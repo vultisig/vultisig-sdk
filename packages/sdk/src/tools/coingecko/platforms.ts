@@ -10,6 +10,7 @@ const chainPlatformEntries = [
   [Chain.Base, 'base'],
   [Chain.Blast, 'blast'],
   [Chain.Mantle, 'mantle'],
+  [Chain.Robinhood, 'robinhood'],
   [Chain.Zksync, 'zksync-era'],
   [Chain.CronosChain, 'cronos'],
   [Chain.Hyperliquid, 'hyperliquid'],

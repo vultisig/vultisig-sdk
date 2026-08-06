@@ -173,6 +173,34 @@ describe('formatSignature', () => {
   })
 
   describe('Multi-Signature Cases (UTXO Chains)', () => {
+    it('preserves each message recovery ID for bundled EVM transactions', () => {
+      const signatureResults: Record<string, KeysignSignature> = {
+        approve: { msg: 'approve', r: 'r1', s: 's1', der_signature: 'der1', recovery_id: '0' },
+        transfer: { msg: 'transfer', r: 'r2', s: 's2', der_signature: 'der2', recovery_id: '1' },
+      }
+
+      const result = formatSignature(signatureResults, ['approve', 'transfer'], 'ecdsa')
+
+      expect(result.signatures).toEqual([
+        { r: 'r1', s: 's1', der: 'der1', recovery: 0 },
+        { r: 'r2', s: 's2', der: 'der2', recovery: 1 },
+      ])
+    })
+
+    it('omits empty recovery IDs for bundled transactions', () => {
+      const signatureResults: Record<string, KeysignSignature> = {
+        approve: { msg: 'approve', r: 'r1', s: 's1', der_signature: 'der1', recovery_id: '' },
+        transfer: { msg: 'transfer', r: 'r2', s: 's2', der_signature: 'der2', recovery_id: '1' },
+      }
+
+      const result = formatSignature(signatureResults, ['approve', 'transfer'], 'ecdsa')
+
+      expect(result.signatures).toEqual([
+        { r: 'r1', s: 's1', der: 'der1' },
+        { r: 'r2', s: 's2', der: 'der2', recovery: 1 },
+      ])
+    })
+
     it('should format Bitcoin transaction with 2 inputs', () => {
       const signatureResults: Record<string, KeysignSignature> = {
         '0xhash1': {
@@ -296,6 +324,7 @@ describe('formatSignature', () => {
           r: 'r2',
           s: 's2',
           der_signature: 'der2',
+          recovery_id: '0',
         },
       }
       const messages = ['hash1', 'hash2']
@@ -304,7 +333,10 @@ describe('formatSignature', () => {
       const result = formatSignature(signatureResults, messages, algorithm)
 
       expect(result.recovery).toBe(1)
-      expect(result.signatures).toHaveLength(2)
+      expect(result.signatures).toEqual([
+        { r: 'r1', s: 's1', der: 'der1', recovery: 1 },
+        { r: 'r2', s: 's2', der: 'der2', recovery: 0 },
+      ])
     })
 
     it('should not include signatures array for single message', () => {

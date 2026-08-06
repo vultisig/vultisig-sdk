@@ -1,7 +1,9 @@
 /**
  * Swap Commands - thin wrapper around vault.swap()
  */
+import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import type { Chain, SwapQuoteResult } from '@vultisig/sdk'
+import { formatUnits } from 'viem'
 
 import type { CommandContext } from '../core'
 import { buildSwapBroadcastIntent, ensureVaultUnlocked, guardedBroadcast } from '../core'
@@ -31,7 +33,7 @@ export async function executeSwapChains(ctx: CommandContext): Promise<readonly C
 export type SwapQuoteOptions = {
   fromChain: Chain
   toChain: Chain
-  amount: number | 'max'
+  amount: string | number
   fromToken?: string
   toToken?: string
 }
@@ -40,12 +42,9 @@ export type SwapQuoteOptions = {
  * Execute swap-quote command - get quote without executing
  */
 export async function executeSwapQuote(ctx: CommandContext, options: SwapQuoteOptions): Promise<SwapQuoteResult> {
-  const vault = await ctx.ensureActiveVault()
-
   const isMax = options.amount === 'max'
-  if (!isMax && (isNaN(options.amount as number) || (options.amount as number) <= 0)) {
-    throw new Error('Invalid amount')
-  }
+  const amount = normalizeSwapAmount(options.amount)
+  const vault = await ctx.ensureActiveVault()
 
   // Use vault.swap() dry-run to get the quote
   const spinner = createSpinner('Getting swap quote...')
@@ -55,7 +54,7 @@ export async function executeSwapQuote(ctx: CommandContext, options: SwapQuoteOp
     fromSymbol: options.fromToken || '',
     toChain: options.toChain,
     toSymbol: options.toToken || '',
-    amount: isMax ? 'max' : String(options.amount),
+    amount,
     dryRun: true,
   })
 
@@ -64,15 +63,16 @@ export async function executeSwapQuote(ctx: CommandContext, options: SwapQuoteOp
   spinner.succeed('Quote received')
 
   const quote = result.quote
+  const semanticAmount = isMax ? amount : normalizeSwapAmount(amount, quote.fromCoin.decimals)
   const fromAmountDisplay = isMax
     ? `${formatBigintAmount(quote.maxSwapable, quote.fromCoin.decimals)} (max)`
-    : String(options.amount)
+    : semanticAmount
 
   if (isJsonOutput()) {
     outputJson({
       fromChain: options.fromChain,
       toChain: options.toChain,
-      amount: isMax ? 'max' : options.amount,
+      amount: semanticAmount,
       isMax,
       quote,
     })
@@ -119,13 +119,24 @@ export type SwapOptions = {
   signal?: AbortSignal
 } & SwapQuoteOptions
 
-function validateSwapAmount(amount: SwapQuoteOptions['amount']): void {
-  if (amount === 'max') return
-  if (isNaN(amount) || amount <= 0) throw new Error('Invalid amount')
-}
+// `toChainAmount` is the SDK's authoritative parser. Using its supported
+// precision ceiling here validates and canonicalizes without losing any input
+// digits before the source coin's actual decimal count is known.
+const SWAP_AMOUNT_CANONICAL_DECIMALS = 10_000
 
-function getSwapAmountString(amount: SwapQuoteOptions['amount']): string {
-  return amount === 'max' ? 'max' : String(amount)
+export function normalizeSwapAmount(
+  amount: SwapQuoteOptions['amount'],
+  decimals = SWAP_AMOUNT_CANONICAL_DECIMALS
+): string {
+  if (amount === 'max') return amount
+
+  try {
+    const chainAmount = toChainAmount(amount, decimals)
+    if (chainAmount <= 0n) throw new Error('Invalid amount')
+    return formatUnits(chainAmount, decimals)
+  } catch {
+    throw new Error('Invalid amount')
+  }
 }
 
 function toSwapRequest(options: SwapOptions, amount: string, dryRun?: true) {
@@ -197,10 +208,8 @@ export async function executeSwap(
   ctx: CommandContext,
   options: SwapOptions
 ): Promise<{ txHash: string; quote: SwapQuoteResult } | SwapDryRunResult> {
+  const amountStr = normalizeSwapAmount(options.amount)
   const vault = await ctx.ensureActiveVault()
-
-  validateSwapAmount(options.amount)
-  const amountStr = getSwapAmountString(options.amount)
 
   // Fail closed up-front: without --yes this flow ends in an interactive
   // confirmation a non-interactive session can never answer — refuse before the
@@ -219,8 +228,9 @@ export async function executeSwap(
   quoteSpinner.succeed('Quote received')
 
   const quote = dryResult.quote
+  const semanticAmount = options.amount === 'max' ? amountStr : normalizeSwapAmount(amountStr, quote.fromCoin.decimals)
   const fromAmountRaw =
-    options.amount === 'max' ? formatBigintAmount(quote.maxSwapable, quote.fromCoin.decimals) : String(options.amount)
+    options.amount === 'max' ? formatBigintAmount(quote.maxSwapable, quote.fromCoin.decimals) : semanticAmount
   const fromAmountDisplay = options.amount === 'max' ? `${fromAmountRaw} (max)` : fromAmountRaw
 
   // If user asked for dry-run only, return preview
@@ -276,7 +286,7 @@ export async function executeSwap(
       vault.on('signingProgress', ({ step }: any) => {
         if (signSpinner) signSpinner.text = `${step.message} (${step.progress}%)`
       })
-      const result = await vault.swap(toSwapRequest(options, amountStr))
+      const result = await vault.swap(toSwapRequest(options, semanticAmount))
       if (result.dryRun) throw new Error('unreachable')
       return result as Extract<typeof result, { dryRun: false }>
     })

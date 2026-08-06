@@ -10,6 +10,7 @@ describe('CoinGecko platform registry', () => {
     ['Sei', 'sei'],
     ['Ton', 'the-open-network'],
     ['Hyperliquid', 'hyperliquid'],
+    ['Robinhood', 'robinhood'],
   ])('round-trips %s <-> %s', (chain, platform) => {
     expect(coinGeckoPlatformForChain(chain)).toBe(platform)
     expect(chainForCoinGeckoPlatform(platform)).toBe(chain)

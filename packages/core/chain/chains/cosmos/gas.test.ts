@@ -5,8 +5,10 @@ import { getCosmosGasLimit } from './cosmosGasLimitRecord'
 import {
   cosmosGasRecord,
   getCosmosFeeAmount,
+  getCosmosSendFeeBaseUnits,
   getFeeAmountFromGasPrice,
   getMinGasPriceForDenom,
+  MAYA_SEND_FEE_BASE_UNITS,
   TERRA_CLASSIC_ULUNA_BASE_GAS,
 } from './gas'
 
@@ -19,6 +21,19 @@ const jsonResponse = (body: unknown, status = 200) =>
 
 const mockFetch = (body: unknown, status = 200) =>
   vi.fn(async () => jsonResponse(body, status)) as unknown as typeof fetch
+
+describe('getCosmosSendFeeBaseUnits', () => {
+  it('returns every existing IBC chain fee from the canonical record', () => {
+    for (const [chain, fee] of Object.entries(cosmosGasRecord)) {
+      expect(getCosmosSendFeeBaseUnits(chain as keyof typeof cosmosGasRecord)).toBe(fee)
+    }
+  })
+
+  it('returns Maya fixed fee and leaves dynamic THORChain fee unresolved', () => {
+    expect(getCosmosSendFeeBaseUnits(Chain.MayaChain)).toBe(MAYA_SEND_FEE_BASE_UNITS)
+    expect(getCosmosSendFeeBaseUnits(Chain.THORChain)).toBeUndefined()
+  })
+})
 
 describe('getFeeAmountFromGasPrice', () => {
   it('ceil-rounds fractional fee amounts', () => {
@@ -54,7 +69,11 @@ describe('getCosmosFeeAmount', () => {
   it('keeps the static fee floor when live min gas computes lower', async () => {
     const fee = await getCosmosFeeAmount(
       { chain: Chain.Cosmos },
-      { fetchImpl: mockFetch({ minimum_gas_price: '0.005000000000000000uatom' }) }
+      {
+        fetchImpl: mockFetch({
+          minimum_gas_price: '0.005000000000000000uatom',
+        }),
+      }
     )
 
     expect(fee).toBe(cosmosGasRecord[Chain.Cosmos])
@@ -63,7 +82,11 @@ describe('getCosmosFeeAmount', () => {
   it('raises the fee when live min gas requires more than the static floor', async () => {
     const fee = await getCosmosFeeAmount(
       { chain: Chain.Cosmos },
-      { fetchImpl: mockFetch({ minimum_gas_price: '0.100000000000000000uatom' }) }
+      {
+        fetchImpl: mockFetch({
+          minimum_gas_price: '0.100000000000000000uatom',
+        }),
+      }
     )
 
     expect(fee).toBe(20_000n)
@@ -85,7 +108,11 @@ describe('getCosmosFeeAmount', () => {
   it('falls back to the static fee when live min gas computes an implausibly high fee', async () => {
     const fee = await getCosmosFeeAmount(
       { chain: Chain.Cosmos },
-      { fetchImpl: mockFetch({ minimum_gas_price: '1000.000000000000000000uatom' }) }
+      {
+        fetchImpl: mockFetch({
+          minimum_gas_price: '1000.000000000000000000uatom',
+        }),
+      }
     )
 
     expect(fee).toBe(cosmosGasRecord[Chain.Cosmos])
@@ -155,9 +182,15 @@ describe('getCosmosFeeAmount', () => {
         {
           fetchImpl: routedFetch([
             // generic node config reports a low minimum-gas-price
-            { urlMatches: /node\/v1beta1\/config/, body: { minimum_gas_price: '0.001000000000000000uosmo' } },
+            {
+              urlMatches: /node\/v1beta1\/config/,
+              body: { minimum_gas_price: '0.001000000000000000uosmo' },
+            },
             // live-verified incident: base fee 0.03 required ~12000uosmo
-            { urlMatches: /txfees\/v1beta1\/cur_eip_base_fee/, body: { base_fee: '0.03' } },
+            {
+              urlMatches: /txfees\/v1beta1\/cur_eip_base_fee/,
+              body: { base_fee: '0.03' },
+            },
           ]),
         }
       )
@@ -172,8 +205,14 @@ describe('getCosmosFeeAmount', () => {
         { chain: Chain.Osmosis },
         {
           fetchImpl: routedFetch([
-            { urlMatches: /node\/v1beta1\/config/, body: { minimum_gas_price: '0.200000000000000000uosmo' } },
-            { urlMatches: /txfees\/v1beta1\/cur_eip_base_fee/, body: { base_fee: '0.001' } },
+            {
+              urlMatches: /node\/v1beta1\/config/,
+              body: { minimum_gas_price: '0.200000000000000000uosmo' },
+            },
+            {
+              urlMatches: /txfees\/v1beta1\/cur_eip_base_fee/,
+              body: { base_fee: '0.001' },
+            },
           ]),
         }
       )
@@ -190,8 +229,15 @@ describe('getCosmosFeeAmount', () => {
         { chain: Chain.Osmosis },
         {
           fetchImpl: routedFetch([
-            { urlMatches: /node\/v1beta1\/config/, body: { minimum_gas_price: '0.100000000000000000uosmo' } },
-            { urlMatches: /txfees\/v1beta1\/cur_eip_base_fee/, body: {}, status: 500 },
+            {
+              urlMatches: /node\/v1beta1\/config/,
+              body: { minimum_gas_price: '0.100000000000000000uosmo' },
+            },
+            {
+              urlMatches: /txfees\/v1beta1\/cur_eip_base_fee/,
+              body: {},
+              status: 500,
+            },
           ]),
         }
       )
@@ -221,8 +267,14 @@ describe('getCosmosFeeAmount', () => {
         { chain: Chain.Osmosis },
         {
           fetchImpl: routedFetch([
-            { urlMatches: /node\/v1beta1\/config/, body: { minimum_gas_price: '0.100000000000000000uosmo' } },
-            { urlMatches: /txfees\/v1beta1\/cur_eip_base_fee/, body: { base_fee: '1000' } },
+            {
+              urlMatches: /node\/v1beta1\/config/,
+              body: { minimum_gas_price: '0.100000000000000000uosmo' },
+            },
+            {
+              urlMatches: /txfees\/v1beta1\/cur_eip_base_fee/,
+              body: { base_fee: '1000' },
+            },
           ]),
         }
       )
@@ -240,8 +292,14 @@ describe('getCosmosFeeAmount', () => {
         { chain: Chain.Osmosis },
         {
           fetchImpl: routedFetch([
-            { urlMatches: /node\/v1beta1\/config/, body: { minimum_gas_price: '0.100000000000000000uosmo' } },
-            { urlMatches: /txfees\/v1beta1\/cur_eip_base_fee/, body: { base_fee: hugeButValid } },
+            {
+              urlMatches: /node\/v1beta1\/config/,
+              body: { minimum_gas_price: '0.100000000000000000uosmo' },
+            },
+            {
+              urlMatches: /txfees\/v1beta1\/cur_eip_base_fee/,
+              body: { base_fee: hugeButValid },
+            },
           ]),
         }
       )
