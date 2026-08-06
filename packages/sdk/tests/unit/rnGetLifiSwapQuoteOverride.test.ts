@@ -86,3 +86,32 @@ describe('RN getLifiSwapQuote override — evm.approvalAddress lockstep with cor
     expect(evm.approvalAddress).toBeUndefined()
   })
 })
+
+// P1 regression: the override used to hardcode a flat 1% slippage and discard the caller's
+// `slippage` — so RN (most users) got a wider floor than web on stable pairs and silently ignored
+// explicit tight-tolerance requests. It must now mirror core's tiered/override resolution.
+describe('RN getLifiSwapQuote override — slippage mirrors core (P1)', () => {
+  // getQuoteMock accumulates calls across tests (no beforeEach reset here), so read the latest.
+  const slippageOf = () => (fixture.getQuoteMock.mock.calls.at(-1)![1] as { slippage: number }).slippage
+
+  it('uses the 0.3% stable-pair tier for a USDC→USDT swap (not a flat 1%)', async () => {
+    fixture.getQuoteMock.mockResolvedValueOnce(quoteResponse())
+    await getLifiSwapQuote(baseInput as never)
+    expect(slippageOf()).toBe(0.003)
+  })
+
+  it('uses the 1% volatile tier for a non-stable pair (ETH→USDC)', async () => {
+    fixture.getQuoteMock.mockResolvedValueOnce(quoteResponse())
+    await getLifiSwapQuote({
+      ...baseInput,
+      from: { id: undefined, chain: 'Ethereum', address: '0xfrom', ticker: 'ETH' },
+    } as never)
+    expect(slippageOf()).toBe(0.01)
+  })
+
+  it('honors an explicit consumer slippage override (no longer dropped)', async () => {
+    fixture.getQuoteMock.mockResolvedValueOnce(quoteResponse())
+    await getLifiSwapQuote({ ...baseInput, slippage: 0.001 } as never)
+    expect(slippageOf()).toBe(0.001)
+  })
+})

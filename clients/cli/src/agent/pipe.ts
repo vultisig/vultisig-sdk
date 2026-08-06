@@ -10,7 +10,7 @@
 import * as readline from 'node:readline'
 
 import { AgentErrorCode, normalizeAgentError } from './agentErrors'
-import type { BalanceSummaryCard } from './cards'
+import type { BalanceSummaryCard, PolymarketMarketsCard, YieldOpportunitiesCard } from './cards'
 import type { AgentSession } from './session'
 import type { PipeInputCommand, PipeOutputEvent, Suggestion, TxLifecycleStatus, UICallbacks } from './types'
 
@@ -165,6 +165,14 @@ export class PipeInterface {
 
       onBalanceSummary: (card: BalanceSummaryCard) => {
         this.emit({ type: 'balance_summary', card })
+      },
+
+      onYieldOpportunities: (card: YieldOpportunitiesCard) => {
+        this.emit({ type: 'yield_opportunities', card })
+      },
+
+      onPolymarketMarkets: (card: PolymarketMarketsCard) => {
+        this.emit({ type: 'polymarket_markets', card })
       },
 
       onSuggestions: (suggestions: Suggestion[]) => {

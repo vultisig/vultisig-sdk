@@ -5,19 +5,13 @@ import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { EntityWithTicker } from '@vultisig/lib-utils/entities/EntityWithTicker'
 
 import { isFeeCoin } from '../../../coin/utils/isFeeCoin'
-import type { NativeSwapChain, NativeSwapChainId } from '../NativeSwapChain'
-import { nativeSwapChainIds, nativeSwapChains, nativeSwapEnabledChains } from '../NativeSwapChain'
-
-type NativeSwapDenomChainKey = Lowercase<NativeSwapChainId>
-
-const nativeSwapChainIdValues = Object.values(nativeSwapChainIds) as NativeSwapChainId[]
-
-const securedAssetDenomChainKeyToSwapId = Object.fromEntries(
-  nativeSwapChainIdValues.map(swapId => [swapId.toLowerCase() as NativeSwapDenomChainKey, swapId])
-) as Partial<Record<NativeSwapDenomChainKey, NativeSwapChainId>>
-
-const getSecuredAssetSwapId = (chainKey: string): NativeSwapChainId | undefined =>
-  securedAssetDenomChainKeyToSwapId[chainKey.toLowerCase() as NativeSwapDenomChainKey]
+import type { NativeSwapChain } from '../NativeSwapChain'
+import {
+  getNativeSwapChainIdFromDenomPrefix,
+  nativeSwapChainIds,
+  nativeSwapChains,
+  nativeSwapEnabledChains,
+} from '../NativeSwapChain'
 
 const formatSecuredAssetRest = (rest: string): string => {
   const evmTail = rest.match(/^(.+)-(0x[0-9a-fA-F]+)$/i)
@@ -49,7 +43,7 @@ const normalizeNativeSwapChainDenom = ({
 
   const segments = denom.split('-')
   if (segments.length >= 2) {
-    const swapId = getSecuredAssetSwapId(segments[0])
+    const swapId = getNativeSwapChainIdFromDenomPrefix(segments[0])
     if (swapId) {
       const rest = segments.slice(1).join('-')
       // THORChain secured assets settle on THORChain (a thor1 destination), so
