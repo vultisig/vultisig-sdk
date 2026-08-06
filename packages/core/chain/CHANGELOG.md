@@ -1,5 +1,13 @@
 # @vultisig/core-chain
 
+## 2.31.2
+
+### Patch Changes
+
+- [#1757](https://github.com/vultisig/vultisig-sdk/pull/1757) [`67667fe`](https://github.com/vultisig/vultisig-sdk/commit/67667fe61a8dd85d40c1b91978da5414987cab6c) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Make guard-shaped per-chain configuration tables exhaustive so new chains require explicit safety decisions.
+
+- [#1718](https://github.com/vultisig/vultisig-sdk/pull/1718) [`fb601d5`](https://github.com/vultisig/vultisig-sdk/commit/fb601d5ad6f6e6a7089ca449ee24bc5c1d7b82f9) Thanks [@neavra](https://github.com/neavra)! - Make transaction help accurately distinguish interactive previews from non-interactive confirmation requirements, describe the addresses command without advertising an unsupported argument, and remove duplicated wording from amount-too-small swap errors.
+
 ## 2.31.1
 
 ### Patch Changes
