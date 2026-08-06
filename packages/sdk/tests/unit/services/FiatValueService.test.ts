@@ -243,6 +243,54 @@ describe('FiatValueService', () => {
     })
   })
 
+  describe('getValues', () => {
+    it('batches all token prices for a chain into a single getErc20Prices call', async () => {
+      const { getCoinPrices } = await import('@vultisig/core-chain/coin/price/getCoinPrices')
+      const { getErc20Prices } = await import('@vultisig/core-chain/coin/price/evm/getErc20Prices')
+      const { getCoinValue } = await import('@vultisig/core-chain/coin/utils/getCoinValue')
+
+      const usdc = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+      const dai = '0x6B175474E89094C44Da98b954EedeAC495271d0F'
+
+      getTokens = vi.fn(() => ({
+        [Chain.Ethereum]: [
+          { id: usdc, symbol: 'USDC', name: 'USD Coin', decimals: 6, chainId: Chain.Ethereum, contractAddress: usdc },
+          { id: dai, symbol: 'DAI', name: 'Dai', decimals: 18, chainId: Chain.Ethereum, contractAddress: dai },
+        ],
+      }))
+      getBalance = vi.fn(async (_chain: Chain, tokenId?: string) => ({
+        amount: '1000000',
+        formattedAmount: '1',
+        decimals: 6,
+        symbol: tokenId ? 'TOKEN' : 'ETH',
+        chainId: Chain.Ethereum,
+        tokenId,
+      }))
+      service = new FiatValueService(cache, getCurrency, getTokens, getChains, getBalance)
+
+      vi.mocked(getCoinPrices).mockResolvedValue({ ethereum: 3000 })
+      vi.mocked(getErc20Prices).mockResolvedValue({
+        [usdc.toLowerCase()]: 1.0,
+        [dai.toLowerCase()]: 1.0,
+      })
+      vi.mocked(getCoinValue).mockReturnValue(1)
+
+      const values = await service.getValues(Chain.Ethereum)
+
+      // ONE batched price call for both tokens, not one per token.
+      expect(getErc20Prices).toHaveBeenCalledTimes(1)
+      expect(getErc20Prices).toHaveBeenCalledWith({
+        ids: [usdc, dai],
+        chain: Chain.Ethereum,
+        fiatCurrency: 'usd',
+      })
+
+      expect(values.native).toBeDefined()
+      expect(values[usdc]).toBeDefined()
+      expect(values[dai]).toBeDefined()
+    })
+  })
+
   describe('getBalanceValue', () => {
     it('should calculate balance value', async () => {
       const { getCoinPrices } = await import('@vultisig/core-chain/coin/price/getCoinPrices')

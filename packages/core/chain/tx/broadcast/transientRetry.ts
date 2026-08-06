@@ -1,5 +1,26 @@
 import { HttpResponseError } from '@vultisig/lib-utils/fetch/HttpResponseError'
 
+/**
+ * A transaction was included on-chain but its execution genuinely failed
+ * (e.g. Cosmos DeliverTx code !== 0 — a wasm revert, out-of-gas, a
+ * THORChain/Maya deposit-handler rejection). This is a terminal, non-transient
+ * outcome even though the chain-controlled error text can read exactly like
+ * a transient one (a cosmwasm revert's rawLog routinely says "aborted"; a
+ * contract can literally say "timed out" or "connection reset" as text).
+ * Retrying would just re-send the same bytes, get "tx already exists in
+ * cache" back, and have that swallowed as success — reopening the false-
+ * success bug the throw exists to close. Resolvers that assert on-chain
+ * execution success throw this instead of a bare Error so
+ * `isTransientBroadcastError` can short-circuit before the message-regex
+ * test ever runs.
+ */
+export class DeliverTxFailedError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options)
+    this.name = 'DeliverTxFailedError'
+  }
+}
+
 export const broadcastRetryMaxAttempts = 3
 const broadcastRetryBaseDelayMs = 250
 
@@ -16,6 +37,33 @@ const transientErrorCodes = new Set([
   'ETIMEDOUT',
   'EAI_AGAIN',
 ])
+
+// gRPC statuses (Sui, since it retired JSON-RPC). `@protobuf-ts` surfaces the
+// grpc-status trailer as `RpcError.code`, holding the status NAME — so these land
+// in the same `code` slot as the errno strings above.
+//
+// Deliberately only the three the gRPC project itself calls safe to retry. Under
+// JSON-RPC a busy or restarting node surfaced as an HTTP 5xx and was retried by the
+// status branch below; without this set that coverage silently disappears, because a
+// grpc-web response is HTTP 200 with the real status in the trailer.
+//
+// Excluded on purpose: INVALID_ARGUMENT / NOT_FOUND / FAILED_PRECONDITION are verdicts
+// about the request itself, and ABORTED / INTERNAL are ambiguous enough that retrying
+// could re-send bytes the chain already rejected.
+const transientGrpcStatuses = new Set(['UNAVAILABLE', 'DEADLINE_EXCEEDED', 'RESOURCE_EXHAUSTED'])
+
+// grpc-web percent-encodes the grpc-message trailer, so a server-produced message
+// arrives as `connection%20reset` and none of the space-bearing patterns below can
+// match it. Decode before testing (falling back to the raw text on a malformed escape)
+// so gRPC errors are classified on the same footing as every other transport's.
+const decodeTransportMessage = (message: string): string => {
+  if (!message.includes('%')) return message
+  try {
+    return decodeURIComponent(message)
+  } catch {
+    return message
+  }
+}
 
 const transientMessagePatterns = [
   /\bfetch failed\b/i,
@@ -51,13 +99,17 @@ export const isTransientBroadcastError = (error: unknown): boolean => {
   while (current != null && !seen.has(current)) {
     seen.add(current)
 
+    if (current instanceof DeliverTxFailedError) {
+      return false
+    }
+
     if (current instanceof HttpResponseError) {
       return current.status === 429 || (current.status >= 500 && current.status <= 599)
     }
 
     if (typeof current === 'object') {
       const code = (current as { code?: unknown }).code
-      if (typeof code === 'string' && transientErrorCodes.has(code)) {
+      if (typeof code === 'string' && (transientErrorCodes.has(code) || transientGrpcStatuses.has(code))) {
         return true
       }
 
@@ -67,7 +119,8 @@ export const isTransientBroadcastError = (error: unknown): boolean => {
       }
     }
 
-    const message = current instanceof Error ? current.message : typeof current === 'string' ? current : undefined
+    const rawMessage = current instanceof Error ? current.message : typeof current === 'string' ? current : undefined
+    const message = rawMessage === undefined ? undefined : decodeTransportMessage(rawMessage)
     if (message && transientMessagePatterns.some(pattern => pattern.test(message))) {
       return true
     }

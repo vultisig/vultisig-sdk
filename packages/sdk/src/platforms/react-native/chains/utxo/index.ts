@@ -35,6 +35,7 @@ export {
   estimateUtxoTxFee,
   getSighashBIP143,
   getSighashLegacy,
+  getSighashZcash,
   getUtxoBalance,
   getUtxoChainSpec,
   getUtxos,

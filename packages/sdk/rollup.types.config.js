@@ -22,6 +22,15 @@ const dtsPluginOptions = {
   },
 }
 
+const createSubpathTypesConfig = (input, file) => ({
+  input,
+  output: {
+    file,
+    format: 'es',
+  },
+  plugins: [dts(dtsPluginOptions)],
+})
+
 export default defineConfig([
   // Main types (platform-agnostic)
   {
@@ -48,6 +57,27 @@ export default defineConfig([
     input: 'src/platforms/electron-main/index.ts',
     output: {
       file: 'dist/index.electron-main.d.ts',
+      format: 'es',
+    },
+    plugins: [dts(dtsPluginOptions)],
+  },
+  // Browser platform types. Keep this bundle aligned with the browser runtime
+  // entry so platform-only storage, crypto, and polyfill exports are visible
+  // through both the root browser condition and the explicit subpath.
+  {
+    input: 'src/platforms/browser/index.ts',
+    output: {
+      file: 'dist/index.browser.d.ts',
+      format: 'es',
+    },
+    plugins: [dts(dtsPluginOptions)],
+  },
+  // Chrome Extension platform types. This entry exposes the extension storage,
+  // crypto, and polyfill implementations shipped by the matching runtime bundle.
+  {
+    input: 'src/platforms/chrome-extension/index.ts',
+    output: {
+      file: 'dist/index.chrome-extension.d.ts',
       format: 'es',
     },
     plugins: [dts(dtsPluginOptions)],
@@ -88,4 +118,10 @@ export default defineConfig([
     external: ['vite'],
     plugins: [dts(dtsPluginOptions)],
   },
+  // Dedicated public tool subpath types — keep these as first-class bundles so
+  // package-name imports like `@vultisig/sdk/tools/parse` resolve to narrow
+  // declarations instead of the root index type graph.
+  createSubpathTypesConfig('src/tools/parse/index.ts', 'dist/tools/parse/index.d.ts'),
+  createSubpathTypesConfig('src/tools/defi/index.ts', 'dist/tools/defi/index.d.ts'),
+  createSubpathTypesConfig('src/tools/bridge/index.ts', 'dist/tools/bridge/index.d.ts'),
 ])

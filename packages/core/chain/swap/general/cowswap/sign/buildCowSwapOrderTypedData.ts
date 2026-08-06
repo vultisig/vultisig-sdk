@@ -83,28 +83,65 @@ type BuildCowSwapOrderTypedDataInput = {
  * signed `appData` field — the orderbook verifies it matches the `appData`
  * string in the submitted order.
  */
+// Matches a checksummed or lowercase EVM address (case-insensitive 0x prefix, per findSwapQuote's
+// isEvmAddress) — CowSwap is EVM-only, so the receiver is always an EVM address.
+const isEvmAddress = (address: string): boolean => /^0x[0-9a-fA-F]{40}$/i.test(address)
+const ZERO_EVM_ADDRESS = '0x0000000000000000000000000000000000000000'
+const BURN_EVM_ADDRESS = '0x000000000000000000000000000000000000dead'
+
+/**
+ * Fund-safety re-check on the SIGNING side (sdk#1358 class). `assertValidCustomRecipient`
+ * (findSwapQuote.ts) rejects a zero/burn/malformed CowSwap receiver at QUOTE construction, but the
+ * MPC co-signer never sees the quote — it decodes a `cowswap-order:` blob from the KeysignPayload
+ * (decodeCowSwapKeysignData, which validates SHAPE only) and builds THIS EIP-712 digest to sign. A
+ * hand-built payload with `receiver = 0x…dead` (or the zero address, or a malformed address) would
+ * otherwise be signed into an unrecoverable order. This is the digest-construction choke point every
+ * signer funnels through, so guarding here binds the receiver the signature actually covers.
+ *
+ * vultisig always sets an explicit receiver (`normalizedRecipient ?? from.address`,
+ * findSwapQuote.ts) — never CowSwap's `address(0)` "pay-the-owner" sentinel — so rejecting zero here
+ * matches the quote-time guard and cannot false-block a legitimately-produced order.
+ */
+const assertCowSwapReceiverSafe = (receiver: string): void => {
+  if (!isEvmAddress(receiver)) {
+    throw new Error(
+      `CowSwap order receiver "${receiver}" is not a valid EVM address — refusing to sign an order to a malformed recipient.`
+    )
+  }
+  const lower = receiver.toLowerCase()
+  if (lower === ZERO_EVM_ADDRESS || lower === BURN_EVM_ADDRESS) {
+    throw new Error(
+      `CowSwap order receiver "${receiver}" is a zero/burn address — the swap output would be unrecoverable; refusing to sign.`
+    )
+  }
+}
+
 export const buildCowSwapOrderTypedData = ({
   order,
   chainId,
-}: BuildCowSwapOrderTypedDataInput): CowSwapOrderTypedData => ({
-  primaryType: 'Order',
-  domain: buildEip712Domain(chainId),
-  types: {
-    EIP712Domain: eip712DomainFields,
-    Order: cowSwapOrderEip712Fields,
-  },
-  message: {
-    sellToken: order.sellToken,
-    buyToken: order.buyToken,
-    receiver: order.receiver,
-    sellAmount: order.sellAmount,
-    buyAmount: order.buyAmount,
-    validTo: order.validTo,
-    appData: order.appDataHash,
-    feeAmount: order.feeAmount,
-    kind: order.kind,
-    partiallyFillable: order.partiallyFillable,
-    sellTokenBalance: order.sellTokenBalance,
-    buyTokenBalance: order.buyTokenBalance,
-  },
-})
+}: BuildCowSwapOrderTypedDataInput): CowSwapOrderTypedData => {
+  assertCowSwapReceiverSafe(order.receiver)
+
+  return {
+    primaryType: 'Order',
+    domain: buildEip712Domain(chainId),
+    types: {
+      EIP712Domain: eip712DomainFields,
+      Order: cowSwapOrderEip712Fields,
+    },
+    message: {
+      sellToken: order.sellToken,
+      buyToken: order.buyToken,
+      receiver: order.receiver,
+      sellAmount: order.sellAmount,
+      buyAmount: order.buyAmount,
+      validTo: order.validTo,
+      appData: order.appDataHash,
+      feeAmount: order.feeAmount,
+      kind: order.kind,
+      partiallyFillable: order.partiallyFillable,
+      sellTokenBalance: order.sellTokenBalance,
+      buyTokenBalance: order.buyTokenBalance,
+    },
+  }
+}

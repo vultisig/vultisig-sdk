@@ -23,18 +23,42 @@
  */
 import { BinaryReader } from '@bufbuild/protobuf/wire'
 import { fromBech32 } from '@cosmjs/encoding'
+import { secp256k1 } from '@noble/curves/secp256k1.js'
 import { sha256 } from '@noble/hashes/sha2.js'
+import { Buffer } from 'buffer'
 import { MsgSend } from 'cosmjs-types/cosmos/bank/v1beta1/tx'
 import { PubKey } from 'cosmjs-types/cosmos/crypto/secp256k1/keys'
 import { AuthInfo, Fee, ModeInfo, SignDoc, SignerInfo, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import { Any } from 'cosmjs-types/google/protobuf/any'
+import { readFileSync } from 'fs'
+import { resolve } from 'path'
 import { describe, expect, it } from 'vitest'
 
-import { buildCosmosSendTx } from '../../../../src/platforms/react-native/chains/cosmos/tx'
+import { buildCosmosSendTx, deriveCosmosAddress } from '../../../../src/platforms/react-native/chains/cosmos/tx'
 
 function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('')
 }
+
+type CosmosCrossEncoderFixture = {
+  senderPrivateKeyHex: string
+  chainId: string
+  senderCosmosAddress: string
+  recipientCosmosAddress: string
+  senderPubKeyHex: string
+  accountNumber: number
+  sequence: number
+  memo: string
+  denom: string
+  amount: string
+  feeAmount: string
+  gasLimit: number
+  expectedSignDocSha256Hex: string
+}
+const loadCrossEncoderFixture = (): CosmosCrossEncoderFixture =>
+  JSON.parse(
+    readFileSync(resolve(__dirname, '../../../../../../testdata/cross-encoder-golden/cosmos-msgsend.json'), 'utf8')
+  ) as CosmosCrossEncoderFixture
 
 const FX = {
   chainId: 'cosmoshub-4',
@@ -169,6 +193,71 @@ describe('cosmos / buildCosmosSendTx — MsgSend golden vectors', () => {
       expect(bytesToHex(result.txBodyBytes)).toBe(bytesToHex(reference.txBodyBytes))
       const txBody = TxBody.decode(result.txBodyBytes)
       expect(txBody.memo).toBe(memo)
+    })
+  })
+
+  // CROSS-ENCODER BINDING (Track B follow-up to VA-81's layer-1/layer-2 golden-vector
+  // work): every test above self-checks the RN-JS builder against cosmjs-types (this
+  // path's OWN reference) - but packages/core's compileTx.golden.test.ts independently
+  // self-checks the SAME logical Cosmos MsgSend against WalletCore/WASM (the OTHER real
+  // encoder the app can dispatch through). Until now the two suites never shared a single
+  // fixture, so the two encoders could silently diverge with nothing catching it - each
+  // path only proves itself internally consistent, not that they AGREE with each other.
+  //
+  // Reads testdata/cross-encoder-golden/cosmos-msgsend.json - the SAME file packages/
+  // core/mpc/tx/compile/compileTx.golden.test.ts's 'matches the shared cross-encoder
+  // golden vector' test reads - via a plain readFileSync rather than an import
+  // (packages/sdk doesn't depend on packages/core, so this sidesteps the workspace
+  // dependency graph). Both suites assert against the SAME fixture-provided expected
+  // hash, so editing the fixture file updates BOTH suites' expectation at once - no
+  // "keep two literals in sync via a comment" drift risk. The sender/recipient address
+  // + pubkey in the fixture are pre-derived from the private keys via WalletCore
+  // (packages/core's suite re-derives them fresh each run from the same keys; this
+  // unit suite reads the precomputed values directly to avoid adding a WASM
+  // wallet-core dependency here).
+  describe('cross-encoder binding (must match packages/core compileTx.golden.test.ts WalletCore path)', () => {
+    it('produces the SAME SignDoc sha256 as WalletCore TransactionCompiler.preImageHashes for the identical MsgSend', () => {
+      const fx = loadCrossEncoderFixture()
+      const result = buildCosmosSendTx({
+        chainName: 'Cosmos',
+        chainId: fx.chainId,
+        fromAddress: fx.senderCosmosAddress,
+        toAddress: fx.recipientCosmosAddress,
+        amount: fx.amount,
+        denom: fx.denom,
+        feeAmount: fx.feeAmount,
+        gasLimit: fx.gasLimit,
+        sequence: fx.sequence,
+        accountNumber: fx.accountNumber,
+        pubKeyBytes: Uint8Array.from(Buffer.from(fx.senderPubKeyHex, 'hex')),
+        memo: fx.memo,
+      })
+
+      expect(result.signingHashHex).toBe(fx.expectedSignDocSha256Hex)
+    })
+
+    // The test above binds the two ENCODERS (does buildCosmosSendTx produce the same
+    // SignDoc bytes as WalletCore, GIVEN the same address/pubkey) - but leaves the two
+    // DERIVATION paths uncrossed: it never checks that RN-JS's OWN privkey -> pubkey ->
+    // address path actually produces the fixture's precomputed values. A divergence
+    // there (wrong sender = funds sent from the wrong address) is a real fund-loss
+    // surface this suite wouldn't otherwise catch. Closes it at zero WASM cost: derives
+    // the pubkey from the fixture's raw private key via @noble/curves/secp256k1 (already
+    // a dependency of the very tx.ts module under test - it's how the module derives
+    // vault child keys), then feeds that into RN-JS's OWN deriveCosmosAddress (bech32
+    // encoding, no HD chain code) to get the address - both must match the fixture's
+    // precomputed values. Chained with the test above: WalletCore-derive (packages/core)
+    // == precomputed (this fixture) == RN-JS-derive (this test) - both derivation AND
+    // encoding are cross-bound.
+    it('derives the SAME sender pubkey/address from the raw private key as WalletCore (RN-JS derivation path)', () => {
+      const fx = loadCrossEncoderFixture()
+      const derivedPubKeyHex = Buffer.from(
+        secp256k1.getPublicKey(Buffer.from(fx.senderPrivateKeyHex, 'hex'), true)
+      ).toString('hex')
+      expect(derivedPubKeyHex).toBe(fx.senderPubKeyHex)
+
+      const derivedAddress = deriveCosmosAddress(derivedPubKeyHex, '', 'cosmos', 118)
+      expect(derivedAddress).toBe(fx.senderCosmosAddress)
     })
   })
 

@@ -57,7 +57,7 @@ import {
   executeVerify,
   resolveTxStatusParams,
 } from './commands'
-import { cachePassword, createPasswordCallback, loadActiveVaultSafely } from './core'
+import { cachePassword, createPasswordCallback, loadActiveVaultSafely, resolveChainOrThrow } from './core'
 import { EXIT_CODE_DESCRIPTIONS, ExitCode, InvalidInputError } from './core/errors'
 import { parseServerEndpointOverridesFromArgv, resolveServerEndpoints } from './core/server-endpoints'
 import { findChainByName } from './interactive'
@@ -593,12 +593,10 @@ program
     withExit(
       async (vaultId: string, options: { resend?: boolean; code?: string; email?: string; password?: string }) => {
         const context = await init(program.opts().vault)
-        const verified = await executeVerify(context, vaultId, options)
-        if (!verified) {
-          const err: any = new Error('Verification failed')
-          err.exitCode = 1
-          throw err
-        }
+        // executeVerify throws a typed error on failure; it no longer signals
+        // failure via a `false` return that this had to re-throw (which produced a
+        // second JSON document on stdout).
+        await executeVerify(context, vaultId, options)
       }
     )
   )
@@ -632,13 +630,13 @@ Examples:
 // Command: Send transaction
 program
   .command('send <chain> <to> [amount]')
-  .description(descriptions.send.description)
+  .description(descriptions.send.cliDescription)
   .option('--max', 'Send maximum amount (balance minus fees)')
   .option('--token <tokenId>', 'Token to send (default: native)')
   .option('--memo <memo>', 'Transaction memo')
   .option('--destination-tag <tag>', 'XRP DestinationTag (0 to 4294967295)')
   .option('--dry-run', 'Preview transaction without signing or broadcasting')
-  .option('--confirm', 'Confirm and broadcast (without this flag, runs as a preview)')
+  .option('--confirm', 'Confirm and broadcast (required to execute non-interactively; use --dry-run to preview)')
   .option('-y, --yes', 'Alias for --confirm')
   .option('--force', 'Bypass the duplicate-broadcast guard (re-send an identical, recently-broadcast tx)')
   .option('--password <password>', 'Vault password for signing')
@@ -690,26 +688,21 @@ See also: balance, tx-status`
           throw new Error('Invalid XRP DestinationTag: expected an integer from 0 to 4294967295')
         }
         const context = await init(program.opts().vault)
-        try {
-          await executeSend(context, {
-            chain,
-            to,
-            amount: amount ?? 'max',
-            tokenId: options.token,
-            memo: options.memo,
-            destinationTag,
-            dryRun: options.dryRun,
-            yes: options.yes || options.confirm,
-            force: options.force,
-            password: options.password,
-          })
-        } catch (err: any) {
-          if (err.message === 'Transaction cancelled by user') {
-            warn('\nx Transaction cancelled')
-            return
-          }
-          throw err
-        }
+        // A decline throws ConfirmationRequiredError (exit 12), which withExit
+        // surfaces as a success:false envelope — the interactive twin of the
+        // non-interactive refusal. No local swallow (which used to force exit 0).
+        await executeSend(context, {
+          chain,
+          to,
+          amount: amount ?? 'max',
+          tokenId: options.token,
+          memo: options.memo,
+          destinationTag,
+          dryRun: options.dryRun,
+          yes: options.yes || options.confirm,
+          force: options.force,
+          password: options.password,
+        })
       }
     )
   )
@@ -739,24 +732,17 @@ Examples:
         options: { funds?: string; memo?: string; dryRun?: boolean; yes?: boolean; password?: string }
       ) => {
         const context = await init(program.opts().vault, options.password)
-        try {
-          await executeExecute(context, {
-            chain: findChainByName(chainStr) || (chainStr as Chain),
-            contract,
-            msg,
-            funds: options.funds,
-            memo: options.memo,
-            dryRun: options.dryRun,
-            yes: options.yes,
-            password: options.password,
-          })
-        } catch (err: any) {
-          if (err.message === 'Transaction cancelled by user') {
-            warn('\nx Transaction cancelled')
-            return
-          }
-          throw err
-        }
+        // A decline throws ConfirmationRequiredError (exit 12) — see `send` above.
+        await executeExecute(context, {
+          chain: findChainByName(chainStr) || (chainStr as Chain),
+          contract,
+          msg,
+          funds: options.funds,
+          memo: options.memo,
+          dryRun: options.dryRun,
+          yes: options.yes,
+          password: options.password,
+        })
       }
     )
   )
@@ -917,7 +903,7 @@ Examples:
 // Command: Show addresses
 program
   .command('addresses')
-  .description(descriptions.address.description)
+  .description(descriptions.address.cliDescription)
   .addHelpText(
     'after',
     `
@@ -1052,10 +1038,14 @@ program
   .description('List and manage tokens for a chain')
   .option('--add <contractAddress>', 'Add a token by contract address')
   .option('--remove <tokenId>', 'Remove a token by ID')
-  .option('--discover', 'Auto-discover tokens with balances on the chain')
+  .option('--discover', 'Find tokens with balances on the chain and save them to this vault')
   .addHelpText(
     'after',
     `
+--discover writes to the vault: every token it finds is saved to the tracked
+list, so it also changes what portfolio and balance --tokens report. Use
+--remove <tokenId> to stop tracking one.
+
 Examples:
   vultisig tokens Ethereum
   vultisig tokens Ethereum --discover --output json
@@ -1077,9 +1067,10 @@ Examples:
           decimals?: string
         }
       ) => {
+        const chain = resolveChainOrThrow(chainStr)
         const context = await init(program.opts().vault)
         await executeTokens(context, {
-          chain: findChainByName(chainStr) || (chainStr as Chain),
+          chain,
           add: options.add,
           remove: options.remove,
           discover: options.discover,
@@ -1130,11 +1121,13 @@ Examples:
       ) => {
         if (!amountStr && !options.max) throw new Error('Provide an amount or use --max')
         if (amountStr && options.max) throw new Error('Cannot specify both amount and --max')
+        const fromChain = resolveChainOrThrow(fromChainStr, 'source chain')
+        const toChain = resolveChainOrThrow(toChainStr, 'destination chain')
         const context = await init(program.opts().vault)
         await executeSwapQuote(context, {
-          fromChain: findChainByName(fromChainStr) || (fromChainStr as Chain),
-          toChain: findChainByName(toChainStr) || (toChainStr as Chain),
-          amount: options.max ? 'max' : parseFloat(amountStr!),
+          fromChain,
+          toChain,
+          amount: options.max ? 'max' : amountStr!,
           fromToken: options.fromToken,
           toToken: options.toToken,
         })
@@ -1145,13 +1138,13 @@ Examples:
 // Command: Execute swap
 program
   .command('swap <fromChain> <toChain> [amount]')
-  .description(descriptions.swap.description)
+  .description(descriptions.swap.cliDescription)
   .option('--max', 'Swap maximum amount (full balance minus fees for native)')
   .option('--from-token <address>', 'Token address to swap from (default: native)')
   .option('--to-token <address>', 'Token address to swap to (default: native)')
   .option('--slippage <percent>', 'Slippage tolerance in percent', '1')
   .option('--dry-run', 'Preview swap without signing or broadcasting')
-  .option('--confirm', 'Confirm and broadcast (without this flag, runs as a preview)')
+  .option('--confirm', 'Confirm and broadcast (required to execute non-interactively; use --dry-run to preview)')
   .option('-y, --yes', 'Alias for --confirm')
   .option('--force', 'Bypass the duplicate-broadcast guard (re-send an identical, recently-broadcast swap)')
   .option('--password <password>', 'Vault password for signing')
@@ -1186,26 +1179,19 @@ See also: swap-quote, swap-chains, balance`
         if (!amountStr && !options.max) throw new Error('Provide an amount or use --max')
         if (amountStr && options.max) throw new Error('Cannot specify both amount and --max')
         const context = await init(program.opts().vault)
-        try {
-          await executeSwap(context, {
-            fromChain: findChainByName(fromChainStr) || (fromChainStr as Chain),
-            toChain: findChainByName(toChainStr) || (toChainStr as Chain),
-            amount: options.max ? 'max' : parseFloat(amountStr!),
-            fromToken: options.fromToken,
-            toToken: options.toToken,
-            slippage: options.slippage ? parseFloat(options.slippage) : undefined,
-            dryRun: options.dryRun,
-            yes: options.yes || options.confirm,
-            force: options.force,
-            password: options.password,
-          })
-        } catch (err: any) {
-          if (err.message === 'Swap cancelled by user') {
-            warn('\nx Swap cancelled')
-            return
-          }
-          throw err
-        }
+        // A decline throws ConfirmationRequiredError (exit 12) — see `send` above.
+        await executeSwap(context, {
+          fromChain: findChainByName(fromChainStr) || (fromChainStr as Chain),
+          toChain: findChainByName(toChainStr) || (toChainStr as Chain),
+          amount: options.max ? 'max' : amountStr!,
+          fromToken: options.fromToken,
+          toToken: options.toToken,
+          slippage: options.slippage ? parseFloat(options.slippage) : undefined,
+          dryRun: options.dryRun,
+          yes: options.yes || options.confirm,
+          force: options.force,
+          password: options.password,
+        })
       }
     )
   )
