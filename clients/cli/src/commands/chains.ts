@@ -54,12 +54,10 @@ export async function executeChains(ctx: CommandContext, options: ChainsOptions 
         suggestions.length > 0
           ? `Did you mean: ${suggestions.join(', ')}? Or run "vultisig chains" to see the supported chains.`
           : 'Run "vultisig chains" to see the supported chains, or check the spelling.'
-      throw new InvalidChainError(
-        `Unsupported chain: "${options.add}"`,
-        hint,
-        undefined,
-        { chain: String(options.add), ...(suggestions.length > 0 ? { suggestions: suggestions.join(',') } : {}) }
-      )
+      throw new InvalidChainError(`Unsupported chain: "${options.add}"`, hint, undefined, {
+        chain: String(options.add),
+        ...(suggestions.length > 0 ? { suggestions: suggestions.join(',') } : {}),
+      })
     }
     const alreadyActive = vault.chains.includes(options.add)
     if (!alreadyActive) {
