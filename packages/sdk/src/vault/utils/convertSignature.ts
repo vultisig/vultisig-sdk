@@ -74,7 +74,7 @@ export function convertToKeysignSignatures(
   const result: Record<string, KeysignSignature> = {}
 
   if (signature.signatures && signature.signatures.length > 0) {
-    // UTXO multi-signature case (multiple inputs)
+    // Multi-message case (UTXO inputs, bundled approvals, and similar flows)
     signature.signatures.forEach((sig, index) => {
       const messageHash = messageHashes[index]
       if (!messageHash) {
