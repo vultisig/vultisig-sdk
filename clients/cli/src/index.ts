@@ -750,7 +750,9 @@ Examples:
 // Command: Sign arbitrary bytes (for externally constructed transactions)
 program
   .command('sign')
-  .description('Sign pre-hashed bytes (for externally constructed transactions). Previews by default — pass --yes to confirm.')
+  .description(
+    'Sign pre-hashed bytes (for externally constructed transactions). Previews by default — pass --yes to confirm.'
+  )
   .requiredOption('--chain <chain>', 'Target blockchain')
   .requiredOption('--bytes <base64>', 'Base64-encoded pre-hashed data to sign')
   .option('-y, --yes', 'Confirm signing without an interactive prompt (required in non-interactive contexts)')
