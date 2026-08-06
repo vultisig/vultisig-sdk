@@ -115,6 +115,11 @@ export { keysign } from '@vultisig/core-mpc/keysign'
 export { validateSeedphrase } from '../../seedphrase/SeedphraseValidator'
 export { SEEDPHRASE_WORD_COUNTS } from '../../seedphrase/types'
 
+// Default-chain canonicals — exported on RN so mobile consumers can delete
+// local onboarding/import default-chain mirrors and follow the same SDK owner.
+export { DEFAULT_CHAINS } from '../../constants'
+export { defaultChains } from '@vultisig/core-chain/Chain'
+
 // WalletCore provider access
 export { configureWasm, getWalletCore } from '../../context/wasmRuntime'
 
