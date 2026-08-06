@@ -1,4 +1,5 @@
 import { getLimitSwapSourceChainKind, limitSwapMemoByteLimit, LimitSwapSourceChainKind } from './limitSwapMemo'
+import { findThorchainMemoAssetSeparatorIndex } from './thorchainMemoAsset'
 
 /**
  * THORChain's modify-limit-swap prefix. Distinct from `limitSwapMemoPrefix`
@@ -84,9 +85,6 @@ export type LimitSwapCancelInputs = {
  */
 const minimumFullTokenIdentifierLength = 20
 
-/** Every separator a THORChain memo asset can use: L1, synth, trade, secured. */
-const assetSeparators = ['.', '/', '~', '-']
-
 /**
  * Whether a memo asset carries a TRUNCATED token identifier —
  * `ETH.USDC-06EB48` rather than `ETH.USDC-0XA0B86991…`.
@@ -103,7 +101,7 @@ const assetSeparators = ['.', '/', '~', '-']
  * `btc-btc` carry no identifier at all and are full by construction.
  */
 export const isAbbreviatedThorchainMemoAsset = (asset: string): boolean => {
-  const chainEnd = [...asset].findIndex(char => assetSeparators.includes(char))
+  const chainEnd = findThorchainMemoAssetSeparatorIndex(asset)
   const symbol = chainEnd === -1 ? asset : asset.slice(chainEnd + 1)
   const identifierStart = symbol.indexOf('-')
   if (identifierStart === -1) {
@@ -195,6 +193,96 @@ export const buildCancelLimitSwapMemo = (inputs: LimitSwapCancelInputs): string 
   const source = `${sourceAmount}${sourceAsset}`
   const target = `${tradeTarget}${targetAsset}`
   return `${modifyLimitSwapMemoPrefix}${source}:${target}:${cancelModifiedTargetAmount}`
+}
+
+/**
+ * `<digits><ASSET>`, the space-less coin form THORNode's `getCoin` splits.
+ *
+ * The asset is anchored on a NON-digit. Without that anchor the greedy digit run
+ * backtracks, so an asset-less `100000000` parses as amount `10000000` and asset
+ * `"0"` — a coin THORNode would reject, silently reported here as valid. Every
+ * THORChain asset starts with a chain prefix letter, so nothing legitimate is
+ * excluded.
+ */
+const cancelMemoCoinPattern = /^(\d+)(\D\S*)$/
+
+/**
+ * Split one `<amount><ASSET>` field the way THORNode's `getCoin` does: take the
+ * leading run of digits as the amount, and everything after it as the asset.
+ *
+ * The absence of a separator is what makes this necessary — an asset can itself
+ * contain digits (`ETH.USDC-0xA0b86991…`), so the boundary is defined only by
+ * where the digits stop.
+ */
+const parseCancelMemoCoin = (field: string, fieldName: string, memo: string): { amount: bigint; asset: string } => {
+  const match = cancelMemoCoinPattern.exec(field)
+  if (!match) {
+    throw new Error(
+      `limit-order cancel memo ${fieldName} must be "<amount><ASSET>" with no separator, got ${JSON.stringify(field)} in ${JSON.stringify(memo)}`
+    )
+  }
+
+  const [, amount, asset] = match
+
+  return { amount: BigInt(amount), asset }
+}
+
+/** The order identity an `m=<` cancel memo encodes, as decoded from the memo. */
+export type ParsedLimitSwapCancelMemo = LimitSwapCancelInputs
+
+/**
+ * Decode the cancel memo's order identity — the inverse of
+ * {@link buildCancelLimitSwapMemo}.
+ *
+ * Fail closed on anything that is not a well-formed CANCEL memo, including a
+ * retarget: a non-zero final field modifies an order's price rather than closing
+ * it, and reporting one as a cancellation would show a co-signer the opposite of
+ * what they are about to sign.
+ *
+ * What comes back is the order's identity, not a request to act on it — these
+ * four values are exactly what {@link getThorchainLimitOrderBucketKey} hashes
+ * into the bucket THORChain will look in, so a caller can show which order is
+ * being cancelled without trusting any field the initiating device supplied
+ * alongside the memo.
+ */
+export const parseCancelLimitSwapMemo = (memo: string): ParsedLimitSwapCancelMemo => {
+  if (!isModifyLimitSwapMemo(memo)) {
+    throw new Error(
+      `memo is not a THORChain limit-order modification (expected a "${modifyLimitSwapMemoPrefix}" prefix): ${JSON.stringify(memo)}`
+    )
+  }
+
+  const segments = memo.slice(modifyLimitSwapMemoPrefix.length).split(':')
+  if (segments.length !== 3) {
+    throw new Error(
+      `limit-order cancel memo must have 3 segments after the prefix, got ${segments.length}: ${JSON.stringify(memo)}`
+    )
+  }
+
+  const [sourceField, targetField, modifiedTarget] = segments
+
+  if (!/^\d+$/.test(modifiedTarget) || BigInt(modifiedTarget) !== 0n) {
+    throw new Error(
+      `memo re-targets a limit order rather than cancelling it (modified target ${JSON.stringify(modifiedTarget)}): ${JSON.stringify(memo)}`
+    )
+  }
+
+  const source = parseCancelMemoCoin(sourceField, 'source coin', memo)
+  const target = parseCancelMemoCoin(targetField, 'target coin', memo)
+
+  const inputs: ParsedLimitSwapCancelMemo = {
+    sourceAsset: source.asset,
+    sourceAmount: source.amount,
+    targetAsset: target.asset,
+    tradeTarget: target.amount,
+  }
+
+  // The same invariants the builder enforces, re-checked on the way back in: a
+  // memo that reaches a reviewer from another device was not necessarily built
+  // by this code.
+  assertPositiveLimitSwapCancelAmounts(inputs)
+
+  return inputs
 }
 
 /**
