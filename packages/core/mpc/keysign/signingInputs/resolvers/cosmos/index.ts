@@ -421,15 +421,31 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
 
         const assetCoin = swapPayload?.fromCoin ?? coin
         const isSecuredWithdrawal = isSecuredAssetWithdrawal({ chain, keysignPayload, native: swapPayload })
-        const securedSwapFromCoin =
-          swapPayload?.fromCoin && isSecuredAssetSwapCoin(swapPayload.fromCoin) ? swapPayload.fromCoin : undefined
+        // Keyed off `assetCoin`, which is the swap payload's source when there is
+        // one and the payload's own coin otherwise. Reading `swapPayload.fromCoin`
+        // directly meant only SWAPS could deposit a secured asset correctly: a
+        // limit order carries no swap payload, so it fell through to chain+ticker
+        // and deposited `THOR.BTC` — an asset no vault holds — failing on-chain
+        // with `insufficient funds` while the memo itself was perfectly valid.
+        //
+        // A secured WITHDRAWAL is excluded: there `assetCoin` is the L1 coin being
+        // pulled off THORChain, and its asset is built by the branch below.
+        // The two shapes spell the denom differently — a swap payload's coin uses
+        // `contractAddress`, the payload's own coin uses `id` — so read whichever
+        // is present rather than assuming the swap shape.
+        const assetDenom =
+          ('contractAddress' in assetCoin ? assetCoin.contractAddress : assetCoin.id)?.trim() || undefined
+
+        const securedDepositCoin =
+          !isSecuredWithdrawal &&
+          assetDenom &&
+          isSecuredAssetSwapCoin({ chain: assetCoin.chain, contractAddress: assetDenom })
+            ? { contractAddress: assetDenom, ticker: assetCoin.ticker }
+            : undefined
 
         const depositCoin = TW.Cosmos.Proto.THORChainCoin.create({
-          asset: securedSwapFromCoin
-            ? getSecuredAssetDepositAsset({
-                contractAddress: securedSwapFromCoin.contractAddress,
-                ticker: securedSwapFromCoin.ticker,
-              })
+          asset: securedDepositCoin
+            ? getSecuredAssetDepositAsset(securedDepositCoin)
             : getThorchainDepositAsset({ assetCoin, chain, secured: isSecuredWithdrawal }),
           ...(isPositive
             ? {
