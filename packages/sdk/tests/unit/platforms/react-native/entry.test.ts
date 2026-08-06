@@ -126,6 +126,17 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     })
   })
 
+  it('re-exports the root River helper family on the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const river = await import('../../../../src/tools/defi/river')
+
+    expect(rn.describeRiverMarket).toBe(river.describeRiverMarket)
+    expect(rn.findRiverInsertHints).toBe(river.findRiverInsertHints)
+    expect(rn.formatRiverPercentWad).toBe(river.formatRiverPercentWad)
+    expect(rn.RIVER_TROVE_STATUS_NAMES).toBe(river.RIVER_TROVE_STATUS_NAMES)
+    expect(rn.riverStatusName).toBe(river.riverStatusName)
+  })
+
   it('re-exports XRPL issued-currency canonicals on the RN entrypoint', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
@@ -220,6 +231,16 @@ describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
     expect(typeof rn.getEvmChainByChainId).toBe('function')
     expect(rn.getEvmChainId(rn.Chain.Ethereum)).toBe('0x1')
     expect(rn.getEvmChainByChainId('0x1')).toBe(rn.Chain.Ethereum)
+  })
+
+  it('exports the canonical gas comparison helpers from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const gas = await import('../../../../src/tools/gas')
+
+    expect(rn.compareCosts).toBe(gas.compareCosts)
+    expect(rn.DEFAULT_COMPARE_CHAINS).toBe(gas.DEFAULT_COMPARE_CHAINS)
+    expect(rn.GAS_UNITS).toBe(gas.GAS_UNITS)
+    expect(rn.getChainGasPriceGwei).toBe(gas.getChainGasPriceGwei)
   })
 
   it('re-exports root-public pure helpers needed by React Native consumers', async () => {
