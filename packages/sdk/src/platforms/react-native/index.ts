@@ -115,6 +115,11 @@ export { keysign } from '@vultisig/core-mpc/keysign'
 export { validateSeedphrase } from '../../seedphrase/SeedphraseValidator'
 export { SEEDPHRASE_WORD_COUNTS } from '../../seedphrase/types'
 
+// Default-chain canonicals — exported on RN so mobile consumers can delete
+// local onboarding/import default-chain mirrors and follow the same SDK owner.
+export { DEFAULT_CHAINS } from '../../constants'
+export { defaultChains } from '@vultisig/core-chain/Chain'
+
 // WalletCore provider access
 export { configureWasm, getWalletCore } from '../../context/wasmRuntime'
 
@@ -168,7 +173,7 @@ export type {
 // Solana bridge type surface — pure primitive reimplementation that does NOT
 // pull @solana/web3.js (and therefore avoids the rpc-websockets / ws cascade
 // that hangs Hermes at module init).
-export type { BuildSolanaSendOptions, SolanaTxBuilderResult } from './chains/solana'
+export type { BroadcastSolanaTxOptions, BuildSolanaSendOptions, SolanaTxBuilderResult } from './chains/solana'
 
 // TON bridge type surface — reimplementation built on @ton/core only, which
 // is Hermes-safe (uses jssha via @ton/crypto peer dep, not crypto.subtle).
@@ -369,13 +374,27 @@ export {
 // tables, no chain-client deps, so safe as a static re-export.
 export { getEvmChainByChainId, getEvmChainId } from '@vultisig/core-chain/chains/evm/chainInfo'
 
-// Gas / fee primitives (read-only — uses global `fetch` + a type-only
-// `UtxoChain` import, no heavy chain client). The RN allow-list omitted
-// these so RN consumers (vultiagent-app) couldn't resolve a current
-// sat/vB rate for a UTXO send / consolidation and had to re-implement
-// the THORChain / MayaChain inbound fetch + halt gating by hand.
-export type { UtxoFeeRate } from '../../tools/gas'
-export { MAYACHAIN_NODE_URL, THORCHAIN_NODE_URL, utxoFeeRate } from '../../tools/gas'
+// Gas / fee primitives (read-only — uses global `fetch` + type-only imports,
+// no heavy chain client at module init). The RN allow-list omitted these so RN
+// consumers (vultiagent-app) couldn't resolve current UTXO sat/vB rates OR the
+// canonical multi-chain gas-cost comparison helper from the same SDK family.
+export type {
+  CompareCostsEntry,
+  CompareCostsParams,
+  CompareCostsResult,
+  CompareCostsSkipped,
+  GasTxType,
+  UtxoFeeRate,
+} from '../../tools/gas'
+export {
+  compareCosts,
+  DEFAULT_COMPARE_CHAINS,
+  GAS_UNITS,
+  getChainGasPriceGwei,
+  MAYACHAIN_NODE_URL,
+  THORCHAIN_NODE_URL,
+  utxoFeeRate,
+} from '../../tools/gas'
 
 // DeFi protocol primitives (unsigned calldata builders) — sdk.defi.*
 // Pure builders, RN-safe. Statically re-exported so RN consumers can reach

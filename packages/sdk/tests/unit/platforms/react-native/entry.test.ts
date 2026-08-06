@@ -30,7 +30,7 @@ vi.mock('@vultisig/walletcore-native', () => ({
 
 describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
   it('registers crypto + storage on module load so Vultisig({}) does not throw', async () => {
-    await import('../../../../src/platforms/react-native/index')
+    const rn = await import('../../../../src/platforms/react-native/index')
     const { randomUUID } = await import('../../../../src/crypto')
     const { getDefaultStorage } = await import('../../../../src/context/defaultStorage')
 
@@ -38,6 +38,15 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     const storage = getDefaultStorage()
     expect(storage).toBeDefined()
     expect(typeof storage.get).toBe('function')
+    expect(rn.DEFAULT_CHAINS).toBe(rn.defaultChains)
+  })
+
+  it('exports default chain canonicals on the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(Array.isArray(rn.DEFAULT_CHAINS)).toBe(true)
+    expect(Array.isArray(rn.defaultChains)).toBe(true)
+    expect(rn.DEFAULT_CHAINS).toEqual(['Bitcoin', 'Ethereum', 'THORChain', 'Solana', 'BSC'])
   })
 
   it('exports the canonical Cosmos fee-denom helpers from the RN entry', async () => {
@@ -216,6 +225,16 @@ describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
     expect(typeof rn.getEvmChainByChainId).toBe('function')
     expect(rn.getEvmChainId(rn.Chain.Ethereum)).toBe('0x1')
     expect(rn.getEvmChainByChainId('0x1')).toBe(rn.Chain.Ethereum)
+  })
+
+  it('exports the canonical gas comparison helpers from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const gas = await import('../../../../src/tools/gas')
+
+    expect(rn.compareCosts).toBe(gas.compareCosts)
+    expect(rn.DEFAULT_COMPARE_CHAINS).toBe(gas.DEFAULT_COMPARE_CHAINS)
+    expect(rn.GAS_UNITS).toBe(gas.GAS_UNITS)
+    expect(rn.getChainGasPriceGwei).toBe(gas.getChainGasPriceGwei)
   })
 
   it('re-exports root-public pure helpers needed by React Native consumers', async () => {
