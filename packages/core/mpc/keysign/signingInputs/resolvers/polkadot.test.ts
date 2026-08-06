@@ -153,3 +153,31 @@ describe('getPolkadotSigningInputs', () => {
     expect(callIndexOffsets).toEqual([CALL_INDICES_OFFSET])
   })
 })
+
+describe('getPolkadotSigningInputs -- amount strict parse (#1147)', () => {
+  let walletCore: WalletCore
+
+  beforeAll(async () => {
+    walletCore = await initWasm()
+  })
+
+  it("rejects an unset ('') amount instead of building a zero-value transfer", () => {
+    const payload = buildPayload()
+    payload.toAmount = ''
+    // Pre-fix: BigInt('') -> 0n -> a 0x00 value byte silently co-signed.
+    expect(() => getPolkadotSigningInputs({ keysignPayload: payload, walletCore })).toThrow(RangeError)
+  })
+
+  it('rejects an amount above the u128 balance range', () => {
+    const payload = buildPayload()
+    payload.toAmount = (2n ** 128n).toString()
+    expect(() => getPolkadotSigningInputs({ keysignPayload: payload, walletCore })).toThrow(RangeError)
+  })
+
+  it('still builds a transfer above 64 bits (u128 balances must not false-reject)', async () => {
+    const payload = buildPayload()
+    payload.toAmount = (2n ** 64n).toString()
+    const [input] = await getPolkadotSigningInputs({ keysignPayload: payload, walletCore })
+    expect(hex(input.balanceCall?.assetTransfer?.value ?? new Uint8Array())).toBe('010000000000000000')
+  })
+})

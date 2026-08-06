@@ -1,6 +1,7 @@
 import { Buffer } from 'buffer'
 import { fromCardanoAssetId } from '@vultisig/core-chain/chains/cardano/asset/cardanoAssetId'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
+import { toBoundedLong } from '@vultisig/lib-utils/bigint/toBoundedLong'
 import { bigIntSum } from '@vultisig/lib-utils/bigint/bigIntSum'
 import { stripHexPrefix } from '@vultisig/lib-utils/hex/stripHexPrefix'
 import { TW } from '@trustwallet/wallet-core'
@@ -63,7 +64,7 @@ export const getCardanoSigningInputs: SigningInputsResolver<'cardano'> = ({ keys
     transferMessage: TW.Cardano.Proto.Transfer.create({
       toAddress: keysignPayload.toAddress,
       changeAddress: coin.address,
-      amount: Long.fromString(sendAmount.toString()),
+      amount: toBoundedLong(sendAmount, { unsigned: true }),
       useMaxAmount: false,
       tokenAmount: tokenBundle,
       forceFee: Long.fromString(byteFee.toString()),

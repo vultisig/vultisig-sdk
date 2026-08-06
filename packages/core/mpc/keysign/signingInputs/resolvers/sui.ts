@@ -1,4 +1,5 @@
 import { suiGasBudget } from '@vultisig/core-chain/chains/sui/config'
+import { toBoundedLong } from '@vultisig/lib-utils/bigint/toBoundedLong'
 import { SuiCoin } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { TW } from '@trustwallet/wallet-core'
 import Long from 'long'
@@ -79,7 +80,7 @@ export const getSuiSigningInputs: SigningInputsResolver<'sui'> = ({ keysignPaylo
           gas: createObjectRef(gasObject),
           inputCoins: inputCoins,
           recipients: [keysignPayload.toAddress],
-          amounts: [Long.fromString(keysignPayload.toAmount)],
+          amounts: [toBoundedLong(keysignPayload.toAmount, { unsigned: true })],
         }),
       }),
     ]
@@ -93,7 +94,7 @@ export const getSuiSigningInputs: SigningInputsResolver<'sui'> = ({ keysignPaylo
       paySui: TW.Sui.Proto.PaySui.create({
         inputCoins: inputCoins,
         recipients: [keysignPayload.toAddress],
-        amounts: [Long.fromString(keysignPayload.toAmount)],
+        amounts: [toBoundedLong(keysignPayload.toAmount, { unsigned: true })],
       }),
     }),
   ]

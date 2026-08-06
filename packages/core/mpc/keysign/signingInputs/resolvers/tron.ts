@@ -1,6 +1,8 @@
 import { Buffer } from 'buffer'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { bigIntToHex } from '@vultisig/lib-utils/bigint/bigIntToHex'
+import { toBoundedBigInt } from '@vultisig/lib-utils/bigint/toBoundedBigInt'
+import { toBoundedLong } from '@vultisig/lib-utils/bigint/toBoundedLong'
 import { stripHexPrefix } from '@vultisig/lib-utils/hex/stripHexPrefix'
 import { matchDiscriminatedUnion } from '@vultisig/lib-utils/matchDiscriminatedUnion'
 import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
@@ -40,7 +42,7 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
       throw new Error(`Invalid TRON resource type: ${resource}`)
     }
 
-    const frozenBalance = Long.fromString(shouldBePresent(keysignPayload?.toAmount))
+    const frozenBalance = toBoundedLong(shouldBePresent(keysignPayload?.toAmount), { unsigned: false })
     if (frozenBalance.lessThanOrEqual(Long.ZERO)) {
       throw new Error('Frozen balance must be strictly positive')
     }
@@ -73,7 +75,7 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
       throw new Error(`Invalid TRON resource type: ${resource}`)
     }
 
-    const unfreezeBalance = Long.fromString(shouldBePresent(keysignPayload?.toAmount))
+    const unfreezeBalance = toBoundedLong(shouldBePresent(keysignPayload?.toAmount), { unsigned: false })
     if (unfreezeBalance.lessThanOrEqual(Long.ZERO)) {
       throw new Error('Unfreeze balance must be strictly positive')
     }
@@ -121,7 +123,7 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
             transfer: TW.Tron.Proto.TransferContract.create({
               ownerAddress: value.ownerAddress,
               toAddress: value.toAddress,
-              amount: Long.fromString(value.amount),
+              amount: toBoundedLong(value.amount, { unsigned: false }),
             }),
           }
         },
@@ -143,7 +145,7 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
             transferAsset: TW.Tron.Proto.TransferAssetContract.create({
               ownerAddress: value.ownerAddress,
               toAddress: value.toAddress,
-              amount: Long.fromString(value.amount),
+              amount: toBoundedLong(value.amount, { unsigned: false }),
               assetName: value.assetName,
             }),
             feeLimit: Long.fromString(tronSpecific.gasEstimation.toString()),
@@ -184,7 +186,9 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
           const contract = TW.Tron.Proto.TransferContract.create({
             ownerAddress: shouldBePresent(keysignPayload?.coin?.address),
             toAddress: shouldBePresent(vaultAddress),
-            amount: Long.fromString(shouldBePresent(keysignPayload?.toAmount)),
+            amount: toBoundedLong(shouldBePresent(keysignPayload?.toAmount), {
+              unsigned: false,
+            }),
           })
 
           const input = TW.Tron.Proto.SigningInput.create({
@@ -207,7 +211,10 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
           return [input]
         }
 
-        const amountHex = Buffer.from(stripHexPrefix(bigIntToHex(BigInt(keysignPayload.toAmount))), 'hex')
+        const amountHex = Buffer.from(
+          stripHexPrefix(bigIntToHex(toBoundedBigInt(keysignPayload.toAmount, { bits: 256, signed: false }))),
+          'hex'
+        )
 
         const contract = TW.Tron.Proto.TransferTRC20Contract.create({
           ownerAddress: shouldBePresent(keysignPayload?.coin?.address),
@@ -247,7 +254,9 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
     const contract = TW.Tron.Proto.TransferContract.create({
       ownerAddress: shouldBePresent(keysignPayload?.coin?.address),
       toAddress: shouldBePresent(keysignPayload?.toAddress),
-      amount: Long.fromString(shouldBePresent(keysignPayload?.toAmount)),
+      amount: toBoundedLong(shouldBePresent(keysignPayload?.toAmount), {
+        unsigned: false,
+      }),
     })
 
     const input = TW.Tron.Proto.SigningInput.create({
@@ -270,7 +279,10 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
     return [input]
   }
 
-  const amountHex = Buffer.from(stripHexPrefix(bigIntToHex(BigInt(keysignPayload.toAmount))), 'hex')
+  const amountHex = Buffer.from(
+    stripHexPrefix(bigIntToHex(toBoundedBigInt(keysignPayload.toAmount, { bits: 256, signed: false }))),
+    'hex'
+  )
 
   const contract = TW.Tron.Proto.TransferTRC20Contract.create({
     ownerAddress: shouldBePresent(keysignPayload?.coin?.address),

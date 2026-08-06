@@ -139,6 +139,16 @@
       "import": "./dist/bigint/decimalStringToBigInt.js",
       "default": "./dist/bigint/decimalStringToBigInt.js"
     },
+    "./bigint/toBoundedBigInt": {
+      "types": "./dist/bigint/toBoundedBigInt.d.ts",
+      "import": "./dist/bigint/toBoundedBigInt.js",
+      "default": "./dist/bigint/toBoundedBigInt.js"
+    },
+    "./bigint/toBoundedLong": {
+      "types": "./dist/bigint/toBoundedLong.d.ts",
+      "import": "./dist/bigint/toBoundedLong.js",
+      "default": "./dist/bigint/toBoundedLong.js"
+    },
     "./capitalizeFirstLetter": {
       "types": "./dist/capitalizeFirstLetter.d.ts",
       "import": "./dist/capitalizeFirstLetter.js",

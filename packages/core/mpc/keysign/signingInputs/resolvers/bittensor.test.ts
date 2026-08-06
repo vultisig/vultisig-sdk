@@ -231,3 +231,33 @@ describe('getBittensorSigningInputs — custom tx-input framing round-trips', ()
     expect(hex(decoded.payload)).toBe(hex(payload))
   })
 })
+
+describe('getBittensorSigningInputs -- amount strict parse (#1147)', () => {
+  let walletCore: WalletCore
+
+  beforeAll(async () => {
+    walletCore = await initWasm()
+  })
+
+  it("rejects an unset ('') amount instead of building a zero-value transfer", () => {
+    const payload = buildPayload()
+    payload.toAmount = ''
+    // Pre-fix: BigInt('') -> 0n -> compactEncode(0n) silently co-signed.
+    expect(() => getBittensorSigningInputs({ keysignPayload: payload, walletCore })).toThrow(RangeError)
+  })
+
+  it('rejects an amount above the u64 balance range (subtensor Balance is u64)', () => {
+    const payload = buildPayload()
+    payload.toAmount = (2n ** 64n).toString()
+    expect(() => getBittensorSigningInputs({ keysignPayload: payload, walletCore })).toThrow(RangeError)
+  })
+
+  it('still builds a transfer at the u64 max (no false-reject)', () => {
+    const payload = buildPayload()
+    payload.toAmount = (2n ** 64n - 1n).toString()
+    const [txInputData] = getBittensorSigningInputs({ keysignPayload: payload, walletCore })
+    const { callData } = decodeBittensorTxInput(txInputData)
+    // callData ends with the SCALE-compact-encoded amount.
+    expect(hex(callData).endsWith(hex(compactEncode(2n ** 64n - 1n)))).toBe(true)
+  })
+})
