@@ -181,6 +181,68 @@ describe('AgentExecutor.getPendingSummary', () => {
     expect(executor.getPendingSummary()).toBe('send 500000 USDC on Base to 0xRecipientAddr')
   })
 
+  it('does not append a rich token label already embedded in the resolved amount', () => {
+    const executor = new AgentExecutor(createMockVault())
+    const tokenLabel = 'USDC.e on Polygon (0x2791…4174)'
+
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Polygon',
+        txArgs: { chain: 'Polygon', tx: { to: '0x2791…4174', value: '0' } },
+        resolved: {
+          labels: {
+            resolved_amount: `0.05 ${tokenLabel}`,
+            token_resolved: tokenLabel,
+            recipient_echo: '0x58C4…5C35',
+          },
+        },
+      })
+    ).toBe(true)
+    const summary = executor.getPendingSummary()!
+    expect(summary).toBe(`send 0.05 ${tokenLabel} on Polygon (0x2791…4174) to 0x58C4…5C35`)
+    expect(summary.match(/USDC\.e on Polygon \(0x2791…4174\)/g)).toHaveLength(1)
+  })
+
+  it.each([
+    [
+      'multi-word asset name',
+      '0.05 USD Coin',
+      'USD Coin on Polygon (0x2791…4174)',
+      'send 0.05 USD Coin USD on Polygon Coin (0x2791…4174) to 0x58C4…5C35',
+    ],
+    [
+      'lowercase chain in label',
+      '0.05 USDC.e',
+      'USDC.e on polygon (0x2791…4174)',
+      'send 0.05 USDC.e on Polygon on polygon (0x2791…4174) to 0x58C4…5C35',
+    ],
+    [
+      'chain named twice in label',
+      '0.05 USDC.e',
+      'USDC.e on Polygon on Polygon (0x2791…4174)',
+      'send 0.05 USDC.e on Polygon on Polygon (0x2791…4174) to 0x58C4…5C35',
+    ],
+  ])('keeps the non-lossy fallback for %s', (_shape, resolvedAmount, tokenLabel, expected) => {
+    const executor = new AgentExecutor(createMockVault())
+
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Polygon',
+        txArgs: { chain: 'Polygon', tx: { to: '0x2791…4174', value: '0' } },
+        resolved: {
+          labels: {
+            resolved_amount: resolvedAmount,
+            token_resolved: tokenLabel,
+            recipient_echo: '0x58C4…5C35',
+          },
+        },
+      })
+    ).toBe(true)
+    const summary = executor.getPendingSummary()!
+    expect(summary).toBe(expected)
+    expect(summary).toContain('(0x2791…4174)')
+  })
+
   it('never drops label details it cannot parse — unexpected shapes stay verbatim', () => {
     const executor = new AgentExecutor(createMockVault())
     const store = (token_resolved: string) =>

@@ -418,7 +418,8 @@ export class AgentExecutor {
       .slice(symbol.length)
       .replace(new RegExp(`(?:^|\\s)on ${escapedChain}(?=\\s|$)`), '')
       .trim()
-    const amountWithSymbol = symbol && !amount.endsWith(` ${symbol}`) ? `${amount} ${symbol}` : amount
+    const amountWithSymbol =
+      symbol && !amount.endsWith(` ${symbol}`) && !amount.endsWith(` ${tokenLabel}`) ? `${amount} ${symbol}` : amount
     const location = `on ${stored.chain}${tokenDetail ? ` ${tokenDetail}` : ''}`
     const to = (p?.txArgs?.to as string) || labels.recipient_echo || '?'
     return `send ${amountWithSymbol} ${location} to ${to}`
