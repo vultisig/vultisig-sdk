@@ -226,6 +226,8 @@ describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
     expect(rn.DEFAULT_COMPARE_CHAINS).toBe(gas.DEFAULT_COMPARE_CHAINS)
     expect(rn.GAS_UNITS).toBe(gas.GAS_UNITS)
     expect(rn.getChainGasPriceGwei).toBe(gas.getChainGasPriceGwei)
+  })
+
   it('exports canonical chain-kind helpers from the RN entry', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
     const chainKind = await import('@vultisig/core-chain/ChainKind')
