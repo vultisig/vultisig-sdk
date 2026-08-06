@@ -33,7 +33,7 @@ describe('tokens --add', () => {
     vi.restoreAllMocks()
   })
 
-  it('stores the prefixed vault id and the bare contract address separately', async () => {
+  it('stores the BARE contract address as the id, matching discoverTokens', async () => {
     configureOutput({ format: 'json' })
     const addTokenToVault = vi.fn(async () => {})
     const vault = { addToken: addTokenToVault } as unknown as VaultBase
@@ -50,10 +50,38 @@ describe('tokens --add', () => {
     expect(addTokenToVault).toHaveBeenCalledWith(
       Chain.Ethereum,
       expect.objectContaining({
-        id: `${Chain.Ethereum}-${USDC}`,
+        id: USDC,
         contractAddress: USDC,
       })
     )
+  })
+
+  // ROUNDTRIP (review ask): the point of aligning `--add` with `discoverTokens` is that a token
+  // added through the CLI can then be REMOVED by the same raw address the user typed. Pinning the
+  // id alone would not catch a future divergence between the two paths, because removal resolves
+  // through `contractAddress || id` - so assert the pair the resolver actually reads.
+  it('the added token is removable by the raw contract address the user typed', async () => {
+    configureOutput({ format: 'json' })
+    const added: Array<{ id?: string; contractAddress?: string }> = []
+    const addTokenToVault = vi.fn(async (_chain: unknown, t: { id?: string; contractAddress?: string }) => {
+      added.push(t)
+    })
+    const vault = { addToken: addTokenToVault } as unknown as VaultBase
+    const ctx = { ensureActiveVault: async () => vault } as unknown as CommandContext
+
+    await addToken(ctx, {
+      chain: Chain.Ethereum,
+      contractAddress: USDC,
+      symbol: 'USDC',
+      name: 'USD Coin',
+      decimals: 6,
+    })
+
+    const stored = added[0]!
+    // BalanceService.removeToken resolves `token.contractAddress?.toLowerCase() === lower`, falling
+    // back to the id - so both must normalize to the raw address the user would pass to --remove.
+    expect(stored.contractAddress?.toLowerCase()).toBe(USDC.toLowerCase())
+    expect(stored.id?.toLowerCase()).toBe(USDC.toLowerCase())
   })
 })
 
