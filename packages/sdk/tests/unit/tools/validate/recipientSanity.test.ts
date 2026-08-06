@@ -24,6 +24,21 @@ describe('isNullAddress', () => {
     expect(isNullAddress(SOL_INCINERATOR)).toBe(true)
   })
 
+  // #1193: routed through the shared table — these were MISSED by the old inline copy and must now flag.
+  it('flags the burns the inline copy missed, via the shared table', () => {
+    // EVM third canonical variant.
+    expect(isNullAddress('0xdead000000000000000042069420694206942069')).toBe(true)
+    // Solana SPL Token Program + Wrapped SOL mint (programs, not wallets).
+    expect(isNullAddress('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA')).toBe(true)
+    expect(isNullAddress('So11111111111111111111111111111111111111112')).toBe(true)
+    // Bitcoin null / eater burns.
+    expect(isNullAddress('1111111111111111111114oLvT2')).toBe(true)
+    expect(isNullAddress('1BitcoinEaterAddressDontSendf59kuE')).toBe(true)
+    // XRP Ledger black-hole accounts.
+    expect(isNullAddress('rrrrrrrrrrrrrrrrrrrrrhoLvTp')).toBe(true)
+    expect(isNullAddress('rrrrrrrrrrrrrrrrrrrrBZbvji')).toBe(true)
+  })
+
   // Go parity: null_recipient_test.go TestIsNullAddress.
   // The Go check lowercases the WHOLE string before the 0x-prefix test, so an
   // uppercase 0X prefix on the zero address must still flag (mixed-case repro).
