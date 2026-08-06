@@ -514,8 +514,16 @@ export class SecureVault extends VaultBase {
    * @param context - Vault context with dependencies
    * @internal Used by VaultManager.importVault()
    */
-  static fromImport(vaultId: string, vultContent: string, parsedVault: CoreVault, context: VaultContext): SecureVault {
-    return new SecureVault(vaultId, parsedVault.name, vultContent, context, parsedVault)
+  static fromImport(
+    vaultId: string,
+    vultContent: string,
+    parsedVault: CoreVault,
+    context: VaultContext,
+    persistedVaultData?: VaultData
+  ): SecureVault {
+    const vault = new SecureVault(vaultId, parsedVault.name, vultContent, context, parsedVault)
+    if (persistedVaultData) vault.setPersistedBaseline(persistedVaultData)
+    return vault
   }
 
   /**
@@ -524,7 +532,7 @@ export class SecureVault extends VaultBase {
    * @param vaultData - Stored vault data
    * @param context - Vault context with dependencies
    */
-  static fromStorage(vaultData: VaultData, context: VaultContext): SecureVault {
+  static fromStorage(vaultData: VaultData, context: VaultContext, persisted = true): SecureVault {
     // Validate vault type
     if (vaultData.type !== 'secure') {
       throw new VaultError(VaultErrorCode.InvalidVault, `Cannot create SecureVault from ${vaultData.type} vault data`)
@@ -544,8 +552,8 @@ export class SecureVault extends VaultBase {
       ;(vault as any)._tokens = vaultData.tokens
     }
 
-    // Override vaultData to ensure all stored fields are preserved
-    ;(vault as any).vaultData = vaultData
+    // Override constructor defaults and retain the persisted revision baseline.
+    vault.restorePersistedVaultData(vaultData, persisted)
 
     // CRITICAL: Update coreVault with stored identity fields
     vault.coreVault.publicKeys = vaultData.publicKeys

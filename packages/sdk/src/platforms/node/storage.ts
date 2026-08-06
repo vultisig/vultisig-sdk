@@ -98,6 +98,7 @@ export class FileStorage implements Storage {
       await fs.writeFile(tempPath, JSON.stringify(stored, null, 2), {
         encoding: 'utf-8',
         mode: 0o600,
+        flag: 'wx',
       })
 
       await fs.rename(tempPath, filePath)

@@ -1,5 +1,14 @@
 # @vultisig/core-mpc
 
+## 1.16.2
+
+### Patch Changes
+
+- [#1756](https://github.com/vultisig/vultisig-sdk/pull/1756) [`fbc5b44`](https://github.com/vultisig/vultisig-sdk/commit/fbc5b4445e102534eb434d7cabcd6fe8d633b391) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Allow native swaps whose source is the protocol's own chain (RUNE on THORChain, CACAO on MayaChain) past the broadcast guard: those routes are MsgDeposits with no inbound vault and never appear in /inbound_addresses, so the inbound-existence and vault-address checks are skipped for them while quote-expiry and trading-halt checks still run.
+
+- Updated dependencies [[`67667fe`](https://github.com/vultisig/vultisig-sdk/commit/67667fe61a8dd85d40c1b91978da5414987cab6c), [`fb601d5`](https://github.com/vultisig/vultisig-sdk/commit/fb601d5ad6f6e6a7089ca449ee24bc5c1d7b82f9)]:
+  - @vultisig/core-chain@2.31.2
+
 ## 1.16.1
 
 ### Patch Changes
