@@ -137,7 +137,12 @@ export class BalanceService {
             result[key] = balance
           }
         } catch (error) {
-          console.warn(`Failed to fetch balance for ${chain}:`, error)
+          // Log the message only, never the raw Error object - console.warn formats an
+          // Error argument with its full stack, and that stack includes `file://` frames
+          // with the local filesystem path (the actual leak this guards against). Same
+          // convention as ServerManager/RelaySigningService's MLDSA warn logs.
+          const message = error instanceof Error ? error.message : String(error)
+          console.warn(`Failed to fetch balance for ${chain}: ${message}`)
           onChainError?.(chain, error)
         }
       })
