@@ -234,9 +234,19 @@ describe('AgentExecutor.getPendingSummary', () => {
     expect(summary.match(/USDC\.e on Polygon \(0x2791…4174\)/g)).toHaveLength(1)
   })
 
-  it('keeps the routed chain when an embedded full token label names a different chain', () => {
+  it.each([
+    [
+      'a different primary chain',
+      'USDC.e on Ethereum (0xA0b8…eB48)',
+      'send 0.05 USDC.e on Ethereum (0xA0b8…eB48) on Polygon on Ethereum (0xA0b8…eB48) to 0x58C4…5C35',
+    ],
+    [
+      'the routed chain only in a secondary negated phrase',
+      'USDC.e on Ethereum (0xA0b8…eB48) not on Polygon',
+      'send 0.05 USDC.e on Ethereum (0xA0b8…eB48) not on Polygon on Polygon on Ethereum (0xA0b8…eB48) not to 0x58C4…5C35',
+    ],
+  ])('keeps the routed chain when an embedded full token label names %s', (_shape, tokenLabel, expected) => {
     const executor = new AgentExecutor(createMockVault())
-    const tokenLabel = 'USDC.e on Ethereum (0xA0b8…eB48)'
 
     expect(
       executor.storeServerTransaction({
@@ -251,9 +261,7 @@ describe('AgentExecutor.getPendingSummary', () => {
         },
       })
     ).toBe(true)
-    const summary = executor.getPendingSummary()!
-    expect(summary).toContain('on Polygon')
-    expect(summary).toContain(tokenLabel)
+    expect(executor.getPendingSummary()).toBe(expected)
   })
 
   it.each([
