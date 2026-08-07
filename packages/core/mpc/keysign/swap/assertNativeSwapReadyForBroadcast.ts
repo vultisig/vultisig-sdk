@@ -111,9 +111,17 @@ export const assertNativeSwapReadyForBroadcast = async ({
   }
   const inboundByChainId = new Map(inboundAddresses.map(info => [info.chain.toUpperCase(), info]))
 
+  // sdk#1726: a swap whose SOURCE is the protocol's own chain (RUNE on THORChain, CACAO on
+  // MayaChain) is a MsgDeposit straight to the network - it has no inbound vault, and
+  // /inbound_addresses only lists external chains, so the lookup below is undefined by design.
+  // Skip the inbound-existence and vault-address checks for those routes (the same tolerance the
+  // halt loop below already applies); quote expiry and the halt checks still run. A RUNE source
+  // routed VIA Maya is NOT exempt: Maya's feed lists THOR as an external chain.
+  const sourceIsProtocolChain = chain === native.chain
+
   const activeInbound = inboundByChainId.get(sourceChainId.toUpperCase())
 
-  if (!activeInbound?.address) {
+  if (!sourceIsProtocolChain && !activeInbound?.address) {
     throw new NativeSwapBroadcastGuardError(
       'network_error',
       `Cannot validate ${native.chain} inbound vault for source chain ${sourceChainId}`
@@ -154,7 +162,13 @@ export const assertNativeSwapReadyForBroadcast = async ({
     }
   }
 
-  if (activeInbound.address.toLowerCase() !== native.vaultAddress.toLowerCase()) {
+  // MsgDeposit payloads carry no vault address, so the staleness comparison is meaningless for
+  // protocol-chain sources even if the feed ever grew a THOR/MAYA entry.
+  if (sourceIsProtocolChain) {
+    return
+  }
+
+  if (!activeInbound?.address || activeInbound.address.toLowerCase() !== native.vaultAddress.toLowerCase()) {
     throw new NativeSwapBroadcastGuardError(
       'invalid_vault',
       `${native.chain} inbound vault address changed; refresh the swap quote before broadcasting`

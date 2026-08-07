@@ -1460,6 +1460,12 @@ Each chain kind has specific:
 - **RPC endpoints** - Chain-specific API URLs
 - **Transaction format** - Chain-specific encoding
 
+Transaction construction, broadcast, confirmation, and React Native transport
+have separate ownership boundaries. See
+[Chain transaction ownership](CHAIN-TRANSACTION-OWNERSHIP.md) before changing a
+chain implementation so platform adapters retain the core broadcast and status
+guarantees.
+
 ### Token Support
 
 | Chain Type | Token Standard | Example         |

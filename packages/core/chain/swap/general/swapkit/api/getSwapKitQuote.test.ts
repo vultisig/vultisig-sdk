@@ -1236,10 +1236,7 @@ describe('getSwapKitQuote', () => {
     expect(evmTx.evm.approvalAddress).toBeUndefined()
   })
 
-  it.each([
-    ['Sui', Chain.Sui, 'sui-source', 'SUI', 9],
-    ['Cardano', Chain.Cardano, 'addr1source', 'ADA', 6],
-  ] as const)(
+  it.each([['Cardano', Chain.Cardano, 'addr1source', 'ADA', 6]] as const)(
     '%s is dispatch-eligible as a SwapKit source (in swapKitSourceChains) but getSwapKitQuote rejects it explicitly, before any network call, since no tx-build path exists yet',
     async (_label, chain, address, ticker, decimals) => {
       const fetchMock = vi.fn()
@@ -1259,4 +1256,116 @@ describe('getSwapKitQuote', () => {
       expect(fetchMock).not.toHaveBeenCalled()
     }
   )
+
+  // Base64 is the SwapKit wire shape for a Sui source. It must reach the
+  // keysign payload as raw bytes so an iOS/Android cosigner rebuilds a
+  // byte-identical signing input.
+  const suiPtbBase64 = Buffer.from('sui-programmable-transaction-block').toString('base64')
+
+  const stubSuiRoute = (meta: Record<string, unknown> | undefined) => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        response({ routes: [{ routeId: 'near-route', providers: ['NEAR'], expectedBuyAmount: '0.5' }] })
+      )
+      .mockResolvedValueOnce(
+        response({
+          providers: ['NEAR'],
+          targetAddress: 'sui-deposit',
+          ...(meta ? { meta } : {}),
+          tx: suiPtbBase64,
+        })
+      )
+    vi.stubGlobal('fetch', fetchMock)
+    configureSwapKit({ apiKey: 'test-key' })
+
+    return fetchMock
+  }
+
+  const quoteSuiSource = () =>
+    getSwapKitQuote({
+      from: { chain: Chain.Sui, address: 'sui-source', ticker: 'SUI', decimals: 9 },
+      to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
+      amount: 1_500_000_000n,
+    })
+
+  it('maps a Sui source route to a transfer tx carrying the decoded PTB bytes', async () => {
+    stubSuiRoute({ txType: 'SUI' })
+
+    const quote = await quoteSuiSource()
+
+    expect(quote.tx).toEqual({
+      transfer: {
+        to: 'sui-deposit',
+        // No depositAmount and a string (non-array) `tx`, so the requested sell
+        // amount carries through. Informational only — the real amount is baked
+        // into the PTB.
+        amount: 1_500_000_000n,
+        txType: 'SUI',
+        txPayload: new Uint8Array(Buffer.from(suiPtbBase64, 'base64')),
+      },
+    })
+  })
+
+  it.each([
+    ['a renamed base64 txType', { txType: 'SERIALIZED_BASE64' }],
+    ['no meta at all', undefined],
+  ])('normalizes a Sui route txType to SUI given %s', async (_label, meta) => {
+    stubSuiRoute(meta)
+
+    const quote = await quoteSuiSource()
+
+    // SwapKit renamed SOLANA -> SERIALIZED_BASE64 mid-flight without
+    // versioning. Trusting the wire label would base64-encode the PTB string
+    // as UTF-8 instead of decoding it, and would break cross-device cosigning
+    // against iOS, which always stamps "SUI".
+    expect(quote.tx).toEqual({
+      transfer: {
+        to: 'sui-deposit',
+        amount: 1_500_000_000n,
+        txType: 'SUI',
+        txPayload: new Uint8Array(Buffer.from(suiPtbBase64, 'base64')),
+      },
+    })
+  })
+
+  it('does not disable tx building for a Sui source (the PTB is what gets signed)', async () => {
+    const fetchMock = stubSuiRoute({ txType: 'SUI' })
+
+    await quoteSuiSource()
+
+    const swapCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/v3/swap'))
+    const swapBody = JSON.parse(swapCall![1].body)
+
+    // Sending disableBuildTx here makes SwapKit return a response with NO `tx`,
+    // so there is no PTB to sign and the keysign payload build fails.
+    expect(swapBody.disableBuildTx).toBeUndefined()
+    expect(swapBody.sourceAddress).toBe('sui-source')
+  })
+
+  it('rejects a Sui route whose tx is not a base64 string', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          response({ routes: [{ routeId: 'near-route', providers: ['NEAR'], expectedBuyAmount: '0.5' }] })
+        )
+        .mockResolvedValueOnce(
+          response({
+            providers: ['NEAR'],
+            targetAddress: 'sui-deposit',
+            meta: { txType: 'SUI' },
+            tx: { some: 'object' },
+          })
+        )
+    )
+    configureSwapKit({ apiKey: 'test-key' })
+
+    // Falling through would JSON-encode the object into `txPayload` and produce
+    // a signable-looking but nonsense PTB. Fail loudly instead.
+    await expect(quoteSuiSource()).rejects.toThrow(
+      'SwapKit Sui route did not return a base64 programmable transaction block.'
+    )
+  })
 })
