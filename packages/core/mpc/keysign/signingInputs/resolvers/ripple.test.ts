@@ -9,7 +9,10 @@ import {
   rippleTokenId,
   toXrplCurrencyCode,
 } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
-import { RippleSpecificSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
+import {
+  RippleSpecificSchema,
+  TransactionType,
+} from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { CoinSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/coin_pb'
 import { KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { beforeAll, describe, expect, it } from 'vitest'
@@ -635,5 +638,75 @@ describe('getRippleSigningInputs interop vector', () => {
 
     expect(hex(txInputData)).toBe(vector.expected.serializedSigningInputHex)
     expect(hex(preSigningHash)).toBe(vector.expected.preSigningHashHex)
+  })
+})
+
+describe('getRippleSigningInputs -- TrustSet discriminator (RippleSpecific.transaction_type)', () => {
+  const buildDiscriminatedTrustSetPayload = (toAmount: string) => {
+    const payload = buildTrustSetPayload(toAmount)
+    const rippleSpecific = create(RippleSpecificSchema, {
+      sequence: 100n,
+      gas: 15n,
+      lastLedgerSequence: 200n,
+      transactionType: TransactionType.RIPPLE_TRUST_SET,
+    })
+    payload.blockchainSpecific = { case: 'rippleSpecific', value: rippleSpecific }
+
+    return payload
+  }
+
+  it('builds a TrustSet when the payload states it explicitly', async () => {
+    const [input] = await getRippleSigningInputs({
+      keysignPayload: buildDiscriminatedTrustSetPayload('1500000000000000'),
+      walletCore,
+    })
+
+    expect(input.opTrustSet).toBeTruthy()
+    expect(input.opPayment).toBeFalsy()
+  })
+
+  it('signs identically whether or not the discriminator is present', async () => {
+    // The whole point: a peer that predates the field infers TrustSet from the
+    // coin, so both devices must serialize the same bytes or the ceremony
+    // diverges and never completes.
+    const amount = '1500000000000000'
+
+    const [discriminated] = await getRippleSigningInputs({
+      keysignPayload: buildDiscriminatedTrustSetPayload(amount),
+      walletCore,
+    })
+    const [inferred] = await getRippleSigningInputs({
+      keysignPayload: buildTrustSetPayload(amount),
+      walletCore,
+    })
+
+    expect(discriminated.opTrustSet).toEqual(inferred.opTrustSet)
+  })
+
+  it('produces byte-identical signing input across a mixed-version committee', async () => {
+    const amount = '1500000000000000'
+
+    const [discriminated, inferred] = await Promise.all([
+      getEncodedSigningInputs({
+        keysignPayload: buildDiscriminatedTrustSetPayload(amount),
+        walletCore,
+      }),
+      getEncodedSigningInputs({
+        keysignPayload: buildTrustSetPayload(amount),
+        walletCore,
+      }),
+    ])
+
+    expect(Buffer.from(discriminated[0]).toString('hex')).toBe(Buffer.from(inferred[0]).toString('hex'))
+  })
+
+  it('leaves native XRP a Payment even though the field is unset', async () => {
+    const [input] = await getRippleSigningInputs({
+      keysignPayload: buildPaymentPayload(),
+      walletCore,
+    })
+
+    expect(input.opPayment).toBeTruthy()
+    expect(input.opTrustSet).toBeFalsy()
   })
 })
