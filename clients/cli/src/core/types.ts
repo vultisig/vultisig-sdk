@@ -53,6 +53,8 @@ export type TransactionResult = {
   txHash: string
   chain: Chain
   explorerUrl: string
+  /** Non-fatal fund-safety warning (e.g. self-send) surfaced in JSON/CI mode, where `warn()` is silent. */
+  warning?: string
 }
 
 /**

@@ -69,6 +69,32 @@ describe('classifyError', () => {
     expect(result).toBeInstanceOf(InvalidAddressError)
   })
 
+  // recipientSanity's null/burn/malformed-EVM refusal (transaction.ts) throws a
+  // plain Error worded "Refusing send: ...", which none of the existing wording
+  // buckets matched - it fell through to UnknownError/exit 7, hiding a
+  // fund-safety refusal behind a generic exit code instead of INVALID_INPUT/4.
+  it('classifies recipientSanity null/burn refusals as invalid input, not unknown', () => {
+    const result = classifyError(
+      new Error(
+        'Refusing send: recipient is a null / burn address (funds would be unrecoverable). If this is intentional, re-run with a different recipient.'
+      )
+    )
+    expect(result).not.toBeInstanceOf(UnknownError)
+    expect(result).toBeInstanceOf(InvalidAddressError)
+    expect(result.exitCode).toBe(ExitCode.INVALID_INPUT)
+  })
+
+  it('classifies recipientSanity malformed-EVM refusals as invalid input, not unknown', () => {
+    const result = classifyError(
+      new Error(
+        'Refusing send: recipient looks like a malformed EVM address. If this is intentional, re-run with a different recipient.'
+      )
+    )
+    expect(result).not.toBeInstanceOf(UnknownError)
+    expect(result).toBeInstanceOf(InvalidAddressError)
+    expect(result.exitCode).toBe(ExitCode.INVALID_INPUT)
+  })
+
   it('classifies insufficient balance errors', () => {
     const result = classifyError(new Error('Insufficient balance for transfer'))
     expect(result).toBeInstanceOf(InsufficientBalanceError)

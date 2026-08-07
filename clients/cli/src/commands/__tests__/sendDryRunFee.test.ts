@@ -92,7 +92,12 @@ function makeTokenVault(opts: {
 
 const params = {
   chain: Chain.Ethereum,
-  to: '0xdead',
+  // Not '0xdead' - that's a valid-length-mismatch hex string, which the
+  // recipientSanity guard (wired into sendTransaction) correctly flags as a
+  // malformed EVM address and refuses. '0xrecipient' has non-hex letters so
+  // it never matches the guard's EVM-shape regex, same convention as the
+  // other send-command test fixtures (sendConfirmationPreview, interactiveDecline).
+  to: '0xrecipient',
   amount: '1.0',
   dryRun: true,
 } as never
