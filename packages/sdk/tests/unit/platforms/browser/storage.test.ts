@@ -54,22 +54,21 @@ describe('BrowserStorage backend selection', () => {
   let local: LocalStorageDouble
 
   beforeEach(() => {
-    const lockTails = new Map<string, Promise<void>>()
+    let mutationTail = Promise.resolve()
     vi.stubGlobal('navigator', {
       locks: {
-        request: async <T>(name: string, operation: () => Promise<T> | T): Promise<T> => {
-          const previous = lockTails.get(name) ?? Promise.resolve()
+        request: async <T>(_name: string, operation: () => Promise<T> | T): Promise<T> => {
+          const previous = mutationTail
           let release!: () => void
           const current = new Promise<void>(resolve => {
             release = resolve
           })
-          lockTails.set(name, current)
+          mutationTail = previous.then(() => current)
           await previous
           try {
             return await operation()
           } finally {
             release()
-            if (lockTails.get(name) === current) lockTails.delete(name)
           }
         },
       },

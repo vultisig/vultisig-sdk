@@ -61,6 +61,24 @@ describe('FileStorage', () => {
     }
   })
 
+  it('conditionally writes one shared value atomically across adapter instances', async () => {
+    const basePath = await fs.mkdtemp(path.join(os.tmpdir(), 'vultisig-storage-cas-'))
+
+    try {
+      const first = new FileStorage({ basePath })
+      const second = new FileStorage({ basePath })
+      const results = await Promise.all([
+        first.compareAndSet('vault:shared', null, { owner: 'first' }),
+        second.compareAndSet('vault:shared', null, { owner: 'second' }),
+      ])
+
+      expect(results.filter(Boolean)).toHaveLength(1)
+      await expect(first.get('vault:shared')).resolves.toEqual(results[0] ? { owner: 'first' } : { owner: 'second' })
+    } finally {
+      await fs.rm(basePath, { recursive: true, force: true })
+    }
+  })
+
   it('refuses to overwrite a pre-existing temp path', async () => {
     const basePath = await fs.mkdtemp(path.join(os.tmpdir(), 'vultisig-storage-'))
     const now = 1_700_000_000_000

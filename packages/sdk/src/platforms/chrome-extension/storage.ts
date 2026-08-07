@@ -10,12 +10,15 @@ import type { Storage, StorageMetadata, StoredValue } from '../../storage/types'
 import { STORAGE_VERSION, StorageError, StorageErrorCode } from '../../storage/types'
 
 export class ChromeExtensionStorage implements Storage {
-  private async withMutationLock<T>(operation: () => Promise<T>): Promise<T> {
+  private async withMutationLock<T>(operation: () => Promise<T>, required = false): Promise<T> {
     if (typeof navigator === 'undefined' || !navigator.locks) {
-      throw new StorageError(
-        StorageErrorCode.StorageUnavailable,
-        'Atomic storage mutations require the Web Locks API in Chrome extension contexts'
-      )
+      if (required) {
+        throw new StorageError(
+          StorageErrorCode.StorageUnavailable,
+          'Atomic storage mutations require the Web Locks API in Chrome extension contexts'
+        )
+      }
+      return operation()
     }
     return navigator.locks.request('vultisig-extension-storage', operation)
   }
@@ -71,18 +74,30 @@ export class ChromeExtensionStorage implements Storage {
 
   async compareAndSet<T>(key: string, expectedValue: T | null, value: T | null): Promise<boolean> {
     this.ensureAvailable()
-    return this.withMutationLock(async () => {
-      const currentValue = await this.get<T>(key)
-      if (JSON.stringify(currentValue) !== JSON.stringify(expectedValue)) {
-        return false
+    try {
+      return await this.withMutationLock(async () => {
+        const currentValue = await this.get<T>(key)
+        if (JSON.stringify(currentValue) !== JSON.stringify(expectedValue)) {
+          return false
+        }
+        if (value === null) {
+          await chrome.storage.local.remove(key)
+        } else {
+          await this.setValue(key, value)
+        }
+        return true
+      }, true)
+    } catch (error) {
+      if (error instanceof StorageError) throw error
+      if ((error as Error).message?.includes('QUOTA_BYTES')) {
+        throw new StorageError(
+          StorageErrorCode.QuotaExceeded,
+          'Chrome extension storage quota exceeded',
+          error as Error
+        )
       }
-      if (value === null) {
-        await chrome.storage.local.remove(key)
-      } else {
-        await this.setValue(key, value)
-      }
-      return true
-    })
+      throw new StorageError(StorageErrorCode.Unknown, `Failed to conditionally write key "${key}"`, error as Error)
+    }
   }
 
   async remove(key: string): Promise<void> {

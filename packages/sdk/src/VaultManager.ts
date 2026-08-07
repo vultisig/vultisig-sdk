@@ -1,6 +1,9 @@
 import { fromBinary, toBinary } from '@bufbuild/protobuf'
 import { fromCommVault } from '@vultisig/core-mpc/types/utils/commVault'
-import { VaultContainerSchema } from '@vultisig/core-mpc/types/vultisig/vault/v1/vault_container_pb'
+import {
+  type VaultContainer,
+  VaultContainerSchema,
+} from '@vultisig/core-mpc/types/vultisig/vault/v1/vault_container_pb'
 import { VaultSchema } from '@vultisig/core-mpc/types/vultisig/vault/v1/vault_pb'
 import { vaultContainerFromString } from '@vultisig/core-mpc/vault/utils/vaultContainerFromString'
 import type { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
@@ -21,7 +24,13 @@ import { VaultData } from './types'
 import { FastVault } from './vault/FastVault'
 import { SecureVault } from './vault/SecureVault'
 import { VaultBase } from './vault/VaultBase'
-import { VaultError, VaultErrorCode, VaultImportError, VaultImportErrorCode } from './vault/VaultError'
+import {
+  VaultConflictError,
+  VaultError,
+  VaultErrorCode,
+  VaultImportError,
+  VaultImportErrorCode,
+} from './vault/VaultError'
 
 /** Legacy SHA-256(password)+AES-GCM: 12-byte nonce + ciphertext + 16-byte tag (minimum empty plaintext ⇒ 28 bytes). */
 const MIN_LEGACY_ENCRYPTED_VAULT_LEN = 28
@@ -34,6 +43,14 @@ type VaultImportResult = {
 }
 
 type LegacyBackupMigrationHandler = (notice: LegacyVaultBackupMigrationNotice) => void
+
+type PreparedVaultImport = {
+  container: VaultContainer
+  parsedVault: CoreVault
+  persistedVultContent: string
+  legacyBackupMigrated: boolean
+  decryptedVaultBytes?: Buffer
+}
 
 const createLegacyBackupMigrationNotice = (vault: VaultBase): LegacyVaultBackupMigrationNotice => ({
   vaultId: vault.id,
@@ -221,70 +238,125 @@ export class VaultManager {
     }
   }
 
-  private async persistImportedVault(vault: VaultBase, existing: VaultData | null): Promise<void> {
-    const vaultKey = `vault:${vault.id}`
-    const compareAndSet = this.storage.compareAndSet?.bind(this.storage)
-    if (!compareAndSet) {
-      throw new VaultImportError(
-        VaultImportErrorCode.PERSISTENCE_FAILED,
-        'The configured storage adapter cannot atomically protect vault imports from concurrent overwrites'
-      )
-    }
-
-    let vaultPersisted = false
-
-    // ROLLBACK SCOPE (review fix): the vault write and the active-pointer write have very different
-    // recovery costs, so they must not share a try. A pointer failure previously rolled the vault
-    // record back out - discarding a durable save to undo a trivially recoverable one.
-    //
-    // Concretely: on the legacy path the record being discarded has already been re-encrypted with
-    // salted 600k PBKDF2 by encryptVaultBackupWithPassword, and the migration notice that tells the
-    // user their derivation changed sits downstream of the throw, so it never fired either. The
-    // message also claimed 'The previous local state was restored', which on a first-ever import
-    // means it restored the ABSENCE of a vault.
-    //
-    // The pointer is recoverable by the user simply selecting a vault. The record is not. So the
-    // rollback stays on the vault write, and a pointer failure surfaces WITHOUT touching what has
-    // already committed.
+  private prepareVaultImport(vultContent: string, password?: string): PreparedVaultImport {
+    let decryptedVaultBytes: Buffer | undefined
     try {
-      vaultPersisted = await compareAndSet(vaultKey, existing, vault.data)
-      if (!vaultPersisted) {
+      let container: VaultContainer
+      try {
+        container = vaultContainerFromString(vultContent.trim())
+      } catch (error) {
         throw new VaultImportError(
-          VaultImportErrorCode.PERSISTENCE_FAILED,
-          'The local vault changed during import; no data was overwritten. Retry against the current record.'
+          VaultImportErrorCode.INVALID_FILE_FORMAT,
+          'Invalid .vult container: file is missing data or is not valid base64/protobuf',
+          error as Error
         )
       }
-    } catch (error) {
-      if (error instanceof VaultImportError && !vaultPersisted) {
-        throw error
-      }
 
-      const rollbackErrors: Error[] = []
-
-      try {
-        const rolledBack = await compareAndSet(vaultKey, vault.data, existing)
-        if (!rolledBack) {
-          rollbackErrors.push(new Error('the vault changed again before rollback'))
+      let vaultBase64: string
+      let persistedVultContent = vultContent.trim()
+      let legacyBackupMigrated = false
+      if (container.isEncrypted) {
+        if (!password) {
+          throw new VaultImportError(VaultImportErrorCode.PASSWORD_REQUIRED, 'Password required for encrypted vault')
         }
-      } catch (rollbackError) {
-        rollbackErrors.push(rollbackError as Error)
+        const encryptedData = fromBase64(container.vault)
+        if (encryptedData.length === 0) {
+          throw new VaultImportError(VaultImportErrorCode.CORRUPTED_DATA, 'Encrypted vault payload is empty')
+        }
+
+        const isPbkdf2Format =
+          encryptedData.length >= VAULT_BACKUP_MAGIC_LEN &&
+          encryptedData.subarray(0, VAULT_BACKUP_MAGIC_LEN).equals(VAULT_BACKUP_BLOB_MAGIC)
+        const minimumLength = isPbkdf2Format
+          ? VAULT_BACKUP_PBKDF2_HEADER_LEN + GCM_AUTH_TAG_BYTES
+          : MIN_LEGACY_ENCRYPTED_VAULT_LEN
+        if (encryptedData.length < minimumLength) {
+          throw new VaultImportError(
+            VaultImportErrorCode.CORRUPTED_DATA,
+            'Encrypted vault payload is truncated or not a valid ciphertext'
+          )
+        }
+
+        try {
+          decryptedVaultBytes = decryptVaultBackupWithPassword(password, encryptedData)
+          vaultBase64 = decryptedVaultBytes.toString('base64')
+          legacyBackupMigrated = !isPbkdf2Format
+        } catch (error) {
+          throw new VaultImportError(
+            VaultImportErrorCode.INVALID_PASSWORD,
+            'Could not decrypt vault with the provided password',
+            error as Error
+          )
+        }
+      } else {
+        vaultBase64 = container.vault
       }
 
-      const rollbackSuffix =
-        rollbackErrors.length === 0
-          ? ' The previous local state was restored.'
-          : ` Rollback also failed: ${rollbackErrors.map(rollbackError => rollbackError.message).join('; ')}`
-      throw new VaultImportError(
-        VaultImportErrorCode.PERSISTENCE_FAILED,
-        `Failed to persist imported vault.${rollbackSuffix}`,
-        error as Error
-      )
+      let vaultProtobuf
+      try {
+        vaultProtobuf = fromBinary(VaultSchema, fromBase64(vaultBase64))
+      } catch (error) {
+        throw new VaultImportError(
+          VaultImportErrorCode.UNSUPPORTED_FORMAT,
+          'Vault payload could not be decoded as a vault message',
+          error as Error
+        )
+      }
+
+      let parsedVault: CoreVault
+      try {
+        parsedVault = fromCommVault(vaultProtobuf)
+      } catch (error) {
+        throw new VaultImportError(
+          VaultImportErrorCode.CORRUPTED_DATA,
+          `Vault data appears incomplete or corrupted: ${(error as Error).message}`,
+          error as Error
+        )
+      }
+
+      if (legacyBackupMigrated && password && decryptedVaultBytes) {
+        const migratedEncryptedData = encryptVaultBackupWithPassword(password, decryptedVaultBytes)
+        container.vault = migratedEncryptedData.toString('base64')
+        persistedVultContent = Buffer.from(toBinary(VaultContainerSchema, container)).toString('base64')
+      }
+
+      return {
+        container,
+        parsedVault,
+        persistedVultContent,
+        legacyBackupMigrated,
+        decryptedVaultBytes,
+      }
+    } catch (error) {
+      decryptedVaultBytes?.fill(0)
+      throw error
+    }
+  }
+
+  private async validateImportConflict(
+    existingVault: VaultData | null,
+    parsedVault: CoreVault,
+    password: string | undefined,
+    wantsReplace: boolean
+  ): Promise<void> {
+    if (!existingVault) return
+
+    let existingCoreVault: CoreVault | null = null
+    try {
+      existingCoreVault = await this.decodeStoredVault(existingVault, password)
+    } catch (decodeError) {
+      if (!wantsReplace) throw decodeError
     }
 
-    // The vault record is committed at this point. A failure setting the active pointer must NOT
-    // undo it - it propagates as-is so the caller sees the real cause, and the downstream migration
-    // notice still fires for the record that genuinely persisted.
-    await this.storage.set('activeVaultId', vault.id)
+    if (!existingCoreVault) return
+    this.validateReplacement(existingCoreVault, parsedVault)
+
+    if (!wantsReplace) {
+      throw new VaultImportError(
+        VaultImportErrorCode.DUPLICATE_VAULT,
+        'This exact local vault share already exists; pass conflictResolution: "replace" to replace it explicitly'
+      )
+    }
   }
 
   /**
@@ -350,163 +422,103 @@ export class VaultManager {
   ): Promise<VaultImportResult> {
     let decryptedVaultBytes: Buffer | undefined
     try {
-      let container
-      try {
-        container = vaultContainerFromString(vultContent.trim())
-      } catch (error) {
-        throw new VaultImportError(
-          VaultImportErrorCode.INVALID_FILE_FORMAT,
-          'Invalid .vult container: file is missing data or is not valid base64/protobuf',
-          error as Error
-        )
-      }
-
-      // We need to peek at the public key to check for duplicates
-      // This requires partial parsing
-      let vaultBase64: string
-      let persistedVultContent = vultContent.trim()
-      let legacyBackupMigrated = false
-      if (container.isEncrypted) {
-        if (!password) {
-          throw new VaultImportError(VaultImportErrorCode.PASSWORD_REQUIRED, 'Password required for encrypted vault')
-        }
-        const encryptedData = fromBase64(container.vault)
-        if (encryptedData.length === 0) {
-          throw new VaultImportError(VaultImportErrorCode.CORRUPTED_DATA, 'Encrypted vault payload is empty')
-        }
-
-        const isPbkdf2Format =
-          encryptedData.length >= VAULT_BACKUP_MAGIC_LEN &&
-          encryptedData.subarray(0, VAULT_BACKUP_MAGIC_LEN).equals(VAULT_BACKUP_BLOB_MAGIC)
-        if (isPbkdf2Format) {
-          if (encryptedData.length < VAULT_BACKUP_PBKDF2_HEADER_LEN + GCM_AUTH_TAG_BYTES) {
-            throw new VaultImportError(
-              VaultImportErrorCode.CORRUPTED_DATA,
-              'Encrypted vault payload is truncated or not a valid ciphertext'
-            )
-          }
-        } else if (encryptedData.length < MIN_LEGACY_ENCRYPTED_VAULT_LEN) {
-          throw new VaultImportError(
-            VaultImportErrorCode.CORRUPTED_DATA,
-            'Encrypted vault payload is truncated or not a valid ciphertext'
-          )
-        }
-
-        try {
-          decryptedVaultBytes = decryptVaultBackupWithPassword(password, encryptedData)
-          vaultBase64 = decryptedVaultBytes.toString('base64')
-          legacyBackupMigrated = !isPbkdf2Format
-        } catch (error) {
-          throw new VaultImportError(
-            VaultImportErrorCode.INVALID_PASSWORD,
-            'Could not decrypt vault with the provided password',
-            error as Error
-          )
-        }
-      } else {
-        vaultBase64 = container.vault
-      }
-
-      let vaultProtobuf
-      try {
-        const vaultBinary = fromBase64(vaultBase64)
-        vaultProtobuf = fromBinary(VaultSchema, vaultBinary)
-      } catch (error) {
-        throw new VaultImportError(
-          VaultImportErrorCode.UNSUPPORTED_FORMAT,
-          'Vault payload could not be decoded as a vault message',
-          error as Error
-        )
-      }
-
-      let parsedVault
-      try {
-        parsedVault = fromCommVault(vaultProtobuf)
-      } catch (error) {
-        throw new VaultImportError(
-          VaultImportErrorCode.CORRUPTED_DATA,
-          `Vault data appears incomplete or corrupted: ${(error as Error).message}`,
-          error as Error
-        )
-      }
-
-      // Legacy decryption remains import-only. Once the password and inner
-      // vault have both been validated, replace the stored ciphertext with the
-      // salted 600k-iteration PBKDF2 format before any VaultData is persisted.
-      // The caller's original file/string is immutable and remains their
-      // responsibility to replace after the migration notice is emitted.
-      if (legacyBackupMigrated && password && decryptedVaultBytes) {
-        const migratedEncryptedData = encryptVaultBackupWithPassword(password, decryptedVaultBytes)
-        container.vault = migratedEncryptedData.toString('base64')
-        persistedVultContent = Buffer.from(toBinary(VaultContainerSchema, container)).toString('base64')
-      }
+      const preparedImport = this.prepareVaultImport(vultContent, password)
+      const { container, parsedVault, persistedVultContent, legacyBackupMigrated } = preparedImport
+      decryptedVaultBytes = preparedImport.decryptedVaultBytes
 
       // Use ECDSA public key as vault ID
       const vaultId = parsedVault.publicKeys.ecdsa
-      const persistedVaultData = await this.storage.get<VaultData>(`vault:${vaultId}`)
+      const existingVault = await this.storage.get<VaultData>(`vault:${vaultId}`)
+      await this.validateImportConflict(
+        existingVault,
+        parsedVault,
+        password,
+        (options.conflictResolution ?? 'reject') === 'replace'
+      )
 
-      {
-        const existingVault = persistedVaultData
-        if (existingVault) {
-          const existingCoreVault = await this.decodeStoredVault(existingVault, password)
-          this.validateReplacement(existingCoreVault, parsedVault)
+      // Determine vault type from parsed vault
+      const vaultType = parsedVault.signers.some((s: string) => s.startsWith('Server-')) ? 'fast' : 'secure'
 
-          if ((options.conflictResolution ?? 'reject') !== 'replace') {
-            throw new VaultImportError(
-              VaultImportErrorCode.DUPLICATE_VAULT,
-              'This exact local vault share already exists; pass conflictResolution: "replace" to replace it explicitly'
-            )
-          }
-        }
+      // Create vault context from SDK context
+      const vaultContext = this.createVaultContext()
 
-        // Determine vault type from parsed vault
-        const vaultType = parsedVault.signers.some((s: string) => s.startsWith('Server-')) ? 'fast' : 'secure'
-
-        // Create vault context from SDK context
-        const vaultContext = this.createVaultContext()
-
-        // Create vault instance using static factory methods
-        // Pass parsedVault to avoid parsing encrypted content synchronously
-        let vaultInstance: VaultBase
-        if (vaultType === 'fast') {
-          const fastSigningService = new FastSigningService(this.context.serverManager, this.context.wasmProvider)
-          vaultInstance = FastVault.fromImport(
-            vaultId,
-            persistedVultContent,
-            parsedVault,
-            fastSigningService,
-            vaultContext,
-            persistedVaultData ?? undefined
-          )
-        } else {
-          vaultInstance = SecureVault.fromImport(
-            vaultId,
-            persistedVultContent,
-            parsedVault,
-            vaultContext,
-            persistedVaultData ?? undefined
-          )
-        }
-
-        await this.persistImportedVault(vaultInstance, existingVault)
-
-        // Only change password state after the vault record and active pointer
-        // have both committed successfully.
-        if (password && container.isEncrypted) {
-          this.context.passwordCache.set(vaultId, password)
-        } else if (!container.isEncrypted) {
-          this.context.passwordCache.delete(vaultId)
-        }
-
-        if (legacyBackupMigrated) {
-          onLegacyBackupMigrated?.(createLegacyBackupMigrationNotice(vaultInstance))
-        }
-
-        return { vault: vaultInstance, legacyBackupMigrated }
+      // Create vault instance using static factory methods. Pass parsedVault to avoid parsing
+      // encrypted content synchronously. When there is an existing logical vault (a validated
+      // 'replace'), seed the revision baseline with its current record so vault.save() below
+      // can detect - and reject - anything that changed underneath us since the read above.
+      let vaultInstance: VaultBase
+      if (vaultType === 'fast') {
+        const fastSigningService = new FastSigningService(this.context.serverManager, this.context.wasmProvider)
+        vaultInstance = FastVault.fromImport(
+          vaultId,
+          persistedVultContent,
+          parsedVault,
+          fastSigningService,
+          vaultContext,
+          existingVault ?? undefined
+        )
+      } else {
+        vaultInstance = SecureVault.fromImport(
+          vaultId,
+          persistedVultContent,
+          parsedVault,
+          vaultContext,
+          existingVault ?? undefined
+        )
       }
+
+      if (!this.storage.compareAndSet) {
+        throw new VaultImportError(
+          VaultImportErrorCode.PERSISTENCE_FAILED,
+          'The configured storage adapter cannot atomically protect vault imports from concurrent overwrites'
+        )
+      }
+
+      // Save to storage. vault.save() is the same revision-checked path every other vault
+      // mutation uses, backed here by the adapter's atomic compare-and-set. It throws
+      // VaultConflictError (caught below) instead of silently overwriting when the record
+      // changes between either read and the write, and it never writes on a failed comparison.
+      try {
+        await vaultInstance.save()
+      } catch (error) {
+        if (error instanceof VaultConflictError) throw error
+        throw new VaultImportError(
+          VaultImportErrorCode.PERSISTENCE_FAILED,
+          `Failed to persist imported vault: ${(error as Error).message}`,
+          error as Error
+        )
+      }
+
+      // Change password state only after the vault record commits. A pointer failure below
+      // leaves the durable record in place, so the cache should already describe that record.
+      if (password && container.isEncrypted) {
+        this.context.passwordCache.set(vaultId, password)
+      } else if (!container.isEncrypted) {
+        this.context.passwordCache.delete(vaultId)
+      }
+
+      // Notify at the durable-save boundary. This guarantees consumers learn about password
+      // rotation even if setting the active-vault pointer fails after the upgraded vault has
+      // already been persisted - the record is durable, the pointer is trivially recoverable,
+      // so a pointer failure below must not undo this or swallow the notice for it.
+      if (legacyBackupMigrated) {
+        onLegacyBackupMigrated?.(createLegacyBackupMigrationNotice(vaultInstance))
+      }
+
+      // Set as active vault
+      await this.storage.set('activeVaultId', vaultId)
+
+      return { vault: vaultInstance, legacyBackupMigrated }
     } catch (error) {
       if (error instanceof VaultImportError) {
         throw error
+      }
+      if (error instanceof VaultConflictError) {
+        throw new VaultImportError(
+          VaultImportErrorCode.PERSISTENCE_FAILED,
+          `The local vault changed during import: ${error.message}`,
+          error
+        )
       }
       throw new VaultImportError(
         VaultImportErrorCode.CORRUPTED_DATA,

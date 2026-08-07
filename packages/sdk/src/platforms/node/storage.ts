@@ -5,7 +5,6 @@
 import * as fs from 'fs/promises'
 import * as os from 'os'
 import * as path from 'path'
-import { performance } from 'perf_hooks'
 
 import type { Storage, StorageMetadata, StoredValue } from '../../storage/types'
 import { STORAGE_VERSION, StorageError, StorageErrorCode } from '../../storage/types'
@@ -14,10 +13,7 @@ type FileLockOwner = {
   id: string
   pid: number
   hostname: string
-  processStartedAt: number
 }
-
-const PROCESS_STARTED_AT = performance.timeOrigin
 
 function getDefaultBasePath(): string {
   const override = process.env.VULTISIG_CONFIG_DIR?.trim()
@@ -65,9 +61,8 @@ export class FileStorage implements Storage {
   }
 
   private async readValue<T>(key: string): Promise<T | null> {
-    const filePath = this.getFilePath(key)
     try {
-      const content = await fs.readFile(filePath, 'utf-8')
+      const content = await fs.readFile(this.getFilePath(key), 'utf-8')
       const stored = JSON.parse(content) as StoredValue<T>
       return stored.value
     } catch (error) {
@@ -104,21 +99,16 @@ export class FileStorage implements Storage {
   private async readLockOwner(lockPath: string): Promise<FileLockOwner | undefined> {
     try {
       const owner = JSON.parse(await fs.readFile(lockPath, 'utf-8')) as Partial<FileLockOwner>
-      return typeof owner.id === 'string' &&
-        typeof owner.pid === 'number' &&
-        typeof owner.hostname === 'string' &&
-        typeof owner.processStartedAt === 'number'
+      return typeof owner.id === 'string' && typeof owner.pid === 'number' && typeof owner.hostname === 'string'
         ? (owner as FileLockOwner)
         : undefined
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    } catch {
       return undefined
     }
   }
 
   private isOwnerProcessDead(owner: FileLockOwner): boolean {
-    if (owner.hostname !== os.hostname()) return false
-    if (owner.pid === process.pid) return owner.processStartedAt !== PROCESS_STARTED_AT
+    if (owner.hostname !== os.hostname() || owner.pid === process.pid) return false
     try {
       process.kill(owner.pid, 0)
       return false
@@ -135,10 +125,13 @@ export class FileStorage implements Storage {
       id: `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       pid: process.pid,
       hostname: os.hostname(),
-      processStartedAt: PROCESS_STARTED_AT,
     }
     const ownerPath = `${lockPath}.${owner.id}.owner`
-    await fs.writeFile(ownerPath, JSON.stringify(owner), { encoding: 'utf-8', mode: 0o600, flag: 'wx' })
+    await fs.writeFile(ownerPath, JSON.stringify(owner), {
+      encoding: 'utf-8',
+      mode: 0o600,
+      flag: 'wx',
+    })
     let acquired = false
 
     try {
@@ -215,19 +208,27 @@ export class FileStorage implements Storage {
   }
 
   async compareAndSet<T>(key: string, expectedValue: T | null, value: T | null): Promise<boolean> {
-    return this.withKeyLock(key, async () => {
-      const currentValue = await this.readValue<T>(key)
-      if (JSON.stringify(currentValue) !== JSON.stringify(expectedValue)) {
-        return false
-      }
+    try {
+      return await this.withKeyLock(key, async () => {
+        const currentValue = await this.readValue<T>(key)
+        if (JSON.stringify(currentValue) !== JSON.stringify(expectedValue)) {
+          return false
+        }
 
-      if (value === null) {
-        await this.removeValue(key)
-      } else {
-        await this.writeValue(key, value)
+        if (value === null) {
+          await this.removeValue(key)
+        } else {
+          await this.writeValue(key, value)
+        }
+        return true
+      })
+    } catch (error) {
+      if (error instanceof StorageError) throw error
+      if ((error as NodeJS.ErrnoException).code === 'ENOSPC') {
+        throw new StorageError(StorageErrorCode.QuotaExceeded, 'Disk space quota exceeded', error as Error)
       }
-      return true
-    })
+      throw new StorageError(StorageErrorCode.Unknown, `Failed to conditionally write key "${key}"`, error as Error)
+    }
   }
 
   async remove(key: string): Promise<void> {

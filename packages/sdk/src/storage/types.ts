@@ -48,8 +48,9 @@ export type Storage = {
    * Atomically replace `key` only when its current value matches `expectedValue`.
    * A null `value` removes the key. Vault import requires this capability so
    * concurrent SDK instances cannot overwrite local key material.
+   * @throws StorageError if the conditional write cannot be completed
    */
-  compareAndSet<T>(key: string, expectedValue: T | null, value: T | null): Promise<boolean>
+  compareAndSet?<T>(key: string, expectedValue: T | null, value: T | null): Promise<boolean>
 
   /**
    * Remove a value by key.

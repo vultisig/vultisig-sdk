@@ -57,18 +57,23 @@ export class ReactNativeStorage implements Storage {
   }
 
   async compareAndSet<T>(key: string, expectedValue: T | null, value: T | null): Promise<boolean> {
-    return withMutationLock(async () => {
-      const currentValue = await this.get<T>(key)
-      if (JSON.stringify(currentValue) !== JSON.stringify(expectedValue)) {
-        return false
-      }
-      if (value === null) {
-        await AsyncStorage.removeItem(prefixed(key))
-      } else {
-        await this.setValue(key, value)
-      }
-      return true
-    })
+    try {
+      return await withMutationLock(async () => {
+        const currentValue = await this.get<T>(key)
+        if (JSON.stringify(currentValue) !== JSON.stringify(expectedValue)) {
+          return false
+        }
+        if (value === null) {
+          await AsyncStorage.removeItem(prefixed(key))
+        } else {
+          await this.setValue(key, value)
+        }
+        return true
+      })
+    } catch (error) {
+      if (error instanceof StorageError) throw error
+      throw new StorageError(StorageErrorCode.Unknown, `Failed to conditionally write "${key}"`, error as Error)
+    }
   }
 
   async remove(key: string): Promise<void> {

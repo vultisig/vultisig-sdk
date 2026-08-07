@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ChromeExtensionStorage } from '../../../../src/platforms/chrome-extension/storage'
 import { StorageError, StorageErrorCode } from '../../../../src/storage/types'
@@ -64,6 +64,10 @@ describe('ChromeExtensionStorage', () => {
     storage = new ChromeExtensionStorage()
   })
 
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   describe('get', () => {
     it('should return null for non-existent key', async () => {
       const result = await storage.get('nonexistent')
@@ -119,34 +123,16 @@ describe('ChromeExtensionStorage', () => {
       }
     })
 
-    it('serializes ordinary writes with conditional writes', async () => {
-      let releaseRead!: () => void
-      const readGate = new Promise<void>(resolve => {
-        releaseRead = resolve
-      })
-      let signalRead!: () => void
-      const readStarted = new Promise<void>(resolve => {
-        signalRead = resolve
-      })
-      mockChromeStorageLocal.get.mockImplementationOnce(async () => {
-        signalRead()
-        await readGate
-        return {}
-      })
+    it('serializes conditional writes across adapter instances', async () => {
+      const other = new ChromeExtensionStorage()
 
-      const replacing = storage.compareAndSet('vault:shared', null, { version: 'conditional' })
-      await readStarted
-      let ordinaryFinished = false
-      const saving = storage.set('vault:shared', { version: 'ordinary' }).then(() => {
-        ordinaryFinished = true
-      })
-      await Promise.resolve()
-      expect(ordinaryFinished).toBe(false)
+      const results = await Promise.all([
+        storage.compareAndSet('vault:shared', null, { owner: 'first' }),
+        other.compareAndSet('vault:shared', null, { owner: 'second' }),
+      ])
 
-      releaseRead()
-      await expect(replacing).resolves.toBe(true)
-      await saving
-      await expect(storage.get('vault:shared')).resolves.toEqual({ version: 'ordinary' })
+      expect(results.filter(Boolean)).toHaveLength(1)
+      await expect(storage.get('vault:shared')).resolves.toEqual(results[0] ? { owner: 'first' } : { owner: 'second' })
     })
   })
 
