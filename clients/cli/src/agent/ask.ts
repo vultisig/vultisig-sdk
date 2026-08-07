@@ -77,7 +77,7 @@ export type AskResult = {
    * stated cause (missing tool / failed build / unconfirmable broadcast) was wrong.
    */
   proposedTransaction?: ProposedTransaction
-  /** Signing requests approved this turn, recorded before their signing bodies ran. */
+  /** Signing requests approved this turn, recorded after their signing bodies ran (with outcome). */
   signingRecords: SigningRecord[]
 }
 

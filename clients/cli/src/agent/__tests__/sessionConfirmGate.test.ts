@@ -112,7 +112,9 @@ describe('runPasswordGatedTool — confirmation gate', () => {
       resolved: {
         labels: {
           resolved_amount: '0.05 USDC.e',
-          token_resolved: `USDC.e on Polygon (${tokenContract})`,
+          // Documented bare-symbol format — the contract must come from the
+          // payload's txArgs.tx.to, NOT from an enriched label.
+          token_resolved: 'USDC.e',
           recipient_echo: recipient,
         },
       },
@@ -142,6 +144,7 @@ describe('runPasswordGatedTool — confirmation gate', () => {
     const record = ui.onSigningRecord.mock.calls[0][0]
     expect(record.tool).toBe('sign_tx')
     expect(record.chain).toBe(keysignPayload.chain)
+    expect(record.success).toBe(true)
     expect(record.summary).toContain(keysignPayload.resolved.labels.resolved_amount)
     expect(record.summary).toContain(keysignPayload.txArgs.tx.to)
     expect(record.summary).toContain(keysignPayload.txArgs.to)
@@ -185,7 +188,33 @@ describe('runPasswordGatedTool — confirmation gate', () => {
       tool: 'sign_tx',
       summary: `send 0.01 POL on Polygon to ${keysignPayload.txArgs.to}`,
       chain: keysignPayload.chain,
+      success: true,
     })
+  })
+
+  it('a signing body that fails yields a record marked success:false, emitted only after the body ran', async () => {
+    // Audit integrity: an approval whose body threw (e.g. a DUPLICATE_BROADCAST
+    // refusal — nothing was signed) must not produce a record indistinguishable
+    // from a completed signing. If the record were emitted before body(), this
+    // record would carry no outcome and success would be undefined.
+    const ui = makeUi(true)
+    const body = vi.fn(async (): Promise<RecentAction> => {
+      throw new Error('DUPLICATE_BROADCAST: identical transaction already broadcast')
+    })
+    const { result } = callGate({
+      toolName: 'sign_tx',
+      ui,
+      body,
+      pendingSummary: 'send 0.01 POL on Polygon to 0xabc',
+      pendingChain: 'Polygon',
+    })
+    const res = await result
+    expect(res.success).toBe(false)
+    const record = ui.onSigningRecord.mock.calls[0][0]
+    expect(record.summary).toBe('send 0.01 POL on Polygon to 0xabc')
+    expect(record.success).toBe(false)
+    // The record must be emitted AFTER the body ran, never before.
+    expect(ui.onSigningRecord.mock.invocationCallOrder[0]).toBeGreaterThan(body.mock.invocationCallOrder[0])
   })
 
   it('sign_typed_data ignores a stale buffered tx summary (declined sign_tx leaves the buffer populated)', async () => {

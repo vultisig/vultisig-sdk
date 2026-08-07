@@ -131,6 +131,21 @@ export type AgentAskOptions = {
  *   success: {"success":true,"v":1,"data":{"conversation_id":"...","response":"...",...}}
  *   error:   {"success":false,"v":1,"error":{"message":"...","code":"...","conversation_id":"..."}}
  */
+function signingRecordsField(result: AskResult | undefined): { signing_records?: AskResult['signingRecords'] } {
+  // Tolerate the array being absent at runtime (out-of-repo producers may not
+  // populate the field even though the type requires it).
+  return result?.signingRecords?.length ? { signing_records: result.signingRecords } : {}
+}
+
+function writeSigningRecordLines(
+  records: AskResult['signingRecords'] | undefined,
+  write: (line: string) => unknown
+): void {
+  for (const record of records ?? []) {
+    write(`signing-record:${record.success ? 'signed' : 'not-signed'}:${record.summary}\n`)
+  }
+}
+
 /**
  * Write the structured error envelope to stdout (JSON mode) or a human line to
  * stderr. Shared by the mid-turn `error`-frame path and the catch path so both
@@ -145,16 +160,6 @@ export type AgentAskOptions = {
  * when non-empty, so the catch path (auth/init failure, no broadcast) keeps the
  * lean `{message,code,conversation_id}` error shape.
  */
-function signingRecordsField(result: AskResult | undefined): { signing_records?: AskResult['signingRecords'] } {
-  return result?.signingRecords.length ? { signing_records: result.signingRecords } : {}
-}
-
-function writeSigningRecordLines(records: AskResult['signingRecords'], write: (line: string) => unknown): void {
-  for (const record of records) {
-    write(`signing-record:${record.summary}\n`)
-  }
-}
-
 function outputAskError(
   wantsJson: boolean,
   message: string,

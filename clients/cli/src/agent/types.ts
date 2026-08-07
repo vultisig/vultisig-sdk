@@ -31,9 +31,11 @@ export type ProposedTransaction = {
 }
 
 /**
- * Audit record emitted when a signing request passes the confirmation gate.
- * It captures the exact one-line summary that was authorized before the
- * signing body runs; transaction hashes and lifecycle status are reported
+ * Audit record emitted once an approved signing request's body has run.
+ * It captures the exact one-line summary that was authorized (sampled at
+ * approval time, before the buffer is consumed) plus whether the signing
+ * body succeeded — an approval whose body failed must not read as a signed
+ * transaction. Transaction hashes and lifecycle status are reported
  * separately once available.
  */
 export type SigningRecord = {
@@ -41,6 +43,8 @@ export type SigningRecord = {
   tool: string
   /** One-line audit rendering of the summary presented to the confirmation policy. */
   summary: string
+  /** Whether the signing body reported success. `false` means approved but NOT signed/broadcast. */
+  success: boolean
   /** Chain the buffered transaction targets, when one is available. */
   chain?: string
 }
@@ -513,7 +517,7 @@ export type UICallbacks = {
    *  read-safe path's actual result — `agent ask` without `--yes` is documented
    *  to report the proposed transaction rather than sign it. */
   onProposedTransaction?: (proposed: ProposedTransaction) => void
-  /** Fired after a signing request is approved and immediately before signing proceeds. */
+  /** Fired after an approved signing request's body has run, with its outcome. */
   onSigningRecord?: (record: SigningRecord) => void
   onSuggestions: (suggestions: Suggestion[]) => void
   onTxStatus: (txHash: string, chain: string, status: TxLifecycleStatus, explorerUrl?: string) => void

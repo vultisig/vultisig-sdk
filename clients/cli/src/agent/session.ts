@@ -1332,7 +1332,7 @@ export class AgentSession {
     body: () => Promise<RecentAction>,
     input?: Record<string, unknown>
   ): Promise<RecentAction> {
-    let signingRecord: SigningRecord | undefined
+    let signingRecord: Omit<SigningRecord, 'success'> | undefined
     // Confirmation gate: a signable tool (sign_tx / sign_typed_data) must be
     // explicitly approved before it signs + broadcasts. This is the single
     // chokepoint for BOTH the tx_ready path and client-side dispatch, so one
@@ -1352,6 +1352,10 @@ export class AgentSession {
       if (!approved) {
         return reportDeclinedSigning(this.executor, toolName, toolCallId, summary, input, ui)
       }
+      // Sample the summary/chain NOW (body() consumes and clears the buffer);
+      // the record itself is only emitted after body() runs, with its outcome —
+      // emitting here would fabricate a "signed" record for a body that failed
+      // before signing anything (e.g. a DUPLICATE_BROADCAST refusal).
       const chain = ui.onSigningRecord && toolName === 'sign_tx' ? this.executor.getPendingChain() : null
       signingRecord = { tool: toolName, summary: capSigningSummary(summary), ...(chain ? { chain } : {}) }
     }
@@ -1408,7 +1412,6 @@ export class AgentSession {
       }
     }
 
-    if (signingRecord) ui.onSigningRecord?.(signingRecord)
     ui.onToolCall(toolCallId, toolName, input)
     let recent: RecentAction
     try {
@@ -1417,6 +1420,7 @@ export class AgentSession {
       const message = err instanceof Error ? err.message : String(err)
       recent = { tool: toolName, success: false, data: { error: message } }
     }
+    if (signingRecord) ui.onSigningRecord?.({ ...signingRecord, success: recent.success })
     const errorMsg = (recent.data?.error as string | undefined) ?? undefined
     const errorCode = (recent.data?.code as AgentErrorCode | undefined) ?? undefined
     ui.onToolResult(toolCallId, toolName, recent.success, recent.data, errorMsg, errorCode)
