@@ -418,9 +418,9 @@ export class AgentExecutor {
     // "USDC.e on Polygon (0x…)". De-dup against the ticker while preserving
     // the richer chain/contract disclosure as the summary suffix. When the
     // amount already embeds the full label, do not render its details again:
-    // omit the suffix if the label's primary post-symbol location is the exact
-    // routed chain, otherwise append only the routed location so a conflicting
-    // or secondary chain mention cannot hide it.
+    // omit the suffix if the label positively names the exact routed chain,
+    // otherwise append only the routed location so a conflicting or negated
+    // chain mention cannot hide it.
     // The label shape is an out-of-repo producer convention, so only remove the
     // first exact "on <routed chain>" fragment and keep any remainder verbatim:
     // an unrecognised shape must never omit either embedded details or the route.
@@ -428,9 +428,12 @@ export class AgentExecutor {
     const symbol = tokenLabel.split(/\s+/, 1)[0]
     const escapedChain = String(stored.chain).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const routedChainPattern = new RegExp(`(?:^|\\s)on ${escapedChain}(?=\\s|$)`)
-    const primaryRoutedChainPattern = new RegExp(`^\\s*on ${escapedChain}(?=\\s|$)`)
+    // Reordered labels put the routed chain after the contract details
+    // ("USDC.e (0x…) on Polygon"), so accept the fragment anywhere in the
+    // context — but a negated mention ("not on Polygon") must not count.
+    const positiveRoutedChainPattern = new RegExp(`(?:^|\\s)(?<!\\bnot\\s)on ${escapedChain}(?=\\s|$)`)
     const tokenContext = tokenLabel.slice(symbol.length)
-    const labelCarriesRoutedChain = primaryRoutedChainPattern.test(tokenContext)
+    const labelCarriesRoutedChain = positiveRoutedChainPattern.test(tokenContext)
     const tokenDetail = tokenContext.replace(routedChainPattern, '').trim()
     const amountEmbedsTokenLabel = tokenLabel.length > 0 && amount.endsWith(` ${tokenLabel}`)
     const amountWithSymbol =
