@@ -1,10 +1,11 @@
 import { create } from '@bufbuild/protobuf'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { Chain } from '@vultisig/core-chain/Chain'
 
 import { BuildKeysignPayloadError } from '../../error'
 import { CoinSchema } from '../../../types/vultisig/keysign/v1/coin_pb'
+import { TransactionType } from '../../../types/vultisig/keysign/v1/blockchain_specific_pb'
 import { KeysignPayloadSchema } from '../../../types/vultisig/keysign/v1/keysign_message_pb'
 
 const SENDER = 'rSenderAAAAAAAAAAAAAAAAAAAAAAAAAAA'
@@ -161,5 +162,74 @@ describe('getRippleChainSpecific — reserve belongs on Amount, not the burned F
     expect(error).toBeInstanceOf(Error)
     expect(error).not.toBeInstanceOf(BuildKeysignPayloadError)
     expect(error.message).toMatch(/unable to verify.*requires a DestinationTag/i)
+  })
+})
+
+describe('getRippleChainSpecific — states the XRPL operation on the wire', () => {
+  const ISSUER = 'rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De'
+
+  // Earlier tests replace the account-info mock outright, so restore the
+  // default rather than inherit whichever one ran last.
+  beforeEach(async () => {
+    const { getRippleAccountInfo } = await import('@vultisig/core-chain/chains/ripple/account/info')
+    vi.mocked(getRippleAccountInfo).mockImplementation(async (address: string) => {
+      if (address === DEST_UNFUNDED) {
+        throw new Error('Account not found.')
+      }
+
+      return accountInfo()
+    })
+  })
+
+  const issuedCurrencyPayload = () =>
+    create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, {
+        chain: Chain.Ripple,
+        ticker: 'RLUSD',
+        address: SENDER,
+        contractAddress: `524C555344000000000000000000000000000000.${ISSUER}`,
+        decimals: 15,
+        isNativeToken: false,
+      }),
+      toAddress: ISSUER,
+      toAmount: '1000000000000000',
+    })
+
+  it('marks an issued-currency payload as a TrustSet', async () => {
+    // Without this a co-signer has only the coin to go on, and one that reads
+    // the undiscriminated case as a token Payment signs different bytes.
+    const res = await getRippleChainSpecific({
+      keysignPayload: issuedCurrencyPayload(),
+      walletCore: {} as never,
+    })
+
+    expect(res.transactionType).toBe(TransactionType.RIPPLE_TRUST_SET)
+  })
+
+  it('leaves a native XRP payload undiscriminated, so its bytes are unchanged', async () => {
+    const res = await getRippleChainSpecific({
+      keysignPayload: payload(DEST_FUNDED, '1000'),
+      walletCore: {} as never,
+    })
+
+    expect(res.transactionType).toBe(TransactionType.UNSPECIFIED)
+  })
+
+  it('does not claim a verbatim dApp transaction is a TrustSet', async () => {
+    // `signRipple` is signed exactly as supplied and never rebuilt from the coin.
+    // A dApp transaction carries no toAddress — an offer has no destination.
+    const dAppPayload = issuedCurrencyPayload()
+    dAppPayload.toAddress = ''
+    dAppPayload.signData = {
+      case: 'signRipple',
+      value: { rawJson: JSON.stringify({ TransactionType: 'OfferCreate', Account: SENDER }) },
+    } as never
+
+    const res = await getRippleChainSpecific({
+      keysignPayload: dAppPayload,
+      walletCore: {} as never,
+    })
+
+    expect(res.transactionType).toBe(TransactionType.UNSPECIFIED)
   })
 })
