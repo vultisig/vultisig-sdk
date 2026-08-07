@@ -26,7 +26,7 @@ import { solanaConfig } from '@vultisig/core-chain/chains/solana/solanaConfig'
 import { AccountCoinKey } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { GeneralSwapQuote } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
-import { logUnenforcedAggregatorDestination } from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
+import { assertKnownAggregatorRouter } from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
 import { injectSolanaAtaIfMissing } from '@vultisig/core-chain/swap/general/lifi/api/injectSolanaAtaIfMissing'
 import { MAX_COMBINED_COST_BPS, resolveLifiSlippage } from '@vultisig/core-chain/swap/general/lifi/api/lifiSlippage'
 import {
@@ -254,12 +254,9 @@ export const getLifiSwapQuote = async ({
         // actual transferFrom caller → revert.
         const approvalAddr = estimate.approvalAddress
         const evmTo = shouldBePresent(to)
-        // AGG-02: mirrors core's getLifiSwapQuote.ts — LiFi routes through many different
-        // bridge/DEX contracts by design, so this is logged (never enforced/thrown). See
-        // core's knownAggregatorRouters.ts for the full rationale. This RN override is a
-        // SEPARATE build target (rollup.platforms.config.js redirects core's
-        // getLifiSwapQuote.ts here), so it needs its own call, not just core's.
-        logUnenforcedAggregatorDestination('li.fi', evmTo)
+        // sdk#1458: mirror core's chain-scoped LI.FI Diamond enforcement. This RN
+        // override is a separate build target, so it needs its own guard call.
+        assertKnownAggregatorRouter('li.fi', evmTo, transfer.from.chain)
         return {
           evm: {
             from: shouldBePresent(from),

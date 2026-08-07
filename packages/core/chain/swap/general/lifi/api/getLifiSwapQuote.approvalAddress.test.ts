@@ -25,7 +25,7 @@ vi.mock('@lifi/sdk', () => ({
         gasLimit: '0',
         data: '0x',
         from: '0xfrom',
-        to: '0x9025b8ff00000000000000000000000000d1a30d', // outer Diamond router
+        to: '0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE', // official LI.FI Diamond
         chainId: 1,
       },
       estimate: {

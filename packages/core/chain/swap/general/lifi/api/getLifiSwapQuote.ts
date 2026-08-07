@@ -17,7 +17,7 @@ import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 
 import { AccountCoinKey } from '../../../../coin/AccountCoin'
 import { GeneralSwapQuote } from '../../GeneralSwapQuote'
-import { logUnenforcedAggregatorDestination } from '../../knownAggregatorRouters'
+import { assertKnownAggregatorRouter } from '../../knownAggregatorRouters'
 import { injectSolanaAtaIfMissing } from './injectSolanaAtaIfMissing'
 import { MAX_COMBINED_COST_BPS, resolveLifiSlippage } from './lifiSlippage'
 
@@ -251,11 +251,10 @@ export const getLifiSwapQuote = async ({
         // actual transferFrom caller → revert.
         const approvalAddr = estimate.approvalAddress
         const evmTo = shouldBePresent(to)
-        // AGG-02: LiFi routes through many different bridge/DEX contracts by design
-        // (diamond routing, multi-hop, chain-specific deployments) — a hard allowlist
-        // would false-block legitimate routes, so log (never throw). See
-        // knownAggregatorRouters.ts.
-        logUnenforcedAggregatorDestination('li.fi', evmTo)
+        // sdk#1458: LI.FI routes through many inner contracts, but every EVM quote enters
+        // through its officially published, chain-scoped Diamond. Enforce that entry point
+        // before it can become a signable destination.
+        assertKnownAggregatorRouter('li.fi', evmTo, transfer.from.chain)
         return {
           evm: {
             from: shouldBePresent(from),

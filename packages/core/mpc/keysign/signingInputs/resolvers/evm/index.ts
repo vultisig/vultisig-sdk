@@ -16,6 +16,7 @@ import { KeysignPayloadSchema } from '../../../../types/vultisig/keysign/v1/keys
 import {
   assertEnforcedSwapApprovalSpenderBound,
   assertKnownAggregatorRouterOnSigningPath,
+  assertSwapKitAddressReputation,
 } from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
 
 import { getBlockchainSpecificValue } from '../../../chainSpecific/KeysignChainSpecific'
@@ -41,9 +42,10 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
     // sibling can't see the spender). The router allow-list runs on quote.tx.to in that recursion;
     // this binds the INDEPENDENT erc20ApprovePayload.spender field to it for enforced providers, so
     // a payload can't pass the router check yet still approve an attacker. sdk#1457: cowswap is now
-    // bound too (its spender IS its tx.to — both the fixed GPv2VaultRelayer); only the genuinely
-    // unenforceable li.fi/swapkit (and the legacy `''`) stay unbound. See
-    // assertEnforcedSwapApprovalSpenderBound.
+    // bound too (its spender IS its tx.to — both the fixed GPv2VaultRelayer). LI.FI's destination
+    // is enforced as of sdk#1458, but its legitimate inner allowance executor can differ from the
+    // Diamond, so LI.FI, SwapKit, and the legacy `''` remain outside this spender-equality guard.
+    // SwapKit's spender is instead checked against Blockaid immediately below.
     const approveSwapPayload = getKeysignSwapPayload(keysignPayload)
     if (approveSwapPayload && 'general' in approveSwapPayload) {
       assertEnforcedSwapApprovalSpenderBound(
@@ -52,12 +54,12 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
         approveSwapPayload.general.quote?.tx?.to ?? '',
         chain
       )
+      if (approveSwapPayload.general.provider === 'swapkit') {
+        await assertSwapKitAddressReputation(erc20ApprovePayload.spender, chain, 'approval spender')
+      }
     }
 
-    const approveSigningInput = getErc20ApproveSigningInput({
-      keysignPayload,
-      walletCore,
-    })
+    const approveSigningInput = getErc20ApproveSigningInput({ keysignPayload, walletCore })
 
     const restOfSigningInputs = await getEvmSigningInputs({
       keysignPayload: incrementKeysignPayloadNonce(create(KeysignPayloadSchema, restOfKeysignPayload)),
@@ -78,9 +80,9 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
   // destination (getToAddress/getTransaction general arms below) - a compromised initiator can
   // hand a co-signer a payload whose tx.to was never quote-checked, and every co-signer
   // independently rebuilds the input from that payload. Fail closed for enforced providers
-  // (1inch/kyber); log-only for the unenforced ones, matching the quote-time policy. A pure gate:
-  // it throws or no-ops, never changes the signed bytes, so it cannot desync the cross-device
-  // pre-signing hash.
+  // (1inch/kyber/cowswap/li.fi), require an independent reputation verdict for SwapKit, and retain
+  // log-only compatibility only for legacy unattributed payloads. A pure gate: it throws or no-ops,
+  // never changes the signed bytes, so it cannot desync the cross-device pre-signing hash.
   //
   // SCOPE - this guard covers the swap-leg destination ONLY, NOT the ERC-20 approval spender.
   // On the INITIATOR, build.ts derives the approve spender from this same quote.tx.to
@@ -90,12 +92,17 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
   // pass this router check yet still carry an approve to an arbitrary spender. That gap is now
   // closed for enforced providers by assertEnforcedSwapApprovalSpenderBound in the branch above
   // (sdk#1358 review follow-up; sdk#1457 extended it to cowswap, whose spender IS its tx.to). It
-  // remains open for li.fi/swapkit and the legacy `''` provider, which cannot be address-bound.
+  // LI.FI's distinct inner executor remains outside the equality constraint; SwapKit's distinct
+  // spender is independently reputation-checked above. The legacy `''` provider remains unenforced.
   if (swapPayload && 'general' in swapPayload) {
     const { provider, quote } = swapPayload.general
     // Pass the raw (possibly empty) destination unconditionally: for an enforced provider an empty
     // `to` must ALSO fail closed (the helper rejects it as unrecognized), not be silently skipped.
-    assertKnownAggregatorRouterOnSigningPath(provider, quote?.tx?.to ?? '', chain)
+    if (provider === 'swapkit') {
+      await assertSwapKitAddressReputation(quote?.tx?.to ?? '', chain, 'transaction destination')
+    } else {
+      assertKnownAggregatorRouterOnSigningPath(provider, quote?.tx?.to ?? '', chain)
+    }
   }
 
   // A token coin carrying raw `0x` calldata with a zero `toAmount` (and no swap)
@@ -140,20 +147,9 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
 
           const abiFunction = walletCore.EthereumAbiFunction.createWithString('depositWithExpiry')
 
+          abiFunction.addParamAddress(toTwAddress({ address: vaultAddress, walletCore, chain }), false)
           abiFunction.addParamAddress(
-            toTwAddress({
-              address: vaultAddress,
-              walletCore,
-              chain,
-            }),
-            false
-          )
-          abiFunction.addParamAddress(
-            toTwAddress({
-              address: shouldBePresent(fromCoin?.contractAddress),
-              walletCore,
-              chain,
-            }),
+            toTwAddress({ address: shouldBePresent(fromCoin?.contractAddress), walletCore, chain }),
             false
           )
           abiFunction.addParamUInt256(toEvmTwAmount(fromAmount), false)
@@ -163,10 +159,7 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
           const data = walletCore.EthereumAbi.encode(abiFunction)
 
           return {
-            contractGeneric: TW.Ethereum.Proto.Transaction.ContractGeneric.create({
-              amount: toEvmTwAmount(0),
-              data,
-            }),
+            contractGeneric: TW.Ethereum.Proto.Transaction.ContractGeneric.create({ amount: toEvmTwAmount(0), data }),
           }
         },
         general: ({ quote }) => {
@@ -203,10 +196,7 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
     }
 
     return {
-      erc20Transfer: TW.Ethereum.Proto.Transaction.ERC20Transfer.create({
-        amount,
-        to: keysignPayload.toAddress,
-      }),
+      erc20Transfer: TW.Ethereum.Proto.Transaction.ERC20Transfer.create({ amount, to: keysignPayload.toAddress }),
     }
   }
 
@@ -231,10 +221,7 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
   const input = TW.Ethereum.Proto.SigningInput.create({
     toAddress: getToAddress(),
     transaction: TW.Ethereum.Proto.Transaction.create(getTransaction()),
-    chainId: getEvmTwChainId({
-      walletCore,
-      chain,
-    }),
+    chainId: getEvmTwChainId({ walletCore, chain }),
     nonce: getEvmTwNonce(nonce),
     ...getFeeFields(),
   })
