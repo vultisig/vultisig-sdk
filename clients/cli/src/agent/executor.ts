@@ -417,12 +417,13 @@ export class AgentExecutor {
     // token_resolved may be either a bare ticker or a richer label such as
     // "USDC.e on Polygon (0x…)". De-dup against the ticker while preserving
     // the richer chain/contract disclosure as the summary suffix. When the
-    // amount already embeds the full label, omit that suffix only if the label's
-    // primary post-symbol location is the exact routed chain; a conflicting or
-    // secondary chain mention must keep the routed location visible.
+    // amount already embeds the full label, do not render its details again:
+    // omit the suffix if the label's primary post-symbol location is the exact
+    // routed chain, otherwise append only the routed location so a conflicting
+    // or secondary chain mention cannot hide it.
     // The label shape is an out-of-repo producer convention, so only remove the
     // first exact "on <routed chain>" fragment and keep any remainder verbatim:
-    // an unrecognised shape must degrade to redundancy rather than omit disclosure.
+    // an unrecognised shape must never omit either embedded details or the route.
     const tokenLabel = (labels.token_resolved || labels.token_symbol || '').trim()
     const symbol = tokenLabel.split(/\s+/, 1)[0]
     const escapedChain = String(stored.chain).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -434,10 +435,8 @@ export class AgentExecutor {
     const amountEmbedsTokenLabel = tokenLabel.length > 0 && amount.endsWith(` ${tokenLabel}`)
     const amountWithSymbol =
       symbol && !amount.endsWith(` ${symbol}`) && !amountEmbedsTokenLabel ? `${amount} ${symbol}` : amount
-    const location =
-      amountEmbedsTokenLabel && labelCarriesRoutedChain
-        ? ''
-        : `on ${stored.chain}${tokenDetail ? ` ${tokenDetail}` : ''}`
+    const tokenDetailSuffix = amountEmbedsTokenLabel || !tokenDetail ? '' : ` ${tokenDetail}`
+    const location = amountEmbedsTokenLabel && labelCarriesRoutedChain ? '' : `on ${stored.chain}${tokenDetailSuffix}`
     const to = (p?.txArgs?.to as string) || labels.recipient_echo || '?'
     return `send ${amountWithSymbol}${location ? ` ${location}` : ''} to ${to}`
   }
