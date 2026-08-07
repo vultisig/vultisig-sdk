@@ -496,8 +496,11 @@ export class RawBroadcastService {
     )
 
     if (error) {
-      if (isBittensorDuplicateError(error) || isBittensorTimeoutError(error)) {
+      if (isBittensorDuplicateError(error)) {
         return rawTxHash()
+      }
+      if (isBittensorTimeoutError(error)) {
+        return verifyKnownRawTx(OtherChain.Bittensor, await rawTxHash(), 'Bittensor')
       }
       throw error
     }
@@ -520,8 +523,11 @@ export class RawBroadcastService {
       if (typeof message !== 'string') {
         throw new Error('Bittensor broadcast failed: malformed JSON-RPC error')
       }
-      if (isBittensorDuplicateError(message) || isBittensorTimeoutError(response.error)) {
+      if (isBittensorDuplicateError(message)) {
         return rawTxHash()
+      }
+      if (isBittensorTimeoutError(response.error)) {
+        return verifyKnownRawTx(OtherChain.Bittensor, await rawTxHash(), 'Bittensor')
       }
       throw new Error(`Bittensor broadcast failed: ${message}`)
     }

@@ -640,10 +640,95 @@ describe('RawBroadcastService', () => {
     }
   )
 
-  it('returns Bittensor raw tx hash for timeout-style JSON-RPC errors', async () => {
-    mockQueryUrl.mockResolvedValue({
+  it('verifies a timeout-style JSON-RPC error via taostats before returning a hash', async () => {
+    mockQueryUrl
+      .mockResolvedValueOnce({
+        error: {
+          message: 'request timed out',
+        },
+      })
+      .mockResolvedValueOnce({
+        pagination: { page: 1, limit: 1, total: 1 },
+        data: [{ hash: '0xbittensorhash', block_number: 1, success: true, timestamp: '2026-01-01T00:00:00Z' }],
+      })
+
+    const hash = await service.broadcastRawTx({
+      chain: Chain.Bittensor,
+      rawTx: '0xbeef',
+    })
+
+    expect(hash).toBe('0xbittensorhash')
+    expect(mockGetBittensorTxHash).toHaveBeenCalledWith({
+      encoded: Buffer.from('beef', 'hex'),
+    })
+    // The submit-timeout branch must confirm the extrinsic actually landed (via taostats)
+    // before handing back a hash - a locally-computed hash is not proof of broadcast.
+    expect(mockQueryUrl).toHaveBeenCalledTimes(2)
+    expect(mockQueryUrl.mock.calls[1][0]).toContain('tao-tx/v1')
+  })
+
+  it('fails closed when a timeout-style JSON-RPC error cannot be verified on-chain', async () => {
+    mockQueryUrl
+      .mockResolvedValueOnce({
+        error: {
+          message: 'request timed out',
+        },
+      })
+      .mockResolvedValueOnce({
+        pagination: { page: 1, limit: 1, total: 0 },
+        data: [],
+      })
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Bittensor,
+        rawTx: '0xbeef',
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+    })
+    expect(mockQueryUrl).toHaveBeenCalledTimes(2)
+  })
+
+  it.each([
+    'request timed out',
+    'queryUrl: request timed out after 20000ms (https://bittensor-finney.api.onfinality.io/public)',
+  ])('verifies a timeout-style submit failure %j via taostats before returning a hash', async timeoutMessage => {
+    mockQueryUrl.mockRejectedValueOnce(new Error(timeoutMessage)).mockResolvedValueOnce({
+      pagination: { page: 1, limit: 1, total: 1 },
+      data: [{ hash: '0xbittensorhash', block_number: 1, success: true, timestamp: '2026-01-01T00:00:00Z' }],
+    })
+
+    const hash = await service.broadcastRawTx({
+      chain: Chain.Bittensor,
+      rawTx: '0xbeef',
+    })
+
+    expect(hash).toBe('0xbittensorhash')
+    expect(mockGetBittensorTxHash).toHaveBeenCalledWith({
+      encoded: Buffer.from('beef', 'hex'),
+    })
+    expect(mockQueryUrl).toHaveBeenCalledTimes(2)
+  })
+
+  it('fails closed when a timeout-style submit failure cannot be verified on-chain', async () => {
+    mockQueryUrl.mockRejectedValueOnce(new Error('request timed out')).mockRejectedValueOnce(new Error('network down'))
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Bittensor,
+        rawTx: '0xbeef',
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+    })
+    expect(mockQueryUrl).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not verify duplicate-style Bittensor errors (idempotent immediate return)', async () => {
+    mockQueryUrl.mockResolvedValueOnce({
       error: {
-        message: 'request timed out',
+        message: 'Already Imported',
       },
     })
 
@@ -653,26 +738,9 @@ describe('RawBroadcastService', () => {
     })
 
     expect(hash).toBe('0xbittensorhash')
-    expect(mockGetBittensorTxHash).toHaveBeenCalledWith({
-      encoded: Buffer.from('beef', 'hex'),
-    })
-  })
-
-  it.each([
-    'request timed out',
-    'queryUrl: request timed out after 20000ms (https://bittensor-finney.api.onfinality.io/public)',
-  ])('returns Bittensor raw tx hash for timeout-style submit failure %j', async timeoutMessage => {
-    mockQueryUrl.mockRejectedValue(new Error(timeoutMessage))
-
-    const hash = await service.broadcastRawTx({
-      chain: Chain.Bittensor,
-      rawTx: '0xbeef',
-    })
-
-    expect(hash).toBe('0xbittensorhash')
-    expect(mockGetBittensorTxHash).toHaveBeenCalledWith({
-      encoded: Buffer.from('beef', 'hex'),
-    })
+    // Duplicate detection is a strong in-mempool signal on its own; it must NOT go through
+    // the taostats verification poll the timeout branch requires.
+    expect(mockQueryUrl).toHaveBeenCalledTimes(1)
   })
 
   it.each([
