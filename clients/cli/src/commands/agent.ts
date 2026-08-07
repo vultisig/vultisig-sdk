@@ -131,6 +131,21 @@ export type AgentAskOptions = {
  *   success: {"success":true,"v":1,"data":{"conversation_id":"...","response":"...",...}}
  *   error:   {"success":false,"v":1,"error":{"message":"...","code":"...","conversation_id":"..."}}
  */
+function signingRecordsField(result: AskResult | undefined): { signing_records?: AskResult['signingRecords'] } {
+  // Tolerate the array being absent at runtime (out-of-repo producers may not
+  // populate the field even though the type requires it).
+  return result?.signingRecords?.length ? { signing_records: result.signingRecords } : {}
+}
+
+function writeSigningRecordLines(
+  records: AskResult['signingRecords'] | undefined,
+  write: (line: string) => unknown
+): void {
+  for (const record of records ?? []) {
+    write(`signing-record:${record.success ? 'signed' : 'not-signed'}:${record.summary}\n`)
+  }
+}
+
 /**
  * Write the structured error envelope to stdout (JSON mode) or a human line to
  * stderr. Shared by the mid-turn `error`-frame path and the catch path so both
@@ -155,6 +170,7 @@ function outputAskError(
   if (wantsJson) {
     const data: Record<string, unknown> = {}
     if (result?.transactions.length) data.transactions = result.transactions
+    Object.assign(data, signingRecordsField(result))
     if (result?.toolCalls.length) data.tool_calls = result.toolCalls
     if (result?.response) data.response = result.response
     if (result?.warnings.length) data.warnings = result.warnings
@@ -162,6 +178,13 @@ function outputAskError(
     // `data` so a caller reads `data.outcome` on BOTH the success and error
     // envelopes (the success envelope wraps its fields under `data` via outputJson).
     if (result?.outcome) data.outcome = result.outcome
+    // The built-but-unauthorized transaction IS this turn's result. Without it the
+    // read-safe path returns an error envelope with nothing to read.
+    if (result?.proposedTransaction) {
+      data.confirmation_required = true
+      data.proposed_transaction = result.proposedTransaction
+      data.proposed = result.proposedTransaction.summary
+    }
     outputErrorJson({
       success: false,
       v: 1,
@@ -176,6 +199,11 @@ function outputAskError(
         process.stderr.write(`outcome:${kind}${outcomeCode ? `:${outcomeCode}` : ''}\n`)
       }
       if (result.response) process.stderr.write(`${result.response}\n`)
+      if (result.proposedTransaction) {
+        process.stderr.write('confirmation-required:pass --yes to authorize signing\n')
+        process.stderr.write(`proposed:${result.proposedTransaction.summary}\n`)
+      }
+      writeSigningRecordLines(result.signingRecords, line => process.stderr.write(line))
     }
     process.stderr.write(`Error: ${message} [${code}]\n`)
   }
@@ -193,6 +221,13 @@ function hasCommittedBroadcast(result: AskResult | undefined): boolean {
 }
 
 const SIGNING_TOOLS = new Set(['sign_tx', 'sign_typed_data'])
+
+// The confirm gate's own verdict, stated in the caller's terms. The raw executor
+// string ("Transaction not confirmed") reads like the transaction was attempted and
+// came back unconfirmed; what actually happened is that it was built and deliberately
+// never authorized. Nothing was signed and nothing was broadcast.
+const CONFIRMATION_REQUIRED_MESSAGE =
+  'The transaction was built but signing was not authorized, so nothing was signed or broadcast. Re-run with --yes to authorize signing.'
 
 /**
  * The turn's signing verdict, or undefined if it signed cleanly (or never tried).
@@ -215,6 +250,9 @@ function failedSigningError(result: AskResult): { message: string; code: AgentEr
     failed.code ??
     (typeof dataCode === 'string' && isAgentErrorCode(dataCode) ? dataCode : inferAgentErrorCodeFromMessage(message))
 
+  if (code === AgentErrorCode.CONFIRMATION_REQUIRED) {
+    return { message: CONFIRMATION_REQUIRED_MESSAGE, code }
+  }
   return { message, code }
 }
 
@@ -235,6 +273,7 @@ function outputPostBroadcastFailure(
   if (wantsJson) {
     const data: Record<string, unknown> = {
       transactions: result.transactions,
+      ...signingRecordsField(result),
       tool_calls: result.toolCalls,
       response: result.response,
       ...(result.warnings.length ? { warnings: result.warnings } : {}),
@@ -266,6 +305,7 @@ function outputPostBroadcastFailure(
     process.stderr.write(`status:${tx.status ?? 'unknown'}\n`)
     if (tx.explorerUrl) process.stderr.write(`explorer:${tx.explorerUrl}\n`)
   }
+  writeSigningRecordLines(result.signingRecords, line => process.stderr.write(line))
   process.stderr.write(
     'WARNING: DO NOT blindly retry. Verify each transaction hash and continue only the incomplete step.\n'
   )
@@ -290,6 +330,7 @@ function outputAskHuman(result: AskResult, confirmationRequired: boolean, propos
       process.stdout.write(`proposed:${proposed}\n`)
     }
   }
+  writeSigningRecordLines(result.signingRecords, line => process.stdout.write(line))
   // Balance cards (rendered as a table instead of raw JSON)
   for (const card of result.cards) {
     process.stdout.write(`\n${renderBalanceSummaryCard(card)}\n`)
@@ -339,6 +380,7 @@ function outputAskSuccess(wantsJson: boolean, result: AskResult, conversationId:
       response: result.response,
       tool_calls: result.toolCalls,
       transactions: result.transactions,
+      ...signingRecordsField(result),
       ...(result.cards.length > 0 ? { cards: result.cards } : {}),
       ...(result.yieldCards.length > 0 ? { yield_cards: result.yieldCards } : {}),
       ...(result.polymarketCards.length > 0 ? { polymarket_cards: result.polymarketCards } : {}),
@@ -358,6 +400,14 @@ function outputAskSuccess(wantsJson: boolean, result: AskResult, conversationId:
 
 /** Convert a typed non-success turn ending into its stable envelope code. */
 function outcomeError(outcome: AskResult['outcome']): { message: string; code: AgentErrorCode } | undefined {
+  // Keyed on the CODE, not the kind: a backend that classifies a built-but-unauthorized
+  // transaction reports it under an existing kind (so no consumer switching on `kind`
+  // meets a value it doesn't handle) with this code. It maps onto the CLI's existing
+  // CONFIRMATION_REQUIRED / exit 12 slot — the same code `send` and `swap` already use
+  // for "needs --yes" — rather than a generic safety block.
+  if (outcome?.code === 'confirmation_required') {
+    return { message: CONFIRMATION_REQUIRED_MESSAGE, code: AgentErrorCode.CONFIRMATION_REQUIRED }
+  }
   switch (outcome?.kind) {
     case 'blocked':
       return {
