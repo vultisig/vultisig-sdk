@@ -381,7 +381,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       // Try loading from disk (two-step flow)
       const pendingData = await this.context.storage.get<VaultData>(`pending:${vaultId}`)
       if (pendingData) {
-        pendingVault = this.vaultManager.createVaultInstance(pendingData) as FastVault
+        pendingVault = this.vaultManager.createVaultInstance(pendingData, false) as FastVault
       }
     }
 
@@ -969,7 +969,9 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    */
   async importVault(vultContent: string, password?: string): Promise<VaultBase> {
     await this.ensureInitialized()
-    const vault = await this.vaultManager.importVault(vultContent, password)
+    const { vault } = await this.vaultManager.importVaultWithResult(vultContent, password, notice => {
+      this.emit('legacyVaultBackupMigrated', notice)
+    })
 
     // VaultManager already handles storage, just emit event
     this.emit('vaultChanged', { vaultId: vault.id })

@@ -235,24 +235,7 @@ describe('RawBroadcastService', () => {
     expect(hash).toBe('sol-signature')
   })
 
-  it('treats duplicate-style Solana broadcast errors as idempotent success', async () => {
-    const signature = Uint8Array.from({ length: 64 }, (_, index) => index + 1)
-    const rawTx = Buffer.from(Uint8Array.from([1, ...signature, 0])).toString('base64')
-    mockSendSolanaRawTx.mockRejectedValue(new Error('AlreadyProcessed'))
-    mockGetSolanaSignatureStatuses.mockResolvedValue({ value: [{ err: null }] })
-
-    const hash = await service.broadcastRawTx({
-      chain: Chain.Solana,
-      rawTx,
-    })
-
-    expect(hash).toBe(base58.encode(signature))
-  })
-
-  // Fund-safety: "AlreadyProcessed" only proves the node executed this signature before, not
-  // that the execution succeeded. The idempotent-retry path must run through the same
-  // on-chain-failure status check as a fresh send, not report success unconditionally.
-  it('fails closed on a duplicate-style Solana broadcast error when the signature already failed on-chain', async () => {
+  it('rejects a duplicate Solana transaction with an explicit on-chain failure', async () => {
     const signature = Uint8Array.from({ length: 64 }, (_, index) => index + 1)
     const rawTx = Buffer.from(Uint8Array.from([1, ...signature, 0])).toString('base64')
     mockSendSolanaRawTx.mockRejectedValue(new Error('AlreadyProcessed'))
@@ -269,32 +252,37 @@ describe('RawBroadcastService', () => {
       code: VaultErrorCode.BroadcastFailed,
       message: expect.stringContaining('failed on-chain'),
     })
+    expect(mockGetSolanaSignatureStatuses).toHaveBeenCalledWith([base58.encode(signature)], {
+      searchTransactionHistory: true,
+    })
   })
 
-  it.each([
-    {
-      name: 'the status lookup finds no record',
-      arrange: () => mockGetSolanaSignatureStatuses.mockResolvedValue({ value: [null] }),
-    },
-    {
-      name: 'the status lookup errors',
-      arrange: () => mockGetSolanaSignatureStatuses.mockRejectedValue(new Error('rpc down')),
-    },
-  ])('fails closed on a duplicate-style Solana broadcast error when $name', async ({ arrange }) => {
+  it('accepts a duplicate Solana transaction when its status is not indexed yet', async () => {
     const signature = Uint8Array.from({ length: 64 }, (_, index) => index + 1)
     const rawTx = Buffer.from(Uint8Array.from([1, ...signature, 0])).toString('base64')
     mockSendSolanaRawTx.mockRejectedValue(new Error('AlreadyProcessed'))
-    arrange()
+    mockGetSolanaSignatureStatuses.mockResolvedValue({ value: [null] })
 
-    await expect(
-      service.broadcastRawTx({
-        chain: Chain.Solana,
-        rawTx,
-      })
-    ).rejects.toMatchObject({
-      code: VaultErrorCode.BroadcastFailed,
-      message: expect.stringContaining('could not be verified'),
+    const hash = await service.broadcastRawTx({
+      chain: Chain.Solana,
+      rawTx,
     })
+
+    expect(hash).toBe(base58.encode(signature))
+  })
+
+  it('accepts a duplicate Solana transaction when its best-effort status lookup is unavailable', async () => {
+    const signature = Uint8Array.from({ length: 64 }, (_, index) => index + 1)
+    const rawTx = Buffer.from(Uint8Array.from([1, ...signature, 0])).toString('base64')
+    mockSendSolanaRawTx.mockRejectedValue(new Error('AlreadyProcessed'))
+    mockGetSolanaSignatureStatuses.mockRejectedValue(new Error('rpc down'))
+
+    const hash = await service.broadcastRawTx({
+      chain: Chain.Solana,
+      rawTx,
+    })
+
+    expect(hash).toBe(base58.encode(signature))
   })
 
   it('broadcasts Cosmos tx when rawTx is JSON with tx_bytes', async () => {
