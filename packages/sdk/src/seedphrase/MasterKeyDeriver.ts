@@ -453,6 +453,7 @@ export class MasterKeyDeriver {
       Zcash: 'zcash',
       Sei: 'ethereum',
       Hyperliquid: 'ethereum', // Uses Ethereum derivation
+      Robinhood: 'robinhoodChain',
     }
 
     const coinTypeName = chainToCoinType[chain]
