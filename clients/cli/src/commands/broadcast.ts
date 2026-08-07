@@ -8,7 +8,7 @@ import { Chain, getChainKind, Vultisig } from '@vultisig/sdk'
 
 import type { CommandContext } from '../core'
 import { ConfirmationRequiredError, InvalidInputError } from '../core/errors'
-import { createSpinner, isNonInteractive, isJsonOutput, outputJson, printResult, warn } from '../lib/output'
+import { createSpinner, isJsonOutput, isNonInteractive, outputJson, printResult, warn } from '../lib/output'
 import { confirmTransaction } from '../ui'
 
 /**
