@@ -166,6 +166,33 @@ describe('sdk.defi.stakekit', () => {
       expect(opp.isAvailable).toBe(true)
     })
 
+    it('scopes enabled-yield cache entries by API key', async () => {
+      const keyAProduct = makeProduct({ id: 'ethereum-eth-key-a', metadata: { ...makeProduct().metadata, name: 'Key A Product' } })
+      const keyBProduct = makeProduct({ id: 'ethereum-eth-key-b', metadata: { ...makeProduct().metadata, name: 'Key B Product' } })
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ data: [keyAProduct], hasNextPage: false }),
+          text: async () => '',
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ data: [keyBProduct], hasNextPage: false }),
+          text: async () => '',
+        } as Response)
+      globalThis.fetch = fetchMock
+
+      const a = await stakekitSearch({ network: 'ethereum', provider: 'lido', apiKey: 'key-a' })
+      const b = await stakekitSearch({ network: 'ethereum', provider: 'lido', apiKey: 'key-b' })
+
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      expect(a[0]?.id).toBe('ethereum-eth-key-a')
+      expect(b[0]?.id).toBe('ethereum-eth-key-b')
+    })
+
     it('applies client-side token filter (stakek.it ignores token param server-side)', async () => {
       const eth = makeProduct({ id: 'ethereum-eth-lido-staking' })
       const usdc = makeProduct({
