@@ -1,5 +1,5 @@
 import type { VaultBase } from '@vultisig/sdk'
-import { Chain,chainFeeCoin } from '@vultisig/sdk'
+import { Chain, chainFeeCoin } from '@vultisig/sdk'
 import { describe, expect, it } from 'vitest'
 
 import { buildMessageContext, buildMinimalContext } from '../context'

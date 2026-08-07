@@ -166,4 +166,3 @@ export async function buildMinimalContext(vault: VaultBase): Promise<MessageCont
 
   return context
 }
-
