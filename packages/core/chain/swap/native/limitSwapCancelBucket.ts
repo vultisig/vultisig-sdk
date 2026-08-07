@@ -1,4 +1,5 @@
 import { assertPositiveLimitSwapCancelAmounts, LimitSwapCancelInputs } from './limitSwapCancelMemo'
+import { findThorchainMemoAssetSeparatorIndex } from './thorchainMemoAsset'
 
 /**
  * THORChain's fixed-point exponent, the `1e8` the ratio is scaled by.
@@ -26,8 +27,7 @@ const thorchainRatioLength = 18
  * it, so it must not be touched.
  */
 export const toThorchainLayer1MemoAsset = (asset: string): string => {
-  const separators = ['/', '~', '-', '.']
-  const index = [...asset].findIndex(char => separators.includes(char))
+  const index = findThorchainMemoAssetSeparatorIndex(asset)
   if (index === -1 || asset[index] === '.') {
     return asset.toUpperCase()
   }

@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-mpc",
-  "version": "1.16.1",
+  "version": "1.17.0",
   "description": "MPC, keysign, and vault types shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -591,6 +591,11 @@
       "import": "./dist/keysign/swap/build.js",
       "default": "./dist/keysign/swap/build.js"
     },
+    "./keysign/swap/buildLimitSwapCancelKeysignPayload": {
+      "types": "./dist/keysign/swap/buildLimitSwapCancelKeysignPayload.d.ts",
+      "import": "./dist/keysign/swap/buildLimitSwapCancelKeysignPayload.js",
+      "default": "./dist/keysign/swap/buildLimitSwapCancelKeysignPayload.js"
+    },
     "./keysign/swap/buildLimitSwapKeysignPayload": {
       "types": "./dist/keysign/swap/buildLimitSwapKeysignPayload.d.ts",
       "import": "./dist/keysign/swap/buildLimitSwapKeysignPayload.js",
@@ -600,6 +605,11 @@
       "types": "./dist/keysign/swap/cowswap/buildCowSwapApprovalSigningInput.d.ts",
       "import": "./dist/keysign/swap/cowswap/buildCowSwapApprovalSigningInput.js",
       "default": "./dist/keysign/swap/cowswap/buildCowSwapApprovalSigningInput.js"
+    },
+    "./keysign/swap/getKeysignLimitSwapCancel": {
+      "types": "./dist/keysign/swap/getKeysignLimitSwapCancel.d.ts",
+      "import": "./dist/keysign/swap/getKeysignLimitSwapCancel.js",
+      "default": "./dist/keysign/swap/getKeysignLimitSwapCancel.js"
     },
     "./keysign/swap/getKeysignLimitSwapOrder": {
       "types": "./dist/keysign/swap/getKeysignLimitSwapOrder.d.ts",
@@ -655,6 +665,11 @@
       "types": "./dist/keysign/utils/getKeysignCoin.d.ts",
       "import": "./dist/keysign/utils/getKeysignCoin.js",
       "default": "./dist/keysign/utils/getKeysignCoin.js"
+    },
+    "./keysign/utils/isRippleTrustSet": {
+      "types": "./dist/keysign/utils/isRippleTrustSet.d.ts",
+      "import": "./dist/keysign/utils/isRippleTrustSet.js",
+      "default": "./dist/keysign/utils/isRippleTrustSet.js"
     },
     "./keysign/utils/resolvePolkadotToAddress": {
       "types": "./dist/keysign/utils/resolvePolkadotToAddress.d.ts",
@@ -1079,7 +1094,7 @@
     "@noble/hashes": "^1.8.0",
     "@solana/web3.js": "^1.98.4",
     "@trustwallet/wallet-core": "^4.7.0",
-    "@vultisig/core-chain": "2.31.1",
+    "@vultisig/core-chain": "2.32.0",
     "@vultisig/core-config": "0.9.1",
     "@vultisig/lib-dkls": "0.9.0",
     "@vultisig/lib-mldsa": "0.9.0",
