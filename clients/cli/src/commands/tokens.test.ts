@@ -56,11 +56,16 @@ describe('tokens --add', () => {
     )
   })
 
-  // ROUNDTRIP (review ask): the point of aligning `--add` with `discoverTokens` is that a token
-  // added through the CLI can then be REMOVED by the same raw address the user typed. Pinning the
-  // id alone would not catch a future divergence between the two paths, because removal resolves
-  // through `contractAddress || id` - so assert the pair the resolver actually reads.
-  it('the added token is removable by the raw contract address the user typed', async () => {
+  // FIELD-STORAGE (CodeRabbit ask): this test mocks VaultBase at the interface boundary, same as
+  // every other test in this file, so it can't drive the real BalanceService resolver without
+  // reaching into SDK internals that clients/cli doesn't import. What it CAN pin is the shape
+  // addToken hands to the vault - both id and contractAddress must normalize to the raw address
+  // the resolver reads (`token.contractAddress?.toLowerCase() === lower`, falling back to id), so
+  // a future divergence between --add and discoverTokens shows up here. The actual
+  // add-then-remove roundtrip through the real resolver is covered at
+  // packages/sdk/tests/unit/services/BalanceService.test.ts (e.g. "removes a token stored with an
+  // empty contractAddress").
+  it('stores id and contractAddress as the same raw address the removal resolver reads', async () => {
     configureOutput({ format: 'json' })
     const added: Array<{ id?: string; contractAddress?: string }> = []
     const addTokenToVault = vi.fn(async (_chain: unknown, t: { id?: string; contractAddress?: string }) => {
@@ -78,8 +83,6 @@ describe('tokens --add', () => {
     })
 
     const stored = added[0]!
-    // BalanceService.removeToken resolves `token.contractAddress?.toLowerCase() === lower`, falling
-    // back to the id - so both must normalize to the raw address the user would pass to --remove.
     expect(stored.contractAddress?.toLowerCase()).toBe(USDC.toLowerCase())
     expect(stored.id?.toLowerCase()).toBe(USDC.toLowerCase())
   })

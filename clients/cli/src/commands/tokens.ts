@@ -114,12 +114,11 @@ export async function addToken(ctx: CommandContext, options: AddTokenOptions): P
 
   // bead vultisig-sb7ub: tokenId must be the raw contract address to match how
   // discovery + storage key tokens across the SDK. Previously this used
-  // `${chain}-${contractAddress}` which produced an id shape ('Ethereum-0x...')
-  // that (a) rendered as a double-prefix 'Ethereum:Ethereum-0x...' in the
-  // balances map, and (b) prevented removal — `vault.removeToken(chain, '0x...')`
-  // normalises to the raw address and never matched the stored prefixed id, so
-  // a manually-added token was orphaned in the vault with no CLI-side removal
-  // path.
+  // `${chain}-${contractAddress}` which rendered as a double-prefix
+  // 'Ethereum:Ethereum-0x...' in the balances map. Note: removal by the raw
+  // address already worked under the old id shape too, via BalanceService's
+  // contractAddress fallback (791d344c) — this fix is about the double-prefix
+  // key, not about unblocking removal.
   await vault.addToken(options.chain, {
     id: options.contractAddress,
     contractAddress: options.contractAddress,
