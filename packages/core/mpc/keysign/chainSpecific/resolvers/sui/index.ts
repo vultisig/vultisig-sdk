@@ -2,6 +2,7 @@ import { create } from '@bufbuild/protobuf'
 import { getSuiClient } from '@vultisig/core-chain/chains/sui/client'
 import { suiGasBudget } from '@vultisig/core-chain/chains/sui/config'
 import { listAllSuiCoins } from '@vultisig/core-chain/chains/sui/listAllCoins'
+import { getSuiPrebuiltGasData } from '@vultisig/core-chain/chains/sui/prebuiltGasData'
 import { SuiCoinSchema, SuiSpecificSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { attempt } from '@vultisig/lib-utils/attempt'
 
@@ -16,12 +17,14 @@ export const getSuiChainSpecific: GetChainSpecificResolver<'suicheSpecific'> = a
   keysignPayload,
   walletCore,
 }) => {
-  // dApp-supplied PTBs (`signData.signSui`) are already fully built: coins,
-  // gas budget and reference gas price are baked into the BCS bytes that
-  // `getSuiSigningInputs` forwards verbatim. There are no construction inputs
-  // to fetch, so return an empty SuiSpecific instead of hitting the RPC.
+  // Pre-built PTBs (`signData.signSui` — dApp Wallet Standard requests and
+  // SwapKit Sui-source swaps) are already fully built: coins, gas budget and
+  // reference gas price are baked into the BCS bytes that `getSuiSigningInputs`
+  // forwards verbatim. There are no construction inputs to fetch, so skip the
+  // RPC entirely and read the gas numbers back out of the bytes — without them
+  // `getSuiFeeAmount` reports a 0 network fee on the confirmation screen.
   if (keysignPayload.signData.case === 'signSui') {
-    return create(SuiSpecificSchema, {})
+    return create(SuiSpecificSchema, getSuiPrebuiltGasData(keysignPayload.signData.value.unsignedTxMsg))
   }
 
   const coin = getKeysignCoin(keysignPayload)
