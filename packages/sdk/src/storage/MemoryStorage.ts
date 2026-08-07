@@ -1,5 +1,13 @@
 import { Storage, STORAGE_VERSION, StorageMetadata, StoredValue } from './types'
 
+function cloneStoredValue<T>(value: T): T {
+  if (typeof globalThis.structuredClone === 'function') {
+    return globalThis.structuredClone(value)
+  }
+  if (value === undefined) return value
+  return JSON.parse(JSON.stringify(value)) as T
+}
+
 /**
  * In-memory storage implementation for testing and temporary use only.
  *
@@ -21,7 +29,7 @@ export class MemoryStorage implements Storage {
     const stored = this.store.get(key)
     if (!stored) return null
 
-    return stored.value as T
+    return cloneStoredValue(stored.value) as T
   }
 
   async set<T>(key: string, value: T): Promise<void> {
@@ -31,21 +39,7 @@ export class MemoryStorage implements Storage {
       lastModified: Date.now(),
     }
 
-    this.store.set(key, { value, metadata })
-  }
-
-  async compareAndSet<T>(key: string, expectedValue: T | null, value: T | null): Promise<boolean> {
-    const currentValue = this.store.get(key)?.value ?? null
-    if (JSON.stringify(currentValue) !== JSON.stringify(expectedValue)) {
-      return false
-    }
-
-    if (value === null) {
-      this.store.delete(key)
-    } else {
-      await this.set(key, value)
-    }
-    return true
+    this.store.set(key, { value: cloneStoredValue(value), metadata })
   }
 
   async remove(key: string): Promise<void> {

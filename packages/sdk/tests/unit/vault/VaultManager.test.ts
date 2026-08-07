@@ -19,10 +19,6 @@
  * - Error scenarios and validation
  */
 
-import { mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-
 import { create, toBinary } from '@bufbuild/protobuf'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { LibType } from '@vultisig/core-mpc/types/vultisig/keygen/v1/lib_type_message_pb'
@@ -32,9 +28,8 @@ import { encryptWithAesGcm } from '@vultisig/lib-utils/encryption/aesGcm/encrypt
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createSdkContext } from '../../../src/context/SdkContextBuilder'
-import { FileStorage } from '../../../src/platforms/node/storage'
 import { MemoryStorage } from '../../../src/storage/MemoryStorage'
-import { VaultImportErrorCode } from '../../../src/vault/VaultError'
+import { VaultConflictError, VaultImportErrorCode } from '../../../src/vault/VaultError'
 import { VaultManager } from '../../../src/VaultManager'
 
 /**
@@ -301,39 +296,6 @@ describe('VaultManager', () => {
       )
     })
 
-    it('atomically rejects concurrent imports through distinct adapters sharing one filesystem backend', async () => {
-      const basePath = await mkdtemp(join(tmpdir(), 'vultisig-import-cas-'))
-      const makeManager = () =>
-        new VaultManager(
-          createSdkContext({
-            storage: new FileStorage({ basePath }),
-            serverEndpoints: {
-              fastVault: 'https://test-api.vultisig.com/vault',
-              messageRelay: 'https://test-api.vultisig.com/router',
-            },
-            defaultChains: [Chain.Bitcoin, Chain.Ethereum, Chain.Solana],
-            defaultCurrency: 'USD',
-          })
-        )
-      const vult = encodeUnencryptedVult(buildMinimalSecureVaultBinary())
-
-      try {
-        const results = await Promise.allSettled([makeManager().importVault(vult), makeManager().importVault(vult)])
-
-        expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1)
-        const rejection = results.find(result => result.status === 'rejected')
-        expect(rejection).toMatchObject({
-          status: 'rejected',
-          reason: { code: VaultImportErrorCode.PERSISTENCE_FAILED },
-        })
-        expect(
-          (await new FileStorage({ basePath }).get<{ vultFileContent: string }>(`vault:${SYNTH_ECDSA_PK}`))
-            ?.vultFileContent
-        ).toBe(vult)
-      } finally {
-        await rm(basePath, { recursive: true, force: true })
-      }
-    })
 
     it('allows an explicit replacement only for the same compatible local share', async () => {
       const original = encodeUnencryptedVult(buildMinimalSecureVaultBinary())
@@ -360,6 +322,35 @@ describe('VaultManager', () => {
       await expect(
         vaultManager.importVault(replacement, password, { conflictResolution: 'replace' })
       ).resolves.toMatchObject({ name: 'Encrypted replacement' })
+    })
+
+    it('lets an explicit replace through when the existing local record cannot be decoded, but stays fail-closed by default', async () => {
+      // A corrupted vultFileContent (partial write, half-migrated record - reachable precisely
+      // because storage writes were not atomic before this guard existed) or an encrypted record
+      // whose backup password has since rotated both make decodeStoredVault throw. Validating the
+      // record before reading conflictResolution meant that throw fired before the caller's
+      // explicit 'replace' escape hatch was ever consulted, permanently locking the user out of
+      // importing their own valid backup with no way out short of clearing storage by hand.
+      const original = encodeUnencryptedVult(buildMinimalSecureVaultBinary())
+      await vaultManager.importVault(original)
+
+      const stored = await memoryStorage.get<{ vultFileContent: string }>(`vault:${SYNTH_ECDSA_PK}`)
+      await memoryStorage.set(`vault:${SYNTH_ECDSA_PK}`, { ...stored, vultFileContent: 'not-a-valid-container' })
+
+      const replacement = encodeUnencryptedVult(buildMinimalSecureVaultBinary({ name: 'Recovered backup' }))
+
+      // Default reject stays fail-closed: an unreadable local record is not silently accepted.
+      await expect(vaultManager.importVault(replacement)).rejects.toMatchObject({
+        code: VaultImportErrorCode.INCOMPATIBLE_VAULT,
+      })
+
+      // Explicit replace recovers: nothing readable remains to validate against, so it proceeds.
+      await expect(
+        vaultManager.importVault(replacement, undefined, { conflictResolution: 'replace' })
+      ).resolves.toMatchObject({ name: 'Recovered backup' })
+      expect((await memoryStorage.get<{ vultFileContent: string }>(`vault:${SYNTH_ECDSA_PK}`))?.vultFileContent).toBe(
+        replacement
+      )
     })
 
     it('rejects a stale same-device share even when replacement is requested', async () => {
@@ -418,7 +409,11 @@ describe('VaultManager', () => {
       )
     })
 
-    it('rolls back a failed import so the same import can be retried', async () => {
+    it('keeps the persisted vault record when only the active-pointer write fails, and the import can be retried explicitly', async () => {
+      // A pointer failure must not roll back a vault record that already committed: the record
+      // is durable (and, on the legacy path, already re-encrypted at real cost), while the
+      // pointer is trivially recoverable by the user picking a vault. Retrying the exact same
+      // import now correctly sees a real existing record and needs an explicit replace.
       class FailActiveVaultWriteOnceStorage extends MemoryStorage {
         private shouldFail = true
 
@@ -445,15 +440,18 @@ describe('VaultManager', () => {
       const vult = encodeUnencryptedVult(buildMinimalSecureVaultBinary())
 
       await expect(manager.importVault(vult)).rejects.toMatchObject({
-        code: VaultImportErrorCode.PERSISTENCE_FAILED,
+        code: VaultImportErrorCode.CORRUPTED_DATA,
       })
-      expect(await storage.get(`vault:${SYNTH_ECDSA_PK}`)).toBeNull()
+      expect(await storage.get(`vault:${SYNTH_ECDSA_PK}`)).not.toBeNull()
       expect(await storage.get('activeVaultId')).toBeNull()
 
-      await expect(manager.importVault(vult)).resolves.toMatchObject({ id: SYNTH_ECDSA_PK })
+      await expect(manager.importVault(vult, undefined, { conflictResolution: 'replace' })).resolves.toMatchObject({
+        id: SYNTH_ECDSA_PK,
+      })
+      expect(await storage.get('activeVaultId')).toBe(SYNTH_ECDSA_PK)
     })
 
-    it('restores the original record when explicit replacement persistence fails', async () => {
+    it('keeps the persisted replacement even when the active-pointer write fails', async () => {
       class ArmableActiveVaultFailureStorage extends MemoryStorage {
         failNextActiveWrite = false
 
@@ -484,9 +482,9 @@ describe('VaultManager', () => {
 
       await expect(
         manager.importVault(replacement, undefined, { conflictResolution: 'replace' })
-      ).rejects.toMatchObject({ code: VaultImportErrorCode.PERSISTENCE_FAILED })
+      ).rejects.toMatchObject({ code: VaultImportErrorCode.CORRUPTED_DATA })
       expect((await storage.get<{ vultFileContent: string }>(`vault:${SYNTH_ECDSA_PK}`))?.vultFileContent).toBe(
-        original
+        replacement
       )
       expect(await storage.get('activeVaultId')).toBe(SYNTH_ECDSA_PK)
     })
@@ -507,6 +505,91 @@ describe('VaultManager', () => {
     it('should return null for non-existent vault', async () => {
       const vault = await vaultManager.getVaultById('nonexistent_public_key_string')
       expect(vault).toBeNull()
+    })
+  })
+
+  describe('vault storage concurrency', () => {
+    async function loadTwoInstances() {
+      const imported = await vaultManager.importVault(encodeUnencryptedVult(buildMinimalSecureVaultBinary()))
+      const first = await vaultManager.getVaultById(imported.id)
+      const second = await vaultManager.getVaultById(imported.id)
+
+      expect(first).not.toBeNull()
+      expect(second).not.toBeNull()
+      return { first: first!, second: second!, id: imported.id }
+    }
+
+    it('rejects a stale instance and deterministically merges non-overlapping metadata on explicit retry', async () => {
+      const { first, second, id } = await loadTwoInstances()
+      expect(first.revision).toBe(1)
+      expect(second.revision).toBe(1)
+
+      await first.rename('Renamed elsewhere')
+
+      const staleSave = second.setCurrency('eur')
+      await expect(staleSave).rejects.toBeInstanceOf(VaultConflictError)
+      await expect(staleSave).rejects.toMatchObject({
+        expectedRevision: 1,
+        actualRevision: 2,
+        conflictingFields: [],
+      })
+
+      await second.save({ conflictStrategy: 'merge-metadata' })
+
+      const persisted = await memoryStorage.get<{ name: string; currency: string; revision: number }>(`vault:${id}`)
+      expect(persisted).toMatchObject({
+        name: 'Renamed elsewhere',
+        currency: 'eur',
+        revision: 3,
+      })
+      expect(second.name).toBe('Renamed elsewhere')
+      expect(second.currency).toBe('eur')
+    })
+
+    it('keeps overlapping metadata edits conflicted during merge retry', async () => {
+      const { first, second, id } = await loadTwoInstances()
+
+      await first.rename('First name')
+      await expect(second.rename('Second name')).rejects.toBeInstanceOf(VaultConflictError)
+      await expect(second.save({ conflictStrategy: 'merge-metadata' })).rejects.toMatchObject({
+        conflictingFields: ['name'],
+      })
+
+      const persisted = await memoryStorage.get<{ name: string; revision: number }>(`vault:${id}`)
+      expect(persisted).toMatchObject({ name: 'First name', revision: 2 })
+    })
+
+    it('serializes invocation-time snapshots from concurrent same-instance mutations', async () => {
+      const imported = await vaultManager.importVault(encodeUnencryptedVult(buildMinimalSecureVaultBinary()))
+      const savedNames: string[] = []
+      const set = memoryStorage.set.bind(memoryStorage)
+      vi.spyOn(memoryStorage, 'set').mockImplementation(async (key, value) => {
+        if (key === `vault:${imported.id}`) savedNames.push((value as { name: string }).name)
+        await set(key, value)
+      })
+
+      await Promise.all([imported.rename('First queued name'), imported.rename('Second queued name')])
+
+      const persisted = await memoryStorage.get<{ revision: number }>(`vault:${imported.id}`)
+      expect(persisted?.revision).toBe(3)
+      expect(imported.revision).toBe(3)
+      expect(savedNames).toEqual(['First queued name', 'Second queued name'])
+    })
+
+    it('treats a disk-restored pending vault as an initial active-vault write', async () => {
+      const imported = await vaultManager.importVault(encodeUnencryptedVult(buildMinimalSecureVaultBinary()))
+      const pendingData = await memoryStorage.get(`vault:${imported.id}`)
+      expect(pendingData).not.toBeNull()
+      await memoryStorage.remove(`vault:${imported.id}`)
+
+      const pendingVault = vaultManager.createVaultInstance(
+        { ...(pendingData as typeof imported.data), revision: undefined },
+        false
+      )
+      await pendingVault.save()
+
+      const persisted = await memoryStorage.get<{ revision: number }>(`vault:${imported.id}`)
+      expect(persisted?.revision).toBe(1)
     })
   })
 

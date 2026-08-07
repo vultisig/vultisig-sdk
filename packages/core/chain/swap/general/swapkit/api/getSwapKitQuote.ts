@@ -185,6 +185,10 @@ const swapKitTransferSourceChains = [
   Chain.Dogecoin,
   Chain.Litecoin,
   Chain.Ripple,
+  // Sui rides the transfer arm for its pre-built PTB, the same way Bitcoin
+  // rides it for a PSBT: `txType`/`txPayload` carry the opaque signing bytes
+  // while `to`/`amount` stay informational (both are baked into the PTB).
+  Chain.Sui,
   Chain.Ton,
   Chain.Tron,
   Chain.Zcash,
@@ -588,6 +592,15 @@ const getTransferAmount = ({ depositAmount, tx }: SwapKitSwapResponse, amount: b
 const shouldUseTransferTx = (chain: SwapKitSourceChain): chain is (typeof swapKitTransferSourceChains)[number] =>
   isOneOf(chain, swapKitTransferSourceChains)
 
+// Transfer-arm chains that still need SwapKit to BUILD the transaction, so
+// `/v3/swap` must not be sent `disableBuildTx`. Bitcoin gets a PSBT and Sui a
+// pre-built PTB; in both cases those bytes drive signing directly, and asking
+// SwapKit to skip construction returns a response with no `tx` at all. The
+// remaining transfer chains are deposit-only (TON/XRP/ADA style) — they need
+// nothing but an address, so skipping the build saves a pointless server-side
+// construction that can fail on balance checks.
+const swapKitPrebuiltTxSourceChains: ReadonlySet<SwapKitSourceChain> = new Set([Chain.Bitcoin, Chain.Sui])
+
 const textEncoder = new TextEncoder()
 
 const stringifyCanonicalJson = (value: unknown): string => {
@@ -663,7 +676,20 @@ const buildTransferTx = (
     throw new Error('SwapKit transfer route did not return a target address.')
   }
 
-  const txType = response.meta?.txType
+  // SwapKit renames base64 tx types on the wire without versioning — `SOLANA`
+  // became `SERIALIZED_BASE64` and `CARDANO` became `CBOR` mid-flight (iOS
+  // accepts both spellings in `SwapKitSwapResponse.decodeTx`). A Sui route's
+  // `meta.txType` therefore cannot be trusted to read `SUI`. The source chain
+  // is the reliable discriminator, and normalizing here also keeps
+  // `SwapKitSwapPayload.txType` byte-identical to what iOS stamps
+  // (`buildSwapKitSuiPayload` hardcodes `"SUI"`) — cosigning peers must agree.
+  const wireTxType = response.meta?.txType
+  const txType = from.chain === Chain.Sui ? 'SUI' : wireTxType
+
+  if (from.chain === Chain.Sui && response.tx !== undefined && typeof response.tx !== 'string') {
+    throw new Error('SwapKit Sui route did not return a base64 programmable transaction block.')
+  }
+
   const txPayload = response.tx ? encodeSwapKitTxPayload(response.tx, txType) : undefined
   const psbtDestinationAmount =
     from.chain === Chain.Bitcoin && txType?.toUpperCase() === 'PSBT' && txPayload?.length
@@ -689,23 +715,17 @@ const buildTransferTx = (
   }
 }
 
-// Sui + Cardano are eligible SwapKit SOURCE chains for quote-dispatch purposes
-// (see SwapKitEnabledChains.ts) but have no wired tx-build path here yet:
-//   - Sui: SwapKit returns the tx as a base64 string (`encodeSwapKitTxPayload`'s
-//     dormant `normalizedTxType === 'SUI'` branch decodes it), but there is no
-//     `GeneralSwapTx` variant a Sui signer can consume — it is neither `evm`
-//     (no `to`/`data` fields) nor a plain `transfer` (a Sui PTB isn't a simple
-//     send). Falling through to `buildEvmTx` would either throw an unrelated
-//     "not a transaction object" error, or worse, silently build a nonsense
-//     `{evm: {...}}` shape if the response ever coincidentally looks
-//     record-like.
-//   - Cardano: `encodeSwapKitTxPayload` explicitly returns an EMPTY byte array
-//     for `normalizedTxType === 'CARDANO'` — there is no decode implementation
-//     at all, so any tx built from it would be silently wrong.
+// Cardano is an eligible SwapKit SOURCE chain for quote-dispatch purposes (see
+// SwapKitEnabledChains.ts) but has no wired tx-build path here yet:
+// `encodeSwapKitTxPayload` explicitly returns an EMPTY byte array for
+// `normalizedTxType === 'CARDANO'` — there is no decode implementation at all,
+// so any tx built from it would be silently wrong. iOS covers this with a
+// separate `CARDANO_PREBUILT` CBOR path (`SwapKitCardanoSigner.swift`); porting
+// that decode is follow-on work.
+//
 // Rejected in `getSwapKitQuote` BEFORE the network round-trip (no route/swap
 // API calls wasted on a request that can never produce a signable tx).
-// Signing support for these two as a SwapKit source is separate follow-on work.
-const SWAP_SOURCE_TX_BUILD_UNSUPPORTED: ReadonlySet<SwapKitSourceChain> = new Set([Chain.Sui, Chain.Cardano])
+const SWAP_SOURCE_TX_BUILD_UNSUPPORTED: ReadonlySet<SwapKitSourceChain> = new Set([Chain.Cardano])
 
 const buildSwapKitTx = (
   response: SwapKitSwapResponse,
@@ -904,7 +924,8 @@ export const getSwapKitQuote = async ({
       sourceAddress: from.address,
       destinationAddress: to.address,
       disableBalanceCheck: true,
-      disableBuildTx: shouldUseTransferTx(from.chain) && from.chain !== Chain.Bitcoin ? true : undefined,
+      disableBuildTx:
+        shouldUseTransferTx(from.chain) && !swapKitPrebuiltTxSourceChains.has(from.chain) ? true : undefined,
     })
   )
   const routeProvider = getRouteProviderName(swapResponse) ?? getRouteProviderName(route)

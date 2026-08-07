@@ -10,27 +10,6 @@ import type { Storage, StorageMetadata, StoredValue } from '../../storage/types'
 import { STORAGE_VERSION, StorageError, StorageErrorCode } from '../../storage/types'
 
 export class ChromeExtensionStorage implements Storage {
-  private async withMutationLock<T>(operation: () => Promise<T>): Promise<T> {
-    if (typeof navigator === 'undefined' || !navigator.locks) {
-      throw new StorageError(
-        StorageErrorCode.StorageUnavailable,
-        'Atomic storage mutations require the Web Locks API in Chrome extension contexts'
-      )
-    }
-    return navigator.locks.request('vultisig-extension-storage', operation)
-  }
-
-  private async setValue<T>(key: string, value: T): Promise<void> {
-    const metadata: StorageMetadata = {
-      version: STORAGE_VERSION,
-      createdAt: Date.now(),
-      lastModified: Date.now(),
-    }
-    await chrome.storage.local.set({
-      [key]: { value, metadata } satisfies StoredValue<T>,
-    })
-  }
-
   private ensureAvailable(): void {
     if (typeof chrome === 'undefined' || !chrome.storage?.local) {
       throw new StorageError(
@@ -55,8 +34,16 @@ export class ChromeExtensionStorage implements Storage {
   async set<T>(key: string, value: T): Promise<void> {
     this.ensureAvailable()
 
+    const metadata: StorageMetadata = {
+      version: STORAGE_VERSION,
+      createdAt: Date.now(),
+      lastModified: Date.now(),
+    }
+
+    const stored: StoredValue<T> = { value, metadata }
+
     try {
-      await this.withMutationLock(() => this.setValue(key, value))
+      await chrome.storage.local.set({ [key]: stored })
     } catch (error) {
       if ((error as Error).message?.includes('QUOTA_BYTES')) {
         throw new StorageError(
@@ -69,27 +56,11 @@ export class ChromeExtensionStorage implements Storage {
     }
   }
 
-  async compareAndSet<T>(key: string, expectedValue: T | null, value: T | null): Promise<boolean> {
-    this.ensureAvailable()
-    return this.withMutationLock(async () => {
-      const currentValue = await this.get<T>(key)
-      if (JSON.stringify(currentValue) !== JSON.stringify(expectedValue)) {
-        return false
-      }
-      if (value === null) {
-        await chrome.storage.local.remove(key)
-      } else {
-        await this.setValue(key, value)
-      }
-      return true
-    })
-  }
-
   async remove(key: string): Promise<void> {
     this.ensureAvailable()
 
     try {
-      await this.withMutationLock(() => chrome.storage.local.remove(key))
+      await chrome.storage.local.remove(key)
     } catch (error) {
       throw new StorageError(StorageErrorCode.Unknown, `Failed to remove key "${key}"`, error as Error)
     }
@@ -110,7 +81,7 @@ export class ChromeExtensionStorage implements Storage {
     this.ensureAvailable()
 
     try {
-      await this.withMutationLock(() => chrome.storage.local.clear())
+      await chrome.storage.local.clear()
     } catch (error) {
       throw new StorageError(StorageErrorCode.Unknown, 'Failed to clear storage', error as Error)
     }

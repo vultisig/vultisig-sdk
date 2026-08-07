@@ -30,6 +30,8 @@ export enum VaultErrorCode {
   BrowserDocumentRequired = 'BROWSER_DOCUMENT_REQUIRED',
   /** User dismissed an in-page password prompt */
   PasswordEntryCancelled = 'PASSWORD_ENTRY_CANCELLED',
+  /** A stale vault instance attempted to overwrite a newer persisted revision. */
+  StorageConflict = 'STORAGE_CONFLICT',
 }
 
 /**
@@ -72,6 +74,27 @@ export class VaultError extends Error {
       stack: this.stack,
       originalError: this.originalError?.message,
     }
+  }
+}
+
+/**
+ * Raised when a vault save is based on an older persisted record revision.
+ * Callers may reload and retry, or explicitly request the narrow metadata merge
+ * path when their edit does not overlap the newer persisted edit.
+ */
+export class VaultConflictError extends VaultError {
+  constructor(
+    public readonly vaultId: string,
+    public readonly expectedRevision: number | null,
+    public readonly actualRevision: number | null,
+    public readonly conflictingFields: string[] = []
+  ) {
+    const fields = conflictingFields.length > 0 ? ` Conflicting fields: ${conflictingFields.join(', ')}.` : ''
+    super(
+      VaultErrorCode.StorageConflict,
+      `Vault ${vaultId} changed in storage (expected revision ${expectedRevision ?? 'missing'}, actual ${actualRevision ?? 'missing'}).${fields}`
+    )
+    this.name = 'VaultConflictError'
   }
 }
 

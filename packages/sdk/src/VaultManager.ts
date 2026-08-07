@@ -21,7 +21,13 @@ import { VaultData } from './types'
 import { FastVault } from './vault/FastVault'
 import { SecureVault } from './vault/SecureVault'
 import { VaultBase } from './vault/VaultBase'
-import { VaultError, VaultErrorCode, VaultImportError, VaultImportErrorCode } from './vault/VaultError'
+import {
+  VaultConflictError,
+  VaultError,
+  VaultErrorCode,
+  VaultImportError,
+  VaultImportErrorCode,
+} from './vault/VaultError'
 
 /** Legacy SHA-256(password)+AES-GCM: 12-byte nonce + ciphertext + 16-byte tag (minimum empty plaintext ⇒ 28 bytes). */
 const MIN_LEGACY_ENCRYPTED_VAULT_LEN = 28
@@ -221,78 +227,12 @@ export class VaultManager {
     }
   }
 
-  private async persistImportedVault(vault: VaultBase, existing: VaultData | null): Promise<void> {
-    const vaultKey = `vault:${vault.id}`
-    const compareAndSet = this.storage.compareAndSet?.bind(this.storage)
-    if (!compareAndSet) {
-      throw new VaultImportError(
-        VaultImportErrorCode.PERSISTENCE_FAILED,
-        'The configured storage adapter cannot atomically protect vault imports from concurrent overwrites'
-      )
-    }
-
-    let vaultPersisted = false
-
-    // ROLLBACK SCOPE (review fix): the vault write and the active-pointer write have very different
-    // recovery costs, so they must not share a try. A pointer failure previously rolled the vault
-    // record back out - discarding a durable save to undo a trivially recoverable one.
-    //
-    // Concretely: on the legacy path the record being discarded has already been re-encrypted with
-    // salted 600k PBKDF2 by encryptVaultBackupWithPassword, and the migration notice that tells the
-    // user their derivation changed sits downstream of the throw, so it never fired either. The
-    // message also claimed 'The previous local state was restored', which on a first-ever import
-    // means it restored the ABSENCE of a vault.
-    //
-    // The pointer is recoverable by the user simply selecting a vault. The record is not. So the
-    // rollback stays on the vault write, and a pointer failure surfaces WITHOUT touching what has
-    // already committed.
-    try {
-      vaultPersisted = await compareAndSet(vaultKey, existing, vault.data)
-      if (!vaultPersisted) {
-        throw new VaultImportError(
-          VaultImportErrorCode.PERSISTENCE_FAILED,
-          'The local vault changed during import; no data was overwritten. Retry against the current record.'
-        )
-      }
-    } catch (error) {
-      if (error instanceof VaultImportError && !vaultPersisted) {
-        throw error
-      }
-
-      const rollbackErrors: Error[] = []
-
-      try {
-        const rolledBack = await compareAndSet(vaultKey, vault.data, existing)
-        if (!rolledBack) {
-          rollbackErrors.push(new Error('the vault changed again before rollback'))
-        }
-      } catch (rollbackError) {
-        rollbackErrors.push(rollbackError as Error)
-      }
-
-      const rollbackSuffix =
-        rollbackErrors.length === 0
-          ? ' The previous local state was restored.'
-          : ` Rollback also failed: ${rollbackErrors.map(rollbackError => rollbackError.message).join('; ')}`
-      throw new VaultImportError(
-        VaultImportErrorCode.PERSISTENCE_FAILED,
-        `Failed to persist imported vault.${rollbackSuffix}`,
-        error as Error
-      )
-    }
-
-    // The vault record is committed at this point. A failure setting the active pointer must NOT
-    // undo it - it propagates as-is so the caller sees the real cause, and the downstream migration
-    // notice still fires for the record that genuinely persisted.
-    await this.storage.set('activeVaultId', vault.id)
-  }
-
   /**
    * Create Vault instance with proper service injection
    * Internal helper for consistent vault instantiation
    * Returns appropriate subclass based on vault type
    */
-  createVaultInstance(vaultData: VaultData): VaultBase {
+  createVaultInstance(vaultData: VaultData, persisted = true): VaultBase {
     // Fail early if vault is encrypted but no password callback provided
     if (vaultData.isEncrypted && !this.context.config.onPasswordRequired) {
       throw new VaultError(
@@ -308,9 +248,9 @@ export class VaultManager {
     // Factory pattern - return appropriate subclass based on vault type
     if (vaultData.type === 'fast') {
       const fastSigningService = new FastSigningService(this.context.serverManager, this.context.wasmProvider)
-      return FastVault.fromStorage(vaultData, fastSigningService, vaultContext)
+      return FastVault.fromStorage(vaultData, fastSigningService, vaultContext, persisted)
     } else {
-      return SecureVault.fromStorage(vaultData, vaultContext)
+      return SecureVault.fromStorage(vaultData, vaultContext, persisted)
     }
   }
 
@@ -443,62 +383,107 @@ export class VaultManager {
 
       // Use ECDSA public key as vault ID
       const vaultId = parsedVault.publicKeys.ecdsa
+      const existingVault = await this.storage.get<VaultData>(`vault:${vaultId}`)
 
-      {
-        const existingVault = await this.storage.get<VaultData>(`vault:${vaultId}`)
-        if (existingVault) {
-          const existingCoreVault = await this.decodeStoredVault(existingVault, password)
+      if (existingVault) {
+        const wantsReplace = (options.conflictResolution ?? 'reject') === 'replace'
+
+        // Validating before checking conflictResolution meant a locally unreadable record
+        // (corrupted vultFileContent, or an encrypted record whose password was rotated and
+        // is no longer cached) threw out of decodeStoredVault before the explicit 'replace'
+        // escape hatch was ever read - permanently locking the user out of importing their
+        // own valid backup, with no way out short of clearing storage by hand.
+        //
+        // When the record can't be decoded and the caller explicitly opted into replace, there
+        // is nothing left to validate against, so let it through. Reject stays fail-closed: an
+        // unreadable record with no explicit replace still throws.
+        let existingCoreVault: CoreVault | null = null
+        try {
+          existingCoreVault = await this.decodeStoredVault(existingVault, password)
+        } catch (decodeError) {
+          if (!wantsReplace) {
+            throw decodeError
+          }
+        }
+
+        if (existingCoreVault) {
           this.validateReplacement(existingCoreVault, parsedVault)
 
-          if ((options.conflictResolution ?? 'reject') !== 'replace') {
+          if (!wantsReplace) {
             throw new VaultImportError(
               VaultImportErrorCode.DUPLICATE_VAULT,
               'This exact local vault share already exists; pass conflictResolution: "replace" to replace it explicitly'
             )
           }
         }
-
-        // Determine vault type from parsed vault
-        const vaultType = parsedVault.signers.some((s: string) => s.startsWith('Server-')) ? 'fast' : 'secure'
-
-        // Create vault context from SDK context
-        const vaultContext = this.createVaultContext()
-
-        // Create vault instance using static factory methods
-        // Pass parsedVault to avoid parsing encrypted content synchronously
-        let vaultInstance: VaultBase
-        if (vaultType === 'fast') {
-          const fastSigningService = new FastSigningService(this.context.serverManager, this.context.wasmProvider)
-          vaultInstance = FastVault.fromImport(
-            vaultId,
-            persistedVultContent,
-            parsedVault,
-            fastSigningService,
-            vaultContext
-          )
-        } else {
-          vaultInstance = SecureVault.fromImport(vaultId, persistedVultContent, parsedVault, vaultContext)
-        }
-
-        await this.persistImportedVault(vaultInstance, existingVault)
-
-        // Only change password state after the vault record and active pointer
-        // have both committed successfully.
-        if (password && container.isEncrypted) {
-          this.context.passwordCache.set(vaultId, password)
-        } else if (!container.isEncrypted) {
-          this.context.passwordCache.delete(vaultId)
-        }
-
-        if (legacyBackupMigrated) {
-          onLegacyBackupMigrated?.(createLegacyBackupMigrationNotice(vaultInstance))
-        }
-
-        return { vault: vaultInstance, legacyBackupMigrated }
       }
+
+      // Determine vault type from parsed vault
+      const vaultType = parsedVault.signers.some((s: string) => s.startsWith('Server-')) ? 'fast' : 'secure'
+
+      // Create vault context from SDK context
+      const vaultContext = this.createVaultContext()
+
+      // Create vault instance using static factory methods. Pass parsedVault to avoid parsing
+      // encrypted content synchronously. When there is an existing logical vault (a validated
+      // 'replace'), seed the revision baseline with its current record so vault.save() below
+      // can detect - and reject - anything that changed underneath us since the read above.
+      let vaultInstance: VaultBase
+      if (vaultType === 'fast') {
+        const fastSigningService = new FastSigningService(this.context.serverManager, this.context.wasmProvider)
+        vaultInstance = FastVault.fromImport(
+          vaultId,
+          persistedVultContent,
+          parsedVault,
+          fastSigningService,
+          vaultContext,
+          existingVault ?? undefined
+        )
+      } else {
+        vaultInstance = SecureVault.fromImport(
+          vaultId,
+          persistedVultContent,
+          parsedVault,
+          vaultContext,
+          existingVault ?? undefined
+        )
+      }
+
+      // Cache password if provided (for encrypted vaults)
+      if (password && container.isEncrypted) {
+        this.context.passwordCache.set(vaultId, password)
+      } else if (!container.isEncrypted) {
+        this.context.passwordCache.delete(vaultId)
+      }
+
+      // Save to storage. vault.save() is the same revision-checked, write-serialized path every
+      // other vault mutation uses - it throws VaultConflictError (caught below) instead of
+      // silently overwriting when the record changed since the read above, and it never writes
+      // when the check fails, so there is nothing to roll back here.
+      await vaultInstance.save()
+
+      // Notify at the durable-save boundary. This guarantees consumers learn about password
+      // rotation even if setting the active-vault pointer fails after the upgraded vault has
+      // already been persisted - the record is durable, the pointer is trivially recoverable,
+      // so a pointer failure below must not undo this or swallow the notice for it.
+      if (legacyBackupMigrated) {
+        onLegacyBackupMigrated?.(createLegacyBackupMigrationNotice(vaultInstance))
+      }
+
+      // Set as active vault
+      await this.storage.set('activeVaultId', vaultId)
+
+      return { vault: vaultInstance, legacyBackupMigrated }
     } catch (error) {
       if (error instanceof VaultImportError) {
         throw error
+      }
+      if (error instanceof VaultConflictError) {
+        throw new VaultImportError(
+          VaultImportErrorCode.PERSISTENCE_FAILED,
+          `The local vault changed during import: ${error.message}`,
+          error
+        )
       }
       throw new VaultImportError(
         VaultImportErrorCode.CORRUPTED_DATA,

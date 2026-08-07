@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
 import { Chain } from '../../Chain'
-import { buildLimitSwapMemo } from './limitSwapMemo'
+import { buildCancelLimitSwapMemo } from './limitSwapCancelMemo'
+import { buildLimitSwapMemo, getLimitSwapSourceChainKind } from './limitSwapMemo'
 import {
+  getThorchainCancelMemoAsset,
   getThorchainMemoAsset,
+  getThorchainMemoAssetChain,
+  getThorchainMemoAssetSourceChain,
   isThorchainRoutable,
   isThorchainSecuredAssetId,
   thorchainAssetPrefixToChain,
@@ -27,23 +31,45 @@ describe('getThorchainMemoAsset', () => {
     })
 
     it('treats an empty id as native', () => {
-      expect(getThorchainMemoAsset({ chain: Chain.Bitcoin, ticker: 'BTC', id: '   ' })).toBe('BTC.BTC')
+      expect(
+        getThorchainMemoAsset({
+          chain: Chain.Bitcoin,
+          ticker: 'BTC',
+          id: '   ',
+        })
+      ).toBe('BTC.BTC')
     })
   })
 
   describe('tokens', () => {
     it('suffixes an EVM token with the last 6 contract chars, uppercased', () => {
-      expect(getThorchainMemoAsset({ chain: Chain.Ethereum, ticker: 'USDC', id: usdcContract })).toBe('ETH.USDC-06EB48')
+      expect(
+        getThorchainMemoAsset({
+          chain: Chain.Ethereum,
+          ticker: 'USDC',
+          id: usdcContract,
+        })
+      ).toBe('ETH.USDC-06EB48')
     })
 
     it('uppercases a suffix that is already partly uppercase', () => {
-      expect(getThorchainMemoAsset({ chain: Chain.BSC, ticker: 'CAKE', id: '0xAbCdEf123456' })).toBe('BSC.CAKE-123456')
+      expect(
+        getThorchainMemoAsset({
+          chain: Chain.BSC,
+          ticker: 'CAKE',
+          id: '0xAbCdEf123456',
+        })
+      ).toBe('BSC.CAKE-123456')
     })
 
     it('rejects an id too short to form a suffix', () => {
-      expect(() => getThorchainMemoAsset({ chain: Chain.Ethereum, ticker: 'FOO', id: '0x123' })).toThrow(
-        /shorter than 6 characters/
-      )
+      expect(() =>
+        getThorchainMemoAsset({
+          chain: Chain.Ethereum,
+          ticker: 'FOO',
+          id: '0x123',
+        })
+      ).toThrow(/shorter than 6 characters/)
     })
   })
 
@@ -51,13 +77,23 @@ describe('getThorchainMemoAsset', () => {
     // Secured assets use `CHAIN-ASSET` notation, matching `toNativeSwapAsset`.
     // The dotted form makes THORNode read the target as the L1 asset instead.
     it('encodes a secured asset in CHAIN-ASSET notation', () => {
-      expect(getThorchainMemoAsset({ chain: Chain.THORChain, ticker: 'USDC', id: `eth-usdc-${usdcContract}` })).toBe(
-        `ETH-USDC-${usdcContract}`
-      )
+      expect(
+        getThorchainMemoAsset({
+          chain: Chain.THORChain,
+          ticker: 'USDC',
+          id: `eth-usdc-${usdcContract}`,
+        })
+      ).toBe(`ETH-USDC-${usdcContract}`)
     })
 
     it('leaves a secured asset un-abbreviated -- its trailing address identifies it', () => {
-      expect(getThorchainMemoAsset({ chain: Chain.THORChain, ticker: 'XRP', id: 'xrp-xrp' })).toBe('XRP-XRP')
+      expect(
+        getThorchainMemoAsset({
+          chain: Chain.THORChain,
+          ticker: 'XRP',
+          id: 'xrp-xrp',
+        })
+      ).toBe('XRP-XRP')
     })
 
     it.each([
@@ -72,7 +108,13 @@ describe('getThorchainMemoAsset', () => {
     // fails closed rather than building a memo for an asset THORChain would not
     // route.
     it('strips the x/ prefix from a synth, matching toNativeSwapAsset', () => {
-      expect(getThorchainMemoAsset({ chain: Chain.THORChain, ticker: 'sBTC', id: 'x/btc-btc' })).toBe('BTC-BTC')
+      expect(
+        getThorchainMemoAsset({
+          chain: Chain.THORChain,
+          ticker: 'sBTC',
+          id: 'x/btc-btc',
+        })
+      ).toBe('BTC-BTC')
     })
   })
 
@@ -87,9 +129,13 @@ describe('getThorchainMemoAsset', () => {
   })
 
   it('trims surrounding whitespace from ticker and id', () => {
-    expect(getThorchainMemoAsset({ chain: Chain.Ethereum, ticker: '  USDC  ', id: `  ${usdcContract}  ` })).toBe(
-      'ETH.USDC-06EB48'
-    )
+    expect(
+      getThorchainMemoAsset({
+        chain: Chain.Ethereum,
+        ticker: '  USDC  ',
+        id: `  ${usdcContract}  `,
+      })
+    ).toBe('ETH.USDC-06EB48')
   })
 })
 
@@ -158,8 +204,15 @@ describe('prefix map consistency', () => {
   })
 
   it('produces assets the limit-swap memo builder accepts', () => {
-    const source = getThorchainMemoAsset({ chain: Chain.Bitcoin, ticker: 'BTC' })
-    const target = getThorchainMemoAsset({ chain: Chain.Ethereum, ticker: 'USDC', id: usdcContract })
+    const source = getThorchainMemoAsset({
+      chain: Chain.Bitcoin,
+      ticker: 'BTC',
+    })
+    const target = getThorchainMemoAsset({
+      chain: Chain.Ethereum,
+      ticker: 'USDC',
+      id: usdcContract,
+    })
 
     const memo = buildLimitSwapMemo({
       source_asset: source,
@@ -171,5 +224,133 @@ describe('prefix map consistency', () => {
     })
 
     expect(memo.startsWith(`=<:${target}:`)).toBe(true)
+  })
+})
+
+describe('getThorchainCancelMemoAsset', () => {
+  // Same notation as the placement spelling, minus the abbreviation. Anything
+  // else here silently addresses a bucket holding no order.
+  it.each([
+    [{ chain: Chain.Bitcoin, ticker: 'BTC' }, 'BTC.BTC'],
+    [{ chain: Chain.Ethereum, ticker: 'ETH' }, 'ETH.ETH'],
+    [{ chain: Chain.THORChain, ticker: 'RUNE' }, 'THOR.RUNE'],
+    [{ chain: Chain.THORChain, ticker: 'TCY', id: 'tcy' }, 'THOR.TCY'],
+    [{ chain: Chain.THORChain, ticker: 'XRP', id: 'xrp-xrp' }, 'XRP-XRP'],
+    [{ chain: Chain.Ethereum, ticker: 'USDC', id: usdcContract }, `ETH.USDC-${usdcContract.toUpperCase()}`],
+  ])('encodes %j in full', (coin, expected) => {
+    expect(getThorchainCancelMemoAsset(coin)).toBe(expected)
+  })
+
+  it('keeps the full contract the placement spelling abbreviates', () => {
+    const coin = { chain: Chain.Ethereum, ticker: 'USDC', id: usdcContract }
+
+    expect(getThorchainMemoAsset(coin)).toBe('ETH.USDC-06EB48')
+    expect(getThorchainCancelMemoAsset(coin)).toContain(usdcContract.toUpperCase())
+  })
+
+  // Case is not semantic to THORNode, but it IS to this package's pool-id
+  // validation, which cancel eligibility routes through to size the memo. Left
+  // lower-case, every ERC20-funded order reads as an unroutable source chain and
+  // becomes uncancellable.
+  it('upper-cases the contract so the cancel eligibility check can route it', () => {
+    const sourceAsset = getThorchainCancelMemoAsset({
+      chain: Chain.Ethereum,
+      ticker: 'USDC',
+      id: usdcContract,
+    })
+
+    expect(sourceAsset).not.toContain(usdcContract)
+    expect(getLimitSwapSourceChainKind(sourceAsset)).toBe('other')
+  })
+
+  it('rejects the same inputs the placement spelling rejects', () => {
+    expect(() => getThorchainCancelMemoAsset({ chain: Chain.Solana, ticker: '  ' })).toThrow(/non-empty string/)
+    expect(() => getThorchainCancelMemoAsset({ chain: Chain.Ton, ticker: 'TON' })).toThrow(/not routable/)
+  })
+
+  // The acceptance test for this helper existing at all: the cancel memo builder
+  // rejects abbreviated assets, so a spelling it will not accept is useless.
+  it.each([
+    ['an L1 leg', { chain: Chain.Bitcoin, ticker: 'BTC' }],
+    ['a token leg', { chain: Chain.Ethereum, ticker: 'USDC', id: usdcContract }],
+    ['a secured leg', { chain: Chain.THORChain, ticker: 'XRP', id: 'xrp-xrp' }],
+  ])('produces %s the cancel memo builder accepts', (_, coin) => {
+    const sourceAsset = getThorchainCancelMemoAsset(coin)
+
+    const memo = buildCancelLimitSwapMemo({
+      sourceAsset,
+      sourceAmount: 100_000_000n,
+      targetAsset: 'THOR.RUNE',
+      tradeTarget: 43_079_145n,
+    })
+
+    expect(memo).toContain(`100000000${sourceAsset}`)
+  })
+})
+
+describe('getThorchainMemoAssetChain', () => {
+  it.each([
+    ['BTC.BTC', Chain.Bitcoin],
+    [`ETH.USDC-${usdcContract}`, Chain.Ethereum],
+    ['ETH.USDC-06EB48', Chain.Ethereum],
+    ['THOR.RUNE', Chain.THORChain],
+    ['BTC/BTC', Chain.Bitcoin],
+    // Secured denoms are lower-case and use `-` throughout, so splitting on `.`
+    // would hand the whole denom to the lookup and resolve nothing.
+    ['eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', Chain.Ethereum],
+    ['xrp-xrp', Chain.Ripple],
+  ])('resolves %s to its home chain', (asset, expected) => {
+    expect(getThorchainMemoAssetChain(asset)).toBe(expected)
+  })
+
+  it('returns undefined for a prefix this SDK cannot route', () => {
+    expect(getThorchainMemoAssetChain('NOPE.NOPE')).toBeUndefined()
+  })
+})
+
+// `GetChain()` rather than `GetLayer1Asset().Chain` — this is what THORChain's
+// `From.IsChain(Source.Asset.GetChain())` compares a sender against, so getting
+// it wrong builds a transaction that broadcasts cleanly and is then refunded.
+describe('getThorchainMemoAssetSourceChain', () => {
+  it.each([
+    ['BTC.BTC', Chain.Bitcoin],
+    ['ETH.ETH', Chain.Ethereum],
+    [`ETH.USDC-${usdcContract.toUpperCase()}`, Chain.Ethereum],
+    ['THOR.RUNE', Chain.THORChain],
+    ['THOR.TCY', Chain.THORChain],
+  ])('sends a layer-1 %s from its own chain', (asset, expected) => {
+    expect(getThorchainMemoAssetSourceChain(asset)).toBe(expected)
+  })
+
+  // Every THORChain-HELD flavour must be sent from a THOR address even though it
+  // originates elsewhere. Each row asserts BOTH answers, so it pins the
+  // divergence itself rather than one side of it — this is the whole reason the
+  // two resolvers exist separately.
+  it.each([
+    ['xrp-xrp', Chain.Ripple],
+    ['eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', Chain.Ethereum],
+    ['BTC/BTC', Chain.Bitcoin],
+    ['ETH~ETH', Chain.Ethereum],
+  ])('sends the THORChain-held %s from THORChain though it originates on %s', (asset, homeChain) => {
+    expect(getThorchainMemoAssetChain(asset)).toBe(homeChain)
+    expect(getThorchainMemoAssetSourceChain(asset)).toBe(Chain.THORChain)
+  })
+
+  // A recognisable SHAPE is not a recognisable asset. Answering THORChain on the
+  // strength of a separator alone would let a garbage source asset pair
+  // successfully with a RUNE coin and reach a signer.
+  it.each(['NOPE-NOPE', 'NOPE/NOPE', 'NOPE~NOPE', 'NOPE.NOPE'])('returns undefined for the unroutable %s', asset => {
+    expect(getThorchainMemoAssetSourceChain(asset)).toBeUndefined()
+  })
+
+  // A bare prefix carries no symbol, so it is not an asset — even though the
+  // home-chain lookup resolves it happily on its own.
+  it.each(['BTC', 'THOR', 'NOPE'])('returns undefined for the bare prefix %s', asset => {
+    expect(getThorchainMemoAssetSourceChain(asset)).toBeUndefined()
+  })
+
+  it('resolves a bare prefix as a home chain but never as a sending chain', () => {
+    expect(getThorchainMemoAssetChain('BTC')).toBe(Chain.Bitcoin)
+    expect(getThorchainMemoAssetSourceChain('BTC')).toBeUndefined()
   })
 })

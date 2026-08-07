@@ -18,16 +18,6 @@ export class BrowserStorage implements Storage {
   private readonly storeName = 'vaults'
   private readonly dbVersion = 1
 
-  private async withLocalStorageMutationLock<T>(operation: () => Promise<T> | T): Promise<T> {
-    if (typeof navigator === 'undefined' || !navigator.locks) {
-      throw new StorageError(
-        StorageErrorCode.StorageUnavailable,
-        'Atomic storage mutations require Web Locks when browser storage uses localStorage'
-      )
-    }
-    return navigator.locks.request(`vultisig-storage:${this.dbName}`, operation)
-  }
-
   constructor() {
     void this.startInitialization().catch(() => undefined)
   }
@@ -253,7 +243,7 @@ export class BrowserStorage implements Storage {
       if (this.mode === 'indexeddb' && this.db) {
         await this.setToIndexedDB(key, stored)
       } else {
-        await this.withLocalStorageMutationLock(() => this.setToLocalStorage(key, stored))
+        this.setToLocalStorage(key, stored)
       }
     } catch (error) {
       if ((error as Error).name === 'QuotaExceededError') {
@@ -264,32 +254,6 @@ export class BrowserStorage implements Storage {
     }
   }
 
-  async compareAndSet<T>(key: string, expectedValue: T | null, value: T | null): Promise<boolean> {
-    await this.ensureInitialized()
-
-    if (this.mode === 'indexeddb' && this.db) {
-      return this.compareAndSetIndexedDB(key, expectedValue, value)
-    }
-
-    return this.withLocalStorageMutationLock(() => {
-      const currentValue = this.getFromLocalStorage<T>(key)
-      if (JSON.stringify(currentValue) !== JSON.stringify(expectedValue)) {
-        return false
-      }
-      if (value === null) {
-        localStorage.removeItem(key)
-      } else {
-        const metadata: StorageMetadata = {
-          version: STORAGE_VERSION,
-          createdAt: Date.now(),
-          lastModified: Date.now(),
-        }
-        this.setToLocalStorage(key, { value, metadata })
-      }
-      return true
-    })
-  }
-
   async remove(key: string): Promise<void> {
     await this.ensureInitialized()
 
@@ -297,7 +261,7 @@ export class BrowserStorage implements Storage {
       if (this.mode === 'indexeddb' && this.db) {
         await this.removeFromIndexedDB(key)
       } else {
-        await this.withLocalStorageMutationLock(() => localStorage.removeItem(key))
+        localStorage.removeItem(key)
       }
     } catch (error) {
       if (error instanceof StorageError) throw error
@@ -327,10 +291,8 @@ export class BrowserStorage implements Storage {
       if (this.mode === 'indexeddb' && this.db) {
         await this.clearIndexedDB()
       } else {
-        await this.withLocalStorageMutationLock(() => {
-          const keys = this.listFromLocalStorage()
-          keys.forEach(key => localStorage.removeItem(key))
-        })
+        const keys = this.listFromLocalStorage()
+        keys.forEach(key => localStorage.removeItem(key))
       }
     } catch (error) {
       if (error instanceof StorageError) throw error
@@ -412,38 +374,6 @@ export class BrowserStorage implements Storage {
     const completion = this.waitForTransaction(transaction)
     transaction.objectStore(this.storeName).put(value, key)
     return completion
-  }
-
-  private async compareAndSetIndexedDB<T>(key: string, expectedValue: T | null, value: T | null): Promise<boolean> {
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(this.storeName, 'readwrite')
-      const store = transaction.objectStore(this.storeName)
-      const request = store.get(key)
-      let matched = false
-
-      request.onsuccess = () => {
-        const current = (request.result as StoredValue<T> | undefined)?.value ?? null
-        if (JSON.stringify(current) !== JSON.stringify(expectedValue)) {
-          return
-        }
-
-        matched = true
-        if (value === null) {
-          store.delete(key)
-        } else {
-          const metadata: StorageMetadata = {
-            version: STORAGE_VERSION,
-            createdAt: Date.now(),
-            lastModified: Date.now(),
-          }
-          store.put({ value, metadata } satisfies StoredValue<T>, key)
-        }
-      }
-      request.onerror = () => reject(request.error)
-      transaction.oncomplete = () => resolve(matched)
-      transaction.onabort = () => reject(transaction.error)
-      transaction.onerror = () => reject(transaction.error)
-    })
   }
 
   private async removeFromIndexedDB(key: string): Promise<void> {
