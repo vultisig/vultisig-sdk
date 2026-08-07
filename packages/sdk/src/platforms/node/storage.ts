@@ -9,12 +9,17 @@ import * as path from 'path'
 import type { Storage, StorageMetadata, StoredValue } from '../../storage/types'
 import { STORAGE_VERSION, StorageError, StorageErrorCode } from '../../storage/types'
 
+function getDefaultBasePath(): string {
+  const override = process.env.VULTISIG_CONFIG_DIR?.trim()
+  return override ? override : path.join(os.homedir(), '.vultisig')
+}
+
 export class FileStorage implements Storage {
   public readonly basePath: string
   private initPromise?: Promise<void>
 
   constructor(config?: { basePath?: string }) {
-    this.basePath = config?.basePath ?? path.join(os.homedir(), '.vultisig')
+    this.basePath = config?.basePath ?? getDefaultBasePath()
   }
 
   private async ensureDirectory(): Promise<void> {
@@ -93,6 +98,7 @@ export class FileStorage implements Storage {
       await fs.writeFile(tempPath, JSON.stringify(stored, null, 2), {
         encoding: 'utf-8',
         mode: 0o600,
+        flag: 'wx',
       })
 
       await fs.rename(tempPath, filePath)

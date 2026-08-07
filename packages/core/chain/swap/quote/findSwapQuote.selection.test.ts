@@ -117,6 +117,16 @@ function minimalCowSwapQuote(dstAmount: string, sellAmount = '100000000000000000
   }
 }
 
+async function expectRejectedWithExactMessage(promise: Promise<unknown>, expectedMessage: string): Promise<void> {
+  try {
+    await promise
+    throw new Error('Expected promise to reject')
+  } catch (error) {
+    expect(error).toBeInstanceOf(Error)
+    expect((error as Error).message).toBe(expectedMessage)
+  }
+}
+
 function minimalNativeQuote(swapChain: Chain, expected_amount_out: string): NativeSwapQuote {
   return {
     swapChain: swapChain as NativeSwapQuote['swapChain'],
@@ -222,8 +232,9 @@ describe('findSwapQuote parallel selection', () => {
     vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('native unavailable'))
     vi.mocked(getSwapKitQuote).mockRejectedValue(new SwapKitAmountBelowMinimumError(Chain.Ethereum, Chain.Ethereum))
 
-    await expect(findSwapQuote({ ...evmSameChainCoins, amount: 1n })).rejects.toThrow(
-      'Swap amount too small. Please increase the amount to proceed.'
+    await expectRejectedWithExactMessage(
+      findSwapQuote({ ...evmSameChainCoins, amount: 1n }),
+      'Please increase the amount to proceed.'
     )
   })
 
@@ -432,10 +443,7 @@ describe('findSwapQuote parallel selection', () => {
     expect(getJupiterSwapQuote).not.toHaveBeenCalled()
   })
 
-  it.each([
-    ['Sui', Chain.Sui, 'sui-source', 9],
-    ['Cardano', Chain.Cardano, 'addr1source', 6],
-  ] as const)(
+  it.each([['Cardano', Chain.Cardano, 'addr1source', 6]] as const)(
     'dispatches the SwapKit fetcher for a %s source (quote-eligibility only -- getSwapKitQuote itself still rejects it, see getSwapKitQuote.test.ts)',
     async (_label, chain, address, decimals) => {
       vi.mocked(getSwapKitQuote).mockRejectedValue(
@@ -445,7 +453,7 @@ describe('findSwapQuote parallel selection', () => {
 
       await expect(
         findSwapQuote({
-          from: { chain, address, decimals, ticker: chain === Chain.Sui ? 'SUI' : 'ADA' },
+          from: { chain, address, decimals, ticker: 'ADA' },
           to: { chain: Chain.Ethereum, address: '0xdestination', decimals: 18, ticker: 'ETH' },
           amount: 1_000_000n,
         })
@@ -456,6 +464,34 @@ describe('findSwapQuote parallel selection', () => {
       )
     }
   )
+
+  it('returns a SwapKit quote for a Sui source (signing is wired via the signSui path)', async () => {
+    vi.mocked(getSwapKitQuote).mockResolvedValue(
+      minimalGeneralQuote('900000', 'swapkit', {
+        transfer: {
+          to: 'sui-deposit',
+          amount: 1_000_000n,
+          txType: 'SUI',
+          txPayload: new Uint8Array([1, 2, 3]),
+        },
+      })
+    )
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))
+
+    const quote = await findSwapQuote({
+      from: { chain: Chain.Sui, address: 'sui-source', decimals: 9, ticker: 'SUI' },
+      to: { chain: Chain.Ethereum, address: '0xdestination', decimals: 18, ticker: 'ETH' },
+      amount: 1_000_000n,
+    })
+
+    expect(getSwapKitQuote).toHaveBeenCalledWith(
+      expect.objectContaining({ from: expect.objectContaining({ chain: Chain.Sui }) })
+    )
+    if (!('general' in quote.quote)) {
+      throw new Error('Expected general quote')
+    }
+    expect(quote.quote.general.provider).toBe('swapkit')
+  })
 
   it('dispatches the MayaChain native fetcher for a Cardano source (live ADA.ADA pool)', async () => {
     vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('skip swapkit'))
@@ -693,12 +729,13 @@ describe('findSwapQuote parallel selection', () => {
       throw new Error('maya fail')
     })
 
-    await expect(
+    await expectRejectedWithExactMessage(
       findSwapQuote({
         ...evmSameChainCoins,
         amount: 1n,
-      })
-    ).rejects.toThrow('Swap amount too small. Please increase the amount to proceed.')
+      }),
+      'Please increase the amount to proceed.'
+    )
   })
 
   it('maps dust threshold on any provider to the user-facing message (Maya in this setup)', async () => {
@@ -713,12 +750,13 @@ describe('findSwapQuote parallel selection', () => {
       throw new Error('quote below dust threshold')
     })
 
-    await expect(
+    await expectRejectedWithExactMessage(
       findSwapQuote({
         ...evmSameChainCoins,
         amount: 1n,
-      })
-    ).rejects.toThrow('Swap amount too small. Please increase the amount to proceed.')
+      }),
+      'Please increase the amount to proceed.'
+    )
   })
 
   it('maps dust threshold from an earlier provider (not only the last) to the user-facing message', async () => {
@@ -728,12 +766,13 @@ describe('findSwapQuote parallel selection', () => {
     vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('swapkit fail'))
     vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('native fail'))
 
-    await expect(
+    await expectRejectedWithExactMessage(
       findSwapQuote({
         ...evmSameChainCoins,
         amount: 1n,
-      })
-    ).rejects.toThrow('Swap amount too small. Please increase the amount to proceed.')
+      }),
+      'Please increase the amount to proceed.'
+    )
   })
 
   // --- Proactive THORChain minimum (#604) ---

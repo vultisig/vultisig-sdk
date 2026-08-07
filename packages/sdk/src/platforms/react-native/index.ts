@@ -31,7 +31,7 @@ if (typeof globalThis !== 'undefined' && !(globalThis as { Buffer?: unknown }).B
 // full cascade in dependency order: getCanonicalLocales → Locale →
 // NumberFormat → PluralRules.
 //
-// Without these, even lazy `import('@mysten/sui/jsonRpc')` /
+// Without these, even lazy `import('@mysten/sui/graphql')` /
 // `import('@lifi/sdk')` crashes the first time the module is evaluated.
 import '@formatjs/intl-getcanonicallocales/polyfill.js'
 import '@formatjs/intl-locale/polyfill.js'
@@ -69,6 +69,22 @@ export {
   getCosmosAllowedFeeDenoms,
   isCosmosFeeDenomAllowed,
 } from '@vultisig/core-chain/chains/cosmos/cosmosFeeDenomAllowlist'
+export {
+  COSMOS_SEND_FEE_DEFAULT,
+  getCosmosSendFeeBaseUnits,
+  MAYA_SEND_FEE_BASE_UNITS,
+} from '@vultisig/core-chain/chains/cosmos/gas'
+
+// Cosmos x/auth.MaxMemoCharacters cap, per chain — single source of truth for
+// "will this memo fit before broadcast rejects it with sdk code 12 (memo too
+// long) after the user has already signed?" Kept in parity with the root SDK
+// entrypoint (sdk#1538) so RN consumers don't hand-roll their own memo-cap table.
+export {
+  COSMOS_MEMO_DEFAULT_MAX_BYTES,
+  getCosmosMemoMaxBytes,
+  getCosmosMemoMaxBytesByChainId,
+  isCosmosMemoWithinCap,
+} from '@vultisig/core-chain/chains/cosmos/cosmosMemoCap'
 
 // XRP Ledger issued-currency canonicals — pure helpers/tables that are safe on
 // the RN graph and should stay in parity with the root SDK entrypoint.
@@ -98,6 +114,11 @@ export { keysign } from '@vultisig/core-mpc/keysign'
 // Seedphrase validation (uses @scure/bip39, RN-compatible)
 export { validateSeedphrase } from '../../seedphrase/SeedphraseValidator'
 export { SEEDPHRASE_WORD_COUNTS } from '../../seedphrase/types'
+
+// Default-chain canonicals — exported on RN so mobile consumers can delete
+// local onboarding/import default-chain mirrors and follow the same SDK owner.
+export { DEFAULT_CHAINS } from '../../constants'
+export { defaultChains } from '@vultisig/core-chain/Chain'
 
 // WalletCore provider access
 export { configureWasm, getWalletCore } from '../../context/wasmRuntime'
@@ -152,7 +173,7 @@ export type {
 // Solana bridge type surface — pure primitive reimplementation that does NOT
 // pull @solana/web3.js (and therefore avoids the rpc-websockets / ws cascade
 // that hangs Hermes at module init).
-export type { BuildSolanaSendOptions, SolanaTxBuilderResult } from './chains/solana'
+export type { BroadcastSolanaTxOptions, BuildSolanaSendOptions, SolanaTxBuilderResult } from './chains/solana'
 
 // TON bridge type surface — reimplementation built on @ton/core only, which
 // is Hermes-safe (uses jssha via @ton/crypto peer dep, not crypto.subtle).
@@ -173,7 +194,7 @@ export type {
 //
 // These helpers work on RN because heavy chain clients (viem, xrpl,
 // @solana/web3.js, @ton/*, @polkadot/util-crypto, bitcoinjs-lib, @cosmjs/*,
-// @mysten/sui/jsonRpc, @lifi/sdk, @bufbuild/protobuf, cbor-x, i18next)
+// @mysten/sui/graphql, @lifi/sdk, @bufbuild/protobuf, cbor-x, i18next)
 // are externalized in rollup.platforms.config.js. Consumers must install
 // those they actually reach (or metro-stub the rest). `bip32` is inlined
 // from its real (pure-JS) npm package, and `tiny-secp256k1` is inlined
@@ -353,13 +374,27 @@ export {
 // tables, no chain-client deps, so safe as a static re-export.
 export { getEvmChainByChainId, getEvmChainId } from '@vultisig/core-chain/chains/evm/chainInfo'
 
-// Gas / fee primitives (read-only — uses global `fetch` + a type-only
-// `UtxoChain` import, no heavy chain client). The RN allow-list omitted
-// these so RN consumers (vultiagent-app) couldn't resolve a current
-// sat/vB rate for a UTXO send / consolidation and had to re-implement
-// the THORChain / MayaChain inbound fetch + halt gating by hand.
-export type { UtxoFeeRate } from '../../tools/gas'
-export { MAYACHAIN_NODE_URL, THORCHAIN_NODE_URL, utxoFeeRate } from '../../tools/gas'
+// Gas / fee primitives (read-only — uses global `fetch` + type-only imports,
+// no heavy chain client at module init). The RN allow-list omitted these so RN
+// consumers (vultiagent-app) couldn't resolve current UTXO sat/vB rates OR the
+// canonical multi-chain gas-cost comparison helper from the same SDK family.
+export type {
+  CompareCostsEntry,
+  CompareCostsParams,
+  CompareCostsResult,
+  CompareCostsSkipped,
+  GasTxType,
+  UtxoFeeRate,
+} from '../../tools/gas'
+export {
+  compareCosts,
+  DEFAULT_COMPARE_CHAINS,
+  GAS_UNITS,
+  getChainGasPriceGwei,
+  MAYACHAIN_NODE_URL,
+  THORCHAIN_NODE_URL,
+  utxoFeeRate,
+} from '../../tools/gas'
 
 // DeFi protocol primitives (unsigned calldata builders) — sdk.defi.*
 // Pure builders, RN-safe. Statically re-exported so RN consumers can reach
@@ -610,6 +645,9 @@ export {
 } from '../../utils/convertAmount'
 export { FiatToAmountError } from '../../utils/fiatToAmount'
 export { fromChainAmountExact } from '@vultisig/core-chain/amount/fromChainAmountExact'
+export { ChainAmountParseError, toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
+export type { ChainKind } from '@vultisig/core-chain/ChainKind'
+export { getChainKind, isChainOfKind } from '@vultisig/core-chain/ChainKind'
 export { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
 export async function fiatToAmount(...args: unknown[]) {
   const mod = await import('../../utils/fiatToAmount')
@@ -620,14 +658,46 @@ export { chainSchema, parseChain, parseTicker, tickerSchema } from '../../tools/
 export type { NormalizeArgs, NormalizedTx } from '../../tx'
 export { normalizeTx, splitMultiTx, TxNormalizeError } from '../../tx'
 export { computePersonalSignHash, formatEcdsaSignature65 } from '../../utils/eip191'
+export {
+  canonicalEvmContracts,
+  canonicalSolanaAddresses,
+  canonicalTronContracts,
+  isCanonicalEvmContract,
+  isCanonicalEvmContractEllipsized,
+  isCanonicalSolanaAddress,
+  isCanonicalSolanaAddressEllipsized,
+  isCanonicalTronContract,
+  isEvmAddressFormat,
+  isKnownContract,
+  knownContracts,
+} from '../../utils/knownContracts'
 export { normalizeChain, UnknownChainError } from '../../utils/normalizeChain'
 export { resolveChainReference } from '../../utils/resolveChainReference'
-export { ChainAmountParseError, toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
+export type { ParsedThorSwapMemo } from '../../utils/thorSwapMemo'
+export { parseThorSwapMemo } from '../../utils/thorSwapMemo'
 export async function parseKeygenQR(...args: unknown[]) {
   const mod = await import('../../utils/parseKeygenQR')
   return mod.parseKeygenQR(...(args as Parameters<typeof mod.parseKeygenQR>))
 }
 export { ValidationHelpers } from '../../utils/validation'
+
+// Dangerous/burn-address guard. Single source of truth for "is this destination
+// a burn/black-hole address that no key controls?" across EVM, Solana, UTXO and
+// XRP. Pure address-string matching (no chain-client deps), so RN-safe as a
+// static re-export. Kept in parity with the node/browser/electron entry
+// (src/index.ts) so RN consumers (the app) get the same guard instead of
+// maintaining their own copy that can drift.
+export {
+  assertSafeDestination,
+  assertSafeEvmDestination,
+  EVM_DANGEROUS_ADDRESSES,
+  getChainDangerousReason,
+  getEvmDangerousReason,
+  isEvmBurnAddress,
+  SOLANA_DANGEROUS_ADDRESSES,
+  UTXO_DANGEROUS_ADDRESSES,
+  XRP_DANGEROUS_ADDRESSES,
+} from '../../utils/dangerousAddresses'
 
 // Storage
 export { MemoryStorage } from '../../storage/MemoryStorage'
@@ -656,10 +726,14 @@ export {
   buildRiverCloseTrove,
   buildRiverDelegateApproval,
   buildRiverOpenTrove,
+  describeRiverMarket,
+  findRiverInsertHints,
+  formatRiverPercentWad,
   isRiverChain,
   river,
   RIVER_CHAIN_CONFIG,
   RIVER_DEFAULT_MAX_FEE_BPS,
   RIVER_SUPPORTED_CHAINS,
+  RIVER_TROVE_STATUS_NAMES,
   riverStatusName,
 } from '../../tools/defi/river'

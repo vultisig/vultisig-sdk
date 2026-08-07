@@ -20,6 +20,7 @@ export const chainSpecificRecord = {
   [Chain.Mantle]: 'ethereumSpecific',
   [Chain.Hyperliquid]: 'ethereumSpecific',
   [Chain.Sei]: 'ethereumSpecific',
+  [Chain.Robinhood]: 'ethereumSpecific',
 
   [Chain.Bitcoin]: 'utxoSpecific',
   [Chain.BitcoinCash]: 'utxoSpecific',
