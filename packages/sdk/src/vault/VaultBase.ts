@@ -1307,10 +1307,17 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     // Fetch balance via BalanceService so cache / balanceUpdated event / VaultError
     // wrapping all fire. The vault-free `getMaxSendAmountFromKeys` skips these
     // (no cache/events in the MCP / agent context); vault callers must not.
-    const balance = await this.balanceService.getBalance(params.coin.chain, params.coin.id)
+    const [balance, nativeBalance] = await Promise.all([
+      this.balanceService.getBalance(params.coin.chain, params.coin.id),
+      params.coin.id === undefined ? undefined : this.balanceService.getBalance(params.coin.chain),
+    ])
     return computeMaxSendFromBalance(
       vaultDataToIdentity(this.coreVault),
-      { ...params, balance: BigInt(balance.amount) },
+      {
+        ...params,
+        balance: BigInt(balance.amount),
+        nativeBalance: nativeBalance === undefined ? undefined : BigInt(nativeBalance.amount),
+      },
       walletCore
     )
   }
@@ -1921,7 +1928,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     return { balances, totalValue: total.toFixed(2), currency }
   }
 
-  /** Send tokens. Use amount "max" to send entire balance minus fees. Set dryRun for fee estimate without signing. */
+  /** Send tokens. Use amount "max" for the native balance minus fees, or the full token balance when native gas is covered. Set dryRun for fee estimates without signing. */
   async send(params: {
     chain: Chain
     to: string
