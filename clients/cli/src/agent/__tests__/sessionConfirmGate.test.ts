@@ -2,9 +2,12 @@
 // vultisig-sdk#679: agent ask auto-signed any backend-returned envelope).
 // The method is private; it's exercised via the prototype with a minimal
 // `this` so no real vault / fs / network is touched.
+import type { VaultBase } from '@vultisig/sdk'
+import { Chain } from '@vultisig/sdk'
 import { describe, expect, it, vi } from 'vitest'
 
 import { AgentErrorCode } from '../agentErrors'
+import { AgentExecutor } from '../executor'
 import { AgentSession } from '../session'
 import type { RecentAction } from '../types'
 
@@ -15,6 +18,7 @@ function makeUi(approve: boolean) {
     requestConfirmation: vi.fn(async (_msg: string) => approve),
     requestPassword: vi.fn(async () => 'pw'),
     onProposedTransaction: vi.fn(),
+    onSigningRecord: vi.fn(),
   }
 }
 
@@ -71,6 +75,7 @@ describe('runPasswordGatedTool — confirmation gate', () => {
       summary: 'send 0.001 ETH on Base to 0xabc',
       chain: 'Base',
     })
+    expect(ui.onSigningRecord).not.toHaveBeenCalled()
     // The rejected envelope must not linger into later turns.
     expect(clearPendingTransaction).toHaveBeenCalledOnce()
   })
@@ -93,6 +98,125 @@ describe('runPasswordGatedTool — confirmation gate', () => {
     expect(clearPendingTransaction).not.toHaveBeenCalled()
   })
 
+  it('approved token send records the summary derived from the buffered keysign payload', async () => {
+    const tokenContract = '0x2791bca1f2de4661ed88a30c99a7a9449aa84174'
+    const recipient = '0x58c4000000000000000000000000000000005c35'
+    const keysignPayload = {
+      chain: 'Polygon',
+      txArgs: {
+        chain: 'Polygon',
+        to: recipient,
+        amount: '50000',
+        tx: { to: tokenContract, value: '0', data: '0xa9059cbb' },
+      },
+      resolved: {
+        labels: {
+          resolved_amount: '0.05 USDC.e',
+          // Documented bare-symbol format — the contract must come from the
+          // payload's txArgs.tx.to, NOT from an enriched label.
+          token_resolved: 'USDC.e',
+          recipient_echo: recipient,
+        },
+      },
+    }
+    const vault = {
+      name: 'mock-vault',
+      id: 'vault-mock-1',
+      type: 'secure',
+      chains: [Chain.Polygon],
+      isEncrypted: false,
+    } as unknown as VaultBase
+    const executor = new AgentExecutor(vault)
+    expect(executor.storeServerTransaction(keysignPayload)).toBe(true)
+    const ui = makeUi(true)
+    const body = vi.fn(async () => ({ tool: 'sign_tx', success: true, data: {} }) as RecentAction)
+
+    const result = await (AgentSession.prototype as any).runPasswordGatedTool.call(
+      { executor, config: { password: 'pw' } },
+      'sign_tx',
+      'tc-token',
+      ui,
+      body
+    )
+
+    expect(result.success).toBe(true)
+    expect(body).toHaveBeenCalledOnce()
+    const record = ui.onSigningRecord.mock.calls[0][0]
+    expect(record.tool).toBe('sign_tx')
+    expect(record.chain).toBe(keysignPayload.chain)
+    expect(record.success).toBe(true)
+    expect(record.summary).toContain(keysignPayload.resolved.labels.resolved_amount)
+    expect(record.summary).toContain(keysignPayload.txArgs.tx.to)
+    expect(record.summary).toContain(keysignPayload.txArgs.to)
+  })
+
+  it('approved native send records its buffered keysign payload summary without a token contract', async () => {
+    const recipient = '0x58c4000000000000000000000000000000005c35'
+    const keysignPayload = {
+      chain: 'Polygon',
+      txArgs: {
+        chain: 'Polygon',
+        to: recipient,
+        amount: '10000000000000000',
+        tx: { to: recipient, value: '10000000000000000', data: '0x' },
+      },
+      resolved: { labels: { resolved_amount: '0.01 POL', recipient_echo: recipient } },
+    }
+    const vault = {
+      name: 'mock-vault',
+      id: 'vault-mock-1',
+      type: 'secure',
+      chains: [Chain.Polygon],
+      isEncrypted: false,
+    } as unknown as VaultBase
+    const executor = new AgentExecutor(vault)
+    expect(executor.storeServerTransaction(keysignPayload)).toBe(true)
+    const ui = makeUi(true)
+    const body = vi.fn(async () => ({ tool: 'sign_tx', success: true, data: {} }) as RecentAction)
+
+    const result = await (AgentSession.prototype as any).runPasswordGatedTool.call(
+      { executor, config: { password: 'pw' } },
+      'sign_tx',
+      'tc-native',
+      ui,
+      body
+    )
+
+    expect(result.success).toBe(true)
+    expect(body).toHaveBeenCalledOnce()
+    expect(ui.onSigningRecord).toHaveBeenCalledExactlyOnceWith({
+      tool: 'sign_tx',
+      summary: `send 0.01 POL on Polygon to ${keysignPayload.txArgs.to}`,
+      chain: keysignPayload.chain,
+      success: true,
+    })
+  })
+
+  it('a signing body that fails yields a record marked success:false, emitted only after the body ran', async () => {
+    // Audit integrity: an approval whose body threw (e.g. a DUPLICATE_BROADCAST
+    // refusal — nothing was signed) must not produce a record indistinguishable
+    // from a completed signing. If the record were emitted before body(), this
+    // record would carry no outcome and success would be undefined.
+    const ui = makeUi(true)
+    const body = vi.fn(async (): Promise<RecentAction> => {
+      throw new Error('DUPLICATE_BROADCAST: identical transaction already broadcast')
+    })
+    const { result } = callGate({
+      toolName: 'sign_tx',
+      ui,
+      body,
+      pendingSummary: 'send 0.01 POL on Polygon to 0xabc',
+      pendingChain: 'Polygon',
+    })
+    const res = await result
+    expect(res.success).toBe(false)
+    const record = ui.onSigningRecord.mock.calls[0][0]
+    expect(record.summary).toBe('send 0.01 POL on Polygon to 0xabc')
+    expect(record.success).toBe(false)
+    // The record must be emitted AFTER the body ran, never before.
+    expect(ui.onSigningRecord.mock.invocationCallOrder[0]).toBeGreaterThan(body.mock.invocationCallOrder[0])
+  })
+
   it('sign_typed_data ignores a stale buffered tx summary (declined sign_tx leaves the buffer populated)', async () => {
     const ui = makeUi(false)
     const { result, clearPendingTransaction } = callGate({
@@ -113,7 +237,7 @@ describe('runPasswordGatedTool — confirmation gate', () => {
     expect(clearPendingTransaction).not.toHaveBeenCalled()
   })
 
-  it('caps an oversized typed-data summary ONCE — data.proposed and the callback agree', async () => {
+  it('caps oversized typed-data audit summaries consistently on declined and approved paths', async () => {
     // The sign_typed_data fallback summary is JSON.stringify(input), an arbitrarily large blob that
     // reaches stdout and the JSON envelope. Capping only one of the two representations would ship
     // two conflicting descriptions of the same proposal.
@@ -132,6 +256,16 @@ describe('runPasswordGatedTool — confirmation gate', () => {
     expect(proposed.length).toBeLessThan(600)
     expect(proposed.endsWith('…')).toBe(true)
     expect(emitted).toBe(proposed)
+
+    const approvedUi = makeUi(true)
+    await callGate({
+      toolName: 'sign_typed_data',
+      ui: approvedUi,
+      body: vi.fn(async () => ({ tool: 'sign_typed_data', success: true, data: {} }) as RecentAction),
+      input: { typed_data: big },
+      pendingSummary: null,
+    }).result
+    expect(approvedUi.onSigningRecord.mock.calls[0][0].summary).toBe(proposed)
   })
 
   it('sign_typed_data with no buffer falls back to tool name + input', async () => {
