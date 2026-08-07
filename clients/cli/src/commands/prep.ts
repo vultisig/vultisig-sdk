@@ -1,5 +1,6 @@
 import type { Chain, VaultBase, VaultIdentity } from '@vultisig/sdk'
 import {
+  assertSafeDestination,
   buildCw20TransferMsg,
   buildDelegateMsg,
   buildRedelegateMsg,
@@ -235,6 +236,12 @@ export function executePrepSplTransfer(
   decimals: string,
   options: { token2022?: boolean }
 ): void {
+  // Fund-safety: buildSplTransfer is a deliberate SDK escape hatch and does not
+  // call assertSafeDestination itself (unlike prepareSendTxFromKeys). The CLI is
+  // a user-facing entry point where a typo'd or pasted-from-Discord address
+  // lands directly, so guard it here before building the instruction.
+  assertSafeDestination('Solana', to)
+
   const result = buildSplTransfer({
     mint,
     from,

@@ -140,6 +140,19 @@ describe('prep commands exercise SDK helpers through a real subprocess', { timeo
     expect(result.instruction.data).toBeTruthy()
   })
 
+  it('refuses to build an SPL transfer to a known burn/program destination', () => {
+    const result = runPrep([
+      'spl-transfer',
+      'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+      '7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU',
+      '11111111111111111111111111111111', // Solana System Program: no private key controls this address
+      '1000000',
+      '6',
+    ])
+    expect(result.status).not.toBe(0)
+    expect(JSON.parse(result.stdout).error.message).toMatch(/Refusing to build transaction/i)
+  })
+
   it('builds a TRC-20 transfer descriptor', () => {
     const result = expectSuccess(
       [
