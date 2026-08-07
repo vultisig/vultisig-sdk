@@ -37,7 +37,7 @@ export type {
   EvmTxBuilderResult,
 } from './evm'
 export type { BuildXrpSendOptions, BuildXrpSendResult, XrpAccountInfo, XrpPaymentTx, XrpSubmitResult } from './ripple'
-export type { BuildSolanaSendOptions, SolanaTxBuilderResult } from './solana'
+export type { BroadcastSolanaTxOptions, BuildSolanaSendOptions, SolanaTxBuilderResult } from './solana'
 export type {
   BuildTonJettonTransferOptions,
   BuildTonSendOptions,
