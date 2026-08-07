@@ -666,6 +666,11 @@
       "import": "./dist/keysign/utils/getKeysignCoin.js",
       "default": "./dist/keysign/utils/getKeysignCoin.js"
     },
+    "./keysign/utils/isRippleTrustSet": {
+      "types": "./dist/keysign/utils/isRippleTrustSet.d.ts",
+      "import": "./dist/keysign/utils/isRippleTrustSet.js",
+      "default": "./dist/keysign/utils/isRippleTrustSet.js"
+    },
     "./keysign/utils/resolvePolkadotToAddress": {
       "types": "./dist/keysign/utils/resolvePolkadotToAddress.d.ts",
       "import": "./dist/keysign/utils/resolvePolkadotToAddress.js",
