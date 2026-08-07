@@ -162,6 +162,7 @@ describe('convertToKeysignSignatures', () => {
             r: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
             s: '0xfedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321',
             der: '0x304402201234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef0220fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321',
+            recovery: 0,
           },
         ],
       }
