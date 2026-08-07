@@ -50,6 +50,10 @@ import { configureWasm } from '../../context/wasmRuntime'
 import { configureCrypto } from '../../crypto'
 import * as cosmos from '../../tools/cosmos'
 import * as evm from '../../tools/evm'
+import {
+  resolveJupiterFeeAccount as swapResolveJupiterFeeAccount,
+  skipChainIdToChainName as swapSkipChainIdToChainName,
+} from '../../tools/swap'
 import * as token from '../../tools/token'
 import { ReactNativeCrypto } from './crypto'
 import { ReactNativeStorage } from './storage'
@@ -263,6 +267,22 @@ export type {
   UnsignedTrc20Transfer,
   VaultIdentity,
 } from '../../tools/prep'
+export type {
+  AcrossChain,
+  AcrossQuote,
+  AcrossQuoteParams,
+  FindSwapQuoteParams,
+  JupiterQuoteResponse,
+  JupiterSwapParams,
+  JupiterSwapResult,
+  SkipChainIdsToAffiliates,
+  SkipSwapArgs,
+  SkipSwapErrorEnvelope,
+  SkipSwapOutcome,
+  SkipSwapSuccess,
+  SkipUnsignedMsg,
+  SwapQuote,
+} from '../../tools/swap'
 
 // Pure cosmos staking msg-envelope builders. These depend only on bech32 +
 // buffer (RN-safe, no mpc/keysign), so unlike the other prep helpers they are
@@ -384,6 +404,45 @@ export {
   TERRA_CHAIN_ID,
   TERRA_LCD,
 } from '../../tools/swap/astroport'
+// Recent generic-swap helpers intentionally ship through async wrappers here so
+// the RN entry stays lazy like the other prep/read surfaces. Omitting them
+// forces Station to deep-import or re-copy the SDK canonicals even though the
+// root SDK already publishes them.
+export {
+  JUPITER_AFFILIATE_FEE_ATAS,
+  JUPITER_AFFILIATE_FEE_OWNER,
+  JUPITER_API_BASE_URL,
+  JUPITER_DEFAULT_SLIPPAGE_BPS,
+  JUPITER_PLATFORM_FEE_BPS,
+  SKIP_AFFILIATE_ADDRESS_BY_CHAIN,
+  SOL_NATIVE_MINT,
+} from '../../tools/swap'
+export async function acrossQuote(...args: unknown[]) {
+  const mod = await import('../../tools/swap')
+  return mod.acrossQuote(...(args as Parameters<typeof mod.acrossQuote>))
+}
+export async function buildJupiterSwapTx(...args: unknown[]) {
+  const mod = await import('../../tools/swap')
+  return mod.buildJupiterSwapTx(...(args as Parameters<typeof mod.buildJupiterSwapTx>))
+}
+export async function findSwapQuote(...args: unknown[]) {
+  const mod = await import('../../tools/swap')
+  return mod.findSwapQuote(...(args as Parameters<typeof mod.findSwapQuote>))
+}
+export async function quoteSkipRoute(...args: unknown[]) {
+  const mod = await import('../../tools/swap')
+  return mod.quoteSkipRoute(...(args as Parameters<typeof mod.quoteSkipRoute>))
+}
+export function resolveJupiterFeeAccount(...args: unknown[]) {
+  return swapResolveJupiterFeeAccount(...(args as Parameters<typeof swapResolveJupiterFeeAccount>))
+}
+export async function runSkipSwap(...args: unknown[]) {
+  const mod = await import('../../tools/swap')
+  return mod.runSkipSwap(...(args as Parameters<typeof mod.runSkipSwap>))
+}
+export function skipChainIdToChainName(...args: unknown[]) {
+  return swapSkipChainIdToChainName(...(args as Parameters<typeof swapSkipChainIdToChainName>))
+}
 
 // EVM utilities (viem-backed — requires app to install `viem` as a peer dep)
 export type {
