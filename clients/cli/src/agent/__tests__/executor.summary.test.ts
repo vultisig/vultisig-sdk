@@ -230,8 +230,30 @@ describe('AgentExecutor.getPendingSummary', () => {
       })
     ).toBe(true)
     const summary = executor.getPendingSummary()!
-    expect(summary).toBe(`send 0.05 ${tokenLabel} on Polygon (0x2791…4174) to 0x58C4…5C35`)
+    expect(summary).toBe(`send 0.05 ${tokenLabel} to 0x58C4…5C35`)
     expect(summary.match(/USDC\.e on Polygon \(0x2791…4174\)/g)).toHaveLength(1)
+  })
+
+  it('keeps the routed chain when an embedded full token label names a different chain', () => {
+    const executor = new AgentExecutor(createMockVault())
+    const tokenLabel = 'USDC.e on Ethereum (0xA0b8…eB48)'
+
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Polygon',
+        txArgs: { chain: 'Polygon', tx: { to: '0xA0b8…eB48', value: '0' } },
+        resolved: {
+          labels: {
+            resolved_amount: `0.05 ${tokenLabel}`,
+            token_resolved: tokenLabel,
+            recipient_echo: '0x58C4…5C35',
+          },
+        },
+      })
+    ).toBe(true)
+    const summary = executor.getPendingSummary()!
+    expect(summary).toContain('on Polygon')
+    expect(summary).toContain(tokenLabel)
   })
 
   it.each([
