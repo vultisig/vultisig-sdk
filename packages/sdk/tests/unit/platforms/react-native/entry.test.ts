@@ -30,7 +30,7 @@ vi.mock('@vultisig/walletcore-native', () => ({
 
 describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
   it('registers crypto + storage on module load so Vultisig({}) does not throw', async () => {
-    const rn = await import('../../../../src/platforms/react-native/index')
+    await import('../../../../src/platforms/react-native/index')
     const { randomUUID } = await import('../../../../src/crypto')
     const { getDefaultStorage } = await import('../../../../src/context/defaultStorage')
 
@@ -38,7 +38,20 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     const storage = getDefaultStorage()
     expect(storage).toBeDefined()
     expect(typeof storage.get).toBe('function')
-    expect(rn.DEFAULT_CHAINS).toBe(rn.defaultChains)
+  })
+
+  it('re-exports the generic swap canonicals needed by RN consumers', async () => {
+    const sdk = await import('../../../../src/platforms/react-native/index')
+
+    expect(typeof sdk.acrossQuote).toBe('function')
+    expect(typeof sdk.buildJupiterSwapTx).toBe('function')
+    expect(typeof sdk.findSwapQuote).toBe('function')
+    expect(typeof sdk.quoteSkipRoute).toBe('function')
+    expect(typeof sdk.runSkipSwap).toBe('function')
+    expect(typeof sdk.resolveJupiterFeeAccount).toBe('function')
+    expect(typeof sdk.skipChainIdToChainName).toBe('function')
+    expect(sdk.SOL_NATIVE_MINT).toBe('So11111111111111111111111111111111111111112')
+    expect(sdk.JUPITER_PLATFORM_FEE_BPS).toBe(50)
   })
 
   it('exports default chain canonicals on the RN entrypoint', async () => {
