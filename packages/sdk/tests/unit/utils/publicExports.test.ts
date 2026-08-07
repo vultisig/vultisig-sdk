@@ -51,6 +51,24 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.evmCheckAllowance).toBe('function')
   })
 
+  it('exports documented balance/bridge/prep/swap namespace handles from the root SDK surface', () => {
+    expect(sdk.balance).toBeDefined()
+    expect(typeof sdk.balance.getSolBalance).toBe('function')
+    expect(typeof sdk.balance.getCosmosBalance).toBe('function')
+
+    expect(sdk.bridge).toBeDefined()
+    expect(typeof sdk.bridge.buildCctpBridge).toBe('function')
+    expect(Array.isArray(sdk.bridge.cctpSupportedChains)).toBe(true)
+
+    expect(sdk.prep).toBeDefined()
+    expect(typeof sdk.prep.prepareIbcTransfer).toBe('function')
+    expect(typeof sdk.prep.prepareTrc20TransferFromKeys).toBe('function')
+
+    expect(sdk.swap).toBeDefined()
+    expect(typeof sdk.swap.acrossQuote).toBe('function')
+    expect(typeof sdk.swap.runSkipSwap).toBe('function')
+  })
+
   it('exports encodeErc20Approve, encodeErc20Revoke, MAX_UINT256 (ERC-20 approve/revoke calldata)', () => {
     expect(typeof sdk.encodeErc20Approve).toBe('function')
     expect(typeof sdk.encodeErc20Revoke).toBe('function')
