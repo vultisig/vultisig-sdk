@@ -442,13 +442,9 @@ export { computeNotificationVaultId } from './utils/computeNotificationVaultId'
 // already live in @vultisig/lib-utils and are used internally by the SDK, but
 // consumers could not reach them from the public @vultisig/sdk surface and
 // were pushed into app-local copies of the same .vult backup wire format.
-export {
-  decryptVaultBackupWithPassword,
-} from '@vultisig/lib-utils/encryption/vaultBackup/decryptVaultBackupWithPassword'
+export { decryptVaultBackupWithPassword } from '@vultisig/lib-utils/encryption/vaultBackup/decryptVaultBackupWithPassword'
 export type { EncryptVaultBackupWithPasswordOptions } from '@vultisig/lib-utils/encryption/vaultBackup/encryptVaultBackupWithPassword'
-export {
-  encryptVaultBackupWithPassword,
-} from '@vultisig/lib-utils/encryption/vaultBackup/encryptVaultBackupWithPassword'
+export { encryptVaultBackupWithPassword } from '@vultisig/lib-utils/encryption/vaultBackup/encryptVaultBackupWithPassword'
 export {
   DEFAULT_VAULT_BACKUP_PBKDF2_ITERATIONS,
   VAULT_BACKUP_BLOB_MAGIC,
