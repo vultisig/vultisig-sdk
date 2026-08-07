@@ -12,6 +12,7 @@ import Long from 'long'
 
 import { getBlockchainSpecificValue } from '../../chainSpecific/KeysignChainSpecific'
 import { getKeysignTwPublicKey } from '../../tw/getKeysignTwPublicKey'
+import { isRippleTrustSet } from '../../utils/isRippleTrustSet'
 import { getLegacyDestinationTag, resolveDestinationTag } from '../../utils/rippleDestinationTag'
 import { SigningInputsResolver } from '../resolver'
 
@@ -112,12 +113,19 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
     return { rawJson }
   }
 
-  // An issued-currency coin (non-native, with a `currency.issuer` contract
-  // address) signals a TrustSet: open/modify the trust line whose limit is the
-  // keysign amount. Native XRP falls through to the Payment path below.
+  // A TrustSet opens or modifies a trust line, and the keysign amount is its
+  // LIMIT rather than a transfer. `RippleSpecific.transaction_type` says so
+  // explicitly; when it is absent the coin's shape decides, which is how every
+  // signer shipped before that field behaves — honouring it keeps a TrustSet
+  // byte-identical across a mixed-version committee. Native XRP falls through
+  // to the Payment path below.
   const getTrustSet = (): Pick<TW.Ripple.Proto.ISigningInput, 'opTrustSet'> | undefined => {
-    if (coin.isNativeToken || !coin.contractAddress) {
+    if (!isRippleTrustSet(keysignPayload)) {
       return undefined
+    }
+
+    if (coin.isNativeToken || !coin.contractAddress) {
+      throw new Error('XRP TrustSet requires an issued-currency coin carrying a token id')
     }
 
     const { currency, issuer } = parseRippleTokenId(coin.contractAddress)
