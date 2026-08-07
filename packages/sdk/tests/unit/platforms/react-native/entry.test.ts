@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { cosmosTxFeeGasParityCases } from '../../../fixtures/cosmosTxFeeGasParity'
+
 vi.mock('expo-crypto', () => ({
   randomUUID: () => '00000000-0000-4000-8000-000000000000',
   getRandomValues: <T extends ArrayBufferView | null>(a: T) => a,
@@ -58,14 +60,29 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.resolveChainReference('8453')).toBe(rn.Chain.Base)
   })
 
-  it('exports the canonical IBC Cosmos send-fee floors from the RN entry', async () => {
+  it.each(cosmosTxFeeGasParityCases)(
+    'exports the canonical $chain fee denom, fee amount, and gas limit together',
+    async ({ chain, feeDenom, feeAmount, gasLimit }) => {
+      const rn = await import('../../../../src/platforms/react-native/index')
+
+      expect(rn.getCosmosAllowedFeeDenoms(chain)[0]).toBe(feeDenom)
+      expect(rn.getCosmosSendFeeBaseUnits(chain)).toBe(feeAmount)
+      expect(rn.getCosmosGasLimit({ chain })).toBe(gasLimit)
+    }
+  )
+
+  it('covers every Cosmos chain exposed by the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const exposedCosmosChains = Object.values(rn.Chain).filter(chain => rn.getChainKind(chain) === 'cosmos')
+
+    expect(new Set(cosmosTxFeeGasParityCases.map(({ chain }) => chain))).toEqual(new Set(exposedCosmosChains))
+  })
+
+  it('exports the shared Cosmos send-fee constants used by the parity matrix', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
-    expect(rn.COSMOS_SEND_FEE_DEFAULT).toBe(7500n)
-    expect(rn.getCosmosSendFeeBaseUnits(rn.Chain.Cosmos)).toBe(7500n)
-    expect(rn.getCosmosSendFeeBaseUnits(rn.Chain.TerraClassic)).toBe(8_497_500n)
-    expect(rn.getCosmosSendFeeBaseUnits(rn.Chain.MayaChain)).toBe(2_000_000_000n)
-    expect(rn.getCosmosSendFeeBaseUnits(rn.Chain.THORChain)).toBeUndefined()
+    expect(rn.COSMOS_SEND_FEE_DEFAULT).toBe(7_500n)
+    expect(rn.MAYA_SEND_FEE_BASE_UNITS).toBe(2_000_000_000n)
   })
 
   it('keeps Robinhood derivation native-compatible on the exported RN surface', async () => {
