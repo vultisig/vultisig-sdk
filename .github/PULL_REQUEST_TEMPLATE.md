@@ -29,7 +29,8 @@ Fixes #<issue-number>
 
 - iOS:
 - Android:
-- Windows + extension:
+- Windows:
+- Browser extension:
 
 ## Checklist
 

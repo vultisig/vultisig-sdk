@@ -185,8 +185,8 @@ made here — or a bug fixed here — is only half done until the consuming plat
 for. Historically the failure mode has not been a forgotten port; it has been a _superseded_ fix
 left uncited, so the next platform copies a shape that has already been corrected elsewhere.
 
-If your PR touches **send, swap, keysign, broadcast, or fee computation**, give one verdict per
-consuming surface in the PR body:
+If your PR touches **send, swap, new chain support, keysign, broadcast, or fee computation**, give
+one verdict per consuming surface in the PR body:
 
 | Verdict              | Meaning                                                                                               |
 | -------------------- | ----------------------------------------------------------------------------------------------------- |
