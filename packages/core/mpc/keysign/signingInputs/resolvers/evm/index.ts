@@ -41,9 +41,9 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
     // sibling can't see the spender). The router allow-list runs on quote.tx.to in that recursion;
     // this binds the INDEPENDENT erc20ApprovePayload.spender field to it for enforced providers, so
     // a payload can't pass the router check yet still approve an attacker. sdk#1457: cowswap is now
-    // bound too (its spender IS its tx.to — both the fixed GPv2VaultRelayer); only the genuinely
-    // unenforceable li.fi/swapkit (and the legacy `''`) stay unbound. See
-    // assertEnforcedSwapApprovalSpenderBound.
+    // bound too (its spender IS its tx.to — both the fixed GPv2VaultRelayer). LI.FI's destination
+    // is enforced as of sdk#1458, but its legitimate inner allowance executor can differ from the
+    // Diamond, so LI.FI, SwapKit, and the legacy `''` remain outside this spender-equality guard.
     const approveSwapPayload = getKeysignSwapPayload(keysignPayload)
     if (approveSwapPayload && 'general' in approveSwapPayload) {
       assertEnforcedSwapApprovalSpenderBound(
@@ -78,7 +78,8 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
   // destination (getToAddress/getTransaction general arms below) - a compromised initiator can
   // hand a co-signer a payload whose tx.to was never quote-checked, and every co-signer
   // independently rebuilds the input from that payload. Fail closed for enforced providers
-  // (1inch/kyber); log-only for the unenforced ones, matching the quote-time policy. A pure gate:
+  // (1inch/kyber/cowswap/li.fi); log-only for the remaining dynamic/legacy values, matching the
+  // quote-time policy. A pure gate:
   // it throws or no-ops, never changes the signed bytes, so it cannot desync the cross-device
   // pre-signing hash.
   //
@@ -90,7 +91,7 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
   // pass this router check yet still carry an approve to an arbitrary spender. That gap is now
   // closed for enforced providers by assertEnforcedSwapApprovalSpenderBound in the branch above
   // (sdk#1358 review follow-up; sdk#1457 extended it to cowswap, whose spender IS its tx.to). It
-  // remains open for li.fi/swapkit and the legacy `''` provider, which cannot be address-bound.
+  // remains open for LI.FI's distinct inner executor, SwapKit, and the legacy `''` provider.
   if (swapPayload && 'general' in swapPayload) {
     const { provider, quote } = swapPayload.general
     // Pass the raw (possibly empty) destination unconditionally: for an enforced provider an empty

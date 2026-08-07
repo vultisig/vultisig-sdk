@@ -154,7 +154,7 @@ describe('buildSwapKeysignPayload — EVM approval spender and signed destinatio
     expect(toAddressTheEvmResolverWouldUse).toBe(ONE_INCH_V6_ROUTER)
   })
 
-  it('uses approvalAddress for an unenforced-provider allowance/approve while retaining the router as the signed swap destination', async () => {
+  it('uses approvalAddress for a LI.FI allowance while retaining its enforced Diamond as the signed swap destination', async () => {
     const swapQuote: SwapQuote = {
       quote: {
         general: {
@@ -219,7 +219,7 @@ describe('buildSwapKeysignPayload — EVM approval spender and signed destinatio
     expect(toAddressTheEvmResolverWouldUse).toBe(LIFI_ROUTER)
 
     // Exercise the real signing resolver, including its approval-spender guard. Providers such as
-    // li.fi legitimately distinguish the allowance executor from the swap transaction destination,
+    // li.fi legitimately distinguishes the allowance executor from the enforced swap transaction destination,
     // so the payload must produce both the approve and swap signing inputs without weakening the
     // stricter spender===router binding for enforced providers such as 1inch and Kyber.
     const signingInputs = await getEvmSigningInputs({

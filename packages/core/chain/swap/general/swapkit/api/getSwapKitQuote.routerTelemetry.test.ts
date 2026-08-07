@@ -4,11 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { getSwapKitQuote } from './getSwapKitQuote'
 
-// AGG-02 (round-2 spec-level fund-safety audit): SwapKit routes through many different
-// bridge/DEX contracts by design (diamond routing, multi-hop, chain-specific deployments),
-// so — unlike 1inch/Kyber — its destination is logged (never enforced/thrown) via
-// knownAggregatorRouters.ts's logUnenforcedAggregatorDestination. This proves that behavior:
-// an unrecognized `to` never blocks the quote, and gets logged for future analysis.
+// sdk#1458: SwapKit destinations are dynamic, so bind the ready-to-sign tx.to to
+// the independent targetAddress returned by the provider's screened v3 response.
 
 const response = (body: unknown) => {
   const serialized = JSON.stringify(body)
@@ -21,13 +18,16 @@ const response = (body: unknown) => {
   } as unknown as Response
 }
 
-describe('getSwapKitQuote — AGG-02 router telemetry (log-only, never enforced)', () => {
+describe('getSwapKitQuote — sdk#1458 targetAddress binding', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     configureSwapKit({ apiKey: undefined, baseUrl: 'https://api.vultisig.com/swapkit-win' })
   })
 
-  const evmRouteFixtures = () => {
+  const evmRouteFixtures = ({
+    txTo = '0x111111125421ca6dc452d289314280a0f8842a65',
+    targetAddress = '0x111111125421ca6dc452d289314280a0f8842a65',
+  }: { txTo?: string; targetAddress?: string } = {}) => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -39,9 +39,10 @@ describe('getSwapKitQuote — AGG-02 router telemetry (log-only, never enforced)
         response({
           expectedBuyAmount: '12.4',
           providers: ['NEAR'],
+          targetAddress,
           tx: {
             from: '0xsender',
-            to: '0x000000000000000000000000000000deadbeef', // NOT a known router — never enforced for SwapKit
+            to: txTo,
             data: '0xabcdef',
             value: '0',
             gas: '21000',
@@ -52,7 +53,7 @@ describe('getSwapKitQuote — AGG-02 router telemetry (log-only, never enforced)
     configureSwapKit({ apiKey: 'test-key', baseUrl: 'https://swapkit.example' })
   }
 
-  it('does NOT throw for an unrecognized destination — SwapKit is never enforced', async () => {
+  it('accepts a transaction whose destination matches the screened targetAddress', async () => {
     evmRouteFixtures()
     await expect(
       getSwapKitQuote({
@@ -63,20 +64,25 @@ describe('getSwapKitQuote — AGG-02 router telemetry (log-only, never enforced)
     ).resolves.toBeDefined()
   })
 
-  it('logs the destination via swap-router-telemetry for future analysis', async () => {
-    evmRouteFixtures()
-    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
-
-    await getSwapKitQuote({
-      from: { chain: Chain.Ethereum, address: '0xsender', ticker: 'ETH', decimals: 18 },
-      to: { chain: Chain.Solana, address: 'sol-destination', ticker: 'USDC', id: 'sol-usdc-mint', decimals: 6 },
-      amount: 10_000_000_000_000_000n,
-    })
-
-    expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining('swap-router-telemetry'), {
-      provider: 'swapkit',
-      address: '0x000000000000000000000000000000deadbeef',
-    })
-    infoSpy.mockRestore()
+  it('rejects an arbitrary tx.to that differs from the screened targetAddress', async () => {
+    evmRouteFixtures({ txTo: '0x000000000000000000000000000000deadbeef' })
+    await expect(
+      getSwapKitQuote({
+        from: {
+          chain: Chain.Ethereum,
+          address: '0xsender',
+          ticker: 'ETH',
+          decimals: 18,
+        },
+        to: {
+          chain: Chain.Solana,
+          address: 'sol-destination',
+          ticker: 'USDC',
+          id: 'sol-usdc-mint',
+          decimals: 6,
+        },
+        amount: 10_000_000_000_000_000n,
+      })
+    ).rejects.toThrow(/does not match the screened targetAddress/)
   })
 })

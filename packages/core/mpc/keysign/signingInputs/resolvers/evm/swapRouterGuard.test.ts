@@ -21,6 +21,7 @@ import { getEvmSigningInputs } from './index'
 // KeysignPayload whose swapPayload.quote.tx.to was never quote-time-validated must be rejected
 // here, and a KeysignPayload carrying the real router must still sign cleanly (no over-blocking).
 const ONE_INCH_V6_ROUTER = '0x111111125421ca6dc452d289314280a0f8842a65'
+const LIFI_DIAMOND = '0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE'
 const ATTACKER_ROUTER = '0x000000000000000000000000000000000000dEaD'
 const COW_VAULT_RELAYER = '0xC92E8bdf79f0507f65a392b0ab4667716BFE0110'
 const SENDER = '0x1234567890123456789012345678901234567890'
@@ -123,6 +124,24 @@ describe('getEvmSigningInputs — sdk#1457 provider-string spoofing guard, end t
         walletCore,
       })
     ).rejects.toThrow(/Unrecognized swap provider/)
+  })
+
+  it('throws when a li.fi payload carries a destination outside the official chain-scoped Diamond allowlist', async () => {
+    await expect(
+      getEvmSigningInputs({
+        keysignPayload: buildPayload(ATTACKER_ROUTER, 'li.fi'),
+        walletCore,
+      })
+    ).rejects.toThrow(/unrecognized router/i)
+  })
+
+  it('accepts a li.fi payload carrying the official Diamond for its source chain', async () => {
+    const inputs = await getEvmSigningInputs({
+      keysignPayload: buildPayload(LIFI_DIAMOND, 'li.fi'),
+      walletCore,
+    })
+
+    expect(inputs[0]?.toAddress).toBe(LIFI_DIAMOND)
   })
 })
 

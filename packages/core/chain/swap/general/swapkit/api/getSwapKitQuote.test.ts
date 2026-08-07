@@ -25,6 +25,7 @@ const response = (body: unknown, ok = true, status = 200) => {
 const textEncoder = new TextEncoder()
 const TEST_PUBKEY = Buffer.from('0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798', 'hex')
 const BTC_RECIPIENT_ADDRESS = 'bc1q0ht9tyks4vh7p5p904t340cr9nvahy7u3re7zg'
+const EVM_TARGET_ADDRESS = '0x111111125421ca6dc452d289314280a0f8842a65'
 
 const makeBitcoinPsbtPayload = (outputValue: bigint) => {
   const p2wpkh = payments.p2wpkh({ pubkey: TEST_PUBKEY, network: networks.bitcoin })
@@ -91,9 +92,10 @@ describe('getSwapKitQuote', () => {
         response({
           expectedBuyAmount: '12.4',
           providers: ['NEAR'],
+          targetAddress: EVM_TARGET_ADDRESS,
           tx: {
             from: '0xsender',
-            to: '0xrouter',
+            to: EVM_TARGET_ADDRESS,
             data: '0xabcdef',
             value: '0',
             gas: '21000',
@@ -155,7 +157,7 @@ describe('getSwapKitQuote', () => {
       tx: {
         evm: {
           from: '0xsender',
-          to: '0xrouter',
+          to: EVM_TARGET_ADDRESS,
           data: '0xabcdef',
           value: '0',
           gasLimit: 21000n,
@@ -762,8 +764,9 @@ describe('getSwapKitQuote', () => {
         response({
           expectedBuyAmount: '0.01',
           providers: ['NEAR'],
+          targetAddress: EVM_TARGET_ADDRESS,
           tx: {
-            to: '0xrouter',
+            to: EVM_TARGET_ADDRESS,
             value: '100',
           },
         })
@@ -833,8 +836,9 @@ describe('getSwapKitQuote', () => {
         response({
           expectedBuyAmount: '9.3',
           providers: ['NEAR'],
+          targetAddress: EVM_TARGET_ADDRESS,
           tx: {
-            to: '0xnear-deposit',
+            to: EVM_TARGET_ADDRESS,
             value: '5000000000000000',
           },
         })
@@ -972,8 +976,9 @@ describe('getSwapKitQuote', () => {
         response({
           expectedBuyAmount: '9.3',
           providers: ['NEAR'],
+          targetAddress: EVM_TARGET_ADDRESS,
           tx: {
-            to: '0xnear-deposit',
+            to: EVM_TARGET_ADDRESS,
             value: '5000000000000000',
             gasLimit: '21000',
           },
@@ -1026,8 +1031,9 @@ describe('getSwapKitQuote', () => {
         response({
           expectedBuyAmount: '9.3',
           providers: ['NEAR'],
+          targetAddress: EVM_TARGET_ADDRESS,
           tx: {
-            to: '0xnear-deposit',
+            to: EVM_TARGET_ADDRESS,
             value: '5000000000000000',
             gasLimit: '21000',
           },
@@ -1068,7 +1074,7 @@ describe('getSwapKitQuote', () => {
       routeProvider: 'NEAR',
       tx: {
         evm: {
-          to: '0xnear-deposit',
+          to: EVM_TARGET_ADDRESS,
           value: '5000000000000000',
           gasLimit: 21000n,
         },
@@ -1143,7 +1149,14 @@ describe('getSwapKitQuote', () => {
         response({
           expectedBuyAmount: '0.3',
           providers: ['ONEINCH'],
-          tx: { from: '0xsender', to: '0x9025b8ff', data: '0xda5d4170', value: '0', gas: '210000' },
+          targetAddress: EVM_TARGET_ADDRESS,
+          tx: {
+            from: '0xsender',
+            to: EVM_TARGET_ADDRESS,
+            data: '0xda5d4170',
+            value: '0',
+            gas: '210000',
+          },
           approvalTx: {
             to: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
             data: approveData,
@@ -1167,7 +1180,7 @@ describe('getSwapKitQuote', () => {
     })
 
     expect(quote.tx).toMatchObject({
-      evm: { to: '0x9025b8ff', approvalAddress: innerExecutor },
+      evm: { to: EVM_TARGET_ADDRESS, approvalAddress: innerExecutor },
     })
   })
 
@@ -1183,7 +1196,14 @@ describe('getSwapKitQuote', () => {
         response({
           expectedBuyAmount: '12.4',
           providers: ['ONEINCH'],
-          tx: { from: '0xsender', to: '0xrouter', data: '0xabcdef', value: '0', gas: '21000' },
+          targetAddress: EVM_TARGET_ADDRESS,
+          tx: {
+            from: '0xsender',
+            to: EVM_TARGET_ADDRESS,
+            data: '0xabcdef',
+            value: '0',
+            gas: '21000',
+          },
         })
       )
 
@@ -1217,8 +1237,19 @@ describe('getSwapKitQuote', () => {
         response({
           expectedBuyAmount: '12.4',
           providers: ['ONEINCH'],
-          tx: { from: '0xsender', to: '0xrouter', data: '0xabcdef', value: '0', gas: '21000' },
-          approvalTx: { from: '0xsender', to: '0xtoken', data: zeroSpenderApproveData },
+          targetAddress: EVM_TARGET_ADDRESS,
+          tx: {
+            from: '0xsender',
+            to: EVM_TARGET_ADDRESS,
+            data: '0xabcdef',
+            value: '0',
+            gas: '21000',
+          },
+          approvalTx: {
+            from: '0xsender',
+            to: '0xtoken',
+            data: zeroSpenderApproveData,
+          },
         })
       )
 

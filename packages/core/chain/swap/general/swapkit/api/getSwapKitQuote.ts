@@ -5,7 +5,7 @@ import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { usdc } from '@vultisig/core-chain/coin/knownTokens'
 import { GeneralSwapQuote, GeneralSwapTx } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
-import { logUnenforcedAggregatorDestination } from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
+import { assertSwapKitDestinationMatchesTarget } from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
 import { getSwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
 import { SwapKitEnabledChain, SwapKitSourceChain } from '@vultisig/core-chain/swap/general/swapkit/SwapKitEnabledChains'
 import {
@@ -385,6 +385,8 @@ const decodeApproveSpender = (data: string | undefined): string | undefined => {
 const buildEvmTx = (
   tx: unknown,
   fromAddress: string,
+  targetAddress: string | undefined,
+  chain: Chain,
   approvalTx?: SwapKitSwapResponse['approvalTx']
 ): GeneralSwapTx => {
   if (!isRecord(tx)) {
@@ -397,10 +399,10 @@ const buildEvmTx = (
     throw new Error('SwapKit EVM transaction is missing a required to field.')
   }
 
-  // AGG-02: SwapKit routes through many different bridge/DEX contracts by design
-  // (diamond routing, multi-hop, chain-specific deployments) — a hard allowlist would
-  // false-block legitimate routes, so log (never throw). See knownAggregatorRouters.ts.
-  logUnenforcedAggregatorDestination('swapkit', evmTx.to)
+  // sdk#1458: SwapKit targets are intentionally dynamic, but v3 independently returns
+  // the screened targetAddress that tx.to must call. Bind the two before constructing
+  // a signable quote so an arbitrary substituted destination fails closed.
+  assertSwapKitDestinationMatchesTarget(evmTx.to, targetAddress, chain)
 
   const gas = evmTx.gasLimit ?? evmTx.gas
 
@@ -742,7 +744,7 @@ const buildSwapKitTx = (
     return buildTransferTx(response, from, amount)
   }
 
-  return buildEvmTx(response.tx, from.address, response.approvalTx)
+  return buildEvmTx(response.tx, from.address, response.targetAddress, from.chain, response.approvalTx)
 }
 
 const routeExpectedBuyAmount = (route: SwapKitQuoteRoute, decimals: number): bigint | null => {

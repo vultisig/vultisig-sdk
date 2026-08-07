@@ -1,6 +1,6 @@
 import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
 
-import { Chain } from '../../Chain'
+import { Chain, EvmChain } from '../../Chain'
 import { COW_VAULT_RELAYER_ADDRESS, cowSwapSupportedChains } from './cowswap/config'
 
 /**
@@ -36,14 +36,12 @@ import { COW_VAULT_RELAYER_ADDRESS, cowSwapSupportedChains } from './cowswap/con
  * zkSync 1inch swap. Kyber showed no such variance on every chain that returned a live
  * response (see the per-chain notes below) — its allowlist stays flat.
  *
- * LiFi and SwapKit CANNOT be enforced the same way — they route through many different
- * bridge/DEX contracts by design (diamond routing, multi-hop, chain-specific deployments),
- * so a hard allowlist would false-block legitimate routes. Those two are logged (never
- * thrown) via logUnenforcedAggregatorDestination so an anomaly is queryable, and so a future
- * allowlist has real usage data to build from if a pattern emerges. sdk#1457: because they are
- * the only genuinely unenforceable-by-address providers, they are the one residual gap
- * assertKnownAggregatorRouterOnSigningPath's provider-string closed-list still can't structurally
- * close - see that function's doc comment.
+ * LiFi is enforced too (sdk#1458). Although its Diamond dispatches to many bridge/DEX contracts,
+ * the user-facing transaction enters through one officially published, chain-scoped Diamond.
+ * Most supported chains share the CREATE2 address below; HyperEVM, Robinhood, and zkSync do not.
+ * SwapKit remains dynamic because its target can be a provider router or a per-swap deposit
+ * address. Its quote path is instead bound to SwapKit's independently returned `targetAddress`
+ * by {@link assertSwapKitDestinationMatchesTarget}.
  */
 
 // 1inch Aggregation Router V5 (legacy). Same address as
@@ -72,26 +70,56 @@ const ONE_INCH_V6_ROBINHOOD_ROUTER = '0x5a705de8982235a7fa45bb83dcacf03a211389c7
 // (Ethereum, BSC, Arbitrum, Optimism, Avalanche, Base, Polygon).
 const KYBER_STANDARD_ROUTER = '0x6131b5fae19ea4f9d964eac0408e4408b66337b5'
 
-export type EnforcedRouterProvider = '1inch' | 'kyber' | 'cowswap'
+// Official LI.FI Diamond deployment registry, read from
+// github.com/lifinance/contracts/tree/main/deployments on 2026-08-08. Keep this
+// deliberately chain-scoped: the exceptions are real deployments, not aliases.
+const LIFI_DIAMOND_BY_CHAIN: Record<EvmChain, string> = {
+  [Chain.Arbitrum]: '0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae',
+  [Chain.Avalanche]: '0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae',
+  [Chain.Base]: '0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae',
+  [Chain.Blast]: '0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae',
+  [Chain.BSC]: '0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae',
+  [Chain.CronosChain]: '0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae',
+  [Chain.Ethereum]: '0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae',
+  [Chain.Hyperliquid]: '0x0a0758d937d1059c356d4714e57f5df0239bce1a',
+  [Chain.Mantle]: '0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae',
+  [Chain.Optimism]: '0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae',
+  [Chain.Polygon]: '0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae',
+  [Chain.Robinhood]: '0xb477751b76cf82d00a686a1232f5fcd772414af3',
+  [Chain.Sei]: '0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae',
+  [Chain.Zksync]: '0x341e94069f53234fe6dabef707ad424830525715',
+}
 
-const ENFORCED_ROUTER_PROVIDERS: ReadonlySet<string> = new Set<EnforcedRouterProvider>(['1inch', 'kyber', 'cowswap'])
+export type EnforcedRouterProvider = '1inch' | 'kyber' | 'cowswap' | 'li.fi'
 
-// sdk#1457: the small, closed set of provider values the codebase legitimately produces for a
-// route that is genuinely NOT address-allow-listable. `li.fi`/`swapkit` route through many
-// different bridge/DEX contracts by design (see the file doc comment). `''` is NOT an attacker
+const ENFORCED_ROUTER_PROVIDERS: ReadonlySet<string> = new Set<EnforcedRouterProvider>([
+  '1inch',
+  'kyber',
+  'cowswap',
+  'li.fi',
+])
+
+// These providers use the same fixed address for the router and approval spender.
+// LI.FI legitimately exposes inner executors through estimate.approvalAddress, so its
+// Diamond destination is enforced without applying this equality constraint.
+const APPROVAL_BOUND_ROUTER_PROVIDERS: ReadonlySet<string> = new Set(['1inch', 'kyber', 'cowswap'])
+
+// sdk#1457/#1458: the small, closed set of provider values whose signing payload does not carry
+// enough independent data for a destination check. SwapKit targets can be dynamic, and `''` is
+// NOT an attacker
 // label - it is the documented fallback mapSwapPayload.ts (and getKeysignSwapPayload's own
 // callers) use for pre-provider-field mobile captures, proven by real golden fixtures
 // (mobileFixtures.golden.test.ts's arb.json/lifiswap.json) that still carry an unset provider.
 // This is a CLOSED list, not "everything not enforced": a `provider` string outside BOTH this
 // set and ENFORCED_ROUTER_PROVIDERS is unrecognized and rejected below, instead of silently logged.
-const RECOGNIZED_UNENFORCED_PROVIDERS: ReadonlySet<string> = new Set(['li.fi', 'swapkit', ''])
+const RECOGNIZED_UNENFORCED_PROVIDERS: ReadonlySet<string> = new Set(['swapkit', ''])
 
 /**
  * Signing-path re-assert (sdk#1358): the same allow-list check as {@link assertKnownAggregatorRouter},
  * but keyed off an arbitrary provider STRING (the value carried in KeysignSwapPayload.general.provider,
- * which is a plain `string`). Enforced providers (1inch/kyber/cowswap) fail closed; the small closed set
- * of genuinely unenforceable providers (li.fi/swapkit, plus the legacy `''` unattributed provider - see
- * RECOGNIZED_UNENFORCED_PROVIDERS) fall through to the same log-only path they take at quote construction;
+ * which is a plain `string`). Enforced providers (1inch/kyber/cowswap/li.fi) fail closed; SwapKit and
+ * the legacy `''` unattributed provider (see RECOGNIZED_UNENFORCED_PROVIDERS) fall through to a
+ * log-only signing path because the payload does not carry SwapKit's quote-time targetAddress;
  * anything else is rejected outright (sdk#1457, see below).
  *
  * WHY THIS EXISTS SEPARATELY FROM quote construction: a compromised initiator (or server composing the
@@ -109,18 +137,15 @@ const RECOGNIZED_UNENFORCED_PROVIDERS: ReadonlySet<string> = new Set(['li.fi', '
  * enforcement) is a real, closable gap - not just a theoretical one.
  *
  * sdk#1457 FIX: two structural improvements that need no proto change. (1) CowSwap is now enforced -
- * unlike li.fi/swapkit it settles through ONE fixed, deterministic contract (the GPv2VaultRelayer, see
+ * unlike swapkit it settles through ONE fixed, deterministic contract (the GPv2VaultRelayer, see
  * assertKnownAggregatorRouter), so its destination is exactly as allow-listable as 1inch/Kyber's; a
  * payload can no longer relabel itself 'cowswap' to dodge a router check the way it previously could. (2)
  * the log-only fallback is now a CLOSED list of the provider values the codebase legitimately produces
- * (li.fi/swapkit, plus the legacy `''` unattributed provider) - a `provider` string outside every known
+ * (at that time li.fi/swapkit, plus the legacy `''` unattributed provider) - a `provider` string outside every known
  * value (enforced or unenforced) is unrecognized and REJECTED, not silently passed through. Together
- * these shrink "relabel to escape enforcement" from "any string at all" down to exactly li.fi, swapkit,
- * and the legacy `''`, which remain unenforceable by address because they legitimately route through
- * many different contracts by design (see the file doc comment) - closing that residual gap needs the
- * provider identity to be a trusted wire discriminant instead of a free string, i.e. a proto oneof case
- * per provider (tracked in sdk#1457, not attempted here: a schema change on the shared commondata proto
- * is a cross-repo, cross-consumer change every native client (iOS/Android/Windows) also builds against).
+ * these originally shrank "relabel to escape enforcement" from "any string at all" to that closed set.
+ * sdk#1458 subsequently removes li.fi from the residual gap using its official Diamond deployments;
+ * SwapKit still needs its quote response's targetAddress, which is not present in this wire payload.
  *
  * This guard remains MONOTONIC beyond that residual gap: it only ever THROWS (rejects) or no-ops - it
  * never makes anything signable that wasn't already.
@@ -138,7 +163,7 @@ export function assertKnownAggregatorRouterOnSigningPath(provider: string, addre
         'whose provider label does not match any known aggregator (enforced or unenforced).'
     )
   }
-  // Unenforced (li.fi/swapkit): log-only, and log the ACTUAL provider so the usage dataset the future
+  // Unenforced (swapkit/legacy unattributed): log-only, and log the ACTUAL provider so the usage dataset the future
   // allow-list is built from isn't poisoned by a coerced label. Skip a genuinely empty address.
   if (address) {
     logUnenforcedAggregatorDestination(provider, address)
@@ -156,10 +181,12 @@ export function assertKnownAggregatorRouterOnSigningPath(provider: string, addre
  *
  * On the initiator these coincide by construction (build.ts sets the approve spender to
  * `getSwapDestinationAddress` === `tx.to`), so this only ever fires on a hand-built/tampered payload.
- * Enforced providers (1inch/kyber/cowswap) MUST have `spender === routerDestination`; unenforced
- * providers (li.fi/swapkit) are NOT bound. CowSwap's spender IS its `tx.to` (both are the fixed
- * GPv2VaultRelayer - see getSwapDestinationAddress.ts), so it binds the same way 1inch/kyber do. Like
- * its sibling this is a MONOTONIC gate: it only throws or no-ops, never changes the signed bytes.
+ * Approval-bound providers (1inch/kyber/cowswap) MUST have `spender === routerDestination`.
+ * LI.FI's destination is enforced separately, but its legitimate inner allowance executor can
+ * differ from the Diamond; LI.FI and the dynamic SwapKit path are therefore not subject to this
+ * equality check. CowSwap's spender IS its `tx.to` (both are the fixed GPv2VaultRelayer - see
+ * getSwapDestinationAddress.ts), so it binds the same way 1inch/kyber do. Like its sibling this is
+ * a MONOTONIC gate: it only throws or no-ops, never changes the signed bytes.
  */
 export function assertEnforcedSwapApprovalSpenderBound(
   provider: string,
@@ -167,7 +194,7 @@ export function assertEnforcedSwapApprovalSpenderBound(
   routerDestination: string,
   chain: Chain
 ): void {
-  if (!ENFORCED_ROUTER_PROVIDERS.has(provider)) {
+  if (!APPROVAL_BOUND_ROUTER_PROVIDERS.has(provider)) {
     return
   }
   if (spender.toLowerCase() !== routerDestination.toLowerCase()) {
@@ -186,21 +213,23 @@ export function assertKnownAggregatorRouter(provider: EnforcedRouterProvider, ad
   const isKnown =
     provider === 'kyber'
       ? normalized === KYBER_STANDARD_ROUTER
-      : provider === 'cowswap'
-        ? // CHAIN-SCOPED, same reason the 1inch arm is: the relayer is a deterministic address, so it
-          // resolves on EVERY EVM chain, but CoW has only deployed the GPv2 stack on
-          // cowSwapSupportedChains (findSwapQuote gates quotes to exactly those). Accepting it
-          // chain-agnostically would let a tampered payload relabelled 'cowswap' on e.g. CronosChain /
-          // Zksync / Blast — where eth_getCode at this address is literally `0x`, verified 2026-07-21 —
-          // pass BOTH this guard and assertEnforcedSwapApprovalSpenderBound, so the co-signer would
-          // sign an ERC-20 approve to a codeless address anyone can later claim via the deterministic
-          // deployment proxy. Fail closed off the supported set.
-          isOneOf(chain, cowSwapSupportedChains) && normalized === COW_VAULT_RELAYER_ADDRESS.toLowerCase()
-        : chain === Chain.Zksync
-          ? normalized === ONE_INCH_V6_ZKSYNC_ROUTER
-          : chain === Chain.Robinhood
-            ? normalized === ONE_INCH_V6_ROBINHOOD_ROUTER
-            : normalized === ONE_INCH_V5_ROUTER || normalized === ONE_INCH_V6_STANDARD_ROUTER
+      : provider === 'li.fi'
+        ? normalized === LIFI_DIAMOND_BY_CHAIN[chain as EvmChain]
+        : provider === 'cowswap'
+          ? // CHAIN-SCOPED, same reason the 1inch arm is: the relayer is a deterministic address, so it
+            // resolves on EVERY EVM chain, but CoW has only deployed the GPv2 stack on
+            // cowSwapSupportedChains (findSwapQuote gates quotes to exactly those). Accepting it
+            // chain-agnostically would let a tampered payload relabelled 'cowswap' on e.g. CronosChain /
+            // Zksync / Blast — where eth_getCode at this address is literally `0x`, verified 2026-07-21 —
+            // pass BOTH this guard and assertEnforcedSwapApprovalSpenderBound, so the co-signer would
+            // sign an ERC-20 approve to a codeless address anyone can later claim via the deterministic
+            // deployment proxy. Fail closed off the supported set.
+            isOneOf(chain, cowSwapSupportedChains) && normalized === COW_VAULT_RELAYER_ADDRESS.toLowerCase()
+          : chain === Chain.Zksync
+            ? normalized === ONE_INCH_V6_ZKSYNC_ROUTER
+            : chain === Chain.Robinhood
+              ? normalized === ONE_INCH_V6_ROBINHOOD_ROUTER
+              : normalized === ONE_INCH_V5_ROUTER || normalized === ONE_INCH_V6_STANDARD_ROUTER
 
   if (!isKnown) {
     throw new Error(
@@ -210,9 +239,32 @@ export function assertKnownAggregatorRouter(provider: EnforcedRouterProvider, ad
 }
 
 /**
- * Log-only (never throws) — for LiFi/SwapKit, whose legitimate routes span many different
- * contracts. Structured so the data is queryable (provider + address) and a future allowlist
- * is easy to build if a stable pattern emerges from real usage.
+ * SwapKit v3 returns `targetAddress` independently from the ready-to-sign EVM
+ * transaction and defines it as the address the transaction must call or transfer to.
+ * Bind those fields before constructing a GeneralSwapQuote so a substituted `tx.to`
+ * cannot silently become the signed destination (or the approval fallback).
+ */
+export function assertSwapKitDestinationMatchesTarget(
+  address: string,
+  targetAddress: string | undefined,
+  chain: Chain
+): void {
+  if (!targetAddress || !/^0x[0-9a-fA-F]{40}$/.test(targetAddress)) {
+    throw new Error(
+      `SwapKit swap response did not include a valid targetAddress on ${chain} — refusing to trust tx.to.`
+    )
+  }
+
+  if (address.toLowerCase() !== targetAddress.toLowerCase()) {
+    throw new Error(
+      `SwapKit swap transaction destination (${address}) does not match the screened targetAddress (${targetAddress}) on ${chain} — refusing to build a signable transaction.`
+    )
+  }
+}
+
+/**
+ * Log-only (never throws) — retained for SwapKit signing payloads and legacy unattributed
+ * payloads, which do not carry the quote response's independently screened targetAddress.
  */
 export function logUnenforcedAggregatorDestination(provider: string, address: string): void {
   console.info('[swap-router-telemetry] general-swap destination (not enforced, logged for future analysis):', {
