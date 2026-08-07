@@ -37,7 +37,7 @@ vi.mock('../../ui', () => ({
 }))
 
 import { ConfirmationRequiredError } from '../../core/errors'
-import { warn } from '../../lib/output'
+import { outputJson, warn } from '../../lib/output'
 import { confirmTransaction } from '../../ui'
 import { sendTransaction } from '../transaction'
 
@@ -120,6 +120,24 @@ describe('recipientSanity wiring - isSelfSend is a warning, not a refusal', () =
     expect(vault.send).not.toHaveBeenCalledWith(expect.objectContaining({ dryRun: false }))
     // The warning still fires - self-send isn't silently allowed, it's surfaced then gated.
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('SELF-SEND'))
+  })
+
+  // JSON/CI callers set isJsonOutput() (see mock above), which makes `warn()` a
+  // no-op (initOutputMode implies silentMode for JSON). Without threading the
+  // warning into the JSON envelope too, a scripted caller silently lost the
+  // self-send signal entirely - table mode warned, JSON mode said nothing.
+  it('self-send + --yes surfaces the warning in the JSON result too, not just via warn()', async () => {
+    const vault = makeVault(SELF_ADDRESS)
+
+    const result = await sendTransaction(vault, {
+      chain: Chain.Ethereum,
+      to: SELF_ADDRESS,
+      amount: '1',
+      yes: true,
+    })
+
+    expect('warning' in result && result.warning).toEqual(expect.stringContaining('self-send'))
+    expect(outputJson).toHaveBeenCalledWith(expect.objectContaining({ warning: expect.stringContaining('self-send') }))
   })
 
   it('a normal send to a different address never warns about self-send', async () => {

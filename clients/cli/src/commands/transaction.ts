@@ -71,7 +71,8 @@ async function previewDryRun(
   vault: VaultBase,
   params: SendParams,
   dryResult: { fee: string; feeSymbol: string; total: string; keysignPayload: KeysignPayload },
-  to: string
+  to: string,
+  extraWarnings: string[] = []
 ): Promise<SendDryRunResult> {
   const balance = await vault.balance(params.chain, params.tokenId)
   const hasInsufficientBalance = parseFloat(dryResult.total) > parseFloat(balance.formattedAmount)
@@ -94,7 +95,7 @@ async function previewDryRun(
   const isTokenSend = balance.tokenId !== undefined
   const feeBalance = isTokenSend ? await vault.balance(params.chain).catch(() => undefined) : undefined
 
-  const warnings: string[] = []
+  const warnings: string[] = [...extraWarnings]
   if (hasInsufficientBalance) {
     warnings.push(`Insufficient balance: you have ${balance.formattedAmount} ${balance.symbol}`)
   }
@@ -203,7 +204,13 @@ export async function sendTransaction(
   }
   // Self-send: warn loudly and let the existing consent gate below decide. A scripted caller passing
   // --yes has already asserted intent, which is exactly the distinction the hard throw erased.
-  if (sanity.isSelfSend) {
+  // `warn()` is a no-op in JSON/CI mode (initOutputMode makes JSON imply silentMode), so the warning
+  // is ALSO threaded into the JSON result's `warning` field below - a scripted caller must not lose
+  // fund-safety signal just because it asked for structured output.
+  const selfSendWarning = sanity.isSelfSend
+    ? 'Recipient matches your own vault address for this chain (self-send): funds stay in your vault, minus the network fee. Legitimate for UTXO consolidation or replacing a stuck nonce - otherwise re-check the recipient.'
+    : undefined
+  if (selfSendWarning) {
     warn('\n⚠  The recipient matches your own vault address for this chain.')
     warn('   This is a SELF-SEND: the funds stay in your vault, minus the network fee.')
     warn('   Legitimate for UTXO consolidation or replacing a stuck nonce - otherwise re-check the recipient.\n')
@@ -228,7 +235,7 @@ export async function sendTransaction(
 
   // If user asked for dry-run only, return preview
   if (params.dryRun) {
-    return previewDryRun(vault, params, dryResult, to)
+    return previewDryRun(vault, params, dryResult, to, selfSendWarning ? [selfSendWarning] : [])
   }
 
   // 2. Show preview and get gas estimate
@@ -309,6 +316,7 @@ export async function sendTransaction(
       txHash: broadcast.txHash,
       chain: params.chain,
       explorerUrl: Vultisig.getTxExplorerUrl(params.chain, broadcast.txHash),
+      ...(selfSendWarning ? { warning: selfSendWarning } : {}),
     }
 
     if (isJsonOutput()) {
