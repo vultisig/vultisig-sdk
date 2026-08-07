@@ -14,9 +14,7 @@ describe('validateFastVaultCreateInputs (bead 33sz9)', () => {
   })
 
   it('accepts email with subdomain + plus-tag', () => {
-    expect(() =>
-      validateFastVaultCreateInputs({ ...validBase, email: 'me+tag@sub.example.co.uk' })
-    ).not.toThrow()
+    expect(() => validateFastVaultCreateInputs({ ...validBase, email: 'me+tag@sub.example.co.uk' })).not.toThrow()
   })
 
   it('rejects empty name', () => {

@@ -53,11 +53,7 @@ import { displayVaultInfo, displayVaultsList, setupVaultEvents } from '../ui'
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const PASSWORD_MIN_LENGTH = 8
 
-export function validateFastVaultCreateInputs(input: {
-  name?: string
-  email?: string
-  password?: string
-}): void {
+export function validateFastVaultCreateInputs(input: { name?: string; email?: string; password?: string }): void {
   const name = input.name?.trim() ?? ''
   const email = input.email?.trim() ?? ''
   const password = input.password ?? ''
