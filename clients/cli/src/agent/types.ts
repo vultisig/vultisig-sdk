@@ -16,6 +16,20 @@ export type ProtocolWarning = {
   eventTypes: string[]
 }
 
+/**
+ * A transaction the agent BUILT but was never authorized to sign — the result of
+ * the confirm gate declining a signing request (e.g. `agent ask` without `--yes`).
+ * Nothing was signed and nothing was broadcast.
+ */
+export type ProposedTransaction = {
+  /** The signing tool that was gated (`sign_tx` / `sign_typed_data`). */
+  tool: string
+  /** One-line human summary of the built transaction — the same text the gate showed. */
+  summary: string
+  /** Chain the built transaction targets, when the buffered envelope identified one. */
+  chain?: string
+}
+
 // ============================================================================
 // Configuration
 // ============================================================================
@@ -478,6 +492,11 @@ export type UICallbacks = {
   /** Typed turn-outcome discriminator (data-turn_outcome SSE part, a2a-02). Fired
    *  once at turn end when the client advertised the `turn_outcome` surface. */
   onTurnOutcome?: (outcome: TurnOutcome) => void
+  /** Fired when the confirm gate DECLINED a signing request. The transaction was
+   *  built and is described here; nothing was signed or broadcast. This is the
+   *  read-safe path's actual result — `agent ask` without `--yes` is documented
+   *  to report the proposed transaction rather than sign it. */
+  onProposedTransaction?: (proposed: ProposedTransaction) => void
   onSuggestions: (suggestions: Suggestion[]) => void
   onTxStatus: (txHash: string, chain: string, status: TxLifecycleStatus, explorerUrl?: string) => void
   onError: (message: string, code: AgentErrorCode) => void

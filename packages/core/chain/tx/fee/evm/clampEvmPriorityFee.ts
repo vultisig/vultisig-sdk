@@ -1,6 +1,7 @@
 import { EvmChain } from '@vultisig/core-chain/Chain'
 
 const GWEI = 1_000_000_000n
+const defaultPriorityFeeCeilingWei = 500n * GWEI
 
 /**
  * Sanity ceiling (wei) on the RPC-reported maxPriorityFeePerGas, per chain.
@@ -21,13 +22,12 @@ const GWEI = 1_000_000_000n
  *   priority fees are typically ~0-2 gwei -> 50 gwei ceiling. Still 25x+
  *   normal, but tight enough to catch an order-of-magnitude inflation on a
  *   chain where fees are otherwise negligible.
- * - Avalanche C-Chain, BSC, CronosChain, Hyperliquid, Sei, and any future
- *   EVM chain: no well-documented extreme-congestion fee history -> fall
- *   back to the generous default ceiling below.
+ * - Avalanche C-Chain, BSC, CronosChain, Hyperliquid, and Sei: no
+ *   well-documented extreme-congestion fee history -> use the generous
+ *   default ceiling below. These entries remain explicit so every new EVM
+ *   chain requires a conscious ceiling decision.
  */
-const priorityFeeCeilingWeiByChain: Partial<Record<EvmChain, bigint>> = {
-  [EvmChain.Ethereum]: 500n * GWEI,
-  [EvmChain.Polygon]: 3_000n * GWEI,
+const priorityFeeCeilingWeiByChain: Record<EvmChain, bigint> = {
   [EvmChain.Arbitrum]: 50n * GWEI,
   [EvmChain.Base]: 50n * GWEI,
   [EvmChain.Blast]: 50n * GWEI,
@@ -35,9 +35,14 @@ const priorityFeeCeilingWeiByChain: Partial<Record<EvmChain, bigint>> = {
   [EvmChain.Zksync]: 50n * GWEI,
   [EvmChain.Mantle]: 50n * GWEI,
   [EvmChain.Robinhood]: 50n * GWEI,
+  [EvmChain.Avalanche]: defaultPriorityFeeCeilingWei,
+  [EvmChain.CronosChain]: defaultPriorityFeeCeilingWei,
+  [EvmChain.BSC]: defaultPriorityFeeCeilingWei,
+  [EvmChain.Ethereum]: 500n * GWEI,
+  [EvmChain.Polygon]: 3_000n * GWEI,
+  [EvmChain.Hyperliquid]: defaultPriorityFeeCeilingWei,
+  [EvmChain.Sei]: defaultPriorityFeeCeilingWei,
 }
-
-const defaultPriorityFeeCeilingWei = 500n * GWEI
 
 /**
  * Minimum tip (wei) to sign on chains where inclusion is a public tip
@@ -64,7 +69,7 @@ const priorityFeeFloorWeiByChain: Partial<Record<EvmChain, bigint>> = {
  * through at a safe fee, whereas rejecting it would strand the user mid-flow.
  */
 export const clampEvmPriorityFee = (chain: EvmChain, rpcPriorityFeeWei: bigint): bigint => {
-  const ceiling = priorityFeeCeilingWeiByChain[chain] ?? defaultPriorityFeeCeilingWei
+  const ceiling = priorityFeeCeilingWeiByChain[chain]
 
   if (rpcPriorityFeeWei > ceiling) {
     console.warn(
