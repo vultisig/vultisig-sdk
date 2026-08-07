@@ -628,8 +628,8 @@ export { decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from '../../tools/d
 // hand-curated-gap class as the rest of this section (sdk#1224) — so RN
 // consumers (Station) couldn't format high-decimal balances exactly or link
 // out to a block explorer without deep-importing core-chain.
-export { computeNotificationVaultId } from '../../utils/computeNotificationVaultId'
 export { getTxStatus, isValidTxHash } from '../../tools'
+export { computeNotificationVaultId } from '../../utils/computeNotificationVaultId'
 export type {
   AmountDirection,
   ConvertAmountParams,
