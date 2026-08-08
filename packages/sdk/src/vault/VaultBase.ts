@@ -1248,7 +1248,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    *
    * @param params - Broadcast parameters
    * @param params.chain - Target blockchain
-   * @param params.rawTx - Signed transaction in the chain family's own encoding: hex (evm/utxo/polkadot/bittensor/ripple), base58 or base64 (solana), base64 protobuf or a JSON tx_bytes envelope (cosmos), a JSON envelope (sui), base64 BOC (ton).
+   * @param params.rawTx - Signed transaction in the chain family's own encoding: hex (evm/utxo/polkadot/bittensor/ripple), base58 or base64 (solana), base64 protobuf or a JSON tx_bytes envelope (cosmos), a JSON envelope (sui/tron), base64 BOC (ton).
    *
    * @returns Transaction hash on success
    *

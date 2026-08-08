@@ -16,7 +16,7 @@ import { confirmTransaction } from '../ui'
  */
 export type BroadcastRawParams = {
   chain: Chain
-  rawTx: string // Signed transaction in the chain family's own encoding: hex (evm/utxo/polkadot/bittensor/ripple), base58-or-base64 (solana), base64 protobuf or JSON tx_bytes envelope (cosmos), JSON envelope (sui), base64 BOC (ton)
+  rawTx: string // Signed transaction in the chain family's own encoding: hex (evm/utxo/polkadot/bittensor/ripple), base58-or-base64 (solana), base64 protobuf or JSON tx_bytes envelope (cosmos), JSON envelope (sui/tron), base64 BOC (ton)
   /**
    * Skip the interactive confirmation prompt. Required in non-interactive
    * contexts because broadcastRawTx sends the pre-signed payload straight
@@ -25,6 +25,20 @@ export type BroadcastRawParams = {
    */
   yes?: boolean
 }
+
+const escapeControlChars = (value: string): string =>
+  value.replace(/[\u0000-\u001f\u007f-\u009f]/g, char => {
+    switch (char) {
+      case '\n':
+        return '\\n'
+      case '\r':
+        return '\\r'
+      case '\t':
+        return '\\t'
+      default:
+        return `\\x${char.charCodeAt(0).toString(16).padStart(2, '0')}`
+    }
+  })
 
 /**
  * Result of broadcast operation
@@ -92,7 +106,7 @@ export async function executeBroadcast(ctx: CommandContext, params: BroadcastRaw
     const shown = isHexFamily ? `0x${hex}` : rawTx
     const size = isHexFamily ? `${Math.floor(hex.length / 2)} bytes` : `${rawTx.length} chars`
     const preview = shown.length > 44 ? `${shown.slice(0, 22)}…${shown.slice(-20)}` : shown
-    warn(`   Raw tx: ${preview} (${size})`)
+    warn(`   Raw tx: ${escapeControlChars(preview)} (${size})`)
     warn(`   This is IRREVERSIBLE. If the payload is a valid signed transaction, funds WILL move.\n`)
     const confirmed = await confirmTransaction()
     if (!confirmed) {
@@ -105,7 +119,7 @@ export async function executeBroadcast(ctx: CommandContext, params: BroadcastRaw
   try {
     const txHash = await vault.broadcastRawTx({
       chain: params.chain,
-      rawTx: params.rawTx,
+      rawTx,
     })
 
     broadcastSpinner.succeed(`Transaction broadcast: ${txHash}`)

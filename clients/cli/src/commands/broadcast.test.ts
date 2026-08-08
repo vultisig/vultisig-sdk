@@ -28,7 +28,7 @@ vi.mock('../ui', () => ({
 
 import type { CommandContext } from '../core'
 import { ConfirmationRequiredError, InvalidInputError } from '../core/errors'
-import { isNonInteractive } from '../lib/output'
+import { isNonInteractive, warn } from '../lib/output'
 import { confirmTransaction } from '../ui'
 import { executeBroadcast } from './broadcast'
 
@@ -80,6 +80,15 @@ describe('executeBroadcast', () => {
     expect(result.txHash).toBe('0xhash')
   })
 
+  it('trims surrounding whitespace before broadcasting', async () => {
+    const { ctx, vault } = makeCtx(async () => '0xhash')
+
+    const result = await executeBroadcast(ctx, { chain: Chain.Ethereum, rawTx: '  0xdeadbeef  ', yes: true })
+
+    expect(vault.broadcastRawTx).toHaveBeenCalledWith({ chain: Chain.Ethereum, rawTx: '0xdeadbeef' })
+    expect(result.txHash).toBe('0xhash')
+  })
+
   it('empty rawTx throws InvalidInputError regardless of chain family', async () => {
     const { ctx, vault } = makeCtx(async () => '0xhash')
 
@@ -119,6 +128,15 @@ describe('executeBroadcast', () => {
     }
   )
 
+  it('escapes control characters in the confirmation preview for non-hex payloads', async () => {
+    const { ctx, vault } = makeCtx(async () => '0xhash')
+
+    await executeBroadcast(ctx, { chain: Chain.THORChain, rawTx: 'CooBCog=\u001b[2J', yes: false })
+
+    expect(vault.broadcastRawTx).toHaveBeenCalledWith({ chain: Chain.THORChain, rawTx: 'CooBCog=\u001b[2J' })
+    expect(vi.mocked(warn)).toHaveBeenCalledWith('   Raw tx: CooBCog=\\x1b[2J (12 chars)')
+  })
+
   // The regression test: before the review fix, the hex-only regex was applied
   // unconditionally to every chain family. Each of these is a legitimate signed
   // payload for its own chain and must reach broadcastRawTx, not get rejected
@@ -129,6 +147,7 @@ describe('executeBroadcast', () => {
     { chain: Chain.THORChain, rawTx: 'CooBCogBChwvY29zbW9zLmJhbmsudjFiZXRhMS5Nc2dTZW5k' }, // cosmos base64 protobuf
     { chain: Chain.THORChain, rawTx: '{"tx_bytes":"CooBCog=","mode":"BROADCAST_MODE_SYNC"}' }, // cosmos JSON envelope
     { chain: Chain.Sui, rawTx: '{"unsignedTx":"AAAB","signature":"AQID"}' }, // sui JSON envelope
+    { chain: Chain.Tron, rawTx: '{"txID":"abc","raw_data_hex":"deadbeef"}' }, // tron JSON envelope
     { chain: Chain.Ton, rawTx: 'te6cckEBAQEAAgAAAEysuc0=' }, // ton base64 BOC
   ])('non-hex family payload for $chain is NOT rejected by the shape check', async ({ chain, rawTx }) => {
     const { ctx, vault } = makeCtx(async () => '0xhash')

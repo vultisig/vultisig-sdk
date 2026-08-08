@@ -772,7 +772,7 @@ program
   .requiredOption('--chain <chain>', 'Target blockchain')
   .requiredOption(
     '--raw-tx <payload>',
-    "Signed tx in the chain's own encoding (hex for evm/utxo/polkadot/bittensor/ripple, base58/base64 for solana, base64 protobuf or JSON tx_bytes for cosmos, JSON for sui, base64 BOC for ton)"
+    "Signed tx in the chain's own encoding (hex for evm/utxo/polkadot/bittensor/ripple, base58/base64 for solana, base64 protobuf or JSON tx_bytes for cosmos, JSON for sui/tron, base64 BOC for ton)"
   )
   .option('-y, --yes', 'Confirm broadcast without an interactive prompt (required in non-interactive contexts)')
   .action(
