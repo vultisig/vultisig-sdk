@@ -2,9 +2,10 @@
  * bead aq5ku + z3xkg: broadcast gates on --yes and pre-validates rawTx shape
  * before it reaches the network. The pre-validation regression (caught in
  * review): a blanket hex regex was applied to every chain, but broadcastRawTx
- * fans out per chain kind and only evm/utxo are hex — solana is base58-or-
- * base64, cosmos is base64 protobuf or a JSON tx_bytes envelope, sui is a JSON
- * envelope, ton is a base64 BOC. The unscoped hex check rejected all of those
+ * fans out per chain kind and only some families are hex-only. evm/utxo/
+ * polkadot/bittensor/ripple are hex, while solana is base58-or-base64, cosmos
+ * is base64 protobuf or a JSON tx_bytes envelope, sui is a JSON envelope, and
+ * ton is a base64 BOC. The unscoped hex check rejected the non-hex families
  * as "Malformed raw transaction" even though they were perfectly valid signed
  * payloads for broadcastRawTx.
  */
@@ -105,6 +106,18 @@ describe('executeBroadcast', () => {
     expect(err).toBeInstanceOf(InvalidInputError)
     expect(vault.broadcastRawTx).not.toHaveBeenCalled()
   })
+
+  it.each([Chain.Polkadot, Chain.Bittensor, Chain.Ripple])(
+    'malformed hex on %s is rejected before broadcasting',
+    async chain => {
+      const { ctx, vault } = makeCtx(async () => '0xhash')
+
+      const err = await executeBroadcast(ctx, { chain, rawTx: 'not-hex!!', yes: true }).catch(e => e)
+
+      expect(err).toBeInstanceOf(InvalidInputError)
+      expect(vault.broadcastRawTx).not.toHaveBeenCalled()
+    }
+  )
 
   // The regression test: before the review fix, the hex-only regex was applied
   // unconditionally to every chain family. Each of these is a legitimate signed

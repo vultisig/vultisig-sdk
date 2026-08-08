@@ -135,7 +135,7 @@ export class RawBroadcastService {
    *
    * @param params - Broadcast parameters
    * @param params.chain - Target blockchain
-   * @param params.rawTx - Signed transaction in the chain family's own encoding: hex (evm/utxo), base58 or base64 (solana), base64 protobuf (cosmos), a JSON envelope (sui), base64 BOC (ton). NOT hex-only.
+   * @param params.rawTx - Signed transaction in the chain family's own encoding: hex (evm/utxo/polkadot/bittensor/ripple), base58 or base64 (solana), base64 protobuf or a JSON tx_bytes envelope (cosmos), a JSON envelope (sui), base64 BOC (ton).
    *
    * @returns Transaction hash on success
    *

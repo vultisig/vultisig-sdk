@@ -16,7 +16,7 @@ import { confirmTransaction } from '../ui'
  */
 export type BroadcastRawParams = {
   chain: Chain
-  rawTx: string // Signed transaction in the chain family's own encoding: hex (evm/utxo), base58-or-base64 (solana), base64 protobuf (cosmos), JSON envelope (sui), base64 BOC (ton)
+  rawTx: string // Signed transaction in the chain family's own encoding: hex (evm/utxo/polkadot/bittensor/ripple), base58-or-base64 (solana), base64 protobuf or JSON tx_bytes envelope (cosmos), JSON envelope (sui), base64 BOC (ton)
   /**
    * Skip the interactive confirmation prompt. Required in non-interactive
    * contexts because broadcastRawTx sends the pre-signed payload straight
@@ -53,14 +53,19 @@ export async function executeBroadcast(ctx: CommandContext, params: BroadcastRaw
   if (rawTx.length === 0) {
     throw new InvalidInputError('Empty raw transaction — pass the signed tx via --raw-tx')
   }
-  // REVIEW FIX (aq5ku): broadcastRawTx is NOT hex-only, so a blanket hex test refuses every
-  // non-hex family. RawBroadcastService fans out per kind and each decoder takes a different
-  // encoding: solana is base58-or-base64 (decodeSolanaRawTx even sniffs it), cosmos is base64
-  // protobuf, sui is a JSON envelope so `{` is the first byte of every valid payload, ton is a
-  // base64 BOC passed verbatim. Only evm and utxo are hex. The docstring above claimed hex for
-  // all of them - the doc was wrong and the code was right, so the doc is corrected too.
+  // REVIEW FIX (aq5ku): broadcastRawTx is not uniformly hex-only, so a blanket hex test refuses
+  // the non-hex families. RawBroadcastService fans out per kind and each decoder takes a
+  // different encoding: solana is base58-or-base64 (decodeSolanaRawTx even sniffs it), cosmos is
+  // base64 protobuf or a JSON tx_bytes envelope, sui is a JSON envelope so `{` is the first byte
+  // of every valid payload, and ton is a base64 BOC passed verbatim. Hex still applies to evm,
+  // utxo, polkadot, bittensor, and ripple, so the local prevalidation must track that exact set.
   const chainKind = getChainKind(params.chain)
-  const isHexFamily = chainKind === 'evm' || chainKind === 'utxo'
+  const isHexFamily =
+    chainKind === 'evm' ||
+    chainKind === 'utxo' ||
+    chainKind === 'polkadot' ||
+    chainKind === 'bittensor' ||
+    chainKind === 'ripple'
   const hex = rawTx.startsWith('0x') ? rawTx.slice(2) : rawTx
   if (isHexFamily && (!/^[0-9a-fA-F]+$/.test(hex) || hex.length % 2 !== 0)) {
     throw new InvalidInputError(
