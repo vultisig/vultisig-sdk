@@ -104,9 +104,21 @@ export class BalanceService {
   async getBalances({
     chains,
     includeTokens = false,
+    onChainError,
   }: {
     chains: Chain | Chain[]
     includeTokens?: boolean
+    /**
+     * Called once per chain whose balance fetch threw. OPTIONAL and additive - every existing
+     * caller is unaffected, and the fan-out still fails open exactly as before.
+     *
+     * Exists because a swallowed per-chain failure is INVISIBLE to callers: `getBalances` returns
+     * a partial record and a `console.warn` the caller cannot see, so a CLI or app rendering the
+     * result shows fewer chains with no indication that anything went wrong. A caller cannot infer
+     * it from the result either - a chain that legitimately holds nothing and a chain whose RPC
+     * died can both be absent.
+     */
+    onChainError?: (chain: Chain, error: unknown) => void
   }): Promise<Record<string, Balance>> {
     const result: Record<string, Balance> = {}
     const chainsList = Array.isArray(chains) ? chains : [chains]
@@ -125,7 +137,13 @@ export class BalanceService {
             result[key] = balance
           }
         } catch (error) {
-          console.warn(`Failed to fetch balance for ${chain}:`, error)
+          // Log the message only, never the raw Error object - console.warn formats an
+          // Error argument with its full stack, and that stack includes `file://` frames
+          // with the local filesystem path (the actual leak this guards against). Same
+          // convention as ServerManager/RelaySigningService's MLDSA warn logs.
+          const message = error instanceof Error ? error.message : String(error)
+          console.warn(`Failed to fetch balance for ${chain}: ${message}`)
+          onChainError?.(chain, error)
         }
       })
     )
