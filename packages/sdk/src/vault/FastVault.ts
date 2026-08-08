@@ -164,6 +164,7 @@ export class FastVault extends VaultBase {
         {
           messageHashes: [messageHash],
           chain: options.chain,
+          derivePath: options.derivePath,
         },
         password,
         step => this.emit('signingProgress', { step }),
@@ -174,7 +175,12 @@ export class FastVault extends VaultBase {
       // Emit signing complete event
       this.emit('transactionSigned', {
         signature,
-        payload: { chain: options.chain, transaction: null, messageHashes: [messageHash] },
+        payload: {
+          chain: options.chain,
+          derivePath: options.derivePath,
+          transaction: null,
+          messageHashes: [messageHash],
+        },
       })
 
       return signature
@@ -325,6 +331,7 @@ export class FastVault extends VaultBase {
       signal?: AbortSignal
       onProgress?: (step: VaultCreationStep) => void
       tssBatching?: boolean
+      waitForServerKeygenComplete?: boolean
     }
   ): Promise<{
     vault: FastVault
@@ -352,6 +359,7 @@ export class FastVault extends VaultBase {
         password: options.password,
         signal: options.signal,
         tssBatching: options.tssBatching ?? context.config.tssBatching,
+        waitForServerKeygenComplete: options.waitForServerKeygenComplete,
         onProgress: update => {
           // Map server progress updates to vault creation progress
           let progress = 10

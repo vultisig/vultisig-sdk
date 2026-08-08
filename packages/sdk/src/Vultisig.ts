@@ -494,6 +494,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     onProgress?: (step: VaultCreationStep) => void
     persistPending?: boolean
     tssBatching?: boolean
+    waitForServerKeygenComplete?: boolean
     skipVerification: true
   }): Promise<FastVault>
   // Overload: no flag (or `skipVerification: false`) → returns the vaultId
@@ -507,6 +508,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     onProgress?: (step: VaultCreationStep) => void
     persistPending?: boolean
     tssBatching?: boolean
+    waitForServerKeygenComplete?: boolean
     skipVerification?: false
   }): Promise<string>
   async createFastVault(options: {
@@ -519,6 +521,12 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     persistPending?: boolean
     /** Enable batched MPC ceremonies for this vault creation. */
     tssBatching?: boolean
+    /**
+     * Wait for every remote party's relay completion marker before returning.
+     * Defaults to true. Callers that disable this must use an independent
+     * server-readiness signal before verification or signing.
+     */
+    waitForServerKeygenComplete?: boolean
     /**
      * Skip the email-verification step (#161). When true: the vault is saved
      * + activated immediately and the FastVault instance is returned. When

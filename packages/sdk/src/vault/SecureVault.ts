@@ -246,6 +246,7 @@ export class SecureVault extends VaultBase {
         {
           messageHashes: [messageHash],
           chain: options.chain,
+          derivePath: options.derivePath,
         },
         walletCore,
         {
@@ -274,6 +275,7 @@ export class SecureVault extends VaultBase {
         signature,
         payload: {
           chain: options.chain,
+          derivePath: options.derivePath,
           transaction: null,
           messageHashes: [messageHash],
         },
