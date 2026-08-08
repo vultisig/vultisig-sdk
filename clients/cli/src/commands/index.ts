@@ -62,7 +62,7 @@ export {
 
 // Swap commands
 export type { SwapDryRunResult, SwapOptions, SwapQuoteOptions } from './swap'
-export { executeSwap, executeSwapChains, executeSwapQuote } from './swap'
+export { executeSwap, executeSwapChains, executeSwapQuote, parseSlippage } from './swap'
 
 // Settings commands
 export type { AddressBookEntry, AddressBookOptions } from './settings'
