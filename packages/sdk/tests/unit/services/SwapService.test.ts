@@ -59,6 +59,7 @@ vi.mock('@vultisig/core-chain/coin/chainFeeCoin', () => ({
     Cosmos: { ticker: 'ATOM', decimals: 6 },
     Hyperliquid: { ticker: 'HYPE', decimals: 18 },
     Optimism: { ticker: 'ETH', decimals: 18 },
+    Robinhood: { ticker: 'ETH', decimals: 18 },
   },
 }))
 
@@ -194,7 +195,12 @@ describe('SwapService', () => {
             swapChain: 'THORChain' as const,
             expected_amount_out: '1000000000',
             expiry: Math.floor(Date.now() / 1000) + 600,
-            fees: { affiliate: '0', asset: 'ETH', outbound: '100000', total: '100000' },
+            fees: {
+              affiliate: '0',
+              asset: 'ETH',
+              outbound: '100000',
+              total: '100000',
+            },
             inbound_address: '0x...',
             memo: '=:ETH.ETH:0x...',
             notes: '',
@@ -244,7 +250,12 @@ describe('SwapService', () => {
             swapChain: 'THORChain' as const,
             expected_amount_out: '1000000000',
             expiry: Math.floor(Date.now() / 1000) + 600,
-            fees: { affiliate: '0', asset: 'ETH', outbound: '100000', total: '100000' },
+            fees: {
+              affiliate: '0',
+              asset: 'ETH',
+              outbound: '100000',
+              total: '100000',
+            },
             inbound_address: '0x...',
             memo: '=:ETH.ETH:0x...',
             notes: '',
@@ -264,7 +275,12 @@ describe('SwapService', () => {
           ticker: 'ETH',
           decimals: 18,
         },
-        toCoin: { chain: Chain.Bitcoin, address: 'bc1qxxx...', ticker: 'BTC', decimals: 8 },
+        toCoin: {
+          chain: Chain.Bitcoin,
+          address: 'bc1qxxx...',
+          ticker: 'BTC',
+          decimals: 8,
+        },
         amount: 1.0,
       })
 
@@ -614,6 +630,114 @@ describe('SwapService', () => {
       expect(result.fees.total).toBe(0n)
     })
 
+    it('should not mix an asset-aware non-native Solana swap fee into native fee totals', async () => {
+      const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
+      const getPrice = vi.fn().mockResolvedValue(200)
+      const serviceWithFiat = new SwapService(mockVaultData, mockGetAddress, mockEmitEvent, mockWasmProvider, {
+        getPrice,
+      } as any)
+
+      vi.mocked(findSwapQuote).mockResolvedValue({
+        quote: {
+          general: {
+            dstAmount: '1000000000000000000',
+            provider: 'swapkit',
+            tx: {
+              solana: {
+                data: 'base64-transaction',
+                networkFee: 100_000_000n,
+                swapFee: {
+                  amount: 492_298_648n,
+                  decimals: 6,
+                  chain: Chain.Ethereum,
+                  id: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+                },
+              },
+            },
+          },
+        },
+        discounts: [],
+      } as any)
+
+      const result = await serviceWithFiat.getQuote({
+        fromCoin: {
+          chain: Chain.Solana,
+          address: 'solana-source-address',
+          ticker: 'SOL',
+          decimals: 9,
+        },
+        toCoin: {
+          chain: Chain.Ethereum,
+          address: '0x1234567890abcdef1234567890abcdef12345678',
+          ticker: 'ETH',
+          decimals: 18,
+        },
+        amount: 1,
+        fiatCurrency: 'usd',
+      })
+
+      expect(result.fees).toEqual({
+        network: 100_000_000n,
+        total: 100_000_000n,
+      })
+      expect(result.feesFiat).toEqual({
+        network: 20,
+        affiliate: undefined,
+        total: 20,
+        currency: 'usd',
+      })
+      expect((result.quote.quote as any).general.tx.solana.swapFee).toEqual({
+        amount: 492_298_648n,
+        decimals: 6,
+        chain: Chain.Ethereum,
+        id: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+      })
+      expect(getPrice).toHaveBeenNthCalledWith(1, Chain.Solana, undefined, 'usd')
+    })
+
+    it('should include a native SOL swap fee in native fee totals', async () => {
+      const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
+
+      vi.mocked(findSwapQuote).mockResolvedValue({
+        quote: {
+          general: {
+            dstAmount: '1000000000000000000',
+            provider: 'swapkit',
+            tx: {
+              solana: {
+                data: 'base64-transaction',
+                networkFee: 5_000n,
+                swapFee: {
+                  amount: 25_000n,
+                  decimals: 9,
+                  chain: Chain.Solana,
+                },
+              },
+            },
+          },
+        },
+        discounts: [],
+      } as any)
+
+      const result = await service.getQuote({
+        fromCoin: {
+          chain: Chain.Solana,
+          address: 'solana-source-address',
+          ticker: 'SOL',
+          decimals: 9,
+        },
+        toCoin: {
+          chain: Chain.Ethereum,
+          address: '0x1234567890abcdef1234567890abcdef12345678',
+          ticker: 'ETH',
+          decimals: 18,
+        },
+        amount: 1,
+      })
+
+      expect(result.fees).toEqual({ network: 5_000n, total: 30_000n })
+    })
+
     it('should handle quote errors gracefully', async () => {
       const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
 
@@ -639,7 +763,11 @@ describe('SwapService', () => {
     it.each([
       [SwapErrorCode.NoRoutesFound, 'No swap route found between these tokens', 'no routes'],
       [SwapErrorCode.AllProvidersFailed, 'No swap route found between these tokens', 'all providers failed'],
-      [SwapErrorCode.AmountTooSmall, 'Swap amount too small', 'below dust'],
+      [
+        SwapErrorCode.AmountTooSmall,
+        'Swap amount too small: Please increase the amount to proceed.',
+        'Please increase the amount to proceed.',
+      ],
       [SwapErrorCode.AmountBelowMinimum, 'Minimum amount is 0.5 BTC', 'Minimum amount is 0.5 BTC'],
       [SwapErrorCode.InvalidConfig, 'Swap configuration error', 'mixed-case THORName'],
     ])('maps SwapError(%s) to its own VaultError message', async (code, expectedMessage, rawMessage) => {
@@ -647,13 +775,25 @@ describe('SwapService', () => {
 
       vi.mocked(findSwapQuote).mockRejectedValue(new SwapError(code, rawMessage))
 
-      await expect(
-        service.getQuote({
+      const error = await service
+        .getQuote({
           fromCoin: { chain: Chain.Ethereum },
           toCoin: { chain: Chain.Bitcoin },
           amount: 0.001,
         })
-      ).rejects.toThrow(expectedMessage)
+        .then(
+          () => {
+            throw new Error('Expected getQuote to reject')
+          },
+          error => error as Error
+        )
+
+      if (code === SwapErrorCode.AmountTooSmall) {
+        expect(error.message).toBe(expectedMessage)
+        expect(error.message.match(/Swap amount too small/g)).toHaveLength(1)
+      } else {
+        expect(error.message).toContain(expectedMessage)
+      }
     })
   })
 

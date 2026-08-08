@@ -456,6 +456,12 @@ describe('AgentClient.sendMessageStream', () => {
   // point: under the old enumerate-everything design it stamped PROTOCOL_DRIFT
   // on a successful turn, and no test could have caught it, because the whole
   // failure mode is a surface that does not exist yet.
+  //
+  // rj3p: `polymarket_markets` / `yield_opportunities` moved OUT of this list —
+  // they are now named surfaces (see 'routes data-yield_opportunities...' and
+  // 'routes data-polymarket_markets...' below) so their raw JSON no longer
+  // leaks into message content. `yield_position` (a single-position lookup, not
+  // a search) stays here — still genuinely tolerated, out of rj3p's scope.
   it('tolerates unknown data-* cards quietly, including surfaces no list knows about', async () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
     globalThis.fetch = mockFetchSSE([
@@ -466,8 +472,6 @@ describe('AgentClient.sendMessageStream', () => {
       'data: {"type":"data-diagnostics","data":{"trace":"x"}}\n\n',
       'data: {"type":"data-checkout-wall","data":{"catalog":[]}}\n\n',
       'data: {"type":"data-agentStep","id":"c1-0","data":{"status":"running"}}\n\n',
-      'data: {"type":"data-polymarket_markets","data":{"surface":"polymarket_markets"}}\n\n',
-      'data: {"type":"data-yield_opportunities","data":{"surface":"yield_opportunities"}}\n\n',
       'data: {"type":"data-yield_position","data":{"surface":"yield_position"}}\n\n',
       'data: {"type":"data-confirmation","data":{"required":true}}\n\n',
       // A surface invented for this test — stands in for whatever the backend
@@ -951,6 +955,51 @@ describe('AgentClient.sendMessageStream', () => {
 
     expect(onBalanceSummary).toHaveBeenCalledTimes(1)
     expect(onBalanceSummary).toHaveBeenCalledWith(envelope)
+  })
+
+  // rj3p: the backend emits data-yield_opportunities when the client advertised
+  // "yield_opportunities" in supported_surfaces. Previously this v1 part fell to
+  // the 'tolerated' bucket and the raw envelope leaked into message content as
+  // JSON; now it surfaces via onYieldOpportunities.
+  it('routes data-yield_opportunities to onYieldOpportunities with the envelope payload', async () => {
+    const onYieldOpportunities = vi.fn()
+
+    const envelope = {
+      surface: 'yield_opportunities',
+      opportunities: [{ id: 'y1', name: 'USDC Lending', chain: 'Ethereum', symbol: 'USDC', apy: 0.042 }],
+    }
+
+    globalThis.fetch = mockFetchSSE([
+      `data: ${JSON.stringify({ type: 'data-yield_opportunities', data: envelope })}\n\n`,
+      'data: {"type":"finish"}\n\n',
+    ])
+
+    const client = new AgentClient('http://example.com')
+    await client.sendMessageStream('c1', { public_key: 'pk', content: 'yield' }, { onYieldOpportunities })
+
+    expect(onYieldOpportunities).toHaveBeenCalledTimes(1)
+    expect(onYieldOpportunities).toHaveBeenCalledWith(envelope)
+  })
+
+  // rj3p: same contract as yield_opportunities above, for polymarket_markets.
+  it('routes data-polymarket_markets to onPolymarketMarkets with the envelope payload', async () => {
+    const onPolymarketMarkets = vi.fn()
+
+    const envelope = {
+      surface: 'polymarket_markets',
+      markets: [{ id: 'm1', question: 'Will it rain tomorrow?', outcomes: [{ name: 'Yes', price: 0.6 }] }],
+    }
+
+    globalThis.fetch = mockFetchSSE([
+      `data: ${JSON.stringify({ type: 'data-polymarket_markets', data: envelope })}\n\n`,
+      'data: {"type":"finish"}\n\n',
+    ])
+
+    const client = new AgentClient('http://example.com')
+    await client.sendMessageStream('c1', { public_key: 'pk', content: 'markets' }, { onPolymarketMarkets })
+
+    expect(onPolymarketMarkets).toHaveBeenCalledTimes(1)
+    expect(onPolymarketMarkets).toHaveBeenCalledWith(envelope)
   })
 
   // a2a-02: the backend emits data-turn_outcome at turn end when the client
