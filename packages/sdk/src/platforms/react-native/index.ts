@@ -65,10 +65,12 @@ configureDefaultStorage(() => new ReactNativeStorage())
 
 // Chain enum and types
 export { Chain } from '@vultisig/core-chain/Chain'
+export { cosmosFeeCoinDenom } from '@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom'
 export {
   getCosmosAllowedFeeDenoms,
   isCosmosFeeDenomAllowed,
 } from '@vultisig/core-chain/chains/cosmos/cosmosFeeDenomAllowlist'
+export { getCosmosStakingGasLimit } from '@vultisig/core-chain/chains/cosmos/cosmosGasLimitRecord'
 export {
   COSMOS_SEND_FEE_DEFAULT,
   getCosmosSendFeeBaseUnits,
