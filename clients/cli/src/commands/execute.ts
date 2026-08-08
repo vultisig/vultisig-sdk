@@ -7,7 +7,14 @@
  * Primary use case: Execute FIN swaps on Rujira DEX
  */
 import type { CosmosChain, VaultBase } from '@vultisig/sdk'
-import { buildCosmosWasmExecuteMsg, Chain, chainFeeCoin, cosmosFeeCoinDenom, getCosmosGasLimit, Vultisig } from '@vultisig/sdk'
+import {
+  buildCosmosWasmExecuteMsg,
+  Chain,
+  chainFeeCoin,
+  cosmosFeeCoinDenom,
+  getCosmosGasLimit,
+  Vultisig,
+} from '@vultisig/sdk'
 import qrcode from 'qrcode-terminal'
 
 import type { CommandContext, TransactionResult } from '../core'
