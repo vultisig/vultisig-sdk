@@ -602,6 +602,12 @@ export class AgentSession {
     return this.cachedContext?.addresses || {}
   }
 
+  private applyAgentMode(request: any): void {
+    if (this.config.viaAgent || this.config.askMode) {
+      request.via_agent = true
+    }
+  }
+
   /**
    * Send a user message and process the full response cycle.
    *
@@ -700,9 +706,7 @@ export class AgentSession {
     }
 
     // Signal to backend that an AI agent is calling (adjusts prompt for structured output)
-    if (this.config.viaAgent || this.config.askMode) {
-      request.via_agent = true
-    }
+    this.applyAgentMode(request)
 
     if (content) {
       request.content = content
