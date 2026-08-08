@@ -107,24 +107,6 @@ export async function executeTxStatus(
       }
     }
 
-    // bead vultisig-3xitk: chains whose resolver cannot distinguish 'never seen'
-    // from 'transient RPC' (UTXO's Blockchair adapter is the current example —
-    // see packages/core/chain/tx/status/resolvers/utxo.ts:36 for the deliberate
-    // {status:'pending', isKnown:false} fallback that protects
-    // verifyBroadcastByHash from swallowing broadcast failures as success).
-    //
-    // At the CLI layer, --no-wait mode has made its single best attempt and the
-    // user asked NOT to poll — so surface `isKnown:false && status:pending` as
-    // `not_found` for display. --wait mode already gets the retries needed to
-    // observe a real in-mempool tx transition to `isKnown:true`; a --wait that
-    // still sees `isKnown:false` after the timeout is handled by giveUpError
-    // above via TxStatusTimeoutError. This keeps the SDK contract intact
-    // (broadcast-verify still sees `isKnown:false`) while stopping users from
-    // seeing a bogus "pending" on a Bitcoin hash that was never broadcast.
-    if (params.noWait && result.status === 'pending' && result.isKnown === false) {
-      result = { ...result, status: 'not_found' }
-    }
-
     if (result.status === 'success') {
       recordResolution(params.txHash, 'confirmed')
     } else if (result.status === 'error') {

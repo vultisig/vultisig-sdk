@@ -195,21 +195,22 @@ describe('executeTxStatus', () => {
     expect(getTxStatus).toHaveBeenCalledTimes(1)
   })
 
-  it('maps pending+isKnown:false to not_found in --no-wait mode (bead 3xitk)', async () => {
-    // Chains whose resolver cannot distinguish "never seen" from "transient RPC"
-    // return {status:'pending', isKnown:false} — UTXO's Blockchair adapter is the
-    // current example (packages/core/chain/tx/status/resolvers/utxo.ts:36 keeps
-    // that shape deliberately for verifyBroadcastByHash safety). --no-wait made
-    // a single attempt and the user asked NOT to poll, so surface as not_found
-    // for the CLI, keeping the underlying SDK contract intact.
-    const getTxStatus = vi.fn().mockResolvedValue({ status: 'pending', isKnown: false })
+  it('reports not_found without throwing in --no-wait mode for a UTXO-shaped hash', async () => {
+    const getTxStatus = vi.fn().mockResolvedValue({ status: 'not_found', isKnown: false })
     const ctx = makeCtx(getTxStatus)
 
     const out = await executeTxStatus(ctx, { chain: Chain.Bitcoin, txHash: BTC_HASH, noWait: true })
     expect(out.status).toBe('not_found')
+    expect(out.isKnown).toBe(false)
     expect(getTxStatus).toHaveBeenCalledTimes(1)
-    // Safety: the underlying isKnown:false is preserved so callers that inspect
-    // the field can still distinguish "we don't know" from "genuine not_found".
+  })
+
+  it('does NOT rewrite pending+isKnown:false in --no-wait mode — provider uncertainty must stay pending', async () => {
+    const getTxStatus = vi.fn().mockResolvedValue({ status: 'pending', isKnown: false })
+    const ctx = makeCtx(getTxStatus)
+
+    const out = await executeTxStatus(ctx, { chain: Chain.Bitcoin, txHash: BTC_HASH, noWait: true })
+    expect(out.status).toBe('pending')
     expect(out.isKnown).toBe(false)
   })
 
