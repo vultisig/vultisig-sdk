@@ -25,7 +25,7 @@ import type { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 import fs from 'fs/promises'
 import os from 'os'
 import path from 'path'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { createSdkContext, type SdkContext } from '../../../src/context/SdkContextBuilder'
 import { FastSigningService } from '../../../src/services/FastSigningService'
@@ -441,6 +441,10 @@ describe('Integration: Vault Export', () => {
   })
 
   describe('Export/Re-import Round-trip', () => {
+    beforeEach(async () => {
+      await memoryStorage.clear()
+    })
+
     it('should export vault with valid keyshares that can be re-imported', async () => {
       const password = 'TestPassword123!'
       const vault = await createTestVault('Round-trip Test')
@@ -455,7 +459,9 @@ describe('Integration: Vault Export', () => {
       expect(exportedData.length).toBeGreaterThan(0)
 
       // Re-import the exported vault
-      const reimportedVault = await sdk.importVault(exportedData, password, { conflictResolution: 'replace' })
+      const reimportedVault = await sdk.importVault(exportedData, password, {
+        conflictResolution: 'replace',
+      })
       expect(reimportedVault).toBeDefined()
 
       // Verify the re-imported vault can derive the same address
@@ -482,7 +488,9 @@ describe('Integration: Vault Export', () => {
       const { data: exportedData } = await vault.export()
 
       // Re-import
-      const reimportedVault = await sdk.importVault(exportedData, undefined, { conflictResolution: 'replace' })
+      const reimportedVault = await sdk.importVault(exportedData, undefined, {
+        conflictResolution: 'replace',
+      })
 
       // Verify addresses match
       const reimportedBtcAddress = await reimportedVault.address(Chain.Bitcoin)
