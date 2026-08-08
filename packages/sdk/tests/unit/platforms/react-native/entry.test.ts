@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
+process.env.VULTISIG_STRICT_SINGLETON = '0'
+
 vi.mock('expo-crypto', () => ({
   randomUUID: () => '00000000-0000-4000-8000-000000000000',
   getRandomValues: <T extends ArrayBufferView | null>(a: T) => a,
@@ -200,6 +202,31 @@ describe('RN entry exposes fromChainAmountExact + getBlockExplorerUrl', () => {
     expect(rn.decodeFromToolResult).toBe(decode.decodeFromToolResult)
     expect(rn.decodeCosmosTx).toBe(decode.decodeCosmosTx)
     expect(rn.decodeEvmTx).toBe(decode.decodeEvmTx)
+  })
+
+  it('re-exports canonical swap tracker URL helpers from the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const swap = await import('@vultisig/core-chain/swap/utils/getSwapExplorerUrl')
+
+    expect(rn.getSwapExplorerUrl).toBe(swap.getSwapExplorerUrl)
+    expect(rn.swapExplorerProviders).toBe(swap.swapExplorerProviders)
+    expect(
+      rn.getSwapExplorerUrl({
+        provider: 'li.fi',
+        txHash: '0xabc',
+        fromChain: rn.Chain.Base,
+      })
+    ).toBe('https://scan.li.fi/tx/0xabc')
+  })
+
+  it('re-exports Noon vault helpers from the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const noon = await import('@vultisig/core-chain/chains/evm/noon')
+
+    expect(rn.noonUsdcVaultConfig).toBe(noon.noonUsdcVaultConfig)
+    expect(rn.getNoonDepositTxPlan).toBe(noon.getNoonDepositTxPlan)
+    expect(rn.readNoonVaultState).toBe(noon.readNoonVaultState)
+    expect(rn.fetchNoonUsdcVaultMetrics).toBe(noon.fetchNoonUsdcVaultMetrics)
   })
 })
 
