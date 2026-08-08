@@ -377,6 +377,68 @@ describe('RawBroadcastService', () => {
     })
   })
 
+  it('recovers a Cosmos tx after an ambiguous transport failure once the hash becomes queryable', async () => {
+    const txBytes = Buffer.from([1, 2, 3])
+    const rawTx = txBytes.toString('base64')
+    const hash = bytesToHex(sha256(txBytes)).toUpperCase()
+    mockCosmosBroadcastTx.mockRejectedValue(new Error('socket hang up'))
+    mockCosmosGetTx
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        hash,
+        code: 0,
+      })
+
+    vi.useFakeTimers()
+    try {
+      const promise = service.broadcastRawTx({ chain: Chain.Cosmos, rawTx })
+      const expectation = expect(promise).resolves.toBe(hash)
+      await vi.runAllTimersAsync()
+      await expectation
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('fails closed after an ambiguous Cosmos transport failure that never becomes queryable', async () => {
+    const txBytes = Buffer.from([1, 2, 3])
+    const rawTx = txBytes.toString('base64')
+    const hash = bytesToHex(sha256(txBytes)).toUpperCase()
+    mockCosmosBroadcastTx.mockRejectedValue(new Error('socket hang up'))
+    mockCosmosGetTx.mockResolvedValue(null)
+
+    vi.useFakeTimers()
+    try {
+      const promise = service.broadcastRawTx({ chain: Chain.Cosmos, rawTx })
+      const expectation = expect(promise).rejects.toMatchObject({
+        code: VaultErrorCode.BroadcastFailed,
+        message: expect.stringContaining(`Verify ${hash} on a block explorer before retrying`),
+      })
+      await vi.runAllTimersAsync()
+      await expectation
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('fails closed if an ambiguous Cosmos transport failure later resolves to an on-chain execution failure', async () => {
+    const txBytes = Buffer.from([1, 2, 3])
+    const rawTx = txBytes.toString('base64')
+    const hash = bytesToHex(sha256(txBytes)).toUpperCase()
+    mockCosmosBroadcastTx.mockRejectedValue(new Error('socket hang up'))
+    mockCosmosGetTx.mockResolvedValueOnce({
+      hash,
+      code: 5,
+      rawLog: 'out of gas',
+    })
+
+    await expect(service.broadcastRawTx({ chain: Chain.Cosmos, rawTx })).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('execution failed'),
+    })
+  })
+
   it('rejects Sui payload missing unsignedTx or signature', async () => {
     await expect(
       service.broadcastRawTx({
