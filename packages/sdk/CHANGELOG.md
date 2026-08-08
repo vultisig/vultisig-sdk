@@ -1,5 +1,58 @@
 # @vultisig/sdk
 
+## 4.2.0
+
+### Minor Changes
+
+- [#1776](https://github.com/vultisig/vultisig-sdk/pull/1776) [`a812367`](https://github.com/vultisig/vultisig-sdk/commit/a812367923ac3781dc240d00124232c6f0cc3348) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - SUI works as a SwapKit swap source, and the transfer-route path no longer trusts SwapKit's `meta.txType` to decide how to decode a payload.
+
+  Sui was rejected before any network call, on the stated grounds that no `GeneralSwapTx` variant could carry a programmable transaction block. That was never true: the `transfer` variant already carries opaque pre-built bytes as `txType` + `txPayload`, which is exactly how a Bitcoin PSBT route reaches the signer. Nothing needed porting either — `getSuiSigningInputs` has forwarded arbitrary BCS-serialized PTBs to WalletCore's `SignDirect` since the dApp Wallet Standard path landed, and the intent digest it produces is the same blake2b-32 over `[0,0,0] || ptb` that iOS computes by hand in `SwapKitSuiSigner`. The route now rides the transfer arm and hands its bytes to that signer, so a Sui source signs and broadcasts through paths already in use rather than new ones.
+
+  `disableBuildTx` is no longer opt-out-by-exception. `swapKitTransferSourceChains` mixes deposit-only chains, which need nothing but an address, with chains whose returned bytes _are_ the thing being signed, and the request suppressed transaction building for everything in the list except a hardcoded `!== Chain.Bitcoin`. Adding any prebuilt-tx chain therefore defaulted to asking SwapKit not to build the transaction — the wrong default, and a silent one: the response simply arrives without a `tx`, and the failure surfaces later as an empty payload during keysign construction rather than at the request that caused it. The two kinds of chain are now named separately, so membership of the transfer list no longer implies anything about who builds the transaction.
+
+  Payload decoding dispatches on the source chain instead of the wire label. SwapKit renames these labels live without versioning — `SOLANA` became `SERIALIZED_BASE64` and `CARDANO` became `CBOR`, both mid-flight — and an unrecognized label fell through to UTF-8-encoding the base64 string instead of decoding it, producing a `txPayload` of the right shape and entirely wrong bytes. The source chain is the discriminator EVM and Solana already used, and it is the only one SwapKit cannot rename. The stored `txType` is normalized to `SUI` for the same reason it must be: iOS hardcodes that spelling rather than persisting what it received, and the field is part of the cosigned `SwapKitSwapPayload`, so a device that stored the wire value would disagree with its own cosigner. A Sui route whose `tx` is not a string is now rejected outright, since the fallback would encode a JSON object into the payload and yield something that looks signable.
+
+  Pre-built PTBs also report their real network fee. `getSuiChainSpecific` returned an empty `SuiSpecific` for the `signSui` case on the reasoning that a built PTB has no construction inputs to fetch — true, but `getSuiFeeAmount` reads its budget from that message, so `BigInt('')` made every such transaction display a zero fee while the chain charged the budget baked into the bytes. The gas budget and price are read back out of the PTB offline, with no RPC call, and a payload that cannot be decoded still falls back to blank rather than blocking a transaction over a display concern. This corrects the dApp signing path as well as swaps.
+
+  Cardano stays blocked as a source. Its payload decode returns an empty byte array — there is no implementation at all — so any transaction built from it would be silently wrong.
+
+### Patch Changes
+
+- [#1801](https://github.com/vultisig/vultisig-sdk/pull/1801) [`5ce75b5`](https://github.com/vultisig/vultisig-sdk/commit/5ce75b53c527b373eb9ccacceac6edbaacf4ebec) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Unblock the `quality:audit` CI gate, which was failing repo-wide on 3 newly-published high-severity advisories:
+
+  - `nanoid` (via `postcss`, GHSA-2v37-7h3g-55p8): fixed by a resolution bump to `^3.3.17` - a real, safe patch upgrade, no API change.
+  - `image-size` (via `metro@0.84.4`, GHSA-w3rx-r6r6-pgpr / GHSA-5p2g-fcmc-qvqq): no fix is available yet. The patched line is `>=2.0.3`, but `image-size` has not published past `2.0.2`, and `metro`'s latest release (`0.87.0`) still pins `image-size@^1.0.2` - there is no dependency bump that can close this today. `image-size` is not a direct dependency anywhere in this repo; it is metro's own asset-dimension parser, used only by the RN/Metro dev bundler toolchain, never by SDK/CLI runtime code shipped to consumers. The two ignores and their durable exception record are in `.yarnrc.yml`; remove both once an upstream-fixed `image-size` release is resolved by this dependency path, or Metro no longer depends on the vulnerable `<=2.0.2` range.
+
+- [#1762](https://github.com/vultisig/vultisig-sdk/pull/1762) [`eb7d862`](https://github.com/vultisig/vultisig-sdk/commit/eb7d86260a2ea5cdd661951d15677ec4db3517b0) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Align raw Solana duplicate-broadcast handling with the core and React Native resolvers by accepting `AlreadyProcessed` when status is pending or unavailable while still rejecting explicit on-chain failures.
+
+- [#1604](https://github.com/vultisig/vultisig-sdk/pull/1604) [`9e88dcf`](https://github.com/vultisig/vultisig-sdk/commit/9e88dcf4875ebccfc7ea021707d99ec728a41eea) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export `DEFAULT_CHAINS` and `defaultChains` from the root and React Native SDK entrypoints so consumers can reuse the canonical onboarding/import default-chain set instead of maintaining local mirrors.
+
+- [#1613](https://github.com/vultisig/vultisig-sdk/pull/1613) [`68f8899`](https://github.com/vultisig/vultisig-sdk/commit/68f8899f6545b3876703e7a56b43d73a64217da2) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export canonical `ChainKind` helpers from the React Native SDK entrypoint.
+
+- [#1794](https://github.com/vultisig/vultisig-sdk/pull/1794) [`80b19bd`](https://github.com/vultisig/vultisig-sdk/commit/80b19bdbfbcb6af875a0b145bb02306552adac27) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(ripple): state TrustSet on the wire so it co-signs with iOS
+
+  An XRPL trust-line activation originated here could not be co-signed by an iOS
+  device: the ceremony diverged and never completed. No funds moved, but the trust
+  line could not be opened at all in a mixed committee.
+
+  A non-native Ripple coin is ambiguous on its own — the same `(currency, issuer)`
+  pair means either "open a trust line for this token" (TrustSet, where the keysign
+  amount is the trust-line LIMIT) or "send this token" (Payment with a
+  CurrencyAmount) — and the two sign different bytes. commondata already carries
+  the discriminator that resolves it, but the generated protos here were stale, so
+  `RippleSpecific.transaction_type` never reached the wire and each platform fell
+  back to its own default: this SDK always read a TrustSet, iOS read a Payment.
+
+  Regenerates `blockchain_specific_pb.ts` from commondata (adding
+  `RippleSpecific.transaction_type` and `TRANSACTION_TYPE_RIPPLE_TRUST_SET`), sets
+  the field when building a TrustSet, and prefers it when signing.
+
+  The coin-shape inference is kept as the fallback, deliberately: clients shipped
+  before this field infer TrustSet from a non-native coin alone, so honouring that
+  keeps a TrustSet byte-identical across a mixed-version committee. Native XRP
+  payloads and verbatim `signRipple` dApp transactions leave the field unset, so
+  their signed bytes are unchanged.
+
 ## 4.1.0
 
 ### Minor Changes
