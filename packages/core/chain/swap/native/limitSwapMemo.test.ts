@@ -82,6 +82,23 @@ describe('validateLimitSwapInputs', () => {
     ).toThrow(/unsupported THORChain asset prefix/)
   })
 
+  it('rejects surrounding whitespace in source and target assets', () => {
+    expect(() =>
+      validateLimitSwapInputs({
+        ...validInput,
+        source_asset: ' BTC.BTC ',
+      })
+    ).toThrow(/surrounding whitespace/)
+
+    expect(() =>
+      buildLimitSwapMemo({
+        ...validInput,
+        target_asset: ' eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 ',
+        dest_addr: 'thor1x2whgc2nt665y0kc44uywhynazvp0l8tp0vtu6',
+      })
+    ).toThrow(/surrounding whitespace/)
+  })
+
   it('accepts a Solana limit-swap destination (THOR-04)', () => {
     expect(() =>
       validateLimitSwapInputs({

@@ -101,6 +101,9 @@ const getSupportedThorchainAssetChain = (asset: string, fieldName: string): Chai
   if (!normalized) {
     throw new Error(`${fieldName} must be a non-empty THORChain asset`)
   }
+  if (normalized !== asset) {
+    throw new Error(`${fieldName} must not contain surrounding whitespace`)
+  }
 
   if (normalized.includes('.')) {
     if (!layer1LimitSwapAssetPattern.test(normalized)) {
