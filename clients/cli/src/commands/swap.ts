@@ -151,6 +151,19 @@ function toSwapRequest(options: SwapOptions, amount: string, dryRun?: true) {
   }
 }
 
+// bead vultisig-ehedh: --slippage 0 built silently even though a 0% tolerance
+// leaves zero room for adverse price movement between the quote timestamp and
+// on-chain execution (bridges take ~15s+, price moves in that window). It
+// does NOT guarantee a revert - favorable movement still succeeds - so the
+// warning is conditional on the risk, not a certainty of failure. Range guard
+// for negative / >50 already rejects at the SDK layer (Received "-5" / "100"),
+// so this only fires on the exactly-0 case that slips through as a
+// "successful" build.
+function slippageZeroWarning(options: SwapOptions): string | undefined {
+  if (options.slippage !== 0) return undefined
+  return 'Slippage=0% may revert if the price moves against you before execution - consider >= 0.1%'
+}
+
 function toDryRunResult(options: SwapOptions, quote: SwapQuoteResult, fromAmountRaw: string): SwapDryRunResult {
   const result: SwapDryRunResult = {
     dryRun: true,
@@ -167,6 +180,12 @@ function toDryRunResult(options: SwapOptions, quote: SwapQuoteResult, fromAmount
   if (quote.estimatedOutputFiat != null) result.estimatedOutputFiat = parseFloat(quote.estimatedOutputFiat.toFixed(2))
   if (quote.requiresApproval) result.requiresApproval = true
   if (quote.warnings?.length) result.warnings = [...quote.warnings]
+
+  const slippageWarning = slippageZeroWarning(options)
+  if (slippageWarning) {
+    result.warnings = result.warnings ? [...result.warnings, slippageWarning] : [slippageWarning]
+  }
+
   return result
 }
 
@@ -256,6 +275,9 @@ export async function executeSwap(
       feeSymbol: feeBalance.symbol,
       discountTier,
     })
+
+    const slippageWarning = slippageZeroWarning(options)
+    if (slippageWarning) warn(`  Warning: ${slippageWarning}`)
   }
 
   // 3. Confirm (required in all output modes)
