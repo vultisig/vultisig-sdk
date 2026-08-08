@@ -10,6 +10,11 @@ import { configureOutput, resetOutput, setSilentMode } from '../../lib/output'
 import { executeTxStatus, resolveTimeoutMs, resolveTxStatusParams } from '../tx-status'
 
 const EVM_HASH = '0x' + 'a'.repeat(64)
+// UTXO hashes carry NO 0x prefix - isValidTxHash.ts gates evm on HEX_64_PREFIXED and utxo on
+// HEX_64. tx-status validates shape BEFORE any RPC (its own header says so), so passing EVM_HASH
+// with Chain.Bitcoin threw InvalidTxHashError and the two noWait cases below never reached the
+// branch they exist to test.
+const BTC_HASH = 'a'.repeat(64)
 
 function makeCtx(getTxStatus: ReturnType<typeof vi.fn>) {
   return {
@@ -188,6 +193,33 @@ describe('executeTxStatus', () => {
     const out = await executeTxStatus(ctx, { chain: Chain.Ethereum, txHash: EVM_HASH, noWait: true })
     expect(out.status).toBe('not_found')
     expect(getTxStatus).toHaveBeenCalledTimes(1)
+  })
+
+  it('maps pending+isKnown:false to not_found in --no-wait mode (bead 3xitk)', async () => {
+    // Chains whose resolver cannot distinguish "never seen" from "transient RPC"
+    // return {status:'pending', isKnown:false} — UTXO's Blockchair adapter is the
+    // current example (packages/core/chain/tx/status/resolvers/utxo.ts:36 keeps
+    // that shape deliberately for verifyBroadcastByHash safety). --no-wait made
+    // a single attempt and the user asked NOT to poll, so surface as not_found
+    // for the CLI, keeping the underlying SDK contract intact.
+    const getTxStatus = vi.fn().mockResolvedValue({ status: 'pending', isKnown: false })
+    const ctx = makeCtx(getTxStatus)
+
+    const out = await executeTxStatus(ctx, { chain: Chain.Bitcoin, txHash: BTC_HASH, noWait: true })
+    expect(out.status).toBe('not_found')
+    expect(getTxStatus).toHaveBeenCalledTimes(1)
+    // Safety: the underlying isKnown:false is preserved so callers that inspect
+    // the field can still distinguish "we don't know" from "genuine not_found".
+    expect(out.isKnown).toBe(false)
+  })
+
+  it('does NOT map pending+isKnown:true to not_found — a real in-mempool tx must stay pending', async () => {
+    const getTxStatus = vi.fn().mockResolvedValue({ status: 'pending', isKnown: true })
+    const ctx = makeCtx(getTxStatus)
+
+    const out = await executeTxStatus(ctx, { chain: Chain.Bitcoin, txHash: BTC_HASH, noWait: true })
+    expect(out.status).toBe('pending')
+    expect(out.isKnown).toBe(true)
   })
 
   it('does NOT record a resolution for a non-terminal status — a not_found tx stays guarded', async () => {
