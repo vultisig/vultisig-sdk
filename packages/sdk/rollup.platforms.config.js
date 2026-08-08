@@ -332,6 +332,10 @@ const configs = {
       input: './src/tools/bridge/index.ts',
       distBase: 'tools/bridge',
     }),
+    ...createToolsSubpathConfigs({
+      input: './src/tools/token/index.ts',
+      distBase: 'tools/token',
+    }),
   ],
   browser: {
     input: './src/platforms/browser/index.ts',
