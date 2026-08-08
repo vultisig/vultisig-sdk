@@ -11,6 +11,7 @@ import {
   Chain,
   chainFeeCoin,
   getChainKind,
+  getEvmRpcUrl,
   parseThorSwapMemo,
   resolveChainReference,
   VaultError,
@@ -47,24 +48,6 @@ const EVM_CHAINS = new Set<string>([
   'Hyperliquid',
   'Sei',
 ])
-
-// Public RPC endpoints for refreshing gas estimates before signing.
-// Used as fallback to ensure maxFeePerGas covers current base fee.
-const EVM_GAS_RPC: Record<string, string> = {
-  Ethereum: 'https://ethereum-rpc.publicnode.com',
-  BSC: 'https://bsc-dataseed.binance.org',
-  Polygon: 'https://polygon-bor-rpc.publicnode.com',
-  Avalanche: 'https://api.avax.network/ext/bc/C/rpc',
-  Arbitrum: 'https://arb1.arbitrum.io/rpc',
-  Optimism: 'https://mainnet.optimism.io',
-  Base: 'https://mainnet.base.org',
-  Blast: 'https://rpc.blast.io',
-  Zksync: 'https://mainnet.era.zksync.io',
-  Mantle: 'https://rpc.mantle.xyz',
-  CronosChain: 'https://cronos-evm-rpc.publicnode.com',
-  Hyperliquid: 'https://rpc.hyperliquid.xyz/evm',
-  Sei: 'https://evm-rpc.sei-apis.com',
-}
 
 type AccountCoin = {
   chain: Chain
@@ -1524,8 +1507,7 @@ export class AgentExecutor {
     const bs = payload.blockchainSpecific
     if (!bs || bs.case !== 'ethereumSpecific') return
 
-    const rpcUrl = EVM_GAS_RPC[chain as string]
-    if (!rpcUrl) return
+    const rpcUrl = getEvmRpcUrl(chain)
 
     try {
       const res = await fetch(rpcUrl, {
@@ -1574,8 +1556,7 @@ export class AgentExecutor {
    * Returns null if the RPC call fails (non-fatal).
    */
   private async fetchEvmPendingNonce(chain: Chain): Promise<bigint | null> {
-    const rpcUrl = EVM_GAS_RPC[chain as string]
-    if (!rpcUrl) return null
+    const rpcUrl = getEvmRpcUrl(chain)
 
     try {
       const address = await this.vault.address(chain)
