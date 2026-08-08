@@ -90,10 +90,13 @@ export async function executePortfolio(ctx: CommandContext, options: PortfolioOp
     throw new Error('Invalid currency')
   }
 
-  if (vault.currency !== currency) {
-    await vault.setCurrency(currency)
-  }
-
+  // bead vultisig-v1n9u: `--currency <X>` is a DISPLAY option, not a preference
+  // change. Previously this ran `vault.setCurrency(currency)` as a side effect,
+  // so `portfolio --currency EUR` silently persisted EUR as the vault's default
+  // — a one-off display became a permanent setting the user never asked for.
+  // getValues(chain, currency) and getValue(chain, _, currency) both accept the
+  // currency explicitly, so no setCurrency call is needed here at all. Vault
+  // preference only changes via the dedicated `currency <X>` command.
   const currencyName = fiatCurrencyNameRecord[currency]
   const spinner = createSpinner(`Loading portfolio in ${currencyName}...`)
 
