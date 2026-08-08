@@ -13,6 +13,13 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.UnknownChainError).toBe('function')
   })
 
+  it('exports canonical EIP-712 helpers for first-party consumers', () => {
+    expect(typeof sdk.coerceEip712ChainId).toBe('function')
+    expect(typeof sdk.computeEip712Hash).toBe('function')
+    expect(typeof sdk.toCanonicalEvmSignature).toBe('function')
+    expect(sdk.coerceEip712ChainId('0x89')).toBe(137)
+  })
+
   it('exports the hardened toChainAmount helper and error class with scientific-notation support', () => {
     expect(sdk.toChainAmount('1.2345e-3', 8)).toBe(123450n)
 
