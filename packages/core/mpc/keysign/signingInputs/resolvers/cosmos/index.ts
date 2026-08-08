@@ -81,6 +81,13 @@ const getThorchainDepositAsset = ({
   })
 }
 
+/**
+ * The THORChain bank denom a coin carries, whichever field its shape spells it
+ * in. Empty is indistinguishable from absent here — both mean "no denom".
+ */
+const getThorchainAssetDenom = (coin: { contractAddress?: string; id?: string }): string | undefined =>
+  coin.contractAddress?.trim() || coin.id?.trim() || undefined
+
 // Mirrors iOS THORChainHelper.isSecuredAsset (thorchain.swift): a THORChain-held
 // token whose denom encodes an L1 chain prefix + '-' (e.g. `xrp-xrp`,
 // `eth-usdc-0x…`). RUNE and `x/…` THORChain-native tokens are not secured assets.
@@ -431,10 +438,14 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
         // A secured WITHDRAWAL is excluded: there `assetCoin` is the L1 coin being
         // pulled off THORChain, and its asset is built by the branch below.
         // The two shapes spell the denom differently — a swap payload's coin uses
-        // `contractAddress`, the payload's own coin uses `id` — so read whichever
-        // is present rather than assuming the swap shape.
-        const assetDenom =
-          ('contractAddress' in assetCoin ? assetCoin.contractAddress : assetCoin.id)?.trim() || undefined
+        // `contractAddress`, the payload's own coin uses `id` — so take the first
+        // that carries a VALUE. Keying off which property merely exists would tie
+        // this to how each shape happens to be declared: a coin bearing an empty
+        // `contractAddress` beside a populated `id` would read the empty one and
+        // silently stop detecting a secured asset, which is the same
+        // typechecks-but-reads-nothing failure this whole branch exists to fix.
+
+        const assetDenom = getThorchainAssetDenom(assetCoin)
 
         const securedDepositCoin =
           !isSecuredWithdrawal &&
