@@ -5,7 +5,7 @@
  */
 import { getVultisigConfigDir } from '@vultisig/client-shared'
 import { FileStorage } from '@vultisig/sdk/node'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 
 /**
@@ -67,8 +67,13 @@ export function createVaultStorage(): FileStorage {
  */
 export function ensureConfigDir(): void {
   const configDir = getConfigDir()
-  if (!existsSync(configDir)) {
-    mkdirSync(configDir, { recursive: true })
+  const createdDir = mkdirSync(configDir, { recursive: true, mode: 0o700 })
+  if (createdDir === undefined) {
+    try {
+      chmodSync(configDir, 0o700)
+    } catch {
+      // Some filesystems do not support POSIX permissions.
+    }
   }
 }
 

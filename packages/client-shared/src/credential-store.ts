@@ -6,7 +6,7 @@ import { createCipheriv, createDecipheriv, randomBytes, scrypt as scryptCb } fro
 import { promisify } from 'node:util'
 
 const scryptAsync = promisify(scryptCb)
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { getVultisigConfigDir } from './config-dir.js'
@@ -89,7 +89,8 @@ async function getFileStore(passphrase: string): Promise<Map<string, string>> {
 
 async function saveFileStore(store: Map<string, string>, passphrase: string): Promise<void> {
   const dir = getVultisigConfigDir()
-  await mkdir(dir, { recursive: true })
+  const createdDir = await mkdir(dir, { recursive: true, mode: 0o700 })
+  if (createdDir === undefined) await chmod(dir, 0o700).catch(() => {})
   const salt = randomBytes(16)
   const iv = randomBytes(12)
   const key = (await scryptAsync(passphrase, salt, 32)) as Buffer

@@ -1,5 +1,91 @@
 # @vultisig/core-mpc
 
+## 1.18.0
+
+### Minor Changes
+
+- [#1776](https://github.com/vultisig/vultisig-sdk/pull/1776) [`a812367`](https://github.com/vultisig/vultisig-sdk/commit/a812367923ac3781dc240d00124232c6f0cc3348) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - SUI works as a SwapKit swap source, and the transfer-route path no longer trusts SwapKit's `meta.txType` to decide how to decode a payload.
+
+  Sui was rejected before any network call, on the stated grounds that no `GeneralSwapTx` variant could carry a programmable transaction block. That was never true: the `transfer` variant already carries opaque pre-built bytes as `txType` + `txPayload`, which is exactly how a Bitcoin PSBT route reaches the signer. Nothing needed porting either — `getSuiSigningInputs` has forwarded arbitrary BCS-serialized PTBs to WalletCore's `SignDirect` since the dApp Wallet Standard path landed, and the intent digest it produces is the same blake2b-32 over `[0,0,0] || ptb` that iOS computes by hand in `SwapKitSuiSigner`. The route now rides the transfer arm and hands its bytes to that signer, so a Sui source signs and broadcasts through paths already in use rather than new ones.
+
+  `disableBuildTx` is no longer opt-out-by-exception. `swapKitTransferSourceChains` mixes deposit-only chains, which need nothing but an address, with chains whose returned bytes _are_ the thing being signed, and the request suppressed transaction building for everything in the list except a hardcoded `!== Chain.Bitcoin`. Adding any prebuilt-tx chain therefore defaulted to asking SwapKit not to build the transaction — the wrong default, and a silent one: the response simply arrives without a `tx`, and the failure surfaces later as an empty payload during keysign construction rather than at the request that caused it. The two kinds of chain are now named separately, so membership of the transfer list no longer implies anything about who builds the transaction.
+
+  Payload decoding dispatches on the source chain instead of the wire label. SwapKit renames these labels live without versioning — `SOLANA` became `SERIALIZED_BASE64` and `CARDANO` became `CBOR`, both mid-flight — and an unrecognized label fell through to UTF-8-encoding the base64 string instead of decoding it, producing a `txPayload` of the right shape and entirely wrong bytes. The source chain is the discriminator EVM and Solana already used, and it is the only one SwapKit cannot rename. The stored `txType` is normalized to `SUI` for the same reason it must be: iOS hardcodes that spelling rather than persisting what it received, and the field is part of the cosigned `SwapKitSwapPayload`, so a device that stored the wire value would disagree with its own cosigner. A Sui route whose `tx` is not a string is now rejected outright, since the fallback would encode a JSON object into the payload and yield something that looks signable.
+
+  Pre-built PTBs also report their real network fee. `getSuiChainSpecific` returned an empty `SuiSpecific` for the `signSui` case on the reasoning that a built PTB has no construction inputs to fetch — true, but `getSuiFeeAmount` reads its budget from that message, so `BigInt('')` made every such transaction display a zero fee while the chain charged the budget baked into the bytes. The gas budget and price are read back out of the PTB offline, with no RPC call, and a payload that cannot be decoded still falls back to blank rather than blocking a transaction over a display concern. This corrects the dApp signing path as well as swaps.
+
+  Cardano stays blocked as a source. Its payload decode returns an empty byte array — there is no implementation at all — so any transaction built from it would be silently wrong.
+
+### Patch Changes
+
+- [#1794](https://github.com/vultisig/vultisig-sdk/pull/1794) [`80b19bd`](https://github.com/vultisig/vultisig-sdk/commit/80b19bdbfbcb6af875a0b145bb02306552adac27) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(ripple): state TrustSet on the wire so it co-signs with iOS
+
+  An XRPL trust-line activation originated here could not be co-signed by an iOS
+  device: the ceremony diverged and never completed. No funds moved, but the trust
+  line could not be opened at all in a mixed committee.
+
+  A non-native Ripple coin is ambiguous on its own — the same `(currency, issuer)`
+  pair means either "open a trust line for this token" (TrustSet, where the keysign
+  amount is the trust-line LIMIT) or "send this token" (Payment with a
+  CurrencyAmount) — and the two sign different bytes. commondata already carries
+  the discriminator that resolves it, but the generated protos here were stale, so
+  `RippleSpecific.transaction_type` never reached the wire and each platform fell
+  back to its own default: this SDK always read a TrustSet, iOS read a Payment.
+
+  Regenerates `blockchain_specific_pb.ts` from commondata (adding
+  `RippleSpecific.transaction_type` and `TRANSACTION_TYPE_RIPPLE_TRUST_SET`), sets
+  the field when building a TrustSet, and prefers it when signing.
+
+  The coin-shape inference is kept as the fallback, deliberately: clients shipped
+  before this field infer TrustSet from a non-native coin alone, so honouring that
+  keeps a TrustSet byte-identical across a mixed-version committee. Native XRP
+  payloads and verbatim `signRipple` dApp transactions leave the field unset, so
+  their signed bytes are unchanged.
+
+- Updated dependencies [[`a812367`](https://github.com/vultisig/vultisig-sdk/commit/a812367923ac3781dc240d00124232c6f0cc3348)]:
+  - @vultisig/core-chain@2.33.0
+
+## 1.17.0
+
+### Minor Changes
+
+- [#1696](https://github.com/vultisig/vultisig-sdk/pull/1696) [`37d7044`](https://github.com/vultisig/vultisig-sdk/commit/37d7044e33d475ddce93b91ff6295d55490052b4) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Limit-order cancellation, end to end: a full-form memo asset, a cancel keysign payload builder, and cancel-aware review for co-signers.
+
+  The primitives shipped earlier could describe a cancellation but not send one, and a device joining the ceremony could not read one at all. These are the three pieces that close that.
+
+  `getThorchainCancelMemoAsset` emits the spelling a cancel requires — the same notation as the placement path, minus the abbreviation. That difference is the entire point: `ModifyLimitSwapMemo` is the one inbound memo type `processOneTxIn` does not route through `fuzzyAssetMatch`, so a placement's six-character contract suffix would address a bucket holding no order. `buildCancelLimitSwapMemo` already refused abbreviated assets, which meant there was previously no supported way to produce an input it would accept for a token leg. Both spellings now share one converter and one set of validation rules, so they cannot drift apart in anything but the abbreviation. `getThorchainMemoAssetChain` resolves a memo asset back to its home chain across every flavour, including the secured denoms that a `.`-split would fail to resolve at all.
+
+  `buildLimitSwapCancelKeysignPayload` turns that memo into a signable transaction, branching on where the order was funded: a THORChain source becomes a `MsgDeposit` carrying no value, and an L1 source a transfer to the live Asgard inbound with derived dust attached solely so Bifrost observes it. The signing asset is the funding chain's **gas** asset, never the order's own — a cancel moves no tokens, and a token here would build an ERC20 transfer that drops the memo entirely. Every gate fails closed: a retarget (`m=<` with a non-zero final field) is refused rather than signed as a cancellation, a memo that overflows the source chain's budget is refused rather than truncated into one matching nothing, and the destination is taken from a live inbound view rather than a cache.
+
+  The signing coin's chain is checked against the memo's, too. The two arrive as independent parameters, so a caller reaching for "the vault's ETH coin" while holding a BTC-sourced memo would otherwise get a payload that builds, signs and broadcasts cleanly — and is then refunded by THORChain's `From.IsChain(Source.Asset.GetChain())` check, leaving a successful-looking transaction that cancelled nothing. The funding chain is derived from the memo rather than cross-checked against a second parameter, so there is one authority for it. `getThorchainMemoAssetSourceChain` supplies that with `GetChain()` semantics rather than the asset's home chain: a secured or synth source is custodied on THORChain and must be sent from a THOR address even though it originates elsewhere.
+
+  The `EnableAdvSwapQueue` mimir is deliberately _not_ re-checked here, unlike at placement. That gate protects a new order from executing as an unprotected market swap, a risk a cancel does not carry; refusing to close an already-resting position because the queue stopped accepting new ones would strand it for the remainder of its TTL with no way out.
+
+  `getKeysignLimitSwapCancel` and `parseCancelLimitSwapMemo` give a joining device the order being closed, decoded from the memo. A cancel carries no swap payload on any branch, so a co-signer keying off one previously saw a dust transfer to an opaque address — worse than uninformative, since a trivial amount reads as harmless while the transaction closes a position. As with placement, the terms come from the memo because the memo is the instruction THORChain executes, so what a reviewer sees cannot disagree with what gets signed. A retarget is reported as not-a-cancellation rather than mislabelled, and the reproduced bucket key travels alongside so a reviewer holding the vault's open orders can tell whether the cancel is unambiguous.
+
+  `getThorchainCancelMemoAsset` emits its asset UPPER-CASED, unlike the coin's own contract id. Case is not semantic to THORNode — `common.ParseAsset` upper-cases whatever it is given, and the queue index key is built from an upper-cased asset — but it is semantic to this package's pool-id validation, which cancel eligibility routes through to size the memo against its source chain. In the contract's native lower case, every ERC20-funded order reads as an unroutable source chain and becomes uncancellable.
+
+### Patch Changes
+
+- Updated dependencies [[`7d2a91d`](https://github.com/vultisig/vultisig-sdk/commit/7d2a91de80a297c6db6b2fe2e9db41ace609c822), [`37d7044`](https://github.com/vultisig/vultisig-sdk/commit/37d7044e33d475ddce93b91ff6295d55490052b4)]:
+  - @vultisig/core-chain@2.32.0
+
+## 1.16.2
+
+### Patch Changes
+
+- [#1756](https://github.com/vultisig/vultisig-sdk/pull/1756) [`fbc5b44`](https://github.com/vultisig/vultisig-sdk/commit/fbc5b4445e102534eb434d7cabcd6fe8d633b391) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Allow native swaps whose source is the protocol's own chain (RUNE on THORChain, CACAO on MayaChain) past the broadcast guard: those routes are MsgDeposits with no inbound vault and never appear in /inbound_addresses, so the inbound-existence and vault-address checks are skipped for them while quote-expiry and trading-halt checks still run.
+
+- Updated dependencies [[`67667fe`](https://github.com/vultisig/vultisig-sdk/commit/67667fe61a8dd85d40c1b91978da5414987cab6c), [`fb601d5`](https://github.com/vultisig/vultisig-sdk/commit/fb601d5ad6f6e6a7089ca449ee24bc5c1d7b82f9)]:
+  - @vultisig/core-chain@2.31.2
+
+## 1.16.1
+
+### Patch Changes
+
+- Updated dependencies [[`413423b`](https://github.com/vultisig/vultisig-sdk/commit/413423b70655e6e4d7faf9cb9f10b63f601e42dc)]:
+  - @vultisig/core-chain@2.31.1
+
 ## 1.16.0
 
 ### Minor Changes

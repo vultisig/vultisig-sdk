@@ -3,9 +3,15 @@ import { describe, expect, it } from 'vitest'
 import {
   CLI_SUPPORTED_SURFACES,
   extractBalanceSummaryFromText,
+  extractPolymarketMarketsFromText,
+  extractYieldOpportunitiesFromText,
   parseBalanceSummaryEnvelope,
+  parsePolymarketMarketsEnvelope,
   parseTurnOutcome,
+  parseYieldOpportunitiesEnvelope,
   renderBalanceSummaryCard,
+  renderPolymarketMarketsCard,
+  renderYieldOpportunitiesCard,
 } from '../cards'
 
 const VALID_ENVELOPE = {
@@ -33,6 +39,10 @@ describe('CLI_SUPPORTED_SURFACES', () => {
   })
   it('advertises turn_outcome (a2a-02)', () => {
     expect(CLI_SUPPORTED_SURFACES).toContain('turn_outcome')
+  })
+  it('advertises yield_opportunities and polymarket_markets (rj3p)', () => {
+    expect(CLI_SUPPORTED_SURFACES).toContain('yield_opportunities')
+    expect(CLI_SUPPORTED_SURFACES).toContain('polymarket_markets')
   })
 })
 
@@ -204,5 +214,202 @@ describe('extractBalanceSummaryFromText (legacy verbatim-echo fallback)', () => 
     // content past the backstop returns null (raw text prints) rather than hang.
     const huge = 'balance_summary ' + '{'.repeat(150_000) + '}'.repeat(150_000)
     expect(extractBalanceSummaryFromText(huge)).toBeNull()
+  })
+})
+
+// ============================================================================
+// yield_opportunities (rj3p)
+// ============================================================================
+
+// Field names (`token`/`network`, `apy` as an already-formatted percentage
+// number) match the live yield_search envelope observed against the
+// miniforum backend during rj3p live-verify — NOT a shape invented from
+// guesswork.
+const YIELD_ENVELOPE = {
+  surface: 'yield_opportunities',
+  title: 'USDC Lending Opportunities',
+  opportunities: [
+    { id: 'linea-usdc-aave-v3-lending', token: 'USDC', network: 'linea', provider: 'Aave', type: 'lending', apy: 4.99 },
+    { id: 'y2', symbol: 'DOT', chain: 'Polkadot', apy: '12.5%' },
+  ],
+}
+
+describe('parseYieldOpportunitiesEnvelope', () => {
+  it('parses a valid envelope using the live token/network/apy field names', () => {
+    const card = parseYieldOpportunitiesEnvelope(YIELD_ENVELOPE)
+    expect(card).not.toBeNull()
+    expect(card!.title).toBe('USDC Lending Opportunities')
+    expect(card!.opportunities).toHaveLength(2)
+    expect(card!.opportunities[0]).toMatchObject({ symbol: 'USDC', chain: 'linea', apy: '4.99%', provider: 'Aave' })
+    // The symbol/chain aliases (used by the legacy-echo fallback shape) also parse.
+    expect(card!.opportunities[1]).toMatchObject({ symbol: 'DOT', chain: 'Polkadot', apy: '12.5%' })
+  })
+
+  it('rejects a non-yield_opportunities surface', () => {
+    expect(parseYieldOpportunitiesEnvelope({ surface: 'balance_summary', opportunities: [] })).toBeNull()
+  })
+
+  it('rejects an envelope with no renderable opportunities', () => {
+    expect(parseYieldOpportunitiesEnvelope({ surface: 'yield_opportunities', opportunities: [{}] })).toBeNull()
+  })
+
+  it('rejects junk', () => {
+    expect(parseYieldOpportunitiesEnvelope(null)).toBeNull()
+    expect(parseYieldOpportunitiesEnvelope('nope')).toBeNull()
+  })
+})
+
+describe('renderYieldOpportunitiesCard', () => {
+  it('renders human-readable prose, not raw JSON', () => {
+    const out = renderYieldOpportunitiesCard(parseYieldOpportunitiesEnvelope(YIELD_ENVELOPE)!)
+    expect(out).toContain('USDC Lending Opportunities')
+    expect(out).toContain('4.99%')
+    expect(out).toContain('Aave')
+    expect(out).toContain('DOT')
+    expect(out).not.toContain('"surface"')
+    expect(out).not.toContain('"opportunities"')
+  })
+})
+
+describe('extractYieldOpportunitiesFromText (legacy verbatim-echo fallback)', () => {
+  it('returns null for plain prose', () => {
+    expect(extractYieldOpportunitiesFromText('Here are some yield options.')).toBeNull()
+  })
+
+  it('extracts an envelope embedded in surrounding prose', () => {
+    const text = `Sure, here's what I found: ${JSON.stringify(YIELD_ENVELOPE)} Let me know if you want more.`
+    const res = extractYieldOpportunitiesFromText(text)
+    expect(res).not.toBeNull()
+    expect(res!.card.opportunities).toHaveLength(2)
+    expect(res!.remainingText).toContain("Sure, here's what I found")
+    expect(res!.remainingText).not.toContain('"surface"')
+  })
+})
+
+// ============================================================================
+// polymarket_markets (rj3p)
+// ============================================================================
+
+// Real envelope shape (polymarket_search tool / app PolymarketMarketsCardSchema
+// / agent-backend-ts PolymarketMarketRow, surface_json_leak spike): rows carry
+// `yesPrice`/`noPrice` (0..1 fractions) and `topOutcome` for multi-outcome
+// markets, NOT a nested `outcomes[]` array; volume is `volume24h`, not
+// `volume`. This fixture pins the parser against that live shape rather than
+// an invented one.
+const POLYMARKET_ENVELOPE = {
+  surface: 'polymarket_markets',
+  title: 'Trending Polymarket markets',
+  subtitle: 'Showing 2 of 8 markets · 24h volume',
+  markets: [
+    {
+      id: 'm1',
+      slug: 'will-it-rain-tomorrow',
+      question: 'Will it rain tomorrow?',
+      yesPrice: 0.6,
+      noPrice: 0.4,
+      volume24h: 12345.6,
+      endDate: '2026-08-01',
+    },
+    {
+      id: 'm2',
+      slug: 'who-will-win-the-election',
+      question: 'Who will win the election?',
+      topOutcome: 'Candidate A',
+      yesPrice: 0.42,
+      volume24h: 5000,
+    },
+  ],
+}
+
+describe('parsePolymarketMarketsEnvelope', () => {
+  it('parses a valid envelope off the real yesPrice/noPrice/volume24h shape', () => {
+    const card = parsePolymarketMarketsEnvelope(POLYMARKET_ENVELOPE)
+    expect(card).not.toBeNull()
+    expect(card!.title).toBe('Trending Polymarket markets')
+    expect(card!.subtitle).toBe('Showing 2 of 8 markets · 24h volume')
+    expect(card!.markets).toHaveLength(2)
+    // Binary YES/NO market: outcomes synthesized from yesPrice/noPrice.
+    expect(card!.markets[0].outcomes).toEqual([
+      { name: 'YES', price: '60%' },
+      { name: 'NO', price: '40%' },
+    ])
+    expect(card!.markets[0].volume).toContain('12,345.60')
+    // Multi-outcome market: topOutcome replaces the YES/NO label, priced off yesPrice.
+    expect(card!.markets[1].outcomes).toEqual([{ name: 'Candidate A', price: '42%' }])
+    expect(card!.markets[1].volume).toContain('5,000.00')
+  })
+
+  it('drops price/volume for a market carrying the OLD invented outcomes[]/volume shape', () => {
+    // Nothing in production ever emits this shape — pins that the parser reads
+    // yesPrice/noPrice/volume24h and does NOT fall back to outcomes[]/volume.
+    const card = parsePolymarketMarketsEnvelope({
+      surface: 'polymarket_markets',
+      markets: [
+        {
+          id: 'm1',
+          question: 'Will it rain tomorrow?',
+          volume: 12345.6,
+          outcomes: [
+            { name: 'Yes', price: 0.6 },
+            { name: 'No', price: 0.4 },
+          ],
+        },
+      ],
+    })
+    expect(card).not.toBeNull()
+    expect(card!.markets[0].outcomes).toEqual([])
+    expect(card!.markets[0].volume).toBeUndefined()
+  })
+
+  it('rejects a non-polymarket_markets surface', () => {
+    expect(parsePolymarketMarketsEnvelope({ surface: 'yield_opportunities', markets: [] })).toBeNull()
+  })
+
+  it('rejects an envelope with no renderable markets', () => {
+    expect(parsePolymarketMarketsEnvelope({ surface: 'polymarket_markets', markets: [{}] })).toBeNull()
+  })
+
+  it('rejects junk', () => {
+    expect(parsePolymarketMarketsEnvelope(null)).toBeNull()
+    expect(parsePolymarketMarketsEnvelope('nope')).toBeNull()
+  })
+})
+
+describe('renderPolymarketMarketsCard', () => {
+  it('renders human-readable prose, not raw JSON', () => {
+    const out = renderPolymarketMarketsCard(parsePolymarketMarketsEnvelope(POLYMARKET_ENVELOPE)!)
+    expect(out).toContain('Trending Polymarket markets')
+    expect(out).toContain('Showing 2 of 8 markets')
+    expect(out).toContain('Will it rain tomorrow?')
+    expect(out).toContain('YES')
+    expect(out).toContain('60%')
+    expect(out).toContain('Candidate A')
+    expect(out).toContain('42%')
+    expect(out).not.toContain('"surface"')
+    expect(out).not.toContain('"outcomes"')
+  })
+
+  it('falls back to the default title when the envelope omits one', () => {
+    const card = parsePolymarketMarketsEnvelope({
+      surface: 'polymarket_markets',
+      markets: [{ id: 'm1', question: 'Will it rain tomorrow?', yesPrice: 0.6 }],
+    })
+    const out = renderPolymarketMarketsCard(card!)
+    expect(out).toContain('Polymarket markets')
+  })
+})
+
+describe('extractPolymarketMarketsFromText (legacy verbatim-echo fallback)', () => {
+  it('returns null for plain prose', () => {
+    expect(extractPolymarketMarketsFromText('Here are some markets.')).toBeNull()
+  })
+
+  it('extracts an envelope embedded in surrounding prose', () => {
+    const text = `Done. ${JSON.stringify(POLYMARKET_ENVELOPE)} Anything else?`
+    const res = extractPolymarketMarketsFromText(text)
+    expect(res).not.toBeNull()
+    expect(res!.card.markets).toHaveLength(2)
+    expect(res!.remainingText).toContain('Done.')
+    expect(res!.remainingText).not.toContain('"surface"')
   })
 })

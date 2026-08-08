@@ -381,7 +381,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       // Try loading from disk (two-step flow)
       const pendingData = await this.context.storage.get<VaultData>(`pending:${vaultId}`)
       if (pendingData) {
-        pendingVault = this.vaultManager.createVaultInstance(pendingData) as FastVault
+        pendingVault = this.vaultManager.createVaultInstance(pendingData, false) as FastVault
       }
     }
 
