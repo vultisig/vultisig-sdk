@@ -750,16 +750,20 @@ Examples:
 // Command: Sign arbitrary bytes (for externally constructed transactions)
 program
   .command('sign')
-  .description('Sign pre-hashed bytes (for externally constructed transactions)')
+  .description(
+    'Sign pre-hashed bytes (for externally constructed transactions). Previews by default — pass --yes to confirm.'
+  )
   .requiredOption('--chain <chain>', 'Target blockchain')
   .requiredOption('--bytes <base64>', 'Base64-encoded pre-hashed data to sign')
+  .option('-y, --yes', 'Confirm signing without an interactive prompt (required in non-interactive contexts)')
   .option('--password <password>', 'Vault password for signing')
   .action(
-    withExit(async (options: { chain: string; bytes: string; password?: string }) => {
+    withExit(async (options: { chain: string; bytes: string; yes?: boolean; password?: string }) => {
       const context = await init(program.opts().vault, options.password)
       await executeSignBytes(context, {
         chain: findChainByName(options.chain) || (options.chain as Chain),
         bytes: options.bytes,
+        yes: options.yes,
         password: options.password,
       })
     })
