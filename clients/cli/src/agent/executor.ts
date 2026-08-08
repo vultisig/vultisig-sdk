@@ -414,9 +414,32 @@ export class AgentExecutor {
     const amount = labels.resolved_amount ?? p?.txArgs?.amount ?? '?'
     // Include the asset symbol so a confirmation prompt can never be ambiguous
     // between native and tokens (e.g. "send 100 on Base to …" — ETH? USDC?).
-    // resolved_amount usually already embeds it; de-dup when both are set.
-    const symbol = labels.token_resolved || labels.token_symbol || ''
-    const amountWithSymbol = symbol && !amount.endsWith(` ${symbol}`) ? `${amount} ${symbol}` : amount
+    // token_resolved may be either a bare ticker or a richer label such as
+    // "USDC.e on Polygon (0x…)". De-dup against the ticker while preserving
+    // the richer chain/contract disclosure as the summary suffix. When the
+    // amount already embeds the full label, do not render its details again:
+    // omit the suffix if the label positively names the exact routed chain,
+    // otherwise append only the routed location so a conflicting or negated
+    // chain mention cannot hide it.
+    // The label shape is an out-of-repo producer convention, so only remove the
+    // first exact "on <routed chain>" fragment and keep any remainder verbatim:
+    // an unrecognised shape must never omit either embedded details or the route.
+    const tokenLabel = (labels.token_resolved || labels.token_symbol || '').trim()
+    const symbol = tokenLabel.split(/\s+/, 1)[0]
+    const escapedChain = String(stored.chain).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const routedChainPattern = new RegExp(`(?:^|\\s)on ${escapedChain}(?=\\s|$)`)
+    // Reordered labels put the routed chain after the contract details
+    // ("USDC.e (0x…) on Polygon"), so accept the fragment anywhere in the
+    // context — but a negated mention ("not on Polygon") must not count.
+    const positiveRoutedChainPattern = new RegExp(`(?:^|\\s)(?<!\\bnot\\s)on ${escapedChain}(?=\\s|$)`)
+    const tokenContext = tokenLabel.slice(symbol.length)
+    const labelCarriesRoutedChain = positiveRoutedChainPattern.test(tokenContext)
+    const tokenDetail = tokenContext.replace(routedChainPattern, '').trim()
+    const amountEmbedsTokenLabel = tokenLabel.length > 0 && amount.endsWith(` ${tokenLabel}`)
+    const amountWithSymbol =
+      symbol && !amount.endsWith(` ${symbol}`) && !amountEmbedsTokenLabel ? `${amount} ${symbol}` : amount
+    const tokenDetailSuffix = amountEmbedsTokenLabel || !tokenDetail ? '' : ` ${tokenDetail}`
+    const location = amountEmbedsTokenLabel && labelCarriesRoutedChain ? '' : `on ${stored.chain}${tokenDetailSuffix}`
     const to = (p?.txArgs?.to as string) || labels.recipient_echo || '?'
     // Name the token contract from the payload that gets signed, not from label
     // text: an EVM token send executes against `txArgs.tx.to` (the contract,
@@ -428,7 +451,7 @@ export class AgentExecutor {
     const isContractSend = !!contractTo && calldata !== '' && calldata !== '0x'
     const contractPart =
       isContractSend && contractTo.toLowerCase() !== to.toLowerCase() ? ` (token contract ${contractTo})` : ''
-    return `send ${amountWithSymbol} on ${stored.chain} to ${to}${contractPart}`
+    return `send ${amountWithSymbol}${location ? ` ${location}` : ''} to ${to}${contractPart}`
   }
 
   /**
