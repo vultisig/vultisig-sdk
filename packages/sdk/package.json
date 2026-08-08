@@ -114,6 +114,12 @@
       "import": "./dist/tools/bridge/index.js",
       "require": "./dist/tools/bridge/index.cjs",
       "default": "./dist/tools/bridge/index.cjs"
+    },
+    "./server": {
+      "types": "./dist/server/index.d.ts",
+      "import": "./dist/server/index.js",
+      "require": "./dist/server/index.cjs",
+      "default": "./dist/server/index.cjs"
     }
   },
   "scripts": {
