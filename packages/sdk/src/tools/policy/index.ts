@@ -11,10 +11,12 @@
  * Consumed via the `policy` namespace:
  *   policy.evaluate(claim, envelope)         → Verdict   (first blocking decision)
  *   policy.checkInvariants(invariantInput)   → InvariantViolation[]  (all violations)
+ *   policy.fromDecodedEnvelope(envelope)     → PolicyEnvelope (decoder→policy adapter)
  */
 
 import { checkInvariants } from './checkInvariants'
 import { evaluatePolicy } from './evaluatePolicy'
+import { toPolicyEnvelope } from './toPolicyEnvelope'
 
 export {
   AMOUNT_DRIFT_BLOCK_PCT,
@@ -30,6 +32,7 @@ export {
 export { chainAliasMap, chainsMatch } from './chains'
 export { checkInvariants } from './checkInvariants'
 export { evaluatePolicy } from './evaluatePolicy'
+export { toPolicyEnvelope } from './toPolicyEnvelope'
 export type {
   AmountUnits,
   AssetRef,
@@ -60,4 +63,6 @@ export const policy = {
   evaluate: evaluatePolicy,
   /** Assert I1-I7 fund-safety invariants → every {@link InvariantViolation}. */
   checkInvariants,
+  /** Adapt `sdk.decode.fromToolResult()` output into the policy envelope shape. */
+  fromDecodedEnvelope: toPolicyEnvelope,
 } as const
