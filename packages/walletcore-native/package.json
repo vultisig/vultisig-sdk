@@ -12,7 +12,7 @@
     "expo-module.config.json"
   ],
   "dependencies": {
-    "@noble/hashes": "^1.8.0"
+    "@noble/hashes": "^2.2.0"
   },
   "peerDependencies": {
     "expo": ">=56.0.8"
