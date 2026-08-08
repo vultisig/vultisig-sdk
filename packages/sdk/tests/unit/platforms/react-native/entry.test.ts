@@ -189,6 +189,7 @@ describe('RN entry exposes fromChainAmountExact + getBlockExplorerUrl', () => {
     const parse = await import('../../../../src/tools/parse')
     const tx = await import('../../../../src/tx')
     const decode = await import('../../../../src/tools/decode')
+    const pairing = await import('../../../../src/services/buildKeygenPairingQrPayload')
 
     expect(rn.parseChain).toBe(parse.parseChain)
     expect(rn.parseTicker).toBe(parse.parseTicker)
@@ -200,6 +201,7 @@ describe('RN entry exposes fromChainAmountExact + getBlockExplorerUrl', () => {
     expect(rn.decodeFromToolResult).toBe(decode.decodeFromToolResult)
     expect(rn.decodeCosmosTx).toBe(decode.decodeCosmosTx)
     expect(rn.decodeEvmTx).toBe(decode.decodeEvmTx)
+    expect(rn.buildKeygenPairingQrPayload).toBe(pairing.buildKeygenPairingQrPayload)
   })
 })
 
