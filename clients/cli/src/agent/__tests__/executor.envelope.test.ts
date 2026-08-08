@@ -18,7 +18,7 @@ import type { VaultBase } from '@vultisig/sdk'
 import { Chain } from '@vultisig/sdk'
 import { describe, expect, it, vi } from 'vitest'
 
-import { AgentExecutor, extractNestedTx } from '../executor'
+import { AgentExecutor, extractNestedTx, parseNonEvmEnvelope } from '../executor'
 
 function createMockVault(): VaultBase {
   return {
@@ -74,6 +74,38 @@ describe('extractNestedTx', () => {
     const nested = { ...SAMPLE_TX, to: '0xnested' }
     const env = { tx: topLevel, txArgs: { tx: nested } }
     expect(extractNestedTx(env)).toBe(topLevel)
+  })
+})
+
+describe('parseNonEvmEnvelope', () => {
+  it('keeps native non-EVM sends on the supported path', () => {
+    expect(
+      parseNonEvmEnvelope(
+        {
+          resolved: { labels: { token_resolved: 'SOL' } },
+          txArgs: { to: 'So11111111111111111111111111111111111111112', amount: '123000000', memo: '' },
+        },
+        Chain.Solana
+      )
+    ).toEqual({
+      chain: Chain.Solana,
+      to: 'So11111111111111111111111111111111111111112',
+      amount: '0.123',
+      symbol: undefined,
+      memo: undefined,
+    })
+  })
+
+  it('fails closed on non-native non-EVM token envelopes until token metadata is wired', () => {
+    expect(() =>
+      parseNonEvmEnvelope(
+        {
+          resolved: { labels: { token_resolved: 'USDC' } },
+          txArgs: { to: 'So11111111111111111111111111111111111111112', amount: '123000000', memo: '' },
+        },
+        Chain.Solana
+      )
+    ).toThrow(/non-native Solana token sends are not wired/)
   })
 })
 
