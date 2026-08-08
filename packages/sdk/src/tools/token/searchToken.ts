@@ -2,34 +2,9 @@ import { Chain } from '@vultisig/core-chain/Chain'
 import { rootApiUrl } from '@vultisig/core-config'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
-const coingeckoApiUrl = `${rootApiUrl}/coingeicko/api/v3`
+import { chainForCoinGeckoPlatform } from '../coingecko/platforms'
 
-// CoinGecko platform ID -> Vultisig Chain enum mapping
-const platformToChain: Record<string, Chain> = {
-  ethereum: Chain.Ethereum,
-  'binance-smart-chain': Chain.BSC,
-  'polygon-pos': Chain.Polygon,
-  'avalanche-c-chain': Chain.Avalanche,
-  'arbitrum-one': Chain.Arbitrum,
-  'optimistic-ethereum': Chain.Optimism,
-  base: Chain.Base,
-  blast: Chain.Blast,
-  mantle: Chain.Mantle,
-  robinhood: Chain.Robinhood,
-  'zksync-era': Chain.Zksync,
-  cronos: Chain.CronosChain,
-  sei: Chain.Sei,
-  solana: Chain.Solana,
-  tron: Chain.Tron,
-  ripple: Chain.Ripple,
-  cosmos: Chain.Cosmos,
-  osmosis: Chain.Osmosis,
-  thorchain: Chain.THORChain,
-  sui: Chain.Sui,
-  'the-open-network': Chain.Ton,
-  cardano: Chain.Cardano,
-  polkadot: Chain.Polkadot,
-}
+const coingeckoApiUrl = `${rootApiUrl}/coingeicko/api/v3`
 
 type TokenDeployment = {
   chain: Chain
@@ -117,7 +92,7 @@ export const searchToken = async (query: string, limit = 10): Promise<TokenSearc
     if (detail) {
       for (const [platform, info] of Object.entries(detail.detail_platforms)) {
         if (!info.contract_address) continue
-        const chain = platformToChain[platform]
+        const chain = chainForCoinGeckoPlatform(platform)
         if (!chain) continue
         deployments.push({
           chain,
