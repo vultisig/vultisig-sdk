@@ -343,6 +343,27 @@ export {
   TERRA_LCD,
 } from '../../tools/swap/astroport'
 
+// Same-chain Solana Jupiter swap helper family. Keep the config constants on a
+// light static path, but lazy-import the builder itself because `jupiter.ts`
+// pulls `@solana/web3.js` at module init. That mirrors other RN lazy wrappers
+// like buildSplTransfer and keeps the eager RN bundle free of Hermes-hostile
+// Solana client initialization while still exposing the canonical SDK contract
+// to Station.
+export type { JupiterQuoteResponse, JupiterSwapParams, JupiterSwapResult } from '../../tools/swap/jupiter'
+export {
+  JUPITER_AFFILIATE_FEE_ATAS,
+  JUPITER_AFFILIATE_FEE_OWNER,
+  JUPITER_API_BASE_URL,
+  JUPITER_DEFAULT_SLIPPAGE_BPS,
+  JUPITER_PLATFORM_FEE_BPS,
+  resolveJupiterFeeAccount,
+  SOL_NATIVE_MINT,
+} from '../../tools/swap/jupiterConfig'
+export async function buildJupiterSwapTx(...args: unknown[]) {
+  const mod = await import('../../tools/swap/jupiter')
+  return mod.buildJupiterSwapTx(...(args as Parameters<typeof mod.buildJupiterSwapTx>))
+}
+
 // EVM utilities (viem-backed — requires app to install `viem` as a peer dep)
 export type {
   EvmBalance,
