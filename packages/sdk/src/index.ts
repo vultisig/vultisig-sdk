@@ -18,9 +18,12 @@ export { Vultisig } from './Vultisig'
 
 // Vault management
 export type { VaultConfig, VaultSaveOptions } from './vault'
+export type { ResolvedTokenInfo } from './vault'
 export {
   BroadcastPartialFailureError,
   FastVault,
+  resolveTokenRef,
+  resolveTokenRefId,
   SecureVault,
   VaultBase,
   VaultConflictError,

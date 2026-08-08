@@ -12,6 +12,8 @@ export { FastVault, SecureVault, VaultBase }
 export type { VaultSaveOptions } from './VaultBase'
 
 // Export errors
+export type { ResolvedTokenInfo } from './tokenRef'
+export { resolveTokenRef, resolveTokenRefId } from './tokenRef'
 export { BroadcastPartialFailureError } from './services/BroadcastService'
 export { VaultConflictError, VaultError, VaultErrorCode, VaultImportError, VaultImportErrorCode } from './VaultError'
 
