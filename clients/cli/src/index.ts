@@ -55,6 +55,7 @@ import {
   executeTxStatus,
   executeVaults,
   executeVerify,
+  parseSlippage,
   resolveTxStatusParams,
 } from './commands'
 import { cachePassword, createPasswordCallback, loadActiveVaultSafely, resolveChainOrThrow } from './core'
@@ -1104,7 +1105,11 @@ program
   .option('--max', 'Swap maximum amount (full balance minus fees for native)')
   .option('--from-token <address>', 'Token address to swap from (default: native)')
   .option('--to-token <address>', 'Token address to swap to (default: native)')
-  .option('--slippage <percent>', 'Slippage tolerance in percent (0-50). Same flag as `swap`; preview how tolerance affects estimatedOutput before signing.', parseFloat)
+  .option(
+    '--slippage <percent>',
+    'Slippage tolerance in percent (0-50). Same flag as `swap`; preview how tolerance affects estimatedOutput before signing.',
+    parseSlippage
+  )
   .addHelpText(
     'after',
     `

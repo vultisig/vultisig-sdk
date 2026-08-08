@@ -3,6 +3,7 @@
  */
 import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import type { Chain, SwapQuoteResult } from '@vultisig/sdk'
+import { InvalidArgumentError } from 'commander'
 import { formatUnits } from 'viem'
 
 import type { CommandContext } from '../core'
@@ -126,6 +127,14 @@ export type SwapOptions = {
   password?: string
   signal?: AbortSignal
 } & SwapQuoteOptions
+
+export function parseSlippage(value: string): number {
+  const slippage = Number(value)
+  if (value.trim() === '' || !Number.isFinite(slippage)) {
+    throw new InvalidArgumentError('Slippage must be a number')
+  }
+  return slippage
+}
 
 // `toChainAmount` is the SDK's authoritative parser. Using its supported
 // precision ceiling here validates and canonicalizes without losing any input

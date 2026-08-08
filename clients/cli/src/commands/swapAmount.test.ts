@@ -24,7 +24,7 @@ vi.mock('../ui', () => ({
 }))
 
 import type { CommandContext } from '../core'
-import { executeSwap, executeSwapQuote, normalizeSwapAmount } from './swap'
+import { executeSwap, executeSwapQuote, normalizeSwapAmount, parseSlippage } from './swap'
 
 const exactAmount = '0.123456789123456789'
 
@@ -130,17 +130,21 @@ describe('CLI swap amount precision', () => {
     }
   )
 
-  it('swap-quote threads --slippage through to the underlying quote request (bead zctj6)', async () => {
+  it('swap-quote threads --slippage 0 through to the underlying quote request (bead zctj6)', async () => {
     const { ctx, swap } = makeContext()
 
     await executeSwapQuote(ctx, {
       fromChain: Chain.Ethereum,
       toChain: Chain.Bitcoin,
       amount: '1',
-      slippage: 3,
+      slippage: parseSlippage('0'),
     })
 
-    expect(swap).toHaveBeenCalledWith(expect.objectContaining({ amount: '1', slippageTolerance: 3, dryRun: true }))
+    expect(swap).toHaveBeenCalledWith(expect.objectContaining({ amount: '1', slippageTolerance: 0, dryRun: true }))
+  })
+
+  it.each(['3abc', '3%', ''])('rejects malformed --slippage value %j', slippage => {
+    expect(() => parseSlippage(slippage)).toThrow('Slippage must be a number')
   })
 
   it('swap-quote omits slippageTolerance when --slippage not passed (backward compatible)', async () => {
