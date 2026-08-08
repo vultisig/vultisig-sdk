@@ -29,6 +29,13 @@ import {
   recordBroadcast,
   reserveBroadcast,
 } from './broadcastJournal'
+import {
+  type HlOrderSigningPayload,
+  type HlOrderTransport,
+  isHlOrderFailure,
+  pollHlOrderStatus,
+  validateHlSigningPayload,
+} from './hlOrder'
 import type { RecentAction } from './types'
 
 // EVM chains that use nonce-based transaction ordering
@@ -110,6 +117,7 @@ export class AgentExecutor {
   // fingerprints so two different vaults sending an identical tx don't collide
   // in the single global journal (see BroadcastIntent.owner).
   private readonly vaultPublicKey: string
+  private readonly consumedHlOrderRefs = new Set<string>()
 
   constructor(vault: VaultBase, verbose = false, vaultId?: string, vultisig?: Vultisig) {
     this.vault = vault
@@ -119,6 +127,89 @@ export class AgentExecutor {
     if (vaultId) {
       this.stateStore = new VaultStateStore(vaultId)
     }
+  }
+
+  async retrieveHlOrder(
+    transport: HlOrderTransport,
+    input: Record<string, unknown>,
+    conversationId: string
+  ): Promise<HlOrderSigningPayload> {
+    const orderRef = typeof input.order_ref === 'string' ? input.order_ref : ''
+    if (!/^[0-9a-f-]{16,64}$/i.test(orderRef)) throw new Error('HL_INVALID_ORDER_REFERENCE')
+    if (this.consumedHlOrderRefs.has(orderRef)) throw new Error('HL_ORDER_REFERENCE_REPLAYED')
+    const payload = await transport.retrieveHlOrderSigningPayload(orderRef, conversationId, this.vaultPublicKey)
+    // Retrieval is one-shot server-side. Mark locally consumed before validation/signing too: a malformed
+    // or tampered payload must not be retried under the same opaque capability.
+    this.consumedHlOrderRefs.add(orderRef)
+    await validateHlSigningPayload(
+      payload,
+      {
+        orderRef,
+        conversationId,
+        publicKey: this.vaultPublicKey,
+        digest: typeof input.digest === 'string' ? input.digest : undefined,
+      },
+      this.vault
+    )
+    return payload
+  }
+
+  async signAndSubmitHlOrder(transport: HlOrderTransport, payload: HlOrderSigningPayload): Promise<RecentAction> {
+    return this.runTool('hl_order', async () => {
+      if (this.vault.isEncrypted && !(this.vault as any).isUnlocked?.() && this.password) {
+        await (this.vault as any).unlock?.(this.password)
+      }
+      const expectedAddress = await this.vault.address(Chain.Ethereum)
+      const signatures = []
+      for (const step of payload.steps) {
+        const signed = await this.vault.signBytes({
+          data: step.digest,
+          chain: Chain.Ethereum,
+        })
+        const canonical = toCanonicalEvmSignature(signed.signature, signed.recovery ?? 0)
+        const v = canonical.recovery + 27
+        const wireSignature = `0x${canonical.r}${canonical.s}${v.toString(16).padStart(2, '0')}` as `0x${string}`
+        const recovered = await recoverAddress({
+          hash: step.digest,
+          signature: wireSignature,
+        })
+        if (recovered.toLowerCase() !== expectedAddress.toLowerCase()) {
+          throw new Error('HL_SIGNATURE_RECOVERY_MISMATCH')
+        }
+        signatures.push({
+          kind: step.kind,
+          digest: step.digest,
+          r: `0x${canonical.r}` as `0x${string}`,
+          s: `0x${canonical.s}` as `0x${string}`,
+          v,
+        })
+      }
+      const params = {
+        orderRef: payload.order_ref,
+        conversationId: payload.conversation_id,
+        publicKey: this.vaultPublicKey,
+      }
+      const submitted = await transport.submitHlOrder(
+        params.orderRef,
+        params.conversationId,
+        params.publicKey,
+        signatures
+      )
+      const status = await pollHlOrderStatus(transport, params, submitted)
+      if (isHlOrderFailure(status)) {
+        throw new Error(`HL_ORDER_${status.state.toUpperCase()}: ${status.reason ?? 'venue did not accept the order'}`)
+      }
+      // Signatures and raw actions travel only over the authenticated direct endpoint. The chat
+      // recent_actions channel receives status metadata, never signing material.
+      return {
+        order_ref: payload.order_ref,
+        state: status.state,
+        order_id: status.order_id,
+        filled_size: status.filled_size,
+        average_price: status.average_price,
+        reason: status.reason,
+      }
+    })
   }
 
   setPassword(password: string): void {
@@ -684,7 +775,9 @@ export class AgentExecutor {
         ? this.buildBroadcastIntent(payload, chain, { txArgs: payload.txArgs })
         : this.buildBroadcastIntent(payload, chain)
       const approveIntent = isMultiLeg
-        ? this.buildBroadcastIntent(payload, chain, { txArgs: payload.approvalTxArgs })
+        ? this.buildBroadcastIntent(payload, chain, {
+            txArgs: payload.approvalTxArgs,
+          })
         : undefined
       const primaryFp = computeFingerprint(primaryIntent)
       const approveFp = approveIntent ? computeFingerprint(approveIntent) : undefined
@@ -2150,7 +2243,11 @@ export function toCanonicalEvmSignature(sigHex: string, recovery: number): { r: 
   const sBig = BigInt('0x' + s)
   if (sBig > SECP256K1_N >> 1n) {
     const folded = SECP256K1_N - sBig
-    return { r, s: folded.toString(16).padStart(64, '0'), recovery: recovery ^ 1 }
+    return {
+      r,
+      s: folded.toString(16).padStart(64, '0'),
+      recovery: recovery ^ 1,
+    }
   }
   return { r, s, recovery }
 }
