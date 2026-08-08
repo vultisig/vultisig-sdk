@@ -441,7 +441,17 @@ export class AgentExecutor {
     const tokenDetailSuffix = amountEmbedsTokenLabel || !tokenDetail ? '' : ` ${tokenDetail}`
     const location = amountEmbedsTokenLabel && labelCarriesRoutedChain ? '' : `on ${stored.chain}${tokenDetailSuffix}`
     const to = (p?.txArgs?.to as string) || labels.recipient_echo || '?'
-    return `send ${amountWithSymbol}${location ? ` ${location}` : ''} to ${to}`
+    // Name the token contract from the payload that gets signed, not from label
+    // text: an EVM token send executes against `txArgs.tx.to` (the contract,
+    // with transfer calldata) while `txArgs.to` is the recipient. A native send
+    // has empty calldata and tx.to === recipient, so it gains nothing here.
+    // Non-EVM envelopes carry no `txArgs.tx` and are likewise unchanged.
+    const contractTo = typeof p?.txArgs?.tx?.to === 'string' ? (p.txArgs.tx.to as string) : ''
+    const calldata = typeof p?.txArgs?.tx?.data === 'string' ? (p.txArgs.tx.data as string) : ''
+    const isContractSend = !!contractTo && calldata !== '' && calldata !== '0x'
+    const contractPart =
+      isContractSend && contractTo.toLowerCase() !== to.toLowerCase() ? ` (token contract ${contractTo})` : ''
+    return `send ${amountWithSymbol}${location ? ` ${location}` : ''} to ${to}${contractPart}`
   }
 
   /**
