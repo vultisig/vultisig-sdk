@@ -53,10 +53,15 @@ import { displayVaultInfo, displayVaultsList, setupVaultEvents } from '../ui'
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const PASSWORD_MIN_LENGTH = 8
 
-export function validateFastVaultCreateInputs(input: { name?: string; email?: string; password?: string }): void {
+export function validateFastVaultCreateInputs(input: {
+  name?: string
+  email?: string
+  password?: string
+}): { name: string; email: string; password: string } {
   const name = input.name?.trim() ?? ''
   const email = input.email?.trim() ?? ''
   const password = input.password ?? ''
+  const passwordCharacters = [...password].length
 
   if (name.length === 0) {
     throw new InvalidInputError('Vault name is required and cannot be empty', undefined, ['Pass a non-empty --name'])
@@ -73,13 +78,15 @@ export function validateFastVaultCreateInputs(input: { name?: string; email?: st
       ['Pass a well-formed --email like you@example.com']
     )
   }
-  if (password.length < PASSWORD_MIN_LENGTH) {
+  if (passwordCharacters < PASSWORD_MIN_LENGTH) {
     throw new InvalidInputError(
-      `Password too short (${password.length} chars, minimum ${PASSWORD_MIN_LENGTH})`,
+      `Password too short (${passwordCharacters} chars, minimum ${PASSWORD_MIN_LENGTH})`,
       'The vault password protects your MPC keyshares — a short password is a real security risk.',
       [`Pass a --password at least ${PASSWORD_MIN_LENGTH} characters`]
     )
   }
+
+  return { name, email, password }
 }
 
 /**
@@ -119,14 +126,18 @@ export type SecureVaultOptions = {
  */
 export async function executeCreateFast(ctx: CommandContext, options: FastVaultOptions): Promise<VaultBase> {
   // bead vultisig-33sz9: validate the inputs BEFORE the server round-trip.
-  validateFastVaultCreateInputs({ name: options.name, email: options.email, password: options.password })
+  const { name, email, password } = validateFastVaultCreateInputs({
+    name: options.name,
+    email: options.email,
+    password: options.password,
+  })
 
   // Auto-enable two-step mode in non-interactive sessions (shared definition:
   // non-TTY stdout OR stdin, or --non-interactive/--ci). Keying off stdin alone
   // would let a redirected-stdout run create server-side vault state and only
   // then die on the OTP prompt — a side effect before the fail-closed refusal.
   const twoStep = options.twoStep || isNonInteractive()
-  const { name, password, email, signal } = options
+  const { signal } = options
 
   if (!options.twoStep && twoStep) {
     info('Non-interactive session detected. Using --two-step mode automatically.')
@@ -924,13 +935,17 @@ export async function executeCreateFromSeedphraseFast(
   // interactive checks. Same reasoning as executeCreateFast — these three
   // inputs get sent to the FastVault server if not caught here, and each
   // invalid one is trivially detectable client-side.
-  validateFastVaultCreateInputs({ name: options.name, email: options.email, password: options.password })
+  const { name, email, password } = validateFastVaultCreateInputs({
+    name: options.name,
+    email: options.email,
+    password: options.password,
+  })
 
   // This flow has no two-step mode: it always ends in an interactive email-OTP
   // prompt. Refuse up-front in a non-interactive session so no server-side vault
   // state is created before the prompt chokepoint would reject anyway.
   requireInteractive('Seedphrase fast-vault import requires interactive email-OTP entry; run it in a terminal.')
-  const { mnemonic, name, password, email, discoverChains, chains, signal, usePhantomSolanaPath } = options
+  const { mnemonic, discoverChains, chains, signal, usePhantomSolanaPath } = options
 
   // jscpd:ignore-start
   // 1. Validate seedphrase first

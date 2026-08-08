@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import type { CommandContext } from '../core'
+import { describe, expect, it, vi } from 'vitest'
 
 import { ExitCode, InvalidInputError } from '../core/errors'
-import { validateFastVaultCreateInputs } from './vault-management'
+import { executeCreateFast, validateFastVaultCreateInputs } from './vault-management'
 
 // bead vultisig-33sz9: `create fast` previously accepted --email 'notemail',
 // --password '1', and --name '' and provisioned real server-side vault state
@@ -68,6 +69,29 @@ describe('validateFastVaultCreateInputs (bead 33sz9)', () => {
 
   it('accepts password exactly 8 chars (boundary)', () => {
     expect(() => validateFastVaultCreateInputs({ ...validBase, password: 'exactly8' })).not.toThrow()
+  })
+
+  it('counts user-perceived password characters, not UTF-16 code units', () => {
+    expect(() => validateFastVaultCreateInputs({ ...validBase, password: '😀😀😀😀' })).toThrow(/password too short/i)
+    expect(() => validateFastVaultCreateInputs({ ...validBase, password: '😀😀😀😀abcd' })).not.toThrow()
+  })
+
+  it('returns normalized email for callers that send the value upstream', () => {
+    expect(validateFastVaultCreateInputs({ ...validBase, email: '  me@example.com  ' }).email).toBe('me@example.com')
+  })
+
+  it('executeCreateFast passes the normalized email upstream', async () => {
+    const createFastVault = vi.fn().mockResolvedValue('vault-id-123')
+    const ctx = { sdk: { createFastVault }, dispose: () => {} } as unknown as CommandContext
+
+    await executeCreateFast(ctx, {
+      name: 'MyVault',
+      password: 'password1',
+      email: '  me@example.com  ',
+      twoStep: true,
+    })
+
+    expect(createFastVault).toHaveBeenCalledWith(expect.objectContaining({ email: 'me@example.com' }))
   })
 
   it('checks name → email → password in that order (deterministic diagnostic)', () => {
