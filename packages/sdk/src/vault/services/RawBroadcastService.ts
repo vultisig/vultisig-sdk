@@ -324,38 +324,31 @@ export class RawBroadcastService {
     // 1. JSON: { "tx_bytes": "base64..." }
     // 2. Raw base64 protobuf bytes
     const txBytes = getCosmosRawTxBytes(rawTx)
+    const hash = deriveCosmosRawTxHash(rawTx)
 
     const client = await getCosmosClient(chain)
     const { data: result, error } = await attempt(client.broadcastTx(txBytes))
 
     if (error) {
       if (isInError(error, 'tx already exists in cache')) {
-        const hash = deriveCosmosRawTxHash(rawTx)
-        const { data: existingTx, error: lookupError } = await attempt(client.getTx(hash))
-
-        if (!existingTx) {
-          const lookupMessage = lookupError instanceof Error ? lookupError.message : String(lookupError ?? 'not found')
-          throw new VaultError(
-            VaultErrorCode.BroadcastFailed,
-            `Cosmos transaction may already exist, but its execution result could not be verified: ${lookupMessage}`,
-            lookupError instanceof Error ? lookupError : new Error(lookupMessage)
-          )
-        }
-
-        try {
-          assertIsDeliverTxSuccess({ ...existingTx, transactionHash: existingTx.hash })
-        } catch (deliverTxError) {
-          const message = deliverTxError instanceof Error ? deliverTxError.message : String(deliverTxError)
-          throw new VaultError(
-            VaultErrorCode.BroadcastFailed,
-            `Cosmos transaction was included but execution failed: ${message}`,
-            deliverTxError instanceof Error ? deliverTxError : new Error(message)
-          )
-        }
-
-        return hash
+        return await this.recoverCosmosBroadcastByHash(client, hash)
       }
-      throw error
+
+      // StargateClient throws for transport/proxy/JSON-RPC failures before we get a DeliverTx
+      // verdict. Those failures are ambiguous: the signed bytes may already have reached the node,
+      // and blindly reporting total failure invites a second sign/broadcast with a fresh sequence.
+      // Recover via the deterministic tx hash first; if the tx never shows up, fail closed and make
+      // the caller verify before retrying.
+      const recoveredHash = await this.tryRecoverCosmosBroadcastByHash(client, hash)
+      if (recoveredHash) {
+        return recoveredHash
+      }
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      throw new VaultError(
+        VaultErrorCode.BroadcastFailed,
+        `Cosmos broadcast status is unknown after transport failure: ${errorMessage}. Verify ${hash} on a block explorer before retrying to avoid a double-spend.`,
+        error instanceof Error ? error : new Error(errorMessage)
+      )
     }
 
     if (!result) throw new Error('No broadcast result returned')
@@ -378,6 +371,53 @@ export class RawBroadcastService {
     }
 
     return result.transactionHash
+  }
+
+  private async tryRecoverCosmosBroadcastByHash(
+    client: Awaited<ReturnType<typeof getCosmosClient>>,
+    hash: string
+  ): Promise<string | null> {
+    const maxAttempts = 6
+    const delayMs = 250
+
+    for (let attemptIndex = 0; attemptIndex < maxAttempts; attemptIndex++) {
+      const { data: existingTx } = await attempt(client.getTx(hash))
+      if (existingTx) {
+        try {
+          assertIsDeliverTxSuccess({ ...existingTx, transactionHash: existingTx.hash })
+        } catch (deliverTxError) {
+          const message = deliverTxError instanceof Error ? deliverTxError.message : String(deliverTxError)
+          throw new VaultError(
+            VaultErrorCode.BroadcastFailed,
+            `Cosmos transaction was included but execution failed: ${message}`,
+            deliverTxError instanceof Error ? deliverTxError : new Error(message)
+          )
+        }
+
+        return hash
+      }
+
+      if (attemptIndex < maxAttempts - 1) {
+        await new Promise(resolve => setTimeout(resolve, delayMs))
+      }
+    }
+
+    return null
+  }
+
+  private async recoverCosmosBroadcastByHash(
+    client: Awaited<ReturnType<typeof getCosmosClient>>,
+    hash: string
+  ): Promise<string> {
+    const recoveredHash = await this.tryRecoverCosmosBroadcastByHash(client, hash)
+    if (recoveredHash) {
+      return recoveredHash
+    }
+
+    throw new VaultError(
+      VaultErrorCode.BroadcastFailed,
+      `Cosmos transaction may already exist, but its execution result could not be verified: not found`
+    )
   }
 
   /**
