@@ -124,4 +124,6 @@ export default defineConfig([
   createSubpathTypesConfig('src/tools/parse/index.ts', 'dist/tools/parse/index.d.ts'),
   createSubpathTypesConfig('src/tools/defi/index.ts', 'dist/tools/defi/index.d.ts'),
   createSubpathTypesConfig('src/tools/bridge/index.ts', 'dist/tools/bridge/index.d.ts'),
+  createSubpathTypesConfig('src/chains/tron/index.ts', 'dist/chains/tron/index.d.ts'),
+  createSubpathTypesConfig('src/chains/utxo/index.ts', 'dist/chains/utxo/index.d.ts'),
 ])
