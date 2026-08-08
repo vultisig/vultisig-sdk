@@ -59,6 +59,34 @@ export class TxNormalizeError extends Error {
 
 const isJsonObject = (v: unknown): v is JsonObject => typeof v === 'object' && v !== null && !Array.isArray(v)
 
+const LEG_METADATA_KEYS = [
+  'chain',
+  'chain_id',
+  'from_chain',
+  'to_chain',
+  'provider',
+  'from_symbol',
+  'to_symbol',
+  'from_address',
+  'to_address',
+  'from_decimals',
+  'to_decimals',
+] as const
+
+const enrichRoutingMetadata = (txMap: JsonObject, args: NormalizeArgs): JsonObject => {
+  const out: JsonObject = { ...txMap }
+  const { from_chain: argFrom, to_chain: argTo, chain: argChain } = args
+
+  if (!('from_chain' in out)) {
+    if (argFrom) out['from_chain'] = argFrom
+    else if (argChain) out['from_chain'] = argChain
+  }
+  if (!('chain' in out) && argChain) out['chain'] = argChain
+  if (!('to_chain' in out) && argTo) out['to_chain'] = argTo
+
+  return out
+}
+
 /**
  * Parse a build result into a plain object. Accepts either a JSON string (the
  * raw MCP tool result, mirroring the Go `result string` input) or an
@@ -135,23 +163,13 @@ export const normalizeTx = (result: string | JsonObject, args: NormalizeArgs = {
   // metadata to the outer level for downstream chain resolution.
   if (!executePrep && !hasNestedTx) {
     const wrapped: JsonObject = { tx: { ...txMap } }
-    if ('chain' in txMap) wrapped['chain'] = txMap['chain']
-    if ('chain_id' in txMap) wrapped['chain_id'] = txMap['chain_id']
+    for (const key of LEG_METADATA_KEYS) {
+      if (key in txMap) wrapped[key] = txMap[key]
+    }
     txMap = wrapped
   }
 
-  // Enrich with chain-routing info from the originating tool-call args when the
-  // payload doesn't already carry it. from_chain falls back to chain (matches
-  // Go: single-chain ops set from_chain = chain).
-  const { from_chain: argFrom, to_chain: argTo, chain: argChain } = args
-  if (!('from_chain' in txMap)) {
-    if (argFrom) txMap['from_chain'] = argFrom
-    else if (argChain) txMap['from_chain'] = argChain
-  }
-  if (!('chain' in txMap) && argChain) txMap['chain'] = argChain
-  if (!('to_chain' in txMap) && argTo) txMap['to_chain'] = argTo
-
-  return txMap as NormalizedTx
+  return enrichRoutingMetadata(txMap, args) as NormalizedTx
 }
 
 /**
@@ -159,19 +177,6 @@ export const normalizeTx = (result: string | JsonObject, args: NormalizeArgs = {
  * `chain` / `chain_id` / `provider` / symbols / addresses / decimals ride along
  * on every leg. Matches the `metadataKeys` slice in Go `wrapSingleTx`.
  */
-const LEG_METADATA_KEYS = [
-  'chain',
-  'chain_id',
-  'from_chain',
-  'to_chain',
-  'provider',
-  'from_symbol',
-  'to_symbol',
-  'from_address',
-  'to_address',
-  'from_decimals',
-  'to_decimals',
-] as const
 
 /**
  * Wrap a single child tx under `txKey` and copy routing metadata from the
@@ -217,15 +222,20 @@ export const splitMultiTx = (result: string | JsonObject, args: NormalizeArgs = 
     throw new TxNormalizeError('build result is not valid JSON')
   }
 
+  const enriched = enrichRoutingMetadata(parsed, args)
+
   // Pattern 1: swap with approval.
-  if (parsed['needs_approval'] === true && 'approval_tx' in parsed && 'swap_tx' in parsed) {
-    return [wrapSingleTx('tx', parsed['approval_tx'], parsed), wrapSingleTx('swap_tx', parsed['swap_tx'], parsed)]
+  if (enriched['needs_approval'] === true && 'approval_tx' in enriched && 'swap_tx' in enriched) {
+    return [
+      wrapSingleTx('tx', enriched['approval_tx'], enriched),
+      wrapSingleTx('swap_tx', enriched['swap_tx'], enriched),
+    ]
   }
 
   // Pattern 2: generic transactions array (len >= 1).
-  const txs = parsed['transactions']
+  const txs = enriched['transactions']
   if (Array.isArray(txs) && txs.length > 0) {
-    return txs.map(child => wrapSingleTx('tx', child, parsed))
+    return txs.map(child => wrapSingleTx('tx', child, enriched))
   }
 
   // Neither pattern: normalize the single tx and return as a 1-element list.
