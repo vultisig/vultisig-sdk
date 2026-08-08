@@ -51,6 +51,7 @@ const external = [
   '7z-wasm',
   '@vultisig/mpc-types',
   '@vultisig/mpc-native',
+  'koffi',
 ]
 
 // Rewrite WASM import paths for bundled output.

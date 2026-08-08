@@ -8,12 +8,7 @@ import * as path from 'path'
 
 import type { Storage, StorageMetadata, StoredValue } from '../../storage/types'
 import { STORAGE_VERSION, StorageError, StorageErrorCode } from '../../storage/types'
-
-type FileLockOwner = {
-  id: string
-  pid: number
-  hostname: string
-}
+import { tryLockFile, unlockFile } from './fileLock'
 
 function getDefaultBasePath(): string {
   const override = process.env.VULTISIG_CONFIG_DIR?.trim()
@@ -96,69 +91,20 @@ export class FileStorage implements Storage {
     })
   }
 
-  private async readLockOwner(lockPath: string): Promise<FileLockOwner | undefined> {
-    try {
-      const owner = JSON.parse(await fs.readFile(lockPath, 'utf-8')) as Partial<FileLockOwner>
-      return typeof owner.id === 'string' && typeof owner.pid === 'number' && typeof owner.hostname === 'string'
-        ? (owner as FileLockOwner)
-        : undefined
-    } catch {
-      return undefined
-    }
-  }
-
-  private isOwnerProcessDead(owner: FileLockOwner): boolean {
-    if (owner.hostname !== os.hostname() || owner.pid === process.pid) return false
-    try {
-      process.kill(owner.pid, 0)
-      return false
-    } catch (error) {
-      return (error as NodeJS.ErrnoException).code === 'ESRCH'
-    }
-  }
-
-  private async withKeyLock<T>(key: string, operation: () => Promise<T>): Promise<T> {
+  private async withStorageLock<T>(key: string, operation: () => Promise<T>): Promise<T> {
     await this.ensureDirectory()
-    const lockPath = `${this.getFilePath(key)}.lock`
+    const lockPath = path.join(this.basePath, '.storage.lock')
     const startedAt = Date.now()
-    const owner: FileLockOwner = {
-      id: `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      pid: process.pid,
-      hostname: os.hostname(),
-    }
-    const ownerPath = `${lockPath}.${owner.id}.owner`
-    await fs.writeFile(ownerPath, JSON.stringify(owner), {
-      encoding: 'utf-8',
-      mode: 0o600,
-      flag: 'wx',
-    })
+    // Keep one storage-wide sentinel stable: advisory locks are inode-scoped,
+    // and replacing or unlinking it could split contenders across locks. The
+    // kernel releases the lock automatically when a process exits.
+    const lockHandle = await fs.open(lockPath, 'a+', 0o600)
     let acquired = false
 
     try {
       while (!acquired) {
-        try {
-          await fs.link(ownerPath, lockPath)
-          acquired = true
-          continue
-        } catch (error) {
-          if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
-            throw new StorageError(StorageErrorCode.Unknown, `Failed to lock value for key "${key}"`, error as Error)
-          }
-        }
-
-        const currentOwner = await this.readLockOwner(lockPath)
-        if (currentOwner && this.isOwnerProcessDead(currentOwner)) {
-          const confirmedOwner = await this.readLockOwner(lockPath)
-          if (confirmedOwner?.id === currentOwner.id) {
-            await fs.unlink(lockPath).catch(error => {
-              if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-            })
-            await fs.unlink(`${lockPath}.${currentOwner.id}.owner`).catch(error => {
-              if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-            })
-          }
-          continue
-        }
+        acquired = tryLockFile(lockHandle.fd)
+        if (acquired) break
 
         if (Date.now() - startedAt > 5_000) {
           throw new StorageError(StorageErrorCode.StorageUnavailable, `Timed out locking value for key "${key}"`)
@@ -169,15 +115,11 @@ export class FileStorage implements Storage {
       return await operation()
     } finally {
       try {
-        if (acquired && (await this.readLockOwner(lockPath))?.id === owner.id) {
-          await fs.unlink(lockPath).catch(error => {
-            if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-          })
+        if (acquired) {
+          unlockFile(lockHandle.fd)
         }
       } finally {
-        await fs.unlink(ownerPath).catch(error => {
-          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-        })
+        await lockHandle.close()
       }
     }
   }
@@ -197,7 +139,7 @@ export class FileStorage implements Storage {
 
   async set<T>(key: string, value: T): Promise<void> {
     try {
-      await this.withKeyLock(key, () => this.writeValue(key, value))
+      await this.withStorageLock(key, () => this.writeValue(key, value))
     } catch (error) {
       if (error instanceof StorageError) throw error
       if ((error as NodeJS.ErrnoException).code === 'ENOSPC') {
@@ -209,7 +151,7 @@ export class FileStorage implements Storage {
 
   async compareAndSet<T>(key: string, expectedValue: T | null, value: T | null): Promise<boolean> {
     try {
-      return await this.withKeyLock(key, async () => {
+      return await this.withStorageLock(key, async () => {
         const currentValue = await this.readValue<T>(key)
         if (JSON.stringify(currentValue) !== JSON.stringify(expectedValue)) {
           return false
@@ -233,7 +175,7 @@ export class FileStorage implements Storage {
 
   async remove(key: string): Promise<void> {
     try {
-      await this.withKeyLock(key, () => this.removeValue(key))
+      await this.withStorageLock(key, () => this.removeValue(key))
     } catch (error) {
       if (error instanceof StorageError) throw error
       throw new StorageError(StorageErrorCode.Unknown, `Failed to remove key "${key}"`, error as Error)
@@ -275,7 +217,9 @@ export class FileStorage implements Storage {
 
   async clear(): Promise<void> {
     try {
-      await Promise.all((await this.list()).map(key => this.remove(key)))
+      await this.withStorageLock('*', async () => {
+        await Promise.all((await this.list()).map(key => this.removeValue(key)))
+      })
     } catch (error) {
       if (error instanceof StorageError) throw error
       throw new StorageError(StorageErrorCode.Unknown, 'Failed to clear storage', error as Error)

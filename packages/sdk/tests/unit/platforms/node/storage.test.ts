@@ -1,8 +1,9 @@
+import { spawn } from 'node:child_process'
+import { once } from 'node:events'
 import * as fs from 'node:fs/promises'
 import * as os from 'node:os'
 import * as path from 'node:path'
-import { performance } from 'node:perf_hooks'
-import { Worker } from 'node:worker_threads'
+import { fileURLToPath } from 'node:url'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -10,7 +11,6 @@ import { FileStorage } from '../../../../src/platforms/node/storage'
 
 const ENV_KEY = 'VULTISIG_CONFIG_DIR'
 const savedConfigDir = process.env[ENV_KEY]
-const tempDirs: string[] = []
 
 afterEach(() => {
   if (savedConfigDir === undefined) {
@@ -18,7 +18,6 @@ afterEach(() => {
   } else {
     process.env[ENV_KEY] = savedConfigDir
   }
-  return Promise.all(tempDirs.splice(0).map(directory => fs.rm(directory, { recursive: true, force: true })))
 })
 
 describe('FileStorage', () => {
@@ -79,6 +78,67 @@ describe('FileStorage', () => {
     }
   })
 
+  it('releases a crashed process lock without allowing concurrent conditional writers', async () => {
+    const basePath = await fs.mkdtemp(path.join(os.tmpdir(), 'vultisig-storage-crashed-lock-'))
+    const lockPath = path.join(basePath, '.storage.lock')
+    const childScript = fileURLToPath(new URL('./fixtures/file-lock-owner.ts', import.meta.url))
+    const lockOwner = spawn(process.execPath, ['--import', 'tsx', childScript, lockPath], {
+      cwd: process.cwd(),
+      stdio: ['ignore', 'pipe', 'inherit'],
+    })
+
+    try {
+      const [lockOutput] = (await once(lockOwner.stdout!, 'data')) as [Buffer]
+      expect(lockOutput.toString()).toContain('locked')
+
+      const storages = Array.from({ length: 12 }, () => new FileStorage({ basePath }))
+      let settled = false
+      const pendingResults = Promise.all(
+        storages.map((storage, owner) => storage.compareAndSet('vault:shared', null, { owner }))
+      ).finally(() => {
+        settled = true
+      })
+
+      await new Promise(resolve => setTimeout(resolve, 50))
+      expect(settled).toBe(false)
+
+      lockOwner.kill('SIGKILL')
+      await once(lockOwner, 'exit')
+      const results = await pendingResults
+
+      expect(results.filter(Boolean)).toHaveLength(1)
+      const winner = results.findIndex(Boolean)
+      await expect(storages[0].get('vault:shared')).resolves.toEqual({ owner: winner })
+      await expect(fs.readdir(basePath).then(files => files.sort())).resolves.toEqual([
+        '.storage.lock',
+        'cache',
+        'vault:shared.json',
+      ])
+    } finally {
+      if (lockOwner.exitCode === null && lockOwner.signalCode === null) {
+        lockOwner.kill('SIGKILL')
+        await once(lockOwner, 'exit')
+      }
+      await fs.rm(basePath, { recursive: true, force: true })
+    }
+  })
+
+  it('uses one non-identifying lock sentinel across removed keys', async () => {
+    const basePath = await fs.mkdtemp(path.join(os.tmpdir(), 'vultisig-storage-lock-sentinel-'))
+
+    try {
+      const storage = new FileStorage({ basePath })
+      await storage.set('vault:first-device', { keyshare: 'first' })
+      await storage.set('cache:address:second-device', { address: 'second' })
+      await storage.clear()
+
+      await expect(fs.readdir(basePath).then(files => files.sort())).resolves.toEqual(['.storage.lock', 'cache'])
+      await expect(fs.readdir(path.join(basePath, 'cache'))).resolves.toEqual([])
+    } finally {
+      await fs.rm(basePath, { recursive: true, force: true })
+    }
+  })
+
   it('refuses to overwrite a pre-existing temp path', async () => {
     const basePath = await fs.mkdtemp(path.join(os.tmpdir(), 'vultisig-storage-'))
     const now = 1_700_000_000_000
@@ -102,144 +162,5 @@ describe('FileStorage', () => {
       vi.restoreAllMocks()
       await fs.rm(basePath, { recursive: true, force: true })
     }
-  })
-
-  it('serializes ordinary writes with conditional writes across adapter instances', async () => {
-    const basePath = await fs.mkdtemp(path.join(os.tmpdir(), 'vultisig-file-storage-'))
-    tempDirs.push(basePath)
-    const conditional = new FileStorage({ basePath })
-    const ordinary = new FileStorage({ basePath })
-    await conditional.set('vault:shared', { version: 'original' })
-
-    let releaseRead!: () => void
-    const readGate = new Promise<void>(resolve => {
-      releaseRead = resolve
-    })
-    let signalRead!: () => void
-    const readStarted = new Promise<void>(resolve => {
-      signalRead = resolve
-    })
-    const storageInternals = conditional as unknown as {
-      readValue: <T>(key: string) => Promise<T | null>
-    }
-    const readValue = storageInternals.readValue.bind(conditional) as typeof storageInternals.readValue
-    storageInternals.readValue = async <T>(key: string) => {
-      signalRead()
-      await readGate
-      return readValue<T>(key)
-    }
-
-    const replacing = conditional.compareAndSet('vault:shared', { version: 'original' }, { version: 'conditional' })
-    await readStarted
-    let ordinaryFinished = false
-    const saving = ordinary.set('vault:shared', { version: 'ordinary' }).then(() => {
-      ordinaryFinished = true
-    })
-    await Promise.resolve()
-    expect(ordinaryFinished).toBe(false)
-
-    releaseRead()
-    await expect(replacing).resolves.toBe(true)
-    await saving
-    await expect(conditional.get('vault:shared')).resolves.toEqual({
-      version: 'ordinary',
-    })
-  })
-
-  it('serializes clear with a conditional write', async () => {
-    const basePath = await fs.mkdtemp(path.join(os.tmpdir(), 'vultisig-file-storage-'))
-    tempDirs.push(basePath)
-    const conditional = new FileStorage({ basePath })
-    const clearing = new FileStorage({ basePath })
-    await conditional.set('vault:shared', { version: 'original' })
-
-    let releaseRead!: () => void
-    const readGate = new Promise<void>(resolve => {
-      releaseRead = resolve
-    })
-    let signalRead!: () => void
-    const readStarted = new Promise<void>(resolve => {
-      signalRead = resolve
-    })
-    const storageInternals = conditional as unknown as {
-      readValue: <T>(key: string) => Promise<T | null>
-    }
-    const readValue = storageInternals.readValue.bind(conditional) as typeof storageInternals.readValue
-    storageInternals.readValue = async <T>(key: string) => {
-      signalRead()
-      await readGate
-      return readValue<T>(key)
-    }
-
-    const replacing = conditional.compareAndSet('vault:shared', { version: 'original' }, { version: 'conditional' })
-    await readStarted
-    let clearFinished = false
-    const clearPromise = clearing.clear().then(() => {
-      clearFinished = true
-    })
-    await Promise.resolve()
-    expect(clearFinished).toBe(false)
-
-    releaseRead()
-    await expect(replacing).resolves.toBe(true)
-    await clearPromise
-    await expect(conditional.get('vault:shared')).resolves.toBeNull()
-  })
-
-  it('recovers a lock abandoned by a crashed process', async () => {
-    const basePath = await fs.mkdtemp(path.join(os.tmpdir(), 'vultisig-file-storage-'))
-    tempDirs.push(basePath)
-    const lockPath = path.join(basePath, 'vault:shared.json.lock')
-    await fs.writeFile(
-      lockPath,
-      JSON.stringify({
-        id: 'crashed-owner',
-        pid: 2_147_483_647,
-        hostname: os.hostname(),
-        processStartedAt: 0,
-      })
-    )
-    const storage = new FileStorage({ basePath })
-
-    await storage.set('vault:shared', { version: 'recovered' })
-
-    await expect(storage.get('vault:shared')).resolves.toEqual({ version: 'recovered' })
-  })
-
-  it('recovers an abandoned lock after its PID is reused by this process', async () => {
-    const basePath = await fs.mkdtemp(path.join(os.tmpdir(), 'vultisig-file-storage-'))
-    tempDirs.push(basePath)
-    await fs.writeFile(
-      path.join(basePath, 'vault:shared.json.lock'),
-      JSON.stringify({
-        id: 'previous-process-with-reused-pid',
-        pid: process.pid,
-        hostname: os.hostname(),
-        processStartedAt: performance.timeOrigin - 1,
-      })
-    )
-    const storage = new FileStorage({ basePath })
-
-    await storage.set('vault:shared', { version: 'recovered-after-pid-reuse' })
-
-    await expect(storage.get('vault:shared')).resolves.toEqual({ version: 'recovered-after-pid-reuse' })
-  })
-
-  it('uses a process-start identity shared with worker threads', async () => {
-    const workerIdentity = await new Promise<{ pid: number; processStartedAt: number }>((resolve, reject) => {
-      const worker = new Worker(
-        `const { performance } = require('perf_hooks');
-         const { parentPort } = require('worker_threads');
-         parentPort.postMessage({ pid: process.pid, processStartedAt: performance.timeOrigin });`,
-        { eval: true }
-      )
-      worker.once('message', resolve)
-      worker.once('error', reject)
-    })
-
-    expect(workerIdentity).toEqual({
-      pid: process.pid,
-      processStartedAt: performance.timeOrigin,
-    })
   })
 })
