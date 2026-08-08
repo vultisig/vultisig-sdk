@@ -211,24 +211,24 @@ const addressToBytes32 = (addr: `0x${string}`): `0x${string}` => {
  * ```
  */
 export const buildCctpBridge = (params: BuildCctpBridgeParams): CctpBridgeResult => {
-  const srcChainName = params.sourceChain.trim()
-  const dstChainName = params.destinationChain.trim()
+  const srcChainInput = params.sourceChain.trim()
+  const dstChainInput = params.destinationChain.trim()
 
-  if (srcChainName === dstChainName) {
-    throw new Error('sourceChain and destinationChain must be different')
-  }
-
-  const srcCctp: CctpChainConfig | undefined = getCctpChain(srcChainName)
+  const srcCctp: CctpChainConfig | undefined = getCctpChain(srcChainInput)
   if (!srcCctp) {
     throw new Error(
-      `source chain ${JSON.stringify(srcChainName)} is not supported by CCTP. Supported: ${cctpSupportedChains.join(', ')}`
+      `source chain ${JSON.stringify(srcChainInput)} is not supported by CCTP. Supported: ${cctpSupportedChains.join(', ')}`
     )
   }
-  const dstCctp: CctpChainConfig | undefined = getCctpChain(dstChainName)
+  const dstCctp: CctpChainConfig | undefined = getCctpChain(dstChainInput)
   if (!dstCctp) {
     throw new Error(
-      `destination chain ${JSON.stringify(dstChainName)} is not supported by CCTP. Supported: ${cctpSupportedChains.join(', ')}`
+      `destination chain ${JSON.stringify(dstChainInput)} is not supported by CCTP. Supported: ${cctpSupportedChains.join(', ')}`
     )
+  }
+
+  if (srcCctp.chain === dstCctp.chain) {
+    throw new Error('sourceChain and destinationChain must be different')
   }
 
   const rawAmount = parseUsdcAmount(params.amount)
@@ -272,11 +272,11 @@ export const buildCctpBridge = (params: BuildCctpBridgeParams): CctpBridgeResult
   })
 
   return {
-    chain: srcChainName,
+    chain: srcCctp.chain,
     chainId: srcCctp.evmChainId,
     provider: 'cctp',
-    fromChain: srcChainName,
-    toChain: dstChainName,
+    fromChain: srcCctp.chain,
+    toChain: dstCctp.chain,
     fromSymbol: 'USDC',
     toSymbol: 'USDC',
     transactions: [
@@ -285,7 +285,7 @@ export const buildCctpBridge = (params: BuildCctpBridgeParams): CctpBridgeResult
         value: '0',
         data: approveData,
         action: 'approve',
-        description: `Approve USDC spending by TokenMessenger on ${srcChainName} (step 1 of 2)`,
+        description: `Approve USDC spending by TokenMessenger on ${srcCctp.chain} (step 1 of 2)`,
       },
       {
         to: getAddress(srcCctp.tokenMessenger),
