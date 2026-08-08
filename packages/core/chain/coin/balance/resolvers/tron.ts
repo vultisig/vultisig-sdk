@@ -20,6 +20,24 @@ const _decode: (s: string) => Uint8Array = (() => {
 // Tron network prefixes. 0x41 = mainnet, 0xa0 = Nile testnet.
 const TRON_NETWORK_PREFIXES: readonly number[] = [0x41, 0xa0]
 
+/**
+ * Decodes a Tron Base58Check address and validates its checksum and network
+ * prefix, returning the raw 21-byte payload (prefix + 20-byte address).
+ */
+export function base58CheckTronDecodeBytes(address: string): Uint8Array {
+  // Throws if the checksum is invalid - intentional.
+  const decoded = _decode(address)
+
+  // 21 bytes: 1-byte network prefix + 20-byte EVM address.
+  if (decoded.length !== 21 || !TRON_NETWORK_PREFIXES.includes(decoded[0])) {
+    throw new Error(
+      `invalid tron address prefix: expected ${TRON_NETWORK_PREFIXES.map(p => `0x${p.toString(16)}`).join(' or ')}, got 0x${decoded[0]?.toString(16) ?? '??'} (length ${decoded.length})`
+    )
+  }
+
+  return decoded
+}
+
 export const getTronCoinBalance: CoinBalanceResolver = async input => {
   if (isFeeCoin(input)) {
     const data = await queryUrl<{
@@ -66,15 +84,7 @@ export const getTronCoinBalance: CoinBalanceResolver = async input => {
  * dep issues.
  */
 export function base58CheckTronDecode(address: string): string {
-  // Throws if the checksum is invalid - intentional.
-  const decoded = _decode(address)
-
-  // 21 bytes: 1-byte network prefix + 20-byte EVM address.
-  if (decoded.length !== 21 || !TRON_NETWORK_PREFIXES.includes(decoded[0])) {
-    throw new Error(
-      `invalid tron address prefix: expected ${TRON_NETWORK_PREFIXES.map(p => `0x${p.toString(16)}`).join(' or ')}, got 0x${decoded[0]?.toString(16) ?? '??'} (length ${decoded.length})`
-    )
-  }
+  const decoded = base58CheckTronDecodeBytes(address)
 
   // Return only the 20-byte EVM address part as hex (strip the network prefix).
   return Buffer.from(decoded.subarray(1)).toString('hex')
