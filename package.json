@@ -189,6 +189,7 @@
     "vitest": "^4.1.8"
   },
   "resolutions": {
+    "nanoid@npm:^3.3.16": "^3.3.17",
     "readable-stream": "3.6.2",
     "@grpc/grpc-js": "1.14.4",
     "@cosmjs/encoding/@scure/base": "1.2.6",
