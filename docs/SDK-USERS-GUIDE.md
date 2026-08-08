@@ -2043,9 +2043,10 @@ Coordinate multi-party signing sessions by sending push notifications to vault m
 ```typescript
 // Obtain a push token from your platform (APNs, FCM, Web Push)
 const token = await getMyPlatformPushToken()
+const vaultId = await sdk.computeNotificationVaultId(vault.publicKeys.ecdsa, vault.hexChainCode)
 
 await sdk.notifications.registerDevice({
-  vaultId: vault.publicKeys.ecdsa,
+  vaultId,
   partyName: vault.localPartyId,
   token,
   deviceType: 'ios', // 'ios' | 'android' | 'web'
@@ -2054,11 +2055,13 @@ await sdk.notifications.registerDevice({
 
 ### Notify Vault Members
 
-When initiating a signing session, notify other members so they can join:
+When initiating a signing session, notify other members so they can join. The notification service uses the hashed `vault_id` (`SHA256(pubKeyECDSA + hexChainCode)`), so derive it with the exported helper instead of passing the raw ECDSA pubkey:
 
 ```typescript
+const vaultId = await sdk.computeNotificationVaultId(vault.publicKeys.ecdsa, vault.hexChainCode)
+
 await sdk.notifications.notifyVaultMembers({
-  vaultId: vault.publicKeys.ecdsa,
+  vaultId,
   vaultName: vault.name,
   localPartyId: vault.localPartyId,
   qrCodeData: keysignQrPayload, // session data for joining
@@ -2100,9 +2103,11 @@ unsubscribe()
 For environments where platform push isn't available (browser extensions, Electron, Node.js), the SDK provides a built-in WebSocket transport. Messages are delivered through the same `onSigningRequest()` callbacks — no platform push handler wiring needed.
 
 ```typescript
+const vaultId = await sdk.computeNotificationVaultId(vault.publicKeys.ecdsa, vault.hexChainCode)
+
 // Step 1: Register device (same as platform push)
 await sdk.notifications.registerDevice({
-  vaultId: vault.publicKeys.ecdsa,
+  vaultId,
   partyName: vault.localPartyId,
   token: myDeviceToken, // Any stable unique identifier
   deviceType: 'web',
@@ -2110,7 +2115,7 @@ await sdk.notifications.registerDevice({
 
 // Step 2: Connect WebSocket
 sdk.notifications.connect({
-  vaultId: vault.publicKeys.ecdsa,
+  vaultId,
   partyName: vault.localPartyId,
   token: myDeviceToken, // Same token used for registerDevice()
 })
@@ -2144,6 +2149,7 @@ unsubState()
 For web platforms using the Web Push API with service workers, fetch the VAPID public key from the server to subscribe:
 
 ```typescript
+const vaultId = await sdk.computeNotificationVaultId(vault.publicKeys.ecdsa, vault.hexChainCode)
 const vapidKey = await sdk.notifications.fetchVapidPublicKey()
 const subscription = await registration.pushManager.subscribe({
   userVisibleOnly: true,
@@ -2151,7 +2157,7 @@ const subscription = await registration.pushManager.subscribe({
 })
 
 await sdk.notifications.registerDevice({
-  vaultId: vault.publicKeys.ecdsa,
+  vaultId,
   partyName: vault.localPartyId,
   token: JSON.stringify(subscription.toJSON()),
   deviceType: 'web',
