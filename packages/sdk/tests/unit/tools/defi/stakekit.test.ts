@@ -11,6 +11,8 @@ import {
   validateStakekitActionInput,
 } from '@/tools/defi/stakekit'
 
+import { getYield } from '../../../../src/tools/defi/stakekit/stakekitApi'
+
 // Minimal yield product fixture that matches YieldDiscoverOpportunity shape
 const makeProduct = (overrides: Record<string, unknown> = {}) => ({
   id: 'ethereum-eth-lido-staking',
@@ -182,6 +184,56 @@ describe('sdk.defi.stakekit', () => {
       const results = await stakekitSearch({ token: 'USDC' })
       expect(results).toHaveLength(1)
       expect(results[0].token.symbol).toBe('USDC')
+    })
+
+    it('scopes enabled-yield cache entries by API key', async () => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ data: [makeProduct({ id: 'yield-a' })], hasNextPage: false }),
+          text: async () => '',
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ data: [makeProduct({ id: 'yield-b' })], hasNextPage: false }),
+          text: async () => '',
+        } as Response)
+      globalThis.fetch = fetchMock
+
+      const first = await stakekitSearch({ network: 'ethereum', apiKey: 'key-one' })
+      const second = await stakekitSearch({ network: 'ethereum', apiKey: 'key-two' })
+
+      expect(first.map((row: YieldDiscoverOpportunity) => row.id)).toEqual(['yield-a'])
+      expect(second.map((row: YieldDiscoverOpportunity) => row.id)).toEqual(['yield-b'])
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    })
+
+    it('scopes yield-detail cache entries by API key', async () => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => makeProduct({ id: 'yield-a', metadata: { name: 'Yield A', type: 'liquid-staking' } }),
+          text: async () => '',
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => makeProduct({ id: 'yield-a', metadata: { name: 'Yield B', type: 'lending' } }),
+          text: async () => '',
+        } as Response)
+      globalThis.fetch = fetchMock
+
+      const first = await getYield('yield-a', 'key-one')
+      const second = await getYield('yield-a', 'key-two')
+
+      expect(first.metadata.name).toBe('Yield A')
+      expect(second.metadata.name).toBe('Yield B')
+      expect(fetchMock).toHaveBeenCalledTimes(2)
     })
   })
 
