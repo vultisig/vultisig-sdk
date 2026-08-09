@@ -200,7 +200,7 @@ const getThorMayaNodeProgress = (
 
 const getMidgardActions = (data: unknown): Record<string, unknown>[] => {
   if (!isRecord(data) || !Array.isArray(data.actions)) return []
-  return data.actions.filter(isRecord)
+  return data.actions.every(isRecord) ? data.actions : []
 }
 
 const isMidgardResponse = (data: unknown): boolean =>
@@ -434,7 +434,10 @@ export const getSwapArrivalStatus = async (input: GetSwapArrivalStatusInput): Pr
   const txHash = input.txHash.trim()
   if (!txHash) throw new TypeError('getSwapArrivalStatus: txHash must not be empty')
 
-  const hosts = { ...defaultSwapArrivalStatusHosts, ...input.hosts }
+  const hostOverrides = Object.fromEntries(
+    Object.entries(input.hosts ?? {}).filter(([, value]) => value !== undefined)
+  ) as Partial<SwapArrivalStatusHosts>
+  const hosts = { ...defaultSwapArrivalStatusHosts, ...hostOverrides }
   const fetchImpl = input.fetchImpl ?? fetch
   const common = { ...input, txHash, hosts, fetchImpl }
 

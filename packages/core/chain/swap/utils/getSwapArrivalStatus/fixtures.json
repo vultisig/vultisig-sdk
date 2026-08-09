@@ -53,6 +53,14 @@
             "ibc_transfer": {
               "packet_txs": {
                 "send_tx": { "tx_hash": "SKIP-SOURCE" },
+                "receive_tx": { "tx_hash": "SKIP-INTERMEDIATE" }
+              }
+            }
+          },
+          {
+            "ibc_transfer": {
+              "packet_txs": {
+                "send_tx": { "tx_hash": "SKIP-INTERMEDIATE" },
                 "receive_tx": { "tx_hash": "SKIP-DESTINATION" }
               }
             }

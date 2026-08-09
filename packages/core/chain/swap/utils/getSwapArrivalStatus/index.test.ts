@@ -109,6 +109,18 @@ describe('getSwapArrivalStatus', () => {
         'unknown actions response'
       )
     })
+
+    it('rejects a mixed Midgard action array instead of accepting its valid prefix', async () => {
+      const fetchImpl = vi.fn(async (input: RequestInfo | URL) =>
+        String(input).includes('/v2/actions')
+          ? jsonResponse({ actions: [...fixtures.mayachainMidgardSuccess.actions, null] })
+          : jsonResponse({}, 404)
+      ) as typeof fetch
+
+      await expect(getSwapArrivalStatus({ provider: 'mayachain', txHash: 'MAYA-SOURCE', fetchImpl })).rejects.toThrow(
+        'unknown actions response'
+      )
+    })
   })
 
   describe('Skip', () => {
@@ -200,6 +212,16 @@ describe('getSwapArrivalStatus', () => {
         destinationTxHash: '0xrefund',
         message: 'Tokens were refunded.',
       })
+    })
+
+    it('keeps the default host when a partial host override is undefined', async () => {
+      const fetchImpl = vi.fn(async () => jsonResponse({ status: 'NOT_FOUND' })) as typeof fetch
+
+      await expect(
+        getSwapArrivalStatus({ provider: 'li.fi', txHash: '0xsource', hosts: { lifi: undefined }, fetchImpl })
+      ).resolves.toMatchObject({ status: 'not_found', stage: 'not_found' })
+
+      expect(fetchImpl).toHaveBeenCalledWith('https://li.quest/v1/status?txHash=0xsource', expect.any(Object))
     })
 
     it.each([
