@@ -34,9 +34,16 @@ const approval = { id: 'approval-1447', nonce: 'nonce-1' }
 const expiresAt = '2030-01-01T00:00:00.000Z'
 const now = '2029-12-31T00:00:00.000Z'
 const nativeAsset = { chain, symbol: 'ETH' }
-const tokenAsset = { chain, symbol: 'USDC', tokenId: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48' }
+const tokenAsset = {
+  chain,
+  symbol: 'USDC',
+  tokenId: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+}
 
-const payload = (value: string): SignableUnsignedPayloadV1 => ({ encoding: 'hex', value })
+const payload = (value: string): SignableUnsignedPayloadV1 => ({
+  encoding: 'hex',
+  value,
+})
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
 
 const sendAction = (overrides: Partial<Extract<SignableActionV1, { type: 'send' }>> = {}) => ({
@@ -53,7 +60,11 @@ const sendAction = (overrides: Partial<Extract<SignableActionV1, { type: 'send' 
 const decoded = (
   actions: SignableActionV1[],
   constraints: Extract<SignableDecodedTransactionV1, { status: 'decoded' }>['constraints'] = {}
-): Extract<SignableDecodedTransactionV1, { status: 'decoded' }> => ({ status: 'decoded', actions, constraints })
+): Extract<SignableDecodedTransactionV1, { status: 'decoded' }> => ({
+  status: 'decoded',
+  actions,
+  constraints,
+})
 
 const decoderFor = (
   result: SignableDecodedTransactionV1,
@@ -118,7 +129,9 @@ const makeFixture = (input: {
               }
             : {}),
           ...(input.envelope.display.constraints.slippageBps
-            ? { slippageBps: input.envelope.display.constraints.slippageBps.value }
+            ? {
+                slippageBps: input.envelope.display.constraints.slippageBps.value,
+              }
             : {}),
         }),
       renderedDisplay,
@@ -173,7 +186,9 @@ describe('signable transaction contract v1', () => {
   })
 
   it('normalizes optional undefined fields and verifies SDK and JSON round trips', async () => {
-    const envelope = await createEnvelope({ action: sendAction({ memo: undefined }) })
+    const envelope = await createEnvelope({
+      action: sendAction({ memo: undefined }),
+    })
     expect(Object.hasOwn(envelope.actions[0]!, 'memo')).toBe(false)
 
     for (const candidate of [envelope, JSON.parse(JSON.stringify(envelope)) as SignableTransactionEnvelopeV1]) {
@@ -192,8 +207,15 @@ describe('signable transaction contract v1', () => {
 
   it('fails closed for unknown semantics and a wrong decoder family', async () => {
     await expect(
-      createEnvelope({ decodedResult: { status: 'unknown', reason: 'unrecognized nested call' } })
-    ).rejects.toMatchObject({ code: 'unknown-semantics' } satisfies Partial<SignableTransactionContractError>)
+      createEnvelope({
+        decodedResult: {
+          status: 'unknown',
+          reason: 'unrecognized nested call',
+        },
+      })
+    ).rejects.toMatchObject({
+      code: 'unknown-semantics',
+    } satisfies Partial<SignableTransactionContractError>)
 
     await expect(
       createSignableTransactionEnvelopeV1({
@@ -205,14 +227,23 @@ describe('signable transaction contract v1', () => {
         approval,
         decoder: decoderFor(decoded([sendAction()]), 'solana'),
       })
-    ).rejects.toMatchObject({ code: 'chain-family-mismatch' } satisfies Partial<SignableTransactionContractError>)
+    ).rejects.toMatchObject({
+      code: 'chain-family-mismatch',
+    } satisfies Partial<SignableTransactionContractError>)
   })
 
   it('defines every canonical action and its required material fields', () => {
     const actions: SignableActionV1[] = [
       sendAction(),
       { ...sendAction(), type: 'token-send', asset: tokenAsset },
-      { type: 'approval', chain, sourceAccount, asset: tokenAsset, spender: recipient, allowance: '1000' },
+      {
+        type: 'approval',
+        chain,
+        sourceAccount,
+        asset: tokenAsset,
+        spender: recipient,
+        allowance: '1000',
+      },
       {
         type: 'swap',
         chain,
@@ -233,7 +264,15 @@ describe('signable transaction contract v1', () => {
         value: '0',
         method: 'claim()',
       },
-      { type: 'deposit', chain, sourceAccount, protocol: 'thorchain', recipient, asset: nativeAsset, amount: '100' },
+      {
+        type: 'deposit',
+        chain,
+        sourceAccount,
+        protocol: 'thorchain',
+        recipient,
+        asset: nativeAsset,
+        amount: '100',
+      },
       {
         type: 'withdraw',
         chain,
@@ -259,10 +298,18 @@ describe('signable transaction contract v1', () => {
     ]
     actions.forEach(action => expect(signableActionV1Schema.parse(action)).toEqual(action))
 
-    expect(() => signableActionV1Schema.parse({ ...actions[0], asset: tokenAsset })).toThrow()
-    expect(() => signableActionV1Schema.parse({ ...actions[1], asset: nativeAsset })).toThrow()
-    expect(() => signableActionV1Schema.parse({ ...actions[2], allowance: undefined })).toThrow()
-    expect(() => signableActionV1Schema.parse({ ...actions[3], minOut: undefined })).toThrow()
+    const expectIssueAtPath = (input: unknown, path: (string | number)[]) => {
+      const result = signableActionV1Schema.safeParse(input)
+      expect(result.success).toBe(false)
+      if (result.success) return
+      expect(result.error.issues).toEqual(expect.arrayContaining([expect.objectContaining({ path })]))
+    }
+
+    expectIssueAtPath({ ...actions[0], asset: tokenAsset }, ['asset'])
+    expectIssueAtPath({ ...actions[1], asset: nativeAsset }, ['asset', 'tokenId'])
+    expectIssueAtPath({ ...actions[2], allowance: undefined }, ['allowance'])
+    expectIssueAtPath({ ...actions[3], minOut: undefined }, ['minOut'])
+    expectIssueAtPath({ ...actions[0], amount: '1'.repeat(81) }, ['amount'])
   })
 
   it('runs shared pass/reject fixtures for every required divergence fence', async () => {
@@ -297,14 +344,20 @@ describe('signable transaction contract v1', () => {
       bounds: { slippageBps: { min: '50', max: '100' } },
     })
     const feeEnvelope = await createEnvelope({
-      decodedResult: decoded([sendAction()], { fee: { asset: nativeAsset, value: '15' } }),
+      decodedResult: decoded([sendAction()], {
+        fee: { asset: nativeAsset, value: '15' },
+      }),
       bounds: { fee: { min: '10', max: '20' } },
     })
     const expiryChangedEnvelope = clone(sendEnvelope)
     expiryChangedEnvelope.expiresAt = '2030-01-01T00:00:01.000Z'
 
     const fixtures: SignableTransactionFixtureV1[] = [
-      makeFixture({ name: 'exact payload and display pass', envelope: sendEnvelope, valid: true }),
+      makeFixture({
+        name: 'exact payload and display pass',
+        envelope: sendEnvelope,
+        valid: true,
+      }),
       makeFixture({
         name: 'payload divergence',
         envelope: sendEnvelope,
@@ -332,7 +385,11 @@ describe('signable transaction contract v1', () => {
         name: 'recipient change',
         envelope: sendEnvelope,
         candidatePayload: payload('01020306'),
-        candidateDecoded: decoded([sendAction({ recipient: '0x3333333333333333333333333333333333333333' })]),
+        candidateDecoded: decoded([
+          sendAction({
+            recipient: '0x3333333333333333333333333333333333333333',
+          }),
+        ]),
         valid: false,
         issueCodes: ['payload-divergence', 'decoded-actions-divergence'],
       }),
@@ -356,7 +413,12 @@ describe('signable transaction contract v1', () => {
         name: 'spender change',
         envelope: approvalEnvelope,
         candidatePayload: payload('0507'),
-        candidateDecoded: decoded([{ ...approvalAction, spender: '0x4444444444444444444444444444444444444444' }]),
+        candidateDecoded: decoded([
+          {
+            ...approvalAction,
+            spender: '0x4444444444444444444444444444444444444444',
+          },
+        ]),
         valid: false,
         issueCodes: ['payload-divergence', 'decoded-actions-divergence'],
       }),
@@ -372,7 +434,9 @@ describe('signable transaction contract v1', () => {
         name: 'minimum output change',
         envelope: swapEnvelope,
         candidatePayload: payload('0709'),
-        candidateDecoded: decoded([{ ...swapAction, minOut: '899' }], { slippageBps: '75' }),
+        candidateDecoded: decoded([{ ...swapAction, minOut: '899' }], {
+          slippageBps: '75',
+        }),
         valid: false,
         issueCodes: ['payload-divergence', 'decoded-actions-divergence'],
       }),
@@ -393,7 +457,11 @@ describe('signable transaction contract v1', () => {
         name: 'wrong source account',
         envelope: sendEnvelope,
         candidatePayload: payload('01020309'),
-        candidateDecoded: decoded([sendAction({ sourceAccount: '0x5555555555555555555555555555555555555555' })]),
+        candidateDecoded: decoded([
+          sendAction({
+            sourceAccount: '0x5555555555555555555555555555555555555555',
+          }),
+        ]),
         valid: false,
         issueCodes: ['payload-divergence', 'decoded-actions-divergence'],
       }),
@@ -401,14 +469,22 @@ describe('signable transaction contract v1', () => {
         name: 'wrong chain',
         envelope: sendEnvelope,
         candidatePayload: payload('0102030c'),
-        candidateDecoded: decoded([sendAction({ chain: Chain.BSC, asset: { chain: Chain.BSC, symbol: 'BNB' } })]),
+        candidateDecoded: decoded([
+          sendAction({
+            chain: Chain.BSC,
+            asset: { chain: Chain.BSC, symbol: 'BNB' },
+          }),
+        ]),
         valid: false,
         issueCodes: ['payload-divergence', 'decoded-actions-divergence'],
       }),
       makeFixture({
         name: 'approval binding digest change',
         envelope: sendEnvelope,
-        approval: { ...sendEnvelope.approval, bindingHash: `sha256:${'0'.repeat(64)}` },
+        approval: {
+          ...sendEnvelope.approval,
+          bindingHash: `sha256:${'0'.repeat(64)}`,
+        },
         valid: false,
         issueCodes: ['approval-divergence'],
       }),
@@ -425,7 +501,11 @@ describe('signable transaction contract v1', () => {
         candidatePayload: payload('0102030a'),
         candidateDecoded: decoded([
           sendAction(),
-          sendAction({ recipient: sourceAccount, amount: '1', memo: undefined }),
+          sendAction({
+            recipient: sourceAccount,
+            amount: '1',
+            memo: undefined,
+          }),
         ]),
         valid: false,
         issueCodes: ['payload-divergence', 'decoded-actions-divergence'],
@@ -434,11 +514,18 @@ describe('signable transaction contract v1', () => {
         name: 'unknown candidate semantics',
         envelope: sendEnvelope,
         candidatePayload: payload('0102030b'),
-        candidateDecoded: { status: 'unknown', reason: 'unrecognized nested call' },
+        candidateDecoded: {
+          status: 'unknown',
+          reason: 'unrecognized nested call',
+        },
         valid: false,
         issueCodes: ['payload-divergence', 'unknown-semantics'],
       }),
-      makeFixture({ name: 'explicit slippage bound pass', envelope: swapEnvelope, valid: true }),
+      makeFixture({
+        name: 'explicit slippage bound pass',
+        envelope: swapEnvelope,
+        valid: true,
+      }),
       makeFixture({
         name: 'slippage value change inside displayed bound',
         envelope: swapEnvelope,
@@ -451,7 +538,9 @@ describe('signable transaction contract v1', () => {
       makeFixture({
         name: 'fee value change inside displayed bound',
         envelope: feeEnvelope,
-        candidateDecoded: decoded([sendAction()], { fee: { asset: nativeAsset, value: '16' } }),
+        candidateDecoded: decoded([sendAction()], {
+          fee: { asset: nativeAsset, value: '16' },
+        }),
         mutateDisplay: display => {
           display.constraints.fee!.value = '16'
         },
@@ -478,13 +567,27 @@ describe('signable transaction contract v1', () => {
   })
 
   it('requires decoded fee/slippage values to stay inside explicit displayed bounds', async () => {
-    const withFee = decoded([sendAction()], { fee: { asset: nativeAsset, value: '15' } })
-    const envelope = await createEnvelope({ decodedResult: withFee, bounds: { fee: { min: '10', max: '20' } } })
-    expect(envelope.display.constraints.fee).toMatchObject({ value: '15', min: '10', max: '20' })
+    const withFee = decoded([sendAction()], {
+      fee: { asset: nativeAsset, value: '15' },
+    })
+    const envelope = await createEnvelope({
+      decodedResult: withFee,
+      bounds: { fee: { min: '10', max: '20' } },
+    })
+    expect(envelope.display.constraints.fee).toMatchObject({
+      value: '15',
+      min: '10',
+      max: '20',
+    })
 
     await expect(
-      createEnvelope({ decodedResult: withFee, bounds: { fee: { min: '16', max: '20' } } })
-    ).rejects.toMatchObject({ code: 'constraint-out-of-bounds' } satisfies Partial<SignableTransactionContractError>)
+      createEnvelope({
+        decodedResult: withFee,
+        bounds: { fee: { min: '16', max: '20' } },
+      })
+    ).rejects.toMatchObject({
+      code: 'constraint-out-of-bounds',
+    } satisfies Partial<SignableTransactionContractError>)
   })
 
   it('rejects a recomputed candidate envelope when its trusted approval receipt did not change', async () => {
@@ -599,7 +702,10 @@ describe('signable transaction contract v1', () => {
     const freshEnvelope = await createEnvelope({
       approval: { id: ' trimmed-id ', nonce: ' trimmed-nonce ' },
     })
-    expect(freshEnvelope.approval).toMatchObject({ id: 'trimmed-id', nonce: 'trimmed-nonce' })
+    expect(freshEnvelope.approval).toMatchObject({
+      id: 'trimmed-id',
+      nonce: 'trimmed-nonce',
+    })
     const malformedReservation = await verifySignableTransactionEnvelopeV1({
       envelope: freshEnvelope,
       unsignedPayload: freshEnvelope.unsignedPayload,

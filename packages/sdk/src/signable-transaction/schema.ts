@@ -5,7 +5,11 @@ import { z } from 'zod'
 export const SIGNABLE_TRANSACTION_VERSION = 1 as const
 
 const nonEmptyString = z.string().trim().min(1)
-const decimalInteger = z.string().regex(/^(0|[1-9]\d*)$/, 'Expected a non-negative base-10 integer string')
+const maxDecimalIntegerDigits = 80
+const decimalInteger = z
+  .string()
+  .max(maxDecimalIntegerDigits, 'Decimal integer strings exceed the supported precision')
+  .regex(/^(0|[1-9]\d*)$/, 'Expected a non-negative base-10 integer string')
 const sha256Digest = z.string().regex(/^sha256:[0-9a-f]{64}$/, 'Expected a lowercase sha256:<hex> digest')
 export const signableUtcTimestampV1Schema = z
   .string()
@@ -220,7 +224,10 @@ export const signableApprovalV1Schema = z
   })
   .strict()
 
-export const signableApprovalInputV1Schema = signableApprovalV1Schema.pick({ id: true, nonce: true })
+export const signableApprovalInputV1Schema = signableApprovalV1Schema.pick({
+  id: true,
+  nonce: true,
+})
 
 export const signableTransactionEnvelopeV1Schema = z
   .object({
