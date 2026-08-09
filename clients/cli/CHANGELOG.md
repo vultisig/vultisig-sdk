@@ -1,5 +1,115 @@
 # @vultisig/cli
 
+## 4.3.0
+
+### Patch Changes
+
+- Updated dependencies [[`c0ff9b5`](https://github.com/vultisig/vultisig-sdk/commit/c0ff9b5f8fe477df10850b25cc0def27ee31b6b4)]:
+  - @vultisig/core-chain@2.34.0
+  - @vultisig/sdk@4.3.0
+  - @vultisig/rujira@62.0.0
+
+## 4.2.0
+
+### Patch Changes
+
+- [#1605](https://github.com/vultisig/vultisig-sdk/pull/1605) [`1a23da3`](https://github.com/vultisig/vultisig-sdk/commit/1a23da39c7b50649b213efab13e02590d35db1a1) Thanks [@neavra](https://github.com/neavra)! - fix(agent): `agent ask` without `--yes` now reports the proposed transaction instead of a failure
+
+  `agent ask --help` documents the no-`--yes` path as read-safe: "it reports the
+  proposed transaction so a read-only prompt can't move funds." It did not. The
+  transaction built fine, the confirm gate correctly denied signing, and the
+  refusal was then fed back into the model loop — which retried, failed, and ended
+  the turn with `transactions: []`, `cards: []`, no proposed transaction, and a
+  stated cause that was wrong: that the build had errored, that there was no send
+  tool, or that a broadcast could not be confirmed. Nothing had ever been
+  authorized to broadcast.
+
+  Refusing to sign without `--yes` was always right. Discarding the built
+  transaction and reporting the refusal as a failed build was the defect.
+
+  In ask mode a declined signing now ENDS the turn — the gate there is a fixed
+  policy, not something a retry can satisfy — and the built, unsigned transaction
+  is surfaced as the turn's result: `proposed_transaction` (tool, summary, chain)
+  plus `confirmation_required` on the JSON envelope, and `proposed:` /
+  `confirmation-required:` lines on the human output. The exit code stays 12
+  (`CONFIRMATION_REQUIRED`), the same slot `send` and `swap` already use for
+  "needs `--yes`", and the error message now states what actually happened. This
+  covers `sign_typed_data` (e.g. a Polymarket bet) as well as `sign_tx`.
+
+  Results of client-side tools that already RAN in the same turn (`vault_chain`,
+  `vault_coin`, `address_book`) stay queued across the decline, so a committed
+  local mutation is still reported to the backend on the next request.
+
+  The TUI and pipe mode are unchanged: the discriminator is policy-vs-decision, not
+  headless-vs-interactive. Ask mode's gate is a constant; the TUI prompts a live
+  user and pipe mode blocks on a live host answer over stdin — there a decline is a
+  real decision the model should still get to acknowledge.
+
+  Also maps a backend turn outcome of `confirmation_required` onto exit 12 rather
+  than the generic safety-block exit 10.
+
+- [#1604](https://github.com/vultisig/vultisig-sdk/pull/1604) [`9e88dcf`](https://github.com/vultisig/vultisig-sdk/commit/9e88dcf4875ebccfc7ea021707d99ec728a41eea) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export `DEFAULT_CHAINS` and `defaultChains` from the root and React Native SDK entrypoints so consumers can reuse the canonical onboarding/import default-chain set instead of maintaining local mirrors.
+
+- [#1613](https://github.com/vultisig/vultisig-sdk/pull/1613) [`68f8899`](https://github.com/vultisig/vultisig-sdk/commit/68f8899f6545b3876703e7a56b43d73a64217da2) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export canonical `ChainKind` helpers from the React Native SDK entrypoint.
+
+- [#1783](https://github.com/vultisig/vultisig-sdk/pull/1783) [`59c4b6d`](https://github.com/vultisig/vultisig-sdk/commit/59c4b6dcda667cf8f7e482ab1ec9666723d7f5c8) Thanks [@neavra](https://github.com/neavra)! - Emit an auditable signing summary in agent output after --yes approves signing
+
+- Updated dependencies [[`5ce75b5`](https://github.com/vultisig/vultisig-sdk/commit/5ce75b53c527b373eb9ccacceac6edbaacf4ebec), [`eb7d862`](https://github.com/vultisig/vultisig-sdk/commit/eb7d86260a2ea5cdd661951d15677ec4db3517b0), [`9e88dcf`](https://github.com/vultisig/vultisig-sdk/commit/9e88dcf4875ebccfc7ea021707d99ec728a41eea), [`68f8899`](https://github.com/vultisig/vultisig-sdk/commit/68f8899f6545b3876703e7a56b43d73a64217da2), [`80b19bd`](https://github.com/vultisig/vultisig-sdk/commit/80b19bdbfbcb6af875a0b145bb02306552adac27), [`a812367`](https://github.com/vultisig/vultisig-sdk/commit/a812367923ac3781dc240d00124232c6f0cc3348)]:
+  - @vultisig/sdk@4.2.0
+  - @vultisig/core-chain@2.33.0
+  - @vultisig/rujira@61.0.0
+
+## 4.1.0
+
+### Patch Changes
+
+- Updated dependencies [[`7d2a91d`](https://github.com/vultisig/vultisig-sdk/commit/7d2a91de80a297c6db6b2fe2e9db41ace609c822), [`0bd1a2d`](https://github.com/vultisig/vultisig-sdk/commit/0bd1a2dfcfc723c77a684be62cc4a676824dc217), [`37d7044`](https://github.com/vultisig/vultisig-sdk/commit/37d7044e33d475ddce93b91ff6295d55490052b4)]:
+  - @vultisig/core-chain@2.32.0
+  - @vultisig/sdk@4.1.0
+  - @vultisig/rujira@60.0.0
+
+## 4.0.3
+
+### Patch Changes
+
+- [#1588](https://github.com/vultisig/vultisig-sdk/pull/1588) [`74cc529`](https://github.com/vultisig/vultisig-sdk/commit/74cc52912f007c6e2afe3c5b9471b6610d39f3fc) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export the canonical gas comparison helpers from `@vultisig/sdk/react-native`.
+
+- [#1717](https://github.com/vultisig/vultisig-sdk/pull/1717) [`c109ff4`](https://github.com/vultisig/vultisig-sdk/commit/c109ff4f6504b9458454bad9b392f2682a51992a) Thanks [@neavra](https://github.com/neavra)! - Create keyshare temp files exclusively and keep credential and CLI config directories owner-only.
+
+- [#1718](https://github.com/vultisig/vultisig-sdk/pull/1718) [`fb601d5`](https://github.com/vultisig/vultisig-sdk/commit/fb601d5ad6f6e6a7089ca449ee24bc5c1d7b82f9) Thanks [@neavra](https://github.com/neavra)! - Make transaction help accurately distinguish interactive previews from non-interactive confirmation requirements, describe the addresses command without advertising an unsupported argument, and remove duplicated wording from amount-too-small swap errors.
+
+- Updated dependencies [[`a6ba6b4`](https://github.com/vultisig/vultisig-sdk/commit/a6ba6b4688027d6abf4ce0eb3385d6e141f5ef57), [`67667fe`](https://github.com/vultisig/vultisig-sdk/commit/67667fe61a8dd85d40c1b91978da5414987cab6c), [`fbc5b44`](https://github.com/vultisig/vultisig-sdk/commit/fbc5b4445e102534eb434d7cabcd6fe8d633b391), [`74cc529`](https://github.com/vultisig/vultisig-sdk/commit/74cc52912f007c6e2afe3c5b9471b6610d39f3fc), [`c49a3f2`](https://github.com/vultisig/vultisig-sdk/commit/c49a3f2bdff6d220960c3609d08b6c848961ed9f), [`c109ff4`](https://github.com/vultisig/vultisig-sdk/commit/c109ff4f6504b9458454bad9b392f2682a51992a), [`fb601d5`](https://github.com/vultisig/vultisig-sdk/commit/fb601d5ad6f6e6a7089ca449ee24bc5c1d7b82f9), [`82ea0b7`](https://github.com/vultisig/vultisig-sdk/commit/82ea0b7526ef7033605aeed461bb156416e4c012)]:
+  - @vultisig/sdk@4.0.3
+  - @vultisig/core-chain@2.31.2
+  - @vultisig/client-shared@0.3.3
+
+## 4.0.2
+
+### Patch Changes
+
+- [#1580](https://github.com/vultisig/vultisig-sdk/pull/1580) [`1a87e08`](https://github.com/vultisig/vultisig-sdk/commit/1a87e080449b37475434f38c99212cc877fd5a4e) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Publish `@vultisig/sdk/tools/bridge` as a real package subpath with dedicated JS and declaration bundles.
+
+- [#1641](https://github.com/vultisig/vultisig-sdk/pull/1641) [`199507d`](https://github.com/vultisig/vultisig-sdk/commit/199507da2be585e8b8414d7d12077174c80afb7b) Thanks [@neavra](https://github.com/neavra)! - Replace unavailable Ethereum and Polygon gas-refresh RPC endpoints, warn when pre-sign gas or nonce refreshes fail, and preserve nonce-gap safeguards when a pending-nonce lookup fails. Ethereum and Polygon pending-nonce checks now share the vault address and request timing with PublicNode.
+
+- [#1578](https://github.com/vultisig/vultisig-sdk/pull/1578) [`9ff1eb2`](https://github.com/vultisig/vultisig-sdk/commit/9ff1eb22030cf2551269b4195155e395d624223b) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export the full River helper family from `@vultisig/sdk/react-native`, including market/hint helpers and trove-status canonicals.
+
+- [#1576](https://github.com/vultisig/vultisig-sdk/pull/1576) [`7ca8c40`](https://github.com/vultisig/vultisig-sdk/commit/7ca8c406a718624a701b8616a3cee1bbab6c5554) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Fix the Astroport swap builder to use a React Native / Hermes-safe fetch timeout instead of `AbortSignal.timeout()`.
+
+- [#1720](https://github.com/vultisig/vultisig-sdk/pull/1720) [`413423b`](https://github.com/vultisig/vultisig-sdk/commit/413423b70655e6e4d7faf9cb9f10b63f601e42dc) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Carry caller-supplied THORChain and MayaChain swap destinations through agent MsgDeposit execution, preserve the existing self-swap default, and reject quote memos that substitute another destination.
+
+- Updated dependencies [[`1a87e08`](https://github.com/vultisig/vultisig-sdk/commit/1a87e080449b37475434f38c99212cc877fd5a4e), [`9ff1eb2`](https://github.com/vultisig/vultisig-sdk/commit/9ff1eb22030cf2551269b4195155e395d624223b), [`7ca8c40`](https://github.com/vultisig/vultisig-sdk/commit/7ca8c406a718624a701b8616a3cee1bbab6c5554), [`9dfd76c`](https://github.com/vultisig/vultisig-sdk/commit/9dfd76c617812418521c820e65a07a02003d5e5e), [`413423b`](https://github.com/vultisig/vultisig-sdk/commit/413423b70655e6e4d7faf9cb9f10b63f601e42dc)]:
+  - @vultisig/sdk@4.0.2
+  - @vultisig/core-chain@2.31.1
+
+## 4.0.1
+
+### Patch Changes
+
+- [#1561](https://github.com/vultisig/vultisig-sdk/pull/1561) [`38be8ef`](https://github.com/vultisig/vultisig-sdk/commit/38be8eff97b061d241c7ac1c1616b48115fbb974) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - Render `yield_opportunities` and `polymarket_markets` agent surfaces as prose instead of leaking raw `{"surface":...}` JSON into the terminal. The CLI only advertised `balance_summary`/`turn_outcome` in `supported_surfaces`, so any other surface fell back to the backend's legacy verbatim-echo path. Adds parsers, prose renderers, and a legacy-echo fallback for both surfaces, mirroring the existing `balance_summary` handling, and wires them through the TUI, pipe mode, and `agent ask`.
+
+- Updated dependencies [[`3767033`](https://github.com/vultisig/vultisig-sdk/commit/3767033f51804f3fff5088098c767280577bd4a4), [`68df301`](https://github.com/vultisig/vultisig-sdk/commit/68df301134b8000187a11cf92b9427e8200d4623)]:
+  - @vultisig/sdk@4.0.1
+
 ## 4.0.0
 
 ### Minor Changes
