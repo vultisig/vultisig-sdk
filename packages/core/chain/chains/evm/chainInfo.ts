@@ -1,4 +1,5 @@
 import { EvmChain } from '@vultisig/core-chain/Chain'
+import { chainRegistry } from '@vultisig/core-chain/chainRegistry'
 import { getCustomRpcOverride } from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { rootApiUrl } from '@vultisig/core-config'
@@ -24,7 +25,7 @@ import {
 const hyperliquidRpcUrl = `${rootApiUrl}/hyperevm/`
 // HyperEVM transactions and addresses live under hypurrscan's `/evm/` section.
 // The bare `https://hypurrscan.io/tx/<hash>` path returns a server error.
-export const hyperliquidBlockExplorerUrl = 'https://hypurrscan.io/evm'
+export const hyperliquidBlockExplorerUrl = chainRegistry[EvmChain.Hyperliquid].explorer.baseUrl
 const hyperliquidNativeCoin = chainFeeCoin[EvmChain.Hyperliquid]
 
 export const hyperliquid = defineChain({
@@ -46,7 +47,7 @@ export const hyperliquid = defineChain({
 })
 
 const robinhoodRpcUrl = 'https://rpc.mainnet.chain.robinhood.com'
-export const robinhoodBlockExplorerUrl = 'https://robinhoodchain.blockscout.com'
+export const robinhoodBlockExplorerUrl = chainRegistry[EvmChain.Robinhood].explorer.baseUrl
 const robinhoodNativeCoin = chainFeeCoin[EvmChain.Robinhood]
 
 export const robinhood = defineChain({

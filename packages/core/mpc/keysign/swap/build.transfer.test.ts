@@ -42,6 +42,12 @@ const publicKey = {
 } as never
 
 const TEST_PUBKEY = Buffer.from('0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798', 'hex')
+
+// A real BCS-serialized Sui `TransactionData`, the shape SwapKit returns for a
+// Sui source route. Kept opaque here — the build step only relays the bytes.
+const SUI_PTB_BASE64 =
+  'AAACAAhkAAAAAAAAAAAgW4yMD3sdSyqcPk9QYXKDlKW2x9jp8KGyw9Tl9gcYKTACAgABAQAAAQEDAAAAAAEBAFuMjA97HUsqnD5PUGFyg5SltsfY6fChssPU5fYHGCkwARERERERERERERERERERERERERERERERERERERERERERAQAAAAAAAAAgBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwdbjIwPex1LKpw+T1BhcoOUpbbH2OnwobLD1OX2BxgpMOgDAAAAAAAAwMYtAAAAAAAA'
+const SUI_PTB_BYTES = new Uint8Array(Buffer.from(SUI_PTB_BASE64, 'base64'))
 const RECIPIENT_ADDRESS = 'bc1q0ht9tyks4vh7p5p904t340cr9nvahy7u3re7zg'
 const EXTRA_RECIPIENT_ADDRESS = '1BoatSLRHtKNngkdXEeobR76b53LETtpyT'
 
@@ -437,5 +443,92 @@ describe('buildSwapKeysignPayload transfer routes', () => {
         }),
       })
     )
+  })
+
+  const suiSwapQuote = (transfer: { txType?: string; txPayload?: Uint8Array }): SwapQuote => ({
+    discounts: [],
+    quote: {
+      general: {
+        dstAmount: '1800000000000000000',
+        provider: 'swapkit',
+        routeProvider: 'NEAR',
+        tx: {
+          transfer: {
+            to: 'sui-deposit',
+            amount: 1_500_000_000n,
+            ...transfer,
+          },
+        },
+      },
+    },
+  })
+
+  const buildSuiSwapPayload = (swapQuote: SwapQuote) =>
+    buildSwapKeysignPayload({
+      fromCoin: {
+        chain: Chain.Sui,
+        address: '0xsuisource',
+        ticker: 'SUI',
+        decimals: 9,
+      },
+      toCoin: {
+        chain: Chain.Ethereum,
+        address: '0xdestination',
+        ticker: 'ETH',
+        decimals: 18,
+      },
+      amount: 1.5,
+      swapQuote,
+      vaultId: 'vault-id',
+      localPartyId: 'local-party',
+      fromPublicKey: publicKey,
+      toPublicKey: publicKey,
+      libType: 'DKLS',
+      walletCore: {} as never,
+    })
+
+  it('signs a Sui route even when SwapKit omits or renames the txType', async () => {
+    mocks.getChainSpecific.mockResolvedValueOnce({ case: 'suicheSpecific', value: {} })
+
+    // SwapKit has renamed base64 tx types mid-flight before (SOLANA ->
+    // SERIALIZED_BASE64). The source chain, not the wire label, decides.
+    const payload = await buildSuiSwapPayload(suiSwapQuote({ txPayload: SUI_PTB_BYTES }))
+
+    expect(payload.signData.case).toBe('signSui')
+    if (payload.signData.case === 'signSui') {
+      expect(payload.signData.value.unsignedTxMsg).toBe(SUI_PTB_BASE64)
+    }
+  })
+
+  it('rejects Sui SwapKit transfer routes with an empty PTB', async () => {
+    mocks.getChainSpecific.mockResolvedValueOnce({ case: 'suicheSpecific', value: {} })
+
+    await expect(buildSuiSwapPayload(suiSwapQuote({ txType: 'SUI', txPayload: new Uint8Array() }))).rejects.toThrow(
+      'SwapKit Sui PTB payload is empty.'
+    )
+  })
+
+  it('builds SwapKit Sui payload and forwards the PTB via signSui', async () => {
+    mocks.getChainSpecific.mockResolvedValueOnce({ case: 'suicheSpecific', value: {} })
+
+    const payload = await buildSuiSwapPayload(suiSwapQuote({ txType: 'SUI', txPayload: SUI_PTB_BYTES }))
+
+    // The PTB drives signing directly, so it must reach WalletCore's SignDirect
+    // input base64-encoded and byte-for-byte unchanged.
+    expect(payload.signData.case).toBe('signSui')
+    if (payload.signData.case === 'signSui') {
+      expect(payload.signData.value.unsignedTxMsg).toBe(SUI_PTB_BASE64)
+    }
+
+    // `SwapKitSwapPayload.txPayload` stays RAW bytes — iOS and Android rebuild
+    // their signing input from these bytes, so re-encoding here would break
+    // cross-device cosigning.
+    expect(payload.swapPayload.case).toBe('swapkitSwapPayload')
+    if (payload.swapPayload.case === 'swapkitSwapPayload') {
+      expect(payload.swapPayload.value.txType).toBe('SUI')
+      expect(payload.swapPayload.value.txPayload).toEqual(SUI_PTB_BYTES)
+      expect(payload.swapPayload.value.targetAddress).toBe('sui-deposit')
+      expect(payload.swapPayload.value.fromAmount).toBe('1500000000')
+    }
   })
 })
