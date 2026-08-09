@@ -464,8 +464,9 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
     const vault = await sdk.getVaultById(vaultId)
     if (!vault) throw new VaultError(VaultErrorCode.VaultNotFound, 'Vault not found')
     const result = await vault.prepareSwapTx(params)
-    // Serialize for IPC (convert BigInt to string)
-    return JSON.parse(JSON.stringify(result, (_key, value) => (typeof value === 'bigint' ? value.toString() : value)))
+    // Preserve the echoed quote's BigInt and Uint8Array values so it remains
+    // consistent with the safety binding when it crosses Electron IPC.
+    return result
   })
 
   // === TRANSACTION OPERATIONS ===
