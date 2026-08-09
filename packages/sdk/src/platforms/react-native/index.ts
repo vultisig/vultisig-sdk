@@ -86,6 +86,23 @@ export {
   isCosmosMemoWithinCap,
 } from '@vultisig/core-chain/chains/cosmos/cosmosMemoCap'
 
+// Dynamic THORChain secured-asset discovery. These fetch-based/pure helpers
+// are RN-safe and intentionally match the root SDK entrypoint so mobile
+// clients consume the same catalog contract.
+export type {
+  ThorchainSecuredAsset,
+  ThorchainSecuredAssetCatalog,
+  ThorchainSecuredAssetCatalogFetcher,
+  ThorchainSwapDestinationAsset,
+} from '@vultisig/core-chain/chains/cosmos/thor/securedAssets'
+export {
+  createThorchainSecuredAssetCatalog,
+  getThorchainSecuredAssetCatalog,
+  getThorchainSecuredAssetL1Asset,
+  getThorchainSwapDestinationAssets,
+  parseThorchainSecuredAssets,
+  thorchainSecuredAssetFallback,
+} from '@vultisig/core-chain/chains/cosmos/thor/securedAssets'
 // XRP Ledger issued-currency canonicals — pure helpers/tables that are safe on
 // the RN graph and should stay in parity with the root SDK entrypoint.
 export {

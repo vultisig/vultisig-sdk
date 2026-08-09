@@ -562,7 +562,20 @@ export { getKeysignLimitSwapOrder } from '@vultisig/core-mpc/keysign/swap/getKey
 // THORChain LP primitives (v2: auto-pair, lockup, halts, mimir pause gate)
 export { getThorchainInboundAddress } from '@vultisig/core-chain/chains/cosmos/thor/getThorchainInboundAddress'
 export * from '@vultisig/core-chain/chains/cosmos/thor/lp'
-
+export type {
+  ThorchainSecuredAsset,
+  ThorchainSecuredAssetCatalog,
+  ThorchainSecuredAssetCatalogFetcher,
+  ThorchainSwapDestinationAsset,
+} from '@vultisig/core-chain/chains/cosmos/thor/securedAssets'
+export {
+  createThorchainSecuredAssetCatalog,
+  getThorchainSecuredAssetCatalog,
+  getThorchainSecuredAssetL1Asset,
+  getThorchainSwapDestinationAssets,
+  parseThorchainSecuredAssets,
+  thorchainSecuredAssetFallback,
+} from '@vultisig/core-chain/chains/cosmos/thor/securedAssets'
 // Cosmos staking + distribution module (LCD queries — read-only, generic over
 // every ibcEnabled cosmos chain). Signing primitives ship via
 // `chains.cosmos.buildCosmosStakingTx` from the platform-specific entry point.

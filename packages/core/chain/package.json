@@ -505,6 +505,11 @@
       "import": "./dist/chains/cosmos/thor/rujira/config.js",
       "default": "./dist/chains/cosmos/thor/rujira/config.js"
     },
+    "./chains/cosmos/thor/securedAssets": {
+      "types": "./dist/chains/cosmos/thor/securedAssets.d.ts",
+      "import": "./dist/chains/cosmos/thor/securedAssets.js",
+      "default": "./dist/chains/cosmos/thor/securedAssets.js"
+    },
     "./chains/cosmos/thor/tcy-autocompound/config": {
       "types": "./dist/chains/cosmos/thor/tcy-autocompound/config.d.ts",
       "import": "./dist/chains/cosmos/thor/tcy-autocompound/config.js",
