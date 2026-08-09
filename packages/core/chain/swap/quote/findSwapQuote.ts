@@ -39,10 +39,6 @@ import {
   nativeSwapChains,
   nativeSwapEnabledChainsRecord,
 } from '@vultisig/core-chain/swap/native/NativeSwapChain'
-import {
-  getThorchainSecuredAssetMintQuote,
-  isSameUnderlyingThorchainSecuredAsset,
-} from '@vultisig/core-chain/swap/native/securedAssetMint'
 import { nativeSwapAmountToCoinBaseUnit } from '@vultisig/core-chain/swap/native/utils/nativeSwapAmountToCoinBaseUnit'
 import { NoSwapRoutesError } from '@vultisig/core-chain/swap/NoSwapRoutesError'
 import { SwapError, SwapErrorCode } from '@vultisig/core-chain/swap/SwapError'
@@ -657,8 +653,6 @@ export const findSwapQuote = async ({
 
   const involvedChains = [from.chain, to.chain]
 
-  const isSecuredMint = isSameUnderlyingThorchainSecuredAsset({ from, to })
-
   const matchingSwapChains = nativeSwapChains.filter(swapChain =>
     involvedChains.every(chain => isOneOf(chain, nativeSwapEnabledChainsRecord[swapChain]))
   )
@@ -667,25 +661,6 @@ export const findSwapQuote = async ({
     matchingSwapChains.map(swapChain => ({
       providerName: swapChain === Chain.THORChain ? 'THORChain' : 'MayaChain',
       fetch: async (): Promise<SwapQuote> => {
-        if (swapChain === Chain.THORChain && isSecuredMint) {
-          try {
-            return {
-              quote: {
-                native: await getThorchainSecuredAssetMintQuote({
-                  from,
-                  to,
-                  amount,
-                  destination: normalizedRecipient ?? to.address,
-                }),
-              },
-              discounts: [],
-            }
-          } catch {
-            // Preserve the existing THORChain pool quote when live secured-asset
-            // status is unavailable or direct deposits are currently halted.
-          }
-        }
-
         await assertNativeTradingOpen({ from, to, swapChain })
 
         const fromDecimals = from.decimals
@@ -922,7 +897,7 @@ export const findSwapQuote = async ({
   // or the all-fail path) — never on every quote — so valid swaps pay no extra
   // network cost. Resolves to `null` when not determinable.
   const computeNativeMin = (): Promise<NativeSwapMinAmountIn | null> =>
-    matchingSwapChains.includes(Chain.THORChain) && !isSecuredMint
+    matchingSwapChains.includes(Chain.THORChain)
       ? getNativeSwapMinAmountIn({ from, to, swapChain: Chain.THORChain })
       : Promise.resolve(null)
 
@@ -935,7 +910,7 @@ export const findSwapQuote = async ({
   // only fall back to the computed minimum if they all fail. (#604, CodeRabbit)
   const thorIsSoleRoute =
     generalFetchers.length === 0 && matchingSwapChains.length === 1 && matchingSwapChains[0] === Chain.THORChain
-  if (thorIsSoleRoute && !isSecuredMint) {
+  if (thorIsSoleRoute) {
     await assertNativeTradingOpen({ from, to, swapChain: Chain.THORChain })
 
     const nativeMin = await computeNativeMin()

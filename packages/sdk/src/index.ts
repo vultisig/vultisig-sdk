@@ -576,11 +576,6 @@ export {
   parseThorchainSecuredAssets,
   thorchainSecuredAssetFallback,
 } from '@vultisig/core-chain/chains/cosmos/thor/securedAssets'
-export {
-  getThorchainSecuredAssetMintQuote,
-  isSameUnderlyingThorchainSecuredAsset,
-} from '@vultisig/core-chain/swap/native/securedAssetMint'
-
 // Cosmos staking + distribution module (LCD queries — read-only, generic over
 // every ibcEnabled cosmos chain). Signing primitives ship via
 // `chains.cosmos.buildCosmosStakingTx` from the platform-specific entry point.

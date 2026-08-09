@@ -1848,11 +1848,6 @@
       "import": "./dist/swap/native/NativeSwapQuote.js",
       "default": "./dist/swap/native/NativeSwapQuote.js"
     },
-    "./swap/native/securedAssetMint": {
-      "types": "./dist/swap/native/securedAssetMint.d.ts",
-      "import": "./dist/swap/native/securedAssetMint.js",
-      "default": "./dist/swap/native/securedAssetMint.js"
-    },
     "./swap/native/thorchainDepositMemo": {
       "types": "./dist/swap/native/thorchainDepositMemo.d.ts",
       "import": "./dist/swap/native/thorchainDepositMemo.js",

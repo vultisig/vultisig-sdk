@@ -93,8 +93,6 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
 
     expect(typeof rn.getThorchainSecuredAssetCatalog).toBe('function')
     expect(typeof rn.createThorchainSecuredAssetCatalog).toBe('function')
-    expect(typeof rn.getThorchainSecuredAssetMintQuote).toBe('function')
-    expect(typeof rn.isSameUnderlyingThorchainSecuredAsset).toBe('function')
     expect(typeof rn.getThorchainSwapDestinationAssets).toBe('function')
     expect(rn.thorchainSecuredAssetFallback.length).toBeGreaterThan(10)
   })
