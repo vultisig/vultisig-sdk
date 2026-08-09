@@ -197,8 +197,8 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
 // in the app. This partially addresses the recurring sdk#1224 allow-list-gap
 // class (see e.g. the cosmosStaking / preparePolkadotAssetSend comments above
 // in the source file) — it does not prevent future gaps, just catches this one.
-describe('RN entry exposes fromChainAmountExact + getBlockExplorerUrl', () => {
-  it('resolves both as functions from the RN entry, not just the root barrel', async () => {
+describe('RN entry exposes pure chain helpers and registry', () => {
+  it('resolves the helpers and registry from the RN entry, not just the root barrel', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
     expect(typeof rn.fromChainAmountExact).toBe('function')
@@ -208,6 +208,11 @@ describe('RN entry exposes fromChainAmountExact + getBlockExplorerUrl', () => {
     expect(rn.getBlockExplorerUrl({ chain: rn.Chain.Ethereum, entity: 'address', value: '0xabc' })).toBe(
       'https://etherscan.io/address/0xabc'
     )
+
+    expect(Object.keys(rn.chainRegistry).sort()).toEqual(Object.values(rn.Chain).sort())
+    expect(typeof rn.deriveFromChainRegistry).toBe('function')
+    expect(typeof rn.extendChainRegistry).toBe('function')
+    expect(rn.chainRegistry[rn.Chain.Ethereum].explorer.baseUrl).toBe('https://etherscan.io')
   })
 
   it('re-exports the recent pure parse/normalize/decode helpers from the RN entrypoint', async () => {

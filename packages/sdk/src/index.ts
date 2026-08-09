@@ -342,6 +342,19 @@ export { getSwapExplorerUrl, swapExplorerProviders } from '@vultisig/core-chain/
 // Chain-native block explorer URL builder (address/tx) for the non-swap case.
 export { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
 
+// Exhaustive, SDK-owned chain metadata. Consumers should derive projections
+// or attach exhaustive app-local support policy instead of copying Chain and
+// maintaining parallel tables that silently drift when a chain is added.
+export type {
+  BlockExplorerEntity,
+  ChainDescriptor,
+  ChainDescriptorRegistry,
+  ChainExplorerDescriptor,
+  ChainExtensionRecord,
+  ExtendedChainRegistry,
+} from '@vultisig/core-chain/chainRegistry'
+export { chainRegistry, deriveFromChainRegistry, extendChainRegistry } from '@vultisig/core-chain/chainRegistry'
+
 // Skip Go routing-eligibility predicates. Single source of truth for "does this
 // from/to chain pair route through Skip Go?" — consolidated here so consumers
 // (execute/build tools, route discovery/listing, destination-format validation)
