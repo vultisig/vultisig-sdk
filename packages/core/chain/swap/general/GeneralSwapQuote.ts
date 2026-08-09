@@ -87,5 +87,12 @@ export type GeneralSwapQuote = {
   dstAmount: string
   provider: GeneralSwapProvider
   routeProvider?: string
+  /**
+   * Signed fractional price impact of the route (`0.0133` == 1.33% of output
+   * lost; a negative value is a favorable trade). Absent for providers that do
+   * not publish it — the EVM aggregators (1inch / Kyber / LI.FI / Jupiter) — so
+   * consumers hide the row rather than substitute a fee figure for it.
+   */
+  priceImpact?: number
   tx: GeneralSwapTx
 }
