@@ -619,7 +619,7 @@ const toProviderSlippage = (slippageTolerance: number | undefined): ProviderSlip
   }
 }
 
-export const findSwapQuote = async (input: FindSwapQuoteInput): Promise<SwapQuote> => {
+export const findSwapQuote = async (input: FindSwapQuoteInput): Promise<BoundSwapQuote> => {
   // Provider requests yield before the returned transaction is safety-bound. Own a synchronous
   // snapshot so caller mutations cannot make a response for pair A receive pair B's fingerprint.
   const {

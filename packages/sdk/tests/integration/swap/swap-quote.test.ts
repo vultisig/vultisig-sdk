@@ -211,6 +211,9 @@ describe('Integration: Swap Quote', () => {
           },
         },
         discounts: [],
+        requestedAmount: 1_000_000_000_000_000_000n,
+        expiresAt: Date.now() + 60_000,
+        safetyFingerprint: 'test-fingerprint',
       }
 
       vi.mocked(findSwapQuote).mockResolvedValue(mockQuote as any)
@@ -276,6 +279,9 @@ describe('Integration: Swap Quote', () => {
           },
         },
         discounts: [],
+        requestedAmount: 1_000_000_000n,
+        expiresAt: Date.now() + 60_000,
+        safetyFingerprint: 'test-fingerprint',
       }
 
       vi.mocked(findSwapQuote).mockResolvedValue(mockQuote)

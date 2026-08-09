@@ -19,7 +19,7 @@ import { chainsWithTokenMetadataDiscovery } from '@vultisig/core-chain/coin/toke
 import { getCoinValue } from '@vultisig/core-chain/coin/utils/getCoinValue'
 import { nativeSwapAmountToCoinBaseUnit } from '@vultisig/core-chain/swap/native/utils/nativeSwapAmountToCoinBaseUnit'
 import { findSwapQuote, FindSwapQuoteInput } from '@vultisig/core-chain/swap/quote/findSwapQuote'
-import { SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
+import { BoundSwapQuote, SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
 import { swapEnabledChains } from '@vultisig/core-chain/swap/swapEnabledChains'
 import { SwapError, SwapErrorCode } from '@vultisig/core-chain/swap/SwapError'
 import { getEvmBaseFee } from '@vultisig/core-chain/tx/fee/evm/baseFee'
@@ -350,7 +350,7 @@ export class SwapService {
    * Format quote into SwapQuoteBase
    */
   private async formatQuoteResult(
-    swapQuote: SwapQuote,
+    swapQuote: BoundSwapQuote,
     fromCoin: AccountCoin,
     toCoin: AccountCoin,
     approvalInfo?: SwapApprovalInfo,
@@ -361,10 +361,7 @@ export class SwapService {
 
     // Preserve the raw quote's receive-time expiry. Native quotes also keep the
     // SDK's existing 60-second maximum presentation window.
-    // `formatQuoteResult` only receives canonical `findSwapQuote` results. The
-    // base type keeps these fields optional so legacy/manual quote fixtures stay
-    // source-compatible; the vault-free builder still validates them at runtime.
-    const quoteExpiresAt = swapQuote.expiresAt as number
+    const quoteExpiresAt = swapQuote.expiresAt
     const expiresAt = isNative ? Math.min(quoteExpiresAt, Date.now() + DEFAULT_QUOTE_EXPIRY_MS) : quoteExpiresAt
 
     // Native swap APIs report output in their protocol precision. SDK consumers

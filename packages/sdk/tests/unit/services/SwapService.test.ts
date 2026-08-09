@@ -367,6 +367,7 @@ describe('SwapService', () => {
         discounts: [],
         requestedAmount: 100_000_000n,
         expiresAt,
+        safetyFingerprint: 'test-fingerprint',
       }
 
       vi.mocked(findSwapQuote).mockResolvedValue(mockQuote)
@@ -422,6 +423,9 @@ describe('SwapService', () => {
           },
         },
         discounts: [],
+        requestedAmount: 100_000_000n,
+        expiresAt: Date.now() + 60_000,
+        safetyFingerprint: 'test-fingerprint',
       })
       vi.mocked(getErc20Allowance).mockResolvedValue(0n)
 
@@ -471,6 +475,9 @@ describe('SwapService', () => {
           },
         },
         discounts: [],
+        requestedAmount: 100_000_000n,
+        expiresAt: Date.now() + 60_000,
+        safetyFingerprint: 'test-fingerprint',
       }
 
       vi.mocked(findSwapQuote).mockResolvedValue(mockQuote)
@@ -518,6 +525,9 @@ describe('SwapService', () => {
           },
         },
         discounts: [],
+        requestedAmount: 1_000_000_000_000_000_000n,
+        expiresAt: Date.now() + 60_000,
+        safetyFingerprint: 'test-fingerprint',
       })
 
       const result = await service.getQuote({
@@ -847,6 +857,7 @@ describe('SwapService', () => {
           discounts: [],
           requestedAmount: 1_000_000_000_000_000_000n,
           expiresAt: Date.now() + 60_000,
+          safetyFingerprint: '',
         },
         estimatedOutput: 1000000000n,
         provider: '1inch',
@@ -934,6 +945,7 @@ describe('SwapService', () => {
           discounts: [],
           requestedAmount: 100_000_000n,
           expiresAt: Date.now() + 60_000,
+          safetyFingerprint: '',
         },
         estimatedOutput: 1000000000n,
         provider: 'thorchain',
@@ -1001,6 +1013,7 @@ describe('SwapService', () => {
           discounts: [],
           requestedAmount: 100_000_000n,
           expiresAt: Date.now() + 60_000,
+          safetyFingerprint: '',
         },
         estimatedOutput: 1000000000000000000n,
         provider: '1inch',
