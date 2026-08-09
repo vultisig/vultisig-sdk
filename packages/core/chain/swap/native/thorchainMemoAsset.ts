@@ -60,6 +60,97 @@ export const thorchainAssetPrefixToChain: Readonly<Partial<Record<string, Chain>
 )
 
 /**
+ * Every separator a THORChain memo asset can use: L1 (`.`), synth (`/`), trade
+ * (`~`) and secured (`-`). Shared so the modules that have to find where a
+ * chain prefix ends cannot disagree about which flavours exist.
+ */
+export const thorchainMemoAssetSeparators: readonly string[] = Object.freeze(['.', '/', '~', '-'])
+
+/**
+ * Index of the separator that ends a memo asset's CHAIN prefix, or `-1` when the
+ * asset carries none.
+ *
+ * Always the FIRST separator, never the last. A secured asset spells the whole
+ * denom with `-` (`eth-usdc-0x…`), so searching from the right would put the
+ * boundary inside the token identifier and make every secured asset read as a
+ * different chain, or as truncated. Shared with the traversal rather than only
+ * the character list, so the three modules that need this boundary cannot
+ * disagree about where it falls.
+ */
+export const findThorchainMemoAssetSeparatorIndex = (asset: string): number =>
+  [...asset].findIndex(char => thorchainMemoAssetSeparators.includes(char))
+
+/**
+ * The chain a memo asset ORIGINATES from — what `Asset.GetLayer1Asset().Chain`
+ * resolves to on THORNode's side.
+ *
+ * Reads the prefix up to the first separator, so it holds for every flavour:
+ * `ETH.USDC-0x…`, `BTC/BTC` and the secured `eth-usdc-0x…` all resolve to their
+ * L1 chain. Splitting on `.` alone would return the whole denom for a secured
+ * asset and resolve nothing.
+ *
+ * Note this is the asset's home chain, NOT necessarily the chain a transaction
+ * touching it is signed from — a secured asset lives on THORChain while still
+ * reporting Ethereum here.
+ *
+ * `undefined` for a prefix this SDK cannot route, which a caller should treat as
+ * "unknown chain" rather than an error: an asset THORChain understands and this
+ * SDK does not is still a real order.
+ */
+export const getThorchainMemoAssetChain = (asset: string): Chain | undefined => {
+  const separatorIndex = findThorchainMemoAssetSeparatorIndex(asset)
+  const prefix = separatorIndex === -1 ? asset : asset.slice(0, separatorIndex)
+
+  return thorchainAssetPrefixToChain[prefix.toUpperCase()]
+}
+
+/**
+ * The chain a transaction referencing this asset must be SENT FROM — what
+ * `Asset.GetChain()` resolves to on THORNode's side, which is a different
+ * question from {@link getThorchainMemoAssetChain}.
+ *
+ * The two diverge for every THORChain-HELD flavour. A secured `eth-usdc-0x…`
+ * originates on Ethereum but is custodied on THORChain, so a message referencing
+ * it must come from a THOR address; the same holds for synths (`BTC/BTC`) and
+ * trade assets (`ETH~ETH`). Only dotted layer-1 notation names a chain that also
+ * has to send.
+ *
+ * The separator IS the discriminator: THORNode's own flavour detection works the
+ * same way, and the first separator is the one that decides — a dotted asset's
+ * later `-` introduces a contract id, not a flavour.
+ *
+ * This is what `MsgModifyLimitSwap.ValidateBasic`'s
+ * `From.IsChain(Source.Asset.GetChain())` compares against, so a caller that
+ * pairs a signing coin with a memo must agree with this or the transaction
+ * broadcasts successfully and is refunded without cancelling anything.
+ *
+ * `undefined` when the prefix is unroutable — treat as "unknown", and refuse.
+ * That holds for the THORChain-held flavours too: a recognisable SHAPE is not a
+ * recognisable asset, so `NOPE-NOPE` is unknown rather than THORChain-held.
+ * Answering THORChain on the strength of a separator alone would let a garbage
+ * source asset pair successfully with a RUNE coin and reach a signer.
+ */
+export const getThorchainMemoAssetSourceChain = (asset: string): Chain | undefined => {
+  const separatorIndex = findThorchainMemoAssetSeparatorIndex(asset)
+
+  // A bare chain prefix carries no symbol, so it is not an asset — even though
+  // the prefix lookup would happily resolve `BTC` on its own.
+  if (separatorIndex === -1) {
+    return undefined
+  }
+
+  const homeChain = getThorchainMemoAssetChain(asset)
+  if (homeChain === undefined) {
+    return undefined
+  }
+
+  // Prefix resolved, so the separator can be trusted to mean what it says: a
+  // non-dot one marks a THORChain-HELD flavour, which sends from THORChain
+  // whatever chain it originates on.
+  return asset[separatorIndex] === '.' ? homeChain : Chain.THORChain
+}
+
+/**
  * Whether a chain can be encoded as a THORChain memo asset — i.e. whether it is
  * routable through THORChain at all.
  *
@@ -101,6 +192,29 @@ const abbreviateContractSuffix = (asset: string): string => {
 }
 
 /**
+ * Notation shared by both memo spellings: the routability and ticker checks a
+ * memo asset must pass, then the one converter that decides what a THORChain
+ * asset string looks like.
+ *
+ * Both callers reject the same inputs for the same reasons, so an asset that is
+ * unbuildable for a placement cannot become buildable for a cancel.
+ */
+const toValidatedNativeSwapAsset = ({ chain, id, ticker }: ThorchainMemoAssetInput, caller: string): string => {
+  if (!isThorchainRoutable(chain)) {
+    throw new Error(`${caller}: ${chain} is not routable through THORChain`)
+  }
+
+  const normalizedTicker = ticker.trim()
+  if (!normalizedTicker) {
+    throw new Error(`${caller}: ticker must be a non-empty string for ${chain}`)
+  }
+
+  const normalizedId = id?.trim()
+
+  return toNativeSwapAsset({ chain, id: normalizedId || undefined, ticker: normalizedTicker })
+}
+
+/**
  * Build the THORChain memo-asset string for a coin — the `source_asset` /
  * `target_asset` a limit-swap memo is built from.
  *
@@ -126,20 +240,44 @@ const abbreviateContractSuffix = (asset: string): string => {
  * too short to abbreviate — a malformed asset segment must fail here rather than
  * at broadcast time, once funds are committed.
  */
-export const getThorchainMemoAsset = ({ chain, id, ticker }: ThorchainMemoAssetInput): string => {
-  if (!isThorchainRoutable(chain)) {
-    throw new Error(`getThorchainMemoAsset: ${chain} is not routable through THORChain`)
-  }
-
-  const normalizedTicker = ticker.trim()
-  if (!normalizedTicker) {
-    throw new Error(`getThorchainMemoAsset: ticker must be a non-empty string for ${chain}`)
-  }
-
-  const normalizedId = id?.trim()
-  const asset = toNativeSwapAsset({ chain, id: normalizedId || undefined, ticker: normalizedTicker })
+export const getThorchainMemoAsset = (input: ThorchainMemoAssetInput): string => {
+  const asset = toValidatedNativeSwapAsset(input, 'getThorchainMemoAsset')
 
   // THORChain-held assets (secured denoms, `THOR.TCY`) carry no L1 contract to
   // shorten -- the trailing address of a secured denom identifies the asset.
-  return chain === Chain.THORChain ? asset : abbreviateContractSuffix(asset)
+  return input.chain === Chain.THORChain ? asset : abbreviateContractSuffix(asset)
 }
+
+/**
+ * Build the THORChain memo-asset string a **cancel** memo must use — the same
+ * notation {@link getThorchainMemoAsset} emits, minus the abbreviation.
+ *
+ * - native → `CHAIN.TICKER` (`BTC.BTC`, `THOR.RUNE`)
+ * - THORChain tokens → `THOR.TICKER` (`THOR.TCY`)
+ * - THORChain secured assets → `CHAIN-ASSET` (`XRP-XRP`, `ETH-USDC-0X…`)
+ * - any other token → `CHAIN.TICKER-<full contract>` (`ETH.USDC-0XA0B8…`)
+ *
+ * The difference from the placement spelling is the entire point. A placement
+ * memo abbreviates an L1 contract to its last six characters because memo bytes
+ * are scarce and `fuzzyAssetMatch` expands it again on arrival. A cancel gets no
+ * such treatment: `ModifyLimitSwapMemo` is the one inbound memo type
+ * `processOneTxIn` does NOT route through `fuzzyAssetMatch`, so its asset string
+ * builds the order-index key verbatim. An abbreviation there addresses a bucket
+ * that by construction holds no order — the cancel is accepted, costs a fee, and
+ * cancels nothing.
+ *
+ * UPPER-CASED, unlike the coin's own contract id. Case is not semantic to
+ * THORNode — `common.ParseAsset` upper-cases whatever it is given, and the queue
+ * index key is built from an upper-cased asset — but it IS semantic to this
+ * package's own pool-id validation, which the cancel eligibility check routes
+ * through to size the memo against its source chain. Left in the contract's
+ * native lower case, every ERC20-funded order would be reported as an
+ * unroutable source chain and become uncancellable. Upper-casing also makes this
+ * byte-identical to what the queue reports the order's assets as, which is what
+ * the two are cross-checked against.
+ *
+ * Both spellings share their notation source and their validation, so the two
+ * cannot drift apart in anything except the abbreviation and that case.
+ */
+export const getThorchainCancelMemoAsset = (input: ThorchainMemoAssetInput): string =>
+  toValidatedNativeSwapAsset(input, 'getThorchainCancelMemoAsset').toUpperCase()

@@ -635,13 +635,13 @@ Examples:
 // Command: Send transaction
 program
   .command('send <chain> <to> [amount]')
-  .description(descriptions.send.description)
+  .description(descriptions.send.cliDescription)
   .option('--max', 'Send maximum amount (balance minus fees)')
   .option('--token <tokenId>', 'Token to send (default: native)')
   .option('--memo <memo>', 'Transaction memo')
   .option('--destination-tag <tag>', 'XRP DestinationTag (0 to 4294967295)')
   .option('--dry-run', 'Preview transaction without signing or broadcasting')
-  .option('--confirm', 'Confirm and broadcast (without this flag, runs as a preview)')
+  .option('--confirm', 'Confirm and broadcast (required to execute non-interactively; use --dry-run to preview)')
   .option('-y, --yes', 'Alias for --confirm')
   .option('--force', 'Bypass the duplicate-broadcast guard (re-send an identical, recently-broadcast tx)')
   .option('--password <password>', 'Vault password for signing')
@@ -908,7 +908,7 @@ Examples:
 // Command: Show addresses
 program
   .command('addresses')
-  .description(descriptions.address.description)
+  .description(descriptions.address.cliDescription)
   .addHelpText(
     'after',
     `
@@ -1143,13 +1143,13 @@ Examples:
 // Command: Execute swap
 program
   .command('swap <fromChain> <toChain> [amount]')
-  .description(descriptions.swap.description)
+  .description(descriptions.swap.cliDescription)
   .option('--max', 'Swap maximum amount (full balance minus fees for native)')
   .option('--from-token <address>', 'Token address to swap from (default: native)')
   .option('--to-token <address>', 'Token address to swap to (default: native)')
   .option('--slippage <percent>', 'Slippage tolerance in percent', '1')
   .option('--dry-run', 'Preview swap without signing or broadcasting')
-  .option('--confirm', 'Confirm and broadcast (without this flag, runs as a preview)')
+  .option('--confirm', 'Confirm and broadcast (required to execute non-interactively; use --dry-run to preview)')
   .option('-y, --yes', 'Alias for --confirm')
   .option('--force', 'Bypass the duplicate-broadcast guard (re-send an identical, recently-broadcast swap)')
   .option('--password <password>', 'Vault password for signing')

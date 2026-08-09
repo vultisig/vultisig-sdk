@@ -7,6 +7,7 @@ import {
   isCancelLimitSwapMemo,
   isModifyLimitSwapMemo,
   LimitSwapCancelInputs,
+  parseCancelLimitSwapMemo,
 } from './limitSwapCancelMemo'
 
 const fullUsdc = 'ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48'
@@ -165,5 +166,44 @@ describe('doesCancelLimitSwapMemoFit', () => {
     })
 
     expect(doesCancelLimitSwapMemoFit(memo, 'utxo')).toBe(true)
+  })
+})
+
+describe('parseCancelLimitSwapMemo', () => {
+  it('round-trips what the builder emits', () => {
+    expect(parseCancelLimitSwapMemo(buildCancelLimitSwapMemo(runeToUsdc))).toEqual(runeToUsdc)
+  })
+
+  // There is no separator between amount and asset, and an asset can itself
+  // contain digits — the boundary is only where the leading digits stop.
+  it('splits each coin where its leading digits end', () => {
+    const parsed = parseCancelLimitSwapMemo(`m=<:100000000${fullUsdc}:43079145THOR.RUNE:0`)
+
+    expect(parsed.sourceAsset).toBe(fullUsdc)
+    expect(parsed.sourceAmount).toBe(100_000_000n)
+  })
+
+  it('reads a secured denom back unchanged', () => {
+    const securedSource = 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+
+    expect(parseCancelLimitSwapMemo(`m=<:100000000${securedSource}:5000000THOR.RUNE:0`).sourceAsset).toBe(securedSource)
+  })
+
+  // A retarget re-prices an order rather than closing it. Decoding one as a
+  // cancellation would describe the opposite of what is about to happen.
+  it('rejects a retarget', () => {
+    expect(() => parseCancelLimitSwapMemo(`m=<:100000000THOR.RUNE:43079145${fullUsdc}:50000000`)).toThrow(
+      /re-targets a limit order/
+    )
+  })
+
+  it.each([
+    ['=<:ETH.ETH:0xdest:100/14400/0', /not a THORChain limit-order modification/],
+    ['m=<:100000000THOR.RUNE:0', /must have 3 segments/],
+    ['m=<:THOR.RUNE:43079145ETH.ETH:0', /<amount><ASSET>/],
+    ['m=<:100000000:43079145ETH.ETH:0', /<amount><ASSET>/],
+    ['m=<:0THOR.RUNE:43079145ETH.ETH:0', /amounts must be positive/],
+  ])('rejects %s', (memo, expected) => {
+    expect(() => parseCancelLimitSwapMemo(memo)).toThrow(expected)
   })
 })
