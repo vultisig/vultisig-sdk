@@ -178,12 +178,11 @@ describe('prefix map consistency', () => {
     expect(new Set(prefixes).size).toBe(prefixes.length)
   })
 
-  // Documents a gap that predates this helper: `buildLimitSwapMemo` validates
-  // dotted `CHAIN.ASSET` pool ids, so the `CHAIN-ASSET` form a secured asset
-  // requires is rejected before the shared map lookup. Pinned so the day
-  // validation learns secured denoms, this test fails and gets updated rather
-  // than the limitation silently persisting.
-  it('produces secured-asset notation the limit-swap memo builder does not yet accept', () => {
+  // This was pinned as a KNOWN GAP — the limit-swap memo builder validated
+  // dotted pool ids and rejected the `CHAIN-ASSET` form a secured asset needs.
+  // It now accepts them, so the pin is inverted rather than deleted: the notation
+  // this helper emits has to stay one the memo builder will take.
+  it('produces secured-asset notation the limit-swap memo builder accepts', () => {
     const securedAsset = getThorchainMemoAsset({
       chain: Chain.THORChain,
       ticker: 'XRP',
@@ -191,16 +190,17 @@ describe('prefix map consistency', () => {
     })
 
     expect(securedAsset).toBe('XRP-XRP')
-    expect(() =>
-      buildLimitSwapMemo({
-        source_asset: securedAsset,
-        source_amount: 100_000_000,
-        target_asset: 'BTC.BTC',
-        dest_addr: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
-        target_price: 0.001,
-        expiry_hours: 24,
-      })
-    ).toThrow(/not a valid THORChain pool id/)
+
+    const memo = buildLimitSwapMemo({
+      source_asset: securedAsset,
+      source_amount: 100_000_000,
+      target_asset: 'BTC.BTC',
+      dest_addr: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+      target_price: 0.001,
+      expiry_hours: 24,
+    })
+
+    expect(memo.startsWith('=<:BTC.BTC:')).toBe(true)
   })
 
   it('produces assets the limit-swap memo builder accepts', () => {

@@ -3,10 +3,9 @@ import { PublicKey } from '@solana/web3.js'
 
 import { Chain } from '../../Chain'
 import { getChainKind } from '../../ChainKind'
-import { assertValidPoolId } from '../../chains/cosmos/thor/lp/pools'
 import { baseAffiliateBps } from '../affiliate/config'
 import { nativeSwapAffiliateConfig } from './nativeSwapAffiliateConfig'
-import { thorchainAssetPrefixToChain } from './thorchainMemoAsset'
+import { getThorchainMemoAssetChain, thorchainAssetPrefixToChain } from './thorchainMemoAsset'
 
 export const limitSwapExpiryHours = [12, 24, 72] as const
 export type LimitSwapExpiryHours = (typeof limitSwapExpiryHours)[number]
@@ -57,15 +56,89 @@ const getAssetChainPrefix = (asset: string): string => {
   return prefix
 }
 
-const getSupportedThorchainAssetChain = (asset: string, fieldName: string): Chain => {
-  assertValidPoolId(asset)
+/** `CHAIN.TICKER` or `CHAIN.TICKER-CONTRACT` — a layer-1 pool asset. */
+const layer1LimitSwapAssetPattern = /^[A-Z0-9]+\.[A-Z0-9]+(-[A-Z0-9]+)?$/
 
-  const prefix = getAssetChainPrefix(asset)
-  const chain = thorchainAssetPrefixToChain[prefix.toUpperCase()]
-  if (!chain) {
-    throw new Error(`${fieldName} has unsupported THORChain asset prefix: ${prefix}`)
+/**
+ * A THORChain SECURED denom: `<l1chain>-<symbol>` (`btc-btc`, `xrp-xrp`) or
+ * `<l1chain>-<symbol>-<contract>` (`eth-usdc-0xa0b…`).
+ *
+ * Case-insensitive on purpose: this app emits the denom lower-case, THORNode's
+ * `common.ParseAsset` upper-cases whatever it is given, and the queue reports it
+ * back upper-cased. All three spell the same asset.
+ */
+const securedLimitSwapAssetPattern = /^[A-Za-z0-9]+-[A-Za-z0-9]+(-[A-Za-z0-9]+)?$/
+
+/**
+ * The chain a limit-swap asset must be SENT FROM (as a source) or PAID OUT ON
+ * (as a target) — `Asset.GetChain()` on THORNode's side.
+ *
+ * Two notations are accepted, and the discriminator is simply whether the asset
+ * carries a `.`:
+ *
+ * - **Layer-1** (`BTC.BTC`, `ETH.USDC-0XA0B8…`) — resolves to its own chain.
+ *   The deposit arrives at that chain's Asgard inbound, and a payout leaves to
+ *   an address on it.
+ * - **Secured** (`eth-usdc-0xa0b…`, `xrp-xrp`) — resolves to **THORChain**. A
+ *   secured asset originates elsewhere but is custodied on THORChain, so it is
+ *   deposited by `MsgDeposit` from a THOR address and paid out to one. Reading
+ *   its home chain here would send the deposit to an Ethereum vault and validate
+ *   the payout address as an Ethereum one — both wrong.
+ *
+ * Deliberately NOT `assertValidPoolId`: that validator is the shared THORChain
+ * *pool id* grammar, used by the LP paths, and it only knows dotted notation.
+ * Widening it would change what every one of those callers accepts. A limit swap
+ * needs its own, narrower question — "is this an asset THIS memo can carry" —
+ * so it gets its own validator.
+ *
+ * Synths (`BTC/BTC`) and trade assets (`ETH~ETH`) remain unsupported. They are a
+ * different custody model again, and neither has been verified against the
+ * advanced swap queue, so they fail here rather than building a memo whose
+ * behaviour nobody has established.
+ */
+const getSupportedThorchainAssetChain = (asset: string, fieldName: string): Chain => {
+  const normalized = typeof asset === 'string' ? asset.trim() : ''
+  if (!normalized) {
+    throw new Error(`${fieldName} must be a non-empty THORChain asset`)
   }
-  return chain
+  if (normalized !== asset) {
+    throw new Error(`${fieldName} must not contain surrounding whitespace`)
+  }
+
+  if (normalized.includes('.')) {
+    if (!layer1LimitSwapAssetPattern.test(normalized)) {
+      throw new Error(
+        `${fieldName} is not a valid THORChain layer-1 asset: ${JSON.stringify(asset)}. ` +
+          `Expected uppercase CHAIN.ASSET (e.g. "BTC.BTC") or CHAIN.ASSET-CONTRACT.`
+      )
+    }
+
+    const prefix = getAssetChainPrefix(normalized)
+    const chain = thorchainAssetPrefixToChain[prefix.toUpperCase()]
+    if (!chain) {
+      throw new Error(`${fieldName} has unsupported THORChain asset prefix: ${prefix}`)
+    }
+    return chain
+  }
+
+  if (!securedLimitSwapAssetPattern.test(normalized)) {
+    throw new Error(
+      `${fieldName} is not a THORChain asset this memo can carry: ${JSON.stringify(asset)}. ` +
+        `Expected a layer-1 asset (e.g. "BTC.BTC") or a secured denom (e.g. "eth-usdc-0xa0b…"). ` +
+        `Synth and trade assets are not supported.`
+    )
+  }
+
+  // The denom's leading segment is its ORIGIN chain, which must be one THORChain
+  // routes — `nope-nope` is a well-shaped string naming nothing.
+  if (!getThorchainMemoAssetChain(normalized)) {
+    throw new Error(
+      `${fieldName} names a secured asset whose origin chain THORChain cannot route: ${JSON.stringify(asset)}`
+    )
+  }
+
+  // Custodied on THORChain, wherever it came from.
+  return Chain.THORChain
 }
 
 const parsePositiveInteger = (value: LimitSwapNumericInput, fieldName: string): bigint => {
