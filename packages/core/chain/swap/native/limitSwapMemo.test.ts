@@ -82,6 +82,23 @@ describe('validateLimitSwapInputs', () => {
     ).toThrow(/unsupported THORChain asset prefix/)
   })
 
+  it('rejects surrounding whitespace in source and target assets', () => {
+    expect(() =>
+      validateLimitSwapInputs({
+        ...validInput,
+        source_asset: ' BTC.BTC ',
+      })
+    ).toThrow(/surrounding whitespace/)
+
+    expect(() =>
+      buildLimitSwapMemo({
+        ...validInput,
+        target_asset: ' eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 ',
+        dest_addr: 'thor1x2whgc2nt665y0kc44uywhynazvp0l8tp0vtu6',
+      })
+    ).toThrow(/surrounding whitespace/)
+  })
+
   it('accepts a Solana limit-swap destination (THOR-04)', () => {
     expect(() =>
       validateLimitSwapInputs({
@@ -274,5 +291,101 @@ describe('assertMemoByteLength', () => {
 
   it('allows non-UTXO memos up to 250 bytes', () => {
     expect(() => assertMemoByteLength('x'.repeat(250), 'other')).not.toThrow()
+  })
+})
+
+// A secured asset is an L1 asset custodied ON THORChain. It is deposited by
+// MsgDeposit from a THOR address and paid out to one, so every chain question
+// about it answers THORChain — not the chain it originates from.
+describe('secured assets', () => {
+  const securedUsdc = 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+  const thorAddress = 'thor12a9rpf9u2ulwuezxkh6uas4au7xnde8umdua5t'
+
+  it('places an order from a secured source', () => {
+    const memo = buildLimitSwapMemo({
+      source_asset: securedUsdc,
+      source_amount: 100_000_000,
+      target_asset: 'BTC.BTC',
+      dest_addr: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+      target_price: 0.001,
+      expiry_hours: 24,
+    })
+
+    expect(memo.startsWith('=<:BTC.BTC:')).toBe(true)
+  })
+
+  // The deposit is a MsgDeposit on THORChain, so it gets THORChain's 250-byte
+  // budget — reading the origin chain would give an ETH/UTXO answer instead.
+  it('sizes a secured source against THORChain, not its origin chain', () => {
+    expect(getLimitSwapSourceChainKind(securedUsdc)).toBe('other')
+    expect(getLimitSwapSourceChainKind('btc-btc')).toBe('other')
+    // The layer-1 spelling of the same origin chain still sizes as UTXO.
+    expect(getLimitSwapSourceChainKind('BTC.BTC')).toBe('utxo')
+  })
+
+  // A secured target pays out ON THORChain, so the payout address must be a THOR
+  // one. Validating it against Ethereum would reject the only correct address.
+  it('requires a THOR payout address for a secured target', () => {
+    expect(() =>
+      buildLimitSwapMemo({
+        source_asset: 'ETH.ETH',
+        source_amount: 100_000_000,
+        target_asset: securedUsdc,
+        dest_addr: thorAddress,
+        target_price: 1,
+        expiry_hours: 24,
+      })
+    ).not.toThrow()
+
+    expect(() =>
+      buildLimitSwapMemo({
+        source_asset: 'ETH.ETH',
+        source_amount: 100_000_000,
+        target_asset: securedUsdc,
+        dest_addr: '0x742d35Cc6634C0532925a3b844Bc454e4438f44e',
+        target_price: 1,
+        expiry_hours: 24,
+      })
+    ).toThrow(/not a valid THORChain address/)
+  })
+
+  // A secured denom is long and cannot be abbreviated, and a THOR payout address
+  // is 43 characters. Together they overflow OP_RETURN, so this pair is simply
+  // not placeable from a UTXO chain — the byte guard says so rather than
+  // truncating the asset into one THORChain would resolve differently.
+  it('refuses a secured target from a UTXO source, which cannot fit', () => {
+    expect(() =>
+      buildLimitSwapMemo({
+        source_asset: 'BTC.BTC',
+        source_amount: 100_000_000,
+        target_asset: securedUsdc,
+        dest_addr: thorAddress,
+        target_price: 1,
+        expiry_hours: 24,
+      })
+    ).toThrow(/exceeding utxo limit 80/)
+  })
+
+  it.each(['XRP-XRP', 'ETH-USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48', securedUsdc])(
+    'accepts %s in either case convention',
+    asset => {
+      expect(() => getLimitSwapSourceChainKind(asset)).not.toThrow()
+    }
+  )
+
+  // A well-shaped string is not a real asset — the origin chain still has to be
+  // one THORChain routes.
+  it('refuses a secured denom whose origin chain is unroutable', () => {
+    expect(() => getLimitSwapSourceChainKind('nope-nope')).toThrow(/cannot route/)
+  })
+
+  // Different custody model, unverified against the advanced swap queue. Failing
+  // here beats building a memo whose behaviour nobody has established.
+  it.each(['BTC/BTC', 'ETH~ETH'])('still refuses the %s flavour', asset => {
+    expect(() => getLimitSwapSourceChainKind(asset)).toThrow(/not a THORChain asset this memo can carry/)
+  })
+
+  it.each(['BTC.BTC.EXTRA', 'BTC.', '.BTC', ''])('still refuses the malformed %j', asset => {
+    expect(() => getLimitSwapSourceChainKind(asset)).toThrow()
   })
 })

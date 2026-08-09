@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-mpc",
-  "version": "1.17.0",
+  "version": "1.19.0",
   "description": "MPC, keysign, and vault types shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -666,6 +666,11 @@
       "import": "./dist/keysign/utils/getKeysignCoin.js",
       "default": "./dist/keysign/utils/getKeysignCoin.js"
     },
+    "./keysign/utils/isRippleTrustSet": {
+      "types": "./dist/keysign/utils/isRippleTrustSet.d.ts",
+      "import": "./dist/keysign/utils/isRippleTrustSet.js",
+      "default": "./dist/keysign/utils/isRippleTrustSet.js"
+    },
     "./keysign/utils/resolvePolkadotToAddress": {
       "types": "./dist/keysign/utils/resolvePolkadotToAddress.d.ts",
       "import": "./dist/keysign/utils/resolvePolkadotToAddress.js",
@@ -1089,7 +1094,7 @@
     "@noble/hashes": "^1.8.0",
     "@solana/web3.js": "^1.98.4",
     "@trustwallet/wallet-core": "^4.7.0",
-    "@vultisig/core-chain": "2.32.0",
+    "@vultisig/core-chain": "2.34.0",
     "@vultisig/core-config": "0.9.1",
     "@vultisig/lib-dkls": "0.9.0",
     "@vultisig/lib-mldsa": "0.9.0",
