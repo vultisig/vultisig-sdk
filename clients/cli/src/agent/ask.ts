@@ -13,9 +13,16 @@
  */
 import type { AgentErrorCode } from './agentErrors'
 import { isTerminalAgentErrorCode } from './agentErrors'
-import type { BalanceSummaryCard, TurnOutcome } from './cards'
+import type { BalanceSummaryCard, PolymarketMarketsCard, TurnOutcome, YieldOpportunitiesCard } from './cards'
 import type { AgentSession } from './session'
-import type { ProtocolWarning, Suggestion, TxLifecycleStatus, UICallbacks } from './types'
+import type {
+  ProposedTransaction,
+  ProtocolWarning,
+  SigningRecord,
+  Suggestion,
+  TxLifecycleStatus,
+  UICallbacks,
+} from './types'
 
 export type AskResult = {
   sessionId: string
@@ -40,6 +47,10 @@ export type AskResult = {
   }>
   /** Server-built balance_summary cards rendered this turn. */
   cards: BalanceSummaryCard[]
+  /** Server-built yield_opportunities cards rendered this turn (rj3p). */
+  yieldCards: YieldOpportunitiesCard[]
+  /** Server-built polymarket_markets cards rendered this turn (rj3p). */
+  polymarketCards: PolymarketMarketsCard[]
   warnings: ProtocolWarning[]
   /**
    * Set when a backend/stream `error` frame arrived mid-turn. Unlike an HTTP
@@ -57,6 +68,17 @@ export type AskResult = {
    * or an infra error without parsing prose.
    */
   outcome?: TurnOutcome
+  /**
+   * The transaction the agent BUILT but was never authorized to sign, set when the
+   * confirm gate declined a signing request (no `--yes`). Nothing was signed and
+   * nothing was broadcast. This is the read-safe path's actual result: `agent ask`
+   * without `--yes` is documented to report the proposed transaction, and before
+   * this existed the built tx was discarded and the turn reported a failure whose
+   * stated cause (missing tool / failed build / unconfirmable broadcast) was wrong.
+   */
+  proposedTransaction?: ProposedTransaction
+  /** Signing requests approved this turn, recorded after their signing bodies ran (with outcome). */
+  signingRecords: SigningRecord[]
 }
 
 export class AskInterface {
@@ -67,8 +89,12 @@ export class AskInterface {
   private toolCalls: AskResult['toolCalls'] = []
   private transactions: AskResult['transactions'] = []
   private cards: BalanceSummaryCard[] = []
+  private yieldCards: YieldOpportunitiesCard[] = []
+  private polymarketCards: PolymarketMarketsCard[] = []
   private warnings: ProtocolWarning[] = []
   private outcome: TurnOutcome | undefined
+  private proposedTransaction: ProposedTransaction | undefined
+  private signingRecords: SigningRecord[] = []
   private error: AskResult['error']
   // Tracks whether the currently-latched `error` is a terminal one (e.g. the
   // depth cap). A terminal error may overwrite a prior non-terminal one; once a
@@ -135,12 +161,30 @@ export class AskInterface {
         this.cards.push(card)
       },
 
+      onYieldOpportunities: (card: YieldOpportunitiesCard) => {
+        this.yieldCards.push(card)
+      },
+
+      onPolymarketMarkets: (card: PolymarketMarketsCard) => {
+        this.polymarketCards.push(card)
+      },
+
       onTurnOutcome: (outcome: TurnOutcome) => {
         // Latch the LAST outcome of the turn. The backend emits exactly one at turn
         // end, but a multi-request action loop (a sign that triggers a follow-up
         // recent_actions turn) can produce more than one across requests — the last
         // reflects the turn's true ending.
         this.outcome = outcome
+      },
+
+      onProposedTransaction: (proposed: ProposedTransaction) => {
+        // Last one wins: a turn gates at most one signable payload, but a
+        // multi-step flow could gate again — the latest is the one still pending.
+        this.proposedTransaction = proposed
+      },
+
+      onSigningRecord: (record: SigningRecord) => {
+        this.signingRecords.push(record)
       },
 
       onSuggestions: (_suggestions: Suggestion[]) => {
@@ -215,8 +259,12 @@ export class AskInterface {
     this.toolCalls = []
     this.transactions = []
     this.cards = []
+    this.yieldCards = []
+    this.polymarketCards = []
     this.warnings = []
     this.outcome = undefined
+    this.proposedTransaction = undefined
+    this.signingRecords = []
     // Each turn's error (and its terminal flag) is turn-local — reset every turn.
     this.error = undefined
     this.errorIsTerminal = false
@@ -242,9 +290,13 @@ export class AskInterface {
       toolCalls: this.toolCalls,
       transactions: this.transactions,
       cards: this.cards,
+      yieldCards: this.yieldCards,
+      polymarketCards: this.polymarketCards,
       warnings: this.warnings,
+      signingRecords: this.signingRecords,
       error: this.error,
       ...(this.outcome ? { outcome: this.outcome } : {}),
+      ...(this.proposedTransaction ? { proposedTransaction: this.proposedTransaction } : {}),
     }
   }
 }

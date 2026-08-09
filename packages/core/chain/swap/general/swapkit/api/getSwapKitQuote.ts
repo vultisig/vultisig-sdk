@@ -3,6 +3,7 @@ import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
+import { usdc } from '@vultisig/core-chain/coin/knownTokens'
 import { GeneralSwapQuote, GeneralSwapTx } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
 import { logUnenforcedAggregatorDestination } from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
 import { getSwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
@@ -16,6 +17,7 @@ import {
   normalizeSwapKitProvider,
   swapKitExcludedProviders,
 } from '@vultisig/core-chain/swap/general/swapkit/SwapKitProviders'
+import { SwapFee } from '@vultisig/core-chain/swap/SwapFee'
 import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
 import { withoutUndefinedFields } from '@vultisig/lib-utils/record/withoutUndefinedFields'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
@@ -135,6 +137,13 @@ type SwapKitQuoteResponse = {
   message?: string
 }
 
+type SwapKitFee = {
+  type?: string
+  amount?: string
+  asset?: string
+  chain?: string
+}
+
 type SwapKitSwapResponse = {
   expectedBuyAmount?: string
   tx?: unknown
@@ -155,7 +164,7 @@ type SwapKitSwapResponse = {
   swapId?: string
   providers?: string[]
   legs?: { provider?: string }[]
-  fees?: { type?: string; amount?: string }[]
+  fees?: SwapKitFee[]
   meta?: {
     txType?: string
   }
@@ -176,6 +185,10 @@ const swapKitTransferSourceChains = [
   Chain.Dogecoin,
   Chain.Litecoin,
   Chain.Ripple,
+  // Sui rides the transfer arm for its pre-built PTB, the same way Bitcoin
+  // rides it for a PSBT: `txType`/`txPayload` carry the opaque signing bytes
+  // while `to`/`amount` stay informational (both are baked into the PTB).
+  Chain.Sui,
   Chain.Ton,
   Chain.Tron,
   Chain.Zcash,
@@ -317,7 +330,9 @@ const postSwapKit = async <T>(path: string, body: Record<string, unknown>): Prom
   return data as T
 }
 
-const toSwapKitAsset = ({ chain, id, ticker }: AccountCoin<SwapKitEnabledChain>) => {
+type SwapKitAssetCoin = Pick<AccountCoin<SwapKitEnabledChain>, 'chain' | 'decimals' | 'id' | 'ticker'>
+
+const toSwapKitAsset = ({ chain, id, ticker }: Pick<SwapKitAssetCoin, 'chain' | 'id' | 'ticker'>) => {
   const chainId = swapKitChainId[chain]
   const symbol = id ? ticker : chainFeeCoin[chain].ticker
 
@@ -407,33 +422,121 @@ const buildEvmTx = (
 }
 
 const getSwapKitFeeAmount = (fees: SwapKitSwapResponse['fees'], type: string, decimals: number): bigint => {
-  const fee = fees?.find(fee => fee.type?.toLowerCase() === type)
-
-  if (!fee?.amount) {
-    return 0n
-  }
-
-  return toChainAmount(fee.amount, decimals)
+  return (fees ?? [])
+    .filter(fee => fee.type?.toLowerCase() === type && fee.amount)
+    .reduce((total, fee) => total + toChainAmount(fee.amount!, decimals), 0n)
 }
 
-const buildSolanaTx = (tx: unknown, fees: SwapKitSwapResponse['fees']): GeneralSwapTx => {
+const isZeroFeeAmount = (amount: string) => /^[+-]?(?:0+(?:\.0*)?|\.0+)$/.test(amount.trim())
+
+const sameSwapFeeCoin = (one: SwapFee, another: SwapFee) =>
+  one.chain === another.chain &&
+  one.decimals === another.decimals &&
+  (one.id ?? '').toLowerCase() === (another.id ?? '').toLowerCase()
+
+const chainflipStableFeeCoin = {
+  chain: Chain.Ethereum,
+  decimals: usdc.decimals,
+  id: usdc.id.toLowerCase(),
+  ticker: usdc.ticker,
+} satisfies SwapKitAssetCoin
+
+const isChainflipProvider = (provider: string | undefined) =>
+  provider === 'CHAINFLIP' || provider === 'CHAINFLIP_STREAMING'
+
+const matchesSwapKitFeeChain = (feeChain: string | undefined, coinChain: SwapKitEnabledChain) => {
+  if (!feeChain) {
+    return true
+  }
+
+  const normalized = feeChain.toLowerCase()
+
+  return normalized === coinChain.toLowerCase() || normalized === swapKitChainId[coinChain].toLowerCase()
+}
+
+const getSwapKitSwapFee = (
+  fees: SwapKitSwapResponse['fees'],
+  from: AccountCoin<SwapKitSourceChain>,
+  to: AccountCoin<SwapKitEnabledChain>,
+  routeProvider: string | undefined
+): SwapFee => {
+  const feeCoins: SwapKitAssetCoin[] = [
+    from,
+    to,
+    ...(isChainflipProvider(routeProvider) ? [chainflipStableFeeCoin] : []),
+  ]
+  const candidates = feeCoins.map(coin => ({
+    coin,
+    asset: toSwapKitAsset(coin).toLowerCase(),
+  }))
+  let result: SwapFee | undefined
+
+  for (const fee of fees ?? []) {
+    const type = fee.type?.toLowerCase()
+
+    if ((type !== 'affiliate' && type !== 'service') || !fee.amount || isZeroFeeAmount(fee.amount)) {
+      continue
+    }
+
+    if (!fee.asset) {
+      throw new Error(`SwapKit ${type} fee is missing its asset.`)
+    }
+
+    const candidate = candidates.find(
+      ({ asset, coin }) => asset === fee.asset!.toLowerCase() && matchesSwapKitFeeChain(fee.chain, coin.chain)
+    )
+
+    if (!candidate) {
+      throw new Error(`SwapKit ${type} fee uses unsupported asset ${fee.asset}.`)
+    }
+
+    const current: SwapFee = {
+      amount: toChainAmount(fee.amount, candidate.coin.decimals),
+      chain: candidate.coin.chain,
+      id: candidate.coin.id,
+      decimals: candidate.coin.decimals,
+    }
+
+    if (current.amount < 0n) {
+      throw new Error(`SwapKit ${type} fee amount cannot be negative.`)
+    }
+
+    if (result && !sameSwapFeeCoin(result, current)) {
+      throw new Error('SwapKit affiliate and service fees use different assets.')
+    }
+
+    result = result ? { ...result, amount: result.amount + current.amount } : current
+  }
+
+  return (
+    result ?? {
+      amount: 0n,
+      chain: from.chain,
+      id: from.id,
+      decimals: from.decimals,
+    }
+  )
+}
+
+const buildSolanaTx = (
+  tx: unknown,
+  fees: SwapKitSwapResponse['fees'],
+  from: AccountCoin<SwapKitSourceChain>,
+  to: AccountCoin<SwapKitEnabledChain>,
+  routeProvider: string | undefined
+): GeneralSwapTx => {
   if (typeof tx !== 'string') {
     throw new Error('SwapKit Solana route did not return a serialized transaction string.')
   }
 
   const decimals = chainFeeCoin[Chain.Solana].decimals
   const networkFee = getSwapKitFeeAmount(fees, 'network', decimals)
-  const swapFee = getSwapKitFeeAmount(fees, 'affiliate', decimals) + getSwapKitFeeAmount(fees, 'service', decimals)
 
   return {
     solana: {
       data: tx,
       networkFee,
-      swapFee: {
-        amount: swapFee,
-        decimals,
-        chain: Chain.Solana,
-      },
+      swapFee: getSwapKitSwapFee(fees, from, to, routeProvider),
     },
   }
 }
@@ -488,6 +591,15 @@ const getTransferAmount = ({ depositAmount, tx }: SwapKitSwapResponse, amount: b
 
 const shouldUseTransferTx = (chain: SwapKitSourceChain): chain is (typeof swapKitTransferSourceChains)[number] =>
   isOneOf(chain, swapKitTransferSourceChains)
+
+// Transfer-arm chains that still need SwapKit to BUILD the transaction, so
+// `/v3/swap` must not be sent `disableBuildTx`. Bitcoin gets a PSBT and Sui a
+// pre-built PTB; in both cases those bytes drive signing directly, and asking
+// SwapKit to skip construction returns a response with no `tx` at all. The
+// remaining transfer chains are deposit-only (TON/XRP/ADA style) — they need
+// nothing but an address, so skipping the build saves a pointless server-side
+// construction that can fail on balance checks.
+const swapKitPrebuiltTxSourceChains: ReadonlySet<SwapKitSourceChain> = new Set([Chain.Bitcoin, Chain.Sui])
 
 const textEncoder = new TextEncoder()
 
@@ -564,7 +676,20 @@ const buildTransferTx = (
     throw new Error('SwapKit transfer route did not return a target address.')
   }
 
-  const txType = response.meta?.txType
+  // SwapKit renames base64 tx types on the wire without versioning — `SOLANA`
+  // became `SERIALIZED_BASE64` and `CARDANO` became `CBOR` mid-flight (iOS
+  // accepts both spellings in `SwapKitSwapResponse.decodeTx`). A Sui route's
+  // `meta.txType` therefore cannot be trusted to read `SUI`. The source chain
+  // is the reliable discriminator, and normalizing here also keeps
+  // `SwapKitSwapPayload.txType` byte-identical to what iOS stamps
+  // (`buildSwapKitSuiPayload` hardcodes `"SUI"`) — cosigning peers must agree.
+  const wireTxType = response.meta?.txType
+  const txType = from.chain === Chain.Sui ? 'SUI' : wireTxType
+
+  if (from.chain === Chain.Sui && response.tx !== undefined && typeof response.tx !== 'string') {
+    throw new Error('SwapKit Sui route did not return a base64 programmable transaction block.')
+  }
+
   const txPayload = response.tx ? encodeSwapKitTxPayload(response.tx, txType) : undefined
   const psbtDestinationAmount =
     from.chain === Chain.Bitcoin && txType?.toUpperCase() === 'PSBT' && txPayload?.length
@@ -590,31 +715,27 @@ const buildTransferTx = (
   }
 }
 
-// Sui + Cardano are eligible SwapKit SOURCE chains for quote-dispatch purposes
-// (see SwapKitEnabledChains.ts) but have no wired tx-build path here yet:
-//   - Sui: SwapKit returns the tx as a base64 string (`encodeSwapKitTxPayload`'s
-//     dormant `normalizedTxType === 'SUI'` branch decodes it), but there is no
-//     `GeneralSwapTx` variant a Sui signer can consume — it is neither `evm`
-//     (no `to`/`data` fields) nor a plain `transfer` (a Sui PTB isn't a simple
-//     send). Falling through to `buildEvmTx` would either throw an unrelated
-//     "not a transaction object" error, or worse, silently build a nonsense
-//     `{evm: {...}}` shape if the response ever coincidentally looks
-//     record-like.
-//   - Cardano: `encodeSwapKitTxPayload` explicitly returns an EMPTY byte array
-//     for `normalizedTxType === 'CARDANO'` — there is no decode implementation
-//     at all, so any tx built from it would be silently wrong.
+// Cardano is an eligible SwapKit SOURCE chain for quote-dispatch purposes (see
+// SwapKitEnabledChains.ts) but has no wired tx-build path here yet:
+// `encodeSwapKitTxPayload` explicitly returns an EMPTY byte array for
+// `normalizedTxType === 'CARDANO'` — there is no decode implementation at all,
+// so any tx built from it would be silently wrong. iOS covers this with a
+// separate `CARDANO_PREBUILT` CBOR path (`SwapKitCardanoSigner.swift`); porting
+// that decode is follow-on work.
+//
 // Rejected in `getSwapKitQuote` BEFORE the network round-trip (no route/swap
 // API calls wasted on a request that can never produce a signable tx).
-// Signing support for these two as a SwapKit source is separate follow-on work.
-const SWAP_SOURCE_TX_BUILD_UNSUPPORTED: ReadonlySet<SwapKitSourceChain> = new Set([Chain.Sui, Chain.Cardano])
+const SWAP_SOURCE_TX_BUILD_UNSUPPORTED: ReadonlySet<SwapKitSourceChain> = new Set([Chain.Cardano])
 
 const buildSwapKitTx = (
   response: SwapKitSwapResponse,
   from: AccountCoin<SwapKitSourceChain>,
-  amount: bigint
+  to: AccountCoin<SwapKitEnabledChain>,
+  amount: bigint,
+  routeProvider: string | undefined
 ): GeneralSwapTx => {
   if (from.chain === Chain.Solana) {
-    return buildSolanaTx(response.tx, response.fees)
+    return buildSolanaTx(response.tx, response.fees, from, to, routeProvider)
   }
 
   if (shouldUseTransferTx(from.chain)) {
@@ -803,14 +924,16 @@ export const getSwapKitQuote = async ({
       sourceAddress: from.address,
       destinationAddress: to.address,
       disableBalanceCheck: true,
-      disableBuildTx: shouldUseTransferTx(from.chain) && from.chain !== Chain.Bitcoin ? true : undefined,
+      disableBuildTx:
+        shouldUseTransferTx(from.chain) && !swapKitPrebuiltTxSourceChains.has(from.chain) ? true : undefined,
     })
   )
+  const routeProvider = getRouteProviderName(swapResponse) ?? getRouteProviderName(route)
 
   return {
     dstAmount: parseExpectedBuyAmount(swapResponse.expectedBuyAmount ?? route.expectedBuyAmount, to.decimals),
     provider: 'swapkit',
-    routeProvider: getRouteProviderName(swapResponse) ?? getRouteProviderName(route),
-    tx: buildSwapKitTx(swapResponse, from, amount),
+    routeProvider,
+    tx: buildSwapKitTx(swapResponse, from, to, amount, routeProvider),
   }
 }

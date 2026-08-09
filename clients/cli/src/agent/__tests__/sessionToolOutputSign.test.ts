@@ -80,6 +80,8 @@ function makeHarness(frames: Frame[], storeImpl: (payload: any) => boolean = () 
     runPasswordGatedTool: (AgentSession.prototype as any).runPasswordGatedTool,
     dispatchClientSideTool: (AgentSession.prototype as any).dispatchClientSideTool,
     renderEchoedBalanceCard: (AgentSession.prototype as any).renderEchoedBalanceCard,
+    renderEchoedYieldOpportunitiesCard: (AgentSession.prototype as any).renderEchoedYieldOpportunitiesCard,
+    renderEchoedPolymarketMarketsCard: (AgentSession.prototype as any).renderEchoedPolymarketMarketsCard,
     confirmBroadcastedTx: (AgentSession.prototype as any).confirmBroadcastedTx,
     emitAndConfirmTx: (AgentSession.prototype as any).emitAndConfirmTx,
     txConfirmSleep: (AgentSession.prototype as any).txConfirmSleep,
