@@ -98,9 +98,9 @@ describe('agent ask --json output contract', () => {
     resetOutput()
   })
 
-  async function runAsk(json = true): Promise<{ exitCode: number }> {
+  async function runAsk(json = true, autoApprove = false): Promise<{ exitCode: number }> {
     try {
-      await executeAgentAsk(ctx, 'hello', { json })
+      await executeAgentAsk(ctx, 'hello', { json, autoApprove })
       return { exitCode: 0 }
     } catch (e) {
       if (e instanceof ExitError) return { exitCode: e.exitCode }
@@ -128,6 +128,72 @@ describe('agent ask --json output contract', () => {
 
     // The structured envelope must NOT leak onto stderr (the wrong-stream bug).
     expect(stderr.join('')).not.toContain('"success"')
+  })
+
+  it('--yes token send includes the contract-bearing signing record in JSON without verbose output', async () => {
+    const summary =
+      'send 0.05 USDC.e on Polygon (0x2791bca1f2de4661ed88a30c99a7a9449aa84174) to 0x58c4000000000000000000000000000000005c35'
+    driver.run = async cb => {
+      const approved = await cb.requestConfirmation(summary)
+      if (approved) cb.onSigningRecord?.({ tool: 'sign_tx', summary, chain: 'Polygon', success: true })
+      cb.onTxStatus('0xtoken', 'Polygon', 'pending')
+    }
+
+    const { exitCode } = await runAsk(true, true)
+    expect(exitCode).toBe(0)
+    const envelope = JSON.parse(stdout.join(''))
+    expect(envelope.data.signing_records).toEqual([{ tool: 'sign_tx', summary, chain: 'Polygon', success: true }])
+    expect(envelope.data.signing_records[0].summary).toContain('0x2791bca1f2de4661ed88a30c99a7a9449aa84174')
+  })
+
+  it('--yes token send includes the contract-bearing signing record in human output without verbose output', async () => {
+    const summary =
+      'send 0.05 USDC.e on Polygon (0x2791bca1f2de4661ed88a30c99a7a9449aa84174) to 0x58c4000000000000000000000000000000005c35'
+    driver.run = async cb => {
+      const approved = await cb.requestConfirmation(summary)
+      if (approved) cb.onSigningRecord?.({ tool: 'sign_tx', summary, chain: 'Polygon', success: true })
+    }
+
+    const { exitCode } = await runAsk(false, true)
+    expect(exitCode).toBe(0)
+    expect(stdout.join('')).toContain(`signing-record:signed:${summary}`)
+  })
+
+  it('mid-turn error after an approved signing still carries signing_records in the error envelope', async () => {
+    // outputAskError path: the error envelope must not drop the audit record
+    // of a signing that already happened this turn.
+    const summary = 'send 0.05 USDC.e on Polygon to 0x58c4000000000000000000000000000000005c35'
+    driver.run = async cb => {
+      const approved = await cb.requestConfirmation(summary)
+      if (approved) cb.onSigningRecord?.({ tool: 'sign_tx', summary, chain: 'Polygon', success: true })
+      cb.onError('backend stream failed mid-turn', AgentErrorCode.UNKNOWN_ERROR)
+    }
+    driver.unacknowledgedBroadcast = false
+
+    const { exitCode } = await runAsk(true, true)
+    expect(exitCode).not.toBe(0)
+    const envelope = JSON.parse(stdout.join(''))
+    expect(envelope.success).toBe(false)
+    expect(envelope.data.signing_records).toEqual([{ tool: 'sign_tx', summary, chain: 'Polygon', success: true }])
+  })
+
+  it('post-broadcast failure carries signing_records in the error envelope', async () => {
+    // outputPostBroadcastFailure path: a broadcast happened, then the turn
+    // failed — exactly where the audit record matters most.
+    const summary = 'send 0.05 USDC.e on Polygon to 0x58c4000000000000000000000000000000005c35'
+    driver.run = async cb => {
+      const approved = await cb.requestConfirmation(summary)
+      if (approved) cb.onSigningRecord?.({ tool: 'sign_tx', summary, chain: 'Polygon', success: true })
+      cb.onTxStatus('0xbroadcast', 'Polygon', 'broadcast', 'https://polygonscan.com/tx/0xbroadcast')
+      cb.onError('confirmation indexer failed after broadcast', AgentErrorCode.TRANSACTION_FAILED)
+    }
+
+    const { exitCode } = await runAsk(true, true)
+    expect(exitCode).toBe(ExitCode.BROADCAST_COMMITTED)
+    const envelope = JSON.parse(stdout.join(''))
+    expect(envelope.error.code).toBe(AgentErrorCode.BROADCAST_COMMITTED)
+    expect(envelope.data.signing_records).toEqual([{ tool: 'sign_tx', summary, chain: 'Polygon', success: true }])
+    expect(envelope.data.transactions[0].hash).toBe('0xbroadcast')
   })
 
   // The read-safe path: `agent ask` WITHOUT --yes is documented to "report the
