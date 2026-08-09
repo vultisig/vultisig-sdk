@@ -376,8 +376,8 @@ payloads: they never sign or broadcast. Identity-dependent helpers use the activ
 isolated tooling can pass the same non-secret fields with `--identity <json>`.
 
 ```bash
-vultisig prep contract-call Ethereum 0xContract approve --sender 0xSender --abi '[...]' --args '[...]'
-vultisig prep ibc-transfer Osmosis osmo1... cosmos1... uosmo 1000000 --to-chain Cosmos
+vultisig prep contract-call Ethereum <contractAddress> approve --sender <senderAddress> --abi '[{"type":"function","name":"approve","inputs":[]}]' --args '[]'
+vultisig prep ibc-transfer Osmosis <sourceAddress> <receiverAddress> uosmo 1000000 --to-chain Cosmos
 vultisig prep spl-transfer <mint> <from> <to> 1000000 6
 vultisig prep trc20-transfer <contract> <from> <to> 1000000
 vultisig prep jetton-transfer <recipient> <senderJettonWallet> 1000000 5
