@@ -15,6 +15,42 @@ function getDefaultBasePath(): string {
   return override ? override : path.join(os.homedir(), '.vultisig')
 }
 
+const WINDOWS_ENCODED_KEY_PREFIX = '.__vultisig_key__'
+const WINDOWS_INVALID_FILENAME_CHARACTERS = /[<>:"/\\|?*]/
+const WINDOWS_RESERVED_FILENAME = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i
+
+function needsWindowsFilenameEncoding(key: string): boolean {
+  return (
+    key.startsWith(WINDOWS_ENCODED_KEY_PREFIX) ||
+    WINDOWS_INVALID_FILENAME_CHARACTERS.test(key) ||
+    Array.from(key).some(character => character.charCodeAt(0) < 32) ||
+    WINDOWS_RESERVED_FILENAME.test(key) ||
+    key.endsWith('.') ||
+    key.endsWith(' ')
+  )
+}
+
+function storageFileName(key: string): string {
+  if (process.platform === 'win32' && needsWindowsFilenameEncoding(key)) {
+    return `${WINDOWS_ENCODED_KEY_PREFIX}${Buffer.from(key, 'utf8').toString('base64url')}`
+  }
+  return key.replace(/[/\\]/g, '_')
+}
+
+function storageKeyFromFileName(fileName: string): string {
+  if (process.platform !== 'win32' || !fileName.startsWith(WINDOWS_ENCODED_KEY_PREFIX)) {
+    return fileName
+  }
+
+  try {
+    const encoded = fileName.slice(WINDOWS_ENCODED_KEY_PREFIX.length)
+    const key = Buffer.from(encoded, 'base64url').toString('utf8')
+    return needsWindowsFilenameEncoding(key) && storageFileName(key) === fileName ? key : fileName
+  } catch {
+    return fileName
+  }
+}
+
 export class FileStorage implements Storage {
   public readonly basePath: string
   private initPromise?: Promise<void>
@@ -48,11 +84,11 @@ export class FileStorage implements Storage {
   }
 
   private getFilePath(key: string): string {
-    const sanitized = key.replace(/[/\\]/g, '_')
+    const fileName = storageFileName(key)
     if (key.startsWith('cache:')) {
-      return path.join(this.basePath, 'cache', `${sanitized}.json`)
+      return path.join(this.basePath, 'cache', `${fileName}.json`)
     }
-    return path.join(this.basePath, `${sanitized}.json`)
+    return path.join(this.basePath, `${fileName}.json`)
   }
 
   private async readValue<T>(key: string): Promise<T | null> {
@@ -191,7 +227,7 @@ export class FileStorage implements Storage {
       const files = await fs.readdir(this.basePath)
       for (const file of files) {
         if (file.endsWith('.json') && !file.endsWith('.tmp')) {
-          keys.push(file.slice(0, -5))
+          keys.push(storageKeyFromFileName(file.slice(0, -5)))
         }
       }
 
@@ -200,7 +236,7 @@ export class FileStorage implements Storage {
         const cacheFiles = await fs.readdir(cacheDir)
         for (const file of cacheFiles) {
           if (file.endsWith('.json') && !file.endsWith('.tmp')) {
-            keys.push(file.slice(0, -5))
+            keys.push(storageKeyFromFileName(file.slice(0, -5)))
           }
         }
       } catch (error) {

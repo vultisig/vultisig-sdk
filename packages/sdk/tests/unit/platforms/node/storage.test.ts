@@ -12,6 +12,9 @@ import { FileStorage } from '../../../../src/platforms/node/storage'
 const ENV_KEY = 'VULTISIG_CONFIG_DIR'
 const savedConfigDir = process.env[ENV_KEY]
 
+const removeTestDirectory = (directory: string) =>
+  fs.rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+
 afterEach(() => {
   if (savedConfigDir === undefined) {
     delete process.env[ENV_KEY]
@@ -34,7 +37,7 @@ describe('FileStorage', () => {
 
     const storage = new FileStorage()
 
-    expect(storage.basePath.endsWith('/.vultisig')).toBe(true)
+    expect(storage.basePath).toBe(path.join(os.homedir(), '.vultisig'))
   })
 
   it('keeps explicit basePath overrides ahead of VULTISIG_CONFIG_DIR', () => {
@@ -56,7 +59,7 @@ describe('FileStorage', () => {
 
       await expect(storage.get('vault')).resolves.toEqual(value)
     } finally {
-      await fs.rm(basePath, { recursive: true, force: true })
+      await removeTestDirectory(basePath)
     }
   })
 
@@ -73,8 +76,9 @@ describe('FileStorage', () => {
 
       expect(results.filter(Boolean)).toHaveLength(1)
       await expect(first.get('vault:shared')).resolves.toEqual(results[0] ? { owner: 'first' } : { owner: 'second' })
+      await expect(first.list()).resolves.toEqual(['vault:shared'])
     } finally {
-      await fs.rm(basePath, { recursive: true, force: true })
+      await removeTestDirectory(basePath)
     }
   })
 
@@ -109,17 +113,18 @@ describe('FileStorage', () => {
       expect(results.filter(Boolean)).toHaveLength(1)
       const winner = results.findIndex(Boolean)
       await expect(storages[0].get('vault:shared')).resolves.toEqual({ owner: winner })
-      await expect(fs.readdir(basePath).then(files => files.sort())).resolves.toEqual([
-        '.storage.lock',
-        'cache',
-        'vault:shared.json',
-      ])
+      await expect(storages[0].list()).resolves.toEqual(['vault:shared'])
+      const files = await fs.readdir(basePath)
+      expect(files).toContain('.storage.lock')
+      expect(files).toContain('cache')
+      expect(files.filter(file => file.endsWith('.json'))).toHaveLength(1)
+      expect(files.some(file => file.endsWith('.tmp'))).toBe(false)
     } finally {
       if (lockOwner.exitCode === null && lockOwner.signalCode === null) {
         lockOwner.kill('SIGKILL')
         await once(lockOwner, 'exit')
       }
-      await fs.rm(basePath, { recursive: true, force: true })
+      await removeTestDirectory(basePath)
     }
   })
 
@@ -135,7 +140,7 @@ describe('FileStorage', () => {
       await expect(fs.readdir(basePath).then(files => files.sort())).resolves.toEqual(['.storage.lock', 'cache'])
       await expect(fs.readdir(path.join(basePath, 'cache'))).resolves.toEqual([])
     } finally {
-      await fs.rm(basePath, { recursive: true, force: true })
+      await removeTestDirectory(basePath)
     }
   })
 
@@ -160,7 +165,7 @@ describe('FileStorage', () => {
       await expect(fs.access(filePath)).rejects.toMatchObject({ code: 'ENOENT' })
     } finally {
       vi.restoreAllMocks()
-      await fs.rm(basePath, { recursive: true, force: true })
+      await removeTestDirectory(basePath)
     }
   })
 })
