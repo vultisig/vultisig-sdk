@@ -59,6 +59,7 @@ describe('ChromeExtensionStorage', () => {
         },
       },
     })
+    vi.stubGlobal('location', { protocol: 'chrome-extension:' })
     mockStorage.clear()
     vi.clearAllMocks()
     storage = new ChromeExtensionStorage()
@@ -133,6 +134,15 @@ describe('ChromeExtensionStorage', () => {
 
       expect(results.filter(Boolean)).toHaveLength(1)
       await expect(storage.get('vault:shared')).resolves.toEqual(results[0] ? { owner: 'first' } : { owner: 'second' })
+    })
+
+    it('fails closed for CAS in content-script origins whose Web Locks cannot cover extension storage', async () => {
+      vi.stubGlobal('location', { protocol: 'https:' })
+
+      await expect(storage.compareAndSet('vault:content-script', null, { owner: 'content' })).rejects.toMatchObject({
+        code: StorageErrorCode.StorageUnavailable,
+      })
+      await expect(storage.get('vault:content-script')).resolves.toBeNull()
     })
   })
 

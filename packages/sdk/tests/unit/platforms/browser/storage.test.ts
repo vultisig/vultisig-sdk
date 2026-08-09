@@ -167,6 +167,18 @@ describe('BrowserStorage backend selection', () => {
     expect(local.getItem('__vultisig_storage_backend__')).toBe('localstorage')
   })
 
+  it('keeps ordinary localStorage writes available but hides CAS when Web Locks are unavailable', async () => {
+    vi.stubGlobal('indexedDB', undefined)
+    vi.stubGlobal('navigator', {})
+    const storage = new BrowserStorage()
+
+    await storage.set('vault:legacy-save', { name: 'before' })
+
+    expect(storage.compareAndSet).toBeUndefined()
+    await storage.set('vault:legacy-save', { name: 'after' })
+    await expect(storage.get('vault:legacy-save')).resolves.toEqual({ name: 'after' })
+  })
+
   it('recovers an unmarked legacy localStorage vault set when IndexedDB is empty', async () => {
     local.setItem('vault:legacy', stored({ name: 'legacy' }))
     const storage = new BrowserStorage()

@@ -70,7 +70,7 @@ async function importEncryptedVaultFromEnv(
 
   try {
     return {
-      vault: await sdk.importVault(vaultContent, envDecryptPw),
+      vault: await sdk.importVault(vaultContent, envDecryptPw, { conflictResolution: 'replace' }),
       decryptPassword: envDecryptPw,
     }
   } catch {
@@ -99,7 +99,10 @@ async function importEncryptedVaultInteractively(
       },
     ])
     try {
-      return { vault: await sdk.importVault(vaultContent, password), decryptPassword: password }
+      return {
+        vault: await sdk.importVault(vaultContent, password, { conflictResolution: 'replace' }),
+        decryptPassword: password,
+      }
     } catch {
       if (attempt === MAX_ATTEMPTS) {
         throw new Error('Failed to decrypt vault after 3 attempts. Check your decryption password.')
@@ -116,7 +119,12 @@ async function importVaultForSetup(
   opts: AuthSetupOpts
 ): Promise<{ vault: ImportedVault; decryptPassword?: string; isEncrypted: boolean }> {
   const isEncrypted = sdk.isVaultEncrypted(vaultContent)
-  if (!isEncrypted) return { vault: await sdk.importVault(vaultContent, undefined), isEncrypted }
+  if (!isEncrypted) {
+    return {
+      vault: await sdk.importVault(vaultContent, undefined, { conflictResolution: 'replace' }),
+      isEncrypted,
+    }
+  }
 
   if (process.env.VAULT_DECRYPT_PASSWORD) {
     return { ...(await importEncryptedVaultFromEnv(sdk, vaultContent)), isEncrypted }

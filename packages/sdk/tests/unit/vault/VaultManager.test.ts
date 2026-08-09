@@ -116,13 +116,14 @@ vi.mock('@vultisig/lib-utils/file/initiateFileDownload', () => ({
 describe('VaultManager', () => {
   let vaultManager: VaultManager
   let memoryStorage: MemoryStorage
+  let context: ReturnType<typeof createSdkContext>
 
   beforeEach(() => {
     // Create fresh storage for each test
     memoryStorage = new MemoryStorage()
 
     // Create SDK context with all dependencies
-    const context = createSdkContext({
+    context = createSdkContext({
       storage: memoryStorage,
       serverEndpoints: {
         fastVault: 'https://test-api.vultisig.com/vault',
@@ -408,6 +409,17 @@ describe('VaultManager', () => {
       )
     })
 
+    it('preserves an unrelated cached password when an unencrypted compatible share is replaced', async () => {
+      const original = encodeUnencryptedVult(buildMinimalSecureVaultBinary())
+      const replacement = encodeUnencryptedVult(buildMinimalSecureVaultBinary({ name: 'Refreshed backup' }))
+      await vaultManager.importVault(original)
+      context.passwordCache.set(SYNTH_ECDSA_PK, 'cached-signing-password')
+
+      await vaultManager.importVault(replacement, undefined, { conflictResolution: 'replace' })
+
+      expect(context.passwordCache.get(SYNTH_ECDSA_PK)).toBe('cached-signing-password')
+    })
+
     it('validates an encrypted stored share before explicit replacement', async () => {
       const password = 'unit-test-password'
       const original = encodeEncryptedVult(buildMinimalSecureVaultBinary(), password)
@@ -424,13 +436,13 @@ describe('VaultManager', () => {
       ).resolves.toMatchObject({ name: 'Encrypted replacement' })
     })
 
-    it('lets an explicit replace through when the existing local record cannot be decoded, but stays fail-closed by default', async () => {
+    it('requires separately explicit unvalidated replacement when the existing local record cannot be decoded', async () => {
       // A corrupted vultFileContent (partial write, half-migrated record - reachable precisely
       // because storage writes were not atomic before this guard existed) or an encrypted record
       // whose backup password has since rotated both make decodeStoredVault throw. Validating the
       // record before reading conflictResolution meant that throw fired before the caller's
-      // explicit 'replace' escape hatch was ever consulted, permanently locking the user out of
-      // importing their own valid backup with no way out short of clearing storage by hand.
+      // explicit unvalidated recovery mode was ever consulted, permanently locking the user out
+      // of importing their own valid backup with no way out short of clearing storage by hand.
       const original = encodeUnencryptedVult(buildMinimalSecureVaultBinary())
       await vaultManager.importVault(original)
 
@@ -447,15 +459,44 @@ describe('VaultManager', () => {
         code: VaultImportErrorCode.INCOMPATIBLE_VAULT,
       })
 
-      // Explicit replace recovers: nothing readable remains to validate against, so it proceeds.
+      // Validated replace also stays fail-closed because nothing readable remains to compare.
       await expect(
         vaultManager.importVault(replacement, undefined, {
           conflictResolution: 'replace',
+        })
+      ).rejects.toMatchObject({ code: VaultImportErrorCode.INCOMPATIBLE_VAULT })
+
+      // The separately named mode makes skipping validation a conscious recovery decision.
+      await expect(
+        vaultManager.importVault(replacement, undefined, {
+          conflictResolution: 'replace-unvalidated',
         })
       ).resolves.toMatchObject({ name: 'Recovered backup' })
       expect((await memoryStorage.get<{ vultFileContent: string }>(`vault:${SYNTH_ECDSA_PK}`))?.vultFileContent).toBe(
         replacement
       )
+    })
+
+    it('does not let validated replace bypass an encrypted local share that cannot be unlocked', async () => {
+      const original = encodeEncryptedVult(buildMinimalSecureVaultBinary(), 'old-password')
+      const replacement = encodeEncryptedVult(
+        buildMinimalSecureVaultBinary({ name: 'Rotated-password backup' }),
+        'new-password'
+      )
+      await vaultManager.importVault(original, 'old-password')
+      context.passwordCache.delete(SYNTH_ECDSA_PK)
+      const persistedBeforeReplace = await memoryStorage.get<{ vultFileContent: string }>(
+        `vault:${SYNTH_ECDSA_PK}`
+      )
+
+      await expect(
+        vaultManager.importVault(replacement, 'new-password', { conflictResolution: 'replace' })
+      ).rejects.toMatchObject({ code: VaultImportErrorCode.EXISTING_VAULT_PASSWORD_REQUIRED })
+      expect(await memoryStorage.get(`vault:${SYNTH_ECDSA_PK}`)).toEqual(persistedBeforeReplace)
+
+      await expect(
+        vaultManager.importVault(replacement, 'new-password', { conflictResolution: 'replace-unvalidated' })
+      ).resolves.toMatchObject({ name: 'Rotated-password backup' })
     })
 
     it('rejects a stale same-device share even when replacement is requested', async () => {

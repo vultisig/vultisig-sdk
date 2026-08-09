@@ -107,8 +107,11 @@ const createWindowsFileLock = (): NativeFileLock => {
   }
 }
 
-const nativeFileLock = process.platform === 'win32' ? createWindowsFileLock() : createPosixFileLock()
+let nativeFileLock: NativeFileLock | undefined
 
-export const tryLockFile = (fd: number): boolean => nativeFileLock.tryLock(fd)
+const getNativeFileLock = (): NativeFileLock =>
+  (nativeFileLock ??= process.platform === 'win32' ? createWindowsFileLock() : createPosixFileLock())
 
-export const unlockFile = (fd: number): void => nativeFileLock.unlock(fd)
+export const tryLockFile = (fd: number): boolean => getNativeFileLock().tryLock(fd)
+
+export const unlockFile = (fd: number): void => getNativeFileLock().unlock(fd)

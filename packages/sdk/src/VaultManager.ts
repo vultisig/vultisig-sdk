@@ -64,12 +64,14 @@ const createLegacyBackupMigrationNotice = (vault: VaultBase): LegacyVaultBackupM
     'This vault came from a legacy backup with a weak password KDF. The SDK upgraded its stored copy, but the password and every old backup must be treated as compromised. Export a fresh backup with a new password, replace all legacy copies, and securely delete the old files.',
 })
 
-export type VaultImportConflictResolution = 'reject' | 'replace'
+export type VaultImportConflictResolution = 'reject' | 'replace' | 'replace-unvalidated'
 
 export type VaultImportOptions = {
   /**
    * Existing logical vaults are rejected by default. `replace` is accepted only
    * when both backups contain the exact same share for the same local party.
+   * `replace-unvalidated` also permits recovery when the stored vault cannot be
+   * decoded, and must be selected explicitly because it skips those checks.
    */
   conflictResolution?: VaultImportConflictResolution
 }
@@ -337,7 +339,7 @@ export class VaultManager {
     existingVault: VaultData | null,
     parsedVault: CoreVault,
     password: string | undefined,
-    wantsReplace: boolean
+    conflictResolution: VaultImportConflictResolution
   ): Promise<void> {
     if (!existingVault) return
 
@@ -345,13 +347,13 @@ export class VaultManager {
     try {
       existingCoreVault = await this.decodeStoredVault(existingVault, password)
     } catch (decodeError) {
-      if (!wantsReplace) throw decodeError
+      if (conflictResolution !== 'replace-unvalidated') throw decodeError
     }
 
     if (!existingCoreVault) return
     this.validateReplacement(existingCoreVault, parsedVault)
 
-    if (!wantsReplace) {
+    if (conflictResolution === 'reject') {
       throw new VaultImportError(
         VaultImportErrorCode.DUPLICATE_VAULT,
         'This exact local vault share already exists; pass conflictResolution: "replace" to replace it explicitly'
@@ -429,12 +431,7 @@ export class VaultManager {
       // Use ECDSA public key as vault ID
       const vaultId = parsedVault.publicKeys.ecdsa
       const existingVault = await this.storage.get<VaultData>(`vault:${vaultId}`)
-      await this.validateImportConflict(
-        existingVault,
-        parsedVault,
-        password,
-        (options.conflictResolution ?? 'reject') === 'replace'
-      )
+      await this.validateImportConflict(existingVault, parsedVault, password, options.conflictResolution ?? 'reject')
 
       // Determine vault type from parsed vault
       const vaultType = parsedVault.signers.some((s: string) => s.startsWith('Server-')) ? 'fast' : 'secure'
@@ -493,7 +490,7 @@ export class VaultManager {
       // leaves the durable record in place, so the cache should already describe that record.
       if (password && container.isEncrypted) {
         this.context.passwordCache.set(vaultId, password)
-      } else if (!container.isEncrypted) {
+      } else if (!container.isEncrypted && existingVault?.isEncrypted) {
         this.context.passwordCache.delete(vaultId)
       }
 

@@ -18,8 +18,25 @@ export class BrowserStorage implements Storage {
   private readonly storeName = 'vaults'
   private readonly dbVersion = 1
 
+  private hasLocalStorageMutationLock(): boolean {
+    return typeof navigator !== 'undefined' && Boolean(navigator.locks)
+  }
+
+  private selectLocalStorageMode(): void {
+    this.mode = 'localstorage'
+    if (!this.hasLocalStorageMutationLock()) {
+      // Shadow the prototype method after backend selection. VaultBase performs
+      // a normal set() when CAS is unavailable, while importVault still refuses
+      // to persist without the atomic capability.
+      Object.defineProperty(this, 'compareAndSet', {
+        configurable: true,
+        value: undefined,
+      })
+    }
+  }
+
   private async withLocalStorageMutationLock<T>(operation: () => Promise<T> | T, required = false): Promise<T> {
-    if (typeof navigator === 'undefined' || !navigator.locks) {
+    if (!this.hasLocalStorageMutationLock()) {
       if (required) {
         throw new StorageError(
           StorageErrorCode.StorageUnavailable,
@@ -40,7 +57,7 @@ export class BrowserStorage implements Storage {
 
     if (persistedMode === 'localstorage') {
       this.tryLocalStorage()
-      this.mode = 'localstorage'
+      this.selectLocalStorageMode()
       return
     }
 
@@ -57,7 +74,7 @@ export class BrowserStorage implements Storage {
           this.db = undefined
           this.tryLocalStorage()
           this.persistMode('localstorage')
-          this.mode = 'localstorage'
+          this.selectLocalStorageMode()
           return
         }
 
@@ -78,7 +95,7 @@ export class BrowserStorage implements Storage {
 
     this.tryLocalStorage()
     this.persistMode('localstorage')
-    this.mode = 'localstorage'
+    this.selectLocalStorageMode()
   }
 
   private async ensureInitialized(): Promise<void> {

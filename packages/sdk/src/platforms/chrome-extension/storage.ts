@@ -10,12 +10,21 @@ import type { Storage, StorageMetadata, StoredValue } from '../../storage/types'
 import { STORAGE_VERSION, StorageError, StorageErrorCode } from '../../storage/types'
 
 export class ChromeExtensionStorage implements Storage {
+  private hasExtensionScopedMutationLock(): boolean {
+    return (
+      typeof navigator !== 'undefined' &&
+      Boolean(navigator.locks) &&
+      typeof location !== 'undefined' &&
+      location.protocol === 'chrome-extension:'
+    )
+  }
+
   private async withMutationLock<T>(operation: () => Promise<T>, required = false): Promise<T> {
-    if (typeof navigator === 'undefined' || !navigator.locks) {
+    if (!this.hasExtensionScopedMutationLock()) {
       if (required) {
         throw new StorageError(
           StorageErrorCode.StorageUnavailable,
-          'Atomic storage mutations require the Web Locks API in Chrome extension contexts'
+          'Atomic storage mutations require extension-origin Web Locks; content-script locks are origin-partitioned'
         )
       }
       return operation()
