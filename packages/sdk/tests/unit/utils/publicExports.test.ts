@@ -26,6 +26,7 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.toChainAmount).toBe('function')
     expect(typeof sdk.normalizeChain).toBe('function')
     expect(typeof sdk.resolveChainReference).toBe('function')
+    expect(typeof sdk.resolveChainIdReference).toBe('function')
     expect(typeof sdk.FiatToAmountError).toBe('function')
     expect(typeof sdk.ChainAmountParseError).toBe('function')
     expect(typeof sdk.UnknownChainError).toBe('function')
