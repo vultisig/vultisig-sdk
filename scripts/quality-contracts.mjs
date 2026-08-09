@@ -277,7 +277,7 @@ import * as root from '@vultisig/sdk'
 import * as node from '@vultisig/sdk/node'
 import * as browser from '@vultisig/sdk/browser'
 import * as vite from '@vultisig/sdk/vite'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 
@@ -285,6 +285,7 @@ const require = createRequire(import.meta.url)
 const entry = require.resolve('@vultisig/sdk')
 const pkgDir = path.resolve(path.dirname(entry), '..')
 const electronMainEntry = require.resolve('@vultisig/sdk/electron/main')
+const reactNativeEntry = require.resolve('@vultisig/sdk/react-native')
 const electronMain = require('@vultisig/sdk/electron/main')
 const electronMainImport = await import('@vultisig/sdk/electron/main')
 
@@ -292,11 +293,21 @@ assert.equal(typeof root.Vultisig, 'function', 'root exports Vultisig')
 assert.ok(root.Chain !== undefined, 'root exports Chain')
 assert.equal(typeof root.fiatToAmount, 'function', 'root exports fiatToAmount')
 assert.equal(typeof root.normalizeChain, 'function', 'root exports normalizeChain')
+assert.equal(typeof root.fromChainAmountExact, 'function', 'root exports fromChainAmountExact')
+assert.equal(typeof root.getBlockExplorerUrl, 'function', 'root exports getBlockExplorerUrl')
+assert.ok(root.chainRegistry !== undefined, 'root exports chainRegistry')
+assert.equal(typeof root.deriveFromChainRegistry, 'function', 'root exports deriveFromChainRegistry')
+assert.equal(typeof root.extendChainRegistry, 'function', 'root exports extendChainRegistry')
 
 assert.equal(typeof node.Vultisig, 'function', '@vultisig/sdk/node exports Vultisig')
 
 assert.ok(browser.Chain !== undefined, '@vultisig/sdk/browser resolves')
 assert.ok(vite && (vite.default || vite), '@vultisig/sdk/vite resolves')
+assert.equal(
+  path.basename(reactNativeEntry),
+  'index.react-native.js',
+  '@vultisig/sdk/react-native resolves the React Native bundle'
+)
 assert.equal(
   path.basename(electronMainEntry),
   'index.electron-main.cjs',
@@ -314,6 +325,10 @@ const rnJs = path.join(pkgDir, 'dist/index.react-native.js')
 assert.ok(existsSync(rnJs), 'react-native bundle file exists on disk')
 const rnDts = path.join(pkgDir, 'dist/index.react-native.d.ts')
 assert.ok(existsSync(rnDts), 'react-native types exist on disk')
+for (const symbol of ['chainRegistry', 'deriveFromChainRegistry', 'extendChainRegistry', 'getBlockExplorerUrl']) {
+  assert.ok(readFileSync(rnJs, 'utf8').includes(symbol), \`react-native bundle exports \${symbol}\`)
+  assert.ok(readFileSync(rnDts, 'utf8').includes(symbol), \`react-native types export \${symbol}\`)
+}
 const electronMainDts = path.join(pkgDir, 'dist/index.electron-main.d.ts')
 assert.ok(existsSync(electronMainDts), 'electron main types exist on disk')
 `
@@ -336,15 +351,41 @@ assert.ok(existsSync(electronMainDts), 'electron main types exist on disk')
     writeFileSync(path.join(consumer, 'tsconfig.json'), JSON.stringify(tsconfig, null, 2) + '\n')
     writeFileSync(
       path.join(consumer, 'types-smoke.ts'),
-      `import type { Chain } from '@vultisig/sdk'
+      `import { Chain, chainRegistry, deriveFromChainRegistry, extendChainRegistry } from '@vultisig/sdk'
+import type {
+  ChainDescriptor,
+  ChainDescriptorRegistry,
+  ChainExplorerDescriptor,
+  ChainExtensionRecord,
+  ChainKind,
+  ExtendedChainRegistry,
+} from '@vultisig/sdk'
+import type {
+  ChainDescriptor as ReactNativeChainDescriptor,
+  ExtendedChainRegistry as ReactNativeExtendedChainRegistry,
+} from '@vultisig/sdk/react-native'
 import type { Vultisig } from '@vultisig/sdk/node'
 import type { ElectronMainCrypto, Vultisig as ElectronMainVultisig } from '@vultisig/sdk/electron/main'
 import '@vultisig/sdk/browser'
 import '@vultisig/sdk/vite'
+
+const descriptor: ChainDescriptor = chainRegistry[Chain.Ethereum]
+const registry: ChainDescriptorRegistry = chainRegistry
+const explorer: ChainExplorerDescriptor = descriptor.explorer
+const extension: ChainExtensionRecord = deriveFromChainRegistry(({ kind }) => ({ kind }))
+const extended: ExtendedChainRegistry<typeof extension> = extendChainRegistry(extension)
+
 export type X = Chain
 export type Y = Vultisig
 export type Z = ElectronMainVultisig
 export type ElectronCrypto = ElectronMainCrypto
+export type RegistryKind = ChainKind
+export type RegistryDescriptor = typeof descriptor
+export type RegistryShape = typeof registry
+export type ExplorerShape = typeof explorer
+export type ExtendedShape = typeof extended
+export type ReactNativeDescriptor = ReactNativeChainDescriptor
+export type ReactNativeExtended = ReactNativeExtendedChainRegistry<typeof extension>
 `
     )
     run(process.execPath, [tscBin, '-p', path.join(consumer, 'tsconfig.json')], {
