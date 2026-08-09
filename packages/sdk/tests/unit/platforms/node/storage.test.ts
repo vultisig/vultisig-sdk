@@ -92,7 +92,12 @@ describe('FileStorage', () => {
     })
 
     try {
-      const [lockOutput] = (await once(lockOwner.stdout!, 'data')) as [Buffer]
+      const lockOutput = await Promise.race([
+        once(lockOwner.stdout!, 'data').then(([output]) => output as Buffer),
+        once(lockOwner, 'exit').then(([code, signal]) => {
+          throw new Error(`Lock owner exited before acquiring the lock (code=${code}, signal=${signal})`)
+        }),
+      ])
       expect(lockOutput.toString()).toContain('locked')
 
       const storages = Array.from({ length: 12 }, () => new FileStorage({ basePath }))
