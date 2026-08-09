@@ -158,6 +158,19 @@ describe('verify --resend failure', () => {
       }
     )
   })
+
+  it('rejects invalid resend flags before any SDK call', async () => {
+    const resendVaultVerification = vi.fn().mockResolvedValue(undefined)
+    const ctx = {
+      sdk: { resendVaultVerification },
+      dispose: () => {},
+    } as unknown as CommandContext
+
+    await expect(
+      executeVerify(ctx, 'v1', { resend: true, email: 'a@example..com', password: 'password123' })
+    ).rejects.toBeInstanceOf(InvalidInputError)
+    expect(resendVaultVerification).not.toHaveBeenCalled()
+  })
 })
 
 describe('vaults pending visibility', () => {

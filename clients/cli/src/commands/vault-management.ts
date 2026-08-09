@@ -53,31 +53,40 @@ import { displayVaultInfo, displayVaultsList, setupVaultEvents } from '../ui'
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const PASSWORD_MIN_LENGTH = 8
 
-export function validateFastVaultCreateInputs(input: {
-  name?: string
-  email?: string
-  password?: string
-}): { name: string; email: string; password: string } {
-  const name = input.name?.trim() ?? ''
-  const email = input.email?.trim() ?? ''
-  const password = input.password ?? ''
-  const passwordCharacters = [...password].length
+function looksLikeFastVaultEmail(email: string): boolean {
+  if (!EMAIL_RE.test(email)) return false
 
-  if (name.length === 0) {
-    throw new InvalidInputError('Vault name is required and cannot be empty', undefined, ['Pass a non-empty --name'])
-  }
+  const [localPart, domain] = email.split('@')
+  if (!localPart || !domain) return false
+  if (localPart.startsWith('.') || localPart.endsWith('.') || localPart.includes('..')) return false
+  if (domain.startsWith('.') || domain.endsWith('.') || domain.includes('..')) return false
+
+  const domainLabels = domain.split('.')
+  if (domainLabels.some(label => label.length === 0 || label.startsWith('-') || label.endsWith('-'))) return false
+
+  return true
+}
+
+function normalizeFastVaultEmailOrThrow(emailInput?: string): string {
+  const email = emailInput?.trim() ?? ''
   if (email.length === 0) {
     throw new InvalidInputError('Email is required for fast-vault verification', undefined, [
       'Pass a valid --email address',
     ])
   }
-  if (!EMAIL_RE.test(email)) {
+  if (!looksLikeFastVaultEmail(email)) {
     throw new InvalidInputError(
       `Email address does not look valid: "${email}"`,
       'A fast-vault OTP is sent to this address — an invalid address creates an orphaned vault.',
       ['Pass a well-formed --email like you@example.com']
     )
   }
+  return email
+}
+
+function normalizeFastVaultPasswordOrThrow(passwordInput?: string): string {
+  const password = passwordInput ?? ''
+  const passwordCharacters = [...password].length
   if (passwordCharacters < PASSWORD_MIN_LENGTH) {
     throw new InvalidInputError(
       `Password too short (${passwordCharacters} chars, minimum ${PASSWORD_MIN_LENGTH})`,
@@ -85,6 +94,21 @@ export function validateFastVaultCreateInputs(input: {
       [`Pass a --password at least ${PASSWORD_MIN_LENGTH} characters`]
     )
   }
+  return password
+}
+
+export function validateFastVaultCreateInputs(input: {
+  name?: string
+  email?: string
+  password?: string
+}): { name: string; email: string; password: string } {
+  const name = input.name?.trim() ?? ''
+  if (name.length === 0) {
+    throw new InvalidInputError('Vault name is required and cannot be empty', undefined, ['Pass a non-empty --name'])
+  }
+
+  const email = normalizeFastVaultEmailOrThrow(input.email)
+  const password = normalizeFastVaultPasswordOrThrow(input.password)
 
   return { name, email, password }
 }
@@ -420,7 +444,14 @@ export async function executeVerify(
                 type: 'input' as const,
                 name: 'email',
                 message: 'Email address:',
-                validate: (input: string) => input.includes('@') || 'Please enter a valid email',
+                validate: (input: string) => {
+                  try {
+                    normalizeFastVaultEmailOrThrow(input)
+                    return true
+                  } catch {
+                    return 'Please enter a valid email'
+                  }
+                },
               },
             ]
           : []),
@@ -431,7 +462,14 @@ export async function executeVerify(
                 name: 'password',
                 message: 'Vault password:',
                 mask: '*',
-                validate: (input: string) => input.length >= 8 || 'Password must be at least 8 characters',
+                validate: (input: string) => {
+                  try {
+                    normalizeFastVaultPasswordOrThrow(input)
+                    return true
+                  } catch {
+                    return `Password must be at least ${PASSWORD_MIN_LENGTH} characters`
+                  }
+                },
               },
             ]
           : []),
@@ -440,9 +478,12 @@ export async function executeVerify(
       password = password || answers.password
     }
 
+    email = normalizeFastVaultEmailOrThrow(email)
+    password = normalizeFastVaultPasswordOrThrow(password)
+
     const spinner = createSpinner('Resending verification email...')
     try {
-      await ctx.sdk.resendVaultVerification({ vaultId, email: email!, password: password! })
+      await ctx.sdk.resendVaultVerification({ vaultId, email, password })
       spinner.succeed('Verification email sent!')
       info('Check your inbox for the new verification code.')
     } catch (resendErr: any) {

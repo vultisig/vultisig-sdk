@@ -44,7 +44,18 @@ describe('validateFastVaultCreateInputs (bead 33sz9)', () => {
   })
 
   it('rejects syntactically invalid email (bead 33sz9 canonical case)', () => {
-    for (const email of ['notemail', 'no@dot', '@example.com', 'no space@example.com', 'foo@']) {
+    for (const email of [
+      'notemail',
+      'no@dot',
+      '@example.com',
+      'no space@example.com',
+      'foo@',
+      'a@example..com',
+      '.a@example.com',
+      'a.@example.com',
+      'a@-example.com',
+      'a@example-.com',
+    ]) {
       try {
         validateFastVaultCreateInputs({ ...validBase, email })
         throw new Error(`expected reject for email="${email}"`)
