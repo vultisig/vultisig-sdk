@@ -1,6 +1,6 @@
-import type { CommandContext } from '../core'
 import { describe, expect, it, vi } from 'vitest'
 
+import type { CommandContext } from '../core'
 import { ExitCode, InvalidInputError } from '../core/errors'
 import { executeCreateFast, validateFastVaultCreateInputs } from './vault-management'
 
@@ -85,6 +85,18 @@ describe('validateFastVaultCreateInputs (bead 33sz9)', () => {
   it('counts user-perceived password characters, not UTF-16 code units', () => {
     expect(() => validateFastVaultCreateInputs({ ...validBase, password: '😀😀😀😀' })).toThrow(/password too short/i)
     expect(() => validateFastVaultCreateInputs({ ...validBase, password: '😀😀😀😀abcd' })).not.toThrow()
+  })
+
+  it('counts user-perceived password characters, not unicode code points (ZWJ sequences)', () => {
+    // '👩🏽‍❤️‍💋‍👨' is 1 grapheme cluster (a "kiss" family emoji) but 9 code points —
+    // code-point counting would let a single-character password through.
+    expect(() => validateFastVaultCreateInputs({ ...validBase, password: '👩🏽‍❤️‍💋‍👨' })).toThrow(
+      /password too short/i
+    )
+    // 4 family emoji = 4 grapheme clusters, still below the 8-char minimum.
+    expect(() =>
+      validateFastVaultCreateInputs({ ...validBase, password: '👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦' })
+    ).toThrow(/password too short/i)
   })
 
   it('returns normalized email for callers that send the value upstream', () => {

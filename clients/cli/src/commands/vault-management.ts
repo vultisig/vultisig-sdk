@@ -70,7 +70,7 @@ function looksLikeFastVaultEmail(email: string): boolean {
 function normalizeFastVaultEmailOrThrow(emailInput?: string): string {
   const email = emailInput?.trim() ?? ''
   if (email.length === 0) {
-    throw new InvalidInputError('Email is required for fast-vault verification', undefined, [
+    throw new InvalidInputError('Email is required for fast-vault operations', undefined, [
       'Pass a valid --email address',
     ])
   }
@@ -84,9 +84,11 @@ function normalizeFastVaultEmailOrThrow(emailInput?: string): string {
   return email
 }
 
+const graphemeSegmenter = new Intl.Segmenter('en', { granularity: 'grapheme' })
+
 function normalizeFastVaultPasswordOrThrow(passwordInput?: string): string {
   const password = passwordInput ?? ''
-  const passwordCharacters = [...password].length
+  const passwordCharacters = [...graphemeSegmenter.segment(password)].length
   if (passwordCharacters < PASSWORD_MIN_LENGTH) {
     throw new InvalidInputError(
       `Password too short (${passwordCharacters} chars, minimum ${PASSWORD_MIN_LENGTH})`,
