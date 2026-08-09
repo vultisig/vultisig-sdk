@@ -164,7 +164,8 @@
     "test:integration:watch": "vitest --config tests/integration/vitest.config.ts tests/integration",
     "test:e2e:watch": "vitest --config tests/e2e/vitest.config.ts tests/e2e",
     "_____TEST_UTILS_____": "",
-    "test:changed": "vitest related --run",
+    "test:changed:unit": "vitest related --run --config tests/unit/vitest.config.ts",
+    "test:changed:integration": "vitest related --run --config tests/integration/vitest.config.ts",
     "_____HOOKS_____": "",
     "prepublishOnly": "echo 'Typecheck skipped - CI runs quality checks before publish'",
     "prepack": "echo 'Build skipped for development'"

@@ -62,7 +62,6 @@
     "test:unit:watch": "yarn workspace @vultisig/sdk test:unit:watch",
     "test:integration:watch": "yarn workspace @vultisig/sdk test:integration:watch",
     "test:e2e:watch": "yarn workspace @vultisig/sdk test:e2e:watch",
-    "test:changed": "yarn workspace @vultisig/sdk test:changed",
     "knip": "knip --config .config/knip.jsonc",
     "knip:fix": "knip --config .config/knip.jsonc --fix --allow-remove-files",
     "quality:architecture": "depcruise --config .config/dependency-cruiser.cjs --output-type err .",
@@ -134,8 +133,11 @@
       "prettier --config .config/.prettierrc --write",
       "eslint --config .config/eslint.config.mjs --fix"
     ],
-    "packages/sdk/tests/!(e2e)/**/*.test.ts": [
-      "yarn workspace @vultisig/sdk test:changed"
+    "packages/sdk/tests/unit/**/*.test.ts": [
+      "yarn workspace @vultisig/sdk test:changed:unit"
+    ],
+    "packages/sdk/tests/integration/**/*.test.ts": [
+      "yarn workspace @vultisig/sdk test:changed:integration"
     ]
   },
   "devDependencies": {

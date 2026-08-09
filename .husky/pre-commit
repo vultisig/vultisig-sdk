@@ -1,6 +1,4 @@
-# Run lint-staged
+# Run lint-staged. The sdk test globs in the root lint-staged config are where
+# staged tests actually get run, scoped per suite so each one gets its own
+# vitest config.
 yarn lint-staged
-
-# Run tests for changed files
-echo "Running tests for changed files..."
-yarn test:changed
