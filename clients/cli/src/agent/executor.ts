@@ -2059,4 +2059,3 @@ export function parseNonEvmEnvelope(serverTxData: any, chain: Chain): NonEvmSend
 export function resolveChainId(chainId: string | number): Chain | null {
   return resolveChainReference(chainId) ?? null
 }
-

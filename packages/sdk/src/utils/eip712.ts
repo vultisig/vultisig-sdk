@@ -99,10 +99,7 @@ function parseDERSignature(sigHex: string): { r: string; s: string } {
  * Canonicalize a raw MPC secp256k1 signature for EVM use by folding a high-S
  * value into the lower half of the curve order and flipping recovery parity.
  */
-export function toCanonicalEvmSignature(
-  sigHex: string,
-  recovery: number
-): { r: string; s: string; recovery: number } {
+export function toCanonicalEvmSignature(sigHex: string, recovery: number): { r: string; s: string; recovery: number } {
   const { r, s } = parseDERSignature(sigHex)
   const sBig = BigInt(`0x${s}`)
   if (sBig > secp256k1Order >> 1n) {

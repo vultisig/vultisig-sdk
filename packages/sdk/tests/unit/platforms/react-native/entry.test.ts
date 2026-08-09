@@ -262,7 +262,6 @@ describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
   })
 })
 
-
 describe('RN entry exposes canonical EIP-712 helpers', () => {
   it('re-exports the same typed-data hash and signature canonicals as the node surface', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
