@@ -37,6 +37,7 @@ describe('AgentExecutor EVM RPC resolution', () => {
 
   it('uses the shared sdk getEvmRpcUrl resolver when refreshing EVM gas', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
       json: vi.fn().mockResolvedValue({ result: { baseFeePerGas: '0xa' } }),
     }) as unknown as typeof fetch
 
@@ -63,6 +64,7 @@ describe('AgentExecutor EVM RPC resolution', () => {
 
   it('uses the shared sdk getEvmRpcUrl resolver when checking the pending nonce', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
       json: vi.fn().mockResolvedValue({ result: '0x10' }),
     }) as unknown as typeof fetch
 
