@@ -132,6 +132,12 @@ function capSigningSummary(summary: string): string {
   return summary.length > PROPOSED_SUMMARY_MAX_CHARS ? `${summary.slice(0, PROPOSED_SUMMARY_MAX_CHARS)}…` : summary
 }
 
+function applyAgentMode(request: any, config: AgentConfig): void {
+  if (config.viaAgent || config.askMode) {
+    request.via_agent = true
+  }
+}
+
 // Mid-turn disconnect recovery (matches the app's 2s poller / ~3min ceiling).
 // On a dropped SSE stream the session polls /messages/since this many times,
 // this far apart, for the assistant message the detached backend persisted.
@@ -602,12 +608,6 @@ export class AgentSession {
     return this.cachedContext?.addresses || {}
   }
 
-  private applyAgentMode(request: any): void {
-    if (this.config.viaAgent || this.config.askMode) {
-      request.via_agent = true
-    }
-  }
-
   /**
    * Send a user message and process the full response cycle.
    *
@@ -706,7 +706,7 @@ export class AgentSession {
     }
 
     // Signal to backend that an AI agent is calling (adjusts prompt for structured output)
-    this.applyAgentMode(request)
+    applyAgentMode(request, this.config)
 
     if (content) {
       request.content = content
