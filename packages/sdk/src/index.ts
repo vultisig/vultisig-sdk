@@ -17,12 +17,13 @@
 export { Vultisig } from './Vultisig'
 
 // Vault management
-export type { VaultConfig } from './vault'
+export type { VaultConfig, VaultSaveOptions } from './vault'
 export {
   BroadcastPartialFailureError,
   FastVault,
   SecureVault,
   VaultBase,
+  VaultConflictError,
   VaultError,
   VaultErrorCode,
   VaultImportError,
@@ -170,12 +171,14 @@ export {
 // Supported chains constants
 export {
   assertSeedphraseImportSupportsChains,
+  DEFAULT_CHAINS,
   getUnsupportedSeedphraseImportChains,
   isSeedphraseImportSupportedChain,
   SEEDPHRASE_IMPORT_SUPPORTED_CHAINS,
   SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS,
   SUPPORTED_CHAINS,
 } from './Vultisig'
+export { defaultChains } from '@vultisig/core-chain/Chain'
 
 // ============================================================================
 // PUBLIC API - Storage
@@ -529,6 +532,7 @@ export {
 export type {
   LimitSwapCancelInputs,
   LimitSwapCancelMemoError,
+  ParsedLimitSwapCancelMemo,
 } from '@vultisig/core-chain/swap/native/limitSwapCancelMemo'
 export {
   assertPositiveLimitSwapCancelAmounts,
@@ -541,7 +545,18 @@ export {
   LimitSwapCancelMemoBuildError,
   limitSwapCancelMemoErrors,
   modifyLimitSwapMemoPrefix,
+  parseCancelLimitSwapMemo,
 } from '@vultisig/core-chain/swap/native/limitSwapCancelMemo'
+// A cancel memo spells its assets in FULL: `ModifyLimitSwapMemo` is the one
+// inbound memo type THORChain does not run through `fuzzyAssetMatch`, so the
+// placement spelling's abbreviated contract would address an empty bucket.
+export {
+  getThorchainCancelMemoAsset,
+  getThorchainMemoAssetChain,
+  getThorchainMemoAssetSourceChain,
+} from '@vultisig/core-chain/swap/native/thorchainMemoAsset'
+export type { KeysignLimitSwapCancel } from '@vultisig/core-mpc/keysign/swap/getKeysignLimitSwapCancel'
+export { getKeysignLimitSwapCancel } from '@vultisig/core-mpc/keysign/swap/getKeysignLimitSwapCancel'
 export type { KeysignLimitSwapOrder } from '@vultisig/core-mpc/keysign/swap/getKeysignLimitSwapOrder'
 export { getKeysignLimitSwapOrder } from '@vultisig/core-mpc/keysign/swap/getKeysignLimitSwapOrder'
 

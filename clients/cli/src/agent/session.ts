@@ -16,7 +16,15 @@ import { cachePassword, clearCachedPassword, resolvePasswordNonInteractive } fro
 import { AgentErrorCode } from './agentErrors'
 import { authenticateVault } from './auth'
 import { recordResolution } from './broadcastJournal'
-import { CLI_SUPPORTED_SURFACES, extractBalanceSummaryFromText, parseBalanceSummaryEnvelope } from './cards'
+import {
+  CLI_SUPPORTED_SURFACES,
+  extractBalanceSummaryFromText,
+  extractPolymarketMarketsFromText,
+  extractYieldOpportunitiesFromText,
+  parseBalanceSummaryEnvelope,
+  parsePolymarketMarketsEnvelope,
+  parseYieldOpportunitiesEnvelope,
+} from './cards'
 import { AgentClient, createTurnIdempotencyKey, type SSEStreamResult } from './client'
 import { buildMessageContext, buildMinimalContext } from './context'
 import { AgentExecutor, resolveChain } from './executor'
@@ -39,6 +47,7 @@ import type {
   ConversationMessage,
   MessageContext,
   RecentAction,
+  SigningRecord,
   TxReadyPayload,
   UICallbacks,
 } from './types'
@@ -111,6 +120,15 @@ export const CLIENT_SIDE_DISPATCH_TOOL_NAMES: ReadonlySet<string> = new Set<stri
 // 2x the backend's 8-iteration cap — belt-and-suspenders against runaway loops.
 const MAX_MESSAGE_LOOP_DEPTH = 16
 
+// Signing audit summaries reach stdout/stderr and the JSON envelope. For sign_tx they are already
+// one line; for sign_typed_data the gate falls back to JSON.stringify(input), which is an
+// arbitrarily large typed-data blob. Keep every emitted audit record bounded.
+const PROPOSED_SUMMARY_MAX_CHARS = 500
+
+function capSigningSummary(summary: string): string {
+  return summary.length > PROPOSED_SUMMARY_MAX_CHARS ? `${summary.slice(0, PROPOSED_SUMMARY_MAX_CHARS)}…` : summary
+}
+
 // Mid-turn disconnect recovery (matches the app's 2s poller / ~3min ceiling).
 // On a dropped SSE stream the session polls /messages/since this many times,
 // this far apart, for the assistant message the detached backend persisted.
@@ -140,6 +158,120 @@ export function hasUnacknowledgedBroadcastResult(results: RecentAction[]): boole
     const hash = (r.data as { tx_hash?: unknown }).tx_hash
     return typeof hash === 'string' && hash.length > 0
   })
+}
+
+/**
+ * Build + report the result of a signing request the confirm gate DECLINED.
+ *
+ * Nothing was signed and nothing was broadcast. The built transaction is captured BEFORE the
+ * rejected envelope is dropped — a declined signing is the one case where the unsigned transaction
+ * IS the turn's result — and surfaced via `onProposedTransaction` on every client, so a read-safe
+ * `agent ask` can report the proposed transaction rather than a bare failure.
+ *
+ * A module-level function, not a method: the session's private methods are exercised through the
+ * prototype with a minimal `this` in tests, and every new method would have to be wired into each
+ * of those harnesses.
+ */
+function reportDeclinedSigning(
+  executor: Pick<AgentExecutor, 'getPendingChain' | 'clearPendingTransaction'>,
+  toolName: string,
+  toolCallId: string,
+  summary: string,
+  input: Record<string, unknown> | undefined,
+  ui: UICallbacks
+): RecentAction {
+  // Only sign_tx has a buffered tx envelope; sign_typed_data legitimately has no chain.
+  const proposedChain = toolName === 'sign_tx' ? executor.getPendingChain() : null
+  // Drop the rejected envelope so it can't linger into later turns (stale legs/summary).
+  if (toolName === 'sign_tx') executor.clearPendingTransaction()
+  // `summary` is a one-line human string for sign_tx, but the sign_typed_data fallback is
+  // `JSON.stringify(input)` — an arbitrarily large typed-data blob that reaches stdout/stderr and
+  // the JSON envelope from here. Cap it rather than dumping the whole payload into a field
+  // documented as one line. Capped ONCE, before both consumers: `data.proposed` and
+  // `proposedTransaction.summary` describe the SAME proposal, so capping only one would ship two
+  // conflicting representations of it. Nothing is lost — this is a display summary of a
+  // transaction that was NOT authorized; the authoritative payload is the request the caller
+  // re-issues with `--yes`.
+  const proposed = capSigningSummary(summary)
+  const declined: RecentAction = {
+    tool: toolName,
+    success: false,
+    data: {
+      error: 'Transaction not confirmed',
+      code: AgentErrorCode.CONFIRMATION_REQUIRED,
+      proposed,
+      ...(proposedChain ? { proposed_chain: proposedChain } : {}),
+    },
+  }
+  ui.onProposedTransaction?.({
+    tool: toolName,
+    summary: proposed,
+    ...(proposedChain ? { chain: proposedChain } : {}),
+  })
+  ui.onToolCall(toolCallId, toolName, input)
+  ui.onToolResult(
+    toolCallId,
+    toolName,
+    false,
+    declined.data,
+    'Transaction not confirmed',
+    AgentErrorCode.CONFIRMATION_REQUIRED
+  )
+  return declined
+}
+
+/**
+ * Whether a signing result is a DECLINE that should end an ask-mode turn.
+ *
+ * Ask mode's confirm gate is a fixed POLICY (no `--yes`; its `requestConfirmation` returns a
+ * constant), so recursing the refusal back into the model loop can only buy a retry that fails
+ * again — which is exactly the reported defect: `execute_send(ok)` -> `sign_tx(declined)` ->
+ * `execute_send(error)`, ending in a turn that claimed the build failed, that there was no send
+ * tool, or that a broadcast could not be confirmed, about a transaction that built fine and was
+ * never authorized to broadcast. Ending the turn instead keeps the built transaction as the
+ * result (see `onProposedTransaction`), which is what `agent ask --help` promises: "it reports the
+ * proposed transaction so a read-only prompt can't move funds".
+ *
+ * The discriminator is POLICY-VS-DECISION, not headless-vs-interactive. The TUI prompts a live
+ * user and pipe mode blocks on a live host answer over stdin (pipe.ts resolves a pending promise)
+ * — in both, a decline is a real decision the model should get to acknowledge, so both keep
+ * report-and-continue.
+ */
+function isAskModeDecline(askMode: boolean | undefined, recent: RecentAction | undefined): boolean {
+  return !!askMode && !!recent && !recent.success && recent.data?.code === AgentErrorCode.CONFIRMATION_REQUIRED
+}
+
+/**
+ * Remove EVERY queued ask-mode signing decline, returning whether any was found.
+ *
+ * All of them, not just the first: client-side dispatches are serialized and all awaited before the
+ * turn ends, so one response can queue several declined sign_typed_data calls, and a response that
+ * mixes a declined sign_typed_data with a buffered sign_tx returns from the signable branch — which
+ * also calls this. Removing one would leave the rest queued, and the NEXT request would flush a
+ * stale refusal into an unrelated turn's recent_actions.
+ *
+ * Only refusals are dropped — they are this turn's result, not input for a next request. Every
+ * OTHER queued entry is a client-side tool the model dispatched that already RAN this turn
+ * (vault_chain / vault_coin / address_book, see dispatchClientSideTool); those mutations are
+ * committed locally, so they stay queued and the next request still reports them as recent_actions.
+ * Clearing the whole queue would silently lose the record of work that happened.
+ */
+function takeQueuedAskModeDeclines(askMode: boolean | undefined, pending: RecentAction[]): boolean {
+  if (!askMode) return false
+  const kept = pending.filter(r => !isAskModeDecline(askMode, r))
+  if (kept.length === pending.length) return false
+  pending.splice(0, pending.length, ...kept)
+  return true
+}
+
+/** End a turn that stopped on a declined signing, leaving already-executed results queued. */
+function finishDeclinedTurn(verbose: boolean | undefined, pendingCount: number, ui: UICallbacks): void {
+  if (verbose) {
+    process.stderr.write(
+      `[session] signing declined and ask mode is non-interactive; ending turn with the proposed transaction (${pendingCount} already-executed result(s) stay queued)\n`
+    )
+  }
+  ui.onDone()
 }
 
 export class AgentSession {
@@ -586,12 +718,15 @@ export class AgentSession {
       toolName: string
       source: ToolOutputCandidate['source']
     } | null = null
-    // Whether a balance_summary card was rendered from the SSE data part this
-    // turn. When true, the message-content fallback still runs to STRIP any
-    // leftover echoed JSON from the displayed text, but does not render a second
-    // card (guards against a misbehaving backend emitting both the typed part
-    // and a verbatim echo).
+    // Whether a balance_summary / yield_opportunities / polymarket_markets card
+    // was rendered from the SSE data part this turn. When true, the
+    // message-content fallback still runs to STRIP any leftover echoed JSON
+    // from the displayed text, but does not render a second card (guards
+    // against a misbehaving backend emitting both the typed part and a
+    // verbatim echo).
     let balanceCardRendered = false
+    let yieldCardRendered = false
+    let polymarketCardRendered = false
     const pendingDispatches: Promise<void>[] = []
     // Serialize client-side tool dispatches in SSE arrival order. Without
     // this, ordering-sensitive flows (vault_chain add → vault_coin add) race
@@ -648,6 +783,20 @@ export class AgentSession {
         if (card) {
           balanceCardRendered = true
           ui.onBalanceSummary?.(card)
+        }
+      },
+      onYieldOpportunities: (raw: unknown) => {
+        const card = parseYieldOpportunitiesEnvelope(raw)
+        if (card) {
+          yieldCardRendered = true
+          ui.onYieldOpportunities?.(card)
+        }
+      },
+      onPolymarketMarkets: (raw: unknown) => {
+        const card = parsePolymarketMarketsEnvelope(raw)
+        if (card) {
+          polymarketCardRendered = true
+          ui.onPolymarketMarkets?.(card)
         }
       },
       onTurnOutcome: outcome => {
@@ -730,6 +879,8 @@ export class AgentSession {
 
     if (displayText) {
       displayText = this.renderEchoedBalanceCard(displayText, balanceCardRendered, ui)
+      displayText = this.renderEchoedYieldOpportunitiesCard(displayText, yieldCardRendered, ui)
+      displayText = this.renderEchoedPolymarketMarketsCard(displayText, polymarketCardRendered, ui)
     }
 
     if (displayText) {
@@ -749,7 +900,11 @@ export class AgentSession {
       const recent = await this.runPasswordGatedTool('sign_tx', signToolCallId, ui, () =>
         this.executor.signTxFromBuffer(signToolCallId)
       )
-      this.pendingToolResults.push(recent)
+      // Ask mode: a declined signing ENDS the turn — see isAskModeDecline / finishDeclinedTurn.
+      // The refusal is this turn's RESULT, not input for a next request, so it is never queued;
+      // anything ALREADY queued is a client-side tool that already RAN this turn and must survive.
+      const declinedInAskMode = isAskModeDecline(this.config.askMode, recent)
+      if (!declinedInAskMode) this.pendingToolResults.push(recent)
       // A DUPLICATE_BROADCAST refusal (persistent broadcast-journal hit) never
       // broadcast anything — surface it as a hard error so a headless caller
       // exits non-zero with a clear, actionable signal instead of reading a
@@ -757,6 +912,13 @@ export class AgentSession {
       // still queued+recursed above so the backend/LLM learns the sign refused.
       if (!recent.success && recent.data?.code === AgentErrorCode.DUPLICATE_BROADCAST) {
         ui.onError(String(recent.data.error ?? 'duplicate broadcast refused'), AgentErrorCode.DUPLICATE_BROADCAST)
+      }
+      if (declinedInAskMode) {
+        // Also purge any decline already queued THIS turn (a sign_typed_data the model dispatched
+        // before the signable candidate) — this branch returns without reaching the tail check.
+        takeQueuedAskModeDeclines(this.config.askMode, this.pendingToolResults)
+        finishDeclinedTurn(this.config.verbose, this.pendingToolResults.length, ui)
+        return
       }
       // Emit tx_status when broadcast succeeded so pipe-mode consumers see it,
       // then poll for the final on-chain outcome (audit F1) so a headless caller
@@ -770,6 +932,15 @@ export class AgentSession {
         }
       }
       await this.processMessageLoop(null, ui, depth + 1)
+      return
+    }
+
+    // sign_typed_data is gated by the SAME confirm gate but reaches the queue via
+    // dispatchClientSideTool rather than the signable branch above, so without this it kept the
+    // original retry-into-failure behavior — `agent ask "bet 5 USDC on X"` without --yes would
+    // still report a wrong cause.
+    if (takeQueuedAskModeDeclines(this.config.askMode, this.pendingToolResults)) {
+      finishDeclinedTurn(this.config.verbose, this.pendingToolResults.length, ui)
       return
     }
 
@@ -1120,6 +1291,34 @@ export class AgentSession {
   }
 
   /**
+   * Legacy-path fallback for echoed yield_opportunities cards (rj3p). Mirrors
+   * {@link renderEchoedBalanceCard} — strips a verbatim-echoed envelope from
+   * the displayed text and renders it, unless the typed SSE part already fired.
+   */
+  private renderEchoedYieldOpportunitiesCard(displayText: string, alreadyRendered: boolean, ui: UICallbacks): string {
+    const extracted = extractYieldOpportunitiesFromText(displayText)
+    if (!extracted) return displayText
+    if (!alreadyRendered) {
+      ui.onYieldOpportunities?.(extracted.card)
+    }
+    return extracted.remainingText
+  }
+
+  /**
+   * Legacy-path fallback for echoed polymarket_markets cards (rj3p). Mirrors
+   * {@link renderEchoedBalanceCard} — strips a verbatim-echoed envelope from
+   * the displayed text and renders it, unless the typed SSE part already fired.
+   */
+  private renderEchoedPolymarketMarketsCard(displayText: string, alreadyRendered: boolean, ui: UICallbacks): string {
+    const extracted = extractPolymarketMarketsFromText(displayText)
+    if (!extracted) return displayText
+    if (!alreadyRendered) {
+      ui.onPolymarketMarkets?.(extracted.card)
+    }
+    return extracted.remainingText
+  }
+
+  /**
    * Wrap a per-tool dispatch with the password-prompt gate (for tools in
    * {@link PASSWORD_REQUIRED_TOOLS}) and `ui.onToolCall` /
    * `ui.onToolResult` lifecycle events. Returns the `RecentAction` produced
@@ -1133,6 +1332,7 @@ export class AgentSession {
     body: () => Promise<RecentAction>,
     input?: Record<string, unknown>
   ): Promise<RecentAction> {
+    let signingRecord: Omit<SigningRecord, 'success'> | undefined
     // Confirmation gate: a signable tool (sign_tx / sign_typed_data) must be
     // explicitly approved before it signs + broadcasts. This is the single
     // chokepoint for BOTH the tx_ready path and client-side dispatch, so one
@@ -1150,31 +1350,14 @@ export class AgentSession {
         `${toolName}${input ? ` ${JSON.stringify(input)}` : ''}`
       const approved = await ui.requestConfirmation(summary)
       if (!approved) {
-        // Drop the rejected envelope so it can't linger into later turns
-        // (stale legs/summary). sign_typed_data has no buffered tx to drop.
-        if (toolName === 'sign_tx') {
-          this.executor.clearPendingTransaction()
-        }
-        const declined: RecentAction = {
-          tool: toolName,
-          success: false,
-          data: {
-            error: 'Transaction not confirmed',
-            code: AgentErrorCode.CONFIRMATION_REQUIRED,
-            proposed: summary,
-          },
-        }
-        ui.onToolCall(toolCallId, toolName, input)
-        ui.onToolResult(
-          toolCallId,
-          toolName,
-          false,
-          declined.data,
-          'Transaction not confirmed',
-          AgentErrorCode.CONFIRMATION_REQUIRED
-        )
-        return declined
+        return reportDeclinedSigning(this.executor, toolName, toolCallId, summary, input, ui)
       }
+      // Sample the summary/chain NOW (body() consumes and clears the buffer);
+      // the record itself is only emitted after body() runs, with its outcome —
+      // emitting here would fabricate a "signed" record for a body that failed
+      // before signing anything (e.g. a DUPLICATE_BROADCAST refusal).
+      const chain = ui.onSigningRecord && toolName === 'sign_tx' ? this.executor.getPendingChain() : null
+      signingRecord = { tool: toolName, summary: capSigningSummary(summary), ...(chain ? { chain } : {}) }
     }
 
     // Gate signing on whether a password is actually NEEDED, not on the
@@ -1237,6 +1420,7 @@ export class AgentSession {
       const message = err instanceof Error ? err.message : String(err)
       recent = { tool: toolName, success: false, data: { error: message } }
     }
+    if (signingRecord) ui.onSigningRecord?.({ ...signingRecord, success: recent.success })
     const errorMsg = (recent.data?.error as string | undefined) ?? undefined
     const errorCode = (recent.data?.code as AgentErrorCode | undefined) ?? undefined
     ui.onToolResult(toolCallId, toolName, recent.success, recent.data, errorMsg, errorCode)

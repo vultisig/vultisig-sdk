@@ -29,7 +29,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createSdkContext } from '../../../src/context/SdkContextBuilder'
 import { MemoryStorage } from '../../../src/storage/MemoryStorage'
-import { VaultImportErrorCode } from '../../../src/vault/VaultError'
+import { VaultConflictError, VaultImportErrorCode } from '../../../src/vault/VaultError'
 import { VaultManager } from '../../../src/VaultManager'
 
 /**
@@ -261,6 +261,91 @@ describe('VaultManager', () => {
     it('should return null for non-existent vault', async () => {
       const vault = await vaultManager.getVaultById('nonexistent_public_key_string')
       expect(vault).toBeNull()
+    })
+  })
+
+  describe('vault storage concurrency', () => {
+    async function loadTwoInstances() {
+      const imported = await vaultManager.importVault(encodeUnencryptedVult(buildMinimalSecureVaultBinary()))
+      const first = await vaultManager.getVaultById(imported.id)
+      const second = await vaultManager.getVaultById(imported.id)
+
+      expect(first).not.toBeNull()
+      expect(second).not.toBeNull()
+      return { first: first!, second: second!, id: imported.id }
+    }
+
+    it('rejects a stale instance and deterministically merges non-overlapping metadata on explicit retry', async () => {
+      const { first, second, id } = await loadTwoInstances()
+      expect(first.revision).toBe(1)
+      expect(second.revision).toBe(1)
+
+      await first.rename('Renamed elsewhere')
+
+      const staleSave = second.setCurrency('eur')
+      await expect(staleSave).rejects.toBeInstanceOf(VaultConflictError)
+      await expect(staleSave).rejects.toMatchObject({
+        expectedRevision: 1,
+        actualRevision: 2,
+        conflictingFields: [],
+      })
+
+      await second.save({ conflictStrategy: 'merge-metadata' })
+
+      const persisted = await memoryStorage.get<{ name: string; currency: string; revision: number }>(`vault:${id}`)
+      expect(persisted).toMatchObject({
+        name: 'Renamed elsewhere',
+        currency: 'eur',
+        revision: 3,
+      })
+      expect(second.name).toBe('Renamed elsewhere')
+      expect(second.currency).toBe('eur')
+    })
+
+    it('keeps overlapping metadata edits conflicted during merge retry', async () => {
+      const { first, second, id } = await loadTwoInstances()
+
+      await first.rename('First name')
+      await expect(second.rename('Second name')).rejects.toBeInstanceOf(VaultConflictError)
+      await expect(second.save({ conflictStrategy: 'merge-metadata' })).rejects.toMatchObject({
+        conflictingFields: ['name'],
+      })
+
+      const persisted = await memoryStorage.get<{ name: string; revision: number }>(`vault:${id}`)
+      expect(persisted).toMatchObject({ name: 'First name', revision: 2 })
+    })
+
+    it('serializes invocation-time snapshots from concurrent same-instance mutations', async () => {
+      const imported = await vaultManager.importVault(encodeUnencryptedVult(buildMinimalSecureVaultBinary()))
+      const savedNames: string[] = []
+      const set = memoryStorage.set.bind(memoryStorage)
+      vi.spyOn(memoryStorage, 'set').mockImplementation(async (key, value) => {
+        if (key === `vault:${imported.id}`) savedNames.push((value as { name: string }).name)
+        await set(key, value)
+      })
+
+      await Promise.all([imported.rename('First queued name'), imported.rename('Second queued name')])
+
+      const persisted = await memoryStorage.get<{ revision: number }>(`vault:${imported.id}`)
+      expect(persisted?.revision).toBe(3)
+      expect(imported.revision).toBe(3)
+      expect(savedNames).toEqual(['First queued name', 'Second queued name'])
+    })
+
+    it('treats a disk-restored pending vault as an initial active-vault write', async () => {
+      const imported = await vaultManager.importVault(encodeUnencryptedVult(buildMinimalSecureVaultBinary()))
+      const pendingData = await memoryStorage.get(`vault:${imported.id}`)
+      expect(pendingData).not.toBeNull()
+      await memoryStorage.remove(`vault:${imported.id}`)
+
+      const pendingVault = vaultManager.createVaultInstance(
+        { ...(pendingData as typeof imported.data), revision: undefined },
+        false
+      )
+      await pendingVault.save()
+
+      const persisted = await memoryStorage.get<{ revision: number }>(`vault:${imported.id}`)
+      expect(persisted?.revision).toBe(1)
     })
   })
 

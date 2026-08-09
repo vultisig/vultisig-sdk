@@ -53,6 +53,7 @@ const DEFAULT_SLIPPAGE = 0.01
 // Capped at 5% to align with the Skip swap surface floor. Pre-cap 50% would
 // let thin-pool swaps slip a user out of meaningful value silently.
 const MAX_SLIPPAGE = 0.05
+const DEFAULT_TIMEOUT_MS = 15_000
 // Generous gas — multi-hop swaps through 2-3 pools fit under 600k. Matches
 // Astroport's own frontend default.
 const SWAP_GAS = 600_000
@@ -359,22 +360,34 @@ async function querySimulate(lcdUrl: string, operations: AstroSwapOperation[], o
   const simulateB64 = Buffer.from(simulateQuery, 'utf8').toString('base64')
   const url = `${lcdUrl}/cosmwasm/wasm/v1/contract/${ASTROPORT_ROUTER}/smart/${simulateB64}`
 
-  const response = await fetch(url, {
-    method: 'GET',
-    signal: AbortSignal.timeout(15_000),
-  })
-  if (!response.ok) {
-    // Body verbatim — preserve `code`/`message`/`details` for the caller. A
-    // missing pool surfaces here as "pair_info ... not found".
-    const body = await response.text()
-    throw new Error(`HTTP ${response.status}: ${body}`)
+  // Hermes-compatible timeout: `AbortSignal.timeout()` is unavailable on older
+  // RN/Hermes runtimes, so mirror the repo's established AbortController +
+  // setTimeout pattern used by other RN-exported fetch helpers.
+  const controller = new AbortController()
+  const timeoutId = setTimeout(
+    () => controller.abort(new Error(`astroport simulate timeout after ${DEFAULT_TIMEOUT_MS}ms: ${url}`)),
+    DEFAULT_TIMEOUT_MS
+  )
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      signal: controller.signal,
+    })
+    if (!response.ok) {
+      // Body verbatim — preserve `code`/`message`/`details` for the caller. A
+      // missing pool surfaces here as "pair_info ... not found".
+      const body = await response.text()
+      throw new Error(`HTTP ${response.status}: ${body}`)
+    }
+    const json = (await response.json()) as SimulateResponse
+    const amount = json.data?.amount
+    if (!amount || !/^[0-9]+$/.test(amount)) {
+      throw new Error(`astroport simulate returned malformed amount: ${JSON.stringify(json)}`)
+    }
+    return amount
+  } finally {
+    clearTimeout(timeoutId)
   }
-  const json = (await response.json()) as SimulateResponse
-  const amount = json.data?.amount
-  if (!amount || !/^[0-9]+$/.test(amount)) {
-    throw new Error(`astroport simulate returned malformed amount: ${JSON.stringify(json)}`)
-  }
-  return amount
 }
 
 /**

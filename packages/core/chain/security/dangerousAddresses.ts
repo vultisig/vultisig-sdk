@@ -76,28 +76,49 @@ const EVM_ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/i
  * Return the dangerous-address reason string if `address` is a known EVM burn
  * address, otherwise `undefined`. Shape-based: any `0x`+40-hex string is vetted
  * against the EVM burn-list regardless of the chain it's destined for.
+ *
+ * Prototype-safe: uses `Object.prototype.hasOwnProperty` so that keys like
+ * `__proto__`, `toString`, or `constructor` never produce a false-positive.
+ * Input is trimmed so whitespace-padded copies of a burn address don't escape.
  */
 export const getEvmDangerousReason = (address: string): string | undefined => {
-  if (!EVM_ADDRESS_RE.test(address)) return undefined
-  return EVM_DANGEROUS_ADDRESSES[address.toLowerCase()]
+  const trimmed = address.trim()
+  if (!EVM_ADDRESS_RE.test(trimmed)) return undefined
+  const key = trimmed.toLowerCase()
+  return Object.prototype.hasOwnProperty.call(EVM_DANGEROUS_ADDRESSES, key) ? EVM_DANGEROUS_ADDRESSES[key] : undefined
 }
 
 /** True iff `address` is a known EVM burn / dead address. */
 export const isEvmBurnAddress = (address: string): boolean => getEvmDangerousReason(address) !== undefined
 
-/** Return the chain-specific dangerous-address reason, if one applies. */
+/**
+ * Return the chain-specific dangerous-address reason, if one applies.
+ *
+ * Prototype-safe: all map lookups go through `Object.prototype.hasOwnProperty`
+ * so that a crafted input like `__proto__` never produces a false-positive
+ * throw on an otherwise-valid chain.
+ *
+ * Chain-alias normalization: lowercase so that canonical enum values
+ * (`'Ripple'`, `'Bitcoin-Cash'`) and common aliases (`'xrp'`, `'bitcoincash'`)
+ * both resolve. Only the lookup key is normalised; the address is kept verbatim
+ * (non-EVM burn lists are case-sensitive base58/b58 strings).
+ */
 export const getChainDangerousReason = (chain: string, address: string): string | undefined => {
   const normalizedChain = chain.trim().toLowerCase()
   const destination = address.trim()
 
+  const safeGet = (map: Record<string, string>, key: string): string | undefined =>
+    Object.prototype.hasOwnProperty.call(map, key) ? map[key] : undefined
+
   if (normalizedChain === 'solana') {
-    return SOLANA_DANGEROUS_ADDRESSES[destination]
+    return safeGet(SOLANA_DANGEROUS_ADDRESSES, destination)
   }
   if (UTXO_CHAINS.has(normalizedChain)) {
-    return UTXO_DANGEROUS_ADDRESSES[destination]
+    return safeGet(UTXO_DANGEROUS_ADDRESSES, destination)
   }
-  if (normalizedChain === 'ripple') {
-    return XRP_DANGEROUS_ADDRESSES[destination]
+  // Accept both canonical enum ('Ripple') and common API alias ('xrp').
+  if (normalizedChain === 'ripple' || normalizedChain === 'xrp') {
+    return safeGet(XRP_DANGEROUS_ADDRESSES, destination)
   }
 
   return undefined
