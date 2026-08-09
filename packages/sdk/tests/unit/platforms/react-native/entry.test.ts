@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { cosmosTxFeeGasParityCases } from '../../../fixtures/cosmosTxFeeGasParity'
+
 vi.mock('expo-crypto', () => ({
   randomUUID: () => '00000000-0000-4000-8000-000000000000',
   getRandomValues: <T extends ArrayBufferView | null>(a: T) => a,
@@ -63,14 +65,29 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.resolveChainReference('8453')).toBe(rn.Chain.Base)
   })
 
-  it('exports the canonical IBC Cosmos send-fee floors from the RN entry', async () => {
+  it.each(cosmosTxFeeGasParityCases)(
+    'exports the canonical $chain fee denom, fee amount, and gas limit together',
+    async ({ chain, feeDenom, feeAmount, gasLimit }) => {
+      const rn = await import('../../../../src/platforms/react-native/index')
+
+      expect(rn.getCosmosAllowedFeeDenoms(chain)[0]).toBe(feeDenom)
+      expect(rn.getCosmosSendFeeBaseUnits(chain)).toBe(feeAmount)
+      expect(rn.getCosmosGasLimit({ chain })).toBe(gasLimit)
+    }
+  )
+
+  it('covers every Cosmos chain exposed by the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const exposedCosmosChains = Object.values(rn.Chain).filter(chain => rn.getChainKind(chain) === 'cosmos')
+
+    expect(new Set(cosmosTxFeeGasParityCases.map(({ chain }) => chain))).toEqual(new Set(exposedCosmosChains))
+  })
+
+  it('exports the shared Cosmos send-fee constants used by the parity matrix', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
-    expect(rn.COSMOS_SEND_FEE_DEFAULT).toBe(7500n)
-    expect(rn.getCosmosSendFeeBaseUnits(rn.Chain.Cosmos)).toBe(7500n)
-    expect(rn.getCosmosSendFeeBaseUnits(rn.Chain.TerraClassic)).toBe(8_497_500n)
-    expect(rn.getCosmosSendFeeBaseUnits(rn.Chain.MayaChain)).toBe(2_000_000_000n)
-    expect(rn.getCosmosSendFeeBaseUnits(rn.Chain.THORChain)).toBeUndefined()
+    expect(rn.COSMOS_SEND_FEE_DEFAULT).toBe(7_500n)
+    expect(rn.MAYA_SEND_FEE_BASE_UNITS).toBe(2_000_000_000n)
   })
 
   it('keeps Robinhood derivation native-compatible on the exported RN surface', async () => {
@@ -91,6 +108,15 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(robinhoodAddress).toBe(ethereumAddress)
     expect(deriveAddressFromPublicKey).toHaveBeenNthCalledWith(1, 10_004_663, publicKey)
     expect(deriveAddressFromPublicKey).toHaveBeenNthCalledWith(2, 60, publicKey)
+  })
+
+  it('exports the shared THORChain secured-asset catalog from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(typeof rn.getThorchainSecuredAssetCatalog).toBe('function')
+    expect(typeof rn.createThorchainSecuredAssetCatalog).toBe('function')
+    expect(typeof rn.getThorchainSwapDestinationAssets).toBe('function')
+    expect(rn.thorchainSecuredAssetFallback.length).toBeGreaterThan(10)
   })
 
   // sdk#1538 - the memo-cap family was already exported from the root SDK
@@ -176,8 +202,8 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
 // in the app. This partially addresses the recurring sdk#1224 allow-list-gap
 // class (see e.g. the cosmosStaking / preparePolkadotAssetSend comments above
 // in the source file) — it does not prevent future gaps, just catches this one.
-describe('RN entry exposes fromChainAmountExact + getBlockExplorerUrl', () => {
-  it('resolves both as functions from the RN entry, not just the root barrel', async () => {
+describe('RN entry exposes pure chain helpers and registry', () => {
+  it('resolves the helpers and registry from the RN entry, not just the root barrel', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
     expect(typeof rn.fromChainAmountExact).toBe('function')
@@ -187,6 +213,11 @@ describe('RN entry exposes fromChainAmountExact + getBlockExplorerUrl', () => {
     expect(rn.getBlockExplorerUrl({ chain: rn.Chain.Ethereum, entity: 'address', value: '0xabc' })).toBe(
       'https://etherscan.io/address/0xabc'
     )
+
+    expect(Object.keys(rn.chainRegistry).sort()).toEqual(Object.values(rn.Chain).sort())
+    expect(typeof rn.deriveFromChainRegistry).toBe('function')
+    expect(typeof rn.extendChainRegistry).toBe('function')
+    expect(rn.chainRegistry[rn.Chain.Ethereum].explorer.baseUrl).toBe('https://etherscan.io')
   })
 
   it('re-exports the recent pure parse/normalize/decode helpers from the RN entrypoint', async () => {

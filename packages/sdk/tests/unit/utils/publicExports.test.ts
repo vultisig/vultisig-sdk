@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import * as sdk from '../../../src/index'
+import { cosmosTxFeeGasParityCases } from '../../fixtures/cosmosTxFeeGasParity'
 
 describe('@vultisig/sdk public exports', () => {
   it('exports fiatToAmount, toChainAmount, and chain-reference normalization utilities', () => {
@@ -20,7 +21,7 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.ChainAmountParseError.prototype).toBeInstanceOf(Error)
   })
 
-  it('exports fromChainAmountExact and getBlockExplorerUrl', () => {
+  it('exports fromChainAmountExact, getBlockExplorerUrl, and the chain registry', () => {
     expect(typeof sdk.fromChainAmountExact).toBe('function')
     expect(sdk.fromChainAmountExact(123456789012345678901n, 18)).toBe('123.456789012345678901')
 
@@ -28,6 +29,10 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.getBlockExplorerUrl({ chain: sdk.Chain.Ethereum, entity: 'address', value: '0xabc' })).toBe(
       'https://etherscan.io/address/0xabc'
     )
+
+    expect(Object.keys(sdk.chainRegistry).sort()).toEqual(Object.values(sdk.Chain).sort())
+    expect(typeof sdk.deriveFromChainRegistry).toBe('function')
+    expect(typeof sdk.extendChainRegistry).toBe('function')
   })
 
   it('exports tx-shape normalization primitives (normalizeTx, splitMultiTx)', () => {
@@ -168,6 +173,14 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.parseThorSwapMemo).toBe('function')
   })
 
+  it('exports the shared THORChain secured-asset catalog helpers', () => {
+    expect(typeof sdk.getThorchainSecuredAssetCatalog).toBe('function')
+    expect(typeof sdk.createThorchainSecuredAssetCatalog).toBe('function')
+    expect(typeof sdk.getThorchainSecuredAssetL1Asset).toBe('function')
+    expect(typeof sdk.getThorchainSwapDestinationAssets).toBe('function')
+    expect(sdk.thorchainSecuredAssetFallback.length).toBeGreaterThan(10)
+  })
+
   it('exports canonical EVM chain-id helpers from the root sdk surface', () => {
     expect(typeof sdk.getEvmChainId).toBe('function')
     expect(typeof sdk.getEvmChainByChainId).toBe('function')
@@ -182,17 +195,29 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.getChainGasPriceGwei).toBe('function')
   })
 
-  it('exports canonical Cosmos fee metadata and send-fee floors for first-party consumers', () => {
-    expect(sdk.cosmosFeeCoinDenom[sdk.Chain.Cosmos]).toBe('uatom')
-    expect(sdk.getCosmosGasLimit({ chain: sdk.Chain.Cosmos })).toBe(200000n)
-    expect(sdk.getCosmosGasLimit({ chain: sdk.Chain.MayaChain })).toBe(2_000_000_000n)
+  it.each(cosmosTxFeeGasParityCases)(
+    'exports the canonical $chain fee denom, fee amount, and gas limit together',
+    ({ chain, feeDenom, feeAmount, gasLimit }) => {
+      expect(sdk.cosmosFeeCoinDenom[chain]).toBe(feeDenom)
+      expect(sdk.getCosmosSendFeeBaseUnits(chain)).toBe(feeAmount)
+      expect(sdk.getCosmosGasLimit({ chain })).toBe(gasLimit)
+    }
+  )
+
+  it('covers every Cosmos chain exposed by the root SDK entry', () => {
+    const exposedCosmosChains = Object.values(sdk.Chain).filter(chain => sdk.getChainKind(chain) === 'cosmos')
+
+    expect(new Set(cosmosTxFeeGasParityCases.map(({ chain }) => chain))).toEqual(new Set(exposedCosmosChains))
+  })
+
+  it('exports the shared Cosmos send-fee constants used by the parity matrix', () => {
+    expect(sdk.COSMOS_SEND_FEE_DEFAULT).toBe(7_500n)
+    expect(sdk.MAYA_SEND_FEE_BASE_UNITS).toBe(2_000_000_000n)
+  })
+
+  it('exports the Cosmos staking gas limit helper, which the send-fee parity matrix does not cover', () => {
     expect(sdk.getCosmosStakingGasLimit({ chain: sdk.Chain.Cosmos })).toBe(350_000n)
     expect(sdk.getCosmosStakingGasLimit({ chain: sdk.Chain.Cosmos, msgCount: 2 })).toBe(437_500n)
-    expect(sdk.COSMOS_SEND_FEE_DEFAULT).toBe(7500n)
-    expect(sdk.getCosmosSendFeeBaseUnits(sdk.Chain.Cosmos)).toBe(7500n)
-    expect(sdk.getCosmosSendFeeBaseUnits(sdk.Chain.TerraClassic)).toBe(8_497_500n)
-    expect(sdk.getCosmosSendFeeBaseUnits(sdk.Chain.MayaChain)).toBe(sdk.MAYA_SEND_FEE_BASE_UNITS)
-    expect(sdk.getCosmosSendFeeBaseUnits(sdk.Chain.THORChain)).toBeUndefined()
   })
 
   it('exports seedphrase import chain support policy for consumers', () => {
