@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import * as sdk from '../../../src/index'
+import { cosmosTxFeeGasParityCases } from '../../fixtures/cosmosTxFeeGasParity'
 
 describe('@vultisig/sdk public exports', () => {
   it('exports fiatToAmount, toChainAmount, and chain-reference normalization utilities', () => {
@@ -190,12 +191,24 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.getChainGasPriceGwei).toBe('function')
   })
 
-  it('exports canonical Cosmos send-fee floors for first-party consumers', () => {
-    expect(sdk.COSMOS_SEND_FEE_DEFAULT).toBe(7500n)
-    expect(sdk.getCosmosSendFeeBaseUnits(sdk.Chain.Cosmos)).toBe(7500n)
-    expect(sdk.getCosmosSendFeeBaseUnits(sdk.Chain.TerraClassic)).toBe(8_497_500n)
-    expect(sdk.getCosmosSendFeeBaseUnits(sdk.Chain.MayaChain)).toBe(sdk.MAYA_SEND_FEE_BASE_UNITS)
-    expect(sdk.getCosmosSendFeeBaseUnits(sdk.Chain.THORChain)).toBeUndefined()
+  it.each(cosmosTxFeeGasParityCases)(
+    'exports the canonical $chain fee denom, fee amount, and gas limit together',
+    ({ chain, feeDenom, feeAmount, gasLimit }) => {
+      expect(sdk.cosmosFeeCoinDenom[chain]).toBe(feeDenom)
+      expect(sdk.getCosmosSendFeeBaseUnits(chain)).toBe(feeAmount)
+      expect(sdk.getCosmosGasLimit({ chain })).toBe(gasLimit)
+    }
+  )
+
+  it('covers every Cosmos chain exposed by the root SDK entry', () => {
+    const exposedCosmosChains = Object.values(sdk.Chain).filter(chain => sdk.getChainKind(chain) === 'cosmos')
+
+    expect(new Set(cosmosTxFeeGasParityCases.map(({ chain }) => chain))).toEqual(new Set(exposedCosmosChains))
+  })
+
+  it('exports the shared Cosmos send-fee constants used by the parity matrix', () => {
+    expect(sdk.COSMOS_SEND_FEE_DEFAULT).toBe(7_500n)
+    expect(sdk.MAYA_SEND_FEE_BASE_UNITS).toBe(2_000_000_000n)
   })
 
   it('exports seedphrase import chain support policy for consumers', () => {
