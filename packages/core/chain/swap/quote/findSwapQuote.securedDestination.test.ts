@@ -72,6 +72,7 @@ describe('findSwapQuote secured destinations', () => {
     expect(quote.quote.native.memo).toMatch(/^=:/)
     expect(quote.quote.native.memo).not.toContain('SECURE+')
     expect(getNativeSwapQuote).toHaveBeenCalledOnce()
+    expect(getSwapKitQuote).not.toHaveBeenCalled()
     expect(getNativeSwapQuote).toHaveBeenCalledWith(
       expect.objectContaining({
         swapChain: Chain.THORChain,
