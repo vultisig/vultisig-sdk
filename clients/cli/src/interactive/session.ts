@@ -49,7 +49,12 @@ import {
   executeTxStatus,
   executeVaults,
 } from '../commands'
-import { loadActiveVaultSafely, resolveChainOrThrow, resolveOptionalChainOrThrow, shouldAutoSelectActiveVault } from '../core'
+import {
+  loadActiveVaultSafely,
+  resolveChainOrThrow,
+  resolveOptionalChainOrThrow,
+  shouldAutoSelectActiveVault,
+} from '../core'
 import { ConfirmationRequiredError } from '../core/errors'
 import { stopAllSpinners } from '../lib/output'
 import { createCompleter, findChainByName } from './completer'
