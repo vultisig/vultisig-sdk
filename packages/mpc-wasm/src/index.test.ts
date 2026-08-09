@@ -4,9 +4,13 @@ import { fileURLToPath } from 'node:url'
 import { ed25519 } from '@noble/curves/ed25519.js'
 import { secp256k1 } from '@noble/curves/secp256k1.js'
 import { sha256 } from '@noble/hashes/sha256.js'
+import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js'
 import type { MpcKeyshare, MpcPerAlgorithmEngineBase, MpcSession } from '@vultisig/mpc-types'
+import { initWasm } from '@trustwallet/wallet-core'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
+import { generateSignature } from '../../core/mpc/tx/signature/generateSignature'
+import { formatSignature } from '../../sdk/src/adapters/formatSignature'
 import { WasmMpcEngine } from './index'
 
 const originalFetch = globalThis.fetch
@@ -116,7 +120,7 @@ const cases: AlgorithmCase[] = [
   },
 ]
 
-describe.each(cases)('$name real WASM MPC ceremonies', ({ select, signatureLength, verify }) => {
+describe.each(cases)('$name real WASM MPC ceremonies', ({ name, select, signatureLength, verify }) => {
   const engine = new WasmMpcEngine()
   const originalParties = ['alice', 'bob', 'carol']
   const resharedParties = ['bob', 'carol', 'dave']
@@ -156,6 +160,29 @@ describe.each(cases)('$name real WASM MPC ceremonies', ({ select, signatureLengt
     expect(signature).toHaveLength(signatureLength)
     expect(signatures.get('bob')).toEqual(signature)
     expect(verify(signature, message, originalShares.get('alice')!.publicKey())).toBe(true)
+
+    if (name === 'Schnorr/EdDSA') {
+      const messageKey = bytesToHex(message)
+      const keysignSignature = {
+        msg: messageKey,
+        r: bytesToHex(signature.subarray(0, 32)),
+        s: bytesToHex(signature.subarray(32, 64)),
+        der_signature: '',
+      }
+      const sdkSignature = hexToBytes(
+        formatSignature({ [messageKey]: keysignSignature }, [messageKey], 'eddsa').signature
+      )
+      const coreSignature = generateSignature({
+        walletCore: await initWasm(),
+        signature: keysignSignature,
+        signatureFormat: 'raw',
+      })
+
+      expect(ed25519.verify(sdkSignature, message, originalShares.get('alice')!.publicKey())).toBe(true)
+      expect(ed25519.verify(coreSignature, message, originalShares.get('alice')!.publicKey())).toBe(true)
+      expect(coreSignature).toEqual(sdkSignature)
+      expect(coreSignature).toEqual(signature)
+    }
 
     const reshareSetup = algorithm.reshareSetup(
       originalShares.get('alice')!,
