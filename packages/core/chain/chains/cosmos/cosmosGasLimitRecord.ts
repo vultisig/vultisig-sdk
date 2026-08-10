@@ -42,10 +42,13 @@ export const getCosmosGasLimit = (coin: CoinKey<CosmosChain>): bigint => {
  * gasUsed: 200X"). Production telemetry later observed MsgBeginRedelegate
  * consuming 2_501_503 gas. The former 3M limit left little headroom over that
  * observed burn, so TerraClassic uses 4M for the heaviest single-msg staking
- * path. Consumers must price the fee amount for this gas limit independently;
- * `cosmosGasRecord[TerraClassic]` governs native MsgSend only. TerraClassic
- * keeps a fixed per-transaction staking budget, so callers must split
- * multi-validator reward claims into separate transactions.
+ * path. Consumers MUST pair this with `TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS`
+ * (from `./gas`), NOT `cosmosGasRecord[TerraClassic]` / `TERRA_CLASSIC_ULUNA_BASE_GAS`,
+ * since those govern native MsgSend at the much lower 300k send gas limit and
+ * under-price a 4M-gas staking tx by ~13x, which the node rejects for
+ * insufficient fees. TerraClassic keeps a fixed per-transaction staking
+ * budget, so callers must split multi-validator reward claims into separate
+ * transactions.
  */
 const cosmosStakingGasLimitRecord: Record<IbcEnabledCosmosChain, bigint> = {
   [Chain.Cosmos]: 350_000n,

@@ -300,6 +300,35 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.getCosmosStakingGasLimit({ chain: sdk.Chain.TerraClassic })).toBe(4_000_000n)
   })
 
+  it('exports a TerraClassic staking fee correctly priced for the staking gas limit, not the send fee', () => {
+    expect(sdk.TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS).toBe(113_300_000n)
+    // The send-fee constant is priced for the 300k send gas limit and would
+    // under-price a 4M-gas staking tx by ~13x, causing the node to reject it
+    // for insufficient fees before it can broadcast.
+    expect(sdk.TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS).toBeGreaterThan(
+      sdk.getCosmosSendFeeBaseUnits(sdk.Chain.TerraClassic)!
+    )
+  })
+
+  it('builds a signable TerraClassic redelegation SignDoc pairing the staking gas limit with its fee', () => {
+    const gasLimit = sdk.getCosmosStakingGasLimit({ chain: sdk.Chain.TerraClassic })
+    const msg = sdk.cosmosStaking.redelegate({
+      delegatorAddress: 'terra1qyqszqgpqyqszqgpqyqszqgpqyqszqgp5hm70u',
+      validatorSrcAddress: 'terravaloper1qgpqyqszqgpqyqszqgpqyqszqgpqyqsz9u3x5e',
+      validatorDstAddress: 'terravaloper1qvpsxqcrqvpsxqcrqvpsxqcrqvpsxqcryvs87c',
+      amount: '1000000',
+      denom: 'uluna',
+    })
+
+    // Mirrors the exact `buildCosmosStakingTx` shape a consumer (mcp-ts) would
+    // sign: gasLimit from getCosmosStakingGasLimit paired with the matching
+    // TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS fee, not a stale hand-picked
+    // LUNC figure. Proves the two exported values are signable together.
+    const requiredFee = Number(gasLimit) * 28.325
+    expect(Number(sdk.TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS)).toBeGreaterThanOrEqual(requiredFee)
+    expect(msg.typeUrl).toBe('/cosmos.staking.v1beta1.MsgBeginRedelegate')
+  })
+
   it('exports seedphrase import chain support policy for consumers', () => {
     expect(Array.isArray(sdk.SEEDPHRASE_IMPORT_SUPPORTED_CHAINS)).toBe(true)
     expect(Array.isArray(sdk.SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS)).toBe(true)
