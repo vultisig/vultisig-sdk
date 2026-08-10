@@ -70,7 +70,13 @@ export async function executeSend(
 async function previewDryRun(
   vault: VaultBase,
   params: SendParams,
-  dryResult: { fee: string; feeSymbol: string; total: string; keysignPayload: KeysignPayload },
+  dryResult: {
+    fee: string
+    feeSymbol: string
+    total: string
+    contractAddress?: string
+    keysignPayload: KeysignPayload
+  },
   to: string
 ): Promise<SendDryRunResult> {
   const balance = await vault.balance(params.chain, params.tokenId)
@@ -122,6 +128,7 @@ async function previewDryRun(
     to,
     amount: params.amount,
     symbol: balance.symbol,
+    ...(dryResult.contractAddress ? { contractAddress: dryResult.contractAddress } : {}),
     fee: dryResult.fee,
     feeSymbol: dryResult.feeSymbol,
     total: dryResult.total,
@@ -139,7 +146,9 @@ async function previewDryRun(
   info(`\nDry-run preview:`)
   info(`  Chain:   ${result.chain}`)
   info(`  To:      ${result.to}`)
-  info(`  Amount:  ${result.amount} ${result.symbol}`)
+  info(
+    `  Amount:  ${result.amount} ${result.symbol}${result.contractAddress ? ` (${escapeTerminalControls(result.contractAddress)})` : ''}`
+  )
   if (result.destinationTag !== undefined) info(`  Destination tag: ${result.destinationTag}`)
   if (result.memo) info(`  Memo:    ${escapeTerminalControls(result.memo)}`)
   info(`  Fee:     ${result.fee} ${result.feeSymbol}`)
@@ -222,7 +231,8 @@ export async function sendTransaction(
       params.chain,
       preview.memo,
       preview.destinationTag,
-      gas
+      gas,
+      dryResult.contractAddress
     )
   }
 

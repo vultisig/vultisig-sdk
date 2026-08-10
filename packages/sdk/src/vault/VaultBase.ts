@@ -1971,6 +1971,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       const isTokenSend = Boolean(tokenInfo.contractAddress)
       return {
         dryRun: true,
+        ...(tokenInfo.contractAddress ? { contractAddress: tokenInfo.contractAddress } : {}),
         fee: this.formatUnits(fee, isTokenSend ? native.decimals : tokenInfo.decimals),
         feeSymbol: native.ticker,
         // Denominated in the asset being sent, so it is directly comparable to

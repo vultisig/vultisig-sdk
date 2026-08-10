@@ -64,6 +64,7 @@ function makeTokenVault(opts: {
   tokenBalance: string
   nativeBalance: string
   tokenSymbol?: string
+  contractAddress?: string
 }) {
   return {
     send: vi.fn(async () => ({
@@ -71,6 +72,7 @@ function makeTokenVault(opts: {
       fee: opts.fee,
       feeSymbol: 'ETH',
       total: opts.total,
+      contractAddress: opts.contractAddress,
       keysignPayload: { some: 'payload' },
     })),
     balance: vi.fn(async (_chain: unknown, tokenId?: string) =>
@@ -108,6 +110,30 @@ async function sendJson(vault: never, options: never = params) {
 }
 
 describe('send --dry-run preview', () => {
+  it('discloses the exact token contract in JSON and the human preview', async () => {
+    const contractAddress = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'
+    const vault = makeTokenVault({
+      fee: '0.0021',
+      total: '1.0',
+      tokenBalance: '5.0',
+      nativeBalance: '2.0',
+      tokenSymbol: 'USDC.e',
+      contractAddress,
+    })
+
+    expect((await sendJson(vault, tokenParams)).contractAddress).toBe(contractAddress)
+
+    configureOutput({ format: 'table', silent: false })
+    const logs: string[] = []
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+      logs.push(args.map(String).join(' '))
+    })
+    const result = (await sendTransaction(vault, tokenParams)) as SendDryRunResult
+
+    expect(result.contractAddress).toBe(contractAddress)
+    expect(logs.join('\n')).toContain(`Amount:  1.0 USDC.e (${contractAddress})`)
+  })
+
   it('returns the fee and total the build produced', async () => {
     const result = (await sendTransaction(
       makeVault({ fee: '0.0021', total: '1.0021', balance: '5.0' }),
@@ -116,6 +142,10 @@ describe('send --dry-run preview', () => {
 
     expect(result.fee).toBe('0.0021')
     expect(result.total).toBe('1.0021')
+    // Assert on the returned object, not JSON output: JSON.stringify drops
+    // undefined-valued keys, so only this catches an unguarded
+    // `contractAddress: undefined` leaking into the native-send result.
+    expect(result).not.toHaveProperty('contractAddress')
   })
 
   it('carries fee and total into the JSON envelope, not just the human preview', async () => {
@@ -127,6 +157,7 @@ describe('send --dry-run preview', () => {
       total: '1.0021',
       balance: '5.0',
     })
+    expect(data).not.toHaveProperty('contractAddress')
   })
 
   it('surfaces the signable payload memo in JSON instead of echoing the input', async () => {
