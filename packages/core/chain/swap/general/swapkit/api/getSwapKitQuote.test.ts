@@ -300,19 +300,38 @@ describe('getSwapKitQuote', () => {
   it('reads price impact from the route meta', async () => {
     const quote = await stubEvmRoute({ route: { meta: { priceImpact: -0.0039 }, totalSlippageBps: 120 } })
 
-    expect(quote.priceImpact).toBe(-0.0039)
+    expect(quote.priceImpactFraction).toBe(-0.0039)
   })
 
   it('falls back to the route slippage bps when meta omits price impact', async () => {
     const quote = await stubEvmRoute({ route: { totalSlippageBps: 133 } })
 
-    expect(quote.priceImpact).toBeCloseTo(0.0133, 10)
+    expect(quote.priceImpactFraction).toBeCloseTo(0.0133, 10)
   })
 
   it('reports no price impact when the route exposes neither figure', async () => {
     const quote = await stubEvmRoute()
 
-    expect(quote.priceImpact).toBeUndefined()
+    expect(quote.priceImpactFraction).toBeUndefined()
+  })
+
+  it.each([
+    ['an explicit null', null],
+    ['a stringified number', '0.0133'],
+    ['a non-finite number', Number.NaN],
+  ])('falls through to the slippage bps when meta price impact is %s', async (_label, priceImpact) => {
+    // Nothing validates the proxy's JSON on the way in. `null !== undefined`,
+    // so an unnarrowed read would put null on a `number` field and reach the
+    // consumer as `null.toFixed(...)`; a string would render 100x wrong.
+    const quote = await stubEvmRoute({ route: { meta: { priceImpact }, totalSlippageBps: 133 } })
+
+    expect(quote.priceImpactFraction).toBeCloseTo(0.0133, 10)
+  })
+
+  it('reports no price impact when neither figure is a usable number', async () => {
+    const quote = await stubEvmRoute({ route: { meta: { priceImpact: null }, totalSlippageBps: '133' } })
+
+    expect(quote.priceImpactFraction).toBeUndefined()
   })
 
   it('maps SwapKit transfer memo and deposit amount fallbacks', async () => {

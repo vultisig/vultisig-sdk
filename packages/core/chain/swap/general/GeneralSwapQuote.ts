@@ -88,11 +88,16 @@ export type GeneralSwapQuote = {
   provider: GeneralSwapProvider
   routeProvider?: string
   /**
-   * Signed fractional price impact of the route (`0.0133` == 1.33% of output
-   * lost; a negative value is a favorable trade). Absent for providers that do
-   * not publish it — the EVM aggregators (1inch / Kyber / LI.FI / Jupiter) — so
-   * consumers hide the row rather than substitute a fee figure for it.
+   * Signed price impact of the route as a FRACTION, not a percent: `0.0133`
+   * means 1.33% of output lost, and a negative value is a favorable trade.
+   *
+   * The unit is in the name because the neighbouring guard exposes both — feed
+   * this to `evaluatePriceImpactPercent` and a 45% impact reads as 0.45% and
+   * passes. `evaluateImpactFromFractionString` is the matching entry point.
+   *
+   * Absent for providers that publish no impact (1inch / Kyber / LI.FI /
+   * Jupiter), so consumers hide the row rather than substitute a fee figure.
    */
-  priceImpact?: number
+  priceImpactFraction?: number
   tx: GeneralSwapTx
 }
