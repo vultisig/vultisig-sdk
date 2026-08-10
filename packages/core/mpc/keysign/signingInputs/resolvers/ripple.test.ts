@@ -584,6 +584,63 @@ describe('getRippleSigningInputs -- rawJson build path (dApp-supplied tx)', () =
     expect(input.rawJson).toBe(paymentJson)
   })
 
+  it.each([
+    ['null', null],
+    ['an empty object', {}],
+    ['an issued-currency object missing its value', { currency: 'RLUSD', issuer: RLUSD_ISSUER }],
+    ['a non-numeric drops string', 'not-a-number'],
+    ['zero drops', '0'],
+    ['a zero issued-currency value', { currency: 'RLUSD', issuer: RLUSD_ISSUER, value: '0' }],
+  ])('rejects a tfPartialPayment Payment whose DeliverMin is %s', (_label, DeliverMin) => {
+    // Each of these satisfies "the field is present" while flooring nothing, so
+    // presence alone cannot stand in for a delivery floor.
+    const payload = buildPaymentPayload()
+    payload.signData = {
+      case: 'signRipple',
+      value: {
+        $typeName: 'vultisig.keysign.v1.SignRipple',
+        rawJson: JSON.stringify({
+          TransactionType: 'Payment',
+          Account: ACCOUNT,
+          Destination: payload.toAddress,
+          Amount: payload.toAmount,
+          SendMax: '999999999',
+          DeliverMin,
+          Flags: 131072,
+        }),
+      },
+    }
+
+    expect(() => getRippleSigningInputs({ keysignPayload: payload, walletCore })).toThrow(/DeliverMin/)
+  })
+
+  it('forwards a tfPartialPayment Payment whose DeliverMin is an issued-currency floor', async () => {
+    const payload = buildPaymentPayload()
+    const paymentJson = JSON.stringify({
+      TransactionType: 'Payment',
+      Account: ACCOUNT,
+      Destination: payload.toAddress,
+      Amount: payload.toAmount,
+      SendMax: '999999999',
+      DeliverMin: { currency: 'RLUSD', issuer: RLUSD_ISSUER, value: '1.5' },
+      Flags: 131072,
+    })
+    payload.signData = {
+      case: 'signRipple',
+      value: {
+        $typeName: 'vultisig.keysign.v1.SignRipple',
+        rawJson: paymentJson,
+      },
+    }
+
+    const [input] = await getRippleSigningInputs({
+      keysignPayload: payload,
+      walletCore,
+    })
+
+    expect(input.rawJson).toBe(paymentJson)
+  })
+
   it('forwards a Payment whose flags do not touch delivery', async () => {
     // tfFullyCanonicalSig sits above INT32_MAX, so the uint32 bound must not
     // clip it into a rejection.

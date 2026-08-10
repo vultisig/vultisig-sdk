@@ -21,6 +21,29 @@ import { SigningInputsResolver } from '../resolver'
 // transaction's metadata as the only record of what actually moved.
 const tfPartialPayment = 0x00020000
 
+// Whether a value is a well-formed, strictly positive XRPL amount — a drops
+// string or an issued-currency object. A DeliverMin only floors a delivery if
+// it is one: `null`, `{}` and zero all satisfy "the field is present" while
+// bounding nothing, so presence alone cannot stand in for a floor.
+const isPositiveXrplAmount = (value: unknown): boolean => {
+  if (typeof value === 'string') {
+    const drops = attempt(() => BigInt(value))
+    return 'error' in drops ? false : drops.data > 0n
+  }
+
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+
+  const { currency, issuer, value: issuedValue } = value as Record<string, unknown>
+  if (typeof currency !== 'string' || typeof issuer !== 'string' || typeof issuedValue !== 'string') {
+    return false
+  }
+
+  const parsed = attempt(() => parseIssuedCurrencyValue(issuedValue))
+  return 'error' in parsed ? false : parsed.data > 0n
+}
+
 export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysignPayload }) => {
   const rippleSpecific = getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'rippleSpecific')
   const { gas, sequence, lastLedgerSequence } = rippleSpecific
@@ -120,17 +143,18 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
       // hands over whatever the path can source and records the real figure
       // only in the executed transaction's metadata, so the reviewed toAmount
       // stops describing what the recipient gets while the sender can still be
-      // charged the full SendMax. A DeliverMin restores a floor; without one
-      // there is nothing left to bind, so refuse rather than sign an outcome
-      // no reviewer could have seen. Flags we cannot read as a uint32 are
-      // refused for the same reason — they may carry the very bit checked here.
+      // charged the full SendMax. A well-formed, positive DeliverMin restores a
+      // floor; without one there is nothing left to bind, so refuse rather than
+      // sign an outcome no reviewer could have seen. Flags we cannot read as a
+      // uint32 are refused for the same reason — they may carry the very bit
+      // checked here.
       const flags = tx.Flags === undefined ? 0 : tx.Flags
       if (typeof flags !== 'number' || !Number.isInteger(flags) || flags < 0 || flags > 0xffffffff) {
         throw new Error('signRipple rawJson Flags is not a uint32 bitmask')
       }
 
-      if ((flags & tfPartialPayment) !== 0 && tx.DeliverMin === undefined) {
-        throw new Error('signRipple rawJson sets tfPartialPayment without a DeliverMin floor')
+      if ((flags & tfPartialPayment) !== 0 && !isPositiveXrplAmount(tx.DeliverMin)) {
+        throw new Error('signRipple rawJson sets tfPartialPayment without a usable DeliverMin floor')
       }
     }
 

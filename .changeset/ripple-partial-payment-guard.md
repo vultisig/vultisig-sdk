@@ -19,9 +19,13 @@ can be charged the full `SendMax`. A cross-currency self-swap — the shape wher
 `Destination` is the sender's own address — turns an attractive receive figure
 into dust for the price of the whole `SendMax`.
 
-`DeliverMin` restores a floor, so a partial payment carrying one is forwarded
-unchanged. One without it is refused: there is nothing left binding the
-outcome, and no reviewer could have seen what they were approving. `Flags` that
-cannot be read as a uint32 — the `{ tfPartialPayment: true }` object form some
-client libraries accept — are refused for the same reason, since they may carry
-the very bit being checked.
+A `DeliverMin` restores a floor, so a partial payment carrying one is forwarded
+unchanged. One without is refused: there is nothing left binding the outcome,
+and no reviewer could have seen what they were approving.
+
+The floor has to be real, so `DeliverMin` is validated as a well-formed,
+strictly positive XRPL amount — a drops string or an issued-currency object —
+rather than merely present. `null`, `{}` and zero all satisfy "the field is
+there" while bounding nothing. `Flags` that cannot be read as a uint32 — the
+`{ tfPartialPayment: true }` object form some client libraries accept — are
+refused for the same reason, since they may carry the very bit being checked.
