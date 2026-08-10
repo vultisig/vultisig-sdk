@@ -1,0 +1,18 @@
+{
+  "_description": "Shared WalletCore/WASM and RN-JS golden vector for a TON Jetton transfer to an uninitialized destination. WalletCore encodes a zero forward amount for this destination state.",
+  "publicKeyEd25519Hex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "senderAddress": "UQCf6aQfV3vc8KLtPI_lROY64hUeR1oyNfdbwXB-gwDaKZmi",
+  "recipientAddress": "0:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "jettonWalletAddress": "0:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "jettonMasterAddress": "0:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "amountMinimalUnits": "5000000",
+  "gasAmountNanotons": "80000000",
+  "forwardAmountNanotons": "0",
+  "bounceable": true,
+  "isActiveDestination": false,
+  "sequenceNumber": 7,
+  "expireAt": 1800000000,
+  "workchain": 0,
+  "subWalletId": 698983191,
+  "expectedSigningHashHex": "223e7611efa44faeeb6a1a79c90ea8b2701a7948dcc4dcbd87d8080ae323d4c7"
+}
