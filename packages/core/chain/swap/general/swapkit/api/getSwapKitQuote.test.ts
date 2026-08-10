@@ -270,6 +270,104 @@ describe('getSwapKitQuote', () => {
     expect(quote.priceImpactFraction).toBeUndefined()
   })
 
+  // PoC: can a malicious/compromised SwapKit response redirect the signed
+  // destination away from what the user reviewed? Both independent trust
+  // boundaries — response-local targetAddress equality, and an out-of-band
+  // Blockaid reputation verdict — are exercised end to end through
+  // getSwapKitQuote itself, not just against the underlying assert helpers.
+  describe('quote-time destination enforcement (sdk#1458 PoC)', () => {
+    const ATTACKER_ADDRESS = '0xbadbadbadbadbadbadbadbadbadbadbadbadbadb'
+    const REAL_ROUTER = '0x1111111254eeb25477b68fb85ed929f73a960582'
+
+    const stubSwapkitRoute = ({ tx, targetAddress }: { tx: Record<string, unknown>; targetAddress?: string }) => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(
+          response({ routes: [{ routeId: 'evm-route', providers: ['ONEINCH'], expectedBuyAmount: '12.4' }] })
+        )
+        .mockResolvedValueOnce(
+          response({
+            expectedBuyAmount: '12.4',
+            providers: ['ONEINCH'],
+            ...(targetAddress ? { targetAddress } : {}),
+            tx,
+          })
+        )
+
+      vi.stubGlobal('fetch', fetchMock)
+
+      return getSwapKitQuote({
+        from: { chain: Chain.Ethereum, address: '0xsender', ticker: 'ETH', decimals: 18 },
+        to: { chain: Chain.Ethereum, address: '0xsender', ticker: 'USDC', id: '0xusdc', decimals: 6 },
+        amount: 10_000_000_000_000_000n,
+      })
+    }
+
+    it('rejects a tx.to that diverges from the screened targetAddress — a compromised response cannot redirect funds by disagreeing with itself', async () => {
+      // The attacker controls tx.to but targetAddress still names the real router:
+      // the two independent fields the response carries disagree, so neither one
+      // alone is trustworthy.
+      await expect(
+        stubSwapkitRoute({
+          tx: { from: '0xsender', to: ATTACKER_ADDRESS, data: '0xabcdef', value: '0', gas: '21000' },
+          targetAddress: REAL_ROUTER,
+        })
+      ).rejects.toThrow(/does not match the screened targetAddress/)
+    })
+
+    it('rejects a tx.to/targetAddress pair that agree with EACH OTHER but not with Blockaid — response-local equality alone is not destination safety', async () => {
+      // The classic "smuggle via a self-consistent response" attempt: attacker
+      // sets both tx.to AND targetAddress to the SAME attacker-controlled
+      // address, so the response-local equality check alone would pass. The
+      // independent Blockaid reputation verdict is the second boundary that
+      // actually has to catch this.
+      mockScanAddressWithBlockaid.mockReset()
+      mockScanAddressWithBlockaid.mockResolvedValueOnce({ resultType: 'Malicious', features: ['drainer'] })
+
+      await expect(
+        stubSwapkitRoute({
+          tx: { from: '0xsender', to: ATTACKER_ADDRESS, data: '0xabcdef', value: '0', gas: '21000' },
+          targetAddress: ATTACKER_ADDRESS,
+        })
+      ).rejects.toThrow(/Malicious Blockaid verdict/)
+
+      expect(mockScanAddressWithBlockaid).toHaveBeenCalledWith(ATTACKER_ADDRESS, 'ethereum')
+    })
+
+    it('rejects a Warning Blockaid verdict on tx.to, not just Malicious', async () => {
+      mockScanAddressWithBlockaid.mockReset()
+      mockScanAddressWithBlockaid.mockResolvedValueOnce({ resultType: 'Warning', features: ['new_address'] })
+
+      await expect(
+        stubSwapkitRoute({
+          tx: { from: '0xsender', to: REAL_ROUTER, data: '0xabcdef', value: '0', gas: '21000' },
+          targetAddress: REAL_ROUTER,
+        })
+      ).rejects.toThrow(/Warning Blockaid verdict/)
+    })
+
+    it('fails closed at quote time when the Blockaid call itself fails — a scan we could not obtain is not evidence of safety', async () => {
+      mockScanAddressWithBlockaid.mockReset()
+      mockScanAddressWithBlockaid.mockRejectedValueOnce(new Error('blockaid unreachable'))
+
+      await expect(
+        stubSwapkitRoute({
+          tx: { from: '0xsender', to: REAL_ROUTER, data: '0xabcdef', value: '0', gas: '21000' },
+          targetAddress: REAL_ROUTER,
+        })
+      ).rejects.toThrow(/reputation check failed/)
+    })
+
+    it('accepts a route only once both boundaries agree it is safe (control: proves the PoC harness itself is not just always-throwing)', async () => {
+      const quote = await stubSwapkitRoute({
+        tx: { from: '0xsender', to: REAL_ROUTER, data: '0xabcdef', value: '0', gas: '21000' },
+        targetAddress: REAL_ROUTER,
+      })
+
+      expect('evm' in quote.tx && quote.tx.evm.to).toBe(REAL_ROUTER)
+    })
+  })
+
   it('maps SwapKit transfer memo and deposit amount fallbacks', async () => {
     vi.stubGlobal(
       'fetch',

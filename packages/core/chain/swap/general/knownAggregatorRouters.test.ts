@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { Chain } from '../../Chain'
+import { Chain, EvmChain } from '../../Chain'
+import { blockaidEvmChain } from '../../security/blockaid/evmChains'
+import { swapKitSourceChains } from './swapkit/SwapKitEnabledChains'
 import { COW_VAULT_RELAYER_ADDRESS, cowSwapSupportedChains } from './cowswap/config'
 import {
   assertKnownAggregatorRouter,
@@ -292,5 +294,22 @@ describe('logUnenforcedAggregatorDestination — dynamic/legacy signing payloads
       address: '0xabc',
     })
     spy.mockRestore()
+  })
+})
+
+describe('SwapKit EVM source chains are fully covered by Blockaid — sdk#1458 review follow-up', () => {
+  it('every EVM chain SwapKit can source from also has a blockaidEvmChain mapping', () => {
+    // assertSwapKitAddressReputation throws "cannot be verified on unsupported Blockaid chain"
+    // for any EVM chain missing from blockaidEvmChain. Today that's fine — neither CronosChain
+    // nor Robinhood is a swapKitSourceChains entry — but adding either to swapKitSourceChains
+    // in the future would look like a harmless one-line change and would silently make every
+    // SwapKit swap FROM that chain a 100%, outage-independent refusal (not a Blockaid outage,
+    // not a flaky network call — a guaranteed throw on every single attempt). This test turns
+    // that into a loud, immediate failure here instead of a field report.
+    const evmSwapKitSourceChains = swapKitSourceChains.filter(chain => chain in EvmChain) as EvmChain[]
+
+    const uncoveredChains = evmSwapKitSourceChains.filter(chain => !(chain in blockaidEvmChain))
+
+    expect(uncoveredChains).toEqual([])
   })
 })

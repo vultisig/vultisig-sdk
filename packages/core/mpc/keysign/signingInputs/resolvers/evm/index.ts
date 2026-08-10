@@ -82,7 +82,11 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
   // independently rebuilds the input from that payload. Fail closed for enforced providers
   // (1inch/kyber/cowswap/li.fi), require an independent reputation verdict for SwapKit, and retain
   // log-only compatibility only for legacy unattributed payloads. A pure gate: it throws or no-ops,
-  // never changes the signed bytes, so it cannot desync the cross-device pre-signing hash.
+  // never changes the signed bytes, so it cannot desync the cross-device pre-signing hash. sdk#1458:
+  // that guarantee covers only the bytes. SwapKit's branch below makes a live Blockaid call, so two
+  // co-signers given the identical payload can now reach different verdicts (one gets Benign, another
+  // times out) - the failure mode this introduces is a stuck ceremony, not a hash desync or fund loss,
+  // but it is a new failure mode this paragraph used to read as having ruled out.
   //
   // SCOPE - this guard covers the swap-leg destination ONLY, NOT the ERC-20 approval spender.
   // On the INITIATOR, build.ts derives the approve spender from this same quote.tx.to
@@ -91,7 +95,7 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
   // erc20ApprovePayload.spender (erc20.ts), which nothing binds to quote.tx.to - so a payload can
   // pass this router check yet still carry an approve to an arbitrary spender. That gap is now
   // closed for enforced providers by assertEnforcedSwapApprovalSpenderBound in the branch above
-  // (sdk#1358 review follow-up; sdk#1457 extended it to cowswap, whose spender IS its tx.to). It
+  // (sdk#1358 review follow-up; sdk#1457 extended it to cowswap, whose spender IS its tx.to).
   // LI.FI's distinct inner executor remains outside the equality constraint; SwapKit's distinct
   // spender is independently reputation-checked above. The legacy `''` provider remains unenforced.
   if (swapPayload && 'general' in swapPayload) {

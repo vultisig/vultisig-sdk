@@ -144,6 +144,19 @@ describe('getEvmSigningInputs — sdk#1457 provider-string spoofing guard, end t
       getEvmSigningInputs({ keysignPayload: buildPayload(ATTACKER_ROUTER, 'swapkit'), walletCore })
     ).rejects.toThrow(/Malicious Blockaid verdict/)
   })
+
+  // This is the most consequential instance of "fail closed on Blockaid" in the repo: unlike
+  // the quote path (which fails in front of the user with a retry available), this runs per
+  // device, mid-ceremony, on a payload every co-signer has already agreed to sign. A scan we
+  // could not obtain must be treated the same as an untrusted destination, not silently
+  // skipped — an unavailable reputation service is not evidence the address is safe.
+  it('fails closed on the co-signer signing path when the Blockaid call itself throws (not just a non-Benign verdict)', async () => {
+    mockScanAddressWithBlockaid.mockRejectedValueOnce(new Error('blockaid unreachable'))
+
+    await expect(
+      getEvmSigningInputs({ keysignPayload: buildPayload(ONE_INCH_V6_ROUTER, 'swapkit'), walletCore })
+    ).rejects.toThrow(/reputation check failed/)
+  })
 })
 
 // sdk#1358 review follow-up (neavra): the router guard covers quote.tx.to, but the ERC-20 approval
