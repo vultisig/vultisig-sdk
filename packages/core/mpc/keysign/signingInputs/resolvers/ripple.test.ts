@@ -584,33 +584,27 @@ describe('getRippleSigningInputs -- rawJson build path (dApp-supplied tx)', () =
     expect(input.rawJson).toBe(paymentJson)
   })
 
-  it('forwards a tfPartialPayment Payment whose DeliverMin exceeds the reviewed Amount', async () => {
-    // A DeliverMin above Amount is a stricter guarantee than what was
-    // reviewed, not a weaker one — nothing to refuse here.
+  it('rejects a tfPartialPayment Payment whose DeliverMin exceeds the reviewed Amount', () => {
+    // On XRPL partial payments, Amount is the delivery ceiling. A larger
+    // DeliverMin is unsatisfiable, not a stricter valid guarantee.
     const payload = buildPaymentPayload()
-    const paymentJson = JSON.stringify({
-      TransactionType: 'Payment',
-      Account: ACCOUNT,
-      Destination: payload.toAddress,
-      Amount: payload.toAmount,
-      SendMax: '999999999',
-      DeliverMin: '1000001',
-      Flags: 131072,
-    })
     payload.signData = {
       case: 'signRipple',
       value: {
         $typeName: 'vultisig.keysign.v1.SignRipple',
-        rawJson: paymentJson,
+        rawJson: JSON.stringify({
+          TransactionType: 'Payment',
+          Account: ACCOUNT,
+          Destination: payload.toAddress,
+          Amount: payload.toAmount,
+          SendMax: '999999999',
+          DeliverMin: '1000001',
+          Flags: 131072,
+        }),
       },
     }
 
-    const [input] = await getRippleSigningInputs({
-      keysignPayload: payload,
-      walletCore,
-    })
-
-    expect(input.rawJson).toBe(paymentJson)
+    expect(() => getRippleSigningInputs({ keysignPayload: payload, walletCore })).toThrow(/tfPartialPayment/)
   })
 
   it('rejects a tfPartialPayment Payment whose DeliverMin floors less than the reviewed Amount', () => {

@@ -60,17 +60,17 @@ const parseXrplAmount = (value: unknown): ParsedXrplAmount | undefined => {
 }
 
 // True only if `deliverMin` is the same asset as `amount` (native XRP, or the
-// same issued-currency code + issuer) and guarantees at least as much value.
-// A DeliverMin in a different currency, or a currency-matched one that floors
-// less than the reviewed Amount, leaves the recipient able to receive less
-// than what the reviewer approved — which a positive-but-unrelated floor does
-// not prevent.
-const deliversAtLeastReviewedAmount = (deliverMin: ParsedXrplAmount, amount: ParsedXrplAmount): boolean => {
+// same issued-currency code + issuer) and exactly matches its value. On XRPL a
+// partial payment's `Amount` is the delivery maximum, so `DeliverMin > Amount`
+// is unsatisfiable rather than a stricter guarantee. A different currency, or a
+// lower/higher floor in the same currency, means the reviewed `toAmount` no
+// longer describes a valid guaranteed outcome.
+const deliverMinExactlyMatchesReviewedAmount = (deliverMin: ParsedXrplAmount, amount: ParsedXrplAmount): boolean => {
   if (deliverMin.kind === 'native' || amount.kind === 'native') {
-    return deliverMin.kind === 'native' && amount.kind === 'native' && deliverMin.units >= amount.units
+    return deliverMin.kind === 'native' && amount.kind === 'native' && deliverMin.units === amount.units
   }
   return (
-    deliverMin.currency === amount.currency && deliverMin.issuer === amount.issuer && deliverMin.units >= amount.units
+    deliverMin.currency === amount.currency && deliverMin.issuer === amount.issuer && deliverMin.units === amount.units
   )
 }
 
@@ -190,7 +190,7 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
       if ((flags & tfPartialPayment) !== 0) {
         const parsedAmount = parseXrplAmount(amount)
         const parsedDeliverMin = parseXrplAmount(tx.DeliverMin)
-        if (!parsedAmount || !parsedDeliverMin || !deliversAtLeastReviewedAmount(parsedDeliverMin, parsedAmount)) {
+        if (!parsedAmount || !parsedDeliverMin || !deliverMinExactlyMatchesReviewedAmount(parsedDeliverMin, parsedAmount)) {
           throw new Error(
             'signRipple rawJson sets tfPartialPayment without a DeliverMin that guarantees the reviewed amount'
           )
