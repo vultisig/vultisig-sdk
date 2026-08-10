@@ -31,6 +31,13 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.UnknownChainError).toBe('function')
   })
 
+  it('exports canonical EIP-712 helpers for first-party consumers', () => {
+    expect(typeof sdk.coerceEip712ChainId).toBe('function')
+    expect(typeof sdk.computeEip712Hash).toBe('function')
+    expect(typeof sdk.toCanonicalEvmSignature).toBe('function')
+    expect(sdk.coerceEip712ChainId('0x89')).toBe(137)
+  })
+
   it('exports the hardened toChainAmount helper and error class with scientific-notation support', () => {
     expect(sdk.toChainAmount('1.2345e-3', 8)).toBe(123450n)
 
@@ -198,11 +205,15 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.thorchainSecuredAssetFallback.length).toBeGreaterThan(10)
   })
 
-  it('exports canonical EVM chain-id helpers from the root sdk surface', () => {
+  it('exports canonical EVM chain-id helpers and the priority-fee sanity clamp from the root sdk surface', () => {
     expect(typeof sdk.getEvmChainId).toBe('function')
     expect(typeof sdk.getEvmChainByChainId).toBe('function')
+    expect(typeof sdk.clampEvmPriorityFee).toBe('function')
     expect(sdk.getEvmChainId(sdk.Chain.Mantle)).toBe('0x1388')
     expect(sdk.getEvmChainByChainId('0x3e7')).toBe(sdk.Chain.Hyperliquid)
+    expect(
+      sdk.clampEvmPriorityFee(sdk.Chain.Base as Parameters<typeof sdk.clampEvmPriorityFee>[0], 75n * 1_000_000_000n)
+    ).toBe(50n * 1_000_000_000n)
   })
 
   it('exports gas comparison helpers from the root sdk surface', () => {

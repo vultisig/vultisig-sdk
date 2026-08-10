@@ -266,13 +266,17 @@ describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
     expect(() => rn.toChainAmount('   ', 8)).toThrow(rn.ChainAmountParseError)
   })
 
-  it('exports the EVM chainId helpers from the RN entry', async () => {
+  it('exports the EVM chainId helpers and priority-fee sanity clamp from the RN entry', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
     expect(typeof rn.getEvmChainId).toBe('function')
     expect(typeof rn.getEvmChainByChainId).toBe('function')
+    expect(typeof rn.clampEvmPriorityFee).toBe('function')
     expect(rn.getEvmChainId(rn.Chain.Ethereum)).toBe('0x1')
     expect(rn.getEvmChainByChainId('0x1')).toBe(rn.Chain.Ethereum)
+    expect(
+      rn.clampEvmPriorityFee(rn.Chain.Base as Parameters<typeof rn.clampEvmPriorityFee>[0], 75n * 1_000_000_000n)
+    ).toBe(50n * 1_000_000_000n)
   })
 
   it('exports the canonical gas comparison helpers from the RN entry', async () => {
@@ -307,5 +311,16 @@ describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
     expect(typeof rn.isKnownContract).toBe('function')
     expect(rn.isKnownContract('0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')).toBe(true)
     expect(typeof rn.knownContracts.isKnownContract).toBe('function')
+  })
+})
+
+describe('RN entry exposes canonical EIP-712 helpers', () => {
+  it('re-exports the same typed-data hash and signature canonicals as the node surface', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const eip712 = await import('../../../../src/utils/eip712')
+
+    expect(rn.coerceEip712ChainId).toBe(eip712.coerceEip712ChainId)
+    expect(rn.computeEip712Hash).toBe(eip712.computeEip712Hash)
+    expect(rn.toCanonicalEvmSignature).toBe(eip712.toCanonicalEvmSignature)
   })
 })
