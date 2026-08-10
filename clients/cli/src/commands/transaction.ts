@@ -98,13 +98,17 @@ async function previewDryRun(
   // check at all — `total` already includes the fee, and running one would
   // just report the same shortfall twice.
   const isTokenSend = balance.tokenId !== undefined
-  const feeBalance = isTokenSend ? await vault.balance(params.chain).catch(() => undefined) : undefined
+  // Max token sends are already gated by the SDK's native-balance check while
+  // calculating the max amount. Keep this preview check for explicit token
+  // amounts, but do not repeat the same balance read for max sends.
+  const shouldCheckNativeFeeBalance = isTokenSend && params.amount !== 'max'
+  const feeBalance = shouldCheckNativeFeeBalance ? await vault.balance(params.chain).catch(() => undefined) : undefined
 
   const warnings: string[] = []
   if (hasInsufficientBalance) {
     warnings.push(`Insufficient balance: you have ${balance.formattedAmount} ${balance.symbol}`)
   }
-  if (isTokenSend && feeBalance === undefined) {
+  if (shouldCheckNativeFeeBalance && feeBalance === undefined) {
     // The gas check needs a second balance read, and it failed. Say so rather
     // than letting its absence read as "gas is fine".
     warnings.push(`Could not check your ${dryResult.feeSymbol} balance for the network fee`)

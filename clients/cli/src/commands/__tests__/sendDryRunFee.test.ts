@@ -374,6 +374,20 @@ describe('send --dry-run preview — token sends', () => {
     expect((await sendJson(vault, tokenParams)).warning).toBeUndefined()
   })
 
+  it('does not perform the CLI native gas balance read for a max token send', async () => {
+    const vault = makeTokenVault({ fee: '0.0001', total: '50.0', tokenBalance: '50.0', nativeBalance: '0.5' })
+
+    expect(
+      (
+        await sendJson(vault, {
+          ...(tokenParams as object),
+          amount: 'max',
+        } as never)
+      ).warning
+    ).toBeUndefined()
+    expect((vault as unknown as { balance: ReturnType<typeof vi.fn> }).balance).toHaveBeenCalledTimes(1)
+  })
+
   it('reports both shortfalls when neither the token nor the gas balance is enough', async () => {
     const data = await sendJson(
       makeTokenVault({ fee: '0.0001', total: '100.0', tokenBalance: '5.0', nativeBalance: '0.00001' }),
