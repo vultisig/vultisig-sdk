@@ -1,0 +1,18 @@
+{
+  "_description": "Shared WalletCore/WASM (packages/core) and RN-JS/@ton/core (packages/sdk) golden vector for the dispatched TON WalletV4R2 Jetton transfer path. Both suites independently build the same TEP-74 body and pin the WalletCore-compatible signing hash.",
+  "publicKeyEd25519Hex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "senderAddress": "UQCf6aQfV3vc8KLtPI_lROY64hUeR1oyNfdbwXB-gwDaKZmi",
+  "recipientAddress": "0:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "jettonWalletAddress": "0:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "jettonMasterAddress": "0:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "amountMinimalUnits": "5000000",
+  "gasAmountNanotons": "80000000",
+  "forwardAmountNanotons": "1",
+  "bounceable": true,
+  "isActiveDestination": true,
+  "sequenceNumber": 7,
+  "expireAt": 1800000000,
+  "workchain": 0,
+  "subWalletId": 698983191,
+  "expectedSigningHashHex": "076457b371194c643a9884634240e96fe2dab04bd1a970bbb3b8364e68bf818e"
+}
