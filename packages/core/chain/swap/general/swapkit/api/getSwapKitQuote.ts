@@ -1030,8 +1030,9 @@ export const getSwapKitQuote = async ({
   const routeProvider = getRouteProviderName(swapResponse) ?? getRouteProviderName(route)
 
   // Read from the quote-stage route, unlike `dstAmount` and `routeProvider`
-  // which prefer the swap-stage response: `/v3/swap` does not restate impact,
-  // and both native clients read it off the chosen route the same way.
+  // which prefer the swap-stage response. No `/v3/swap` shape we model carries
+  // impact, and both native clients read it off the chosen route the same way;
+  // if it is ever restated there, it should be preferred here too.
   const priceImpactFraction = routePriceImpact(route)
 
   return {
