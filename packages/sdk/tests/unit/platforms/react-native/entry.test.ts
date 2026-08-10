@@ -31,6 +31,23 @@ vi.mock('@vultisig/walletcore-native', () => ({
 }))
 
 describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
+  it.each([
+    'EVM_DANGEROUS_ADDRESSES',
+    'SOLANA_DANGEROUS_ADDRESSES',
+    'UTXO_DANGEROUS_ADDRESSES',
+    'XRP_DANGEROUS_ADDRESSES',
+    'getEvmDangerousReason',
+    'isEvmBurnAddress',
+    'getChainDangerousReason',
+    'assertSafeEvmDestination',
+    'assertSafeDestination',
+  ] as const)('re-exports dangerous-address canonical %s by identity', async name => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const dangerousAddresses = await import('../../../../src/utils/dangerousAddresses')
+
+    expect(rn[name]).toBe(dangerousAddresses[name])
+  })
+
   it('registers crypto + storage on module load so Vultisig({}) does not throw', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
     const { randomUUID } = await import('../../../../src/crypto')
