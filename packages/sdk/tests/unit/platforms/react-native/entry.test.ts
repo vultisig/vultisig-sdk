@@ -318,3 +318,14 @@ describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
     expect(typeof rn.knownContracts.isKnownContract).toBe('function')
   })
 })
+
+describe('RN entry exposes canonical EIP-712 helpers', () => {
+  it('re-exports the same typed-data hash and signature canonicals as the node surface', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const eip712 = await import('../../../../src/utils/eip712')
+
+    expect(rn.coerceEip712ChainId).toBe(eip712.coerceEip712ChainId)
+    expect(rn.computeEip712Hash).toBe(eip712.computeEip712Hash)
+    expect(rn.toCanonicalEvmSignature).toBe(eip712.toCanonicalEvmSignature)
+  })
+})
