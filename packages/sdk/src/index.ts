@@ -459,6 +459,22 @@ export { parseKeygenQR } from './utils/parseKeygenQR'
 // Notification server vault_id (cross-platform, matches iOS)
 export { computeNotificationVaultId } from './utils/computeNotificationVaultId'
 
+// Vault-backup import/export crypto contract. The node-safe implementations
+// already live in @vultisig/lib-utils and are used internally by the SDK, but
+// consumers could not reach them from the public @vultisig/sdk surface and
+// were pushed into app-local copies of the same .vult backup wire format.
+export { decryptVaultBackupWithPassword } from '@vultisig/lib-utils/encryption/vaultBackup/decryptVaultBackupWithPassword'
+export type { EncryptVaultBackupWithPasswordOptions } from '@vultisig/lib-utils/encryption/vaultBackup/encryptVaultBackupWithPassword'
+export { encryptVaultBackupWithPassword } from '@vultisig/lib-utils/encryption/vaultBackup/encryptVaultBackupWithPassword'
+export {
+  DEFAULT_VAULT_BACKUP_PBKDF2_ITERATIONS,
+  VAULT_BACKUP_BLOB_MAGIC,
+  VAULT_BACKUP_IV_LEN,
+  VAULT_BACKUP_MAGIC_LEN,
+  VAULT_BACKUP_PBKDF2_HEADER_LEN,
+  VAULT_BACKUP_SALT_LEN,
+} from '@vultisig/lib-utils/encryption/vaultBackup/vaultBackupConstants'
+
 // ============================================================================
 // PUBLIC API - Discount Tier Configuration
 // ============================================================================
