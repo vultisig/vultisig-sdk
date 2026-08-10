@@ -1,8 +1,8 @@
 /**
  * Swap Commands - thin wrapper around vault.swap()
  */
-import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import type { Chain, SwapQuoteResult } from '@vultisig/sdk'
+import { toChainAmount } from '@vultisig/sdk'
 import { formatUnits } from 'viem'
 
 import type { CommandContext } from '../core'
