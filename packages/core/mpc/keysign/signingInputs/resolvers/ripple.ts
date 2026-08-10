@@ -52,7 +52,11 @@ const parseXrplAmount = (value: unknown): ParsedXrplAmount | undefined => {
   if ('error' in parsed || parsed.data <= 0n) {
     return undefined
   }
-  return { kind: 'issued', currency: toXrplCurrencyCode(currency), issuer, units: parsed.data }
+  const normalizedCurrency = attempt(() => toXrplCurrencyCode(currency))
+  if ('error' in normalizedCurrency) {
+    return undefined
+  }
+  return { kind: 'issued', currency: normalizedCurrency.data, issuer, units: parsed.data }
 }
 
 // True only if `deliverMin` is the same asset as `amount` (native XRP, or the

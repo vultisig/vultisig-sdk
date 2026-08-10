@@ -646,6 +646,7 @@ describe('getRippleSigningInputs -- rawJson build path (dApp-supplied tx)', () =
     ['zero drops', '0'],
     ['a zero issued-currency value', { currency: 'RLUSD', issuer: RLUSD_ISSUER, value: '0' }],
     ['just below the reviewed Amount', '999999'],
+    ['an unencodable overlong currency code', { currency: 'a'.repeat(30), issuer: RLUSD_ISSUER, value: '999999999' }],
     // Amount here is native XRP; a well-formed positive IOU cannot restore a
     // floor on a different asset than what was actually reviewed.
     ['an issued-currency amount when Amount is native XRP', { currency: 'RLUSD', issuer: RLUSD_ISSUER, value: '999999999' }],
