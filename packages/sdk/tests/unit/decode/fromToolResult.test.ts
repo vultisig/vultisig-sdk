@@ -2,6 +2,7 @@ import { MsgSend } from 'cosmjs-types/cosmos/bank/v1beta1/tx'
 import { MsgDelegate, MsgUndelegate } from 'cosmjs-types/cosmos/staking/v1beta1/tx'
 import { TxBody, TxRaw } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import { Any } from 'cosmjs-types/google/protobuf/any'
+import { MsgTransfer } from 'cosmjs-types/ibc/applications/transfer/v1/tx'
 import { type Address, encodeFunctionData, getAddress, type Hex, parseAbi, serializeTransaction } from 'viem'
 import { describe, expect, it } from 'vitest'
 
@@ -253,6 +254,32 @@ describe('decodeFromToolResult — Cosmos half (cosmjs-types proto3)', () => {
     })
     expect(env.recipient).toBe(TO)
     expect(env.amount).toBe('9')
+  })
+
+  it('decodes an IBC MsgTransfer: recipient + amount + denom from proto3 bytes', () => {
+    const any = Any.fromPartial({
+      typeUrl: '/ibc.applications.transfer.v1.MsgTransfer',
+      value: MsgTransfer.encode(
+        MsgTransfer.fromPartial({
+          sourcePort: 'transfer',
+          sourceChannel: 'channel-0',
+          sender: FROM,
+          receiver: TO,
+          token: { denom: 'ibc/ABC123', amount: '1234567' },
+          timeoutHeight: { revisionNumber: 0n, revisionHeight: 0n },
+          timeoutTimestamp: 0n,
+        })
+      ).finish(),
+    })
+    const env = decodeFromToolResult({ family: 'cosmos', chain: 'osmosis-1', payload: buildCosmosTx([any]) })
+
+    expect(env.decoded).toBe(true)
+    expect(env.kind).toBe('transfer')
+    expect(env.recipient).toBe(TO)
+    expect(env.amount).toBe('1234567')
+    expect(env.asset.contract).toBe('ibc/ABC123')
+    expect(env.asset.symbol).toBe('')
+    expect(env.chain).toBe('osmosis-1')
   })
 
   it('fails closed on a multi-message tx (would let drift ride through)', () => {
