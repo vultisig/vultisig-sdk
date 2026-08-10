@@ -1,0 +1,14 @@
+{
+  "_description": "Shared WalletCore/WASM (packages/core) and RN-JS/ripple-binary-codec (packages/sdk) golden vector for an XRP Payment. Both suites read this file and independently derive the same signing hash. Flags is explicitly zero because WalletCore serializes that optional field; omitting it is network-equivalent but changes the preimage and breaks mixed-platform MPC.",
+  "senderPrivateKeyHex": "0101010101010101010101010101010101010101010101010101010101010101",
+  "recipientPrivateKeyHex": "0202020202020202020202020202020202020202020202020202020202020202",
+  "senderAddress": "rUaRcsApnVHudsdLD2mut2qCKWq6iLRT2D",
+  "recipientAddress": "r4VYvnjmi9JREsu1PZJQmJEJ6bQ6iPNSTP",
+  "senderPublicKeyHex": "031b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f",
+  "amountDrops": "1000000",
+  "feeDrops": "12",
+  "sequence": 5,
+  "lastLedgerSequence": 32000000,
+  "flags": 0,
+  "expectedSigningHashHex": "d66908156861d2629068359705f1e40254cf80a51800db82cb2d68b0ebafea57"
+}

@@ -1,5 +1,73 @@
 # @vultisig/cli
 
+## 4.4.0
+
+### Patch Changes
+
+- Updated dependencies [[`2e1b8bb`](https://github.com/vultisig/vultisig-sdk/commit/2e1b8bb597d2d0fa052a121ab2757efa228314f5), [`aaa3aa9`](https://github.com/vultisig/vultisig-sdk/commit/aaa3aa93b62b6933f09ba8a33d09806d051215b9), [`1e05f2c`](https://github.com/vultisig/vultisig-sdk/commit/1e05f2c4a97772f48a2b3946a701e63e309410db), [`67dd842`](https://github.com/vultisig/vultisig-sdk/commit/67dd8425a10f0c7b7833c02147fc0036e6ee7a64), [`3ea8b2c`](https://github.com/vultisig/vultisig-sdk/commit/3ea8b2c5133a16878991ec33d569fd8498837316)]:
+  - @vultisig/core-chain@2.35.0
+  - @vultisig/sdk@4.4.0
+  - @vultisig/rujira@63.0.0
+
+## 4.3.0
+
+### Patch Changes
+
+- Updated dependencies [[`c0ff9b5`](https://github.com/vultisig/vultisig-sdk/commit/c0ff9b5f8fe477df10850b25cc0def27ee31b6b4)]:
+  - @vultisig/core-chain@2.34.0
+  - @vultisig/sdk@4.3.0
+  - @vultisig/rujira@62.0.0
+
+## 4.2.0
+
+### Patch Changes
+
+- [#1605](https://github.com/vultisig/vultisig-sdk/pull/1605) [`1a23da3`](https://github.com/vultisig/vultisig-sdk/commit/1a23da39c7b50649b213efab13e02590d35db1a1) Thanks [@neavra](https://github.com/neavra)! - fix(agent): `agent ask` without `--yes` now reports the proposed transaction instead of a failure
+
+  `agent ask --help` documents the no-`--yes` path as read-safe: "it reports the
+  proposed transaction so a read-only prompt can't move funds." It did not. The
+  transaction built fine, the confirm gate correctly denied signing, and the
+  refusal was then fed back into the model loop — which retried, failed, and ended
+  the turn with `transactions: []`, `cards: []`, no proposed transaction, and a
+  stated cause that was wrong: that the build had errored, that there was no send
+  tool, or that a broadcast could not be confirmed. Nothing had ever been
+  authorized to broadcast.
+
+  Refusing to sign without `--yes` was always right. Discarding the built
+  transaction and reporting the refusal as a failed build was the defect.
+
+  In ask mode a declined signing now ENDS the turn — the gate there is a fixed
+  policy, not something a retry can satisfy — and the built, unsigned transaction
+  is surfaced as the turn's result: `proposed_transaction` (tool, summary, chain)
+  plus `confirmation_required` on the JSON envelope, and `proposed:` /
+  `confirmation-required:` lines on the human output. The exit code stays 12
+  (`CONFIRMATION_REQUIRED`), the same slot `send` and `swap` already use for
+  "needs `--yes`", and the error message now states what actually happened. This
+  covers `sign_typed_data` (e.g. a Polymarket bet) as well as `sign_tx`.
+
+  Results of client-side tools that already RAN in the same turn (`vault_chain`,
+  `vault_coin`, `address_book`) stay queued across the decline, so a committed
+  local mutation is still reported to the backend on the next request.
+
+  The TUI and pipe mode are unchanged: the discriminator is policy-vs-decision, not
+  headless-vs-interactive. Ask mode's gate is a constant; the TUI prompts a live
+  user and pipe mode blocks on a live host answer over stdin — there a decline is a
+  real decision the model should still get to acknowledge.
+
+  Also maps a backend turn outcome of `confirmation_required` onto exit 12 rather
+  than the generic safety-block exit 10.
+
+- [#1604](https://github.com/vultisig/vultisig-sdk/pull/1604) [`9e88dcf`](https://github.com/vultisig/vultisig-sdk/commit/9e88dcf4875ebccfc7ea021707d99ec728a41eea) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export `DEFAULT_CHAINS` and `defaultChains` from the root and React Native SDK entrypoints so consumers can reuse the canonical onboarding/import default-chain set instead of maintaining local mirrors.
+
+- [#1613](https://github.com/vultisig/vultisig-sdk/pull/1613) [`68f8899`](https://github.com/vultisig/vultisig-sdk/commit/68f8899f6545b3876703e7a56b43d73a64217da2) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export canonical `ChainKind` helpers from the React Native SDK entrypoint.
+
+- [#1783](https://github.com/vultisig/vultisig-sdk/pull/1783) [`59c4b6d`](https://github.com/vultisig/vultisig-sdk/commit/59c4b6dcda667cf8f7e482ab1ec9666723d7f5c8) Thanks [@neavra](https://github.com/neavra)! - Emit an auditable signing summary in agent output after --yes approves signing
+
+- Updated dependencies [[`5ce75b5`](https://github.com/vultisig/vultisig-sdk/commit/5ce75b53c527b373eb9ccacceac6edbaacf4ebec), [`eb7d862`](https://github.com/vultisig/vultisig-sdk/commit/eb7d86260a2ea5cdd661951d15677ec4db3517b0), [`9e88dcf`](https://github.com/vultisig/vultisig-sdk/commit/9e88dcf4875ebccfc7ea021707d99ec728a41eea), [`68f8899`](https://github.com/vultisig/vultisig-sdk/commit/68f8899f6545b3876703e7a56b43d73a64217da2), [`80b19bd`](https://github.com/vultisig/vultisig-sdk/commit/80b19bdbfbcb6af875a0b145bb02306552adac27), [`a812367`](https://github.com/vultisig/vultisig-sdk/commit/a812367923ac3781dc240d00124232c6f0cc3348)]:
+  - @vultisig/sdk@4.2.0
+  - @vultisig/core-chain@2.33.0
+  - @vultisig/rujira@61.0.0
+
 ## 4.1.0
 
 ### Patch Changes
