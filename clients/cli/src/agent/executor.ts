@@ -81,6 +81,20 @@ type StoredPayload = {
   timestamp: number
 }
 
+function stripEmbeddedPayloadContract(value: string, disclosedContract: string): string {
+  if (!disclosedContract) return value
+  const escapedContract = disclosedContract.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return value
+    .replace(new RegExp(escapedContract, 'gi'), '')
+    .replace(/\(\s*\)/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
+function formatTokenContractDisclosure(disclosedContract: string): string {
+  return disclosedContract ? ` (token contract ${disclosedContract})` : ''
+}
+
 export class AgentExecutor {
   private vault: VaultBase
   /** Owning SDK (optional); used for address book backed by app storage */
@@ -411,7 +425,21 @@ export class AgentExecutor {
       if (labels.estimated_fee) parts.push(`est. fee ${labels.estimated_fee}`)
       return parts.join(' ')
     }
-    const amount = labels.resolved_amount ?? p?.txArgs?.amount ?? '?'
+    const to = (p?.txArgs?.to as string) || labels.recipient_echo || '?'
+    // Name the token contract from the payload that gets signed, not from label
+    // text: an EVM token send executes against `txArgs.tx.to` (the contract,
+    // with transfer calldata) while `txArgs.to` is the recipient. A native send
+    // has empty calldata and tx.to === recipient, so it gains nothing here.
+    // Non-EVM envelopes carry no `txArgs.tx` and are likewise unchanged.
+    const contractTo = typeof p?.txArgs?.tx?.to === 'string' ? (p.txArgs.tx.to as string) : ''
+    const calldata = typeof p?.txArgs?.tx?.data === 'string' ? (p.txArgs.tx.data as string) : ''
+    const isContractSend = !!contractTo && calldata !== '' && calldata !== '0x'
+    const disclosedContract = isContractSend && contractTo.toLowerCase() !== to.toLowerCase() ? contractTo : ''
+    // The signed payload is authoritative. Rich producer labels may repeat its
+    // address; remove only that exact copy (case-insensitively), clean up an
+    // empty parenthetical wrapper, and preserve every other label detail for
+    // the existing de-dup logic.
+    const amount = stripEmbeddedPayloadContract(labels.resolved_amount ?? p?.txArgs?.amount ?? '?', disclosedContract)
     // Include the asset symbol so a confirmation prompt can never be ambiguous
     // between native and tokens (e.g. "send 100 on Base to …" — ETH? USDC?).
     // token_resolved may be either a bare ticker or a richer label such as
@@ -424,7 +452,10 @@ export class AgentExecutor {
     // The label shape is an out-of-repo producer convention, so only remove the
     // first exact "on <routed chain>" fragment and keep any remainder verbatim:
     // an unrecognised shape must never omit either embedded details or the route.
-    const tokenLabel = (labels.token_resolved || labels.token_symbol || '').trim()
+    const tokenLabel = stripEmbeddedPayloadContract(
+      (labels.token_resolved || labels.token_symbol || '').trim(),
+      disclosedContract
+    )
     const symbol = tokenLabel.split(/\s+/, 1)[0]
     const escapedChain = String(stored.chain).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const routedChainPattern = new RegExp(`(?:^|\\s)on ${escapedChain}(?=\\s|$)`)
@@ -440,17 +471,7 @@ export class AgentExecutor {
       symbol && !amount.endsWith(` ${symbol}`) && !amountEmbedsTokenLabel ? `${amount} ${symbol}` : amount
     const tokenDetailSuffix = amountEmbedsTokenLabel || !tokenDetail ? '' : ` ${tokenDetail}`
     const location = amountEmbedsTokenLabel && labelCarriesRoutedChain ? '' : `on ${stored.chain}${tokenDetailSuffix}`
-    const to = (p?.txArgs?.to as string) || labels.recipient_echo || '?'
-    // Name the token contract from the payload that gets signed, not from label
-    // text: an EVM token send executes against `txArgs.tx.to` (the contract,
-    // with transfer calldata) while `txArgs.to` is the recipient. A native send
-    // has empty calldata and tx.to === recipient, so it gains nothing here.
-    // Non-EVM envelopes carry no `txArgs.tx` and are likewise unchanged.
-    const contractTo = typeof p?.txArgs?.tx?.to === 'string' ? (p.txArgs.tx.to as string) : ''
-    const calldata = typeof p?.txArgs?.tx?.data === 'string' ? (p.txArgs.tx.data as string) : ''
-    const isContractSend = !!contractTo && calldata !== '' && calldata !== '0x'
-    const contractPart =
-      isContractSend && contractTo.toLowerCase() !== to.toLowerCase() ? ` (token contract ${contractTo})` : ''
+    const contractPart = formatTokenContractDisclosure(disclosedContract)
     return `send ${amountWithSymbol}${location ? ` ${location}` : ''} to ${to}${contractPart}`
   }
 
