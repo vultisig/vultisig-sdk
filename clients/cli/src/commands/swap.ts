@@ -3,6 +3,7 @@
  */
 import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import type { Chain, SwapQuoteResult } from '@vultisig/sdk'
+import { InvalidArgumentError } from 'commander'
 import { formatUnits } from 'viem'
 
 import type { CommandContext } from '../core'
@@ -36,6 +37,13 @@ export type SwapQuoteOptions = {
   amount: string | number
   fromToken?: string
   toToken?: string
+  /**
+   * Slippage tolerance in percent (0-50). Passed through to the underlying
+   * quote request so users can preview how tolerance affects estimatedOutput
+   * before committing to the more-committed `swap --dry-run` path.
+   * bead vultisig-zctj6.
+   */
+  slippage?: number
 }
 
 /**
@@ -55,6 +63,7 @@ export async function executeSwapQuote(ctx: CommandContext, options: SwapQuoteOp
     toChain: options.toChain,
     toSymbol: options.toToken || '',
     amount,
+    ...(options.slippage !== undefined && { slippageTolerance: options.slippage }),
     dryRun: true,
   })
 
@@ -118,6 +127,14 @@ export type SwapOptions = {
   password?: string
   signal?: AbortSignal
 } & SwapQuoteOptions
+
+export function parseSlippage(value: string): number {
+  const slippage = Number(value)
+  if (value.trim() === '' || !Number.isFinite(slippage)) {
+    throw new InvalidArgumentError('Slippage must be a number')
+  }
+  return slippage
+}
 
 // `toChainAmount` is the SDK's authoritative parser. Using its supported
 // precision ceiling here validates and canonicalizes without losing any input
