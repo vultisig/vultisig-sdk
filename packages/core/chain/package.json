@@ -640,6 +640,21 @@
       "import": "./dist/chains/evm/noon/index.js",
       "default": "./dist/chains/evm/noon/index.js"
     },
+    "./chains/evm/opStack/getOpStackFeeSurcharge": {
+      "types": "./dist/chains/evm/opStack/getOpStackFeeSurcharge.d.ts",
+      "import": "./dist/chains/evm/opStack/getOpStackFeeSurcharge.js",
+      "default": "./dist/chains/evm/opStack/getOpStackFeeSurcharge.js"
+    },
+    "./chains/evm/opStack/l1FeeProbeData": {
+      "types": "./dist/chains/evm/opStack/l1FeeProbeData.d.ts",
+      "import": "./dist/chains/evm/opStack/l1FeeProbeData.js",
+      "default": "./dist/chains/evm/opStack/l1FeeProbeData.js"
+    },
+    "./chains/evm/opStack/opStackChains": {
+      "types": "./dist/chains/evm/opStack/opStackChains.d.ts",
+      "import": "./dist/chains/evm/opStack/opStackChains.js",
+      "default": "./dist/chains/evm/opStack/opStackChains.js"
+    },
     "./chains/evm/tx/fee": {
       "types": "./dist/chains/evm/tx/fee/index.d.ts",
       "import": "./dist/chains/evm/tx/fee/index.js",
