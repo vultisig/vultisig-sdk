@@ -84,8 +84,15 @@ type StoredPayload = {
 function stripEmbeddedPayloadContract(value: string, disclosedContract: string): string {
   if (!disclosedContract) return value
   const escapedContract = disclosedContract.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const normalizedContract = disclosedContract.toLowerCase()
   return value
     .replace(new RegExp(escapedContract, 'gi'), '')
+    .replace(/0x([0-9a-fA-F]{2,8})…([0-9a-fA-F]{2,8})/g, (match, prefix: string, suffix: string) => {
+      const normalizedPrefix = `0x${prefix}`.toLowerCase()
+      return normalizedContract.startsWith(normalizedPrefix) && normalizedContract.endsWith(suffix.toLowerCase())
+        ? ''
+        : match
+    })
     .replace(/\(\s*\)/g, '')
     .replace(/\s{2,}/g, ' ')
     .trim()
@@ -436,9 +443,9 @@ export class AgentExecutor {
     const isContractSend = !!contractTo && calldata !== '' && calldata !== '0x'
     const disclosedContract = isContractSend && contractTo.toLowerCase() !== to.toLowerCase() ? contractTo : ''
     // The signed payload is authoritative. Rich producer labels may repeat its
-    // address; remove only that exact copy (case-insensitively), clean up an
-    // empty parenthetical wrapper, and preserve every other label detail for
-    // the existing de-dup logic.
+    // address; remove only exact or matching truncated copies
+    // (case-insensitively), clean up an empty parenthetical wrapper, and
+    // preserve every other label detail for the existing de-dup logic.
     const amount = stripEmbeddedPayloadContract(labels.resolved_amount ?? p?.txArgs?.amount ?? '?', disclosedContract)
     // Include the asset symbol so a confirmation prompt can never be ambiguous
     // between native and tokens (e.g. "send 100 on Base to …" — ETH? USDC?).

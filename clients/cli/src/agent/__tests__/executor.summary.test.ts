@@ -189,6 +189,69 @@ describe('AgentExecutor.getPendingSummary', () => {
     expect(summary).toBe(`send 0.05 USDC.e on Polygon to ${recipient} (token contract ${payloadContract})`)
   })
 
+  it('strips a truncated payload-derived ERC-20 contract from rich token labels', () => {
+    const executor = new AgentExecutor(createMockVault())
+    const recipient = '0x58C4b38BfA5C2a84f9D3483D04B2C2e8906e5C35'
+    const payloadContract = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'
+    const truncatedContract = '0x2791…4174'
+
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Polygon',
+        txArgs: {
+          chain: 'Polygon',
+          to: recipient,
+          tx: {
+            to: payloadContract,
+            value: '0',
+            data: `0xa9059cbb${'0'.repeat(24)}${recipient.slice(2).toLowerCase()}${'c350'.padStart(64, '0')}`,
+          },
+        },
+        resolved: {
+          labels: {
+            resolved_amount: `0.05 USDC.e on Polygon (${truncatedContract})`,
+            token_resolved: `USDC.e on Polygon (${truncatedContract})`,
+          },
+        },
+      })
+    ).toBe(true)
+    const summary = executor.getPendingSummary()!
+    expect(summary.match(/USDC\.e/g)).toHaveLength(1)
+    expect(summary.match(/on Polygon/g)).toHaveLength(1)
+    expect(summary.match(/0x2791bca1f2de4661ed88a30c99a7a9449aa84174/gi)).toHaveLength(1)
+    expect(summary.match(/0x2791…4174/g) ?? []).toHaveLength(0)
+    expect(summary).toBe(`send 0.05 USDC.e on Polygon to ${recipient} (token contract ${payloadContract})`)
+  })
+
+  it('preserves a truncated non-contract address in rich token labels', () => {
+    const executor = new AgentExecutor(createMockVault())
+    const recipient = '0x58C4b38BfA5C2a84f9D3483D04B2C2e8906e5C35'
+    const truncatedRecipient = '0x58C4…5C35'
+    const payloadContract = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'
+
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Polygon',
+        txArgs: {
+          chain: 'Polygon',
+          to: recipient,
+          tx: {
+            to: payloadContract,
+            value: '0',
+            data: `0xa9059cbb${'0'.repeat(24)}${recipient.slice(2).toLowerCase()}${'c350'.padStart(64, '0')}`,
+          },
+        },
+        resolved: {
+          labels: {
+            resolved_amount: `0.05 USDC.e on Polygon (${truncatedRecipient})`,
+            token_resolved: `USDC.e on Polygon (${truncatedRecipient})`,
+          },
+        },
+      })
+    ).toBe(true)
+    expect(executor.getPendingSummary()).toContain(truncatedRecipient)
+  })
+
   it('renders rich token, native, and bare token labels without duplicated consent details', () => {
     const executor = new AgentExecutor(createMockVault())
 
