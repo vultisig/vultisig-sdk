@@ -238,8 +238,8 @@ const signatureForHash = ({
 
   return {
     msg: '',
-    r: hex(signature.slice(0, 32).reverse()),
-    s: hex(signature.slice(32, 64).reverse()),
+    r: hex(signature.slice(0, 32)),
+    s: hex(signature.slice(32, 64)),
     der_signature: '',
   }
 }
@@ -1033,8 +1033,8 @@ describe('compileTx golden vectors', () => {
     const sig = privateKey.sign(hashes[0], walletCore.Curve.ed25519)
     const keysignSig: KeysignSignature = {
       msg: '',
-      r: hex(sig.slice(0, 32).reverse()),
-      s: hex(sig.slice(32, 64).reverse()),
+      r: hex(sig.slice(0, 32)),
+      s: hex(sig.slice(32, 64)),
       der_signature: '',
     }
 
