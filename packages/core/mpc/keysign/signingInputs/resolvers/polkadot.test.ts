@@ -133,8 +133,8 @@ describe('getPolkadotSigningInputs', () => {
       signatures: {
         [hex(hash)]: {
           msg: '',
-          r: hex(rawSignature.slice(0, 32).reverse()),
-          s: hex(rawSignature.slice(32, 64).reverse()),
+          r: hex(rawSignature.slice(0, 32)),
+          s: hex(rawSignature.slice(32, 64)),
           der_signature: '',
         },
       },
