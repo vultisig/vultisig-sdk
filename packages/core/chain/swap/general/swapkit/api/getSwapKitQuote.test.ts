@@ -178,8 +178,9 @@ describe('getSwapKitQuote', () => {
         response({
           expectedBuyAmount: '12.4',
           providers: ['ONEINCH'],
+          targetAddress: '0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1',
           ...(fees ? { fees } : {}),
-          tx: { from: '0xsender', to: '0xrouter', data: '0xabcdef', value: '0', gas: '21000' },
+          tx: { from: '0xsender', to: '0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1', data: '0xabcdef', value: '0', gas: '21000' },
         })
       )
 
@@ -220,7 +221,7 @@ describe('getSwapKitQuote', () => {
       fees: [{ type: 'affiliate', amount: '0.04', asset: 'BTC.BTC', chain: 'BTC' }],
     })
 
-    expect('evm' in quote.tx && quote.tx.evm.to).toBe('0xrouter')
+    expect('evm' in quote.tx && quote.tx.evm.to).toBe('0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1')
     expect('evm' in quote.tx && quote.tx.evm.affiliateFee).toBeUndefined()
   })
 
