@@ -1,5 +1,15 @@
 # @vultisig/sdk
 
+## 4.3.1
+
+### Patch Changes
+
+- [#1652](https://github.com/vultisig/vultisig-sdk/pull/1652) [`e71c39b`](https://github.com/vultisig/vultisig-sdk/commit/e71c39b79f9141d9f1959e108a1fcd355e848776) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Reject scientific-notation, Infinity, and hex-like StakeKit action amounts unless they are plain positive decimal strings.
+
+- [#1815](https://github.com/vultisig/vultisig-sdk/pull/1815) [`b61dcba`](https://github.com/vultisig/vultisig-sdk/commit/b61dcbaa16bd9b09e9550484f7b1429c968b8ace) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fail closed when multi-input signature counts differ from message hashes or a single signature is paired with multiple message hashes.
+
+- [#1822](https://github.com/vultisig/vultisig-sdk/pull/1822) [`2fc21fe`](https://github.com/vultisig/vultisig-sdk/commit/2fc21fec196a1dcf46aa6892452fc44b5ad6fb1b) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Route SecureVault QBTC signing through the dedicated ML-DSA keyshare and signing primitive.
+
 ## 4.3.0
 
 ### Minor Changes
