@@ -166,6 +166,109 @@ describe('getSwapKitQuote', () => {
     }
   )
 
+  const stubEvmRoute = ({ route, fees }: { route?: Record<string, unknown>; fees?: unknown[] } = {}) => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        response({
+          routes: [{ routeId: 'evm-route', providers: ['ONEINCH'], expectedBuyAmount: '12.4', ...route }],
+        })
+      )
+      .mockResolvedValueOnce(
+        response({
+          expectedBuyAmount: '12.4',
+          providers: ['ONEINCH'],
+          ...(fees ? { fees } : {}),
+          tx: { from: '0xsender', to: '0xrouter', data: '0xabcdef', value: '0', gas: '21000' },
+        })
+      )
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    return getSwapKitQuote({
+      from: { chain: Chain.Ethereum, address: '0xsender', ticker: 'ETH', decimals: 18 },
+      to: { chain: Chain.Ethereum, address: '0xsender', ticker: 'USDC', id: '0xusdc', decimals: 6 },
+      amount: 10_000_000_000_000_000n,
+      affiliateBps: 30,
+    })
+  }
+
+  it('surfaces the affiliate fee SwapKit itemizes on an EVM route', async () => {
+    // Without this the aggregator route looked like it charged no swap fee at
+    // all, so the consumer's fee row had nothing to show and the headline total
+    // silently omitted it.
+    const quote = await stubEvmRoute({
+      fees: [
+        { type: 'affiliate', amount: '0.04', asset: 'ETH.USDC-0xusdc', chain: 'ETH' },
+        { type: 'network', amount: '0.0002', asset: 'ETH.ETH', chain: 'ETH' },
+      ],
+    })
+
+    expect('evm' in quote.tx && quote.tx.evm.affiliateFee).toEqual({
+      amount: 40_000n,
+      chain: Chain.Ethereum,
+      id: '0xusdc',
+      decimals: 6,
+    })
+  })
+
+  it('keeps an EVM route signable when the fee shape cannot be resolved', async () => {
+    // The fee is display-only on this branch, so an unexpected asset must not
+    // take down a route that would otherwise sign. Solana legitimately throws
+    // here: its tx type requires the fee.
+    const quote = await stubEvmRoute({
+      fees: [{ type: 'affiliate', amount: '0.04', asset: 'BTC.BTC', chain: 'BTC' }],
+    })
+
+    expect('evm' in quote.tx && quote.tx.evm.to).toBe('0xrouter')
+    expect('evm' in quote.tx && quote.tx.evm.affiliateFee).toBeUndefined()
+  })
+
+  it('leaves the affiliate fee absent when SwapKit itemizes none', async () => {
+    // A zero here would render as a definite "$0.00" swap fee; staying absent
+    // lets the consumer report the fee as part of the quoted rate instead.
+    const quote = await stubEvmRoute()
+
+    expect('evm' in quote.tx && quote.tx.evm.affiliateFee).toBeUndefined()
+  })
+
+  it('reads price impact from the route meta', async () => {
+    const quote = await stubEvmRoute({ route: { meta: { priceImpact: -0.0039 }, totalSlippageBps: 120 } })
+
+    expect(quote.priceImpactFraction).toBe(-0.0039)
+  })
+
+  it('falls back to the route slippage bps when meta omits price impact', async () => {
+    const quote = await stubEvmRoute({ route: { totalSlippageBps: 133 } })
+
+    expect(quote.priceImpactFraction).toBeCloseTo(0.0133, 10)
+  })
+
+  it('reports no price impact when the route exposes neither figure', async () => {
+    const quote = await stubEvmRoute()
+
+    expect(quote.priceImpactFraction).toBeUndefined()
+  })
+
+  it.each([
+    ['an explicit null', null],
+    ['a stringified number', '0.0133'],
+    ['a non-finite number', Number.NaN],
+  ])('falls through to the slippage bps when meta price impact is %s', async (_label, priceImpact) => {
+    // Nothing validates the proxy's JSON on the way in. `null !== undefined`,
+    // so an unnarrowed read would put null on a `number` field and reach the
+    // consumer as `null.toFixed(...)`; a string would render 100x wrong.
+    const quote = await stubEvmRoute({ route: { meta: { priceImpact }, totalSlippageBps: 133 } })
+
+    expect(quote.priceImpactFraction).toBeCloseTo(0.0133, 10)
+  })
+
+  it('reports no price impact when neither figure is a usable number', async () => {
+    const quote = await stubEvmRoute({ route: { meta: { priceImpact: null }, totalSlippageBps: '133' } })
+
+    expect(quote.priceImpactFraction).toBeUndefined()
+  })
+
   it('maps SwapKit transfer memo and deposit amount fallbacks', async () => {
     vi.stubGlobal(
       'fetch',

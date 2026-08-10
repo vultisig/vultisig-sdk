@@ -13,6 +13,7 @@ import { getSwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/conf
 import { SwapKitEnabledChain, SwapKitSourceChain } from '@vultisig/core-chain/swap/general/swapkit/SwapKitEnabledChains'
 import {
   SwapKitAmountBelowMinimumError,
+  SwapKitFeeShapeError,
   SwapKitNoEligibleRoutesError,
 } from '@vultisig/core-chain/swap/general/swapkit/SwapKitErrors'
 import {
@@ -127,6 +128,27 @@ type SwapKitQuoteRoute = {
   expectedBuyAmount?: string
   legs?: { provider?: string }[]
   warnings?: { display?: string; message?: string }[]
+  /**
+   * Realized directional price movement of this route, in basis points, signed
+   * (negative == favorable). NOT the user-set tolerance every other
+   * `slippageBps` in this repo denotes (`DEFAULT_JUPITER_SLIPPAGE_BPS`,
+   * balancer, astroport) — it is the same quantity as `meta.priceImpact`, just
+   * in bps, and serves as the fallback for routes whose meta the proxy omits.
+   *
+   * Typed loosely because nothing validates the proxy's JSON before it lands
+   * here; `routePriceImpact` is what narrows it.
+   */
+  totalSlippageBps?: unknown
+  meta?: {
+    /**
+     * Signed fractional price movement (`0.0133` == 1.33% of output lost).
+     * Read as a fraction by both native clients — iOS's Price Impact row and
+     * Android's `SwapKitRouteMeta.priceImpact`, which multiplies by 100 to
+     * display — and self-consistent with the `totalSlippageBps / 10_000`
+     * fallback.
+     */
+    priceImpact?: unknown
+  }
 }
 
 type SwapKitQuoteResponse = {
@@ -371,13 +393,24 @@ const decodeApproveSpender = (data: string | undefined): string | undefined => {
   return spender === '0x0000000000000000000000000000000000000000' ? undefined : spender
 }
 
-const buildEvmTx = async (
-  tx: unknown,
-  fromAddress: string,
-  targetAddress: string | undefined,
-  chain: Chain,
+type BuildEvmTxInput = {
+  tx: unknown
+  fromAddress: string
+  targetAddress: string | undefined
+  chain: Chain
   approvalTx?: SwapKitSwapResponse['approvalTx']
-): Promise<GeneralSwapTx> => {
+  /** Omitted when the response itemizes no affiliate/service fee at all. */
+  affiliateFee?: SwapFee
+}
+
+const buildEvmTx = async ({
+  tx,
+  fromAddress,
+  targetAddress,
+  chain,
+  approvalTx,
+  affiliateFee,
+}: BuildEvmTxInput): Promise<GeneralSwapTx> => {
   if (!isRecord(tx)) {
     throw new Error('SwapKit EVM route did not return a transaction object.')
   }
@@ -417,6 +450,16 @@ const buildEvmTx = async (
       value: bigintString(evmTx.value),
       gasLimit: safeBigInt(gas),
       ...(approvalAddress ? { approvalAddress } : {}),
+      // SwapKit itemizes the affiliate/service fee it charges. The Solana
+      // branch already surfaces it; leaving it off the EVM branch made an
+      // aggregator swap look like it carried no swap fee at all, so the fee row
+      // had nothing to show and the total omitted it.
+      //
+      // Absent covers three cases — no fee entries, an itemized zero, and a
+      // shape that could not be resolved — because none of them establishes an
+      // amount we can vouch for. Consumers report the fee as part of the quoted
+      // rate rather than asserting a zero.
+      ...(affiliateFee && affiliateFee.amount > 0n ? { affiliateFee } : {}),
     },
   }
 }
@@ -476,7 +519,7 @@ const getSwapKitSwapFee = (
     }
 
     if (!fee.asset) {
-      throw new Error(`SwapKit ${type} fee is missing its asset.`)
+      throw new SwapKitFeeShapeError(`SwapKit ${type} fee is missing its asset.`)
     }
 
     const candidate = candidates.find(
@@ -484,7 +527,7 @@ const getSwapKitSwapFee = (
     )
 
     if (!candidate) {
-      throw new Error(`SwapKit ${type} fee uses unsupported asset ${fee.asset}.`)
+      throw new SwapKitFeeShapeError(`SwapKit ${type} fee uses unsupported asset ${fee.asset}.`)
     }
 
     const current: SwapFee = {
@@ -495,11 +538,11 @@ const getSwapKitSwapFee = (
     }
 
     if (current.amount < 0n) {
-      throw new Error(`SwapKit ${type} fee amount cannot be negative.`)
+      throw new SwapKitFeeShapeError(`SwapKit ${type} fee amount cannot be negative.`)
     }
 
     if (result && !sameSwapFeeCoin(result, current)) {
-      throw new Error('SwapKit affiliate and service fees use different assets.')
+      throw new SwapKitFeeShapeError('SwapKit affiliate and service fees use different assets.')
     }
 
     result = result ? { ...result, amount: result.amount + current.amount } : current
@@ -720,7 +763,72 @@ const buildSwapKitTx = (
     return buildTransferTx(response, from, amount)
   }
 
-  return buildEvmTx(response.tx, from.address, response.targetAddress, from.chain, response.approvalTx)
+  return buildEvmTx({
+    tx: response.tx,
+    fromAddress: from.address,
+    targetAddress: response.targetAddress,
+    chain: from.chain,
+    approvalTx: response.approvalTx,
+    affiliateFee: getSwapKitEvmSwapFee({ fees: response.fees, from, to, routeProvider }),
+  })
+}
+
+type GetSwapKitEvmSwapFeeInput = {
+  fees: SwapKitSwapResponse['fees']
+  from: AccountCoin<SwapKitSourceChain>
+  to: AccountCoin<SwapKitEnabledChain>
+  routeProvider: string | undefined
+}
+
+/**
+ * SwapKit's affiliate/service fee for an EVM route, or `undefined` when its
+ * shape cannot be resolved.
+ *
+ * The fee is not part of the signed EVM transaction — `from`/`to`/`data`/
+ * `value`/`gas` are — so an unexpected shape must never take down a route that
+ * would otherwise sign. Only [SwapKitFeeShapeError] is swallowed; anything else
+ * is a bug in the resolution and stays loud. The Solana branch calls
+ * `getSwapKitSwapFee` bare and lets it throw on purpose: its tx type requires
+ * the fee, so an unresolved one really is fatal there.
+ */
+const getSwapKitEvmSwapFee = ({ fees, from, to, routeProvider }: GetSwapKitEvmSwapFeeInput): SwapFee | undefined => {
+  try {
+    return getSwapKitSwapFee(fees, from, to, routeProvider)
+  } catch (error) {
+    if (!(error instanceof SwapKitFeeShapeError)) {
+      throw error
+    }
+
+    console.warn('[getSwapKitQuote] unresolved SwapKit fee on an EVM route; reporting none', error)
+    return undefined
+  }
+}
+
+const bpsPerUnit = 10_000
+
+const finiteNumber = (value: unknown): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) ? value : undefined
+
+/**
+ * Price impact of a route as a signed fraction, preferring `meta.priceImpact`
+ * (the figure iOS and Android show) and falling back to the same directional
+ * movement expressed in bps for routes whose meta the proxy omits.
+ *
+ * Both are narrowed rather than trusted: nothing validates the proxy's JSON on
+ * the way in, so an explicit `null` or a stringified number would otherwise
+ * land in a `number` field and reach consumers as `null.toFixed(...)` or a
+ * 100x-wrong figure. A value that fails the check falls through to the next
+ * source, and an unreadable pair reports nothing at all.
+ */
+const routePriceImpact = ({ meta, totalSlippageBps }: SwapKitQuoteRoute): number | undefined => {
+  const metaImpact = finiteNumber(meta?.priceImpact)
+  if (metaImpact !== undefined) {
+    return metaImpact
+  }
+
+  const slippageBps = finiteNumber(totalSlippageBps)
+
+  return slippageBps === undefined ? undefined : slippageBps / bpsPerUnit
 }
 
 const routeExpectedBuyAmount = (route: SwapKitQuoteRoute, decimals: number): bigint | null => {
@@ -900,10 +1008,17 @@ export const getSwapKitQuote = async ({
   )
   const routeProvider = getRouteProviderName(swapResponse) ?? getRouteProviderName(route)
 
+  // Read from the quote-stage route, unlike `dstAmount` and `routeProvider`
+  // which prefer the swap-stage response. No `/v3/swap` shape we model carries
+  // impact, and both native clients read it off the chosen route the same way;
+  // if it is ever restated there, it should be preferred here too.
+  const priceImpactFraction = routePriceImpact(route)
+
   return {
     dstAmount: parseExpectedBuyAmount(swapResponse.expectedBuyAmount ?? route.expectedBuyAmount, to.decimals),
     provider: 'swapkit',
     routeProvider,
+    ...(priceImpactFraction === undefined ? {} : { priceImpactFraction }),
     tx: await buildSwapKitTx(swapResponse, from, to, amount, routeProvider),
   }
 }
