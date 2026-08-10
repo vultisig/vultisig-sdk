@@ -927,6 +927,7 @@ export {
   cosmosBalanceChains,
   cosmosStaking,
   decodeBittensorAddress,
+  decode,
   decodeCosmosTx,
   decodeEvmTx,
   decodeFromToolResult,

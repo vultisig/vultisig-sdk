@@ -82,6 +82,16 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.evmCheckAllowance).toBe('function')
   })
 
+  it('exports the documented sdk.decode namespace without breaking the flat decode helpers', () => {
+    expect(sdk.decode).toBeDefined()
+    expect(typeof sdk.decode.fromToolResult).toBe('function')
+    expect(typeof sdk.decode.cosmosTx).toBe('function')
+    expect(typeof sdk.decode.evmTx).toBe('function')
+    expect(sdk.decode.fromToolResult).toBe(sdk.decodeFromToolResult)
+    expect(sdk.decode.cosmosTx).toBe(sdk.decodeCosmosTx)
+    expect(sdk.decode.evmTx).toBe(sdk.decodeEvmTx)
+  })
+
   it('exports encodeErc20Approve, encodeErc20Revoke, MAX_UINT256 (ERC-20 approve/revoke calldata)', () => {
     expect(typeof sdk.encodeErc20Approve).toBe('function')
     expect(typeof sdk.encodeErc20Revoke).toBe('function')
