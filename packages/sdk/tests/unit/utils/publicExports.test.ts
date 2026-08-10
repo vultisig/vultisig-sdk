@@ -1,9 +1,26 @@
 import { describe, expect, it } from 'vitest'
 
 import * as sdk from '../../../src/index'
+import * as dangerousAddresses from '../../../src/utils/dangerousAddresses'
 import { cosmosTxFeeGasParityCases } from '../../fixtures/cosmosTxFeeGasParity'
 
+const dangerousAddressCanonicalExports = [
+  'EVM_DANGEROUS_ADDRESSES',
+  'SOLANA_DANGEROUS_ADDRESSES',
+  'UTXO_DANGEROUS_ADDRESSES',
+  'XRP_DANGEROUS_ADDRESSES',
+  'getEvmDangerousReason',
+  'isEvmBurnAddress',
+  'getChainDangerousReason',
+  'assertSafeEvmDestination',
+  'assertSafeDestination',
+] as const
+
 describe('@vultisig/sdk public exports', () => {
+  it.each(dangerousAddressCanonicalExports)('re-exports dangerous-address canonical %s by identity', name => {
+    expect(sdk[name]).toBe(dangerousAddresses[name])
+  })
+
   it('exports fiatToAmount, toChainAmount, and chain-reference normalization utilities', () => {
     expect(typeof sdk.fiatToAmount).toBe('function')
     expect(typeof sdk.toChainAmount).toBe('function')
