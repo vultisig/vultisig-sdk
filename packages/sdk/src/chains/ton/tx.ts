@@ -282,7 +282,7 @@ export type BuildTonJettonTransferOptions = {
   amount: bigint
   /** Whether the recipient account is initialized. Matches WalletCore's transfer context; defaults to true. */
   isActiveDestination?: boolean
-  /** Optional UTF-8 comment; must fit WalletCore's inline Jetton forward_payload. */
+  /** Optional UTF-8 comment; must fit WalletCore's inline Jetton forward_payload. The cap shrinks as `amount` grows (larger VarUInteger encoding leaves fewer bits) — at most ~34 ASCII bytes for large amounts, ~39 for small ones. Throws if it doesn't fit. */
   memo?: string
   seqno: number
   validUntil?: number

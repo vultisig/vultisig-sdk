@@ -26,7 +26,7 @@ export type PrepareJettonTransferTxFromKeysParams = {
   amount: bigint
   /** Whether the recipient account is initialized. Defaults to true for backward compatibility. */
   isActiveDestination?: boolean
-  /** Optional UTF-8 forward comment; must fit WalletCore's inline Jetton payload (39 ASCII bytes for typical inputs). */
+  /** Optional UTF-8 forward comment; must fit WalletCore's inline Jetton payload. The cap shrinks as `amount` grows (larger VarUInteger encoding leaves fewer bits) — at most ~34 ASCII bytes for large amounts, ~39 for small ones. Throws if it doesn't fit. */
   memo?: string
   /**
    * Sender wallet seqno from `getTonWalletInfo(from).seqno`. First-ever send = 0

@@ -298,6 +298,26 @@ describe('TON / buildTonJettonTransferTx golden vectors', () => {
     )
   })
 
+  it('shrinks the memo cap as the amount grows (VarUInteger encoding eats into available bits)', () => {
+    // A memo that fits at a small amount can still overflow at a larger one —
+    // the cap is not a fixed byte count. 10^18 is one token of an 18-decimal
+    // Jetton, a realistic amount, not an adversarial edge case.
+    const base = {
+      publicKeyEd25519: FX.publicKeyEd25519,
+      to: FX.to,
+      jettonWalletAddress: '0:' + 'cc'.repeat(32),
+      isActiveDestination: true,
+      seqno: FX.seqno,
+      validUntil: FX.validUntil,
+      memo: 'x'.repeat(39),
+    }
+
+    expect(buildTonJettonTransferTx({ ...base, amount: 5_000_000n }).signingHashHex).toMatch(/^[0-9a-f]{64}$/)
+    expect(() => buildTonJettonTransferTx({ ...base, amount: 10n ** 18n })).toThrow(
+      /exceeds WalletCore inline forward_payload capacity/
+    )
+  })
+
   it('signing payload matches an independently-built jetton transfer body + V4R2 header', () => {
     const jettonWalletAddress = '0:' + 'cc'.repeat(32)
     const result = buildTonJettonTransferTx({
