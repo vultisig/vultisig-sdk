@@ -14,4 +14,12 @@ describe('browser preamble runtime globals', () => {
 
     expect((globalThis as { Buffer?: unknown }).Buffer).toBeDefined()
   })
+
+  it('re-exports the shared chains namespace from the browser entrypoint', async () => {
+    const browser = await import('../../../../src/platforms/browser/index')
+
+    expect(browser.chains).toBeDefined()
+    expect(typeof browser.chains.cosmos.buildCosmosStakingTx).toBe('function')
+    expect(typeof browser.chains.evm.buildEvmSendTx).toBe('function')
+  })
 })
