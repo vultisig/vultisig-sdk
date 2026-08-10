@@ -69,7 +69,9 @@ const deliversAtLeastReviewedAmount = (deliverMin: ParsedXrplAmount, amount: Par
   if (deliverMin.kind === 'native' || amount.kind === 'native') {
     return deliverMin.kind === 'native' && amount.kind === 'native' && deliverMin.units >= amount.units
   }
-  return deliverMin.currency === amount.currency && deliverMin.issuer === amount.issuer && deliverMin.units >= amount.units
+  return (
+    deliverMin.currency === amount.currency && deliverMin.issuer === amount.issuer && deliverMin.units >= amount.units
+  )
 }
 
 export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysignPayload }) => {

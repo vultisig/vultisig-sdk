@@ -649,7 +649,10 @@ describe('getRippleSigningInputs -- rawJson build path (dApp-supplied tx)', () =
     ['an unencodable overlong currency code', { currency: 'a'.repeat(30), issuer: RLUSD_ISSUER, value: '999999999' }],
     // Amount here is native XRP; a well-formed positive IOU cannot restore a
     // floor on a different asset than what was actually reviewed.
-    ['an issued-currency amount when Amount is native XRP', { currency: 'RLUSD', issuer: RLUSD_ISSUER, value: '999999999' }],
+    [
+      'an issued-currency amount when Amount is native XRP',
+      { currency: 'RLUSD', issuer: RLUSD_ISSUER, value: '999999999' },
+    ],
   ])('rejects a tfPartialPayment Payment whose DeliverMin is %s', (_label, DeliverMin) => {
     const payload = buildPaymentPayload()
     payload.signData = {
