@@ -333,5 +333,47 @@ describe('convertToKeysignSignatures', () => {
         'Signature count 1 does not match message hash count 2'
       )
     })
+
+    // Regression coverage restored after #1815. That PR added the count guard and repurposed the only
+    // test that reached the per-index `!messageHash` throw, which left a fail-closed branch on a signing
+    // path with zero tests. The branch is still live, it just needs a different input: the count guard
+    // runs first, so you now reach it only when the counts MATCH and a hash is individually falsy.
+    // A fail-closed guard with no test is how a fail-closed guard quietly becomes fail-open.
+    it('should throw error when message hash is missing at an index despite matching counts', () => {
+      const sigPair = [
+        {
+          r: '0xab3c7b6a9e8f2c1d5e4a3f2b1c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d',
+          s: '0x7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e',
+          der: '0x3045022100ab3c7b6a9e8f2c1d5e4a3f2b1c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d02207f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e',
+        },
+        {
+          r: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+          s: '0xfedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321',
+          der: '0x304402201234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef0220fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321',
+        },
+      ]
+      const signature: Signature = { signature: '', format: 'ECDSA', signatures: sigPair }
+      const first = '0x1111111111111111111111111111111111111111111111111111111111111111'
+      const second = '0x2222222222222222222222222222222222222222222222222222222222222222'
+
+      // 2 === 2 clears the count guard, then index 1 is empty
+      expect(() => convertToKeysignSignatures(signature, [first, ''])).toThrow(
+        'Missing message hash for signature at index 1'
+      )
+      // index 0 too, so the assertion is pinned to the index rather than to "the last one"
+      expect(() => convertToKeysignSignatures(signature, ['', second])).toThrow(
+        'Missing message hash for signature at index 0'
+      )
+
+      // Non-vacuity control: the same shape with both hashes present must NOT throw. Without this the
+      // assertions above would still pass if convertToKeysignSignatures started throwing unconditionally.
+      expect(() => convertToKeysignSignatures(signature, [first, second])).not.toThrow()
+
+      // Discriminator: an actual count mismatch must report the COUNT message, not the index one, so
+      // this test can never be satisfied by the guard that displaced it.
+      expect(() => convertToKeysignSignatures(signature, [first])).toThrow(
+        'Signature count 2 does not match message hash count 1'
+      )
+    })
   })
 })
