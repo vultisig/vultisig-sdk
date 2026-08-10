@@ -705,6 +705,10 @@ export function classifyError(err: Error): VsigError {
   // Same wording, thrown as a plain Error by the vault-free prep helpers
   // (tools/prep/send.ts:60) rather than wrapped in a VaultError.
   if (INVALID_ADDRESS_RE.test(msg)) return invalidAddressError(err.message)
+  // recipientSanity's null/burn/malformed-EVM refusal (transaction.ts) - a plain
+  // Error, same "vault-free helper" pattern as above. Without this it fell through
+  // to UnknownError/exit 7, hiding a fund-safety refusal behind a generic exit code.
+  if (msg.startsWith('refusing send:')) return invalidAddressError(err.message)
   if (msg.includes('insufficient') && msg.includes('balance')) {
     return new InsufficientBalanceError(err.message)
   }

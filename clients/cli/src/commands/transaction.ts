@@ -4,7 +4,7 @@
 import { normalizeRippleDestination } from '@vultisig/core-chain/chains/ripple/address'
 import { getLegacyDestinationTag, resolveDestinationTag } from '@vultisig/core-mpc/keysign/utils/rippleDestinationTag'
 import type { KeysignPayload, VaultBase } from '@vultisig/sdk'
-import { Chain, Vultisig } from '@vultisig/sdk'
+import { Chain, recipientSanity, Vultisig } from '@vultisig/sdk'
 
 import type { CommandContext, SendDryRunResult, SendParams, TransactionResult } from '../core'
 import { buildSendBroadcastIntent, ensureVaultUnlocked, guardedBroadcast } from '../core'
@@ -71,7 +71,8 @@ async function previewDryRun(
   vault: VaultBase,
   params: SendParams,
   dryResult: { fee: string; feeSymbol: string; total: string; keysignPayload: KeysignPayload },
-  to: string
+  to: string,
+  extraWarnings: string[] = []
 ): Promise<SendDryRunResult> {
   const balance = await vault.balance(params.chain, params.tokenId)
   const hasInsufficientBalance = parseFloat(dryResult.total) > parseFloat(balance.formattedAmount)
@@ -94,7 +95,7 @@ async function previewDryRun(
   const isTokenSend = balance.tokenId !== undefined
   const feeBalance = isTokenSend ? await vault.balance(params.chain).catch(() => undefined) : undefined
 
-  const warnings: string[] = []
+  const warnings: string[] = [...extraWarnings]
   if (hasInsufficientBalance) {
     warnings.push(`Insufficient balance: you have ${balance.formattedAmount} ${balance.symbol}`)
   }
@@ -176,6 +177,45 @@ export async function sendTransaction(
   }
   const destinationTag = params.destinationTag ?? rippleDestination.destinationTag
 
+  // Fund-safety: refuse null / burn / self-send / malformed-EVM recipients before
+  // any network call. bead vultisig-51exn: the shared recipientSanity helper was
+  // exported but not wired into the send prep — so a send to Solana's System
+  // Program (`11111111111111111111111111111111`), the EVM zero address, or the
+  // canonical `0x...dEaD` burn built silently. All are unrecoverable on-chain.
+  // Self-send is caught here rather than at broadcast because dry-run alone
+  // reads as "safe to sign" to a scripted caller.
+  const fromAddress = await vault.address(params.chain).catch(() => '')
+  const sanity = recipientSanity({ recipient: to, from: fromAddress })
+  // REVIEW FIX (51exn): the three flags are NOT the same kind of problem, so they no longer get
+  // identical treatment.
+  //   isNull        - funds are unrecoverable. Hard refuse.
+  //   isMalformedEvm - the send would fail downstream anyway. Refusing early is strictly better.
+  //   isSelfSend    - the money lands in the user's OWN vault. Nothing is ever lost.
+  // The upstream this helper ports (self_send_warning.go:detectSelfSendTurn) calls self-send a
+  // WARNING, and refusing it turns ordinary operations into a wall with no way past: UTXO
+  // consolidation (`send bitcoin <my-own-address> <amount>`) and a 0-value EVM self-send to replace
+  // a stuck nonce are both legitimate and both have no workaround, because the advice "re-run with
+  // a different recipient" is wrong when the recipient IS what they meant.
+  const refusals: string[] = []
+  if (sanity.isNull) refusals.push('recipient is a null / burn address (funds would be unrecoverable)')
+  if (sanity.isMalformedEvm) refusals.push('recipient looks like a malformed EVM address')
+  if (refusals.length > 0) {
+    throw new Error(`Refusing send: ${refusals.join('; ')}. If this is intentional, re-run with a different recipient.`)
+  }
+  // Self-send: warn loudly and let the existing consent gate below decide. A scripted caller passing
+  // --yes has already asserted intent, which is exactly the distinction the hard throw erased.
+  // `warn()` is a no-op in JSON/CI mode (initOutputMode makes JSON imply silentMode), so the warning
+  // is ALSO threaded into the JSON result's `warning` field below - a scripted caller must not lose
+  // fund-safety signal just because it asked for structured output.
+  const selfSendWarning = sanity.isSelfSend
+    ? 'Recipient matches your own vault address for this chain (self-send): funds stay in your vault, minus the network fee. Legitimate for UTXO consolidation or replacing a stuck nonce - otherwise re-check the recipient.'
+    : undefined
+  if (selfSendWarning) {
+    warn('\n⚠  The recipient matches your own vault address for this chain.')
+    warn('   This is a SELF-SEND: the funds stay in your vault, minus the network fee.')
+    warn('   Legitimate for UTXO consolidation or replacing a stuck nonce - otherwise re-check the recipient.\n')
+  }
+
   // 1. Dry-run for preview
   const prepareSpinner = createSpinner('Preparing transaction...')
 
@@ -195,7 +235,7 @@ export async function sendTransaction(
 
   // If user asked for dry-run only, return preview
   if (params.dryRun) {
-    return previewDryRun(vault, params, dryResult, to)
+    return previewDryRun(vault, params, dryResult, to, selfSendWarning ? [selfSendWarning] : [])
   }
 
   // 2. Show preview and get gas estimate
@@ -276,6 +316,7 @@ export async function sendTransaction(
       txHash: broadcast.txHash,
       chain: params.chain,
       explorerUrl: Vultisig.getTxExplorerUrl(params.chain, broadcast.txHash),
+      ...(selfSendWarning ? { warning: selfSendWarning } : {}),
     }
 
     if (isJsonOutput()) {
