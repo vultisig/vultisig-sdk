@@ -14,6 +14,7 @@
  */
 import type { WalletCore } from '@trustwallet/wallet-core'
 import { Chain } from '@vultisig/core-chain/Chain'
+import type { SignatureAlgorithm } from '@vultisig/core-chain/signing/SignatureAlgorithm'
 import { generateLocalPartyId } from '@vultisig/core-mpc/devices/localPartyId'
 import { keysign } from '@vultisig/core-mpc/keysign'
 import type { KeysignSignature } from '@vultisig/core-mpc/keysign/KeysignSignature'
@@ -27,7 +28,7 @@ import type { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 import { withoutDuplicates } from '@vultisig/lib-utils/array/withoutDuplicates'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
-import { formatSignature } from '../adapters/formatSignature'
+import { formatMldsaSignature, formatSignature } from '../adapters/formatSignature'
 import { getChainSigningInfo } from '../adapters/getChainSigningInfo'
 import { randomUUID } from '../crypto'
 import type { Signature, SigningMode, SigningPayload, SigningStep } from '../types'
@@ -82,6 +83,58 @@ export class RelaySigningService {
 
   constructor(relayUrl: string = DEFAULT_RELAY_URL) {
     this.relayUrl = relayUrl
+  }
+
+  private validateSigningKeyDomain(vault: CoreVault, chain: Chain, signatureAlgorithm: SignatureAlgorithm): void {
+    if (chain === Chain.QBTC && signatureAlgorithm !== 'mldsa') {
+      throw new Error(`QBTC requires MLDSA signing, but ${signatureAlgorithm} was selected`)
+    }
+
+    if (signatureAlgorithm === 'mldsa') {
+      if (!vault.keyShareMldsa) {
+        throw new Error('No MLDSA key share found in vault (required for QBTC and other MLDSA chains)')
+      }
+      return
+    }
+
+    if (!vault.keyShares || Object.keys(vault.keyShares).length === 0) {
+      throw new Error('Vault key shares not loaded. Call ensureKeySharesLoaded() first.')
+    }
+  }
+
+  private async signMldsaWithRelay(params: {
+    vault: CoreVault
+    messages: string[]
+    devices: string[]
+    sessionId: string
+    localPartyId: string
+    hexEncryptionKey: string
+  }): Promise<Signature> {
+    const { vault, messages, devices, sessionId, localPartyId, hexEncryptionKey } = params
+    const keyShareMldsa = vault.keyShareMldsa
+
+    if (!keyShareMldsa) {
+      throw new Error('No MLDSA key share found in vault (required for QBTC and other MLDSA chains)')
+    }
+
+    const mldsaKeysign = new MldsaKeysign({
+      keysignCommittee: devices,
+      serverURL: this.relayUrl,
+      sessionId,
+      localPartyId,
+      messagesToSign: messages,
+      keyShareBase64: keyShareMldsa,
+      hexEncryptionKey,
+      chainPath: 'm',
+      isInitiatingDevice: true,
+    })
+    const [result] = await mldsaKeysign.startKeysignWithRetry()
+
+    if (!result) {
+      throw new Error('MLDSA signing produced no signature')
+    }
+
+    return formatMldsaSignature(result.signature)
   }
 
   /**
@@ -236,10 +289,6 @@ export class RelaySigningService {
       // Step 1: Validate vault is a secure vault
       reportProgress('preparing', 5, 'Validating vault configuration')
 
-      if (!vault.keyShares || Object.keys(vault.keyShares).length === 0) {
-        throw new Error('Vault key shares not loaded. Call ensureKeySharesLoaded() first.')
-      }
-
       const threshold = vault.signers.length > 2 ? Math.ceil((vault.signers.length + 1) / 2) : 2
 
       // Validate message hashes are provided
@@ -260,6 +309,7 @@ export class RelaySigningService {
         { chain, derivePath: payload.derivePath },
         walletCore
       )
+      this.validateSigningKeyDomain(vault, chain, signatureAlgorithm)
 
       // Step 4: Generate QR payload with full transaction details
       reportProgress('preparing', 20, 'Generating QR code for device pairing')
@@ -304,6 +354,20 @@ export class RelaySigningService {
         sessionId,
         devices,
       })
+
+      if (signatureAlgorithm === 'mldsa') {
+        reportProgress('signing', 60, 'Performing ML-DSA post-quantum signing...')
+        const signature = await this.signMldsaWithRelay({
+          vault,
+          messages: payload.messageHashes,
+          devices,
+          sessionId,
+          localPartyId,
+          hexEncryptionKey,
+        })
+        reportProgress('complete', 100, 'Signing complete')
+        return signature
+      }
 
       // Step 8: Get key share for signing
       const keyShareKey = signatureAlgorithm === 'ecdsa' ? 'ecdsa' : 'eddsa'
@@ -431,10 +495,6 @@ export class RelaySigningService {
       // Validate vault
       reportProgress('preparing', 5, 'Validating vault configuration')
 
-      if (!vault.keyShares || Object.keys(vault.keyShares).length === 0) {
-        throw new Error('Vault key shares not loaded.')
-      }
-
       const threshold = vault.signers.length > 2 ? Math.ceil((vault.signers.length + 1) / 2) : 2
 
       // Generate session params
@@ -446,6 +506,7 @@ export class RelaySigningService {
         { chain: bytesOptions.chain, derivePath: bytesOptions.derivePath },
         walletCore
       )
+      this.validateSigningKeyDomain(vault, bytesOptions.chain, signatureAlgorithm)
 
       // Generate QR payload
       reportProgress('preparing', 20, 'Generating QR code for device pairing')
@@ -487,6 +548,20 @@ export class RelaySigningService {
         sessionId,
         devices,
       })
+
+      if (signatureAlgorithm === 'mldsa') {
+        reportProgress('signing', 60, 'Performing ML-DSA post-quantum signing...')
+        const signature = await this.signMldsaWithRelay({
+          vault,
+          messages: bytesOptions.messageHashes,
+          devices,
+          sessionId,
+          localPartyId,
+          hexEncryptionKey,
+        })
+        reportProgress('complete', 100, 'Signing complete')
+        return signature
+      }
 
       // Get key share
       const keyShareKey = signatureAlgorithm === 'ecdsa' ? 'ecdsa' : 'eddsa'
