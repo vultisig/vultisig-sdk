@@ -254,6 +254,21 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.isSeedphraseImportSupportedChain).toBe('function')
   })
 
+  it('exports the canonical node vault-backup helpers and constants from the root surface', async () => {
+    const libEncrypt = await import('@vultisig/lib-utils/encryption/vaultBackup/encryptVaultBackupWithPassword')
+    const libDecrypt = await import('@vultisig/lib-utils/encryption/vaultBackup/decryptVaultBackupWithPassword')
+    const constants = await import('@vultisig/lib-utils/encryption/vaultBackup/vaultBackupConstants')
+
+    expect(sdk.encryptVaultBackupWithPassword).toBe(libEncrypt.encryptVaultBackupWithPassword)
+    expect(sdk.decryptVaultBackupWithPassword).toBe(libDecrypt.decryptVaultBackupWithPassword)
+    expect(sdk.DEFAULT_VAULT_BACKUP_PBKDF2_ITERATIONS).toBe(constants.DEFAULT_VAULT_BACKUP_PBKDF2_ITERATIONS)
+    expect(Buffer.from(sdk.VAULT_BACKUP_BLOB_MAGIC)).toEqual(Buffer.from(constants.VAULT_BACKUP_BLOB_MAGIC))
+    expect(sdk.VAULT_BACKUP_SALT_LEN).toBe(constants.VAULT_BACKUP_SALT_LEN)
+    expect(sdk.VAULT_BACKUP_IV_LEN).toBe(constants.VAULT_BACKUP_IV_LEN)
+    expect(sdk.VAULT_BACKUP_MAGIC_LEN).toBe(constants.VAULT_BACKUP_MAGIC_LEN)
+    expect(sdk.VAULT_BACKUP_PBKDF2_HEADER_LEN).toBe(constants.VAULT_BACKUP_PBKDF2_HEADER_LEN)
+  })
+
   it('exports canonical defaultChains helpers for app onboarding/import parity', () => {
     expect(Array.isArray(sdk.DEFAULT_CHAINS)).toBe(true)
     expect(Array.isArray(sdk.defaultChains)).toBe(true)
