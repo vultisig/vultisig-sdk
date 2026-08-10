@@ -7,7 +7,14 @@
  * Primary use case: Execute FIN swaps on Rujira DEX
  */
 import type { CosmosChain, VaultBase } from '@vultisig/sdk'
-import { buildCosmosWasmExecuteMsg, Chain, Vultisig } from '@vultisig/sdk'
+import {
+  buildCosmosWasmExecuteMsg,
+  Chain,
+  chainFeeCoin,
+  cosmosFeeCoinDenom,
+  getCosmosGasLimit,
+  Vultisig,
+} from '@vultisig/sdk'
 import qrcode from 'qrcode-terminal'
 
 import type { CommandContext, TransactionResult } from '../core'
@@ -40,26 +47,39 @@ type ParsedFund = {
 }
 
 /**
- * Chain-specific configuration for Cosmos chains
+ * The CLI only supports CosmWasm execute on the two first-party CosmWasm chains
+ * we actively exercise today. The per-chain fee coin metadata and gas limits are
+ * still sourced from the canonical SDK registries instead of a CLI-local copy.
  */
-const COSMOS_CHAIN_CONFIG: Record<
-  string,
-  { chainId: string; prefix: string; denom: string; decimals: number; gasLimit: string }
-> = {
-  THORChain: {
-    chainId: 'thorchain-1',
-    prefix: 'thor',
-    denom: 'rune',
-    decimals: 8,
-    gasLimit: '500000',
-  },
-  MayaChain: {
-    chainId: 'mayachain-mainnet-v1',
-    prefix: 'maya',
-    denom: 'cacao',
-    decimals: 10,
-    gasLimit: '500000',
-  },
+const SUPPORTED_COSMWASM_CHAINS = [Chain.THORChain, Chain.MayaChain] as const
+
+type SupportedCosmWasmChain = (typeof SUPPORTED_COSMWASM_CHAINS)[number]
+
+type CosmosChainConfig = {
+  denom: string
+  decimals: number
+  ticker: string
+  gasLimit: string
+}
+
+function getCosmosChainConfig(chain: Chain): CosmosChainConfig {
+  if (!SUPPORTED_COSMWASM_CHAINS.includes(chain as SupportedCosmWasmChain)) {
+    throw new Error(
+      `Chain ${chain} does not support CosmWasm execute. Supported chains: ${SUPPORTED_COSMWASM_CHAINS.join(', ')}`
+    )
+  }
+
+  const supportedChain = chain as SupportedCosmWasmChain
+  const feeCoin = chainFeeCoin[supportedChain]
+  const denom = cosmosFeeCoinDenom[supportedChain]
+  const gasLimit = getCosmosGasLimit({ chain: supportedChain, id: denom }).toString()
+
+  return {
+    denom,
+    decimals: feeCoin.decimals,
+    ticker: feeCoin.ticker,
+    gasLimit,
+  }
 }
 
 /**
@@ -84,15 +104,8 @@ function parseFunds(fundsStr?: string): ParsedFund[] {
 export async function executeExecute(ctx: CommandContext, params: ExecuteParams): Promise<TransactionResult> {
   const vault = await ctx.ensureActiveVault()
 
-  // Validate chain is supported
-  const chainConfig = COSMOS_CHAIN_CONFIG[params.chain]
-  if (!chainConfig) {
-    throw new Error(
-      `Chain ${params.chain} does not support CosmWasm execute. Supported chains: ${Object.keys(
-        COSMOS_CHAIN_CONFIG
-      ).join(', ')}`
-    )
-  }
+  // Validate chain is supported and source the execution metadata from the SDK canonicals.
+  const chainConfig = getCosmosChainConfig(params.chain)
 
   // Parse and validate message JSON
   let msg: object
@@ -114,7 +127,7 @@ export async function executeExecute(ctx: CommandContext, params: ExecuteParams)
 async function executeContractTransaction(
   vault: VaultBase,
   params: ExecuteParams,
-  chainConfig: { chainId: string; prefix: string; denom: string; decimals: number; gasLimit: string },
+  chainConfig: CosmosChainConfig,
   msg: object,
   funds: ParsedFund[]
 ): Promise<TransactionResult> {
