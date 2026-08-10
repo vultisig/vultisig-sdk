@@ -532,6 +532,106 @@ describe('getRippleSigningInputs -- rawJson build path (dApp-supplied tx)', () =
     expect(() => getRippleSigningInputs({ keysignPayload: payload, walletCore })).toThrow(/Amount does not match/)
   })
 
+  it('rejects a tfPartialPayment Payment that sets no DeliverMin floor', () => {
+    // Destination and Amount both match the reviewed metadata, so every other
+    // gate passes — but tfPartialPayment makes Amount a ceiling, so the ledger
+    // may deliver dust while the sender still pays. The reviewed toAmount no
+    // longer describes the outcome, which is exactly what this resolver exists
+    // to prevent.
+    const payload = buildPaymentPayload()
+    payload.signData = {
+      case: 'signRipple',
+      value: {
+        $typeName: 'vultisig.keysign.v1.SignRipple',
+        rawJson: JSON.stringify({
+          TransactionType: 'Payment',
+          Account: ACCOUNT,
+          Destination: payload.toAddress,
+          Amount: payload.toAmount,
+          SendMax: '999999999',
+          Flags: 131072,
+        }),
+      },
+    }
+
+    expect(() => getRippleSigningInputs({ keysignPayload: payload, walletCore })).toThrow(/tfPartialPayment/)
+  })
+
+  it('forwards a tfPartialPayment Payment that bounds delivery with DeliverMin', async () => {
+    const payload = buildPaymentPayload()
+    const paymentJson = JSON.stringify({
+      TransactionType: 'Payment',
+      Account: ACCOUNT,
+      Destination: payload.toAddress,
+      Amount: payload.toAmount,
+      SendMax: '999999999',
+      DeliverMin: '900000',
+      Flags: 131072,
+    })
+    payload.signData = {
+      case: 'signRipple',
+      value: {
+        $typeName: 'vultisig.keysign.v1.SignRipple',
+        rawJson: paymentJson,
+      },
+    }
+
+    const [input] = await getRippleSigningInputs({
+      keysignPayload: payload,
+      walletCore,
+    })
+
+    expect(input.rawJson).toBe(paymentJson)
+  })
+
+  it('forwards a Payment whose flags do not touch delivery', async () => {
+    // tfFullyCanonicalSig sits above INT32_MAX, so the uint32 bound must not
+    // clip it into a rejection.
+    const payload = buildPaymentPayload()
+    const paymentJson = JSON.stringify({
+      TransactionType: 'Payment',
+      Account: ACCOUNT,
+      Destination: payload.toAddress,
+      Amount: payload.toAmount,
+      Flags: 2147483648,
+    })
+    payload.signData = {
+      case: 'signRipple',
+      value: {
+        $typeName: 'vultisig.keysign.v1.SignRipple',
+        rawJson: paymentJson,
+      },
+    }
+
+    const [input] = await getRippleSigningInputs({
+      keysignPayload: payload,
+      walletCore,
+    })
+
+    expect(input.rawJson).toBe(paymentJson)
+  })
+
+  it('rejects a Payment whose Flags cannot be read as a uint32', () => {
+    // Some client libraries accept `{ tfPartialPayment: true }` sugar. Signing
+    // it would mean signing flags this resolver never evaluated.
+    const payload = buildPaymentPayload()
+    payload.signData = {
+      case: 'signRipple',
+      value: {
+        $typeName: 'vultisig.keysign.v1.SignRipple',
+        rawJson: JSON.stringify({
+          TransactionType: 'Payment',
+          Account: ACCOUNT,
+          Destination: payload.toAddress,
+          Amount: payload.toAmount,
+          Flags: { tfPartialPayment: true },
+        }),
+      },
+    }
+
+    expect(() => getRippleSigningInputs({ keysignPayload: payload, walletCore })).toThrow(/Flags is not a uint32/)
+  })
+
   it('still lets a non-Payment rawJson through on the Account check alone (OfferCreate)', async () => {
     // Offers cannot be expressed by toAddress/toAmount, so the metadata
     // binding must not break them — only the Account gate applies.

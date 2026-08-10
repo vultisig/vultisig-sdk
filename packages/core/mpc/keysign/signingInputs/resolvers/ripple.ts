@@ -16,6 +16,11 @@ import { isRippleTrustSet } from '../../utils/isRippleTrustSet'
 import { getLegacyDestinationTag, resolveDestinationTag } from '../../utils/rippleDestinationTag'
 import { SigningInputsResolver } from '../resolver'
 
+// tfPartialPayment on an XRPL Payment. It redefines `Amount` from a guaranteed
+// delivery into a maximum, leaving `delivered_amount` in the executed
+// transaction's metadata as the only record of what actually moved.
+const tfPartialPayment = 0x00020000
+
 export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysignPayload }) => {
   const rippleSpecific = getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'rippleSpecific')
   const { gas, sequence, lastLedgerSequence } = rippleSpecific
@@ -31,7 +36,8 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
   // payload's toAddress / toAmount (which cannot describe an offer); this
   // resolver is instead the fail-closed chokepoint that binds the raw
   // transaction to the signing vault (the `Account` check below) and, for
-  // Payments, to the reviewed destination and amount.
+  // Payments, to the reviewed destination and amount — including refusing the
+  // flags that would quietly unbind that amount again.
   const getRawJson = (): Pick<TW.Ripple.Proto.ISigningInput, 'rawJson'> | undefined => {
     if (keysignPayload.signData.case !== 'signRipple') {
       return undefined
@@ -107,6 +113,24 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
       } else {
         // Missing Amount (or an unrepresentable encoding) cannot be reviewed.
         throw amountMismatch
+      }
+
+      // The Amount binding just established only means something while Amount
+      // is a delivery. tfPartialPayment turns it into a ceiling: the ledger
+      // hands over whatever the path can source and records the real figure
+      // only in the executed transaction's metadata, so the reviewed toAmount
+      // stops describing what the recipient gets while the sender can still be
+      // charged the full SendMax. A DeliverMin restores a floor; without one
+      // there is nothing left to bind, so refuse rather than sign an outcome
+      // no reviewer could have seen. Flags we cannot read as a uint32 are
+      // refused for the same reason — they may carry the very bit checked here.
+      const flags = tx.Flags === undefined ? 0 : tx.Flags
+      if (typeof flags !== 'number' || !Number.isInteger(flags) || flags < 0 || flags > 0xffffffff) {
+        throw new Error('signRipple rawJson Flags is not a uint32 bitmask')
+      }
+
+      if ((flags & tfPartialPayment) !== 0 && tx.DeliverMin === undefined) {
+        throw new Error('signRipple rawJson sets tfPartialPayment without a DeliverMin floor')
       }
     }
 
