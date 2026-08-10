@@ -190,7 +190,11 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
       if ((flags & tfPartialPayment) !== 0) {
         const parsedAmount = parseXrplAmount(amount)
         const parsedDeliverMin = parseXrplAmount(tx.DeliverMin)
-        if (!parsedAmount || !parsedDeliverMin || !deliverMinExactlyMatchesReviewedAmount(parsedDeliverMin, parsedAmount)) {
+        if (
+          !parsedAmount ||
+          !parsedDeliverMin ||
+          !deliverMinExactlyMatchesReviewedAmount(parsedDeliverMin, parsedAmount)
+        ) {
           throw new Error(
             'signRipple rawJson sets tfPartialPayment without a DeliverMin that guarantees the reviewed amount'
           )
