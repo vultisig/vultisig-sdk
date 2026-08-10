@@ -18,8 +18,12 @@ vi.mock('@vultisig/core-chain/chains/evm/erc20/getErc20Allowance', () => ({
   getErc20Allowance: vi.fn(),
 }))
 
-// Mock isChainOfKind to always work
-vi.mock('@vultisig/core-chain/ChainKind', () => ({
+// Mock isChainOfKind to always work. Partial mock on purpose: chainRegistry builds
+// its descriptors at module scope and calls getChainKind while evm/chainInfo is
+// still importing, so a bare factory here drops that export and the suite dies at
+// import time rather than in a test.
+vi.mock('@vultisig/core-chain/ChainKind', async importOriginal => ({
+  ...(await importOriginal<typeof import('@vultisig/core-chain/ChainKind')>()),
   isChainOfKind: vi.fn((chain: string, kind: string) => {
     const evmChains = ['Ethereum', 'BSC', 'Polygon', 'Avalanche', 'Base', 'Arbitrum', 'Optimism']
     if (kind === 'evm') return evmChains.includes(chain)

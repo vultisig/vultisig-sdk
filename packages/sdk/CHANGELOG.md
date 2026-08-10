@@ -1,5 +1,57 @@
 # @vultisig/sdk
 
+## 4.4.0
+
+### Minor Changes
+
+- [#1812](https://github.com/vultisig/vultisig-sdk/pull/1812) [`2e1b8bb`](https://github.com/vultisig/vultisig-sdk/commit/2e1b8bb597d2d0fa052a121ab2757efa228314f5) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Export an exhaustive chain-descriptor registry with explorer metadata plus helpers for deriving consumer projections and attaching compile-safe consumer-local extensions.
+
+- [#1823](https://github.com/vultisig/vultisig-sdk/pull/1823) [`1e05f2c`](https://github.com/vultisig/vultisig-sdk/commit/1e05f2c4a97772f48a2b3946a701e63e309410db) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add the versioned signable-transaction v1 schema, canonical hashing, decoder interface, approval binding, verifier, and shared fixture format.
+
+- [#1817](https://github.com/vultisig/vultisig-sdk/pull/1817) [`67dd842`](https://github.com/vultisig/vultisig-sdk/commit/67dd8425a10f0c7b7833c02147fc0036e6ee7a64) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Surface the affiliate fee SwapKit itemizes on EVM routes, and expose a route's price impact on `GeneralSwapQuote`.
+
+  The SwapKit EVM branch never populated `affiliateFee`, although the Solana branch already did, so an aggregator swap reached consumers with no swap fee to show and a total that omitted it. It now carries the fee. It stays absent when no amount can be vouched for — no fee entries, an itemized zero, or a shape that cannot be resolved — so consumers report the fee as part of the quoted rate rather than asserting a zero. Unresolvable shapes raise the new `SwapKitFeeShapeError`, which this branch swallows because the fee is not part of the signed EVM transaction; Solana still lets it throw, since its tx type requires the fee.
+
+  `GeneralSwapQuote.priceImpactFraction` carries a route's signed price impact as a fraction, read from SwapKit's `meta.priceImpact` and falling back to `totalSlippageBps`. Both are narrowed to finite numbers, since nothing validates the proxy's JSON on the way in. The unit is named in the field because the neighbouring price-impact guard exposes both fraction and percent entry points, and mixing them is a silent 100x. The field is absent for providers that publish no impact, so consumers can hide the row instead of substituting a fee figure for it.
+
+- [#1703](https://github.com/vultisig/vultisig-sdk/pull/1703) [`3ea8b2c`](https://github.com/vultisig/vultisig-sdk/commit/3ea8b2c5133a16878991ec33d569fd8498837316) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Expose a cached dynamic THORChain secured-asset catalog with an offline fallback for swap destination discovery.
+
+### Patch Changes
+
+- [#1813](https://github.com/vultisig/vultisig-sdk/pull/1813) [`aaa3aa9`](https://github.com/vultisig/vultisig-sdk/commit/aaa3aa93b62b6933f09ba8a33d09806d051215b9) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(ripple): only declare genuine trust lines as TrustSet
+
+  `RippleSpecific.transaction_type` was set from the coin's shape alone, but an
+  issued-currency Payment has the identical shape — a non-native Ripple coin with
+  a `contractAddress`. So sending a token stamped that payload
+  `TRANSACTION_TYPE_RIPPLE_TRUST_SET`.
+
+  That is worse than the ambiguity it was meant to remove. Before the field
+  existed, a token send diverged: this SDK built a TrustSet, an iOS co-signer
+  built a Payment, and the ceremony failed without signing anything. With the
+  field set, every signer agrees to build a TrustSet — so the ceremony _completes_
+  over an operation the user never asked for, setting a trust-line limit to the
+  amount they meant to send. No funds move, and nothing surfaces it.
+
+  Declaring is an assertion, so it now requires more than the shape: a TrustSet is
+  addressed to the _issuer_, the party being trusted, while a Payment is addressed
+  to a recipient.
+
+  The signing fallback is deliberately left broad. Clients already released infer
+  TrustSet from a non-native coin alone, and honouring that inference is what keeps
+  a genuine TrustSet byte-identical across a mixed-version committee; narrowing it
+  would break MPC parity with every signer in the field. A token send therefore
+  returns to diverging safely rather than completing wrongly.
+
+## 4.3.1
+
+### Patch Changes
+
+- [#1652](https://github.com/vultisig/vultisig-sdk/pull/1652) [`e71c39b`](https://github.com/vultisig/vultisig-sdk/commit/e71c39b79f9141d9f1959e108a1fcd355e848776) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Reject scientific-notation, Infinity, and hex-like StakeKit action amounts unless they are plain positive decimal strings.
+
+- [#1815](https://github.com/vultisig/vultisig-sdk/pull/1815) [`b61dcba`](https://github.com/vultisig/vultisig-sdk/commit/b61dcbaa16bd9b09e9550484f7b1429c968b8ace) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fail closed when multi-input signature counts differ from message hashes or a single signature is paired with multiple message hashes.
+
+- [#1822](https://github.com/vultisig/vultisig-sdk/pull/1822) [`2fc21fe`](https://github.com/vultisig/vultisig-sdk/commit/2fc21fec196a1dcf46aa6892452fc44b5ad6fb1b) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Route SecureVault QBTC signing through the dedicated ML-DSA keyshare and signing primitive.
+
 ## 4.3.0
 
 ### Minor Changes
