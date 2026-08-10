@@ -1,9 +1,26 @@
 import { describe, expect, it } from 'vitest'
 
 import * as sdk from '../../../src/index'
+import * as dangerousAddresses from '../../../src/utils/dangerousAddresses'
 import { cosmosTxFeeGasParityCases } from '../../fixtures/cosmosTxFeeGasParity'
 
+const dangerousAddressCanonicalExports = [
+  'EVM_DANGEROUS_ADDRESSES',
+  'SOLANA_DANGEROUS_ADDRESSES',
+  'UTXO_DANGEROUS_ADDRESSES',
+  'XRP_DANGEROUS_ADDRESSES',
+  'getEvmDangerousReason',
+  'isEvmBurnAddress',
+  'getChainDangerousReason',
+  'assertSafeEvmDestination',
+  'assertSafeDestination',
+] as const
+
 describe('@vultisig/sdk public exports', () => {
+  it.each(dangerousAddressCanonicalExports)('re-exports dangerous-address canonical %s by identity', name => {
+    expect(sdk[name]).toBe(dangerousAddresses[name])
+  })
+
   it('exports fiatToAmount, toChainAmount, and chain-reference normalization utilities', () => {
     expect(typeof sdk.fiatToAmount).toBe('function')
     expect(typeof sdk.toChainAmount).toBe('function')
@@ -181,11 +198,15 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.thorchainSecuredAssetFallback.length).toBeGreaterThan(10)
   })
 
-  it('exports canonical EVM chain-id helpers from the root sdk surface', () => {
+  it('exports canonical EVM chain-id helpers and the priority-fee sanity clamp from the root sdk surface', () => {
     expect(typeof sdk.getEvmChainId).toBe('function')
     expect(typeof sdk.getEvmChainByChainId).toBe('function')
+    expect(typeof sdk.clampEvmPriorityFee).toBe('function')
     expect(sdk.getEvmChainId(sdk.Chain.Mantle)).toBe('0x1388')
     expect(sdk.getEvmChainByChainId('0x3e7')).toBe(sdk.Chain.Hyperliquid)
+    expect(
+      sdk.clampEvmPriorityFee(sdk.Chain.Base as Parameters<typeof sdk.clampEvmPriorityFee>[0], 75n * 1_000_000_000n)
+    ).toBe(50n * 1_000_000_000n)
   })
 
   it('exports gas comparison helpers from the root sdk surface', () => {
