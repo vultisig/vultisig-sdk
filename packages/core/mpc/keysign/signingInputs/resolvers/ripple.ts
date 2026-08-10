@@ -21,27 +21,51 @@ import { SigningInputsResolver } from '../resolver'
 // transaction's metadata as the only record of what actually moved.
 const tfPartialPayment = 0x00020000
 
-// Whether a value is a well-formed, strictly positive XRPL amount — a drops
-// string or an issued-currency object. A DeliverMin only floors a delivery if
-// it is one: `null`, `{}` and zero all satisfy "the field is present" while
-// bounding nothing, so presence alone cannot stand in for a floor.
-const isPositiveXrplAmount = (value: unknown): boolean => {
+// A well-formed, strictly positive XRPL amount — a drops string or an
+// issued-currency object — normalised so two amounts can be compared. `null`,
+// `{}` and zero all satisfy "the field is present" while bounding nothing, so
+// presence alone cannot stand in for a floor: this parses to `undefined` for
+// anything that isn't an actual positive quantity.
+type ParsedXrplAmount =
+  | { kind: 'native'; units: bigint }
+  | { kind: 'issued'; currency: string; issuer: string; units: bigint }
+
+const parseXrplAmount = (value: unknown): ParsedXrplAmount | undefined => {
   if (typeof value === 'string') {
     const drops = attempt(() => BigInt(value))
-    return 'error' in drops ? false : drops.data > 0n
+    if ('error' in drops || drops.data <= 0n) {
+      return undefined
+    }
+    return { kind: 'native', units: drops.data }
   }
 
   if (typeof value !== 'object' || value === null) {
-    return false
+    return undefined
   }
 
   const { currency, issuer, value: issuedValue } = value as Record<string, unknown>
   if (typeof currency !== 'string' || typeof issuer !== 'string' || typeof issuedValue !== 'string') {
-    return false
+    return undefined
   }
 
   const parsed = attempt(() => parseIssuedCurrencyValue(issuedValue))
-  return 'error' in parsed ? false : parsed.data > 0n
+  if ('error' in parsed || parsed.data <= 0n) {
+    return undefined
+  }
+  return { kind: 'issued', currency: toXrplCurrencyCode(currency), issuer, units: parsed.data }
+}
+
+// True only if `deliverMin` is the same asset as `amount` (native XRP, or the
+// same issued-currency code + issuer) and guarantees at least as much value.
+// A DeliverMin in a different currency, or a currency-matched one that floors
+// less than the reviewed Amount, leaves the recipient able to receive less
+// than what the reviewer approved — which a positive-but-unrelated floor does
+// not prevent.
+const deliversAtLeastReviewedAmount = (deliverMin: ParsedXrplAmount, amount: ParsedXrplAmount): boolean => {
+  if (deliverMin.kind === 'native' || amount.kind === 'native') {
+    return deliverMin.kind === 'native' && amount.kind === 'native' && deliverMin.units >= amount.units
+  }
+  return deliverMin.currency === amount.currency && deliverMin.issuer === amount.issuer && deliverMin.units >= amount.units
 }
 
 export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysignPayload }) => {
@@ -143,18 +167,28 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
       // hands over whatever the path can source and records the real figure
       // only in the executed transaction's metadata, so the reviewed toAmount
       // stops describing what the recipient gets while the sender can still be
-      // charged the full SendMax. A well-formed, positive DeliverMin restores a
-      // floor; without one there is nothing left to bind, so refuse rather than
-      // sign an outcome no reviewer could have seen. Flags we cannot read as a
-      // uint32 are refused for the same reason — they may carry the very bit
-      // checked here.
+      // charged the full SendMax. A DeliverMin that merely exists and is
+      // positive is not a floor the reviewer approved — a dApp can bind Amount
+      // to the reviewed toAmount while DeliverMin permits delivering a dust
+      // fraction of it. Only a DeliverMin that guarantees the full reviewed
+      // Amount (same asset, at least as much value) restores what the review
+      // screen promised; without one there is nothing left to bind, so refuse
+      // rather than sign an outcome no reviewer could have seen. Flags we
+      // cannot read as a uint32 are refused for the same reason — they may
+      // carry the very bit checked here.
       const flags = tx.Flags === undefined ? 0 : tx.Flags
       if (typeof flags !== 'number' || !Number.isInteger(flags) || flags < 0 || flags > 0xffffffff) {
         throw new Error('signRipple rawJson Flags is not a uint32 bitmask')
       }
 
-      if ((flags & tfPartialPayment) !== 0 && !isPositiveXrplAmount(tx.DeliverMin)) {
-        throw new Error('signRipple rawJson sets tfPartialPayment without a usable DeliverMin floor')
+      if ((flags & tfPartialPayment) !== 0) {
+        const parsedAmount = parseXrplAmount(amount)
+        const parsedDeliverMin = parseXrplAmount(tx.DeliverMin)
+        if (!parsedAmount || !parsedDeliverMin || !deliversAtLeastReviewedAmount(parsedDeliverMin, parsedAmount)) {
+          throw new Error(
+            'signRipple rawJson sets tfPartialPayment without a DeliverMin that guarantees the reviewed amount'
+          )
+        }
       }
     }
 
