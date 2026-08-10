@@ -40,6 +40,26 @@ const assertCowQuoteNotExpired = (validTo: number): void => {
   }
 }
 
+// Cross-checks the caller's `amount` against the base-unit amount `findSwapQuote`
+// actually fetched the quote for (`SwapQuote.requestedAmount`, ABTS/plan 005
+// residual). This is the only amount-consistency signal available for
+// native/EVM/Solana routes — their quote responses carry no committed-input-
+// amount field to compare against (see `assertAmountMatchesCommittedSellAmount`
+// below for the narrower, provider-committed check on transfer/CoW routes).
+// Fails open when `requestedAmount` is absent (e.g. a hand-built quote that
+// didn't go through `findSwapQuote`) rather than invent a comparison.
+const assertAmountMatchesRequestedAmount = (params: PrepareSwapTxFromKeysParams): void => {
+  const { requestedAmount } = params.swapQuote
+  if (requestedAmount === undefined) return
+
+  const requested = toChainAmount(params.amount, params.fromCoin.decimals)
+  if (requested !== requestedAmount) {
+    throw new Error(
+      `prepareSwapTxFromKeys: requested amount (${requested} base units) does not match the amount the quote was fetched for (${requestedAmount} base units) — the quote may be stale or for a different request`
+    )
+  }
+}
+
 // Cross-checks the caller's `amount` against the quote's CoW gross sell amount only.
 // `general.transfer` amount is provider-committed and legitimately diverges from the caller's
 // input by small fee adjustments (e.g. request 100_000n → committed 99_999n), so an exact
@@ -76,12 +96,11 @@ const assertAmountMatchesCommittedSellAmount = (params: PrepareSwapTxFromKeysPar
  *
  * Coin-input resolution must be performed by the caller — the vault layer owns
  * that responsibility because it requires `getAddress`. This helper enforces
- * quote-expiry (native quotes) and amount↔quote consistency (general quotes
- * with a confidently-comparable committed sell amount) itself, so every
+ * quote-expiry (native/CoW quotes) and amount↔quote consistency itself, so every
  * caller — vault-wrapped and vault-free alike — gets those checks; see the
  * inline reasoning above `assertNativeQuoteNotExpired` /
- * `assertAmountMatchesCommittedSellAmount` for exactly what is and isn't
- * covered.
+ * `assertAmountMatchesRequestedAmount` / `assertAmountMatchesCommittedSellAmount`
+ * for exactly what is and isn't covered.
  *
  * If the swap requires an ERC-20 approval, the resulting payload will have
  * `erc20ApprovePayload` set by core; this wrapper returns the payload as-is
@@ -105,6 +124,7 @@ export const prepareSwapTxFromKeys = async (
   if ('general' in quote && 'cowswap_order' in quote.general.tx) {
     assertCowQuoteNotExpired(quote.general.tx.cowswap_order.validTo)
   }
+  assertAmountMatchesRequestedAmount(params)
   assertAmountMatchesCommittedSellAmount(params)
 
   const walletCore = walletCoreOverride ?? (await getWalletCore())

@@ -680,6 +680,7 @@ export const findSwapQuote = async ({
         return {
           quote: { native },
           discounts: swapChain === Chain.THORChain ? [...vultDiscount, ...referralDiscount] : vultDiscount,
+          requestedAmount: amount,
         }
       },
     }))
@@ -726,7 +727,7 @@ export const findSwapQuote = async ({
             affiliateBps,
           })
 
-          return { quote: { general }, discounts: vultDiscount }
+          return { quote: { general }, discounts: vultDiscount, requestedAmount: chainAmount }
         },
       })
     }
@@ -755,7 +756,7 @@ export const findSwapQuote = async ({
             slippageTolerance: kyberSlippageBps,
           })
 
-          return { quote: { general }, discounts: vultDiscount }
+          return { quote: { general }, discounts: vultDiscount, requestedAmount: chainAmount }
         },
       })
     }
@@ -783,7 +784,7 @@ export const findSwapQuote = async ({
             slippage: oneInchSlippagePercent,
           })
 
-          return { quote: { general }, discounts: vultDiscount }
+          return { quote: { general }, discounts: vultDiscount, requestedAmount: chainAmount }
         },
       })
     }
@@ -809,7 +810,7 @@ export const findSwapQuote = async ({
             slippageBps: jupiterSlippageBps,
           })
 
-          return { quote: { general }, discounts: vultDiscount }
+          return { quote: { general }, discounts: vultDiscount, requestedAmount: chainAmount }
         },
       })
     }
@@ -833,7 +834,7 @@ export const findSwapQuote = async ({
             slippage: lifiSlippageFraction,
           })
 
-          return { quote: { general }, discounts: vultDiscount }
+          return { quote: { general }, discounts: vultDiscount, requestedAmount: chainAmount }
         },
       })
     }
@@ -856,7 +857,7 @@ export const findSwapQuote = async ({
             slippage: swapKitSlippagePercent,
           })
 
-          return { quote: { general }, discounts: vultDiscount }
+          return { quote: { general }, discounts: vultDiscount, requestedAmount: chainAmount }
         },
       })
     }

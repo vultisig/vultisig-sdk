@@ -396,3 +396,83 @@ describe('prepareSwapTxFromKeys — amount vs committed sell amount (ABTS/plan 0
     ).resolves.toBeDefined()
   })
 })
+
+describe('prepareSwapTxFromKeys — amount vs quote.requestedAmount (fixes native/EVM residual, ABTS-005/#1117)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockGetWalletCore.mockResolvedValue(mockWalletCore)
+    mockGetPublicKey.mockReturnValueOnce(mockFromPublicKey).mockReturnValueOnce(mockToPublicKey)
+  })
+
+  it('throws when the caller amount does not match a native quote requestedAmount (regression: previously fail-open)', async () => {
+    // Quote was fetched for 10 RUNE (base units at 8 decimals), caller signs for 20.
+    const quote = {
+      quote: { native: { expiry: Math.floor(Date.now() / 1000) + 600 } },
+      requestedAmount: 1_000_000_000n,
+    } as any
+
+    await expect(
+      prepareSwapTxFromKeys(baseIdentity, {
+        fromCoin: thorCoin,
+        toCoin: btcCoin,
+        amount: 20,
+        swapQuote: quote,
+      })
+    ).rejects.toThrow(/does not match the amount the quote was fetched for/)
+
+    expect(mockBuildSwapKeysignPayload).not.toHaveBeenCalled()
+    expect(mockGetWalletCore).not.toHaveBeenCalled()
+  })
+
+  it('does NOT throw when the caller amount matches the native quote requestedAmount', async () => {
+    mockBuildSwapKeysignPayload.mockResolvedValue({ __mock: 'payload' })
+    const quote = {
+      quote: { native: { expiry: Math.floor(Date.now() / 1000) + 600 } },
+      requestedAmount: 1_000_000_000n,
+    } as any
+
+    await expect(
+      prepareSwapTxFromKeys(baseIdentity, {
+        fromCoin: thorCoin,
+        toCoin: btcCoin,
+        amount: 10,
+        swapQuote: quote,
+      })
+    ).resolves.toBeDefined()
+  })
+
+  it('throws when the caller amount does not match an EVM-general quote requestedAmount (regression: previously fail-open)', async () => {
+    const quote = {
+      quote: { general: { tx: { evm: { to: '0xrouter', data: '0xdeadbeef', value: '0' } } } },
+      requestedAmount: 1_000_000_000_000_000_000n,
+    } as any
+
+    await expect(
+      prepareSwapTxFromKeys(baseIdentity, {
+        fromCoin: ethCoin,
+        toCoin: btcCoin,
+        amount: '999999',
+        swapQuote: quote,
+      })
+    ).rejects.toThrow(/does not match the amount the quote was fetched for/)
+
+    expect(mockBuildSwapKeysignPayload).not.toHaveBeenCalled()
+  })
+
+  it('does NOT throw when the caller amount matches the EVM-general quote requestedAmount', async () => {
+    mockBuildSwapKeysignPayload.mockResolvedValue({ __mock: 'payload' })
+    const quote = {
+      quote: { general: { tx: { evm: { to: '0xrouter', data: '0xdeadbeef', value: '0' } } } },
+      requestedAmount: 1_000_000_000_000_000_000n,
+    } as any
+
+    await expect(
+      prepareSwapTxFromKeys(baseIdentity, {
+        fromCoin: ethCoin,
+        toCoin: btcCoin,
+        amount: '1',
+        swapQuote: quote,
+      })
+    ).resolves.toBeDefined()
+  })
+})
