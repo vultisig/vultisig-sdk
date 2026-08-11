@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { Chain, EvmChain } from '../../Chain'
 import { blockaidEvmChain } from '../../security/blockaid/evmChains'
-import { swapKitSourceChains } from './swapkit/SwapKitEnabledChains'
 import { COW_VAULT_RELAYER_ADDRESS, cowSwapSupportedChains } from './cowswap/config'
 import {
   assertKnownAggregatorRouter,
@@ -10,6 +9,7 @@ import {
   assertSwapKitDestinationMatchesTarget,
   logUnenforcedAggregatorDestination,
 } from './knownAggregatorRouters'
+import { swapKitSourceChains } from './swapkit/SwapKitEnabledChains'
 
 const ONE_INCH_V6 = '0x111111125421ca6dc452d289314280a0f8842a65'
 const ONE_INCH_V5 = '0x1111111254eeb25477b68fb85ed929f73a960582'

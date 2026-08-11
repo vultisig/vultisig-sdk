@@ -180,7 +180,13 @@ describe('getSwapKitQuote', () => {
           providers: ['ONEINCH'],
           targetAddress: '0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1',
           ...(fees ? { fees } : {}),
-          tx: { from: '0xsender', to: '0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1', data: '0xabcdef', value: '0', gas: '21000' },
+          tx: {
+            from: '0xsender',
+            to: '0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1',
+            data: '0xabcdef',
+            value: '0',
+            gas: '21000',
+          },
         })
       )
 
