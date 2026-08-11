@@ -412,12 +412,6 @@ export {
 export { getEvmChainByChainId, getEvmChainId } from '@vultisig/core-chain/chains/evm/chainInfo'
 export { clampEvmPriorityFee } from '@vultisig/core-chain/tx/fee/evm/clampEvmPriorityFee'
 
-// Swap tracker URL routing (pure provider/chain -> URL mapping). The root SDK
-// entry already exports these canonicals, but the RN allow-list omitted them,
-// forcing RN consumers back into local provider-host routing tables.
-export type { GetSwapExplorerUrlInput, SwapExplorerProvider } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
-export { getSwapExplorerUrl, swapExplorerProviders } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
-
 // Gas / fee primitives (read-only — uses global `fetch` + type-only imports,
 // no heavy chain client at module init). The RN allow-list omitted these so RN
 // consumers (vultiagent-app) couldn't resolve current UTXO sat/vB rates OR the
