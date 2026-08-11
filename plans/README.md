@@ -15,10 +15,10 @@ live in agent-backend-ts; 004/008 in vultiagent-poc).
 
 ## Execution order & status
 
-| Plan | Title | Priority | Effort | Depends on | Status |
-|------|-------|----------|--------|------------|--------|
-| 003  | Golden-vector-bind the two tx-encoder families (RN pure-JS vs WalletCore) | P1 | M | — | DONE — see note |
-| 005  | Add amount↔quote + expiry checks to the agent-reachable vault-free swap helper | P1 | S | — | DONE (partial) — see note |
+| Plan | Title                                                                          | Priority | Effort | Depends on | Status          |
+| ---- | ------------------------------------------------------------------------------ | -------- | ------ | ---------- | --------------- |
+| 003  | Golden-vector-bind the two tx-encoder families (RN pure-JS vs WalletCore)      | P1       | M      | —          | DONE — see note |
+| 005  | Add amount↔quote + expiry checks to the agent-reachable vault-free swap helper | P1       | S      | —          | DONE — see note |
 
 ## Plan 003 outcome note (2026-07-17, branch fix_encoder_parity_cross_check)
 
@@ -61,6 +61,16 @@ enforcement in the vault-free path — the calldata-amount-decode gap defers bot
 cowswap_order are covered. Follow-up: an EVM calldata amount-decoder (analogous to what would unlock
 decode-based checks elsewhere) is the prerequisite to close it — worth tracking as a named next step,
 not "good enough as-is."
+
+**Follow-up outcome (2026-08-05, issue #1196):** the residual is closed at the canonical quote
+boundary without coupling fund safety to provider-specific router ABIs. `findSwapQuote` now
+integrity-binds every raw quote to the exact source/destination coin identities, requested source
+amount, absolute receive-time expiry, and returned transaction; the vault-free helper fails closed
+when that binding is missing, expired, mismatched, or mutated before wallet-core/key derivation or
+payload construction. Native and CoW embedded deadlines and CoW's committed gross sell amount remain
+defense-in-depth checks. This guards stale/cross-request quote reuse and post-selection transaction
+changes across evolving EVM aggregator calldata shapes while keeping provider response validation at
+each provider's existing trust boundary.
 
 10 new tests (`swap.test.ts`), all green; 3 pre-existing tests' quote fixtures updated (bare mock →
 real `{quote:{native:{expiry}}}` shape) to exercise the real branches rather than break on the new
