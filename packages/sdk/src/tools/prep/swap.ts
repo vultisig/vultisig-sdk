@@ -6,7 +6,7 @@ import {
   cloneSwapSafetyValue,
   getSwapQuoteSafetyFingerprint,
 } from '@vultisig/core-chain/swap/quote/getSwapQuoteSafetyFingerprint'
-import type { SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
+import type { BoundSwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
 import { buildSwapKeysignPayload } from '@vultisig/core-mpc/keysign/swap/build'
 import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
@@ -18,7 +18,18 @@ export type PrepareSwapTxFromKeysParams = {
   fromCoin: AccountCoin
   toCoin: AccountCoin
   amount: string | number
-  swapQuote: SwapQuote
+  /** Live bound quote returned by `findSwapQuote`; do not JSON round-trip it. */
+  swapQuote: BoundSwapQuote
+}
+
+/** Catchable signal that the caller should fetch a fresh quote and retry. */
+export class SwapQuoteExpiredError extends Error {
+  readonly code = 'SWAP_QUOTE_EXPIRED'
+
+  constructor(message: string) {
+    super(message)
+    this.name = 'SwapQuoteExpiredError'
+  }
 }
 
 // Snapshot all amount/coin/quote inputs synchronously. Validation and payload construction must
@@ -44,7 +55,7 @@ const assertQuoteSafetyBinding = (params: PrepareSwapTxFromKeysParams, requested
     )
   }
   if (expiresAt <= Date.now()) {
-    throw new Error('prepareSwapTxFromKeys: swap quote has expired; refresh the quote before signing')
+    throw new SwapQuoteExpiredError('prepareSwapTxFromKeys: swap quote has expired; refresh the quote before signing')
   }
   if (boundAmount !== requestedAmount) {
     throw new Error(
@@ -60,7 +71,7 @@ const assertQuoteSafetyBinding = (params: PrepareSwapTxFromKeysParams, requested
   })
   if (safetyFingerprint !== expectedFingerprint) {
     throw new Error(
-      'prepareSwapTxFromKeys: swap quote does not match the requested coins or its original transaction; refresh the quote before signing'
+      'prepareSwapTxFromKeys: swap quote does not match the requested coins, amount, value types, or original transaction; fetch a fresh quote without JSON round-tripping it'
     )
   }
 }
@@ -69,21 +80,25 @@ const assertQuoteSafetyBinding = (params: PrepareSwapTxFromKeysParams, requested
 // THORChain/Maya quote API. CoW's `validTo` is the deadline on the EIP-712 order itself.
 const assertNativeQuoteNotExpired = (expirySeconds: number): void => {
   if (expirySeconds <= Math.floor(Date.now() / 1000)) {
-    throw new Error('prepareSwapTxFromKeys: native swap quote has expired; refresh the quote before signing')
+    throw new SwapQuoteExpiredError(
+      'prepareSwapTxFromKeys: native swap quote has expired; refresh the quote before signing'
+    )
   }
 }
 
 const assertCowQuoteNotExpired = (validTo: number): void => {
   if (validTo <= Math.floor(Date.now() / 1000)) {
-    throw new Error(
+    throw new SwapQuoteExpiredError(
       'prepareSwapTxFromKeys: CoW swap order has expired (validTo in the past); refresh the quote before signing'
     )
   }
 }
 
 // Defense-in-depth for CoW: the quote-level requested amount must also match the gross value
-// committed to the EIP-712 order. Other tx variants are covered by the quote-level binding above;
-// `transfer.amount` may legitimately differ because providers subtract deposit-channel fees.
+// committed to the EIP-712 order. Native/evm/solana do not expose a separate committed-sell
+// field here, so they intentionally fail open after the quote-level amount binding above;
+// `transfer.amount` may legitimately differ (for example, 100_000n -> 99_999n) because providers
+// subtract deposit-channel fees.
 const assertAmountMatchesCommittedSellAmount = (params: PrepareSwapTxFromKeysParams): void => {
   const { quote } = params.swapQuote
   if (!('general' in quote)) return

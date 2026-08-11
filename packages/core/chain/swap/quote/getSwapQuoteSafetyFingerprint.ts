@@ -28,7 +28,11 @@ export const cloneSwapSafetyValue = <T>(value: T): T => {
 const canonicalize = (value: unknown): string => {
   if (value === null) return 'null'
   if (value instanceof Uint8Array) return `{"$bytes":${JSON.stringify(bytesToHex(value))}}`
-  if (Array.isArray(value)) return `[${value.map(canonicalize).join(',')}]`
+  if (Array.isArray(value)) {
+    return `[${Array.from({ length: value.length }, (_, index) =>
+      index in value && value[index] !== undefined ? canonicalize(value[index]) : '{"$undefined":true}'
+    ).join(',')}]`
+  }
 
   switch (typeof value) {
     case 'bigint':
@@ -42,7 +46,10 @@ const canonicalize = (value: unknown): string => {
       return `{${Object.keys(record)
         .filter(key => record[key] !== undefined)
         .sort()
-        .map(key => `${JSON.stringify(key)}:${canonicalize(record[key])}`)
+        // `$...` is reserved for canonical type tags above. Escape real object
+        // keys in that namespace so, for example, `5n` cannot collide with a
+        // provider object shaped like `{ $bigint: '5' }`.
+        .map(key => `${JSON.stringify(key.startsWith('$') ? `$${key}` : key)}:${canonicalize(record[key])}`)
         .join(',')}}`
     }
     default:
@@ -59,9 +66,11 @@ const coinIdentity = ({ chain, address, id, ticker, decimals }: AccountCoin) => 
 })
 
 /**
- * Integrity-binds a canonical quote to the exact request identity and signable
- * transaction it was returned with. Pure and platform-neutral so preparation
- * can recompute the same value before any wallet/key/payload work.
+ * Detects accidental mutation and stale or mismatched reuse by binding a
+ * canonical quote to the exact request identity and signable transaction it
+ * was returned with. This unkeyed digest is not an authenticity boundary.
+ * Pure and platform-neutral so preparation can recompute the same value before
+ * any wallet/key/payload work.
  */
 export const getSwapQuoteSafetyFingerprint = ({ from, to, requestedAmount, expiresAt, quote }: Input): string =>
   bytesToHex(

@@ -18,7 +18,7 @@ vi.mock('@/context/wasmRuntime', () => ({
   getWalletCore: mockGetWalletCore,
 }))
 
-import { prepareSwapTxFromKeys } from '@/tools/prep/swap'
+import { prepareSwapTxFromKeys, SwapQuoteExpiredError } from '@/tools/prep/swap'
 import type { VaultIdentity } from '@/tools/prep/types'
 
 const baseIdentity: VaultIdentity = {
@@ -247,7 +247,7 @@ describe('prepareSwapTxFromKeys — quote expiry (ABTS/plan 005)', () => {
         amount: '1',
         swapQuote: generalQuote,
       })
-    ).rejects.toThrow(/expired/)
+    ).rejects.toBeInstanceOf(SwapQuoteExpiredError)
 
     expect(mockBuildSwapKeysignPayload).not.toHaveBeenCalled()
     expect(mockGetWalletCore).not.toHaveBeenCalled()
@@ -456,7 +456,7 @@ describe('prepareSwapTxFromKeys — amount consistency (ABTS/plan 005)', () => {
         amount: '1',
         swapQuote: quote,
       })
-    ).rejects.toThrow(/does not match the requested coins or its original transaction/)
+    ).rejects.toThrow(/does not match the requested coins, amount, value types, or original transaction/)
 
     expect(mockBuildSwapKeysignPayload).not.toHaveBeenCalled()
     expect(mockGetWalletCore).not.toHaveBeenCalled()
@@ -472,7 +472,7 @@ describe('prepareSwapTxFromKeys — amount consistency (ABTS/plan 005)', () => {
       },
       1_000_000_000_000_000_000n
     )
-    quote.quote.general.tx.evm.data = '0xtampered'
+    quote.quote.general.tx.evm.data = '0xchanged'
 
     await expect(
       prepareSwapTxFromKeys(baseIdentity, {
@@ -481,7 +481,7 @@ describe('prepareSwapTxFromKeys — amount consistency (ABTS/plan 005)', () => {
         amount: '1',
         swapQuote: quote,
       })
-    ).rejects.toThrow(/does not match the requested coins or its original transaction/)
+    ).rejects.toThrow(/does not match the requested coins, amount, value types, or original transaction/)
 
     expect(mockBuildSwapKeysignPayload).not.toHaveBeenCalled()
     expect(mockGetWalletCore).not.toHaveBeenCalled()
@@ -510,7 +510,7 @@ describe('prepareSwapTxFromKeys — amount consistency (ABTS/plan 005)', () => {
 
     const pending = prepareSwapTxFromKeys(baseIdentity, params)
     params.toCoin.id = 'mutated-asset'
-    quote.quote.general.tx.evm.data = '0xtampered-during-await'
+    quote.quote.general.tx.evm.data = '0xchanged-during-await'
     resolveWalletCore(mockWalletCore)
 
     await expect(pending).resolves.toBeDefined()

@@ -129,7 +129,13 @@ type RankedSwapQuote = {
 }
 
 const QUOTE_FETCH_TIMEOUT_MS = 30_000
-const GENERAL_QUOTE_TTL_MS = 60_000
+/**
+ * General aggregators do not expose a uniform quote deadline. Keep the bound
+ * transaction usable for a normal review-and-sign round trip while the SDK's
+ * presentation layer continues to recommend a refresh after 60 seconds.
+ * Provider-supplied deadlines (currently CoW's `validTo`) still win when sooner.
+ */
+export const GENERAL_QUOTE_PREPARATION_TTL_MS = 5 * 60_000
 
 const bindQuoteSafetyMetadata = (
   quote: UnboundSwapQuote,
@@ -138,7 +144,7 @@ const bindQuoteSafetyMetadata = (
   requestedAmount: bigint
 ): BoundSwapQuote => {
   const now = Date.now()
-  const expiresAt = 'native' in quote.quote ? quote.quote.native.expiry * 1000 : now + GENERAL_QUOTE_TTL_MS
+  const expiresAt = 'native' in quote.quote ? quote.quote.native.expiry * 1000 : now + GENERAL_QUOTE_PREPARATION_TTL_MS
   const effectiveExpiresAt =
     'general' in quote.quote && 'cowswap_order' in quote.quote.general.tx
       ? Math.min(expiresAt, quote.quote.general.tx.cowswap_order.validTo * 1000)

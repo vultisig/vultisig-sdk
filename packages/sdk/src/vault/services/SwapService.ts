@@ -134,8 +134,9 @@ export class SwapService {
    */
   async prepareSwapTx(params: SwapTxParams): Promise<SwapPrepareResult> {
     try {
-      // Validate quote hasn't expired
-      if (Date.now() > params.swapQuote.expiresAt) {
+      // `SwapQuoteBase.expiresAt` is the presentation refresh window. The raw
+      // bound quote carries the preparation deadline enforced again below.
+      if (Date.now() > params.swapQuote.quote.expiresAt) {
         throw new VaultError(VaultErrorCode.InvalidConfig, 'Swap quote has expired. Please refresh the quote.')
       }
 
@@ -359,10 +360,10 @@ export class SwapService {
     const { quote: quoteData } = swapQuote
     const isNative = 'native' in quoteData
 
-    // Preserve the raw quote's receive-time expiry. Native quotes also keep the
-    // SDK's existing 60-second maximum presentation window.
+    // Keep the SDK's existing 60-second presentation refresh window separate
+    // from the raw bound quote's longer preparation deadline.
     const quoteExpiresAt = swapQuote.expiresAt
-    const expiresAt = isNative ? Math.min(quoteExpiresAt, Date.now() + DEFAULT_QUOTE_EXPIRY_MS) : quoteExpiresAt
+    const expiresAt = Math.min(quoteExpiresAt, Date.now() + DEFAULT_QUOTE_EXPIRY_MS)
 
     // Native swap APIs report output in their protocol precision. SDK consumers
     // expect the destination coin's base units, matching general provider quotes.

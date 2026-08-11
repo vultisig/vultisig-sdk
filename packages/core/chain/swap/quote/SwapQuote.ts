@@ -20,10 +20,14 @@ export type SwapQuote = {
   requestedAmount?: bigint
   /** Absolute quote expiry in milliseconds, bound by `findSwapQuote`. Absent on legacy/manually constructed quotes. */
   expiresAt?: number
-  /** Integrity binding for the request identity, expiry, and exact returned transaction. */
+  /** Mutation/stale-reuse binding for the request identity, expiry, and exact returned transaction. */
   safetyFingerprint?: string
 }
 
-/** A canonical quote returned by `findSwapQuote`, with fund-safety metadata present. */
+/**
+ * A canonical quote returned by `findSwapQuote`, with fund-safety metadata
+ * present. Keep this as the live returned object (structured cloning is safe);
+ * JSON round-tripping loses required runtime value types such as `bigint`.
+ */
 export type BoundSwapQuote = SwapQuote &
   Required<Pick<SwapQuote, 'requestedAmount' | 'expiresAt' | 'safetyFingerprint'>>

@@ -18,7 +18,7 @@ import { NativeSwapQuote } from '@vultisig/core-chain/swap/native/NativeSwapQuot
 import { HttpResponseError } from '@vultisig/lib-utils/fetch/HttpResponseError'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { findSwapQuote } from './findSwapQuote'
+import { findSwapQuote, GENERAL_QUOTE_PREPARATION_TTL_MS } from './findSwapQuote'
 import { getSwapQuoteSafetyFingerprint } from './getSwapQuoteSafetyFingerprint'
 
 vi.mock('@vultisig/core-chain/swap/general/cowswap/api/getCowSwapQuote', () => ({
@@ -225,8 +225,8 @@ describe('findSwapQuote parallel selection', () => {
     const after = Date.now()
 
     expect(quote.requestedAmount).toBe(requestedAmount)
-    expect(quote.expiresAt).toBeGreaterThanOrEqual(before + 60_000)
-    expect(quote.expiresAt).toBeLessThanOrEqual(after + 60_000)
+    expect(quote.expiresAt).toBeGreaterThanOrEqual(before + GENERAL_QUOTE_PREPARATION_TTL_MS)
+    expect(quote.expiresAt).toBeLessThanOrEqual(after + GENERAL_QUOTE_PREPARATION_TTL_MS)
     expect(quote.safetyFingerprint).toBe(
       getSwapQuoteSafetyFingerprint({
         ...evmSameChainCoins,

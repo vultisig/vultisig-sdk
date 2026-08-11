@@ -1024,6 +1024,7 @@ export {
   SUI_NATIVE_COIN_TYPE,
   supportedIbcDestinationsFrom,
   supportedUtxoBalanceChains,
+  SwapQuoteExpiredError,
   symbolFromCoinGeckoId,
   TERRA_CHAIN_ID,
   TERRA_LCD,
