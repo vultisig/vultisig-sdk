@@ -1,5 +1,65 @@
 # @vultisig/sdk
 
+## 4.5.0
+
+### Minor Changes
+
+- [#1821](https://github.com/vultisig/vultisig-sdk/pull/1821) [`6fd138c`](https://github.com/vultisig/vultisig-sdk/commit/6fd138c364d791d48f5fcd7f6f99f5dbb4756a8d) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Align React Native XRP and TON transaction-builder signing hashes with WalletCore for mixed-platform MPC ceremonies.
+
+  **Consumer-visible behavior changes:**
+
+  - **TON Jetton memo capacity narrows and becomes amount-dependent.** Previously any memo up to 123 bytes was accepted. Now `buildTonJettonTransferTx` / `prepareJettonTransferTxFromKeys` throw once the encoded comment no longer fits WalletCore's inline `forward_payload` cell. The exact cap shrinks as the transfer amount grows (larger `storeCoins` encoding leaves fewer bits for the comment) — at most ~34 ASCII bytes for large (e.g. 18-decimal, 1-token) amounts, ~39 bytes for small ones. This is a hard throw, not a truncation.
+  - **XRP `Memos[].Memo.MemoType` is no longer set.** A Payment memo previously always carried `MemoType: "text/plain"` (hex-encoded); it's now omitted to match WalletCore's raw-JSON memo path byte-for-byte. Anything downstream reading `MemoType` off a Vultisig-built XRP payment will stop seeing it.
+
+### Patch Changes
+
+- [#1763](https://github.com/vultisig/vultisig-sdk/pull/1763) [`3c2ca9f`](https://github.com/vultisig/vultisig-sdk/commit/3c2ca9f681a8473e27b876b0158c2084a53a5bd3) Thanks [@neavra](https://github.com/neavra)! - Disclose resolved token contract addresses in SDK and CLI send dry-run previews and in the CLI pre-signing confirmation preview, while leaving native-send output unchanged.
+
+- [#1846](https://github.com/vultisig/vultisig-sdk/pull/1846) [`8faa612`](https://github.com/vultisig/vultisig-sdk/commit/8faa612e6358af0a77cebf9c06d8865d832b69df) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Reserve the OP-stack balance-check surcharges in the EVM fee amount, so a native max send on Optimism, Base, Blast or Mantle stays affordable at broadcast. op-geth requires `value + gasLimit * maxFeePerGas + l1Cost + operatorCost`, and an amount that left only the gas term behind was rejected by exactly the difference — after the keysign ceremony had already run. Both oracle reads fail open, so a chain whose oracle is unreachable or predates a term behaves exactly as before.
+
+- [#1618](https://github.com/vultisig/vultisig-sdk/pull/1618) [`9d94476`](https://github.com/vultisig/vultisig-sdk/commit/9d944766d79f164c6d7997e38b106f00c332fb27) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - export the canonical vault-backup helpers and constants from the public root and react-native SDK entrypoints.
+
+- [#1624](https://github.com/vultisig/vultisig-sdk/pull/1624) [`9424ec2`](https://github.com/vultisig/vultisig-sdk/commit/9424ec2b10f899b8078a7ed1a23cc3077b370044) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Use the SDK's canonical `chainFeeCoin` registry when building CLI agent wallet context native-coin metadata.
+
+- [#1691](https://github.com/vultisig/vultisig-sdk/pull/1691) [`0e48010`](https://github.com/vultisig/vultisig-sdk/commit/0e480103a7c384c91cd6ac927d481e9ecbc616fe) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Keep Schnorr WASM signatures in their canonical Ed25519 byte order and cover real in-process DKLS and Schnorr keygen, signing, and resharing ceremonies.
+
+- [#1844](https://github.com/vultisig/vultisig-sdk/pull/1844) [`69a891c`](https://github.com/vultisig/vultisig-sdk/commit/69a891ce5fbb49c6fd8951e28f66411cc5a8ff99) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(ripple): refuse a partial payment with no delivery floor
+
+  For a `signRipple` Payment this resolver binds the raw transaction's
+  `Destination` and `Amount` to the reviewed `toAddress` / `toAmount`, so the
+  bytes being signed match the terms someone approved. That binding assumes
+  `Amount` is a delivery.
+
+  `tfPartialPayment` breaks the assumption. With the flag set, `Amount` becomes a
+  maximum: the ledger delivers whatever the chosen path can source and records
+  the real figure only in the executed transaction's metadata
+  (`delivered_amount`). The reviewed amount is still matched byte for byte and
+  still describes nothing the recipient will actually receive, while the sender
+  can be charged the full `SendMax`. A cross-currency self-swap — the shape where
+  `Destination` is the sender's own address — turns an attractive receive figure
+  into dust for the price of the whole `SendMax`.
+
+  A `DeliverMin` restores a floor only if it actually guarantees the reviewed
+  amount: `DeliverMin` must be the same asset as `Amount` (native XRP, or the
+  same issued-currency code and issuer) and at least as much value, so a
+  partial payment carrying one is forwarded unchanged only when the recipient
+  is guaranteed to receive no less than what was reviewed. A `DeliverMin` that
+  is merely present and positive — but floors delivery at a fraction of
+  `Amount`, or in an unrelated currency — is refused: it satisfies "the field
+  is there" while leaving the sender able to pay the full `SendMax` for dust,
+  which is the exact outcome this resolver exists to prevent. `Flags` that
+  cannot be read as a uint32 — the `{ tfPartialPayment: true }` object form
+  some client libraries accept — are refused for the same reason, since they
+  may carry the very bit being checked.
+
+- [#1639](https://github.com/vultisig/vultisig-sdk/pull/1639) [`348d0cd`](https://github.com/vultisig/vultisig-sdk/commit/348d0cdb20cb53553f3cad3361d3e81fda7e899b) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - export canonical EIP-712 helpers and route CLI consumers through the public SDK surface
+
+- [#1546](https://github.com/vultisig/vultisig-sdk/pull/1546) [`91862e0`](https://github.com/vultisig/vultisig-sdk/commit/91862e0960819cd4d1f859b24191fc3a1426f7c8) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export the canonical `clampEvmPriorityFee` helper from the root and React Native SDK entrypoints so first-party TypeScript consumers can share the SDK's EVM fee sanity ceiling instead of re-implementing it locally.
+
+- [#1621](https://github.com/vultisig/vultisig-sdk/pull/1621) [`d4d4665`](https://github.com/vultisig/vultisig-sdk/commit/d4d46657ffba2f8d11d81528b8caa429c655dede) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `cosmosFeeCoinDenom`, `getCosmosGasLimit`, and `getCosmosStakingGasLimit` to the `@vultisig/sdk/react-native` public entrypoint for parity with the root SDK exports.
+
+- [#1729](https://github.com/vultisig/vultisig-sdk/pull/1729) [`6298fef`](https://github.com/vultisig/vultisig-sdk/commit/6298fef8cccea2eca9798baba9385d97b4721296) Thanks [@neavra](https://github.com/neavra)! - Fix token max-sends to use the full token balance while checking the native gas balance separately.
+
 ## 4.4.0
 
 ### Minor Changes
