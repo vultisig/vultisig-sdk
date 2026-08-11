@@ -398,7 +398,7 @@ export class BalanceService {
       // address-keyed record, and then "which record" and "which asset" are
       // different questions. Removal must mean the same record every other
       // surface means for that reference.
-      const upper = id.toUpperCase()
+      const upper = tokenId.toUpperCase()
       tokenIndex = tokens.findIndex(token => token.symbol?.toUpperCase() === upper)
       if (tokenIndex === -1) {
         tokenIndex = tokens.findIndex(token => token.contractAddress === tokenId || token.id === tokenId)

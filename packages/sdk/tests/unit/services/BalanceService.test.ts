@@ -488,6 +488,26 @@ describe('BalanceService', () => {
     expect(getTokens(Chain.Ethereum)).toEqual([byTickerId])
   })
 
+  it('removes the exact legacy-prefixed id before symbol fallback can reinterpret it', async () => {
+    // Legacy EVM records were historically stored as `<Chain>-<address>`, but the
+    // prefix stripper is broad enough to rewrite any `<Chain>-...` id. If removal
+    // canonicalizes that raw id BEFORE deciding whether the ref is a symbol or an
+    // exact record id, `Ethereum-USDC` collapses to `usdc` and can delete a
+    // different sibling whose symbol is `USDC`.
+    const literalLegacyId: Token = {
+      ...addedToken,
+      id: 'Ethereum-USDC',
+      contractAddress: undefined,
+      symbol: 'Ethereum-USDC',
+    }
+    const bySymbol: Token = { ...addedToken, id: USDC, contractAddress: USDC, symbol: 'USDC' }
+    const { service, getTokens } = makeMutableService([literalLegacyId, bySymbol])
+
+    await expect(service.removeToken(Chain.Ethereum, 'Ethereum-USDC')).resolves.toBe(true)
+
+    expect(getTokens(Chain.Ethereum)).toEqual([bySymbol])
+  })
+
   it('removes only the referenced token when a chain tracks several', async () => {
     const DAI = '0x6b175474e89094c44da98b954eedeac495271d0f'
     const daiToken: Token = {
