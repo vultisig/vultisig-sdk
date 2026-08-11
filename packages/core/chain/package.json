@@ -1908,6 +1908,11 @@
       "import": "./dist/swap/quote/getSwapQuoteProviderName.js",
       "default": "./dist/swap/quote/getSwapQuoteProviderName.js"
     },
+    "./swap/quote/getSwapQuoteSafetyFingerprint": {
+      "types": "./dist/swap/quote/getSwapQuoteSafetyFingerprint.d.ts",
+      "import": "./dist/swap/quote/getSwapQuoteSafetyFingerprint.js",
+      "default": "./dist/swap/quote/getSwapQuoteSafetyFingerprint.js"
+    },
     "./swap/quote/SwapQuote": {
       "types": "./dist/swap/quote/SwapQuote.d.ts",
       "import": "./dist/swap/quote/SwapQuote.js",
