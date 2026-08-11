@@ -310,7 +310,7 @@ describe('@vultisig/sdk public exports', () => {
     )
   })
 
-  it('builds a signable TerraClassic redelegation SignDoc pairing the staking gas limit with its fee', () => {
+  it('exports a composable TerraClassic redelegation message and sufficient staking gas/fee pair', () => {
     const gasLimit = sdk.getCosmosStakingGasLimit({ chain: sdk.Chain.TerraClassic })
     const msg = sdk.cosmosStaking.redelegate({
       delegatorAddress: 'terra1qyqszqgpqyqszqgpqyqszqgpqyqszqgp5hm70u',
@@ -320,12 +320,11 @@ describe('@vultisig/sdk public exports', () => {
       denom: 'uluna',
     })
 
-    // Mirrors the exact `buildCosmosStakingTx` shape a consumer (mcp-ts) would
-    // sign: gasLimit from getCosmosStakingGasLimit paired with the matching
-    // TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS fee, not a stale hand-picked
-    // LUNC figure. Proves the two exported values are signable together.
-    const requiredFee = Number(gasLimit) * 28.325
-    expect(Number(sdk.TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS)).toBeGreaterThanOrEqual(requiredFee)
+    // The React Native entrypoint test exercises the actual SignDoc builder;
+    // this root-surface contract proves consumers can compose the message with
+    // the matching gas and fee exports instead of a stale hand-picked value.
+    const requiredFee = (gasLimit * 28_325n) / 1000n
+    expect(sdk.TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS).toBeGreaterThanOrEqual(requiredFee)
     expect(msg.typeUrl).toBe('/cosmos.staking.v1beta1.MsgBeginRedelegate')
   })
 
