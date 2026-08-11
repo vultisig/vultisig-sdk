@@ -90,11 +90,11 @@ export type BuildTonSendOptions = {
   /** Unix seconds after which the message is invalid. Default = now + 600. */
   validUntil?: number
   /**
-   * Sub-wallet ID. Defaults to the V4R2 constant (698983191 for workchain 0).
-   * Only override if you're targeting a non-default sub-wallet.
+   * Sub-wallet ID. WalletCore 4.7.0 only supports the V4R2 default (698983191).
+   * Other values are rejected because they cannot receive independent parity proof.
    */
   subWalletId?: number
-  /** Sender wallet workchain. Default 0. */
+  /** Sender wallet workchain. WalletCore-backed transfers currently support only 0. */
   workchain?: number
 }
 
@@ -139,6 +139,23 @@ export type TonWalletCoreBackedTxBuilderResult = TonTxBuilderResult & {
 
 const walletCoreTonSendMode =
   TW.TheOpenNetwork.Proto.SendMode.PAY_FEES_SEPARATELY | TW.TheOpenNetwork.Proto.SendMode.IGNORE_ACTION_PHASE_ERRORS
+
+function assertWalletCoreTonWalletOptions(opts: { subWalletId?: number; workchain?: number }): {
+  subWalletId: number
+  workchain: 0
+} {
+  const workchain = opts.workchain ?? 0
+  if (workchain !== 0) {
+    throw new Error(`TON WalletCore parity supports only workchain 0, got ${workchain}`)
+  }
+  const subWalletId = opts.subWalletId ?? TON_V4R2_SUB_WALLET_ID
+  if (subWalletId !== TON_V4R2_SUB_WALLET_ID) {
+    throw new Error(
+      `TON WalletCore parity supports only V4R2 sub-wallet ID ${TON_V4R2_SUB_WALLET_ID}, got ${subWalletId}`
+    )
+  }
+  return { subWalletId, workchain: 0 }
+}
 
 function tonUnsignedIntegerToBytes(field: string, value: bigint): Uint8Array {
   if (value < 0n) {
@@ -241,9 +258,9 @@ function buildExternalMessageCell(args: {
  *   4. Broadcast `signedBocBase64` via `broadcastTonTx`.
  */
 export function buildTonSendTx(opts: BuildTonSendOptions): TonWalletCoreBackedTxBuilderResult {
+  const { subWalletId, workchain } = assertWalletCoreTonWalletOptions(opts)
   const pubKey = hexToBytes(opts.publicKeyEd25519)
-  const workchain = opts.workchain ?? 0
-  const wallet = buildV4R2Wallet({ publicKeyEd25519: pubKey, workchain })
+  const wallet = buildV4R2Wallet({ publicKeyEd25519: pubKey, workchain, walletId: subWalletId })
   const destination = Address.parse(opts.to)
 
   const innerMsg = beginCell()
@@ -264,8 +281,6 @@ export function buildTonSendTx(opts: BuildTonSendOptions): TonWalletCoreBackedTx
     .endCell()
 
   const validUntil = opts.validUntil ?? Math.floor(Date.now() / 1000) + 600
-  const subWalletId = opts.subWalletId ?? TON_V4R2_SUB_WALLET_ID + workchain
-
   const signingPayload = buildSigningPayloadCell({
     subWalletId,
     validUntil,
@@ -341,14 +356,16 @@ export type BuildTonJettonTransferOptions = {
   memo?: string
   seqno: number
   validUntil?: number
+  /** WalletCore 4.7.0 supports only the V4R2 default (698983191). */
   subWalletId?: number
+  /** WalletCore-backed transfers currently support only workchain 0. */
   workchain?: number
 }
 
 export function buildTonJettonTransferTx(opts: BuildTonJettonTransferOptions): TonWalletCoreBackedTxBuilderResult {
+  const { subWalletId, workchain } = assertWalletCoreTonWalletOptions(opts)
   const pubKey = hexToBytes(opts.publicKeyEd25519)
-  const workchain = opts.workchain ?? 0
-  const wallet = buildV4R2Wallet({ publicKeyEd25519: pubKey, workchain })
+  const wallet = buildV4R2Wallet({ publicKeyEd25519: pubKey, workchain, walletId: subWalletId })
 
   const destinationAddr = Address.parse(opts.to)
   const jettonWalletAddr = Address.parse(opts.jettonWalletAddress)
@@ -397,8 +414,6 @@ export function buildTonJettonTransferTx(opts: BuildTonJettonTransferOptions): T
     .endCell()
 
   const validUntil = opts.validUntil ?? Math.floor(Date.now() / 1000) + 600
-  const subWalletId = opts.subWalletId ?? TON_V4R2_SUB_WALLET_ID + workchain
-
   const signingPayload = buildSigningPayloadCell({
     subWalletId,
     validUntil,

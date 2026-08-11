@@ -16,6 +16,7 @@ import { keysign } from '@vultisig/core-mpc/keysign'
 import { getPreSigningHashes } from '@vultisig/core-mpc/tx/preSigningHashes'
 
 import { getWalletCore } from '../../../context/wasmRuntime'
+import { VaultError, VaultErrorCode } from '../../../vault/VaultError'
 import {
   DEFAULT_RN_FETCH_TIMEOUT_MS,
   delayWithSignal,
@@ -59,7 +60,7 @@ const DEFAULT_RELAY_URL = 'https://api.vultisig.com/router'
 const normalizeSigningHash = (field: 'messageHashHex' | 'WalletCore pre-signing hash', value: string): string => {
   const normalized = value.startsWith('0x') || value.startsWith('0X') ? value.slice(2) : value
   if (!/^[0-9a-fA-F]{64}$/.test(normalized)) {
-    throw new Error(`fastVaultSign: ${field} must be a 32-byte hex string`)
+    throw new VaultError(VaultErrorCode.InvalidSigningHash, `fastVaultSign: ${field} must be a 32-byte hex string`)
   }
   return normalized.toLowerCase()
 }
@@ -75,13 +76,15 @@ const verifyTonSigningHashParity = async (messageHash: string, txInputData: Uint
     txInputData,
   })
   if (walletCoreHashes.length !== 1 || !walletCoreHashes[0]) {
-    throw new Error(
+    throw new VaultError(
+      VaultErrorCode.InvalidSigningHashCount,
       `fastVaultSign: WalletCore returned ${walletCoreHashes.length} pre-signing hashes for TON; expected exactly one`
     )
   }
 
   if (messageHash !== normalizeSigningHash('WalletCore pre-signing hash', hexFromBytes(walletCoreHashes[0]))) {
-    throw new Error(
+    throw new VaultError(
+      VaultErrorCode.SigningHashParityMismatch,
       'fastVaultSign: encoder parity check failed; refusing to dispatch a hash that differs from WalletCore'
     )
   }
@@ -91,14 +94,18 @@ const assertPreDispatchSigningHashParity = (opts: FastVaultSignOptions): Promise
   const messageHash = normalizeSigningHash('messageHashHex', opts.messageHashHex)
 
   if (!opts.chain) {
-    throw new Error('fastVaultSign: chain is required; refusing to dispatch without chain-bound parity policy')
+    throw new VaultError(
+      VaultErrorCode.InvalidConfig,
+      'fastVaultSign: chain is required; refusing to dispatch without chain-bound parity policy'
+    )
   }
 
   if (opts.chain.toLowerCase() !== 'ton') return undefined
 
   const txInputData = opts.walletCoreTxInputData
   if (!(txInputData instanceof Uint8Array) || txInputData.length === 0) {
-    throw new Error(
+    throw new VaultError(
+      VaultErrorCode.MissingSigningParityInput,
       'fastVaultSign: walletCoreTxInputData is required for TON; refusing to dispatch without WalletCore encoder parity proof'
     )
   }

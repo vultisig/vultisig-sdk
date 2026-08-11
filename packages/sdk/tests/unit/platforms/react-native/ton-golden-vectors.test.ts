@@ -138,6 +138,45 @@ function buildReferenceSigningPayload(subWalletId: number, validUntil: number, s
   return beginCell().storeBuffer(Buffer.from(header)).storeRef(innerMsg).endCell()
 }
 
+describe('TON WalletCore-backed builder boundaries', () => {
+  const unsupportedBuilderCalls = [
+    {
+      name: 'native transfer',
+      build: (walletOptions: { subWalletId?: number; workchain?: number }) =>
+        buildTonSendTx({
+          publicKeyEd25519: 'not-hex',
+          to: FX.to,
+          amount: FX.amountNanotons,
+          bounceable: FX.bounceable,
+          seqno: FX.seqno,
+          ...walletOptions,
+        }),
+    },
+    {
+      name: 'Jetton transfer',
+      build: (walletOptions: { subWalletId?: number; workchain?: number }) =>
+        buildTonJettonTransferTx({
+          publicKeyEd25519: 'not-hex',
+          to: FX.to,
+          jettonWalletAddress: '0:' + 'cc'.repeat(32),
+          amount: 5_000_000n,
+          seqno: FX.seqno,
+          ...walletOptions,
+        }),
+    },
+  ]
+
+  it.each(unsupportedBuilderCalls)('rejects a custom sub-wallet before building the $name wallet', ({ build }) => {
+    expect(() => build({ subWalletId: 698983192 })).toThrow(
+      /WalletCore parity supports only V4R2 sub-wallet ID 698983191/
+    )
+  })
+
+  it.each(unsupportedBuilderCalls)('rejects a nonzero workchain before building the $name wallet', ({ build }) => {
+    expect(() => build({ workchain: -1 })).toThrow(/WalletCore parity supports only workchain 0/)
+  })
+})
+
 describe('TON / buildTonSendTx golden vectors', () => {
   it('matches WalletCore for the shared native-transfer fixture', () => {
     const fixture = loadCrossEncoderFixture<TonNativeCrossEncoderFixture>('ton-native-transfer.json')

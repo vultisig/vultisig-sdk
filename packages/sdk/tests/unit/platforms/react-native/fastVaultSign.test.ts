@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { VaultErrorCode } from '../../../../src/vault/VaultError'
+
 // Mock the MPC keysign + the relay-session helpers so the test never hits the
 // network. The assertions focus on fastVaultSign's signature-assembly logic.
 vi.mock('@vultisig/core-mpc/keysign', () => ({
@@ -57,7 +59,10 @@ describe('fastVaultSign — pre-dispatch encoder parity', () => {
     const withoutChain: Partial<typeof BASE_OPTS> = { ...BASE_OPTS }
     delete withoutChain.chain
 
-    await expect(fastVaultSign(withoutChain as typeof BASE_OPTS)).rejects.toThrow(/chain is required/)
+    await expect(fastVaultSign(withoutChain as typeof BASE_OPTS)).rejects.toMatchObject({
+      code: VaultErrorCode.InvalidConfig,
+      message: expect.stringMatching(/chain is required/),
+    })
 
     expect(fetchMock).not.toHaveBeenCalled()
     expect(joinRelaySession).not.toHaveBeenCalled()
@@ -68,9 +73,10 @@ describe('fastVaultSign — pre-dispatch encoder parity', () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(fastVaultSign({ ...BASE_OPTS, chain: 'Ton', isEcdsa: false })).rejects.toThrow(
-      /walletCoreTxInputData is required for TON/
-    )
+    await expect(fastVaultSign({ ...BASE_OPTS, chain: 'Ton', isEcdsa: false })).rejects.toMatchObject({
+      code: VaultErrorCode.MissingSigningParityInput,
+      message: expect.stringMatching(/walletCoreTxInputData is required for TON/),
+    })
 
     expect(fetchMock).not.toHaveBeenCalled()
     expect(getWalletCore).not.toHaveBeenCalled()
@@ -90,7 +96,10 @@ describe('fastVaultSign — pre-dispatch encoder parity', () => {
         isEcdsa: false,
         walletCoreTxInputData: new Uint8Array([0x01]),
       })
-    ).rejects.toThrow(/encoder parity check failed/)
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.SigningHashParityMismatch,
+      message: expect.stringMatching(/encoder parity check failed/),
+    })
 
     expect(fetchMock).not.toHaveBeenCalled()
     expect(getWalletCore).toHaveBeenCalledTimes(1)
@@ -101,6 +110,25 @@ describe('fastVaultSign — pre-dispatch encoder parity', () => {
     })
     expect(joinRelaySession).not.toHaveBeenCalled()
     expect(keysign).not.toHaveBeenCalled()
+  })
+
+  it('exposes a stable code for malformed message hashes', async () => {
+    await expect(fastVaultSign({ ...BASE_OPTS, messageHashHex: 'not-a-hash' })).rejects.toMatchObject({
+      code: VaultErrorCode.InvalidSigningHash,
+    })
+  })
+
+  it('exposes a stable code when WalletCore returns an invalid hash count', async () => {
+    vi.mocked(getPreSigningHashes).mockReturnValueOnce([])
+
+    await expect(
+      fastVaultSign({
+        ...BASE_OPTS,
+        chain: 'Ton',
+        isEcdsa: false,
+        walletCoreTxInputData: new Uint8Array([0x03]),
+      })
+    ).rejects.toMatchObject({ code: VaultErrorCode.InvalidSigningHashCount })
   })
 
   it('dispatches TON only after the WalletCore hash matches', async () => {
