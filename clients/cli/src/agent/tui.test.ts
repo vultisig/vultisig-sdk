@@ -22,6 +22,10 @@ describe('ChatTUI terminal assistant messages', () => {
     const callbacks = tui.getCallbacks()
     for (const delta of deltas) callbacks.onTextDelta?.(delta)
     callbacks.onAssistantMessage?.(content)
+    // Complete the turn like production does (session.ts calls onDone after the
+    // terminal message) — if the render path ever leaves isStreaming set, onDone
+    // re-flushes the buffer and the exactly-once assertions below catch it.
+    callbacks.onDone?.()
 
     return { logs, output: [...writes, ...logs].join(''), writes }
   }
