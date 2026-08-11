@@ -2014,9 +2014,9 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       resolvedAmount = this.formatUnits(BigInt(bal.amount), fromToken.decimals)
       if (BigInt(bal.amount) <= 0n) throw new VaultError(VaultErrorCode.InvalidAmount, 'Zero balance — nothing to swap')
     }
-    const normalizedAmount = this.validateHumanSwapAmount(resolvedAmount, fromToken.decimals)
+    let normalizedAmount = this.validateHumanSwapAmount(resolvedAmount, fromToken.decimals)
 
-    const quote = await this.getSwapQuote({
+    let quote = await this.getSwapQuote({
       fromCoin,
       toCoin,
       amount: normalizedAmount,
@@ -2024,6 +2024,29 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       slippageTolerance,
       excludeProviders,
     })
+
+    if (amount === 'max') {
+      if (quote.maxSwapable <= 0n) {
+        throw new VaultError(
+          VaultErrorCode.InvalidAmount,
+          `Cannot swap max ${fromToken.ticker}: source-chain network fee is not computable from the quote; choose an explicit amount`
+        )
+      }
+
+      const feeAwareAmount = this.validateHumanSwapAmount(this.formatUnits(quote.maxSwapable, fromToken.decimals), fromToken.decimals)
+      if (feeAwareAmount !== normalizedAmount) {
+        normalizedAmount = feeAwareAmount
+        quote = await this.getSwapQuote({
+          fromCoin,
+          toCoin,
+          amount: normalizedAmount,
+          recipient: normalizedRecipient,
+          slippageTolerance,
+          excludeProviders,
+        })
+      }
+    }
+
     if (dryRun) return { dryRun: true, quote }
 
     const { keysignPayload, approvalPayload } = await this.prepareSwapTx({
