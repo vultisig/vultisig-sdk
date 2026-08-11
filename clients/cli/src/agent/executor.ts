@@ -10,14 +10,16 @@ import type { VaultBase, Vultisig } from '@vultisig/sdk'
 import {
   Chain,
   chainFeeCoin,
+  computeEip712Hash,
   getChainKind,
   parseThorSwapMemo,
   resolveChainReference,
+  toCanonicalEvmSignature,
   VaultError,
   VaultErrorCode,
   Vultisig as VultisigSdk,
 } from '@vultisig/sdk'
-import { formatUnits, hashTypedData, recoverAddress } from 'viem'
+import { formatUnits, recoverAddress } from 'viem'
 
 import { VaultStateStore } from '../core/VaultStateStore'
 import { normalizeAgentError } from './agentErrors'
@@ -1693,7 +1695,7 @@ export class AgentExecutor {
 
     if (this.verbose) process.stderr.write(`[sign_typed_data] primaryType=${primaryType} domain.name=${domain.name}\n`)
 
-    const eip712Hash = computeEIP712Hash(domain, types, primaryType, message)
+    const eip712Hash = computeEip712Hash(domain, types, primaryType, message)
     if (this.verbose) process.stderr.write(`[sign_typed_data] hash=${eip712Hash}\n`)
 
     // Resolve chain from domain chainId or explicit chain param
@@ -2056,152 +2058,4 @@ export function parseNonEvmEnvelope(serverTxData: any, chain: Chain): NonEvmSend
  */
 export function resolveChainId(chainId: string | number): Chain | null {
   return resolveChainReference(chainId) ?? null
-}
-
-// ============================================================================
-// EIP-712 Typed Data Hashing
-// ============================================================================
-
-/**
- * Compute the EIP-712 digest: keccak256("\x19\x01" || domainSeparator || hashStruct(message)).
- *
- * Delegates to viem's `hashTypedData` — the vetted encoder the rest of the
- * ecosystem verifies against, and the same digest the app's reference path
- * produces via ethers `TypedDataEncoder.hash` (see
- * vultiagent-app/src/services/eip712Signing.ts). viem derives the
- * `EIP712Domain` type from the keys actually present on `domain`, so domains
- * that omit `verifyingContract` (Polymarket's ClobAuthDomain) or carry `salt`
- * hash correctly. It throws on a message missing a declared field or a
- * `primaryType` absent from `types` — the fail-loud contract we want, with no
- * hand-rolled struct encoder to drift from the spec.
- */
-function computeEIP712Hash(
-  domain: Record<string, unknown>,
-  types: Record<string, Array<{ name: string; type: string }>>,
-  primaryType: string,
-  message: Record<string, unknown>
-): string {
-  // viem synthesizes the EIP712Domain type from `domain`; a caller-supplied
-  // `EIP712Domain` entry would be treated as a struct type and make viem
-  // reject `primaryType`. Strip it so the synthesized- and explicit-domain
-  // payload shapes hash identically.
-  const messageTypes = { ...types }
-  delete messageTypes.EIP712Domain
-
-  // Normalize a string `chainId` to a number. The agent backend serialises
-  // chainId as a JS number, but the JSON wire occasionally double-stringifies
-  // primitives (`domain.chainId` is typed `number | string` upstream).
-  // Crucially, viem hashes a string `chainId` ("137") to a DIFFERENT digest
-  // than the numeric form (137) — whereas ethers `TypedDataEncoder.hash` (the
-  // app's encoder, and what the on-chain DOMAIN_SEPARATOR matches) coerces
-  // both to the same value. Coerce here so our digest agrees with theirs.
-  const normalizedDomain = domain.chainId !== undefined ? { ...domain, chainId: coerceChainId(domain.chainId) } : domain
-
-  return hashTypedData({
-    domain: normalizedDomain,
-    types: messageTypes,
-    primaryType,
-    message,
-  } as Parameters<typeof hashTypedData>[0])
-}
-
-/**
- * Coerce an EIP-712 `domain.chainId` (which may arrive as a number or a
- * decimal/hex string over the JSON wire) to a number. Mirrors the app's
- * `coerceChainId` in vultiagent-app/src/services/eip712Signing.ts. Throws on
- * an empty/unparseable value rather than letting viem hash a wrong digest.
- */
-function coerceChainId(raw: unknown): number | bigint {
-  if (typeof raw === 'number' || typeof raw === 'bigint') return raw
-  const s = String(raw).trim()
-  if (s === '') {
-    throw new Error('EIP-712 domain.chainId is empty')
-  }
-  // Parse decimal and hex via BigInt (exact), then narrow to a JS number only
-  // when it fits safely. Using Number() directly would round values above
-  // MAX_SAFE_INTEGER and silently produce a DIFFERENT EIP-712 digest — viem
-  // accepts a bigint chainId, so return that instead of corrupting the hash.
-  if (/^[0-9]+$/.test(s) || /^0x[0-9a-fA-F]+$/.test(s)) {
-    const big = BigInt(s)
-    return big <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(big) : big
-  }
-  throw new Error(`EIP-712 domain.chainId not parseable: ${String(raw)}`)
-}
-
-/**
- * secp256k1 group order n (SEC 2 v2, §2.4.1). EIP-2 requires the signature's
- * `s` value to lie in the lower half of this order; values above n/2 are
- * malleable and rejected by OpenZeppelin's ECDSA library (which Polymarket's
- * CLOB and most EVM verifiers use).
- */
-const SECP256K1_N = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n
-
-/**
- * Canonicalize a raw MPC signature for EVM use: parse r/s, fold a high `s`
- * into the lower half of the curve order (flipping the recovery parity to
- * match), and return 32-byte hex r/s with the corrected recovery id.
- *
- * Exported for unit testing the low-S fold in isolation (the recover-verify
- * gate in signSingleTypedData rejects a synthetic signature before its
- * canonicalized output can be inspected through the full path).
- */
-export function toCanonicalEvmSignature(sigHex: string, recovery: number): { r: string; s: string; recovery: number } {
-  const { r, s } = parseDERSignature(sigHex)
-  const sBig = BigInt('0x' + s)
-  if (sBig > SECP256K1_N >> 1n) {
-    const folded = SECP256K1_N - sBig
-    return { r, s: folded.toString(16).padStart(64, '0'), recovery: recovery ^ 1 }
-  }
-  return { r, s, recovery }
-}
-
-/**
- * Parse a DER-encoded ECDSA signature into r and s hex strings (each 32 bytes / 64 hex chars).
- */
-function parseDERSignature(sigHex: string): { r: string; s: string } {
-  const raw = sigHex.startsWith('0x') ? sigHex.slice(2) : sigHex
-
-  // If it's already 128 hex chars (64 bytes), it's raw r||s
-  if (raw.length === 128) {
-    return { r: raw.slice(0, 64), s: raw.slice(64) }
-  }
-
-  // DER format: 30 <len> 02 <rlen> <r> 02 <slen> <s>
-  let offset = 0
-  if (raw.slice(offset, offset + 2) !== '30') {
-    // Not DER, try raw
-    return {
-      r: raw.slice(0, 64).padStart(64, '0'),
-      s: raw.slice(64).padStart(64, '0'),
-    }
-  }
-  offset += 2
-  offset += 2 // skip total length
-
-  // R value
-  if (raw.slice(offset, offset + 2) !== '02') throw new Error('Invalid DER: expected 02 for R')
-  offset += 2
-  const rLen = parseInt(raw.slice(offset, offset + 2), 16)
-  offset += 2
-  let rHex = raw.slice(offset, offset + rLen * 2)
-  offset += rLen * 2
-  // Remove leading 00 padding
-  if (rHex.length > 64 && rHex.startsWith('00')) {
-    rHex = rHex.slice(rHex.length - 64)
-  }
-  rHex = rHex.padStart(64, '0')
-
-  // S value
-  if (raw.slice(offset, offset + 2) !== '02') throw new Error('Invalid DER: expected 02 for S')
-  offset += 2
-  const sLen = parseInt(raw.slice(offset, offset + 2), 16)
-  offset += 2
-  let sHex = raw.slice(offset, offset + sLen * 2)
-  // Remove leading 00 padding
-  if (sHex.length > 64 && sHex.startsWith('00')) {
-    sHex = sHex.slice(sHex.length - 64)
-  }
-  sHex = sHex.padStart(64, '0')
-
-  return { r: rHex, s: sHex }
 }

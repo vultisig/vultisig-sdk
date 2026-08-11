@@ -57,11 +57,16 @@ import {
   executeVerify,
   resolveTxStatusParams,
 } from './commands'
-import { cachePassword, createPasswordCallback, loadActiveVaultSafely, resolveChainOrThrow } from './core'
+import {
+  cachePassword,
+  createPasswordCallback,
+  loadActiveVaultSafely,
+  resolveChainOrThrow,
+  resolveOptionalChainOrThrow,
+} from './core'
 import { EXIT_CODE_DESCRIPTIONS, ExitCode, InvalidInputError } from './core/errors'
 import { parseServerEndpointOverridesFromArgv, resolveServerEndpoints } from './core/server-endpoints'
-import { findChainByName } from './interactive'
-import { ShellSession } from './interactive'
+import { findChainByName, ShellSession } from './interactive'
 import {
   checkForUpdates,
   createVaultStorage,
@@ -620,7 +625,7 @@ Examples:
     withExit(async (chainStr: string | undefined, options: { tokens?: boolean; raw?: boolean }) => {
       const context = await init(program.opts().vault)
       await executeBalance(context, {
-        chain: chainStr ? findChainByName(chainStr) || (chainStr as Chain) : undefined,
+        chain: resolveOptionalChainOrThrow(chainStr),
         includeTokens: options.tokens,
         raw: options.raw,
       })
@@ -674,7 +679,7 @@ See also: balance, tx-status`
       ) => {
         if (!amount && !options.max) throw new Error('Provide an amount or use --max')
         if (amount && options.max) throw new Error('Cannot specify both amount and --max')
-        const chain = findChainByName(chainStr) || (chainStr as Chain)
+        const chain = resolveChainOrThrow(chainStr)
         if (options.destinationTag !== undefined && chain !== Chain.Ripple) {
           throw new Error('--destination-tag is only supported for XRP')
         }
@@ -734,7 +739,7 @@ Examples:
         const context = await init(program.opts().vault, options.password)
         // A decline throws ConfirmationRequiredError (exit 12) — see `send` above.
         await executeExecute(context, {
-          chain: findChainByName(chainStr) || (chainStr as Chain),
+          chain: resolveChainOrThrow(chainStr),
           contract,
           msg,
           funds: options.funds,
@@ -758,7 +763,7 @@ program
     withExit(async (options: { chain: string; bytes: string; password?: string }) => {
       const context = await init(program.opts().vault, options.password)
       await executeSignBytes(context, {
-        chain: findChainByName(options.chain) || (options.chain as Chain),
+        chain: resolveChainOrThrow(options.chain),
         bytes: options.bytes,
         password: options.password,
       })
@@ -775,7 +780,7 @@ program
     withExit(async (options: { chain: string; rawTx: string }) => {
       const context = await init(program.opts().vault)
       await executeBroadcast(context, {
-        chain: findChainByName(options.chain) || (options.chain as Chain),
+        chain: resolveChainOrThrow(options.chain),
         rawTx: options.rawTx,
       })
     })
@@ -809,7 +814,7 @@ Examples:
         )
       }
       const params = resolveTxStatusParams({
-        chain: findChainByName(options.chain) || (options.chain as Chain),
+        chain: resolveChainOrThrow(options.chain),
         txHash: options.txHash,
         noWait: !options.wait,
         timeoutSec,
@@ -933,7 +938,7 @@ program
       await executeAddressBook(context, {
         add: options.add,
         remove: options.remove,
-        chain: options.chain ? findChainByName(options.chain) || (options.chain as Chain) : undefined,
+        chain: resolveOptionalChainOrThrow(options.chain),
         address: options.address,
         name: options.name,
       })
@@ -959,9 +964,9 @@ Examples:
     withExit(async (options: { add?: string; addAll?: boolean; remove?: string }) => {
       const context = await init(program.opts().vault)
       await executeChains(context, {
-        add: options.add ? findChainByName(options.add) || (options.add as Chain) : undefined,
+        add: resolveOptionalChainOrThrow(options.add, 'chain'),
         addAll: options.addAll,
-        remove: options.remove ? findChainByName(options.remove) || (options.remove as Chain) : undefined,
+        remove: resolveOptionalChainOrThrow(options.remove, 'chain'),
       })
     })
   )
@@ -1181,8 +1186,8 @@ See also: swap-quote, swap-chains, balance`
         const context = await init(program.opts().vault)
         // A decline throws ConfirmationRequiredError (exit 12) — see `send` above.
         await executeSwap(context, {
-          fromChain: findChainByName(fromChainStr) || (fromChainStr as Chain),
-          toChain: findChainByName(toChainStr) || (toChainStr as Chain),
+          fromChain: resolveChainOrThrow(fromChainStr, 'source chain'),
+          toChain: resolveChainOrThrow(toChainStr, 'destination chain'),
           amount: options.max ? 'max' : amountStr!,
           fromToken: options.fromToken,
           toToken: options.toToken,
