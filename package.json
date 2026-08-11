@@ -35,7 +35,7 @@
     "check:shared-exports": "node scripts/build-shared-packages.mjs --check",
     "pack:shared": "node scripts/pack-shared-packages.mjs",
     "sync-packages": "syncpack fix-mismatches",
-    "typecheck": "node scripts/check-agent-toolchain.mjs --typescript-only && tsc --project .config/tsconfig.json --noEmit && yarn workspace @vultisig/client-shared typecheck && yarn workspace @vultisig/cli typecheck && yarn workspace @vultisig/mcp typecheck && yarn workspace @vultisig/sdk typecheck && yarn workspace @vultisig/rujira typecheck && yarn workspace @vultisig/example-browser typecheck && yarn workspace @vultisig/example-electron typecheck",
+    "typecheck": "node scripts/check-agent-toolchain.mjs --typescript-only && concurrently --kill-others-on-fail=false -n root,client-shared,cli,mcp,sdk,rujira,ex-electron \"tsc --project .config/tsconfig.json --noEmit\" \"yarn workspace @vultisig/client-shared typecheck\" \"yarn workspace @vultisig/cli typecheck\" \"yarn workspace @vultisig/mcp typecheck\" \"yarn workspace @vultisig/sdk typecheck\" \"yarn workspace @vultisig/rujira typecheck\" \"yarn workspace @vultisig/example-electron typecheck\" && yarn workspace @vultisig/example-browser typecheck",
     "typecheck:example-browser": "node scripts/check-agent-toolchain.mjs --typescript-only && yarn workspace @vultisig/examples-shared typecheck && yarn workspace @vultisig/example-browser typecheck",
     "test": "yarn test:scripts && yarn workspace @vultisig/sdk test && yarn test:rujira && yarn test:core && yarn workspace @vultisig/cli test && yarn workspace @vultisig/mcp test",
     "test:coverage": "yarn workspace @vultisig/sdk test:coverage",
