@@ -102,10 +102,11 @@ const ENFORCED_ROUTER_PROVIDERS: ReadonlySet<string> = new Set<EnforcedRouterPro
   'li.fi',
 ])
 
-// These providers use the same fixed address for the router and approval spender.
-// LI.FI legitimately exposes inner executors through estimate.approvalAddress, so its
-// Diamond destination is enforced without applying this equality constraint.
-const APPROVAL_BOUND_ROUTER_PROVIDERS: ReadonlySet<string> = new Set(['1inch', 'kyber', 'cowswap'])
+// These providers use the same fixed address for the user-facing router and approval spender.
+// LI.FI's nested route steps may call inner executors, but the user's token approval remains bound
+// to the chain-scoped Diamond; accepting an arbitrary top-level approvalAddress would let a
+// compromised quote response grant an attacker allowance over the input token.
+const APPROVAL_BOUND_ROUTER_PROVIDERS: ReadonlySet<string> = new Set(['1inch', 'kyber', 'cowswap', 'li.fi'])
 
 // sdk#1457/#1458: the small, closed set of recognized providers outside the fixed-router
 // allowlists. SwapKit targets are dynamic and use Blockaid; `''` is NOT an attacker label - it is
@@ -227,9 +228,10 @@ export async function assertSwapKitAddressReputation(
  * On the initiator these coincide by construction (build.ts sets the approve spender to
  * `getSwapDestinationAddress` === `tx.to`), so this only ever fires on a hand-built/tampered payload.
  * Approval-bound providers (1inch/kyber/cowswap) MUST have `spender === routerDestination`.
- * LI.FI's destination is enforced separately, but its legitimate inner allowance executor can
- * differ from the Diamond; LI.FI and the dynamic SwapKit path are therefore not subject to this
- * equality check. CowSwap's spender IS its `tx.to` (both are the fixed GPv2VaultRelayer - see
+ * LI.FI's destination and approval spender are both the chain-scoped Diamond; inner executor
+ * approvals occur inside the Diamond's nested route rather than in the user's top-level allowance.
+ * The dynamic SwapKit path is therefore the only attributed provider outside this equality check.
+ * CowSwap's spender IS its `tx.to` (both are the fixed GPv2VaultRelayer - see
  * getSwapDestinationAddress.ts), so it binds the same way 1inch/kyber do. Like its sibling this is
  * a MONOTONIC gate: it only throws or no-ops, never changes the signed bytes.
  */

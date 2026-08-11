@@ -1,12 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Inner-spender exposure (#895): LI.FI's `estimate.approvalAddress` is the
-// address that will call `transferFrom` on the input ERC-20 — it can differ
-// from `transactionRequest.to` (the Diamond) when an inner executor (e.g. a
-// 1inch AggregationExecutor) pulls the token directly. These cases pin that
-// the quote threads it onto `evm.approvalAddress` when it is a real address,
-// and omits it for the zero address / an absent field so consumers keep the
-// `tx.to` fallback (the pre-#895 behavior).
+// LI.FI's `estimate.approvalAddress` is the top-level spender that will call
+// `transferFrom` on the user's input ERC-20. It must be the same official
+// chain-scoped Diamond as `transactionRequest.to`; nested route executors are
+// funded by the Diamond and never receive the user's allowance directly.
 
 const fixture = vi.hoisted(() => ({
   approvalAddress: undefined as string | undefined,
@@ -76,7 +73,8 @@ const baseInput = {
 }
 // jscpd:ignore-end
 
-const INNER_EXECUTOR = '0x7f51c134000000000000000000000000000c7e11'
+const LIFI_DIAMOND = '0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE'
+const ATTACKER_SPENDER = '0x7f51c134000000000000000000000000000c7e11'
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
 const getEvmTx = async () => {
@@ -97,10 +95,16 @@ describe('getLifiSwapQuote — evm.approvalAddress exposure (#895)', () => {
     fixture.approvalAddress = undefined
   })
 
-  it('threads a non-zero estimate.approvalAddress (inner executor) onto evm.approvalAddress', async () => {
-    fixture.approvalAddress = INNER_EXECUTOR
+  it('threads the verified LI.FI Diamond approvalAddress onto evm.approvalAddress', async () => {
+    fixture.approvalAddress = LIFI_DIAMOND
     const evm = await getEvmTx()
-    expect(evm.approvalAddress).toBe(INNER_EXECUTOR)
+    expect(evm.approvalAddress).toBe(LIFI_DIAMOND)
+  })
+
+  it('rejects an approvalAddress outside the LI.FI chain-scoped Diamond allowlist', async () => {
+    fixture.approvalAddress = ATTACKER_SPENDER
+
+    await expect(getEvmTx()).rejects.toThrow(/unrecognized router address/i)
   })
 
   it('omits evm.approvalAddress for the zero address (native-only routes)', async () => {

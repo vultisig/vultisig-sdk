@@ -235,26 +235,21 @@ export const getLifiSwapQuote = async ({
           swapFee &&
           ([fromToken, toToken].find(token => token.toLowerCase() === swapFeeAddress) ||
             chainFeeCoin[transfer.from.chain].id)
-        // LI.FI `estimate.approvalAddress` is the address that will call
-        // `transferFrom` on the input ERC-20. It can differ from `to` (the
-        // Diamond / router) when an inner executor (e.g. 1inch
-        // AggregationExecutor) pulls the token directly. The field is always
-        // present in the LiFi API response (`Estimate.approvalAddress: string`)
-        // but may be the zero address or equal to `to` for native-token routes.
-        // Pass it through so mcp-ts (and other consumers) can approve the
-        // correct spender instead of the Diamond.
-        //
-        // On-chain proof: tx 0xa3aadf17 (Ethereum, block 25415989) reverted
-        // with "ERC20: transfer amount exceeds allowance". Vault had 9.41 USDC
-        // approved to Diamond (0x9025B8ff…, = `to`) — sufficient. Inner 1inch
-        // executor (0x7f51c134…, = `approvalAddress`) had zero allowance — the
-        // actual transferFrom caller → revert.
+        // LI.FI `estimate.approvalAddress` is the top-level spender that will
+        // pull the user's input ERC-20. For LI.FI routes that spender is the
+        // same chain-scoped Diamond as `transactionRequest.to`; nested route
+        // steps may use inner executors only after the Diamond holds the funds.
+        // Treat this response field as independently attacker-controlled and
+        // enforce the same Diamond allowlist before exposing it to consumers.
         const approvalAddr = estimate.approvalAddress
         const evmTo = shouldBePresent(to)
         // sdk#1458: LI.FI routes through many inner contracts, but every EVM quote enters
         // through its officially published, chain-scoped Diamond. Enforce that entry point
         // before it can become a signable destination.
         assertKnownAggregatorRouter('li.fi', evmTo, transfer.from.chain)
+        if (approvalAddr && approvalAddr !== '0x0000000000000000000000000000000000000000') {
+          assertKnownAggregatorRouter('li.fi', approvalAddr, transfer.from.chain)
+        }
         return {
           evm: {
             from: shouldBePresent(from),

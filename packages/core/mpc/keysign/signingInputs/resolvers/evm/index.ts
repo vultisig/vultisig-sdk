@@ -42,10 +42,10 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
     // sibling can't see the spender). The router allow-list runs on quote.tx.to in that recursion;
     // this binds the INDEPENDENT erc20ApprovePayload.spender field to it for enforced providers, so
     // a payload can't pass the router check yet still approve an attacker. sdk#1457: cowswap is now
-    // bound too (its spender IS its tx.to — both the fixed GPv2VaultRelayer). LI.FI's destination
-    // is enforced as of sdk#1458, but its legitimate inner allowance executor can differ from the
-    // Diamond, so LI.FI, SwapKit, and the legacy `''` remain outside this spender-equality guard.
-    // SwapKit's spender is instead checked against Blockaid immediately below.
+    // bound too (its spender IS its tx.to — both the fixed GPv2VaultRelayer). sdk#1458 binds LI.FI's
+    // top-level approval spender to its chain-scoped Diamond as well; nested route executors are
+    // internal to the Diamond and never receive the user's allowance directly. SwapKit's dynamic
+    // spender is instead checked against Blockaid immediately below.
     const approveSwapPayload = getKeysignSwapPayload(keysignPayload)
     if (approveSwapPayload && 'general' in approveSwapPayload) {
       assertEnforcedSwapApprovalSpenderBound(
@@ -96,8 +96,8 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
   // pass this router check yet still carry an approve to an arbitrary spender. That gap is now
   // closed for enforced providers by assertEnforcedSwapApprovalSpenderBound in the branch above
   // (sdk#1358 review follow-up; sdk#1457 extended it to cowswap, whose spender IS its tx.to).
-  // LI.FI's distinct inner executor remains outside the equality constraint; SwapKit's distinct
-  // spender is independently reputation-checked above. The legacy `''` provider remains unenforced.
+  // LI.FI's top-level spender is bound to its Diamond; SwapKit's distinct spender is independently
+  // reputation-checked above. The legacy `''` provider remains unenforced.
   if (swapPayload && 'general' in swapPayload) {
     const { provider, quote } = swapPayload.general
     // Pass the raw (possibly empty) destination unconditionally: for an enforced provider an empty

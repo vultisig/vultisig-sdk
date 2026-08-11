@@ -233,6 +233,33 @@ describe('getEvmSigningInputs — sdk#1358 approval-spender bind on the signing-
     expect(inputs[1]?.toAddress).toBe(COW_VAULT_RELAYER)
   })
 
+  it('rejects a LI.FI approval spender that does not match its verified Diamond', async () => {
+    await expect(
+      getEvmSigningInputs({
+        keysignPayload: buildApprovePayload({
+          routerTo: LIFI_DIAMOND,
+          spender: ATTACKER_ROUTER,
+          provider: 'li.fi',
+        }),
+        walletCore,
+      })
+    ).rejects.toThrow(/approval spender .* does not match the verified swap router/i)
+  })
+
+  it('signs cleanly for LI.FI when the approval spender matches its verified Diamond', async () => {
+    const inputs = await getEvmSigningInputs({
+      keysignPayload: buildApprovePayload({
+        routerTo: LIFI_DIAMOND,
+        spender: LIFI_DIAMOND,
+        provider: 'li.fi',
+      }),
+      walletCore,
+    })
+
+    expect(inputs).toHaveLength(2)
+    expect(inputs[1]?.toAddress).toBe(LIFI_DIAMOND)
+  })
+
   it('rejects a swapkit approval spender without an independent benign verdict', async () => {
     mockScanAddressWithBlockaid.mockResolvedValueOnce({ resultType: 'Warning', features: ['untrusted'] })
 

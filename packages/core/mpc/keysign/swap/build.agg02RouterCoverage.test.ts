@@ -14,13 +14,11 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 // AGG-02 (round-2 spec-level fund-safety audit): the aggregator-returned tx.to used to be
 // trusted with NO allowlist, and it feeds the actual swap transaction's on-chain destination
 // (swapPayload.value.quote.tx.to, read by the EVM signing-input resolver). Quote construction
-// now validates that outer router. A quote may separately identify the ERC-20 transferFrom
-// executor in approvalAddress, so this suite locks both valid cases: without an executor the
-// allowance/approve spender falls back to the validated router; with one, approval uses the
-// executor while signing still targets the validated router.
+// now validates that outer router. The ERC-20 allowance spender must remain bound to that
+// validated router as well; accepting a response-controlled spender would allow an approval
+// drain even when the signed swap destination is safe.
 const ONE_INCH_V6_ROUTER = '0x111111125421ca6dc452d289314280a0f8842a65'
 const LIFI_ROUTER = '0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE'
-const INNER_EXECUTOR = '0x2222222222222222222222222222222222222222'
 const SENDER = '0x1234567890123456789012345678901234567890'
 const USDC = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
 
@@ -154,7 +152,7 @@ describe('buildSwapKeysignPayload — EVM approval spender and signed destinatio
     expect(toAddressTheEvmResolverWouldUse).toBe(ONE_INCH_V6_ROUTER)
   })
 
-  it('uses approvalAddress for a LI.FI allowance while retaining its enforced Diamond as the signed swap destination', async () => {
+  it('uses the verified LI.FI Diamond for both the allowance and signed swap destination', async () => {
     const swapQuote: SwapQuote = {
       quote: {
         general: {
@@ -164,7 +162,7 @@ describe('buildSwapKeysignPayload — EVM approval spender and signed destinatio
             evm: {
               from: SENDER,
               to: LIFI_ROUTER,
-              approvalAddress: INNER_EXECUTOR,
+              approvalAddress: LIFI_ROUTER,
               data: '0xabc',
               value: '0',
             },
@@ -203,10 +201,10 @@ describe('buildSwapKeysignPayload — EVM approval spender and signed destinatio
       expect.objectContaining({
         chain: Chain.Ethereum,
         address: SENDER,
-        spender: INNER_EXECUTOR,
+        spender: LIFI_ROUTER,
       })
     )
-    expect(payload.erc20ApprovePayload?.spender).toBe(INNER_EXECUTOR)
+    expect(payload.erc20ApprovePayload?.spender).toBe(LIFI_ROUTER)
     expect(payload.toAddress).toBe(LIFI_ROUTER)
 
     const swapPayload = shouldBePresent(getKeysignSwapPayload(payload))
@@ -218,17 +216,16 @@ describe('buildSwapKeysignPayload — EVM approval spender and signed destinatio
     })
     expect(toAddressTheEvmResolverWouldUse).toBe(LIFI_ROUTER)
 
-    // Exercise the real signing resolver, including its approval-spender guard. Providers such as
-    // li.fi legitimately distinguishes the allowance executor from the enforced swap transaction destination,
-    // so the payload must produce both the approve and swap signing inputs without weakening the
-    // stricter spender===router binding for enforced providers such as 1inch and Kyber.
+    // Exercise the real signing resolver, including its approval-spender guard. LI.FI's top-level
+    // allowance and swap transaction both target the verified Diamond, so the payload must produce
+    // both signing inputs while preserving that spender===router binding.
     const signingInputs = await getEvmSigningInputs({
       keysignPayload: payload,
       walletCore,
     })
     expect(signingInputs).toHaveLength(2)
     expect(signingInputs[0]?.toAddress).toBe(USDC)
-    expect(signingInputs[0]?.transaction?.erc20Approve?.spender).toBe(INNER_EXECUTOR)
+    expect(signingInputs[0]?.transaction?.erc20Approve?.spender).toBe(LIFI_ROUTER)
     expect(signingInputs[1]?.toAddress).toBe(LIFI_ROUTER)
   })
 })

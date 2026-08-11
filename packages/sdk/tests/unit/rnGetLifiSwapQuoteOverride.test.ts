@@ -4,8 +4,8 @@ import { describe, expect, it, vi } from 'vitest'
 // override is a SEPARATE build target (rollup.platforms.config.js redirects
 // core's getLifiSwapQuote.ts here), and its header contract says "Public
 // surface mirrors core byte-for-byte". Without this lockstep test the app
-// platform could silently lose the inner-executor approvalAddress exposure
-// (#895) while every core test stays green — the exact two-bundle seam that
+// platform could silently lose the approvalAddress safety contract while every
+// core test stays green — the exact two-bundle seam that
 // bit the cosmos fee-denom helpers (#1199).
 
 const fixture = vi.hoisted(() => ({
@@ -32,7 +32,8 @@ vi.mock('@vultisig/core-chain/swap/general/lifi/api/injectSolanaAtaIfMissing', (
 
 import { getLifiSwapQuote } from '@/platforms/react-native/overrides/getLifiSwapQuote'
 
-const INNER_EXECUTOR = '0x7f51c134000000000000000000000000000c7e11'
+const LIFI_DIAMOND = '0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE'
+const ATTACKER_SPENDER = '0x7f51c134000000000000000000000000000c7e11'
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
 const quoteResponse = () => ({
@@ -66,10 +67,16 @@ const getEvmTx = async () => {
 }
 
 describe('RN getLifiSwapQuote override — evm.approvalAddress lockstep with core (#895)', () => {
-  it('threads a non-zero estimate.approvalAddress (inner executor) onto evm.approvalAddress', async () => {
-    fixture.approvalAddress = INNER_EXECUTOR
+  it('threads the verified LI.FI Diamond approvalAddress onto evm.approvalAddress', async () => {
+    fixture.approvalAddress = LIFI_DIAMOND
     const evm = await getEvmTx()
-    expect(evm.approvalAddress).toBe(INNER_EXECUTOR)
+    expect(evm.approvalAddress).toBe(LIFI_DIAMOND)
+  })
+
+  it('rejects an approvalAddress outside the LI.FI chain-scoped Diamond allowlist', async () => {
+    fixture.approvalAddress = ATTACKER_SPENDER
+
+    await expect(getEvmTx()).rejects.toThrow(/unrecognized router address/i)
   })
 
   it('omits evm.approvalAddress for the zero address (native-only routes)', async () => {
