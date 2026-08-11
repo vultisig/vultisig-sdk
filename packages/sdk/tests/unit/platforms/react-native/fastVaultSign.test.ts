@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { buildSolanaSendTx } from '../../../../src/platforms/react-native/chains/solana/tx'
 import { VaultErrorCode } from '../../../../src/vault/VaultError'
 
 // Mock the MPC keysign + the relay-session helpers so the test never hits the
@@ -113,9 +114,40 @@ describe('fastVaultSign — pre-dispatch encoder parity', () => {
   })
 
   it('exposes a stable code for malformed message hashes', async () => {
-    await expect(fastVaultSign({ ...BASE_OPTS, messageHashHex: 'not-a-hash' })).rejects.toMatchObject({
-      code: VaultErrorCode.InvalidSigningHash,
+    await expect(
+      fastVaultSign({
+        ...BASE_OPTS,
+        chain: 'Ton',
+        messageHashHex: 'not-a-hash',
+        walletCoreTxInputData: new Uint8Array([0x04]),
+      })
+    ).rejects.toMatchObject({ code: VaultErrorCode.InvalidSigningHash })
+  })
+
+  it('dispatches a Solana builder message without applying the TON-only 32-byte hash requirement', async () => {
+    const fetchMock = vi.fn(async () => new Response('', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    vi.mocked(keysign).mockResolvedValueOnce({ r: 'aa'.repeat(32), s: 'bb'.repeat(32) } as never)
+    const tx = buildSolanaSendTx({
+      from: '4wBqpZM9xaSheZzJSMawUKKwhdpChKbZ5eu5ky4Vigw',
+      to: '7ppk9w8NHnH6ehajvJyU31VcMafwZ3ybRtJWumSyD2wd',
+      lamports: 123_456_789n,
+      recentBlockhash: 'EagX51WiJHRKUdxXouY1qMamNNrqr9N3KLyeh25xRaTs',
     })
+
+    expect(tx.signingHashHex).toHaveLength(300)
+    await expect(
+      fastVaultSign({
+        ...BASE_OPTS,
+        chain: 'Solana',
+        isEcdsa: false,
+        messageHashHex: tx.signingHashHex,
+      })
+    ).resolves.toBe('aa'.repeat(32) + 'bb'.repeat(32))
+
+    expect(getWalletCore).not.toHaveBeenCalled()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(keysign).toHaveBeenCalledWith(expect.objectContaining({ message: tx.signingHashHex }))
   })
 
   it('exposes a stable code when WalletCore returns an invalid hash count', async () => {
@@ -135,7 +167,10 @@ describe('fastVaultSign — pre-dispatch encoder parity', () => {
     const fetchMock = vi.fn(async () => new Response('', { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
     vi.mocked(getPreSigningHashes).mockReturnValueOnce([new Uint8Array(32)])
-    vi.mocked(keysign).mockResolvedValueOnce({ r: 'aa'.repeat(32), s: 'bb'.repeat(32) } as never)
+    vi.mocked(keysign).mockResolvedValueOnce({
+      r: 'aa'.repeat(32),
+      s: 'bb'.repeat(32),
+    } as never)
 
     await expect(
       fastVaultSign({

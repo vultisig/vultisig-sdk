@@ -91,8 +91,6 @@ const verifyTonSigningHashParity = async (messageHash: string, txInputData: Uint
 }
 
 const assertPreDispatchSigningHashParity = (opts: FastVaultSignOptions): Promise<void> | undefined => {
-  const messageHash = normalizeSigningHash('messageHashHex', opts.messageHashHex)
-
   if (!opts.chain) {
     throw new VaultError(
       VaultErrorCode.InvalidConfig,
@@ -102,6 +100,7 @@ const assertPreDispatchSigningHashParity = (opts: FastVaultSignOptions): Promise
 
   if (opts.chain.toLowerCase() !== 'ton') return undefined
 
+  const messageHash = normalizeSigningHash('messageHashHex', opts.messageHashHex)
   const txInputData = opts.walletCoreTxInputData
   if (!(txInputData instanceof Uint8Array) || txInputData.length === 0) {
     throw new VaultError(
