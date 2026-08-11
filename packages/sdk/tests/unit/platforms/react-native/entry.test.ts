@@ -68,12 +68,17 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.DEFAULT_CHAINS).toEqual(['Bitcoin', 'Ethereum', 'THORChain', 'Solana', 'BSC'])
   })
 
-  it('exports the canonical Cosmos fee-denom helpers from the RN entry', async () => {
+  it('exports the canonical Cosmos fee helpers and gas-limit tables from the RN entry', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
+    expect(rn.cosmosFeeCoinDenom[rn.Chain.Cosmos]).toBe('uatom')
     expect(rn.getCosmosAllowedFeeDenoms(rn.Chain.Cosmos)).toContain('uatom')
     expect(rn.isCosmosFeeDenomAllowed(rn.Chain.Cosmos, 'uatom')).toBe(true)
     expect(rn.isCosmosFeeDenomAllowed(rn.Chain.Cosmos, 'uusdc')).toBe(false)
+    expect(rn.getCosmosGasLimit({ chain: rn.Chain.Cosmos })).toBe(200000n)
+    expect(rn.getCosmosGasLimit({ chain: rn.Chain.MayaChain })).toBe(2_000_000_000n)
+    expect(rn.getCosmosStakingGasLimit({ chain: rn.Chain.Cosmos })).toBe(350_000n)
+    expect(rn.getCosmosStakingGasLimit({ chain: rn.Chain.Cosmos, msgCount: 2 })).toBe(437_500n)
     expect(rn.resolveChainReference('8453')).toBe(rn.Chain.Base)
   })
 
@@ -201,6 +206,22 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
       rn.Chain.BitcoinCash,
       rn.Chain.Dash,
     ])
+  })
+
+  it('exports the RN vault-backup helpers and constants from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const rnEncrypt = await import('../../../../src/platforms/react-native/polyfills/encryptVaultBackupWithPassword')
+    const rnDecrypt = await import('../../../../src/platforms/react-native/polyfills/decryptVaultBackupWithPassword')
+    const constants = await import('@vultisig/lib-utils/encryption/vaultBackup/vaultBackupConstants')
+
+    expect(rn.encryptVaultBackupWithPassword).toBe(rnEncrypt.encryptVaultBackupWithPassword)
+    expect(rn.decryptVaultBackupWithPassword).toBe(rnDecrypt.decryptVaultBackupWithPassword)
+    expect(rn.DEFAULT_VAULT_BACKUP_PBKDF2_ITERATIONS).toBe(constants.DEFAULT_VAULT_BACKUP_PBKDF2_ITERATIONS)
+    expect(Buffer.from(rn.VAULT_BACKUP_BLOB_MAGIC)).toEqual(Buffer.from(constants.VAULT_BACKUP_BLOB_MAGIC))
+    expect(rn.VAULT_BACKUP_SALT_LEN).toBe(constants.VAULT_BACKUP_SALT_LEN)
+    expect(rn.VAULT_BACKUP_IV_LEN).toBe(constants.VAULT_BACKUP_IV_LEN)
+    expect(rn.VAULT_BACKUP_MAGIC_LEN).toBe(constants.VAULT_BACKUP_MAGIC_LEN)
+    expect(rn.VAULT_BACKUP_PBKDF2_HEADER_LEN).toBe(constants.VAULT_BACKUP_PBKDF2_HEADER_LEN)
   })
 })
 
