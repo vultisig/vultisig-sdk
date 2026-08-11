@@ -211,6 +211,7 @@ describe('BalanceService', () => {
 
     expect(result[Chain.Ethereum]?.formattedAmount).toBe('1')
     expect(result[`${Chain.Ethereum}:${USDC}`]?.formattedAmount).toBe('5')
+    expect(result[`${Chain.Ethereum}:${USDC}`]?.tokenId).toBe(USDC)
     expect(getEvmChainBalances).toHaveBeenCalledWith(
       expect.objectContaining({
         coins: expect.arrayContaining([expect.objectContaining({ id: USDC })]),
@@ -276,6 +277,7 @@ describe('BalanceService', () => {
     expect(vi.mocked(getCoinBalance).mock.calls.map(([input]) => input.id)).toEqual([undefined, mint, secondMint])
     expect(result[Chain.Solana]).toBeDefined()
     expect(result[`${Chain.Solana}:${mint}`]?.formattedAmount).toBe('5')
+    expect(result[`${Chain.Solana}:${mint}`]?.tokenId).toBe(mint)
     expect(result[`${Chain.Solana}:${collidingToken.id}`]?.formattedAmount).toBe('7')
   })
 
@@ -511,6 +513,7 @@ describe('BalanceService', () => {
 
     expect(result).toHaveProperty(`${Chain.Ethereum}:${USDC}`)
     expect(result).not.toHaveProperty(`${Chain.Ethereum}:${addedToken.id}`)
+    expect(result[`${Chain.Ethereum}:${USDC}`]?.tokenId).toBe(USDC)
   })
 
   it('batches native + token balances for an EVM chain into a single multicall', async () => {

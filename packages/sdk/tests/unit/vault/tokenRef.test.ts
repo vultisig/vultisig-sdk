@@ -143,6 +143,19 @@ describe('resolveTokenRef', () => {
     expect(() => resolveTokenRef(Chain.Ethereum, 'NOPE', [])).toThrow(VaultError)
     expect(() => resolveTokenRef(Chain.Ethereum, 'NOPE', [])).toThrow(/Token "NOPE" not found on Ethereum/)
   })
+
+  it('treats case-variant Solana mint ids as distinct ambiguous assets', () => {
+    const firstMint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+    const secondMint = 'ePjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+    const tokens: Token[] = [
+      { ...storedUsdc, id: firstMint, contractAddress: firstMint, chainId: Chain.Solana, symbol: 'WIDGET' },
+      { ...storedUsdc, id: secondMint, contractAddress: secondMint, chainId: Chain.Solana, symbol: 'WIDGET' },
+    ]
+
+    expect(() => resolveTokenRef(Chain.Solana, 'WIDGET', tokens)).toThrow(/ambiguous.*contract address/i)
+    expect(() => resolveTokenRefId(Chain.Solana, 'WIDGET', tokens)).toThrow(/ambiguous.*contract address/i)
+    expect(resolveTokenRef(Chain.Solana, secondMint, tokens).contractAddress).toBe(secondMint)
+  })
 })
 
 describe('resolveTokenRefId', () => {

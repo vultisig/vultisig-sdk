@@ -6,7 +6,7 @@ import { ChainWithTokenMetadataDiscovery } from '@vultisig/core-chain/coin/token
 
 import type { Token } from '../../types'
 import type { DiscoveredToken, TokenInfo } from '../../types/tokens'
-import { stripLegacyTokenIdPrefix } from '../tokenRef'
+import { normalizedTokenIdentity } from '../tokenRef'
 import { VaultError, VaultErrorCode } from '../VaultError'
 
 const syntheticTickerSuffix = /_\d+$/u
@@ -16,16 +16,28 @@ function tickerBase(ticker: string): string {
 }
 
 function tokenIdentity(chain: Chain, tokenId: string): string {
-  return stripLegacyTokenIdPrefix(chain, tokenId).toLowerCase()
+  return normalizedTokenIdentity(chain, tokenId)
 }
 
 function compactTokenId(tokenId: string): string {
   return (tokenId.replace(/[^a-z0-9]/giu, '').toLowerCase() || 'unknown').padStart(8, '0')
 }
 
+function caseSensitiveHash(value: string): string {
+  let hash = 0x811c9dc5
+  for (const character of value) {
+    hash ^= character.codePointAt(0) ?? 0
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0')
+}
+
 function addressDiscriminator(tokenId: string, collidingIdentities: Set<string>): string {
   const compactId = compactTokenId(tokenId)
   const compactIdentities = [...collidingIdentities].map(compactTokenId)
+  if (compactIdentities.filter(identity => identity === compactId).length > 1) {
+    return `${compactId.slice(-8)}${caseSensitiveHash(tokenId)}`
+  }
   for (let length = 8; length <= compactId.length; length += 1) {
     const suffix = compactId.slice(-length)
     if (compactIdentities.filter(identity => identity.endsWith(suffix)).length === 1) return suffix

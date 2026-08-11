@@ -14,8 +14,10 @@
  * same token — the only change is that refs which used to throw now resolve.
  */
 import { Chain } from '@vultisig/core-chain/Chain'
+import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { knownTokens } from '@vultisig/core-chain/coin/knownTokens'
+import { normalizeTokenId } from '@vultisig/core-chain/utils/isValidTokenId'
 
 import type { Token } from '../types'
 import { VaultError, VaultErrorCode } from './VaultError'
@@ -34,10 +36,21 @@ export function stripLegacyTokenIdPrefix(chain: Chain, id: string): string {
   return id.toLowerCase().startsWith(prefix.toLowerCase()) ? id.slice(prefix.length) : id
 }
 
+/** Normalize only the chain ids whose core contract defines a canonical form. */
+export function normalizedTokenIdentity(chain: Chain, id: string): string {
+  return normalizeTokenId({ chain, id: stripLegacyTokenIdPrefix(chain, id) })
+}
+
 /** Compare bare and legacy-prefixed storage ids without changing symbol lookup. */
 export function tokenIdsMatch(chain: Chain, left: string | undefined, right: string): boolean {
+  return left !== undefined && normalizedTokenIdentity(chain, left) === normalizedTokenIdentity(chain, right)
+}
+
+/** Preserve legacy EVM address matching while keeping other chain ids case-sensitive. */
+function caseInsensitiveTokenIdsMatch(chain: Chain, left: string | undefined, right: string): boolean {
   return (
     left !== undefined &&
+    getChainKind(chain) === 'evm' &&
     stripLegacyTokenIdPrefix(chain, left).toLowerCase() === stripLegacyTokenIdPrefix(chain, right).toLowerCase()
   )
 }
@@ -48,7 +61,7 @@ function tokenSymbolBase(symbol: string | undefined): string | undefined {
 }
 
 function tokenAssetId(chain: Chain, token: Token): string {
-  return stripLegacyTokenIdPrefix(chain, token.contractAddress || token.id).toLowerCase()
+  return normalizedTokenIdentity(chain, token.contractAddress || token.id)
 }
 
 class AmbiguousTokenRefError extends VaultError {}
@@ -69,7 +82,6 @@ export function resolveTokenRef(chain: Chain, ref: string | undefined, userToken
   }
 
   const upper = ref.toUpperCase()
-  const lower = ref.toLowerCase()
   const symbolMatches = userTokens.filter(t => t.symbol?.toUpperCase() === upper)
   const baseSymbolMatches = userTokens.filter(t => tokenSymbolBase(t.symbol)?.toUpperCase() === upper)
   const distinctSymbolAssets = new Map([...symbolMatches, ...baseSymbolMatches].map(t => [tokenAssetId(chain, t), t]))
@@ -87,8 +99,10 @@ export function resolveTokenRef(chain: Chain, ref: string | undefined, userToken
   //    treated as the same storage identity.
   const token =
     symbolMatches[0] ??
-    userTokens.find(t => t.contractAddress?.toLowerCase() === lower || t.id?.toLowerCase() === lower) ??
-    userTokens.find(t => tokenIdsMatch(chain, t.contractAddress, ref) || tokenIdsMatch(chain, t.id, ref))
+    userTokens.find(t => tokenIdsMatch(chain, t.contractAddress, ref) || tokenIdsMatch(chain, t.id, ref)) ??
+    userTokens.find(
+      t => caseInsensitiveTokenIdsMatch(chain, t.contractAddress, ref) || caseInsensitiveTokenIdsMatch(chain, t.id, ref)
+    )
   if (token) {
     return {
       ticker: token.symbol ?? token.contractAddress ?? token.id,
@@ -101,8 +115,8 @@ export function resolveTokenRef(chain: Chain, ref: string | undefined, userToken
   const known = knownTokens[chain] ?? []
   const match =
     known.find(t => t.ticker.toUpperCase() === upper) ??
-    known.find(t => t.id?.toLowerCase() === lower) ??
-    known.find(t => tokenIdsMatch(chain, t.id, ref))
+    known.find(t => tokenIdsMatch(chain, t.id, ref)) ??
+    known.find(t => caseInsensitiveTokenIdsMatch(chain, t.id, ref))
   if (match) return { ticker: match.ticker, decimals: match.decimals, contractAddress: match.id }
 
   throw new VaultError(

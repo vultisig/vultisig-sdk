@@ -194,6 +194,34 @@ describe('TokenDiscoveryService', () => {
       })
     })
 
+    it('preserves case-sensitive Solana mint identities when checking symbol collisions', async () => {
+      const firstMint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+      const secondMint = 'ePjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+      vi.mocked(findCoins).mockResolvedValue([
+        { chain: Chain.Solana, id: firstMint, ticker: 'WIDGET', decimals: 6 },
+        { chain: Chain.Solana, id: secondMint, ticker: 'WIDGET_1', decimals: 6 },
+      ] as any)
+
+      const discovered = await service.discoverTokens(Chain.Solana)
+      const tickers = discovered.map(token => token.ticker)
+      const stored = discovered.map(token => ({
+        id: token.tokenId!,
+        contractAddress: token.contractAddress,
+        symbol: token.ticker,
+        name: token.ticker,
+        decimals: token.decimals,
+        chainId: Chain.Solana,
+        isNative: false,
+      }))
+
+      expect(tickers).toHaveLength(2)
+      expect(tickers.every(ticker => /^WIDGET@/u.test(ticker))).toBe(true)
+      expect(new Set(tickers.map(ticker => ticker.toUpperCase())).size).toBe(2)
+      expect(resolveTokenRef(Chain.Solana, tickers[0], stored).contractAddress).toBe(firstMint)
+      expect(resolveTokenRef(Chain.Solana, tickers[1], stored).contractAddress).toBe(secondMint)
+      expect(resolveTokenRef(Chain.Solana, secondMint, stored).contractAddress).toBe(secondMint)
+    })
+
     it('should pass the vault address to findCoins', async () => {
       mockGetAddress.mockResolvedValue('0xMyVaultAddress')
       vi.mocked(findCoins).mockResolvedValue([])

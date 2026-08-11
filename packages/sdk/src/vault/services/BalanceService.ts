@@ -149,9 +149,9 @@ export class BalanceService {
           chain,
           id: stripLegacyTokenIdPrefix(chain, token.contractAddress || token.id),
         })
-        const resultId = stripLegacyTokenIdPrefix(chain, token.id)
+        const resultId = normalizeTokenId({ chain, id: stripLegacyTokenIdPrefix(chain, token.id) })
         balanceRequests.push(
-          this.getBalanceForAsset(chain, token.id, assetId, token).then(
+          this.getBalanceForAsset(chain, resultId, assetId, token).then(
             balance => [`${chain}:${resultId}`, balance] as const
           )
         )
@@ -187,11 +187,12 @@ export class BalanceService {
           chain,
           id: stripLegacyTokenIdPrefix(chain, token.contractAddress || token.id),
         })
+        const resultId = normalizeTokenId({ chain, id: stripLegacyTokenIdPrefix(chain, token.id) })
         return {
           coinKey: { chain, id: assetId, address } as AccountCoinKey<EvmChain>,
-          resultKey: `${chain}:${stripLegacyTokenIdPrefix(chain, token.id)}`,
-          cacheKey: `${chain.toLowerCase()}:${token.id}`,
-          tokenId: token.id,
+          resultKey: `${chain}:${resultId}`,
+          cacheKey: `${chain.toLowerCase()}:${resultId}`,
+          tokenId: resultId,
           token,
         }
       }),
@@ -272,7 +273,8 @@ export class BalanceService {
       if (includeTokens) {
         const tokens = this.getTokens(chain)
         for (const token of tokens) {
-          const tokenKey = `${chain.toLowerCase()}:${token.id}`
+          const resultId = normalizeTokenId({ chain, id: stripLegacyTokenIdPrefix(chain, token.id) })
+          const tokenKey = `${chain.toLowerCase()}:${resultId}`
           await this.cacheService.invalidateScoped(tokenKey, CacheScope.BALANCE)
         }
       }
