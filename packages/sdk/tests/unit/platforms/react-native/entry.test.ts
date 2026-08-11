@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { cosmosTxFeeGasParityCases } from '../../../fixtures/cosmosTxFeeGasParity'
 
+process.env.VULTISIG_STRICT_SINGLETON = '0'
+
 vi.mock('expo-crypto', () => ({
   randomUUID: () => '00000000-0000-4000-8000-000000000000',
   getRandomValues: <T extends ArrayBufferView | null>(a: T) => a,
@@ -332,6 +334,33 @@ describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
     expect(typeof rn.isKnownContract).toBe('function')
     expect(rn.isKnownContract('0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')).toBe(true)
     expect(typeof rn.knownContracts.isKnownContract).toBe('function')
+  })
+
+  it('exports the swap-progress explorer helpers from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(typeof rn.getSwapExplorerUrl).toBe('function')
+    expect(Array.isArray(rn.swapExplorerProviders)).toBe(true)
+    expect(rn.getSwapExplorerUrl({ provider: 'thorchain', txHash: '0xabc', fromChain: rn.Chain.THORChain })).toBe(
+      'https://runescan.io/tx/abc'
+    )
+  })
+
+  it('exports the THORChain LP v2 helper family from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const thorLp = await import('@vultisig/core-chain/chains/cosmos/thor/lp')
+    const thorInbound = await import('@vultisig/core-chain/chains/cosmos/thor/getThorchainInboundAddress')
+
+    expect(rn.getThorchainInboundAddress).toBe(thorInbound.getThorchainInboundAddress)
+    expect(rn.buildThorchainLpAddPayload).toBe(thorLp.buildThorchainLpAddPayload)
+    expect(rn.buildThorchainLpRemovePayload).toBe(thorLp.buildThorchainLpRemovePayload)
+    expect(rn.getThorchainLpPosition).toBe(thorLp.getThorchainLpPosition)
+    expect(rn.getThorchainLpPositions).toBe(thorLp.getThorchainLpPositions)
+    expect(rn.getThorchainLpHaltStatus).toBe(thorLp.getThorchainLpHaltStatus)
+    expect(rn.getThorchainLpLockupSeconds).toBe(thorLp.getThorchainLpLockupSeconds)
+    expect(rn.resolvePairedAddressForLpAdd).toBe(thorLp.resolvePairedAddressForLpAdd)
+    expect(rn.addLpMemo).toBe(thorLp.addLpMemo)
+    expect(rn.removeLpMemo).toBe(thorLp.removeLpMemo)
   })
 })
 
