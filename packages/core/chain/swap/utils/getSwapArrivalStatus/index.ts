@@ -135,12 +135,21 @@ const resultBase = (provider: SwapArrivalProvider, txHash: string): SwapArrivalS
   txHash,
 })
 
+const maxDestinationTxSearchDepth = 12
+
+/**
+ * Provider route payloads list hops and outbound transactions in execution
+ * order, so the last distinct transaction hash is the destination transaction.
+ * The depth cap keeps malformed or unexpectedly recursive payloads bounded.
+ * THORNode's generic `id` field is handled separately on its known `out_txs`
+ * collection so unrelated provider object IDs cannot be mistaken for tx hashes.
+ */
 const findDestinationTxHash = (value: unknown, sourceTxHash: string): string | undefined => {
   const source = sourceTxHash.toLowerCase()
   const found: string[] = []
 
   const visit = (candidate: unknown, depth: number): void => {
-    if (depth > 12 || candidate === null || candidate === undefined) return
+    if (depth > maxDestinationTxSearchDepth || candidate === null || candidate === undefined) return
     if (Array.isArray(candidate)) {
       candidate.forEach(item => visit(item, depth + 1))
       return
@@ -161,6 +170,18 @@ const findDestinationTxHash = (value: unknown, sourceTxHash: string): string | u
   return found.at(-1)
 }
 
+const findThorMayaNodeDestinationTxHash = (data: unknown, sourceTxHash: string): string | undefined => {
+  if (!isRecord(data) || !Array.isArray(data.out_txs)) return findDestinationTxHash(data, sourceTxHash)
+
+  const source = sourceTxHash.toLowerCase()
+  const outboundTxHashes = data.out_txs.flatMap(outboundTx => {
+    const id = getString(outboundTx, 'id')?.trim()
+    return id && id.toLowerCase() !== source ? [id] : []
+  })
+
+  return outboundTxHashes.at(-1) ?? findDestinationTxHash(data, sourceTxHash)
+}
+
 const completed = (stage: unknown): boolean => getBoolean(stage, 'completed') === true
 
 const started = (stage: unknown): boolean => getBoolean(stage, 'started') === true || completed(stage)
@@ -174,9 +195,12 @@ const getThorMayaNodeProgress = (
   if (!stages) return undefined
 
   const outboundSigned = stages.outbound_signed
-  const destinationTxHash = findDestinationTxHash(data, txHash)
+  const destinationTxHash = findThorMayaNodeDestinationTxHash(data, txHash)
   if (completed(outboundSigned)) {
-    return { ...resultBase(provider, txHash), status: 'success', stage: 'complete', destinationTxHash }
+    // A signed outbound can be either the swap output or a refund. Only
+    // Midgard's action type can distinguish them, so node-only completion must
+    // remain pollable until Midgard corroborates the terminal outcome.
+    return { ...resultBase(provider, txHash), status: 'pending', stage: 'outbound', destinationTxHash }
   }
 
   if (isRecord(outboundSigned) || isRecord(stages.outbound_delay) || completed(stages.swap_finalised)) {
@@ -418,13 +442,18 @@ const getLifiStatus = async ({
   throw new SwapArrivalStatusRequestError('li.fi', [new Error('LI.FI returned an unknown transaction status')])
 }
 
-export const isSwapArrivalStatusTerminal = (result: SwapArrivalStatusResult): boolean => result.status !== 'pending'
+export const isSwapArrivalStatusTerminal = (result: SwapArrivalStatusResult): boolean =>
+  result.status !== 'pending' && result.status !== 'not_found'
 
 /**
  * Reads one provider status snapshot and normalizes it for both UI progress and
  * terminal agent workflows. This function deliberately does not poll: callers
  * retain control of cadence, retry budgets and cancellation while sharing the
  * provider response state machines.
+ *
+ * `not_found` is a transient snapshot because providers use it during normal
+ * pre-indexing windows. Likewise, THOR/Maya node-only outbound completion stays
+ * pending until Midgard identifies the action as a swap or refund.
  *
  * Network, HTTP and malformed-response failures throw
  * `SwapArrivalStatusRequestError`; they are not converted to terminal `error`

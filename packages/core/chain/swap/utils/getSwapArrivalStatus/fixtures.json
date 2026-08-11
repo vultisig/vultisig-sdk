@@ -8,6 +8,18 @@
       "swap_status": { "pending": true }
     }
   },
+  "thorchainNodeCompleteWithOutbound": {
+    "tx": { "id": "THOR-REFUND-SOURCE" },
+    "stages": {
+      "inbound_observed": { "started": true, "completed": true },
+      "inbound_confirmation_counted": { "completed": true },
+      "inbound_finalised": { "completed": true },
+      "swap_status": { "pending": false },
+      "swap_finalised": { "completed": true },
+      "outbound_signed": { "completed": true }
+    },
+    "out_txs": [{ "id": "THOR-REAL-OUT", "chain": "BTC" }]
+  },
   "thorchainMidgardPending": {
     "count": "1",
     "actions": [

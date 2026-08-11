@@ -76,12 +76,34 @@ describe('getSwapArrivalStatus', () => {
         String(input).includes('/v2/actions') ? jsonResponse({ count: '0', actions: [] }) : jsonResponse({}, 404)
       ) as typeof fetch
 
-      await expect(getSwapArrivalStatus({ provider: 'thorchain', txHash: 'UNKNOWN', fetchImpl })).resolves.toEqual({
+      const result = await getSwapArrivalStatus({ provider: 'thorchain', txHash: 'UNKNOWN', fetchImpl })
+
+      expect(result).toEqual({
         provider: 'thorchain',
         txHash: 'UNKNOWN',
         status: 'not_found',
         stage: 'not_found',
       })
+      expect(isSwapArrivalStatusTerminal(result)).toBe(false)
+    })
+
+    it('keeps a THORNode-completed outbound pending when Midgard is unavailable', async () => {
+      const fetchImpl = vi.fn(async (input: RequestInfo | URL) =>
+        String(input).includes('/v2/actions')
+          ? jsonResponse({ message: 'unavailable' }, 502)
+          : jsonResponse(fixtures.thorchainNodeCompleteWithOutbound)
+      ) as typeof fetch
+
+      const result = await getSwapArrivalStatus({ provider: 'thorchain', txHash: 'THOR-REFUND-SOURCE', fetchImpl })
+
+      expect(result).toEqual({
+        provider: 'thorchain',
+        txHash: 'THOR-REFUND-SOURCE',
+        status: 'pending',
+        stage: 'outbound',
+        destinationTxHash: 'THOR-REAL-OUT',
+      })
+      expect(isSwapArrivalStatusTerminal(result)).toBe(false)
     })
 
     it('throws when both THORChain sources are unavailable instead of reporting a terminal swap error', async () => {
@@ -224,6 +246,20 @@ describe('getSwapArrivalStatus', () => {
       expect(fetchImpl).toHaveBeenCalledWith('https://li.quest/v1/status?txHash=0xsource', expect.any(Object))
     })
 
+    it('keeps LI.FI not-found snapshots pollable during provider indexing', async () => {
+      const fetchImpl = vi.fn(async () => jsonResponse({ status: 'NOT_FOUND' })) as typeof fetch
+
+      const result = await getSwapArrivalStatus({ provider: 'li.fi', txHash: '0xsource', fetchImpl })
+
+      expect(result).toEqual({
+        provider: 'li.fi',
+        txHash: '0xsource',
+        status: 'not_found',
+        stage: 'not_found',
+      })
+      expect(isSwapArrivalStatusTerminal(result)).toBe(false)
+    })
+
     it.each([
       [{ status: 'NOT_FOUND' }, 'not_found', 'not_found'],
       [{ status: 'INVALID' }, 'error', 'failed'],
@@ -250,9 +286,12 @@ describe('getSwapArrivalStatus', () => {
     expect(fetchImpl).not.toHaveBeenCalled()
   })
 
-  it('exposes terminal-state classification without treating pending as terminal', () => {
+  it('keeps pending and not-found snapshots pollable while classifying settled outcomes as terminal', () => {
     expect(
       isSwapArrivalStatusTerminal({ provider: 'skip', txHash: 'hash', status: 'pending', stage: 'outbound' })
+    ).toBe(false)
+    expect(
+      isSwapArrivalStatusTerminal({ provider: 'li.fi', txHash: 'hash', status: 'not_found', stage: 'not_found' })
     ).toBe(false)
     expect(
       isSwapArrivalStatusTerminal({ provider: 'skip', txHash: 'hash', status: 'refunded', stage: 'refunded' })
