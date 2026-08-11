@@ -9,11 +9,13 @@ const sdkPackageJson = JSON.parse(readFileSync(path.join(sdkRoot, 'package.json'
 const platformRollupConfig = readFileSync(path.join(sdkRoot, 'rollup.platforms.config.js'), 'utf8')
 const typesRollupConfig = readFileSync(path.join(sdkRoot, 'rollup.types.config.js'), 'utf8')
 
-describe('public API tools subpath exports', () => {
-  it('publishes dedicated export-map entries for parse, defi, and bridge', () => {
+describe('public API subpath exports', () => {
+  it('publishes dedicated export-map entries for every narrow public surface', () => {
     const parseExport = sdkPackageJson.exports['./tools/parse']
     const defiExport = sdkPackageJson.exports['./tools/defi']
     const bridgeExport = sdkPackageJson.exports['./tools/bridge']
+    const decodeExport = sdkPackageJson.exports['./tools/decode']
+    const txExport = sdkPackageJson.exports['./tx']
 
     expect(parseExport).toMatchObject({
       types: './dist/tools/parse/index.d.ts',
@@ -33,19 +35,37 @@ describe('public API tools subpath exports', () => {
       require: './dist/tools/bridge/index.cjs',
       default: './dist/tools/bridge/index.cjs',
     })
+    expect(decodeExport).toMatchObject({
+      types: './dist/tools/decode/index.d.ts',
+      import: './dist/tools/decode/index.js',
+      require: './dist/tools/decode/index.cjs',
+      default: './dist/tools/decode/index.cjs',
+    })
+    expect(txExport).toMatchObject({
+      types: './dist/tx/index.d.ts',
+      import: './dist/tx/index.js',
+      require: './dist/tx/index.cjs',
+      default: './dist/tx/index.cjs',
+    })
 
     expect(JSON.stringify(parseExport)).not.toContain('dist/index.node')
     expect(JSON.stringify(defiExport)).not.toContain('dist/index.node')
     expect(JSON.stringify(bridgeExport)).not.toContain('dist/index.node')
+    expect(JSON.stringify(decodeExport)).not.toContain('dist/index.node')
+    expect(JSON.stringify(txExport)).not.toContain('dist/index.node')
   })
 
-  it('keeps dedicated JS and d.ts bundle generation wired for all tool subpaths', () => {
+  it('keeps dedicated JS and d.ts bundle generation wired for every narrow public surface', () => {
     expect(platformRollupConfig).toContain("input: './src/tools/parse/index.ts'")
     expect(platformRollupConfig).toContain("distBase: 'tools/parse'")
     expect(platformRollupConfig).toContain("input: './src/tools/defi/index.ts'")
     expect(platformRollupConfig).toContain("distBase: 'tools/defi'")
     expect(platformRollupConfig).toContain("input: './src/tools/bridge/index.ts'")
     expect(platformRollupConfig).toContain("distBase: 'tools/bridge'")
+    expect(platformRollupConfig).toContain("input: './src/tools/decode/index.ts'")
+    expect(platformRollupConfig).toContain("distBase: 'tools/decode'")
+    expect(platformRollupConfig).toContain("input: './src/tx/index.ts'")
+    expect(platformRollupConfig).toContain("distBase: 'tx'")
 
     expect(typesRollupConfig).toContain(
       "createSubpathTypesConfig('src/tools/parse/index.ts', 'dist/tools/parse/index.d.ts')"
@@ -56,5 +76,9 @@ describe('public API tools subpath exports', () => {
     expect(typesRollupConfig).toContain(
       "createSubpathTypesConfig('src/tools/bridge/index.ts', 'dist/tools/bridge/index.d.ts')"
     )
+    expect(typesRollupConfig).toContain(
+      "createSubpathTypesConfig('src/tools/decode/index.ts', 'dist/tools/decode/index.d.ts')"
+    )
+    expect(typesRollupConfig).toContain("createSubpathTypesConfig('src/tx/index.ts', 'dist/tx/index.d.ts')")
   })
 })
