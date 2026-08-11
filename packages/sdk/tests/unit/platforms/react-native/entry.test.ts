@@ -70,12 +70,17 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.DEFAULT_CHAINS).toEqual(['Bitcoin', 'Ethereum', 'THORChain', 'Solana', 'BSC'])
   })
 
-  it('exports the canonical Cosmos fee-denom helpers from the RN entry', async () => {
+  it('exports the canonical Cosmos fee helpers and gas-limit tables from the RN entry', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
+    expect(rn.cosmosFeeCoinDenom[rn.Chain.Cosmos]).toBe('uatom')
     expect(rn.getCosmosAllowedFeeDenoms(rn.Chain.Cosmos)).toContain('uatom')
     expect(rn.isCosmosFeeDenomAllowed(rn.Chain.Cosmos, 'uatom')).toBe(true)
     expect(rn.isCosmosFeeDenomAllowed(rn.Chain.Cosmos, 'uusdc')).toBe(false)
+    expect(rn.getCosmosGasLimit({ chain: rn.Chain.Cosmos })).toBe(200000n)
+    expect(rn.getCosmosGasLimit({ chain: rn.Chain.MayaChain })).toBe(2_000_000_000n)
+    expect(rn.getCosmosStakingGasLimit({ chain: rn.Chain.Cosmos })).toBe(350_000n)
+    expect(rn.getCosmosStakingGasLimit({ chain: rn.Chain.Cosmos, msgCount: 2 })).toBe(437_500n)
     expect(rn.resolveChainReference('8453')).toBe(rn.Chain.Base)
   })
 
@@ -204,6 +209,22 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
       rn.Chain.Dash,
     ])
   })
+
+  it('exports the RN vault-backup helpers and constants from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const rnEncrypt = await import('../../../../src/platforms/react-native/polyfills/encryptVaultBackupWithPassword')
+    const rnDecrypt = await import('../../../../src/platforms/react-native/polyfills/decryptVaultBackupWithPassword')
+    const constants = await import('@vultisig/lib-utils/encryption/vaultBackup/vaultBackupConstants')
+
+    expect(rn.encryptVaultBackupWithPassword).toBe(rnEncrypt.encryptVaultBackupWithPassword)
+    expect(rn.decryptVaultBackupWithPassword).toBe(rnDecrypt.decryptVaultBackupWithPassword)
+    expect(rn.DEFAULT_VAULT_BACKUP_PBKDF2_ITERATIONS).toBe(constants.DEFAULT_VAULT_BACKUP_PBKDF2_ITERATIONS)
+    expect(Buffer.from(rn.VAULT_BACKUP_BLOB_MAGIC)).toEqual(Buffer.from(constants.VAULT_BACKUP_BLOB_MAGIC))
+    expect(rn.VAULT_BACKUP_SALT_LEN).toBe(constants.VAULT_BACKUP_SALT_LEN)
+    expect(rn.VAULT_BACKUP_IV_LEN).toBe(constants.VAULT_BACKUP_IV_LEN)
+    expect(rn.VAULT_BACKUP_MAGIC_LEN).toBe(constants.VAULT_BACKUP_MAGIC_LEN)
+    expect(rn.VAULT_BACKUP_PBKDF2_HEADER_LEN).toBe(constants.VAULT_BACKUP_PBKDF2_HEADER_LEN)
+  })
 })
 
 // RN-entry parity guard: the root barrel (packages/sdk/src/index.ts, resolved
@@ -293,13 +314,17 @@ describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
     expect(() => rn.toChainAmount('   ', 8)).toThrow(rn.ChainAmountParseError)
   })
 
-  it('exports the EVM chainId helpers from the RN entry', async () => {
+  it('exports the EVM chainId helpers and priority-fee sanity clamp from the RN entry', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
     expect(typeof rn.getEvmChainId).toBe('function')
     expect(typeof rn.getEvmChainByChainId).toBe('function')
+    expect(typeof rn.clampEvmPriorityFee).toBe('function')
     expect(rn.getEvmChainId(rn.Chain.Ethereum)).toBe('0x1')
     expect(rn.getEvmChainByChainId('0x1')).toBe(rn.Chain.Ethereum)
+    expect(
+      rn.clampEvmPriorityFee(rn.Chain.Base as Parameters<typeof rn.clampEvmPriorityFee>[0], 75n * 1_000_000_000n)
+    ).toBe(50n * 1_000_000_000n)
   })
 
   it('exports the canonical gas comparison helpers from the RN entry', async () => {
@@ -334,5 +359,43 @@ describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
     expect(typeof rn.isKnownContract).toBe('function')
     expect(rn.isKnownContract('0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')).toBe(true)
     expect(typeof rn.knownContracts.isKnownContract).toBe('function')
+  })
+
+  it('exports the swap-progress explorer helpers from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(typeof rn.getSwapExplorerUrl).toBe('function')
+    expect(Array.isArray(rn.swapExplorerProviders)).toBe(true)
+    expect(rn.getSwapExplorerUrl({ provider: 'thorchain', txHash: '0xabc', fromChain: rn.Chain.THORChain })).toBe(
+      'https://runescan.io/tx/abc'
+    )
+  })
+
+  it('exports the THORChain LP v2 helper family from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const thorLp = await import('@vultisig/core-chain/chains/cosmos/thor/lp')
+    const thorInbound = await import('@vultisig/core-chain/chains/cosmos/thor/getThorchainInboundAddress')
+
+    expect(rn.getThorchainInboundAddress).toBe(thorInbound.getThorchainInboundAddress)
+    expect(rn.buildThorchainLpAddPayload).toBe(thorLp.buildThorchainLpAddPayload)
+    expect(rn.buildThorchainLpRemovePayload).toBe(thorLp.buildThorchainLpRemovePayload)
+    expect(rn.getThorchainLpPosition).toBe(thorLp.getThorchainLpPosition)
+    expect(rn.getThorchainLpPositions).toBe(thorLp.getThorchainLpPositions)
+    expect(rn.getThorchainLpHaltStatus).toBe(thorLp.getThorchainLpHaltStatus)
+    expect(rn.getThorchainLpLockupSeconds).toBe(thorLp.getThorchainLpLockupSeconds)
+    expect(rn.resolvePairedAddressForLpAdd).toBe(thorLp.resolvePairedAddressForLpAdd)
+    expect(rn.addLpMemo).toBe(thorLp.addLpMemo)
+    expect(rn.removeLpMemo).toBe(thorLp.removeLpMemo)
+  })
+})
+
+describe('RN entry exposes canonical EIP-712 helpers', () => {
+  it('re-exports the same typed-data hash and signature canonicals as the node surface', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const eip712 = await import('../../../../src/utils/eip712')
+
+    expect(rn.coerceEip712ChainId).toBe(eip712.coerceEip712ChainId)
+    expect(rn.computeEip712Hash).toBe(eip712.computeEip712Hash)
+    expect(rn.toCanonicalEvmSignature).toBe(eip712.toCanonicalEvmSignature)
   })
 })

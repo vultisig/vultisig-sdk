@@ -7,7 +7,7 @@
 import type { Chain } from '@vultisig/core-chain/Chain'
 import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import type { SwapAffiliateConfig, SwapQuoteProviderExcludeName } from '@vultisig/core-chain/swap/quote/findSwapQuote'
-import type { SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
+import type { BoundSwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
 import type { FiatCurrency } from '@vultisig/core-config/FiatCurrency'
 import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 
@@ -15,7 +15,7 @@ import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v
 export type { GeneralSwapProvider } from '@vultisig/core-chain/swap/general/GeneralSwapProvider'
 export type { GeneralSwapQuote } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
 export type { NativeSwapQuote } from '@vultisig/core-chain/swap/native/NativeSwapQuote'
-export type { SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
+export type { BoundSwapQuote, SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
 export type { FiatCurrency } from '@vultisig/core-config/FiatCurrency'
 
 /**
@@ -123,7 +123,7 @@ export type ResolvedCoinInfo = {
  */
 export type SwapQuoteBase = {
   /** Raw quote from core (for use with prepareSwapTx) */
-  quote: SwapQuote
+  quote: BoundSwapQuote
   /** Expected output amount (in smallest unit, e.g., wei) */
   estimatedOutput: bigint
   /** Expected output amount in fiat (when fiatCurrency was requested) */
