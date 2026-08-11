@@ -53,6 +53,7 @@ type MinimalVaultOverrides = {
   localPartyId?: string
   ecdsaShare?: string
   eddsaShare?: string
+  resharePrefix?: string
 }
 
 function buildMinimalSecureVaultBinary(overrides: MinimalVaultOverrides = {}): Uint8Array {
@@ -68,7 +69,7 @@ function buildMinimalSecureVaultBinary(overrides: MinimalVaultOverrides = {}): U
       signers: overrides.signers ?? ['SyntheticDevice'],
       hexChainCode: '00'.repeat(32),
       localPartyId: overrides.localPartyId ?? 'SyntheticDevice',
-      resharePrefix: '',
+      resharePrefix: overrides.resharePrefix ?? '',
       libType: LibType.DKLS,
       keyShares: [
         create(Vault_KeyShareSchema, {
@@ -485,9 +486,7 @@ describe('VaultManager', () => {
       )
       await vaultManager.importVault(original, 'old-password')
       context.passwordCache.delete(SYNTH_ECDSA_PK)
-      const persistedBeforeReplace = await memoryStorage.get<{ vultFileContent: string }>(
-        `vault:${SYNTH_ECDSA_PK}`
-      )
+      const persistedBeforeReplace = await memoryStorage.get<{ vultFileContent: string }>(`vault:${SYNTH_ECDSA_PK}`)
 
       await expect(
         vaultManager.importVault(replacement, 'new-password', { conflictResolution: 'replace' })
@@ -516,6 +515,23 @@ describe('VaultManager', () => {
       ).rejects.toMatchObject({ code: VaultImportErrorCode.STALE_SHARE })
       expect((await memoryStorage.get<{ vultFileContent: string }>(`vault:${SYNTH_ECDSA_PK}`))?.vultFileContent).toBe(
         original
+      )
+    })
+
+    it('rejects a share from a superseded reshare round even when key material matches', async () => {
+      const current = encodeUnencryptedVult(buildMinimalSecureVaultBinary({ resharePrefix: 'reshare-round-2' }))
+      const preReshareBackup = encodeUnencryptedVult(
+        buildMinimalSecureVaultBinary({ resharePrefix: 'reshare-round-1' })
+      )
+      await vaultManager.importVault(current)
+
+      await expect(
+        vaultManager.importVault(preReshareBackup, undefined, {
+          conflictResolution: 'replace',
+        })
+      ).rejects.toMatchObject({ code: VaultImportErrorCode.STALE_SHARE })
+      expect((await memoryStorage.get<{ vultFileContent: string }>(`vault:${SYNTH_ECDSA_PK}`))?.vultFileContent).toBe(
+        current
       )
     })
 

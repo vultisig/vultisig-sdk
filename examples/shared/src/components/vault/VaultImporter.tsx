@@ -129,7 +129,7 @@ export default function VaultImporter({ onVaultImported }: VaultImporterProps) {
             password = passwordResult
           }
 
-          const importedVault = await sdk.importVault(content, password)
+          const importedVault = await sdk.importVault(content, password, { conflictResolution: 'replace' })
           importedVaults.push(importedVault)
         } catch (fileError) {
           console.error(`Failed to import ${file.name}:`, fileError)

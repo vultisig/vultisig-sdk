@@ -4,7 +4,7 @@
 import * as fs from 'node:fs/promises'
 import { dirname } from 'node:path'
 
-import { Vultisig } from '@vultisig/sdk'
+import { VaultImportError, VaultImportErrorCode, Vultisig } from '@vultisig/sdk'
 import inquirer from 'inquirer'
 
 import { loadConfig, saveConfig } from './config-store.js'
@@ -24,6 +24,10 @@ type AuthSetupOpts = {
 }
 
 type ImportedVault = Awaited<ReturnType<Vultisig['importVault']>>
+
+const isWrongPasswordError = (error: unknown): boolean =>
+  error instanceof VaultImportError &&
+  (error.code === VaultImportErrorCode.INVALID_PASSWORD || error.code === VaultImportErrorCode.PASSWORD_REQUIRED)
 
 async function resolveVaultFilePath(opts: AuthSetupOpts): Promise<string> {
   if (opts.vaultFile) return opts.vaultFile
@@ -73,10 +77,13 @@ async function importEncryptedVaultFromEnv(
       vault: await sdk.importVault(vaultContent, envDecryptPw, { conflictResolution: 'replace' }),
       decryptPassword: envDecryptPw,
     }
-  } catch {
-    throw new Error(
-      'VAULT_DECRYPT_PASSWORD is set but failed to decrypt the vault. Check that the password is correct.'
-    )
+  } catch (error) {
+    if (isWrongPasswordError(error)) {
+      throw new Error(
+        'VAULT_DECRYPT_PASSWORD is set but failed to decrypt the vault. Check that the password is correct.'
+      )
+    }
+    throw error
   }
 }
 
@@ -103,7 +110,8 @@ async function importEncryptedVaultInteractively(
         vault: await sdk.importVault(vaultContent, password, { conflictResolution: 'replace' }),
         decryptPassword: password,
       }
-    } catch {
+    } catch (error) {
+      if (!isWrongPasswordError(error)) throw error
       if (attempt === MAX_ATTEMPTS) {
         throw new Error('Failed to decrypt vault after 3 attempts. Check your decryption password.')
       }
