@@ -14,6 +14,7 @@ import {
   getChainKind,
   getEvmRpcUrl,
   parseThorSwapMemo,
+  pollTxStatusUntilFinal,
   resolveChainReference,
   toCanonicalEvmSignature,
   VaultError,
@@ -1355,25 +1356,23 @@ export class AgentExecutor {
    * success.
    */
   private async waitForEvmReceipt(chain: Chain, txHash: string, opts: { timeoutSec: number }): Promise<void> {
-    const intervalMs = 3_000
-    const deadline = Date.now() + opts.timeoutSec * 1_000
-    while (Date.now() < deadline) {
-      try {
-        const result = await (this.vault as any).getTxStatus({ chain, txHash })
-        if (result?.status === 'success') return
-        if (result?.status === 'error') {
-          // Typed BroadcastFailed lets callers distinguish a revert (the tx
-          // mined but reverted on-chain) from a generic timeout below.
-          throw new VaultError(VaultErrorCode.BroadcastFailed, `approve tx reverted (${txHash})`)
-        }
-      } catch (e: any) {
-        // Re-throw revert failures; treat other errors (network, RPC) as
-        // transient and keep polling until the deadline.
-        if (e instanceof VaultError && e.code === VaultErrorCode.BroadcastFailed) throw e
-        if (e?.message?.includes('reverted')) throw e
-      }
-      await new Promise(r => setTimeout(r, intervalMs))
+    const outcome = await pollTxStatusUntilFinal({
+      chain,
+      txHash,
+      timeoutMs: opts.timeoutSec * 1_000,
+      intervalMs: 3_000,
+      getTxStatus: params => this.vault.getTxStatus(params),
+      shouldRetryError: error => {
+        if (error instanceof VaultError && error.code === VaultErrorCode.BroadcastFailed) return false
+        return !(error as { message?: string } | undefined)?.message?.includes('reverted')
+      },
+    })
+
+    if (outcome.result?.status === 'success') return
+    if (outcome.result?.status === 'error') {
+      throw new VaultError(VaultErrorCode.BroadcastFailed, `approve tx reverted (${txHash})`)
     }
+
     throw new VaultError(VaultErrorCode.Timeout, `approve tx ${txHash} not confirmed within ${opts.timeoutSec}s`)
   }
 

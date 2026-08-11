@@ -32,6 +32,7 @@ import { DiscountTierService } from '../services/DiscountTierService'
 import { FiatValueService } from '../services/FiatValueService'
 import type { PasswordCacheService } from '../services/PasswordCacheService'
 import type { Storage } from '../storage/types'
+import { pollTxStatusUntilFinal } from '../tx'
 // Import prep helpers from per-file paths, not the `tools/prep` barrel: the
 // barrel pulls in cosmos.ts → buildCosmosPayload → @vultisig/core-chain THORChain
 // modules at module-load time, which breaks vitest setups that mock chainFeeCoin.
@@ -2232,19 +2233,21 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     timeoutMs = 60_000,
     intervalMs = 3_000
   ): Promise<void> {
-    const deadline = Date.now() + timeoutMs
-    while (Date.now() < deadline) {
-      try {
-        const result = await this.getTxStatus({ chain, txHash })
-        if (result.status === 'success') return
-        if (result.status === 'error')
-          throw new VaultError(VaultErrorCode.BroadcastFailed, `Approval tx failed: ${txHash}`)
-      } catch (e) {
-        if (e instanceof VaultError && e.code !== VaultErrorCode.NetworkError) throw e
-      }
-      await new Promise(resolve => setTimeout(resolve, intervalMs))
+    const outcome = await pollTxStatusUntilFinal({
+      chain,
+      txHash,
+      timeoutMs,
+      intervalMs,
+      getTxStatus: params => this.getTxStatus(params),
+      shouldRetryError: error => !(error instanceof VaultError) || error.code === VaultErrorCode.NetworkError,
+    })
+
+    if (outcome.result?.status === 'error') {
+      throw new VaultError(VaultErrorCode.BroadcastFailed, `Approval tx failed: ${txHash}`)
     }
-    throw new VaultError(VaultErrorCode.Timeout, `Approval tx not confirmed within ${timeoutMs / 1000}s: ${txHash}`)
+    if (outcome.timedOut) {
+      throw new VaultError(VaultErrorCode.Timeout, `Approval tx not confirmed within ${timeoutMs / 1000}s: ${txHash}`)
+    }
   }
 
   private formatUnits(value: bigint, decimals: number): string {

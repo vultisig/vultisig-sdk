@@ -12,6 +12,7 @@ import { compileTx } from '@vultisig/core-mpc/tx/compile/compileTx'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 
 import type { WasmProvider } from '../../context/SdkContext'
+import { pollTxStatusUntilFinal } from '../../tx'
 import type { Signature } from '../../types'
 import { convertToKeysignSignatures } from '../utils/convertSignature'
 import { VaultError, VaultErrorCode } from '../VaultError'
@@ -238,38 +239,21 @@ export class BroadcastService {
   private async waitForConfirmation(chain: Chain, txHash: string): Promise<void> {
     const timeoutMs = this.confirmationOptions.approvalConfirmationTimeoutMs ?? 60_000
     const intervalMs = this.confirmationOptions.approvalConfirmationIntervalMs ?? 3_000
-    const deadline = Date.now() + timeoutMs
-    let lastError: unknown
+    const outcome = await pollTxStatusUntilFinal({
+      chain,
+      txHash,
+      timeoutMs,
+      intervalMs,
+      getTxStatus: ({ chain, txHash }) => getTxStatus({ chain, hash: txHash }),
+      shouldRetryError: () => true,
+    })
 
-    while (Date.now() <= deadline) {
-      const requestBudgetMs = deadline - Date.now()
-      if (requestBudgetMs <= 0) break
-
-      let requestTimeout: number | ReturnType<typeof setTimeout> | undefined
-      const result = await Promise.race([
-        getTxStatus({ chain, hash: txHash }).catch(error => {
-          lastError = error
-          return undefined
-        }),
-        new Promise<undefined>(resolve => {
-          requestTimeout = setTimeout(resolve, requestBudgetMs)
-        }),
-      ]).finally(() => {
-        if (requestTimeout) clearTimeout(requestTimeout)
-      })
-
-      if (result?.status === 'success') return
-      if (result?.status === 'error') {
-        throw new Error(`Approval tx failed: ${txHash}`)
-      }
-
-      const remainingMs = deadline - Date.now()
-      if (remainingMs <= 0) break
-
-      await new Promise(resolve => setTimeout(resolve, Math.min(intervalMs, remainingMs)))
+    if (outcome.result?.status === 'success') return
+    if (outcome.result?.status === 'error') {
+      throw new Error(`Approval tx failed: ${txHash}`)
     }
 
-    const suffix = lastError instanceof Error ? ` Last status error: ${lastError.message}` : ''
+    const suffix = outcome.lastError instanceof Error ? ` Last status error: ${outcome.lastError.message}` : ''
     throw new Error(`Approval tx not confirmed within ${timeoutMs / 1000}s: ${txHash}.${suffix}`)
   }
 }
