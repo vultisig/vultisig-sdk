@@ -49,7 +49,7 @@ describe('chains/ton', () => {
     expect(TON_V4R2_SUB_WALLET_ID).toBe(698983191)
   })
 
-  it('matches @ton/ton createTransfer byte-for-byte for a native send', () => {
+  it('matches the WalletCore-compatible @ton/core cell layout for a native send', () => {
     const amount = 1_000_000_000n // 1 TON
     const seqno = 42
     const validUntil = 1_700_000_000 // pinned so hash is deterministic
@@ -64,9 +64,9 @@ describe('chains/ton', () => {
     })
 
     // Reference: build the exact same signing payload manually using only
-    // `@ton/core` primitives, mirroring what @ton/ton's WalletContractV4
-    // emits. If our payload byte-matches this, consumers get the same
-    // on-chain outcome as the reference implementation.
+    // `@ton/core` primitives while selecting WalletCore's body-reference
+    // representation. Both inline and referenced bodies are valid TON
+    // messages, but mixed-platform MPC requires byte-identical preimages.
     const walletReference = buildV4R2Wallet({
       publicKeyEd25519: Uint8Array.from({ length: 32 }, () => 0x01),
     })
@@ -80,7 +80,9 @@ describe('chains/ton', () => {
             to: RECIPIENT,
             value: amount,
             bounce: true,
-          })
+          }),
+          // WalletCore's V4R2 encoder always stores the body as a reference.
+          { forceRef: true }
         )
       )
       .endCell()
