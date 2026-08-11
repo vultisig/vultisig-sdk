@@ -5,7 +5,7 @@ import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 import { getEvmChainBalances } from '@vultisig/core-chain/coin/balance/getEvmChainBalances'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { CacheService } from '../../../src/services/CacheService'
+import { CacheScope, CacheService } from '../../../src/services/CacheService'
 import { MemoryStorage } from '../../../src/storage/MemoryStorage'
 import type { Token } from '../../../src/types'
 import { BalanceService } from '../../../src/vault/services/BalanceService'
@@ -228,6 +228,21 @@ describe('BalanceService', () => {
     expect(saveVault).not.toHaveBeenCalled()
   })
 
+  it('does not duplicate a lowercase-stored EVM contract when it is re-added with checksum casing', async () => {
+    const checksummedUsdc = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+    const storedToken: Token = { ...addedToken, id: USDC, contractAddress: USDC }
+    const { service, getTokens, saveVault } = makeMutableService([storedToken])
+
+    await service.addToken(Chain.Ethereum, {
+      ...storedToken,
+      id: checksummedUsdc,
+      contractAddress: checksummedUsdc,
+    })
+
+    expect(getTokens(Chain.Ethereum)).toEqual([storedToken])
+    expect(saveVault).not.toHaveBeenCalled()
+  })
+
   it('uses the token asset id for the non-EVM per-coin balance path', async () => {
     const mint = 'So11111111111111111111111111111111111111112'
     const secondMint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
@@ -297,6 +312,45 @@ describe('BalanceService', () => {
     await expect(service.removeToken(Chain.Ethereum, USDC.toUpperCase())).resolves.toBe(true)
 
     expect(getTokens(Chain.Ethereum)).toEqual([])
+  })
+
+  it('removes the exact case-sensitive Solana mint when a case-variant sibling is tracked', async () => {
+    const upperMint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+    const lowerMint = 'ePjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+    const upperToken: Token = {
+      id: upperMint,
+      contractAddress: upperMint,
+      symbol: 'USDC_A',
+      name: 'USD Coin A',
+      decimals: 6,
+      chainId: Chain.Solana,
+    }
+    const lowerToken: Token = {
+      ...upperToken,
+      id: lowerMint,
+      contractAddress: lowerMint,
+      symbol: 'USDC_B',
+      name: 'USD Coin B',
+    }
+    let allTokens: Record<string, Token[]> = { [Chain.Solana]: [upperToken, lowerToken] }
+    const service = new BalanceService(
+      cacheService,
+      vi.fn(),
+      vi.fn(),
+      async chain => `${chain}-address`,
+      chain => allTokens[chain] ?? [],
+      () => allTokens,
+      tokens => {
+        allTokens = tokens
+      },
+      vi.fn(),
+      vi.fn(),
+      vi.fn()
+    )
+
+    await expect(service.removeToken(Chain.Solana, lowerMint)).resolves.toBe(true)
+
+    expect(allTokens[Chain.Solana]).toEqual([upperToken])
   })
 
   it('reports that no token was removed when the reference does not exist', async () => {
@@ -551,6 +605,35 @@ describe('BalanceService', () => {
     expect(result[Chain.Ethereum]?.formattedAmount).toBe('1')
     expect(result[`${Chain.Ethereum}:${token.id}`]?.formattedAmount).toBe('5')
     expect(result[Chain.Bitcoin]?.formattedAmount).toBe('1')
+  })
+
+  it('uses one lowercase EVM identity for result, balance, RPC, cache, and invalidation keys', async () => {
+    const checksummedUsdc = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+    const checksummedToken: Token = { ...token, id: checksummedUsdc }
+    const ethAddress = `${Chain.Ethereum}-address`
+    const setScoped = vi.spyOn(cacheService, 'setScoped')
+    const invalidateScoped = vi.spyOn(cacheService, 'invalidateScoped')
+    vi.mocked(getEvmChainBalances).mockResolvedValue({
+      [accountCoinKeyToString({ chain: Chain.Ethereum, address: ethAddress })]: 1_000_000_000_000_000_000n,
+      [accountCoinKeyToString({ chain: Chain.Ethereum, id: USDC, address: ethAddress })]: 5_000_000n,
+    })
+    vi.mocked(getCoinBalance).mockResolvedValue(5_000_000n)
+    const service = makeReadService([checksummedToken])
+
+    const result = await service.getBalances({ chains: Chain.Ethereum, includeTokens: true })
+
+    expect(result[`${Chain.Ethereum}:${USDC}`]?.tokenId).toBe(USDC)
+    expect(result[`${Chain.Ethereum}:${checksummedUsdc}`]).toBeUndefined()
+    expect(getEvmChainBalances).toHaveBeenCalledWith(
+      expect.objectContaining({ coins: expect.arrayContaining([expect.objectContaining({ id: USDC })]) })
+    )
+    expect(setScoped).toHaveBeenCalledWith(`ethereum:${USDC}`, CacheScope.BALANCE, expect.any(Object))
+
+    const refreshed = await service.updateBalance(Chain.Ethereum, checksummedUsdc)
+
+    expect(invalidateScoped).toHaveBeenCalledWith(`ethereum:${USDC}`, CacheScope.BALANCE)
+    expect(getCoinBalance).toHaveBeenCalledWith(expect.objectContaining({ id: USDC }))
+    expect(refreshed.tokenId).toBe(USDC)
   })
 
   it('does NOT cache or emit a coin the multicall omitted, and refetches it next call (#1191)', async () => {
