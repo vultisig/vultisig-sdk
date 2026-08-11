@@ -93,7 +93,7 @@ export type MaxSendAmount = {
   balance: bigint
   /** Estimated network fee in base units */
   fee: bigint
-  /** Maximum sendable amount (balance - fee) */
+  /** Maximum sendable amount (full token balance, or native balance minus fee) */
   maxSendable: bigint
 }
 
@@ -623,6 +623,8 @@ export type SendResult =
   | { dryRun: false; txHash: string; chain: Chain }
   | {
       dryRun: true
+      /** Resolved token contract address / chain-specific asset id. Omitted for native sends. */
+      contractAddress?: string
       /** Network fee, denominated in the chain's native asset (`feeSymbol`). */
       fee: string
       /** Ticker of the asset the fee is paid in — always the chain's native asset. */

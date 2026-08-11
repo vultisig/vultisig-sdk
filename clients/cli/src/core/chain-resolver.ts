@@ -6,6 +6,8 @@ import type { Chain } from '@vultisig/sdk'
 import { findChainByName } from '../interactive/completer'
 import { InvalidChainError } from './errors'
 
+type OptionalChainInput = string | undefined | null
+
 /**
  * Resolve a user-supplied chain name, or throw INVALID_CHAIN.
  *
@@ -29,4 +31,9 @@ export function resolveChainOrThrow(input: string, label = 'chain'): Chain {
     )
   }
   return chain
+}
+
+export function resolveOptionalChainOrThrow(input: OptionalChainInput, label = 'chain'): Chain | undefined {
+  if (input === undefined || input === null) return undefined
+  return resolveChainOrThrow(input, label)
 }
