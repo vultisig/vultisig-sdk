@@ -695,6 +695,10 @@ export type {
   ExtendedChainRegistry,
 } from '@vultisig/core-chain/chainRegistry'
 export { chainRegistry, deriveFromChainRegistry, extendChainRegistry } from '@vultisig/core-chain/chainRegistry'
+export { getThorchainInboundAddress } from '@vultisig/core-chain/chains/cosmos/thor/getThorchainInboundAddress'
+export * from '@vultisig/core-chain/chains/cosmos/thor/lp'
+export type { GetSwapExplorerUrlInput, SwapExplorerProvider } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
+export { getSwapExplorerUrl, swapExplorerProviders } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 export { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
 export async function fiatToAmount(...args: unknown[]) {
   const mod = await import('../../utils/fiatToAmount')
