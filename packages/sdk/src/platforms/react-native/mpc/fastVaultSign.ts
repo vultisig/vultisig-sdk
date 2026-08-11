@@ -32,8 +32,11 @@ export type FastVaultSignOptions = {
   messageHashHex: string
   /**
    * Encoded WalletCore SigningInput for parity-sensitive RN-JS builders.
-   * TON requires this value so the SDK itself can invoke WalletCore and
-   * compare the independently derived pre-signing hash before dispatch.
+   * When a TON builder can represent the transaction in WalletCore, pass
+   * this value so the SDK can independently verify its pre-signing hash.
+   * Arbitrary prebuilt TON payloads cannot be represented by WalletCore and
+   * intentionally omit it; those payloads retain their direct hash-signing
+   * contract.
    */
   walletCoreTxInputData?: Uint8Array
   serverDerivePath: string
@@ -102,10 +105,11 @@ const assertPreDispatchSigningHashParity = (opts: FastVaultSignOptions): Promise
 
   const messageHash = normalizeSigningHash('messageHashHex', opts.messageHashHex)
   const txInputData = opts.walletCoreTxInputData
+  if (txInputData === undefined) return undefined
   if (!(txInputData instanceof Uint8Array) || txInputData.length === 0) {
     throw new VaultError(
       VaultErrorCode.MissingSigningParityInput,
-      'fastVaultSign: walletCoreTxInputData is required for TON; refusing to dispatch without WalletCore encoder parity proof'
+      'fastVaultSign: walletCoreTxInputData must be a non-empty Uint8Array when supplied for TON'
     )
   }
 
