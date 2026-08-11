@@ -19,7 +19,7 @@ import {
   VaultErrorCode,
   Vultisig as VultisigSdk,
 } from '@vultisig/sdk'
-import { formatUnits, recoverAddress } from 'viem'
+import { type Address, decodeFunctionData, formatUnits, type Hex, parseAbi, recoverAddress } from 'viem'
 
 import { VaultStateStore } from '../core/VaultStateStore'
 import { normalizeAgentError } from './agentErrors'
@@ -49,6 +49,22 @@ const EVM_CHAINS = new Set<string>([
   'Hyperliquid',
   'Sei',
 ])
+
+const ERC20_TRANSFER_SELECTOR = '0xa9059cbb'
+const ERC20_TRANSFER_ABI = parseAbi(['function transfer(address to, uint256 value)'])
+
+/** Decode the recipient that an ERC-20 transfer will actually send tokens to. */
+function decodeErc20TransferRecipient(calldata: string): string | null {
+  if (calldata.slice(0, ERC20_TRANSFER_SELECTOR.length).toLowerCase() !== ERC20_TRANSFER_SELECTOR) return null
+
+  try {
+    const decoded = decodeFunctionData({ abi: ERC20_TRANSFER_ABI, data: calldata as Hex })
+    const [recipient] = decoded.args as readonly [Address, bigint]
+    return recipient
+  } catch {
+    throw new Error('Invalid ERC-20 transfer calldata — refusing to sign')
+  }
+}
 
 // Public RPC endpoints for refreshing gas estimates before signing.
 // Used as fallback to ensure maxFeePerGas covers current base fee.
@@ -419,7 +435,6 @@ export class AgentExecutor {
     // resolved_amount usually already embeds it; de-dup when both are set.
     const symbol = labels.token_resolved || labels.token_symbol || ''
     const amountWithSymbol = symbol && !amount.endsWith(` ${symbol}`) ? `${amount} ${symbol}` : amount
-    const to = (p?.txArgs?.to as string) || labels.recipient_echo || '?'
     // Name the token contract from the payload that gets signed, not from label
     // text: an EVM token send executes against `txArgs.tx.to` (the contract,
     // with transfer calldata) while `txArgs.to` is the recipient. A native send
@@ -428,6 +443,25 @@ export class AgentExecutor {
     const contractTo = typeof p?.txArgs?.tx?.to === 'string' ? (p.txArgs.tx.to as string) : ''
     const calldata = typeof p?.txArgs?.tx?.data === 'string' ? (p.txArgs.tx.data as string) : ''
     const isContractSend = !!contractTo && calldata !== '' && calldata !== '0x'
+    const producerRecipient = typeof p?.txArgs?.to === 'string' ? (p.txArgs.to as string) : ''
+    let calldataRecipient: string | null = null
+    try {
+      calldataRecipient = isContractSend ? decodeErc20TransferRecipient(calldata) : null
+    } catch (error) {
+      this.clearPendingTransaction()
+      throw error
+    }
+    if (calldataRecipient && producerRecipient && calldataRecipient.toLowerCase() !== producerRecipient.toLowerCase()) {
+      this.clearPendingTransaction()
+      throw new Error(
+        `ERC-20 recipient mismatch — refusing to sign: txArgs.to ${producerRecipient} does not match calldata destination ${calldataRecipient}`
+      )
+    }
+    // For ERC-20 transfer calldata, this decoded address is the value that will
+    // receive funds. It therefore owns both the rendered summary and the exact
+    // string passed to the confirmation policy; producer labels are fallback
+    // text only for native, non-EVM, and non-transfer envelopes.
+    const to = calldataRecipient || producerRecipient || labels.recipient_echo || '?'
     const contractPart =
       isContractSend && contractTo.toLowerCase() !== to.toLowerCase() ? ` (token contract ${contractTo})` : ''
     return `send ${amountWithSymbol} on ${stored.chain} to ${to}${contractPart}`
