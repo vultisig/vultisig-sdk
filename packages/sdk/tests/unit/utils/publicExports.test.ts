@@ -151,6 +151,18 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.getSplTokenBalance).toBe('function')
   })
 
+  it('exports canonical swap tracker URL helpers for first-party consumers', () => {
+    expect(typeof sdk.getSwapExplorerUrl).toBe('function')
+    expect(Array.isArray(sdk.swapExplorerProviders)).toBe(true)
+    expect(
+      sdk.getSwapExplorerUrl({
+        provider: 'li.fi',
+        txHash: '0xabc',
+        fromChain: sdk.Chain.Base,
+      })
+    ).toBe('https://scan.li.fi/tx/0xabc')
+  })
+
   it('exports Noon USDC yield helpers for Windows and Station consumers', () => {
     expect(sdk.noonUsdcVaultConfig).toBeDefined()
     expect(typeof sdk.encodeNoonDeposit).toBe('function')
