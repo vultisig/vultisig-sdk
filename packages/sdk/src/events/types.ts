@@ -13,6 +13,17 @@ import type {
 import type { SwapQuoteBase } from '../vault/swap-types'
 import type { VaultBase } from '../vault/VaultBase'
 
+export type LegacyVaultBackupMigrationNotice = {
+  vaultId: string
+  vaultName: string
+  sourceFormat: 'legacy-sha256'
+  storedFormat: 'pbkdf2-hmac-sha256'
+  pbkdf2Iterations: 600_000
+  passwordRotationRecommended: true
+  replaceLegacyBackupsRecommended: true
+  message: string
+}
+
 /**
  * Events emitted by the Vultisig SDK for state changes.
  * Consumers can listen to these for reactive updates.
@@ -22,6 +33,14 @@ export type SdkEvents = {
   vaultChanged: {
     vaultId: string
   }
+
+  /**
+   * Emitted after a legacy SHA-256(password) vault backup is successfully
+   * imported and its stored copy has been upgraded to salted PBKDF2.
+   * Consumers should show this as a security warning and guide the user through
+   * a fresh export with a new password before replacing every legacy copy.
+   */
+  legacyVaultBackupMigrated: LegacyVaultBackupMigrationNotice
 
   /** Emitted on SDK-level errors */
   error: Error
@@ -57,6 +76,8 @@ export type VaultEvents = {
   transactionSigned: {
     signature: Signature
     payload: SigningPayload
+    /** Secure-signing session ID. Fast-vault signing does not set this. */
+    sessionId?: string
   }
 
   /** Emitted when a chain is added to the vault */
@@ -103,6 +124,20 @@ export type VaultEvents = {
   /** Emitted during transaction signing with progress updates */
   signingProgress: {
     step: SigningStep
+    /** Secure-signing session ID. Fast-vault signing does not set this. */
+    sessionId?: string
+  }
+
+  /** Emitted when a secure-signing ceremony fails before completion. */
+  signingFailed: {
+    sessionId: string
+    error: Error
+  }
+
+  /** Emitted when a secure-signing ceremony is cancelled. */
+  signingCancelled: {
+    sessionId: string
+    error: Error
   }
 
   /** Emitted when a transaction is successfully broadcast to the blockchain network */
@@ -183,6 +218,8 @@ export type VaultEvents = {
     totalJoined: number
     /** Total devices required */
     required: number
+    /** Session ID for the signing operation */
+    sessionId: string
   }
 
   /** Emitted when all required devices have joined (SecureVault) */

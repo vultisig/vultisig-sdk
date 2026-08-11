@@ -1,5 +1,17 @@
 # @vultisig/mpc-wasm
 
+## 0.1.7
+
+### Patch Changes
+
+- [#1691](https://github.com/vultisig/vultisig-sdk/pull/1691) [`0e48010`](https://github.com/vultisig/vultisig-sdk/commit/0e480103a7c384c91cd6ac927d481e9ecbc616fe) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Keep Schnorr WASM signatures in their canonical Ed25519 byte order and cover real in-process DKLS and Schnorr keygen, signing, and resharing ceremonies.
+
+## 0.1.6
+
+### Patch Changes
+
+- [#1418](https://github.com/vultisig/vultisig-sdk/pull/1418) [`1ee4ddf`](https://github.com/vultisig/vultisig-sdk/commit/1ee4ddf5d1336eccfb593ba1f034cb74cda82f4b) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Implement `createMigrateSession` on the WASM Schnorr engine so GG20→DKLS vault upgrades can migrate the EdDSA keyshare. Previously the EdDSA migration step threw `schnorr engine does not support createMigrateSession` because the method was declared optional on `SchnorrEngine` and never wired up, even though the underlying `SchnorrKeygenSession.migrate` WASM binding exists. Mirrors the existing DKLS engine implementation.
+
 ## 0.1.5
 
 ### Patch Changes

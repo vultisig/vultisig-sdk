@@ -105,6 +105,26 @@ describe('AskInterface.getCallbacks', () => {
     expect(result.response).toBe('final answer')
   })
 
+  it('collects protocol-drift warnings for the machine result', async () => {
+    const warning = {
+      code: 'PROTOCOL_DRIFT' as const,
+      message: 'Ignored 2 unknown SSE frames: data-confirmation',
+      count: 2,
+      eventTypes: ['data-confirmation'],
+    }
+    const session = {
+      getConversationId: () => 'c1',
+      sendMessage: vi.fn().mockImplementation(async (_message: string, ui: UICallbacks) => {
+        ui.onProtocolWarning?.(warning)
+      }),
+    } as unknown as AgentSession
+
+    const ask = new AskInterface(session)
+    const result = await ask.ask('q')
+
+    expect(result.warnings).toEqual([warning])
+  })
+
   it('requestConfirmation defaults to DENY (no --yes) so a misrouted prompt cannot sign', async () => {
     const ask = createAsk() // autoApprove defaults to false
     const ui = ask.getCallbacks()
@@ -174,58 +194,5 @@ describe('AskInterface.getCallbacks', () => {
     const result = await ask.ask('go')
 
     expect(result.error?.code).toBe(AgentErrorCode.NETWORK_ERROR)
-  })
-
-  // initialize() runs getCallbacks() BEFORE the first ask(); a stale --session
-  // fallback fires onError(SESSION_NOT_FOUND) there. These cases pin the priority
-  // ordering of that init-time signal vs. a real first-turn error.
-  it('init-time SESSION_NOT_FOUND survives a CLEAN first turn (lowest-priority fallback)', async () => {
-    const session = {
-      getConversationId: () => 'conv-new',
-      sendMessage: vi.fn().mockImplementation(async (_message: string, ui: UICallbacks) => {
-        ui.onAssistantMessage('You have 1.0 ETH')
-      }),
-    } as unknown as AgentSession
-
-    const ask = new AskInterface(session)
-    ask.getCallbacks().onError('stale session not found; started new', AgentErrorCode.SESSION_NOT_FOUND)
-
-    const result = await ask.ask('hello')
-
-    expect(result.error?.code).toBe(AgentErrorCode.SESSION_NOT_FOUND)
-  })
-
-  it('a REAL first-turn error overrides the init-time SESSION_NOT_FOUND', async () => {
-    const session = {
-      getConversationId: () => 'conv-new',
-      sendMessage: vi.fn().mockImplementation(async (_message: string, ui: UICallbacks) => {
-        ui.onError('backend stream failed', AgentErrorCode.TRANSACTION_FAILED)
-      }),
-    } as unknown as AgentSession
-
-    const ask = new AskInterface(session)
-    ask.getCallbacks().onError('stale session not found; started new', AgentErrorCode.SESSION_NOT_FOUND)
-
-    const result = await ask.ask('hello')
-
-    expect(result.error?.code).toBe(AgentErrorCode.TRANSACTION_FAILED)
-    expect(result.error?.code).not.toBe(AgentErrorCode.SESSION_NOT_FOUND)
-  })
-
-  it('init-time signal does NOT carry into a LATER turn', async () => {
-    const session = {
-      getConversationId: () => 'conv-new',
-      sendMessage: vi.fn().mockImplementation(async (_message: string, ui: UICallbacks) => {
-        ui.onAssistantMessage('ok')
-      }),
-    } as unknown as AgentSession
-
-    const ask = new AskInterface(session)
-    ask.getCallbacks().onError('stale session not found; started new', AgentErrorCode.SESSION_NOT_FOUND)
-
-    await ask.ask('first')
-    const second = await ask.ask('second')
-
-    expect(second.error).toBeUndefined()
   })
 })

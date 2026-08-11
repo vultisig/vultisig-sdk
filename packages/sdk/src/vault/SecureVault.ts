@@ -8,6 +8,7 @@ import { decryptVaultBackupWithPassword } from '@vultisig/lib-utils/encryption/v
 import { fromBase64 } from '@vultisig/lib-utils/fromBase64'
 
 import type { SdkContext, VaultContext } from '../context/SdkContext'
+import { randomUUID } from '../crypto'
 import { RelaySigningService } from '../services/RelaySigningService'
 import { SecureVaultCreationService, type SecureVaultCreationStep } from '../services/SecureVaultCreationService'
 import type {
@@ -97,50 +98,76 @@ export class SecureVault extends VaultBase {
     payload: SigningPayload,
     options: {
       signal?: AbortSignal
-      onQRCodeReady?: (qrPayload: string) => void
-      onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
+      onQRCodeReady?: (qrPayload: string, sessionId: string) => void
+      onDeviceJoined?: (deviceId: string, totalJoined: number, required: number, sessionId: string) => void
     } = {}
   ): Promise<Signature> {
-    // Ensure keyShares are loaded (will decrypt if encrypted)
-    await this.ensureKeySharesLoaded()
+    const sessionId = randomUUID()
 
-    // Get WalletCore for chain utilities
-    const walletCore = await this.wasmProvider.getWalletCore()
+    try {
+      // Ensure keyShares are loaded (will decrypt if encrypted)
+      await this.ensureKeySharesLoaded()
 
-    // Create relay signing service
-    const relaySigningService = new RelaySigningService()
+      // Get WalletCore for chain utilities
+      const walletCore = await this.wasmProvider.getWalletCore()
 
-    // Sign using relay service with event emission
-    const signature = await relaySigningService.signWithRelay(this.coreVault, payload, walletCore, {
-      signal: options.signal,
-      onProgress: (step: SigningStep) => {
-        this.emit('signingProgress', { step })
-      },
-      onQRCodeReady: qrPayload => {
-        this.handleQRCodeReady(qrPayload, options.onQRCodeReady)
-      },
-      onDeviceJoined: (deviceId, totalJoined, required) => {
-        this.emit('deviceJoined', { deviceId, totalJoined, required })
-        if (options.onDeviceJoined) {
-          options.onDeviceJoined(deviceId, totalJoined, required)
-        }
-      },
-    })
+      // Create relay signing service
+      const relaySigningService = new RelaySigningService(this.context.serverManager.messageRelay)
 
-    // Emit completion event
-    this.emit('transactionSigned', { signature, payload })
+      // Sign using relay service with event emission
+      const signature = await relaySigningService.signWithRelay(this.coreVault, payload, walletCore, {
+        sessionId,
+        signal: options.signal,
+        onProgress: (step: SigningStep) => {
+          this.emit('signingProgress', { step, sessionId })
+        },
+        onQRCodeReady: qrPayload => {
+          this.handleQRCodeReady(qrPayload, sessionId, options.onQRCodeReady)
+        },
+        onDeviceJoined: (deviceId, totalJoined, required) => {
+          this.emit('deviceJoined', {
+            deviceId,
+            totalJoined,
+            required,
+            sessionId,
+          })
+          options.onDeviceJoined?.(deviceId, totalJoined, required, sessionId)
+        },
+      })
 
-    return signature
+      // Emit completion event
+      this.emit('transactionSigned', { signature, payload, sessionId })
+
+      return signature
+    } catch (error) {
+      this.emitSigningError(sessionId, error)
+      throw error
+    }
   }
 
-  private handleQRCodeReady(qrPayload: string, onQRCodeReady?: (qrPayload: string) => void): void {
+  private handleQRCodeReady(
+    qrPayload: string,
+    sessionId: string,
+    onQRCodeReady?: (qrPayload: string, sessionId: string) => void
+  ): void {
     this.emit('qrCodeReady', {
       qrPayload,
       action: 'keysign',
-      sessionId: '',
+      sessionId,
     })
     void this.notifyDevices(qrPayload)
-    onQRCodeReady?.(qrPayload)
+    onQRCodeReady?.(qrPayload, sessionId)
+  }
+
+  private emitSigningError(sessionId: string, error: unknown): void {
+    const normalizedError = error instanceof Error ? error : new Error(String(error))
+
+    if (normalizedError.name === 'AbortError') {
+      this.emit('signingCancelled', { sessionId, error: normalizedError })
+    } else {
+      this.emit('signingFailed', { sessionId, error: normalizedError })
+    }
+    this.emit('error', normalizedError)
   }
 
   /**
@@ -194,10 +221,12 @@ export class SecureVault extends VaultBase {
     options: SignBytesOptions,
     signingOptions: {
       signal?: AbortSignal
-      onQRCodeReady?: (qrPayload: string) => void
-      onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
+      onQRCodeReady?: (qrPayload: string, sessionId: string) => void
+      onDeviceJoined?: (deviceId: string, totalJoined: number, required: number, sessionId: string) => void
     } = {}
   ): Promise<Signature> {
+    const sessionId = randomUUID()
+
     try {
       // Normalize input to hex string
       const messageHash = normalizeToHex(options.data)
@@ -209,7 +238,7 @@ export class SecureVault extends VaultBase {
       const walletCore = await this.wasmProvider.getWalletCore()
 
       // Create relay signing service
-      const relaySigningService = new RelaySigningService()
+      const relaySigningService = new RelaySigningService(this.context.serverManager.messageRelay)
 
       // Sign using relay service with event emission
       const signature = await relaySigningService.signBytesWithRelay(
@@ -220,18 +249,22 @@ export class SecureVault extends VaultBase {
         },
         walletCore,
         {
+          sessionId,
           signal: signingOptions.signal,
           onProgress: (step: SigningStep) => {
-            this.emit('signingProgress', { step })
+            this.emit('signingProgress', { step, sessionId })
           },
           onQRCodeReady: qrPayload => {
-            this.handleQRCodeReady(qrPayload, signingOptions.onQRCodeReady)
+            this.handleQRCodeReady(qrPayload, sessionId, signingOptions.onQRCodeReady)
           },
           onDeviceJoined: (deviceId, totalJoined, required) => {
-            this.emit('deviceJoined', { deviceId, totalJoined, required })
-            if (signingOptions.onDeviceJoined) {
-              signingOptions.onDeviceJoined(deviceId, totalJoined, required)
-            }
+            this.emit('deviceJoined', {
+              deviceId,
+              totalJoined,
+              required,
+              sessionId,
+            })
+            signingOptions.onDeviceJoined?.(deviceId, totalJoined, required, sessionId)
           },
         }
       )
@@ -239,12 +272,17 @@ export class SecureVault extends VaultBase {
       // Emit signing complete event
       this.emit('transactionSigned', {
         signature,
-        payload: { chain: options.chain, transaction: null, messageHashes: [messageHash] },
+        payload: {
+          chain: options.chain,
+          transaction: null,
+          messageHashes: [messageHash],
+        },
+        sessionId,
       })
 
       return signature
     } catch (error) {
-      this.emit('error', error as Error)
+      this.emitSigningError(sessionId, error)
 
       if (error instanceof VaultError) {
         throw error
@@ -476,8 +514,16 @@ export class SecureVault extends VaultBase {
    * @param context - Vault context with dependencies
    * @internal Used by VaultManager.importVault()
    */
-  static fromImport(vaultId: string, vultContent: string, parsedVault: CoreVault, context: VaultContext): SecureVault {
-    return new SecureVault(vaultId, parsedVault.name, vultContent, context, parsedVault)
+  static fromImport(
+    vaultId: string,
+    vultContent: string,
+    parsedVault: CoreVault,
+    context: VaultContext,
+    persistedVaultData?: VaultData
+  ): SecureVault {
+    const vault = new SecureVault(vaultId, parsedVault.name, vultContent, context, parsedVault)
+    if (persistedVaultData) vault.setPersistedBaseline(persistedVaultData)
+    return vault
   }
 
   /**
@@ -486,7 +532,7 @@ export class SecureVault extends VaultBase {
    * @param vaultData - Stored vault data
    * @param context - Vault context with dependencies
    */
-  static fromStorage(vaultData: VaultData, context: VaultContext): SecureVault {
+  static fromStorage(vaultData: VaultData, context: VaultContext, persisted = true): SecureVault {
     // Validate vault type
     if (vaultData.type !== 'secure') {
       throw new VaultError(VaultErrorCode.InvalidVault, `Cannot create SecureVault from ${vaultData.type} vault data`)
@@ -506,8 +552,8 @@ export class SecureVault extends VaultBase {
       ;(vault as any)._tokens = vaultData.tokens
     }
 
-    // Override vaultData to ensure all stored fields are preserved
-    ;(vault as any).vaultData = vaultData
+    // Override constructor defaults and retain the persisted revision baseline.
+    vault.restorePersistedVaultData(vaultData, persisted)
 
     // CRITICAL: Update coreVault with stored identity fields
     vault.coreVault.publicKeys = vaultData.publicKeys

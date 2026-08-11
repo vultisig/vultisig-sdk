@@ -1,0 +1,13 @@
+{
+  "_description": "Shared WalletCore/WASM (packages/core) and RN-JS/@ton/core (packages/sdk) golden vector for a TON WalletV4R2 native transfer. WalletCore stores the internal-message body by reference. The RN builder must force the same cell shape because the inline form is network-equivalent but hashes differently for mixed-platform MPC.",
+  "publicKeyEd25519Hex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "senderAddress": "UQCf6aQfV3vc8KLtPI_lROY64hUeR1oyNfdbwXB-gwDaKZmi",
+  "recipientAddress": "0:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "amountNanotons": "1500000000",
+  "bounceable": true,
+  "sequenceNumber": 7,
+  "expireAt": 1800000000,
+  "workchain": 0,
+  "subWalletId": 698983191,
+  "expectedSigningHashHex": "c137f35651e51e7969649545350ada9e53925e823ae6dd8d77d8b2d3f7fc0383"
+}

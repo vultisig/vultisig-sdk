@@ -12,6 +12,8 @@ type ValueForCase<C extends KeysignChainSpecificKey> = Extract<KeysignChainSpeci
 export type GetChainSpecificInput<C extends KeysignChainSpecificKey = KeysignChainSpecificKey> = {
   keysignPayload: KeysignPayload
   walletCore: WalletCore
+  /** XRPL DestinationTag, carried in RippleSpecific for Ripple payments. */
+  destinationTag?: number
 } & (C extends 'ethereumSpecific'
   ? {
       feeSettings?: FeeSettings<'evm'>

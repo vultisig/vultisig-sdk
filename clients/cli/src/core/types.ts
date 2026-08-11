@@ -12,6 +12,7 @@ export type SendParams = {
   amount: string // Human-readable amount (e.g., "1.5")
   tokenId?: string
   memo?: string
+  destinationTag?: number
   yes?: boolean // Skip confirmation prompt
   dryRun?: boolean // Preview transaction without signing/broadcasting
   force?: boolean // Bypass the broadcast-journal duplicate guard
@@ -28,7 +29,22 @@ export type SendDryRunResult = {
   to: string
   amount: string
   symbol: string
+  /** Resolved token contract address / chain-specific asset id. Omitted for native sends. */
+  contractAddress?: string
+  /** Network fee the build estimated for this transaction, in `feeSymbol`. */
+  fee: string
+  /** Asset the fee is paid in — the chain's native asset, which is not `symbol` for a token send. */
+  feeSymbol: string
+  /**
+   * What the send costs in `symbol`, and what `balance` is checked against:
+   * amount + fee for a native send, amount alone for a token send (whose fee is
+   * paid in `feeSymbol`, out of a different balance).
+   */
+  total: string
   balance: string
+  destinationTag?: number
+  /** User-visible memo the signer will include, excluding XRP's legacy destination-tag carrier. */
+  memo?: string
   warning?: string
 }
 
@@ -45,11 +61,20 @@ export type TransactionResult = {
  * Portfolio summary with breakdown by chain
  */
 export type PortfolioSummary = {
+  /** Sum of every row in `chainBalances`, native and token alike. */
   totalValue: Value
   chainBalances: Array<{
     chain: Chain
+    /** Native balance for the chain. */
     balance: Balance
+    /** Fiat value of the native balance. Absent when the price lookup failed. */
     value?: Value
+    /**
+     * Tracked tokens on this chain that carry a fiat value. Itemized so the
+     * breakdown accounts for the whole total instead of leaving token value as
+     * an unexplained gap between the total and the sum of the native rows.
+     */
+    tokens?: Array<{ tokenId: string; balance?: Balance; value: Value }>
   }>
 }
 

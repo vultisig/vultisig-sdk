@@ -16,6 +16,7 @@ import {
   getCardanoBalance,
   getSuiAllBalances,
   getSuiBalance,
+  getSuiTokenBalance,
   getTaoBalance,
   getTonBalance,
   getTrc20TokenBalance,
@@ -178,24 +179,62 @@ describe('getTonBalance', () => {
   })
 })
 
-describe('getSuiBalance / getSuiAllBalances', () => {
+// Sui is retiring JSON-RPC (Foundation mainnet shutdown began the week of
+// 2026-07-27), so these tools now POST GraphQL. Fixtures mirror the GraphQL
+// envelope: `{ data: { address: { ... } } }` / `{ data: null, errors: [...] }`.
+describe('getSuiBalance / getSuiTokenBalance / getSuiAllBalances (GraphQL RPC)', () => {
   beforeEach(() => mockFetchJson.mockReset())
 
+  const balancesPage = (
+    nodes: Array<{ coinType: string; totalBalance: string }>,
+    pageInfo: { hasNextPage: boolean; endCursor: string | null } = { hasNextPage: false, endCursor: null }
+  ) => ({
+    data: {
+      address: {
+        balances: {
+          pageInfo,
+          nodes: nodes.map(n => ({ coinType: { repr: n.coinType }, totalBalance: n.totalBalance })),
+        },
+      },
+    },
+  })
+
   it('formats native SUI mist', async () => {
-    mockFetchJson.mockResolvedValueOnce({ result: { totalBalance: '3000000000' } })
+    mockFetchJson.mockResolvedValueOnce({ data: { address: { balance: { totalBalance: '3000000000' } } } })
     const r = await getSuiBalance(SUI_ADDR)
     expect(r.balance).toBe('3')
     expect(r.balanceMist).toBe('3000000000')
+
+    // Posts GraphQL to the GraphQL RPC endpoint, not JSON-RPC to publicnode.
+    const [url, body] = mockFetchJson.mock.calls[0] as [string, { query: string; variables: Record<string, unknown> }]
+    expect(url).toBe('https://graphql.mainnet.sui.io/graphql')
+    expect(body.query).toContain('totalBalance')
+    expect(body.variables).toEqual({ owner: SUI_ADDR })
+  })
+
+  it('treats a never-held coin type as zero, not an error', async () => {
+    // GraphQL resolves `balance` to null when the address has never held the type.
+    mockFetchJson.mockResolvedValueOnce({ data: { address: { balance: null } } })
+    await expect(getSuiBalance(SUI_ADDR)).resolves.toMatchObject({ balance: '0', balanceMist: '0' })
+  })
+
+  it('scopes a token balance query to the coin type', async () => {
+    mockFetchJson.mockResolvedValueOnce({ data: { address: { balance: { totalBalance: '5000000' } } } })
+    const r = await getSuiTokenBalance(SUI_ADDR, '0xabc::usdc::USDC')
+    expect(r.balance).toBe('5000000')
+
+    const [, body] = mockFetchJson.mock.calls[0] as [string, { variables: Record<string, unknown> }]
+    expect(body.variables).toEqual({ owner: SUI_ADDR, coinType: '0xabc::usdc::USDC' })
   })
 
   it('flags native vs token and drops zero holdings', async () => {
-    mockFetchJson.mockResolvedValueOnce({
-      result: [
-        { coinType: '0x2::sui::SUI', totalBalance: '1000000000', coinObjectCount: 1 },
-        { coinType: '0xabc::usdc::USDC', totalBalance: '5000000', coinObjectCount: 1 },
-        { coinType: '0xdef::dust::DUST', totalBalance: '0', coinObjectCount: 1 },
-      ],
-    })
+    mockFetchJson.mockResolvedValueOnce(
+      balancesPage([
+        { coinType: '0x2::sui::SUI', totalBalance: '1000000000' },
+        { coinType: '0xabc::usdc::USDC', totalBalance: '5000000' },
+        { coinType: '0xdef::dust::DUST', totalBalance: '0' },
+      ])
+    )
     const r = await getSuiAllBalances(SUI_ADDR)
     expect(r.ok).toBe(true)
     if (!r.ok) throw new Error('expected ok')
@@ -204,12 +243,76 @@ describe('getSuiBalance / getSuiAllBalances', () => {
     expect(r.balances[1]).toMatchObject({ ticker: 'USDC', isNative: false })
   })
 
-  it('returns tokens_unavailable on a JSON-RPC error (typo address != empty wallet)', async () => {
-    mockFetchJson.mockResolvedValueOnce({ error: { code: -32602, message: 'Invalid params' } })
+  it('follows the cursor so a multi-page portfolio is not under-reported', async () => {
+    // `suix_getAllBalances` returned everything at once; the GraphQL connection
+    // paginates, so a single-page read would silently hide token holdings.
+    mockFetchJson
+      .mockResolvedValueOnce(
+        balancesPage([{ coinType: '0x2::sui::SUI', totalBalance: '1000000000' }], {
+          hasNextPage: true,
+          endCursor: 'cur1',
+        })
+      )
+      .mockResolvedValueOnce(balancesPage([{ coinType: '0xabc::usdc::USDC', totalBalance: '5000000' }]))
+
+    const r = await getSuiAllBalances(SUI_ADDR)
+    expect(r.ok).toBe(true)
+    if (!r.ok) throw new Error('expected ok')
+    expect(r.balances.map(b => b.ticker)).toEqual(['SUI', 'USDC'])
+    expect(mockFetchJson).toHaveBeenCalledTimes(2)
+
+    const [, secondBody] = mockFetchJson.mock.calls[1] as [string, { variables: Record<string, unknown> }]
+    expect(secondBody.variables).toMatchObject({ cursor: 'cur1' })
+  })
+
+  it('returns tokens_unavailable rather than a truncated portfolio when the cursor never advances', async () => {
+    mockFetchJson.mockResolvedValue(
+      balancesPage([{ coinType: '0x2::sui::SUI', totalBalance: '1' }], { hasNextPage: true, endCursor: 'stuck' })
+    )
+
+    const r = await getSuiAllBalances(SUI_ADDR)
+    expect(r.ok).toBe(false)
+    if (r.ok) throw new Error('expected not ok')
+    expect(r.detail).toMatch(/truncated portfolio/)
+    // Bounded, not unbounded.
+    expect(mockFetchJson).toHaveBeenCalledTimes(40)
+  })
+
+  it('returns tokens_unavailable on a GraphQL error (typo address != empty wallet)', async () => {
+    // GraphQL answers HTTP 200 with `errors` + null data for a bad address.
+    mockFetchJson.mockResolvedValueOnce({
+      data: null,
+      errors: [{ message: 'Failed to parse "SuiAddress": Missing \'0x\' prefix' }],
+    })
     const r = await getSuiAllBalances('0xbad')
     expect(r.ok).toBe(false)
     if (r.ok) throw new Error('expected not ok')
     expect(r.error).toBe('tokens_unavailable')
+    expect(r.detail).toMatch(/SuiAddress/)
+  })
+
+  it('returns tokens_unavailable on a malformed response instead of an empty wallet', async () => {
+    mockFetchJson.mockResolvedValueOnce({ data: { address: null } })
+    const r = await getSuiAllBalances(SUI_ADDR)
+    expect(r.ok).toBe(false)
+    if (r.ok) throw new Error('expected not ok')
+    expect(r.error).toBe('tokens_unavailable')
+  })
+
+  it('reports an address with no holdings as an empty-but-complete portfolio', async () => {
+    mockFetchJson.mockResolvedValueOnce(balancesPage([]))
+    const r = await getSuiAllBalances(SUI_ADDR)
+    expect(r.ok).toBe(true)
+    if (!r.ok) throw new Error('expected ok')
+    expect(r.balances).toEqual([])
+  })
+
+  it('refuses to report a partial portfolio on a non-integer balance', async () => {
+    mockFetchJson.mockResolvedValueOnce(balancesPage([{ coinType: '0xabc::x::X', totalBalance: 'not-a-number' }]))
+    const r = await getSuiAllBalances(SUI_ADDR)
+    expect(r.ok).toBe(false)
+    if (r.ok) throw new Error('expected not ok')
+    expect(r.detail).toMatch(/non-integer balance/)
   })
 })
 

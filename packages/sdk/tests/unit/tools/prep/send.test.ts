@@ -172,4 +172,133 @@ describe('prepareSendTxFromKeys', () => {
       })
     )
   })
+
+  it('forwards an XRP DestinationTag independently from memo', async () => {
+    await prepareSendTxFromKeys(baseIdentity, {
+      coin: {
+        chain: Chain.Ripple,
+        address: 'rFrom',
+        decimals: 6,
+        ticker: 'XRP',
+        isNativeToken: true,
+      } as any,
+      receiver: 'rDestination',
+      amount: 1_000_000n,
+      destinationTag: 12345,
+      memo: 'invoice 12345',
+    })
+
+    expect(mockBuildSendKeysignPayload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        receiver: 'rDestination',
+        destinationTag: 12345,
+        memo: 'invoice 12345',
+      })
+    )
+  })
+
+  // -- Destination-guard tests (2urb + i9qum) --
+
+  it('rejects the EVM zero address before building the payload', async () => {
+    await expect(
+      prepareSendTxFromKeys(baseIdentity, {
+        coin: { chain: Chain.Ethereum, address: '0xfrom', decimals: 18, ticker: 'ETH' } as any,
+        receiver: '0x0000000000000000000000000000000000000000',
+        amount: 1n,
+      })
+    ).rejects.toThrow(/Refusing to build transaction/)
+
+    expect(mockBuildSendKeysignPayload).not.toHaveBeenCalled()
+  })
+
+  it('rejects the EVM 0xdead burn address before building the payload', async () => {
+    await expect(
+      prepareSendTxFromKeys(baseIdentity, {
+        coin: { chain: Chain.Ethereum, address: '0xfrom', decimals: 18, ticker: 'ETH' } as any,
+        receiver: '0x000000000000000000000000000000000000dEaD',
+        amount: 1n,
+      })
+    ).rejects.toThrow(/Refusing to build transaction/)
+
+    expect(mockBuildSendKeysignPayload).not.toHaveBeenCalled()
+  })
+
+  it('rejects an EVM burn address on any EVM chain (shape-based, chain-agnostic)', async () => {
+    await expect(
+      prepareSendTxFromKeys(baseIdentity, {
+        coin: { chain: Chain.Base, address: '0xfrom', decimals: 18, ticker: 'ETH' } as any,
+        receiver: '0xdead000000000000000042069420694206942069',
+        amount: 1n,
+      })
+    ).rejects.toThrow(/Refusing to build transaction/)
+
+    expect(mockBuildSendKeysignPayload).not.toHaveBeenCalled()
+  })
+
+  it('rejects ERC-20 send where recipient equals the token contract address (own-token-contract burn)', async () => {
+    const usdcContract = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+    await expect(
+      prepareSendTxFromKeys(baseIdentity, {
+        coin: {
+          chain: Chain.Ethereum,
+          address: '0xfrom',
+          decimals: 6,
+          ticker: 'USDC',
+          id: usdcContract,
+        } as any,
+        receiver: usdcContract,
+        amount: 1_000_000n,
+      })
+    ).rejects.toThrow(/recipient.*is the token contract address/)
+
+    expect(mockBuildSendKeysignPayload).not.toHaveBeenCalled()
+  })
+
+  it('rejects own-token-contract regardless of address casing', async () => {
+    const usdcContractLower = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+    const usdcContractChecksum = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+    await expect(
+      prepareSendTxFromKeys(baseIdentity, {
+        coin: {
+          chain: Chain.Ethereum,
+          address: '0xfrom',
+          decimals: 6,
+          ticker: 'USDC',
+          id: usdcContractLower,
+        } as any,
+        receiver: usdcContractChecksum,
+        amount: 1_000_000n,
+      })
+    ).rejects.toThrow(/recipient.*is the token contract address/)
+
+    expect(mockBuildSendKeysignPayload).not.toHaveBeenCalled()
+  })
+
+  it('allows a normal EOA recipient for a native ETH send (guard must not block legit sends)', async () => {
+    await prepareSendTxFromKeys(baseIdentity, {
+      coin: { chain: Chain.Ethereum, address: '0xfrom', decimals: 18, ticker: 'ETH' } as any,
+      receiver: '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045',
+      amount: 1_000_000_000_000_000n,
+    })
+
+    expect(mockBuildSendKeysignPayload).toHaveBeenCalledTimes(1)
+  })
+
+  it('allows ERC-20 send to a different address (not the token contract)', async () => {
+    const usdcContract = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+    const recipient = '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045'
+    await prepareSendTxFromKeys(baseIdentity, {
+      coin: {
+        chain: Chain.Ethereum,
+        address: '0xfrom',
+        decimals: 6,
+        ticker: 'USDC',
+        id: usdcContract,
+      } as any,
+      receiver: recipient,
+      amount: 1_000_000n,
+    })
+
+    expect(mockBuildSendKeysignPayload).toHaveBeenCalledTimes(1)
+  })
 })

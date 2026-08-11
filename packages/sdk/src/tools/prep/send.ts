@@ -2,6 +2,7 @@ import type { WalletCore } from '@trustwallet/wallet-core'
 import { Chain } from '@vultisig/core-chain/Chain'
 import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
+import { assertSafeDestination } from '@vultisig/core-chain/security/dangerousAddresses'
 import { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
 import type { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
 import { buildSendKeysignPayload } from '@vultisig/core-mpc/keysign/send/build'
@@ -16,6 +17,8 @@ export type PrepareSendTxFromKeysParams = {
   receiver: string
   amount: bigint
   memo?: string
+  /** XRPL DestinationTag, independent from the transaction memo. */
+  destinationTag?: number
   feeSettings?: FeeSettings
 }
 
@@ -58,6 +61,23 @@ export const prepareSendTxFromKeys = async (
     throw new Error(`Invalid receiver address for chain ${params.coin.chain}: ${params.receiver}`)
   }
 
+  // Fund-safety: reject known burn/dead/dangerous addresses before building
+  // the keysign payload. assertSafeDestination is chain-aware and shape-based
+  // for EVM (any 0x+40-hex address is vetted regardless of chain label), so
+  // newly-added EVM chains don't escape the guard automatically.
+  assertSafeDestination(params.coin.chain, params.receiver)
+
+  // Fund-safety: reject sends where the recipient equals the token's own
+  // contract address. Tokens sent to their own contract are unrecoverable for
+  // almost all users (the contract has no sweep path for arbitrary senders).
+  // This applies to ERC-20 and any token where `coin.id` encodes the contract
+  // address — native sends (no `coin.id`) are unaffected.
+  if (params.coin.id !== undefined && params.coin.id.trim().toLowerCase() === params.receiver.trim().toLowerCase()) {
+    throw new Error(
+      `Refusing to build transaction: recipient ${params.receiver} is the token contract address for ${params.coin.ticker}. Sending tokens to their own contract is almost certainly a mistake and funds would be unrecoverable.`
+    )
+  }
+
   const isQbtc = params.coin.chain === Chain.QBTC
 
   const publicKey = isQbtc
@@ -82,6 +102,7 @@ export const prepareSendTxFromKeys = async (
     receiver: params.receiver,
     amount: params.amount,
     memo: params.memo,
+    destinationTag: params.destinationTag,
     vaultId: identity.ecdsaPublicKey,
     localPartyId: identity.localPartyId,
     publicKey,

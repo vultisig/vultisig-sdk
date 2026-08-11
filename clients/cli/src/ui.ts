@@ -9,7 +9,7 @@
  * import directly from './lib/output' which respects silent mode.
  */
 import type { Balance, Chain, FiatCurrency, GasInfo, SwapQuoteResult, VaultBase } from '@vultisig/sdk'
-import { fiatCurrencyNameRecord, Vultisig } from '@vultisig/sdk'
+import { fiatCurrencyNameRecord, fromChainAmountExact, Vultisig } from '@vultisig/sdk'
 import chalk from 'chalk'
 
 // Re-export types from core for backwards compatibility
@@ -22,6 +22,16 @@ import { prompt } from './lib/prompt'
 // ============================================================================
 // Display Formatters
 // ============================================================================
+
+export const escapeTerminalControls = (value: string): string =>
+  Array.from(value, character => {
+    if (character === '\\') return '\\\\'
+
+    const codePoint = character.codePointAt(0) ?? 0
+    const isTerminalControl = codePoint <= 0x1f || codePoint === 0x7f || (codePoint >= 0x80 && codePoint <= 0x9f)
+
+    return isTerminalControl ? `\\x${codePoint.toString(16).padStart(2, '0').toUpperCase()}` : character
+  }).join('')
 
 export function displayBalance(chain: string, balance: Balance, _raw = false): void {
   printResult(chalk.cyan(`\n${chain} Balance:`))
@@ -59,12 +69,22 @@ export function displayPortfolio(portfolio: PortfolioSummary, currency: FiatCurr
   // Display breakdown by chain
   printResult(chalk.bold('Chain Breakdown:\n'))
 
-  const table = portfolio.chainBalances.map(({ chain, balance, value }) => ({
-    Chain: chain,
-    Amount: balance.formattedAmount,
-    Symbol: balance.symbol,
-    Value: value ? `${value.amount} ${value.currency.toUpperCase()}` : 'N/A',
-  }))
+  // One row per priced asset — native first, then the chain's tracked tokens —
+  // so the rows add up to the total printed above.
+  const table = portfolio.chainBalances.flatMap(({ chain, balance, value, tokens }) => [
+    {
+      Chain: chain,
+      Amount: balance.formattedAmount,
+      Symbol: balance.symbol,
+      Value: value ? `${value.amount} ${value.currency.toUpperCase()}` : 'N/A',
+    },
+    ...(tokens ?? []).map(token => ({
+      Chain: chain,
+      Amount: token.balance?.formattedAmount ?? '-',
+      Symbol: token.balance?.symbol ?? token.tokenId,
+      Value: `${token.value.amount} ${token.value.currency.toUpperCase()}`,
+    })),
+  ])
 
   printTable(table)
 }
@@ -143,7 +163,9 @@ export function displayTransactionPreview(
   symbol: string,
   chain: Chain,
   memo?: string,
-  gas?: GasInfo
+  destinationTag?: number,
+  gas?: GasInfo,
+  contractAddress?: string
 ): void {
   if (gas) {
     const bigIntReplacer = (_k: string, v: unknown) => (typeof v === 'bigint' ? v.toString() : v)
@@ -153,10 +175,13 @@ export function displayTransactionPreview(
   printResult(chalk.cyan('\nTransaction Preview:'))
   printResult(`  From:   ${fromAddress}`)
   printResult(`  To:     ${toAddress}`)
-  printResult(`  Amount: ${amount} ${symbol}`)
+  printResult(`  Amount: ${amount} ${symbol}${contractAddress ? ` (${escapeTerminalControls(contractAddress)})` : ''}`)
   printResult(`  Chain:  ${chain}`)
   if (memo) {
-    printResult(`  Memo:   ${memo}`)
+    printResult(`  Memo:   ${escapeTerminalControls(memo)}`)
+  }
+  if (destinationTag !== undefined) {
+    printResult(`  Destination tag: ${destinationTag}`)
   }
 }
 
@@ -265,23 +290,22 @@ export function setupVaultEvents(vault: VaultBase): void {
 // ============================================================================
 
 /**
- * Format bigint amount to human-readable string
+ * Format bigint amount to human-readable string.
+ *
+ * Delegates to the SDK's pure-bigint `fromChainAmountExact` (no float64
+ * round-trip) and trims trailing fraction zeros to keep this function's
+ * existing display contract. The prior `BigInt(10 ** decimals)` divisor was
+ * only exact up to decimals=22 — a float64 power past that silently
+ * corrupted the divisor for higher-decimal assets.
  */
 export function formatBigintAmount(amount: bigint, decimals: number): string {
   if (amount === 0n) return '0'
 
-  const divisor = BigInt(10 ** decimals)
-  const whole = amount / divisor
-  const fraction = amount % divisor
+  const [whole, fraction] = fromChainAmountExact(amount, decimals).split('.')
+  if (!fraction) return whole
 
-  if (fraction === 0n) {
-    return whole.toString()
-  }
-
-  const fractionStr = fraction.toString().padStart(decimals, '0')
-  // Trim trailing zeros
-  const trimmed = fractionStr.replace(/0+$/, '')
-  return `${whole}.${trimmed}`
+  const trimmed = fraction.replace(/0+$/, '')
+  return trimmed ? `${whole}.${trimmed}` : whole
 }
 
 /**

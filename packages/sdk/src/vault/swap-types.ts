@@ -6,7 +6,8 @@
 
 import type { Chain } from '@vultisig/core-chain/Chain'
 import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
-import type { SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
+import type { SwapAffiliateConfig, SwapQuoteProviderExcludeName } from '@vultisig/core-chain/swap/quote/findSwapQuote'
+import type { BoundSwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
 import type { FiatCurrency } from '@vultisig/core-config/FiatCurrency'
 import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 
@@ -14,7 +15,7 @@ import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v
 export type { GeneralSwapProvider } from '@vultisig/core-chain/swap/general/GeneralSwapProvider'
 export type { GeneralSwapQuote } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
 export type { NativeSwapQuote } from '@vultisig/core-chain/swap/native/NativeSwapQuote'
-export type { SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
+export type { BoundSwapQuote, SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
 export type { FiatCurrency } from '@vultisig/core-config/FiatCurrency'
 
 /**
@@ -50,6 +51,18 @@ export type SwapQuoteParams = {
   referral?: string
   /** Optional fiat currency for fee/output conversion (e.g., 'usd', 'eur') */
   fiatCurrency?: FiatCurrency
+  /**
+   * Optional per-provider affiliate overrides (native/1inch/kyber/lifi/
+   * jupiter). Lets a tenant consumer supply its own fee owners; when omitted
+   * every provider falls back to core's built-in vultisig-0-family defaults.
+   */
+  affiliateConfig?: SwapAffiliateConfig
+  /** Optional external recipient for the swapped output */
+  recipient?: string
+  /** Optional max slippage tolerance in PERCENT (e.g. `0.5` = 0.5%, `3` = 3%) */
+  slippageTolerance?: number
+  /** Optional opt-in list of swap providers to exclude from best-quote selection */
+  excludeProviders?: SwapQuoteProviderExcludeName[]
 }
 
 /**
@@ -110,7 +123,7 @@ export type ResolvedCoinInfo = {
  */
 export type SwapQuoteBase = {
   /** Raw quote from core (for use with prepareSwapTx) */
-  quote: SwapQuote
+  quote: BoundSwapQuote
   /** Expected output amount (in smallest unit, e.g., wei) */
   estimatedOutput: bigint
   /** Expected output amount in fiat (when fiatCurrency was requested) */

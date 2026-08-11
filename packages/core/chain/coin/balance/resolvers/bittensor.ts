@@ -16,15 +16,31 @@ type RpcResponse<T> = {
 // System.Account storage key prefix: twox128("System") ++ twox128("Account")
 const systemAccountPrefix = '0x26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9'
 
+const bittensorSs58Prefix = 42
 const ss58AddressByteLength = 35
 const ss58PublicKeyOffset = 1
 const ss58PublicKeyEnd = 33
+const ss58ChecksumPreamble = new TextEncoder().encode('SS58PRE')
 
 const decodeSs58PublicKey = (address: string): Uint8Array => {
   const decoded = bs58.decode(address)
   if (decoded.length !== ss58AddressByteLength) {
     throw new Error(`Invalid SS58 address length: expected ${ss58AddressByteLength} bytes, got ${decoded.length}`)
   }
+  if (decoded[0] !== bittensorSs58Prefix) {
+    throw new Error(`Not a Bittensor address: SS58 network prefix ${decoded[0]}, expected ${bittensorSs58Prefix}`)
+  }
+
+  const body = decoded.subarray(0, ss58PublicKeyEnd)
+  const checksum = decoded.subarray(ss58PublicKeyEnd)
+  const checksumInput = new Uint8Array(ss58ChecksumPreamble.length + body.length)
+  checksumInput.set(ss58ChecksumPreamble)
+  checksumInput.set(body, ss58ChecksumPreamble.length)
+  const expected = blake2b(checksumInput, { dkLen: 64 })
+  if (expected[0] !== checksum[0] || expected[1] !== checksum[1]) {
+    throw new Error('Invalid SS58 checksum')
+  }
+
   return decoded.slice(ss58PublicKeyOffset, ss58PublicKeyEnd)
 }
 
