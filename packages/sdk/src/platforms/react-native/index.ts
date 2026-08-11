@@ -65,10 +65,12 @@ configureDefaultStorage(() => new ReactNativeStorage())
 
 // Chain enum and types
 export { Chain } from '@vultisig/core-chain/Chain'
+export { cosmosFeeCoinDenom } from '@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom'
 export {
   getCosmosAllowedFeeDenoms,
   isCosmosFeeDenomAllowed,
 } from '@vultisig/core-chain/chains/cosmos/cosmosFeeDenomAllowlist'
+export { getCosmosStakingGasLimit } from '@vultisig/core-chain/chains/cosmos/cosmosGasLimitRecord'
 export {
   COSMOS_SEND_FEE_DEFAULT,
   getCosmosSendFeeBaseUnits,
@@ -131,6 +133,22 @@ export { keysign } from '@vultisig/core-mpc/keysign'
 // Seedphrase validation (uses @scure/bip39, RN-compatible)
 export { validateSeedphrase } from '../../seedphrase/SeedphraseValidator'
 export { SEEDPHRASE_WORD_COUNTS } from '../../seedphrase/types'
+
+// Vault-backup import/export crypto contract. The RN-safe implementations live
+// under this platform surface already, but first-party mobile consumers could
+// not import them from @vultisig/sdk/react-native and kept a local copy of the
+// same .vult backup wire format instead.
+export { decryptVaultBackupWithPassword } from './polyfills/decryptVaultBackupWithPassword'
+export type { EncryptVaultBackupWithPasswordOptions } from './polyfills/encryptVaultBackupWithPassword'
+export { encryptVaultBackupWithPassword } from './polyfills/encryptVaultBackupWithPassword'
+export {
+  DEFAULT_VAULT_BACKUP_PBKDF2_ITERATIONS,
+  VAULT_BACKUP_BLOB_MAGIC,
+  VAULT_BACKUP_IV_LEN,
+  VAULT_BACKUP_MAGIC_LEN,
+  VAULT_BACKUP_PBKDF2_HEADER_LEN,
+  VAULT_BACKUP_SALT_LEN,
+} from '@vultisig/lib-utils/encryption/vaultBackup/vaultBackupConstants'
 
 // Default-chain canonicals — exported on RN so mobile consumers can delete
 // local onboarding/import default-chain mirrors and follow the same SDK owner.
@@ -384,12 +402,15 @@ export {
   resolveEns,
 } from '../../tools/evm'
 
-// EVM chainId ↔ chain mapping. Same single source of truth exported from the
-// generic entry (src/index.ts) — the RN allow-list omitted these so RN
-// consumers (Station) had to hand-maintain their own chainId table, risking
-// the Hyperliquid 998/999 client↔server chainId drift class. Pure lookup
-// tables, no chain-client deps, so safe as a static re-export.
+// EVM chainId ↔ chain mapping plus the canonical priority-fee sanity clamp.
+// Same single source of truth exported from the generic entry (src/index.ts)
+// — the RN allow-list omitted these so RN consumers (Station) had to
+// hand-maintain their own chainId table and fee sanity policy, risking both
+// the Hyperliquid 998/999 client↔server chainId drift class and EVM fee-policy
+// forks. Pure lookup/policy helpers, no chain-client deps, so safe as static
+// re-exports.
 export { getEvmChainByChainId, getEvmChainId } from '@vultisig/core-chain/chains/evm/chainInfo'
+export { clampEvmPriorityFee } from '@vultisig/core-chain/tx/fee/evm/clampEvmPriorityFee'
 
 // Gas / fee primitives (read-only — uses global `fetch` + type-only imports,
 // no heavy chain client at module init). The RN allow-list omitted these so RN
@@ -684,6 +705,7 @@ export { chainSchema, parseChain, parseTicker, tickerSchema } from '../../tools/
 export type { NormalizeArgs, NormalizedTx } from '../../tx'
 export { normalizeTx, splitMultiTx, TxNormalizeError } from '../../tx'
 export { computePersonalSignHash, formatEcdsaSignature65 } from '../../utils/eip191'
+export { coerceEip712ChainId, computeEip712Hash, toCanonicalEvmSignature } from '../../utils/eip712'
 export {
   canonicalEvmContracts,
   canonicalSolanaAddresses,
