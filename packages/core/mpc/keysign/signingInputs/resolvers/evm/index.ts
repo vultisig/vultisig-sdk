@@ -16,6 +16,7 @@ import { KeysignPayloadSchema } from '../../../../types/vultisig/keysign/v1/keys
 import {
   assertEnforcedSwapApprovalSpenderBound,
   assertKnownAggregatorRouterOnSigningPath,
+  assertLifiApprovalAddress,
   assertSwapKitAddressReputation,
 } from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
 
@@ -42,10 +43,9 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
     // sibling can't see the spender). The router allow-list runs on quote.tx.to in that recursion;
     // this binds the INDEPENDENT erc20ApprovePayload.spender field to it for enforced providers, so
     // a payload can't pass the router check yet still approve an attacker. sdk#1457: cowswap is now
-    // bound too (its spender IS its tx.to — both the fixed GPv2VaultRelayer). sdk#1458 binds LI.FI's
-    // top-level approval spender to its chain-scoped Diamond as well; nested route executors are
-    // internal to the Diamond and never receive the user's allowance directly. SwapKit's dynamic
-    // spender is instead checked against Blockaid immediately below.
+    // bound too (its spender IS its tx.to — both the fixed GPv2VaultRelayer). LI.FI and SwapKit
+    // can carry distinct approval spenders, so those providers use independent reputation checks
+    // below rather than trusting response-local equality or forcing legitimate routes to the router.
     const approveSwapPayload = getKeysignSwapPayload(keysignPayload)
     if (approveSwapPayload && 'general' in approveSwapPayload) {
       assertEnforcedSwapApprovalSpenderBound(
@@ -54,7 +54,9 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
         approveSwapPayload.general.quote?.tx?.to ?? '',
         chain
       )
-      if (approveSwapPayload.general.provider === 'swapkit') {
+      if (approveSwapPayload.general.provider === 'li.fi') {
+        await assertLifiApprovalAddress(erc20ApprovePayload.spender, chain)
+      } else if (approveSwapPayload.general.provider === 'swapkit') {
         await assertSwapKitAddressReputation(erc20ApprovePayload.spender, chain, 'approval spender')
       }
     }
@@ -94,10 +96,10 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
   // (handled in the erc20ApprovePayload branch above) is built from an INDEPENDENT wire field,
   // erc20ApprovePayload.spender (erc20.ts), which nothing binds to quote.tx.to - so a payload can
   // pass this router check yet still carry an approve to an arbitrary spender. That gap is now
-  // closed for enforced providers by assertEnforcedSwapApprovalSpenderBound in the branch above
-  // (sdk#1358 review follow-up; sdk#1457 extended it to cowswap, whose spender IS its tx.to).
-  // LI.FI's top-level spender is bound to its Diamond; SwapKit's distinct spender is independently
-  // reputation-checked above. The legacy `''` provider remains unenforced.
+  // closed for fixed-spender providers by assertEnforcedSwapApprovalSpenderBound in the branch
+  // above (sdk#1358 review follow-up; sdk#1457 extended it to cowswap, whose spender IS its tx.to).
+  // LI.FI and SwapKit distinct spenders are independently reputation-checked above. The legacy
+  // `''` provider remains unenforced.
   if (swapPayload && 'general' in swapPayload) {
     const { provider, quote } = swapPayload.general
     // Pass the raw (possibly empty) destination unconditionally: for an enforced provider an empty

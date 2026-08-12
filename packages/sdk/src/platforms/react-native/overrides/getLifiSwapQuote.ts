@@ -26,7 +26,10 @@ import { solanaConfig } from '@vultisig/core-chain/chains/solana/solanaConfig'
 import { AccountCoinKey } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { GeneralSwapQuote } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
-import { assertKnownAggregatorRouter } from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
+import {
+  assertKnownAggregatorRouter,
+  assertLifiApprovalAddress,
+} from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
 import { injectSolanaAtaIfMissing } from '@vultisig/core-chain/swap/general/lifi/api/injectSolanaAtaIfMissing'
 import { MAX_COMBINED_COST_BPS, resolveLifiSlippage } from '@vultisig/core-chain/swap/general/lifi/api/lifiSlippage'
 import {
@@ -192,6 +195,14 @@ export const getLifiSwapQuote = async ({
     }
   }
 
+  const approvalAddr = estimate.approvalAddress
+  if (chainKind === 'evm') {
+    assertKnownAggregatorRouter('li.fi', shouldBePresent(to), transfer.from.chain)
+    if (approvalAddr && approvalAddr !== '0x0000000000000000000000000000000000000000') {
+      await assertLifiApprovalAddress(approvalAddr, transfer.from.chain)
+    }
+  }
+
   return {
     dstAmount: estimate.toAmount,
     provider: 'li.fi',
@@ -238,20 +249,11 @@ export const getLifiSwapQuote = async ({
           swapFee &&
           ([fromToken, toToken].find(token => token.toLowerCase() === swapFeeAddress) ||
             chainFeeCoin[transfer.from.chain].id)
-        // LI.FI `estimate.approvalAddress` is the top-level spender that will
-        // pull the user's input ERC-20. For LI.FI routes that spender is the
-        // same chain-scoped Diamond as `transactionRequest.to`; nested route
-        // steps may use inner executors only after the Diamond holds the funds.
-        // Treat this response field as independently attacker-controlled and
-        // enforce the same Diamond allowlist before exposing it to consumers.
-        const approvalAddr = estimate.approvalAddress
+        // LI.FI `estimate.approvalAddress` is route-dependent and can differ
+        // from the Diamond destination. Mirror core's trust boundary: accept
+        // the official Diamond directly, but require an independent benign
+        // Blockaid verdict for every distinct spender.
         const evmTo = shouldBePresent(to)
-        // sdk#1458: mirror core's chain-scoped LI.FI Diamond enforcement. This RN
-        // override is a separate build target, so it needs its own guard call.
-        assertKnownAggregatorRouter('li.fi', evmTo, transfer.from.chain)
-        if (approvalAddr && approvalAddr !== '0x0000000000000000000000000000000000000000') {
-          assertKnownAggregatorRouter('li.fi', approvalAddr, transfer.from.chain)
-        }
         return {
           evm: {
             from: shouldBePresent(from),

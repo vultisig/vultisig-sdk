@@ -38,9 +38,11 @@ import { COW_VAULT_RELAYER_ADDRESS, cowSwapSupportedChains } from './cowswap/con
  * zkSync 1inch swap. Kyber showed no such variance on every chain that returned a live
  * response (see the per-chain notes below) — its allowlist stays flat.
  *
- * LiFi is enforced too (sdk#1458). Although its Diamond dispatches to many bridge/DEX contracts,
+ * LI.FI is enforced too (sdk#1458). Although its Diamond dispatches to many bridge/DEX contracts,
  * the user-facing transaction enters through one officially published, chain-scoped Diamond.
  * Most supported chains share the CREATE2 address below; HyperEVM, Robinhood, and zkSync do not.
+ * LI.FI's approval spender can vary by route, so the Diamond remains the deterministic fast path
+ * while any distinct spender requires an independent benign Blockaid verdict.
  * SwapKit remains dynamic because its target can be a provider router or a per-swap deposit
  * address. Its quote and co-signer paths therefore require an independent benign Blockaid
  * reputation verdict via {@link assertSwapKitAddressReputation}; the response-local
@@ -103,10 +105,9 @@ const ENFORCED_ROUTER_PROVIDERS: ReadonlySet<string> = new Set<EnforcedRouterPro
 ])
 
 // These providers use the same fixed address for the user-facing router and approval spender.
-// LI.FI's nested route steps may call inner executors, but the user's token approval remains bound
-// to the chain-scoped Diamond; accepting an arbitrary top-level approvalAddress would let a
-// compromised quote response grant an attacker allowance over the input token.
-const APPROVAL_BOUND_ROUTER_PROVIDERS: ReadonlySet<string> = new Set(['1inch', 'kyber', 'cowswap', 'li.fi'])
+// LI.FI is intentionally absent: its official API contract says approval spenders may vary by
+// route or bridge, so distinct spenders use assertLifiApprovalAddress instead of hard equality.
+const APPROVAL_BOUND_ROUTER_PROVIDERS: ReadonlySet<string> = new Set(['1inch', 'kyber', 'cowswap'])
 
 // sdk#1457/#1458: the small, closed set of recognized providers outside the fixed-router
 // allowlists. SwapKit targets are dynamic and use Blockaid; `''` is NOT an attacker label - it is
@@ -179,25 +180,23 @@ export function assertKnownAggregatorRouterOnSigningPath(provider: string, addre
 }
 
 /**
- * Independent trust boundary for dynamic SwapKit EVM addresses. SwapKit's `tx.to`,
- * `targetAddress`, and optional approval transaction all come from the same `/v3/swap`
- * response, so equality between them cannot establish destination safety when that
- * response is compromised. Blockaid is queried through the existing Vultisig security
- * route and only an explicit Benign verdict is accepted. Unsupported chains, scan
- * failures, Warning, and Malicious verdicts all fail closed.
+ * Independent reputation boundary shared by dynamic aggregator addresses. Only an explicit
+ * Benign Blockaid verdict is accepted; unsupported chains, scan failures, Warning, and Malicious
+ * verdicts all fail closed.
  */
-export async function assertSwapKitAddressReputation(
+async function assertAggregatorAddressReputation(
+  provider: 'LI.FI' | 'SwapKit',
   address: string,
   chain: Chain,
   role = 'destination'
 ): Promise<void> {
   if (!/^0x[0-9a-fA-F]{40}$/.test(address)) {
-    throw new Error(`SwapKit ${role} (${address}) is not a valid EVM address on ${chain}.`)
+    throw new Error(`${provider} ${role} (${address}) is not a valid EVM address on ${chain}.`)
   }
 
   const blockaidChain = (blockaidEvmChain as Partial<Record<Chain, string>>)[chain]
   if (!blockaidChain) {
-    throw new Error(`SwapKit ${role} reputation cannot be verified on unsupported Blockaid chain ${chain}.`)
+    throw new Error(`${provider} ${role} reputation cannot be verified on unsupported Blockaid chain ${chain}.`)
   }
 
   let result: Awaited<ReturnType<typeof scanAddressWithBlockaid>>
@@ -205,15 +204,39 @@ export async function assertSwapKitAddressReputation(
     result = await scanAddressWithBlockaid(address, blockaidChain)
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error)
-    throw new Error(`SwapKit ${role} reputation check failed on ${chain}: ${reason}`)
+    throw new Error(`${provider} ${role} reputation check failed on ${chain}: ${reason}`)
   }
 
   if (result.resultType !== 'Benign') {
     const features = result.features.length ? ` (${result.features.join(', ')})` : ''
     throw new Error(
-      `SwapKit ${role} (${address}) received a ${result.resultType} Blockaid verdict on ${chain}${features} — refusing to sign or return the transaction.`
+      `${provider} ${role} (${address}) received a ${result.resultType} Blockaid verdict on ${chain}${features} — refusing to sign or return the transaction.`
     )
   }
+}
+
+/**
+ * Independent trust boundary for dynamic SwapKit EVM addresses. SwapKit's `tx.to`,
+ * `targetAddress`, and optional approval transaction all come from the same `/v3/swap`
+ * response, so equality between them cannot establish destination safety when that response
+ * is compromised.
+ */
+export function assertSwapKitAddressReputation(address: string, chain: Chain, role = 'destination'): Promise<void> {
+  return assertAggregatorAddressReputation('SwapKit', address, chain, role)
+}
+
+/**
+ * LI.FI documents `estimate.approvalAddress` as route-dependent and explicitly warns consumers
+ * not to hardcode it. The official Diamond is safe without a network dependency; a distinct
+ * spender is accepted only after an independent benign Blockaid verdict. This preserves valid
+ * inner-executor routes without trusting the quote response to authorize its own spender.
+ */
+export function assertLifiApprovalAddress(address: string, chain: Chain): Promise<void> {
+  if (address.toLowerCase() === LIFI_DIAMOND_BY_CHAIN[chain as EvmChain]) {
+    return Promise.resolve()
+  }
+
+  return assertAggregatorAddressReputation('LI.FI', address, chain, 'approval spender')
 }
 
 /**
@@ -225,12 +248,11 @@ export async function assertSwapKitAddressReputation(
  * genuine 1inch/kyber `tx.to` yet still carry an approve granting an ATTACKER an allowance over the
  * user's token (a classic approval-drain the co-signer would otherwise sign blind).
  *
- * On the initiator these coincide by construction (build.ts sets the approve spender to
- * `getSwapDestinationAddress` === `tx.to`), so this only ever fires on a hand-built/tampered payload.
+ * On the initiator the fixed-spender providers coincide by construction. LI.FI and SwapKit can
+ * instead set an explicit `approvalAddress`, which is why their spender checks are separate.
  * Approval-bound providers (1inch/kyber/cowswap) MUST have `spender === routerDestination`.
- * LI.FI's destination and approval spender are both the chain-scoped Diamond; inner executor
- * approvals occur inside the Diamond's nested route rather than in the user's top-level allowance.
- * The dynamic SwapKit path is therefore the only attributed provider outside this equality check.
+ * LI.FI approval spenders can vary by route and are instead checked by
+ * {@link assertLifiApprovalAddress}; SwapKit spenders use its corresponding reputation guard.
  * CowSwap's spender IS its `tx.to` (both are the fixed GPv2VaultRelayer - see
  * getSwapDestinationAddress.ts), so it binds the same way 1inch/kyber do. Like its sibling this is
  * a MONOTONIC gate: it only throws or no-ops, never changes the signed bytes.

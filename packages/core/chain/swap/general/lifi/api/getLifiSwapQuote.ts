@@ -17,7 +17,7 @@ import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 
 import { AccountCoinKey } from '../../../../coin/AccountCoin'
 import { GeneralSwapQuote } from '../../GeneralSwapQuote'
-import { assertKnownAggregatorRouter } from '../../knownAggregatorRouters'
+import { assertKnownAggregatorRouter, assertLifiApprovalAddress } from '../../knownAggregatorRouters'
 import { injectSolanaAtaIfMissing } from './injectSolanaAtaIfMissing'
 import { MAX_COMBINED_COST_BPS, resolveLifiSlippage } from './lifiSlippage'
 
@@ -188,6 +188,14 @@ export const getLifiSwapQuote = async ({
     }
   }
 
+  const approvalAddr = estimate.approvalAddress
+  if (chainKind === 'evm') {
+    assertKnownAggregatorRouter('li.fi', shouldBePresent(to), transfer.from.chain)
+    if (approvalAddr && approvalAddr !== '0x0000000000000000000000000000000000000000') {
+      await assertLifiApprovalAddress(approvalAddr, transfer.from.chain)
+    }
+  }
+
   return {
     dstAmount: estimate.toAmount,
     provider: 'li.fi',
@@ -235,21 +243,13 @@ export const getLifiSwapQuote = async ({
           swapFee &&
           ([fromToken, toToken].find(token => token.toLowerCase() === swapFeeAddress) ||
             chainFeeCoin[transfer.from.chain].id)
-        // LI.FI `estimate.approvalAddress` is the top-level spender that will
-        // pull the user's input ERC-20. For LI.FI routes that spender is the
-        // same chain-scoped Diamond as `transactionRequest.to`; nested route
-        // steps may use inner executors only after the Diamond holds the funds.
-        // Treat this response field as independently attacker-controlled and
-        // enforce the same Diamond allowlist before exposing it to consumers.
-        const approvalAddr = estimate.approvalAddress
+        // LI.FI `estimate.approvalAddress` is the spender that will pull the
+        // user's input ERC-20. LI.FI documents it as route-dependent, so it can
+        // differ from the Diamond destination. Treat it as independently
+        // attacker-controlled: the official Diamond is the deterministic fast
+        // path, while a distinct spender must receive an independent benign
+        // Blockaid verdict before it is exposed to consumers.
         const evmTo = shouldBePresent(to)
-        // sdk#1458: LI.FI routes through many inner contracts, but every EVM quote enters
-        // through its officially published, chain-scoped Diamond. Enforce that entry point
-        // before it can become a signable destination.
-        assertKnownAggregatorRouter('li.fi', evmTo, transfer.from.chain)
-        if (approvalAddr && approvalAddr !== '0x0000000000000000000000000000000000000000') {
-          assertKnownAggregatorRouter('li.fi', approvalAddr, transfer.from.chain)
-        }
         return {
           evm: {
             from: shouldBePresent(from),

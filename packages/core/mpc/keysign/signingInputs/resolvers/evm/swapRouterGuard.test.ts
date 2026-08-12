@@ -32,6 +32,7 @@ beforeEach(() => {
 // here, and a KeysignPayload carrying the real router must still sign cleanly (no over-blocking).
 const ONE_INCH_V6_ROUTER = '0x111111125421ca6dc452d289314280a0f8842a65'
 const LIFI_DIAMOND = '0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE'
+const LIFI_INNER_EXECUTOR = '0x7f51c134000000000000000000000000000c7e11'
 const ATTACKER_ROUTER = '0x000000000000000000000000000000000000dEaD'
 const COW_VAULT_RELAYER = '0xC92E8bdf79f0507f65a392b0ab4667716BFE0110'
 const SENDER = '0x1234567890123456789012345678901234567890'
@@ -233,20 +234,52 @@ describe('getEvmSigningInputs — sdk#1358 approval-spender bind on the signing-
     expect(inputs[1]?.toAddress).toBe(COW_VAULT_RELAYER)
   })
 
-  it('rejects a LI.FI approval spender that does not match its verified Diamond', async () => {
+  it('rejects a distinct LI.FI approval spender without an independent benign verdict', async () => {
+    mockScanAddressWithBlockaid.mockResolvedValueOnce({ resultType: 'Malicious', features: ['drainer'] })
+
     await expect(
       getEvmSigningInputs({
         keysignPayload: buildApprovePayload({
           routerTo: LIFI_DIAMOND,
-          spender: ATTACKER_ROUTER,
+          spender: LIFI_INNER_EXECUTOR,
           provider: 'li.fi',
         }),
         walletCore,
       })
-    ).rejects.toThrow(/approval spender .* does not match the verified swap router/i)
+    ).rejects.toThrow(/LI\.FI approval spender .*Malicious Blockaid verdict/i)
   })
 
-  it('signs cleanly for LI.FI when the approval spender matches its verified Diamond', async () => {
+  it('signs cleanly for LI.FI when a distinct route spender receives an independent benign verdict', async () => {
+    const inputs = await getEvmSigningInputs({
+      keysignPayload: buildApprovePayload({
+        routerTo: LIFI_DIAMOND,
+        spender: LIFI_INNER_EXECUTOR,
+        provider: 'li.fi',
+      }),
+      walletCore,
+    })
+
+    expect(inputs).toHaveLength(2)
+    expect(inputs[1]?.toAddress).toBe(LIFI_DIAMOND)
+    expect(mockScanAddressWithBlockaid).toHaveBeenCalledWith(LIFI_INNER_EXECUTOR, 'ethereum')
+  })
+
+  it('fails closed for a distinct LI.FI spender when the reputation service is unavailable', async () => {
+    mockScanAddressWithBlockaid.mockRejectedValueOnce(new Error('blockaid unreachable'))
+
+    await expect(
+      getEvmSigningInputs({
+        keysignPayload: buildApprovePayload({
+          routerTo: LIFI_DIAMOND,
+          spender: LIFI_INNER_EXECUTOR,
+          provider: 'li.fi',
+        }),
+        walletCore,
+      })
+    ).rejects.toThrow(/LI\.FI approval spender reputation check failed/i)
+  })
+
+  it('signs LI.FI Diamond approvals without a reputation network call', async () => {
     const inputs = await getEvmSigningInputs({
       keysignPayload: buildApprovePayload({
         routerTo: LIFI_DIAMOND,
@@ -257,7 +290,7 @@ describe('getEvmSigningInputs — sdk#1358 approval-spender bind on the signing-
     })
 
     expect(inputs).toHaveLength(2)
-    expect(inputs[1]?.toAddress).toBe(LIFI_DIAMOND)
+    expect(mockScanAddressWithBlockaid).not.toHaveBeenCalled()
   })
 
   it('rejects a swapkit approval spender without an independent benign verdict', async () => {
