@@ -78,7 +78,7 @@ describe('getLifiSwapQuote — integrator override', () => {
         gasLimit: '0',
         data: '0x',
         from: '0xfrom',
-        to: '0xto',
+        to: '0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE',
         chainId: 1,
       },
       estimate: {

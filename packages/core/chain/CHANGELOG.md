@@ -1,5 +1,11 @@
 # @vultisig/core-chain
 
+## 2.35.1
+
+### Patch Changes
+
+- [#1846](https://github.com/vultisig/vultisig-sdk/pull/1846) [`8faa612`](https://github.com/vultisig/vultisig-sdk/commit/8faa612e6358af0a77cebf9c06d8865d832b69df) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Reserve the OP-stack balance-check surcharges in the EVM fee amount, so a native max send on Optimism, Base, Blast or Mantle stays affordable at broadcast. op-geth requires `value + gasLimit * maxFeePerGas + l1Cost + operatorCost`, and an amount that left only the gas term behind was rejected by exactly the difference — after the keysign ceremony had already run. Both oracle reads fail open, so a chain whose oracle is unreachable or predates a term behaves exactly as before.
+
 ## 2.35.0
 
 ### Minor Changes

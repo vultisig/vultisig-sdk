@@ -6,12 +6,13 @@
  * Each handler takes `(toolCallId, input)` and returns a `RecentAction` ready
  * to be flushed into the next outbound `context.recent_actions`.
  */
-import type { VaultBase, Vultisig } from '@vultisig/sdk'
+import type { EvmChain, VaultBase, Vultisig } from '@vultisig/sdk'
 import {
   Chain,
   chainFeeCoin,
   computeEip712Hash,
   getChainKind,
+  getEvmRpcUrl,
   parseThorSwapMemo,
   resolveChainReference,
   toCanonicalEvmSignature,
@@ -50,23 +51,13 @@ const EVM_CHAINS = new Set<string>([
   'Sei',
 ])
 
-// Public RPC endpoints for refreshing gas estimates before signing.
-// Used as fallback to ensure maxFeePerGas covers current base fee.
-const EVM_GAS_RPC: Record<string, string> = {
-  Ethereum: 'https://ethereum-rpc.publicnode.com',
-  BSC: 'https://bsc-dataseed.binance.org',
-  Polygon: 'https://polygon-bor-rpc.publicnode.com',
-  Avalanche: 'https://api.avax.network/ext/bc/C/rpc',
-  Arbitrum: 'https://arb1.arbitrum.io/rpc',
-  Optimism: 'https://mainnet.optimism.io',
-  Base: 'https://mainnet.base.org',
-  Blast: 'https://rpc.blast.io',
-  Zksync: 'https://mainnet.era.zksync.io',
-  Mantle: 'https://rpc.mantle.xyz',
-  CronosChain: 'https://cronos-evm-rpc.publicnode.com',
-  Hyperliquid: 'https://rpc.hyperliquid.xyz/evm',
-  Sei: 'https://evm-rpc.sei-apis.com',
-}
+// `Set<string>.has()` returns a plain boolean, so it never narrows `Chain` down to
+// the `EvmChain` union that `getEvmRpcUrl` takes. This predicate keeps membership
+// byte-identical to the set above rather than delegating to `isChainOfKind(chain,
+// 'evm')`: the canonical chain-kind record also classifies Robinhood as EVM, and
+// switching would newly route it through nonce locking, nonce patching and gas
+// bumping. That is a money-path change and does not belong in a typing fix.
+const isEvmChain = (chain: Chain): chain is EvmChain => EVM_CHAINS.has(chain)
 
 type AccountCoin = {
   chain: Chain
@@ -254,7 +245,7 @@ export class AgentExecutor {
       // today and would silently misbehave if forced through this path.
       // Reject loudly rather than fall through to the single-leg branch
       // (which would extract main-leg txArgs and silently drop the approve).
-      if (!EVM_CHAINS.has(chain)) {
+      if (!isEvmChain(chain)) {
         if (this.verbose)
           process.stderr.write(
             `[executor] rejecting multi-leg envelope on non-EVM chain ${chain}: signMultiLeg is EVM-only\n`
@@ -1418,7 +1409,7 @@ export class AgentExecutor {
    * Releases any previously held lock first (e.g. from an abandoned build).
    */
   private async acquireEvmLockIfNeeded(chain: Chain): Promise<void> {
-    if (!this.stateStore || !EVM_CHAINS.has(chain)) return
+    if (!this.stateStore || !isEvmChain(chain)) return
 
     // Release any stale lock from a previous build that was never signed
     await this.releaseEvmLock(chain)
@@ -1450,7 +1441,7 @@ export class AgentExecutor {
    * dropped and local state is stale.
    */
   private async patchEvmNonce(chain: Chain, payload: any): Promise<void> {
-    if (!this.stateStore || !EVM_CHAINS.has(chain)) return
+    if (!this.stateStore || !isEvmChain(chain)) return
 
     const bs = payload.blockchainSpecific
     if (!bs || bs.case !== 'ethereumSpecific') return
@@ -1521,13 +1512,12 @@ export class AgentExecutor {
    * Compensates for gas price drift between build time and sign time.
    */
   private async patchEvmGas(chain: Chain, payload: any): Promise<void> {
-    if (!EVM_CHAINS.has(chain)) return
+    if (!isEvmChain(chain)) return
 
     const bs = payload.blockchainSpecific
     if (!bs || bs.case !== 'ethereumSpecific') return
 
-    const rpcUrl = EVM_GAS_RPC[chain as string]
-    if (!rpcUrl) return
+    const rpcUrl = getEvmRpcUrl(chain)
 
     try {
       const res = await fetch(rpcUrl, {
@@ -1576,8 +1566,12 @@ export class AgentExecutor {
    * Returns null if the RPC call fails (non-fatal).
    */
   private async fetchEvmPendingNonce(chain: Chain): Promise<bigint | null> {
-    const rpcUrl = EVM_GAS_RPC[chain as string]
-    if (!rpcUrl) return null
+    // The old CLI-local map returned `undefined` for a non-EVM chain and the
+    // caller bailed on the falsy URL. The shared resolver has no such escape
+    // hatch, so keep the guard explicit: without it a non-EVM chain would POST
+    // eth_getTransactionCount at an undefined endpoint.
+    if (!isEvmChain(chain)) return null
+    const rpcUrl = getEvmRpcUrl(chain)
 
     try {
       const address = await this.vault.address(chain)
@@ -1607,7 +1601,7 @@ export class AgentExecutor {
    * For approve+swap flows with N message hashes, the highest nonce used is base + N - 1.
    */
   private recordEvmNonceFromPayload(chain: Chain, payload: any, numTxs: number): void {
-    if (!this.stateStore || !EVM_CHAINS.has(chain)) return
+    if (!this.stateStore || !isEvmChain(chain)) return
 
     const bs = payload.blockchainSpecific
     if (!bs || bs.case !== 'ethereumSpecific') return
