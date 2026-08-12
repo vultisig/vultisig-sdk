@@ -27,7 +27,7 @@ const defaultPriorityFeeCeilingWei = 500n * GWEI
  *   default ceiling below. These entries remain explicit so every new EVM
  *   chain requires a conscious ceiling decision.
  */
-const priorityFeeCeilingWeiByChain: Record<EvmChain, bigint> = {
+export const priorityFeeCeilingWeiByChain: Readonly<Record<EvmChain, bigint>> = {
   [EvmChain.Arbitrum]: 50n * GWEI,
   [EvmChain.Base]: 50n * GWEI,
   [EvmChain.Blast]: 50n * GWEI,
@@ -55,8 +55,13 @@ const priorityFeeCeilingWeiByChain: Record<EvmChain, bigint> = {
  * EthereumFeeService) and Polygon at 30 gwei (Polygon validators enforce a
  * ~25 gwei minimum tip). L2 sequencers include txs regardless of tip, so
  * rollups deliberately have no floor.
+ *
+ * Exported (vultisig-sdk#1157) as the canonical per-chain priority-fee floor
+ * so downstream consumers (vultiagent-poc's MIN_PRIORITY_FEE_BY_CHAIN,
+ * agent-backend-ts's GAS_FLOORS_WEI) can read this table directly instead of
+ * hand-maintaining their own copies that can silently drift from it.
  */
-const priorityFeeFloorWeiByChain: Partial<Record<EvmChain, bigint>> = {
+export const priorityFeeFloorWeiByChain: Readonly<Partial<Record<EvmChain, bigint>>> = {
   [EvmChain.Ethereum]: 1n * GWEI,
   [EvmChain.Polygon]: 30n * GWEI,
 }

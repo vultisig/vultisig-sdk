@@ -1,7 +1,7 @@
 import { EvmChain } from '@vultisig/core-chain/Chain'
 import { describe, expect, it } from 'vitest'
 
-import { clampEvmPriorityFee } from './clampEvmPriorityFee'
+import { clampEvmPriorityFee, priorityFeeCeilingWeiByChain, priorityFeeFloorWeiByChain } from './clampEvmPriorityFee'
 
 const gwei = (n: number) => BigInt(n) * 1_000_000_000n
 
@@ -81,5 +81,37 @@ describe('clampEvmPriorityFee', () => {
     const nearZero = 398_220n
 
     expect(clampEvmPriorityFee(chain, nearZero)).toBe(nearZero)
+  })
+})
+
+// vultisig-sdk#1157: these tables are the exported canonical single source of
+// truth for downstream per-chain gas-price floor/ceiling tables (app,
+// agent-backend-ts). Assert their shape so a future refactor can't silently
+// narrow them and break a consumer that reads the table directly instead of
+// going through `clampEvmPriorityFee`.
+describe('priorityFeeCeilingWeiByChain / priorityFeeFloorWeiByChain (public export)', () => {
+  it('has a ceiling entry for every EvmChain, each a positive bigint', () => {
+    const chains = Object.values(EvmChain)
+
+    expect(Object.keys(priorityFeeCeilingWeiByChain).sort()).toEqual([...chains].sort())
+
+    for (const chain of chains) {
+      expect(typeof priorityFeeCeilingWeiByChain[chain]).toBe('bigint')
+      expect(priorityFeeCeilingWeiByChain[chain]).toBeGreaterThan(0n)
+    }
+  })
+
+  it('has floor entries only for tip-auction chains, each below its own ceiling', () => {
+    expect(Object.keys(priorityFeeFloorWeiByChain).sort()).toEqual([EvmChain.Ethereum, EvmChain.Polygon].sort())
+
+    for (const [chain, floor] of Object.entries(priorityFeeFloorWeiByChain) as [EvmChain, bigint][]) {
+      expect(floor).toBeGreaterThan(0n)
+      expect(floor).toBeLessThan(priorityFeeCeilingWeiByChain[chain])
+    }
+  })
+
+  it('matches the documented Ethereum/Polygon floor values', () => {
+    expect(priorityFeeFloorWeiByChain[EvmChain.Ethereum]).toBe(gwei(1))
+    expect(priorityFeeFloorWeiByChain[EvmChain.Polygon]).toBe(gwei(30))
   })
 })

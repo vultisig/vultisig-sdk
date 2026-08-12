@@ -410,7 +410,11 @@ export {
 // forks. Pure lookup/policy helpers, no chain-client deps, so safe as static
 // re-exports.
 export { getEvmChainByChainId, getEvmChainId } from '@vultisig/core-chain/chains/evm/chainInfo'
-export { clampEvmPriorityFee } from '@vultisig/core-chain/tx/fee/evm/clampEvmPriorityFee'
+export {
+  clampEvmPriorityFee,
+  priorityFeeCeilingWeiByChain as evmPriorityFeeCeilingWeiByChain,
+  priorityFeeFloorWeiByChain as evmPriorityFeeFloorWeiByChain,
+} from '@vultisig/core-chain/tx/fee/evm/clampEvmPriorityFee'
 
 // Gas / fee primitives (read-only — uses global `fetch` + type-only imports,
 // no heavy chain client at module init). The RN allow-list omitted these so RN
