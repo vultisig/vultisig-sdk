@@ -29,6 +29,8 @@ export type SendDryRunResult = {
   to: string
   amount: string
   symbol: string
+  /** Resolved token contract address / chain-specific asset id. Omitted for native sends. */
+  contractAddress?: string
   /** Network fee the build estimated for this transaction, in `feeSymbol`. */
   fee: string
   /** Asset the fee is paid in — the chain's native asset, which is not `symbol` for a token send. */

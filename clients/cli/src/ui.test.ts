@@ -53,6 +53,47 @@ describe('displayTransactionPreview', () => {
     expect(memoLine).toContain('literal\\\\x0A\\x00\\x0A\\x0D\\x1B\\x7F\\x9Btail')
     expect(memoLine).not.toContain(memo)
   })
+
+  it('discloses the token contract on the Amount line, escaped, and omits it when absent', () => {
+    const logs: string[] = []
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+      logs.push(args.map(String).join(' '))
+    })
+
+    const contractAddress = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'
+    displayTransactionPreview(
+      'from',
+      'to',
+      '1.0',
+      'USDC.e',
+      Chain.Polygon,
+      undefined,
+      undefined,
+      undefined,
+      contractAddress
+    )
+    expect(logs.find(line => line.includes('Amount:'))).toContain(`Amount: 1.0 USDC.e (${contractAddress})`)
+
+    logs.length = 0
+    displayTransactionPreview(
+      'from',
+      'to',
+      '1.0',
+      'USDC.e',
+      Chain.Polygon,
+      undefined,
+      undefined,
+      undefined,
+      `evil${String.fromCharCode(27)}[2J`
+    )
+    const escapedLine = logs.find(line => line.includes('Amount:'))
+    expect(escapedLine).toContain('evil\\x1B[2J')
+    expect(escapedLine).not.toContain(String.fromCharCode(27))
+
+    logs.length = 0
+    displayTransactionPreview('from', 'to', '1.0', 'ETH', Chain.Ethereum)
+    expect(logs.find(line => line.includes('Amount:'))).toBe('  Amount: 1.0 ETH')
+  })
 })
 
 // formatBigintAmount delegates to the SDK's pure-bigint fromChainAmountExact.
