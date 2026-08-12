@@ -53,14 +53,14 @@ const EVM_CHAINS = new Set<string>([
 const ERC20_TRANSFER_SELECTOR = '0xa9059cbb'
 const ERC20_TRANSFER_ABI = parseAbi(['function transfer(address to, uint256 value)'])
 
-/** Decode the recipient that an ERC-20 transfer will actually send tokens to. */
-function decodeErc20TransferRecipient(calldata: string): string | null {
+/** Decode the recipient and amount that an ERC-20 transfer will actually use. */
+function decodeErc20Transfer(calldata: string): { recipient: Address; amount: bigint } | null {
   if (calldata.slice(0, ERC20_TRANSFER_SELECTOR.length).toLowerCase() !== ERC20_TRANSFER_SELECTOR) return null
 
   try {
     const decoded = decodeFunctionData({ abi: ERC20_TRANSFER_ABI, data: calldata as Hex })
-    const [recipient] = decoded.args as readonly [Address, bigint]
-    return recipient
+    const [recipient, amount] = decoded.args as readonly [Address, bigint]
+    return { recipient, amount }
   } catch {
     throw new Error('Invalid ERC-20 transfer calldata — refusing to sign')
   }
@@ -384,10 +384,10 @@ export class AgentExecutor {
 
   /**
    * If the transaction that will actually be signed carries ERC-20 `transfer`
-   * calldata, decode its destination and cross-check it against the producer's
-   * declared recipient. Returns the calldata recipient (the address funds
-   * really move to, hence authoritative for the summary) when the signed tx is
-   * a transfer, or null otherwise.
+   * calldata, decode its destination and amount and cross-check them against
+   * the producer's declared values. Returns the calldata recipient (the address
+   * funds really move to, hence authoritative for the summary) when the signed
+   * tx is a transfer, or null otherwise.
    *
    * Reads the signed tx via {@link extractNestedTx} — the SAME resolution the
    * signer uses (`swap_tx || send_tx || tx || txArgs.tx`) — not `txArgs.tx`
@@ -395,32 +395,44 @@ export class AgentExecutor {
    * `txArgs.tx` and a malicious higher-precedence key, must not be able to move
    * funds to an address the consent summary never showed. Fails closed —
    * clearing the buffered tx and throwing — on malformed transfer calldata or a
-   * producer/calldata recipient mismatch, so a divergent envelope can never be
-   * signed. Invoked before the branch-specific summaries below so a transfer
-   * cannot be disguised as a swap/contract-call to skip the check.
+   * producer/calldata recipient or amount mismatch, so a divergent envelope can
+   * never be signed. Invoked before the branch-specific summaries below so a
+   * transfer cannot be disguised as a swap/contract-call to skip the check.
    */
-  private assertConsistentTransferRecipient(p: any): string | null {
+  private assertConsistentTransfer(p: any): string | null {
     const signedTx = extractNestedTx(p)
     const calldata = typeof signedTx?.data === 'string' ? (signedTx.data as string) : ''
     if (calldata === '' || calldata === '0x') return null
 
-    let calldataRecipient: string | null
+    let transfer: { recipient: Address; amount: bigint } | null
     try {
-      calldataRecipient = decodeErc20TransferRecipient(calldata)
+      transfer = decodeErc20Transfer(calldata)
     } catch (error) {
       this.clearPendingTransaction()
       throw error
     }
-    if (!calldataRecipient) return null
+    if (!transfer) return null
 
     const producerRecipient = typeof p?.txArgs?.to === 'string' ? (p.txArgs.to as string) : ''
-    if (producerRecipient && calldataRecipient.toLowerCase() !== producerRecipient.toLowerCase()) {
+    if (producerRecipient && transfer.recipient.toLowerCase() !== producerRecipient.toLowerCase()) {
       this.clearPendingTransaction()
       throw new Error(
-        `ERC-20 recipient mismatch — refusing to sign: txArgs.to ${producerRecipient} does not match calldata destination ${calldataRecipient}`
+        `ERC-20 recipient mismatch — refusing to sign: txArgs.to ${producerRecipient} does not match calldata destination ${transfer.recipient}`
       )
     }
-    return calldataRecipient
+
+    const producerAmount = p?.txArgs?.amount
+    if (typeof producerAmount !== 'string' || !/^\d+$/.test(producerAmount)) {
+      this.clearPendingTransaction()
+      throw new Error('Invalid ERC-20 txArgs.amount — refusing to sign')
+    }
+    if (BigInt(producerAmount) !== transfer.amount) {
+      this.clearPendingTransaction()
+      throw new Error(
+        `ERC-20 amount mismatch — refusing to sign: txArgs.amount ${producerAmount} does not match calldata value ${transfer.amount}`
+      )
+    }
+    return transfer.recipient
   }
 
   /**
@@ -436,10 +448,10 @@ export class AgentExecutor {
     const labels = (p?.resolved?.labels ?? {}) as Record<string, string>
 
     // Fail closed on any signed ERC-20 transfer whose destination diverges from
-    // the producer's declared recipient (or whose transfer calldata is
-    // malformed) BEFORE rendering any branch-specific summary — a transfer must
-    // not be able to hide behind a swap/contract-call head to skip the check.
-    const transferRecipient = this.assertConsistentTransferRecipient(p)
+    // the producer's declared recipient or amount (or whose transfer calldata
+    // is malformed) BEFORE rendering any branch-specific summary — a transfer
+    // must not be able to hide behind a swap/contract-call head to skip the check.
+    const transferRecipient = this.assertConsistentTransfer(p)
 
     // Design B: Polymarket flat-tx-builder bridge envelopes carry no swap/send
     // token labels, so the generic summaries below degrade to "send ? to ?".

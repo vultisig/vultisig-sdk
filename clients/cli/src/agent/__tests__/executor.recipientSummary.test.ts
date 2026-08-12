@@ -20,15 +20,15 @@ function createExecutor(): AgentExecutor {
   return new AgentExecutor(vault)
 }
 
-function encodeTransfer(recipient: `0x${string}`): `0x${string}` {
+function encodeTransfer(recipient: `0x${string}`, amount = 500000n): `0x${string}` {
   return encodeFunctionData({
     abi: erc20Abi,
     functionName: 'transfer',
-    args: [recipient, 500000n],
+    args: [recipient, amount],
   })
 }
 
-describe('AgentExecutor ERC-20 recipient consent summary', () => {
+describe('AgentExecutor ERC-20 consent summary', () => {
   it('rejects a send when txArgs.to diverges from the calldata recipient', () => {
     const executor = createExecutor()
     expect(
@@ -150,6 +150,21 @@ describe('AgentExecutor ERC-20 recipient consent summary', () => {
     expect(executor.hasPendingTransaction()).toBe(false)
   })
 
+  it('rejects amount drift in the top-level tx the signer consumes', () => {
+    const executor = createExecutor()
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Base',
+        tx: { to: TOKEN_CONTRACT, value: '0', data: encodeTransfer(RECIPIENT_A, 500000000n) },
+        txArgs: { chain: 'Base', to: RECIPIENT_A, amount: '500000' },
+        resolved: { labels: { resolved_amount: '0.5 USDC', recipient_echo: RECIPIENT_A } },
+      })
+    ).toBe(true)
+
+    expect(() => executor.getPendingSummary()).toThrow(/amount mismatch — refusing to sign/i)
+    expect(executor.hasPendingTransaction()).toBe(false)
+  })
+
   it('rejects a benign txArgs.tx masking a divergent higher-precedence tx', () => {
     const executor = createExecutor()
     // Envelope carries BOTH a benign txArgs.tx (matches txArgs.to) and a
@@ -171,6 +186,26 @@ describe('AgentExecutor ERC-20 recipient consent summary', () => {
     ).toBe(true)
 
     expect(() => executor.getPendingSummary()).toThrow(/recipient mismatch — refusing to sign/i)
+    expect(executor.hasPendingTransaction()).toBe(false)
+  })
+
+  it('rejects a benign txArgs.tx masking amount drift in a higher-precedence tx', () => {
+    const executor = createExecutor()
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Base',
+        tx: { to: TOKEN_CONTRACT, value: '0', data: encodeTransfer(RECIPIENT_A, 500000000n) },
+        txArgs: {
+          chain: 'Base',
+          to: RECIPIENT_A,
+          amount: '500000',
+          tx: { to: TOKEN_CONTRACT, value: '0', data: encodeTransfer(RECIPIENT_A) },
+        },
+        resolved: { labels: { resolved_amount: '0.5 USDC', recipient_echo: RECIPIENT_A } },
+      })
+    ).toBe(true)
+
+    expect(() => executor.getPendingSummary()).toThrow(/amount mismatch — refusing to sign/i)
     expect(executor.hasPendingTransaction()).toBe(false)
   })
 })
