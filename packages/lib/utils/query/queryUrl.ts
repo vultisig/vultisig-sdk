@@ -19,7 +19,7 @@ type QueryUrlOptions = {
 // hang and perma-loaded the agent send card's "Network fee" row until the app's
 // own 60s build-timeout fired. 20s matches the SDK's other HTTP timeouts
 // (balance/swap rails) — comfortably above a healthy query, still bounding a hang.
-const DEFAULT_QUERY_TIMEOUT_MS = 20_000
+export const DEFAULT_QUERY_TIMEOUT_MS = 20_000
 
 const processBody = (body: any) => {
   if (body === undefined) {

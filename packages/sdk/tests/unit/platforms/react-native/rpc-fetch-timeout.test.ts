@@ -1,7 +1,8 @@
+import { DEFAULT_QUERY_TIMEOUT_MS } from '@vultisig/lib-utils/query/queryUrl'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { getSolanaBalance } from '../../../../src/platforms/react-native/chains/solana/rpc'
-import { FetchTimeoutError } from '../../../../src/platforms/react-native/fetchWithTimeout'
+import { DEFAULT_RN_FETCH_TIMEOUT_MS, FetchTimeoutError } from '../../../../src/platforms/react-native/fetchWithTimeout'
 import { jsonRpcCall, queryUrl } from '../../../../src/platforms/react-native/rpcFetch'
 
 const neverRespondingFetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
@@ -15,6 +16,13 @@ describe('React Native fetch timeout and cancellation', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.clearAllMocks()
+  })
+
+  it('matches the shared lib-utils queryUrl default deadline (sdk#1374)', () => {
+    // The RN queryUrl/jsonRpcCall default MUST track the non-RN queryUrl
+    // default so a hung RN request can't wait longer than the rest of the
+    // SDK's HTTP calls before this test starts failing.
+    expect(DEFAULT_RN_FETCH_TIMEOUT_MS).toBe(DEFAULT_QUERY_TIMEOUT_MS)
   })
 
   it('bounds a wedged JSON-RPC request with a typed timeout', async () => {
