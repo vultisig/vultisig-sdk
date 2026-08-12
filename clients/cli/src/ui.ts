@@ -23,6 +23,16 @@ import { prompt } from './lib/prompt'
 // Display Formatters
 // ============================================================================
 
+export const escapeTerminalControls = (value: string): string =>
+  Array.from(value, character => {
+    if (character === '\\') return '\\\\'
+
+    const codePoint = character.codePointAt(0) ?? 0
+    const isTerminalControl = codePoint <= 0x1f || codePoint === 0x7f || (codePoint >= 0x80 && codePoint <= 0x9f)
+
+    return isTerminalControl ? `\\x${codePoint.toString(16).padStart(2, '0').toUpperCase()}` : character
+  }).join('')
+
 export function displayBalance(chain: string, balance: Balance, _raw = false): void {
   printResult(chalk.cyan(`\n${chain} Balance:`))
   printResult(`  Amount: ${balance.formattedAmount} ${balance.symbol}`)
@@ -154,7 +164,8 @@ export function displayTransactionPreview(
   chain: Chain,
   memo?: string,
   destinationTag?: number,
-  gas?: GasInfo
+  gas?: GasInfo,
+  contractAddress?: string
 ): void {
   if (gas) {
     const bigIntReplacer = (_k: string, v: unknown) => (typeof v === 'bigint' ? v.toString() : v)
@@ -164,10 +175,10 @@ export function displayTransactionPreview(
   printResult(chalk.cyan('\nTransaction Preview:'))
   printResult(`  From:   ${fromAddress}`)
   printResult(`  To:     ${toAddress}`)
-  printResult(`  Amount: ${amount} ${symbol}`)
+  printResult(`  Amount: ${amount} ${symbol}${contractAddress ? ` (${escapeTerminalControls(contractAddress)})` : ''}`)
   printResult(`  Chain:  ${chain}`)
   if (memo) {
-    printResult(`  Memo:   ${memo}`)
+    printResult(`  Memo:   ${escapeTerminalControls(memo)}`)
   }
   if (destinationTag !== undefined) {
     printResult(`  Destination tag: ${destinationTag}`)

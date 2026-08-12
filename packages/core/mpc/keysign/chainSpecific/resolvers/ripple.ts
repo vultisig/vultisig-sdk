@@ -1,7 +1,10 @@
 import { create } from '@bufbuild/protobuf'
 import { getRippleAccountInfo } from '@vultisig/core-chain/chains/ripple/account/info'
 import { getRippleNetworkInfo } from '@vultisig/core-chain/chains/ripple/network/info'
-import { RippleSpecificSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
+import {
+  RippleSpecificSchema,
+  TransactionType,
+} from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { attempt } from '@vultisig/lib-utils/attempt'
 import { isInError } from '@vultisig/lib-utils/error/isInError'
@@ -9,6 +12,7 @@ import { maxBigInt } from '@vultisig/lib-utils/math/maxBigInt'
 
 import { BuildKeysignPayloadError } from '../../error'
 import { getKeysignCoin } from '../../utils/getKeysignCoin'
+import { originatesRippleTrustSet } from '../../utils/isRippleTrustSet'
 import { resolveDestinationTag } from '../../utils/rippleDestinationTag'
 import { GetChainSpecificResolver } from '../resolver'
 
@@ -100,11 +104,23 @@ export const getRippleChainSpecific: GetChainSpecificResolver<'rippleSpecific'> 
 
   const { account_data, ledger_current_index: ledgerCurrentIndex } = senderAccount
 
+  // State the operation on the wire rather than leaving every signer to infer
+  // it from the coin. A non-native Ripple coin means either "open a trust line"
+  // or "send this token", and the two sign different bytes — a co-signer that
+  // reads the undiscriminated case as a Payment diverges from the TrustSet
+  // built here, and the ceremony never completes.
+  //
+  // Only genuine originations are declared. Stamping a token send would make
+  // every signer agree to build a TrustSet from it, which is worse than the
+  // divergence: the ceremony completes over an operation nobody asked for.
+  const isTrustSet = originatesRippleTrustSet(keysignPayload)
+
   return create(RippleSpecificSchema, {
     sequence: BigInt(account_data.Sequence),
     lastLedgerSequence: getRippleLastLedgerSequence(ledgerCurrentIndex),
     // Fee is the network fee only — the reserve rides on the Payment amount.
     gas: networkFee,
     ...(effectiveDestinationTag !== undefined ? { destinationTag: effectiveDestinationTag } : {}),
+    ...(isTrustSet ? { transactionType: TransactionType.RIPPLE_TRUST_SET } : {}),
   })
 }

@@ -88,4 +88,25 @@ describe('assertSafeDestination', () => {
       /Refusing to build transaction/
     )
   })
+
+  // Prototype-safe map access: Object prototype keys must never produce a false-positive throw.
+  it('does not false-positive on Object.prototype key inputs (prototype-safe access)', () => {
+    expect(() => assertSafeDestination('Solana', 'toString')).not.toThrow()
+    expect(() => assertSafeDestination('Solana', 'constructor')).not.toThrow()
+    expect(() => assertSafeDestination('Solana', '__proto__')).not.toThrow()
+    expect(() => assertSafeDestination('Bitcoin', 'toString')).not.toThrow()
+    expect(() => assertSafeDestination('Ripple', 'toString')).not.toThrow()
+  })
+
+  // EVM trim: a whitespace-padded burn address must still be caught.
+  it('rejects whitespace-padded EVM burn address (trim applied)', () => {
+    expect(() => assertSafeDestination('Ethereum', '  0x000000000000000000000000000000000000dead  ')).toThrow(
+      /Refusing to build transaction/
+    )
+  })
+
+  // Chain-alias normalization: 'xrp' (common API alias) must be treated the same as 'Ripple'.
+  it('rejects XRP black-hole address when chain is passed as lowercase alias "xrp"', () => {
+    expect(() => assertSafeDestination('xrp', 'rrrrrrrrrrrrrrrrrrrrrhoLvTp')).toThrow(/Refusing to build transaction/)
+  })
 })

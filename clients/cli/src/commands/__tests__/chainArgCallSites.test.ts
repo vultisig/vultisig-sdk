@@ -7,6 +7,7 @@
 //   tokens bogus-chain      -> was exit 0 + {"success":true,"data":{"tokens":[]}}
 //   swap-quote bogus-chain  -> was exit 7 + a raw "reading 'ticker'" TypeError
 import { spawnSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -15,6 +16,8 @@ import { describe, expect, it } from 'vitest'
 import { ExitCode } from '../../core/errors'
 
 const CLI_ENTRY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'index.ts')
+const INDEX_SOURCE = readFileSync(CLI_ENTRY, 'utf8')
+const SESSION_SOURCE = readFileSync(path.resolve(path.dirname(CLI_ENTRY), 'interactive', 'session.ts'), 'utf8')
 
 function run(args: string[]) {
   const env: NodeJS.ProcessEnv = { ...process.env, NO_COLOR: '1' }
@@ -44,6 +47,14 @@ describe('tokens <chain> validation', () => {
     const { stdout } = run(['tokens', 'bogus-chain', '-o', 'json'])
 
     expect(stdout).not.toMatch(/"success":\s*true/)
+  })
+})
+
+describe('resolver sweep', () => {
+  it('does not leave any `findChainByName(x) || (x as Chain)` bypasses in the main CLI entrypoints', () => {
+    const unsafeCastPattern = /findChainByName\([^\n]+\)\s*\|\|\s*\([^\n]+ as Chain\)/
+    expect(INDEX_SOURCE).not.toMatch(unsafeCastPattern)
+    expect(SESSION_SOURCE).not.toMatch(unsafeCastPattern)
   })
 })
 

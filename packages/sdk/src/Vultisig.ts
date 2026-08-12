@@ -1,5 +1,6 @@
 import { banxaSupportedChains } from '@vultisig/core-chain/banxa'
 import { Chain } from '@vultisig/core-chain/Chain'
+import { getThorchainSwapDestinationAssets } from '@vultisig/core-chain/chains/cosmos/thor/securedAssets'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { findCoins as coreFindCoins } from '@vultisig/core-chain/coin/find'
 import { knownTokens, knownTokensIndex } from '@vultisig/core-chain/coin/knownTokens'
@@ -381,7 +382,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       // Try loading from disk (two-step flow)
       const pendingData = await this.context.storage.get<VaultData>(`pending:${vaultId}`)
       if (pendingData) {
-        pendingVault = this.vaultManager.createVaultInstance(pendingData) as FastVault
+        pendingVault = this.vaultManager.createVaultInstance(pendingData, false) as FastVault
       }
     }
 
@@ -969,7 +970,9 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    */
   async importVault(vultContent: string, password?: string): Promise<VaultBase> {
     await this.ensureInitialized()
-    const vault = await this.vaultManager.importVault(vultContent, password)
+    const { vault } = await this.vaultManager.importVaultWithResult(vultContent, password, notice => {
+      this.emit('legacyVaultBackupMigrated', notice)
+    })
 
     // VaultManager already handles storage, just emit event
     this.emit('vaultChanged', { vaultId: vault.id })
@@ -1309,6 +1312,27 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       decimals: coin.decimals,
       logo: coin.logo,
       priceProviderId: coin.priceProviderId,
+    }))
+  }
+
+  /**
+   * Get the complete token universe for a swap destination picker.
+   * THORChain secured assets are refreshed from THORChain with the SDK's
+   * explicit offline fallback; other chains retain the built-in registry.
+   */
+  static async getSwapDestinationTokens(chain: Chain): Promise<TokenInfo[]> {
+    const coins = chain === Chain.THORChain ? await getThorchainSwapDestinationAssets() : (knownTokens[chain] ?? [])
+    return coins.map(coin => ({
+      chain: coin.chain,
+      tokenId: coin.id,
+      contractAddress: coin.id,
+      ticker: coin.ticker,
+      decimals: coin.decimals,
+      logo: coin.logo,
+      priceProviderId: coin.priceProviderId,
+      ...('isSecured' in coin && coin.isSecured === true && 'l1Asset' in coin && typeof coin.l1Asset === 'string'
+        ? { isSecured: true as const, l1Asset: coin.l1Asset }
+        : {}),
     }))
   }
 

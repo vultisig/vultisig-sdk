@@ -142,6 +142,7 @@ export function deriveXrpPubkey(compressedPubKeyHex: string, hexChainCode = ''):
 
 export type XrpPaymentTx = {
   TransactionType: 'Payment'
+  Flags?: number
   Account: string
   Destination: string
   Amount: string
@@ -171,7 +172,7 @@ export type BuildXrpSendOptions = {
   signingPubKey: string
   /** Optional destination tag for exchange deposits. */
   destinationTag?: number
-  /** Optional memo string (UTF-8, wrapped in text/plain MIME type). */
+  /** Optional memo string (UTF-8). */
   memo?: string
 }
 
@@ -236,8 +237,16 @@ export function buildXrpSendTx(opts: BuildXrpSendOptions): BuildXrpSendResult {
     throw new Error('Invalid XRP DestinationTag: expected an integer from 0 to 4294967295')
   }
 
+  const memoIsLegacyCarrier =
+    opts.memo !== undefined && (legacyMemoDestinationTag !== undefined || opts.memo === destinationTag?.toString())
+  const hasDistinctMemo = Boolean(opts.memo && !memoIsLegacyCarrier)
+
   const tx: XrpPaymentTx = {
     TransactionType: 'Payment',
+    // WalletCore's protobuf Payment path emits the optional Flags field with
+    // its zero value. Its raw-JSON memo path does not. XRPL accepts both forms,
+    // but they serialize to different signing preimages.
+    ...(hasDistinctMemo ? {} : { Flags: 0 }),
     Account: opts.account,
     Destination: rippleDestination.address,
     Amount: opts.amount,
@@ -251,14 +260,11 @@ export function buildXrpSendTx(opts: BuildXrpSendOptions): BuildXrpSendResult {
     tx.DestinationTag = destinationTag
   }
 
-  const memoIsLegacyCarrier =
-    opts.memo !== undefined && (legacyMemoDestinationTag !== undefined || opts.memo === destinationTag?.toString())
-  if (opts.memo && !memoIsLegacyCarrier) {
+  if (opts.memo && hasDistinctMemo) {
     tx.Memos = [
       {
         Memo: {
           MemoData: utf8ToHex(opts.memo).toUpperCase(),
-          MemoType: utf8ToHex('text/plain').toUpperCase(),
         },
       },
     ]
@@ -286,7 +292,10 @@ export function buildXrpSendTx(opts: BuildXrpSendOptions): BuildXrpSendResult {
     const normalizedS = sBI > SECP256K1_HALF_ORDER ? SECP256K1_ORDER - sBI : sBI
     const sHex = normalizedS.toString(16).padStart(64, '0')
     const derSig = derEncode(rHex, sHex)
-    const signedTx: XrpPaymentTx = { ...tx, TxnSignature: derSig.toUpperCase() }
+    const signedTx: XrpPaymentTx = {
+      ...tx,
+      TxnSignature: derSig.toUpperCase(),
+    }
     const signedBlobHex = xrplEncode(signedTx as unknown as Parameters<typeof xrplEncode>[0])
     const txHash = getRippleTxHash(signedBlobHex)
     return { signedBlobHex, txHash, signedTx }

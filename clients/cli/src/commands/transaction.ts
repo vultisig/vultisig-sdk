@@ -2,14 +2,42 @@
  * Transaction Commands - thin wrapper around vault.send()
  */
 import { normalizeRippleDestination } from '@vultisig/core-chain/chains/ripple/address'
-import type { VaultBase } from '@vultisig/sdk'
+import { getLegacyDestinationTag, resolveDestinationTag } from '@vultisig/core-mpc/keysign/utils/rippleDestinationTag'
+import type { KeysignPayload, VaultBase } from '@vultisig/sdk'
 import { Chain, Vultisig } from '@vultisig/sdk'
 
 import type { CommandContext, SendDryRunResult, SendParams, TransactionResult } from '../core'
 import { buildSendBroadcastIntent, ensureVaultUnlocked, guardedBroadcast } from '../core'
 import { ConfirmationRequiredError } from '../core/errors'
 import { createSpinner, info, isJsonOutput, isNonInteractive, outputJson, warn } from '../lib/output'
-import { confirmTransaction, displayTransactionPreview, displayTransactionResult } from '../ui'
+import { confirmTransaction, displayTransactionPreview, displayTransactionResult, escapeTerminalControls } from '../ui'
+
+const getSendPreviewDetails = (
+  chain: Chain,
+  keysignPayload: KeysignPayload
+): { memo: string | undefined; destinationTag: number | undefined } => {
+  let memo = keysignPayload.memo || undefined
+
+  if (chain !== Chain.Ripple) {
+    return { memo, destinationTag: undefined }
+  }
+
+  const rippleSpecific = keysignPayload.blockchainSpecific
+  if (rippleSpecific.case !== 'rippleSpecific') {
+    throw new Error('Ripple send payload is missing Ripple-specific data')
+  }
+
+  const destinationTag = resolveDestinationTag({
+    destinationTag: rippleSpecific.value.destinationTag,
+    memo,
+  })
+  const legacyMemoDestinationTag = getLegacyDestinationTag(memo)
+  if (legacyMemoDestinationTag !== undefined && legacyMemoDestinationTag === destinationTag) {
+    memo = undefined
+  }
+
+  return { memo, destinationTag }
+}
 
 /**
  * Execute send command - send tokens to an address
@@ -42,12 +70,21 @@ export async function executeSend(
 async function previewDryRun(
   vault: VaultBase,
   params: SendParams,
-  dryResult: { fee: string; feeSymbol: string; total: string },
-  to: string,
-  destinationTag: number | undefined
+  dryResult: {
+    fee: string
+    feeSymbol: string
+    total: string
+    contractAddress?: string
+    keysignPayload: KeysignPayload
+  },
+  to: string
 ): Promise<SendDryRunResult> {
   const balance = await vault.balance(params.chain, params.tokenId)
   const hasInsufficientBalance = parseFloat(dryResult.total) > parseFloat(balance.formattedAmount)
+  const { memo: previewMemo, destinationTag: payloadDestinationTag } = getSendPreviewDetails(
+    params.chain,
+    dryResult.keysignPayload
+  )
 
   // A token send pays its fee out of the NATIVE balance, which `total` no
   // longer covers — so check it separately. Holding the token but no gas is
@@ -61,13 +98,17 @@ async function previewDryRun(
   // check at all — `total` already includes the fee, and running one would
   // just report the same shortfall twice.
   const isTokenSend = balance.tokenId !== undefined
-  const feeBalance = isTokenSend ? await vault.balance(params.chain).catch(() => undefined) : undefined
+  // Max token sends are already gated by the SDK's native-balance check while
+  // calculating the max amount. Keep this preview check for explicit token
+  // amounts, but do not repeat the same balance read for max sends.
+  const shouldCheckNativeFeeBalance = isTokenSend && params.amount !== 'max'
+  const feeBalance = shouldCheckNativeFeeBalance ? await vault.balance(params.chain).catch(() => undefined) : undefined
 
   const warnings: string[] = []
   if (hasInsufficientBalance) {
     warnings.push(`Insufficient balance: you have ${balance.formattedAmount} ${balance.symbol}`)
   }
-  if (isTokenSend && feeBalance === undefined) {
+  if (shouldCheckNativeFeeBalance && feeBalance === undefined) {
     // The gas check needs a second balance read, and it failed. Say so rather
     // than letting its absence read as "gas is fine".
     warnings.push(`Could not check your ${dryResult.feeSymbol} balance for the network fee`)
@@ -87,11 +128,13 @@ async function previewDryRun(
     to,
     amount: params.amount,
     symbol: balance.symbol,
+    ...(dryResult.contractAddress ? { contractAddress: dryResult.contractAddress } : {}),
     fee: dryResult.fee,
     feeSymbol: dryResult.feeSymbol,
     total: dryResult.total,
     balance: balance.formattedAmount,
-    destinationTag,
+    destinationTag: payloadDestinationTag,
+    ...(previewMemo ? { memo: previewMemo } : {}),
     ...(warnings.length > 0 ? { warning: warnings.join('. ') } : {}),
   }
 
@@ -103,8 +146,11 @@ async function previewDryRun(
   info(`\nDry-run preview:`)
   info(`  Chain:   ${result.chain}`)
   info(`  To:      ${result.to}`)
-  info(`  Amount:  ${result.amount} ${result.symbol}`)
+  info(
+    `  Amount:  ${result.amount} ${result.symbol}${result.contractAddress ? ` (${escapeTerminalControls(result.contractAddress)})` : ''}`
+  )
   if (result.destinationTag !== undefined) info(`  Destination tag: ${result.destinationTag}`)
+  if (result.memo) info(`  Memo:    ${escapeTerminalControls(result.memo)}`)
   info(`  Fee:     ${result.fee} ${result.feeSymbol}`)
   info(`  Total:   ${result.total} ${result.symbol}`)
   info(`  Balance: ${result.balance} ${result.symbol}`)
@@ -162,7 +208,7 @@ export async function sendTransaction(
 
   // If user asked for dry-run only, return preview
   if (params.dryRun) {
-    return previewDryRun(vault, params, dryResult, to, destinationTag)
+    return previewDryRun(vault, params, dryResult, to)
   }
 
   // 2. Show preview and get gas estimate
@@ -176,15 +222,17 @@ export async function sendTransaction(
   const balance = await vault.balance(params.chain, params.tokenId)
   if (!isJsonOutput()) {
     const address = await vault.address(params.chain)
+    const preview = getSendPreviewDetails(params.chain, dryResult.keysignPayload)
     displayTransactionPreview(
       address,
       to,
       dryResult.total,
       balance.symbol,
       params.chain,
-      params.memo,
-      destinationTag,
-      gas
+      preview.memo,
+      preview.destinationTag,
+      gas,
+      dryResult.contractAddress
     )
   }
 

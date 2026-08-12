@@ -6,8 +6,6 @@ import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { getThorchainInboundAddress } from '@vultisig/core-chain/chains/cosmos/thor/getThorchainInboundAddress'
 import { getErc20Allowance } from '@vultisig/core-chain/chains/evm/erc20/getErc20Allowance'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
-import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
-import { areEqualCoins } from '@vultisig/core-chain/coin/Coin'
 import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import { getAdvancedSwapQueueEnabled } from '@vultisig/core-chain/swap/native/limitSwapAvailability'
 import {
@@ -75,8 +73,9 @@ export type BuildLimitSwapKeysignPayloadInput = {
  * The limit-ness always lives in the memo (`=<` vs the market `=>`); how that
  * memo reaches the chain depends on the source asset:
  *
- * - **Native RUNE** — `MsgDeposit` on THORChain itself. No inbound vault and no
- *   real destination, so `toAddress` carries the signer's own address as a
+ * - **THORChain-held source** (RUNE, and secured assets custodied on THORChain)
+ *   — `MsgDeposit` on THORChain itself. No inbound vault and no real
+ *   destination, so `toAddress` carries the signer's own address as a
  *   placeholder (the Cosmos signer keys off `isDeposit`, not `toAddress`).
  * - **Native gas asset** (BTC/ETH/AVAX/…) — a plain transfer to the Asgard
  *   inbound vault with the memo in tx `data` / `OP_RETURN`. No swap payload.
@@ -157,7 +156,11 @@ export const buildLimitSwapKeysignPayload = async ({
   const fromCoinHexPublicKey = Buffer.from(fromPublicKey.data()).toString('hex')
   const toCoinHexPublicKey = Buffer.from(toPublicKey.data()).toString('hex')
 
-  const isRuneDeposit = areEqualCoins(fromCoin, chainFeeCoin[Chain.THORChain])
+  // Every THORChain-HELD source deposits, not just RUNE. A secured asset is
+  // custodied on THORChain, so it is deposited by `MsgDeposit` from the vault's
+  // THOR address exactly as RUNE is — there is no Asgard inbound for THORChain,
+  // so the transfer branch below would look one up and refuse outright.
+  const isThorchainDeposit = fromCoin.chain === Chain.THORChain
 
   const inbounds = await getThorchainInboundAddress()
 
@@ -166,16 +169,16 @@ export const buildLimitSwapKeysignPayload = async ({
     swapPayload?: ReturnType<typeof create<typeof THORChainSwapPayloadSchema>>
     approveSpender?: string
   } => {
-    if (isRuneDeposit) {
+    if (isThorchainDeposit) {
       if (shouldBlockRuneDeposit(inbounds)) {
         throw new Error(
-          'THORChain has globally paused trading (or its inbound list is unverifiable); refusing to sign a RUNE limit-order deposit'
+          'THORChain has globally paused trading (or its inbound list is unverifiable); refusing to sign a limit-order deposit'
         )
       }
 
       if (isLimitSwapDestinationHalted({ inbounds, chain: toCoin.chain })) {
         throw new Error(
-          `THORChain has halted ${toCoin.chain} trading; refusing to sign a RUNE limit-order deposit whose outbound could not leave`
+          `THORChain has halted ${toCoin.chain} trading; refusing to sign a limit-order deposit whose outbound could not leave`
         )
       }
 
@@ -232,7 +235,7 @@ export const buildLimitSwapKeysignPayload = async ({
   keysignPayload.blockchainSpecific = await getChainSpecific({
     keysignPayload,
     walletCore,
-    isDeposit: isRuneDeposit,
+    isDeposit: isThorchainDeposit,
   })
 
   if (approveSpender && isChainOfKind(fromCoin.chain, 'evm') && fromCoin.id) {

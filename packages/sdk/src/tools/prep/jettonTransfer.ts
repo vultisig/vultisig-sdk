@@ -24,7 +24,9 @@ export type PrepareJettonTransferTxFromKeysParams = {
   jettonWalletAddress: string
   /** Amount in the Jetton's minimal units (per the Jetton metadata decimals). */
   amount: bigint
-  /** Optional UTF-8 forward comment (≤ 123 bytes, enforced by the cell builder). */
+  /** Whether the recipient account is initialized. Defaults to true for backward compatibility. */
+  isActiveDestination?: boolean
+  /** Optional UTF-8 forward comment; must fit WalletCore's inline Jetton payload. The cap shrinks as `amount` grows (larger VarUInteger encoding leaves fewer bits) — at most ~34 ASCII bytes for large amounts, ~39 for small ones. Throws if it doesn't fit. */
   memo?: string
   /**
    * Sender wallet seqno from `getTonWalletInfo(from).seqno`. First-ever send = 0
@@ -82,6 +84,7 @@ export const prepareJettonTransferTxFromKeys = (
     to: params.receiver,
     jettonWalletAddress: params.jettonWalletAddress,
     amount: params.amount,
+    isActiveDestination: params.isActiveDestination,
     memo: params.memo,
     seqno: params.seqno,
     validUntil: params.validUntil,
