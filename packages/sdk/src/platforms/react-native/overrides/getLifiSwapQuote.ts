@@ -26,7 +26,10 @@ import { solanaConfig } from '@vultisig/core-chain/chains/solana/solanaConfig'
 import { AccountCoinKey } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { GeneralSwapQuote } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
-import { logUnenforcedAggregatorDestination } from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
+import {
+  assertKnownAggregatorRouter,
+  assertLifiApprovalAddress,
+} from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
 import { injectSolanaAtaIfMissing } from '@vultisig/core-chain/swap/general/lifi/api/injectSolanaAtaIfMissing'
 import { MAX_COMBINED_COST_BPS, resolveLifiSlippage } from '@vultisig/core-chain/swap/general/lifi/api/lifiSlippage'
 import {
@@ -192,6 +195,14 @@ export const getLifiSwapQuote = async ({
     }
   }
 
+  const approvalAddr = estimate.approvalAddress
+  if (chainKind === 'evm') {
+    assertKnownAggregatorRouter('li.fi', shouldBePresent(to), transfer.from.chain)
+    if (approvalAddr && approvalAddr !== '0x0000000000000000000000000000000000000000') {
+      await assertLifiApprovalAddress(approvalAddr, transfer.from.chain)
+    }
+  }
+
   return {
     dstAmount: estimate.toAmount,
     provider: 'li.fi',
@@ -238,28 +249,11 @@ export const getLifiSwapQuote = async ({
           swapFee &&
           ([fromToken, toToken].find(token => token.toLowerCase() === swapFeeAddress) ||
             chainFeeCoin[transfer.from.chain].id)
-        // LI.FI `estimate.approvalAddress` is the address that will call
-        // `transferFrom` on the input ERC-20. It can differ from `to` (the
-        // Diamond / router) when an inner executor (e.g. 1inch
-        // AggregationExecutor) pulls the token directly. The field is always
-        // present in the LiFi API response (`Estimate.approvalAddress: string`)
-        // but may be the zero address or equal to `to` for native-token routes.
-        // Pass it through so mcp-ts (and other consumers) can approve the
-        // correct spender instead of the Diamond.
-        //
-        // On-chain proof: tx 0xa3aadf17 (Ethereum, block 25415989) reverted
-        // with "ERC20: transfer amount exceeds allowance". Vault had 9.41 USDC
-        // approved to Diamond (0x9025B8ff…, = `to`) — sufficient. Inner 1inch
-        // executor (0x7f51c134…, = `approvalAddress`) had zero allowance — the
-        // actual transferFrom caller → revert.
-        const approvalAddr = estimate.approvalAddress
+        // LI.FI `estimate.approvalAddress` is route-dependent and can differ
+        // from the Diamond destination. Mirror core's trust boundary: accept
+        // the official Diamond directly, but require an independent benign
+        // Blockaid verdict for every distinct spender.
         const evmTo = shouldBePresent(to)
-        // AGG-02: mirrors core's getLifiSwapQuote.ts — LiFi routes through many different
-        // bridge/DEX contracts by design, so this is logged (never enforced/thrown). See
-        // core's knownAggregatorRouters.ts for the full rationale. This RN override is a
-        // SEPARATE build target (rollup.platforms.config.js redirects core's
-        // getLifiSwapQuote.ts here), so it needs its own call, not just core's.
-        logUnenforcedAggregatorDestination('li.fi', evmTo)
         return {
           evm: {
             from: shouldBePresent(from),

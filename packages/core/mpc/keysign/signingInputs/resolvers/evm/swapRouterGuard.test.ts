@@ -1,6 +1,7 @@
 import { create } from '@bufbuild/protobuf'
 import { initWasm, type WalletCore } from '@trustwallet/wallet-core'
 import { Chain } from '@vultisig/core-chain/Chain'
+import { scanAddressWithBlockaid } from '@vultisig/core-chain/security/blockaid/address'
 import {
   OneInchQuoteSchema,
   OneInchSwapPayloadSchema,
@@ -10,9 +11,18 @@ import { EthereumSpecificSchema } from '@vultisig/core-mpc/types/vultisig/keysig
 import { CoinSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/coin_pb'
 import { Erc20ApprovePayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/erc20_approve_payload_pb'
 import { KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
-import { beforeAll, describe, expect, it } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getEvmSigningInputs } from './index'
+
+vi.mock('@vultisig/core-chain/security/blockaid/address', () => ({ scanAddressWithBlockaid: vi.fn() }))
+
+const mockScanAddressWithBlockaid = vi.mocked(scanAddressWithBlockaid)
+
+beforeEach(() => {
+  mockScanAddressWithBlockaid.mockReset()
+  mockScanAddressWithBlockaid.mockResolvedValue({ resultType: 'Benign', features: ['trusted'] })
+})
 
 // sdk#1358 fund-safety: assertKnownAggregatorRouterOnSigningPath re-asserts the 1inch/kyber
 // router allow-list on the CO-SIGNER signing-input path (not just at quote construction), since
@@ -21,6 +31,8 @@ import { getEvmSigningInputs } from './index'
 // KeysignPayload whose swapPayload.quote.tx.to was never quote-time-validated must be rejected
 // here, and a KeysignPayload carrying the real router must still sign cleanly (no over-blocking).
 const ONE_INCH_V6_ROUTER = '0x111111125421ca6dc452d289314280a0f8842a65'
+const LIFI_DIAMOND = '0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE'
+const LIFI_INNER_EXECUTOR = '0x7f51c134000000000000000000000000000c7e11'
 const ATTACKER_ROUTER = '0x000000000000000000000000000000000000dEaD'
 const COW_VAULT_RELAYER = '0xC92E8bdf79f0507f65a392b0ab4667716BFE0110'
 const SENDER = '0x1234567890123456789012345678901234567890'
@@ -50,13 +62,7 @@ const buildPayload = (routerTo: string, provider = '1inch') =>
       value: create(OneInchSwapPayloadSchema, {
         provider,
         quote: create(OneInchQuoteSchema, {
-          tx: create(OneInchTransactionSchema, {
-            to: routerTo,
-            data: '0xabcdef',
-            value: '0',
-            gasPrice: '0',
-            gas: 0n,
-          }),
+          tx: create(OneInchTransactionSchema, { to: routerTo, data: '0xabcdef', value: '0', gasPrice: '0', gas: 0n }),
         }),
       }),
     },
@@ -70,19 +76,13 @@ describe('getEvmSigningInputs — sdk#1358 aggregator router guard on the signin
   })
 
   it('throws when a 1inch general-swap KeysignPayload carries an unrecognized router as quote.tx.to', async () => {
-    await expect(
-      getEvmSigningInputs({
-        keysignPayload: buildPayload(ATTACKER_ROUTER),
-        walletCore,
-      })
-    ).rejects.toThrow(/unrecognized router/i)
+    await expect(getEvmSigningInputs({ keysignPayload: buildPayload(ATTACKER_ROUTER), walletCore })).rejects.toThrow(
+      /unrecognized router/i
+    )
   })
 
   it('does not over-block a 1inch general-swap KeysignPayload carrying the real router as quote.tx.to', async () => {
-    const inputs = await getEvmSigningInputs({
-      keysignPayload: buildPayload(ONE_INCH_V6_ROUTER),
-      walletCore,
-    })
+    const inputs = await getEvmSigningInputs({ keysignPayload: buildPayload(ONE_INCH_V6_ROUTER), walletCore })
 
     expect(inputs[0]?.toAddress).toBe(ONE_INCH_V6_ROUTER)
   })
@@ -99,30 +99,64 @@ describe('getEvmSigningInputs — sdk#1457 provider-string spoofing guard, end t
   })
 
   it('does not over-block a legit CowSwap payload whose provider label matches the fixed relayer destination', async () => {
-    const inputs = await getEvmSigningInputs({
-      keysignPayload: buildPayload(COW_VAULT_RELAYER, 'cowswap'),
-      walletCore,
-    })
+    const inputs = await getEvmSigningInputs({ keysignPayload: buildPayload(COW_VAULT_RELAYER, 'cowswap'), walletCore })
 
     expect(inputs[0]?.toAddress).toBe(COW_VAULT_RELAYER)
   })
 
   it('throws when a payload labeled cowswap carries a destination that is not the real relayer (relabel-vs-shape mismatch)', async () => {
     await expect(
-      getEvmSigningInputs({
-        keysignPayload: buildPayload(ATTACKER_ROUTER, 'cowswap'),
-        walletCore,
-      })
+      getEvmSigningInputs({ keysignPayload: buildPayload(ATTACKER_ROUTER, 'cowswap'), walletCore })
     ).rejects.toThrow(/unrecognized router/i)
   })
 
   it('throws when a payload is relabelled to an unrecognized provider string (the previously-open bypass)', async () => {
     await expect(
-      getEvmSigningInputs({
-        keysignPayload: buildPayload(ATTACKER_ROUTER, 'totally-not-a-real-provider'),
-        walletCore,
-      })
+      getEvmSigningInputs({ keysignPayload: buildPayload(ATTACKER_ROUTER, 'totally-not-a-real-provider'), walletCore })
     ).rejects.toThrow(/Unrecognized swap provider/)
+  })
+
+  it('throws when a li.fi payload carries a destination outside the official chain-scoped Diamond allowlist', async () => {
+    await expect(
+      getEvmSigningInputs({ keysignPayload: buildPayload(ATTACKER_ROUTER, 'li.fi'), walletCore })
+    ).rejects.toThrow(/unrecognized router/i)
+  })
+
+  it('accepts a li.fi payload carrying the official Diamond for its source chain', async () => {
+    const inputs = await getEvmSigningInputs({ keysignPayload: buildPayload(LIFI_DIAMOND, 'li.fi'), walletCore })
+
+    expect(inputs[0]?.toAddress).toBe(LIFI_DIAMOND)
+  })
+
+  it('accepts a swapkit payload only after an independent benign destination verdict', async () => {
+    const inputs = await getEvmSigningInputs({
+      keysignPayload: buildPayload(ONE_INCH_V6_ROUTER, 'swapkit'),
+      walletCore,
+    })
+
+    expect(inputs[0]?.toAddress).toBe(ONE_INCH_V6_ROUTER)
+    expect(mockScanAddressWithBlockaid).toHaveBeenCalledWith(ONE_INCH_V6_ROUTER, 'ethereum')
+  })
+
+  it('rejects a swapkit co-signer payload when Blockaid does not return Benign', async () => {
+    mockScanAddressWithBlockaid.mockResolvedValueOnce({ resultType: 'Malicious', features: ['drainer'] })
+
+    await expect(
+      getEvmSigningInputs({ keysignPayload: buildPayload(ATTACKER_ROUTER, 'swapkit'), walletCore })
+    ).rejects.toThrow(/Malicious Blockaid verdict/)
+  })
+
+  // This is the most consequential instance of "fail closed on Blockaid" in the repo: unlike
+  // the quote path (which fails in front of the user with a retry available), this runs per
+  // device, mid-ceremony, on a payload every co-signer has already agreed to sign. A scan we
+  // could not obtain must be treated the same as an untrusted destination, not silently
+  // skipped — an unavailable reputation service is not evidence the address is safe.
+  it('fails closed on the co-signer signing path when the Blockaid call itself throws (not just a non-Benign verdict)', async () => {
+    mockScanAddressWithBlockaid.mockRejectedValueOnce(new Error('blockaid unreachable'))
+
+    await expect(
+      getEvmSigningInputs({ keysignPayload: buildPayload(ONE_INCH_V6_ROUTER, 'swapkit'), walletCore })
+    ).rejects.toThrow(/reputation check failed/)
   })
 })
 
@@ -198,5 +232,79 @@ describe('getEvmSigningInputs — sdk#1358 approval-spender bind on the signing-
 
     expect(inputs).toHaveLength(2)
     expect(inputs[1]?.toAddress).toBe(COW_VAULT_RELAYER)
+  })
+
+  it('rejects a distinct LI.FI approval spender without an independent benign verdict', async () => {
+    mockScanAddressWithBlockaid.mockResolvedValueOnce({ resultType: 'Malicious', features: ['drainer'] })
+
+    await expect(
+      getEvmSigningInputs({
+        keysignPayload: buildApprovePayload({
+          routerTo: LIFI_DIAMOND,
+          spender: LIFI_INNER_EXECUTOR,
+          provider: 'li.fi',
+        }),
+        walletCore,
+      })
+    ).rejects.toThrow(/LI\.FI approval spender .*Malicious Blockaid verdict/i)
+  })
+
+  it('signs cleanly for LI.FI when a distinct route spender receives an independent benign verdict', async () => {
+    const inputs = await getEvmSigningInputs({
+      keysignPayload: buildApprovePayload({
+        routerTo: LIFI_DIAMOND,
+        spender: LIFI_INNER_EXECUTOR,
+        provider: 'li.fi',
+      }),
+      walletCore,
+    })
+
+    expect(inputs).toHaveLength(2)
+    expect(inputs[1]?.toAddress).toBe(LIFI_DIAMOND)
+    expect(mockScanAddressWithBlockaid).toHaveBeenCalledWith(LIFI_INNER_EXECUTOR, 'ethereum')
+  })
+
+  it('fails closed for a distinct LI.FI spender when the reputation service is unavailable', async () => {
+    mockScanAddressWithBlockaid.mockRejectedValueOnce(new Error('blockaid unreachable'))
+
+    await expect(
+      getEvmSigningInputs({
+        keysignPayload: buildApprovePayload({
+          routerTo: LIFI_DIAMOND,
+          spender: LIFI_INNER_EXECUTOR,
+          provider: 'li.fi',
+        }),
+        walletCore,
+      })
+    ).rejects.toThrow(/LI\.FI approval spender reputation check failed/i)
+  })
+
+  it('signs LI.FI Diamond approvals without a reputation network call', async () => {
+    const inputs = await getEvmSigningInputs({
+      keysignPayload: buildApprovePayload({
+        routerTo: LIFI_DIAMOND,
+        spender: LIFI_DIAMOND,
+        provider: 'li.fi',
+      }),
+      walletCore,
+    })
+
+    expect(inputs).toHaveLength(2)
+    expect(mockScanAddressWithBlockaid).not.toHaveBeenCalled()
+  })
+
+  it('rejects a swapkit approval spender without an independent benign verdict', async () => {
+    mockScanAddressWithBlockaid.mockResolvedValueOnce({ resultType: 'Warning', features: ['untrusted'] })
+
+    await expect(
+      getEvmSigningInputs({
+        keysignPayload: buildApprovePayload({
+          routerTo: ONE_INCH_V6_ROUTER,
+          spender: ATTACKER_ROUTER,
+          provider: 'swapkit',
+        }),
+        walletCore,
+      })
+    ).rejects.toThrow(/approval spender .*Warning Blockaid verdict/i)
   })
 })

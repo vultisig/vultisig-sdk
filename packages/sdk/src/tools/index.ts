@@ -386,6 +386,7 @@ export {
   type SplTransferResult,
   SUI_NATIVE_COIN_TYPE,
   supportedIbcDestinationsFrom,
+  SwapQuoteExpiredError,
   TRC20_TRANSFER_SELECTOR,
   type UndelegateParams,
   type UnsignedTrc20Transfer,

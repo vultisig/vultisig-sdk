@@ -116,14 +116,13 @@ describe('getSuiSigningInputs — signSui (pre-built PTB)', () => {
       txInputData,
     })
 
-    // EdDSA 'raw' format: generateSignature reverses each 32-byte half, so the
-    // MPC-supplied r/s are the reversed signature halves.
+    // EdDSA 'raw' format uses canonical R || S byte order end to end.
     const rawSignature = privateKey.sign(digest, walletCore.Curve.ed25519)
     const signatures = {
       [hex(digest)]: {
         msg: '',
-        r: hex(rawSignature.slice(0, 32).reverse()),
-        s: hex(rawSignature.slice(32, 64).reverse()),
+        r: hex(rawSignature.slice(0, 32)),
+        s: hex(rawSignature.slice(32, 64)),
         der_signature: '',
       },
     }
