@@ -17,7 +17,7 @@ import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 
 import { AccountCoinKey } from '../../../../coin/AccountCoin'
 import { GeneralSwapQuote } from '../../GeneralSwapQuote'
-import { logUnenforcedAggregatorDestination } from '../../knownAggregatorRouters'
+import { assertKnownAggregatorRouter, assertLifiApprovalAddress } from '../../knownAggregatorRouters'
 import { injectSolanaAtaIfMissing } from './injectSolanaAtaIfMissing'
 import { MAX_COMBINED_COST_BPS, resolveLifiSlippage } from './lifiSlippage'
 
@@ -188,6 +188,14 @@ export const getLifiSwapQuote = async ({
     }
   }
 
+  const approvalAddr = estimate.approvalAddress
+  if (chainKind === 'evm') {
+    assertKnownAggregatorRouter('li.fi', shouldBePresent(to), transfer.from.chain)
+    if (approvalAddr && approvalAddr !== '0x0000000000000000000000000000000000000000') {
+      await assertLifiApprovalAddress(approvalAddr, transfer.from.chain)
+    }
+  }
+
   return {
     dstAmount: estimate.toAmount,
     provider: 'li.fi',
@@ -235,27 +243,13 @@ export const getLifiSwapQuote = async ({
           swapFee &&
           ([fromToken, toToken].find(token => token.toLowerCase() === swapFeeAddress) ||
             chainFeeCoin[transfer.from.chain].id)
-        // LI.FI `estimate.approvalAddress` is the address that will call
-        // `transferFrom` on the input ERC-20. It can differ from `to` (the
-        // Diamond / router) when an inner executor (e.g. 1inch
-        // AggregationExecutor) pulls the token directly. The field is always
-        // present in the LiFi API response (`Estimate.approvalAddress: string`)
-        // but may be the zero address or equal to `to` for native-token routes.
-        // Pass it through so mcp-ts (and other consumers) can approve the
-        // correct spender instead of the Diamond.
-        //
-        // On-chain proof: tx 0xa3aadf17 (Ethereum, block 25415989) reverted
-        // with "ERC20: transfer amount exceeds allowance". Vault had 9.41 USDC
-        // approved to Diamond (0x9025B8ff…, = `to`) — sufficient. Inner 1inch
-        // executor (0x7f51c134…, = `approvalAddress`) had zero allowance — the
-        // actual transferFrom caller → revert.
-        const approvalAddr = estimate.approvalAddress
+        // LI.FI `estimate.approvalAddress` is the spender that will pull the
+        // user's input ERC-20. LI.FI documents it as route-dependent, so it can
+        // differ from the Diamond destination. Treat it as independently
+        // attacker-controlled: the official Diamond is the deterministic fast
+        // path, while a distinct spender must receive an independent benign
+        // Blockaid verdict before it is exposed to consumers.
         const evmTo = shouldBePresent(to)
-        // AGG-02: LiFi routes through many different bridge/DEX contracts by design
-        // (diamond routing, multi-hop, chain-specific deployments) — a hard allowlist
-        // would false-block legitimate routes, so log (never throw). See
-        // knownAggregatorRouters.ts.
-        logUnenforcedAggregatorDestination('li.fi', evmTo)
         return {
           evm: {
             from: shouldBePresent(from),
