@@ -9,7 +9,7 @@
  */
 import bs58check from 'bs58check'
 
-import { fetchJson, formatBalance, ROOT_API_URL } from './rpc'
+import { fetchJson, fetchText, formatBalance, ROOT_API_URL } from './rpc'
 
 // bs58check ships as ESM with a CJS-compat default export depending on the
 // bundler; resolve the decode function once (mirrors chains/tron/rpc.ts).
@@ -149,24 +149,34 @@ export async function getXrpBalance(address: string): Promise<XrpBalance> {
 
 export type TrxBalance = {
   address: string
+  /** Best-effort legacy numeric view. Prefer balanceSunRaw for precision-sensitive callers. */
   balanceSun: number
+  /** Exact raw SUN balance from the RPC response. */
+  balanceSunRaw: string
   balanceTrx: string
   asOf: string
+}
+
+function parseTrxBalanceSun(raw: string): string {
+  const match = raw.match(/"balance"\s*:\s*(\d+)/)
+  return match?.[1] ?? '0'
 }
 
 /** Query the native TRX balance of a TRON address (base58, starts with T). */
 export async function getTrxBalance(address: string): Promise<TrxBalance> {
   if (!address) throw new Error('No TRON address provided.')
   assertTronAddress(address)
-  const response = await fetchJson<{ balance?: number }>('https://tron-rpc.publicnode.com/wallet/getaccount', {
+  const raw = await fetchText('https://tron-rpc.publicnode.com/wallet/getaccount', {
     address,
     visible: true,
   })
-  const sun = response.balance ?? 0
+  const sunRaw = parseTrxBalanceSun(raw)
+  const sun = BigInt(sunRaw)
   return {
     address,
-    balanceSun: sun,
-    balanceTrx: formatBalance(BigInt(sun), 6),
+    balanceSun: Number(sun),
+    balanceSunRaw: sunRaw,
+    balanceTrx: formatBalance(sun, 6),
     asOf: new Date().toISOString(),
   }
 }

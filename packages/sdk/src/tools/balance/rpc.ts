@@ -31,12 +31,7 @@ function isRetryable(error: unknown): boolean {
   return false
 }
 
-/**
- * Generic JSON fetch with retry + timeout. POSTs when `body` is provided,
- * GETs otherwise. Throws on 4xx (client error, no retry) and after exhausting
- * retries on 5xx / network failures.
- */
-export async function fetchJson<T>(url: string, body?: unknown, init?: RequestInit): Promise<T> {
+async function fetchWithRetry(url: string, body?: unknown, init?: RequestInit): Promise<Response> {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       const response = await fetch(url, {
@@ -47,9 +42,7 @@ export async function fetchJson<T>(url: string, body?: unknown, init?: RequestIn
         ...init,
       })
 
-      if (response.ok) {
-        return response.json() as Promise<T>
-      }
+      if (response.ok) return response
 
       // 429 — rate limited; back off and retry while attempts remain.
       if (response.status === 429 && attempt < MAX_RETRIES) {
@@ -78,6 +71,22 @@ export async function fetchJson<T>(url: string, body?: unknown, init?: RequestIn
     }
   }
   throw new Error('unreachable')
+}
+
+/**
+ * Generic JSON fetch with retry + timeout. POSTs when `body` is provided,
+ * GETs otherwise. Throws on 4xx (client error, no retry) and after exhausting
+ * retries on 5xx / network failures.
+ */
+export async function fetchJson<T>(url: string, body?: unknown, init?: RequestInit): Promise<T> {
+  const response = await fetchWithRetry(url, body, init)
+  return response.json() as Promise<T>
+}
+
+/** Same retry/timeout semantics as fetchJson, but returns the raw response text. */
+export async function fetchText(url: string, body?: unknown, init?: RequestInit): Promise<string> {
+  const response = await fetchWithRetry(url, body, init)
+  return response.text()
 }
 
 /**
