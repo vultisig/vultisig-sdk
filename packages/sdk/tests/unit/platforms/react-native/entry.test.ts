@@ -201,6 +201,7 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
 
     expect(rn.TRC20_TRANSFER_SELECTOR).toBe('transfer(address,uint256)')
     expect(rn.SUI_NATIVE_COIN_TYPE).toBe('0x2::sui::SUI')
+    expect(rn.IBC_MSG_TRANSFER_TYPE_URL).toBe('/ibc.applications.transfer.v1.MsgTransfer')
     expect(rn.CONSOLIDATE_CHAINS).toEqual([
       rn.Chain.Bitcoin,
       rn.Chain.Litecoin,
@@ -208,6 +209,34 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
       rn.Chain.BitcoinCash,
       rn.Chain.Dash,
     ])
+  })
+
+  it('exports the canonical IBC prep helper family from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const prep = await import('../../../../src/tools/prep')
+
+    expect(rn.prepareIbcTransfer).toBe(prep.prepareIbcTransfer)
+    expect(rn.normaliseIbcChainId).toBe(prep.normaliseIbcChainId)
+    expect(rn.supportedIbcDestinationsFrom).toBe(prep.supportedIbcDestinationsFrom)
+    expect(rn.IBC_CHANNEL_DEST).toBe(prep.IBC_CHANNEL_DEST)
+    expect(rn.IBC_CHAIN_HRP).toBe(prep.IBC_CHAIN_HRP)
+    expect(rn.IBC_CHAIN_REVISION).toBe(prep.IBC_CHAIN_REVISION)
+
+    const result = rn.prepareIbcTransfer({
+      fromAddress: 'cosmos1skjwj5whet0l88fdwq5w882r5dwskjwjsh0wff',
+      toAddress: 'osmo1skjwj5whet0l88fdwq5w882r5dwskjwje6qlkm',
+      sourceChainId: 'cosmoshub-4',
+      destChainId: 'osmosis-1',
+      amount: 123456n,
+      denom: 'uatom',
+      memo: 'rn-export-check',
+      accountNumber: 7n,
+      sequence: 9n,
+    })
+
+    expect(result.channelId).toBe('channel-141')
+    expect(result.tx.msgs[0].type).toBe(rn.IBC_MSG_TRANSFER_TYPE_URL)
+    expect(rn.supportedIbcDestinationsFrom('cosmoshub-4')).toContain('osmosis-1')
   })
 
   it('exports the RN vault-backup helpers and constants from the RN entry', async () => {
