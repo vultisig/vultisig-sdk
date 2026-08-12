@@ -207,6 +207,13 @@ export { Chain } from './types'
 export type { ChainKind } from '@vultisig/core-chain/ChainKind'
 export { getChainKind, isChainOfKind } from '@vultisig/core-chain/ChainKind'
 
+// Signature algorithm classification — the canonical ECDSA-vs-EdDSA dispatch key,
+// derived from ChainKind. Exposed for the same reason as getChainKind/isChainOfKind:
+// downstream consumers (e.g. agent-backend-ts) were hand-copying EdDSA chain-kind
+// sets instead of routing through the SDK.
+export type { SignatureAlgorithm } from '@vultisig/core-chain/signing/SignatureAlgorithm'
+export { getSignatureAlgorithm, isEddsaChain } from '@vultisig/core-chain/signing/SignatureAlgorithm'
+
 // XRP Ledger issued-currency canonicals — surfaced so consumers stop re-creating
 // `<currency>.<issuer>` ids / 160-bit currency-code normalization outside the SDK.
 export {
