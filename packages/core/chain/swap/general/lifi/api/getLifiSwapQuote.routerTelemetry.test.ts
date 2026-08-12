@@ -1,10 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-// AGG-02 (round-2 spec-level fund-safety audit): LiFi routes through many different
-// bridge/DEX contracts by design (diamond routing, multi-hop, chain-specific deployments),
-// so — unlike 1inch/Kyber — its destination is logged (never enforced/thrown) via
-// knownAggregatorRouters.ts's logUnenforcedAggregatorDestination. This proves that behavior:
-// an unrecognized `to` never blocks the quote, and gets logged for future analysis.
+// sdk#1458: LI.FI routes through many inner bridge/DEX contracts, but the user-facing
+// EVM transaction enters through one officially published, chain-scoped Diamond.
+
+const fixture = vi.hoisted(() => ({
+  destination: '0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE',
+}))
 
 // jscpd:ignore-start — the LiFi module-mock + fixture scaffolding below is intentionally
 // shared with getLifiSwapQuote.integrator.test.ts (same core module under test); the
@@ -20,7 +21,7 @@ vi.mock('@lifi/sdk', () => ({
         gasLimit: '0',
         data: '0x',
         from: '0xfrom',
-        to: '0x000000000000000000000000000000deadbeef', // NOT a known router — never enforced for LiFi
+        to: fixture.destination,
         chainId: 1,
       },
       estimate: {
@@ -70,28 +71,20 @@ const baseInput = {
 }
 // jscpd:ignore-end
 
-describe('getLifiSwapQuote — AGG-02 router telemetry (log-only, never enforced)', () => {
-  let infoSpy: ReturnType<typeof vi.spyOn>
-
+describe('getLifiSwapQuote — sdk#1458 LI.FI Diamond enforcement', () => {
   beforeEach(() => {
     vi.resetModules()
-    infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
-  })
-  afterEach(() => {
-    infoSpy.mockRestore()
+    fixture.destination = '0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE'
   })
 
-  it('does NOT throw for an unrecognized destination — LiFi is never enforced', async () => {
+  it('accepts the official LI.FI Diamond for the source chain', async () => {
     const { getLifiSwapQuote } = await import('./getLifiSwapQuote')
     await expect(getLifiSwapQuote(baseInput as never)).resolves.toBeDefined()
   })
 
-  it('logs the destination via swap-router-telemetry for future analysis', async () => {
+  it('rejects an arbitrary destination before returning a signable quote', async () => {
+    fixture.destination = '0x000000000000000000000000000000deadbeef'
     const { getLifiSwapQuote } = await import('./getLifiSwapQuote')
-    await getLifiSwapQuote(baseInput as never)
-    expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining('swap-router-telemetry'), {
-      provider: 'li.fi',
-      address: '0x000000000000000000000000000000deadbeef',
-    })
+    await expect(getLifiSwapQuote(baseInput as never)).rejects.toThrow(/unrecognized router address/)
   })
 })
