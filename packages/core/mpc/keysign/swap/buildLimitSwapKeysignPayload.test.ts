@@ -131,6 +131,40 @@ describe('buildLimitSwapKeysignPayload', () => {
     })
   })
 
+  // A secured asset is custodied ON THORChain, so it deposits exactly as RUNE
+  // does. Branching on "is this RUNE" instead of "is this on THORChain" sent it
+  // to the transfer branch, which looked for a THORChain Asgard inbound — there
+  // is none — and refused every secured-funded order outright.
+  describe('secured source (MsgDeposit, not a transfer)', () => {
+    const securedUsdcCoin = {
+      chain: Chain.THORChain,
+      address: 'thor1sender',
+      id: 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+      ticker: 'USDC',
+      decimals: 8,
+    }
+
+    it('deposits from the vault THOR address rather than seeking an inbound', async () => {
+      const payload = await buildLimitSwapKeysignPayload({
+        ...baseInput,
+        fromCoin: securedUsdcCoin,
+        toCoin: btcCoin,
+      })
+
+      expect(payload.toAddress).toBe(securedUsdcCoin.address)
+      expect(payload.swapPayload.case).toBeUndefined()
+      expect(mocks.getChainSpecific).toHaveBeenCalledWith(expect.objectContaining({ isDeposit: true }))
+    })
+
+    it('applies the same global-pause gate RUNE gets', async () => {
+      mocks.getThorchainInboundAddress.mockResolvedValue([inbound('BTC', { global_trading_paused: true })])
+
+      await expect(
+        buildLimitSwapKeysignPayload({ ...baseInput, fromCoin: securedUsdcCoin, toCoin: btcCoin })
+      ).rejects.toThrow(/globally paused trading/)
+    })
+  })
+
   describe('native gas asset (inbound vault transfer)', () => {
     it('targets the live Asgard vault and carries no swap payload', async () => {
       const payload = await buildLimitSwapKeysignPayload({ ...baseInput, fromCoin: ethCoin, toCoin: btcCoin })

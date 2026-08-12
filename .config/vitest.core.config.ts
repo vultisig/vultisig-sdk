@@ -19,11 +19,12 @@ export default defineConfig({
       '@vultisig/lib-dkls': resolve(root, 'packages/lib/dkls'),
       '@vultisig/lib-mldsa': resolve(root, 'packages/lib/mldsa'),
       '@vultisig/lib-schnorr': resolve(root, 'packages/lib/schnorr'),
+      '@vultisig/mpc-types': resolve(root, 'packages/mpc-types/src'),
     },
   },
   test: {
     environment: 'node',
-    include: ['packages/core/**/*.test.ts', 'packages/lib/**/*.test.ts'],
+    include: ['packages/core/**/*.test.ts', 'packages/lib/**/*.test.ts', 'packages/mpc-wasm/**/*.test.ts'],
     exclude: ['**/node_modules/**', '**/dist/**'],
     pool: 'forks',
   },
