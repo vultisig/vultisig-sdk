@@ -100,6 +100,18 @@ export function validatePackedExportTargets(manifest, packageRoot) {
   return targets
 }
 
+function validatePackedReactNativeCosmosPayloadExports(packageRoot) {
+  const runtimePath = path.join(packageRoot, 'dist/index.react-native.js')
+  const declarationsPath = path.join(packageRoot, 'dist/index.react-native.d.ts')
+  const runtimeSource = readFileSync(runtimePath, 'utf8')
+  const declarationSource = readFileSync(declarationsPath, 'utf8')
+
+  for (const symbol of ['buildSignAminoKeysignPayload', 'buildSignDirectKeysignPayload']) {
+    assert.ok(runtimeSource.includes(symbol), `react-native bundle exports ${symbol}`)
+    assert.ok(declarationSource.includes(symbol), `react-native types export ${symbol}`)
+  }
+}
+
 export function resolveConditionalTarget(value, activeConditions) {
   if (typeof value === 'string') return value
   if (Array.isArray(value)) {
@@ -497,6 +509,7 @@ export async function checkSdkPackageExports({
     )
 
     const targets = validatePackedExportTargets(sourceManifest, packageRoot)
+    validatePackedReactNativeCosmosPayloadExports(packageRoot)
     const importCases = collectNodeRuntimeCases(sourceManifest, 'import')
     const requireCases = collectNodeRuntimeCases(sourceManifest, 'require')
     if (!importCases.length || !requireCases.length) {
