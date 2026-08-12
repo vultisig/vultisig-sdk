@@ -7,6 +7,7 @@ import test from 'node:test'
 import {
   collectExportTargets,
   collectNodeRuntimeCases,
+  collectTypeCustomConditionSets,
   validatePackedExportTargets,
 } from './check-sdk-package-exports.mjs'
 
@@ -149,4 +150,37 @@ test('a newly added export automatically joins structural and Node runtime cover
       )
     }
   )
+})
+
+test('derives every custom TypeScript declaration condition from the manifest', () => {
+  const manifest = {
+    exports: {
+      '.': {
+        types: {
+          'chrome-extension': './dist/index.chrome-extension.d.ts',
+          browser: './dist/index.browser.d.ts',
+          worker: './dist/index.browser.d.ts',
+          'react-native': './dist/index.react-native.d.ts',
+          default: './dist/index.d.ts',
+        },
+        import: './dist/index.js',
+      },
+      './added': {
+        types: {
+          runtime: {
+            embedded: './dist/added.embedded.d.ts',
+          },
+          default: './dist/added.d.ts',
+        },
+      },
+    },
+  }
+
+  assert.deepEqual(collectTypeCustomConditionSets(manifest), [
+    ['chrome-extension'],
+    ['browser'],
+    ['worker'],
+    ['react-native'],
+    ['runtime', 'embedded'],
+  ])
 })

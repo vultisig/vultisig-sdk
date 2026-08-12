@@ -13,6 +13,7 @@ const sdkRoot = path.join(repoRoot, 'packages/sdk')
 const sdkManifestPath = path.join(sdkRoot, 'package.json')
 const yarnCli = path.join(repoRoot, '.yarn/releases/yarn-4.16.0.cjs')
 const platformTargetPattern = /(?:^|[./-])(browser|chrome-extension|react-native|rn-preamble)(?:[./-]|$)/
+const builtInTypeConditions = new Set(['types', 'import', 'require', 'node', 'node-addons', 'default'])
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -135,6 +136,24 @@ export function collectNodeRuntimeCases(manifest, mode) {
   return cases
 }
 
+export function collectTypeCustomConditionSets(manifest) {
+  const conditionSets = new Map()
+
+  for (const { conditions, target } of collectExportTargets(manifest.exports)) {
+    if (!conditions.includes('types') || !/\.d\.(?:ts|mts|cts)$/.test(target)) continue
+
+    const customConditions = conditions.filter(
+      condition => !builtInTypeConditions.has(condition) && !/^\[\d+\]$/.test(condition)
+    )
+    if (!customConditions.length) continue
+
+    const key = JSON.stringify(customConditions)
+    if (!conditionSets.has(key)) conditionSets.set(key, customConditions)
+  }
+
+  return [...conditionSets.values()]
+}
+
 function writeConsumerFiles(consumerRoot, manifest, importCases, requireCases) {
   writeFileSync(
     path.join(consumerRoot, 'package.json'),
@@ -156,6 +175,7 @@ function writeConsumerFiles(consumerRoot, manifest, importCases, requireCases) {
     `import assert from 'node:assert/strict'
 
 const cases = ${JSON.stringify(importCases, null, 2)}
+const importedModules = new Map()
 for (const { specifier, target } of cases) {
   const resolved = import.meta.resolve(specifier)
   assert.ok(
@@ -164,7 +184,26 @@ for (const { specifier, target } of cases) {
   )
   const imported = await import(specifier)
   assert.ok(imported && typeof imported === 'object', \`\${specifier} import returned a module namespace\`)
+  importedModules.set(specifier, imported)
 }
+
+const root = importedModules.get('@vultisig/sdk')
+const node = importedModules.get('@vultisig/sdk/node')
+const vite = importedModules.get('@vultisig/sdk/vite')
+const electronMain = importedModules.get('@vultisig/sdk/electron/main')
+assert.equal(typeof root?.Vultisig, 'function', 'root import exports Vultisig')
+assert.ok(root?.Chain !== undefined, 'root import exports Chain')
+assert.equal(typeof root?.fiatToAmount, 'function', 'root import exports fiatToAmount')
+assert.equal(typeof root?.normalizeChain, 'function', 'root import exports normalizeChain')
+assert.equal(typeof root?.fromChainAmountExact, 'function', 'root import exports fromChainAmountExact')
+assert.equal(typeof root?.getBlockExplorerUrl, 'function', 'root import exports getBlockExplorerUrl')
+assert.ok(root?.chainRegistry !== undefined, 'root import exports chainRegistry')
+assert.equal(typeof root?.deriveFromChainRegistry, 'function', 'root import exports deriveFromChainRegistry')
+assert.equal(typeof root?.extendChainRegistry, 'function', 'root import exports extendChainRegistry')
+assert.equal(typeof node?.Vultisig, 'function', 'node import exports Vultisig')
+assert.ok(vite && (vite.default || vite), 'vite import resolves')
+assert.equal(typeof electronMain?.Vultisig, 'function', 'electron main import exports Vultisig')
+assert.equal(typeof electronMain?.ElectronMainCrypto, 'function', 'electron main import exports ElectronMainCrypto')
 console.log(\`SDK package import conditions passed for \${cases.length} manifest exports\`)
 `
   )
@@ -175,14 +214,24 @@ console.log(\`SDK package import conditions passed for \${cases.length} manifest
 const path = require('node:path')
 
 const cases = ${JSON.stringify(requireCases, null, 2)}
+const requiredModules = new Map()
 for (const { specifier, target } of cases) {
   const resolved = require.resolve(specifier)
   assert.ok(
     resolved.endsWith(path.normalize(target.slice(2))),
     \`\${specifier} require resolved to \${resolved}, expected \${target}\`
   )
-  assert.notEqual(require(specifier), undefined, \`\${specifier} require returned a value\`)
+  const required = require(specifier)
+  assert.notEqual(required, undefined, \`\${specifier} require returned a value\`)
+  requiredModules.set(specifier, required)
 }
+
+assert.equal(typeof requiredModules.get('@vultisig/sdk')?.Vultisig, 'function', 'root require exports Vultisig')
+assert.equal(
+  typeof requiredModules.get('@vultisig/sdk/electron/main')?.ElectronMainCrypto,
+  'function',
+  'electron main require exports ElectronMainCrypto'
+)
 console.log(\`SDK package require conditions passed for \${cases.length} manifest exports\`)
 `
   )
@@ -190,24 +239,71 @@ console.log(\`SDK package require conditions passed for \${cases.length} manifes
   const typeImports = Object.keys(manifest.exports)
     .map(subpath => `import '${packageSpecifier(manifest.name, subpath)}'`)
     .join('\n')
-  writeFileSync(path.join(consumerRoot, 'verify-types.ts'), `${typeImports}\n`)
   writeFileSync(
-    path.join(consumerRoot, 'tsconfig.json'),
-    `${JSON.stringify(
-      {
-        compilerOptions: {
-          module: 'NodeNext',
-          moduleResolution: 'NodeNext',
-          strict: true,
-          noEmit: true,
-          skipLibCheck: true,
-        },
-        include: ['verify-types.ts'],
-      },
-      null,
-      2
-    )}\n`
+    path.join(consumerRoot, 'verify-types.ts'),
+    `${typeImports}
+import { Chain, chainRegistry, deriveFromChainRegistry, extendChainRegistry } from '@vultisig/sdk'
+import type {
+  ChainDescriptor,
+  ChainDescriptorRegistry,
+  ChainExplorerDescriptor,
+  ChainExtensionRecord,
+  ChainKind,
+  ExtendedChainRegistry,
+} from '@vultisig/sdk'
+import type {
+  ChainDescriptor as ReactNativeChainDescriptor,
+  ExtendedChainRegistry as ReactNativeExtendedChainRegistry,
+} from '@vultisig/sdk/react-native'
+import type { Vultisig } from '@vultisig/sdk/node'
+import type { ElectronMainCrypto, Vultisig as ElectronMainVultisig } from '@vultisig/sdk/electron/main'
+
+const descriptor: ChainDescriptor = chainRegistry[Chain.Ethereum]
+const registry: ChainDescriptorRegistry = chainRegistry
+const explorer: ChainExplorerDescriptor = descriptor.explorer
+const extension: ChainExtensionRecord = deriveFromChainRegistry(({ kind }) => ({ kind }))
+const extended: ExtendedChainRegistry<typeof extension> = extendChainRegistry(extension)
+
+export type RootChain = Chain
+export type NodeClient = Vultisig
+export type ElectronClient = ElectronMainVultisig
+export type ElectronCrypto = ElectronMainCrypto
+export type RegistryKind = ChainKind
+export type RegistryDescriptor = typeof descriptor
+export type RegistryShape = typeof registry
+export type ExplorerShape = typeof explorer
+export type ExtendedShape = typeof extended
+export type ReactNativeDescriptor = ReactNativeChainDescriptor
+export type ReactNativeExtended = ReactNativeExtendedChainRegistry<typeof extension>
+`
   )
+
+  const typeConditionSets = [[], ...collectTypeCustomConditionSets(manifest)]
+  const typeProjects = typeConditionSets.map((customConditions, index) => {
+    const label = customConditions.length ? customConditions.join('+') : 'default'
+    const configPath = path.join(consumerRoot, `tsconfig.types-${index}.json`)
+    writeFileSync(
+      configPath,
+      `${JSON.stringify(
+        {
+          compilerOptions: {
+            module: 'NodeNext',
+            moduleResolution: 'NodeNext',
+            strict: true,
+            noEmit: true,
+            skipLibCheck: true,
+            ...(customConditions.length ? { customConditions } : {}),
+          },
+          include: ['verify-types.ts'],
+        },
+        null,
+        2
+      )}\n`
+    )
+    return { configPath, label }
+  })
+
+  return typeProjects
 }
 
 function installPackedSdk(consumerRoot, tarballPath) {
@@ -270,7 +366,7 @@ export function checkSdkPackageExports({
 
     const consumerRoot = path.join(workRoot, 'consumer')
     mkdirSync(consumerRoot, { recursive: true })
-    writeConsumerFiles(consumerRoot, sourceManifest, importCases, requireCases)
+    const typeProjects = writeConsumerFiles(consumerRoot, sourceManifest, importCases, requireCases)
     const env = installPackedSdk(consumerRoot, tarballPath)
 
     run(process.execPath, ['verify-imports.mjs'], { cwd: consumerRoot, env, stdio: 'inherit' })
@@ -280,15 +376,19 @@ export function checkSdkPackageExports({
     if (!existsSync(typescriptBin)) {
       throw new Error('TypeScript is required to verify SDK declarations from the clean consumer')
     }
-    run(process.execPath, [typescriptBin, '--project', path.join(consumerRoot, 'tsconfig.json')], {
-      cwd: consumerRoot,
-      env,
-      stdio: 'inherit',
-    })
+    for (const { configPath, label } of typeProjects) {
+      run(process.execPath, [typescriptBin, '--project', configPath], {
+        cwd: consumerRoot,
+        env,
+        stdio: 'inherit',
+      })
+      console.log(`SDK package declaration conditions passed: ${label}`)
+    }
 
     console.log(
       `SDK package export manifest OK: ${Object.keys(sourceManifest.exports).length} exports, ` +
-        `${targets.length} conditional targets, ${importCases.length} imports, ${requireCases.length} requires`
+        `${targets.length} conditional targets, ${importCases.length} imports, ${requireCases.length} requires, ` +
+        `${typeProjects.length} declaration condition sets`
     )
   } finally {
     if (ownsWorkRoot) rmSync(workRoot, { recursive: true, force: true })
