@@ -56,6 +56,7 @@ export {
   toHumanUnits,
 } from './utils/convertAmount'
 export { computePersonalSignHash, formatEcdsaSignature65 } from './utils/eip191'
+export { coerceEip712ChainId, computeEip712Hash, toCanonicalEvmSignature } from './utils/eip712'
 export type { FiatToAmountParams } from './utils/fiatToAmount'
 export { fiatToAmount, FiatToAmountError } from './utils/fiatToAmount'
 export { normalizeChain, UnknownChainError } from './utils/normalizeChain'
@@ -379,14 +380,17 @@ export {
   XRP_DANGEROUS_ADDRESSES,
 } from './utils/dangerousAddresses'
 
-// EVM chainId ↔ chain mapping. Single source of truth for the per-chain EVM
-// chainId table so consumers (app, agent-backend-ts) import it instead of
+// EVM chainId ↔ chain mapping plus the canonical priority-fee sanity clamp.
+// Single source of truth for the per-chain EVM chainId table and fee-ceiling
+// policy so consumers (app, agent-backend-ts) import it instead of
 // hand-maintaining their own copies that can drift (the Hyperliquid 998/999
-// client↔server chainId bug class). Native tickers are already exported via
-// `chainFeeCoin`. `getEvmChainId` returns the hex chainId; `getEvmChainByChainId`
-// resolves a hex chainId back to its EvmChain; `getEvmRpcUrl` returns the
-// canonical default/custom-RPC-resolved endpoint for that chain.
+// client↔server chainId bug class and the client-side fee-policy fork class).
+// Native tickers are already exported via `chainFeeCoin`. `getEvmChainId`
+// returns the hex chainId; `getEvmChainByChainId` resolves a hex chainId back to
+// its EvmChain; `getEvmRpcUrl` returns the canonical default/custom-RPC-resolved
+// endpoint for that chain.
 export { getEvmChainByChainId, getEvmChainId, getEvmRpcUrl } from '@vultisig/core-chain/chains/evm/chainInfo'
+export { clampEvmPriorityFee } from '@vultisig/core-chain/tx/fee/evm/clampEvmPriorityFee'
 
 // Noon USDC yield vault SDK boundary. Consumers should use these helpers
 // instead of calling Noon/Accountable APIs or hand-encoding ERC-7540 calldata.
@@ -456,6 +460,22 @@ export { parseKeygenQR } from './utils/parseKeygenQR'
 
 // Notification server vault_id (cross-platform, matches iOS)
 export { computeNotificationVaultId } from './utils/computeNotificationVaultId'
+
+// Vault-backup import/export crypto contract. The node-safe implementations
+// already live in @vultisig/lib-utils and are used internally by the SDK, but
+// consumers could not reach them from the public @vultisig/sdk surface and
+// were pushed into app-local copies of the same .vult backup wire format.
+export { decryptVaultBackupWithPassword } from '@vultisig/lib-utils/encryption/vaultBackup/decryptVaultBackupWithPassword'
+export type { EncryptVaultBackupWithPasswordOptions } from '@vultisig/lib-utils/encryption/vaultBackup/encryptVaultBackupWithPassword'
+export { encryptVaultBackupWithPassword } from '@vultisig/lib-utils/encryption/vaultBackup/encryptVaultBackupWithPassword'
+export {
+  DEFAULT_VAULT_BACKUP_PBKDF2_ITERATIONS,
+  VAULT_BACKUP_BLOB_MAGIC,
+  VAULT_BACKUP_IV_LEN,
+  VAULT_BACKUP_MAGIC_LEN,
+  VAULT_BACKUP_PBKDF2_HEADER_LEN,
+  VAULT_BACKUP_SALT_LEN,
+} from '@vultisig/lib-utils/encryption/vaultBackup/vaultBackupConstants'
 
 // ============================================================================
 // PUBLIC API - Discount Tier Configuration
@@ -1006,6 +1026,7 @@ export {
   SUI_NATIVE_COIN_TYPE,
   supportedIbcDestinationsFrom,
   supportedUtxoBalanceChains,
+  SwapQuoteExpiredError,
   symbolFromCoinGeckoId,
   TERRA_CHAIN_ID,
   TERRA_LCD,

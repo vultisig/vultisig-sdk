@@ -221,11 +221,28 @@ describe('prepareIbcTransfer', () => {
     ).toThrow(/must be positive/)
   })
 
+  it('reverse-resolves the direct cosmoshub-4 → noble-1 route', () => {
+    const r = prepareIbcTransfer({
+      fromChain: 'cosmoshub-4',
+      toChainId: 'noble-1',
+      fromAddress: COSMOS,
+      toAddress: addr('noble'),
+      denom: 'uatom',
+      amount: '42',
+      nowMs: FIXED_NOW,
+    })
+
+    expect(r.destChain).toBe('noble-1')
+    expect(r.sourceChannel).toBe('channel-536')
+    expect(r.routeDescription).toBe('cosmoshub-4 → noble-1 via channel-536')
+    expect(r.msgTransfer.receiver).toBe(addr('noble'))
+  })
+
   it('rejects an unroutable destination and lists supported destinations', () => {
     expect(() =>
       prepareIbcTransfer({
         fromChain: 'cosmoshub-4',
-        toChainId: 'juno-1', // cosmoshub-4 only routes to osmosis-1 in the table
+        toChainId: 'juno-1', // cosmoshub-4 only routes to osmosis-1 / noble-1 in the table
         fromAddress: COSMOS,
         toAddress: addr('juno'),
         denom: 'uatom',
