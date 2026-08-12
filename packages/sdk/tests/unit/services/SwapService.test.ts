@@ -1,4 +1,5 @@
 import { Chain } from '@vultisig/core-chain/Chain'
+import { getSwapQuoteSafetyFingerprint } from '@vultisig/core-chain/swap/quote/getSwapQuoteSafetyFingerprint'
 import { SwapError, SwapErrorCode } from '@vultisig/core-chain/swap/SwapError'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -18,8 +19,12 @@ vi.mock('@vultisig/core-chain/chains/evm/erc20/getErc20Allowance', () => ({
   getErc20Allowance: vi.fn(),
 }))
 
-// Mock isChainOfKind to always work
-vi.mock('@vultisig/core-chain/ChainKind', () => ({
+// Mock isChainOfKind to always work. Partial mock on purpose: chainRegistry builds
+// its descriptors at module scope and calls getChainKind while evm/chainInfo is
+// still importing, so a bare factory here drops that export and the suite dies at
+// import time rather than in a test.
+vi.mock('@vultisig/core-chain/ChainKind', async importOriginal => ({
+  ...(await importOriginal<typeof import('@vultisig/core-chain/ChainKind')>()),
   isChainOfKind: vi.fn((chain: string, kind: string) => {
     const evmChains = ['Ethereum', 'BSC', 'Polygon', 'Avalanche', 'Base', 'Arbitrum', 'Optimism']
     if (kind === 'evm') return evmChains.includes(chain)
@@ -341,6 +346,7 @@ describe('SwapService', () => {
     it('should fetch a swap quote for ERC-20 token requiring approval', async () => {
       const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
       const { getErc20Allowance } = await import('@vultisig/core-chain/chains/evm/erc20/getErc20Allowance')
+      const expiresAt = Date.now() + 45_000
 
       const mockQuote = {
         quote: {
@@ -359,6 +365,9 @@ describe('SwapService', () => {
           },
         },
         discounts: [],
+        requestedAmount: 100_000_000n,
+        expiresAt,
+        safetyFingerprint: 'test-fingerprint',
       }
 
       vi.mocked(findSwapQuote).mockResolvedValue(mockQuote)
@@ -383,9 +392,50 @@ describe('SwapService', () => {
 
       expect(result).toBeDefined()
       expect(result.provider).toBe('1inch')
+      expect(result.expiresAt).toBe(expiresAt)
       expect(result.requiresApproval).toBe(true)
       expect(result.approvalInfo).toBeDefined()
       expect(result.approvalInfo?.spender).toBe('0x1111111254fb6c44bAC0beD2854e76F90643097d')
+    })
+
+    it('keeps the 60-second presentation refresh separate from the raw preparation deadline', async () => {
+      const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
+      const now = Date.now()
+      const preparationExpiresAt = now + 5 * 60_000
+
+      vi.mocked(findSwapQuote).mockResolvedValue({
+        quote: {
+          general: {
+            dstAmount: '1000000',
+            provider: '1inch',
+            tx: { evm: { from: '0xsender', to: '0xrouter', data: '0x', value: '0' } },
+          },
+        },
+        discounts: [],
+        requestedAmount: 1n,
+        expiresAt: preparationExpiresAt,
+        safetyFingerprint: 'test-fingerprint',
+      })
+
+      const result = await service.getQuote({
+        fromCoin: {
+          chain: Chain.Ethereum,
+          address: '0x1234567890abcdef1234567890abcdef12345678',
+          ticker: 'ETH',
+          decimals: 18,
+        },
+        toCoin: {
+          chain: Chain.Ethereum,
+          address: '0x1234567890abcdef1234567890abcdef12345678',
+          ticker: 'USDC',
+          decimals: 6,
+        },
+        amount: 0.000000000000000001,
+      })
+
+      expect(result.expiresAt).toBeGreaterThanOrEqual(now + 60_000)
+      expect(result.expiresAt).toBeLessThanOrEqual(Date.now() + 60_000)
+      expect(result.quote.expiresAt).toBe(preparationExpiresAt)
     })
 
     it('should use the quote approvalAddress as the ERC-20 spender when it differs from the router', async () => {
@@ -413,6 +463,9 @@ describe('SwapService', () => {
           },
         },
         discounts: [],
+        requestedAmount: 100_000_000n,
+        expiresAt: Date.now() + 60_000,
+        safetyFingerprint: 'test-fingerprint',
       })
       vi.mocked(getErc20Allowance).mockResolvedValue(0n)
 
@@ -462,6 +515,9 @@ describe('SwapService', () => {
           },
         },
         discounts: [],
+        requestedAmount: 100_000_000n,
+        expiresAt: Date.now() + 60_000,
+        safetyFingerprint: 'test-fingerprint',
       }
 
       vi.mocked(findSwapQuote).mockResolvedValue(mockQuote)
@@ -509,6 +565,9 @@ describe('SwapService', () => {
           },
         },
         discounts: [],
+        requestedAmount: 1_000_000_000_000_000_000n,
+        expiresAt: Date.now() + 60_000,
+        safetyFingerprint: 'test-fingerprint',
       })
 
       const result = await service.getQuote({
@@ -836,6 +895,9 @@ describe('SwapService', () => {
             },
           },
           discounts: [],
+          requestedAmount: 1_000_000_000_000_000_000n,
+          expiresAt: Date.now() + 60_000,
+          safetyFingerprint: '',
         },
         estimatedOutput: 1000000000n,
         provider: '1inch',
@@ -853,6 +915,24 @@ describe('SwapService', () => {
         balance: 10n ** 18n,
         maxSwapable: 10n ** 18n,
       }
+      mockQuoteResult.quote.safetyFingerprint = getSwapQuoteSafetyFingerprint({
+        from: {
+          chain: Chain.Ethereum,
+          address: '0x1234567890abcdef1234567890abcdef12345678',
+          ticker: 'ETH',
+          decimals: 18,
+        },
+        to: {
+          chain: Chain.Ethereum,
+          address: '0x1234567890abcdef1234567890abcdef12345678',
+          id: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+          ticker: 'USDC',
+          decimals: 6,
+        },
+        requestedAmount: mockQuoteResult.quote.requestedAmount as bigint,
+        expiresAt: mockQuoteResult.quote.expiresAt as number,
+        quote: mockQuoteResult.quote.quote,
+      })
 
       const result = await service.prepareSwapTx({
         fromCoin: {
@@ -903,10 +983,13 @@ describe('SwapService', () => {
             },
           },
           discounts: [],
+          requestedAmount: 100_000_000n,
+          expiresAt: Date.now() - 10_000,
+          safetyFingerprint: '',
         },
         estimatedOutput: 1000000000n,
         provider: 'thorchain',
-        expiresAt: Date.now() - 10000, // Expired
+        expiresAt: Date.now() + 60_000, // Presentation refresh can outlive the raw preparation deadline.
         requiresApproval: false,
         fees: { network: 0n, total: 0n },
         warnings: [],
@@ -968,6 +1051,9 @@ describe('SwapService', () => {
             },
           },
           discounts: [],
+          requestedAmount: 100_000_000n,
+          expiresAt: Date.now() + 60_000,
+          safetyFingerprint: '',
         },
         estimatedOutput: 1000000000000000000n,
         provider: '1inch',
@@ -990,6 +1076,24 @@ describe('SwapService', () => {
         balance: 10n ** 18n,
         maxSwapable: 10n ** 18n,
       }
+      mockQuoteResult.quote.safetyFingerprint = getSwapQuoteSafetyFingerprint({
+        from: {
+          chain: Chain.Ethereum,
+          address: '0x1234567890abcdef1234567890abcdef12345678',
+          id: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+          ticker: 'USDC',
+          decimals: 6,
+        },
+        to: {
+          chain: Chain.Ethereum,
+          address: '0x1234567890abcdef1234567890abcdef12345678',
+          ticker: 'ETH',
+          decimals: 18,
+        },
+        requestedAmount: mockQuoteResult.quote.requestedAmount as bigint,
+        expiresAt: mockQuoteResult.quote.expiresAt as number,
+        quote: mockQuoteResult.quote.quote,
+      })
 
       await service.prepareSwapTx({
         fromCoin: {

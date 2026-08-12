@@ -12,7 +12,7 @@ import { maxBigInt } from '@vultisig/lib-utils/math/maxBigInt'
 
 import { BuildKeysignPayloadError } from '../../error'
 import { getKeysignCoin } from '../../utils/getKeysignCoin'
-import { hasRippleTrustSetShape } from '../../utils/isRippleTrustSet'
+import { originatesRippleTrustSet } from '../../utils/isRippleTrustSet'
 import { resolveDestinationTag } from '../../utils/rippleDestinationTag'
 import { GetChainSpecificResolver } from '../resolver'
 
@@ -109,7 +109,11 @@ export const getRippleChainSpecific: GetChainSpecificResolver<'rippleSpecific'> 
   // or "send this token", and the two sign different bytes — a co-signer that
   // reads the undiscriminated case as a Payment diverges from the TrustSet
   // built here, and the ceremony never completes.
-  const isTrustSet = hasRippleTrustSetShape(keysignPayload)
+  //
+  // Only genuine originations are declared. Stamping a token send would make
+  // every signer agree to build a TrustSet from it, which is worse than the
+  // divergence: the ceremony completes over an operation nobody asked for.
+  const isTrustSet = originatesRippleTrustSet(keysignPayload)
 
   return create(RippleSpecificSchema, {
     sequence: BigInt(account_data.Sequence),

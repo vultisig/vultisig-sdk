@@ -16,6 +16,11 @@ vi.mock('@vultisig/core-chain/coin/find', () => ({
   findCoins: vi.fn(),
 }))
 
+vi.mock('@vultisig/core-chain/chains/cosmos/thor/securedAssets', () => ({
+  getThorchainSwapDestinationAssets: vi.fn(),
+}))
+
+import { getThorchainSwapDestinationAssets } from '@vultisig/core-chain/chains/cosmos/thor/securedAssets'
 import { findCoins } from '@vultisig/core-chain/coin/find'
 import { getCoinPrices } from '@vultisig/core-chain/coin/price/getCoinPrices'
 import { scanSiteWithBlockaid } from '@vultisig/core-chain/security/blockaid/site'
@@ -55,6 +60,32 @@ describe('Vultisig static methods', () => {
       const tokens = Vultisig.getKnownTokens(Chain.Bitcoin)
 
       expect(tokens).toEqual([])
+    })
+  })
+
+  describe('getSwapDestinationTokens', () => {
+    it('uses the dynamic THORChain destination universe for picker clients', async () => {
+      vi.mocked(getThorchainSwapDestinationAssets).mockResolvedValue([
+        {
+          chain: Chain.THORChain,
+          id: 'newchain-coin',
+          ticker: 'COIN',
+          decimals: 8,
+          logo: 'coin',
+          isSecured: true,
+          l1Asset: 'NEWCHAIN.COIN',
+        },
+      ])
+
+      await expect(Vultisig.getSwapDestinationTokens(Chain.THORChain)).resolves.toEqual([
+        expect.objectContaining({
+          chain: Chain.THORChain,
+          tokenId: 'newchain-coin',
+          ticker: 'COIN',
+          isSecured: true,
+          l1Asset: 'NEWCHAIN.COIN',
+        }),
+      ])
     })
   })
 

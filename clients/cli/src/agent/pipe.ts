@@ -189,6 +189,10 @@ export class PipeInterface {
         })
       },
 
+      onSigningRecord: record => {
+        this.emit({ type: 'signing_record', record })
+      },
+
       onError: (message: string, code: AgentErrorCode) => {
         this.emit({ type: 'error', message, code })
       },
