@@ -1,4 +1,3 @@
-import { scanAddressWithBlockaid } from '@vultisig/core-chain/security/blockaid/address'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // LI.FI documents `estimate.approvalAddress` as route-dependent. The official
@@ -7,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const fixture = vi.hoisted(() => ({
   approvalAddress: undefined as string | undefined,
+  scanAddressWithBlockaid: vi.fn(),
 }))
 
 // jscpd:ignore-start — the LiFi module-mock + fixture scaffolding below is intentionally
@@ -33,7 +33,9 @@ vi.mock('@lifi/sdk', () => ({
       },
     }),
 }))
-vi.mock('@vultisig/core-chain/security/blockaid/address', () => ({ scanAddressWithBlockaid: vi.fn() }))
+vi.mock('../../../../security/blockaid/address', () => ({
+  scanAddressWithBlockaid: fixture.scanAddressWithBlockaid,
+}))
 vi.mock('@vultisig/core-chain/ChainKind', () => ({
   getChainKind: () => 'evm',
   DeriveChainKind: {},
@@ -77,7 +79,7 @@ const baseInput = {
 const LIFI_DIAMOND = '0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE'
 const INNER_EXECUTOR = '0x7f51c134000000000000000000000000000c7e11'
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
-const mockScanAddressWithBlockaid = vi.mocked(scanAddressWithBlockaid)
+const mockScanAddressWithBlockaid = fixture.scanAddressWithBlockaid
 
 const getEvmTx = async () => {
   const { getLifiSwapQuote } = await import('./getLifiSwapQuote')
