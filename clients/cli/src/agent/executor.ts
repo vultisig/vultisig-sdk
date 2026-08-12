@@ -383,6 +383,47 @@ export class AgentExecutor {
   }
 
   /**
+   * If the transaction that will actually be signed carries ERC-20 `transfer`
+   * calldata, decode its destination and cross-check it against the producer's
+   * declared recipient. Returns the calldata recipient (the address funds
+   * really move to, hence authoritative for the summary) when the signed tx is
+   * a transfer, or null otherwise.
+   *
+   * Reads the signed tx via {@link extractNestedTx} — the SAME resolution the
+   * signer uses (`swap_tx || send_tx || tx || txArgs.tx`) — not `txArgs.tx`
+   * alone: a `send_tx`/`tx`/`swap_tx` envelope, or one carrying both a benign
+   * `txArgs.tx` and a malicious higher-precedence key, must not be able to move
+   * funds to an address the consent summary never showed. Fails closed —
+   * clearing the buffered tx and throwing — on malformed transfer calldata or a
+   * producer/calldata recipient mismatch, so a divergent envelope can never be
+   * signed. Invoked before the branch-specific summaries below so a transfer
+   * cannot be disguised as a swap/contract-call to skip the check.
+   */
+  private assertConsistentTransferRecipient(p: any): string | null {
+    const signedTx = extractNestedTx(p)
+    const calldata = typeof signedTx?.data === 'string' ? (signedTx.data as string) : ''
+    if (calldata === '' || calldata === '0x') return null
+
+    let calldataRecipient: string | null
+    try {
+      calldataRecipient = decodeErc20TransferRecipient(calldata)
+    } catch (error) {
+      this.clearPendingTransaction()
+      throw error
+    }
+    if (!calldataRecipient) return null
+
+    const producerRecipient = typeof p?.txArgs?.to === 'string' ? (p.txArgs.to as string) : ''
+    if (producerRecipient && calldataRecipient.toLowerCase() !== producerRecipient.toLowerCase()) {
+      this.clearPendingTransaction()
+      throw new Error(
+        `ERC-20 recipient mismatch — refusing to sign: txArgs.to ${producerRecipient} does not match calldata destination ${calldataRecipient}`
+      )
+    }
+    return calldataRecipient
+  }
+
+  /**
    * Human-readable one-line summary of the currently-buffered server tx
    * (set by storeServerTransaction), for the pre-sign confirmation prompt.
    * Returns null when nothing is buffered (e.g. sign_typed_data, which has
@@ -393,6 +434,12 @@ export class AgentExecutor {
     if (!stored) return null
     const p = stored.payload as any
     const labels = (p?.resolved?.labels ?? {}) as Record<string, string>
+
+    // Fail closed on any signed ERC-20 transfer whose destination diverges from
+    // the producer's declared recipient (or whose transfer calldata is
+    // malformed) BEFORE rendering any branch-specific summary — a transfer must
+    // not be able to hide behind a swap/contract-call head to skip the check.
+    const transferRecipient = this.assertConsistentTransferRecipient(p)
 
     // Design B: Polymarket flat-tx-builder bridge envelopes carry no swap/send
     // token labels, so the generic summaries below degrade to "send ? to ?".
@@ -436,32 +483,23 @@ export class AgentExecutor {
     const symbol = labels.token_resolved || labels.token_symbol || ''
     const amountWithSymbol = symbol && !amount.endsWith(` ${symbol}`) ? `${amount} ${symbol}` : amount
     // Name the token contract from the payload that gets signed, not from label
-    // text: an EVM token send executes against `txArgs.tx.to` (the contract,
-    // with transfer calldata) while `txArgs.to` is the recipient. A native send
-    // has empty calldata and tx.to === recipient, so it gains nothing here.
-    // Non-EVM envelopes carry no `txArgs.tx` and are likewise unchanged.
-    const contractTo = typeof p?.txArgs?.tx?.to === 'string' ? (p.txArgs.tx.to as string) : ''
-    const calldata = typeof p?.txArgs?.tx?.data === 'string' ? (p.txArgs.tx.data as string) : ''
+    // text: an EVM token send executes against the signed tx's `to` (the
+    // contract, with transfer calldata) while `txArgs.to` is the recipient. A
+    // native send has empty calldata and tx.to === recipient, so it gains
+    // nothing here. Non-EVM envelopes carry no signable EVM tx and are likewise
+    // unchanged. Resolve via `extractNestedTx` so the summary describes the same
+    // tx the signer consumes (`swap_tx || send_tx || tx || txArgs.tx`).
+    const signedTx = extractNestedTx(p)
+    const contractTo = typeof signedTx?.to === 'string' ? (signedTx.to as string) : ''
+    const calldata = typeof signedTx?.data === 'string' ? (signedTx.data as string) : ''
     const isContractSend = !!contractTo && calldata !== '' && calldata !== '0x'
     const producerRecipient = typeof p?.txArgs?.to === 'string' ? (p.txArgs.to as string) : ''
-    let calldataRecipient: string | null = null
-    try {
-      calldataRecipient = isContractSend ? decodeErc20TransferRecipient(calldata) : null
-    } catch (error) {
-      this.clearPendingTransaction()
-      throw error
-    }
-    if (calldataRecipient && producerRecipient && calldataRecipient.toLowerCase() !== producerRecipient.toLowerCase()) {
-      this.clearPendingTransaction()
-      throw new Error(
-        `ERC-20 recipient mismatch — refusing to sign: txArgs.to ${producerRecipient} does not match calldata destination ${calldataRecipient}`
-      )
-    }
-    // For ERC-20 transfer calldata, this decoded address is the value that will
-    // receive funds. It therefore owns both the rendered summary and the exact
-    // string passed to the confirmation policy; producer labels are fallback
-    // text only for native, non-EVM, and non-transfer envelopes.
-    const to = calldataRecipient || producerRecipient || labels.recipient_echo || '?'
+    // `transferRecipient` (decoded + cross-checked above) is the value that will
+    // receive funds for an ERC-20 transfer. It therefore owns both the rendered
+    // summary and the exact string passed to the confirmation policy; producer
+    // labels are fallback text only for native, non-EVM, and non-transfer
+    // envelopes.
+    const to = transferRecipient || producerRecipient || labels.recipient_echo || '?'
     const contractPart =
       isContractSend && contractTo.toLowerCase() !== to.toLowerCase() ? ` (token contract ${contractTo})` : ''
     return `send ${amountWithSymbol} on ${stored.chain} to ${to}${contractPart}`

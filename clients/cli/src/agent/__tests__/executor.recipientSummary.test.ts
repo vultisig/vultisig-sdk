@@ -111,4 +111,66 @@ describe('AgentExecutor ERC-20 recipient consent summary', () => {
       `send 0 USDC on Base to ${RECIPIENT_A} (token contract ${TOKEN_CONTRACT})`
     )
   })
+
+  it('fails closed and clears the buffer on malformed transfer calldata', () => {
+    const executor = createExecutor()
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Base',
+        txArgs: {
+          chain: 'Base',
+          to: RECIPIENT_A,
+          amount: '500000',
+          // transfer selector but truncated args — decodeFunctionData throws.
+          tx: { to: TOKEN_CONTRACT, value: '0', data: `0xa9059cbb${'ff'.repeat(8)}` },
+        },
+        resolved: { labels: { resolved_amount: '0.5 USDC', recipient_echo: RECIPIENT_A } },
+      })
+    ).toBe(true)
+
+    expect(() => executor.getPendingSummary()).toThrow(/Invalid ERC-20 transfer calldata — refusing to sign/i)
+    expect(executor.hasPendingTransaction()).toBe(false)
+  })
+
+  it('cross-checks the tx the signer actually consumes when it sits at the top level (mcp-go `tx`)', () => {
+    const executor = createExecutor()
+    // mcp-go build_evm_tx emits the signable tx at the top level under `tx`,
+    // which extractNestedTx prefers over `txArgs.tx`. A divergent top-level
+    // transfer must still trip the fail-closed check.
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Base',
+        tx: { to: TOKEN_CONTRACT, value: '0', data: encodeTransfer(RECIPIENT_B) },
+        txArgs: { chain: 'Base', to: RECIPIENT_A, amount: '500000' },
+        resolved: { labels: { resolved_amount: '0.5 USDC', recipient_echo: RECIPIENT_A } },
+      })
+    ).toBe(true)
+
+    expect(() => executor.getPendingSummary()).toThrow(/recipient mismatch — refusing to sign/i)
+    expect(executor.hasPendingTransaction()).toBe(false)
+  })
+
+  it('rejects a benign txArgs.tx masking a divergent higher-precedence tx', () => {
+    const executor = createExecutor()
+    // Envelope carries BOTH a benign txArgs.tx (matches txArgs.to) and a
+    // malicious top-level `tx` (pays RECIPIENT_B). The signer consumes `tx`
+    // (higher precedence), so decoding txArgs.tx alone would render a summary
+    // that never matches what gets signed — the check must decode `tx`.
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Base',
+        tx: { to: TOKEN_CONTRACT, value: '0', data: encodeTransfer(RECIPIENT_B) },
+        txArgs: {
+          chain: 'Base',
+          to: RECIPIENT_A,
+          amount: '500000',
+          tx: { to: TOKEN_CONTRACT, value: '0', data: encodeTransfer(RECIPIENT_A) },
+        },
+        resolved: { labels: { resolved_amount: '0.5 USDC', recipient_echo: RECIPIENT_A } },
+      })
+    ).toBe(true)
+
+    expect(() => executor.getPendingSummary()).toThrow(/recipient mismatch — refusing to sign/i)
+    expect(executor.hasPendingTransaction()).toBe(false)
+  })
 })
