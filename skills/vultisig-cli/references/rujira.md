@@ -70,7 +70,7 @@ vultisig rujira deposit --asset BTC.BTC --amount 100000 -o json
     "chain": "Bitcoin",
     "asset": "BTC.BTC",
     "inboundAddress": "bc1q...",
-    "memo": "=:BTC/BTC:thor1abc...",
+    "memo": "secure+:thor1abc...",
     "minimumAmount": "10000"
   }
 }
@@ -129,7 +129,7 @@ vultisig rujira withdraw \
     "asset": "BTC.BTC",
     "amount": "100000",
     "destination": "bc1q...",
-    "memo": "-:BTC.BTC:bc1q...",
+    "memo": "secure-:bc1q...",
     "estimatedFee": "5000"
   },
   "result": {
