@@ -1,9 +1,26 @@
 import { describe, expect, it } from 'vitest'
 
 import * as sdk from '../../../src/index'
+import * as dangerousAddresses from '../../../src/utils/dangerousAddresses'
 import { cosmosTxFeeGasParityCases } from '../../fixtures/cosmosTxFeeGasParity'
 
+const dangerousAddressCanonicalExports = [
+  'EVM_DANGEROUS_ADDRESSES',
+  'SOLANA_DANGEROUS_ADDRESSES',
+  'UTXO_DANGEROUS_ADDRESSES',
+  'XRP_DANGEROUS_ADDRESSES',
+  'getEvmDangerousReason',
+  'isEvmBurnAddress',
+  'getChainDangerousReason',
+  'assertSafeEvmDestination',
+  'assertSafeDestination',
+] as const
+
 describe('@vultisig/sdk public exports', () => {
+  it.each(dangerousAddressCanonicalExports)('re-exports dangerous-address canonical %s by identity', name => {
+    expect(sdk[name]).toBe(dangerousAddresses[name])
+  })
+
   it('exports fiatToAmount, toChainAmount, and chain-reference normalization utilities', () => {
     expect(typeof sdk.fiatToAmount).toBe('function')
     expect(typeof sdk.toChainAmount).toBe('function')
@@ -12,6 +29,13 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.FiatToAmountError).toBe('function')
     expect(typeof sdk.ChainAmountParseError).toBe('function')
     expect(typeof sdk.UnknownChainError).toBe('function')
+  })
+
+  it('exports canonical EIP-712 helpers for first-party consumers', () => {
+    expect(typeof sdk.coerceEip712ChainId).toBe('function')
+    expect(typeof sdk.computeEip712Hash).toBe('function')
+    expect(typeof sdk.toCanonicalEvmSignature).toBe('function')
+    expect(sdk.coerceEip712ChainId('0x89')).toBe(137)
   })
 
   it('exports the hardened toChainAmount helper and error class with scientific-notation support', () => {
@@ -127,6 +151,18 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.getSplTokenBalance).toBe('function')
   })
 
+  it('exports canonical swap tracker URL helpers for first-party consumers', () => {
+    expect(typeof sdk.getSwapExplorerUrl).toBe('function')
+    expect(Array.isArray(sdk.swapExplorerProviders)).toBe(true)
+    expect(
+      sdk.getSwapExplorerUrl({
+        provider: 'li.fi',
+        txHash: '0xabc',
+        fromChain: sdk.Chain.Base,
+      })
+    ).toBe('https://scan.li.fi/tx/0xabc')
+  })
+
   it('exports Noon USDC yield helpers for Windows and Station consumers', () => {
     expect(sdk.noonUsdcVaultConfig).toBeDefined()
     expect(typeof sdk.encodeNoonDeposit).toBe('function')
@@ -181,11 +217,18 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.thorchainSecuredAssetFallback.length).toBeGreaterThan(10)
   })
 
-  it('exports canonical EVM chain-id helpers from the root sdk surface', () => {
+  it('exports canonical EVM chain-id, RPC, and priority-fee-clamp helpers from the root sdk surface', () => {
     expect(typeof sdk.getEvmChainId).toBe('function')
     expect(typeof sdk.getEvmChainByChainId).toBe('function')
+    expect(typeof sdk.getEvmRpcUrl).toBe('function')
+    expect(typeof sdk.clampEvmPriorityFee).toBe('function')
     expect(sdk.getEvmChainId(sdk.Chain.Mantle)).toBe('0x1388')
     expect(sdk.getEvmChainByChainId('0x3e7')).toBe(sdk.Chain.Hyperliquid)
+    expect(sdk.getEvmRpcUrl(sdk.Chain.Ethereum)).toBe('https://api.vultisig.com/eth/')
+    expect(sdk.getEvmRpcUrl(sdk.Chain.Hyperliquid)).toBe('https://api.vultisig.com/hyperevm/')
+    expect(
+      sdk.clampEvmPriorityFee(sdk.Chain.Base as Parameters<typeof sdk.clampEvmPriorityFee>[0], 75n * 1_000_000_000n)
+    ).toBe(50n * 1_000_000_000n)
   })
 
   it('exports gas comparison helpers from the root sdk surface', () => {
@@ -215,10 +258,30 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.MAYA_SEND_FEE_BASE_UNITS).toBe(2_000_000_000n)
   })
 
+  it('exports the Cosmos staking gas limit helper, which the send-fee parity matrix does not cover', () => {
+    expect(sdk.getCosmosStakingGasLimit({ chain: sdk.Chain.Cosmos })).toBe(350_000n)
+    expect(sdk.getCosmosStakingGasLimit({ chain: sdk.Chain.Cosmos, msgCount: 2 })).toBe(437_500n)
+  })
+
   it('exports seedphrase import chain support policy for consumers', () => {
     expect(Array.isArray(sdk.SEEDPHRASE_IMPORT_SUPPORTED_CHAINS)).toBe(true)
     expect(Array.isArray(sdk.SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS)).toBe(true)
     expect(typeof sdk.isSeedphraseImportSupportedChain).toBe('function')
+  })
+
+  it('exports the canonical node vault-backup helpers and constants from the root surface', async () => {
+    const libEncrypt = await import('@vultisig/lib-utils/encryption/vaultBackup/encryptVaultBackupWithPassword')
+    const libDecrypt = await import('@vultisig/lib-utils/encryption/vaultBackup/decryptVaultBackupWithPassword')
+    const constants = await import('@vultisig/lib-utils/encryption/vaultBackup/vaultBackupConstants')
+
+    expect(sdk.encryptVaultBackupWithPassword).toBe(libEncrypt.encryptVaultBackupWithPassword)
+    expect(sdk.decryptVaultBackupWithPassword).toBe(libDecrypt.decryptVaultBackupWithPassword)
+    expect(sdk.DEFAULT_VAULT_BACKUP_PBKDF2_ITERATIONS).toBe(constants.DEFAULT_VAULT_BACKUP_PBKDF2_ITERATIONS)
+    expect(Buffer.from(sdk.VAULT_BACKUP_BLOB_MAGIC)).toEqual(Buffer.from(constants.VAULT_BACKUP_BLOB_MAGIC))
+    expect(sdk.VAULT_BACKUP_SALT_LEN).toBe(constants.VAULT_BACKUP_SALT_LEN)
+    expect(sdk.VAULT_BACKUP_IV_LEN).toBe(constants.VAULT_BACKUP_IV_LEN)
+    expect(sdk.VAULT_BACKUP_MAGIC_LEN).toBe(constants.VAULT_BACKUP_MAGIC_LEN)
+    expect(sdk.VAULT_BACKUP_PBKDF2_HEADER_LEN).toBe(constants.VAULT_BACKUP_PBKDF2_HEADER_LEN)
   })
 
   it('exports canonical defaultChains helpers for app onboarding/import parity', () => {

@@ -1,0 +1,19 @@
+{
+  "_description": "Shared WalletCore/WASM and RN-JS golden vector for a TON Jetton transfer with a UTF-8 forward comment to an initialized destination.",
+  "publicKeyEd25519Hex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "senderAddress": "UQCf6aQfV3vc8KLtPI_lROY64hUeR1oyNfdbwXB-gwDaKZmi",
+  "recipientAddress": "0:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "jettonWalletAddress": "0:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "jettonMasterAddress": "0:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "amountMinimalUnits": "5000000",
+  "gasAmountNanotons": "80000000",
+  "forwardAmountNanotons": "1",
+  "memo": "hello",
+  "bounceable": true,
+  "isActiveDestination": true,
+  "sequenceNumber": 7,
+  "expireAt": 1800000000,
+  "workchain": 0,
+  "subWalletId": 698983191,
+  "expectedSigningHashHex": "932adca879a7c18e4a3d34cba372cb5ad57b0c75533a70a256fa451fd0d46955"
+}

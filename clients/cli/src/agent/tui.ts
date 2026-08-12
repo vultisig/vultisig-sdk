@@ -195,8 +195,8 @@ export class ChatTUI {
 
       onAssistantMessage: (content: string) => {
         if (this.isStreaming) {
-          // Deltas were collected; render the full text with markdown
-          process.stdout.write(renderMarkdown(this.currentStreamText) + '\n')
+          // Prefer the authoritative terminal message over collected deltas
+          process.stdout.write(renderMarkdown(content || this.currentStreamText) + '\n')
           this.isStreaming = false
         } else if (content && content !== this.currentStreamText) {
           // Print full message with markdown rendering
