@@ -36,6 +36,7 @@ type PreviewCase = {
   }
   payloadMemo?: string
   payloadDestinationTag?: number
+  contractAddress?: string
   expectedTo: string
   expectedMemo?: string
   expectedDestinationTag?: number
@@ -88,6 +89,12 @@ const cases: PreviewCase[] = [
     expectedTo: '0xrecipient',
     expectedMemo: 'memo-from-signable-payload',
   },
+  {
+    name: 'token send discloses the resolved contract',
+    params: { chain: Chain.Ethereum, to: '0xrecipient', amount: '1.0' },
+    contractAddress: '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174',
+    expectedTo: '0xrecipient',
+  },
 ]
 
 function makeVault(testCase: PreviewCase): { vault: VaultBase; keysignPayload: KeysignPayload } {
@@ -108,6 +115,7 @@ function makeVault(testCase: PreviewCase): { vault: VaultBase; keysignPayload: K
       fee: '0.000015',
       feeSymbol: testCase.params.chain === Chain.Ripple ? 'XRP' : 'ETH',
       total: '1.000015',
+      ...(testCase.contractAddress ? { contractAddress: testCase.contractAddress } : {}),
       keysignPayload,
     }),
     gas: vi.fn().mockResolvedValue(GAS),
@@ -143,7 +151,8 @@ async function expectSignablePayloadPreview(testCase: PreviewCase): Promise<void
     testCase.params.chain,
     testCase.expectedMemo,
     testCase.expectedDestinationTag,
-    GAS
+    GAS,
+    testCase.contractAddress
   )
 }
 
@@ -156,6 +165,12 @@ describe('send confirmation preview', () => {
 
   it('reports a non-Ripple memo from the signable payload', async () => {
     const testCase = cases.find(({ params }) => params.chain === Chain.Ethereum)
+    expect(testCase).toBeDefined()
+    await expectSignablePayloadPreview(testCase!)
+  })
+
+  it('passes the resolved token contract through to the confirmation preview', async () => {
+    const testCase = cases.find(({ contractAddress }) => contractAddress !== undefined)
     expect(testCase).toBeDefined()
     await expectSignablePayloadPreview(testCase!)
   })

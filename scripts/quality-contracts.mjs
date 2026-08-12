@@ -24,6 +24,10 @@ const CLI_ENTRY = path.join(repoRoot, 'clients/cli/dist/index.js')
 const SDK_DIST_MARKER = path.join(repoRoot, 'packages/sdk/dist/index.node.esm.js')
 const YARN_CLI = path.join(repoRoot, '.yarn/releases/yarn-4.16.0.cjs')
 const PACKAGE_CONTRACT_WORKSPACES = ['@vultisig/mpc-types', '@vultisig/mpc-wasm']
+const WINDOWS_CORE_CHAIN_EXPORTS = [
+  './chains/thorchain/ruji/services/fetchMergeableTokenBalances',
+  './chains/thorchain/ruji/services/fetchStakeView',
+]
 const NODE_BUILTINS = new Set(builtinModules.map(name => name.replace(/^node:/, '')))
 
 /** Collect relative paths like `./dist/foo.js` from package.json `exports` */
@@ -123,6 +127,30 @@ function validateTarballExportFiles(packageRoot) {
     const abs = packageRelativePath(packageRoot, rel)
     if (!existsSync(abs)) {
       throw new Error(`${pkg.name} export target missing from packed tarball: ${rel} -> ${abs}`)
+    }
+  }
+}
+
+function validateWindowsCoreChainExports(packageRoot) {
+  const pkgPath = path.join(packageRoot, 'package.json')
+  const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'))
+
+  for (const subpath of WINDOWS_CORE_CHAIN_EXPORTS) {
+    const contract = pkg.exports?.[subpath]
+    if (!contract) {
+      throw new Error(`@vultisig/core-chain is missing a Windows consumer export: ${subpath}`)
+    }
+
+    const rels = collectExportRelativePaths(contract)
+    if (!rels.size) {
+      throw new Error(`@vultisig/core-chain Windows consumer export has no target: ${subpath}`)
+    }
+
+    for (const rel of rels) {
+      const abs = packageRelativePath(packageRoot, rel)
+      if (!existsSync(abs)) {
+        throw new Error(`@vultisig/core-chain Windows consumer target is missing: ${subpath} -> ${rel}`)
+      }
     }
   }
 }
@@ -554,7 +582,11 @@ function main() {
 
     const { tgzPath: libUtilsTgzPath } = validatePackedWorkspaceExports(workRoot, '@vultisig/lib-utils')
 
-    const { tgzPath: coreChainTgzPath } = validatePackedWorkspaceExports(workRoot, '@vultisig/core-chain')
+    const { packageRoot: coreChainPackageRoot, tgzPath: coreChainTgzPath } = validatePackedWorkspaceExports(
+      workRoot,
+      '@vultisig/core-chain'
+    )
+    validateWindowsCoreChainExports(coreChainPackageRoot)
 
     const { tgzPath: clientSharedTgzPath } = validatePackedWorkspaceExports(workRoot, '@vultisig/client-shared')
 
