@@ -16,8 +16,10 @@ import { KeysignPayloadSchema } from '../../../../types/vultisig/keysign/v1/keys
 import {
   assertEnforcedSwapApprovalSpenderBound,
   assertKnownAggregatorRouterOnSigningPath,
+  assertLegacyUnattributedAddressReputation,
   assertLifiApprovalAddress,
   assertSwapKitAddressReputation,
+  isKnownAggregatorRouterAddress,
 } from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
 
 import { getBlockchainSpecificValue } from '../../../chainSpecific/KeysignChainSpecific'
@@ -58,6 +60,13 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
         await assertLifiApprovalAddress(erc20ApprovePayload.spender, chain)
       } else if (approveSwapPayload.general.provider === 'swapkit') {
         await assertSwapKitAddressReputation(erc20ApprovePayload.spender, chain, 'approval spender')
+      } else if (
+        // sdk#1500: a legacy unattributed provider must not let an approval spender skip
+        // enforcement entirely — same reputation floor as the swap-leg destination below.
+        approveSwapPayload.general.provider === '' &&
+        !isKnownAggregatorRouterAddress(erc20ApprovePayload.spender, chain)
+      ) {
+        await assertLegacyUnattributedAddressReputation(erc20ApprovePayload.spender, chain, 'approval spender')
       }
     }
 
@@ -82,13 +91,15 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
   // destination (getToAddress/getTransaction general arms below) - a compromised initiator can
   // hand a co-signer a payload whose tx.to was never quote-checked, and every co-signer
   // independently rebuilds the input from that payload. Fail closed for enforced providers
-  // (1inch/kyber/cowswap/li.fi), require an independent reputation verdict for SwapKit, and retain
-  // log-only compatibility only for legacy unattributed payloads. A pure gate: it throws or no-ops,
-  // never changes the signed bytes, so it cannot desync the cross-device pre-signing hash. sdk#1458:
-  // that guarantee covers only the bytes. SwapKit's branch below makes a live Blockaid call, so two
-  // co-signers given the identical payload can now reach different verdicts (one gets Benign, another
-  // times out) - the failure mode this introduces is a stuck ceremony, not a hash desync or fund loss,
-  // but it is a new failure mode this paragraph used to read as having ruled out.
+  // (1inch/kyber/cowswap/li.fi), require an independent reputation verdict for SwapKit and for a
+  // legacy unattributed destination that isn't already a known router (sdk#1500), and retain
+  // log-only compatibility ONLY for a legacy unattributed payload whose destination already IS a
+  // known router. A pure gate: it throws or no-ops, never changes the signed bytes, so it cannot
+  // desync the cross-device pre-signing hash. sdk#1458: that guarantee covers only the bytes.
+  // SwapKit's branch below (and sdk#1500's legacy-unattributed branch) makes a live Blockaid call,
+  // so two co-signers given the identical payload can now reach different verdicts (one gets
+  // Benign, another times out) - the failure mode this introduces is a stuck ceremony, not a hash
+  // desync or fund loss, but it is a new failure mode this paragraph used to read as having ruled out.
   //
   // SCOPE - this guard covers the swap-leg destination ONLY, NOT the ERC-20 approval spender.
   // On the INITIATOR, build.ts derives the approve spender from this same quote.tx.to
@@ -98,16 +109,21 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
   // pass this router check yet still carry an approve to an arbitrary spender. That gap is now
   // closed for fixed-spender providers by assertEnforcedSwapApprovalSpenderBound in the branch
   // above (sdk#1358 review follow-up; sdk#1457 extended it to cowswap, whose spender IS its tx.to).
-  // LI.FI and SwapKit distinct spenders are independently reputation-checked above. The legacy
-  // `''` provider remains unenforced.
+  // LI.FI and SwapKit distinct spenders are independently reputation-checked above; sdk#1500
+  // extends the same reputation floor to a legacy `''` spender that isn't already a known router.
   if (swapPayload && 'general' in swapPayload) {
     const { provider, quote } = swapPayload.general
+    const destination = quote?.tx?.to ?? ''
     // Pass the raw (possibly empty) destination unconditionally: for an enforced provider an empty
     // `to` must ALSO fail closed (the helper rejects it as unrecognized), not be silently skipped.
     if (provider === 'swapkit') {
-      await assertSwapKitAddressReputation(quote?.tx?.to ?? '', chain, 'transaction destination')
+      await assertSwapKitAddressReputation(destination, chain, 'transaction destination')
+    } else if (provider === '' && destination && !isKnownAggregatorRouterAddress(destination, chain)) {
+      // sdk#1500: '' is no longer a bare bypass — a destination that isn't independently a known
+      // router requires the same independent Blockaid reputation verdict SwapKit uses.
+      await assertLegacyUnattributedAddressReputation(destination, chain, 'transaction destination')
     } else {
-      assertKnownAggregatorRouterOnSigningPath(provider, quote?.tx?.to ?? '', chain)
+      assertKnownAggregatorRouterOnSigningPath(provider, destination, chain)
     }
   }
 

@@ -160,6 +160,49 @@ describe('getEvmSigningInputs — sdk#1457 provider-string spoofing guard, end t
   })
 })
 
+// sdk#1500: `''` (legacy unattributed) was still a bare bypass after sdk#1457/#1458 - a payload
+// could relabel ANY malicious destination as `''` and skip every check above. These end-to-end
+// cases prove the fix through the real co-signer resolver: a known-router destination stays
+// log-only (no network call, matching real historical fixtures), anything else now requires the
+// same independent Blockaid reputation verdict SwapKit uses.
+describe('getEvmSigningInputs — sdk#1500 legacy unattributed (empty-string) provider guard, end to end', () => {
+  let walletCore: WalletCore
+
+  beforeAll(async () => {
+    walletCore = await initWasm()
+  })
+
+  it('does not over-block a legacy unattributed payload whose destination is a known router, without a reputation network call', async () => {
+    const inputs = await getEvmSigningInputs({ keysignPayload: buildPayload(ONE_INCH_V6_ROUTER, ''), walletCore })
+
+    expect(inputs[0]?.toAddress).toBe(ONE_INCH_V6_ROUTER)
+    expect(mockScanAddressWithBlockaid).not.toHaveBeenCalled()
+  })
+
+  it('rejects a legacy unattributed payload whose destination is not a known router when Blockaid does not return Benign (the sdk#1500 relabel-to-empty-string bypass)', async () => {
+    mockScanAddressWithBlockaid.mockResolvedValueOnce({ resultType: 'Malicious', features: ['drainer'] })
+
+    await expect(
+      getEvmSigningInputs({ keysignPayload: buildPayload(ATTACKER_ROUTER, ''), walletCore })
+    ).rejects.toThrow(/Malicious Blockaid verdict/)
+  })
+
+  it('accepts a legacy unattributed payload whose destination is not a known router only after an independent benign verdict', async () => {
+    const inputs = await getEvmSigningInputs({ keysignPayload: buildPayload(ATTACKER_ROUTER, ''), walletCore })
+
+    expect(inputs[0]?.toAddress).toBe(ATTACKER_ROUTER)
+    expect(mockScanAddressWithBlockaid).toHaveBeenCalledWith(ATTACKER_ROUTER, 'ethereum')
+  })
+
+  it('fails closed when the Blockaid call itself throws for a legacy unattributed unknown-router destination', async () => {
+    mockScanAddressWithBlockaid.mockRejectedValueOnce(new Error('blockaid unreachable'))
+
+    await expect(getEvmSigningInputs({ keysignPayload: buildPayload(ATTACKER_ROUTER, ''), walletCore })).rejects.toThrow(
+      /reputation check failed/
+    )
+  })
+})
+
 // sdk#1358 review follow-up (neavra): the router guard covers quote.tx.to, but the ERC-20 approval
 // spender is an INDEPENDENT wire field (erc20ApprovePayload.spender) the approve resolver reads
 // verbatim. A payload can pass the router check with a genuine router yet still approve an attacker -
@@ -306,5 +349,37 @@ describe('getEvmSigningInputs — sdk#1358 approval-spender bind on the signing-
         walletCore,
       })
     ).rejects.toThrow(/approval spender .*Warning Blockaid verdict/i)
+  })
+
+  // sdk#1500: the approve leg is an INDEPENDENT wire field from quote.tx.to (erc20.ts reads
+  // spender verbatim) - a payload relabelled `''` could previously carry an unenforced,
+  // unreviewed approval spender even though the swap-leg destination was a known router.
+  it('signs cleanly for a legacy unattributed approval spender that matches a known router, without a reputation call', async () => {
+    const inputs = await getEvmSigningInputs({
+      keysignPayload: buildApprovePayload({
+        routerTo: ONE_INCH_V6_ROUTER,
+        spender: ONE_INCH_V6_ROUTER,
+        provider: '',
+      }),
+      walletCore,
+    })
+
+    expect(inputs).toHaveLength(2)
+    expect(mockScanAddressWithBlockaid).not.toHaveBeenCalled()
+  })
+
+  it('rejects a legacy unattributed approval spender that is not a known router without an independent benign verdict', async () => {
+    mockScanAddressWithBlockaid.mockResolvedValueOnce({ resultType: 'Malicious', features: ['drainer'] })
+
+    await expect(
+      getEvmSigningInputs({
+        keysignPayload: buildApprovePayload({
+          routerTo: ONE_INCH_V6_ROUTER,
+          spender: ATTACKER_ROUTER,
+          provider: '',
+        }),
+        walletCore,
+      })
+    ).rejects.toThrow(/approval spender .*Malicious Blockaid verdict/i)
   })
 })
