@@ -458,6 +458,31 @@ export type {
   GlifUnsignedTx,
 } from '../../tools/defi'
 export { buildBalancerV3SwapCalldata, defi } from '../../tools/defi'
+export type {
+  YieldActionResponse,
+  YieldArgs,
+  YieldBalance,
+  YieldDiscoverMetadata,
+  YieldDiscoverOpportunity,
+  YieldDiscoverToken,
+  YieldListResponse,
+  YieldMetadata,
+  YieldProduct,
+  YieldToken,
+  YieldTransaction,
+} from '../../tools/defi/stakekit'
+export {
+  buildYieldActionScanRequest,
+  buildYieldStepScanRequest,
+  parseActionDisplay,
+  stakekit,
+  stakekitBalances,
+  stakekitBuildEnter,
+  stakekitBuildExit,
+  stakekitBuildManage,
+  stakekitDetails,
+  stakekitSearch,
+} from '../../tools/defi/stakekit'
 export {
   buildGlifRedeemSticnt,
   buildGlifStakeIcnt,
