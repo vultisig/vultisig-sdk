@@ -1,6 +1,8 @@
+import { encodeAbiParameters, parseAbiParameters } from 'viem'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { type BalancerPoolState, balancerQuote } from '@/tools/dex/balancerQuote'
+import { uniswapV3PoolInfo } from '@/tools/dex/uniswap/poolInfo'
 import { getAmountOut, uniswapV2Quote } from '@/tools/dex/uniswapV2Quote'
 
 // Mock the EVM read layer so we can drive uniswapV2Quote's factory/pair/reserve
@@ -52,7 +54,7 @@ describe('uniswapV2Quote reserve mapping + pair-identity guard', () => {
   afterEach(() => vi.mocked(evmCall).mockReset())
 
   // selector -> response router shared by the happy-path + guard tests.
-  function installMock(opts: { token0: string; token1: string }) {
+  function installMock(opts: { token0: string; token1: string; decimals?: bigint }) {
     vi.mocked(evmCall).mockImplementation(async (_chain, call) => {
       const data = (call.data ?? '0x') as string
       const sel = data.slice(0, 10)
@@ -66,7 +68,7 @@ describe('uniswapV2Quote reserve mapping + pair-identity guard', () => {
           uint(2000n * 10n ** 18n).padStart(64, '0') +
           ''.padStart(64, '0')) as `0x${string}`
       }
-      if (sel === '0x313ce567') return word('12') // decimals() = 18
+      if (sel === '0x313ce567') return word(uint(opts.decimals ?? 18n))
       if (sel === '0x95d89b41') {
         // symbol() returns abi-encoded string "TKN": offset=0x20, length=3, data="TKN" padded
         return ('0x' +
@@ -99,6 +101,54 @@ describe('uniswapV2Quote reserve mapping + pair-identity guard', () => {
     installMock({ token0: T0, token1: OTHER })
     await expect(uniswapV2Quote({ chain: ETH, tokenIn: T0, tokenOut: T1, amountIn: '1' })).rejects.toThrow(
       /token mismatch/
+    )
+  })
+
+  it('rejects implausible token decimals before fixed-point quote math', async () => {
+    installMock({ token0: T0, token1: T1, decimals: 37n })
+
+    await expect(uniswapV2Quote({ chain: ETH, tokenIn: T0, tokenOut: T1, amountIn: '1' })).rejects.toThrow(
+      /implausible decimals 37 \(> 36\)/
+    )
+  })
+})
+
+describe('uniswapV3PoolInfo decimals guard', () => {
+  const ETH = 'Ethereum' as unknown as Parameters<typeof uniswapV3PoolInfo>[0]['chain']
+  const POOL = '0x000000000000000000000000000000000000beef'
+  const T0 = '0x1111111111111111111111111111111111111111'
+  const T1 = '0x2222222222222222222222222222222222222222'
+  const word = (value: bigint | string) => `0x${BigInt(value).toString(16).padStart(64, '0')}` as `0x${string}`
+  const addrWord = (addr: string) => word(`0x${addr.slice(2)}`)
+
+  afterEach(() => vi.mocked(evmCall).mockReset())
+
+  it('rejects implausible token decimals through the shared reader', async () => {
+    const slot0 = encodeAbiParameters(parseAbiParameters('uint160, int24, uint16, uint16, uint16, uint8, bool'), [
+      2n ** 96n,
+      0,
+      0,
+      0,
+      0,
+      0,
+      false,
+    ])
+    const symbol = encodeAbiParameters(parseAbiParameters('string'), ['TKN'])
+
+    vi.mocked(evmCall).mockImplementation(async (_chain, call) => {
+      const selector = (call.data ?? '0x').slice(0, 10)
+      if (selector === '0x0dfe1681') return addrWord(T0)
+      if (selector === '0xd21220a7') return addrWord(T1)
+      if (selector === '0x3850c7bd') return slot0
+      if (selector === '0x1a686502') return word(1n)
+      if (selector === '0xddca3f43') return word(3000n)
+      if (selector === '0x313ce567') return word(37n)
+      if (selector === '0x95d89b41') return symbol
+      return '0x' as `0x${string}`
+    })
+
+    await expect(uniswapV3PoolInfo({ chain: ETH, poolAddress: POOL })).rejects.toThrow(
+      /implausible decimals 37 \(> 36\)/
     )
   })
 })
