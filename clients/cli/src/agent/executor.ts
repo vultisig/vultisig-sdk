@@ -12,6 +12,7 @@ import {
   chainFeeCoin,
   computeEip712Hash,
   getChainKind,
+  knownTokensIndex,
   parseThorSwapMemo,
   resolveChainReference,
   toCanonicalEvmSignature,
@@ -385,9 +386,8 @@ export class AgentExecutor {
   /**
    * If the transaction that will actually be signed carries ERC-20 `transfer`
    * calldata, decode its destination and amount and cross-check them against
-   * the producer's declared values. Returns the calldata recipient (the address
-   * funds really move to, hence authoritative for the summary) when the signed
-   * tx is a transfer, or null otherwise.
+   * the producer's declared values. Returns the decoded transfer (authoritative
+   * for the summary) when the signed tx is a transfer, or null otherwise.
    *
    * Reads the signed tx via {@link extractNestedTx} — the SAME resolution the
    * signer uses (`swap_tx || send_tx || tx || txArgs.tx`) — not `txArgs.tx`
@@ -399,7 +399,7 @@ export class AgentExecutor {
    * never be signed. Invoked before the branch-specific summaries below so a
    * transfer cannot be disguised as a swap/contract-call to skip the check.
    */
-  private assertConsistentTransfer(p: any): string | null {
+  private assertConsistentTransfer(p: any): { recipient: Address; amount: bigint } | null {
     const signedTx = extractNestedTx(p)
     const calldata = typeof signedTx?.data === 'string' ? (signedTx.data as string) : ''
     if (calldata === '' || calldata === '0x') return null
@@ -432,7 +432,7 @@ export class AgentExecutor {
         `ERC-20 amount mismatch — refusing to sign: txArgs.amount ${producerAmount} does not match calldata value ${transfer.amount}`
       )
     }
-    return transfer.recipient
+    return { recipient: transfer.recipient, amount: transfer.amount }
   }
 
   /**
@@ -451,7 +451,7 @@ export class AgentExecutor {
     // the producer's declared recipient or amount (or whose transfer calldata
     // is malformed) BEFORE rendering any branch-specific summary — a transfer
     // must not be able to hide behind a swap/contract-call head to skip the check.
-    const transferRecipient = this.assertConsistentTransfer(p)
+    const transfer = this.assertConsistentTransfer(p)
 
     // Design B: Polymarket flat-tx-builder bridge envelopes carry no swap/send
     // token labels, so the generic summaries below degrade to "send ? to ?".
@@ -488,12 +488,6 @@ export class AgentExecutor {
       if (labels.estimated_fee) parts.push(`est. fee ${labels.estimated_fee}`)
       return parts.join(' ')
     }
-    const amount = labels.resolved_amount ?? p?.txArgs?.amount ?? '?'
-    // Include the asset symbol so a confirmation prompt can never be ambiguous
-    // between native and tokens (e.g. "send 100 on Base to …" — ETH? USDC?).
-    // resolved_amount usually already embeds it; de-dup when both are set.
-    const symbol = labels.token_resolved || labels.token_symbol || ''
-    const amountWithSymbol = symbol && !amount.endsWith(` ${symbol}`) ? `${amount} ${symbol}` : amount
     // Name the token contract from the payload that gets signed, not from label
     // text: an EVM token send executes against the signed tx's `to` (the
     // contract, with transfer calldata) while `txArgs.to` is the recipient. A
@@ -506,15 +500,45 @@ export class AgentExecutor {
     const calldata = typeof signedTx?.data === 'string' ? (signedTx.data as string) : ''
     const isContractSend = !!contractTo && calldata !== '' && calldata !== '0x'
     const producerRecipient = typeof p?.txArgs?.to === 'string' ? (p.txArgs.to as string) : ''
-    // `transferRecipient` (decoded + cross-checked above) is the value that will
+    // `transfer.recipient` (decoded + cross-checked above) is the value that will
     // receive funds for an ERC-20 transfer. It therefore owns both the rendered
     // summary and the exact string passed to the confirmation policy; producer
     // labels are fallback text only for native, non-EVM, and non-transfer
     // envelopes.
-    const to = transferRecipient || producerRecipient || labels.recipient_echo || '?'
+    const to = transfer?.recipient || producerRecipient || labels.recipient_echo || '?'
+
+    // WYSIWYS: derive the displayed amount from signed calldata, never a producer label. Unknown tokens have no trusted
+    // decimals, so show raw base units as unverified rather than a misleading precise number; the recipient was already
+    // cross-checked above, so this rendering branch never fails closed.
+    if (transfer) {
+      return this.renderErc20TransferSummary(transfer.amount, contractTo, stored.chain, to)
+    }
+
+    const amount = labels.resolved_amount ?? p?.txArgs?.amount ?? '?'
+    // Include the asset symbol so a confirmation prompt can never be ambiguous
+    // between native and tokens (e.g. "send 100 on Base to …" — ETH? USDC?).
+    // resolved_amount usually already embeds it; de-dup when both are set.
+    const symbol = labels.token_resolved || labels.token_symbol || ''
+    const amountWithSymbol = symbol && !amount.endsWith(` ${symbol}`) ? `${amount} ${symbol}` : amount
     const contractPart =
       isContractSend && contractTo.toLowerCase() !== to.toLowerCase() ? ` (token contract ${contractTo})` : ''
     return `send ${amountWithSymbol} on ${stored.chain} to ${to}${contractPart}`
+  }
+
+  /**
+   * Render the consent amount for an ERC-20 transfer from the SIGNED calldata
+   * value, never a producer label. Known tokens use trusted decimals/ticker from
+   * knownTokensIndex; unknown tokens fall back to raw base units with an explicit
+   * unverified marker (the recipient is already cross-checked, so we never fail
+   * closed here).
+   */
+  private renderErc20TransferSummary(amount: bigint, contractTo: string, chain: Chain, to: string): string {
+    const known = knownTokensIndex[chain]?.[contractTo.toLowerCase()]
+    if (known) {
+      const contractPart = contractTo.toLowerCase() !== to.toLowerCase() ? ` (token contract ${contractTo})` : ''
+      return `send ${formatUnits(amount, known.decimals)} ${known.ticker} on ${chain} to ${to}${contractPart}`
+    }
+    return `send ${amount} base units of token ${contractTo} (decimals unverified) on ${chain} to ${to}`
   }
 
   /**

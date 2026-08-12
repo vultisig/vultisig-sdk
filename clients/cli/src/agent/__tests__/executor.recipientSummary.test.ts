@@ -63,7 +63,9 @@ describe('AgentExecutor ERC-20 consent summary', () => {
     })
 
     const summary = executor.getPendingSummary()!
-    expect(summary).toBe(`send 0.5 USDC on Base to ${RECIPIENT_B} (token contract ${TOKEN_CONTRACT})`)
+    expect(summary).toBe(
+      `send 500000 base units of token ${TOKEN_CONTRACT} (decimals unverified) on Base to ${RECIPIENT_B}`
+    )
     expect(summary.match(new RegExp(RECIPIENT_B, 'gi'))).toHaveLength(1)
   })
 
