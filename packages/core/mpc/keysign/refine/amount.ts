@@ -1,4 +1,5 @@
 import { Chain, UtxoBasedChain } from '@vultisig/core-chain/Chain'
+import { isTerraClassicUstcCoin } from '@vultisig/core-chain/chains/cosmos/terraClassicTax'
 import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
 import { minBigInt } from '@vultisig/lib-utils/math/minBigInt'
@@ -23,7 +24,11 @@ export const refineKeysignAmount = async (input: RefineKeysignAmountInput) => {
   }
 
   const coin = getKeysignCoin(input.keysignPayload)
-  if (!isFeeCoin(coin)) {
+  // TerraClassic USTC pays its fee (base gas + burn tax) in `uusd` — the same
+  // denom being sent — so a full-balance USTC send must be refined down just
+  // like a native-fee-coin send. Every other non-fee-coin token pays gas from
+  // a separate native balance and is left untouched.
+  if (!isFeeCoin(coin) && !isTerraClassicUstcCoin(coin)) {
     return input.keysignPayload
   }
 

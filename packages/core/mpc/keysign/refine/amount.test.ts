@@ -104,6 +104,20 @@ describe('refineKeysignAmount', () => {
     expect(mocks.getFeeAmount).not.toHaveBeenCalled()
   })
 
+  // Regression for #1519: unlike an ordinary token (previous test), USTC
+  // (TerraClassic uusd) pays its fee (base gas + burn tax) in uusd itself —
+  // the same denom being sent — so a full-balance send must still be refined
+  // down, exactly like a native-fee-coin send.
+  it('refines a full-balance TerraClassic USTC (uusd) send, since its fee is paid in-kind', async () => {
+    const balance = 200_000_000n
+    const fee = 1_225_000n
+    mocks.getFeeAmount.mockResolvedValue(fee)
+
+    const refined = await refine(buildPayload({ chain: Chain.TerraClassic, amount: balance, contractAddress: 'uusd' }), balance)
+
+    expect(BigInt(refined.toAmount)).toBe(balance - fee)
+  })
+
   it.each([Chain.Bitcoin, Chain.Ton])(
     'leaves %s alone, where the fee comes off the inputs and not the amount',
     async chain => {

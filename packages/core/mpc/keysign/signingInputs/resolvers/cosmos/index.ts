@@ -2,6 +2,7 @@ import { Chain, CosmosChain, VaultBasedCosmosChain } from '@vultisig/core-chain/
 import { cosmosFeeCoinDenom } from '@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom'
 import { getCosmosGasLimit } from '@vultisig/core-chain/chains/cosmos/cosmosGasLimitRecord'
 import { resolveCosmosGasLimit } from '@vultisig/core-chain/chains/cosmos/resolveCosmosGasLimit'
+import { isTerraClassicUstcCoin } from '@vultisig/core-chain/chains/cosmos/terraClassicTax'
 import { getCosmosChainKind } from '@vultisig/core-chain/chains/cosmos/utils/getCosmosChainKind'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import {
@@ -547,7 +548,14 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
       // burn tax in the send denom itself. `CosmosSpecific.gas` already
       // contains that complete amount, computed by the initiator, so emit one
       // uusd fee coin exactly like the current Swift and Kotlin signers.
-      if (coin.chain === Chain.TerraClassic && coin.id?.toLowerCase() === 'uusd') {
+      //
+      // Scoped to PLAIN sends only (mirrors the initiator's `isPlainSend` gate
+      // in `getCosmosChainSpecific`): an IBC transfer of USTC still prices
+      // `gas` in `uluna` (chain-specific pricing, not the uusd surcharge), so
+      // relabeling its denom to uusd here would sign a fee coin that doesn't
+      // match what was actually priced.
+      const isPlainSend = ibcSpecific?.transactionType === TransactionType.UNSPECIFIED
+      if (isPlainSend && isTerraClassicUstcCoin(coin)) {
         return [
           TW.Cosmos.Proto.Amount.create({
             amount: feeAmount.toString(),
