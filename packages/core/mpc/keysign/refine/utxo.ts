@@ -15,7 +15,8 @@ import { getKeysignAmount } from '../utils/getKeysignAmount'
 type RefineKeysignUtxoInput = {
   keysignPayload: KeysignPayload
   walletCore: WalletCore
-  publicKey: PublicKey
+  /** Not read by getUtxoSigningInputs; accepted as null for the `hexPublicKeyOverride` signing path. */
+  publicKey: PublicKey | null
 }
 
 const dustStats = 600n

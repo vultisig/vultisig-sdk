@@ -121,21 +121,23 @@ export const buildSendKeysignPayload = async ({
 
   const balance = await getCoinBalance(coin)
 
-  if (publicKey) {
-    keysignPayload = await refineKeysignAmount({
+  // Recap runs regardless of how the signing key was resolved (`publicKey` or
+  // `hexPublicKeyOverride`): neither refine step reads `publicKey` itself, they
+  // derive everything from `keysignPayload`/`balance`, so a null `publicKey`
+  // (the hex-override / MLDSA-only path) must not skip the safety net.
+  keysignPayload = await refineKeysignAmount({
+    keysignPayload,
+    walletCore,
+    publicKey,
+    balance,
+  })
+
+  if (isChainOfKind(coin.chain, 'utxo')) {
+    keysignPayload = await refineKeysignUtxo({
       keysignPayload,
       walletCore,
       publicKey,
-      balance,
     })
-
-    if (isChainOfKind(coin.chain, 'utxo')) {
-      keysignPayload = await refineKeysignUtxo({
-        keysignPayload,
-        walletCore,
-        publicKey,
-      })
-    }
   }
 
   return keysignPayload
