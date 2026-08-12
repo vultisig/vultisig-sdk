@@ -264,6 +264,10 @@ describe('splitMultiTx', () => {
       toChain: 'Base',
       fromSymbol: 'USDC',
       toSymbol: 'USDC',
+      fromAddress: '0xsource',
+      toAddress: '0xdestination',
+      fromDecimals: 6,
+      toDecimals: 6,
       transactions: [
         { to: '0xtoken', value: '0', data: '0xapprove', action: 'approve' },
         { to: '0xmessenger', value: '0', data: '0xburn', action: 'burn' },
@@ -278,6 +282,10 @@ describe('splitMultiTx', () => {
       expect(leg.to_chain).toBe('Base')
       expect(leg.from_symbol).toBe('USDC')
       expect(leg.to_symbol).toBe('USDC')
+      expect(leg.from_address).toBe('0xsource')
+      expect(leg.to_address).toBe('0xdestination')
+      expect(leg.from_decimals).toBe(6)
+      expect(leg.to_decimals).toBe(6)
     }
   })
 
