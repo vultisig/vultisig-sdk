@@ -392,7 +392,14 @@ const rnJs = path.join(pkgDir, 'dist/index.react-native.js')
 assert.ok(existsSync(rnJs), 'react-native bundle file exists on disk')
 const rnDts = path.join(pkgDir, 'dist/index.react-native.d.ts')
 assert.ok(existsSync(rnDts), 'react-native types exist on disk')
-for (const symbol of ['chainRegistry', 'deriveFromChainRegistry', 'extendChainRegistry', 'getBlockExplorerUrl']) {
+for (const symbol of [
+  'chainRegistry',
+  'deriveFromChainRegistry',
+  'extendChainRegistry',
+  'getBlockExplorerUrl',
+  'assertUtxoAddressBrand',
+  'isUtxoAddressBrandValid',
+]) {
   assert.ok(readFileSync(rnJs, 'utf8').includes(symbol), \`react-native bundle exports \${symbol}\`)
   assert.ok(readFileSync(rnDts, 'utf8').includes(symbol), \`react-native types export \${symbol}\`)
 }
@@ -418,7 +425,14 @@ assert.ok(existsSync(electronMainDts), 'electron main types exist on disk')
     writeFileSync(path.join(consumer, 'tsconfig.json'), JSON.stringify(tsconfig, null, 2) + '\n')
     writeFileSync(
       path.join(consumer, 'types-smoke.ts'),
-      `import { Chain, chainRegistry, deriveFromChainRegistry, extendChainRegistry } from '@vultisig/sdk'
+      `import {
+  Chain,
+  assertUtxoAddressBrand,
+  chainRegistry,
+  deriveFromChainRegistry,
+  extendChainRegistry,
+  isUtxoAddressBrandValid,
+} from '@vultisig/sdk'
 import type {
   ChainDescriptor,
   ChainDescriptorRegistry,
@@ -426,10 +440,16 @@ import type {
   ChainExtensionRecord,
   ChainKind,
   ExtendedChainRegistry,
+  UtxoChainName,
 } from '@vultisig/sdk'
+import {
+  assertUtxoAddressBrand as assertReactNativeUtxoAddressBrand,
+  isUtxoAddressBrandValid as isReactNativeUtxoAddressBrandValid,
+} from '@vultisig/sdk/react-native'
 import type {
   ChainDescriptor as ReactNativeChainDescriptor,
   ExtendedChainRegistry as ReactNativeExtendedChainRegistry,
+  UtxoChainName as ReactNativeUtxoChainName,
 } from '@vultisig/sdk/react-native'
 import type { Vultisig } from '@vultisig/sdk/node'
 import type { ElectronMainCrypto, Vultisig as ElectronMainVultisig } from '@vultisig/sdk/electron/main'
@@ -442,6 +462,21 @@ const registry: ChainDescriptorRegistry = chainRegistry
 const explorer: ChainExplorerDescriptor = descriptor.explorer
 const extension: ChainExtensionRecord = deriveFromChainRegistry(({ kind }) => ({ kind }))
 const extended: ExtendedChainRegistry<typeof extension> = extendChainRegistry(extension)
+const utxoChain: UtxoChainName = 'Bitcoin'
+const reactNativeUtxoChain: ReactNativeUtxoChainName = 'Litecoin'
+const rootUtxoBrandValid: boolean = isUtxoAddressBrandValid(
+  'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4',
+  utxoChain
+)
+const reactNativeUtxoBrandValid: boolean = isReactNativeUtxoAddressBrandValid(
+  'ltc1qw508d6qejxtdg4y5r3zarvary0c5xw7kgmn4n9',
+  reactNativeUtxoChain
+)
+assertUtxoAddressBrand('bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4', utxoChain)
+assertReactNativeUtxoAddressBrand(
+  'ltc1qw508d6qejxtdg4y5r3zarvary0c5xw7kgmn4n9',
+  reactNativeUtxoChain
+)
 
 export type X = Chain
 export type Y = Vultisig
@@ -457,6 +492,8 @@ export type ReactNativeExtended = ReactNativeExtendedChainRegistry<typeof extens
 export type CosmosNamespace = typeof cosmos
 export type EvmNamespace = typeof evm
 export type TokenNamespace = typeof token
+export type RootUtxoBrandResult = typeof rootUtxoBrandValid
+export type ReactNativeUtxoBrandResult = typeof reactNativeUtxoBrandValid
 `
     )
     run(process.execPath, [tscBin, '-p', path.join(consumer, 'tsconfig.json')], {

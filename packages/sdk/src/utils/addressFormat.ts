@@ -99,6 +99,10 @@ const reCardano =
 /** base58-alphabet pre-filter (32-44 chars) before the more expensive decode. */
 const reSolanaBase58Alphabet = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/
 
+/** Lowercase a uniformly-cased Bech32/CashAddr value; reject mixed case. */
+const normalizeCaseInsensitiveEncoding = (address: string): string | undefined =>
+  address === address.toLowerCase() || address === address.toUpperCase() ? address.toLowerCase() : undefined
+
 /**
  * Well-known bech32 HRPs that, when a base58-decodable string starts with one,
  * mean it is NOT a Solana key even if it decodes to 32 bytes by coincidence.
@@ -398,16 +402,40 @@ const familyMatchers: Array<{ family: AddressFamily; match: Matcher }> = [
   { family: 'sui', match: re(reSui) },
   { family: 'evm', match: re(reEVM) },
   { family: 'solana', match: isSolanaAddress },
-  { family: 'bitcoincash', match: re(reBCH) },
-  { family: 'litecoin', match: addr => reLTCBech32.test(addr) || reLTCLegacy.test(addr) },
+  {
+    family: 'bitcoincash',
+    match: addr => {
+      const normalized = normalizeCaseInsensitiveEncoding(addr)
+      return normalized !== undefined && reBCH.test(normalized)
+    },
+  },
+  {
+    family: 'litecoin',
+    match: addr => {
+      const normalized = normalizeCaseInsensitiveEncoding(addr)
+      return (normalized !== undefined && reLTCBech32.test(normalized)) || reLTCLegacy.test(addr)
+    },
+  },
   { family: 'dogecoin', match: re(reDOGE) },
   { family: 'dash', match: re(reDASH) },
-  { family: 'btc', match: addr => reBTCNativeSegWit.test(addr) || reBTCLegacy.test(addr) },
+  {
+    family: 'btc',
+    match: addr => {
+      const normalized = normalizeCaseInsensitiveEncoding(addr)
+      return (normalized !== undefined && reBTCNativeSegWit.test(normalized)) || reBTCLegacy.test(addr)
+    },
+  },
   { family: 'cardano', match: re(reCardano) },
   { family: 'ton', match: re(reTON) },
   { family: 'tron', match: re(reTron) },
   { family: 'xrp', match: re(reXRP) },
-  { family: 'zcash', match: addr => reZcashT.test(addr) || reZcashZ.test(addr) },
+  {
+    family: 'zcash',
+    match: addr => {
+      const normalized = normalizeCaseInsensitiveEncoding(addr)
+      return reZcashT.test(addr) || (normalized !== undefined && reZcashZ.test(normalized))
+    },
+  },
   { family: 'polkadot', match: re(rePolkadot) },
   { family: 'bittensor', match: re(reBittensor) },
 ]
