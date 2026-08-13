@@ -19,6 +19,7 @@ export default defineConfig({
       '@vultisig/lib-dkls': resolve(root, 'packages/lib/dkls'),
       '@vultisig/lib-mldsa': resolve(root, 'packages/lib/mldsa'),
       '@vultisig/lib-schnorr': resolve(root, 'packages/lib/schnorr'),
+      '@vultisig/client-shared': resolve(root, 'packages/client-shared/src/index.ts'),
       '@vultisig/mpc-types': resolve(root, 'packages/mpc-types/src'),
       // Point at the leaf FileStorage module, NOT the node platform entry
       // (platforms/node/index.ts), which runs import-time side effects

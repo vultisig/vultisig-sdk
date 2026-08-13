@@ -9,7 +9,10 @@ import {
   rippleTokenId,
   toXrplCurrencyCode,
 } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
-import { RippleSpecificSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
+import {
+  RippleSpecificSchema,
+  TransactionType,
+} from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { CoinSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/coin_pb'
 import { KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { beforeAll, describe, expect, it } from 'vitest'
@@ -529,6 +532,240 @@ describe('getRippleSigningInputs -- rawJson build path (dApp-supplied tx)', () =
     expect(() => getRippleSigningInputs({ keysignPayload: payload, walletCore })).toThrow(/Amount does not match/)
   })
 
+  it('rejects a tfPartialPayment Payment that sets no DeliverMin floor', () => {
+    // Destination and Amount both match the reviewed metadata, so every other
+    // gate passes — but tfPartialPayment makes Amount a ceiling, so the ledger
+    // may deliver dust while the sender still pays. The reviewed toAmount no
+    // longer describes the outcome, which is exactly what this resolver exists
+    // to prevent.
+    const payload = buildPaymentPayload()
+    payload.signData = {
+      case: 'signRipple',
+      value: {
+        $typeName: 'vultisig.keysign.v1.SignRipple',
+        rawJson: JSON.stringify({
+          TransactionType: 'Payment',
+          Account: ACCOUNT,
+          Destination: payload.toAddress,
+          Amount: payload.toAmount,
+          SendMax: '999999999',
+          Flags: 131072,
+        }),
+      },
+    }
+
+    expect(() => getRippleSigningInputs({ keysignPayload: payload, walletCore })).toThrow(/tfPartialPayment/)
+  })
+
+  it('forwards a tfPartialPayment Payment whose DeliverMin exactly matches the reviewed Amount', async () => {
+    const payload = buildPaymentPayload()
+    const paymentJson = JSON.stringify({
+      TransactionType: 'Payment',
+      Account: ACCOUNT,
+      Destination: payload.toAddress,
+      Amount: payload.toAmount,
+      SendMax: '999999999',
+      DeliverMin: payload.toAmount,
+      Flags: 131072,
+    })
+    payload.signData = {
+      case: 'signRipple',
+      value: {
+        $typeName: 'vultisig.keysign.v1.SignRipple',
+        rawJson: paymentJson,
+      },
+    }
+
+    const [input] = await getRippleSigningInputs({
+      keysignPayload: payload,
+      walletCore,
+    })
+
+    expect(input.rawJson).toBe(paymentJson)
+  })
+
+  it('rejects a tfPartialPayment Payment whose DeliverMin exceeds the reviewed Amount', () => {
+    // On XRPL partial payments, Amount is the delivery ceiling. A larger
+    // DeliverMin is unsatisfiable, not a stricter valid guarantee.
+    const payload = buildPaymentPayload()
+    payload.signData = {
+      case: 'signRipple',
+      value: {
+        $typeName: 'vultisig.keysign.v1.SignRipple',
+        rawJson: JSON.stringify({
+          TransactionType: 'Payment',
+          Account: ACCOUNT,
+          Destination: payload.toAddress,
+          Amount: payload.toAmount,
+          SendMax: '999999999',
+          DeliverMin: '1000001',
+          Flags: 131072,
+        }),
+      },
+    }
+
+    expect(() => getRippleSigningInputs({ keysignPayload: payload, walletCore })).toThrow(/tfPartialPayment/)
+  })
+
+  it('rejects a tfPartialPayment Payment whose DeliverMin floors less than the reviewed Amount', () => {
+    // Destination and Amount both match the reviewed metadata and DeliverMin
+    // is a well-formed, positive amount — but it floors delivery at a dust
+    // fraction of what was reviewed. A DeliverMin merely being present and
+    // positive is not a floor the reviewer approved.
+    const payload = buildPaymentPayload()
+    payload.signData = {
+      case: 'signRipple',
+      value: {
+        $typeName: 'vultisig.keysign.v1.SignRipple',
+        rawJson: JSON.stringify({
+          TransactionType: 'Payment',
+          Account: ACCOUNT,
+          Destination: payload.toAddress,
+          Amount: payload.toAmount,
+          SendMax: '999999999',
+          DeliverMin: '1',
+          Flags: 131072,
+        }),
+      },
+    }
+
+    expect(() => getRippleSigningInputs({ keysignPayload: payload, walletCore })).toThrow(/DeliverMin/)
+  })
+
+  it.each([
+    ['null', null],
+    ['an empty object', {}],
+    ['an issued-currency object missing its value', { currency: 'RLUSD', issuer: RLUSD_ISSUER }],
+    ['a non-numeric drops string', 'not-a-number'],
+    ['zero drops', '0'],
+    ['a zero issued-currency value', { currency: 'RLUSD', issuer: RLUSD_ISSUER, value: '0' }],
+    ['just below the reviewed Amount', '999999'],
+    ['an unencodable overlong currency code', { currency: 'a'.repeat(30), issuer: RLUSD_ISSUER, value: '999999999' }],
+    // Amount here is native XRP; a well-formed positive IOU cannot restore a
+    // floor on a different asset than what was actually reviewed.
+    [
+      'an issued-currency amount when Amount is native XRP',
+      { currency: 'RLUSD', issuer: RLUSD_ISSUER, value: '999999999' },
+    ],
+  ])('rejects a tfPartialPayment Payment whose DeliverMin is %s', (_label, DeliverMin) => {
+    const payload = buildPaymentPayload()
+    payload.signData = {
+      case: 'signRipple',
+      value: {
+        $typeName: 'vultisig.keysign.v1.SignRipple',
+        rawJson: JSON.stringify({
+          TransactionType: 'Payment',
+          Account: ACCOUNT,
+          Destination: payload.toAddress,
+          Amount: payload.toAmount,
+          SendMax: '999999999',
+          DeliverMin,
+          Flags: 131072,
+        }),
+      },
+    }
+
+    expect(() => getRippleSigningInputs({ keysignPayload: payload, walletCore })).toThrow(/DeliverMin/)
+  })
+
+  it('forwards a tfPartialPayment issued-currency Payment whose DeliverMin meets the reviewed value', async () => {
+    const payload = buildTrustSetPayload('1500000000000000')
+    payload.toAddress = 'rDestinationAddressForTests9876543210'
+    const paymentJson = JSON.stringify({
+      TransactionType: 'Payment',
+      Account: ACCOUNT,
+      Destination: payload.toAddress,
+      Amount: { currency: 'RLUSD', issuer: RLUSD_ISSUER, value: '1.5' },
+      SendMax: { currency: 'RLUSD', issuer: RLUSD_ISSUER, value: '2' },
+      DeliverMin: { currency: 'RLUSD', issuer: RLUSD_ISSUER, value: '1.5' },
+      Flags: 131072,
+    })
+    payload.signData = {
+      case: 'signRipple',
+      value: {
+        $typeName: 'vultisig.keysign.v1.SignRipple',
+        rawJson: paymentJson,
+      },
+    }
+
+    const [input] = await getRippleSigningInputs({
+      keysignPayload: payload,
+      walletCore,
+    })
+
+    expect(input.rawJson).toBe(paymentJson)
+  })
+
+  it('rejects a tfPartialPayment issued-currency Payment whose DeliverMin is a different issuer', () => {
+    const payload = buildTrustSetPayload('1500000000000000')
+    payload.toAddress = 'rDestinationAddressForTests9876543210'
+    payload.signData = {
+      case: 'signRipple',
+      value: {
+        $typeName: 'vultisig.keysign.v1.SignRipple',
+        rawJson: JSON.stringify({
+          TransactionType: 'Payment',
+          Account: ACCOUNT,
+          Destination: payload.toAddress,
+          Amount: { currency: 'RLUSD', issuer: RLUSD_ISSUER, value: '1.5' },
+          SendMax: { currency: 'RLUSD', issuer: RLUSD_ISSUER, value: '2' },
+          DeliverMin: { currency: 'RLUSD', issuer: 'rSomeOtherIssuer00000000000000000', value: '1.5' },
+          Flags: 131072,
+        }),
+      },
+    }
+
+    expect(() => getRippleSigningInputs({ keysignPayload: payload, walletCore })).toThrow(/DeliverMin/)
+  })
+
+  it('forwards a Payment whose flags do not touch delivery', async () => {
+    // tfFullyCanonicalSig sits above INT32_MAX, so the uint32 bound must not
+    // clip it into a rejection.
+    const payload = buildPaymentPayload()
+    const paymentJson = JSON.stringify({
+      TransactionType: 'Payment',
+      Account: ACCOUNT,
+      Destination: payload.toAddress,
+      Amount: payload.toAmount,
+      Flags: 2147483648,
+    })
+    payload.signData = {
+      case: 'signRipple',
+      value: {
+        $typeName: 'vultisig.keysign.v1.SignRipple',
+        rawJson: paymentJson,
+      },
+    }
+
+    const [input] = await getRippleSigningInputs({
+      keysignPayload: payload,
+      walletCore,
+    })
+
+    expect(input.rawJson).toBe(paymentJson)
+  })
+
+  it('rejects a Payment whose Flags cannot be read as a uint32', () => {
+    // Some client libraries accept `{ tfPartialPayment: true }` sugar. Signing
+    // it would mean signing flags this resolver never evaluated.
+    const payload = buildPaymentPayload()
+    payload.signData = {
+      case: 'signRipple',
+      value: {
+        $typeName: 'vultisig.keysign.v1.SignRipple',
+        rawJson: JSON.stringify({
+          TransactionType: 'Payment',
+          Account: ACCOUNT,
+          Destination: payload.toAddress,
+          Amount: payload.toAmount,
+          Flags: { tfPartialPayment: true },
+        }),
+      },
+    }
+
+    expect(() => getRippleSigningInputs({ keysignPayload: payload, walletCore })).toThrow(/Flags is not a uint32/)
+  })
+
   it('still lets a non-Payment rawJson through on the Account check alone (OfferCreate)', async () => {
     // Offers cannot be expressed by toAddress/toAmount, so the metadata
     // binding must not break them — only the Account gate applies.
@@ -635,5 +872,75 @@ describe('getRippleSigningInputs interop vector', () => {
 
     expect(hex(txInputData)).toBe(vector.expected.serializedSigningInputHex)
     expect(hex(preSigningHash)).toBe(vector.expected.preSigningHashHex)
+  })
+})
+
+describe('getRippleSigningInputs -- TrustSet discriminator (RippleSpecific.transaction_type)', () => {
+  const buildDiscriminatedTrustSetPayload = (toAmount: string) => {
+    const payload = buildTrustSetPayload(toAmount)
+    const rippleSpecific = create(RippleSpecificSchema, {
+      sequence: 100n,
+      gas: 15n,
+      lastLedgerSequence: 200n,
+      transactionType: TransactionType.RIPPLE_TRUST_SET,
+    })
+    payload.blockchainSpecific = { case: 'rippleSpecific', value: rippleSpecific }
+
+    return payload
+  }
+
+  it('builds a TrustSet when the payload states it explicitly', async () => {
+    const [input] = await getRippleSigningInputs({
+      keysignPayload: buildDiscriminatedTrustSetPayload('1500000000000000'),
+      walletCore,
+    })
+
+    expect(input.opTrustSet).toBeTruthy()
+    expect(input.opPayment).toBeFalsy()
+  })
+
+  it('signs identically whether or not the discriminator is present', async () => {
+    // The whole point: a peer that predates the field infers TrustSet from the
+    // coin, so both devices must serialize the same bytes or the ceremony
+    // diverges and never completes.
+    const amount = '1500000000000000'
+
+    const [discriminated] = await getRippleSigningInputs({
+      keysignPayload: buildDiscriminatedTrustSetPayload(amount),
+      walletCore,
+    })
+    const [inferred] = await getRippleSigningInputs({
+      keysignPayload: buildTrustSetPayload(amount),
+      walletCore,
+    })
+
+    expect(discriminated.opTrustSet).toEqual(inferred.opTrustSet)
+  })
+
+  it('produces byte-identical signing input across a mixed-version committee', async () => {
+    const amount = '1500000000000000'
+
+    const [discriminated, inferred] = await Promise.all([
+      getEncodedSigningInputs({
+        keysignPayload: buildDiscriminatedTrustSetPayload(amount),
+        walletCore,
+      }),
+      getEncodedSigningInputs({
+        keysignPayload: buildTrustSetPayload(amount),
+        walletCore,
+      }),
+    ])
+
+    expect(Buffer.from(discriminated[0]).toString('hex')).toBe(Buffer.from(inferred[0]).toString('hex'))
+  })
+
+  it('leaves native XRP a Payment even though the field is unset', async () => {
+    const [input] = await getRippleSigningInputs({
+      keysignPayload: buildPaymentPayload(),
+      walletCore,
+    })
+
+    expect(input.opPayment).toBeTruthy()
+    expect(input.opTrustSet).toBeFalsy()
   })
 })

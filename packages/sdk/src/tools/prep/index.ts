@@ -46,7 +46,7 @@ export {
   type PrepareSuiTokenTransferFromKeysParams,
   SUI_NATIVE_COIN_TYPE,
 } from './suiTokenTransfer'
-export { prepareSwapTxFromKeys, type PrepareSwapTxFromKeysParams } from './swap'
+export { prepareSwapTxFromKeys, type PrepareSwapTxFromKeysParams, SwapQuoteExpiredError } from './swap'
 export {
   prepareThorchainMsgDepositTxFromKeys,
   type PrepareThorchainMsgDepositTxFromKeysParams,

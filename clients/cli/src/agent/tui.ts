@@ -14,7 +14,14 @@ import * as readline from 'node:readline'
 import chalk from 'chalk'
 
 import type { AgentErrorCode } from './agentErrors'
-import { type BalanceSummaryCard, renderBalanceSummaryCard } from './cards'
+import {
+  type BalanceSummaryCard,
+  type PolymarketMarketsCard,
+  renderBalanceSummaryCard,
+  renderPolymarketMarketsCard,
+  renderYieldOpportunitiesCard,
+  type YieldOpportunitiesCard,
+} from './cards'
 import type { AgentSession } from './session'
 import type { ConversationMessage, Suggestion, TxLifecycleStatus, UICallbacks } from './types'
 
@@ -188,8 +195,8 @@ export class ChatTUI {
 
       onAssistantMessage: (content: string) => {
         if (this.isStreaming) {
-          // Deltas were collected; render the full text with markdown
-          process.stdout.write(renderMarkdown(this.currentStreamText) + '\n')
+          // Prefer the authoritative terminal message over collected deltas
+          process.stdout.write(renderMarkdown(content || this.currentStreamText) + '\n')
           this.isStreaming = false
         } else if (content && content !== this.currentStreamText) {
           // Print full message with markdown rendering
@@ -212,6 +219,24 @@ export class ChatTUI {
         console.log(renderBalanceSummaryCard(card))
       },
 
+      onYieldOpportunities: (card: YieldOpportunitiesCard) => {
+        if (this.isStreaming) {
+          process.stdout.write('\n')
+          this.isStreaming = false
+        }
+        this.currentStreamText = ''
+        console.log(renderYieldOpportunitiesCard(card))
+      },
+
+      onPolymarketMarkets: (card: PolymarketMarketsCard) => {
+        if (this.isStreaming) {
+          process.stdout.write('\n')
+          this.isStreaming = false
+        }
+        this.currentStreamText = ''
+        console.log(renderPolymarketMarketsCard(card))
+      },
+
       onSuggestions: (suggestions: Suggestion[]) => {
         if (suggestions.length > 0) {
           console.log(chalk.gray('  Suggestions:'))
@@ -227,6 +252,14 @@ export class ChatTUI {
         console.log(`  ${statusIcon} ${chalk.bold('TX')} [${chain}]: ${txHash.slice(0, 12)}...${txHash.slice(-8)}`)
         if (explorerUrl) {
           console.log(`     ${chalk.blue.underline(explorerUrl)}`)
+        }
+      },
+
+      onSigningRecord: record => {
+        if (record.success) {
+          console.log(`  ${chalk.green('✓')} ${chalk.bold('Signing approved')}: ${record.summary}`)
+        } else {
+          console.log(`  ${chalk.red('✗')} ${chalk.bold('Signing approved but not completed')}: ${record.summary}`)
         }
       },
 

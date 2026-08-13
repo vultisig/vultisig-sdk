@@ -43,6 +43,7 @@ describe('prepareJettonTransferTxFromKeys', () => {
       receiver: RECIPIENT,
       jettonWalletAddress: JETTON_WALLET,
       amount: 1_000_000n,
+      isActiveDestination: true,
       seqno: 5,
       validUntil: 1_700_000_000, // pinned -> deterministic hash
     })
@@ -55,7 +56,7 @@ describe('prepareJettonTransferTxFromKeys', () => {
     })
     expect(tx.fromAddress).toBe(wallet.addressString({ bounceable: false }))
 
-    // Same inputs -> identical signing hash (pure function, no randomness).
+    // Omitted activity state preserves the historical active-recipient behavior.
     const tx2 = prepareJettonTransferTxFromKeys(identity, {
       receiver: RECIPIENT,
       jettonWalletAddress: JETTON_WALLET,
@@ -102,6 +103,7 @@ describe('prepareJettonTransferTxFromKeys', () => {
       receiver: RECIPIENT,
       jettonWalletAddress: JETTON_WALLET,
       amount: 1_000_000n,
+      isActiveDestination: true,
       seqno: 5,
       validUntil: 1_700_000_000,
     })

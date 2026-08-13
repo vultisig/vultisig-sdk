@@ -451,27 +451,20 @@ describe('AgentExecutor — non-EVM dispatcher chain-consistency', () => {
   })
 })
 
-// PR #439 CodeRabbit review (post-merge of PR #435):
-//
-//   A) EVM addresses must compare case-insensitively in the self-swap
-//      guard — TrustWallet wallet-core returns EIP-55 checksummed, but
-//      THORChain memos can carry either case.
-//   B) signThorMsgDepositSwap must share the parseNonEvmEnvelope digit
-//      bound + strict-decimals contract (no silent `?? 8` fallback).
-//
-// Implemented via shared `convertBaseUnitsToDecimal` helper + EVM-aware
-// destAddress comparison.
+// The MsgDeposit swap path shares parseNonEvmEnvelope's digit bound and
+// strict-decimals contract via `convertBaseUnitsToDecimal`. Destination cases
+// below pin the separate routing contract: the memo remains authoritative and
+// reaches `vault.swap({ recipient })` unchanged.
 describe('AgentExecutor — signThorMsgDepositSwap dispatch', () => {
-  // Vault that always returns a checksummed EVM destination for ETH.
-  // Differs from createMockVault() in two ways: per-chain address mock,
-  // and a vault.swap mock that succeeds.
+  // Vault with distinct destination-chain addresses and a swap mock that
+  // captures the exact public SDK request.
   function createThorSwapVault(opts: { ethAddrChecksummed?: string } = {}): VaultBase {
     const ethAddr = opts.ethAddrChecksummed ?? '0x742d35Cc6634C0532925a3b844Bc9e7595f5b1A4'
     return {
       name: 'mock-vault',
       id: 'vault-mock-1',
       type: 'secure',
-      chains: [Chain.THORChain, Chain.Ethereum, Chain.Bitcoin],
+      chains: [Chain.THORChain, Chain.MayaChain, Chain.Ethereum, Chain.Bitcoin],
       isEncrypted: false,
       balances: vi.fn().mockResolvedValue({}),
       address: vi.fn().mockImplementation(async (chain: Chain) => {
@@ -488,27 +481,35 @@ describe('AgentExecutor — signThorMsgDepositSwap dispatch', () => {
     } as unknown as VaultBase
   }
 
-  function makeMsgDepositEnvelope(opts: { memo: string; amount?: string }): Record<string, unknown> {
+  function makeMsgDepositEnvelope(opts: { memo: string; amount?: string; chain?: Chain }): Record<string, unknown> {
+    const sourceChain = opts.chain ?? Chain.THORChain
+    const sourceAddress =
+      sourceChain === Chain.THORChain
+        ? 'thor149ekc6vu5ez775hd7y7ukgdq86e43t88pk7njm'
+        : 'maya1l8tqmlnzhxn30sd03cmq98uju95tw6ucxgkre6'
     return {
-      chain: 'THORChain',
-      from_chain: 'THORChain',
+      chain: sourceChain,
+      from_chain: sourceChain,
       txArgs: {
-        chain: 'THORChain',
+        chain: sourceChain,
         tx_encoding: 'cosmos-msg',
-        from: 'thor149ekc6vu5ez775hd7y7ukgdq86e43t88pk7njm',
-        to: 'thor1dheycdevsuagds76hp4dz4u6t6dx5x6f9smtj0', // THORChain Asgard
+        from: sourceAddress,
+        to:
+          sourceChain === Chain.THORChain
+            ? 'thor1dheycdevsuagds76hp4dz4u6t6dx5x6f9smtj0'
+            : 'maya1dheycdevsuagds76hp4dz4u6t6dx5x6f9smtj0',
         amount: opts.amount ?? '1000000',
-        denom: 'rune',
-        chain_id: 'thorchain-1',
+        denom: sourceChain === Chain.THORChain ? 'rune' : 'cacao',
+        chain_id: sourceChain === Chain.THORChain ? 'thorchain-1' : 'mayachain-mainnet-v1',
         memo: opts.memo,
         msg_type: 'deposit',
       },
     }
   }
 
-  it('accepts lowercase EVM destAddress when vault.address returns EIP-55 checksum (CR-A)', async () => {
-    // Vault address is checksummed (TrustWallet wallet-core default).
-    // Memo carries the same address in lowercase — agent/quote-side normal case.
+  it('forwards an explicit self-swap destination instead of re-deriving it', async () => {
+    // The memo carries the same address as the vault, but it must still remain
+    // the authoritative destination passed into the SDK.
     const vault = createThorSwapVault({
       ethAddrChecksummed: '0x742d35Cc6634C0532925a3b844Bc9e7595f5b1A4',
     })
@@ -519,10 +520,18 @@ describe('AgentExecutor — signThorMsgDepositSwap dispatch', () => {
     expect(executor.storeServerTransaction(envelope)).toBe(true)
     const recent = await executor.signTxFromBuffer('call-evm-norm')
     expect(recent.success).toBe(true)
-    expect((vault as any).swap).toHaveBeenCalledTimes(1)
+    expect((vault as any).swap).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fromChain: Chain.THORChain,
+        fromSymbol: 'RUNE',
+        toChain: Chain.Ethereum,
+        toSymbol: 'ETH',
+        recipient: '0x742d35cc6634c0532925a3b844bc9e7595f5b1a4',
+      })
+    )
   })
 
-  it('accepts checksummed EVM destAddress when vault.address returns checksum (CR-A symmetry)', async () => {
+  it('preserves a checksummed EVM destination verbatim', async () => {
     const vault = createThorSwapVault({
       ethAddrChecksummed: '0x742d35Cc6634C0532925a3b844Bc9e7595f5b1A4',
     })
@@ -533,9 +542,12 @@ describe('AgentExecutor — signThorMsgDepositSwap dispatch', () => {
     expect(executor.storeServerTransaction(envelope)).toBe(true)
     const recent = await executor.signTxFromBuffer('call-evm-checksum')
     expect(recent.success).toBe(true)
+    expect((vault as any).swap).toHaveBeenCalledWith(
+      expect.objectContaining({ recipient: '0x742d35Cc6634C0532925a3b844Bc9e7595f5b1A4' })
+    )
   })
 
-  it('still rejects a real cross-account EVM destination (CR-A regression — fund-safety preserved)', async () => {
+  it('forwards a cross-account EVM destination instead of rejecting or substituting it', async () => {
     const vault = createThorSwapVault({
       ethAddrChecksummed: '0x742d35Cc6634C0532925a3b844Bc9e7595f5b1A4',
     })
@@ -546,24 +558,72 @@ describe('AgentExecutor — signThorMsgDepositSwap dispatch', () => {
     })
     expect(executor.storeServerTransaction(envelope)).toBe(true)
     const recent = await executor.signTxFromBuffer('call-evm-cross')
-    expect(recent.success).toBe(false)
-    expect((recent.data as any).error).toMatch(/does not match vault address/)
-    expect((vault as any).swap).not.toHaveBeenCalled()
+    expect(recent.success).toBe(true)
+    expect((vault as any).swap).toHaveBeenCalledWith(
+      expect.objectContaining({ recipient: '0xDEADBEEFcafebabeDEADBEEFcafebabeDEADBEEF' })
+    )
   })
 
-  it('preserves case-sensitive comparison for non-EVM (BTC) destinations (CR-A scope guard)', async () => {
+  it('forwards a cross-account non-EVM destination verbatim', async () => {
     const vault = createThorSwapVault()
     const executor = new AgentExecutor(vault)
-    // Same-looking Bech32 address but with a case difference — these are
-    // semantically distinct in bech32 (and a real mismatch). Guard MUST
-    // reject because BTC is not in EVM_CHAINS.
     const envelope = makeMsgDepositEnvelope({
-      memo: '=:BTC.BTC:BC1QZMSK98GQTFVXHFRYE8P7XKXLJ6G9Q6A2YJ3YJ2', // uppercase variant
+      memo: '=:BTC.BTC:bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
     })
     expect(executor.storeServerTransaction(envelope)).toBe(true)
     const recent = await executor.signTxFromBuffer('call-btc-case')
+    expect(recent.success).toBe(true)
+    expect((vault as any).swap).toHaveBeenCalledWith(
+      expect.objectContaining({ recipient: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh' })
+    )
+  })
+
+  it('omits recipient when the memo has no destination, preserving the self-swap default', async () => {
+    const vault = createThorSwapVault()
+    const executor = new AgentExecutor(vault)
+    const envelope = makeMsgDepositEnvelope({ memo: '=:BTC.BTC' })
+    expect(executor.storeServerTransaction(envelope)).toBe(true)
+    const recent = await executor.signTxFromBuffer('call-empty-destination')
+    expect(recent.success).toBe(true)
+    expect((vault as any).swap).toHaveBeenCalledWith({
+      fromChain: Chain.THORChain,
+      fromSymbol: 'RUNE',
+      toChain: Chain.Bitcoin,
+      toSymbol: 'BTC',
+      amount: '0.01',
+    })
+  })
+
+  it('rejects a whitespace destination instead of silently treating it as self-swap', async () => {
+    const vault = createThorSwapVault()
+    const executor = new AgentExecutor(vault)
+    const envelope = makeMsgDepositEnvelope({ memo: '=:BTC.BTC:   ' })
+    expect(executor.storeServerTransaction(envelope)).toBe(true)
+    const recent = await executor.signTxFromBuffer('call-whitespace-destination')
     expect(recent.success).toBe(false)
-    expect((recent.data as any).error).toMatch(/does not match vault address/)
+    expect((recent.data as any).error).toMatch(/destination address.*must not contain whitespace/i)
+    expect((vault as any).swap).not.toHaveBeenCalled()
+  })
+
+  it('forwards a MayaChain envelope destination with CACAO amount semantics', async () => {
+    const vault = createThorSwapVault()
+    const executor = new AgentExecutor(vault)
+    const envelope = makeMsgDepositEnvelope({
+      chain: Chain.MayaChain,
+      memo: '=:BTC.BTC:bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+      amount: '10000000000',
+    })
+    expect(executor.storeServerTransaction(envelope)).toBe(true)
+    const recent = await executor.signTxFromBuffer('call-maya-cross-account')
+    expect(recent.success).toBe(true)
+    expect((vault as any).swap).toHaveBeenCalledWith({
+      fromChain: Chain.MayaChain,
+      fromSymbol: 'CACAO',
+      toChain: Chain.Bitcoin,
+      toSymbol: 'BTC',
+      amount: '1',
+      recipient: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+    })
   })
 
   it('rejects 27-digit amount on MsgDeposit path (CR-B parity with parseNonEvmEnvelope)', async () => {
