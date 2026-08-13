@@ -338,6 +338,7 @@ export type { RecipientSanityFlag, RecipientSanityInput, RecipientSanityResult }
 export { isMalformedEvmAddress, isNullAddress, isSelfSend, recipientSanity } from './validate'
 
 // Vault-free prep helpers (KeysignPayload construction without a full vault)
+export type { Prep } from './prep'
 export {
   buildCosmosWasmExecuteMsg,
   type BuildCosmosWasmExecuteMsgParams,
@@ -401,6 +402,7 @@ export {
   type UnsignedTrc20Transfer,
   type VaultIdentity,
   type WithdrawRewardsParams,
+  prep,
 } from './prep'
 
 // Atomic chain helpers (re-exported from core for vault-free callers)
