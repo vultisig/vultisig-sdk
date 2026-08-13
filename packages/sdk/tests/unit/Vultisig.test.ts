@@ -112,6 +112,19 @@ describe('Vultisig', () => {
     })
   })
 
+  describe('public namespace handles', () => {
+    it('exposes documented sdk.<namespace> helpers on the Vultisig instance', () => {
+      expect(typeof sdk.balance.getEvmBalances).toBe('function')
+      expect(typeof sdk.bridge.buildCctpBridge).toBe('function')
+      expect(typeof sdk.cosmos.getCosmosGovernanceProposals).toBe('function')
+      expect(typeof sdk.decode.decodeFromToolResult).toBe('function')
+      expect(typeof sdk.gas.compareCosts).toBe('function')
+      expect(typeof sdk.prep.prepareSendTxFromKeys).toBe('function')
+      expect(typeof sdk.price.getPrice).toBe('function')
+      expect(typeof sdk.swap.findSwapQuote).toBe('function')
+    })
+  })
+
   describe('supported chains', () => {
     it('should return all supported chains', () => {
       const chains = SUPPORTED_CHAINS

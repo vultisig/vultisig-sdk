@@ -30,6 +30,14 @@ import { SdkContextBuilder, type SdkContextBuilderOptions } from './context/SdkC
 import { UniversalEventEmitter } from './events/EventEmitter'
 import type { SdkEvents } from './events/types'
 import { ChainDiscoveryService } from './seedphrase/ChainDiscoveryService'
+import * as balance from './tools/balance'
+import * as bridge from './tools/bridge'
+import * as cosmos from './tools/cosmos'
+import * as decode from './tools/decode'
+import * as gas from './tools/gas'
+import * as prep from './tools/prep'
+import * as price from './tools/price'
+import * as swap from './tools/swap'
 import { SeedphraseValidator } from './seedphrase/SeedphraseValidator'
 import type {
   ChainDiscoveryAggregate,
@@ -170,6 +178,62 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    */
   get defi(): Defi {
     return defi
+  }
+
+  /**
+   * Read-only balance primitives (`sdk.balance.*`).
+   */
+  public get balance(): typeof balance {
+    return balance
+  }
+
+  /**
+   * Unsigned bridge helpers (`sdk.bridge.*`).
+   */
+  public get bridge(): typeof bridge {
+    return bridge
+  }
+
+  /**
+   * Cosmos governance helpers (`sdk.cosmos.*`).
+   */
+  public get cosmos(): typeof cosmos {
+    return cosmos
+  }
+
+  /**
+   * Canonical decode helpers (`sdk.decode.*`).
+   */
+  public get decode(): typeof decode {
+    return decode
+  }
+
+  /**
+   * Gas / fee helpers (`sdk.gas.*`).
+   */
+  public get gas(): typeof gas {
+    return gas
+  }
+
+  /**
+   * Pure unsigned prep builders (`sdk.prep.*`).
+   */
+  public get prep(): typeof prep {
+    return prep
+  }
+
+  /**
+   * Price helpers (`sdk.price.*`).
+   */
+  public get price(): typeof price {
+    return price
+  }
+
+  /**
+   * Read-only / unsigned swap helpers (`sdk.swap.*`).
+   */
+  public get swap(): typeof swap {
+    return swap
   }
 
   /**
