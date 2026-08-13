@@ -10,7 +10,13 @@ import type { CommandContext, SendDryRunResult, SendParams, TransactionResult } 
 import { buildSendBroadcastIntent, ensureVaultUnlocked, guardedBroadcast } from '../core'
 import { ConfirmationRequiredError } from '../core/errors'
 import { createSpinner, info, isJsonOutput, isNonInteractive, outputJson, warn } from '../lib/output'
-import { confirmTransaction, displayTransactionPreview, displayTransactionResult, escapeTerminalControls } from '../ui'
+import {
+  confirmTransaction,
+  displayTransactionPreview,
+  displayTransactionResult,
+  escapeTerminalControls,
+  formatBigintAmount,
+} from '../ui'
 
 const getSendPreviewDetails = (
   chain: Chain,
@@ -139,8 +145,20 @@ async function previewDryRun(
   }
 
   if (isJsonOutput()) {
-    outputJson(result)
-    return result
+    if (params.amount !== 'max') {
+      outputJson(result)
+      return result
+    }
+
+    const decimals = dryResult.keysignPayload.coin?.decimals
+    if (decimals === undefined) throw new Error('Prepared transaction is missing coin decimals')
+    const jsonResult = {
+      ...result,
+      amount: formatBigintAmount(BigInt(dryResult.keysignPayload.toAmount), decimals),
+      isMax: true,
+    }
+    outputJson(jsonResult)
+    return jsonResult
   }
 
   info(`\nDry-run preview:`)

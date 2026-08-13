@@ -6,12 +6,13 @@
  * Each handler takes `(toolCallId, input)` and returns a `RecentAction` ready
  * to be flushed into the next outbound `context.recent_actions`.
  */
-import type { VaultBase, Vultisig } from '@vultisig/sdk'
+import type { EvmChain, VaultBase, Vultisig } from '@vultisig/sdk'
 import {
   Chain,
   chainFeeCoin,
   computeEip712Hash,
   getChainKind,
+  getEvmRpcUrl,
   knownTokensIndex,
   parseThorSwapMemo,
   resolveChainReference,
@@ -32,6 +33,13 @@ import {
   recordBroadcast,
   reserveBroadcast,
 } from './broadcastJournal'
+import {
+  type HlOrderSigningPayload,
+  type HlOrderTransport,
+  isHlOrderFailure,
+  pollHlOrderStatus,
+  validateHlSigningPayload,
+} from './hlOrder'
 import type { RecentAction } from './types'
 
 // EVM chains that use nonce-based transaction ordering
@@ -67,23 +75,13 @@ function decodeErc20Transfer(calldata: string): { recipient: Address; amount: bi
   }
 }
 
-// Public RPC endpoints for refreshing gas estimates before signing.
-// Used as fallback to ensure maxFeePerGas covers current base fee.
-const EVM_GAS_RPC: Record<string, string> = {
-  Ethereum: 'https://ethereum-rpc.publicnode.com',
-  BSC: 'https://bsc-dataseed.binance.org',
-  Polygon: 'https://polygon-bor-rpc.publicnode.com',
-  Avalanche: 'https://api.avax.network/ext/bc/C/rpc',
-  Arbitrum: 'https://arb1.arbitrum.io/rpc',
-  Optimism: 'https://mainnet.optimism.io',
-  Base: 'https://mainnet.base.org',
-  Blast: 'https://rpc.blast.io',
-  Zksync: 'https://mainnet.era.zksync.io',
-  Mantle: 'https://rpc.mantle.xyz',
-  CronosChain: 'https://cronos-evm-rpc.publicnode.com',
-  Hyperliquid: 'https://rpc.hyperliquid.xyz/evm',
-  Sei: 'https://evm-rpc.sei-apis.com',
-}
+// `Set<string>.has()` returns a plain boolean, so it never narrows `Chain` down to
+// the `EvmChain` union that `getEvmRpcUrl` takes. This predicate keeps membership
+// byte-identical to the set above rather than delegating to `isChainOfKind(chain,
+// 'evm')`: the canonical chain-kind record also classifies Robinhood as EVM, and
+// switching would newly route it through nonce locking, nonce patching and gas
+// bumping. That is a money-path change and does not belong in a typing fix.
+const isEvmChain = (chain: Chain): chain is EvmChain => EVM_CHAINS.has(chain)
 
 type AccountCoin = {
   chain: Chain
@@ -129,6 +127,7 @@ export class AgentExecutor {
   // fingerprints so two different vaults sending an identical tx don't collide
   // in the single global journal (see BroadcastIntent.owner).
   private readonly vaultPublicKey: string
+  private readonly consumedHlOrderRefs = new Set<string>()
 
   constructor(vault: VaultBase, verbose = false, vaultId?: string, vultisig?: Vultisig) {
     this.vault = vault
@@ -138,6 +137,89 @@ export class AgentExecutor {
     if (vaultId) {
       this.stateStore = new VaultStateStore(vaultId)
     }
+  }
+
+  async retrieveHlOrder(
+    transport: HlOrderTransport,
+    input: Record<string, unknown>,
+    conversationId: string
+  ): Promise<HlOrderSigningPayload> {
+    const orderRef = typeof input.order_ref === 'string' ? input.order_ref : ''
+    if (!/^[0-9a-f-]{16,64}$/i.test(orderRef)) throw new Error('HL_INVALID_ORDER_REFERENCE')
+    if (this.consumedHlOrderRefs.has(orderRef)) throw new Error('HL_ORDER_REFERENCE_REPLAYED')
+    const payload = await transport.retrieveHlOrderSigningPayload(orderRef, conversationId, this.vaultPublicKey)
+    // Retrieval is one-shot server-side. Mark locally consumed before validation/signing too: a malformed
+    // or tampered payload must not be retried under the same opaque capability.
+    this.consumedHlOrderRefs.add(orderRef)
+    await validateHlSigningPayload(
+      payload,
+      {
+        orderRef,
+        conversationId,
+        publicKey: this.vaultPublicKey,
+        digest: typeof input.digest === 'string' ? input.digest : undefined,
+      },
+      this.vault
+    )
+    return payload
+  }
+
+  async signAndSubmitHlOrder(transport: HlOrderTransport, payload: HlOrderSigningPayload): Promise<RecentAction> {
+    return this.runTool('hl_order', async () => {
+      if (this.vault.isEncrypted && !(this.vault as any).isUnlocked?.() && this.password) {
+        await (this.vault as any).unlock?.(this.password)
+      }
+      const expectedAddress = await this.vault.address(Chain.Ethereum)
+      const signatures = []
+      for (const step of payload.steps) {
+        const signed = await this.vault.signBytes({
+          data: step.digest,
+          chain: Chain.Ethereum,
+        })
+        const canonical = toCanonicalEvmSignature(signed.signature, signed.recovery ?? 0)
+        const v = canonical.recovery + 27
+        const wireSignature = `0x${canonical.r}${canonical.s}${v.toString(16).padStart(2, '0')}` as `0x${string}`
+        const recovered = await recoverAddress({
+          hash: step.digest,
+          signature: wireSignature,
+        })
+        if (recovered.toLowerCase() !== expectedAddress.toLowerCase()) {
+          throw new Error('HL_SIGNATURE_RECOVERY_MISMATCH')
+        }
+        signatures.push({
+          kind: step.kind,
+          digest: step.digest,
+          r: `0x${canonical.r}` as `0x${string}`,
+          s: `0x${canonical.s}` as `0x${string}`,
+          v,
+        })
+      }
+      const params = {
+        orderRef: payload.order_ref,
+        conversationId: payload.conversation_id,
+        publicKey: this.vaultPublicKey,
+      }
+      const submitted = await transport.submitHlOrder(
+        params.orderRef,
+        params.conversationId,
+        params.publicKey,
+        signatures
+      )
+      const status = await pollHlOrderStatus(transport, params, submitted)
+      if (isHlOrderFailure(status)) {
+        throw new Error(`HL_ORDER_${status.state.toUpperCase()}: ${status.reason ?? 'venue did not accept the order'}`)
+      }
+      // Signatures and raw actions travel only over the authenticated direct endpoint. The chat
+      // recent_actions channel receives status metadata, never signing material.
+      return {
+        order_ref: payload.order_ref,
+        state: status.state,
+        order_id: status.order_id,
+        filled_size: status.filled_size,
+        average_price: status.average_price,
+        reason: status.reason,
+      }
+    })
   }
 
   setPassword(password: string): void {
@@ -271,7 +353,7 @@ export class AgentExecutor {
       // today and would silently misbehave if forced through this path.
       // Reject loudly rather than fall through to the single-leg branch
       // (which would extract main-leg txArgs and silently drop the approve).
-      if (!EVM_CHAINS.has(chain)) {
+      if (!isEvmChain(chain)) {
         if (this.verbose)
           process.stderr.write(
             `[executor] rejecting multi-leg envelope on non-EVM chain ${chain}: signMultiLeg is EVM-only\n`
@@ -794,7 +876,9 @@ export class AgentExecutor {
         ? this.buildBroadcastIntent(payload, chain, { txArgs: payload.txArgs })
         : this.buildBroadcastIntent(payload, chain)
       const approveIntent = isMultiLeg
-        ? this.buildBroadcastIntent(payload, chain, { txArgs: payload.approvalTxArgs })
+        ? this.buildBroadcastIntent(payload, chain, {
+            txArgs: payload.approvalTxArgs,
+          })
         : undefined
       const primaryFp = computeFingerprint(primaryIntent)
       const approveFp = approveIntent ? computeFingerprint(approveIntent) : undefined
@@ -1526,7 +1610,7 @@ export class AgentExecutor {
    * Releases any previously held lock first (e.g. from an abandoned build).
    */
   private async acquireEvmLockIfNeeded(chain: Chain): Promise<void> {
-    if (!this.stateStore || !EVM_CHAINS.has(chain)) return
+    if (!this.stateStore || !isEvmChain(chain)) return
 
     // Release any stale lock from a previous build that was never signed
     await this.releaseEvmLock(chain)
@@ -1558,7 +1642,7 @@ export class AgentExecutor {
    * dropped and local state is stale.
    */
   private async patchEvmNonce(chain: Chain, payload: any): Promise<void> {
-    if (!this.stateStore || !EVM_CHAINS.has(chain)) return
+    if (!this.stateStore || !isEvmChain(chain)) return
 
     const bs = payload.blockchainSpecific
     if (!bs || bs.case !== 'ethereumSpecific') return
@@ -1629,13 +1713,12 @@ export class AgentExecutor {
    * Compensates for gas price drift between build time and sign time.
    */
   private async patchEvmGas(chain: Chain, payload: any): Promise<void> {
-    if (!EVM_CHAINS.has(chain)) return
+    if (!isEvmChain(chain)) return
 
     const bs = payload.blockchainSpecific
     if (!bs || bs.case !== 'ethereumSpecific') return
 
-    const rpcUrl = EVM_GAS_RPC[chain as string]
-    if (!rpcUrl) return
+    const rpcUrl = getEvmRpcUrl(chain)
 
     try {
       const res = await fetch(rpcUrl, {
@@ -1684,8 +1767,12 @@ export class AgentExecutor {
    * Returns null if the RPC call fails (non-fatal).
    */
   private async fetchEvmPendingNonce(chain: Chain): Promise<bigint | null> {
-    const rpcUrl = EVM_GAS_RPC[chain as string]
-    if (!rpcUrl) return null
+    // The old CLI-local map returned `undefined` for a non-EVM chain and the
+    // caller bailed on the falsy URL. The shared resolver has no such escape
+    // hatch, so keep the guard explicit: without it a non-EVM chain would POST
+    // eth_getTransactionCount at an undefined endpoint.
+    if (!isEvmChain(chain)) return null
+    const rpcUrl = getEvmRpcUrl(chain)
 
     try {
       const address = await this.vault.address(chain)
@@ -1715,7 +1802,7 @@ export class AgentExecutor {
    * For approve+swap flows with N message hashes, the highest nonce used is base + N - 1.
    */
   private recordEvmNonceFromPayload(chain: Chain, payload: any, numTxs: number): void {
-    if (!this.stateStore || !EVM_CHAINS.has(chain)) return
+    if (!this.stateStore || !isEvmChain(chain)) return
 
     const bs = payload.blockchainSpecific
     if (!bs || bs.case !== 'ethereumSpecific') return
