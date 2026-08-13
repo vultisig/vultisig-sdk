@@ -867,7 +867,6 @@ export {
   buildCctpBridge,
   buildCctpClaim,
   buildCosmosWasmExecuteMsg,
-  getCctpAttestation,
   buildCw20TransferMsg,
   buildDelegateMsg,
   buildGlifRedeemSticnt,
@@ -885,7 +884,6 @@ export {
   cctpAttestationApiBase,
   cctpChains,
   cctpSupportedChains,
-  waitForCctpAttestation,
   chainAliasMap,
   chainFeeCoin,
   chainsMatch,
@@ -927,6 +925,7 @@ export {
   gas,
   GAS_UNITS,
   getCardanoBalance,
+  getCctpAttestation,
   getCctpChain,
   getChainGasPriceGwei,
   getCoinBalance,
@@ -1046,6 +1045,7 @@ export {
   TRC20_TRANSFER_SELECTOR,
   utxoFeeRate,
   VerifierClient,
+  waitForCctpAttestation,
 } from './tools'
 
 // The protobuf builder is environment-neutral despite its historical RN path.
