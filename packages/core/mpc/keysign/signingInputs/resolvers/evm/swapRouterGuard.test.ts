@@ -197,9 +197,9 @@ describe('getEvmSigningInputs — sdk#1500 legacy unattributed (empty-string) pr
   it('fails closed when the Blockaid call itself throws for a legacy unattributed unknown-router destination', async () => {
     mockScanAddressWithBlockaid.mockRejectedValueOnce(new Error('blockaid unreachable'))
 
-    await expect(getEvmSigningInputs({ keysignPayload: buildPayload(ATTACKER_ROUTER, ''), walletCore })).rejects.toThrow(
-      /reputation check failed/
-    )
+    await expect(
+      getEvmSigningInputs({ keysignPayload: buildPayload(ATTACKER_ROUTER, ''), walletCore })
+    ).rejects.toThrow(/reputation check failed/)
   })
 })
 
