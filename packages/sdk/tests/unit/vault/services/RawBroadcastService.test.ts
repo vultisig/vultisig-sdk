@@ -382,13 +382,10 @@ describe('RawBroadcastService', () => {
     const rawTx = txBytes.toString('base64')
     const hash = bytesToHex(sha256(txBytes)).toUpperCase()
     mockCosmosBroadcastTx.mockRejectedValue(new Error('socket hang up'))
-    mockCosmosGetTx
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({
-        hash,
-        code: 0,
-      })
+    mockCosmosGetTx.mockResolvedValueOnce(null).mockResolvedValueOnce(null).mockResolvedValueOnce({
+      hash,
+      code: 0,
+    })
 
     vi.useFakeTimers()
     try {
