@@ -340,6 +340,16 @@ describe('RujiraOrderbook', () => {
       })
     })
 
+    it('fails closed when canonical contract config reverses the requested pair', async () => {
+      const mockClient = createMockClient({ denoms: ['btc-btc', 'rune'] })
+      const orderbook = new RujiraOrderbook(mockClient as any)
+
+      await expect(orderbook.buildPlaceOrder(buyParams as any)).rejects.toMatchObject({
+        code: RujiraErrorCode.INVALID_ASSET,
+        message: 'Could not determine offer asset for order',
+      })
+    })
+
     it('fails closed when contract config names an unknown quote asset', async () => {
       const mockClient = createMockClient({
         denoms: { base: 'rune', quote: 'unknown-quote' },

@@ -491,6 +491,17 @@ export class RujiraOrderbook {
 
     const config = await this.getContractConfig(contractAddress)
 
+    if (typeof params.pair === 'string' && !params.pair.startsWith('thor1')) {
+      const pairParts = params.pair.split('/')
+      if (pairParts.length !== 2) return undefined
+
+      const expectedBase = findAssetByFormat(pairParts[0] || '')?.formats.thorchain
+      const expectedQuote = findAssetByFormat(pairParts[1] || '')?.formats.thorchain
+      if (!expectedBase || !expectedQuote || config.base !== expectedBase || config.quote !== expectedQuote) {
+        return undefined
+      }
+    }
+
     if (params.side === 'buy') {
       return config.quote ? getAssetInfo(config.quote) : undefined
     }
