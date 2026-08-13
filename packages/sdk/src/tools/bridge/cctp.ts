@@ -27,6 +27,7 @@
  */
 
 import { EvmChain } from '@vultisig/core-chain/Chain'
+import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 /**
  * CCTP contract configuration for a single chain. Mirrors the Go
@@ -132,4 +133,101 @@ export type CctpAttestationResult = {
   status: string
   /** 0x-prefixed attestation bytes when status === "complete", otherwise empty. */
   attestation?: string
+}
+
+export type GetCctpAttestationOptions = {
+  /** Optional external abort signal for the attestation fetch. */
+  signal?: AbortSignal
+}
+
+export type WaitForCctpAttestationOptions = GetCctpAttestationOptions & {
+  /** Max wall-clock time to wait before failing. Defaults to 120s. */
+  timeoutMs?: number
+  /** Poll cadence while Circle is still processing. Defaults to 5s. */
+  pollIntervalMs?: number
+}
+
+const DEFAULT_CCTP_ATTESTATION_TIMEOUT_MS = 120_000
+const DEFAULT_CCTP_ATTESTATION_POLL_INTERVAL_MS = 5_000
+
+const sleep = async (ms: number): Promise<void> => {
+  await new Promise(resolve => setTimeout(resolve, ms))
+}
+
+const normalizeMessageHash = (messageHash: string): `0x${string}` => {
+  const trimmed = messageHash.trim()
+  if (trimmed === '') {
+    throw new Error('messageHash is empty')
+  }
+
+  const withPrefix = trimmed.startsWith('0x') ? trimmed : `0x${trimmed}`
+  if (!/^0x[0-9a-fA-F]+$/.test(withPrefix)) {
+    throw new Error('messageHash is not valid hex')
+  }
+
+  const hexChars = withPrefix.length - 2
+  if (hexChars !== 64) {
+    throw new Error(`messageHash must be 32 bytes (64 hex chars), got ${hexChars}`)
+  }
+
+  return withPrefix as `0x${string}`
+}
+
+export const getCctpAttestation = async (
+  messageHash: string,
+  options: GetCctpAttestationOptions = {}
+): Promise<CctpAttestationResult> => {
+  const normalizedHash = normalizeMessageHash(messageHash)
+  return queryUrl<CctpAttestationResult>(`${cctpAttestationApiBase}/attestations/${normalizedHash}`, {
+    signal: options.signal,
+  })
+}
+
+export const waitForCctpAttestation = async (
+  messageHash: string,
+  options: WaitForCctpAttestationOptions = {}
+): Promise<CctpAttestationResult & { attestation: string }> => {
+  const normalizedHash = normalizeMessageHash(messageHash)
+  const timeoutMs = options.timeoutMs ?? DEFAULT_CCTP_ATTESTATION_TIMEOUT_MS
+  const pollIntervalMs = options.pollIntervalMs ?? DEFAULT_CCTP_ATTESTATION_POLL_INTERVAL_MS
+
+  if (timeoutMs <= 0) {
+    throw new Error(`timeoutMs must be positive, got ${timeoutMs}`)
+  }
+  if (pollIntervalMs <= 0) {
+    throw new Error(`pollIntervalMs must be positive, got ${pollIntervalMs}`)
+  }
+
+  const deadline = Date.now() + timeoutMs
+  let lastStatus: string | undefined
+
+  while (Date.now() < deadline) {
+    if (options.signal?.aborted) {
+      throw options.signal.reason ?? new Error('waitForCctpAttestation aborted')
+    }
+
+    const result = await getCctpAttestation(normalizedHash, { signal: options.signal })
+    lastStatus = result.status
+    if (result.status === 'complete') {
+      if (!result.attestation) {
+        throw new Error('Circle attestation marked complete but returned no attestation bytes')
+      }
+
+      return {
+        ...result,
+        attestation: result.attestation,
+      }
+    }
+
+    if (result.status === 'not_found') {
+      throw new Error(`Circle attestation not found for message hash ${normalizedHash}`)
+    }
+
+    await sleep(Math.min(pollIntervalMs, Math.max(0, deadline - Date.now())))
+  }
+
+  throw new Error(
+    `Circle attestation not ready within ${timeoutMs}ms for message hash ${normalizedHash}` +
+      (lastStatus ? ` (last status: ${lastStatus})` : '')
+  )
 }

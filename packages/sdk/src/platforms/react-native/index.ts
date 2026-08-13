@@ -563,6 +563,8 @@ export type {
   CctpChainConfig,
   CctpClaimResult,
   CctpUnsignedTx,
+  GetCctpAttestationOptions,
+  WaitForCctpAttestationOptions,
 } from '../../tools/bridge'
 export {
   buildCctpBridge,
@@ -571,9 +573,11 @@ export {
   cctpChains,
   cctpSupportedChains,
   formatUsdc,
+  getCctpAttestation,
   getCctpChain,
   normalizeHexBytes,
   parseUsdcAmount,
+  waitForCctpAttestation,
 } from '../../tools/bridge'
 
 // Noon USDC vault helpers. The root SDK entry already exports these canonicals,

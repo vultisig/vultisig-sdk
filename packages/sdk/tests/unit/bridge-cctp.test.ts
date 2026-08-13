@@ -1,5 +1,5 @@
 import { decodeFunctionData } from 'viem'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   buildCctpBridge,
@@ -7,9 +7,11 @@ import {
   cctpChains,
   cctpSupportedChains,
   formatUsdc,
+  getCctpAttestation,
   getCctpChain,
   normalizeHexBytes,
   parseUsdcAmount,
+  waitForCctpAttestation,
 } from '../../src/tools/bridge'
 import { assertSafeEvmDestination, EVM_DANGEROUS_ADDRESSES, isEvmBurnAddress } from '../../src/utils/dangerousAddresses'
 
@@ -56,6 +58,11 @@ const messageTransmitterAbi = [
 ] as const
 
 const SENDER = '0x1111111111111111111111111111111111111111'
+const MESSAGE_HASH = `0x${'ab'.repeat(32)}`
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('parseUsdcAmount', () => {
   it('parses whole + fractional USDC into 6-decimal raw units', () => {
@@ -201,6 +208,63 @@ describe('buildCctpClaim', () => {
   it('rejects malformed hex', () => {
     expect(() => normalizeHexBytes('0xZZ', 'message')).toThrow(/not valid hex/)
     expect(() => normalizeHexBytes('0xabc', 'message')).toThrow(/odd hex length/)
+  })
+})
+
+describe('cctp attestation helpers', () => {
+  it('fetches a single attestation result from Circle', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: 'pending_confirmations' }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const res = await getCctpAttestation(MESSAGE_HASH)
+
+    expect(res).toEqual({ status: 'pending_confirmations' })
+    expect(fetchMock).toHaveBeenCalledWith(
+      `https://iris-api.circle.com/v1/attestations/${MESSAGE_HASH}`,
+      expect.objectContaining({ method: 'GET' })
+    )
+  })
+
+  it('polls until Circle returns a complete attestation', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ status: 'pending_confirmations' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ status: 'complete', attestation: `0x${'cd'.repeat(65)}` }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const res = await waitForCctpAttestation(MESSAGE_HASH, { timeoutMs: 50, pollIntervalMs: 1 })
+
+    expect(res.status).toBe('complete')
+    expect(res.attestation).toBe(`0x${'cd'.repeat(65)}`)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('fails closed when Circle says complete but returns no attestation bytes', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ status: 'complete' }) })
+    )
+
+    await expect(waitForCctpAttestation(MESSAGE_HASH, { timeoutMs: 20, pollIntervalMs: 1 })).rejects.toThrow(
+      /returned no attestation bytes/
+    )
+  })
+
+  it('rejects malformed message hashes before hitting the network', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getCctpAttestation('not-hex')).rejects.toThrow(/not valid hex/)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })
 

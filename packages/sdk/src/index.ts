@@ -843,8 +843,10 @@ export type { BuildSplTransferParams, SplTransferResult } from './tools'
 export type {
   CosmosStakingMsgEnvelope,
   DelegateParams,
+  GetCctpAttestationOptions,
   RedelegateParams,
   UndelegateParams,
+  WaitForCctpAttestationOptions,
   WithdrawRewardsParams,
 } from './tools'
 export type { BuildCosmosWasmExecuteMsgParams, CosmWasmExecuteFund } from './tools'
@@ -865,6 +867,7 @@ export {
   buildCctpBridge,
   buildCctpClaim,
   buildCosmosWasmExecuteMsg,
+  getCctpAttestation,
   buildCw20TransferMsg,
   buildDelegateMsg,
   buildGlifRedeemSticnt,
@@ -882,6 +885,7 @@ export {
   cctpAttestationApiBase,
   cctpChains,
   cctpSupportedChains,
+  waitForCctpAttestation,
   chainAliasMap,
   chainFeeCoin,
   chainsMatch,
