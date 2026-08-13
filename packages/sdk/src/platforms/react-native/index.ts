@@ -466,12 +466,6 @@ export {
   glifPoolWriteAbi,
 } from '../../tools/defi/glif'
 export type {
-  BuildThreeJaneSupplyUsdcParams,
-  BuildThreeJaneSupplyUsdcResult,
-  ThreeJaneTranche,
-  ThreeJaneTxStep,
-} from '../../tools/defi/threeJane'
-export type {
   EvmScanRequest,
   PendingAction,
   ScanRequest,
@@ -503,6 +497,12 @@ export {
   validateStakekitActionAddress,
   validateStakekitActionInput,
 } from '../../tools/defi/stakekit'
+export type {
+  BuildThreeJaneSupplyUsdcParams,
+  BuildThreeJaneSupplyUsdcResult,
+  ThreeJaneTranche,
+  ThreeJaneTxStep,
+} from '../../tools/defi/threeJane'
 
 // Cosmos staking + distribution module (LCD queries — read-only,
 // vault-free, generic over every ibcEnabled cosmos chain). Mirrors the
