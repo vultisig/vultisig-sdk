@@ -8,14 +8,14 @@ describe('COMMON_TOKENS', () => {
       for (const token of tokens) {
         expect(
           isValidEvmContractAddress(token.contractAddress),
-          `${chain} ${token.symbol} should expose a valid EVM address`,
+          `${chain} ${token.symbol} should expose a valid EVM address`
         ).toBe(true)
       }
     }
   })
 
   it('pins Ethereum DAI to the canonical mainnet contract', () => {
-    const dai = COMMON_TOKENS.Ethereum?.find((token) => token.symbol === 'DAI')
+    const dai = COMMON_TOKENS.Ethereum?.find(token => token.symbol === 'DAI')
     expect(dai?.contractAddress).toBe('0x6B175474E89094C44Da98b954EedeAC495271d0F')
   })
 })
