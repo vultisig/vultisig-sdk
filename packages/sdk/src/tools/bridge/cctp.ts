@@ -54,8 +54,18 @@ export type CctpChainConfig = {
 /**
  * CCTP V1-contracts registry. Addresses sourced from Circle docs and
  * verified against the mcp Go side (`vultisig/mcp@62efee8`).
+ *
+ * PARTIAL by design, and the type has to say so. Circle only operates CCTP
+ * domains for the six chains below; Blast, Zksync, Mantle, CronosChain and the
+ * rest of `EvmChain` have no domain at all. Typing this as the total
+ * `Record<EvmChain, CctpChainConfig>` claimed a config for every EVM chain, so
+ * `cctpChains[EvmChain.Blast].domain` type-checked and threw at runtime. The
+ * runtime was always correct - `getCctpChain` guards with `in` and
+ * `cctpSupportedChains` derives from the real keys - it was only the type that
+ * lied. `Partial` makes the lookup `CctpChainConfig | undefined` so callers are
+ * forced to narrow, which is what the runtime already required of them.
  */
-export const cctpChains: Record<EvmChain, CctpChainConfig> = {
+export const cctpChains: Partial<Record<EvmChain, CctpChainConfig>> = {
   Ethereum: {
     chain: EvmChain.Ethereum,
     evmChainId: 1,
