@@ -1,5 +1,4 @@
 import type { Envelope as DecodedEnvelope } from '../decode/types'
-
 import type { Envelope as PolicyEnvelope } from './types'
 
 const INTEGER_STRING = /^-?\d+$/

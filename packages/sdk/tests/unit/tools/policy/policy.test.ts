@@ -1,6 +1,7 @@
-import { encodeFunctionData, getAddress, parseAbi, serializeTransaction, type Address, type Hex } from 'viem'
+import { type Address, encodeFunctionData, getAddress, type Hex,parseAbi, serializeTransaction } from 'viem'
 import { describe, expect, it } from 'vitest'
 
+import { decodeFromToolResult } from '@/tools/decode'
 import {
   chainAliasMap,
   chainsMatch,
@@ -17,7 +18,6 @@ import {
   scaleDecimalClaimToAtomic,
   toPolicyEnvelope,
 } from '@/tools/policy'
-import { decodeFromToolResult } from '@/tools/decode'
 
 const usdc = (recipient: string, amount: bigint): Envelope => ({
   decoded: true,

@@ -328,9 +328,9 @@ export {
   type AssetRef as PolicyAssetRef,
   type Envelope as PolicyEnvelope,
   ResultKind,
-  toPolicyEnvelope,
   sanitizeAmount,
   scaleDecimalClaimToAtomic,
+  toPolicyEnvelope,
   type Verdict,
 } from './policy'
 
