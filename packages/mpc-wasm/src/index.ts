@@ -5,16 +5,6 @@
  * Wraps the existing wasm-bindgen JS wrappers (vs_wasm.js, vs_schnorr_wasm.js).
  * Used by browser, Node.js, Electron, and Chrome Extension platforms.
  */
-import {
-  WASM_MPC_ENGINE_KIND,
-  type DklsEngine,
-  type MpcEngine,
-  type MpcKeyshare,
-  type MpcMessage,
-  type MpcSession,
-  type SchnorrEngine,
-} from '@vultisig/mpc-types'
-
 import initDkls, {
   KeygenSession as DklsKeygenSession,
   KeyImportInitiator as DklsKeyImportInitiator,
@@ -31,6 +21,15 @@ import initSchnorr, {
   QcSession as SchnorrQcSession,
   SignSession as SchnorrSignSession,
 } from '@vultisig/lib-schnorr/vs_schnorr_wasm'
+import {
+  type DklsEngine,
+  type MpcEngine,
+  type MpcKeyshare,
+  type MpcMessage,
+  type MpcSession,
+  type SchnorrEngine,
+  WASM_MPC_ENGINE_KIND,
+} from '@vultisig/mpc-types'
 
 // ---------------------------------------------------------------------------
 // Keyshare adapter
