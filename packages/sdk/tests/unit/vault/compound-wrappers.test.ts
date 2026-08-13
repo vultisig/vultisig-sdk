@@ -13,8 +13,8 @@ import { signatureAlgorithms } from '@vultisig/core-chain/signing/SignatureAlgor
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Token } from '../../../src/types'
-import { VaultBase } from '../../../src/vault/VaultBase'
 import { resolveTokenRef } from '../../../src/vault/tokenRef'
+import { VaultBase } from '../../../src/vault/VaultBase'
 import { VaultError, VaultErrorCode } from '../../../src/vault/VaultError'
 
 // ---------------------------------------------------------------------------
