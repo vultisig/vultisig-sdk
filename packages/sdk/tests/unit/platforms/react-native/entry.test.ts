@@ -222,20 +222,34 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.IBC_CHAIN_HRP).toBe(prep.IBC_CHAIN_HRP)
     expect(rn.IBC_CHAIN_REVISION).toBe(prep.IBC_CHAIN_REVISION)
 
+    // Field names and types here are the ones PrepareIbcTransferParams/Result actually declare
+    // (fromChain/toChainId, base-unit STRING amounts, sourceChannel/cosmosTx). The first draft of
+    // this test invented sourceChainId/destChainId, bigint amounts and channelId/tx, which is what
+    // the TS2322/TS2339 errors in CI were reporting. Note the 'channel-141' expectation below was
+    // already the CORRECT value - it was just asserted on a field name that does not exist.
+    //
+    // The bech32 fixtures also had invalid checksums, so this would have thrown at runtime even
+    // after the types were fixed ("Invalid checksum ... expected dhwy7t"). Both are corrected and
+    // every value asserted below was read off the real implementation, not assumed.
     const result = rn.prepareIbcTransfer({
-      fromAddress: 'cosmos1skjwj5whet0l88fdwq5w882r5dwskjwjsh0wff',
-      toAddress: 'osmo1skjwj5whet0l88fdwq5w882r5dwskjwje6qlkm',
-      sourceChainId: 'cosmoshub-4',
-      destChainId: 'osmosis-1',
-      amount: 123456n,
+      fromChain: 'cosmoshub-4',
+      fromAddress: 'cosmos1skjwj5whet0l88fdwq5w882r5dwskjwjdhwy7t',
+      toAddress: 'osmo1skjwj5whet0l88fdwq5w882r5dwskjwj9va5ge',
+      toChainId: 'osmosis-1',
+      amount: '123456',
       denom: 'uatom',
       memo: 'rn-export-check',
-      accountNumber: 7n,
-      sequence: 9n,
+      accountNumber: '7',
+      sequence: '9',
     })
 
-    expect(result.channelId).toBe('channel-141')
-    expect(result.tx.msgs[0].type).toBe(rn.IBC_MSG_TRANSFER_TYPE_URL)
+    expect(result.fromChain).toBe('cosmoshub-4')
+    expect(result.destChain).toBe('osmosis-1')
+    expect(result.sourceChannel).toBe('channel-141')
+    expect(result.msgTypeUrl).toBe(rn.IBC_MSG_TRANSFER_TYPE_URL)
+    expect(result.cosmosTx.msgs[0].msg_type_url).toBe(rn.IBC_MSG_TRANSFER_TYPE_URL)
+    expect(result.msgTransfer.token).toEqual({ denom: 'uatom', amount: '123456' })
+    expect(result.msgTransfer.memo).toBe('rn-export-check')
     expect(rn.supportedIbcDestinationsFrom('cosmoshub-4')).toContain('osmosis-1')
   })
 
