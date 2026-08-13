@@ -460,7 +460,9 @@ export function buildTrc20TransferTx(opts: BuildTrc20TransferOptions): TronTxBui
     throw new Error(`buildTrc20TransferTx: feeLimit must be > 0, got ${opts.feeLimit}`)
   }
   if (opts.feeLimit > TRON_PROTO_INT64_MAX) {
-    throw new Error(`buildTrc20TransferTx: feeLimit must be <= ${TRON_PROTO_INT64_MAX} (protobuf int64), got ${opts.feeLimit}`)
+    throw new Error(
+      `buildTrc20TransferTx: feeLimit must be <= ${TRON_PROTO_INT64_MAX} (protobuf int64), got ${opts.feeLimit}`
+    )
   }
   const callData = buildTrc20CallData(opts.to, opts.amount)
   const contractValue = buildTriggerSmartContract(opts.from, opts.tokenAddress, callData)
