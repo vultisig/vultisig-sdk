@@ -458,6 +458,13 @@ export type {
   GlifUnsignedTx,
 } from '../../tools/defi'
 export { buildBalancerV3SwapCalldata, defi } from '../../tools/defi'
+export {
+  buildGlifRedeemSticnt,
+  buildGlifStakeIcnt,
+  GLIF_ICN_BASE_ADDRESSES,
+  GLIF_ICN_TOKEN_DECIMALS,
+  glifPoolWriteAbi,
+} from '../../tools/defi/glif'
 export type {
   YieldActionResponse,
   YieldArgs,
@@ -483,13 +490,6 @@ export {
   stakekitDetails,
   stakekitSearch,
 } from '../../tools/defi/stakekit'
-export {
-  buildGlifRedeemSticnt,
-  buildGlifStakeIcnt,
-  GLIF_ICN_BASE_ADDRESSES,
-  GLIF_ICN_TOKEN_DECIMALS,
-  glifPoolWriteAbi,
-} from '../../tools/defi/glif'
 export type {
   BuildThreeJaneSupplyUsdcParams,
   BuildThreeJaneSupplyUsdcResult,
