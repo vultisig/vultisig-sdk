@@ -4,6 +4,7 @@ import { encodeFunctionData, erc20Abi, getAddress } from 'viem'
 import { describe, expect, it } from 'vitest'
 
 import { AgentExecutor } from '../executor'
+import { buildTxReadyFromToolOutput, POLYMARKET_DEPOSIT_TOOL } from '../toolOutputSigning'
 
 const TOKEN_CONTRACT = '0x2791bca1f2de4661ed88a30c99a7a9449aa84174'
 const RECIPIENT_A = '0x58c4000000000000000000000000000000005c35'
@@ -209,5 +210,27 @@ describe('AgentExecutor ERC-20 consent summary', () => {
 
     expect(() => executor.getPendingSummary()).toThrow(/amount mismatch — refusing to sign/i)
     expect(executor.hasPendingTransaction()).toBe(false)
+  })
+
+  it('accepts a flat __buildTx ERC-20 transfer envelope with no producer txArgs.amount', () => {
+    // Flat tool-output bridges (e.g. Polymarket) wrap into `{ __buildTx: true,
+    // tx: {...} }` with NO `txArgs` at all — there is no producer-side amount
+    // or recipient to cross-check. The signed calldata is still a real ERC-20
+    // transfer, so the missing producer metadata alone must not trip the
+    // fail-closed amount/recipient checks (only an actual mismatch should).
+    const executor = createExecutor()
+    const wrapped = buildTxReadyFromToolOutput(POLYMARKET_DEPOSIT_TOOL, {
+      chain: 'Polygon',
+      chain_id: '137',
+      to: TOKEN_CONTRACT,
+      value: '0',
+      data: encodeTransfer(RECIPIENT_B),
+    })
+    expect(wrapped).not.toBeNull()
+    expect((wrapped as any).txArgs).toBeUndefined()
+
+    expect(executor.storeServerTransaction(wrapped!)).toBe(true)
+    expect(() => executor.getPendingSummary()).not.toThrow()
+    expect(executor.hasPendingTransaction()).toBe(true)
   })
 })

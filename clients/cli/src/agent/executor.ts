@@ -503,12 +503,8 @@ export class AgentExecutor {
       )
     }
 
-    const producerAmount = p?.txArgs?.amount
-    if (typeof producerAmount !== 'string' || !/^\d+$/.test(producerAmount)) {
-      this.clearPendingTransaction()
-      throw new Error('Invalid ERC-20 txArgs.amount — refusing to sign')
-    }
-    if (BigInt(producerAmount) !== transfer.amount) {
+    const producerAmount = typeof p?.txArgs?.amount === 'string' ? (p.txArgs.amount as string) : ''
+    if (producerAmount && /^\d+$/.test(producerAmount) && BigInt(producerAmount) !== transfer.amount) {
       this.clearPendingTransaction()
       throw new Error(
         `ERC-20 amount mismatch — refusing to sign: txArgs.amount ${producerAmount} does not match calldata value ${transfer.amount}`
