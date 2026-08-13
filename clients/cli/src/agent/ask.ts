@@ -11,9 +11,15 @@
  *   vultisig agent ask "What is my HYPE balance?" --vault t1 --password 1
  *   vultisig agent ask "Send 0.01567 HYPE to myself" --session <id> --vault t1 --password 1
  */
-import type { AgentErrorCode } from './agentErrors'
-import { isTerminalAgentErrorCode } from './agentErrors'
-import type { BalanceSummaryCard, PolymarketMarketsCard, TurnOutcome, YieldOpportunitiesCard } from './cards'
+import { AgentErrorCode, isTerminalAgentErrorCode } from './agentErrors'
+import type {
+  AgentCard,
+  BalanceSummaryCard,
+  HlOrderConfirmationCard,
+  PolymarketMarketsCard,
+  TurnOutcome,
+  YieldOpportunitiesCard,
+} from './cards'
 import type { AgentSession } from './session'
 import type {
   ProposedTransaction,
@@ -46,7 +52,7 @@ export type AskResult = {
     status?: TxLifecycleStatus
   }>
   /** Server-built balance_summary cards rendered this turn. */
-  cards: BalanceSummaryCard[]
+  cards: AgentCard[]
   /** Server-built yield_opportunities cards rendered this turn (rj3p). */
   yieldCards: YieldOpportunitiesCard[]
   /** Server-built polymarket_markets cards rendered this turn (rj3p). */
@@ -88,7 +94,7 @@ export class AskInterface {
   private responseParts: string[] = []
   private toolCalls: AskResult['toolCalls'] = []
   private transactions: AskResult['transactions'] = []
-  private cards: BalanceSummaryCard[] = []
+  private cards: AgentCard[] = []
   private yieldCards: YieldOpportunitiesCard[] = []
   private polymarketCards: PolymarketMarketsCard[] = []
   private warnings: ProtocolWarning[] = []
@@ -161,6 +167,15 @@ export class AskInterface {
         this.cards.push(card)
       },
 
+      onHlOrderConfirmation: (card: HlOrderConfirmationCard) => {
+        this.cards.push(card)
+        this.outcome = {
+          kind: 'blocked',
+          code: AgentErrorCode.CONFIRMATION_REQUIRED,
+          detail: 'Explicit approval is required before signing this Hyperliquid order.',
+        }
+      },
+
       onYieldOpportunities: (card: YieldOpportunitiesCard) => {
         this.yieldCards.push(card)
       },
@@ -170,6 +185,13 @@ export class AskInterface {
       },
 
       onTurnOutcome: (outcome: TurnOutcome) => {
+        // A local signing refusal is the terminal truth for this client turn. The
+        // backend may have already emitted (or may race in with) its pre-ceremony
+        // `success` outcome while the queued hl_order retrieval is still running;
+        // never let that stale server classification overwrite the local gate.
+        if (this.outcome?.kind === 'blocked' && this.outcome.code === AgentErrorCode.CONFIRMATION_REQUIRED) {
+          return
+        }
         // Latch the LAST outcome of the turn. The backend emits exactly one at turn
         // end, but a multi-request action loop (a sign that triggers a follow-up
         // recent_actions turn) can produce more than one across requests — the last
