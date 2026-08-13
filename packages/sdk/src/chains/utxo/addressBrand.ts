@@ -15,12 +15,14 @@ const BASE58_VERSION_BYTES: Partial<Record<UtxoChainName, ReadonlySet<number>>> 
 const BECH32_HRP: Partial<Record<UtxoChainName, string>> = {
   Bitcoin: 'bc',
   Litecoin: 'ltc',
+  Zcash: 'zs',
 }
 
-function hasExpectedBech32Hrp(address: string, expectedHrp: string): boolean {
+function hasExpectedBech32Hrp(address: string, expectedHrp: string, allowBech32m: boolean): boolean {
   if (address !== address.toLowerCase()) return false
 
-  for (const codec of [bech32, bech32m]) {
+  const codecs = allowBech32m ? [bech32, bech32m] : [bech32]
+  for (const codec of codecs) {
     try {
       if (codec.decode(address as `${string}1${string}`).prefix === expectedHrp) return true
     } catch {
@@ -56,7 +58,7 @@ function hasExpectedBase58Version(address: string, chain: UtxoChainName): boolea
  * - Bitcoin / Litecoin: Bech32/Bech32m HRP or exact Base58Check version byte
  * - Dogecoin / Dash: exact Base58Check version byte
  * - Bitcoin Cash: checksummed mainnet CashAddr
- * - Zcash: transparent t1/t3 two-byte Base58Check versions
+ * - Zcash: transparent t1/t3 Base58Check versions or Sapling zs Bech32 HRP
  *
  * Ambiguous legacy Bitcoin Cash and Litecoin P2SH encodings are excluded so a
  * Bitcoin-looking address is never accepted for another chain by accident.
@@ -68,7 +70,7 @@ export function isUtxoAddressBrandValid(address: string, chain: UtxoChainName): 
   if (chain === 'Bitcoin-Cash') return isValidCashAddr(normalized)
 
   const expectedHrp = BECH32_HRP[chain]
-  if (expectedHrp && hasExpectedBech32Hrp(normalized, expectedHrp)) return true
+  if (expectedHrp && hasExpectedBech32Hrp(normalized, expectedHrp, chain !== 'Zcash')) return true
 
   return hasExpectedBase58Version(normalized, chain)
 }

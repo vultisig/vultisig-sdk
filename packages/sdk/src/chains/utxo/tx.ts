@@ -327,6 +327,10 @@ function decodeBase58Address(address: string, chain: UtxoChainName): DecodedAddr
 export function decodeAddressToPubKeyHash(address: string, chain: UtxoChainName): DecodedAddress {
   assertUtxoAddressBrand(address, chain)
 
+  if (chain === 'Zcash' && address.trim().startsWith('zs1')) {
+    throw new Error(`Cannot decode address: ${address} — Zcash shielded outputs are not supported by this SDK build`)
+  }
+
   // bech32 (BTC bc1q..., LTC ltc1q...)
   // We deliberately try bech32 first; non-bech32 addresses fall through to
   // CashAddr / base58 below. We DO NOT swallow the 32-byte (P2WSH) error

@@ -29,6 +29,8 @@ const GOLDEN_ADDRESSES: Record<UtxoChainName, readonly string[]> = {
 }
 
 const CHAINS = Object.keys(GOLDEN_ADDRESSES) as UtxoChainName[]
+const ZCASH_SAPLING_ADDRESS = 'zs1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5z5tpwxqergd3c8g7ruszzg3rysjjvfeg9y4zkvtfdeq'
+const ZCASH_SAPLING_BECH32M_VARIANT = 'zs1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5z5tpwxqergd3c8g7ruszzg3rysjjvfeg9y4zkehepuz'
 
 describe('UTXO address brand validation', () => {
   it.each(CHAINS)('accepts golden %s addresses', chain => {
@@ -50,6 +52,17 @@ describe('UTXO address brand validation', () => {
     expect(isUtxoAddressBrandValid('bc1not-a-valid-address', 'Bitcoin')).toBe(false)
     expect(isUtxoAddressBrandValid('bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6x', 'Bitcoin-Cash')).toBe(
       false
+    )
+  })
+
+  it('recognizes a checksummed Zcash Sapling address without treating it as a signable transparent output', () => {
+    expect(isUtxoAddressBrandValid(ZCASH_SAPLING_ADDRESS, 'Zcash')).toBe(true)
+    expect(isUtxoAddressBrandValid(ZCASH_SAPLING_ADDRESS, 'Bitcoin')).toBe(false)
+    expect(isUtxoAddressBrandValid(`${ZCASH_SAPLING_ADDRESS.slice(0, -1)}x`, 'Zcash')).toBe(false)
+    expect(isUtxoAddressBrandValid(ZCASH_SAPLING_BECH32M_VARIANT, 'Zcash')).toBe(false)
+    expect(isAddressValidForChain(ZCASH_SAPLING_ADDRESS, 'Zcash')).toBe(true)
+    expect(() => decodeAddressToPubKeyHash(ZCASH_SAPLING_ADDRESS, 'Zcash')).toThrow(
+      'Zcash shielded outputs are not supported by this SDK build'
     )
   })
 
