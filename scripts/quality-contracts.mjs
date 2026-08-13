@@ -326,10 +326,32 @@ assert.equal(typeof root.getBlockExplorerUrl, 'function', 'root exports getBlock
 assert.ok(root.chainRegistry !== undefined, 'root exports chainRegistry')
 assert.equal(typeof root.deriveFromChainRegistry, 'function', 'root exports deriveFromChainRegistry')
 assert.equal(typeof root.extendChainRegistry, 'function', 'root exports extendChainRegistry')
+assert.equal(root.evm.encodeErc20Approve, root.encodeErc20Approve, 'root exposes sdk.evm')
+assert.equal(root.token.resolveContract, root.resolveContract, 'root exposes sdk.token')
+assert.equal(
+  root.cosmos.gov.getCosmosGovernanceProposals,
+  root.getCosmosGovernanceProposals,
+  'root exposes sdk.cosmos.gov'
+)
+assert.equal(root.cosmos.gov.prepareCosmosVote, root.prepareCosmosVote, 'sdk.cosmos.gov keeps the flat vote helper')
 
 assert.equal(typeof node.Vultisig, 'function', '@vultisig/sdk/node exports Vultisig')
+assert.equal(node.evm.encodeErc20Approve, node.encodeErc20Approve, '@vultisig/sdk/node exposes sdk.evm')
+assert.equal(node.token.resolveContract, node.resolveContract, '@vultisig/sdk/node exposes sdk.token')
+assert.equal(
+  node.cosmos.gov.prepareCosmosVote,
+  node.prepareCosmosVote,
+  '@vultisig/sdk/node exposes sdk.cosmos.gov'
+)
 
 assert.ok(browser.Chain !== undefined, '@vultisig/sdk/browser resolves')
+assert.equal(browser.evm.encodeErc20Approve, browser.encodeErc20Approve, '@vultisig/sdk/browser exposes sdk.evm')
+assert.equal(browser.token.resolveContract, browser.resolveContract, '@vultisig/sdk/browser exposes sdk.token')
+assert.equal(
+  browser.cosmos.gov.prepareCosmosVote,
+  browser.prepareCosmosVote,
+  '@vultisig/sdk/browser exposes sdk.cosmos.gov'
+)
 assert.ok(vite && (vite.default || vite), '@vultisig/sdk/vite resolves')
 assert.equal(
   path.basename(reactNativeEntry),
@@ -394,6 +416,7 @@ import type {
 } from '@vultisig/sdk/react-native'
 import type { Vultisig } from '@vultisig/sdk/node'
 import type { ElectronMainCrypto, Vultisig as ElectronMainVultisig } from '@vultisig/sdk/electron/main'
+import { cosmos, evm, token } from '@vultisig/sdk'
 import '@vultisig/sdk/browser'
 import '@vultisig/sdk/vite'
 
@@ -414,6 +437,9 @@ export type ExplorerShape = typeof explorer
 export type ExtendedShape = typeof extended
 export type ReactNativeDescriptor = ReactNativeChainDescriptor
 export type ReactNativeExtended = ReactNativeExtendedChainRegistry<typeof extension>
+export type CosmosNamespace = typeof cosmos
+export type EvmNamespace = typeof evm
+export type TokenNamespace = typeof token
 `
     )
     run(process.execPath, [tscBin, '-p', path.join(consumer, 'tsconfig.json')], {
