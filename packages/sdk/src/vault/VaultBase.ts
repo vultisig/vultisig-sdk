@@ -32,12 +32,12 @@ import { DiscountTierService } from '../services/DiscountTierService'
 import { FiatValueService } from '../services/FiatValueService'
 import type { PasswordCacheService } from '../services/PasswordCacheService'
 import type { Storage } from '../storage/types'
-import { pollTxStatusUntilFinal } from '../tx'
 // Import prep helpers from per-file paths, not the `tools/prep` barrel: the
 // barrel pulls in cosmos.ts → buildCosmosPayload → @vultisig/core-chain THORChain
 // modules at module-load time, which breaks vitest setups that mock chainFeeCoin.
 import { computeMaxSendFromBalance } from '../tools/prep/maxSend'
 import { vaultDataToIdentity } from '../tools/prep/types'
+import { pollTxStatusUntilFinal } from '../tx'
 // Types
 import {
   Balance,
