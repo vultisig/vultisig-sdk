@@ -218,7 +218,14 @@ export class RujiraOrderbook {
         owner: await this.client.getAddress(),
         pair:
           typeof params.pair === 'string'
-            ? { base: '', quote: '', contractAddress, tick: '0', takerFee: '0', makerFee: '0' }
+            ? {
+                base: '',
+                quote: '',
+                contractAddress,
+                tick: '0',
+                takerFee: '0',
+                makerFee: '0',
+              }
             : params.pair,
         side: params.side,
         price: params.price,
@@ -480,23 +487,22 @@ export class RujiraOrderbook {
       return { denom: asset.formats.fin, decimals: asset.decimals?.fin ?? 8 }
     }
 
-    if (typeof params.pair !== 'string' && params.pair.base && params.pair.quote) {
-      const assetId = params.side === 'buy' ? params.pair.quote : params.pair.base
-      return getAssetInfo(assetId)
-    }
-
     const contractAddress = await this.resolveContract(
       typeof params.pair === 'string' ? params.pair : params.pair.contractAddress
     )
 
     const config = await this.getContractConfig(contractAddress)
 
-    if (typeof params.pair === 'string' && !params.pair.startsWith('thor1')) {
-      const pairParts = params.pair.split('/')
-      if (pairParts.length !== 2) return undefined
+    if (typeof params.pair !== 'string' || !params.pair.startsWith('thor1')) {
+      const requestedPair =
+        typeof params.pair === 'string' ? params.pair.split('/') : [params.pair.base, params.pair.quote]
+      if (requestedPair.length !== 2) return undefined
 
-      const expectedBase = findAssetByFormat(pairParts[0] || '')?.formats.thorchain
-      const expectedQuote = findAssetByFormat(pairParts[1] || '')?.formats.thorchain
+      const [requestedBase, requestedQuote] = requestedPair
+      if (!requestedBase || !requestedQuote) return undefined
+
+      const expectedBase = findAssetByFormat(requestedBase)?.formats.thorchain
+      const expectedQuote = findAssetByFormat(requestedQuote)?.formats.thorchain
       if (!expectedBase || !expectedQuote || config.base !== expectedBase || config.quote !== expectedQuote) {
         return undefined
       }

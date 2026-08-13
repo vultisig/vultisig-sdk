@@ -37,6 +37,7 @@ const createMockClient = (configResponse?: object, bookResponse?: object) => ({
     }
   ),
   getAddress: vi.fn().mockResolvedValue('thor1user...'),
+  executeContract: vi.fn().mockResolvedValue({ transactionHash: 'ABC123' }),
 })
 
 describe('RujiraOrderbook', () => {
@@ -158,7 +159,10 @@ describe('RujiraOrderbook', () => {
   describe('denomToAsset conversion', () => {
     it('should convert common denoms correctly', async () => {
       const mockClient = createMockClient({
-        denoms: { base: 'eth-eth', quote: 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48' },
+        denoms: {
+          base: 'eth-eth',
+          quote: 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+        },
       })
       const orderbook = new RujiraOrderbook(mockClient as any)
 
@@ -253,7 +257,14 @@ describe('RujiraOrderbook', () => {
     }
 
     const build = async (side: 'buy' | 'sell', price: string, amount: string) => {
-      const orderbook = new RujiraOrderbook(createMockClient() as any)
+      const orderbook = new RujiraOrderbook(
+        createMockClient({
+          denoms: {
+            base: 'rune',
+            quote: 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+          },
+        }) as any
+      )
       return orderbook.buildPlaceOrder({ pair, side, price, amount } as any)
     }
 
@@ -305,7 +316,9 @@ describe('RujiraOrderbook', () => {
 
       const { funds } = await orderbook.buildPlaceOrder(buyParams as any)
 
-      expect(mockClient.queryContract).toHaveBeenCalledWith('thor1runebtc...', { config: {} })
+      expect(mockClient.queryContract).toHaveBeenCalledWith('thor1runebtc...', {
+        config: {},
+      })
       expect(funds).toEqual([{ denom: 'btc-btc', amount: '2500' }])
     })
 
@@ -331,7 +344,9 @@ describe('RujiraOrderbook', () => {
     })
 
     it('fails closed when canonical contract config contains extra denoms', async () => {
-      const mockClient = createMockClient({ denoms: ['rune', 'btc-btc', 'eth-eth'] })
+      const mockClient = createMockClient({
+        denoms: ['rune', 'btc-btc', 'eth-eth'],
+      })
       const orderbook = new RujiraOrderbook(mockClient as any)
 
       await expect(orderbook.buildPlaceOrder(buyParams as any)).rejects.toMatchObject({
@@ -348,6 +363,52 @@ describe('RujiraOrderbook', () => {
         code: RujiraErrorCode.INVALID_ASSET,
         message: 'Could not determine offer asset for order',
       })
+    })
+
+    it('fails closed when a named pair contains extra path components', async () => {
+      const mockClient = createMockClient({ denoms: ['rune', 'btc-btc'] })
+      Object.assign(mockClient.config.contracts.finContracts, {
+        'RUNE/BTC/ETH': 'thor1runebtc...',
+      })
+      const orderbook = new RujiraOrderbook(mockClient as any)
+
+      await expect(
+        orderbook.buildPlaceOrder({
+          ...buyParams,
+          pair: 'RUNE/BTC/ETH',
+        } as any)
+      ).rejects.toMatchObject({
+        code: RujiraErrorCode.INVALID_ASSET,
+        message: 'Could not determine offer asset for order',
+      })
+    })
+
+    it('fails closed when an object pair does not match its contract config', async () => {
+      const mockClient = createMockClient({ denoms: ['rune', 'btc-btc'] })
+      const orderbook = new RujiraOrderbook(mockClient as any)
+      const mismatchedPair = {
+        base: 'BTC.BTC',
+        quote: 'THOR.RUNE',
+        contractAddress: 'thor1runebtc...',
+        tick: '0',
+        takerFee: '0',
+        makerFee: '0',
+      }
+
+      await expect(
+        orderbook.buildPlaceOrder({
+          ...buyParams,
+          pair: mismatchedPair,
+        } as any)
+      ).rejects.toMatchObject({
+        code: RujiraErrorCode.INVALID_ASSET,
+        message: 'Could not determine offer asset for order',
+      })
+      await expect(orderbook.placeOrder({ ...buyParams, pair: mismatchedPair } as any)).rejects.toMatchObject({
+        code: RujiraErrorCode.INVALID_ASSET,
+        message: 'Could not determine offer asset for order',
+      })
+      expect(mockClient.executeContract).not.toHaveBeenCalled()
     })
 
     it('fails closed when contract config names an unknown quote asset', async () => {
