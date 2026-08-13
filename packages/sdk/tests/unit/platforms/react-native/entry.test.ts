@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import * as sdkRn from '../../../../src/platforms/react-native/index'
-
 import { cosmosTxFeeGasParityCases } from '../../../fixtures/cosmosTxFeeGasParity'
 
 process.env.VULTISIG_STRICT_SINGLETON = '0'
