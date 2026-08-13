@@ -368,6 +368,7 @@ export {
   type IbcMsgTransfer,
   normaliseIbcChainId,
   POLKADOT_ASSET_HUB_KNOWN_ASSETS,
+  prep,
   prepareContractCallTxFromKeys,
   prepareIbcTransfer,
   type PrepareIbcTransferParams,
@@ -402,7 +403,6 @@ export {
   type UnsignedTrc20Transfer,
   type VaultIdentity,
   type WithdrawRewardsParams,
-  prep,
 } from './prep'
 
 // Atomic chain helpers (re-exported from core for vault-free callers)
