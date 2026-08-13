@@ -249,10 +249,7 @@ describe('cctp attestation helpers', () => {
   })
 
   it('fails closed when Circle says complete but returns no attestation bytes', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ status: 'complete' }) })
-    )
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ status: 'complete' }) }))
 
     await expect(waitForCctpAttestation(MESSAGE_HASH, { timeoutMs: 20, pollIntervalMs: 1 })).rejects.toThrow(
       /returned no attestation bytes/
