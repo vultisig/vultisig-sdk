@@ -1,19 +1,26 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { Chain } from '../../Chain'
+import { Chain, EvmChain } from '../../Chain'
+import { blockaidEvmChain } from '../../security/blockaid/evmChains'
 import { COW_VAULT_RELAYER_ADDRESS, cowSwapSupportedChains } from './cowswap/config'
 import {
   assertKnownAggregatorRouter,
   assertKnownAggregatorRouterOnSigningPath,
+  assertSwapKitDestinationMatchesTarget,
   logUnenforcedAggregatorDestination,
 } from './knownAggregatorRouters'
+import { swapKitSourceChains } from './swapkit/SwapKitEnabledChains'
 
 const ONE_INCH_V6 = '0x111111125421ca6dc452d289314280a0f8842a65'
 const ONE_INCH_V5 = '0x1111111254eeb25477b68fb85ed929f73a960582'
 const ONE_INCH_V6_ZKSYNC = '0x6fd4383cb451173d5f9304f041c7bcbf27d561ff'
 const ONE_INCH_V6_ROBINHOOD = '0x5a705de8982235a7fa45bb83dcacf03a211389c7'
 const KYBER_V2 = '0x6131b5fae19ea4f9d964eac0408e4408b66337b5'
-const ATTACKER_ADDRESS = '0x000000000000000000000000000000deadbeef'
+const LIFI_DIAMOND = '0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE'
+const LIFI_DIAMOND_HYPEREVM = '0x0a0758d937d1059c356D4714e57F5df0239bce1A'
+const LIFI_DIAMOND_ROBINHOOD = '0xB477751B76CF82d00a686A1232f5fCD772414Af3'
+const LIFI_DIAMOND_ZKSYNC = '0x341e94069f53234fE6DabeF707aD424830525715'
+const ATTACKER_ADDRESS = '0x00000000000000000000000000000000deadbeef'
 
 describe('assertKnownAggregatorRouter — AGG-02 fund-safety allowlist', () => {
   it('accepts 1inch V6 on Ethereum (live-confirmed against the real quote API)', () => {
@@ -96,6 +103,39 @@ describe('assertKnownAggregatorRouter — AGG-02 fund-safety allowlist', () => {
     ]) {
       expect(() => assertKnownAggregatorRouter('kyber', KYBER_V2, chain)).not.toThrow()
     }
+  })
+
+  it('accepts the official LI.FI Diamond on every standard-address SDK EVM chain', () => {
+    for (const chain of [
+      Chain.Arbitrum,
+      Chain.Avalanche,
+      Chain.Base,
+      Chain.Blast,
+      Chain.BSC,
+      Chain.CronosChain,
+      Chain.Ethereum,
+      Chain.Mantle,
+      Chain.Optimism,
+      Chain.Polygon,
+      Chain.Sei,
+    ]) {
+      expect(() => assertKnownAggregatorRouter('li.fi', LIFI_DIAMOND, chain)).not.toThrow()
+    }
+  })
+
+  it.each([
+    [Chain.Hyperliquid, LIFI_DIAMOND_HYPEREVM],
+    [Chain.Robinhood, LIFI_DIAMOND_ROBINHOOD],
+    [Chain.Zksync, LIFI_DIAMOND_ZKSYNC],
+  ])('accepts the chain-specific LI.FI Diamond on %s', (chain, address) => {
+    expect(() => assertKnownAggregatorRouter('li.fi', address, chain)).not.toThrow()
+    expect(() => assertKnownAggregatorRouter('li.fi', LIFI_DIAMOND, chain)).toThrow(/unrecognized router address/)
+  })
+
+  it('REJECTS an attacker-controlled LI.FI destination', () => {
+    expect(() => assertKnownAggregatorRouter('li.fi', ATTACKER_ADDRESS, Chain.Ethereum)).toThrow(
+      /unrecognized router address/
+    )
   })
 
   it("REJECTS a 1inch response carrying Kyber's router (cross-provider mismatch)", () => {
@@ -195,11 +235,14 @@ describe('assertKnownAggregatorRouterOnSigningPath — sdk#1457 provider-string 
     ).toThrow(/Unrecognized swap provider/)
   })
 
-  it('still logs (does not throw) for the genuinely unenforceable, recognized li.fi/swapkit providers', () => {
-    const spy = vi.spyOn(console, 'info').mockImplementation(() => {})
-    expect(() => assertKnownAggregatorRouterOnSigningPath('li.fi', ATTACKER_ADDRESS, Chain.Ethereum)).not.toThrow()
-    expect(() => assertKnownAggregatorRouterOnSigningPath('swapkit', ATTACKER_ADDRESS, Chain.Ethereum)).not.toThrow()
-    spy.mockRestore()
+  it('enforces li.fi and refuses a synchronous log-only check for dynamic swapkit destinations', () => {
+    expect(() => assertKnownAggregatorRouterOnSigningPath('li.fi', ATTACKER_ADDRESS, Chain.Ethereum)).toThrow(
+      /unrecognized router address/
+    )
+    expect(() => assertKnownAggregatorRouterOnSigningPath('li.fi', LIFI_DIAMOND, Chain.Ethereum)).not.toThrow()
+    expect(() => assertKnownAggregatorRouterOnSigningPath('swapkit', ATTACKER_ADDRESS, Chain.Ethereum)).toThrow(
+      /independent reputation guard/
+    )
   })
 
   // sdk#1457 backward-compat: real mobile golden fixtures (mobileFixtures.golden.test.ts's
@@ -214,19 +257,59 @@ describe('assertKnownAggregatorRouterOnSigningPath — sdk#1457 provider-string 
   })
 })
 
-describe('logUnenforcedAggregatorDestination — LiFi/SwapKit, never throws', () => {
+describe('assertSwapKitDestinationMatchesTarget — sdk#1458 response binding', () => {
+  it('accepts a case-insensitive match with the screened targetAddress', () => {
+    expect(() =>
+      assertSwapKitDestinationMatchesTarget(
+        '0x111111125421ca6dc452d289314280a0f8842a65',
+        '0x111111125421CA6dc452D289314280a0F8842A65',
+        Chain.Ethereum
+      )
+    ).not.toThrow()
+  })
+
+  it('rejects an arbitrary tx.to that does not match targetAddress', () => {
+    expect(() => assertSwapKitDestinationMatchesTarget(ATTACKER_ADDRESS, LIFI_DIAMOND, Chain.Ethereum)).toThrow(
+      /does not match the screened targetAddress/
+    )
+  })
+
+  it.each([undefined, '', 'not-an-address'])('rejects missing or malformed targetAddress: %s', targetAddress => {
+    expect(() => assertSwapKitDestinationMatchesTarget(ATTACKER_ADDRESS, targetAddress, Chain.Ethereum)).toThrow(
+      /did not include a valid targetAddress/
+    )
+  })
+})
+
+describe('logUnenforcedAggregatorDestination — dynamic/legacy signing payloads, never throws', () => {
   it('never throws regardless of the address', () => {
-    expect(() => logUnenforcedAggregatorDestination('li.fi', '0x000000000000000000000000000000deadbeef')).not.toThrow()
     expect(() => logUnenforcedAggregatorDestination('swapkit', 'not-even-an-address')).not.toThrow()
   })
 
   it('logs provider + address so a future allowlist has real usage data to build from', () => {
     const spy = vi.spyOn(console, 'info').mockImplementation(() => {})
-    logUnenforcedAggregatorDestination('li.fi', '0xabc')
+    logUnenforcedAggregatorDestination('swapkit', '0xabc')
     expect(spy).toHaveBeenCalledWith(expect.stringContaining('swap-router-telemetry'), {
-      provider: 'li.fi',
+      provider: 'swapkit',
       address: '0xabc',
     })
     spy.mockRestore()
+  })
+})
+
+describe('SwapKit EVM source chains are fully covered by Blockaid — sdk#1458 review follow-up', () => {
+  it('every EVM chain SwapKit can source from also has a blockaidEvmChain mapping', () => {
+    // assertSwapKitAddressReputation throws "cannot be verified on unsupported Blockaid chain"
+    // for any EVM chain missing from blockaidEvmChain. Today that's fine — neither CronosChain
+    // nor Robinhood is a swapKitSourceChains entry — but adding either to swapKitSourceChains
+    // in the future would look like a harmless one-line change and would silently make every
+    // SwapKit swap FROM that chain a 100%, outage-independent refusal (not a Blockaid outage,
+    // not a flaky network call — a guaranteed throw on every single attempt). This test turns
+    // that into a loud, immediate failure here instead of a field report.
+    const evmSwapKitSourceChains = swapKitSourceChains.filter(chain => chain in EvmChain) as EvmChain[]
+
+    const uncoveredChains = evmSwapKitSourceChains.filter(chain => !(chain in blockaidEvmChain))
+
+    expect(uncoveredChains).toEqual([])
   })
 })
