@@ -326,8 +326,10 @@ function decodeBase58Address(address: string, chain: UtxoChainName): DecodedAddr
  */
 export function decodeAddressToPubKeyHash(address: string, chain: UtxoChainName): DecodedAddress {
   assertUtxoAddressBrand(address, chain)
+  const normalized = address.trim()
+  const caseInsensitive = normalized.toLowerCase()
 
-  if (chain === 'Zcash' && address.trim().startsWith('zs1')) {
+  if (chain === 'Zcash' && caseInsensitive.startsWith('zs1')) {
     throw new Error(`Cannot decode address: ${address} — Zcash shielded outputs are not supported by this SDK build`)
   }
 
@@ -337,11 +339,11 @@ export function decodeAddressToPubKeyHash(address: string, chain: UtxoChainName)
   // because the caller asked us to encode a script that this SDK can't yet
   // build — silently treating the 32-byte witness program as a 20-byte
   // P2WPKH would lock funds under a hash matching no spendable script.
-  const bech32Decoded = decodeBech32Address(address)
+  const bech32Decoded = decodeBech32Address(normalized)
   if (bech32Decoded) return bech32Decoded
 
   // CashAddr (BCH bitcoincash:q...)
-  const cashAddrDecoded = decodeCashAddrAddress(address)
+  const cashAddrDecoded = decodeCashAddrAddress(caseInsensitive)
   if (cashAddrDecoded) return cashAddrDecoded
 
   // base58check (DOGE D..., Zcash t1..., legacy BTC 1...)
@@ -352,7 +354,7 @@ export function decodeAddressToPubKeyHash(address: string, chain: UtxoChainName)
   // under a generic catch silently re-routes wrong-chain-paste cases (e.g. a
   // 22-byte Zcash t-address under chain='Dogecoin') back to the same vague
   // "Cannot decode address" message instead of surfacing the length mismatch.
-  const base58Decoded = decodeBase58Address(address, chain)
+  const base58Decoded = decodeBase58Address(normalized, chain)
   if (base58Decoded) return base58Decoded
 
   throw new Error(`Cannot decode address: ${address}`)

@@ -12,25 +12,37 @@ const BASE58_VERSION_BYTES: Partial<Record<UtxoChainName, ReadonlySet<number>>> 
   Dash: new Set([0x4c, 0x10]),
 }
 
-const BECH32_HRP: Partial<Record<UtxoChainName, string>> = {
+const SEGWIT_HRP: Partial<Record<UtxoChainName, string>> = {
   Bitcoin: 'bc',
   Litecoin: 'ltc',
-  Zcash: 'zs',
 }
 
-function hasExpectedBech32Hrp(address: string, expectedHrp: string, allowBech32m: boolean): boolean {
-  if (address !== address.toLowerCase()) return false
-
-  const codecs = allowBech32m ? [bech32, bech32m] : [bech32]
-  for (const codec of codecs) {
+function hasExpectedSegwitBrand(address: string, expectedHrp: string): boolean {
+  for (const codec of [bech32, bech32m]) {
     try {
-      if (codec.decode(address as `${string}1${string}`).prefix === expectedHrp) return true
+      const { prefix, words } = codec.decode(address as `${string}1${string}`)
+      const version = words[0]
+      if (prefix !== expectedHrp || version === undefined || version > 16) continue
+
+      const program = codec.fromWords(words.slice(1))
+      if (program.length < 2 || program.length > 40) continue
+      if (version === 0) return codec === bech32 && (program.length === 20 || program.length === 32)
+      return codec === bech32m
     } catch {
-      // Try the other checksum variant, then the non-bech32 formats below.
+      // Try the other checksum variant, then the non-SegWit formats below.
     }
   }
 
   return false
+}
+
+function hasExpectedZcashSaplingBrand(address: string): boolean {
+  try {
+    const decoded = bech32.decode(address as `${string}1${string}`)
+    return decoded.prefix === 'zs' && bech32.fromWords(decoded.words).length === 43
+  } catch {
+    return false
+  }
 }
 
 function hasExpectedBase58Version(address: string, chain: UtxoChainName): boolean {
@@ -68,9 +80,10 @@ export function isUtxoAddressBrandValid(address: string, chain: UtxoChainName): 
   if (normalized === '') return false
 
   if (chain === 'Bitcoin-Cash') return isValidCashAddr(normalized)
+  if (chain === 'Zcash' && hasExpectedZcashSaplingBrand(normalized)) return true
 
-  const expectedHrp = BECH32_HRP[chain]
-  if (expectedHrp && hasExpectedBech32Hrp(normalized, expectedHrp, chain !== 'Zcash')) return true
+  const expectedHrp = SEGWIT_HRP[chain]
+  if (expectedHrp && hasExpectedSegwitBrand(normalized, expectedHrp)) return true
 
   return hasExpectedBase58Version(normalized, chain)
 }

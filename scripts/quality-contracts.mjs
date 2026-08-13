@@ -323,6 +323,23 @@ assert.equal(typeof root.fiatToAmount, 'function', 'root exports fiatToAmount')
 assert.equal(typeof root.normalizeChain, 'function', 'root exports normalizeChain')
 assert.equal(typeof root.fromChainAmountExact, 'function', 'root exports fromChainAmountExact')
 assert.equal(typeof root.getBlockExplorerUrl, 'function', 'root exports getBlockExplorerUrl')
+assert.equal(typeof root.assertUtxoAddressBrand, 'function', 'root exports assertUtxoAddressBrand')
+assert.equal(typeof root.isUtxoAddressBrandValid, 'function', 'root exports isUtxoAddressBrandValid')
+assert.equal(
+  root.isUtxoAddressBrandValid('D5ERdEN1gsouFSs7zsq7VYJxyWP6dP28H1', 'Dogecoin'),
+  true,
+  'packed root validates a Dogecoin address for Dogecoin'
+)
+assert.equal(
+  root.isUtxoAddressBrandValid('D5ERdEN1gsouFSs7zsq7VYJxyWP6dP28H1', 'Bitcoin'),
+  false,
+  'packed root rejects a Dogecoin address for Bitcoin'
+)
+assert.throws(
+  () => root.assertUtxoAddressBrand('D5ERdEN1gsouFSs7zsq7VYJxyWP6dP28H1', 'Bitcoin'),
+  /UTXO address brand mismatch/,
+  'packed root exposes the throwing UTXO brand guard'
+)
 assert.ok(root.chainRegistry !== undefined, 'root exports chainRegistry')
 assert.equal(typeof root.deriveFromChainRegistry, 'function', 'root exports deriveFromChainRegistry')
 assert.equal(typeof root.extendChainRegistry, 'function', 'root exports extendChainRegistry')

@@ -31,6 +31,15 @@ const GOLDEN_ADDRESSES: Record<UtxoChainName, readonly string[]> = {
 const CHAINS = Object.keys(GOLDEN_ADDRESSES) as UtxoChainName[]
 const ZCASH_SAPLING_ADDRESS = 'zs1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5z5tpwxqergd3c8g7ruszzg3rysjjvfeg9y4zkvtfdeq'
 const ZCASH_SAPLING_BECH32M_VARIANT = 'zs1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5z5tpwxqergd3c8g7ruszzg3rysjjvfeg9y4zkehepuz'
+const INVALID_BITCOIN_SEGWIT_ADDRESSES = [
+  'bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqh2y7hd',
+  'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kemeawh',
+  'BC130XLXVLHEMJA6C4DQV22UAPCTQUPFHLXM9H8Z3K2E72Q4K9HCZ7VQ7ZWS8R',
+  'bc1pw5dgrnzv',
+  'bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7v8n0nx0muaewav253zgeav',
+  'BC1QR508D6QEJXTDG4Y5R3ZARVARYV98GJ9P',
+  'bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7v07qwwzcrf',
+]
 
 describe('UTXO address brand validation', () => {
   it.each(CHAINS)('accepts golden %s addresses', chain => {
@@ -53,6 +62,27 @@ describe('UTXO address brand validation', () => {
     expect(isUtxoAddressBrandValid('bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6x', 'Bitcoin-Cash')).toBe(
       false
     )
+  })
+
+  it('accepts uniform uppercase encodings and rejects mixed case', () => {
+    const bitcoin = GOLDEN_ADDRESSES.Bitcoin[0]!
+    const bitcoinCash = GOLDEN_ADDRESSES['Bitcoin-Cash'][0]!
+
+    expect(isUtxoAddressBrandValid(bitcoin.toUpperCase(), 'Bitcoin')).toBe(true)
+    expect(isUtxoAddressBrandValid(bitcoinCash.toUpperCase(), 'Bitcoin-Cash')).toBe(true)
+    expect(isUtxoAddressBrandValid(ZCASH_SAPLING_ADDRESS.toUpperCase(), 'Zcash')).toBe(true)
+    expect(isUtxoAddressBrandValid(`${bitcoin.slice(0, -1)}T`, 'Bitcoin')).toBe(false)
+    expect(isUtxoAddressBrandValid(`${bitcoinCash.slice(0, -1)}A`, 'Bitcoin-Cash')).toBe(false)
+    expect(decodeAddressToPubKeyHash(bitcoin.toUpperCase(), 'Bitcoin')).toEqual(
+      decodeAddressToPubKeyHash(bitcoin, 'Bitcoin')
+    )
+    expect(() => decodeAddressToPubKeyHash(ZCASH_SAPLING_ADDRESS.toUpperCase(), 'Zcash')).toThrow(
+      'Zcash shielded outputs are not supported by this SDK build'
+    )
+  })
+
+  it.each(INVALID_BITCOIN_SEGWIT_ADDRESSES)('rejects the invalid BIP-350 SegWit vector %s', address => {
+    expect(isUtxoAddressBrandValid(address, 'Bitcoin')).toBe(false)
   })
 
   it('recognizes a checksummed Zcash Sapling address without treating it as a signable transparent output', () => {
