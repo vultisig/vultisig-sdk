@@ -1,5 +1,48 @@
 # @vultisig/sdk
 
+## 4.6.0
+
+### Minor Changes
+
+- [#1830](https://github.com/vultisig/vultisig-sdk/pull/1830) [`1fd27b9`](https://github.com/vultisig/vultisig-sdk/commit/1fd27b9103b75a13191f173ebeed98288d8c16b0) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fail closed when LI.FI returns a destination outside its official chain-scoped Diamond deployments. Accept that Diamond as LI.FI's deterministic approval-spender fast path, while requiring an independent benign Blockaid verdict for any route-dependent spender that differs from it. Require the same independent verdicts for SwapKit EVM transaction destinations and approval spenders, while retaining response-local target-address binding as defense in depth.
+
+  **Consumer-visible behavior changes:**
+
+  - **New runtime throws on the signing path.** A LI.FI destination outside the official Diamond, a distinct LI.FI approval spender that doesn't clear an independent Blockaid check, or a SwapKit destination/approval-spender that doesn't clear the same check now throws during quote construction and co-signer signing-input construction. A consumer on a caret range picks this up automatically.
+  - **Dynamic LI.FI approval spenders and SwapKit addresses add a live third-party network call (Blockaid) during MPC signing**, per co-signer. The official LI.FI Diamond remains an offline fast path. A slow or unreachable Blockaid response can stall a signing ceremony for up to the shared `queryUrl` timeout (20s default) before throwing.
+
+- [#1811](https://github.com/vultisig/vultisig-sdk/pull/1811) [`003ee98`](https://github.com/vultisig/vultisig-sdk/commit/003ee98728f3318eb2de661209f164b449150810) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Bind raw swap quotes to their exact coin identities, requested source amount, absolute expiry, and returned transaction, then reject missing, stale, mismatched, or mutated quotes in the vault-free swap preparation path before any payload construction. General quotes remain preparation-valid for five minutes while SDK presentation continues to recommend refreshing after 60 seconds, and vault-free callers can catch `SwapQuoteExpiredError` to requote.
+
+  Consumers must pass the live bound quote returned by `findSwapQuote` or `getSwapQuote` into preparation instead of constructing or persisting an unbound raw quote. Structured cloning is supported; JSON round-tripping is not because it loses required runtime value types such as `bigint`.
+
+- [#1898](https://github.com/vultisig/vultisig-sdk/pull/1898) [`4859206`](https://github.com/vultisig/vultisig-sdk/commit/4859206bd801c3556316561236ce549ab270676e) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Publish the canonical seedphrase normalization, validation, key-derivation, and chain-discovery helpers through the supported `@vultisig/sdk/seedphrase` subpath.
+
+### Patch Changes
+
+- [#1892](https://github.com/vultisig/vultisig-sdk/pull/1892) [`9eaa7dc`](https://github.com/vultisig/vultisig-sdk/commit/9eaa7dcbb3c01af4b88f5ff373b38e84781cb32b) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add a canonical UTXO address-brand validator and enforce it in the transaction decoder.
+
+- [#1884](https://github.com/vultisig/vultisig-sdk/pull/1884) [`9ec2d77`](https://github.com/vultisig/vultisig-sdk/commit/9ec2d7723b5a6e1d71f48976b50e45a811bb09cb) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject implausible ERC-20 decimal values across shared Uniswap V2 and V3 DEX reads.
+
+- [#1883](https://github.com/vultisig/vultisig-sdk/pull/1883) [`44f0ecb`](https://github.com/vultisig/vultisig-sdk/commit/44f0ecbdf10b07789341c0279041d3a1e37d46a0) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Share LI.FI fee-chain fallback logic between the core and React Native quote paths.
+
+- [#1529](https://github.com/vultisig/vultisig-sdk/pull/1529) [`072f292`](https://github.com/vultisig/vultisig-sdk/commit/072f292338454a3bead7a17fe5b863904d03fc01) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export `getEvmRpcUrl` from the root SDK entrypoint and have the CLI agent executor use the shared EVM RPC resolver for gas refreshes and pending nonce checks.
+
+- [#1890](https://github.com/vultisig/vultisig-sdk/pull/1890) [`0967744`](https://github.com/vultisig/vultisig-sdk/commit/0967744cf0a6697f0dfe66f4f6ce31d6dd90d576) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Expose the documented `sdk.evm`, `sdk.token`, and `sdk.cosmos.gov` helper namespaces while preserving the existing flat exports.
+
+- [#1928](https://github.com/vultisig/vultisig-sdk/pull/1928) [`5814430`](https://github.com/vultisig/vultisig-sdk/commit/5814430f1cdbbe007fc943c3940971f0b3b61c02) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Publish dedicated `@vultisig/sdk/tx` and `@vultisig/sdk/tools/decode` subpaths with JavaScript and declaration bundles.
+
+- [#1553](https://github.com/vultisig/vultisig-sdk/pull/1553) [`4abbac7`](https://github.com/vultisig/vultisig-sdk/commit/4abbac7baf523df8af5a9b2bdf941ce72f8e1073) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export the canonical Noon vault helper family from `@vultisig/sdk/react-native` so first-party mobile consumers can reuse the shared SDK contract instead of maintaining local mirrors.
+
+- [#1560](https://github.com/vultisig/vultisig-sdk/pull/1560) [`f243bec`](https://github.com/vultisig/vultisig-sdk/commit/f243bec2191dffbc17af8b4f774e7d307b5c632d) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export swap-progress explorer helpers and the THORChain LP v2 helper family from `@vultisig/sdk/react-native`.
+
+- [#1563](https://github.com/vultisig/vultisig-sdk/pull/1563) [`a169543`](https://github.com/vultisig/vultisig-sdk/commit/a169543b62aa8ce4154cb5236806a54275a7aa42) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Keep the SDK IBC route table in sync with first-party consumers by adding the direct `cosmoshub-4` → `noble-1` channel-536 path to `prepareIbcTransfer()` and route discovery.
+
+- [#1887](https://github.com/vultisig/vultisig-sdk/pull/1887) [`1108d64`](https://github.com/vultisig/vultisig-sdk/commit/1108d64869394eb5ad494c7a489d3d1cb5f2174e) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Share one strict USDC amount parser between the CCTP and ThreeJane builders so both reject signed and non-digit inputs consistently.
+
+- [#1927](https://github.com/vultisig/vultisig-sdk/pull/1927) [`1f297ae`](https://github.com/vultisig/vultisig-sdk/commit/1f297ae036379b8d6a76344cb3d027eea97a6b07) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject malformed hex and base64 strings in `decodeFromToolResult` instead of allowing `Buffer` to normalize them into different bytes.
+
+- [#1886](https://github.com/vultisig/vultisig-sdk/pull/1886) [`eb25508`](https://github.com/vultisig/vultisig-sdk/commit/eb25508eadfde14ee62470e64d8c2b590627fd76) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fail closed when Sui pagination reports more data without a usable cursor, preventing partial coin sets or portfolios from being returned as complete.
+
 ## 4.5.0
 
 ### Minor Changes
