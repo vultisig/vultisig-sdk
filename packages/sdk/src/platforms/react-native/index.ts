@@ -735,6 +735,45 @@ export { fromChainAmountExact } from '@vultisig/core-chain/amount/fromChainAmoun
 export { ChainAmountParseError, toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 export type { ChainKind } from '@vultisig/core-chain/ChainKind'
 export { getChainKind, isChainOfKind } from '@vultisig/core-chain/ChainKind'
+export {
+  canonicalChainTag,
+  classifyAddress,
+  isAddressValidForChain,
+  isSolanaAddress,
+  supportedChainTags,
+} from '../../utils/addressFormat'
+export type { AddressFamily, AddressRole, ChainPrefixResult } from '../../utils/addressValidation'
+export { address, validate } from '../../utils/addressValidation'
+export { checkChainPrefix } from '../../utils/chainPrefix'
+export {
+  amountMatches,
+  computeEvmFee,
+  decimalsFor,
+  feeMatches,
+  isValidTokenSymbolFormat,
+  normalizeTokenSymbol,
+  scaleHumanToRaw,
+  scaleRawToHuman,
+  tokenDecimals,
+  ValidateNormalizerError,
+} from '../../utils/validateNormalizers'
+export type {
+  StationImportSource,
+  StationMnemonicImportSource,
+  StationPrivateKeyImportSource,
+  StationSeedImportSource,
+  StationTerraChain,
+  StationTerraChainPublicData,
+  StationTerraCoinType,
+  StationTerraKeyMaterial,
+} from '@vultisig/core-chain/station/importPrimitives'
+export {
+  deriveStationTerraKeyMaterial,
+  getStationTerraDerivationPath,
+  normalizeStationPrivateKeyHex,
+  stationTerraCoinTypes,
+  validateStationPrivateKeyHex,
+} from '@vultisig/core-chain/station/importPrimitives'
 export type {
   BlockExplorerEntity,
   ChainDescriptor,
