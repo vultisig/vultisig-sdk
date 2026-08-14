@@ -1,6 +1,10 @@
 import { create } from '@bufbuild/protobuf'
 import { Chain, EvmChain } from '@vultisig/core-chain/Chain'
-import { EthereumSpecificSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
+import {
+  CosmosSpecificSchema,
+  EthereumSpecificSchema,
+  TransactionType,
+} from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -19,9 +23,15 @@ type PayloadInput = {
   chain?: Chain
   amount: bigint
   contractAddress?: string
+  transactionType?: TransactionType
 }
 
-const buildPayload = ({ chain = EvmChain.Optimism, amount, contractAddress }: PayloadInput) =>
+const buildPayload = ({
+  chain = EvmChain.Optimism,
+  amount,
+  contractAddress,
+  transactionType = TransactionType.UNSPECIFIED,
+}: PayloadInput) =>
   create(KeysignPayloadSchema, {
     coin: {
       chain,
@@ -32,15 +42,25 @@ const buildPayload = ({ chain = EvmChain.Optimism, amount, contractAddress }: Pa
     },
     toAddress: '0x2222222222222222222222222222222222222222',
     toAmount: amount.toString(),
-    blockchainSpecific: {
-      case: 'ethereumSpecific',
-      value: create(EthereumSpecificSchema, {
-        gasLimit: '40000',
-        maxFeePerGasWei: '1500000',
-        priorityFee: '0',
-        nonce: 0n,
-      }),
-    },
+    blockchainSpecific:
+      chain === Chain.TerraClassic
+        ? {
+            case: 'cosmosSpecific',
+            value: create(CosmosSpecificSchema, {
+              accountNumber: 7n,
+              sequence: 3n,
+              transactionType,
+            }),
+          }
+        : {
+            case: 'ethereumSpecific',
+            value: create(EthereumSpecificSchema, {
+              gasLimit: '40000',
+              maxFeePerGasWei: '1500000',
+              priorityFee: '0',
+              nonce: 0n,
+            }),
+          },
   })
 
 const refine = (keysignPayload: ReturnType<typeof buildPayload>, balance: bigint) =>
@@ -116,6 +136,30 @@ describe('refineKeysignAmount', () => {
     const refined = await refine(buildPayload({ chain: Chain.TerraClassic, amount: balance, contractAddress: 'uusd' }), balance)
 
     expect(BigInt(refined.toAmount)).toBe(balance - fee)
+  })
+
+  // Regression for the CHANGES_REQUESTED review on #1879: an IBC MsgTransfer
+  // of USTC still prices CosmosSpecific.gas in uluna (the signing-inputs
+  // resolver never relabels it to uusd for IBC), so refining uusd off the
+  // amount here — as if the fee were paid in-kind like a plain USTC send —
+  // would debit a denom the signing path never priced against. Only a plain
+  // TerraClassic bank-send pays its fee in uusd; an IBC transfer must be left
+  // untouched, exactly like the ordinary full-balance token case above.
+  it('leaves an IBC transfer of TerraClassic USTC untouched — its fee is priced in uluna, not uusd', async () => {
+    const balance = 200_000_000n
+
+    const refined = await refine(
+      buildPayload({
+        chain: Chain.TerraClassic,
+        amount: balance,
+        contractAddress: 'uusd',
+        transactionType: TransactionType.IBC_TRANSFER,
+      }),
+      balance
+    )
+
+    expect(BigInt(refined.toAmount)).toBe(balance)
+    expect(mocks.getFeeAmount).not.toHaveBeenCalled()
   })
 
   it.each([Chain.Bitcoin, Chain.Ton])(
