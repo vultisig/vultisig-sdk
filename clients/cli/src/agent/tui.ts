@@ -195,8 +195,8 @@ export class ChatTUI {
 
       onAssistantMessage: (content: string) => {
         if (this.isStreaming) {
-          // Deltas were collected; render the full text with markdown
-          process.stdout.write(renderMarkdown(this.currentStreamText) + '\n')
+          // Prefer the authoritative terminal message over collected deltas
+          process.stdout.write(renderMarkdown(content || this.currentStreamText) + '\n')
           this.isStreaming = false
         } else if (content && content !== this.currentStreamText) {
           // Print full message with markdown rendering
@@ -252,6 +252,14 @@ export class ChatTUI {
         console.log(`  ${statusIcon} ${chalk.bold('TX')} [${chain}]: ${txHash.slice(0, 12)}...${txHash.slice(-8)}`)
         if (explorerUrl) {
           console.log(`     ${chalk.blue.underline(explorerUrl)}`)
+        }
+      },
+
+      onSigningRecord: record => {
+        if (record.success) {
+          console.log(`  ${chalk.green('✓')} ${chalk.bold('Signing approved')}: ${record.summary}`)
+        } else {
+          console.log(`  ${chalk.red('✗')} ${chalk.bold('Signing approved but not completed')}: ${record.summary}`)
         }
       },
 

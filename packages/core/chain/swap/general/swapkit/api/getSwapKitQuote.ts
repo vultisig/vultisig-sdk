@@ -5,11 +5,15 @@ import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { usdc } from '@vultisig/core-chain/coin/knownTokens'
 import { GeneralSwapQuote, GeneralSwapTx } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
-import { logUnenforcedAggregatorDestination } from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
+import {
+  assertSwapKitAddressReputation,
+  assertSwapKitDestinationMatchesTarget,
+} from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
 import { getSwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
 import { SwapKitEnabledChain, SwapKitSourceChain } from '@vultisig/core-chain/swap/general/swapkit/SwapKitEnabledChains'
 import {
   SwapKitAmountBelowMinimumError,
+  SwapKitFeeShapeError,
   SwapKitNoEligibleRoutesError,
 } from '@vultisig/core-chain/swap/general/swapkit/SwapKitErrors'
 import {
@@ -124,25 +128,37 @@ type SwapKitQuoteRoute = {
   expectedBuyAmount?: string
   legs?: { provider?: string }[]
   warnings?: { display?: string; message?: string }[]
+  /**
+   * Realized directional price movement of this route, in basis points, signed
+   * (negative == favorable). NOT the user-set tolerance every other
+   * `slippageBps` in this repo denotes (`DEFAULT_JUPITER_SLIPPAGE_BPS`,
+   * balancer, astroport) — it is the same quantity as `meta.priceImpact`, just
+   * in bps, and serves as the fallback for routes whose meta the proxy omits.
+   *
+   * Typed loosely because nothing validates the proxy's JSON before it lands
+   * here; `routePriceImpact` is what narrows it.
+   */
+  totalSlippageBps?: unknown
+  meta?: {
+    /**
+     * Signed fractional price movement (`0.0133` == 1.33% of output lost).
+     * Read as a fraction by both native clients — iOS's Price Impact row and
+     * Android's `SwapKitRouteMeta.priceImpact`, which multiplies by 100 to
+     * display — and self-consistent with the `totalSlippageBps / 10_000`
+     * fallback.
+     */
+    priceImpact?: unknown
+  }
 }
 
 type SwapKitQuoteResponse = {
   routes?: SwapKitQuoteRoute[]
-  providerErrors?: {
-    provider?: string
-    message?: string
-    errorCode?: string
-  }[]
+  providerErrors?: { provider?: string; message?: string; errorCode?: string }[]
   error?: string
   message?: string
 }
 
-type SwapKitFee = {
-  type?: string
-  amount?: string
-  asset?: string
-  chain?: string
-}
+type SwapKitFee = { type?: string; amount?: string; asset?: string; chain?: string }
 
 type SwapKitSwapResponse = {
   expectedBuyAmount?: string
@@ -165,9 +181,7 @@ type SwapKitSwapResponse = {
   providers?: string[]
   legs?: { provider?: string }[]
   fees?: SwapKitFee[]
-  meta?: {
-    txType?: string
-  }
+  meta?: { txType?: string }
 }
 
 type SwapKitEvmTx = {
@@ -185,6 +199,10 @@ const swapKitTransferSourceChains = [
   Chain.Dogecoin,
   Chain.Litecoin,
   Chain.Ripple,
+  // Sui rides the transfer arm for its pre-built PTB, the same way Bitcoin
+  // rides it for a PSBT: `txType`/`txPayload` carry the opaque signing bytes
+  // while `to`/`amount` stay informational (both are baked into the PTB).
+  Chain.Sui,
   Chain.Ton,
   Chain.Tron,
   Chain.Zcash,
@@ -303,10 +321,7 @@ const postSwapKit = async <T>(path: string, body: Record<string, unknown>): Prom
 
   const response = await fetch(`${baseUrl.replace(/\/$/, '')}${path}`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(trimmedApiKey ? { 'x-api-key': trimmedApiKey } : {}),
-    },
+    headers: { 'Content-Type': 'application/json', ...(trimmedApiKey ? { 'x-api-key': trimmedApiKey } : {}) },
     body: JSON.stringify(body),
   })
 
@@ -378,11 +393,24 @@ const decodeApproveSpender = (data: string | undefined): string | undefined => {
   return spender === '0x0000000000000000000000000000000000000000' ? undefined : spender
 }
 
-const buildEvmTx = (
-  tx: unknown,
-  fromAddress: string,
+type BuildEvmTxInput = {
+  tx: unknown
+  fromAddress: string
+  targetAddress: string | undefined
+  chain: Chain
   approvalTx?: SwapKitSwapResponse['approvalTx']
-): GeneralSwapTx => {
+  /** Omitted when the response itemizes no affiliate/service fee at all. */
+  affiliateFee?: SwapFee
+}
+
+const buildEvmTx = async ({
+  tx,
+  fromAddress,
+  targetAddress,
+  chain,
+  approvalTx,
+  affiliateFee,
+}: BuildEvmTxInput): Promise<GeneralSwapTx> => {
   if (!isRecord(tx)) {
     throw new Error('SwapKit EVM route did not return a transaction object.')
   }
@@ -393,10 +421,9 @@ const buildEvmTx = (
     throw new Error('SwapKit EVM transaction is missing a required to field.')
   }
 
-  // AGG-02: SwapKit routes through many different bridge/DEX contracts by design
-  // (diamond routing, multi-hop, chain-specific deployments) — a hard allowlist would
-  // false-block legitimate routes, so log (never throw). See knownAggregatorRouters.ts.
-  logUnenforcedAggregatorDestination('swapkit', evmTx.to)
+  // sdk#1458: tx.to and targetAddress share the same untrusted /v3/swap response, so
+  // equality is defense in depth rather than an independent trust boundary.
+  assertSwapKitDestinationMatchesTarget(evmTx.to, targetAddress, chain)
 
   const gas = evmTx.gasLimit ?? evmTx.gas
 
@@ -404,6 +431,16 @@ const buildEvmTx = (
   // allowance target (often an inner executor != tx.to). Surface it so the
   // consumer approves the correct contract instead of the router.
   const approvalAddress = decodeApproveSpender(approvalTx?.data)
+
+  // The Blockaid verdict is independent of SwapKit's response. Require an explicit
+  // Benign result for both the transaction destination and any distinct approval
+  // spender before either address can enter a signable quote.
+  const reputationChecks = [assertSwapKitAddressReputation(evmTx.to, chain, 'transaction destination')]
+  if (approvalAddress && approvalAddress.toLowerCase() !== evmTx.to.toLowerCase()) {
+    reputationChecks.push(assertSwapKitAddressReputation(approvalAddress, chain, 'approval spender'))
+  }
+
+  await Promise.all(reputationChecks)
 
   return {
     evm: {
@@ -413,6 +450,16 @@ const buildEvmTx = (
       value: bigintString(evmTx.value),
       gasLimit: safeBigInt(gas),
       ...(approvalAddress ? { approvalAddress } : {}),
+      // SwapKit itemizes the affiliate/service fee it charges. The Solana
+      // branch already surfaces it; leaving it off the EVM branch made an
+      // aggregator swap look like it carried no swap fee at all, so the fee row
+      // had nothing to show and the total omitted it.
+      //
+      // Absent covers three cases — no fee entries, an itemized zero, and a
+      // shape that could not be resolved — because none of them establishes an
+      // amount we can vouch for. Consumers report the fee as part of the quoted
+      // rate rather than asserting a zero.
+      ...(affiliateFee && affiliateFee.amount > 0n ? { affiliateFee } : {}),
     },
   }
 }
@@ -461,10 +508,7 @@ const getSwapKitSwapFee = (
     to,
     ...(isChainflipProvider(routeProvider) ? [chainflipStableFeeCoin] : []),
   ]
-  const candidates = feeCoins.map(coin => ({
-    coin,
-    asset: toSwapKitAsset(coin).toLowerCase(),
-  }))
+  const candidates = feeCoins.map(coin => ({ coin, asset: toSwapKitAsset(coin).toLowerCase() }))
   let result: SwapFee | undefined
 
   for (const fee of fees ?? []) {
@@ -475,7 +519,7 @@ const getSwapKitSwapFee = (
     }
 
     if (!fee.asset) {
-      throw new Error(`SwapKit ${type} fee is missing its asset.`)
+      throw new SwapKitFeeShapeError(`SwapKit ${type} fee is missing its asset.`)
     }
 
     const candidate = candidates.find(
@@ -483,7 +527,7 @@ const getSwapKitSwapFee = (
     )
 
     if (!candidate) {
-      throw new Error(`SwapKit ${type} fee uses unsupported asset ${fee.asset}.`)
+      throw new SwapKitFeeShapeError(`SwapKit ${type} fee uses unsupported asset ${fee.asset}.`)
     }
 
     const current: SwapFee = {
@@ -494,24 +538,17 @@ const getSwapKitSwapFee = (
     }
 
     if (current.amount < 0n) {
-      throw new Error(`SwapKit ${type} fee amount cannot be negative.`)
+      throw new SwapKitFeeShapeError(`SwapKit ${type} fee amount cannot be negative.`)
     }
 
     if (result && !sameSwapFeeCoin(result, current)) {
-      throw new Error('SwapKit affiliate and service fees use different assets.')
+      throw new SwapKitFeeShapeError('SwapKit affiliate and service fees use different assets.')
     }
 
     result = result ? { ...result, amount: result.amount + current.amount } : current
   }
 
-  return (
-    result ?? {
-      amount: 0n,
-      chain: from.chain,
-      id: from.id,
-      decimals: from.decimals,
-    }
-  )
+  return result ?? { amount: 0n, chain: from.chain, id: from.id, decimals: from.decimals }
 }
 
 const buildSolanaTx = (
@@ -528,13 +565,7 @@ const buildSolanaTx = (
   const decimals = chainFeeCoin[Chain.Solana].decimals
   const networkFee = getSwapKitFeeAmount(fees, 'network', decimals)
 
-  return {
-    solana: {
-      data: tx,
-      networkFee,
-      swapFee: getSwapKitSwapFee(fees, from, to, routeProvider),
-    },
-  }
+  return { solana: { data: tx, networkFee, swapFee: getSwapKitSwapFee(fees, from, to, routeProvider) } }
 }
 
 const getTransferTargetAddress = ({ targetAddress, depositAddress, tx }: SwapKitSwapResponse): string | undefined => {
@@ -587,6 +618,15 @@ const getTransferAmount = ({ depositAmount, tx }: SwapKitSwapResponse, amount: b
 
 const shouldUseTransferTx = (chain: SwapKitSourceChain): chain is (typeof swapKitTransferSourceChains)[number] =>
   isOneOf(chain, swapKitTransferSourceChains)
+
+// Transfer-arm chains that still need SwapKit to BUILD the transaction, so
+// `/v3/swap` must not be sent `disableBuildTx`. Bitcoin gets a PSBT and Sui a
+// pre-built PTB; in both cases those bytes drive signing directly, and asking
+// SwapKit to skip construction returns a response with no `tx` at all. The
+// remaining transfer chains are deposit-only (TON/XRP/ADA style) — they need
+// nothing but an address, so skipping the build saves a pointless server-side
+// construction that can fail on balance checks.
+const swapKitPrebuiltTxSourceChains: ReadonlySet<SwapKitSourceChain> = new Set([Chain.Bitcoin, Chain.Sui])
 
 const textEncoder = new TextEncoder()
 
@@ -663,15 +703,24 @@ const buildTransferTx = (
     throw new Error('SwapKit transfer route did not return a target address.')
   }
 
-  const txType = response.meta?.txType
+  // SwapKit renames base64 tx types on the wire without versioning — `SOLANA`
+  // became `SERIALIZED_BASE64` and `CARDANO` became `CBOR` mid-flight (iOS
+  // accepts both spellings in `SwapKitSwapResponse.decodeTx`). A Sui route's
+  // `meta.txType` therefore cannot be trusted to read `SUI`. The source chain
+  // is the reliable discriminator, and normalizing here also keeps
+  // `SwapKitSwapPayload.txType` byte-identical to what iOS stamps
+  // (`buildSwapKitSuiPayload` hardcodes `"SUI"`) — cosigning peers must agree.
+  const wireTxType = response.meta?.txType
+  const txType = from.chain === Chain.Sui ? 'SUI' : wireTxType
+
+  if (from.chain === Chain.Sui && response.tx !== undefined && typeof response.tx !== 'string') {
+    throw new Error('SwapKit Sui route did not return a base64 programmable transaction block.')
+  }
+
   const txPayload = response.tx ? encodeSwapKitTxPayload(response.tx, txType) : undefined
   const psbtDestinationAmount =
     from.chain === Chain.Bitcoin && txType?.toUpperCase() === 'PSBT' && txPayload?.length
-      ? getBitcoinPsbtDestinationAmount({
-          txPayload,
-          senderAddress: from.address,
-          targetAddress: to,
-        })
+      ? getBitcoinPsbtDestinationAmount({ txPayload, senderAddress: from.address, targetAddress: to })
       : undefined
 
   const transfer = {
@@ -684,28 +733,20 @@ const buildTransferTx = (
     ...(response.swapId ? { swapId: response.swapId } : {}),
   }
 
-  return {
-    transfer,
-  }
+  return { transfer }
 }
 
-// Sui + Cardano are eligible SwapKit SOURCE chains for quote-dispatch purposes
-// (see SwapKitEnabledChains.ts) but have no wired tx-build path here yet:
-//   - Sui: SwapKit returns the tx as a base64 string (`encodeSwapKitTxPayload`'s
-//     dormant `normalizedTxType === 'SUI'` branch decodes it), but there is no
-//     `GeneralSwapTx` variant a Sui signer can consume — it is neither `evm`
-//     (no `to`/`data` fields) nor a plain `transfer` (a Sui PTB isn't a simple
-//     send). Falling through to `buildEvmTx` would either throw an unrelated
-//     "not a transaction object" error, or worse, silently build a nonsense
-//     `{evm: {...}}` shape if the response ever coincidentally looks
-//     record-like.
-//   - Cardano: `encodeSwapKitTxPayload` explicitly returns an EMPTY byte array
-//     for `normalizedTxType === 'CARDANO'` — there is no decode implementation
-//     at all, so any tx built from it would be silently wrong.
+// Cardano is an eligible SwapKit SOURCE chain for quote-dispatch purposes (see
+// SwapKitEnabledChains.ts) but has no wired tx-build path here yet:
+// `encodeSwapKitTxPayload` explicitly returns an EMPTY byte array for
+// `normalizedTxType === 'CARDANO'` — there is no decode implementation at all,
+// so any tx built from it would be silently wrong. iOS covers this with a
+// separate `CARDANO_PREBUILT` CBOR path (`SwapKitCardanoSigner.swift`); porting
+// that decode is follow-on work.
+//
 // Rejected in `getSwapKitQuote` BEFORE the network round-trip (no route/swap
 // API calls wasted on a request that can never produce a signable tx).
-// Signing support for these two as a SwapKit source is separate follow-on work.
-const SWAP_SOURCE_TX_BUILD_UNSUPPORTED: ReadonlySet<SwapKitSourceChain> = new Set([Chain.Sui, Chain.Cardano])
+const SWAP_SOURCE_TX_BUILD_UNSUPPORTED: ReadonlySet<SwapKitSourceChain> = new Set([Chain.Cardano])
 
 const buildSwapKitTx = (
   response: SwapKitSwapResponse,
@@ -713,7 +754,7 @@ const buildSwapKitTx = (
   to: AccountCoin<SwapKitEnabledChain>,
   amount: bigint,
   routeProvider: string | undefined
-): GeneralSwapTx => {
+): GeneralSwapTx | Promise<GeneralSwapTx> => {
   if (from.chain === Chain.Solana) {
     return buildSolanaTx(response.tx, response.fees, from, to, routeProvider)
   }
@@ -722,7 +763,72 @@ const buildSwapKitTx = (
     return buildTransferTx(response, from, amount)
   }
 
-  return buildEvmTx(response.tx, from.address, response.approvalTx)
+  return buildEvmTx({
+    tx: response.tx,
+    fromAddress: from.address,
+    targetAddress: response.targetAddress,
+    chain: from.chain,
+    approvalTx: response.approvalTx,
+    affiliateFee: getSwapKitEvmSwapFee({ fees: response.fees, from, to, routeProvider }),
+  })
+}
+
+type GetSwapKitEvmSwapFeeInput = {
+  fees: SwapKitSwapResponse['fees']
+  from: AccountCoin<SwapKitSourceChain>
+  to: AccountCoin<SwapKitEnabledChain>
+  routeProvider: string | undefined
+}
+
+/**
+ * SwapKit's affiliate/service fee for an EVM route, or `undefined` when its
+ * shape cannot be resolved.
+ *
+ * The fee is not part of the signed EVM transaction — `from`/`to`/`data`/
+ * `value`/`gas` are — so an unexpected shape must never take down a route that
+ * would otherwise sign. Only [SwapKitFeeShapeError] is swallowed; anything else
+ * is a bug in the resolution and stays loud. The Solana branch calls
+ * `getSwapKitSwapFee` bare and lets it throw on purpose: its tx type requires
+ * the fee, so an unresolved one really is fatal there.
+ */
+const getSwapKitEvmSwapFee = ({ fees, from, to, routeProvider }: GetSwapKitEvmSwapFeeInput): SwapFee | undefined => {
+  try {
+    return getSwapKitSwapFee(fees, from, to, routeProvider)
+  } catch (error) {
+    if (!(error instanceof SwapKitFeeShapeError)) {
+      throw error
+    }
+
+    console.warn('[getSwapKitQuote] unresolved SwapKit fee on an EVM route; reporting none', error)
+    return undefined
+  }
+}
+
+const bpsPerUnit = 10_000
+
+const finiteNumber = (value: unknown): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) ? value : undefined
+
+/**
+ * Price impact of a route as a signed fraction, preferring `meta.priceImpact`
+ * (the figure iOS and Android show) and falling back to the same directional
+ * movement expressed in bps for routes whose meta the proxy omits.
+ *
+ * Both are narrowed rather than trusted: nothing validates the proxy's JSON on
+ * the way in, so an explicit `null` or a stringified number would otherwise
+ * land in a `number` field and reach consumers as `null.toFixed(...)` or a
+ * 100x-wrong figure. A value that fails the check falls through to the next
+ * source, and an unreadable pair reports nothing at all.
+ */
+const routePriceImpact = ({ meta, totalSlippageBps }: SwapKitQuoteRoute): number | undefined => {
+  const metaImpact = finiteNumber(meta?.priceImpact)
+  if (metaImpact !== undefined) {
+    return metaImpact
+  }
+
+  const slippageBps = finiteNumber(totalSlippageBps)
+
+  return slippageBps === undefined ? undefined : slippageBps / bpsPerUnit
 }
 
 const routeExpectedBuyAmount = (route: SwapKitQuoteRoute, decimals: number): bigint | null => {
@@ -763,10 +869,7 @@ const fetchSwapKitQuoteResponse = async (body: Record<string, unknown>): Promise
 
   const response = await fetch(`${baseUrl.replace(/\/$/, '')}/v3/quote`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(trimmedApiKey ? { 'x-api-key': trimmedApiKey } : {}),
-    },
+    headers: { 'Content-Type': 'application/json', ...(trimmedApiKey ? { 'x-api-key': trimmedApiKey } : {}) },
     body: JSON.stringify(body),
   })
 
@@ -793,12 +896,7 @@ const getSwapKitRoutes = async (
   providers: SwapKitProvider[]
 ): Promise<SwapKitQuoteRoute[]> => {
   try {
-    const quoteResponse = await fetchSwapKitQuoteResponse(
-      withoutUndefinedFields({
-        ...body,
-        providers,
-      })
-    )
+    const quoteResponse = await fetchSwapKitQuoteResponse(withoutUndefinedFields({ ...body, providers }))
 
     if (quoteResponse.error) {
       const message = quoteResponse.message ?? quoteResponse.error
@@ -904,15 +1002,23 @@ export const getSwapKitQuote = async ({
       sourceAddress: from.address,
       destinationAddress: to.address,
       disableBalanceCheck: true,
-      disableBuildTx: shouldUseTransferTx(from.chain) && from.chain !== Chain.Bitcoin ? true : undefined,
+      disableBuildTx:
+        shouldUseTransferTx(from.chain) && !swapKitPrebuiltTxSourceChains.has(from.chain) ? true : undefined,
     })
   )
   const routeProvider = getRouteProviderName(swapResponse) ?? getRouteProviderName(route)
+
+  // Read from the quote-stage route, unlike `dstAmount` and `routeProvider`
+  // which prefer the swap-stage response. No `/v3/swap` shape we model carries
+  // impact, and both native clients read it off the chosen route the same way;
+  // if it is ever restated there, it should be preferred here too.
+  const priceImpactFraction = routePriceImpact(route)
 
   return {
     dstAmount: parseExpectedBuyAmount(swapResponse.expectedBuyAmount ?? route.expectedBuyAmount, to.decimals),
     provider: 'swapkit',
     routeProvider,
-    tx: buildSwapKitTx(swapResponse, from, to, amount, routeProvider),
+    ...(priceImpactFraction === undefined ? {} : { priceImpactFraction }),
+    tx: await buildSwapKitTx(swapResponse, from, to, amount, routeProvider),
   }
 }

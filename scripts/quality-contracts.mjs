@@ -24,6 +24,10 @@ const CLI_ENTRY = path.join(repoRoot, 'clients/cli/dist/index.js')
 const SDK_DIST_MARKER = path.join(repoRoot, 'packages/sdk/dist/index.node.esm.js')
 const YARN_CLI = path.join(repoRoot, '.yarn/releases/yarn-4.16.0.cjs')
 const PACKAGE_CONTRACT_WORKSPACES = ['@vultisig/mpc-types', '@vultisig/mpc-wasm']
+const WINDOWS_CORE_CHAIN_EXPORTS = [
+  './chains/thorchain/ruji/services/fetchMergeableTokenBalances',
+  './chains/thorchain/ruji/services/fetchStakeView',
+]
 const NODE_BUILTINS = new Set(builtinModules.map(name => name.replace(/^node:/, '')))
 
 /** Collect relative paths like `./dist/foo.js` from package.json `exports` */
@@ -123,6 +127,30 @@ function validateTarballExportFiles(packageRoot) {
     const abs = packageRelativePath(packageRoot, rel)
     if (!existsSync(abs)) {
       throw new Error(`${pkg.name} export target missing from packed tarball: ${rel} -> ${abs}`)
+    }
+  }
+}
+
+function validateWindowsCoreChainExports(packageRoot) {
+  const pkgPath = path.join(packageRoot, 'package.json')
+  const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'))
+
+  for (const subpath of WINDOWS_CORE_CHAIN_EXPORTS) {
+    const contract = pkg.exports?.[subpath]
+    if (!contract) {
+      throw new Error(`@vultisig/core-chain is missing a Windows consumer export: ${subpath}`)
+    }
+
+    const rels = collectExportRelativePaths(contract)
+    if (!rels.size) {
+      throw new Error(`@vultisig/core-chain Windows consumer export has no target: ${subpath}`)
+    }
+
+    for (const rel of rels) {
+      const abs = packageRelativePath(packageRoot, rel)
+      if (!existsSync(abs)) {
+        throw new Error(`@vultisig/core-chain Windows consumer target is missing: ${subpath} -> ${rel}`)
+      }
     }
   }
 }
@@ -277,7 +305,7 @@ import * as root from '@vultisig/sdk'
 import * as node from '@vultisig/sdk/node'
 import * as browser from '@vultisig/sdk/browser'
 import * as vite from '@vultisig/sdk/vite'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 
@@ -285,6 +313,7 @@ const require = createRequire(import.meta.url)
 const entry = require.resolve('@vultisig/sdk')
 const pkgDir = path.resolve(path.dirname(entry), '..')
 const electronMainEntry = require.resolve('@vultisig/sdk/electron/main')
+const reactNativeEntry = require.resolve('@vultisig/sdk/react-native')
 const electronMain = require('@vultisig/sdk/electron/main')
 const electronMainImport = await import('@vultisig/sdk/electron/main')
 
@@ -292,11 +321,60 @@ assert.equal(typeof root.Vultisig, 'function', 'root exports Vultisig')
 assert.ok(root.Chain !== undefined, 'root exports Chain')
 assert.equal(typeof root.fiatToAmount, 'function', 'root exports fiatToAmount')
 assert.equal(typeof root.normalizeChain, 'function', 'root exports normalizeChain')
+assert.equal(typeof root.fromChainAmountExact, 'function', 'root exports fromChainAmountExact')
+assert.equal(typeof root.getBlockExplorerUrl, 'function', 'root exports getBlockExplorerUrl')
+assert.equal(typeof root.assertUtxoAddressBrand, 'function', 'root exports assertUtxoAddressBrand')
+assert.equal(typeof root.isUtxoAddressBrandValid, 'function', 'root exports isUtxoAddressBrandValid')
+assert.equal(
+  root.isUtxoAddressBrandValid('D5ERdEN1gsouFSs7zsq7VYJxyWP6dP28H1', 'Dogecoin'),
+  true,
+  'packed root validates a Dogecoin address for Dogecoin'
+)
+assert.equal(
+  root.isUtxoAddressBrandValid('D5ERdEN1gsouFSs7zsq7VYJxyWP6dP28H1', 'Bitcoin'),
+  false,
+  'packed root rejects a Dogecoin address for Bitcoin'
+)
+assert.throws(
+  () => root.assertUtxoAddressBrand('D5ERdEN1gsouFSs7zsq7VYJxyWP6dP28H1', 'Bitcoin'),
+  /UTXO address brand mismatch/,
+  'packed root exposes the throwing UTXO brand guard'
+)
+assert.ok(root.chainRegistry !== undefined, 'root exports chainRegistry')
+assert.equal(typeof root.deriveFromChainRegistry, 'function', 'root exports deriveFromChainRegistry')
+assert.equal(typeof root.extendChainRegistry, 'function', 'root exports extendChainRegistry')
+assert.equal(root.evm.encodeErc20Approve, root.encodeErc20Approve, 'root exposes sdk.evm')
+assert.equal(root.token.resolveContract, root.resolveContract, 'root exposes sdk.token')
+assert.equal(
+  root.cosmos.gov.getCosmosGovernanceProposals,
+  root.getCosmosGovernanceProposals,
+  'root exposes sdk.cosmos.gov'
+)
+assert.equal(root.cosmos.gov.prepareCosmosVote, root.prepareCosmosVote, 'sdk.cosmos.gov keeps the flat vote helper')
 
 assert.equal(typeof node.Vultisig, 'function', '@vultisig/sdk/node exports Vultisig')
+assert.equal(node.evm.encodeErc20Approve, node.encodeErc20Approve, '@vultisig/sdk/node exposes sdk.evm')
+assert.equal(node.token.resolveContract, node.resolveContract, '@vultisig/sdk/node exposes sdk.token')
+assert.equal(
+  node.cosmos.gov.prepareCosmosVote,
+  node.prepareCosmosVote,
+  '@vultisig/sdk/node exposes sdk.cosmos.gov'
+)
 
 assert.ok(browser.Chain !== undefined, '@vultisig/sdk/browser resolves')
+assert.equal(browser.evm.encodeErc20Approve, browser.encodeErc20Approve, '@vultisig/sdk/browser exposes sdk.evm')
+assert.equal(browser.token.resolveContract, browser.resolveContract, '@vultisig/sdk/browser exposes sdk.token')
+assert.equal(
+  browser.cosmos.gov.prepareCosmosVote,
+  browser.prepareCosmosVote,
+  '@vultisig/sdk/browser exposes sdk.cosmos.gov'
+)
 assert.ok(vite && (vite.default || vite), '@vultisig/sdk/vite resolves')
+assert.equal(
+  path.basename(reactNativeEntry),
+  'index.react-native.js',
+  '@vultisig/sdk/react-native resolves the React Native bundle'
+)
 assert.equal(
   path.basename(electronMainEntry),
   'index.electron-main.cjs',
@@ -314,6 +392,17 @@ const rnJs = path.join(pkgDir, 'dist/index.react-native.js')
 assert.ok(existsSync(rnJs), 'react-native bundle file exists on disk')
 const rnDts = path.join(pkgDir, 'dist/index.react-native.d.ts')
 assert.ok(existsSync(rnDts), 'react-native types exist on disk')
+for (const symbol of [
+  'chainRegistry',
+  'deriveFromChainRegistry',
+  'extendChainRegistry',
+  'getBlockExplorerUrl',
+  'assertUtxoAddressBrand',
+  'isUtxoAddressBrandValid',
+]) {
+  assert.ok(readFileSync(rnJs, 'utf8').includes(symbol), \`react-native bundle exports \${symbol}\`)
+  assert.ok(readFileSync(rnDts, 'utf8').includes(symbol), \`react-native types export \${symbol}\`)
+}
 const electronMainDts = path.join(pkgDir, 'dist/index.electron-main.d.ts')
 assert.ok(existsSync(electronMainDts), 'electron main types exist on disk')
 `
@@ -336,15 +425,75 @@ assert.ok(existsSync(electronMainDts), 'electron main types exist on disk')
     writeFileSync(path.join(consumer, 'tsconfig.json'), JSON.stringify(tsconfig, null, 2) + '\n')
     writeFileSync(
       path.join(consumer, 'types-smoke.ts'),
-      `import type { Chain } from '@vultisig/sdk'
+      `import {
+  Chain,
+  assertUtxoAddressBrand,
+  chainRegistry,
+  deriveFromChainRegistry,
+  extendChainRegistry,
+  isUtxoAddressBrandValid,
+} from '@vultisig/sdk'
+import type {
+  ChainDescriptor,
+  ChainDescriptorRegistry,
+  ChainExplorerDescriptor,
+  ChainExtensionRecord,
+  ChainKind,
+  ExtendedChainRegistry,
+  UtxoChainName,
+} from '@vultisig/sdk'
+import {
+  assertUtxoAddressBrand as assertReactNativeUtxoAddressBrand,
+  isUtxoAddressBrandValid as isReactNativeUtxoAddressBrandValid,
+} from '@vultisig/sdk/react-native'
+import type {
+  ChainDescriptor as ReactNativeChainDescriptor,
+  ExtendedChainRegistry as ReactNativeExtendedChainRegistry,
+  UtxoChainName as ReactNativeUtxoChainName,
+} from '@vultisig/sdk/react-native'
 import type { Vultisig } from '@vultisig/sdk/node'
 import type { ElectronMainCrypto, Vultisig as ElectronMainVultisig } from '@vultisig/sdk/electron/main'
+import { cosmos, evm, token } from '@vultisig/sdk'
 import '@vultisig/sdk/browser'
 import '@vultisig/sdk/vite'
+
+const descriptor: ChainDescriptor = chainRegistry[Chain.Ethereum]
+const registry: ChainDescriptorRegistry = chainRegistry
+const explorer: ChainExplorerDescriptor = descriptor.explorer
+const extension: ChainExtensionRecord = deriveFromChainRegistry(({ kind }) => ({ kind }))
+const extended: ExtendedChainRegistry<typeof extension> = extendChainRegistry(extension)
+const utxoChain: UtxoChainName = 'Bitcoin'
+const reactNativeUtxoChain: ReactNativeUtxoChainName = 'Litecoin'
+const rootUtxoBrandValid: boolean = isUtxoAddressBrandValid(
+  'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4',
+  utxoChain
+)
+const reactNativeUtxoBrandValid: boolean = isReactNativeUtxoAddressBrandValid(
+  'ltc1qw508d6qejxtdg4y5r3zarvary0c5xw7kgmn4n9',
+  reactNativeUtxoChain
+)
+assertUtxoAddressBrand('bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4', utxoChain)
+assertReactNativeUtxoAddressBrand(
+  'ltc1qw508d6qejxtdg4y5r3zarvary0c5xw7kgmn4n9',
+  reactNativeUtxoChain
+)
+
 export type X = Chain
 export type Y = Vultisig
 export type Z = ElectronMainVultisig
 export type ElectronCrypto = ElectronMainCrypto
+export type RegistryKind = ChainKind
+export type RegistryDescriptor = typeof descriptor
+export type RegistryShape = typeof registry
+export type ExplorerShape = typeof explorer
+export type ExtendedShape = typeof extended
+export type ReactNativeDescriptor = ReactNativeChainDescriptor
+export type ReactNativeExtended = ReactNativeExtendedChainRegistry<typeof extension>
+export type CosmosNamespace = typeof cosmos
+export type EvmNamespace = typeof evm
+export type TokenNamespace = typeof token
+export type RootUtxoBrandResult = typeof rootUtxoBrandValid
+export type ReactNativeUtxoBrandResult = typeof reactNativeUtxoBrandValid
 `
     )
     run(process.execPath, [tscBin, '-p', path.join(consumer, 'tsconfig.json')], {
@@ -513,7 +662,11 @@ function main() {
 
     const { tgzPath: libUtilsTgzPath } = validatePackedWorkspaceExports(workRoot, '@vultisig/lib-utils')
 
-    const { tgzPath: coreChainTgzPath } = validatePackedWorkspaceExports(workRoot, '@vultisig/core-chain')
+    const { packageRoot: coreChainPackageRoot, tgzPath: coreChainTgzPath } = validatePackedWorkspaceExports(
+      workRoot,
+      '@vultisig/core-chain'
+    )
+    validateWindowsCoreChainExports(coreChainPackageRoot)
 
     const { tgzPath: clientSharedTgzPath } = validatePackedWorkspaceExports(workRoot, '@vultisig/client-shared')
 

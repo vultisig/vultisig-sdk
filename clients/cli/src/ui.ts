@@ -164,7 +164,8 @@ export function displayTransactionPreview(
   chain: Chain,
   memo?: string,
   destinationTag?: number,
-  gas?: GasInfo
+  gas?: GasInfo,
+  contractAddress?: string
 ): void {
   if (gas) {
     const bigIntReplacer = (_k: string, v: unknown) => (typeof v === 'bigint' ? v.toString() : v)
@@ -174,7 +175,7 @@ export function displayTransactionPreview(
   printResult(chalk.cyan('\nTransaction Preview:'))
   printResult(`  From:   ${fromAddress}`)
   printResult(`  To:     ${toAddress}`)
-  printResult(`  Amount: ${amount} ${symbol}`)
+  printResult(`  Amount: ${amount} ${symbol}${contractAddress ? ` (${escapeTerminalControls(contractAddress)})` : ''}`)
   printResult(`  Chain:  ${chain}`)
   if (memo) {
     printResult(`  Memo:   ${escapeTerminalControls(memo)}`)

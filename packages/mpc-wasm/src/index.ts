@@ -5,16 +5,6 @@
  * Wraps the existing wasm-bindgen JS wrappers (vs_wasm.js, vs_schnorr_wasm.js).
  * Used by browser, Node.js, Electron, and Chrome Extension platforms.
  */
-import {
-  WASM_MPC_ENGINE_KIND,
-  type DklsEngine,
-  type MpcEngine,
-  type MpcKeyshare,
-  type MpcMessage,
-  type MpcSession,
-  type SchnorrEngine,
-} from '@vultisig/mpc-types'
-
 import initDkls, {
   KeygenSession as DklsKeygenSession,
   KeyImportInitiator as DklsKeyImportInitiator,
@@ -31,6 +21,15 @@ import initSchnorr, {
   QcSession as SchnorrQcSession,
   SignSession as SchnorrSignSession,
 } from '@vultisig/lib-schnorr/vs_schnorr_wasm'
+import {
+  type DklsEngine,
+  type MpcEngine,
+  type MpcKeyshare,
+  type MpcMessage,
+  type MpcSession,
+  type SchnorrEngine,
+  WASM_MPC_ENGINE_KIND,
+} from '@vultisig/mpc-types'
 
 // ---------------------------------------------------------------------------
 // Keyshare adapter
@@ -80,20 +79,15 @@ function wrapSession<TWasm extends WasmSessionLike, TResult>(
 }
 
 /**
- * Normalize a 64-byte Schnorr (Ed25519) signature emitted by the WASM
- * `SchnorrSignSession.finish()` — which uses big-endian byte order for both
- * the R point and the S scalar — into canonical Ed25519 R || S
- * little-endian bytes that ed25519-dalek and downstream verifiers expect.
+ * Preserve the canonical Ed25519 R || S bytes emitted by the current WASM
+ * binding. Both the WASM and native engines must expose the same wire format
+ * so `core/mpc/keysign/index.ts` can remain backend-agnostic.
  *
- * Both the WASM engine and the native `@vultisig/mpc-native` engine MUST
- * emit the same canonical wire format from their `finish()` so that
- * `core/mpc/keysign/index.ts` can pass the bytes through without any
- * backend-specific byte-ordering logic.
- *
- * Exported (`_normalizeSchnorrSig`, underscore-prefixed = internal) for
- * unit testing — see vultisig/vultisig-sdk#252.
- *
- * Returns a fresh Uint8Array (does not mutate the input).
+ * Older bindings were believed to emit each half in big-endian order, which
+ * led to a compensating reversal here. A real keygen/sign/verify ceremony
+ * proved the current binding already emits canonical bytes; reversing them
+ * produces an invalid signature. Keep this adapter as the explicit contract
+ * boundary and return a fresh array without changing byte order.
  */
 export function _normalizeSchnorrSig(sig: Uint8Array): Uint8Array {
   if (sig.length !== 64) {
@@ -102,16 +96,7 @@ export function _normalizeSchnorrSig(sig: Uint8Array): Uint8Array {
     // loudly downstream rather than us silently corrupting the payload.
     return sig
   }
-  const out = new Uint8Array(64)
-  // Reverse R (first 32 bytes) into out[0..32]
-  for (let i = 0; i < 32; i++) {
-    out[i] = sig[31 - i]!
-  }
-  // Reverse S (next 32 bytes) into out[32..64]
-  for (let i = 0; i < 32; i++) {
-    out[32 + i] = sig[63 - i]!
-  }
-  return out
+  return new Uint8Array(sig)
 }
 
 // ---------------------------------------------------------------------------
@@ -236,19 +221,8 @@ class WasmSchnorrEngine implements SchnorrEngine {
     // Re-create from bytes: MpcKeyshare doesn't expose the raw WASM Keyshare
     const rawKs = SchnorrKeyshare.fromBytes(keyshare.toBytes())
     const session = new SchnorrSignSession(setup, localPartyId, rawKs)
-    // Normalize WASM SchnorrSignSession output to canonical Ed25519 R || S
-    // little-endian bytes so consumers (e.g. core/mpc/keysign/index.ts) can
-    // pass through without backend-specific byte-ordering logic. The raw
-    // wasm-bindgen output is big-endian R || S, which is the historical
-    // reason core/mpc/keysign was reversing both halves unconditionally for
-    // EdDSA. That unconditional reverse corrupted the native MpcEngine
-    // output (which is already canonical), so the reverse moved here:
-    // each engine is responsible for emitting canonical bytes from its
-    // own finish().
-    //
-    // See vultisig/vultisig-sdk#252 (this PR) for the original incident
-    // and on-chain proof — Ed25519 R is a compressed Edwards point and
-    // reversing it corrupts the point representation entirely.
+    // Keep the engine boundary explicit: the current WASM binding already
+    // emits canonical Ed25519 R || S bytes, just like the native engine.
     return wrapSession(session, s => _normalizeSchnorrSig(s.finish()))
   }
 

@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "2.32.0",
+  "version": "2.35.1",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -59,6 +59,11 @@
       "types": "./dist/ChainKind.d.ts",
       "import": "./dist/ChainKind.js",
       "default": "./dist/ChainKind.js"
+    },
+    "./chainRegistry": {
+      "types": "./dist/chainRegistry.d.ts",
+      "import": "./dist/chainRegistry.js",
+      "default": "./dist/chainRegistry.js"
     },
     "./chains/bittensor/client": {
       "types": "./dist/chains/bittensor/client.d.ts",
@@ -505,6 +510,11 @@
       "import": "./dist/chains/cosmos/thor/rujira/config.js",
       "default": "./dist/chains/cosmos/thor/rujira/config.js"
     },
+    "./chains/cosmos/thor/securedAssets": {
+      "types": "./dist/chains/cosmos/thor/securedAssets.d.ts",
+      "import": "./dist/chains/cosmos/thor/securedAssets.js",
+      "default": "./dist/chains/cosmos/thor/securedAssets.js"
+    },
     "./chains/cosmos/thor/tcy-autocompound/config": {
       "types": "./dist/chains/cosmos/thor/tcy-autocompound/config.d.ts",
       "import": "./dist/chains/cosmos/thor/tcy-autocompound/config.js",
@@ -629,6 +639,21 @@
       "types": "./dist/chains/evm/noon/index.d.ts",
       "import": "./dist/chains/evm/noon/index.js",
       "default": "./dist/chains/evm/noon/index.js"
+    },
+    "./chains/evm/opStack/getOpStackFeeSurcharge": {
+      "types": "./dist/chains/evm/opStack/getOpStackFeeSurcharge.d.ts",
+      "import": "./dist/chains/evm/opStack/getOpStackFeeSurcharge.js",
+      "default": "./dist/chains/evm/opStack/getOpStackFeeSurcharge.js"
+    },
+    "./chains/evm/opStack/l1FeeProbeData": {
+      "types": "./dist/chains/evm/opStack/l1FeeProbeData.d.ts",
+      "import": "./dist/chains/evm/opStack/l1FeeProbeData.js",
+      "default": "./dist/chains/evm/opStack/l1FeeProbeData.js"
+    },
+    "./chains/evm/opStack/opStackChains": {
+      "types": "./dist/chains/evm/opStack/opStackChains.d.ts",
+      "import": "./dist/chains/evm/opStack/opStackChains.js",
+      "default": "./dist/chains/evm/opStack/opStackChains.js"
     },
     "./chains/evm/tx/fee": {
       "types": "./dist/chains/evm/tx/fee/index.d.ts",
@@ -829,6 +854,11 @@
       "types": "./dist/chains/sui/listAllCoins.d.ts",
       "import": "./dist/chains/sui/listAllCoins.js",
       "default": "./dist/chains/sui/listAllCoins.js"
+    },
+    "./chains/sui/prebuiltGasData": {
+      "types": "./dist/chains/sui/prebuiltGasData.d.ts",
+      "import": "./dist/chains/sui/prebuiltGasData.js",
+      "default": "./dist/chains/sui/prebuiltGasData.js"
     },
     "./chains/sui/sign": {
       "types": "./dist/chains/sui/sign.d.ts",
@@ -1678,6 +1708,11 @@
       "import": "./dist/swap/general/lifi/api/lifiSlippage.js",
       "default": "./dist/swap/general/lifi/api/lifiSlippage.js"
     },
+    "./swap/general/lifi/api/lifiSwapFeeChain": {
+      "types": "./dist/swap/general/lifi/api/lifiSwapFeeChain.d.ts",
+      "import": "./dist/swap/general/lifi/api/lifiSwapFeeChain.js",
+      "default": "./dist/swap/general/lifi/api/lifiSwapFeeChain.js"
+    },
     "./swap/general/lifi/config": {
       "types": "./dist/swap/general/lifi/config.d.ts",
       "import": "./dist/swap/general/lifi/config.js",
@@ -1877,6 +1912,11 @@
       "types": "./dist/swap/quote/getSwapQuoteProviderName.d.ts",
       "import": "./dist/swap/quote/getSwapQuoteProviderName.js",
       "default": "./dist/swap/quote/getSwapQuoteProviderName.js"
+    },
+    "./swap/quote/getSwapQuoteSafetyFingerprint": {
+      "types": "./dist/swap/quote/getSwapQuoteSafetyFingerprint.d.ts",
+      "import": "./dist/swap/quote/getSwapQuoteSafetyFingerprint.js",
+      "default": "./dist/swap/quote/getSwapQuoteSafetyFingerprint.js"
     },
     "./swap/quote/SwapQuote": {
       "types": "./dist/swap/quote/SwapQuote.d.ts",
