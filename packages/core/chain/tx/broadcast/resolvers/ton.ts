@@ -11,16 +11,20 @@ export const broadcastTonTx: BroadcastTxResolver<OtherChain.Ton> = async ({ chai
   const url = `${rootApiUrl}/ton/v2/sendBocReturnHash`
 
   const result = await attempt(
-    queryUrl<{ result: { hash: string } }>(url, {
+    queryUrl<{ result?: { hash?: string } }>(url, {
       body: { boc: tx.encoded },
     })
   )
 
-  if (result.data !== undefined) {
-    return broadcastAccepted(result.data.result.hash)
+  const hash = result.data?.result?.hash
+  if (hash) {
+    return broadcastAccepted(hash)
   }
 
-  const { error } = result
+  const responseMissingHash = result.data !== undefined
+  const error = responseMissingHash
+    ? new Error('TON broadcast failed: missing transaction hash in response')
+    : result.error
   if (isInError(error, 'duplicate message', 'duplicate msg_seqno')) {
     return broadcastAccepted()
   }
@@ -28,6 +32,6 @@ export const broadcastTonTx: BroadcastTxResolver<OtherChain.Ton> = async ({ chai
   try {
     return broadcastAccepted(await verifyBroadcastByHash({ chain, tx, error }))
   } catch (cause) {
-    return broadcastFailed(cause, isRetryableBroadcastCause(error))
+    return broadcastFailed(cause, responseMissingHash ? false : isRetryableBroadcastCause(error))
   }
 }

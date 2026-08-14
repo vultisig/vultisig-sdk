@@ -171,6 +171,19 @@ describe('broadcastPolkadotTx', () => {
       expect((callArg.error as Error).message).toContain('missing extrinsic hash')
     })
 
+    it('keeps a malformed response non-retryable when hash verification fails', async () => {
+      const verificationFailure = new Error('verification failed')
+      mocks.queryUrl.mockResolvedValue({})
+      mocks.verifyBroadcastByHash.mockRejectedValue(verificationFailure)
+
+      await expect(broadcastPolkadotTx({ chain, tx })).resolves.toEqual({
+        status: 'failed',
+        code: BroadcastErrorCode.Rejected,
+        retryable: false,
+        cause: verificationFailure,
+      })
+    })
+
     it('routes network-level errors through verifyBroadcastByHash', async () => {
       const networkErr = new Error('ECONNRESET')
       mocks.queryUrl.mockRejectedValue(networkErr)

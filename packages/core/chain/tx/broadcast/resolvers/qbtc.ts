@@ -3,6 +3,7 @@ import { qbtcRestUrl } from '@vultisig/core-chain/chains/cosmos/qbtc/tendermintR
 import { waitForQbtcTxInclusion } from '@vultisig/core-chain/chains/cosmos/qbtc/waitForQbtcTxInclusion'
 import { attempt } from '@vultisig/lib-utils/attempt'
 import { isInError } from '@vultisig/lib-utils/error/isInError'
+import { HttpResponseError } from '@vultisig/lib-utils/fetch/HttpResponseError'
 
 import { broadcastAccepted, broadcastFailed, BroadcastTxResolver, isRetryableBroadcastCause } from '../resolver'
 import { DeliverTxFailedError } from '../transientRetry'
@@ -32,11 +33,17 @@ export const broadcastQbtcTx: BroadcastTxResolver<typeof Chain.QBTC> = async ({ 
       if (isInError(text, 'tx already exists in cache')) {
         return broadcastAccepted()
       }
-      const err = new Error(`QBTC broadcast failed (${resp.status}): ${text}`)
+      const err = new HttpResponseError({
+        message: `QBTC broadcast failed (${resp.status}): ${text}`,
+        status: resp.status,
+        statusText: resp.statusText,
+        url: resp.url || `${qbtcRestUrl}/cosmos/tx/v1beta1/txs`,
+        body: text,
+      })
       try {
         return broadcastAccepted(await verifyBroadcastByHash({ chain, tx, error: err }))
       } catch (cause) {
-        return broadcastFailed(cause, resp.status === 408 || resp.status === 429 || resp.status >= 500)
+        return broadcastFailed(cause, isRetryableBroadcastCause(err))
       }
     }
 

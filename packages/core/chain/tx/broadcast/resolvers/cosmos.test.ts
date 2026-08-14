@@ -115,15 +115,19 @@ describe('broadcastCosmosTx', () => {
       throw error
     })
 
-    const rejection = await broadcastCosmosTx({ chain, tx }).catch(error => error)
+    const rejection = await broadcastCosmosTx({ chain, tx })
 
-    expect(rejection).toBeInstanceOf(CosmosSequenceMismatchError)
     expect(rejection).toMatchObject({
-      expectedSequence: 255n,
-      signedSequence: 254n,
-      recovery: 'resign',
-      message: expect.stringContaining('start a new signing ceremony'),
+      status: 'failed',
+      retryable: false,
+      cause: {
+        expectedSequence: 255n,
+        signedSequence: 254n,
+        recovery: 'resign',
+        message: expect.stringContaining('start a new signing ceremony'),
+      },
     })
+    expect(rejection.status === 'failed' && rejection.cause).toBeInstanceOf(CosmosSequenceMismatchError)
     expect(mocks.verifyBroadcastByHash).toHaveBeenCalledOnce()
   })
 
@@ -135,7 +139,7 @@ describe('broadcastCosmosTx', () => {
     )
     mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
 
-    await expect(broadcastCosmosTx({ chain, tx })).resolves.toBeUndefined()
+    await expect(broadcastCosmosTx({ chain, tx })).resolves.toMatchObject({ status: 'accepted' })
 
     expect(mocks.verifyBroadcastByHash).toHaveBeenCalledWith({
       chain,

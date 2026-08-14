@@ -45,7 +45,12 @@ export const broadcastPolkadotTx: BroadcastTxResolver<OtherChain.Polkadot> = asy
     // `error`. If both are missing (malformed gateway response, truncated
     // body, …) do not silently assume success — force hash verification.
     if (!response.result) {
-      throw new Error('Polkadot broadcast failed: missing extrinsic hash in RPC response')
+      const error = new Error('Polkadot broadcast failed: missing extrinsic hash in RPC response')
+      try {
+        return broadcastAccepted(await verifyBroadcastByHash({ chain, tx, error }))
+      } catch (cause) {
+        return broadcastFailed(cause, false)
+      }
     }
     return broadcastAccepted(response.result)
   } catch (error) {

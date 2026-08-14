@@ -200,3 +200,32 @@ describe('broadcast resolver unknown-cause preservation', () => {
     })
   })
 })
+
+describe('TON malformed provider response', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.verifyBroadcastByHash.mockImplementation(({ error }) => Promise.reject(error))
+  })
+
+  it('verifies a successful response that omits its transaction hash instead of throwing', async () => {
+    mocks.queryUrl.mockResolvedValue({ result: {} })
+
+    await expect(broadcastTonTx({ chain: OtherChain.Ton, tx: { encoded: 'boc' } as any })).resolves.toMatchObject({
+      status: 'failed',
+      code: BroadcastErrorCode.Rejected,
+      retryable: false,
+      cause: expect.objectContaining({ message: 'TON broadcast failed: missing transaction hash in response' }),
+    })
+    expect(mocks.verifyBroadcastByHash).toHaveBeenCalledOnce()
+  })
+
+  it('preserves the existing accepted acknowledgement for a duplicate message', async () => {
+    mocks.queryUrl.mockRejectedValue(new Error('duplicate message'))
+
+    await expect(broadcastTonTx({ chain: OtherChain.Ton, tx: { encoded: 'boc' } as any })).resolves.toEqual({
+      status: 'accepted',
+      finality: 'pending',
+    })
+    expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
+  })
+})

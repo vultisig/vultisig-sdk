@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { Chain } from '../../../Chain'
+import { BroadcastErrorCode } from '../resolver'
 import { DeliverTxFailedError } from '../transientRetry'
 
-const { mockVerify } = vi.hoisted(() => ({ mockVerify: vi.fn(async () => {}) }))
+const { mockVerify } = vi.hoisted(() => ({ mockVerify: vi.fn(async (_input: any) => {}) }))
 vi.mock('../verifyBroadcastByHash', () => ({ verifyBroadcastByHash: mockVerify }))
 vi.mock('@vultisig/core-chain/chains/cosmos/qbtc/tendermintRpcUrl', () => ({ qbtcRestUrl: 'https://qbtc.test' }))
 
@@ -68,6 +69,27 @@ describe('broadcastQbtcTx — DeliverTx false-success', () => {
       code: 'BROADCAST_REJECTED',
       retryable: false,
       cause: missingHash,
+    })
+  })
+
+  it('preserves a transient HTTP status in the cause used by the dispatcher retry classifier', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+        statusText: 'Service Unavailable',
+        url: 'https://qbtc.test/cosmos/tx/v1beta1/txs',
+        text: async () => 'opaque provider body',
+      })
+    )
+    mockVerify.mockImplementationOnce(({ error }) => Promise.reject(error))
+
+    await expect(broadcastQbtcTx({ chain: Chain.QBTC, tx })).resolves.toMatchObject({
+      status: 'failed',
+      code: BroadcastErrorCode.Transport,
+      retryable: true,
+      cause: expect.objectContaining({ status: 503 }),
     })
   })
 
