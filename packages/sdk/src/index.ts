@@ -113,6 +113,11 @@ export { checkChainPrefix } from './utils/chainPrefix'
 export type { ParsedThorSwapMemo } from './utils/thorSwapMemo'
 export { parseThorSwapMemo } from './utils/thorSwapMemo'
 
+// Canonical UTXO wrong-chain guard. Consumers should import this instead of
+// maintaining local bech32 HRP / Base58Check version / CashAddr matrices.
+export type { UtxoChainName } from './chains/utxo/addressBrand'
+export { assertUtxoAddressBrand, isUtxoAddressBrandValid } from './chains/utxo/addressBrand'
+
 // ============================================================================
 // PUBLIC API - Tx Shape Normalization (pure, vault-free)
 // ============================================================================
@@ -887,6 +892,7 @@ export {
   compareCosts,
   computeAstroportMinReceive,
   CONSOLIDATE_CHAINS,
+  cosmos,
   COSMOS_SWAP_FEE_LABEL_CHAINS,
   COSMOS_SWAP_GAS_LIMIT,
   cosmosBalanceChains,
@@ -905,6 +911,7 @@ export {
   encodeErc20Revoke,
   estimateCosmosSwapFeeLabel,
   evaluatePolicy,
+  evm,
   evmCall,
   evmCheckAllowance,
   evmGasPrice,
@@ -1031,6 +1038,7 @@ export {
   TERRA_CHAIN_ID,
   TERRA_LCD,
   THORCHAIN_NODE_URL,
+  token,
   TRC20_TRANSFER_SELECTOR,
   utxoFeeRate,
   VerifierClient,
