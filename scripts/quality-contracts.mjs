@@ -304,6 +304,7 @@ function packedConsumerSmoke(workRoot, tgzPath) {
 import * as root from '@vultisig/sdk'
 import * as node from '@vultisig/sdk/node'
 import * as browser from '@vultisig/sdk/browser'
+import * as seedphrase from '@vultisig/sdk/seedphrase'
 import * as vite from '@vultisig/sdk/vite'
 import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -314,7 +315,9 @@ const entry = require.resolve('@vultisig/sdk')
 const pkgDir = path.resolve(path.dirname(entry), '..')
 const electronMainEntry = require.resolve('@vultisig/sdk/electron/main')
 const reactNativeEntry = require.resolve('@vultisig/sdk/react-native')
+const seedphraseEntry = require.resolve('@vultisig/sdk/seedphrase')
 const electronMain = require('@vultisig/sdk/electron/main')
+const seedphraseRequire = require('@vultisig/sdk/seedphrase')
 const electronMainImport = await import('@vultisig/sdk/electron/main')
 
 assert.equal(typeof root.Vultisig, 'function', 'root exports Vultisig')
@@ -360,6 +363,23 @@ assert.equal(
   node.prepareCosmosVote,
   '@vultisig/sdk/node exposes sdk.cosmos.gov'
 )
+
+assert.equal(
+  path.basename(seedphraseEntry),
+  'index.cjs',
+  '@vultisig/sdk/seedphrase resolves the dedicated CommonJS bundle'
+)
+assert.equal(typeof seedphraseRequire.normalizeMnemonic, 'function', 'CommonJS seedphrase subpath loads')
+assert.equal(seedphrase.normalizeMnemonic('  ABANDON   ABANDON  '), 'abandon abandon')
+assert.equal(
+  seedphrase.detectMnemonicLanguage(
+    'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'
+  ),
+  'english'
+)
+assert.equal(typeof seedphrase.SeedphraseValidator, 'function')
+assert.equal(typeof seedphrase.MasterKeyDeriver, 'function')
+assert.equal(typeof seedphrase.ChainDiscoveryService, 'function')
 
 assert.ok(browser.Chain !== undefined, '@vultisig/sdk/browser resolves')
 assert.equal(browser.evm.encodeErc20Approve, browser.encodeErc20Approve, '@vultisig/sdk/browser exposes sdk.evm')
@@ -454,6 +474,12 @@ import type {
 import type { Vultisig } from '@vultisig/sdk/node'
 import type { ElectronMainCrypto, Vultisig as ElectronMainVultisig } from '@vultisig/sdk/electron/main'
 import { cosmos, evm, token } from '@vultisig/sdk'
+import {
+  normalizeMnemonic,
+  type Bip39Language,
+  type ChainDiscoveryResult,
+  type SeedphraseValidation,
+} from '@vultisig/sdk/seedphrase'
 import '@vultisig/sdk/browser'
 import '@vultisig/sdk/vite'
 
@@ -494,6 +520,10 @@ export type EvmNamespace = typeof evm
 export type TokenNamespace = typeof token
 export type RootUtxoBrandResult = typeof rootUtxoBrandValid
 export type ReactNativeUtxoBrandResult = typeof reactNativeUtxoBrandValid
+export type SeedphraseLanguage = Bip39Language
+export type SeedphraseDiscovery = ChainDiscoveryResult
+export type SeedphraseValidationResult = SeedphraseValidation
+export const normalizedMnemonic: string = normalizeMnemonic(' ABANDON  ABOUT ')
 `
     )
     run(process.execPath, [tscBin, '-p', path.join(consumer, 'tsconfig.json')], {
