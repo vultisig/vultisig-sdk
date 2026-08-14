@@ -1,5 +1,5 @@
 ---
-'@vultisig/core-chain': patch
+'@vultisig/core-chain': major
 '@vultisig/sdk': patch
 ---
 
