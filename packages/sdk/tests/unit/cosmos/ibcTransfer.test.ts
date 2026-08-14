@@ -10,10 +10,12 @@ import { bech32 } from '@scure/base'
 import { describe, expect, it } from 'vitest'
 
 import {
+  IBC_CHANNEL_DEST,
   IBC_MSG_TRANSFER_TYPE_URL,
   normaliseIbcChainId,
   prepareIbcTransfer,
   supportedIbcDestinationsFrom,
+  VULTISIG_NAME_TO_CHAIN_ID,
 } from '@/tools/prep/ibcTransfer'
 
 /** Build a valid bech32 address for `hrp` from a fixed 20-byte payload. */
@@ -96,9 +98,50 @@ describe('prepareIbcTransfer', () => {
     expect(normaliseIbcChainId('MayaChain')).toBe('mayachain-mainnet-v1')
     expect(normaliseIbcChainId('THORChain')).toBe('thorchain-1')
     expect(normaliseIbcChainId('Stride')).toBe('stride-1')
+    // sdk#1803: these are live IBC_CHANNEL_DEST destinations that had NO
+    // alias here — a caller passing the canonical name got a false "no
+    // supported IBC channel" rejection despite the route existing.
+    expect(normaliseIbcChainId('Celestia')).toBe('celestia')
+    expect(normaliseIbcChainId('Juno')).toBe('juno-1')
+    expect(normaliseIbcChainId('Axelar')).toBe('axelar-dojo-1')
+    expect(normaliseIbcChainId('Neutron')).toBe('neutron-1')
+    expect(normaliseIbcChainId('Injective')).toBe('injective-1')
     // unknown / already-an-ID inputs pass through untouched
     expect(normaliseIbcChainId('cosmoshub-4')).toBe('cosmoshub-4')
     expect(normaliseIbcChainId('not-a-chain')).toBe('not-a-chain')
+  })
+
+  // sdk#1803: this module's own docs promise Vultisig canonical chain names
+  // as valid toChainId/fromChain input, but VULTISIG_NAME_TO_CHAIN_ID had
+  // silently fallen behind IBC_CHANNEL_DEST — a canonical name for a route
+  // that genuinely exists could still be rejected. This test enforces the
+  // invariant structurally (not just for today's known gaps) so a FUTURE
+  // IBC_CHANNEL_DEST addition without a matching alias fails CI instead of
+  // silently reintroducing the same class of bug.
+  it('sdk#1803: every IBC_CHANNEL_DEST destination has a canonical-name alias', () => {
+    const aliasedChainIds = new Set(Object.values(VULTISIG_NAME_TO_CHAIN_ID))
+    const missing = new Set<string>()
+    for (const destChainId of Object.values(IBC_CHANNEL_DEST)) {
+      if (!aliasedChainIds.has(destChainId)) missing.add(destChainId)
+    }
+    expect([...missing]).toEqual([])
+  })
+
+  // sdk#1803's own reported case: fromChain "Osmosis" -> toChainId "Celestia"
+  // falsely rejected despite osmosis-1/channel-6994 -> celestia existing.
+  it('sdk#1803: builds an Osmosis→Celestia MsgTransfer using canonical names end to end', () => {
+    const r = prepareIbcTransfer({
+      fromChain: 'Osmosis',
+      toChainId: 'Celestia',
+      fromAddress: OSMO,
+      toAddress: addr('celestia'),
+      denom: 'uosmo',
+      amount: '1000000',
+      nowMs: FIXED_NOW,
+    })
+    expect(r.fromChain).toBe('osmosis-1')
+    expect(r.destChain).toBe('celestia')
+    expect(r.sourceChannel).toBe('channel-6994')
   })
 
   it('resolves destination from sourceChannel alone', () => {
