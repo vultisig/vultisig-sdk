@@ -2,7 +2,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ExitCode } from '../../core/errors'
 import { AgentErrorCode, agentErrorCodeToExitCode, normalizeAgentError } from '../agentErrors'
-import { AgentClient, AgentStreamIdleTimeoutError, resolveHttpTimeoutMs, resolveSseIdleTimeoutMs } from '../client'
+import {
+  AgentClient,
+  AgentStreamIdleTimeoutError,
+  deriveHlOrderClientAction,
+  resolveHttpTimeoutMs,
+  resolveSseIdleTimeoutMs,
+} from '../client'
 
 /**
  * Creates a ReadableStream that yields one chunk per read() call.
@@ -253,6 +259,189 @@ describe('AgentClient.sendMessageStream', () => {
     expect(onMessage).toHaveBeenCalledTimes(1)
   })
 
+  it('fails closed instead of reporting success when a Hyperliquid preview lacks its ready action', async () => {
+    const onClientSideToolCall = vi.fn()
+    const onError = vi.fn()
+    globalThis.fetch = mockFetchSSE([
+      'data: {"type":"tool-input-start","toolCallId":"hl-1","toolName":"build_hyperliquid_open_position"}\n\n',
+      'data: {"type":"tool-output-available","toolCallId":"hl-1","output":"{\\"surface\\":\\"hyperliquid_order\\",\\"status\\":\\"ready_to_sign\\"}"}\n\n',
+      'data: {"type":"finish"}\n\n',
+    ])
+
+    await new AgentClient('http://example.com').sendMessageStream(
+      'c1',
+      { public_key: 'pk', content: 'open $10 BTC long 3x' },
+      { onClientSideToolCall, onError }
+    )
+
+    expect(onClientSideToolCall).not.toHaveBeenCalled()
+    expect(onError).toHaveBeenCalledWith(
+      'Hyperliquid preview was not delivered as a complete ready-to-sign action.',
+      AgentErrorCode.INVALID_INPUT
+    )
+  })
+
+  describe('Hyperliquid builder/action binding', () => {
+    const ready = {
+      surface: 'hyperliquid_order',
+      status: 'ready_to_sign',
+      action: 'open',
+      order_ref: '12345678-1234-4234-8234-123456789abc',
+      coin: 'BTC',
+      asset_index: 0,
+      wire_size: '0.00016',
+      price_cap: '64557.825000000004',
+      wire_notional_usd: '10.32925200000000064',
+      tif: 'Ioc',
+      reduce_only: false,
+    }
+
+    it('accepts only the exact open/open/false and close/close/true tuples', () => {
+      expect(deriveHlOrderClientAction('build_hyperliquid_open_position', ready)).toEqual({
+        order_ref: ready.order_ref,
+      })
+      expect(
+        deriveHlOrderClientAction('build_hyperliquid_close_position', {
+          ...ready,
+          action: 'close',
+          reduce_only: true,
+        })
+      ).toEqual({ order_ref: ready.order_ref })
+    })
+
+    it('bridges one canonical reduce-only close builder frame to one local ceremony', async () => {
+      const onClientSideToolCall = vi.fn()
+      const close = { ...ready, action: 'close', reduce_only: true }
+      globalThis.fetch = mockFetchSSE([
+        'data: {"type":"tool-input-start","toolCallId":"hl-close","toolName":"build_hyperliquid_close_position"}\n\n',
+        `data: ${JSON.stringify({
+          type: 'tool-output-available',
+          toolCallId: 'hl-close',
+          output: JSON.stringify(close),
+        })}\n\n`,
+        'data: {"type":"finish"}\n\n',
+      ])
+
+      await new AgentClient('http://example.com').sendMessageStream(
+        'c1',
+        { public_key: 'pk', content: 'close my BTC perp' },
+        { onClientSideToolCall }
+      )
+
+      expect(onClientSideToolCall).toHaveBeenCalledTimes(1)
+      expect(onClientSideToolCall).toHaveBeenCalledWith('hl-close:hl_order', 'hl_order', { order_ref: ready.order_ref })
+    })
+
+    it.each([
+      ['Open a $10 BTC long at 2x on Hyperliquid', 'build_hyperliquid_open_position', ready],
+      [
+        'close 50% of my BTC long',
+        'build_hyperliquid_close_position',
+        { ...ready, action: 'close', reduce_only: true },
+      ],
+      [
+        'close my ETH short',
+        'build_hyperliquid_close_position',
+        { ...ready, action: 'close', coin: 'ETH', reduce_only: true },
+      ],
+    ])('bridges exactly one local order for the QA natural-language fixture: %s', async (content, toolName, output) => {
+      const onClientSideToolCall = vi.fn()
+      globalThis.fetch = vi.fn(async (_url, init) => {
+        const sent = JSON.parse(String(init?.body)) as { content?: string }
+        // Captured backend contract fixture: the server wire is selected by the
+        // exact NL request actually sent. A random/changed request cannot receive
+        // this successful builder response and therefore cannot make the test pass.
+        expect(sent.content).toBe(content)
+        return new Response(
+          makeChunkedStream([
+            `data: ${JSON.stringify({ type: 'tool-input-start', toolCallId: 'hl-nlp', toolName })}\n\n`,
+            `data: ${JSON.stringify({ type: 'tool-output-available', toolCallId: 'hl-nlp', output: JSON.stringify(output) })}\n\n`,
+            'data: {"type":"finish"}\n\n',
+          ]),
+          { status: 200, headers: { 'Content-Type': 'text/event-stream' } }
+        )
+      }) as typeof fetch
+
+      await new AgentClient('http://example.com').sendMessageStream(
+        'c1',
+        { public_key: 'pk', content },
+        { onClientSideToolCall }
+      )
+
+      expect(onClientSideToolCall).toHaveBeenCalledTimes(1)
+      expect(onClientSideToolCall).toHaveBeenCalledWith('hl-nlp:hl_order', 'hl_order', { order_ref: ready.order_ref })
+    })
+
+    it('keeps the QA preview-only wording read-only with zero local order actions', async () => {
+      const onClientSideToolCall = vi.fn()
+      const content = 'Preview only: Open a $10 BTC long at 2x on Hyperliquid'
+      globalThis.fetch = vi.fn(async (_url, init) => {
+        const sent = JSON.parse(String(init?.body)) as { content?: string }
+        expect(sent.content).toBe(content)
+        return new Response(
+          makeChunkedStream([
+            'data: {"type":"text-delta","delta":"BTC perpetual market preview"}\n\n',
+            'data: {"type":"finish"}\n\n',
+          ]),
+          { status: 200, headers: { 'Content-Type': 'text/event-stream' } }
+        )
+      }) as typeof fetch
+
+      await new AgentClient('http://example.com').sendMessageStream(
+        'c1',
+        { public_key: 'pk', content },
+        { onClientSideToolCall }
+      )
+
+      expect(onClientSideToolCall).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      ['open missing action', 'build_hyperliquid_open_position', { action: undefined }],
+      ['open wrong action', 'build_hyperliquid_open_position', { action: 'close' }],
+      ['open wrong reduce-only', 'build_hyperliquid_open_position', { reduce_only: true }],
+      ['close missing action', 'build_hyperliquid_close_position', { action: undefined, reduce_only: true }],
+      ['close wrong action', 'build_hyperliquid_close_position', { action: 'open', reduce_only: true }],
+      ['close wrong reduce-only', 'build_hyperliquid_close_position', { action: 'close', reduce_only: false }],
+      ['action case variant', 'build_hyperliquid_open_position', { action: 'Open' }],
+      ['surface case variant', 'build_hyperliquid_open_position', { surface: 'Hyperliquid_Order' }],
+      ['status case variant', 'build_hyperliquid_open_position', { status: 'READY_TO_SIGN' }],
+      ['TIF case variant', 'build_hyperliquid_open_position', { tif: 'IOC' }],
+      ['boolean schema variant', 'build_hyperliquid_open_position', { reduce_only: 0 }],
+    ])('rejects %s', (_name, toolName, override) => {
+      expect(deriveHlOrderClientAction(toolName, { ...ready, ...override })).toBeNull()
+    })
+
+    it('marks a mismatched terminal frame failed and never dispatches the local action', async () => {
+      const onClientSideToolCall = vi.fn()
+      const onToolProgress = vi.fn()
+      const onError = vi.fn()
+      const mismatched = { ...ready, action: 'close', reduce_only: true }
+      globalThis.fetch = mockFetchSSE([
+        'data: {"type":"tool-input-start","toolCallId":"hl-bind","toolName":"build_hyperliquid_open_position"}\n\n',
+        `data: ${JSON.stringify({
+          type: 'tool-output-available',
+          toolCallId: 'hl-bind',
+          output: JSON.stringify(mismatched),
+        })}\n\n`,
+        'data: {"type":"finish"}\n\n',
+      ])
+
+      await new AgentClient('http://example.com').sendMessageStream(
+        'c1',
+        { public_key: 'pk', content: 'open $10 BTC long 3x' },
+        { onClientSideToolCall, onToolProgress, onError }
+      )
+
+      expect(onToolProgress).toHaveBeenLastCalledWith('build_hyperliquid_open_position', 'done', undefined, false)
+      expect(onClientSideToolCall).not.toHaveBeenCalled()
+      expect(onError).toHaveBeenCalledWith(
+        'Hyperliquid preview was not delivered as a complete ready-to-sign action.',
+        AgentErrorCode.INVALID_INPUT
+      )
+    })
+  })
+
   // H2 (review of #1305): unknown `data-*` kinds are FORWARD-COMPATIBLE by the
   // backend's own V1 contract (`v1_wire_schema_test.go`) and some are emitted
   // from a dynamic site — `V1Data(streamSurface, …)` over the mutable
@@ -267,6 +456,12 @@ describe('AgentClient.sendMessageStream', () => {
   // point: under the old enumerate-everything design it stamped PROTOCOL_DRIFT
   // on a successful turn, and no test could have caught it, because the whole
   // failure mode is a surface that does not exist yet.
+  //
+  // rj3p: `polymarket_markets` / `yield_opportunities` moved OUT of this list —
+  // they are now named surfaces (see 'routes data-yield_opportunities...' and
+  // 'routes data-polymarket_markets...' below) so their raw JSON no longer
+  // leaks into message content. `yield_position` (a single-position lookup, not
+  // a search) stays here — still genuinely tolerated, out of rj3p's scope.
   it('tolerates unknown data-* cards quietly, including surfaces no list knows about', async () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
     globalThis.fetch = mockFetchSSE([
@@ -277,8 +472,6 @@ describe('AgentClient.sendMessageStream', () => {
       'data: {"type":"data-diagnostics","data":{"trace":"x"}}\n\n',
       'data: {"type":"data-checkout-wall","data":{"catalog":[]}}\n\n',
       'data: {"type":"data-agentStep","id":"c1-0","data":{"status":"running"}}\n\n',
-      'data: {"type":"data-polymarket_markets","data":{"surface":"polymarket_markets"}}\n\n',
-      'data: {"type":"data-yield_opportunities","data":{"surface":"yield_opportunities"}}\n\n',
       'data: {"type":"data-yield_position","data":{"surface":"yield_position"}}\n\n',
       'data: {"type":"data-confirmation","data":{"required":true}}\n\n',
       // A surface invented for this test — stands in for whatever the backend
@@ -764,12 +957,61 @@ describe('AgentClient.sendMessageStream', () => {
     expect(onBalanceSummary).toHaveBeenCalledWith(envelope)
   })
 
+  // rj3p: the backend emits data-yield_opportunities when the client advertised
+  // "yield_opportunities" in supported_surfaces. Previously this v1 part fell to
+  // the 'tolerated' bucket and the raw envelope leaked into message content as
+  // JSON; now it surfaces via onYieldOpportunities.
+  it('routes data-yield_opportunities to onYieldOpportunities with the envelope payload', async () => {
+    const onYieldOpportunities = vi.fn()
+
+    const envelope = {
+      surface: 'yield_opportunities',
+      opportunities: [{ id: 'y1', name: 'USDC Lending', chain: 'Ethereum', symbol: 'USDC', apy: 0.042 }],
+    }
+
+    globalThis.fetch = mockFetchSSE([
+      `data: ${JSON.stringify({ type: 'data-yield_opportunities', data: envelope })}\n\n`,
+      'data: {"type":"finish"}\n\n',
+    ])
+
+    const client = new AgentClient('http://example.com')
+    await client.sendMessageStream('c1', { public_key: 'pk', content: 'yield' }, { onYieldOpportunities })
+
+    expect(onYieldOpportunities).toHaveBeenCalledTimes(1)
+    expect(onYieldOpportunities).toHaveBeenCalledWith(envelope)
+  })
+
+  // rj3p: same contract as yield_opportunities above, for polymarket_markets.
+  it('routes data-polymarket_markets to onPolymarketMarkets with the envelope payload', async () => {
+    const onPolymarketMarkets = vi.fn()
+
+    const envelope = {
+      surface: 'polymarket_markets',
+      markets: [{ id: 'm1', question: 'Will it rain tomorrow?', outcomes: [{ name: 'Yes', price: 0.6 }] }],
+    }
+
+    globalThis.fetch = mockFetchSSE([
+      `data: ${JSON.stringify({ type: 'data-polymarket_markets', data: envelope })}\n\n`,
+      'data: {"type":"finish"}\n\n',
+    ])
+
+    const client = new AgentClient('http://example.com')
+    await client.sendMessageStream('c1', { public_key: 'pk', content: 'markets' }, { onPolymarketMarkets })
+
+    expect(onPolymarketMarkets).toHaveBeenCalledTimes(1)
+    expect(onPolymarketMarkets).toHaveBeenCalledWith(envelope)
+  })
+
   // a2a-02: the backend emits data-turn_outcome at turn end when the client
   // advertised the `turn_outcome` surface. Route it to onTurnOutcome so a headless
   // caller learns the typed ending without parsing prose.
   it('routes data-turn_outcome to onTurnOutcome with the typed payload', async () => {
     const onTurnOutcome = vi.fn()
-    const outcome = { kind: 'blocked', code: 'broadcast-claim', detail: 'I cannot confirm that broadcast' }
+    const outcome = {
+      kind: 'blocked',
+      code: 'broadcast-claim',
+      detail: 'I cannot confirm that broadcast',
+    }
 
     globalThis.fetch = mockFetchSSE([
       `data: ${JSON.stringify({ type: 'data-turn_outcome', id: 'turn-outcome', data: outcome })}\n\n`,

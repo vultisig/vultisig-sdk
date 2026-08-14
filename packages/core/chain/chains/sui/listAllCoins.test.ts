@@ -73,14 +73,60 @@ describe('listAllSuiCoins', () => {
     expect(listCoins).toHaveBeenCalledTimes(maxSuiCoinPages)
   })
 
-  it('does not truncate when hasNextPage is true but the cursor is null', async () => {
-    // A page that claims more data yet hands back no cursor cannot be followed;
-    // stopping is correct (and must not loop forever on `undefined`).
-    const listCoins = vi.fn().mockResolvedValue({ objects: [coinObject(0)], hasNextPage: true, cursor: null })
+  it.each([
+    ['null', null],
+    ['undefined', undefined],
+    ['an empty string', ''],
+  ])('fails closed when hasNextPage is true but the cursor is %s', async (_label, cursor) => {
+    const listCoins = vi.fn().mockResolvedValue({ objects: [coinObject(0)], hasNextPage: true, cursor })
+
+    await expect(listAllSuiCoins({ client: client(listCoins), owner: '0xowner', coinType: NATIVE })).rejects.toThrow(
+      /hasNextPage with no cursor/
+    )
+    expect(listCoins).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps coins from later pages when an intermediate page is empty', async () => {
+    const listCoins = vi
+      .fn()
+      .mockResolvedValueOnce({ objects: [coinObject(0)], hasNextPage: true, cursor: 'cur1' })
+      .mockResolvedValueOnce({ objects: [], hasNextPage: true, cursor: 'cur2' })
+      .mockResolvedValueOnce({ objects: [coinObject(1)], hasNextPage: false, cursor: null })
+
+    const coins = await listAllSuiCoins({ client: client(listCoins), owner: '0xowner', coinType: NATIVE })
+
+    expect(coins.map(coin => coin.coinObjectId)).toEqual(['0xobj0', '0xobj1'])
+    expect(listCoins).toHaveBeenCalledTimes(3)
+  })
+
+  it('treats hasNextPage as authoritative when a terminal page carries a stale cursor', async () => {
+    const listCoins = vi.fn().mockResolvedValue({
+      objects: [coinObject(0)],
+      hasNextPage: false,
+      cursor: 'stale',
+    })
 
     await expect(
       listAllSuiCoins({ client: client(listCoins), owner: '0xowner', coinType: NATIVE })
     ).resolves.toHaveLength(1)
     expect(listCoins).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns the full set when the final page lands exactly on the page bound', async () => {
+    const listCoins = vi.fn().mockImplementation(() => {
+      const page = listCoins.mock.calls.length
+      const isLastPage = page >= maxSuiCoinPages
+
+      return Promise.resolve({
+        objects: [coinObject(page - 1)],
+        hasNextPage: !isLastPage,
+        cursor: isLastPage ? null : `cur${page}`,
+      })
+    })
+
+    await expect(
+      listAllSuiCoins({ client: client(listCoins), owner: '0xowner', coinType: NATIVE })
+    ).resolves.toHaveLength(maxSuiCoinPages)
+    expect(listCoins).toHaveBeenCalledTimes(maxSuiCoinPages)
   })
 })

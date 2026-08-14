@@ -6,7 +6,7 @@ import {
   SwapAffiliateConfig,
   SwapQuoteProviderExcludeName,
 } from '@vultisig/core-chain/swap/quote/findSwapQuote'
-import type { SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
+import type { BoundSwapQuote, SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
 
 export type { SwapAffiliateConfig, SwapQuoteProviderExcludeName }
 
@@ -63,7 +63,7 @@ export type FindSwapQuoteParams = {
   excludeProviders?: SwapQuoteProviderExcludeName[]
 }
 
-export type { SwapQuote }
+export type { BoundSwapQuote, SwapQuote }
 
 /**
  * Find the best swap quote across all providers (THORChain, MayaChain, 1inch, LiFi, KyberSwap).
@@ -84,7 +84,7 @@ export type { SwapQuote }
  * })
  * ```
  */
-export const findSwapQuote = async (params: FindSwapQuoteParams): Promise<SwapQuote> => {
+export const findSwapQuote = async (params: FindSwapQuoteParams): Promise<BoundSwapQuote> => {
   const from: AccountCoin = {
     chain: params.fromChain,
     address: params.fromAddress,

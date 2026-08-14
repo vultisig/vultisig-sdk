@@ -14,6 +14,15 @@ const SEL_SYMBOL = '0x95d89b41' as const
 const SEL_DECIMALS = '0x313ce567' as const
 
 /**
+ * Max ERC-20 decimals accepted by DEX quote readers. Although decimals() is a
+ * uint8, downstream fixed-point math raises 10 to a decimals-derived exponent.
+ * Bounding the value prevents attacker-controlled tokens from forcing
+ * pathologically large bigint allocations while retaining ample headroom for
+ * real tokens.
+ */
+const MAX_ERC20_DECIMALS = 36
+
+/**
  * Decode a right-NULL-padded bytes32 string. Some non-standard ERC-20s
  * (MKR, SAI) return a bytes32 instead of a string for symbol().
  */
@@ -45,7 +54,13 @@ export async function readDecimals(chain: EvmChain, token: `0x${string}`): Promi
   if (!data || data === '0x') {
     throw new Error(`failed to read decimals for ${token}: empty response`)
   }
-  return Number(BigInt(data))
+  const decimals = BigInt(data)
+  if (decimals > BigInt(MAX_ERC20_DECIMALS)) {
+    throw new Error(
+      `token ${token} reported implausible decimals ${decimals} (> ${MAX_ERC20_DECIMALS}); refusing to compute prices.`
+    )
+  }
+  return Number(decimals)
 }
 
 export function decodeAddress(data: `0x${string}`): `0x${string}` {

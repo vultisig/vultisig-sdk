@@ -12,6 +12,9 @@ const ADDR = {
   sol: '7EYnhQoR9YM3N7UoaKRoA44Uy8JeaZV3qyouov87awMs', // canonical example pubkey
   btcBech32: 'bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq',
   btcLegacy: '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa', // genesis coinbase
+  bitcoinCash: 'bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a',
+  litecoinBech32: 'ltc1qw508d6qejxtdg4y5r3zarvary0c5xw7kgmn4n9',
+  zcashSapling: 'zs1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5z5tpwxqergd3c8g7ruszzg3rysjjvfeg9y4zkvtfdeq',
   sui: '0x0000000000000000000000000000000000000000000000000000000000000002',
   tron: 'TJRabPrwbZy45sbavfcjinPJC18kjpRTv8',
   xrp: 'rDsbeomae4FXwgQTJp9Rs64Qg9vDiTCdBv',
@@ -43,6 +46,20 @@ describe('classifyAddress', () => {
   it('disambiguates EVM (40 hex) from Sui (64 hex)', () => {
     expect(classifyAddress(ADDR.eth)).toBe('evm')
     expect(classifyAddress(ADDR.sui)).toBe('sui')
+  })
+
+  it.each([
+    [ADDR.btcBech32, 'btc'],
+    [ADDR.bitcoinCash, 'bitcoincash'],
+    [ADDR.litecoinBech32, 'litecoin'],
+    [ADDR.zcashSapling, 'zcash'],
+  ])('classifies a uniform-uppercase %s address as %s', (addr, family) => {
+    expect(classifyAddress(addr.toUpperCase())).toBe(family)
+  })
+
+  it('does not normalize mixed-case Bech32 or CashAddr values for classification', () => {
+    expect(classifyAddress(`${ADDR.btcBech32.slice(0, -1)}Q`)).toBe('unknown')
+    expect(classifyAddress(`${ADDR.bitcoinCash.slice(0, -1)}A`)).toBe('unknown')
   })
 })
 
@@ -79,6 +96,16 @@ describe('isAddressValidForChain', () => {
   it('accepts osmo address on osmosis (and via osmo alias)', () => {
     expect(isAddressValidForChain(ADDR.osmo, 'osmosis')).toBe(true)
     expect(isAddressValidForChain(ADDR.osmo, 'osmo')).toBe(true)
+  })
+  it('accepts normalizeChain aliases and chain ids instead of failing open', () => {
+    expect(isAddressValidForChain(ADDR.cosmos, 'gaia')).toBe(true)
+    expect(isAddressValidForChain(ADDR.cosmos, 'cosmoshub-4')).toBe(true)
+    expect(isAddressValidForChain(ADDR.eth, 'binancesmartchain')).toBe(true)
+    expect(isAddressValidForChain(ADDR.eth, 'Cronos Chain')).toBe(true)
+  })
+  it('accepts spaced / hyphenated Bitcoin Cash aliases instead of treating them as unknown', () => {
+    expect(isAddressValidForChain('bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a', 'Bitcoin Cash')).toBe(true)
+    expect(isAddressValidForChain('bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a', 'Bitcoin-Cash')).toBe(true)
   })
   it('returns undefined for a chain with no FORMAT rule', () => {
     expect(isAddressValidForChain(ADDR.eth, 'madeupchain')).toBeUndefined()
@@ -143,6 +170,12 @@ describe('validate.chainPrefix', () => {
     const r = validate.chainPrefix(ADDR.eth, 'eth')
     expect(r.valid).toBe(true)
     expect(r.reason).toBe('match')
+  })
+  it('keeps validation and classification aligned for uniform-uppercase UTXO encodings', () => {
+    const result = checkChainPrefix(ADDR.bitcoinCash.toUpperCase(), 'Bitcoin-Cash')
+    expect(result.valid).toBe(true)
+    expect(result.reason).toBe('match')
+    expect(result.detectedFamily).toBe('bitcoincash')
   })
   it('fails open (valid) for an unknown chain', () => {
     const r = validate.chainPrefix(ADDR.eth, 'madeupchain')

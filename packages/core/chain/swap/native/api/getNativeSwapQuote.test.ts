@@ -111,6 +111,56 @@ describe('getNativeSwapQuote', () => {
     expect(queryUrlMock).not.toHaveBeenCalled()
   })
 
+  it('accepts EVM destination checksum differences between the request and executable memo', async () => {
+    queryUrlMock.mockResolvedValueOnce(baseOkBody)
+
+    const quote = await getNativeSwapQuote({
+      swapChain: Chain.THORChain,
+      destination: ethTo.address.toLowerCase(),
+      from: btcFrom,
+      to: ethTo,
+      amount: 1,
+    })
+
+    expect(quote.memo).toBe(baseOkBody.memo)
+  })
+
+  it.each([Chain.THORChain, Chain.MayaChain])(
+    '%s: rejects a quote whose executable memo substitutes the requested destination',
+    async swapChain => {
+      queryUrlMock.mockResolvedValueOnce({
+        ...baseOkBody,
+        memo: '=:e:0x1111111111111111111111111111111111111111',
+      })
+
+      await expect(
+        getNativeSwapQuote({
+          swapChain,
+          destination: ethTo.address,
+          from: btcFrom,
+          to: ethTo,
+          amount: 1,
+        })
+      ).rejects.toThrow(/destination mismatch.*requested.*executable memo routes/i)
+
+      expect(queryUrlMock).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it('rejects a successful provider response with no executable memo destination', async () => {
+    queryUrlMock.mockResolvedValueOnce({ ...baseOkBody, memo: undefined })
+
+    await expect(
+      getNativeSwapQuote({
+        swapChain: Chain.THORChain,
+        destination: ethTo.address,
+        from: btcFrom,
+        to: ethTo,
+        amount: 1,
+      })
+    ).rejects.toThrow(/destination mismatch/)
+  })
+
   it('THORChain: skips streaming when total_bps is missing', async () => {
     queryUrlMock.mockResolvedValueOnce({
       ...baseOkBody,

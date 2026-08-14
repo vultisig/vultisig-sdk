@@ -98,6 +98,10 @@ export const IBC_CHANNEL_DEST: Record<ChannelKey, string> = {
   'osmosis-1/channel-6994': 'celestia',
   // cosmoshub-4 outbound
   'cosmoshub-4/channel-141': 'osmosis-1',
+  // Noble direct ATOM<>USDC path. Backend already patched this route locally;
+  // keep the SDK table in sync so prepareIbcTransfer() and downstream route
+  // discovery don't reject a path first-party consumers already accept.
+  'cosmoshub-4/channel-536': 'noble-1',
 }
 
 /**

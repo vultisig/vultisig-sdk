@@ -78,8 +78,16 @@ import { TransactionBuilder } from './services/TransactionBuilder'
 // Swap types
 import type { SwapPrepareResult, SwapQuoteParams, SwapQuoteResult, SwapTxParams } from './swap-types'
 import { type ResolvedTokenInfo, resolveTokenRef, resolveTokenRefId } from './tokenRef'
-import { VaultError, VaultErrorCode } from './VaultError'
+import { VaultConflictError, VaultError, VaultErrorCode } from './VaultError'
 import { VaultConfig } from './VaultServices'
+
+export type VaultSaveOptions = {
+  /**
+   * Reject stale records by default. `merge-metadata` retries only when the
+   * local and persisted edits touch different top-level mutable fields.
+   */
+  conflictStrategy?: 'reject' | 'merge-metadata'
+}
 
 /**
  * Determine vault type based on signer names
@@ -124,6 +132,64 @@ function encodeFilenameComponent(component: string): string {
     // hazard once used as a filename; neutralize only the leading dots ("a..b" is fine).
     .replace(/^\.+/, '_')
   return encoded.length > 0 ? encoded : '_'
+}
+
+const MERGEABLE_VAULT_FIELDS = [
+  'name',
+  'isBackedUp',
+  'order',
+  'folderId',
+  'currency',
+  'chains',
+  'tokens',
+  'lastValueUpdate',
+] as const satisfies readonly (keyof VaultData)[]
+
+const storageWriteQueues = new WeakMap<Storage, Map<string, Promise<void>>>()
+
+function cloneValue<T>(value: T): T {
+  if (value === undefined) return value
+  return JSON.parse(JSON.stringify(value)) as T
+}
+
+function cloneVaultData(vaultData: VaultData): VaultData {
+  return cloneValue(vaultData)
+}
+
+function valuesEqual(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right)
+}
+
+function getVaultRevision(vaultData: VaultData): number {
+  const revision = vaultData.revision ?? 0
+  if (!Number.isSafeInteger(revision) || revision < 0) {
+    throw new VaultError(VaultErrorCode.InvalidVault, `Vault ${vaultData.id} has an invalid storage revision`)
+  }
+  return revision
+}
+
+async function withStorageWriteLock<T>(storage: Storage, key: string, operation: () => Promise<T>): Promise<T> {
+  let queues = storageWriteQueues.get(storage)
+  if (!queues) {
+    queues = new Map()
+    storageWriteQueues.set(storage, queues)
+  }
+
+  const previous = queues.get(key) ?? Promise.resolve()
+  const result = previous.then(operation, operation)
+  const settled = result.then(
+    () => undefined,
+    () => undefined
+  )
+  queues.set(key, settled)
+
+  void settled.finally(() => {
+    if (queues?.get(key) === settled) {
+      queues.delete(key)
+    }
+  })
+
+  return result
 }
 
 /**
@@ -179,6 +245,9 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   // Vault data and core vault
   protected vaultData: VaultData // Single source of truth
   protected coreVault: CoreVault // Built from vaultData
+  private persistedVaultData!: VaultData
+  private hasPersistedRecord = false
+  private saveQueue: Promise<void> = Promise.resolve()
 
   /**
    * Protected constructor - use subclass factory methods instead.
@@ -331,6 +400,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       // Vault file
       vultFileContent: vultFileContent.trim(),
     }
+    this.persistedVaultData = cloneVaultData(this.vaultData)
 
     // Initialize runtime state
     this._userChains =
@@ -664,6 +734,11 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     return this.vaultData.lastModified
   }
 
+  /** Monotonic persisted record revision. Legacy records start at revision 0. */
+  get revision(): number {
+    return getVaultRevision(this.vaultData)
+  }
+
   /** Total number of signers in this vault. */
   get totalSigners(): number {
     return this.vaultData.signers.length
@@ -708,8 +783,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     // Load vault data
     const loadedVaultData = await this.storage.get<VaultData>(`vault:${this.vaultData.id}`)
     if (loadedVaultData) {
-      // Replace entire vaultData object
-      ;(this as any).vaultData = loadedVaultData
+      this.restorePersistedVaultData(loadedVaultData)
 
       // Update runtime state
       this._currency = loadedVaultData.currency
@@ -728,26 +802,22 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
   /**
    * Save this vault to storage
-   * Syncs runtime state to VaultData and persists atomically
+   * Syncs runtime state to VaultData and persists with optimistic concurrency.
+   *
+   * Stale saves reject with VaultConflictError. Callers that intentionally
+   * edited a different top-level mutable field can retry with
+   * `{ conflictStrategy: 'merge-metadata' }`.
    */
-  async save(): Promise<void> {
-    // Sync runtime state to vaultData
-    const mutableData = this.vaultData as any
-    mutableData.currency = this._currency
-    mutableData.chains = this._userChains.map(c => c.toString())
-    mutableData.tokens = this._tokens
-    mutableData.lastModified = Date.now()
-
-    // Sync CoreVault fields
-    this.coreVault.name = this.vaultData.name
-    this.coreVault.isBackedUp = this.vaultData.isBackedUp
-    this.coreVault.order = this.vaultData.order
-
-    // Persist to storage (cache is handled automatically by CacheService)
-    await this.storage.set(`vault:${this.vaultData.id}`, this.vaultData)
-
-    // Emit event
-    this.emit('saved', { vaultId: this.vaultData.id })
+  async save(options: VaultSaveOptions = {}): Promise<void> {
+    const key = `vault:${this.vaultData.id}`
+    const localData = this.snapshotVaultData()
+    const operation = () => withStorageWriteLock(this.storage, key, () => this.saveUnlocked(key, localData, options))
+    const result = this.saveQueue.then(operation, operation)
+    this.saveQueue = result.then(
+      () => undefined,
+      () => undefined
+    )
+    return result
   }
 
   /**
@@ -847,8 +917,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       throw new VaultError(VaultErrorCode.InvalidVault, `Vault ${this.vaultData.id} not found in storage`)
     }
 
-    // Replace vaultData
-    ;(this as any).vaultData = loadedVaultData
+    this.restorePersistedVaultData(loadedVaultData)
 
     // Update runtime state
     this._currency = loadedVaultData.currency
@@ -873,6 +942,119 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   async exists(): Promise<boolean> {
     const vaultData = await this.storage.get<VaultData>(`vault:${this.vaultData.id}`)
     return vaultData !== null && vaultData !== undefined
+  }
+
+  /** @internal Replaces constructor defaults with a stored or pending snapshot. */
+  protected restorePersistedVaultData(vaultData: VaultData, persisted = true): void {
+    const snapshot = cloneVaultData(vaultData)
+    getVaultRevision(snapshot)
+    this.vaultData = snapshot
+    this.persistedVaultData = cloneVaultData(snapshot)
+    this.hasPersistedRecord = persisted
+  }
+
+  /** @internal Retains a current storage snapshot as the CAS baseline for an explicit import overwrite. */
+  protected setPersistedBaseline(vaultData: VaultData): void {
+    const snapshot = cloneVaultData(vaultData)
+    getVaultRevision(snapshot)
+    this.persistedVaultData = snapshot
+    this.hasPersistedRecord = true
+  }
+
+  private async saveUnlocked(key: string, localData: VaultData, options: VaultSaveOptions): Promise<void> {
+    const currentStored = await this.storage.get<VaultData>(key)
+    const currentData = currentStored ? cloneVaultData(currentStored) : null
+    const expectedRevision = this.hasPersistedRecord ? getVaultRevision(this.persistedVaultData) : null
+    const actualRevision = currentData ? getVaultRevision(currentData) : null
+
+    let nextData = localData
+    if (expectedRevision !== actualRevision) {
+      if (options.conflictStrategy !== 'merge-metadata' || !this.hasPersistedRecord || !currentData) {
+        throw new VaultConflictError(this.vaultData.id, expectedRevision, actualRevision)
+      }
+      nextData = this.mergeMetadata(
+        this.persistedVaultData,
+        localData,
+        currentData,
+        getVaultRevision(this.persistedVaultData),
+        getVaultRevision(currentData)
+      )
+    }
+
+    nextData.revision = (actualRevision ?? 0) + 1
+    nextData.lastModified = Date.now()
+
+    await this.storage.set(key, cloneVaultData(nextData))
+    this.restorePersistedVaultData(nextData)
+    this.syncRuntimeFromVaultData()
+    this.emit('saved', { vaultId: this.vaultData.id })
+  }
+
+  private snapshotVaultData(): VaultData {
+    const snapshot = cloneVaultData(this.vaultData)
+    snapshot.currency = this._currency
+    snapshot.chains = this._userChains.map(chain => chain.toString())
+    snapshot.tokens = cloneValue(this._tokens)
+    return snapshot
+  }
+
+  private mergeMetadata(
+    baseline: VaultData,
+    localData: VaultData,
+    currentData: VaultData,
+    expectedRevision: number,
+    actualRevision: number
+  ): VaultData {
+    const mergeableFields = new Set<keyof VaultData>(MERGEABLE_VAULT_FIELDS)
+    const localNonMetadataChanges = Array.from(
+      new Set([...Object.keys(baseline), ...Object.keys(localData)] as (keyof VaultData)[])
+    ).filter(
+      field =>
+        field !== 'revision' &&
+        field !== 'lastModified' &&
+        !mergeableFields.has(field) &&
+        !valuesEqual(baseline[field], localData[field])
+    )
+
+    const conflictingFields: string[] = [...localNonMetadataChanges.map(String)]
+    const merged = cloneVaultData(currentData)
+
+    for (const field of MERGEABLE_VAULT_FIELDS) {
+      const localChanged = !valuesEqual(baseline[field], localData[field])
+      const persistedChanged = !valuesEqual(baseline[field], currentData[field])
+
+      if (localChanged && persistedChanged && !valuesEqual(localData[field], currentData[field])) {
+        conflictingFields.push(field)
+      } else if (localChanged) {
+        ;(merged as Record<keyof VaultData, unknown>)[field] = cloneValue(localData[field])
+      }
+    }
+
+    if (conflictingFields.length > 0) {
+      throw new VaultConflictError(this.vaultData.id, expectedRevision, actualRevision, conflictingFields)
+    }
+
+    return merged
+  }
+
+  private syncRuntimeFromVaultData(): void {
+    this._currency = this.vaultData.currency
+    this._userChains = this.vaultData.chains.map(chain => chain as Chain)
+    this._tokens = this.vaultData.tokens
+    this.coreVault.publicKeys = this.vaultData.publicKeys
+    this.coreVault.hexChainCode = this.vaultData.hexChainCode
+    this.coreVault.signers = [...this.vaultData.signers]
+    this.coreVault.localPartyId = this.vaultData.localPartyId
+    this.coreVault.libType = this.vaultData.libType
+    this.coreVault.createdAt = this.vaultData.createdAt
+    this.coreVault.name = this.vaultData.name
+    this.coreVault.isBackedUp = this.vaultData.isBackedUp
+    this.coreVault.order = this.vaultData.order
+    this.coreVault.folderId = this.vaultData.folderId
+    this.coreVault.chainPublicKeys = this.vaultData.chainPublicKeys
+    this.coreVault.chainKeyShares = this.vaultData.chainKeyShares
+    this.coreVault.publicKeyMldsa = this.vaultData.publicKeyMldsa
+    this.coreVault.keyShareMldsa = this.vaultData.keyShareMldsa
   }
 
   // ===== PASSWORD MANAGEMENT =====
@@ -1125,10 +1307,17 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     // Fetch balance via BalanceService so cache / balanceUpdated event / VaultError
     // wrapping all fire. The vault-free `getMaxSendAmountFromKeys` skips these
     // (no cache/events in the MCP / agent context); vault callers must not.
-    const balance = await this.balanceService.getBalance(params.coin.chain, params.coin.id)
+    const [balance, nativeBalance] = await Promise.all([
+      this.balanceService.getBalance(params.coin.chain, params.coin.id),
+      params.coin.id === undefined ? undefined : this.balanceService.getBalance(params.coin.chain),
+    ])
     return computeMaxSendFromBalance(
       vaultDataToIdentity(this.coreVault),
-      { ...params, balance: BigInt(balance.amount) },
+      {
+        ...params,
+        balance: BigInt(balance.amount),
+        nativeBalance: nativeBalance === undefined ? undefined : BigInt(nativeBalance.amount),
+      },
       walletCore
     )
   }
@@ -1739,7 +1928,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     return { balances, totalValue: total.toFixed(2), currency }
   }
 
-  /** Send tokens. Use amount "max" to send entire balance minus fees. Set dryRun for fee estimate without signing. */
+  /** Send tokens. Use amount "max" for the native balance minus fees, or the full token balance when native gas is covered. Set dryRun for fee estimates without signing. */
   async send(params: {
     chain: Chain
     to: string
@@ -1782,6 +1971,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       const isTokenSend = Boolean(tokenInfo.contractAddress)
       return {
         dryRun: true,
+        ...(tokenInfo.contractAddress ? { contractAddress: tokenInfo.contractAddress } : {}),
         fee: this.formatUnits(fee, isTokenSend ? native.decimals : tokenInfo.decimals),
         feeSymbol: native.ticker,
         // Denominated in the asset being sent, so it is directly comparable to
@@ -1813,7 +2003,8 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     const fromToken = this.resolveTokenInfo(fromChain, fromSymbol)
     const toToken = this.resolveTokenInfo(toChain, toSymbol)
     const [fromAddress, defaultToAddress] = await Promise.all([this.address(fromChain), this.address(toChain)])
-    const toAddress = recipient ?? defaultToAddress
+    const normalizedRecipient = recipient?.trim() || undefined
+    const toAddress = normalizedRecipient ?? defaultToAddress
     const fromCoin = this.buildAccountCoin(fromChain, fromAddress, fromToken)
     const toCoin = this.buildAccountCoin(toChain, toAddress, toToken)
 
@@ -1829,7 +2020,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       fromCoin,
       toCoin,
       amount: normalizedAmount,
-      recipient,
+      recipient: normalizedRecipient,
       slippageTolerance,
       excludeProviders,
     })

@@ -116,14 +116,13 @@ describe('getSuiSigningInputs — signSui (pre-built PTB)', () => {
       txInputData,
     })
 
-    // EdDSA 'raw' format: generateSignature reverses each 32-byte half, so the
-    // MPC-supplied r/s are the reversed signature halves.
+    // EdDSA 'raw' format uses canonical R || S byte order end to end.
     const rawSignature = privateKey.sign(digest, walletCore.Curve.ed25519)
     const signatures = {
       [hex(digest)]: {
         msg: '',
-        r: hex(rawSignature.slice(0, 32).reverse()),
-        s: hex(rawSignature.slice(32, 64).reverse()),
+        r: hex(rawSignature.slice(0, 32)),
+        s: hex(rawSignature.slice(32, 64)),
         der_signature: '',
       },
     }
@@ -231,14 +230,42 @@ describe('getSuiSigningInputs — native send', () => {
 })
 
 describe('getSuiChainSpecific — signSui (pre-built PTB)', () => {
-  it('returns an empty SuiSpecific without touching the RPC', async () => {
+  it('reads gas back out of the PTB without touching the RPC', async () => {
     const chainSpecific = await getSuiChainSpecific({
       keysignPayload: buildSignSuiPayload(),
       walletCore,
     })
 
+    // No coin selection: the PTB already names its own gas payment objects.
     expect(chainSpecific.coins).toHaveLength(0)
-    expect(chainSpecific.referenceGasPrice).toBe('')
+    // Gas is decoded from the bytes rather than left blank — a blank budget
+    // makes `getSuiFeeAmount` report a 0 network fee on the confirmation
+    // screen even though the chain charges the baked-in budget.
+    expect(chainSpecific.gasBudget).toBe('3000000')
+    expect(chainSpecific.referenceGasPrice).toBe('1000')
+  })
+
+  it('falls back to a blank SuiSpecific when the PTB cannot be decoded', async () => {
+    const keysignPayload = create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, {
+        chain: Chain.Sui,
+        ticker: 'SUI',
+        address: signer,
+        decimals: 9,
+        isNativeToken: true,
+        hexPublicKey: hex(publicKey.data()),
+      }),
+      signData: {
+        case: 'signSui',
+        value: create(SignSuiSchema, { unsignedTxMsg: Buffer.from('not-a-ptb').toString('base64') }),
+      },
+    })
+
+    const chainSpecific = await getSuiChainSpecific({ keysignPayload, walletCore })
+
+    // Fee display is a presentation concern — it must never block a
+    // transaction whose bytes are otherwise signable.
     expect(chainSpecific.gasBudget).toBe('')
+    expect(chainSpecific.referenceGasPrice).toBe('')
   })
 })

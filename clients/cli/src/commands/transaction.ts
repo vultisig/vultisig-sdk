@@ -10,7 +10,13 @@ import type { CommandContext, SendDryRunResult, SendParams, TransactionResult } 
 import { buildSendBroadcastIntent, ensureVaultUnlocked, guardedBroadcast } from '../core'
 import { ConfirmationRequiredError } from '../core/errors'
 import { createSpinner, info, isJsonOutput, isNonInteractive, outputJson, warn } from '../lib/output'
-import { confirmTransaction, displayTransactionPreview, displayTransactionResult, escapeTerminalControls } from '../ui'
+import {
+  confirmTransaction,
+  displayTransactionPreview,
+  displayTransactionResult,
+  escapeTerminalControls,
+  formatBigintAmount,
+} from '../ui'
 
 const getSendPreviewDetails = (
   chain: Chain,
@@ -70,7 +76,13 @@ export async function executeSend(
 async function previewDryRun(
   vault: VaultBase,
   params: SendParams,
-  dryResult: { fee: string; feeSymbol: string; total: string; keysignPayload: KeysignPayload },
+  dryResult: {
+    fee: string
+    feeSymbol: string
+    total: string
+    contractAddress?: string
+    keysignPayload: KeysignPayload
+  },
   to: string
 ): Promise<SendDryRunResult> {
   const balance = await vault.balance(params.chain, params.tokenId)
@@ -92,13 +104,17 @@ async function previewDryRun(
   // check at all — `total` already includes the fee, and running one would
   // just report the same shortfall twice.
   const isTokenSend = balance.tokenId !== undefined
-  const feeBalance = isTokenSend ? await vault.balance(params.chain).catch(() => undefined) : undefined
+  // Max token sends are already gated by the SDK's native-balance check while
+  // calculating the max amount. Keep this preview check for explicit token
+  // amounts, but do not repeat the same balance read for max sends.
+  const shouldCheckNativeFeeBalance = isTokenSend && params.amount !== 'max'
+  const feeBalance = shouldCheckNativeFeeBalance ? await vault.balance(params.chain).catch(() => undefined) : undefined
 
   const warnings: string[] = []
   if (hasInsufficientBalance) {
     warnings.push(`Insufficient balance: you have ${balance.formattedAmount} ${balance.symbol}`)
   }
-  if (isTokenSend && feeBalance === undefined) {
+  if (shouldCheckNativeFeeBalance && feeBalance === undefined) {
     // The gas check needs a second balance read, and it failed. Say so rather
     // than letting its absence read as "gas is fine".
     warnings.push(`Could not check your ${dryResult.feeSymbol} balance for the network fee`)
@@ -118,6 +134,7 @@ async function previewDryRun(
     to,
     amount: params.amount,
     symbol: balance.symbol,
+    ...(dryResult.contractAddress ? { contractAddress: dryResult.contractAddress } : {}),
     fee: dryResult.fee,
     feeSymbol: dryResult.feeSymbol,
     total: dryResult.total,
@@ -128,14 +145,28 @@ async function previewDryRun(
   }
 
   if (isJsonOutput()) {
-    outputJson(result)
-    return result
+    if (params.amount !== 'max') {
+      outputJson(result)
+      return result
+    }
+
+    const decimals = dryResult.keysignPayload.coin?.decimals
+    if (decimals === undefined) throw new Error('Prepared transaction is missing coin decimals')
+    const jsonResult = {
+      ...result,
+      amount: formatBigintAmount(BigInt(dryResult.keysignPayload.toAmount), decimals),
+      isMax: true,
+    }
+    outputJson(jsonResult)
+    return jsonResult
   }
 
   info(`\nDry-run preview:`)
   info(`  Chain:   ${result.chain}`)
   info(`  To:      ${result.to}`)
-  info(`  Amount:  ${result.amount} ${result.symbol}`)
+  info(
+    `  Amount:  ${result.amount} ${result.symbol}${result.contractAddress ? ` (${escapeTerminalControls(result.contractAddress)})` : ''}`
+  )
   if (result.destinationTag !== undefined) info(`  Destination tag: ${result.destinationTag}`)
   if (result.memo) info(`  Memo:    ${escapeTerminalControls(result.memo)}`)
   info(`  Fee:     ${result.fee} ${result.feeSymbol}`)
@@ -218,7 +249,8 @@ export async function sendTransaction(
       params.chain,
       preview.memo,
       preview.destinationTag,
-      gas
+      gas,
+      dryResult.contractAddress
     )
   }
 
