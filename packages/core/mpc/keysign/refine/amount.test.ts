@@ -133,7 +133,10 @@ describe('refineKeysignAmount', () => {
     const fee = 1_225_000n
     mocks.getFeeAmount.mockResolvedValue(fee)
 
-    const refined = await refine(buildPayload({ chain: Chain.TerraClassic, amount: balance, contractAddress: 'uusd' }), balance)
+    const refined = await refine(
+      buildPayload({ chain: Chain.TerraClassic, amount: balance, contractAddress: 'uusd' }),
+      balance
+    )
 
     expect(BigInt(refined.toAmount)).toBe(balance - fee)
   })
