@@ -5383,7 +5383,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@scure/base@npm:1.2.6, @scure/base@npm:^1.1.1, @scure/base@npm:^1.1.7, @scure/base@npm:^1.2.5, @scure/base@npm:~1.2.5":
+"@scure/base@npm:1.2.6, @scure/base@npm:^1.1.1, @scure/base@npm:^1.1.7, @scure/base@npm:~1.2.5":
   version: 1.2.6
   resolution: "@scure/base@npm:1.2.6"
   checksum: 10c0/49bd5293371c4e062cb6ba689c8fe3ea3981b7bb9c000400dc4eafa29f56814cdcdd27c04311c2fec34de26bc373c593a1d6ca6d754398a488d587943b7c128a
@@ -5401,6 +5401,13 @@ __metadata:
   version: 2.2.0
   resolution: "@scure/base@npm:2.2.0"
   checksum: 10c0/30158ccf5da86b0f06928f1cfe24a29fbea22824adf6f8895222910cade1ad4fe7593958aacf563287e6b4c55746f47395178e7a4763b059c22d6ee8e6f76387
+  languageName: node
+  linkType: hard
+
+"@scure/base@npm:^2.3.0":
+  version: 2.3.0
+  resolution: "@scure/base@npm:2.3.0"
+  checksum: 10c0/538da122a8ef9a3f2951b912a8350ad73a1dd812fa99b0fc8617ace1a3200ccd6dfb6d3756c3f8fbc18780156baaf38a95c3e8512cb4af8d593b3bc4b8ee02e7
   languageName: node
   linkType: hard
 
@@ -7342,7 +7349,7 @@ __metadata:
     "@rollup/plugin-replace": "npm:^6.0.3"
     "@rollup/plugin-terser": "npm:^1.0.0"
     "@rollup/plugin-typescript": "npm:^12.3.0"
-    "@scure/base": "npm:^1.2.5"
+    "@scure/base": "npm:^2.3.0"
     "@scure/bip39": "npm:^1.6.0"
     "@solana/spl-token": "npm:^0.4.14"
     "@solana/web3.js": "npm:^1.98.4"
