@@ -32,7 +32,9 @@ const chainToCoinGeckoPlatformMap = Object.freeze(
 )
 
 const coinGeckoPlatformToChainMap = Object.freeze(
-  Object.fromEntries(chainPlatformEntries.map(([chain, platform]) => [platform, chain])) as Readonly<Record<string, Chain>>
+  Object.fromEntries(chainPlatformEntries.map(([chain, platform]) => [platform, chain])) as Readonly<
+    Record<string, Chain>
+  >
 )
 
 export const coinGeckoPlatformForChain = (chain: string): string | undefined =>
