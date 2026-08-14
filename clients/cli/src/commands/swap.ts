@@ -1,8 +1,8 @@
 /**
  * Swap Commands - thin wrapper around vault.swap()
  */
-import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import type { Chain, SwapQuoteResult } from '@vultisig/sdk'
+import { toChainAmount } from '@vultisig/sdk'
 import { formatUnits } from 'viem'
 
 import type { CommandContext } from '../core'
@@ -63,10 +63,10 @@ export async function executeSwapQuote(ctx: CommandContext, options: SwapQuoteOp
   spinner.succeed('Quote received')
 
   const quote = result.quote
-  const semanticAmount = isMax ? amount : normalizeSwapAmount(amount, quote.fromCoin.decimals)
-  const fromAmountDisplay = isMax
-    ? `${formatBigintAmount(quote.maxSwapable, quote.fromCoin.decimals)} (max)`
-    : semanticAmount
+  const semanticAmount = isMax
+    ? formatBigintAmount(quote.maxSwapable, quote.fromCoin.decimals)
+    : normalizeSwapAmount(amount, quote.fromCoin.decimals)
+  const fromAmountDisplay = isMax ? `${semanticAmount} (max)` : semanticAmount
 
   if (isJsonOutput()) {
     outputJson({

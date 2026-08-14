@@ -27,6 +27,7 @@ export type {
   UtxoTxBuilderResult,
 } from '../../../../chains/utxo'
 export {
+  assertUtxoAddressBrand,
   broadcastUtxoTx,
   buildUtxoSendTx,
   decodeAddressToPubKeyHash,
@@ -39,6 +40,7 @@ export {
   getUtxoBalance,
   getUtxoChainSpec,
   getUtxos,
+  isUtxoAddressBrandValid,
   selectUtxoInputs,
   ZCASH_BRANCH_ID_NU6_1,
   ZCASH_BRANCH_ID_NU6_2,

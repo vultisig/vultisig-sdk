@@ -21,6 +21,7 @@ import {
   extractBalanceSummaryFromText,
   extractPolymarketMarketsFromText,
   extractYieldOpportunitiesFromText,
+  type HlOrderConfirmationCard,
   parseBalanceSummaryEnvelope,
   parsePolymarketMarketsEnvelope,
   parseYieldOpportunitiesEnvelope,
@@ -28,6 +29,7 @@ import {
 import { AgentClient, createTurnIdempotencyKey, type SSEStreamResult } from './client'
 import { buildMessageContext, buildMinimalContext } from './context'
 import { AgentExecutor, resolveChain } from './executor'
+import { formatHlConfirmation } from './hlOrder'
 import {
   type AgentTokenCacheScope,
   clearCachedToken,
@@ -47,6 +49,7 @@ import type {
   ConversationMessage,
   MessageContext,
   RecentAction,
+  SigningRecord,
   TxReadyPayload,
   UICallbacks,
 } from './types'
@@ -54,7 +57,7 @@ import type {
 // Tools that prompt for the vault password before dispatch. `sign_tx` is
 // reached via the tool-output signing path (not a registry tool name) but uses
 // the same gate via `runPasswordGatedTool('sign_tx', …)` below.
-const PASSWORD_REQUIRED_TOOLS = new Set(['sign_typed_data', 'sign_tx'])
+const PASSWORD_REQUIRED_TOOLS = new Set(['sign_typed_data', 'sign_tx', 'hl_order'])
 const AUTO_SUBMIT_MARKERS = new Set([
   '__pm_auto_submit',
   '__pm_auto_submit_batch',
@@ -99,6 +102,7 @@ export const BACKEND_CLIENT_SIDE_TOOL_NAMES: readonly string[] = [
   'sign_typed_data',
   'polymarket_sign_bet',
   'polymarket_sign_batch',
+  'hl_order',
 ]
 
 // Every tool name the SSE layer intercepts for local dispatch: the backend's
@@ -119,11 +123,20 @@ export const CLIENT_SIDE_DISPATCH_TOOL_NAMES: ReadonlySet<string> = new Set<stri
 // 2x the backend's 8-iteration cap — belt-and-suspenders against runaway loops.
 const MAX_MESSAGE_LOOP_DEPTH = 16
 
-// ProposedTransaction.summary is documented as a ONE-LINE human summary, and it reaches
-// stdout/stderr and the JSON envelope. For sign_tx it is exactly that; for sign_typed_data the
-// gate falls back to JSON.stringify(input), which is an arbitrarily large typed-data blob. Cap it
-// so a declined typed-data signature can't dump its whole payload into a one-line field.
+// Signing audit summaries reach stdout/stderr and the JSON envelope. For sign_tx they are already
+// one line; for sign_typed_data the gate falls back to JSON.stringify(input), which is an
+// arbitrarily large typed-data blob. Keep every emitted audit record bounded.
 const PROPOSED_SUMMARY_MAX_CHARS = 500
+
+function capSigningSummary(summary: string): string {
+  return summary.length > PROPOSED_SUMMARY_MAX_CHARS ? `${summary.slice(0, PROPOSED_SUMMARY_MAX_CHARS)}…` : summary
+}
+
+function applyAgentMode(request: any, config: AgentConfig): void {
+  if (config.viaAgent || config.askMode) {
+    request.via_agent = true
+  }
+}
 
 // Mid-turn disconnect recovery (matches the app's 2s poller / ~3min ceiling).
 // On a dropped SSE stream the session polls /messages/since this many times,
@@ -188,8 +201,7 @@ function reportDeclinedSigning(
   // conflicting representations of it. Nothing is lost — this is a display summary of a
   // transaction that was NOT authorized; the authoritative payload is the request the caller
   // re-issues with `--yes`.
-  const proposed =
-    summary.length > PROPOSED_SUMMARY_MAX_CHARS ? `${summary.slice(0, PROPOSED_SUMMARY_MAX_CHARS)}…` : summary
+  const proposed = capSigningSummary(summary)
   const declined: RecentAction = {
     tool: toolName,
     success: false,
@@ -284,6 +296,9 @@ export class AgentSession {
   private pushService: PushNotificationService | null = null
   // Flushed into context.recent_actions on the next outbound request.
   private pendingToolResults: RecentAction[] = []
+  private terminalHlConfirmation = false
+  private firstHlOrderRef: string | null = null
+  private seenHlOrderRefs = new Set<string>()
   // Snapshot, taken the instant sendMessage's catch fires (BEFORE it clears the
   // queue), of whether an already-broadcast tx result was still UNDELIVERED to
   // the backend. This is the true "ack failed" signal: a successful broadcast
@@ -456,7 +471,9 @@ export class AgentSession {
             new Error(
               `Session ${this.config.sessionId} could not be resumed (${err?.message ?? 'unknown error'}); refusing to execute the request without its conversation context`
             ),
-            { code: isAuthError(err) ? AgentErrorCode.AUTH_FAILED : AgentErrorCode.SESSION_NOT_FOUND }
+            {
+              code: isAuthError(err) ? AgentErrorCode.AUTH_FAILED : AgentErrorCode.SESSION_NOT_FOUND,
+            }
           )
         }
 
@@ -607,6 +624,9 @@ export class AgentSession {
     }
 
     this.abortController = new AbortController()
+    this.terminalHlConfirmation = false
+    this.firstHlOrderRef = null
+    this.seenHlOrderRefs = new Set<string>()
     // Fresh turn — clear the prior turn's ack snapshot.
     this.unacknowledgedBroadcastAtError = false
 
@@ -686,9 +706,7 @@ export class AgentSession {
     }
 
     // Signal to backend that an AI agent is calling (adjusts prompt for structured output)
-    if (this.config.viaAgent || this.config.askMode) {
-      request.via_agent = true
-    }
+    applyAgentMode(request, this.config)
 
     if (content) {
       request.content = content
@@ -752,6 +770,16 @@ export class AgentSession {
         }
       },
       onClientSideToolCall: (toolCallId: string, toolName: string, input: Record<string, unknown>) => {
+        if (toolName === 'hl_order') {
+          // Claim synchronously while parsing SSE: serialized dispatch alone is too late because a
+          // second distinct ref would already be queued and could retrieve/sign after the first.
+          const orderRef = typeof input.order_ref === 'string' ? input.order_ref : ''
+          if (this.firstHlOrderRef === null || this.firstHlOrderRef === undefined) {
+            this.firstHlOrderRef = orderRef
+          } else if (this.firstHlOrderRef !== orderRef) {
+            return
+          }
+        }
         const dispatch = dispatchChain.then(() => this.dispatchClientSideTool(toolCallId, toolName, input, ui))
         dispatchChain = dispatch.catch(() => {})
         pendingDispatches.push(dispatch)
@@ -854,6 +882,14 @@ export class AgentSession {
     // Wait for client-side dispatches (they push onto pendingToolResults).
     if (pendingDispatches.length > 0) {
       await Promise.all(pendingDispatches)
+    }
+
+    // Confirmation refusal terminates locally. Feeding it back as a failed tool result makes the
+    // model rebuild/re-dispatch orders and can fabricate a card or success above the real client gate.
+    if (this.terminalHlConfirmation) {
+      this.pendingToolResults = this.pendingToolResults.filter(result => result.tool !== 'hl_order')
+      ui.onDone()
+      return
     }
 
     // Mid-turn disconnect recovery: the SSE stream dropped before the backend
@@ -1327,8 +1363,10 @@ export class AgentSession {
     toolCallId: string,
     ui: UICallbacks,
     body: () => Promise<RecentAction>,
-    input?: Record<string, unknown>
+    input?: Record<string, unknown>,
+    confirmationSummary?: string
   ): Promise<RecentAction> {
+    let signingRecord: Omit<SigningRecord, 'success'> | undefined
     // Confirmation gate: a signable tool (sign_tx / sign_typed_data) must be
     // explicitly approved before it signs + broadcasts. This is the single
     // chokepoint for BOTH the tx_ready path and client-side dispatch, so one
@@ -1342,12 +1380,19 @@ export class AgentSession {
       // sign_typed_data must NOT pick it up — the user would be approving
       // typed-data while reading a stale send/swap summary.
       const summary =
+        confirmationSummary ??
         (toolName === 'sign_tx' ? this.executor.getPendingSummary() : null) ??
         `${toolName}${input ? ` ${JSON.stringify(input)}` : ''}`
       const approved = await ui.requestConfirmation(summary)
       if (!approved) {
         return reportDeclinedSigning(this.executor, toolName, toolCallId, summary, input, ui)
       }
+      // Sample the summary/chain NOW (body() consumes and clears the buffer);
+      // the record itself is only emitted after body() runs, with its outcome —
+      // emitting here would fabricate a "signed" record for a body that failed
+      // before signing anything (e.g. a DUPLICATE_BROADCAST refusal).
+      const chain = ui.onSigningRecord && toolName === 'sign_tx' ? this.executor.getPendingChain() : null
+      signingRecord = { tool: toolName, summary: capSigningSummary(summary), ...(chain ? { chain } : {}) }
     }
 
     // Gate signing on whether a password is actually NEEDED, not on the
@@ -1410,6 +1455,7 @@ export class AgentSession {
       const message = err instanceof Error ? err.message : String(err)
       recent = { tool: toolName, success: false, data: { error: message } }
     }
+    if (signingRecord) ui.onSigningRecord?.({ ...signingRecord, success: recent.success })
     const errorMsg = (recent.data?.error as string | undefined) ?? undefined
     const errorCode = (recent.data?.code as AgentErrorCode | undefined) ?? undefined
     ui.onToolResult(toolCallId, toolName, recent.success, recent.data, errorMsg, errorCode)
@@ -1429,6 +1475,51 @@ export class AgentSession {
     input: Record<string, unknown>,
     ui: UICallbacks
   ): Promise<void> {
+    if (toolName === 'hl_order') {
+      let recent: RecentAction
+      try {
+        const conversationId = this.conversationId
+        if (!conversationId) throw new Error('HL_CONVERSATION_REQUIRED')
+        const orderRef = typeof input.order_ref === 'string' ? input.order_ref : ''
+        if (this.firstHlOrderRef === null || this.firstHlOrderRef === undefined) {
+          this.firstHlOrderRef = orderRef
+        } else if (this.firstHlOrderRef !== orderRef) {
+          return
+        }
+        const seenRefs = this.seenHlOrderRefs ?? (this.seenHlOrderRefs = new Set<string>())
+        if (seenRefs.has(orderRef)) return
+        seenRefs.add(orderRef)
+        const payload = await this.executor.retrieveHlOrder(this.client, input, conversationId)
+        recent = await this.runPasswordGatedTool(
+          toolName,
+          toolCallId,
+          ui,
+          () => this.executor.signAndSubmitHlOrder(this.client, payload),
+          input,
+          formatHlConfirmation(payload)
+        )
+        if (recent.data?.code === AgentErrorCode.CONFIRMATION_REQUIRED) {
+          const proposed = String(recent.data.proposed ?? formatHlConfirmation(payload))
+          const card: HlOrderConfirmationCard = {
+            surface: 'hyperliquid_order_confirmation',
+            status: 'confirmation_required',
+            order_ref: payload.order_ref,
+            ...payload.summary,
+            proposed,
+          }
+          recent.data.confirmation_card = card
+          this.terminalHlConfirmation = true
+          ui.onHlOrderConfirmation?.(card)
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        recent = { tool: toolName, success: false, data: { error: message } }
+        ui.onToolCall(toolCallId, toolName, input)
+        ui.onToolResult(toolCallId, toolName, false, recent.data, message)
+      }
+      if (!this.terminalHlConfirmation) this.pendingToolResults.push(recent)
+      return
+    }
     const handler = CLIENT_SIDE_TOOL_DISPATCH[toolName]
     if (!handler) {
       process.stderr.write(`[cli] unimplemented client-side tool: ${toolName}\n`)
@@ -1440,7 +1531,10 @@ export class AgentSession {
       this.pendingToolResults.push({
         tool: toolName,
         success: false,
-        data: { code: AgentErrorCode.TOOL_UNSUPPORTED, error: `unimplemented in CLI: ${toolName}` },
+        data: {
+          code: AgentErrorCode.TOOL_UNSUPPORTED,
+          error: `unimplemented in CLI: ${toolName}`,
+        },
       })
       return
     }

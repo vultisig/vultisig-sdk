@@ -18,6 +18,9 @@
  * dropped DestinationTag, etc.) by re-deriving the same Payment JSON
  * independently from the raw inputs and asserting byte-for-byte equality.
  */
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 import { encode as xrplEncode, encodeForSigning as xrplEncodeForSigning, type Payment } from 'xrpl'
 
@@ -32,6 +35,26 @@ const FX = {
   lastLedgerSequence: 12345,
   signingPubKey: '0286E56770CE9B95253CCB48D22DCE4EAE1CA3606A9DA6D4CDA3AA5C6D0A9DBEE',
 }
+
+type RippleCrossEncoderFixture = {
+  senderAddress: string
+  recipientAddress: string
+  senderPublicKeyHex: string
+  amountDrops: string
+  feeDrops: string
+  sequence: number
+  lastLedgerSequence: number
+  flags?: number
+  memo?: string
+  expectedSigningHashHex: string
+}
+
+const crossEncoderFixture = JSON.parse(
+  readFileSync(resolve(__dirname, '../../../../../../testdata/cross-encoder-golden/ripple-payment.json'), 'utf8')
+) as RippleCrossEncoderFixture
+const crossEncoderMemoFixture = JSON.parse(
+  readFileSync(resolve(__dirname, '../../../../../../testdata/cross-encoder-golden/ripple-payment-memo.json'), 'utf8')
+) as RippleCrossEncoderFixture
 
 function encodeDerInteger(hex: string): Buffer {
   let bytes = Buffer.from(hex, 'hex')
@@ -51,6 +74,38 @@ function buildReferenceDerSignature(rHex: string, sHex: string): Buffer {
 }
 
 describe('Ripple / buildXrpSendTx golden vectors', () => {
+  it('matches WalletCore for the shared XRP Payment fixture', () => {
+    const result = buildXrpSendTx({
+      account: crossEncoderFixture.senderAddress,
+      destination: crossEncoderFixture.recipientAddress,
+      amount: crossEncoderFixture.amountDrops,
+      fee: crossEncoderFixture.feeDrops,
+      sequence: crossEncoderFixture.sequence,
+      lastLedgerSequence: crossEncoderFixture.lastLedgerSequence,
+      signingPubKey: crossEncoderFixture.senderPublicKeyHex,
+    })
+
+    expect(result.tx.Flags).toBe(crossEncoderFixture.flags)
+    expect(result.signingHashHex).toBe(crossEncoderFixture.expectedSigningHashHex)
+  })
+
+  it('matches WalletCore for the shared XRP Payment memo fixture', () => {
+    const result = buildXrpSendTx({
+      account: crossEncoderMemoFixture.senderAddress,
+      destination: crossEncoderMemoFixture.recipientAddress,
+      amount: crossEncoderMemoFixture.amountDrops,
+      fee: crossEncoderMemoFixture.feeDrops,
+      sequence: crossEncoderMemoFixture.sequence,
+      lastLedgerSequence: crossEncoderMemoFixture.lastLedgerSequence,
+      signingPubKey: crossEncoderMemoFixture.senderPublicKeyHex,
+      memo: crossEncoderMemoFixture.memo,
+    })
+
+    expect(result.tx.Flags).toBeUndefined()
+    expect(result.tx.Memos?.[0]?.Memo.MemoType).toBeUndefined()
+    expect(result.signingHashHex).toBe(crossEncoderMemoFixture.expectedSigningHashHex)
+  })
+
   it('matches an independently-built Payment tx serialized via xrpl.encodeForSigning', () => {
     const result = buildXrpSendTx({
       account: FX.account,
@@ -64,6 +119,7 @@ describe('Ripple / buildXrpSendTx golden vectors', () => {
 
     const referenceTx: Payment = {
       TransactionType: 'Payment',
+      Flags: 0,
       Account: FX.account,
       Destination: FX.destination,
       Amount: FX.amount,
@@ -93,8 +149,6 @@ describe('Ripple / buildXrpSendTx golden vectors', () => {
     })
 
     const memoHex = Buffer.from(memo, 'utf8').toString('hex').toUpperCase()
-    const memoTypeHex = Buffer.from('text/plain', 'utf8').toString('hex').toUpperCase()
-
     const referenceTx: Payment = {
       TransactionType: 'Payment',
       Account: FX.account,
@@ -105,7 +159,7 @@ describe('Ripple / buildXrpSendTx golden vectors', () => {
       LastLedgerSequence: FX.lastLedgerSequence,
       SigningPubKey: FX.signingPubKey.toUpperCase(),
       DestinationTag: 998877,
-      Memos: [{ Memo: { MemoData: memoHex, MemoType: memoTypeHex } }],
+      Memos: [{ Memo: { MemoData: memoHex } }],
     }
 
     expect(result.tx).toEqual(referenceTx)
@@ -237,6 +291,7 @@ describe('Ripple / buildXrpSendTx golden vectors', () => {
 
     const referenceSignedTx: Payment = {
       TransactionType: 'Payment',
+      Flags: 0,
       Account: FX.account,
       Destination: FX.destination,
       Amount: FX.amount,
