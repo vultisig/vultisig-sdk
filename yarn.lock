@@ -3740,6 +3740,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@noble/hashes@npm:^2.3.0":
+  version: 2.3.0
+  resolution: "@noble/hashes@npm:2.3.0"
+  checksum: 10c0/85651da4c1ea1db15fcacac7f38e4c4e6d60154cd116200b1002c198893bfad2733b31108352fde307126bab789f82f47b5bee8a12462b12f25fd0703aed7dce
+  languageName: node
+  linkType: hard
+
 "@nodelib/fs.scandir@npm:2.1.5":
   version: 2.1.5
   resolution: "@nodelib/fs.scandir@npm:2.1.5"
@@ -7028,7 +7035,7 @@ __metadata:
     "@cosmjs/stargate": "npm:^0.39.0"
     "@msgpack/msgpack": "npm:^3.1.2"
     "@napi-rs/keyring": "npm:^1.3.0"
-    "@noble/hashes": "npm:^2.2.0"
+    "@noble/hashes": "npm:^2.3.0"
     "@types/inquirer": "npm:^9.0.10"
     "@types/node": "npm:^26.1.1"
     "@types/tabtab": "npm:^3.0.4"
@@ -7085,7 +7092,7 @@ __metadata:
     "@cosmjs/stargate": "npm:^0.39.0"
     "@lifi/sdk": "npm:^4.1.0"
     "@mysten/sui": "npm:^2.22.1"
-    "@noble/hashes": "npm:^1.8.0"
+    "@noble/hashes": "npm:^2.3.0"
     "@polkadot/api": "npm:^16.5.6"
     "@polkadot/util": "npm:^14.0.3"
     "@polkadot/util-crypto": "npm:^14.0.3"
@@ -7125,7 +7132,7 @@ __metadata:
     "@bufbuild/protobuf": "npm:^2.13.0"
     "@cosmjs/encoding": "npm:^0.39.0"
     "@mysten/sui": "npm:^2.22.1"
-    "@noble/hashes": "npm:^1.8.0"
+    "@noble/hashes": "npm:^2.3.0"
     "@solana/web3.js": "npm:^1.98.4"
     "@trustwallet/wallet-core": "npm:^4.7.0"
     "@vultisig/core-chain": "npm:2.35.1"
@@ -7332,7 +7339,7 @@ __metadata:
     "@formatjs/intl-pluralrules": "npm:^6.3.10"
     "@lifi/sdk": "npm:^4.1.0"
     "@mysten/sui": "npm:^2.22.1"
-    "@noble/hashes": "npm:^1.8.0"
+    "@noble/hashes": "npm:^2.3.0"
     "@polkadot/api": "npm:^16.5.6"
     "@rollup/plugin-alias": "npm:^6.0.0"
     "@rollup/plugin-commonjs": "npm:^29.0.3"
@@ -7426,7 +7433,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@vultisig/walletcore-native@workspace:packages/walletcore-native"
   dependencies:
-    "@noble/hashes": "npm:^1.8.0"
+    "@noble/hashes": "npm:^2.3.0"
     expo: "npm:>=56.0.12"
   peerDependencies:
     expo: ">=56.0.8"
