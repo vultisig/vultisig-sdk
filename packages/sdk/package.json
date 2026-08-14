@@ -124,6 +124,32 @@
       "import": "./dist/seedphrase/index.js",
       "require": "./dist/seedphrase/index.cjs",
       "default": "./dist/seedphrase/index.cjs"
+    },
+    "./tools/decode": {
+      "types": "./dist/tools/decode/index.d.ts",
+      "browser": "./dist/tools/decode/index.js",
+      "worker": "./dist/tools/decode/index.js",
+      "react-native": "./dist/tools/decode/index.js",
+      "node": {
+        "import": "./dist/tools/decode/index.js",
+        "require": "./dist/tools/decode/index.cjs"
+      },
+      "import": "./dist/tools/decode/index.js",
+      "require": "./dist/tools/decode/index.cjs",
+      "default": "./dist/tools/decode/index.cjs"
+    },
+    "./tx": {
+      "types": "./dist/tx/index.d.ts",
+      "browser": "./dist/tx/index.js",
+      "worker": "./dist/tx/index.js",
+      "react-native": "./dist/tx/index.js",
+      "node": {
+        "import": "./dist/tx/index.js",
+        "require": "./dist/tx/index.cjs"
+      },
+      "import": "./dist/tx/index.js",
+      "require": "./dist/tx/index.cjs",
+      "default": "./dist/tx/index.cjs"
     }
   },
   "scripts": {

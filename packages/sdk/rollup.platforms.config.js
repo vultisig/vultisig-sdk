@@ -339,6 +339,14 @@ const configs = {
       input: './src/seedphrase/index.ts',
       distBase: 'seedphrase',
     }),
+    ...createSubpathConfigs({
+      input: './src/tools/decode/index.ts',
+      distBase: 'tools/decode',
+    }),
+    ...createSubpathConfigs({
+      input: './src/tx/index.ts',
+      distBase: 'tx',
+    }),
   ],
   browser: {
     input: './src/platforms/browser/index.ts',
