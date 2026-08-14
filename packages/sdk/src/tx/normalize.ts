@@ -173,6 +173,23 @@ const LEG_METADATA_KEYS = [
   'to_decimals',
 ] as const
 
+// camelCase aliases some newer SDK-native builders emit for the same concepts (e.g.
+// buildCctpBridge.ts returns chainId/fromChain/toChain/fromSymbol/toSymbol, not the snake_case
+// shape below). Output legs stay snake_case (matches Go wrapSingleTx and downstream consumers),
+// but source lookup falls back to the camelCase key when the snake_case one is absent, so a
+// camelCase-emitting parent doesn't silently lose its leg metadata.
+const LEG_METADATA_CAMEL_ALIASES: Partial<Record<(typeof LEG_METADATA_KEYS)[number], string>> = {
+  chain_id: 'chainId',
+  from_chain: 'fromChain',
+  to_chain: 'toChain',
+  from_symbol: 'fromSymbol',
+  to_symbol: 'toSymbol',
+  from_address: 'fromAddress',
+  to_address: 'toAddress',
+  from_decimals: 'fromDecimals',
+  to_decimals: 'toDecimals',
+}
+
 /**
  * Wrap a single child tx under `txKey` and copy routing metadata from the
  * parent envelope. Mirrors Go `wrapSingleTx`.
@@ -180,7 +197,12 @@ const LEG_METADATA_KEYS = [
 const wrapSingleTx = (txKey: string, txData: unknown, parent: JsonObject): NormalizedTx => {
   const leg: JsonObject = { [txKey]: txData }
   for (const key of LEG_METADATA_KEYS) {
-    if (key in parent) leg[key] = parent[key]
+    if (key in parent) {
+      leg[key] = parent[key]
+      continue
+    }
+    const camelKey = LEG_METADATA_CAMEL_ALIASES[key]
+    if (camelKey && camelKey in parent) leg[key] = parent[camelKey]
   }
   return leg as NormalizedTx
 }

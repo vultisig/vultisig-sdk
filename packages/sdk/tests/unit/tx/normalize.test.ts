@@ -250,4 +250,52 @@ describe('splitMultiTx', () => {
       expect(leg['approval_tx']).toBeUndefined()
     }
   })
+
+  // #1715: newer SDK-native builders (e.g. buildCctpBridge.ts) emit camelCase routing metadata
+  // (chainId/fromChain/toChain/fromSymbol/toSymbol) instead of the snake_case shape LEG_METADATA_KEYS
+  // originally only looked for, so every multi-leg CCTP (and similar) split silently lost its
+  // chain/routing/display context on each wrapped leg.
+  it('falls back to camelCase source keys so a camelCase parent (e.g. CCTP bridge) keeps its leg metadata', () => {
+    const legs = splitMultiTx({
+      chain: 'Ethereum',
+      chainId: 1,
+      provider: 'cctp',
+      fromChain: 'Ethereum',
+      toChain: 'Base',
+      fromSymbol: 'USDC',
+      toSymbol: 'USDC',
+      fromAddress: '0xsource',
+      toAddress: '0xdestination',
+      fromDecimals: 6,
+      toDecimals: 6,
+      transactions: [
+        { to: '0xtoken', value: '0', data: '0xapprove', action: 'approve' },
+        { to: '0xmessenger', value: '0', data: '0xburn', action: 'burn' },
+      ],
+    })
+    expect(legs).toHaveLength(2)
+    for (const leg of legs) {
+      expect(leg.chain).toBe('Ethereum')
+      expect(leg.chain_id).toBe(1)
+      expect(leg.provider).toBe('cctp')
+      expect(leg.from_chain).toBe('Ethereum')
+      expect(leg.to_chain).toBe('Base')
+      expect(leg.from_symbol).toBe('USDC')
+      expect(leg.to_symbol).toBe('USDC')
+      expect(leg.from_address).toBe('0xsource')
+      expect(leg.to_address).toBe('0xdestination')
+      expect(leg.from_decimals).toBe(6)
+      expect(leg.to_decimals).toBe(6)
+    }
+  })
+
+  it('prefers an existing snake_case key over a camelCase alias when both are present', () => {
+    const legs = splitMultiTx({
+      chain: 'Ethereum',
+      chain_id: '1',
+      chainId: 999, // must be ignored: snake_case wins when both are present
+      transactions: [{ to: '0xrouter' }],
+    })
+    expect(legs[0].chain_id).toBe('1')
+  })
 })
