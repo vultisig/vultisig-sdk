@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { YieldActionResponse, YieldDiscoverOpportunity } from '@/tools/defi/stakekit'
 import {
+  buildYieldActionScanRequest,
+  buildYieldActionScanRequests,
   parseActionDisplay,
   stakekitBalances,
   stakekitBuildEnter,
@@ -260,6 +262,125 @@ describe('sdk.defi.stakekit', () => {
     })
   })
 
+  // sdk#1918: the top-level scan_request must target the VALUE-MOVING leg (deposit/withdraw),
+  // not the APPROVAL leg, for the common EVM shape [approve, <action>]. buildYieldActionScanRequests
+  // is the new 1:1-aligned array that lets a consumer scan every step instead of a single scalar.
+  describe('buildYieldActionScanRequest / buildYieldActionScanRequests — leg selection (sdk#1918)', () => {
+    it('[approve, deposit]: scan_request targets the deposit leg, not the approval leg', () => {
+      const resp = makeEvmActionResponse() // transactions[0]=APPROVAL, transactions[1]=SUPPLY
+      const req = buildYieldActionScanRequest(resp) as Record<string, unknown>
+      expect(req.kind).toBe('evm')
+      // The SUPPLY step's `to` (0xbbbb...), not the APPROVAL step's `to` (0xA0b8...).
+      expect(req.to).toBe('0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0')
+    })
+
+    it('[approve, withdraw]: scan_request targets the withdraw leg, not the approval leg', () => {
+      const resp = makeEvmActionResponse({
+        transactions: [
+          {
+            id: 'tx-approve',
+            title: 'Approve aToken',
+            type: 'APPROVAL',
+            network: 'base',
+            status: 'CREATED',
+            unsignedTransaction: JSON.stringify({
+              to: '0x1111111111111111111111111111111111111111',
+              value: '0x0',
+              data: '0x095ea7b3',
+              from: '0x1234567890123456789012345678901234567890',
+            }),
+            gasEstimate: '{}',
+          },
+          {
+            id: 'tx-withdraw',
+            title: 'Withdraw USDC',
+            type: 'WITHDRAW',
+            network: 'base',
+            status: 'CREATED',
+            unsignedTransaction: JSON.stringify({
+              to: '0x2222222222222222222222222222222222222222',
+              value: '0x0',
+              data: '0xdeadbeef',
+              from: '0x1234567890123456789012345678901234567890',
+            }),
+            gasEstimate: '{}',
+          },
+        ],
+      })
+      const req = buildYieldActionScanRequest(resp) as Record<string, unknown>
+      expect(req.kind).toBe('evm')
+      expect(req.to).toBe('0x2222222222222222222222222222222222222222')
+    })
+
+    it('falls back to the approval leg when it is the ONLY supported step (never regresses to unsupported)', () => {
+      const resp = makeEvmActionResponse({
+        transactions: [
+          {
+            id: 'tx-approve',
+            title: 'Approve USDC',
+            type: 'APPROVAL',
+            network: 'base',
+            status: 'CREATED',
+            unsignedTransaction: JSON.stringify({
+              to: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+              value: '0x0',
+              data: '0x095ea7b3',
+              from: '0x1234567890123456789012345678901234567890',
+            }),
+            gasEstimate: '{}',
+          },
+          {
+            // Unsupported network -> can't be the target, so the approval leg (the only
+            // supported step) must still win rather than falling all the way to unsupported.
+            id: 'tx-deposit-unsupported-chain',
+            title: 'Deposit on an unsupported chain',
+            type: 'SUPPLY',
+            network: 'not-a-real-network',
+            status: 'CREATED',
+            unsignedTransaction: '{}',
+            gasEstimate: '{}',
+          },
+        ],
+      })
+      const req = buildYieldActionScanRequest(resp) as Record<string, unknown>
+      expect(req.kind).toBe('evm')
+      expect(req.to).toBe('0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48')
+    })
+
+    it('returns unsupported when every step is unsupported', () => {
+      const resp = makeEvmActionResponse({
+        transactions: [
+          {
+            id: 'tx-1',
+            title: 'Unsupported',
+            type: 'SUPPLY',
+            network: 'not-a-real-network',
+            status: 'CREATED',
+            unsignedTransaction: '{}',
+            gasEstimate: '{}',
+          },
+        ],
+      })
+      const req = buildYieldActionScanRequest(resp) as Record<string, unknown>
+      expect(req.kind).toBe('unsupported')
+    })
+
+    it('buildYieldActionScanRequests returns one entry per transaction, 1:1 aligned', () => {
+      const resp = makeEvmActionResponse() // [APPROVAL, SUPPLY]
+      const reqs = buildYieldActionScanRequests(resp) as Record<string, unknown>[]
+      expect(reqs).toHaveLength(2)
+      expect(reqs[0]?.kind).toBe('evm')
+      expect(reqs[0]?.to).toBe('0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48') // approval leg
+      expect(reqs[1]?.kind).toBe('evm')
+      expect(reqs[1]?.to).toBe('0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0') // deposit leg
+    })
+
+    it('buildYieldActionScanRequests returns [] for an action with no transactions', () => {
+      const resp = makeEvmActionResponse({ transactions: [] })
+      expect(buildYieldActionScanRequests(resp)).toEqual([])
+    })
+  })
+
   describe('stakekitBuildEnter', () => {
     it('returns unsigned EVM calldata shape: flat {to, value, data, action, description}, provider: "yield_xyz", scan_request', async () => {
       const product = makeProduct()
@@ -296,6 +417,17 @@ describe('sdk.defi.stakekit', () => {
       const scanReq = r.scan_request as Record<string, unknown>
       expect(scanReq.kind).toBe('evm')
       expect(scanReq.chain).toBe('Base')
+      // sdk#1918: the legacy scalar must target the deposit leg (SUPPLY), not the APPROVAL leg
+      // that precedes it in this fixture's [APPROVAL, SUPPLY] transactions[].
+      expect(scanReq.to).toBe('0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0')
+
+      // sdk#1918: scan_requests is the new 1:1-aligned array — every step gets its own entry.
+      expect(r.scan_requests).toBeDefined()
+      const scanReqs = r.scan_requests as Record<string, unknown>[]
+      expect(scanReqs).toHaveLength(2)
+      expect(scanReqs[0]?.kind).toBe('evm')
+      expect(scanReqs[1]?.kind).toBe('evm')
+      expect(scanReqs[1]?.to).toBe('0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0')
 
       const txs = r.transactions as Record<string, unknown>[]
       expect(txs).toHaveLength(2)
