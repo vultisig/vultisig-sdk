@@ -263,12 +263,21 @@ describe('normalizeChain', () => {
   // hand-curated additions, not a side effect of separator-stripping alone.
   describe('chain-id / marketing-name aliases', () => {
     it.each([
+      ['cosmoshub-4', Chain.Cosmos],
+      ['gaia', Chain.Cosmos],
+      ['osmosis-1', Chain.Osmosis],
+      ['thorchain-1', Chain.THORChain],
+      ['mayachain-mainnet-v1', Chain.MayaChain],
+      ['dydx-mainnet-1', Chain.Dydx],
+      ['kaiyo-1', Chain.Kujira],
       ['columbus-5', Chain.TerraClassic],
       ['columbus5', Chain.TerraClassic],
       ['Columbus-5', Chain.TerraClassic],
       ['COLUMBUS-5', Chain.TerraClassic],
       ['phoenix-1', Chain.Terra],
       ['phoenix1', Chain.Terra],
+      ['noble-1', Chain.Noble],
+      ['akashnet-2', Chain.Akash],
       ['Phoenix-1', Chain.Terra],
       ['terra v2', Chain.Terra],
       ['Terra V2', Chain.Terra],
@@ -276,6 +285,20 @@ describe('normalizeChain', () => {
       ['terra-v2', Chain.Terra],
       ['terra_v2', Chain.Terra],
       ['terrav2', Chain.Terra],
+      ['cosmos hub', Chain.Cosmos],
+      ['Cosmos Hub', Chain.Cosmos],
+      ['gaia', Chain.Cosmos],
+      ['GAIA', Chain.Cosmos],
+      ['ustc', Chain.TerraClassic],
+      ['USTC', Chain.TerraClassic],
+      ['bnb smart chain', Chain.BSC],
+      ['BNB Smart Chain', Chain.BSC],
+      ['bnb chain', Chain.BSC],
+      ['BSC-MAINNET', Chain.BSC],
+      ['arbitrum one', Chain.Arbitrum],
+      ['Arbitrum One', Chain.Arbitrum],
+      ['ethereum-mainnet', Chain.Ethereum],
+      ['Ethereum Mainnet', Chain.Ethereum],
     ])('resolves chain-id/marketing alias "%s" to %s', (input, expected) => {
       expect(normalizeChain(input)).toBe(expected)
     })

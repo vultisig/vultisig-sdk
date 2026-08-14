@@ -1,7 +1,6 @@
 // Core functions (functional dispatch) - Direct imports from core
 import { fromBinary } from '@bufbuild/protobuf'
 import { sha256 } from '@noble/hashes/sha2'
-import { keccak_256 } from '@noble/hashes/sha3'
 import { getMaxValue } from '@vultisig/core-chain/amount/getMaxValue'
 import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import { banxaSupportedChains, getBanxaBuyUrl } from '@vultisig/core-chain/banxa'
@@ -9,7 +8,6 @@ import { Chain } from '@vultisig/core-chain/Chain'
 import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
-import { knownTokens } from '@vultisig/core-chain/coin/knownTokens'
 import { getCoinValue } from '@vultisig/core-chain/coin/utils/getCoinValue'
 import { signatureAlgorithms } from '@vultisig/core-chain/signing/SignatureAlgorithm'
 import { getTxStatus as coreTxStatus } from '@vultisig/core-chain/tx/status'
@@ -64,6 +62,7 @@ import {
 import type { ContractCallTxParams } from '../types/contractCall'
 import type { TransactionSimulationResult, TransactionValidationResult } from '../types/security'
 import type { DiscoveredToken, TokenInfo } from '../types/tokens'
+import { computePersonalSignHash } from '../utils/eip191'
 import { createVaultBackup } from '../utils/export'
 // Vault services
 import { AddressService } from './services/AddressService'
@@ -78,8 +77,17 @@ import { TokenDiscoveryService } from './services/TokenDiscoveryService'
 import { TransactionBuilder } from './services/TransactionBuilder'
 // Swap types
 import type { SwapPrepareResult, SwapQuoteParams, SwapQuoteResult, SwapTxParams } from './swap-types'
-import { VaultError, VaultErrorCode } from './VaultError'
+import { type ResolvedTokenInfo, resolveTokenRef, resolveTokenRefId } from './tokenRef'
+import { VaultConflictError, VaultError, VaultErrorCode } from './VaultError'
 import { VaultConfig } from './VaultServices'
+
+export type VaultSaveOptions = {
+  /**
+   * Reject stale records by default. `merge-metadata` retries only when the
+   * local and persisted edits touch different top-level mutable fields.
+   */
+  conflictStrategy?: 'reject' | 'merge-metadata'
+}
 
 /**
  * Determine vault type based on signer names
@@ -88,6 +96,100 @@ import { VaultConfig } from './VaultServices'
  */
 function determineVaultType(signers: string[]): 'fast' | 'secure' {
   return signers.some(signer => signer.startsWith('Server-')) ? 'fast' : 'secure'
+}
+
+// ===== Vault-name / export-filename safety policy (single source of truth) =====
+//
+// A vault's name and localPartyId are interpolated into the export filename (see
+// export()). Two independently-unsafe things must never reach a filename component:
+//   - path separators ("/" or "\"), which would split the component across directories
+//   - control characters (C0/DEL/C1); C1 U+009B (CSI) is a terminal escape introducer
+//
+// rename() (validateVaultName) and export() (encodeFilenameComponent) BOTH derive
+// their rules from these two regexes — one policy, two dispositions. rename() refuses
+// an unsafe name; export() cannot, so it encodes. Keep the regexes here the only
+// definition so the reject path and the encode path can never drift apart.
+const PATH_SEPARATOR_RE = /[/\\]/
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHAR_RE = /[\u0000-\u001f\u007f\u0080-\u009f]/
+
+/**
+ * Encode one filename component so it stays a single safe path segment.
+ *
+ * Mirrors the rename-time name policy (PATH_SEPARATOR_RE, CONTROL_CHAR_RE) but
+ * ENCODES rather than rejects: rename() is the going-forward chokepoint, yet a vault
+ * imported — or created via a path that ran no name validation — may already carry an
+ * unsafe name or localPartyId. Refusing to export such a vault would strand a
+ * legitimate user behind their own backup file, so we replace the unsafe bytes with
+ * "_" instead. The result is always a single component that cannot escape the target
+ * directory, while staying recognizable enough for a human to identify the vault.
+ */
+function encodeFilenameComponent(component: string): string {
+  const encoded = component
+    .replace(new RegExp(PATH_SEPARATOR_RE.source, 'g'), '_')
+    .replace(new RegExp(CONTROL_CHAR_RE.source, 'g'), '_')
+    // A component of "." or ".." (or any leading dot-run) is a traversal / hidden-file
+    // hazard once used as a filename; neutralize only the leading dots ("a..b" is fine).
+    .replace(/^\.+/, '_')
+  return encoded.length > 0 ? encoded : '_'
+}
+
+const MERGEABLE_VAULT_FIELDS = [
+  'name',
+  'isBackedUp',
+  'order',
+  'folderId',
+  'currency',
+  'chains',
+  'tokens',
+  'lastValueUpdate',
+] as const satisfies readonly (keyof VaultData)[]
+
+const storageWriteQueues = new WeakMap<Storage, Map<string, Promise<void>>>()
+
+function cloneValue<T>(value: T): T {
+  if (value === undefined) return value
+  return JSON.parse(JSON.stringify(value)) as T
+}
+
+function cloneVaultData(vaultData: VaultData): VaultData {
+  return cloneValue(vaultData)
+}
+
+function valuesEqual(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right)
+}
+
+function getVaultRevision(vaultData: VaultData): number {
+  const revision = vaultData.revision ?? 0
+  if (!Number.isSafeInteger(revision) || revision < 0) {
+    throw new VaultError(VaultErrorCode.InvalidVault, `Vault ${vaultData.id} has an invalid storage revision`)
+  }
+  return revision
+}
+
+async function withStorageWriteLock<T>(storage: Storage, key: string, operation: () => Promise<T>): Promise<T> {
+  let queues = storageWriteQueues.get(storage)
+  if (!queues) {
+    queues = new Map()
+    storageWriteQueues.set(storage, queues)
+  }
+
+  const previous = queues.get(key) ?? Promise.resolve()
+  const result = previous.then(operation, operation)
+  const settled = result.then(
+    () => undefined,
+    () => undefined
+  )
+  queues.set(key, settled)
+
+  void settled.finally(() => {
+    if (queues?.get(key) === settled) {
+      queues.delete(key)
+    }
+  })
+
+  return result
 }
 
 /**
@@ -143,6 +245,9 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   // Vault data and core vault
   protected vaultData: VaultData // Single source of truth
   protected coreVault: CoreVault // Built from vaultData
+  private persistedVaultData!: VaultData
+  private hasPersistedRecord = false
+  private saveQueue: Promise<void> = Promise.resolve()
 
   /**
    * Protected constructor - use subclass factory methods instead.
@@ -295,6 +400,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       // Vault file
       vultFileContent: vultFileContent.trim(),
     }
+    this.persistedVaultData = cloneVaultData(this.vaultData)
 
     // Initialize runtime state
     this._userChains =
@@ -463,8 +569,22 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       errors.push(`Vault name cannot exceed ${vaultConfig.maxNameLength} characters`)
     }
 
-    if (!/^[a-zA-Z0-9\s\-_]+$/.test(name)) {
-      errors.push('Vault name can only contain letters, numbers, spaces, hyphens, and underscores')
+    // Only reject what is actually unsafe. The name is interpolated into the export
+    // filename (see export()), so path separators and control characters are out —
+    // but the previous alphanumeric allowlist also rejected the `#` in ecosystem-created
+    // names like "Vultisig Cluster #1". Creation and import run no name validation at all,
+    // so they already accept such names; rename was the sole validator, which made it a
+    // one-way door: rename away from such a name, and you could never rename back.
+    // The two regexes below are the shared policy that export() also enforces (by
+    // encoding rather than rejecting) — see encodeFilenameComponent.
+    if (PATH_SEPARATOR_RE.test(name)) {
+      errors.push('Vault name cannot contain path separators')
+    }
+
+    // C0 + DEL + C1: C1 (U+0080-U+009F) includes CSI (U+009B), which a terminal can treat
+    // as an escape introducer when the name is echoed, so deny the whole range too.
+    if (CONTROL_CHAR_RE.test(name)) {
+      errors.push('Vault name cannot contain control characters')
     }
 
     return {
@@ -614,6 +734,11 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     return this.vaultData.lastModified
   }
 
+  /** Monotonic persisted record revision. Legacy records start at revision 0. */
+  get revision(): number {
+    return getVaultRevision(this.vaultData)
+  }
+
   /** Total number of signers in this vault. */
   get totalSigners(): number {
     return this.vaultData.signers.length
@@ -658,8 +783,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     // Load vault data
     const loadedVaultData = await this.storage.get<VaultData>(`vault:${this.vaultData.id}`)
     if (loadedVaultData) {
-      // Replace entire vaultData object
-      ;(this as any).vaultData = loadedVaultData
+      this.restorePersistedVaultData(loadedVaultData)
 
       // Update runtime state
       this._currency = loadedVaultData.currency
@@ -678,26 +802,22 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
   /**
    * Save this vault to storage
-   * Syncs runtime state to VaultData and persists atomically
+   * Syncs runtime state to VaultData and persists with optimistic concurrency.
+   *
+   * Stale saves reject with VaultConflictError. Callers that intentionally
+   * edited a different top-level mutable field can retry with
+   * `{ conflictStrategy: 'merge-metadata' }`.
    */
-  async save(): Promise<void> {
-    // Sync runtime state to vaultData
-    const mutableData = this.vaultData as any
-    mutableData.currency = this._currency
-    mutableData.chains = this._userChains.map(c => c.toString())
-    mutableData.tokens = this._tokens
-    mutableData.lastModified = Date.now()
-
-    // Sync CoreVault fields
-    this.coreVault.name = this.vaultData.name
-    this.coreVault.isBackedUp = this.vaultData.isBackedUp
-    this.coreVault.order = this.vaultData.order
-
-    // Persist to storage (cache is handled automatically by CacheService)
-    await this.storage.set(`vault:${this.vaultData.id}`, this.vaultData)
-
-    // Emit event
-    this.emit('saved', { vaultId: this.vaultData.id })
+  async save(options: VaultSaveOptions = {}): Promise<void> {
+    const key = `vault:${this.vaultData.id}`
+    const localData = this.snapshotVaultData()
+    const operation = () => withStorageWriteLock(this.storage, key, () => this.saveUnlocked(key, localData, options))
+    const result = this.saveQueue.then(operation, operation)
+    this.saveQueue = result.then(
+      () => undefined,
+      () => undefined
+    )
+    return result
   }
 
   /**
@@ -754,7 +874,16 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     const localPartyIndex = this.vaultData.signers.indexOf(this.vaultData.localPartyId) + 1
 
     // Format: {vaultName}-{localPartyId}-share{index}of{total}.vult
-    const filename = `${this.vaultData.name}-${this.vaultData.localPartyId}-share${localPartyIndex}of${totalSigners}.vult`
+    //
+    // Encode name and localPartyId rather than trusting them: rename() enforces the
+    // name policy going forward, but a vault imported — or created via a path that ran
+    // no validation — may already carry an unsafe name or localPartyId (path separators,
+    // control chars, a bare ".."). Refusing to export such a vault would strand the user
+    // behind their own backup, so we encode to a safe single path component (same policy
+    // as rename, see encodeFilenameComponent) instead of throwing.
+    const safeName = encodeFilenameComponent(this.vaultData.name)
+    const safeLocalPartyId = encodeFilenameComponent(this.vaultData.localPartyId)
+    const filename = `${safeName}-${safeLocalPartyId}-share${localPartyIndex}of${totalSigners}.vult`
 
     // Generate base64-encoded backup (possibly encrypted)
     const data = await createVaultBackup(this.coreVault, password)
@@ -788,8 +917,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       throw new VaultError(VaultErrorCode.InvalidVault, `Vault ${this.vaultData.id} not found in storage`)
     }
 
-    // Replace vaultData
-    ;(this as any).vaultData = loadedVaultData
+    this.restorePersistedVaultData(loadedVaultData)
 
     // Update runtime state
     this._currency = loadedVaultData.currency
@@ -814,6 +942,119 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   async exists(): Promise<boolean> {
     const vaultData = await this.storage.get<VaultData>(`vault:${this.vaultData.id}`)
     return vaultData !== null && vaultData !== undefined
+  }
+
+  /** @internal Replaces constructor defaults with a stored or pending snapshot. */
+  protected restorePersistedVaultData(vaultData: VaultData, persisted = true): void {
+    const snapshot = cloneVaultData(vaultData)
+    getVaultRevision(snapshot)
+    this.vaultData = snapshot
+    this.persistedVaultData = cloneVaultData(snapshot)
+    this.hasPersistedRecord = persisted
+  }
+
+  /** @internal Retains a current storage snapshot as the CAS baseline for an explicit import overwrite. */
+  protected setPersistedBaseline(vaultData: VaultData): void {
+    const snapshot = cloneVaultData(vaultData)
+    getVaultRevision(snapshot)
+    this.persistedVaultData = snapshot
+    this.hasPersistedRecord = true
+  }
+
+  private async saveUnlocked(key: string, localData: VaultData, options: VaultSaveOptions): Promise<void> {
+    const currentStored = await this.storage.get<VaultData>(key)
+    const currentData = currentStored ? cloneVaultData(currentStored) : null
+    const expectedRevision = this.hasPersistedRecord ? getVaultRevision(this.persistedVaultData) : null
+    const actualRevision = currentData ? getVaultRevision(currentData) : null
+
+    let nextData = localData
+    if (expectedRevision !== actualRevision) {
+      if (options.conflictStrategy !== 'merge-metadata' || !this.hasPersistedRecord || !currentData) {
+        throw new VaultConflictError(this.vaultData.id, expectedRevision, actualRevision)
+      }
+      nextData = this.mergeMetadata(
+        this.persistedVaultData,
+        localData,
+        currentData,
+        getVaultRevision(this.persistedVaultData),
+        getVaultRevision(currentData)
+      )
+    }
+
+    nextData.revision = (actualRevision ?? 0) + 1
+    nextData.lastModified = Date.now()
+
+    await this.storage.set(key, cloneVaultData(nextData))
+    this.restorePersistedVaultData(nextData)
+    this.syncRuntimeFromVaultData()
+    this.emit('saved', { vaultId: this.vaultData.id })
+  }
+
+  private snapshotVaultData(): VaultData {
+    const snapshot = cloneVaultData(this.vaultData)
+    snapshot.currency = this._currency
+    snapshot.chains = this._userChains.map(chain => chain.toString())
+    snapshot.tokens = cloneValue(this._tokens)
+    return snapshot
+  }
+
+  private mergeMetadata(
+    baseline: VaultData,
+    localData: VaultData,
+    currentData: VaultData,
+    expectedRevision: number,
+    actualRevision: number
+  ): VaultData {
+    const mergeableFields = new Set<keyof VaultData>(MERGEABLE_VAULT_FIELDS)
+    const localNonMetadataChanges = Array.from(
+      new Set([...Object.keys(baseline), ...Object.keys(localData)] as (keyof VaultData)[])
+    ).filter(
+      field =>
+        field !== 'revision' &&
+        field !== 'lastModified' &&
+        !mergeableFields.has(field) &&
+        !valuesEqual(baseline[field], localData[field])
+    )
+
+    const conflictingFields: string[] = [...localNonMetadataChanges.map(String)]
+    const merged = cloneVaultData(currentData)
+
+    for (const field of MERGEABLE_VAULT_FIELDS) {
+      const localChanged = !valuesEqual(baseline[field], localData[field])
+      const persistedChanged = !valuesEqual(baseline[field], currentData[field])
+
+      if (localChanged && persistedChanged && !valuesEqual(localData[field], currentData[field])) {
+        conflictingFields.push(field)
+      } else if (localChanged) {
+        ;(merged as Record<keyof VaultData, unknown>)[field] = cloneValue(localData[field])
+      }
+    }
+
+    if (conflictingFields.length > 0) {
+      throw new VaultConflictError(this.vaultData.id, expectedRevision, actualRevision, conflictingFields)
+    }
+
+    return merged
+  }
+
+  private syncRuntimeFromVaultData(): void {
+    this._currency = this.vaultData.currency
+    this._userChains = this.vaultData.chains.map(chain => chain as Chain)
+    this._tokens = this.vaultData.tokens
+    this.coreVault.publicKeys = this.vaultData.publicKeys
+    this.coreVault.hexChainCode = this.vaultData.hexChainCode
+    this.coreVault.signers = [...this.vaultData.signers]
+    this.coreVault.localPartyId = this.vaultData.localPartyId
+    this.coreVault.libType = this.vaultData.libType
+    this.coreVault.createdAt = this.vaultData.createdAt
+    this.coreVault.name = this.vaultData.name
+    this.coreVault.isBackedUp = this.vaultData.isBackedUp
+    this.coreVault.order = this.vaultData.order
+    this.coreVault.folderId = this.vaultData.folderId
+    this.coreVault.chainPublicKeys = this.vaultData.chainPublicKeys
+    this.coreVault.chainKeyShares = this.vaultData.chainKeyShares
+    this.coreVault.publicKeyMldsa = this.vaultData.publicKeyMldsa
+    this.coreVault.keyShareMldsa = this.vaultData.keyShareMldsa
   }
 
   // ===== PASSWORD MANAGEMENT =====
@@ -897,10 +1138,15 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   // ===== BALANCE METHODS =====
 
   /**
-   * Get balance for chain (with optional token)
+   * Get balance for chain (with optional token).
+   *
+   * `tokenId` is a token ref: a symbol (`USDC`), a contract address, or a vault
+   * token id — the same values `send()`/`swap()` accept. It is resolved through
+   * `resolveTokenRefId` before it reaches the RPC layer, which needs the
+   * contract address; an unrecognised ref is passed through untouched.
    */
   async balance(chain: Chain, tokenId?: string): Promise<Balance> {
-    return this.balanceService.getBalance(chain, tokenId)
+    return this.balanceService.getBalance(chain, resolveTokenRefId(chain, tokenId, this.getTokens(chain)))
   }
 
   /**
@@ -937,8 +1183,15 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     await Promise.all(
       Object.entries(balances).map(async ([key, balance]) => {
         const chain = balance.chainId as Chain
+        const tokens = balance.tokenId ? this.getTokens(chain) : []
+        const trackedToken = tokens.find(token => token.id === balance.tokenId)
+        const tokenId = balance.tokenId
+          ? trackedToken
+            ? trackedToken.contractAddress || trackedToken.id
+            : resolveTokenRefId(chain, balance.tokenId, tokens)
+          : undefined
         const price = balance.tokenId
-          ? await this.fiatValueService.getPrice(chain, balance.tokenId, currency)
+          ? await this.fiatValueService.getPrice(chain, tokenId, currency)
           : (nativePrices[chain] ?? (await this.fiatValueService.getPrice(chain, undefined, currency)))
 
         const fiatValue = getCoinValue({
@@ -963,7 +1216,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    * Force refresh balance (clear cache)
    */
   async updateBalance(chain: Chain, tokenId?: string): Promise<Balance> {
-    return this.balanceService.updateBalance(chain, tokenId)
+    return this.balanceService.updateBalance(chain, resolveTokenRefId(chain, tokenId, this.getTokens(chain)))
   }
 
   /**
@@ -993,6 +1246,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     receiver: string
     amount: bigint
     memo?: string
+    destinationTag?: number
     feeSettings?: FeeSettings
   }): Promise<KeysignPayload> {
     return this.transactionBuilder.prepareSendTx(params)
@@ -1037,6 +1291,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     coin: AccountCoin
     receiver: string
     memo?: string
+    destinationTag?: number
     feeSettings?: FeeSettings
   }): Promise<MaxSendAmount> {
     const walletCore = await this.wasmProvider.getWalletCore()
@@ -1052,10 +1307,17 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     // Fetch balance via BalanceService so cache / balanceUpdated event / VaultError
     // wrapping all fire. The vault-free `getMaxSendAmountFromKeys` skips these
     // (no cache/events in the MCP / agent context); vault callers must not.
-    const balance = await this.balanceService.getBalance(params.coin.chain, params.coin.id)
+    const [balance, nativeBalance] = await Promise.all([
+      this.balanceService.getBalance(params.coin.chain, params.coin.id),
+      params.coin.id === undefined ? undefined : this.balanceService.getBalance(params.coin.chain),
+    ])
     return computeMaxSendFromBalance(
       vaultDataToIdentity(this.coreVault),
-      { ...params, balance: BigInt(balance.amount) },
+      {
+        ...params,
+        balance: BigInt(balance.amount),
+        nativeBalance: nativeBalance === undefined ? undefined : BigInt(nativeBalance.amount),
+      },
       walletCore
     )
   }
@@ -1238,11 +1500,11 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    * }
    * ```
    */
-  async getTxStatus(params: { chain: Chain; txHash: string }): Promise<TxStatusResult> {
-    const { chain, txHash } = params
+  async getTxStatus(params: { chain: Chain; txHash: string; lastValidBlockHeight?: number }): Promise<TxStatusResult> {
+    const { chain, txHash, lastValidBlockHeight } = params
 
     try {
-      const result = await coreTxStatus({ chain, hash: txHash })
+      const result = await coreTxStatus({ chain, hash: txHash, lastValidBlockHeight })
 
       if (result.status === 'success') {
         this.emit('transactionConfirmed', { chain, txHash, receipt: result.receipt })
@@ -1448,7 +1710,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    * @param chain - The blockchain chain
    * @param tokenId - Token contract address or identifier
    */
-  async removeToken(chain: Chain, tokenId: string): Promise<void> {
+  async removeToken(chain: Chain, tokenId: string): Promise<boolean> {
     return this.balanceService.removeToken(chain, tokenId)
   }
 
@@ -1593,16 +1855,16 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   }
 
   /**
-   * Resolve token metadata by contract address.
+   * Resolve token metadata by canonical chain-specific token ID.
    * Checks known tokens registry first, then resolves from chain APIs.
    * Supported: EVM, Solana, Cosmos, TRON.
    *
    * @param chain - The chain the token is on
-   * @param contractAddress - The token's contract address
+   * @param tokenId - The token's canonical chain-specific identifier
    * @returns Token metadata (ticker, decimals, logo, priceProviderId)
    */
-  async resolveToken(chain: Chain, contractAddress: string): Promise<TokenInfo> {
-    return this.tokenDiscoveryService.resolveToken(chain, contractAddress)
+  async resolveToken(chain: Chain, tokenId: string): Promise<TokenInfo> {
+    return this.tokenDiscoveryService.resolveToken(chain, tokenId)
   }
 
   // ===== SECURITY SCANNING =====
@@ -1646,12 +1908,8 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
     const chainKind = getChainKind(chain)
     const algorithm = signatureAlgorithms[chainKind] === 'ecdsa' ? 'ECDSA' : 'EdDSA'
-    // EIP-191 uses UTF-8 byte length, not JS string length
     const msgBytes = new TextEncoder().encode(message)
-    const hash =
-      chainKind === 'evm'
-        ? keccak_256(new TextEncoder().encode(`\x19Ethereum Signed Message:\n${msgBytes.length}${message}`))
-        : sha256(msgBytes)
+    const hash = chainKind === 'evm' ? computePersonalSignHash(message) : sha256(msgBytes)
 
     const sig = await this.signBytes({ data: hash, chain }, options)
     return { signature: sig.signature.startsWith('0x') ? sig.signature : '0x' + sig.signature, chain, algorithm }
@@ -1670,22 +1928,23 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     return { balances, totalValue: total.toFixed(2), currency }
   }
 
-  /** Send tokens. Use amount "max" to send entire balance minus fees. Set dryRun for fee estimate without signing. */
+  /** Send tokens. Use amount "max" for the native balance minus fees, or the full token balance when native gas is covered. Set dryRun for fee estimates without signing. */
   async send(params: {
     chain: Chain
     to: string
     amount: string
     symbol?: string
     memo?: string
+    destinationTag?: number
     dryRun?: boolean
   }): Promise<SendResult> {
-    const { chain, to, amount, symbol, memo, dryRun } = params
+    const { chain, to, amount, symbol, memo, destinationTag, dryRun } = params
     const tokenInfo = this.resolveTokenInfo(chain, symbol)
     const coin = this.buildAccountCoin(chain, await this.address(chain), tokenInfo)
 
     let amountBigInt: bigint
     if (amount === 'max') {
-      const maxInfo = await this.getMaxSendAmount({ coin, receiver: to, memo })
+      const maxInfo = await this.getMaxSendAmount({ coin, receiver: to, memo, destinationTag })
       if (maxInfo.maxSendable <= 0n)
         throw new VaultError(VaultErrorCode.InvalidAmount, 'Insufficient balance to cover network fees')
       amountBigInt = maxInfo.maxSendable
@@ -1693,14 +1952,31 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       amountBigInt = this.parseAmount(amount, tokenInfo.decimals)
     }
 
-    const keysignPayload = await this.prepareSendTx({ coin, receiver: to, amount: amountBigInt, memo })
+    const keysignPayload = await this.prepareSendTx({ coin, receiver: to, amount: amountBigInt, memo, destinationTag })
 
     if (dryRun) {
-      const fee = await this.transactionBuilder.estimateSendFee({ coin, receiver: to, amount: amountBigInt, memo })
+      const fee = await this.transactionBuilder.estimateSendFee({
+        coin,
+        receiver: to,
+        amount: amountBigInt,
+        memo,
+        destinationTag,
+      })
+      // The network fee is always paid in the chain's native asset, never in the
+      // token being sent. Formatting it with the token's decimals (and adding it
+      // to the token amount) produced a nonsense quote for every token send —
+      // USDC's 6 decimals applied to a wei-denominated gas fee reads as hundreds
+      // of millions of USDC, and `total` then failed any balance comparison.
+      const native = chainFeeCoin[chain]
+      const isTokenSend = Boolean(tokenInfo.contractAddress)
       return {
         dryRun: true,
-        fee: this.formatUnits(fee, tokenInfo.decimals),
-        total: this.formatUnits(amountBigInt + fee, tokenInfo.decimals),
+        ...(tokenInfo.contractAddress ? { contractAddress: tokenInfo.contractAddress } : {}),
+        fee: this.formatUnits(fee, isTokenSend ? native.decimals : tokenInfo.decimals),
+        feeSymbol: native.ticker,
+        // Denominated in the asset being sent, so it is directly comparable to
+        // that asset's balance. Only a native send debits the fee from it.
+        total: this.formatUnits(isTokenSend ? amountBigInt : amountBigInt + fee, tokenInfo.decimals),
         keysignPayload,
       }
     }
@@ -1717,12 +1993,18 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     toChain: Chain
     toSymbol: string
     amount: string
+    recipient?: string
+    slippageTolerance?: number
+    excludeProviders?: import('./swap-types').SwapQuoteParams['excludeProviders']
     dryRun?: boolean
   }): Promise<CompoundSwapResult> {
-    const { fromChain, fromSymbol, toChain, toSymbol, amount, dryRun } = params
+    const { fromChain, fromSymbol, toChain, toSymbol, amount, recipient, slippageTolerance, excludeProviders, dryRun } =
+      params
     const fromToken = this.resolveTokenInfo(fromChain, fromSymbol)
     const toToken = this.resolveTokenInfo(toChain, toSymbol)
-    const [fromAddress, toAddress] = await Promise.all([this.address(fromChain), this.address(toChain)])
+    const [fromAddress, defaultToAddress] = await Promise.all([this.address(fromChain), this.address(toChain)])
+    const normalizedRecipient = recipient?.trim() || undefined
+    const toAddress = normalizedRecipient ?? defaultToAddress
     const fromCoin = this.buildAccountCoin(fromChain, fromAddress, fromToken)
     const toCoin = this.buildAccountCoin(toChain, toAddress, toToken)
 
@@ -1734,7 +2016,14 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     }
     const normalizedAmount = this.validateHumanSwapAmount(resolvedAmount, fromToken.decimals)
 
-    const quote = await this.getSwapQuote({ fromCoin, toCoin, amount: normalizedAmount })
+    const quote = await this.getSwapQuote({
+      fromCoin,
+      toCoin,
+      amount: normalizedAmount,
+      recipient: normalizedRecipient,
+      slippageTolerance,
+      excludeProviders,
+    })
     if (dryRun) return { dryRun: true, quote }
 
     const { keysignPayload, approvalPayload } = await this.prepareSwapTx({
@@ -1896,27 +2185,13 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     }
   }
 
-  private resolveTokenInfo(
-    chain: Chain,
-    symbol?: string
-  ): { ticker: string; decimals: number; contractAddress?: string } {
-    const native = chainFeeCoin[chain]
-    if (!symbol || symbol.toUpperCase() === native.ticker.toUpperCase())
-      return { ticker: native.ticker, decimals: native.decimals }
-
-    // 1. User's configured tokens
-    const token = this.getTokens(chain).find(t => t.symbol.toUpperCase() === symbol.toUpperCase())
-    if (token)
-      return { ticker: token.symbol, decimals: token.decimals, contractAddress: token.contractAddress || token.id }
-
-    // 2. Well-known token registry (no network call)
-    const known = (knownTokens[chain] ?? []).find(t => t.ticker.toUpperCase() === symbol.toUpperCase())
-    if (known) return { ticker: known.ticker, decimals: known.decimals, contractAddress: known.id }
-
-    throw new VaultError(
-      VaultErrorCode.InvalidConfig,
-      `Token "${symbol}" not found on ${chain}. Add it with vault.addToken() or use a well-known token symbol.`
-    )
+  /**
+   * Resolve a token ref (symbol, well-known ticker, contract address or vault
+   * token id) for the transaction paths. See `tokenRef.ts` — `balance()` uses
+   * the same resolution so the two cannot disagree about what a ref means.
+   */
+  private resolveTokenInfo(chain: Chain, symbol?: string): ResolvedTokenInfo {
+    return resolveTokenRef(chain, symbol, this.getTokens(chain))
   }
 
   private parseAmount(amount: string, decimals: number): bigint {

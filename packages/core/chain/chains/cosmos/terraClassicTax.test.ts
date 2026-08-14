@@ -1,11 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  applyTerraClassicBurnTax,
   applyTerraClassicTax,
+  getTerraClassicBurnTaxRate,
   getTerraClassicTaxCap,
   getTerraClassicTaxCapsUrl,
   getTerraClassicTaxRate,
   getTerraClassicTaxRateUrl,
+  parseTerraClassicBurnTaxRate,
+  TERRA_CLASSIC_FALLBACK_BURN_TAX_RATE,
+  TERRA_CLASSIC_MAX_BURN_TAX_RATE,
   TERRA_CLASSIC_TAX_DEC_SCALE,
 } from './terraClassicTax'
 
@@ -262,5 +267,101 @@ describe('applyTerraClassicTax', () => {
 describe('TERRA_CLASSIC_TAX_DEC_SCALE', () => {
   it('is 10^18 (cosmos-sdk Dec convention)', () => {
     expect(TERRA_CLASSIC_TAX_DEC_SCALE).toBe(1_000_000_000_000_000_000n)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// x/tax burn tax — a DIFFERENT tax from the x/treasury stability tax above.
+// Live shape captured from
+// https://terra-classic-lcd.publicnode.com/terra/tax/v1beta1/params
+// ---------------------------------------------------------------------------
+
+const fixtureBurnTaxParams = {
+  params: {
+    burn_tax_rate: '0.005000000000000000',
+    gas_prices: [{ denom: 'uluna', amount: '28.325000000000000000' }],
+  },
+}
+
+describe('getTerraClassicBurnTaxRate', () => {
+  it('parses the live 0.5% rate', async () => {
+    const fetchImpl = mkFetch(() => okJson(fixtureBurnTaxParams))
+    await expect(getTerraClassicBurnTaxRate({ fetchImpl })).resolves.toBe(5_000_000_000_000_000n)
+  })
+
+  it('reads the x/tax module, NOT the paused x/treasury tax_rate', async () => {
+    // Guards the whole point of this helper: the treasury rate is 0, so
+    // pointing at it would silently drop the burn tax on every LUNC send.
+    let requested = ''
+    const fetchImpl = mkFetch(url => {
+      requested = url
+      return okJson(fixtureBurnTaxParams)
+    })
+    await getTerraClassicBurnTaxRate({ fetchImpl })
+
+    expect(requested).toContain('/terra/tax/v1beta1/params')
+    expect(requested).not.toContain('treasury')
+  })
+
+  it.each([
+    ['a non-2xx response', () => status(503)],
+    ['a 200 with the field missing', () => okJson({ params: {} })],
+    ['a 200 with no params at all', () => okJson({})],
+    ['a malformed Dec', () => okJson({ params: { burn_tax_rate: 'not-a-number' } })],
+    ['a negative rate', () => okJson({ params: { burn_tax_rate: '-0.005' } })],
+    ['an implausibly large rate', () => okJson({ params: { burn_tax_rate: '5.0' } })],
+  ])('fails closed to the 0.5%% governance rate on %s', async (_label, responder) => {
+    const fetchImpl = mkFetch(responder)
+    await expect(getTerraClassicBurnTaxRate({ fetchImpl })).resolves.toBe(TERRA_CLASSIC_FALLBACK_BURN_TAX_RATE)
+  })
+
+  it('never throws — the initiator must always produce a fee', async () => {
+    const fetchImpl = mkFetch(() => {
+      throw new Error('network down')
+    })
+    await expect(getTerraClassicBurnTaxRate({ fetchImpl })).resolves.toBe(TERRA_CLASSIC_FALLBACK_BURN_TAX_RATE)
+  })
+})
+
+describe('applyTerraClassicBurnTax', () => {
+  const RATE = 5_000_000_000_000_000n // 0.5%
+
+  it('does NOT exempt uluna — unlike the treasury stability tax', () => {
+    // applyTerraClassicTax returns 0n for uluna; the burn tax must not.
+    expect(applyTerraClassicTax(300_000_000n, 'uluna', RATE, {})).toBe(0n)
+    expect(applyTerraClassicBurnTax(300_000_000n, RATE)).toBe(1_500_000n)
+  })
+
+  it('rounds up so the fee never lands a base unit short', () => {
+    // 12345 × 0.005 = 61.725 -> 62
+    expect(applyTerraClassicBurnTax(12_345n, RATE)).toBe(62n)
+  })
+
+  it('returns 0n for a zero/negative amount or a zero rate', () => {
+    expect(applyTerraClassicBurnTax(0n, RATE)).toBe(0n)
+    expect(applyTerraClassicBurnTax(-1n, RATE)).toBe(0n)
+    expect(applyTerraClassicBurnTax(300_000_000n, 0n)).toBe(0n)
+  })
+
+  it('is uncapped — large transfers scale linearly', () => {
+    expect(applyTerraClassicBurnTax(10_000_000_000n, RATE)).toBe(50_000_000n)
+  })
+})
+
+describe('parseTerraClassicBurnTaxRate', () => {
+  it('accepts a well-formed Dec', () => {
+    expect(parseTerraClassicBurnTaxRate('0.012000000000000000')).toBe(12_000_000_000_000_000n)
+  })
+
+  it('accepts an explicit zero rate if governance ever pauses the burn', () => {
+    expect(parseTerraClassicBurnTaxRate('0.000000000000000000')).toBe(0n)
+  })
+
+  it.each([null, undefined, '', 'garbage', '-0.005', '5.0'])('falls back for %s', raw => {
+    expect(parseTerraClassicBurnTaxRate(raw)).toBe(TERRA_CLASSIC_FALLBACK_BURN_TAX_RATE)
+  })
+
+  it('accepts a rate exactly at the sanity ceiling', () => {
+    expect(parseTerraClassicBurnTaxRate('0.100000000000000000')).toBe(TERRA_CLASSIC_MAX_BURN_TAX_RATE)
   })
 })

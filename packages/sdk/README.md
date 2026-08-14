@@ -255,6 +255,9 @@ import { Vultisig, Chain, CosmosMsgType } from '@vultisig/sdk'
 
 // Look up known tokens (static, no vault needed)
 const tokens = Vultisig.getKnownTokens(Chain.Ethereum)
+// Swap pickers should use the dynamic destination universe. On THORChain this
+// refreshes secured assets from THORChain and uses the static list only offline.
+const swapDestinations = await Vultisig.getSwapDestinationTokens(Chain.THORChain)
 const usdc = Vultisig.getKnownToken(Chain.Ethereum, '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48')
 
 // Get native fee coin info
@@ -863,11 +866,21 @@ Sign arbitrary bytes (not a blockchain transaction).
 
 #### `Vultisig.getKnownTokens(chain): TokenInfo[]`
 
-Get all known tokens for a chain from the built-in registry.
+Get all known tokens for a chain from the built-in registry. Each token exposes
+its canonical chain-specific `tokenId`; `contractAddress` remains as a
+deprecated compatibility alias.
 
-#### `Vultisig.getKnownToken(chain, contractAddress): TokenInfo | null`
+#### `Vultisig.getKnownToken(chain, tokenId): TokenInfo | null`
 
-Look up a specific token by contract address (case-insensitive). Returns null if not found.
+Look up a specific token by its canonical chain-specific ID (case-insensitive). Returns null if not found. `TokenInfo.contractAddress` remains as a deprecated alias for `tokenId`.
+
+#### `Vultisig.getSwapDestinationTokens(chain): Promise<TokenInfo[]>`
+
+Get the complete token universe for a swap destination picker. THORChain
+secured assets come from the live shared catalog, with the built-in list used
+only as an explicit offline fallback; other chains use the built-in registry.
+Secured entries include `isSecured: true` and their canonical `l1Asset` so the
+picker can label them without parsing token IDs.
 
 #### `Vultisig.getFeeCoin(chain): FeeCoinInfo`
 
@@ -901,9 +914,9 @@ Scan a website URL for malicious content via Blockaid.
 
 Discover tokens with non-zero balances at this vault's address. Supported: EVM (via 1inch), Solana (via Jupiter), Cosmos (via RPC).
 
-#### `vault.resolveToken(chain, contractAddress): Promise<TokenInfo>`
+#### `vault.resolveToken(chain, tokenId): Promise<TokenInfo>`
 
-Resolve token metadata by contract address. Checks known tokens registry first, then resolves from chain APIs.
+Resolve token metadata by canonical chain-specific token ID. Checks known tokens registry first, then resolves from chain APIs.
 
 #### `vault.getBuyUrl(chain, ticker?): Promise<string | null>`
 

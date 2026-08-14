@@ -186,6 +186,8 @@ describe('AgentExecutor — broadcast idempotency guard', () => {
 
     // The fingerprint executor.buildBroadcastIntent derives for sendEnvelope():
     // owner '' (mock vault has no ecdsa key / vaultId), nested send_tx fields.
+    // dataIsEvmCalldata mirrors the nested-EVM branch so the empty `"0x"` folds
+    // the same way the executor's intent does (PR #1259).
     const heldByA = reserveBroadcast(
       computeFingerprint({
         owner: '',
@@ -193,6 +195,7 @@ describe('AgentExecutor — broadcast idempotency guard', () => {
         to: '0xrecipient',
         value: '1000000000000000000',
         data: '0x',
+        dataIsEvmCalldata: true,
       })
     )
 

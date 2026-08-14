@@ -7,21 +7,20 @@
  * Primary use case: Execute FIN swaps on Rujira DEX
  */
 import type { CosmosChain, VaultBase } from '@vultisig/sdk'
-import { Chain, Vultisig } from '@vultisig/sdk'
+import {
+  buildCosmosWasmExecuteMsg,
+  Chain,
+  chainFeeCoin,
+  cosmosFeeCoinDenom,
+  getCosmosGasLimit,
+  Vultisig,
+} from '@vultisig/sdk'
 import qrcode from 'qrcode-terminal'
 
 import type { CommandContext, TransactionResult } from '../core'
 import { ensureVaultUnlocked } from '../core'
-import {
-  createSpinner,
-  info,
-  isJsonOutput,
-  isNonInteractive,
-  isSilent,
-  outputJson,
-  printResult,
-  warn,
-} from '../lib/output'
+import { ConfirmationRequiredError } from '../core/errors'
+import { createSpinner, info, isJsonOutput, isNonInteractive, isSilent, outputJson, printResult } from '../lib/output'
 import { confirmTransaction, displayTransactionResult } from '../ui'
 
 /**
@@ -48,26 +47,39 @@ type ParsedFund = {
 }
 
 /**
- * Chain-specific configuration for Cosmos chains
+ * The CLI only supports CosmWasm execute on the two first-party CosmWasm chains
+ * we actively exercise today. The per-chain fee coin metadata and gas limits are
+ * still sourced from the canonical SDK registries instead of a CLI-local copy.
  */
-const COSMOS_CHAIN_CONFIG: Record<
-  string,
-  { chainId: string; prefix: string; denom: string; decimals: number; gasLimit: string }
-> = {
-  THORChain: {
-    chainId: 'thorchain-1',
-    prefix: 'thor',
-    denom: 'rune',
-    decimals: 8,
-    gasLimit: '500000',
-  },
-  MayaChain: {
-    chainId: 'mayachain-mainnet-v1',
-    prefix: 'maya',
-    denom: 'cacao',
-    decimals: 10,
-    gasLimit: '500000',
-  },
+const SUPPORTED_COSMWASM_CHAINS = [Chain.THORChain, Chain.MayaChain] as const
+
+type SupportedCosmWasmChain = (typeof SUPPORTED_COSMWASM_CHAINS)[number]
+
+type CosmosChainConfig = {
+  denom: string
+  decimals: number
+  ticker: string
+  gasLimit: string
+}
+
+function getCosmosChainConfig(chain: Chain): CosmosChainConfig {
+  if (!SUPPORTED_COSMWASM_CHAINS.includes(chain as SupportedCosmWasmChain)) {
+    throw new Error(
+      `Chain ${chain} does not support CosmWasm execute. Supported chains: ${SUPPORTED_COSMWASM_CHAINS.join(', ')}`
+    )
+  }
+
+  const supportedChain = chain as SupportedCosmWasmChain
+  const feeCoin = chainFeeCoin[supportedChain]
+  const denom = cosmosFeeCoinDenom[supportedChain]
+  const gasLimit = getCosmosGasLimit({ chain: supportedChain, id: denom }).toString()
+
+  return {
+    denom,
+    decimals: feeCoin.decimals,
+    ticker: feeCoin.ticker,
+    gasLimit,
+  }
 }
 
 /**
@@ -92,13 +104,8 @@ function parseFunds(fundsStr?: string): ParsedFund[] {
 export async function executeExecute(ctx: CommandContext, params: ExecuteParams): Promise<TransactionResult> {
   const vault = await ctx.ensureActiveVault()
 
-  // Validate chain is supported
-  const chainConfig = COSMOS_CHAIN_CONFIG[params.chain]
-  if (!chainConfig) {
-    throw new Error(
-      `Chain ${params.chain} does not support CosmWasm execute. Supported chains: ${Object.keys(COSMOS_CHAIN_CONFIG).join(', ')}`
-    )
-  }
+  // Validate chain is supported and source the execution metadata from the SDK canonicals.
+  const chainConfig = getCosmosChainConfig(params.chain)
 
   // Parse and validate message JSON
   let msg: object
@@ -120,10 +127,20 @@ export async function executeExecute(ctx: CommandContext, params: ExecuteParams)
 async function executeContractTransaction(
   vault: VaultBase,
   params: ExecuteParams,
-  chainConfig: { chainId: string; prefix: string; denom: string; decimals: number; gasLimit: string },
+  chainConfig: CosmosChainConfig,
   msg: object,
   funds: ParsedFund[]
 ): Promise<TransactionResult> {
+  // Fail closed up-front: without --yes this flow ends in an interactive
+  // confirmation a non-interactive session can never answer — refuse before the
+  // contract preview writes to stdout (or any network work happens).
+  if (!params.dryRun && !params.yes && isNonInteractive()) {
+    throw new ConfirmationRequiredError(
+      'Transaction requires confirmation.',
+      'Pass --yes to confirm, or --dry-run to preview without signing.'
+    )
+  }
+
   // 1. Prepare transaction
   const prepareSpinner = createSpinner('Preparing contract execution...')
 
@@ -186,15 +203,15 @@ async function executeContractTransaction(
     info('━'.repeat(50))
   }
 
-  // 3. Confirm with user (required in all output modes)
+  // 3. Confirm (required in all output modes; the non-interactive case was
+  // refused up-front, before the preview)
   if (!params.yes) {
-    if (isNonInteractive()) {
-      throw new Error('Transaction requires confirmation. Use --yes to skip, or --dry-run to preview.')
-    }
     const confirmed = await confirmTransaction()
     if (!confirmed) {
-      warn('Transaction cancelled')
-      throw new Error('Transaction cancelled by user')
+      // Same contract as `send`: an interactive decline exits 12
+      // CONFIRMATION_REQUIRED (matching the non-interactive refusal), never the
+      // old swallowed exit 0.
+      throw new ConfirmationRequiredError('Transaction declined at the confirmation prompt')
     }
   }
 
@@ -248,17 +265,12 @@ async function executeContractTransaction(
       ticker: chainConfig.denom.toUpperCase(),
     }
 
-    // Build MsgExecuteContract in Amino format
-    // The type URL follows standard CosmWasm naming convention
-    const executeContractMsg = {
-      type: 'wasm/MsgExecuteContract',
-      value: JSON.stringify({
-        sender: address,
-        contract: params.contract,
-        msg: msg,
-        funds: funds.map(f => ({ denom: f.denom, amount: f.amount })),
-      }),
-    }
+    const executeContractMsg = buildCosmosWasmExecuteMsg({
+      sender: address,
+      contract: params.contract,
+      msg,
+      funds,
+    })
 
     // Build fee (THORChain has zero fees for CosmWasm)
     const fee = {

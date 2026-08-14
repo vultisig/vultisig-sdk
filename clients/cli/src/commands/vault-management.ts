@@ -4,23 +4,34 @@
 import type { Chain, VaultBase } from '@vultisig/sdk'
 import { FastVault } from '@vultisig/sdk'
 import chalk from 'chalk'
+import { randomBytes } from 'crypto'
 import { promises as fs } from 'fs'
-import inquirer from 'inquirer'
 import path from 'path'
 import qrcode from 'qrcode-terminal'
 
 import type { CommandContext } from '../core'
 import {
+  classifyError,
+  ExternalServiceError,
+  InvalidInputError,
+  UnknownError,
+  VaultNotFoundError,
+  type VsigError,
+} from '../core/errors'
+import {
   createSpinner,
   error,
   info,
   isJsonOutput,
+  isNonInteractive,
   isSilent,
   outputJson,
   printResult,
+  requireInteractive,
   success,
   warn,
 } from '../lib/output'
+import { prompt } from '../lib/prompt'
 import { displayVaultInfo, displayVaultsList, setupVaultEvents } from '../ui'
 
 /**
@@ -59,12 +70,15 @@ export type SecureVaultOptions = {
  * Create a fast vault (server-assisted 2-of-2)
  */
 export async function executeCreateFast(ctx: CommandContext, options: FastVaultOptions): Promise<VaultBase> {
-  // Auto-enable two-step mode when stdin is not a TTY (non-interactive / agent context)
-  const twoStep = options.twoStep || !process.stdin.isTTY
+  // Auto-enable two-step mode in non-interactive sessions (shared definition:
+  // non-TTY stdout OR stdin, or --non-interactive/--ci). Keying off stdin alone
+  // would let a redirected-stdout run create server-side vault state and only
+  // then die on the OTP prompt — a side effect before the fail-closed refusal.
+  const twoStep = options.twoStep || isNonInteractive()
   const { name, password, email, signal } = options
 
   if (!options.twoStep && twoStep) {
-    info('Non-interactive terminal detected. Using --two-step mode automatically.')
+    info('Non-interactive session detected. Using --two-step mode automatically.')
   }
 
   const spinner = createSpinner('Creating vault...')
@@ -118,7 +132,7 @@ export async function executeCreateFast(ctx: CommandContext, options: FastVaultO
   while (attempts < MAX_VERIFY_ATTEMPTS) {
     attempts++
 
-    const codeAnswer = await inquirer.prompt([
+    const codeAnswer = await prompt([
       {
         type: 'input',
         name: 'code',
@@ -156,7 +170,7 @@ export async function executeCreateFast(ctx: CommandContext, options: FastVaultO
       }
 
       // Offer retry options
-      const { action } = await inquirer.prompt([
+      const { action } = await prompt([
         {
           type: 'select',
           name: 'action',
@@ -282,7 +296,7 @@ export async function executeImport(ctx: CommandContext, file: string, flagPassw
   // Password priority: --password flag > VAULT_PASSWORD env var > interactive prompt
   let password = flagPassword || process.env.VAULT_PASSWORD || ''
   if (!password) {
-    const answers = await inquirer.prompt([
+    const answers = await prompt([
       {
         type: 'password',
         name: 'password',
@@ -301,6 +315,15 @@ export async function executeImport(ctx: CommandContext, file: string, flagPassw
   setupVaultEvents(vault)
   await ctx.setActiveVault(vault)
   spinner.succeed(`Vault imported: ${vault.name}`)
+
+  if (isJsonOutput()) {
+    outputJson({
+      imported: true,
+      vault: { id: vault.id, name: vault.name, type: vault.type, chains: vault.chains.length },
+      isActive: true,
+    })
+    return vault
+  }
 
   success('\n+ Vault imported successfully!')
   info('\nRun "vultisig balance" to view balances')
@@ -326,8 +349,9 @@ export async function executeVerify(
     let password = options.password
 
     if (!email || !password) {
+      requireInteractive('Pass --email and --password to resend non-interactively.')
       info('Email and password are required to resend verification.')
-      const answers = await inquirer.prompt([
+      const answers = await prompt([
         ...(!email
           ? [
               {
@@ -349,7 +373,7 @@ export async function executeVerify(
               },
             ]
           : []),
-      ] as unknown as Parameters<typeof inquirer.prompt>[0])
+      ] as unknown as Parameters<typeof prompt>[0])
       email = email || answers.email
       password = password || answers.password
     }
@@ -361,15 +385,32 @@ export async function executeVerify(
       info('Check your inbox for the new verification code.')
     } catch (resendErr: any) {
       spinner.fail('Failed to resend verification email')
-      error(resendErr.message || 'Could not resend email. You may need to wait a few minutes.')
-      return false
+      // Throw rather than `return false`: the caller no longer converts a false
+      // return into an error, so returning here would report the resend as a
+      // success (exit 0, and empty stdout in JSON mode) for an email that was
+      // never sent.
+      throw resendFailureError(resendErr as Error, vaultId)
+    }
+
+    // Non-interactive sessions can't fall through to the OTP prompt below — resend
+    // is a complete action on its own (the documented follow-up is a separate
+    // `verify --code <OTP>` call), so return here instead of reaching a prompt that
+    // would throw ConfirmationRequiredError right after we already reported success.
+    if (!options.code && isNonInteractive()) {
+      if (isJsonOutput()) {
+        outputJson({ resent: true, vaultId })
+        return true
+      }
+      info('\nOnce you have the code, run:')
+      printResult(chalk.cyan(`  vultisig verify ${vaultId} --code <OTP>`))
+      return true
     }
   }
 
   let code = options.code
 
   if (!code) {
-    const codeAnswer = await inquirer.prompt([
+    const codeAnswer = await prompt([
       {
         type: 'input',
         name: 'code',
@@ -382,40 +423,90 @@ export async function executeVerify(
 
   const spinner = createSpinner('Verifying email code...')
 
+  // Two phases with two different failure meanings. Only the verify call itself can mean
+  // "the code was wrong", so it is the only thing that maps to verificationFailureError.
+  let vault: VaultBase
   try {
-    // verifyVault now returns the vault directly (throws on failure)
-    const vault = await ctx.sdk.verifyVault(vaultId, code!)
-    spinner.succeed('Vault verified successfully!')
-
-    setupVaultEvents(vault)
-    await ctx.setActiveVault(vault)
-
-    if (isJsonOutput()) {
-      outputJson({
-        verified: true,
-        vault: { id: vaultId, name: vault.name, type: 'fast' },
-      })
-      return true
-    }
-
-    success(`\n+ Vault "${vault.name}" is now ready to use!`)
-    return true
+    // verifyVault returns the vault directly and throws on a bad/expired code or an
+    // unknown pending vault.
+    vault = await ctx.sdk.verifyVault(vaultId, code!)
   } catch (err: any) {
     spinner.fail('Verification failed')
-
-    if (isJsonOutput()) {
-      outputJson({
-        verified: false,
-        error: err.message || 'Verification failed. Please check the code and try again.',
-      })
-      return false
-    }
-
-    error(`\n✗ ${err.message || 'Verification failed. Please check the code and try again.'}`)
-    warn('\nTip: Use --resend to get a new verification code:')
-    info(`  vultisig verify ${vaultId} --resend`)
-    return false
+    // Throw a single typed error rather than pre-writing a result and returning false:
+    // the caller used to turn that false into a second throw, so `-o json` emitted TWO
+    // documents — a success-shaped {verified:false} envelope followed by an error
+    // envelope — and JSON.parse on the output failed. withExit renders
+    // message/hint/suggestions, so the human path keeps the same guidance.
+    throw verificationFailureError(err as Error, vaultId)
   }
+
+  spinner.succeed('Vault verified successfully!')
+
+  // The code has already been accepted. Anything that fails from here — persisting the
+  // active-vault pointer, wiring events — is NOT a bad code, so it must carry its own
+  // classification (a corrupt store is CORRUPT_STATE, a full disk stays UNKNOWN) and must
+  // never send the user back to re-check or re-send a code that was fine.
+  try {
+    setupVaultEvents(vault)
+    await ctx.setActiveVault(vault)
+  } catch (err) {
+    throw classifyError(err as Error)
+  }
+
+  if (isJsonOutput()) {
+    outputJson({
+      verified: true,
+      vault: { id: vaultId, name: vault.name, type: 'fast' },
+    })
+    return true
+  }
+
+  success(`\n+ Vault "${vault.name}" is now ready to use!`)
+  return true
+}
+
+/**
+ * A resend that failed must not look like one that succeeded. Keep the SDK's own
+ * classification when it produced a precise one (a bad password is AUTH_REQUIRED,
+ * a dropped connection is NETWORK); only an otherwise-unclassifiable failure gets
+ * the resend-specific wording, since rate-limiting is the common cause.
+ */
+function resendFailureError(err: Error, vaultId: string): VsigError {
+  const classified = classifyError(err)
+  if (!(classified instanceof UnknownError)) return classified
+  return new ExternalServiceError(
+    err.message || 'Could not resend the verification email.',
+    'The server may be rate-limiting resends — you may need to wait a few minutes',
+    [`vultisig verify ${vaultId} --resend`]
+  )
+}
+
+/** The SDK words this case for library callers ("...with createFastVault()"), which
+ *  is meaningless in a shell. The CLI owns its own copy. */
+const PENDING_VAULT_MISSING_RE = /no pending vault found/i
+
+function verificationFailureError(err: Error, vaultId: string): VsigError {
+  if (PENDING_VAULT_MISSING_RE.test(err.message ?? '')) {
+    return new VaultNotFoundError(
+      `No pending vault found for ID "${vaultId}".`,
+      'It may already be verified, or the ID may be wrong',
+      ['vultisig vaults', 'vultisig create --two-step']
+    )
+  }
+  // The whole verify path — verifyVault(), then setActiveVault() — sits in one try, so
+  // this also catches failures AFTER the code was already accepted. Keep the SDK's own
+  // classification when it produced a precise one, exactly as resendFailureError does:
+  // a StorageError from persisting the active-vault pointer means the code was RIGHT and
+  // the stored state is broken, so it has to surface as CORRUPT_STATE rather than "the
+  // code may be incorrect" — which would send someone to re-send an OTP that was never
+  // the problem.
+  const classified = classifyError(err)
+  if (!(classified instanceof UnknownError)) return classified
+  return new InvalidInputError(
+    err.message || 'Verification failed. Please check the code and try again.',
+    'The code may be incorrect or expired',
+    [`vultisig verify ${vaultId} --resend`]
+  )
 }
 
 export type AddPostQuantumKeysOptions = {
@@ -455,6 +546,12 @@ export async function executeAddPostQuantumKeys(
       },
     })
     spinner.succeed('ML-DSA keys added. Vault file updated — export a backup if needed.')
+
+    if (isJsonOutput()) {
+      outputJson({ added: true, vault: { id: vault.id, name: vault.name }, backupRecommended: true })
+      return
+    }
+
     success('Post-quantum signing is now available for this vault (where supported).')
   } catch (e) {
     spinner.fail('Failed to add ML-DSA keys')
@@ -485,7 +582,7 @@ export async function executeExport(ctx: CommandContext, options: ExportVaultOpt
       exportPassword = options.password
     } else {
       // Prompt for export password
-      const answer = await inquirer.prompt([
+      const answer = await prompt([
         {
           type: 'password',
           name: 'exportPassword',
@@ -526,10 +623,37 @@ export async function executeExport(ctx: CommandContext, options: ExportVaultOpt
   const parentDir = path.dirname(outputPath)
   await fs.mkdir(parentDir, { recursive: true })
 
-  // Write the vault file
-  await fs.writeFile(outputPath, vultContent, 'utf-8')
+  // An export carries key shares, so it gets the same owner-only mode as the SDK's
+  // vault store. Write to a fresh temp path and rename over the target, mirroring
+  // storage.ts: `mode` only applies when writeFile CREATES the file, so writing
+  // straight to an existing (or attacker-pre-created) path would put the shares in a
+  // world-readable file and only tighten it afterwards. Creating a new file first
+  // means the shares are never on disk at anything but 0600, and the rename is atomic.
+  //
+  // The temp name carries random bytes and the write is exclusive ('wx') for the same
+  // reason: 'mode' applying only at creation cuts both ways, so a temp path an attacker
+  // could predict and pre-create would put the shares straight back into their 0644 file.
+  // Unpredictable name + fail-closed create means that path cannot be won.
+  const tempPath = `${outputPath}.${process.pid}.${Date.now()}.${randomBytes(6).toString('hex')}.tmp`
+  try {
+    await fs.writeFile(tempPath, vultContent, { encoding: 'utf-8', mode: 0o600, flag: 'wx' })
+    await fs.rename(tempPath, outputPath)
+  } catch (err) {
+    // Only remove the temp file if the exclusive create is what succeeded. On EEXIST we
+    // never created it — something was already at that path — so deleting it would remove
+    // a file we do not own.
+    if ((err as NodeJS.ErrnoException)?.code !== 'EEXIST') {
+      await fs.rm(tempPath, { force: true }).catch(() => {})
+    }
+    throw err
+  }
 
   spinner.succeed(`Vault exported: ${outputPath}`)
+
+  if (isJsonOutput()) {
+    outputJson({ exported: true, path: outputPath, encrypted: exportPassword !== undefined })
+    return outputPath
+  }
 
   success('\n+ Vault exported successfully!')
   info(`File: ${outputPath}`)
@@ -543,6 +667,11 @@ export async function executeExport(ctx: CommandContext, options: ExportVaultOpt
 export async function executeVaults(ctx: CommandContext): Promise<VaultBase[]> {
   const spinner = createSpinner('Loading vaults...')
   const vaults = await ctx.sdk.listVaults()
+  // A two-step vault awaiting verification is only named in the create-time output.
+  // An agent that lost that output had no way to rediscover the id and finish
+  // verifying, so list pending vaults here too. Best-effort: a pending-store read
+  // failure must not take down `vaults`, the command used to diagnose vault state.
+  const pending = await listPendingVaultsSafely(ctx)
   spinner.succeed('Vaults loaded')
 
   if (isJsonOutput()) {
@@ -557,21 +686,42 @@ export async function executeVaults(ctx: CommandContext): Promise<VaultBase[]> {
         createdAt: v.createdAt,
         isActive: activeVault?.id === v.id,
       })),
+      pending: pending.map(id => ({ id, status: 'pending_verification' })),
     })
     return vaults
   }
 
-  if (vaults.length === 0) {
+  if (vaults.length === 0 && pending.length === 0) {
     warn('\nNo vaults found. Create or import a vault first.')
     return []
   }
 
   const activeVault = ctx.getActiveVault()
-  displayVaultsList(vaults, activeVault)
+  if (vaults.length > 0) {
+    displayVaultsList(vaults, activeVault)
+  }
 
-  info(chalk.gray('\nUse "vultisig switch <id>" to switch active vault'))
+  if (pending.length > 0) {
+    warn(`\nPending verification (${pending.length}):`)
+    for (const id of pending) {
+      info(`  ${id}`)
+    }
+    info(chalk.gray('Finish with "vultisig verify <id> --code <OTP>"'))
+  }
+
+  if (vaults.length > 0) {
+    info(chalk.gray('\nUse "vultisig switch <id>" to switch active vault'))
+  }
 
   return vaults
+}
+
+async function listPendingVaultsSafely(ctx: CommandContext): Promise<string[]> {
+  try {
+    return await ctx.sdk.listPendingVaults()
+  } catch {
+    return []
+  }
 }
 
 /**
@@ -610,6 +760,15 @@ export async function executeSwitch(ctx: CommandContext, vaultId: string): Promi
   setupVaultEvents(vault)
   spinner.succeed('Vault switched')
 
+  if (isJsonOutput()) {
+    outputJson({
+      switched: true,
+      vault: { id: vault.id, name: vault.name, type: vault.type, chains: vault.chains.length },
+      isActive: true,
+    })
+    return vault
+  }
+
   success(`\n+ Switched to vault: ${vault.name}`)
   info(`  Type: ${vault.type}`)
   info(`  Chains: ${vault.chains.length}`)
@@ -628,6 +787,11 @@ export async function executeRename(ctx: CommandContext, newName: string): Promi
   const spinner = createSpinner('Renaming vault...')
   await vault.rename(newName)
   spinner.succeed('Vault renamed')
+
+  if (isJsonOutput()) {
+    outputJson({ renamed: true, vault: { id: vault.id, name: newName }, previousName: oldName })
+    return
+  }
 
   success(`\n+ Vault renamed from "${oldName}" to "${newName}"`)
 }
@@ -705,6 +869,10 @@ export async function executeCreateFromSeedphraseFast(
   ctx: CommandContext,
   options: CreateFromSeedphraseFastOptions
 ): Promise<VaultBase> {
+  // This flow has no two-step mode: it always ends in an interactive email-OTP
+  // prompt. Refuse up-front in a non-interactive session so no server-side vault
+  // state is created before the prompt chokepoint would reject anyway.
+  requireInteractive('Seedphrase fast-vault import requires interactive email-OTP entry; run it in a terminal.')
   const { mnemonic, name, password, email, discoverChains, chains, signal, usePhantomSolanaPath } = options
 
   // jscpd:ignore-start
@@ -784,7 +952,7 @@ export async function executeCreateFromSeedphraseFast(
   while (attempts < MAX_VERIFY_ATTEMPTS) {
     attempts++
 
-    const codeAnswer = await inquirer.prompt([
+    const codeAnswer = await prompt([
       {
         type: 'input',
         name: 'code',
@@ -821,7 +989,7 @@ export async function executeCreateFromSeedphraseFast(
         throw err
       }
 
-      const { action } = await inquirer.prompt([
+      const { action } = await prompt([
         {
           type: 'select',
           name: 'action',
@@ -1116,6 +1284,14 @@ export async function executeDelete(ctx: CommandContext, options: DeleteVaultOpt
     return
   }
 
+  // Fail closed up-front: table mode ends in an interactive delete confirmation
+  // a non-interactive session can never answer — refuse before the vault
+  // details/warnings write to stdout. (JSON mode legitimately skips
+  // confirmation and returned above; --yes maps to skipConfirmation.)
+  if (!options.skipConfirmation) {
+    requireInteractive('Pass --yes to skip confirmation, or use -o json for scripting.')
+  }
+
   // Step 3: Display vault info for confirmation
   info('\n' + chalk.bold('Vault to delete:'))
   info(`  Name:   ${chalk.cyan(vault.name)}`)
@@ -1130,7 +1306,7 @@ export async function executeDelete(ctx: CommandContext, options: DeleteVaultOpt
     warn('Make sure you have a backup of your vault (.vult file) before proceeding.')
     info('')
 
-    const { confirmed } = await inquirer.prompt([
+    const { confirmed } = await prompt([
       {
         type: 'confirm',
         name: 'confirmed',

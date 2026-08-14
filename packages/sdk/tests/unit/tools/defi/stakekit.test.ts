@@ -124,6 +124,21 @@ describe('sdk.defi.stakekit', () => {
   })
 
   describe('stakekitSearch', () => {
+    it('normalizes public network aliases at the StakeKit request boundary', async () => {
+      const fetchMock = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: [], hasNextPage: false }),
+        text: async () => '',
+      } as Response)
+      globalThis.fetch = fetchMock
+
+      await stakekitSearch({ network: 'BSC' })
+
+      const requestUrl = String(fetchMock.mock.calls[0]?.[0])
+      expect(new URL(requestUrl).searchParams.get('network')).toBe('binance')
+    })
+
     it('returns rows with YieldDiscoverOpportunity-compatible shape: apy is fraction, provider nested in metadata, id present', async () => {
       const product = makeProduct()
       globalThis.fetch = vi.fn().mockResolvedValueOnce({
@@ -511,6 +526,25 @@ describe('sdk.defi.stakekit', () => {
   })
 
   describe('stakekitBalances', () => {
+    it('uses the same canonical network aliases as search', async () => {
+      const fetchMock = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: [], hasNextPage: false }),
+        text: async () => '',
+      } as Response)
+      globalThis.fetch = fetchMock
+
+      const result = await stakekitBalances({
+        address: '0x1234567890123456789012345678901234567890',
+        network: 'AVAX',
+      })
+
+      expect(result).toEqual([])
+      const requestUrl = String(fetchMock.mock.calls[0]?.[0])
+      expect(new URL(requestUrl).searchParams.get('network')).toBe('avalanche-c')
+    })
+
     it('returns null on 403 (restricted endpoint)', async () => {
       // searchYields (to enumerate integration IDs)
       globalThis.fetch = vi
@@ -552,12 +586,20 @@ describe('action-input validation (ported from mcp-ts validateActionInput, Apo #
     expect(validateStakekitActionAddress('0xdeadbeef')).toMatch(/Invalid 0x-prefixed address/)
   })
 
-  it('validateStakekitActionInput: rejects non-positive / NaN amounts', () => {
+  it('validateStakekitActionInput: rejects non-positive and non-plain-decimal amounts', () => {
     expect(validateStakekitActionInput(EVM, '5')).toBeNull()
     expect(validateStakekitActionInput(EVM, '0.0001')).toBeNull()
-    expect(validateStakekitActionInput(EVM, '0')).toMatch(/positive number/)
-    expect(validateStakekitActionInput(EVM, '-1')).toMatch(/positive number/)
-    expect(validateStakekitActionInput(EVM, 'abc')).toMatch(/positive number/)
+    expect(validateStakekitActionInput(EVM, '.5')).toBeNull()
+    expect(validateStakekitActionInput(EVM, '1.')).toBeNull()
+    expect(validateStakekitActionInput(EVM, '1' + '0'.repeat(400))).toBeNull()
+    expect(validateStakekitActionInput(EVM, '0')).toMatch(/plain decimal string/)
+    expect(validateStakekitActionInput(EVM, '-1')).toMatch(/plain decimal string/)
+    expect(validateStakekitActionInput(EVM, 'abc')).toMatch(/plain decimal string/)
+    expect(validateStakekitActionInput(EVM, '1e3')).toMatch(/plain decimal string/)
+    expect(validateStakekitActionInput(EVM, 'Infinity')).toMatch(/plain decimal string/)
+    expect(validateStakekitActionInput(EVM, '0x10')).toMatch(/plain decimal string/)
+    expect(validateStakekitActionInput(EVM, ' 1 ')).toMatch(/plain decimal string/)
+    expect(validateStakekitActionInput(EVM, '\t0.5')).toMatch(/plain decimal string/)
     // address error takes precedence over amount
     expect(validateStakekitActionInput('0xbad', '5')).toMatch(/Invalid 0x-prefixed address/)
   })
@@ -575,7 +617,7 @@ describe('action-input validation (ported from mcp-ts validateActionInput, Apo #
     const fetchSpy = vi.spyOn(globalThis, 'fetch')
     await expect(
       stakekitBuildEnter({ yieldId: 'ethereum-eth-lido-staking', address: '0x' + 'a'.repeat(40), amount: '0' })
-    ).rejects.toThrow(/positive number/)
+    ).rejects.toThrow(/plain decimal string/)
     expect(fetchSpy).not.toHaveBeenCalled()
     fetchSpy.mockRestore()
   })

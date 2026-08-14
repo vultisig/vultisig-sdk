@@ -16,15 +16,16 @@
  *   - intent-match (does the address match what the user asked for)
  *   - grounding (is the address present in tool output)
  *   - prompt-injection / fabrication detection
- *   - checksum verification (shape-valid is the contract here, same as the
- *     backend extractors which validate shape, not cryptographic checksum)
+ *   - checksum verification for non-UTXO families (shape-valid is their
+ *     contract here, same as the backend extractors)
  * Those stay in the agent backend's judgement layer. This is pure crypto
  * format-validation, RN-safe (bs58 is pure JS), no network, no signing.
  */
 
 import bs58 from 'bs58'
 
-import { isValidCashAddr } from './cashaddr'
+import { isUtxoAddressBrandValid } from '../chains/utxo/addressBrand'
+import { normalizeChain } from './normalizeChain'
 
 /**
  * Coarse chain-family tag. Mirrors the backend `address.Family` enum.
@@ -63,8 +64,9 @@ const reBTCLegacy = /^[13][1-9A-HJ-NP-Za-km-z]{25,34}$/
 /**
  * Bitcoin Cash cashaddr SHAPE regex (q/p prefix, 41 chars, optional scheme).
  * Used only by the loose `classifyAddress` family heuristic. The authoritative
- * fund-safety gate uses `isValidCashAddr` (polymod checksum), NOT this regex —
- * the regex accepts a single-char typo whose checksum is wrong.
+ * fund-safety gate uses the canonical UTXO brand validator (including the
+ * CashAddr polymod checksum), NOT this regex — the regex accepts a single-char
+ * typo whose checksum is wrong.
  */
 const reBCH = /^(?:bitcoincash:)?[qp][a-z0-9]{41}$/
 /** Litecoin bech32 (ltc1...). */
@@ -96,6 +98,10 @@ const reCardano =
   /^(addr1[a-z0-9]{50,}|addr_test1[a-z0-9]{50,}|Ae2[1-9A-HJ-NP-Za-km-z]{50,}|DdzFF[1-9A-HJ-NP-Za-km-z]{50,})$/
 /** base58-alphabet pre-filter (32-44 chars) before the more expensive decode. */
 const reSolanaBase58Alphabet = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/
+
+/** Lowercase a uniformly-cased Bech32/CashAddr value; reject mixed case. */
+const normalizeCaseInsensitiveEncoding = (address: string): string | undefined =>
+  address === address.toLowerCase() || address === address.toUpperCase() ? address.toLowerCase() : undefined
 
 /**
  * Well-known bech32 HRPs that, when a base58-decodable string starts with one,
@@ -271,6 +277,7 @@ const evmChains = [
   'katana',
   'plasma',
   'mantle',
+  'robinhood',
   'blast',
   'cronos',
   'zksync',
@@ -289,16 +296,17 @@ const chainFormatRules: Record<string, Matcher[]> = {
   // EVM family — all share 0x + 40 hex.
   ...Object.fromEntries(evmChains.map(chain => [chain, [evmRule]])),
   solana: [isSolanaAddress],
-  bitcoin: [re(reBTCNativeSegWit), re(reBTCLegacy)],
-  // Authoritative fund-safety gate: full CashAddr polymod checksum, not just
-  // the shape regex — rejects a mistyped BCH address the regex would pass.
-  bitcoincash: [isValidCashAddr],
-  litecoin: [re(reLTCBech32), re(reLTCLegacy)],
-  dogecoin: [re(reDOGE)],
-  dash: [re(reDASH)],
+  // UTXO chains use the canonical SDK brand validator so this generic gate,
+  // the tx decoder, and downstream consumers share one HRP / version-byte /
+  // CashAddr policy.
+  bitcoin: [addr => isUtxoAddressBrandValid(addr, 'Bitcoin')],
+  bitcoincash: [addr => isUtxoAddressBrandValid(addr, 'Bitcoin-Cash')],
+  litecoin: [addr => isUtxoAddressBrandValid(addr, 'Litecoin')],
+  dogecoin: [addr => isUtxoAddressBrandValid(addr, 'Dogecoin')],
+  dash: [addr => isUtxoAddressBrandValid(addr, 'Dash')],
   ripple: [re(reXRP)],
   ton: [re(reTON)],
-  zcash: [re(reZcashT), re(reZcashZ)],
+  zcash: [addr => isUtxoAddressBrandValid(addr, 'Zcash')],
   sui: [re(reSui)],
   tron: [re(reTron)],
   polkadot: [re(rePolkadot)],
@@ -351,10 +359,36 @@ const chainAlias: Record<string, string> = {
   stars: 'stargaze',
 }
 
+/**
+ * Map a canonical SDK Chain value to the address-format rule key used in
+ * chainFormatRules.
+ */
+function canonicalRuleTagForNormalizedChain(chain: string): string {
+  const lowered = chain.toLowerCase()
+  if (chainFormatRules[lowered]) return lowered
+
+  const stripped = lowered.replace(/[\s_-]+/g, '')
+  if (chainFormatRules[stripped]) return stripped
+
+  if (lowered.endsWith('chain')) {
+    const withoutChainSuffix = lowered.slice(0, -'chain'.length)
+    if (chainFormatRules[withoutChainSuffix]) return withoutChainSuffix
+  }
+
+  return lowered
+}
+
 /** Resolve an arbitrary chain string to a canonical tag in chainFormatRules. */
 export function canonicalChainTag(chain: string): string {
   const key = chain.trim().toLowerCase()
-  return chainAlias[key] ?? key
+  const direct = chainAlias[key] ?? key
+  if (chainFormatRules[direct]) return direct
+
+  try {
+    return canonicalRuleTagForNormalizedChain(normalizeChain(chain))
+  } catch {
+    return direct
+  }
 }
 
 /**
@@ -368,16 +402,40 @@ const familyMatchers: Array<{ family: AddressFamily; match: Matcher }> = [
   { family: 'sui', match: re(reSui) },
   { family: 'evm', match: re(reEVM) },
   { family: 'solana', match: isSolanaAddress },
-  { family: 'bitcoincash', match: re(reBCH) },
-  { family: 'litecoin', match: addr => reLTCBech32.test(addr) || reLTCLegacy.test(addr) },
+  {
+    family: 'bitcoincash',
+    match: addr => {
+      const normalized = normalizeCaseInsensitiveEncoding(addr)
+      return normalized !== undefined && reBCH.test(normalized)
+    },
+  },
+  {
+    family: 'litecoin',
+    match: addr => {
+      const normalized = normalizeCaseInsensitiveEncoding(addr)
+      return (normalized !== undefined && reLTCBech32.test(normalized)) || reLTCLegacy.test(addr)
+    },
+  },
   { family: 'dogecoin', match: re(reDOGE) },
   { family: 'dash', match: re(reDASH) },
-  { family: 'btc', match: addr => reBTCNativeSegWit.test(addr) || reBTCLegacy.test(addr) },
+  {
+    family: 'btc',
+    match: addr => {
+      const normalized = normalizeCaseInsensitiveEncoding(addr)
+      return (normalized !== undefined && reBTCNativeSegWit.test(normalized)) || reBTCLegacy.test(addr)
+    },
+  },
   { family: 'cardano', match: re(reCardano) },
   { family: 'ton', match: re(reTON) },
   { family: 'tron', match: re(reTron) },
   { family: 'xrp', match: re(reXRP) },
-  { family: 'zcash', match: addr => reZcashT.test(addr) || reZcashZ.test(addr) },
+  {
+    family: 'zcash',
+    match: addr => {
+      const normalized = normalizeCaseInsensitiveEncoding(addr)
+      return reZcashT.test(addr) || (normalized !== undefined && reZcashZ.test(normalized))
+    },
+  },
   { family: 'polkadot', match: re(rePolkadot) },
   { family: 'bittensor', match: re(reBittensor) },
 ]

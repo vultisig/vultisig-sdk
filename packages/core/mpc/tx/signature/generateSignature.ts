@@ -23,7 +23,7 @@ export const generateSignature = ({ walletCore, signature, signatureFormat }: In
       return new Uint8Array([...r, ...s, ...recovery_id])
     },
     raw: () => {
-      const { r, s } = recordMap(pick(signature, ['r', 's']), value => walletCore.HexCoding.decode(value).reverse())
+      const { r, s } = recordMap(pick(signature, ['r', 's']), value => walletCore.HexCoding.decode(value))
 
       return new Uint8Array([...r, ...s])
     },

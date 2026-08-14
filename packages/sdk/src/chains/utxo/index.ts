@@ -1,3 +1,5 @@
+export type { UtxoChainName } from './addressBrand'
+export { assertUtxoAddressBrand, isUtxoAddressBrandValid } from './addressBrand'
 export type {
   BroadcastUtxoTxOptions,
   EstimateUtxoFeeOptions,
@@ -15,7 +17,6 @@ export type {
   DecodedAddress,
   SighashBIP143Options,
   SighashLegacyOptions,
-  UtxoChainName,
   UtxoInput,
   UtxoTxBuilderResult,
 } from './tx'
@@ -26,6 +27,7 @@ export {
   estimateUtxoTxFee,
   getSighashBIP143,
   getSighashLegacy,
+  getSighashZcash,
   getUtxoChainSpec,
   ZCASH_BRANCH_ID_NU6_1,
   ZCASH_BRANCH_ID_NU6_2,
