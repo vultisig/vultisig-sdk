@@ -400,7 +400,7 @@ function packedMcpBinSmoke(workRoot, tgzPath, sdkTgzPath, clientSharedTgzPath) {
   }
 }
 
-function main() {
+async function main() {
   assertSdkBuilt()
   smokeCli()
 
@@ -410,7 +410,7 @@ function main() {
 
     const tgzPath = packWorkspace(workRoot, '@vultisig/sdk', 'sdk.tgz')
 
-    checkSdkPackageExports({
+    await checkSdkPackageExports({
       build: false,
       workRoot: path.join(workRoot, 'sdk-package-exports'),
       tarballPath: tgzPath,
@@ -467,7 +467,7 @@ function main() {
 }
 
 try {
-  main()
+  await main()
 } catch (e) {
   console.error(e.message || e)
   process.exitCode = 1

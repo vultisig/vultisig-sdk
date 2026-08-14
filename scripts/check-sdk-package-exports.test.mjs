@@ -6,7 +6,9 @@ import test from 'node:test'
 
 import {
   collectExportTargets,
+  collectIntrospectableRuntimeCases,
   collectNodeRuntimeCases,
+  collectRuntimeExportKeys,
   collectTypeCustomConditionSets,
   validatePackedExportTargets,
 } from './check-sdk-package-exports.mjs'
@@ -183,4 +185,67 @@ test('derives every custom TypeScript declaration condition from the manifest', 
     ['react-native'],
     ['runtime', 'embedded'],
   ])
+})
+
+test('introspectable runtime cases include browser/chrome-extension and seedphrase but exclude react-native/rn-preamble/root', () => {
+  const manifest = {
+    name: '@vultisig/sdk',
+    exports: {
+      '.': {
+        node: { import: './dist/index.node.esm.js', require: './dist/index.node.cjs' },
+        import: './dist/index.node.esm.js',
+        require: './dist/index.node.cjs',
+      },
+      './browser': {
+        types: './dist/index.browser.d.ts',
+        import: './dist/index.browser.js',
+      },
+      './react-native': {
+        types: './dist/index.react-native.d.ts',
+        'react-native': './dist/index.react-native.js',
+        import: './dist/index.react-native.js',
+        default: './dist/index.react-native.js',
+      },
+      './rn-preamble': {
+        types: './dist/index.rn-preamble.d.ts',
+        'react-native': './dist/index.rn-preamble.js',
+        import: './dist/index.rn-preamble.js',
+        default: './dist/index.rn-preamble.js',
+      },
+      './seedphrase': {
+        types: './dist/seedphrase/index.d.ts',
+        node: { import: './dist/seedphrase/index.js', require: './dist/seedphrase/index.cjs' },
+        import: './dist/seedphrase/index.js',
+        require: './dist/seedphrase/index.cjs',
+      },
+    },
+  }
+
+  assert.deepEqual(
+    collectIntrospectableRuntimeCases(manifest).map(({ specifier }) => specifier),
+    ['@vultisig/sdk/browser', '@vultisig/sdk/seedphrase']
+  )
+})
+
+test('runtime export keys are collected from the packed module and empty modules are skipped', async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'sdk-runtime-export-keys-test-'))
+  try {
+    mkdirSync(path.join(root, 'dist'), { recursive: true })
+    writeFileSync(
+      path.join(root, 'dist/with-exports.mjs'),
+      "export const normalizeMnemonic = (value) => value.trim()\nexport class SeedphraseValidator {}\n"
+    )
+    writeFileSync(path.join(root, 'dist/empty.mjs'), 'export {}\n')
+
+    const keys = await collectRuntimeExportKeys(root, [
+      { specifier: '@vultisig/sdk/seedphrase', target: './dist/with-exports.mjs' },
+      { specifier: '@vultisig/sdk/empty', target: './dist/empty.mjs' },
+    ])
+
+    assert.deepEqual(keys, {
+      '@vultisig/sdk/seedphrase': ['SeedphraseValidator', 'normalizeMnemonic'],
+    })
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })
