@@ -2099,7 +2099,6 @@ export function parseNonEvmEnvelope(serverTxData: any, chain: Chain): NonEvmSend
   //
   // Fail closed until a later phase teaches this path to parse token metadata
   // from tx_ready envelopes instead of guessing.
-  let symbol: string | undefined
   const tokenResolved = serverTxData?.resolved?.labels?.token_resolved
   const nativeTicker = chainFeeCoin[chain]?.ticker
   if (typeof tokenResolved === 'string' && tokenResolved !== nativeTicker) {
@@ -2112,7 +2111,11 @@ export function parseNonEvmEnvelope(serverTxData: any, chain: Chain): NonEvmSend
 
   const memo: string | undefined = typeof txArgs.memo === 'string' && txArgs.memo.length > 0 ? txArgs.memo : undefined
 
-  return { chain, to, amount: amountDecimal, symbol, memo }
+  // `symbol: undefined` means "native send" to the caller, and it is the only
+  // reachable value here: the guard above throws for any non-native token, so
+  // anything that gets this far is native by construction. Stated inline rather
+  // than via an unassigned `let`, which read as an unfinished branch.
+  return { chain, to, amount: amountDecimal, symbol: undefined, memo }
 }
 
 /**
