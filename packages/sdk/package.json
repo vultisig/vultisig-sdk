@@ -114,6 +114,16 @@
       "import": "./dist/tools/bridge/index.js",
       "require": "./dist/tools/bridge/index.cjs",
       "default": "./dist/tools/bridge/index.cjs"
+    },
+    "./seedphrase": {
+      "types": "./dist/seedphrase/index.d.ts",
+      "node": {
+        "import": "./dist/seedphrase/index.js",
+        "require": "./dist/seedphrase/index.cjs"
+      },
+      "import": "./dist/seedphrase/index.js",
+      "require": "./dist/seedphrase/index.cjs",
+      "default": "./dist/seedphrase/index.cjs"
     }
   },
   "scripts": {
