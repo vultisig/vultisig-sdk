@@ -174,6 +174,56 @@ describe('runSkipSwap input validation (no network)', () => {
     expect(out.ok).toBe(false)
     if (!out.ok) expect(out.envelope.error).toBe('invalid_input')
   })
+
+})
+
+describe('runSkipSwap Akash HRP allowlist (sdk#1785)', () => {
+  // Both tests below share a route/msgs fixture shaped for an
+  // osmosis-1 → akashnet-2 route (required_chain_addresses / chain_ids
+  // consistent with destChainId) so the ONLY variable between them is the
+  // toAddress prefix — isolates the HRP check itself from unrelated
+  // custody-chain / intermediate-address validation.
+  const akashRoute = {
+    ...okRoute,
+    chain_ids: ['osmosis-1', 'akashnet-2'],
+    required_chain_addresses: ['osmosis-1', 'akashnet-2'],
+  }
+  const akashMsgs = { ...okMsgs, route: akashRoute }
+
+  // sdk#1785: akashnet-2 was missing from the local HRP allowlist, so an
+  // Akash-destined route fell back to generic bech32-shape acceptance — a
+  // wrong-chain address (valid shape, wrong chain) could pass. This never
+  // reaches the network — validateAddressShape throws before any fetch.
+  it('rejects a wrong-chain bech32 recipient (osmo1...) on an Akash-destined route', async () => {
+    mockFetchSequence([{ body: akashRoute }, { body: akashMsgs }])
+
+    const out = await runSkipSwap({
+      ...baseArgs,
+      destChainId: 'akashnet-2',
+      destAssetDenom: 'uakt',
+      toAddress: 'osmo1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+    })
+    expect(out.ok).toBe(false)
+    if (!out.ok) {
+      expect(out.envelope.error).toBe('invalid_input')
+      expect(out.envelope.message).toMatch(/akashnet-2 expects bech32 HRP "akash", got "osmo"/)
+    }
+  })
+
+  it('accepts a correct akash1... recipient on an Akash-destined route', async () => {
+    mockFetchSequence([{ body: akashRoute }, { body: akashMsgs }])
+
+    const out = await runSkipSwap({
+      ...baseArgs,
+      destChainId: 'akashnet-2',
+      destAssetDenom: 'uakt',
+      toAddress: 'akash1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+    })
+    expect(out.ok).toBe(true)
+    if (out.ok) {
+      expect(out.metadata.skip_chain_path).toEqual(['osmosis-1', 'akashnet-2'])
+    }
+  })
 })
 
 describe('runSkipSwap happy path (mocked Skip)', () => {

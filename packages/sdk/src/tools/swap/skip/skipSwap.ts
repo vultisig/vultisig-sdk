@@ -374,6 +374,14 @@ const COSMOS_CHAIN_HRPS: Record<string, string> = {
   'agoric-3': 'agoric',
   celestia: 'celestia',
   'injective-1': 'inj',
+  // sdk#1785: was missing entirely, so Akash routes fell back to the generic
+  // bech32-shape check below — a wrong-chain address (e.g. osmo1...) could
+  // pass local validation for what's supposed to be an Akash-destined
+  // transfer. Akash is already a registered cosmos chain (see
+  // `cosmosChainId` in core/chain/chains/cosmos/chainInfo.ts —
+  // `CosmosChain.Akash` → `akashnet-2`, standard `akash1` bech32 prefix) —
+  // this table just never got the entry.
+  'akashnet-2': 'akash',
 }
 
 function validateAddressShape(address: string, chainId: string, field: string): void {
