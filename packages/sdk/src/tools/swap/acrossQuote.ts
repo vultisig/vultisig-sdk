@@ -61,8 +61,15 @@ const acrossSpokePools = {
 } as const satisfies Record<AcrossChain, `0x${string}`>
 
 export type AcrossQuoteParams = {
-  /** Origin chain. Pinned to Ethereum for the current factory scope. */
-  sourceChain: AcrossChain
+  /**
+   * Origin chain. sdk#1906: typed as the literal `'Ethereum'`, not the full
+   * `AcrossChain` union — the runtime rejects every other origin (see the
+   * `sourceChain !== ETHEREUM_ORIGIN_CHAIN` check in `acrossQuote` below), so
+   * the type should say that, not just the doc comment. `AcrossChain` remains
+   * correct for `destinationChain`: any of the 8 supported chains except the
+   * origin is a valid destination today.
+   */
+  sourceChain: typeof ETHEREUM_ORIGIN_CHAIN
   /** Destination EVM chain. Must differ from the origin. */
   destinationChain: AcrossChain
   /** Input token contract on the source chain. Use WETH for native ETH routes. */
@@ -206,6 +213,12 @@ function assertPinnedSpokePools(
  * Returns fees, limits, output amount, fill estimate, and pinned-SpokePool
  * verification. Does NOT build calldata, sign, or broadcast — quote-only.
  *
+ * sdk#1906: `sourceChain` is Ethereum-only for this factory slice today —
+ * `destinationChain` can be any other `AcrossChain`. Multi-origin support
+ * (any supported chain as the source) is not implemented; expanding it needs
+ * real Across API integration + live per-chain verification, tracked
+ * separately rather than silently advertised by an overly-wide type.
+ *
  * @throws if inputs are invalid, the route is unsupported, the upstream quote
  *         fails, the SpokePools don't match the pinned deployments, or no usable
  *         output amount is returned.
@@ -213,9 +226,9 @@ function assertPinnedSpokePools(
  * @example
  * ```ts
  * const quote = await acrossQuote({
- *   sourceChain: 'Base',
+ *   sourceChain: 'Ethereum',
  *   destinationChain: 'Arbitrum',
- *   inputToken: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // USDC on Base
+ *   inputToken: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', // USDC on Ethereum
  *   outputToken: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831', // USDC on Arbitrum
  *   amount: '1000000', // 1 USDC
  * })
