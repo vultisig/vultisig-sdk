@@ -28,6 +28,8 @@ export type SendDryRunResult = {
   chain: string
   to: string
   amount: string
+  /** True when `amount` was resolved from the `max` input sentinel. */
+  isMax?: boolean
   symbol: string
   /** Resolved token contract address / chain-specific asset id. Omitted for native sends. */
   contractAddress?: string

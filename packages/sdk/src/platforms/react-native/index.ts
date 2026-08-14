@@ -48,6 +48,9 @@ import { NativeWalletCore } from '@vultisig/walletcore-native'
 import { configureDefaultStorage } from '../../context/defaultStorage'
 import { configureWasm } from '../../context/wasmRuntime'
 import { configureCrypto } from '../../crypto'
+import * as cosmos from '../../tools/cosmos'
+import * as evm from '../../tools/evm'
+import * as token from '../../tools/token'
 import { ReactNativeCrypto } from './crypto'
 import { ReactNativeStorage } from './storage'
 
@@ -235,6 +238,10 @@ export type {
 // from its real (pure-JS) npm package, and `tiny-secp256k1` is inlined
 // via the noble-backed shim at
 // src/platforms/react-native/shims/tiny-secp256k1.ts.
+
+// Public namespace handles documented by the SDK changelog. Keep these as
+// explicit module objects so Rollup preserves the nested `cosmos.gov` handle.
+export { cosmos, evm, token }
 
 // Vault-free prep helpers (KeysignPayload construction without an instantiated vault)
 export type {
@@ -779,6 +786,11 @@ export { ValidationHelpers } from '../../utils/validation'
 // the curated React Native entry point so mobile consumers receive the same v1
 // schema and canonical hashes as Node/browser/desktop clients.
 export * from '../../signable-transaction'
+
+// Canonical RN-safe UTXO wrong-chain guard. Keep this static export in parity
+// with the generic entry so the app can remove its local brand matrix.
+export type { UtxoChainName } from '../../chains/utxo/addressBrand'
+export { assertUtxoAddressBrand, isUtxoAddressBrandValid } from '../../chains/utxo/addressBrand'
 
 // Dangerous/burn-address guard. Single source of truth for "is this destination
 // a burn/black-hole address that no key controls?" across EVM, Solana, UTXO and

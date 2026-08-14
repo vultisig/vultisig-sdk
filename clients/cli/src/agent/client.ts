@@ -9,6 +9,7 @@ import { randomUUID } from 'node:crypto'
 import { IdempotencyKeyReusedError, IdempotentTurnDuplicateError } from '../core/errors'
 import { AgentErrorCode, inferAgentErrorCodeFromMessage, isAgentErrorCode } from './agentErrors'
 import { parseTurnOutcome, type TurnOutcome } from './cards'
+import type { HlOrderSignature, HlOrderSigningPayload, HlOrderStatus, HlOrderTransport } from './hlOrder'
 import {
   CLI_SIGNABLE_FLAT_TOOLS,
   CLI_SIGNABLE_PREP_TOOLS,
@@ -34,7 +35,12 @@ import type {
   TxReadyPayload,
 } from './types'
 
-type JsonErrorBody = { error?: string; code?: string; conversation_id?: string; first_request_at?: string }
+type JsonErrorBody = {
+  error?: string
+  code?: string
+  conversation_id?: string
+  first_request_at?: string
+}
 
 /** Generate a server-valid visible-ASCII key for one agent turn POST attempt.
  *
@@ -155,6 +161,45 @@ type StreamCallbacks = {
 }
 
 type SSEPayload = Record<string, any>
+
+const HL_ORDER_BUILD_TOOLS = new Set(['build_hyperliquid_open_position', 'build_hyperliquid_close_position'])
+
+/** Convert the backend's sanitized Hyperliquid builder result into the canonical
+ * client-side hl_order action. The raw sign_action intentionally never crosses
+ * the chat stream; order_ref is the only capability the CLI needs to retrieve
+ * the authenticated WYSIWYS payload over the dedicated endpoint. */
+export function deriveHlOrderClientAction(toolName: string, output: unknown): { order_ref: string } | null {
+  if (!HL_ORDER_BUILD_TOOLS.has(toolName)) return null
+  let value = output
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value)
+    } catch {
+      return null
+    }
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const result = value as Record<string, unknown>
+  const expectedAction = toolName === 'build_hyperliquid_open_position' ? 'open' : 'close'
+  const expectedReduceOnly = expectedAction === 'close'
+  if (
+    result.surface !== 'hyperliquid_order' ||
+    result.status !== 'ready_to_sign' ||
+    result.action !== expectedAction ||
+    typeof result.order_ref !== 'string' ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(result.order_ref) ||
+    typeof result.coin !== 'string' ||
+    !Number.isInteger(result.asset_index) ||
+    typeof result.wire_size !== 'string' ||
+    typeof result.price_cap !== 'string' ||
+    typeof result.wire_notional_usd !== 'string' ||
+    !['Ioc', 'Gtc', 'Alo'].includes(String(result.tif)) ||
+    result.reduce_only !== expectedReduceOnly
+  ) {
+    return null
+  }
+  return { order_ref: result.order_ref }
+}
 
 // Map a v1 frame type to the legacy 'running' | 'done' lifecycle. The v1
 // protocol never sends `status` on tool frames (see protocol_v1.go) so the
@@ -286,7 +331,7 @@ function getToolInput(parsed: SSEPayload): Record<string, unknown> {
     : {}
 }
 
-export class AgentClient {
+export class AgentClient implements HlOrderTransport {
   private baseUrl: string
   private authToken: string | null = null
   private profile: string = ''
@@ -389,7 +434,10 @@ export class AgentClient {
     try {
       res = await fetch(`${this.baseUrl}/auth/token`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...this.profileHeader() },
+        headers: {
+          'Content-Type': 'application/json',
+          ...this.profileHeader(),
+        },
         body: JSON.stringify(req),
         signal: this.timeoutSignal(),
       })
@@ -413,7 +461,9 @@ export class AgentClient {
     try {
       // A timeout aborts the fetch → caught here → reported unhealthy, so a
       // hung backend never blocks init indefinitely.
-      const res = await fetch(`${this.baseUrl}/healthz`, { signal: this.timeoutSignal() })
+      const res = await fetch(`${this.baseUrl}/healthz`, {
+        signal: this.timeoutSignal(),
+      })
       return res.ok
     } catch {
       return false
@@ -441,6 +491,40 @@ export class AgentClient {
 
   async deleteConversation(conversationId: string, publicKey: string): Promise<void> {
     await this.delete(`/agent/conversations/${conversationId}`, {
+      public_key: publicKey,
+    })
+  }
+
+  async retrieveHlOrderSigningPayload(
+    orderRef: string,
+    conversationId: string,
+    publicKey: string
+  ): Promise<HlOrderSigningPayload> {
+    return this.post<HlOrderSigningPayload>(
+      `/agent/hyperliquid/orders/${encodeURIComponent(orderRef)}/signing-payload`,
+      {
+        conversation_id: conversationId,
+        public_key: publicKey,
+      }
+    )
+  }
+
+  async submitHlOrder(
+    orderRef: string,
+    conversationId: string,
+    publicKey: string,
+    signatures: HlOrderSignature[]
+  ): Promise<HlOrderStatus> {
+    return this.post<HlOrderStatus>(`/agent/hyperliquid/orders/${encodeURIComponent(orderRef)}/submit`, {
+      conversation_id: conversationId,
+      public_key: publicKey,
+      signatures,
+    })
+  }
+
+  async getHlOrderStatus(orderRef: string, conversationId: string, publicKey: string): Promise<HlOrderStatus> {
+    return this.post<HlOrderStatus>(`/agent/hyperliquid/orders/${encodeURIComponent(orderRef)}/status`, {
+      conversation_id: conversationId,
       public_key: publicKey,
     })
   }
@@ -809,7 +893,12 @@ export class AgentClient {
     process.stderr.write(`[SSE] unknown frame type: ${type}\n`)
     let warning = result.protocolWarnings[0]
     if (!warning) {
-      warning = { code: 'PROTOCOL_DRIFT', message: '', count: 0, eventTypes: [] }
+      warning = {
+        code: 'PROTOCOL_DRIFT',
+        message: '',
+        count: 0,
+        eventTypes: [],
+      }
       result.protocolWarnings.push(warning)
     }
     warning.count += 1
@@ -893,8 +982,23 @@ export class AgentClient {
     const label = typeof parsed.label === 'string' ? parsed.label : undefined
     this.maybeEmitClientSideToolCall(parsed, callbacks, v1Type, callId, toolName)
 
-    const ok = deriveToolDoneOk(status, parsed.output, v1Type)
+    const hlOrderAction =
+      status === 'done' && toolName && HL_ORDER_BUILD_TOOLS.has(toolName)
+        ? deriveHlOrderClientAction(toolName, parsed.output)
+        : undefined
+    const derivedOk = deriveToolDoneOk(status, parsed.output, v1Type)
+    const ok = hlOrderAction === null ? false : derivedOk
     if (status && toolName) callbacks.onToolProgress?.(toolName, status, label, ok)
+    if (status === 'done' && toolName && HL_ORDER_BUILD_TOOLS.has(toolName)) {
+      if (hlOrderAction && callId && callbacks.onClientSideToolCall) {
+        callbacks.onClientSideToolCall(`${callId}:hl_order`, 'hl_order', hlOrderAction)
+      } else {
+        callbacks.onError?.(
+          'Hyperliquid preview was not delivered as a complete ready-to-sign action.',
+          AgentErrorCode.INVALID_INPUT
+        )
+      }
+    }
     this.maybeSignToolOutput(status, toolName, parsed.output, callbacks, v1Type)
     if (status === 'done' && callId) toolNameByCallId.delete(callId)
   }
