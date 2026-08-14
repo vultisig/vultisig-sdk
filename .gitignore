@@ -1,5 +1,10 @@
 # Node dependencies
-node_modules/
+# NO trailing slash: `node_modules/` only matches a real DIRECTORY, so an accidental
+# node_modules SYMLINK (-> another machine's clone) sails straight through `git add -A` -
+# it's a dangling symlink (plain file to git) on every machine except the one that made it.
+# The bare pattern matches file, symlink, or directory. See agent-backend-ts's .gitignore
+# (fixed the same way after 3 re-tracking incidents) and vultisig-sdk#1920.
+node_modules
 npm-debug.log
 yarn-error.log
 
