@@ -118,7 +118,13 @@ function createMockVault() {
       fromCoin: { ticker: 'ETH', decimals: 18 },
       toCoin: { ticker: 'BTC', decimals: 8 },
       warnings: [],
-      quote: { general: { provider: '1inch', tx: { evm: { from: '0x', to: '0x', data: '0x', value: '0', gasLimit: 21_000n } }, dstAmount: '100' } },
+      quote: {
+        general: {
+          provider: '1inch',
+          tx: { evm: { from: '0x', to: '0x', data: '0x', value: '0', gasLimit: 21_000n } },
+          dstAmount: '100',
+        },
+      },
       fees: { network: BigInt(1000000000000000), total: BigInt(1000000000000000) },
     }),
     prepareSwapTx: vi.fn().mockResolvedValue({
@@ -765,7 +771,13 @@ describe('swap', () => {
         fromCoin: { ticker: 'ETH', decimals: 18 },
         toCoin: { ticker: 'BTC', decimals: 8 },
         warnings: [],
-        quote: { general: { provider: '1inch', tx: { evm: { from: '0x', to: '0x', data: '0x', value: '0', gasLimit: 21_000n } }, dstAmount: '100' } },
+        quote: {
+          general: {
+            provider: '1inch',
+            tx: { evm: { from: '0x', to: '0x', data: '0x', value: '0', gasLimit: 21_000n } },
+            dstAmount: '100',
+          },
+        },
         fees: { network: 1_000_000_000_000_000n, total: 1_000_000_000_000_000n },
       })
       .mockResolvedValueOnce({
@@ -775,7 +787,13 @@ describe('swap', () => {
         fromCoin: { ticker: 'ETH', decimals: 18 },
         toCoin: { ticker: 'BTC', decimals: 8 },
         warnings: [],
-        quote: { general: { provider: '1inch', tx: { evm: { from: '0x', to: '0x', data: '0x', value: '0', gasLimit: 21_000n } }, dstAmount: '99' } },
+        quote: {
+          general: {
+            provider: '1inch',
+            tx: { evm: { from: '0x', to: '0x', data: '0x', value: '0', gasLimit: 21_000n } },
+            dstAmount: '99',
+          },
+        },
         fees: { network: 1_000_000_000_000_000n, total: 1_000_000_000_000_000n },
       })
 
@@ -796,9 +814,7 @@ describe('swap', () => {
       2,
       expect.objectContaining({ amount: '0.999', recipient: undefined })
     )
-    expect(actualVault.prepareSwapTx).toHaveBeenCalledWith(
-      expect.objectContaining({ amount: '0.999' })
-    )
+    expect(actualVault.prepareSwapTx).toHaveBeenCalledWith(expect.objectContaining({ amount: '0.999' }))
   })
 
   it('fails closed for swap(max) when the quote cannot compute a fee-safe native amount', async () => {
@@ -811,7 +827,13 @@ describe('swap', () => {
       fromCoin: { ticker: 'BTC', decimals: 8 },
       toCoin: { ticker: 'ETH', decimals: 18 },
       warnings: [],
-      quote: { general: { provider: 'swapkit', tx: { transfer: { to: 'bc1qdeposit', amount: 99_500_000n, memo: 'memo' } }, dstAmount: '100' } },
+      quote: {
+        general: {
+          provider: 'swapkit',
+          tx: { transfer: { to: 'bc1qdeposit', amount: 99_500_000n, memo: 'memo' } },
+          dstAmount: '100',
+        },
+      },
       fees: { network: 0n, total: 0n },
     })
     actualVault.balanceService.getBalance = vi.fn().mockResolvedValue({ amount: '100000000' })
@@ -826,7 +848,8 @@ describe('swap', () => {
       })
     ).rejects.toMatchObject({
       code: VaultErrorCode.InvalidAmount,
-      message: 'Cannot swap max BTC: source-chain network fee is not computable from the quote; choose an explicit amount',
+      message:
+        'Cannot swap max BTC: source-chain network fee is not computable from the quote; choose an explicit amount',
     })
     expect(actualVault.prepareSwapTx).not.toHaveBeenCalled()
   })

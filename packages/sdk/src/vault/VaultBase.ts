@@ -2033,7 +2033,10 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
         )
       }
 
-      const feeAwareAmount = this.validateHumanSwapAmount(this.formatUnits(quote.maxSwapable, fromToken.decimals), fromToken.decimals)
+      const feeAwareAmount = this.validateHumanSwapAmount(
+        this.formatUnits(quote.maxSwapable, fromToken.decimals),
+        fromToken.decimals
+      )
       if (feeAwareAmount !== normalizedAmount) {
         normalizedAmount = feeAwareAmount
         quote = await this.getSwapQuote({

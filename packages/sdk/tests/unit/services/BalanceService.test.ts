@@ -153,7 +153,7 @@ describe('BalanceService', () => {
     })
     const service = makeReadService([collisionTokenA, collisionTokenB])
     const proto = VaultBase.prototype as unknown as Record<string, (...args: never[]) => unknown>
-    const getSwapQuote = vi.fn().mockResolvedValue({ provider: 'test' })
+    const getSwapQuote = vi.fn().mockResolvedValue({ provider: 'test', maxSwapable: 5_000_000n })
     const vault = {
       _tokens: { [Chain.Ethereum]: [collisionTokenA, collisionTokenB] },
       getTokens: proto.getTokens,
