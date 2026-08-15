@@ -119,9 +119,38 @@ describe('compareCosts', () => {
     const res = await compareCosts({ chains: ['Base'] })
 
     expect(res.results).toHaveLength(1)
+    // Display clamps to the smallest renderable gwei value...
     expect(res.results[0].gasPriceGwei).toBe(0.0001)
-    expect(res.results[0].estTxCostNative).toBeCloseTo(0.0001 * 1e-9 * 21_000, 18)
+    // ...but cost math must use the exact wei price (49_999), not the
+    // clamped 0.0001 gwei (which would overstate the true cost).
+    expect(res.results[0].estTxCostNative).toBeCloseTo((49_999 * 21_000) / 1e18, 18)
     expect(res.cheapest?.chain).toBe('Base')
+  })
+
+  it('ranks two sub-display chains by exact wei, not the tied display-clamped gwei', async () => {
+    // Both wei prices round to the SAME clamped 0.0001 gwei for display
+    // (true gwei < 0.00005), but differ ~5x in reality. Cost math (and
+    // therefore cheapest-first ranking) must be based on the real wei value,
+    // never the display clamp - otherwise these two chains would tie or the
+    // more expensive one could be crowned cheapest.
+    const byChain: Record<string, bigint> = {
+      Base: 10_001n, // ~0.5x cheaper in reality
+      Optimism: 49_999n,
+    }
+    let call = 0
+    const order = ['Base', 'Optimism']
+    mockGetGasPrice.mockImplementation(() => Promise.resolve(byChain[order[call++]]))
+
+    const res = await compareCosts({ chains: ['Base', 'Optimism'] })
+
+    // Both display-clamp to the same gwei figure...
+    expect(res.results.find(r => r.chain === 'Base')?.gasPriceGwei).toBe(0.0001)
+    expect(res.results.find(r => r.chain === 'Optimism')?.gasPriceGwei).toBe(0.0001)
+    // ...yet ranking correctly favors the chain with the lower real wei price.
+    expect(res.results.map(r => r.chain)).toEqual(['Base', 'Optimism'])
+    expect(res.cheapest?.chain).toBe('Base')
+    expect(res.results.find(r => r.chain === 'Base')?.estTxCostNative).toBeCloseTo((10_001 * 21_000) / 1e18, 18)
+    expect(res.results.find(r => r.chain === 'Optimism')?.estTxCostNative).toBeCloseTo((49_999 * 21_000) / 1e18, 18)
   })
 
   it('is fail-soft: a failing RPC lands in skipped, not a rejection', async () => {
