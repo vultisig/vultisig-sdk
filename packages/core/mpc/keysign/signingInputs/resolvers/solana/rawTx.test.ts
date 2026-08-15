@@ -253,13 +253,13 @@ describe('signSolana pipeline e2e (encode → hash → sign → compile)', () =>
         expect(hashes).toHaveLength(1)
         const [message] = hashes
 
-        // EdDSA 'raw' format: generateSignature reverses each 32-byte half.
+        // EdDSA 'raw' format uses canonical R || S byte order end to end.
         const rawSignature = privateKey.sign(message, walletCore.Curve.ed25519)
         const signatures = {
           [hex(message)]: {
             msg: '',
-            r: hex(new Uint8Array(rawSignature.slice(0, 32)).reverse()),
-            s: hex(new Uint8Array(rawSignature.slice(32, 64)).reverse()),
+            r: hex(rawSignature.slice(0, 32)),
+            s: hex(rawSignature.slice(32, 64)),
             der_signature: '',
           },
         }

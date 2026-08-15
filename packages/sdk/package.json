@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/sdk",
-  "version": "4.1.0",
+  "version": "4.6.0",
   "description": "The self-custody MPC wallet SDK for AI agents. Bitcoin, Ethereum, Solana & 36+ chains via DKLS23 threshold signatures. TypeScript, multi-platform (Node, browser, React Native).",
   "type": "module",
   "main": "dist/index.node.cjs",
@@ -114,6 +114,42 @@
       "import": "./dist/tools/bridge/index.js",
       "require": "./dist/tools/bridge/index.cjs",
       "default": "./dist/tools/bridge/index.cjs"
+    },
+    "./seedphrase": {
+      "types": "./dist/seedphrase/index.d.ts",
+      "node": {
+        "import": "./dist/seedphrase/index.js",
+        "require": "./dist/seedphrase/index.cjs"
+      },
+      "import": "./dist/seedphrase/index.js",
+      "require": "./dist/seedphrase/index.cjs",
+      "default": "./dist/seedphrase/index.cjs"
+    },
+    "./tools/decode": {
+      "types": "./dist/tools/decode/index.d.ts",
+      "browser": "./dist/tools/decode/index.js",
+      "worker": "./dist/tools/decode/index.js",
+      "react-native": "./dist/tools/decode/index.js",
+      "node": {
+        "import": "./dist/tools/decode/index.js",
+        "require": "./dist/tools/decode/index.cjs"
+      },
+      "import": "./dist/tools/decode/index.js",
+      "require": "./dist/tools/decode/index.cjs",
+      "default": "./dist/tools/decode/index.cjs"
+    },
+    "./tx": {
+      "types": "./dist/tx/index.d.ts",
+      "browser": "./dist/tx/index.js",
+      "worker": "./dist/tx/index.js",
+      "react-native": "./dist/tx/index.js",
+      "node": {
+        "import": "./dist/tx/index.js",
+        "require": "./dist/tx/index.cjs"
+      },
+      "import": "./dist/tx/index.js",
+      "require": "./dist/tx/index.cjs",
+      "default": "./dist/tx/index.cjs"
     }
   },
   "scripts": {

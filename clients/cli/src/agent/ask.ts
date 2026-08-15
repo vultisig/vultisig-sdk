@@ -11,11 +11,24 @@
  *   vultisig agent ask "What is my HYPE balance?" --vault t1 --password 1
  *   vultisig agent ask "Send 0.01567 HYPE to myself" --session <id> --vault t1 --password 1
  */
-import type { AgentErrorCode } from './agentErrors'
-import { isTerminalAgentErrorCode } from './agentErrors'
-import type { BalanceSummaryCard, PolymarketMarketsCard, TurnOutcome, YieldOpportunitiesCard } from './cards'
+import { AgentErrorCode, isTerminalAgentErrorCode } from './agentErrors'
+import type {
+  AgentCard,
+  BalanceSummaryCard,
+  HlOrderConfirmationCard,
+  PolymarketMarketsCard,
+  TurnOutcome,
+  YieldOpportunitiesCard,
+} from './cards'
 import type { AgentSession } from './session'
-import type { ProposedTransaction, ProtocolWarning, Suggestion, TxLifecycleStatus, UICallbacks } from './types'
+import type {
+  ProposedTransaction,
+  ProtocolWarning,
+  SigningRecord,
+  Suggestion,
+  TxLifecycleStatus,
+  UICallbacks,
+} from './types'
 
 export type AskResult = {
   sessionId: string
@@ -39,7 +52,7 @@ export type AskResult = {
     status?: TxLifecycleStatus
   }>
   /** Server-built balance_summary cards rendered this turn. */
-  cards: BalanceSummaryCard[]
+  cards: AgentCard[]
   /** Server-built yield_opportunities cards rendered this turn (rj3p). */
   yieldCards: YieldOpportunitiesCard[]
   /** Server-built polymarket_markets cards rendered this turn (rj3p). */
@@ -70,6 +83,8 @@ export type AskResult = {
    * stated cause (missing tool / failed build / unconfirmable broadcast) was wrong.
    */
   proposedTransaction?: ProposedTransaction
+  /** Signing requests approved this turn, recorded after their signing bodies ran (with outcome). */
+  signingRecords: SigningRecord[]
 }
 
 export class AskInterface {
@@ -79,12 +94,13 @@ export class AskInterface {
   private responseParts: string[] = []
   private toolCalls: AskResult['toolCalls'] = []
   private transactions: AskResult['transactions'] = []
-  private cards: BalanceSummaryCard[] = []
+  private cards: AgentCard[] = []
   private yieldCards: YieldOpportunitiesCard[] = []
   private polymarketCards: PolymarketMarketsCard[] = []
   private warnings: ProtocolWarning[] = []
   private outcome: TurnOutcome | undefined
   private proposedTransaction: ProposedTransaction | undefined
+  private signingRecords: SigningRecord[] = []
   private error: AskResult['error']
   // Tracks whether the currently-latched `error` is a terminal one (e.g. the
   // depth cap). A terminal error may overwrite a prior non-terminal one; once a
@@ -151,6 +167,15 @@ export class AskInterface {
         this.cards.push(card)
       },
 
+      onHlOrderConfirmation: (card: HlOrderConfirmationCard) => {
+        this.cards.push(card)
+        this.outcome = {
+          kind: 'blocked',
+          code: AgentErrorCode.CONFIRMATION_REQUIRED,
+          detail: 'Explicit approval is required before signing this Hyperliquid order.',
+        }
+      },
+
       onYieldOpportunities: (card: YieldOpportunitiesCard) => {
         this.yieldCards.push(card)
       },
@@ -160,6 +185,13 @@ export class AskInterface {
       },
 
       onTurnOutcome: (outcome: TurnOutcome) => {
+        // A local signing refusal is the terminal truth for this client turn. The
+        // backend may have already emitted (or may race in with) its pre-ceremony
+        // `success` outcome while the queued hl_order retrieval is still running;
+        // never let that stale server classification overwrite the local gate.
+        if (this.outcome?.kind === 'blocked' && this.outcome.code === AgentErrorCode.CONFIRMATION_REQUIRED) {
+          return
+        }
         // Latch the LAST outcome of the turn. The backend emits exactly one at turn
         // end, but a multi-request action loop (a sign that triggers a follow-up
         // recent_actions turn) can produce more than one across requests — the last
@@ -171,6 +203,10 @@ export class AskInterface {
         // Last one wins: a turn gates at most one signable payload, but a
         // multi-step flow could gate again — the latest is the one still pending.
         this.proposedTransaction = proposed
+      },
+
+      onSigningRecord: (record: SigningRecord) => {
+        this.signingRecords.push(record)
       },
 
       onSuggestions: (_suggestions: Suggestion[]) => {
@@ -250,6 +286,7 @@ export class AskInterface {
     this.warnings = []
     this.outcome = undefined
     this.proposedTransaction = undefined
+    this.signingRecords = []
     // Each turn's error (and its terminal flag) is turn-local — reset every turn.
     this.error = undefined
     this.errorIsTerminal = false
@@ -278,6 +315,7 @@ export class AskInterface {
       yieldCards: this.yieldCards,
       polymarketCards: this.polymarketCards,
       warnings: this.warnings,
+      signingRecords: this.signingRecords,
       error: this.error,
       ...(this.outcome ? { outcome: this.outcome } : {}),
       ...(this.proposedTransaction ? { proposedTransaction: this.proposedTransaction } : {}),
