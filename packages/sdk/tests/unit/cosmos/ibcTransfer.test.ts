@@ -286,4 +286,24 @@ describe('prepareIbcTransfer', () => {
     expect(dests).toContain('noble-1')
     expect(dests).toEqual([...dests].sort())
   })
+
+  it('supportedIbcDestinationsFrom accepts canonical Vultisig names, matching the chain-ID result', () => {
+    expect(supportedIbcDestinationsFrom('Osmosis')).toEqual(supportedIbcDestinationsFrom('osmosis-1'))
+    expect(supportedIbcDestinationsFrom('Cosmos')).toEqual(supportedIbcDestinationsFrom('cosmoshub-4'))
+    expect(supportedIbcDestinationsFrom('Osmosis')).toContain('cosmoshub-4')
+    expect(supportedIbcDestinationsFrom('Cosmos')).toContain('osmosis-1')
+  })
+
+  it('agrees with prepareIbcTransfer on which canonical source names resolve to a route', () => {
+    // Cross-consistency guard: every canonical name that prepareIbcTransfer
+    // resolves to a chain-ID with at least one route must also be recognised
+    // by supportedIbcDestinationsFrom for that same canonical input — catches
+    // future drift between the two entry points.
+    for (const name of ['Cosmos', 'Osmosis', 'Terra', 'TerraClassic', 'Kujira', 'Akash', 'Noble', 'Dydx', 'Stride']) {
+      const chainId = normaliseIbcChainId(name)
+      const byChainId = supportedIbcDestinationsFrom(chainId)
+      const byCanonicalName = supportedIbcDestinationsFrom(name)
+      expect(byCanonicalName).toEqual(byChainId)
+    }
+  })
 })

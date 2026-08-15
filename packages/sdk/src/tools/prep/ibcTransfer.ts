@@ -128,10 +128,17 @@ function resolveSourceChannelByDestChain(fromChain: string, toChainId: string): 
   return IBC_CHANNEL_BY_ROUTE.get(`${fromChain}→${toChainId}`) ?? null
 }
 
-/** Supported destination chain-IDs reachable FROM the given source chain. */
+/**
+ * Supported destination chain-IDs reachable FROM the given source chain.
+ * Accepts both Vultisig canonical names ("Osmosis") and plain IBC chain-IDs
+ * ("osmosis-1") — normalised through the same `normaliseIbcChainId()` alias
+ * table `prepareIbcTransfer()` uses, so the two functions never disagree on
+ * what counts as a valid source chain for the same input.
+ */
 export function supportedIbcDestinationsFrom(fromChain: string): string[] {
+  const normalised = normaliseIbcChainId(fromChain)
   return Array.from(IBC_CHANNEL_BY_ROUTE.keys())
-    .filter(routeKey => routeKey.startsWith(`${fromChain}→`))
+    .filter(routeKey => routeKey.startsWith(`${normalised}→`))
     .map(routeKey => routeKey.split('→')[1]!)
     .sort()
 }
