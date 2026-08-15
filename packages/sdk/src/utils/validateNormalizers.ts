@@ -343,28 +343,56 @@ export const feeMatches = (
 // the symbol is real / grounded (that is the agent layer's job against tool
 // results).
 //
-// Mirrors the Go `symbolCandidateRe` shape EXACTLY (anchored here, \b-bounded
-// there): `[A-Z][A-Z0-9]{2,9}` base/pair — uppercase-only, min length 3 — with
-// the same `[a-zA-Z]{1,4}` dotted suffix. The Go matcher never lowercases the
-// candidate before matching (it only ToUppers for the allowlist compare), so a
-// lowercase or 2-char input does NOT match upstream; we reproduce that by
-// upper-casing in the callers below before testing, which keeps the SDK's
-// case-insensitive ergonomics (usdc.e -> USDC.E) while rejecting the same 2-char
-// tickers (OP, ZK) the backend rejects. Previously this was `[A-Za-z][...]{1,9}`
-// which accepted 2-char + lowercase tickers the Go side drops — drift fixed.
-const SYMBOL_SHAPE = /^[A-Z][A-Z0-9]{2,9}(?:\.[a-zA-Z]{1,4})?(?:\/[A-Z][A-Z0-9]{2,9}(?:\.[a-zA-Z]{1,4})?)?$/
+// Mirrors the Go `symbolCandidateRe` shape (per-leg here, \b-bounded there):
+// `[A-Z][A-Z0-9]{2,9}` — uppercase-only, min length 3 — with the same
+// `[a-zA-Z]{1,4}` dotted suffix. That regex is a freeform-text CANDIDATE-
+// extraction heuristic (pulling ticker-shaped substrings out of an LLM
+// response), so it deliberately floors at 3 chars to avoid matching 2-letter
+// noise words ("ID", "US", "OK", ...).
+//
+// It is NOT the Go side's full contract, though: canonical already-known
+// tickers bypass that floor via a SEPARATE `knownTokenSymbols` allowlist
+// (`token_symbol.go`), which includes 2-char entries like `"OP": {}` and
+// `"ZK": {}` — real production tickers (Optimism, zkSync), not noise. This
+// SDK's own `tokenDecimals` registry above is the allowlist equivalent, so a
+// 2-char, letter-led ticker that's already a known registry entry bypasses
+// the extraction floor here too (#1945 — previously only the extraction
+// regex was ported, so `decimalsFor('OP')` resolved while
+// `isValidTokenSymbolFormat('OP')` rejected it: the same file blessed and
+// rejected the same symbol).
+const LEG_SHAPE = /^[A-Z][A-Z0-9]{2,9}(?:\.[a-zA-Z]{1,4})?$/
+const SHORT_TICKER_SHAPE = /^[A-Z][A-Z0-9]$/
+
+/**
+ * True for a 2-char, letter-led leg that is already a known ticker in
+ * {@link tokenDecimals} (e.g. OP, ZK). Lets a canonical short ticker bypass
+ * the 3-char extraction-regex floor, mirroring the Go backend's
+ * `knownTokenSymbols` allowlist bypass of `symbolCandidateRe`.
+ */
+const isKnownShortTicker = (leg: string): boolean => SHORT_TICKER_SHAPE.test(leg) && leg in tokenDecimals
+
+const isValidLeg = (leg: string): boolean => LEG_SHAPE.test(leg) || isKnownShortTicker(leg)
 
 /**
  * Returns true if `symbol` matches the canonical token-ticker FORMAT (length,
- * charset, optional dotted-suffix or slash-pair). Pure shape check — does not
- * assert the token exists. Mirrors the Go `symbolCandidateRe` shape, anchored.
+ * charset, optional dotted-suffix or slash-pair), OR is a known 2-char
+ * ticker already present in {@link tokenDecimals} (OP, ZK, ...). Pure shape
+ * check — does not assert the token exists on-chain. Mirrors the Go
+ * `symbolCandidateRe` shape plus the `knownTokenSymbols` allowlist bypass.
  *
  * Input is upper-cased before the shape test so the case-insensitive SDK
  * ergonomics hold while the underlying pattern stays uppercase-only (matching
  * the Go regex, which only ever sees uppercase candidates in practice).
+ * Slash-pairs are validated per-leg, so a known short ticker (OP) is valid
+ * both standalone and as one side of a pair (e.g. `OP/RUNE`).
  */
-export const isValidTokenSymbolFormat = (symbol: string): boolean =>
-  typeof symbol === 'string' && SYMBOL_SHAPE.test(symbol.trim().toUpperCase())
+export const isValidTokenSymbolFormat = (symbol: string): boolean => {
+  if (typeof symbol !== 'string') return false
+  const upper = symbol.trim().toUpperCase()
+  if (upper === '') return false
+  const legs = upper.split('/')
+  return legs.length <= 2 && legs.every(isValidLeg)
+}
 
 /**
  * Normalize a token symbol to its canonical uppercase form after validating

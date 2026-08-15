@@ -144,14 +144,22 @@ describe('token-symbol FORMAT validation', () => {
     }
   })
 
-  // Drift fix: mirror the Go `symbolCandidateRe` shape EXACTLY —
-  // `[A-Z][A-Z0-9]{2,9}` base/pair (3-10 chars, uppercase-only, letter-led).
-  // The previous SDK regex was `[A-Za-z][A-Za-z0-9]{1,9}` which accepted
-  // 2-char + lowercase tickers the backend extractor rejects.
-  it('rejects 2-char tickers (min length 3, matching Go)', () => {
-    // Go `[A-Z][A-Z0-9]{2,9}` requires >= 3 chars, so OP / ZK never match
-    // symbolCandidateRe upstream — the SDK must agree.
-    for (const s of ['OP', 'ZK', 'op', 'zk', 'A1']) {
+  // #1945: Go's `symbolCandidateRe` extraction regex floors at 3 chars (it's
+  // a freeform-text noise filter), but canonical 2-char tickers bypass that
+  // floor via the separate `knownTokenSymbols` allowlist, which includes
+  // "OP" and "ZK". The SDK's `tokenDecimals` registry is that allowlist
+  // equivalent, so any 2-char ticker already registered there must validate
+  // — matching the Go contract instead of only half of it.
+  it('accepts known 2-char registry tickers (OP, ZK) via the allowlist bypass', () => {
+    for (const s of ['OP', 'ZK', 'op', 'zk']) {
+      expect(isValidTokenSymbolFormat(s)).toBe(true)
+    }
+  })
+
+  it('still rejects 2-char tickers NOT in the registry (min length 3, matching Go)', () => {
+    // Go `[A-Z][A-Z0-9]{2,9}` requires >= 3 chars for anything not on the
+    // known-symbol allowlist — "A1" is neither shape-valid nor registered.
+    for (const s of ['A1', 'ZZ', 'xy']) {
       expect(isValidTokenSymbolFormat(s)).toBe(false)
     }
   })
@@ -168,14 +176,21 @@ describe('token-symbol FORMAT validation', () => {
     expect(isValidTokenSymbolFormat('ABCDEFGHIJK')).toBe(false) // 11
   })
 
-  it('rejects a 2-char leg inside a slash-pair', () => {
-    // Each leg must independently satisfy the 3-char minimum.
-    expect(isValidTokenSymbolFormat('RUNE/OP')).toBe(false)
-    expect(isValidTokenSymbolFormat('OP/RUNE')).toBe(false)
+  it('validates each leg independently — a known short ticker is fine in a pair, an unknown one is not', () => {
+    // OP is a registered 2-char ticker, so it's valid on either side of a pair.
+    expect(isValidTokenSymbolFormat('RUNE/OP')).toBe(true)
+    expect(isValidTokenSymbolFormat('OP/RUNE')).toBe(true)
+    // "A1" is still not a registered short ticker, so the pair stays invalid.
+    expect(isValidTokenSymbolFormat('RUNE/A1')).toBe(false)
   })
 
-  it('throws when normalizing a now-too-short ticker', () => {
-    expect(() => normalizeTokenSymbol('op')).toThrow(ValidateNormalizerError)
+  it('throws when normalizing an unregistered too-short ticker', () => {
+    expect(() => normalizeTokenSymbol('zz')).toThrow(ValidateNormalizerError)
+  })
+
+  it('normalizes a known short ticker (OP) to its canonical uppercase form', () => {
+    expect(normalizeTokenSymbol('op')).toEqual({ symbol: 'OP', parts: ['OP'] })
+    expect(normalizeTokenSymbol('RUNE/zk')).toEqual({ symbol: 'RUNE/ZK', parts: ['RUNE', 'ZK'] })
   })
 
   it('normalizes to uppercase and splits pairs', () => {
@@ -185,5 +200,21 @@ describe('token-symbol FORMAT validation', () => {
 
   it('throws on invalid symbol normalization', () => {
     expect(() => normalizeTokenSymbol('!!!')).toThrow(ValidateNormalizerError)
+  })
+})
+
+describe('registry <-> format-validator cross-consistency (#1945 regression)', () => {
+  // Guards against this file's two sources of truth drifting apart again:
+  // a ticker the decimals registry knows about must also be a validate-able
+  // token symbol. Digit-led entries (e.g. "1INCH") are intentionally
+  // excluded — Go's `symbolCandidateRe` extractor never emits digit-led
+  // candidates from freeform text, so that gap is a deliberate, separate
+  // contract and not the drift this test protects against.
+  it('every letter-led tokenDecimals entry passes isValidTokenSymbolFormat', () => {
+    const letterLedTickers = Object.keys(tokenDecimals).filter(ticker => /^[A-Z]/.test(ticker))
+    expect(letterLedTickers).toEqual(expect.arrayContaining(['OP', 'ZK']))
+    for (const ticker of letterLedTickers) {
+      expect(isValidTokenSymbolFormat(ticker)).toBe(true)
+    }
   })
 })
