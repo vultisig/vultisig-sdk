@@ -352,6 +352,26 @@ assert.equal(
   'root exposes sdk.cosmos.gov'
 )
 assert.equal(root.cosmos.gov.prepareCosmosVote, root.prepareCosmosVote, 'sdk.cosmos.gov keeps the flat vote helper')
+assert.equal(
+  root.defi.stakekit.parseActionDisplay,
+  root.parseActionDisplay,
+  'sdk.defi.stakekit exposes the canonical parseActionDisplay helper'
+)
+assert.equal(
+  root.defi.stakekit.buildYieldActionScanRequest,
+  root.buildYieldActionScanRequest,
+  'sdk.defi.stakekit exposes the canonical buildYieldActionScanRequest helper'
+)
+assert.equal(
+  root.defi.stakekit.validateStakekitActionAddress,
+  root.validateStakekitActionAddress,
+  'sdk.defi.stakekit exposes the canonical validateStakekitActionAddress helper'
+)
+assert.equal(
+  root.defi.stakekit.validateStakekitActionInput,
+  root.validateStakekitActionInput,
+  'sdk.defi.stakekit exposes the canonical validateStakekitActionInput helper'
+)
 
 assert.equal(typeof node.Vultisig, 'function', '@vultisig/sdk/node exports Vultisig')
 assert.equal(node.evm.encodeErc20Approve, node.encodeErc20Approve, '@vultisig/sdk/node exposes sdk.evm')
@@ -360,6 +380,11 @@ assert.equal(
   node.cosmos.gov.prepareCosmosVote,
   node.prepareCosmosVote,
   '@vultisig/sdk/node exposes sdk.cosmos.gov'
+)
+assert.equal(
+  node.defi.stakekit.parseActionDisplay,
+  node.parseActionDisplay,
+  '@vultisig/sdk/node exposes sdk.defi.stakekit.parseActionDisplay'
 )
 
 assert.equal(
@@ -386,6 +411,11 @@ assert.equal(
   browser.cosmos.gov.prepareCosmosVote,
   browser.prepareCosmosVote,
   '@vultisig/sdk/browser exposes sdk.cosmos.gov'
+)
+assert.equal(
+  browser.defi.stakekit.parseActionDisplay,
+  browser.parseActionDisplay,
+  '@vultisig/sdk/browser exposes sdk.defi.stakekit.parseActionDisplay'
 )
 assert.ok(vite && (vite.default || vite), '@vultisig/sdk/vite resolves')
 assert.equal(

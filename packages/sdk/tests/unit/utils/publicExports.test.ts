@@ -180,6 +180,22 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.defi.arkis.ARKIS_OFFICIAL_ADDRESSES.dispatcher).toBe('0x2f01D7CFfe62673B3D2b680295A2D047F3848e4c')
   })
 
+  it('exports the sdk.defi.stakekit namespace with the canonical display/parser/validation helpers', () => {
+    expect(sdk.defi.stakekit).toBeDefined()
+    expect(typeof sdk.defi.stakekit.search).toBe('function')
+    expect(typeof sdk.defi.stakekit.details).toBe('function')
+    expect(typeof sdk.defi.stakekit.balances).toBe('function')
+    expect(typeof sdk.defi.stakekit.buildEnter).toBe('function')
+    expect(typeof sdk.defi.stakekit.buildExit).toBe('function')
+    expect(typeof sdk.defi.stakekit.buildManage).toBe('function')
+    // Canonical helpers (issue #1913) — must be the SAME function reference as
+    // the flat root export, not a reimplementation, so both surfaces stay in sync.
+    expect(sdk.defi.stakekit.parseActionDisplay).toBe(sdk.parseActionDisplay)
+    expect(sdk.defi.stakekit.buildYieldActionScanRequest).toBe(sdk.buildYieldActionScanRequest)
+    expect(sdk.defi.stakekit.validateStakekitActionAddress).toBe(sdk.validateStakekitActionAddress)
+    expect(sdk.defi.stakekit.validateStakekitActionInput).toBe(sdk.validateStakekitActionInput)
+  })
+
   it('exports the full River helper family from the root sdk surface', () => {
     expect(typeof sdk.describeRiverMarket).toBe('function')
     expect(typeof sdk.findRiverInsertHints).toBe('function')
