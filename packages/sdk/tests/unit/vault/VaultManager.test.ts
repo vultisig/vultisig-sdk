@@ -612,7 +612,7 @@ describe('VaultManager', () => {
       const vult = encodeUnencryptedVult(buildMinimalSecureVaultBinary())
 
       await expect(manager.importVault(vult)).rejects.toMatchObject({
-        code: VaultImportErrorCode.CORRUPTED_DATA,
+        code: VaultImportErrorCode.PERSISTENCE_FAILED,
       })
       expect(await storage.get(`vault:${SYNTH_ECDSA_PK}`)).not.toBeNull()
       expect(await storage.get('activeVaultId')).toBeNull()
@@ -656,7 +656,7 @@ describe('VaultManager', () => {
         manager.importVault(replacement, undefined, {
           conflictResolution: 'replace',
         })
-      ).rejects.toMatchObject({ code: VaultImportErrorCode.CORRUPTED_DATA })
+      ).rejects.toMatchObject({ code: VaultImportErrorCode.PERSISTENCE_FAILED })
       expect((await storage.get<{ vultFileContent: string }>(`vault:${SYNTH_ECDSA_PK}`))?.vultFileContent).toBe(
         replacement
       )

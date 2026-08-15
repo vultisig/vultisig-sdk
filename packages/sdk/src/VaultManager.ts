@@ -502,8 +502,19 @@ export class VaultManager {
         onLegacyBackupMigrated?.(createLegacyBackupMigrationNotice(vaultInstance))
       }
 
-      // Set as active vault
-      await this.storage.set('activeVaultId', vaultId)
+      // Set as active vault. The vault record already committed durably above, so a
+      // failure here is a pointer-write failure, not data corruption - report it as
+      // PERSISTENCE_FAILED (matching vault.save() above) rather than falling through
+      // to the generic CORRUPTED_DATA catch-all below.
+      try {
+        await this.storage.set('activeVaultId', vaultId)
+      } catch (error) {
+        throw new VaultImportError(
+          VaultImportErrorCode.PERSISTENCE_FAILED,
+          `Failed to set imported vault as active: ${(error as Error).message}`,
+          error as Error
+        )
+      }
 
       return { vault: vaultInstance, legacyBackupMigrated }
     } catch (error) {
