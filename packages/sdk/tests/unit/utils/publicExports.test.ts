@@ -138,7 +138,9 @@ describe('@vultisig/sdk public exports', () => {
     expect(tx.functionSelector).toBe('transfer(address,uint256)')
     expect(tx.parameter).toHaveLength(128)
     expect(sdk.encodeTrc20TransferParam('TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH', '1000000')).toBe(tx.parameter)
-    expect(sdk.tronBase58ToEvmHex('TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH')).toBe('c8599111f29c1e1e061265b4af93ea1f274ad78a')
+    expect(sdk.tronBase58ToEvmHex('TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH')).toBe(
+      'c8599111f29c1e1e061265b4af93ea1f274ad78a'
+    )
     expect(sdk.tronBase58ToHex('TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH')).toBe('41c8599111f29c1e1e061265b4af93ea1f274ad78a')
     expect(sdk.tronHexToBase58('41c8599111f29c1e1e061265b4af93ea1f274ad78a')).toBe('TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH')
   })

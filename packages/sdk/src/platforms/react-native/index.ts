@@ -294,12 +294,7 @@ export { buildCw20TransferMsg } from '../../tools/prep/cw20Transfer'
 // rather than a lazy `await import(...)` wrapper. `POLKADOT_ASSET_HUB_KNOWN_ASSETS`
 // is a plain const map. Omitting these broke RN/vultiagent-app consumption of the
 // Asset Hub send builder (same hand-curated-allow-list gap as prior prep builders).
-export {
-  encodeTrc20TransferParam,
-  tronBase58ToEvmHex,
-  tronBase58ToHex,
-  tronHexToBase58,
-} from '../../abi'
+export { encodeTrc20TransferParam, tronBase58ToEvmHex, tronBase58ToHex, tronHexToBase58 } from '../../abi'
 export { POLKADOT_ASSET_HUB_KNOWN_ASSETS, preparePolkadotAssetSend } from '../../tools/prep/polkadotAssetSend'
 export { SUI_NATIVE_COIN_TYPE } from '../../tools/prep/suiTokenTransfer'
 export { TRC20_TRANSFER_SELECTOR } from '../../tools/prep/trc20'
