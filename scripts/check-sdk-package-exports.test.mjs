@@ -233,7 +233,7 @@ test('runtime export keys are collected from the packed module and empty modules
     mkdirSync(path.join(root, 'dist'), { recursive: true })
     writeFileSync(
       path.join(root, 'dist/with-exports.mjs'),
-      "export const normalizeMnemonic = (value) => value.trim()\nexport class SeedphraseValidator {}\n"
+      'export const normalizeMnemonic = (value) => value.trim()\nexport class SeedphraseValidator {}\n'
     )
     writeFileSync(path.join(root, 'dist/empty.mjs'), 'export {}\n')
 
