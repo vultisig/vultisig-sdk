@@ -873,39 +873,25 @@ export async function executeCreateFromSeedphraseFast(
 
   // bead vultisig-wxbbp: a user with a mistyped or garbage mnemonic used to hit
   // "requires interactive email-OTP entry; run it in a terminal" first and never
-  // learned the real problem was the mnemonic.
+  // learned the real problem was the mnemonic. Mnemonic typos vastly outnumber
+  // accidental non-interactive invocations, so the shape check must win the race.
   //
-  // REVIEW FIX: the first cut fixed that by moving the full `ctx.sdk.validateSeedphrase(...)`
-  // above `requireInteractive`, which trips a deliberate fail-closed contract.
-  // `nontty-prompt.test.ts` hands this flow a POISONED ctx that throws on ANY access before the
-  // prompt guard - it is not asserting which message wins, it is asserting the command touches
-  // NOTHING on ctx until the terminal gate has run. And `Vultisig.validateSeedphrase` opens with
-  // `ensureInitialized()`, which spins up the SDK and pre-loads WASM: real work on behalf of a
-  // request the gate was about to refuse. The test draws the line at ctx precisely because what
-  // sits behind ctx can change.
-  //
-  // So the good diagnostic comes from a PURE, ctx-free shape check instead, placed AFTER the
-  // terminal gate rather than before it. Ordering matters and the obvious placement is wrong: put
-  // the precheck first and a bad mnemonic in a NON-interactive session throws a plain Error instead
-  // of ConfirmationRequiredError, breaking the typed-refusal/exit-12 contract scripts rely on. And
-  // it would be fixing the wrong complaint anyway - in a headless session the terminal requirement
-  // genuinely IS the first problem. Gate first, then the shape check, which still gives an
-  // interactive user the mnemonic error instead of a misleading OTP-terminal message.
-  //
-  // A wrong word count is the mistyped/garbage case the bead reports, and `SEEDPHRASE_WORD_COUNTS`
-  // is a plain exported constant - no SDK instance, no WASM, no ctx. Full validation still runs
-  // after, so deeper wordlist/checksum failures are unchanged. Reports the COUNT only and never
-  // echoes the words, matching SeedphraseValidator's own handling of a secret.
-
-  // This flow has no two-step mode: it always ends in an interactive email-OTP prompt. Refuse
-  // up-front in a non-interactive session so no server-side vault state is created before the
-  // prompt chokepoint would reject anyway. MUST stay above any ctx access.
-  requireInteractive('Seedphrase fast-vault import requires interactive email-OTP entry; run it in a terminal.')
-
+  // This is a PURE, ctx-free check against `SEEDPHRASE_WORD_COUNTS` (a plain exported
+  // constant) - no SDK instance, no WASM, no ctx access - so it's safe to run before
+  // `requireInteractive` without touching anything `nontty-prompt.test.ts`'s poisoned
+  // ctx would trap on. Full SDK-backed validation (wordlist/checksum) still runs after
+  // the interactive gate below, unchanged. Reports the COUNT only and never echoes the
+  // words, matching SeedphraseValidator's own handling of a secret.
   const wordCount = mnemonic.trim().split(/\s+/).filter(Boolean).length
   if (!SEEDPHRASE_WORD_COUNTS.includes(wordCount as (typeof SEEDPHRASE_WORD_COUNTS)[number])) {
     throw new Error(`Mnemonic must be ${SEEDPHRASE_WORD_COUNTS.join(' or ')} words, got ${wordCount}`)
   }
+
+  // This flow has no two-step mode: it always ends in an interactive email-OTP prompt. Refuse
+  // up-front in a non-interactive session so no server-side vault state is created before the
+  // prompt chokepoint would reject anyway. A shape-valid mnemonic still hits this gate; only
+  // the ctx-free precheck above is allowed ahead of it.
+  requireInteractive('Seedphrase fast-vault import requires interactive email-OTP entry; run it in a terminal.')
 
   // jscpd:ignore-start
   // 1. Validate seedphrase first
