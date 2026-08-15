@@ -41,7 +41,7 @@ export { ValidationHelpers } from './utils/validation'
 // PUBLIC API - Server-Assisted Fast Vault Helpers
 // ============================================================================
 
-export type { ServerEndpoints } from './server/ServerManager'
+export type { VaultFromServerResponse } from './server'
 export {
   checkVaultExistsOnServer,
   createVaultWithServer,
@@ -56,7 +56,7 @@ export {
   signWithServer,
   verifyVaultEmailCode,
 } from './server'
-export type { VaultFromServerResponse } from './server'
+export type { ServerEndpoints } from './server/ServerManager'
 
 // ============================================================================
 // PUBLIC API - Conversion / Normalization Utilities (vault-free)

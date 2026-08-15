@@ -128,7 +128,7 @@ export type { WalletCoreLike } from '@vultisig/walletcore-native'
 // Server-assisted fast-vault helpers — pure fetch/query wrappers or config
 // types that are safe on React Native and let Station consume the canonical
 // SDK surface instead of deep-importing core-mpc internals.
-export type { ServerEndpoints } from '../../server/ServerManager'
+export type { VaultFromServerResponse } from '../../server'
 export {
   checkVaultExistsOnServer,
   createVaultWithServer,
@@ -143,7 +143,7 @@ export {
   signWithServer,
   verifyVaultEmailCode,
 } from '../../server'
-export type { VaultFromServerResponse } from '../../server'
+export type { ServerEndpoints } from '../../server/ServerManager'
 
 // Address derivation and chain utilities
 // RN wrappers accept WalletCoreLike from @vultisig/walletcore-native
