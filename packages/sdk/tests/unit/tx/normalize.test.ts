@@ -317,4 +317,39 @@ describe('splitMultiTx', () => {
       expect(leg['approval_tx']).toBeUndefined()
     }
   })
+
+  it('preserves camelCase metadata on transactions[] legs', () => {
+    const legs = splitMultiTx({
+      transactions: [
+        { to: '0xbridge', step: 'approve' },
+        { to: '0xbridge', step: 'bridge' },
+      ],
+      chain: 'Base',
+      chainId: '8453',
+      fromChain: 'Base',
+      toChain: 'Arbitrum',
+      provider: 'cctp',
+      fromSymbol: 'USDC',
+      toSymbol: 'USDC',
+      fromAddress: '0xfrom',
+      toAddress: '0xto',
+      fromDecimals: 6,
+      toDecimals: 6,
+    })
+
+    expect(legs).toHaveLength(2)
+    for (const leg of legs) {
+      expect(leg.chain).toBe('Base')
+      expect(leg.chainId).toBe('8453')
+      expect(leg.fromChain).toBe('Base')
+      expect(leg.toChain).toBe('Arbitrum')
+      expect(leg.provider).toBe('cctp')
+      expect(leg.fromSymbol).toBe('USDC')
+      expect(leg.toSymbol).toBe('USDC')
+      expect(leg.fromAddress).toBe('0xfrom')
+      expect(leg.toAddress).toBe('0xto')
+      expect(leg.fromDecimals).toBe(6)
+      expect(leg.toDecimals).toBe(6)
+    }
+  })
 })

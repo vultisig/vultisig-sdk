@@ -59,18 +59,34 @@ export class TxNormalizeError extends Error {
 
 const isJsonObject = (v: unknown): v is JsonObject => typeof v === 'object' && v !== null && !Array.isArray(v)
 
+/**
+ * Metadata fields copied onto each split leg (`wrapSingleTx`) and lifted to
+ * the outer envelope for flat `build_*` results (`normalizeTx`'s wrap step) so
+ * that `chain` / `chain_id` / `provider` / symbols / addresses / decimals ride
+ * along, in both snake_case and camelCase. Matches the `metadataKeys` slice in
+ * Go `wrapSingleTx`.
+ */
 const LEG_METADATA_KEYS = [
   'chain',
   'chain_id',
+  'chainId',
   'from_chain',
+  'fromChain',
   'to_chain',
+  'toChain',
   'provider',
   'from_symbol',
+  'fromSymbol',
   'to_symbol',
+  'toSymbol',
   'from_address',
+  'fromAddress',
   'to_address',
+  'toAddress',
   'from_decimals',
+  'fromDecimals',
   'to_decimals',
+  'toDecimals',
 ] as const
 
 const enrichRoutingMetadata = (txMap: JsonObject, args: NormalizeArgs): JsonObject => {
@@ -171,12 +187,6 @@ export const normalizeTx = (result: string | JsonObject, args: NormalizeArgs = {
 
   return enrichRoutingMetadata(txMap, args) as NormalizedTx
 }
-
-/**
- * Metadata fields copied from a multi-tx parent onto each split leg so that
- * `chain` / `chain_id` / `provider` / symbols / addresses / decimals ride along
- * on every leg. Matches the `metadataKeys` slice in Go `wrapSingleTx`.
- */
 
 /**
  * Wrap a single child tx under `txKey` and copy routing metadata from the
