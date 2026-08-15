@@ -115,7 +115,10 @@ export type TonTxBuilderResult = {
    * Encoded WalletCore TON SigningInput for an independent pre-dispatch
    * signing-hash check. Native and Jetton builders always provide it;
    * arbitrary prebuilt signing payloads cannot be represented by WalletCore
-   * and therefore omit it.
+   * and therefore omit it. `fastVaultSign` / `schnorrSign` now require this
+   * field for every `chain === 'ton'` sign — a result that omits it (i.e.
+   * anything from `buildTonTxFromSigningPayload`) will fail closed at
+   * dispatch time rather than reach MPC unchecked.
    */
   walletCoreTxInputData?: Uint8Array
   /**
@@ -616,6 +619,16 @@ function decodeSigningPayload(input: string): Cell {
  *          the decoded payload's serialized form (NOT the input
  *          string verbatim — equality holds at the byte level after
  *          BoC re-serialization).
+ *
+ * IMPORTANT: this result never carries `walletCoreTxInputData` — an opaque
+ * prebuilt payload's inner message can encode an arbitrary contract call
+ * (e.g. a yield.xyz staking-pool invocation), so it cannot be reliably
+ * reconstructed into a WalletCore `Transfer` for independent parity proof.
+ * `fastVaultSign` / `schnorrSign` require that field for every TON sign, so
+ * a caller that goes `buildTonTxFromSigningPayload(...) -> schnorrSign(...)`
+ * will now get a `MissingSigningParityInput` rejection instead of reaching
+ * MPC. There is currently no supported way to sign a prebuilt TON payload
+ * through the fast-sign path in this SDK version.
  */
 export function buildTonTxFromSigningPayload(opts: BuildTonTxFromSigningPayloadOptions): TonTxBuilderResult {
   const pubKey = hexToBytes(opts.publicKeyEd25519)
