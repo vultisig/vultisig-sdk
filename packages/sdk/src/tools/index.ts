@@ -15,6 +15,10 @@ export {
   type PolkadotNativeBalance,
 } from './balance'
 
+// Cross-chain balance reads grouped under `sdk.balance.*` (excludes the
+// Polkadot reads above — see `./balance/namespace` for why).
+export { balance, type BalanceNamespace } from './balance/namespace'
+
 // EVM utilities
 import * as evm from './evm'
 
@@ -43,6 +47,10 @@ export { cosmosBalanceChains, getCosmosBalance, isCosmosBalanceChain } from './b
 // Canonical bytes oracle (calldata -> chain-agnostic Envelope)
 export type { AssetRef, ChainFamily, DecodeFromToolResultInput, Envelope, EnvelopeKind } from './decode'
 export { decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from './decode'
+import * as decode from './decode'
+// Namespace handle so callers can use the documented `sdk.decode.*` ergonomic
+// alongside the flat named exports.
+export { decode }
 
 // DEX primitives (read-only / pure math + on-chain quotes — no signing, no broadcast)
 export * as dex from './dex'
@@ -125,6 +133,10 @@ export {
   NATIVE_COINGECKO_IDS,
   symbolFromCoinGeckoId,
 } from './price'
+import * as price from './price'
+// Namespace handle so callers can use the documented `sdk.price.*` ergonomic
+// alongside the flat named exports.
+export { price }
 
 // Cosmos governance (read proposals + build unsigned MsgVote envelope)
 import * as cosmos from './cosmos'
@@ -195,6 +207,10 @@ export {
   TERRA_LCD,
 } from './swap'
 
+// Grouped `sdk.swap.*` namespace (findSwapQuote + astroport + acrossQuote —
+// excludes jupiter/skip, see `./swap/namespace` for why).
+export { type Swap, swap } from './swap/namespace'
+
 // Bridge — Circle CCTP unsigned bridge/claim calldata builders
 export type {
   BuildCctpBridgeParams,
@@ -216,6 +232,10 @@ export {
   normalizeHexBytes,
   parseUsdcAmount,
 } from './bridge'
+import * as bridge from './bridge'
+// Namespace handle so callers can use the documented `sdk.bridge.*`
+// ergonomic alongside the flat named exports.
+export { bridge }
 
 // Gas / fee primitives (cosmos gas-fee label + gas limits)
 export {
@@ -402,6 +422,11 @@ export {
   type VaultIdentity,
   type WithdrawRewardsParams,
 } from './prep'
+
+// Grouped `sdk.prep.*` namespace (excludes buildSplTransfer + a handful of
+// other functions not yet proven React-Native-bundle-safe — see
+// `./prep/namespace` for why).
+export { type Prep, prep } from './prep/namespace'
 
 // Atomic chain helpers (re-exported from core for vault-free callers)
 export { getCoinBalance } from '@vultisig/core-chain/coin/balance'

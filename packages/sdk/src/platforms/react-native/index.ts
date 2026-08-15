@@ -48,8 +48,15 @@ import { NativeWalletCore } from '@vultisig/walletcore-native'
 import { configureDefaultStorage } from '../../context/defaultStorage'
 import { configureWasm } from '../../context/wasmRuntime'
 import { configureCrypto } from '../../crypto'
+import { balance } from '../../tools/balance/namespace'
+import * as bridge from '../../tools/bridge'
 import * as cosmos from '../../tools/cosmos'
+import * as decode from '../../tools/decode'
 import * as evm from '../../tools/evm'
+import * as gas from '../../tools/gas'
+import { prep } from '../../tools/prep/namespace'
+import * as price from '../../tools/price'
+import { swap } from '../../tools/swap/namespace'
 import * as token from '../../tools/token'
 import { ReactNativeCrypto } from './crypto'
 import { ReactNativeStorage } from './storage'
@@ -241,7 +248,11 @@ export type {
 
 // Public namespace handles documented by the SDK changelog. Keep these as
 // explicit module objects so Rollup preserves the nested `cosmos.gov` handle.
-export { cosmos, evm, token }
+// `balance` / `prep` / `swap` are the hand-curated safe subsets from
+// `tools/*/namespace.ts` (see those files for what's excluded and why —
+// mainly Polkadot / `@solana/web3.js` / Jupiter / Skip Go, which are
+// Hermes-hostile at module init).
+export { balance, bridge, cosmos, decode, evm, gas, prep, price, swap, token }
 
 // Vault-free prep helpers (KeysignPayload construction without an instantiated vault)
 export type {
