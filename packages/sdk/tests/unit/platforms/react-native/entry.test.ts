@@ -398,4 +398,12 @@ describe('RN entry exposes canonical EIP-712 helpers', () => {
     expect(rn.computeEip712Hash).toBe(eip712.computeEip712Hash)
     expect(rn.toCanonicalEvmSignature).toBe(eip712.toCanonicalEvmSignature)
   })
+
+  it('exports token-id validation from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(typeof rn.isValidTokenId).toBe('function')
+    expect(rn.isValidTokenId({ chain: rn.Chain.Sui, id: '0x2::sui::SUI', walletCore: {} as never })).toBe(true)
+    expect(rn.isValidTokenId({ chain: rn.Chain.Sui, id: 'not-a-struct-tag', walletCore: {} as never })).toBe(false)
+  })
 })

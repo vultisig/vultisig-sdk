@@ -13,6 +13,7 @@ import { deriveAddress as coreDeriveAddress } from '@vultisig/core-chain/publicK
 import { getPublicKey as coreGetPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
 import type { PublicKeys } from '@vultisig/core-chain/publicKey/PublicKeys'
 import { isValidAddress as coreIsValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
+import { isValidTokenId as coreIsValidTokenId } from '@vultisig/core-chain/utils/isValidTokenId'
 import type { WalletCoreLike } from '@vultisig/walletcore-native'
 
 /**
@@ -53,6 +54,16 @@ type IsValidAddressInput = {
 /** Validate a chain address. Accepts WalletCoreLike. */
 export const isValidAddress = ({ walletCore, ...rest }: IsValidAddressInput) =>
   coreIsValidAddress({ ...rest, walletCore: toTwWalletCore(walletCore) })
+
+type IsValidTokenIdInput = {
+  chain: Chain
+  id: string
+  walletCore: WalletCoreLike
+}
+
+/** Validate a chain-specific token identifier. Accepts WalletCoreLike. */
+export const isValidTokenId = ({ walletCore, ...rest }: IsValidTokenIdInput) =>
+  coreIsValidTokenId({ ...rest, walletCore: toTwWalletCore(walletCore) })
 
 type GetCoinTypeInput = {
   walletCore: WalletCoreLike
