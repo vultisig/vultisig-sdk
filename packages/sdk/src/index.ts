@@ -128,12 +128,7 @@ export { assertUtxoAddressBrand, isUtxoAddressBrandValid } from './chains/utxo/a
 // enrichBuildResult + splitMultiTx; SSE/Redis sequencing stays in the backend.
 export type { NormalizeArgs, NormalizedTx } from './tx'
 export type { PollTxStatusUntilFinalParams, PollTxStatusUntilFinalResult } from './tx'
-export {
-  normalizeTx,
-  pollTxStatusUntilFinal,
-  splitMultiTx,
-  TxNormalizeError,
-} from './tx'
+export { normalizeTx, pollTxStatusUntilFinal, splitMultiTx, TxNormalizeError } from './tx'
 
 // ============================================================================
 // PUBLIC API - Canonical Contract / Token Registry (knownContracts)
