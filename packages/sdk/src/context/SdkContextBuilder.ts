@@ -16,6 +16,8 @@ import type { SdkConfigOptions, SdkContext } from './SdkContext'
 
 // Re-export SdkContext type for consumers
 export type { SdkContext } from './SdkContext'
+// Re-export ServerEndpoints type for consumers
+export type { ServerEndpoints } from '../server/ServerManager'
 import { getWalletCore } from './wasmRuntime'
 
 /**
