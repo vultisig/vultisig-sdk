@@ -20,6 +20,32 @@
     },
     "out_txs": [{ "id": "THOR-REAL-OUT", "chain": "BTC" }]
   },
+  "thorchainNodeCompleteWithPlannedRefund": {
+    "tx": { "id": "THOR-REFUND-SOURCE" },
+    "stages": {
+      "inbound_observed": { "started": true, "completed": true },
+      "inbound_confirmation_counted": { "completed": true },
+      "inbound_finalised": { "completed": true },
+      "swap_status": { "pending": false },
+      "swap_finalised": { "completed": true },
+      "outbound_signed": { "completed": true }
+    },
+    "planned_out_txs": [{ "chain": "BTC", "refund": true }],
+    "out_txs": [{ "id": "THOR-REAL-OUT", "chain": "BTC" }]
+  },
+  "thorchainNodeCompleteWithPlannedSwapOutput": {
+    "tx": { "id": "THOR-SUCCESS-SOURCE" },
+    "stages": {
+      "inbound_observed": { "started": true, "completed": true },
+      "inbound_confirmation_counted": { "completed": true },
+      "inbound_finalised": { "completed": true },
+      "swap_status": { "pending": false },
+      "swap_finalised": { "completed": true },
+      "outbound_signed": { "completed": true }
+    },
+    "planned_out_txs": [{ "chain": "BTC", "refund": false }],
+    "out_txs": [{ "id": "THOR-REAL-OUT", "chain": "BTC" }]
+  },
   "thorchainMidgardPending": {
     "count": "1",
     "actions": [
@@ -41,6 +67,16 @@
         "in": [{ "txID": "THOR-REFUND-SOURCE" }],
         "out": [{ "txID": "THOR-REFUND-OUT" }],
         "metadata": { "refund": { "reason": "emit asset less than price limit" } }
+      }
+    ]
+  },
+  "thorchainMidgardMalformedSwapStatus": {
+    "count": "1",
+    "actions": [
+      {
+        "type": "swap",
+        "in": [{ "txID": "THOR-SOURCE" }],
+        "out": []
       }
     ]
   },

@@ -18,6 +18,7 @@ type SwapArrivalStatusBase = {
 export type SwapArrivalStatusResult =
   | (SwapArrivalStatusBase & { status: 'pending'; stage: SwapArrivalPendingStage })
   | (SwapArrivalStatusBase & { status: 'success'; stage: 'complete' })
+  | (SwapArrivalStatusBase & { status: 'partial'; stage: 'complete' })
   | (SwapArrivalStatusBase & { status: 'refunded'; stage: 'refunded' })
   | (SwapArrivalStatusBase & { status: 'not_found'; stage: 'not_found' })
   | (SwapArrivalStatusBase & { status: 'error'; stage: 'failed' })
@@ -186,6 +187,19 @@ const completed = (stage: unknown): boolean => getBoolean(stage, 'completed') ==
 
 const started = (stage: unknown): boolean => getBoolean(stage, 'started') === true || completed(stage)
 
+/**
+ * THORNode's `planned_out_txs[].refund` flags whether a planned outbound is a
+ * refund or the swap output. Returns `undefined` when the field isn't present
+ * on every planned outbound, since a partially-populated response can't be
+ * trusted to discriminate the outcome.
+ */
+const getPlannedOutTxRefund = (data: unknown): boolean | undefined => {
+  if (!isRecord(data) || !Array.isArray(data.planned_out_txs) || data.planned_out_txs.length === 0) return undefined
+  const refundFlags = data.planned_out_txs.map(plannedOutTx => getBoolean(plannedOutTx, 'refund'))
+  if (refundFlags.some(refund => refund === undefined)) return undefined
+  return refundFlags.some(refund => refund === true)
+}
+
 const getThorMayaNodeProgress = (
   provider: ThorMayaProvider,
   txHash: string,
@@ -197,9 +211,16 @@ const getThorMayaNodeProgress = (
   const outboundSigned = stages.outbound_signed
   const destinationTxHash = findThorMayaNodeDestinationTxHash(data, txHash)
   if (completed(outboundSigned)) {
-    // A signed outbound can be either the swap output or a refund. Only
-    // Midgard's action type can distinguish them, so node-only completion must
-    // remain pollable until Midgard corroborates the terminal outcome.
+    const refund = getPlannedOutTxRefund(data)
+    if (refund === true) {
+      return { ...resultBase(provider, txHash), status: 'refunded', stage: 'refunded', destinationTxHash }
+    }
+    if (refund === false) {
+      return { ...resultBase(provider, txHash), status: 'success', stage: 'complete', destinationTxHash }
+    }
+    // `planned_out_txs[].refund` isn't available on this response, so node
+    // data alone can't distinguish a swap output from a refund. Stay pollable
+    // until Midgard corroborates the terminal outcome.
     return { ...resultBase(provider, txHash), status: 'pending', stage: 'outbound', destinationTxHash }
   }
 
@@ -235,6 +256,19 @@ const isThorMayaNodeResponse = (data: unknown): boolean => isRecord(data) && isR
 const getActionMessage = (action: Record<string, unknown>, type: 'refund' | 'swap'): string | undefined =>
   messageFromUnknown(getRecord(getRecord(action, 'metadata'), type))
 
+// Midgard only documents `success` and `pending` as action statuses. Any other
+// (or missing) value is malformed-response data, not a legitimate terminal
+// failure signal, so it must throw rather than be reported as a swap error.
+const unknownMidgardActionStatus = (
+  provider: ThorMayaProvider,
+  type: 'refund' | 'swap',
+  status: string | undefined
+): never => {
+  throw new SwapArrivalStatusRequestError(provider, [
+    new Error(`${provider} Midgard returned an unknown ${type} action status${status ? `: ${status}` : ''}`),
+  ])
+}
+
 const getThorMayaMidgardStatus = (
   provider: ThorMayaProvider,
   txHash: string,
@@ -253,7 +287,7 @@ const getThorMayaMidgardStatus = (
     if (status === 'pending') {
       return { ...resultBase(provider, txHash), status: 'pending', stage: 'refunding', destinationTxHash, message }
     }
-    return { ...resultBase(provider, txHash), status: 'error', stage: 'failed', destinationTxHash, message }
+    return unknownMidgardActionStatus(provider, 'refund', status)
   }
 
   const swap = actions.find(action => getString(action, 'type')?.toLowerCase() === 'swap')
@@ -267,13 +301,7 @@ const getThorMayaMidgardStatus = (
   if (status === 'pending') {
     return nodeProgress ?? { ...resultBase(provider, txHash), status: 'pending', stage: 'swapping' }
   }
-  return {
-    ...resultBase(provider, txHash),
-    status: 'error',
-    stage: 'failed',
-    destinationTxHash,
-    message: getActionMessage(swap, 'swap'),
-  }
+  return unknownMidgardActionStatus(provider, 'swap', status)
 }
 
 const getThorMayaStatus = async ({
@@ -421,6 +449,11 @@ const getLifiStatus = async ({
     return { ...resultBase('li.fi', txHash), status: 'refunded', stage: 'refunded', destinationTxHash, message }
   }
   if (status === 'DONE') {
+    // PARTIAL means the user received a different (typically lower-value) token
+    // than requested, so it must not be flattened into ordinary `success`.
+    if (substatus === 'PARTIAL') {
+      return { ...resultBase('li.fi', txHash), status: 'partial', stage: 'complete', destinationTxHash, message }
+    }
     return { ...resultBase('li.fi', txHash), status: 'success', stage: 'complete', destinationTxHash, message }
   }
   if (status === 'PENDING') {
@@ -453,7 +486,8 @@ export const isSwapArrivalStatusTerminal = (result: SwapArrivalStatusResult): bo
  *
  * `not_found` is a transient snapshot because providers use it during normal
  * pre-indexing windows. Likewise, THOR/Maya node-only outbound completion stays
- * pending until Midgard identifies the action as a swap or refund.
+ * pending unless the node's `planned_out_txs[].refund` flag or Midgard's
+ * action type can identify it as a swap output or a refund.
  *
  * Network, HTTP and malformed-response failures throw
  * `SwapArrivalStatusRequestError`; they are not converted to terminal `error`

@@ -106,6 +106,56 @@ describe('getSwapArrivalStatus', () => {
       expect(isSwapArrivalStatusTerminal(result)).toBe(false)
     })
 
+    it('throws on a malformed/missing Midgard action status instead of reporting a terminal swap error', async () => {
+      const fetchImpl = vi.fn(async (input: RequestInfo | URL) =>
+        String(input).includes('/v2/actions')
+          ? jsonResponse(fixtures.thorchainMidgardMalformedSwapStatus)
+          : jsonResponse({}, 404)
+      ) as typeof fetch
+
+      await expect(getSwapArrivalStatus({ provider: 'thorchain', txHash: 'THOR-SOURCE', fetchImpl })).rejects.toThrow(
+        SwapArrivalStatusRequestError
+      )
+    })
+
+    it('reports a refund when THORNode planned_out_txs marks the outbound as a refund, even without Midgard', async () => {
+      const fetchImpl = vi.fn(async (input: RequestInfo | URL) =>
+        String(input).includes('/v2/actions')
+          ? jsonResponse({ message: 'unavailable' }, 502)
+          : jsonResponse(fixtures.thorchainNodeCompleteWithPlannedRefund)
+      ) as typeof fetch
+
+      const result = await getSwapArrivalStatus({ provider: 'thorchain', txHash: 'THOR-REFUND-SOURCE', fetchImpl })
+
+      expect(result).toEqual({
+        provider: 'thorchain',
+        txHash: 'THOR-REFUND-SOURCE',
+        status: 'refunded',
+        stage: 'refunded',
+        destinationTxHash: 'THOR-REAL-OUT',
+      })
+      expect(isSwapArrivalStatusTerminal(result)).toBe(true)
+    })
+
+    it('reports success when THORNode planned_out_txs marks the outbound as the swap output, even without Midgard', async () => {
+      const fetchImpl = vi.fn(async (input: RequestInfo | URL) =>
+        String(input).includes('/v2/actions')
+          ? jsonResponse({ message: 'unavailable' }, 502)
+          : jsonResponse(fixtures.thorchainNodeCompleteWithPlannedSwapOutput)
+      ) as typeof fetch
+
+      const result = await getSwapArrivalStatus({ provider: 'thorchain', txHash: 'THOR-SUCCESS-SOURCE', fetchImpl })
+
+      expect(result).toEqual({
+        provider: 'thorchain',
+        txHash: 'THOR-SUCCESS-SOURCE',
+        status: 'success',
+        stage: 'complete',
+        destinationTxHash: 'THOR-REAL-OUT',
+      })
+      expect(isSwapArrivalStatusTerminal(result)).toBe(true)
+    })
+
     it('throws when both THORChain sources are unavailable instead of reporting a terminal swap error', async () => {
       const fetchImpl = vi.fn(async () => jsonResponse({ message: 'unavailable' }, 503)) as typeof fetch
 
@@ -236,6 +286,27 @@ describe('getSwapArrivalStatus', () => {
       })
     })
 
+    it('normalizes DONE/PARTIAL as partial instead of flattening it into success', async () => {
+      const fetchImpl = vi.fn(async () =>
+        jsonResponse({
+          status: 'DONE',
+          substatus: 'PARTIAL',
+          substatusMessage: 'The user received less tokens than expected.',
+          sending: { txHash: '0xsource' },
+          receiving: { txHash: '0xreceived' },
+        })
+      ) as typeof fetch
+
+      await expect(getSwapArrivalStatus({ provider: 'li.fi', txHash: '0xsource', fetchImpl })).resolves.toEqual({
+        provider: 'li.fi',
+        txHash: '0xsource',
+        status: 'partial',
+        stage: 'complete',
+        destinationTxHash: '0xreceived',
+        message: 'The user received less tokens than expected.',
+      })
+    })
+
     it('keeps the default host when a partial host override is undefined', async () => {
       const fetchImpl = vi.fn(async () => jsonResponse({ status: 'NOT_FOUND' })) as typeof fetch
 
@@ -265,7 +336,7 @@ describe('getSwapArrivalStatus', () => {
       [{ status: 'INVALID' }, 'error', 'failed'],
       [{ status: 'FAILED' }, 'error', 'failed'],
       [{ status: 'DONE', substatus: 'COMPLETED' }, 'success', 'complete'],
-      [{ status: 'DONE', substatus: 'PARTIAL' }, 'success', 'complete'],
+      [{ status: 'DONE', substatus: 'PARTIAL' }, 'partial', 'complete'],
       [{ status: 'PENDING', substatus: 'WAIT_SOURCE_CONFIRMATIONS' }, 'pending', 'confirming'],
       [{ status: 'PENDING', substatus: 'REFUND_IN_PROGRESS' }, 'pending', 'refunding'],
     ] as const)('maps $status/$substatus to $1/$2', async (body, status, stage) => {
