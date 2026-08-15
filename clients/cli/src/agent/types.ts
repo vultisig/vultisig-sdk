@@ -7,7 +7,13 @@
 import type { Vultisig } from '@vultisig/sdk'
 
 import type { AgentErrorCode } from './agentErrors'
-import type { BalanceSummaryCard, PolymarketMarketsCard, TurnOutcome, YieldOpportunitiesCard } from './cards'
+import type {
+  BalanceSummaryCard,
+  HlOrderConfirmationCard,
+  PolymarketMarketsCard,
+  TurnOutcome,
+  YieldOpportunitiesCard,
+} from './cards'
 
 export type ProtocolWarning = {
   code: 'PROTOCOL_DRIFT'
@@ -503,6 +509,7 @@ export type UICallbacks = {
   /** Render a server-built balance_summary card (data-balance_summary SSE part,
    *  or the legacy verbatim-echo fallback parsed from message content). */
   onBalanceSummary?: (card: BalanceSummaryCard) => void
+  onHlOrderConfirmation?: (card: HlOrderConfirmationCard) => void
   /** Render a server-built yield_opportunities card (data-yield_opportunities SSE
    *  part, or the legacy verbatim-echo fallback parsed from message content). */
   onYieldOpportunities?: (card: YieldOpportunitiesCard) => void
