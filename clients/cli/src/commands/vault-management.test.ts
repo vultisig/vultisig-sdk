@@ -2,7 +2,20 @@ import { describe, expect, it, vi } from 'vitest'
 
 import type { CommandContext } from '../core'
 import { ExitCode, InvalidInputError } from '../core/errors'
-import { executeCreateFast, validateFastVaultCreateInputs } from './vault-management'
+import {
+  executeCreateFast,
+  executeCreateFromSeedphraseFast,
+  executeVerify,
+  validateFastVaultCreateInputs,
+} from './vault-management'
+
+// Controls what the shared prompt chokepoint (../lib/prompt) resolves to, so the
+// `verify --resend` prompted/mixed path can be exercised without a real inquirer
+// prompt rendering during tests.
+const promptMock = vi.fn()
+vi.mock('../lib/prompt', () => ({
+  prompt: (...args: unknown[]) => promptMock(...args),
+}))
 
 // bead vultisig-33sz9: `create fast` previously accepted --email 'notemail',
 // --password '1', and --name '' and provisioned real server-side vault state
@@ -94,27 +107,26 @@ describe('validateFastVaultCreateInputs (bead 33sz9)', () => {
       /password too short/i
     )
     // 4 family emoji = 4 grapheme clusters, still below the 8-char minimum.
-    expect(() =>
-      validateFastVaultCreateInputs({ ...validBase, password: '👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦' })
-    ).toThrow(/password too short/i)
+    expect(() => validateFastVaultCreateInputs({ ...validBase, password: '👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦' })).toThrow(/password too short/i)
   })
 
   it('returns normalized email for callers that send the value upstream', () => {
     expect(validateFastVaultCreateInputs({ ...validBase, email: '  me@example.com  ' }).email).toBe('me@example.com')
   })
 
-  it('executeCreateFast passes the normalized email upstream', async () => {
+  it('executeCreateFast passes the normalized name and email upstream', async () => {
     const createFastVault = vi.fn().mockResolvedValue('vault-id-123')
     const ctx = { sdk: { createFastVault }, dispose: () => {} } as unknown as CommandContext
 
     await executeCreateFast(ctx, {
-      name: 'MyVault',
+      name: '  MyVault  ',
       password: 'password1',
       email: '  me@example.com  ',
       twoStep: true,
     })
 
-    expect(createFastVault).toHaveBeenCalledWith(expect.objectContaining({ email: 'me@example.com' }))
+    // Asserts both fields (not just email) so a revert of the `:177` name trim is caught too.
+    expect(createFastVault).toHaveBeenCalledWith(expect.objectContaining({ name: 'MyVault', email: 'me@example.com' }))
   })
 
   it('checks name → email → password in that order (deterministic diagnostic)', () => {
@@ -141,5 +153,87 @@ describe('validateFastVaultCreateInputs (bead 33sz9)', () => {
     } catch (err) {
       expect((err as InvalidInputError).message).toMatch(/password/i)
     }
+  })
+
+  // PR #1749 review (neavra) minor item: --two-step + invalid input was untested.
+  it('rejects invalid input in --two-step mode too, before any server call', async () => {
+    const createFastVault = vi.fn().mockResolvedValue('vault-id-123')
+    const ctx = { sdk: { createFastVault }, dispose: () => {} } as unknown as CommandContext
+
+    await expect(
+      executeCreateFast(ctx, { name: 'MyVault', password: 'x', email: 'me@example.com', twoStep: true })
+    ).rejects.toBeInstanceOf(InvalidInputError)
+    expect(createFastVault).not.toHaveBeenCalled()
+  })
+})
+
+// PR #1749 review (neavra, should-fix 3): the only test through
+// executeCreateFromSeedphraseFast used valid inputs and exited at requireInteractive
+// before ever reaching invalid-input territory — deleting the
+// validateFastVaultCreateInputs(...) call at the top of this function left the whole
+// suite green. This pins the call site directly: an invalid password must reject
+// before validateSeedphrase (or anything else on ctx.sdk) is ever touched.
+describe('executeCreateFromSeedphraseFast validates inputs before touching ctx (PR #1749 should-fix 3)', () => {
+  it('rejects a too-short password before validateSeedphrase is called', async () => {
+    const validateSeedphrase = vi.fn()
+    const ctx = { sdk: { validateSeedphrase }, dispose: () => {} } as unknown as CommandContext
+
+    await expect(
+      executeCreateFromSeedphraseFast(ctx, {
+        mnemonic: 'abandon '.repeat(11) + 'about',
+        name: 'v',
+        password: 'x',
+        email: 'e@x.io',
+      })
+    ).rejects.toThrow(/password/i)
+
+    expect(validateSeedphrase).not.toHaveBeenCalled()
+  })
+})
+
+// PR #1749 review (neavra, should-fix 5): executeVerify's post-prompt re-validation
+// (the `requireNonEmptyEmailForResend`/`requireNonEmptyPasswordForResend` calls after
+// the prompt block) was only exercised on the both-flags-supplied path. These cover
+// the prompted/mixed path — one field via flag, the other from the (mocked) prompt.
+describe('executeVerify --resend prompted/mixed path (PR #1749 should-fix 5)', () => {
+  it('re-validates a prompted-for email the same as a flag-supplied one, then completes the OTP step', async () => {
+    promptMock
+      .mockResolvedValueOnce({ email: 'prompted@vault.io' }) // the missing-email prompt
+      .mockResolvedValueOnce({ code: '123456' }) // the follow-up OTP-code prompt
+
+    const resendVaultVerification = vi.fn().mockResolvedValue(undefined)
+    const vault = { id: 'vault-id', name: 'V', chains: [], on: vi.fn() }
+    const verifyVault = vi.fn().mockResolvedValue(vault)
+    const setActiveVault = vi.fn().mockResolvedValue(undefined)
+    const ctx = {
+      sdk: { resendVaultVerification, verifyVault },
+      setActiveVault,
+      dispose: () => {},
+    } as unknown as CommandContext
+
+    // Password supplied via flag; email is missing so it comes from the mocked prompt.
+    const result = await executeVerify(ctx, 'vault-id', { resend: true, password: 'password123' })
+
+    expect(result).toBe(true)
+    expect(resendVaultVerification).toHaveBeenCalledWith({
+      vaultId: 'vault-id',
+      email: 'prompted@vault.io',
+      password: 'password123',
+    })
+  })
+
+  it('rejects an empty prompted-for password via the same post-prompt re-validation as flags', async () => {
+    promptMock.mockResolvedValueOnce({ password: '' }) // the missing-password prompt answers empty
+
+    const resendVaultVerification = vi.fn().mockResolvedValue(undefined)
+    const ctx = {
+      sdk: { resendVaultVerification },
+      dispose: () => {},
+    } as unknown as CommandContext
+
+    await expect(executeVerify(ctx, 'vault-id', { resend: true, email: 'e@x.io' })).rejects.toBeInstanceOf(
+      InvalidInputError
+    )
+    expect(resendVaultVerification).not.toHaveBeenCalled()
   })
 })

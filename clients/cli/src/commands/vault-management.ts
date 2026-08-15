@@ -1,6 +1,7 @@
 /**
  * Vault Management Commands - create, import, export, verify, switch, rename, info, vaults
  */
+import { validateEmail } from '@vultisig/lib-utils/validation/validateEmail'
 import type { Chain, VaultBase } from '@vultisig/sdk'
 import { FastVault } from '@vultisig/sdk'
 import chalk from 'chalk'
@@ -50,16 +51,27 @@ import { displayVaultInfo, displayVaultsList, setupVaultEvents } from '../ui'
  * check, not a mailability guarantee — the OTP send later confirms
  * deliverability, but 'notemail' can't possibly work.
  */
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const PASSWORD_MIN_LENGTH = 8
 
+/**
+ * bead 33sz9 review (neavra, PR #1749, should-fix 4): reuse @vultisig/lib-utils'
+ * validateEmail as the baseline check instead of a fully hand-rolled regex, so this
+ * agrees with what other Vultisig clients (mobile, web) already accept/reject on the
+ * RFC-shaped syntax. Layered on top: rules the shared validator does not enforce but
+ * that matter specifically for OTP deliverability at fast-vault CREATE time — a bare
+ * hostname ("user@localhost"), a missing TLD ("no@dot"), or a dot-adjacent local part
+ * ("a.@x.com") pass the shared validator but can never receive real mail. These extra
+ * rules are intentionally create-time-only; see requireNonEmptyEmailForResend below
+ * for why `verify --resend` does not run this at all.
+ */
 function looksLikeFastVaultEmail(email: string): boolean {
-  if (!EMAIL_RE.test(email)) return false
+  if (validateEmail(email) !== undefined) return false
 
   const [localPart, domain] = email.split('@')
   if (!localPart || !domain) return false
   if (localPart.startsWith('.') || localPart.endsWith('.') || localPart.includes('..')) return false
   if (domain.startsWith('.') || domain.endsWith('.') || domain.includes('..')) return false
+  if (!domain.includes('.')) return false
 
   const domainLabels = domain.split('.')
   if (domainLabels.some(label => label.length === 0 || label.startsWith('-') || label.endsWith('-'))) return false
@@ -99,11 +111,43 @@ function normalizeFastVaultPasswordOrThrow(passwordInput?: string): string {
   return password
 }
 
-export function validateFastVaultCreateInputs(input: {
-  name?: string
-  email?: string
-  password?: string
-}): { name: string; email: string; password: string } {
+/**
+ * bead 33sz9 review (neavra, PR #1749, blocking-1): `verify --resend` targets a vault
+ * that already exists on the server — its email/password were validated (or not) by
+ * whichever client created it, possibly under an older/looser rule set, and the
+ * server already accepted them. Re-running validateFastVaultCreateInputs' strictness
+ * here would lock a legitimately-created vault out of its own OTP resend: a legacy
+ * password shorter than the current 8-char floor, or an 8-emoji password that passed
+ * the old UTF-16-length check but not today's grapheme count, or an email another
+ * Vultisig client accepted at create time but this CLI's stricter syntax check would
+ * now reject. Resend only needs proof the caller supplied *something* to send to the
+ * server — the server is the source of truth on whether the credential is correct.
+ */
+function requireNonEmptyEmailForResend(emailInput?: string): string {
+  const email = emailInput?.trim() ?? ''
+  if (email.length === 0) {
+    throw new InvalidInputError('Email is required to resend verification', undefined, [
+      'Pass the --email used when the vault was created',
+    ])
+  }
+  return email
+}
+
+function requireNonEmptyPasswordForResend(passwordInput?: string): string {
+  const password = passwordInput ?? ''
+  if (password.length === 0) {
+    throw new InvalidInputError('Password is required to resend verification', undefined, [
+      'Pass the --password used when the vault was created',
+    ])
+  }
+  return password
+}
+
+export function validateFastVaultCreateInputs(input: { name?: string; email?: string; password?: string }): {
+  name: string
+  email: string
+  password: string
+} {
   const name = input.name?.trim() ?? ''
   if (name.length === 0) {
     throw new InvalidInputError('Vault name is required and cannot be empty', undefined, ['Pass a non-empty --name'])
@@ -448,10 +492,10 @@ export async function executeVerify(
                 message: 'Email address:',
                 validate: (input: string) => {
                   try {
-                    normalizeFastVaultEmailOrThrow(input)
+                    requireNonEmptyEmailForResend(input)
                     return true
                   } catch {
-                    return 'Please enter a valid email'
+                    return 'Please enter the email used when the vault was created'
                   }
                 },
               },
@@ -466,10 +510,10 @@ export async function executeVerify(
                 mask: '*',
                 validate: (input: string) => {
                   try {
-                    normalizeFastVaultPasswordOrThrow(input)
+                    requireNonEmptyPasswordForResend(input)
                     return true
                   } catch {
-                    return `Password must be at least ${PASSWORD_MIN_LENGTH} characters`
+                    return 'Please enter the password used when the vault was created'
                   }
                 },
               },
@@ -480,8 +524,8 @@ export async function executeVerify(
       password = password || answers.password
     }
 
-    email = normalizeFastVaultEmailOrThrow(email)
-    password = normalizeFastVaultPasswordOrThrow(password)
+    email = requireNonEmptyEmailForResend(email)
+    password = requireNonEmptyPasswordForResend(password)
 
     const spinner = createSpinner('Resending verification email...')
     try {
