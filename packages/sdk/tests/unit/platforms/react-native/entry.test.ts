@@ -399,3 +399,40 @@ describe('RN entry exposes canonical EIP-712 helpers', () => {
     expect(rn.toCanonicalEvmSignature).toBe(eip712.toCanonicalEvmSignature)
   })
 })
+
+// sdk#1935: lazy RN wrappers were declared `(...args: unknown[])`, which erased
+// their public parameter contract in the emitted `dist/index.react-native.d.ts`.
+// Fixed by typing the rest param from `Parameters<typeof import('module')['export']>`
+// (a type-only query — zero runtime cost, same lazy-loading rationale as before).
+describe('RN lazy wrapper functions preserve real parameter types (sdk#1935)', () => {
+  it('prepareTrc20TransferFromKeys forwards the real params object to the underlying pure builder', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const direct = await import('../../../../src/tools/prep/trc20')
+
+    const params = {
+      contractAddress: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+      from: 'TJRabPrwbZy45sbavfcjinPJC18kjpRTv8',
+      to: 'TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH',
+      amount: '1000000',
+    }
+
+    const result = await rn.prepareTrc20TransferFromKeys(params)
+
+    expect(result).toEqual(direct.prepareTrc20TransferFromKeys(params))
+  })
+
+  it('rejects a params object missing required TRC-20 fields at compile time (regression guard)', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    await expect(
+      // @ts-expect-error - `to` is a required field on PrepareTrc20TransferFromKeysParams.
+      // If this wrapper's rest param ever regresses to `(...args: unknown[])`, this call
+      // stops erroring and `yarn typecheck` fails on the unused `@ts-expect-error` directive.
+      rn.prepareTrc20TransferFromKeys({
+        contractAddress: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+        from: 'TJRabPrwbZy45sbavfcjinPJC18kjpRTv8',
+        amount: '1000000',
+      })
+    ).rejects.toThrow()
+  })
+})
