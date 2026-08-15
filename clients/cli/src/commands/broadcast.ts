@@ -8,8 +8,8 @@ import { Chain, getChainKind, Vultisig } from '@vultisig/sdk'
 
 import type { CommandContext } from '../core'
 import { ConfirmationRequiredError, InvalidInputError } from '../core/errors'
-import { createSpinner, isJsonOutput, isNonInteractive, outputJson, printResult, warn } from '../lib/output'
-import { confirmTransaction } from '../ui'
+import { createSpinner, isJsonOutput, isNonInteractive, isSilent, outputJson, printResult } from '../lib/output'
+import { confirmTransaction, escapeTerminalControls } from '../ui'
 
 /**
  * Parameters for broadcasting a raw transaction
@@ -25,20 +25,6 @@ export type BroadcastRawParams = {
    */
   yes?: boolean
 }
-
-const escapeControlChars = (value: string): string =>
-  value.replace(/[\u0000-\u001f\u007f-\u009f]/g, char => {
-    switch (char) {
-      case '\n':
-        return '\\n'
-      case '\r':
-        return '\\r'
-      case '\t':
-        return '\\t'
-      default:
-        return `\\x${char.charCodeAt(0).toString(16).padStart(2, '0')}`
-    }
-  })
 
 /**
  * Result of broadcast operation
@@ -82,8 +68,9 @@ export async function executeBroadcast(ctx: CommandContext, params: BroadcastRaw
     chainKind === 'ripple'
   const hex = rawTx.startsWith('0x') ? rawTx.slice(2) : rawTx
   if (isHexFamily && (!/^[0-9a-fA-F]+$/.test(hex) || hex.length % 2 !== 0)) {
+    const shown = escapeTerminalControls(rawTx.slice(0, 20))
     throw new InvalidInputError(
-      `Malformed raw transaction — expected hex bytes for ${params.chain}, got: ${rawTx.slice(0, 20)}${rawTx.length > 20 ? '…' : ''}`
+      `Malformed raw transaction — expected hex bytes for ${params.chain}, got: ${shown}${rawTx.length > 20 ? '…' : ''}`
     )
   }
 
@@ -98,16 +85,27 @@ export async function executeBroadcast(ctx: CommandContext, params: BroadcastRaw
         'Pass --yes to confirm. broadcastRawTx sends the payload straight to the chain; be sure the raw tx is what you intend to send.'
       )
     }
-    warn('\n⚠  You are about to broadcast a pre-signed transaction.')
-    warn(`   Chain:  ${params.chain}`)
-    // Show the payload in its OWN encoding. Rendering a base58/base64/JSON payload with a `0x`
-    // prefix and a hex-derived byte count would misdescribe exactly the thing the operator is
-    // being asked to confirm.
-    const shown = isHexFamily ? `0x${hex}` : rawTx
+    // REVIEW FIX: --output json / --silent both suppress warn()-based output, but on a TTY
+    // isNonInteractive() is still false, so confirmTransaction() would still fire an inquirer
+    // prompt — with none of the preview lines that give the operator anything to approve, and
+    // with inquirer's own prompt output contaminating the promised clean JSON stdout. Refuse
+    // up-front instead: json/silent broadcast can only proceed with --yes.
+    if (isJsonOutput() || isSilent()) {
+      throw new ConfirmationRequiredError(
+        'broadcast requires confirmation.',
+        'Pass --yes to confirm. The confirmation preview cannot render under --output json or --silent without corrupting the machine-readable output.'
+      )
+    }
+    // Show the payload in its OWN encoding, exactly as submitted to broadcastRawTx below —
+    // reconstructing a `0x`-prefixed hex string here would misdescribe non-EVM hex payloads
+    // (e.g. utxo) that are broadcast without that prefix.
+    const shown = rawTx
     const size = isHexFamily ? `${Math.floor(hex.length / 2)} bytes` : `${rawTx.length} chars`
     const preview = shown.length > 44 ? `${shown.slice(0, 22)}…${shown.slice(-20)}` : shown
-    warn(`   Raw tx: ${escapeControlChars(preview)} (${size})`)
-    warn(`   This is IRREVERSIBLE. If the payload is a valid signed transaction, funds WILL move.\n`)
+    printResult('\n⚠  You are about to broadcast a pre-signed transaction.')
+    printResult(`   Chain:  ${params.chain}`)
+    printResult(`   Raw tx: ${escapeTerminalControls(preview)} (${size})`)
+    printResult(`   This is IRREVERSIBLE. If the payload is a valid signed transaction, funds WILL move.\n`)
     const confirmed = await confirmTransaction()
     if (!confirmed) {
       throw new ConfirmationRequiredError('Broadcast declined at the confirmation prompt')
