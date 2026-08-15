@@ -417,3 +417,5 @@ describe('RN entry exposes canonical EIP-712 helpers', () => {
     expect(rn.coerceEip712ChainId).toBe(eip712.coerceEip712ChainId)
     expect(rn.computeEip712Hash).toBe(eip712.computeEip712Hash)
     expect(rn.toCanonicalEvmSignature).toBe(eip712.toCanonicalEvmSignature)
+  })
+})
