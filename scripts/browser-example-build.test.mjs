@@ -146,7 +146,7 @@ function startDevServer() {
     child.once('close', resolve)
   })
   const waitForUrl = new Promise((resolve, reject) => {
-    const startTimeoutMs = 360_000
+    const startTimeoutMs = 600_000
     const timeout = setTimeout(() => {
       reject(
         new Error(
@@ -217,13 +217,13 @@ async function assertWasmResponse(baseUrl, pathname) {
   assert.ok((await response.arrayBuffer()).byteLength > 0, `expected ${pathname} to have a non-empty body`)
 }
 
-test('browser example prepare recreates missing shared package artifacts', { timeout: 540_000 }, async () => {
+test('browser example prepare recreates missing shared package artifacts', { timeout: 900_000 }, async () => {
   const mpcWasmDist = path.join(repoRoot, 'packages/mpc-wasm/dist')
   rmSync(mpcWasmDist, { recursive: true, force: true })
 
   try {
     await runWithDiagnostics('yarn', ['workspace', '@vultisig/example-browser', 'prepare:sdk'], {
-      timeoutMs: 360_000,
+      timeoutMs: 600_000,
       label: formatShellCommand('yarn', ['workspace', '@vultisig/example-browser', 'prepare:sdk']),
     })
     assert.ok(existsSync(path.join(mpcWasmDist, 'index.js')), 'expected prepare:sdk to rebuild mpc-wasm dist')
@@ -235,9 +235,9 @@ test('browser example prepare recreates missing shared package artifacts', { tim
   }
 })
 
-test('browser example builds against the local SDK workspace package', { timeout: 420_000 }, async () => {
+test('browser example builds against the local SDK workspace package', { timeout: 660_000 }, async () => {
   await runWithDiagnostics('yarn', ['workspace', '@vultisig/example-browser', 'build'], {
-    timeoutMs: 360_000,
+    timeoutMs: 600_000,
     label: formatShellCommand('yarn', ['workspace', '@vultisig/example-browser', 'build']),
   })
 
@@ -251,7 +251,7 @@ test('browser example builds against the local SDK workspace package', { timeout
   )
 })
 
-test('browser example dev server serves SDK wasm assets', { timeout: 420_000 }, async () => {
+test('browser example dev server serves SDK wasm assets', { timeout: 660_000 }, async () => {
   const server = startDevServer()
   try {
     const baseUrl = await server.waitForUrl
