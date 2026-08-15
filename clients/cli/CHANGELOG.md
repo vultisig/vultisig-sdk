@@ -1,5 +1,30 @@
 # @vultisig/cli
 
+## 4.6.0
+
+### Minor Changes
+
+- [#1680](https://github.com/vultisig/vultisig-sdk/pull/1680) [`cc88d49`](https://github.com/vultisig/vultisig-sdk/commit/cc88d4976b3528549aa9395255b7545ecb392798) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - Add the gated Hyperliquid order retrieval, local MPC signing, submission, and status ceremony.
+
+### Patch Changes
+
+- [#1909](https://github.com/vultisig/vultisig-sdk/pull/1909) [`ef70146`](https://github.com/vultisig/vultisig-sdk/commit/ef70146c37b390eed4a117d1d1804f0956396d04) Thanks [@neavra](https://github.com/neavra)! - Resolve max send and swap quote amounts to numeric strings in JSON output.
+
+- [#1529](https://github.com/vultisig/vultisig-sdk/pull/1529) [`072f292`](https://github.com/vultisig/vultisig-sdk/commit/072f292338454a3bead7a17fe5b863904d03fc01) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export `getEvmRpcUrl` from the root SDK entrypoint and have the CLI agent executor use the shared EVM RPC resolver for gas refreshes and pending nonce checks.
+
+- [#1928](https://github.com/vultisig/vultisig-sdk/pull/1928) [`5814430`](https://github.com/vultisig/vultisig-sdk/commit/5814430f1cdbbe007fc943c3940971f0b3b61c02) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Publish dedicated `@vultisig/sdk/tx` and `@vultisig/sdk/tools/decode` subpaths with JavaScript and declaration bundles.
+
+- [#1553](https://github.com/vultisig/vultisig-sdk/pull/1553) [`4abbac7`](https://github.com/vultisig/vultisig-sdk/commit/4abbac7baf523df8af5a9b2bdf941ce72f8e1073) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export the canonical Noon vault helper family from `@vultisig/sdk/react-native` so first-party mobile consumers can reuse the shared SDK contract instead of maintaining local mirrors.
+
+- [#1563](https://github.com/vultisig/vultisig-sdk/pull/1563) [`a169543`](https://github.com/vultisig/vultisig-sdk/commit/a169543b62aa8ce4154cb5236806a54275a7aa42) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Keep the SDK IBC route table in sync with first-party consumers by adding the direct `cosmoshub-4` → `noble-1` channel-536 path to `prepareIbcTransfer()` and route discovery.
+
+- [#1893](https://github.com/vultisig/vultisig-sdk/pull/1893) [`15912f3`](https://github.com/vultisig/vultisig-sdk/commit/15912f36df9368c2c0e9d3da9a26531fde779dfe) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Use the shared config directory resolver for the agent token cache so empty overrides fall back safely.
+
+- Updated dependencies [[`9eaa7dc`](https://github.com/vultisig/vultisig-sdk/commit/9eaa7dcbb3c01af4b88f5ff373b38e84781cb32b), [`1fd27b9`](https://github.com/vultisig/vultisig-sdk/commit/1fd27b9103b75a13191f173ebeed98288d8c16b0), [`9ec2d77`](https://github.com/vultisig/vultisig-sdk/commit/9ec2d7723b5a6e1d71f48976b50e45a811bb09cb), [`003ee98`](https://github.com/vultisig/vultisig-sdk/commit/003ee98728f3318eb2de661209f164b449150810), [`44f0ecb`](https://github.com/vultisig/vultisig-sdk/commit/44f0ecbdf10b07789341c0279041d3a1e37d46a0), [`072f292`](https://github.com/vultisig/vultisig-sdk/commit/072f292338454a3bead7a17fe5b863904d03fc01), [`0967744`](https://github.com/vultisig/vultisig-sdk/commit/0967744cf0a6697f0dfe66f4f6ce31d6dd90d576), [`4859206`](https://github.com/vultisig/vultisig-sdk/commit/4859206bd801c3556316561236ce549ab270676e), [`5814430`](https://github.com/vultisig/vultisig-sdk/commit/5814430f1cdbbe007fc943c3940971f0b3b61c02), [`4abbac7`](https://github.com/vultisig/vultisig-sdk/commit/4abbac7baf523df8af5a9b2bdf941ce72f8e1073), [`f243bec`](https://github.com/vultisig/vultisig-sdk/commit/f243bec2191dffbc17af8b4f774e7d307b5c632d), [`a169543`](https://github.com/vultisig/vultisig-sdk/commit/a169543b62aa8ce4154cb5236806a54275a7aa42), [`721c11f`](https://github.com/vultisig/vultisig-sdk/commit/721c11ffe8216d4ae1d7d6fe9ab148f94ca31265), [`1108d64`](https://github.com/vultisig/vultisig-sdk/commit/1108d64869394eb5ad494c7a489d3d1cb5f2174e), [`1f297ae`](https://github.com/vultisig/vultisig-sdk/commit/1f297ae036379b8d6a76344cb3d027eea97a6b07), [`eb25508`](https://github.com/vultisig/vultisig-sdk/commit/eb25508eadfde14ee62470e64d8c2b590627fd76)]:
+  - @vultisig/sdk@4.6.0
+  - @vultisig/core-chain@2.36.0
+  - @vultisig/rujira@65.0.0
+
 ## 4.5.0
 
 ### Patch Changes

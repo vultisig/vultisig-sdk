@@ -144,7 +144,10 @@ const rnOverridePlugin = () => ({
   name: 'vultisig-rn-path-override',
   async resolveId(source, importer, options) {
     if (options?.isEntry) return null
-    const resolved = await this.resolve(source, importer, { ...options, skipSelf: true })
+    const resolved = await this.resolve(source, importer, {
+      ...options,
+      skipSelf: true,
+    })
     if (!resolved || resolved.external) return null
     const id = resolved.id.replace(/\\/g, '/')
     for (const [suffix, override] of Object.entries(rnOverrideMap)) {
@@ -339,6 +342,18 @@ const configs = {
     ...createSubpathConfigs({
       input: './src/chains/utxo/index.ts',
       distBase: 'chains/utxo',
+    }),
+    ...createSubpathConfigs({
+      input: './src/seedphrase/index.ts',
+      distBase: 'seedphrase',
+    }),
+    ...createSubpathConfigs({
+      input: './src/tools/decode/index.ts',
+      distBase: 'tools/decode',
+    }),
+    ...createSubpathConfigs({
+      input: './src/tx/index.ts',
+      distBase: 'tx',
     }),
   ],
   browser: {
