@@ -268,3 +268,19 @@ export const cryptoToFiat = ({ amount, price, fiatDecimals = 2 }: CryptoToFiatPa
   const unitPrice = parsePositiveNumber(price, 'price')
   return formatDecimalString(value * unitPrice, fiatDecimals)
 }
+
+/**
+ * Grouped namespace object — this IS the `sdk.amount.convert` surface promised
+ * above. Exposed both as a root SDK export and as the `Vultisig` instance
+ * handle `sdk.amount`. `convert` aliases `convertAmount`; the rest of the
+ * family is reachable at its full name.
+ */
+export const amount = {
+  convert: convertAmount,
+  toBaseUnits,
+  toHumanUnits,
+  fiatToCrypto,
+  cryptoToFiat,
+} as const
+
+export type Amount = typeof amount

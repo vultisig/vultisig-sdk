@@ -717,12 +717,14 @@ export { decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from '../../tools/d
 // out to a block explorer without deep-importing core-chain.
 export { computeNotificationVaultId } from '../../utils/computeNotificationVaultId'
 export type {
+  Amount,
   AmountDirection,
   ConvertAmountParams,
   CryptoToFiatParams,
   FiatToCryptoParams,
 } from '../../utils/convertAmount'
 export {
+  amount,
   AmountConvertError,
   convertAmount,
   cryptoToFiat,

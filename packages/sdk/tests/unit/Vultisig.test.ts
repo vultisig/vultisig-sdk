@@ -112,6 +112,22 @@ describe('Vultisig', () => {
     })
   })
 
+  describe('amount namespace', () => {
+    it('exposes sdk.amount on a fresh instance', () => {
+      expect(sdk.amount).toBeDefined()
+      expect(typeof sdk.amount.convert).toBe('function')
+      expect(typeof sdk.amount.toBaseUnits).toBe('function')
+      expect(typeof sdk.amount.toHumanUnits).toBe('function')
+      expect(typeof sdk.amount.fiatToCrypto).toBe('function')
+      expect(typeof sdk.amount.cryptoToFiat).toBe('function')
+    })
+
+    it('sdk.amount.convert delegates to the canonical convertAmount implementation', () => {
+      expect(sdk.amount.convert({ amount: '1.5', decimals: 18, direction: 'to_base' })).toBe('1500000000000000000')
+      expect(sdk.amount.convert({ amount: '100000000', decimals: 6, direction: 'to_human' })).toBe('100')
+    })
+  })
+
   describe('supported chains', () => {
     it('should return all supported chains', () => {
       const chains = SUPPORTED_CHAINS
