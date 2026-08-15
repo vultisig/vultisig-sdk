@@ -81,8 +81,8 @@ describe('prepareIbcTransfer', () => {
   })
 
   it('supportedIbcDestinationsFrom accepts Vultisig canonical source names too', () => {
-    expect(supportedIbcDestinationsFrom('Osmosis')).toContain('cosmoshub-4')
-    expect(supportedIbcDestinationsFrom('Cosmos')).toContain('osmosis-1')
+    expect(supportedIbcDestinationsFrom('Osmosis')).toEqual(supportedIbcDestinationsFrom('osmosis-1'))
+    expect(supportedIbcDestinationsFrom('Cosmos')).toEqual(supportedIbcDestinationsFrom('cosmoshub-4'))
   })
 
   it('normaliseIbcChainId maps every Vultisig canonical name to its IBC chain-ID (mcp-ts parity)', () => {
