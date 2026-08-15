@@ -52,3 +52,11 @@ export {
   SEEDPHRASE_IMPORT_SUPPORTED_CHAINS,
   SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS,
 } from '../constants'
+
+// Shared import prelude
+export {
+  prepareSeedphraseImportPrelude,
+  type SeedphraseImportPreludeInput,
+  type SeedphraseImportPreludeProgressLabels,
+  type SeedphraseImportPreludeResult,
+} from './prepareSeedphraseImportPrelude'
