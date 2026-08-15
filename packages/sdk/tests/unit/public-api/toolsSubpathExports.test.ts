@@ -16,6 +16,7 @@ describe('public API subpath exports', () => {
     const bridgeExport = sdkPackageJson.exports['./tools/bridge']
     const decodeExport = sdkPackageJson.exports['./tools/decode']
     const txExport = sdkPackageJson.exports['./tx']
+    const tonExport = sdkPackageJson.exports['./chains/ton']
 
     expect(parseExport).toMatchObject({
       types: './dist/tools/parse/index.d.ts',
@@ -47,12 +48,19 @@ describe('public API subpath exports', () => {
       require: './dist/tx/index.cjs',
       default: './dist/tx/index.cjs',
     })
+    expect(tonExport).toMatchObject({
+      types: './dist/chains/ton/index.d.ts',
+      import: './dist/chains/ton/index.js',
+      require: './dist/chains/ton/index.cjs',
+      default: './dist/chains/ton/index.cjs',
+    })
 
     expect(JSON.stringify(parseExport)).not.toContain('dist/index.node')
     expect(JSON.stringify(defiExport)).not.toContain('dist/index.node')
     expect(JSON.stringify(bridgeExport)).not.toContain('dist/index.node')
     expect(JSON.stringify(decodeExport)).not.toContain('dist/index.node')
     expect(JSON.stringify(txExport)).not.toContain('dist/index.node')
+    expect(JSON.stringify(tonExport)).not.toContain('dist/index.node')
   })
 
   it('keeps dedicated JS and d.ts bundle generation wired for every narrow public surface', () => {
@@ -66,6 +74,8 @@ describe('public API subpath exports', () => {
     expect(platformRollupConfig).toContain("distBase: 'tools/decode'")
     expect(platformRollupConfig).toContain("input: './src/tx/index.ts'")
     expect(platformRollupConfig).toContain("distBase: 'tx'")
+    expect(platformRollupConfig).toContain("input: './src/chains/ton/index.ts'")
+    expect(platformRollupConfig).toContain("distBase: 'chains/ton'")
 
     expect(typesRollupConfig).toContain(
       "createSubpathTypesConfig('src/tools/parse/index.ts', 'dist/tools/parse/index.d.ts')"
@@ -80,5 +90,8 @@ describe('public API subpath exports', () => {
       "createSubpathTypesConfig('src/tools/decode/index.ts', 'dist/tools/decode/index.d.ts')"
     )
     expect(typesRollupConfig).toContain("createSubpathTypesConfig('src/tx/index.ts', 'dist/tx/index.d.ts')")
+    expect(typesRollupConfig).toContain(
+      "createSubpathTypesConfig('src/chains/ton/index.ts', 'dist/chains/ton/index.d.ts')"
+    )
   })
 })
