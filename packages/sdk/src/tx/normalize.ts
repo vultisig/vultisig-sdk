@@ -162,15 +162,24 @@ export const normalizeTx = (result: string | JsonObject, args: NormalizeArgs = {
 const LEG_METADATA_KEYS = [
   'chain',
   'chain_id',
+  'chainId',
   'from_chain',
+  'fromChain',
   'to_chain',
+  'toChain',
   'provider',
   'from_symbol',
+  'fromSymbol',
   'to_symbol',
+  'toSymbol',
   'from_address',
+  'fromAddress',
   'to_address',
+  'toAddress',
   'from_decimals',
+  'fromDecimals',
   'to_decimals',
+  'toDecimals',
 ] as const
 
 /**
