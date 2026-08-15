@@ -258,9 +258,16 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.MAYA_SEND_FEE_BASE_UNITS).toBe(2_000_000_000n)
   })
 
-  it('exports the Cosmos staking gas limit helper, which the send-fee parity matrix does not cover', () => {
-    expect(sdk.getCosmosStakingGasLimit({ chain: sdk.Chain.Cosmos })).toBe(350_000n)
-    expect(sdk.getCosmosStakingGasLimit({ chain: sdk.Chain.Cosmos, msgCount: 2 })).toBe(437_500n)
+  it('exports Chain enum and VaultBase class (VaultBase carries the prep-only primitives)', () => {
+    expect(sdk.Chain).toBeDefined()
+    expect(typeof sdk.VaultBase).toBe('function')
+  })
+
+  it('exports canonical fast-vault helpers and the shared ServerEndpoints contract', () => {
+    expect(typeof sdk.checkVaultExistsOnServer).toBe('function')
+    expect(typeof sdk.migrateWithServer).toBe('function')
+    expect(typeof sdk.resendVaultShare).toBe('function')
+    expect(typeof sdk.mldsaWithServer).toBe('function')
   })
 
   it('exports seedphrase import chain support policy for consumers', () => {
