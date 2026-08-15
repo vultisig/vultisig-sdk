@@ -44,9 +44,13 @@ describe('isValidCashAddr — polymod checksum enforcement', () => {
     expect(isValidCashAddr(bad)).toBe(false)
   })
 
-  it('rejects wrong length and uppercase', () => {
+  it('rejects wrong length', () => {
     expect(isValidCashAddr(VALID_P2PKH + 'q')).toBe(false)
-    expect(isValidCashAddr(VALID_P2PKH.toUpperCase())).toBe(false)
+  })
+
+  it('accepts uniform uppercase and rejects mixed case', () => {
+    expect(isValidCashAddr(VALID_P2PKH.toUpperCase())).toBe(true)
+    expect(isValidCashAddr(`${VALID_P2PKH.slice(0, -1)}A`)).toBe(false)
   })
 })
 
