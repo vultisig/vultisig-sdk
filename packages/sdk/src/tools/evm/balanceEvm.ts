@@ -1,7 +1,9 @@
 import { EvmChain } from '@vultisig/core-chain/Chain'
 import { getEvmClient } from '@vultisig/core-chain/chains/evm/client'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
-import { erc20Abi } from 'viem'
+import { decodeAbiParameters, erc20Abi, parseAbiParameters } from 'viem'
+
+import { evmCall } from './evmCall'
 
 /** Format a raw base-unit bigint to a human-readable decimal string (no precision loss). */
 const formatUnits = (raw: bigint, decimals: number): string => {
@@ -10,6 +12,42 @@ const formatUnits = (raw: bigint, decimals: number): string => {
   const frac = raw % divisor
   if (frac === 0n) return whole.toString()
   return `${whole}.${frac.toString().padStart(decimals, '0').replace(/0+$/, '')}`
+}
+
+const SYMBOL_SELECTOR = '0x95d89b41' as const
+
+/**
+ * Decode a right-NULL-padded bytes32 string. Legacy ERC-20s (MKR, SAI class)
+ * return `symbol()` as a raw bytes32 instead of the canonical ABI `string`,
+ * which viem's typed `readContract` decoder rejects outright.
+ */
+const decodeBytes32Symbol = (data: `0x${string}`): string => {
+  const hex = data.slice(2)
+  let end = hex.length
+  while (end >= 2 && hex.slice(end - 2, end) === '00') end -= 2
+  if (end === 0) return 'UNKNOWN'
+  let out = ''
+  for (let i = 0; i < end; i += 2) {
+    out += String.fromCharCode(parseInt(hex.slice(i, i + 2), 16))
+  }
+  return out
+}
+
+/**
+ * Read an ERC-20 `symbol()`, tolerating both the canonical ABI `string`
+ * return and the legacy right-padded `bytes32` return (MKR / SAI class).
+ * `readContract` decodes strictly against the ABI and throws for the bytes32
+ * shape, so we go through a raw `eth_call` and try both decodings.
+ */
+const readSymbol = async (chain: EvmChain, address: `0x${string}`): Promise<string> => {
+  const data = await evmCall(chain, { to: address, data: SYMBOL_SELECTOR })
+  if (data === '0x') return 'UNKNOWN'
+  try {
+    const [symbol] = decodeAbiParameters(parseAbiParameters('string'), data)
+    return symbol
+  } catch {
+    return decodeBytes32Symbol(data)
+  }
 }
 
 export type EvmBalance = {
@@ -77,11 +115,7 @@ export const getEvmBalances = async (chain: EvmChain, params: GetEvmBalancesPara
           abi: erc20Abi,
           functionName: 'decimals',
         }),
-        client.readContract({
-          address: contractAddress,
-          abi: erc20Abi,
-          functionName: 'symbol',
-        }),
+        readSymbol(chain, contractAddress),
       ])
 
       return {
