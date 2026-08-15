@@ -111,6 +111,20 @@ export async function executeBalance(ctx: CommandContext, options: BalanceOption
       if (result.balances) Object.assign(balances, result.balances)
       if (result.error) failures.push({ chain: result.chain, error: result.error })
     }
+    // Every chain failed → this is a real error, not a partial success. Mirror
+    // executePortfolio's contract below: fail the spinner and throw instead of
+    // printing a success envelope with an empty balances map.
+    if (failures.length > 0 && Object.keys(balances).length === 0) {
+      spinner.fail('Balances failed to load')
+      throw new NetworkError(
+        `Failed to load balances for all ${failures.length} chain(s): ${failures
+          .map(f => `${f.chain} (${f.error.message})`)
+          .join('; ')}`,
+        'All chain balance fetches failed — likely a network/RPC issue',
+        ['Check your internet connection', 'Retry in a few moments']
+      )
+    }
+
     spinner.succeed(failures.length === 0 ? 'Balances loaded' : `Balances loaded (${failures.length} chain(s) failed)`)
 
     if (isJsonOutput()) {
