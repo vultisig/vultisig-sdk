@@ -8,7 +8,7 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 
 import { DEFAULT_CHAINS } from '../constants'
-import { ServerManager, type ServerEndpoints } from '../server/ServerManager'
+import { type ServerEndpoints, ServerManager } from '../server/ServerManager'
 import { PasswordCacheService } from '../services/PasswordCacheService'
 import { PushNotificationService } from '../services/PushNotificationService'
 import type { Storage } from '../storage/types'
