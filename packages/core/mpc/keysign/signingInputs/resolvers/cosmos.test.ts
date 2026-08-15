@@ -283,6 +283,98 @@ describe('getCosmosSigningInputs gas limit', () => {
     expect(depositCoin?.decimals.toString()).toBe('8')
   })
 
+  // A limit order carries NO swap payload on the THORChain branch, so the
+  // secured asset has to be read off the payload's own coin. Reading it only
+  // from `swapPayload.fromCoin` deposited `THOR.BTC` — an asset no vault holds —
+  // and THORChain rejected the broadcast with `insufficient funds` even though
+  // the memo was perfectly valid. Every secured denom was affected, not just BTC.
+  it.each([
+    ['btc-btc', 'BTC', 'BTC', 'BTC'],
+    ['eth-eth', 'ETH', 'ETH', 'ETH'],
+    ['gaia-atom', 'ATOM', 'GAIA', 'ATOM'],
+    [
+      'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+      'USDC',
+      'ETH',
+      'USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48',
+    ],
+  ])('deposits %s by its secured asset with no swap payload', async (denom, ticker, expectedChain, expectedSymbol) => {
+    const [input] = await getCosmosSigningInputs({
+      keysignPayload: create(KeysignPayloadSchema, {
+        coin: create(CoinSchema, {
+          chain: Chain.THORChain,
+          ticker,
+          contractAddress: denom,
+          address: thorSender,
+          decimals: 8,
+          isNativeToken: false,
+          hexPublicKey: publicKeyHex,
+        }),
+        toAddress: thorSender,
+        toAmount: '1000',
+        memo: `=<:THOR.RUNE:${thorSender}:5000000/14400/0:v0:50`,
+        blockchainSpecific: {
+          case: 'thorchainSpecific',
+          value: create(THORChainSpecificSchema, {
+            accountNumber: 7n,
+            sequence: 3n,
+            fee: 2_000_000n,
+            isDeposit: true,
+            transactionType: TransactionType.UNSPECIFIED,
+          }),
+        },
+      }),
+      walletCore,
+    })
+
+    const depositCoin = input.messages[0]?.thorchainDepositMessage?.coins?.[0]
+    expect(depositCoin?.asset).toMatchObject({
+      chain: expectedChain,
+      symbol: expectedSymbol,
+      ticker,
+      secured: true,
+    })
+    expect(depositCoin?.amount).toBe('1000')
+  })
+
+  // THORChain-NATIVE tokens are not secured assets and must keep THOR.TICKER.
+  // `x/` synths and plain denoms have no L1 chain prefix to derive from.
+  it.each([
+    ['tcy', 'TCY'],
+    ['x/ruji', 'RUJI'],
+  ])('keeps the THORChain-native %s on the THOR asset path', async (denom, ticker) => {
+    const [input] = await getCosmosSigningInputs({
+      keysignPayload: create(KeysignPayloadSchema, {
+        coin: create(CoinSchema, {
+          chain: Chain.THORChain,
+          ticker,
+          contractAddress: denom,
+          address: thorSender,
+          decimals: 8,
+          isNativeToken: false,
+          hexPublicKey: publicKeyHex,
+        }),
+        toAddress: thorSender,
+        toAmount: '1000',
+        memo: `=<:THOR.RUNE:${thorSender}:5000000/14400/0:v0:50`,
+        blockchainSpecific: {
+          case: 'thorchainSpecific',
+          value: create(THORChainSpecificSchema, {
+            accountNumber: 7n,
+            sequence: 3n,
+            fee: 2_000_000n,
+            isDeposit: true,
+            transactionType: TransactionType.UNSPECIFIED,
+          }),
+        },
+      }),
+      walletCore,
+    })
+
+    const depositCoin = input.messages[0]?.thorchainDepositMessage?.coins?.[0]
+    expect(depositCoin?.asset).toMatchObject({ chain: 'THOR', ticker, secured: false })
+  })
+
   it('encodes a secured-asset swap deposit with the L1 secured asset (native)', async () => {
     const memo = `=:ETH-USDC:${thorSender}`
     const [input] = await getCosmosSigningInputs({
