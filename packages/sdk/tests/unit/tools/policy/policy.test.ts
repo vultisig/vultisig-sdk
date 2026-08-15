@@ -1,4 +1,4 @@
-import { type Address, encodeFunctionData, getAddress, type Hex,parseAbi, serializeTransaction } from 'viem'
+import { type Address, encodeFunctionData, getAddress, type Hex, parseAbi, serializeTransaction } from 'viem'
 import { describe, expect, it } from 'vitest'
 
 import { decodeFromToolResult } from '@/tools/decode'
@@ -285,7 +285,7 @@ describe('toPolicyEnvelope', () => {
 
     const verdict = policy.evaluate(
       { chain: 'ethereum', recipient: POLICY_RECIPIENT, asset: 'USDC', amount: '1', amountUnits: 'human' },
-      policy.fromDecodedEnvelope(decoded),
+      policy.fromDecodedEnvelope(decoded)
     )
 
     expect(decoded.decoded).toBe(true)

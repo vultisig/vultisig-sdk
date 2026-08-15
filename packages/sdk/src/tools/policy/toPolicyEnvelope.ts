@@ -22,9 +22,7 @@ export function toPolicyEnvelope(envelope: DecodedEnvelope): PolicyEnvelope {
     asset: envelope.asset,
     amount,
     decoded: invalidAmount ? false : envelope.decoded,
-    decodeError: invalidAmount
-      ? `invalid decoded atomic amount: ${envelope.amount}`
-      : envelope.decodeError,
+    decodeError: invalidAmount ? `invalid decoded atomic amount: ${envelope.amount}` : envelope.decodeError,
   }
 }
 
