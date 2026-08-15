@@ -174,7 +174,6 @@ describe('runSkipSwap input validation (no network)', () => {
     expect(out.ok).toBe(false)
     if (!out.ok) expect(out.envelope.error).toBe('invalid_input')
   })
-
 })
 
 describe('runSkipSwap Akash HRP allowlist (sdk#1785)', () => {
