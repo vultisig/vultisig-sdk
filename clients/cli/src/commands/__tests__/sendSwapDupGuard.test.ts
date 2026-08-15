@@ -46,6 +46,7 @@ import { computeFingerprint, reserveBroadcast } from '../../agent/broadcastJourn
 import { AgentExecutor } from '../../agent/executor'
 import { buildSendBroadcastIntent } from '../../core/broadcastGuard'
 import { classifyError, ExitCode } from '../../core/errors'
+import { outputJson } from '../../lib/output'
 import { executeSwap } from '../swap'
 import { sendTransaction } from '../transaction'
 
@@ -335,6 +336,22 @@ describe('send — broadcast dedupe guard', () => {
         dryRun: true,
       })
     ).rejects.toThrow(/Conflicting XRP destination tags/)
+  })
+
+  it('keeps the executed max-send JSON result limited to transaction fields', async () => {
+    const realSends = { count: 0 }
+    const { vault } = makeDriftingMaxVault({
+      payloads: [nativeSendPayload('0xrecipient', '1000000000000000000')],
+      txHash: '0xmax-json',
+      realSends,
+    })
+
+    await sendTransaction(vault, { chain: Chain.Ethereum, to: '0xrecipient', amount: 'max', yes: true })
+
+    const jsonResult = vi.mocked(outputJson).mock.calls.at(-1)?.[0] as Record<string, unknown>
+    expect(jsonResult).toMatchObject({ txHash: '0xmax-json', chain: Chain.Ethereum })
+    expect(jsonResult).not.toHaveProperty('amount')
+    expect(jsonResult).not.toHaveProperty('isMax')
   })
 
   it('refuses an identical second send within the window (no second broadcast, exit 9)', async () => {

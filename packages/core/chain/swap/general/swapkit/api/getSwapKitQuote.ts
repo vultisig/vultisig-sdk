@@ -5,7 +5,10 @@ import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { usdc } from '@vultisig/core-chain/coin/knownTokens'
 import { GeneralSwapQuote, GeneralSwapTx } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
-import { logUnenforcedAggregatorDestination } from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
+import {
+  assertSwapKitAddressReputation,
+  assertSwapKitDestinationMatchesTarget,
+} from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
 import { getSwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
 import { SwapKitEnabledChain, SwapKitSourceChain } from '@vultisig/core-chain/swap/general/swapkit/SwapKitEnabledChains'
 import {
@@ -150,21 +153,12 @@ type SwapKitQuoteRoute = {
 
 type SwapKitQuoteResponse = {
   routes?: SwapKitQuoteRoute[]
-  providerErrors?: {
-    provider?: string
-    message?: string
-    errorCode?: string
-  }[]
+  providerErrors?: { provider?: string; message?: string; errorCode?: string }[]
   error?: string
   message?: string
 }
 
-type SwapKitFee = {
-  type?: string
-  amount?: string
-  asset?: string
-  chain?: string
-}
+type SwapKitFee = { type?: string; amount?: string; asset?: string; chain?: string }
 
 type SwapKitSwapResponse = {
   expectedBuyAmount?: string
@@ -187,9 +181,7 @@ type SwapKitSwapResponse = {
   providers?: string[]
   legs?: { provider?: string }[]
   fees?: SwapKitFee[]
-  meta?: {
-    txType?: string
-  }
+  meta?: { txType?: string }
 }
 
 type SwapKitEvmTx = {
@@ -329,10 +321,7 @@ const postSwapKit = async <T>(path: string, body: Record<string, unknown>): Prom
 
   const response = await fetch(`${baseUrl.replace(/\/$/, '')}${path}`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(trimmedApiKey ? { 'x-api-key': trimmedApiKey } : {}),
-    },
+    headers: { 'Content-Type': 'application/json', ...(trimmedApiKey ? { 'x-api-key': trimmedApiKey } : {}) },
     body: JSON.stringify(body),
   })
 
@@ -407,12 +396,21 @@ const decodeApproveSpender = (data: string | undefined): string | undefined => {
 type BuildEvmTxInput = {
   tx: unknown
   fromAddress: string
+  targetAddress: string | undefined
+  chain: Chain
   approvalTx?: SwapKitSwapResponse['approvalTx']
   /** Omitted when the response itemizes no affiliate/service fee at all. */
   affiliateFee?: SwapFee
 }
 
-const buildEvmTx = ({ tx, fromAddress, approvalTx, affiliateFee }: BuildEvmTxInput): GeneralSwapTx => {
+const buildEvmTx = async ({
+  tx,
+  fromAddress,
+  targetAddress,
+  chain,
+  approvalTx,
+  affiliateFee,
+}: BuildEvmTxInput): Promise<GeneralSwapTx> => {
   if (!isRecord(tx)) {
     throw new Error('SwapKit EVM route did not return a transaction object.')
   }
@@ -423,10 +421,9 @@ const buildEvmTx = ({ tx, fromAddress, approvalTx, affiliateFee }: BuildEvmTxInp
     throw new Error('SwapKit EVM transaction is missing a required to field.')
   }
 
-  // AGG-02: SwapKit routes through many different bridge/DEX contracts by design
-  // (diamond routing, multi-hop, chain-specific deployments) — a hard allowlist would
-  // false-block legitimate routes, so log (never throw). See knownAggregatorRouters.ts.
-  logUnenforcedAggregatorDestination('swapkit', evmTx.to)
+  // sdk#1458: tx.to and targetAddress share the same untrusted /v3/swap response, so
+  // equality is defense in depth rather than an independent trust boundary.
+  assertSwapKitDestinationMatchesTarget(evmTx.to, targetAddress, chain)
 
   const gas = evmTx.gasLimit ?? evmTx.gas
 
@@ -434,6 +431,16 @@ const buildEvmTx = ({ tx, fromAddress, approvalTx, affiliateFee }: BuildEvmTxInp
   // allowance target (often an inner executor != tx.to). Surface it so the
   // consumer approves the correct contract instead of the router.
   const approvalAddress = decodeApproveSpender(approvalTx?.data)
+
+  // The Blockaid verdict is independent of SwapKit's response. Require an explicit
+  // Benign result for both the transaction destination and any distinct approval
+  // spender before either address can enter a signable quote.
+  const reputationChecks = [assertSwapKitAddressReputation(evmTx.to, chain, 'transaction destination')]
+  if (approvalAddress && approvalAddress.toLowerCase() !== evmTx.to.toLowerCase()) {
+    reputationChecks.push(assertSwapKitAddressReputation(approvalAddress, chain, 'approval spender'))
+  }
+
+  await Promise.all(reputationChecks)
 
   return {
     evm: {
@@ -501,10 +508,7 @@ const getSwapKitSwapFee = (
     to,
     ...(isChainflipProvider(routeProvider) ? [chainflipStableFeeCoin] : []),
   ]
-  const candidates = feeCoins.map(coin => ({
-    coin,
-    asset: toSwapKitAsset(coin).toLowerCase(),
-  }))
+  const candidates = feeCoins.map(coin => ({ coin, asset: toSwapKitAsset(coin).toLowerCase() }))
   let result: SwapFee | undefined
 
   for (const fee of fees ?? []) {
@@ -544,14 +548,7 @@ const getSwapKitSwapFee = (
     result = result ? { ...result, amount: result.amount + current.amount } : current
   }
 
-  return (
-    result ?? {
-      amount: 0n,
-      chain: from.chain,
-      id: from.id,
-      decimals: from.decimals,
-    }
-  )
+  return result ?? { amount: 0n, chain: from.chain, id: from.id, decimals: from.decimals }
 }
 
 const buildSolanaTx = (
@@ -568,13 +565,7 @@ const buildSolanaTx = (
   const decimals = chainFeeCoin[Chain.Solana].decimals
   const networkFee = getSwapKitFeeAmount(fees, 'network', decimals)
 
-  return {
-    solana: {
-      data: tx,
-      networkFee,
-      swapFee: getSwapKitSwapFee(fees, from, to, routeProvider),
-    },
-  }
+  return { solana: { data: tx, networkFee, swapFee: getSwapKitSwapFee(fees, from, to, routeProvider) } }
 }
 
 const getTransferTargetAddress = ({ targetAddress, depositAddress, tx }: SwapKitSwapResponse): string | undefined => {
@@ -729,11 +720,7 @@ const buildTransferTx = (
   const txPayload = response.tx ? encodeSwapKitTxPayload(response.tx, txType) : undefined
   const psbtDestinationAmount =
     from.chain === Chain.Bitcoin && txType?.toUpperCase() === 'PSBT' && txPayload?.length
-      ? getBitcoinPsbtDestinationAmount({
-          txPayload,
-          senderAddress: from.address,
-          targetAddress: to,
-        })
+      ? getBitcoinPsbtDestinationAmount({ txPayload, senderAddress: from.address, targetAddress: to })
       : undefined
 
   const transfer = {
@@ -746,9 +733,7 @@ const buildTransferTx = (
     ...(response.swapId ? { swapId: response.swapId } : {}),
   }
 
-  return {
-    transfer,
-  }
+  return { transfer }
 }
 
 // Cardano is an eligible SwapKit SOURCE chain for quote-dispatch purposes (see
@@ -769,7 +754,7 @@ const buildSwapKitTx = (
   to: AccountCoin<SwapKitEnabledChain>,
   amount: bigint,
   routeProvider: string | undefined
-): GeneralSwapTx => {
+): GeneralSwapTx | Promise<GeneralSwapTx> => {
   if (from.chain === Chain.Solana) {
     return buildSolanaTx(response.tx, response.fees, from, to, routeProvider)
   }
@@ -781,6 +766,8 @@ const buildSwapKitTx = (
   return buildEvmTx({
     tx: response.tx,
     fromAddress: from.address,
+    targetAddress: response.targetAddress,
+    chain: from.chain,
     approvalTx: response.approvalTx,
     affiliateFee: getSwapKitEvmSwapFee({ fees: response.fees, from, to, routeProvider }),
   })
@@ -882,10 +869,7 @@ const fetchSwapKitQuoteResponse = async (body: Record<string, unknown>): Promise
 
   const response = await fetch(`${baseUrl.replace(/\/$/, '')}/v3/quote`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(trimmedApiKey ? { 'x-api-key': trimmedApiKey } : {}),
-    },
+    headers: { 'Content-Type': 'application/json', ...(trimmedApiKey ? { 'x-api-key': trimmedApiKey } : {}) },
     body: JSON.stringify(body),
   })
 
@@ -912,12 +896,7 @@ const getSwapKitRoutes = async (
   providers: SwapKitProvider[]
 ): Promise<SwapKitQuoteRoute[]> => {
   try {
-    const quoteResponse = await fetchSwapKitQuoteResponse(
-      withoutUndefinedFields({
-        ...body,
-        providers,
-      })
-    )
+    const quoteResponse = await fetchSwapKitQuoteResponse(withoutUndefinedFields({ ...body, providers }))
 
     if (quoteResponse.error) {
       const message = quoteResponse.message ?? quoteResponse.error
@@ -1040,6 +1019,6 @@ export const getSwapKitQuote = async ({
     provider: 'swapkit',
     routeProvider,
     ...(priceImpactFraction === undefined ? {} : { priceImpactFraction }),
-    tx: buildSwapKitTx(swapResponse, from, to, amount, routeProvider),
+    tx: await buildSwapKitTx(swapResponse, from, to, amount, routeProvider),
   }
 }

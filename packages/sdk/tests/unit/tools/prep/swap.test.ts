@@ -1,4 +1,5 @@
 import { Chain } from '@vultisig/core-chain/Chain'
+import { getSwapQuoteSafetyFingerprint } from '@vultisig/core-chain/swap/quote/getSwapQuoteSafetyFingerprint'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { mockBuildSwapKeysignPayload, mockGetPublicKey, mockGetWalletCore } = vi.hoisted(() => ({
@@ -17,7 +18,7 @@ vi.mock('@/context/wasmRuntime', () => ({
   getWalletCore: mockGetWalletCore,
 }))
 
-import { prepareSwapTxFromKeys } from '@/tools/prep/swap'
+import { prepareSwapTxFromKeys, SwapQuoteExpiredError } from '@/tools/prep/swap'
 import type { VaultIdentity } from '@/tools/prep/types'
 
 const baseIdentity: VaultIdentity = {
@@ -53,9 +54,33 @@ const btcCoin = {
   ticker: 'BTC',
 } as any
 
+const bindSwapQuote = (
+  quote: any,
+  requestedAmount: bigint,
+  {
+    expiresAt = Date.now() + 600_000,
+    fromCoin = ethCoin,
+    toCoin = btcCoin,
+  }: { expiresAt?: number; fromCoin?: any; toCoin?: any } = {}
+) =>
+  ({
+    quote,
+    discounts: [],
+    requestedAmount,
+    expiresAt,
+    safetyFingerprint: getSwapQuoteSafetyFingerprint({
+      from: fromCoin,
+      to: toCoin,
+      requestedAmount,
+      expiresAt,
+      quote,
+    }),
+  }) as any
+
 // A non-expired native quote (expiry is a future unix-seconds timestamp) — the shape that
-// exercises the real `'native' in quote` branch without tripping the new expiry guard.
-const swapQuoteStub = { quote: { native: { expiry: Math.floor(Date.now() / 1000) + 600 } } } as any
+// exercises the real `'native' in quote` branch without tripping the expiry guards.
+const freshNativeQuote = (requestedAmount: bigint, fromCoin = ethCoin, toCoin = btcCoin) =>
+  bindSwapQuote({ native: { expiry: Math.floor(Date.now() / 1000) + 600 } }, requestedAmount, { fromCoin, toCoin })
 
 describe('prepareSwapTxFromKeys', () => {
   beforeEach(() => {
@@ -66,13 +91,14 @@ describe('prepareSwapTxFromKeys', () => {
 
   it('calls getPublicKey for both fromCoin.chain and toCoin.chain (native swap THORChain -> BTC)', async () => {
     const payload = { __mock: 'nativePayload' }
+    const swapQuote = freshNativeQuote(1_000_000_000n, thorCoin, btcCoin)
     mockBuildSwapKeysignPayload.mockResolvedValue(payload)
 
     const result = await prepareSwapTxFromKeys(baseIdentity, {
       fromCoin: thorCoin,
       toCoin: btcCoin,
       amount: 10,
-      swapQuote: swapQuoteStub,
+      swapQuote,
     })
 
     expect(result).toBe(payload)
@@ -103,7 +129,7 @@ describe('prepareSwapTxFromKeys', () => {
       fromCoin: thorCoin,
       toCoin: btcCoin,
       amount: 10,
-      swapQuote: swapQuoteStub,
+      swapQuote,
       vaultId: baseIdentity.ecdsaPublicKey,
       localPartyId: baseIdentity.localPartyId,
       libType: baseIdentity.libType,
@@ -123,7 +149,7 @@ describe('prepareSwapTxFromKeys', () => {
         fromCoin: ethCoin,
         toCoin: btcCoin,
         amount: '1',
-        swapQuote: swapQuoteStub,
+        swapQuote: freshNativeQuote(1_000_000_000_000_000_000n),
       },
       overrideWalletCore as any
     )
@@ -146,7 +172,7 @@ describe('prepareSwapTxFromKeys', () => {
       fromCoin: ethCoin,
       toCoin: btcCoin,
       amount: '1',
-      swapQuote: swapQuoteStub,
+      swapQuote: freshNativeQuote(1_000_000_000_000_000_000n),
     })
 
     expect(mockGetPublicKey).toHaveBeenCalledTimes(2)
@@ -167,7 +193,7 @@ describe('prepareSwapTxFromKeys', () => {
   })
 })
 
-describe('prepareSwapTxFromKeys — quote expiry (native only, ABTS/plan 005)', () => {
+describe('prepareSwapTxFromKeys — quote expiry (ABTS/plan 005)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetWalletCore.mockResolvedValue(mockWalletCore)
@@ -175,7 +201,10 @@ describe('prepareSwapTxFromKeys — quote expiry (native only, ABTS/plan 005)', 
   })
 
   it('throws on an expired native quote, before building any payload', async () => {
-    const expiredQuote = { quote: { native: { expiry: Math.floor(Date.now() / 1000) - 1 } } } as any
+    const expiredQuote = bindSwapQuote({ native: { expiry: Math.floor(Date.now() / 1000) - 1 } }, 1_000_000_000n, {
+      fromCoin: thorCoin,
+      toCoin: btcCoin,
+    })
 
     await expect(
       prepareSwapTxFromKeys(baseIdentity, {
@@ -194,7 +223,7 @@ describe('prepareSwapTxFromKeys — quote expiry (native only, ABTS/plan 005)', 
 
   it('does NOT throw on a fresh native quote (expiry in the future)', async () => {
     mockBuildSwapKeysignPayload.mockResolvedValue({ __mock: 'payload' })
-    const freshQuote = { quote: { native: { expiry: Math.floor(Date.now() / 1000) + 600 } } } as any
+    const freshQuote = freshNativeQuote(1_000_000_000n, thorCoin, btcCoin)
 
     await expect(
       prepareSwapTxFromKeys(baseIdentity, {
@@ -206,9 +235,10 @@ describe('prepareSwapTxFromKeys — quote expiry (native only, ABTS/plan 005)', 
     ).resolves.toBeDefined()
   })
 
-  it('does NOT enforce expiry on a non-CoW general quote (evm/solana/transfer carry no expiry field here)', async () => {
-    mockBuildSwapKeysignPayload.mockResolvedValue({ __mock: 'payload' })
-    const generalQuote = { quote: { general: { tx: { evm: {} } } } } as any
+  it('throws on an expired EVM-general quote before building any payload', async () => {
+    const generalQuote = bindSwapQuote({ general: { tx: { evm: {} } } }, 1_000_000_000_000_000_000n, {
+      expiresAt: Date.now() - 1,
+    })
 
     await expect(
       prepareSwapTxFromKeys(baseIdentity, {
@@ -217,12 +247,16 @@ describe('prepareSwapTxFromKeys — quote expiry (native only, ABTS/plan 005)', 
         amount: '1',
         swapQuote: generalQuote,
       })
-    ).resolves.toBeDefined()
+    ).rejects.toBeInstanceOf(SwapQuoteExpiredError)
+
+    expect(mockBuildSwapKeysignPayload).not.toHaveBeenCalled()
+    expect(mockGetWalletCore).not.toHaveBeenCalled()
+    expect(mockGetPublicKey).not.toHaveBeenCalled()
   })
 
   it('throws on an expired CoW order (validTo in the past), before building any payload', async () => {
-    const expiredCowQuote = {
-      quote: {
+    const expiredCowQuote = bindSwapQuote(
+      {
         general: {
           tx: {
             cowswap_order: {
@@ -233,7 +267,8 @@ describe('prepareSwapTxFromKeys — quote expiry (native only, ABTS/plan 005)', 
           },
         },
       },
-    } as any
+      1_000_000_000_000_000_000n
+    )
 
     await expect(
       prepareSwapTxFromKeys(baseIdentity, {
@@ -250,8 +285,8 @@ describe('prepareSwapTxFromKeys — quote expiry (native only, ABTS/plan 005)', 
 
   it('does NOT throw on a fresh CoW order (validTo in the future)', async () => {
     mockBuildSwapKeysignPayload.mockResolvedValue({ __mock: 'payload' })
-    const freshCowQuote = {
-      quote: {
+    const freshCowQuote = bindSwapQuote(
+      {
         general: {
           tx: {
             cowswap_order: {
@@ -262,7 +297,8 @@ describe('prepareSwapTxFromKeys — quote expiry (native only, ABTS/plan 005)', 
           },
         },
       },
-    } as any
+      1_000_000_000_000_000_000n
+    )
 
     await expect(
       prepareSwapTxFromKeys(baseIdentity, {
@@ -275,7 +311,7 @@ describe('prepareSwapTxFromKeys — quote expiry (native only, ABTS/plan 005)', 
   })
 })
 
-describe('prepareSwapTxFromKeys — amount vs committed sell amount (ABTS/plan 005)', () => {
+describe('prepareSwapTxFromKeys — amount consistency (ABTS/plan 005)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetWalletCore.mockResolvedValue(mockWalletCore)
@@ -286,7 +322,10 @@ describe('prepareSwapTxFromKeys — amount vs committed sell amount (ABTS/plan 0
     // transfer.amount is provider-committed and legitimately diverges from caller input (e.g. 100_000 -> 99_999).
     // Exact comparison is excluded for the transfer variant.
     mockBuildSwapKeysignPayload.mockResolvedValue({ __mock: 'payload' })
-    const quote = { quote: { general: { tx: { transfer: { amount: 500000000000000000n } } } } } as any
+    const quote = bindSwapQuote(
+      { general: { tx: { transfer: { amount: 500000000000000000n } } } },
+      1_000_000_000_000_000_000n
+    )
 
     await expect(
       prepareSwapTxFromKeys(baseIdentity, {
@@ -300,8 +339,8 @@ describe('prepareSwapTxFromKeys — amount vs committed sell amount (ABTS/plan 0
 
   it('throws when the caller amount does not match the CoW gross sell amount (sellAmount + feeAmount)', async () => {
     // gross = 600e15 + 100e15 = 700e15, but requested is 1e18 — mismatch
-    const quote = {
-      quote: {
+    const quote = bindSwapQuote(
+      {
         general: {
           tx: {
             cowswap_order: {
@@ -312,7 +351,8 @@ describe('prepareSwapTxFromKeys — amount vs committed sell amount (ABTS/plan 0
           },
         },
       },
-    } as any
+      1_000_000_000_000_000_000n
+    )
 
     await expect(
       prepareSwapTxFromKeys(baseIdentity, {
@@ -329,8 +369,8 @@ describe('prepareSwapTxFromKeys — amount vs committed sell amount (ABTS/plan 0
   it('builds when the caller amount matches the CoW gross sell amount (sellAmount + feeAmount == requested)', async () => {
     mockBuildSwapKeysignPayload.mockResolvedValue({ __mock: 'payload' })
     // gross = 900e15 + 100e15 = 1e18, matches amount '1'
-    const quote = {
-      quote: {
+    const quote = bindSwapQuote(
+      {
         general: {
           tx: {
             cowswap_order: {
@@ -341,7 +381,8 @@ describe('prepareSwapTxFromKeys — amount vs committed sell amount (ABTS/plan 0
           },
         },
       },
-    } as any
+      1_000_000_000_000_000_000n
+    )
 
     await expect(
       prepareSwapTxFromKeys(baseIdentity, {
@@ -353,23 +394,166 @@ describe('prepareSwapTxFromKeys — amount vs committed sell amount (ABTS/plan 0
     ).resolves.toBeDefined()
   })
 
-  it('does NOT throw for an EVM-general quote (opaque calldata amount, not confidently comparable)', async () => {
-    mockBuildSwapKeysignPayload.mockResolvedValue({ __mock: 'payload' })
-    const quote = { quote: { general: { tx: { evm: { to: '0xrouter', data: '0xdeadbeef', value: '0' } } } } } as any
+  it('throws when an EVM-general quote was fetched for a different source amount', async () => {
+    const quote = bindSwapQuote(
+      {
+        general: {
+          tx: { evm: { to: '0xrouter', data: '0xdeadbeef', value: '0' } },
+        },
+      },
+      1_000_000_000_000_000_000n
+    )
 
     await expect(
       prepareSwapTxFromKeys(baseIdentity, {
         fromCoin: ethCoin,
         toCoin: btcCoin,
-        amount: '999999', // deliberately absurd — must NOT be rejected, since evm calldata isn't decoded
+        amount: '999999',
+        swapQuote: quote,
+      })
+    ).rejects.toThrow(/does not match the quote's requested source amount/)
+
+    expect(mockBuildSwapKeysignPayload).not.toHaveBeenCalled()
+    expect(mockGetWalletCore).not.toHaveBeenCalled()
+    expect(mockGetPublicKey).not.toHaveBeenCalled()
+  })
+
+  it('builds an EVM-general quote when the bound source amount matches', async () => {
+    mockBuildSwapKeysignPayload.mockResolvedValue({ __mock: 'payload' })
+    const quote = bindSwapQuote(
+      {
+        general: {
+          tx: { evm: { to: '0xrouter', data: '0xdeadbeef', value: '0' } },
+        },
+      },
+      1_000_000_000_000_000_000n
+    )
+
+    await expect(
+      prepareSwapTxFromKeys(baseIdentity, {
+        fromCoin: ethCoin,
+        toCoin: btcCoin,
+        amount: '1',
         swapQuote: quote,
       })
     ).resolves.toBeDefined()
   })
 
+  it('rejects a same-amount quote bound to a different coin pair before wallet work', async () => {
+    const quote = bindSwapQuote(
+      {
+        general: {
+          tx: { evm: { to: '0xrouter', data: '0xdeadbeef', value: '0' } },
+        },
+      },
+      1_000_000_000_000_000_000n
+    )
+
+    await expect(
+      prepareSwapTxFromKeys(baseIdentity, {
+        fromCoin: ethCoin,
+        toCoin: { ...btcCoin, id: 'other-bitcoin-asset' },
+        amount: '1',
+        swapQuote: quote,
+      })
+    ).rejects.toThrow(/does not match the requested coins, amount, value types, or original transaction/)
+
+    expect(mockBuildSwapKeysignPayload).not.toHaveBeenCalled()
+    expect(mockGetWalletCore).not.toHaveBeenCalled()
+    expect(mockGetPublicKey).not.toHaveBeenCalled()
+  })
+
+  it('rejects a quote whose EVM transaction changed after binding before wallet work', async () => {
+    const quote = bindSwapQuote(
+      {
+        general: {
+          tx: { evm: { to: '0xrouter', data: '0xdeadbeef', value: '0' } },
+        },
+      },
+      1_000_000_000_000_000_000n
+    )
+    quote.quote.general.tx.evm.data = '0xchanged'
+
+    await expect(
+      prepareSwapTxFromKeys(baseIdentity, {
+        fromCoin: ethCoin,
+        toCoin: btcCoin,
+        amount: '1',
+        swapQuote: quote,
+      })
+    ).rejects.toThrow(/does not match the requested coins, amount, value types, or original transaction/)
+
+    expect(mockBuildSwapKeysignPayload).not.toHaveBeenCalled()
+    expect(mockGetWalletCore).not.toHaveBeenCalled()
+    expect(mockGetPublicKey).not.toHaveBeenCalled()
+  })
+
+  it('uses the validated snapshot when caller-owned quote inputs mutate during wallet resolution', async () => {
+    let resolveWalletCore!: (walletCore: typeof mockWalletCore) => void
+    mockGetWalletCore.mockReturnValue(
+      new Promise<typeof mockWalletCore>(resolve => {
+        resolveWalletCore = resolve
+      })
+    )
+    mockBuildSwapKeysignPayload.mockResolvedValue({ __mock: 'payload' })
+
+    const quote = bindSwapQuote(
+      { general: { tx: { evm: { to: '0xrouter', data: '0xdeadbeef', value: '0' } } } },
+      1_000_000_000_000_000_000n
+    )
+    const params = {
+      fromCoin: ethCoin,
+      toCoin: { ...btcCoin },
+      amount: '1',
+      swapQuote: quote,
+    }
+
+    const pending = prepareSwapTxFromKeys(baseIdentity, params)
+    params.toCoin.id = 'mutated-asset'
+    quote.quote.general.tx.evm.data = '0xchanged-during-await'
+    resolveWalletCore(mockWalletCore)
+
+    await expect(pending).resolves.toBeDefined()
+    expect(mockBuildSwapKeysignPayload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toCoin: expect.not.objectContaining({ id: 'mutated-asset' }),
+        swapQuote: expect.objectContaining({
+          quote: {
+            general: expect.objectContaining({
+              tx: { evm: expect.objectContaining({ data: '0xdeadbeef' }) },
+            }),
+          },
+        }),
+      })
+    )
+  })
+
+  it('fails closed when an EVM-general quote lacks its safety binding', async () => {
+    const quote = {
+      quote: {
+        general: {
+          tx: { evm: { to: '0xrouter', data: '0xdeadbeef', value: '0' } },
+        },
+      },
+    } as any
+
+    await expect(
+      prepareSwapTxFromKeys(baseIdentity, {
+        fromCoin: ethCoin,
+        toCoin: btcCoin,
+        amount: '1',
+        swapQuote: quote,
+      })
+    ).rejects.toThrow(/missing its amount\/expiry safety binding/)
+
+    expect(mockBuildSwapKeysignPayload).not.toHaveBeenCalled()
+    expect(mockGetWalletCore).not.toHaveBeenCalled()
+    expect(mockGetPublicKey).not.toHaveBeenCalled()
+  })
+
   it('does NOT throw for a native quote (no committed-sell-amount field to compare against)', async () => {
     mockBuildSwapKeysignPayload.mockResolvedValue({ __mock: 'payload' })
-    const quote = { quote: { native: { expiry: Math.floor(Date.now() / 1000) + 600 } } } as any
+    const quote = freshNativeQuote(99_999_900_000_000n, thorCoin, btcCoin)
 
     await expect(
       prepareSwapTxFromKeys(baseIdentity, {
@@ -384,7 +568,10 @@ describe('prepareSwapTxFromKeys — amount vs committed sell amount (ABTS/plan 0
   it('accepts a scientific-notation amount on a transfer-route quote (transfer excluded from amount check)', async () => {
     mockBuildSwapKeysignPayload.mockResolvedValue({ __mock: 'payload' })
     // "1e-8" @ 8 decimals == 1 base unit — transfer is excluded, so this should never throw.
-    const quote = { quote: { general: { tx: { transfer: { amount: 999n } } } } } as any
+    const quote = bindSwapQuote({ general: { tx: { transfer: { amount: 999n } } } }, 1n, {
+      fromCoin: btcCoin,
+      toCoin: ethCoin,
+    })
 
     await expect(
       prepareSwapTxFromKeys(baseIdentity, {

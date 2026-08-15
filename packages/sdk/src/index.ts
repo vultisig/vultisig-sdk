@@ -116,6 +116,11 @@ export { checkChainPrefix } from './utils/chainPrefix'
 export type { ParsedThorSwapMemo } from './utils/thorSwapMemo'
 export { parseThorSwapMemo } from './utils/thorSwapMemo'
 
+// Canonical UTXO wrong-chain guard. Consumers should import this instead of
+// maintaining local bech32 HRP / Base58Check version / CashAddr matrices.
+export type { UtxoChainName } from './chains/utxo/addressBrand'
+export { assertUtxoAddressBrand, isUtxoAddressBrandValid } from './chains/utxo/addressBrand'
+
 // ============================================================================
 // PUBLIC API - Tx Shape Normalization (pure, vault-free)
 // ============================================================================
@@ -387,10 +392,12 @@ export {
 // Single source of truth for the per-chain EVM chainId table and fee-ceiling
 // policy so consumers (app, agent-backend-ts) import it instead of
 // hand-maintaining their own copies that can drift (the Hyperliquid 998/999
-// chainId bug class and the client-side fee-policy fork class). Native tickers
-// are already exported via `chainFeeCoin`. `getEvmChainId` returns the hex
-// chainId; `getEvmChainByChainId` resolves a hex chainId back to its EvmChain.
-export { getEvmChainByChainId, getEvmChainId } from '@vultisig/core-chain/chains/evm/chainInfo'
+// client↔server chainId bug class and the client-side fee-policy fork class).
+// Native tickers are already exported via `chainFeeCoin`. `getEvmChainId`
+// returns the hex chainId; `getEvmChainByChainId` resolves a hex chainId back to
+// its EvmChain; `getEvmRpcUrl` returns the canonical default/custom-RPC-resolved
+// endpoint for that chain.
+export { getEvmChainByChainId, getEvmChainId, getEvmRpcUrl } from '@vultisig/core-chain/chains/evm/chainInfo'
 export { clampEvmPriorityFee } from '@vultisig/core-chain/tx/fee/evm/clampEvmPriorityFee'
 
 // Noon USDC yield vault SDK boundary. Consumers should use these helpers
@@ -888,6 +895,7 @@ export {
   compareCosts,
   computeAstroportMinReceive,
   CONSOLIDATE_CHAINS,
+  cosmos,
   COSMOS_SWAP_FEE_LABEL_CHAINS,
   COSMOS_SWAP_GAS_LIMIT,
   cosmosBalanceChains,
@@ -906,6 +914,7 @@ export {
   encodeErc20Revoke,
   estimateCosmosSwapFeeLabel,
   evaluatePolicy,
+  evm,
   evmCall,
   evmCheckAllowance,
   evmGasPrice,
@@ -1027,10 +1036,12 @@ export {
   SUI_NATIVE_COIN_TYPE,
   supportedIbcDestinationsFrom,
   supportedUtxoBalanceChains,
+  SwapQuoteExpiredError,
   symbolFromCoinGeckoId,
   TERRA_CHAIN_ID,
   TERRA_LCD,
   THORCHAIN_NODE_URL,
+  token,
   TRC20_TRANSFER_SELECTOR,
   utxoFeeRate,
   VerifierClient,
