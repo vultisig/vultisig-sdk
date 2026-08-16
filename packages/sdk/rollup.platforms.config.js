@@ -336,6 +336,14 @@ const configs = {
       distBase: 'tools/bridge',
     }),
     ...createSubpathConfigs({
+      input: './src/tools/evm/index.ts',
+      distBase: 'tools/evm',
+    }),
+    ...createSubpathConfigs({
+      input: './src/tools/cosmos/index.ts',
+      distBase: 'tools/cosmos',
+    }),
+    ...createSubpathConfigs({
       input: './src/chains/tron/index.ts',
       distBase: 'chains/tron',
     }),
@@ -354,6 +362,10 @@ const configs = {
     ...createSubpathConfigs({
       input: './src/tx/index.ts',
       distBase: 'tx',
+    }),
+    ...createSubpathConfigs({
+      input: './src/signable-transaction/index.ts',
+      distBase: 'signable-transaction',
     }),
   ],
   browser: {
