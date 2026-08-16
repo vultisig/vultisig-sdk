@@ -545,6 +545,35 @@ describe('sdk.defi.stakekit', () => {
       expect(new URL(requestUrl).searchParams.get('network')).toBe('avalanche-c')
     })
 
+    it('maps the SDK canonical Cronos id to the StakeKit slug (sdk#1640)', async () => {
+      // `CronosChain` is this SDK's OWN canonical Chain id, and it was the one
+      // canonical id in StakeKit's supported set that did not round-trip: the
+      // literal `cronoschain` went upstream as an unknown slug and came back `[]`,
+      // which reads as "you hold nothing on Cronos" rather than "that network name
+      // was not understood".
+      //
+      // Only ONE network is asserted here on purpose: this path caches, so a second
+      // case in the same file does not re-fetch and has no request to assert on.
+      // The casing/spacing variants are covered by the alias map itself.
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: [], hasNextPage: false }),
+        text: async () => '',
+      } as Response)
+      globalThis.fetch = fetchMock
+
+      await stakekitBalances({ address: '0x1234567890123456789012345678901234567890', network: 'CronosChain' })
+
+      const networks = fetchMock.mock.calls
+        .map(c => String(c[0]))
+        .filter(u => u.startsWith('http'))
+        .map(u => new URL(u).searchParams.get('network'))
+        .filter((n): n is string => n !== null)
+      expect(networks.length).toBeGreaterThan(0)
+      for (const n of networks) expect(n).toBe('cronos')
+    })
+
     it('returns null on 403 (restricted endpoint)', async () => {
       // searchYields (to enumerate integration IDs)
       globalThis.fetch = vi
