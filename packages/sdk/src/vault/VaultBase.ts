@@ -1253,6 +1253,32 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   }
 
   /**
+   * Estimate the network fee a send would pay, in the fee coin's base units.
+   *
+   * Builds the keysign payload internally and extracts just the fee, without
+   * signing or broadcasting anything.
+   *
+   * sdk#1867: this is the estimator that `swap-types.ts` and the `maxSwapable`
+   * comments already instruct consumers to call when a transfer route reports
+   * `maxSwapable: 0n` — but `transactionBuilder` is `protected`, so there was
+   * no way to reach it from the published vault surface. Consumers were left
+   * either approximating max-send or reaching into internals.
+   *
+   * @param params - Same parameters as {@link prepareSendTx}
+   * @returns Fee in the fee coin's base units (e.g. wei for EVM, sats for UTXO)
+   */
+  async estimateSendFee(params: {
+    coin: AccountCoin
+    receiver: string
+    amount: bigint
+    memo?: string
+    destinationTag?: number
+    feeSettings?: FeeSettings
+  }): Promise<bigint> {
+    return this.transactionBuilder.estimateSendFee(params)
+  }
+
+  /**
    * Prepare a contract call transaction keysign payload (EVM chains only).
    *
    * Encodes the function call via ABI and builds a keysign payload with the
