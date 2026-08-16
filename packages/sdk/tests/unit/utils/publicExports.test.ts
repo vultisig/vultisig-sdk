@@ -1,3 +1,5 @@
+import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
+import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
 import { describe, expect, it } from 'vitest'
 
 import * as sdk from '../../../src/index'
@@ -119,6 +121,28 @@ describe('@vultisig/sdk public exports', () => {
       currency: '524C555344000000000000000000000000000000',
       issuer: 'rIssuer',
     })
+  })
+
+  it('exports the custom-RPC registry + health-probe canonicals from the root SDK entrypoint', () => {
+    expect(sdk.customRpcSupportedChains).toBe(customRpcSupportedChains.customRpcSupportedChains)
+    expect(sdk.customRpcSupportedEvmChains).toBe(customRpcSupportedChains.customRpcSupportedEvmChains)
+    expect(sdk.customRpcSupportedCosmosChains).toBe(customRpcSupportedChains.customRpcSupportedCosmosChains)
+    expect(sdk.isCustomRpcSupported).toBe(customRpcSupportedChains.isCustomRpcSupported)
+    expect(sdk.getCustomRpcOverride).toBe(customRpcOverrides.getCustomRpcOverride)
+    expect(sdk.setCustomRpcOverride).toBe(customRpcOverrides.setCustomRpcOverride)
+    expect(sdk.clearCustomRpcOverride).toBe(customRpcOverrides.clearCustomRpcOverride)
+    expect(sdk.setCustomRpcOverrides).toBe(customRpcOverrides.setCustomRpcOverrides)
+    expect(sdk.getCustomRpcOverrides).toBe(customRpcOverrides.getCustomRpcOverrides)
+    expect(sdk.probeRpcHealth).toBeTypeOf('function')
+
+    sdk.clearCustomRpcOverride(sdk.Chain.Ethereum)
+    expect(sdk.isCustomRpcSupported(sdk.Chain.Ethereum)).toBe(true)
+    expect(sdk.isCustomRpcSupported(sdk.Chain.THORChain)).toBe(false)
+    sdk.setCustomRpcOverride(sdk.Chain.Ethereum, ' https://rpc.example ')
+    expect(sdk.getCustomRpcOverride(sdk.Chain.Ethereum)).toBe('https://rpc.example')
+    expect(sdk.getCustomRpcOverrides()).toEqual({ [sdk.Chain.Ethereum]: 'https://rpc.example' })
+    sdk.clearCustomRpcOverride(sdk.Chain.Ethereum)
+    expect(sdk.getCustomRpcOverride(sdk.Chain.Ethereum)).toBeUndefined()
   })
 
   it('exports prepareTrc20TransferFromKeys (pure-crypto TRC-20 builder for mcp-ts/backend)', () => {
