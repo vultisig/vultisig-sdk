@@ -289,6 +289,11 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.MAYA_SEND_FEE_BASE_UNITS).toBe(2_000_000_000n)
   })
 
+  it('exports canonical token-ref resolution helpers for consumer token selection', () => {
+    expect(typeof sdk.resolveTokenRef).toBe('function')
+    expect(typeof sdk.resolveTokenRefId).toBe('function')
+  })
+
   it('exports the Cosmos staking gas limit helper, which the send-fee parity matrix does not cover', () => {
     expect(sdk.getCosmosStakingGasLimit({ chain: sdk.Chain.Cosmos })).toBe(350_000n)
     expect(sdk.getCosmosStakingGasLimit({ chain: sdk.Chain.Cosmos, msgCount: 2 })).toBe(437_500n)
