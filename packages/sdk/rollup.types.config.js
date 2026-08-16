@@ -131,4 +131,8 @@ export default defineConfig([
   createSubpathTypesConfig('src/seedphrase/index.ts', 'dist/seedphrase/index.d.ts'),
   createSubpathTypesConfig('src/tools/decode/index.ts', 'dist/tools/decode/index.d.ts'),
   createSubpathTypesConfig('src/tx/index.ts', 'dist/tx/index.d.ts'),
+  // Curated fast-vault + relay helpers. "server" names the Vultisig FAST-VAULT
+  // server these helpers talk to, not a Node-only runtime — they are plain HTTP
+  // calls, so the subpath ships the same all-platform conditions as ./tx.
+  createSubpathTypesConfig('src/server/index.ts', 'dist/server/index.d.ts'),
 ])
