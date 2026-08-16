@@ -1,5 +1,5 @@
 import { descriptions } from '@vultisig/client-shared'
-import { resolveChainReference } from '@vultisig/sdk'
+import { resolveChainReference, splitAssetRef } from '@vultisig/sdk'
 import * as z from 'zod/v4'
 
 import type { Vault } from './types.js'
@@ -38,10 +38,28 @@ export function resolveChain(name: string, knownChains: readonly string[]): stri
   return match
 }
 
+/**
+ * Parse the `chain[:token]` text contract, resolving the chain within the VAULT'S
+ * currently known chain set.
+ *
+ * sdk#1819: the grammar half now comes from the SDK's canonical `parseAssetRef`
+ * instead of a local `input.split(':')`. That split was wrong in two silent ways:
+ * `'eth:usdc:extra'` returned `symbol: 'usdc'` and DISCARDED `'extra'` (a malformed
+ * ref accepted as a valid one for a different asset), and `'eth:'` returned an empty
+ * `symbol` that flowed downstream as if a token had been named.
+ *
+ * The chain half deliberately stays vault-scoped. `parseAssetRef` (the sibling helper)
+ * resolves against the SDK's GLOBAL chain registry, whereas these tools must only accept
+ * chains the caller's vault actually has — so this uses `splitAssetRef`, which validates
+ * the grammar and the ticker without deciding the chain, and resolves through
+ * `resolveChain(knownChains)` as before. Using `parseAssetRef` here would have silently
+ * changed which chains these tools accept.
+ */
 export function parseChainToken(input: string, knownChains: readonly string[]): { chain: string; symbol?: string } {
-  const parts = input.split(':')
-  const chain = resolveChain(parts[0], knownChains)
-  return { chain, symbol: parts[1] }
+  const ref = splitAssetRef(input)
+  if (!ref.success) throw new Error(ref.error)
+  const chain = resolveChain(ref.chainRef, knownChains)
+  return { chain, ...(ref.ticker === undefined ? {} : { symbol: ref.ticker }) }
 }
 
 export type ToolDef = {
