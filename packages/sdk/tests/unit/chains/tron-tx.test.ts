@@ -82,6 +82,22 @@ describe('tron / encodeInt64Varint', () => {
     expect(enc.length).toBe(10)
     expect(enc[9]).toBe(0x01)
   })
+
+  it('refuses values that do not fit in an int64 (sdk#1828)', () => {
+    const max = (1n << 63n) - 1n
+    const min = -(1n << 63n)
+
+    // Both inclusive bounds stay encodable.
+    expect(() => encodeInt64Varint(max)).not.toThrow()
+    expect(() => encodeInt64Varint(min)).not.toThrow()
+
+    // One past either bound used to encode SILENTLY: 2^63 emitted the unsigned
+    // varint, which a node decodes back as -9223372036854775808, and 2^70
+    // decoded back as 0. Corrupting a value-adjacent field must fail closed.
+    expect(() => encodeInt64Varint(max + 1n)).toThrow(/does not fit in an int64/)
+    expect(() => encodeInt64Varint(1n << 70n)).toThrow(/does not fit in an int64/)
+    expect(() => encodeInt64Varint(min - 1n)).toThrow(/does not fit in an int64/)
+  })
 })
 
 describe('tron / buildTronSendTx', () => {
@@ -193,6 +209,31 @@ describe('tron / buildTrc20TransferTx', () => {
         timestamp: 1_699_999_940_000n,
       })
     ).toThrow(/feeLimit must be > 0/)
+  })
+
+  it('rejects a feeLimit above protobuf int64 max (sdk#1828)', () => {
+    const INT64_MAX = (1n << 63n) - 1n
+    const build = (feeLimit: bigint) =>
+      buildTrc20TransferTx({
+        from: FROM,
+        to: TO,
+        tokenAddress: USDT,
+        amount: 1n,
+        feeLimit,
+        refBlockBytes: REF_BLOCK_BYTES,
+        refBlockHash: REF_BLOCK_HASH,
+        expiration: 1_700_000_000_000n,
+        timestamp: 1_699_999_940_000n,
+      })
+
+    // int64 max is legal and the field survives serialisation unchanged.
+    expect(() => build(INT64_MAX)).not.toThrow()
+
+    // Above it, the emitted varint decodes to a different number entirely
+    // (2^63 -> negative, 2^70 -> 0). Fail closed rather than sign a tx whose
+    // fee ceiling is not the one the caller asked for.
+    expect(() => build(INT64_MAX + 1n)).toThrow(/feeLimit must fit in an int64/)
+    expect(() => build(1n << 70n)).toThrow(/feeLimit must fit in an int64/)
   })
 })
 
