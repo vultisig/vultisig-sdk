@@ -440,6 +440,9 @@ describe('RN entry exposes canonical IBC + Sui prep helpers', () => {
     expect(rn.supportedIbcDestinationsFrom).toBe(prep.supportedIbcDestinationsFrom)
     expect(rn.normaliseIbcChainId).toBe(ibcTransfer.normaliseIbcChainId)
     expect(rn.IBC_MSG_TRANSFER_TYPE_URL).toBe(ibcTransfer.IBC_MSG_TRANSFER_TYPE_URL)
+    expect(rn.IBC_CHAIN_HRP).toBe(ibcTransfer.IBC_CHAIN_HRP)
+    expect(rn.IBC_CHAIN_REVISION).toBe(ibcTransfer.IBC_CHAIN_REVISION)
+    expect(rn.IBC_CHANNEL_DEST).toBe(ibcTransfer.IBC_CHANNEL_DEST)
 
     expect(rn.prepareSuiTokenTransferFromKeys).toBe(prep.prepareSuiTokenTransferFromKeys)
     expect(rn.prepareSuiTokenTransferFromKeys).toBe(suiTokenTransfer.prepareSuiTokenTransferFromKeys)
