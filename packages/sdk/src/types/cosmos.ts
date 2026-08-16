@@ -136,6 +136,25 @@ export type CosmosSigningOptions = {
    * Skip automatic chain-specific data fetching.
    * When true, uses only provided values without querying the chain.
    * Useful for offline signing or when you have pre-fetched data.
+   *
+   * When true you MUST also supply the account metadata that would otherwise
+   * have been fetched: `sequence`, plus `accountNumber` for SignAmino (for
+   * SignDirect the account number is already part of the input).
+   *
+   * sdk#1809: these used to silently default to `'0'`, so "offline signing
+   * with pre-fetched data" produced a payload bound to sequence 0 for every
+   * account whose real sequence was not 0. Such a signature is invalid on
+   * chain, so the builders now fail closed rather than emit it.
    */
   skipChainSpecificFetch?: boolean
+  /**
+   * Pre-fetched account number. Required when `skipChainSpecificFetch` is true
+   * for SignAmino; ignored otherwise (SignDirect takes it from the input).
+   */
+  accountNumber?: string
+  /**
+   * Pre-fetched account sequence. Required when `skipChainSpecificFetch` is
+   * true; ignored otherwise.
+   */
+  sequence?: string
 }

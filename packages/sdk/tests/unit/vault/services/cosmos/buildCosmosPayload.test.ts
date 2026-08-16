@@ -67,6 +67,9 @@ describe('buildCosmosPayload', () => {
           publicKey: fakePublicKey,
           libType,
           skipChainSpecificFetch: true,
+          // sdk#1809: skip means "I already fetched this", so it must be supplied.
+          accountNumber: '7',
+          sequence: '41',
         })
 
         expect(mockGetCosmosAccountInfo).not.toHaveBeenCalled()
@@ -76,8 +79,8 @@ describe('buildCosmosPayload', () => {
           sequence: bigint
           fee: bigint
         }
-        expect(thor.accountNumber).toBe(0n)
-        expect(thor.sequence).toBe(0n)
+        expect(thor.accountNumber).toBe(7n)
+        expect(thor.sequence).toBe(41n)
         expect(thor.fee).toBe(2_000_000n)
       })
 
@@ -101,6 +104,8 @@ describe('buildCosmosPayload', () => {
             publicKey: fakePublicKey,
             libType,
             skipChainSpecificFetch: true,
+            accountNumber: '7',
+            sequence: '41',
           })
         ).rejects.toThrow('THORChain fee.amount[0].amount is required when fee is provided')
       })
@@ -124,6 +129,9 @@ describe('buildCosmosPayload', () => {
           publicKey: fakePublicKey,
           libType,
           skipChainSpecificFetch: true,
+          // sdk#1809: skip means "I already fetched this", so it must be supplied.
+          accountNumber: '7',
+          sequence: '41',
         })
 
         expect(mockGetCosmosAccountInfo).not.toHaveBeenCalled()
@@ -132,8 +140,8 @@ describe('buildCosmosPayload', () => {
           accountNumber: bigint
           sequence: bigint
         }
-        expect(maya.accountNumber).toBe(0n)
-        expect(maya.sequence).toBe(0n)
+        expect(maya.accountNumber).toBe(7n)
+        expect(maya.sequence).toBe(41n)
       })
 
       it('uses cosmosSpecific with gas from record for Osmosis (IBC)', async () => {
@@ -164,6 +172,9 @@ describe('buildCosmosPayload', () => {
           publicKey: fakePublicKey,
           libType,
           skipChainSpecificFetch: true,
+          // sdk#1809: skip means "I already fetched this", so it must be supplied.
+          accountNumber: '7',
+          sequence: '41',
         })
 
         expect(mockGetCosmosAccountInfo).not.toHaveBeenCalled()
@@ -175,9 +186,34 @@ describe('buildCosmosPayload', () => {
         }
         expect(osmo.gas).toBe(cosmosGasRecord.Osmosis)
         expect(getCosmosFeeAmount).not.toHaveBeenCalled()
-        expect(osmo.accountNumber).toBe(0n)
-        expect(osmo.sequence).toBe(0n)
+        expect(osmo.accountNumber).toBe(7n)
+        expect(osmo.sequence).toBe(41n)
       })
+    })
+
+    it('fails closed when skipChainSpecificFetch is true without pre-fetched account metadata (sdk#1809)', async () => {
+      const aminoBase = {
+        chain: Chain.THORChain,
+        coin: { chain: Chain.THORChain, address: 'thor1test', decimals: 8, ticker: 'RUNE' },
+        msgs: [{ type: 'types/MsgDeposit', value: '{}' }],
+        fee: { amount: [{ denom: 'rune', amount: '2000000' }], gas: '400000' },
+        vaultId: 'vault-ecdsa',
+        localPartyId: 'device-1',
+        publicKey: fakePublicKey,
+        libType,
+        skipChainSpecificFetch: true,
+      }
+
+      // A Cosmos signature is bound to (account_number, sequence). Defaulting
+      // either to '0' produced a signature the chain rejects for any account
+      // that has ever transacted, which is every real account.
+      await expect(buildSignAminoKeysignPayload({ ...aminoBase })).rejects.toThrow(
+        /accountNumber is required when skipChainSpecificFetch is true/
+      )
+      await expect(buildSignAminoKeysignPayload({ ...aminoBase, accountNumber: '7' })).rejects.toThrow(
+        /sequence is required when skipChainSpecificFetch is true/
+      )
+      expect(mockGetCosmosAccountInfo).not.toHaveBeenCalled()
     })
 
     it('calls getCosmosAccountInfo when skipChainSpecificFetch is false and applies account fields', async () => {
@@ -285,11 +321,12 @@ describe('buildCosmosPayload', () => {
       libType,
     } as const
 
-    it('does not call getCosmosAccountInfo when skipChainSpecificFetch is true; sequence stays default', async () => {
+    it('does not call getCosmosAccountInfo when skipChainSpecificFetch is true; uses the pre-fetched sequence', async () => {
       const payload = await buildSignDirectKeysignPayload({
         ...directBase,
         chain: Chain.Cosmos,
         skipChainSpecificFetch: true,
+        sequence: '41',
       })
 
       expect(mockGetCosmosAccountInfo).not.toHaveBeenCalled()
@@ -299,8 +336,33 @@ describe('buildCosmosPayload', () => {
         sequence: bigint
       }
       expect(directSkip.accountNumber).toBe(42n)
-      expect(directSkip.sequence).toBe(0n)
+      // sdk#1809: this used to be 0n regardless of what the caller passed.
+      expect(directSkip.sequence).toBe(41n)
       expect(getCosmosFeeAmount).not.toHaveBeenCalled()
+    })
+
+    it('fails closed when skipChainSpecificFetch is true without a pre-fetched sequence (sdk#1809)', async () => {
+      await expect(
+        buildSignDirectKeysignPayload({
+          ...directBase,
+          chain: Chain.Cosmos,
+          skipChainSpecificFetch: true,
+        })
+      ).rejects.toThrow(/sequence is required when skipChainSpecificFetch is true/)
+      // The skipped fetch must NOT be silently performed as a fallback either —
+      // the whole point of the flag is that the caller owns that value.
+      expect(mockGetCosmosAccountInfo).not.toHaveBeenCalled()
+    })
+
+    it('rejects a non-numeric pre-fetched sequence (sdk#1809)', async () => {
+      await expect(
+        buildSignDirectKeysignPayload({
+          ...directBase,
+          chain: Chain.Cosmos,
+          skipChainSpecificFetch: true,
+          sequence: 'not-a-number',
+        })
+      ).rejects.toThrow(/sequence must be a plain non-negative integer string/)
     })
 
     it('calls getCosmosAccountInfo when skipChainSpecificFetch is false; sequence comes from chain', async () => {

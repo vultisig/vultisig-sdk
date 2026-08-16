@@ -47,7 +47,11 @@ export async function buildWithdrawalKeysignPayload(params: KeysignBuildParams):
       accountNumber: accountInfo.accountNumber,
       memo: prepared.memo,
     },
-    { skipChainSpecificFetch: true }
+    // sdk#1809: skipChainSpecificFetch needs the account metadata the skipped
+    // fetch would have returned. We already hold it, and the payload built
+    // below uses those same values — passing them here keeps the base payload
+    // consistent with it instead of carrying a silent zero sequence.
+    { skipChainSpecificFetch: true, accountNumber: accountInfo.accountNumber, sequence: accountInfo.sequence }
   )
 
   const derivedPublicKey = basePayload.coin?.hexPublicKey || vault.publicKeys.ecdsa
