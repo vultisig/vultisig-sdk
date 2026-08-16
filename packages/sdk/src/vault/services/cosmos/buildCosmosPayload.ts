@@ -29,6 +29,7 @@ import {
 } from '@vultisig/core-mpc/types/vultisig/keysign/v1/wasm_execute_contract_payload_pb'
 
 import type { CosmosFeeInput, CosmosMsgInput, SignAminoInput, SignDirectInput } from '../../../types/cosmos'
+import { VaultError, VaultErrorCode } from '../../VaultError'
 
 /**
  * Input parameters for building SignAmino keysign payload
@@ -67,14 +68,18 @@ export type BuildSignDirectPayloadInput = SignDirectInput & {
  */
 function requirePrefetched(builder: string, field: 'accountNumber' | 'sequence', value: string | undefined): string {
   if (value === undefined || value === '') {
-    throw new Error(
+    throw new VaultError(
+      VaultErrorCode.InvalidConfig,
       `${builder}: ${field} is required when skipChainSpecificFetch is true. ` +
         `Pass the pre-fetched value (e.g. from getCosmosAccountInfo) - defaulting it to '0' would ` +
         `bind the signature to the wrong account state and the chain would reject the broadcast.`
     )
   }
   if (!/^[0-9]+$/.test(value)) {
-    throw new Error(`${builder}: ${field} must be a plain non-negative integer string, got ${JSON.stringify(value)}`)
+    throw new VaultError(
+      VaultErrorCode.InvalidConfig,
+      `${builder}: ${field} must be a plain non-negative integer string, got ${JSON.stringify(value)}`
+    )
   }
   return value
 }
