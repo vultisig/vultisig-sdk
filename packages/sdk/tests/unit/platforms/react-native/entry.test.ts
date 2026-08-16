@@ -72,7 +72,7 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.DEFAULT_CHAINS).toEqual(['Bitcoin', 'Ethereum', 'THORChain', 'Solana', 'BSC'])
   })
 
-  it('exports the canonical Cosmos fee helpers and gas-limit tables from the RN entry', async () => {
+  it('exports the canonical Cosmos fee helpers, gas-limit tables, and cosmos chain subsets from the RN entry', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
     expect(rn.cosmosFeeCoinDenom[rn.Chain.Cosmos]).toBe('uatom')
@@ -84,6 +84,9 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.getCosmosStakingGasLimit({ chain: rn.Chain.Cosmos })).toBe(350_000n)
     expect(rn.getCosmosStakingGasLimit({ chain: rn.Chain.Cosmos, msgCount: 2 })).toBe(437_500n)
     expect(rn.resolveChainReference('8453')).toBe(rn.Chain.Base)
+    expect(rn.IbcEnabledCosmosChain.TerraClassic).toBe('TerraClassic')
+    expect(rn.VaultBasedCosmosChain.THORChain).toBe('THORChain')
+    expect(Object.values(rn.IbcEnabledCosmosChain)).not.toContain(rn.Chain.THORChain)
   })
 
   it.each(cosmosTxFeeGasParityCases)(
