@@ -1041,6 +1041,8 @@ export {
   token,
   TRC20_TRANSFER_SELECTOR,
   utxoFeeRate,
+  validateStakekitActionAddress,
+  validateStakekitActionInput,
   VerifierClient,
 } from './tools'
 

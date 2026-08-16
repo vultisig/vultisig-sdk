@@ -312,6 +312,9 @@ describe('RN entry exposes pure chain helpers and registry', () => {
     expect(rn.parseActionDisplay).toBe(stakekit.parseActionDisplay)
     expect(rn.buildYieldActionScanRequest).toBe(stakekit.buildYieldActionScanRequest)
     expect(rn.buildYieldStepScanRequest).toBe(stakekit.buildYieldStepScanRequest)
+    // sdk#1902: the action preflight validators belong to the same canonical set.
+    expect(rn.validateStakekitActionAddress).toBe(stakekit.validateStakekitActionAddress)
+    expect(rn.validateStakekitActionInput).toBe(stakekit.validateStakekitActionInput)
   })
 })
 

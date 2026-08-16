@@ -489,6 +489,8 @@ export {
   stakekitBuildManage,
   stakekitDetails,
   stakekitSearch,
+  validateStakekitActionAddress,
+  validateStakekitActionInput,
 } from '../../tools/defi/stakekit'
 export type {
   BuildThreeJaneSupplyUsdcParams,
