@@ -67,3 +67,13 @@ export { BrowserCrypto, BrowserPolyfills, BrowserStorage }
 
 // Export BrowserStorage as the default Storage type for this platform
 export { BrowserStorage as Storage }
+
+// sdk#1840: the shared chain tx-builder namespace. `src/index.ts` documents the Cosmos
+// signing primitives as shipping via `chains.cosmos.buildCosmosStakingTx` "from the
+// platform-specific entry point", but only the React Native entry actually exposed it —
+// so Node/browser/electron/chrome consumers had to deep-import or re-glue it.
+//
+// It lives under platforms/react-native/ for historical reasons only: the tree has no
+// react-native or expo import anywhere in it, just @noble/@scure crypto. The root entry
+// already reaches into the same path for `buildCosmosWasmExecuteTx`.
+export { chains } from '../react-native/chains'
