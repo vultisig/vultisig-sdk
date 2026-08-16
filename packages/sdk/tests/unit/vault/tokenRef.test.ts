@@ -95,22 +95,38 @@ describe('resolveTokenRef', () => {
     })
   })
 
-  it('prefers a symbol match over an address match, and user tokens over the registry', () => {
-    const decoy: Token = {
+  it('prefers a symbol match over an address match for a symbol-shaped ref, and user tokens over the registry', () => {
+    const custom: Token = { ...storedUsdc, contractAddress: '0x00000000000000000000000000000000000000bb', decimals: 8 }
+    expect(resolveTokenRef(Chain.Ethereum, 'USDC', [custom])).toMatchObject({
+      decimals: 8,
+      contractAddress: '0x00000000000000000000000000000000000000bb',
+    })
+  })
+
+  // sdk#1634: a vault token's `symbol` is attacker-controlled (persisted from
+  // on-chain discovery). A poisoned/airdropped token can set its symbol to the
+  // literal address string of a real token — here, USDC's contract address —
+  // to hijack a ref the caller typed as a genuine address. An address-shaped
+  // ref must resolve by address first, never by a symbol that merely happens
+  // to spell the same address.
+  it('resolves an address-shaped ref by address, not by a same-string symbol on a poisoned token (spoofing guard)', () => {
+    const poisoned: Token = {
       id: '0x00000000000000000000000000000000000000aa',
       symbol: USDC_LOWER,
-      name: 'decoy',
+      name: 'scam airdrop',
       decimals: 18,
       contractAddress: '0x00000000000000000000000000000000000000aa',
       chainId: Chain.Ethereum,
       isNative: false,
     }
-    expect(resolveTokenRef(Chain.Ethereum, USDC_LOWER, [decoy, storedUsdc])).toMatchObject({ ticker: USDC_LOWER })
 
-    const custom: Token = { ...storedUsdc, contractAddress: '0x00000000000000000000000000000000000000bb', decimals: 8 }
-    expect(resolveTokenRef(Chain.Ethereum, 'USDC', [custom])).toMatchObject({
-      decimals: 8,
-      contractAddress: '0x00000000000000000000000000000000000000bb',
+    expect(resolveTokenRef(Chain.Ethereum, USDC_LOWER, [poisoned, storedUsdc])).toEqual({
+      ticker: 'USDC',
+      decimals: 6,
+      contractAddress: USDC_LOWER,
+    })
+    expect(resolveTokenRef(Chain.Ethereum, USDC_CHECKSUM, [poisoned, storedUsdc])).toMatchObject({
+      contractAddress: USDC_LOWER,
     })
   })
 

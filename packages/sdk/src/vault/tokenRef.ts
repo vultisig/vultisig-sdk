@@ -12,6 +12,16 @@
  * contract address, and the user's own tokens before the well-known registry.
  * Every ref that resolved before this module existed resolves to exactly the
  * same token — the only change is that refs which used to throw now resolve.
+ *
+ * Exception, for fund safety: when `ref` is itself shaped like an EVM contract
+ * address (`0x` + 40 hex), the user's own tokens are matched by address BEFORE
+ * symbol. A vault token's `symbol` is an attacker-controlled string persisted
+ * from on-chain discovery — a poisoned/airdropped token can set its symbol to
+ * the literal address string of a real token (e.g. USDC's contract address).
+ * Trying symbol first there would let that poisoned token hijack a ref the
+ * caller typed as a genuine address. Address-shaped refs cannot ambiguously
+ * mean "look up my ticker `0xA0b8…`" the way a real symbol can, so there is no
+ * legitimate resolution this reordering could break.
  */
 import { Chain } from '@vultisig/core-chain/Chain'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
@@ -49,9 +59,16 @@ export function resolveTokenRef(chain: Chain, ref: string | undefined, userToken
   // 1. The user's configured tokens — by symbol first, then by contract address
   //    or stored id (the CLI's `--add` writes id as `<Chain>-<address>`, token
   //    discovery writes the bare address, so both are checked).
-  const token =
-    userTokens.find(t => t.symbol?.toUpperCase() === upper) ??
+  //
+  //    Address-shaped refs flip that order (address before symbol): a stored
+  //    token's `symbol` is attacker-controlled (see the module doc comment),
+  //    so a symbol match must not be able to shadow a ref the caller typed as
+  //    a real contract address.
+  const isEvmAddressShaped = /^0x[0-9a-fA-F]{40}$/.test(ref)
+  const bySymbol = () => userTokens.find(t => t.symbol?.toUpperCase() === upper)
+  const byAddress = () =>
     userTokens.find(t => t.contractAddress?.toLowerCase() === lower || t.id?.toLowerCase() === lower)
+  const token = isEvmAddressShaped ? (byAddress() ?? bySymbol()) : (bySymbol() ?? byAddress())
   if (token) {
     return {
       ticker: token.symbol ?? token.contractAddress ?? token.id,
