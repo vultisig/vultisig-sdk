@@ -43,6 +43,19 @@ const METHOD_TRANSFER_KEEP_ALIVE = 2
 const ASSET_ID_MAX = 0x3fffffff // 2^30 - 1, the largest non-big-integer compact
 
 /**
+ * `pallet_assets.transferKeepAlive` takes its `amount` as a `u128` (the
+ * pallet's `Balance` type), so that is the real ceiling of the field.
+ *
+ * sdk#1827: `compactToU8a` does NOT stop at u128 — past that it silently
+ * switches to compact big-integer mode and happily produces a 17+ byte payload
+ * for a slot the runtime decodes as a 16-byte u128. The resulting call body is
+ * not a decodable `transferKeepAlive`, so the on-device signer would be signing
+ * bytes that cannot execute. Same failure class the ASSET_ID_MAX guard above
+ * already covers for the asset id.
+ */
+const AMOUNT_MAX = (1n << 128n) - 1n
+
+/**
  * SS58 address-prefix for Polkadot relay chain + Asset Hub. Substrate chains
  * (Bittensor prefix=42 → `5xxx`, Kusama prefix=2 → `H/J`, Acala prefix=10 →
  * `2xxx`, etc.) all share the same 32-byte AccountId under different SS58
@@ -176,6 +189,13 @@ export const preparePolkadotAssetSend = (params: PreparePolkadotAssetSendParams)
   }
   if (amount <= 0n) {
     throw new Error('Amount must be greater than zero')
+  }
+  if (amount > AMOUNT_MAX) {
+    throw new Error(
+      `Invalid Polkadot asset amount ${amount}: must be <= ${AMOUNT_MAX} (2^128-1). ` +
+        `pallet_assets encodes amount as a u128; larger values SCALE-encode in compact ` +
+        `big-integer mode and do not decode back as a valid transferKeepAlive call.`
+    )
   }
   if (!from) {
     throw new Error('Sender address (from) is required')
