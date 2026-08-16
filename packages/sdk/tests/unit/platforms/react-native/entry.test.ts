@@ -53,7 +53,7 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
   })
 
   it('registers crypto + storage on module load so Vultisig({}) does not throw', async () => {
-    const rn = await import('../../../../src/platforms/react-native/index')
+    const sdk = await import('../../../../src/platforms/react-native/index')
     const { randomUUID } = await import('../../../../src/crypto')
     const { getDefaultStorage } = await import('../../../../src/context/defaultStorage')
 
@@ -61,7 +61,27 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     const storage = getDefaultStorage()
     expect(storage).toBeDefined()
     expect(typeof storage.get).toBe('function')
-    expect(rn.DEFAULT_CHAINS).toBe(rn.defaultChains)
+
+    expect(typeof sdk.amountMatches).toBe('function')
+    expect(typeof sdk.computeEvmFee).toBe('function')
+    expect(typeof sdk.canonicalChainTag).toBe('function')
+    expect(typeof sdk.classifyAddress).toBe('function')
+    expect(typeof sdk.checkChainPrefix).toBe('function')
+    expect(typeof sdk.deriveStationTerraKeyMaterial).toBe('function')
+    expect(typeof sdk.getStationTerraDerivationPath).toBe('function')
+    expect(typeof sdk.validateStationPrivateKeyHex).toBe('function')
+    expect(typeof sdk.decimalsFor).toBe('function')
+    expect(typeof sdk.feeMatches).toBe('function')
+    expect(typeof sdk.isValidTokenSymbolFormat).toBe('function')
+    expect(typeof sdk.normalizeTokenSymbol).toBe('function')
+    expect(typeof sdk.scaleHumanToRaw).toBe('function')
+    expect(typeof sdk.scaleRawToHuman).toBe('function')
+    expect(sdk.tokenDecimals).toBeDefined()
+    expect(typeof sdk.isAddressValidForChain).toBe('function')
+    expect(typeof sdk.isSolanaAddress).toBe('function')
+    expect(typeof sdk.supportedChainTags).toBe('function')
+    expect(sdk.address).toBeDefined()
+    expect(sdk.validate).toBeDefined()
   })
 
   it('exports default chain canonicals on the RN entrypoint', async () => {
@@ -70,6 +90,7 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(Array.isArray(rn.DEFAULT_CHAINS)).toBe(true)
     expect(Array.isArray(rn.defaultChains)).toBe(true)
     expect(rn.DEFAULT_CHAINS).toEqual(['Bitcoin', 'Ethereum', 'THORChain', 'Solana', 'BSC'])
+    expect(rn.DEFAULT_CHAINS).toBe(rn.defaultChains)
   })
 
   it('exports the canonical Cosmos fee helpers and gas-limit tables from the RN entry', async () => {

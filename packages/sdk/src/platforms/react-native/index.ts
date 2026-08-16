@@ -733,6 +733,16 @@ export { decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from '../../tools/d
 // hand-curated-gap class as the rest of this section (sdk#1224) — so RN
 // consumers (Station) couldn't format high-decimal balances exactly or link
 // out to a block explorer without deep-importing core-chain.
+export {
+  canonicalChainTag,
+  classifyAddress,
+  isAddressValidForChain,
+  isSolanaAddress,
+  supportedChainTags,
+} from '../../utils/addressFormat'
+export type { AddressFamily, AddressRole, ChainPrefixResult } from '../../utils/addressValidation'
+export { address, validate } from '../../utils/addressValidation'
+export { checkChainPrefix } from '../../utils/chainPrefix'
 export { computeNotificationVaultId } from '../../utils/computeNotificationVaultId'
 export type {
   AmountDirection,
@@ -749,6 +759,18 @@ export {
   toHumanUnits,
 } from '../../utils/convertAmount'
 export { FiatToAmountError } from '../../utils/fiatToAmount'
+export {
+  amountMatches,
+  computeEvmFee,
+  decimalsFor,
+  feeMatches,
+  isValidTokenSymbolFormat,
+  normalizeTokenSymbol,
+  scaleHumanToRaw,
+  scaleRawToHuman,
+  tokenDecimals,
+  ValidateNormalizerError,
+} from '../../utils/validateNormalizers'
 export { fromChainAmountExact } from '@vultisig/core-chain/amount/fromChainAmountExact'
 export { ChainAmountParseError, toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 export type { ChainKind } from '@vultisig/core-chain/ChainKind'
@@ -764,6 +786,23 @@ export type {
 export { chainRegistry, deriveFromChainRegistry, extendChainRegistry } from '@vultisig/core-chain/chainRegistry'
 export { getThorchainInboundAddress } from '@vultisig/core-chain/chains/cosmos/thor/getThorchainInboundAddress'
 export * from '@vultisig/core-chain/chains/cosmos/thor/lp'
+export type {
+  StationImportSource,
+  StationMnemonicImportSource,
+  StationPrivateKeyImportSource,
+  StationSeedImportSource,
+  StationTerraChain,
+  StationTerraChainPublicData,
+  StationTerraCoinType,
+  StationTerraKeyMaterial,
+} from '@vultisig/core-chain/station/importPrimitives'
+export {
+  deriveStationTerraKeyMaterial,
+  getStationTerraDerivationPath,
+  normalizeStationPrivateKeyHex,
+  stationTerraCoinTypes,
+  validateStationPrivateKeyHex,
+} from '@vultisig/core-chain/station/importPrimitives'
 export type { GetSwapExplorerUrlInput, SwapExplorerProvider } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 export { getSwapExplorerUrl, swapExplorerProviders } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 export { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
