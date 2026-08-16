@@ -221,3 +221,109 @@ describe('getCardanoSigningInputs — per-UTXO native tokens', () => {
     expect(hex(tokenBlind.dataHash)).not.toBe(hex(tokenAware.dataHash))
   })
 })
+
+describe('getCardanoSigningInputs — native-token (CNT) recipient min-UTxO floor (sdk#429)', () => {
+  let walletCore: WalletCore
+
+  beforeAll(async () => {
+    walletCore = await initWasm()
+  })
+
+  const buildCntPayload = (toAmount: string) =>
+    create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, {
+        chain: Chain.Cardano,
+        ticker: 'USDM',
+        address: SENDER_ADDRESS,
+        contractAddress: `${usdm.policyId}.${usdm.assetNameHex}`,
+        decimals: 6,
+        isNativeToken: false,
+      }),
+      toAddress: RECIPIENT_ADDRESS,
+      toAmount,
+      blockchainSpecific: {
+        case: 'cardano',
+        value: create(CardanoChainSpecificSchema, {
+          byteFee: 200_000n,
+          sendMaxAmount: false,
+          ttl: 500_000n,
+        }),
+      },
+      utxoInfo: [
+        create(UtxoInfoSchema, {
+          hash: '11'.repeat(32),
+          amount: 5_000_000n,
+          index: 0,
+          cardanoTokens: [{ ...usdm, amount: '5000000' }],
+        }),
+      ],
+    })
+
+  it('funds the recipient output with the min-UTxO floor, not the raw token quantity (the false-broadcast bug this fixes)', async () => {
+    // 0.665 USDM: reusing toAmount as lovelace (the pre-fix bug) would fund the
+    // recipient with 665_000 lovelace (0.665 ADA), below Cardano's min-UTxO
+    // floor for a single-asset output — the network rejects the signed tx post
+    // keysign (Ogmios 3125 "insufficiently funded outputs").
+    const [signingInput] = await getCardanoSigningInputs({
+      keysignPayload: buildCntPayload('665000'),
+      walletCore,
+    })
+
+    expect(signingInput.transferMessage?.amount?.toString()).toBe('1500000')
+
+    // The token quantity itself is untouched — only the lovelace floor changed.
+    const tokenAmount = shouldBePresent(signingInput.transferMessage?.tokenAmount?.token?.[0]?.amount)
+    expect(hex(tokenAmount)).toBe('0a25a8') // 665_000 minimal big-endian bytes
+  })
+
+  it('applies the same fixed floor regardless of the token quantity magnitude', async () => {
+    const [small] = await getCardanoSigningInputs({ keysignPayload: buildCntPayload('1'), walletCore })
+    const [large] = await getCardanoSigningInputs({ keysignPayload: buildCntPayload('4999999'), walletCore })
+
+    expect(small.transferMessage?.amount?.toString()).toBe('1500000')
+    expect(large.transferMessage?.amount?.toString()).toBe('1500000')
+  })
+
+  it('leaves plain ADA sends unaffected — toAmount is still lovelace verbatim', async () => {
+    const adaPayload = create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, {
+        chain: Chain.Cardano,
+        ticker: 'ADA',
+        address: SENDER_ADDRESS,
+        contractAddress: '',
+        decimals: 6,
+        isNativeToken: true,
+      }),
+      toAddress: RECIPIENT_ADDRESS,
+      toAmount: '665000',
+      blockchainSpecific: {
+        case: 'cardano',
+        value: create(CardanoChainSpecificSchema, {
+          byteFee: 200_000n,
+          sendMaxAmount: false,
+          ttl: 500_000n,
+        }),
+      },
+      utxoInfo: [create(UtxoInfoSchema, { hash: '11'.repeat(32), amount: 5_000_000n, index: 0 })],
+    })
+
+    const [signingInput] = await getCardanoSigningInputs({ keysignPayload: adaPayload, walletCore })
+    expect(signingInput.transferMessage?.amount?.toString()).toBe('665000')
+  })
+
+  it('produces a broadcastable (min-UTxO-satisfying) pre-signing body', async () => {
+    const [signingInput] = await getCardanoSigningInputs({
+      keysignPayload: buildCntPayload('665000'),
+      walletCore,
+    })
+    const txInputData = TW.Cardano.Proto.SigningInput.encode(signingInput).finish()
+
+    const plan = TW.Cardano.Proto.TransactionPlan.decode(
+      walletCore.AnySigner.plan(txInputData, walletCore.CoinType.cardano)
+    )
+
+    expect(plan.error).toBe(TW.Common.Proto.SigningError.OK)
+    expect(plan.amount?.toString()).toBe('1500000')
+    expect(plan.fee?.toString()).toBe('200000')
+  })
+})
