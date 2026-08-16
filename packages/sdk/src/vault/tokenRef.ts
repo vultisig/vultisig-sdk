@@ -87,9 +87,7 @@ export function resolveTokenRef(chain: Chain, ref: string | undefined, userToken
   //    exactly that hole open for a victim who does not already hold the real
   //    token. An address the vault does not hold must fall through to the
   //    registry or fail — never to an attacker-named symbol.
-  const byAddress = userTokens.find(
-    t => t.contractAddress?.toLowerCase() === lower || t.id?.toLowerCase() === lower
-  )
+  const byAddress = userTokens.find(t => t.contractAddress?.toLowerCase() === lower || t.id?.toLowerCase() === lower)
   const token = byAddress ?? (addressShaped ? undefined : userTokens.find(t => t.symbol?.toUpperCase() === upper))
   if (token) {
     return {
