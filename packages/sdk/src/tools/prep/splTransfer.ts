@@ -5,6 +5,7 @@ import {
   TOKEN_PROGRAM_ID,
 } from '@solana/spl-token'
 import { type AccountMeta, PublicKey } from '@solana/web3.js'
+import { assertSafeDestination } from '@vultisig/core-chain/security/dangerousAddresses'
 import { Buffer } from 'buffer'
 
 /**
@@ -113,6 +114,8 @@ const isValidSolanaPubkey = (addr: string): boolean => {
  *
  * Fund-safety guards (ported from mcp-ts `build_spl_transfer_tx`):
  *  - `from`/`to`/`mint` must each be valid 32-byte base58 pubkeys.
+ *  - `to` is vetted against the burn/program destination list (sdk#1723), the
+ *    same `assertSafeDestination` the native `prepareSendTxFromKeys` uses.
  *  - `to !== mint` — sending to the mint account itself credits an ATA owned by
  *    the mint authority (funds lost), so it is rejected explicitly.
  *  - `amount > 0` and `amount <= u64 max` (the on-chain instruction encodes a
@@ -142,6 +145,16 @@ export const buildSplTransfer = (params: BuildSplTransferParams): SplTransferRes
   if (!isValidSolanaPubkey(to)) {
     throw new Error(`buildSplTransfer: invalid Solana \`to\` address: ${to}`)
   }
+  // sdk#1723: burn/program destinations, same guard the native sibling
+  // (prepareSendTxFromKeys) has had since #1698. Without it this builder
+  // disagreed with its own sibling about destinations the SDK explicitly calls
+  // unrecoverable — the Solana System Program and the SPL Token Program are both
+  // ON the ed25519 curve, so ATA derivation succeeds and a transfer to either
+  // built cleanly. (The incinerator happened to be refused, but only by curve
+  // geometry, with an opaque TokenOwnerOffCurveError rather than an honest
+  // reason.) Placed before the mint/amount checks so the destination verdict
+  // does not depend on the rest of the payload being well-formed.
+  assertSafeDestination('Solana', to)
   if (!isValidSolanaPubkey(mint)) {
     throw new Error(`buildSplTransfer: invalid Solana \`mint\` address: ${mint}`)
   }

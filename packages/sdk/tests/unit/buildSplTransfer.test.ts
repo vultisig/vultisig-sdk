@@ -132,4 +132,45 @@ describe('buildSplTransfer (pure-crypto unsigned SPL transfer)', () => {
       )
     })
   })
+
+  // --- sdk#1723: burn/program destinations -------------------------------------
+  //
+  // `prepareSendTxFromKeys` gained assertSafeDestination in #1698 and Solana is a
+  // covered family in dangerousAddresses.ts, but this sibling builder had none —
+  // the two disagreed about destinations the SDK explicitly calls unrecoverable.
+  //
+  // These are not caught "for free" by the pubkey check: the System Program and
+  // the SPL Token Program are both ON the ed25519 curve, so ATA derivation
+  // succeeds and the transfer built cleanly before this guard.
+  describe('burn / program destination guard (sdk#1723)', () => {
+    it.each([
+      ['Solana System Program', '11111111111111111111111111111111'],
+      ['SPL Token Program', 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'],
+      ['incinerator', '1nc1nerator11111111111111111111111111111111'],
+    ])('refuses %s with an honest reason', (_label, to) => {
+      expect(() => buildSplTransfer({ mint: USDC_MINT, from: FROM, to, amount: 1_000_000n, decimals: 6 })).toThrow(
+        /Refusing to build transaction/
+      )
+    })
+
+    it('the incinerator refusal is the burn-list reason, not an opaque curve error', () => {
+      // It was previously rejected only by accident — being off-curve made ATA
+      // derivation throw TokenOwnerOffCurveError, which tells the user nothing.
+      expect(() =>
+        buildSplTransfer({
+          mint: USDC_MINT,
+          from: FROM,
+          to: '1nc1nerator11111111111111111111111111111111',
+          amount: 1_000_000n,
+          decimals: 6,
+        })
+      ).not.toThrow(/TokenOwnerOffCurve/)
+    })
+
+    it('a normal wallet destination still builds (guard is not over-broad)', () => {
+      expect(() =>
+        buildSplTransfer({ mint: USDC_MINT, from: FROM, to: TO, amount: 1_000_000n, decimals: 6 })
+      ).not.toThrow()
+    })
+  })
 })
