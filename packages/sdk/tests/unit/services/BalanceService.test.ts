@@ -1,3 +1,5 @@
+import { format } from 'node:util'
+
 import { Chain } from '@vultisig/core-chain/Chain'
 import { rippleTokenId } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
 import { accountCoinKeyToString } from '@vultisig/core-chain/coin/AccountCoin'
@@ -490,6 +492,40 @@ describe('BalanceService', () => {
     expect(result[Chain.Ethereum]?.formattedAmount).toBe('1')
     expect(result[`${Chain.Ethereum}:${addedToken.id}`]?.formattedAmount).toBe('5')
     expect(result[`${Chain.Ethereum}:${daiToken.id}`]?.formattedAmount).toBe('7')
+  })
+
+  it('does not leak a file:// stack frame when a chain balance fetch throws (bead mvvry)', async () => {
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const err = new Error('fetch failed for Kujira')
+    // Simulate a real thrown Error carrying a local filesystem stack trace, the
+    // exact shape the bead reported leaking through console.warn.
+    err.stack = [
+      'Error: fetch failed for Kujira',
+      '    at BalanceService.getBalanceForAsset (file:///home/vultisig/vultisig-sdk/packages/sdk/src/vault/services/BalanceService.ts:66:30)',
+    ].join('\n')
+    vi.mocked(getCoinBalance).mockImplementation(async ({ chain }) => {
+      if (chain === Chain.Kujira) throw err
+      return 100_000_000n
+    })
+
+    const service = makeService()
+    const result = await service.getBalances({ chains: [Chain.Kujira, Chain.Bitcoin], includeTokens: false })
+
+    // The failing chain is swallowed (fan-out fails open) while the healthy one still resolves.
+    expect(result[Chain.Kujira]).toBeUndefined()
+    expect(result[Chain.Bitcoin]).toBeDefined()
+
+    // `format` (Node's `util.format`, the same formatter `console.warn` uses under the
+    // hood) mirrors what actually reaches the terminal. A plain `.join(' ')` would call
+    // `Error.prototype.toString()` and miss the stack entirely, hiding this exact leak.
+    const warnedText = consoleWarnSpy.mock.calls.map(args => format(...args)).join('\n')
+    expect(warnedText).not.toContain('file://')
+    expect(warnedText).not.toContain('/Users/')
+    // Still useful for debugging: which chain, and the error message.
+    expect(warnedText).toContain('Kujira')
+    expect(warnedText).toContain('fetch failed for Kujira')
+
+    consoleWarnSpy.mockRestore()
   })
 
   it('batches native + token balances for an EVM chain into a single multicall', async () => {

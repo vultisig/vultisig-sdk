@@ -1152,9 +1152,13 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   /**
    * Get balances for multiple chains
    */
-  async balances(chains?: Chain[], includeTokens = false): Promise<Record<string, Balance>> {
+  async balances(
+    chains?: Chain[],
+    includeTokens = false,
+    onChainError?: (chain: Chain, error: unknown) => void
+  ): Promise<Record<string, Balance>> {
     const chainsToFetch = chains || this._userChains
-    return this.balanceService.getBalances({ chains: chainsToFetch, includeTokens })
+    return this.balanceService.getBalances({ chains: chainsToFetch, includeTokens, onChainError })
   }
 
   /**

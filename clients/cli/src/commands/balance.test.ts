@@ -412,3 +412,51 @@ describe('executeBalance honours --tokens on a single chain', () => {
     expect(envelope.data).toMatchObject({ chain: Chain.Ethereum, balance: { symbol: 'ETH' } })
   })
 })
+
+describe('executeBalance all-chains sweep partial vs. total failure', () => {
+  beforeEach(() => {
+    configureOutput({ format: 'json' })
+  })
+
+  afterEach(() => {
+    resetOutput()
+    vi.restoreAllMocks()
+  })
+
+  type OnChainError = (chain: ChainType, err: unknown) => void
+
+  function makeSweepCtx(chains: ChainType[], failingChains: Set<ChainType>) {
+    const balances = vi.fn(async (requested: ChainType[], _includeTokens?: boolean, onChainError?: OnChainError) => {
+      const chain = requested[0]
+      if (failingChains.has(chain)) {
+        onChainError?.(chain, new Error(`${chain} rpc unreachable`))
+        return {}
+      }
+      return { [chain]: makeBalance(chain) }
+    })
+    const vault = { chains, balances } as unknown as VaultBase
+    return { ctx: { ensureActiveVault: async () => vault } as unknown as CommandContext, balances }
+  }
+
+  it('stays partial-success when at least one chain succeeds', async () => {
+    const { ctx } = makeSweepCtx([Chain.Ethereum, Chain.Bitcoin], new Set([Chain.Bitcoin]))
+
+    const envelope = await captureJson(() => executeBalance(ctx, {}))
+
+    expect(envelope.success).toBe(true)
+    const { balances: emitted, failures } = envelope.data
+    expect(Object.keys(emitted)).toEqual([Chain.Ethereum])
+    expect(failures).toEqual([{ chain: Chain.Bitcoin, error: { message: `${Chain.Bitcoin} rpc unreachable` } }])
+  })
+
+  it('throws a NetworkError instead of reporting success when every chain fails', async () => {
+    const { ctx } = makeSweepCtx([Chain.Ethereum, Chain.Bitcoin], new Set([Chain.Ethereum, Chain.Bitcoin]))
+
+    const err = await executeBalance(ctx, {}).catch(e => e)
+
+    expect(err).toBeInstanceOf(NetworkError)
+    expect((err as NetworkError).exitCode).toBe(ExitCode.NETWORK)
+    expect((err as NetworkError).message).toContain(Chain.Ethereum)
+    expect((err as NetworkError).message).toContain(Chain.Bitcoin)
+  })
+})

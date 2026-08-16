@@ -60,14 +60,81 @@ export async function executeBalance(ctx: CommandContext, options: BalanceOption
     }
     displayBalance(options.chain, balance, raw)
   } else {
-    const balances = await vault.balances(undefined, options.includeTokens)
-    spinner.succeed('Balances loaded')
+    // bead vultisig-mvvry: `vault.balances()` throws on the FIRST chain that
+    // errors (e.g. Kujira when polkachu is unreachable), which crashed the
+    // whole balance sweep with an unhandled stack trace that ALSO leaked
+    // local file:// paths to stdout, breaking the --silent -o json contract.
+    // Portfolio already handles this by iterating chains one-by-one with a
+    // catch (executePortfolio below, lines 100-175 pattern). Balance now
+    // does the same: each chain's balance is fetched independently, and a
+    // failure is recorded as a { chain, error } marker instead of aborting
+    // the sweep or leaking a stack trace.
+    const chainsToFetch = vault.chains
+    const perChainResults = await Promise.all(
+      chainsToFetch.map(async chain => {
+        try {
+          // REVIEW FIX (mvvry): `vault.balances()` does NOT throw on a chain failure -
+          // BalanceService.getBalances fans out per chain and swallows each error with a
+          // console.warn, returning a PARTIAL record. So the catch below never fired and `failures`
+          // was always empty: the sweep silently rendered fewer chains with no indication anything
+          // broke, which is the same invisible-failure the bead is about.
+          //
+          // The absence of a chain in the result cannot be used to infer failure either - a chain
+          // that legitimately holds nothing looks identical. So the SDK now takes an additive,
+          // optional `onChainError` callback and this passes one. The try/catch is kept as cheap
+          // redundancy in case a future change makes the call throw for real.
+          let chainError: unknown
+          const chainBalances = await vault.balances([chain], options.includeTokens, (_chain, err) => {
+            chainError = err
+          })
+          if (chainError !== undefined) {
+            const message = chainError instanceof Error ? chainError.message : String(chainError)
+            const clean = message.split('\n')[0].replace(/file:\/\/[^\s)]+/g, '<path>')
+            return { chain, error: { message: clean } }
+          }
+          return { chain, balances: chainBalances }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err)
+          // Strip file:// paths and stack frames — user-facing error, not a diagnostic
+          const clean = message.split('\n')[0].replace(/file:\/\/[^\s)]+/g, '<path>')
+          return { chain, error: { message: clean } }
+        }
+      })
+    )
+    // Merge the successful per-chain balance maps into a single record while
+    // keeping the failures separate. Same shape as before (`balances`) plus a
+    // `failures` array — a reader that ignored `failures` still gets the same
+    // partial map they would have gotten if we had lucky-continued.
+    const balances: Record<string, unknown> = {}
+    const failures: Array<{ chain: string; error: { message: string } }> = []
+    for (const result of perChainResults) {
+      if (result.balances) Object.assign(balances, result.balances)
+      if (result.error) failures.push({ chain: result.chain, error: result.error })
+    }
+    // Every chain failed → this is a real error, not a partial success. Mirror
+    // executePortfolio's contract below: fail the spinner and throw instead of
+    // printing a success envelope with an empty balances map.
+    if (failures.length > 0 && Object.keys(balances).length === 0) {
+      spinner.fail('Balances failed to load')
+      throw new NetworkError(
+        `Failed to load balances for all ${failures.length} chain(s): ${failures
+          .map(f => `${f.chain} (${f.error.message})`)
+          .join('; ')}`,
+        'All chain balance fetches failed — likely a network/RPC issue',
+        ['Check your internet connection', 'Retry in a few moments']
+      )
+    }
+
+    spinner.succeed(failures.length === 0 ? 'Balances loaded' : `Balances loaded (${failures.length} chain(s) failed)`)
 
     if (isJsonOutput()) {
-      outputJson({ balances })
+      outputJson(failures.length === 0 ? { balances } : { balances, failures })
       return
     }
-    displayBalancesTable(balances, raw)
+    displayBalancesTable(balances as Parameters<typeof displayBalancesTable>[0], raw)
+    if (failures.length > 0) {
+      for (const f of failures) warn(`  ${f.chain}: ${f.error.message}`)
+    }
   }
 }
 
