@@ -128,10 +128,22 @@ function resolveSourceChannelByDestChain(fromChain: string, toChainId: string): 
   return IBC_CHANNEL_BY_ROUTE.get(`${fromChain}→${toChainId}`) ?? null
 }
 
-/** Supported destination chain-IDs reachable FROM the given source chain. */
+/**
+ * Supported destination chain-IDs reachable FROM the given source chain.
+ *
+ * sdk#1917: accepts BOTH a Vultisig canonical chain name ("Osmosis") and a raw
+ * IBC chain-ID ("osmosis-1"), because `prepareIbcTransfer()` already normalises
+ * the same aliases and succeeds on them. Without the normalisation here, a
+ * consumer populating a destination picker from this helper got a false-empty
+ * list for exactly the inputs the prep function accepts. `normaliseIbcChainId`
+ * is identity on values that are already chain-IDs, so callers that pass a
+ * chain-ID (e.g. `resolveRoute`, which normalises before it calls in) are
+ * unaffected.
+ */
 export function supportedIbcDestinationsFrom(fromChain: string): string[] {
+  const normalised = normaliseIbcChainId(fromChain.trim())
   return Array.from(IBC_CHANNEL_BY_ROUTE.keys())
-    .filter(routeKey => routeKey.startsWith(`${fromChain}→`))
+    .filter(routeKey => routeKey.startsWith(`${normalised}→`))
     .map(routeKey => routeKey.split('→')[1]!)
     .sort()
 }

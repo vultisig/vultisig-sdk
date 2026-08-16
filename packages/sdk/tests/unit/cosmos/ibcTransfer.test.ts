@@ -286,4 +286,22 @@ describe('prepareIbcTransfer', () => {
     expect(dests).toContain('noble-1')
     expect(dests).toEqual([...dests].sort())
   })
+
+  it('supportedIbcDestinationsFrom accepts canonical names, not just chain-IDs (sdk#1917)', () => {
+    // The helper used to filter route keys with the RAW input, so a canonical
+    // name returned a false-empty list even though prepareIbcTransfer() accepts
+    // that same name. Every alias must agree with its chain-ID.
+    for (const name of ['Cosmos', 'Osmosis', 'Terra', 'TerraClassic', 'Kujira', 'Noble'] as const) {
+      const byName = supportedIbcDestinationsFrom(name)
+      const byChainId = supportedIbcDestinationsFrom(normaliseIbcChainId(name))
+      expect(byName).toEqual(byChainId)
+    }
+
+    // Concretely: the input prepareIbcTransfer() already takes must not be empty.
+    expect(supportedIbcDestinationsFrom('Osmosis')).toContain('cosmoshub-4')
+    expect(supportedIbcDestinationsFrom('Cosmos')).toContain('osmosis-1')
+
+    // Unknown chains still yield an empty list rather than throwing.
+    expect(supportedIbcDestinationsFrom('NotAChain')).toEqual([])
+  })
 })
