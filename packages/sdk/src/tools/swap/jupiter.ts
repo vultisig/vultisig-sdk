@@ -177,17 +177,39 @@ const fetchJupiter = async <T>(input: string, init?: RequestInit): Promise<T> =>
 }
 
 /**
- * Build the input/output mint addresses from token info. Falls back to the
- * SOL native mint when no SPL contract is provided.
+ * Build the input/output mint address from token info.
+ *
+ * An OMITTED parameter (`undefined`) is explicit native-SOL intent and resolves to
+ * {@link SOL_NATIVE_MINT}. A present-but-BLANK string is not: sdk#1732.
+ *
+ * The old `contractAddress?.trim() || SOL_NATIVE_MINT` collapsed the two, so a
+ * consumer whose token resolution returned `''` on a lookup miss silently got a
+ * **native SOL** swap instead of a deterministic failure — "swap 100 USDC for X"
+ * with a failed USDC resolution builds a quote for 100 SOL. The same-mint check
+ * below does not catch it either, since the other side is usually a real mint.
+ *
+ * Fail closed instead, and name the side so the caller can see which resolution
+ * failed.
  */
-const toMint = (contractAddress: string | undefined): string => contractAddress?.trim() || SOL_NATIVE_MINT
+const toMint = (contractAddress: string | undefined, side: 'from' | 'to'): string => {
+  if (contractAddress === undefined) return SOL_NATIVE_MINT
+  const trimmed = contractAddress.trim()
+  if (trimmed === '') {
+    throw new Error(
+      `Jupiter swap ${side}ContractAddress was blank. Omit the parameter for native SOL; ` +
+        `a blank string usually means token resolution failed, and silently quoting native SOL ` +
+        `would swap the wrong asset.`
+    )
+  }
+  return trimmed
+}
 
 export type JupiterSwapParams = {
   /** The signer's Solana base58 public key (owner of the swap). */
   userPublicKey: string
-  /** Input token SPL mint. Omit / empty for native SOL. */
+  /** Input token SPL mint. OMIT for native SOL; a blank string is rejected (sdk#1732). */
   fromContractAddress?: string
-  /** Output token SPL mint. Omit / empty for native SOL. */
+  /** Output token SPL mint. OMIT for native SOL; a blank string is rejected (sdk#1732). */
   toContractAddress?: string
   /** Exact input amount in lamports / token base units. */
   amountBaseUnits: bigint
@@ -238,8 +260,8 @@ export const buildJupiterSwapTx = async ({
     throw new Error('Jupiter swap amount must be greater than zero')
   }
 
-  const inputMint = toMint(fromContractAddress)
-  const outputMint = toMint(toContractAddress)
+  const inputMint = toMint(fromContractAddress, 'from')
+  const outputMint = toMint(toContractAddress, 'to')
 
   if (inputMint === outputMint) {
     throw new Error('Jupiter swap input and output mint must differ')
