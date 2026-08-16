@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RujiraClient } from '../client.js'
 import { RujiraError } from '../errors.js'
 import { RujiraRange } from '../modules/range.js'
+import { VALID_THOR_ADDRESS_2 } from './test-helpers.js'
 
 const client = {} as RujiraClient
 const range = new RujiraRange(client)
@@ -34,6 +35,16 @@ const pairEdge = (address: string, baseSymbol = 'RUJI', quoteSymbol = 'RUNE') =>
   },
 })
 
+// Registry edge whose denoms match baseCoin/quoteCoin exactly — the "canonical
+// market" fixture for buildCreatePosition/buildDeposit's authoritative-pair proof.
+const matchingPairEdge = (address: string) => ({
+  node: {
+    address,
+    assetBase: { metadata: { symbol: 'BTC' }, variants: { native: { denom: baseCoin.denom } } },
+    assetQuote: { metadata: { symbol: 'USDC' }, variants: { native: { denom: quoteCoin.denom } } },
+  },
+})
+
 const mockPairFetch = (...edgeSets: Array<ReturnType<typeof pairEdge>[]>) => {
   const fetchMock = vi.fn()
   for (const edges of edgeSets) {
@@ -59,8 +70,11 @@ afterEach(() => {
 
 describe('RujiraRange builders', () => {
   describe('buildCreatePosition', () => {
-    it('emits range.create with config + sorted funds', () => {
-      const tx = range.buildCreatePosition({
+    it('emits range.create with config + sorted funds when pairAddress is the authoritative FIN pair', async () => {
+      mockPairFetch([matchingPairEdge(validPair)])
+      const localRange = new RujiraRange(client)
+
+      const tx = await localRange.buildCreatePosition({
         pairAddress: validPair,
         config: validConfig,
         base: baseCoin,
@@ -84,87 +98,127 @@ describe('RujiraRange builders', () => {
       expect(tx.funds.map(c => c.denom)).toEqual([baseCoin.denom, quoteCoin.denom].sort())
     })
 
-    it('rejects numeric config fields (LLM footgun guard)', () => {
-      expect(() =>
+    // sdk#1513: pairAddress used to be trusted after bech32-shape validation
+    // alone. A bech32-valid contract that is NOT the registry's pair for
+    // (base, quote) must be rejected rather than trusted as the escrow sink.
+    it('rejects a bech32-valid pairAddress that is not the authoritative FIN pair for base/quote (forged pair)', async () => {
+      const forgedPair = VALID_THOR_ADDRESS_2
+      mockPairFetch([matchingPairEdge(validPair)])
+      const localRange = new RujiraRange(client)
+
+      await expect(
+        localRange.buildCreatePosition({
+          pairAddress: forgedPair,
+          config: validConfig,
+          base: baseCoin,
+          quote: quoteCoin,
+        })
+      ).rejects.toThrow(/not the authoritative FIN pair/)
+    })
+
+    it('rejects when base/quote cannot be resolved in the FIN pair registry at all', async () => {
+      mockPairFetch([pairEdge(validPair)]) // unrelated RUJI/RUNE pair only, no btc-btc/eth-usdc match
+      const localRange = new RujiraRange(client)
+
+      await expect(
+        localRange.buildCreatePosition({
+          pairAddress: validPair,
+          config: validConfig,
+          base: baseCoin,
+          quote: quoteCoin,
+        })
+      ).rejects.toThrow(/no FIN pair found/)
+    })
+
+    it('rejects numeric config fields (LLM footgun guard)', async () => {
+      // No fetch mock needed: assertConfig throws before the registry call.
+      await expect(
         range.buildCreatePosition({
           pairAddress: validPair,
           config: { ...validConfig, high: 80000 as unknown as string },
           base: baseCoin,
           quote: quoteCoin,
         })
-      ).toThrow(RujiraError)
+      ).rejects.toThrow(RujiraError)
     })
 
-    it('rejects over-precision (>12dp)', () => {
-      expect(() =>
+    it('rejects over-precision (>12dp)', async () => {
+      await expect(
         range.buildCreatePosition({
           pairAddress: validPair,
           config: { ...validConfig, spread: '0.0300000000001' },
           base: baseCoin,
           quote: quoteCoin,
         })
-      ).toThrow(/12 fractional digits/)
+      ).rejects.toThrow(/12 fractional digits/)
     })
 
-    it('rejects high <= low', () => {
-      expect(() =>
+    it('rejects high <= low', async () => {
+      await expect(
         range.buildCreatePosition({
           pairAddress: validPair,
           config: { ...validConfig, high: '40000', low: '40000' },
           base: baseCoin,
           quote: quoteCoin,
         })
-      ).toThrow(/> config.low/)
+      ).rejects.toThrow(/> config.low/)
     })
 
-    it('rejects spread outside (0, 1)', () => {
-      expect(() =>
+    it('rejects spread outside (0, 1)', async () => {
+      await expect(
         range.buildCreatePosition({
           pairAddress: validPair,
           config: { ...validConfig, spread: '1' },
           base: baseCoin,
           quote: quoteCoin,
         })
-      ).toThrow(/spread must be in/)
+      ).rejects.toThrow(/spread must be in/)
     })
 
-    it('rejects fee > spread', () => {
-      expect(() =>
+    it('rejects fee > spread', async () => {
+      await expect(
         range.buildCreatePosition({
           pairAddress: validPair,
           config: { ...validConfig, spread: '0.01', fee: '0.05' },
           base: baseCoin,
           quote: quoteCoin,
         })
-      ).toThrow(/fee must be in/)
+      ).rejects.toThrow(/fee must be in/)
     })
 
-    it('accepts negative skew', () => {
-      expect(() =>
-        range.buildCreatePosition({
+    it('accepts negative skew', async () => {
+      mockPairFetch([matchingPairEdge(validPair)])
+      const localRange = new RujiraRange(client)
+
+      await expect(
+        localRange.buildCreatePosition({
           pairAddress: validPair,
           config: { ...validConfig, skew: '-0.5' },
           base: baseCoin,
           quote: quoteCoin,
         })
-      ).not.toThrow()
+      ).resolves.not.toThrow()
     })
 
-    it('rejects invalid pair address', () => {
-      expect(() =>
+    it('rejects invalid pair address', async () => {
+      // No fetch mock needed: assertPairAddress throws before the registry call.
+      await expect(
         range.buildCreatePosition({
           pairAddress: 'not-a-thor-addr',
           config: validConfig,
           base: baseCoin,
           quote: quoteCoin,
         })
-      ).toThrow(/pairAddress/)
+      ).rejects.toThrow(/pairAddress/)
     })
   })
 
   describe('buildDeposit', () => {
-    it('emits range.deposit with idx', () => {
-      const tx = range.buildDeposit({
+    it('emits range.deposit with idx when pairAddress is the authoritative FIN pair', async () => {
+      mockPairFetch([matchingPairEdge(validPair)])
+      const localRange = new RujiraRange(client)
+
+      const tx = await localRange.buildDeposit({
         pairAddress: validPair,
         idx: '42',
         base: baseCoin,
@@ -174,15 +228,34 @@ describe('RujiraRange builders', () => {
       expect(tx.funds).toHaveLength(2)
     })
 
-    it('rejects numeric idx (precision hazard)', () => {
-      expect(() =>
+    // sdk#1513: same forged-pair guard as buildCreatePosition — deposit adds
+    // funds to an EXISTING position, so trusting an unproven pairAddress here
+    // is exactly as unsafe as trusting one at position creation.
+    it('rejects a bech32-valid pairAddress that is not the authoritative FIN pair for base/quote (forged pair)', async () => {
+      const forgedPair = VALID_THOR_ADDRESS_2
+      mockPairFetch([matchingPairEdge(validPair)])
+      const localRange = new RujiraRange(client)
+
+      await expect(
+        localRange.buildDeposit({
+          pairAddress: forgedPair,
+          idx: '42',
+          base: baseCoin,
+          quote: quoteCoin,
+        })
+      ).rejects.toThrow(/not the authoritative FIN pair/)
+    })
+
+    it('rejects numeric idx (precision hazard)', async () => {
+      // No fetch mock needed: assertIdx throws before the registry call.
+      await expect(
         range.buildDeposit({
           pairAddress: validPair,
           idx: 42 as unknown as string,
           base: baseCoin,
           quote: quoteCoin,
         })
-      ).toThrow(/idx/)
+      ).rejects.toThrow(/idx/)
     })
   })
 
