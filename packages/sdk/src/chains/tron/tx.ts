@@ -462,9 +462,7 @@ export function buildTrc20TransferTx(opts: BuildTrc20TransferOptions): TronTxBui
   // as negative, 2^70 reads back as 0, which silently re-enters the exact
   // zero-fee_limit OUT_OF_ENERGY case the check above exists to prevent.
   if (opts.feeLimit > INT64_MAX) {
-    throw new Error(
-      `buildTrc20TransferTx: feeLimit must fit in an int64 (max ${INT64_MAX}), got ${opts.feeLimit}`
-    )
+    throw new Error(`buildTrc20TransferTx: feeLimit must fit in an int64 (max ${INT64_MAX}), got ${opts.feeLimit}`)
   }
   const callData = buildTrc20CallData(opts.to, opts.amount)
   const contractValue = buildTriggerSmartContract(opts.from, opts.tokenAddress, callData)
