@@ -221,6 +221,14 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.river.findInsertHints).toBe(sdk.findRiverInsertHints)
   })
 
+  it('exports ThreeJane USDC helpers on the root sdk surface', async () => {
+    const threeJane = await import('../../../src/tools/defi/threeJane')
+
+    expect(sdk.buildThreeJaneSupplyUsdc).toBe(threeJane.buildThreeJaneSupplyUsdc)
+    expect(sdk.parseThreeJaneUsdcAmount).toBe(threeJane.parseUsdcAmount)
+    expect(sdk.THREE_JANE_ADDRESSES).toBe(threeJane.THREE_JANE_ADDRESSES)
+  })
+
   it('exports Chain enum, chain helpers, and VaultBase class for first-party consumers', () => {
     expect(sdk.Chain).toBeDefined()
     expect(typeof sdk.getChainKind).toBe('function')

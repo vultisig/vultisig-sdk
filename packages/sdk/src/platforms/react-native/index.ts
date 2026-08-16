@@ -489,6 +489,11 @@ export type {
   ThreeJaneTranche,
   ThreeJaneTxStep,
 } from '../../tools/defi/threeJane'
+export {
+  buildThreeJaneSupplyUsdc,
+  parseUsdcAmount as parseThreeJaneUsdcAmount,
+  THREE_JANE_ADDRESSES,
+} from '../../tools/defi/threeJane'
 
 // Cosmos staking + distribution module (LCD queries — read-only,
 // vault-free, generic over every ibcEnabled cosmos chain). Mirrors the
