@@ -95,7 +95,11 @@ describe('resolveTokenRef', () => {
     })
   })
 
-  it('prefers a symbol match over an address match, and user tokens over the registry', () => {
+  it('prefers user tokens over the registry, and an ADDRESS ref over a symbol (sdk#1634)', () => {
+    // This case previously asserted the opposite — that a `decoy` whose SYMBOL is
+    // real USDC's address wins when the user types that address. That is the
+    // spoofing surface sdk#1634 reports, so the expectation is inverted here: the
+    // decoy must NOT capture the ref, and the token actually AT that address wins.
     const decoy: Token = {
       id: '0x00000000000000000000000000000000000000aa',
       symbol: USDC_LOWER,
@@ -105,7 +109,11 @@ describe('resolveTokenRef', () => {
       chainId: Chain.Ethereum,
       isNative: false,
     }
-    expect(resolveTokenRef(Chain.Ethereum, USDC_LOWER, [decoy, storedUsdc])).toMatchObject({ ticker: USDC_LOWER })
+    expect(resolveTokenRef(Chain.Ethereum, USDC_LOWER, [decoy, storedUsdc])).toMatchObject({
+      ticker: 'USDC',
+      decimals: 6,
+      contractAddress: USDC_LOWER,
+    })
 
     const custom: Token = { ...storedUsdc, contractAddress: '0x00000000000000000000000000000000000000bb', decimals: 8 }
     expect(resolveTokenRef(Chain.Ethereum, 'USDC', [custom])).toMatchObject({
@@ -289,4 +297,66 @@ describe('non-EVM token refs resolve on both paths', () => {
       }
     }
   )
+})
+
+// --- sdk#1634: address-shaped refs must never be captured by a symbol -----------
+//
+// Vault token symbols are attacker-controlled strings persisted from on-chain
+// discovery. A scam token whose `symbol` is set to the LITERAL TEXT of real USDC's
+// contract address could capture a send in which the victim typed that genuine
+// address correctly — resolving decimals, amount and the keysign target to the
+// scam contract.
+
+const poisoned: Token = {
+  id: '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
+  // The attack: the symbol field IS real USDC's address.
+  symbol: USDC_CHECKSUM,
+  name: 'Airdrop',
+  decimals: 18,
+  contractAddress: '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
+  chainId: Chain.Ethereum,
+  isNative: false,
+}
+
+describe('resolveTokenRef address-shaped refs (sdk#1634)', () => {
+  it('resolves the REAL token when the victim also holds it', () => {
+    const resolved = resolveTokenRef(Chain.Ethereum, USDC_CHECKSUM, [poisoned, storedUsdc])
+    expect(resolved.contractAddress?.toLowerCase()).toBe(USDC_LOWER)
+    expect(resolved.decimals).toBe(6)
+  })
+
+  it('does NOT fall back to the poisoned symbol when the real token is absent', () => {
+    // The sharp case: with a symbol fallback, a victim who does not already hold
+    // real USDC still resolves to the scam contract. It must fail or reach the
+    // curated registry — never an attacker-named symbol.
+    const resolved = resolveTokenRef(Chain.Ethereum, USDC_CHECKSUM, [poisoned])
+    expect(resolved.contractAddress?.toLowerCase()).not.toBe(poisoned.contractAddress)
+    expect(resolved.decimals).not.toBe(18)
+  })
+
+  it('is order-independent (the poisoned token first does not win)', () => {
+    const a = resolveTokenRef(Chain.Ethereum, USDC_CHECKSUM, [poisoned, storedUsdc])
+    const b = resolveTokenRef(Chain.Ethereum, USDC_CHECKSUM, [storedUsdc, poisoned])
+    expect(a).toEqual(b)
+  })
+
+  it('still resolves a plain ticker ref by symbol (no regression)', () => {
+    expect(resolveTokenRef(Chain.Ethereum, 'usdc', [storedUsdc])).toMatchObject({ ticker: 'USDC', decimals: 6 })
+  })
+
+  it('treats long non-hex refs as addresses too (Solana mint shape)', () => {
+    const splMint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+    const poisonedSpl: Token = { ...poisoned, symbol: splMint }
+    // The poisoned symbol must not capture it. This mint IS in the curated
+    // registry, so it correctly falls through to real USDC (6 decimals) rather
+    // than the scam token's 18 — which is the outcome that matters.
+    const resolved = resolveTokenRef(Chain.Solana, splMint, [poisonedSpl])
+    expect(resolved).toMatchObject({ ticker: 'USDC', decimals: 6 })
+    expect(resolved.contractAddress?.toLowerCase()).not.toBe(poisonedSpl.contractAddress?.toLowerCase())
+  })
+
+  it('an address-shaped ref matching nothing at all still throws', () => {
+    const unknown = '0x' + 'ab'.repeat(20)
+    expect(() => resolveTokenRef(Chain.Ethereum, unknown, [poisoned])).toThrow(VaultError)
+  })
 })
