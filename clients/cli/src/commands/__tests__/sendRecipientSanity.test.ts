@@ -46,6 +46,9 @@ const SELF_ADDRESS = '0x1111111111111111111111111111111111111111'
 const OTHER_ADDRESS = '0x2222222222222222222222222222222222222222'
 const EVM_ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 const MALFORMED_EVM_ADDRESS = '0xdeadbeef'
+// A valid 32-byte Sui address: 0x + 64 hex chars (66 total) - NOT a valid 42-char
+// EVM address, but a perfectly legitimate Sui recipient.
+const VALID_SUI_ADDRESS = '0x1111111111111111111111111111111111111111111111111111111111111111'
 
 function makeVault(address: string): VaultBase {
   const payload = {
@@ -171,6 +174,56 @@ describe('recipientSanity wiring - isNull / isMalformedEvm stay hard refusals', 
     const err = await sendTransaction(vault, {
       chain: Chain.Ethereum,
       to: MALFORMED_EVM_ADDRESS,
+      amount: '1',
+      yes: true,
+    }).catch(e => e)
+
+    expect(err).toBeInstanceOf(Error)
+    expect((err as Error).message).toMatch(/Refusing send.*malformed EVM/)
+    expect(vault.send).not.toHaveBeenCalled()
+  })
+})
+
+describe('recipientSanity wiring - isMalformedEvm is chain-aware', () => {
+  // Review fix: recipientSanity()'s isMalformedEvm flag is a pure 0x-shape check
+  // (0x + hex, length != 42) with no chain context. A valid Sui address is ALSO
+  // 0x-prefixed hex, just 66 chars (0x + 64 hex) instead of 42. Applying the EVM
+  // rejection chain-agnostically hard-blocked every legitimate Sui send.
+  it('a malformed-looking EVM string still refuses on an EVM chain', async () => {
+    const vault = makeVault(OTHER_ADDRESS)
+
+    const err = await sendTransaction(vault, {
+      chain: Chain.Ethereum,
+      to: MALFORMED_EVM_ADDRESS,
+      amount: '1',
+      yes: true,
+    }).catch(e => e)
+
+    expect(err).toBeInstanceOf(Error)
+    expect((err as Error).message).toMatch(/Refusing send.*malformed EVM/)
+    expect(vault.send).not.toHaveBeenCalled()
+  })
+
+  it('a valid 66-char Sui address is NOT rejected as malformed EVM on a Sui send', async () => {
+    const vault = makeVault(OTHER_ADDRESS)
+
+    const result = await sendTransaction(vault, {
+      chain: Chain.Sui,
+      to: VALID_SUI_ADDRESS,
+      amount: '1',
+      yes: true,
+    })
+
+    expect('txHash' in result && result.txHash).toBe('0xbroadcast')
+    expect(vault.send).toHaveBeenCalled()
+  })
+
+  it('the same 66-char Sui-shaped string is still refused if sent on an EVM chain', async () => {
+    const vault = makeVault(OTHER_ADDRESS)
+
+    const err = await sendTransaction(vault, {
+      chain: Chain.Ethereum,
+      to: VALID_SUI_ADDRESS,
       amount: '1',
       yes: true,
     }).catch(e => e)

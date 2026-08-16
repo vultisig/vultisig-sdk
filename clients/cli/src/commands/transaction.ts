@@ -4,7 +4,7 @@
 import { normalizeRippleDestination } from '@vultisig/core-chain/chains/ripple/address'
 import { getLegacyDestinationTag, resolveDestinationTag } from '@vultisig/core-mpc/keysign/utils/rippleDestinationTag'
 import type { KeysignPayload, VaultBase } from '@vultisig/sdk'
-import { Chain, recipientSanity, Vultisig } from '@vultisig/sdk'
+import { Chain, isChainOfKind, recipientSanity, Vultisig } from '@vultisig/sdk'
 
 import type { CommandContext, SendDryRunResult, SendParams, TransactionResult } from '../core'
 import { buildSendBroadcastIntent, ensureVaultUnlocked, guardedBroadcast } from '../core'
@@ -196,9 +196,17 @@ export async function sendTransaction(
   // consolidation (`send bitcoin <my-own-address> <amount>`) and a 0-value EVM self-send to replace
   // a stuck nonce are both legitimate and both have no workaround, because the advice "re-run with
   // a different recipient" is wrong when the recipient IS what they meant.
+  //
+  // REVIEW FIX (51exn): recipientSanity() is chain-agnostic on purpose - `isMalformedEvm` is a pure
+  // 0x-shape check (0x + hex, length != 42), with no idea which chain the send targets. Sui/Aptos
+  // addresses are ALSO 0x-prefixed hex (0x + 64 hex, 66 chars), so a bare `isMalformedEvm` refusal
+  // wrongly hard-blocked every legitimate Sui send. Gate it here, at the one call site that knows
+  // the destination chain: only EVM-family sends get the EVM-shape rejection.
   const refusals: string[] = []
   if (sanity.isNull) refusals.push('recipient is a null / burn address (funds would be unrecoverable)')
-  if (sanity.isMalformedEvm) refusals.push('recipient looks like a malformed EVM address')
+  if (sanity.isMalformedEvm && isChainOfKind(params.chain, 'evm')) {
+    refusals.push('recipient looks like a malformed EVM address')
+  }
   if (refusals.length > 0) {
     throw new Error(`Refusing send: ${refusals.join('; ')}. If this is intentional, re-run with a different recipient.`)
   }
