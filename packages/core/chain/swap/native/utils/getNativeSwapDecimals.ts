@@ -1,6 +1,6 @@
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { CoinKey } from '@vultisig/core-chain/coin/Coin'
-import { knownTokensIndex } from '@vultisig/core-chain/coin/knownTokens'
+import { getKnownTokenById } from '@vultisig/core-chain/coin/knownTokens'
 import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 
 import { Chain } from '../../../Chain'
@@ -19,7 +19,7 @@ export const getNativeSwapDecimals = (coin: CoinKey) => {
       return chainFeeCoin[coin.chain].decimals
     }
 
-    const known = coin.id ? knownTokensIndex[coin.chain][coin.id.toLowerCase()] : undefined
+    const known = coin.id ? getKnownTokenById(coin.chain, coin.id) : undefined
 
     if (known) {
       return known.decimals
