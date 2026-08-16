@@ -545,6 +545,63 @@ describe('sdk.defi.stakekit', () => {
       expect(new URL(requestUrl).searchParams.get('network')).toBe('avalanche-c')
     })
 
+    // sdk#1669: balance discovery used to call the single-page searchYields
+    // internally and stop, so integrations past the first page's `limit` were
+    // never queried for a wallet's balance — a real position there silently
+    // read back as "no balance" instead of an error.
+    it('follows hasNextPage across pages when discovering integration ids, instead of truncating at page 1', async () => {
+      const page1Product = makeProduct({ id: 'ethereum-page1-lido-staking' })
+      const page2Product = makeProduct({ id: 'ethereum-page2-rocketpool-staking' })
+
+      const fetchMock = vi.fn()
+      // Page 1: hasNextPage true — must NOT be the last discovery call.
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: [page1Product], hasNextPage: true }),
+        text: async () => '',
+      } as Response)
+      // Page 2: hasNextPage false — discovery stops here.
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: [page2Product], hasNextPage: false }),
+        text: async () => '',
+      } as Response)
+      // Balances POST — the batched integrationIds body is what we assert on.
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => [
+          { integrationId: page1Product.id, balances: [] },
+          { integrationId: page2Product.id, balances: [] },
+        ],
+        text: async () => '',
+      } as Response)
+      globalThis.fetch = fetchMock
+
+      // A network not used by any other test in this file — the discovery
+      // GET cache is module-level and keyed by query string, so reusing
+      // 'ethereum' here would let this test's page-1 cache entry leak into
+      // (and desync the fetch-mock queue of) the neighboring 403 test.
+      await stakekitBalances({ address: '0x1234567890123456789012345678901234567890', network: 'polygon' })
+
+      // Two discovery calls: page 1 then page 2.
+      const discoveryUrls = fetchMock.mock.calls.slice(0, 2).map(call => String(call[0]))
+      expect(new URL(discoveryUrls[0]).searchParams.get('page')).toBe('1')
+      expect(new URL(discoveryUrls[1]).searchParams.get('page')).toBe('2')
+
+      // The balances POST body must carry BOTH integration ids — page 2's
+      // integration is not silently dropped.
+      const balancesCall = fetchMock.mock.calls[2]
+      const balancesBody = JSON.parse((balancesCall?.[1] as RequestInit).body as string) as Array<{
+        integrationId: string
+      }>
+      const requestedIds = balancesBody.map(entry => entry.integrationId)
+      expect(requestedIds).toContain(page1Product.id)
+      expect(requestedIds).toContain(page2Product.id)
+    })
+
     it('returns null on 403 (restricted endpoint)', async () => {
       // searchYields (to enumerate integration IDs)
       globalThis.fetch = vi
