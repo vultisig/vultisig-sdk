@@ -1,3 +1,5 @@
+import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
+import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
 import { describe, expect, it, vi } from 'vitest'
 
 import { cosmosTxFeeGasParityCases } from '../../../fixtures/cosmosTxFeeGasParity'
@@ -194,6 +196,30 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.rippleOwnerReserveDrops).toBe(200000n)
     expect(Array.isArray(rn.rippleKnownIssuedTokens)).toBe(true)
     expect(rn.toXrplCurrencyCode('RLUSD')).toBe('524C555344000000000000000000000000000000')
+  })
+
+  it('re-exports the custom-RPC canonicals on the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(rn.customRpcSupportedChains).toBe(customRpcSupportedChains.customRpcSupportedChains)
+    expect(rn.customRpcSupportedEvmChains).toBe(customRpcSupportedChains.customRpcSupportedEvmChains)
+    expect(rn.customRpcSupportedCosmosChains).toBe(customRpcSupportedChains.customRpcSupportedCosmosChains)
+    expect(rn.isCustomRpcSupported).toBe(customRpcSupportedChains.isCustomRpcSupported)
+    expect(rn.getCustomRpcOverride).toBe(customRpcOverrides.getCustomRpcOverride)
+    expect(rn.setCustomRpcOverride).toBe(customRpcOverrides.setCustomRpcOverride)
+    expect(rn.clearCustomRpcOverride).toBe(customRpcOverrides.clearCustomRpcOverride)
+    expect(rn.setCustomRpcOverrides).toBe(customRpcOverrides.setCustomRpcOverrides)
+    expect(rn.getCustomRpcOverrides).toBe(customRpcOverrides.getCustomRpcOverrides)
+    expect(rn.probeRpcHealth).toBeTypeOf('function')
+
+    rn.clearCustomRpcOverride(rn.Chain.Base)
+    expect(rn.isCustomRpcSupported(rn.Chain.Base)).toBe(true)
+    expect(rn.isCustomRpcSupported(rn.Chain.MayaChain)).toBe(false)
+    rn.setCustomRpcOverride(rn.Chain.Base, ' https://base.example ')
+    expect(rn.getCustomRpcOverride(rn.Chain.Base)).toBe('https://base.example')
+    expect(rn.getCustomRpcOverrides()).toEqual({ [rn.Chain.Base]: 'https://base.example' })
+    rn.clearCustomRpcOverride(rn.Chain.Base)
+    expect(rn.getCustomRpcOverride(rn.Chain.Base)).toBeUndefined()
   })
 
   it('exports the canonical prep constants from the RN entry', async () => {
