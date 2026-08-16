@@ -83,10 +83,10 @@ describe('isSuiExecutionSuccess — @mysten/sui parser contract', () => {
       { include: { effects: true } }
     )
 
-  it('classifies the library parser output for success, failure, and missing status', () => {
+  it('classifies the library parser output for success, failure, and missing effects', () => {
     const parsedSuccess = parseTransaction(true)
     const parsedFailure = parseTransaction(false)
-    const parsedWithoutStatus = parseTransaction()
+    const parsedWithoutEffects = parseTransaction()
 
     expect(parsedSuccess).toMatchObject({
       $kind: 'Transaction',
@@ -117,7 +117,7 @@ describe('isSuiExecutionSuccess — @mysten/sui parser contract', () => {
         },
       },
     })
-    expect(parsedWithoutStatus).toMatchObject({
+    expect(parsedWithoutEffects).toMatchObject({
       $kind: 'FailedTransaction',
       FailedTransaction: {
         status: { success: false, error: { $kind: 'Unknown', message: 'Transaction failed' } },
@@ -128,7 +128,7 @@ describe('isSuiExecutionSuccess — @mysten/sui parser contract', () => {
     expect([
       isSuiExecutionSuccess(parsedSuccess),
       isSuiExecutionSuccess(parsedFailure),
-      isSuiExecutionSuccess(parsedWithoutStatus),
+      isSuiExecutionSuccess(parsedWithoutEffects),
     ]).toEqual([true, false, false])
   })
 })
