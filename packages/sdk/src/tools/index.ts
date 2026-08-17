@@ -356,6 +356,8 @@ export {
   cosmosStaking,
   type CosmosStakingMsgEnvelope,
   type CosmWasmExecuteFund,
+  type ComputeMaxSendFromBalanceParams,
+  computeMaxSendFromBalance,
   type DelegateParams,
   getMaxSendAmountFromKeys,
   type GetMaxSendAmountFromKeysParams,
