@@ -104,7 +104,7 @@ function stripEmbeddedPayloadContract(value: string, disclosedContract: string):
   const normalizedContract = disclosedContract.toLowerCase()
   return value
     .replace(new RegExp(escapedContract, 'gi'), '')
-    .replace(/0x([0-9a-fA-F]{2,8})…([0-9a-fA-F]{2,8})/g, (match, prefix: string, suffix: string) => {
+    .replace(/0x([0-9a-fA-F]{2,8})(?:…|\.{3})([0-9a-fA-F]{2,8})/g, (match, prefix: string, suffix: string) => {
       const normalizedPrefix = `0x${prefix}`.toLowerCase()
       return normalizedContract.startsWith(normalizedPrefix) && normalizedContract.endsWith(suffix.toLowerCase())
         ? ''
@@ -654,11 +654,14 @@ export class AgentExecutor {
     )
     const symbol = tokenLabel.split(/\s+/, 1)[0]
     const escapedChain = String(chain).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const routedChainPattern = new RegExp(`(?:^|\\s)on ${escapedChain}(?=\\s|$)`)
+    // Strip the negation together with the chain ("not on Polygon"): removing
+    // only "on <chain>" would leave a dangling "not" in front of the recipient,
+    // and the routed location is re-anchored below regardless.
+    const routedChainPattern = new RegExp(`(?:^|\\s)(?:not\\s+)?on ${escapedChain}(?=\\s|$)`)
     // Reordered labels put the routed chain after the contract details
     // ("USDC.e (0x…) on Polygon"), so accept the fragment anywhere in the
     // context — but a negated mention ("not on Polygon") must not count.
-    const positiveRoutedChainPattern = new RegExp(`(?:^|\\s)(?<!\\bnot\\s)on ${escapedChain}(?=\\s|$)`)
+    const positiveRoutedChainPattern = new RegExp(`(?:^|\\s)(?<!\\bnot\\s+)on ${escapedChain}(?=\\s|$)`)
     const tokenContext = tokenLabel.slice(symbol.length)
     const labelCarriesRoutedChain = positiveRoutedChainPattern.test(tokenContext)
     const tokenDetail = tokenContext.replace(routedChainPattern, '').trim()

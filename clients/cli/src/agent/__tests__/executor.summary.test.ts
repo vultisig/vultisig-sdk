@@ -226,6 +226,109 @@ describe('AgentExecutor.getPendingSummary', () => {
     expect(summary).toBe(`send 0.05 USDC.e on Polygon to ${getAddress(recipient)} (token contract ${payloadContract})`)
   })
 
+  // The disclosure tests above use a9059cbb transfer calldata, so they render
+  // via renderErc20TransferSummary and never reach the label fallback. The
+  // next four tests pin the SAME guarantees on the fallback path itself
+  // (transfer === null: native sends and non-transfer contract calldata),
+  // where renderLabelSendSummary / stripEmbeddedPayloadContract actually run.
+  it('renders a native send via the label fallback, not the decoded-transfer branch', () => {
+    const labelSpy = vi.spyOn(AgentExecutor.prototype as any, 'renderLabelSendSummary')
+    const transferSpy = vi.spyOn(AgentExecutor.prototype as any, 'renderErc20TransferSummary')
+    try {
+      const executor = new AgentExecutor(createMockVault())
+      expect(
+        executor.storeServerTransaction({
+          chain: 'Polygon',
+          txArgs: { chain: 'Polygon', to: '0x58C4…5C35', tx: { to: '0x58C4…5C35', value: '1' } },
+          resolved: { labels: { resolved_amount: '0.01 POL' } },
+        })
+      ).toBe(true)
+      expect(executor.getPendingSummary()).toBe('send 0.01 POL on Polygon to 0x58C4…5C35')
+      expect(labelSpy).toHaveBeenCalledTimes(1)
+      expect(transferSpy).not.toHaveBeenCalled()
+    } finally {
+      labelSpy.mockRestore()
+      transferSpy.mockRestore()
+    }
+  })
+
+  it('fallback path: strips a negated routed-chain phrase without leaving a dangling "not"', () => {
+    const executor = new AgentExecutor(createMockVault())
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Polygon',
+        txArgs: { chain: 'Polygon', tx: { to: '0x58C4…5C35', value: '1' } },
+        resolved: {
+          labels: {
+            resolved_amount: '0.05 USDC.e',
+            token_resolved: 'USDC.e not on Polygon',
+            recipient_echo: '0x58C4…5C35',
+          },
+        },
+      })
+    ).toBe(true)
+    const summary = executor.getPendingSummary()!
+    expect(summary).toBe('send 0.05 USDC.e on Polygon to 0x58C4…5C35')
+    // The regression this pins: stripping only "on Polygon" left "… on Polygon not to …".
+    expect(summary).not.toMatch(/\bnot\b/)
+  })
+
+  it('fallback path: discloses the payload contract once for a non-transfer contract send', () => {
+    const executor = new AgentExecutor(createMockVault())
+    const recipient = '0x58C4b38BfA5C2a84f9D3483D04B2C2e8906e5C35'
+    const labelContract = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'
+    const payloadContract = labelContract.toLowerCase()
+
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Polygon',
+        txArgs: {
+          chain: 'Polygon',
+          to: recipient,
+          tx: { to: payloadContract, value: '0', data: `0x095ea7b3${'0'.repeat(120)}` },
+        },
+        resolved: {
+          labels: {
+            resolved_amount: `0.05 USDC.e on Polygon (${labelContract})`,
+            token_resolved: `USDC.e on Polygon (${labelContract})`,
+          },
+        },
+      })
+    ).toBe(true)
+    const summary = executor.getPendingSummary()!
+    expect(summary).toBe(`send 0.05 USDC.e on Polygon to ${recipient} (token contract ${payloadContract})`)
+    expect(summary.match(/USDC\.e/g)).toHaveLength(1)
+    expect(summary.match(/on Polygon/g)).toHaveLength(1)
+    expect(summary.match(/0x2791bca1f2de4661ed88a30c99a7a9449aa84174/gi)).toHaveLength(1)
+  })
+
+  it('fallback path: strips an ASCII-ellipsis truncated payload contract like the Unicode form', () => {
+    const executor = new AgentExecutor(createMockVault())
+    const recipient = '0x58C4b38BfA5C2a84f9D3483D04B2C2e8906e5C35'
+    const payloadContract = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'
+    const truncatedContract = '0x2791...4174'
+
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Polygon',
+        txArgs: {
+          chain: 'Polygon',
+          to: recipient,
+          tx: { to: payloadContract, value: '0', data: `0x095ea7b3${'0'.repeat(120)}` },
+        },
+        resolved: {
+          labels: {
+            resolved_amount: `0.05 USDC.e on Polygon (${truncatedContract})`,
+            token_resolved: `USDC.e on Polygon (${truncatedContract})`,
+          },
+        },
+      })
+    ).toBe(true)
+    const summary = executor.getPendingSummary()!
+    expect(summary).toBe(`send 0.05 USDC.e on Polygon to ${recipient} (token contract ${payloadContract})`)
+    expect(summary.match(/0x2791\.\.\.4174/g) ?? []).toHaveLength(0)
+  })
+
   // Decoded ERC-20 transfers render from calldata and ignore labels entirely
   // (WYSIWYS), so this label-preservation guarantee is pinned on the
   // non-transfer contract-send path (approve calldata) where labels still
