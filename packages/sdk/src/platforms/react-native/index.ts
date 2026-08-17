@@ -85,6 +85,35 @@ export {
 // "will this memo fit before broadcast rejects it with sdk code 12 (memo too
 // long) after the user has already signed?" Kept in parity with the root SDK
 // entrypoint (sdk#1538) so RN consumers don't hand-roll their own memo-cap table.
+// Pure-crypto chain-math normalizers + pure address-format validation.
+// Vault-free, network-free and platform-neutral, so RN gets the same canonicals
+// as the root entry (sdk#1772). Without them a mobile consumer has to
+// deep-import or keep an app-local mirror - the duplicated-not-imported drift
+// these helpers exist to remove. `entry.test.ts` asserts the WHOLE surface of
+// each source module is re-exported here, so a helper added to one of them and
+// wired only into the root entry fails loudly.
+export {
+  canonicalChainTag,
+  classifyAddress,
+  isAddressValidForChain,
+  isSolanaAddress,
+  supportedChainTags,
+} from '../../utils/addressFormat'
+export type { AddressFamily, AddressRole, ChainPrefixResult } from '../../utils/addressValidation'
+export { address, validate } from '../../utils/addressValidation'
+export { checkChainPrefix } from '../../utils/chainPrefix'
+export {
+  amountMatches,
+  computeEvmFee,
+  decimalsFor,
+  feeMatches,
+  isValidTokenSymbolFormat,
+  normalizeTokenSymbol,
+  scaleHumanToRaw,
+  scaleRawToHuman,
+  tokenDecimals,
+  ValidateNormalizerError,
+} from '../../utils/validateNormalizers'
 export {
   COSMOS_MEMO_DEFAULT_MAX_BYTES,
   getCosmosMemoMaxBytes,
