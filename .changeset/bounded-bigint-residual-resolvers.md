@@ -2,9 +2,9 @@
 '@vultisig/sdk': patch
 ---
 
-fix(encoding): reject empty/malformed amounts in the 5 resolvers #1140 missed
+fix(encoding): reject empty/malformed amounts in the 5 resolvers issue `#1140` missed
 
-#1140 closed the `BigInt('') -> 0n` fail-open class (proto3 defaults an unset
+Issue `#1140` closed the `BigInt('') -> 0n` fail-open class (proto3 defaults an unset
 `toAmount` string to `''`, so a bare `BigInt()` silently builds a zero-amount
 transfer) for the resolvers whose amounts feed proto 64-bit fields via
 `toBoundedLong`. The same unguarded `BigInt(toAmount)` pattern remained in five

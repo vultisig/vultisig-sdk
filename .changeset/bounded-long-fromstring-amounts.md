@@ -1,5 +1,7 @@
 ---
 '@vultisig/sdk': patch
+'@vultisig/lib-utils': patch
+'@vultisig/core-mpc': patch
 ---
 
 fix(mpc): bound `Long.fromString` against silent 64-bit wraparound on fund-relevant amount fields
@@ -19,7 +21,7 @@ coerce - importantly `''`, which proto3 uses for an unset `toAmount` and which w
 otherwise silently build a zero-amount transfer.
 
 Wired into every fund-relevant transfer-amount `Long.fromString` call across the Sui,
-Tron, Ripple and Cardano keysign signing-input resolvers (including Tron's native
+Solana send, Tron, Ripple and Cardano keysign signing-input resolvers (including Tron's native
 TRX transfers and freeze/unfreeze amounts, which previously only rejected `<= 0` after
 the wrap had already happened). Signedness matches each proto field type: Sui
 (`Pay`/`PaySui.amounts`) and Cardano (`Transfer.amount`) are proto `uint64`, so they
