@@ -1,7 +1,7 @@
 export type { AcrossChain, AcrossQuote, AcrossQuoteParams } from './acrossQuote'
 export { acrossQuote, acrossSupportedChains } from './acrossQuote'
-export type { FindSwapQuoteParams, SwapQuote } from './findSwapQuote'
-export { findSwapQuote } from './findSwapQuote'
+export type { FindSwapQuoteParams, FindSwapQuotesResult, SwapQuote, SwapQuoteCandidate } from './findSwapQuote'
+export { findSwapQuote, findSwapQuotes } from './findSwapQuote'
 export type { JupiterQuoteResponse, JupiterSwapParams, JupiterSwapResult } from './jupiter'
 export {
   buildJupiterSwapTx,

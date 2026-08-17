@@ -151,6 +151,7 @@ export type {
   AstroportSwapResult,
   BuildAstroportSwapParams,
   FindSwapQuoteParams,
+  FindSwapQuotesResult,
   JupiterQuoteResponse,
   JupiterSwapParams,
   JupiterSwapResult,
@@ -162,6 +163,7 @@ export type {
   SkipSwapSuccess,
   SkipUnsignedMsg,
   SwapQuote,
+  SwapQuoteCandidate,
 } from './swap'
 export {
   acrossQuote,
@@ -175,6 +177,7 @@ export {
   computeAstroportMinReceive,
   DEFAULT_LUNC_NOTIONAL_FLOOR_USD,
   findSwapQuote,
+  findSwapQuotes,
   getNativeSwapDecimals,
   getNativeSwapMinAmountIn,
   JUPITER_AFFILIATE_FEE_ATAS,
