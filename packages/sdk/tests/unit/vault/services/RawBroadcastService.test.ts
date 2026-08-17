@@ -640,6 +640,24 @@ describe('RawBroadcastService', () => {
     }
   )
 
+  it.each(['Already Imported', 'TRANSACTION ALREADY IMPORTED'])(
+    'returns Bittensor raw tx hash for duplicate submit failure %j',
+    async duplicateMessage => {
+      mockQueryUrl.mockRejectedValue(new Error(duplicateMessage))
+
+      const hash = await service.broadcastRawTx({
+        chain: Chain.Bittensor,
+        rawTx: 'beef',
+      })
+
+      expect(hash).toBe('0xbittensorhash')
+      expect(mockGetBittensorTxHash).toHaveBeenCalledWith({
+        encoded: Buffer.from('beef', 'hex'),
+      })
+      expect(mockQueryUrl).toHaveBeenCalledTimes(1)
+    }
+  )
+
   it('verifies a timeout-style JSON-RPC error via taostats before returning a hash', async () => {
     mockQueryUrl
       .mockResolvedValueOnce({
