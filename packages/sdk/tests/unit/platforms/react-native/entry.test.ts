@@ -1,4 +1,10 @@
+import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
+import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
 import { describe, expect, it, vi } from 'vitest'
+
+import { cosmosTxFeeGasParityCases } from '../../../fixtures/cosmosTxFeeGasParity'
+
+process.env.VULTISIG_STRICT_SINGLETON = '0'
 
 vi.mock('expo-crypto', () => ({
   randomUUID: () => '00000000-0000-4000-8000-000000000000',
@@ -29,6 +35,23 @@ vi.mock('@vultisig/walletcore-native', () => ({
 }))
 
 describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
+  it.each([
+    'EVM_DANGEROUS_ADDRESSES',
+    'SOLANA_DANGEROUS_ADDRESSES',
+    'UTXO_DANGEROUS_ADDRESSES',
+    'XRP_DANGEROUS_ADDRESSES',
+    'getEvmDangerousReason',
+    'isEvmBurnAddress',
+    'getChainDangerousReason',
+    'assertSafeEvmDestination',
+    'assertSafeDestination',
+  ] as const)('re-exports dangerous-address canonical %s by identity', async name => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const dangerousAddresses = await import('../../../../src/utils/dangerousAddresses')
+
+    expect(rn[name]).toBe(dangerousAddresses[name])
+  })
+
   it('registers crypto + storage on module load so Vultisig({}) does not throw', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
     const { randomUUID } = await import('../../../../src/crypto')
@@ -49,23 +72,46 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.DEFAULT_CHAINS).toEqual(['Bitcoin', 'Ethereum', 'THORChain', 'Solana', 'BSC'])
   })
 
-  it('exports the canonical Cosmos fee-denom helpers from the RN entry', async () => {
+  it('exports the canonical Cosmos fee helpers, gas-limit tables, and cosmos chain subsets from the RN entry', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
+    expect(rn.cosmosFeeCoinDenom[rn.Chain.Cosmos]).toBe('uatom')
     expect(rn.getCosmosAllowedFeeDenoms(rn.Chain.Cosmos)).toContain('uatom')
     expect(rn.isCosmosFeeDenomAllowed(rn.Chain.Cosmos, 'uatom')).toBe(true)
     expect(rn.isCosmosFeeDenomAllowed(rn.Chain.Cosmos, 'uusdc')).toBe(false)
+    expect(rn.getCosmosGasLimit({ chain: rn.Chain.Cosmos })).toBe(200000n)
+    expect(rn.getCosmosGasLimit({ chain: rn.Chain.MayaChain })).toBe(2_000_000_000n)
+    expect(rn.getCosmosStakingGasLimit({ chain: rn.Chain.Cosmos })).toBe(350_000n)
+    expect(rn.getCosmosStakingGasLimit({ chain: rn.Chain.Cosmos, msgCount: 2 })).toBe(437_500n)
     expect(rn.resolveChainReference('8453')).toBe(rn.Chain.Base)
+    expect(rn.IbcEnabledCosmosChain.TerraClassic).toBe('TerraClassic')
+    expect(rn.VaultBasedCosmosChain.THORChain).toBe('THORChain')
+    expect(Object.values(rn.IbcEnabledCosmosChain)).not.toContain(rn.Chain.THORChain)
   })
 
-  it('exports the canonical IBC Cosmos send-fee floors from the RN entry', async () => {
+  it.each(cosmosTxFeeGasParityCases)(
+    'exports the canonical $chain fee denom, fee amount, and gas limit together',
+    async ({ chain, feeDenom, feeAmount, gasLimit }) => {
+      const rn = await import('../../../../src/platforms/react-native/index')
+
+      expect(rn.getCosmosAllowedFeeDenoms(chain)[0]).toBe(feeDenom)
+      expect(rn.getCosmosSendFeeBaseUnits(chain)).toBe(feeAmount)
+      expect(rn.getCosmosGasLimit({ chain })).toBe(gasLimit)
+    }
+  )
+
+  it('covers every Cosmos chain exposed by the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const exposedCosmosChains = Object.values(rn.Chain).filter(chain => rn.getChainKind(chain) === 'cosmos')
+
+    expect(new Set(cosmosTxFeeGasParityCases.map(({ chain }) => chain))).toEqual(new Set(exposedCosmosChains))
+  })
+
+  it('exports the shared Cosmos send-fee constants used by the parity matrix', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
-    expect(rn.COSMOS_SEND_FEE_DEFAULT).toBe(7500n)
-    expect(rn.getCosmosSendFeeBaseUnits(rn.Chain.Cosmos)).toBe(7500n)
-    expect(rn.getCosmosSendFeeBaseUnits(rn.Chain.TerraClassic)).toBe(8_497_500n)
-    expect(rn.getCosmosSendFeeBaseUnits(rn.Chain.MayaChain)).toBe(2_000_000_000n)
-    expect(rn.getCosmosSendFeeBaseUnits(rn.Chain.THORChain)).toBeUndefined()
+    expect(rn.COSMOS_SEND_FEE_DEFAULT).toBe(7_500n)
+    expect(rn.MAYA_SEND_FEE_BASE_UNITS).toBe(2_000_000_000n)
   })
 
   it('keeps Robinhood derivation native-compatible on the exported RN surface', async () => {
@@ -86,6 +132,15 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(robinhoodAddress).toBe(ethereumAddress)
     expect(deriveAddressFromPublicKey).toHaveBeenNthCalledWith(1, 10_004_663, publicKey)
     expect(deriveAddressFromPublicKey).toHaveBeenNthCalledWith(2, 60, publicKey)
+  })
+
+  it('exports the shared THORChain secured-asset catalog from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(typeof rn.getThorchainSecuredAssetCatalog).toBe('function')
+    expect(typeof rn.createThorchainSecuredAssetCatalog).toBe('function')
+    expect(typeof rn.getThorchainSwapDestinationAssets).toBe('function')
+    expect(rn.thorchainSecuredAssetFallback.length).toBeGreaterThan(10)
   })
 
   // sdk#1538 - the memo-cap family was already exported from the root SDK
@@ -146,6 +201,30 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.toXrplCurrencyCode('RLUSD')).toBe('524C555344000000000000000000000000000000')
   })
 
+  it('re-exports the custom-RPC canonicals on the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(rn.customRpcSupportedChains).toBe(customRpcSupportedChains.customRpcSupportedChains)
+    expect(rn.customRpcSupportedEvmChains).toBe(customRpcSupportedChains.customRpcSupportedEvmChains)
+    expect(rn.customRpcSupportedCosmosChains).toBe(customRpcSupportedChains.customRpcSupportedCosmosChains)
+    expect(rn.isCustomRpcSupported).toBe(customRpcSupportedChains.isCustomRpcSupported)
+    expect(rn.getCustomRpcOverride).toBe(customRpcOverrides.getCustomRpcOverride)
+    expect(rn.setCustomRpcOverride).toBe(customRpcOverrides.setCustomRpcOverride)
+    expect(rn.clearCustomRpcOverride).toBe(customRpcOverrides.clearCustomRpcOverride)
+    expect(rn.setCustomRpcOverrides).toBe(customRpcOverrides.setCustomRpcOverrides)
+    expect(rn.getCustomRpcOverrides).toBe(customRpcOverrides.getCustomRpcOverrides)
+    expect(rn.probeRpcHealth).toBeTypeOf('function')
+
+    rn.clearCustomRpcOverride(rn.Chain.Base)
+    expect(rn.isCustomRpcSupported(rn.Chain.Base)).toBe(true)
+    expect(rn.isCustomRpcSupported(rn.Chain.MayaChain)).toBe(false)
+    rn.setCustomRpcOverride(rn.Chain.Base, ' https://base.example ')
+    expect(rn.getCustomRpcOverride(rn.Chain.Base)).toBe('https://base.example')
+    expect(rn.getCustomRpcOverrides()).toEqual({ [rn.Chain.Base]: 'https://base.example' })
+    rn.clearCustomRpcOverride(rn.Chain.Base)
+    expect(rn.getCustomRpcOverride(rn.Chain.Base)).toBeUndefined()
+  })
+
   it('exports the canonical prep constants from the RN entry', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
@@ -159,6 +238,22 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
       rn.Chain.Dash,
     ])
   })
+
+  it('exports the RN vault-backup helpers and constants from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const rnEncrypt = await import('../../../../src/platforms/react-native/polyfills/encryptVaultBackupWithPassword')
+    const rnDecrypt = await import('../../../../src/platforms/react-native/polyfills/decryptVaultBackupWithPassword')
+    const constants = await import('@vultisig/lib-utils/encryption/vaultBackup/vaultBackupConstants')
+
+    expect(rn.encryptVaultBackupWithPassword).toBe(rnEncrypt.encryptVaultBackupWithPassword)
+    expect(rn.decryptVaultBackupWithPassword).toBe(rnDecrypt.decryptVaultBackupWithPassword)
+    expect(rn.DEFAULT_VAULT_BACKUP_PBKDF2_ITERATIONS).toBe(constants.DEFAULT_VAULT_BACKUP_PBKDF2_ITERATIONS)
+    expect(Buffer.from(rn.VAULT_BACKUP_BLOB_MAGIC)).toEqual(Buffer.from(constants.VAULT_BACKUP_BLOB_MAGIC))
+    expect(rn.VAULT_BACKUP_SALT_LEN).toBe(constants.VAULT_BACKUP_SALT_LEN)
+    expect(rn.VAULT_BACKUP_IV_LEN).toBe(constants.VAULT_BACKUP_IV_LEN)
+    expect(rn.VAULT_BACKUP_MAGIC_LEN).toBe(constants.VAULT_BACKUP_MAGIC_LEN)
+    expect(rn.VAULT_BACKUP_PBKDF2_HEADER_LEN).toBe(constants.VAULT_BACKUP_PBKDF2_HEADER_LEN)
+  })
 })
 
 // RN-entry parity guard: the root barrel (packages/sdk/src/index.ts, resolved
@@ -171,8 +266,8 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
 // in the app. This partially addresses the recurring sdk#1224 allow-list-gap
 // class (see e.g. the cosmosStaking / preparePolkadotAssetSend comments above
 // in the source file) — it does not prevent future gaps, just catches this one.
-describe('RN entry exposes fromChainAmountExact + getBlockExplorerUrl', () => {
-  it('resolves both as functions from the RN entry, not just the root barrel', async () => {
+describe('RN entry exposes pure chain helpers and registry', () => {
+  it('resolves the helpers and registry from the RN entry, not just the root barrel', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
     expect(typeof rn.fromChainAmountExact).toBe('function')
@@ -182,6 +277,11 @@ describe('RN entry exposes fromChainAmountExact + getBlockExplorerUrl', () => {
     expect(rn.getBlockExplorerUrl({ chain: rn.Chain.Ethereum, entity: 'address', value: '0xabc' })).toBe(
       'https://etherscan.io/address/0xabc'
     )
+
+    expect(Object.keys(rn.chainRegistry).sort()).toEqual(Object.values(rn.Chain).sort())
+    expect(typeof rn.deriveFromChainRegistry).toBe('function')
+    expect(typeof rn.extendChainRegistry).toBe('function')
+    expect(rn.chainRegistry[rn.Chain.Ethereum].explorer.baseUrl).toBe('https://etherscan.io')
   })
 
   it('re-exports the recent pure parse/normalize/decode helpers from the RN entrypoint', async () => {
@@ -189,6 +289,7 @@ describe('RN entry exposes fromChainAmountExact + getBlockExplorerUrl', () => {
     const parse = await import('../../../../src/tools/parse')
     const tx = await import('../../../../src/tx')
     const decode = await import('../../../../src/tools/decode')
+    const pairing = await import('../../../../src/services/buildKeygenPairingQrPayload')
 
     expect(rn.parseChain).toBe(parse.parseChain)
     expect(rn.parseTicker).toBe(parse.parseTicker)
@@ -200,6 +301,32 @@ describe('RN entry exposes fromChainAmountExact + getBlockExplorerUrl', () => {
     expect(rn.decodeFromToolResult).toBe(decode.decodeFromToolResult)
     expect(rn.decodeCosmosTx).toBe(decode.decodeCosmosTx)
     expect(rn.decodeEvmTx).toBe(decode.decodeEvmTx)
+    expect(rn.buildKeygenPairingQrPayload).toBe(pairing.buildKeygenPairingQrPayload)
+  })
+
+  it('re-exports canonical swap tracker URL helpers from the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const swap = await import('@vultisig/core-chain/swap/utils/getSwapExplorerUrl')
+
+    expect(rn.getSwapExplorerUrl).toBe(swap.getSwapExplorerUrl)
+    expect(rn.swapExplorerProviders).toBe(swap.swapExplorerProviders)
+    expect(
+      rn.getSwapExplorerUrl({
+        provider: 'li.fi',
+        txHash: '0xabc',
+        fromChain: rn.Chain.Base,
+      })
+    ).toBe('https://scan.li.fi/tx/0xabc')
+  })
+
+  it('re-exports Noon vault helpers from the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const noon = await import('@vultisig/core-chain/chains/evm/noon')
+
+    expect(rn.noonUsdcVaultConfig).toBe(noon.noonUsdcVaultConfig)
+    expect(rn.getNoonDepositTxPlan).toBe(noon.getNoonDepositTxPlan)
+    expect(rn.readNoonVaultState).toBe(noon.readNoonVaultState)
+    expect(rn.fetchNoonUsdcVaultMetrics).toBe(noon.fetchNoonUsdcVaultMetrics)
   })
 })
 
@@ -218,13 +345,17 @@ describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
     expect(() => rn.toChainAmount('   ', 8)).toThrow(rn.ChainAmountParseError)
   })
 
-  it('exports the EVM chainId helpers from the RN entry', async () => {
+  it('exports the EVM chainId helpers and priority-fee sanity clamp from the RN entry', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
     expect(typeof rn.getEvmChainId).toBe('function')
     expect(typeof rn.getEvmChainByChainId).toBe('function')
+    expect(typeof rn.clampEvmPriorityFee).toBe('function')
     expect(rn.getEvmChainId(rn.Chain.Ethereum)).toBe('0x1')
     expect(rn.getEvmChainByChainId('0x1')).toBe(rn.Chain.Ethereum)
+    expect(
+      rn.clampEvmPriorityFee(rn.Chain.Base as Parameters<typeof rn.clampEvmPriorityFee>[0], 75n * 1_000_000_000n)
+    ).toBe(50n * 1_000_000_000n)
   })
 
   it('exports the canonical gas comparison helpers from the RN entry', async () => {
@@ -259,5 +390,43 @@ describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
     expect(typeof rn.isKnownContract).toBe('function')
     expect(rn.isKnownContract('0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')).toBe(true)
     expect(typeof rn.knownContracts.isKnownContract).toBe('function')
+  })
+
+  it('exports the swap-progress explorer helpers from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(typeof rn.getSwapExplorerUrl).toBe('function')
+    expect(Array.isArray(rn.swapExplorerProviders)).toBe(true)
+    expect(rn.getSwapExplorerUrl({ provider: 'thorchain', txHash: '0xabc', fromChain: rn.Chain.THORChain })).toBe(
+      'https://runescan.io/tx/abc'
+    )
+  })
+
+  it('exports the THORChain LP v2 helper family from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const thorLp = await import('@vultisig/core-chain/chains/cosmos/thor/lp')
+    const thorInbound = await import('@vultisig/core-chain/chains/cosmos/thor/getThorchainInboundAddress')
+
+    expect(rn.getThorchainInboundAddress).toBe(thorInbound.getThorchainInboundAddress)
+    expect(rn.buildThorchainLpAddPayload).toBe(thorLp.buildThorchainLpAddPayload)
+    expect(rn.buildThorchainLpRemovePayload).toBe(thorLp.buildThorchainLpRemovePayload)
+    expect(rn.getThorchainLpPosition).toBe(thorLp.getThorchainLpPosition)
+    expect(rn.getThorchainLpPositions).toBe(thorLp.getThorchainLpPositions)
+    expect(rn.getThorchainLpHaltStatus).toBe(thorLp.getThorchainLpHaltStatus)
+    expect(rn.getThorchainLpLockupSeconds).toBe(thorLp.getThorchainLpLockupSeconds)
+    expect(rn.resolvePairedAddressForLpAdd).toBe(thorLp.resolvePairedAddressForLpAdd)
+    expect(rn.addLpMemo).toBe(thorLp.addLpMemo)
+    expect(rn.removeLpMemo).toBe(thorLp.removeLpMemo)
+  })
+})
+
+describe('RN entry exposes canonical EIP-712 helpers', () => {
+  it('re-exports the same typed-data hash and signature canonicals as the node surface', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const eip712 = await import('../../../../src/utils/eip712')
+
+    expect(rn.coerceEip712ChainId).toBe(eip712.coerceEip712ChainId)
+    expect(rn.computeEip712Hash).toBe(eip712.computeEip712Hash)
+    expect(rn.toCanonicalEvmSignature).toBe(eip712.toCanonicalEvmSignature)
   })
 })

@@ -8,6 +8,7 @@
  */
 import type { VaultBase } from '@vultisig/sdk'
 import { Chain } from '@vultisig/sdk'
+import { getAddress } from 'viem'
 import { describe, expect, it, vi } from 'vitest'
 
 import { AgentExecutor } from '../executor'
@@ -186,7 +187,9 @@ describe('AgentExecutor.getPendingSummary', () => {
     expect(summary.match(/USDC\.e/g)).toHaveLength(1)
     expect(summary.match(/on Polygon/g)).toHaveLength(1)
     expect(summary.match(/0x2791bca1f2de4661ed88a30c99a7a9449aa84174/gi)).toHaveLength(1)
-    expect(summary).toBe(`send 0.05 USDC.e on Polygon to ${recipient} (token contract ${payloadContract})`)
+    // The consent recipient derives from the decoded calldata (WYSIWYS), which
+    // viem returns in canonical EIP-55 checksum form.
+    expect(summary).toBe(`send 0.05 USDC.e on Polygon to ${getAddress(recipient)} (token contract ${payloadContract})`)
   })
 
   it('strips a truncated payload-derived ERC-20 contract from rich token labels', () => {
@@ -220,9 +223,13 @@ describe('AgentExecutor.getPendingSummary', () => {
     expect(summary.match(/on Polygon/g)).toHaveLength(1)
     expect(summary.match(/0x2791bca1f2de4661ed88a30c99a7a9449aa84174/gi)).toHaveLength(1)
     expect(summary.match(/0x2791…4174/g) ?? []).toHaveLength(0)
-    expect(summary).toBe(`send 0.05 USDC.e on Polygon to ${recipient} (token contract ${payloadContract})`)
+    expect(summary).toBe(`send 0.05 USDC.e on Polygon to ${getAddress(recipient)} (token contract ${payloadContract})`)
   })
 
+  // Decoded ERC-20 transfers render from calldata and ignore labels entirely
+  // (WYSIWYS), so this label-preservation guarantee is pinned on the
+  // non-transfer contract-send path (approve calldata) where labels still
+  // drive the summary and only exact/truncated CONTRACT copies are stripped.
   it('preserves a truncated non-contract address in rich token labels', () => {
     const executor = new AgentExecutor(createMockVault())
     const recipient = '0x58C4b38BfA5C2a84f9D3483D04B2C2e8906e5C35'
@@ -238,7 +245,7 @@ describe('AgentExecutor.getPendingSummary', () => {
           tx: {
             to: payloadContract,
             value: '0',
-            data: `0xa9059cbb${'0'.repeat(24)}${recipient.slice(2).toLowerCase()}${'c350'.padStart(64, '0')}`,
+            data: `0x095ea7b3${'0'.repeat(120)}`,
           },
         },
         resolved: {

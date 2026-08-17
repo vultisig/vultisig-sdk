@@ -18,6 +18,7 @@ yarn-error.log
 dist/
 bin/
 .shared-dist-temp/
+.shared-dist-check-*/
 *.tgz
 
 # Build cache and generated files
