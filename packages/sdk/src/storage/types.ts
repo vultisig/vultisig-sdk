@@ -46,8 +46,12 @@ export type Storage = {
 
   /**
    * Atomically replace `key` only when its current value matches `expectedValue`.
-   * A null `value` removes the key. Vault import requires this capability so
-   * concurrent SDK instances cannot overwrite local key material.
+   * Matching uses the exact JSON serialization contract:
+   * `JSON.stringify(currentValue) === JSON.stringify(expectedValue)`. A null
+   * `value` removes the key. Vault import requires this capability so concurrent
+   * SDK instances cannot overwrite local key material. The method remains
+   * optional only for backwards compatibility with ordinary vault saves, whose
+   * fallback `set` path cannot protect against concurrent SDK instances.
    * @throws StorageError if the conditional write cannot be completed
    */
   compareAndSet?<T>(key: string, expectedValue: T | null, value: T | null): Promise<boolean>

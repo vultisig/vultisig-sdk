@@ -6,6 +6,7 @@ import * as fs from 'fs/promises'
 import * as os from 'os'
 import * as path from 'path'
 
+import { storageValuesEqual } from '../../storage/storageValuesEqual'
 import type { Storage, StorageMetadata, StoredValue } from '../../storage/types'
 import { STORAGE_VERSION, StorageError, StorageErrorCode } from '../../storage/types'
 import { tryLockFile, unlockFile } from './fileLock'
@@ -189,7 +190,7 @@ export class FileStorage implements Storage {
     try {
       return await this.withStorageLock(key, async () => {
         const currentValue = await this.readValue<T>(key)
-        if (JSON.stringify(currentValue) !== JSON.stringify(expectedValue)) {
+        if (!storageValuesEqual(currentValue, expectedValue)) {
           return false
         }
 

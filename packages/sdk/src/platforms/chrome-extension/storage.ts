@@ -6,6 +6,7 @@
  * Unlike BrowserStorage (IndexedDB/localStorage), this uses the Chrome Extension
  * Storage API which is reliable in Manifest V3 service workers.
  */
+import { storageValuesEqual } from '../../storage/storageValuesEqual'
 import type { Storage, StorageMetadata, StoredValue } from '../../storage/types'
 import { STORAGE_VERSION, StorageError, StorageErrorCode } from '../../storage/types'
 
@@ -86,7 +87,7 @@ export class ChromeExtensionStorage implements Storage {
     try {
       return await this.withMutationLock(async () => {
         const currentValue = await this.get<T>(key)
-        if (JSON.stringify(currentValue) !== JSON.stringify(expectedValue)) {
+        if (!storageValuesEqual(currentValue, expectedValue)) {
           return false
         }
         if (value === null) {

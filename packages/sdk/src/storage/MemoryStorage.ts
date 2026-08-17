@@ -1,3 +1,4 @@
+import { storageValuesEqual } from './storageValuesEqual'
 import { Storage, STORAGE_VERSION, StorageMetadata, StoredValue } from './types'
 
 function cloneStoredValue<T>(value: T): T {
@@ -44,7 +45,7 @@ export class MemoryStorage implements Storage {
 
   async compareAndSet<T>(key: string, expectedValue: T | null, value: T | null): Promise<boolean> {
     const currentValue = this.store.get(key)?.value ?? null
-    if (JSON.stringify(currentValue) !== JSON.stringify(expectedValue)) {
+    if (!storageValuesEqual(currentValue, expectedValue)) {
       return false
     }
 

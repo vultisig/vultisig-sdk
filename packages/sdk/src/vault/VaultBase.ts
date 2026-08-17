@@ -996,6 +996,9 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
         throw new VaultConflictError(this.vaultData.id, expectedRevision, latestRevision)
       }
     } else {
+      // Legacy custom adapters may omit compareAndSet, so ordinary saves retain
+      // the historical set fallback. Import is stricter and rejects such an
+      // adapter before writing because key-share replacement must be atomic.
       await this.storage.set(key, nextSnapshot)
     }
     this.restorePersistedVaultData(nextData)

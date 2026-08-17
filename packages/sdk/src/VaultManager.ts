@@ -71,7 +71,9 @@ export type VaultImportOptions = {
    * Existing logical vaults are rejected by default. `replace` is accepted only
    * when both backups contain the exact same share for the same local party.
    * `replace-unvalidated` also permits recovery when the stored vault cannot be
-   * decoded, and must be selected explicitly because it skips those checks.
+   * decoded after it has been read, and must be selected explicitly because it
+   * skips those checks. Storage read failures still fail closed because there is
+   * no trustworthy compare-and-set baseline for an atomic replacement.
    */
   conflictResolution?: VaultImportConflictResolution
 }
@@ -430,7 +432,16 @@ export class VaultManager {
 
       // Use ECDSA public key as vault ID
       const vaultId = parsedVault.publicKeys.ecdsa
-      const existingVault = await this.storage.get<VaultData>(`vault:${vaultId}`)
+      let existingVault: VaultData | null
+      try {
+        existingVault = await this.storage.get<VaultData>(`vault:${vaultId}`)
+      } catch (error) {
+        throw new VaultImportError(
+          VaultImportErrorCode.PERSISTENCE_FAILED,
+          `Failed to read the existing local vault before import: ${(error as Error).message}`,
+          error as Error
+        )
+      }
       await this.validateImportConflict(existingVault, parsedVault, password, options.conflictResolution ?? 'reject')
 
       // Determine vault type from parsed vault

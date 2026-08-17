@@ -2,6 +2,7 @@
  * Browser storage implementation with IndexedDB and localStorage fallback
  * Direct implementation without runtime detection
  */
+import { storageValuesEqual } from '../../storage/storageValuesEqual'
 import type { Storage, StorageMetadata, StoredValue } from '../../storage/types'
 import { STORAGE_VERSION, StorageError, StorageErrorCode } from '../../storage/types'
 
@@ -294,7 +295,7 @@ export class BrowserStorage implements Storage {
 
       return await this.withLocalStorageMutationLock(() => {
         const currentValue = this.getFromLocalStorage<T>(key)
-        if (JSON.stringify(currentValue) !== JSON.stringify(expectedValue)) {
+        if (!storageValuesEqual(currentValue, expectedValue)) {
           return false
         }
         if (value === null) {
@@ -453,7 +454,7 @@ export class BrowserStorage implements Storage {
 
       request.onsuccess = () => {
         const current = (request.result as StoredValue<T> | undefined)?.value ?? null
-        if (JSON.stringify(current) !== JSON.stringify(expectedValue)) {
+        if (!storageValuesEqual(current, expectedValue)) {
           return
         }
 

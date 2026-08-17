@@ -478,6 +478,46 @@ describe('VaultManager', () => {
       )
     })
 
+    it('fails closed when storage cannot provide an atomic replacement baseline', async () => {
+      class UnreadableVaultStorage extends MemoryStorage {
+        compareAndSetCalls = 0
+
+        override async get<T>(key: string): Promise<T | null> {
+          if (key === `vault:${SYNTH_ECDSA_PK}`) {
+            throw new Error('synthetic torn storage record')
+          }
+          return super.get<T>(key)
+        }
+
+        override async compareAndSet<T>(key: string, expectedValue: T | null, value: T | null): Promise<boolean> {
+          this.compareAndSetCalls += 1
+          return super.compareAndSet(key, expectedValue, value)
+        }
+      }
+
+      const storage = new UnreadableVaultStorage()
+      const manager = new VaultManager(
+        createSdkContext({
+          storage,
+          serverEndpoints: {
+            fastVault: 'https://test-api.vultisig.com/vault',
+            messageRelay: 'https://test-api.vultisig.com/router',
+          },
+          defaultChains: [Chain.Bitcoin, Chain.Ethereum, Chain.Solana],
+          defaultCurrency: 'USD',
+        })
+      )
+      const replacement = encodeUnencryptedVult(buildMinimalSecureVaultBinary())
+
+      await expect(
+        manager.importVault(replacement, undefined, { conflictResolution: 'replace-unvalidated' })
+      ).rejects.toMatchObject({
+        code: VaultImportErrorCode.PERSISTENCE_FAILED,
+        message: expect.stringContaining('Failed to read the existing local vault'),
+      })
+      expect(storage.compareAndSetCalls).toBe(0)
+    })
+
     it('does not let validated replace bypass an encrypted local share that cannot be unlocked', async () => {
       const original = encodeEncryptedVult(buildMinimalSecureVaultBinary(), 'old-password')
       const replacement = encodeEncryptedVult(

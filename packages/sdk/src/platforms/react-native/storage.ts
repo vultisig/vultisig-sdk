@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
+import { storageValuesEqual } from '../../storage/storageValuesEqual'
 import type { Storage, StorageMetadata, StoredValue } from '../../storage/types'
 import { STORAGE_VERSION, StorageError, StorageErrorCode } from '../../storage/types'
 
@@ -60,7 +61,7 @@ export class ReactNativeStorage implements Storage {
     try {
       return await withMutationLock(async () => {
         const currentValue = await this.get<T>(key)
-        if (JSON.stringify(currentValue) !== JSON.stringify(expectedValue)) {
+        if (!storageValuesEqual(currentValue, expectedValue)) {
           return false
         }
         if (value === null) {
