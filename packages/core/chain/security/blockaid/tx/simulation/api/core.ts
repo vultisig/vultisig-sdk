@@ -255,8 +255,15 @@ type SolanaAssetDiff = BlockaidSolanaSimulation['account_summary']['account_asse
 // purposes: a wrap-then-spend (or an unwrap/withdraw that closes the WSOL
 // account) produces an `out` leg on one and an `in` leg on the other for a
 // single economic movement, not a swap between two assets.
-const solanaMintForAsset = (asset: SolanaAssetDiff['asset']): string =>
-  asset.type === 'SOL' ? WSOL_MINT : shouldBePresent(asset.address)
+//
+// Checks BOTH `asset.type` and the diff-level `asset_type` (matching the
+// native-SOL-fee filter a few lines below) — Blockaid responses aren't
+// always internally consistent, and a diff carrying `asset_type: 'SOL'`
+// with `asset.type: 'TOKEN'` would otherwise fall through to
+// `shouldBePresent(asset.address)` and throw instead of resolving to the
+// WSOL mint bucket.
+const solanaMintForAsset = (diff: SolanaAssetDiff): string =>
+  diff.asset.type === 'SOL' || diff.asset_type === 'SOL' ? WSOL_MINT : shouldBePresent(diff.asset.address)
 
 /**
  * Parse a Blockaid Solana simulation into the user's net balance change,
@@ -292,7 +299,7 @@ export const parseBlockaidSolanaSimulation = async (
 
   const groups = new Map<string, { mint: string; decimals: number; netRaw: bigint }>()
   for (const diff of relevantDiffs) {
-    const mint = solanaMintForAsset(diff.asset)
+    const mint = solanaMintForAsset(diff)
     const outRaw = diff.out ? BigInt(diff.out.raw_value) : 0n
     const inRaw = diff.in ? BigInt(diff.in.raw_value) : 0n
     const existing = groups.get(mint)

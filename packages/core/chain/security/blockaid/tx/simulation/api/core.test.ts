@@ -422,6 +422,32 @@ describe('parseBlockaidSolanaSimulation', () => {
     expect(result).toEqual({ transfer: { fromMint: USDC_MINT, fromAmount: 42000000n } })
   })
 
+  it('resolves native SOL to the WSOL mint via the diff-level asset_type even when asset.type disagrees (inconsistent Blockaid metadata)', async () => {
+    // Some Blockaid responses carry asset_type: 'SOL' at the diff level while
+    // asset.type says 'TOKEN' with no address — mirrors the native-SOL-fee
+    // filter's own dual check a few lines above in the source.
+    const inconsistentNativeSol: SolanaAssetDiff['asset'] = {
+      type: 'TOKEN',
+      symbol: 'SOL',
+      decimals: 9,
+      logo: '',
+    }
+
+    const result = await parseBlockaidSolanaSimulation(
+      buildSolanaSimulation([
+        { asset: inconsistentNativeSol, out: solSide('59435000'), in: null, asset_type: 'SOL' },
+        solDiff({ asset: wsolAsset, in: solSide('2039280') }),
+      ])
+    )
+
+    expect(result).toEqual({
+      transfer: {
+        fromMint: WSOL_MINT,
+        fromAmount: 57395720n,
+      },
+    })
+  })
+
   it('throws rather than guess when three distinct nonzero mints remain', async () => {
     await expect(
       parseBlockaidSolanaSimulation(
