@@ -7,6 +7,8 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
+import { createDisposableYarnEnv } from './quality-contracts-cache.mjs'
+
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(scriptDir, '..')
 const sdkRoot = path.join(repoRoot, 'packages/sdk')
@@ -169,12 +171,52 @@ export function collectIntrospectableRuntimeCases(manifest) {
   return cases
 }
 
-export async function collectRuntimeExportKeys(packageRoot, cases) {
+const runtimeExportIntrospectionSource = `
+import { writeSync } from 'node:fs'
+
+const moduleUrl = process.argv[1]
+try {
+  const imported = await import(moduleUrl)
+  writeSync(1, JSON.stringify(Object.keys(imported).sort()))
+  process.exit(0)
+} catch (error) {
+  console.error(error?.stack || error)
+  process.exit(1)
+}
+`
+
+export function collectRuntimeExportKeys(packageRoot, cases, { timeoutMs = 10_000 } = {}) {
   const keysBySpecifier = {}
   for (const { specifier, target } of cases) {
     const modulePath = path.join(packageRoot, target.slice(2))
-    const imported = await import(pathToFileURL(modulePath).href)
-    const keys = Object.keys(imported).sort()
+    const result = spawnSync(
+      process.execPath,
+      ['--input-type=module', '--eval', runtimeExportIntrospectionSource, pathToFileURL(modulePath).href],
+      {
+        encoding: 'utf8',
+        maxBuffer: 20 * 1024 * 1024,
+        timeout: timeoutMs,
+      }
+    )
+    const context = `${specifier} target ${target}`
+    if (result.error?.code === 'ETIMEDOUT' || result.signal) {
+      throw new Error(`SDK runtime export introspection timed out after ${timeoutMs}ms for ${context}`)
+    }
+    if (result.error) {
+      throw new Error(`SDK runtime export introspection failed for ${context}: ${result.error.message}`)
+    }
+    if (result.status !== 0) {
+      throw new Error(
+        [`SDK runtime export introspection failed for ${context}`, result.stderr?.trim()].filter(Boolean).join('\n\n')
+      )
+    }
+
+    let keys
+    try {
+      keys = JSON.parse(result.stdout)
+    } catch (error) {
+      throw new Error(`SDK runtime export introspection returned invalid output for ${context}: ${error.message}`)
+    }
     if (keys.length) keysBySpecifier[specifier] = keys
   }
   return keysBySpecifier
@@ -262,7 +304,7 @@ const requiredModules = new Map()
 for (const { specifier, target } of cases) {
   const resolved = require.resolve(specifier)
   assert.ok(
-    resolved.endsWith(path.normalize(target.slice(2))),
+    resolved.endsWith(path.sep + path.normalize(target.slice(2))),
     \`\${specifier} require resolved to \${resolved}, expected \${target}\`
   )
   const required = require(specifier)
@@ -372,10 +414,9 @@ export type ReactNativeExtended = ReactNativeExtendedChainRegistry<typeof extens
 }
 
 function installPackedSdk(consumerRoot, tarballPath) {
-  const cacheFolder = path.join(repoRoot, '.yarn/cache')
   const env = {
-    ...process.env,
-    ...(existsSync(cacheFolder) ? { YARN_CACHE_FOLDER: cacheFolder } : {}),
+    ...createDisposableYarnEnv(consumerRoot),
+    YARN_ENABLE_IMMUTABLE_INSTALLS: 'false',
   }
   runYarn(['add', `@vultisig/sdk@file:${tarballPath}`], {
     cwd: consumerRoot,

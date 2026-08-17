@@ -227,7 +227,7 @@ test('introspectable runtime cases include browser/chrome-extension and seedphra
   )
 })
 
-test('runtime export keys are collected from the packed module and empty modules are skipped', async () => {
+test('runtime export keys are collected from the packed module and empty modules are skipped', () => {
   const root = mkdtempSync(path.join(os.tmpdir(), 'sdk-runtime-export-keys-test-'))
   try {
     mkdirSync(path.join(root, 'dist'), { recursive: true })
@@ -237,7 +237,7 @@ test('runtime export keys are collected from the packed module and empty modules
     )
     writeFileSync(path.join(root, 'dist/empty.mjs'), 'export {}\n')
 
-    const keys = await collectRuntimeExportKeys(root, [
+    const keys = collectRuntimeExportKeys(root, [
       { specifier: '@vultisig/sdk/seedphrase', target: './dist/with-exports.mjs' },
       { specifier: '@vultisig/sdk/empty', target: './dist/empty.mjs' },
     ])
@@ -245,6 +245,39 @@ test('runtime export keys are collected from the packed module and empty modules
     assert.deepEqual(keys, {
       '@vultisig/sdk/seedphrase': ['SeedphraseValidator', 'normalizeMnemonic'],
     })
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('runtime export introspection isolates modules and reports timeout context', () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'sdk-runtime-export-timeout-test-'))
+  try {
+    mkdirSync(path.join(root, 'dist'), { recursive: true })
+    writeFileSync(
+      path.join(root, 'dist/hangs.mjs'),
+      'Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10_000)\nexport const value = true\n'
+    )
+
+    assert.throws(
+      () =>
+        collectRuntimeExportKeys(root, [{ specifier: '@vultisig/sdk/hangs', target: './dist/hangs.mjs' }], {
+          timeoutMs: 100,
+        }),
+      /timed out after 100ms.*@vultisig\/sdk\/hangs target \.\/dist\/hangs\.mjs/
+    )
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('runtime export introspection reports import failures with specifier and target', () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'sdk-runtime-export-failure-test-'))
+  try {
+    assert.throws(
+      () => collectRuntimeExportKeys(root, [{ specifier: '@vultisig/sdk/missing', target: './dist/missing.mjs' }]),
+      /failed for @vultisig\/sdk\/missing target \.\/dist\/missing\.mjs/
+    )
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
