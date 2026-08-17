@@ -1,8 +1,8 @@
 /**
  * Balance Commands - balance and portfolio
  */
-import type { Balance, FiatCurrency, Value } from '@vultisig/sdk'
-import { Chain, fiatCurrencies, fiatCurrencyNameRecord } from '@vultisig/sdk'
+import type { Balance, Chain, FiatCurrency, Value } from '@vultisig/sdk'
+import { fiatCurrencies, fiatCurrencyNameRecord, SUPPORTED_CHAINS } from '@vultisig/sdk'
 
 import type { ChainFailure, CommandContext, PortfolioSummary } from '../core'
 import { NetworkError } from '../core/errors'
@@ -18,9 +18,14 @@ import { displayBalance, displayBalancesTable, displayPortfolio } from '../ui'
  * RPC), and it must only name commands that actually exist (`balance <chain>`
  * works on any SDK-supported chain regardless of the enabled set;
  * `chains --add` grows the enabled set).
+ *
+ * The denominator is SUPPORTED_CHAINS — the same registry `chains --add`
+ * validates against and `chains` reports "N of M enabled" from — so the hint
+ * can never advise adding a chain that `chains --add` would reject, even if
+ * SUPPORTED_CHAINS later becomes a filtered subset of the Chain enum.
  */
 export function buildScopeHint(enabledChainCount: number): string | undefined {
-  const supportedCount = Object.values(Chain).length
+  const supportedCount = SUPPORTED_CHAINS.length
   if (enabledChainCount >= supportedCount) return undefined
   const noun = enabledChainCount === 1 ? 'chain' : 'chains'
   return (

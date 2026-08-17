@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 
 import type { Balance, Chain as ChainType, FiatCurrency, Value, VaultBase } from '@vultisig/sdk'
-import { Chain } from '@vultisig/sdk'
+import { Chain, SUPPORTED_CHAINS } from '@vultisig/sdk'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { CommandContext, PortfolioSummary } from '../core'
@@ -420,7 +420,7 @@ describe('aggregate scope hint (DF-02)', () => {
   // the hint is the honesty marker that says so. The scoped `balance <chain>`
   // path deliberately stays hint-free AND permissive (querying any
   // SDK-supported chain is the documented escape hatch — do not "fix" it).
-  const allSupported = Object.values(Chain) as ChainType[]
+  const allSupported = [...SUPPORTED_CHAINS]
 
   beforeEach(() => {
     configureOutput({ format: 'json' })
@@ -447,11 +447,16 @@ describe('aggregate scope hint (DF-02)', () => {
 
   it('puts the hint in its own JSON field on all-chains balance, leaving the balances payload unchanged', async () => {
     const { ctx, emitted } = makeAggregateCtx([Chain.Ethereum, Chain.Bitcoin])
+    // Snapshot BEFORE the call: comparing against `emitted` itself would go
+    // blind if the implementation mutated the map in place (e.g. wrote the
+    // hint INTO it) — the reference and the expectation would drift together.
+    const pristine = structuredClone(emitted)
 
     const envelope = await captureJson(() => executeBalance(ctx, {}))
     expect(envelope.data.scopeHint).toContain('2 enabled chains')
     // The machine-readable payload is byte-for-byte what the vault returned.
-    expect(envelope.data.balances).toEqual(emitted)
+    expect(envelope.data.balances).toEqual(pristine)
+    expect(emitted).toEqual(pristine)
   })
 
   it('omits the hint when every SDK-supported chain is enabled', async () => {
@@ -495,6 +500,24 @@ describe('aggregate scope hint (DF-02)', () => {
     const joined = logs.join('\n')
     expect(joined).toContain("won't appear here")
     expect(joined).toContain('vultisig balance <chain>')
+  })
+
+  it('prints nothing extra on human output when every supported chain is enabled', async () => {
+    // Guards the `if (scopeHint)` gate: without it, a suppressed hint would
+    // print a stray "undefined" line after the table for fully-enabled vaults.
+    configureOutput({ format: 'table', silent: false })
+    const logs: string[] = []
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+      logs.push(args.map(String).join(' '))
+    })
+    vi.spyOn(console, 'table').mockImplementation(() => {})
+
+    const { ctx } = makeAggregateCtx(allSupported)
+    await executeBalance(ctx, {})
+
+    const joined = logs.join('\n')
+    expect(joined).not.toContain('undefined')
+    expect(joined).not.toContain("won't appear here")
   })
 
   it('prints the hint on the human-readable portfolio output', async () => {
