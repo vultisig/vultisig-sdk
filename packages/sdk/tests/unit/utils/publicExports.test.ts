@@ -1,3 +1,5 @@
+import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
+import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
 import { describe, expect, it } from 'vitest'
 
 import * as sdk from '../../../src/index'
@@ -121,6 +123,28 @@ describe('@vultisig/sdk public exports', () => {
     })
   })
 
+  it('exports the custom-RPC registry + health-probe canonicals from the root SDK entrypoint', () => {
+    expect(sdk.customRpcSupportedChains).toBe(customRpcSupportedChains.customRpcSupportedChains)
+    expect(sdk.customRpcSupportedEvmChains).toBe(customRpcSupportedChains.customRpcSupportedEvmChains)
+    expect(sdk.customRpcSupportedCosmosChains).toBe(customRpcSupportedChains.customRpcSupportedCosmosChains)
+    expect(sdk.isCustomRpcSupported).toBe(customRpcSupportedChains.isCustomRpcSupported)
+    expect(sdk.getCustomRpcOverride).toBe(customRpcOverrides.getCustomRpcOverride)
+    expect(sdk.setCustomRpcOverride).toBe(customRpcOverrides.setCustomRpcOverride)
+    expect(sdk.clearCustomRpcOverride).toBe(customRpcOverrides.clearCustomRpcOverride)
+    expect(sdk.setCustomRpcOverrides).toBe(customRpcOverrides.setCustomRpcOverrides)
+    expect(sdk.getCustomRpcOverrides).toBe(customRpcOverrides.getCustomRpcOverrides)
+    expect(sdk.probeRpcHealth).toBeTypeOf('function')
+
+    sdk.clearCustomRpcOverride(sdk.Chain.Ethereum)
+    expect(sdk.isCustomRpcSupported(sdk.Chain.Ethereum)).toBe(true)
+    expect(sdk.isCustomRpcSupported(sdk.Chain.THORChain)).toBe(false)
+    sdk.setCustomRpcOverride(sdk.Chain.Ethereum, ' https://rpc.example ')
+    expect(sdk.getCustomRpcOverride(sdk.Chain.Ethereum)).toBe('https://rpc.example')
+    expect(sdk.getCustomRpcOverrides()).toEqual({ [sdk.Chain.Ethereum]: 'https://rpc.example' })
+    sdk.clearCustomRpcOverride(sdk.Chain.Ethereum)
+    expect(sdk.getCustomRpcOverride(sdk.Chain.Ethereum)).toBeUndefined()
+  })
+
   it('exports prepareTrc20TransferFromKeys (pure-crypto TRC-20 builder for mcp-ts/backend)', () => {
     expect(typeof sdk.prepareTrc20TransferFromKeys).toBe('function')
     expect(sdk.TRC20_TRANSFER_SELECTOR).toBe('transfer(address,uint256)')
@@ -151,6 +175,18 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.getSplTokenBalance).toBe('function')
   })
 
+  it('exports canonical swap tracker URL helpers for first-party consumers', () => {
+    expect(typeof sdk.getSwapExplorerUrl).toBe('function')
+    expect(Array.isArray(sdk.swapExplorerProviders)).toBe(true)
+    expect(
+      sdk.getSwapExplorerUrl({
+        provider: 'li.fi',
+        txHash: '0xabc',
+        fromChain: sdk.Chain.Base,
+      })
+    ).toBe('https://scan.li.fi/tx/0xabc')
+  })
+
   it('exports Noon USDC yield helpers for Windows and Station consumers', () => {
     expect(sdk.noonUsdcVaultConfig).toBeDefined()
     expect(typeof sdk.encodeNoonDeposit).toBe('function')
@@ -168,6 +204,13 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.defi.arkis.ARKIS_OFFICIAL_ADDRESSES.dispatcher).toBe('0x2f01D7CFfe62673B3D2b680295A2D047F3848e4c')
   })
 
+  it('exports Balancer V3 calldata builder on the root sdk surface alongside other DeFi builders', () => {
+    expect(typeof sdk.buildBalancerV3SwapCalldata).toBe('function')
+    expect(typeof sdk.buildBuyPt).toBe('function')
+    expect(typeof sdk.defi.balancer.buildBalancerV3SwapCalldata).toBe('function')
+    expect(sdk.buildBalancerV3SwapCalldata).toBe(sdk.defi.balancer.buildBalancerV3SwapCalldata)
+  })
+
   it('exports the full River helper family from the root sdk surface', () => {
     expect(typeof sdk.describeRiverMarket).toBe('function')
     expect(typeof sdk.findRiverInsertHints).toBe('function')
@@ -178,8 +221,12 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.river.findInsertHints).toBe(sdk.findRiverInsertHints)
   })
 
-  it('exports Chain enum, chain helpers, and VaultBase class for first-party consumers', () => {
+  it('exports Chain enum, cosmos chain subsets, chain helpers, and VaultBase class for first-party consumers', () => {
     expect(sdk.Chain).toBeDefined()
+    expect(sdk.IbcEnabledCosmosChain.TerraClassic).toBe('TerraClassic')
+    expect(sdk.VaultBasedCosmosChain.THORChain).toBe('THORChain')
+    expect(Object.values(sdk.IbcEnabledCosmosChain)).not.toContain(sdk.Chain.THORChain)
+    expect(Object.values(sdk.VaultBasedCosmosChain)).toEqual([sdk.Chain.THORChain, sdk.Chain.MayaChain])
     expect(typeof sdk.getChainKind).toBe('function')
     expect(typeof sdk.isChainOfKind).toBe('function')
     expect(sdk.chainFeeCoin.Ethereum.ticker).toBe('ETH')
@@ -205,12 +252,15 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.thorchainSecuredAssetFallback.length).toBeGreaterThan(10)
   })
 
-  it('exports canonical EVM chain-id helpers and the priority-fee sanity clamp from the root sdk surface', () => {
+  it('exports canonical EVM chain-id, RPC, and priority-fee-clamp helpers from the root sdk surface', () => {
     expect(typeof sdk.getEvmChainId).toBe('function')
     expect(typeof sdk.getEvmChainByChainId).toBe('function')
+    expect(typeof sdk.getEvmRpcUrl).toBe('function')
     expect(typeof sdk.clampEvmPriorityFee).toBe('function')
     expect(sdk.getEvmChainId(sdk.Chain.Mantle)).toBe('0x1388')
     expect(sdk.getEvmChainByChainId('0x3e7')).toBe(sdk.Chain.Hyperliquid)
+    expect(sdk.getEvmRpcUrl(sdk.Chain.Ethereum)).toBe('https://api.vultisig.com/eth/')
+    expect(sdk.getEvmRpcUrl(sdk.Chain.Hyperliquid)).toBe('https://api.vultisig.com/hyperevm/')
     expect(
       sdk.clampEvmPriorityFee(sdk.Chain.Base as Parameters<typeof sdk.clampEvmPriorityFee>[0], 75n * 1_000_000_000n)
     ).toBe(50n * 1_000_000_000n)
@@ -280,6 +330,13 @@ describe('@vultisig/sdk public exports', () => {
       sdk.Chain.Solana,
       sdk.Chain.BSC,
     ])
+  })
+
+  it('exports the pairing-QR payload builder from the root SDK surface', async () => {
+    const services = await import('../../../src/services/buildKeygenPairingQrPayload')
+
+    expect(typeof sdk.buildKeygenPairingQrPayload).toBe('function')
+    expect(sdk.buildKeygenPairingQrPayload).toBe(services.buildKeygenPairingQrPayload)
   })
 
   it('exports generic CosmWasm amino and protobuf execute builders', () => {

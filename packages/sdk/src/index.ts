@@ -113,6 +113,11 @@ export { checkChainPrefix } from './utils/chainPrefix'
 export type { ParsedThorSwapMemo } from './utils/thorSwapMemo'
 export { parseThorSwapMemo } from './utils/thorSwapMemo'
 
+// Canonical UTXO wrong-chain guard. Consumers should import this instead of
+// maintaining local bech32 HRP / Base58Check version / CashAddr matrices.
+export type { UtxoChainName } from './chains/utxo/addressBrand'
+export { assertUtxoAddressBrand, isUtxoAddressBrandValid } from './chains/utxo/addressBrand'
+
 // ============================================================================
 // PUBLIC API - Tx Shape Normalization (pure, vault-free)
 // ============================================================================
@@ -199,7 +204,7 @@ export type { SdkEvents, VaultEvents } from './events/types'
 
 // Chain enums and types
 export type { Chain as ChainType, CosmosChain, EvmChain, OtherChain, UtxoChain } from './types'
-export { Chain } from './types'
+export { Chain, IbcEnabledCosmosChain, VaultBasedCosmosChain } from './types'
 
 // Chain-kind classification — the canonical 12-family dispatch key. Exposed so
 // downstream consumers (mcp-ts, agent-backend) route through the SDK instead of
@@ -220,6 +225,25 @@ export {
   rippleTokenId,
   toXrplCurrencyCode,
 } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
+
+// Custom-RPC canonicals — surfaced so consumers can use the SDK-owned per-chain
+// override registry + health probe instead of deep-importing core internals or
+// rebuilding the same feature in app/backend code.
+export {
+  clearCustomRpcOverride,
+  getCustomRpcOverride,
+  getCustomRpcOverrides,
+  setCustomRpcOverride,
+  setCustomRpcOverrides,
+} from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
+export {
+  customRpcSupportedChains,
+  customRpcSupportedCosmosChains,
+  customRpcSupportedEvmChains,
+  isCustomRpcSupported,
+} from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
+export type { RpcHealthResult } from '@vultisig/core-chain/chains/customRpc/rpcHealthProbe'
+export { probeRpcHealth } from '@vultisig/core-chain/chains/customRpc/rpcHealthProbe'
 
 // Cosmos chain metadata — surfaced so consumers stop re-declaring LCD urls /
 // fee denoms / gas limits (e.g. mcp-ts lib/cosmos-chains.ts).
@@ -384,10 +408,12 @@ export {
 // Single source of truth for the per-chain EVM chainId table and fee-ceiling
 // policy so consumers (app, agent-backend-ts) import it instead of
 // hand-maintaining their own copies that can drift (the Hyperliquid 998/999
-// chainId bug class and the client-side fee-policy fork class). Native tickers
-// are already exported via `chainFeeCoin`. `getEvmChainId` returns the hex
-// chainId; `getEvmChainByChainId` resolves a hex chainId back to its EvmChain.
-export { getEvmChainByChainId, getEvmChainId } from '@vultisig/core-chain/chains/evm/chainInfo'
+// client↔server chainId bug class and the client-side fee-policy fork class).
+// Native tickers are already exported via `chainFeeCoin`. `getEvmChainId`
+// returns the hex chainId; `getEvmChainByChainId` resolves a hex chainId back to
+// its EvmChain; `getEvmRpcUrl` returns the canonical default/custom-RPC-resolved
+// endpoint for that chain.
+export { getEvmChainByChainId, getEvmChainId, getEvmRpcUrl } from '@vultisig/core-chain/chains/evm/chainInfo'
 export { clampEvmPriorityFee } from '@vultisig/core-chain/tx/fee/evm/clampEvmPriorityFee'
 
 // Noon USDC yield vault SDK boundary. Consumers should use these helpers
@@ -452,7 +478,8 @@ export { SEEDPHRASE_WORD_COUNTS, validateSeedphrase } from './seedphrase'
 // Reshare types
 export type { PerformReshareParams } from './services/SecureVaultCreationService'
 
-// QR payload parsing (for programmatic multi-device coordination)
+// QR payload parsing / generation (for programmatic multi-device coordination)
+export { buildKeygenPairingQrPayload } from './services/buildKeygenPairingQrPayload'
 export type { ParsedKeygenQR } from './utils/parseKeygenQR'
 export { parseKeygenQR } from './utils/parseKeygenQR'
 
@@ -854,6 +881,7 @@ export {
   ASTROPORT_ROUTER,
   balancePolkadot,
   buildAstroportSwap,
+  buildBalancerV3SwapCalldata,
   buildBuyPt,
   buildCctpBridge,
   buildCctpClaim,
@@ -885,6 +913,7 @@ export {
   compareCosts,
   computeAstroportMinReceive,
   CONSOLIDATE_CHAINS,
+  cosmos,
   COSMOS_SWAP_FEE_LABEL_CHAINS,
   COSMOS_SWAP_GAS_LIMIT,
   cosmosBalanceChains,
@@ -903,6 +932,7 @@ export {
   encodeErc20Revoke,
   estimateCosmosSwapFeeLabel,
   evaluatePolicy,
+  evm,
   evmCall,
   evmCheckAllowance,
   evmGasPrice,
@@ -1024,10 +1054,12 @@ export {
   SUI_NATIVE_COIN_TYPE,
   supportedIbcDestinationsFrom,
   supportedUtxoBalanceChains,
+  SwapQuoteExpiredError,
   symbolFromCoinGeckoId,
   TERRA_CHAIN_ID,
   TERRA_LCD,
   THORCHAIN_NODE_URL,
+  token,
   TRC20_TRANSFER_SELECTOR,
   utxoFeeRate,
   VerifierClient,

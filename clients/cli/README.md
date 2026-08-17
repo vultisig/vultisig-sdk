@@ -1337,6 +1337,7 @@ npm update -g @vultisig/cli
 ## Documentation
 
 - [SDK Documentation](../../packages/sdk/README.md)
+- [Hyperliquid signed-order backend contract](docs/hyperliquid-order-contract.md)
 - [API Reference](https://docs.vultisig.com)
 
 ## Support
