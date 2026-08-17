@@ -42,7 +42,7 @@ export type WithdrawResult = {
   status: 'pending' | 'success' | 'failed'
 }
 
-function hasVaultAccess(signer: unknown): signer is { getVault(): VultisigVault } {
+function hasVaultAccess(signer: unknown): signer is { getVault(): VultisigVault; getChainId?(): string } {
   return (
     signer !== null &&
     typeof signer === 'object' &&
@@ -143,12 +143,19 @@ export class RujiraWithdraw {
 
       const [accountInfo, fee] = await Promise.all([this.getAccountInfo(senderAddress), this.getNetworkFee()])
 
+      // Thread the provider's configured chain ID (VultisigRujiraProvider
+      // already supports a non-default one — vultisig-provider.ts) instead
+      // of hardcoding mainnet, so a stagenet/testnet-configured provider
+      // signs against the chain ID it was actually constructed with.
+      const chainId = typeof signer.getChainId === 'function' ? signer.getChainId() : undefined
+
       const keysignPayload = await buildWithdrawalKeysignPayload({
         vault,
         senderAddress,
         prepared,
         accountInfo,
         fee,
+        chainId,
       })
 
       const messageHashes = await vault.extractMessageHashes(keysignPayload)
