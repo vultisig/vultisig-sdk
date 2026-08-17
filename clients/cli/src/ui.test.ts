@@ -6,6 +6,8 @@ import { resetOutput, setNonInteractive } from './lib/output'
 import {
   confirmSwap,
   confirmTransaction,
+  displayBalance,
+  displayBalancesTable,
   displayTransactionPreview,
   formatBalanceAmount,
   formatBigintAmount,
@@ -36,6 +38,81 @@ describe('confirm prompts fail closed in non-interactive mode', () => {
 
     await expect(confirmSwap()).rejects.toBeInstanceOf(ConfirmationRequiredError)
     expect(stdoutSpy).not.toHaveBeenCalled()
+  })
+})
+
+// The XRP account reserve made balances read as missing funds: the headline is
+// the spendable (post-reserve) number, but nothing said so. Reserve-carrying
+// balances must be labeled; every other chain's render stays byte-identical.
+describe('displayBalance reserve labeling', () => {
+  const captureLogs = () => {
+    const logs: string[] = []
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+      logs.push(args.map(String).join(' '))
+    })
+    return logs
+  }
+
+  const xrpBalance = {
+    amount: '2365052',
+    formattedAmount: '2.365052',
+    decimals: 6,
+    symbol: 'XRP',
+    chainId: 'Ripple',
+    totalAmount: '3765052',
+    reserveAmount: '1400000',
+  }
+
+  it('labels the spendable headline and prints the reserve breakdown', () => {
+    const logs = captureLogs()
+
+    displayBalance('Ripple', xrpBalance)
+
+    expect(logs.find(line => line.includes('Amount:'))).toContain('2.365052 XRP (spendable)')
+    expect(logs.find(line => line.includes('Reserve:'))).toContain('1.4 XRP locked (3.765052 XRP total on ledger)')
+  })
+
+  it('keeps balances without a reserve byte-identical', () => {
+    const logs = captureLogs()
+
+    displayBalance('Bitcoin', {
+      amount: '100000000',
+      formattedAmount: '1',
+      decimals: 8,
+      symbol: 'BTC',
+      chainId: 'Bitcoin',
+    })
+
+    expect(logs.find(line => line.includes('Amount:'))).toBe('  Amount: 1 BTC')
+    expect(logs.some(line => line.includes('Reserve:'))).toBe(false)
+    expect(logs.some(line => line.includes('spendable'))).toBe(false)
+  })
+
+  it('does not label a zero reserve', () => {
+    const logs = captureLogs()
+
+    displayBalance('Ripple', { ...xrpBalance, totalAmount: xrpBalance.amount, reserveAmount: '0' })
+
+    expect(logs.find(line => line.includes('Amount:'))).toBe('  Amount: 2.365052 XRP')
+    expect(logs.some(line => line.includes('Reserve:'))).toBe(false)
+  })
+
+  it('marks the table Amount cell as spendable only for reserve-carrying rows', () => {
+    const rows: object[][] = []
+    vi.spyOn(console, 'table').mockImplementation((data: object[]) => {
+      rows.push(data)
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    displayBalancesTable({
+      Ripple: xrpBalance,
+      Bitcoin: { amount: '100000000', formattedAmount: '1', decimals: 8, symbol: 'BTC', chainId: 'Bitcoin' },
+    })
+
+    expect(rows[0]).toEqual([
+      expect.objectContaining({ Chain: 'Ripple', Amount: '2.365052 (spendable)' }),
+      expect.objectContaining({ Chain: 'Bitcoin', Amount: '1' }),
+    ])
   })
 })
 

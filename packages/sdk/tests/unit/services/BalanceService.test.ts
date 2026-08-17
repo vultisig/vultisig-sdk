@@ -3,6 +3,7 @@ import { rippleTokenId } from '@vultisig/core-chain/chains/ripple/issuedCurrency
 import { accountCoinKeyToString } from '@vultisig/core-chain/coin/AccountCoin'
 import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 import { getEvmChainBalances } from '@vultisig/core-chain/coin/balance/getEvmChainBalances'
+import { getRippleNativeBalanceDetail } from '@vultisig/core-chain/coin/balance/resolvers/ripple'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { CacheScope, CacheService } from '../../../src/services/CacheService'
@@ -17,6 +18,10 @@ vi.mock('@vultisig/core-chain/coin/balance', () => ({
 
 vi.mock('@vultisig/core-chain/coin/balance/getEvmChainBalances', () => ({
   getEvmChainBalances: vi.fn(),
+}))
+
+vi.mock('@vultisig/core-chain/coin/balance/resolvers/ripple', () => ({
+  getRippleNativeBalanceDetail: vi.fn(),
 }))
 
 const token: Token = {
@@ -126,6 +131,35 @@ describe('BalanceService', () => {
       vi.fn(),
       vi.fn()
     )
+
+  it('surfaces the XRP reserve breakdown while keeping spendable as the balance', async () => {
+    vi.mocked(getRippleNativeBalanceDetail).mockResolvedValue({
+      total: 3_765_052n,
+      reserve: 1_400_000n,
+      spendable: 2_365_052n,
+    })
+    const service = makeService()
+
+    const balance = await service.getBalance(Chain.Ripple)
+
+    // The headline number every consumer already relies on stays spendable.
+    expect(balance.amount).toBe('2365052')
+    expect(balance.totalAmount).toBe('3765052')
+    expect(balance.reserveAmount).toBe('1400000')
+    expect(getCoinBalance).not.toHaveBeenCalled()
+  })
+
+  it('leaves Ripple token balances on the plain resolver without a breakdown', async () => {
+    vi.mocked(getCoinBalance).mockResolvedValue(7_000_000n)
+    const service = makeService()
+
+    const tokenId = rippleTokenId({ currency: 'RLUSD', issuer: 'rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De' })
+    const balance = await service.getBalance(Chain.Ripple, tokenId)
+
+    expect(getRippleNativeBalanceDetail).not.toHaveBeenCalled()
+    expect(balance.totalAmount).toBeUndefined()
+    expect(balance.reserveAmount).toBeUndefined()
+  })
 
   it("does not reinterpret a canonical asset id as another token's symbol", async () => {
     vi.mocked(getCoinBalance).mockImplementation(async ({ id }) => {
