@@ -34,8 +34,8 @@ export {
 export { prepareJettonTransferTxFromKeys, type PrepareJettonTransferTxFromKeysParams } from './jettonTransfer'
 export {
   computeMaxSendFromBalance,
-  getMaxSendAmountFromKeys,
   type ComputeMaxSendFromBalanceParams,
+  getMaxSendAmountFromKeys,
   type GetMaxSendAmountFromKeysParams,
 } from './maxSend'
 export {
