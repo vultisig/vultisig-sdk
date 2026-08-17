@@ -47,7 +47,15 @@ import type { PushNotificationService } from './services/PushNotificationService
 import { type PerformReshareParams, SecureVaultCreationService } from './services/SecureVaultCreationService'
 import { SecureVaultFromSeedphraseService } from './services/SecureVaultFromSeedphraseService'
 import type { Storage } from './storage/types'
+import { balance, type BalanceNamespace } from './tools/balance/namespace'
+import * as bridge from './tools/bridge'
+import * as cosmos from './tools/cosmos'
+import * as decode from './tools/decode'
 import { type Defi, defi } from './tools/defi'
+import * as gas from './tools/gas'
+import { type Prep, prep } from './tools/prep/namespace'
+import * as price from './tools/price'
+import { type Swap, swap } from './tools/swap/namespace'
 import {
   AddressBook,
   AddressBookEntry,
@@ -170,6 +178,80 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    */
   get defi(): Defi {
     return defi
+  }
+
+  /**
+   * Cross-chain balance reads (`sdk.balance.*`), e.g. `sdk.balance.getEvmBalances`.
+   *
+   * Pure reads — nothing here signs or broadcasts. Excludes the Polkadot
+   * balance helpers (`balancePolkadot` / `getPolkadotNativeBalance` /
+   * `getPolkadotAssetBalance`), which remain available as flat exports only
+   * (see `tools/balance/namespace.ts` for why).
+   */
+  get balance(): BalanceNamespace {
+    return balance
+  }
+
+  /**
+   * Circle CCTP bridge/claim primitives (`sdk.bridge.*`), e.g.
+   * `sdk.bridge.buildCctpBridge`. Unsigned calldata builders only.
+   */
+  get bridge(): typeof bridge {
+    return bridge
+  }
+
+  /**
+   * Cosmos governance (`sdk.cosmos.gov.*`) — read proposals, build an
+   * unsigned `MsgVote` envelope. Never signs or broadcasts.
+   */
+  get cosmos(): typeof cosmos {
+    return cosmos
+  }
+
+  /**
+   * Canonical bytes oracle (`sdk.decode.*`) — decode calldata into a
+   * chain-agnostic `Envelope`.
+   */
+  get decode(): typeof decode {
+    return decode
+  }
+
+  /**
+   * Gas / fee-rate primitives (`sdk.gas.*`), e.g. `sdk.gas.compareCosts`,
+   * `sdk.gas.utxoFeeRate`. Read-only.
+   */
+  get gas(): typeof gas {
+    return gas
+  }
+
+  /**
+   * Vault-free prep helpers (`sdk.prep.*`), e.g. `sdk.prep.prepareSendTxFromKeys`
+   * — build unsigned `KeysignPayload`s from a `VaultIdentity` (raw public
+   * keys, no key shares). Excludes `buildSplTransfer` and a handful of other
+   * prep helpers not yet proven React-Native-bundle-safe (see
+   * `tools/prep/namespace.ts` for why); those remain available as flat
+   * exports only.
+   */
+  get prep(): Prep {
+    return prep
+  }
+
+  /**
+   * Token USD pricing (`sdk.price.*`), e.g. `sdk.price.getPrice`, via
+   * CoinGecko through the Vultisig proxy. Read-only.
+   */
+  get price(): typeof price {
+    return price
+  }
+
+  /**
+   * Swap quoting/building primitives (`sdk.swap.*`), e.g.
+   * `sdk.swap.findSwapQuote`. Excludes the Jupiter (same-chain Solana) and
+   * Skip Go (cross-chain) builders (see `tools/swap/namespace.ts` for why);
+   * those remain available as flat exports only.
+   */
+  get swap(): Swap {
+    return swap
   }
 
   /**

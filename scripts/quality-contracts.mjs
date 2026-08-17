@@ -352,6 +352,16 @@ assert.equal(
   'root exposes sdk.cosmos.gov'
 )
 assert.equal(root.cosmos.gov.prepareCosmosVote, root.prepareCosmosVote, 'sdk.cosmos.gov keeps the flat vote helper')
+// #1912: new Vultisig() only exposed sdk.defi as an instance namespace even
+// though these root/module exports already existed. Covers the root namespace
+// objects here; Vultisig.test.ts covers the new Vultisig().balance etc instance getters.
+assert.equal(root.balance.getEvmBalances, root.getEvmBalances, 'root exposes sdk.balance')
+assert.equal(root.bridge.buildCctpBridge, root.buildCctpBridge, 'root exposes sdk.bridge')
+assert.equal(root.decode.decodeEvmTx, root.decodeEvmTx, 'root exposes sdk.decode')
+assert.equal(root.gas.compareCosts, root.compareCosts, 'root exposes sdk.gas')
+assert.equal(root.prep.prepareSendTxFromKeys, root.prepareSendTxFromKeys, 'root exposes sdk.prep')
+assert.equal(root.price.getPrice, root.getPrice, 'root exposes sdk.price')
+assert.equal(root.swap.findSwapQuote, root.findSwapQuote, 'root exposes sdk.swap')
 
 assert.equal(typeof node.Vultisig, 'function', '@vultisig/sdk/node exports Vultisig')
 assert.equal(node.evm.encodeErc20Approve, node.encodeErc20Approve, '@vultisig/sdk/node exposes sdk.evm')
@@ -361,6 +371,9 @@ assert.equal(
   node.prepareCosmosVote,
   '@vultisig/sdk/node exposes sdk.cosmos.gov'
 )
+assert.equal(node.balance.getEvmBalances, node.getEvmBalances, '@vultisig/sdk/node exposes sdk.balance')
+assert.equal(node.swap.findSwapQuote, node.findSwapQuote, '@vultisig/sdk/node exposes sdk.swap')
+assert.equal(node.prep.prepareSendTxFromKeys, node.prepareSendTxFromKeys, '@vultisig/sdk/node exposes sdk.prep')
 
 assert.equal(
   path.basename(seedphraseEntry),
@@ -387,6 +400,8 @@ assert.equal(
   browser.prepareCosmosVote,
   '@vultisig/sdk/browser exposes sdk.cosmos.gov'
 )
+assert.equal(browser.balance.getEvmBalances, browser.getEvmBalances, '@vultisig/sdk/browser exposes sdk.balance')
+assert.equal(browser.swap.findSwapQuote, browser.findSwapQuote, '@vultisig/sdk/browser exposes sdk.swap')
 assert.ok(vite && (vite.default || vite), '@vultisig/sdk/vite resolves')
 assert.equal(
   path.basename(reactNativeEntry),
@@ -471,7 +486,7 @@ import type {
 } from '@vultisig/sdk/react-native'
 import type { Vultisig } from '@vultisig/sdk/node'
 import type { ElectronMainCrypto, Vultisig as ElectronMainVultisig } from '@vultisig/sdk/electron/main'
-import { cosmos, evm, token } from '@vultisig/sdk'
+import { balance, bridge, cosmos, decode, evm, gas, prep, price, swap, token } from '@vultisig/sdk'
 import {
   normalizeMnemonic,
   type Bip39Language,
@@ -516,6 +531,13 @@ export type ReactNativeExtended = ReactNativeExtendedChainRegistry<typeof extens
 export type CosmosNamespace = typeof cosmos
 export type EvmNamespace = typeof evm
 export type TokenNamespace = typeof token
+export type BalanceNamespaceSmoke = typeof balance
+export type BridgeNamespace = typeof bridge
+export type DecodeNamespace = typeof decode
+export type GasNamespace = typeof gas
+export type PrepNamespace = typeof prep
+export type PriceNamespace = typeof price
+export type SwapNamespace = typeof swap
 export type RootUtxoBrandResult = typeof rootUtxoBrandValid
 export type ReactNativeUtxoBrandResult = typeof reactNativeUtxoBrandValid
 export type SeedphraseLanguage = Bip39Language

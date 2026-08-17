@@ -162,6 +162,54 @@ describe('Vultisig', () => {
     })
   })
 
+  // Regression coverage for #1912: `new Vultisig()` only exposed `sdk.defi.*`
+  // as an instance namespace even though the changelog documents
+  // `sdk.balance.*` / `sdk.bridge.*` / `sdk.cosmos.*` / `sdk.decode.*` /
+  // `sdk.gas.*` / `sdk.prep.*` / `sdk.price.*` / `sdk.swap.*` too.
+  describe('namespace getters (#1912)', () => {
+    it('exposes sdk.balance on a fresh instance', () => {
+      expect(typeof sdk.balance.getEvmBalances).toBe('function')
+      expect(typeof sdk.balance.getCosmosBalance).toBe('function')
+      expect(typeof sdk.balance.getUtxoBalance).toBe('function')
+      expect(typeof sdk.balance.getSolBalance).toBe('function')
+    })
+
+    it('exposes sdk.bridge on a fresh instance', () => {
+      expect(typeof sdk.bridge.buildCctpBridge).toBe('function')
+      expect(typeof sdk.bridge.buildCctpClaim).toBe('function')
+    })
+
+    it('exposes sdk.cosmos on a fresh instance', () => {
+      expect(typeof sdk.cosmos.gov.getCosmosGovernanceProposals).toBe('function')
+      expect(typeof sdk.cosmos.gov.prepareCosmosVote).toBe('function')
+    })
+
+    it('exposes sdk.decode on a fresh instance', () => {
+      expect(typeof sdk.decode.decodeEvmTx).toBe('function')
+      expect(typeof sdk.decode.decodeCosmosTx).toBe('function')
+    })
+
+    it('exposes sdk.gas on a fresh instance', () => {
+      expect(typeof sdk.gas.compareCosts).toBe('function')
+      expect(typeof sdk.gas.utxoFeeRate).toBe('function')
+    })
+
+    it('exposes sdk.prep on a fresh instance', () => {
+      expect(typeof sdk.prep.prepareSendTxFromKeys).toBe('function')
+      expect(typeof sdk.prep.prepareContractCallTxFromKeys).toBe('function')
+    })
+
+    it('exposes sdk.price on a fresh instance', () => {
+      expect(typeof sdk.price.getPrice).toBe('function')
+      expect(typeof sdk.price.getPricesBatch).toBe('function')
+    })
+
+    it('exposes sdk.swap on a fresh instance', () => {
+      expect(typeof sdk.swap.findSwapQuote).toBe('function')
+      expect(typeof sdk.swap.acrossQuote).toBe('function')
+    })
+  })
+
   describe('validation helpers', () => {
     describe('validateEmail', () => {
       it('should validate correct email formats', () => {
