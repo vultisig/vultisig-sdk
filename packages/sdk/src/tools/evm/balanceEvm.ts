@@ -3,6 +3,8 @@ import { getEvmClient } from '@vultisig/core-chain/chains/evm/client'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { erc20Abi } from 'viem'
 
+import { readSymbol } from '../dex/_erc20'
+
 /** Format a raw base-unit bigint to a human-readable decimal string (no precision loss). */
 const formatUnits = (raw: bigint, decimals: number): string => {
   const divisor = 10n ** BigInt(decimals)
@@ -77,11 +79,11 @@ export const getEvmBalances = async (chain: EvmChain, params: GetEvmBalancesPara
           abi: erc20Abi,
           functionName: 'decimals',
         }),
-        client.readContract({
-          address: contractAddress,
-          abi: erc20Abi,
-          functionName: 'symbol',
-        }),
+        // Raw eth_call + tolerant decode: some legacy ERC-20s (MKR, SAI) return
+        // a right-padded bytes32 from symbol() instead of a dynamic string, which
+        // viem's typed readContract() strictly rejects. readSymbol() falls back
+        // to bytes32 decoding so one legacy token doesn't fail the whole batch.
+        readSymbol(chain, contractAddress),
       ])
 
       return {
