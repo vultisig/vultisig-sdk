@@ -116,6 +116,63 @@ describe('buildCctpBridge', () => {
     expect((decodedBurn.args[3] as string).toLowerCase()).toBe(base.usdc.toLowerCase())
   })
 
+  // sdk#1911: the rest of the SDK routes chain strings through normalizeChain;
+  // CCTP was an exact-match object index, so callers had to pre-normalize for
+  // this one family and any alias added to the canonicals later would work
+  // everywhere except here.
+  describe('accepts the chain spellings the rest of the SDK accepts (sdk#1911)', () => {
+    it.each(['base', 'BASE', 'Base', ' base '])('resolves %j to the canonical Base config', input => {
+      expect(getCctpChain(input)).toBe(cctpChains.Base)
+    })
+
+    it('still returns undefined for a chain that normalizes but is not CCTP-supported', () => {
+      // Solana is a real chain the normalizer resolves; it just has no CCTP V1
+      // config here. It must answer the same as an unresolvable string.
+      expect(getCctpChain('Solana')).toBeUndefined()
+      expect(getCctpChain('solana')).toBeUndefined()
+      expect(getCctpChain('definitely-not-a-chain')).toBeUndefined()
+      expect(getCctpChain('')).toBeUndefined()
+    })
+
+    it('builds the same envelope from a lowercase spelling as from the canonical one', () => {
+      const canonical = buildCctpBridge({
+        sourceChain: 'Base',
+        destinationChain: 'Arbitrum',
+        amount: '10',
+        from: SENDER,
+      })
+      const lowercased = buildCctpBridge({
+        sourceChain: 'base',
+        destinationChain: 'arbitrum',
+        amount: '10',
+        from: SENDER,
+      })
+
+      expect(lowercased).toEqual(canonical)
+      // And the envelope carries the CANONICAL name, not what the caller typed.
+      expect(lowercased.chain).toBe('Base')
+      expect(lowercased.toChain).toBe('Arbitrum')
+    })
+
+    // The trap alias tolerance introduces: comparing the RAW strings would see
+    // 'base' !== 'Base' as two different chains and happily build a bridge from
+    // a chain to itself. The guard has to run on canonical names.
+    it('still rejects a same-chain bridge written with two different spellings', () => {
+      expect(() =>
+        buildCctpBridge({ sourceChain: 'base', destinationChain: 'Base', amount: '1', from: SENDER })
+      ).toThrow(/must be different/)
+      expect(() =>
+        buildCctpBridge({ sourceChain: 'BASE', destinationChain: ' base ', amount: '1', from: SENDER })
+      ).toThrow(/must be different/)
+    })
+
+    it("reports the caller's own spelling in the unsupported-chain error", () => {
+      expect(() =>
+        buildCctpBridge({ sourceChain: 'nonsense-chain', destinationChain: 'Base', amount: '1', from: SENDER })
+      ).toThrow(/"nonsense-chain"/)
+    })
+  })
+
   it('rejects identical source/destination chains', () => {
     expect(() => buildCctpBridge({ sourceChain: 'Base', destinationChain: 'Base', amount: '1', from: SENDER })).toThrow(
       /must be different/
