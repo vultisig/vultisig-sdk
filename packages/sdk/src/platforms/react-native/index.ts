@@ -63,7 +63,7 @@ configureWasm(async () => NativeWalletCore.getInstance())
 // Register RN crypto (validates globalThis.crypto polyfill on first use)
 configureCrypto(new ReactNativeCrypto())
 
-// Register AsyncStorage-backed default storage
+// Register SQLite-backed default storage (with one-time AsyncStorage migration)
 configureDefaultStorage(() => new ReactNativeStorage())
 
 // Chain enum and types

@@ -2,9 +2,11 @@
 /**
  * Chrome Extension storage implementation using chrome.storage.local
  *
- * Works in all extension contexts: service worker, popup, content script, options page.
+ * Reads work in every extension context. Mutations require an extension-origin
+ * context (service worker, popup, or options page) so they share one Web Lock;
+ * content scripts must message an extension-origin context to mutate storage.
  * Unlike BrowserStorage (IndexedDB/localStorage), this uses the Chrome Extension
- * Storage API which is reliable in Manifest V3 service workers.
+ * Storage API, which is reliable in Manifest V3 service workers.
  */
 import { storageValuesEqual } from '../../storage/storageValuesEqual'
 import type { Storage, StorageMetadata, StoredValue } from '../../storage/types'
