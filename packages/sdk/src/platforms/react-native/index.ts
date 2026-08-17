@@ -48,6 +48,9 @@ import { NativeWalletCore } from '@vultisig/walletcore-native'
 import { configureDefaultStorage } from '../../context/defaultStorage'
 import { configureWasm } from '../../context/wasmRuntime'
 import { configureCrypto } from '../../crypto'
+import * as cosmos from '../../tools/cosmos'
+import * as evm from '../../tools/evm'
+import * as token from '../../tools/token'
 import { ReactNativeCrypto } from './crypto'
 import { ReactNativeStorage } from './storage'
 
@@ -64,7 +67,7 @@ configureCrypto(new ReactNativeCrypto())
 configureDefaultStorage(() => new ReactNativeStorage())
 
 // Chain enum and types
-export { Chain } from '@vultisig/core-chain/Chain'
+export { Chain, IbcEnabledCosmosChain, VaultBasedCosmosChain } from '@vultisig/core-chain/Chain'
 export { cosmosFeeCoinDenom } from '@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom'
 export {
   getCosmosAllowedFeeDenoms,
@@ -118,6 +121,24 @@ export {
   rippleTokenId,
   toXrplCurrencyCode,
 } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
+
+// Custom-RPC canonicals — pure helpers/registry state that stay safe on the RN
+// graph and must remain in parity with the root SDK entrypoint.
+export {
+  clearCustomRpcOverride,
+  getCustomRpcOverride,
+  getCustomRpcOverrides,
+  setCustomRpcOverride,
+  setCustomRpcOverrides,
+} from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
+export {
+  customRpcSupportedChains,
+  customRpcSupportedCosmosChains,
+  customRpcSupportedEvmChains,
+  isCustomRpcSupported,
+} from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
+export type { RpcHealthResult } from '@vultisig/core-chain/chains/customRpc/rpcHealthProbe'
+export { probeRpcHealth } from '@vultisig/core-chain/chains/customRpc/rpcHealthProbe'
 
 // WalletCore type compatible with both @trustwallet/wallet-core and @vultisig/walletcore-native
 export type { WalletCoreLike } from '@vultisig/walletcore-native'
@@ -235,6 +256,10 @@ export type {
 // from its real (pure-JS) npm package, and `tiny-secp256k1` is inlined
 // via the noble-backed shim at
 // src/platforms/react-native/shims/tiny-secp256k1.ts.
+
+// Public namespace handles documented by the SDK changelog. Keep these as
+// explicit module objects so Rollup preserves the nested `cosmos.gov` handle.
+export { cosmos, evm, token }
 
 // Vault-free prep helpers (KeysignPayload construction without an instantiated vault)
 export type {
@@ -700,14 +725,12 @@ export { getSolBalance, getSplTokenBalance } from '../../tools/balance/solana'
 // Pure helpers — no chain client deps
 export type { AssetRef, ChainFamily, DecodeFromToolResultInput, Envelope, EnvelopeKind } from '../../tools/decode'
 export { decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from '../../tools/decode'
-//
 // Exact base-units -> human decimal-string conversion (pure bigint string
-// arithmetic, no float64 round-trip) and the chain-native block explorer URL
-// builder (a const chain->URL map + match). Both were added to the generic
-// entry (src/index.ts) but the RN allow-list omitted them — same
-// hand-curated-gap class as the rest of this section (sdk#1224) — so RN
-// consumers (Station) couldn't format high-decimal balances exactly or link
-// out to a block explorer without deep-importing core-chain.
+// arithmetic, no float64 round-trip), pairing-QR payload generation, and the
+// notification-vault-id helper are all deterministic utilities with no live
+// chain client dependency. Re-export them here so RN consumers do not have to
+// deep-import internal service/util paths.
+export { buildKeygenPairingQrPayload } from '../../services/buildKeygenPairingQrPayload'
 export { computeNotificationVaultId } from '../../utils/computeNotificationVaultId'
 export type {
   AmountDirection,
@@ -779,6 +802,11 @@ export { ValidationHelpers } from '../../utils/validation'
 // the curated React Native entry point so mobile consumers receive the same v1
 // schema and canonical hashes as Node/browser/desktop clients.
 export * from '../../signable-transaction'
+
+// Canonical RN-safe UTXO wrong-chain guard. Keep this static export in parity
+// with the generic entry so the app can remove its local brand matrix.
+export type { UtxoChainName } from '../../chains/utxo/addressBrand'
+export { assertUtxoAddressBrand, isUtxoAddressBrandValid } from '../../chains/utxo/addressBrand'
 
 // Dangerous/burn-address guard. Single source of truth for "is this destination
 // a burn/black-hole address that no key controls?" across EVM, Solana, UTXO and
