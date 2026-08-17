@@ -105,6 +105,23 @@ describe('preparePolkadotAssetSend', () => {
     )
   })
 
+  it('rejects an amount above u128, which pallet_assets cannot decode (sdk#1827)', () => {
+    const U128_MAX = (1n << 128n) - 1n
+
+    // u128 max is a legal Balance and must still build.
+    const ok = preparePolkadotAssetSend({ assetId: 1984, from: BOB, to: ALICE, amount: U128_MAX })
+    expect(ok.amount).toBe(U128_MAX.toString())
+
+    // Past it, compactToU8a silently switches to big-integer mode and emits a
+    // payload wider than the u128 slot the runtime decodes — the same failure
+    // class the assetId ceiling above already guards against.
+    for (const over of [U128_MAX + 1n, 1n << 200n]) {
+      expect(() => preparePolkadotAssetSend({ assetId: 1984, from: BOB, to: ALICE, amount: over })).toThrow(
+        /Invalid Polkadot asset amount/
+      )
+    }
+  })
+
   it('rejects non-u32 / non-positive asset ids', () => {
     expect(() => preparePolkadotAssetSend({ assetId: 0, from: BOB, to: ALICE, amount: 1n })).toThrow(
       /Invalid Polkadot asset id/
