@@ -402,6 +402,17 @@ describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
     )
   })
 
+  it('exports the canonical THOR/Maya native-swap metadata from the RN entry (sdk#1988)', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const nativeSwapChain = await import('@vultisig/core-chain/swap/native/NativeSwapChain')
+
+    expect(rn.nativeSwapChains).toBe(nativeSwapChain.nativeSwapChains)
+    expect(rn.nativeSwapChainIds).toBe(nativeSwapChain.nativeSwapChainIds)
+    expect(rn.nativeSwapEnabledChainsRecord).toBe(nativeSwapChain.nativeSwapEnabledChainsRecord)
+    expect(rn.getNativeSwapChainId).toBe(nativeSwapChain.getNativeSwapChainId)
+    expect(rn.getNativeSwapChainIdFromDenomPrefix).toBe(nativeSwapChain.getNativeSwapChainIdFromDenomPrefix)
+  })
+
   it('exports the THORChain LP v2 helper family from the RN entry', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
     const thorLp = await import('@vultisig/core-chain/chains/cosmos/thor/lp')
