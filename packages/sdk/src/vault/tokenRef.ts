@@ -92,6 +92,10 @@ class AmbiguousTokenRefError extends VaultError {}
  */
 function isAddressShapedRef(ref: string): boolean {
   if (/^0x[0-9a-fA-F]{40}$/.test(ref) || /^0x[0-9a-fA-F]{64}$/.test(ref)) return true
+  // Discovery-disambiguated symbols (`WIDGET@1deadbeef`, see tokenSymbolBase's
+  // `@[a-z0-9]{8,}$` suffix) can exceed the ticker length cap below but are
+  // never address-shaped — no supported chain's address format contains `@`.
+  if (ref.includes('@')) return false
   // Mirrors MAX_TICKER_LENGTH in tools/parse/tickerSchema.ts.
   return ref.length > 20
 }
