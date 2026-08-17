@@ -43,6 +43,7 @@ import {
   CompoundSwapResult,
   ContractCallResult,
   CosmosSigningOptions,
+  ExtendedPublicKeyOptions,
   FiatCurrency,
   GasInfoForChain,
   MaxSendAmount,
@@ -68,6 +69,7 @@ import { createVaultBackup } from '../utils/export'
 import { AddressService } from './services/AddressService'
 import { BalanceService } from './services/BalanceService'
 import { BroadcastService } from './services/BroadcastService'
+import { deriveExtendedPublicKey } from './services/ExtendedPublicKeyService'
 import { GasEstimationService } from './services/GasEstimationService'
 import { PreferencesService } from './services/PreferencesService'
 import { RawBroadcastService } from './services/RawBroadcastService'
@@ -1136,6 +1138,14 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   async addresses(chains?: Chain[]): Promise<Record<string, string>> {
     const chainsToDerive = chains ?? this._userChains
     return this.addressService.getAddresses(chainsToDerive)
+  }
+
+  /**
+   * Derive a serialized ECDSA extended public key for an external watch-only
+   * wallet coordinator. The returned key contains public material only.
+   */
+  extendedPublicKey(options: ExtendedPublicKeyOptions): string {
+    return deriveExtendedPublicKey(this.publicKeys.ecdsa, this.hexChainCode, options)
   }
 
   // ===== BALANCE METHODS =====

@@ -468,6 +468,7 @@ export class RelaySigningService {
     bytesOptions: {
       messageHashes: string[]
       chain: Chain
+      derivePath?: string
     },
     walletCore: WalletCore,
     options: RelaySigningOptions = {}
@@ -501,7 +502,10 @@ export class RelaySigningService {
       const { sessionId, hexEncryptionKey, localPartyId } = this.generateSessionParams(options.sessionId)
 
       // Determine signature algorithm and derivation path
-      const { signatureAlgorithm, chainPath } = getChainSigningInfo({ chain: bytesOptions.chain }, walletCore)
+      const { signatureAlgorithm, chainPath } = getChainSigningInfo(
+        { chain: bytesOptions.chain, derivePath: bytesOptions.derivePath },
+        walletCore
+      )
       this.validateSigningKeyDomain(vault, bytesOptions.chain, signatureAlgorithm)
 
       // Generate QR payload

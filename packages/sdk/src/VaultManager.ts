@@ -8,7 +8,6 @@ import { encryptVaultBackupWithPassword } from '@vultisig/lib-utils/encryption/v
 import {
   DEFAULT_VAULT_BACKUP_PBKDF2_ITERATIONS,
   VAULT_BACKUP_BLOB_MAGIC,
-  VAULT_BACKUP_MAGIC_LEN,
   VAULT_BACKUP_PBKDF2_HEADER_LEN,
 } from '@vultisig/lib-utils/encryption/vaultBackup/vaultBackupConstants'
 import { fromBase64 } from '@vultisig/lib-utils/fromBase64'
@@ -17,6 +16,7 @@ import type { SdkContext, VaultContext } from './context/SdkContext'
 import type { LegacyVaultBackupMigrationNotice } from './events/types'
 import { FastSigningService } from './services/FastSigningService'
 import { VaultData } from './types'
+import { startsWithBytes } from './utils/startsWithBytes'
 import { FastVault } from './vault/FastVault'
 import { SecureVault } from './vault/SecureVault'
 import { VaultBase } from './vault/VaultBase'
@@ -178,9 +178,7 @@ export class VaultManager {
           throw new VaultImportError(VaultImportErrorCode.CORRUPTED_DATA, 'Encrypted vault payload is empty')
         }
 
-        const isPbkdf2Format =
-          encryptedData.length >= VAULT_BACKUP_MAGIC_LEN &&
-          encryptedData.subarray(0, VAULT_BACKUP_MAGIC_LEN).equals(VAULT_BACKUP_BLOB_MAGIC)
+        const isPbkdf2Format = startsWithBytes(encryptedData, VAULT_BACKUP_BLOB_MAGIC)
         if (isPbkdf2Format) {
           if (encryptedData.length < VAULT_BACKUP_PBKDF2_HEADER_LEN + GCM_AUTH_TAG_BYTES) {
             throw new VaultImportError(

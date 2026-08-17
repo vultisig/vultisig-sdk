@@ -301,6 +301,7 @@ export type {
   CosmosSigningOptions,
   EvmGasInfo,
   ExportOptions,
+  ExtendedPublicKeyOptions,
   GasEstimate,
   GasInfo,
   GasInfoForChain,

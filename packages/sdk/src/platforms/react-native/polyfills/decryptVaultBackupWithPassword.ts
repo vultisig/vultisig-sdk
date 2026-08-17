@@ -15,15 +15,13 @@ import {
   VAULT_BACKUP_SALT_LEN,
 } from '@vultisig/lib-utils/encryption/vaultBackup/vaultBackupConstants'
 
+import { startsWithBytes } from '../../../utils/startsWithBytes'
 import { decryptWithAesGcm } from './decryptWithAesGcm'
 
 const GCM_TAG_LEN = 16
 
 export const decryptVaultBackupWithPassword = (password: string, value: Buffer): Buffer => {
-  if (
-    value.length < VAULT_BACKUP_MAGIC_LEN ||
-    !value.subarray(0, VAULT_BACKUP_MAGIC_LEN).equals(VAULT_BACKUP_BLOB_MAGIC)
-  ) {
+  if (!startsWithBytes(value, VAULT_BACKUP_BLOB_MAGIC)) {
     return decryptWithAesGcm({ key: password, value })
   }
 
