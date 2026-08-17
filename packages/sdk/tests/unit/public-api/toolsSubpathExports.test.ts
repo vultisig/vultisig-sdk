@@ -16,6 +16,7 @@ describe('public API subpath exports', () => {
     const bridgeExport = sdkPackageJson.exports['./tools/bridge']
     const addressExport = sdkPackageJson.exports['./tools/address']
     const validateExport = sdkPackageJson.exports['./tools/validate']
+    const balanceExport = sdkPackageJson.exports['./tools/balance']
     const tronExport = sdkPackageJson.exports['./chains/tron']
     const utxoExport = sdkPackageJson.exports['./chains/utxo']
     const decodeExport = sdkPackageJson.exports['./tools/decode']
@@ -51,6 +52,12 @@ describe('public API subpath exports', () => {
       require: './dist/tools/validate/index.cjs',
       default: './dist/tools/validate/index.cjs',
     })
+    expect(balanceExport).toMatchObject({
+      types: './dist/tools/balance/index.d.ts',
+      import: './dist/tools/balance/index.js',
+      require: './dist/tools/balance/index.cjs',
+      default: './dist/tools/balance/index.cjs',
+    })
     expect(tronExport).toMatchObject({
       types: './dist/chains/tron/index.d.ts',
       import: './dist/chains/tron/index.js',
@@ -81,6 +88,7 @@ describe('public API subpath exports', () => {
     expect(JSON.stringify(bridgeExport)).not.toContain('dist/index.node')
     expect(JSON.stringify(addressExport)).not.toContain('dist/index.node')
     expect(JSON.stringify(validateExport)).not.toContain('dist/index.node')
+    expect(JSON.stringify(balanceExport)).not.toContain('dist/index.node')
     expect(JSON.stringify(tronExport)).not.toContain('dist/index.node')
     expect(JSON.stringify(utxoExport)).not.toContain('dist/index.node')
     expect(JSON.stringify(decodeExport)).not.toContain('dist/index.node')
@@ -98,6 +106,8 @@ describe('public API subpath exports', () => {
     expect(platformRollupConfig).toContain("distBase: 'tools/address'")
     expect(platformRollupConfig).toContain("input: './src/tools/validate/index.ts'")
     expect(platformRollupConfig).toContain("distBase: 'tools/validate'")
+    expect(platformRollupConfig).toContain("input: './src/tools/balance/index.ts'")
+    expect(platformRollupConfig).toContain("distBase: 'tools/balance'")
     expect(platformRollupConfig).toContain("input: './src/chains/tron/index.ts'")
     expect(platformRollupConfig).toContain("distBase: 'chains/tron'")
     expect(platformRollupConfig).toContain("input: './src/chains/utxo/index.ts'")
@@ -121,6 +131,9 @@ describe('public API subpath exports', () => {
     )
     expect(typesRollupConfig).toContain(
       "createSubpathTypesConfig('src/tools/validate/index.ts', 'dist/tools/validate/index.d.ts')"
+    )
+    expect(typesRollupConfig).toContain(
+      "createSubpathTypesConfig('src/tools/balance/index.ts', 'dist/tools/balance/index.d.ts')"
     )
     expect(typesRollupConfig).toContain(
       "createSubpathTypesConfig('src/chains/tron/index.ts', 'dist/chains/tron/index.d.ts')"

@@ -141,6 +141,19 @@
       "require": "./dist/tools/validate/index.cjs",
       "default": "./dist/tools/validate/index.cjs"
     },
+    "./tools/balance": {
+      "types": "./dist/tools/balance/index.d.ts",
+      "browser": "./dist/tools/balance/index.js",
+      "worker": "./dist/tools/balance/index.js",
+      "react-native": "./dist/tools/balance/index.js",
+      "node": {
+        "import": "./dist/tools/balance/index.js",
+        "require": "./dist/tools/balance/index.cjs"
+      },
+      "import": "./dist/tools/balance/index.js",
+      "require": "./dist/tools/balance/index.cjs",
+      "default": "./dist/tools/balance/index.cjs"
+    },
     "./chains/tron": {
       "types": "./dist/chains/tron/index.d.ts",
       "browser": "./dist/chains/tron/index.js",
