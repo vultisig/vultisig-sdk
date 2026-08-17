@@ -1,5 +1,6 @@
 import { Buffer } from 'buffer'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
+import { assertBoundedInt } from '@vultisig/lib-utils/bigint/assertBoundedInt'
 import { bigIntToHex } from '@vultisig/lib-utils/bigint/bigIntToHex'
 import { stripHexPrefix } from '@vultisig/lib-utils/hex/stripHexPrefix'
 import { matchDiscriminatedUnion } from '@vultisig/lib-utils/matchDiscriminatedUnion'
@@ -10,6 +11,13 @@ import Long from 'long'
 import { getBlockchainSpecificValue } from '../../chainSpecific/KeysignChainSpecific'
 import { getKeysignSwapPayload } from '../../swap/getKeysignSwapPayload'
 import { SigningInputsResolver } from '../resolver'
+
+// sdk#1200: callValue / callTokenValue / feeLimit are all TRON int64 proto
+// fields fed by third-party gas estimation / swap-aggregator data — bound
+// them before Long.fromString rather than letting an out-of-range magnitude
+// silently two's-complement-wrap (e.g. a wrapped feeLimit authorizing an
+// outsized fee burn).
+const toBoundedTronLong = (value: string) => Long.fromString(assertBoundedInt(value, 'int64'))
 
 const createTronBlockHeader = (tronSpecific: {
   blockHeaderTimestamp: bigint | number | string
@@ -130,12 +138,12 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
             triggerSmartContract: TW.Tron.Proto.TriggerSmartContract.create({
               ownerAddress: value.ownerAddress,
               contractAddress: value.contractAddress,
-              callValue: value.callValue ? Long.fromString(value.callValue?.toString()) : undefined,
+              callValue: value.callValue ? toBoundedTronLong(value.callValue.toString()) : undefined,
               data: value.data ? Buffer.from(value.data, 'hex') : undefined,
-              callTokenValue: value.callTokenValue ? Long.fromString(value.callTokenValue?.toString()) : undefined,
+              callTokenValue: value.callTokenValue ? toBoundedTronLong(value.callTokenValue.toString()) : undefined,
               tokenId: value.tokenId ? Long.fromString(value.tokenId?.toString()) : undefined,
             }),
-            feeLimit: Long.fromString(tronSpecific.gasEstimation.toString()),
+            feeLimit: toBoundedTronLong(tronSpecific.gasEstimation.toString()),
           }
         },
         tronTransferAssetContractPayload: value => {
@@ -146,7 +154,7 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
               amount: Long.fromString(value.amount),
               assetName: value.assetName,
             }),
-            feeLimit: Long.fromString(tronSpecific.gasEstimation.toString()),
+            feeLimit: toBoundedTronLong(tronSpecific.gasEstimation.toString()),
           }
         },
         wasmExecuteContractPayload: () => {
@@ -218,7 +226,7 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
 
         const input = TW.Tron.Proto.SigningInput.create({
           transaction: TW.Tron.Proto.Transaction.create({
-            feeLimit: Long.fromString(tronSpecific.gasEstimation.toString()),
+            feeLimit: toBoundedTronLong(tronSpecific.gasEstimation.toString()),
             transferTrc20Contract: contract,
             timestamp: Long.fromString(tronSpecific.timestamp.toString()),
             blockHeader: TW.Tron.Proto.BlockHeader.create({
@@ -281,7 +289,7 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
 
   const input = TW.Tron.Proto.SigningInput.create({
     transaction: TW.Tron.Proto.Transaction.create({
-      feeLimit: Long.fromString(tronSpecific.gasEstimation.toString()),
+      feeLimit: toBoundedTronLong(tronSpecific.gasEstimation.toString()),
       transferTrc20Contract: contract,
       timestamp: Long.fromString(tronSpecific.timestamp.toString()),
       blockHeader: TW.Tron.Proto.BlockHeader.create({

@@ -104,6 +104,11 @@
       "import": "./dist/base64Encode.js",
       "default": "./dist/base64Encode.js"
     },
+    "./bigint/assertBoundedInt": {
+      "types": "./dist/bigint/assertBoundedInt.d.ts",
+      "import": "./dist/bigint/assertBoundedInt.js",
+      "default": "./dist/bigint/assertBoundedInt.js"
+    },
     "./bigint/bigIntMax": {
       "types": "./dist/bigint/bigIntMax.d.ts",
       "import": "./dist/bigint/bigIntMax.js",
