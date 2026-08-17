@@ -54,6 +54,39 @@ export const getCosmosMemoMaxBytesByChainId = (chainId: string): number => {
 }
 
 /**
+ * Chains that enforce `MaxMemoCharacters` against the **ICS-20 packet memo**
+ * (the `memo` field inside a `MsgTransfer` message) instead of - or IN ADDITION
+ * TO - the SDK transaction-level `TxBody.memo`.
+ *
+ * This is deliberately an allow-list of live-verified chains, not an assumption.
+ * Over-including here REJECTS routes that would broadcast fine:
+ *
+ * - `columbus-5` (Terra Classic): ENFORCING. Live-verified 2026-06-29.
+ * - `cosmoshub-4`, `osmosis-1`: NOT enforcing. Live-verified 2026-06-01 - Keplr
+ *   broadcasts ~1500B packet memos on cosmoshub-4 without error.
+ * - `phoenix-1` (Terra v2): deliberately absent. A live >512B packet-memo
+ *   broadcast check is still pending; adding it unverified would over-reject
+ *   valid phoenix-1 routes.
+ *
+ * Do not add a chain here without a live broadcast check, for the same reason
+ * COSMOS_MEMO_MAX_BYTES_BY_CHAIN entries want the chain's own auth params.
+ */
+const COSMOS_PACKET_MEMO_ENFORCING_CHAIN_IDS: ReadonlySet<string> = new Set(['columbus-5'])
+
+/**
+ * True when the chain identified by `chainId` applies its `MaxMemoCharacters`
+ * cap to the inner ICS-20 packet memo as well as the outer `TxBody.memo`.
+ *
+ * Callers building an IBC/PFM route must measure the packet memo too on these
+ * chains: a Skip PFM leg routinely carries an EMPTY top-level memo with the
+ * whole payload inside the `MsgTransfer` packet memo, so a top-level-only check
+ * sees 0 bytes and admits a tx the chain rejects at broadcast with sdk error
+ * code 12 ("memo too long") - after the signing ceremony has been burned.
+ */
+export const isCosmosPacketMemoEnforcingChainId = (chainId: string): boolean =>
+  COSMOS_PACKET_MEMO_ENFORCING_CHAIN_IDS.has(chainId)
+
+/**
  * True when `memo`'s UTF-8 byte length fits within `chain`'s live
  * `MaxMemoCharacters` cap. Uses `TextEncoder` (not Node's `Buffer`) so this
  * is safe to call from the RN bridge too.

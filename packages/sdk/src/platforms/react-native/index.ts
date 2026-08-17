@@ -89,6 +89,7 @@ export {
   getCosmosMemoMaxBytes,
   getCosmosMemoMaxBytesByChainId,
   isCosmosMemoWithinCap,
+  isCosmosPacketMemoEnforcingChainId,
 } from '@vultisig/core-chain/chains/cosmos/cosmosMemoCap'
 
 // Dynamic THORChain secured-asset discovery. These fetch-based/pure helpers

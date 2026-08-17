@@ -271,6 +271,7 @@ export {
   getCosmosMemoMaxBytes,
   getCosmosMemoMaxBytesByChainId,
   isCosmosMemoWithinCap,
+  isCosmosPacketMemoEnforcingChainId,
 } from '@vultisig/core-chain/chains/cosmos/cosmosMemoCap'
 
 // Fiat currency types

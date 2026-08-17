@@ -336,6 +336,148 @@ describe('multi-tx memo-cap regression (SDK-vs-abts reconciliation, VA-86)', () 
   })
 })
 
+describe('ICS-20 packet-memo cap (SDK-vs-mcp-ts reconciliation, abts#2458)', () => {
+  // BEFORE this fix the SDK measured ONLY `cosmos_tx.memo` and its own comment
+  // asserted the inner packet memo "is unbounded". That is not true for Terra
+  // Classic: columbus-5 applies MaxMemoCharacters to the ICS-20 packet memo as
+  // well. A Skip PFM leg routinely ships an EMPTY top-level memo with the whole
+  // payload inside MsgTransfer, so the old check measured 0 bytes and admitted
+  // a tx the chain rejects at broadcast (sdk code 12, "memo too long") AFTER
+  // the MPC signing ceremony has been burned. mcp-ts already caught this
+  // live-verified 2026-06-29; the SDK did not, so the same route was admitted
+  // by one consumer and rejected by the other.
+  const packetArgs: SkipSwapArgs = {
+    ...baseArgs,
+    toAddress: 'terra1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+    destChainId: 'columbus-5',
+    destAssetDenom: 'uluna',
+  }
+
+  /**
+   * A single-tx route whose only leg is on `args.destChainId`, with an EMPTY
+   * top-level memo. The leg chain has to be the route's own source/dest rather
+   * than an intermediate hop, otherwise `intermediate_addresses_required` fires
+   * first and the memo preflight never runs.
+   */
+  function packetMemoLeg(msgs: Array<{ msg: string; msg_type_url: string }>, args: SkipSwapArgs = packetArgs) {
+    const chainIds = [args.sourceChainId, args.destChainId]
+    const route = { ...okRoute, chain_ids: chainIds, required_chain_addresses: chainIds }
+    return [
+      { body: route },
+      {
+        body: {
+          txs: [
+            {
+              cosmos_tx: {
+                chain_id: args.destChainId,
+                signer_address: args.fromAddress,
+                msgs,
+                memo: '', // empty top-level memo - the whole point
+              },
+            },
+          ],
+          msgs: [],
+          min_amount_out: '118800',
+          route,
+        },
+      },
+    ]
+  }
+
+  const msgTransfer = (memo: string) => ({
+    msg: JSON.stringify({ receiver: packetArgs.toAddress, memo }),
+    msg_type_url: '/ibc.applications.transfer.v1.MsgTransfer',
+  })
+
+  it('rejects a columbus-5 leg whose packet memo is over cap even though the top-level memo is empty', async () => {
+    mockFetchSequence(packetMemoLeg([msgTransfer('a'.repeat(700))]))
+
+    const out = await runSkipSwap(packetArgs)
+
+    expect(out.ok).toBe(false)
+    if (!out.ok) {
+      expect(out.envelope.error).toBe('skip_source_memo_too_long')
+      expect(out.envelope.source_chain_id).toBe('columbus-5')
+      // The effective measurement is the PACKET memo, not the empty outer one.
+      expect(out.envelope.memo_bytes).toBe(700)
+      expect(out.envelope.memo_max_bytes).toBe(256)
+    }
+  })
+
+  it('accepts a columbus-5 leg whose packet memo sits exactly at the cap', async () => {
+    mockFetchSequence(packetMemoLeg([msgTransfer('a'.repeat(256))]))
+    const out = await runSkipSwap(packetArgs)
+    expect(out.ok).toBe(true)
+  })
+
+  // The other half of the contract, and the reason this is an allow-list rather
+  // than a blanket rule: cosmoshub-4 does NOT enforce against the packet memo
+  // (live-verified 2026-06-01, Keplr broadcasts ~1500B packet memos there). If
+  // this ever starts failing, the SDK has begun over-rejecting valid routes -
+  // which is worse than the bug being fixed, because it blocks a working swap.
+  it('does NOT reject a large packet memo on a non-enforcing chain (cosmoshub-4)', async () => {
+    // baseArgs, not packetArgs: cosmoshub-4 must be this route's own dest chain.
+    mockFetchSequence(packetMemoLeg([msgTransfer('a'.repeat(1500))], baseArgs))
+    const out = await runSkipSwap(baseArgs)
+    expect(out.ok).toBe(true)
+  })
+
+  it('ignores a non-MsgTransfer message carrying a large memo field', async () => {
+    mockFetchSequence(
+      packetMemoLeg([{ msg: JSON.stringify({ memo: 'a'.repeat(700) }), msg_type_url: '/cosmos.bank.v1beta1.MsgSend' }])
+    )
+    const out = await runSkipSwap(packetArgs)
+    expect(out.ok).toBe(true)
+  })
+
+  it('does not crash on a MsgTransfer whose msg body is not valid JSON', async () => {
+    mockFetchSequence(packetMemoLeg([{ msg: '{not json', msg_type_url: msgTransfer('').msg_type_url }]))
+    const out = await runSkipSwap(packetArgs)
+    expect(out.ok).toBe(true)
+  })
+
+  it('takes the largest packet memo when a leg carries several MsgTransfers', async () => {
+    mockFetchSequence(
+      packetMemoLeg([msgTransfer('a'.repeat(10)), msgTransfer('a'.repeat(900)), msgTransfer('a'.repeat(5))])
+    )
+
+    const out = await runSkipSwap(packetArgs)
+
+    expect(out.ok).toBe(false)
+    if (!out.ok) expect(out.envelope.memo_bytes).toBe(900)
+  })
+
+  it('still measures the top-level memo when it is the larger of the two', async () => {
+    const chainIds = ['osmosis-1', 'columbus-5']
+    const route = { ...okRoute, chain_ids: chainIds, required_chain_addresses: chainIds }
+    mockFetchSequence([
+      { body: route },
+      {
+        body: {
+          txs: [
+            {
+              cosmos_tx: {
+                chain_id: 'columbus-5',
+                signer_address: packetArgs.fromAddress,
+                msgs: [msgTransfer('a'.repeat(300))],
+                memo: 'b'.repeat(600), // outer is bigger - max() must pick it
+              },
+            },
+          ],
+          msgs: [],
+          min_amount_out: '118800',
+          route,
+        },
+      },
+    ])
+
+    const out = await runSkipSwap(packetArgs)
+
+    expect(out.ok).toBe(false)
+    if (!out.ok) expect(out.envelope.memo_bytes).toBe(600)
+  })
+})
+
 describe('quoteSkipRoute (quote-only path)', () => {
   it('returns the raw route on success', async () => {
     mockFetchSequence([{ body: okRoute }])

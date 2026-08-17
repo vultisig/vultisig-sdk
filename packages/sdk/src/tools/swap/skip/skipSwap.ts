@@ -26,7 +26,11 @@
  * Skip's grpc-gateway returns structured `{code, message, details}` errors;
  * `SkipApiError` surfaces `code` (stable) rather than regexing messages.
  */
-import { getCosmosMemoMaxBytesByChainId } from '@vultisig/core-chain/chains/cosmos/cosmosMemoCap'
+import {
+  getCosmosMemoMaxBytesByChainId,
+  isCosmosPacketMemoEnforcingChainId,
+} from '@vultisig/core-chain/chains/cosmos/cosmosMemoCap'
+import { CosmosMsgType } from '@vultisig/core-chain/chains/cosmos/cosmosMsgTypes'
 
 import { buildSkipAffiliates, type SkipChainIdsToAffiliates } from './affiliateConfig'
 import { skipChainIdToChainName } from './chainMapping'
@@ -166,6 +170,12 @@ type SkipCosmosTx = {
   path?: string[]
   msgs: SkipCosmosMsg[]
   signer_address: string
+  // SDK transaction-level memo. Routinely an EMPTY string in Skip envelopes for
+  // IBC-source PFM legs - the payload lives inside the inner MsgTransfer packet
+  // memo, NOT here. Most cosmos chains (cosmoshub-4, osmosis-1) enforce
+  // `x/auth.MaxMemoCharacters` against THIS field only; Terra Classic
+  // (columbus-5) enforces it against the packet memo too. See
+  // isCosmosPacketMemoEnforcingChainId + getCosmosLegMemoInfos.
   memo?: string
 }
 
@@ -224,17 +234,25 @@ function firstUnsupportedCustodyChain(
 }
 
 /**
- * Extract the SDK transaction-level memo byte length for EVERY cosmos leg in a
- * Skip /msgs_direct response. Returns one entry per cosmos tx (empty array when
+ * Extract the EFFECTIVE memo byte length for EVERY cosmos leg in a Skip
+ * /msgs_direct response. Returns one entry per cosmos tx (empty array when
  * the route is EVM-only and the cap check doesn't apply).
  *
- * cosmoshub-4 / columbus-5 / etc. enforce `x/auth.MaxMemoCharacters` against
- * the SDK **transaction**-level memo (`cosmos_tx.memo`), NOT against the inner
- * ICS-20 packet `memo` (which is unbounded).
+ * For most chains the effective length is the SDK transaction-level memo
+ * (`cosmos_tx.memo`). For a chain that also enforces `MaxMemoCharacters`
+ * against the ICS-20 packet memo (see `isCosmosPacketMemoEnforcingChainId`),
+ * the effective length is `max(topLevelMemoBytes, maxPacketMemoBytes)` across
+ * that leg's `MsgTransfer` messages. That matches how those chains apply the
+ * cap in their own broadcast validation.
+ *
+ * This second half is what a top-level-only check misses entirely: a Skip PFM
+ * leg carries an empty `cosmos_tx.memo` and puts the whole payload in the
+ * packet memo, so the outer measurement reads 0 bytes.
  */
 function getCosmosLegMemoInfos(
   txs: ReadonlyArray<SkipMsgsDirectTx>
 ): Array<{ sourceChainId: string; memoBytes: number }> {
+  const encoder = new TextEncoder()
   const out: Array<{ sourceChainId: string; memoBytes: number }> = []
   for (const tx of txs) {
     if (!tx || !('cosmos_tx' in tx)) continue
@@ -245,17 +263,37 @@ function getCosmosLegMemoInfos(
     // malformed tx envelope; this preflight only cares about well-formed legs.
     if (!cosmosTx || typeof cosmosTx.chain_id !== 'string') continue
     const memo = typeof cosmosTx.memo === 'string' ? cosmosTx.memo : ''
-    out.push({
-      sourceChainId: cosmosTx.chain_id,
-      memoBytes: new TextEncoder().encode(memo).length,
-    })
+    let memoBytes = encoder.encode(memo).length
+
+    if (isCosmosPacketMemoEnforcingChainId(cosmosTx.chain_id) && Array.isArray(cosmosTx.msgs)) {
+      for (const msg of cosmosTx.msgs) {
+        if (!msg || msg.msg_type_url !== CosmosMsgType.MSG_TRANSFER_URL) continue
+        if (typeof msg.msg !== 'string') continue
+        let parsed: { memo?: unknown }
+        try {
+          parsed = JSON.parse(msg.msg) as { memo?: unknown }
+        } catch {
+          // Malformed msg JSON - skip the packet-memo check for this message
+          // rather than failing the whole preflight. A structurally broken
+          // envelope is validateTxEnvelopes' job to report.
+          continue
+        }
+        if (typeof parsed.memo !== 'string' || parsed.memo.length === 0) continue
+        const packetMemoBytes = encoder.encode(parsed.memo).length
+        if (packetMemoBytes > memoBytes) memoBytes = packetMemoBytes
+      }
+    }
+
+    out.push({ sourceChainId: cosmosTx.chain_id, memoBytes })
   }
   return out
 }
 
 /**
- * Return the first cosmos leg whose top-level memo exceeds its chain's
- * `MaxMemoCharacters` cap, or `null` when every cosmos leg fits.
+ * Return the first cosmos leg whose EFFECTIVE memo exceeds its chain's
+ * `MaxMemoCharacters` cap, or `null` when every cosmos leg fits. "Effective"
+ * per {@link getCosmosLegMemoInfos}: the top-level memo, widened to the largest
+ * ICS-20 packet memo on chains that enforce the cap against it.
  *
  * Checks EVERY leg, including multi-tx routes — a leg whose own memo exceeds
  * its own chain's cap fails on-chain no matter how the route is split. This

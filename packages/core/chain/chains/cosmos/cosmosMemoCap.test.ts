@@ -6,6 +6,7 @@ import {
   getCosmosMemoMaxBytes,
   getCosmosMemoMaxBytesByChainId,
   isCosmosMemoWithinCap,
+  isCosmosPacketMemoEnforcingChainId,
 } from './cosmosMemoCap'
 
 describe('getCosmosMemoMaxBytes', () => {
@@ -78,5 +79,32 @@ describe('isCosmosMemoWithinCap', () => {
     const emojiMemo = '🚀'.repeat(65) // 260 bytes, over TerraClassic's 256 cap
     expect(emojiMemo.length).toBeLessThan(260)
     expect(isCosmosMemoWithinCap(CosmosChain.TerraClassic, emojiMemo)).toBe(false)
+  })
+})
+
+describe('isCosmosPacketMemoEnforcingChainId', () => {
+  it('reports Terra Classic as enforcing the cap against the ICS-20 packet memo', () => {
+    expect(isCosmosPacketMemoEnforcingChainId('columbus-5')).toBe(true)
+  })
+
+  // These are the over-rejection guards. cosmoshub-4 and osmosis-1 were
+  // live-verified NOT to enforce against the packet memo (2026-06-01: Keplr
+  // broadcasts ~1500B packet memos on cosmoshub-4 without error). Flipping
+  // either to true would start refusing Skip routes that broadcast fine, which
+  // is a worse failure than the one this helper exists to prevent.
+  it('does NOT claim enforcement for chains live-verified as non-enforcing', () => {
+    expect(isCosmosPacketMemoEnforcingChainId('cosmoshub-4')).toBe(false)
+    expect(isCosmosPacketMemoEnforcingChainId('osmosis-1')).toBe(false)
+  })
+
+  // phoenix-1 is deliberately absent pending a live >512B broadcast check.
+  // If someone adds it, this test should be updated together with that receipt.
+  it('leaves Terra v2 (phoenix-1) out until a live broadcast check exists', () => {
+    expect(isCosmosPacketMemoEnforcingChainId('phoenix-1')).toBe(false)
+  })
+
+  it('returns false for an unknown chain id rather than throwing', () => {
+    expect(isCosmosPacketMemoEnforcingChainId('agoric-3')).toBe(false)
+    expect(isCosmosPacketMemoEnforcingChainId('')).toBe(false)
   })
 })
