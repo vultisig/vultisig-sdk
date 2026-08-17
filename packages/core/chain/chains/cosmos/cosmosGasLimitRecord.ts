@@ -68,6 +68,8 @@ type GetCosmosStakingGasLimitInput = {
    * `MsgWithdrawDelegatorReward` into one tx, one per delegation; each
    * extra msg adds roughly a quarter of the base cost. Defaults to 1,
    * which is correct for delegate / undelegate / redelegate (single-msg).
+   * TerraClassic is the exception: it always returns the fixed 4M
+   * single-transaction limit, so callers must split multi-validator claims.
    */
   msgCount?: number
 }
@@ -76,7 +78,7 @@ type GetCosmosStakingGasLimitInput = {
  * Returns the gas limit a Cosmos staking tx should request for the given
  * chain. Overestimating is safe — the chain only charges for `gas_used` —
  * but underestimating runs out of gas mid-execution, so we leave headroom
- * and scale by msg count.
+ * and scale by msg count, except for TerraClassic's fixed 4M budget.
  *
  * `msgCount` must be a finite non-negative integer. `BigInt()` throws a
  * `RangeError` on floats / NaN / Infinity, so guard at the boundary with
