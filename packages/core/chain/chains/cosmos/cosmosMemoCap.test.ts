@@ -3,10 +3,11 @@ import { describe, expect, it } from 'vitest'
 
 import {
   COSMOS_MEMO_DEFAULT_MAX_BYTES,
+  COSMOS_PACKET_MEMO_DEFAULT_MAX_BYTES,
   getCosmosMemoMaxBytes,
   getCosmosMemoMaxBytesByChainId,
+  getCosmosPacketMemoMaxBytesByChainId,
   isCosmosMemoWithinCap,
-  isCosmosPacketMemoEnforcingChainId,
 } from './cosmosMemoCap'
 
 describe('getCosmosMemoMaxBytes', () => {
@@ -82,29 +83,30 @@ describe('isCosmosMemoWithinCap', () => {
   })
 })
 
-describe('isCosmosPacketMemoEnforcingChainId', () => {
-  it('reports Terra Classic as enforcing the cap against the ICS-20 packet memo', () => {
-    expect(isCosmosPacketMemoEnforcingChainId('columbus-5')).toBe(true)
+describe('getCosmosPacketMemoMaxBytesByChainId', () => {
+  it('caps the columbus-5 packet memo at the measured bracket, NOT the 256B outer cap', () => {
+    expect(getCosmosPacketMemoMaxBytesByChainId('columbus-5')).toBe(1024)
   })
 
-  // These are the over-rejection guards. cosmoshub-4 and osmosis-1 were
-  // live-verified NOT to enforce against the packet memo (2026-06-01: Keplr
-  // broadcasts ~1500B packet memos on cosmoshub-4 without error). Flipping
-  // either to true would start refusing Skip routes that broadcast fine, which
-  // is a worse failure than the one this helper exists to prevent.
-  it('does NOT claim enforcement for chains live-verified as non-enforcing', () => {
-    expect(isCosmosPacketMemoEnforcingChainId('cosmoshub-4')).toBe(false)
-    expect(isCosmosPacketMemoEnforcingChainId('osmosis-1')).toBe(false)
+  // This is the whole point of a separate table, and the assertion most worth
+  // keeping. 80 measured WORKING USTC<->LUNC routes carry columbus-5 packet
+  // memos of 698-1001 bytes. Reusing the outer 256B cap here - the obvious
+  // "simplification" - rejects every one of them.
+  it('admits the 698-1001 byte packet memos that real working routes carry', () => {
+    const cap = getCosmosPacketMemoMaxBytesByChainId('columbus-5')
+    expect(cap).toBeGreaterThan(1001)
+    expect(cap).toBeGreaterThan(getCosmosMemoMaxBytesByChainId('columbus-5'))
   })
 
-  // phoenix-1 is deliberately absent pending a live >512B broadcast check.
-  // If someone adds it, this test should be updated together with that receipt.
-  it('leaves Terra v2 (phoenix-1) out until a live broadcast check exists', () => {
-    expect(isCosmosPacketMemoEnforcingChainId('phoenix-1')).toBe(false)
+  // The measured failures start at 1122 bytes, so the cap must sit below that.
+  it('stays under the measured failure floor of 1122 bytes', () => {
+    expect(getCosmosPacketMemoMaxBytesByChainId('columbus-5')).toBeLessThan(1122)
   })
 
-  it('returns false for an unknown chain id rather than throwing', () => {
-    expect(isCosmosPacketMemoEnforcingChainId('agoric-3')).toBe(false)
-    expect(isCosmosPacketMemoEnforcingChainId('')).toBe(false)
+  it('defaults unmeasured chains to the permissive ceiling, not the outer default', () => {
+    expect(getCosmosPacketMemoMaxBytesByChainId('cosmoshub-4')).toBe(COSMOS_PACKET_MEMO_DEFAULT_MAX_BYTES)
+    expect(getCosmosPacketMemoMaxBytesByChainId('osmosis-1')).toBe(COSMOS_PACKET_MEMO_DEFAULT_MAX_BYTES)
+    expect(getCosmosPacketMemoMaxBytesByChainId('agoric-3')).toBe(COSMOS_PACKET_MEMO_DEFAULT_MAX_BYTES)
+    expect(COSMOS_PACKET_MEMO_DEFAULT_MAX_BYTES).toBeGreaterThan(COSMOS_MEMO_DEFAULT_MAX_BYTES)
   })
 })

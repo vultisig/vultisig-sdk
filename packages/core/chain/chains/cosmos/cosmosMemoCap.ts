@@ -54,37 +54,45 @@ export const getCosmosMemoMaxBytesByChainId = (chainId: string): number => {
 }
 
 /**
- * Chains that enforce `MaxMemoCharacters` against the **ICS-20 packet memo**
- * (the `memo` field inside a `MsgTransfer` message) instead of - or IN ADDITION
- * TO - the SDK transaction-level `TxBody.memo`.
+ * Per-chain caps on the ICS-20 **packet** memo (`MsgTransfer.memo`) - a
+ * structurally different field from the outer `TxBody.memo` capped by
+ * {@link getCosmosMemoMaxBytesByChainId}, and one that legitimately carries far
+ * more data (PFM / forward payloads).
  *
- * This is deliberately an allow-list of live-verified chains, not an assumption.
- * Over-including here REJECTS routes that would broadcast fine:
+ * MEASURED EVIDENCE (152 real columbus-5 Skip envelopes, 2026-05-30 ->
+ * 2026-07-18):
+ *   80 successes: packet memo <= 1001 bytes
+ *   72 failures:  packet memo >= 1122 bytes
+ * Perfectly separated, so the true cap is bracketed in (1001, 1122]; 1024 is
+ * the round value inside that bracket. Every one of those 152 envelopes has an
+ * EMPTY outer memo - the payload lives entirely in the packet memo for
+ * IBC-source legs - which is exactly why the outer-memo check alone never sees
+ * the overflow.
  *
- * - `columbus-5` (Terra Classic): ENFORCING. Live-verified 2026-06-29.
- * - `cosmoshub-4`, `osmosis-1`: NOT enforcing. Live-verified 2026-06-01 - Keplr
- *   broadcasts ~1500B packet memos on cosmoshub-4 without error.
- * - `phoenix-1` (Terra v2): deliberately absent. A live >512B packet-memo
- *   broadcast check is still pending; adding it unverified would over-reject
- *   valid phoenix-1 routes.
- *
- * Do not add a chain here without a live broadcast check, for the same reason
- * COSMOS_MEMO_MAX_BYTES_BY_CHAIN entries want the chain's own auth params.
+ * DO NOT default this table to 256 or reuse `getCosmosMemoMaxBytesByChainId`
+ * for packet memos. The 80 WORKING USTC<->LUNC routes carry packet memos of
+ * 698-1001 bytes on columbus-5 itself, so a 256-byte packet cap would reject
+ * every one of those healthy routes. Chains with no explicit entry default to a
+ * permissive ibc-go-scale ceiling instead, because most do not cap this field
+ * tightly and guessing tight here silently blocks working corridors.
  */
-const COSMOS_PACKET_MEMO_ENFORCING_CHAIN_IDS: ReadonlySet<string> = new Set(['columbus-5'])
+const COSMOS_PACKET_MEMO_MAX_BYTES_BY_CHAIN_ID: Readonly<Record<string, number>> = {
+  'columbus-5': 1024,
+}
+
+/** Permissive ibc-go-scale ceiling for chains with no measured packet-memo cap. */
+export const COSMOS_PACKET_MEMO_DEFAULT_MAX_BYTES = 32768
 
 /**
- * True when the chain identified by `chainId` applies its `MaxMemoCharacters`
- * cap to the inner ICS-20 packet memo as well as the outer `TxBody.memo`.
+ * The byte cap for a chain's ICS-20 packet memo, keyed by live chain-id.
  *
- * Callers building an IBC/PFM route must measure the packet memo too on these
- * chains: a Skip PFM leg routinely carries an EMPTY top-level memo with the
- * whole payload inside the `MsgTransfer` packet memo, so a top-level-only check
- * sees 0 bytes and admits a tx the chain rejects at broadcast with sdk error
- * code 12 ("memo too long") - after the signing ceremony has been burned.
+ * Deliberately NOT the outer-memo cap: a packet memo that exceeds this is
+ * rejected at broadcast, but one that merely exceeds the *outer* cap is fine,
+ * and conflating them rejects healthy routes. Check both fields, each against
+ * its own cap.
  */
-export const isCosmosPacketMemoEnforcingChainId = (chainId: string): boolean =>
-  COSMOS_PACKET_MEMO_ENFORCING_CHAIN_IDS.has(chainId)
+export const getCosmosPacketMemoMaxBytesByChainId = (chainId: string): number =>
+  COSMOS_PACKET_MEMO_MAX_BYTES_BY_CHAIN_ID[chainId] ?? COSMOS_PACKET_MEMO_DEFAULT_MAX_BYTES
 
 /**
  * True when `memo`'s UTF-8 byte length fits within `chain`'s live
