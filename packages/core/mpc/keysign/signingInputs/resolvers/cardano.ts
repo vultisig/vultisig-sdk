@@ -37,7 +37,7 @@ export const getCardanoSigningInputs: SigningInputsResolver<'cardano'> = ({ keys
   const isSendMax = sendMaxAmount && !isTokenSend
   const sendAmount = isSendMax
     ? bigIntSum(keysignPayload.utxoInfo.map(({ amount }) => amount)) - byteFee
-    : BigInt(keysignPayload.toAmount)
+    : BigInt(toBoundedLong(keysignPayload.toAmount, { unsigned: true }).toString())
 
   // CIP-20 memo: hand the already-CBOR-encoded auxiliary data to WalletCore,
   // which commits its Blake2b-256 hash into the tx body (key 7) and embeds the

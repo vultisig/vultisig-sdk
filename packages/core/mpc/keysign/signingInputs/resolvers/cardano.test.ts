@@ -80,8 +80,9 @@ const usdm = {
 //   UTXO 2: hash 22…22, index 1, 3_000_000 lovelace, no tokens
 const SENDER_ADDRESS = 'addr1vyxk54m7j3q6mrkevcunryrwf4p7e68c93cjk8gzxkhlkpsjpczl2'
 const RECIPIENT_ADDRESS = 'addr1vyqgk3uyfkfgzt7rp50s4jdkl0ecw7xvh2wmsvf2myreq7gd27kn4'
+const MALFORMED_AMOUNT_ERROR = /toBoundedBigInt: expected a base-10 integer string/
 const EXPECTED_TOKEN_AWARE_PRE_IMAGE_HASH = '839ae494ce1af23729a8e918c2d63febb688f0055450865016721c2a62fba93b'
-// What the pre-fix (token-blind) SDK derived from the same payload — pinned to
+// What the pre-fix (token-blind) SDK derived from the same payload - pinned to
 // document the exact divergence that made iOS↔SDK keysign fail to converge.
 const TOKEN_BLIND_PRE_IMAGE_HASH = 'db6bde29ccda113233a4ac6bc668fd14ad114ca013698948cfe0d7aa818b7903'
 
@@ -219,5 +220,29 @@ describe('getCardanoSigningInputs — per-UTXO native tokens', () => {
     // when one device maps tokens and the other does not.
     expect(hex(tokenBlind.dataHash)).toBe(TOKEN_BLIND_PRE_IMAGE_HASH)
     expect(hex(tokenBlind.dataHash)).not.toBe(hex(tokenAware.dataHash))
+  })
+
+  it('rejects an empty cardano toAmount before building a non-send-max transfer', () => {
+    const payload = buildPayload({ withTokens: false })
+    payload.toAmount = ''
+
+    expect(() =>
+      getCardanoSigningInputs({
+        keysignPayload: payload,
+        walletCore,
+      })
+    ).toThrow(MALFORMED_AMOUNT_ERROR)
+  })
+
+  it('rejects a non-decimal cardano toAmount before BigInt coercion widens it', () => {
+    const payload = buildPayload({ withTokens: false })
+    payload.toAmount = '0x10'
+
+    expect(() =>
+      getCardanoSigningInputs({
+        keysignPayload: payload,
+        walletCore,
+      })
+    ).toThrow(MALFORMED_AMOUNT_ERROR)
   })
 })
