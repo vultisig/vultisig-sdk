@@ -14,8 +14,10 @@
  * same token — the only change is that refs which used to throw now resolve.
  */
 import { Chain } from '@vultisig/core-chain/Chain'
+import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { knownTokens } from '@vultisig/core-chain/coin/knownTokens'
+import { normalizeTokenId } from '@vultisig/core-chain/utils/isValidTokenId'
 
 import type { Token } from '../types'
 import { VaultError, VaultErrorCode } from './VaultError'
@@ -27,6 +29,42 @@ export type ResolvedTokenInfo = {
   /** Contract address / chain-level asset id. Absent for the chain's native asset. */
   contractAddress?: string
 }
+
+/** Strip the chain prefix written by older CLI `tokens --add` versions. */
+export function stripLegacyTokenIdPrefix(chain: Chain, id: string): string {
+  const prefix = `${chain}-`
+  return id.toLowerCase().startsWith(prefix.toLowerCase()) ? id.slice(prefix.length) : id
+}
+
+/** Normalize only the chain ids whose core contract defines a canonical form. */
+export function normalizedTokenIdentity(chain: Chain, id: string): string {
+  return normalizeTokenId({ chain, id: stripLegacyTokenIdPrefix(chain, id) })
+}
+
+/** Compare bare and legacy-prefixed storage ids without changing symbol lookup. */
+export function tokenIdsMatch(chain: Chain, left: string | undefined, right: string): boolean {
+  return left !== undefined && normalizedTokenIdentity(chain, left) === normalizedTokenIdentity(chain, right)
+}
+
+/** Preserve legacy EVM address matching while keeping other chain ids case-sensitive. */
+function caseInsensitiveTokenIdsMatch(chain: Chain, left: string | undefined, right: string): boolean {
+  return (
+    left !== undefined &&
+    getChainKind(chain) === 'evm' &&
+    stripLegacyTokenIdPrefix(chain, left).toLowerCase() === stripLegacyTokenIdPrefix(chain, right).toLowerCase()
+  )
+}
+
+/** Remove discovery-only disambiguators when checking whether a bare symbol is ambiguous. */
+function tokenSymbolBase(symbol: string | undefined): string | undefined {
+  return symbol?.replace(/@[a-z0-9]{8,}$/iu, '').replace(/_\d+$/u, '')
+}
+
+function tokenAssetId(chain: Chain, token: Token): string {
+  return normalizedTokenIdentity(chain, token.contractAddress || token.id)
+}
+
+class AmbiguousTokenRefError extends VaultError {}
 
 /**
  * Resolve a token ref to its ticker, decimals and contract address.
@@ -44,25 +82,41 @@ export function resolveTokenRef(chain: Chain, ref: string | undefined, userToken
   }
 
   const upper = ref.toUpperCase()
-  const lower = ref.toLowerCase()
+  const symbolMatches = userTokens.filter(t => t.symbol?.toUpperCase() === upper)
+  const baseSymbolMatches = userTokens.filter(t => tokenSymbolBase(t.symbol)?.toUpperCase() === upper)
+  const distinctSymbolAssets = new Map([...symbolMatches, ...baseSymbolMatches].map(t => [tokenAssetId(chain, t), t]))
+
+  if (distinctSymbolAssets.size > 1) {
+    const contractAddresses = [...distinctSymbolAssets.values()].map(t => tokenAssetId(chain, t)).join(', ')
+    throw new AmbiguousTokenRefError(
+      VaultErrorCode.InvalidConfig,
+      `Token symbol "${ref}" is ambiguous on ${chain}; it matches multiple contract addresses (${contractAddresses}). Pass the intended contract address instead.`
+    )
+  }
 
   // 1. The user's configured tokens — by symbol first, then by contract address
-  //    or stored id (the CLI's `--add` writes id as `<Chain>-<address>`, token
-  //    discovery writes the bare address, so both are checked).
+  //    or stored id. Legacy `<Chain>-<address>` ids and canonical bare ids are
+  //    treated as the same storage identity.
   const token =
-    userTokens.find(t => t.symbol?.toUpperCase() === upper) ??
-    userTokens.find(t => t.contractAddress?.toLowerCase() === lower || t.id?.toLowerCase() === lower)
+    symbolMatches[0] ??
+    userTokens.find(t => tokenIdsMatch(chain, t.contractAddress, ref) || tokenIdsMatch(chain, t.id, ref)) ??
+    userTokens.find(
+      t => caseInsensitiveTokenIdsMatch(chain, t.contractAddress, ref) || caseInsensitiveTokenIdsMatch(chain, t.id, ref)
+    )
   if (token) {
     return {
       ticker: token.symbol ?? token.contractAddress ?? token.id,
       decimals: token.decimals,
-      contractAddress: token.contractAddress || token.id,
+      contractAddress: stripLegacyTokenIdPrefix(chain, token.contractAddress || token.id),
     }
   }
 
   // 2. Well-known token registry (no network call) — ticker first, then id.
   const known = knownTokens[chain] ?? []
-  const match = known.find(t => t.ticker.toUpperCase() === upper) ?? known.find(t => t.id?.toLowerCase() === lower)
+  const match =
+    known.find(t => t.ticker.toUpperCase() === upper) ??
+    known.find(t => tokenIdsMatch(chain, t.id, ref)) ??
+    known.find(t => caseInsensitiveTokenIdsMatch(chain, t.id, ref))
   if (match) return { ticker: match.ticker, decimals: match.decimals, contractAddress: match.id }
 
   throw new VaultError(
@@ -83,7 +137,8 @@ export function resolveTokenRefId(chain: Chain, ref: string | undefined, userTok
   if (!ref) return undefined
   try {
     return resolveTokenRef(chain, ref, userTokens).contractAddress
-  } catch {
+  } catch (error) {
+    if (error instanceof AmbiguousTokenRefError) throw error
     return ref
   }
 }
