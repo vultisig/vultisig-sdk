@@ -60,6 +60,8 @@ describe('@vultisig/sdk/seedphrase public surface', () => {
         'getWordlist',
         'isSeedphraseImportSupportedChain',
         'normalizeMnemonic',
+        // sdk#1955: the prelude both import services run first.
+        'prepareSeedphraseImportPrelude',
         'validateSeedphrase',
       ].sort()
     )

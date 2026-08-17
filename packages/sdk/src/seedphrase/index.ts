@@ -11,6 +11,7 @@
 // Types
 export type {
   Bip39Language,
+  ChainDiscoveryAggregate,
   ChainDiscoveryPhase,
   ChainDiscoveryProgress,
   ChainDiscoveryResult,
@@ -52,3 +53,13 @@ export {
   SEEDPHRASE_IMPORT_SUPPORTED_CHAINS,
   SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS,
 } from '../constants'
+
+// Shared prelude for both seedphrase-import paths (fast + secure). It is the
+// step a caller has to run before either service, so leaving it internal meant
+// the public API described a flow whose first step could not be reached.
+export {
+  prepareSeedphraseImportPrelude,
+  type SeedphraseImportPreludeInput,
+  type SeedphraseImportPreludeProgressLabels,
+  type SeedphraseImportPreludeResult,
+} from './prepareSeedphraseImportPrelude'

@@ -85,12 +85,28 @@ export {
 // "will this memo fit before broadcast rejects it with sdk code 12 (memo too
 // long) after the user has already signed?" Kept in parity with the root SDK
 // entrypoint (sdk#1538) so RN consumers don't hand-roll their own memo-cap table.
+// Canonical THOR/Maya native-swap metadata (sdk#1988). The SDK already owns the
+// live-supported chain/ticker contract; without these on a public surface,
+// first-party consumers re-pin their own tables and drift from it.
+export type { NativeSwapChain, NativeSwapChainId } from '@vultisig/core-chain/swap/native/NativeSwapChain'
+export {
+  getNativeSwapChainId,
+  getNativeSwapChainIdFromDenomPrefix,
+  nativeSwapChainIds,
+  nativeSwapChains,
+  nativeSwapEnabledChainsRecord,
+} from '@vultisig/core-chain/swap/native/NativeSwapChain'
+
+// sdk#1957: root exports getEvmRpcUrl alongside getEvmChainByChainId /
+// getEvmChainId; RN had the other two but not this one, so a mobile consumer
+// could identify an EVM chain and then not reach its RPC endpoint.
 export {
   COSMOS_MEMO_DEFAULT_MAX_BYTES,
   getCosmosMemoMaxBytes,
   getCosmosMemoMaxBytesByChainId,
   isCosmosMemoWithinCap,
 } from '@vultisig/core-chain/chains/cosmos/cosmosMemoCap'
+export { getEvmRpcUrl } from '@vultisig/core-chain/chains/evm/chainInfo'
 
 // Dynamic THORChain secured-asset discovery. These fetch-based/pure helpers
 // are RN-safe and intentionally match the root SDK entrypoint so mobile
@@ -321,6 +337,14 @@ export { CONSOLIDATE_CHAINS } from '../../tools/prep/utxoConsolidate'
 export async function getMaxSendAmountFromKeys(...args: unknown[]) {
   const mod = await import('../../tools/prep/maxSend')
   return mod.getMaxSendAmountFromKeys(...(args as Parameters<typeof mod.getMaxSendAmountFromKeys>))
+}
+
+// sdk#1998: the sibling of getMaxSendAmountFromKeys, defined in the same module
+// and used by the vault max-send path, was reachable from no published surface.
+// Lazy-imported the same way so the RN bundle is unaffected.
+export async function computeMaxSendFromBalance(...args: unknown[]) {
+  const mod = await import('../../tools/prep/maxSend')
+  return mod.computeMaxSendFromBalance(...(args as Parameters<typeof mod.computeMaxSendFromBalance>))
 }
 
 export async function prepareContractCallTxFromKeys(...args: unknown[]) {

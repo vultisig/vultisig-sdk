@@ -271,12 +271,23 @@ export {
 // maintained copies in agent-backend-ts (skip-swap.ts's full per-chain table,
 // execute_send.ts's TerraClassic-only hardcoded 256 check that missed every
 // other cosmos chain) and mcp-ts's own copy of the same table.
+// Canonical THOR/Maya native-swap metadata (sdk#1988). The SDK already owns the
+// live-supported chain/ticker contract; without these on a public surface,
+// first-party consumers re-pin their own tables and drift from it.
 export {
   COSMOS_MEMO_DEFAULT_MAX_BYTES,
   getCosmosMemoMaxBytes,
   getCosmosMemoMaxBytesByChainId,
   isCosmosMemoWithinCap,
 } from '@vultisig/core-chain/chains/cosmos/cosmosMemoCap'
+export type { NativeSwapChain, NativeSwapChainId } from '@vultisig/core-chain/swap/native/NativeSwapChain'
+export {
+  getNativeSwapChainId,
+  getNativeSwapChainIdFromDenomPrefix,
+  nativeSwapChainIds,
+  nativeSwapChains,
+  nativeSwapEnabledChainsRecord,
+} from '@vultisig/core-chain/swap/native/NativeSwapChain'
 
 // Fiat currency types
 export type { FiatCurrency } from '@vultisig/core-config/FiatCurrency'
@@ -917,6 +928,7 @@ export {
   coinGeckoIdToSymbol,
   compareCosts,
   computeAstroportMinReceive,
+  computeMaxSendFromBalance,
   CONSOLIDATE_CHAINS,
   cosmos,
   COSMOS_SWAP_FEE_LABEL_CHAINS,
