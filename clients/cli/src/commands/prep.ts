@@ -170,6 +170,11 @@ export async function executePrepContractCall(
   functionName: string,
   options: PrepContractCallOptions
 ): Promise<void> {
+  const value = options.value === undefined ? undefined : parseDecimalBigInt(options.value, 'value')
+  if (value !== undefined && value > 0n) {
+    assertSafeDestination(chain, contractAddress)
+  }
+
   const feeSettings =
     options.gasLimit !== undefined || options.maxPriorityFeePerGas !== undefined
       ? {
@@ -184,7 +189,7 @@ export async function executePrepContractCall(
     abi: parseJsonArray(options.abi, 'abi'),
     functionName,
     args: options.args === undefined ? undefined : parseLosslessJsonArray(options.args, 'args'),
-    value: options.value === undefined ? undefined : parseDecimalBigInt(options.value, 'value'),
+    value,
     senderAddress: options.sender,
     feeSettings,
   })

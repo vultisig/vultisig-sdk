@@ -75,6 +75,25 @@ describe('prep commands exercise SDK helpers through a real subprocess', { timeo
     expect(JSON.parse(result.stdout).error.message).toMatch(/only supports EVM chains.*Bitcoin/i)
   })
 
+  it('refuses a value-bearing contract call to a known EVM burn destination', () => {
+    const result = runPrep([
+      'contract-call',
+      'Ethereum',
+      '0x000000000000000000000000000000000000dead',
+      'deposit',
+      '--abi',
+      '[{"type":"function","name":"deposit","inputs":[]}]',
+      '--sender',
+      '0x0000000000000000000000000000000000000002',
+      '--value',
+      '1',
+      '--identity',
+      IDENTITY,
+    ])
+    expect(result.status).not.toBe(0)
+    expect(JSON.parse(result.stdout).error.message).toMatch(/Refusing to build transaction/i)
+  })
+
   it('rejects lossy numeric ABI lexemes before JSON parsing can change transaction bytes', () => {
     for (const args of ['[9007199254740993]', '[1.0000000000000001]', '[9007199254740991.1]']) {
       const result = runPrep([

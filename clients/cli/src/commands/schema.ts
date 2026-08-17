@@ -33,7 +33,7 @@ const COMMAND_EXAMPLES: Record<string, { enumValues?: Record<string, string[]>; 
   },
   'prep.contract-call': {
     examples: [
-      'vultisig prep contract-call Ethereum 0xContract approve --sender 0xSender --abi \'[{"type":"function","name":"approve","inputs":[]}]\'',
+      'vultisig prep contract-call Ethereum <contractAddress> approve --sender <senderAddress> --abi \'[{"type":"function","name":"approve","inputs":[{"type":"address","name":"spender"},{"type":"uint256","name":"amount"}]}]\' --args \'["<spenderAddress>","1000000"]\'',
     ],
   },
   'prep.ibc-transfer': {
