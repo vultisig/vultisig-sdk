@@ -324,6 +324,10 @@ const configs = {
       }),
     },
     ...createSubpathConfigs({
+      input: './src/tools/index.ts',
+      distBase: 'tools',
+    }),
+    ...createSubpathConfigs({
       input: './src/tools/parse/index.ts',
       distBase: 'tools/parse',
     }),
