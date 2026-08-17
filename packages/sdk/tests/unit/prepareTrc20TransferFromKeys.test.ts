@@ -179,6 +179,36 @@ describe('prepareTrc20TransferFromKeys', () => {
     ).toThrow(/feeLimitSun must be a plain decimal/)
   })
 
+  it('rejects a feeLimitSun above protobuf int64 max (sdk#1828)', () => {
+    const INT64_MAX = (1n << 63n) - 1n
+
+    // int64 max itself is legal and must still round-trip.
+    expect(
+      prepareTrc20TransferFromKeys({
+        contractAddress: USDT_CONTRACT,
+        from: FROM,
+        to: TO,
+        amount: '1',
+        feeLimitSun: INT64_MAX.toString(),
+      }).feeLimitSun
+    ).toBe(INT64_MAX.toString())
+
+    // One past it encodes to a varint the node reads back as NEGATIVE, and
+    // 2^70 reads back as 0 (silently re-entering the OUT_OF_ENERGY case the
+    // "> 0" guard exists to prevent). Both must fail closed here instead.
+    for (const over of [INT64_MAX + 1n, 1n << 70n]) {
+      expect(() =>
+        prepareTrc20TransferFromKeys({
+          contractAddress: USDT_CONTRACT,
+          from: FROM,
+          to: TO,
+          amount: '1',
+          feeLimitSun: over.toString(),
+        })
+      ).toThrow(/feeLimitSun must fit in an int64/)
+    }
+  })
+
   it('canonicalizes a valid feeLimitSun', () => {
     const tx = prepareTrc20TransferFromKeys({
       contractAddress: USDT_CONTRACT,

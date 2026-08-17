@@ -38,6 +38,10 @@ export function encodeVarint(value: number | bigint): Uint8Array {
   return new Uint8Array(bytes)
 }
 
+/** Inclusive bounds of a protobuf `int64`. */
+export const INT64_MAX = (1n << 63n) - 1n
+export const INT64_MIN = -(1n << 63n)
+
 /**
  * Protobuf int64 varint — two's-complement encoding for negatives.
  *
@@ -47,8 +51,19 @@ export function encodeVarint(value: number | bigint): Uint8Array {
  * reinterpreting a negative int64 as uint64 always leaves bit 63 set, and
  * a varint for a value ≥ 2^63 always takes 10 bytes (9 continuation bytes
  * + 1 final byte with the high bit of the original 64-bit integer).
+ *
+ * sdk#1828: an `int64` field must actually fit in an int64. A positive value
+ * >= 2^63 used to fall straight through to `encodeVarint`, which happily emits
+ * its UNSIGNED varint — and the node decodes those same bytes back as a SIGNED
+ * 64-bit integer. `2^63` comes back as `-9223372036854775808`; `2^70` comes
+ * back as `0`. Every caller here encodes a value-adjacent field (amount,
+ * fee_limit, expiration, timestamp), so emitting bytes that do not mean what
+ * the caller asked for is never the right answer. Fail closed at the encoder.
  */
 export function encodeInt64Varint(value: bigint): Uint8Array {
+  if (value > INT64_MAX || value < INT64_MIN) {
+    throw new Error(`encodeInt64Varint: value does not fit in an int64, got ${value}`)
+  }
   if (value >= 0n) return encodeVarint(value)
   // Two's-complement mask — BigInt.asUintN(64, x) is mathematically
   // `x + 2^64` for negative x in [-2^63, -1]. Output is in [2^63, 2^64-1],

@@ -58,6 +58,12 @@ export type UnsignedTrc20Transfer = {
 const DEFAULT_FEE_LIMIT_SUN = '100000000' // 100 TRX
 
 /**
+ * `fee_limit` is a protobuf `int64` on the Tron wire (raw_data field 18), so
+ * its ceiling is int64 max, not "any positive integer". sdk#1828.
+ */
+const TRON_FEE_LIMIT_MAX_SUN = (1n << 63n) - 1n
+
+/**
  * Vault-free, pure-crypto builder for an unsigned TRON TRC-20 transfer.
  *
  * Ported from the mcp-ts `build_trc20_transfer` tool so the SDK is the single
@@ -125,6 +131,14 @@ export const prepareTrc20TransferFromKeys = (params: PrepareTrc20TransferFromKey
     const feeBig = BigInt(feeLimitSun)
     if (feeBig <= 0n) {
       throw new Error(`prepareTrc20TransferFromKeys: feeLimitSun must be greater than zero, got ${feeLimitSun}`)
+    }
+    // sdk#1828: anything above int64 max serialises to bytes the node decodes
+    // as a DIFFERENT number (2^63 -> negative, 2^70 -> 0), so bound it here
+    // rather than emit a descriptor whose fee ceiling cannot survive the wire.
+    if (feeBig > TRON_FEE_LIMIT_MAX_SUN) {
+      throw new Error(
+        `prepareTrc20TransferFromKeys: feeLimitSun must fit in an int64 (max ${TRON_FEE_LIMIT_MAX_SUN}), got ${feeLimitSun}`
+      )
     }
     canonicalFeeLimit = feeBig.toString()
   }
