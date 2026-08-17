@@ -164,6 +164,19 @@
       "require": "./dist/tools/decode/index.cjs",
       "default": "./dist/tools/decode/index.cjs"
     },
+    "./tools/policy": {
+      "types": "./dist/tools/policy/index.d.ts",
+      "browser": "./dist/tools/policy/index.js",
+      "worker": "./dist/tools/policy/index.js",
+      "react-native": "./dist/tools/policy/index.js",
+      "node": {
+        "import": "./dist/tools/policy/index.js",
+        "require": "./dist/tools/policy/index.cjs"
+      },
+      "import": "./dist/tools/policy/index.js",
+      "require": "./dist/tools/policy/index.cjs",
+      "default": "./dist/tools/policy/index.cjs"
+    },
     "./tx": {
       "types": "./dist/tx/index.d.ts",
       "browser": "./dist/tx/index.js",
