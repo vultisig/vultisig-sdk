@@ -1,13 +1,34 @@
 /**
  * Balance Commands - balance and portfolio
  */
-import type { Balance, Chain, FiatCurrency, Value } from '@vultisig/sdk'
-import { fiatCurrencies, fiatCurrencyNameRecord } from '@vultisig/sdk'
+import type { Balance, FiatCurrency, Value } from '@vultisig/sdk'
+import { Chain, fiatCurrencies, fiatCurrencyNameRecord } from '@vultisig/sdk'
 
 import type { ChainFailure, CommandContext, PortfolioSummary } from '../core'
 import { NetworkError } from '../core/errors'
-import { createSpinner, error, isJsonOutput, outputJson, warn } from '../lib/output'
+import { createSpinner, error, info, isJsonOutput, outputJson, warn } from '../lib/output'
 import { displayBalance, displayBalancesTable, displayPortfolio } from '../ui'
+
+/**
+ * The aggregate views (`balance` with no chain, `portfolio`) iterate only the
+ * vault's ENABLED chains — funds sitting on a non-enabled chain simply don't
+ * appear, which reads as "the money is gone". When the enabled set is a strict
+ * subset of what the SDK supports, say so and point at the existing escape
+ * hatches. Static text only: this must never scan non-enabled chains (no extra
+ * RPC), and it must only name commands that actually exist (`balance <chain>`
+ * works on any SDK-supported chain regardless of the enabled set;
+ * `chains --add` grows the enabled set).
+ */
+export function buildScopeHint(enabledChainCount: number): string | undefined {
+  const supportedCount = Object.values(Chain).length
+  if (enabledChainCount >= supportedCount) return undefined
+  const noun = enabledChainCount === 1 ? 'chain' : 'chains'
+  return (
+    `Showing the vault's ${enabledChainCount} enabled ${noun} of ${supportedCount} supported. ` +
+    `Funds on other chains won't appear here — run \`vultisig balance <chain>\` to check one, ` +
+    `or \`vultisig chains --add <chain>\` to include it.`
+  )
+}
 
 /**
  * Reduce an unknown thrown value to a concise, single-line message that is safe
@@ -63,11 +84,16 @@ export async function executeBalance(ctx: CommandContext, options: BalanceOption
     const balances = await vault.balances(undefined, options.includeTokens)
     spinner.succeed('Balances loaded')
 
+    // Aggregate view: admit its scope. `scopeHint` rides in its own field in
+    // JSON mode (omitted when all supported chains are enabled) so the
+    // `balances` payload stays untouched for machine consumers.
+    const scopeHint = buildScopeHint(vault.chains.length)
     if (isJsonOutput()) {
-      outputJson({ balances })
+      outputJson({ balances, scopeHint })
       return
     }
     displayBalancesTable(balances, raw)
+    if (scopeHint) info(`\n${scopeHint}`)
   }
 }
 
@@ -202,13 +228,19 @@ export async function executePortfolio(ctx: CommandContext, options: PortfolioOp
 
   spinner.succeed('Portfolio loaded')
 
+  // Same honesty hint as the all-chains balance view: the portfolio only
+  // covers enabled chains, so admit it when that's a strict subset.
+  const scopeHint = buildScopeHint(chains.length)
+
   if (isJsonOutput()) {
     // `failures` is always present (empty array when none) so machine consumers
     // can branch on `data.failures.length` without probing for the field.
-    outputJson({ portfolio, currency, failures })
+    // `scopeHint` is omitted when every supported chain is enabled.
+    outputJson({ portfolio, currency, failures, scopeHint })
     return
   }
   displayPortfolio(portfolio, currency, options.raw ?? false)
+  if (scopeHint) info(`\n${scopeHint}`)
   if (failures.length > 0) {
     warn(`\nWarning: ${failures.length} chain(s) failed to load fully:`)
     for (const f of failures) {
