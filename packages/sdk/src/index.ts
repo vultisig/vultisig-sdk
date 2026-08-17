@@ -204,7 +204,7 @@ export type { SdkEvents, VaultEvents } from './events/types'
 
 // Chain enums and types
 export type { Chain as ChainType, CosmosChain, EvmChain, OtherChain, UtxoChain } from './types'
-export { Chain } from './types'
+export { Chain, IbcEnabledCosmosChain, VaultBasedCosmosChain } from './types'
 
 // Chain-kind classification — the canonical 12-family dispatch key. Exposed so
 // downstream consumers (mcp-ts, agent-backend) route through the SDK instead of
@@ -225,6 +225,25 @@ export {
   rippleTokenId,
   toXrplCurrencyCode,
 } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
+
+// Custom-RPC canonicals — surfaced so consumers can use the SDK-owned per-chain
+// override registry + health probe instead of deep-importing core internals or
+// rebuilding the same feature in app/backend code.
+export {
+  clearCustomRpcOverride,
+  getCustomRpcOverride,
+  getCustomRpcOverrides,
+  setCustomRpcOverride,
+  setCustomRpcOverrides,
+} from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
+export {
+  customRpcSupportedChains,
+  customRpcSupportedCosmosChains,
+  customRpcSupportedEvmChains,
+  isCustomRpcSupported,
+} from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
+export type { RpcHealthResult } from '@vultisig/core-chain/chains/customRpc/rpcHealthProbe'
+export { probeRpcHealth } from '@vultisig/core-chain/chains/customRpc/rpcHealthProbe'
 
 // Cosmos chain metadata — surfaced so consumers stop re-declaring LCD urls /
 // fee denoms / gas limits (e.g. mcp-ts lib/cosmos-chains.ts).
@@ -459,7 +478,8 @@ export { SEEDPHRASE_WORD_COUNTS, validateSeedphrase } from './seedphrase'
 // Reshare types
 export type { PerformReshareParams } from './services/SecureVaultCreationService'
 
-// QR payload parsing (for programmatic multi-device coordination)
+// QR payload parsing / generation (for programmatic multi-device coordination)
+export { buildKeygenPairingQrPayload } from './services/buildKeygenPairingQrPayload'
 export type { ParsedKeygenQR } from './utils/parseKeygenQR'
 export { parseKeygenQR } from './utils/parseKeygenQR'
 
@@ -861,6 +881,7 @@ export {
   ASTROPORT_ROUTER,
   balancePolkadot,
   buildAstroportSwap,
+  buildBalancerV3SwapCalldata,
   buildBuyPt,
   buildCctpBridge,
   buildCctpClaim,
