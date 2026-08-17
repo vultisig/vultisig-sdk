@@ -203,32 +203,6 @@
       "require": "./dist/tools/dex/index.cjs",
       "default": "./dist/tools/dex/index.cjs"
     },
-    "./tools/address": {
-      "types": "./dist/tools/address/index.d.ts",
-      "browser": "./dist/tools/address/index.js",
-      "worker": "./dist/tools/address/index.js",
-      "react-native": "./dist/tools/address/index.js",
-      "node": {
-        "import": "./dist/tools/address/index.js",
-        "require": "./dist/tools/address/index.cjs"
-      },
-      "import": "./dist/tools/address/index.js",
-      "require": "./dist/tools/address/index.cjs",
-      "default": "./dist/tools/address/index.cjs"
-    },
-    "./tools/validate": {
-      "types": "./dist/tools/validate/index.d.ts",
-      "browser": "./dist/tools/validate/index.js",
-      "worker": "./dist/tools/validate/index.js",
-      "react-native": "./dist/tools/validate/index.js",
-      "node": {
-        "import": "./dist/tools/validate/index.js",
-        "require": "./dist/tools/validate/index.cjs"
-      },
-      "import": "./dist/tools/validate/index.js",
-      "require": "./dist/tools/validate/index.cjs",
-      "default": "./dist/tools/validate/index.cjs"
-    },
     "./tools/evm": {
       "types": "./dist/tools/evm/index.d.ts",
       "browser": "./dist/tools/evm/index.js",
@@ -254,19 +228,6 @@
       "import": "./dist/tools/cosmos/index.js",
       "require": "./dist/tools/cosmos/index.cjs",
       "default": "./dist/tools/cosmos/index.cjs"
-    },
-    "./tools/policy": {
-      "types": "./dist/tools/policy/index.d.ts",
-      "browser": "./dist/tools/policy/index.js",
-      "worker": "./dist/tools/policy/index.js",
-      "react-native": "./dist/tools/policy/index.js",
-      "node": {
-        "import": "./dist/tools/policy/index.js",
-        "require": "./dist/tools/policy/index.cjs"
-      },
-      "import": "./dist/tools/policy/index.js",
-      "require": "./dist/tools/policy/index.cjs",
-      "default": "./dist/tools/policy/index.cjs"
     },
     "./signable-transaction": {
       "types": "./dist/signable-transaction/index.d.ts",

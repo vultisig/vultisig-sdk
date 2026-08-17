@@ -336,24 +336,12 @@ const configs = {
       distBase: 'tools/dex',
     }),
     ...createSubpathConfigs({
-      input: './src/tools/address/index.ts',
-      distBase: 'tools/address',
-    }),
-    ...createSubpathConfigs({
-      input: './src/tools/validate/index.ts',
-      distBase: 'tools/validate',
-    }),
-    ...createSubpathConfigs({
       input: './src/tools/evm/index.ts',
       distBase: 'tools/evm',
     }),
     ...createSubpathConfigs({
       input: './src/tools/cosmos/index.ts',
       distBase: 'tools/cosmos',
-    }),
-    ...createSubpathConfigs({
-      input: './src/tools/policy/index.ts',
-      distBase: 'tools/policy',
     }),
     ...createSubpathConfigs({
       input: './src/signable-transaction/index.ts',

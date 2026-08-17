@@ -132,11 +132,8 @@ export default defineConfig([
   createSubpathTypesConfig('src/seedphrase/index.ts', 'dist/seedphrase/index.d.ts'),
   createSubpathTypesConfig('src/tools/decode/index.ts', 'dist/tools/decode/index.d.ts'),
   createSubpathTypesConfig('src/tools/dex/index.ts', 'dist/tools/dex/index.d.ts'),
-  createSubpathTypesConfig('src/tools/address/index.ts', 'dist/tools/address/index.d.ts'),
-  createSubpathTypesConfig('src/tools/validate/index.ts', 'dist/tools/validate/index.d.ts'),
   createSubpathTypesConfig('src/tools/evm/index.ts', 'dist/tools/evm/index.d.ts'),
   createSubpathTypesConfig('src/tools/cosmos/index.ts', 'dist/tools/cosmos/index.d.ts'),
-  createSubpathTypesConfig('src/tools/policy/index.ts', 'dist/tools/policy/index.d.ts'),
   createSubpathTypesConfig('src/signable-transaction/index.ts', 'dist/signable-transaction/index.d.ts'),
   createSubpathTypesConfig('src/tx/index.ts', 'dist/tx/index.d.ts'),
 ])
