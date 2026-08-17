@@ -6,8 +6,8 @@
  * - MCP packed bin metadata + temp installed `vmcp --help` smoke
  * - CLI dist + packed install smoke: --help and hidden `schema` JSON
  *
- * Temp installs use YARN_CACHE_FOLDER pointing at the repo's Yarn cache so CI stays
- * mostly offline after `yarn install --immutable`.
+ * Temp installs use a disposable Yarn cache beneath the run's work root. This
+ * prevents unique `file:` archives from accumulating in the user-global cache.
  */
 
 import { spawnSync } from 'node:child_process'
@@ -16,6 +16,8 @@ import { builtinModules } from 'node:module'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+import { createDisposableYarnEnv } from './quality-contracts-cache.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(__dirname, '..')
@@ -289,11 +291,7 @@ function packedConsumerSmoke(workRoot, tgzPath) {
   )
   writeFileSync(path.join(consumer, '.yarnrc.yml'), 'nodeLinker: node-modules\n')
 
-  const cacheFolder = path.join(repoRoot, '.yarn/cache')
-  const env = {
-    ...process.env,
-    ...(existsSync(cacheFolder) ? { YARN_CACHE_FOLDER: cacheFolder } : {}),
-  }
+  const env = createDisposableYarnEnv(workRoot)
 
   runYarn(['add', `@vultisig/sdk@file:${tgzPath}`], { cwd: consumer, env, stdio: 'inherit' })
 
@@ -576,11 +574,7 @@ function packedCliBinSmoke(
   )
   writeFileSync(path.join(consumer, '.yarnrc.yml'), 'nodeLinker: node-modules\n')
 
-  const cacheFolder = path.join(repoRoot, '.yarn/cache')
-  const env = {
-    ...process.env,
-    ...(existsSync(cacheFolder) ? { YARN_CACHE_FOLDER: cacheFolder } : {}),
-  }
+  const env = createDisposableYarnEnv(workRoot)
 
   runYarn(['install', '--no-immutable'], {
     cwd: consumer,
@@ -639,11 +633,7 @@ function packedMcpBinSmoke(workRoot, tgzPath, sdkTgzPath, clientSharedTgzPath) {
   )
   writeFileSync(path.join(consumer, '.yarnrc.yml'), 'nodeLinker: node-modules\n')
 
-  const cacheFolder = path.join(repoRoot, '.yarn/cache')
-  const env = {
-    ...process.env,
-    ...(existsSync(cacheFolder) ? { YARN_CACHE_FOLDER: cacheFolder } : {}),
-  }
+  const env = createDisposableYarnEnv(workRoot)
 
   runYarn(['install', '--no-immutable'], {
     cwd: consumer,
