@@ -9,6 +9,7 @@ import { VaultError } from '../../../src/vault/VaultError'
 
 const USDC_CHECKSUM = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
 const USDC_LOWER = USDC_CHECKSUM.toLowerCase()
+const IMPOSTOR_USDC = '0x00000000000000000000000000000000000000ff'
 
 const storedUsdc: Token = {
   id: USDC_LOWER,
@@ -18,6 +19,14 @@ const storedUsdc: Token = {
   contractAddress: USDC_LOWER,
   chainId: Chain.Ethereum,
   isNative: false,
+}
+
+const impostorUsdc: Token = {
+  ...storedUsdc,
+  id: IMPOSTOR_USDC,
+  contractAddress: IMPOSTOR_USDC,
+  name: 'Airdropped USDC lookalike',
+  decimals: 18,
 }
 
 describe('resolveTokenRef', () => {
@@ -79,6 +88,22 @@ describe('resolveTokenRef', () => {
     })
   })
 
+  it('resolves a legacy prefixed id by both its stored and bare forms', () => {
+    const customAddress = '0x00000000000000000000000000000000000000ff'
+    const legacy = {
+      ...storedUsdc,
+      id: `${Chain.Ethereum}-${customAddress}`,
+      contractAddress: undefined,
+    } as Token
+
+    for (const ref of [legacy.id, customAddress]) {
+      expect(resolveTokenRef(Chain.Ethereum, ref, [legacy])).toMatchObject({
+        ticker: 'USDC',
+        contractAddress: customAddress,
+      })
+    }
+  })
+
   it('falls back to the well-known registry by ticker — pre-existing behaviour', () => {
     expect(resolveTokenRef(Chain.Ethereum, 'USDC', [])).toEqual({
       ticker: 'USDC',
@@ -125,6 +150,19 @@ describe('resolveTokenRef', () => {
   it('throws a VaultError naming the ref when nothing matches', () => {
     expect(() => resolveTokenRef(Chain.Ethereum, 'NOPE', [])).toThrow(VaultError)
     expect(() => resolveTokenRef(Chain.Ethereum, 'NOPE', [])).toThrow(/Token "NOPE" not found on Ethereum/)
+  })
+
+  it('treats case-variant Solana mint ids as distinct ambiguous assets', () => {
+    const firstMint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+    const secondMint = 'ePjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+    const tokens: Token[] = [
+      { ...storedUsdc, id: firstMint, contractAddress: firstMint, chainId: Chain.Solana, symbol: 'WIDGET' },
+      { ...storedUsdc, id: secondMint, contractAddress: secondMint, chainId: Chain.Solana, symbol: 'WIDGET' },
+    ]
+
+    expect(() => resolveTokenRef(Chain.Solana, 'WIDGET', tokens)).toThrow(/ambiguous.*contract address/i)
+    expect(() => resolveTokenRefId(Chain.Solana, 'WIDGET', tokens)).toThrow(/ambiguous.*contract address/i)
+    expect(resolveTokenRef(Chain.Solana, secondMint, tokens).contractAddress).toBe(secondMint)
   })
 })
 
@@ -240,6 +278,28 @@ describe('send and balance resolve a token ref identically', () => {
   it('updateBalance refreshes the same resolved token id as balance', async () => {
     expect(await balanceIdFor('USDC', [storedUsdc])).toBe(USDC_LOWER)
     expect(await updateBalanceIdFor('USDC', [storedUsdc])).toBe(USDC_LOWER)
+  })
+
+  it('fails closed before a send when one symbol names distinct contracts', async () => {
+    const tokens = [impostorUsdc, storedUsdc]
+
+    await expect(sendCoinFor('USDC', tokens)).rejects.toThrow(/ambiguous.*contract address/i)
+    expect(() => resolveTokenRefId(Chain.Ethereum, 'USDC', tokens)).toThrow(/ambiguous.*contract address/i)
+  })
+
+  it('still resolves either contract address in an ambiguous-symbol vault', async () => {
+    const tokens = [impostorUsdc, storedUsdc]
+
+    await expect(sendCoinFor(USDC_CHECKSUM, tokens)).resolves.toMatchObject({
+      ticker: 'USDC',
+      decimals: 6,
+      id: USDC_LOWER,
+    })
+    await expect(sendCoinFor(IMPOSTOR_USDC, tokens)).resolves.toMatchObject({
+      ticker: 'USDC',
+      decimals: 18,
+      id: IMPOSTOR_USDC,
+    })
   })
 })
 
