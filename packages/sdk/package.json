@@ -115,6 +115,19 @@
       "require": "./dist/tools/bridge/index.cjs",
       "default": "./dist/tools/bridge/index.cjs"
     },
+    "./tools/dex": {
+      "types": "./dist/tools/dex/index.d.ts",
+      "browser": "./dist/tools/dex/index.js",
+      "worker": "./dist/tools/dex/index.js",
+      "react-native": "./dist/tools/dex/index.js",
+      "node": {
+        "import": "./dist/tools/dex/index.js",
+        "require": "./dist/tools/dex/index.cjs"
+      },
+      "import": "./dist/tools/dex/index.js",
+      "require": "./dist/tools/dex/index.cjs",
+      "default": "./dist/tools/dex/index.cjs"
+    },
     "./chains/tron": {
       "types": "./dist/chains/tron/index.d.ts",
       "browser": "./dist/chains/tron/index.js",

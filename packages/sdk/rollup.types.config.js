@@ -1,52 +1,52 @@
-import { defineConfig } from 'rollup'
-import dts from 'rollup-plugin-dts'
+import { defineConfig } from "rollup";
+import dts from "rollup-plugin-dts";
 
 const dtsPluginOptions = {
   compilerOptions: {
-    baseUrl: '.',
+    baseUrl: ".",
     paths: {
-      '@/*': ['./src/*'],
-      '@helpers/*': ['./tests/e2e/helpers/*'],
-      '@types': ['./src/types'],
-      '@vultisig/core-chain/*': ['../core/chain/*'],
-      '@vultisig/core-mpc/*': ['../core/mpc/*'],
-      '@vultisig/core-config': ['../core/config/index.ts'],
-      '@vultisig/core-config/*': ['../core/config/*'],
-      '@vultisig/lib-utils/*': ['../lib/utils/*'],
-      '@vultisig/lib-dkls/*': ['../lib/dkls/*'],
-      '@vultisig/lib-mldsa/*': ['../lib/mldsa/*'],
-      '@vultisig/lib-schnorr/*': ['../lib/schnorr/*'],
+      "@/*": ["./src/*"],
+      "@helpers/*": ["./tests/e2e/helpers/*"],
+      "@types": ["./src/types"],
+      "@vultisig/core-chain/*": ["../core/chain/*"],
+      "@vultisig/core-mpc/*": ["../core/mpc/*"],
+      "@vultisig/core-config": ["../core/config/index.ts"],
+      "@vultisig/core-config/*": ["../core/config/*"],
+      "@vultisig/lib-utils/*": ["../lib/utils/*"],
+      "@vultisig/lib-dkls/*": ["../lib/dkls/*"],
+      "@vultisig/lib-mldsa/*": ["../lib/mldsa/*"],
+      "@vultisig/lib-schnorr/*": ["../lib/schnorr/*"],
     },
     skipLibCheck: true,
     strict: false,
   },
-}
+};
 
 const createSubpathTypesConfig = (input, file) => ({
   input,
   output: {
     file,
-    format: 'es',
+    format: "es",
   },
   plugins: [dts(dtsPluginOptions)],
-})
+});
 
 export default defineConfig([
   // Main types (platform-agnostic)
   {
-    input: 'src/index.ts',
+    input: "src/index.ts",
     output: {
-      file: 'dist/index.d.ts',
-      format: 'es',
+      file: "dist/index.d.ts",
+      format: "es",
     },
     plugins: [dts(dtsPluginOptions)],
   },
   // Node.js platform types
   {
-    input: 'src/platforms/node/index.ts',
+    input: "src/platforms/node/index.ts",
     output: {
-      file: 'dist/index.node.d.ts',
-      format: 'es',
+      file: "dist/index.node.d.ts",
+      format: "es",
     },
     plugins: [dts(dtsPluginOptions)],
   },
@@ -54,10 +54,10 @@ export default defineConfig([
   // storage, crypto, and polyfill implementations in addition to the public SDK
   // surface.
   {
-    input: 'src/platforms/electron-main/index.ts',
+    input: "src/platforms/electron-main/index.ts",
     output: {
-      file: 'dist/index.electron-main.d.ts',
-      format: 'es',
+      file: "dist/index.electron-main.d.ts",
+      format: "es",
     },
     plugins: [dts(dtsPluginOptions)],
   },
@@ -65,20 +65,20 @@ export default defineConfig([
   // entry so platform-only storage, crypto, and polyfill exports are visible
   // through both the root browser condition and the explicit subpath.
   {
-    input: 'src/platforms/browser/index.ts',
+    input: "src/platforms/browser/index.ts",
     output: {
-      file: 'dist/index.browser.d.ts',
-      format: 'es',
+      file: "dist/index.browser.d.ts",
+      format: "es",
     },
     plugins: [dts(dtsPluginOptions)],
   },
   // Chrome Extension platform types. This entry exposes the extension storage,
   // crypto, and polyfill implementations shipped by the matching runtime bundle.
   {
-    input: 'src/platforms/chrome-extension/index.ts',
+    input: "src/platforms/chrome-extension/index.ts",
     output: {
-      file: 'dist/index.chrome-extension.d.ts',
-      format: 'es',
+      file: "dist/index.chrome-extension.d.ts",
+      format: "es",
     },
     plugins: [dts(dtsPluginOptions)],
   },
@@ -87,20 +87,20 @@ export default defineConfig([
   // agnostic. Consumers resolving under the "react-native" export condition
   // (Metro/Expo tsconfig with customConditions) get this file.
   {
-    input: 'src/platforms/react-native/index.ts',
+    input: "src/platforms/react-native/index.ts",
     output: {
-      file: 'dist/index.react-native.d.ts',
-      format: 'es',
+      file: "dist/index.react-native.d.ts",
+      format: "es",
     },
     plugins: [dts(dtsPluginOptions)],
   },
   // RN preamble — side-effect import, no runtime exports. Emits an almost-
   // empty .d.ts so `import '@vultisig/sdk/rn-preamble'` type-checks cleanly.
   {
-    input: 'src/platforms/react-native/preamble.ts',
+    input: "src/platforms/react-native/preamble.ts",
     output: {
-      file: 'dist/index.rn-preamble.d.ts',
-      format: 'es',
+      file: "dist/index.rn-preamble.d.ts",
+      format: "es",
     },
     plugins: [dts(dtsPluginOptions)],
   },
@@ -110,25 +110,50 @@ export default defineConfig([
   // `import('vite').Plugin` from the consumer's installed version instead of
   // inlining Vite's entire type graph.
   {
-    input: 'src/vite/index.ts',
+    input: "src/vite/index.ts",
     output: {
-      file: 'dist/vite/index.d.ts',
-      format: 'es',
+      file: "dist/vite/index.d.ts",
+      format: "es",
     },
-    external: ['vite'],
+    external: ["vite"],
     plugins: [dts(dtsPluginOptions)],
   },
   // Dedicated public subpath types — keep these as first-class bundles so
   // package-name imports resolve to narrow declarations instead of the root
   // index type graph.
-  createSubpathTypesConfig('src/tools/parse/index.ts', 'dist/tools/parse/index.d.ts'),
-  createSubpathTypesConfig('src/tools/defi/index.ts', 'dist/tools/defi/index.d.ts'),
-  createSubpathTypesConfig('src/tools/bridge/index.ts', 'dist/tools/bridge/index.d.ts'),
-  createSubpathTypesConfig('src/chains/tron/index.ts', 'dist/chains/tron/index.d.ts'),
-  createSubpathTypesConfig('src/chains/utxo/index.ts', 'dist/chains/utxo/index.d.ts'),
+  createSubpathTypesConfig(
+    "src/tools/parse/index.ts",
+    "dist/tools/parse/index.d.ts",
+  ),
+  createSubpathTypesConfig(
+    "src/tools/defi/index.ts",
+    "dist/tools/defi/index.d.ts",
+  ),
+  createSubpathTypesConfig(
+    "src/tools/bridge/index.ts",
+    "dist/tools/bridge/index.d.ts",
+  ),
+  createSubpathTypesConfig(
+    "src/tools/dex/index.ts",
+    "dist/tools/dex/index.d.ts",
+  ),
+  createSubpathTypesConfig(
+    "src/chains/tron/index.ts",
+    "dist/chains/tron/index.d.ts",
+  ),
+  createSubpathTypesConfig(
+    "src/chains/utxo/index.ts",
+    "dist/chains/utxo/index.d.ts",
+  ),
   // Canonical seedphrase helpers and import/discovery services are published
   // as a narrow declaration surface alongside their dedicated runtime bundle.
-  createSubpathTypesConfig('src/seedphrase/index.ts', 'dist/seedphrase/index.d.ts'),
-  createSubpathTypesConfig('src/tools/decode/index.ts', 'dist/tools/decode/index.d.ts'),
-  createSubpathTypesConfig('src/tx/index.ts', 'dist/tx/index.d.ts'),
-])
+  createSubpathTypesConfig(
+    "src/seedphrase/index.ts",
+    "dist/seedphrase/index.d.ts",
+  ),
+  createSubpathTypesConfig(
+    "src/tools/decode/index.ts",
+    "dist/tools/decode/index.d.ts",
+  ),
+  createSubpathTypesConfig("src/tx/index.ts", "dist/tx/index.d.ts"),
+]);
