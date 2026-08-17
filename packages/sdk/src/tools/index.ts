@@ -149,6 +149,7 @@ export type {
   AcrossQuote,
   AcrossQuoteParams,
   AstroportSwapResult,
+  BoundSwapQuote,
   BuildAstroportSwapParams,
   FindSwapQuoteParams,
   FindSwapQuotesResult,

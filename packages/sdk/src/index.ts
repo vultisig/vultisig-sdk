@@ -724,6 +724,7 @@ export type {
   AmountUnits,
   AssetRef,
   AstroportSwapResult,
+  BoundSwapQuote,
   BuildAstroportSwapParams,
   BuildBuyPtParams,
   BuildCctpBridgeParams,
