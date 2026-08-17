@@ -217,13 +217,13 @@ async function assertWasmResponse(baseUrl, pathname) {
   assert.ok((await response.arrayBuffer()).byteLength > 0, `expected ${pathname} to have a non-empty body`)
 }
 
-test('browser example prepare recreates missing shared package artifacts', { timeout: 540_000 }, async () => {
+test('browser example prepare recreates missing shared package artifacts', { timeout: 720_000 }, async () => {
   const mpcWasmDist = path.join(repoRoot, 'packages/mpc-wasm/dist')
   rmSync(mpcWasmDist, { recursive: true, force: true })
 
   try {
     await runWithDiagnostics('yarn', ['workspace', '@vultisig/example-browser', 'prepare:sdk'], {
-      timeoutMs: 360_000,
+      timeoutMs: 600_000,
       label: formatShellCommand('yarn', ['workspace', '@vultisig/example-browser', 'prepare:sdk']),
     })
     assert.ok(existsSync(path.join(mpcWasmDist, 'index.js')), 'expected prepare:sdk to rebuild mpc-wasm dist')

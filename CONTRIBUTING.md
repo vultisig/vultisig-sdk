@@ -29,6 +29,39 @@ yarn build:sdk
 yarn test
 ```
 
+### Git worktrees and shared dependencies
+
+A worktree must not use the primary checkout's `node_modules` symlink without
+local workspace overrides. Otherwise `@vultisig/*` imports can resolve to the
+primary checkout, so a worktree test may stay green while its source is broken.
+Writing to `node_modules/@vultisig` through that top-level symlink can also
+delete the primary checkout's workspace links.
+
+The safest option is a normal install inside the worktree. To reuse an existing
+checkout's third-party dependencies, run this from the worktree root instead of
+creating or editing workspace links by hand:
+
+```bash
+yarn worktree:setup --from /path/to/primary/vultisig-sdk
+```
+
+The helper keeps the shared top-level `node_modules` read-only, creates
+worktree-owned overrides under each workspace, verifies that every override
+points back into the worktree, and rebuilds shared packages there. It refuses
+to write through a symlinked per-workspace directory.
+
+Before trusting a worktree test result, run the must-fail resolution control:
+
+```bash
+yarn worktree:check
+```
+
+The check exits nonzero when a workspace link is missing, broken, or resolves
+outside the current checkout. Root `yarn test`, `yarn check`, `yarn check:agent`,
+and `yarn check:ci` run this control before loading project packages. Never remove or replace
+`<worktree>/node_modules/@vultisig/*` directly when the top-level
+`node_modules` is shared; that path belongs to the primary checkout.
+
 ## Project Structure
 
 This is a Yarn workspaces monorepo:
