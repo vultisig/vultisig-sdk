@@ -5,11 +5,18 @@ import {
   encodeErc20Approve,
   evm,
   getCosmosGovernanceProposals,
+  getPrice,
   prepareCosmosVote,
+  price,
   resolveContract,
   token,
 } from '@/index'
-import { cosmos as cosmosFromTools, evm as evmFromTools, token as tokenFromTools } from '@/tools'
+import {
+  cosmos as cosmosFromTools,
+  evm as evmFromTools,
+  price as priceFromTools,
+  token as tokenFromTools,
+} from '@/tools'
 
 describe('SDK root tool namespaces', () => {
   it('exposes the EVM helper family without removing flat exports', () => {
@@ -26,5 +33,10 @@ describe('SDK root tool namespaces', () => {
     expect(cosmos).toBe(cosmosFromTools)
     expect(cosmos.gov.getCosmosGovernanceProposals).toBe(getCosmosGovernanceProposals)
     expect(cosmos.gov.prepareCosmosVote).toBe(prepareCosmosVote)
+  })
+
+  it('exposes the price helper family under sdk.price without removing flat exports (sdk#1780)', () => {
+    expect(price).toBe(priceFromTools)
+    expect(price.getPrice).toBe(getPrice)
   })
 })
