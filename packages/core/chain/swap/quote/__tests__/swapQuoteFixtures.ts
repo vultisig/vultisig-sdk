@@ -57,7 +57,9 @@ export function minimalCowSwapQuote(dstAmount: string, sellAmount = '10000000000
         receiver: '0xsender',
         sellAmount,
         buyAmount: dstAmount,
-        validTo: 1,
+        // 2100-01-01 — far enough out that the bound quote is never already
+        // expired; the general-quote TTL therefore drives `expiresAt`.
+        validTo: 4_102_444_800,
         appData: '0x',
         appDataHash: '0x',
         feeAmount: '0',
