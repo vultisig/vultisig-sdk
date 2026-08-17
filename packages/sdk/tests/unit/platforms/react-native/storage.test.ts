@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type { Storage } from '../../../../src/storage/types'
+
 // Mock @react-native-async-storage/async-storage before importing ReactNativeStorage.
 //
 // The mock mirrors the REAL AsyncStorage API surface: `multiRemove` (plural-
@@ -47,16 +49,8 @@ describe('ReactNativeStorage', () => {
     expect(await storage.get<{ a: number }>('key1')).toEqual({ a: 1 })
   })
 
-  it('serializes conditional writes across adapter instances', async () => {
-    const other = new ReactNativeStorage()
-
-    const results = await Promise.all([
-      storage.compareAndSet('vault:shared', null, { owner: 'first' }),
-      other.compareAndSet('vault:shared', null, { owner: 'second' }),
-    ])
-
-    expect(results.filter(Boolean)).toHaveLength(1)
-    expect(await storage.get('vault:shared')).toEqual(results[0] ? { owner: 'first' } : { owner: 'second' })
+  it('does not advertise cross-runtime atomic compare-and-set', () => {
+    expect((storage as Storage).compareAndSet).toBeUndefined()
   })
 
   it('removes a value', async () => {

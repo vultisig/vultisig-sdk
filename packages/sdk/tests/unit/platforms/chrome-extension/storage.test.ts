@@ -144,6 +144,23 @@ describe('ChromeExtensionStorage', () => {
       })
       await expect(storage.get('vault:content-script')).resolves.toBeNull()
     })
+
+    it('fails all content-script mutations closed so they cannot race extension CAS', async () => {
+      mockStorage.set('vault:content-script', {
+        value: { owner: 'extension' },
+        metadata: { version: 1, createdAt: 1000, lastModified: 1000 },
+      })
+      vi.stubGlobal('location', { protocol: 'https:' })
+
+      await expect(storage.set('vault:content-script', { owner: 'content' })).rejects.toMatchObject({
+        code: StorageErrorCode.StorageUnavailable,
+      })
+      await expect(storage.remove('vault:content-script')).rejects.toMatchObject({
+        code: StorageErrorCode.StorageUnavailable,
+      })
+      await expect(storage.clear()).rejects.toMatchObject({ code: StorageErrorCode.StorageUnavailable })
+      await expect(storage.get('vault:content-script')).resolves.toEqual({ owner: 'extension' })
+    })
   })
 
   describe('remove', () => {

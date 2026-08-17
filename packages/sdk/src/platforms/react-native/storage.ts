@@ -1,6 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
-import { storageValuesEqual } from '../../storage/storageValuesEqual'
 import type { Storage, StorageMetadata, StoredValue } from '../../storage/types'
 import { STORAGE_VERSION, StorageError, StorageErrorCode } from '../../storage/types'
 
@@ -27,6 +26,12 @@ function prefixed(key: string): string {
   return `${KEY_PREFIX}${key}`
 }
 
+/**
+ * AsyncStorage does not expose an atomic conditional-write primitive across
+ * separate React Native JS runtimes. This adapter intentionally omits
+ * `compareAndSet`, so fund-safety-sensitive imports fail closed unless the host
+ * supplies a storage adapter backed by a native atomic primitive.
+ */
 export class ReactNativeStorage implements Storage {
   private async setValue<T>(key: string, value: T): Promise<void> {
     const metadata: StorageMetadata = {
@@ -54,26 +59,6 @@ export class ReactNativeStorage implements Storage {
       await withMutationLock(() => this.setValue(key, value))
     } catch (error) {
       throw new StorageError(StorageErrorCode.Unknown, `Failed to set "${key}"`, error as Error)
-    }
-  }
-
-  async compareAndSet<T>(key: string, expectedValue: T | null, value: T | null): Promise<boolean> {
-    try {
-      return await withMutationLock(async () => {
-        const currentValue = await this.get<T>(key)
-        if (!storageValuesEqual(currentValue, expectedValue)) {
-          return false
-        }
-        if (value === null) {
-          await AsyncStorage.removeItem(prefixed(key))
-        } else {
-          await this.setValue(key, value)
-        }
-        return true
-      })
-    } catch (error) {
-      if (error instanceof StorageError) throw error
-      throw new StorageError(StorageErrorCode.Unknown, `Failed to conditionally write "${key}"`, error as Error)
     }
   }
 

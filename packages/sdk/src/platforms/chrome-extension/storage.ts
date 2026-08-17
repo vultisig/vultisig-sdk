@@ -69,7 +69,7 @@ export class ChromeExtensionStorage implements Storage {
     this.ensureAvailable()
 
     try {
-      await this.withMutationLock(() => this.setValue(key, value))
+      await this.withMutationLock(() => this.setValue(key, value), true)
     } catch (error) {
       if ((error as Error).message?.includes('QUOTA_BYTES')) {
         throw new StorageError(
@@ -78,6 +78,7 @@ export class ChromeExtensionStorage implements Storage {
           error as Error
         )
       }
+      if (error instanceof StorageError) throw error
       throw new StorageError(StorageErrorCode.Unknown, `Failed to set value for key "${key}"`, error as Error)
     }
   }
@@ -114,8 +115,9 @@ export class ChromeExtensionStorage implements Storage {
     this.ensureAvailable()
 
     try {
-      await this.withMutationLock(() => chrome.storage.local.remove(key))
+      await this.withMutationLock(() => chrome.storage.local.remove(key), true)
     } catch (error) {
+      if (error instanceof StorageError) throw error
       throw new StorageError(StorageErrorCode.Unknown, `Failed to remove key "${key}"`, error as Error)
     }
   }
@@ -135,8 +137,9 @@ export class ChromeExtensionStorage implements Storage {
     this.ensureAvailable()
 
     try {
-      await this.withMutationLock(() => chrome.storage.local.clear())
+      await this.withMutationLock(() => chrome.storage.local.clear(), true)
     } catch (error) {
+      if (error instanceof StorageError) throw error
       throw new StorageError(StorageErrorCode.Unknown, 'Failed to clear storage', error as Error)
     }
   }
