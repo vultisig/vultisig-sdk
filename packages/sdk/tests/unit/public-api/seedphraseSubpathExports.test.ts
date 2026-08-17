@@ -4,9 +4,12 @@ import { fileURLToPath } from 'node:url'
 
 import { describe, expect, expectTypeOf, it } from 'vitest'
 
-import * as seedphrase from '../../../src/seedphrase'
 import type { ChainDiscoveryAggregate as RootChainDiscoveryAggregate } from '../../../src/index'
-import type { ChainDiscoveryAggregate as SeedphraseChainDiscoveryAggregate, ChainDiscoveryResult } from '../../../src/seedphrase'
+import type {
+  ChainDiscoveryAggregate as SeedphraseChainDiscoveryAggregate,
+  ChainDiscoveryResult,
+} from '../../../src/seedphrase'
+import * as seedphrase from '../../../src/seedphrase'
 
 const sdkRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 const sdkPackageJson = JSON.parse(readFileSync(path.join(sdkRoot, 'package.json'), 'utf8'))
