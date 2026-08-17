@@ -39,7 +39,7 @@ export const escapeTerminalControls = (value: string): string =>
  * number; without a label the locked reserve looks like missing funds.
  */
 const hasLockedReserve = (balance: Balance): boolean =>
-  balance.reserveAmount !== undefined && balance.reserveAmount !== '0'
+  balance.reserveAmount !== undefined && balance.reserveAmount !== '0' && balance.totalAmount !== undefined
 
 /** Table Amount cell: mark reserve-carrying balances as spendable, others unchanged. */
 const formatAmountCell = (balance: Balance): string =>
@@ -263,7 +263,7 @@ export function setupVaultEvents(vault: VaultBase): void {
   // Balance updates
   vault.on('balanceUpdated', ({ chain, balance, tokenId }: any) => {
     const asset = tokenId ? `${balance.symbol} token` : balance.symbol
-    info(chalk.blue(`i Balance updated for ${chain} (${asset}): ${balance.formattedAmount}`))
+    info(chalk.blue(`i Balance updated for ${chain} (${asset}): ${formatAmountCell(balance)}`))
   })
 
   // Transaction broadcast

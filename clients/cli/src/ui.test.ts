@@ -8,6 +8,7 @@ import {
   confirmTransaction,
   displayBalance,
   displayBalancesTable,
+  displayPortfolio,
   displayTransactionPreview,
   formatBalanceAmount,
   formatBigintAmount,
@@ -95,6 +96,33 @@ describe('displayBalance reserve labeling', () => {
 
     expect(logs.find(line => line.includes('Amount:'))).toBe('  Amount: 2.365052 XRP')
     expect(logs.some(line => line.includes('Reserve:'))).toBe(false)
+  })
+
+  it('marks the portfolio Amount cell as spendable only for reserve-carrying rows', () => {
+    const rows: object[][] = []
+    vi.spyOn(console, 'table').mockImplementation((data: object[]) => {
+      rows.push(data)
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    displayPortfolio(
+      {
+        totalValue: { amount: '10.00', currency: 'usd', lastUpdated: 0 },
+        chainBalances: [
+          { chain: Chain.Ripple, balance: xrpBalance },
+          {
+            chain: Chain.Bitcoin,
+            balance: { amount: '100000000', formattedAmount: '1', decimals: 8, symbol: 'BTC', chainId: 'Bitcoin' },
+          },
+        ],
+      },
+      'usd'
+    )
+
+    expect(rows[0]).toEqual([
+      expect.objectContaining({ Chain: Chain.Ripple, Amount: '2.365052 (spendable)' }),
+      expect.objectContaining({ Chain: Chain.Bitcoin, Amount: '1' }),
+    ])
   })
 
   it('marks the table Amount cell as spendable only for reserve-carrying rows', () => {
