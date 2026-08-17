@@ -463,6 +463,7 @@ export {
 
 // Seedphrase validation and vault creation from seedphrase types
 export type {
+  ChainDiscoveryAggregate,
   ChainDiscoveryPhase,
   ChainDiscoveryProgress,
   ChainDiscoveryResult,
