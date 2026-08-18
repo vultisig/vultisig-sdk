@@ -1,11 +1,10 @@
-import { Chain, CosmosChain } from '@vultisig/core-chain/Chain'
+import { Chain } from '@vultisig/core-chain/Chain'
 import { getCosmosRpcUrl } from '@vultisig/core-chain/chains/cosmos/getCosmosRpcUrl'
 import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
-import { getCosmosChainSpecific, getCosmosFeeAmounts } from '../../signingInputs/resolvers/cosmos/chainSpecific'
+import { getCosmosChainSpecific } from '../../signingInputs/resolvers/cosmos/chainSpecific'
 import { getKeysignChain } from '../../utils/getKeysignChain'
-import { getKeysignCoin } from '../../utils/getKeysignCoin'
 import { FeeAmountResolver } from '../resolver'
 
 type MayaMimir = Record<string, number | string | undefined>
@@ -65,29 +64,19 @@ const getMayaNativeTransactionFee = async (): Promise<bigint> => {
  * MayaChain is the intentional exception: its payload schema has no fee field,
  * so the display resolves the current native transaction fee from MayaNode.
  *
- * `CosmosSpecific.gas` is the base fee AMOUNT (proto field 3). A relayed
+ * `CosmosSpecific.gas` is the complete fee AMOUNT (proto field 3) and is
+ * returned verbatim, exactly as the signing-input resolver emits it. A relayed
  * `gas_limit` (field 7) changes the signed gas limit, not the amount; the
- * initiator has already priced `gas` against it. TerraClassic USTC sends also
- * sign the pre-computed `uusd` burn-tax surcharge as a second amount, so the
- * display total is the sum of the same fee-amount list used by signing.
+ * initiator has already priced `gas` against it. For a plain TerraClassic USTC
+ * send, that amount already combines the `uusd` gas fee and burn tax.
  */
 export const getCosmosFeeAmount: FeeAmountResolver = ({ keysignPayload }) => {
   const chain = getKeysignChain<'cosmos'>(keysignPayload)
-  const coin = getKeysignCoin<CosmosChain>(keysignPayload)
 
   const chainSpecific = getCosmosChainSpecific(chain, keysignPayload.blockchainSpecific)
 
   return matchRecordUnion(chainSpecific, {
-    ibcEnabled: cosmosSpecific =>
-      getCosmosFeeAmounts({
-        chain,
-        coinId: coin.id,
-        chainSpecific: cosmosSpecific,
-        // signAmino/signDirect carry their own fee list. Their canonical base
-        // total is already relayed in `gas`; the native USTC surcharge applies
-        // only to the ordinary signing-input path.
-        includeTerraClassicBurnTax: keysignPayload.signData.case === undefined,
-      }).reduce((total, { amount }) => total + amount, 0n),
+    ibcEnabled: ({ gas }) => gas,
     vaultBased: value => ('fee' in value ? value.fee : getMayaNativeTransactionFee()),
   })
 }

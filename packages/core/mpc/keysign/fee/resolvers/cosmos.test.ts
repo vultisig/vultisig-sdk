@@ -223,13 +223,9 @@ describe('getCosmosFeeAmount', () => {
     )
   })
 
-  it('includes the TerraClassic USTC burn tax in the display total exactly when signing includes it', async () => {
+  it('displays the single-denom TerraClassic USTC fee that signing emits', async () => {
     const { getCosmosSigningInputs } = await import('../../signingInputs/resolvers/cosmos')
     const { initWasm } = await import('@trustwallet/wallet-core')
-    const { CosmosIbcDenomTraceSchema } =
-      await import('@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb')
-    const { CosmosCoinSchema, CosmosFeeSchema, SignAminoSchema } =
-      await import('@vultisig/core-mpc/types/vultisig/keysign/v1/wasm_execute_contract_payload_pb')
 
     const walletCore = await initWasm()
     const privateKey = walletCore.PrivateKey.createWithData(new Uint8Array(32).fill(1))
@@ -253,46 +249,24 @@ describe('getCosmosFeeAmount', () => {
         value: create(CosmosSpecificSchema, {
           accountNumber: 7n,
           sequence: 3n,
-          gas: 8_497_500n,
+          // The initiator already combined the base fee and burn tax in uusd.
+          gas: 1_225_000n,
           transactionType: TransactionType.UNSPECIFIED,
-          ibcDenomTraces: create(CosmosIbcDenomTraceSchema, {
-            baseDenom: '120000',
-          }),
         }),
       },
     })
 
-    const displayedFee = getCosmosFeeAmount({ keysignPayload, walletCore: {} as never, publicKey: {} as never })
-    const [signingInput] = await getCosmosSigningInputs({ keysignPayload, walletCore })
-    const signedFeeAmounts = signingInput.fee?.amounts ?? []
-
-    expect(signedFeeAmounts.map(({ amount, denom }) => ({ amount, denom }))).toEqual([
-      { amount: '8497500', denom: 'uluna' },
-      { amount: '120000', denom: 'uusd' },
-    ])
-    expect(displayedFee).toBe(8_617_500n)
-    expect(displayedFee).toBe(signedFeeAmounts.reduce((total, { amount }) => total + BigInt(amount ?? '0'), 0n))
-
-    keysignPayload.signData = {
-      case: 'signAmino',
-      value: create(SignAminoSchema, {
-        fee: create(CosmosFeeSchema, {
-          gas: '300000',
-          amount: [create(CosmosCoinSchema, { amount: '8497500', denom: 'uluna' })],
-        }),
-      }),
-    }
-    const dappDisplayedFee = getCosmosFeeAmount({
+    const displayedFee = getCosmosFeeAmount({
       keysignPayload,
       walletCore: {} as never,
       publicKey: {} as never,
     })
-    const [dappSigningInput] = await getCosmosSigningInputs({ keysignPayload, walletCore })
+    const [signingInput] = await getCosmosSigningInputs({ keysignPayload, walletCore })
 
-    expect(dappSigningInput.fee?.amounts?.map(({ amount, denom }) => ({ amount, denom }))).toEqual([
-      { amount: '8497500', denom: 'uluna' },
+    expect(displayedFee).toBe(1_225_000n)
+    expect(signingInput.fee?.amounts?.map(({ amount, denom }) => ({ amount, denom }))).toEqual([
+      { amount: displayedFee.toString(), denom: 'uusd' },
     ])
-    expect(dappDisplayedFee).toBe(8_497_500n)
   })
 
   it('keeps the native uluna fee denom for an IBC transfer of TerraClassic USTC (does not relabel to uusd)', async () => {
