@@ -65,7 +65,7 @@ function withScanRequests<T extends object>(
   scanRequests: ScanRequest[],
   rest: T
 ): { scan_request: ScanRequest; scan_requests: ScanRequest[] } & T {
-  const primary = scanRequests.find(req => req.kind !== 'unsupported') ?? scanRequests[0] ?? {
+  const primary = scanRequests.find(req => req.kind !== 'unsupported') ?? {
     kind: 'unsupported' as const,
     reason: 'no_compiled_txs',
   }
@@ -611,7 +611,7 @@ export async function stakekitBuildEnter(params: {
   if (!actionData.transactions) throw new Error('yield.xyz returned no transactions')
 
   const display = parseActionDisplay(actionData)
-  const scanRequests = buildYieldActionScanRequests(actionData)
+  const scanRequests = buildYieldActionScanRequests(actionData, params.address)
   return withScanRequests(scanRequests, display)
 }
 
@@ -672,7 +672,7 @@ export async function stakekitBuildExit(params: {
   if (!actionData.transactions) throw new Error('yield.xyz returned no transactions')
 
   const display = parseActionDisplay(actionData)
-  const scanRequests = buildYieldActionScanRequests(actionData)
+  const scanRequests = buildYieldActionScanRequests(actionData, params.address)
   const cooldownDays = yieldMeta?.metadata?.cooldownPeriod?.days ?? null
   return {
     ...withScanRequests(scanRequests, display),
@@ -727,7 +727,7 @@ export async function stakekitBuildManage(params: {
   if (!actionData.transactions) throw new Error('yield.xyz returned no transactions')
 
   const display = parseActionDisplay(actionData)
-  const scanRequests = buildYieldActionScanRequests(actionData)
+  const scanRequests = buildYieldActionScanRequests(actionData, params.address)
   return withScanRequests(scanRequests, display)
 }
 

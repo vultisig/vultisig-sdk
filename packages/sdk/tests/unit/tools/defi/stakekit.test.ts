@@ -308,6 +308,43 @@ describe('sdk.defi.stakekit', () => {
       expect(txs[0].tx_encoding).toBeUndefined()
     })
 
+    it('threads the action address into Solana scan_requests for downstream scanners', async () => {
+      const product = makeProduct({
+        id: 'solana-sol-marinade-staking',
+        token: { symbol: 'SOL', name: 'Solana', network: 'solana', decimals: 9 },
+        tokens: [{ symbol: 'SOL', name: 'Solana', network: 'solana', decimals: 9 }],
+      })
+      const actionResp = makeSolanaActionResponse()
+
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => product,
+          text: async () => JSON.stringify(product),
+        } as Response)
+        .mockRejectedValueOnce(new Error('MCP unavailable'))
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => actionResp,
+          text: async () => JSON.stringify(actionResp),
+        } as Response)
+
+      const result = (await stakekitBuildEnter({
+        yieldId: 'solana-sol-marinade-staking',
+        address: 'SoLwaLLetAddr1111111111111111111111111111',
+        amount: '1',
+      })) as { scan_requests: Array<Record<string, unknown>> }
+
+      expect(result.scan_requests[0]).toMatchObject({
+        kind: 'solana',
+        chain: 'Solana',
+        accountAddress: 'SoLwaLLetAddr1111111111111111111111111111',
+      })
+    })
+
     it('omits X-API-KEY header when apiKey not supplied', async () => {
       const product = makeProduct()
       const actionResp = makeEvmActionResponse()
@@ -666,6 +703,49 @@ describe('scan-request coverage (architecture#1670)', () => {
     const single = buildYieldActionScanRequest(resp)
     const plural = buildYieldActionScanRequests(resp)
     expect(single).toEqual(plural[0])
+  })
+
+  it('withScanRequests keeps the singular fallback at no_compiled_txs when every step is unsupported', async () => {
+    const product = makeProduct({
+      id: 'cosmos-atom-some-staking',
+      token: { symbol: 'ATOM', name: 'Cosmos', network: 'cosmos-hub', decimals: 6 },
+      tokens: [{ symbol: 'ATOM', name: 'Cosmos', network: 'cosmos-hub', decimals: 6 }],
+    })
+    const actionResp = makeSolanaActionResponse()
+
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => product,
+        text: async () => JSON.stringify(product),
+      } as Response)
+      .mockRejectedValueOnce(new Error('MCP unavailable'))
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          ...actionResp,
+          yieldId: 'cosmos-atom-some-staking',
+          transactions: actionResp.transactions.map((tx: YieldTransaction) => ({ ...tx, network: 'cosmos-hub' })),
+        }),
+        text: async () =>
+          JSON.stringify({
+            ...actionResp,
+            yieldId: 'cosmos-atom-some-staking',
+            transactions: actionResp.transactions.map((tx: YieldTransaction) => ({ ...tx, network: 'cosmos-hub' })),
+          }),
+      } as Response)
+
+    const result = (await stakekitBuildEnter({
+      yieldId: 'cosmos-atom-some-staking',
+      address: 'cosmos1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqnrql8a',
+      amount: '1',
+    })) as { scan_request: unknown; scan_requests: unknown[] }
+
+    expect(result.scan_requests).toEqual([{ kind: 'unsupported', reason: 'chain_not_supported' }])
+    expect(result.scan_request).toEqual({ kind: 'unsupported', reason: 'no_compiled_txs' })
   })
 
   it('a Solana step gets a real `solana` scan_request, not chain_not_supported (was the bug)', () => {
