@@ -46,6 +46,7 @@
     "../**/node_modules",
     "../packages/**/dist",
     "../**/*.test.ts",
+    "../**/__tests__/**",
     "../packages/core/mpc/keysign/tests/**"
   ]
 }

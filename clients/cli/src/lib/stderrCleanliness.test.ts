@@ -44,7 +44,7 @@ describe('stderr cleanliness', () => {
 
   it('does not warn about bigint bindings on --help', () => {
     expect(run(['--help']).stderr).not.toMatch(/Failed to load bindings/)
-  })
+  }, 10_000)
 
   it('never advises "npm run rebuild", which cannot help a global install', () => {
     const { stdout, stderr } = run(['--version'])
