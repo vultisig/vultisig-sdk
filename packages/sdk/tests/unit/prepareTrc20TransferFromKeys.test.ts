@@ -180,6 +180,15 @@ describe('prepareTrc20TransferFromKeys', () => {
         feeLimitSun: '-5',
       })
     ).toThrow(/feeLimitSun must be a plain decimal/)
+    expect(() =>
+      prepareTrc20TransferFromKeys({
+        contractAddress: USDT_CONTRACT,
+        from: FROM,
+        to: TO,
+        amount: '1',
+        feeLimitSun: (1n << 63n).toString(),
+      })
+    ).toThrow(/protobuf int64|feeLimitSun must be <=/)
   })
 
   it('canonicalizes a valid feeLimitSun', () => {

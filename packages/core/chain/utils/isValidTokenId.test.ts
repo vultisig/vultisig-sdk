@@ -106,8 +106,11 @@ describe('normalizeTokenId - Ripple issued currencies', () => {
     expect(normalizeTokenId({ chain: Chain.Ripple, id: 'garbage' })).toBe('garbage')
   })
 
-  it('leaves non-Ripple ids untouched', () => {
+  it('lowercases EVM ids while leaving case-sensitive non-Ripple ids untouched', () => {
     const evmToken = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
-    expect(normalizeTokenId({ chain: Chain.Ethereum, id: evmToken })).toBe(evmToken)
+    const solanaMint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+
+    expect(normalizeTokenId({ chain: Chain.Ethereum, id: evmToken })).toBe(evmToken.toLowerCase())
+    expect(normalizeTokenId({ chain: Chain.Solana, id: solanaMint })).toBe(solanaMint)
   })
 })
