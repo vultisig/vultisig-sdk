@@ -5,7 +5,7 @@ import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 import { getEvmChainBalances } from '@vultisig/core-chain/coin/balance/getEvmChainBalances'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { CacheService } from '../../../src/services/CacheService'
+import { CacheScope, CacheService } from '../../../src/services/CacheService'
 import { MemoryStorage } from '../../../src/storage/MemoryStorage'
 import type { Token } from '../../../src/types'
 import { BalanceService } from '../../../src/vault/services/BalanceService'
@@ -184,10 +184,10 @@ describe('BalanceService', () => {
     )
   })
 
-  it('keeps an EVM chain in --tokens results after adding a token with a prefixed vault id', async () => {
+  it('keeps an EVM chain in --tokens results with a legacy prefixed vault id', async () => {
     const { service, getTokens } = makeMutableService()
 
-    // This is the exact token shape written by the CLI's `tokens --add` path.
+    // This is the legacy token shape written by the old CLI `tokens --add` path.
     await service.addToken(Chain.Ethereum, addedToken)
     expect(getTokens(Chain.Ethereum)[0]).toMatchObject({
       id: `${Chain.Ethereum}-${USDC}`,
@@ -210,12 +210,37 @@ describe('BalanceService', () => {
     const result = await service.getBalances({ chains: Chain.Ethereum, includeTokens: true })
 
     expect(result[Chain.Ethereum]?.formattedAmount).toBe('1')
-    expect(result[`${Chain.Ethereum}:${addedToken.id}`]?.formattedAmount).toBe('5')
+    expect(result[`${Chain.Ethereum}:${USDC}`]?.formattedAmount).toBe('5')
+    expect(result[`${Chain.Ethereum}:${USDC}`]?.tokenId).toBe(USDC)
     expect(getEvmChainBalances).toHaveBeenCalledWith(
       expect.objectContaining({
         coins: expect.arrayContaining([expect.objectContaining({ id: USDC })]),
       })
     )
+  })
+
+  it('does not duplicate a legacy-stored contract when it is re-added with its canonical id', async () => {
+    const { service, getTokens, saveVault } = makeMutableService([addedToken])
+
+    await service.addToken(Chain.Ethereum, { ...addedToken, id: USDC })
+
+    expect(getTokens(Chain.Ethereum)).toEqual([addedToken])
+    expect(saveVault).not.toHaveBeenCalled()
+  })
+
+  it('does not duplicate a lowercase-stored EVM contract when it is re-added with checksum casing', async () => {
+    const checksummedUsdc = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+    const storedToken: Token = { ...addedToken, id: USDC, contractAddress: USDC }
+    const { service, getTokens, saveVault } = makeMutableService([storedToken])
+
+    await service.addToken(Chain.Ethereum, {
+      ...storedToken,
+      id: checksummedUsdc,
+      contractAddress: checksummedUsdc,
+    })
+
+    expect(getTokens(Chain.Ethereum)).toEqual([storedToken])
+    expect(saveVault).not.toHaveBeenCalled()
   })
 
   it('uses the token asset id for the non-EVM per-coin balance path', async () => {
@@ -266,7 +291,8 @@ describe('BalanceService', () => {
     // against the whole list would fetch WSOL twice and label one as USDC.
     expect(vi.mocked(getCoinBalance).mock.calls.map(([input]) => input.id)).toEqual([undefined, mint, secondMint])
     expect(result[Chain.Solana]).toBeDefined()
-    expect(result[`${Chain.Solana}:${solanaToken.id}`]?.formattedAmount).toBe('5')
+    expect(result[`${Chain.Solana}:${mint}`]?.formattedAmount).toBe('5')
+    expect(result[`${Chain.Solana}:${mint}`]?.tokenId).toBe(mint)
     expect(result[`${Chain.Solana}:${collidingToken.id}`]?.formattedAmount).toBe('7')
   })
 
@@ -286,6 +312,45 @@ describe('BalanceService', () => {
     await expect(service.removeToken(Chain.Ethereum, USDC.toUpperCase())).resolves.toBe(true)
 
     expect(getTokens(Chain.Ethereum)).toEqual([])
+  })
+
+  it('removes the exact case-sensitive Solana mint when a case-variant sibling is tracked', async () => {
+    const upperMint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+    const lowerMint = 'ePjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+    const upperToken: Token = {
+      id: upperMint,
+      contractAddress: upperMint,
+      symbol: 'USDC_A',
+      name: 'USD Coin A',
+      decimals: 6,
+      chainId: Chain.Solana,
+    }
+    const lowerToken: Token = {
+      ...upperToken,
+      id: lowerMint,
+      contractAddress: lowerMint,
+      symbol: 'USDC_B',
+      name: 'USD Coin B',
+    }
+    let allTokens: Record<string, Token[]> = { [Chain.Solana]: [upperToken, lowerToken] }
+    const service = new BalanceService(
+      cacheService,
+      vi.fn(),
+      vi.fn(),
+      async chain => `${chain}-address`,
+      chain => allTokens[chain] ?? [],
+      () => allTokens,
+      tokens => {
+        allTokens = tokens
+      },
+      vi.fn(),
+      vi.fn(),
+      vi.fn()
+    )
+
+    await expect(service.removeToken(Chain.Solana, lowerMint)).resolves.toBe(true)
+
+    expect(allTokens[Chain.Solana]).toEqual([upperToken])
   })
 
   it('reports that no token was removed when the reference does not exist', async () => {
@@ -362,7 +427,7 @@ describe('BalanceService', () => {
     expect(emitTokenRemoved).toHaveBeenCalledWith({ chain: Chain.Ethereum, tokenId: addedToken.id })
   })
 
-  it('removes the asset the resolver picks when a stored id collides with another token symbol', async () => {
+  it('refuses an ambiguous symbol when two tracked contracts share it', async () => {
     // A vault following the users guide stores USDT with `id: 'usdt'`. If it
     // also tracks a bridged USDT, the ref 'USDT' is both an exact id of one
     // record and the symbol of another. Removal must agree with the resolver —
@@ -388,11 +453,9 @@ describe('BalanceService', () => {
     }
     const { service, getTokens } = makeMutableService([bridged, canonical])
 
-    await expect(service.removeToken(Chain.Ethereum, 'USDT')).resolves.toBe(true)
+    await expect(service.removeToken(Chain.Ethereum, 'USDT')).resolves.toBe(false)
 
-    // resolveTokenRef matches by symbol first and returns the FIRST symbol
-    // match, so 'USDT' means the bridged token on every surface — including here.
-    expect(getTokens(Chain.Ethereum)).toEqual([canonical])
+    expect(getTokens(Chain.Ethereum)).toEqual([bridged, canonical])
   })
 
   it('removes the record carrying the named symbol when one asset is tracked twice', async () => {
@@ -423,6 +486,26 @@ describe('BalanceService', () => {
     await expect(service.removeToken(Chain.Ethereum, 'USDC')).resolves.toBe(true)
 
     expect(getTokens(Chain.Ethereum)).toEqual([byTickerId])
+  })
+
+  it('removes the exact legacy-prefixed id before symbol fallback can reinterpret it', async () => {
+    // Legacy EVM records were historically stored as `<Chain>-<address>`, but the
+    // prefix stripper is broad enough to rewrite any `<Chain>-...` id. If removal
+    // canonicalizes that raw id BEFORE deciding whether the ref is a symbol or an
+    // exact record id, `Ethereum-USDC` collapses to `usdc` and can delete a
+    // different sibling whose symbol is `USDC`.
+    const literalLegacyId: Token = {
+      ...addedToken,
+      id: 'Ethereum-USDC',
+      contractAddress: undefined,
+      symbol: 'Ethereum-USDC',
+    }
+    const bySymbol: Token = { ...addedToken, id: USDC, contractAddress: USDC, symbol: 'USDC' }
+    const { service, getTokens } = makeMutableService([literalLegacyId, bySymbol])
+
+    await expect(service.removeToken(Chain.Ethereum, 'Ethereum-USDC')).resolves.toBe(true)
+
+    expect(getTokens(Chain.Ethereum)).toEqual([bySymbol])
   })
 
   it('removes only the referenced token when a chain tracks several', async () => {
@@ -488,8 +571,23 @@ describe('BalanceService', () => {
     const result = await service.getBalances({ chains: Chain.Ethereum, includeTokens: true })
 
     expect(result[Chain.Ethereum]?.formattedAmount).toBe('1')
-    expect(result[`${Chain.Ethereum}:${addedToken.id}`]?.formattedAmount).toBe('5')
+    expect(result[`${Chain.Ethereum}:${USDC}`]?.formattedAmount).toBe('5')
     expect(result[`${Chain.Ethereum}:${daiToken.id}`]?.formattedAmount).toBe('7')
+  })
+
+  it('renders a legacy prefixed token id once, using its bare contract address', async () => {
+    const address = `${Chain.Ethereum}-address`
+    const service = makeReadService([addedToken])
+    vi.mocked(getEvmChainBalances).mockResolvedValue({
+      [accountCoinKeyToString({ chain: Chain.Ethereum, address })]: 1_000_000_000_000_000_000n,
+      [accountCoinKeyToString({ chain: Chain.Ethereum, id: USDC, address })]: 5_000_000n,
+    })
+
+    const result = await service.getBalances({ chains: Chain.Ethereum, includeTokens: true })
+
+    expect(result).toHaveProperty(`${Chain.Ethereum}:${USDC}`)
+    expect(result).not.toHaveProperty(`${Chain.Ethereum}:${addedToken.id}`)
+    expect(result[`${Chain.Ethereum}:${USDC}`]?.tokenId).toBe(USDC)
   })
 
   it('batches native + token balances for an EVM chain into a single multicall', async () => {
@@ -527,6 +625,35 @@ describe('BalanceService', () => {
     expect(result[Chain.Ethereum]?.formattedAmount).toBe('1')
     expect(result[`${Chain.Ethereum}:${token.id}`]?.formattedAmount).toBe('5')
     expect(result[Chain.Bitcoin]?.formattedAmount).toBe('1')
+  })
+
+  it('uses one lowercase EVM identity for result, balance, RPC, cache, and invalidation keys', async () => {
+    const checksummedUsdc = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+    const checksummedToken: Token = { ...token, id: checksummedUsdc }
+    const ethAddress = `${Chain.Ethereum}-address`
+    const setScoped = vi.spyOn(cacheService, 'setScoped')
+    const invalidateScoped = vi.spyOn(cacheService, 'invalidateScoped')
+    vi.mocked(getEvmChainBalances).mockResolvedValue({
+      [accountCoinKeyToString({ chain: Chain.Ethereum, address: ethAddress })]: 1_000_000_000_000_000_000n,
+      [accountCoinKeyToString({ chain: Chain.Ethereum, id: USDC, address: ethAddress })]: 5_000_000n,
+    })
+    vi.mocked(getCoinBalance).mockResolvedValue(5_000_000n)
+    const service = makeReadService([checksummedToken])
+
+    const result = await service.getBalances({ chains: Chain.Ethereum, includeTokens: true })
+
+    expect(result[`${Chain.Ethereum}:${USDC}`]?.tokenId).toBe(USDC)
+    expect(result[`${Chain.Ethereum}:${checksummedUsdc}`]).toBeUndefined()
+    expect(getEvmChainBalances).toHaveBeenCalledWith(
+      expect.objectContaining({ coins: expect.arrayContaining([expect.objectContaining({ id: USDC })]) })
+    )
+    expect(setScoped).toHaveBeenCalledWith(`ethereum:${USDC}`, CacheScope.BALANCE, expect.any(Object))
+
+    const refreshed = await service.updateBalance(Chain.Ethereum, checksummedUsdc)
+
+    expect(invalidateScoped).toHaveBeenCalledWith(`ethereum:${USDC}`, CacheScope.BALANCE)
+    expect(getCoinBalance).toHaveBeenCalledWith(expect.objectContaining({ id: USDC }))
+    expect(refreshed.tokenId).toBe(USDC)
   })
 
   it('does NOT cache or emit a coin the multicall omitted, and refetches it next call (#1191)', async () => {
