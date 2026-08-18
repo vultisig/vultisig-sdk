@@ -404,6 +404,34 @@ export {
   TERRA_LCD,
 } from '../../tools/swap/astroport'
 
+// Jupiter (Solana same-chain swap) config constants — plain values + a
+// `@vultisig/core-chain/swap/general/jupiter/config` dependency, no
+// `@solana/web3.js`, so safe as a static re-export from `./jupiterConfig`
+// (NOT `./jupiter`, which eagerly pulls @solana/web3.js at module scope).
+export type { JupiterAffiliateConfig } from '@vultisig/core-chain/swap/general/jupiter/config'
+export {
+  JUPITER_AFFILIATE_FEE_ATAS,
+  JUPITER_AFFILIATE_FEE_OWNER,
+  JUPITER_API_BASE_URL,
+  JUPITER_DEFAULT_SLIPPAGE_BPS,
+  JUPITER_PLATFORM_FEE_BPS,
+  SOL_NATIVE_MINT,
+} from '../../tools/swap/jupiterConfig'
+export type { JupiterQuoteResponse, JupiterSwapParams, JupiterSwapResult } from '../../tools/swap/jupiter'
+// `buildJupiterSwapTx` / `resolveJupiterFeeAccount` live in `./jupiter`, which
+// statically imports `PublicKey` from `@solana/web3.js` — deferred behind
+// `await import(...)` so RN/Metro doesn't eagerly bundle it (same rationale
+// as `buildSplTransfer` above). Without this, RN consumers (Station) had no
+// canonical import path for the SDK-owned same-chain Solana swap builder.
+export async function buildJupiterSwapTx(...args: unknown[]) {
+  const mod = await import('../../tools/swap/jupiter')
+  return mod.buildJupiterSwapTx(...(args as Parameters<typeof mod.buildJupiterSwapTx>))
+}
+export async function resolveJupiterFeeAccount(...args: unknown[]) {
+  const mod = await import('../../tools/swap/jupiter')
+  return mod.resolveJupiterFeeAccount(...(args as Parameters<typeof mod.resolveJupiterFeeAccount>))
+}
+
 // EVM utilities (viem-backed — requires app to install `viem` as a peer dep)
 export type {
   EvmBalance,

@@ -278,6 +278,25 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     ])
   })
 
+  it('exports the Jupiter config constants + lazy swap builder from the RN entry, matching the root SDK values', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const root = await import('../../../../src/index')
+
+    expect(rn.SOL_NATIVE_MINT).toBe(root.SOL_NATIVE_MINT)
+    expect(rn.JUPITER_AFFILIATE_FEE_OWNER).toBe(root.JUPITER_AFFILIATE_FEE_OWNER)
+    expect(rn.JUPITER_PLATFORM_FEE_BPS).toBe(root.JUPITER_PLATFORM_FEE_BPS)
+    expect(rn.JUPITER_API_BASE_URL).toBe(root.JUPITER_API_BASE_URL)
+    expect(rn.JUPITER_DEFAULT_SLIPPAGE_BPS).toBe(root.JUPITER_DEFAULT_SLIPPAGE_BPS)
+    expect(rn.JUPITER_AFFILIATE_FEE_ATAS).toEqual(root.JUPITER_AFFILIATE_FEE_ATAS)
+
+    // The builder/resolver are lazy (`await import('../../tools/swap/jupiter')`)
+    // so RN/Metro doesn't eagerly bundle `@solana/web3.js`; calling them still
+    // reaches the same underlying implementation as the root SDK export.
+    expect(rn.buildJupiterSwapTx).toBeTypeOf('function')
+    expect(rn.resolveJupiterFeeAccount).toBeTypeOf('function')
+    await expect(rn.buildJupiterSwapTx({} as never)).rejects.toThrow()
+  })
+
   it('exports the RN vault-backup helpers and constants from the RN entry', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
     const rnEncrypt = await import('../../../../src/platforms/react-native/polyfills/encryptVaultBackupWithPassword')
