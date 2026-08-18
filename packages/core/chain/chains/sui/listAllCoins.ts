@@ -65,6 +65,17 @@ export const listAllSuiCoins = async ({ client, owner, coinType }: ListAllSuiCoi
       })
     }
 
+    // `hasNextPage: true` without a cursor cannot be followed. Treat every
+    // falsy cursor as malformed because the gRPC adapter can turn an empty page
+    // token into `cursor: ''`, while GraphQL can return a null end cursor.
+    // Returning the coins collected so far would make a truncated set look
+    // complete and can surface later as a false insufficient-balance error.
+    if (page.hasNextPage && !page.cursor) {
+      throw new Error(
+        `listAllSuiCoins: page ${pages + 1} for ${owner} (${coinType}) reports hasNextPage with no cursor — refusing to build a send from a truncated coin set`
+      )
+    }
+
     cursor = page.hasNextPage ? page.cursor : null
 
     if (++pages >= maxSuiCoinPages && cursor) {

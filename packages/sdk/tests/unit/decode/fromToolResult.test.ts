@@ -277,6 +277,50 @@ describe('decodeFromToolResult — Cosmos half (cosmjs-types proto3)', () => {
   })
 })
 
+describe('decodeFromToolResult — strict payload encodings', () => {
+  it.each(['0x123', '123', 'zz'])('rejects malformed explicit EVM hex without throwing: %s', payload => {
+    const env = decodeFromToolResult({ family: 'evm', chain: 'ethereum', payload })
+
+    expect(env.decoded).toBe(false)
+    expect(env.decodeError).toContain('evm: invalid hex payload')
+  })
+
+  it.each(['0x123', '123', 'zz'])(
+    'rejects malformed args.unsigned_payload hex without throwing: %s',
+    unsignedPayload => {
+      const env = decodeFromToolResult({
+        family: 'evm',
+        chain: 'ethereum',
+        args: { unsigned_payload: unsignedPayload },
+      })
+
+      expect(env.decoded).toBe(false)
+      expect(env.decodeError).toContain('evm: invalid hex payload')
+    }
+  )
+
+  it.each(['AQ===', 'AQ', 'AQ==\n'])('rejects non-canonical explicit Cosmos base64 without throwing: %s', payload => {
+    const env = decodeFromToolResult({ family: 'cosmos', chain: 'cosmoshub-4', payload })
+
+    expect(env.decoded).toBe(false)
+    expect(env.decodeError).toContain('cosmos: invalid base64 payload')
+  })
+
+  it.each(['AQ===', 'AQ', 'AQ==\n'])(
+    'rejects non-canonical args.cosmos_payload base64 without throwing: %s',
+    cosmosPayload => {
+      const env = decodeFromToolResult({
+        family: 'cosmos',
+        chain: 'cosmoshub-4',
+        args: { cosmos_payload: cosmosPayload },
+      })
+
+      expect(env.decoded).toBe(false)
+      expect(env.decodeError).toContain('cosmos: invalid base64 payload')
+    }
+  )
+})
+
 describe('decodeFromToolResult — EVM multicall batch (fail-closed on >1 value-moving call)', () => {
   const transferAbi = parseAbi(['function transfer(address to, uint256 value)'])
   const approveAbi = parseAbi(['function approve(address spender, uint256 value)'])
