@@ -16,6 +16,7 @@ import {
   buildTrc20TransferTx,
   buildTronSendTx,
   buildTronTxFromRawData,
+  tronAddressToBytes,
 } from '../../../src/chains/tron/tx'
 
 // Valid Tron base58check addresses (0x41 || 20-byte payload, bs58check-encoded).
@@ -743,5 +744,45 @@ describe('tron / WalletCore cross-check (fund-safety net)', () => {
     })
 
     expect(ours.unsignedRawHex).toBe(walletCoreRawDataHex)
+  })
+})
+
+describe('tron / tronAddressToBytes', () => {
+  it('decodes a mainnet (0x41) address to its raw 21-byte form', () => {
+    const bytes = tronAddressToBytes(FROM)
+    expect(bytes).toHaveLength(21)
+    expect(bytes[0]).toBe(0x41)
+  })
+
+  // Regression for sdk#1526: tronAddressToBytes previously carried its own
+  // decoder that only accepted 0x41 (mainnet), diverging from core-chain's
+  // resolver which already accepted 0xa0 (Nile testnet) too. Both now
+  // delegate to the shared @vultisig/core-chain/chains/tron/address decoder.
+  it('decodes a Nile testnet (0xa0) address to its raw 21-byte form', async () => {
+    const bs58check = await import('bs58check')
+    const mod = bs58check as unknown as {
+      encode?: (b: Uint8Array) => string
+      default?: { encode: (b: Uint8Array) => string }
+    }
+    const encode = mod.encode ?? mod.default?.encode
+    if (!encode) throw new Error('bs58check.encode unavailable in test')
+
+    // Reuse FROM's 20-byte EVM payload under the Nile prefix.
+    const mainnetBytes = tronAddressToBytes(FROM)
+    const nilePayload = Buffer.concat([Buffer.from([0xa0]), Buffer.from(mainnetBytes.subarray(1))])
+    const nileAddress = encode(nilePayload)
+
+    const bytes = tronAddressToBytes(nileAddress)
+    expect(bytes).toHaveLength(21)
+    expect(bytes[0]).toBe(0xa0)
+    expect(bytesToHex(bytes.subarray(1))).toBe(bytesToHex(mainnetBytes.subarray(1)))
+  })
+
+  it('throws on a corrupted address (invalid checksum)', () => {
+    const lastChar = FROM.slice(-1)
+    const flippedChar = lastChar === 'm' ? 'n' : 'm'
+    const corrupted = FROM.slice(0, -1) + flippedChar
+
+    expect(() => tronAddressToBytes(corrupted)).toThrow()
   })
 })

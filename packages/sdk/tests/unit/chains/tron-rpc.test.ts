@@ -117,6 +117,30 @@ describe('tron / estimateTrc20Energy error parsing', () => {
     expect(out).toBe(12_500)
   })
 
+  // Regression for sdk#1526: `to` decoding previously accepted only the Tron
+  // mainnet 0x41 version byte, diverging from core-chain's resolver (which
+  // already accepted 0xa0 Nile testnet too). Both now delegate to the shared
+  // @vultisig/core-chain/chains/tron/address decoder.
+  it('accepts a Nile testnet (0xa0) `to` address', async () => {
+    const bs58check = await import('bs58check')
+    const mod = bs58check as unknown as {
+      decode?: (s: string) => Uint8Array
+      encode?: (b: Uint8Array) => string
+      default?: { decode: (s: string) => Uint8Array; encode: (b: Uint8Array) => string }
+    }
+    const decode = mod.decode ?? mod.default?.decode
+    const encode = mod.encode ?? mod.default?.encode
+    if (!decode || !encode) throw new Error('bs58check unavailable in test')
+
+    const mainnetPayload = decode(baseOpts.to)
+    const nilePayload = Buffer.concat([Buffer.from([0xa0]), Buffer.from(mainnetPayload.subarray(1))])
+    const nileAddress = encode(nilePayload)
+
+    stubFetch({ result: { result: true }, energy_required: 14_000 })
+    const out = await estimateTrc20Energy({ ...baseOpts, to: nileAddress }, 'https://api.trongrid.io')
+    expect(out).toBe(14_000)
+  })
+
   it('throws on `{result: {result: false, message}}` (existing branch)', async () => {
     stubFetch({ result: { result: false, message: 'BANDWITH_ERROR' } })
     await expect(estimateTrc20Energy(baseOpts, 'https://api.trongrid.io')).rejects.toThrow(

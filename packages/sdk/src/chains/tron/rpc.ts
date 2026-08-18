@@ -10,7 +10,7 @@
  * rate-limit configuration.
  */
 
-import bs58check from 'bs58check'
+import { decodeTronBase58Address } from '@vultisig/core-chain/chains/tron/address'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -271,19 +271,14 @@ export async function estimateTrc20Energy(
   //
   // Format: [32-byte address left-padded][32-byte amount big-endian].
   //
-  // We accept `to` as a Tron base58 address and strip the 0x41 prefix here.
-  // The endpoint accepts both `Txxx` and `41xxx` styles as owner/contract
-  // but the parameter payload must be 32-byte left-padded.
-
-  const bs58checkMod = bs58check as unknown as { decode?: (s: string) => Uint8Array } & {
-    default?: { decode: (s: string) => Uint8Array }
-  }
-  const decode = bs58checkMod.decode ?? bs58checkMod.default?.decode
-  if (!decode) throw new Error('bs58check.decode unavailable')
-  const raw = decode(opts.to)
-  if (raw.length !== 21 || raw[0] !== 0x41) {
-    throw new Error(`invalid tron address: ${opts.to}`)
-  }
+  // We accept `to` as a Tron base58 address and strip the network prefix
+  // here. The endpoint accepts both `Txxx` and `41xxx` styles as
+  // owner/contract but the parameter payload must be 32-byte left-padded.
+  //
+  // decodeTronBase58Address is the canonical shared decoder (also consumed
+  // by core-chain's resolvers and tx.ts's tronAddressToBytes), so mainnet
+  // (0x41) and Nile testnet (0xa0) addresses are accepted identically here.
+  const raw = decodeTronBase58Address(opts.to)
   const addrHex = Array.from(raw.subarray(1))
     .map(b => b.toString(16).padStart(2, '0'))
     .join('')
