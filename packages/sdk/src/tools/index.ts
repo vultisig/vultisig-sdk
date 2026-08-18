@@ -36,6 +36,26 @@ export {
   resolveEns,
 } from './evm'
 
+// Direct-checkout USDC router (AgentRouter) calldata + version/memo guards
+export type { CheckoutUsdcChain, DecodedApproveParams, DecodedDepositWithMemoParams } from './payments'
+export {
+  AGENT_ROUTER_ADDRESS,
+  APPROVE_SELECTOR,
+  assertCheckoutRouterVersion,
+  buildApproveCalldata,
+  buildDepositWithMemoCalldata,
+  CHECKOUT_CHAIN_IDS,
+  decodeApproveCalldata,
+  decodeDepositWithMemoCalldata,
+  DEPOSIT_MEMO_RE,
+  DEPOSIT_WITH_MEMO_SELECTOR,
+  isValidDepositMemo,
+  resolveCheckoutChainId,
+  resolveUsdcContract,
+  ROUTER_VERSION_PINNED,
+  USDC_CONTRACTS,
+} from './payments'
+
 // Balance reads (pure decode + decimal-scale, no signing/broadcast)
 export type { CosmosBalanceChain, CosmosBalanceEntry, CosmosBalanceResult } from './balance'
 export { cosmosBalanceChains, getCosmosBalance, isCosmosBalanceChain } from './balance'

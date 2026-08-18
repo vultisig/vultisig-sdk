@@ -82,6 +82,17 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.evmCheckAllowance).toBe('function')
   })
 
+  it('exports the direct-checkout USDC router calldata + version/memo guards', () => {
+    expect(sdk.AGENT_ROUTER_ADDRESS).toBe('0xFEEEeeEE643d6AD9eBC6B2025a03eB2290A72bBf')
+    expect(sdk.ROUTER_VERSION_PINNED).toBe(1)
+    expect(typeof sdk.buildApproveCalldata).toBe('function')
+    expect(typeof sdk.buildDepositWithMemoCalldata).toBe('function')
+    expect(typeof sdk.decodeApproveCalldata).toBe('function')
+    expect(typeof sdk.decodeDepositWithMemoCalldata).toBe('function')
+    expect(typeof sdk.assertCheckoutRouterVersion).toBe('function')
+    expect(typeof sdk.isValidDepositMemo).toBe('function')
+  })
+
   it('exports encodeErc20Approve, encodeErc20Revoke, MAX_UINT256 (ERC-20 approve/revoke calldata)', () => {
     expect(typeof sdk.encodeErc20Approve).toBe('function')
     expect(typeof sdk.encodeErc20Revoke).toBe('function')
