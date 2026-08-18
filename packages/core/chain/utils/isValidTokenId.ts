@@ -1,6 +1,7 @@
 import { isValidStructTag } from '@mysten/sui/utils'
 import { WalletCore } from '@trustwallet/wallet-core'
 import { Chain } from '@vultisig/core-chain/Chain'
+import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import {
   isValidXrplCurrencyCode,
   parseRippleTokenId,
@@ -57,14 +58,21 @@ export const isValidTokenId = ({ chain, id, walletCore }: Input) => {
 /**
  * Canonical form of a custom token id, for storage and equality.
  *
- * Only XRPL needs normalising: a token may be entered by its human ticker
+ * EVM contract addresses are case-insensitive, so checksum casing is display
+ * metadata rather than identity and the canonical form is lowercase.
+ *
+ * XRPL also needs normalising: a token may be entered by its human ticker
  * (`SOLO.rsoLo…`, as shown on explorers) or by its on-ledger currency code, and
  * both must resolve to the same id so a manually added token dedupes against the
  * same token discovered from the ledger — which always uses the on-ledger code.
- * `rippleTokenId` re-encodes the currency to that canonical form. For every other
- * chain the id is already canonical and returned unchanged.
+ * `rippleTokenId` re-encodes the currency to that canonical form. Other chains
+ * remain byte-for-byte case-sensitive.
  */
 export const normalizeTokenId = ({ chain, id }: Pick<Input, 'chain' | 'id'>): string => {
+  if (getChainKind(chain) === 'evm') {
+    return id.toLowerCase()
+  }
+
   if (chain !== Chain.Ripple) {
     return id
   }
