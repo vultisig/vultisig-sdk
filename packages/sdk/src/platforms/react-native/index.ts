@@ -408,7 +408,7 @@ export {
 // `@vultisig/core-chain/swap/general/jupiter/config` dependency, no
 // `@solana/web3.js`, so safe as a static re-export from `./jupiterConfig`
 // (NOT `./jupiter`, which eagerly pulls @solana/web3.js at module scope).
-export type { JupiterAffiliateConfig } from '@vultisig/core-chain/swap/general/jupiter/config'
+export type { JupiterQuoteResponse, JupiterSwapParams, JupiterSwapResult } from '../../tools/swap/jupiter'
 export {
   JUPITER_AFFILIATE_FEE_ATAS,
   JUPITER_AFFILIATE_FEE_OWNER,
@@ -417,7 +417,7 @@ export {
   JUPITER_PLATFORM_FEE_BPS,
   SOL_NATIVE_MINT,
 } from '../../tools/swap/jupiterConfig'
-export type { JupiterQuoteResponse, JupiterSwapParams, JupiterSwapResult } from '../../tools/swap/jupiter'
+export type { JupiterAffiliateConfig } from '@vultisig/core-chain/swap/general/jupiter/config'
 // `buildJupiterSwapTx` / `resolveJupiterFeeAccount` live in `./jupiter`, which
 // statically imports `PublicKey` from `@solana/web3.js` — deferred behind
 // `await import(...)` so RN/Metro doesn't eagerly bundle it (same rationale
