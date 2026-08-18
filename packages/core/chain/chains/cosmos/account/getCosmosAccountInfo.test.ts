@@ -2,7 +2,7 @@ import { HttpResponseError } from '@vultisig/lib-utils/fetch/HttpResponseError'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { CosmosChain } from '../../../Chain'
-import { getCosmosAccountInfo } from './getCosmosAccountInfo'
+import { cosmosLcdFallbackUrls, getCosmosAccountInfo } from './getCosmosAccountInfo'
 
 vi.mock('@vultisig/core-chain/chains/cosmos/client', () => ({
   getCosmosClient: vi.fn(),
@@ -521,5 +521,16 @@ describe('getCosmosAccountInfo — LCD fallback URL on primary failure', () => {
       })
     ).rejects.toThrow('fallback unavailable')
     expect(queryUrl).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('cosmosLcdFallbackUrls completeness', () => {
+  it('enumerates the intentional no-fallback gap so a new cosmos chain cannot silently skip the second LCD path', () => {
+    // Maya is the only cosmos chain we have not live-verified a distinct
+    // fallback LCD for. Adding a CosmosChain member fails this until the
+    // author either adds a URL or lists it here as an intentional gap.
+    const intentionalGaps: CosmosChain[] = [CosmosChain.MayaChain]
+    const missing = Object.values(CosmosChain).filter(chain => cosmosLcdFallbackUrls[chain] === undefined)
+    expect(missing.sort()).toEqual([...intentionalGaps].sort())
   })
 })

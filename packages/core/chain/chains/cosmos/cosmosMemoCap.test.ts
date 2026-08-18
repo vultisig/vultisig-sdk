@@ -15,17 +15,16 @@ describe('getCosmosMemoMaxBytes', () => {
   })
 
   it('returns the sdk default (256) for every other cosmos chain, including TerraClassic', () => {
-    for (const chain of [
-      CosmosChain.TerraClassic,
-      CosmosChain.Osmosis,
-      CosmosChain.Kujira,
-      CosmosChain.Noble,
-      CosmosChain.Dydx,
-      CosmosChain.Akash,
-      CosmosChain.THORChain,
-      CosmosChain.MayaChain,
-    ]) {
+    const raised = new Set<CosmosChain>([CosmosChain.Terra, CosmosChain.Cosmos])
+    for (const chain of Object.values(CosmosChain)) {
+      if (raised.has(chain)) continue
       expect(getCosmosMemoMaxBytes(chain)).toBe(COSMOS_MEMO_DEFAULT_MAX_BYTES)
+    }
+  })
+
+  it('has a memo-cap decision for every CosmosChain (adding a chain fails here until one is chosen)', () => {
+    for (const chain of Object.values(CosmosChain)) {
+      expect(getCosmosMemoMaxBytes(chain)).toBeGreaterThan(0)
     }
   })
 })
