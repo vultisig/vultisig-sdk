@@ -473,7 +473,10 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       this.fiatValueService,
       this.discountTierService
     )
-    this.tokenDiscoveryService = new TokenDiscoveryService(chain => this.address(chain))
+    this.tokenDiscoveryService = new TokenDiscoveryService(
+      chain => this.address(chain),
+      chain => this.getTokens(chain)
+    )
     this.securityService = new SecurityService(this.wasmProvider)
 
     // Setup event-driven cache invalidation
