@@ -283,6 +283,7 @@ export {
   GLIF_ICN_TOKEN_DECIMALS,
   glifPoolWriteAbi,
   isPendleChain,
+  normalizeStakekitNetwork,
   parseActionDisplay,
   pendle,
   PENDLE_ROUTER_V4,
@@ -296,8 +297,10 @@ export {
   stakekitBuildExit,
   stakekitBuildManage,
   stakekitDetails,
+  STAKEKIT_NETWORK_ALIASES,
   stakekitSearch,
   stripChainPrefix,
+  yieldNetworkToCanonicalChain,
 } from './defi'
 
 // Verifier client

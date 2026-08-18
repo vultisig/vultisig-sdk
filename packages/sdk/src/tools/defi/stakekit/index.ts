@@ -63,8 +63,12 @@ function withScanRequest<T extends object>(scanRequest: ScanRequest, rest: T): {
 /**
  * Map a yield.xyz network slug to the PascalCase chain name the app uses everywhere.
  * Mirrors mcp-ts's `yieldNetworkToCanonicalChain`.
+ *
+ * Exported (alongside {@link normalizeStakekitNetwork} / {@link STAKEKIT_NETWORK_ALIASES})
+ * so consumers (app/backend) read StakeKit network canonicalization from the SDK
+ * instead of maintaining their own copy that can drift on a network add/rename.
  */
-function yieldNetworkToCanonicalChain(network: string): string | null {
+export function yieldNetworkToCanonicalChain(network: string): string | null {
   switch (network) {
     case 'ethereum':
       return 'Ethereum'
@@ -409,7 +413,8 @@ async function resolveActionArgs(
 
 // --- Builder functions ---
 
-const STAKEKIT_NETWORK_ALIASES: Readonly<Record<string, string>> = {
+/** Case-insensitive aliases for StakeKit network slugs (e.g. "bsc" -> "binance"). */
+export const STAKEKIT_NETWORK_ALIASES: Readonly<Record<string, string>> = {
   bsc: 'binance',
   'bnb chain': 'binance',
   'bnb-chain': 'binance',
@@ -418,7 +423,8 @@ const STAKEKIT_NETWORK_ALIASES: Readonly<Record<string, string>> = {
   avax: 'avalanche-c',
 }
 
-const normalizeStakekitNetwork = (network: string): string => {
+/** Canonicalize a StakeKit network slug through {@link STAKEKIT_NETWORK_ALIASES}. */
+export const normalizeStakekitNetwork = (network: string): string => {
   const normalized = network.toLowerCase()
   return STAKEKIT_NETWORK_ALIASES[normalized] ?? normalized
 }
@@ -725,4 +731,7 @@ export const stakekit = {
   buildEnter: stakekitBuildEnter,
   buildExit: stakekitBuildExit,
   buildManage: stakekitBuildManage,
+  normalizeNetwork: normalizeStakekitNetwork,
+  networkToCanonicalChain: yieldNetworkToCanonicalChain,
+  NETWORK_ALIASES: STAKEKIT_NETWORK_ALIASES,
 } as const
