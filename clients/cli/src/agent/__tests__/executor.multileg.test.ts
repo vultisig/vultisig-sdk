@@ -451,10 +451,12 @@ describe('AgentExecutor — non-EVM dispatcher chain-consistency', () => {
   })
 })
 
-// The MsgDeposit swap path shares parseNonEvmEnvelope's digit bound and
-// strict-decimals contract via `convertBaseUnitsToDecimal`. Destination cases
-// below pin the separate routing contract: the memo remains authoritative and
-// reaches `vault.swap({ recipient })` unchanged.
+// The MsgDeposit swap path shares parseNonEvmEnvelope's digit-bound guard
+// (`parseBaseUnitsAmount`) but hands its amount straight through to
+// `vault.swap`'s `amountBaseUnits` (architecture#2080) rather than
+// reconstructing a decimal string. Destination cases below pin the separate
+// routing contract: the memo remains authoritative and reaches
+// `vault.swap({ recipient })` unchanged.
 describe('AgentExecutor — signThorMsgDepositSwap dispatch', () => {
   // Vault with distinct destination-chain addresses and a swap mock that
   // captures the exact public SDK request.
@@ -590,7 +592,7 @@ describe('AgentExecutor — signThorMsgDepositSwap dispatch', () => {
       fromSymbol: 'RUNE',
       toChain: Chain.Bitcoin,
       toSymbol: 'BTC',
-      amount: '0.01',
+      amountBaseUnits: 1_000_000n,
     })
   })
 
@@ -621,7 +623,7 @@ describe('AgentExecutor — signThorMsgDepositSwap dispatch', () => {
       fromSymbol: 'CACAO',
       toChain: Chain.Bitcoin,
       toSymbol: 'BTC',
-      amount: '1',
+      amountBaseUnits: 10_000_000_000n,
       recipient: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
     })
   })

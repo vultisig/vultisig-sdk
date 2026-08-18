@@ -191,6 +191,80 @@ describe('SwapService', () => {
       })
     })
 
+    it('forwards amountBaseUnits directly to findSwapQuote, skipping the human-decimal round trip (architecture#2080)', async () => {
+      const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
+
+      const mockQuote = {
+        quote: {
+          native: {
+            swapChain: 'THORChain' as const,
+            expected_amount_out: '1000000000',
+            expiry: Math.floor(Date.now() / 1000) + 600,
+            fees: { affiliate: '0', asset: 'ETH', outbound: '100000', total: '100000' },
+            inbound_address: '0x...',
+            memo: '=:ETH.ETH:0x...',
+            notes: '',
+            outbound_delay_blocks: 0,
+            outbound_delay_seconds: 0,
+            recommended_min_amount_in: '1000000',
+            warning: '',
+          },
+        },
+        discounts: [],
+      }
+      vi.mocked(findSwapQuote).mockResolvedValue(mockQuote as any)
+
+      await service.getQuote({
+        fromCoin: {
+          chain: Chain.Ethereum,
+          address: '0x1234567890abcdef1234567890abcdef12345678',
+          ticker: 'ETH',
+          decimals: 18,
+        },
+        toCoin: {
+          chain: Chain.Bitcoin,
+          address: 'bc1qxxx...',
+          ticker: 'BTC',
+          decimals: 8,
+        },
+        amountBaseUnits: 1_500_000_000_000_000_000n, // 1.5 ETH in wei
+      })
+
+      expect(findSwapQuote).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 1_500_000_000_000_000_000n })
+      )
+    })
+
+    it('rejects when both amount and amountBaseUnits are provided', async () => {
+      await expect(
+        service.getQuote({
+          fromCoin: {
+            chain: Chain.Ethereum,
+            address: '0x1234567890abcdef1234567890abcdef12345678',
+            ticker: 'ETH',
+            decimals: 18,
+          },
+          toCoin: { chain: Chain.Bitcoin, address: 'bc1qxxx...', ticker: 'BTC', decimals: 8 },
+          amount: 1.0,
+          amountBaseUnits: 1_000_000_000_000_000_000n,
+        })
+      ).rejects.toThrow(/exactly one of/)
+    })
+
+    it('rejects when neither amount nor amountBaseUnits is provided', async () => {
+      await expect(
+        service.getQuote({
+          fromCoin: {
+            chain: Chain.Ethereum,
+            address: '0x1234567890abcdef1234567890abcdef12345678',
+            ticker: 'ETH',
+            decimals: 18,
+          },
+          toCoin: { chain: Chain.Bitcoin, address: 'bc1qxxx...', ticker: 'BTC', decimals: 8 },
+        } as any)
+      ).rejects.toThrow(/exactly one of/)
+    })
+
     it('forwards affiliateConfig to findSwapQuote (sdk#1150)', async () => {
       const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
 
@@ -963,6 +1037,116 @@ describe('SwapService', () => {
         toAmountExpected: '1000000000',
         requiresApproval: false,
       })
+    })
+
+    it('accepts amountBaseUnits, round-tripping losslessly to the same human amount buildSwapKeysignPayload sees (architecture#2080)', async () => {
+      const { buildSwapKeysignPayload } = await import('@vultisig/core-mpc/keysign/swap/build')
+
+      const mockKeysignPayload = {
+        coin: {},
+        toAmount: '1000000000',
+        toAddress: '0x...',
+        vaultLocalPartyId: 'local-party-1',
+        vaultPublicKeyEcdsa: 'mock-ecdsa-pubkey',
+        swapPayload: { case: 'oneinchSwapPayload', value: {} },
+        blockchainSpecific: { case: 'ethereumSpecific', value: {} },
+      }
+      vi.mocked(buildSwapKeysignPayload).mockResolvedValue(mockKeysignPayload as any)
+
+      const mockQuoteResult: SwapQuoteResult = {
+        quote: {
+          quote: {
+            general: {
+              dstAmount: '1000000000',
+              provider: '1inch',
+              tx: { evm: { from: '0x...', to: '0x...', data: '0x...', value: '0' } },
+            },
+          },
+          discounts: [],
+          requestedAmount: 1_000_000_000_000_000_000n,
+          expiresAt: Date.now() + 60_000,
+          safetyFingerprint: '',
+        },
+        estimatedOutput: 1000000000n,
+        provider: '1inch',
+        expiresAt: Date.now() + 60000,
+        requiresApproval: false,
+        fees: { network: 0n, total: 0n },
+        warnings: [],
+        fromCoin: { chain: Chain.Ethereum, ticker: 'ETH', decimals: 18 },
+        toCoin: {
+          chain: Chain.Ethereum,
+          ticker: 'USDC',
+          decimals: 6,
+          tokenId: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+        },
+        balance: 10n ** 18n,
+        maxSwapable: 10n ** 18n,
+      }
+      mockQuoteResult.quote.safetyFingerprint = getSwapQuoteSafetyFingerprint({
+        from: {
+          chain: Chain.Ethereum,
+          address: '0x1234567890abcdef1234567890abcdef12345678',
+          ticker: 'ETH',
+          decimals: 18,
+        },
+        to: {
+          chain: Chain.Ethereum,
+          address: '0x1234567890abcdef1234567890abcdef12345678',
+          id: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+          ticker: 'USDC',
+          decimals: 6,
+        },
+        requestedAmount: mockQuoteResult.quote.requestedAmount as bigint,
+        expiresAt: mockQuoteResult.quote.expiresAt as number,
+        quote: mockQuoteResult.quote.quote,
+      })
+
+      const result = await service.prepareSwapTx({
+        fromCoin: {
+          chain: Chain.Ethereum,
+          address: '0x1234567890abcdef1234567890abcdef12345678',
+          ticker: 'ETH',
+          decimals: 18,
+        },
+        toCoin: {
+          chain: Chain.Ethereum,
+          address: '0x1234567890abcdef1234567890abcdef12345678',
+          id: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+          ticker: 'USDC',
+          decimals: 6,
+        },
+        amountBaseUnits: 1_000_000_000_000_000_000n, // 1 ETH in wei — same requestedAmount the quote was bound with
+        swapQuote: mockQuoteResult,
+      })
+
+      expect(result).toBeDefined()
+      expect(vi.mocked(buildSwapKeysignPayload)).toHaveBeenCalledWith(expect.objectContaining({ amount: '1' }))
+      expect(mockEmitEvent).toHaveBeenCalledWith('swapPrepared', {
+        provider: '1inch',
+        fromAmount: '1',
+        toAmountExpected: '1000000000',
+        requiresApproval: false,
+      })
+    })
+
+    it('rejects when both amount and amountBaseUnits are provided to prepareSwapTx', async () => {
+      await expect(
+        service.prepareSwapTx({
+          fromCoin: {
+            chain: Chain.Ethereum,
+            address: '0x1234567890abcdef1234567890abcdef12345678',
+            ticker: 'ETH',
+            decimals: 18,
+          },
+          toCoin: { chain: Chain.Ethereum, address: '0x1234567890abcdef1234567890abcdef12345678', ticker: 'USDC', decimals: 6 },
+          amount: 1.0,
+          amountBaseUnits: 1_000_000_000_000_000_000n,
+          swapQuote: {
+            quote: { quote: { general: {} }, discounts: [], requestedAmount: 1n, expiresAt: Date.now() + 60_000, safetyFingerprint: '' },
+          } as any,
+        })
+      ).rejects.toThrow(/exactly one of/)
     })
 
     it('should reject expired quotes', async () => {

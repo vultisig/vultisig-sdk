@@ -1989,20 +1989,46 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     return { dryRun: false, txHash: await this.broadcastTx({ chain, keysignPayload, signature }), chain }
   }
 
-  /** Swap tokens. Use amount "max" to swap entire balance. Set dryRun for quote without signing. */
+  /**
+   * Swap tokens. Use amount "max" to swap entire balance. Set dryRun for quote
+   * without signing. Provide exactly one of `amount` (human-readable, or
+   * "max") or `amountBaseUnits` (source token smallest units — "max" is not
+   * supported on this path; resolve the balance yourself first). The base-
+   * units path exists for callers that already hold an authoritative
+   * base-unit amount (e.g. rehydrating a swap from a backend tx envelope) and
+   * would otherwise have to reconstruct a human-readable decimal string
+   * themselves just to call in.
+   */
   async swap(params: {
     fromChain: Chain
     fromSymbol: string
     toChain: Chain
     toSymbol: string
-    amount: string
+    amount?: string
+    amountBaseUnits?: bigint
     recipient?: string
     slippageTolerance?: number
     excludeProviders?: import('./swap-types').SwapQuoteParams['excludeProviders']
     dryRun?: boolean
   }): Promise<CompoundSwapResult> {
-    const { fromChain, fromSymbol, toChain, toSymbol, amount, recipient, slippageTolerance, excludeProviders, dryRun } =
-      params
+    const {
+      fromChain,
+      fromSymbol,
+      toChain,
+      toSymbol,
+      amount,
+      amountBaseUnits,
+      recipient,
+      slippageTolerance,
+      excludeProviders,
+      dryRun,
+    } = params
+    if ((amount !== undefined) === (amountBaseUnits !== undefined)) {
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        'swap: provide exactly one of `amount` (human-readable, or "max") or `amountBaseUnits`.'
+      )
+    }
     const fromToken = this.resolveTokenInfo(fromChain, fromSymbol)
     const toToken = this.resolveTokenInfo(toChain, toSymbol)
     const [fromAddress, defaultToAddress] = await Promise.all([this.address(fromChain), this.address(toChain)])
@@ -2011,18 +2037,27 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     const fromCoin = this.buildAccountCoin(fromChain, fromAddress, fromToken)
     const toCoin = this.buildAccountCoin(toChain, toAddress, toToken)
 
-    let resolvedAmount = amount
-    if (amount === 'max') {
-      const bal = await this.balanceService.getBalance(fromChain, fromToken.contractAddress)
-      resolvedAmount = this.formatUnits(BigInt(bal.amount), fromToken.decimals)
-      if (BigInt(bal.amount) <= 0n) throw new VaultError(VaultErrorCode.InvalidAmount, 'Zero balance — nothing to swap')
+    let swapAmountInput: { amount: string } | { amountBaseUnits: bigint }
+    if (amountBaseUnits !== undefined) {
+      if (amountBaseUnits <= 0n) {
+        throw new VaultError(VaultErrorCode.InvalidAmount, `Invalid amount: "${amountBaseUnits}"`)
+      }
+      swapAmountInput = { amountBaseUnits }
+    } else {
+      let resolvedAmount = amount!
+      if (amount === 'max') {
+        const bal = await this.balanceService.getBalance(fromChain, fromToken.contractAddress)
+        resolvedAmount = this.formatUnits(BigInt(bal.amount), fromToken.decimals)
+        if (BigInt(bal.amount) <= 0n)
+          throw new VaultError(VaultErrorCode.InvalidAmount, 'Zero balance — nothing to swap')
+      }
+      swapAmountInput = { amount: this.validateHumanSwapAmount(resolvedAmount, fromToken.decimals) }
     }
-    const normalizedAmount = this.validateHumanSwapAmount(resolvedAmount, fromToken.decimals)
 
     const quote = await this.getSwapQuote({
       fromCoin,
       toCoin,
-      amount: normalizedAmount,
+      ...swapAmountInput,
       recipient: normalizedRecipient,
       slippageTolerance,
       excludeProviders,
@@ -2032,7 +2067,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     const { keysignPayload, approvalPayload } = await this.prepareSwapTx({
       fromCoin,
       toCoin,
-      amount: normalizedAmount,
+      ...swapAmountInput,
       swapQuote: quote,
     })
     if (approvalPayload) {

@@ -1103,9 +1103,8 @@ export class AgentExecutor {
     // THORChain, CACAO on MayaChain).
     const fromSymbol = chain === Chain.THORChain ? 'RUNE' : 'CACAO'
 
-    // Convert base-units amount → decimal string for vault.swap. We refuse
-    // to fall through with a default (e.g. '0') because that would mask
-    // malformed envelopes by silently submitting a zero-value swap.
+    // Refuse to fall through with a default (e.g. '0') because that would
+    // mask malformed envelopes by silently submitting a zero-value swap.
     const amountRaw = typeof txArgs.amount === 'string' ? txArgs.amount : undefined
     if (!amountRaw) {
       throw new VaultError(
@@ -1113,11 +1112,15 @@ export class AgentExecutor {
         `signThorMsgDepositSwap: missing or non-string 'amount' field on ${chain} envelope`
       )
     }
-    const amountDecimal = convertBaseUnitsToDecimal(chain, amountRaw, 'signThorMsgDepositSwap')
+    // Pass the envelope's authoritative base-units amount straight through —
+    // `vault.swap`'s `amountBaseUnits` path (architecture#2080) owns the
+    // scaling policy now, so this dispatcher no longer reconstructs a
+    // decimal string itself just to call in.
+    const amountBaseUnits = parseBaseUnitsAmount(amountRaw, chain, 'signThorMsgDepositSwap')
 
     if (this.verbose)
       process.stderr.write(
-        `[sign_thor_msg_deposit_swap] ${fromSymbol}@${chain} → ${parsed.destAsset}@${toChain}, amount=${amountDecimal}, memo='${memo}'\n`
+        `[sign_thor_msg_deposit_swap] ${fromSymbol}@${chain} → ${parsed.destAsset}@${toChain}, amount=${amountBaseUnits} (base units), memo='${memo}'\n`
       )
 
     const result = await this.vault.swap({
@@ -1125,7 +1128,7 @@ export class AgentExecutor {
       fromSymbol,
       toChain,
       toSymbol: parsed.destAsset,
-      amount: amountDecimal,
+      amountBaseUnits,
       ...(parsed.destAddress && { recipient: parsed.destAddress }),
     })
 
@@ -1514,18 +1517,18 @@ export class AgentExecutor {
 
     const fromToken = serverTxData.from_address as string | undefined
     const toToken = serverTxData.to_address as string | undefined
-    const fromDecimals = serverTxData.from_decimals as number | undefined
-    if (fromDecimals == null)
-      throw Object.assign(new Error('Missing from_decimals in tx_ready data for local Solana swap build'), {
-        _phase: 'prepare',
-      })
 
     const fromCoin = { chain: fromChain, token: fromToken || undefined }
     const toCoin = { chain: toChain, token: toToken || undefined }
 
-    let humanAmount: string
+    // `amountStr` is already the authoritative base-units amount from the
+    // backend tx envelope — hand it straight to the SDK's `amountBaseUnits`
+    // path (architecture#2080) instead of reconstructing a human decimal
+    // string (which needed `from_decimals` purely to undo what the backend
+    // had already scaled).
+    let amountBaseUnits: bigint
     try {
-      humanAmount = formatUnits(BigInt(amountStr), fromDecimals)
+      amountBaseUnits = BigInt(amountStr)
     } catch {
       throw Object.assign(new Error(`Invalid amount in tx_ready data for local Solana swap build: ${amountStr}`), {
         _phase: 'prepare',
@@ -1534,7 +1537,7 @@ export class AgentExecutor {
 
     if (this.verbose)
       process.stderr.write(
-        `[solana_local_swap] from=${fromChainName} to=${toChainName || fromChainName} amount=${amountStr} human=${humanAmount}\n`
+        `[solana_local_swap] from=${fromChainName} to=${toChainName || fromChainName} amount=${amountBaseUnits} (base units)\n`
       )
 
     // Unlock vault if needed
@@ -1551,13 +1554,13 @@ export class AgentExecutor {
       quote = await this.vault.getSwapQuote({
         fromCoin: fromCoin as any,
         toCoin: toCoin as any,
-        amount: humanAmount,
+        amountBaseUnits,
       })
 
       swapResult = await this.vault.prepareSwapTx({
         fromCoin: fromCoin as any,
         toCoin: toCoin as any,
-        amount: humanAmount,
+        amountBaseUnits,
         swapQuote: quote,
         autoApprove: true,
       })
@@ -2168,10 +2171,12 @@ const MAX_AMOUNT_DIGITS = 26
 
 /**
  * Convert a base-unit integer-string amount → decimal string using the
- * chain's native fee-coin decimals. Used by both `parseNonEvmEnvelope`
- * (non-EVM send dispatch) and `signThorMsgDepositSwap` (RUNE/CACAO swap
- * dispatch). Keeping the validation logic in one place ensures both paths
- * fail closed identically on:
+ * chain's native fee-coin decimals. Used by `parseNonEvmEnvelope` (non-EVM
+ * send dispatch, which has no base-unit SDK entrypoint to hand off to).
+ * `signThorMsgDepositSwap` (RUNE/CACAO swap dispatch) used to share this
+ * helper too, but now hands its base-units amount straight to `vault.swap`'s
+ * `amountBaseUnits` (architecture#2080) instead of reconstructing a decimal
+ * string just to have the SDK re-parse it. Fails closed on:
  *
  * 1. **Magnitude-bug envelopes** — amount strings longer than 26 digits
  *    (10^26 wei = 10^8 ETH = ~$300B). Defensive bound against quote-side
@@ -2202,6 +2207,30 @@ function convertBaseUnitsToDecimal(chain: Chain, amountRaw: string, context: str
     throw new VaultError(
       VaultErrorCode.InvalidAmount,
       `${context}: failed to convert amount '${amountRaw}' for ${chain}: ${err?.message ?? err}`
+    )
+  }
+}
+
+/**
+ * Parse a base-unit integer-string amount → bigint, applying the same
+ * magnitude-bug guard as `convertBaseUnitsToDecimal` (see its docstring) —
+ * but with no decimal-string reconstruction, since the caller hands the
+ * bigint straight to an SDK `amountBaseUnits` entrypoint.
+ */
+function parseBaseUnitsAmount(amountRaw: string, chain: Chain, context: string): bigint {
+  if (amountRaw.length > MAX_AMOUNT_DIGITS) {
+    throw new VaultError(
+      VaultErrorCode.InvalidAmount,
+      `${context}: amount '${amountRaw}' for ${chain} exceeds ${MAX_AMOUNT_DIGITS}-digit safety bound. ` +
+        'Likely a quote-side bug. Refusing to sign.'
+    )
+  }
+  try {
+    return BigInt(amountRaw)
+  } catch (err: any) {
+    throw new VaultError(
+      VaultErrorCode.InvalidAmount,
+      `${context}: failed to parse amount '${amountRaw}' for ${chain}: ${err?.message ?? err}`
     )
   }
 }
