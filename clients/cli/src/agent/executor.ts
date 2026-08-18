@@ -2230,18 +2230,21 @@ export function parseNonEvmEnvelope(serverTxData: any, chain: Chain): NonEvmSend
   // Token symbol — for native sends, leave undefined (vault.send defaults
   // to native). resolved.labels.token_resolved is the agent-resolved
   // symbol; for native it equals the chain's native ticker (BTC/SOL/RUNE).
-  // Phase D PR 0 only wires native sends; non-native (e.g. SPL, TRC-20)
-  // is PR 1+ scope.
-  let symbol: string | undefined
+  // Amount conversion above used the chain's *native* decimals, so a
+  // non-native token symbol would sign at the wrong magnitude (SPL/TRC-20
+  // etc.). Fail closed until envelopes carry token-aware decimals/ids.
   const tokenResolved = serverTxData?.resolved?.labels?.token_resolved
   const nativeTicker = chainFeeCoin[chain]?.ticker
   if (typeof tokenResolved === 'string' && tokenResolved !== nativeTicker) {
-    symbol = tokenResolved
+    throw new VaultError(
+      VaultErrorCode.NotImplemented,
+      `parseNonEvmEnvelope: non-native token '${tokenResolved}' on ${chain} is not supported until envelopes carry token decimals/ids. Refusing to sign.`
+    )
   }
 
   const memo: string | undefined = typeof txArgs.memo === 'string' && txArgs.memo.length > 0 ? txArgs.memo : undefined
 
-  return { chain, to, amount: amountDecimal, symbol, memo }
+  return { chain, to, amount: amountDecimal, symbol: undefined, memo }
 }
 
 /**
