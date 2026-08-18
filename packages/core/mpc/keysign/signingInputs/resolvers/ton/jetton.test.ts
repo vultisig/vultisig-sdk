@@ -43,7 +43,7 @@ describe('buildJettonTransfer gas floor', () => {
     })
 
     expect(Buffer.from(transfer.amount).toString('hex')).toBe(numberToEvenHex(tonConfig.jettonAmount))
-    expect(Buffer.from(transfer.jettonTransfer!.forwardAmount).toString('hex')).toBe('01')
+    expect(Buffer.from(transfer.jettonTransfer!.forwardAmount!).toString('hex')).toBe('01')
   })
 
   it('raises the gas floor for a not-yet-active destination (new jetton wallet deploy)', () => {
@@ -58,6 +58,6 @@ describe('buildJettonTransfer gas floor', () => {
 
     expect(Buffer.from(transfer.amount).toString('hex')).toBe(numberToEvenHex(tonConfig.jettonAmountNewWallet))
     expect(tonConfig.jettonAmountNewWallet).toBeGreaterThan(tonConfig.jettonAmount)
-    expect(Buffer.from(transfer.jettonTransfer!.forwardAmount).toString('hex')).toBe('00')
+    expect(Buffer.from(transfer.jettonTransfer!.forwardAmount!).toString('hex')).toBe('00')
   })
 })
