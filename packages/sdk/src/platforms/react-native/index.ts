@@ -799,6 +799,69 @@ export async function parseKeygenQR(...args: unknown[]) {
 }
 export { ValidationHelpers } from '../../utils/validation'
 
+// Pure-crypto chain-math normalizers (decimals/amount-scale/fee/token-symbol).
+// No chain-client deps, so safe as a static re-export in parity with the root
+// SDK entrypoint. Without this, RN consumers had to re-implement base-unit
+// scaling + the token-decimals table to ground claimed amounts/fees.
+export {
+  amountMatches,
+  computeEvmFee,
+  decimalsFor,
+  feeMatches,
+  isValidTokenSymbolFormat,
+  normalizeTokenSymbol,
+  scaleHumanToRaw,
+  scaleRawToHuman,
+  tokenDecimals,
+  ValidateNormalizerError,
+} from '../../utils/validateNormalizers'
+
+// Pure address-format validation (vault-free, no network, no signing). Only
+// `bs58` + the SDK's own chain-utils, safe as a static re-export in parity
+// with the root SDK entrypoint.
+export {
+  canonicalChainTag,
+  classifyAddress,
+  isAddressValidForChain,
+  isSolanaAddress,
+  supportedChainTags,
+} from '../../utils/addressFormat'
+export type { AddressFamily, AddressRole, ChainPrefixResult } from '../../utils/addressValidation'
+export { address, validate } from '../../utils/addressValidation'
+export { checkChainPrefix } from '../../utils/chainPrefix'
+
+// Pure intent<->envelope policy diff (vault-free, no signing/broadcast). Only
+// depends on the policy submodule's own pure amount/chain helpers, safe as a
+// static re-export in parity with the root SDK entrypoint. `AssetRef`/`Envelope`
+// are aliased to avoid colliding with the decode module's same-named types
+// (already exported above from `../../tools/decode`).
+export {
+  AMOUNT_DRIFT_BLOCK_PCT,
+  AMOUNT_DRIFT_WARN_PCT,
+  amountDriftPct,
+  type AmountUnits,
+  chainAliasMap,
+  chainsMatch,
+  checkInvariants,
+  claimInterpretations,
+  evaluatePolicy,
+  type FieldDiff,
+  type IntentClaim,
+  Invariant,
+  type InvariantInput,
+  type InvariantViolation,
+  isZeroAmount,
+  parseAmountBig,
+  PLAUSIBLE_TOKEN_DECIMALS,
+  policy,
+  type AssetRef as PolicyAssetRef,
+  type Envelope as PolicyEnvelope,
+  ResultKind,
+  sanitizeAmount,
+  scaleDecimalClaimToAtomic,
+  type Verdict,
+} from '../../tools/policy'
+
 // Pure, platform-neutral signable-transaction contract. Keep this explicit in
 // the curated React Native entry point so mobile consumers receive the same v1
 // schema and canonical hashes as Node/browser/desktop clients.

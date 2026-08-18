@@ -293,6 +293,73 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.VAULT_BACKUP_MAGIC_LEN).toBe(constants.VAULT_BACKUP_MAGIC_LEN)
     expect(rn.VAULT_BACKUP_PBKDF2_HEADER_LEN).toBe(constants.VAULT_BACKUP_PBKDF2_HEADER_LEN)
   })
+
+  it('re-exports the pure validation/normalization/policy helper family by identity, matching the root SDK entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const validateNormalizers = await import('../../../../src/utils/validateNormalizers')
+    const addressFormat = await import('../../../../src/utils/addressFormat')
+    const addressValidation = await import('../../../../src/utils/addressValidation')
+    const chainPrefix = await import('../../../../src/utils/chainPrefix')
+    const policyModule = await import('../../../../src/tools/policy')
+
+    // Pure-crypto chain-math normalizers
+    expect(rn.amountMatches).toBe(validateNormalizers.amountMatches)
+    expect(rn.computeEvmFee).toBe(validateNormalizers.computeEvmFee)
+    expect(rn.decimalsFor).toBe(validateNormalizers.decimalsFor)
+    expect(rn.feeMatches).toBe(validateNormalizers.feeMatches)
+    expect(rn.isValidTokenSymbolFormat).toBe(validateNormalizers.isValidTokenSymbolFormat)
+    expect(rn.normalizeTokenSymbol).toBe(validateNormalizers.normalizeTokenSymbol)
+    expect(rn.scaleHumanToRaw).toBe(validateNormalizers.scaleHumanToRaw)
+    expect(rn.scaleRawToHuman).toBe(validateNormalizers.scaleRawToHuman)
+    expect(rn.tokenDecimals).toBe(validateNormalizers.tokenDecimals)
+    expect(rn.ValidateNormalizerError).toBe(validateNormalizers.ValidateNormalizerError)
+
+    // Pure address-format validation
+    expect(rn.canonicalChainTag).toBe(addressFormat.canonicalChainTag)
+    expect(rn.classifyAddress).toBe(addressFormat.classifyAddress)
+    expect(rn.isAddressValidForChain).toBe(addressFormat.isAddressValidForChain)
+    expect(rn.isSolanaAddress).toBe(addressFormat.isSolanaAddress)
+    expect(rn.supportedChainTags).toBe(addressFormat.supportedChainTags)
+    expect(rn.address).toBe(addressValidation.address)
+    expect(rn.validate).toBe(addressValidation.validate)
+    expect(rn.checkChainPrefix).toBe(chainPrefix.checkChainPrefix)
+
+    // Pure intent<->envelope policy diff
+    expect(rn.policy).toBe(policyModule.policy)
+    expect(rn.checkInvariants).toBe(policyModule.checkInvariants)
+    expect(rn.evaluatePolicy).toBe(policyModule.evaluatePolicy)
+    expect(rn.chainsMatch).toBe(policyModule.chainsMatch)
+    expect(rn.chainAliasMap).toBe(policyModule.chainAliasMap)
+    expect(rn.claimInterpretations).toBe(policyModule.claimInterpretations)
+    expect(rn.isZeroAmount).toBe(policyModule.isZeroAmount)
+    expect(rn.parseAmountBig).toBe(policyModule.parseAmountBig)
+    expect(rn.sanitizeAmount).toBe(policyModule.sanitizeAmount)
+    expect(rn.scaleDecimalClaimToAtomic).toBe(policyModule.scaleDecimalClaimToAtomic)
+    expect(rn.amountDriftPct).toBe(policyModule.amountDriftPct)
+    expect(rn.AMOUNT_DRIFT_BLOCK_PCT).toBe(policyModule.AMOUNT_DRIFT_BLOCK_PCT)
+    expect(rn.AMOUNT_DRIFT_WARN_PCT).toBe(policyModule.AMOUNT_DRIFT_WARN_PCT)
+    expect(rn.PLAUSIBLE_TOKEN_DECIMALS).toBe(policyModule.PLAUSIBLE_TOKEN_DECIMALS)
+    expect(rn.Invariant).toBe(policyModule.Invariant)
+    expect(rn.ResultKind).toBe(policyModule.ResultKind)
+
+    // Sanity: a real policy.evaluate() call reaches the same logic as the
+    // canonical module (not just an identically-shaped duplicate).
+    const claim = {
+      chain: 'base',
+      recipient: '0xAAA',
+      asset: 'USDC',
+      amount: '1',
+      amountUnits: 'human' as const,
+    }
+    const envelope = {
+      decoded: true,
+      chainId: 'base',
+      recipient: '0xBBB',
+      asset: { symbol: 'USDC', decimals: 6 },
+      amount: 1000000n,
+    }
+    expect(rn.policy.evaluate(claim, envelope)).toEqual(policyModule.policy.evaluate(claim, envelope))
+  })
 })
 
 // RN-entry parity guard: the root barrel (packages/sdk/src/index.ts, resolved
