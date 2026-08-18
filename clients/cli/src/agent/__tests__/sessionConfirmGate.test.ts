@@ -4,6 +4,7 @@
 // `this` so no real vault / fs / network is touched.
 import type { VaultBase } from '@vultisig/sdk'
 import { Chain } from '@vultisig/sdk'
+import { encodeFunctionData, erc20Abi, getAddress } from 'viem'
 import { describe, expect, it, vi } from 'vitest'
 
 import { AgentErrorCode } from '../agentErrors'
@@ -100,14 +101,22 @@ describe('runPasswordGatedTool — confirmation gate', () => {
 
   it('approved token send records the summary derived from the buffered keysign payload', async () => {
     const tokenContract = '0x2791bca1f2de4661ed88a30c99a7a9449aa84174'
-    const recipient = '0x58c4000000000000000000000000000000005c35'
+    const recipient = getAddress('0x58c4000000000000000000000000000000005c35')
     const keysignPayload = {
       chain: 'Polygon',
       txArgs: {
         chain: 'Polygon',
         to: recipient,
         amount: '50000',
-        tx: { to: tokenContract, value: '0', data: '0xa9059cbb' },
+        tx: {
+          to: tokenContract,
+          value: '0',
+          data: encodeFunctionData({
+            abi: erc20Abi,
+            functionName: 'transfer',
+            args: [recipient, 50000n],
+          }),
+        },
       },
       resolved: {
         labels: {
@@ -148,6 +157,7 @@ describe('runPasswordGatedTool — confirmation gate', () => {
     expect(record.summary).toContain(keysignPayload.resolved.labels.resolved_amount)
     expect(record.summary).toContain(keysignPayload.txArgs.tx.to)
     expect(record.summary).toContain(keysignPayload.txArgs.to)
+    expect(ui.requestConfirmation).toHaveBeenCalledExactlyOnceWith(record.summary)
   })
 
   it('approved native send records its buffered keysign payload summary without a token contract', async () => {
