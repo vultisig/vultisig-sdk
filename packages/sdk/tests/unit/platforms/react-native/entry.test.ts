@@ -248,7 +248,7 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(typeof rn.isValidRippleXAddress).toBe('function')
     expect(typeof rn.normalizeRippleDestination).toBe('function')
 
-    const classicAddress = 'rf7SyXdM3aZqkz9bmgGgX6V3eC8oJ8wxYY'
+    const classicAddress = 'raJ1Aqkhf19P7cyUc33MMVAzgvHPvtNFC'
     expect(rn.normalizeRippleDestination(classicAddress)).toEqual({ address: classicAddress })
 
     const xAddress = rn.encodeRippleXAddress(classicAddress, 42)

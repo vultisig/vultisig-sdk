@@ -129,7 +129,7 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.isValidRippleXAddress).toBe('function')
     expect(typeof sdk.normalizeRippleDestination).toBe('function')
 
-    const classicAddress = 'rf7SyXdM3aZqkz9bmgGgX6V3eC8oJ8wxYY'
+    const classicAddress = 'raJ1Aqkhf19P7cyUc33MMVAzgvHPvtNFC'
     expect(sdk.normalizeRippleDestination(classicAddress)).toEqual({ address: classicAddress })
 
     const xAddress = sdk.encodeRippleXAddress(classicAddress, 42)
