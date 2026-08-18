@@ -3,6 +3,8 @@ import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc
 import { AuthInfo, SignDoc, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import { describe, expect, it, vi } from 'vitest'
 
+import { resolveSwapFeeChain as canonicalResolveSwapFeeChain } from '@vultisig/core-chain/swap/general/lifi/api/lifiSwapFeeChain'
+
 import { cosmosTxFeeGasParityCases } from '../../../fixtures/cosmosTxFeeGasParity'
 
 process.env.VULTISIG_STRICT_SINGLETON = '0'
@@ -88,6 +90,13 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.IbcEnabledCosmosChain.TerraClassic).toBe('TerraClassic')
     expect(rn.VaultBasedCosmosChain.THORChain).toBe('THORChain')
     expect(Object.values(rn.IbcEnabledCosmosChain)).not.toContain(rn.Chain.THORChain)
+  })
+
+  it('exports the canonical LI.FI fee-chain resolver from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(rn.resolveSwapFeeChain).toBe(canonicalResolveSwapFeeChain)
+    expect(rn.resolveSwapFeeChain(999_999, rn.Chain.Solana)).toBe(rn.Chain.Solana)
   })
 
   it.each(cosmosTxFeeGasParityCases)(
