@@ -207,7 +207,13 @@ export async function searchYields(params: {
   if (params.provider) query.set('provider', params.provider)
   if (params.limit) query.set('limit', String(params.limit))
 
-  const cacheKey = `yield:search:${query.toString()}`
+  // `/yields/enabled` returns ONLY the products THIS project's API key is
+  // allowed to deposit into (see below) — the result set is auth-scoped, not
+  // just query-scoped. Cache the response under the API key (or a shared
+  // "public" bucket when none is provided) so a caller that warms the cache
+  // with one key can never serve another key's (or the public/no-key) enabled
+  // set in a shared SDK process.
+  const cacheKey = `yield:search:${params.apiKey ?? 'public'}:${query.toString()}`
   const cached = getCached<YieldProduct[]>(cacheKey)
   if (cached) return cached
 
