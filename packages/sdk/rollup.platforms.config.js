@@ -340,6 +340,10 @@ const configs = {
       distBase: 'tools/balance',
     }),
     ...createSubpathConfigs({
+      input: './src/tools/swap/index.ts',
+      distBase: 'tools/swap',
+    }),
+    ...createSubpathConfigs({
       input: './src/chains/tron/index.ts',
       distBase: 'chains/tron',
     }),
