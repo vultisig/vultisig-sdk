@@ -1,13 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Mock the folder-local fetch helper so every test exercises the pure
+// Mock the folder-local fetch helpers so every test exercises the pure
 // decode/parse/format/validate logic without a live network call.
 const mockFetchJson = vi.fn()
+const mockFetchJsonWithText = vi.fn()
 vi.mock('@/tools/balance/rpc', async () => {
   const actual = await vi.importActual<typeof import('@/tools/balance/rpc')>('@/tools/balance/rpc')
   return {
     ...actual,
     fetchJson: (...args: unknown[]) => mockFetchJson(...args),
+    fetchJsonWithText: (...args: unknown[]) => mockFetchJsonWithText(...args),
   }
 })
 
@@ -106,18 +108,43 @@ describe('getXrpBalance', () => {
 })
 
 describe('getTrxBalance', () => {
-  beforeEach(() => mockFetchJson.mockReset())
+  beforeEach(() => mockFetchJsonWithText.mockReset())
 
   it('formats SUN into TRX', async () => {
-    mockFetchJson.mockResolvedValueOnce({ balance: 12_500_000 })
+    mockFetchJsonWithText.mockResolvedValueOnce({ text: '{"balance":12500000}', json: { balance: 12_500_000 } })
     const r = await getTrxBalance(TRON_ADDR)
     expect(r.balanceSun).toBe(12_500_000)
+    expect(r.balanceSunRaw).toBe('12500000')
     expect(r.balanceTrx).toBe('12.5')
+  })
+
+  it('keeps full precision for a >2^53-SUN whale balance (no Number() rounding)', async () => {
+    // 9,100,000,000.123457 TRX = 9100000000123457 SUN > 2^53 (9.007e15); this
+    // exact value round-trips lossily through `Number()` (rounds to ...3456).
+    const sunRaw = '9100000000123457'
+    mockFetchJsonWithText.mockResolvedValueOnce({
+      text: `{"balance":${sunRaw}}`,
+      json: { balance: Number(sunRaw) }, // pre-rounded, mirrors what JSON.parse would produce
+    })
+    const r = await getTrxBalance(TRON_ADDR)
+    expect(r.balanceSunRaw).toBe(sunRaw)
+    expect(r.balanceSun).toBeNull()
+    expect(r.balanceTrx).toBe('9100000000.123457')
+    // Guard: the lossy path would have produced this instead.
+    expect(r.balanceSunRaw).not.toBe(String(Number(sunRaw)))
+  })
+
+  it('treats a missing balance field (unfunded account) as zero', async () => {
+    mockFetchJsonWithText.mockResolvedValueOnce({ text: '{}', json: {} })
+    const r = await getTrxBalance(TRON_ADDR)
+    expect(r.balanceSun).toBe(0)
+    expect(r.balanceSunRaw).toBe('0')
+    expect(r.balanceTrx).toBe('0')
   })
 
   it('rejects a non-Tron address before any RPC call', async () => {
     await expect(getTrxBalance('0xdeadbeef')).rejects.toThrow(/not a valid Tron address/)
-    expect(mockFetchJson).not.toHaveBeenCalled()
+    expect(mockFetchJsonWithText).not.toHaveBeenCalled()
   })
 })
 

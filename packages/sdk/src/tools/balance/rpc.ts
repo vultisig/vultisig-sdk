@@ -32,11 +32,10 @@ function isRetryable(error: unknown): boolean {
 }
 
 /**
- * Generic JSON fetch with retry + timeout. POSTs when `body` is provided,
- * GETs otherwise. Throws on 4xx (client error, no retry) and after exhausting
- * retries on 5xx / network failures.
+ * Retry + timeout core shared by `fetchJson` and `fetchJsonWithText`. Resolves
+ * to the `ok` response; callers decide how to read the body.
  */
-export async function fetchJson<T>(url: string, body?: unknown, init?: RequestInit): Promise<T> {
+async function fetchOk(url: string, body?: unknown, init?: RequestInit): Promise<Response> {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       const response = await fetch(url, {
@@ -48,7 +47,7 @@ export async function fetchJson<T>(url: string, body?: unknown, init?: RequestIn
       })
 
       if (response.ok) {
-        return response.json() as Promise<T>
+        return response
       }
 
       // 429 — rate limited; back off and retry while attempts remain.
@@ -78,6 +77,33 @@ export async function fetchJson<T>(url: string, body?: unknown, init?: RequestIn
     }
   }
   throw new Error('unreachable')
+}
+
+/**
+ * Generic JSON fetch with retry + timeout. POSTs when `body` is provided,
+ * GETs otherwise. Throws on 4xx (client error, no retry) and after exhausting
+ * retries on 5xx / network failures.
+ */
+export async function fetchJson<T>(url: string, body?: unknown, init?: RequestInit): Promise<T> {
+  const response = await fetchOk(url, body, init)
+  return response.json() as Promise<T>
+}
+
+/**
+ * Same as `fetchJson`, but also returns the raw response text alongside the
+ * parsed JSON. `JSON.parse` silently rounds any numeric literal past
+ * `Number.MAX_SAFE_INTEGER`, so a caller reading a wire-format integer that
+ * can exceed 2^53 (e.g. TRON SUN balances) must recover the exact digits
+ * from `text` instead of trusting the parsed `number`.
+ */
+export async function fetchJsonWithText<T>(
+  url: string,
+  body?: unknown,
+  init?: RequestInit
+): Promise<{ text: string; json: T }> {
+  const response = await fetchOk(url, body, init)
+  const text = await response.text()
+  return { text, json: JSON.parse(text) as T }
 }
 
 /**

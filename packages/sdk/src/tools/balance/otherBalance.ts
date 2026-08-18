@@ -9,7 +9,7 @@
  */
 import bs58check from 'bs58check'
 
-import { fetchJson, formatBalance, ROOT_API_URL } from './rpc'
+import { fetchJson, fetchJsonWithText, formatBalance, ROOT_API_URL } from './rpc'
 
 // bs58check ships as ESM with a CJS-compat default export depending on the
 // bundler; resolve the decode function once (mirrors chains/tron/rpc.ts).
@@ -147,9 +147,19 @@ export async function getXrpBalance(address: string): Promise<XrpBalance> {
 
 // ── TRON ────────────────────────────────────────────────────────────────────
 
+const MAX_SAFE_SUN = BigInt(Number.MAX_SAFE_INTEGER)
+
 export type TrxBalance = {
   address: string
-  balanceSun: number
+  /**
+   * Balance in SUN as a JS number, for convenience. `null` when the exact
+   * value exceeds `Number.MAX_SAFE_INTEGER` (~9.007M TRX) and can't be
+   * represented without precision loss — use `balanceSunRaw` for exact
+   * precision in that case. `balanceTrx` is always exact regardless.
+   */
+  balanceSun: number | null
+  /** Balance in SUN as a base-10 string (lossless precision). */
+  balanceSunRaw: string
   balanceTrx: string
   asOf: string
 }
@@ -158,15 +168,24 @@ export type TrxBalance = {
 export async function getTrxBalance(address: string): Promise<TrxBalance> {
   if (!address) throw new Error('No TRON address provided.')
   assertTronAddress(address)
-  const response = await fetchJson<{ balance?: number }>('https://tron-rpc.publicnode.com/wallet/getaccount', {
-    address,
-    visible: true,
-  })
-  const sun = response.balance ?? 0
+  const { text } = await fetchJsonWithText<{ balance?: number }>(
+    'https://tron-rpc.publicnode.com/wallet/getaccount',
+    { address, visible: true }
+  )
+
+  // `balance` is a JSON *number*; `JSON.parse` already rounds it once it
+  // exceeds 2^53, so recover the exact integer from the raw response text
+  // before any Number coercion can corrupt it. An unfunded account's
+  // response omits `balance` entirely, which reads as zero.
+  const match = text.match(/"balance"\s*:\s*(\d+)/)
+  const sunRaw = match ? match[1] : '0'
+  const sun = BigInt(sunRaw)
+
   return {
     address,
-    balanceSun: sun,
-    balanceTrx: formatBalance(BigInt(sun), 6),
+    balanceSun: sun <= MAX_SAFE_SUN ? Number(sun) : null,
+    balanceSunRaw: sunRaw,
+    balanceTrx: formatBalance(sun, 6),
     asOf: new Date().toISOString(),
   }
 }
