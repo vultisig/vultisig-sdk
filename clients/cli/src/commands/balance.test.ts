@@ -549,6 +549,17 @@ describe('aggregate scope hint (DF-02)', () => {
     expect(indexSource).toContain("'--add <chain>'")
   })
 
+  it('pins the zero-enabled-chains wording (0 uses the plural noun)', () => {
+    // A vault with no enabled chains still gets the hint (0 < supported), and
+    // the plural branch must hold — "0 enabled chain" would read as a bug.
+    const hint = buildScopeHint(0)
+    expect(hint).toBe(
+      `Showing the vault's 0 enabled chains of ${SUPPORTED_CHAINS.length} supported. ` +
+        `Funds on other chains won't appear here — run \`vultisig balance <chain>\` to check one, ` +
+        `or \`vultisig chains --add <chain>\` to include it.`
+    )
+  })
+
   it('never claims a scan it did not run (hint is static, no RPC)', () => {
     // buildScopeHint is a pure function of the enabled-chain count — feeding it
     // a count can't trigger network I/O, and the wording must not promise
