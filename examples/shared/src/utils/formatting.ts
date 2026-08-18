@@ -1,4 +1,4 @@
-import { chainFeeCoin, type Chain } from '@vultisig/sdk'
+import { type Chain,chainFeeCoin } from '@vultisig/sdk'
 
 /**
  * Shorten an address for display
