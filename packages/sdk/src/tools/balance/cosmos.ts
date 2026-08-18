@@ -220,19 +220,30 @@ const isTimeout = (error: unknown): boolean =>
 async function fetchJson<T>(url: string): Promise<T> {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const response = await withFetchTimeout(url, {}, DEFAULT_TIMEOUT_MS, async response => {
-        if (response.ok) return response
-        if (response.status >= 400 && response.status < 500) {
-          throw new Error(`HTTP ${response.status}: ${await response.text()}`)
+      // sdk#1344 review: withFetchTimeout clears its timer once `consume`
+      // settles — the body read must happen INSIDE consume or a stalled
+      // response body runs with no deadline. The 4xx text() read was already
+      // inside consume; the success-path json() read was not.
+      const result = await withFetchTimeout<{ ok: true; data: T } | { ok: false; status: number }>(
+        url,
+        {},
+        DEFAULT_TIMEOUT_MS,
+        async response => {
+          if (response.ok) {
+            return { ok: true, data: (await response.json()) as T }
+          }
+          if (response.status >= 400 && response.status < 500) {
+            throw new Error(`HTTP ${response.status}: ${await response.text()}`)
+          }
+          return { ok: false, status: response.status }
         }
-        return response
-      })
-      if (response.ok) return (await response.json()) as T
+      )
+      if (result.ok) return result.data
       if (attempt < MAX_RETRIES) {
         await delay(BASE_DELAY_MS * 2 ** attempt)
         continue
       }
-      throw new Error(`HTTP ${response.status} after ${MAX_RETRIES + 1} attempts`)
+      throw new Error(`HTTP ${result.status} after ${MAX_RETRIES + 1} attempts`)
     } catch (error) {
       const retryable = isTimeout(error) || error instanceof TypeError
       if (retryable && attempt < MAX_RETRIES) {

@@ -130,15 +130,29 @@ export const getUtxoBalance = async (
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
   const url = `${base.replace(/\/+$/, '')}/${blockchairPath(chain)}/dashboards/address/${encodeURIComponent(address)}`
 
-  const response = await withFetchTimeout(url, {}, timeoutMs, async response => response)
-  if (!response.ok) {
-    throw new Error(`getUtxoBalance: Blockchair returned ${response.status} for ${chain} address ${address}.`)
+  // sdk#1344 review: withFetchTimeout clears its timer once `consume`
+  // settles. The raw-text body read (needed for full-precision balance
+  // extraction, see below) must happen INSIDE consume — a caller-supplied
+  // `timeoutMs` otherwise silently applies no budget to the body read at all.
+  const result = await withFetchTimeout<{ ok: true; rawBody: string } | { ok: false; status: number }>(
+    url,
+    {},
+    timeoutMs,
+    async response => {
+      if (!response.ok) {
+        return { ok: false, status: response.status }
+      }
+      // Read the raw body so we can pull the balance integer at full precision
+      // (see extractBalanceSatoshis); `response.json()` numberifies and would
+      // truncate large UTXO balances past Number.MAX_SAFE_INTEGER.
+      return { ok: true, rawBody: await response.text() }
+    }
+  )
+  if (!result.ok) {
+    throw new Error(`getUtxoBalance: Blockchair returned ${result.status} for ${chain} address ${address}.`)
   }
 
-  // Read the raw body so we can pull the balance integer at full precision
-  // (see extractBalanceSatoshis); `response.json()` numberifies and would
-  // truncate large UTXO balances past Number.MAX_SAFE_INTEGER.
-  const rawBody = await response.text()
+  const rawBody = result.rawBody
   let json: BlockchairDashboardResponse
   try {
     json = JSON.parse(rawBody) as BlockchairDashboardResponse
