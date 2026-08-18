@@ -1,5 +1,6 @@
 import { Chain, OtherChain } from '@vultisig/core-chain/Chain'
 import { getRippleClient } from '@vultisig/core-chain/chains/ripple/client'
+import { readRippleDeliveredAmount } from '../../../chains/ripple/deliveredAmount'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { attempt } from '@vultisig/lib-utils/attempt'
 
@@ -50,7 +51,8 @@ export const getRippleTxStatus: TxStatusResolver<OtherChain.Ripple> = async ({ h
           }
         : undefined
 
-    return { status, receipt }
+    const rippleDelivered = readRippleDeliveredAmount(meta)
+    return { status, receipt, ...(rippleDelivered ? { rippleDelivered } : {}) }
   }
 
   // Genuinely in the ledger but not yet validated — XRPL knows about it.

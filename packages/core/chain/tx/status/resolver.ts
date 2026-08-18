@@ -1,6 +1,7 @@
 import { Resolver } from '@vultisig/lib-utils/types/Resolver'
 
 import { Chain } from '../../Chain'
+import type { RippleDeliveredAmount } from '../../chains/ripple/deliveredAmount'
 
 // `not_found` is terminal-ish: the node affirmatively has no record of the hash
 // (never seen it), as opposed to `pending` which means "known/plausibly in-flight,
@@ -19,6 +20,12 @@ export type TxStatusResult = {
   status: TxStatus
   isKnown?: boolean
   receipt?: TxReceiptInfo
+  /**
+   * XRPL Payment only. Always sourced from metadata `delivered_amount`
+   * (legacy `DeliveredAmount`). Never from the send-side `Amount` field —
+   * that is a ceiling under tfPartialPayment.
+   */
+  rippleDelivered?: RippleDeliveredAmount
 }
 
 export type TxStatusInput<T extends Chain = Chain> = {

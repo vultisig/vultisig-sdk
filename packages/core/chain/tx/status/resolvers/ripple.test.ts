@@ -116,4 +116,36 @@ describe('getRippleTxStatus', () => {
     expect(result.status).toBe('success')
     expect(result.receipt).toBeUndefined()
   })
+
+  it('surfaces delivered_amount on success and ignores the send-side Amount ceiling', async () => {
+    mocks.request.mockResolvedValue({
+      result: {
+        validated: true,
+        meta: {
+          TransactionResult: 'tesSUCCESS',
+          delivered_amount: '500000',
+          Amount: '1000000',
+        },
+        tx_json: { Fee: '20', Amount: '1000000' },
+      },
+    })
+
+    const result = await getRippleTxStatus({ chain: OtherChain.Ripple, hash })
+    expect(result.status).toBe('success')
+    expect(result.rippleDelivered).toEqual({ type: 'xrp', drops: 500_000n })
+  })
+
+  it('does not invent a delivered amount from Amount when metadata omits delivered_amount', async () => {
+    mocks.request.mockResolvedValue({
+      result: {
+        validated: true,
+        meta: { TransactionResult: 'tesSUCCESS', Amount: '1000000' },
+        tx_json: { Fee: '20', Amount: '1000000' },
+      },
+    })
+
+    const result = await getRippleTxStatus({ chain: OtherChain.Ripple, hash })
+    expect(result.status).toBe('success')
+    expect(result.rippleDelivered).toBeUndefined()
+  })
 })
