@@ -103,9 +103,11 @@ const onwarn = (warning, warn) => {
 // eventually resolves to the same file. One mapping, all callsites covered.
 //
 // The overrides exist because the real modules would evaluate Hermes-hostile
-// deps (`@solana/web3.js`, `@mysten/sui/jsonRpc`, `@lifi/sdk`) at module-init
+// deps (`@solana/web3.js`, `@mysten/sui/grpc`, `@lifi/sdk`) at module-init
 // time. The RN-specific versions defer those imports to inside async function
-// bodies so the module graph stays cold until the first real call.
+// bodies so the module graph stays cold until the first real call. The Sui
+// override additionally swaps gRPC for GraphQL RPC: grpc-web needs
+// `Response.body` streaming, which Hermes' fetch does not provide.
 const rnOverrideMap = {
   'packages/core/chain/chains/solana/client.ts': 'src/platforms/react-native/overrides/solanaClient.ts',
   'packages/core/chain/chains/sui/client.ts': 'src/platforms/react-native/overrides/suiClient.ts',
@@ -142,7 +144,10 @@ const rnOverridePlugin = () => ({
   name: 'vultisig-rn-path-override',
   async resolveId(source, importer, options) {
     if (options?.isEntry) return null
-    const resolved = await this.resolve(source, importer, { ...options, skipSelf: true })
+    const resolved = await this.resolve(source, importer, {
+      ...options,
+      skipSelf: true,
+    })
     if (!resolved || resolved.external) return null
     const id = resolved.id.replace(/\\/g, '/')
     for (const [suffix, override] of Object.entries(rnOverrideMap)) {
@@ -236,6 +241,46 @@ const createPlugins = (platformOptions = {}) => {
   ]
 }
 
+const createSubpathConfigs = ({ input, distBase }) => [
+  {
+    input,
+    output: {
+      file: `./dist/${distBase}/index.js`,
+      format: 'es',
+      sourcemap: true,
+      inlineDynamicImports: true,
+      paths: wasmPathsResolver,
+    },
+    external,
+    plugins: createPlugins({
+      preferBuiltins: true,
+      replaceOptions: {
+        'process.env.VULTISIG_PLATFORM': JSON.stringify('node'),
+      },
+    }),
+    onwarn,
+  },
+  {
+    input,
+    output: {
+      file: `./dist/${distBase}/index.cjs`,
+      format: 'cjs',
+      sourcemap: true,
+      exports: 'named',
+      interop: 'auto',
+      inlineDynamicImports: true,
+      paths: wasmPathsResolver,
+    },
+    external,
+    plugins: createPlugins({
+      preferBuiltins: true,
+      replaceOptions: {
+        'process.env.VULTISIG_PLATFORM': JSON.stringify('node'),
+      },
+    }),
+  },
+]
+
 // Get target from environment variable
 const target = process.env.BUILD_TARGET || 'all'
 
@@ -278,6 +323,42 @@ const configs = {
         },
       }),
     },
+    ...createSubpathConfigs({
+      input: './src/tools/parse/index.ts',
+      distBase: 'tools/parse',
+    }),
+    ...createSubpathConfigs({
+      input: './src/tools/defi/index.ts',
+      distBase: 'tools/defi',
+    }),
+    ...createSubpathConfigs({
+      input: './src/tools/bridge/index.ts',
+      distBase: 'tools/bridge',
+    }),
+    ...createSubpathConfigs({
+      input: './src/tools/balance/index.ts',
+      distBase: 'tools/balance',
+    }),
+    ...createSubpathConfigs({
+      input: './src/chains/tron/index.ts',
+      distBase: 'chains/tron',
+    }),
+    ...createSubpathConfigs({
+      input: './src/chains/utxo/index.ts',
+      distBase: 'chains/utxo',
+    }),
+    ...createSubpathConfigs({
+      input: './src/seedphrase/index.ts',
+      distBase: 'seedphrase',
+    }),
+    ...createSubpathConfigs({
+      input: './src/tools/decode/index.ts',
+      distBase: 'tools/decode',
+    }),
+    ...createSubpathConfigs({
+      input: './src/tx/index.ts',
+      distBase: 'tx',
+    }),
   ],
   browser: {
     input: './src/platforms/browser/index.ts',

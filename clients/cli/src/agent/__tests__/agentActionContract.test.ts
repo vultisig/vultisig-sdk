@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
@@ -7,9 +8,15 @@ import { DOCUMENTED_AGENT_ACTION_TYPES } from '../agentActionContract'
 import { CLIENT_SIDE_TOOL_DISPATCH } from '../session'
 
 const agentsMdPath = fileURLToPath(new URL('../../../../../AGENTS.md', import.meta.url))
+const repoRoot = fileURLToPath(new URL('../../../../../', import.meta.url))
+
+const readAgentsMd = () =>
+  existsSync(agentsMdPath)
+    ? readFileSync(agentsMdPath, 'utf8')
+    : execFileSync('git', ['show', 'HEAD:AGENTS.md'], { cwd: repoRoot, encoding: 'utf8' })
 
 const getAgentsMdActionNames = () =>
-  readFileSync(agentsMdPath, 'utf8')
+  readAgentsMd()
     .split(/\r?\n/)
     .flatMap(line => {
       const match = line.match(/^\|\s*`([^`]+)`\s*\|/)
@@ -38,5 +45,9 @@ describe('agent action contract (AGENTS.md curated list)', () => {
     const documented = new Set(DOCUMENTED_AGENT_ACTION_TYPES)
     expect(documented.has('sign_typed_data')).toBe(true)
     expect(documented.has('sign_tx')).toBe(true)
+  })
+
+  it('does not revive retired backend actions', () => {
+    expect(DOCUMENTED_AGENT_ACTION_TYPES).not.toContain('get_portfolio')
   })
 })

@@ -16,7 +16,7 @@ vi.mock('../verifyBroadcastByHash', () => ({
 }))
 
 import { OtherChain } from '../../../Chain'
-import { broadcastRippleTx } from './ripple'
+import { broadcastRippleTx, isRippleInFlightEngineResult } from './ripple'
 
 describe('broadcastRippleTx', () => {
   const tx = { encoded: new Uint8Array([0x12, 0x00, 0x00]) } as any
@@ -88,6 +88,20 @@ describe('broadcastRippleTx', () => {
 
       await expect(broadcastRippleTx({ chain, tx })).rejects.toThrow(/terPRE_SEQ/)
       expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
+    })
+
+    it('resolves on terQUEUED because XRPL accepted the tx into the queue', async () => {
+      mocks.request.mockResolvedValue(submitResponse('terQUEUED', -89))
+
+      await expect(broadcastRippleTx({ chain, tx })).resolves.toBeUndefined()
+
+      expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
+    })
+
+    it('classifies only terQUEUED as an in-flight retry-later result', () => {
+      expect(isRippleInFlightEngineResult('terQUEUED')).toBe(true)
+      expect(isRippleInFlightEngineResult('terPRE_SEQ')).toBe(false)
+      expect(isRippleInFlightEngineResult('tesSUCCESS')).toBe(false)
     })
 
     it('THROWS with a useful message including engine_result + engine_result_message', async () => {

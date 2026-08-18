@@ -1,6 +1,7 @@
 import { Chain, EvmChain } from '@vultisig/core-chain/Chain'
 import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
+import { getChainDangerousReason, getEvmDangerousReason } from '@vultisig/core-chain/security/dangerousAddresses'
 import { getSwapAffiliateBps, VultDiscountTier } from '@vultisig/core-chain/swap/affiliate'
 import { SwapDiscount } from '@vultisig/core-chain/swap/discount/SwapDiscount'
 import { getCowSwapQuote } from '@vultisig/core-chain/swap/general/cowswap/api/getCowSwapQuote'
@@ -49,7 +50,8 @@ import { HttpResponseError } from '@vultisig/lib-utils/fetch/HttpResponseError'
 import { pick } from '@vultisig/lib-utils/record/pick'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 
-import { SwapQuote } from './SwapQuote'
+import { cloneSwapSafetyValue, getSwapQuoteSafetyFingerprint } from './getSwapQuoteSafetyFingerprint'
+import type { BoundSwapQuote, SwapQuote } from './SwapQuote'
 
 /** Optional per-aggregator affiliate overrides. When absent each aggregator
  * falls back to its own vultisig-0 default — no behavior change for existing
@@ -114,17 +116,63 @@ export type SwapQuoteProviderExcludeName = SwapQuoteProviderName | GeneralSwapPr
 
 type SwapQuoteFetcher = {
   providerName: SwapQuoteProviderName
-  fetch: () => Promise<SwapQuote>
+  fetch: () => Promise<UnboundSwapQuote>
 }
 
-type RankedSwapQuote = {
-  quote: SwapQuote
-  outputAmount: bigint
-  sourceGasUnits?: bigint
+type UnboundSwapQuote = Omit<SwapQuote, 'requestedAmount' | 'expiresAt' | 'safetyFingerprint'>
+
+/**
+ * A single fetched swap route: the fully bound quote (request amount, expiry,
+ * safety fingerprint), the provider that produced it, and its comparable net
+ * output in the destination token's smallest units. `outputAmount` is the
+ * exact value best-quote selection ranks by, so consumers can present
+ * alternatives ordered the same way the auto-selection sees them.
+ */
+export type SwapQuoteCandidate = {
+  quote: BoundSwapQuote
   providerName: SwapQuoteProviderName
+  outputAmount: bigint
+}
+
+type RankedSwapQuote = SwapQuoteCandidate & {
+  sourceGasUnits?: bigint
 }
 
 const QUOTE_FETCH_TIMEOUT_MS = 30_000
+/**
+ * General aggregators do not expose a uniform quote deadline. Keep the bound
+ * transaction usable for a normal review-and-sign round trip while the SDK's
+ * presentation layer continues to recommend a refresh after 60 seconds.
+ * Provider-supplied deadlines (currently CoW's `validTo`) still win when sooner.
+ */
+export const GENERAL_QUOTE_PREPARATION_TTL_MS = 5 * 60_000
+
+const bindQuoteSafetyMetadata = (
+  quote: UnboundSwapQuote,
+  from: AccountCoin,
+  to: AccountCoin,
+  requestedAmount: bigint
+): BoundSwapQuote => {
+  const now = Date.now()
+  const expiresAt = 'native' in quote.quote ? quote.quote.native.expiry * 1000 : now + GENERAL_QUOTE_PREPARATION_TTL_MS
+  const effectiveExpiresAt =
+    'general' in quote.quote && 'cowswap_order' in quote.quote.general.tx
+      ? Math.min(expiresAt, quote.quote.general.tx.cowswap_order.validTo * 1000)
+      : expiresAt
+
+  return {
+    ...quote,
+    requestedAmount,
+    expiresAt: effectiveExpiresAt,
+    safetyFingerprint: getSwapQuoteSafetyFingerprint({
+      from,
+      to,
+      requestedAmount,
+      expiresAt: effectiveExpiresAt,
+      quote: quote.quote,
+    }),
+  }
+}
 
 // Node/undici network-layer error codes — mirrors agent-backend-ts's
 // `TRANSIENT_QUOTE_CODE_RE` (execute_swap.ts) for the same reason: a provider's raw
@@ -425,7 +473,7 @@ const getSameChainEvmSourceGasUnits = (q: SwapQuote, from: AccountCoin, to: Acco
   return undefined
 }
 
-function selectBestEligibleQuote(settled: PromiseSettledResult<RankedSwapQuote>[]): SwapQuote | null {
+function selectBestEligibleQuote(settled: PromiseSettledResult<RankedSwapQuote>[]): BoundSwapQuote | null {
   const candidates: RankedSwapQuote[] = []
 
   for (let i = 0; i < settled.length; i++) {
@@ -488,6 +536,27 @@ function selectBestEligibleQuote(settled: PromiseSettledResult<RankedSwapQuote>[
   return selected?.quote ?? null
 }
 
+// Every fulfilled candidate, sorted best→worst by comparable net output.
+// Exact-output ties break by provider preference order so the returned list is
+// deterministic regardless of `Promise.allSettled` resolution order. Rejected
+// fetchers (including quotes whose output amount could not be parsed) are
+// already absent from the fulfilled set, so they never appear in the ranking.
+const rankQuoteCandidates = (settled: PromiseSettledResult<RankedSwapQuote>[]): SwapQuoteCandidate[] =>
+  settled
+    .filter((result): result is PromiseFulfilledResult<RankedSwapQuote> => result.status === 'fulfilled')
+    .map(result => result.value)
+    .sort((a, b) => {
+      if (a.outputAmount !== b.outputAmount) {
+        return a.outputAmount > b.outputAmount ? -1 : 1
+      }
+      return getProviderPreferenceRank(a.providerName) - getProviderPreferenceRank(b.providerName)
+    })
+    .map(({ quote, providerName, outputAmount }) => ({
+      quote,
+      providerName,
+      outputAmount,
+    }))
+
 // `slippageTolerance` is a percent (e.g. 0.5 = 0.5%). Reject invalid values up
 // front so they don't propagate into every provider call and fail with
 // non-actionable downstream errors. Cap at 50%: above that every provider
@@ -507,7 +576,12 @@ const assertValidSlippageTolerance = (slippageTolerance: number | undefined): vo
 }
 
 // Matches a checksummed or lowercase EVM address: 0x followed by exactly 40 hex chars.
-const isEvmAddress = (address: string): boolean => /^0x[0-9a-fA-F]{40}$/.test(address)
+// Case-insensitive on the `0x` prefix too (`/i`) so a `0X…`-prefixed burn can't slip the
+// gate: without it, `0X…dead` failed this shape check, skipped the zero/burn branch, and —
+// on a native THOR/Maya cross-chain route where the CowSwap path is unreachable — passed
+// straight through as the swap destination (an unspendable sink). The burn comparison below
+// already lowercases, so tolerating the uppercase prefix only closes the bypass.
+const isEvmAddress = (address: string): boolean => /^0x[0-9a-fA-F]{40}$/i.test(address)
 
 // Validate a custom swap recipient is a properly-formatted EVM address before it
 // reaches CowSwap. CowSwap lowercases the receiver but does zero format validation —
@@ -518,23 +592,30 @@ const isEvmAddress = (address: string): boolean => /^0x[0-9a-fA-F]{40}$/.test(ad
 // THOR/Maya pairs the node validates the destination downstream, so a malformed
 // non-EVM address fails there and the EVM check is skipped. Extracted from
 // findSwapQuote to keep that function's cognitive complexity within the gate.
-// The zero address and the canonical `…dEaD` burn sink — a swap output routed here is
-// unrecoverably destroyed. Never a legit payout target for ANY route, so reject up front
-// (a well-formed but merely WRONG non-burn recipient is the caller's grounding responsibility).
-const ZERO_EVM_ADDRESS = '0x0000000000000000000000000000000000000000'
-const BURN_EVM_ADDRESS = '0x000000000000000000000000000000000000dead'
-
+// Burn sinks — a swap output routed here is unrecoverably destroyed. Never a legit payout target for
+// ANY route, so reject up front (a well-formed but merely WRONG non-burn recipient is the caller's
+// grounding responsibility). Routed through the canonical shared table so it can't drift from the other
+// guards: the EVM check now covers all three canonical burns (incl. the `0xdead…42069` variant it used to
+// miss) and the non-EVM check adds the Solana / UTXO / XRP family burn addresses (base58 it used to miss).
 const assertValidCustomRecipient = (recipient: string | undefined, from: AccountCoin, to: AccountCoin): void => {
   if (recipient === undefined) return
   if (isEvmAddress(recipient)) {
-    const lower = recipient.toLowerCase()
-    if (lower === ZERO_EVM_ADDRESS || lower === BURN_EVM_ADDRESS) {
+    const evmReason = getEvmDangerousReason(recipient)
+    if (evmReason) {
       throw new SwapError(
         SwapErrorCode.InvalidConfig,
-        `recipient "${recipient}" is a zero/burn address — the swap output would be unrecoverable.`
+        `recipient "${recipient}" is a ${evmReason} — the swap output would be unrecoverable.`
       )
     }
     return
+  }
+  // Non-EVM recipient: reject a family-specific burn / black-hole on the destination chain.
+  const chainReason = getChainDangerousReason(to.chain, recipient)
+  if (chainReason) {
+    throw new SwapError(
+      SwapErrorCode.InvalidConfig,
+      `recipient "${recipient}" is a ${chainReason} — the swap output would be unrecoverable.`
+    )
   }
   const cowSwapPathReachable =
     isChainOfKind(from.chain, 'evm') &&
@@ -575,17 +656,42 @@ const toProviderSlippage = (slippageTolerance: number | undefined): ProviderSlip
   }
 }
 
-export const findSwapQuote = async ({
-  from,
-  to,
-  amount,
-  referral,
-  vultDiscountTier,
-  affiliateConfig,
-  recipient,
-  slippageTolerance,
-  excludeProviders,
-}: FindSwapQuoteInput): Promise<SwapQuote> => {
+/**
+ * Best quote plus every fetched candidate, so a consumer can offer route
+ * selection instead of only the auto-selected winner.
+ */
+export type FindSwapQuotesResult = {
+  /** The auto-selected winner — identical to what `findSwapQuote` returns. */
+  best: BoundSwapQuote
+  /**
+   * Every successfully fetched quote (including `best`), sorted best→worst by
+   * comparable net output. `best` is not necessarily `ranked[0]`: within the
+   * preference band the auto-selection may prefer a lower-output provider (see
+   * `providerPreferenceOrder`).
+   */
+  ranked: SwapQuoteCandidate[]
+}
+
+/**
+ * Fetches quotes from every eligible provider in parallel and returns the
+ * auto-selected best quote together with the full ranked candidate set. Error
+ * behavior is identical to `findSwapQuote`: when no provider yields a usable
+ * quote, the same classified `SwapError` is thrown.
+ */
+export const findSwapQuotes = async (input: FindSwapQuoteInput): Promise<FindSwapQuotesResult> => {
+  // Provider requests yield before the returned transaction is safety-bound. Own a synchronous
+  // snapshot so caller mutations cannot make a response for pair A receive pair B's fingerprint.
+  const {
+    from,
+    to,
+    amount,
+    referral,
+    vultDiscountTier,
+    affiliateConfig,
+    recipient,
+    slippageTolerance,
+    excludeProviders,
+  } = cloneSwapSafetyValue(input)
   // Runtime guard: THORName affiliateFeeAddress must be lowercase.
   // THORChain memo parsing is case-sensitive — passing 'STVS' instead of 'stvs'
   // silently routes affiliate fees to the vultisig-0 default instead of the
@@ -647,7 +753,7 @@ export const findSwapQuote = async ({
   const getNativeFetchers = (): SwapQuoteFetcher[] =>
     matchingSwapChains.map(swapChain => ({
       providerName: swapChain === Chain.THORChain ? 'THORChain' : 'MayaChain',
-      fetch: async (): Promise<SwapQuote> => {
+      fetch: async (): Promise<UnboundSwapQuote> => {
         await assertNativeTradingOpen({ from, to, swapChain })
 
         const fromDecimals = from.decimals
@@ -702,7 +808,7 @@ export const findSwapQuote = async ({
       const buyToken = to.id
       result.push({
         providerName: 'CowSwap',
-        fetch: async (): Promise<SwapQuote> => {
+        fetch: async (): Promise<UnboundSwapQuote> => {
           const general = await getCowSwapQuote({
             sellToken,
             buyToken,
@@ -726,7 +832,7 @@ export const findSwapQuote = async ({
     ) {
       result.push({
         providerName: 'KyberSwap',
-        fetch: async (): Promise<SwapQuote> => {
+        fetch: async (): Promise<UnboundSwapQuote> => {
           const general = await getKyberSwapQuote({
             from: {
               ...from,
@@ -750,11 +856,16 @@ export const findSwapQuote = async ({
     if (!hasCustomRecipient && isOneOf(from.chain, oneInchSwapEnabledChains) && from.chain === to.chain) {
       result.push({
         providerName: '1inch',
-        fetch: async (): Promise<SwapQuote> => {
+        fetch: async (): Promise<UnboundSwapQuote> => {
           const general = await getOneInchSwapQuote({
             account: pick(from, ['address', 'chain']),
-            fromCoinId: from.id ?? from.ticker,
-            toCoinId: to.id ?? to.ticker,
+            // Pass the raw `.id` (undefined for a chain's native/fee coin) — NOT a ticker
+            // fallback. `getOneInchSwapQuote`'s `isFeeCoin` check relies on `undefined` to
+            // map the native asset to 1inch's `0xEeee...` sentinel; a ticker string like
+            // "ETH" is truthy and would defeat that check, sending the literal ticker as
+            // `dst`/`src` to 1inch's API (which requires the sentinel address).
+            fromCoinId: from.id,
+            toCoinId: to.id,
             to: {
               ...to,
               chain: to.chain as EvmChain,
@@ -775,7 +886,7 @@ export const findSwapQuote = async ({
     if (!hasCustomRecipient && isOneOf(fromChain, jupiterSwapEnabledChains) && fromChain === toChain) {
       result.push({
         providerName: 'Jupiter',
-        fetch: async (): Promise<SwapQuote> => {
+        fetch: async (): Promise<UnboundSwapQuote> => {
           const general = await getJupiterSwapQuote({
             from: {
               ...from,
@@ -799,7 +910,7 @@ export const findSwapQuote = async ({
     if (!hasCustomRecipient && isOneOf(fromChain, lifiSwapEnabledChains) && isOneOf(toChain, lifiSwapEnabledChains)) {
       result.push({
         providerName: 'LiFi',
-        fetch: async (): Promise<SwapQuote> => {
+        fetch: async (): Promise<UnboundSwapQuote> => {
           const general = await getLifiSwapQuote({
             from: {
               ...from,
@@ -823,7 +934,7 @@ export const findSwapQuote = async ({
     if (!hasCustomRecipient && isOneOf(fromChain, swapKitSourceChains) && isOneOf(toChain, swapKitEnabledChains)) {
       result.push({
         providerName: 'SwapKit',
-        fetch: async (): Promise<SwapQuote> => {
+        fetch: async (): Promise<UnboundSwapQuote> => {
           const general = await getSwapKitQuote({
             from: {
               ...from,
@@ -903,7 +1014,12 @@ export const findSwapQuote = async ({
 
   const settled = await Promise.allSettled(
     fetchers.map(async (fetcher): Promise<RankedSwapQuote> => {
-      const quote = await withTimeout(fetcher.fetch(), QUOTE_FETCH_TIMEOUT_MS)
+      const quote = bindQuoteSafetyMetadata(
+        await withTimeout(fetcher.fetch(), QUOTE_FETCH_TIMEOUT_MS),
+        from,
+        to,
+        amount
+      )
       return {
         quote,
         outputAmount: getComparableOutputAmount(quote, to, fetcher.providerName),
@@ -915,7 +1031,7 @@ export const findSwapQuote = async ({
   const best = selectBestEligibleQuote(settled)
 
   if (best) {
-    return best
+    return { best, ranked: rankQuoteCandidates(settled) }
   }
 
   // Scan rejected results for actionable size-related signals. Prefer the most
@@ -964,7 +1080,7 @@ export const findSwapQuote = async ({
       isInError(result.reason, 'dust threshold') ||
       isInError(result.reason, 'amount less than')
     ) {
-      throw new SwapError(SwapErrorCode.AmountTooSmall, 'Swap amount too small. Please increase the amount to proceed.')
+      throw new SwapError(SwapErrorCode.AmountTooSmall, 'Please increase the amount to proceed.')
     }
 
     if (isBelowMinimumMsg(msg) && !belowMinimumByProvider.has(fetchers[i].providerName)) {
@@ -1069,6 +1185,14 @@ export const findSwapQuote = async ({
     `No swap route found after trying ${failedProviders.join(', ')}.`
   )
 }
+
+/**
+ * The auto-selected best swap quote across all eligible providers — equivalent
+ * to `findSwapQuotes(input)`'s `best`. Use `findSwapQuotes` when the
+ * alternatives matter (e.g. a route picker).
+ */
+export const findSwapQuote = async (input: FindSwapQuoteInput): Promise<BoundSwapQuote> =>
+  (await findSwapQuotes(input)).best
 
 const belowNativeMinimumError = (min: NativeSwapMinAmountIn, from: AccountCoin): SwapError =>
   new SwapError(

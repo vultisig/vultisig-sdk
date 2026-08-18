@@ -1,6 +1,8 @@
 import { Buffer } from 'buffer'
 import { create } from '@bufbuild/protobuf'
+import { Chain } from '@vultisig/core-chain/Chain'
 import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
+import { normalizeRippleDestination } from '@vultisig/core-chain/chains/ripple/address'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 import { getChainSpecific } from '@vultisig/core-mpc/keysign/chainSpecific'
@@ -15,6 +17,8 @@ import { KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/
 import { WalletCore } from '@trustwallet/wallet-core'
 import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
 
+import { BuildKeysignPayloadError } from '../error'
+import { validateDestinationTag } from '../utils/rippleDestinationTag'
 import { getCosmosWasmTokenTransferPayload } from './cosmosWasm'
 
 export type BuildSendKeysignPayloadInput = {
@@ -22,6 +26,8 @@ export type BuildSendKeysignPayloadInput = {
   receiver: string
   amount: bigint
   memo?: string
+  /** XRPL DestinationTag, kept independent from the free-text memo. */
+  destinationTag?: number
   vaultId: string
   localPartyId: string
   publicKey: PublicKey | null
@@ -37,6 +43,7 @@ export const buildSendKeysignPayload = async ({
   receiver,
   amount,
   memo,
+  destinationTag,
   vaultId,
   localPartyId,
   publicKey,
@@ -50,20 +57,42 @@ export const buildSendKeysignPayload = async ({
     throw new Error('buildSendKeysignPayload requires publicKey or hexPublicKeyOverride')
   }
 
+  const rippleDestination = coin.chain === Chain.Ripple ? normalizeRippleDestination(receiver) : undefined
+  const normalizedReceiver = rippleDestination?.address ?? receiver
+  const embeddedDestinationTag = rippleDestination?.destinationTag
+  if (
+    embeddedDestinationTag !== undefined &&
+    destinationTag !== undefined &&
+    embeddedDestinationTag !== destinationTag
+  ) {
+    throw new BuildKeysignPayloadError(
+      'ripple-destination-tag-invalid',
+      `Conflicting XRP destination tags: X-address ${embeddedDestinationTag}, field ${destinationTag}`
+    )
+  }
+  const effectiveDestinationTag = destinationTag ?? embeddedDestinationTag
+  if (effectiveDestinationTag !== undefined) validateDestinationTag(effectiveDestinationTag)
+
   const cosmosWasmTokenTransferPayload = getCosmosWasmTokenTransferPayload({
     coin,
-    receiver,
+    receiver: normalizedReceiver,
     amount,
   })
+
+  // Keep tag-only XRP sends compatible with legacy signers that do not read
+  // RippleSpecific.destinationTag yet. An explicit memo remains independent
+  // when it differs from the tag; an equal memo is treated as the compatibility
+  // carrier by the signing-input resolver.
+  const keysignMemo = memo || (coin.chain === Chain.Ripple ? effectiveDestinationTag?.toString() : undefined)
 
   let keysignPayload = create(KeysignPayloadSchema, {
     coin: toCommCoin({
       ...coin,
       hexPublicKey,
     }),
-    toAddress: receiver,
+    toAddress: normalizedReceiver,
     toAmount: amount.toString(),
-    memo,
+    memo: keysignMemo,
     vaultLocalPartyId: localPartyId,
     vaultPublicKeyEcdsa: vaultId,
     libType,
@@ -81,11 +110,13 @@ export const buildSendKeysignPayload = async ({
         keysignPayload,
         walletCore,
         transactionType: TransactionType.GENERIC_CONTRACT,
+        destinationTag: effectiveDestinationTag,
       })
     : await getChainSpecific({
         keysignPayload,
         feeSettings,
         walletCore,
+        destinationTag: effectiveDestinationTag,
       })
 
   const balance = await getCoinBalance(coin)

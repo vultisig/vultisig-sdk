@@ -10,26 +10,46 @@
  *   `tool-output-available` channel is buffered then signed — the sole sign source)
  * - RecentAction reporting back to backend via `context.recent_actions`
  */
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
-
-import { MemoryStorage, PushNotificationService, type VaultBase } from '@vultisig/sdk'
+import { computeNotificationVaultId, MemoryStorage, PushNotificationService, type VaultBase } from '@vultisig/sdk'
 
 import { cachePassword, clearCachedPassword, resolvePasswordNonInteractive } from '../core/password-manager'
 import { AgentErrorCode } from './agentErrors'
 import { authenticateVault } from './auth'
 import { recordResolution } from './broadcastJournal'
-import { CLI_SUPPORTED_SURFACES, extractBalanceSummaryFromText, parseBalanceSummaryEnvelope } from './cards'
-import { AgentClient, type SSEStreamResult } from './client'
+import {
+  CLI_SUPPORTED_SURFACES,
+  extractBalanceSummaryFromText,
+  extractPolymarketMarketsFromText,
+  extractYieldOpportunitiesFromText,
+  type HlOrderConfirmationCard,
+  parseBalanceSummaryEnvelope,
+  parsePolymarketMarketsEnvelope,
+  parseYieldOpportunitiesEnvelope,
+} from './cards'
+import { AgentClient, createTurnIdempotencyKey, type SSEStreamResult } from './client'
 import { buildMessageContext, buildMinimalContext } from './context'
 import { AgentExecutor, resolveChain } from './executor'
-import { CLI_SIGNABLE_FLAT_TOOLS, CLI_SIGNABLE_PREP_TOOLS, payloadLooksSignable } from './toolOutputSigning'
+import { formatHlConfirmation } from './hlOrder'
+import {
+  type AgentTokenCacheScope,
+  clearCachedToken,
+  getCachedTokenEntry,
+  getTokenCachePath,
+  loadCachedToken,
+  saveCachedToken,
+} from './tokenCache'
+import {
+  CLI_SIGNABLE_FLAT_TOOLS,
+  CLI_SIGNABLE_PREP_TOOLS,
+  payloadLooksSignable,
+  type ToolOutputCandidate,
+} from './toolOutputSigning'
 import type {
   AgentConfig,
   ConversationMessage,
   MessageContext,
   RecentAction,
+  SigningRecord,
   TxReadyPayload,
   UICallbacks,
 } from './types'
@@ -37,7 +57,13 @@ import type {
 // Tools that prompt for the vault password before dispatch. `sign_tx` is
 // reached via the tool-output signing path (not a registry tool name) but uses
 // the same gate via `runPasswordGatedTool('sign_tx', …)` below.
-const PASSWORD_REQUIRED_TOOLS = new Set(['sign_typed_data', 'sign_tx'])
+const PASSWORD_REQUIRED_TOOLS = new Set(['sign_typed_data', 'sign_tx', 'hl_order'])
+const AUTO_SUBMIT_MARKERS = new Set([
+  '__pm_auto_submit',
+  '__pm_auto_submit_batch',
+  '__pm_submit_token',
+  '__pm_batch_submit_token',
+])
 
 // Client-side tool dispatch table — the tools the CLI IMPLEMENTS locally. Each
 // entry maps an inbound `tool-input-available` toolName to the matching per-tool
@@ -76,6 +102,7 @@ export const BACKEND_CLIENT_SIDE_TOOL_NAMES: readonly string[] = [
   'sign_typed_data',
   'polymarket_sign_bet',
   'polymarket_sign_batch',
+  'hl_order',
 ]
 
 // Every tool name the SSE layer intercepts for local dispatch: the backend's
@@ -95,6 +122,21 @@ export const CLIENT_SIDE_DISPATCH_TOOL_NAMES: ReadonlySet<string> = new Set<stri
 
 // 2x the backend's 8-iteration cap — belt-and-suspenders against runaway loops.
 const MAX_MESSAGE_LOOP_DEPTH = 16
+
+// Signing audit summaries reach stdout/stderr and the JSON envelope. For sign_tx they are already
+// one line; for sign_typed_data the gate falls back to JSON.stringify(input), which is an
+// arbitrarily large typed-data blob. Keep every emitted audit record bounded.
+const PROPOSED_SUMMARY_MAX_CHARS = 500
+
+function capSigningSummary(summary: string): string {
+  return summary.length > PROPOSED_SUMMARY_MAX_CHARS ? `${summary.slice(0, PROPOSED_SUMMARY_MAX_CHARS)}…` : summary
+}
+
+function applyAgentMode(request: any, config: AgentConfig): void {
+  if (config.viaAgent || config.askMode) {
+    request.via_agent = true
+  }
+}
 
 // Mid-turn disconnect recovery (matches the app's 2s poller / ~3min ceiling).
 // On a dropped SSE stream the session polls /messages/since this many times,
@@ -127,6 +169,120 @@ export function hasUnacknowledgedBroadcastResult(results: RecentAction[]): boole
   })
 }
 
+/**
+ * Build + report the result of a signing request the confirm gate DECLINED.
+ *
+ * Nothing was signed and nothing was broadcast. The built transaction is captured BEFORE the
+ * rejected envelope is dropped — a declined signing is the one case where the unsigned transaction
+ * IS the turn's result — and surfaced via `onProposedTransaction` on every client, so a read-safe
+ * `agent ask` can report the proposed transaction rather than a bare failure.
+ *
+ * A module-level function, not a method: the session's private methods are exercised through the
+ * prototype with a minimal `this` in tests, and every new method would have to be wired into each
+ * of those harnesses.
+ */
+function reportDeclinedSigning(
+  executor: Pick<AgentExecutor, 'getPendingChain' | 'clearPendingTransaction'>,
+  toolName: string,
+  toolCallId: string,
+  summary: string,
+  input: Record<string, unknown> | undefined,
+  ui: UICallbacks
+): RecentAction {
+  // Only sign_tx has a buffered tx envelope; sign_typed_data legitimately has no chain.
+  const proposedChain = toolName === 'sign_tx' ? executor.getPendingChain() : null
+  // Drop the rejected envelope so it can't linger into later turns (stale legs/summary).
+  if (toolName === 'sign_tx') executor.clearPendingTransaction()
+  // `summary` is a one-line human string for sign_tx, but the sign_typed_data fallback is
+  // `JSON.stringify(input)` — an arbitrarily large typed-data blob that reaches stdout/stderr and
+  // the JSON envelope from here. Cap it rather than dumping the whole payload into a field
+  // documented as one line. Capped ONCE, before both consumers: `data.proposed` and
+  // `proposedTransaction.summary` describe the SAME proposal, so capping only one would ship two
+  // conflicting representations of it. Nothing is lost — this is a display summary of a
+  // transaction that was NOT authorized; the authoritative payload is the request the caller
+  // re-issues with `--yes`.
+  const proposed = capSigningSummary(summary)
+  const declined: RecentAction = {
+    tool: toolName,
+    success: false,
+    data: {
+      error: 'Transaction not confirmed',
+      code: AgentErrorCode.CONFIRMATION_REQUIRED,
+      proposed,
+      ...(proposedChain ? { proposed_chain: proposedChain } : {}),
+    },
+  }
+  ui.onProposedTransaction?.({
+    tool: toolName,
+    summary: proposed,
+    ...(proposedChain ? { chain: proposedChain } : {}),
+  })
+  ui.onToolCall(toolCallId, toolName, input)
+  ui.onToolResult(
+    toolCallId,
+    toolName,
+    false,
+    declined.data,
+    'Transaction not confirmed',
+    AgentErrorCode.CONFIRMATION_REQUIRED
+  )
+  return declined
+}
+
+/**
+ * Whether a signing result is a DECLINE that should end an ask-mode turn.
+ *
+ * Ask mode's confirm gate is a fixed POLICY (no `--yes`; its `requestConfirmation` returns a
+ * constant), so recursing the refusal back into the model loop can only buy a retry that fails
+ * again — which is exactly the reported defect: `execute_send(ok)` -> `sign_tx(declined)` ->
+ * `execute_send(error)`, ending in a turn that claimed the build failed, that there was no send
+ * tool, or that a broadcast could not be confirmed, about a transaction that built fine and was
+ * never authorized to broadcast. Ending the turn instead keeps the built transaction as the
+ * result (see `onProposedTransaction`), which is what `agent ask --help` promises: "it reports the
+ * proposed transaction so a read-only prompt can't move funds".
+ *
+ * The discriminator is POLICY-VS-DECISION, not headless-vs-interactive. The TUI prompts a live
+ * user and pipe mode blocks on a live host answer over stdin (pipe.ts resolves a pending promise)
+ * — in both, a decline is a real decision the model should get to acknowledge, so both keep
+ * report-and-continue.
+ */
+function isAskModeDecline(askMode: boolean | undefined, recent: RecentAction | undefined): boolean {
+  return !!askMode && !!recent && !recent.success && recent.data?.code === AgentErrorCode.CONFIRMATION_REQUIRED
+}
+
+/**
+ * Remove EVERY queued ask-mode signing decline, returning whether any was found.
+ *
+ * All of them, not just the first: client-side dispatches are serialized and all awaited before the
+ * turn ends, so one response can queue several declined sign_typed_data calls, and a response that
+ * mixes a declined sign_typed_data with a buffered sign_tx returns from the signable branch — which
+ * also calls this. Removing one would leave the rest queued, and the NEXT request would flush a
+ * stale refusal into an unrelated turn's recent_actions.
+ *
+ * Only refusals are dropped — they are this turn's result, not input for a next request. Every
+ * OTHER queued entry is a client-side tool the model dispatched that already RAN this turn
+ * (vault_chain / vault_coin / address_book, see dispatchClientSideTool); those mutations are
+ * committed locally, so they stay queued and the next request still reports them as recent_actions.
+ * Clearing the whole queue would silently lose the record of work that happened.
+ */
+function takeQueuedAskModeDeclines(askMode: boolean | undefined, pending: RecentAction[]): boolean {
+  if (!askMode) return false
+  const kept = pending.filter(r => !isAskModeDecline(askMode, r))
+  if (kept.length === pending.length) return false
+  pending.splice(0, pending.length, ...kept)
+  return true
+}
+
+/** End a turn that stopped on a declined signing, leaving already-executed results queued. */
+function finishDeclinedTurn(verbose: boolean | undefined, pendingCount: number, ui: UICallbacks): void {
+  if (verbose) {
+    process.stderr.write(
+      `[session] signing declined and ask mode is non-interactive; ending turn with the proposed transaction (${pendingCount} already-executed result(s) stay queued)\n`
+    )
+  }
+  ui.onDone()
+}
+
 export class AgentSession {
   private client: AgentClient
   private vault: VaultBase
@@ -140,6 +296,9 @@ export class AgentSession {
   private pushService: PushNotificationService | null = null
   // Flushed into context.recent_actions on the next outbound request.
   private pendingToolResults: RecentAction[] = []
+  private terminalHlConfirmation = false
+  private firstHlOrderRef: string | null = null
+  private seenHlOrderRefs = new Set<string>()
   // Snapshot, taken the instant sendMessage's catch fires (BEFORE it clears the
   // queue), of whether an already-broadcast tx result was still UNDELIVERED to
   // the backend. This is the true "ack failed" signal: a successful broadcast
@@ -156,6 +315,14 @@ export class AgentSession {
   // drive the loop without real waits.
   private txConfirmPollIntervalMs = TX_CONFIRM_POLL_INTERVAL_MS
   private txConfirmMaxPolls = TX_CONFIRM_MAX_POLLS
+
+  private get tokenCacheScope(): AgentTokenCacheScope {
+    return {
+      publicKey: this.publicKey,
+      backendUrl: this.config.backendUrl,
+      profile: this.config.profile,
+    }
+  }
 
   constructor(vault: VaultBase, config: AgentConfig) {
     this.vault = vault
@@ -266,13 +433,13 @@ export class AgentSession {
     try {
       await this.unlockEncryptedVault(ui)
 
-      const cached = loadCachedToken(this.publicKey)
+      const cached = await loadCachedToken(this.tokenCacheScope).catch(() => null)
       if (cached) {
         this.client.setAuthToken(cached)
       } else {
         const auth = await authenticateVault(this.client, this.vault, this.config.password)
         this.client.setAuthToken(auth.token)
-        saveCachedToken(this.publicKey, auth.token, auth.expiresAt, auth.refreshToken)
+        await saveCachedToken(this.tokenCacheScope, auth.token, auth.expiresAt, auth.refreshToken).catch(() => {})
       }
     } catch (err: any) {
       throw new Error(`Authentication failed: ${err.message}`)
@@ -289,6 +456,27 @@ export class AgentSession {
         const conv = await this.withAuthRetry(() => this.client.getConversation(this.conversationId!, this.publicKey))
         this.historyMessages = conv.messages || []
       } catch (err: any) {
+        // One-shot ask mode must fail closed when the requested context is
+        // unavailable. Sending the user's message in a fresh conversation can
+        // execute an intent without the history the caller explicitly named.
+        // Interactive/pipe sessions retain the recoverable fallback below.
+        if (this.config.askMode) {
+          this.conversationId = null
+          this.historyMessages = []
+          // An auth failure that survived withAuthRetry's single retry is an AUTH
+          // problem (→ exit 2), not a missing session (→ exit 5): classify by cause
+          // so a headless caller re-auths rather than treating the session id as
+          // stale. Any other resume failure stays SESSION_NOT_FOUND.
+          throw Object.assign(
+            new Error(
+              `Session ${this.config.sessionId} could not be resumed (${err?.message ?? 'unknown error'}); refusing to execute the request without its conversation context`
+            ),
+            {
+              code: isAuthError(err) ? AgentErrorCode.AUTH_FAILED : AgentErrorCode.SESSION_NOT_FOUND,
+            }
+          )
+        }
+
         // Resume failed: a stale/typo'd --session-id, a persistent backend
         // error, or an auth failure that survived the single retry. Fall back
         // to a fresh conversation rather than hard-failing (finding b — the old
@@ -328,9 +516,10 @@ export class AgentSession {
 
         const token = crypto.randomUUID()
         this.pushService = new PushNotificationService(new MemoryStorage(), this.config.notificationUrl)
+        const notificationVaultId = await computeNotificationVaultId(this.publicKey, this.vault.hexChainCode)
 
         await this.pushService.registerDevice({
-          vaultId: this.publicKey,
+          vaultId: notificationVaultId,
           partyName: 'cli-agent',
           token,
           deviceType: 'electron',
@@ -342,7 +531,7 @@ export class AgentSession {
         })
 
         this.pushService.connect({
-          vaultId: this.publicKey,
+          vaultId: notificationVaultId,
           partyName: 'cli-agent',
           token,
         })
@@ -383,11 +572,16 @@ export class AgentSession {
       // authenticateVault (MPC re-sign) may not return a refreshToken; capture
       // the previously cached one before clearing so it survives the re-auth and
       // the later /auth/refresh path stays available.
-      const previousRefreshToken = readTokenStore()[this.publicKey]?.refreshToken
-      clearCachedToken(this.publicKey)
+      const previousRefreshToken = getCachedTokenEntry(this.tokenCacheScope)?.refreshToken
+      await clearCachedToken(this.tokenCacheScope).catch(() => {})
       const auth = await authenticateVault(this.client, this.vault, this.config.password)
       this.client.setAuthToken(auth.token)
-      saveCachedToken(this.publicKey, auth.token, auth.expiresAt, auth.refreshToken ?? previousRefreshToken)
+      await saveCachedToken(
+        this.tokenCacheScope,
+        auth.token,
+        auth.expiresAt,
+        auth.refreshToken ?? previousRefreshToken
+      ).catch(() => {})
       return await request()
     }
   }
@@ -430,6 +624,9 @@ export class AgentSession {
     }
 
     this.abortController = new AbortController()
+    this.terminalHlConfirmation = false
+    this.firstHlOrderRef = null
+    this.seenHlOrderRefs = new Set<string>()
     // Fresh turn — clear the prior turn's ack snapshot.
     this.unacknowledgedBroadcastAtError = false
 
@@ -509,9 +706,7 @@ export class AgentSession {
     }
 
     // Signal to backend that an AI agent is calling (adjusts prompt for structured output)
-    if (this.config.viaAgent || this.config.askMode) {
-      request.via_agent = true
-    }
+    applyAgentMode(request, this.config)
 
     if (content) {
       request.content = content
@@ -536,14 +731,17 @@ export class AgentSession {
     let toolOutputCandidate: {
       payload: TxReadyPayload
       toolName: string
-      source: 'flat' | 'prep'
+      source: ToolOutputCandidate['source']
     } | null = null
-    // Whether a balance_summary card was rendered from the SSE data part this
-    // turn. When true, the message-content fallback still runs to STRIP any
-    // leftover echoed JSON from the displayed text, but does not render a second
-    // card (guards against a misbehaving backend emitting both the typed part
-    // and a verbatim echo).
+    // Whether a balance_summary / yield_opportunities / polymarket_markets card
+    // was rendered from the SSE data part this turn. When true, the
+    // message-content fallback still runs to STRIP any leftover echoed JSON
+    // from the displayed text, but does not render a second card (guards
+    // against a misbehaving backend emitting both the typed part and a
+    // verbatim echo).
     let balanceCardRendered = false
+    let yieldCardRendered = false
+    let polymarketCardRendered = false
     const pendingDispatches: Promise<void>[] = []
     // Serialize client-side tool dispatches in SSE arrival order. Without
     // this, ordering-sensitive flows (vault_chain add → vault_coin add) race
@@ -572,6 +770,16 @@ export class AgentSession {
         }
       },
       onClientSideToolCall: (toolCallId: string, toolName: string, input: Record<string, unknown>) => {
+        if (toolName === 'hl_order') {
+          // Claim synchronously while parsing SSE: serialized dispatch alone is too late because a
+          // second distinct ref would already be queued and could retrieve/sign after the first.
+          const orderRef = typeof input.order_ref === 'string' ? input.order_ref : ''
+          if (this.firstHlOrderRef === null || this.firstHlOrderRef === undefined) {
+            this.firstHlOrderRef = orderRef
+          } else if (this.firstHlOrderRef !== orderRef) {
+            return
+          }
+        }
         const dispatch = dispatchChain.then(() => this.dispatchClientSideTool(toolCallId, toolName, input, ui))
         dispatchChain = dispatch.catch(() => {})
         pendingDispatches.push(dispatch)
@@ -582,7 +790,7 @@ export class AgentSession {
       onSuggestions: (suggestions: any[]) => {
         ui.onSuggestions(suggestions)
       },
-      onToolOutputTx: (payload: TxReadyPayload, toolName: string, source: 'flat' | 'prep') => {
+      onToolOutputTx: (payload: TxReadyPayload, toolName: string, source: ToolOutputCandidate['source']) => {
         // Client-enriched candidate from a `tool-output-available` frame — the sole
         // sign source (buffered after the stream by `selectAndBufferSignable`).
         // First-wins per turn: a SECOND signable frame is deferred (the executor
@@ -602,6 +810,20 @@ export class AgentSession {
           ui.onBalanceSummary?.(card)
         }
       },
+      onYieldOpportunities: (raw: unknown) => {
+        const card = parseYieldOpportunitiesEnvelope(raw)
+        if (card) {
+          yieldCardRendered = true
+          ui.onYieldOpportunities?.(card)
+        }
+      },
+      onPolymarketMarkets: (raw: unknown) => {
+        const card = parsePolymarketMarketsEnvelope(raw)
+        if (card) {
+          polymarketCardRendered = true
+          ui.onPolymarketMarkets?.(card)
+        }
+      },
       onTurnOutcome: outcome => {
         // a2a-02: forward the typed turn-outcome straight through (already
         // validated by parseTurnOutcome in the client). The ask layer latches it
@@ -616,6 +838,16 @@ export class AgentSession {
       },
     }
 
+    // One key belongs to this exact POST attempt (body + recent_actions). A
+    // recursive continuation calls processMessageLoop again and gets a fresh
+    // key, as does a new user-initiated send after any failure. The one automatic
+    // 401/403 re-POST below deliberately closes over and reuses this key because
+    // it replays the identical attempt. SSE disconnect recovery does not share
+    // or regenerate it: that path only polls GET /messages/since and never
+    // re-POSTs the turn. This lifetime honors the backend's poison-on-failure
+    // contract: only a genuinely new attempt receives a new execution identity.
+    const idempotencyKey = createTurnIdempotencyKey()
+
     // CR2: 401/403 retry at the request boundary so the replay uses the
     // EXACT same request body (same content, same recent_actions). Doing
     // this in sendMessage's catch would re-deliver the original user
@@ -625,7 +857,13 @@ export class AgentSession {
     let streamResult
     try {
       streamResult = await this.withAuthRetry(() =>
-        this.client.sendMessageStream(this.conversationId!, request, callbacks, this.abortController?.signal)
+        this.client.sendMessageStream(
+          this.conversationId!,
+          request,
+          callbacks,
+          this.abortController?.signal,
+          idempotencyKey
+        )
       )
     } catch (err) {
       // Non-401 or already-retried auth failure: restore the spliced batch so
@@ -637,9 +875,21 @@ export class AgentSession {
       throw err
     }
 
+    for (const warning of streamResult.protocolWarnings ?? []) {
+      ui.onProtocolWarning?.(warning)
+    }
+
     // Wait for client-side dispatches (they push onto pendingToolResults).
     if (pendingDispatches.length > 0) {
       await Promise.all(pendingDispatches)
+    }
+
+    // Confirmation refusal terminates locally. Feeding it back as a failed tool result makes the
+    // model rebuild/re-dispatch orders and can fabricate a card or success above the real client gate.
+    if (this.terminalHlConfirmation) {
+      this.pendingToolResults = this.pendingToolResults.filter(result => result.tool !== 'hl_order')
+      ui.onDone()
+      return
     }
 
     // Mid-turn disconnect recovery: the SSE stream dropped before the backend
@@ -662,6 +912,8 @@ export class AgentSession {
 
     if (displayText) {
       displayText = this.renderEchoedBalanceCard(displayText, balanceCardRendered, ui)
+      displayText = this.renderEchoedYieldOpportunitiesCard(displayText, yieldCardRendered, ui)
+      displayText = this.renderEchoedPolymarketMarketsCard(displayText, polymarketCardRendered, ui)
     }
 
     if (displayText) {
@@ -681,7 +933,11 @@ export class AgentSession {
       const recent = await this.runPasswordGatedTool('sign_tx', signToolCallId, ui, () =>
         this.executor.signTxFromBuffer(signToolCallId)
       )
-      this.pendingToolResults.push(recent)
+      // Ask mode: a declined signing ENDS the turn — see isAskModeDecline / finishDeclinedTurn.
+      // The refusal is this turn's RESULT, not input for a next request, so it is never queued;
+      // anything ALREADY queued is a client-side tool that already RAN this turn and must survive.
+      const declinedInAskMode = isAskModeDecline(this.config.askMode, recent)
+      if (!declinedInAskMode) this.pendingToolResults.push(recent)
       // A DUPLICATE_BROADCAST refusal (persistent broadcast-journal hit) never
       // broadcast anything — surface it as a hard error so a headless caller
       // exits non-zero with a clear, actionable signal instead of reading a
@@ -689,6 +945,13 @@ export class AgentSession {
       // still queued+recursed above so the backend/LLM learns the sign refused.
       if (!recent.success && recent.data?.code === AgentErrorCode.DUPLICATE_BROADCAST) {
         ui.onError(String(recent.data.error ?? 'duplicate broadcast refused'), AgentErrorCode.DUPLICATE_BROADCAST)
+      }
+      if (declinedInAskMode) {
+        // Also purge any decline already queued THIS turn (a sign_typed_data the model dispatched
+        // before the signable candidate) — this branch returns without reaching the tail check.
+        takeQueuedAskModeDeclines(this.config.askMode, this.pendingToolResults)
+        finishDeclinedTurn(this.config.verbose, this.pendingToolResults.length, ui)
+        return
       }
       // Emit tx_status when broadcast succeeded so pipe-mode consumers see it,
       // then poll for the final on-chain outcome (audit F1) so a headless caller
@@ -702,6 +965,15 @@ export class AgentSession {
         }
       }
       await this.processMessageLoop(null, ui, depth + 1)
+      return
+    }
+
+    // sign_typed_data is gated by the SAME confirm gate but reaches the queue via
+    // dispatchClientSideTool rather than the signable branch above, so without this it kept the
+    // original retry-into-failure behavior — `agent ask "bet 5 USDC on X"` without --yes would
+    // still report a wrong cause.
+    if (takeQueuedAskModeDeclines(this.config.askMode, this.pendingToolResults)) {
+      finishDeclinedTurn(this.config.verbose, this.pendingToolResults.length, ui)
       return
     }
 
@@ -752,7 +1024,7 @@ export class AgentSession {
     toolOutputCandidate: {
       payload: TxReadyPayload
       toolName: string
-      source: 'flat' | 'prep'
+      source: ToolOutputCandidate['source']
     } | null
   ): boolean {
     if (!toolOutputCandidate) return false
@@ -1052,6 +1324,34 @@ export class AgentSession {
   }
 
   /**
+   * Legacy-path fallback for echoed yield_opportunities cards (rj3p). Mirrors
+   * {@link renderEchoedBalanceCard} — strips a verbatim-echoed envelope from
+   * the displayed text and renders it, unless the typed SSE part already fired.
+   */
+  private renderEchoedYieldOpportunitiesCard(displayText: string, alreadyRendered: boolean, ui: UICallbacks): string {
+    const extracted = extractYieldOpportunitiesFromText(displayText)
+    if (!extracted) return displayText
+    if (!alreadyRendered) {
+      ui.onYieldOpportunities?.(extracted.card)
+    }
+    return extracted.remainingText
+  }
+
+  /**
+   * Legacy-path fallback for echoed polymarket_markets cards (rj3p). Mirrors
+   * {@link renderEchoedBalanceCard} — strips a verbatim-echoed envelope from
+   * the displayed text and renders it, unless the typed SSE part already fired.
+   */
+  private renderEchoedPolymarketMarketsCard(displayText: string, alreadyRendered: boolean, ui: UICallbacks): string {
+    const extracted = extractPolymarketMarketsFromText(displayText)
+    if (!extracted) return displayText
+    if (!alreadyRendered) {
+      ui.onPolymarketMarkets?.(extracted.card)
+    }
+    return extracted.remainingText
+  }
+
+  /**
    * Wrap a per-tool dispatch with the password-prompt gate (for tools in
    * {@link PASSWORD_REQUIRED_TOOLS}) and `ui.onToolCall` /
    * `ui.onToolResult` lifecycle events. Returns the `RecentAction` produced
@@ -1063,8 +1363,10 @@ export class AgentSession {
     toolCallId: string,
     ui: UICallbacks,
     body: () => Promise<RecentAction>,
-    input?: Record<string, unknown>
+    input?: Record<string, unknown>,
+    confirmationSummary?: string
   ): Promise<RecentAction> {
+    let signingRecord: Omit<SigningRecord, 'success'> | undefined
     // Confirmation gate: a signable tool (sign_tx / sign_typed_data) must be
     // explicitly approved before it signs + broadcasts. This is the single
     // chokepoint for BOTH the tx_ready path and client-side dispatch, so one
@@ -1078,64 +1380,70 @@ export class AgentSession {
       // sign_typed_data must NOT pick it up — the user would be approving
       // typed-data while reading a stale send/swap summary.
       const summary =
+        confirmationSummary ??
         (toolName === 'sign_tx' ? this.executor.getPendingSummary() : null) ??
         `${toolName}${input ? ` ${JSON.stringify(input)}` : ''}`
       const approved = await ui.requestConfirmation(summary)
       if (!approved) {
-        // Drop the rejected envelope so it can't linger into later turns
-        // (stale legs/summary). sign_typed_data has no buffered tx to drop.
-        if (toolName === 'sign_tx') {
-          this.executor.clearPendingTransaction()
-        }
-        const declined: RecentAction = {
-          tool: toolName,
-          success: false,
-          data: {
-            error: 'Transaction not confirmed',
-            code: AgentErrorCode.CONFIRMATION_REQUIRED,
-            proposed: summary,
-          },
-        }
-        ui.onToolCall(toolCallId, toolName, input)
-        ui.onToolResult(
-          toolCallId,
-          toolName,
-          false,
-          declined.data,
-          'Transaction not confirmed',
-          AgentErrorCode.CONFIRMATION_REQUIRED
-        )
-        return declined
+        return reportDeclinedSigning(this.executor, toolName, toolCallId, summary, input, ui)
       }
+      // Sample the summary/chain NOW (body() consumes and clears the buffer);
+      // the record itself is only emitted after body() runs, with its outcome —
+      // emitting here would fabricate a "signed" record for a body that failed
+      // before signing anything (e.g. a DUPLICATE_BROADCAST refusal).
+      const chain = ui.onSigningRecord && toolName === 'sign_tx' ? this.executor.getPendingChain() : null
+      signingRecord = { tool: toolName, summary: capSigningSummary(summary), ...(chain ? { chain } : {}) }
     }
 
+    // Gate signing on whether a password is actually NEEDED, not on the
+    // --password flag. An encrypted vault is unlocked at init from the
+    // keyring/env chain (#899), which also seeds the executor's password, so a
+    // headless session that set VAULT_PASSWORD (or the OS keyring) already has
+    // the secret and must not be re-prompted. Only a still-locked vault with no
+    // executor password requires one — and even then we retry the same
+    // non-interactive chain (cache → keyring → VAULT_PASSWORDS/VAULT_PASSWORD)
+    // before prompting, so #899's "never prompt when the chain resolves"
+    // contract holds at sign time too. Unencrypted vaults are always
+    // "unlocked", so they skip this entirely. `--password` (config.password)
+    // short-circuits the whole block: it was applied to the executor at
+    // construction.
+    //
     // Delay caching the prompted password until after body() succeeds so a
-    // wrong password triggers a re-prompt on the next call rather than
-    // staying silently locked in to a bad value.
+    // wrong password triggers a re-prompt on the next call rather than staying
+    // silently locked in to a bad value.
     let promptedPassword: string | undefined
     if (PASSWORD_REQUIRED_TOOLS.has(toolName) && !this.config.password) {
-      try {
-        promptedPassword = await ui.requestPassword()
-        this.executor.setPassword(promptedPassword)
-      } catch {
-        const failure: RecentAction = {
-          tool: toolName,
-          success: false,
-          data: {
-            error: 'Password not provided',
-            code: AgentErrorCode.PASSWORD_REQUIRED,
-          },
+      const vaultLocked = this.vault.isEncrypted && !this.vault.isUnlocked()
+      const needsPassword = vaultLocked && !this.executor.hasPassword()
+      if (needsPassword) {
+        const resolved = await resolvePasswordNonInteractive(this.vault.id, this.vault.name)
+        if (resolved) {
+          this.executor.setPassword(resolved)
+        } else {
+          try {
+            promptedPassword = await ui.requestPassword()
+            this.executor.setPassword(promptedPassword)
+          } catch {
+            const failure: RecentAction = {
+              tool: toolName,
+              success: false,
+              data: {
+                error: 'Password not provided',
+                code: AgentErrorCode.PASSWORD_REQUIRED,
+              },
+            }
+            ui.onToolCall(toolCallId, toolName, input)
+            ui.onToolResult(
+              toolCallId,
+              toolName,
+              false,
+              failure.data,
+              'Password not provided',
+              AgentErrorCode.PASSWORD_REQUIRED
+            )
+            return failure
+          }
         }
-        ui.onToolCall(toolCallId, toolName, input)
-        ui.onToolResult(
-          toolCallId,
-          toolName,
-          false,
-          failure.data,
-          'Password not provided',
-          AgentErrorCode.PASSWORD_REQUIRED
-        )
-        return failure
       }
     }
 
@@ -1147,6 +1455,7 @@ export class AgentSession {
       const message = err instanceof Error ? err.message : String(err)
       recent = { tool: toolName, success: false, data: { error: message } }
     }
+    if (signingRecord) ui.onSigningRecord?.({ ...signingRecord, success: recent.success })
     const errorMsg = (recent.data?.error as string | undefined) ?? undefined
     const errorCode = (recent.data?.code as AgentErrorCode | undefined) ?? undefined
     ui.onToolResult(toolCallId, toolName, recent.success, recent.data, errorMsg, errorCode)
@@ -1166,6 +1475,51 @@ export class AgentSession {
     input: Record<string, unknown>,
     ui: UICallbacks
   ): Promise<void> {
+    if (toolName === 'hl_order') {
+      let recent: RecentAction
+      try {
+        const conversationId = this.conversationId
+        if (!conversationId) throw new Error('HL_CONVERSATION_REQUIRED')
+        const orderRef = typeof input.order_ref === 'string' ? input.order_ref : ''
+        if (this.firstHlOrderRef === null || this.firstHlOrderRef === undefined) {
+          this.firstHlOrderRef = orderRef
+        } else if (this.firstHlOrderRef !== orderRef) {
+          return
+        }
+        const seenRefs = this.seenHlOrderRefs ?? (this.seenHlOrderRefs = new Set<string>())
+        if (seenRefs.has(orderRef)) return
+        seenRefs.add(orderRef)
+        const payload = await this.executor.retrieveHlOrder(this.client, input, conversationId)
+        recent = await this.runPasswordGatedTool(
+          toolName,
+          toolCallId,
+          ui,
+          () => this.executor.signAndSubmitHlOrder(this.client, payload),
+          input,
+          formatHlConfirmation(payload)
+        )
+        if (recent.data?.code === AgentErrorCode.CONFIRMATION_REQUIRED) {
+          const proposed = String(recent.data.proposed ?? formatHlConfirmation(payload))
+          const card: HlOrderConfirmationCard = {
+            surface: 'hyperliquid_order_confirmation',
+            status: 'confirmation_required',
+            order_ref: payload.order_ref,
+            ...payload.summary,
+            proposed,
+          }
+          recent.data.confirmation_card = card
+          this.terminalHlConfirmation = true
+          ui.onHlOrderConfirmation?.(card)
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        recent = { tool: toolName, success: false, data: { error: message } }
+        ui.onToolCall(toolCallId, toolName, input)
+        ui.onToolResult(toolCallId, toolName, false, recent.data, message)
+      }
+      if (!this.terminalHlConfirmation) this.pendingToolResults.push(recent)
+      return
+    }
     const handler = CLIENT_SIDE_TOOL_DISPATCH[toolName]
     if (!handler) {
       process.stderr.write(`[cli] unimplemented client-side tool: ${toolName}\n`)
@@ -1177,7 +1531,10 @@ export class AgentSession {
       this.pendingToolResults.push({
         tool: toolName,
         success: false,
-        data: { code: AgentErrorCode.TOOL_UNSUPPORTED, error: `unimplemented in CLI: ${toolName}` },
+        data: {
+          code: AgentErrorCode.TOOL_UNSUPPORTED,
+          error: `unimplemented in CLI: ${toolName}`,
+        },
       })
       return
     }
@@ -1204,7 +1561,23 @@ export class AgentSession {
     // has no __ prefix and isn't the order ref, so it must be named here or
     // it's dropped and BATCH approvals never auto-submit.
     if (recent.data === undefined) recent.data = {}
+    const requestedAutoSubmit =
+      input.auto_submit === true || input.__pm_auto_submit === true || input.__pm_auto_submit_batch === true
+    if (!this.config.allowAutoSubmit) {
+      // The executor may have derived auto_submit=true from the signed input.
+      // Override that result and withhold the one-time submit tokens: a backend
+      // can request a signature, but only this explicit local flag authorizes it
+      // to turn that signature into a live order.
+      recent.data.auto_submit = false
+      for (const marker of AUTO_SUBMIT_MARKERS) delete recent.data[marker]
+      if (requestedAutoSubmit) {
+        process.stderr.write(
+          '[session] backend requested Polymarket auto-submit; signed payload returned without submit authorization (pass --allow-auto-submit to opt in)\n'
+        )
+      }
+    }
     for (const key of Object.keys(input)) {
+      if (AUTO_SUBMIT_MARKERS.has(key) && !this.config.allowAutoSubmit) continue
       if (key.startsWith('__') || key === 'pm_order_ref' || key === 'pm_batch_ref') {
         recent.data[key] = input[key]
       }
@@ -1313,107 +1686,7 @@ export function isAuthError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err ?? '')
   return /\b(401|403)\b/.test(msg)
 }
-
-// ============================================================================
-// Agent Token Cache
-//
-// Persists JWT tokens to ~/.vultisig/agent-tokens.json keyed by vault public key.
-// Tokens are reused on startup if not expired, avoiding a costly MPC signing round.
-// ============================================================================
-
-type TokenEntry = { token: string; expiresAt: number; refreshToken?: string }
-type TokenStore = Record<string, TokenEntry>
-
-function getTokenCachePath(): string {
-  const dir = process.env.VULTISIG_CONFIG_DIR ?? join(homedir(), '.vultisig')
-  return join(dir, 'agent-tokens.json')
-}
-
-function readTokenStore(): TokenStore {
-  try {
-    const path = getTokenCachePath()
-    if (!existsSync(path)) return {}
-    return JSON.parse(readFileSync(path, 'utf-8'))
-  } catch {
-    return {}
-  }
-}
-
-function writeTokenStore(store: TokenStore): void {
-  const path = getTokenCachePath()
-  const dir = join(path, '..')
-  // 0o700 dir / 0o600 file: the store holds bearer access + refresh tokens.
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true, mode: 0o700 })
-  // mkdirSync's `mode` is honored only when the dir is CREATED; a pre-existing
-  // dir (e.g. ~/.vultisig from an older release) keeps its old perms. chmod
-  // every write so it can't retain looser perms now that refresh tokens live here.
-  try {
-    chmodSync(dir, 0o700)
-  } catch {
-    /* best-effort: non-POSIX FS (e.g. Windows) ignores perms */
-  }
-  writeFileSync(path, JSON.stringify(store, null, 2), { mode: 0o600 })
-  // writeFileSync's `mode` is honored only when the file is CREATED; an existing
-  // file keeps its old perms. chmod every write so a pre-existing (or
-  // out-of-band) agent-tokens.json can't retain looser perms now that a
-  // longer-lived refresh token lives here.
-  try {
-    chmodSync(path, 0o600)
-  } catch {
-    /* best-effort: non-POSIX FS (e.g. Windows) ignores perms */
-  }
-}
-
-/**
- * Load a cached token for a vault if it exists and hasn't expired.
- * Adds a 60-second buffer to avoid using tokens right at expiry.
- */
-function loadCachedToken(publicKey: string): string | null {
-  const store = readTokenStore()
-  const entry = store[publicKey]
-  if (!entry) return null
-
-  const now = Date.now()
-  const expiresMs = entry.expiresAt * (entry.expiresAt < 1e12 ? 1000 : 1)
-  if (now >= expiresMs - 60_000) {
-    // Expired or about to expire - clean it up
-    delete store[publicKey]
-    try {
-      writeTokenStore(store)
-    } catch {
-      /* ignore */
-    }
-    return null
-  }
-
-  return entry.token
-}
-
-// Persists the access token (and optional refresh token) under 0o600 perms.
-// The refresh token is captured for a future POST /auth/refresh exchange. A
-// prior entry's refreshToken is preserved when this call doesn't carry one
-// (e.g. a backend that stops returning refresh_token shouldn't drop the
-// still-valid token we already hold).
-function saveCachedToken(publicKey: string, token: string, expiresAt: number, refreshToken?: string): void {
-  const store = readTokenStore()
-  store[publicKey] = {
-    token,
-    expiresAt,
-    refreshToken: refreshToken ?? store[publicKey]?.refreshToken,
-  }
-  try {
-    writeTokenStore(store)
-  } catch {
-    /* ignore */
-  }
-}
-
-function clearCachedToken(publicKey: string): void {
-  const store = readTokenStore()
-  delete store[publicKey]
-  try {
-    writeTokenStore(store)
-  } catch {
-    /* ignore */
-  }
-}
+// Re-exported for callers/tests that resolve the agent token-cache path
+// through the session module (the cache itself now lives in ./tokenCache,
+// scoped by vault/backend/profile rather than bare publicKey).
+export { getTokenCachePath }

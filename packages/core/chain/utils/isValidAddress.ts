@@ -3,6 +3,8 @@ import { WalletCore } from '@trustwallet/wallet-core'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getCoinType } from '@vultisig/core-chain/coin/coinType'
 
+import { isValidRippleXAddress } from '../chains/ripple/address'
+
 type Input = {
   chain: Chain
   address: string
@@ -26,6 +28,10 @@ export const isValidAddress = ({ chain, address, walletCore }: Input) => {
     } catch {
       return false
     }
+  }
+
+  if (chain === Chain.Ripple && /^[XT]/u.test(address.trim())) {
+    return isValidRippleXAddress(address)
   }
 
   if (chain === Chain.MayaChain) {

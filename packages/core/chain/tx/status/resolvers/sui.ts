@@ -1,5 +1,6 @@
 import { Chain, OtherChain } from '@vultisig/core-chain/Chain'
 import { getSuiClient } from '@vultisig/core-chain/chains/sui/client'
+import { getSuiResultTransaction, isSuiExecutionSuccess } from '@vultisig/core-chain/chains/sui/transactionResult'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { attempt } from '@vultisig/lib-utils/attempt'
 
@@ -8,21 +9,28 @@ import { TxStatusResolver } from '../resolver'
 export const getSuiTxStatus: TxStatusResolver<OtherChain.Sui> = async ({ hash }) => {
   const client = getSuiClient()
 
+  // `getTransaction` replaces the retired `getTransactionBlock`. An unknown
+  // digest REJECTS ("missing digest") rather than resolving to null, which the
+  // attempt() wrapper already funnels into the not-known branch below.
   const { data, error } = await attempt(
-    client.getTransactionBlock({
+    client.getTransaction({
       digest: hash,
-      options: { showEffects: true },
+      include: { effects: true },
     })
   )
 
   if (error || !data) {
-    return { status: 'pending' }
+    return { status: 'pending', isKnown: false }
   }
 
-  const effectsStatus = data.effects?.status?.status
+  const transaction = getSuiResultTransaction(data)
 
-  if (effectsStatus === 'success') {
-    const gasUsed = data.effects?.gasUsed
+  if (!transaction) {
+    return { status: 'pending', isKnown: false }
+  }
+
+  if (isSuiExecutionSuccess(data)) {
+    const gasUsed = transaction.effects?.gasUsed
     const feeCoin = chainFeeCoin[Chain.Sui]
     const receipt =
       gasUsed != null &&
@@ -43,9 +51,11 @@ export const getSuiTxStatus: TxStatusResolver<OtherChain.Sui> = async ({ hash })
     return { status: 'success', receipt }
   }
 
-  if (effectsStatus === 'failure') {
+  // A `FailedTransaction` arm, or an explicit `status.success === false`, is a
+  // finalized on-chain failure (MoveAbort / InsufficientGas).
+  if (data.$kind === 'FailedTransaction' || transaction.status?.success === false) {
     return { status: 'error' }
   }
 
-  return { status: 'pending' }
+  return { status: 'pending', isKnown: true }
 }

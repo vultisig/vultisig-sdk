@@ -132,7 +132,7 @@ describe('tool handlers', () => {
   })
 })
 
-const CHAINS = ['Ethereum', 'Bitcoin', 'Solana', 'THORChain'] as const
+const CHAINS = ['Ethereum', 'Bitcoin', 'Bitcoin-Cash', 'Solana', 'THORChain', 'TerraClassic', 'Base'] as const
 
 describe('resolveChain', () => {
   it('matches exact chain name', () => {
@@ -143,6 +143,16 @@ describe('resolveChain', () => {
     expect(resolveChain('ethereum', CHAINS)).toBe('Ethereum')
     expect(resolveChain('BITCOIN', CHAINS)).toBe('Bitcoin')
     expect(resolveChain('thorchain', CHAINS)).toBe('THORChain')
+  })
+
+  it('accepts SDK aliases and IDs within the vault chain set', () => {
+    expect(resolveChain('Bitcoin Cash', CHAINS)).toBe('Bitcoin-Cash')
+    expect(resolveChain('columbus-5', CHAINS)).toBe('TerraClassic')
+    expect(resolveChain('8453', CHAINS)).toBe('Base')
+  })
+
+  it('rejects a known SDK chain outside the vault chain set', () => {
+    expect(() => resolveChain('999', CHAINS)).toThrow()
   })
 
   it('throws on unknown chain', () => {

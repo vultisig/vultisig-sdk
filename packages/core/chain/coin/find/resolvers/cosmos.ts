@@ -2,6 +2,7 @@ import { CosmosChain } from '@vultisig/core-chain/Chain'
 import { getAllCosmosBalances } from '@vultisig/core-chain/chains/cosmos/account/getAllCosmosBalances'
 import { getCosmosClient } from '@vultisig/core-chain/chains/cosmos/client'
 import { cosmosFeeCoinDenom } from '@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom'
+import { bruneBondConfig } from '@vultisig/core-chain/chains/cosmos/thor/brune-bond/config'
 import { tcyAutoCompounderConfig } from '@vultisig/core-chain/chains/cosmos/thor/tcy-autocompound/config'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { CoinMetadata } from '@vultisig/core-chain/coin/Coin'
@@ -77,7 +78,8 @@ export const findCosmosCoins: FindCoinsResolver<CosmosChain> = async ({ address,
     without(
       balances.map(({ denom }) => denom),
       cosmosFeeCoinDenom[chain],
-      tcyAutoCompounderConfig.shareDenom
+      tcyAutoCompounderConfig.shareDenom,
+      bruneBondConfig.shareDenom
     ).map(denom => getDiscoveredDenom(chain, denom))
   )
 

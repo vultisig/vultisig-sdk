@@ -13,6 +13,22 @@ export type GeneralSwapTx =
         value: string
         gasLimit?: bigint
         affiliateFee?: SwapFee
+        /**
+         * The address that will be called as `transferFrom` spender for the
+         * input ERC-20 token. Set by LI.FI quotes from `estimate.approvalAddress`
+         * when it differs from `to` (e.g. when 1inch or another inner executor
+         * does the token pull directly instead of the Diamond/router).
+         *
+         * On-chain proof of the gap: tx 0xa3aadf17 (Ethereum, block 25415989)
+         * reverted with "ERC20: transfer amount exceeds allowance" because the
+         * vault had 9.41 USDC approved to the Diamond (`to` = 0x9025B8ff…) but
+         * zero allowance to the 1inch executor (`approvalAddress`). The Diamond
+         * being approved is not sufficient when an inner executor does the pull.
+         *
+         * Consumers building an ERC-20 approve leg MUST use this field as the
+         * spender when present, falling back to `to` only when absent.
+         */
+        approvalAddress?: string
       }
     }
   | {
@@ -63,13 +79,29 @@ export type GeneralSwapTx =
  * Consumers building a "View on Explorer" link should call
  * `getSwapExplorerUrl({ provider, txHash, fromChain })` from
  * `@vultisig/core-chain/swap/utils/getSwapExplorerUrl` instead of routing
- * by hand — the helper covers the LI.FI / Helius scanners and falls back to
- * the source-chain explorer for `1inch` / `jupiter` / `kyber` / `swapkit` (none of which
- * expose a per-tx aggregator page).
+ * by hand — the helper covers LI.FI / Helius and SwapKit scanners, accepts the
+ * provider-specific CoW order UID for pending CowSwap orders, and falls back to
+ * the source-chain explorer for `1inch` / `jupiter` / `kyber`.
  */
 export type GeneralSwapQuote = {
   dstAmount: string
   provider: GeneralSwapProvider
   routeProvider?: string
+  /**
+   * Signed price impact of the route as a FRACTION, not a percent: `0.0133`
+   * means 1.33% of output lost, and a negative value is a favorable trade.
+   *
+   * Do NOT hand this to `evaluatePriceImpactPercent` — it takes a percent, so
+   * `0.45` would be read as 0.45% rather than 45% and pass a ceiling it should
+   * fail. Scale it first (`fraction * 100`), or use
+   * `evaluateImpactFromFractionString` when the raw string is still in hand.
+   *
+   * Absent whenever no usable figure was found, not as a property of the
+   * provider: today only SwapKit routes populate it, from `meta.priceImpact`
+   * with a `totalSlippageBps` fallback, and even those omit it when neither is
+   * a finite number. Consumers hide the row rather than substitute anything
+   * for it.
+   */
+  priceImpactFraction?: number
   tx: GeneralSwapTx
 }

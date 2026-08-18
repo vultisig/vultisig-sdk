@@ -12,7 +12,17 @@ import {
 
 import type { CommandContext } from '../core'
 import { ensureVaultUnlocked } from '../core'
-import { createSpinner, info, isJsonOutput, outputJson, printResult, printTable, warn } from '../lib/output'
+import { ConfirmationRequiredError } from '../core/errors'
+import {
+  createSpinner,
+  info,
+  isJsonOutput,
+  isNonInteractive,
+  outputJson,
+  printResult,
+  printTable,
+  warn,
+} from '../lib/output'
 
 export type RujiraBaseOptions = {
   rpcEndpoint?: string
@@ -204,8 +214,16 @@ export type RujiraSwapOptions = RujiraBaseOptions & {
 export async function executeRujiraSwap(ctx: CommandContext, options: RujiraSwapOptions): Promise<void> {
   const vault = await ctx.ensureActiveVault()
 
-  // Pre-unlock vault before signing
-  await ensureVaultUnlocked(vault, options.password)
+  // Fail closed up-front: without --yes this flow ends in a confirmation refusal
+  // (this command never prompts — it requires -y/--yes). In a non-interactive
+  // session refuse before the preview writes to stdout; a TTY keeps the
+  // preview-then-refuse guidance below.
+  if (!options.dryRun && !options.yes && isNonInteractive()) {
+    throw new ConfirmationRequiredError(
+      'Swap requires confirmation.',
+      'Pass --yes to confirm, or --dry-run to preview.'
+    )
+  }
 
   const client = await createRujiraClient(ctx, options)
 
@@ -253,8 +271,15 @@ export async function executeRujiraSwap(ctx: CommandContext, options: RujiraSwap
 
   if (!options.yes) {
     warn('This command will execute a swap. Re-run with -y/--yes to skip this warning.')
-    throw new Error('Confirmation required (use --yes)')
+    throw new ConfirmationRequiredError(
+      'Swap requires confirmation.',
+      'Pass --yes to confirm, or --dry-run to preview.'
+    )
   }
+
+  // Unlock only after the confirmation gate — don't decrypt key shares for a swap
+  // the caller hasn't confirmed.
+  await ensureVaultUnlocked(vault, options.password)
 
   const execSpinner = createSpinner('Executing FIN swap...')
   const result = await client.swap.execute(quote, { slippageBps: options.slippageBps })
@@ -283,8 +308,16 @@ export type RujiraWithdrawOptions = RujiraBaseOptions & {
 export async function executeRujiraWithdraw(ctx: CommandContext, options: RujiraWithdrawOptions): Promise<void> {
   const vault = await ctx.ensureActiveVault()
 
-  // Pre-unlock vault before signing
-  await ensureVaultUnlocked(vault, options.password)
+  // Fail closed up-front: without --yes this flow ends in a confirmation refusal
+  // (this command never prompts — it requires -y/--yes). In a non-interactive
+  // session refuse before the preview writes to stdout; a TTY keeps the
+  // preview-then-refuse guidance below.
+  if (!options.dryRun && !options.yes && isNonInteractive()) {
+    throw new ConfirmationRequiredError(
+      'Withdrawal requires confirmation.',
+      'Pass --yes to confirm, or --dry-run to preview.'
+    )
+  }
 
   const client = await createRujiraClient(ctx, options)
 
@@ -323,8 +356,15 @@ export async function executeRujiraWithdraw(ctx: CommandContext, options: Rujira
 
   if (!options.yes) {
     warn('This command will broadcast a THORChain MsgDeposit withdrawal. Re-run with -y/--yes to proceed.')
-    throw new Error('Confirmation required (use --yes)')
+    throw new ConfirmationRequiredError(
+      'Withdrawal requires confirmation.',
+      'Pass --yes to confirm, or --dry-run to preview.'
+    )
   }
+
+  // Unlock only after the confirmation gate — don't decrypt key shares for a
+  // withdrawal the caller hasn't confirmed.
+  await ensureVaultUnlocked(vault, options.password)
 
   const execSpinner = createSpinner('Broadcasting withdrawal...')
   const result = await client.withdraw.execute(prepared)

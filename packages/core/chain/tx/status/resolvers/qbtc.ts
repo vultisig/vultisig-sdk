@@ -30,7 +30,7 @@ export const getQbtcTxStatus: TxStatusResolver<typeof Chain.QBTC> = async ({ has
   })
 
   if (error || !data?.tx_response) {
-    return { status: 'pending' }
+    return { status: 'pending', isKnown: false }
   }
 
   const txResp = data.tx_response

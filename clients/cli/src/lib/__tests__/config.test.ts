@@ -8,13 +8,13 @@
  * config location). createVaultStorage() is the seam the CLI now uses to root
  * SDK vault storage at getConfigDir(); these tests pin that contract.
  */
-import { mkdtempSync, rmSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { createVaultStorage, getConfigDir } from '../config'
+import { createVaultStorage, ensureConfigDir, getConfigDir } from '../config'
 
 describe('createVaultStorage (VULTISIG_CONFIG_DIR)', () => {
   const original = process.env.VULTISIG_CONFIG_DIR
@@ -51,5 +51,30 @@ describe('createVaultStorage (VULTISIG_CONFIG_DIR)', () => {
     expect(createVaultStorage().basePath).toBe(expected)
     process.env.VULTISIG_CONFIG_DIR = '   '
     expect(createVaultStorage().basePath).toBe(expected)
+  })
+
+  it('creates the CLI config directory with owner-only permissions', () => {
+    const configDir = join(tmp, 'config')
+    const originalUmask = process.umask(0)
+    process.env.VULTISIG_CONFIG_DIR = configDir
+
+    try {
+      ensureConfigDir()
+
+      expect(statSync(configDir).mode & 0o777).toBe(0o700)
+    } finally {
+      process.umask(originalUmask)
+    }
+  })
+
+  it('best-effort tightens an existing CLI config directory', () => {
+    const configDir = join(tmp, 'config')
+    mkdirSync(configDir, { mode: 0o755 })
+    chmodSync(configDir, 0o755)
+    process.env.VULTISIG_CONFIG_DIR = configDir
+
+    ensureConfigDir()
+
+    expect(statSync(configDir).mode & 0o777).toBe(0o700)
   })
 })

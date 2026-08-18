@@ -1,11 +1,11 @@
 /**
  * Token Commands - token management
  */
-import type { Chain, DiscoveredToken } from '@vultisig/sdk'
+import { type Chain, type DiscoveredToken, getChainKind } from '@vultisig/sdk'
 import chalk from 'chalk'
-import inquirer from 'inquirer'
 
 import type { CommandContext } from '../core'
+import { TokenNotFoundError } from '../core/errors'
 import {
   createSpinner,
   info,
@@ -17,6 +17,7 @@ import {
   success,
   warn,
 } from '../lib/output'
+import { prompt } from '../lib/prompt'
 
 export type TokensOptions = {
   chain: Chain
@@ -35,6 +36,19 @@ export type AddTokenOptions = {
   symbol: string
   name: string
   decimals: number
+}
+
+/**
+ * Canonical vault storage id for a CLI-managed token.
+ *
+ * Older `--add` writes prefixed the contract with the chain name. Strip that
+ * shape when comparing existing records, and lowercase EVM contracts while
+ * preserving case-sensitive non-EVM ids such as Solana mints.
+ */
+function canonicalTokenId(chain: Chain, id: string): string {
+  const legacyPrefix = `${chain}-`
+  const bareId = id.toLowerCase().startsWith(legacyPrefix.toLowerCase()) ? id.slice(legacyPrefix.length) : id
+  return getChainKind(chain) === 'evm' ? bareId.toLowerCase() : bareId
 }
 
 /**
@@ -85,7 +99,7 @@ export async function executeTokens(ctx: CommandContext, options: TokensOptions)
 
     if (prompts.length > 0) {
       requireInteractive('Provide --symbol, --name, and --decimals flags for non-interactive token addition.')
-      const answers = await inquirer.prompt(prompts)
+      const answers = await prompt(prompts)
       symbol = symbol || answers.symbol?.trim()
       name = name || answers.name?.trim()
       decimals = decimals ?? answers.decimals
@@ -110,10 +124,11 @@ export async function executeTokens(ctx: CommandContext, options: TokensOptions)
  */
 export async function addToken(ctx: CommandContext, options: AddTokenOptions): Promise<void> {
   const vault = await ctx.ensureActiveVault()
+  const contractAddress = canonicalTokenId(options.chain, options.contractAddress)
 
   await vault.addToken(options.chain, {
-    id: `${options.chain}-${options.contractAddress}`,
-    contractAddress: options.contractAddress,
+    id: contractAddress,
+    contractAddress,
     symbol: options.symbol,
     name: options.name,
     decimals: options.decimals,
@@ -130,12 +145,28 @@ export async function addToken(ctx: CommandContext, options: AddTokenOptions): P
 export async function removeToken(ctx: CommandContext, chain: Chain, tokenId: string): Promise<void> {
   const vault = await ctx.ensureActiveVault()
 
-  await vault.removeToken(chain, tokenId)
+  const removed = await vault.removeToken(chain, tokenId)
+  if (!removed) {
+    throw new TokenNotFoundError(`Token "${tokenId}" not found on ${chain}`)
+  }
+  if (isJsonOutput()) {
+    outputJson({ chain, tokenId, removed: true })
+    return
+  }
   success(`\n+ Removed token ${tokenId} from ${chain}`)
 }
 
 /**
- * Discover tokens with balances on a chain and add them to the vault
+ * Discover tokens with balances on a chain and add them to the vault.
+ *
+ * The persistence is deliberate, not a side effect: `vault.discoverTokens()` is
+ * the read-only half (it just returns what the address holds), and this command
+ * is the "find what I hold and start tracking it" action, as distinct from
+ * `--add <address>` for a token you can already name. That is why it reports
+ * only tokens that are NEW relative to the stored list. What was wrong is that
+ * nothing said so — the help called it "auto-discover", and a user who ran it
+ * expecting a query found their vault file and later `portfolio` totals
+ * changed. Both now state it.
  */
 export async function discoverTokens(ctx: CommandContext, chain: Chain): Promise<void> {
   const vault = await ctx.ensureActiveVault()
@@ -159,17 +190,20 @@ export async function discoverTokens(ctx: CommandContext, chain: Chain): Promise
 
   // Merge with existing tokens (no duplicates by contractAddress)
   const existingTokens = vault.getTokens(chain)
-  const existingAddresses = new Set(existingTokens.map(t => t.contractAddress ?? t.id))
+  const existingAddresses = new Set(existingTokens.map(t => canonicalTokenId(chain, t.contractAddress ?? t.id)))
 
-  const newTokens = discovered.filter(d => d.contractAddress && !existingAddresses.has(d.contractAddress))
+  const newTokens = discovered.filter(
+    d => d.contractAddress && !existingAddresses.has(canonicalTokenId(chain, d.contractAddress))
+  )
 
   for (const d of newTokens) {
+    const contractAddress = canonicalTokenId(chain, d.contractAddress)
     await vault.addToken(chain, {
-      id: d.contractAddress,
+      id: contractAddress,
       symbol: d.ticker,
       name: d.ticker,
       decimals: d.decimals,
-      contractAddress: d.contractAddress,
+      contractAddress,
       chainId: chain,
       isNative: false,
     })
@@ -177,7 +211,7 @@ export async function discoverTokens(ctx: CommandContext, chain: Chain): Promise
 
   const allTokens = vault.getTokens(chain)
 
-  spinner.succeed(`Discovered ${newTokens.length} new token(s) on ${chain}`)
+  spinner.succeed(`Now tracking ${newTokens.length} new token(s) on ${chain}`)
 
   if (isJsonOutput()) {
     outputJson({
@@ -195,6 +229,8 @@ export async function discoverTokens(ctx: CommandContext, chain: Chain): Promise
   for (const d of newTokens) {
     printResult(`  ${d.ticker} (${d.contractAddress})`)
   }
+  info(chalk.gray(`\nSaved to this vault — tracked tokens count toward portfolio and balance --tokens.`))
+  info(chalk.gray(`Use --remove <tokenId> to stop tracking one.`))
   info(chalk.gray(`\n${allTokens.length} total token(s) tracked on ${chain}`))
 }
 

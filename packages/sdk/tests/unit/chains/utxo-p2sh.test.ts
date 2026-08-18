@@ -274,9 +274,7 @@ describe('decodeAddressToPubKeyHash — wrong-chain paste rejects 21-byte payloa
 
   it('throws when a Zcash t1-address is decoded as Dogecoin (22-byte payload → 21-byte slice)', () => {
     const zcashTAddr = buildZcashTAddress(0xb8, HASH_20) // t1...
-    expect(() => decodeAddressToPubKeyHash(zcashTAddr, 'Dogecoin')).toThrow(
-      /payload length 21 bytes for chain Dogecoin/
-    )
+    expect(() => decodeAddressToPubKeyHash(zcashTAddr, 'Dogecoin')).toThrow(/UTXO address brand mismatch/)
   })
 
   it('throws when a Zcash t1-address is decoded as Bitcoin-Cash', () => {
@@ -284,14 +282,12 @@ describe('decodeAddressToPubKeyHash — wrong-chain paste rejects 21-byte payloa
     // Note: BCH branch is CashAddr (`bitcoincash:...`); a base58 t-address
     // doesn't match the CashAddr prefix, so it falls into the base58 fallback
     // exactly as the Dogecoin case does.
-    expect(() => decodeAddressToPubKeyHash(zcashTAddr, 'Bitcoin-Cash')).toThrow(
-      /payload length 21 bytes for chain Bitcoin-Cash/
-    )
+    expect(() => decodeAddressToPubKeyHash(zcashTAddr, 'Bitcoin-Cash')).toThrow(/UTXO address brand mismatch/)
   })
 
   it('throws when a Zcash t1-address is decoded as Dash', () => {
     const zcashTAddr = buildZcashTAddress(0xb8, HASH_20)
-    expect(() => decodeAddressToPubKeyHash(zcashTAddr, 'Dash')).toThrow(/payload length 21 bytes for chain Dash/)
+    expect(() => decodeAddressToPubKeyHash(zcashTAddr, 'Dash')).toThrow(/UTXO address brand mismatch/)
   })
 
   it('still decodes a Zcash t1-address normally under chain=Zcash (Zcash branch handles before fallback)', () => {
