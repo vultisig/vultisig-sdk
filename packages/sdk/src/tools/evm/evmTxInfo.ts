@@ -18,6 +18,22 @@ type EvmTxInfoResult = {
 }
 
 /**
+ * Get the next nonce for `address`. Prefers the `'pending'` block tag so an
+ * external wallet's not-yet-confirmed transaction (e.g. MetaMask) is counted
+ * too — `'latest'` alone only reflects confirmed txs and can hand out an
+ * already-used nonce. Falls back to `'latest'` for chains that don't support
+ * `'pending'` cleanly (zkSync Era, Hyperliquid, some alt-EVMs). Mirrors
+ * `platforms/react-native/chains/evm/rpc.ts#getEvmNonce`.
+ */
+const getEvmTxInfoNonce = async (client: ReturnType<typeof getEvmClient>, address: `0x${string}`): Promise<number> => {
+  try {
+    return await client.getTransactionCount({ address, blockTag: 'pending' })
+  } catch {
+    return client.getTransactionCount({ address, blockTag: 'latest' })
+  }
+}
+
+/**
  * Get nonce, gas prices, and chain ID for building an EVM transaction.
  * Optionally estimates gas if `to`/`data`/`value` are provided.
  *
@@ -33,7 +49,7 @@ export const evmTxInfo = async (chain: EvmChain, params: EvmTxInfoParams): Promi
   const client = getEvmClient(chain)
 
   const [nonce, block, maxPriorityFeePerGas, chainId] = await Promise.all([
-    client.getTransactionCount({ address: params.address }),
+    getEvmTxInfoNonce(client, params.address),
     client.getBlock(),
     client.estimateMaxPriorityFeePerGas(),
     client.getChainId(),

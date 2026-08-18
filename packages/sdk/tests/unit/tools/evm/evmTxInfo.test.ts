@@ -67,4 +67,34 @@ describe('evmTxInfo', () => {
 
     expect(result.baseFeePerGas).toBe(0n)
   })
+
+  it('prefers the pending block tag so an external wallet in-flight tx is counted', async () => {
+    // sdk#144: 'latest' alone only reflects confirmed txs, so a not-yet-mined
+    // tx from e.g. MetaMask can hand out an already-used nonce.
+    await evmTxInfo('Ethereum', { address: '0x000000000000000000000000000000000000dEaD' })
+
+    expect(mockGetTransactionCount).toHaveBeenCalledWith({
+      address: '0x000000000000000000000000000000000000dEaD',
+      blockTag: 'pending',
+    })
+    expect(mockGetTransactionCount).not.toHaveBeenCalledWith(
+      expect.objectContaining({ blockTag: 'latest' })
+    )
+  })
+
+  it('falls back to the latest block tag on chains that reject the pending tag', async () => {
+    mockGetTransactionCount.mockRejectedValueOnce(new Error('pending tag unsupported')).mockResolvedValueOnce(7)
+
+    const result = await evmTxInfo('Ethereum', { address: '0x000000000000000000000000000000000000dEaD' })
+
+    expect(result.nonce).toBe(7)
+    expect(mockGetTransactionCount).toHaveBeenNthCalledWith(1, {
+      address: '0x000000000000000000000000000000000000dEaD',
+      blockTag: 'pending',
+    })
+    expect(mockGetTransactionCount).toHaveBeenNthCalledWith(2, {
+      address: '0x000000000000000000000000000000000000dEaD',
+      blockTag: 'latest',
+    })
+  })
 })
