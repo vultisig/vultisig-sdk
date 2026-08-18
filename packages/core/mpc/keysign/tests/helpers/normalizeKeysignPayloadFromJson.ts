@@ -106,10 +106,12 @@ export const normalizeKeysignPayloadFromJson = (input: any) => {
         senderAddress: wasmPayload.sender_address,
         contractAddress: wasmPayload.contract_address,
         executeMsg: wasmPayload.execute_msg,
-        coins: (wasmPayload.coins ?? []).map((coin: any) => ({
-          denom: coin.denom,
-          amount: coin.amount,
-        })) as any,
+        coins: (wasmPayload.coins ?? []).map((coin: any) =>
+          create(CosmosCoinSchema, {
+            denom: coin.denom,
+            amount: coin.amount,
+          })
+        ),
       },
     }
   } else if (tronTransferPayload) {
