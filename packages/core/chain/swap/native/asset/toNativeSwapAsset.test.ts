@@ -186,9 +186,10 @@ describe('toNativeSwapAsset — fee-coin ticker matches the THORChain/MayaChain 
   it('chainFeeCoin ticker matches the pinned pool asset ticker for every native-swap-enabled chain', () => {
     for (const chain of nativeSwapEnabledChains) {
       const expected = thorchainPoolAssetTicker[chain]
-      expect(chainFeeCoin[chain].ticker, `${chain} fee-coin ticker drifted from its THORChain/MayaChain pool asset`).toBe(
-        expected
-      )
+      expect(
+        chainFeeCoin[chain].ticker,
+        `${chain} fee-coin ticker drifted from its THORChain/MayaChain pool asset`
+      ).toBe(expected)
     }
   })
 
