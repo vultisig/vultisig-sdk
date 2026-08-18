@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { Chain } from '../../Chain'
-import { getCosmosGasLimit } from './cosmosGasLimitRecord'
+import { getCosmosGasLimit, getCosmosStakingGasLimit } from './cosmosGasLimitRecord'
 import {
   cosmosGasRecord,
   getCosmosFeeAmount,
@@ -9,6 +9,7 @@ import {
   getFeeAmountFromGasPrice,
   getMinGasPriceForDenom,
   MAYA_SEND_FEE_BASE_UNITS,
+  TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS,
   TERRA_CLASSIC_ULUNA_BASE_GAS,
 } from './gas'
 
@@ -328,5 +329,37 @@ describe('TERRA_CLASSIC_ULUNA_BASE_GAS', () => {
 
   it('matches iOS ulunaBaseGas / Android ULUNA_BASE_GAS', () => {
     expect(TERRA_CLASSIC_ULUNA_BASE_GAS).toBe(8_497_500n)
+  })
+})
+
+describe('TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS', () => {
+  // Paired with getCosmosStakingGasLimit (4M), NOT the 300k send gas limit.
+  // The send-fee constant would under-price a staking tx by ~13x and get it
+  // rejected for insufficient fees. Derived rather than hardcoded so a future
+  // retune of the staking gas limit can't silently desync the fee again.
+  const ULUNA_GAS_PRICE_MILLI = 28_325n // 28.325, scaled by 1000 to stay integral
+
+  it('equals the TerraClassic staking gas limit priced at 28.325 uluna/gas', () => {
+    const stakingGasLimit = getCosmosStakingGasLimit({ chain: Chain.TerraClassic })
+
+    expect(TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS).toBe((stakingGasLimit * ULUNA_GAS_PRICE_MILLI) / 1000n)
+  })
+
+  it('is exactly 113.3 LUNC for the current 4M staking gas limit', () => {
+    expect(TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS).toBe(113_300_000n)
+  })
+
+  it('is signable: fee >= gasLimit * minGasPrice at the chain minimum', () => {
+    const stakingGasLimit = getCosmosStakingGasLimit({ chain: Chain.TerraClassic })
+    const requiredFee = getFeeAmountFromGasPrice(stakingGasLimit, {
+      numerator: ULUNA_GAS_PRICE_MILLI,
+      denominator: 1000n,
+    })
+
+    expect(TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS).toBeGreaterThanOrEqual(requiredFee)
+  })
+
+  it('exceeds the native-send fee constant, proving the send fee alone would under-price staking', () => {
+    expect(TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS).toBeGreaterThan(TERRA_CLASSIC_ULUNA_BASE_GAS)
   })
 })
