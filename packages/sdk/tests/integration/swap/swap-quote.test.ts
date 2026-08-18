@@ -14,6 +14,7 @@
  */
 
 import { Chain } from '@vultisig/core-chain/Chain'
+import { getSwapQuoteSafetyFingerprint } from '@vultisig/core-chain/swap/quote/getSwapQuoteSafetyFingerprint'
 import type { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -187,30 +188,54 @@ describe('Integration: Swap Quote', () => {
   describe('Quote Fetching', () => {
     it('should get swap quote for native token swap', async () => {
       const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
+      const fromCoin = {
+        chain: Chain.Ethereum,
+        address: '0x1234567890abcdef1234567890abcdef12345678',
+        ticker: 'ETH',
+        decimals: 18,
+      }
+      const toCoin = {
+        chain: Chain.Bitcoin,
+        address: 'bc1qtest...',
+        ticker: 'BTC',
+        decimals: 8,
+      }
+      const requestedAmount = 1_000_000_000_000_000_000n
+      const expiresAt = Date.now() + 60_000
 
       // Mock THORChain quote
-      const mockQuote = {
-        quote: {
-          native: {
-            swapChain: 'THORChain' as const,
-            expected_amount_out: '5000000', // 0.05 BTC in sats
-            expiry: Math.floor(Date.now() / 1000) + 600,
-            fees: {
-              affiliate: '0',
-              asset: 'BTC',
-              outbound: '10000',
-              total: '10000',
-            },
-            inbound_address: 'bc1q...',
-            memo: '=:BTC.BTC:bc1q...',
-            notes: '',
-            outbound_delay_blocks: 0,
-            outbound_delay_seconds: 0,
-            recommended_min_amount_in: '100000000000000000',
-            warning: '',
+      const rawQuote = {
+        native: {
+          swapChain: 'THORChain' as const,
+          expected_amount_out: '5000000', // 0.05 BTC in sats
+          expiry: Math.floor(Date.now() / 1000) + 600,
+          fees: {
+            affiliate: '0',
+            asset: 'BTC',
+            outbound: '10000',
+            total: '10000',
           },
+          inbound_address: 'bc1q...',
+          memo: '=:BTC.BTC:bc1q...',
+          notes: '',
+          outbound_delay_blocks: 0,
+          outbound_delay_seconds: 0,
+          recommended_min_amount_in: '100000000000000000',
+          warning: '',
         },
+      }
+      const mockQuote = {
+        quote: rawQuote,
         discounts: [],
+        requestedAmount,
+        expiresAt,
+        safetyFingerprint: getSwapQuoteSafetyFingerprint({
+          from: fromCoin,
+          to: toCoin,
+          requestedAmount,
+          expiresAt,
+          quote: rawQuote,
+        }),
       }
 
       vi.mocked(findSwapQuote).mockResolvedValue(mockQuote as any)
@@ -218,18 +243,8 @@ describe('Integration: Swap Quote', () => {
       receivedEvents = []
 
       const quote = await vault.getSwapQuote({
-        fromCoin: {
-          chain: Chain.Ethereum,
-          address: '0x1234567890abcdef1234567890abcdef12345678',
-          ticker: 'ETH',
-          decimals: 18,
-        },
-        toCoin: {
-          chain: Chain.Bitcoin,
-          address: 'bc1qtest...',
-          ticker: 'BTC',
-          decimals: 8,
-        },
+        fromCoin,
+        toCoin,
         amount: 1.0,
       })
 
@@ -257,25 +272,50 @@ describe('Integration: Swap Quote', () => {
     it('should get swap quote with approval required for ERC-20', async () => {
       const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
       const { getErc20Allowance } = await import('@vultisig/core-chain/chains/evm/erc20/getErc20Allowance')
+      const fromCoin = {
+        chain: Chain.Ethereum,
+        address: '0x1234567890abcdef1234567890abcdef12345678',
+        id: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', // USDC
+        ticker: 'USDC',
+        decimals: 6,
+      }
+      const toCoin = {
+        chain: Chain.Ethereum,
+        address: '0x1234567890abcdef1234567890abcdef12345678',
+        ticker: 'ETH',
+        decimals: 18,
+      }
+      const requestedAmount = 1_000_000_000n
+      const expiresAt = Date.now() + 60_000
 
       // Mock 1inch quote
-      const mockQuote = {
-        quote: {
-          general: {
-            dstAmount: '1000000000000000000', // 1 ETH
-            provider: '1inch' as const,
-            tx: {
-              evm: {
-                from: '0x1234...',
-                to: '0x1111111254fb6c44bAC0beD2854e76F90643097d',
-                data: '0x...',
-                value: '0',
-                gasLimit: 300000n,
-              },
+      const rawQuote = {
+        general: {
+          dstAmount: '1000000000000000000', // 1 ETH
+          provider: '1inch' as const,
+          tx: {
+            evm: {
+              from: '0x1234...',
+              to: '0x1111111254fb6c44bAC0beD2854e76F90643097d',
+              data: '0x...',
+              value: '0',
+              gasLimit: 300000n,
             },
           },
         },
+      }
+      const mockQuote = {
+        quote: rawQuote,
         discounts: [],
+        requestedAmount,
+        expiresAt,
+        safetyFingerprint: getSwapQuoteSafetyFingerprint({
+          from: fromCoin,
+          to: toCoin,
+          requestedAmount,
+          expiresAt,
+          quote: rawQuote,
+        }),
       }
 
       vi.mocked(findSwapQuote).mockResolvedValue(mockQuote)
@@ -284,19 +324,8 @@ describe('Integration: Swap Quote', () => {
       receivedEvents = []
 
       const quote = await vault.getSwapQuote({
-        fromCoin: {
-          chain: Chain.Ethereum,
-          address: '0x1234567890abcdef1234567890abcdef12345678',
-          id: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', // USDC
-          ticker: 'USDC',
-          decimals: 6,
-        },
-        toCoin: {
-          chain: Chain.Ethereum,
-          address: '0x1234567890abcdef1234567890abcdef12345678',
-          ticker: 'ETH',
-          decimals: 18,
-        },
+        fromCoin,
+        toCoin,
         amount: 1000, // 1000 USDC
       })
 
@@ -313,7 +342,14 @@ describe('Integration: Swap Quote', () => {
       console.log(`✅ Quote requires approval for ${quote.approvalInfo?.requiredAmount} units`)
     })
 
-    it('should forward recipient, slippageTolerance, and excludeProviders to the core quote resolver', async () => {
+    it.each([
+      { scenario: 'self-swap default', recipient: undefined },
+      { scenario: 'blank recipient self-swap default', recipient: '   ' },
+      {
+        scenario: 'cross-account override',
+        recipient: 'bc1qrecipienttest0000000000000000000000000000',
+      },
+    ])('should keep the destination consistent for $scenario', async ({ recipient }) => {
       const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
 
       const mockQuote = {
@@ -332,6 +368,11 @@ describe('Integration: Swap Quote', () => {
       }
 
       vi.mocked(findSwapQuote).mockResolvedValue(mockQuote as any)
+      vi.mocked(findSwapQuote).mockClear()
+
+      const ownDestination = await vault.address(Chain.Bitcoin)
+      const expectedRecipient = recipient?.trim() || undefined
+      const expectedDestination = expectedRecipient ?? ownDestination
 
       const result = await vault.swap({
         fromChain: Chain.Ethereum,
@@ -339,7 +380,7 @@ describe('Integration: Swap Quote', () => {
         toChain: Chain.Bitcoin,
         toSymbol: 'BTC',
         amount: '1',
-        recipient: 'bc1qrecipienttest0000000000000000000000000000',
+        ...(recipient && { recipient }),
         slippageTolerance: 2.5,
         excludeProviders: ['CowSwap', 'KyberSwap'],
         dryRun: true,
@@ -348,7 +389,8 @@ describe('Integration: Swap Quote', () => {
       expect(result.dryRun).toBe(true)
       expect(vi.mocked(findSwapQuote)).toHaveBeenCalledWith(
         expect.objectContaining({
-          recipient: 'bc1qrecipienttest0000000000000000000000000000',
+          to: expect.objectContaining({ address: expectedDestination }),
+          recipient: expectedRecipient,
           slippageTolerance: 2.5,
           excludeProviders: ['CowSwap', 'KyberSwap'],
         })

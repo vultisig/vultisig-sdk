@@ -1,4 +1,5 @@
 import { Chain } from '@vultisig/core-chain/Chain'
+import { CosmosSequenceMismatchError } from '@vultisig/core-chain/tx/broadcast/cosmosSequenceMismatch'
 import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -12,6 +13,7 @@ const {
   mockDecodeSigningOutput,
   mockCoreBroadcastTx,
   mockGetTxHash,
+  mockGetTxStatus,
   mockGetEncodedSigningInputs,
   mockAssertNativeSwapReadyForBroadcast,
   mockGetKeysignTwPublicKey,
@@ -23,6 +25,7 @@ const {
   mockDecodeSigningOutput: vi.fn(),
   mockCoreBroadcastTx: vi.fn(),
   mockGetTxHash: vi.fn(),
+  mockGetTxStatus: vi.fn(),
   mockGetEncodedSigningInputs: vi.fn(),
   mockAssertNativeSwapReadyForBroadcast: vi.fn(),
   mockGetKeysignTwPublicKey: vi.fn(),
@@ -48,6 +51,10 @@ vi.mock('@vultisig/core-chain/tx/broadcast', () => ({
 
 vi.mock('@vultisig/core-chain/tx/hash', () => ({
   getTxHash: (...args: unknown[]) => mockGetTxHash(...args),
+}))
+
+vi.mock('@vultisig/core-chain/tx/status', () => ({
+  getTxStatus: (...args: unknown[]) => mockGetTxStatus(...args),
 }))
 
 vi.mock('@vultisig/core-mpc/keysign/signingInputs', () => ({
@@ -80,7 +87,9 @@ const signature: Signature = { signature: '0xdeadbeef', format: 'ECDSA' }
 const keysignPayload = {} as KeysignPayload
 
 describe('BroadcastService', () => {
-  const wasmProvider = { getWalletCore: vi.fn().mockResolvedValue(fakeWalletCore) }
+  const wasmProvider = {
+    getWalletCore: vi.fn().mockResolvedValue(fakeWalletCore),
+  }
   const extractMessageHashes = vi.fn().mockResolvedValue(['0xmessagehash'])
   const service = new BroadcastService(extractMessageHashes, wasmProvider)
 
@@ -96,13 +105,18 @@ describe('BroadcastService', () => {
     mockCompileTx.mockReturnValue('compiled-tx-bytes')
     mockDecodeSigningOutput.mockReturnValue({ marker: 'signing-output' })
     mockGetEncodedSigningInputs.mockResolvedValue(['tx-input'])
+    mockGetTxStatus.mockResolvedValue({ status: 'success' })
   })
 
   it('falls back to the locally computed hash when the resolver returns void (evm/cosmos/sui/ripple/ton/polkadot/bittensor)', async () => {
     mockCoreBroadcastTx.mockResolvedValue(undefined)
     mockGetTxHash.mockResolvedValue('0xlocally-computed-hash')
 
-    const hash = await service.broadcastTx({ chain: Chain.Ethereum, keysignPayload, signature })
+    const hash = await service.broadcastTx({
+      chain: Chain.Ethereum,
+      keysignPayload,
+      signature,
+    })
 
     expect(hash).toBe('0xlocally-computed-hash')
     expect(mockGetTxHash).toHaveBeenCalledOnce()
@@ -112,17 +126,28 @@ describe('BroadcastService', () => {
     mockCoreBroadcastTx.mockResolvedValue('node-returned-hash')
     mockGetTxHash.mockResolvedValue('should-never-be-used')
 
-    const hash = await service.broadcastTx({ chain: Chain.Bitcoin, keysignPayload, signature })
+    const hash = await service.broadcastTx({
+      chain: Chain.Bitcoin,
+      keysignPayload,
+      signature,
+    })
 
     expect(hash).toBe('node-returned-hash')
     expect(mockGetTxHash).not.toHaveBeenCalled()
   })
 
   it('prefers the resolver-returned txid over the local computation for the Tron response shape', async () => {
-    mockCoreBroadcastTx.mockResolvedValue({ txid: 'tron-node-hash', result: true })
+    mockCoreBroadcastTx.mockResolvedValue({
+      txid: 'tron-node-hash',
+      result: true,
+    })
     mockGetTxHash.mockResolvedValue('should-never-be-used')
 
-    const hash = await service.broadcastTx({ chain: Chain.Tron, keysignPayload, signature })
+    const hash = await service.broadcastTx({
+      chain: Chain.Tron,
+      keysignPayload,
+      signature,
+    })
 
     expect(hash).toBe('tron-node-hash')
     expect(mockGetTxHash).not.toHaveBeenCalled()
@@ -132,7 +157,11 @@ describe('BroadcastService', () => {
     mockCoreBroadcastTx.mockResolvedValue('')
     mockGetTxHash.mockResolvedValue('local-fallback-hash')
 
-    const hash = await service.broadcastTx({ chain: Chain.Bitcoin, keysignPayload, signature })
+    const hash = await service.broadcastTx({
+      chain: Chain.Bitcoin,
+      keysignPayload,
+      signature,
+    })
 
     expect(hash).toBe('local-fallback-hash')
   })
@@ -141,7 +170,11 @@ describe('BroadcastService', () => {
     mockCoreBroadcastTx.mockResolvedValue({ result: true })
     mockGetTxHash.mockResolvedValue('local-fallback-hash')
 
-    const hash = await service.broadcastTx({ chain: Chain.Tron, keysignPayload, signature })
+    const hash = await service.broadcastTx({
+      chain: Chain.Tron,
+      keysignPayload,
+      signature,
+    })
 
     expect(hash).toBe('local-fallback-hash')
   })
@@ -151,7 +184,11 @@ describe('BroadcastService', () => {
     mockCoreBroadcastTx.mockResolvedValueOnce(undefined).mockResolvedValueOnce('swap-node-hash')
     mockGetTxHash.mockResolvedValue('approve-local-hash')
 
-    const hash = await service.broadcastTx({ chain: Chain.Ethereum, keysignPayload, signature })
+    const hash = await service.broadcastTx({
+      chain: Chain.Ethereum,
+      keysignPayload,
+      signature,
+    })
 
     expect(hash).toBe('swap-node-hash')
     // Only the first (void-resolver) iteration needed the local fallback.
@@ -193,6 +230,164 @@ describe('BroadcastService', () => {
     await expect(service.broadcastTx({ chain: Chain.Ethereum, keysignPayload, signature })).rejects.toMatchObject({
       code: VaultErrorCode.BroadcastFailed,
       message: expect.stringContaining('Ethereum'),
+    })
+  })
+
+  it('waits for ERC-20 approval confirmation before broadcasting the swap input', async () => {
+    const events: string[] = []
+    mockGetEncodedSigningInputs.mockResolvedValue(['approval-input', 'swap-input'])
+    mockCompileTx.mockImplementation(({ txInputData }) => txInputData)
+    mockDecodeSigningOutput.mockImplementation((_chain, tx) => tx)
+    const injectedBroadcaster = vi.fn(async () => {
+      events.push('broadcast')
+    })
+    mockGetTxHash.mockImplementation(async ({ tx }) => (tx.includes('approval-input') ? '0xapproval' : '0xswap'))
+    mockGetTxStatus.mockImplementation(async ({ hash }) => {
+      events.push(`status:${hash}`)
+      return { status: 'success' }
+    })
+
+    const approvalService = new BroadcastService(extractMessageHashes, wasmProvider, injectedBroadcaster, {
+      approvalConfirmationIntervalMs: 1,
+      approvalConfirmationTimeoutMs: 100,
+    })
+
+    const txHash = await approvalService.broadcastTx({
+      chain: Chain.Ethereum,
+      keysignPayload: { erc20ApprovePayload: {} } as KeysignPayload,
+      signature,
+    })
+
+    expect(txHash).toBe('0xswap')
+    expect(events).toEqual(['broadcast', 'status:0xapproval', 'broadcast'])
+    expect(injectedBroadcaster).toHaveBeenCalledTimes(2)
+    expect(mockCoreBroadcastTx).not.toHaveBeenCalled()
+    expect(mockGetTxStatus).toHaveBeenCalledWith({
+      chain: Chain.Ethereum,
+      hash: '0xapproval',
+    })
+  })
+
+  it('does not broadcast the swap input when the approval transaction fails', async () => {
+    mockGetEncodedSigningInputs.mockResolvedValue(['approval-input', 'swap-input'])
+    mockCompileTx.mockImplementation(({ txInputData }) => txInputData)
+    mockDecodeSigningOutput.mockImplementation((_chain, tx) => tx)
+    mockCoreBroadcastTx.mockResolvedValue(undefined)
+    mockGetTxHash.mockImplementation(async ({ tx }) => (tx.includes('approval-input') ? '0xapproval' : '0xswap'))
+    mockGetTxStatus.mockResolvedValue({ status: 'error' })
+
+    const approvalService = new BroadcastService(extractMessageHashes, wasmProvider, {
+      approvalConfirmationIntervalMs: 1,
+      approvalConfirmationTimeoutMs: 100,
+    })
+
+    await expect(
+      approvalService.broadcastTx({
+        chain: Chain.Ethereum,
+        keysignPayload: { erc20ApprovePayload: {} } as KeysignPayload,
+        signature,
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('Approval tx failed'),
+      originalError: expect.objectContaining({
+        broadcastedTxHashes: ['0xapproval'],
+        failedInputIndex: 0,
+      }),
+    })
+
+    expect(mockCoreBroadcastTx).toHaveBeenCalledOnce()
+  })
+
+  it('does not broadcast the swap input when approval confirmation times out', async () => {
+    mockGetEncodedSigningInputs.mockResolvedValue(['approval-input', 'swap-input'])
+    mockCompileTx.mockImplementation(({ txInputData }) => txInputData)
+    mockDecodeSigningOutput.mockImplementation((_chain, tx) => tx)
+    mockCoreBroadcastTx.mockResolvedValue(undefined)
+    mockGetTxHash.mockImplementation(async ({ tx }) => (tx.includes('approval-input') ? '0xapproval' : '0xswap'))
+    mockGetTxStatus.mockResolvedValue({ status: 'pending' })
+
+    const approvalService = new BroadcastService(extractMessageHashes, wasmProvider, {
+      approvalConfirmationIntervalMs: 1,
+      approvalConfirmationTimeoutMs: 0,
+    })
+
+    await expect(
+      approvalService.broadcastTx({
+        chain: Chain.Ethereum,
+        keysignPayload: { erc20ApprovePayload: {} } as KeysignPayload,
+        signature,
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('Approval tx not confirmed within 0s'),
+      originalError: expect.objectContaining({
+        broadcastedTxHashes: ['0xapproval'],
+        failedInputIndex: 0,
+      }),
+    })
+
+    expect(mockCoreBroadcastTx).toHaveBeenCalledOnce()
+  })
+
+  it('bounds a never-resolving approval status request by the confirmation deadline', async () => {
+    mockGetEncodedSigningInputs.mockResolvedValue(['approval-input', 'swap-input'])
+    mockCompileTx.mockImplementation(({ txInputData }) => txInputData)
+    mockDecodeSigningOutput.mockImplementation((_chain, tx) => tx)
+    mockCoreBroadcastTx.mockResolvedValue(undefined)
+    mockGetTxHash.mockResolvedValue('0xapproval')
+    mockGetTxStatus.mockReturnValue(new Promise(() => {}))
+
+    const approvalService = new BroadcastService(extractMessageHashes, wasmProvider, {
+      approvalConfirmationIntervalMs: 1,
+      approvalConfirmationTimeoutMs: 20,
+    })
+
+    await expect(
+      approvalService.broadcastTx({
+        chain: Chain.Ethereum,
+        keysignPayload: { erc20ApprovePayload: {} } as KeysignPayload,
+        signature,
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('Approval tx not confirmed within 0.02s'),
+      originalError: expect.objectContaining({
+        broadcastedTxHashes: ['0xapproval'],
+        failedInputIndex: 0,
+      }),
+    })
+
+    expect(mockGetTxStatus).toHaveBeenCalledOnce()
+    expect(mockCoreBroadcastTx).toHaveBeenCalledOnce()
+  })
+
+  it('does not wait between multiple inputs without an ERC-20 approval payload', async () => {
+    mockGetEncodedSigningInputs.mockResolvedValue(['first-input', 'second-input'])
+    mockCoreBroadcastTx.mockResolvedValue(undefined)
+    mockGetTxHash.mockResolvedValueOnce('0xfirst').mockResolvedValueOnce('0xsecond')
+
+    await service.broadcastTx({
+      chain: Chain.Ethereum,
+      keysignPayload,
+      signature,
+    })
+
+    expect(mockCoreBroadcastTx).toHaveBeenCalledTimes(2)
+    expect(mockGetTxStatus).not.toHaveBeenCalled()
+  })
+
+  it('preserves typed Cosmos stale-sequence recovery through the public broadcast error', async () => {
+    const mismatch = new CosmosSequenceMismatchError({
+      expectedSequence: 255n,
+      signedSequence: 254n,
+    })
+    mockCoreBroadcastTx.mockRejectedValue(mismatch)
+
+    await expect(service.broadcastTx({ chain: Chain.Cosmos, keysignPayload, signature })).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('start a new signing ceremony'),
+      originalError: mismatch,
     })
   })
 })

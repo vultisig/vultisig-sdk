@@ -15,13 +15,13 @@
 //     flips the recovery parity;
 //   - `signSingleTypedData` recover-verifies the assembled signature against
 //     the vault's EVM address and throws SIGNATURE_RECOVERY_MISMATCH otherwise.
-import type { VaultBase } from '@vultisig/sdk'
+import { toCanonicalEvmSignature, type VaultBase } from '@vultisig/sdk'
 import { TypedDataEncoder } from 'ethers'
 import { hashTypedData, recoverAddress } from 'viem'
 import { privateKeyToAddress, sign } from 'viem/accounts'
 import { describe, expect, it, vi } from 'vitest'
 
-import { AgentExecutor, toCanonicalEvmSignature } from '../executor'
+import { AgentExecutor } from '../executor'
 
 // secp256k1 group order — duplicated here (the impl constant is module-private)
 // so the low-S test pins the fold against an independent literal.

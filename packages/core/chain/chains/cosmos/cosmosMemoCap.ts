@@ -12,18 +12,25 @@ import { getCosmosChainByChainId } from './chainInfo'
 export const COSMOS_MEMO_DEFAULT_MAX_BYTES = 256
 
 /**
- * Chains whose gov-set `MaxMemoCharacters` differs from the cosmos-sdk default.
- * A chain absent here uses `COSMOS_MEMO_DEFAULT_MAX_BYTES` (256), not "no cap" -
- * that default closes the fail-open gap of an unmapped chain never getting
- * checked, which fails on virtually every cosmos chain in practice.
+ * The `MaxMemoCharacters` decision for every supported cosmos chain. Most use
+ * the cosmos-sdk default; keeping those entries explicit makes adding a chain
+ * fail typechecking until its cap has been consciously selected.
  */
-const COSMOS_MEMO_MAX_BYTES_OVERRIDES: Partial<Record<CosmosChain, number>> = {
+const COSMOS_MEMO_MAX_BYTES_BY_CHAIN: Record<CosmosChain, number> = {
+  [CosmosChain.Osmosis]: COSMOS_MEMO_DEFAULT_MAX_BYTES,
+  [CosmosChain.Dydx]: COSMOS_MEMO_DEFAULT_MAX_BYTES,
+  [CosmosChain.Kujira]: COSMOS_MEMO_DEFAULT_MAX_BYTES,
   // Terra v2 (phoenix-1): live-verified 512 (2026-06-22, /cosmos/auth params) -
   // Terra raised MaxMemoCharacters above the sdk default.
   [CosmosChain.Terra]: 512,
+  [CosmosChain.TerraClassic]: COSMOS_MEMO_DEFAULT_MAX_BYTES,
+  [CosmosChain.Noble]: COSMOS_MEMO_DEFAULT_MAX_BYTES,
+  [CosmosChain.Akash]: COSMOS_MEMO_DEFAULT_MAX_BYTES,
   // Cosmos Hub (cosmoshub-4): live-verified 512 (2026-06-22, /cosmos/auth params) -
   // gov-raised above the sdk default.
   [CosmosChain.Cosmos]: 512,
+  [CosmosChain.THORChain]: COSMOS_MEMO_DEFAULT_MAX_BYTES,
+  [CosmosChain.MayaChain]: COSMOS_MEMO_DEFAULT_MAX_BYTES,
 }
 
 /**
@@ -33,8 +40,7 @@ const COSMOS_MEMO_MAX_BYTES_OVERRIDES: Partial<Record<CosmosChain, number>> = {
  * burning the signing ceremony for nothing. Check this before building any
  * cosmos tx with a caller-supplied memo.
  */
-export const getCosmosMemoMaxBytes = (chain: CosmosChain): number =>
-  COSMOS_MEMO_MAX_BYTES_OVERRIDES[chain] ?? COSMOS_MEMO_DEFAULT_MAX_BYTES
+export const getCosmosMemoMaxBytes = (chain: CosmosChain): number => COSMOS_MEMO_MAX_BYTES_BY_CHAIN[chain]
 
 /**
  * Same as {@link getCosmosMemoMaxBytes}, keyed by the chain's live chain-id
