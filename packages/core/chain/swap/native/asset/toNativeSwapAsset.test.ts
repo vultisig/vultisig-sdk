@@ -1,7 +1,8 @@
 import { Chain } from '@vultisig/core-chain/Chain'
+import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { describe, expect, it } from 'vitest'
 
-import { nativeSwapChainIds } from '../NativeSwapChain'
+import { nativeSwapChainIds, nativeSwapEnabledChains } from '../NativeSwapChain'
 import { toNativeSwapAsset } from './toNativeSwapAsset'
 
 describe('toNativeSwapAsset', () => {
@@ -142,5 +143,61 @@ describe('toNativeSwapAsset', () => {
         ticker: 'USDC',
       })
     ).toBe('ETH.USDC-0xabc')
+  })
+})
+
+describe('toNativeSwapAsset — fee-coin ticker matches the THORChain/MayaChain pool asset (oracle)', () => {
+  // The fee-coin branch of toNativeSwapAsset interpolates `chainFeeCoin[chain].ticker`
+  // directly into `<swapChainId>.<ticker>` (e.g. "BSC.BNB"). That ticker is a DISPLAY
+  // value that can be rebranded (as Ton -> Toncoin's ticker became "GRAM"), while the
+  // THORChain/MayaChain pool asset symbol is protocol-stable and does NOT follow a
+  // rebrand. This oracle is independently pinned (NOT derived from chainFeeCoin) so a
+  // future rebrand of a native-swap chain's display ticker fails this test instead of
+  // silently emitting a wrong asset string at quote time. See vultisig-sdk#1697.
+  const thorchainPoolAssetTicker: Partial<Record<Chain, string>> = {
+    [Chain.Avalanche]: 'AVAX',
+    [Chain.BitcoinCash]: 'BCH',
+    [Chain.BSC]: 'BNB',
+    [Chain.Bitcoin]: 'BTC',
+    [Chain.Dogecoin]: 'DOGE',
+    [Chain.Ethereum]: 'ETH',
+    [Chain.Cosmos]: 'ATOM',
+    [Chain.Litecoin]: 'LTC',
+    [Chain.THORChain]: 'RUNE',
+    [Chain.MayaChain]: 'CACAO',
+    [Chain.Ripple]: 'XRP',
+    [Chain.Base]: 'ETH',
+    [Chain.Solana]: 'SOL',
+    [Chain.Tron]: 'TRX',
+    [Chain.Noble]: 'USDC',
+    [Chain.Kujira]: 'KUJI',
+    [Chain.Dash]: 'DASH',
+    [Chain.Arbitrum]: 'ETH',
+    [Chain.Zcash]: 'ZEC',
+    [Chain.Cardano]: 'ADA',
+  }
+
+  it('every native-swap-enabled chain has a pinned oracle entry (no chain silently unguarded)', () => {
+    for (const chain of nativeSwapEnabledChains) {
+      expect(thorchainPoolAssetTicker[chain], `${chain} missing from the oracle table`).toBeDefined()
+    }
+  })
+
+  it('chainFeeCoin ticker matches the pinned pool asset ticker for every native-swap-enabled chain', () => {
+    for (const chain of nativeSwapEnabledChains) {
+      const expected = thorchainPoolAssetTicker[chain]
+      expect(chainFeeCoin[chain].ticker, `${chain} fee-coin ticker drifted from its THORChain/MayaChain pool asset`).toBe(
+        expected
+      )
+    }
+  })
+
+  it('reproduces the bug class: a rebranded fee-coin ticker would build the wrong asset string', () => {
+    // Ton is NOT in nativeSwapEnabledChains today (the guard above only covers
+    // enabled chains), so this directly demonstrates what the guard is for:
+    // chainFeeCoin[Ton].ticker is "GRAM" post-rebrand, but the correct THORChain
+    // notation for TON's native asset is "TON.TON", not "TON.GRAM".
+    expect(chainFeeCoin[Chain.Ton].ticker).toBe('GRAM')
+    expect(chainFeeCoin[Chain.Ton].ticker).not.toBe('TON')
   })
 })
