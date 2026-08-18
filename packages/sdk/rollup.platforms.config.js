@@ -363,6 +363,10 @@ const configs = {
       input: './src/tx/index.ts',
       distBase: 'tx',
     }),
+    ...createSubpathConfigs({
+      input: './src/server/index.ts',
+      distBase: 'server',
+    }),
   ],
   browser: {
     input: './src/platforms/browser/index.ts',
