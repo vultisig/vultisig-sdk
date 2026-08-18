@@ -203,7 +203,10 @@ export type {
   CctpBridgeResult,
   CctpChainConfig,
   CctpClaimResult,
+  CctpReceiptLike,
+  CctpReceiptLog,
   CctpUnsignedTx,
+  ExtractedCctpMessage,
 } from './bridge'
 export {
   buildCctpBridge,
@@ -211,6 +214,7 @@ export {
   cctpAttestationApiBase,
   cctpChains,
   cctpSupportedChains,
+  extractCctpMessageFromReceipt,
   formatUsdc,
   getCctpChain,
   normalizeHexBytes,
