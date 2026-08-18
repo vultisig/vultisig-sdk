@@ -1,4 +1,5 @@
 import { EvmChain } from '@vultisig/core-chain/Chain'
+import { deriveEvmGasLimit } from '@vultisig/core-chain/tx/fee/evm/evmGasLimit'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 
 const mocks = vi.hoisted(() => {
@@ -204,6 +205,27 @@ describe('getEvmFeeQuote gas limit buffering', () => {
     })
 
     expect(quote.gasLimit).toBe(400_000n)
+  })
+
+  it('sdk#1938: a memo-less Mantle ERC-20 send signs the 3_000_000_000n data-bearing floor, not the 120_000n token-table default, when estimation fails', async () => {
+    // Mirrors chainSpecific/resolvers/evm.ts's real call shape for a plain token send:
+    // coin.id set (it's an ERC-20), no memo/swap payload so getData() returns undefined,
+    // and minimumGasLimit computed via the REAL deriveEvmGasLimit (not a literal) so this
+    // test actually guards the fix in evmGasLimit.ts, not just the capGasLimit contract.
+    mocks.getKeysignCoin.mockReturnValue({ ...makeCoin(EvmChain.Mantle), id: router })
+    mocks.getKeysignSwapPayload.mockReturnValue(undefined)
+    mocks.client.estimateGas.mockRejectedValueOnce(new Error('execution reverted'))
+
+    const coin = { ...makeCoin(EvmChain.Mantle), id: router }
+    const minimumGasLimit = deriveEvmGasLimit({ coin, data: undefined })
+    expect(minimumGasLimit).toBe(3_000_000_000n)
+
+    const quote = await getEvmFeeQuote({
+      keysignPayload: { toAddress: router } as never,
+      minimumGasLimit,
+    })
+
+    expect(quote.gasLimit).toBe(3_000_000_000n)
   })
 
   it('buffers ZkSync fee estimates while preserving its fee-field calculation', async () => {

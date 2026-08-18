@@ -41,13 +41,21 @@ describe('deriveEvmGasLimit — Mantle native floor (sdk#1847)', () => {
     expect(limit).toBeGreaterThan(REAL_GAS_USED)
   })
 
-  it('ERC-20 (non-data) table entry now uses the shared default, not the native floor', () => {
-    // deriveEvmGasLimit only reaches the erc20TransferGasLimit table when `data` is
-    // undefined AND coin.id is set - not the real-world ERC-20-transfer path (which
-    // always carries calldata and hits the untouched `data` branch instead, see
-    // evmGasLimit.ts's docblock) - but this table entry must still be internally
-    // consistent with every other chain's shared default rather than the native floor.
-    expect(deriveEvmGasLimit({ coin: mantleTokenCoin })).toBe(120_000n)
+  it('a memo-less Mantle token send (id set, no data) routes to the 3_000_000_000n data-bearing floor, not the 120_000n table default (sdk#1938 review)', () => {
+    // chainSpecific/resolvers/evm.ts's getData() only carries swap calldata or an explicit
+    // memo - a plain token send leaves `data` undefined even though it's a real ERC-20
+    // `transfer(...)` call on-chain. deriveEvmGasLimit must not let that fall through to
+    // erc20TransferGasLimit[Mantle] (120_000n) - a real Mantle token transfer needs gas in
+    // the hundreds of millions (Mantle's op-geth fee model), so 120_000n would fail on-chain
+    // and burn the fee.
+    expect(deriveEvmGasLimit({ coin: mantleTokenCoin })).toBe(3_000_000_000n)
+  })
+
+  it('erc20TransferGasLimit[Mantle] table entry is unreachable in practice but still internally consistent', () => {
+    // Structurally unreachable via deriveEvmGasLimit (the id && chain === Mantle branch
+    // above catches every case that would otherwise land here), kept as a total Record entry.
+    const nonMantleTokenCoin = { chain: EvmChain.Ethereum, address: mantleCoin.address, id: mantleTokenCoin.id }
+    expect(deriveEvmGasLimit({ coin: nonMantleTokenCoin })).toBe(120_000n)
   })
 
   it('other EVM chains are unaffected by the Mantle-specific change', () => {

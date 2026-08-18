@@ -48,13 +48,13 @@ const erc20TransferGasLimit: Record<EvmChain, bigint> = {
   [EvmChain.BSC]: defaultErc20TransferGasLimit,
   [EvmChain.Avalanche]: defaultErc20TransferGasLimit,
   [EvmChain.Zksync]: zkSyncTransferGasLimit,
-  // sdk#1847: was mantleTransferGasLimit (the native-transfer floor, sized for a value-only
-  // send) - an ERC-20 transfer is a data-bearing call, so it should size against the shared
-  // ERC-20 default like every other chain here, not the native floor. In practice this entry
-  // is currently unreachable anyway: an ERC-20 transfer always carries calldata, so
-  // deriveEvmGasLimit's `data` branch below (a SEPARATE hardcoded 3_000_000_000n literal for
-  // Mantle, untouched by this fix - see PR body) is what a real Mantle token send hits today,
-  // not this table. Fixed here for correctness/consistency regardless.
+  // sdk#1847 review: this entry is NOT reachable for a real Mantle token send - see the
+  // `id && chain === EvmChain.Mantle` branch in deriveEvmGasLimit below, which catches every
+  // Mantle ERC-20 transfer (memo-less ones included) before it ever falls through to this
+  // table lookup. Kept at the shared default only so the Record stays total; if that branch
+  // is ever removed, this value would need its own on-chain-measured Mantle floor first, NOT
+  // this default (a real Mantle token send needs gas in the hundreds of millions - Mantle's
+  // op-geth fee model, per PR #1938 review evidence, e.g. ~215.5M for a mainnet USDT transfer).
   [EvmChain.Mantle]: defaultErc20TransferGasLimit,
   [EvmChain.Hyperliquid]: defaultErc20TransferGasLimit,
   [EvmChain.Sei]: defaultErc20TransferGasLimit,
@@ -68,18 +68,28 @@ type DeriveEvmGasLimitInput = {
 
 export const deriveEvmGasLimit = ({ coin, data }: DeriveEvmGasLimitInput) => {
   const { id, chain } = coin
-  // NOT touched by sdk#1847 (scoped to the native-transfer floor above): the Mantle branch
-  // here (3_000_000_000n) is a SEPARATE hardcoded value for any data-bearing Mantle call
-  // (ERC-20 transfers, contract calls, swaps) - same shape of bug, arguably worse (real gas
-  // used for a contract call is still far below 3B), but a wider blast radius (every
-  // calldata-bearing Mantle tx, not just native sends) and getEvmFeeQuote.ts's
+  // Mantle branch (3_000_000_000n): a SEPARATE hardcoded value for any data-bearing Mantle
+  // call (ERC-20 transfers, contract calls, swaps) - getEvmFeeQuote.ts's
   // shouldBufferDataTxGasLimit already special-cases `chain !== EvmChain.Mantle` to skip its
   // 1.5x data-tx buffer specifically because of this value - an existing test
   // ("keeps Mantle swap gas limits at the existing special floor",
-  // getEvmFeeQuote.test.ts) pins today's 3_000_000_000n as deliberate. Flagged, not fixed
-  // here - needs its own issue + explicit sign-off given the wider surface.
+  // getEvmFeeQuote.test.ts) pins today's 3_000_000_000n as deliberate.
   if (data) {
-    return chain === EvmChain.Mantle ? 3_00_000_0000n : 600_000n
+    return chain === EvmChain.Mantle ? 3_000_000_000n : 600_000n
+  }
+
+  // sdk#1938 review: a token send (`id` set) is ALWAYS a data-bearing ERC-20 `transfer(...)`
+  // call on-chain, even when this call site's own `data` param is undefined (per
+  // chainSpecific/resolvers/evm.ts's getData(), which only carries swap calldata or an
+  // explicit memo - a plain token send leaves it unset). Without this branch a memo-less
+  // Mantle token send fell through to `erc20TransferGasLimit[Mantle]`
+  // (defaultErc20TransferGasLimit, 120_000n) - catastrophically under the hundreds-of-millions
+  // Mantle's op-geth fee model actually charges for a token transfer, which would fail
+  // on-chain and burn the fee. Route it through the same 3_000_000_000n floor every other
+  // data-bearing Mantle call already gets, rather than inventing a second Mantle-specific
+  // constant.
+  if (id && chain === EvmChain.Mantle) {
+    return 3_000_000_000n
   }
 
   return (id ? erc20TransferGasLimit : feeCoinTransferGasLimit)[chain]
