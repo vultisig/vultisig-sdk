@@ -774,6 +774,39 @@ export type { ParseChainResult, ParseTickerResult } from '../../tools/parse'
 export { chainSchema, parseChain, parseTicker, tickerSchema } from '../../tools/parse'
 export type { NormalizeArgs, NormalizedTx } from '../../tx'
 export { normalizeTx, splitMultiTx, TxNormalizeError } from '../../tx'
+
+// Pure-crypto chain-math normalizers (decimals/amount-scale/fee/token-symbol).
+// Kept in parity with the root SDK entrypoint (sdk#1408) so RN consumers
+// don't hand-roll their own base-unit scaling / token-decimals table.
+export {
+  amountMatches,
+  computeEvmFee,
+  decimalsFor,
+  feeMatches,
+  isValidTokenSymbolFormat,
+  normalizeTokenSymbol,
+  scaleHumanToRaw,
+  scaleRawToHuman,
+  tokenDecimals,
+  ValidateNormalizerError,
+} from '../../utils/validateNormalizers'
+
+// Pure address-format validation (vault-free, no network, no signing). Kept
+// in parity with the root SDK entrypoint (sdk#1408).
+export {
+  canonicalChainTag,
+  classifyAddress,
+  isAddressValidForChain,
+  isSolanaAddress,
+  supportedChainTags,
+} from '../../utils/addressFormat'
+export type { AddressFamily, AddressRole, ChainPrefixResult } from '../../utils/addressValidation'
+export { address, validate } from '../../utils/addressValidation'
+export { checkChainPrefix } from '../../utils/chainPrefix'
+
+// Pure intent<->envelope policy diff (vault-free, no signing/broadcast). Kept
+// in parity with the root SDK entrypoint (sdk#1408).
+export { policy } from '../../tools/policy'
 export { computePersonalSignHash, formatEcdsaSignature65 } from '../../utils/eip191'
 export { coerceEip712ChainId, computeEip712Hash, toCanonicalEvmSignature } from '../../utils/eip712'
 export {

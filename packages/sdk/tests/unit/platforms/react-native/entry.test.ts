@@ -173,6 +173,39 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(deriveAddressFromPublicKey).toHaveBeenNthCalledWith(2, 60, publicKey)
   })
 
+  it('exports the pure validate-normalizer, address-format, and policy helper families from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const validateNormalizers = await import('../../../../src/utils/validateNormalizers')
+    const addressFormat = await import('../../../../src/utils/addressFormat')
+    const addressValidation = await import('../../../../src/utils/addressValidation')
+    const chainPrefix = await import('../../../../src/utils/chainPrefix')
+    const policyModule = await import('../../../../src/tools/policy')
+
+    expect(rn.amountMatches).toBe(validateNormalizers.amountMatches)
+    expect(rn.computeEvmFee).toBe(validateNormalizers.computeEvmFee)
+    expect(rn.decimalsFor).toBe(validateNormalizers.decimalsFor)
+    expect(rn.feeMatches).toBe(validateNormalizers.feeMatches)
+    expect(rn.isValidTokenSymbolFormat).toBe(validateNormalizers.isValidTokenSymbolFormat)
+    expect(rn.normalizeTokenSymbol).toBe(validateNormalizers.normalizeTokenSymbol)
+    expect(rn.scaleHumanToRaw).toBe(validateNormalizers.scaleHumanToRaw)
+    expect(rn.scaleRawToHuman).toBe(validateNormalizers.scaleRawToHuman)
+    expect(rn.tokenDecimals).toBe(validateNormalizers.tokenDecimals)
+    expect(rn.ValidateNormalizerError).toBe(validateNormalizers.ValidateNormalizerError)
+
+    expect(rn.canonicalChainTag).toBe(addressFormat.canonicalChainTag)
+    expect(rn.classifyAddress).toBe(addressFormat.classifyAddress)
+    expect(rn.isAddressValidForChain).toBe(addressFormat.isAddressValidForChain)
+    expect(rn.isSolanaAddress).toBe(addressFormat.isSolanaAddress)
+    expect(rn.supportedChainTags).toBe(addressFormat.supportedChainTags)
+    expect(rn.address).toBe(addressValidation.address)
+    expect(rn.validate).toBe(addressValidation.validate)
+    expect(rn.checkChainPrefix).toBe(chainPrefix.checkChainPrefix)
+
+    expect(rn.policy).toBe(policyModule.policy)
+    expect(rn.policy.evaluate).toBeTypeOf('function')
+    expect(rn.policy.checkInvariants).toBeTypeOf('function')
+  })
+
   it('exports the shared THORChain secured-asset catalog from the RN entry', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
