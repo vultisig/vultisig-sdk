@@ -33,27 +33,28 @@ describe('tokens --add', () => {
     vi.restoreAllMocks()
   })
 
-  it('stores the prefixed vault id and the bare contract address separately', async () => {
+  it('stores the same bare lowercase id through manual add and discovery', async () => {
     configureOutput({ format: 'json' })
-    const addTokenToVault = vi.fn(async () => {})
-    const vault = { addToken: addTokenToVault } as unknown as VaultBase
-    const ctx = { ensureActiveVault: async () => vault } as unknown as CommandContext
+    const checksummed = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+    const addTokenToVault = vi.fn(async (_chain: ChainType, _token: Token) => {})
+    const manualVault = { addToken: addTokenToVault } as unknown as VaultBase
+    const manualCtx = { ensureActiveVault: async () => manualVault } as unknown as CommandContext
 
-    await addToken(ctx, {
+    await addToken(manualCtx, {
       chain: Chain.Ethereum,
-      contractAddress: USDC,
+      contractAddress: checksummed,
       symbol: 'USDC',
       name: 'USD Coin',
       decimals: 6,
     })
+    const { ctx: discoveryCtx, addToken: addDiscoveredToken } = makeCtx([discoveredToken(checksummed, 'USDC', 6)])
+    await discoverTokens(discoveryCtx, Chain.Ethereum)
 
-    expect(addTokenToVault).toHaveBeenCalledWith(
-      Chain.Ethereum,
-      expect.objectContaining({
-        id: `${Chain.Ethereum}-${USDC}`,
-        contractAddress: USDC,
-      })
-    )
+    const manual = addTokenToVault.mock.calls[0][1]
+    const discovered = addDiscoveredToken.mock.calls[0][1]
+    expect(manual).toMatchObject({ id: USDC, contractAddress: USDC })
+    expect(discovered).toMatchObject({ id: USDC, contractAddress: USDC })
+    expect(manual.id).toBe(discovered.id)
   })
 })
 
@@ -94,6 +95,25 @@ describe('tokens --remove', () => {
     expect(error).toBeInstanceOf(TokenNotFoundError)
     expect((error as TokenNotFoundError).exitCode).toBe(ExitCode.RESOURCE_NOT_FOUND)
     expect(logs.join('\n')).not.toMatch(/Removed token/)
+  })
+
+  it('emits the v1 success envelope in JSON mode', async () => {
+    configureOutput({ format: 'json' })
+    const vault = { removeToken: vi.fn(async () => true) } as unknown as VaultBase
+    const ctx = { ensureActiveVault: async () => vault } as unknown as CommandContext
+    const writes: string[] = []
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk: any) => {
+      writes.push(String(chunk))
+      return true
+    })
+
+    await removeToken(ctx, Chain.Ethereum, USDC)
+
+    expect(JSON.parse(writes.join(''))).toEqual({
+      success: true,
+      v: 1,
+      data: { chain: Chain.Ethereum, tokenId: USDC, removed: true },
+    })
   })
 })
 
