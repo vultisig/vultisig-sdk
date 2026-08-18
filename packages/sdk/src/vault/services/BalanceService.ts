@@ -3,13 +3,12 @@ import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import { type AccountCoinKey, accountCoinKeyToString } from '@vultisig/core-chain/coin/AccountCoin'
 import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 import { getEvmChainBalances } from '@vultisig/core-chain/coin/balance/getEvmChainBalances'
-import { normalizeTokenId } from '@vultisig/core-chain/utils/isValidTokenId'
 import type { Address } from 'viem'
 
 import { formatBalance } from '../../adapters/formatBalance'
 import { CacheScope, type CacheService } from '../../services/CacheService'
 import type { Balance, Token } from '../../types'
-import { resolveTokenRef } from '../tokenRef'
+import { normalizedTokenIdentity, resolveTokenRef, stripLegacyTokenIdPrefix, tokenIdsMatch } from '../tokenRef'
 import { VaultError, VaultErrorCode } from '../VaultError'
 
 /**
@@ -46,7 +45,8 @@ export class BalanceService {
     knownAssetId?: string,
     knownToken?: Token
   ): Promise<Balance> {
-    const key = `${chain.toLowerCase()}:${tokenId ?? 'native'}`
+    const resultId = tokenId === undefined ? undefined : normalizedTokenIdentity(chain, tokenId)
+    const key = `${chain.toLowerCase()}:${resultId ?? 'native'}`
 
     // Check scoped cache (uses configured TTL)
     const cached = this.cacheService.getScoped<Balance>(key, CacheScope.BALANCE)
@@ -57,7 +57,10 @@ export class BalanceService {
       // User-facing refs are resolved at the VaultBase boundary. This service
       // receives an already-canonical asset id; resolving it again could treat
       // a contract address as an untrusted sibling token's symbol.
-      const assetId = knownAssetId ?? tokenId
+      const assetId =
+        knownAssetId === undefined
+          ? resultId
+          : normalizedTokenIdentity(chain, stripLegacyTokenIdPrefix(chain, knownAssetId))
 
       address = await this.getAddress(chain)
 
@@ -71,7 +74,7 @@ export class BalanceService {
 
       // Format using adapter
       const tokens = knownToken ? { [chain]: [knownToken] } : this.getTokensRecord()
-      const balance = formatBalance(rawBalance, chain, tokenId, tokens)
+      const balance = formatBalance(rawBalance, chain, resultId, tokens)
 
       // Cache with configured TTL
       await this.cacheService.setScoped(key, CacheScope.BALANCE, balance)
@@ -80,7 +83,7 @@ export class BalanceService {
       this.emitBalanceUpdated({
         chain,
         balance,
-        tokenId,
+        tokenId: resultId,
       })
 
       return balance
@@ -92,7 +95,7 @@ export class BalanceService {
       this.emitError(error as Error)
       throw new VaultError(
         VaultErrorCode.BalanceFetchFailed,
-        `Failed to fetch balance for ${chain}${tokenId ? `:${tokenId}` : ''}: ${errorName}: ${errorMessage}`,
+        `Failed to fetch balance for ${chain}${resultId ? `:${resultId}` : ''}: ${errorName}: ${errorMessage}`,
         error as Error
       )
     }
@@ -145,10 +148,11 @@ export class BalanceService {
     if (includeTokens) {
       const tokens = this.getTokens(chain)
       for (const token of tokens) {
-        const assetId = normalizeTokenId({ chain, id: token.contractAddress || token.id })
+        const assetId = normalizedTokenIdentity(chain, token.contractAddress || token.id)
+        const resultId = normalizedTokenIdentity(chain, token.id)
         balanceRequests.push(
-          this.getBalanceForAsset(chain, token.id, assetId, token).then(
-            balance => [`${chain}:${token.id}`, balance] as const
+          this.getBalanceForAsset(chain, resultId, assetId, token).then(
+            balance => [`${chain}:${resultId}`, balance] as const
           )
         )
       }
@@ -179,12 +183,13 @@ export class BalanceService {
       ...tokens.map(token => {
         // This record is already selected. Use its own chain-level asset id
         // instead of resolving its storage key against sibling symbols.
-        const assetId = normalizeTokenId({ chain, id: token.contractAddress || token.id })
+        const assetId = normalizedTokenIdentity(chain, token.contractAddress || token.id)
+        const resultId = normalizedTokenIdentity(chain, token.id)
         return {
           coinKey: { chain, id: assetId, address } as AccountCoinKey<EvmChain>,
-          resultKey: `${chain}:${token.id}`,
-          cacheKey: `${chain.toLowerCase()}:${token.id}`,
-          tokenId: token.id,
+          resultKey: `${chain}:${resultId}`,
+          cacheKey: `${chain.toLowerCase()}:${resultId}`,
+          tokenId: resultId,
           token,
         }
       }),
@@ -239,10 +244,11 @@ export class BalanceService {
    * Force refresh balance (invalidate cache)
    */
   async updateBalance(chain: Chain, tokenId?: string): Promise<Balance> {
-    const key = `${chain.toLowerCase()}:${tokenId ?? 'native'}`
+    const resultId = tokenId === undefined ? undefined : normalizedTokenIdentity(chain, tokenId)
+    const key = `${chain.toLowerCase()}:${resultId ?? 'native'}`
     await this.cacheService.invalidateScoped(key, CacheScope.BALANCE)
     // getBalance() will emit the balanceUpdated event
-    return this.getBalance(chain, tokenId)
+    return this.getBalance(chain, resultId)
   }
 
   /**
@@ -265,7 +271,8 @@ export class BalanceService {
       if (includeTokens) {
         const tokens = this.getTokens(chain)
         for (const token of tokens) {
-          const tokenKey = `${chain.toLowerCase()}:${token.id}`
+          const resultId = normalizedTokenIdentity(chain, token.id)
+          const tokenKey = `${chain.toLowerCase()}:${resultId}`
           await this.cacheService.invalidateScoped(tokenKey, CacheScope.BALANCE)
         }
       }
@@ -317,14 +324,20 @@ export class BalanceService {
     // entered by its human ticker `RLUSD.<issuer>` — dedupes against the on-ledger
     // id discovery stores (`524C…<issuer>`) instead of being kept as a second,
     // distinct token. A no-op for chains whose ids are already canonical.
-    const id = normalizeTokenId({ chain, id: token.id })
+    const strippedId = stripLegacyTokenIdPrefix(chain, token.id)
+    const canonicalId = normalizedTokenIdentity(chain, token.id)
+    const id = strippedId === token.id ? canonicalId : `${chain}-${canonicalId}`
     const normalizedToken: Token =
       token.contractAddress === undefined
         ? { ...token, id }
-        : { ...token, id, contractAddress: normalizeTokenId({ chain, id: token.contractAddress }) }
+        : { ...token, id, contractAddress: normalizedTokenIdentity(chain, token.contractAddress) }
 
-    // Check if token already exists
-    if (!chainTokens.find(t => t.id === normalizedToken.id)) {
+    // Check if this chain-level asset already exists. Older CLI versions stored
+    // `<Chain>-<address>` ids, so exact-id comparison can create a second record
+    // when that same contract is added again under its canonical bare id.
+    const normalizedAssetId = normalizedToken.contractAddress || normalizedToken.id
+    const tokenAlreadyExists = chainTokens.some(t => tokenIdsMatch(chain, t.contractAddress || t.id, normalizedAssetId))
+    if (!tokenAlreadyExists) {
       this.setAllTokens({ ...allTokens, [chain]: [...chainTokens, normalizedToken] })
 
       try {
@@ -354,7 +367,7 @@ export class BalanceService {
 
     // Match the canonical id addToken persisted, so a raw id — e.g. a Ripple
     // human-ticker `RLUSD.<issuer>` — still removes the stored token.
-    const id = normalizeTokenId({ chain, id: tokenId })
+    const id = normalizedTokenIdentity(chain, tokenId)
 
     if (!tokens) return false
 
@@ -385,10 +398,18 @@ export class BalanceService {
       // address-keyed record, and then "which record" and "which asset" are
       // different questions. Removal must mean the same record every other
       // surface means for that reference.
-      const upper = id.toUpperCase()
-      const lower = id.toLowerCase()
+      const upper = tokenId.toUpperCase()
       tokenIndex = tokens.findIndex(token => token.symbol?.toUpperCase() === upper)
       if (tokenIndex === -1) {
+        tokenIndex = tokens.findIndex(token => token.contractAddress === tokenId || token.id === tokenId)
+      }
+      if (tokenIndex === -1) {
+        tokenIndex = tokens.findIndex(
+          token => tokenIdsMatch(chain, token.contractAddress, id) || tokenIdsMatch(chain, token.id, id)
+        )
+      }
+      if (tokenIndex === -1 && getChainKind(chain) === 'evm') {
+        const lower = id.toLowerCase()
         tokenIndex = tokens.findIndex(
           token => token.contractAddress?.toLowerCase() === lower || token.id?.toLowerCase() === lower
         )
@@ -399,8 +420,8 @@ export class BalanceService {
         // resolver applies — a token stored with an empty `contractAddress` is
         // identified by its `id`, and `??` would compare it against `''` and
         // leave it permanently unremovable.
-        const resolvedAssetId = resolved.contractAddress.toLowerCase()
-        tokenIndex = tokens.findIndex(token => (token.contractAddress || token.id)?.toLowerCase() === resolvedAssetId)
+        const resolvedAssetId = resolved.contractAddress
+        tokenIndex = tokens.findIndex(token => tokenIdsMatch(chain, token.contractAddress || token.id, resolvedAssetId))
       }
     }
 
