@@ -1,5 +1,15 @@
 # @vultisig/core-mpc
 
+## 1.20.1
+
+### Patch Changes
+
+- [#1880](https://github.com/vultisig/vultisig-sdk/pull/1880) [`39b8762`](https://github.com/vultisig/vultisig-sdk/commit/39b8762aeed25382bf803944c1b2c2066f6224a6) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Resolve MayaChain's displayed native transaction fee from live network parameters and clarify vault-based Cosmos fee signing semantics.
+
+- Updated dependencies [[`f7caa39`](https://github.com/vultisig/vultisig-sdk/commit/f7caa39ad2eb3d322031d8ac56ae832a9108e6d4), [`50257ad`](https://github.com/vultisig/vultisig-sdk/commit/50257ad213a36952509f3548100334e5f3e44a09), [`69b1c2e`](https://github.com/vultisig/vultisig-sdk/commit/69b1c2e4026e62a83151957a91651eaa982d0a13), [`687f1ad`](https://github.com/vultisig/vultisig-sdk/commit/687f1adea7c81dde4a5f21520ea1cdbbf34e10fd), [`76163b6`](https://github.com/vultisig/vultisig-sdk/commit/76163b6e533cb0178c999e5b6554bddf4517718e)]:
+  - @vultisig/core-chain@2.37.0
+  - @vultisig/lib-utils@0.10.5
+
 ## 1.20.0
 
 ### Minor Changes
