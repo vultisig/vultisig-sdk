@@ -274,7 +274,9 @@ export type {
   PreparePolkadotAssetSendParams,
   PreparePolkadotAssetSendResult,
   PrepareSendTxFromKeysParams,
+  PrepareSuiTokenTransferFromKeysParams,
   PrepareSwapTxFromKeysParams,
+  PrepareThorchainMsgDepositTxFromKeysParams,
   PrepareTrc20TransferFromKeysParams,
   PrepareUtxoConsolidateResult,
   PrepareUtxoConsolidateTxFromKeysParams,
@@ -317,6 +319,26 @@ export { POLKADOT_ASSET_HUB_KNOWN_ASSETS, preparePolkadotAssetSend } from '../..
 export { SUI_NATIVE_COIN_TYPE } from '../../tools/prep/suiTokenTransfer'
 export { TRC20_TRANSFER_SELECTOR } from '../../tools/prep/trc20'
 export { CONSOLIDATE_CHAINS } from '../../tools/prep/utxoConsolidate'
+// `prepareIbcTransfer` + route tables are pure-crypto (@scure/base + plain
+// lookup tables, no WalletCore/network), so they ship as static re-exports
+// like the CosmWasm/Polkadot builders above. Kept in parity with the root
+// entrypoint — the hand-curated RN prep surface had silently fallen behind
+// (sdk#1926).
+export type {
+  IbcCosmosTx,
+  IbcMsgTransfer,
+  PrepareIbcTransferParams,
+  PrepareIbcTransferResult,
+} from '../../tools/prep/ibcTransfer'
+export {
+  IBC_CHAIN_HRP,
+  IBC_CHAIN_REVISION,
+  IBC_CHANNEL_DEST,
+  IBC_MSG_TRANSFER_TYPE_URL,
+  normaliseIbcChainId,
+  prepareIbcTransfer,
+  supportedIbcDestinationsFrom,
+} from '../../tools/prep/ibcTransfer'
 
 export async function getMaxSendAmountFromKeys(...args: unknown[]) {
   const mod = await import('../../tools/prep/maxSend')
@@ -360,6 +382,24 @@ export async function prepareSwapTxFromKeys(...args: unknown[]) {
 export async function prepareTrc20TransferFromKeys(...args: unknown[]) {
   const mod = await import('../../tools/prep/trc20')
   return mod.prepareTrc20TransferFromKeys(...(args as Parameters<typeof mod.prepareTrc20TransferFromKeys>))
+}
+
+// Sui token-transfer and THOR/Maya deposit builders were reachable from the
+// root entrypoint but fell through the hand-curated RN prep allow-list
+// (sdk#1926) — lazy-imported to match the WalletCore-dependent prep helpers
+// above.
+export async function prepareSuiTokenTransferFromKeys(...args: unknown[]) {
+  const mod = await import('../../tools/prep/suiTokenTransfer')
+  return mod.prepareSuiTokenTransferFromKeys(
+    ...(args as Parameters<typeof mod.prepareSuiTokenTransferFromKeys>)
+  )
+}
+
+export async function prepareThorchainMsgDepositTxFromKeys(...args: unknown[]) {
+  const mod = await import('../../tools/prep/thorchainMsgDeposit')
+  return mod.prepareThorchainMsgDepositTxFromKeys(
+    ...(args as Parameters<typeof mod.prepareThorchainMsgDepositTxFromKeys>)
+  )
 }
 
 // Lazy import: `splTransfer` statically pulls `@solana/web3.js`, which reads

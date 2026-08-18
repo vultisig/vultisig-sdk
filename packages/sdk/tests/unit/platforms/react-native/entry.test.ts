@@ -173,6 +173,24 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(deriveAddressFromPublicKey).toHaveBeenNthCalledWith(2, 60, publicKey)
   })
 
+  it('exports the IBC / Sui-token / THOR-deposit prep helpers that had fallen behind the RN allow-list (sdk#1926)', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    // Pure/static IBC helpers — exercised for real, not just typeof.
+    expect(rn.normaliseIbcChainId('Cosmos')).toBe('cosmoshub-4')
+    expect(rn.supportedIbcDestinationsFrom('osmosis-1')).toContain('cosmoshub-4')
+    expect(typeof rn.prepareIbcTransfer).toBe('function')
+    expect(rn.IBC_CHAIN_HRP['osmosis-1']).toBe('osmo')
+    expect(rn.IBC_CHAIN_REVISION['cosmoshub-4']).toBe(4)
+    expect(rn.IBC_CHANNEL_DEST['osmosis-1/channel-0']).toBe('cosmoshub-4')
+    expect(typeof rn.IBC_MSG_TRANSFER_TYPE_URL).toBe('string')
+
+    // WalletCore-dependent builders — lazy-imported like the sibling prep
+    // helpers above, so only the shape is checked here.
+    expect(typeof rn.prepareSuiTokenTransferFromKeys).toBe('function')
+    expect(typeof rn.prepareThorchainMsgDepositTxFromKeys).toBe('function')
+  })
+
   it('exports the shared THORChain secured-asset catalog from the RN entry', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
