@@ -41,6 +41,7 @@ const METHOD_TRANSFER_KEEP_ALIVE = 2
  * any legitimate asset.
  */
 const ASSET_ID_MAX = 0x3fffffff // 2^30 - 1, the largest non-big-integer compact
+const POLKADOT_BALANCE_MAX = (1n << 128n) - 1n
 
 /**
  * SS58 address-prefix for Polkadot relay chain + Asset Hub. Substrate chains
@@ -176,6 +177,11 @@ export const preparePolkadotAssetSend = (params: PreparePolkadotAssetSendParams)
   }
   if (amount <= 0n) {
     throw new Error('Amount must be greater than zero')
+  }
+  if (amount > POLKADOT_BALANCE_MAX) {
+    throw new Error(
+      `Invalid Polkadot asset amount ${amount}: must be <= ${POLKADOT_BALANCE_MAX} (2^128-1) to match pallet_assets Balance = u128.`
+    )
   }
   if (!from) {
     throw new Error('Sender address (from) is required')

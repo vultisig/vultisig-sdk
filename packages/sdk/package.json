@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/sdk",
-  "version": "4.5.0",
+  "version": "4.7.0",
   "description": "The self-custody MPC wallet SDK for AI agents. Bitcoin, Ethereum, Solana & 36+ chains via DKLS23 threshold signatures. TypeScript, multi-platform (Node, browser, React Native).",
   "type": "module",
   "main": "dist/index.node.cjs",
@@ -115,6 +115,45 @@
       "require": "./dist/tools/bridge/index.cjs",
       "default": "./dist/tools/bridge/index.cjs"
     },
+    "./tools/balance": {
+      "types": "./dist/tools/balance/index.d.ts",
+      "browser": "./dist/tools/balance/index.js",
+      "worker": "./dist/tools/balance/index.js",
+      "react-native": "./dist/tools/balance/index.js",
+      "node": {
+        "import": "./dist/tools/balance/index.js",
+        "require": "./dist/tools/balance/index.cjs"
+      },
+      "import": "./dist/tools/balance/index.js",
+      "require": "./dist/tools/balance/index.cjs",
+      "default": "./dist/tools/balance/index.cjs"
+    },
+    "./chains/tron": {
+      "types": "./dist/chains/tron/index.d.ts",
+      "browser": "./dist/chains/tron/index.js",
+      "worker": "./dist/chains/tron/index.js",
+      "react-native": "./dist/chains/tron/index.js",
+      "node": {
+        "import": "./dist/chains/tron/index.js",
+        "require": "./dist/chains/tron/index.cjs"
+      },
+      "import": "./dist/chains/tron/index.js",
+      "require": "./dist/chains/tron/index.cjs",
+      "default": "./dist/chains/tron/index.cjs"
+    },
+    "./chains/utxo": {
+      "types": "./dist/chains/utxo/index.d.ts",
+      "browser": "./dist/chains/utxo/index.js",
+      "worker": "./dist/chains/utxo/index.js",
+      "react-native": "./dist/chains/utxo/index.js",
+      "node": {
+        "import": "./dist/chains/utxo/index.js",
+        "require": "./dist/chains/utxo/index.cjs"
+      },
+      "import": "./dist/chains/utxo/index.js",
+      "require": "./dist/chains/utxo/index.cjs",
+      "default": "./dist/chains/utxo/index.cjs"
+    },
     "./seedphrase": {
       "types": "./dist/seedphrase/index.d.ts",
       "node": {
@@ -124,6 +163,32 @@
       "import": "./dist/seedphrase/index.js",
       "require": "./dist/seedphrase/index.cjs",
       "default": "./dist/seedphrase/index.cjs"
+    },
+    "./tools/decode": {
+      "types": "./dist/tools/decode/index.d.ts",
+      "browser": "./dist/tools/decode/index.js",
+      "worker": "./dist/tools/decode/index.js",
+      "react-native": "./dist/tools/decode/index.js",
+      "node": {
+        "import": "./dist/tools/decode/index.js",
+        "require": "./dist/tools/decode/index.cjs"
+      },
+      "import": "./dist/tools/decode/index.js",
+      "require": "./dist/tools/decode/index.cjs",
+      "default": "./dist/tools/decode/index.cjs"
+    },
+    "./tx": {
+      "types": "./dist/tx/index.d.ts",
+      "browser": "./dist/tx/index.js",
+      "worker": "./dist/tx/index.js",
+      "react-native": "./dist/tx/index.js",
+      "node": {
+        "import": "./dist/tx/index.js",
+        "require": "./dist/tx/index.cjs"
+      },
+      "import": "./dist/tx/index.js",
+      "require": "./dist/tx/index.cjs",
+      "default": "./dist/tx/index.cjs"
     }
   },
   "scripts": {
