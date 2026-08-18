@@ -17,7 +17,7 @@ vi.mock('../verifyBroadcastByHash', () => ({
 }))
 
 import { CosmosChain } from '../../../Chain'
-import { broadcastCosmosTx, getCosmosBroadcastTimeoutTxId } from './cosmos'
+import { broadcastCosmosTx, CosmosSequenceMismatchError, getCosmosBroadcastTimeoutTxId } from './cosmos'
 
 describe('broadcastCosmosTx', () => {
   const chain = CosmosChain.THORChain
@@ -92,6 +92,45 @@ describe('broadcastCosmosTx', () => {
     await expect(broadcastCosmosTx({ chain, tx })).resolves.toBeUndefined()
 
     expect(mocks.verifyBroadcastByHash).toHaveBeenCalledWith({ chain, tx, error: rpcError })
+  })
+
+  it('surfaces a stale account sequence as a typed re-sign recovery after hash verification', async () => {
+    mocks.broadcastTx.mockRejectedValue(
+      new Error(
+        'Broadcasting transaction failed with code 32 (codespace: sdk). Log: account sequence mismatch, expected 255, got 254: incorrect account sequence'
+      )
+    )
+    mocks.verifyBroadcastByHash.mockImplementation(async ({ error }) => {
+      throw error
+    })
+
+    const rejection = await broadcastCosmosTx({ chain, tx }).catch(error => error)
+
+    expect(rejection).toBeInstanceOf(CosmosSequenceMismatchError)
+    expect(rejection).toMatchObject({
+      expectedSequence: 255n,
+      signedSequence: 254n,
+      recovery: 'resign',
+      message: expect.stringContaining('start a new signing ceremony'),
+    })
+    expect(mocks.verifyBroadcastByHash).toHaveBeenCalledOnce()
+  })
+
+  it('keeps a sequence mismatch successful when another MPC participant broadcast the same hash', async () => {
+    mocks.broadcastTx.mockRejectedValue(
+      new Error(
+        'Broadcasting transaction failed with code 32 (codespace: sdk). Log: account sequence mismatch, expected 255, got 254: incorrect account sequence'
+      )
+    )
+    mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
+
+    await expect(broadcastCosmosTx({ chain, tx })).resolves.toBeUndefined()
+
+    expect(mocks.verifyBroadcastByHash).toHaveBeenCalledWith({
+      chain,
+      tx,
+      error: expect.any(CosmosSequenceMismatchError),
+    })
   })
 
   it('extracts only non-empty tx ids from CosmJS timeout errors', () => {
