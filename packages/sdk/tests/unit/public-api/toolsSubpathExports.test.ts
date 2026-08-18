@@ -14,6 +14,8 @@ describe('public API subpath exports', () => {
     const parseExport = sdkPackageJson.exports['./tools/parse']
     const defiExport = sdkPackageJson.exports['./tools/defi']
     const bridgeExport = sdkPackageJson.exports['./tools/bridge']
+    const policyExport = sdkPackageJson.exports['./tools/policy']
+    const gasExport = sdkPackageJson.exports['./tools/gas']
     const balanceExport = sdkPackageJson.exports['./tools/balance']
     const tronExport = sdkPackageJson.exports['./chains/tron']
     const utxoExport = sdkPackageJson.exports['./chains/utxo']
@@ -37,6 +39,18 @@ describe('public API subpath exports', () => {
       import: './dist/tools/bridge/index.js',
       require: './dist/tools/bridge/index.cjs',
       default: './dist/tools/bridge/index.cjs',
+    })
+    expect(policyExport).toMatchObject({
+      types: './dist/tools/policy/index.d.ts',
+      import: './dist/tools/policy/index.js',
+      require: './dist/tools/policy/index.cjs',
+      default: './dist/tools/policy/index.cjs',
+    })
+    expect(gasExport).toMatchObject({
+      types: './dist/tools/gas/index.d.ts',
+      import: './dist/tools/gas/index.js',
+      require: './dist/tools/gas/index.cjs',
+      default: './dist/tools/gas/index.cjs',
     })
     expect(balanceExport).toMatchObject({
       types: './dist/tools/balance/index.d.ts',
@@ -72,6 +86,8 @@ describe('public API subpath exports', () => {
     expect(JSON.stringify(parseExport)).not.toContain('dist/index.node')
     expect(JSON.stringify(defiExport)).not.toContain('dist/index.node')
     expect(JSON.stringify(bridgeExport)).not.toContain('dist/index.node')
+    expect(JSON.stringify(policyExport)).not.toContain('dist/index.node')
+    expect(JSON.stringify(gasExport)).not.toContain('dist/index.node')
     expect(JSON.stringify(balanceExport)).not.toContain('dist/index.node')
     expect(JSON.stringify(tronExport)).not.toContain('dist/index.node')
     expect(JSON.stringify(utxoExport)).not.toContain('dist/index.node')
@@ -86,6 +102,10 @@ describe('public API subpath exports', () => {
     expect(platformRollupConfig).toContain("distBase: 'tools/defi'")
     expect(platformRollupConfig).toContain("input: './src/tools/bridge/index.ts'")
     expect(platformRollupConfig).toContain("distBase: 'tools/bridge'")
+    expect(platformRollupConfig).toContain("input: './src/tools/policy/index.ts'")
+    expect(platformRollupConfig).toContain("distBase: 'tools/policy'")
+    expect(platformRollupConfig).toContain("input: './src/tools/gas/index.ts'")
+    expect(platformRollupConfig).toContain("distBase: 'tools/gas'")
     expect(platformRollupConfig).toContain("input: './src/tools/balance/index.ts'")
     expect(platformRollupConfig).toContain("distBase: 'tools/balance'")
     expect(platformRollupConfig).toContain("input: './src/chains/tron/index.ts'")
@@ -105,6 +125,12 @@ describe('public API subpath exports', () => {
     )
     expect(typesRollupConfig).toContain(
       "createSubpathTypesConfig('src/tools/bridge/index.ts', 'dist/tools/bridge/index.d.ts')"
+    )
+    expect(typesRollupConfig).toContain(
+      "createSubpathTypesConfig('src/tools/policy/index.ts', 'dist/tools/policy/index.d.ts')"
+    )
+    expect(typesRollupConfig).toContain(
+      "createSubpathTypesConfig('src/tools/gas/index.ts', 'dist/tools/gas/index.d.ts')"
     )
     expect(typesRollupConfig).toContain(
       "createSubpathTypesConfig('src/tools/balance/index.ts', 'dist/tools/balance/index.d.ts')"
