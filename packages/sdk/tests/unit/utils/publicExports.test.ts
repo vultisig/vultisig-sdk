@@ -231,8 +231,12 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.river.findInsertHints).toBe(sdk.findRiverInsertHints)
   })
 
-  it('exports Chain enum, chain helpers, and VaultBase class for first-party consumers', () => {
+  it('exports Chain enum, cosmos chain subsets, chain helpers, and VaultBase class for first-party consumers', () => {
     expect(sdk.Chain).toBeDefined()
+    expect(sdk.IbcEnabledCosmosChain.TerraClassic).toBe('TerraClassic')
+    expect(sdk.VaultBasedCosmosChain.THORChain).toBe('THORChain')
+    expect(Object.values(sdk.IbcEnabledCosmosChain)).not.toContain(sdk.Chain.THORChain)
+    expect(Object.values(sdk.VaultBasedCosmosChain)).toEqual([sdk.Chain.THORChain, sdk.Chain.MayaChain])
     expect(typeof sdk.getChainKind).toBe('function')
     expect(typeof sdk.isChainOfKind).toBe('function')
     expect(sdk.chainFeeCoin.Ethereum.ticker).toBe('ETH')
@@ -299,9 +303,39 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.MAYA_SEND_FEE_BASE_UNITS).toBe(2_000_000_000n)
   })
 
-  it('exports the Cosmos staking gas limit helper, which the send-fee parity matrix does not cover', () => {
+  it('exports the Cosmos staking gas limit helper, including TerraClassic redelegation headroom', () => {
+    expect(typeof sdk.getCosmosStakingGasLimit).toBe('function')
     expect(sdk.getCosmosStakingGasLimit({ chain: sdk.Chain.Cosmos })).toBe(350_000n)
     expect(sdk.getCosmosStakingGasLimit({ chain: sdk.Chain.Cosmos, msgCount: 2 })).toBe(437_500n)
+    expect(sdk.getCosmosStakingGasLimit({ chain: sdk.Chain.TerraClassic })).toBe(4_000_000n)
+  })
+
+  it('exports a TerraClassic staking fee correctly priced for the staking gas limit, not the send fee', () => {
+    expect(sdk.TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS).toBe(113_300_000n)
+    // The send-fee constant is priced for the 300k send gas limit and would
+    // under-price a 4M-gas staking tx by ~13x, causing the node to reject it
+    // for insufficient fees before it can broadcast.
+    expect(sdk.TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS).toBeGreaterThan(
+      sdk.getCosmosSendFeeBaseUnits(sdk.Chain.TerraClassic)!
+    )
+  })
+
+  it('exports a composable TerraClassic redelegation message and sufficient staking gas/fee pair', () => {
+    const gasLimit = sdk.getCosmosStakingGasLimit({ chain: sdk.Chain.TerraClassic })
+    const msg = sdk.cosmosStaking.redelegate({
+      delegatorAddress: 'terra1qyqszqgpqyqszqgpqyqszqgpqyqszqgp5hm70u',
+      validatorSrcAddress: 'terravaloper1qgpqyqszqgpqyqszqgpqyqszqgpqyqsz9u3x5e',
+      validatorDstAddress: 'terravaloper1qvpsxqcrqvpsxqcrqvpsxqcrqvpsxqcryvs87c',
+      amount: '1000000',
+      denom: 'uluna',
+    })
+
+    // The React Native entrypoint test exercises the actual SignDoc builder;
+    // this root-surface contract proves consumers can compose the message with
+    // the matching gas and fee exports instead of a stale hand-picked value.
+    const requiredFee = (gasLimit * 28_325n) / 1000n
+    expect(sdk.TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS).toBeGreaterThanOrEqual(requiredFee)
+    expect(msg.typeUrl).toBe('/cosmos.staking.v1beta1.MsgBeginRedelegate')
   })
 
   it('exports seedphrase import chain support policy for consumers', () => {
@@ -336,6 +370,13 @@ describe('@vultisig/sdk public exports', () => {
       sdk.Chain.Solana,
       sdk.Chain.BSC,
     ])
+  })
+
+  it('exports the pairing-QR payload builder from the root SDK surface', async () => {
+    const services = await import('../../../src/services/buildKeygenPairingQrPayload')
+
+    expect(typeof sdk.buildKeygenPairingQrPayload).toBe('function')
+    expect(sdk.buildKeygenPairingQrPayload).toBe(services.buildKeygenPairingQrPayload)
   })
 
   it('exports generic CosmWasm amino and protobuf execute builders', () => {
