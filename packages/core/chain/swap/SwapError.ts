@@ -13,12 +13,29 @@ export enum SwapErrorCode {
   InvalidConfig = 'SWAP_INVALID_CONFIG',
 }
 
+/**
+ * Structured detail attached to `AmountBelowMinimum`/`AmountTooSmall` errors so
+ * a consumer can act on the exact threshold instead of re-deriving it from a
+ * second native-quote fetch. `nativeMin` mirrors THORChain/Maya's own
+ * `recommended_min_amount_in` economics (see `getNativeSwapMinAmountIn`), in
+ * the `from` coin's base units — the same shape whether the threshold was
+ * computed proactively or surfaced by a provider rejection.
+ */
+export type SwapErrorMetadata = {
+  nativeMin?: {
+    swapChain: string
+    minAmountInBaseUnits: bigint
+    minAmountInHuman: string
+  }
+}
+
 export class SwapError extends Error {
   readonly name = 'SwapError'
 
   constructor(
     public readonly code: SwapErrorCode,
-    message: string
+    message: string,
+    public readonly metadata?: SwapErrorMetadata
   ) {
     super(message)
   }
