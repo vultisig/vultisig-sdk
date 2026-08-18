@@ -20,14 +20,18 @@
 //
 // Public surface mirrors core byte-for-byte: one `getLifiSwapQuote(input)`
 // export returning `Promise<GeneralSwapQuote>`.
-import type { ChainId } from '@lifi/sdk'
 import { DeriveChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
 import { solanaConfig } from '@vultisig/core-chain/chains/solana/solanaConfig'
 import { AccountCoinKey } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { GeneralSwapQuote } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
-import { logUnenforcedAggregatorDestination } from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
+import {
+  assertKnownAggregatorRouter,
+  assertLifiApprovalAddress,
+} from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
 import { injectSolanaAtaIfMissing } from '@vultisig/core-chain/swap/general/lifi/api/injectSolanaAtaIfMissing'
+import { MAX_COMBINED_COST_BPS, resolveLifiSlippage } from '@vultisig/core-chain/swap/general/lifi/api/lifiSlippage'
+import { resolveSwapFeeChain } from '@vultisig/core-chain/swap/general/lifi/api/lifiSwapFeeChain'
 import {
   getLifiClient,
   LifiAffiliateConfig,
@@ -38,10 +42,9 @@ import { lifiSwapChainId, LifiSwapEnabledChain } from '@vultisig/core-chain/swap
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { match } from '@vultisig/lib-utils/match'
 import { memoize } from '@vultisig/lib-utils/memoize'
-import { mirrorRecord } from '@vultisig/lib-utils/record/mirrorRecord'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 
-type Input = Record<TransferDirection, AccountCoinKey<LifiSwapEnabledChain>> & {
+type Input = Record<TransferDirection, AccountCoinKey<LifiSwapEnabledChain> & { ticker?: string }> & {
   amount: bigint
   affiliateBps?: number
   /** Consumer-supplied LI.FI integrator override — mirrors the core
@@ -49,34 +52,11 @@ type Input = Record<TransferDirection, AccountCoinKey<LifiSwapEnabledChain>> & {
    * arg on `getQuote` so RN consumers get the same affiliate-routing surface
    * as Node consumers. (Ehsan-saradar #618 review.) */
   lifiAffiliateConfig?: LifiAffiliateConfig
-}
-
-// 1% slippage tolerance — same as core implementation (see getLifiSwapQuote.ts in core).
-// MPC keysign ceremony latency makes the default LiFi 0.5% too tight for Vultisig flows.
-const DEFAULT_LIFI_SLIPPAGE_TOLERANCE = 0.01
-
-// Mirror of core's MAX_COMBINED_COST_BPS guard. Defensive: logs when affiliate
-// + slippage combined cost crosses 3%. Today affiliateBps is typically 0 and
-// slippage is 1% (100bps total) — well under the ceiling — but a future bump to
-// affiliateBps shouldn't silently push users past 3% total cost without logging.
-// (#519 r-N NeO should-fix #3 - mirror core guard in RN override.)
-const MAX_COMBINED_COST_BPS = 300
-
-// Mirror of core's `resolveSwapFeeChain`. See the core version in
-// `@vultisig/core-chain/swap/general/lifi/api/getLifiSwapQuote.ts` for the
-// full rationale: `mirrorRecord(lifiSwapChainId)[unknownChainId]` silently
-// returns `undefined` for cross-chain routes whose fee token lives on an
-// intermediate chain that is not a `LifiSwapEnabledChain`, producing an
-// ambiguous `swap_fee` non-empty + `swap_fee_chain` absent state on the
-// cosigner. Fall back to the source chain and warn so the drift is visible.
-// (NeOMakinG #540 review blocking #1.)
-const resolveSwapFeeChain = (chainId: ChainId, fallback: LifiSwapEnabledChain): LifiSwapEnabledChain => {
-  const resolved = mirrorRecord(lifiSwapChainId)[chainId]
-  if (resolved === undefined) {
-    console.warn(`[getLifiSwapQuote] fee token chainId ${chainId} not in lifiSwapChainId; falling back to ${fallback}`)
-    return fallback
-  }
-  return resolved
+  /** Slippage tolerance as a fraction (e.g. 0.01 = 1%). Mirrors the core
+   * `getLifiSwapQuote` Input — the shared caller (findSwapQuote) passes
+   * `lifiSlippageFraction` here. When omitted, falls back to the stable/
+   * non-stable pair tier (see resolveLifiSlippage). */
+  slippage?: number
 }
 
 // RN-specific bootstrap. Mirrors the `ensureLifiConfigured` pattern from
@@ -102,11 +82,18 @@ export const getLifiSwapQuote = async ({
   amount,
   affiliateBps,
   lifiAffiliateConfig,
+  slippage: slippageOverride,
   ...transfer
 }: Input): Promise<GeneralSwapQuote> => {
   ensureLifiConfiguredInRN()
 
-  const combinedCostBps = (affiliateBps ?? 0) + DEFAULT_LIFI_SLIPPAGE_TOLERANCE * 10000
+  // Mirror core's tiered slippage (see ./lifiSlippage, the shared source of truth): honor an
+  // explicit consumer override, else 0.3% for stable pairs / 1% otherwise. Previously this
+  // override hardcoded a flat 1% and dropped the caller's `slippage` — so RN (most users) got a
+  // wider floor than web on stable pairs and silently ignored an explicit tight-tolerance request.
+  const slippage = resolveLifiSlippage({ slippageOverride, from: transfer.from, to: transfer.to })
+
+  const combinedCostBps = (affiliateBps ?? 0) + slippage * 10000
   if (combinedCostBps > MAX_COMBINED_COST_BPS) {
     console.warn(
       `[getLifiSwapQuote] affiliate + slippage combined cost exceeds ${MAX_COMBINED_COST_BPS}bps: ${combinedCostBps}bps`
@@ -146,7 +133,7 @@ export const getLifiSwapQuote = async ({
     // silently fall back to `_config.routeOptions?.fee`. For a consumer that
     // explicitly set 0, that's a silent non-zero fee. Now: 0 stays 0.
     fee: affiliateBps !== undefined ? affiliateBps / 10000 : undefined,
-    slippage: DEFAULT_LIFI_SLIPPAGE_TOLERANCE,
+    slippage,
     integrator,
   })
 
@@ -187,6 +174,14 @@ export const getLifiSwapQuote = async ({
           },
         },
       },
+    }
+  }
+
+  const approvalAddr = estimate.approvalAddress
+  if (chainKind === 'evm') {
+    assertKnownAggregatorRouter('li.fi', shouldBePresent(to), transfer.from.chain)
+    if (approvalAddr && approvalAddr !== '0x0000000000000000000000000000000000000000') {
+      await assertLifiApprovalAddress(approvalAddr, transfer.from.chain)
     }
   }
 
@@ -236,28 +231,11 @@ export const getLifiSwapQuote = async ({
           swapFee &&
           ([fromToken, toToken].find(token => token.toLowerCase() === swapFeeAddress) ||
             chainFeeCoin[transfer.from.chain].id)
-        // LI.FI `estimate.approvalAddress` is the address that will call
-        // `transferFrom` on the input ERC-20. It can differ from `to` (the
-        // Diamond / router) when an inner executor (e.g. 1inch
-        // AggregationExecutor) pulls the token directly. The field is always
-        // present in the LiFi API response (`Estimate.approvalAddress: string`)
-        // but may be the zero address or equal to `to` for native-token routes.
-        // Pass it through so mcp-ts (and other consumers) can approve the
-        // correct spender instead of the Diamond.
-        //
-        // On-chain proof: tx 0xa3aadf17 (Ethereum, block 25415989) reverted
-        // with "ERC20: transfer amount exceeds allowance". Vault had 9.41 USDC
-        // approved to Diamond (0x9025B8ff…, = `to`) — sufficient. Inner 1inch
-        // executor (0x7f51c134…, = `approvalAddress`) had zero allowance — the
-        // actual transferFrom caller → revert.
-        const approvalAddr = estimate.approvalAddress
+        // LI.FI `estimate.approvalAddress` is route-dependent and can differ
+        // from the Diamond destination. Mirror core's trust boundary: accept
+        // the official Diamond directly, but require an independent benign
+        // Blockaid verdict for every distinct spender.
         const evmTo = shouldBePresent(to)
-        // AGG-02: mirrors core's getLifiSwapQuote.ts — LiFi routes through many different
-        // bridge/DEX contracts by design, so this is logged (never enforced/thrown). See
-        // core's knownAggregatorRouters.ts for the full rationale. This RN override is a
-        // SEPARATE build target (rollup.platforms.config.js redirects core's
-        // getLifiSwapQuote.ts here), so it needs its own call, not just core's.
-        logUnenforcedAggregatorDestination('li.fi', evmTo)
         return {
           evm: {
             from: shouldBePresent(from),

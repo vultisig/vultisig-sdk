@@ -3,11 +3,9 @@ import { PublicKey } from '@solana/web3.js'
 
 import { Chain } from '../../Chain'
 import { getChainKind } from '../../ChainKind'
-import { lpChainMap } from '../../chains/cosmos/thor/lp/lpChainMap'
-import { assertValidPoolId } from '../../chains/cosmos/thor/lp/pools'
 import { baseAffiliateBps } from '../affiliate/config'
 import { nativeSwapAffiliateConfig } from './nativeSwapAffiliateConfig'
-import { nativeSwapChainIds, thorChainSwapEnabledChains } from './NativeSwapChain'
+import { getThorchainMemoAssetChain, thorchainAssetPrefixToChain } from './thorchainMemoAsset'
 
 export const limitSwapExpiryHours = [12, 24, 72] as const
 export type LimitSwapExpiryHours = (typeof limitSwapExpiryHours)[number]
@@ -58,38 +56,89 @@ const getAssetChainPrefix = (asset: string): string => {
   return prefix
 }
 
-// Limit swaps (`LIM=`) share THORChain's regular-swap destination-chain
-// universe — `=` vs `=<` only selects execution behavior (price/queue/TTL),
-// not a different set of destination chains, per THORChain's memo docs
-// (dev.thorchain.org/concepts/memos.html). `lpChainMap` alone
-// under-resolves this: it's LP-position-display-scoped (keyed off pool
-// existence), so Solana/Noble - which have no THORChain LP pools but ARE
-// valid swap destinations (see `thorChainSwapEnabledChains`, the list
-// already used to gate regular market swaps to THORChain) - never got an
-// entry. We union the two rather than replacing `lpChainMap` outright:
-// `thorChainSwapEnabledChains` is itself missing chains (Dash/Kujira/
-// Arbitrum/Zcash) that `lpChainMap` already resolves correctly, so a
-// straight swap of authority would regress those. We deliberately do NOT
-// use the broader `nativeSwapChainIds`, which also carries MayaChain-only
-// entries (e.g. `Chain.MayaChain` itself) that aren't valid THORChain
-// limit-swap destinations.
-const thorchainAssetPrefixToChain: Partial<Record<string, Chain>> = {
-  ...lpChainMap,
-  ...thorChainSwapEnabledChains.reduce<Partial<Record<string, Chain>>>((acc, chain) => {
-    acc[nativeSwapChainIds[chain]] = chain
-    return acc
-  }, {}),
-}
+/** `CHAIN.TICKER` or `CHAIN.TICKER-CONTRACT` — a layer-1 pool asset. */
+const layer1LimitSwapAssetPattern = /^[A-Z0-9]+\.[A-Z0-9]+(-[A-Z0-9]+)?$/
 
+/**
+ * A THORChain SECURED denom: `<l1chain>-<symbol>` (`btc-btc`, `xrp-xrp`) or
+ * `<l1chain>-<symbol>-<contract>` (`eth-usdc-0xa0b…`).
+ *
+ * Case-insensitive on purpose: this app emits the denom lower-case, THORNode's
+ * `common.ParseAsset` upper-cases whatever it is given, and the queue reports it
+ * back upper-cased. All three spell the same asset.
+ */
+const securedLimitSwapAssetPattern = /^[A-Za-z0-9]+-[A-Za-z0-9]+(-[A-Za-z0-9]+)?$/
+
+/**
+ * The chain a limit-swap asset must be SENT FROM (as a source) or PAID OUT ON
+ * (as a target) — `Asset.GetChain()` on THORNode's side.
+ *
+ * Two notations are accepted, and the discriminator is simply whether the asset
+ * carries a `.`:
+ *
+ * - **Layer-1** (`BTC.BTC`, `ETH.USDC-0XA0B8…`) — resolves to its own chain.
+ *   The deposit arrives at that chain's Asgard inbound, and a payout leaves to
+ *   an address on it.
+ * - **Secured** (`eth-usdc-0xa0b…`, `xrp-xrp`) — resolves to **THORChain**. A
+ *   secured asset originates elsewhere but is custodied on THORChain, so it is
+ *   deposited by `MsgDeposit` from a THOR address and paid out to one. Reading
+ *   its home chain here would send the deposit to an Ethereum vault and validate
+ *   the payout address as an Ethereum one — both wrong.
+ *
+ * Deliberately NOT `assertValidPoolId`: that validator is the shared THORChain
+ * *pool id* grammar, used by the LP paths, and it only knows dotted notation.
+ * Widening it would change what every one of those callers accepts. A limit swap
+ * needs its own, narrower question — "is this an asset THIS memo can carry" —
+ * so it gets its own validator.
+ *
+ * Synths (`BTC/BTC`) and trade assets (`ETH~ETH`) remain unsupported. They are a
+ * different custody model again, and neither has been verified against the
+ * advanced swap queue, so they fail here rather than building a memo whose
+ * behaviour nobody has established.
+ */
 const getSupportedThorchainAssetChain = (asset: string, fieldName: string): Chain => {
-  assertValidPoolId(asset)
-
-  const prefix = getAssetChainPrefix(asset)
-  const chain = thorchainAssetPrefixToChain[prefix.toUpperCase()]
-  if (!chain) {
-    throw new Error(`${fieldName} has unsupported THORChain asset prefix: ${prefix}`)
+  const normalized = typeof asset === 'string' ? asset.trim() : ''
+  if (!normalized) {
+    throw new Error(`${fieldName} must be a non-empty THORChain asset`)
   }
-  return chain
+  if (normalized !== asset) {
+    throw new Error(`${fieldName} must not contain surrounding whitespace`)
+  }
+
+  if (normalized.includes('.')) {
+    if (!layer1LimitSwapAssetPattern.test(normalized)) {
+      throw new Error(
+        `${fieldName} is not a valid THORChain layer-1 asset: ${JSON.stringify(asset)}. ` +
+          `Expected uppercase CHAIN.ASSET (e.g. "BTC.BTC") or CHAIN.ASSET-CONTRACT.`
+      )
+    }
+
+    const prefix = getAssetChainPrefix(normalized)
+    const chain = thorchainAssetPrefixToChain[prefix.toUpperCase()]
+    if (!chain) {
+      throw new Error(`${fieldName} has unsupported THORChain asset prefix: ${prefix}`)
+    }
+    return chain
+  }
+
+  if (!securedLimitSwapAssetPattern.test(normalized)) {
+    throw new Error(
+      `${fieldName} is not a THORChain asset this memo can carry: ${JSON.stringify(asset)}. ` +
+        `Expected a layer-1 asset (e.g. "BTC.BTC") or a secured denom (e.g. "eth-usdc-0xa0b…"). ` +
+        `Synth and trade assets are not supported.`
+    )
+  }
+
+  // The denom's leading segment is its ORIGIN chain, which must be one THORChain
+  // routes — `nope-nope` is a well-shaped string naming nothing.
+  if (!getThorchainMemoAssetChain(normalized)) {
+    throw new Error(
+      `${fieldName} names a secured asset whose origin chain THORChain cannot route: ${JSON.stringify(asset)}`
+    )
+  }
+
+  // Custodied on THORChain, wherever it came from.
+  return Chain.THORChain
 }
 
 const parsePositiveInteger = (value: LimitSwapNumericInput, fieldName: string): bigint => {
@@ -219,12 +268,26 @@ const isSolanaAddress = (address: string): boolean => {
   }
 }
 
-const limitSwapDestinationValidators: Partial<Record<Chain, (address: string) => boolean>> = {
+type LimitSwapDestinationValidator = (address: string) => boolean
+
+// Keep this exhaustive even though unsupported chains deliberately map to
+// `undefined`: adding a Chain must force an explicit decision about whether
+// THORChain limit swaps can safely validate destinations for it.
+const limitSwapDestinationValidators: Record<Chain, LimitSwapDestinationValidator | undefined> = {
   [Chain.Arbitrum]: isEvmAddress,
-  [Chain.Avalanche]: isEvmAddress,
   [Chain.Base]: isEvmAddress,
+  [Chain.Blast]: undefined,
+  [Chain.Optimism]: undefined,
+  [Chain.Zksync]: undefined,
+  [Chain.Mantle]: undefined,
+  [Chain.Robinhood]: undefined,
+  [Chain.Avalanche]: isEvmAddress,
+  [Chain.CronosChain]: undefined,
   [Chain.BSC]: isEvmAddress,
   [Chain.Ethereum]: isEvmAddress,
+  [Chain.Polygon]: undefined,
+  [Chain.Hyperliquid]: undefined,
+  [Chain.Sei]: undefined,
 
   [Chain.Bitcoin]: address =>
     new RegExp(`^(bc1[ac-hj-np-z02-9]{11,71}|[13][${base58AddressChars}]{25,34})$`, 'i').test(address),
@@ -236,15 +299,26 @@ const limitSwapDestinationValidators: Partial<Record<Chain, (address: string) =>
     new RegExp(`^(ltc1[ac-hj-np-z02-9]{11,71}|[LM3][${base58AddressChars}]{25,34})$`, 'i').test(address),
   [Chain.Zcash]: address => new RegExp(`^t[13][${base58AddressChars}]{33}$`).test(address),
 
-  [Chain.Solana]: isSolanaAddress,
-
   [Chain.Cosmos]: address => isBech32Address(address, 'cosmos'),
+  [Chain.Osmosis]: undefined,
+  [Chain.Dydx]: undefined,
   [Chain.Kujira]: address => isBech32Address(address, 'kujira'),
-  [Chain.THORChain]: address => isBech32Address(address, 'thor'),
+  [Chain.Terra]: undefined,
+  [Chain.TerraClassic]: undefined,
   [Chain.Noble]: address => isBech32Address(address, 'noble'),
+  [Chain.Akash]: undefined,
+  [Chain.THORChain]: address => isBech32Address(address, 'thor'),
+  [Chain.MayaChain]: undefined,
 
+  [Chain.Sui]: undefined,
+  [Chain.Solana]: isSolanaAddress,
+  [Chain.Polkadot]: undefined,
+  [Chain.Bittensor]: undefined,
+  [Chain.Ton]: undefined,
   [Chain.Ripple]: address => new RegExp(`^r[${base58AddressChars}]{24,34}$`).test(address),
   [Chain.Tron]: address => new RegExp(`^T[${base58AddressChars}]{33}$`).test(address),
+  [Chain.Cardano]: undefined,
+  [Chain.QBTC]: undefined,
 }
 
 const assertValidLimitSwapDestinationAddress = (targetChain: Chain, address: string): void => {
@@ -257,21 +331,142 @@ const assertValidLimitSwapDestinationAddress = (targetChain: Chain, address: str
   }
 }
 
+const assertValidLimitSwapDestination = (targetAsset: string, address: string): void => {
+  const targetChain = getSupportedThorchainAssetChain(targetAsset, 'target_asset')
+  assertMemoSegmentSafe(address, 'dest_addr')
+  assertValidLimitSwapDestinationAddress(targetChain, address)
+}
+
 export const validateLimitSwapInputs = (inputs: LimitSwapMemoInput): void => {
   getSupportedThorchainAssetChain(inputs.source_asset, 'source_asset')
-  const targetChain = getSupportedThorchainAssetChain(inputs.target_asset, 'target_asset')
-  assertMemoSegmentSafe(inputs.dest_addr, 'dest_addr')
-  assertValidLimitSwapDestinationAddress(targetChain, inputs.dest_addr)
+  assertValidLimitSwapDestination(inputs.target_asset, inputs.dest_addr)
 
   parsePositiveInteger(inputs.source_amount, 'source_amount')
   parsePositiveDecimal(inputs.target_price, 'target_price')
   getLimitSwapIntervalBlocks(inputs.expiry_hours)
 }
 
+/**
+ * THORChain memo prefix selecting the advanced swap queue — what makes a deposit
+ * a resting limit order rather than a market swap (`=>`).
+ */
+export const limitSwapMemoPrefix = '=<:'
+
+/** `<LIM>/<interval>/<quantity>`, the segment that makes the order a limit order. */
+const limitSwapMemoTradeTargetPattern = /^\d+\/\d+\/\d+$/
+
+/** Basis points are a bare integer; the affiliate name is a printable, separator-free token. */
+const limitSwapMemoAffiliateBpsPattern = /^\d+$/
+
+/** The order terms a `=<` memo encodes, as decoded from the memo itself. */
+export type ParsedLimitSwapMemo = {
+  /** THORChain asset notation for the buy side, e.g. `ETH.USDC-06EB48`. */
+  targetAsset: string
+  /** Where a filled order pays out. */
+  destinationAddress: string
+  /** Guaranteed-minimum received (LIM), in THORChain's 1e8 fixed point. */
+  limit: bigint
+  /** How long the order rests, in THORChain blocks. */
+  intervalBlocks: number
+  /** Streaming quantity; `0` for the orders this SDK builds. */
+  quantity: number
+  affiliate?: string
+  affiliateBps?: number
+}
+
+/**
+ * Decode a THORChain limit-swap memo into the order terms it encodes.
+ *
+ * Fail closed on anything that is not a well-formed limit memo. This guards the
+ * signing path: the limit deposit builder accepts a pre-built memo string, so a
+ * market (`=>`) memo, an unrelated action, or a truncated/corrupted limit memo
+ * would otherwise sign a value-bearing deposit that executes with completely
+ * different semantics — or with no price protection at all.
+ *
+ * Validates the shape `=<:TARGET:DEST:LIM/INTERVAL/QUANTITY[:AFFILIATE:BPS]`
+ * rather than only the prefix, because it is the trade-target segment that
+ * carries the order's price floor: a memo whose LIM is missing or non-numeric is
+ * exactly the case that must never reach a signer.
+ *
+ * Returning the terms rather than only validating them is what lets a *joining*
+ * device review a limit order. The memo is the order — it rides on the keysign
+ * payload for every source branch, and it is the exact string THORChain
+ * executes — so terms derived from it cannot disagree with what gets signed, the
+ * way a separately-supplied display field can.
+ */
+export const parseLimitSwapMemo = (memo: string): ParsedLimitSwapMemo => {
+  if (!memo.startsWith(limitSwapMemoPrefix)) {
+    throw new Error(
+      `memo is not a THORChain limit-swap memo (expected a "${limitSwapMemoPrefix}" prefix): ${JSON.stringify(memo)}`
+    )
+  }
+
+  const segments = memo.slice(limitSwapMemoPrefix.length).split(':')
+  if (segments.length !== 3 && segments.length !== 5) {
+    throw new Error(
+      `limit-swap memo must have 3 segments (or 5 with an affiliate) after the prefix, got ${segments.length}: ${JSON.stringify(memo)}`
+    )
+  }
+
+  const [targetAsset, destAddress, tradeTarget, affiliate, affiliateBps] = segments
+
+  if (!targetAsset) {
+    throw new Error(`limit-swap memo is missing its target asset: ${JSON.stringify(memo)}`)
+  }
+
+  if (!destAddress) {
+    throw new Error(`limit-swap memo is missing its destination address: ${JSON.stringify(memo)}`)
+  }
+
+  if (!limitSwapMemoTradeTargetPattern.test(tradeTarget)) {
+    throw new Error(
+      `limit-swap memo trade target must be "<limit>/<interval>/<quantity>", got ${JSON.stringify(tradeTarget)}`
+    )
+  }
+
+  const [limit, interval, quantity] = tradeTarget.split('/')
+  if (BigInt(limit) === 0n) {
+    // THORChain reads a zero trade target as an unprotected market order.
+    throw new Error(`limit-swap memo has a zero minimum-received (LIM), which THORChain treats as a market order`)
+  }
+
+  if (segments.length === 5) {
+    if (!affiliate) {
+      throw new Error(`limit-swap memo has an empty affiliate segment: ${JSON.stringify(memo)}`)
+    }
+
+    if (!limitSwapMemoAffiliateBpsPattern.test(affiliateBps)) {
+      throw new Error(`limit-swap memo affiliate bps must be an integer, got ${JSON.stringify(affiliateBps)}`)
+    }
+  }
+
+  assertValidLimitSwapDestination(targetAsset, destAddress)
+
+  return {
+    targetAsset,
+    destinationAddress: destAddress,
+    limit: BigInt(limit),
+    intervalBlocks: Number(interval),
+    quantity: Number(quantity),
+    ...(segments.length === 5 ? { affiliate, affiliateBps: Number(affiliateBps) } : {}),
+  }
+}
+
+/**
+ * Fail closed on anything that is not a well-formed THORChain limit-swap memo.
+ *
+ * Thin wrapper over {@link parseLimitSwapMemo} so the grammar has exactly one
+ * implementation — a validator that could drift from the parser is how a memo
+ * ends up reviewed as one order and executed as another.
+ */
+export const assertLimitSwapMemo = (memo: string): void => {
+  parseLimitSwapMemo(memo)
+}
+
 const buildMemo = (inputs: LimitSwapMemoInput, includeAffiliate: boolean): string => {
   const limit = getLimitSwapLimitAmount(inputs)
   const interval = getLimitSwapIntervalBlocks(inputs.expiry_hours)
-  const memo = `=<:${inputs.target_asset}:${inputs.dest_addr}:${limit}/${interval}/0`
+  const memo = `${limitSwapMemoPrefix}${inputs.target_asset}:${inputs.dest_addr}:${limit}/${interval}/0`
 
   return includeAffiliate ? `${memo}:${nativeSwapAffiliateConfig.affiliateFeeAddress}:${baseAffiliateBps}` : memo
 }

@@ -9,4 +9,7 @@ export const oneInchSwapEnabledChains = [
   Chain.Optimism,
   Chain.Polygon,
   Chain.Base,
+  // Live-confirmed on 4663: /quote and /swap return executable calldata to
+  // 1inch's deployed router (0x5a70…89c7).
+  Chain.Robinhood,
 ] as const

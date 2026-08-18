@@ -34,6 +34,10 @@ const backendClientSideTools = [...BACKEND_CLIENT_SIDE_TOOL_NAMES].sort()
 // (a) Implemented locally by the CLI — present in CLIENT_SIDE_TOOL_DISPATCH.
 const cliImplemented = ['vault_coin', 'vault_chain', 'sign_typed_data']
 
+// Implemented by the session rather than the simple executor-only registry because
+// it needs the authenticated AgentClient for retrieve/submit/status calls.
+const cliSessionImplemented = ['hl_order']
+
 // (b) Intentionally NOT implemented — mobile-only flows (VultiServer /
 //     multi-device / plugin+policy UX) that the headless CLI can't drive.
 const mobileOnlyExcluded = ['create_vault', 'plugin_install', 'create_policy', 'delete_policy']
@@ -65,7 +69,12 @@ describe('CLIENT_SIDE_TOOL_DISPATCH registry — backend parity / drift guard', 
   })
 
   it('every backend client-side tool is classified exactly once (catches a new backend tool once the vendored constant is updated)', () => {
-    const classified = [...cliImplemented, ...mobileOnlyExcluded, ...backendRewrittenToSignTypedData].sort()
+    const classified = [
+      ...cliImplemented,
+      ...cliSessionImplemented,
+      ...mobileOnlyExcluded,
+      ...backendRewrittenToSignTypedData,
+    ].sort()
     // Exhaustive + disjoint: the union of the three buckets is precisely the
     // backend set. A backend tool missing from all buckets (or listed twice)
     // breaks this — forcing a deliberate classification on every contract change.
@@ -75,7 +84,12 @@ describe('CLIENT_SIDE_TOOL_DISPATCH registry — backend parity / drift guard', 
 
   it('classification buckets only name real backend tools (catches a backend rename)', () => {
     const backend = new Set(backendClientSideTools)
-    for (const name of [...cliImplemented, ...mobileOnlyExcluded, ...backendRewrittenToSignTypedData]) {
+    for (const name of [
+      ...cliImplemented,
+      ...cliSessionImplemented,
+      ...mobileOnlyExcluded,
+      ...backendRewrittenToSignTypedData,
+    ]) {
       expect(backend.has(name), `${name} is not in backendClientSideTools — stale classification`).toBe(true)
     }
     // The CLI-local tool is genuinely absent from the backend map (that's the point).
@@ -152,8 +166,13 @@ describe('CLIENT_SIDE_DISPATCH_TOOL_NAMES — routing surface is the backend sup
     const spy = vi.spyOn(AgentClient.prototype, 'setClientSideToolNames')
     try {
       // Empty ecdsa pubkey ⇒ AgentExecutor skips VaultStateStore (no fs side effect).
-      const fakeVault = { publicKeys: { ecdsa: '' }, isEncrypted: false } as any
-      new AgentSession(fakeVault, { backendUrl: 'http://localhost:8084' } as any)
+      const fakeVault = {
+        publicKeys: { ecdsa: '' },
+        isEncrypted: false,
+      } as any
+      new AgentSession(fakeVault, {
+        backendUrl: 'http://localhost:8084',
+      } as any)
       expect(spy).toHaveBeenCalledTimes(1)
       const passed = spy.mock.calls[0][0] as Set<string>
       expect([...passed].sort()).toEqual([...CLIENT_SIDE_DISPATCH_TOOL_NAMES].sort())
@@ -471,7 +490,10 @@ describe('AgentClient SSE parser — registry-based client-side tool routing', (
     const onClientSideToolCall = vi.fn()
     const onToolProgress = vi.fn()
 
-    feedEvent(client, currentBackendVaultCoinEvent, { onClientSideToolCall, onToolProgress })
+    feedEvent(client, currentBackendVaultCoinEvent, {
+      onClientSideToolCall,
+      onToolProgress,
+    })
 
     expect(onClientSideToolCall).not.toHaveBeenCalled()
     // The tool still degrades to display-only progress (the silent regression).
@@ -483,7 +505,10 @@ describe('AgentClient SSE parser — registry-based client-side tool routing', (
     const onClientSideToolCall = vi.fn()
     const onToolProgress = vi.fn()
 
-    feedEvent(client, currentBackendVaultCoinEvent, { onClientSideToolCall, onToolProgress })
+    feedEvent(client, currentBackendVaultCoinEvent, {
+      onClientSideToolCall,
+      onToolProgress,
+    })
 
     expect(onClientSideToolCall).toHaveBeenCalledOnce()
     expect(onClientSideToolCall).toHaveBeenCalledWith('c1', 'vault_coin', {
@@ -498,7 +523,12 @@ describe('AgentClient SSE parser — registry-based client-side tool routing', (
       const onClientSideToolCall = vi.fn()
       feedEvent(
         client,
-        JSON.stringify({ type: 'tool-input-available', toolCallId: 'c', toolName, input: { action: 'add' } }),
+        JSON.stringify({
+          type: 'tool-input-available',
+          toolCallId: 'c',
+          toolName,
+          input: { action: 'add' },
+        }),
         { onClientSideToolCall }
       )
       expect(onClientSideToolCall, `expected ${toolName} to dispatch`).toHaveBeenCalledWith('c', toolName, {
@@ -518,7 +548,12 @@ describe('AgentClient SSE parser — registry-based client-side tool routing', (
 
     feedEvent(
       client,
-      JSON.stringify({ type: 'tool-input-available', toolCallId: 'cv', toolName: 'create_vault', input: {} }),
+      JSON.stringify({
+        type: 'tool-input-available',
+        toolCallId: 'cv',
+        toolName: 'create_vault',
+        input: {},
+      }),
       { onClientSideToolCall, onToolProgress }
     )
 
@@ -737,8 +772,22 @@ describe('Polymarket marker echo — dispatchClientSideTool protocol contract', 
     // BATCH approvals sign but never auto-submit.
     const batchInput = {
       payloads: [
-        { id: 'order', primaryType: 'Order', domain: {}, types: {}, message: {}, chain: 'Polygon' },
-        { id: 'auth', primaryType: 'ClobAuth', domain: {}, types: {}, message: {}, chain: 'Ethereum' },
+        {
+          id: 'order',
+          primaryType: 'Order',
+          domain: {},
+          types: {},
+          message: {},
+          chain: 'Polygon',
+        },
+        {
+          id: 'auth',
+          primaryType: 'ClobAuth',
+          domain: {},
+          types: {},
+          message: {},
+          chain: 'Ethereum',
+        },
       ],
       pm_batch_ref: 'batch-ref-789',
       __pm_auto_submit_batch: true,

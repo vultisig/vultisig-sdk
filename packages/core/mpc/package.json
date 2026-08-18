@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-mpc",
-  "version": "1.12.0",
+  "version": "1.20.1",
   "description": "MPC, keysign, and vault types shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -536,6 +536,11 @@
       "import": "./dist/keysign/signingInputs/resolvers/solana/index.js",
       "default": "./dist/keysign/signingInputs/resolvers/solana/index.js"
     },
+    "./keysign/signingInputs/resolvers/solana/rawTx": {
+      "types": "./dist/keysign/signingInputs/resolvers/solana/rawTx.d.ts",
+      "import": "./dist/keysign/signingInputs/resolvers/solana/rawTx.js",
+      "default": "./dist/keysign/signingInputs/resolvers/solana/rawTx.js"
+    },
     "./keysign/signingInputs/resolvers/solana/send": {
       "types": "./dist/keysign/signingInputs/resolvers/solana/send.d.ts",
       "import": "./dist/keysign/signingInputs/resolvers/solana/send.js",
@@ -576,15 +581,40 @@
       "import": "./dist/keysign/suiCoinSelection.js",
       "default": "./dist/keysign/suiCoinSelection.js"
     },
+    "./keysign/swap/assertNativeSwapReadyForBroadcast": {
+      "types": "./dist/keysign/swap/assertNativeSwapReadyForBroadcast.d.ts",
+      "import": "./dist/keysign/swap/assertNativeSwapReadyForBroadcast.js",
+      "default": "./dist/keysign/swap/assertNativeSwapReadyForBroadcast.js"
+    },
     "./keysign/swap/build": {
       "types": "./dist/keysign/swap/build.d.ts",
       "import": "./dist/keysign/swap/build.js",
       "default": "./dist/keysign/swap/build.js"
     },
+    "./keysign/swap/buildLimitSwapCancelKeysignPayload": {
+      "types": "./dist/keysign/swap/buildLimitSwapCancelKeysignPayload.d.ts",
+      "import": "./dist/keysign/swap/buildLimitSwapCancelKeysignPayload.js",
+      "default": "./dist/keysign/swap/buildLimitSwapCancelKeysignPayload.js"
+    },
+    "./keysign/swap/buildLimitSwapKeysignPayload": {
+      "types": "./dist/keysign/swap/buildLimitSwapKeysignPayload.d.ts",
+      "import": "./dist/keysign/swap/buildLimitSwapKeysignPayload.js",
+      "default": "./dist/keysign/swap/buildLimitSwapKeysignPayload.js"
+    },
     "./keysign/swap/cowswap/buildCowSwapApprovalSigningInput": {
       "types": "./dist/keysign/swap/cowswap/buildCowSwapApprovalSigningInput.d.ts",
       "import": "./dist/keysign/swap/cowswap/buildCowSwapApprovalSigningInput.js",
       "default": "./dist/keysign/swap/cowswap/buildCowSwapApprovalSigningInput.js"
+    },
+    "./keysign/swap/getKeysignLimitSwapCancel": {
+      "types": "./dist/keysign/swap/getKeysignLimitSwapCancel.d.ts",
+      "import": "./dist/keysign/swap/getKeysignLimitSwapCancel.js",
+      "default": "./dist/keysign/swap/getKeysignLimitSwapCancel.js"
+    },
+    "./keysign/swap/getKeysignLimitSwapOrder": {
+      "types": "./dist/keysign/swap/getKeysignLimitSwapOrder.d.ts",
+      "import": "./dist/keysign/swap/getKeysignLimitSwapOrder.js",
+      "default": "./dist/keysign/swap/getKeysignLimitSwapOrder.js"
     },
     "./keysign/swap/getKeysignSwapPayload": {
       "types": "./dist/keysign/swap/getKeysignSwapPayload.d.ts",
@@ -635,6 +665,11 @@
       "types": "./dist/keysign/utils/getKeysignCoin.d.ts",
       "import": "./dist/keysign/utils/getKeysignCoin.js",
       "default": "./dist/keysign/utils/getKeysignCoin.js"
+    },
+    "./keysign/utils/isRippleTrustSet": {
+      "types": "./dist/keysign/utils/isRippleTrustSet.d.ts",
+      "import": "./dist/keysign/utils/isRippleTrustSet.js",
+      "default": "./dist/keysign/utils/isRippleTrustSet.js"
     },
     "./keysign/utils/resolvePolkadotToAddress": {
       "types": "./dist/keysign/utils/resolvePolkadotToAddress.d.ts",
@@ -1053,24 +1088,24 @@
   },
   "dependencies": {
     "7z-wasm": "^1.2.0",
-    "@bufbuild/protobuf": "^2.12.0",
+    "@bufbuild/protobuf": "^2.13.0",
     "@cosmjs/encoding": "^0.39.0",
-    "@mysten/sui": "^2.20.3",
+    "@mysten/sui": "^2.22.1",
     "@noble/hashes": "^1.8.0",
     "@solana/web3.js": "^1.98.4",
     "@trustwallet/wallet-core": "^4.7.0",
-    "@vultisig/core-chain": "2.26.0",
+    "@vultisig/core-chain": "2.37.0",
     "@vultisig/core-config": "0.9.1",
     "@vultisig/lib-dkls": "0.9.0",
     "@vultisig/lib-mldsa": "0.9.0",
     "@vultisig/lib-schnorr": "0.9.0",
-    "@vultisig/lib-utils": "0.10.4",
+    "@vultisig/lib-utils": "0.10.5",
     "@vultisig/mpc-types": "0.2.3",
     "bitcoinjs-lib": "^7.0.1",
     "bs58": "^6.0.0",
     "buffer": "^6.0.3",
     "cosmjs-types": "^0.11.0",
     "long": "^5.3.2",
-    "viem": "^2.53.1"
+    "viem": "^2.55.10"
   }
 }

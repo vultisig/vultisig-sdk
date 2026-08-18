@@ -22,13 +22,13 @@ const TON_HASH = 'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f
 
 describe('getSwapTrackingUrl', () => {
   describe('general / swapkit provider', () => {
-    it('routes to track.swapkit.dev for EVM source chains and strips 0x', () => {
+    it('routes to track.swapkit.dev for EVM source chains and preserves 0x', () => {
       const url = getSwapTrackingUrl({
         swapPayload: { general: { provider: 'swapkit' } as any },
         txHash: EVM_HASH,
         sourceChain: Chain.Ethereum,
       })
-      expect(url).toBe(`https://track.swapkit.dev/?tx=abc123&chainId=1&hash=${EVM_HASH}`)
+      expect(url).toBe(`https://track.swapkit.dev/?hash=${EVM_HASH}&chainId=1`)
     })
 
     it('uses the correct numeric chainId for Polygon', () => {
@@ -37,7 +37,7 @@ describe('getSwapTrackingUrl', () => {
         txHash: EVM_HASH,
         sourceChain: Chain.Polygon,
       })
-      expect(url).toBe(`https://track.swapkit.dev/?tx=abc123&chainId=137&hash=${EVM_HASH}`)
+      expect(url).toBe(`https://track.swapkit.dev/?hash=${EVM_HASH}&chainId=137`)
     })
 
     it('uses slug chainId for Bitcoin AND passes UTXO hash through (no 0x prefix to strip)', () => {
@@ -46,7 +46,7 @@ describe('getSwapTrackingUrl', () => {
         txHash: UTXO_HASH,
         sourceChain: Chain.Bitcoin,
       })
-      expect(url).toBe(`https://track.swapkit.dev/?tx=${UTXO_HASH}&chainId=bitcoin&hash=${UTXO_HASH}`)
+      expect(url).toBe(`https://track.swapkit.dev/?hash=${UTXO_HASH}&chainId=bitcoin`)
     })
 
     it('uses slug chainId for Solana', () => {
@@ -55,31 +55,31 @@ describe('getSwapTrackingUrl', () => {
         txHash: SOLANA_HASH,
         sourceChain: Chain.Solana,
       })
-      expect(url).toBe(`https://track.swapkit.dev/?tx=${SOLANA_HASH}&chainId=solana&hash=${SOLANA_HASH}`)
+      expect(url).toBe(`https://track.swapkit.dev/?hash=${SOLANA_HASH}&chainId=solana`)
     })
 
     // Remaining mapped chains -- lock each chainId entry so map drift is caught immediately
     it.each([
-      [Chain.Arbitrum, '42161', EVM_HASH, 'abc123'],
-      [Chain.Avalanche, '43114', EVM_HASH, 'abc123'],
-      [Chain.Base, '8453', EVM_HASH, 'abc123'],
-      [Chain.BSC, '56', EVM_HASH, 'abc123'],
-      [Chain.Optimism, '10', EVM_HASH, 'abc123'],
+      [Chain.Arbitrum, '42161', EVM_HASH],
+      [Chain.Avalanche, '43114', EVM_HASH],
+      [Chain.Base, '8453', EVM_HASH],
+      [Chain.BSC, '56', EVM_HASH],
+      [Chain.Optimism, '10', EVM_HASH],
       // UTXO chains: bare hashes (no 0x). Byte-order is the human-readable
       // txid form (byte-reversed double-SHA256), which track.swapkit.dev expects.
-      [Chain.BitcoinCash, 'bitcoincash', UTXO_HASH, UTXO_HASH],
-      [Chain.Dogecoin, 'dogecoin', UTXO_HASH, UTXO_HASH],
-      [Chain.Litecoin, 'litecoin', UTXO_HASH, UTXO_HASH],
-      [Chain.Zcash, 'zcash', UTXO_HASH, UTXO_HASH],
+      [Chain.BitcoinCash, 'bitcoincash', UTXO_HASH],
+      [Chain.Dogecoin, 'dogecoin', UTXO_HASH],
+      [Chain.Litecoin, 'litecoin', UTXO_HASH],
+      [Chain.Zcash, 'zcash', UTXO_HASH],
       // Tron: decimal chain ID per SwapKit docs (not 0x2b6653cc hex form)
-      [Chain.Tron, '728126428', UTXO_HASH, UTXO_HASH],
-    ])('%s routes to track.swapkit.dev with chainId=%s', (chain, expectedChainId, hash, expectedHash) => {
+      [Chain.Tron, '728126428', UTXO_HASH],
+    ])('%s routes to track.swapkit.dev with chainId=%s', (chain, expectedChainId, hash) => {
       const url = getSwapTrackingUrl({
         swapPayload: { general: { provider: 'swapkit' } as any },
         txHash: hash,
         sourceChain: chain as Chain,
       })
-      expect(url).toBe(`https://track.swapkit.dev/?tx=${expectedHash}&chainId=${expectedChainId}&hash=${hash}`)
+      expect(url).toBe(`https://track.swapkit.dev/?hash=${hash}&chainId=${expectedChainId}`)
     })
 
     it('XRP uses forward byte-order hash (distinct from UTXO chains, no reversal needed)', () => {
@@ -89,7 +89,7 @@ describe('getSwapTrackingUrl', () => {
         txHash: XRP_HASH,
         sourceChain: Chain.Ripple,
       })
-      expect(url).toBe(`https://track.swapkit.dev/?tx=${XRP_HASH}&chainId=ripple&hash=${XRP_HASH}`)
+      expect(url).toBe(`https://track.swapkit.dev/?hash=${XRP_HASH}&chainId=ripple`)
     })
 
     it('TON hex hash passes through (encodeURIComponent is no-op for hex)', () => {
@@ -100,19 +100,7 @@ describe('getSwapTrackingUrl', () => {
         txHash: TON_HASH,
         sourceChain: Chain.Ton,
       })
-      expect(url).toBe(`https://track.swapkit.dev/?tx=${TON_HASH}&chainId=ton&hash=${TON_HASH}`)
-    })
-
-    it('TON hash with 0x prefix throws (would silently corrupt hex hash)', () => {
-      // Defensive guard: a 0x-prefixed TON hash indicates misconfigured upstream.
-      // stripHexPrefix would strip the first two chars, producing a corrupted hash.
-      expect(() =>
-        getSwapTrackingUrl({
-          swapPayload: { general: { provider: 'swapkit' } as any },
-          txHash: `0x${TON_HASH}`,
-          sourceChain: Chain.Ton,
-        })
-      ).toThrow('TON tx hash must not have a 0x prefix')
+      expect(url).toBe(`https://track.swapkit.dev/?hash=${TON_HASH}&chainId=ton`)
     })
 
     describe('exhaustiveness warning when chain not in tracker map', () => {
@@ -125,15 +113,13 @@ describe('getSwapTrackingUrl', () => {
       })
 
       it('falls back to block explorer + warns when sourceChain has no tracker entry', () => {
-        // THORChain is not in swapKitTrackerChainId, so it falls through.
-        // Using THORChain here simulates a hypothetical SwapKitSourceChain
-        // extension without a matching swapKitTrackerChainId update.
+        // Polkadot is not enabled by SwapKit, so it falls through.
         const url = getSwapTrackingUrl({
           swapPayload: { general: { provider: 'swapkit' } as any },
           txHash: EVM_HASH,
-          sourceChain: Chain.THORChain,
+          sourceChain: Chain.Polkadot,
         })
-        expect(url).toMatch(/runescan\.io|thorchain/i)
+        expect(url).toContain(EVM_HASH)
         expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('SwapKit tracker chainId missing for'))
       })
     })

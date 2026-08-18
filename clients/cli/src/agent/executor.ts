@@ -6,17 +6,22 @@
  * Each handler takes `(toolCallId, input)` and returns a `RecentAction` ready
  * to be flushed into the next outbound `context.recent_actions`.
  */
-import type { VaultBase, Vultisig } from '@vultisig/sdk'
+import type { EvmChain, VaultBase, Vultisig } from '@vultisig/sdk'
 import {
   Chain,
   chainFeeCoin,
+  computeEip712Hash,
   getChainKind,
+  getEvmRpcUrl,
+  knownTokensIndex,
+  parseThorSwapMemo,
   resolveChainReference,
+  toCanonicalEvmSignature,
   VaultError,
   VaultErrorCode,
   Vultisig as VultisigSdk,
 } from '@vultisig/sdk'
-import { formatUnits, hashTypedData, recoverAddress } from 'viem'
+import { type Address, decodeFunctionData, formatUnits, type Hex, parseAbi, recoverAddress } from 'viem'
 
 import { VaultStateStore } from '../core/VaultStateStore'
 import { normalizeAgentError } from './agentErrors'
@@ -28,61 +33,14 @@ import {
   recordBroadcast,
   reserveBroadcast,
 } from './broadcastJournal'
+import {
+  type HlOrderSigningPayload,
+  type HlOrderTransport,
+  isHlOrderFailure,
+  pollHlOrderStatus,
+  validateHlSigningPayload,
+} from './hlOrder'
 import type { RecentAction } from './types'
-
-/**
- * THORChain swap-memo chain codes → SDK Chain enum. Used to resolve the
- * destination chain encoded in `=:CHAIN.ASSET:DEST::v0:slippage` memos
- * back to a Chain enum so vault.swap can dispatch.
- *
- * Reference: https://docs.thorchain.org/concepts/memos
- * Maya uses similar codes — additions here cover both ecosystems.
- */
-const THOR_MEMO_CHAIN_TO_ENUM: Record<string, Chain> = {
-  BTC: Chain.Bitcoin,
-  ETH: Chain.Ethereum,
-  BSC: Chain.BSC,
-  AVAX: Chain.Avalanche,
-  BASE: Chain.Base, // L2 — THORChain routinely quotes Base destinations (PR #439 review finding 1)
-  ARB: Chain.Arbitrum, // L1-via-bridge path (PR #439 review finding 1)
-  BCH: Chain.BitcoinCash,
-  LTC: Chain.Litecoin,
-  DOGE: Chain.Dogecoin,
-  GAIA: Chain.Cosmos,
-  THOR: Chain.THORChain,
-  RUNE: Chain.THORChain,
-  XRP: Chain.Ripple,
-  DASH: Chain.Dash,
-  ZEC: Chain.Zcash,
-  MAYA: Chain.MayaChain,
-  CACAO: Chain.MayaChain,
-}
-
-/**
- * THORChain abbreviated asset shortcuts → expanded `CHAIN.ASSET`. THORChain
- * memos accept both full (`XRP.XRP`) and abbreviated (`x`) notation for
- * common native assets to fit within the 250-byte memo limit when paired
- * with long destination addresses. Reference:
- * https://docs.thorchain.org/concepts/asset-notation#asset-shorthand
- */
-const THOR_MEMO_ASSET_SHORTCUTS: Record<string, string> = {
-  b: 'BTC.BTC',
-  e: 'ETH.ETH',
-  s: 'BSC.BNB',
-  a: 'AVAX.AVAX',
-  c: 'BCH.BCH',
-  l: 'LTC.LTC',
-  d: 'DOGE.DOGE',
-  g: 'GAIA.ATOM',
-  r: 'THOR.RUNE',
-  x: 'XRP.XRP',
-  cacao: 'MAYA.CACAO',
-  dash: 'DASH.DASH',
-  zec: 'ZEC.ZEC',
-  // BASE / ARB don't have documented single-letter shortcuts; THORChain
-  // emits these as the full CHAIN.ASSET form in memos. Listed in
-  // THOR_MEMO_CHAIN_TO_ENUM only.
-}
 
 // EVM chains that use nonce-based transaction ordering
 const EVM_CHAINS = new Set<string>([
@@ -101,23 +59,29 @@ const EVM_CHAINS = new Set<string>([
   'Sei',
 ])
 
-// Public RPC endpoints for refreshing gas estimates before signing.
-// Used as fallback to ensure maxFeePerGas covers current base fee.
-const EVM_GAS_RPC: Record<string, string> = {
-  Ethereum: 'https://eth.llamarpc.com',
-  BSC: 'https://bsc-dataseed.binance.org',
-  Polygon: 'https://polygon-rpc.com',
-  Avalanche: 'https://api.avax.network/ext/bc/C/rpc',
-  Arbitrum: 'https://arb1.arbitrum.io/rpc',
-  Optimism: 'https://mainnet.optimism.io',
-  Base: 'https://mainnet.base.org',
-  Blast: 'https://rpc.blast.io',
-  Zksync: 'https://mainnet.era.zksync.io',
-  Mantle: 'https://rpc.mantle.xyz',
-  CronosChain: 'https://cronos-evm-rpc.publicnode.com',
-  Hyperliquid: 'https://rpc.hyperliquid.xyz/evm',
-  Sei: 'https://evm-rpc.sei-apis.com',
+const ERC20_TRANSFER_SELECTOR = '0xa9059cbb'
+const ERC20_TRANSFER_ABI = parseAbi(['function transfer(address to, uint256 value)'])
+
+/** Decode the recipient and amount that an ERC-20 transfer will actually use. */
+function decodeErc20Transfer(calldata: string): { recipient: Address; amount: bigint } | null {
+  if (calldata.slice(0, ERC20_TRANSFER_SELECTOR.length).toLowerCase() !== ERC20_TRANSFER_SELECTOR) return null
+
+  try {
+    const decoded = decodeFunctionData({ abi: ERC20_TRANSFER_ABI, data: calldata as Hex })
+    const [recipient, amount] = decoded.args as readonly [Address, bigint]
+    return { recipient, amount }
+  } catch {
+    throw new Error('Invalid ERC-20 transfer calldata — refusing to sign')
+  }
 }
+
+// `Set<string>.has()` returns a plain boolean, so it never narrows `Chain` down to
+// the `EvmChain` union that `getEvmRpcUrl` takes. This predicate keeps membership
+// byte-identical to the set above rather than delegating to `isChainOfKind(chain,
+// 'evm')`: the canonical chain-kind record also classifies Robinhood as EVM, and
+// switching would newly route it through nonce locking, nonce patching and gas
+// bumping. That is a money-path change and does not belong in a typing fix.
+const isEvmChain = (chain: Chain): chain is EvmChain => EVM_CHAINS.has(chain)
 
 type AccountCoin = {
   chain: Chain
@@ -163,6 +127,7 @@ export class AgentExecutor {
   // fingerprints so two different vaults sending an identical tx don't collide
   // in the single global journal (see BroadcastIntent.owner).
   private readonly vaultPublicKey: string
+  private readonly consumedHlOrderRefs = new Set<string>()
 
   constructor(vault: VaultBase, verbose = false, vaultId?: string, vultisig?: Vultisig) {
     this.vault = vault
@@ -172,6 +137,89 @@ export class AgentExecutor {
     if (vaultId) {
       this.stateStore = new VaultStateStore(vaultId)
     }
+  }
+
+  async retrieveHlOrder(
+    transport: HlOrderTransport,
+    input: Record<string, unknown>,
+    conversationId: string
+  ): Promise<HlOrderSigningPayload> {
+    const orderRef = typeof input.order_ref === 'string' ? input.order_ref : ''
+    if (!/^[0-9a-f-]{16,64}$/i.test(orderRef)) throw new Error('HL_INVALID_ORDER_REFERENCE')
+    if (this.consumedHlOrderRefs.has(orderRef)) throw new Error('HL_ORDER_REFERENCE_REPLAYED')
+    const payload = await transport.retrieveHlOrderSigningPayload(orderRef, conversationId, this.vaultPublicKey)
+    // Retrieval is one-shot server-side. Mark locally consumed before validation/signing too: a malformed
+    // or tampered payload must not be retried under the same opaque capability.
+    this.consumedHlOrderRefs.add(orderRef)
+    await validateHlSigningPayload(
+      payload,
+      {
+        orderRef,
+        conversationId,
+        publicKey: this.vaultPublicKey,
+        digest: typeof input.digest === 'string' ? input.digest : undefined,
+      },
+      this.vault
+    )
+    return payload
+  }
+
+  async signAndSubmitHlOrder(transport: HlOrderTransport, payload: HlOrderSigningPayload): Promise<RecentAction> {
+    return this.runTool('hl_order', async () => {
+      if (this.vault.isEncrypted && !(this.vault as any).isUnlocked?.() && this.password) {
+        await (this.vault as any).unlock?.(this.password)
+      }
+      const expectedAddress = await this.vault.address(Chain.Ethereum)
+      const signatures = []
+      for (const step of payload.steps) {
+        const signed = await this.vault.signBytes({
+          data: step.digest,
+          chain: Chain.Ethereum,
+        })
+        const canonical = toCanonicalEvmSignature(signed.signature, signed.recovery ?? 0)
+        const v = canonical.recovery + 27
+        const wireSignature = `0x${canonical.r}${canonical.s}${v.toString(16).padStart(2, '0')}` as `0x${string}`
+        const recovered = await recoverAddress({
+          hash: step.digest,
+          signature: wireSignature,
+        })
+        if (recovered.toLowerCase() !== expectedAddress.toLowerCase()) {
+          throw new Error('HL_SIGNATURE_RECOVERY_MISMATCH')
+        }
+        signatures.push({
+          kind: step.kind,
+          digest: step.digest,
+          r: `0x${canonical.r}` as `0x${string}`,
+          s: `0x${canonical.s}` as `0x${string}`,
+          v,
+        })
+      }
+      const params = {
+        orderRef: payload.order_ref,
+        conversationId: payload.conversation_id,
+        publicKey: this.vaultPublicKey,
+      }
+      const submitted = await transport.submitHlOrder(
+        params.orderRef,
+        params.conversationId,
+        params.publicKey,
+        signatures
+      )
+      const status = await pollHlOrderStatus(transport, params, submitted)
+      if (isHlOrderFailure(status)) {
+        throw new Error(`HL_ORDER_${status.state.toUpperCase()}: ${status.reason ?? 'venue did not accept the order'}`)
+      }
+      // Signatures and raw actions travel only over the authenticated direct endpoint. The chat
+      // recent_actions channel receives status metadata, never signing material.
+      return {
+        order_ref: payload.order_ref,
+        state: status.state,
+        order_id: status.order_id,
+        filled_size: status.filled_size,
+        average_price: status.average_price,
+        reason: status.reason,
+      }
+    })
   }
 
   setPassword(password: string): void {
@@ -305,7 +353,7 @@ export class AgentExecutor {
       // today and would silently misbehave if forced through this path.
       // Reject loudly rather than fall through to the single-leg branch
       // (which would extract main-leg txArgs and silently drop the approve).
-      if (!EVM_CHAINS.has(chain)) {
+      if (!isEvmChain(chain)) {
         if (this.verbose)
           process.stderr.write(
             `[executor] rejecting multi-leg envelope on non-EVM chain ${chain}: signMultiLeg is EVM-only\n`
@@ -407,6 +455,65 @@ export class AgentExecutor {
   }
 
   /**
+   * The chain the currently-buffered server tx targets, or null when nothing is
+   * buffered. Read alongside {@link getPendingSummary} so a declined signing can
+   * report the proposed transaction as a machine-readable surface — a read-safe
+   * `agent ask` (no `--yes`) is documented to REPORT the proposed transaction,
+   * and a prose summary alone is not something an integrator can branch on.
+   */
+  getPendingChain(): string | null {
+    return this.pendingPayloads.get('latest')?.chain ?? null
+  }
+
+  /**
+   * If the transaction that will actually be signed carries ERC-20 `transfer`
+   * calldata, decode its destination and amount and cross-check them against
+   * the producer's declared values. Returns the decoded transfer (authoritative
+   * for the summary) when the signed tx is a transfer, or null otherwise.
+   *
+   * Reads the signed tx via {@link extractNestedTx} — the SAME resolution the
+   * signer uses (`swap_tx || send_tx || tx || txArgs.tx`) — not `txArgs.tx`
+   * alone: a `send_tx`/`tx`/`swap_tx` envelope, or one carrying both a benign
+   * `txArgs.tx` and a malicious higher-precedence key, must not be able to move
+   * funds to an address the consent summary never showed. Fails closed —
+   * clearing the buffered tx and throwing — on malformed transfer calldata or a
+   * producer/calldata recipient or amount mismatch, so a divergent envelope can
+   * never be signed. Invoked before the branch-specific summaries below so a
+   * transfer cannot be disguised as a swap/contract-call to skip the check.
+   */
+  private assertConsistentTransfer(p: any): { recipient: Address; amount: bigint } | null {
+    const signedTx = extractNestedTx(p)
+    const calldata = typeof signedTx?.data === 'string' ? (signedTx.data as string) : ''
+    if (calldata === '' || calldata === '0x') return null
+
+    let transfer: { recipient: Address; amount: bigint } | null
+    try {
+      transfer = decodeErc20Transfer(calldata)
+    } catch (error) {
+      this.clearPendingTransaction()
+      throw error
+    }
+    if (!transfer) return null
+
+    const producerRecipient = typeof p?.txArgs?.to === 'string' ? (p.txArgs.to as string) : ''
+    if (producerRecipient && transfer.recipient.toLowerCase() !== producerRecipient.toLowerCase()) {
+      this.clearPendingTransaction()
+      throw new Error(
+        `ERC-20 recipient mismatch — refusing to sign: txArgs.to ${producerRecipient} does not match calldata destination ${transfer.recipient}`
+      )
+    }
+
+    const producerAmount = typeof p?.txArgs?.amount === 'string' ? (p.txArgs.amount as string) : ''
+    if (producerAmount && /^\d+$/.test(producerAmount) && BigInt(producerAmount) !== transfer.amount) {
+      this.clearPendingTransaction()
+      throw new Error(
+        `ERC-20 amount mismatch — refusing to sign: txArgs.amount ${producerAmount} does not match calldata value ${transfer.amount}`
+      )
+    }
+    return { recipient: transfer.recipient, amount: transfer.amount }
+  }
+
+  /**
    * Human-readable one-line summary of the currently-buffered server tx
    * (set by storeServerTransaction), for the pre-sign confirmation prompt.
    * Returns null when nothing is buffered (e.g. sign_typed_data, which has
@@ -417,6 +524,12 @@ export class AgentExecutor {
     if (!stored) return null
     const p = stored.payload as any
     const labels = (p?.resolved?.labels ?? {}) as Record<string, string>
+
+    // Fail closed on any signed ERC-20 transfer whose destination diverges from
+    // the producer's declared recipient or amount (or whose transfer calldata
+    // is malformed) BEFORE rendering any branch-specific summary — a transfer
+    // must not be able to hide behind a swap/contract-call head to skip the check.
+    const transfer = this.assertConsistentTransfer(p)
 
     // Design B: Polymarket flat-tx-builder bridge envelopes carry no swap/send
     // token labels, so the generic summaries below degrade to "send ? to ?".
@@ -453,14 +566,57 @@ export class AgentExecutor {
       if (labels.estimated_fee) parts.push(`est. fee ${labels.estimated_fee}`)
       return parts.join(' ')
     }
+    // Name the token contract from the payload that gets signed, not from label
+    // text: an EVM token send executes against the signed tx's `to` (the
+    // contract, with transfer calldata) while `txArgs.to` is the recipient. A
+    // native send has empty calldata and tx.to === recipient, so it gains
+    // nothing here. Non-EVM envelopes carry no signable EVM tx and are likewise
+    // unchanged. Resolve via `extractNestedTx` so the summary describes the same
+    // tx the signer consumes (`swap_tx || send_tx || tx || txArgs.tx`).
+    const signedTx = extractNestedTx(p)
+    const contractTo = typeof signedTx?.to === 'string' ? (signedTx.to as string) : ''
+    const calldata = typeof signedTx?.data === 'string' ? (signedTx.data as string) : ''
+    const isContractSend = !!contractTo && calldata !== '' && calldata !== '0x'
+    const producerRecipient = typeof p?.txArgs?.to === 'string' ? (p.txArgs.to as string) : ''
+    // `transfer.recipient` (decoded + cross-checked above) is the value that will
+    // receive funds for an ERC-20 transfer. It therefore owns both the rendered
+    // summary and the exact string passed to the confirmation policy; producer
+    // labels are fallback text only for native, non-EVM, and non-transfer
+    // envelopes.
+    const to = transfer?.recipient || producerRecipient || labels.recipient_echo || '?'
+
+    // WYSIWYS: derive the displayed amount from signed calldata, never a producer label. Unknown tokens have no trusted
+    // decimals, so show raw base units as unverified rather than a misleading precise number; the recipient was already
+    // cross-checked above, so this rendering branch never fails closed.
+    if (transfer) {
+      return this.renderErc20TransferSummary(transfer.amount, contractTo, stored.chain, to)
+    }
+
     const amount = labels.resolved_amount ?? p?.txArgs?.amount ?? '?'
     // Include the asset symbol so a confirmation prompt can never be ambiguous
     // between native and tokens (e.g. "send 100 on Base to …" — ETH? USDC?).
     // resolved_amount usually already embeds it; de-dup when both are set.
     const symbol = labels.token_resolved || labels.token_symbol || ''
     const amountWithSymbol = symbol && !amount.endsWith(` ${symbol}`) ? `${amount} ${symbol}` : amount
-    const to = (p?.txArgs?.to as string) || labels.recipient_echo || '?'
-    return `send ${amountWithSymbol} on ${stored.chain} to ${to}`
+    const contractPart =
+      isContractSend && contractTo.toLowerCase() !== to.toLowerCase() ? ` (token contract ${contractTo})` : ''
+    return `send ${amountWithSymbol} on ${stored.chain} to ${to}${contractPart}`
+  }
+
+  /**
+   * Render the consent amount for an ERC-20 transfer from the SIGNED calldata
+   * value, never a producer label. Known tokens use trusted decimals/ticker from
+   * knownTokensIndex; unknown tokens fall back to raw base units with an explicit
+   * unverified marker (the recipient is already cross-checked, so we never fail
+   * closed here).
+   */
+  private renderErc20TransferSummary(amount: bigint, contractTo: string, chain: Chain, to: string): string {
+    const known = knownTokensIndex[chain]?.[contractTo.toLowerCase()]
+    if (known) {
+      const contractPart = contractTo.toLowerCase() !== to.toLowerCase() ? ` (token contract ${contractTo})` : ''
+      return `send ${formatUnits(amount, known.decimals)} ${known.ticker} on ${chain} to ${to}${contractPart}`
+    }
+    return `send ${amount} base units of token ${contractTo} (decimals unverified) on ${chain} to ${to}`
   }
 
   /**
@@ -627,7 +783,7 @@ export class AgentExecutor {
   private async removeCoinImpl(params: Record<string, unknown>): Promise<Record<string, unknown>> {
     const coins = (params.coins as any[] | undefined) ?? (params.tokens as any[] | undefined)
     if (coins && Array.isArray(coins)) {
-      const results: { chain: string; tokenId: string }[] = []
+      const results: { chain: string; tokenId: string; removed: boolean }[] = []
       for (const t of coins) {
         const chain = resolveChain(t.chain)
         if (!chain) throw new Error(`Unknown chain: ${t.chain}`)
@@ -637,8 +793,10 @@ export class AgentExecutor {
             `vault_coin remove: missing contract_address for ${t.ticker || t.symbol || 'coin'} on ${t.chain}`
           )
         }
-        await this.vault.removeToken(chain, tokenId)
-        results.push({ chain: chain.toString(), tokenId })
+        // Report per-coin what the SDK actually did — a coin that was never
+        // tracked must not be reported back to the model as removed.
+        const removed = await this.vault.removeToken(chain, tokenId)
+        results.push({ chain: chain.toString(), tokenId, removed })
       }
       return { removed: results }
     }
@@ -653,8 +811,8 @@ export class AgentExecutor {
     if (!tokenId) {
       throw new Error(`vault_coin remove: missing contract_address for coin on ${chainName}`)
     }
-    await this.vault.removeToken(chain, tokenId)
-    return { chain: chain.toString(), removed: true }
+    const removed = await this.vault.removeToken(chain, tokenId)
+    return { chain: chain.toString(), removed }
   }
 
   async removeChain(_toolCallId: string, input: Record<string, unknown>): Promise<RecentAction> {
@@ -714,7 +872,9 @@ export class AgentExecutor {
         ? this.buildBroadcastIntent(payload, chain, { txArgs: payload.txArgs })
         : this.buildBroadcastIntent(payload, chain)
       const approveIntent = isMultiLeg
-        ? this.buildBroadcastIntent(payload, chain, { txArgs: payload.approvalTxArgs })
+        ? this.buildBroadcastIntent(payload, chain, {
+            txArgs: payload.approvalTxArgs,
+          })
         : undefined
       const primaryFp = computeFingerprint(primaryIntent)
       const approveFp = approveIntent ? computeFingerprint(approveIntent) : undefined
@@ -920,59 +1080,24 @@ export class AgentExecutor {
    * destination chain + asset, look up the corresponding `Chain` enum,
    * then call `vault.swap` which builds the MsgDeposit internally.
    *
-   * IMPORTANT — destination address handling: `vault.swap` re-derives the
-   * destination address from `vault.address(toChain)` when fetching the
-   * native swap quote (see `findSwapQuote` → `getNativeSwapQuote` —
-   * `destination: to.address`). It does NOT honor the destination address
-   * encoded in the envelope's memo. As a fund-safety guard we therefore
-   * require the memo's destination address to match the vault's own
-   * destination address (self-swap) and throw otherwise — see Phase D
-   * review F1. Cross-account routing must wait on a Phase E SDK extension
-   * that lets `vault.swap` accept a user-supplied destination.
+   * The destination encoded in the server-issued memo is forwarded through
+   * `vault.swap({ recipient })`. The SDK uses the same recipient both for the
+   * destination coin and the THORChain/MayaChain quote request, so an explicit
+   * cross-account route cannot be silently replaced with the vault's address.
+   * An omitted destination keeps the existing self-swap default.
    */
   private async signThorMsgDepositSwap(serverTxData: any, chain: Chain): Promise<Record<string, unknown>> {
     const txArgs = serverTxData?.txArgs ?? {}
     const memo: string = typeof txArgs.memo === 'string' ? txArgs.memo : ''
     const parsed = parseThorSwapMemo(memo)
-
-    const toChain = THOR_MEMO_CHAIN_TO_ENUM[parsed.destChainCode]
-    if (!toChain) {
+    if (/\s/.test(parsed.destAddress)) {
       throw new VaultError(
-        VaultErrorCode.UnsupportedChain,
-        `signThorMsgDepositSwap: unsupported destination chain code '${parsed.destChainCode}' in memo '${memo}'.`
+        VaultErrorCode.InvalidConfig,
+        `signThorMsgDepositSwap: destination address in memo '${memo}' must not contain whitespace.`
       )
     }
 
-    // Fund-safety: require memo destination to equal the vault's own
-    // destination address. vault.swap silently substitutes the vault's
-    // address into the broadcast memo, so any mismatch here would misroute
-    // funds without warning. Phase D self-swaps remain supported (BTC
-    // tests confirmed 3.565 XRP arrived at the vault's own XRP address).
-    //
-    // **Empty `destAddress` semantics** (PR #439 review finding 2):
-    // THORChain treats an empty DEST in a swap memo as "refund to source"
-    // — the chain substitutes its own record of the user's address on the
-    // destination chain. The leading-truthiness check intentionally skips
-    // the equality assertion in that case: vault.swap's substitution will
-    // land at the vault's own dest address (which IS the right address),
-    // so there's nothing to compare against. A malicious party can't
-    // exploit this because the substitution is constrained to addresses
-    // THORChain associates with the source signer (i.e. the vault).
-    const vaultDestAddress = await this.vault.address(toChain)
-    // EVM addresses are case-insensitive on-chain — TrustWallet wallet-core
-    // returns EIP-55 checksummed form, but THORChain memos can carry either
-    // case depending on quote source. Normalize both sides for EVM
-    // destinations to avoid false-positive rejections on legitimate
-    // self-swaps. Non-EVM chains use case-sensitive base58/bech32/etc.
-    // encodings — leave those untouched.
-    const normalizeForCompare = (addr: string): string => (EVM_CHAINS.has(toChain) ? addr.toLowerCase() : addr)
-    if (parsed.destAddress && normalizeForCompare(parsed.destAddress) !== normalizeForCompare(vaultDestAddress)) {
-      throw new VaultError(
-        VaultErrorCode.NotImplemented,
-        `signThorMsgDepositSwap: memo destination '${parsed.destAddress}' does not match vault address '${vaultDestAddress}' on ${toChain}. ` +
-          `Phase D only supports self-swaps; cross-account routing requires a Phase E SDK extension that passes the user-supplied destination through to vault.swap.`
-      )
-    }
+    const toChain = parsed.toChain
 
     // From-asset: derived from the source chain's native ticker (RUNE on
     // THORChain, CACAO on MayaChain).
@@ -1001,6 +1126,7 @@ export class AgentExecutor {
       toChain,
       toSymbol: parsed.destAsset,
       amount: amountDecimal,
+      ...(parsed.destAddress && { recipient: parsed.destAddress }),
     })
 
     if (result.dryRun) {
@@ -1480,7 +1606,7 @@ export class AgentExecutor {
    * Releases any previously held lock first (e.g. from an abandoned build).
    */
   private async acquireEvmLockIfNeeded(chain: Chain): Promise<void> {
-    if (!this.stateStore || !EVM_CHAINS.has(chain)) return
+    if (!this.stateStore || !isEvmChain(chain)) return
 
     // Release any stale lock from a previous build that was never signed
     await this.releaseEvmLock(chain)
@@ -1512,7 +1638,7 @@ export class AgentExecutor {
    * dropped and local state is stale.
    */
   private async patchEvmNonce(chain: Chain, payload: any): Promise<void> {
-    if (!this.stateStore || !EVM_CHAINS.has(chain)) return
+    if (!this.stateStore || !isEvmChain(chain)) return
 
     const bs = payload.blockchainSpecific
     if (!bs || bs.case !== 'ethereumSpecific') return
@@ -1560,15 +1686,19 @@ export class AgentExecutor {
       // assume local state is stale rather than risk a large nonce gap
       const nonceGap = nextNonce - rpcNonce
       if (pendingNonce === null && nonceGap > 3n) {
-        if (this.verbose)
-          process.stderr.write(
-            `[nonce] Large nonce gap for ${chain} (${nonceGap}) and couldn't verify pending txs — using on-chain nonce ${rpcNonce}\n`
-          )
+        process.stderr.write(
+          `[nonce] Warning: pending nonce was not verified for ${chain}; signing will continue with on-chain nonce ${rpcNonce} because the local gap is ${nonceGap}\n`
+        )
         this.stateStore.clearEvmState(chain)
         return
       }
 
       bs.value.nonce = nextNonce
+      if (pendingNonce === null) {
+        process.stderr.write(
+          `[nonce] Warning: pending nonce was not verified for ${chain}; signing will continue with local nonce ${nextNonce}\n`
+        )
+      }
       if (this.verbose) process.stderr.write(`[nonce] Patched ${chain} nonce: ${rpcNonce} → ${nextNonce}\n`)
     }
   }
@@ -1579,13 +1709,12 @@ export class AgentExecutor {
    * Compensates for gas price drift between build time and sign time.
    */
   private async patchEvmGas(chain: Chain, payload: any): Promise<void> {
-    if (!EVM_CHAINS.has(chain)) return
+    if (!isEvmChain(chain)) return
 
     const bs = payload.blockchainSpecific
     if (!bs || bs.case !== 'ethereumSpecific') return
 
-    const rpcUrl = EVM_GAS_RPC[chain as string]
-    if (!rpcUrl) return
+    const rpcUrl = getEvmRpcUrl(chain)
 
     try {
       const res = await fetch(rpcUrl, {
@@ -1600,7 +1729,10 @@ export class AgentExecutor {
         signal: AbortSignal.timeout(5000),
       })
       const data = (await res.json()) as any
-      const baseFee = BigInt(data.result?.baseFeePerGas || '0')
+      if (!res.ok || data?.error || data?.result?.baseFeePerGas === undefined || data?.result?.baseFeePerGas === null) {
+        throw new Error(`Failed to fetch current base fee for ${chain}`)
+      }
+      const baseFee = BigInt(data.result.baseFeePerGas)
       if (baseFee === 0n) return
 
       const currentPriorityFee = BigInt(bs.value.priorityFee || '0')
@@ -1620,7 +1752,9 @@ export class AgentExecutor {
       }
     } catch {
       // Non-fatal — keep the original gas estimate
-      if (this.verbose) process.stderr.write(`[gas] Failed to refresh base fee for ${chain}, keeping original\n`)
+      process.stderr.write(
+        `[gas] Warning: gas estimate was not refreshed for ${chain}; signing will continue with the original estimate\n`
+      )
     }
   }
 
@@ -1629,8 +1763,12 @@ export class AgentExecutor {
    * Returns null if the RPC call fails (non-fatal).
    */
   private async fetchEvmPendingNonce(chain: Chain): Promise<bigint | null> {
-    const rpcUrl = EVM_GAS_RPC[chain as string]
-    if (!rpcUrl) return null
+    // The old CLI-local map returned `undefined` for a non-EVM chain and the
+    // caller bailed on the falsy URL. The shared resolver has no such escape
+    // hatch, so keep the guard explicit: without it a non-EVM chain would POST
+    // eth_getTransactionCount at an undefined endpoint.
+    if (!isEvmChain(chain)) return null
+    const rpcUrl = getEvmRpcUrl(chain)
 
     try {
       const address = await this.vault.address(chain)
@@ -1646,7 +1784,10 @@ export class AgentExecutor {
         signal: AbortSignal.timeout(5000),
       })
       const data = (await res.json()) as any
-      return BigInt(data.result || '0')
+      if (!res.ok || data?.error || data?.result === undefined || data?.result === null) {
+        return null
+      }
+      return BigInt(data.result)
     } catch {
       return null
     }
@@ -1657,7 +1798,7 @@ export class AgentExecutor {
    * For approve+swap flows with N message hashes, the highest nonce used is base + N - 1.
    */
   private recordEvmNonceFromPayload(chain: Chain, payload: any, numTxs: number): void {
-    if (!this.stateStore || !EVM_CHAINS.has(chain)) return
+    if (!this.stateStore || !isEvmChain(chain)) return
 
     const bs = payload.blockchainSpecific
     if (!bs || bs.case !== 'ethereumSpecific') return
@@ -1745,7 +1886,7 @@ export class AgentExecutor {
 
     if (this.verbose) process.stderr.write(`[sign_typed_data] primaryType=${primaryType} domain.name=${domain.name}\n`)
 
-    const eip712Hash = computeEIP712Hash(domain, types, primaryType, message)
+    const eip712Hash = computeEip712Hash(domain, types, primaryType, message)
     if (this.verbose) process.stderr.write(`[sign_typed_data] hash=${eip712Hash}\n`)
 
     // Resolve chain from domain chainId or explicit chain param
@@ -2119,223 +2260,8 @@ export function parseNonEvmEnvelope(serverTxData: any, chain: Chain): NonEvmSend
 }
 
 /**
- * Parsed shape of a THORChain swap memo (`=:CHAIN.ASSET:DEST[::v0:slippage]`).
- *
- * - `destChainCode` is the raw memo chain prefix (`XRP`, `ETH`, ...).
- *   Caller is responsible for mapping it to a `Chain` enum via
- *   `THOR_MEMO_CHAIN_TO_ENUM` and rejecting unsupported codes.
- * - `destAsset` is the asset ticker only — any ERC-20 contract suffix
- *   (`USDC-0X...`) is stripped because vault.swap takes the ticker.
- * - `destAddress` is the user-supplied destination on the destination
- *   chain. May be empty when the memo omits it (THORChain treats this
- *   as "refund to source"); callers should still validate against the
- *   vault's own destination address before broadcasting since vault.swap
- *   silently substitutes its own address into the broadcast memo.
- */
-export type ParsedThorSwapMemo = {
-  destChainCode: string
-  destAsset: string
-  destAddress: string
-}
-
-/**
- * Parse a THORChain swap memo into its destination-routing components.
- *
- * Accepts the shorthand notation documented at
- * https://docs.thorchain.org/concepts/asset-notation#asset-shorthand
- * (`x` → `XRP.XRP`, `e` → `ETH.ETH`, ...) — common shortcuts let memos
- * fit inside THORChain's 250-byte limit when paired with long EVM
- * destination addresses.
- *
- * Throws `VaultError(NotImplemented)` for non-swap memos (anything that
- * doesn't start with the `=:` swap prefix — e.g. LP `+:POOL` or `-:POOL`,
- * which are deferred to Phase E). Throws `VaultError(InvalidConfig)`
- * when the swap memo is structurally malformed (no CHAIN.ASSET segment).
- */
-export function parseThorSwapMemo(memo: string): ParsedThorSwapMemo {
-  if (!memo.startsWith('=:')) {
-    throw new VaultError(
-      VaultErrorCode.NotImplemented,
-      `parseThorSwapMemo: only swap memos (=:CHAIN.ASSET:DEST...) supported on this path; got memo='${memo}'. ` +
-        `LP memos (+:/-:) route through signThorMsgDepositLp; loan / validator ops out of scope.`
-    )
-  }
-
-  const memoBody = memo.slice(2) // strip leading '=:'
-  const parts = memoBody.split(':')
-
-  let chainAsset = parts[0]
-  if (chainAsset && !chainAsset.includes('.')) {
-    const expanded = THOR_MEMO_ASSET_SHORTCUTS[chainAsset.toLowerCase()]
-    if (expanded) chainAsset = expanded
-  }
-  if (!chainAsset || !chainAsset.includes('.')) {
-    throw new VaultError(
-      VaultErrorCode.InvalidConfig,
-      `parseThorSwapMemo: malformed swap memo '${memo}': missing CHAIN.ASSET in first segment.`
-    )
-  }
-
-  const [destChainCode, destAssetRaw] = chainAsset.split('.')
-  // The destAsset can carry an ERC-20 contract suffix ("ETH.USDC-0X...");
-  // for vault.swap we only need the ticker (part before `-`).
-  const destAsset = destAssetRaw?.split('-')[0] ?? ''
-  const destAddress = typeof parts[1] === 'string' ? parts[1] : ''
-
-  return { destChainCode, destAsset, destAddress }
-}
-
-/**
  * Resolve a Chain from a numeric EVM chain ID.
  */
 export function resolveChainId(chainId: string | number): Chain | null {
   return resolveChainReference(chainId) ?? null
-}
-
-// ============================================================================
-// EIP-712 Typed Data Hashing
-// ============================================================================
-
-/**
- * Compute the EIP-712 digest: keccak256("\x19\x01" || domainSeparator || hashStruct(message)).
- *
- * Delegates to viem's `hashTypedData` — the vetted encoder the rest of the
- * ecosystem verifies against, and the same digest the app's reference path
- * produces via ethers `TypedDataEncoder.hash` (see
- * vultiagent-app/src/services/eip712Signing.ts). viem derives the
- * `EIP712Domain` type from the keys actually present on `domain`, so domains
- * that omit `verifyingContract` (Polymarket's ClobAuthDomain) or carry `salt`
- * hash correctly. It throws on a message missing a declared field or a
- * `primaryType` absent from `types` — the fail-loud contract we want, with no
- * hand-rolled struct encoder to drift from the spec.
- */
-function computeEIP712Hash(
-  domain: Record<string, unknown>,
-  types: Record<string, Array<{ name: string; type: string }>>,
-  primaryType: string,
-  message: Record<string, unknown>
-): string {
-  // viem synthesizes the EIP712Domain type from `domain`; a caller-supplied
-  // `EIP712Domain` entry would be treated as a struct type and make viem
-  // reject `primaryType`. Strip it so the synthesized- and explicit-domain
-  // payload shapes hash identically.
-  const messageTypes = { ...types }
-  delete messageTypes.EIP712Domain
-
-  // Normalize a string `chainId` to a number. The agent backend serialises
-  // chainId as a JS number, but the JSON wire occasionally double-stringifies
-  // primitives (`domain.chainId` is typed `number | string` upstream).
-  // Crucially, viem hashes a string `chainId` ("137") to a DIFFERENT digest
-  // than the numeric form (137) — whereas ethers `TypedDataEncoder.hash` (the
-  // app's encoder, and what the on-chain DOMAIN_SEPARATOR matches) coerces
-  // both to the same value. Coerce here so our digest agrees with theirs.
-  const normalizedDomain = domain.chainId !== undefined ? { ...domain, chainId: coerceChainId(domain.chainId) } : domain
-
-  return hashTypedData({
-    domain: normalizedDomain,
-    types: messageTypes,
-    primaryType,
-    message,
-  } as Parameters<typeof hashTypedData>[0])
-}
-
-/**
- * Coerce an EIP-712 `domain.chainId` (which may arrive as a number or a
- * decimal/hex string over the JSON wire) to a number. Mirrors the app's
- * `coerceChainId` in vultiagent-app/src/services/eip712Signing.ts. Throws on
- * an empty/unparseable value rather than letting viem hash a wrong digest.
- */
-function coerceChainId(raw: unknown): number | bigint {
-  if (typeof raw === 'number' || typeof raw === 'bigint') return raw
-  const s = String(raw).trim()
-  if (s === '') {
-    throw new Error('EIP-712 domain.chainId is empty')
-  }
-  // Parse decimal and hex via BigInt (exact), then narrow to a JS number only
-  // when it fits safely. Using Number() directly would round values above
-  // MAX_SAFE_INTEGER and silently produce a DIFFERENT EIP-712 digest — viem
-  // accepts a bigint chainId, so return that instead of corrupting the hash.
-  if (/^[0-9]+$/.test(s) || /^0x[0-9a-fA-F]+$/.test(s)) {
-    const big = BigInt(s)
-    return big <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(big) : big
-  }
-  throw new Error(`EIP-712 domain.chainId not parseable: ${String(raw)}`)
-}
-
-/**
- * secp256k1 group order n (SEC 2 v2, §2.4.1). EIP-2 requires the signature's
- * `s` value to lie in the lower half of this order; values above n/2 are
- * malleable and rejected by OpenZeppelin's ECDSA library (which Polymarket's
- * CLOB and most EVM verifiers use).
- */
-const SECP256K1_N = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n
-
-/**
- * Canonicalize a raw MPC signature for EVM use: parse r/s, fold a high `s`
- * into the lower half of the curve order (flipping the recovery parity to
- * match), and return 32-byte hex r/s with the corrected recovery id.
- *
- * Exported for unit testing the low-S fold in isolation (the recover-verify
- * gate in signSingleTypedData rejects a synthetic signature before its
- * canonicalized output can be inspected through the full path).
- */
-export function toCanonicalEvmSignature(sigHex: string, recovery: number): { r: string; s: string; recovery: number } {
-  const { r, s } = parseDERSignature(sigHex)
-  const sBig = BigInt('0x' + s)
-  if (sBig > SECP256K1_N >> 1n) {
-    const folded = SECP256K1_N - sBig
-    return { r, s: folded.toString(16).padStart(64, '0'), recovery: recovery ^ 1 }
-  }
-  return { r, s, recovery }
-}
-
-/**
- * Parse a DER-encoded ECDSA signature into r and s hex strings (each 32 bytes / 64 hex chars).
- */
-function parseDERSignature(sigHex: string): { r: string; s: string } {
-  const raw = sigHex.startsWith('0x') ? sigHex.slice(2) : sigHex
-
-  // If it's already 128 hex chars (64 bytes), it's raw r||s
-  if (raw.length === 128) {
-    return { r: raw.slice(0, 64), s: raw.slice(64) }
-  }
-
-  // DER format: 30 <len> 02 <rlen> <r> 02 <slen> <s>
-  let offset = 0
-  if (raw.slice(offset, offset + 2) !== '30') {
-    // Not DER, try raw
-    return {
-      r: raw.slice(0, 64).padStart(64, '0'),
-      s: raw.slice(64).padStart(64, '0'),
-    }
-  }
-  offset += 2
-  offset += 2 // skip total length
-
-  // R value
-  if (raw.slice(offset, offset + 2) !== '02') throw new Error('Invalid DER: expected 02 for R')
-  offset += 2
-  const rLen = parseInt(raw.slice(offset, offset + 2), 16)
-  offset += 2
-  let rHex = raw.slice(offset, offset + rLen * 2)
-  offset += rLen * 2
-  // Remove leading 00 padding
-  if (rHex.length > 64 && rHex.startsWith('00')) {
-    rHex = rHex.slice(rHex.length - 64)
-  }
-  rHex = rHex.padStart(64, '0')
-
-  // S value
-  if (raw.slice(offset, offset + 2) !== '02') throw new Error('Invalid DER: expected 02 for S')
-  offset += 2
-  const sLen = parseInt(raw.slice(offset, offset + 2), 16)
-  offset += 2
-  let sHex = raw.slice(offset, offset + sLen * 2)
-  // Remove leading 00 padding
-  if (sHex.length > 64 && sHex.startsWith('00')) {
-    sHex = sHex.slice(sHex.length - 64)
-  }
-  sHex = sHex.padStart(64, '0')
-
-  return { r: rHex, s: sHex }
 }

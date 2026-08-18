@@ -23,9 +23,13 @@ describe('estimateCosmosSwapFeeLabel', () => {
     expect(estimateCosmosSwapFeeLabel(Chain.Osmosis)).toBe('~0.009 OSMO')
   })
 
-  // TerraClassic send fee lowered from 100 to 20 LUNC (cosmosGasRecord, real MsgSend ~11 LUNC).
-  it('formats the canonical TerraClassic swap fee (20_000_000 uluna = 20 LUNC)', () => {
-    expect(estimateCosmosSwapFeeLabel(Chain.TerraClassic)).toBe('~20 LUNC')
+  // TerraClassic is now priced from the chain's own gas price rather than a
+  // hand-tuned constant: 300_000 × 28.325 uluna/gas. (Was a flat 20 LUNC, and
+  // 100 LUNC before that.) The label deliberately excludes the x/tax burn tax —
+  // that is 0.5% OF THE TRANSFER, and this amount-independent estimate has
+  // nothing to apply it to; the signer adds it at payload-build time.
+  it('formats the canonical TerraClassic swap fee (8_497_500 uluna = 8.4975 LUNC)', () => {
+    expect(estimateCosmosSwapFeeLabel(Chain.TerraClassic)).toBe('~8.4975 LUNC')
   })
 
   // Terra (phoenix-1, LUNA) must not be confused with TerraClassic (columbus-5,

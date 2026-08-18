@@ -1,5 +1,6 @@
 import { banxaSupportedChains } from '@vultisig/core-chain/banxa'
 import { Chain } from '@vultisig/core-chain/Chain'
+import { getThorchainSwapDestinationAssets } from '@vultisig/core-chain/chains/cosmos/thor/securedAssets'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { findCoins as coreFindCoins } from '@vultisig/core-chain/coin/find'
 import { knownTokens, knownTokensIndex } from '@vultisig/core-chain/coin/knownTokens'
@@ -381,7 +382,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       // Try loading from disk (two-step flow)
       const pendingData = await this.context.storage.get<VaultData>(`pending:${vaultId}`)
       if (pendingData) {
-        pendingVault = this.vaultManager.createVaultInstance(pendingData) as FastVault
+        pendingVault = this.vaultManager.createVaultInstance(pendingData, false) as FastVault
       }
     }
 
@@ -969,7 +970,9 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    */
   async importVault(vultContent: string, password?: string): Promise<VaultBase> {
     await this.ensureInitialized()
-    const vault = await this.vaultManager.importVault(vultContent, password)
+    const { vault } = await this.vaultManager.importVaultWithResult(vultContent, password, notice => {
+      this.emit('legacyVaultBackupMigrated', notice)
+    })
 
     // VaultManager already handles storage, just emit event
     this.emit('vaultChanged', { vaultId: vault.id })
@@ -1221,19 +1224,20 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   /**
    * Get the canonical "view on explorer" URL for a swap-provider transaction.
    *
-   * Routes to the aggregator's scanner where one exists (LI.FI / Helius for
-   * Solana settlement, Runescan for THORChain, the MayaChain explorer for
-   * MayaChain) and falls back to the source-chain explorer for `1inch`,
-   * `kyber`, and `swapkit` — none of which expose a per-tx aggregator page.
+   * Routes to the aggregator's scanner where one exists (LI.FI / Helius,
+   * SwapKit, CoW Explorer, Runescan, or the MayaChain explorer) and falls back
+   * to the source-chain explorer for `1inch`, `kyber`, and `jupiter`.
    *
    * Mirrors iOS `ExplorerLinkBuilder.swift` and Android
    * `ExplorerLinkRepository.getSwapProgressLink` so every Vultisig client
    * routes tx-history links to the same scanner.
    *
    * @param provider - The swap provider that executed the trade
-   * @param txHash - The on-chain transaction hash (with or without 0x prefix)
-   * @param fromChain - The chain the tx was broadcast on
+   * @param txHash - The on-chain transaction hash, or the 56-byte order UID for
+   * a pending CowSwap order
+   * @param fromChain - The source chain; an unsupported CowSwap chain throws
    * @returns The provider-specific explorer URL
+   * @throws For an unsupported CowSwap chain
    */
   static getSwapExplorerUrl(provider: SwapExplorerProvider, txHash: string, fromChain: Chain): string {
     return getSwapExplorerUrl({ provider, txHash, fromChain })
@@ -1279,13 +1283,19 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       address: params.address,
       chain: params.chain,
     })
-    return coins.map(coin => ({
-      chain: coin.chain,
-      contractAddress: coin.id ?? '',
-      ticker: coin.ticker,
-      decimals: coin.decimals,
-      logo: coin.logo,
-    }))
+    return coins.map(coin => {
+      const tokenId = coin.id ?? ''
+
+      return {
+        chain: coin.chain,
+        tokenId,
+        contractAddress: tokenId,
+        ticker: coin.ticker,
+        decimals: coin.decimals,
+        logo: coin.logo,
+        ...(coin.isHidden === undefined ? {} : { isHidden: coin.isHidden }),
+      }
+    })
   }
 
   /**
@@ -1296,6 +1306,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   static getKnownTokens(chain: Chain): TokenInfo[] {
     return (knownTokens[chain] ?? []).map(coin => ({
       chain: coin.chain,
+      tokenId: coin.id,
       contractAddress: coin.id,
       ticker: coin.ticker,
       decimals: coin.decimals,
@@ -1305,16 +1316,38 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   }
 
   /**
-   * Look up a specific token by contract address in the known tokens registry.
+   * Get the complete token universe for a swap destination picker.
+   * THORChain secured assets are refreshed from THORChain with the SDK's
+   * explicit offline fallback; other chains retain the built-in registry.
+   */
+  static async getSwapDestinationTokens(chain: Chain): Promise<TokenInfo[]> {
+    const coins = chain === Chain.THORChain ? await getThorchainSwapDestinationAssets() : (knownTokens[chain] ?? [])
+    return coins.map(coin => ({
+      chain: coin.chain,
+      tokenId: coin.id,
+      contractAddress: coin.id,
+      ticker: coin.ticker,
+      decimals: coin.decimals,
+      logo: coin.logo,
+      priceProviderId: coin.priceProviderId,
+      ...('isSecured' in coin && coin.isSecured === true && 'l1Asset' in coin && typeof coin.l1Asset === 'string'
+        ? { isSecured: true as const, l1Asset: coin.l1Asset }
+        : {}),
+    }))
+  }
+
+  /**
+   * Look up a specific token by its canonical chain-specific token ID.
    * @param chain - The blockchain chain
-   * @param contractAddress - The token's contract address
+   * @param tokenId - The token's canonical chain-specific identifier
    * @returns Token metadata or null if not found
    */
-  static getKnownToken(chain: Chain, contractAddress: string): TokenInfo | null {
-    const coin = knownTokensIndex[chain]?.[contractAddress.toLowerCase()]
+  static getKnownToken(chain: Chain, tokenId: string): TokenInfo | null {
+    const coin = knownTokensIndex[chain]?.[tokenId.toLowerCase()]
     if (!coin) return null
     return {
       chain,
+      tokenId: coin.id,
       contractAddress: coin.id,
       ticker: coin.ticker,
       decimals: coin.decimals,

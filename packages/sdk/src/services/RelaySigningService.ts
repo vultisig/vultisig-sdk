@@ -14,6 +14,7 @@
  */
 import type { WalletCore } from '@trustwallet/wallet-core'
 import { Chain } from '@vultisig/core-chain/Chain'
+import type { SignatureAlgorithm } from '@vultisig/core-chain/signing/SignatureAlgorithm'
 import { generateLocalPartyId } from '@vultisig/core-mpc/devices/localPartyId'
 import { keysign } from '@vultisig/core-mpc/keysign'
 import type { KeysignSignature } from '@vultisig/core-mpc/keysign/KeysignSignature'
@@ -27,13 +28,21 @@ import type { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 import { withoutDuplicates } from '@vultisig/lib-utils/array/withoutDuplicates'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
-import { formatSignature } from '../adapters/formatSignature'
+import { formatMldsaSignature, formatSignature } from '../adapters/formatSignature'
 import { getChainSigningInfo } from '../adapters/getChainSigningInfo'
 import { randomUUID } from '../crypto'
 import type { Signature, SigningMode, SigningPayload, SigningStep } from '../types'
 
 // Default relay server URL
 const DEFAULT_RELAY_URL = 'https://api.vultisig.com/router'
+
+const createAbortError = (signal: AbortSignal): Error => {
+  const error = new Error('Operation aborted', { cause: signal.reason })
+  error.name = 'AbortError'
+  return error
+}
+
+const isAbortError = (error: unknown): error is Error => error instanceof Error && error.name === 'AbortError'
 
 /**
  * Progress step during relay signing
@@ -50,6 +59,8 @@ export type RelaySigningStep =
  * Options for relay signing
  */
 export type RelaySigningOptions = {
+  /** Existing operation ID to use instead of generating one internally. */
+  sessionId?: string
   /** AbortSignal for cancellation */
   signal?: AbortSignal
   /** Progress callback - maps to SigningStep for consistency */
@@ -74,16 +85,68 @@ export class RelaySigningService {
     this.relayUrl = relayUrl
   }
 
+  private validateSigningKeyDomain(vault: CoreVault, chain: Chain, signatureAlgorithm: SignatureAlgorithm): void {
+    if (chain === Chain.QBTC && signatureAlgorithm !== 'mldsa') {
+      throw new Error(`QBTC requires MLDSA signing, but ${signatureAlgorithm} was selected`)
+    }
+
+    if (signatureAlgorithm === 'mldsa') {
+      if (!vault.keyShareMldsa) {
+        throw new Error('No MLDSA key share found in vault (required for QBTC and other MLDSA chains)')
+      }
+      return
+    }
+
+    if (!vault.keyShares || Object.keys(vault.keyShares).length === 0) {
+      throw new Error('Vault key shares not loaded. Call ensureKeySharesLoaded() first.')
+    }
+  }
+
+  private async signMldsaWithRelay(params: {
+    vault: CoreVault
+    messages: string[]
+    devices: string[]
+    sessionId: string
+    localPartyId: string
+    hexEncryptionKey: string
+  }): Promise<Signature> {
+    const { vault, messages, devices, sessionId, localPartyId, hexEncryptionKey } = params
+    const keyShareMldsa = vault.keyShareMldsa
+
+    if (!keyShareMldsa) {
+      throw new Error('No MLDSA key share found in vault (required for QBTC and other MLDSA chains)')
+    }
+
+    const mldsaKeysign = new MldsaKeysign({
+      keysignCommittee: devices,
+      serverURL: this.relayUrl,
+      sessionId,
+      localPartyId,
+      messagesToSign: messages,
+      keyShareBase64: keyShareMldsa,
+      hexEncryptionKey,
+      chainPath: 'm',
+      isInitiatingDevice: true,
+    })
+    const [result] = await mldsaKeysign.startKeysignWithRetry()
+
+    if (!result) {
+      throw new Error('MLDSA signing produced no signature')
+    }
+
+    return formatMldsaSignature(result.signature)
+  }
+
   /**
    * Generate session parameters for a signing session
    */
-  generateSessionParams(): {
+  generateSessionParams(sessionId?: string): {
     sessionId: string
     hexEncryptionKey: string
     localPartyId: string
   } {
     return {
-      sessionId: randomUUID(),
+      sessionId: sessionId?.trim() || randomUUID(),
       hexEncryptionKey: generateHexEncryptionKey(),
       localPartyId: generateLocalPartyId('sdk'),
     }
@@ -141,7 +204,7 @@ export class RelaySigningService {
     while (Date.now() - startTime < timeout) {
       // Check for abort via signal
       if (signal?.aborted) {
-        throw new Error('Operation aborted')
+        throw createAbortError(signal)
       }
 
       try {
@@ -177,7 +240,7 @@ export class RelaySigningService {
         }
       } catch (error) {
         // Re-throw abort errors
-        if (error instanceof Error && error.message === 'Operation aborted') {
+        if (isAbortError(error)) {
           throw error
         }
         // Ignore other polling errors, continue waiting
@@ -210,7 +273,7 @@ export class RelaySigningService {
     const reportProgress = (step: StepType, progress: number, message: string, participantsReady = 0) => {
       // Check for abort via signal
       if (signal?.aborted) {
-        throw new Error('Operation aborted')
+        throw createAbortError(signal)
       }
       onProgress?.({
         step,
@@ -226,10 +289,6 @@ export class RelaySigningService {
       // Step 1: Validate vault is a secure vault
       reportProgress('preparing', 5, 'Validating vault configuration')
 
-      if (!vault.keyShares || Object.keys(vault.keyShares).length === 0) {
-        throw new Error('Vault key shares not loaded. Call ensureKeySharesLoaded() first.')
-      }
-
       const threshold = vault.signers.length > 2 ? Math.ceil((vault.signers.length + 1) / 2) : 2
 
       // Validate message hashes are provided
@@ -242,7 +301,7 @@ export class RelaySigningService {
 
       // Step 2: Generate session params
       reportProgress('preparing', 10, 'Generating session parameters')
-      const { sessionId, hexEncryptionKey, localPartyId } = this.generateSessionParams()
+      const { sessionId, hexEncryptionKey, localPartyId } = this.generateSessionParams(options.sessionId)
 
       // Step 3: Get chain signing info (signature algorithm and derivation path)
       const chain = payload.chain as Chain
@@ -250,6 +309,7 @@ export class RelaySigningService {
         { chain, derivePath: payload.derivePath },
         walletCore
       )
+      this.validateSigningKeyDomain(vault, chain, signatureAlgorithm)
 
       // Step 4: Generate QR payload with full transaction details
       reportProgress('preparing', 20, 'Generating QR code for device pairing')
@@ -294,6 +354,20 @@ export class RelaySigningService {
         sessionId,
         devices,
       })
+
+      if (signatureAlgorithm === 'mldsa') {
+        reportProgress('signing', 60, 'Performing ML-DSA post-quantum signing...')
+        const signature = await this.signMldsaWithRelay({
+          vault,
+          messages: payload.messageHashes,
+          devices,
+          sessionId,
+          localPartyId,
+          hexEncryptionKey,
+        })
+        reportProgress('complete', 100, 'Signing complete')
+        return signature
+      }
 
       // Step 8: Get key share for signing
       const keyShareKey = signatureAlgorithm === 'ecdsa' ? 'ecdsa' : 'eddsa'
@@ -372,8 +446,11 @@ export class RelaySigningService {
 
       return formattedSignature
     } catch (error) {
+      if (isAbortError(error)) {
+        throw error
+      }
       const message = error instanceof Error ? error.message : 'Unknown error during signing'
-      throw new Error(`Relay signing failed: ${message}`)
+      throw new Error(`Relay signing failed: ${message}`, { cause: error })
     }
   }
 
@@ -401,7 +478,7 @@ export class RelaySigningService {
     const reportProgress = (step: StepType, progress: number, message: string, participantsReady = 0) => {
       // Check for abort via signal
       if (signal?.aborted) {
-        throw new Error('Operation aborted')
+        throw createAbortError(signal)
       }
       onProgress?.({
         step,
@@ -417,18 +494,15 @@ export class RelaySigningService {
       // Validate vault
       reportProgress('preparing', 5, 'Validating vault configuration')
 
-      if (!vault.keyShares || Object.keys(vault.keyShares).length === 0) {
-        throw new Error('Vault key shares not loaded.')
-      }
-
       const threshold = vault.signers.length > 2 ? Math.ceil((vault.signers.length + 1) / 2) : 2
 
       // Generate session params
       reportProgress('preparing', 10, 'Generating session parameters')
-      const { sessionId, hexEncryptionKey, localPartyId } = this.generateSessionParams()
+      const { sessionId, hexEncryptionKey, localPartyId } = this.generateSessionParams(options.sessionId)
 
       // Determine signature algorithm and derivation path
       const { signatureAlgorithm, chainPath } = getChainSigningInfo({ chain: bytesOptions.chain }, walletCore)
+      this.validateSigningKeyDomain(vault, bytesOptions.chain, signatureAlgorithm)
 
       // Generate QR payload
       reportProgress('preparing', 20, 'Generating QR code for device pairing')
@@ -470,6 +544,20 @@ export class RelaySigningService {
         sessionId,
         devices,
       })
+
+      if (signatureAlgorithm === 'mldsa') {
+        reportProgress('signing', 60, 'Performing ML-DSA post-quantum signing...')
+        const signature = await this.signMldsaWithRelay({
+          vault,
+          messages: bytesOptions.messageHashes,
+          devices,
+          sessionId,
+          localPartyId,
+          hexEncryptionKey,
+        })
+        reportProgress('complete', 100, 'Signing complete')
+        return signature
+      }
 
       // Get key share
       const keyShareKey = signatureAlgorithm === 'ecdsa' ? 'ecdsa' : 'eddsa'
@@ -543,8 +631,11 @@ export class RelaySigningService {
 
       return formattedSignature
     } catch (error) {
+      if (isAbortError(error)) {
+        throw error
+      }
       const message = error instanceof Error ? error.message : 'Unknown error during signing'
-      throw new Error(`Relay bytes signing failed: ${message}`)
+      throw new Error(`Relay bytes signing failed: ${message}`, { cause: error })
     }
   }
 }

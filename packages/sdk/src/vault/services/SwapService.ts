@@ -19,7 +19,7 @@ import { chainsWithTokenMetadataDiscovery } from '@vultisig/core-chain/coin/toke
 import { getCoinValue } from '@vultisig/core-chain/coin/utils/getCoinValue'
 import { nativeSwapAmountToCoinBaseUnit } from '@vultisig/core-chain/swap/native/utils/nativeSwapAmountToCoinBaseUnit'
 import { findSwapQuote, FindSwapQuoteInput } from '@vultisig/core-chain/swap/quote/findSwapQuote'
-import { SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
+import { BoundSwapQuote, SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
 import { swapEnabledChains } from '@vultisig/core-chain/swap/swapEnabledChains'
 import { SwapError, SwapErrorCode } from '@vultisig/core-chain/swap/SwapError'
 import { getEvmBaseFee } from '@vultisig/core-chain/tx/fee/evm/baseFee'
@@ -92,6 +92,10 @@ export class SwapService {
         amount: chainAmount,
         referral: params.referral,
         vultDiscountTier,
+        // Per-provider affiliate overrides (sdk#1150): forward the consumer's
+        // config so tenants (e.g. Station) can supply their own fee owners.
+        // Omitted -> core falls back to the vultisig-0 defaults, unchanged.
+        affiliateConfig: params.affiliateConfig,
         recipient: params.recipient,
         slippageTolerance: params.slippageTolerance,
         excludeProviders: params.excludeProviders,
@@ -130,8 +134,9 @@ export class SwapService {
    */
   async prepareSwapTx(params: SwapTxParams): Promise<SwapPrepareResult> {
     try {
-      // Validate quote hasn't expired
-      if (Date.now() > params.swapQuote.expiresAt) {
+      // `SwapQuoteBase.expiresAt` is the presentation refresh window. The raw
+      // bound quote carries the preparation deadline enforced again below.
+      if (Date.now() > params.swapQuote.quote.expiresAt) {
         throw new VaultError(VaultErrorCode.InvalidConfig, 'Swap quote has expired. Please refresh the quote.')
       }
 
@@ -329,7 +334,7 @@ export class SwapService {
   private getSpenderFromQuote(quoteData: SwapQuote['quote']): string | undefined {
     if ('general' in quoteData && quoteData.general.tx) {
       if ('evm' in quoteData.general.tx) {
-        return quoteData.general.tx.evm.to
+        return quoteData.general.tx.evm.approvalAddress ?? quoteData.general.tx.evm.to
       }
       // UTXO/Cosmos deposit-channel swaps: no ERC-20 spender approval needed.
       if ('transfer' in quoteData.general.tx) {
@@ -346,7 +351,7 @@ export class SwapService {
    * Format quote into SwapQuoteBase
    */
   private async formatQuoteResult(
-    swapQuote: SwapQuote,
+    swapQuote: BoundSwapQuote,
     fromCoin: AccountCoin,
     toCoin: AccountCoin,
     approvalInfo?: SwapApprovalInfo,
@@ -355,9 +360,10 @@ export class SwapService {
     const { quote: quoteData } = swapQuote
     const isNative = 'native' in quoteData
 
-    // Calculate expiry
-    const expiresIn = isNative ? quoteData.native.expiry * 1000 - Date.now() : DEFAULT_QUOTE_EXPIRY_MS
-    const expiresAt = Date.now() + Math.min(expiresIn, DEFAULT_QUOTE_EXPIRY_MS)
+    // Keep the SDK's existing 60-second presentation refresh window separate
+    // from the raw bound quote's longer preparation deadline.
+    const quoteExpiresAt = swapQuote.expiresAt
+    const expiresAt = Math.min(quoteExpiresAt, Date.now() + DEFAULT_QUOTE_EXPIRY_MS)
 
     // Native swap APIs report output in their protocol precision. SDK consumers
     // expect the destination coin's base units, matching general provider quotes.
@@ -464,10 +470,13 @@ export class SwapService {
     // Solana has explicit fees in the quote
     if ('solana' in tx) {
       const networkFee = tx.solana.networkFee
-      const swapFee = tx.solana.swapFee.amount
+      const swapFee = tx.solana.swapFee
+      // SwapFees is native-denominated. Preserve a non-native swap fee on the
+      // raw quote without mixing its units into the native network-fee total.
+      const nativeSwapFee = swapFee.chain === fromChain && swapFee.id === undefined ? swapFee.amount : 0n
       return {
         network: networkFee,
-        total: networkFee + swapFee,
+        total: networkFee + nativeSwapFee,
       }
     }
 

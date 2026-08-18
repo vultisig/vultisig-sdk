@@ -53,6 +53,7 @@ const evmChainIds: Record<EvmChain, number> = {
   Hyperliquid: 999,
   Sei: 1329,
   CronosChain: 25,
+  Robinhood: 4663,
 }
 
 /**
@@ -222,9 +223,15 @@ export function buildEvmContractCallTx(opts: BuildEvmContractCallOptions): EvmTx
     if (clean.length !== 130) {
       throw new Error(`expected 65-byte signature (130 hex chars, r||s||recoveryId), got ${clean.length}`)
     }
+    if (!/^[0-9a-fA-F]+$/.test(clean)) {
+      throw new Error('invalid signature: non-hex characters in input')
+    }
     const r = `0x${clean.substring(0, 64)}` as `0x${string}`
     const s = `0x${clean.substring(64, 128)}` as `0x${string}`
     const recoveryId = parseInt(clean.substring(128, 130), 16)
+    if (recoveryId !== 0 && recoveryId !== 1) {
+      throw new Error(`invalid signature: recoveryId must be 0 or 1, got ${recoveryId}`)
+    }
 
     const rawTxHex = isLegacy
       ? serializeTransaction(

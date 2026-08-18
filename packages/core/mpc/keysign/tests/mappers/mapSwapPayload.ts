@@ -1,7 +1,9 @@
+import { create } from '@bufbuild/protobuf'
 import { base64Decode } from '@bufbuild/protobuf/wire'
-import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 
 import { bigishToString, emptyToUndefined } from '../utils'
+import { OneInchQuoteSchema, OneInchTransactionSchema } from '../../../types/vultisig/keysign/v1/1inch_swap_payload_pb'
 import { mapNestedCoin } from './mapNestedCoin'
 
 const mapBytes = (value: unknown): Uint8Array => {
@@ -27,11 +29,10 @@ export const mapSwapPayload = (spRaw: any): KeysignPayload['swapPayload'] | unde
         fromAmount: String(o.from_amount ?? o.fromAmount),
         toAmountDecimal: o.to_amount_decimal ?? o.toAmountDecimal,
         quote: o.quote
-          ? {
-              $typeName: '' as any,
+          ? create(OneInchQuoteSchema, {
               dstAmount: String(o.quote.dst_amount ?? o.quote.dstAmount),
               tx: o.quote.tx
-                ? {
+                ? create(OneInchTransactionSchema, {
                     // `swap_fee` lives on `tx` per the proto, but historical iOS
                     // fixtures have surfaced it one level up on `quote`; accept
                     // both paths so existing roundtrip fixtures keep working.
@@ -51,18 +52,26 @@ export const mapSwapPayload = (spRaw: any): KeysignPayload['swapPayload'] | unde
                         : o.quote.tx.swapFeeDecimals != null
                           ? Number(o.quote.tx.swapFeeDecimals)
                           : undefined,
-                    $typeName: '' as any,
                     data: o.quote.tx.data,
                     from: o.quote.tx.from,
                     gas: o.quote.tx.gas !== undefined && o.quote.tx.gas !== null ? BigInt(o.quote.tx.gas) : 0n,
                     gasPrice: bigishToString(o.quote.tx.gas_price ?? o.quote.tx.gasPrice) ?? '',
                     to: o.quote.tx.to,
                     value: bigishToString(o.quote.tx.value) ?? '',
-                  }
+                  })
                 : undefined,
-            }
+            })
           : undefined,
-        provider: '1inch',
+        // Carry the fixture's ACTUAL provider. Production always sets this to the real
+        // quote.provider (see mpc/keysign/swap/build.ts), so a li.fi/swapkit general swap is
+        // never labelled '1inch'. This mapper previously HARDCODED '1inch' for every general
+        // (OneinchSwapPayload) fixture, which mislabelled the lifiswap.json fixture (LiFi Diamond
+        // router 0x1231DEB6...) as a 1inch swap - and the signing-path router guard
+        // (sdk#1358, assertKnownAggregatorRouterOnSigningPath) then correctly rejected that LiFi
+        // router as a non-1inch router. When the source fixture omits provider (older captures),
+        // fall back to '' - an unattributed provider must NOT be enforced as 1inch. The guard is a
+        // pure gate, so this never changes any pinned pre-signing hash; it only stops the mislabel.
+        provider: o.provider ?? o.Provider ?? '',
       },
     }
 

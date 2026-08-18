@@ -1,6 +1,13 @@
+import { Chain } from '@vultisig/core-chain/Chain'
+import { keysign } from '@vultisig/core-mpc/keysign'
 import { getJoinKeysignUrl } from '@vultisig/core-mpc/keysign/utils/getJoinKeysignUrl'
+import { MldsaKeysign } from '@vultisig/core-mpc/mldsa/mldsaKeysign'
+import { joinMpcSession } from '@vultisig/core-mpc/session/joinMpcSession'
+import { startMpcSession } from '@vultisig/core-mpc/session/startMpcSession'
+import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { getChainSigningInfo } from '../../../src/adapters/getChainSigningInfo'
 import { RelaySigningService } from '../../../src/services/RelaySigningService'
 
 // Mock the core MPC modules
@@ -10,6 +17,26 @@ vi.mock('@vultisig/core-mpc/devices/localPartyId', () => ({
 
 vi.mock('@vultisig/core-mpc/utils/generateHexEncryptionKey', () => ({
   generateHexEncryptionKey: vi.fn(() => 'a'.repeat(64)),
+}))
+
+vi.mock('@vultisig/core-mpc/keysign', () => ({
+  keysign: vi.fn(),
+}))
+
+vi.mock('@vultisig/core-mpc/mldsa/mldsaKeysign', () => ({
+  MldsaKeysign: vi.fn(),
+}))
+
+vi.mock('@vultisig/core-mpc/session/joinMpcSession', () => ({
+  joinMpcSession: vi.fn(),
+}))
+
+vi.mock('@vultisig/core-mpc/session/startMpcSession', () => ({
+  startMpcSession: vi.fn(),
+}))
+
+vi.mock('@vultisig/lib-utils/query/queryUrl', () => ({
+  queryUrl: vi.fn(),
 }))
 
 // Mock getJoinKeysignUrl to return a predictable URL format
@@ -62,6 +89,11 @@ describe('RelaySigningService', () => {
   beforeEach(() => {
     service = new RelaySigningService()
     vi.clearAllMocks()
+    vi.mocked(getChainSigningInfo).mockReturnValue({
+      signatureAlgorithm: 'ecdsa',
+      derivePath: "m/44'/60'/0'/0/0",
+      chainPath: 'm/44/60/0/0/0',
+    })
   })
 
   describe('constructor', () => {
@@ -101,6 +133,11 @@ describe('RelaySigningService', () => {
       const params1 = service.generateSessionParams()
       const params2 = service.generateSessionParams()
       expect(params1.sessionId).not.toBe(params2.sessionId)
+    })
+
+    it('should preserve a caller-supplied session ID', () => {
+      const params = service.generateSessionParams('caller-session-id')
+      expect(params.sessionId).toBe('caller-session-id')
     })
 
     it('should return all required fields', () => {
@@ -176,6 +213,18 @@ describe('RelaySigningService', () => {
   })
 
   describe('signWithRelay validation', () => {
+    it('preserves an explicit abort identity', async () => {
+      const abortController = new AbortController()
+      abortController.abort('test cancellation')
+
+      await expect(
+        service.signWithRelay({} as any, {} as any, mockWalletCore, { signal: abortController.signal })
+      ).rejects.toMatchObject({
+        name: 'AbortError',
+        message: 'Operation aborted',
+      })
+    })
+
     it('should require messageHashes in payload', async () => {
       const mockVault = {
         keyShares: { ecdsa: 'mock-key-share' },
@@ -210,6 +259,143 @@ describe('RelaySigningService', () => {
       await expect(service.signWithRelay(mockVaultNoKeys as any, payload as any, mockWalletCore)).rejects.toThrow(
         'Vault key shares not loaded'
       )
+    })
+
+    it('rejects a QBTC vault without an MLDSA key share before joining the relay', async () => {
+      vi.mocked(getChainSigningInfo).mockReturnValue({
+        signatureAlgorithm: 'mldsa',
+        derivePath: "m/44'/118'/0'/0/0",
+        chainPath: 'm/44/118/0/0/0',
+      })
+
+      const vault = {
+        keyShares: { ecdsa: 'ecdsa-share' },
+        signers: ['party1', 'party2'],
+        publicKeys: { ecdsa: 'ecdsa-public-key', eddsa: 'eddsa-public-key' },
+      }
+      const payload = {
+        chain: Chain.QBTC,
+        transaction: {},
+        messageHashes: ['ab'.repeat(32)],
+      }
+
+      await expect(service.signWithRelay(vault as any, payload as any, mockWalletCore)).rejects.toThrow(
+        'No MLDSA key share found in vault'
+      )
+      expect(joinMpcSession).not.toHaveBeenCalled()
+      expect(keysign).not.toHaveBeenCalled()
+    })
+
+    it('rejects a QBTC payload when the selected signing domain is not MLDSA', async () => {
+      const vault = {
+        keyShares: { ecdsa: 'ecdsa-share' },
+        keyShareMldsa: 'mldsa-key-share',
+        signers: ['party1', 'party2'],
+        publicKeys: { ecdsa: 'ecdsa-public-key', eddsa: 'eddsa-public-key' },
+      }
+      const payload = {
+        chain: Chain.QBTC,
+        transaction: {},
+        messageHashes: ['ab'.repeat(32)],
+      }
+
+      await expect(service.signWithRelay(vault as any, payload as any, mockWalletCore)).rejects.toThrow(
+        'QBTC requires MLDSA signing, but ecdsa was selected'
+      )
+      expect(joinMpcSession).not.toHaveBeenCalled()
+      expect(keysign).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('QBTC MLDSA signing', () => {
+    const messageHash = 'ab'.repeat(32)
+    const vault = {
+      keyShares: {},
+      keyShareMldsa: 'mldsa-key-share',
+      signers: ['party1', 'party2'],
+      publicKeys: { ecdsa: 'ecdsa-public-key', eddsa: 'eddsa-public-key' },
+    }
+    const payload = {
+      chain: Chain.QBTC,
+      transaction: {},
+      messageHashes: [messageHash],
+    }
+
+    beforeEach(() => {
+      vi.mocked(getChainSigningInfo).mockReturnValue({
+        signatureAlgorithm: 'mldsa',
+        derivePath: "m/44'/118'/0'/0/0",
+        chainPath: 'm/44/118/0/0/0',
+      })
+      vi.mocked(queryUrl).mockResolvedValue(['peer-1', 'peer-2'])
+    })
+
+    it('routes SecureVault QBTC signing directly through MLDSA key material', async () => {
+      const startKeysignWithRetry = vi.fn().mockResolvedValue([{ msg: messageHash, signature: '0xcafe' }])
+      vi.mocked(MldsaKeysign).mockImplementation(function () {
+        return { startKeysignWithRetry }
+      } as unknown as typeof MldsaKeysign)
+
+      const signature = await service.signWithRelay(vault as any, payload as any, mockWalletCore, {
+        sessionId: 'qbtc-session',
+      })
+
+      expect(signature).toEqual({
+        signature: 'cafe',
+        format: 'MLDSA',
+        mldsaSignature: 'cafe',
+      })
+      expect(MldsaKeysign).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: 'qbtc-session',
+          messagesToSign: [messageHash],
+          keyShareBase64: 'mldsa-key-share',
+          chainPath: 'm',
+          isInitiatingDevice: true,
+        })
+      )
+      expect(startMpcSession).toHaveBeenCalledOnce()
+      expect(startKeysignWithRetry).toHaveBeenCalledOnce()
+      expect(keysign).not.toHaveBeenCalled()
+    })
+
+    it('propagates MLDSA failure without falling back to a generic key share', async () => {
+      const startKeysignWithRetry = vi.fn().mockRejectedValue(new Error('MLDSA session failed'))
+      vi.mocked(MldsaKeysign).mockImplementation(function () {
+        return { startKeysignWithRetry }
+      } as unknown as typeof MldsaKeysign)
+      const onProgress = vi.fn()
+
+      await expect(
+        service.signWithRelay(vault as any, payload as any, mockWalletCore, {
+          sessionId: 'qbtc-failure-session',
+          onProgress,
+        })
+      ).rejects.toThrow('Relay signing failed: MLDSA session failed')
+
+      expect(keysign).not.toHaveBeenCalled()
+      expect(onProgress).not.toHaveBeenCalledWith(expect.objectContaining({ step: 'complete' }))
+    })
+
+    it('uses the same dedicated MLDSA route for raw QBTC bytes', async () => {
+      const startKeysignWithRetry = vi.fn().mockResolvedValue([{ msg: messageHash, signature: 'beef' }])
+      vi.mocked(MldsaKeysign).mockImplementation(function () {
+        return { startKeysignWithRetry }
+      } as unknown as typeof MldsaKeysign)
+
+      const signature = await service.signBytesWithRelay(
+        vault as any,
+        { chain: Chain.QBTC, messageHashes: [messageHash] },
+        mockWalletCore,
+        { sessionId: 'qbtc-bytes-session' }
+      )
+
+      expect(signature).toEqual({
+        signature: 'beef',
+        format: 'MLDSA',
+        mldsaSignature: 'beef',
+      })
+      expect(keysign).not.toHaveBeenCalled()
     })
   })
 

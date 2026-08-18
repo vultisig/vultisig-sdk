@@ -3,11 +3,18 @@ import type { Chain } from '@vultisig/core-chain/Chain'
 /** Token metadata (SDK-owned, decoupled from core's KnownCoin) */
 export type TokenInfo = {
   chain: Chain
+  /** Canonical chain-specific token identifier. */
+  tokenId?: string
+  /** @deprecated Use `tokenId`; retained as a compatibility alias. */
   contractAddress?: string
   ticker: string
   decimals: number
   logo?: string
   priceProviderId?: string
+  /** True when this is a THORChain bank representation of an L1 asset. */
+  isSecured?: true
+  /** Canonical L1 identity for a THORChain secured asset. */
+  l1Asset?: string
 }
 
 /** Native fee coin info for a chain */
@@ -22,6 +29,9 @@ export type FeeCoinInfo = {
 /** Token discovered at an address (from on-chain scan) */
 export type DiscoveredToken = {
   chain: Chain
+  /** Canonical chain-specific token identifier. */
+  tokenId?: string
+  /** @deprecated Use `tokenId`; retained as a compatibility alias. */
   contractAddress: string
   ticker: string
   decimals: number

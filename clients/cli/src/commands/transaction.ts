@@ -2,14 +2,48 @@
  * Transaction Commands - thin wrapper around vault.send()
  */
 import { normalizeRippleDestination } from '@vultisig/core-chain/chains/ripple/address'
-import type { VaultBase } from '@vultisig/sdk'
+import { getLegacyDestinationTag, resolveDestinationTag } from '@vultisig/core-mpc/keysign/utils/rippleDestinationTag'
+import type { KeysignPayload, VaultBase } from '@vultisig/sdk'
 import { Chain, Vultisig } from '@vultisig/sdk'
 
 import type { CommandContext, SendDryRunResult, SendParams, TransactionResult } from '../core'
 import { buildSendBroadcastIntent, ensureVaultUnlocked, guardedBroadcast } from '../core'
 import { ConfirmationRequiredError } from '../core/errors'
 import { createSpinner, info, isJsonOutput, isNonInteractive, outputJson, warn } from '../lib/output'
-import { confirmTransaction, displayTransactionPreview, displayTransactionResult } from '../ui'
+import {
+  confirmTransaction,
+  displayTransactionPreview,
+  displayTransactionResult,
+  escapeTerminalControls,
+  formatBigintAmount,
+} from '../ui'
+
+const getSendPreviewDetails = (
+  chain: Chain,
+  keysignPayload: KeysignPayload
+): { memo: string | undefined; destinationTag: number | undefined } => {
+  let memo = keysignPayload.memo || undefined
+
+  if (chain !== Chain.Ripple) {
+    return { memo, destinationTag: undefined }
+  }
+
+  const rippleSpecific = keysignPayload.blockchainSpecific
+  if (rippleSpecific.case !== 'rippleSpecific') {
+    throw new Error('Ripple send payload is missing Ripple-specific data')
+  }
+
+  const destinationTag = resolveDestinationTag({
+    destinationTag: rippleSpecific.value.destinationTag,
+    memo,
+  })
+  const legacyMemoDestinationTag = getLegacyDestinationTag(memo)
+  if (legacyMemoDestinationTag !== undefined && legacyMemoDestinationTag === destinationTag) {
+    memo = undefined
+  }
+
+  return { memo, destinationTag }
+}
 
 /**
  * Execute send command - send tokens to an address
@@ -30,6 +64,116 @@ export async function executeSend(
   }
 
   return sendTransaction(vault, params)
+}
+
+/**
+ * Build (and emit) the `--dry-run` preview.
+ *
+ * A module-level function rather than an inline block: it is the whole of what
+ * `--dry-run` does, and keeping it here leaves `sendTransaction` about the
+ * confirm-and-sign flow.
+ */
+async function previewDryRun(
+  vault: VaultBase,
+  params: SendParams,
+  dryResult: {
+    fee: string
+    feeSymbol: string
+    total: string
+    contractAddress?: string
+    keysignPayload: KeysignPayload
+  },
+  to: string
+): Promise<SendDryRunResult> {
+  const balance = await vault.balance(params.chain, params.tokenId)
+  const hasInsufficientBalance = parseFloat(dryResult.total) > parseFloat(balance.formattedAmount)
+  const { memo: previewMemo, destinationTag: payloadDestinationTag } = getSendPreviewDetails(
+    params.chain,
+    dryResult.keysignPayload
+  )
+
+  // A token send pays its fee out of the NATIVE balance, which `total` no
+  // longer covers — so check it separately. Holding the token but no gas is
+  // the ordinary way an ERC-20 send fails, and it would otherwise preview
+  // clean and only fail at broadcast.
+  //
+  // Whether this IS a token send is decided by asset identity (`tokenId` is
+  // absent on a native balance), never by comparing tickers: an ERC-20 whose
+  // symbol happens to be the native ticker would otherwise have its own
+  // balance checked for gas it cannot pay. A native send needs no separate
+  // check at all — `total` already includes the fee, and running one would
+  // just report the same shortfall twice.
+  const isTokenSend = balance.tokenId !== undefined
+  // Max token sends are already gated by the SDK's native-balance check while
+  // calculating the max amount. Keep this preview check for explicit token
+  // amounts, but do not repeat the same balance read for max sends.
+  const shouldCheckNativeFeeBalance = isTokenSend && params.amount !== 'max'
+  const feeBalance = shouldCheckNativeFeeBalance ? await vault.balance(params.chain).catch(() => undefined) : undefined
+
+  const warnings: string[] = []
+  if (hasInsufficientBalance) {
+    warnings.push(`Insufficient balance: you have ${balance.formattedAmount} ${balance.symbol}`)
+  }
+  if (shouldCheckNativeFeeBalance && feeBalance === undefined) {
+    // The gas check needs a second balance read, and it failed. Say so rather
+    // than letting its absence read as "gas is fine".
+    warnings.push(`Could not check your ${dryResult.feeSymbol} balance for the network fee`)
+  } else if (feeBalance && parseFloat(dryResult.fee) > parseFloat(feeBalance.formattedAmount)) {
+    warnings.push(
+      `Insufficient ${dryResult.feeSymbol} for the network fee: you have ${feeBalance.formattedAmount} ${dryResult.feeSymbol}, the fee is ${dryResult.fee}`
+    )
+  }
+
+  // fee/total come straight from the build the SDK just did. They were previously
+  // dropped from the JSON result even though the human preview below prints the fee
+  // and `total` is what the insufficient-balance check compares against — so
+  // `--dry-run -o json` looked like a bare balance check with no cost information.
+  const result: SendDryRunResult = {
+    dryRun: true,
+    chain: params.chain,
+    to,
+    amount: params.amount,
+    symbol: balance.symbol,
+    ...(dryResult.contractAddress ? { contractAddress: dryResult.contractAddress } : {}),
+    fee: dryResult.fee,
+    feeSymbol: dryResult.feeSymbol,
+    total: dryResult.total,
+    balance: balance.formattedAmount,
+    destinationTag: payloadDestinationTag,
+    ...(previewMemo ? { memo: previewMemo } : {}),
+    ...(warnings.length > 0 ? { warning: warnings.join('. ') } : {}),
+  }
+
+  if (isJsonOutput()) {
+    if (params.amount !== 'max') {
+      outputJson(result)
+      return result
+    }
+
+    const decimals = dryResult.keysignPayload.coin?.decimals
+    if (decimals === undefined) throw new Error('Prepared transaction is missing coin decimals')
+    const jsonResult = {
+      ...result,
+      amount: formatBigintAmount(BigInt(dryResult.keysignPayload.toAmount), decimals),
+      isMax: true,
+    }
+    outputJson(jsonResult)
+    return jsonResult
+  }
+
+  info(`\nDry-run preview:`)
+  info(`  Chain:   ${result.chain}`)
+  info(`  To:      ${result.to}`)
+  info(
+    `  Amount:  ${result.amount} ${result.symbol}${result.contractAddress ? ` (${escapeTerminalControls(result.contractAddress)})` : ''}`
+  )
+  if (result.destinationTag !== undefined) info(`  Destination tag: ${result.destinationTag}`)
+  if (result.memo) info(`  Memo:    ${escapeTerminalControls(result.memo)}`)
+  info(`  Fee:     ${result.fee} ${result.feeSymbol}`)
+  info(`  Total:   ${result.total} ${result.symbol}`)
+  info(`  Balance: ${result.balance} ${result.symbol}`)
+  if (result.warning) warn(`  Warning: ${result.warning}`)
+  return result
 }
 
 /**
@@ -82,40 +226,7 @@ export async function sendTransaction(
 
   // If user asked for dry-run only, return preview
   if (params.dryRun) {
-    const balance = await vault.balance(params.chain, params.tokenId)
-    const hasInsufficientBalance = parseFloat(dryResult.total) > parseFloat(balance.formattedAmount)
-    // fee/total come straight from the build the SDK just did. They were previously
-    // dropped from the JSON result even though the human preview below prints the fee
-    // and `total` is what the insufficient-balance check compares against — so
-    // `--dry-run -o json` looked like a bare balance check with no cost information.
-    const result: SendDryRunResult = {
-      dryRun: true,
-      chain: params.chain,
-      to,
-      amount: params.amount,
-      symbol: balance.symbol,
-      fee: dryResult.fee,
-      total: dryResult.total,
-      balance: balance.formattedAmount,
-      destinationTag,
-    }
-    if (hasInsufficientBalance) {
-      result.warning = `Insufficient balance: you have ${balance.formattedAmount} ${balance.symbol}`
-    }
-    if (isJsonOutput()) {
-      outputJson(result)
-    } else {
-      info(`\nDry-run preview:`)
-      info(`  Chain:   ${result.chain}`)
-      info(`  To:      ${result.to}`)
-      info(`  Amount:  ${result.amount} ${result.symbol}`)
-      if (result.destinationTag !== undefined) info(`  Destination tag: ${result.destinationTag}`)
-      info(`  Fee:     ${result.fee} ${result.symbol}`)
-      info(`  Total:   ${result.total} ${result.symbol}`)
-      info(`  Balance: ${result.balance} ${result.symbol}`)
-      if (result.warning) warn(`  Warning: ${result.warning}`)
-    }
-    return result
+    return previewDryRun(vault, params, dryResult, to)
   }
 
   // 2. Show preview and get gas estimate
@@ -129,15 +240,17 @@ export async function sendTransaction(
   const balance = await vault.balance(params.chain, params.tokenId)
   if (!isJsonOutput()) {
     const address = await vault.address(params.chain)
+    const preview = getSendPreviewDetails(params.chain, dryResult.keysignPayload)
     displayTransactionPreview(
       address,
       to,
       dryResult.total,
       balance.symbol,
       params.chain,
-      params.memo,
-      destinationTag,
-      gas
+      preview.memo,
+      preview.destinationTag,
+      gas,
+      dryResult.contractAddress
     )
   }
 
@@ -146,8 +259,12 @@ export async function sendTransaction(
   if (!params.yes) {
     const confirmed = await confirmTransaction()
     if (!confirmed) {
-      warn('Transaction cancelled')
-      throw new Error('Transaction cancelled by user')
+      // A human declining at the prompt is the interactive twin of the
+      // non-interactive refusal (confirmTransaction → requireInteractive →
+      // ConfirmationRequiredError): both must exit 12 CONFIRMATION_REQUIRED /
+      // success:false. The old plain Error was swallowed to exit 0 in index.ts,
+      // telling a scripted caller a declined send had "succeeded".
+      throw new ConfirmationRequiredError('Transaction declined at the confirmation prompt')
     }
   }
 

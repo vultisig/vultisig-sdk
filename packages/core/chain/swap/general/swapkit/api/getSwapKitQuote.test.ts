@@ -1,4 +1,5 @@
 import { Chain } from '@vultisig/core-chain/Chain'
+import { scanAddressWithBlockaid } from '@vultisig/core-chain/security/blockaid/address'
 import { configureSwapKit, getSwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
 import type { SwapKitSourceChain } from '@vultisig/core-chain/swap/general/swapkit/SwapKitEnabledChains'
 import {
@@ -7,9 +8,13 @@ import {
 } from '@vultisig/core-chain/swap/general/swapkit/SwapKitErrors'
 import { resetSwapKitProvidersCache } from '@vultisig/core-chain/swap/general/swapkit/SwapKitProviders'
 import { networks, payments, Psbt } from 'bitcoinjs-lib'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getSwapKitQuote } from './getSwapKitQuote'
+
+vi.mock('@vultisig/core-chain/security/blockaid/address', () => ({ scanAddressWithBlockaid: vi.fn() }))
+
+const mockScanAddressWithBlockaid = vi.mocked(scanAddressWithBlockaid)
 
 const response = (body: unknown, ok = true, status = 200) => {
   const serialized = JSON.stringify(body)
@@ -25,6 +30,7 @@ const response = (body: unknown, ok = true, status = 200) => {
 const textEncoder = new TextEncoder()
 const TEST_PUBKEY = Buffer.from('0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798', 'hex')
 const BTC_RECIPIENT_ADDRESS = 'bc1q0ht9tyks4vh7p5p904t340cr9nvahy7u3re7zg'
+const EVM_TARGET_ADDRESS = '0x111111125421ca6dc452d289314280a0f8842a65'
 
 const makeBitcoinPsbtPayload = (outputValue: bigint) => {
   const p2wpkh = payments.p2wpkh({ pubkey: TEST_PUBKEY, network: networks.bitcoin })
@@ -35,16 +41,9 @@ const makeBitcoinPsbtPayload = (outputValue: bigint) => {
     index: 0,
     witnessUtxo: { script: Buffer.from(p2wpkh.output!), value: 110_000n },
   })
-  psbt.addOutput({
-    address: BTC_RECIPIENT_ADDRESS,
-    value: outputValue,
-  })
+  psbt.addOutput({ address: BTC_RECIPIENT_ADDRESS, value: outputValue })
 
-  return {
-    sourceAddress: p2wpkh.address!,
-    targetAddress: BTC_RECIPIENT_ADDRESS,
-    payload: psbt.toBuffer(),
-  }
+  return { sourceAddress: p2wpkh.address!, targetAddress: BTC_RECIPIENT_ADDRESS, payload: psbt.toBuffer() }
 }
 
 type TransferSourceFixture = readonly [string, SwapKitSourceChain, string, number, string, string]
@@ -60,12 +59,14 @@ const transferSourceFixtures: TransferSourceFixture[] = [
 ]
 
 describe('getSwapKitQuote', () => {
+  beforeEach(() => {
+    mockScanAddressWithBlockaid.mockReset()
+    mockScanAddressWithBlockaid.mockResolvedValue({ resultType: 'Benign', features: ['trusted'] })
+  })
+
   afterEach(() => {
     vi.unstubAllGlobals()
-    configureSwapKit({
-      apiKey: undefined,
-      baseUrl: 'https://api.vultisig.com/swapkit-win',
-    })
+    configureSwapKit({ apiKey: undefined, baseUrl: 'https://api.vultisig.com/swapkit-win' })
   })
 
   it('quotes and builds an EVM transaction while filtering native THOR/Maya routes', async () => {
@@ -74,16 +75,8 @@ describe('getSwapKitQuote', () => {
       .mockResolvedValueOnce(
         response({
           routes: [
-            {
-              routeId: 'thor-route',
-              providers: ['THORCHAIN'],
-              expectedBuyAmount: '15',
-            },
-            {
-              routeId: 'near-route',
-              providers: ['NEAR'],
-              expectedBuyAmount: '12.5',
-            },
+            { routeId: 'thor-route', providers: ['THORCHAIN'], expectedBuyAmount: '15' },
+            { routeId: 'near-route', providers: ['NEAR'], expectedBuyAmount: '12.5' },
           ],
         })
       )
@@ -91,36 +84,17 @@ describe('getSwapKitQuote', () => {
         response({
           expectedBuyAmount: '12.4',
           providers: ['NEAR'],
-          tx: {
-            from: '0xsender',
-            to: '0xrouter',
-            data: '0xabcdef',
-            value: '0',
-            gas: '21000',
-          },
+          targetAddress: EVM_TARGET_ADDRESS,
+          tx: { from: '0xsender', to: EVM_TARGET_ADDRESS, data: '0xabcdef', value: '0', gas: '21000' },
         })
       )
 
     vi.stubGlobal('fetch', fetchMock)
-    configureSwapKit({
-      apiKey: 'test-key',
-      baseUrl: 'https://swapkit.example',
-    })
+    configureSwapKit({ apiKey: 'test-key', baseUrl: 'https://swapkit.example' })
 
     const quote = await getSwapKitQuote({
-      from: {
-        chain: Chain.Ethereum,
-        address: '0xsender',
-        ticker: 'ETH',
-        decimals: 18,
-      },
-      to: {
-        chain: Chain.Solana,
-        address: 'sol-destination',
-        ticker: 'USDC',
-        id: 'sol-usdc-mint',
-        decimals: 6,
-      },
+      from: { chain: Chain.Ethereum, address: '0xsender', ticker: 'ETH', decimals: 18 },
+      to: { chain: Chain.Solana, address: 'sol-destination', ticker: 'USDC', id: 'sol-usdc-mint', decimals: 6 },
       amount: 10_000_000_000_000_000n,
       affiliateBps: 15,
     })
@@ -152,16 +126,9 @@ describe('getSwapKitQuote', () => {
       dstAmount: '12400000',
       provider: 'swapkit',
       routeProvider: 'NEAR',
-      tx: {
-        evm: {
-          from: '0xsender',
-          to: '0xrouter',
-          data: '0xabcdef',
-          value: '0',
-          gasLimit: 21000n,
-        },
-      },
+      tx: { evm: { from: '0xsender', to: EVM_TARGET_ADDRESS, data: '0xabcdef', value: '0', gasLimit: 21000n } },
     })
+    expect(mockScanAddressWithBlockaid).toHaveBeenCalledWith(EVM_TARGET_ADDRESS, 'ethereum')
   })
 
   it.each(transferSourceFixtures)(
@@ -170,43 +137,16 @@ describe('getSwapKitQuote', () => {
       const fetchMock = vi
         .fn()
         .mockResolvedValueOnce(
-          response({
-            routes: [
-              {
-                routeId: 'near-transfer-route',
-                providers: ['NEAR'],
-                expectedBuyAmount: '0.01',
-              },
-            ],
-          })
+          response({ routes: [{ routeId: 'near-transfer-route', providers: ['NEAR'], expectedBuyAmount: '0.01' }] })
         )
-        .mockResolvedValueOnce(
-          response({
-            expectedBuyAmount: '0.009',
-            providers: ['NEAR'],
-            targetAddress: target,
-          })
-        )
+        .mockResolvedValueOnce(response({ expectedBuyAmount: '0.009', providers: ['NEAR'], targetAddress: target }))
 
       vi.stubGlobal('fetch', fetchMock)
-      configureSwapKit({
-        apiKey: 'test-key',
-        baseUrl: 'https://swapkit.example',
-      })
+      configureSwapKit({ apiKey: 'test-key', baseUrl: 'https://swapkit.example' })
 
       const quote = await getSwapKitQuote({
-        from: {
-          chain,
-          address: source,
-          ticker,
-          decimals,
-        },
-        to: {
-          chain: Chain.Ethereum,
-          address: '0xdestination',
-          ticker: 'ETH',
-          decimals: 18,
-        },
+        from: { chain, address: source, ticker, decimals },
+        to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
         amount: 100_000n,
       })
 
@@ -221,15 +161,218 @@ describe('getSwapKitQuote', () => {
         dstAmount: '9000000000000000',
         provider: 'swapkit',
         routeProvider: 'NEAR',
-        tx: {
-          transfer: {
-            to: target,
-            amount: 100_000n,
-          },
-        },
+        tx: { transfer: { to: target, amount: 100_000n } },
       })
     }
   )
+
+  const stubEvmRoute = ({ route, fees }: { route?: Record<string, unknown>; fees?: unknown[] } = {}) => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        response({
+          routes: [{ routeId: 'evm-route', providers: ['ONEINCH'], expectedBuyAmount: '12.4', ...route }],
+        })
+      )
+      .mockResolvedValueOnce(
+        response({
+          expectedBuyAmount: '12.4',
+          providers: ['ONEINCH'],
+          targetAddress: '0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1',
+          ...(fees ? { fees } : {}),
+          tx: {
+            from: '0xsender',
+            to: '0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1',
+            data: '0xabcdef',
+            value: '0',
+            gas: '21000',
+          },
+        })
+      )
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    return getSwapKitQuote({
+      from: { chain: Chain.Ethereum, address: '0xsender', ticker: 'ETH', decimals: 18 },
+      to: { chain: Chain.Ethereum, address: '0xsender', ticker: 'USDC', id: '0xusdc', decimals: 6 },
+      amount: 10_000_000_000_000_000n,
+      affiliateBps: 30,
+    })
+  }
+
+  it('surfaces the affiliate fee SwapKit itemizes on an EVM route', async () => {
+    // Without this the aggregator route looked like it charged no swap fee at
+    // all, so the consumer's fee row had nothing to show and the headline total
+    // silently omitted it.
+    const quote = await stubEvmRoute({
+      fees: [
+        { type: 'affiliate', amount: '0.04', asset: 'ETH.USDC-0xusdc', chain: 'ETH' },
+        { type: 'network', amount: '0.0002', asset: 'ETH.ETH', chain: 'ETH' },
+      ],
+    })
+
+    expect('evm' in quote.tx && quote.tx.evm.affiliateFee).toEqual({
+      amount: 40_000n,
+      chain: Chain.Ethereum,
+      id: '0xusdc',
+      decimals: 6,
+    })
+  })
+
+  it('keeps an EVM route signable when the fee shape cannot be resolved', async () => {
+    // The fee is display-only on this branch, so an unexpected asset must not
+    // take down a route that would otherwise sign. Solana legitimately throws
+    // here: its tx type requires the fee.
+    const quote = await stubEvmRoute({
+      fees: [{ type: 'affiliate', amount: '0.04', asset: 'BTC.BTC', chain: 'BTC' }],
+    })
+
+    expect('evm' in quote.tx && quote.tx.evm.to).toBe('0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1')
+    expect('evm' in quote.tx && quote.tx.evm.affiliateFee).toBeUndefined()
+  })
+
+  it('leaves the affiliate fee absent when SwapKit itemizes none', async () => {
+    // A zero here would render as a definite "$0.00" swap fee; staying absent
+    // lets the consumer report the fee as part of the quoted rate instead.
+    const quote = await stubEvmRoute()
+
+    expect('evm' in quote.tx && quote.tx.evm.affiliateFee).toBeUndefined()
+  })
+
+  it('reads price impact from the route meta', async () => {
+    const quote = await stubEvmRoute({ route: { meta: { priceImpact: -0.0039 }, totalSlippageBps: 120 } })
+
+    expect(quote.priceImpactFraction).toBe(-0.0039)
+  })
+
+  it('falls back to the route slippage bps when meta omits price impact', async () => {
+    const quote = await stubEvmRoute({ route: { totalSlippageBps: 133 } })
+
+    expect(quote.priceImpactFraction).toBeCloseTo(0.0133, 10)
+  })
+
+  it('reports no price impact when the route exposes neither figure', async () => {
+    const quote = await stubEvmRoute()
+
+    expect(quote.priceImpactFraction).toBeUndefined()
+  })
+
+  it.each([
+    ['an explicit null', null],
+    ['a stringified number', '0.0133'],
+    ['a non-finite number', Number.NaN],
+  ])('falls through to the slippage bps when meta price impact is %s', async (_label, priceImpact) => {
+    // Nothing validates the proxy's JSON on the way in. `null !== undefined`,
+    // so an unnarrowed read would put null on a `number` field and reach the
+    // consumer as `null.toFixed(...)`; a string would render 100x wrong.
+    const quote = await stubEvmRoute({ route: { meta: { priceImpact }, totalSlippageBps: 133 } })
+
+    expect(quote.priceImpactFraction).toBeCloseTo(0.0133, 10)
+  })
+
+  it('reports no price impact when neither figure is a usable number', async () => {
+    const quote = await stubEvmRoute({ route: { meta: { priceImpact: null }, totalSlippageBps: '133' } })
+
+    expect(quote.priceImpactFraction).toBeUndefined()
+  })
+
+  // PoC: can a malicious/compromised SwapKit response redirect the signed
+  // destination away from what the user reviewed? Both independent trust
+  // boundaries — response-local targetAddress equality, and an out-of-band
+  // Blockaid reputation verdict — are exercised end to end through
+  // getSwapKitQuote itself, not just against the underlying assert helpers.
+  describe('quote-time destination enforcement (sdk#1458 PoC)', () => {
+    const ATTACKER_ADDRESS = '0xbadbadbadbadbadbadbadbadbadbadbadbadbadb'
+    const REAL_ROUTER = '0x1111111254eeb25477b68fb85ed929f73a960582'
+
+    const stubSwapkitRoute = ({ tx, targetAddress }: { tx: Record<string, unknown>; targetAddress?: string }) => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(
+          response({ routes: [{ routeId: 'evm-route', providers: ['ONEINCH'], expectedBuyAmount: '12.4' }] })
+        )
+        .mockResolvedValueOnce(
+          response({
+            expectedBuyAmount: '12.4',
+            providers: ['ONEINCH'],
+            ...(targetAddress ? { targetAddress } : {}),
+            tx,
+          })
+        )
+
+      vi.stubGlobal('fetch', fetchMock)
+
+      return getSwapKitQuote({
+        from: { chain: Chain.Ethereum, address: '0xsender', ticker: 'ETH', decimals: 18 },
+        to: { chain: Chain.Ethereum, address: '0xsender', ticker: 'USDC', id: '0xusdc', decimals: 6 },
+        amount: 10_000_000_000_000_000n,
+      })
+    }
+
+    it('rejects a tx.to that diverges from the screened targetAddress — a compromised response cannot redirect funds by disagreeing with itself', async () => {
+      // The attacker controls tx.to but targetAddress still names the real router:
+      // the two independent fields the response carries disagree, so neither one
+      // alone is trustworthy.
+      await expect(
+        stubSwapkitRoute({
+          tx: { from: '0xsender', to: ATTACKER_ADDRESS, data: '0xabcdef', value: '0', gas: '21000' },
+          targetAddress: REAL_ROUTER,
+        })
+      ).rejects.toThrow(/does not match the screened targetAddress/)
+    })
+
+    it('rejects a tx.to/targetAddress pair that agree with EACH OTHER but not with Blockaid — response-local equality alone is not destination safety', async () => {
+      // The classic "smuggle via a self-consistent response" attempt: attacker
+      // sets both tx.to AND targetAddress to the SAME attacker-controlled
+      // address, so the response-local equality check alone would pass. The
+      // independent Blockaid reputation verdict is the second boundary that
+      // actually has to catch this.
+      mockScanAddressWithBlockaid.mockReset()
+      mockScanAddressWithBlockaid.mockResolvedValueOnce({ resultType: 'Malicious', features: ['drainer'] })
+
+      await expect(
+        stubSwapkitRoute({
+          tx: { from: '0xsender', to: ATTACKER_ADDRESS, data: '0xabcdef', value: '0', gas: '21000' },
+          targetAddress: ATTACKER_ADDRESS,
+        })
+      ).rejects.toThrow(/Malicious Blockaid verdict/)
+
+      expect(mockScanAddressWithBlockaid).toHaveBeenCalledWith(ATTACKER_ADDRESS, 'ethereum')
+    })
+
+    it('rejects a Warning Blockaid verdict on tx.to, not just Malicious', async () => {
+      mockScanAddressWithBlockaid.mockReset()
+      mockScanAddressWithBlockaid.mockResolvedValueOnce({ resultType: 'Warning', features: ['new_address'] })
+
+      await expect(
+        stubSwapkitRoute({
+          tx: { from: '0xsender', to: REAL_ROUTER, data: '0xabcdef', value: '0', gas: '21000' },
+          targetAddress: REAL_ROUTER,
+        })
+      ).rejects.toThrow(/Warning Blockaid verdict/)
+    })
+
+    it('fails closed at quote time when the Blockaid call itself fails — a scan we could not obtain is not evidence of safety', async () => {
+      mockScanAddressWithBlockaid.mockReset()
+      mockScanAddressWithBlockaid.mockRejectedValueOnce(new Error('blockaid unreachable'))
+
+      await expect(
+        stubSwapkitRoute({
+          tx: { from: '0xsender', to: REAL_ROUTER, data: '0xabcdef', value: '0', gas: '21000' },
+          targetAddress: REAL_ROUTER,
+        })
+      ).rejects.toThrow(/reputation check failed/)
+    })
+
+    it('accepts a route only once both boundaries agree it is safe (control: proves the PoC harness itself is not just always-throwing)', async () => {
+      const quote = await stubSwapkitRoute({
+        tx: { from: '0xsender', to: REAL_ROUTER, data: '0xabcdef', value: '0', gas: '21000' },
+        targetAddress: REAL_ROUTER,
+      })
+
+      expect('evm' in quote.tx && quote.tx.evm.to).toBe(REAL_ROUTER)
+    })
+  })
 
   it('maps SwapKit transfer memo and deposit amount fallbacks', async () => {
     vi.stubGlobal(
@@ -237,15 +380,7 @@ describe('getSwapKitQuote', () => {
       vi
         .fn()
         .mockResolvedValueOnce(
-          response({
-            routes: [
-              {
-                routeId: 'deposit-route',
-                providers: ['NEAR'],
-                expectedBuyAmount: '0.01',
-              },
-            ],
-          })
+          response({ routes: [{ routeId: 'deposit-route', providers: ['NEAR'], expectedBuyAmount: '0.01' }] })
         )
         .mockResolvedValueOnce(
           response({
@@ -260,28 +395,12 @@ describe('getSwapKitQuote', () => {
     configureSwapKit({ apiKey: undefined })
 
     const quote = await getSwapKitQuote({
-      from: {
-        chain: Chain.Bitcoin,
-        address: 'bc1qsource',
-        ticker: 'BTC',
-        decimals: 8,
-      },
-      to: {
-        chain: Chain.Ethereum,
-        address: '0xdestination',
-        ticker: 'ETH',
-        decimals: 18,
-      },
+      from: { chain: Chain.Bitcoin, address: 'bc1qsource', ticker: 'BTC', decimals: 8 },
+      to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
       amount: 1n,
     })
 
-    expect(quote.tx).toEqual({
-      transfer: {
-        to: 'bc1qdeposit',
-        amount: 100_000n,
-        memo: 'swap-memo',
-      },
-    })
+    expect(quote.tx).toEqual({ transfer: { to: 'bc1qdeposit', amount: 100_000n, memo: 'swap-memo' } })
   })
 
   it('maps SwapKit transfer tx metadata into QR payload fields', async () => {
@@ -289,15 +408,7 @@ describe('getSwapKitQuote', () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
-        response({
-          routes: [
-            {
-              routeId: 'psbt-route',
-              providers: ['CHAINFLIP'],
-              expectedBuyAmount: '0.01',
-            },
-          ],
-        })
+        response({ routes: [{ routeId: 'psbt-route', providers: ['CHAINFLIP'], expectedBuyAmount: '0.01' }] })
       )
       .mockResolvedValueOnce(
         response({
@@ -307,9 +418,7 @@ describe('getSwapKitQuote', () => {
           inboundAddress: 'bc1qinbound',
           depositAmount: '0.001',
           tx: Buffer.from(psbt.payload).toString('base64'),
-          meta: {
-            txType: 'PSBT',
-          },
+          meta: { txType: 'PSBT' },
           swapId: 'swapkit-id',
         })
       )
@@ -318,18 +427,8 @@ describe('getSwapKitQuote', () => {
     configureSwapKit({ apiKey: undefined })
 
     const quote = await getSwapKitQuote({
-      from: {
-        chain: Chain.Bitcoin,
-        address: psbt.sourceAddress,
-        ticker: 'BTC',
-        decimals: 8,
-      },
-      to: {
-        chain: Chain.Ethereum,
-        address: '0xdestination',
-        ticker: 'ETH',
-        decimals: 18,
-      },
+      from: { chain: Chain.Bitcoin, address: psbt.sourceAddress, ticker: 'BTC', decimals: 8 },
+      to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
       amount: 100_000n,
     })
 
@@ -358,39 +457,17 @@ describe('getSwapKitQuote', () => {
       vi
         .fn()
         .mockResolvedValueOnce(
-          response({
-            routes: [
-              {
-                routeId: 'ton-array-route',
-                providers: ['NEAR'],
-                expectedBuyAmount: '0.01',
-              },
-            ],
-          })
+          response({ routes: [{ routeId: 'ton-array-route', providers: ['NEAR'], expectedBuyAmount: '0.01' }] })
         )
         .mockResolvedValueOnce(
-          response({
-            expectedBuyAmount: '0.009',
-            providers: ['NEAR'],
-            tx: [{ address: 'UQDeposit', amount: '0.001' }],
-          })
+          response({ expectedBuyAmount: '0.009', providers: ['NEAR'], tx: [{ address: 'UQDeposit', amount: '0.001' }] })
         )
     )
     configureSwapKit({ apiKey: undefined })
 
     const quote = await getSwapKitQuote({
-      from: {
-        chain: Chain.Ton,
-        address: 'UQSource',
-        ticker: 'TON',
-        decimals: 9,
-      },
-      to: {
-        chain: Chain.Ethereum,
-        address: '0xdestination',
-        ticker: 'ETH',
-        decimals: 18,
-      },
+      from: { chain: Chain.Ton, address: 'UQSource', ticker: 'TON', decimals: 9 },
+      to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
       amount: 1n,
     })
 
@@ -409,15 +486,7 @@ describe('getSwapKitQuote', () => {
       vi
         .fn()
         .mockResolvedValueOnce(
-          response({
-            routes: [
-              {
-                routeId: 'jupiter-route',
-                providers: ['JUPITER'],
-                expectedBuyAmount: '0.05',
-              },
-            ],
-          })
+          response({ routes: [{ routeId: 'jupiter-route', providers: ['JUPITER'], expectedBuyAmount: '0.05' }] })
         )
         .mockResolvedValueOnce(
           response({
@@ -425,7 +494,7 @@ describe('getSwapKitQuote', () => {
             tx: 'serialized-solana-transaction',
             fees: [
               { type: 'network', amount: '0.000005' },
-              { type: 'service', amount: '0.000000007' },
+              { type: 'service', amount: '0.000000007', asset: 'SOL.SOL', chain: 'Solana' },
             ],
           })
         )
@@ -433,18 +502,8 @@ describe('getSwapKitQuote', () => {
     configureSwapKit({ apiKey: 'test-key' })
 
     const quote = await getSwapKitQuote({
-      from: {
-        chain: Chain.Solana,
-        address: 'sol-source',
-        ticker: 'SOL',
-        decimals: 9,
-      },
-      to: {
-        chain: Chain.Ethereum,
-        address: '0xdestination',
-        ticker: 'ETH',
-        decimals: 18,
-      },
+      from: { chain: Chain.Solana, address: 'sol-source', ticker: 'SOL', decimals: 9 },
+      to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
       amount: 1_000_000n,
     })
 
@@ -456,62 +515,258 @@ describe('getSwapKitQuote', () => {
         solana: {
           data: 'serialized-solana-transaction',
           networkFee: 5000n,
-          swapFee: {
-            amount: 7n,
-            decimals: 9,
-            chain: Chain.Solana,
-          },
+          swapFee: { amount: 7n, decimals: 9, chain: Chain.Solana },
         },
       },
     })
+  })
+
+  it('maps the live Chainflip streaming fee shape to destination USDC', async () => {
+    const usdcId = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          response({
+            routes: [
+              {
+                routeId: 'chainflip-streaming-route',
+                providers: ['CHAINFLIP_STREAMING'],
+                expectedBuyAmount: '75245.896838',
+              },
+            ],
+          })
+        )
+        .mockResolvedValueOnce(
+          response({
+            providers: ['CHAINFLIP_STREAMING'],
+            expectedBuyAmount: '75245.896838',
+            tx: 'serialized-solana-transaction',
+            fees: [
+              { type: 'affiliate', amount: '378.691268', asset: `ETH.USDC-${usdcId}`, chain: 'Ethereum' },
+              { type: 'service', amount: '113.60738', asset: `ETH.USDC-${usdcId}`, chain: 'Ethereum' },
+            ],
+          })
+        )
+    )
+
+    const quote = await getSwapKitQuote({
+      from: { chain: Chain.Solana, address: 'sol-source', ticker: 'SOL', decimals: 9 },
+      to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'USDC', decimals: 6, id: usdcId.toLowerCase() },
+      amount: 1_000_000_000_000n,
+    })
+
+    expect(quote.tx).toMatchObject({
+      solana: { swapFee: { amount: 492_298_648n, decimals: 6, chain: Chain.Ethereum, id: usdcId.toLowerCase() } },
+    })
+  })
+
+  it('maps independent Chainflip stable USDC fees for a SOL to native ETH route', async () => {
+    const usdcId = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          response({
+            routes: [
+              { routeId: 'chainflip-stable-fee-route', providers: ['CHAINFLIP_STREAMING'], expectedBuyAmount: '24.5' },
+            ],
+          })
+        )
+        .mockResolvedValueOnce(
+          response({
+            providers: ['CHAINFLIP_STREAMING'],
+            expectedBuyAmount: '24.5',
+            tx: 'serialized-solana-transaction',
+            fees: [
+              { type: 'affiliate', amount: '1.25', asset: `ETH.USDC-${usdcId}`, chain: 'Ethereum' },
+              { type: 'service', amount: '0.5', asset: `ETH.USDC-${usdcId}`, chain: 'Ethereum' },
+            ],
+          })
+        )
+    )
+
+    const quote = await getSwapKitQuote({
+      from: { chain: Chain.Solana, address: 'sol-source', ticker: 'SOL', decimals: 9 },
+      to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
+      amount: 1_000_000_000_000n,
+    })
+
+    expect(quote.tx).toMatchObject({
+      solana: { swapFee: { amount: 1_750_000n, decimals: 6, chain: Chain.Ethereum, id: usdcId.toLowerCase() } },
+    })
+  })
+
+  it('sums repeated SwapKit fee entries of the same type and asset', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          response({ routes: [{ routeId: 'repeated-fees', providers: ['JUPITER'], expectedBuyAmount: '1' }] })
+        )
+        .mockResolvedValueOnce(
+          response({
+            providers: ['JUPITER'],
+            expectedBuyAmount: '1',
+            tx: 'serialized-solana-transaction',
+            fees: [
+              { type: 'service', amount: '0.1', asset: 'SOL.SOL' },
+              { type: 'service', amount: '0.2', asset: 'SOL.SOL' },
+            ],
+          })
+        )
+    )
+
+    const quote = await getSwapKitQuote({
+      from: { chain: Chain.Solana, address: 'sol-source', ticker: 'SOL', decimals: 9 },
+      to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
+      amount: 1_000_000n,
+    })
+
+    expect(quote.tx).toMatchObject({ solana: { swapFee: { amount: 300_000_000n, decimals: 9, chain: Chain.Solana } } })
+  })
+
+  it('rejects a non-zero SwapKit fee without asset metadata', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          response({ routes: [{ routeId: 'missing-fee-asset', providers: ['JUPITER'], expectedBuyAmount: '1' }] })
+        )
+        .mockResolvedValueOnce(
+          response({
+            providers: ['JUPITER'],
+            expectedBuyAmount: '1',
+            tx: 'serialized-solana-transaction',
+            fees: [{ type: 'service', amount: '0.1' }],
+          })
+        )
+    )
+
+    await expect(
+      getSwapKitQuote({
+        from: { chain: Chain.Solana, address: 'sol-source', ticker: 'SOL', decimals: 9 },
+        to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
+        amount: 1_000_000n,
+      })
+    ).rejects.toThrow('SwapKit service fee is missing its asset.')
+  })
+
+  it('rejects affiliate and service fees denominated in different assets', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          response({ routes: [{ routeId: 'mixed-fee-assets', providers: ['JUPITER'], expectedBuyAmount: '1' }] })
+        )
+        .mockResolvedValueOnce(
+          response({
+            providers: ['JUPITER'],
+            expectedBuyAmount: '1',
+            tx: 'serialized-solana-transaction',
+            fees: [
+              { type: 'affiliate', amount: '0.1', asset: 'SOL.SOL' },
+              { type: 'service', amount: '0.1', asset: 'ETH.ETH' },
+            ],
+          })
+        )
+    )
+
+    await expect(
+      getSwapKitQuote({
+        from: { chain: Chain.Solana, address: 'sol-source', ticker: 'SOL', decimals: 9 },
+        to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
+        amount: 1_000_000n,
+      })
+    ).rejects.toThrow('SwapKit affiliate and service fees use different assets.')
+  })
+
+  it('rejects an independent stable fee outside a Chainflip route', async () => {
+    const usdcId = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          response({ routes: [{ routeId: 'jupiter-stable-fee', providers: ['JUPITER'], expectedBuyAmount: '1' }] })
+        )
+        .mockResolvedValueOnce(
+          response({
+            providers: ['JUPITER'],
+            expectedBuyAmount: '1',
+            tx: 'serialized-solana-transaction',
+            fees: [{ type: 'service', amount: '0.1', asset: `ETH.USDC-${usdcId}`, chain: 'Ethereum' }],
+          })
+        )
+    )
+
+    await expect(
+      getSwapKitQuote({
+        from: { chain: Chain.Solana, address: 'sol-source', ticker: 'SOL', decimals: 9 },
+        to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
+        amount: 1_000_000n,
+      })
+    ).rejects.toThrow(`SwapKit service fee uses unsupported asset ETH.USDC-${usdcId}.`)
+  })
+
+  it('rejects a fee whose chain metadata contradicts its asset', async () => {
+    const usdcId = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          response({
+            routes: [{ routeId: 'chainflip-wrong-fee-chain', providers: ['CHAINFLIP'], expectedBuyAmount: '1' }],
+          })
+        )
+        .mockResolvedValueOnce(
+          response({
+            providers: ['CHAINFLIP'],
+            expectedBuyAmount: '1',
+            tx: 'serialized-solana-transaction',
+            fees: [{ type: 'service', amount: '0.1', asset: `ETH.USDC-${usdcId}`, chain: 'Solana' }],
+          })
+        )
+    )
+
+    await expect(
+      getSwapKitQuote({
+        from: { chain: Chain.Solana, address: 'sol-source', ticker: 'SOL', decimals: 9 },
+        to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
+        amount: 1_000_000n,
+      })
+    ).rejects.toThrow(`SwapKit service fee uses unsupported asset ETH.USDC-${usdcId}.`)
   })
 
   it('uses the Vultisig proxy without an API key by default', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
-        response({
-          routes: [
-            {
-              routeId: 'near-route',
-              providers: ['NEAR'],
-              expectedBuyAmount: '0.01',
-            },
-          ],
-        })
+        response({ routes: [{ routeId: 'near-route', providers: ['NEAR'], expectedBuyAmount: '0.01' }] })
       )
       .mockResolvedValueOnce(
         response({
           expectedBuyAmount: '0.01',
           providers: ['NEAR'],
-          tx: {
-            to: '0xrouter',
-            value: '100',
-          },
+          targetAddress: EVM_TARGET_ADDRESS,
+          tx: { to: EVM_TARGET_ADDRESS, value: '100' },
         })
       )
     vi.stubGlobal('fetch', fetchMock)
 
     // Explicitly set the Windows proxy URL; the default is platform-detected
     // (darwin/ios -> /swapkit, android -> /swapkit-a, other -> /swapkit-win).
-    configureSwapKit({
-      apiKey: undefined,
-      baseUrl: 'https://api.vultisig.com/swapkit-win',
-    })
+    configureSwapKit({ apiKey: undefined, baseUrl: 'https://api.vultisig.com/swapkit-win' })
 
     await getSwapKitQuote({
-      from: {
-        chain: Chain.Ethereum,
-        address: '0xsender',
-        ticker: 'ETH',
-        decimals: 18,
-      },
-      to: {
-        chain: Chain.Bitcoin,
-        address: 'bc1destination',
-        ticker: 'BTC',
-        decimals: 8,
-      },
+      from: { chain: Chain.Ethereum, address: '0xsender', ticker: 'ETH', decimals: 18 },
+      to: { chain: Chain.Bitcoin, address: 'bc1destination', ticker: 'BTC', decimals: 8 },
       amount: 1n,
     })
 
@@ -534,20 +789,9 @@ describe('getSwapKitQuote', () => {
       .mockResolvedValueOnce(
         response({
           routes: [
-            {
-              routeId: 'missing-amount-route',
-              providers: ['NEAR'],
-            },
-            {
-              routeId: 'malformed-amount-route',
-              providers: ['NEAR'],
-              expectedBuyAmount: 'not-a-number',
-            },
-            {
-              routeId: 'valid-route',
-              providers: ['NEAR'],
-              expectedBuyAmount: '9.4',
-            },
+            { routeId: 'missing-amount-route', providers: ['NEAR'] },
+            { routeId: 'malformed-amount-route', providers: ['NEAR'], expectedBuyAmount: 'not-a-number' },
+            { routeId: 'valid-route', providers: ['NEAR'], expectedBuyAmount: '9.4' },
           ],
         })
       )
@@ -555,10 +799,8 @@ describe('getSwapKitQuote', () => {
         response({
           expectedBuyAmount: '9.3',
           providers: ['NEAR'],
-          tx: {
-            to: '0xnear-deposit',
-            value: '5000000000000000',
-          },
+          targetAddress: EVM_TARGET_ADDRESS,
+          tx: { to: EVM_TARGET_ADDRESS, value: '5000000000000000' },
         })
       )
 
@@ -566,18 +808,8 @@ describe('getSwapKitQuote', () => {
     configureSwapKit({ apiKey: undefined })
 
     await getSwapKitQuote({
-      from: {
-        chain: Chain.Ethereum,
-        address: '0xsender',
-        ticker: 'ETH',
-        decimals: 18,
-      },
-      to: {
-        chain: Chain.Sui,
-        address: '0xsui',
-        ticker: 'SUI',
-        decimals: 9,
-      },
+      from: { chain: Chain.Ethereum, address: '0xsender', ticker: 'ETH', decimals: 18 },
+      to: { chain: Chain.Sui, address: '0xsui', ticker: 'SUI', decimals: 9 },
       amount: 5_000_000_000_000_000n,
     })
 
@@ -609,53 +841,27 @@ describe('getSwapKitQuote', () => {
 
     await expect(
       getSwapKitQuote({
-        from: {
-          chain: Chain.Bitcoin,
-          address: 'bc1qsource',
-          ticker: 'BTC',
-          decimals: 8,
-        },
-        to: {
-          chain: Chain.Ethereum,
-          address: '0xdestination',
-          ticker: 'ETH',
-          decimals: 18,
-        },
+        from: { chain: Chain.Bitcoin, address: 'bc1qsource', ticker: 'BTC', decimals: 8 },
+        to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
         amount: 1000n,
       })
     ).rejects.toThrow('CHAINFLIP: Amount below minimum: 0.0003 BTC required')
   })
 
   it('throws a below-minimum error when providerErrors carry a minimum-size rejection (200 with empty routes)', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      response({
-        routes: [],
-        providerErrors: [
-          {
-            provider: 'NEAR',
-            message: 'min amount not met for this swap',
-          },
-        ],
-      })
-    )
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        response({ routes: [], providerErrors: [{ provider: 'NEAR', message: 'min amount not met for this swap' }] })
+      )
 
     vi.stubGlobal('fetch', fetchMock)
     configureSwapKit({ apiKey: undefined })
 
     await expect(
       getSwapKitQuote({
-        from: {
-          chain: Chain.Bitcoin,
-          address: 'bc1qsource',
-          ticker: 'BTC',
-          decimals: 8,
-        },
-        to: {
-          chain: Chain.Ethereum,
-          address: '0xdestination',
-          ticker: 'ETH',
-          decimals: 18,
-        },
+        from: { chain: Chain.Bitcoin, address: 'bc1qsource', ticker: 'BTC', decimals: 8 },
+        to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
         amount: 100n,
       })
     ).rejects.toThrow('NEAR: min amount not met for this swap')
@@ -673,19 +879,9 @@ describe('getSwapKitQuote', () => {
       .fn()
       .mockResolvedValueOnce(
         response({
-          routes: [
-            {
-              routeId: 'near-route',
-              providers: ['NEAR'],
-              expectedBuyAmount: '9.4',
-            },
-          ],
+          routes: [{ routeId: 'near-route', providers: ['NEAR'], expectedBuyAmount: '9.4' }],
           providerErrors: [
-            {
-              provider: 'CHAINFLIP',
-              message: 'Amount below minimum: 0.0003 BTC required',
-              errorCode: 'BELOW_MINIMUM',
-            },
+            { provider: 'CHAINFLIP', message: 'Amount below minimum: 0.0003 BTC required', errorCode: 'BELOW_MINIMUM' },
           ],
         })
       )
@@ -694,11 +890,8 @@ describe('getSwapKitQuote', () => {
         response({
           expectedBuyAmount: '9.3',
           providers: ['NEAR'],
-          tx: {
-            to: '0xnear-deposit',
-            value: '5000000000000000',
-            gasLimit: '21000',
-          },
+          targetAddress: EVM_TARGET_ADDRESS,
+          tx: { to: EVM_TARGET_ADDRESS, value: '5000000000000000', gasLimit: '21000' },
         })
       )
 
@@ -708,25 +901,12 @@ describe('getSwapKitQuote', () => {
     // Must NOT throw — the NEAR route is valid and should be returned even
     // though CHAINFLIP rejected for below-minimum.
     const quote = await getSwapKitQuote({
-      from: {
-        chain: Chain.Ethereum,
-        address: '0xsender',
-        ticker: 'ETH',
-        decimals: 18,
-      },
-      to: {
-        chain: Chain.Sui,
-        address: '0xsui',
-        ticker: 'SUI',
-        decimals: 9,
-      },
+      from: { chain: Chain.Ethereum, address: '0xsender', ticker: 'ETH', decimals: 18 },
+      to: { chain: Chain.Sui, address: '0xsui', ticker: 'SUI', decimals: 9 },
       amount: 5_000_000_000_000_000n,
     })
 
-    expect(quote).toMatchObject({
-      provider: 'swapkit',
-      routeProvider: 'NEAR',
-    })
+    expect(quote).toMatchObject({ provider: 'swapkit', routeProvider: 'NEAR' })
   })
 
   it('falls back to focused provider groups when the broad SwapKit provider query misses a route', async () => {
@@ -734,25 +914,14 @@ describe('getSwapKitQuote', () => {
       .fn()
       .mockResolvedValueOnce(response({ error: 'noRoutesFound' }, false, 400))
       .mockResolvedValueOnce(
-        response({
-          routes: [
-            {
-              routeId: 'near-sui-route',
-              providers: ['NEAR'],
-              expectedBuyAmount: '9.4',
-            },
-          ],
-        })
+        response({ routes: [{ routeId: 'near-sui-route', providers: ['NEAR'], expectedBuyAmount: '9.4' }] })
       )
       .mockResolvedValueOnce(
         response({
           expectedBuyAmount: '9.3',
           providers: ['NEAR'],
-          tx: {
-            to: '0xnear-deposit',
-            value: '5000000000000000',
-            gasLimit: '21000',
-          },
+          targetAddress: EVM_TARGET_ADDRESS,
+          tx: { to: EVM_TARGET_ADDRESS, value: '5000000000000000', gasLimit: '21000' },
         })
       )
 
@@ -760,18 +929,8 @@ describe('getSwapKitQuote', () => {
     configureSwapKit({ apiKey: undefined })
 
     const quote = await getSwapKitQuote({
-      from: {
-        chain: Chain.Ethereum,
-        address: '0xsender',
-        ticker: 'ETH',
-        decimals: 18,
-      },
-      to: {
-        chain: Chain.Sui,
-        address: '0xsui',
-        ticker: 'SUI',
-        decimals: 9,
-      },
+      from: { chain: Chain.Ethereum, address: '0xsender', ticker: 'ETH', decimals: 18 },
+      to: { chain: Chain.Sui, address: '0xsui', ticker: 'SUI', decimals: 9 },
       amount: 5_000_000_000_000_000n,
     })
 
@@ -788,13 +947,7 @@ describe('getSwapKitQuote', () => {
       dstAmount: '9300000000',
       provider: 'swapkit',
       routeProvider: 'NEAR',
-      tx: {
-        evm: {
-          to: '0xnear-deposit',
-          value: '5000000000000000',
-          gasLimit: 21000n,
-        },
-      },
+      tx: { evm: { to: EVM_TARGET_ADDRESS, value: '5000000000000000', gasLimit: 21000n } },
     })
   })
 
@@ -857,19 +1010,15 @@ describe('getSwapKitQuote', () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
-        response({
-          routes: [{ routeId: 'one-inch-route', providers: ['ONEINCH'], expectedBuyAmount: '0.3' }],
-        })
+        response({ routes: [{ routeId: 'one-inch-route', providers: ['ONEINCH'], expectedBuyAmount: '0.3' }] })
       )
       .mockResolvedValueOnce(
         response({
           expectedBuyAmount: '0.3',
           providers: ['ONEINCH'],
-          tx: { from: '0xsender', to: '0x9025b8ff', data: '0xda5d4170', value: '0', gas: '210000' },
-          approvalTx: {
-            to: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-            data: approveData,
-          },
+          targetAddress: EVM_TARGET_ADDRESS,
+          tx: { from: '0xsender', to: EVM_TARGET_ADDRESS, data: '0xda5d4170', value: '0', gas: '210000' },
+          approvalTx: { to: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', data: approveData },
         })
       )
 
@@ -888,24 +1037,23 @@ describe('getSwapKitQuote', () => {
       amount: 1_000_000n,
     })
 
-    expect(quote.tx).toMatchObject({
-      evm: { to: '0x9025b8ff', approvalAddress: innerExecutor },
-    })
+    expect(quote.tx).toMatchObject({ evm: { to: EVM_TARGET_ADDRESS, approvalAddress: innerExecutor } })
+    expect(mockScanAddressWithBlockaid).toHaveBeenCalledWith(EVM_TARGET_ADDRESS, 'ethereum')
+    expect(mockScanAddressWithBlockaid).toHaveBeenCalledWith(innerExecutor, 'ethereum')
   })
 
   it('omits evm.approvalAddress when the swap response carries no approvalTx', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
-        response({
-          routes: [{ routeId: 'native-route', providers: ['ONEINCH'], expectedBuyAmount: '12.4' }],
-        })
+        response({ routes: [{ routeId: 'native-route', providers: ['ONEINCH'], expectedBuyAmount: '12.4' }] })
       )
       .mockResolvedValueOnce(
         response({
           expectedBuyAmount: '12.4',
           providers: ['ONEINCH'],
-          tx: { from: '0xsender', to: '0xrouter', data: '0xabcdef', value: '0', gas: '21000' },
+          targetAddress: EVM_TARGET_ADDRESS,
+          tx: { from: '0xsender', to: EVM_TARGET_ADDRESS, data: '0xabcdef', value: '0', gas: '21000' },
         })
       )
 
@@ -931,15 +1079,14 @@ describe('getSwapKitQuote', () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
-        response({
-          routes: [{ routeId: 'zero-spender-route', providers: ['ONEINCH'], expectedBuyAmount: '12.4' }],
-        })
+        response({ routes: [{ routeId: 'zero-spender-route', providers: ['ONEINCH'], expectedBuyAmount: '12.4' }] })
       )
       .mockResolvedValueOnce(
         response({
           expectedBuyAmount: '12.4',
           providers: ['ONEINCH'],
-          tx: { from: '0xsender', to: '0xrouter', data: '0xabcdef', value: '0', gas: '21000' },
+          targetAddress: EVM_TARGET_ADDRESS,
+          tx: { from: '0xsender', to: EVM_TARGET_ADDRESS, data: '0xabcdef', value: '0', gas: '21000' },
           approvalTx: { from: '0xsender', to: '0xtoken', data: zeroSpenderApproveData },
         })
       )
@@ -958,10 +1105,7 @@ describe('getSwapKitQuote', () => {
     expect(evmTx.evm.approvalAddress).toBeUndefined()
   })
 
-  it.each([
-    ['Sui', Chain.Sui, 'sui-source', 'SUI', 9],
-    ['Cardano', Chain.Cardano, 'addr1source', 'ADA', 6],
-  ] as const)(
+  it.each([['Cardano', Chain.Cardano, 'addr1source', 'ADA', 6]] as const)(
     '%s is dispatch-eligible as a SwapKit source (in swapKitSourceChains) but getSwapKitQuote rejects it explicitly, before any network call, since no tx-build path exists yet',
     async (_label, chain, address, ticker, decimals) => {
       const fetchMock = vi.fn()
@@ -981,4 +1125,111 @@ describe('getSwapKitQuote', () => {
       expect(fetchMock).not.toHaveBeenCalled()
     }
   )
+
+  // Base64 is the SwapKit wire shape for a Sui source. It must reach the
+  // keysign payload as raw bytes so an iOS/Android cosigner rebuilds a
+  // byte-identical signing input.
+  const suiPtbBase64 = Buffer.from('sui-programmable-transaction-block').toString('base64')
+
+  const stubSuiRoute = (meta: Record<string, unknown> | undefined) => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        response({ routes: [{ routeId: 'near-route', providers: ['NEAR'], expectedBuyAmount: '0.5' }] })
+      )
+      .mockResolvedValueOnce(
+        response({ providers: ['NEAR'], targetAddress: 'sui-deposit', ...(meta ? { meta } : {}), tx: suiPtbBase64 })
+      )
+    vi.stubGlobal('fetch', fetchMock)
+    configureSwapKit({ apiKey: 'test-key' })
+
+    return fetchMock
+  }
+
+  const quoteSuiSource = () =>
+    getSwapKitQuote({
+      from: { chain: Chain.Sui, address: 'sui-source', ticker: 'SUI', decimals: 9 },
+      to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
+      amount: 1_500_000_000n,
+    })
+
+  it('maps a Sui source route to a transfer tx carrying the decoded PTB bytes', async () => {
+    stubSuiRoute({ txType: 'SUI' })
+
+    const quote = await quoteSuiSource()
+
+    expect(quote.tx).toEqual({
+      transfer: {
+        to: 'sui-deposit',
+        // No depositAmount and a string (non-array) `tx`, so the requested sell
+        // amount carries through. Informational only — the real amount is baked
+        // into the PTB.
+        amount: 1_500_000_000n,
+        txType: 'SUI',
+        txPayload: new Uint8Array(Buffer.from(suiPtbBase64, 'base64')),
+      },
+    })
+  })
+
+  it.each([
+    ['a renamed base64 txType', { txType: 'SERIALIZED_BASE64' }],
+    ['no meta at all', undefined],
+  ])('normalizes a Sui route txType to SUI given %s', async (_label, meta) => {
+    stubSuiRoute(meta)
+
+    const quote = await quoteSuiSource()
+
+    // SwapKit renamed SOLANA -> SERIALIZED_BASE64 mid-flight without
+    // versioning. Trusting the wire label would base64-encode the PTB string
+    // as UTF-8 instead of decoding it, and would break cross-device cosigning
+    // against iOS, which always stamps "SUI".
+    expect(quote.tx).toEqual({
+      transfer: {
+        to: 'sui-deposit',
+        amount: 1_500_000_000n,
+        txType: 'SUI',
+        txPayload: new Uint8Array(Buffer.from(suiPtbBase64, 'base64')),
+      },
+    })
+  })
+
+  it('does not disable tx building for a Sui source (the PTB is what gets signed)', async () => {
+    const fetchMock = stubSuiRoute({ txType: 'SUI' })
+
+    await quoteSuiSource()
+
+    const swapCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/v3/swap'))
+    const swapBody = JSON.parse(swapCall![1].body)
+
+    // Sending disableBuildTx here makes SwapKit return a response with NO `tx`,
+    // so there is no PTB to sign and the keysign payload build fails.
+    expect(swapBody.disableBuildTx).toBeUndefined()
+    expect(swapBody.sourceAddress).toBe('sui-source')
+  })
+
+  it('rejects a Sui route whose tx is not a base64 string', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          response({ routes: [{ routeId: 'near-route', providers: ['NEAR'], expectedBuyAmount: '0.5' }] })
+        )
+        .mockResolvedValueOnce(
+          response({
+            providers: ['NEAR'],
+            targetAddress: 'sui-deposit',
+            meta: { txType: 'SUI' },
+            tx: { some: 'object' },
+          })
+        )
+    )
+    configureSwapKit({ apiKey: 'test-key' })
+
+    // Falling through would JSON-encode the object into `txPayload` and produce
+    // a signable-looking but nonsense PTB. Fail loudly instead.
+    await expect(quoteSuiSource()).rejects.toThrow(
+      'SwapKit Sui route did not return a base64 programmable transaction block.'
+    )
+  })
 })

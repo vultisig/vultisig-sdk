@@ -46,6 +46,7 @@ import { computeFingerprint, reserveBroadcast } from '../../agent/broadcastJourn
 import { AgentExecutor } from '../../agent/executor'
 import { buildSendBroadcastIntent } from '../../core/broadcastGuard'
 import { classifyError, ExitCode } from '../../core/errors'
+import { outputJson } from '../../lib/output'
 import { executeSwap } from '../swap'
 import { sendTransaction } from '../transaction'
 
@@ -68,6 +69,19 @@ function memoSendPayload(to: string, amountBaseUnits: string, memo: string): Key
     toAddress: to,
     toAmount: amountBaseUnits,
     memo,
+  } as unknown as KeysignPayload
+}
+
+function rippleSendPayload(to: string, amountBaseUnits: string, destinationTag: number): KeysignPayload {
+  return {
+    coin: { isNativeToken: true, ticker: 'XRP', contractAddress: '', chain: 'Ripple', address: 'rSender' },
+    toAddress: to,
+    toAmount: amountBaseUnits,
+    memo: destinationTag.toString(),
+    blockchainSpecific: {
+      case: 'rippleSpecific',
+      value: { destinationTag },
+    },
   } as unknown as KeysignPayload
 }
 
@@ -260,7 +274,7 @@ describe('send — broadcast dedupe guard', () => {
   it('includes an XRP DestinationTag in a dry-run result', async () => {
     const realSends = { count: 0 }
     const vault = makeSendVault({
-      payload: nativeSendPayload('rRecipient', '1000000'),
+      payload: rippleSendPayload('rRecipient', '1000000', 123),
       txHash: 'xrp-dry-run',
       realSends,
     })
@@ -280,7 +294,7 @@ describe('send — broadcast dedupe guard', () => {
   it('normalizes an XRP X-address and previews its embedded DestinationTag', async () => {
     const realSends = { count: 0 }
     const vault = makeSendVault({
-      payload: nativeSendPayload('rPEPPER7kfTD9w2To4CQk6UCfuHM9c6GDY', '1000000'),
+      payload: rippleSendPayload('rPEPPER7kfTD9w2To4CQk6UCfuHM9c6GDY', '1000000', 495),
       txHash: 'xrp-x-address-dry-run',
       realSends,
     })
@@ -322,6 +336,22 @@ describe('send — broadcast dedupe guard', () => {
         dryRun: true,
       })
     ).rejects.toThrow(/Conflicting XRP destination tags/)
+  })
+
+  it('keeps the executed max-send JSON result limited to transaction fields', async () => {
+    const realSends = { count: 0 }
+    const { vault } = makeDriftingMaxVault({
+      payloads: [nativeSendPayload('0xrecipient', '1000000000000000000')],
+      txHash: '0xmax-json',
+      realSends,
+    })
+
+    await sendTransaction(vault, { chain: Chain.Ethereum, to: '0xrecipient', amount: 'max', yes: true })
+
+    const jsonResult = vi.mocked(outputJson).mock.calls.at(-1)?.[0] as Record<string, unknown>
+    expect(jsonResult).toMatchObject({ txHash: '0xmax-json', chain: Chain.Ethereum })
+    expect(jsonResult).not.toHaveProperty('amount')
+    expect(jsonResult).not.toHaveProperty('isMax')
   })
 
   it('refuses an identical second send within the window (no second broadcast, exit 9)', async () => {
@@ -725,6 +755,19 @@ describe('swap — broadcast dedupe guard', () => {
     const err = await executeSwap(ctxFor(vault), { ...opts }).catch(e => e)
     expect(err.code).toBe(AgentErrorCode.DUPLICATE_BROADCAST)
     expect(classifyError(err).exitCode).toBe(ExitCode.DUPLICATE_BROADCAST) // exit 9 parity with send
+    expect(realSwaps.count).toBe(1)
+  })
+
+  it('refuses amounts equivalent at the source token precision', async () => {
+    const realSwaps = { count: 0 }
+    const vault = makeSwapVault({ txHash: '0xswap-precision', realSwaps })
+
+    await executeSwap(ctxFor(vault), { ...opts, amount: '1' })
+    expect(vault.swap).toHaveBeenLastCalledWith(expect.objectContaining({ amount: '1' }))
+
+    await expect(executeSwap(ctxFor(vault), { ...opts, amount: '1.0000000000000000009' })).rejects.toMatchObject({
+      code: AgentErrorCode.DUPLICATE_BROADCAST,
+    })
     expect(realSwaps.count).toBe(1)
   })
 

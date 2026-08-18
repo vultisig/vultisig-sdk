@@ -144,6 +144,43 @@ describe('decodeFromToolResult — EVM half (viem)', () => {
     expect(env.amount).toBe('7')
   })
 
+  it('resolves typed tx chain ids through the canonical SDK registry for newer EVM chains', () => {
+    const data = encodeFunctionData({
+      abi: parseAbi(['function transfer(address to, uint256 value)']),
+      functionName: 'transfer',
+      args: [RECIPIENT, 9n],
+    })
+
+    const hyperliquid = decodeFromToolResult({
+      family: 'evm',
+      chain: 'ethereum',
+      payload: buildEvmTx(USDC, data, 0n, 999),
+    })
+    expect(hyperliquid.decoded).toBe(true)
+    expect(hyperliquid.chain).toBe('hyperliquid')
+    expect(hyperliquid.recipient).toBe(RECIPIENT)
+    expect(hyperliquid.amount).toBe('9')
+
+    const sei = decodeFromToolResult({
+      family: 'evm',
+      chain: 'ethereum',
+      payload: buildEvmTx(USDC, data, 0n, 1329),
+    })
+    expect(sei.decoded).toBe(true)
+    expect(sei.chain).toBe('sei')
+    expect(sei.recipient).toBe(RECIPIENT)
+    expect(sei.amount).toBe('9')
+  })
+
+  it('falls back to the raw numeric chain id for unknown typed EVM chains', () => {
+    const payload = buildEvmTx(RECIPIENT, '0x', 1n, 31337)
+    const env = decodeFromToolResult({ family: 'evm', chain: 'ethereum', payload })
+    expect(env.decoded).toBe(true)
+    expect(env.chain).toBe('31337')
+    expect(env.recipient).toBe(RECIPIENT)
+    expect(env.amount).toBe('1')
+  })
+
   it('fails closed (decoded=false) on malformed EVM bytes — never throws', () => {
     const env = decodeFromToolResult({ family: 'evm', chain: 'ethereum', payload: '0xabcd' })
     expect(env.decoded).toBe(false)
@@ -238,6 +275,50 @@ describe('decodeFromToolResult — Cosmos half (cosmjs-types proto3)', () => {
     })
     expect(env.decoded).toBe(false)
   })
+})
+
+describe('decodeFromToolResult — strict payload encodings', () => {
+  it.each(['0x123', '123', 'zz'])('rejects malformed explicit EVM hex without throwing: %s', payload => {
+    const env = decodeFromToolResult({ family: 'evm', chain: 'ethereum', payload })
+
+    expect(env.decoded).toBe(false)
+    expect(env.decodeError).toContain('evm: invalid hex payload')
+  })
+
+  it.each(['0x123', '123', 'zz'])(
+    'rejects malformed args.unsigned_payload hex without throwing: %s',
+    unsignedPayload => {
+      const env = decodeFromToolResult({
+        family: 'evm',
+        chain: 'ethereum',
+        args: { unsigned_payload: unsignedPayload },
+      })
+
+      expect(env.decoded).toBe(false)
+      expect(env.decodeError).toContain('evm: invalid hex payload')
+    }
+  )
+
+  it.each(['AQ===', 'AQ', 'AQ==\n'])('rejects non-canonical explicit Cosmos base64 without throwing: %s', payload => {
+    const env = decodeFromToolResult({ family: 'cosmos', chain: 'cosmoshub-4', payload })
+
+    expect(env.decoded).toBe(false)
+    expect(env.decodeError).toContain('cosmos: invalid base64 payload')
+  })
+
+  it.each(['AQ===', 'AQ', 'AQ==\n'])(
+    'rejects non-canonical args.cosmos_payload base64 without throwing: %s',
+    cosmosPayload => {
+      const env = decodeFromToolResult({
+        family: 'cosmos',
+        chain: 'cosmoshub-4',
+        args: { cosmos_payload: cosmosPayload },
+      })
+
+      expect(env.decoded).toBe(false)
+      expect(env.decodeError).toContain('cosmos: invalid base64 payload')
+    }
+  )
 })
 
 describe('decodeFromToolResult — EVM multicall batch (fail-closed on >1 value-moving call)', () => {

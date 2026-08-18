@@ -1,66 +1,58 @@
 import { create } from '@bufbuild/protobuf'
 import { getSuiClient } from '@vultisig/core-chain/chains/sui/client'
 import { suiGasBudget } from '@vultisig/core-chain/chains/sui/config'
+import { listAllSuiCoins } from '@vultisig/core-chain/chains/sui/listAllCoins'
+import { getSuiPrebuiltGasData } from '@vultisig/core-chain/chains/sui/prebuiltGasData'
 import { SuiCoinSchema, SuiSpecificSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
-import { attempt, withFallback } from '@vultisig/lib-utils/attempt'
-import type { CoinStruct } from '@mysten/sui/jsonRpc'
+import { attempt } from '@vultisig/lib-utils/attempt'
 
 import { getKeysignCoin } from '../../../utils/getKeysignCoin'
-import { selectSuiPayloadCoins } from '../../../suiCoinSelection'
+import { isSameSuiCoinType, selectSuiPayloadCoins, suiNativeCoinType } from '../../../suiCoinSelection'
 import { GetChainSpecificResolver } from '../../resolver'
 import { refineSuiChainSpecific } from './refine'
+
+class SuiGasBudgetConvergenceError extends Error {}
 
 export const getSuiChainSpecific: GetChainSpecificResolver<'suicheSpecific'> = async ({
   keysignPayload,
   walletCore,
 }) => {
-  // dApp-supplied PTBs (`signData.signSui`) are already fully built: coins,
-  // gas budget and reference gas price are baked into the BCS bytes that
-  // `getSuiSigningInputs` forwards verbatim. There are no construction inputs
-  // to fetch, so return an empty SuiSpecific instead of hitting the RPC.
+  // Pre-built PTBs (`signData.signSui` — dApp Wallet Standard requests and
+  // SwapKit Sui-source swaps) are already fully built: coins, gas budget and
+  // reference gas price are baked into the BCS bytes that `getSuiSigningInputs`
+  // forwards verbatim. There are no construction inputs to fetch, so skip the
+  // RPC entirely and read the gas numbers back out of the bytes — without them
+  // `getSuiFeeAmount` reports a 0 network fee on the confirmation screen.
   if (keysignPayload.signData.case === 'signSui') {
-    return create(SuiSpecificSchema, {})
+    return create(SuiSpecificSchema, getSuiPrebuiltGasData(keysignPayload.signData.value.unsignedTxMsg))
   }
 
   const coin = getKeysignCoin(keysignPayload)
   const { address } = coin
   const client = getSuiClient()
 
-  // `getAllCoins` is paginated (~50 objects/page). Sui's object-per-coin model
-  // makes >50 coin objects realistic for an active wallet (dust, partial fills,
-  // repeated small transfers, staking rewards), so reading only the first page
-  // silently truncates the coin set. That set feeds both `gasCoins` (native SUI
-  // objects for the Pay/PaySui gas payment) and `inputCoins` (the coinType being
-  // sent) downstream, so a truncated page produces a broken send ("insufficient
-  // balance" despite adequate holdings, or an empty inputCoins array if none of
-  // the sent coinType's objects land on page 1) even though the getBalance-based
-  // display path shows the correct aggregate total. Follow the cursor to
-  // completion, mirroring the Solana SPL pagination fix (sdk#962).
-  // Bound the cursor loop: a buggy/misbehaving RPC that keeps returning
-  // hasNextPage=true with a non-advancing cursor would otherwise spin forever.
-  // 200 pages ≈ 10k coin objects — far beyond any real wallet — so hitting the
-  // cap means the cursor is stuck; fail CLOSED (throw) rather than hang or
-  // silently truncate the coin set and under-fund the send.
-  const MAX_COIN_PAGES = 200
-  const rawCoins: CoinStruct[] = []
-  let cursor: string | null | undefined = undefined
-  let pages = 0
-  do {
-    const page = await client.getAllCoins({ owner: address, cursor })
-    rawCoins.push(...page.data)
-    cursor = page.hasNextPage ? page.nextCursor : null
-    if (++pages >= MAX_COIN_PAGES && cursor) {
-      throw new Error(
-        `getSuiChainSpecific: getAllCoins exceeded ${MAX_COIN_PAGES} pages for ${address} — refusing to build a send from a possibly-truncated or looping coin set`
-      )
-    }
-  } while (cursor)
-
-  const coins = rawCoins.map((coin: CoinStruct) => create(SuiCoinSchema, coin))
-
-  const referenceGasPrice = await client.getReferenceGasPrice()
-  const amount = BigInt(keysignPayload.toAmount || '0')
+  // The retired JSON-RPC `getAllCoins` returned every coin type in one paginated
+  // sweep. The unified client's `listCoins` is scoped to ONE coin type (SUI by
+  // default), so fetch exactly the two sets the payload needs and nothing more:
+  //   - native SUI objects, always — they pay gas for both Pay and PaySui;
+  //   - the sent coin type's objects, when sending a non-native token.
+  // `listAllSuiCoins` follows the cursor to completion (see its comment on why
+  // a single page silently under-funds a send) and is bounded so a stuck cursor
+  // fails closed instead of spinning.
   const isNativeToken = !coin.id
+  // A payload can name SUI as its "token" id; listing it twice would duplicate every
+  // native object in the selection pool, so only a genuinely distinct type is fetched.
+  const tokenCoinType = coin.id && !isSameSuiCoinType(coin.id, suiNativeCoinType) ? coin.id : undefined
+
+  const [nativeCoins, tokenCoins] = await Promise.all([
+    listAllSuiCoins({ client, owner: address, coinType: suiNativeCoinType }),
+    tokenCoinType ? listAllSuiCoins({ client, owner: address, coinType: tokenCoinType }) : Promise.resolve([]),
+  ])
+
+  const coins = [...nativeCoins, ...tokenCoins].map(rawCoin => create(SuiCoinSchema, rawCoin))
+
+  const { referenceGasPrice } = await client.getReferenceGasPrice()
+  const amount = BigInt(keysignPayload.toAmount || '0')
   const selectCoins = (gasBudget: bigint) =>
     selectSuiPayloadCoins({
       coins,
@@ -81,50 +73,58 @@ export const getSuiChainSpecific: GetChainSpecificResolver<'suicheSpecific'> = a
   // Re-price that grown selection, bounded so a pathological RPC response
   // cannot make transaction construction loop indefinitely.
   const maxGasBudgetConvergeIterations = 2
-  const refined = await withFallback(
-    attempt(async () => {
-      let priced = await refineSuiChainSpecific({
-        keysignPayload,
-        chainSpecific,
-        walletCore,
-      })
+  const initialRefinement = await attempt(() =>
+    refineSuiChainSpecific({
+      keysignPayload,
+      chainSpecific,
+      walletCore,
+    })
+  )
 
-      let gasBudget = priced.gasBudget ? BigInt(priced.gasBudget) : suiGasBudget
-      let selectedCoins = selectCoins(gasBudget)
-      let pricedCoinCount = chainSpecific.coins.length
+  // Preserve the historical fallback only when the first dry run cannot
+  // refine the static baseline. Once refinement has learned a higher gas
+  // requirement, returning that baseline on a later re-price or re-selection
+  // failure would knowingly construct an under-budget transaction.
+  if ('error' in initialRefinement) return chainSpecific
 
-      for (
-        let iteration = 0;
-        iteration < maxGasBudgetConvergeIterations && selectedCoins.length > pricedCoinCount;
-        iteration++
-      ) {
-        const repriced = await refineSuiChainSpecific({
-          keysignPayload,
-          chainSpecific: create(SuiSpecificSchema, {
-            ...priced,
-            coins: selectedCoins,
-            gasBudget: gasBudget.toString(),
-          }),
-          walletCore,
-        })
-        const repricedGasBudget = repriced.gasBudget ? BigInt(repriced.gasBudget) : gasBudget
-        const nextGasBudget = repricedGasBudget > gasBudget ? repricedGasBudget : gasBudget
-        if (nextGasBudget === gasBudget) break
+  let priced = initialRefinement.data
+  let gasBudget = priced.gasBudget ? BigInt(priced.gasBudget) : suiGasBudget
+  let selectedCoins = selectCoins(gasBudget)
+  let pricedCoinCount = chainSpecific.coins.length
 
-        pricedCoinCount = selectedCoins.length
-        gasBudget = nextGasBudget
-        priced = repriced
-        selectedCoins = selectCoins(gasBudget)
-      }
-
-      return create(SuiSpecificSchema, {
+  for (
+    let iteration = 0;
+    iteration < maxGasBudgetConvergeIterations && selectedCoins.length > pricedCoinCount;
+    iteration++
+  ) {
+    const repriced = await refineSuiChainSpecific({
+      keysignPayload,
+      chainSpecific: create(SuiSpecificSchema, {
         ...priced,
         coins: selectedCoins,
         gasBudget: gasBudget.toString(),
-      })
-    }),
-    chainSpecific
-  )
+      }),
+      walletCore,
+    })
+    const repricedGasBudget = repriced.gasBudget ? BigInt(repriced.gasBudget) : gasBudget
+    const nextGasBudget = repricedGasBudget > gasBudget ? repricedGasBudget : gasBudget
+    pricedCoinCount = selectedCoins.length
+    if (nextGasBudget === gasBudget) break
 
-  return refined
+    gasBudget = nextGasBudget
+    priced = repriced
+    selectedCoins = selectCoins(gasBudget)
+  }
+
+  if (selectedCoins.length > pricedCoinCount) {
+    throw new SuiGasBudgetConvergenceError(
+      `Sui gas budget did not converge after ${maxGasBudgetConvergeIterations} re-price rounds`
+    )
+  }
+
+  return create(SuiSpecificSchema, {
+    ...priced,
+    coins: selectedCoins,
+    gasBudget: gasBudget.toString(),
+  })
 }

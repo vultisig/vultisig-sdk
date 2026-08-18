@@ -4,6 +4,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 
+import { RujiraErrorCode } from '../errors.js'
 import { RujiraOrderbook } from '../modules/orderbook.js'
 
 // Mock the client
@@ -36,6 +37,7 @@ const createMockClient = (configResponse?: object, bookResponse?: object) => ({
     }
   ),
   getAddress: vi.fn().mockResolvedValue('thor1user...'),
+  executeContract: vi.fn().mockResolvedValue({ transactionHash: 'ABC123' }),
 })
 
 describe('RujiraOrderbook', () => {
@@ -157,7 +159,10 @@ describe('RujiraOrderbook', () => {
   describe('denomToAsset conversion', () => {
     it('should convert common denoms correctly', async () => {
       const mockClient = createMockClient({
-        denoms: { base: 'eth-eth', quote: 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48' },
+        denoms: {
+          base: 'eth-eth',
+          quote: 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+        },
       })
       const orderbook = new RujiraOrderbook(mockClient as any)
 
@@ -233,6 +238,189 @@ describe('RujiraOrderbook', () => {
 
       expect(book.timestamp).toBeGreaterThanOrEqual(before)
       expect(book.timestamp).toBeLessThanOrEqual(after)
+    })
+  })
+  // FUND SAFETY (vultisig-ops-p8bch): FIN's OrderTarget is documented as a
+  // "target offer amount", and the contract requires "funds sent must be equal
+  // to the net change of balances". buildPlaceOrder used to put the BASE
+  // quantity in the msg while attaching amount x price as funds, so on a buy
+  // the two disagreed by a factor of `price`. On-chain reality (every one of
+  // ~600 order txs scanned on thor1y8g3yhz...ts7ud7): msg amount == funds.
+  describe('buildPlaceOrder() offer-amount encoding', () => {
+    const pair = {
+      base: 'THOR.RUNE',
+      quote: 'ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48',
+      contractAddress: 'thor1paircontract',
+      tick: '0',
+      takerFee: '0',
+      makerFee: '0',
+    }
+
+    const build = async (side: 'buy' | 'sell', price: string, amount: string) => {
+      const orderbook = new RujiraOrderbook(
+        createMockClient({
+          denoms: {
+            base: 'rune',
+            quote: 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+          },
+        }) as any
+      )
+      return orderbook.buildPlaceOrder({ pair, side, price, amount } as any)
+    }
+
+    it('buy: msg amount equals the attached quote funds, not the base quantity', async () => {
+      // buy 2 RUNE at 4 USDC -> escrow 8 USDC. price > 1: the old encoding
+      // silently created an order 4x too small and refunded the excess.
+      const { msg, funds } = await build('buy', '4', '200000000')
+
+      expect(funds[0].amount).toBe('800000000')
+      expect(msg.order[0][0][2]).toBe(funds[0].amount)
+      expect(msg.order[0][0][0]).toBe('quote')
+    })
+
+    it('buy below parity: msg amount equals funds (old encoding under-funded and reverted)', async () => {
+      // buy 0.5 RUNE at 0.44 USDC -> escrow 0.22 USDC. price < 1: the old
+      // encoding asked the contract for 0.5 USDC of order while sending 0.22,
+      // tripping ContractError::InsufficientFunds.
+      const { msg, funds } = await build('buy', '0.44', '50000000')
+
+      expect(funds[0].amount).toBe('22000000')
+      expect(msg.order[0][0][2]).toBe(funds[0].amount)
+    })
+
+    it('sell: unchanged — base quantity is already the offer amount', async () => {
+      const { msg, funds } = await build('sell', '2', '300000000')
+
+      expect(funds[0].amount).toBe('300000000')
+      expect(msg.order[0][0][2]).toBe(funds[0].amount)
+      expect(msg.order[0][0][0]).toBe('base')
+    })
+  })
+
+  describe('buildPlaceOrder() offer-asset resolution', () => {
+    const buyParams = {
+      pair: 'RUNE/BTC',
+      side: 'buy',
+      price: '0.000025',
+      amount: '100000000',
+    } as const
+
+    it('uses the quote asset proven by canonical contract config', async () => {
+      const mockClient = createMockClient({
+        denoms: ['rune', 'btc-btc'],
+        tick: 6,
+        fee_taker: '0.0015',
+        fee_maker: '0.00075',
+      })
+      const orderbook = new RujiraOrderbook(mockClient as any)
+
+      const { funds } = await orderbook.buildPlaceOrder(buyParams as any)
+
+      expect(mockClient.queryContract).toHaveBeenCalledWith('thor1runebtc...', {
+        config: {},
+      })
+      expect(funds).toEqual([{ denom: 'btc-btc', amount: '2500' }])
+    })
+
+    it('fails closed when contract config cannot be loaded', async () => {
+      const mockClient = createMockClient()
+      mockClient.queryContract = vi.fn().mockRejectedValue(new Error('Query failed'))
+      const orderbook = new RujiraOrderbook(mockClient as any)
+
+      await expect(orderbook.buildPlaceOrder(buyParams as any)).rejects.toMatchObject({
+        code: RujiraErrorCode.INVALID_ASSET,
+        message: 'Could not determine offer asset for order',
+      })
+    })
+
+    it('fails closed when canonical contract config omits the quote denom', async () => {
+      const mockClient = createMockClient({ denoms: ['rune'] })
+      const orderbook = new RujiraOrderbook(mockClient as any)
+
+      await expect(orderbook.buildPlaceOrder(buyParams as any)).rejects.toMatchObject({
+        code: RujiraErrorCode.INVALID_ASSET,
+        message: 'Could not determine offer asset for order',
+      })
+    })
+
+    it('fails closed when canonical contract config contains extra denoms', async () => {
+      const mockClient = createMockClient({
+        denoms: ['rune', 'btc-btc', 'eth-eth'],
+      })
+      const orderbook = new RujiraOrderbook(mockClient as any)
+
+      await expect(orderbook.buildPlaceOrder(buyParams as any)).rejects.toMatchObject({
+        code: RujiraErrorCode.INVALID_ASSET,
+        message: 'Could not determine offer asset for order',
+      })
+    })
+
+    it('fails closed when canonical contract config reverses the requested pair', async () => {
+      const mockClient = createMockClient({ denoms: ['btc-btc', 'rune'] })
+      const orderbook = new RujiraOrderbook(mockClient as any)
+
+      await expect(orderbook.buildPlaceOrder(buyParams as any)).rejects.toMatchObject({
+        code: RujiraErrorCode.INVALID_ASSET,
+        message: 'Could not determine offer asset for order',
+      })
+    })
+
+    it('fails closed when a named pair contains extra path components', async () => {
+      const mockClient = createMockClient({ denoms: ['rune', 'btc-btc'] })
+      Object.assign(mockClient.config.contracts.finContracts, {
+        'RUNE/BTC/ETH': 'thor1runebtc...',
+      })
+      const orderbook = new RujiraOrderbook(mockClient as any)
+
+      await expect(
+        orderbook.buildPlaceOrder({
+          ...buyParams,
+          pair: 'RUNE/BTC/ETH',
+        } as any)
+      ).rejects.toMatchObject({
+        code: RujiraErrorCode.INVALID_ASSET,
+        message: 'Could not determine offer asset for order',
+      })
+    })
+
+    it('fails closed when an object pair does not match its contract config', async () => {
+      const mockClient = createMockClient({ denoms: ['rune', 'btc-btc'] })
+      const orderbook = new RujiraOrderbook(mockClient as any)
+      const mismatchedPair = {
+        base: 'BTC.BTC',
+        quote: 'THOR.RUNE',
+        contractAddress: 'thor1runebtc...',
+        tick: '0',
+        takerFee: '0',
+        makerFee: '0',
+      }
+
+      await expect(
+        orderbook.buildPlaceOrder({
+          ...buyParams,
+          pair: mismatchedPair,
+        } as any)
+      ).rejects.toMatchObject({
+        code: RujiraErrorCode.INVALID_ASSET,
+        message: 'Could not determine offer asset for order',
+      })
+      await expect(orderbook.placeOrder({ ...buyParams, pair: mismatchedPair } as any)).rejects.toMatchObject({
+        code: RujiraErrorCode.INVALID_ASSET,
+        message: 'Could not determine offer asset for order',
+      })
+      expect(mockClient.executeContract).not.toHaveBeenCalled()
+    })
+
+    it('fails closed when contract config names an unknown quote asset', async () => {
+      const mockClient = createMockClient({
+        denoms: { base: 'rune', quote: 'unknown-quote' },
+      })
+      const orderbook = new RujiraOrderbook(mockClient as any)
+
+      await expect(orderbook.buildPlaceOrder(buyParams as any)).rejects.toMatchObject({
+        code: RujiraErrorCode.INVALID_ASSET,
+        message: 'Could not determine offer asset for order',
+      })
     })
   })
 })

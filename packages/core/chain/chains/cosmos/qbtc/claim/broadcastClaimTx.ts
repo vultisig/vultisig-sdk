@@ -1,5 +1,5 @@
 import { qbtcRestUrl } from '@vultisig/core-chain/chains/cosmos/qbtc/tendermintRpcUrl'
-import { sleep } from '@vultisig/lib-utils/sleep'
+import { waitForQbtcTxInclusion } from '@vultisig/core-chain/chains/cosmos/qbtc/waitForQbtcTxInclusion'
 
 type ClaimTxResponse = {
   /** Total satoshis claimed. */
@@ -49,10 +49,6 @@ type BroadcastResponseShape = {
   tx_response?: TxResponse
 }
 
-type FetchTxResponseShape = {
-  tx_response?: TxResponse
-}
-
 const claimWithProofEventType = 'claim_with_proof'
 
 const findEventAttr = (events: TxEvent[] | undefined, type: string, key: string): string | undefined =>
@@ -71,44 +67,6 @@ const idempotentResult = (txHash: string): ClaimTxResponse => ({
   utxosSkipped: 0,
   txHash,
 })
-
-/**
- * Polls `/cosmos/tx/v1beta1/txs/{txHash}` until the tx is included in a
- * block (200 OK) or the timeout fires. 404 means "not yet included" and
- * triggers a retry. Other non-2xx statuses propagate as errors so we
- * don't mask infra failures as "still pending".
- */
-const waitForTxInclusion = async ({
-  txHash,
-  timeoutMs,
-  intervalMs,
-}: {
-  txHash: string
-  timeoutMs: number
-  intervalMs: number
-}): Promise<TxResponse> => {
-  const url = `${qbtcRestUrl}/cosmos/tx/v1beta1/txs/${txHash}`
-  const deadline = Date.now() + timeoutMs
-
-  while (Date.now() <= deadline) {
-    const response = await fetch(url)
-
-    if (response.ok) {
-      const data: FetchTxResponseShape = await response.json()
-      if (data.tx_response) return data.tx_response
-      throw new Error(`QBTC claim tx ${txHash}: missing tx_response on inclusion query`)
-    }
-
-    if (response.status !== 404) {
-      const text = await response.text()
-      throw new Error(`QBTC claim inclusion query failed (${response.status}): ${text}`)
-    }
-
-    await sleep(intervalMs)
-  }
-
-  throw new Error(`QBTC claim tx ${txHash} not included within ${timeoutMs}ms`)
-}
 
 type WaitForClaimTxResultInput = {
   /** Transaction hash (hex, upper-case) returned by the broadcaster. */
@@ -132,7 +90,7 @@ export const waitForClaimTxResult = async ({
   inclusionTimeoutMs = 30_000,
   inclusionPollIntervalMs = 1_000,
 }: WaitForClaimTxResultInput): Promise<ClaimTxResponse> => {
-  const included = await waitForTxInclusion({
+  const included = await waitForQbtcTxInclusion({
     txHash,
     timeoutMs: inclusionTimeoutMs,
     intervalMs: inclusionPollIntervalMs,
@@ -200,7 +158,7 @@ export const broadcastClaimTx = async ({
   }
 
   // CheckTx passed; wait for DeliverTx events.
-  const included = await waitForTxInclusion({
+  const included = await waitForQbtcTxInclusion({
     txHash,
     timeoutMs: inclusionTimeoutMs,
     intervalMs: inclusionPollIntervalMs,

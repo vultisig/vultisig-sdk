@@ -1,11 +1,14 @@
 import { Chain, CosmosChain, VaultBasedCosmosChain } from '@vultisig/core-chain/Chain'
 import { cosmosFeeCoinDenom } from '@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom'
 import { getCosmosGasLimit } from '@vultisig/core-chain/chains/cosmos/cosmosGasLimitRecord'
-import { resolveCosmosGasFee } from '@vultisig/core-chain/chains/cosmos/resolveCosmosGasFee'
+import { resolveCosmosGasLimit } from '@vultisig/core-chain/chains/cosmos/resolveCosmosGasLimit'
 import { getCosmosChainKind } from '@vultisig/core-chain/chains/cosmos/utils/getCosmosChainKind'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { areEqualCoins } from '@vultisig/core-chain/coin/Coin'
-import { nativeSwapChainIds } from '@vultisig/core-chain/swap/native/NativeSwapChain'
+import {
+  getNativeSwapChainIdFromDenomPrefix,
+  nativeSwapChainIds,
+} from '@vultisig/core-chain/swap/native/NativeSwapChain'
 import { THORChainSpecific, TransactionType } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { fromBase64 } from '@cosmjs/encoding'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
@@ -51,8 +54,21 @@ const getThorchainDepositAsset = ({
     (nativeSwapChainIds as Record<string, string>)[assetCoin.chain] ??
     nativeSwapChainIds[chain as VaultBasedCosmosChain]
   const { contractAddress } = assetCoin
+  // The `TICKER-CONTRACT` symbol form belongs to secured-asset withdrawals only,
+  // where `assetCoin` is the L1 coin being pulled off THORChain and
+  // `contractAddress` is its L1 token contract (`USDC` + `0xa0b8…` ->
+  // `USDC-0XA0B8…`, matching THORNode's `ETH.USDC-0XA0B8…`).
+  //
+  // For a plain swap the contract address is the THORChain bank denom
+  // (`tcy`, `x/ruji`), and appending it produced `TCY-tcy` — an asset THORNode
+  // has no pool for, and a pre-image hash that no longer matched the one iOS
+  // (`thorchain.swift` getSwapPreSignedInputData) and Android
+  // (`ThorchainSwapHelper.getSwapPreSignedInputData`) derive from the same
+  // payload. A co-signing joiner then polled a `message_id` the initiator never
+  // uploaded and died on `404 Timed out while waiting for setup message`.
+  // See vultisig/vultisig-windows#4464.
   const rawSymbol =
-    typeof contractAddress === 'string' && contractAddress.trim()
+    secured && typeof contractAddress === 'string' && contractAddress.trim()
       ? `${assetCoin.ticker}-${contractAddress}`
       : assetCoin.ticker
 
@@ -64,6 +80,13 @@ const getThorchainDepositAsset = ({
     secured,
   })
 }
+
+/**
+ * The THORChain bank denom a coin carries, whichever field its shape spells it
+ * in. Empty is indistinguishable from absent here — both mean "no denom".
+ */
+const getThorchainAssetDenom = (coin: { contractAddress?: string; id?: string }): string | undefined =>
+  coin.contractAddress?.trim() || coin.id?.trim() || undefined
 
 // Mirrors iOS THORChainHelper.isSecuredAsset (thorchain.swift): a THORChain-held
 // token whose denom encodes an L1 chain prefix + '-' (e.g. `xrp-xrp`,
@@ -81,10 +104,14 @@ const isSecuredAssetSwapCoin = (assetCoin: { chain: string; contractAddress?: st
 // secured asset referenced by the server-issued swap memo (`=:ETH-USDC:…`).
 const getSecuredAssetDepositAsset = (assetCoin: { contractAddress: string; ticker: string }) => {
   const [chainPrefix, ...symbolParts] = assetCoin.contractAddress.split('-')
+  const chainId = getNativeSwapChainIdFromDenomPrefix(chainPrefix)
+  if (!chainId) {
+    throw new Error(`Unsupported secured asset chain prefix: "${chainPrefix}"`)
+  }
   const symbol = symbolParts.join('-')
 
   return TW.Cosmos.Proto.THORChainAsset.create({
-    chain: chainPrefix.toUpperCase(),
+    chain: chainId,
     symbol: (symbol || assetCoin.ticker).toUpperCase(),
     ticker: assetCoin.ticker.toUpperCase().replace(/X\//g, ''),
     synth: false,
@@ -401,15 +428,35 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
 
         const assetCoin = swapPayload?.fromCoin ?? coin
         const isSecuredWithdrawal = isSecuredAssetWithdrawal({ chain, keysignPayload, native: swapPayload })
-        const securedSwapFromCoin =
-          swapPayload?.fromCoin && isSecuredAssetSwapCoin(swapPayload.fromCoin) ? swapPayload.fromCoin : undefined
+        // Keyed off `assetCoin`, which is the swap payload's source when there is
+        // one and the payload's own coin otherwise. Reading `swapPayload.fromCoin`
+        // directly meant only SWAPS could deposit a secured asset correctly: a
+        // limit order carries no swap payload, so it fell through to chain+ticker
+        // and deposited `THOR.BTC` — an asset no vault holds — failing on-chain
+        // with `insufficient funds` while the memo itself was perfectly valid.
+        //
+        // A secured WITHDRAWAL is excluded: there `assetCoin` is the L1 coin being
+        // pulled off THORChain, and its asset is built by the branch below.
+        // The two shapes spell the denom differently — a swap payload's coin uses
+        // `contractAddress`, the payload's own coin uses `id` — so take the first
+        // that carries a VALUE. Keying off which property merely exists would tie
+        // this to how each shape happens to be declared: a coin bearing an empty
+        // `contractAddress` beside a populated `id` would read the empty one and
+        // silently stop detecting a secured asset, which is the same
+        // typechecks-but-reads-nothing failure this whole branch exists to fix.
+
+        const assetDenom = getThorchainAssetDenom(assetCoin)
+
+        const securedDepositCoin =
+          !isSecuredWithdrawal &&
+          assetDenom &&
+          isSecuredAssetSwapCoin({ chain: assetCoin.chain, contractAddress: assetDenom })
+            ? { contractAddress: assetDenom, ticker: assetCoin.ticker }
+            : undefined
 
         const depositCoin = TW.Cosmos.Proto.THORChainCoin.create({
-          asset: securedSwapFromCoin
-            ? getSecuredAssetDepositAsset({
-                contractAddress: securedSwapFromCoin.contractAddress,
-                ticker: securedSwapFromCoin.ticker,
-              })
+          asset: securedDepositCoin
+            ? getSecuredAssetDepositAsset(securedDepositCoin)
             : getThorchainDepositAsset({ assetCoin, chain, secured: isSecuredWithdrawal }),
           ...(isPositive
             ? {
@@ -489,7 +536,13 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
     }
 
     const getFeeAmounts = (feeAmount: bigint) => {
-      if (chainKind !== 'ibcEnabled') return
+      if (chainKind !== 'ibcEnabled') {
+        // THORChain and MayaChain charge their native transaction fee inside
+        // message processing, not from cosmos-sdk authInfo.fee.amount. Their
+        // displayed network fee is therefore informational protocol state and
+        // must not be inserted into the signed Cosmos fee coins.
+        return
+      }
 
       const { ibcDenomTraces } = getRecordUnionValue(chainSpecific, 'ibcEnabled')
 
@@ -521,23 +574,19 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
 
     const ibcSpecific = chainKind === 'ibcEnabled' ? getRecordUnionValue(chainSpecific, 'ibcEnabled') : undefined
 
-    const staticGasLimit = getCosmosGasLimit(coin)
-    const relayedGasLimit = ibcSpecific?.gasLimit
-    // COSMOS-02: an IBC MsgTransfer needs more gas headroom than the flat
-    // per-chain limit (calibrated for MsgSend) — see resolveCosmosGasFee's
-    // IBC_GAS_MULTIPLIER. Scoped to IBC_TRANSFER only so plain sends and
-    // wasm executes on ibc-enabled chains keep the calibrated flat fee.
-    const isIbcTransfer = ibcSpecific?.transactionType === TransactionType.IBC_TRANSFER
-    const { resolvedGasLimit, feeAmount } = resolveCosmosGasFee({
-      gas: ibcSpecific?.gas ?? 0n,
-      relayedGasLimit,
-      staticGasLimit,
-      isIbcTransfer,
+    // `CosmosSpecific.gas` (proto field 3) IS the fee amount — signed verbatim,
+    // never re-derived here. The initiator prices it against the gas limit it
+    // relays in field 7 (`getCosmosChainSpecific`), so any headroom is already
+    // baked in. Doing arithmetic on it in this read path is what diverged the
+    // SignDoc from iOS / Android — see resolveCosmosGasLimit.ts.
+    const resolvedGasLimit = resolveCosmosGasLimit({
+      relayedGasLimit: ibcSpecific?.gasLimit,
+      staticGasLimit: getCosmosGasLimit(coin),
     })
 
     return TW.Cosmos.Proto.Fee.create({
       gas: Long.fromBigInt(resolvedGasLimit),
-      amounts: getFeeAmounts(feeAmount),
+      amounts: getFeeAmounts(ibcSpecific?.gas ?? 0n),
     })
   }
 

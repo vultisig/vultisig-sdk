@@ -9,9 +9,11 @@ import { SecureVault } from './SecureVault'
 import { VaultBase } from './VaultBase'
 
 export { FastVault, SecureVault, VaultBase }
+export type { VaultSaveOptions } from './VaultBase'
 
 // Export errors
-export { VaultError, VaultErrorCode, VaultImportError, VaultImportErrorCode } from './VaultError'
+export { BroadcastPartialFailureError } from './services/BroadcastService'
+export { VaultConflictError, VaultError, VaultErrorCode, VaultImportError, VaultImportErrorCode } from './VaultError'
 
 // Export vault configuration
 export type { VaultConfig } from './VaultServices'
