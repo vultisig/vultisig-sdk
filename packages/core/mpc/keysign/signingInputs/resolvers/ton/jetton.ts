@@ -39,7 +39,11 @@ export const buildJettonTransfer = ({
 
   return TW.TheOpenNetwork.Proto.Transfer.create({
     dest: jettonAddress,
-    amount: tonAmountToBytes(tonConfig.jettonAmount),
+    // A not-yet-active destination needs its jetton wallet deployed as part
+    // of this transfer, which costs materially more gas than a transfer into
+    // an already-deployed jetton wallet — the flat floor under-funds that
+    // case and TON bounces/rejects the tx.
+    amount: tonAmountToBytes(isActiveDestination ? tonConfig.jettonAmount : tonConfig.jettonAmountNewWallet),
     bounceable: true,
     comment: toSafeComment(keysignPayload.memo ?? ''),
     mode,
