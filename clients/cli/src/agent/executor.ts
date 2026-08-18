@@ -2230,14 +2230,25 @@ export function parseNonEvmEnvelope(serverTxData: any, chain: Chain): NonEvmSend
   // Token symbol — for native sends, leave undefined (vault.send defaults
   // to native). resolved.labels.token_resolved is the agent-resolved
   // symbol; for native it equals the chain's native ticker (BTC/SOL/RUNE).
-  // Phase D PR 0 only wires native sends; non-native (e.g. SPL, TRC-20)
-  // is PR 1+ scope.
-  let symbol: string | undefined
+  // Phase D PR 0 only wires native sends: `amountDecimal` above was computed
+  // with the CHAIN's native decimals, which is only correct for a native
+  // send. A non-native token (e.g. SPL, TRC-20) almost certainly has
+  // different decimals, so silently forwarding it as `symbol` here would
+  // let `vault.send` re-parse a native-decimals-scaled amount against the
+  // token's own decimals — a magnitude-wrong sign. Fail closed instead of
+  // guessing (sdk#1403) until the envelope contract carries token-aware
+  // decimals/ids and this parser can convert per-token correctly.
   const tokenResolved = serverTxData?.resolved?.labels?.token_resolved
   const nativeTicker = chainFeeCoin[chain]?.ticker
   if (typeof tokenResolved === 'string' && tokenResolved !== nativeTicker) {
-    symbol = tokenResolved
+    throw new VaultError(
+      VaultErrorCode.NotImplemented,
+      `parseNonEvmEnvelope: non-native token send ('${tokenResolved}' on ${chain}) is not yet supported — ` +
+        `amount was converted with ${chain}'s native decimals, which would mis-scale a non-native token amount. ` +
+        'Refusing to sign rather than guess.'
+    )
   }
+  const symbol: string | undefined = undefined
 
   const memo: string | undefined = typeof txArgs.memo === 'string' && txArgs.memo.length > 0 ? txArgs.memo : undefined
 

@@ -12,6 +12,10 @@
  *   native chain coin).
  * - Memo passes through unchanged when present, undefined when empty.
  * - Missing required fields throw with `VaultError` typed errors.
+ * - A non-native token symbol (`resolved.labels.token_resolved` differing
+ *   from the chain's native ticker) throws instead of being silently
+ *   forwarded — `amountDecimal` is computed with the chain's NATIVE
+ *   decimals, which mis-scales a non-native token amount (sdk#1403).
  */
 import { Chain, VaultError, VaultErrorCode } from '@vultisig/sdk'
 import { describe, expect, it } from 'vitest'
@@ -221,6 +225,45 @@ describe('parseNonEvmEnvelope', () => {
       // production, not parseNonEvmEnvelope — but the parser itself must
       // accept the boundary case to not over-reject.
       expect(() => parseNonEvmEnvelope(atBound, Chain.Ethereum)).not.toThrow(/exceeds 26-digit/)
+    })
+
+    // sdk#1403: pre-fix, this silently set `symbol = 'USDC'` on an amount
+    // that was converted with Solana's NATIVE (9) decimals — a magnitude-
+    // wrong send for a 6-decimal SPL token. Phase D only wires native
+    // sends; a non-native token_resolved must fail closed, not guess.
+    it('throws on a non-native token_resolved instead of silently forwarding it as symbol', () => {
+      const splEnvelope = {
+        chain: 'Solana',
+        resolved: {
+          labels: {
+            token_resolved: 'USDC',
+          },
+        },
+        txArgs: {
+          chain: 'Solana',
+          to: 'iwMx27vvAiaQteMhdpSBVDRztiSt1Cxwcfkm6SQBpxA',
+          amount: '1000000',
+        },
+      }
+      expect(() => parseNonEvmEnvelope(splEnvelope, Chain.Solana)).toThrow(/non-native token send.*USDC/)
+    })
+
+    it('does not throw when token_resolved equals the chain native ticker', () => {
+      const nativeEnvelope = {
+        chain: 'Solana',
+        resolved: {
+          labels: {
+            token_resolved: 'SOL',
+          },
+        },
+        txArgs: {
+          chain: 'Solana',
+          to: 'iwMx27vvAiaQteMhdpSBVDRztiSt1Cxwcfkm6SQBpxA',
+          amount: '1000000',
+        },
+      }
+      const args = parseNonEvmEnvelope(nativeEnvelope, Chain.Solana)
+      expect(args.symbol).toBeUndefined()
     })
   })
 })
