@@ -67,7 +67,7 @@ configureCrypto(new ReactNativeCrypto())
 configureDefaultStorage(() => new ReactNativeStorage())
 
 // Chain enum and types
-export { Chain } from '@vultisig/core-chain/Chain'
+export { Chain, IbcEnabledCosmosChain, VaultBasedCosmosChain } from '@vultisig/core-chain/Chain'
 export { cosmosFeeCoinDenom } from '@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom'
 export {
   getCosmosAllowedFeeDenoms,
@@ -78,6 +78,7 @@ export {
   COSMOS_SEND_FEE_DEFAULT,
   getCosmosSendFeeBaseUnits,
   MAYA_SEND_FEE_BASE_UNITS,
+  TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS,
 } from '@vultisig/core-chain/chains/cosmos/gas'
 
 // Cosmos x/auth.MaxMemoCharacters cap, per chain — single source of truth for
