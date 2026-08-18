@@ -19,6 +19,11 @@
  * This guard works HRP-suffix-wise so it covers EVERY cosmos chain (including
  * ones not yet in a per-chain table) and every send/swap recipient boundary
  * uniformly.
+ *
+ * Despite the `swap/skip` path, `validatorRoleForHrp` is the canonical
+ * classifier for the whole SDK — `tools/prep/cosmosStaking.ts` and
+ * `tools/prep/ibcTransfer.ts` import it too, rather than keeping their own
+ * copies, so the fund-safety rule can't drift between call sites (sdk#1969).
  */
 
 /**
