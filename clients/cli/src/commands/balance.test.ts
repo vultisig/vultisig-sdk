@@ -570,7 +570,9 @@ describe('aggregate scope hint (DF-02)', () => {
       SUPPORTED_CHAINS[0],
       'not-a-chain' as ChainType,
     ])
-    expect(hint).toContain(`Showing the vault's ${SUPPORTED_CHAINS.length - 1} enabled chains of ${SUPPORTED_CHAINS.length} supported.`)
+    expect(hint).toContain(
+      `Showing the vault's ${SUPPORTED_CHAINS.length - 1} enabled chains of ${SUPPORTED_CHAINS.length} supported.`
+    )
   })
 
   it('never claims a scan it did not run (hint is static, no RPC)', () => {
