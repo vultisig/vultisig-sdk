@@ -1,5 +1,6 @@
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
+import { AuthInfo, SignDoc, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import { describe, expect, it, vi } from 'vitest'
 
 import { cosmosTxFeeGasParityCases } from '../../../fixtures/cosmosTxFeeGasParity'
@@ -112,6 +113,44 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
 
     expect(rn.COSMOS_SEND_FEE_DEFAULT).toBe(7_500n)
     expect(rn.MAYA_SEND_FEE_BASE_UNITS).toBe(2_000_000_000n)
+  })
+
+  it('exports and encodes the TerraClassic staking gas/fee pair in a redelegation SignDoc', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const gasLimit = rn.getCosmosStakingGasLimit({ chain: rn.Chain.TerraClassic })
+
+    expect(gasLimit).toBe(4_000_000n)
+    expect(rn.TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS).toBe(113_300_000n)
+
+    const tx = rn.chains.cosmos.buildCosmosStakingTx({
+      chainId: 'columbus-5',
+      msgs: [
+        {
+          type: 'redelegate',
+          delegatorAddress: 'terra1qyqszqgpqyqszqgpqyqszqgpqyqszqgp5hm70u',
+          validatorSrcAddress: 'terravaloper1qgpqyqszqgpqyqszqgpqyqszqgpqyqsz9u3x5e',
+          validatorDstAddress: 'terravaloper1qvpsxqcrqvpsxqcrqvpsxqcrqvpsxqcryvs87c',
+          amount: '1000000',
+          denom: 'uluna',
+        },
+      ],
+      sequence: 7,
+      accountNumber: 42,
+      pubKeyBytes: new Uint8Array(33).fill(0x02),
+      gasLimit: Number(gasLimit),
+      feeDenom: 'uluna',
+      feeAmount: rn.TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS.toString(),
+    })
+    const signDoc = SignDoc.decode(tx.signDocBytes)
+    const authInfo = AuthInfo.decode(signDoc.authInfoBytes)
+    const txBody = TxBody.decode(signDoc.bodyBytes)
+
+    expect(signDoc.chainId).toBe('columbus-5')
+    expect(authInfo.fee?.gasLimit).toBe(gasLimit)
+    expect(authInfo.fee?.amount).toEqual([
+      { denom: 'uluna', amount: rn.TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS.toString() },
+    ])
+    expect(txBody.messages[0]?.typeUrl).toBe('/cosmos.staking.v1beta1.MsgBeginRedelegate')
   })
 
   it('keeps Robinhood derivation native-compatible on the exported RN surface', async () => {
