@@ -78,10 +78,29 @@ export type {
   KnownCoin,
   KnownCoinMetadata,
   ResolveContractResult,
+  ResolvedTokenIdentity,
+  TokenCandidate,
+  TokenDeployment,
+  TokenDeploymentLike,
+  TokenInputKind,
+  TokenMatch,
   TokenMetadataResolver,
+  TokenSearchResult,
+  TokenSearchResultLike,
   TokenStandard,
 } from './token'
-export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, resolveContract, searchToken } from './token'
+export {
+  chainFeeCoin,
+  classifyTokenInput,
+  findContractIdentity,
+  getTokenMetadata,
+  knownTokens,
+  knownTokensIndex,
+  normalizeTokenCandidates,
+  pickClearTokenCandidate,
+  resolveContract,
+  searchToken,
+} from './token'
 
 // Balance reads for non-EVM, non-Cosmos chains (sui/ton/tron/xrp/cardano/tao)
 export type {

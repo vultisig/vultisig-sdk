@@ -31,13 +31,13 @@ const platformToChain: Record<string, Chain> = {
   polkadot: Chain.Polkadot,
 }
 
-type TokenDeployment = {
+export type TokenDeployment = {
   chain: Chain
   contractAddress: string
   decimals?: number
 }
 
-type TokenSearchResult = {
+export type TokenSearchResult = {
   id: string
   name: string
   symbol: string
