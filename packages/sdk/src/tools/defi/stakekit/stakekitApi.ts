@@ -14,6 +14,13 @@ import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 const STAKEKIT_API_BASE = 'https://api.stakek.it/v1'
 const STAKEKIT_MCP_URL = 'https://mcp.yield.xyz/mcp'
+// The multi-network batched balances endpoint below is validated against
+// THIS host with the `{queries:[{network,address}]}` body shape — NOT
+// interchangeable with STAKEKIT_API_BASE, whose `/yields/balances` expects
+// the different `[{addresses:{address},integrationId}]` array shape (see
+// `getBalances` below). Both are yield.xyz/StakeKit; different hosts validate
+// different request contracts on the same path.
+const YIELD_XYZ_API_BASE = 'https://api.yield.xyz/v1'
 
 // --- Auth helper — apiKey is injectable ---
 
@@ -305,6 +312,173 @@ export async function getBalances(
     }
   }
   return out
+}
+
+// --- Batched multi-network balances (architecture#1765) ---
+//
+// Ported from vultiagent-app's `src/features/dashboard/lib/yieldXyzPositions.ts`
+// (the app's local positions client) — the SDK's `getBalances` above is
+// single-network only and requires an extra `searchYields` round trip per
+// network to enumerate yield IDs. This queries `{network, address}` pairs
+// DIRECTLY across any number of networks in one logical call, batched at the
+// yield.xyz-enforced cap of 25 queries per HTTP request. Uses `api.yield.xyz`
+// (not `STAKEKIT_API_BASE`/`api.stakek.it`) — see the `YIELD_XYZ_API_BASE`
+// comment above for why the two hosts are not interchangeable here.
+
+/** One (network, address) balances query. */
+export type StakekitBalanceQuery = {
+  network: string
+  address: string
+}
+
+export type StakekitBalanceEntry = {
+  address?: string
+  amount: string
+  amountRaw?: string
+  amountUsd?: string
+  type: string
+  isEarning?: boolean
+  token: {
+    symbol: string
+    name: string
+    decimals: number
+    network: string
+    logoURI?: string
+    coinGeckoId?: string
+    address?: string
+  }
+  pendingActions: Array<{ type: string; [k: string]: unknown }>
+}
+
+/** One yield product's aggregated balances for the queried address(es). */
+export type StakekitBalanceItem = {
+  yieldId: string
+  balances: StakekitBalanceEntry[]
+  rewardRate?: {
+    total: number
+    rateType: string
+    components?: Array<{
+      rate: number
+      rateType: string
+      yieldSource?: string
+      description?: string
+      token: { symbol: string; name: string; decimals: number; network: string }
+    }>
+  }
+}
+
+export type StakekitBalancesResult = {
+  items: StakekitBalanceItem[]
+  /** Per-query failures the server captured without 5xx-ing the whole request,
+   * OR per-chunk rejections synthesized client-side in `fetchAllStakekitBalances`
+   * when an entire batch's fetch rejects (see that function). */
+  errors: Array<{ query?: { network?: string; address?: string }; message?: string }>
+}
+
+/** Per-request cap enforced by the yield.xyz batched-balances endpoint. */
+export const STAKEKIT_BALANCE_QUERIES_PER_REQUEST = 25
+
+/**
+ * Split an arbitrary-length query list into `size`-sized chunks so a caller
+ * never exceeds the per-request cap. Pure function, safe for fixture tests.
+ */
+export function chunkStakekitBalanceQueries(
+  queries: StakekitBalanceQuery[],
+  size: number = STAKEKIT_BALANCE_QUERIES_PER_REQUEST
+): StakekitBalanceQuery[][] {
+  if (!Number.isInteger(size) || size <= 0) {
+    throw new Error(`chunkStakekitBalanceQueries: size must be a positive integer, got ${size}`)
+  }
+  if (queries.length === 0) return []
+  const chunks: StakekitBalanceQuery[][] = []
+  for (let i = 0; i < queries.length; i += size) {
+    chunks.push(queries.slice(i, i + size))
+  }
+  return chunks
+}
+
+/**
+ * Fetch yield positions for one batch of ≤25 `{network, address}` queries.
+ * Throws on non-200, request timeout, or invalid JSON. Callers needing an
+ * arbitrary-length query list should use `fetchAllStakekitBalances` instead,
+ * which chunks and merges.
+ */
+export async function fetchStakekitBalancesBatch(
+  queries: StakekitBalanceQuery[],
+  apiKey?: string
+): Promise<StakekitBalancesResult> {
+  if (queries.length === 0) {
+    return { items: [], errors: [] }
+  }
+  if (queries.length > STAKEKIT_BALANCE_QUERIES_PER_REQUEST) {
+    throw new Error(
+      `fetchStakekitBalancesBatch: batch size ${queries.length} exceeds cap ${STAKEKIT_BALANCE_QUERIES_PER_REQUEST}`
+    )
+  }
+
+  const url = `${YIELD_XYZ_API_BASE}/yields/balances`
+  const resp = await fetch(url, {
+    method: 'POST',
+    signal: AbortSignal.timeout(15_000),
+    headers: authHeaders(apiKey, { 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ queries }),
+  })
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => '')
+    throw new Error(`yield.xyz ${resp.status}: ${body.slice(0, 200)}`)
+  }
+  const json = (await resp.json()) as { items?: StakekitBalanceItem[] | null; errors?: StakekitBalancesResult['errors'] | null }
+  // yield.xyz has been observed to return `items: null` on edge errors.
+  return {
+    items: Array.isArray(json?.items) ? json.items : [],
+    errors: Array.isArray(json?.errors) ? json.errors : [],
+  }
+}
+
+/**
+ * Fetch yield positions for ANY number of `{network, address}` queries by
+ * chunking into ≤25-query requests and merging results. A single failing
+ * batch does not abort the others — its failure lands in `errors[]` with
+ * enough context (first network + batch size) to be diagnosable, address
+ * elided (PII). Throws only when EVERY batch fails, so a caller can
+ * distinguish "partial data" (still useful) from "the whole fetch failed".
+ */
+export async function fetchAllStakekitBalances(
+  queries: StakekitBalanceQuery[],
+  apiKey?: string
+): Promise<StakekitBalancesResult> {
+  const chunks = chunkStakekitBalanceQueries(queries)
+  if (chunks.length === 0) return { items: [], errors: [] }
+
+  const results = await Promise.allSettled(chunks.map(chunk => fetchStakekitBalancesBatch(chunk, apiKey)))
+
+  const items: StakekitBalanceItem[] = []
+  const errors: StakekitBalancesResult['errors'] = []
+  let fulfilledCount = 0
+  results.forEach((r, idx) => {
+    const chunk = chunks[idx]
+    if (r.status === 'fulfilled') {
+      fulfilledCount += 1
+      items.push(...r.value.items)
+      errors.push(...r.value.errors)
+    } else {
+      const firstNetwork = chunk?.[0]?.network ?? '?'
+      errors.push({
+        message: r.reason instanceof Error ? r.reason.message : String(r.reason),
+        query: { network: `${firstNetwork} (batch of ${chunk?.length ?? 0})` },
+      })
+    }
+  })
+
+  if (fulfilledCount === 0 && results.length > 0) {
+    const firstErr = results.find((r): r is PromiseRejectedResult => r.status === 'rejected')
+    const reason = firstErr?.reason
+    throw reason instanceof Error
+      ? reason
+      : new Error(`fetchAllStakekitBalances: all ${results.length} batch(es) failed — ${String(reason ?? 'unknown')}`)
+  }
+
+  return { items, errors }
 }
 
 export async function callYieldMCP(toolName: string, args: Record<string, unknown>, apiKey?: string): Promise<string> {
