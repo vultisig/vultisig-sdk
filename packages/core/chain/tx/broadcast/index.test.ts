@@ -43,6 +43,7 @@ vi.mock('./resolvers/utxo', () => ({ broadcastUtxoTx: mocks.broadcastUtxoTx }))
 
 import { Chain, OtherChain } from '../../Chain'
 import { broadcastTx } from '.'
+import { CosmosSequenceMismatchError } from './cosmosSequenceMismatch'
 import { broadcastRetryMaxAttempts, isTransientBroadcastError } from './transientRetry'
 
 describe('broadcastTx transient retry dispatcher', () => {
@@ -131,5 +132,32 @@ describe('broadcastTx transient retry dispatcher', () => {
 
     expect(mocks.broadcastSolanaTx).toHaveBeenCalledTimes(1)
     expect(mocks.broadcastEvmTx).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not retry a stale Cosmos sequence that requires re-signing', async () => {
+    const error = new CosmosSequenceMismatchError({
+      expectedSequence: 255n,
+      signedSequence: 254n,
+    })
+    mocks.broadcastCosmosTx.mockRejectedValue(error)
+
+    await expect(broadcastTx({ chain: Chain.Cosmos, tx })).rejects.toBe(error)
+
+    expect(mocks.broadcastCosmosTx).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries a future Cosmos sequence after its predecessor may have landed', async () => {
+    vi.useFakeTimers()
+    const error = new CosmosSequenceMismatchError({
+      expectedSequence: 254n,
+      signedSequence: 255n,
+    })
+    mocks.broadcastCosmosTx.mockRejectedValueOnce(error).mockResolvedValueOnce(undefined)
+
+    const promise = broadcastTx({ chain: Chain.Cosmos, tx })
+
+    await vi.advanceTimersByTimeAsync(250)
+    await expect(promise).resolves.toBeUndefined()
+    expect(mocks.broadcastCosmosTx).toHaveBeenCalledTimes(2)
   })
 })
