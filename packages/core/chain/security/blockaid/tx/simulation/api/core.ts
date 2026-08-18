@@ -13,6 +13,14 @@ import {
 
 const SUI_NATIVE_COIN_TYPE = '0x2::sui::SUI'
 
+// Native legs are dropped only when they look like gas, never because a
+// three-diff response "probably" includes a fee. These ceilings are well
+// above typical priority fees and well below any principal movement we
+// would want to headline. A larger native outflow (or any native inflow)
+// stays in the set; the parser then declines rather than guessing.
+const SOL_NATIVE_FEE_CEILING_LAMPORTS = 100_000n
+const SUI_NATIVE_FEE_CEILING_MIST = 50_000_000n
+
 // Blockaid's `/sui/transaction/scan` simulation block exposes per-asset diffs
 // under `account_summary.account_assets_diffs` (plural). Asset entries use
 // `type === 'NATIVE'` for SUI and `type === 'COIN'` for fungible Move coins,
@@ -88,6 +96,16 @@ const toBigInt = (raw: number | string): bigint | null => {
   return BigInt(raw)
 }
 
+const isFeeSizedNativeOutflow = (
+  inSide: { raw_value?: number | string } | null | undefined,
+  outRaw: number | string | undefined,
+  ceiling: bigint
+): boolean => {
+  if (inSide || outRaw === undefined) return false
+  const amount = toBigInt(outRaw)
+  return amount !== null && amount > 0n && amount <= ceiling
+}
+
 /**
  * Parse a Blockaid Sui simulation into the user's net balance changes,
  * mirroring how Solana classifies into a `swap` or `transfer` headline.
@@ -108,13 +126,14 @@ export const parseBlockaidSuiSimulation = async (
   const assetDiffs = simulation.account_summary?.account_assets_diffs ?? simulation.account_summary?.account_assets_diff
   if (!assetDiffs || assetDiffs.length === 0) return null
 
-  // When we have 3 items and one is native SUI, filter it out and use the
-  // other two tokens — the native SUI is likely the gas charge, not part of
-  // the swap itself. Same heuristic as Solana.
+  // Drop a native SUI leg only when it is an out-only, fee-sized movement.
+  // A three-diff wrapped-SUI withdrawal (native in + residual + receipt)
+  // must not lose the principal inflow — that reverses the approval headline.
   let relevantDiffs = assetDiffs
   if (assetDiffs.length === 3) {
     const nativeIdx = assetDiffs.findIndex(diff => isNativeSui(diff.asset))
-    if (nativeIdx !== -1) {
+    const native = nativeIdx === -1 ? undefined : assetDiffs[nativeIdx]
+    if (native && isFeeSizedNativeOutflow(native.in, native.out?.raw_value, SUI_NATIVE_FEE_CEILING_MIST)) {
       relevantDiffs = assetDiffs.filter((_, i) => i !== nativeIdx)
     }
   }
@@ -252,12 +271,15 @@ export const parseBlockaidSolanaSimulation = async (
 ): Promise<BlockaidSolanaSimulationInfo> => {
   const assetDiffs = simulation.account_summary.account_assets_diff
 
-  // When we have 3 items and one is native SOL, filter it out and use the other two tokens.
-  // The native SOL is likely the transaction fee, not part of the swap itself.
+  // Drop a native SOL leg only when it is an out-only, fee-sized movement.
+  // Array length alone is not evidence of a fee: a three-diff wrapped-SOL
+  // withdrawal (native in + WSOL residual out + receipt out) would otherwise
+  // delete the principal inflow and headline the residual as a send.
   let relevantDiffs = assetDiffs
   if (assetDiffs.length === 3) {
     const nativeSolIndex = assetDiffs.findIndex(diff => diff.asset.type === 'SOL' || diff.asset_type === 'SOL')
-    if (nativeSolIndex !== -1) {
+    const native = nativeSolIndex === -1 ? undefined : assetDiffs[nativeSolIndex]
+    if (native && isFeeSizedNativeOutflow(native.in, native.out?.raw_value, SOL_NATIVE_FEE_CEILING_LAMPORTS)) {
       relevantDiffs = assetDiffs.filter((_, index) => index !== nativeSolIndex)
     }
   }
@@ -280,7 +302,10 @@ export const parseBlockaidSolanaSimulation = async (
     }
   }
 
-  if (relevantDiffs.length > 1) {
+  // Two relevant diffs is the only multi-leg shape we will headline. More
+  // than that used to be read positionally (first two only), which can hide
+  // a second spend or reverse the direction after a dropped native inflow.
+  if (relevantDiffs.length === 2) {
     const [potentialOutAsset, potentialInAsset] = relevantDiffs
     const { inAsset, inValue } = potentialInAsset.in
       ? {

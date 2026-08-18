@@ -1,7 +1,14 @@
 import { EvmChain } from '@vultisig/core-chain/Chain'
 import { describe, expect, it } from 'vitest'
 
-import { BlockaidEVMSimulation, parseBlockaidEvmSimulation } from './core'
+import {
+  BlockaidEVMSimulation,
+  BlockaidSolanaSimulation,
+  BlockaidSuiSimulation,
+  parseBlockaidEvmSimulation,
+  parseBlockaidSolanaSimulation,
+  parseBlockaidSuiSimulation,
+} from './core'
 
 type AssetDiff = BlockaidEVMSimulation['account_summary']['assets_diffs'][number]
 type Asset = AssetDiff['asset']
@@ -315,5 +322,135 @@ describe('parseBlockaidEvmSimulation', () => {
       amount: 100n,
     })
     expect(result?.changes[0].coin.ticker).toBe('ETH')
+  })
+})
+
+type SolanaDiff = BlockaidSolanaSimulation['account_summary']['account_assets_diff'][number]
+
+const solSide = (rawValue: string) => ({
+  usd_price: 0,
+  summary: '',
+  value: 0,
+  raw_value: rawValue,
+})
+
+const solNative = (parts: Pick<SolanaDiff, 'in' | 'out'>): SolanaDiff => ({
+  asset: { type: 'SOL', symbol: 'SOL', decimals: 9, logo: '' },
+  asset_type: 'SOL',
+  in: null,
+  out: null,
+  ...parts,
+})
+
+const solToken = (address: string, symbol: string, parts: Pick<SolanaDiff, 'in' | 'out'>): SolanaDiff => ({
+  asset: { type: 'TOKEN', symbol, address, decimals: 6, logo: '' },
+  asset_type: 'TOKEN',
+  in: null,
+  out: null,
+  ...parts,
+})
+
+describe('parseBlockaidSolanaSimulation', () => {
+  it('still drops a fee-sized native SOL outflow from a three-diff swap', async () => {
+    const result = await parseBlockaidSolanaSimulation({
+      account_summary: {
+        account_assets_diff: [
+          solNative({ out: solSide('5000') }),
+          solToken('mint-a', 'A', { out: solSide('100') }),
+          solToken('mint-b', 'B', { in: solSide('200') }),
+        ],
+      },
+    })
+
+    expect(result).toEqual({
+      swap: {
+        fromMint: 'mint-a',
+        toMint: 'mint-b',
+        fromAmount: 100n,
+        toAmount: 200n,
+        toAssetDecimal: 6,
+      },
+    })
+  })
+
+  it('does not drop a principal native SOL inflow and refuses a reversed headline', async () => {
+    await expect(
+      parseBlockaidSolanaSimulation({
+        account_summary: {
+          account_assets_diff: [
+            solNative({ in: solSide('1_000_000_000'.replaceAll('_', '')) }),
+            solToken('wsol', 'WSOL', { out: solSide('42') }),
+            solToken('receipt', 'RCPT', { out: solSide('1') }),
+          ],
+        },
+      })
+    ).rejects.toThrow(/Invalid simulation data/)
+  })
+
+  it('does not drop a principal native SOL outflow and refuses a partial headline', async () => {
+    await expect(
+      parseBlockaidSolanaSimulation({
+        account_summary: {
+          account_assets_diff: [
+            solNative({ out: solSide('500000000') }),
+            solToken('mint-a', 'A', { out: solSide('100') }),
+            solToken('mint-b', 'B', { in: solSide('200') }),
+          ],
+        },
+      })
+    ).rejects.toThrow(/Invalid simulation data/)
+  })
+})
+
+describe('parseBlockaidSuiSimulation', () => {
+  const suiNative = (parts: { in?: { raw_value: number } | null; out?: { raw_value: number } | null }) => ({
+    asset: { type: 'NATIVE' as const, symbol: 'SUI', decimals: 9 },
+    in: parts.in ?? null,
+    out: parts.out ?? null,
+  })
+
+  const suiCoin = (
+    id: string,
+    symbol: string,
+    parts: { in?: { raw_value: number } | null; out?: { raw_value: number } | null }
+  ) => ({
+    asset: { type: 'COIN' as const, id, symbol, decimals: 6 },
+    in: parts.in ?? null,
+    out: parts.out ?? null,
+  })
+
+  it('still drops a fee-sized native SUI outflow from a three-diff swap', async () => {
+    const result = await parseBlockaidSuiSimulation({
+      account_summary: {
+        account_assets_diffs: [
+          suiNative({ out: { raw_value: 1_000_000 } }),
+          suiCoin('0x1::a::A', 'A', { out: { raw_value: 100 } }),
+          suiCoin('0x1::b::B', 'B', { in: { raw_value: 200 } }),
+        ],
+      },
+    })
+
+    expect(result).toEqual({
+      swap: {
+        from: expect.objectContaining({ coinType: '0x1::a::A', symbol: 'A' }),
+        to: expect.objectContaining({ coinType: '0x1::b::B', symbol: 'B' }),
+        fromAmount: 100n,
+        toAmount: 200n,
+      },
+    })
+  })
+
+  it('does not drop a principal native SUI inflow and returns null instead of a reversed send', async () => {
+    const result = await parseBlockaidSuiSimulation({
+      account_summary: {
+        account_assets_diffs: [
+          suiNative({ in: { raw_value: 1_000_000_000 } }),
+          suiCoin('0x1::wsol::WSOL', 'WSOL', { out: { raw_value: 42 } }),
+          suiCoin('0x1::rcpt::RCPT', 'RCPT', { out: { raw_value: 1 } }),
+        ],
+      },
+    })
+
+    expect(result).toBeNull()
   })
 })
