@@ -638,12 +638,20 @@ describe('action-input validation (ported from mcp-ts validateActionInput, Apo #
     expect(validateStakekitActionAddress('0xdeadbeef')).toMatch(/Invalid 0x-prefixed address/)
   })
 
-  it('validateStakekitActionInput: rejects non-positive / NaN amounts', () => {
+  it('validateStakekitActionInput: rejects non-positive and non-plain-decimal amounts', () => {
     expect(validateStakekitActionInput(EVM, '5')).toBeNull()
     expect(validateStakekitActionInput(EVM, '0.0001')).toBeNull()
-    expect(validateStakekitActionInput(EVM, '0')).toMatch(/positive number/)
-    expect(validateStakekitActionInput(EVM, '-1')).toMatch(/positive number/)
-    expect(validateStakekitActionInput(EVM, 'abc')).toMatch(/positive number/)
+    expect(validateStakekitActionInput(EVM, '.5')).toBeNull()
+    expect(validateStakekitActionInput(EVM, '1.')).toBeNull()
+    expect(validateStakekitActionInput(EVM, '1' + '0'.repeat(400))).toBeNull()
+    expect(validateStakekitActionInput(EVM, '0')).toMatch(/plain decimal string/)
+    expect(validateStakekitActionInput(EVM, '-1')).toMatch(/plain decimal string/)
+    expect(validateStakekitActionInput(EVM, 'abc')).toMatch(/plain decimal string/)
+    expect(validateStakekitActionInput(EVM, '1e3')).toMatch(/plain decimal string/)
+    expect(validateStakekitActionInput(EVM, 'Infinity')).toMatch(/plain decimal string/)
+    expect(validateStakekitActionInput(EVM, '0x10')).toMatch(/plain decimal string/)
+    expect(validateStakekitActionInput(EVM, ' 1 ')).toMatch(/plain decimal string/)
+    expect(validateStakekitActionInput(EVM, '\t0.5')).toMatch(/plain decimal string/)
     // address error takes precedence over amount
     expect(validateStakekitActionInput('0xbad', '5')).toMatch(/Invalid 0x-prefixed address/)
   })
@@ -661,7 +669,7 @@ describe('action-input validation (ported from mcp-ts validateActionInput, Apo #
     const fetchSpy = vi.spyOn(globalThis, 'fetch')
     await expect(
       stakekitBuildEnter({ yieldId: 'ethereum-eth-lido-staking', address: '0x' + 'a'.repeat(40), amount: '0' })
-    ).rejects.toThrow(/positive number/)
+    ).rejects.toThrow(/plain decimal string/)
     expect(fetchSpy).not.toHaveBeenCalled()
     fetchSpy.mockRestore()
   })

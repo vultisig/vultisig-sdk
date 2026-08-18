@@ -527,9 +527,15 @@ export function validateStakekitActionAddress(address: string): string | null {
 export function validateStakekitActionInput(address: string, amount: string): string | null {
   const addrErr = validateStakekitActionAddress(address)
   if (addrErr !== null) return addrErr
-  const num = Number(amount)
-  if (Number.isNaN(num) || num <= 0) {
-    return 'Invalid amount. Must be a positive number.'
+
+  const trimmed = amount.trim()
+  if (trimmed !== amount || !/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(trimmed)) {
+    return 'Invalid amount. Must be a positive plain decimal string.'
+  }
+
+  const digits = trimmed.replace('.', '').replace(/^0+/, '')
+  if (digits === '') {
+    return 'Invalid amount. Must be a positive plain decimal string.'
   }
   return null
 }

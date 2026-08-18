@@ -28,8 +28,8 @@
  * guard to move down into `vault.send()`/`vault.swap()` — see the residual note on
  * {@link guardedBroadcast}.
  */
-import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import type { Chain, KeysignPayload, VaultBase } from '@vultisig/sdk'
+import { getChainKind } from '@vultisig/sdk'
 
 import {
   assertNoRecentDuplicate,
