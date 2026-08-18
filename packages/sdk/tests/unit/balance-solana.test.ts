@@ -69,6 +69,26 @@ describe('getSolBalance', () => {
     // Lossless raw + exact integer-math SOL string (mirrors Go FormatLamports).
     expect(res.lamportsRaw).toBe('12345678901234567')
     expect(res.sol).toBe('12345678.901234567')
+    // `lamports` fails closed to null rather than silently re-exposing a rounded number.
+    expect(res.lamports).toBeNull()
+  })
+
+  it('returns lamports as a number exactly at Number.MAX_SAFE_INTEGER, null one lamport above it', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockRpcRaw('{"jsonrpc":"2.0","id":1,"result":{"context":{"slot":1},"value":9007199254740991}}')
+    )
+    const atLimit = await getSolBalance(OWNER)
+    expect(atLimit.lamports).toBe(9_007_199_254_740_991)
+    expect(atLimit.lamportsRaw).toBe('9007199254740991')
+
+    vi.stubGlobal(
+      'fetch',
+      mockRpcRaw('{"jsonrpc":"2.0","id":1,"result":{"context":{"slot":1},"value":9007199254740992}}')
+    )
+    const overLimit = await getSolBalance(OWNER)
+    expect(overLimit.lamports).toBeNull()
+    expect(overLimit.lamportsRaw).toBe('9007199254740992')
   })
 
   it('throws on a malformed getBalance response (no value)', async () => {

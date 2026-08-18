@@ -108,7 +108,7 @@ describe('getEvmFeeQuote gas limit buffering', () => {
     expect(quote.gasLimit).toBe(1_050_002n)
   })
 
-  it('buffers the capped third-party swap gas limit when it is the largest source', async () => {
+  it('buffers the third-party swap gas limit when it is the largest floor candidate', async () => {
     const quote = await getEvmFeeQuote({
       keysignPayload: {} as never,
       thirdPartyGasLimitEstimation: 800_000n,
