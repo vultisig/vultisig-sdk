@@ -18,7 +18,7 @@ export const COMMON_TOKENS: Record<string, CommonToken[]> = {
     {
       symbol: 'DAI',
       name: 'Dai Stablecoin',
-      contractAddress: '0x6B175474E89094C44Da98b954EesDbB725fb8fAf',
+      contractAddress: '0x6B175474E89094C44Da98b954EedeAC495271d0F',
       decimals: 18,
     },
     {
