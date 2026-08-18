@@ -192,23 +192,34 @@ export type ScanRequest = EvmScanRequest | UnsupportedScanRequest
 
 // --- API functions ---
 
-export async function searchYields(params: {
+type SearchYieldsParams = {
   apiKey?: string
   network?: string
   token?: string
   type?: string
   provider?: string
   limit?: number
-}): Promise<YieldProduct[]> {
+  /** 1-indexed page number, per stakek.it's InfinityPaginatedDto contract. */
+  page?: number
+}
+
+/**
+ * Fetch a single page from `/yields/enabled`, returning the raw
+ * `{data, hasNextPage}` shape so callers that need to paginate exhaustively
+ * (see {@link getAllEnabledYieldIds}) can see the continuation signal that
+ * {@link searchYields} deliberately discards.
+ */
+async function fetchYieldsPage(params: SearchYieldsParams): Promise<YieldListResponse> {
   const query = new URLSearchParams()
   if (params.network) query.set('network', params.network)
   if (params.token) query.set('token', params.token)
   if (params.type) query.set('type', params.type)
   if (params.provider) query.set('provider', params.provider)
   if (params.limit) query.set('limit', String(params.limit))
+  if (params.page) query.set('page', String(params.page))
 
   const cacheKey = `yield:search:${query.toString()}`
-  const cached = getCached<YieldProduct[]>(cacheKey)
+  const cached = getCached<YieldListResponse>(cacheKey)
   if (cached) return cached
 
   // `/yields/enabled` returns ONLY the products this project's API key
@@ -221,9 +232,47 @@ export async function searchYields(params: {
   const resp = await queryUrl<YieldListResponse>(url, {
     headers: authHeaders(params.apiKey),
   })
-  const data = resp.data ?? []
-  setCache(cacheKey, data, CACHE_TTL)
-  return data
+  setCache(cacheKey, resp, CACHE_TTL)
+  return resp
+}
+
+export async function searchYields(params: SearchYieldsParams): Promise<YieldProduct[]> {
+  const resp = await fetchYieldsPage(params)
+  return resp.data ?? []
+}
+
+/**
+ * Enumerate ALL yield integration ids enabled for `network` (or every network
+ * when omitted), following `hasNextPage` across pages instead of stopping at
+ * the first one.
+ *
+ * `searchYields`/`stakekitSearch` intentionally return a single, bounded page
+ * (it's a "search", capped at 50 results client-side in `stakekitSearch`).
+ * Balance discovery is different: it needs the COMPLETE integration set for a
+ * network to know which ones to query for a wallet's positions. On a dense
+ * network with more than one page of integrations, stopping at page 1 silently
+ * dropped every integration past the first `limit` — a real position in a
+ * later integration read back as "no balance" rather than an error.
+ *
+ * `maxPages` is a safety bound against a misbehaving `hasNextPage` (e.g. an
+ * API bug that never flips it false); it is far above any realistic StakeKit
+ * catalog size at `limit` per page.
+ */
+export async function getAllEnabledYieldIds(
+  params: { network?: string; apiKey?: string },
+  limit = 100,
+  maxPages = 50
+): Promise<string[]> {
+  const ids: string[] = []
+  let page = 1
+
+  for (; page <= maxPages; page++) {
+    const resp = await fetchYieldsPage({ network: params.network, apiKey: params.apiKey, limit, page })
+    for (const product of resp.data ?? []) ids.push(product.id)
+    if (!resp.hasNextPage) break
+  }
+
+  return ids
 }
 
 export async function getYield(yieldId: string, apiKey?: string): Promise<YieldProduct> {
@@ -259,8 +308,7 @@ export async function getBalances(
 ): Promise<YieldBalance[] | null> {
   let integrationIds = yieldIds
   if (!integrationIds || integrationIds.length === 0) {
-    const enabled = await searchYields({ network, limit: 100, apiKey })
-    integrationIds = enabled.map(y => y.id)
+    integrationIds = await getAllEnabledYieldIds({ network, apiKey })
   }
   if (integrationIds.length === 0) {
     return []
