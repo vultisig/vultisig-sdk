@@ -9,7 +9,7 @@
  */
 
 import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
-import { Chain, EvmChain } from '@vultisig/core-chain/Chain'
+import { Chain } from '@vultisig/core-chain/Chain'
 import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { getErc20Allowance } from '@vultisig/core-chain/chains/evm/erc20/getErc20Allowance'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
@@ -22,8 +22,6 @@ import { findSwapQuote, FindSwapQuoteInput } from '@vultisig/core-chain/swap/quo
 import { BoundSwapQuote, SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
 import { swapEnabledChains } from '@vultisig/core-chain/swap/swapEnabledChains'
 import { SwapError, SwapErrorCode } from '@vultisig/core-chain/swap/SwapError'
-import { getEvmBaseFee } from '@vultisig/core-chain/tx/fee/evm/baseFee'
-import { getEvmMaxPriorityFeePerGas } from '@vultisig/core-chain/tx/fee/evm/maxPriorityFeePerGas'
 import { FiatCurrency } from '@vultisig/core-config/FiatCurrency'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
@@ -42,13 +40,13 @@ import {
   CoinInput,
   isAccountCoin,
   SwapApprovalInfo,
-  SwapFees,
   SwapPrepareResult,
   SwapQuoteBase,
   SwapQuoteParams,
   SwapTxParams,
 } from '../swap-types'
 import { VaultError, VaultErrorCode } from '../VaultError'
+import { extractSwapFees } from './swap/extractFees'
 
 // Default quote expiry (60 seconds for general swaps)
 const DEFAULT_QUOTE_EXPIRY_MS = 60_000
@@ -377,7 +375,7 @@ export class SwapService {
       : quoteData.general.routeProvider?.trim() || quoteData.general.provider
 
     // Extract fees
-    const fees = await this.extractFees(quoteData, fromCoin.chain)
+    const fees = await extractSwapFees(quoteData, fromCoin.chain)
 
     // Extract warnings
     const warnings: string[] = []
@@ -452,69 +450,6 @@ export class SwapService {
     return result
   }
 
-  /**
-   * Extract fees from quote
-   */
-  private async extractFees(quoteData: SwapQuote['quote'], fromChain: Chain): Promise<SwapFees> {
-    if ('native' in quoteData) {
-      return {
-        network: BigInt(quoteData.native.fees.outbound),
-        affiliate: quoteData.native.fees.affiliate ? BigInt(quoteData.native.fees.affiliate) : undefined,
-        total: BigInt(quoteData.native.fees.total),
-      }
-    }
-
-    // General swaps
-    const { tx } = quoteData.general
-
-    // Solana has explicit fees in the quote
-    if ('solana' in tx) {
-      const networkFee = tx.solana.networkFee
-      const swapFee = tx.solana.swapFee
-      // SwapFees is native-denominated. Preserve a non-native swap fee on the
-      // raw quote without mixing its units into the native network-fee total.
-      const nativeSwapFee = swapFee.chain === fromChain && swapFee.id === undefined ? swapFee.amount : 0n
-      return {
-        network: networkFee,
-        total: networkFee + nativeSwapFee,
-      }
-    }
-
-    // EVM - estimate from gasLimit × gas price
-    if ('evm' in tx && tx.evm.gasLimit) {
-      try {
-        const evmChain = fromChain as EvmChain
-        const baseFee = await getEvmBaseFee(evmChain)
-        const priorityFee = await getEvmMaxPriorityFeePerGas(evmChain)
-        const networkFee = tx.evm.gasLimit * (baseFee + priorityFee)
-        return {
-          network: networkFee,
-          total: networkFee,
-        }
-      } catch {
-        // Fall through to default if gas price fetch fails
-      }
-    }
-
-    // UTXO/Cosmos source via deposit channel: fees come from the source-chain tx,
-    // not from the SwapKit quote. Return 0n — real source-chain fees are estimated
-    // at broadcast time by TransactionBuilder.estimateSendFee() (which wraps
-    // getSendFeeEstimate() from @vultisig/core-mpc). This is the same estimator
-    // used for regular UTXO sends. VaultBase.getSwapQuote detects this 0n and
-    // keeps maxSwapable=0n rather than overstating it as the full balance.
-    if ('transfer' in tx) {
-      return {
-        network: 0n,
-        total: 0n,
-      }
-    }
-
-    // Fallback for unknown swap types
-    return {
-      network: 0n,
-      total: 0n,
-    }
-  }
 
   /**
    * Wrap errors in VaultError with appropriate messages
