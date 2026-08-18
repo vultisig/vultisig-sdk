@@ -20,6 +20,8 @@ export type PrepareSendTxFromKeysParams = {
   /** XRPL DestinationTag, independent from the transaction memo. */
   destinationTag?: number
   feeSettings?: FeeSettings
+  /** When true, plan a UTXO sweep. Defaults to false. */
+  sendMaxAmount?: boolean
 }
 
 /**
@@ -110,5 +112,6 @@ export const prepareSendTxFromKeys = async (
     walletCore,
     libType: identity.libType,
     feeSettings: params.feeSettings,
+    sendMaxAmount: params.sendMaxAmount,
   })
 }

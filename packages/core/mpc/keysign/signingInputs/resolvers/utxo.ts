@@ -118,6 +118,12 @@ export const getUtxoSigningInputs: SigningInputsResolver<'utxo'> = async ({ keys
         })
       : planInput(input)
 
+  assertUtxoPlanAcceptable({
+    plan: shouldBePresent(input.plan, 'UTXO signing input plan'),
+    sendMaxAmount,
+    amount,
+  })
+
   if (chain === UtxoChain.Zcash) {
     input.plan.branchId = Buffer.from(shouldBePresent(zcashBranchIdHex, 'Zcash branch id'), 'hex')
   }
@@ -127,6 +133,60 @@ export const getUtxoSigningInputs: SigningInputsResolver<'utxo'> = async ({ keys
 
 /** Max non-ZIP-317 re-plans before we give up raising the Zcash fee. */
 const maxZcashFeeBumps = 5
+
+const RETRIABLE_EMPTY_PLAN_ERRORS = new Set<TW.Common.Proto.SigningError>([
+  TW.Common.Proto.SigningError.OK,
+  TW.Common.Proto.SigningError.Error_not_enough_utxos,
+  TW.Common.Proto.SigningError.Error_missing_input_utxos,
+  TW.Common.Proto.SigningError.Error_low_balance,
+])
+
+function utxoPlanErrorName(error: TW.Common.Proto.SigningError): string {
+  return TW.Common.Proto.SigningError[error] ?? `error_${error}`
+}
+
+function utxoPlanErrorHint(error: TW.Common.Proto.SigningError): string {
+  switch (error) {
+    case TW.Common.Proto.SigningError.Error_not_enough_utxos:
+    case TW.Common.Proto.SigningError.Error_missing_input_utxos:
+    case TW.Common.Proto.SigningError.Error_low_balance:
+      return 'Insufficient UTXOs for this amount and fee. Try a smaller amount, or send the maximum so change is not required.'
+    case TW.Common.Proto.SigningError.Error_dust_amount_requested:
+      return 'The requested amount is below the dust threshold for this chain.'
+    case TW.Common.Proto.SigningError.Error_invalid_address:
+      return 'The destination address is not valid for this chain.'
+    default:
+      return 'The transaction could not be planned.'
+  }
+}
+
+/**
+ * Inspect WalletCore `plan.error` instead of letting the raw enum leak out of
+ * `TransactionCompiler.preImageHashes`.
+ *
+ * Empty near-max plans with `sendMaxAmount: false` are left for
+ * `refineKeysignUtxo` to retry as a sweep. Throwing here would disable that
+ * backstop. Every other non-OK error is fail-closed.
+ */
+export function assertUtxoPlanAcceptable({
+  plan,
+  sendMaxAmount,
+  amount,
+}: {
+  plan: TW.Bitcoin.Proto.ITransactionPlan
+  sendMaxAmount: boolean
+  amount: string
+}): void {
+  const error = plan.error ?? TW.Common.Proto.SigningError.OK
+  if (error === TW.Common.Proto.SigningError.OK) return
+
+  const empty = !plan.utxos || plan.utxos.length === 0
+  if (!sendMaxAmount && empty && amount && RETRIABLE_EMPTY_PLAN_ERRORS.has(error)) {
+    return
+  }
+
+  throw new Error(`UTXO coin selection failed (${utxoPlanErrorName(error)}). ${utxoPlanErrorHint(error)}`)
+}
 
 type PlanZcashConventionalFeeInput = {
   input: TW.Bitcoin.Proto.SigningInput

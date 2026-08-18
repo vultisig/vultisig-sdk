@@ -21,13 +21,16 @@ vi.mock('@vultisig/core-chain/chains/utxo/zcashBranchId', () => ({
 // and live in integration tests. This file targets the address-validation guard only.
 // A minimal 1-in / recipient+change plan whose fee clears the ZIP-317 floor
 // for a no-memo send, so the Zcash conventional-fee guard returns it as-is.
-const encodeStubPlan = () =>
+const encodeStubPlan = (
+  overrides: Partial<TW.Bitcoin.Proto.ITransactionPlan> = {}
+) =>
   TW.Bitcoin.Proto.TransactionPlan.encode(
     TW.Bitcoin.Proto.TransactionPlan.create({
       amount: 600000,
       availableAmount: 1000000,
       fee: 10000,
       change: 390000,
+      error: TW.Common.Proto.SigningError.OK,
       utxos: [
         TW.Bitcoin.Proto.UnspentTransaction.create({
           amount: 1000000,
@@ -39,10 +42,14 @@ const encodeStubPlan = () =>
           script: new Uint8Array(0),
         }),
       ],
+      ...overrides,
     })
   ).finish()
 
-const makeWalletCore = ({ isValidAddress = true }: { isValidAddress?: boolean } = {}) =>
+const makeWalletCore = ({
+  isValidAddress = true,
+  planBytes,
+}: { isValidAddress?: boolean; planBytes?: Uint8Array } = {}) =>
   ({
     AnyAddress: {
       isValid: vi.fn(() => isValidAddress),
@@ -65,7 +72,7 @@ const makeWalletCore = ({ isValidAddress = true }: { isValidAddress?: boolean } 
       decode: vi.fn(() => new Uint8Array(32)),
     },
     AnySigner: {
-      plan: vi.fn(() => encodeStubPlan()),
+      plan: vi.fn(() => planBytes ?? encodeStubPlan()),
     },
     CoinType: {
       bitcoin: { value: 0 },
@@ -231,5 +238,100 @@ describe('Zcash ZIP-317 fee planning', () => {
     const planInput = vi.mocked(plan).mock.calls[0]?.[0]
     expect(planInput).toBeDefined()
     expect(TW.Bitcoin.Proto.SigningInput.decode(planInput).zip_0317).toBe(true)
+  })
+})
+
+describe('assertUtxoPlanAcceptable', () => {
+  async function loadAssert() {
+    const mod = await import('./utxo')
+    return mod.assertUtxoPlanAcceptable
+  }
+
+  it('allows an empty Error_not_enough_utxos plan when sendMaxAmount is still false so refine can retry', async () => {
+    const assertUtxoPlanAcceptable = await loadAssert()
+    const plan = TW.Bitcoin.Proto.TransactionPlan.create({
+      error: TW.Common.Proto.SigningError.Error_not_enough_utxos,
+      utxos: [],
+    })
+
+    expect(() =>
+      assertUtxoPlanAcceptable({ plan, sendMaxAmount: false, amount: '999450' })
+    ).not.toThrow()
+  })
+
+  it('throws a mapped error when the same empty plan is already a max-send', async () => {
+    const assertUtxoPlanAcceptable = await loadAssert()
+    const plan = TW.Bitcoin.Proto.TransactionPlan.create({
+      error: TW.Common.Proto.SigningError.Error_not_enough_utxos,
+      utxos: [],
+    })
+
+    expect(() => assertUtxoPlanAcceptable({ plan, sendMaxAmount: true, amount: '999450' })).toThrow(
+      /UTXO coin selection failed \(Error_not_enough_utxos\)/
+    )
+  })
+
+  it('throws immediately on dust — that is not a refine-retry case', async () => {
+    const assertUtxoPlanAcceptable = await loadAssert()
+    const plan = TW.Bitcoin.Proto.TransactionPlan.create({
+      error: TW.Common.Proto.SigningError.Error_dust_amount_requested,
+      utxos: [],
+    })
+
+    expect(() => assertUtxoPlanAcceptable({ plan, sendMaxAmount: false, amount: '100' })).toThrow(
+      /dust threshold/
+    )
+  })
+
+  it('does not throw on OK', async () => {
+    const assertUtxoPlanAcceptable = await loadAssert()
+    const plan = TW.Bitcoin.Proto.TransactionPlan.create({
+      error: TW.Common.Proto.SigningError.OK,
+      utxos: [
+        TW.Bitcoin.Proto.UnspentTransaction.create({
+          amount: 1000000,
+        }),
+      ],
+    })
+
+    expect(() => assertUtxoPlanAcceptable({ plan, sendMaxAmount: false, amount: '600000' })).not.toThrow()
+  })
+})
+
+describe('getUtxoSigningInputs — plan.error mapping', () => {
+  it('surfaces a mapped error from a terminal dust plan', async () => {
+    const resolver = await getUtxoSigningInputs()
+    const payload = create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, {
+        chain: Chain.Bitcoin,
+        ticker: 'BTC',
+        address: 'bc1qsource',
+        decimals: 8,
+        isNativeToken: true,
+      }),
+      toAddress: 'bc1qdest',
+      toAmount: '100',
+      blockchainSpecific: {
+        case: 'utxoSpecific',
+        value: create(UTXOSpecificSchema, {
+          byteFee: '10',
+          sendMaxAmount: true,
+        }),
+      },
+      utxoInfo: [],
+    })
+
+    await expect(
+      resolver({
+        keysignPayload: payload,
+        walletCore: makeWalletCore({
+          planBytes: encodeStubPlan({
+            error: TW.Common.Proto.SigningError.Error_dust_amount_requested,
+            utxos: [],
+          }),
+        }),
+        publicKey: {} as never,
+      })
+    ).rejects.toThrow(/UTXO coin selection failed \(Error_dust_amount_requested\)/)
   })
 })

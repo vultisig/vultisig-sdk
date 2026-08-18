@@ -36,6 +36,12 @@ export type BuildSendKeysignPayloadInput = {
   libType: KeysignLibType
   walletCore: WalletCore
   feeSettings?: FeeSettings
+  /**
+   * When true, WalletCore plans a single-output sweep. Defaults to false so
+   * existing callers keep the previous 2-output plan; refineKeysignUtxo stays
+   * the backstop for near-max amounts that omit this flag.
+   */
+  sendMaxAmount?: boolean
 }
 
 export const buildSendKeysignPayload = async ({
@@ -51,6 +57,7 @@ export const buildSendKeysignPayload = async ({
   walletCore,
   libType,
   feeSettings,
+  sendMaxAmount,
 }: BuildSendKeysignPayloadInput) => {
   const hexPublicKey = hexPublicKeyOverride ?? (publicKey ? Buffer.from(publicKey.data()).toString('hex') : undefined)
   if (!hexPublicKey) {
@@ -117,6 +124,7 @@ export const buildSendKeysignPayload = async ({
         feeSettings,
         walletCore,
         destinationTag: effectiveDestinationTag,
+        sendMaxAmount,
       })
 
   const balance = await getCoinBalance(coin)
