@@ -930,6 +930,11 @@
       "import": "./dist/chains/ton/staking.js",
       "default": "./dist/chains/ton/staking.js"
     },
+    "./chains/tron/address": {
+      "types": "./dist/chains/tron/address.d.ts",
+      "import": "./dist/chains/tron/address.js",
+      "default": "./dist/chains/tron/address.js"
+    },
     "./chains/tron/config": {
       "types": "./dist/chains/tron/config.d.ts",
       "import": "./dist/chains/tron/config.js",
