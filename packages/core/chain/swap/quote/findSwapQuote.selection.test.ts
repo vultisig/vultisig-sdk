@@ -14,10 +14,15 @@ import {
   getNativeSwapMinAmountIn,
   NativeSwapMinAmountIn,
 } from '@vultisig/core-chain/swap/native/minimum/getNativeSwapMinAmountIn'
-import { NativeSwapQuote } from '@vultisig/core-chain/swap/native/NativeSwapQuote'
 import { HttpResponseError } from '@vultisig/lib-utils/fetch/HttpResponseError'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import {
+  evmSameChainCoins,
+  minimalCowSwapQuote,
+  minimalGeneralQuote,
+  minimalNativeQuote,
+} from './__tests__/swapQuoteFixtures'
 import { findSwapQuote, GENERAL_QUOTE_PREPARATION_TTL_MS } from './findSwapQuote'
 import { getSwapQuoteSafetyFingerprint } from './getSwapQuoteSafetyFingerprint'
 
@@ -57,68 +62,6 @@ vi.mock('@vultisig/core-chain/swap/native/minimum/getNativeSwapMinAmountIn', () 
   getNativeSwapMinAmountIn: vi.fn(),
 }))
 
-const evmSameChainCoins = {
-  from: {
-    chain: Chain.Ethereum,
-    address: '0xsender',
-    id: '0xsrc',
-    decimals: 18,
-    ticker: 'SRC',
-  },
-  to: {
-    chain: Chain.Ethereum,
-    address: '0xsender',
-    id: '0xdst',
-    decimals: 6,
-    ticker: 'DST',
-  },
-} as const
-
-function minimalGeneralQuote(
-  dstAmount: string,
-  provider: 'kyber' | '1inch' | 'swapkit' | 'li.fi' | 'jupiter',
-  tx: GeneralSwapQuote['tx'] = {
-    evm: {
-      from: '0xsender',
-      to: '0xrouter',
-      data: '0x',
-      value: '0',
-    },
-  }
-): GeneralSwapQuote {
-  const base = {
-    dstAmount,
-    tx,
-  }
-  return { ...base, provider }
-}
-
-function minimalCowSwapQuote(dstAmount: string, sellAmount = '1000000000000000000'): GeneralSwapQuote {
-  return {
-    dstAmount,
-    provider: 'cowswap',
-    tx: {
-      cowswap_order: {
-        sellToken: '0xsrc',
-        buyToken: '0xdst',
-        receiver: '0xsender',
-        sellAmount,
-        buyAmount: dstAmount,
-        validTo: 1,
-        appData: '0x',
-        appDataHash: '0x',
-        feeAmount: '0',
-        kind: 'sell',
-        partiallyFillable: false,
-        sellTokenBalance: 'erc20',
-        buyTokenBalance: 'erc20',
-        chainId: 1,
-        apiBase: 'https://api.cow.fi/mainnet',
-      },
-    },
-  }
-}
-
 async function expectRejectedWithExactMessage(promise: Promise<unknown>, expectedMessage: string): Promise<void> {
   try {
     await promise
@@ -126,21 +69,6 @@ async function expectRejectedWithExactMessage(promise: Promise<unknown>, expecte
   } catch (error) {
     expect(error).toBeInstanceOf(Error)
     expect((error as Error).message).toBe(expectedMessage)
-  }
-}
-
-function minimalNativeQuote(swapChain: Chain, expected_amount_out: string): NativeSwapQuote {
-  return {
-    swapChain: swapChain as NativeSwapQuote['swapChain'],
-    expected_amount_out,
-    expiry: 0,
-    fees: { affiliate: '0', asset: '0', outbound: '0', total: '0' },
-    memo: '',
-    notes: '',
-    outbound_delay_blocks: 0,
-    outbound_delay_seconds: 0,
-    recommended_min_amount_in: '0',
-    warning: '',
   }
 }
 
