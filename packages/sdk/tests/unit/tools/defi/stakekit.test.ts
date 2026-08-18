@@ -225,7 +225,7 @@ describe('sdk.defi.stakekit', () => {
       expect(step.to).toBeUndefined()
     })
 
-    it('all-or-nothing: if any step fails to decode, ALL steps fall back to decoded[]', () => {
+    it('per-step degrade: a step that fails to canonicalize falls back to decoded[] WITHOUT nuking the other steps', () => {
       const resp = makeEvmActionResponse({
         transactions: [
           {
@@ -251,12 +251,53 @@ describe('sdk.defi.stakekit', () => {
       })
       const display = parseActionDisplay(resp)
 
-      // All-or-nothing: both steps use decoded fallback
       expect(display.transactions).toHaveLength(2)
+
+      // The good step stays canonicalized (flat EVM shape).
       const step0 = display.transactions[0] as Record<string, unknown>
-      // Decoded fallback: has title/type/network, no flat EVM shape
-      expect(step0.title).toBe('Good step')
-      expect(step0.to).toBeUndefined() // not the canonical EVM shape
+      expect(step0.to).toBe('0xabc123')
+      expect(step0.data).toBe('0xdeadbeef')
+
+      // Only the bad step degrades to its decoded fallback.
+      const step1 = display.transactions[1] as Record<string, unknown>
+      expect(step1.title).toBe('Bad step')
+      expect(step1.to).toBeUndefined() // not the canonical EVM shape
+    })
+
+    it('unsupported network (e.g. Cardano) mid-action degrades only that step, keeps siblings canonical', () => {
+      const resp = makeEvmActionResponse({
+        transactions: [
+          {
+            id: 'tx-evm',
+            title: 'EVM step',
+            type: 'APPROVAL',
+            network: 'base',
+            status: 'CREATED',
+            unsignedTransaction: JSON.stringify({ to: '0xabc123', data: '0xdeadbeef', value: '0x0' }),
+            gasEstimate: '{}',
+          },
+          {
+            id: 'tx-cardano',
+            title: 'Cardano step',
+            type: 'STAKE',
+            network: 'cardano',
+            status: 'CREATED',
+            unsignedTransaction: JSON.stringify({ cbor: 'deadbeef' }),
+            gasEstimate: '{}',
+          },
+        ],
+      })
+      const display = parseActionDisplay(resp)
+
+      expect(display.transactions).toHaveLength(2)
+      const evmStep = display.transactions[0] as Record<string, unknown>
+      expect(evmStep.to).toBe('0xabc123')
+      expect(evmStep.tx_encoding).toBeUndefined()
+
+      const cardanoStep = display.transactions[1] as Record<string, unknown>
+      expect(cardanoStep.title).toBe('Cardano step')
+      expect(cardanoStep.network).toBe('cardano')
+      expect(cardanoStep.to).toBeUndefined()
     })
   })
 
