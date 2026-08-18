@@ -59,6 +59,9 @@ describe('@vultisig/sdk public exports', () => {
     expect(Object.keys(sdk.chainRegistry).sort()).toEqual(Object.values(sdk.Chain).sort())
     expect(typeof sdk.deriveFromChainRegistry).toBe('function')
     expect(typeof sdk.extendChainRegistry).toBe('function')
+    expect(typeof sdk.toChainId).toBe('function')
+    expect(sdk.toChainId(sdk.Chain.Terra)).toBe('cosmos:phoenix-1')
+    expect(sdk.toChainId(sdk.Chain.TerraClassic)).toBe('cosmos:columbus-5')
   })
 
   it('exports tx-shape normalization primitives (normalizeTx, splitMultiTx)', () => {
