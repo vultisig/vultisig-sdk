@@ -23,7 +23,12 @@ const MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
 describe('getSplAssociatedAccount', () => {
   it('reports isToken2022=true for an account owned by the Token-2022 program', async () => {
     getParsedTokenAccountsByOwnerMock.mockReset().mockResolvedValueOnce({
-      value: [{ pubkey: { toBase58: () => 'ATA_ADDRESS' }, account: { owner: { toBase58: () => 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb' } } }],
+      value: [
+        {
+          pubkey: { toBase58: () => 'ATA_ADDRESS' },
+          account: { owner: { toBase58: () => 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb' } },
+        },
+      ],
     })
 
     const result = await getSplAssociatedAccount({ account: OWNER, token: MINT })
@@ -33,7 +38,12 @@ describe('getSplAssociatedAccount', () => {
 
   it('reports isToken2022=false for a legacy SPL Token-owned account', async () => {
     getParsedTokenAccountsByOwnerMock.mockReset().mockResolvedValueOnce({
-      value: [{ pubkey: { toBase58: () => 'ATA_ADDRESS' }, account: { owner: { toBase58: () => 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' } } }],
+      value: [
+        {
+          pubkey: { toBase58: () => 'ATA_ADDRESS' },
+          account: { owner: { toBase58: () => 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' } },
+        },
+      ],
     })
 
     const result = await getSplAssociatedAccount({ account: OWNER, token: MINT })
