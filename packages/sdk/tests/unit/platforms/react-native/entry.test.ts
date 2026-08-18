@@ -68,6 +68,7 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     ['utils/addressFormat', () => import('../../../../src/utils/addressFormat')],
     ['utils/addressValidation', () => import('../../../../src/utils/addressValidation')],
     ['utils/chainPrefix', () => import('../../../../src/utils/chainPrefix')],
+    ['tools/policy', () => import('../../../../src/tools/policy')],
   ] as const)('re-exports every runtime export of %s on the RN entry, by identity', async (_name, load) => {
     const rn = (await import('../../../../src/platforms/react-native/index')) as Record<string, unknown>
     const mod = (await load()) as Record<string, unknown>
@@ -112,6 +113,9 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
       'address',
       'validate',
       'checkChainPrefix',
+      'policy',
+      'checkInvariants',
+      'evaluatePolicy',
     ]
 
     for (const key of family) {

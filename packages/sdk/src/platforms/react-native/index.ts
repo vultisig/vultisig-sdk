@@ -102,6 +102,37 @@ export {
 export type { AddressFamily, AddressRole, ChainPrefixResult } from '../../utils/addressValidation'
 export { address, validate } from '../../utils/addressValidation'
 export { checkChainPrefix } from '../../utils/chainPrefix'
+
+// Pure intent<->envelope policy diff (vault-free, no signing/broadcast).
+// Root already exports the full flat surface; RN did not (sdk#1408).
+export type {
+  AmountUnits,
+  FieldDiff,
+  IntentClaim,
+  InvariantInput,
+  InvariantViolation,
+  AssetRef as PolicyAssetRef,
+  Envelope as PolicyEnvelope,
+  Verdict,
+} from '../../tools/policy'
+export {
+  AMOUNT_DRIFT_BLOCK_PCT,
+  AMOUNT_DRIFT_WARN_PCT,
+  amountDriftPct,
+  chainAliasMap,
+  chainsMatch,
+  checkInvariants,
+  claimInterpretations,
+  evaluatePolicy,
+  Invariant,
+  isZeroAmount,
+  parseAmountBig,
+  PLAUSIBLE_TOKEN_DECIMALS,
+  policy,
+  ResultKind,
+  sanitizeAmount,
+  scaleDecimalClaimToAtomic,
+} from '../../tools/policy'
 export {
   amountMatches,
   computeEvmFee,
