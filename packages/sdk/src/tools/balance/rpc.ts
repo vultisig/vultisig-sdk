@@ -44,9 +44,7 @@ export async function fetchJson<T>(url: string, body?: unknown, init?: RequestIn
     // controller per attempt, only when the caller didn't already bring its
     // own signal (init.signal wins, same precedence as before).
     const controller = init?.signal ? undefined : new AbortController()
-    const timeoutId = controller
-      ? setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS)
-      : undefined
+    const timeoutId = controller ? setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS) : undefined
     try {
       const response = await fetch(url, {
         method: body ? 'POST' : 'GET',
