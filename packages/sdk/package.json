@@ -189,6 +189,58 @@
       "import": "./dist/tx/index.js",
       "require": "./dist/tx/index.cjs",
       "default": "./dist/tx/index.cjs"
+    },
+    "./tools/dex": {
+      "types": "./dist/tools/dex/index.d.ts",
+      "browser": "./dist/tools/dex/index.js",
+      "worker": "./dist/tools/dex/index.js",
+      "react-native": "./dist/tools/dex/index.js",
+      "node": {
+        "import": "./dist/tools/dex/index.js",
+        "require": "./dist/tools/dex/index.cjs"
+      },
+      "import": "./dist/tools/dex/index.js",
+      "require": "./dist/tools/dex/index.cjs",
+      "default": "./dist/tools/dex/index.cjs"
+    },
+    "./tools/evm": {
+      "types": "./dist/tools/evm/index.d.ts",
+      "browser": "./dist/tools/evm/index.js",
+      "worker": "./dist/tools/evm/index.js",
+      "react-native": "./dist/tools/evm/index.js",
+      "node": {
+        "import": "./dist/tools/evm/index.js",
+        "require": "./dist/tools/evm/index.cjs"
+      },
+      "import": "./dist/tools/evm/index.js",
+      "require": "./dist/tools/evm/index.cjs",
+      "default": "./dist/tools/evm/index.cjs"
+    },
+    "./tools/cosmos": {
+      "types": "./dist/tools/cosmos/index.d.ts",
+      "browser": "./dist/tools/cosmos/index.js",
+      "worker": "./dist/tools/cosmos/index.js",
+      "react-native": "./dist/tools/cosmos/index.js",
+      "node": {
+        "import": "./dist/tools/cosmos/index.js",
+        "require": "./dist/tools/cosmos/index.cjs"
+      },
+      "import": "./dist/tools/cosmos/index.js",
+      "require": "./dist/tools/cosmos/index.cjs",
+      "default": "./dist/tools/cosmos/index.cjs"
+    },
+    "./signable-transaction": {
+      "types": "./dist/signable-transaction/index.d.ts",
+      "browser": "./dist/signable-transaction/index.js",
+      "worker": "./dist/signable-transaction/index.js",
+      "react-native": "./dist/signable-transaction/index.js",
+      "node": {
+        "import": "./dist/signable-transaction/index.js",
+        "require": "./dist/signable-transaction/index.cjs"
+      },
+      "import": "./dist/signable-transaction/index.js",
+      "require": "./dist/signable-transaction/index.cjs",
+      "default": "./dist/signable-transaction/index.cjs"
     }
   },
   "scripts": {
