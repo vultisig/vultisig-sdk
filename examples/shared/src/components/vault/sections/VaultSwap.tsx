@@ -10,6 +10,7 @@ import type {
   TokenInfo,
   VaultInfo,
 } from '../../../types'
+import { getChainDecimals, getChainTicker } from '../../../utils/formatting'
 import Button from '../../common/Button'
 import Select from '../../common/Select'
 import Spinner from '../../common/Spinner'
@@ -654,46 +655,3 @@ function formatAmount(amount: string | bigint, decimals: number): string {
   return `${wholePart}.${fractionalStr}`
 }
 
-// Get native token ticker for a chain
-function getChainTicker(chain: string): string {
-  const tickerMap: Record<string, string> = {
-    Bitcoin: 'BTC',
-    'Bitcoin-Cash': 'BCH',
-    Litecoin: 'LTC',
-    Dogecoin: 'DOGE',
-    Dash: 'DASH',
-    Zcash: 'ZEC',
-    Ethereum: 'ETH',
-    Polygon: 'POL',
-    Avalanche: 'AVAX',
-    BSC: 'BNB',
-    Arbitrum: 'ETH',
-    Optimism: 'ETH',
-    Base: 'ETH',
-    Solana: 'SOL',
-    Cosmos: 'ATOM',
-    THORChain: 'RUNE',
-    MayaChain: 'CACAO',
-    Sui: 'SUI',
-    Ripple: 'XRP',
-  }
-  return tickerMap[chain] ?? chain
-}
-
-// Get native token decimals
-function getChainDecimals(chain: string): number {
-  const decimalsMap: Record<string, number> = {
-    Bitcoin: 8,
-    Ethereum: 18,
-    Polygon: 18,
-    Avalanche: 18,
-    BSC: 18,
-    Arbitrum: 18,
-    Optimism: 18,
-    Base: 18,
-    Solana: 9,
-    Cosmos: 6,
-    THORChain: 8,
-  }
-  return decimalsMap[chain] ?? 18
-}
