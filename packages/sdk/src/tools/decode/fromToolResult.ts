@@ -46,15 +46,34 @@ function inferFamily(input: DecodeFromToolResultInput, args: Record<string, unkn
   return undefined
 }
 
-/** Strip 0x and decode a hex string to bytes. */
-function hexToBytes(hex: string): Uint8Array {
+type PayloadResult = Uint8Array | { error: string }
+
+/** Strip 0x and decode a strict, round-trippable hex string to bytes. */
+function hexToBytes(hex: string): PayloadResult {
   const clean = hex.startsWith('0x') || hex.startsWith('0X') ? hex.slice(2) : hex
-  return Uint8Array.from(Buffer.from(clean, 'hex'))
+  if (clean.length === 0) return { error: 'invalid hex payload: value must not be empty' }
+  if (clean.length % 2 !== 0) return { error: 'invalid hex payload: value must contain an even number of digits' }
+  if (!/^[0-9a-fA-F]+$/.test(clean)) return { error: 'invalid hex payload: value contains non-hex characters' }
+
+  const bytes = Buffer.from(clean, 'hex')
+  if (bytes.toString('hex') !== clean.toLowerCase()) {
+    return { error: 'invalid hex payload: value did not round-trip exactly' }
+  }
+  return Uint8Array.from(bytes)
 }
 
-/** Decode base64 to bytes. */
-function base64ToBytes(b64: string): Uint8Array {
-  return Uint8Array.from(Buffer.from(b64, 'base64'))
+/** Decode canonical base64 to bytes without accepting Node's normalization. */
+function base64ToBytes(b64: string): PayloadResult {
+  if (b64.length === 0) return { error: 'invalid base64 payload: value must not be empty' }
+  if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(b64)) {
+    return { error: 'invalid base64 payload: value is not canonical base64' }
+  }
+
+  const bytes = Buffer.from(b64, 'base64')
+  if (bytes.toString('base64') !== b64) {
+    return { error: 'invalid base64 payload: value did not round-trip exactly' }
+  }
+  return Uint8Array.from(bytes)
 }
 
 /**
@@ -70,26 +89,26 @@ function resolvePayload(
   if (input.payload !== undefined) {
     if (input.payload instanceof Uint8Array) return input.payload
     const p = input.payload
-    return family === 'evm' ? hexToBytes(p) : tryBase64ThenHex(p)
+    return withFamilyError(family, family === 'evm' ? hexToBytes(p) : tryBase64ThenHex(p))
   }
   if (family === 'evm') {
     const hex = args['unsigned_payload']
-    if (typeof hex === 'string' && hex.length > 0) return hexToBytes(hex)
+    if (typeof hex === 'string' && hex.length > 0) return withFamilyError(family, hexToBytes(hex))
     return { error: 'evm: no payload — pass `payload` or args.unsigned_payload (hex)' }
   }
   const b64 = args['cosmos_payload'] ?? args['payload']
-  if (typeof b64 === 'string' && b64.length > 0) return tryBase64ThenHex(b64)
+  if (typeof b64 === 'string' && b64.length > 0) return withFamilyError(family, tryBase64ThenHex(b64))
   return { error: 'cosmos: no payload — pass `payload` or args.cosmos_payload (base64)' }
 }
 
+function withFamilyError(family: ChainFamily, result: PayloadResult): PayloadResult {
+  return result instanceof Uint8Array ? result : { error: `${family}: ${result.error}` }
+}
+
 /** Cosmos payloads are base64 in the wild, but tolerate hex too. */
-function tryBase64ThenHex(s: string): Uint8Array {
+function tryBase64ThenHex(s: string): PayloadResult {
   if (s.startsWith('0x') || /^[0-9a-fA-F]+$/.test(s)) {
-    try {
-      return hexToBytes(s)
-    } catch {
-      /* fall through */
-    }
+    return hexToBytes(s)
   }
   return base64ToBytes(s)
 }

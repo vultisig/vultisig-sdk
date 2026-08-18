@@ -26,6 +26,7 @@ function makeVault(opts: {
   fee: string
   total: string
   balance: string
+  resolvedAmount?: string
   payloadMemo?: string
   payloadDestinationTag?: number
 }) {
@@ -36,6 +37,8 @@ function makeVault(opts: {
       feeSymbol: 'ETH',
       total: opts.total,
       keysignPayload: {
+        coin: { decimals: 18 },
+        toAmount: opts.resolvedAmount ?? '1000000000000000000',
         memo: opts.payloadMemo,
         blockchainSpecific:
           opts.payloadDestinationTag === undefined
@@ -73,7 +76,10 @@ function makeTokenVault(opts: {
       feeSymbol: 'ETH',
       total: opts.total,
       contractAddress: opts.contractAddress,
-      keysignPayload: { some: 'payload' },
+      keysignPayload: {
+        coin: { decimals: 6 },
+        toAmount: '50000000',
+      },
     })),
     balance: vi.fn(async (_chain: unknown, tokenId?: string) =>
       tokenId
@@ -158,6 +164,43 @@ describe('send --dry-run preview', () => {
       balance: '5.0',
     })
     expect(data).not.toHaveProperty('contractAddress')
+  })
+
+  it('serializes the resolved amount and max flag for a max send', async () => {
+    const data = await sendJson(
+      makeVault({
+        fee: '0.0021',
+        total: '1.5021',
+        balance: '2.0',
+        resolvedAmount: '1500000000000000000',
+      }),
+      { ...(params as object), amount: 'max' } as never
+    )
+
+    expect(data.amount).toBe('1.5')
+    expect(data.isMax).toBe(true)
+  })
+
+  it('leaves a non-max send amount unchanged and omits the max flag', async () => {
+    const data = await sendJson(makeVault({ fee: '0.0021', total: '1.0021', balance: '5.0' }))
+
+    expect(data.amount).toBe('1.0')
+    expect(data).not.toHaveProperty('isMax')
+  })
+
+  it('leaves the human max-send preview unchanged', async () => {
+    configureOutput({ format: 'table', silent: false })
+    const logs: string[] = []
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+      logs.push(args.map(String).join(' '))
+    })
+
+    await sendTransaction(
+      makeVault({ fee: '0.0021', total: '1.5021', balance: '2.0', resolvedAmount: '1500000000000000000' }),
+      { ...(params as object), amount: 'max' } as never
+    )
+
+    expect(logs.join('\n')).toContain('Amount:  max ETH')
   })
 
   it('surfaces the signable payload memo in JSON instead of echoing the input', async () => {
