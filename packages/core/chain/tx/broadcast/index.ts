@@ -1,6 +1,8 @@
 import { ChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
 
 import { BroadcastTxResolver } from './resolver'
+
+export type { BroadcastStrategy } from './resolver'
 import { broadcastBittensorTx } from './resolvers/bittensor'
 import { broadcastCardanoTx } from './resolvers/cardano'
 import { broadcastCosmosTx } from './resolvers/cosmos'

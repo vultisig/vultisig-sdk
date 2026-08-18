@@ -6,13 +6,21 @@ import { ensureHexPrefix } from '@vultisig/lib-utils/hex/ensureHexPrefix'
 
 import { BroadcastTxResolver } from '../resolver'
 import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
+import { broadcastEvmTxRacedPublicRpc } from './evmRacedPublicRpc'
 
-export const broadcastEvmTx: BroadcastTxResolver<EvmChain> = async ({ chain, tx }) => {
+export const broadcastEvmTx: BroadcastTxResolver<EvmChain> = async ({ chain, tx, strategy }) => {
+  const serializedTransaction = ensureHexPrefix(Buffer.from(tx.encoded).toString('hex'))
+
+  if (strategy === 'raced-public-rpc') {
+    await broadcastEvmTxRacedPublicRpc(chain, serializedTransaction)
+    return
+  }
+
   const client = getEvmClient(chain)
 
   const { error } = await attempt(
     client.sendRawTransaction({
-      serializedTransaction: ensureHexPrefix(Buffer.from(tx.encoded).toString('hex')),
+      serializedTransaction,
     })
   )
 

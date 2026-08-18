@@ -2,7 +2,7 @@ import { Chain } from '@vultisig/core-chain/Chain'
 import { getCoinType } from '@vultisig/core-chain/coin/coinType'
 import { getTwPublicKeyType } from '@vultisig/core-chain/publicKey/tw/getTwPublicKeyType'
 import { decodeSigningOutput } from '@vultisig/core-chain/tw/signingOutput'
-import { broadcastTx as coreBroadcastTx } from '@vultisig/core-chain/tx/broadcast'
+import { broadcastTx as coreBroadcastTx, type BroadcastStrategy } from '@vultisig/core-chain/tx/broadcast'
 import { getTxHash } from '@vultisig/core-chain/tx/hash'
 import { getTxStatus } from '@vultisig/core-chain/tx/status'
 import { getEncodedSigningInputs } from '@vultisig/core-mpc/keysign/signingInputs'
@@ -128,8 +128,13 @@ export class BroadcastService {
    * console.log(`Transaction: ${txHash}`)
    * ```
    */
-  async broadcastTx(params: { chain: Chain; keysignPayload: KeysignPayload; signature: Signature }): Promise<string> {
-    const { chain, keysignPayload, signature } = params
+  async broadcastTx(params: {
+    chain: Chain
+    keysignPayload: KeysignPayload
+    signature: Signature
+    strategy?: BroadcastStrategy
+  }): Promise<string> {
+    const { chain, keysignPayload, signature, strategy } = params
 
     try {
       await assertNativeSwapReadyForBroadcast({ chain, keysignPayload })
@@ -194,6 +199,7 @@ export class BroadcastService {
           broadcastResult = await this.broadcastTransaction({
             chain,
             tx: signingOutput,
+            strategy,
           })
         } catch (error) {
           if (broadcastedTxHashes.length > 0) {
