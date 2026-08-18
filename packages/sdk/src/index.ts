@@ -823,6 +823,12 @@ export {
 export type {
   ContinuousVestingAccount,
   Coin as CosmosStakingCoin,
+  // Aliased: `Validator` is already public as StakeKit's yield-validator shape
+  // (name/apr/commission/stakedBalance), and this is the cosmos staking LCD
+  // shape (operatorAddress/jailed/status/tokens). Different domains, same word.
+  // The StakeKit one keeps the bare name because it was public first; renaming
+  // it would break consumers.
+  Validator as CosmosStakingValidator,
   DelayedVestingAccount,
   Delegation,
   DelegatorReward,
@@ -831,7 +837,6 @@ export type {
   StakingChain,
   UnbondingDelegation,
   UnbondingEntry,
-  Validator,
   ValidatorCommission,
   ValidatorDescription,
   ValidatorStatus,
@@ -848,8 +853,8 @@ export {
   getDelegationsUrl,
   getDelegatorRewardsUrl,
   getUnbondingDelegationsUrl,
-  getValidatorUrl,
   getValidatorsUrl,
+  getValidatorUrl,
 } from '@vultisig/core-chain/chains/cosmos/staking/lcdQueries'
 
 // Cosmos governance (read proposals + build unsigned MsgVote envelope —
