@@ -765,6 +765,7 @@ export { getThorchainInboundAddress } from '@vultisig/core-chain/chains/cosmos/t
 export * from '@vultisig/core-chain/chains/cosmos/thor/lp'
 export type { GetSwapExplorerUrlInput, SwapExplorerProvider } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 export { getSwapExplorerUrl, swapExplorerProviders } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
+export { getSwapKitTrackerUrl, swapKitTrackerChainIds } from '@vultisig/core-chain/swap/general/swapkit/getSwapKitTrackerUrl'
 export { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
 export async function fiatToAmount(...args: unknown[]) {
   const mod = await import('../../utils/fiatToAmount')

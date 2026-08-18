@@ -368,6 +368,7 @@ export * from './signable-transaction'
 // chain-only explorer URLs when rendering swap tx history.
 export type { GetSwapExplorerUrlInput, SwapExplorerProvider } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 export { getSwapExplorerUrl, swapExplorerProviders } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
+export { getSwapKitTrackerUrl, swapKitTrackerChainIds } from '@vultisig/core-chain/swap/general/swapkit/getSwapKitTrackerUrl'
 
 // Chain-native block explorer URL builder (address/tx) for the non-swap case.
 export { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
