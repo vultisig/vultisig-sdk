@@ -123,6 +123,21 @@ describe('@vultisig/sdk public exports', () => {
     })
   })
 
+  it('exports XRP destination/X-address normalization from the root SDK entrypoint', () => {
+    expect(typeof sdk.decodeRippleXAddress).toBe('function')
+    expect(typeof sdk.encodeRippleXAddress).toBe('function')
+    expect(typeof sdk.isValidRippleXAddress).toBe('function')
+    expect(typeof sdk.normalizeRippleDestination).toBe('function')
+
+    const classicAddress = 'rf7SyXdM3aZqkz9bmgGgX6V3eC8oJ8wxYY'
+    expect(sdk.normalizeRippleDestination(classicAddress)).toEqual({ address: classicAddress })
+
+    const xAddress = sdk.encodeRippleXAddress(classicAddress, 42)
+    expect(sdk.isValidRippleXAddress(xAddress)).toBe(true)
+    expect(sdk.decodeRippleXAddress(xAddress)).toEqual({ address: classicAddress, destinationTag: 42 })
+    expect(sdk.normalizeRippleDestination(xAddress)).toEqual({ address: classicAddress, destinationTag: 42 })
+  })
+
   it('exports the custom-RPC registry + health-probe canonicals from the root SDK entrypoint', () => {
     expect(sdk.customRpcSupportedChains).toBe(customRpcSupportedChains.customRpcSupportedChains)
     expect(sdk.customRpcSupportedEvmChains).toBe(customRpcSupportedChains.customRpcSupportedEvmChains)
