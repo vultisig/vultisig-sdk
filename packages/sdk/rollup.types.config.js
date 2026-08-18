@@ -132,4 +132,14 @@ export default defineConfig([
   createSubpathTypesConfig('src/seedphrase/index.ts', 'dist/seedphrase/index.d.ts'),
   createSubpathTypesConfig('src/tools/decode/index.ts', 'dist/tools/decode/index.d.ts'),
   createSubpathTypesConfig('src/tx/index.ts', 'dist/tx/index.d.ts'),
+  // Server helper subpath types — additive public surface for fast-vault /
+  // relay helpers without widening the root @vultisig/sdk export.
+  {
+    input: 'src/server/index.ts',
+    output: {
+      file: 'dist/server/index.d.ts',
+      format: 'es',
+    },
+    plugins: [dts(dtsPluginOptions)],
+  },
 ])
