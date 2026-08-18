@@ -28,10 +28,16 @@ describe('getUtxoChainSpec — Litecoin dust threshold (UTXO-02)', () => {
     expect(getUtxoChainSpec('Litecoin').dustLimit).toBeGreaterThan(1_000n)
   })
 
-  it('treats a 1_001..2_939 change output as DUST (change > dustLimit is false)', () => {
+  it('treats a 1_001..2_939 change output as DUST, and 2_940 (exactly at the floor) as spendable (sdk#1142 review)', () => {
+    // Bitcoin's own dust rule is `value < threshold => dust` - a change
+    // output exactly AT dustLimit is standard/relayable, not dust. Using
+    // `change > dustLimit` (strict) instead of `>=` used to fold an
+    // exactly-at-the-floor change output into the miner fee instead of
+    // paying it back to the sender.
     const { dustLimit } = getUtxoChainSpec('Litecoin')
-    for (const change of [1_001n, 2_000n, 2_939n]) expect(change > dustLimit).toBe(false)
-    expect(2_941n > dustLimit).toBe(true)
+    for (const change of [1_001n, 2_000n, 2_939n]) expect(change >= dustLimit).toBe(false)
+    expect(2_940n >= dustLimit).toBe(true)
+    expect(2_941n >= dustLimit).toBe(true)
   })
 
   it('leaves Bitcoin unchanged', () => {
@@ -58,7 +64,7 @@ describe('buildUtxoSendTx — primary-amount dust floor (#1137)', () => {
   it('throws before signing when the send amount is below the dust limit', () => {
     // 545 < BTC 546n dust: the output would be unrelayable, so the ceremony
     // must never start.
-    expect(() => buildUtxoSendTx({ ...baseOpts, amount: 545n })).toThrow(/below the Bitcoin dust limit 546/)
+    expect(() => buildUtxoSendTx({ ...baseOpts, amount: 545n })).toThrow(/below the Bitcoin SDK's conservative dust floor 546/)
   })
 
   it('still throws on the existing zero/negative-amount guard', () => {
@@ -76,7 +82,7 @@ describe('buildUtxoSendTx — primary-amount dust floor (#1137)', () => {
     const ltcOpts = { ...baseOpts, chain: 'Litecoin' as const, fromAddress: LTC_P2WPKH, toAddress: LTC_P2WPKH }
     // 2_939 is fine on BTC (>546) but dust on Litecoin (<2_940) — proves the
     // guard reads spec.dustLimit per chain rather than a constant.
-    expect(() => buildUtxoSendTx({ ...ltcOpts, amount: 2_939n })).toThrow(/below the Litecoin dust limit 2940/)
+    expect(() => buildUtxoSendTx({ ...ltcOpts, amount: 2_939n })).toThrow(/below the Litecoin SDK's conservative dust floor 2940/)
     expect(() => buildUtxoSendTx({ ...ltcOpts, amount: 2_940n })).not.toThrow()
   })
 })
