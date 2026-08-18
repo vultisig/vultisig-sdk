@@ -121,11 +121,21 @@ type SwapQuoteFetcher = {
 
 type UnboundSwapQuote = Omit<SwapQuote, 'requestedAmount' | 'expiresAt' | 'safetyFingerprint'>
 
-type RankedSwapQuote = {
+/**
+ * A single fetched swap route: the fully bound quote (request amount, expiry,
+ * safety fingerprint), the provider that produced it, and its comparable net
+ * output in the destination token's smallest units. `outputAmount` is the
+ * exact value best-quote selection ranks by, so consumers can present
+ * alternatives ordered the same way the auto-selection sees them.
+ */
+export type SwapQuoteCandidate = {
   quote: BoundSwapQuote
-  outputAmount: bigint
-  sourceGasUnits?: bigint
   providerName: SwapQuoteProviderName
+  outputAmount: bigint
+}
+
+type RankedSwapQuote = SwapQuoteCandidate & {
+  sourceGasUnits?: bigint
 }
 
 const QUOTE_FETCH_TIMEOUT_MS = 30_000
@@ -526,6 +536,27 @@ function selectBestEligibleQuote(settled: PromiseSettledResult<RankedSwapQuote>[
   return selected?.quote ?? null
 }
 
+// Every fulfilled candidate, sorted best→worst by comparable net output.
+// Exact-output ties break by provider preference order so the returned list is
+// deterministic regardless of `Promise.allSettled` resolution order. Rejected
+// fetchers (including quotes whose output amount could not be parsed) are
+// already absent from the fulfilled set, so they never appear in the ranking.
+const rankQuoteCandidates = (settled: PromiseSettledResult<RankedSwapQuote>[]): SwapQuoteCandidate[] =>
+  settled
+    .filter((result): result is PromiseFulfilledResult<RankedSwapQuote> => result.status === 'fulfilled')
+    .map(result => result.value)
+    .sort((a, b) => {
+      if (a.outputAmount !== b.outputAmount) {
+        return a.outputAmount > b.outputAmount ? -1 : 1
+      }
+      return getProviderPreferenceRank(a.providerName) - getProviderPreferenceRank(b.providerName)
+    })
+    .map(({ quote, providerName, outputAmount }) => ({
+      quote,
+      providerName,
+      outputAmount,
+    }))
+
 // `slippageTolerance` is a percent (e.g. 0.5 = 0.5%). Reject invalid values up
 // front so they don't propagate into every provider call and fail with
 // non-actionable downstream errors. Cap at 50%: above that every provider
@@ -625,7 +656,29 @@ const toProviderSlippage = (slippageTolerance: number | undefined): ProviderSlip
   }
 }
 
-export const findSwapQuote = async (input: FindSwapQuoteInput): Promise<BoundSwapQuote> => {
+/**
+ * Best quote plus every fetched candidate, so a consumer can offer route
+ * selection instead of only the auto-selected winner.
+ */
+export type FindSwapQuotesResult = {
+  /** The auto-selected winner — identical to what `findSwapQuote` returns. */
+  best: BoundSwapQuote
+  /**
+   * Every successfully fetched quote (including `best`), sorted best→worst by
+   * comparable net output. `best` is not necessarily `ranked[0]`: within the
+   * preference band the auto-selection may prefer a lower-output provider (see
+   * `providerPreferenceOrder`).
+   */
+  ranked: SwapQuoteCandidate[]
+}
+
+/**
+ * Fetches quotes from every eligible provider in parallel and returns the
+ * auto-selected best quote together with the full ranked candidate set. Error
+ * behavior is identical to `findSwapQuote`: when no provider yields a usable
+ * quote, the same classified `SwapError` is thrown.
+ */
+export const findSwapQuotes = async (input: FindSwapQuoteInput): Promise<FindSwapQuotesResult> => {
   // Provider requests yield before the returned transaction is safety-bound. Own a synchronous
   // snapshot so caller mutations cannot make a response for pair A receive pair B's fingerprint.
   const {
@@ -978,7 +1031,7 @@ export const findSwapQuote = async (input: FindSwapQuoteInput): Promise<BoundSwa
   const best = selectBestEligibleQuote(settled)
 
   if (best) {
-    return best
+    return { best, ranked: rankQuoteCandidates(settled) }
   }
 
   // Scan rejected results for actionable size-related signals. Prefer the most
@@ -1132,6 +1185,14 @@ export const findSwapQuote = async (input: FindSwapQuoteInput): Promise<BoundSwa
     `No swap route found after trying ${failedProviders.join(', ')}.`
   )
 }
+
+/**
+ * The auto-selected best swap quote across all eligible providers — equivalent
+ * to `findSwapQuotes(input)`'s `best`. Use `findSwapQuotes` when the
+ * alternatives matter (e.g. a route picker).
+ */
+export const findSwapQuote = async (input: FindSwapQuoteInput): Promise<BoundSwapQuote> =>
+  (await findSwapQuotes(input)).best
 
 const belowNativeMinimumError = (min: NativeSwapMinAmountIn, from: AccountCoin): SwapError =>
   new SwapError(
