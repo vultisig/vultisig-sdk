@@ -19,13 +19,21 @@ export type KeysignBuildParams = {
   prepared: PreparedWithdraw
   accountInfo: { accountNumber: string; sequence: string }
   fee: bigint
+  /**
+   * THORChain chain ID for the `prepareSignDirectTx` metadata-harvest call.
+   * Defaults to mainnet (`'thorchain-1'`) so a caller that doesn't pass one
+   * keeps today's behavior. Pass the signer's actual configured chain ID
+   * (`VultisigRujiraProvider.getChainId()`) so a non-default network never
+   * silently signs against the wrong chain ID (architecture#1848).
+   */
+  chainId?: string
 }
 
 /**
  * Build a keysign payload for a withdrawal transaction.
  */
 export async function buildWithdrawalKeysignPayload(params: KeysignBuildParams): Promise<KeysignPayload> {
-  const { vault, senderAddress, prepared, accountInfo, fee } = params
+  const { vault, senderAddress, prepared, accountInfo, fee, chainId = 'thorchain-1' } = params
 
   const { chain: thorchainChainId, symbol: fullSymbol } = parseAsset(prepared.asset)
   const ticker = fullSymbol.split('-')[0] || fullSymbol
@@ -43,7 +51,7 @@ export async function buildWithdrawalKeysignPayload(params: KeysignBuildParams):
       },
       bodyBytes: base64Encode('dummy'),
       authInfoBytes: base64Encode('dummy'),
-      chainId: 'thorchain-1',
+      chainId,
       accountNumber: accountInfo.accountNumber,
       memo: prepared.memo,
     },

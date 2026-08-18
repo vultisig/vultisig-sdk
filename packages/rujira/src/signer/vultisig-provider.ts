@@ -230,6 +230,13 @@ export class VultisigRujiraProvider implements RujiraSigner {
     return this.vault.publicKeys.ecdsa
   }
 
+  /**
+   * The chain ID this provider was configured with (defaults to
+   * `'thorchain-1'`). Withdrawal (`RujiraWithdraw.execute`, via
+   * `buildWithdrawalKeysignPayload`) reads this so a non-default network
+   * doesn't get hardcoded mainnet chain ID in its keysign payload
+   * (architecture#1848).
+   */
   getChainId(): string {
     return this.chainId
   }

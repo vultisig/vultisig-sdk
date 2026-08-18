@@ -304,6 +304,117 @@ describe('RujiraWithdraw', () => {
         signature: expect.any(Object),
       })
     })
+
+    it('threads the signer configured chain ID into the keysign payload instead of hardcoding mainnet (architecture#1848)', async () => {
+      const mockVault = {
+        publicKeys: { ecdsa: 'abc123', eddsa: 'def456' },
+        address: vi.fn().mockImplementation(async (_chain: string) => 'thor1vaultaddressxyz'),
+        prepareSignDirectTx: vi.fn().mockResolvedValue({
+          coin: { hexPublicKey: 'abc123' },
+          vaultLocalPartyId: 'local-party-1',
+          libType: 'GG20',
+        }),
+        extractMessageHashes: vi.fn().mockResolvedValue(['hash1']),
+        sign: vi.fn().mockResolvedValue({ signature: 'sig123', format: 'ECDSA' }),
+        broadcastTx: vi.fn().mockResolvedValue('tx_hash_abc'),
+      }
+
+      // Mirrors VultisigRujiraProvider: a signer that exposes getChainId()
+      // for a non-default (e.g. stagenet) chain.
+      const mockSigner = {
+        getVault: () => mockVault,
+        getChainId: () => 'thorchain-stagenet-2',
+      }
+
+      const client = createMockClient({
+        canSign: true,
+        signer: mockSigner,
+        address: 'thor1testaddress123',
+      })
+
+      const withdraw = new RujiraWithdraw(client)
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ account: { account_number: '12345', sequence: '5' } }),
+      })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ native_tx_fee_rune: '2000000' }),
+      })
+
+      const prepared = {
+        chain: 'BTC',
+        asset: 'BTC.BTC',
+        denom: 'btc/btc',
+        amount: '1000000',
+        destination: 'bc1q...',
+        memo: 'secure-:bc1q...',
+        estimatedFee: '30000',
+        estimatedTimeMinutes: 30,
+        funds: [{ denom: 'btc/btc', amount: '1000000' }],
+      }
+
+      await withdraw.execute(prepared)
+
+      expect(mockVault.prepareSignDirectTx).toHaveBeenCalledWith(
+        expect.objectContaining({ chainId: 'thorchain-stagenet-2' }),
+        expect.anything()
+      )
+    })
+
+    it('falls back to the mainnet chain ID when the signer has no getChainId() (backward compat)', async () => {
+      const mockVault = {
+        publicKeys: { ecdsa: 'abc123', eddsa: 'def456' },
+        address: vi.fn().mockImplementation(async (_chain: string) => 'thor1vaultaddressxyz'),
+        prepareSignDirectTx: vi.fn().mockResolvedValue({
+          coin: { hexPublicKey: 'abc123' },
+          vaultLocalPartyId: 'local-party-1',
+          libType: 'GG20',
+        }),
+        extractMessageHashes: vi.fn().mockResolvedValue(['hash1']),
+        sign: vi.fn().mockResolvedValue({ signature: 'sig123', format: 'ECDSA' }),
+        broadcastTx: vi.fn().mockResolvedValue('tx_hash_abc'),
+      }
+
+      const mockSigner = { getVault: () => mockVault } // no getChainId
+
+      const client = createMockClient({
+        canSign: true,
+        signer: mockSigner,
+        address: 'thor1testaddress123',
+      })
+
+      const withdraw = new RujiraWithdraw(client)
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ account: { account_number: '12345', sequence: '5' } }),
+      })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ native_tx_fee_rune: '2000000' }),
+      })
+
+      const prepared = {
+        chain: 'BTC',
+        asset: 'BTC.BTC',
+        denom: 'btc/btc',
+        amount: '1000000',
+        destination: 'bc1q...',
+        memo: 'secure-:bc1q...',
+        estimatedFee: '30000',
+        estimatedTimeMinutes: 30,
+        funds: [{ denom: 'btc/btc', amount: '1000000' }],
+      }
+
+      await withdraw.execute(prepared)
+
+      expect(mockVault.prepareSignDirectTx).toHaveBeenCalledWith(
+        expect.objectContaining({ chainId: 'thorchain-1' }),
+        expect.anything()
+      )
+    })
   })
 
   describe('buildWithdrawMemo', () => {

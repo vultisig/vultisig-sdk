@@ -51,6 +51,22 @@ function hasVaultAccess(signer: unknown): signer is { getVault(): VultisigVault 
   )
 }
 
+/** THORChain mainnet chain ID — the default `VultisigRujiraProvider` uses when
+ * constructed without an explicit chain ID. Kept as the fallback here too, so
+ * a signer that doesn't expose `getChainId()` (e.g. a bare `{ getVault }`
+ * duck-typed signer, as older/other consumers of this module may still pass)
+ * behaves exactly as before this fix. */
+const DEFAULT_THORCHAIN_CHAIN_ID = 'thorchain-1'
+
+function hasChainId(signer: unknown): signer is { getChainId(): string } {
+  return (
+    signer !== null &&
+    typeof signer === 'object' &&
+    'getChainId' in signer &&
+    typeof (signer as { getChainId?: unknown }).getChainId === 'function'
+  )
+}
+
 type AccountInfo = {
   result?: {
     value?: {
@@ -140,6 +156,7 @@ export class RujiraWithdraw {
       }
 
       const senderAddress = await vault.address('THORChain')
+      const chainId = hasChainId(signer) ? signer.getChainId() : DEFAULT_THORCHAIN_CHAIN_ID
 
       const [accountInfo, fee] = await Promise.all([this.getAccountInfo(senderAddress), this.getNetworkFee()])
 
@@ -149,6 +166,7 @@ export class RujiraWithdraw {
         prepared,
         accountInfo,
         fee,
+        chainId,
       })
 
       const messageHashes = await vault.extractMessageHashes(keysignPayload)
