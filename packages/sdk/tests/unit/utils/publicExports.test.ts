@@ -145,6 +145,10 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.getCustomRpcOverride(sdk.Chain.Ethereum)).toBeUndefined()
   })
 
+  it('exports getSplAssociatedAccount, the isToken2022 resolver for buildSplTransfer (sdk#1728)', () => {
+    expect(typeof sdk.getSplAssociatedAccount).toBe('function')
+  })
+
   it('exports prepareTrc20TransferFromKeys (pure-crypto TRC-20 builder for mcp-ts/backend)', () => {
     expect(typeof sdk.prepareTrc20TransferFromKeys).toBe('function')
     expect(sdk.TRC20_TRANSFER_SELECTOR).toBe('transfer(address,uint256)')

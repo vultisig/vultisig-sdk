@@ -421,6 +421,16 @@ export {
 export { getEvmChainByChainId, getEvmChainId, getEvmRpcUrl } from '@vultisig/core-chain/chains/evm/chainInfo'
 export { clampEvmPriorityFee } from '@vultisig/core-chain/tx/fee/evm/clampEvmPriorityFee'
 
+// Canonical resolver for `buildSplTransfer`'s safety-critical `isToken2022`
+// flag (sdk#1728). `buildSplTransfer` does no RPC and trusts the caller's
+// flag verbatim — passing `false` for an actual Token-2022 mint derives the
+// WRONG ATA/program id (failed tx or a credit to an unintended account).
+// This resolves the sender's associated token account for the mint and
+// reports which token program owns it, so callers can stay on the reviewed
+// public SDK contract instead of reimplementing Solana token-program
+// detection.
+export { getSplAssociatedAccount } from '@vultisig/core-chain/chains/solana/spl/getSplAssociatedAccount'
+
 // Noon USDC yield vault SDK boundary. Consumers should use these helpers
 // instead of calling Noon/Accountable APIs or hand-encoding ERC-7540 calldata.
 export type {
