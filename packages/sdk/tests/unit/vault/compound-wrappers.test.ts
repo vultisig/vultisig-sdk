@@ -817,6 +817,63 @@ describe('swap', () => {
     expect(actualVault.prepareSwapTx).toHaveBeenCalledWith(expect.objectContaining({ amount: '0.999' }))
   })
 
+  it('fails closed for swap(max) when the replacement quote reports a lower maxSwapable than the requested amount', async () => {
+    // Quote 1 says maxSwapable = 0.999 ETH → we request that.
+    // Quote 2 (fresh best-provider selection) picks a different provider with higher gas,
+    // now reports maxSwapable = 0.500 ETH. Signing the 0.999 ETH amount from quote 1 would
+    // strand funds or fail at broadcast. The post-refetch assert must fire.
+    const actualVault = Object.create(VaultBase.prototype) as VaultBase & ReturnType<typeof createMockVault>
+    Object.assign(actualVault, vault)
+    actualVault.getSwapQuote = vi
+      .fn()
+      .mockResolvedValueOnce({
+        bestQuote: { provider: '1inch', expectedOutput: '100', minOutput: '95' },
+        balance: 1_000_000_000_000_000_000n,
+        maxSwapable: 999_000_000_000_000_000n,
+        fromCoin: { ticker: 'ETH', decimals: 18 },
+        toCoin: { ticker: 'BTC', decimals: 8 },
+        warnings: [],
+        quote: {
+          general: {
+            provider: '1inch',
+            tx: { evm: { from: '0x', to: '0x', data: '0x', value: '0', gasLimit: 21_000n } },
+            dstAmount: '100',
+          },
+        },
+        fees: { network: 1_000_000_000_000_000n, total: 1_000_000_000_000_000n },
+      })
+      .mockResolvedValueOnce({
+        bestQuote: { provider: 'kyber', expectedOutput: '50', minOutput: '47' },
+        balance: 1_000_000_000_000_000_000n,
+        maxSwapable: 500_000_000_000_000_000n,
+        fromCoin: { ticker: 'ETH', decimals: 18 },
+        toCoin: { ticker: 'BTC', decimals: 8 },
+        warnings: [],
+        quote: {
+          general: {
+            provider: 'kyber',
+            tx: { evm: { from: '0x', to: '0x', data: '0x', value: '0', gasLimit: 250_000n } },
+            dstAmount: '50',
+          },
+        },
+        fees: { network: 500_000_000_000_000_000n, total: 500_000_000_000_000_000n },
+      })
+
+    await expect(
+      actualVault.swap({
+        fromChain: Chain.Ethereum,
+        fromSymbol: 'ETH',
+        toChain: Chain.Bitcoin,
+        toSymbol: 'BTC',
+        amount: 'max',
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.InvalidAmount,
+      message: expect.stringContaining('replacement quote reports a lower maxSwapable'),
+    })
+    expect(actualVault.prepareSwapTx).not.toHaveBeenCalled()
+  })
+
   it('fails closed for swap(max) when the quote cannot compute a fee-safe native amount', async () => {
     const actualVault = Object.create(VaultBase.prototype) as VaultBase & ReturnType<typeof createMockVault>
     Object.assign(actualVault, vault)
