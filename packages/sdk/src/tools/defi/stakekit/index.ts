@@ -49,7 +49,7 @@ export type {
   YieldToken,
   YieldTransaction,
 } from './stakekitApi'
-export { buildYieldActionScanRequest, buildYieldStepScanRequest } from './stakekitApi'
+export { buildYieldActionScanRequest, buildYieldStepScanRequest, ensureTransactionsBuilt } from './stakekitApi'
 
 // --- Inline withScanRequest helper ---
 // (mcp-ts's withScanRequest isn't available in the SDK — inline it here)

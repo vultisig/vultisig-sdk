@@ -366,9 +366,27 @@ export async function callYieldActionREST(
     throw new Error(`${prefix}: ${humanMsg}`)
   }
   const action_response = (await resp.json()) as YieldActionResponse
-  // Some chains return the action with status:"CREATED" and every
-  // transactions[].unsignedTransaction === null because yield.xyz hasn't
-  // built the payload yet. PATCH each null tx to advance it.
+  return ensureTransactionsBuilt(action_response, apiKey)
+}
+
+/**
+ * Some chains (Tron native staking, occasional Sui/TON) return the action
+ * with `status:"CREATED"` and every `transactions[].unsignedTransaction ===
+ * null` because yield.xyz hasn't built the payload yet — it's an async
+ * background job. The build only advances when each transaction is PATCH'd
+ * to `WAITING_FOR_SIGNATURE`. EVM and most Solana yields return the payload
+ * synchronously, so this loop is a no-op for them.
+ *
+ * Exported so every caller of a yield.xyz action response — REST
+ * (`callYieldActionREST`) and the hosted MCP path (`callYieldActionWithFallback`)
+ * alike — applies the SAME PATCH step, and so a consumer resolving an action
+ * from elsewhere (e.g. a backend that hit the hosted MCP directly) doesn't
+ * have to duplicate this loop.
+ */
+export async function ensureTransactionsBuilt(
+  action_response: YieldActionResponse,
+  apiKey?: string
+): Promise<YieldActionResponse> {
   if (Array.isArray(action_response.transactions) && action_response.transactions.length > 0) {
     const needsBuild = action_response.transactions.some(
       t => (t as { unsignedTransaction?: unknown }).unsignedTransaction == null
@@ -431,7 +449,23 @@ export async function callYieldActionWithFallback(args: {
     return JSON.stringify(json)
   }
   try {
-    return await callYieldMCP(args.mcpToolName, args.mcpArgs, args.apiKey)
+    const raw = await callYieldMCP(args.mcpToolName, args.mcpArgs, args.apiKey)
+    // The hosted MCP path returns the action response as-is — it never
+    // PATCH'd a still-building (`unsignedTransaction: null`) transaction,
+    // unlike callYieldActionREST above. Without this, an async-build chain
+    // (e.g. sui-sui-native-staking) that happens to route through MCP
+    // returns a success-shaped payload with an unbuilt transaction; apply
+    // the SAME build step here so both paths converge on a fully-built
+    // action response. Best-effort: a response that doesn't parse as
+    // YieldActionResponse (or has no transactions to build) is returned
+    // unchanged — downstream parsing/validation still runs on it.
+    try {
+      const parsed = JSON.parse(raw) as YieldActionResponse
+      const built = await ensureTransactionsBuilt(parsed, args.apiKey)
+      return JSON.stringify(built)
+    } catch {
+      return raw
+    }
   } catch (mcpErr) {
     const mcpMsg = mcpErr instanceof Error ? mcpErr.message : String(mcpErr)
     try {

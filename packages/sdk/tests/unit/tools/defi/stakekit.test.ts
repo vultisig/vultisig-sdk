@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { YieldActionResponse, YieldDiscoverOpportunity } from '@/tools/defi/stakekit'
 import {
+  ensureTransactionsBuilt,
   parseActionDisplay,
   stakekitBalances,
   stakekitBuildEnter,
@@ -260,6 +261,85 @@ describe('sdk.defi.stakekit', () => {
     })
   })
 
+  describe('ensureTransactionsBuilt (architecture#1954)', () => {
+    it('is a no-op when every transaction already has an unsignedTransaction', async () => {
+      const resp = makeEvmActionResponse()
+      const fetchMock = vi.fn()
+      globalThis.fetch = fetchMock
+
+      const result = await ensureTransactionsBuilt(resp)
+
+      expect(fetchMock).not.toHaveBeenCalled()
+      expect(result).toBe(resp)
+    })
+
+    it('PATCHes a null-unsignedTransaction entry and substitutes the built transaction', async () => {
+      const resp = makeEvmActionResponse({
+        transactions: [
+          {
+            id: 'tx-async',
+            title: 'Freeze bandwidth',
+            type: 'STAKE',
+            network: 'tron',
+            status: 'CREATED',
+            unsignedTransaction: null as unknown as string,
+            gasEstimate: '{}',
+          },
+        ],
+      })
+      const builtTx = {
+        id: 'tx-async',
+        title: 'Freeze bandwidth',
+        type: 'STAKE',
+        network: 'tron',
+        status: 'WAITING_FOR_SIGNATURE',
+        unsignedTransaction: JSON.stringify({ raw: 'built-payload' }),
+        gasEstimate: '{}',
+      }
+      const fetchMock = vi.fn().mockImplementation((url: unknown, opts: unknown) => {
+        expect(String(url)).toContain('/transactions/tx-async')
+        expect((opts as RequestInit).method).toBe('PATCH')
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => builtTx,
+          text: async () => JSON.stringify(builtTx),
+        } as Response)
+      })
+      globalThis.fetch = fetchMock
+
+      const result = await ensureTransactionsBuilt(resp)
+
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      expect(result.transactions[0].unsignedTransaction).toBe(builtTx.unsignedTransaction)
+      expect(result.transactions[0].status).toBe('WAITING_FOR_SIGNATURE')
+    })
+
+    it('keeps the original (still-null) entry when the PATCH fails', async () => {
+      const original = {
+        id: 'tx-async',
+        title: 'Freeze bandwidth',
+        type: 'STAKE',
+        network: 'tron',
+        status: 'CREATED',
+        unsignedTransaction: null as unknown as string,
+        gasEstimate: '{}',
+      }
+      const resp = makeEvmActionResponse({ transactions: [original] })
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        json: async () => ({}),
+        text: async () => 'server error',
+      } as Response)
+
+      const result = await ensureTransactionsBuilt(resp)
+
+      expect(result.transactions[0]).toBe(original)
+      expect(result.transactions[0].unsignedTransaction).toBeNull()
+    })
+  })
+
   describe('stakekitBuildEnter', () => {
     it('returns unsigned EVM calldata shape: flat {to, value, data, action, description}, provider: "yield_xyz", scan_request', async () => {
       const product = makeProduct()
@@ -383,6 +463,89 @@ describe('sdk.defi.stakekit', () => {
       // At least one header set should include X-API-KEY
       const hasKey = capturedHeaders.some(h => h['X-API-KEY'] === 'test-key-123')
       expect(hasKey).toBe(true)
+    })
+
+    it('applies the async-build PATCH to a hosted-MCP response, not only the REST fallback (architecture#1954)', async () => {
+      // Regression for the same bug agent-backend-ts hit and fixed
+      // (vultisig-ops-vecc): an async-build chain (e.g. sui-sui-native-staking)
+      // that routes through the hosted MCP path used to return a
+      // success-shaped payload with unsignedTransaction still null, because
+      // only callYieldActionREST applied the CREATED -> WAITING_FOR_SIGNATURE
+      // PATCH loop. callYieldActionWithFallback must apply it too.
+      const product = makeProduct()
+      const pendingActionResp = makeEvmActionResponse({
+        transactions: [
+          {
+            id: 'tx-async',
+            title: 'Stake',
+            type: 'STAKE',
+            network: 'base',
+            status: 'CREATED',
+            unsignedTransaction: null as unknown as string,
+            gasEstimate: '{}',
+          },
+        ],
+      })
+      const builtTx = {
+        id: 'tx-async',
+        title: 'Stake',
+        type: 'STAKE',
+        network: 'base',
+        status: 'WAITING_FOR_SIGNATURE',
+        unsignedTransaction: JSON.stringify({
+          to: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+          value: '0x0',
+          data: '0x',
+          from: '0x1234567890123456789012345678901234567890',
+        }),
+        gasEstimate: '{}',
+      }
+
+      globalThis.fetch = vi.fn().mockImplementation((url: unknown, opts: unknown) => {
+        const u = String(url)
+        if (u.includes('/yields/')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => product,
+            text: async () => JSON.stringify(product),
+          } as Response)
+        }
+        if (u.includes('/mcp')) {
+          // Hosted MCP "succeeds" but the action is still CREATED with a null
+          // unsignedTransaction — the exact async-build shape.
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => ({
+              result: { content: [{ text: JSON.stringify(pendingActionResp) }] },
+            }),
+            text: async () => '',
+          } as Response)
+        }
+        if (u.includes('/transactions/tx-async')) {
+          expect((opts as RequestInit).method).toBe('PATCH')
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => builtTx,
+            text: async () => JSON.stringify(builtTx),
+          } as Response)
+        }
+        throw new Error(`unexpected fetch: ${u}`)
+      })
+
+      const result = await stakekitBuildEnter({
+        yieldId: 'base-usdc-aave-v3-lending',
+        address: '0x1234567890123456789012345678901234567890',
+        amount: '100',
+      })
+
+      const txs = (result as Record<string, unknown>).transactions as Record<string, unknown>[]
+      expect(txs).toHaveLength(1)
+      // The build step ran BEFORE parseActionDisplay, so the returned step
+      // carries real calldata, not a null/decoded-fallback shape.
+      expect(txs[0].to).toBe('0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48')
     })
   })
 
