@@ -195,6 +195,16 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.fetchNoonUsdcVaultMetrics).toBe('function')
   })
 
+  it('exports the sdk.decode namespace documented as the canonical bytes-oracle keystone', () => {
+    // `packages/sdk/src/tools/policy/types.ts` documents the canonical
+    // decoder as `sdk.decode.fromToolResult` — pin that exact shape, aliased
+    // from (not duplicating) the flat sdk.decodeFromToolResult export.
+    expect(sdk.decode).toBeDefined()
+    expect(sdk.decode.fromToolResult).toBe(sdk.decodeFromToolResult)
+    expect(sdk.decode.decodeCosmosTx).toBe(sdk.decodeCosmosTx)
+    expect(sdk.decode.decodeEvmTx).toBe(sdk.decodeEvmTx)
+  })
+
   it('exports the sdk.defi namespace with the Arkis lender supply builder', () => {
     expect(sdk.defi).toBeDefined()
     expect(sdk.defi.arkis).toBeDefined()

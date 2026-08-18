@@ -340,6 +340,10 @@ describe('RN entry exposes pure chain helpers and registry', () => {
     expect(rn.decodeFromToolResult).toBe(decode.decodeFromToolResult)
     expect(rn.decodeCosmosTx).toBe(decode.decodeCosmosTx)
     expect(rn.decodeEvmTx).toBe(decode.decodeEvmTx)
+    // sdk#1310: sdk.decode.fromToolResult is the documented canonical shape.
+    expect(rn.decode.fromToolResult).toBe(decode.decodeFromToolResult)
+    expect(rn.decode.decodeCosmosTx).toBe(decode.decodeCosmosTx)
+    expect(rn.decode.decodeEvmTx).toBe(decode.decodeEvmTx)
     expect(rn.buildKeygenPairingQrPayload).toBe(pairing.buildKeygenPairingQrPayload)
   })
 
