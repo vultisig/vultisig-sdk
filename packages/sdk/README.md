@@ -310,9 +310,11 @@ if (buyUrl) window.open(buyUrl)
 Coordinate multi-party signing by notifying vault members when a signing session is initiated.
 
 ```typescript
+import { computeNotificationVaultId } from '@vultisig/sdk'
+
 // The notification service buckets devices by the hashed vault_id
 // (SHA256(pubKeyECDSA + hexChainCode)), not the raw ECDSA pubkey.
-const vaultId = await sdk.computeNotificationVaultId(vault.publicKeys.ecdsa, vault.hexChainCode)
+const vaultId = await computeNotificationVaultId(vault.publicKeys.ecdsa, vault.hexChainCode)
 
 // Step 1: Register device for vault notifications
 // Token comes from your platform's push service (APNs, FCM, or Web Push)
@@ -372,7 +374,9 @@ sdk.notifications.handleIncomingPush(remoteMessage.data)
 **Browser / Extension** — Use WebSocket for real-time delivery (no service worker needed):
 
 ```typescript
-const vaultId = await sdk.computeNotificationVaultId(vault.publicKeys.ecdsa, vault.hexChainCode)
+import { computeNotificationVaultId } from '@vultisig/sdk'
+
+const vaultId = await computeNotificationVaultId(vault.publicKeys.ecdsa, vault.hexChainCode)
 
 // Register device
 await sdk.notifications.registerDevice({
@@ -396,7 +400,9 @@ sdk.notifications.disconnect()
 Alternatively, use Web Push API with VAPID key:
 
 ```typescript
-const vaultId = await sdk.computeNotificationVaultId(vault.publicKeys.ecdsa, vault.hexChainCode)
+import { computeNotificationVaultId } from '@vultisig/sdk'
+
+const vaultId = await computeNotificationVaultId(vault.publicKeys.ecdsa, vault.hexChainCode)
 const vapidKey = await sdk.notifications.fetchVapidPublicKey()
 const subscription = await registration.pushManager.subscribe({
   userVisibleOnly: true,
