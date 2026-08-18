@@ -799,6 +799,12 @@ export async function parseKeygenQR(...args: unknown[]) {
 }
 export { ValidationHelpers } from '../../utils/validation'
 
+// Recipient sanity helpers (null/self-send/malformed-EVM) live on the root SDK
+// surface already; re-export them here so React Native consumers can delete
+// local copies instead of routing around the canonical tool family.
+export type { RecipientSanityFlag, RecipientSanityInput, RecipientSanityResult } from '../../tools/validate'
+export { isMalformedEvmAddress, isNullAddress, isSelfSend, recipientSanity } from '../../tools/validate'
+
 // Pure, platform-neutral signable-transaction contract. Keep this explicit in
 // the curated React Native entry point so mobile consumers receive the same v1
 // schema and canonical hashes as Node/browser/desktop clients.
