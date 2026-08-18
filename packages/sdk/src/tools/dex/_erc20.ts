@@ -8,7 +8,11 @@
 import { EvmChain } from '@vultisig/core-chain/Chain'
 import { decodeAbiParameters, parseAbiParameters } from 'viem'
 
-import { evmCall } from '../evm'
+// Import from the concrete module, not the `../evm` barrel: the barrel re-exports
+// balanceEvm.ts (getEvmBalances), which imports readSymbol from this very file to
+// decode bytes32-returning ERC-20 symbols (sdk#1946) — importing the barrel here
+// would close that cycle (flagged by dependency-cruiser's no-circular rule).
+import { evmCall } from '../evm/evmCall'
 
 const SEL_SYMBOL = '0x95d89b41' as const
 const SEL_DECIMALS = '0x313ce567' as const
