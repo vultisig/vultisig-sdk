@@ -1,15 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Inner-spender exposure (#895): LI.FI's `estimate.approvalAddress` is the
-// address that will call `transferFrom` on the input ERC-20 — it can differ
-// from `transactionRequest.to` (the Diamond) when an inner executor (e.g. a
-// 1inch AggregationExecutor) pulls the token directly. These cases pin that
-// the quote threads it onto `evm.approvalAddress` when it is a real address,
-// and omits it for the zero address / an absent field so consumers keep the
-// `tx.to` fallback (the pre-#895 behavior).
+// LI.FI documents `estimate.approvalAddress` as route-dependent. The official
+// Diamond is accepted deterministically; a distinct spender must clear an
+// independent reputation boundary before it reaches the approval payload.
 
 const fixture = vi.hoisted(() => ({
   approvalAddress: undefined as string | undefined,
+  scanAddressWithBlockaid: vi.fn(),
 }))
 
 // jscpd:ignore-start — the LiFi module-mock + fixture scaffolding below is intentionally
@@ -25,7 +22,7 @@ vi.mock('@lifi/sdk', () => ({
         gasLimit: '0',
         data: '0x',
         from: '0xfrom',
-        to: '0x9025b8ff00000000000000000000000000d1a30d', // outer Diamond router
+        to: '0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE', // official LI.FI Diamond
         chainId: 1,
       },
       estimate: {
@@ -35,6 +32,9 @@ vi.mock('@lifi/sdk', () => ({
         ...(fixture.approvalAddress !== undefined ? { approvalAddress: fixture.approvalAddress } : {}),
       },
     }),
+}))
+vi.mock('../../../../security/blockaid/address', () => ({
+  scanAddressWithBlockaid: fixture.scanAddressWithBlockaid,
 }))
 vi.mock('@vultisig/core-chain/ChainKind', () => ({
   getChainKind: () => 'evm',
@@ -76,8 +76,10 @@ const baseInput = {
 }
 // jscpd:ignore-end
 
+const LIFI_DIAMOND = '0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE'
 const INNER_EXECUTOR = '0x7f51c134000000000000000000000000000c7e11'
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
+const mockScanAddressWithBlockaid = fixture.scanAddressWithBlockaid
 
 const getEvmTx = async () => {
   const { getLifiSwapQuote } = await import('./getLifiSwapQuote')
@@ -90,6 +92,8 @@ describe('getLifiSwapQuote — evm.approvalAddress exposure (#895)', () => {
 
   beforeEach(() => {
     vi.resetModules()
+    mockScanAddressWithBlockaid.mockReset()
+    mockScanAddressWithBlockaid.mockResolvedValue({ resultType: 'Benign', features: ['trusted'] })
     infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
   })
   afterEach(() => {
@@ -97,10 +101,33 @@ describe('getLifiSwapQuote — evm.approvalAddress exposure (#895)', () => {
     fixture.approvalAddress = undefined
   })
 
-  it('threads a non-zero estimate.approvalAddress (inner executor) onto evm.approvalAddress', async () => {
+  it('threads the verified LI.FI Diamond approvalAddress onto evm.approvalAddress', async () => {
+    fixture.approvalAddress = LIFI_DIAMOND
+    const evm = await getEvmTx()
+    expect(evm.approvalAddress).toBe(LIFI_DIAMOND)
+    expect(mockScanAddressWithBlockaid).not.toHaveBeenCalled()
+  })
+
+  it('threads a distinct route spender only after an independent benign reputation verdict', async () => {
     fixture.approvalAddress = INNER_EXECUTOR
     const evm = await getEvmTx()
+
     expect(evm.approvalAddress).toBe(INNER_EXECUTOR)
+    expect(mockScanAddressWithBlockaid).toHaveBeenCalledWith(INNER_EXECUTOR, 'ethereum')
+  })
+
+  it('rejects a distinct route spender when the independent verdict is not benign', async () => {
+    fixture.approvalAddress = INNER_EXECUTOR
+    mockScanAddressWithBlockaid.mockResolvedValueOnce({ resultType: 'Malicious', features: ['drainer'] })
+
+    await expect(getEvmTx()).rejects.toThrow(/LI\.FI approval spender .*Malicious Blockaid verdict/i)
+  })
+
+  it('fails closed when a distinct route spender cannot be reputation-checked', async () => {
+    fixture.approvalAddress = INNER_EXECUTOR
+    mockScanAddressWithBlockaid.mockRejectedValueOnce(new Error('blockaid unreachable'))
+
+    await expect(getEvmTx()).rejects.toThrow(/LI\.FI approval spender reputation check failed/i)
   })
 
   it('omits evm.approvalAddress for the zero address (native-only routes)', async () => {

@@ -1,6 +1,6 @@
 import type { VaultBase } from '@vultisig/sdk'
 import { Chain } from '@vultisig/sdk'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../lib/output', () => ({
   createSpinner: () => ({
@@ -20,22 +20,23 @@ vi.mock('../ui', () => ({
   displaySwapChains: vi.fn(),
   displaySwapPreview: vi.fn(),
   displaySwapResult: vi.fn(),
-  formatBigintAmount: (value: bigint) => String(value),
+  formatBigintAmount: (value: bigint, decimals: number) => String(Number(value) / 10 ** decimals),
 }))
 
 import type { CommandContext } from '../core'
+import { outputJson } from '../lib/output'
 import { executeSwap, executeSwapQuote, normalizeSwapAmount } from './swap'
 
 const exactAmount = '0.123456789123456789'
 
-function makeContext() {
+function makeContext({ fromDecimals = 18, maxSwapable = 0n } = {}) {
   const swap = vi.fn().mockResolvedValue({
     dryRun: true,
     quote: {
-      fromCoin: { decimals: 18, ticker: 'ETH' },
+      fromCoin: { decimals: fromDecimals, ticker: 'ETH' },
       toCoin: { decimals: 8, ticker: 'BTC' },
       estimatedOutput: 100n,
-      maxSwapable: 0n,
+      maxSwapable,
       provider: 'thorchain',
     },
   })
@@ -47,6 +48,10 @@ function makeContext() {
 }
 
 describe('CLI swap amount precision', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
   it('preserves an exact decimal string in swap quote requests', async () => {
     const { ctx, swap } = makeContext()
 
@@ -57,6 +62,30 @@ describe('CLI swap amount precision', () => {
     })
 
     expect(swap).toHaveBeenCalledWith(expect.objectContaining({ amount: exactAmount, dryRun: true }))
+  })
+
+  it('serializes the resolved amount and max flag for a max swap quote', async () => {
+    const { ctx } = makeContext({ fromDecimals: 6, maxSwapable: 1500000n })
+
+    await executeSwapQuote(ctx, {
+      fromChain: Chain.Ethereum,
+      toChain: Chain.Bitcoin,
+      amount: 'max',
+    })
+
+    expect(outputJson).toHaveBeenCalledWith(expect.objectContaining({ amount: '1.5', isMax: true }))
+  })
+
+  it('leaves a non-max swap quote amount unchanged and clears the max flag', async () => {
+    const { ctx } = makeContext()
+
+    await executeSwapQuote(ctx, {
+      fromChain: Chain.Ethereum,
+      toChain: Chain.Bitcoin,
+      amount: '1.2500',
+    })
+
+    expect(outputJson).toHaveBeenCalledWith(expect.objectContaining({ amount: '1.25', isMax: false }))
   })
 
   it('preserves an exact decimal string in swap dry-run requests and output', async () => {

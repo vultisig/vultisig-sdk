@@ -104,10 +104,7 @@ describe('AgentExecutor EVM gas refresh', () => {
     expect(vault.sign).toHaveBeenCalledOnce()
     expect(vault.broadcastTx).toHaveBeenCalledOnce()
     expect(result.tx_hash).toBe('0xtxhash')
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://ethereum-rpc.publicnode.com',
-      expect.objectContaining({ method: 'POST' })
-    )
+    expect(fetchMock).toHaveBeenCalledWith('https://api.vultisig.com/eth/', expect.objectContaining({ method: 'POST' }))
   })
 
   it('warns without verbose and signs with the original estimate after an HTTP-200 JSON-RPC error', async () => {
@@ -134,10 +131,7 @@ describe('AgentExecutor EVM gas refresh', () => {
     expect(vault.sign).toHaveBeenCalledOnce()
     expect(vault.broadcastTx).toHaveBeenCalledOnce()
     expect(result.tx_hash).toBe('0xtxhash')
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://ethereum-rpc.publicnode.com',
-      expect.objectContaining({ method: 'POST' })
-    )
+    expect(fetchMock).toHaveBeenCalledWith('https://api.vultisig.com/eth/', expect.objectContaining({ method: 'POST' }))
   })
 
   it('warns without verbose and signs with the original estimate when the base fee is absent', async () => {
@@ -162,10 +156,7 @@ describe('AgentExecutor EVM gas refresh', () => {
     expect(vault.sign).toHaveBeenCalledOnce()
     expect(vault.broadcastTx).toHaveBeenCalledOnce()
     expect(result.tx_hash).toBe('0xtxhash')
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://ethereum-rpc.publicnode.com',
-      expect.objectContaining({ method: 'POST' })
-    )
+    expect(fetchMock).toHaveBeenCalledWith('https://api.vultisig.com/eth/', expect.objectContaining({ method: 'POST' }))
   })
 
   it.each([
@@ -197,16 +188,18 @@ describe('AgentExecutor EVM gas refresh', () => {
       expect(vault.broadcastTx).toHaveBeenCalledOnce()
       expect(result.tx_hash).toBe('0xtxhash')
       expect(fetchMock).toHaveBeenCalledWith(
-        'https://bsc-dataseed.binance.org',
+        'https://api.vultisig.com/bsc/',
         expect.objectContaining({ method: 'POST' })
       )
     }
   )
 
   // These successful-refresh cases pin the endpoint URLs; behavioural coverage lives in the cases above.
+  // The literals are the canonical `getEvmRpcUrl` values (packages/core/chain/chains/evm/chainInfo.ts),
+  // spelled out rather than computed so a silent map change fails here instead of asserting itself.
   it.each([
-    [Chain.Ethereum, 'https://ethereum-rpc.publicnode.com'],
-    [Chain.Polygon, 'https://polygon-bor-rpc.publicnode.com'],
+    [Chain.Ethereum, 'https://api.vultisig.com/eth/'],
+    [Chain.Polygon, 'https://api.vultisig.com/polygon/'],
   ])('does not warn after a successful %s gas refresh', async (chain, rpcUrl) => {
     const payload = createEvmPayload()
     const vault = createSigningVault(payload)
