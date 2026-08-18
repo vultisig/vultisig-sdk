@@ -332,6 +332,10 @@ const configs = {
       distBase: 'tools/defi',
     }),
     ...createSubpathConfigs({
+      input: './src/tools/gas/index.ts',
+      distBase: 'tools/gas',
+    }),
+    ...createSubpathConfigs({
       input: './src/tools/bridge/index.ts',
       distBase: 'tools/bridge',
     }),
