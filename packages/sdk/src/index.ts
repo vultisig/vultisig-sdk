@@ -62,6 +62,10 @@ export { fiatToAmount, FiatToAmountError } from './utils/fiatToAmount'
 export { normalizeChain, UnknownChainError } from './utils/normalizeChain'
 export { resolveChainReference } from './utils/resolveChainReference'
 export { ChainAmountParseError, toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
+export {
+  CosmosSequenceMismatchError,
+  toCosmosSequenceMismatchError,
+} from '@vultisig/core-chain/tx/broadcast/cosmosSequenceMismatch'
 
 // Pure-bigint exact base-units -> human decimal-string conversion (no float64
 // round-trip, so it's safe for high-decimal assets). Exported at the root so
@@ -258,6 +262,7 @@ export {
   COSMOS_SEND_FEE_DEFAULT,
   getCosmosSendFeeBaseUnits,
   MAYA_SEND_FEE_BASE_UNITS,
+  TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS,
 } from '@vultisig/core-chain/chains/cosmos/gas'
 
 // Cosmos x/auth.MaxMemoCharacters cap, per chain — single source of truth for
@@ -736,6 +741,7 @@ export type {
   AmountUnits,
   AssetRef,
   AstroportSwapResult,
+  BoundSwapQuote,
   BuildAstroportSwapParams,
   BuildBuyPtParams,
   BuildCctpBridgeParams,
@@ -779,6 +785,7 @@ export type {
   EvmScanRequest,
   FieldDiff,
   FindSwapQuoteParams,
+  FindSwapQuotesResult,
   GasTxType,
   GetEvmBalancesParams,
   GetMaxSendAmountFromKeysParams,
@@ -839,6 +846,7 @@ export type {
   SuiBalance,
   SuiCoinBalance,
   SuiTokenBalance,
+  SwapQuoteCandidate,
   TaoBalance,
   ThreeJaneTranche,
   ThreeJaneTxStep,
@@ -950,6 +958,7 @@ export {
   evmGasPrice,
   evmTxInfo,
   findSwapQuote,
+  findSwapQuotes,
   formatDot,
   formatUsdc,
   formatUtxoBalance,
