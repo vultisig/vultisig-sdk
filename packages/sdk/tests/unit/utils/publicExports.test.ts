@@ -195,6 +195,26 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.fetchNoonUsdcVaultMetrics).toBe('function')
   })
 
+  it('exports the changelog-documented sdk.evm, sdk.token, and sdk.cosmos.gov namespace handles', () => {
+    // Namespaces alongside the existing flat exports (sdk.evm / sdk.token /
+    // sdk.cosmos.gov), matching what packages/sdk/CHANGELOG.md documents.
+    expect(sdk.evm).toBeDefined()
+    expect(typeof sdk.evm.encodeErc20Approve).toBe('function')
+    expect(typeof sdk.evm.encodeErc20Revoke).toBe('function')
+    expect(sdk.evm.encodeErc20Approve).toBe(sdk.encodeErc20Approve)
+
+    expect(sdk.token).toBeDefined()
+    expect(typeof sdk.token.resolveContract).toBe('function')
+    expect(sdk.token.resolveContract).toBe(sdk.resolveContract)
+
+    expect(sdk.cosmos).toBeDefined()
+    expect(sdk.cosmos.gov).toBeDefined()
+    expect(typeof sdk.cosmos.gov.getCosmosGovernanceProposals).toBe('function')
+    expect(typeof sdk.cosmos.gov.prepareCosmosVote).toBe('function')
+    expect(sdk.cosmos.gov.getCosmosGovernanceProposals).toBe(sdk.getCosmosGovernanceProposals)
+    expect(sdk.cosmos.gov.prepareCosmosVote).toBe(sdk.prepareCosmosVote)
+  })
+
   it('exports the sdk.defi namespace with the Arkis lender supply builder', () => {
     expect(sdk.defi).toBeDefined()
     expect(sdk.defi.arkis).toBeDefined()
