@@ -390,9 +390,7 @@ export async function prepareTrc20TransferFromKeys(...args: unknown[]) {
 // above.
 export async function prepareSuiTokenTransferFromKeys(...args: unknown[]) {
   const mod = await import('../../tools/prep/suiTokenTransfer')
-  return mod.prepareSuiTokenTransferFromKeys(
-    ...(args as Parameters<typeof mod.prepareSuiTokenTransferFromKeys>)
-  )
+  return mod.prepareSuiTokenTransferFromKeys(...(args as Parameters<typeof mod.prepareSuiTokenTransferFromKeys>))
 }
 
 export async function prepareThorchainMsgDepositTxFromKeys(...args: unknown[]) {
