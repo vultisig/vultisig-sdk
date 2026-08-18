@@ -27,19 +27,19 @@ describe('decodeAddressToPubKeyHash — CashAddr checksum', () => {
     // no longer produces 0. Before the fix, this decoded to random bytes
     // and looked like a valid P2PKH.
     const tampered = 'bitcoincash:qr95sy3j9xwd2ap32xkykttr4cvcu7as4y0qverfux'
-    expect(() => decodeAddressToPubKeyHash(tampered, 'Bitcoin-Cash')).toThrow(/Cannot decode/)
+    expect(() => decodeAddressToPubKeyHash(tampered, 'Bitcoin-Cash')).toThrow(/UTXO address brand mismatch/)
   })
 
   it('rejects a CashAddr with mid-string transposition (valid base32, bad checksum)', () => {
     // Swap two mid-payload symbols: `y0q` → `0yq`.
     const transposed = 'bitcoincash:qr95sy3j9xwd2ap32xkykttr4cvcu7as40yqverfuy'
-    expect(() => decodeAddressToPubKeyHash(transposed, 'Bitcoin-Cash')).toThrow(/Cannot decode/)
+    expect(() => decodeAddressToPubKeyHash(transposed, 'Bitcoin-Cash')).toThrow(/UTXO address brand mismatch/)
   })
 
   it('rejects a CashAddr with an out-of-alphabet character', () => {
     // `b` is not in the cashaddr charset ('qpzry9x8gf2tvdw0s3jn54khce6mua7l').
     const bad = 'bitcoincash:qr95sy3j9xwd2ap32xkykttr4cvcb7as4y0qverfuy'
-    expect(() => decodeAddressToPubKeyHash(bad, 'Bitcoin-Cash')).toThrow(/Cannot decode/)
+    expect(() => decodeAddressToPubKeyHash(bad, 'Bitcoin-Cash')).toThrow(/UTXO address brand mismatch/)
   })
 
   it('accepts a CashAddr without the prefix (auto-prefixes bitcoincash:)', () => {
