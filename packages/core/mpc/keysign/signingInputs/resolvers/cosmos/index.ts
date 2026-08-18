@@ -541,7 +541,13 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
     }
 
     const getFeeAmounts = (feeAmount: bigint) => {
-      if (chainKind !== 'ibcEnabled') return
+      if (chainKind !== 'ibcEnabled') {
+        // THORChain and MayaChain charge their native transaction fee inside
+        // message processing, not from cosmos-sdk authInfo.fee.amount. Their
+        // displayed network fee is therefore informational protocol state and
+        // must not be inserted into the signed Cosmos fee coins.
+        return
+      }
 
       const { ibcDenomTraces } = getRecordUnionValue(chainSpecific, 'ibcEnabled')
 
