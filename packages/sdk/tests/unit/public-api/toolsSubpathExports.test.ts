@@ -107,9 +107,7 @@ describe('public API subpath exports', () => {
     expect(platformRollupConfig).toContain("input: './src/tx/index.ts'")
     expect(platformRollupConfig).toContain("distBase: 'tx'")
 
-    expect(typesRollupConfig).toContain(
-      "createSubpathTypesConfig('src/tools/index.ts', 'dist/tools/index.d.ts')"
-    )
+    expect(typesRollupConfig).toContain("createSubpathTypesConfig('src/tools/index.ts', 'dist/tools/index.d.ts')")
     expect(typesRollupConfig).toContain(
       "createSubpathTypesConfig('src/tools/parse/index.ts', 'dist/tools/parse/index.d.ts')"
     )
