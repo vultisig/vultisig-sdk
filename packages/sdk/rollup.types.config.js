@@ -131,5 +131,6 @@ export default defineConfig([
   // as a narrow declaration surface alongside their dedicated runtime bundle.
   createSubpathTypesConfig('src/seedphrase/index.ts', 'dist/seedphrase/index.d.ts'),
   createSubpathTypesConfig('src/tools/decode/index.ts', 'dist/tools/decode/index.d.ts'),
+  createSubpathTypesConfig('src/tools/prep/index.ts', 'dist/tools/prep/index.d.ts'),
   createSubpathTypesConfig('src/tx/index.ts', 'dist/tx/index.d.ts'),
 ])
