@@ -77,9 +77,7 @@ describe('evmTxInfo', () => {
       address: '0x000000000000000000000000000000000000dEaD',
       blockTag: 'pending',
     })
-    expect(mockGetTransactionCount).not.toHaveBeenCalledWith(
-      expect.objectContaining({ blockTag: 'latest' })
-    )
+    expect(mockGetTransactionCount).not.toHaveBeenCalledWith(expect.objectContaining({ blockTag: 'latest' }))
   })
 
   it('falls back to the latest block tag on chains that reject the pending tag', async () => {
