@@ -292,7 +292,7 @@ describe('toPolicyEnvelope', () => {
     expect(verdict.result).toBe(ResultKind.Pass)
   })
 
-  it('fails closed when the decoded amount is not an integer atomic string', () => {
+  it('sdk#1402: an unparseable amount skips only the amount check, not the whole envelope (does not flip decoded)', () => {
     const envelope = toPolicyEnvelope({
       chain: 'base',
       family: 'evm',
@@ -305,9 +305,91 @@ describe('toPolicyEnvelope', () => {
       decodeError: '',
     })
 
+    // amount:null means "unknown -> skip the amount check" (existing
+    // convention) - NOT "the whole envelope is untrustworthy". Flipping
+    // decoded to false here used to silently erase unrelated
+    // recipient/chain/memo findings for any envelope whose amount string
+    // happened to be malformed.
     expect(envelope.amount).toBeNull()
+    expect(envelope.decoded).toBe(true)
+    expect(envelope.decodeError).toBe('')
+    expect(envelope.amountParseError).toContain('invalid decoded atomic amount')
+
+    // Recipient/chain checks still run against an unparseable-amount envelope.
+    const claim: IntentClaim = { chain: 'base', recipient: '0xBBB', amount: '1', amountUnits: 'human' }
+    expect(evaluatePolicy(claim, envelope).result).toBe(ResultKind.Block)
+    expect(checkInvariants({ claim, envelope }).some(v => v.invariant === Invariant.RecipientMatchesIntent)).toBe(
+      true
+    )
+  })
+
+  it('sdk#1402: a negative amount is rejected as unparseable, not silently accepted (would disable the amount check)', () => {
+    const envelope = toPolicyEnvelope({
+      chain: 'cosmoshub-4',
+      family: 'cosmos',
+      kind: 'transfer',
+      recipient: 'cosmos1attacker',
+      asset: { symbol: 'ATOM', contract: '', decimals: 6 },
+      amount: '-1000000',
+      spender: '',
+      decoded: true,
+      decodeError: '',
+    })
+
+    expect(envelope.amount).toBeNull()
+    expect(envelope.decoded).toBe(true)
+    expect(envelope.amountParseError).toContain('invalid decoded atomic amount')
+
+    // With amount:null the I5 (never-exceed-balance) invariant is skipped -
+    // callers MUST treat a present amountParseError as untrustworthy.
+    expect(checkInvariants({ claim: { amount: '5', amountUnits: 'human' }, envelope, balance: 1_000_000n })).toEqual(
+      []
+    )
+  })
+
+  it('sdk#1402: a non-string envelope.amount (undefined/number/bigint) never throws (decode/fromToolResult.ts contract)', () => {
+    for (const badAmount of [undefined, 1_000_000, 1_000_000n] as const) {
+      const envelope = toPolicyEnvelope({
+        chain: 'base',
+        family: 'evm',
+        kind: 'transfer',
+        recipient: '0xAAA',
+        asset: { symbol: 'USDC', contract: '', decimals: 6 },
+        amount: badAmount as unknown as string,
+        spender: '',
+        decoded: true,
+        decodeError: '',
+      })
+
+      expect(envelope.amount).toBeNull()
+      expect(envelope.decoded).toBe(false)
+      expect(envelope.decodeError).toContain('not a string')
+    }
+  })
+
+  it('sdk#1402: a non-transfer kind (approve) fails closed instead of laundering into a transfer-shaped PASS', () => {
+    // Real shape: EVM approve has no value recipient (spender is the real
+    // counterparty), so rebuilding it as a transfer-shaped envelope let an
+    // unlimited-approval tx compare cleanly against a plain-send claim.
+    const envelope = toPolicyEnvelope({
+      chain: 'ethereum',
+      family: 'evm',
+      kind: 'approve',
+      recipient: '',
+      asset: { symbol: 'USDC', contract: '', decimals: 6 },
+      amount: '1000000',
+      spender: '0xDeaDBeEf00000000000000000000000000000000',
+      decoded: true,
+      decodeError: '',
+    })
+
     expect(envelope.decoded).toBe(false)
-    expect(envelope.decodeError).toContain('invalid decoded atomic amount')
+    expect(envelope.decodeError).toContain('approve')
+
+    const claim: IntentClaim = { chain: 'ethereum', recipient: '0x7099...79C8', amount: '1', amountUnits: 'human' }
+    // Undecoded envelope -> WARN, not the false PASS an approve-laundered-as-
+    // transfer used to produce.
+    expect(evaluatePolicy(claim, envelope).result).toBe(ResultKind.Warn)
   })
 })
 
