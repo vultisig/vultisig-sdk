@@ -130,8 +130,23 @@ export { assertUtxoAddressBrand, isUtxoAddressBrandValid } from './chains/utxo/a
 // multi-tx build results (approve+swap, generic transactions[]) into ordered
 // legs. Ports the normalize/split half of the agent-backend's
 // enrichBuildResult + splitMultiTx; SSE/Redis sequencing stays in the backend.
-export type { NormalizeArgs, NormalizedTx } from './tx'
-export { normalizeTx, splitMultiTx, TxNormalizeError } from './tx'
+export type { NormalizeArgs, NormalizedTx, SignableTxCandidatePayload, ToolOutputCandidate, TxReadyPayload } from './tx'
+export {
+  asRecord,
+  buildTxReadyFromToolOutput,
+  buildTxReadyFromYieldOutput,
+  CLI_SIGNABLE_FLAT_TOOLS,
+  CLI_SIGNABLE_PREP_TOOLS,
+  CLI_SIGNABLE_YIELD_TOOLS,
+  deriveToolOutputCandidate,
+  DIVERGENT_FIELD_TOOLS,
+  normalizeTx,
+  payloadLooksSignable,
+  POLYMARKET_DEPOSIT_TOOL,
+  POLYMARKET_SETUP_TRADING_TOOL,
+  splitMultiTx,
+  TxNormalizeError,
+} from './tx'
 
 // ============================================================================
 // PUBLIC API - Canonical Contract / Token Registry (knownContracts)
