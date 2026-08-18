@@ -65,6 +65,18 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.DEFAULT_CHAINS).toBe(rn.defaultChains)
   })
 
+  it('exports the ThreeJane USDC helper values (not just their types) on the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const threeJane = await import('../../../../src/tools/defi/threeJane')
+
+    expect(rn.buildThreeJaneSupplyUsdc).toBe(threeJane.buildThreeJaneSupplyUsdc)
+    expect(rn.THREE_JANE_ADDRESSES).toBe(threeJane.THREE_JANE_ADDRESSES)
+    // Aliased to avoid colliding with the CCTP bridge's own `parseUsdcAmount`
+    // export, which is also present on this entrypoint.
+    expect(rn.parseThreeJaneUsdcAmount).toBe(threeJane.parseUsdcAmount)
+    expect(typeof rn.parseUsdcAmount).toBe('function')
+  })
+
   it('exports default chain canonicals on the RN entrypoint', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
