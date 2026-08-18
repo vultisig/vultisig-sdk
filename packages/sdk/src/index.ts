@@ -522,6 +522,8 @@ export {
 export type { JupiterAffiliateConfig } from '@vultisig/core-chain/swap/general/jupiter/config'
 export type { LifiAffiliateConfig, LifiBootstrapConfig } from '@vultisig/core-chain/swap/general/lifi/config'
 export { setupLifi } from '@vultisig/core-chain/swap/general/lifi/config'
+export type { LifiSwapEnabledChain } from '@vultisig/core-chain/swap/general/lifi/LifiSwapEnabledChains'
+export { resolveSwapFeeChain } from '@vultisig/core-chain/swap/general/lifi/api/lifiSwapFeeChain'
 export type { SwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
 export { configureSwapKit, getSwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
 export type {
