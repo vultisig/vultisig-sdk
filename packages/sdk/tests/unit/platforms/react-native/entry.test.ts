@@ -1,3 +1,6 @@
+import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
+import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
+import { AuthInfo, SignDoc, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import { describe, expect, it, vi } from 'vitest'
 
 import { cosmosTxFeeGasParityCases } from '../../../fixtures/cosmosTxFeeGasParity'
@@ -70,7 +73,7 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.DEFAULT_CHAINS).toEqual(['Bitcoin', 'Ethereum', 'THORChain', 'Solana', 'BSC'])
   })
 
-  it('exports the canonical Cosmos fee helpers and gas-limit tables from the RN entry', async () => {
+  it('exports the canonical Cosmos fee helpers, gas-limit tables, and cosmos chain subsets from the RN entry', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
     expect(rn.cosmosFeeCoinDenom[rn.Chain.Cosmos]).toBe('uatom')
@@ -82,6 +85,9 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.getCosmosStakingGasLimit({ chain: rn.Chain.Cosmos })).toBe(350_000n)
     expect(rn.getCosmosStakingGasLimit({ chain: rn.Chain.Cosmos, msgCount: 2 })).toBe(437_500n)
     expect(rn.resolveChainReference('8453')).toBe(rn.Chain.Base)
+    expect(rn.IbcEnabledCosmosChain.TerraClassic).toBe('TerraClassic')
+    expect(rn.VaultBasedCosmosChain.THORChain).toBe('THORChain')
+    expect(Object.values(rn.IbcEnabledCosmosChain)).not.toContain(rn.Chain.THORChain)
   })
 
   it.each(cosmosTxFeeGasParityCases)(
@@ -107,6 +113,44 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
 
     expect(rn.COSMOS_SEND_FEE_DEFAULT).toBe(7_500n)
     expect(rn.MAYA_SEND_FEE_BASE_UNITS).toBe(2_000_000_000n)
+  })
+
+  it('exports and encodes the TerraClassic staking gas/fee pair in a redelegation SignDoc', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const gasLimit = rn.getCosmosStakingGasLimit({ chain: rn.Chain.TerraClassic })
+
+    expect(gasLimit).toBe(4_000_000n)
+    expect(rn.TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS).toBe(113_300_000n)
+
+    const tx = rn.chains.cosmos.buildCosmosStakingTx({
+      chainId: 'columbus-5',
+      msgs: [
+        {
+          type: 'redelegate',
+          delegatorAddress: 'terra1qyqszqgpqyqszqgpqyqszqgpqyqszqgp5hm70u',
+          validatorSrcAddress: 'terravaloper1qgpqyqszqgpqyqszqgpqyqszqgpqyqsz9u3x5e',
+          validatorDstAddress: 'terravaloper1qvpsxqcrqvpsxqcrqvpsxqcrqvpsxqcryvs87c',
+          amount: '1000000',
+          denom: 'uluna',
+        },
+      ],
+      sequence: 7,
+      accountNumber: 42,
+      pubKeyBytes: new Uint8Array(33).fill(0x02),
+      gasLimit: Number(gasLimit),
+      feeDenom: 'uluna',
+      feeAmount: rn.TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS.toString(),
+    })
+    const signDoc = SignDoc.decode(tx.signDocBytes)
+    const authInfo = AuthInfo.decode(signDoc.authInfoBytes)
+    const txBody = TxBody.decode(signDoc.bodyBytes)
+
+    expect(signDoc.chainId).toBe('columbus-5')
+    expect(authInfo.fee?.gasLimit).toBe(gasLimit)
+    expect(authInfo.fee?.amount).toEqual([
+      { denom: 'uluna', amount: rn.TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS.toString() },
+    ])
+    expect(txBody.messages[0]?.typeUrl).toBe('/cosmos.staking.v1beta1.MsgBeginRedelegate')
   })
 
   it('keeps Robinhood derivation native-compatible on the exported RN surface', async () => {
@@ -196,6 +240,30 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.toXrplCurrencyCode('RLUSD')).toBe('524C555344000000000000000000000000000000')
   })
 
+  it('re-exports the custom-RPC canonicals on the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(rn.customRpcSupportedChains).toBe(customRpcSupportedChains.customRpcSupportedChains)
+    expect(rn.customRpcSupportedEvmChains).toBe(customRpcSupportedChains.customRpcSupportedEvmChains)
+    expect(rn.customRpcSupportedCosmosChains).toBe(customRpcSupportedChains.customRpcSupportedCosmosChains)
+    expect(rn.isCustomRpcSupported).toBe(customRpcSupportedChains.isCustomRpcSupported)
+    expect(rn.getCustomRpcOverride).toBe(customRpcOverrides.getCustomRpcOverride)
+    expect(rn.setCustomRpcOverride).toBe(customRpcOverrides.setCustomRpcOverride)
+    expect(rn.clearCustomRpcOverride).toBe(customRpcOverrides.clearCustomRpcOverride)
+    expect(rn.setCustomRpcOverrides).toBe(customRpcOverrides.setCustomRpcOverrides)
+    expect(rn.getCustomRpcOverrides).toBe(customRpcOverrides.getCustomRpcOverrides)
+    expect(rn.probeRpcHealth).toBeTypeOf('function')
+
+    rn.clearCustomRpcOverride(rn.Chain.Base)
+    expect(rn.isCustomRpcSupported(rn.Chain.Base)).toBe(true)
+    expect(rn.isCustomRpcSupported(rn.Chain.MayaChain)).toBe(false)
+    rn.setCustomRpcOverride(rn.Chain.Base, ' https://base.example ')
+    expect(rn.getCustomRpcOverride(rn.Chain.Base)).toBe('https://base.example')
+    expect(rn.getCustomRpcOverrides()).toEqual({ [rn.Chain.Base]: 'https://base.example' })
+    rn.clearCustomRpcOverride(rn.Chain.Base)
+    expect(rn.getCustomRpcOverride(rn.Chain.Base)).toBeUndefined()
+  })
+
   it('exports the canonical prep constants from the RN entry', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
     const tronAbi = await import('../../../../src/abi/tron')
@@ -265,6 +333,7 @@ describe('RN entry exposes pure chain helpers and registry', () => {
     const parse = await import('../../../../src/tools/parse')
     const tx = await import('../../../../src/tx')
     const decode = await import('../../../../src/tools/decode')
+    const pairing = await import('../../../../src/services/buildKeygenPairingQrPayload')
 
     expect(rn.parseChain).toBe(parse.parseChain)
     expect(rn.parseTicker).toBe(parse.parseTicker)
@@ -276,6 +345,7 @@ describe('RN entry exposes pure chain helpers and registry', () => {
     expect(rn.decodeFromToolResult).toBe(decode.decodeFromToolResult)
     expect(rn.decodeCosmosTx).toBe(decode.decodeCosmosTx)
     expect(rn.decodeEvmTx).toBe(decode.decodeEvmTx)
+    expect(rn.buildKeygenPairingQrPayload).toBe(pairing.buildKeygenPairingQrPayload)
   })
 
   it('re-exports canonical swap tracker URL helpers from the RN entrypoint', async () => {
