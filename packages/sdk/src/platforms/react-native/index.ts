@@ -748,7 +748,8 @@ export {
   toHumanUnits,
 } from '../../utils/convertAmount'
 export { FiatToAmountError } from '../../utils/fiatToAmount'
-export { fromChainAmountExact } from '@vultisig/core-chain/amount/fromChainAmountExact'
+export { fromChainAmount } from '@vultisig/core-chain/amount/fromChainAmount'
+export { fromChainAmountDisplay, fromChainAmountExact } from '@vultisig/core-chain/amount/fromChainAmountExact'
 export { ChainAmountParseError, toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 export type { ChainKind } from '@vultisig/core-chain/ChainKind'
 export { getChainKind, isChainOfKind } from '@vultisig/core-chain/ChainKind'
