@@ -157,6 +157,12 @@ describe('BalanceService', () => {
     const balance = await service.getBalance(Chain.Ripple, tokenId)
 
     expect(getRippleNativeBalanceDetail).not.toHaveBeenCalled()
+    expect(getCoinBalance).toHaveBeenCalledWith({
+      chain: Chain.Ripple,
+      address: `${Chain.Ripple}-address`,
+      id: tokenId,
+    })
+    expect(balance.amount).toBe('7000000')
     expect(balance.totalAmount).toBeUndefined()
     expect(balance.reserveAmount).toBeUndefined()
   })
