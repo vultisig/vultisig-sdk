@@ -83,8 +83,8 @@ describe('searchToken', () => {
     mockQueryUrl.mockResolvedValueOnce({
       id: 'test-token',
       detail_platforms: {
-        'avalanche-c-chain': { contract_address: '0xavax', decimal_place: 18 },
-        'zksync-era': { contract_address: '0xzk', decimal_place: 18 },
+        'avalanche': { contract_address: '0xavax', decimal_place: 18 },
+        'zksync': { contract_address: '0xzk', decimal_place: 18 },
         sei: { contract_address: '0xsei', decimal_place: 18 },
         'the-open-network': { contract_address: 'EQTON', decimal_place: 9 },
         'some-unknown-chain': { contract_address: '0xabc', decimal_place: 18 },

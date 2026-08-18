@@ -109,9 +109,9 @@ describe('getPrice', () => {
   })
 
   it.each([
-    ['Avalanche', 'avalanche-c-chain'],
-    ['Zksync', 'zksync-era'],
-    ['Sei', 'sei'],
+    ['Avalanche', 'avalanche'],
+    ['Zksync', 'zksync'],
+    ['Sei', 'sei-v2'],
   ])('Route 1: uses the canonical CoinGecko platform for %s', async (chain, platform) => {
     const contract = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
     mockQueryUrl.mockResolvedValueOnce({ [contract.toLowerCase()]: simplePrice(1.0) })

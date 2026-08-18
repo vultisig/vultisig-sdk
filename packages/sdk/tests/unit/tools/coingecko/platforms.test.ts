@@ -5,9 +5,9 @@ import { chainForCoinGeckoPlatform, coinGeckoPlatformForChain } from '@/tools/co
 describe('CoinGecko platform registry', () => {
   it.each([
     ['Ethereum', 'ethereum'],
-    ['Avalanche', 'avalanche-c-chain'],
-    ['Zksync', 'zksync-era'],
-    ['Sei', 'sei'],
+    ['Avalanche', 'avalanche'],
+    ['Zksync', 'zksync'],
+    ['Sei', 'sei-v2'],
     ['Ton', 'the-open-network'],
     ['Hyperliquid', 'hyperliquid'],
     ['Robinhood', 'robinhood'],
