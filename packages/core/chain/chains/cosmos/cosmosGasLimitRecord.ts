@@ -39,15 +39,16 @@ export const getCosmosGasLimit = (coin: CoinKey<CosmosChain>): bigint => {
  * writes that the standard SDK gas estimate omits. In practice this adds
  * ~200-800 gas on top of the base delegate cost (~2M), so a 2M limit fails
  * consistently ("out of gas in location: ValuePerByte; gasWanted: 2000000,
- * gasUsed: 200X"). 3M needs ~84.97 LUNC at sign time (3M * 28.325 uluna/gas).
- * That fee is supplied by the CONSUMER's separate per-msg staking fee
- * (mcp-ts COSMOS_STAKING_FEE_PER_MSG_BASE_UNITS[TerraClassic] = 100 LUNC/msg,
- * written into the signAmino / signDirect fee) — NOT by
- * `cosmosGasRecord[TerraClassic]`, which is the native MsgSend gas fee
- * (8.4975 LUNC = 300k × 28.325) and never governs staking. The msgCount scaling is disabled for
- * TerraClassic: at msgCount>=2, scaled gasWanted would push the required fee
- * above the 100 LUNC per-msg staking fee, causing node rejection. Columbus-5
- * callers must split multi-validator claims into separate txs.
+ * gasUsed: 200X"). Production telemetry later observed MsgBeginRedelegate
+ * consuming 2_501_503 gas. The former 3M limit left little headroom over that
+ * observed burn, so TerraClassic uses 4M for the heaviest single-msg staking
+ * path. Consumers MUST pair this with `TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS`
+ * (from `./gas`), NOT `cosmosGasRecord[TerraClassic]` / `TERRA_CLASSIC_ULUNA_BASE_GAS`,
+ * since those govern native MsgSend at the much lower 300k send gas limit and
+ * under-price a 4M-gas staking tx by ~13x, which the node rejects for
+ * insufficient fees. TerraClassic keeps a fixed per-transaction staking
+ * budget, so callers must split multi-validator reward claims into separate
+ * transactions.
  */
 const cosmosStakingGasLimitRecord: Record<IbcEnabledCosmosChain, bigint> = {
   [Chain.Cosmos]: 350_000n,
@@ -57,7 +58,7 @@ const cosmosStakingGasLimitRecord: Record<IbcEnabledCosmosChain, bigint> = {
   [Chain.Noble]: 350_000n,
   [Chain.Akash]: 350_000n,
   [Chain.Terra]: 500_000n,
-  [Chain.TerraClassic]: 3_000_000n,
+  [Chain.TerraClassic]: 4_000_000n,
 }
 
 type GetCosmosStakingGasLimitInput = {
@@ -88,10 +89,8 @@ export const getCosmosStakingGasLimit = ({ chain, msgCount = 1 }: GetCosmosStaki
 
   const base = cosmosStakingGasLimitRecord[chain]
 
-  // TerraClassic: staking-fee cap (see comment on cosmosStakingGasLimitRecord).
-  // Scaling would push the required fee above the consumer's 100 LUNC per-msg
-  // staking fee at msgCount>=2; single-msg policy keeps the tx within that fee
-  // for columbus-5 (independent of the cosmosGasRecord native-send gas fee).
+  // TerraClassic uses a fixed single-transaction budget (see the record
+  // comment). Multi-validator reward claims must be split by the caller.
   if (chain === Chain.TerraClassic) return base
 
   const n = BigInt(Math.max(1, msgCount))
