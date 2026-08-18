@@ -8,7 +8,6 @@
  * - Chain support queries
  */
 
-import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import { Chain, EvmChain } from '@vultisig/core-chain/Chain'
 import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { getErc20Allowance } from '@vultisig/core-chain/chains/evm/erc20/getErc20Allowance'
@@ -41,6 +40,8 @@ import { vaultDataToIdentity } from '../../tools/prep/types'
 import {
   CoinInput,
   isAccountCoin,
+  resolveSwapAmountBaseUnits,
+  resolveSwapAmountHuman,
   SwapApprovalInfo,
   SwapFees,
   SwapPrepareResult,
@@ -83,7 +84,7 @@ export class SwapService {
           )
         : null
 
-      const chainAmount = toChainAmount(params.amount, fromCoin.decimals)
+      const chainAmount = resolveSwapAmountBaseUnits(params, fromCoin.decimals)
 
       // Call core's findSwapQuote
       const quoteInput: FindSwapQuoteInput = {
@@ -144,6 +145,11 @@ export class SwapService {
       const fromCoin = await this.resolveCoinInput(params.fromCoin)
       const toCoin = await this.resolveCoinInput(params.toCoin)
 
+      // `prepareSwapTxFromKeys` is built on the human-string amount path;
+      // `amountBaseUnits` (when provided) round-trips losslessly through
+      // `formatUnits` here (see resolveSwapAmountHuman).
+      const humanAmount = resolveSwapAmountHuman(params, fromCoin.decimals)
+
       // Delegate payload construction to vault-free helper
       const walletCore = await this.wasmProvider.getWalletCore()
       const keysignPayload = await prepareSwapTxFromKeys(
@@ -151,7 +157,7 @@ export class SwapService {
         {
           fromCoin,
           toCoin,
-          amount: params.amount,
+          amount: humanAmount,
           swapQuote: params.swapQuote.quote,
         },
         walletCore
@@ -178,7 +184,7 @@ export class SwapService {
       // Emit swap prepared event
       this.emitEvent('swapPrepared', {
         provider: params.swapQuote.provider,
-        fromAmount: params.amount.toString(),
+        fromAmount: humanAmount,
         toAmountExpected: params.swapQuote.estimatedOutput.toString(),
         requiresApproval: !!keysignPayload.erc20ApprovePayload,
       })
