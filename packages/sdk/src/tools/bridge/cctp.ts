@@ -28,6 +28,8 @@
 
 import { EvmChain } from '@vultisig/core-chain/Chain'
 
+import { normalizeChain } from '../../utils/normalizeChain'
+
 /**
  * CCTP contract configuration for a single chain. Mirrors the Go
  * `cctp.ChainConfig` struct, plus the SDK's `EvmChain` enum key and the
@@ -111,8 +113,20 @@ export const cctpChains: Record<string, CctpChainConfig> = {
 /** List of CCTP-supported chain names, for descriptions / error text. */
 export const cctpSupportedChains = Object.keys(cctpChains)
 
-/** Lookup CCTP config for a chain. Returns undefined for unsupported chains. */
-export const getCctpChain = (chainName: string): CctpChainConfig | undefined => cctpChains[chainName]
+/**
+ * Lookup CCTP config for a chain. Resolves `chainName` through the SDK's
+ * canonical LLM-tolerant chain normalizer (tickers, aliases, natural-language
+ * phrasings) before the registry lookup, so callers don't have to
+ * pre-normalize and same-chain alias pairs (`"Ethereum"` vs `"eth"`) resolve
+ * to the same config. Returns undefined for unrecognized or non-CCTP chains.
+ */
+export const getCctpChain = (chainName: string): CctpChainConfig | undefined => {
+  try {
+    return cctpChains[normalizeChain(chainName)]
+  } catch {
+    return undefined
+  }
+}
 
 /**
  * Circle CCTP attestation API base URL.

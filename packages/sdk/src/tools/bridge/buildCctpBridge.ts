@@ -156,10 +156,6 @@ export const buildCctpBridge = (params: BuildCctpBridgeParams): CctpBridgeResult
   const srcChainName = params.sourceChain.trim()
   const dstChainName = params.destinationChain.trim()
 
-  if (srcChainName === dstChainName) {
-    throw new Error('sourceChain and destinationChain must be different')
-  }
-
   const srcCctp: CctpChainConfig | undefined = getCctpChain(srcChainName)
   if (!srcCctp) {
     throw new Error(
@@ -171,6 +167,13 @@ export const buildCctpBridge = (params: BuildCctpBridgeParams): CctpBridgeResult
     throw new Error(
       `destination chain ${JSON.stringify(dstChainName)} is not supported by CCTP. Supported: ${cctpSupportedChains.join(', ')}`
     )
+  }
+
+  // Compare CANONICAL chains, not raw input strings — "Ethereum" and "eth"
+  // are the same chain through different aliases and must be rejected as
+  // identical, not slip through because the strings differ.
+  if (srcCctp.chain === dstCctp.chain) {
+    throw new Error('sourceChain and destinationChain must be different')
   }
 
   const rawAmount = parseUsdcAmount(params.amount)
@@ -214,11 +217,11 @@ export const buildCctpBridge = (params: BuildCctpBridgeParams): CctpBridgeResult
   })
 
   return {
-    chain: srcChainName,
+    chain: srcCctp.chain,
     chainId: srcCctp.evmChainId,
     provider: 'cctp',
-    fromChain: srcChainName,
-    toChain: dstChainName,
+    fromChain: srcCctp.chain,
+    toChain: dstCctp.chain,
     fromSymbol: 'USDC',
     toSymbol: 'USDC',
     transactions: [
@@ -227,7 +230,7 @@ export const buildCctpBridge = (params: BuildCctpBridgeParams): CctpBridgeResult
         value: '0',
         data: approveData,
         action: 'approve',
-        description: `Approve USDC spending by TokenMessenger on ${srcChainName} (step 1 of 2)`,
+        description: `Approve USDC spending by TokenMessenger on ${srcCctp.chain} (step 1 of 2)`,
       },
       {
         to: getAddress(srcCctp.tokenMessenger),

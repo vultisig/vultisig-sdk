@@ -128,6 +128,19 @@ describe('buildCctpBridge', () => {
     ).toThrow(/not supported by CCTP/)
   })
 
+  it('resolves chain aliases through the canonical normalizer (ticker, lowercase, natural-language)', () => {
+    const res = buildCctpBridge({ sourceChain: 'eth', destinationChain: 'Arbitrum One', amount: '1', from: SENDER })
+    expect(res.chain).toBe('Ethereum')
+    expect(res.fromChain).toBe('Ethereum')
+    expect(res.toChain).toBe('Arbitrum')
+  })
+
+  it('rejects same-chain alias pairs that resolve to the same canonical chain', () => {
+    expect(() =>
+      buildCctpBridge({ sourceChain: 'Ethereum', destinationChain: 'eth', amount: '1', from: SENDER })
+    ).toThrow(/must be different/)
+  })
+
   it('refuses a burn-address mintRecipient (fund-safety) — all 3 canonical variants', () => {
     // dead (case-insensitive checksum)
     expect(() =>
@@ -201,6 +214,14 @@ describe('buildCctpClaim', () => {
   it('rejects malformed hex', () => {
     expect(() => normalizeHexBytes('0xZZ', 'message')).toThrow(/not valid hex/)
     expect(() => normalizeHexBytes('0xabc', 'message')).toThrow(/odd hex length/)
+  })
+
+  it('resolves the destination chain alias through the canonical normalizer', () => {
+    const message = '0x' + 'ab'.repeat(100)
+    const attestation = '0x' + 'cd'.repeat(65)
+    const res = buildCctpClaim({ destinationChain: 'arb', message, attestation })
+    expect(res.chain).toBe('Arbitrum')
+    expect(res.chainId).toBe(42161)
   })
 })
 
