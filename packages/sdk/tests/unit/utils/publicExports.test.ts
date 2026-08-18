@@ -260,7 +260,9 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.getValidatorsUrl(sdk.Chain.Cosmos, { status: 'BOND_STATUS_BONDED', limit: 25 })).toContain(
       'status=BOND_STATUS_BONDED'
     )
-    expect(sdk.getValidatorUrl(sdk.Chain.Cosmos, 'cosmosvaloper1validator')).toContain('/validators/cosmosvaloper1validator')
+    expect(sdk.getValidatorUrl(sdk.Chain.Cosmos, 'cosmosvaloper1validator')).toContain(
+      '/validators/cosmosvaloper1validator'
+    )
   })
 
   it('exports canonical EVM chain-id, RPC, and priority-fee-clamp helpers from the root sdk surface', () => {

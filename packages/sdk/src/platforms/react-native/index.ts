@@ -525,8 +525,8 @@ export {
   getDelegationsUrl,
   getDelegatorRewardsUrl,
   getUnbondingDelegationsUrl,
-  getValidatorUrl,
   getValidatorsUrl,
+  getValidatorUrl,
 } from '@vultisig/core-chain/chains/cosmos/staking/lcdQueries'
 
 // Cosmos governance — read proposals + build unsigned MsgVote envelope.

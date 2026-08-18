@@ -208,7 +208,9 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.getValidatorsUrl(rn.Chain.Cosmos, { status: 'BOND_STATUS_BONDED', limit: 25 })).toContain(
       'status=BOND_STATUS_BONDED'
     )
-    expect(rn.getValidatorUrl(rn.Chain.Cosmos, 'cosmosvaloper1validator')).toContain('/validators/cosmosvaloper1validator')
+    expect(rn.getValidatorUrl(rn.Chain.Cosmos, 'cosmosvaloper1validator')).toContain(
+      '/validators/cosmosvaloper1validator'
+    )
   })
 
   it('exports the generic CosmWasm execute message builder from the RN root surface', async () => {
