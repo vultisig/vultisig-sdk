@@ -348,6 +348,14 @@ const configs = {
       distBase: 'chains/utxo',
     }),
     ...createSubpathConfigs({
+      input: './src/chains/ton/index.ts',
+      distBase: 'chains/ton',
+    }),
+    ...createSubpathConfigs({
+      input: './src/abi/index.ts',
+      distBase: 'abi',
+    }),
+    ...createSubpathConfigs({
       input: './src/seedphrase/index.ts',
       distBase: 'seedphrase',
     }),

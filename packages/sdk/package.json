@@ -154,6 +154,32 @@
       "require": "./dist/chains/utxo/index.cjs",
       "default": "./dist/chains/utxo/index.cjs"
     },
+    "./chains/ton": {
+      "types": "./dist/chains/ton/index.d.ts",
+      "browser": "./dist/chains/ton/index.js",
+      "worker": "./dist/chains/ton/index.js",
+      "react-native": "./dist/chains/ton/index.js",
+      "node": {
+        "import": "./dist/chains/ton/index.js",
+        "require": "./dist/chains/ton/index.cjs"
+      },
+      "import": "./dist/chains/ton/index.js",
+      "require": "./dist/chains/ton/index.cjs",
+      "default": "./dist/chains/ton/index.cjs"
+    },
+    "./abi": {
+      "types": "./dist/abi/index.d.ts",
+      "browser": "./dist/abi/index.js",
+      "worker": "./dist/abi/index.js",
+      "react-native": "./dist/abi/index.js",
+      "node": {
+        "import": "./dist/abi/index.js",
+        "require": "./dist/abi/index.cjs"
+      },
+      "import": "./dist/abi/index.js",
+      "require": "./dist/abi/index.cjs",
+      "default": "./dist/abi/index.cjs"
+    },
     "./seedphrase": {
       "types": "./dist/seedphrase/index.d.ts",
       "node": {
