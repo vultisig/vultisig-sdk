@@ -40,5 +40,7 @@ export type SwapQuote = {
  * present. Keep this as the live returned object (structured cloning is safe);
  * JSON round-tripping loses required runtime value types such as `bigint`.
  */
-export type BoundSwapQuote = SwapQuote &
+export type SafetyBoundSwapQuote = SwapQuote &
   Required<Pick<SwapQuote, 'requestedAmount' | 'expiresAt' | 'safetyFingerprint'>>
+
+export type BoundSwapQuote = SafetyBoundSwapQuote & Required<Pick<SwapQuote, 'comparableOutputAmount'>>

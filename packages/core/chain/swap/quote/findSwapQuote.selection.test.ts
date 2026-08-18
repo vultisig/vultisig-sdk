@@ -901,6 +901,25 @@ describe('findSwapQuote parallel selection', () => {
     }
   })
 
+  it('omits nativeMin metadata when MayaChain is the selected native failure', async () => {
+    vi.mocked(getCowSwapQuote).mockRejectedValue(new Error('cowswap fail'))
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('kyber fail'))
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('inch fail'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('lifi fail'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('swapkit fail'))
+    vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) => {
+      if (swapChain === Chain.THORChain) {
+        throw new Error('thor fail')
+      }
+      throw new Error('trading is halted')
+    })
+
+    await expect(findSwapQuote({ ...evmSameChainCoins, amount: 1n })).rejects.toThrow(
+      'temporarily unavailable — trading is halted on MayaChain'
+    )
+    expect(getNativeSwapMinAmountIn).not.toHaveBeenCalled()
+  })
+
   it('omits nativeMin metadata when a non-THORChain provider surfaces the below-minimum hint', async () => {
     // SwapKit/Chainflip's own minimum has nothing to do with the THORChain
     // economics `computeNativeMin` models — attaching it would be misleading.

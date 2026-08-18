@@ -51,7 +51,7 @@ import { pick } from '@vultisig/lib-utils/record/pick'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 
 import { cloneSwapSafetyValue, getSwapQuoteSafetyFingerprint } from './getSwapQuoteSafetyFingerprint'
-import type { BoundSwapQuote, SwapQuote } from './SwapQuote'
+import type { BoundSwapQuote, SafetyBoundSwapQuote, SwapQuote } from './SwapQuote'
 
 /** Optional per-aggregator affiliate overrides. When absent each aggregator
  * falls back to its own vultisig-0 default — no behavior change for existing
@@ -152,7 +152,7 @@ const bindQuoteSafetyMetadata = (
   from: AccountCoin,
   to: AccountCoin,
   requestedAmount: bigint
-): BoundSwapQuote => {
+): SafetyBoundSwapQuote => {
   const now = Date.now()
   const expiresAt = 'native' in quote.quote ? quote.quote.native.expiry * 1000 : now + GENERAL_QUOTE_PREPARATION_TTL_MS
   const effectiveExpiresAt =
