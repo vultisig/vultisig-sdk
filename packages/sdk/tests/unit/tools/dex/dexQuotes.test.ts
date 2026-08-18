@@ -8,11 +8,16 @@ import { getAmountOut, uniswapV2Quote } from '@/tools/dex/uniswapV2Quote'
 // Mock the EVM read layer so we can drive uniswapV2Quote's factory/pair/reserve
 // reads deterministically and exercise the pair-identity guard + reserve mapping
 // without hitting an RPC.
-vi.mock('@/tools/evm', () => ({
-  evmCall: vi.fn(),
-}))
-
-import { evmCall } from '@/tools/evm'
+//
+// Two mock targets sharing one vi.fn() (sdk#1946): uniswapV2Quote.ts/poolInfo.ts
+// import evmCall from the `@/tools/evm` barrel, but `_erc20.ts` (used by
+// uniswapV3PoolInfo's decimals/symbol reads) imports it from the concrete
+// `@/tools/evm/evmCall` module instead, specifically to avoid a circular
+// import back through the barrel (which re-exports getEvmBalances, which
+// itself now calls into `_erc20.ts` for bytes32-tolerant symbol decoding).
+const { evmCall } = vi.hoisted(() => ({ evmCall: vi.fn() }))
+vi.mock('@/tools/evm', () => ({ evmCall }))
+vi.mock('@/tools/evm/evmCall', () => ({ evmCall }))
 
 describe('uniswap-v2 getAmountOut', () => {
   it('applies the canonical 0.3% fee constant-product formula', () => {
