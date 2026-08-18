@@ -20,6 +20,7 @@ export type {
 export { SecureVaultCreationService } from './SecureVaultCreationService'
 
 // Vault Creation from Seedphrase Services
+export { buildKeygenPairingQrPayload } from './buildKeygenPairingQrPayload'
 export { FastVaultFromSeedphraseService } from './FastVaultFromSeedphraseService'
 export { JoinSecureVaultService } from './JoinSecureVaultService'
 export { SecureVaultFromSeedphraseService } from './SecureVaultFromSeedphraseService'
