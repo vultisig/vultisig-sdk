@@ -1,6 +1,7 @@
 import { bech32 } from 'bech32'
 import { MsgSend } from 'cosmjs-types/cosmos/bank/v1beta1/tx'
-import { MsgDelegate, MsgUndelegate } from 'cosmjs-types/cosmos/staking/v1beta1/tx'
+import { MsgWithdrawDelegatorReward } from 'cosmjs-types/cosmos/distribution/v1beta1/tx'
+import { MsgBeginRedelegate, MsgDelegate, MsgUndelegate } from 'cosmjs-types/cosmos/staking/v1beta1/tx'
 import { TxBody, TxRaw } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import { MsgExecuteContract } from 'cosmjs-types/cosmwasm/wasm/v1/tx'
 
@@ -170,6 +171,27 @@ export function decodeCosmosTx(bytes: Uint8Array, chainHint: string): Envelope {
           env.asset.contract = msg.amount.denom
           env.asset.symbol = denomToSymbol(msg.amount.denom)
         }
+        return env
+      }
+      case '/cosmos.staking.v1beta1.MsgBeginRedelegate': {
+        const msg = MsgBeginRedelegate.decode(any.value)
+        env.kind = 'redelegate'
+        // The destination (new) validator — where the stake ends up.
+        env.recipient = msg.validatorDstAddress
+        if (msg.amount) {
+          env.amount = msg.amount.amount
+          env.asset.contract = msg.amount.denom
+          env.asset.symbol = denomToSymbol(msg.amount.denom)
+        }
+        return env
+      }
+      case '/cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward': {
+        const msg = MsgWithdrawDelegatorReward.decode(any.value)
+        env.kind = 'withdrawReward'
+        env.recipient = msg.validatorAddress
+        // Reward amount is not on the wire — it's computed on-chain at
+        // execution time. amount/asset stay empty (unknown), same as any
+        // other envelope field the message itself doesn't carry.
         return env
       }
       case '/cosmwasm.wasm.v1.MsgExecuteContract': {
