@@ -71,6 +71,26 @@ describe('parseKaminoSharePosition', () => {
     expect(parsed?.isPlausible).toBe(false)
   })
 
+  it('flags parts that individually fit but together exceed the total', () => {
+    const parsed = parseKaminoSharePosition({
+      position: position('2', '2', '3'),
+      shareDecimals: 6,
+    })
+
+    expect(parsed?.isPlausible).toBe(false)
+  })
+
+  it('compares the sum against the total at reported precision, not the mint scale', () => {
+    // Truncated to 6 decimals both sides read 1.000001, but the reported sum
+    // exceeds the reported total by one 7th-decimal digit.
+    const parsed = parseKaminoSharePosition({
+      position: position('1.0000015', '0', '1.0000011'),
+      shareDecimals: 6,
+    })
+
+    expect(parsed?.isPlausible).toBe(false)
+  })
+
   it('treats an unreadable value as a failed read, not a zero balance', () => {
     expect(parseKaminoSharePosition({ position: position('1,5', '0', '1.5'), shareDecimals: 6 })).toBeUndefined()
     expect(parseKaminoSharePosition({ position: position('1', '0', ''), shareDecimals: 6 })).toBeUndefined()

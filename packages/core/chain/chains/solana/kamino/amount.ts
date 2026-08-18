@@ -231,7 +231,9 @@ const isConvertible = (rate: KaminoRate, baseUnits: bigint, decimalScales: numbe
 const divide = (numerator: bigint, denominator: bigint, roundUp: boolean): bigint =>
   roundUp ? (numerator + denominator - 1n) / denominator : numerator / denominator
 
+// Unsigned on purpose: base-unit fields are u64 values, so a signed string is
+// a malformed response, not a negative amount.
 const parseBaseUnitString = (raw: string): bigint | undefined => {
-  if (!/^-?\d+$/.test(raw)) return undefined
+  if (!/^\d+$/.test(raw)) return undefined
   return BigInt(raw)
 }

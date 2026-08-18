@@ -90,6 +90,20 @@ export const kaminoRateEquals = (rate: KaminoRate, raw: string): boolean => {
 }
 
 /**
+ * Orders two exact rates: negative when `lhs < rhs`, zero when equal,
+ * positive when `lhs > rhs`. Both values are brought to a common scale first,
+ * so the comparison happens at full reported precision rather than after a
+ * truncation that could mask a one-base-unit difference.
+ */
+export const compareKaminoRates = (lhs: KaminoRate, rhs: KaminoRate): number => {
+  const scale = Math.max(lhs.scale, rhs.scale)
+  const a = lhs.numerator * 10n ** BigInt(scale - lhs.scale)
+  const b = rhs.numerator * 10n ** BigInt(scale - rhs.scale)
+  if (a === b) return 0
+  return a < b ? -1 : 1
+}
+
+/**
  * Renders the rate back to its plain decimal-string form (no trailing zeros,
  * no exponent).
  */

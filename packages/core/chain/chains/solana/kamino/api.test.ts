@@ -66,4 +66,14 @@ describe('kamino api error envelope', () => {
       'https://api.kamino.finance/kvaults/users/ownerPubkey/positions'
     )
   })
+
+  it('encodes path parameters so a hostile value cannot change the endpoint', async () => {
+    vi.mocked(queryUrl).mockResolvedValue([] as never)
+
+    await fetchKaminoUserPositions('../vaults/x?y=#z')
+
+    expect(vi.mocked(queryUrl).mock.calls[0]?.[0]).toBe(
+      'https://api.kamino.finance/kvaults/users/..%2Fvaults%2Fx%3Fy%3D%23z/positions'
+    )
+  })
 })

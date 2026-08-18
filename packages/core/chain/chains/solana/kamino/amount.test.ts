@@ -44,6 +44,11 @@ describe('kaminoTokenAmountFromBaseUnitString', () => {
     expect(kaminoTokenAmountFromBaseUnitString('', 6)).toBeUndefined()
     expect(kaminoTokenAmountFromBaseUnitString('1e5', 6)).toBeUndefined()
   })
+
+  it('refuses signed base-unit strings — the fields are u64 values', () => {
+    expect(kaminoTokenAmountFromBaseUnitString('-100000', 6)).toBeUndefined()
+    expect(kaminoTokenAmountFromBaseUnitString('-0', 6)).toBeUndefined()
+  })
 })
 
 describe('kaminoShareAmountFromDecimalString', () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { kaminoRateEquals, parseKaminoRate, renderKaminoRate, sumKaminoRates } from './rate'
+import { compareKaminoRates, kaminoRateEquals, parseKaminoRate, renderKaminoRate, sumKaminoRates } from './rate'
 
 describe('parseKaminoRate', () => {
   it('parses exactly without going through floating point', () => {
@@ -50,6 +50,16 @@ describe('kaminoRateEquals', () => {
   it('an unreadable figure is never equal to a readable one', () => {
     const rate = parseKaminoRate('1.5')
     expect(kaminoRateEquals(rate!, '1,5')).toBe(false)
+  })
+})
+
+describe('compareKaminoRates', () => {
+  it('orders across differing scales at full precision', () => {
+    const a = parseKaminoRate('1.0000015')!
+    const b = parseKaminoRate('1.000001')!
+    expect(compareKaminoRates(a, b)).toBe(1)
+    expect(compareKaminoRates(b, a)).toBe(-1)
+    expect(compareKaminoRates(parseKaminoRate('1.50')!, parseKaminoRate('1.5')!)).toBe(0)
   })
 })
 

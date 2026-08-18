@@ -175,4 +175,12 @@ describe('fetchKaminoVaultInfo', () => {
 
     expect(info.tokensAvailable).toBeUndefined()
   })
+
+  it('drops a negative liquidity figure — advisory data is never surfaced below zero', async () => {
+    mockApi(stateFor(steakhouseUsdc), metrics({ tokensAvailable: '-1' }))
+
+    const info = await fetchKaminoVaultInfo(steakhouseUsdc.address)
+
+    expect(info.tokensAvailable).toBeUndefined()
+  })
 })

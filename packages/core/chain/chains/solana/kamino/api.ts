@@ -57,13 +57,18 @@ const kaminoGet = async <T>(path: string, timeoutMs?: number): Promise<T> => {
   }
 }
 
+// Path parameters are encoded because nothing in this module enforces that
+// they are pubkeys: a value containing `/`, `?` or `#` would otherwise change
+// which endpoint is called. A base58 string passes through unchanged.
+const segment = encodeURIComponent
+
 /** Fetches a vault's live state (`GET /kvaults/vaults/{address}`). */
 export const fetchKaminoVaultState = (address: string): Promise<KaminoVaultStateResponse> =>
-  kaminoGet(`/kvaults/vaults/${address}`)
+  kaminoGet(`/kvaults/vaults/${segment(address)}`)
 
 /** Fetches a vault's metrics (`GET /kvaults/vaults/{address}/metrics`). */
 export const fetchKaminoVaultMetrics = (address: string): Promise<KaminoVaultMetricsResponse> =>
-  kaminoGet(`/kvaults/vaults/${address}/metrics`)
+  kaminoGet(`/kvaults/vaults/${segment(address)}/metrics`)
 
 /**
  * Fetches every kVault position the owner holds
@@ -71,11 +76,11 @@ export const fetchKaminoVaultMetrics = (address: string): Promise<KaminoVaultMet
  * this read gates withdraws.
  */
 export const fetchKaminoUserPositions = (owner: string): Promise<KaminoUserPositionResponse[]> =>
-  kaminoGet(`/kvaults/users/${owner}/positions`, positionsReadTimeoutMs)
+  kaminoGet(`/kvaults/users/${segment(owner)}/positions`, positionsReadTimeoutMs)
 
 /**
  * Fetches lifetime PnL for one position
  * (`GET /kvaults/users/{owner}/vaults/{vault}/pnl`).
  */
 export const fetchKaminoPnl = ({ owner, vault }: { owner: string; vault: string }): Promise<KaminoPnlResponse> =>
-  kaminoGet(`/kvaults/users/${owner}/vaults/${vault}/pnl`)
+  kaminoGet(`/kvaults/users/${segment(owner)}/vaults/${segment(vault)}/pnl`)

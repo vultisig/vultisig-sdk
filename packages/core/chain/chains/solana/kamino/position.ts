@@ -1,6 +1,6 @@
 import { KaminoShareAmount, kaminoShareAmount, kaminoShareAmountFromDecimalString, scaleKaminoRate } from './amount'
 import { KaminoUserPositionResponse } from './models'
-import { kaminoRateEquals, parseKaminoRate, sumKaminoRates } from './rate'
+import { compareKaminoRates, kaminoRateEquals, parseKaminoRate, sumKaminoRates } from './rate'
 
 /**
  * The user's share balance in one vault, split the way `/positions` reports
@@ -54,10 +54,12 @@ export type KaminoSharePosition = {
   accountsForItsTotal: boolean
   /**
    * Whether the three reported numbers can all be true at once. A response
-   * saying the user holds more of either kind of share than they hold in
-   * total is one whose figures cannot be spent as a balance — and spending a
-   * balance that is too large is precisely the mistake the API turns into
-   * `u64::MAX`.
+   * whose parts sum past its total says the user holds more shares than they
+   * hold — figures that cannot be spent as a balance, and spending a balance
+   * that is too large is precisely the mistake the API turns into `u64::MAX`.
+   * The sum is compared at the API's own precision, like
+   * `accountsForItsTotal`: each part can sit below the total while the pair
+   * still exceeds it, and a truncated comparison could mask a real excess.
    */
   isPlausible: boolean
 }
@@ -87,6 +89,7 @@ export const parseKaminoSharePosition = ({
   if (!staked || !unstaked || !total || !spendable) return undefined
 
   const reportedSum = sumKaminoRates(position.stakedShares, position.unstakedShares)
+  const reportedTotal = parseKaminoRate(position.totalShares)
 
   return {
     staked,
@@ -94,11 +97,10 @@ export const parseKaminoSharePosition = ({
     total,
     spendable,
     accountsForItsTotal: reportedSum ? kaminoRateEquals(reportedSum, position.totalShares) : false,
+    // The amounts above parsed, so the parts are non-negative; what remains to
+    // check is that together they do not exceed the total.
     isPlausible:
-      staked.baseUnits >= 0n &&
-      unstaked.baseUnits >= 0n &&
-      staked.baseUnits <= total.baseUnits &&
-      unstaked.baseUnits <= total.baseUnits,
+      reportedSum !== undefined && reportedTotal !== undefined && compareKaminoRates(reportedSum, reportedTotal) <= 0,
   }
 }
 
