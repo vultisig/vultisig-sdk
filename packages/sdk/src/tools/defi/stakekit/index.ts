@@ -62,9 +62,10 @@ function withScanRequest<T extends object>(scanRequest: ScanRequest, rest: T): {
 
 /**
  * Map a yield.xyz network slug to the PascalCase chain name the app uses everywhere.
- * Mirrors mcp-ts's `yieldNetworkToCanonicalChain`.
+ * Mirrors mcp-ts's `yieldNetworkToCanonicalChain`. Public so consumers that need
+ * the same network→chain bridge can import it instead of vendoring the mapper.
  */
-function yieldNetworkToCanonicalChain(network: string): string | null {
+export function yieldNetworkToCanonicalChain(network: string): string | null {
   switch (network) {
     case 'ethereum':
       return 'Ethereum'
@@ -344,6 +345,15 @@ export function parseActionDisplay(data: YieldActionResponse) {
   }
 }
 
+/** Canonical shape returned by {@link parseActionDisplay}. */
+export type StakekitActionDisplay = ReturnType<typeof parseActionDisplay>
+
+/** Canonical result of the enter/manage builders: the display envelope with `scan_request` prepended. */
+export type StakekitActionResult = { scan_request: ScanRequest } & StakekitActionDisplay
+
+/** Canonical result of {@link stakekitBuildExit}: an action result plus the cooldown period, when known. */
+export type StakekitExitResult = StakekitActionResult & { cooldown_days?: number }
+
 // --- Validator picker ---
 
 function pickValidators(validators: Validator[]): string[] {
@@ -472,8 +482,31 @@ export async function stakekitSearch(params: {
   return products
 }
 
+/** Canonical result of {@link stakekitDetails}. */
+export type StakekitDetailsResult = {
+  id: string
+  name: string
+  token: string
+  network: string
+  apy: number
+  type: string
+  provider: string
+  isAvailable: boolean
+  fee: { percentage: number } | null
+  cooldownDays: number
+  warmupDays: number
+  rewardSchedule: string
+  rewardClaiming: string
+  enterEnabled: boolean
+  exitEnabled: boolean
+  acceptedTokens: { symbol: string; network: string; address?: string }[]
+}
+
 /** Get full yield product metadata. */
-export async function stakekitDetails(params: { apiKey?: string; yieldId: string }): Promise<object> {
+export async function stakekitDetails(params: {
+  apiKey?: string
+  yieldId: string
+}): Promise<StakekitDetailsResult> {
   const p = await getYield(params.yieldId, params.apiKey)
   return {
     id: p.id,
@@ -552,7 +585,7 @@ export async function stakekitBuildEnter(params: {
   amount: string
   validatorAddresses?: string[]
   tronResource?: 'BANDWIDTH' | 'ENERGY'
-}): Promise<object> {
+}): Promise<StakekitActionResult> {
   const inputErr = validateStakekitActionInput(params.address, params.amount)
   if (inputErr) throw new Error(inputErr)
   const resolved = await resolveActionArgs(
@@ -613,7 +646,7 @@ export async function stakekitBuildExit(params: {
   amount: string
   validatorAddresses?: string[]
   tronResource?: 'BANDWIDTH' | 'ENERGY'
-}): Promise<object> {
+}): Promise<StakekitExitResult> {
   const inputErr = validateStakekitActionInput(params.address, params.amount)
   if (inputErr) throw new Error(inputErr)
   const resolved = await resolveActionArgs(
@@ -683,7 +716,7 @@ export async function stakekitBuildManage(params: {
     | 'UNLOCK_LOCKED'
     | 'RESTAKE'
   passthrough: string
-}): Promise<object> {
+}): Promise<StakekitActionResult> {
   const addrErr = validateStakekitActionAddress(params.address)
   if (addrErr) throw new Error(addrErr)
   const raw = await callYieldActionWithFallback({
