@@ -1,5 +1,100 @@
 # @vultisig/core-mpc
 
+## 1.20.1
+
+### Patch Changes
+
+- [#1880](https://github.com/vultisig/vultisig-sdk/pull/1880) [`39b8762`](https://github.com/vultisig/vultisig-sdk/commit/39b8762aeed25382bf803944c1b2c2066f6224a6) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Resolve MayaChain's displayed native transaction fee from live network parameters and clarify vault-based Cosmos fee signing semantics.
+
+- Updated dependencies [[`f7caa39`](https://github.com/vultisig/vultisig-sdk/commit/f7caa39ad2eb3d322031d8ac56ae832a9108e6d4), [`50257ad`](https://github.com/vultisig/vultisig-sdk/commit/50257ad213a36952509f3548100334e5f3e44a09), [`69b1c2e`](https://github.com/vultisig/vultisig-sdk/commit/69b1c2e4026e62a83151957a91651eaa982d0a13), [`687f1ad`](https://github.com/vultisig/vultisig-sdk/commit/687f1adea7c81dde4a5f21520ea1cdbbf34e10fd), [`76163b6`](https://github.com/vultisig/vultisig-sdk/commit/76163b6e533cb0178c999e5b6554bddf4517718e)]:
+  - @vultisig/core-chain@2.37.0
+  - @vultisig/lib-utils@0.10.5
+
+## 1.20.0
+
+### Minor Changes
+
+- [#1830](https://github.com/vultisig/vultisig-sdk/pull/1830) [`1fd27b9`](https://github.com/vultisig/vultisig-sdk/commit/1fd27b9103b75a13191f173ebeed98288d8c16b0) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fail closed when LI.FI returns a destination outside its official chain-scoped Diamond deployments. Accept that Diamond as LI.FI's deterministic approval-spender fast path, while requiring an independent benign Blockaid verdict for any route-dependent spender that differs from it. Require the same independent verdicts for SwapKit EVM transaction destinations and approval spenders, while retaining response-local target-address binding as defense in depth.
+
+  **Consumer-visible behavior changes:**
+
+  - **New runtime throws on the signing path.** A LI.FI destination outside the official Diamond, a distinct LI.FI approval spender that doesn't clear an independent Blockaid check, or a SwapKit destination/approval-spender that doesn't clear the same check now throws during quote construction and co-signer signing-input construction. A consumer on a caret range picks this up automatically.
+  - **Dynamic LI.FI approval spenders and SwapKit addresses add a live third-party network call (Blockaid) during MPC signing**, per co-signer. The official LI.FI Diamond remains an offline fast path. A slow or unreachable Blockaid response can stall a signing ceremony for up to the shared `queryUrl` timeout (20s default) before throwing.
+
+### Patch Changes
+
+- Updated dependencies [[`1fd27b9`](https://github.com/vultisig/vultisig-sdk/commit/1fd27b9103b75a13191f173ebeed98288d8c16b0), [`003ee98`](https://github.com/vultisig/vultisig-sdk/commit/003ee98728f3318eb2de661209f164b449150810), [`44f0ecb`](https://github.com/vultisig/vultisig-sdk/commit/44f0ecbdf10b07789341c0279041d3a1e37d46a0), [`eb25508`](https://github.com/vultisig/vultisig-sdk/commit/eb25508eadfde14ee62470e64d8c2b590627fd76)]:
+  - @vultisig/core-chain@2.36.0
+
+## 1.19.2
+
+### Patch Changes
+
+- [#1846](https://github.com/vultisig/vultisig-sdk/pull/1846) [`8faa612`](https://github.com/vultisig/vultisig-sdk/commit/8faa612e6358af0a77cebf9c06d8865d832b69df) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Reserve the OP-stack balance-check surcharges in the EVM fee amount, so a native max send on Optimism, Base, Blast or Mantle stays affordable at broadcast. op-geth requires `value + gasLimit * maxFeePerGas + l1Cost + operatorCost`, and an amount that left only the gas term behind was rejected by exactly the difference — after the keysign ceremony had already run. Both oracle reads fail open, so a chain whose oracle is unreachable or predates a term behaves exactly as before.
+
+- [#1844](https://github.com/vultisig/vultisig-sdk/pull/1844) [`69a891c`](https://github.com/vultisig/vultisig-sdk/commit/69a891ce5fbb49c6fd8951e28f66411cc5a8ff99) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(ripple): refuse a partial payment with no delivery floor
+
+  For a `signRipple` Payment this resolver binds the raw transaction's
+  `Destination` and `Amount` to the reviewed `toAddress` / `toAmount`, so the
+  bytes being signed match the terms someone approved. That binding assumes
+  `Amount` is a delivery.
+
+  `tfPartialPayment` breaks the assumption. With the flag set, `Amount` becomes a
+  maximum: the ledger delivers whatever the chosen path can source and records
+  the real figure only in the executed transaction's metadata
+  (`delivered_amount`). The reviewed amount is still matched byte for byte and
+  still describes nothing the recipient will actually receive, while the sender
+  can be charged the full `SendMax`. A cross-currency self-swap — the shape where
+  `Destination` is the sender's own address — turns an attractive receive figure
+  into dust for the price of the whole `SendMax`.
+
+  A `DeliverMin` restores a floor only if it actually guarantees the reviewed
+  amount: `DeliverMin` must be the same asset as `Amount` (native XRP, or the
+  same issued-currency code and issuer) and at least as much value, so a
+  partial payment carrying one is forwarded unchanged only when the recipient
+  is guaranteed to receive no less than what was reviewed. A `DeliverMin` that
+  is merely present and positive — but floors delivery at a fraction of
+  `Amount`, or in an unrelated currency — is refused: it satisfies "the field
+  is there" while leaving the sender able to pay the full `SendMax` for dust,
+  which is the exact outcome this resolver exists to prevent. `Flags` that
+  cannot be read as a uint32 — the `{ tfPartialPayment: true }` object form
+  some client libraries accept — are refused for the same reason, since they
+  may carry the very bit being checked.
+
+- Updated dependencies [[`8faa612`](https://github.com/vultisig/vultisig-sdk/commit/8faa612e6358af0a77cebf9c06d8865d832b69df)]:
+  - @vultisig/core-chain@2.35.1
+
+## 1.19.1
+
+### Patch Changes
+
+- [#1813](https://github.com/vultisig/vultisig-sdk/pull/1813) [`aaa3aa9`](https://github.com/vultisig/vultisig-sdk/commit/aaa3aa93b62b6933f09ba8a33d09806d051215b9) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(ripple): only declare genuine trust lines as TrustSet
+
+  `RippleSpecific.transaction_type` was set from the coin's shape alone, but an
+  issued-currency Payment has the identical shape — a non-native Ripple coin with
+  a `contractAddress`. So sending a token stamped that payload
+  `TRANSACTION_TYPE_RIPPLE_TRUST_SET`.
+
+  That is worse than the ambiguity it was meant to remove. Before the field
+  existed, a token send diverged: this SDK built a TrustSet, an iOS co-signer
+  built a Payment, and the ceremony failed without signing anything. With the
+  field set, every signer agrees to build a TrustSet — so the ceremony _completes_
+  over an operation the user never asked for, setting a trust-line limit to the
+  amount they meant to send. No funds move, and nothing surfaces it.
+
+  Declaring is an assertion, so it now requires more than the shape: a TrustSet is
+  addressed to the _issuer_, the party being trusted, while a Payment is addressed
+  to a recipient.
+
+  The signing fallback is deliberately left broad. Clients already released infer
+  TrustSet from a non-native coin alone, and honouring that inference is what keeps
+  a genuine TrustSet byte-identical across a mixed-version committee; narrowing it
+  would break MPC parity with every signer in the field. A token send therefore
+  returns to diverging safely rather than completing wrongly.
+
+- Updated dependencies [[`2e1b8bb`](https://github.com/vultisig/vultisig-sdk/commit/2e1b8bb597d2d0fa052a121ab2757efa228314f5), [`67dd842`](https://github.com/vultisig/vultisig-sdk/commit/67dd8425a10f0c7b7833c02147fc0036e6ee7a64), [`3ea8b2c`](https://github.com/vultisig/vultisig-sdk/commit/3ea8b2c5133a16878991ec33d569fd8498837316)]:
+  - @vultisig/core-chain@2.35.0
+
 ## 1.19.0
 
 ### Minor Changes

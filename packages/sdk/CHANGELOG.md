@@ -1,5 +1,196 @@
 # @vultisig/sdk
 
+## 4.7.0
+
+### Minor Changes
+
+- [#2011](https://github.com/vultisig/vultisig-sdk/pull/2011) [`687f1ad`](https://github.com/vultisig/vultisig-sdk/commit/687f1adea7c81dde4a5f21520ea1cdbbf34e10fd) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Add `findSwapQuotes`, returning the full ranked swap-route candidate set (`{ best, ranked }`) alongside the auto-selected winner, so consumers can offer route selection. Each ranked entry carries the fully bound quote (request amount, expiry, safety fingerprint), its provider name, and the comparable net output used for ranking. `findSwapQuote` now delegates to it and its behavior — selection, preference band, and every error path — is unchanged.
+
+### Patch Changes
+
+- [#1779](https://github.com/vultisig/vultisig-sdk/pull/1779) [`e5937ee`](https://github.com/vultisig/vultisig-sdk/commit/e5937ee938eb19adc423a7d5ca29cee71f0592f4) Thanks [@neavra](https://github.com/neavra)! - Store CLI-managed token IDs as bare lowercase EVM contract addresses, retain reads of legacy chain-prefixed IDs, and use stable ecosystem token names in discovery. Ambiguous token symbols now fail closed, discovery collisions use address-derived discriminators, and re-adding legacy-stored contracts remains idempotent. Token removal now emits the standard JSON success envelope and token-add help documents its required name.
+
+- [#1881](https://github.com/vultisig/vultisig-sdk/pull/1881) [`f7caa39`](https://github.com/vultisig/vultisig-sdk/commit/f7caa39ad2eb3d322031d8ac56ae832a9108e6d4) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Surface Cosmos account-sequence mismatches with direction-aware recovery: stale signed transactions now require rebuilding and a new signing ceremony, while future-sequence transactions may wait for their predecessor and retry. Preserve peer-broadcast hash verification and retry only the recoverable future-sequence case.
+
+- [#1947](https://github.com/vultisig/vultisig-sdk/pull/1947) [`144cc70`](https://github.com/vultisig/vultisig-sdk/commit/144cc7085d63eb6111ae5f8b0fc948af224ecc21) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Fix `getEvmBalances` failing on ERC-20 tokens whose `symbol()` returns a legacy bytes32 (e.g. MKR) instead of a dynamic string, aborting the whole balance batch.
+
+- [#1664](https://github.com/vultisig/vultisig-sdk/pull/1664) [`42d46b6`](https://github.com/vultisig/vultisig-sdk/commit/42d46b640bb7577d2cc98af31a8776fa04728fd2) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export `buildBalancerV3SwapCalldata` from the root SDK surface so Node and browser consumers can import it the same way React Native consumers already can.
+
+- [#1658](https://github.com/vultisig/vultisig-sdk/pull/1658) [`fbdd174`](https://github.com/vultisig/vultisig-sdk/commit/fbdd174c24a79b81559e1775e33841fb024ef142) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Publish `@vultisig/sdk/chains/tron` and `@vultisig/sdk/chains/utxo` as real package subpaths with dedicated runtime and type bundles.
+
+- [#1662](https://github.com/vultisig/vultisig-sdk/pull/1662) [`ef3d8f2`](https://github.com/vultisig/vultisig-sdk/commit/ef3d8f2e37d5c8686835b9f14d36c10e2eab3a08) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export the custom-RPC override registry and health-probe helpers from the root and React Native SDK entrypoints.
+
+- [#1839](https://github.com/vultisig/vultisig-sdk/pull/1839) [`50257ad`](https://github.com/vultisig/vultisig-sdk/commit/50257ad213a36952509f3548100334e5f3e44a09) Thanks [@rcoderdev](https://github.com/rcoderdev)! - cosmos/gas: raise the TerraClassic staking gas limit from 3M to 4M
+
+  `getCosmosStakingGasLimit` now returns 4M for `Chain.TerraClassic` regardless of `msgCount`, giving external SDK consumers headroom over the observed 2,501,503-gas `MsgBeginRedelegate` path.
+
+  Also exports `TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS`, the `uluna` fee correctly priced for this 4M staking gas limit (113.3 LUNC at the chain's 28.325 uluna/gas minimum). The existing `TERRA_CLASSIC_ULUNA_BASE_GAS` / `getCosmosSendFeeBaseUnits` fee is priced for the 300k native-send gas limit and under-pays a 4M-gas staking tx by ~13x, so consumers must pair the staking gas limit with this new constant, not the send fee.
+
+- [#1872](https://github.com/vultisig/vultisig-sdk/pull/1872) [`94fe7b4`](https://github.com/vultisig/vultisig-sdk/commit/94fe7b482d5df9d382064c089c107acbd39524e4) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Publish `@vultisig/sdk/tools/balance` as a real package subpath with dedicated JS and declaration bundles.
+
+- [#1515](https://github.com/vultisig/vultisig-sdk/pull/1515) [`69b1c2e`](https://github.com/vultisig/vultisig-sdk/commit/69b1c2e4026e62a83151957a91651eaa982d0a13) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Centralize the race-safe `memoizeAsync` implementation in `@vultisig/lib-utils`, and update the SDK browser/chrome-extension runtimes to consume the shared helper so concurrent initialization work shares in-flight promises instead of duplicating async setup.
+
+- [#1880](https://github.com/vultisig/vultisig-sdk/pull/1880) [`39b8762`](https://github.com/vultisig/vultisig-sdk/commit/39b8762aeed25382bf803944c1b2c2066f6224a6) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Resolve MayaChain's displayed native transaction fee from live network parameters and clarify vault-based Cosmos fee signing semantics.
+
+- [#1722](https://github.com/vultisig/vultisig-sdk/pull/1722) [`f914e7c`](https://github.com/vultisig/vultisig-sdk/commit/f914e7c1c6f430fa54116f4c0a82f19919e0fbf6) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Preserve top-level routing metadata when normalizing flat tx payloads, and carry `chain` / `from_chain` / `to_chain` args onto split multi-leg transactions. This keeps `normalizeTx()` and `splitMultiTx()` consistent for downstream app/backend consumers that rely on the canonical SDK envelope contract.
+
+- [#1871](https://github.com/vultisig/vultisig-sdk/pull/1871) [`76163b6`](https://github.com/vultisig/vultisig-sdk/commit/76163b6e533cb0178c999e5b6554bddf4517718e) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Make the expired, zero-caller Rujira merge-balance service inert. The KUJI-to-RUJI merge window closed on 2026-04-05, so the compatibility shim now returns an empty result without querying GraphQL.
+
+- [#1495](https://github.com/vultisig/vultisig-sdk/pull/1495) [`3d0fd71`](https://github.com/vultisig/vultisig-sdk/commit/3d0fd71b923d57e52ae5760656051be22323947d) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export the canonical `IbcEnabledCosmosChain` and `VaultBasedCosmosChain` subsets from the root and React Native SDK entrypoints so first-party consumers can stop mirroring staking-chain allowlists.
+
+- [#1498](https://github.com/vultisig/vultisig-sdk/pull/1498) [`e869b4d`](https://github.com/vultisig/vultisig-sdk/commit/e869b4d0a1da17d6278ca37c991673a9b4dd0c8d) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export `buildKeygenPairingQrPayload` from the root and React Native SDK entrypoints so first-party consumers can build canonical secure-vault pairing QR payloads without deep-importing internal service paths.
+
+- [#1829](https://github.com/vultisig/vultisig-sdk/pull/1829) [`0a73b05`](https://github.com/vultisig/vultisig-sdk/commit/0a73b056a6d9fa1dc3c4c115e8c9850bcede0403) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Reject Polkadot asset-send amounts above pallet_assets `u128` and TRON TRC-20 fee limits above protobuf `int64` (at both the prep and raw-builder layers) instead of silently truncating or overflowing. Closes [#1827](https://github.com/vultisig/vultisig-sdk/issues/1827), [#1828](https://github.com/vultisig/vultisig-sdk/issues/1828).
+
+- [#1962](https://github.com/vultisig/vultisig-sdk/pull/1962) [`01f92f5`](https://github.com/vultisig/vultisig-sdk/commit/01f92f5b20461e62625b743d27a6a7571f9b0d74) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Fail closed instead of silently rounding: `getSolBalance()`'s `lamports` field is now `number | null`, returning `null` once the exact u64 balance exceeds `Number.MAX_SAFE_INTEGER` instead of re-exposing a value already corrupted by `Number()` coercion. `lamportsRaw` (base-10 string) and `sol` (exact decimal string) remain lossless across the full range and are unaffected.
+
+- [#1716](https://github.com/vultisig/vultisig-sdk/pull/1716) [`2a35932`](https://github.com/vultisig/vultisig-sdk/commit/2a35932cbde4eddad4edf9462e9f0b4063a56f62) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Preserve camelCase transaction metadata like `chainId`, `fromChain`, `toChain`, symbols, addresses, and decimals when `splitMultiTx()` expands a `transactions[]` build result into per-leg envelopes. This keeps newer SDK-native multi-leg builders from silently losing routing/display metadata that downstream app and backend consumers need.
+
+## 4.6.0
+
+### Minor Changes
+
+- [#1830](https://github.com/vultisig/vultisig-sdk/pull/1830) [`1fd27b9`](https://github.com/vultisig/vultisig-sdk/commit/1fd27b9103b75a13191f173ebeed98288d8c16b0) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fail closed when LI.FI returns a destination outside its official chain-scoped Diamond deployments. Accept that Diamond as LI.FI's deterministic approval-spender fast path, while requiring an independent benign Blockaid verdict for any route-dependent spender that differs from it. Require the same independent verdicts for SwapKit EVM transaction destinations and approval spenders, while retaining response-local target-address binding as defense in depth.
+
+  **Consumer-visible behavior changes:**
+
+  - **New runtime throws on the signing path.** A LI.FI destination outside the official Diamond, a distinct LI.FI approval spender that doesn't clear an independent Blockaid check, or a SwapKit destination/approval-spender that doesn't clear the same check now throws during quote construction and co-signer signing-input construction. A consumer on a caret range picks this up automatically.
+  - **Dynamic LI.FI approval spenders and SwapKit addresses add a live third-party network call (Blockaid) during MPC signing**, per co-signer. The official LI.FI Diamond remains an offline fast path. A slow or unreachable Blockaid response can stall a signing ceremony for up to the shared `queryUrl` timeout (20s default) before throwing.
+
+- [#1811](https://github.com/vultisig/vultisig-sdk/pull/1811) [`003ee98`](https://github.com/vultisig/vultisig-sdk/commit/003ee98728f3318eb2de661209f164b449150810) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Bind raw swap quotes to their exact coin identities, requested source amount, absolute expiry, and returned transaction, then reject missing, stale, mismatched, or mutated quotes in the vault-free swap preparation path before any payload construction. General quotes remain preparation-valid for five minutes while SDK presentation continues to recommend refreshing after 60 seconds, and vault-free callers can catch `SwapQuoteExpiredError` to requote.
+
+  Consumers must pass the live bound quote returned by `findSwapQuote` or `getSwapQuote` into preparation instead of constructing or persisting an unbound raw quote. Structured cloning is supported; JSON round-tripping is not because it loses required runtime value types such as `bigint`.
+
+- [#1898](https://github.com/vultisig/vultisig-sdk/pull/1898) [`4859206`](https://github.com/vultisig/vultisig-sdk/commit/4859206bd801c3556316561236ce549ab270676e) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Publish the canonical seedphrase normalization, validation, key-derivation, and chain-discovery helpers through the supported `@vultisig/sdk/seedphrase` subpath.
+
+### Patch Changes
+
+- [#1892](https://github.com/vultisig/vultisig-sdk/pull/1892) [`9eaa7dc`](https://github.com/vultisig/vultisig-sdk/commit/9eaa7dcbb3c01af4b88f5ff373b38e84781cb32b) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add a canonical UTXO address-brand validator and enforce it in the transaction decoder.
+
+- [#1884](https://github.com/vultisig/vultisig-sdk/pull/1884) [`9ec2d77`](https://github.com/vultisig/vultisig-sdk/commit/9ec2d7723b5a6e1d71f48976b50e45a811bb09cb) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject implausible ERC-20 decimal values across shared Uniswap V2 and V3 DEX reads.
+
+- [#1883](https://github.com/vultisig/vultisig-sdk/pull/1883) [`44f0ecb`](https://github.com/vultisig/vultisig-sdk/commit/44f0ecbdf10b07789341c0279041d3a1e37d46a0) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Share LI.FI fee-chain fallback logic between the core and React Native quote paths.
+
+- [#1529](https://github.com/vultisig/vultisig-sdk/pull/1529) [`072f292`](https://github.com/vultisig/vultisig-sdk/commit/072f292338454a3bead7a17fe5b863904d03fc01) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export `getEvmRpcUrl` from the root SDK entrypoint and have the CLI agent executor use the shared EVM RPC resolver for gas refreshes and pending nonce checks.
+
+- [#1890](https://github.com/vultisig/vultisig-sdk/pull/1890) [`0967744`](https://github.com/vultisig/vultisig-sdk/commit/0967744cf0a6697f0dfe66f4f6ce31d6dd90d576) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Expose the documented `sdk.evm`, `sdk.token`, and `sdk.cosmos.gov` helper namespaces while preserving the existing flat exports.
+
+- [#1928](https://github.com/vultisig/vultisig-sdk/pull/1928) [`5814430`](https://github.com/vultisig/vultisig-sdk/commit/5814430f1cdbbe007fc943c3940971f0b3b61c02) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Publish dedicated `@vultisig/sdk/tx` and `@vultisig/sdk/tools/decode` subpaths with JavaScript and declaration bundles.
+
+- [#1553](https://github.com/vultisig/vultisig-sdk/pull/1553) [`4abbac7`](https://github.com/vultisig/vultisig-sdk/commit/4abbac7baf523df8af5a9b2bdf941ce72f8e1073) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export the canonical Noon vault helper family from `@vultisig/sdk/react-native` so first-party mobile consumers can reuse the shared SDK contract instead of maintaining local mirrors.
+
+- [#1560](https://github.com/vultisig/vultisig-sdk/pull/1560) [`f243bec`](https://github.com/vultisig/vultisig-sdk/commit/f243bec2191dffbc17af8b4f774e7d307b5c632d) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export swap-progress explorer helpers and the THORChain LP v2 helper family from `@vultisig/sdk/react-native`.
+
+- [#1563](https://github.com/vultisig/vultisig-sdk/pull/1563) [`a169543`](https://github.com/vultisig/vultisig-sdk/commit/a169543b62aa8ce4154cb5236806a54275a7aa42) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Keep the SDK IBC route table in sync with first-party consumers by adding the direct `cosmoshub-4` → `noble-1` channel-536 path to `prepareIbcTransfer()` and route discovery.
+
+- [#1887](https://github.com/vultisig/vultisig-sdk/pull/1887) [`1108d64`](https://github.com/vultisig/vultisig-sdk/commit/1108d64869394eb5ad494c7a489d3d1cb5f2174e) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Share one strict USDC amount parser between the CCTP and ThreeJane builders so both reject signed and non-digit inputs consistently.
+
+- [#1927](https://github.com/vultisig/vultisig-sdk/pull/1927) [`1f297ae`](https://github.com/vultisig/vultisig-sdk/commit/1f297ae036379b8d6a76344cb3d027eea97a6b07) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject malformed hex and base64 strings in `decodeFromToolResult` instead of allowing `Buffer` to normalize them into different bytes.
+
+- [#1886](https://github.com/vultisig/vultisig-sdk/pull/1886) [`eb25508`](https://github.com/vultisig/vultisig-sdk/commit/eb25508eadfde14ee62470e64d8c2b590627fd76) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fail closed when Sui pagination reports more data without a usable cursor, preventing partial coin sets or portfolios from being returned as complete.
+
+## 4.5.0
+
+### Minor Changes
+
+- [#1821](https://github.com/vultisig/vultisig-sdk/pull/1821) [`6fd138c`](https://github.com/vultisig/vultisig-sdk/commit/6fd138c364d791d48f5fcd7f6f99f5dbb4756a8d) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Align React Native XRP and TON transaction-builder signing hashes with WalletCore for mixed-platform MPC ceremonies.
+
+  **Consumer-visible behavior changes:**
+
+  - **TON Jetton memo capacity narrows and becomes amount-dependent.** Previously any memo up to 123 bytes was accepted. Now `buildTonJettonTransferTx` / `prepareJettonTransferTxFromKeys` throw once the encoded comment no longer fits WalletCore's inline `forward_payload` cell. The exact cap shrinks as the transfer amount grows (larger `storeCoins` encoding leaves fewer bits for the comment) — at most ~34 ASCII bytes for large (e.g. 18-decimal, 1-token) amounts, ~39 bytes for small ones. This is a hard throw, not a truncation.
+  - **XRP `Memos[].Memo.MemoType` is no longer set.** A Payment memo previously always carried `MemoType: "text/plain"` (hex-encoded); it's now omitted to match WalletCore's raw-JSON memo path byte-for-byte. Anything downstream reading `MemoType` off a Vultisig-built XRP payment will stop seeing it.
+
+### Patch Changes
+
+- [#1763](https://github.com/vultisig/vultisig-sdk/pull/1763) [`3c2ca9f`](https://github.com/vultisig/vultisig-sdk/commit/3c2ca9f681a8473e27b876b0158c2084a53a5bd3) Thanks [@neavra](https://github.com/neavra)! - Disclose resolved token contract addresses in SDK and CLI send dry-run previews and in the CLI pre-signing confirmation preview, while leaving native-send output unchanged.
+
+- [#1846](https://github.com/vultisig/vultisig-sdk/pull/1846) [`8faa612`](https://github.com/vultisig/vultisig-sdk/commit/8faa612e6358af0a77cebf9c06d8865d832b69df) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Reserve the OP-stack balance-check surcharges in the EVM fee amount, so a native max send on Optimism, Base, Blast or Mantle stays affordable at broadcast. op-geth requires `value + gasLimit * maxFeePerGas + l1Cost + operatorCost`, and an amount that left only the gas term behind was rejected by exactly the difference — after the keysign ceremony had already run. Both oracle reads fail open, so a chain whose oracle is unreachable or predates a term behaves exactly as before.
+
+- [#1618](https://github.com/vultisig/vultisig-sdk/pull/1618) [`9d94476`](https://github.com/vultisig/vultisig-sdk/commit/9d944766d79f164c6d7997e38b106f00c332fb27) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - export the canonical vault-backup helpers and constants from the public root and react-native SDK entrypoints.
+
+- [#1624](https://github.com/vultisig/vultisig-sdk/pull/1624) [`9424ec2`](https://github.com/vultisig/vultisig-sdk/commit/9424ec2b10f899b8078a7ed1a23cc3077b370044) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Use the SDK's canonical `chainFeeCoin` registry when building CLI agent wallet context native-coin metadata.
+
+- [#1691](https://github.com/vultisig/vultisig-sdk/pull/1691) [`0e48010`](https://github.com/vultisig/vultisig-sdk/commit/0e480103a7c384c91cd6ac927d481e9ecbc616fe) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Keep Schnorr WASM signatures in their canonical Ed25519 byte order and cover real in-process DKLS and Schnorr keygen, signing, and resharing ceremonies.
+
+- [#1844](https://github.com/vultisig/vultisig-sdk/pull/1844) [`69a891c`](https://github.com/vultisig/vultisig-sdk/commit/69a891ce5fbb49c6fd8951e28f66411cc5a8ff99) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(ripple): refuse a partial payment with no delivery floor
+
+  For a `signRipple` Payment this resolver binds the raw transaction's
+  `Destination` and `Amount` to the reviewed `toAddress` / `toAmount`, so the
+  bytes being signed match the terms someone approved. That binding assumes
+  `Amount` is a delivery.
+
+  `tfPartialPayment` breaks the assumption. With the flag set, `Amount` becomes a
+  maximum: the ledger delivers whatever the chosen path can source and records
+  the real figure only in the executed transaction's metadata
+  (`delivered_amount`). The reviewed amount is still matched byte for byte and
+  still describes nothing the recipient will actually receive, while the sender
+  can be charged the full `SendMax`. A cross-currency self-swap — the shape where
+  `Destination` is the sender's own address — turns an attractive receive figure
+  into dust for the price of the whole `SendMax`.
+
+  A `DeliverMin` restores a floor only if it actually guarantees the reviewed
+  amount: `DeliverMin` must be the same asset as `Amount` (native XRP, or the
+  same issued-currency code and issuer) and at least as much value, so a
+  partial payment carrying one is forwarded unchanged only when the recipient
+  is guaranteed to receive no less than what was reviewed. A `DeliverMin` that
+  is merely present and positive — but floors delivery at a fraction of
+  `Amount`, or in an unrelated currency — is refused: it satisfies "the field
+  is there" while leaving the sender able to pay the full `SendMax` for dust,
+  which is the exact outcome this resolver exists to prevent. `Flags` that
+  cannot be read as a uint32 — the `{ tfPartialPayment: true }` object form
+  some client libraries accept — are refused for the same reason, since they
+  may carry the very bit being checked.
+
+- [#1639](https://github.com/vultisig/vultisig-sdk/pull/1639) [`348d0cd`](https://github.com/vultisig/vultisig-sdk/commit/348d0cdb20cb53553f3cad3361d3e81fda7e899b) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - export canonical EIP-712 helpers and route CLI consumers through the public SDK surface
+
+- [#1546](https://github.com/vultisig/vultisig-sdk/pull/1546) [`91862e0`](https://github.com/vultisig/vultisig-sdk/commit/91862e0960819cd4d1f859b24191fc3a1426f7c8) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export the canonical `clampEvmPriorityFee` helper from the root and React Native SDK entrypoints so first-party TypeScript consumers can share the SDK's EVM fee sanity ceiling instead of re-implementing it locally.
+
+- [#1621](https://github.com/vultisig/vultisig-sdk/pull/1621) [`d4d4665`](https://github.com/vultisig/vultisig-sdk/commit/d4d46657ffba2f8d11d81528b8caa429c655dede) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `cosmosFeeCoinDenom`, `getCosmosGasLimit`, and `getCosmosStakingGasLimit` to the `@vultisig/sdk/react-native` public entrypoint for parity with the root SDK exports.
+
+- [#1729](https://github.com/vultisig/vultisig-sdk/pull/1729) [`6298fef`](https://github.com/vultisig/vultisig-sdk/commit/6298fef8cccea2eca9798baba9385d97b4721296) Thanks [@neavra](https://github.com/neavra)! - Fix token max-sends to use the full token balance while checking the native gas balance separately.
+
+## 4.4.0
+
+### Minor Changes
+
+- [#1812](https://github.com/vultisig/vultisig-sdk/pull/1812) [`2e1b8bb`](https://github.com/vultisig/vultisig-sdk/commit/2e1b8bb597d2d0fa052a121ab2757efa228314f5) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Export an exhaustive chain-descriptor registry with explorer metadata plus helpers for deriving consumer projections and attaching compile-safe consumer-local extensions.
+
+- [#1823](https://github.com/vultisig/vultisig-sdk/pull/1823) [`1e05f2c`](https://github.com/vultisig/vultisig-sdk/commit/1e05f2c4a97772f48a2b3946a701e63e309410db) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add the versioned signable-transaction v1 schema, canonical hashing, decoder interface, approval binding, verifier, and shared fixture format.
+
+- [#1817](https://github.com/vultisig/vultisig-sdk/pull/1817) [`67dd842`](https://github.com/vultisig/vultisig-sdk/commit/67dd8425a10f0c7b7833c02147fc0036e6ee7a64) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Surface the affiliate fee SwapKit itemizes on EVM routes, and expose a route's price impact on `GeneralSwapQuote`.
+
+  The SwapKit EVM branch never populated `affiliateFee`, although the Solana branch already did, so an aggregator swap reached consumers with no swap fee to show and a total that omitted it. It now carries the fee. It stays absent when no amount can be vouched for — no fee entries, an itemized zero, or a shape that cannot be resolved — so consumers report the fee as part of the quoted rate rather than asserting a zero. Unresolvable shapes raise the new `SwapKitFeeShapeError`, which this branch swallows because the fee is not part of the signed EVM transaction; Solana still lets it throw, since its tx type requires the fee.
+
+  `GeneralSwapQuote.priceImpactFraction` carries a route's signed price impact as a fraction, read from SwapKit's `meta.priceImpact` and falling back to `totalSlippageBps`. Both are narrowed to finite numbers, since nothing validates the proxy's JSON on the way in. The unit is named in the field because the neighbouring price-impact guard exposes both fraction and percent entry points, and mixing them is a silent 100x. The field is absent for providers that publish no impact, so consumers can hide the row instead of substituting a fee figure for it.
+
+- [#1703](https://github.com/vultisig/vultisig-sdk/pull/1703) [`3ea8b2c`](https://github.com/vultisig/vultisig-sdk/commit/3ea8b2c5133a16878991ec33d569fd8498837316) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Expose a cached dynamic THORChain secured-asset catalog with an offline fallback for swap destination discovery.
+
+### Patch Changes
+
+- [#1813](https://github.com/vultisig/vultisig-sdk/pull/1813) [`aaa3aa9`](https://github.com/vultisig/vultisig-sdk/commit/aaa3aa93b62b6933f09ba8a33d09806d051215b9) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(ripple): only declare genuine trust lines as TrustSet
+
+  `RippleSpecific.transaction_type` was set from the coin's shape alone, but an
+  issued-currency Payment has the identical shape — a non-native Ripple coin with
+  a `contractAddress`. So sending a token stamped that payload
+  `TRANSACTION_TYPE_RIPPLE_TRUST_SET`.
+
+  That is worse than the ambiguity it was meant to remove. Before the field
+  existed, a token send diverged: this SDK built a TrustSet, an iOS co-signer
+  built a Payment, and the ceremony failed without signing anything. With the
+  field set, every signer agrees to build a TrustSet — so the ceremony _completes_
+  over an operation the user never asked for, setting a trust-line limit to the
+  amount they meant to send. No funds move, and nothing surfaces it.
+
+  Declaring is an assertion, so it now requires more than the shape: a TrustSet is
+  addressed to the _issuer_, the party being trusted, while a Payment is addressed
+  to a recipient.
+
+  The signing fallback is deliberately left broad. Clients already released infer
+  TrustSet from a non-native coin alone, and honouring that inference is what keeps
+  a genuine TrustSet byte-identical across a mixed-version committee; narrowing it
+  would break MPC parity with every signer in the field. A token send therefore
+  returns to diverging safely rather than completing wrongly.
+
 ## 4.3.1
 
 ### Patch Changes

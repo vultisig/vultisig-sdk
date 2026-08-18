@@ -16,6 +16,9 @@ export {
 } from './balance'
 
 // EVM utilities
+import * as evm from './evm'
+
+export { evm }
 export type { EvmBalance, EvmGasPrice, GetEvmBalancesParams, GetTokenApprovalsResult, TokenApproval } from './evm'
 export {
   abiDecode,
@@ -65,6 +68,9 @@ export type { UtxoFeeRate } from './gas'
 export { MAYACHAIN_NODE_URL, THORCHAIN_NODE_URL, utxoFeeRate } from './gas'
 
 // Token utilities
+import * as token from './token'
+
+export { token }
 export type {
   Coin,
   CoinKey,
@@ -121,6 +127,9 @@ export {
 } from './price'
 
 // Cosmos governance (read proposals + build unsigned MsgVote envelope)
+import * as cosmos from './cosmos'
+
+export { cosmos }
 export type {
   CosmosVoteEnvelope,
   GetCosmosGovernanceProposalsParams,
@@ -140,8 +149,10 @@ export type {
   AcrossQuote,
   AcrossQuoteParams,
   AstroportSwapResult,
+  BoundSwapQuote,
   BuildAstroportSwapParams,
   FindSwapQuoteParams,
+  FindSwapQuotesResult,
   JupiterQuoteResponse,
   JupiterSwapParams,
   JupiterSwapResult,
@@ -153,6 +164,7 @@ export type {
   SkipSwapSuccess,
   SkipUnsignedMsg,
   SwapQuote,
+  SwapQuoteCandidate,
 } from './swap'
 export {
   acrossQuote,
@@ -166,6 +178,7 @@ export {
   computeAstroportMinReceive,
   DEFAULT_LUNC_NOTIONAL_FLOOR_USD,
   findSwapQuote,
+  findSwapQuotes,
   getNativeSwapDecimals,
   getNativeSwapMinAmountIn,
   JUPITER_AFFILIATE_FEE_ATAS,
@@ -386,6 +399,7 @@ export {
   type SplTransferResult,
   SUI_NATIVE_COIN_TYPE,
   supportedIbcDestinationsFrom,
+  SwapQuoteExpiredError,
   TRC20_TRANSFER_SELECTOR,
   type UndelegateParams,
   type UnsignedTrc20Transfer,

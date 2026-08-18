@@ -1,9 +1,28 @@
+import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
+import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
 import { describe, expect, it } from 'vitest'
 
 import * as sdk from '../../../src/index'
+import * as dangerousAddresses from '../../../src/utils/dangerousAddresses'
 import { cosmosTxFeeGasParityCases } from '../../fixtures/cosmosTxFeeGasParity'
 
+const dangerousAddressCanonicalExports = [
+  'EVM_DANGEROUS_ADDRESSES',
+  'SOLANA_DANGEROUS_ADDRESSES',
+  'UTXO_DANGEROUS_ADDRESSES',
+  'XRP_DANGEROUS_ADDRESSES',
+  'getEvmDangerousReason',
+  'isEvmBurnAddress',
+  'getChainDangerousReason',
+  'assertSafeEvmDestination',
+  'assertSafeDestination',
+] as const
+
 describe('@vultisig/sdk public exports', () => {
+  it.each(dangerousAddressCanonicalExports)('re-exports dangerous-address canonical %s by identity', name => {
+    expect(sdk[name]).toBe(dangerousAddresses[name])
+  })
+
   it('exports fiatToAmount, toChainAmount, and chain-reference normalization utilities', () => {
     expect(typeof sdk.fiatToAmount).toBe('function')
     expect(typeof sdk.toChainAmount).toBe('function')
@@ -12,6 +31,13 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.FiatToAmountError).toBe('function')
     expect(typeof sdk.ChainAmountParseError).toBe('function')
     expect(typeof sdk.UnknownChainError).toBe('function')
+  })
+
+  it('exports canonical EIP-712 helpers for first-party consumers', () => {
+    expect(typeof sdk.coerceEip712ChainId).toBe('function')
+    expect(typeof sdk.computeEip712Hash).toBe('function')
+    expect(typeof sdk.toCanonicalEvmSignature).toBe('function')
+    expect(sdk.coerceEip712ChainId('0x89')).toBe(137)
   })
 
   it('exports the hardened toChainAmount helper and error class with scientific-notation support', () => {
@@ -97,6 +123,28 @@ describe('@vultisig/sdk public exports', () => {
     })
   })
 
+  it('exports the custom-RPC registry + health-probe canonicals from the root SDK entrypoint', () => {
+    expect(sdk.customRpcSupportedChains).toBe(customRpcSupportedChains.customRpcSupportedChains)
+    expect(sdk.customRpcSupportedEvmChains).toBe(customRpcSupportedChains.customRpcSupportedEvmChains)
+    expect(sdk.customRpcSupportedCosmosChains).toBe(customRpcSupportedChains.customRpcSupportedCosmosChains)
+    expect(sdk.isCustomRpcSupported).toBe(customRpcSupportedChains.isCustomRpcSupported)
+    expect(sdk.getCustomRpcOverride).toBe(customRpcOverrides.getCustomRpcOverride)
+    expect(sdk.setCustomRpcOverride).toBe(customRpcOverrides.setCustomRpcOverride)
+    expect(sdk.clearCustomRpcOverride).toBe(customRpcOverrides.clearCustomRpcOverride)
+    expect(sdk.setCustomRpcOverrides).toBe(customRpcOverrides.setCustomRpcOverrides)
+    expect(sdk.getCustomRpcOverrides).toBe(customRpcOverrides.getCustomRpcOverrides)
+    expect(sdk.probeRpcHealth).toBeTypeOf('function')
+
+    sdk.clearCustomRpcOverride(sdk.Chain.Ethereum)
+    expect(sdk.isCustomRpcSupported(sdk.Chain.Ethereum)).toBe(true)
+    expect(sdk.isCustomRpcSupported(sdk.Chain.THORChain)).toBe(false)
+    sdk.setCustomRpcOverride(sdk.Chain.Ethereum, ' https://rpc.example ')
+    expect(sdk.getCustomRpcOverride(sdk.Chain.Ethereum)).toBe('https://rpc.example')
+    expect(sdk.getCustomRpcOverrides()).toEqual({ [sdk.Chain.Ethereum]: 'https://rpc.example' })
+    sdk.clearCustomRpcOverride(sdk.Chain.Ethereum)
+    expect(sdk.getCustomRpcOverride(sdk.Chain.Ethereum)).toBeUndefined()
+  })
+
   it('exports prepareTrc20TransferFromKeys (pure-crypto TRC-20 builder for mcp-ts/backend)', () => {
     expect(typeof sdk.prepareTrc20TransferFromKeys).toBe('function')
     expect(sdk.TRC20_TRANSFER_SELECTOR).toBe('transfer(address,uint256)')
@@ -127,6 +175,18 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.getSplTokenBalance).toBe('function')
   })
 
+  it('exports canonical swap tracker URL helpers for first-party consumers', () => {
+    expect(typeof sdk.getSwapExplorerUrl).toBe('function')
+    expect(Array.isArray(sdk.swapExplorerProviders)).toBe(true)
+    expect(
+      sdk.getSwapExplorerUrl({
+        provider: 'li.fi',
+        txHash: '0xabc',
+        fromChain: sdk.Chain.Base,
+      })
+    ).toBe('https://scan.li.fi/tx/0xabc')
+  })
+
   it('exports Noon USDC yield helpers for Windows and Station consumers', () => {
     expect(sdk.noonUsdcVaultConfig).toBeDefined()
     expect(typeof sdk.encodeNoonDeposit).toBe('function')
@@ -144,6 +204,13 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.defi.arkis.ARKIS_OFFICIAL_ADDRESSES.dispatcher).toBe('0x2f01D7CFfe62673B3D2b680295A2D047F3848e4c')
   })
 
+  it('exports Balancer V3 calldata builder on the root sdk surface alongside other DeFi builders', () => {
+    expect(typeof sdk.buildBalancerV3SwapCalldata).toBe('function')
+    expect(typeof sdk.buildBuyPt).toBe('function')
+    expect(typeof sdk.defi.balancer.buildBalancerV3SwapCalldata).toBe('function')
+    expect(sdk.buildBalancerV3SwapCalldata).toBe(sdk.defi.balancer.buildBalancerV3SwapCalldata)
+  })
+
   it('exports the full River helper family from the root sdk surface', () => {
     expect(typeof sdk.describeRiverMarket).toBe('function')
     expect(typeof sdk.findRiverInsertHints).toBe('function')
@@ -154,8 +221,12 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.river.findInsertHints).toBe(sdk.findRiverInsertHints)
   })
 
-  it('exports Chain enum, chain helpers, and VaultBase class for first-party consumers', () => {
+  it('exports Chain enum, cosmos chain subsets, chain helpers, and VaultBase class for first-party consumers', () => {
     expect(sdk.Chain).toBeDefined()
+    expect(sdk.IbcEnabledCosmosChain.TerraClassic).toBe('TerraClassic')
+    expect(sdk.VaultBasedCosmosChain.THORChain).toBe('THORChain')
+    expect(Object.values(sdk.IbcEnabledCosmosChain)).not.toContain(sdk.Chain.THORChain)
+    expect(Object.values(sdk.VaultBasedCosmosChain)).toEqual([sdk.Chain.THORChain, sdk.Chain.MayaChain])
     expect(typeof sdk.getChainKind).toBe('function')
     expect(typeof sdk.isChainOfKind).toBe('function')
     expect(sdk.chainFeeCoin.Ethereum.ticker).toBe('ETH')
@@ -181,11 +252,18 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.thorchainSecuredAssetFallback.length).toBeGreaterThan(10)
   })
 
-  it('exports canonical EVM chain-id helpers from the root sdk surface', () => {
+  it('exports canonical EVM chain-id, RPC, and priority-fee-clamp helpers from the root sdk surface', () => {
     expect(typeof sdk.getEvmChainId).toBe('function')
     expect(typeof sdk.getEvmChainByChainId).toBe('function')
+    expect(typeof sdk.getEvmRpcUrl).toBe('function')
+    expect(typeof sdk.clampEvmPriorityFee).toBe('function')
     expect(sdk.getEvmChainId(sdk.Chain.Mantle)).toBe('0x1388')
     expect(sdk.getEvmChainByChainId('0x3e7')).toBe(sdk.Chain.Hyperliquid)
+    expect(sdk.getEvmRpcUrl(sdk.Chain.Ethereum)).toBe('https://api.vultisig.com/eth/')
+    expect(sdk.getEvmRpcUrl(sdk.Chain.Hyperliquid)).toBe('https://api.vultisig.com/hyperevm/')
+    expect(
+      sdk.clampEvmPriorityFee(sdk.Chain.Base as Parameters<typeof sdk.clampEvmPriorityFee>[0], 75n * 1_000_000_000n)
+    ).toBe(50n * 1_000_000_000n)
   })
 
   it('exports gas comparison helpers from the root sdk surface', () => {
@@ -215,10 +293,60 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.MAYA_SEND_FEE_BASE_UNITS).toBe(2_000_000_000n)
   })
 
+  it('exports the Cosmos staking gas limit helper, including TerraClassic redelegation headroom', () => {
+    expect(typeof sdk.getCosmosStakingGasLimit).toBe('function')
+    expect(sdk.getCosmosStakingGasLimit({ chain: sdk.Chain.Cosmos })).toBe(350_000n)
+    expect(sdk.getCosmosStakingGasLimit({ chain: sdk.Chain.Cosmos, msgCount: 2 })).toBe(437_500n)
+    expect(sdk.getCosmosStakingGasLimit({ chain: sdk.Chain.TerraClassic })).toBe(4_000_000n)
+  })
+
+  it('exports a TerraClassic staking fee correctly priced for the staking gas limit, not the send fee', () => {
+    expect(sdk.TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS).toBe(113_300_000n)
+    // The send-fee constant is priced for the 300k send gas limit and would
+    // under-price a 4M-gas staking tx by ~13x, causing the node to reject it
+    // for insufficient fees before it can broadcast.
+    expect(sdk.TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS).toBeGreaterThan(
+      sdk.getCosmosSendFeeBaseUnits(sdk.Chain.TerraClassic)!
+    )
+  })
+
+  it('exports a composable TerraClassic redelegation message and sufficient staking gas/fee pair', () => {
+    const gasLimit = sdk.getCosmosStakingGasLimit({ chain: sdk.Chain.TerraClassic })
+    const msg = sdk.cosmosStaking.redelegate({
+      delegatorAddress: 'terra1qyqszqgpqyqszqgpqyqszqgpqyqszqgp5hm70u',
+      validatorSrcAddress: 'terravaloper1qgpqyqszqgpqyqszqgpqyqszqgpqyqsz9u3x5e',
+      validatorDstAddress: 'terravaloper1qvpsxqcrqvpsxqcrqvpsxqcrqvpsxqcryvs87c',
+      amount: '1000000',
+      denom: 'uluna',
+    })
+
+    // The React Native entrypoint test exercises the actual SignDoc builder;
+    // this root-surface contract proves consumers can compose the message with
+    // the matching gas and fee exports instead of a stale hand-picked value.
+    const requiredFee = (gasLimit * 28_325n) / 1000n
+    expect(sdk.TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS).toBeGreaterThanOrEqual(requiredFee)
+    expect(msg.typeUrl).toBe('/cosmos.staking.v1beta1.MsgBeginRedelegate')
+  })
+
   it('exports seedphrase import chain support policy for consumers', () => {
     expect(Array.isArray(sdk.SEEDPHRASE_IMPORT_SUPPORTED_CHAINS)).toBe(true)
     expect(Array.isArray(sdk.SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS)).toBe(true)
     expect(typeof sdk.isSeedphraseImportSupportedChain).toBe('function')
+  })
+
+  it('exports the canonical node vault-backup helpers and constants from the root surface', async () => {
+    const libEncrypt = await import('@vultisig/lib-utils/encryption/vaultBackup/encryptVaultBackupWithPassword')
+    const libDecrypt = await import('@vultisig/lib-utils/encryption/vaultBackup/decryptVaultBackupWithPassword')
+    const constants = await import('@vultisig/lib-utils/encryption/vaultBackup/vaultBackupConstants')
+
+    expect(sdk.encryptVaultBackupWithPassword).toBe(libEncrypt.encryptVaultBackupWithPassword)
+    expect(sdk.decryptVaultBackupWithPassword).toBe(libDecrypt.decryptVaultBackupWithPassword)
+    expect(sdk.DEFAULT_VAULT_BACKUP_PBKDF2_ITERATIONS).toBe(constants.DEFAULT_VAULT_BACKUP_PBKDF2_ITERATIONS)
+    expect(Buffer.from(sdk.VAULT_BACKUP_BLOB_MAGIC)).toEqual(Buffer.from(constants.VAULT_BACKUP_BLOB_MAGIC))
+    expect(sdk.VAULT_BACKUP_SALT_LEN).toBe(constants.VAULT_BACKUP_SALT_LEN)
+    expect(sdk.VAULT_BACKUP_IV_LEN).toBe(constants.VAULT_BACKUP_IV_LEN)
+    expect(sdk.VAULT_BACKUP_MAGIC_LEN).toBe(constants.VAULT_BACKUP_MAGIC_LEN)
+    expect(sdk.VAULT_BACKUP_PBKDF2_HEADER_LEN).toBe(constants.VAULT_BACKUP_PBKDF2_HEADER_LEN)
   })
 
   it('exports canonical defaultChains helpers for app onboarding/import parity', () => {
@@ -232,6 +360,13 @@ describe('@vultisig/sdk public exports', () => {
       sdk.Chain.Solana,
       sdk.Chain.BSC,
     ])
+  })
+
+  it('exports the pairing-QR payload builder from the root SDK surface', async () => {
+    const services = await import('../../../src/services/buildKeygenPairingQrPayload')
+
+    expect(typeof sdk.buildKeygenPairingQrPayload).toBe('function')
+    expect(sdk.buildKeygenPairingQrPayload).toBe(services.buildKeygenPairingQrPayload)
   })
 
   it('exports generic CosmWasm amino and protobuf execute builders', () => {

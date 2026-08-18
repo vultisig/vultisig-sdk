@@ -233,3 +233,75 @@ describe('getRippleChainSpecific — states the XRPL operation on the wire', () 
     expect(res.transactionType).toBe(TransactionType.UNSPECIFIED)
   })
 })
+
+describe('getRippleChainSpecific — only genuine trust lines are declared', () => {
+  const ISSUER = 'rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De'
+  const RECIPIENT = 'rFriendDDDDDDDDDDDDDDDDDDDDDDDDDDDD'
+  const SOLO_TOKEN_ID = `534F4C4F00000000000000000000000000000000.${ISSUER}`
+
+  beforeEach(async () => {
+    const { getRippleAccountInfo } = await import('@vultisig/core-chain/chains/ripple/account/info')
+    vi.mocked(getRippleAccountInfo).mockImplementation(async (address: string) => {
+      if (address === DEST_UNFUNDED) {
+        throw new Error('Account not found.')
+      }
+
+      return accountInfo()
+    })
+  })
+
+  const issuedCurrencyPayloadTo = (toAddress: string) =>
+    create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, {
+        chain: Chain.Ripple,
+        ticker: 'SOLO',
+        address: SENDER,
+        contractAddress: SOLO_TOKEN_ID,
+        decimals: 15,
+        isNativeToken: false,
+      }),
+      toAddress,
+      toAmount: '5000000000000000',
+    })
+
+  it('does not declare a send of an issued currency a TrustSet', async () => {
+    // The coin shape is identical to a trust line's. Declaring this one would
+    // make every signer agree to build a TrustSet from a payment the user
+    // intended as a send — a completed ceremony over the wrong operation,
+    // where previously the devices simply diverged and signed nothing.
+    const res = await getRippleChainSpecific({
+      keysignPayload: issuedCurrencyPayloadTo(RECIPIENT),
+      walletCore: {} as never,
+    })
+
+    expect(res.transactionType).toBe(TransactionType.UNSPECIFIED)
+  })
+
+  it('declares a trust line, which is addressed to the issuer', async () => {
+    const res = await getRippleChainSpecific({
+      keysignPayload: issuedCurrencyPayloadTo(ISSUER),
+      walletCore: {} as never,
+    })
+
+    expect(res.transactionType).toBe(TransactionType.RIPPLE_TRUST_SET)
+  })
+
+  it('does not declare one when the token id cannot be parsed', async () => {
+    const payload = create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, {
+        chain: Chain.Ripple,
+        ticker: 'SOLO',
+        address: SENDER,
+        contractAddress: 'not-a-token-id',
+        decimals: 15,
+        isNativeToken: false,
+      }),
+      toAddress: ISSUER,
+      toAmount: '5000000000000000',
+    })
+
+    const res = await getRippleChainSpecific({ keysignPayload: payload, walletCore: {} as never })
+
+    expect(res.transactionType).toBe(TransactionType.UNSPECIFIED)
+  })
+})

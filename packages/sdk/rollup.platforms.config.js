@@ -144,7 +144,10 @@ const rnOverridePlugin = () => ({
   name: 'vultisig-rn-path-override',
   async resolveId(source, importer, options) {
     if (options?.isEntry) return null
-    const resolved = await this.resolve(source, importer, { ...options, skipSelf: true })
+    const resolved = await this.resolve(source, importer, {
+      ...options,
+      skipSelf: true,
+    })
     if (!resolved || resolved.external) return null
     const id = resolved.id.replace(/\\/g, '/')
     for (const [suffix, override] of Object.entries(rnOverrideMap)) {
@@ -238,7 +241,7 @@ const createPlugins = (platformOptions = {}) => {
   ]
 }
 
-const createToolsSubpathConfigs = ({ input, distBase }) => [
+const createSubpathConfigs = ({ input, distBase }) => [
   {
     input,
     output: {
@@ -320,17 +323,41 @@ const configs = {
         },
       }),
     },
-    ...createToolsSubpathConfigs({
+    ...createSubpathConfigs({
       input: './src/tools/parse/index.ts',
       distBase: 'tools/parse',
     }),
-    ...createToolsSubpathConfigs({
+    ...createSubpathConfigs({
       input: './src/tools/defi/index.ts',
       distBase: 'tools/defi',
     }),
-    ...createToolsSubpathConfigs({
+    ...createSubpathConfigs({
       input: './src/tools/bridge/index.ts',
       distBase: 'tools/bridge',
+    }),
+    ...createSubpathConfigs({
+      input: './src/tools/balance/index.ts',
+      distBase: 'tools/balance',
+    }),
+    ...createSubpathConfigs({
+      input: './src/chains/tron/index.ts',
+      distBase: 'chains/tron',
+    }),
+    ...createSubpathConfigs({
+      input: './src/chains/utxo/index.ts',
+      distBase: 'chains/utxo',
+    }),
+    ...createSubpathConfigs({
+      input: './src/seedphrase/index.ts',
+      distBase: 'seedphrase',
+    }),
+    ...createSubpathConfigs({
+      input: './src/tools/decode/index.ts',
+      distBase: 'tools/decode',
+    }),
+    ...createSubpathConfigs({
+      input: './src/tx/index.ts',
+      distBase: 'tx',
     }),
   ],
   browser: {

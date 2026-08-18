@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "2.34.0",
+  "version": "2.37.0",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -639,6 +639,21 @@
       "types": "./dist/chains/evm/noon/index.d.ts",
       "import": "./dist/chains/evm/noon/index.js",
       "default": "./dist/chains/evm/noon/index.js"
+    },
+    "./chains/evm/opStack/getOpStackFeeSurcharge": {
+      "types": "./dist/chains/evm/opStack/getOpStackFeeSurcharge.d.ts",
+      "import": "./dist/chains/evm/opStack/getOpStackFeeSurcharge.js",
+      "default": "./dist/chains/evm/opStack/getOpStackFeeSurcharge.js"
+    },
+    "./chains/evm/opStack/l1FeeProbeData": {
+      "types": "./dist/chains/evm/opStack/l1FeeProbeData.d.ts",
+      "import": "./dist/chains/evm/opStack/l1FeeProbeData.js",
+      "default": "./dist/chains/evm/opStack/l1FeeProbeData.js"
+    },
+    "./chains/evm/opStack/opStackChains": {
+      "types": "./dist/chains/evm/opStack/opStackChains.d.ts",
+      "import": "./dist/chains/evm/opStack/opStackChains.js",
+      "default": "./dist/chains/evm/opStack/opStackChains.js"
     },
     "./chains/evm/tx/fee": {
       "types": "./dist/chains/evm/tx/fee/index.d.ts",
@@ -1693,6 +1708,11 @@
       "import": "./dist/swap/general/lifi/api/lifiSlippage.js",
       "default": "./dist/swap/general/lifi/api/lifiSlippage.js"
     },
+    "./swap/general/lifi/api/lifiSwapFeeChain": {
+      "types": "./dist/swap/general/lifi/api/lifiSwapFeeChain.d.ts",
+      "import": "./dist/swap/general/lifi/api/lifiSwapFeeChain.js",
+      "default": "./dist/swap/general/lifi/api/lifiSwapFeeChain.js"
+    },
     "./swap/general/lifi/config": {
       "types": "./dist/swap/general/lifi/config.d.ts",
       "import": "./dist/swap/general/lifi/config.js",
@@ -1893,6 +1913,11 @@
       "import": "./dist/swap/quote/getSwapQuoteProviderName.js",
       "default": "./dist/swap/quote/getSwapQuoteProviderName.js"
     },
+    "./swap/quote/getSwapQuoteSafetyFingerprint": {
+      "types": "./dist/swap/quote/getSwapQuoteSafetyFingerprint.d.ts",
+      "import": "./dist/swap/quote/getSwapQuoteSafetyFingerprint.js",
+      "default": "./dist/swap/quote/getSwapQuoteSafetyFingerprint.js"
+    },
     "./swap/quote/SwapQuote": {
       "types": "./dist/swap/quote/SwapQuote.d.ts",
       "import": "./dist/swap/quote/SwapQuote.js",
@@ -1937,6 +1962,11 @@
       "types": "./dist/tx/broadcast/index.d.ts",
       "import": "./dist/tx/broadcast/index.js",
       "default": "./dist/tx/broadcast/index.js"
+    },
+    "./tx/broadcast/cosmosSequenceMismatch": {
+      "types": "./dist/tx/broadcast/cosmosSequenceMismatch.d.ts",
+      "import": "./dist/tx/broadcast/cosmosSequenceMismatch.js",
+      "default": "./dist/tx/broadcast/cosmosSequenceMismatch.js"
     },
     "./tx/broadcast/resolver": {
       "types": "./dist/tx/broadcast/resolver.d.ts",
@@ -2251,7 +2281,7 @@
     "@ton/crypto": "^3.3.0",
     "@trustwallet/wallet-core": "^4.7.0",
     "@vultisig/core-config": "0.9.1",
-    "@vultisig/lib-utils": "0.10.4",
+    "@vultisig/lib-utils": "0.10.5",
     "bip32": "^5.0.1",
     "bitcoinjs-lib": "^7.0.1",
     "bs58": "^6.0.0",

@@ -50,7 +50,8 @@ import { HttpResponseError } from '@vultisig/lib-utils/fetch/HttpResponseError'
 import { pick } from '@vultisig/lib-utils/record/pick'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 
-import { SwapQuote } from './SwapQuote'
+import { cloneSwapSafetyValue, getSwapQuoteSafetyFingerprint } from './getSwapQuoteSafetyFingerprint'
+import type { BoundSwapQuote, SwapQuote } from './SwapQuote'
 
 /** Optional per-aggregator affiliate overrides. When absent each aggregator
  * falls back to its own vultisig-0 default — no behavior change for existing
@@ -115,17 +116,63 @@ export type SwapQuoteProviderExcludeName = SwapQuoteProviderName | GeneralSwapPr
 
 type SwapQuoteFetcher = {
   providerName: SwapQuoteProviderName
-  fetch: () => Promise<SwapQuote>
+  fetch: () => Promise<UnboundSwapQuote>
 }
 
-type RankedSwapQuote = {
-  quote: SwapQuote
-  outputAmount: bigint
-  sourceGasUnits?: bigint
+type UnboundSwapQuote = Omit<SwapQuote, 'requestedAmount' | 'expiresAt' | 'safetyFingerprint'>
+
+/**
+ * A single fetched swap route: the fully bound quote (request amount, expiry,
+ * safety fingerprint), the provider that produced it, and its comparable net
+ * output in the destination token's smallest units. `outputAmount` is the
+ * exact value best-quote selection ranks by, so consumers can present
+ * alternatives ordered the same way the auto-selection sees them.
+ */
+export type SwapQuoteCandidate = {
+  quote: BoundSwapQuote
   providerName: SwapQuoteProviderName
+  outputAmount: bigint
+}
+
+type RankedSwapQuote = SwapQuoteCandidate & {
+  sourceGasUnits?: bigint
 }
 
 const QUOTE_FETCH_TIMEOUT_MS = 30_000
+/**
+ * General aggregators do not expose a uniform quote deadline. Keep the bound
+ * transaction usable for a normal review-and-sign round trip while the SDK's
+ * presentation layer continues to recommend a refresh after 60 seconds.
+ * Provider-supplied deadlines (currently CoW's `validTo`) still win when sooner.
+ */
+export const GENERAL_QUOTE_PREPARATION_TTL_MS = 5 * 60_000
+
+const bindQuoteSafetyMetadata = (
+  quote: UnboundSwapQuote,
+  from: AccountCoin,
+  to: AccountCoin,
+  requestedAmount: bigint
+): BoundSwapQuote => {
+  const now = Date.now()
+  const expiresAt = 'native' in quote.quote ? quote.quote.native.expiry * 1000 : now + GENERAL_QUOTE_PREPARATION_TTL_MS
+  const effectiveExpiresAt =
+    'general' in quote.quote && 'cowswap_order' in quote.quote.general.tx
+      ? Math.min(expiresAt, quote.quote.general.tx.cowswap_order.validTo * 1000)
+      : expiresAt
+
+  return {
+    ...quote,
+    requestedAmount,
+    expiresAt: effectiveExpiresAt,
+    safetyFingerprint: getSwapQuoteSafetyFingerprint({
+      from,
+      to,
+      requestedAmount,
+      expiresAt: effectiveExpiresAt,
+      quote: quote.quote,
+    }),
+  }
+}
 
 // Node/undici network-layer error codes — mirrors agent-backend-ts's
 // `TRANSIENT_QUOTE_CODE_RE` (execute_swap.ts) for the same reason: a provider's raw
@@ -426,7 +473,7 @@ const getSameChainEvmSourceGasUnits = (q: SwapQuote, from: AccountCoin, to: Acco
   return undefined
 }
 
-function selectBestEligibleQuote(settled: PromiseSettledResult<RankedSwapQuote>[]): SwapQuote | null {
+function selectBestEligibleQuote(settled: PromiseSettledResult<RankedSwapQuote>[]): BoundSwapQuote | null {
   const candidates: RankedSwapQuote[] = []
 
   for (let i = 0; i < settled.length; i++) {
@@ -488,6 +535,27 @@ function selectBestEligibleQuote(settled: PromiseSettledResult<RankedSwapQuote>[
 
   return selected?.quote ?? null
 }
+
+// Every fulfilled candidate, sorted best→worst by comparable net output.
+// Exact-output ties break by provider preference order so the returned list is
+// deterministic regardless of `Promise.allSettled` resolution order. Rejected
+// fetchers (including quotes whose output amount could not be parsed) are
+// already absent from the fulfilled set, so they never appear in the ranking.
+const rankQuoteCandidates = (settled: PromiseSettledResult<RankedSwapQuote>[]): SwapQuoteCandidate[] =>
+  settled
+    .filter((result): result is PromiseFulfilledResult<RankedSwapQuote> => result.status === 'fulfilled')
+    .map(result => result.value)
+    .sort((a, b) => {
+      if (a.outputAmount !== b.outputAmount) {
+        return a.outputAmount > b.outputAmount ? -1 : 1
+      }
+      return getProviderPreferenceRank(a.providerName) - getProviderPreferenceRank(b.providerName)
+    })
+    .map(({ quote, providerName, outputAmount }) => ({
+      quote,
+      providerName,
+      outputAmount,
+    }))
 
 // `slippageTolerance` is a percent (e.g. 0.5 = 0.5%). Reject invalid values up
 // front so they don't propagate into every provider call and fail with
@@ -588,17 +656,42 @@ const toProviderSlippage = (slippageTolerance: number | undefined): ProviderSlip
   }
 }
 
-export const findSwapQuote = async ({
-  from,
-  to,
-  amount,
-  referral,
-  vultDiscountTier,
-  affiliateConfig,
-  recipient,
-  slippageTolerance,
-  excludeProviders,
-}: FindSwapQuoteInput): Promise<SwapQuote> => {
+/**
+ * Best quote plus every fetched candidate, so a consumer can offer route
+ * selection instead of only the auto-selected winner.
+ */
+export type FindSwapQuotesResult = {
+  /** The auto-selected winner — identical to what `findSwapQuote` returns. */
+  best: BoundSwapQuote
+  /**
+   * Every successfully fetched quote (including `best`), sorted best→worst by
+   * comparable net output. `best` is not necessarily `ranked[0]`: within the
+   * preference band the auto-selection may prefer a lower-output provider (see
+   * `providerPreferenceOrder`).
+   */
+  ranked: SwapQuoteCandidate[]
+}
+
+/**
+ * Fetches quotes from every eligible provider in parallel and returns the
+ * auto-selected best quote together with the full ranked candidate set. Error
+ * behavior is identical to `findSwapQuote`: when no provider yields a usable
+ * quote, the same classified `SwapError` is thrown.
+ */
+export const findSwapQuotes = async (input: FindSwapQuoteInput): Promise<FindSwapQuotesResult> => {
+  // Provider requests yield before the returned transaction is safety-bound. Own a synchronous
+  // snapshot so caller mutations cannot make a response for pair A receive pair B's fingerprint.
+  const {
+    from,
+    to,
+    amount,
+    referral,
+    vultDiscountTier,
+    affiliateConfig,
+    recipient,
+    slippageTolerance,
+    excludeProviders,
+  } = cloneSwapSafetyValue(input)
   // Runtime guard: THORName affiliateFeeAddress must be lowercase.
   // THORChain memo parsing is case-sensitive — passing 'STVS' instead of 'stvs'
   // silently routes affiliate fees to the vultisig-0 default instead of the
@@ -660,7 +753,7 @@ export const findSwapQuote = async ({
   const getNativeFetchers = (): SwapQuoteFetcher[] =>
     matchingSwapChains.map(swapChain => ({
       providerName: swapChain === Chain.THORChain ? 'THORChain' : 'MayaChain',
-      fetch: async (): Promise<SwapQuote> => {
+      fetch: async (): Promise<UnboundSwapQuote> => {
         await assertNativeTradingOpen({ from, to, swapChain })
 
         const fromDecimals = from.decimals
@@ -715,7 +808,7 @@ export const findSwapQuote = async ({
       const buyToken = to.id
       result.push({
         providerName: 'CowSwap',
-        fetch: async (): Promise<SwapQuote> => {
+        fetch: async (): Promise<UnboundSwapQuote> => {
           const general = await getCowSwapQuote({
             sellToken,
             buyToken,
@@ -739,7 +832,7 @@ export const findSwapQuote = async ({
     ) {
       result.push({
         providerName: 'KyberSwap',
-        fetch: async (): Promise<SwapQuote> => {
+        fetch: async (): Promise<UnboundSwapQuote> => {
           const general = await getKyberSwapQuote({
             from: {
               ...from,
@@ -763,7 +856,7 @@ export const findSwapQuote = async ({
     if (!hasCustomRecipient && isOneOf(from.chain, oneInchSwapEnabledChains) && from.chain === to.chain) {
       result.push({
         providerName: '1inch',
-        fetch: async (): Promise<SwapQuote> => {
+        fetch: async (): Promise<UnboundSwapQuote> => {
           const general = await getOneInchSwapQuote({
             account: pick(from, ['address', 'chain']),
             // Pass the raw `.id` (undefined for a chain's native/fee coin) — NOT a ticker
@@ -793,7 +886,7 @@ export const findSwapQuote = async ({
     if (!hasCustomRecipient && isOneOf(fromChain, jupiterSwapEnabledChains) && fromChain === toChain) {
       result.push({
         providerName: 'Jupiter',
-        fetch: async (): Promise<SwapQuote> => {
+        fetch: async (): Promise<UnboundSwapQuote> => {
           const general = await getJupiterSwapQuote({
             from: {
               ...from,
@@ -817,7 +910,7 @@ export const findSwapQuote = async ({
     if (!hasCustomRecipient && isOneOf(fromChain, lifiSwapEnabledChains) && isOneOf(toChain, lifiSwapEnabledChains)) {
       result.push({
         providerName: 'LiFi',
-        fetch: async (): Promise<SwapQuote> => {
+        fetch: async (): Promise<UnboundSwapQuote> => {
           const general = await getLifiSwapQuote({
             from: {
               ...from,
@@ -841,7 +934,7 @@ export const findSwapQuote = async ({
     if (!hasCustomRecipient && isOneOf(fromChain, swapKitSourceChains) && isOneOf(toChain, swapKitEnabledChains)) {
       result.push({
         providerName: 'SwapKit',
-        fetch: async (): Promise<SwapQuote> => {
+        fetch: async (): Promise<UnboundSwapQuote> => {
           const general = await getSwapKitQuote({
             from: {
               ...from,
@@ -921,7 +1014,12 @@ export const findSwapQuote = async ({
 
   const settled = await Promise.allSettled(
     fetchers.map(async (fetcher): Promise<RankedSwapQuote> => {
-      const quote = await withTimeout(fetcher.fetch(), QUOTE_FETCH_TIMEOUT_MS)
+      const quote = bindQuoteSafetyMetadata(
+        await withTimeout(fetcher.fetch(), QUOTE_FETCH_TIMEOUT_MS),
+        from,
+        to,
+        amount
+      )
       return {
         quote,
         outputAmount: getComparableOutputAmount(quote, to, fetcher.providerName),
@@ -933,7 +1031,7 @@ export const findSwapQuote = async ({
   const best = selectBestEligibleQuote(settled)
 
   if (best) {
-    return best
+    return { best, ranked: rankQuoteCandidates(settled) }
   }
 
   // Scan rejected results for actionable size-related signals. Prefer the most
@@ -1087,6 +1185,14 @@ export const findSwapQuote = async ({
     `No swap route found after trying ${failedProviders.join(', ')}.`
   )
 }
+
+/**
+ * The auto-selected best swap quote across all eligible providers — equivalent
+ * to `findSwapQuotes(input)`'s `best`. Use `findSwapQuotes` when the
+ * alternatives matter (e.g. a route picker).
+ */
+export const findSwapQuote = async (input: FindSwapQuoteInput): Promise<BoundSwapQuote> =>
+  (await findSwapQuotes(input)).best
 
 const belowNativeMinimumError = (min: NativeSwapMinAmountIn, from: AccountCoin): SwapError =>
   new SwapError(
