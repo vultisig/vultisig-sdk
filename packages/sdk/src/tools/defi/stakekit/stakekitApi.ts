@@ -109,6 +109,21 @@ export type YieldBalance = {
   pendingActions: PendingAction[]
 }
 
+/**
+ * A build-PATCH failure classified as PERMANENT: the provider gave a
+ * concrete, structured reason for rejecting the build — retrying the
+ * identical request will fail identically forever (e.g. an on-chain
+ * dry-run/simulation abort). `reason` is the RAW provider text; callers
+ * must sanitize it (see `sanitizeStakekitRejectionReason` in
+ * `./finalizeStakekitAction`) before it ever reaches a user.
+ */
+export type YieldBuildFailure = {
+  permanent: boolean
+  reason: string
+  moveAbortFunctionName?: string
+  moveAbortCode?: number
+}
+
 export type YieldTransaction = {
   id: string
   title: string
@@ -117,6 +132,8 @@ export type YieldTransaction = {
   status: string
   unsignedTransaction: string // JSON string — needs JSON.parse
   gasEstimate: string // JSON string — needs JSON.parse
+  /** Set only when the async-build PATCH permanently failed (see `buildYieldTransaction`). */
+  buildError?: YieldBuildFailure
 }
 
 export type YieldActionResponse = {
@@ -389,9 +406,50 @@ export async function callYieldActionREST(
   return action_response
 }
 
+// Classify a FAILED transaction-build PATCH's response body as a PERMANENT
+// on-chain/simulation rejection vs. an ambiguous/transient failure. A
+// parseable JSON error body alone is not enough to prove permanence —
+// structured 401/429/5xx responses can also carry `message`/`details.reason`
+// — so this stays narrow: only bodies positively identifiable as an
+// on-chain rejection (MoveAbort marker, "Dry run failed") get tagged.
+// Unknown bodies stay ambiguous/transient on purpose (existing retry
+// behavior unchanged for them).
+function classifyYieldBuildFailure(rawBody: string): YieldBuildFailure | null {
+  if (!rawBody) return null
+  let parsed: { details?: { reason?: unknown } }
+  try {
+    parsed = JSON.parse(rawBody)
+  } catch {
+    return null
+  }
+  const reason =
+    typeof parsed.details?.reason === 'string' && parsed.details.reason.length > 0 ? parsed.details.reason : ''
+  if (!reason) return null
+  // MoveAbort marker (Sui/Move-VM on-chain simulation reject): pull the
+  // aborting function name + numeric code independently, tolerant of exact
+  // MoveLocation struct field ordering/formatting.
+  const fnMatch = /function_name:\s*Some\("([^"]+)"\)/.exec(reason)
+  const codeMatch = /,\s*(\d+)\)\s*in command\s*\d+/.exec(reason)
+  const looksLikeOnChainRejection = /\bMoveAbort\b|\bDry run failed\b/i.test(reason)
+  if (!fnMatch && !codeMatch && !looksLikeOnChainRejection) return null
+  return {
+    permanent: true,
+    reason,
+    ...(fnMatch ? { moveAbortFunctionName: fnMatch[1] } : {}),
+    ...(codeMatch ? { moveAbortCode: Number(codeMatch[1]) } : {}),
+  }
+}
+
 /**
  * Advance one yield.xyz transaction from `CREATED` → `WAITING_FOR_SIGNATURE`
- * by PATCH'ing it with an empty body. Internal — not exported.
+ * by PATCH'ing it with an empty body. Internal — not exported. On failure
+ * returns the original tx unchanged so the parent action still surfaces the
+ * rest of the steps — EXCEPT when the failure classifies as a PERMANENT
+ * provider rejection (e.g. an on-chain MoveAbort from a below-minimum stake
+ * amount), in which case the fallback tx is annotated with `buildError` so
+ * `finalizeStakekitAction` can surface an honest, non-retryable message
+ * instead of the generic "try again" wording (which is FALSE for a
+ * permanent rejection).
  */
 async function buildYieldTransaction(txId: string, fallback: unknown, apiKey?: string): Promise<unknown> {
   try {
@@ -402,7 +460,14 @@ async function buildYieldTransaction(txId: string, fallback: unknown, apiKey?: s
       body: '{}',
       signal: AbortSignal.timeout(30_000),
     })
-    if (!resp.ok) return fallback
+    if (!resp.ok) {
+      const respBody = await resp.text().catch(() => '')
+      const buildError = classifyYieldBuildFailure(respBody)
+      if (buildError) {
+        return { ...(fallback as Record<string, unknown>), buildError }
+      }
+      return fallback
+    }
     const updated = (await resp.json()) as { unsignedTransaction?: unknown }
     if (updated && updated.unsignedTransaction != null) {
       return updated

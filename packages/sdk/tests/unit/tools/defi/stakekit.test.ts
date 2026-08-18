@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { YieldActionResponse, YieldDiscoverOpportunity } from '@/tools/defi/stakekit'
 import {
+  finalizeStakekitAction,
+  honestStakekitBuildFailureMessage,
   parseActionDisplay,
+  sanitizeStakekitRejectionReason,
   stakekitBalances,
   stakekitBuildEnter,
   stakekitBuildExit,
@@ -257,6 +260,224 @@ describe('sdk.defi.stakekit', () => {
       // Decoded fallback: has title/type/network, no flat EVM shape
       expect(step0.title).toBe('Good step')
       expect(step0.to).toBeUndefined() // not the canonical EVM shape
+    })
+  })
+
+  describe('finalizeStakekitAction (architecture#1904)', () => {
+    it('returns signable for a normal, fully-built EVM action', () => {
+      const result = finalizeStakekitAction(makeEvmActionResponse())
+      expect(result.status).toBe('signable')
+      if (result.status === 'signable') {
+        expect(result.display.provider).toBe('yield_xyz')
+        expect(result.display.transactions).toHaveLength(2)
+      }
+    })
+
+    it('provider_error: a permanently-failed build step returns the honest below-minimum message (real MoveAbort fixture)', () => {
+      // Real fixture, ported from agent-backend-ts's yield-tools.test.ts
+      // MOVE_ABORT_BODY — this is live-captured wording, not guessed.
+      const resp = makeEvmActionResponse({
+        yieldId: 'sui-sui-native-staking',
+        amount: '0.5',
+        transactions: [
+          {
+            id: 'tx-min',
+            title: 'Stake',
+            type: 'STAKE',
+            network: 'sui',
+            status: 'FAILED',
+            unsignedTransaction: null as unknown as string,
+            gasEstimate: '{}',
+            buildError: {
+              permanent: true,
+              reason:
+                'Dry run failed, could not automatically determine a budget: MoveAbort(MoveLocation { module: ..., function_name: Some("request_add_stake") }, 10) in command 1',
+              moveAbortFunctionName: 'request_add_stake',
+              moveAbortCode: 10,
+            },
+          },
+        ],
+      })
+
+      const result = finalizeStakekitAction(resp)
+      expect(result.status).toBe('provider_error')
+      if (result.status === 'provider_error') {
+        expect(result.message).toMatch(/requires at least 1 SUI/i)
+        expect(result.message).toMatch(/0\.5/) // cites the resolved amount
+        expect(result.message).not.toMatch(/try again in a moment/i)
+        expect(result.message).not.toMatch(/MoveAbort|MoveLocation/) // raw provider dump never surfaces
+      }
+    })
+
+    it('provider_error: an unrecognized permanent rejection falls to the generic sanitized message', () => {
+      const resp = makeEvmActionResponse({
+        transactions: [
+          {
+            id: 'tx-fail',
+            title: 'Deposit',
+            type: 'SUPPLY',
+            network: 'base',
+            status: 'FAILED',
+            unsignedTransaction: null as unknown as string,
+            gasEstimate: '{}',
+            buildError: {
+              permanent: true,
+              reason: 'insufficient liquidity in the pool: MoveLocation { module: pool }',
+            },
+          },
+        ],
+      })
+      const result = finalizeStakekitAction(resp)
+      expect(result.status).toBe('provider_error')
+      if (result.status === 'provider_error') {
+        expect(result.message).toBe('The provider rejected this stake: insufficient liquidity in the pool.')
+      }
+    })
+
+    it('unsignable_sui: a Sui step carrying the JSON-intent shape (unresolved gasData) declines instead of signing blind', () => {
+      const jsonIntent = {
+        gasData: { budget: null, payment: null },
+        commands: [{ MoveCall: {} }],
+        inputs: [],
+      }
+      const resp = makeEvmActionResponse({
+        transactions: [
+          {
+            id: 'tx-sui',
+            title: 'Stake',
+            type: 'STAKE',
+            network: 'sui',
+            status: 'WAITING_FOR_SIGNATURE',
+            unsignedTransaction: Buffer.from(JSON.stringify(jsonIntent), 'utf8').toString('base64'),
+            gasEstimate: '{}',
+          },
+        ],
+      })
+      const result = finalizeStakekitAction(resp)
+      expect(result.status).toBe('unsignable_sui')
+    })
+
+    it('does NOT decline a Sui step carrying a real (non-JSON-intent) base64 payload', () => {
+      const resp = makeEvmActionResponse({
+        transactions: [
+          {
+            id: 'tx-sui-real',
+            title: 'Stake',
+            type: 'STAKE',
+            network: 'sui',
+            status: 'WAITING_FOR_SIGNATURE',
+            // Real BCS bytes never base64-decode to valid JSON text.
+            unsignedTransaction: Buffer.from([0xaa, 0xbb, 0xcc, 0xdd, 0xee]).toString('base64'),
+            gasEstimate: '{}',
+          },
+        ],
+      })
+      const result = finalizeStakekitAction(resp)
+      expect(result.status).not.toBe('unsignable_sui')
+    })
+
+    it('unsupported_chain: a network with no SDK signer (e.g. Polkadot) declines instead of shipping a raw blob', () => {
+      const resp = makeEvmActionResponse({
+        transactions: [
+          {
+            id: 'tx-dot',
+            title: 'Stake',
+            type: 'STAKE',
+            network: 'polkadot',
+            status: 'WAITING_FOR_SIGNATURE',
+            unsignedTransaction: JSON.stringify({ tx: { address: '1FRMM8...' }, blockHash: '0x233b' }),
+            gasEstimate: '{}',
+          },
+        ],
+      })
+      const result = finalizeStakekitAction(resp)
+      expect(result.status).toBe('unsupported_chain')
+    })
+
+    it('incomplete: a null unsignedTransaction (async build still pending) declines with a retryable message', () => {
+      const resp = makeEvmActionResponse({
+        transactions: [
+          {
+            id: 'tx-pending',
+            title: 'Stake',
+            type: 'STAKE',
+            network: 'base',
+            status: 'CREATED',
+            unsignedTransaction: null as unknown as string,
+            gasEstimate: '{}',
+          },
+        ],
+      })
+      const result = finalizeStakekitAction(resp)
+      expect(result.status).toBe('incomplete')
+      if (result.status === 'incomplete') {
+        expect(result.message).toMatch(/try again in a moment/i)
+      }
+    })
+
+    it('precedence: a permanent failure wins over an also-incomplete sibling step', () => {
+      const resp = makeEvmActionResponse({
+        transactions: [
+          {
+            id: 'tx-approve',
+            title: 'Approve',
+            type: 'APPROVAL',
+            network: 'base',
+            status: 'CREATED',
+            unsignedTransaction: null as unknown as string, // also "incomplete" on its own
+            gasEstimate: '{}',
+          },
+          {
+            id: 'tx-deposit',
+            title: 'Deposit',
+            type: 'SUPPLY',
+            network: 'base',
+            status: 'FAILED',
+            unsignedTransaction: null as unknown as string,
+            gasEstimate: '{}',
+            buildError: { permanent: true, reason: 'rejected' },
+          },
+        ],
+      })
+      const result = finalizeStakekitAction(resp)
+      expect(result.status).toBe('provider_error')
+    })
+  })
+
+  describe('sanitizeStakekitRejectionReason', () => {
+    it('cuts the raw MoveAbort/MoveLocation dump, keeping only the human-legible prefix', () => {
+      expect(
+        sanitizeStakekitRejectionReason(
+          'Dry run failed, could not automatically determine a budget: MoveAbort(MoveLocation { module: x }, 10) in command 1'
+        )
+      ).toBe('Dry run failed, could not automatically determine a budget')
+    })
+
+    it('falls back to a neutral phrase when nothing legible survives the cut', () => {
+      expect(sanitizeStakekitRejectionReason('MoveAbort(MoveLocation { module: x }, 10)')).toBe(
+        'the transaction was rejected on-chain'
+      )
+    })
+
+    it('returns a plain reason unchanged (no MoveAbort marker to cut)', () => {
+      expect(sanitizeStakekitRejectionReason('insufficient liquidity in the pool')).toBe(
+        'insufficient liquidity in the pool'
+      )
+    })
+  })
+
+  describe('honestStakekitBuildFailureMessage', () => {
+    it('falls back to the generic incomplete message when no buildError is present', () => {
+      const tx = {
+        id: 'tx',
+        title: 'Stake',
+        type: 'STAKE',
+        network: 'base',
+        status: 'CREATED',
+        unsignedTransaction: null as unknown as string,
+        gasEstimate: '{}',
+      }
+      expect(honestStakekitBuildFailureMessage(tx)).toMatch(/try again in a moment/i)
     })
   })
 
