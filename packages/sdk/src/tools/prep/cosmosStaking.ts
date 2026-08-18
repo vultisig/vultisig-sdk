@@ -37,8 +37,8 @@ import { bech32 } from 'bech32'
 import { Buffer } from 'buffer'
 
 import { CosmosMsgType } from '../../types/cosmos-msg'
-import { validatorRoleForHrp } from '../swap/skip/cosmosAddressGuard'
 import { concat, encodeCoin, encodeString, field } from '../../utils/cosmosProto'
+import { validatorRoleForHrp } from '../swap/skip/cosmosAddressGuard'
 
 // ---------------------------------------------------------------------------
 // Input validation (pure, no network). Ported from mcp-ts cosmos-staking.ts.
