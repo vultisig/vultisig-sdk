@@ -4,9 +4,12 @@ import { getCosmosClient } from '@vultisig/core-chain/chains/cosmos/client'
 import { attempt } from '@vultisig/lib-utils/attempt'
 import { isInError } from '@vultisig/lib-utils/error/isInError'
 
+import { toCosmosSequenceMismatchError } from '../cosmosSequenceMismatch'
 import { BroadcastTxResolver } from '../resolver'
 import { DeliverTxFailedError } from '../transientRetry'
 import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
+
+export { CosmosSequenceMismatchError, toCosmosSequenceMismatchError } from '../cosmosSequenceMismatch'
 
 export const getCosmosBroadcastTimeoutTxId = (error: unknown): string | undefined => {
   if (!(error instanceof TimeoutError)) return undefined
@@ -52,5 +55,9 @@ export const broadcastCosmosTx: BroadcastTxResolver<CosmosChain> = async ({ chai
     return timeoutTxId
   }
 
-  await verifyBroadcastByHash({ chain, tx, error })
+  // Keep the hash-verification safety net first: another MPC participant may
+  // have successfully broadcast these same bytes just before this node returned
+  // a sequence rejection. When the hash is genuinely unknown, replace the raw
+  // code-32 message with direction-aware recovery guidance.
+  await verifyBroadcastByHash({ chain, tx, error: toCosmosSequenceMismatchError(error) ?? error })
 }
