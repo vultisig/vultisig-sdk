@@ -24,12 +24,13 @@ import { displayBalance, displayBalancesTable, displayPortfolio } from '../ui'
  * can never advise adding a chain that `chains --add` would reject, even if
  * SUPPORTED_CHAINS later becomes a filtered subset of the Chain enum.
  */
-export function buildScopeHint(enabledChainCount: number): string | undefined {
+export function buildScopeHint(enabledChains: Chain[]): string | undefined {
   const supportedCount = SUPPORTED_CHAINS.length
-  if (enabledChainCount >= supportedCount) return undefined
-  const noun = enabledChainCount === 1 ? 'chain' : 'chains'
+  const enabledSupportedCount = new Set(enabledChains.filter(chain => SUPPORTED_CHAINS.includes(chain))).size
+  if (enabledSupportedCount >= supportedCount) return undefined
+  const noun = enabledSupportedCount === 1 ? 'chain' : 'chains'
   return (
-    `Showing the vault's ${enabledChainCount} enabled ${noun} of ${supportedCount} supported. ` +
+    `Showing the vault's ${enabledSupportedCount} enabled ${noun} of ${supportedCount} supported. ` +
     `Funds on other chains won't appear here — run \`vultisig balance <chain>\` to check one, ` +
     `or \`vultisig chains --add <chain>\` to include it.`
   )
@@ -92,7 +93,7 @@ export async function executeBalance(ctx: CommandContext, options: BalanceOption
     // Aggregate view: admit its scope. `scopeHint` rides in its own field in
     // JSON mode (omitted when all supported chains are enabled) so the
     // `balances` payload stays untouched for machine consumers.
-    const scopeHint = buildScopeHint(vault.chains.length)
+    const scopeHint = buildScopeHint(vault.chains)
     if (isJsonOutput()) {
       outputJson({ balances, scopeHint })
       return
@@ -235,7 +236,7 @@ export async function executePortfolio(ctx: CommandContext, options: PortfolioOp
 
   // Same honesty hint as the all-chains balance view: the portfolio only
   // covers enabled chains, so admit it when that's a strict subset.
-  const scopeHint = buildScopeHint(chains.length)
+  const scopeHint = buildScopeHint(chains)
 
   if (isJsonOutput()) {
     // `failures` is always present (empty array when none) so machine consumers

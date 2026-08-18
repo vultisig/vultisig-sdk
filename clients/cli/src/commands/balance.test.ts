@@ -538,7 +538,7 @@ describe('aggregate scope hint (DF-02)', () => {
     // The hint's escape hatches must stay real: `vultisig balance <chain>` and
     // `vultisig chains --add <chain>`. If either registration disappears from
     // index.ts, this test — not a user — catches the stale pointer.
-    const hint = buildScopeHint(1)
+    const hint = buildScopeHint([Chain.Ethereum])
     expect(hint).toBeDefined()
     expect(hint).toContain('vultisig balance <chain>')
     expect(hint).toContain('vultisig chains --add <chain>')
@@ -552,7 +552,7 @@ describe('aggregate scope hint (DF-02)', () => {
   it('pins the zero-enabled-chains wording (0 uses the plural noun)', () => {
     // A vault with no enabled chains still gets the hint (0 < supported), and
     // the plural branch must hold — "0 enabled chain" would read as a bug.
-    const hint = buildScopeHint(0)
+    const hint = buildScopeHint([])
     expect(hint).toBe(
       `Showing the vault's 0 enabled chains of ${SUPPORTED_CHAINS.length} supported. ` +
         `Funds on other chains won't appear here — run \`vultisig balance <chain>\` to check one, ` +
@@ -560,11 +560,24 @@ describe('aggregate scope hint (DF-02)', () => {
     )
   })
 
+  it('ignores duplicate and unsupported entries when deciding whether the hint is suppressed', () => {
+    // VaultBase rehydrates persisted chains with an unchecked cast, and setChains
+    // replaces the list without deduping. If the vault carries duplicates or a
+    // stale unsupported string, the hint must still be driven by the unique
+    // supported set rather than the raw array length.
+    const hint = buildScopeHint([
+      ...SUPPORTED_CHAINS.slice(0, SUPPORTED_CHAINS.length - 1),
+      SUPPORTED_CHAINS[0],
+      'not-a-chain' as ChainType,
+    ])
+    expect(hint).toContain(`Showing the vault's ${SUPPORTED_CHAINS.length - 1} enabled chains of ${SUPPORTED_CHAINS.length} supported.`)
+  })
+
   it('never claims a scan it did not run (hint is static, no RPC)', () => {
-    // buildScopeHint is a pure function of the enabled-chain count — feeding it
-    // a count can't trigger network I/O, and the wording must not promise
+    // buildScopeHint is a pure function of the enabled-chain list — feeding it
+    // a list can't trigger network I/O, and the wording must not promise
     // discovered funds, only point at where to look.
-    const hint = buildScopeHint(3)
+    const hint = buildScopeHint([Chain.Ethereum, Chain.Bitcoin, Chain.Solana])
     expect(hint).toBeDefined()
     expect(hint!.toLowerCase()).not.toContain('found')
     expect(hint!.toLowerCase()).not.toContain('detected')
