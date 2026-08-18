@@ -56,6 +56,9 @@ export {
   signWithServer,
   verifyVaultEmailCode,
 } from './server'
+// Only signWithServer/mldsaWithServer accept a ServerEndpoints override — the
+// other 10 helpers above hard-bind the default fast-vault URL. Consumers
+// should not expect `endpoints.fastVault` to redirect the whole family.
 export type { ServerEndpoints } from './server/ServerManager'
 
 // ============================================================================
@@ -83,6 +86,10 @@ export { fiatToAmount, FiatToAmountError } from './utils/fiatToAmount'
 export { normalizeChain, UnknownChainError } from './utils/normalizeChain'
 export { resolveChainReference } from './utils/resolveChainReference'
 export { ChainAmountParseError, toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
+export {
+  CosmosSequenceMismatchError,
+  toCosmosSequenceMismatchError,
+} from '@vultisig/core-chain/tx/broadcast/cosmosSequenceMismatch'
 
 // Pure-bigint exact base-units -> human decimal-string conversion (no float64
 // round-trip, so it's safe for high-decimal assets). Exported at the root so
@@ -225,7 +232,7 @@ export type { SdkEvents, VaultEvents } from './events/types'
 
 // Chain enums and types
 export type { Chain as ChainType, CosmosChain, EvmChain, OtherChain, UtxoChain } from './types'
-export { Chain } from './types'
+export { Chain, IbcEnabledCosmosChain, VaultBasedCosmosChain } from './types'
 
 // Chain-kind classification — the canonical 12-family dispatch key. Exposed so
 // downstream consumers (mcp-ts, agent-backend) route through the SDK instead of
@@ -247,6 +254,25 @@ export {
   toXrplCurrencyCode,
 } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
 
+// Custom-RPC canonicals — surfaced so consumers can use the SDK-owned per-chain
+// override registry + health probe instead of deep-importing core internals or
+// rebuilding the same feature in app/backend code.
+export {
+  clearCustomRpcOverride,
+  getCustomRpcOverride,
+  getCustomRpcOverrides,
+  setCustomRpcOverride,
+  setCustomRpcOverrides,
+} from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
+export {
+  customRpcSupportedChains,
+  customRpcSupportedCosmosChains,
+  customRpcSupportedEvmChains,
+  isCustomRpcSupported,
+} from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
+export type { RpcHealthResult } from '@vultisig/core-chain/chains/customRpc/rpcHealthProbe'
+export { probeRpcHealth } from '@vultisig/core-chain/chains/customRpc/rpcHealthProbe'
+
 // Cosmos chain metadata — surfaced so consumers stop re-declaring LCD urls /
 // fee denoms / gas limits (e.g. mcp-ts lib/cosmos-chains.ts).
 export { cosmosFeeCoinDenom } from '@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom'
@@ -260,6 +286,7 @@ export {
   COSMOS_SEND_FEE_DEFAULT,
   getCosmosSendFeeBaseUnits,
   MAYA_SEND_FEE_BASE_UNITS,
+  TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS,
 } from '@vultisig/core-chain/chains/cosmos/gas'
 
 // Cosmos x/auth.MaxMemoCharacters cap, per chain — single source of truth for
@@ -480,7 +507,8 @@ export { SEEDPHRASE_WORD_COUNTS, validateSeedphrase } from './seedphrase'
 // Reshare types
 export type { PerformReshareParams } from './services/SecureVaultCreationService'
 
-// QR payload parsing (for programmatic multi-device coordination)
+// QR payload parsing / generation (for programmatic multi-device coordination)
+export { buildKeygenPairingQrPayload } from './services/buildKeygenPairingQrPayload'
 export type { ParsedKeygenQR } from './utils/parseKeygenQR'
 export { parseKeygenQR } from './utils/parseKeygenQR'
 
@@ -725,6 +753,7 @@ export type {
   AmountUnits,
   AssetRef,
   AstroportSwapResult,
+  BoundSwapQuote,
   BuildAstroportSwapParams,
   BuildBuyPtParams,
   BuildCctpBridgeParams,
@@ -768,6 +797,7 @@ export type {
   EvmScanRequest,
   FieldDiff,
   FindSwapQuoteParams,
+  FindSwapQuotesResult,
   GasTxType,
   GetEvmBalancesParams,
   GetMaxSendAmountFromKeysParams,
@@ -828,6 +858,7 @@ export type {
   SuiBalance,
   SuiCoinBalance,
   SuiTokenBalance,
+  SwapQuoteCandidate,
   TaoBalance,
   ThreeJaneTranche,
   ThreeJaneTxStep,
@@ -882,6 +913,7 @@ export {
   ASTROPORT_ROUTER,
   balancePolkadot,
   buildAstroportSwap,
+  buildBalancerV3SwapCalldata,
   buildBuyPt,
   buildCctpBridge,
   buildCctpClaim,
@@ -938,6 +970,7 @@ export {
   evmGasPrice,
   evmTxInfo,
   findSwapQuote,
+  findSwapQuotes,
   formatDot,
   formatUsdc,
   formatUtxoBalance,
