@@ -173,6 +173,24 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(deriveAddressFromPublicKey).toHaveBeenNthCalledWith(2, 60, publicKey)
   })
 
+  it('exports the canonical amount-conversion helper family from the RN entry, matching the root SDK values', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const root = await import('../../../../src/index')
+    const fromChainAmountMod = await import('@vultisig/core-chain/amount/fromChainAmount')
+    const fromChainAmountExactMod = await import('@vultisig/core-chain/amount/fromChainAmountExact')
+
+    expect(rn.fromChainAmount).toBe(fromChainAmountMod.fromChainAmount)
+    expect(rn.fromChainAmount).toBe(root.fromChainAmount)
+    expect(rn.fromChainAmountExact).toBe(fromChainAmountExactMod.fromChainAmountExact)
+    expect(rn.fromChainAmountExact).toBe(root.fromChainAmountExact)
+    expect(rn.fromChainAmountDisplay).toBe(fromChainAmountExactMod.fromChainAmountDisplay)
+    expect(rn.fromChainAmountDisplay).toBe(root.fromChainAmountDisplay)
+
+    expect(rn.fromChainAmount(1_500_000n, 6)).toBe(1.5)
+    expect(rn.fromChainAmountExact('1500000', 6)).toBe('1.500000')
+    expect(rn.fromChainAmountDisplay('1500000', 6)).toBe('1.500000')
+  })
+
   it('exports the shared THORChain secured-asset catalog from the RN entry', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 

@@ -67,11 +67,18 @@ export {
   toCosmosSequenceMismatchError,
 } from '@vultisig/core-chain/tx/broadcast/cosmosSequenceMismatch'
 
+// Base-units -> human amount conversion (float64 `Number(amount) / 10**decimals`).
+// Exported at the root alongside its bigint-exact/display siblings below so
+// consumers don't hand-roll `10 ** decimals` division.
+export { fromChainAmount } from '@vultisig/core-chain/amount/fromChainAmount'
+
 // Pure-bigint exact base-units -> human decimal-string conversion (no float64
-// round-trip, so it's safe for high-decimal assets). Exported at the root so
-// downstream consumers (CLI, app) can share this instead of hand-rolling
-// their own `BigInt(10 ** decimals)` divisor, which drifts past decimals=22.
-export { fromChainAmountExact } from '@vultisig/core-chain/amount/fromChainAmountExact'
+// round-trip, so it's safe for high-decimal assets), plus the display-oriented
+// variant (exact for integer base-unit strings, float64 fallback for the rare
+// non-integer aggregator amount). Exported at the root so downstream consumers
+// (CLI, app) can share these instead of hand-rolling their own `BigInt(10 **
+// decimals)` divisor, which drifts past decimals=22.
+export { fromChainAmountDisplay, fromChainAmountExact } from '@vultisig/core-chain/amount/fromChainAmountExact'
 
 // Public-boundary argument validation (AUDIT-R3 TASK-020).
 // Zod schemas + safe-parse helpers for chain and ticker strings.
