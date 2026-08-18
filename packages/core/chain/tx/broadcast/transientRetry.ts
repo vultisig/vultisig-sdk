@@ -1,6 +1,8 @@
 import { BroadcastTxError } from '@cosmjs/stargate'
 import { HttpResponseError } from '@vultisig/lib-utils/fetch/HttpResponseError'
 
+import { CosmosSequenceMismatchError } from './cosmosSequenceMismatch'
+
 /**
  * A transaction was included on-chain but its execution genuinely failed
  * (e.g. Cosmos DeliverTx code !== 0 — a wasm revert, out-of-gas, a
@@ -99,6 +101,12 @@ export const isTransientBroadcastError = (error: unknown): boolean => {
 
   while (current != null && !seen.has(current)) {
     seen.add(current)
+
+    if (current instanceof CosmosSequenceMismatchError) {
+      // A future sequence can become valid when its missing predecessor lands.
+      // A stale sequence is already consumed and must be rebuilt/re-signed.
+      return current.recovery === 'wait'
+    }
 
     if (current instanceof DeliverTxFailedError) {
       return false
