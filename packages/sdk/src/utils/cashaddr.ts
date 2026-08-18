@@ -46,12 +46,15 @@ export function verifyCashAddrChecksum(prefix: string, data5: number[]): boolean
 /**
  * Full validity check for a mainnet BCH CashAddr (P2PKH `q...` / P2SH `p...`),
  * with or without the `bitcoincash:` prefix. Enforces the canonical 42-symbol
- * payload length, the base32 charset (so b/i/o/1 and any uppercase are
- * rejected — mixed-case CashAddr is invalid), and the polymod checksum.
+ * payload length, uniform casing, the base32 charset (so b/i/o/1 are
+ * rejected), and the polymod checksum.
  */
 export function isValidCashAddr(address: string): boolean {
   const trimmed = address.trim()
-  const payload = trimmed.startsWith('bitcoincash:') ? trimmed.slice('bitcoincash:'.length) : trimmed
+  const lowercase = trimmed.toLowerCase()
+  if (trimmed !== lowercase && trimmed !== trimmed.toUpperCase()) return false
+
+  const payload = lowercase.startsWith('bitcoincash:') ? lowercase.slice('bitcoincash:'.length) : lowercase
   // Mainnet P2PKH/P2SH CashAddr payloads are exactly 42 base32 symbols
   // (1 version symbol + 33 hash symbols + 8 checksum symbols).
   if (payload.length !== 42) return false

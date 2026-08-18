@@ -81,6 +81,28 @@ export type BalanceSummaryCard = {
   staleSecs?: number
 }
 
+export type HlOrderConfirmationCard = {
+  surface: 'hyperliquid_order_confirmation'
+  status: 'confirmation_required'
+  order_ref: string
+  operation: 'open' | 'close'
+  coin: string
+  asset_index: number
+  side: 'long' | 'short'
+  size: string
+  notional_usd: string
+  leverage?: number
+  margin_mode?: 'cross' | 'isolated'
+  order_type: 'market' | 'limit'
+  price_cap: string
+  limit_price: string | null
+  tif: 'Ioc' | 'Gtc' | 'Alo'
+  reduce_only: boolean
+  proposed: string
+}
+
+export type AgentCard = BalanceSummaryCard | HlOrderConfirmationCard
+
 /**
  * Strip terminal control bytes (C0 0x00–0x1F, DEL 0x7F, C1 0x80–0x9F) from a
  * value before it can reach the TTY. Card string fields flow from

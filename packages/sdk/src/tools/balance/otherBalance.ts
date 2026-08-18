@@ -580,7 +580,22 @@ export async function getSuiAllBalances(address: string): Promise<SuiAllBalances
       })
     }
 
-    cursor = connection.pageInfo?.hasNextPage ? connection.pageInfo.endCursor : null
+    const pageInfo = connection.pageInfo
+    if (typeof pageInfo?.hasNextPage !== 'boolean') {
+      return unavailable('Sui GraphQL returned no balance pagination metadata — malformed upstream response.')
+    }
+
+    // A page that claims more data without a cursor cannot be followed. A null
+    // cursor is valid Relay metadata for an empty page, and an omitted or empty
+    // cursor is equally unusable. Never turn any of those malformed continuation
+    // states into `ok: true` with the balances collected so far.
+    if (pageInfo.hasNextPage && !pageInfo.endCursor) {
+      return unavailable(
+        'Sui GraphQL reported more balance pages but returned no cursor — refusing to report a partial portfolio.'
+      )
+    }
+
+    cursor = pageInfo.hasNextPage ? pageInfo.endCursor : null
 
     if (++pages >= SUI_BALANCES_MAX_PAGES && cursor) {
       return unavailable(

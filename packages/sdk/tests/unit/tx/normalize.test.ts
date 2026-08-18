@@ -18,6 +18,34 @@ describe('normalizeTx', () => {
     expect(out.chain_id).toBe('1')
   })
 
+  it('preserves top-level routing metadata when wrapping a flat build_* result', () => {
+    const flat = {
+      to: '0xrecipient',
+      value: '0x0',
+      chain: 'Ethereum',
+      from_chain: 'Ethereum',
+      to_chain: 'THORChain',
+      provider: 'thorchain',
+      from_symbol: 'USDC',
+      to_symbol: 'RUNE',
+      from_address: '0xuser',
+      to_address: 'thor1dest',
+      from_decimals: 6,
+      to_decimals: 8,
+    }
+    const out = normalizeTx(flat)
+    expect(out['tx']).toEqual(flat)
+    expect(out.from_chain).toBe('Ethereum')
+    expect(out.to_chain).toBe('THORChain')
+    expect(out.provider).toBe('thorchain')
+    expect(out.from_symbol).toBe('USDC')
+    expect(out.to_symbol).toBe('RUNE')
+    expect(out.from_address).toBe('0xuser')
+    expect(out.to_address).toBe('thor1dest')
+    expect(out.from_decimals).toBe(6)
+    expect(out.to_decimals).toBe(8)
+  })
+
   it('leaves a result that already nests swap_tx untouched (only enriches chain)', () => {
     const nested = { swap_tx: { to: '0xpool', data: '0xdead' } }
     const out = normalizeTx(nested, { from_chain: 'Ethereum', to_chain: 'THORChain' })
@@ -124,6 +152,25 @@ describe('splitMultiTx', () => {
     expect(legs[0]['swap_tx']).toEqual({ to: '0xrouter', data: '0xfeed' })
   })
 
+  it('copies routing args onto approval+swap legs when the payload omits them', () => {
+    const legs = splitMultiTx(
+      {
+        needs_approval: true,
+        approval_tx: { to: '0xtoken', data: '0x095ea7b3' },
+        swap_tx: { to: '0xrouter', data: '0xfeed' },
+        provider: 'thorchain',
+      },
+      { from_chain: 'Ethereum', to_chain: 'THORChain', chain: 'Ethereum' }
+    )
+    expect(legs).toHaveLength(2)
+    for (const leg of legs) {
+      expect(leg.chain).toBe('Ethereum')
+      expect(leg.from_chain).toBe('Ethereum')
+      expect(leg.to_chain).toBe('THORChain')
+      expect(leg.provider).toBe('thorchain')
+    }
+  })
+
   it('splits a generic transactions[] array, copying parent metadata onto each leg', () => {
     const buildResult = {
       transactions: [
@@ -152,6 +199,26 @@ describe('splitMultiTx', () => {
     expect(legs).toHaveLength(1)
     expect(legs[0]['tx']).toEqual({ to: '0xa', data: '0x1' })
     expect(legs[0].chain).toBe('Ethereum')
+  })
+
+  it('copies routing args onto transactions[] legs when the payload omits them', () => {
+    const legs = splitMultiTx(
+      {
+        transactions: [
+          { to: '0xa', data: '0x1' },
+          { to: '0xb', data: '0x2' },
+        ],
+        provider: 'morpho',
+      },
+      { chain: 'Base', from_chain: 'Base', to_chain: 'Arbitrum' }
+    )
+    expect(legs).toHaveLength(2)
+    for (const leg of legs) {
+      expect(leg.chain).toBe('Base')
+      expect(leg.from_chain).toBe('Base')
+      expect(leg.to_chain).toBe('Arbitrum')
+      expect(leg.provider).toBe('morpho')
+    }
   })
 
   it('returns a single normalized leg for a plain single-tx build result', () => {
@@ -248,6 +315,41 @@ describe('splitMultiTx', () => {
     for (const leg of legs) {
       expect(leg['needs_approval']).toBeUndefined()
       expect(leg['approval_tx']).toBeUndefined()
+    }
+  })
+
+  it('preserves camelCase metadata on transactions[] legs', () => {
+    const legs = splitMultiTx({
+      transactions: [
+        { to: '0xbridge', step: 'approve' },
+        { to: '0xbridge', step: 'bridge' },
+      ],
+      chain: 'Base',
+      chainId: '8453',
+      fromChain: 'Base',
+      toChain: 'Arbitrum',
+      provider: 'cctp',
+      fromSymbol: 'USDC',
+      toSymbol: 'USDC',
+      fromAddress: '0xfrom',
+      toAddress: '0xto',
+      fromDecimals: 6,
+      toDecimals: 6,
+    })
+
+    expect(legs).toHaveLength(2)
+    for (const leg of legs) {
+      expect(leg.chain).toBe('Base')
+      expect(leg.chainId).toBe('8453')
+      expect(leg.fromChain).toBe('Base')
+      expect(leg.toChain).toBe('Arbitrum')
+      expect(leg.provider).toBe('cctp')
+      expect(leg.fromSymbol).toBe('USDC')
+      expect(leg.toSymbol).toBe('USDC')
+      expect(leg.fromAddress).toBe('0xfrom')
+      expect(leg.toAddress).toBe('0xto')
+      expect(leg.fromDecimals).toBe(6)
+      expect(leg.toDecimals).toBe(6)
     }
   })
 })

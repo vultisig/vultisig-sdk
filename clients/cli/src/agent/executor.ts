@@ -13,6 +13,7 @@ import {
   computeEip712Hash,
   getChainKind,
   getEvmRpcUrl,
+  knownTokensIndex,
   parseThorSwapMemo,
   resolveChainReference,
   toCanonicalEvmSignature,
@@ -20,7 +21,7 @@ import {
   VaultErrorCode,
   Vultisig as VultisigSdk,
 } from '@vultisig/sdk'
-import { formatUnits, recoverAddress } from 'viem'
+import { type Address, decodeFunctionData, formatUnits, type Hex, parseAbi, recoverAddress } from 'viem'
 
 import { VaultStateStore } from '../core/VaultStateStore'
 import { normalizeAgentError } from './agentErrors'
@@ -32,6 +33,13 @@ import {
   recordBroadcast,
   reserveBroadcast,
 } from './broadcastJournal'
+import {
+  type HlOrderSigningPayload,
+  type HlOrderTransport,
+  isHlOrderFailure,
+  pollHlOrderStatus,
+  validateHlSigningPayload,
+} from './hlOrder'
 import type { RecentAction } from './types'
 
 // EVM chains that use nonce-based transaction ordering
@@ -50,6 +58,22 @@ const EVM_CHAINS = new Set<string>([
   'Hyperliquid',
   'Sei',
 ])
+
+const ERC20_TRANSFER_SELECTOR = '0xa9059cbb'
+const ERC20_TRANSFER_ABI = parseAbi(['function transfer(address to, uint256 value)'])
+
+/** Decode the recipient and amount that an ERC-20 transfer will actually use. */
+function decodeErc20Transfer(calldata: string): { recipient: Address; amount: bigint } | null {
+  if (calldata.slice(0, ERC20_TRANSFER_SELECTOR.length).toLowerCase() !== ERC20_TRANSFER_SELECTOR) return null
+
+  try {
+    const decoded = decodeFunctionData({ abi: ERC20_TRANSFER_ABI, data: calldata as Hex })
+    const [recipient, amount] = decoded.args as readonly [Address, bigint]
+    return { recipient, amount }
+  } catch {
+    throw new Error('Invalid ERC-20 transfer calldata — refusing to sign')
+  }
+}
 
 // `Set<string>.has()` returns a plain boolean, so it never narrows `Chain` down to
 // the `EvmChain` union that `getEvmRpcUrl` takes. This predicate keeps membership
@@ -103,6 +127,7 @@ export class AgentExecutor {
   // fingerprints so two different vaults sending an identical tx don't collide
   // in the single global journal (see BroadcastIntent.owner).
   private readonly vaultPublicKey: string
+  private readonly consumedHlOrderRefs = new Set<string>()
 
   constructor(vault: VaultBase, verbose = false, vaultId?: string, vultisig?: Vultisig) {
     this.vault = vault
@@ -112,6 +137,89 @@ export class AgentExecutor {
     if (vaultId) {
       this.stateStore = new VaultStateStore(vaultId)
     }
+  }
+
+  async retrieveHlOrder(
+    transport: HlOrderTransport,
+    input: Record<string, unknown>,
+    conversationId: string
+  ): Promise<HlOrderSigningPayload> {
+    const orderRef = typeof input.order_ref === 'string' ? input.order_ref : ''
+    if (!/^[0-9a-f-]{16,64}$/i.test(orderRef)) throw new Error('HL_INVALID_ORDER_REFERENCE')
+    if (this.consumedHlOrderRefs.has(orderRef)) throw new Error('HL_ORDER_REFERENCE_REPLAYED')
+    const payload = await transport.retrieveHlOrderSigningPayload(orderRef, conversationId, this.vaultPublicKey)
+    // Retrieval is one-shot server-side. Mark locally consumed before validation/signing too: a malformed
+    // or tampered payload must not be retried under the same opaque capability.
+    this.consumedHlOrderRefs.add(orderRef)
+    await validateHlSigningPayload(
+      payload,
+      {
+        orderRef,
+        conversationId,
+        publicKey: this.vaultPublicKey,
+        digest: typeof input.digest === 'string' ? input.digest : undefined,
+      },
+      this.vault
+    )
+    return payload
+  }
+
+  async signAndSubmitHlOrder(transport: HlOrderTransport, payload: HlOrderSigningPayload): Promise<RecentAction> {
+    return this.runTool('hl_order', async () => {
+      if (this.vault.isEncrypted && !(this.vault as any).isUnlocked?.() && this.password) {
+        await (this.vault as any).unlock?.(this.password)
+      }
+      const expectedAddress = await this.vault.address(Chain.Ethereum)
+      const signatures = []
+      for (const step of payload.steps) {
+        const signed = await this.vault.signBytes({
+          data: step.digest,
+          chain: Chain.Ethereum,
+        })
+        const canonical = toCanonicalEvmSignature(signed.signature, signed.recovery ?? 0)
+        const v = canonical.recovery + 27
+        const wireSignature = `0x${canonical.r}${canonical.s}${v.toString(16).padStart(2, '0')}` as `0x${string}`
+        const recovered = await recoverAddress({
+          hash: step.digest,
+          signature: wireSignature,
+        })
+        if (recovered.toLowerCase() !== expectedAddress.toLowerCase()) {
+          throw new Error('HL_SIGNATURE_RECOVERY_MISMATCH')
+        }
+        signatures.push({
+          kind: step.kind,
+          digest: step.digest,
+          r: `0x${canonical.r}` as `0x${string}`,
+          s: `0x${canonical.s}` as `0x${string}`,
+          v,
+        })
+      }
+      const params = {
+        orderRef: payload.order_ref,
+        conversationId: payload.conversation_id,
+        publicKey: this.vaultPublicKey,
+      }
+      const submitted = await transport.submitHlOrder(
+        params.orderRef,
+        params.conversationId,
+        params.publicKey,
+        signatures
+      )
+      const status = await pollHlOrderStatus(transport, params, submitted)
+      if (isHlOrderFailure(status)) {
+        throw new Error(`HL_ORDER_${status.state.toUpperCase()}: ${status.reason ?? 'venue did not accept the order'}`)
+      }
+      // Signatures and raw actions travel only over the authenticated direct endpoint. The chat
+      // recent_actions channel receives status metadata, never signing material.
+      return {
+        order_ref: payload.order_ref,
+        state: status.state,
+        order_id: status.order_id,
+        filled_size: status.filled_size,
+        average_price: status.average_price,
+        reason: status.reason,
+      }
+    })
   }
 
   setPassword(password: string): void {
@@ -358,6 +466,54 @@ export class AgentExecutor {
   }
 
   /**
+   * If the transaction that will actually be signed carries ERC-20 `transfer`
+   * calldata, decode its destination and amount and cross-check them against
+   * the producer's declared values. Returns the decoded transfer (authoritative
+   * for the summary) when the signed tx is a transfer, or null otherwise.
+   *
+   * Reads the signed tx via {@link extractNestedTx} — the SAME resolution the
+   * signer uses (`swap_tx || send_tx || tx || txArgs.tx`) — not `txArgs.tx`
+   * alone: a `send_tx`/`tx`/`swap_tx` envelope, or one carrying both a benign
+   * `txArgs.tx` and a malicious higher-precedence key, must not be able to move
+   * funds to an address the consent summary never showed. Fails closed —
+   * clearing the buffered tx and throwing — on malformed transfer calldata or a
+   * producer/calldata recipient or amount mismatch, so a divergent envelope can
+   * never be signed. Invoked before the branch-specific summaries below so a
+   * transfer cannot be disguised as a swap/contract-call to skip the check.
+   */
+  private assertConsistentTransfer(p: any): { recipient: Address; amount: bigint } | null {
+    const signedTx = extractNestedTx(p)
+    const calldata = typeof signedTx?.data === 'string' ? (signedTx.data as string) : ''
+    if (calldata === '' || calldata === '0x') return null
+
+    let transfer: { recipient: Address; amount: bigint } | null
+    try {
+      transfer = decodeErc20Transfer(calldata)
+    } catch (error) {
+      this.clearPendingTransaction()
+      throw error
+    }
+    if (!transfer) return null
+
+    const producerRecipient = typeof p?.txArgs?.to === 'string' ? (p.txArgs.to as string) : ''
+    if (producerRecipient && transfer.recipient.toLowerCase() !== producerRecipient.toLowerCase()) {
+      this.clearPendingTransaction()
+      throw new Error(
+        `ERC-20 recipient mismatch — refusing to sign: txArgs.to ${producerRecipient} does not match calldata destination ${transfer.recipient}`
+      )
+    }
+
+    const producerAmount = typeof p?.txArgs?.amount === 'string' ? (p.txArgs.amount as string) : ''
+    if (producerAmount && /^\d+$/.test(producerAmount) && BigInt(producerAmount) !== transfer.amount) {
+      this.clearPendingTransaction()
+      throw new Error(
+        `ERC-20 amount mismatch — refusing to sign: txArgs.amount ${producerAmount} does not match calldata value ${transfer.amount}`
+      )
+    }
+    return { recipient: transfer.recipient, amount: transfer.amount }
+  }
+
+  /**
    * Human-readable one-line summary of the currently-buffered server tx
    * (set by storeServerTransaction), for the pre-sign confirmation prompt.
    * Returns null when nothing is buffered (e.g. sign_typed_data, which has
@@ -368,6 +524,12 @@ export class AgentExecutor {
     if (!stored) return null
     const p = stored.payload as any
     const labels = (p?.resolved?.labels ?? {}) as Record<string, string>
+
+    // Fail closed on any signed ERC-20 transfer whose destination diverges from
+    // the producer's declared recipient or amount (or whose transfer calldata
+    // is malformed) BEFORE rendering any branch-specific summary — a transfer
+    // must not be able to hide behind a swap/contract-call head to skip the check.
+    const transfer = this.assertConsistentTransfer(p)
 
     // Design B: Polymarket flat-tx-builder bridge envelopes carry no swap/send
     // token labels, so the generic summaries below degrade to "send ? to ?".
@@ -404,24 +566,57 @@ export class AgentExecutor {
       if (labels.estimated_fee) parts.push(`est. fee ${labels.estimated_fee}`)
       return parts.join(' ')
     }
+    // Name the token contract from the payload that gets signed, not from label
+    // text: an EVM token send executes against the signed tx's `to` (the
+    // contract, with transfer calldata) while `txArgs.to` is the recipient. A
+    // native send has empty calldata and tx.to === recipient, so it gains
+    // nothing here. Non-EVM envelopes carry no signable EVM tx and are likewise
+    // unchanged. Resolve via `extractNestedTx` so the summary describes the same
+    // tx the signer consumes (`swap_tx || send_tx || tx || txArgs.tx`).
+    const signedTx = extractNestedTx(p)
+    const contractTo = typeof signedTx?.to === 'string' ? (signedTx.to as string) : ''
+    const calldata = typeof signedTx?.data === 'string' ? (signedTx.data as string) : ''
+    const isContractSend = !!contractTo && calldata !== '' && calldata !== '0x'
+    const producerRecipient = typeof p?.txArgs?.to === 'string' ? (p.txArgs.to as string) : ''
+    // `transfer.recipient` (decoded + cross-checked above) is the value that will
+    // receive funds for an ERC-20 transfer. It therefore owns both the rendered
+    // summary and the exact string passed to the confirmation policy; producer
+    // labels are fallback text only for native, non-EVM, and non-transfer
+    // envelopes.
+    const to = transfer?.recipient || producerRecipient || labels.recipient_echo || '?'
+
+    // WYSIWYS: derive the displayed amount from signed calldata, never a producer label. Unknown tokens have no trusted
+    // decimals, so show raw base units as unverified rather than a misleading precise number; the recipient was already
+    // cross-checked above, so this rendering branch never fails closed.
+    if (transfer) {
+      return this.renderErc20TransferSummary(transfer.amount, contractTo, stored.chain, to)
+    }
+
     const amount = labels.resolved_amount ?? p?.txArgs?.amount ?? '?'
     // Include the asset symbol so a confirmation prompt can never be ambiguous
     // between native and tokens (e.g. "send 100 on Base to …" — ETH? USDC?).
     // resolved_amount usually already embeds it; de-dup when both are set.
     const symbol = labels.token_resolved || labels.token_symbol || ''
     const amountWithSymbol = symbol && !amount.endsWith(` ${symbol}`) ? `${amount} ${symbol}` : amount
-    const to = (p?.txArgs?.to as string) || labels.recipient_echo || '?'
-    // Name the token contract from the payload that gets signed, not from label
-    // text: an EVM token send executes against `txArgs.tx.to` (the contract,
-    // with transfer calldata) while `txArgs.to` is the recipient. A native send
-    // has empty calldata and tx.to === recipient, so it gains nothing here.
-    // Non-EVM envelopes carry no `txArgs.tx` and are likewise unchanged.
-    const contractTo = typeof p?.txArgs?.tx?.to === 'string' ? (p.txArgs.tx.to as string) : ''
-    const calldata = typeof p?.txArgs?.tx?.data === 'string' ? (p.txArgs.tx.data as string) : ''
-    const isContractSend = !!contractTo && calldata !== '' && calldata !== '0x'
     const contractPart =
       isContractSend && contractTo.toLowerCase() !== to.toLowerCase() ? ` (token contract ${contractTo})` : ''
     return `send ${amountWithSymbol} on ${stored.chain} to ${to}${contractPart}`
+  }
+
+  /**
+   * Render the consent amount for an ERC-20 transfer from the SIGNED calldata
+   * value, never a producer label. Known tokens use trusted decimals/ticker from
+   * knownTokensIndex; unknown tokens fall back to raw base units with an explicit
+   * unverified marker (the recipient is already cross-checked, so we never fail
+   * closed here).
+   */
+  private renderErc20TransferSummary(amount: bigint, contractTo: string, chain: Chain, to: string): string {
+    const known = knownTokensIndex[chain]?.[contractTo.toLowerCase()]
+    if (known) {
+      const contractPart = contractTo.toLowerCase() !== to.toLowerCase() ? ` (token contract ${contractTo})` : ''
+      return `send ${formatUnits(amount, known.decimals)} ${known.ticker} on ${chain} to ${to}${contractPart}`
+    }
+    return `send ${amount} base units of token ${contractTo} (decimals unverified) on ${chain} to ${to}`
   }
 
   /**
@@ -677,7 +872,9 @@ export class AgentExecutor {
         ? this.buildBroadcastIntent(payload, chain, { txArgs: payload.txArgs })
         : this.buildBroadcastIntent(payload, chain)
       const approveIntent = isMultiLeg
-        ? this.buildBroadcastIntent(payload, chain, { txArgs: payload.approvalTxArgs })
+        ? this.buildBroadcastIntent(payload, chain, {
+            txArgs: payload.approvalTxArgs,
+          })
         : undefined
       const primaryFp = computeFingerprint(primaryIntent)
       const approveFp = approveIntent ? computeFingerprint(approveIntent) : undefined
