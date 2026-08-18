@@ -7,6 +7,7 @@ import { encodeTrc20TransferParam, tronBase58ToEvmHex } from '../../abi/tron'
  * NOT the pre-hashed 4-byte selector.
  */
 export const TRC20_TRANSFER_SELECTOR = 'transfer(address,uint256)' as const
+const TRON_PROTO_INT64_MAX = (1n << 63n) - 1n
 
 export type PrepareTrc20TransferFromKeysParams = {
   /** TRC-20 contract address (base58, T...). e.g. USDT = TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t */
@@ -125,6 +126,11 @@ export const prepareTrc20TransferFromKeys = (params: PrepareTrc20TransferFromKey
     const feeBig = BigInt(feeLimitSun)
     if (feeBig <= 0n) {
       throw new Error(`prepareTrc20TransferFromKeys: feeLimitSun must be greater than zero, got ${feeLimitSun}`)
+    }
+    if (feeBig > TRON_PROTO_INT64_MAX) {
+      throw new Error(
+        `prepareTrc20TransferFromKeys: feeLimitSun must be <= ${TRON_PROTO_INT64_MAX} (protobuf int64), got ${feeLimitSun}`
+      )
     }
     canonicalFeeLimit = feeBig.toString()
   }
