@@ -437,6 +437,8 @@ export function buildTronTxFromRawData(rawDataHex: string): TronTxBuilderResult 
   return { signingHashHex, unsignedRawHex, finalize }
 }
 
+const TRON_PROTO_INT64_MAX = (1n << 63n) - 1n
+
 export function buildTrc20TransferTx(opts: BuildTrc20TransferOptions): TronTxBuilderResult {
   validateRefs(opts.refBlockBytes, opts.refBlockHash)
   // feeLimit must be > 0 — buildRawData silently drops a zero feeLimit, and a
@@ -445,6 +447,11 @@ export function buildTrc20TransferTx(opts: BuildTrc20TransferOptions): TronTxBui
   // broadcast.
   if (opts.feeLimit <= 0n) {
     throw new Error(`buildTrc20TransferTx: feeLimit must be > 0, got ${opts.feeLimit}`)
+  }
+  if (opts.feeLimit > TRON_PROTO_INT64_MAX) {
+    throw new Error(
+      `buildTrc20TransferTx: feeLimit must be <= ${TRON_PROTO_INT64_MAX} (protobuf int64), got ${opts.feeLimit}`
+    )
   }
   const callData = buildTrc20CallData(opts.to, opts.amount)
   const contractValue = buildTriggerSmartContract(opts.from, opts.tokenAddress, callData)

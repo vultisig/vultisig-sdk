@@ -215,6 +215,22 @@ describe('tron / buildTrc20TransferTx', () => {
       })
     ).toThrow(/feeLimit must be > 0/)
   })
+
+  it('rejects feeLimit above protobuf int64 max', () => {
+    expect(() =>
+      buildTrc20TransferTx({
+        from: FROM,
+        to: TO,
+        tokenAddress: USDT,
+        amount: 1n,
+        feeLimit: 1n << 63n,
+        refBlockBytes: REF_BLOCK_BYTES,
+        refBlockHash: REF_BLOCK_HASH,
+        expiration: 1_700_000_000_000n,
+        timestamp: 1_699_999_940_000n,
+      })
+    ).toThrow(/protobuf int64|feeLimit must be <=/)
+  })
 })
 
 describe('tron / buildTronSendTx memo / data field (proto field 10)', () => {
