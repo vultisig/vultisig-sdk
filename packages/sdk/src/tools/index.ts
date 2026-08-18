@@ -19,19 +19,42 @@ export {
 import * as evm from './evm'
 
 export { evm }
-export type { EvmBalance, EvmGasPrice, GetEvmBalancesParams, GetTokenApprovalsResult, TokenApproval } from './evm'
+export type {
+  DecodedAgentRouterDeposit,
+  EvmBalance,
+  EvmGasPrice,
+  GetEvmBalancesParams,
+  GetTokenApprovalsResult,
+  TokenApproval,
+  UsdcPaymentChain,
+  UsdcPaymentChainConfig,
+} from './evm'
 export {
   abiDecode,
   abiEncode,
+  AGENT_ROUTER_ADDRESS,
+  AGENT_ROUTER_DEPOSIT_WITH_MEMO_SELECTOR,
+  CHECKOUT_CHAIN_IDS,
+  decodeAgentRouterDepositWithMemo,
+  encodeAgentRouterDepositWithMemo,
   encodeErc20Approve,
   encodeErc20Revoke,
   evmCall,
   evmCheckAllowance,
   evmGasPrice,
   evmTxInfo,
+  formatCheckoutUsdcDisplay,
   getEvmBalances,
   getTokenApprovals,
+  isUsdcPaymentChain,
+  lookupUsdcPaymentChain,
   MAX_UINT256,
+  resolveUsdcPaymentChainId,
+  resolveUsdcPaymentContract,
+  USDC_CONTRACTS,
+  USDC_PAYMENT_CHAIN_CONFIG,
+  USDC_PAYMENT_CHAINS,
+  USDC_PAYMENT_DECIMALS,
   resolve4ByteSelector,
   resolveEns,
 } from './evm'
