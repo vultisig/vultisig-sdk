@@ -397,6 +397,19 @@ describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
     ).toBe(50n * 1_000_000_000n)
   })
 
+  it('exports the shared EVM gas-floor table from the RN entry (sdk#1351)', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(rn.EVM_GAS_FLOOR_WEI[rn.Chain.BSC as keyof typeof rn.EVM_GAS_FLOOR_WEI]).toEqual({
+      basePerGas: 1_000_000_000n,
+      priorityPerGas: 3_000_000_000n,
+    })
+    expect(typeof rn.getEvmMaxFeeFloorWei).toBe('function')
+    expect(rn.getEvmMaxFeeFloorWei(rn.Chain.Polygon as Parameters<typeof rn.getEvmMaxFeeFloorWei>[0])).toBe(
+      31_000_000_000n
+    )
+  })
+
   it('exports the canonical gas comparison helpers from the RN entry', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
     const gas = await import('../../../../src/tools/gas')
