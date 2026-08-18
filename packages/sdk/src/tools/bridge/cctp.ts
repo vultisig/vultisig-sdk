@@ -28,6 +28,8 @@
 
 import { EvmChain } from '@vultisig/core-chain/Chain'
 
+import { normalizeChain } from '../../utils/normalizeChain'
+
 /**
  * CCTP contract configuration for a single chain. Mirrors the Go
  * `cctp.ChainConfig` struct, plus the SDK's `EvmChain` enum key and the
@@ -52,8 +54,18 @@ export type CctpChainConfig = {
 /**
  * CCTP V1-contracts registry. Addresses sourced from Circle docs and
  * verified against the mcp Go side (`vultisig/mcp@62efee8`).
+ *
+ * PARTIAL by design, and the type has to say so. Circle only operates CCTP
+ * domains for the six chains below; Blast, Zksync, Mantle, CronosChain and the
+ * rest of `EvmChain` have no domain at all. Typing this as the total
+ * `Record<EvmChain, CctpChainConfig>` claimed a config for every EVM chain, so
+ * `cctpChains[EvmChain.Blast].domain` type-checked and threw at runtime. The
+ * runtime was always correct - `getCctpChain` guards with `in` and
+ * `cctpSupportedChains` derives from the real keys - it was only the type that
+ * lied. `Partial` makes the lookup `CctpChainConfig | undefined` so callers are
+ * forced to narrow, which is what the runtime already required of them.
  */
-export const cctpChains: Record<string, CctpChainConfig> = {
+export const cctpChains: Partial<Record<EvmChain, CctpChainConfig>> = {
   Ethereum: {
     chain: EvmChain.Ethereum,
     evmChainId: 1,
@@ -109,10 +121,18 @@ export const cctpChains: Record<string, CctpChainConfig> = {
 }
 
 /** List of CCTP-supported chain names, for descriptions / error text. */
-export const cctpSupportedChains = Object.keys(cctpChains)
+export const cctpSupportedChains = Object.keys(cctpChains) as EvmChain[]
 
 /** Lookup CCTP config for a chain. Returns undefined for unsupported chains. */
-export const getCctpChain = (chainName: string): CctpChainConfig | undefined => cctpChains[chainName]
+export const getCctpChain = (chainName: string): CctpChainConfig | undefined => {
+  try {
+    const canonical = normalizeChain(chainName)
+    if (!(canonical in cctpChains)) return undefined
+    return cctpChains[canonical as EvmChain]
+  } catch {
+    return undefined
+  }
+}
 
 /**
  * Circle CCTP attestation API base URL.
