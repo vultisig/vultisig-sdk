@@ -19,6 +19,7 @@
 import { fromBech32, toBech32 } from '@cosmjs/encoding'
 import { IbcEnabledCosmosChain } from '@vultisig/core-chain/Chain'
 import { getCosmosChainId } from '@vultisig/core-chain/chains/cosmos/chainInfo'
+import { getCosmosChainHrp } from '@vultisig/core-chain/chains/cosmos/cosmosHrp'
 import { cosmosRpcUrl } from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
 import { getAuthAccountUrl } from '@vultisig/core-chain/chains/cosmos/staking/lcdQueries'
 
@@ -30,19 +31,12 @@ export type GovChain = IbcEnabledCosmosChain
 /**
  * Expected bech32 HRP (human-readable prefix) per gov chain, used to reject a
  * voter address that belongs to a different chain (e.g. an `osmo1…` address
- * submitted as a Cosmos Hub vote). No centralized HRP map exists in core-chain,
- * so it's declared here for the small, stable set of gov chains.
+ * submitted as a Cosmos Hub vote). Sourced from the canonical
+ * `getCosmosChainHrp` registry (architecture#1787) instead of a local copy.
  */
-const CHAIN_HRP: Record<GovChain, string> = {
-  Cosmos: 'cosmos',
-  Osmosis: 'osmo',
-  Dydx: 'dydx',
-  Kujira: 'kujira',
-  Terra: 'terra',
-  TerraClassic: 'terra',
-  Noble: 'noble',
-  Akash: 'akash',
-}
+const CHAIN_HRP: Record<GovChain, string> = Object.fromEntries(
+  Object.values(IbcEnabledCosmosChain).map(chain => [chain, getCosmosChainHrp(chain)])
+) as Record<GovChain, string>
 
 /**
  * Whether a chain serves the modern `gov/v1` endpoint. TerraClassic
