@@ -217,8 +217,19 @@ const isTimeout = (error: unknown): boolean => error instanceof DOMException && 
 /** Bounded-retry JSON GET with timeout. 4xx fails fast; 5xx/network retried. */
 async function fetchJson<T>(url: string): Promise<T> {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    // Hermes-compatible timeout: `AbortSignal.timeout()` is Node 17.3+ and not
+    // available on older RN/Hermes runtimes — build the same behaviour with
+    // AbortController + setTimeout (mirrors src/chains/tron/rpc.ts). Abort
+    // with a DOMException named 'TimeoutError' — the same name the native
+    // `AbortSignal.timeout()` produces — so `isTimeout`'s check below still
+    // recognizes a deadline abort as retryable.
+    const controller = new AbortController()
+    const timeoutId = setTimeout(
+      () => controller.abort(new DOMException(`fetchJson timed out after ${DEFAULT_TIMEOUT_MS}ms`, 'TimeoutError')),
+      DEFAULT_TIMEOUT_MS
+    )
     try {
-      const response = await fetch(url, { signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS) })
+      const response = await fetch(url, { signal: controller.signal })
       if (response.ok) return (await response.json()) as T
       if (response.status >= 400 && response.status < 500) {
         throw new Error(`HTTP ${response.status}: ${await response.text()}`)
@@ -235,6 +246,8 @@ async function fetchJson<T>(url: string): Promise<T> {
         continue
       }
       throw error
+    } finally {
+      clearTimeout(timeoutId)
     }
   }
   throw new Error('unreachable')

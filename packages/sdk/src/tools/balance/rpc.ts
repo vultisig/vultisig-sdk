@@ -38,12 +38,21 @@ function isRetryable(error: unknown): boolean {
  */
 export async function fetchJson<T>(url: string, body?: unknown, init?: RequestInit): Promise<T> {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    // Hermes-compatible timeout: `AbortSignal.timeout()` is Node 17.3+ and not
+    // available on older RN/Hermes runtimes — build the same behaviour with
+    // AbortController + setTimeout (mirrors src/chains/tron/rpc.ts). A fresh
+    // controller per attempt, only when the caller didn't already bring its
+    // own signal (init.signal wins, same precedence as before).
+    const controller = init?.signal ? undefined : new AbortController()
+    const timeoutId = controller
+      ? setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS)
+      : undefined
     try {
       const response = await fetch(url, {
         method: body ? 'POST' : 'GET',
         headers: body ? { 'Content-Type': 'application/json' } : undefined,
         body: body ? JSON.stringify(body) : undefined,
-        signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+        signal: controller?.signal,
         ...init,
       })
 
@@ -75,6 +84,8 @@ export async function fetchJson<T>(url: string, body?: unknown, init?: RequestIn
         continue
       }
       throw error
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId)
     }
   }
   throw new Error('unreachable')

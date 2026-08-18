@@ -149,14 +149,18 @@ async function withEndpointTimeout<T>(url: string, request: Promise<T>): Promise
 async function bittensorFetch<T>(method: string, params: unknown[]): Promise<RpcResponse<T>> {
   let lastErr: unknown
   for (const url of BITTENSOR_RPCS) {
+    // Hermes-compatible timeout: `AbortSignal.timeout()` is Node 17.3+ and not
+    // available on older RN/Hermes runtimes — build the same behaviour with
+    // AbortController + setTimeout (mirrors src/chains/tron/rpc.ts). This
+    // aborts the in-flight fetch at BITTENSOR_RPC_TIMEOUT_MS (4s) so a slow
+    // endpoint's connection is released instead of running to fetchJson's own
+    // longer default while withEndpointTimeout's race has already moved on.
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), BITTENSOR_RPC_TIMEOUT_MS)
     try {
       const response = await withEndpointTimeout(
         url,
-        fetchJson<RpcResponse<T>>(
-          url,
-          { jsonrpc: '2.0', method, params, id: 1 },
-          { signal: AbortSignal.timeout(BITTENSOR_RPC_TIMEOUT_MS) }
-        )
+        fetchJson<RpcResponse<T>>(url, { jsonrpc: '2.0', method, params, id: 1 }, { signal: controller.signal })
       )
       if (response.error && shouldFallbackJsonRpcError(response.error)) {
         lastErr = new Error(`JSON-RPC ${response.error.code}: ${response.error.message}`)
@@ -165,6 +169,8 @@ async function bittensorFetch<T>(method: string, params: unknown[]): Promise<Rpc
       return response
     } catch (err) {
       lastErr = err
+    } finally {
+      clearTimeout(timeoutId)
     }
   }
   throw new Error(
