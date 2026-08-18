@@ -457,6 +457,14 @@ describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
     expect(rn.addLpMemo).toBe(thorLp.addLpMemo)
     expect(rn.removeLpMemo).toBe(thorLp.removeLpMemo)
   })
+
+  it('exports the documented decode namespace from the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(rn.decode).toBeDefined()
+    expect(typeof rn.decode.fromToolResult).toBe('function')
+    expect(rn.decode.fromToolResult).toBe(rn.decodeFromToolResult)
+  })
 })
 
 describe('RN entry exposes canonical EIP-712 helpers', () => {
