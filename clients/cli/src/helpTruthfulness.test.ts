@@ -64,3 +64,16 @@ describe('addresses help matches the command signature', () => {
     SUBPROCESS_TEST_TIMEOUT
   )
 })
+
+describe('tokens help matches conditional add requirements', () => {
+  it(
+    'marks --name as required with --add',
+    () => {
+      const result = run(['tokens', 'Ethereum', '--help'])
+
+      expect(result.status).toBe(0)
+      expect(result.stdout).toMatch(/--name <name>\s+Token name \(required with --add\)/)
+    },
+    SUBPROCESS_TEST_TIMEOUT
+  )
+})

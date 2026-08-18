@@ -1,3 +1,4 @@
+import { GrpcTypes, parseGrpcTransactionResponse } from '@mysten/sui/grpc'
 import { describe, expect, it } from 'vitest'
 
 import { describeSuiExecutionFailure, getSuiResultTransaction, isSuiExecutionSuccess } from './transactionResult'
@@ -52,6 +53,83 @@ describe('isSuiExecutionSuccess — fails closed (sdk#1398)', () => {
     ['null', null],
   ])('is false for %s', (_label, result) => {
     expect(isSuiExecutionSuccess(result)).toBe(false)
+  })
+})
+
+describe('isSuiExecutionSuccess — @mysten/sui parser contract', () => {
+  const parseTransaction = (success?: boolean) =>
+    parseGrpcTransactionResponse(
+      GrpcTypes.ExecutedTransaction.create({
+        digest: 'parsed-digest',
+        effects:
+          success === undefined
+            ? undefined
+            : GrpcTypes.TransactionEffects.create({
+                transactionDigest: 'parsed-effects-digest',
+                gasUsed: GrpcTypes.GasCostSummary.create({
+                  computationCost: 11n,
+                  storageCost: 22n,
+                  storageRebate: 3n,
+                  nonRefundableStorageFee: 1n,
+                }),
+                status: GrpcTypes.ExecutionStatus.create({
+                  success,
+                  error: success
+                    ? undefined
+                    : GrpcTypes.ExecutionError.create({ description: 'MoveAbort(...) in command 0' }),
+                }),
+              }),
+      }),
+      { include: { effects: true } }
+    )
+
+  it('classifies the library parser output for success, failure, and missing effects', () => {
+    const parsedSuccess = parseTransaction(true)
+    const parsedFailure = parseTransaction(false)
+    const parsedWithoutEffects = parseTransaction()
+
+    expect(parsedSuccess).toMatchObject({
+      $kind: 'Transaction',
+      Transaction: {
+        digest: 'parsed-digest',
+        status: { success: true, error: null },
+        effects: {
+          transactionDigest: 'parsed-effects-digest',
+          gasUsed: {
+            computationCost: '11',
+            storageCost: '22',
+            storageRebate: '3',
+            nonRefundableStorageFee: '1',
+          },
+        },
+      },
+    })
+    expect(parsedFailure).toMatchObject({
+      $kind: 'FailedTransaction',
+      FailedTransaction: {
+        status: {
+          success: false,
+          error: { $kind: 'Unknown', message: 'MoveAbort(...) in command 0' },
+        },
+        effects: {
+          transactionDigest: 'parsed-effects-digest',
+          gasUsed: { computationCost: '11', storageCost: '22', storageRebate: '3' },
+        },
+      },
+    })
+    expect(parsedWithoutEffects).toMatchObject({
+      $kind: 'FailedTransaction',
+      FailedTransaction: {
+        status: { success: false, error: { $kind: 'Unknown', message: 'Transaction failed' } },
+        effects: null,
+      },
+    })
+
+    expect([
+      isSuiExecutionSuccess(parsedSuccess),
+      isSuiExecutionSuccess(parsedFailure),
+      isSuiExecutionSuccess(parsedWithoutEffects),
+    ]).toEqual([true, false, false])
   })
 })
 
