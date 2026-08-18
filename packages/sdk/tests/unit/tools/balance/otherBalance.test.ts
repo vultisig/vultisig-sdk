@@ -187,7 +187,7 @@ describe('getSuiBalance / getSuiTokenBalance / getSuiAllBalances (GraphQL RPC)',
 
   const balancesPage = (
     nodes: Array<{ coinType: string; totalBalance: string }>,
-    pageInfo: { hasNextPage: boolean; endCursor: string | null } = { hasNextPage: false, endCursor: null }
+    pageInfo: { hasNextPage: boolean; endCursor?: string | null } = { hasNextPage: false, endCursor: null }
   ) => ({
     data: {
       address: {
@@ -263,6 +263,45 @@ describe('getSuiBalance / getSuiTokenBalance / getSuiAllBalances (GraphQL RPC)',
 
     const [, secondBody] = mockFetchJson.mock.calls[1] as [string, { variables: Record<string, unknown> }]
     expect(secondBody.variables).toMatchObject({ cursor: 'cur1' })
+  })
+
+  it.each([
+    ['null', null],
+    ['undefined', undefined],
+    ['an empty string', ''],
+  ])('returns tokens_unavailable when a page claims more data but the cursor is %s', async (_label, endCursor) => {
+    mockFetchJson.mockResolvedValue(
+      balancesPage([{ coinType: '0x2::sui::SUI', totalBalance: '1000000000' }], {
+        hasNextPage: true,
+        endCursor,
+      })
+    )
+
+    const r = await getSuiAllBalances(SUI_ADDR)
+    expect(r.ok).toBe(false)
+    if (r.ok) throw new Error('expected not ok')
+    expect(r.error).toBe('tokens_unavailable')
+    expect(r.detail).toMatch(/no cursor/)
+    expect(mockFetchJson).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns tokens_unavailable when the balances connection has no pageInfo', async () => {
+    mockFetchJson.mockResolvedValue({
+      data: {
+        address: {
+          balances: {
+            nodes: [{ coinType: { repr: '0x2::sui::SUI' }, totalBalance: '1000000000' }],
+          },
+        },
+      },
+    })
+
+    const r = await getSuiAllBalances(SUI_ADDR)
+    expect(r.ok).toBe(false)
+    if (r.ok) throw new Error('expected not ok')
+    expect(r.error).toBe('tokens_unavailable')
+    expect(r.detail).toMatch(/no balance pagination metadata/)
+    expect(mockFetchJson).toHaveBeenCalledTimes(1)
   })
 
   it('returns tokens_unavailable rather than a truncated portfolio when the cursor never advances', async () => {

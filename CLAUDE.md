@@ -128,6 +128,11 @@ Specific E2E tests: `yarn test:e2e:balance`, `yarn test:e2e:signing`, etc.
 
 ## Common Tasks
 
+The CLI's gated Hyperliquid `hl_order` client ceremony and its required backend
+wire schema are documented in `clients/cli/docs/hyperliquid-order-contract.md`.
+It signs retrieved phantom-agent digests locally and never returns signatures
+through chat.
+
 ### Adding a new chain feature
 
 1. Check if chain logic exists in `packages/core/chain/`
