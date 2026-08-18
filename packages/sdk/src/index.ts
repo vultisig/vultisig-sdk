@@ -724,6 +724,7 @@ export { CosmosMsgType } from './types'
 
 export type {
   AcrossChain,
+  AcrossOriginChain,
   AcrossQuote,
   AcrossQuoteParams,
   AmountUnits,
@@ -876,6 +877,7 @@ export type { BuildCosmosWasmExecuteMsgParams, CosmWasmExecuteFund } from './too
 export {
   abiDecode,
   abiEncode,
+  ACROSS_ORIGIN_CHAIN,
   acrossQuote,
   acrossSupportedChains,
   AMOUNT_DRIFT_BLOCK_PCT,
