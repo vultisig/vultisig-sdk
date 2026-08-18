@@ -168,10 +168,10 @@ export type TrxBalance = {
 export async function getTrxBalance(address: string): Promise<TrxBalance> {
   if (!address) throw new Error('No TRON address provided.')
   assertTronAddress(address)
-  const { text } = await fetchJsonWithText<{ balance?: number }>(
-    'https://tron-rpc.publicnode.com/wallet/getaccount',
-    { address, visible: true }
-  )
+  const { text } = await fetchJsonWithText<{ balance?: number }>('https://tron-rpc.publicnode.com/wallet/getaccount', {
+    address,
+    visible: true,
+  })
 
   // `balance` is a JSON *number*; `JSON.parse` already rounds it once it
   // exceeds 2^53, so recover the exact integer from the raw response text
