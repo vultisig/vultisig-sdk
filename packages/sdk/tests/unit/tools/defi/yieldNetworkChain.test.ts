@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  yieldNetworkToCanonicalChain,
-  yieldNetworkToEvmChain,
-} from '@/tools/defi/stakekit/yieldNetworkChain'
+import { yieldNetworkToCanonicalChain, yieldNetworkToEvmChain } from '@/tools/defi/stakekit/yieldNetworkChain'
 
 describe('yieldNetworkToCanonicalChain', () => {
   it('maps EVM network slugs to their PascalCase chain name', () => {
@@ -27,7 +24,18 @@ describe('yieldNetworkToCanonicalChain', () => {
 describe('yieldNetworkToEvmChain', () => {
   it('agrees with yieldNetworkToCanonicalChain for every EVM network', () => {
     // sdk#1953: single canonical mapping backs both entry points.
-    for (const network of ['ethereum', 'arbitrum', 'base', 'optimism', 'polygon', 'avalanche-c', 'binance', 'cronos', 'zksync', 'sei']) {
+    for (const network of [
+      'ethereum',
+      'arbitrum',
+      'base',
+      'optimism',
+      'polygon',
+      'avalanche-c',
+      'binance',
+      'cronos',
+      'zksync',
+      'sei',
+    ]) {
       expect(yieldNetworkToEvmChain(network)).toBe(yieldNetworkToCanonicalChain(network))
     }
   })
