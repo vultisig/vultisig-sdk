@@ -908,6 +908,7 @@ export {
   nativeSwapChains,
   nativeSwapEnabledChainsRecord,
 } from '@vultisig/core-chain/swap/native/NativeSwapChain'
+export { getSwapKitTrackerUrl, swapKitTrackerChainIds } from '@vultisig/core-chain/swap/general/swapkit/getSwapKitTrackerUrl'
 export { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
 export async function fiatToAmount(...args: unknown[]) {
   const mod = await import('../../utils/fiatToAmount')
