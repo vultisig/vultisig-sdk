@@ -57,7 +57,7 @@ export const getEvmFeeQuote = async ({
     (data || (swapPayload && 'general' in swapPayload)) && chain !== EvmChain.Mantle
   )
 
-  const capGasLimit = (estimatedGasLimit: bigint | undefined): bigint => {
+  const resolveGasLimit = (estimatedGasLimit: bigint | undefined): bigint => {
     // SDK2-03: bigIntMax() with zero args throws an opaque error. Unreachable today
     // (minimumGasLimit is always supplied), but guard so a future caller that omits every
     // source fails with a clear, actionable message instead of a bare bigIntMax throw —
@@ -65,9 +65,12 @@ export const getEvmFeeQuote = async ({
     const gasLimitSources = without([estimatedGasLimit, thirdPartyGasLimitEstimation, minimumGasLimit], undefined)
     if (gasLimitSources.length === 0) {
       throw new Error(
-        'capGasLimit: no gas-limit source available (estimated, third-party, and minimum are all undefined)'
+        'resolveGasLimit: no gas-limit source available (estimated, third-party, and minimum are all undefined)'
       )
     }
+    // This selects the highest available floor; it deliberately does not claim
+    // to cap the transaction. A safe upper bound is chain- and call-specific,
+    // so introducing an arbitrary global ceiling here would reject valid calls.
     const gasLimit = bigIntMax(...gasLimitSources)
 
     return shouldBufferDataTxGasLimit ? addDataTxGasLimitBuffer(gasLimit) : gasLimit
@@ -161,7 +164,7 @@ export const getEvmFeeQuote = async ({
         if (result.data) {
           const { gasLimit, maxFeePerGas, maxPriorityFeePerGas } = result.data
           return {
-            gasLimit: capGasLimit(gasLimit),
+            gasLimit: resolveGasLimit(gasLimit),
             // Floor at 0: on the zkSync path baseFeePerGas is derived from the
             // raw split, but downstream maxFeePerGas is rebuilt as
             // baseFeePerGas + clamp(priority). A compromised RPC returning a
@@ -192,7 +195,7 @@ export const getEvmFeeQuote = async ({
         )
       : undefined
 
-    const gasLimit = capGasLimit(estimatedGasLimit)
+    const gasLimit = resolveGasLimit(estimatedGasLimit)
 
     const baseFeePerGas = baseFeeMultiplier(await getEvmBaseFee(chain))
 
