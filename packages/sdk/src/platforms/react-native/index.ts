@@ -574,6 +574,8 @@ export { deriveAddressFromKeys } from '../../tools/address'
 
 // Circle CCTP — pure-crypto (viem-only) bridge/claim calldata builders +
 // contract registry. RN-safe: no chain-client deps, so re-exported statically.
+// `assertCctpMintSideHasCode` uses the same `getEvmClient` (viem PublicClient)
+// dependency as the EVM utilities below, so it's equally RN-safe.
 export type {
   BuildCctpBridgeParams,
   BuildCctpClaimParams,
@@ -584,10 +586,12 @@ export type {
   CctpUnsignedTx,
 } from '../../tools/bridge'
 export {
+  assertCctpMintSideHasCode,
   buildCctpBridge,
   buildCctpClaim,
   cctpAttestationApiBase,
   cctpChains,
+  CctpMintSideCodeError,
   cctpSupportedChains,
   formatUsdc,
   getCctpChain,

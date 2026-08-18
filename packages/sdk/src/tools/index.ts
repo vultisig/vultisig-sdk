@@ -210,10 +210,12 @@ export type {
   CctpUnsignedTx,
 } from './bridge'
 export {
+  assertCctpMintSideHasCode,
   buildCctpBridge,
   buildCctpClaim,
   cctpAttestationApiBase,
   cctpChains,
+  CctpMintSideCodeError,
   cctpSupportedChains,
   formatUsdc,
   getCctpChain,
