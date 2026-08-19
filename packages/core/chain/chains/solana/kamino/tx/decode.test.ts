@@ -4,9 +4,12 @@ import { describe, expect, it } from 'vitest'
 import { kaminoConfig } from '../config'
 import { kaminoVaultRegistry } from '../registry'
 import {
+  anchorU64Data,
   buildTestTransaction,
   depositInstructions,
   stakedWithdrawInstructions,
+  TestAccountIndexes,
+  TestInstruction,
   testOwner,
   withdrawInstruction,
 } from './__tests__/txTestKit'
@@ -232,5 +235,107 @@ describe('decodeKaminoTransaction: wrapped-SOL deposit', () => {
     // exactly like the initiating validator would.
     const decoded = decodeKaminoTransaction(wrappedDeposit(indexes => indexes.program(strayAccount)))
     expect(decoded).toBeUndefined()
+  })
+})
+
+describe('decodeKaminoTransaction: farm instruction bindings', () => {
+  const strayFarm = Keypair.generate().publicKey.toBase58()
+
+  /** A deposit plus a farms instruction whose accounts the caller chooses. */
+  const depositWith = (farmsInstruction: (indexes: TestAccountIndexes) => TestInstruction) =>
+    buildTestTransaction({
+      owner: testOwner,
+      descriptor: steakhouseUsdc,
+      extraStaticReadonly: [strayFarm],
+      instructions: indexes => [...depositInstructions(1_000_000n)(indexes).slice(0, 1), farmsInstruction(indexes)],
+    }).transaction
+
+  const stake = (accountKeyIndexes: number[]): TestInstruction => ({
+    program: kaminoAllowedPrograms.farms,
+    accountKeyIndexes,
+    data: anchorU64Data(kaminoDiscriminators.farmsStake, 2n ** 64n - 1n),
+  })
+
+  const initializeUser = (accountKeyIndexes: number[]): TestInstruction => ({
+    program: kaminoAllowedPrograms.farms,
+    accountKeyIndexes,
+    data: kaminoDiscriminators.farmsInitializeUser.slice(),
+  })
+
+  const stakeSlots = (indexes: TestAccountIndexes) => [
+    indexes.owner,
+    indexes.vaultState,
+    indexes.farm,
+    indexes.spare,
+    indexes.userShareAccount,
+    indexes.sharesMint,
+  ]
+
+  it('decodes a stake that names the signer, this vault farm and the deposit share account', () => {
+    expect(decodeKaminoTransaction(depositWith(indexes => stake(stakeSlots(indexes))))).toMatchObject({
+      operation: 'deposit',
+      amountBaseUnits: 1_000_000n,
+    })
+  })
+
+  it('refuses a stake authorised by someone other than the signer', () => {
+    const transaction = depositWith(indexes => stake([indexes.userTokenAccount, ...stakeSlots(indexes).slice(1)]))
+    expect(decodeKaminoTransaction(transaction)).toBeUndefined()
+  })
+
+  it('refuses a stake into a farm that is not this vault own', () => {
+    // A farm belonging to somewhere else parks the position where this app
+    // never reads it. The slot resolves statically here, so the offline
+    // decode must catch it rather than defer to the initiating validator.
+    const transaction = depositWith(indexes => {
+      const slots = stakeSlots(indexes)
+      slots[2] = indexes.program(strayFarm)
+      return stake(slots)
+    })
+    expect(decodeKaminoTransaction(transaction)).toBeUndefined()
+  })
+
+  it('refuses a stake crediting a share account other than the one the deposit filled', () => {
+    const transaction = depositWith(indexes => {
+      const slots = stakeSlots(indexes)
+      slots[4] = indexes.userTokenAccount
+      return stake(slots)
+    })
+    expect(decodeKaminoTransaction(transaction)).toBeUndefined()
+  })
+
+  it('refuses a farm user initialization for another authority or another farm', () => {
+    const slots = (indexes: TestAccountIndexes) => [
+      indexes.owner,
+      indexes.spare,
+      indexes.spare,
+      indexes.spare,
+      indexes.spare,
+      indexes.farm,
+    ]
+
+    const wrongAuthority = buildTestTransaction({
+      owner: testOwner,
+      descriptor: steakhouseUsdc,
+      extraStaticReadonly: [strayFarm],
+      instructions: indexes => [
+        ...depositInstructions(1_000_000n)(indexes).slice(0, 1),
+        initializeUser([indexes.userTokenAccount, ...slots(indexes).slice(1)]),
+        stake(stakeSlots(indexes)),
+      ],
+    }).transaction
+    expect(decodeKaminoTransaction(wrongAuthority)).toBeUndefined()
+
+    const wrongFarm = buildTestTransaction({
+      owner: testOwner,
+      descriptor: steakhouseUsdc,
+      extraStaticReadonly: [strayFarm],
+      instructions: indexes => [
+        ...depositInstructions(1_000_000n)(indexes).slice(0, 1),
+        initializeUser([...slots(indexes).slice(0, 5), indexes.program(strayFarm)]),
+        stake(stakeSlots(indexes)),
+      ],
+    }).transaction
+    expect(decodeKaminoTransaction(wrongFarm)).toBeUndefined()
   })
 })

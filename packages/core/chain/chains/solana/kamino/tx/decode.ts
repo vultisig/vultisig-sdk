@@ -162,8 +162,7 @@ const actsOnSignersFarmPosition = ({
   if (!expected) return false
   if (staticAddress(accounts, userStateIndex) !== expected) return false
 
-  const namedFarm = staticAddress(accounts, farmIndex)
-  return namedFarm === undefined || namedFarm === farm
+  return namesThisVaultsFarm({ accounts, index: farmIndex, descriptor })
 }
 
 /**
@@ -441,11 +440,62 @@ const checkSyncNative = ({ indexes, accounts, signer, descriptor }: ArgumentChec
   )
 }
 
-const checkFarmsStake = ({ data, indexes }: ArgumentCheck): boolean =>
-  indexes.length >= accountLayout.farmsStake.minimumCount && anchorU64Argument(data) === kaminoMaxBaseUnits
+/**
+ * The stake that makes a deposit's shares invisible in the wallet, bound to
+ * the signer, to this vault's farm and to the same share account the deposit
+ * credited. All three derive offline, so leaving them unchecked would let a
+ * stake naming another authority — or another vault's farm, which parks the
+ * position somewhere this app never reads — pass a co-signing device that the
+ * initiating validator refuses.
+ *
+ * Kamino stakes the whole share balance rather than the freshly minted
+ * amount, so the argument is the u64 sentinel; a different value is a
+ * behaviour change rather than a variation.
+ */
+const checkFarmsStake = ({ data, indexes, accounts, signer, descriptor, shareAccount }: ArgumentCheck): boolean => {
+  const layout = accountLayout.farmsStake
+  if (indexes.length < layout.minimumCount || anchorU64Argument(data) !== kaminoMaxBaseUnits) return false
+  if (staticAddress(accounts, indexes[layout.owner]) !== signer) return false
+  if (!namesThisVaultsFarm({ accounts, index: indexes[layout.farm], descriptor })) return false
 
-const checkFarmsInitializeUser = ({ indexes }: ArgumentCheck): boolean =>
-  indexes.length >= accountLayout.farmsInitializeUser.minimumCount
+  const staked = staticAddress(accounts, indexes[layout.userShareAccount])
+  return staked === undefined || staked === shareAccount
+}
+
+/**
+ * Creating the farm user state costs the payer rent and decides whose
+ * position the later stake lands in, so the authority and the farm are bound
+ * the same way as the stake's.
+ */
+const checkFarmsInitializeUser = ({ indexes, accounts, signer, descriptor }: ArgumentCheck): boolean => {
+  const layout = accountLayout.farmsInitializeUser
+  return (
+    indexes.length >= layout.minimumCount &&
+    staticAddress(accounts, indexes[layout.authority]) === signer &&
+    namesThisVaultsFarm({ accounts, index: indexes[layout.farm], descriptor })
+  )
+}
+
+/**
+ * Whether a farm slot names this vault's farm. The farm is a lookup-table
+ * entry in every captured transaction and cannot be resolved offline, so an
+ * unresolvable slot is accepted — the initiating validator resolves the
+ * tables and pins it. One that DOES resolve statically must match, so moving
+ * the farm into the static keys is not a way past the check.
+ */
+const namesThisVaultsFarm = ({
+  accounts,
+  index,
+  descriptor,
+}: {
+  accounts: string[]
+  index: number | undefined
+  descriptor: KaminoVaultDescriptor
+}): boolean => {
+  if (!descriptor.farm) return false
+  const named = staticAddress(accounts, index)
+  return named === undefined || named === descriptor.farm
+}
 
 /**
  * The u128 WAD-scaled release amount. The exact figure is `requested −
