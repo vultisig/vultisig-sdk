@@ -367,6 +367,24 @@ describe('RN entry exposes pure chain helpers and registry', () => {
     expect(rn.readNoonVaultState).toBe(noon.readNoonVaultState)
     expect(rn.fetchNoonUsdcVaultMetrics).toBe(noon.fetchNoonUsdcVaultMetrics)
   })
+
+  it('re-exports canonical fast-vault helpers by identity, matching the source ../../server module (sdk#1950 review — RN parity)', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const server = await import('../../../../src/server')
+
+    expect(rn.checkVaultExistsOnServer).toBe(server.checkVaultExistsOnServer)
+    expect(rn.createVaultWithServer).toBe(server.createVaultWithServer)
+    expect(rn.getVaultFromServer).toBe(server.getVaultFromServer)
+    expect(rn.keyImportWithServer).toBe(server.keyImportWithServer)
+    expect(rn.migrateWithServer).toBe(server.migrateWithServer)
+    expect(rn.mldsaWithServer).toBe(server.mldsaWithServer)
+    expect(rn.resendVaultShare).toBe(server.resendVaultShare)
+    expect(rn.reshareWithServer).toBe(server.reshareWithServer)
+    expect(rn.sequentialKeyImportWithServer).toBe(server.sequentialKeyImportWithServer)
+    expect(rn.setupVaultWithServer).toBe(server.setupVaultWithServer)
+    expect(rn.signWithServer).toBe(server.signWithServer)
+    expect(rn.verifyVaultEmailCode).toBe(server.verifyVaultEmailCode)
+  })
 })
 
 // Same parity guard for the hardened human-amount -> base-units parser: the RN

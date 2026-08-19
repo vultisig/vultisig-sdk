@@ -328,6 +328,23 @@ describe('@vultisig/sdk public exports', () => {
     expect(msg.typeUrl).toBe('/cosmos.staking.v1beta1.MsgBeginRedelegate')
   })
 
+  it('exports canonical fast-vault helpers by identity, matching the source ./server module (sdk#1950 review)', async () => {
+    const server = await import('../../../src/server')
+
+    expect(sdk.checkVaultExistsOnServer).toBe(server.checkVaultExistsOnServer)
+    expect(sdk.createVaultWithServer).toBe(server.createVaultWithServer)
+    expect(sdk.getVaultFromServer).toBe(server.getVaultFromServer)
+    expect(sdk.keyImportWithServer).toBe(server.keyImportWithServer)
+    expect(sdk.migrateWithServer).toBe(server.migrateWithServer)
+    expect(sdk.mldsaWithServer).toBe(server.mldsaWithServer)
+    expect(sdk.resendVaultShare).toBe(server.resendVaultShare)
+    expect(sdk.reshareWithServer).toBe(server.reshareWithServer)
+    expect(sdk.sequentialKeyImportWithServer).toBe(server.sequentialKeyImportWithServer)
+    expect(sdk.setupVaultWithServer).toBe(server.setupVaultWithServer)
+    expect(sdk.signWithServer).toBe(server.signWithServer)
+    expect(sdk.verifyVaultEmailCode).toBe(server.verifyVaultEmailCode)
+  })
+
   it('exports seedphrase import chain support policy for consumers', () => {
     expect(Array.isArray(sdk.SEEDPHRASE_IMPORT_SUPPORTED_CHAINS)).toBe(true)
     expect(Array.isArray(sdk.SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS)).toBe(true)

@@ -38,6 +38,30 @@ export {
 export { ValidationHelpers } from './utils/validation'
 
 // ============================================================================
+// PUBLIC API - Server-Assisted Fast Vault Helpers
+// ============================================================================
+
+export type { VaultFromServerResponse } from './server'
+export {
+  checkVaultExistsOnServer,
+  createVaultWithServer,
+  getVaultFromServer,
+  keyImportWithServer,
+  migrateWithServer,
+  mldsaWithServer,
+  resendVaultShare,
+  reshareWithServer,
+  sequentialKeyImportWithServer,
+  setupVaultWithServer,
+  signWithServer,
+  verifyVaultEmailCode,
+} from './server'
+// Only signWithServer/mldsaWithServer accept a ServerEndpoints override — the
+// other 10 helpers above hard-bind the default fast-vault URL. Consumers
+// should not expect `endpoints.fastVault` to redirect the whole family.
+export type { ServerEndpoints } from './server/ServerManager'
+
+// ============================================================================
 // PUBLIC API - Conversion / Normalization Utilities (vault-free)
 // ============================================================================
 
