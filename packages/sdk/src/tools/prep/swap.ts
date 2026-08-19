@@ -94,11 +94,12 @@ const assertCowQuoteNotExpired = (validTo: number): void => {
   }
 }
 
-// Defense-in-depth for CoW: the quote-level requested amount must also match the gross value
-// committed to the EIP-712 order. Native/evm/solana do not expose a separate committed-sell
-// field here, so they intentionally fail open after the quote-level amount binding above;
-// `transfer.amount` may legitimately differ (for example, 100_000n -> 99_999n) because providers
-// subtract deposit-channel fees.
+// Defense-in-depth for providers whose tx shape carries an exact source amount: the quote-level
+// requested amount must also match the gross value committed to the EIP-712 order or CosmWasm
+// funds. Native/evm/solana do not expose a separate committed-sell field here, so they
+// intentionally fail open after the quote-level amount binding above; `transfer.amount` may
+// legitimately differ (for example, 100_000n -> 99_999n) because providers subtract
+// deposit-channel fees.
 const assertAmountMatchesCommittedSellAmount = (params: PrepareSwapTxFromKeysParams): void => {
   const { quote } = params.swapQuote
   if (!('general' in quote)) return
@@ -107,6 +108,13 @@ const assertAmountMatchesCommittedSellAmount = (params: PrepareSwapTxFromKeysPar
     evm: () => undefined,
     solana: () => undefined,
     transfer: () => undefined,
+    cosmosWasm: ({ funds }) => {
+      if (funds.length !== 1 || !/^[1-9]\d*$/.test(funds[0].amount)) {
+        throw new Error('prepareSwapTxFromKeys: CosmWasm route must commit exactly one positive integer source fund')
+      }
+
+      return BigInt(funds[0].amount)
+    },
     cowswap_order: order => BigInt(order.sellAmount) + BigInt(order.feeAmount),
   })
   if (committed === undefined) return
@@ -114,7 +122,7 @@ const assertAmountMatchesCommittedSellAmount = (params: PrepareSwapTxFromKeysPar
   const requested = toChainAmount(params.amount, params.fromCoin.decimals)
   if (requested !== committed) {
     throw new Error(
-      `prepareSwapTxFromKeys: requested amount (${requested} base units) does not match the CoW order's committed gross sell amount (${committed} base units) — the quote may be stale or for a different request`
+      `prepareSwapTxFromKeys: requested amount (${requested} base units) does not match the route's committed source amount (${committed} base units) — the quote may be stale or for a different request`
     )
   }
 }

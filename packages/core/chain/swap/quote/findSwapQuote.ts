@@ -21,6 +21,10 @@ import {
   OneInchAffiliateConfig,
 } from '@vultisig/core-chain/swap/general/oneInch/api/getOneInchSwapQuote'
 import { oneInchSwapEnabledChains } from '@vultisig/core-chain/swap/general/oneInch/OneInchSwapEnabledChains'
+import {
+  getRujiTradeSwapQuote,
+  isRujiTradeSwapPair,
+} from '@vultisig/core-chain/swap/general/ruji/api/getRujiTradeSwapQuote'
 import { getSwapKitQuote } from '@vultisig/core-chain/swap/general/swapkit/api/getSwapKitQuote'
 import {
   swapKitEnabledChains,
@@ -75,8 +79,8 @@ export type FindSwapQuoteInput = Record<TransferDirection, AccountCoin> & {
    * Optional external recipient for the swapped output. When omitted the swap
    * pays out to the user's own derived address (existing behavior). When set,
    * only providers that route the output to an explicit address are used —
-   * native THORChain/MayaChain (memo destination) and CowSwap (order
-   * `receiver`); aggregators that would silently pay the initiator are skipped
+   * native THORChain/MayaChain (memo destination), CowSwap (order `receiver`),
+   * and RUJI Trade (FIN execute `to`); aggregators that would silently pay the initiator are skipped
    * so funds are never sent to the wrong address.
    */
   recipient?: string
@@ -84,7 +88,7 @@ export type FindSwapQuoteInput = Record<TransferDirection, AccountCoin> & {
    * Optional slippage tolerance, expressed in PERCENT (e.g. `0.5` = 0.5%,
    * `3` = 3%). When omitted each provider keeps its own default. Applied to the
    * general aggregators that accept a slippage override (1inch, KyberSwap, LiFi,
-   * SwapKit); CowSwap (RFQ limit order) and the native THORChain/MayaChain
+   * SwapKit, RUJI Trade); CowSwap (RFQ limit order) and the native THORChain/MayaChain
    * protocols use their own protection mechanisms and ignore this value.
    */
   slippageTolerance?: number
@@ -109,6 +113,7 @@ export type SwapQuoteProviderName =
   | 'LiFi'
   | 'SwapKit'
   | 'Jupiter'
+  | 'RUJI Trade'
   | 'THORChain'
   | 'MayaChain'
 
@@ -162,7 +167,10 @@ const bindQuoteSafetyMetadata = (
   requestedAmount: bigint
 ): BoundSwapQuote => {
   const now = Date.now()
-  const expiresAt = 'native' in quote.quote ? quote.quote.native.expiry * 1000 : now + GENERAL_QUOTE_PREPARATION_TTL_MS
+  const expiresAt =
+    'native' in quote.quote
+      ? quote.quote.native.expiry * 1000
+      : (quote.quote.general.expiresAt ?? now + GENERAL_QUOTE_PREPARATION_TTL_MS)
   const effectiveExpiresAt =
     'general' in quote.quote && 'cowswap_order' in quote.quote.general.tx
       ? Math.min(expiresAt, quote.quote.general.tx.cowswap_order.validTo * 1000)
@@ -214,6 +222,7 @@ export const providerPreferenceOrder: readonly SwapQuoteProviderName[] = [
   // competes for same-chain ERC-20 EVM pairs (see fetcher registration below);
   // for every other pair it simply isn't in the candidate set.
   'CowSwap',
+  'RUJI Trade',
   'THORChain',
   'MayaChain',
   // Jupiter is slotted ahead of the EVM/multi-chain aggregators: it only enters
@@ -244,6 +253,7 @@ const swapQuoteProviderExcludeAlias: Record<GeneralSwapProvider, SwapQuoteProvid
   swapkit: 'SwapKit',
   cowswap: 'CowSwap',
   jupiter: 'Jupiter',
+  ruji: 'RUJI Trade',
 }
 
 const swapQuoteProviderExcludeNames = new Set<SwapQuoteProviderExcludeName>([
@@ -579,7 +589,8 @@ const getGeneralDestinationSideFeeAmount = ({ quote, to }: { quote: SwapQuote; t
     general.provider === 'kyber' ||
     general.provider === 'swapkit' ||
     general.provider === 'jupiter' ||
-    general.provider === 'cowswap'
+    general.provider === 'cowswap' ||
+    general.provider === 'ruji'
   if (!providerAlreadyNet && explicitFee && isSameCoinKey(explicitFee, to)) {
     return rebaseDecimals(explicitFee.amount, explicitFee.decimals, to.decimals)
   }
@@ -809,6 +820,7 @@ type ProviderSlippage = {
   lifiFraction: number | undefined
   kyberBps: number | undefined
   jupiterBps: number | undefined
+  rujiBps: number | undefined
 }
 const toProviderSlippage = (slippageTolerance: number | undefined): ProviderSlippage => {
   const bps = slippageTolerance !== undefined ? Math.round(slippageTolerance * 100) : undefined
@@ -820,6 +832,7 @@ const toProviderSlippage = (slippageTolerance: number | undefined): ProviderSlip
     lifiFraction: slippageTolerance !== undefined ? slippageTolerance / 100 : undefined,
     kyberBps: bps,
     jupiterBps: bps,
+    rujiBps: bps,
   }
 }
 
@@ -881,8 +894,8 @@ export const findSwapQuotes = async (input: FindSwapQuoteInput): Promise<FindSwa
   const referralDiscount: SwapDiscount[] = referral ? [{ referral: {} }] : []
 
   // When the caller requests an external recipient, restrict routing to the
-  // providers that send the swapped output to an explicit address (native +
-  // CowSwap). Aggregators that pay the initiator would silently misroute funds,
+  // providers that send the swapped output to an explicit address (native,
+  // CowSwap, and RUJI Trade). Aggregators that pay the initiator would silently misroute funds,
   // so they are not offered for custom-recipient swaps until they thread the
   // receiver through (tracked in vultisig/vultisig-windows#4131).
   // Trim and treat empty/whitespace strings as no recipient, so route gating
@@ -908,6 +921,7 @@ export const findSwapQuotes = async (input: FindSwapQuoteInput): Promise<FindSwa
     lifiFraction: lifiSlippageFraction,
     kyberBps: kyberSlippageBps,
     jupiterBps: jupiterSlippageBps,
+    rujiBps: rujiSlippageBps,
     nativeBps: nativeSlippageBps,
   } = toProviderSlippage(slippageTolerance)
 
@@ -950,6 +964,23 @@ export const findSwapQuotes = async (input: FindSwapQuoteInput): Promise<FindSwa
     const fromChain = from.chain
     const toChain = to.chain
     const chainAmount = amount
+
+    if (isRujiTradeSwapPair(from, to)) {
+      result.push({
+        providerName: 'RUJI Trade',
+        fetch: async (): Promise<UnboundSwapQuote> => {
+          const general = await getRujiTradeSwapQuote({
+            from,
+            to,
+            amount: chainAmount,
+            destination: normalizedRecipient ?? to.address,
+            slippageBps: rujiSlippageBps,
+          })
+
+          return { quote: { general }, discounts: [] }
+        },
+      })
+    }
 
     // CowSwap (Phase 2 — off-chain RFQ orders). Gated to same-chain ERC-20 →
     // ERC-20 pairs on a CowSwap-supported EVM chain. Both sides must be ERC-20
@@ -1224,6 +1255,7 @@ export const findSwapQuotes = async (input: FindSwapQuoteInput): Promise<FindSwa
   // resolution order. (#535 r3 — NeO preferably-blocking response.)
   const belowMinimumProviderOrder: SwapQuoteProviderName[] = [
     'CowSwap',
+    'RUJI Trade',
     'KyberSwap',
     '1inch',
     'Jupiter',

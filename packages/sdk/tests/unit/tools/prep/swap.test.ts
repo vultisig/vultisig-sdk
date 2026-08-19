@@ -47,6 +47,14 @@ const thorCoin = {
   ticker: 'RUNE',
 } as any
 
+const bruneCoin = {
+  chain: Chain.THORChain,
+  address: 'thor1from',
+  id: 'x/brune',
+  decimals: 8,
+  ticker: 'bRUNE',
+} as any
+
 const btcCoin = {
   chain: Chain.Bitcoin,
   address: 'bc1from',
@@ -361,7 +369,7 @@ describe('prepareSwapTxFromKeys — amount consistency (ABTS/plan 005)', () => {
         amount: '1',
         swapQuote: quote,
       })
-    ).rejects.toThrow(/does not match the CoW order's committed gross sell amount/)
+    ).rejects.toThrow(/does not match the route's committed source amount/)
 
     expect(mockBuildSwapKeysignPayload).not.toHaveBeenCalled()
   })
@@ -392,6 +400,95 @@ describe('prepareSwapTxFromKeys — amount consistency (ABTS/plan 005)', () => {
         swapQuote: quote,
       })
     ).resolves.toBeDefined()
+  })
+
+  it('throws when RUJI Trade CosmWasm funds do not match the bound source amount', async () => {
+    const quote = bindSwapQuote(
+      {
+        general: {
+          tx: {
+            cosmosWasm: {
+              sender: thorCoin.address,
+              contract: 'thor1contract',
+              executeMsg: '{"swap":{}}',
+              funds: [{ denom: 'rune', amount: '99999999' }],
+            },
+          },
+        },
+      },
+      100_000_000n,
+      { fromCoin: thorCoin, toCoin: bruneCoin }
+    )
+
+    await expect(
+      prepareSwapTxFromKeys(baseIdentity, {
+        fromCoin: thorCoin,
+        toCoin: bruneCoin,
+        amount: '1',
+        swapQuote: quote,
+      })
+    ).rejects.toThrow(/does not match the route's committed source amount/)
+
+    expect(mockBuildSwapKeysignPayload).not.toHaveBeenCalled()
+  })
+
+  it('builds when RUJI Trade CosmWasm funds match the bound source amount', async () => {
+    mockBuildSwapKeysignPayload.mockResolvedValue({ __mock: 'payload' })
+    const quote = bindSwapQuote(
+      {
+        general: {
+          tx: {
+            cosmosWasm: {
+              sender: thorCoin.address,
+              contract: 'thor1contract',
+              executeMsg: '{"swap":{}}',
+              funds: [{ denom: 'rune', amount: '100000000' }],
+            },
+          },
+        },
+      },
+      100_000_000n,
+      { fromCoin: thorCoin, toCoin: bruneCoin }
+    )
+
+    await expect(
+      prepareSwapTxFromKeys(baseIdentity, {
+        fromCoin: thorCoin,
+        toCoin: bruneCoin,
+        amount: '1',
+        swapQuote: quote,
+      })
+    ).resolves.toBeDefined()
+  })
+
+  it('rejects a RUJI Trade CosmWasm route without exactly one positive source fund', async () => {
+    const quote = bindSwapQuote(
+      {
+        general: {
+          tx: {
+            cosmosWasm: {
+              sender: thorCoin.address,
+              contract: 'thor1contract',
+              executeMsg: '{"swap":{}}',
+              funds: [],
+            },
+          },
+        },
+      },
+      100_000_000n,
+      { fromCoin: thorCoin, toCoin: bruneCoin }
+    )
+
+    await expect(
+      prepareSwapTxFromKeys(baseIdentity, {
+        fromCoin: thorCoin,
+        toCoin: bruneCoin,
+        amount: '1',
+        swapQuote: quote,
+      })
+    ).rejects.toThrow(/exactly one positive integer source fund/)
+
+    expect(mockBuildSwapKeysignPayload).not.toHaveBeenCalled()
   })
 
   it('throws when an EVM-general quote was fetched for a different source amount', async () => {
