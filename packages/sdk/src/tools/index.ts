@@ -307,6 +307,13 @@ export type {
   ThreeJaneTranche,
   ThreeJaneTxStep,
 } from './defi/threeJane'
+// Aliased to avoid colliding with the CCTP bridge's `parseUsdcAmount` above —
+// both re-export the same underlying `./parse/usdcAmount` helper.
+export {
+  buildThreeJaneSupplyUsdc,
+  parseUsdcAmount as parseThreeJaneUsdcAmount,
+  THREE_JANE_ADDRESSES,
+} from './defi/threeJane'
 export { VerifierClient } from './verifier'
 
 // Pure intent↔envelope policy diff (vault-free comparison, no signing/broadcast)
