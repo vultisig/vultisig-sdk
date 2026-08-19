@@ -2,6 +2,8 @@ import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/custo
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
 import { describe, expect, it } from 'vitest'
 
+import { resolveSwapFeeChain as canonicalResolveSwapFeeChain } from '@vultisig/core-chain/swap/general/lifi/api/lifiSwapFeeChain'
+
 import * as sdk from '../../../src/index'
 import * as dangerousAddresses from '../../../src/utils/dangerousAddresses'
 import { cosmosTxFeeGasParityCases } from '../../fixtures/cosmosTxFeeGasParity'
@@ -80,6 +82,11 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.findSwapQuote).toBe('function')
     expect(typeof sdk.abiEncode).toBe('function')
     expect(typeof sdk.evmCheckAllowance).toBe('function')
+  })
+
+  it('exports the canonical LI.FI fee-chain resolver from the root sdk surface', () => {
+    expect(sdk.resolveSwapFeeChain).toBe(canonicalResolveSwapFeeChain)
+    expect(sdk.resolveSwapFeeChain(999_999, sdk.Chain.Solana)).toBe(sdk.Chain.Solana)
   })
 
   it('exports encodeErc20Approve, encodeErc20Revoke, MAX_UINT256 (ERC-20 approve/revoke calldata)', () => {
