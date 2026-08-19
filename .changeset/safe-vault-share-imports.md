@@ -1,7 +1,0 @@
----
-'@vultisig/sdk': major
----
-
-Reject duplicate, stale, incompatible, and other-device vault shares before local import persistence, with an explicit compatible-share replacement option. Import persistence is revision-checked through the same optimistic-concurrency `vault.save()` every other vault mutation uses and committed with atomic compare-and-set across built-in storage backends, so a record that changes underneath an import is rejected instead of silently overwritten. Custom storage adapters must expose `compareAndSet` for vault imports. React Native consumers must install the new optional peer `expo-sqlite`; the default adapter durably migrates and removes existing SDK-owned AsyncStorage records once, then keeps values and compare-and-set revisions together in native SQLite transactions across JS runtimes. Chrome content scripts must route storage mutations through an extension-origin context so all mutations share the same Web Lock. A locally unreadable existing record (corrupted, or an encrypted record whose password rotated) cannot be replaced because no trustworthy atomic baseline exists, including through `conflictResolution: 'replace-unvalidated'`.
-
-Existing callers of `importVault`/`importVaultWithResult` that relied on re-importing the same vault silently succeeding must now pass `{ conflictResolution: 'replace' }` explicitly, and custom storage adapters without atomic compare-and-set can no longer import vaults.
