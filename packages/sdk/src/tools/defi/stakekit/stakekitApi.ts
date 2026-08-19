@@ -533,7 +533,8 @@ function extractSolanaTxCandidate(unsignedTransaction: string): string | null {
     const maybeObj = JSON.parse(unsignedTransaction) as unknown
     if (maybeObj && typeof maybeObj === 'object') {
       const obj = maybeObj as { serialized?: unknown; tx?: unknown }
-      candidate = (typeof obj.serialized === 'string' && obj.serialized) || (typeof obj.tx === 'string' && obj.tx) || null
+      candidate =
+        (typeof obj.serialized === 'string' && obj.serialized) || (typeof obj.tx === 'string' && obj.tx) || null
     }
   } catch {
     candidate = unsignedTransaction
