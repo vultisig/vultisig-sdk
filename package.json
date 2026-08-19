@@ -34,6 +34,7 @@
     "build:shared": "node scripts/build-shared-packages.mjs",
     "worktree:setup": "node scripts/setup-worktree.mjs",
     "worktree:check": "node scripts/setup-worktree.mjs --check",
+    "deps:release-age": "node scripts/check-dependency-release-age.mjs",
     "check:shared-exports": "node scripts/build-shared-packages.mjs --check",
     "pack:shared": "node scripts/pack-shared-packages.mjs",
     "sync-packages": "syncpack fix-mismatches",
@@ -78,7 +79,7 @@
     "quality:secrets": "secretlint --secretlintrc .config/secretlintrc.json --secretlintignore .config/secretlintignore \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml,cjs,mjs,sh}\"",
     "check": "yarn worktree:check && concurrently --kill-others-on-fail -n shared-exports,typecheck,lint,knip,format \"yarn check:shared-exports\" \"yarn typecheck\" \"yarn lint\" \"yarn knip\" \"yarn format:check\"",
     "check:agent": "yarn worktree:check && node scripts/check-agent-toolchain.mjs && yarn check:shared-exports && yarn lint && yarn typecheck && yarn knip && yarn format:check",
-    "check:ci": "yarn worktree:check && yarn check:shared-exports && yarn build:all && yarn cli:build && yarn cli:smoke && yarn mcp:build && yarn mcp:smoke && yarn changeset:check-sdk-bundle && yarn quality:contracts && yarn lint && yarn typecheck && yarn knip && yarn format:check && yarn quality:architecture && yarn quality:duplication && yarn quality:complexity && yarn quality:secrets && yarn quality:audit && yarn quality:docs:markdown",
+    "check:ci": "yarn worktree:check && yarn deps:release-age && yarn check:shared-exports && yarn build:all && yarn cli:build && yarn cli:smoke && yarn mcp:build && yarn mcp:smoke && yarn changeset:check-sdk-bundle && yarn quality:contracts && yarn lint && yarn typecheck && yarn knip && yarn format:check && yarn quality:architecture && yarn quality:duplication && yarn quality:complexity && yarn quality:secrets && yarn quality:audit && yarn quality:docs:markdown",
     "check:all": "yarn check:ci && yarn test",
     "prepare": "husky",
     "cli": "yarn workspace @vultisig/cli dev",
@@ -191,7 +192,7 @@
     "vitest": "^4.1.8"
   },
   "resolutions": {
-    "nanoid@npm:^3.3.16": "^3.3.17",
+    "nanoid@npm:^3.3.16": "3.3.17",
     "readable-stream": "3.6.2",
     "@grpc/grpc-js": "1.14.4",
     "@cosmjs/encoding/@scure/base": "1.2.6",
