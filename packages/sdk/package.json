@@ -202,6 +202,19 @@
       "import": "./dist/tx/index.js",
       "require": "./dist/tx/index.cjs",
       "default": "./dist/tx/index.cjs"
+    },
+    "./tools/gas": {
+      "types": "./dist/tools/gas/index.d.ts",
+      "browser": "./dist/tools/gas/index.js",
+      "worker": "./dist/tools/gas/index.js",
+      "react-native": "./dist/tools/gas/index.js",
+      "node": {
+        "import": "./dist/tools/gas/index.js",
+        "require": "./dist/tools/gas/index.cjs"
+      },
+      "import": "./dist/tools/gas/index.js",
+      "require": "./dist/tools/gas/index.cjs",
+      "default": "./dist/tools/gas/index.cjs"
     }
   },
   "scripts": {
