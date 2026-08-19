@@ -14,6 +14,7 @@
 // ============================================================================
 
 // Core SDK class
+export type { VaultImportConflictResolution, VaultImportOptions } from './VaultManager'
 export { Vultisig } from './Vultisig'
 
 // Vault management
