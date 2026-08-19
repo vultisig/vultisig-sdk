@@ -1,5 +1,6 @@
 import { banxaSupportedChains } from '@vultisig/core-chain/banxa'
 import { Chain } from '@vultisig/core-chain/Chain'
+import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import { getThorchainSwapDestinationAssets } from '@vultisig/core-chain/chains/cosmos/thor/securedAssets'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { findCoins as coreFindCoins } from '@vultisig/core-chain/coin/find'
@@ -1344,7 +1345,8 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * @returns Token metadata or null if not found
    */
   static getKnownToken(chain: Chain, tokenId: string): TokenInfo | null {
-    const coin = knownTokensIndex[chain]?.[tokenId.toLowerCase()]
+    const lookupId = getChainKind(chain) === 'evm' ? tokenId.toLowerCase() : tokenId
+    const coin = knownTokensIndex[chain]?.[lookupId]
     if (!coin) return null
     return {
       chain,

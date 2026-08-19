@@ -128,6 +128,7 @@ describe('Vultisig static methods', () => {
       expect(rlusd?.tokenId).toMatch(/^[A-F0-9]{40}\.r.+$/u)
       expect(rlusd?.contractAddress).toBe(rlusd?.tokenId)
       expect(Vultisig.getKnownToken(Chain.Ripple, rlusd!.tokenId!)).toEqual(rlusd)
+      expect(Vultisig.getKnownToken(Chain.Ripple, rlusd!.tokenId!.toLowerCase())).toBeNull()
     })
   })
 

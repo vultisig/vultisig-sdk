@@ -1,4 +1,4 @@
-import { Chain } from '@vultisig/core-chain/Chain'
+import { Chain, EvmChain } from '@vultisig/core-chain/Chain'
 import { rippleKnownIssuedTokens } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
 import { makeRecord } from '@vultisig/lib-utils/record/makeRecord'
 import { omit } from '@vultisig/lib-utils/record/omit'
@@ -1326,11 +1326,14 @@ export const knownTokens = makeRecord(Object.values(Chain), chain => {
 
 type KnownIndex = Record<Chain, Record<string, KnownCoin>>
 
+const evmChains = new Set<Chain>(Object.values(EvmChain))
+
 export const knownTokensIndex: KnownIndex = makeRecord(Object.values(Chain), chain => {
   const byId: Record<string, KnownCoin> = {}
   for (const coin of knownTokens[chain] ?? []) {
     if (!coin.id) continue
-    byId[coin.id.toLowerCase()] = coin
+    const key = evmChains.has(chain) ? coin.id.toLowerCase() : coin.id
+    byId[key] = coin
   }
   return byId
 })

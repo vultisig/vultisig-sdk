@@ -1,4 +1,5 @@
 import { Chain } from '@vultisig/core-chain/Chain'
+import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import { findCoins } from '@vultisig/core-chain/coin/find'
 import { knownTokensIndex } from '@vultisig/core-chain/coin/knownTokens'
 import { getTokenMetadata as coreGetTokenMetadata } from '@vultisig/core-chain/coin/token/metadata'
@@ -17,6 +18,10 @@ function tickerBase(ticker: string): string {
 
 function tokenIdentity(chain: Chain, tokenId: string): string {
   return normalizedTokenIdentity(chain, tokenId)
+}
+
+function knownTokenLookupId(chain: Chain, tokenId: string): string {
+  return getChainKind(chain) === 'evm' ? tokenId.toLowerCase() : tokenId
 }
 
 function compactTokenId(tokenId: string): string {
@@ -57,7 +62,7 @@ export class TokenDiscoveryService {
       const coins = await findCoins({ address, chain })
       const candidates = coins.map(coin => {
         const tokenId = coin.id ?? ''
-        const knownToken = knownTokensIndex[chain]?.[tokenId.toLowerCase()]
+        const knownToken = knownTokensIndex[chain]?.[knownTokenLookupId(chain, tokenId)]
 
         return { coin, tokenId, ticker: knownToken?.ticker ?? tickerBase(coin.ticker) }
       })
@@ -105,7 +110,7 @@ export class TokenDiscoveryService {
 
   async resolveToken(chain: Chain, tokenId: string): Promise<TokenInfo> {
     // Check known tokens first (fast, no network)
-    const known = knownTokensIndex[chain]?.[tokenId.toLowerCase()]
+    const known = knownTokensIndex[chain]?.[knownTokenLookupId(chain, tokenId)]
     if (known) {
       return {
         chain,
