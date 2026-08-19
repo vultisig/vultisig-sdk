@@ -1,5 +1,13 @@
 # @vultisig/core-chain
 
+## 2.38.0
+
+### Minor Changes
+
+- [#2074](https://github.com/vultisig/vultisig-sdk/pull/2074) [`8929244`](https://github.com/vultisig/vultisig-sdk/commit/8929244cdb3b21059a46eabac6d4d9684e18a633) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Add the Kamino Earn data layer under `chains/solana/kamino`: a REST client for the kVaults API (vault state, metrics, user positions, PnL) with a typed error envelope that separates retryable statuses from permanent refusals; a curated vault registry pinning each launch vault's identity (mints, decimals, farm, curator, risk tier); distinct token- and share-denominated amount types over exact `bigint` base units, with exact-rate conversions that truncate toward zero so a sized withdraw can never over-request (the API rewrites an over-sized withdraw to `u64::MAX` — withdraw everything); vault-info hydration that refuses responses disagreeing with the pinned identity and derives the effective deposit/withdraw minimums the on-chain program actually accepts; and position parsing with a spendable-balance rule that stays strictly below the reported balance.
+
+- [#2124](https://github.com/vultisig/vultisig-sdk/pull/2124) [`514e31f`](https://github.com/vultisig/vultisig-sdk/commit/514e31f084c241792f3a9b2436074c324a909c0f) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Add the Kamino Earn transaction pipeline under `chains/solana/kamino/tx`: build the unsigned deposit/withdraw transactions (with the withdraw-everything sentinel refused before a request leaves the device); inject the attribution memo and the compute-budget pair into the built v0 transaction without disturbing address-lookup-table indexes; replace the recent blockhash immediately before keysign; a fail-closed validator that admits only allow-listed programs, matches the exact instruction sequence each operation produces (both withdraw discriminators, the farms unstake pair, exactly one memo carrying exactly the attribution tag), pins every account that decides where money goes against the registry and local ATA/PDA derivations, pins every spend amount, and refuses unexplained writable accounts; and an offline decoder that lets a co-signing device derive an independent claim about what the bytes do — vault identified through the signer's own share account, both withdraw shapes accepted, the farm release bounded by the withdraw itself.
+
 ## 2.37.0
 
 ### Minor Changes
