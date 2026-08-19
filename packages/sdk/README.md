@@ -310,10 +310,14 @@ if (buyUrl) window.open(buyUrl)
 Coordinate multi-party signing by notifying vault members when a signing session is initiated.
 
 ```typescript
+import { computeNotificationVaultId } from '@vultisig/sdk'
+
+const notificationVaultId = await computeNotificationVaultId(vault.publicKeys.ecdsa, vault.hexChainCode)
+
 // Step 1: Register device for vault notifications
 // Token comes from your platform's push service (APNs, FCM, or Web Push)
 await sdk.notifications.registerDevice({
-  vaultId: vault.publicKeys.ecdsa,
+  vaultId: notificationVaultId,
   partyName: vault.localPartyId,
   token: myPlatformPushToken,
   deviceType: 'ios', // 'ios' | 'android' | 'web'
@@ -321,7 +325,7 @@ await sdk.notifications.registerDevice({
 
 // Step 2: Notify other vault members when initiating a signing session
 await sdk.notifications.notifyVaultMembers({
-  vaultId: vault.publicKeys.ecdsa,
+  vaultId: notificationVaultId,
   vaultName: vault.name,
   localPartyId: vault.localPartyId,
   qrCodeData: keysignQrPayload, // session data for joining
@@ -368,9 +372,11 @@ sdk.notifications.handleIncomingPush(remoteMessage.data)
 **Browser / Extension** — Use WebSocket for real-time delivery (no service worker needed):
 
 ```typescript
+const notificationVaultId = await computeNotificationVaultId(vault.publicKeys.ecdsa, vault.hexChainCode)
+
 // Register device
 await sdk.notifications.registerDevice({
-  vaultId: vault.publicKeys.ecdsa,
+  vaultId: notificationVaultId,
   partyName: vault.localPartyId,
   token: myDeviceToken,
   deviceType: 'web',
@@ -378,7 +384,7 @@ await sdk.notifications.registerDevice({
 
 // Connect WebSocket — notifications delivered via onSigningRequest()
 sdk.notifications.connect({
-  vaultId: vault.publicKeys.ecdsa,
+  vaultId: notificationVaultId,
   partyName: vault.localPartyId,
   token: myDeviceToken,
 })
@@ -396,7 +402,7 @@ const subscription = await registration.pushManager.subscribe({
   applicationServerKey: vapidKey,
 })
 await sdk.notifications.registerDevice({
-  vaultId: vault.publicKeys.ecdsa,
+  vaultId: await computeNotificationVaultId(vault.publicKeys.ecdsa, vault.hexChainCode),
   partyName: vault.localPartyId,
   token: JSON.stringify(subscription.toJSON()),
   deviceType: 'web',
@@ -972,7 +978,7 @@ Register a device to receive push notifications for a vault.
 
 **Parameters:**
 
-- `options.vaultId: string` - Vault ID (`publicKeys.ecdsa`)
+- `options.vaultId: string` - Notification vault ID from `computeNotificationVaultId(vault.publicKeys.ecdsa, vault.hexChainCode)`
 - `options.partyName: string` - Local party ID of the device
 - `options.token: string` - Push token from APNs, FCM, or Web Push
 - `options.deviceType: 'ios' | 'android' | 'web'` - Platform type
@@ -987,7 +993,7 @@ Send a push notification to all other registered devices for a vault.
 
 **Parameters:**
 
-- `options.vaultId: string` - Vault ID
+- `options.vaultId: string` - Notification vault ID from `computeNotificationVaultId(vault.publicKeys.ecdsa, vault.hexChainCode)`
 - `options.vaultName: string` - Vault display name
 - `options.localPartyId: string` - Sender's party ID (excluded from recipients)
 - `options.qrCodeData: string` - Keysign session data for joining
@@ -1022,7 +1028,7 @@ Open a WebSocket connection for real-time notification delivery. Messages are di
 
 **Parameters:**
 
-- `options.vaultId: string` - Vault ID (`publicKeys.ecdsa`)
+- `options.vaultId: string` - Notification vault ID from `computeNotificationVaultId(vault.publicKeys.ecdsa, vault.hexChainCode)`
 - `options.partyName: string` - Local party ID of the device
 - `options.token: string` - Same token used for `registerDevice()`
 
