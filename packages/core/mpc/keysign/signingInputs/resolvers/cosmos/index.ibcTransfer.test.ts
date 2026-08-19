@@ -112,6 +112,24 @@ describe('getCosmosSigningInputs IBC transfer guards', () => {
     expect(transfer!.sourceChannel).toBe('channel-141')
     expect(transfer!.timeoutTimestamp.toString()).toBe('1751328000000000000')
     expect(transfer!.timeoutTimestamp.isZero()).toBe(false)
+    expect(input.memo).toBe('')
+  })
+
+  it('signs only the optional user memo and preserves embedded colons', async () => {
+    const [input] = await getCosmosSigningInputs({
+      keysignPayload: buildPayload({
+        memo: `Osmosis:channel-141:${recipient}:exchange:deposit:42`,
+        ibcDenomTraces: {
+          path: 'transfer/channel-141',
+          baseDenom: 'uatom',
+          latestBlock: '12345_1751328000000000000',
+        },
+      }),
+      walletCore,
+    })
+
+    expect(input.messages[0].transferTokensMessage?.sourceChannel).toBe('channel-141')
+    expect(input.memo).toBe('exchange:deposit:42')
   })
 
   it('preserves uint64 account identifiers above the JavaScript safe-integer range', async () => {
@@ -196,7 +214,7 @@ describe('getCosmosSigningInputs IBC transfer guards', () => {
     it('falls back to the static limit for an IBC transfer with no relayed limit (mobile-initiated payload)', async () => {
       const [input] = await getCosmosSigningInputs({
         keysignPayload: buildPayload({
-          memo: 'transfer:channel-141:{"forward":{"receiver":"osmo1abc","port":"transfer","channel":"channel-42"}}',
+          memo: 'Osmosis:channel-141:osmo1abc:{"forward":{"receiver":"osmo1abc","port":"transfer","channel":"channel-42"}}',
           ibcDenomTraces: {
             path: 'transfer/channel-141',
             baseDenom: 'uatom',
