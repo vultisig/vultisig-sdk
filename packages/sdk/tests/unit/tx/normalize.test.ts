@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { normalizeTx, splitMultiTx, TxNormalizeError } from '../../../src/tx/normalize'
+import { normalizeTx, splitMultiTx, TxNormalizeError, type NormalizeArgs, type NormalizedTx } from '../../../src/tx/normalize'
 
 describe('normalizeTx', () => {
   it('wraps a flat build_* result under "tx" and lifts chain metadata', () => {
@@ -351,5 +351,34 @@ describe('splitMultiTx', () => {
       expect(leg.fromDecimals).toBe(6)
       expect(leg.toDecimals).toBe(6)
     }
+  })
+
+  it('accepts camelCase NormalizeArgs and exposes them on the typed result surface', () => {
+    const args: NormalizeArgs = {
+      chain: 'Base',
+      chainId: '8453',
+      fromChain: 'Base',
+      toChain: 'Arbitrum',
+    }
+
+    const [leg]: NormalizedTx[] = splitMultiTx(
+      {
+        transactions: [{ to: '0xbridge', step: 'bridge' }],
+        provider: 'cctp',
+      },
+      args
+    )
+
+    const typedChainId: string | undefined = leg.chainId
+    const typedFromChain: string | undefined = leg.fromChain
+    const typedToChain: string | undefined = leg.toChain
+    const typedProvider: string | undefined = leg.provider
+    const typedTx = leg.tx as Record<string, unknown>
+
+    expect(typedChainId).toBe('8453')
+    expect(typedFromChain).toBe('Base')
+    expect(typedToChain).toBe('Arbitrum')
+    expect(typedProvider).toBe('cctp')
+    expect(typedTx.step).toBe('bridge')
   })
 })
