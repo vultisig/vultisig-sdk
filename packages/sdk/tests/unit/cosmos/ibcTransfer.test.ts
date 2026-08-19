@@ -10,6 +10,8 @@ import { bech32 } from '@scure/base'
 import { describe, expect, it } from 'vitest'
 
 import {
+  getIbcCounterpartyChannel,
+  getIbcDestinationChainId,
   IBC_MSG_TRANSFER_TYPE_URL,
   normaliseIbcChainId,
   prepareIbcTransfer,
@@ -27,6 +29,29 @@ const COSMOS = addr('cosmos')
 const TERRA = addr('terra')
 // 2026-07-01T00:00:00Z, comfortably in the future for timeout checks.
 const FIXED_NOW = 1782604800000
+
+describe('IBC ACK-poller route helpers', () => {
+  it('returns the verified destination chain-id for supported source channels', () => {
+    expect(getIbcDestinationChainId('osmosis-1', 'channel-750')).toBe('noble-1')
+    expect(getIbcDestinationChainId('cosmoshub-4', 'channel-536')).toBe('noble-1')
+    expect(getIbcDestinationChainId('phoenix-1', 'channel-1')).toBe('osmosis-1')
+    expect(getIbcDestinationChainId('columbus-5', 'channel-1')).toBe('osmosis-1')
+  })
+
+  it('returns the verified counterparty channel for supported source channels', () => {
+    expect(getIbcCounterpartyChannel('osmosis-1', 'channel-750')).toBe('channel-1')
+    expect(getIbcCounterpartyChannel('cosmoshub-4', 'channel-536')).toBe('channel-4')
+    expect(getIbcCounterpartyChannel('phoenix-1', 'channel-1')).toBe('channel-251')
+    expect(getIbcCounterpartyChannel('columbus-5', 'channel-1')).toBe('channel-72')
+  })
+
+  it('fails closed for unknown source-chain/channel pairs', () => {
+    expect(getIbcDestinationChainId('osmosis-1', 'channel-999999')).toBeNull()
+    expect(getIbcCounterpartyChannel('osmosis-1', 'channel-999999')).toBeNull()
+    expect(getIbcDestinationChainId('unknown-chain', 'channel-1')).toBeNull()
+    expect(getIbcCounterpartyChannel('unknown-chain', 'channel-1')).toBeNull()
+  })
+})
 
 describe('prepareIbcTransfer', () => {
   it('builds an OSMO→cosmoshub-4 MsgTransfer with channel reverse-resolved from toChainId', () => {

@@ -98,6 +98,7 @@ export const IBC_CHANNEL_DEST: Record<ChannelKey, string> = {
   'osmosis-1/channel-6994': 'celestia',
   // cosmoshub-4 outbound
   'cosmoshub-4/channel-141': 'osmosis-1',
+  'cosmoshub-4/channel-536': 'noble-1',
 }
 
 /**
@@ -130,6 +131,44 @@ export function supportedIbcDestinationsFrom(fromChain: string): string[] {
     .filter(routeKey => routeKey.startsWith(`${fromChain}→`))
     .map(routeKey => routeKey.split('→')[1]!)
     .sort()
+}
+
+const IBC_COUNTERPARTY_CHANNEL_BY_ROUTE: Record<ChannelKey, string> = {
+  'osmosis-1/channel-0': 'channel-141',
+  'osmosis-1/channel-42': 'channel-0',
+  'osmosis-1/channel-750': 'channel-1',
+  'osmosis-1/channel-341': 'channel-26',
+  'osmosis-1/channel-1': 'channel-9',
+  'osmosis-1/channel-6787': 'channel-3',
+  'osmosis-1/channel-208': 'channel-3',
+  'osmosis-1/channel-259': 'channel-3',
+  'osmosis-1/channel-874': 'channel-10',
+  'osmosis-1/channel-122': 'channel-8',
+  'osmosis-1/channel-326': 'channel-5',
+  'osmosis-1/channel-6994': 'channel-2',
+  'cosmoshub-4/channel-141': 'channel-0',
+  'cosmoshub-4/channel-536': 'channel-4',
+  'phoenix-1/channel-1': 'channel-251',
+  'columbus-5/channel-1': 'channel-72',
+}
+
+for (const routeKey of Object.keys(IBC_COUNTERPARTY_CHANNEL_BY_ROUTE) as ChannelKey[]) {
+  if (!(routeKey in IBC_CHANNEL_DEST)) {
+    throw new Error(
+      `IBC_COUNTERPARTY_CHANNEL_BY_ROUTE["${routeKey}"] has no matching destination route in IBC_CHANNEL_DEST; ` +
+        `add the destination mapping before shipping.`,
+    )
+  }
+}
+
+/** ACK-poller counterparty channel for a verified outbound IBC route, or null. */
+export function getIbcCounterpartyChannel(fromChainId: string, sourceChannel: string): string | null {
+  return IBC_COUNTERPARTY_CHANNEL_BY_ROUTE[`${fromChainId}/${sourceChannel}` as ChannelKey] ?? null
+}
+
+/** ACK-poller destination chain-id for a verified outbound IBC route, or null. */
+export function getIbcDestinationChainId(fromChainId: string, sourceChannel: string): string | null {
+  return IBC_CHANNEL_DEST[`${fromChainId}/${sourceChannel}` as ChannelKey] ?? null
 }
 
 // ── chain name aliases ──────────────────────────────────────────────────────

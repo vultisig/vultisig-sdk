@@ -119,6 +119,20 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
       rn.Chain.Dash,
     ])
   })
+
+  it('exports the canonical IBC route helper family from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(rn.IBC_CHAIN_HRP['osmosis-1']).toBe('osmo')
+    expect(rn.IBC_CHAIN_REVISION['cosmoshub-4']).toBe(4)
+    expect(rn.IBC_CHANNEL_DEST['cosmoshub-4/channel-536']).toBe('noble-1')
+    expect(rn.IBC_MSG_TRANSFER_TYPE_URL).toBe('/ibc.applications.transfer.v1.MsgTransfer')
+    expect(rn.normaliseIbcChainId('Osmosis')).toBe('osmosis-1')
+    expect(rn.supportedIbcDestinationsFrom('cosmoshub-4')).toEqual(['noble-1', 'osmosis-1'])
+    expect(rn.getIbcDestinationChainId('cosmoshub-4', 'channel-536')).toBe('noble-1')
+    expect(rn.getIbcCounterpartyChannel('cosmoshub-4', 'channel-536')).toBe('channel-4')
+    expect(typeof rn.prepareIbcTransfer).toBe('function')
+  })
 })
 
 // RN-entry parity guard: the root barrel (packages/sdk/src/index.ts, resolved

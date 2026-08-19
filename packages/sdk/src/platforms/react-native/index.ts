@@ -242,6 +242,20 @@ export {
 export type { BuildCosmosWasmExecuteMsgParams, CosmWasmExecuteFund } from '../../tools/prep/cosmosWasmExecute'
 export { buildCosmosWasmExecuteMsg } from '../../tools/prep/cosmosWasmExecute'
 export { buildCw20TransferMsg } from '../../tools/prep/cw20Transfer'
+// Canonical direct-IBC route helpers/tables (pure bech32 + const lookups).
+// Keep this RN allow-list in parity with the root entry so app-side ACK polling
+// can import the reviewed route metadata instead of re-declaring it locally.
+export {
+  getIbcCounterpartyChannel,
+  getIbcDestinationChainId,
+  IBC_CHAIN_HRP,
+  IBC_CHAIN_REVISION,
+  IBC_CHANNEL_DEST,
+  IBC_MSG_TRANSFER_TYPE_URL,
+  normaliseIbcChainId,
+  prepareIbcTransfer,
+  supportedIbcDestinationsFrom,
+} from '../../tools/prep/ibcTransfer'
 // `preparePolkadotAssetSend` is pure-crypto (@polkadot/util + @polkadot/util-crypto,
 // both RN-safe) with no MPC/wasm dependency, so it ships as a static re-export
 // rather than a lazy `await import(...)` wrapper. `POLKADOT_ASSET_HUB_KNOWN_ASSETS`

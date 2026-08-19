@@ -348,6 +348,8 @@ export {
   type CosmosStakingMsgEnvelope,
   type CosmWasmExecuteFund,
   type DelegateParams,
+  getIbcCounterpartyChannel,
+  getIbcDestinationChainId,
   getMaxSendAmountFromKeys,
   type GetMaxSendAmountFromKeysParams,
   IBC_CHAIN_HRP,
