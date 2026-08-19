@@ -115,7 +115,7 @@ export type YieldTransaction = {
   type: string // APPROVAL, SUPPLY, STAKE, UNSTAKE, etc.
   network: string
   status: string
-  unsignedTransaction: string // JSON string — needs JSON.parse
+  unsignedTransaction: string | null // JSON string — needs JSON.parse; null while yield.xyz is still building it
   gasEstimate: string // JSON string — needs JSON.parse
 }
 
@@ -389,19 +389,18 @@ export async function ensureTransactionsBuilt(
 ): Promise<YieldActionResponse> {
   if (Array.isArray(action_response.transactions) && action_response.transactions.length > 0) {
     const needsBuild = action_response.transactions.some(
-      t => (t as { unsignedTransaction?: unknown }).unsignedTransaction == null
+      t => t.status === 'CREATED' && t.unsignedTransaction == null
     )
     if (needsBuild) {
       const built = await Promise.all(
         action_response.transactions.map(async tx => {
-          const txRec = tx as { id?: string; unsignedTransaction?: unknown }
-          if (typeof txRec.id !== 'string' || txRec.unsignedTransaction != null) {
-            return tx as unknown
+          if (typeof tx.id !== 'string' || tx.status !== 'CREATED' || tx.unsignedTransaction != null) {
+            return tx
           }
-          return await buildYieldTransaction(txRec.id, tx, apiKey)
+          return (await buildYieldTransaction(tx.id, tx, apiKey)) as YieldTransaction
         })
       )
-      action_response.transactions = built as YieldActionResponse['transactions']
+      action_response.transactions = built
     }
   }
   return action_response
@@ -520,7 +519,8 @@ type EvmUnsignedTx = {
   data?: string
 }
 
-function asEvmUnsignedTx(raw: string): EvmUnsignedTx | null {
+function asEvmUnsignedTx(raw: string | null): EvmUnsignedTx | null {
+  if (typeof raw !== 'string') return null
   try {
     const parsed = JSON.parse(raw) as unknown
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null

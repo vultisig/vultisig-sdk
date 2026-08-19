@@ -282,7 +282,7 @@ describe('sdk.defi.stakekit', () => {
             type: 'STAKE',
             network: 'tron',
             status: 'CREATED',
-            unsignedTransaction: null as unknown as string,
+            unsignedTransaction: null,
             gasEstimate: '{}',
           },
         ],
@@ -322,7 +322,7 @@ describe('sdk.defi.stakekit', () => {
         type: 'STAKE',
         network: 'tron',
         status: 'CREATED',
-        unsignedTransaction: null as unknown as string,
+        unsignedTransaction: null,
         gasEstimate: '{}',
       }
       const resp = makeEvmActionResponse({ transactions: [original] })
@@ -335,6 +335,27 @@ describe('sdk.defi.stakekit', () => {
 
       const result = await ensureTransactionsBuilt(resp)
 
+      expect(result.transactions[0]).toBe(original)
+      expect(result.transactions[0].unsignedTransaction).toBeNull()
+    })
+
+    it('does not PATCH a non-CREATED transaction even if unsignedTransaction is null', async () => {
+      const original = {
+        id: 'tx-weird',
+        title: 'Weird state',
+        type: 'STAKE',
+        network: 'tron',
+        status: 'FAILED',
+        unsignedTransaction: null,
+        gasEstimate: '{}',
+      }
+      const resp = makeEvmActionResponse({ transactions: [original] })
+      const fetchMock = vi.fn()
+      globalThis.fetch = fetchMock
+
+      const result = await ensureTransactionsBuilt(resp)
+
+      expect(fetchMock).not.toHaveBeenCalled()
       expect(result.transactions[0]).toBe(original)
       expect(result.transactions[0].unsignedTransaction).toBeNull()
     })
