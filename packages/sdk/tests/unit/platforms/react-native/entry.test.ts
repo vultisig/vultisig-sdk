@@ -1,7 +1,7 @@
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
 import { AuthInfo, SignDoc, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { cosmosTxFeeGasParityCases } from '../../../fixtures/cosmosTxFeeGasParity'
 
@@ -10,6 +10,30 @@ process.env.VULTISIG_STRICT_SINGLETON = '0'
 vi.mock('expo-crypto', () => ({
   randomUUID: () => '00000000-0000-4000-8000-000000000000',
   getRandomValues: <T extends ArrayBufferView | null>(a: T) => a,
+}))
+
+vi.mock('expo-sqlite', () => ({
+  openDatabaseAsync: async () => ({
+    execAsync: async () => {},
+    getAllAsync: async () => [],
+    getFirstAsync: async () => null,
+    runAsync: async () => ({}),
+    withExclusiveTransactionAsync: async (
+      task: (transaction: {
+        execAsync: () => Promise<void>
+        getAllAsync: () => Promise<never[]>
+        getFirstAsync: () => Promise<null>
+        runAsync: () => Promise<object>
+      }) => Promise<void>
+    ) => {
+      await task({
+        execAsync: async () => {},
+        getAllAsync: async () => [],
+        getFirstAsync: async () => null,
+        runAsync: async () => ({}),
+      })
+    },
+  }),
 }))
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
@@ -35,6 +59,16 @@ vi.mock('@vultisig/walletcore-native', () => ({
   NativeWalletCore: { getInstance: async () => ({}) },
 }))
 
+let reactNativeEntry: Awaited<typeof import('../../../../src/platforms/react-native/index')>
+let dangerousAddresses: Awaited<typeof import('../../../../src/utils/dangerousAddresses')>
+
+beforeAll(async () => {
+  ;[reactNativeEntry, dangerousAddresses] = await Promise.all([
+    import('../../../../src/platforms/react-native/index'),
+    import('../../../../src/utils/dangerousAddresses'),
+  ])
+}, 120_000)
+
 describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
   it.each([
     'EVM_DANGEROUS_ADDRESSES',
@@ -47,10 +81,7 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     'assertSafeEvmDestination',
     'assertSafeDestination',
   ] as const)('re-exports dangerous-address canonical %s by identity', async name => {
-    const rn = await import('../../../../src/platforms/react-native/index')
-    const dangerousAddresses = await import('../../../../src/utils/dangerousAddresses')
-
-    expect(rn[name]).toBe(dangerousAddresses[name])
+    expect(reactNativeEntry[name]).toBe(dangerousAddresses[name])
   })
 
   // sdk#1772: the RN entry omitted the whole validation / address-format

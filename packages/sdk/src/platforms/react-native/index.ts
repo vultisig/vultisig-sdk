@@ -63,7 +63,7 @@ configureWasm(async () => NativeWalletCore.getInstance())
 // Register RN crypto (validates globalThis.crypto polyfill on first use)
 configureCrypto(new ReactNativeCrypto())
 
-// Register AsyncStorage-backed default storage
+// Register SQLite-backed default storage (with one-time AsyncStorage migration)
 configureDefaultStorage(() => new ReactNativeStorage())
 
 // Chain enum and types
@@ -247,6 +247,7 @@ export { configureMpc, ensureMpcEngine, getMpcEngine } from '@vultisig/mpc-types
 // Vault + fast vault lifecycle classes
 export { FastVaultFromSeedphraseService } from '../../services/FastVaultFromSeedphraseService'
 export { FastVault } from '../../vault/FastVault'
+export type { VaultImportConflictResolution, VaultImportOptions } from '../../VaultManager'
 export { VaultManager } from '../../VaultManager'
 export type { VultisigConfig } from '../../Vultisig'
 export { Vultisig } from '../../Vultisig'
