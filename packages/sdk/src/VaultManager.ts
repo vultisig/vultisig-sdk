@@ -1,4 +1,5 @@
 import { fromBinary, toBinary } from '@bufbuild/protobuf'
+import { hasServer } from '@vultisig/core-mpc/devices/localPartyId'
 import { fromCommVault } from '@vultisig/core-mpc/types/utils/commVault'
 import {
   type VaultContainer,
@@ -445,7 +446,7 @@ export class VaultManager {
       await this.validateImportConflict(existingVault, parsedVault, password, options.conflictResolution ?? 'reject')
 
       // Determine vault type from parsed vault
-      const vaultType = parsedVault.signers.some((s: string) => s.startsWith('Server-')) ? 'fast' : 'secure'
+      const vaultType = hasServer(parsedVault.signers) ? 'fast' : 'secure'
 
       // Create vault context from SDK context
       const vaultContext = this.createVaultContext()

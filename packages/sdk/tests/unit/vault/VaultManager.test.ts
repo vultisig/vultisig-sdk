@@ -35,6 +35,7 @@ import { createSdkContext } from '../../../src/context/SdkContextBuilder'
 import { FileStorage } from '../../../src/platforms/node/storage'
 import { MemoryStorage } from '../../../src/storage/MemoryStorage'
 import type { Storage } from '../../../src/storage/types'
+import { FastVault } from '../../../src/vault/FastVault'
 import { VaultConflictError, VaultImportErrorCode } from '../../../src/vault/VaultError'
 import { VaultManager } from '../../../src/VaultManager'
 
@@ -264,6 +265,19 @@ describe('VaultManager', () => {
       const vult = encodeEncryptedVult(buildMinimalSecureVaultBinary(), pwd)
       const vault = await vaultManager.importVault(vult, pwd)
       expect(vault.id).toBe(SYNTH_ECDSA_PK)
+    })
+
+    it('imports a legacy VultiServer signer backup as a fast vault', async () => {
+      const vult = encodeUnencryptedVult(
+        buildMinimalSecureVaultBinary({
+          signers: ['SyntheticDevice', 'VultiServer-legacy'],
+        })
+      )
+
+      const vault = await vaultManager.importVault(vult)
+
+      expect(vault).toBeInstanceOf(FastVault)
+      expect(vault.type).toBe('fast')
     })
 
     it('rejects an exact duplicate unless replacement is explicit', async () => {
