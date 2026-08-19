@@ -1,7 +1,6 @@
 import { suiGasBudget } from '@vultisig/core-chain/chains/sui/config'
 import { SuiCoin } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { TW } from '@trustwallet/wallet-core'
-import Long from 'long'
 
 import { getBlockchainSpecificValue } from '../../chainSpecific/KeysignChainSpecific'
 import {
@@ -12,6 +11,7 @@ import {
   suiNativeCoinType,
 } from '../../suiCoinSelection'
 import { getKeysignCoin } from '../../utils/getKeysignCoin'
+import { unsignedLongFromString } from '../long'
 import { SigningInputsResolver } from '../resolver'
 
 export const getSuiSigningInputs: SigningInputsResolver<'sui'> = ({ keysignPayload }) => {
@@ -51,15 +51,15 @@ export const getSuiSigningInputs: SigningInputsResolver<'sui'> = ({ keysignPaylo
     TW.Sui.Proto.ObjectRef.create({
       objectDigest: coin.digest,
       objectId: coin.coinObjectId,
-      version: Long.fromString(coin.version),
+      version: unsignedLongFromString(coin.version, 'Sui coin version'),
     })
 
   const gasBudgetAmount = gasBudget ? BigInt(gasBudget) : suiGasBudget
 
   const baseInput = {
-    referenceGasPrice: Long.fromString(referenceGasPrice),
+    referenceGasPrice: unsignedLongFromString(referenceGasPrice, 'Sui reference gas price'),
     signer: coin.address,
-    gasBudget: Long.fromString(gasBudgetAmount.toString()),
+    gasBudget: unsignedLongFromString(gasBudgetAmount, 'Sui gas budget'),
   }
 
   const amount = BigInt(keysignPayload.toAmount || '0')
@@ -79,7 +79,7 @@ export const getSuiSigningInputs: SigningInputsResolver<'sui'> = ({ keysignPaylo
           gas: createObjectRef(gasObject),
           inputCoins: inputCoins,
           recipients: [keysignPayload.toAddress],
-          amounts: [Long.fromString(keysignPayload.toAmount)],
+          amounts: [unsignedLongFromString(keysignPayload.toAmount, 'Sui transfer amount')],
         }),
       }),
     ]
@@ -93,7 +93,7 @@ export const getSuiSigningInputs: SigningInputsResolver<'sui'> = ({ keysignPaylo
       paySui: TW.Sui.Proto.PaySui.create({
         inputCoins: inputCoins,
         recipients: [keysignPayload.toAddress],
-        amounts: [Long.fromString(keysignPayload.toAmount)],
+        amounts: [unsignedLongFromString(keysignPayload.toAmount, 'Sui transfer amount')],
       }),
     }),
   ]

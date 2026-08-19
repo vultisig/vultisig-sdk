@@ -26,6 +26,7 @@ const walletCore = {} as unknown as WalletCore
 
 const ACCOUNT = 'rExampleAccountAddressForTests1234567'
 const RLUSD_ISSUER = 'rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De'
+const UINT64_OVERFLOW = '18446744073709551616'
 // Dummy 33-byte secp256k1 public key (hex) for getKeysignTwPublicKey.
 const HEX_PUBLIC_KEY = `02${'ab'.repeat(32)}`
 
@@ -151,6 +152,15 @@ describe('getRippleSigningInputs -- TrustSet build path (issued currency)', () =
 
     expect(input.opPayment).toBeTruthy()
     expect(input.opTrustSet).toBeFalsy()
+  })
+
+  it('rejects native payment amounts above uint64 instead of wrapping them', () => {
+    const payload = buildPaymentPayload()
+    payload.toAmount = UINT64_OVERFLOW
+
+    expect(() => getRippleSigningInputs({ keysignPayload: payload, walletCore })).toThrow(
+      'Ripple payment amount exceeds uint64'
+    )
   })
 
   it('uses the first-class destination tag when no independent memo is supplied', async () => {

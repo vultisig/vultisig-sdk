@@ -84,6 +84,7 @@ const EXPECTED_TOKEN_AWARE_PRE_IMAGE_HASH = '839ae494ce1af23729a8e918c2d63febb68
 // What the pre-fix (token-blind) SDK derived from the same payload — pinned to
 // document the exact divergence that made iOS↔SDK keysign fail to converge.
 const TOKEN_BLIND_PRE_IMAGE_HASH = 'db6bde29ccda113233a4ac6bc668fd14ad114ca013698948cfe0d7aa818b7903'
+const UINT64_OVERFLOW = 18446744073709551616n
 
 describe('getCardanoSigningInputs — per-UTXO native tokens', () => {
   let walletCore: WalletCore
@@ -181,6 +182,15 @@ describe('getCardanoSigningInputs — per-UTXO native tokens', () => {
 
     // Token-free UTXOs stay without a token_amount entry, matching iOS.
     expect(plainUtxo.tokenAmount ?? []).toHaveLength(0)
+  })
+
+  it('rejects UTXO amounts above uint64 instead of wrapping them', () => {
+    const payload = buildPayload({ withTokens: false })
+    payload.utxoInfo[0].amount = UINT64_OVERFLOW
+
+    expect(() => getCardanoSigningInputs({ keysignPayload: payload, walletCore })).toThrow(
+      'Cardano UTXO amount exceeds uint64'
+    )
   })
 
   it('pins the golden pre-image hash for the token-carrying fixture', async () => {

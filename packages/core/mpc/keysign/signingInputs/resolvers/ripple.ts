@@ -14,6 +14,7 @@ import { getBlockchainSpecificValue } from '../../chainSpecific/KeysignChainSpec
 import { getKeysignTwPublicKey } from '../../tw/getKeysignTwPublicKey'
 import { isRippleTrustSet } from '../../utils/isRippleTrustSet'
 import { getLegacyDestinationTag, resolveDestinationTag } from '../../utils/rippleDestinationTag'
+import { unsignedLongFromString } from '../long'
 import { SigningInputsResolver } from '../resolver'
 
 // tfPartialPayment on an XRPL Payment. It redefines `Amount` from a guaranteed
@@ -279,7 +280,7 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
     return {
       opPayment: TW.Ripple.Proto.OperationPayment.create({
         destination: keysignPayload.toAddress,
-        amount: Long.fromString(keysignPayload.toAmount),
+        amount: unsignedLongFromString(keysignPayload.toAmount, 'Ripple payment amount'),
         ...(destinationTag === undefined ? {} : { destinationTag: Long.fromNumber(destinationTag) as any }),
       }),
     }
@@ -287,7 +288,7 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
 
   const input = TW.Ripple.Proto.SigningInput.create({
     account,
-    fee: Long.fromString(gas.toString()),
+    fee: unsignedLongFromString(gas, 'Ripple fee'),
     sequence: Number(sequence),
     lastLedgerSequence: Number(lastLedgerSequence),
     publicKey: getKeysignTwPublicKey(keysignPayload),

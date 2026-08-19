@@ -31,6 +31,7 @@ const UNSIGNED_TX_MSG =
 const hex = (bytes: Uint8Array) => Buffer.from(bytes).toString('hex')
 const SUI_TYPE = '0x2::sui::SUI'
 const TOKEN_TYPE = '0xabc::coin::USDC'
+const UINT64_OVERFLOW = '18446744073709551616'
 
 let walletCore: WalletCore
 let publicKey: PublicKey
@@ -190,6 +191,31 @@ describe('getSuiSigningInputs — native send', () => {
 
     expect(input.paySui).toBeDefined()
     expect(input.paySui?.inputCoins?.map(c => c.objectId)).toEqual(['covering'])
+  })
+
+  it('rejects transfer amounts above uint64 instead of wrapping them', () => {
+    const keysignPayload = create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, {
+        chain: Chain.Sui,
+        ticker: 'SUI',
+        address: signer,
+        decimals: 9,
+        isNativeToken: true,
+        hexPublicKey: hex(publicKey.data()),
+      }),
+      toAddress: signer,
+      toAmount: UINT64_OVERFLOW,
+      blockchainSpecific: {
+        case: 'suicheSpecific',
+        value: create(SuiSpecificSchema, {
+          referenceGasPrice: '1000',
+          gasBudget: '0',
+          coins: [suiCoin('overflow-cover', UINT64_OVERFLOW)],
+        }),
+      },
+    })
+
+    expect(() => getSuiSigningInputs({ keysignPayload, walletCore })).toThrow('Sui transfer amount exceeds uint64')
   })
 
   it('selects token inputs and a smallest-covering native gas object for token sends', async () => {

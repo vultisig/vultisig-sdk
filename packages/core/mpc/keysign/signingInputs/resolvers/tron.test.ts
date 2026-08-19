@@ -4,6 +4,7 @@ import { Chain } from '@vultisig/core-chain/Chain'
 import { TronSpecificSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { CoinSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/coin_pb'
 import { KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import { TronTransferContractPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/tron_contract_payload_pb'
 import Long from 'long'
 import { describe, expect, it } from 'vitest'
 
@@ -30,6 +31,7 @@ const makeTronSpecific = (gasEstimation = 100_000_000n) =>
   })
 
 const OWNER = 'T9yED5xMV5ARV98BexN97aLZ1UUq7eKSxm'
+const UINT64_OVERFLOW = '18446744073709551616'
 
 const buildPayload = (memo: string, toAmount = '1000000000') =>
   create(KeysignPayloadSchema, {
@@ -95,5 +97,21 @@ describe('getTronSigningInputs -- FREEZE: / UNFREEZE: feeLimit semantics (BUG-7)
     // (a non-zero energy estimate that's semantically meaningless for
     // system contracts and only served to confuse the UI fee display).
     expect(input.transaction?.feeLimit?.equals(Long.ZERO)).toBe(true)
+  })
+
+  it('rejects dApp transfer payload amounts above uint64 instead of wrapping them', () => {
+    const payload = buildPayload('')
+    payload.contractPayload = {
+      case: 'tronTransferContractPayload',
+      value: create(TronTransferContractPayloadSchema, {
+        ownerAddress: OWNER,
+        toAddress: OWNER,
+        amount: UINT64_OVERFLOW,
+      }),
+    }
+
+    expect(() => getTronSigningInputs({ keysignPayload: payload, walletCore })).toThrow(
+      'Tron transfer amount exceeds uint64'
+    )
   })
 })

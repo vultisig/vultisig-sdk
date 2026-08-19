@@ -4,10 +4,10 @@ import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { bigIntSum } from '@vultisig/lib-utils/bigint/bigIntSum'
 import { stripHexPrefix } from '@vultisig/lib-utils/hex/stripHexPrefix'
 import { TW } from '@trustwallet/wallet-core'
-import Long from 'long'
 
 import { getBlockchainSpecificValue } from '../../chainSpecific/KeysignChainSpecific'
 import { buildCip20AuxData } from '../../../tx/compile/cardano/buildCip20AuxData'
+import { unsignedLongFromString } from '../long'
 import { SigningInputsResolver } from '../resolver'
 
 /** Encodes a token amount as big-endian bytes for WalletCore's Cardano proto. */
@@ -63,21 +63,21 @@ export const getCardanoSigningInputs: SigningInputsResolver<'cardano'> = ({ keys
     transferMessage: TW.Cardano.Proto.Transfer.create({
       toAddress: keysignPayload.toAddress,
       changeAddress: coin.address,
-      amount: Long.fromString(sendAmount.toString()),
+      amount: unsignedLongFromString(sendAmount, 'Cardano transfer amount'),
       useMaxAmount: false,
       tokenAmount: tokenBundle,
-      forceFee: Long.fromString(byteFee.toString()),
+      forceFee: unsignedLongFromString(byteFee, 'Cardano force fee'),
     }),
-    ttl: Long.fromString(ttl.toString()),
+    ttl: unsignedLongFromString(ttl, 'Cardano ttl'),
     auxiliaryData,
 
     utxos: keysignPayload.utxoInfo.map(({ hash, amount, index, cardanoTokens }) =>
       TW.Cardano.Proto.TxInput.create({
         outPoint: TW.Cardano.Proto.OutPoint.create({
           txHash: walletCore.HexCoding.decode(stripHexPrefix(hash)),
-          outputIndex: Long.fromString(index.toString()),
+          outputIndex: unsignedLongFromString(index, 'Cardano output index'),
         }),
-        amount: Long.fromString(amount.toString()),
+        amount: unsignedLongFromString(amount, 'Cardano UTXO amount'),
         address: coin.address,
         // Per-UTXO native assets, read verbatim off the keysign wire (the
         // initiator attached them). Without these WalletCore's planner cannot
