@@ -703,6 +703,11 @@ export const validateKaminoTransaction = ({
 /**
  * Resolves the transaction's address lookup tables from the RPC, then runs
  * the pure validator against them.
+ *
+ * Rejects with `KaminoValidationError` for a refusal of the transaction, and
+ * with `KaminoWireError` when the lookup tables could not be resolved at all
+ * (missing table, stalled node past the read deadline, transport failure) —
+ * callers must not assume every rejection carries a `finding`.
  */
 export const validateKaminoTransactionOnline = async ({
   transaction,

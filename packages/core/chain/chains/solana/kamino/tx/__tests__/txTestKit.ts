@@ -110,6 +110,9 @@ export const buildTestTransaction = ({
 }: BuildTransactionInput): { transaction: VersionedTransaction; lookupTables: Record<string, string[]> } => {
   const userTokenAccount = testAta(owner, descriptor.tokenMint)
   const userShareAccount = testAta(owner, descriptor.sharesMint)
+  if (withFarmUserState && !descriptor.farm) {
+    throw new Error('fixture error: withFarmUserState requires a descriptor with a farm')
+  }
   const farmUserState = withFarmUserState ? deriveKaminoFarmsUserState({ farm: descriptor.farm!, owner })! : undefined
 
   const writableStatics = [owner, userTokenAccount, userShareAccount, ...(farmUserState ? [farmUserState] : [])]
@@ -117,7 +120,17 @@ export const buildTestTransaction = ({
   const staticKeys = [...writableStatics, ...programKeys]
   const staticCount = staticKeys.length
 
-  const table = [descriptor.address, filler, descriptor.tokenMint, descriptor.sharesMint, descriptor.farm!, filler]
+  // A farmless descriptor loads a filler in the farm slot rather than
+  // encoding invalid account data that would resurface as a confusing
+  // account-resolution refusal.
+  const table = [
+    descriptor.address,
+    filler,
+    descriptor.tokenMint,
+    descriptor.sharesMint,
+    descriptor.farm ?? filler,
+    filler,
+  ]
   const writableIndexes = [0, 1]
   const readonlyIndexes = [2, 3, 4, 5]
 
@@ -125,7 +138,12 @@ export const buildTestTransaction = ({
     owner: 0,
     userTokenAccount: 1,
     userShareAccount: 2,
-    farmUserState: farmUserState ? 3 : -1,
+    // A getter so a fixture that forgot `withFarmUserState` fails loudly at
+    // the reference, not as a malformed index in the compiled message.
+    get farmUserState(): number {
+      if (!farmUserState) throw new Error('fixture error: farmUserState requires withFarmUserState: true')
+      return 3
+    },
     program: address => {
       const index = staticKeys.indexOf(address)
       if (index === -1) throw new Error(`program ${address} is not a static key`)

@@ -17,7 +17,7 @@ import {
   mentionsKaminoVaultProgram,
   withdrawsEntireKaminoPosition,
 } from './decode'
-import { kaminoDiscriminators, kaminoFarmsStakeScale } from './instructions'
+import { kaminoAllowedPrograms, kaminoDiscriminators, kaminoFarmsStakeScale } from './instructions'
 import { injectKaminoAttributionMemo, injectKaminoComputeBudget, serializeKaminoWireTransaction } from './wire'
 
 const [steakhouseUsdc] = kaminoVaultRegistry
@@ -183,5 +183,54 @@ describe('mentionsKaminoVaultProgram', () => {
     const programKey = Buffer.from(new PublicKey(kaminoConfig.programId).toBytes())
     const legacyish = Buffer.concat([Buffer.from([1, 2, 3]), programKey, Buffer.from([4, 5])])
     expect(mentionsKaminoVaultProgram(legacyish.toString('base64'))).toBe(true)
+  })
+})
+
+describe('decodeKaminoTransaction: wrapped-SOL deposit', () => {
+  const [, , allezSol] = kaminoVaultRegistry
+  const strayAccount = Keypair.generate().publicKey.toBase58()
+
+  const systemTransferData = (lamports: bigint): Uint8Array => {
+    const data = new Uint8Array(12)
+    data[0] = 2
+    new DataView(data.buffer).setBigUint64(4, lamports, true)
+    return data
+  }
+
+  const wrappedDeposit = (syncedAccount?: (indexes: { program: (address: string) => number }) => number) =>
+    buildTestTransaction({
+      owner: testOwner,
+      descriptor: allezSol,
+      extraStaticReadonly: [kaminoAllowedPrograms.system, kaminoAllowedPrograms.token, strayAccount],
+      instructions: indexes => [
+        {
+          program: kaminoAllowedPrograms.system,
+          accountKeyIndexes: [indexes.owner, indexes.userTokenAccount],
+          data: systemTransferData(1_000_000n),
+        },
+        {
+          program: kaminoAllowedPrograms.token,
+          accountKeyIndexes: [syncedAccount ? syncedAccount(indexes) : indexes.userTokenAccount],
+          data: Uint8Array.from([17]),
+        },
+        ...depositInstructions(1_000_000n)(indexes),
+      ],
+    }).transaction
+
+  it('decodes the wrap, sync and deposit as one claim and flags the stranded rent', () => {
+    const decoded = decodeKaminoTransaction(wrappedDeposit())
+    expect(decoded).toMatchObject({
+      operation: 'deposit',
+      descriptor: allezSol,
+      amountBaseUnits: 1_000_000n,
+      strandsWrappedSolRent: true,
+    })
+  })
+
+  it('refuses a sync aimed at an account that is not the signer wrapped-SOL account', () => {
+    // The derivation needs no network, so a co-signing device refuses this
+    // exactly like the initiating validator would.
+    const decoded = decodeKaminoTransaction(wrappedDeposit(indexes => indexes.program(strayAccount)))
+    expect(decoded).toBeUndefined()
   })
 })

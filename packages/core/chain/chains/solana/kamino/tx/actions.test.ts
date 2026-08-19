@@ -79,3 +79,13 @@ describe('buildKaminoWithdrawTransaction', () => {
     expect(vi.mocked(queryUrl)).not.toHaveBeenCalled()
   })
 })
+
+describe('build response validation', () => {
+  it('names a malformed 200 for what it is instead of failing downstream', async () => {
+    vi.mocked(queryUrl).mockResolvedValue({ ok: true } as never)
+
+    await expect(
+      buildKaminoDepositTransaction({ owner, vaultAddress: steakhouse.address, amount: kaminoTokenAmount(1n, 6) })
+    ).rejects.toMatchObject({ reason: { api: { status: 200, message: expect.stringContaining('no transaction') } } })
+  })
+})

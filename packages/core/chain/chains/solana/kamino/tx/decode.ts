@@ -512,7 +512,18 @@ const readArguments = ({
       }
 
       case 'syncNative': {
+        // Bound to the signer's own wrapped-SOL account whenever the slot
+        // resolves statically — the derivation needs no network, so leaving
+        // this looser than the initiating validator would be an unnecessary
+        // asymmetry between the two devices' refusals.
         if (indexes.length === 0) return undefined
+        const syncedAccount = staticAddress(accounts, indexes[0])
+        if (
+          syncedAccount !== undefined &&
+          !kaminoUserTokenAccounts({ owner: signer, mint: descriptor.tokenMint }).has(syncedAccount)
+        ) {
+          return undefined
+        }
         break
       }
 

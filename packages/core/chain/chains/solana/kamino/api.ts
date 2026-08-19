@@ -30,11 +30,14 @@ import {
  */
 const positionsReadTimeoutMs = 60_000
 
-/** Error body the API returns with a 400. */
+/**
+ * Error body the API returns with a 400. `error` and `code` are optional
+ * because the guard below only proves the fields the envelope handling reads.
+ */
 type KaminoErrorResponse = {
   statusCode: number
   message: string
-  error: string
+  error?: string
   code?: string
 }
 

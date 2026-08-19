@@ -40,7 +40,10 @@ type KaminoActionResponse = {
   transaction: string
 }
 
-type KaminoErrorBody = { statusCode: number; message: string; error: string; code?: string }
+// `error` and `code` are optional because the guard below only proves the
+// fields the envelope handling reads — a type claiming more than the guard
+// checks would hand a later reader `undefined` with no type error.
+type KaminoErrorBody = { statusCode: number; message: string; error?: string; code?: string }
 
 const isKaminoErrorBody = (body: unknown): body is KaminoErrorBody =>
   typeof body === 'object' &&
@@ -54,6 +57,12 @@ const buildTransaction = async (
 ): Promise<string> => {
   try {
     const response = await queryUrl<KaminoActionResponse>(`${kaminoConfig.apiBaseUrl}${path}`, { body })
+    // The type parameter asserts the response shape; it does not check it. A
+    // 200 without a transaction would otherwise surface downstream as an
+    // unreadable-transaction failure instead of naming the real cause.
+    if (typeof response?.transaction !== 'string' || response.transaction.length === 0) {
+      throw new KaminoServiceError({ api: { status: 200, message: `${path} response carried no transaction` } })
+    }
     return response.transaction
   } catch (error) {
     if (error instanceof HttpResponseError && isKaminoErrorBody(error.body)) {

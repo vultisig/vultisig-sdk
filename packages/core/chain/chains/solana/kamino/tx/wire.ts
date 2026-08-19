@@ -137,7 +137,21 @@ export const isKaminoAccountWritable = ({
   return index < staticCount + writableLoads
 }
 
-/** The contents of every lookup table the transaction reads from, via RPC. */
+/**
+ * Deadline for one lookup-table read. This sits on the signing critical path
+ * and the RPC client itself carries no timeout, so an unbounded call would
+ * let a stalled node wedge the prepare indefinitely. Matches the HTTP layer's
+ * default deadline — comfortably above a healthy read, still bounding a hang.
+ */
+const lookupTableReadTimeoutMs = 20_000
+
+/**
+ * The contents of every lookup table the transaction reads from, via RPC.
+ *
+ * Every failure surfaces as `KaminoWireError` — a missing table, a stalled
+ * node past the deadline, or a transport error — so callers see one rejection
+ * type from resolution rather than raw RPC errors.
+ */
 export const resolveKaminoLookupTables = async (
   transaction: VersionedTransaction
 ): Promise<Record<string, string[]>> => {
@@ -146,12 +160,32 @@ export const resolveKaminoLookupTables = async (
   for (const lookup of transaction.message.addressTableLookups) {
     const address = lookup.accountKey.toBase58()
     if (tables[address]) continue
-    const table = await client.getAddressLookupTable(lookup.accountKey)
-    if (!table.value) throw new KaminoWireError(`address lookup table ${address} not found`)
-    tables[address] = table.value.state.addresses.map(key => key.toBase58())
+
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
+    const deadline = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(
+        () =>
+          reject(
+            new KaminoWireError(`address lookup table ${address} read timed out after ${lookupTableReadTimeoutMs}ms`)
+          ),
+        lookupTableReadTimeoutMs
+      )
+    })
+    try {
+      const table = await Promise.race([client.getAddressLookupTable(lookup.accountKey), deadline])
+      if (!table.value) throw new KaminoWireError(`address lookup table ${address} not found`)
+      tables[address] = table.value.state.addresses.map(key => key.toBase58())
+    } catch (error) {
+      if (error instanceof KaminoWireError) throw error
+      throw new KaminoWireError(`address lookup table ${address} could not be read: ${extractErrorMessage(error)}`)
+    } finally {
+      clearTimeout(timeoutId)
+    }
   }
   return tables
 }
+
+const extractErrorMessage = (error: unknown): string => (error instanceof Error ? error.message : String(error))
 
 type CompiledInstruction = {
   programIdIndex: number
