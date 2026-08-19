@@ -291,10 +291,12 @@ describe('@vultisig/sdk public exports', () => {
 
   it('exports canonical EVM chain-id, RPC, and priority-fee-clamp helpers from the root sdk surface', () => {
     expect(typeof sdk.getEvmChainId).toBe('function')
+    expect(typeof sdk.getEvmNumericChainId).toBe('function')
     expect(typeof sdk.getEvmChainByChainId).toBe('function')
     expect(typeof sdk.getEvmRpcUrl).toBe('function')
     expect(typeof sdk.clampEvmPriorityFee).toBe('function')
     expect(sdk.getEvmChainId(sdk.Chain.Mantle)).toBe('0x1388')
+    expect(sdk.getEvmNumericChainId(sdk.Chain.Mantle)).toBe(5000)
     expect(sdk.getEvmChainByChainId('0x3e7')).toBe(sdk.Chain.Hyperliquid)
     expect(sdk.getEvmRpcUrl(sdk.Chain.Ethereum)).toBe('https://api.vultisig.com/eth/')
     expect(sdk.getEvmRpcUrl(sdk.Chain.Hyperliquid)).toBe('https://api.vultisig.com/hyperevm/')
