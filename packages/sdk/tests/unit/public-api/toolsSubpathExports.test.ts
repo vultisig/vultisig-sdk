@@ -85,6 +85,22 @@ describe('public API tools subpath exports', () => {
     expect(JSON.stringify(policyExport)).not.toContain('dist/index.node')
     expect(JSON.stringify(swapExport)).not.toContain('dist/index.node')
     expect(JSON.stringify(prepExport)).not.toContain('dist/index.node')
+
+    for (const subpathExport of [
+      parseExport,
+      defiExport,
+      bridgeExport,
+      decodeExport,
+      txExport,
+      gasExport,
+      policyExport,
+      swapExport,
+      prepExport,
+    ]) {
+      expect(subpathExport).not.toHaveProperty('browser')
+      expect(subpathExport).not.toHaveProperty('worker')
+      expect(subpathExport).not.toHaveProperty('react-native')
+    }
   })
 
   it('keeps dedicated JS and d.ts bundle generation wired for every public tools subpath', () => {

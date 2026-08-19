@@ -78,9 +78,6 @@
     },
     "./tools/parse": {
       "types": "./dist/tools/parse/index.d.ts",
-      "browser": "./dist/tools/parse/index.js",
-      "worker": "./dist/tools/parse/index.js",
-      "react-native": "./dist/tools/parse/index.js",
       "node": {
         "import": "./dist/tools/parse/index.js",
         "require": "./dist/tools/parse/index.cjs"
@@ -91,9 +88,6 @@
     },
     "./tools/defi": {
       "types": "./dist/tools/defi/index.d.ts",
-      "browser": "./dist/tools/defi/index.js",
-      "worker": "./dist/tools/defi/index.js",
-      "react-native": "./dist/tools/defi/index.js",
       "node": {
         "import": "./dist/tools/defi/index.js",
         "require": "./dist/tools/defi/index.cjs"
@@ -104,9 +98,6 @@
     },
     "./tools/bridge": {
       "types": "./dist/tools/bridge/index.d.ts",
-      "browser": "./dist/tools/bridge/index.js",
-      "worker": "./dist/tools/bridge/index.js",
-      "react-native": "./dist/tools/bridge/index.js",
       "node": {
         "import": "./dist/tools/bridge/index.js",
         "require": "./dist/tools/bridge/index.cjs"
@@ -127,9 +118,6 @@
     },
     "./tools/decode": {
       "types": "./dist/tools/decode/index.d.ts",
-      "browser": "./dist/tools/decode/index.js",
-      "worker": "./dist/tools/decode/index.js",
-      "react-native": "./dist/tools/decode/index.js",
       "node": {
         "import": "./dist/tools/decode/index.js",
         "require": "./dist/tools/decode/index.cjs"
@@ -140,9 +128,6 @@
     },
     "./tx": {
       "types": "./dist/tx/index.d.ts",
-      "browser": "./dist/tx/index.js",
-      "worker": "./dist/tx/index.js",
-      "react-native": "./dist/tx/index.js",
       "node": {
         "import": "./dist/tx/index.js",
         "require": "./dist/tx/index.cjs"
@@ -153,9 +138,6 @@
     },
     "./tools/gas": {
       "types": "./dist/tools/gas/index.d.ts",
-      "browser": "./dist/tools/gas/index.js",
-      "worker": "./dist/tools/gas/index.js",
-      "react-native": "./dist/tools/gas/index.js",
       "node": {
         "import": "./dist/tools/gas/index.js",
         "require": "./dist/tools/gas/index.cjs"
@@ -166,9 +148,6 @@
     },
     "./tools/policy": {
       "types": "./dist/tools/policy/index.d.ts",
-      "browser": "./dist/tools/policy/index.js",
-      "worker": "./dist/tools/policy/index.js",
-      "react-native": "./dist/tools/policy/index.js",
       "node": {
         "import": "./dist/tools/policy/index.js",
         "require": "./dist/tools/policy/index.cjs"
@@ -179,9 +158,6 @@
     },
     "./tools/swap": {
       "types": "./dist/tools/swap/index.d.ts",
-      "browser": "./dist/tools/swap/index.js",
-      "worker": "./dist/tools/swap/index.js",
-      "react-native": "./dist/tools/swap/index.js",
       "node": {
         "import": "./dist/tools/swap/index.js",
         "require": "./dist/tools/swap/index.cjs"
@@ -192,9 +168,6 @@
     },
     "./tools/prep": {
       "types": "./dist/tools/prep/index.d.ts",
-      "browser": "./dist/tools/prep/index.js",
-      "worker": "./dist/tools/prep/index.js",
-      "react-native": "./dist/tools/prep/index.js",
       "node": {
         "import": "./dist/tools/prep/index.js",
         "require": "./dist/tools/prep/index.cjs"
