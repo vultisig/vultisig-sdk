@@ -14,6 +14,7 @@
 // ============================================================================
 
 // Core SDK class
+export type { VaultImportConflictResolution, VaultImportOptions } from './VaultManager'
 export { Vultisig } from './Vultisig'
 
 // Vault management
@@ -1087,6 +1088,11 @@ export { buildCosmosWasmExecuteTx } from './platforms/react-native/chains/cosmos
 // service is exposed for callers that already hold a vault and need the richer
 // chain-specific fee shape (base fee / priority / cosmos gas limit, etc).
 export { GasEstimationService } from './vault/services/GasEstimationService'
+
+// Vault-free raw broadcast: submit a pre-signed raw transaction through the
+// SDK's chain-agnostic broadcaster without needing a vault instance. Backs
+// `VaultBase.broadcastRawTx`, which wraps this same call with vault events.
+export { broadcastRawTx } from './vault/services/RawBroadcastService'
 
 // ============================================================================
 // PUBLIC API - DeFi protocol primitives (sdk.defi.*) — unsigned-tx builders

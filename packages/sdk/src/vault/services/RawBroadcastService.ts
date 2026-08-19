@@ -625,3 +625,34 @@ export class RawBroadcastService {
     return response.txid
   }
 }
+
+// `RawBroadcastService` holds no vault state (no constructor, every method is
+// a pure chain dispatch) — one shared instance backs the vault-free helper below.
+const rawBroadcastService = new RawBroadcastService()
+
+/**
+ * Broadcast a pre-signed raw transaction to the blockchain network, without
+ * needing a vault instance. Runtimes that already hold signed bytes (built and
+ * signed externally, e.g. with ethers.js or bitcoinjs-lib) can reuse the SDK's
+ * chain-agnostic broadcaster directly instead of standing up their own submitter.
+ *
+ * `VaultBase.broadcastRawTx` is a thin wrapper over this same broadcaster that
+ * additionally emits `transactionBroadcast`/`error` vault events.
+ *
+ * @param params - Broadcast parameters
+ * @param params.chain - Target blockchain
+ * @param params.rawTx - Hex-encoded signed transaction (with or without 0x prefix)
+ *
+ * @returns Transaction hash on success
+ *
+ * @throws {VaultError} With code BroadcastFailed if broadcast fails
+ * @throws {VaultError} With code UnsupportedChain if chain is not yet supported
+ *
+ * @example
+ * ```typescript
+ * const signedTx = await ethersWallet.signTransaction(tx)
+ * const txHash = await broadcastRawTx({ chain: Chain.Ethereum, rawTx: signedTx })
+ * ```
+ */
+export const broadcastRawTx = (params: { chain: Chain; rawTx: string }): Promise<string> =>
+  rawBroadcastService.broadcastRawTx(params)
