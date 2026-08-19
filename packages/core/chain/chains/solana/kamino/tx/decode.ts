@@ -318,16 +318,7 @@ export const decodeKaminoRawTransactions = (rawTransactions: string[]): KaminoDe
  * spends, arguments that encode behaviour (`farms::stake` must carry
  * `u64::MAX`), and account cardinality.
  */
-const readArguments = ({
-  matched,
-  transaction,
-  accounts,
-  signer,
-  operation,
-  amount,
-  descriptor,
-  shareAccount,
-}: {
+const readArguments = (input: {
   matched: KaminoInstructionKind[]
   transaction: VersionedTransaction
   accounts: string[]
@@ -337,208 +328,250 @@ const readArguments = ({
   descriptor: KaminoVaultDescriptor
   shareAccount: string
 }): { fee?: KaminoPriorityFee } | undefined => {
-  let unitLimit: number | undefined
-  let unitPrice: bigint | undefined
-  const layout = kaminoInstructionAccounts
+  const { matched, transaction, ...shared } = input
+  const fee: FeeAccumulator = {}
 
   for (let position = 0; position < matched.length; position++) {
-    const kind = matched[position]
-    const data = transaction.message.compiledInstructions[position].data
-    const indexes = transaction.message.compiledInstructions[position].accountKeyIndexes
-
-    switch (kind) {
-      case 'computeUnitPrice': {
-        // Bounded on BOTH sides, because the producer clamps into exactly
-        // this range: above the ceiling is SOL spent for nothing, below the
-        // floor is a transaction that will not land before its blockhash
-        // expires — and either way a price this app never chooses.
-        const value = computeUnitPriceArgument(data)
-        if (
-          indexes.length > 0 ||
-          value === undefined ||
-          value < kaminoComputeBudget.fallbackUnitPriceMicroLamports ||
-          value > kaminoComputeBudget.maxUnitPriceMicroLamports ||
-          value !== clampKaminoUnitPrice(value)
-        ) {
-          return undefined
-        }
-        unitPrice = value
-        break
-      }
-
-      case 'computeUnitLimit': {
-        const value = computeUnitLimitArgument(data)
-        if (indexes.length > 0 || value === undefined || value !== kaminoExpectedUnitLimit({ operation, descriptor })) {
-          return undefined
-        }
-        unitLimit = value
-        break
-      }
-
-      case 'wrapSolTransfer': {
-        const lamports = systemTransferLamports(data)
-        if (
-          operation !== 'deposit' ||
-          lamports === undefined ||
-          lamports !== amount ||
-          indexes.length < layout.systemTransfer.count ||
-          staticAddress(accounts, indexes[layout.systemTransfer.source]) !== signer
-        ) {
-          return undefined
-        }
-        // The destination is the user's own wrapped-SOL account whenever it
-        // resolves statically — and it does in every captured transaction.
-        const destination = staticAddress(accounts, indexes[layout.systemTransfer.destination])
-        if (
-          destination !== undefined &&
-          !kaminoUserTokenAccounts({ owner: signer, mint: descriptor.tokenMint }).has(destination)
-        ) {
-          return undefined
-        }
-        break
-      }
-
-      case 'farmsStake': {
-        if (indexes.length < layout.farmsStake.minimumCount || anchorU64Argument(data) !== kaminoMaxBaseUnits) {
-          return undefined
-        }
-        break
-      }
-
-      case 'farmsInitializeUser': {
-        if (indexes.length < layout.farmsInitializeUser.minimumCount) return undefined
-        break
-      }
-
-      case 'farmsUnstake': {
-        // The u128 WAD-scaled release amount. The exact figure is `requested −
-        // unstaked`, and the unstaked half is a balance this device cannot
-        // read — so what is checked here is the BOUND: a withdraw cannot
-        // legitimately take more out of the farm than it burns. The authority
-        // is checked too, and that is the half that matters most: whatever
-        // amount is released, it is released from THIS signer's own farm
-        // position and nobody else's.
-        const scaled = anchorU128Argument(data)
-        if (
-          operation !== 'withdraw' ||
-          indexes.length < layout.farmsUnstake.minimumCount ||
-          staticAddress(accounts, indexes[layout.farmsUnstake.owner]) !== signer ||
-          scaled === undefined ||
-          scaled <= 0n ||
-          scaled % kaminoFarmsStakeScale !== 0n ||
-          scaled > amount * kaminoFarmsStakeScale
-        ) {
-          return undefined
-        }
-        if (
-          !actsOnSignersFarmPosition({
-            accounts,
-            userStateIndex: indexes[layout.farmsUnstake.userState],
-            farmIndex: indexes[layout.farmsUnstake.farm],
-            signer,
-            descriptor,
-          })
-        ) {
-          return undefined
-        }
-        break
-      }
-
-      case 'farmsWithdrawUnstakedDeposits': {
-        // Where the released shares LAND. It has to be the same share account
-        // the vault withdraw then burns from — the one already proven to be
-        // this signer's, for this vault's share mint — or the release and the
-        // withdraw are two unrelated movements presented as one.
-        if (
-          operation !== 'withdraw' ||
-          indexes.length < layout.farmsWithdrawUnstakedDeposits.minimumCount ||
-          !hasNoAnchorArgument(data) ||
-          staticAddress(accounts, indexes[layout.farmsWithdrawUnstakedDeposits.owner]) !== signer ||
-          staticAddress(accounts, indexes[layout.farmsWithdrawUnstakedDeposits.userShareAccount]) !== shareAccount
-        ) {
-          return undefined
-        }
-        if (
-          !actsOnSignersFarmPosition({
-            accounts,
-            userStateIndex: indexes[layout.farmsWithdrawUnstakedDeposits.userState],
-            farmIndex: indexes[layout.farmsWithdrawUnstakedDeposits.farm],
-            signer,
-            descriptor,
-          })
-        ) {
-          return undefined
-        }
-        break
-      }
-
-      case 'createTokenAccount': {
-        // Creating an account is not free — the PAYER funds its rent — and
-        // the step is repeatable, so an extra creation for a stranger's
-        // wallet would otherwise ride along unremarked and spend the signer's
-        // SOL. Both slots that decide who pays and who owns are static keys.
-        // The mint and the derived address need the lookup table; the
-        // initiating validator pins those.
-        if (
-          indexes.length < layout.associatedToken.count ||
-          staticAddress(accounts, indexes[layout.associatedToken.payer]) !== signer ||
-          staticAddress(accounts, indexes[layout.associatedToken.wallet]) !== signer
-        ) {
-          return undefined
-        }
-        break
-      }
-
-      case 'closeTokenAccount': {
-        // Closing an account SENDS its rent somewhere. Where it lands, and
-        // who authorised the close, decide whether that is the signer
-        // reclaiming their own lamports or a third party collecting them.
-        if (
-          indexes.length < layout.closeAccount.count ||
-          staticAddress(accounts, indexes[layout.closeAccount.destination]) !== signer ||
-          staticAddress(accounts, indexes[layout.closeAccount.authority]) !== signer
-        ) {
-          return undefined
-        }
-        break
-      }
-
-      case 'attributionMemo': {
-        // The tag itself was matched whole by the sequence. What is left to
-        // check is that it attests to nobody: a memo carrying account indexes
-        // is the Memo program asserting those accounts signed.
-        if (indexes.length > 0) return undefined
-        break
-      }
-
-      case 'syncNative': {
-        // Bound to the signer's own wrapped-SOL account whenever the slot
-        // resolves statically — the derivation needs no network, so leaving
-        // this looser than the initiating validator would be an unnecessary
-        // asymmetry between the two devices' refusals.
-        if (indexes.length === 0) return undefined
-        const syncedAccount = staticAddress(accounts, indexes[0])
-        if (
-          syncedAccount !== undefined &&
-          !kaminoUserTokenAccounts({ owner: signer, mint: descriptor.tokenMint }).has(syncedAccount)
-        ) {
-          return undefined
-        }
-        break
-      }
-
-      case 'kvaultDeposit':
-      case 'kvaultWithdraw':
-        // Already read: the amount, the authority and the share account.
-        break
-    }
+    const { data, accountKeyIndexes } = transaction.message.compiledInstructions[position]
+    const accepted = argumentChecks[matched[position]]({ ...shared, data, indexes: accountKeyIndexes }, fee)
+    if (!accepted) return undefined
   }
 
   // Both halves or neither. The template already enforces that, but the pair
   // is what the fee is, so it is assembled rather than assumed.
-  if (unitLimit !== undefined && unitPrice !== undefined) {
-    return { fee: { unitLimit, unitPriceMicroLamports: unitPrice } }
+  const { unitLimit, unitPriceMicroLamports } = fee
+  if (unitLimit !== undefined && unitPriceMicroLamports !== undefined) {
+    return { fee: { unitLimit, unitPriceMicroLamports } }
   }
-  if (unitLimit === undefined && unitPrice === undefined) return {}
+  if (unitLimit === undefined && unitPriceMicroLamports === undefined) return {}
   return undefined
+}
+
+/** What every offline argument check receives for one matched instruction. */
+type ArgumentCheck = {
+  data: Uint8Array
+  indexes: readonly number[]
+  /** The message's static account keys, in index order. */
+  accounts: string[]
+  signer: string
+  operation: 'deposit' | 'withdraw'
+  /** The `u64` the kvault instruction carries — the bound on a farm release. */
+  amount: bigint
+  descriptor: KaminoVaultDescriptor
+  shareAccount: string
+}
+
+/** The ComputeBudget pair, accumulated as the walk reads it. */
+type FeeAccumulator = { unitLimit?: number; unitPriceMicroLamports?: bigint }
+
+const accountLayout = kaminoInstructionAccounts
+
+/**
+ * Bounded on BOTH sides, because the producer clamps into exactly this range:
+ * above the ceiling is SOL spent for nothing, below the floor is a
+ * transaction that will not land before its blockhash expires — and either
+ * way a price this app never chooses.
+ */
+const readComputeUnitPrice = ({ data, indexes }: ArgumentCheck, fee: FeeAccumulator): boolean => {
+  const value = computeUnitPriceArgument(data)
+  if (
+    indexes.length > 0 ||
+    value === undefined ||
+    value < kaminoComputeBudget.fallbackUnitPriceMicroLamports ||
+    value > kaminoComputeBudget.maxUnitPriceMicroLamports ||
+    value !== clampKaminoUnitPrice(value)
+  ) {
+    return false
+  }
+  fee.unitPriceMicroLamports = value
+  return true
+}
+
+const readComputeUnitLimit = (
+  { data, indexes, operation, descriptor }: ArgumentCheck,
+  fee: FeeAccumulator
+): boolean => {
+  const value = computeUnitLimitArgument(data)
+  if (indexes.length > 0 || value === undefined || value !== kaminoExpectedUnitLimit({ operation, descriptor })) {
+    return false
+  }
+  fee.unitLimit = value
+  return true
+}
+
+const checkWrapSolTransfer = ({
+  data,
+  indexes,
+  accounts,
+  signer,
+  operation,
+  amount,
+  descriptor,
+}: ArgumentCheck): boolean => {
+  const lamports = systemTransferLamports(data)
+  if (
+    operation !== 'deposit' ||
+    lamports === undefined ||
+    lamports !== amount ||
+    indexes.length < accountLayout.systemTransfer.count ||
+    staticAddress(accounts, indexes[accountLayout.systemTransfer.source]) !== signer
+  ) {
+    return false
+  }
+  // The destination is the user's own wrapped-SOL account whenever it
+  // resolves statically — and it does in every captured transaction.
+  const destination = staticAddress(accounts, indexes[accountLayout.systemTransfer.destination])
+  return (
+    destination === undefined || kaminoUserTokenAccounts({ owner: signer, mint: descriptor.tokenMint }).has(destination)
+  )
+}
+
+/**
+ * Bound to the signer's own wrapped-SOL account whenever the slot resolves
+ * statically — the derivation needs no network, so leaving this looser than
+ * the initiating validator would be an unnecessary asymmetry between the two
+ * devices' refusals.
+ */
+const checkSyncNative = ({ indexes, accounts, signer, descriptor }: ArgumentCheck): boolean => {
+  if (indexes.length === 0) return false
+  const syncedAccount = staticAddress(accounts, indexes[0])
+  return (
+    syncedAccount === undefined ||
+    kaminoUserTokenAccounts({ owner: signer, mint: descriptor.tokenMint }).has(syncedAccount)
+  )
+}
+
+const checkFarmsStake = ({ data, indexes }: ArgumentCheck): boolean =>
+  indexes.length >= accountLayout.farmsStake.minimumCount && anchorU64Argument(data) === kaminoMaxBaseUnits
+
+const checkFarmsInitializeUser = ({ indexes }: ArgumentCheck): boolean =>
+  indexes.length >= accountLayout.farmsInitializeUser.minimumCount
+
+/**
+ * The u128 WAD-scaled release amount. The exact figure is `requested −
+ * unstaked`, and the unstaked half is a balance this device cannot read — so
+ * what is checked here is the BOUND: a withdraw cannot legitimately take more
+ * out of the farm than it burns. The authority is checked too, and that is
+ * the half that matters most: whatever amount is released, it is released
+ * from THIS signer's own farm position and nobody else's.
+ */
+const checkFarmsUnstake = ({
+  data,
+  indexes,
+  accounts,
+  signer,
+  operation,
+  amount,
+  descriptor,
+}: ArgumentCheck): boolean => {
+  const scaled = anchorU128Argument(data)
+  if (
+    operation !== 'withdraw' ||
+    indexes.length < accountLayout.farmsUnstake.minimumCount ||
+    staticAddress(accounts, indexes[accountLayout.farmsUnstake.owner]) !== signer ||
+    scaled === undefined ||
+    scaled <= 0n ||
+    scaled % kaminoFarmsStakeScale !== 0n ||
+    scaled > amount * kaminoFarmsStakeScale
+  ) {
+    return false
+  }
+  return actsOnSignersFarmPosition({
+    accounts,
+    userStateIndex: indexes[accountLayout.farmsUnstake.userState],
+    farmIndex: indexes[accountLayout.farmsUnstake.farm],
+    signer,
+    descriptor,
+  })
+}
+
+/**
+ * Where the released shares LAND. It has to be the same share account the
+ * vault withdraw then burns from — the one already proven to be this signer's,
+ * for this vault's share mint — or the release and the withdraw are two
+ * unrelated movements presented as one.
+ */
+const checkFarmsWithdrawUnstakedDeposits = ({
+  data,
+  indexes,
+  accounts,
+  signer,
+  operation,
+  descriptor,
+  shareAccount,
+}: ArgumentCheck): boolean => {
+  const layout = accountLayout.farmsWithdrawUnstakedDeposits
+  if (
+    operation !== 'withdraw' ||
+    indexes.length < layout.minimumCount ||
+    !hasNoAnchorArgument(data) ||
+    staticAddress(accounts, indexes[layout.owner]) !== signer ||
+    staticAddress(accounts, indexes[layout.userShareAccount]) !== shareAccount
+  ) {
+    return false
+  }
+  return actsOnSignersFarmPosition({
+    accounts,
+    userStateIndex: indexes[layout.userState],
+    farmIndex: indexes[layout.farm],
+    signer,
+    descriptor,
+  })
+}
+
+/**
+ * Creating an account is not free — the PAYER funds its rent — and the step
+ * is repeatable, so an extra creation for a stranger's wallet would otherwise
+ * ride along unremarked and spend the signer's SOL. Both slots that decide
+ * who pays and who owns are static keys. The mint and the derived address
+ * need the lookup table; the initiating validator pins those.
+ */
+const checkCreateTokenAccount = ({ indexes, accounts, signer }: ArgumentCheck): boolean =>
+  indexes.length >= accountLayout.associatedToken.count &&
+  staticAddress(accounts, indexes[accountLayout.associatedToken.payer]) === signer &&
+  staticAddress(accounts, indexes[accountLayout.associatedToken.wallet]) === signer
+
+/**
+ * Closing an account SENDS its rent somewhere. Where it lands, and who
+ * authorised the close, decide whether that is the signer reclaiming their
+ * own lamports or a third party collecting them.
+ */
+const checkCloseTokenAccount = ({ indexes, accounts, signer }: ArgumentCheck): boolean =>
+  indexes.length >= accountLayout.closeAccount.count &&
+  staticAddress(accounts, indexes[accountLayout.closeAccount.destination]) === signer &&
+  staticAddress(accounts, indexes[accountLayout.closeAccount.authority]) === signer
+
+/**
+ * The tag itself was matched whole by the sequence. What is left to check is
+ * that it attests to nobody: a memo carrying account indexes is the Memo
+ * program asserting those accounts signed.
+ */
+const checkAttributionMemo = ({ indexes }: ArgumentCheck): boolean => indexes.length === 0
+
+/**
+ * Every instruction contract that can be judged offline, one entry per
+ * template step. Three kinds of check, all of which the online validator also
+ * makes — the point is that a co-signing device should refuse what the
+ * initiating device would have refused, minus only what genuinely needs the
+ * network: amounts that are spends, arguments that encode behaviour
+ * (`farms::stake` must carry `u64::MAX`), and account cardinality.
+ *
+ * A record rather than a switch so each check stands alone and the set stays
+ * exhaustive: a template step added without a check is a type error.
+ */
+const argumentChecks: Record<KaminoInstructionKind, (check: ArgumentCheck, fee: FeeAccumulator) => boolean> = {
+  computeUnitPrice: readComputeUnitPrice,
+  computeUnitLimit: readComputeUnitLimit,
+  wrapSolTransfer: checkWrapSolTransfer,
+  syncNative: checkSyncNative,
+  farmsStake: checkFarmsStake,
+  farmsInitializeUser: checkFarmsInitializeUser,
+  farmsUnstake: checkFarmsUnstake,
+  farmsWithdrawUnstakedDeposits: checkFarmsWithdrawUnstakedDeposits,
+  createTokenAccount: checkCreateTokenAccount,
+  closeTokenAccount: checkCloseTokenAccount,
+  attributionMemo: checkAttributionMemo,
+  // Already read by the caller: the amount, the authority and the share account.
+  kvaultDeposit: () => true,
+  kvaultWithdraw: () => true,
 }

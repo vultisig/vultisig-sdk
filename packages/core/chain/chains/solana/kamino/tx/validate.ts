@@ -246,271 +246,316 @@ const requireAnchorAmount = (data: Uint8Array, position: number, expected: bigin
 const operationKind = (intent: KaminoTransactionIntent): 'deposit' | 'withdraw' =>
   'deposit' in intent.operation ? 'deposit' : 'withdraw'
 
-const validateInstruction = (context: Context, kind: KaminoInstructionKind, position: number) => {
-  const data = context.transaction.message.compiledInstructions[position].data
-  const accounts = instructionAccounts(context, position)
-  const { intent } = context
-  const layout = kaminoInstructionAccounts
+/** What every per-instruction check receives, resolved once by the dispatcher. */
+type InstructionCheck = {
+  context: Context
+  position: number
+  data: Uint8Array
+  /** The instruction's accounts, already resolved to addresses. */
+  accounts: string[]
+  /** Refuses unless the instruction carries at least `minimum` accounts. */
+  requireMinimumAccounts: (minimum: number) => void
+}
 
-  const requireMinimumAccounts = (minimum: number) => {
-    if (accounts.length < minimum) {
-      refuse(
-        'malformedInstruction',
-        `instruction ${position}: ${kaminoInstructionKindName[kind]} needs ${minimum} accounts`
-      )
-    }
+const layout = kaminoInstructionAccounts
+
+/**
+ * The compute unit limit, pinned to the value the app injected. A limit is
+ * half of the fee — the network charges `limit × price` — so one raised
+ * beyond what the transaction needs is SOL spent for nothing.
+ */
+const checkComputeUnitLimit = ({ context, position, data, accounts }: InstructionCheck) => {
+  requireNoAccounts(accounts, position, 'compute budget')
+  const limit = computeUnitLimitArgument(data)
+  const fee = context.intent.priorityFee
+  if (!fee || limit === undefined) {
+    return refuse('malformedInstruction', `instruction ${position}: compute unit limit`)
+  }
+  if (limit !== fee.unitLimit) {
+    refuse('amountMismatch', `compute unit limit is ${limit}, expected ${fee.unitLimit}`)
+  }
+}
+
+/**
+ * The price per compute unit, pinned to the value the app injected. This is
+ * the half an attacker would inflate: a u64 of micro-lamports, and nothing on
+ * chain caps the resulting fee below the payer's balance.
+ */
+const checkComputeUnitPrice = ({ context, position, data, accounts }: InstructionCheck) => {
+  requireNoAccounts(accounts, position, 'compute budget')
+  const price = computeUnitPriceArgument(data)
+  const fee = context.intent.priorityFee
+  if (!fee || price === undefined) {
+    return refuse('malformedInstruction', `instruction ${position}: compute unit price`)
+  }
+  if (price !== fee.unitPriceMicroLamports) {
+    refuse('amountMismatch', `compute unit price is ${price}, expected ${fee.unitPriceMicroLamports}`)
+  }
+}
+
+/**
+ * A CreateIdempotent may only create one of the vault's two mints' accounts,
+ * for the user, at the address derivation says it must have. Creating an
+ * account is harmless in itself, but it is also where a third-party
+ * destination would first appear.
+ */
+const checkCreateTokenAccount = ({ context, accounts, requireMinimumAccounts }: InstructionCheck) => {
+  const { intent } = context
+  requireMinimumAccounts(layout.associatedToken.count)
+  requireOwner(context, accounts[layout.associatedToken.payer], 'token account funder')
+  requireOwner(context, accounts[layout.associatedToken.wallet], 'token account owner')
+
+  const mint = accounts[layout.associatedToken.mint]
+  const { tokenMint, sharesMint } = intent.vault.descriptor
+  if (mint !== tokenMint && mint !== sharesMint) {
+    return refuse('accountMismatch', `created token account mint is ${mint}`)
   }
 
-  switch (kind) {
-    case 'computeUnitLimit': {
-      requireNoAccounts(accounts, position, 'compute budget')
-      const limit = computeUnitLimitArgument(data)
-      const fee = intent.priorityFee
-      if (!fee || limit === undefined) {
-        return refuse('malformedInstruction', `instruction ${position}: compute unit limit`)
-      }
-      // A limit is half of the fee: the network charges `limit × price`, so a
-      // limit raised beyond what the transaction needs is SOL spent for nothing.
-      if (limit !== fee.unitLimit) {
-        refuse('amountMismatch', `compute unit limit is ${limit}, expected ${fee.unitLimit}`)
-      }
-      return
-    }
+  const tokenProgramId = accounts[layout.associatedToken.tokenProgram]
+  const tokenProgram = splTokenProgram(tokenProgramId)
+  if (!tokenProgram) return refuse('programNotAllowed', `token program ${tokenProgramId}`)
 
-    case 'computeUnitPrice': {
-      requireNoAccounts(accounts, position, 'compute budget')
-      const price = computeUnitPriceArgument(data)
-      const fee = intent.priorityFee
-      if (!fee || price === undefined) {
-        return refuse('malformedInstruction', `instruction ${position}: compute unit price`)
-      }
-      // This is the half an attacker would inflate: a u64 of micro-lamports,
-      // and nothing on chain caps the resulting fee below the payer's balance.
-      if (price !== fee.unitPriceMicroLamports) {
-        refuse('amountMismatch', `compute unit price is ${price}, expected ${fee.unitPriceMicroLamports}`)
-      }
-      return
-    }
+  const derived = getAssociatedTokenAddressSync(
+    new PublicKey(mint),
+    new PublicKey(intent.owner),
+    false,
+    tokenProgram
+  ).toBase58()
+  requireAccount(accounts[layout.associatedToken.account], derived, 'created token account')
+}
 
-    case 'createTokenAccount': {
-      // A CreateIdempotent may only create one of the vault's two mints'
-      // accounts, for the user, at the address derivation says it must have.
-      // Creating an account is harmless in itself, but it is also where a
-      // third-party destination would first appear.
-      requireMinimumAccounts(layout.associatedToken.count)
-      requireOwner(context, accounts[layout.associatedToken.payer], 'token account funder')
-      requireOwner(context, accounts[layout.associatedToken.wallet], 'token account owner')
+const splTokenProgram = (programId: string): PublicKey | undefined => {
+  if (programId === kaminoAllowedPrograms.token) return TOKEN_PROGRAM_ID
+  if (programId === kaminoAllowedPrograms.token2022) return TOKEN_2022_PROGRAM_ID
+  return undefined
+}
 
-      const mint = accounts[layout.associatedToken.mint]
-      const { tokenMint, sharesMint } = intent.vault.descriptor
-      if (mint !== tokenMint && mint !== sharesMint) {
-        return refuse('accountMismatch', `created token account mint is ${mint}`)
-      }
+/**
+ * The lamports that fund the wSOL account: the only native SOL movement the
+ * operation performs, so both endpoints and the amount are pinned.
+ */
+const checkWrapSolTransfer = ({ context, position, data, accounts, requireMinimumAccounts }: InstructionCheck) => {
+  const { intent } = context
+  requireMinimumAccounts(layout.systemTransfer.count)
+  const lamports = systemTransferLamports(data)
+  if (lamports === undefined) {
+    return refuse('malformedInstruction', `instruction ${position}: system transfer`)
+  }
+  requireOwner(context, accounts[layout.systemTransfer.source], 'SOL transfer source')
+  requireUserTokenAccount(context, accounts[layout.systemTransfer.destination], 'SOL transfer destination')
 
-      const tokenProgramId = accounts[layout.associatedToken.tokenProgram]
-      const tokenProgram =
-        tokenProgramId === kaminoAllowedPrograms.token
-          ? TOKEN_PROGRAM_ID
-          : tokenProgramId === kaminoAllowedPrograms.token2022
-            ? TOKEN_2022_PROGRAM_ID
-            : undefined
-      if (!tokenProgram) return refuse('programNotAllowed', `token program ${tokenProgramId}`)
+  if (!('deposit' in intent.operation)) {
+    return refuse('instructionNotForOperation', 'SOL wrap on a withdraw')
+  }
+  const expected = requireU64(intent.operation.deposit.baseUnits, 'deposit amount')
+  if (lamports !== expected) {
+    refuse('amountMismatch', `wrapped SOL amount is ${lamports}, expected ${expected}`)
+  }
+}
 
-      const derived = getAssociatedTokenAddressSync(
-        new PublicKey(mint),
-        new PublicKey(intent.owner),
-        false,
-        tokenProgram
-      ).toBase58()
-      requireAccount(accounts[layout.associatedToken.account], derived, 'created token account')
-      return
-    }
+const checkSyncNative = ({ context, accounts, requireMinimumAccounts }: InstructionCheck) => {
+  requireMinimumAccounts(1)
+  requireUserTokenAccount(context, accounts[0], 'wrapped SOL account')
+}
 
-    case 'wrapSolTransfer': {
-      // The lamports that fund the wSOL account: the only native SOL movement
-      // the operation performs, so both endpoints and the amount are pinned.
-      requireMinimumAccounts(layout.systemTransfer.count)
-      const lamports = systemTransferLamports(data)
-      if (lamports === undefined) {
-        return refuse('malformedInstruction', `instruction ${position}: system transfer`)
-      }
-      requireOwner(context, accounts[layout.systemTransfer.source], 'SOL transfer source')
-      requireUserTokenAccount(context, accounts[layout.systemTransfer.destination], 'SOL transfer destination')
+/**
+ * Closing a token account sends its remaining lamports somewhere. Both the
+ * account being closed and where its rent lands have to be the user's.
+ */
+const checkCloseTokenAccount = ({ context, accounts, requireMinimumAccounts }: InstructionCheck) => {
+  requireMinimumAccounts(layout.closeAccount.count)
+  const closed = accounts[layout.closeAccount.account]
+  if (!context.userTokenAccounts.has(closed) && !context.userShareAccounts.has(closed)) {
+    return refuse('accountNotOwnedByUser', `closed token account ${closed}`)
+  }
+  requireOwner(context, accounts[layout.closeAccount.destination], 'closed account rent destination')
+  requireOwner(context, accounts[layout.closeAccount.authority], 'closed account authority')
+}
 
-      if (!('deposit' in intent.operation)) {
-        return refuse('instructionNotForOperation', 'SOL wrap on a withdraw')
-      }
-      const expected = requireU64(intent.operation.deposit.baseUnits, 'deposit amount')
-      if (lamports !== expected) {
-        refuse('amountMismatch', `wrapped SOL amount is ${lamports}, expected ${expected}`)
-      }
-      return
-    }
+const checkKvaultDeposit = ({ context, position, data, accounts, requireMinimumAccounts }: InstructionCheck) => {
+  const { intent } = context
+  requireMinimumAccounts(layout.kvaultDeposit.minimumCount)
+  if (!('deposit' in intent.operation)) {
+    return refuse('instructionNotForOperation', 'vault deposit on a withdraw')
+  }
+  const { address, tokenMint, sharesMint } = intent.vault.descriptor
+  requireOwner(context, accounts[layout.kvaultDeposit.user], 'deposit authority')
+  requireAccount(accounts[layout.kvaultDeposit.vault], address, 'vault')
+  requireAccount(accounts[layout.kvaultDeposit.tokenMint], tokenMint, 'deposit token mint')
+  requireAccount(accounts[layout.kvaultDeposit.sharesMint], sharesMint, 'deposit shares mint')
+  requireUserTokenAccount(context, accounts[layout.kvaultDeposit.userTokenAccount], 'deposit source')
+  requireUserShareAccount(context, accounts[layout.kvaultDeposit.userShareAccount], 'deposit share destination')
+  requireAnchorAmount(data, position, intent.operation.deposit.baseUnits, 'deposit amount')
+}
 
-    case 'syncNative': {
-      requireMinimumAccounts(1)
-      requireUserTokenAccount(context, accounts[0], 'wrapped SOL account')
-      return
-    }
+const checkKvaultWithdraw = ({ context, position, data, accounts, requireMinimumAccounts }: InstructionCheck) => {
+  const { intent } = context
+  requireMinimumAccounts(layout.kvaultWithdraw.minimumCount)
+  if (!('withdraw' in intent.operation)) {
+    return refuse('instructionNotForOperation', 'vault withdraw on a deposit')
+  }
+  const { address, tokenMint, sharesMint } = intent.vault.descriptor
+  requireOwner(context, accounts[layout.kvaultWithdraw.user], 'withdraw authority')
+  requireAccount(accounts[layout.kvaultWithdraw.vault], address, 'vault')
+  requireAccount(accounts[layout.kvaultWithdraw.tokenMint], tokenMint, 'withdraw token mint')
+  requireAccount(accounts[layout.kvaultWithdraw.sharesMint], sharesMint, 'withdraw shares mint')
+  requireUserTokenAccount(context, accounts[layout.kvaultWithdraw.userTokenAccount], 'withdraw destination')
+  requireUserShareAccount(context, accounts[layout.kvaultWithdraw.userShareAccount], 'withdraw share source')
+  // Shares, not tokens. The API takes the same `amount` field for both actions
+  // with inverted units, and an amount above the user's balance is silently
+  // rewritten to u64::MAX — withdraw everything — so this is the check that
+  // stands between a partial exit and a full one.
+  requireAnchorAmount(data, position, intent.operation.withdraw.shares.baseUnits, 'withdraw share amount')
+}
 
-    case 'closeTokenAccount': {
-      // Closing a token account sends its remaining lamports somewhere. Both
-      // the account being closed and where its rent lands have to be the user's.
-      requireMinimumAccounts(layout.closeAccount.count)
-      const closed = accounts[layout.closeAccount.account]
-      if (!context.userTokenAccounts.has(closed) && !context.userShareAccounts.has(closed)) {
-        return refuse('accountNotOwnedByUser', `closed token account ${closed}`)
-      }
-      requireOwner(context, accounts[layout.closeAccount.destination], 'closed account rent destination')
-      requireOwner(context, accounts[layout.closeAccount.authority], 'closed account authority')
-      return
-    }
+const checkFarmsInitializeUser = ({ context, accounts, requireMinimumAccounts }: InstructionCheck) => {
+  requireMinimumAccounts(layout.farmsInitializeUser.minimumCount)
+  requireOwner(context, accounts[layout.farmsInitializeUser.authority], 'farm user authority')
+  requireFarm(context, accounts[layout.farmsInitializeUser.farm])
+}
 
-    case 'kvaultDeposit': {
-      requireMinimumAccounts(layout.kvaultDeposit.minimumCount)
-      if (!('deposit' in intent.operation)) {
-        return refuse('instructionNotForOperation', 'vault deposit on a withdraw')
-      }
-      requireOwner(context, accounts[layout.kvaultDeposit.user], 'deposit authority')
-      requireAccount(accounts[layout.kvaultDeposit.vault], intent.vault.descriptor.address, 'vault')
-      requireAccount(accounts[layout.kvaultDeposit.tokenMint], intent.vault.descriptor.tokenMint, 'deposit token mint')
-      requireAccount(
-        accounts[layout.kvaultDeposit.sharesMint],
-        intent.vault.descriptor.sharesMint,
-        'deposit shares mint'
-      )
-      requireUserTokenAccount(context, accounts[layout.kvaultDeposit.userTokenAccount], 'deposit source')
-      requireUserShareAccount(context, accounts[layout.kvaultDeposit.userShareAccount], 'deposit share destination')
-      requireAnchorAmount(data, position, intent.operation.deposit.baseUnits, 'deposit amount')
-      return
-    }
+/**
+ * The stake that makes the deposit's shares invisible in the wallet. It must
+ * move the user's own shares into this vault's own farm — a farm belonging to
+ * another vault would park the position somewhere the app never reads.
+ */
+const checkFarmsStake = ({ context, position, data, accounts, requireMinimumAccounts }: InstructionCheck) => {
+  requireMinimumAccounts(layout.farmsStake.minimumCount)
+  requireOwner(context, accounts[layout.farmsStake.owner], 'stake authority')
+  requireFarm(context, accounts[layout.farmsStake.farm])
+  requireUserShareAccount(context, accounts[layout.farmsStake.userShareAccount], 'stake source')
+  requireAccount(
+    accounts[layout.farmsStake.sharesMint],
+    context.intent.vault.descriptor.sharesMint,
+    'stake shares mint'
+  )
 
-    case 'kvaultWithdraw': {
-      requireMinimumAccounts(layout.kvaultWithdraw.minimumCount)
-      if (!('withdraw' in intent.operation)) {
-        return refuse('instructionNotForOperation', 'vault withdraw on a deposit')
-      }
-      requireOwner(context, accounts[layout.kvaultWithdraw.user], 'withdraw authority')
-      requireAccount(accounts[layout.kvaultWithdraw.vault], intent.vault.descriptor.address, 'vault')
-      requireAccount(
-        accounts[layout.kvaultWithdraw.tokenMint],
-        intent.vault.descriptor.tokenMint,
-        'withdraw token mint'
-      )
-      requireAccount(
-        accounts[layout.kvaultWithdraw.sharesMint],
-        intent.vault.descriptor.sharesMint,
-        'withdraw shares mint'
-      )
-      requireUserTokenAccount(context, accounts[layout.kvaultWithdraw.userTokenAccount], 'withdraw destination')
-      requireUserShareAccount(context, accounts[layout.kvaultWithdraw.userShareAccount], 'withdraw share source')
-      // Shares, not tokens. The API takes the same `amount` field for both
-      // actions with inverted units, and an amount above the user's balance is
-      // silently rewritten to u64::MAX — withdraw everything — so this is the
-      // check that stands between a partial exit and a full one.
-      requireAnchorAmount(data, position, intent.operation.withdraw.shares.baseUnits, 'withdraw share amount')
-      return
-    }
+  // Kamino stakes the whole share balance rather than the freshly minted
+  // amount, so the argument is the u64 sentinel. A different value is a
+  // behaviour change, not a variation, and is worth stopping on.
+  const argument = anchorU64Argument(data)
+  if (argument === undefined) {
+    return refuse('malformedInstruction', `instruction ${position}: farms stake argument`)
+  }
+  if (argument !== kaminoMaxBaseUnits) {
+    refuse('amountMismatch', `staked share amount is ${argument}, expected ${kaminoMaxBaseUnits}`)
+  }
+}
 
-    case 'farmsInitializeUser': {
-      requireMinimumAccounts(layout.farmsInitializeUser.minimumCount)
-      requireOwner(context, accounts[layout.farmsInitializeUser.authority], 'farm user authority')
-      requireFarm(context, accounts[layout.farmsInitializeUser.farm])
-      return
-    }
+/**
+ * The release of staked shares from the farm, and the one amount in this
+ * feature that is not a u64: a u128 scaled by 10^18, checked in exact bigint
+ * arithmetic with no division and no narrowing.
+ *
+ * Pinned to the exact shortfall rather than bounded above by it: a LARGER
+ * unstake would release shares the transaction then leaves sitting out of the
+ * farm and no longer earning — a real loss, silent, and invisible on the
+ * verify screen; a smaller one simply cannot settle.
+ */
+const checkFarmsUnstake = ({ context, position, data, accounts, requireMinimumAccounts }: InstructionCheck) => {
+  const { intent } = context
+  requireMinimumAccounts(layout.farmsUnstake.minimumCount)
+  if (!('withdraw' in intent.operation)) {
+    return refuse('instructionNotForOperation', 'farm unstake on a deposit')
+  }
+  requireOwner(context, accounts[layout.farmsUnstake.owner], 'unstake authority')
+  requireFarm(context, accounts[layout.farmsUnstake.farm])
+  requireFarmUserState(context, accounts[layout.farmsUnstake.userState])
 
-    case 'farmsStake': {
-      // The stake that makes the deposit's shares invisible in the wallet. It
-      // must move the user's own shares into this vault's own farm — a farm
-      // belonging to another vault would park the position somewhere the app
-      // never reads.
-      requireMinimumAccounts(layout.farmsStake.minimumCount)
-      requireOwner(context, accounts[layout.farmsStake.owner], 'stake authority')
-      requireFarm(context, accounts[layout.farmsStake.farm])
-      requireUserShareAccount(context, accounts[layout.farmsStake.userShareAccount], 'stake source')
-      requireAccount(accounts[layout.farmsStake.sharesMint], intent.vault.descriptor.sharesMint, 'stake shares mint')
+  const scaled = anchorU128Argument(data)
+  if (scaled === undefined) {
+    return refuse('malformedInstruction', `instruction ${position}: farms unstake argument`)
+  }
+  const expected = kaminoUnstakeShares(intent.operation.withdraw).baseUnits * kaminoFarmsStakeScale
+  if (scaled !== expected) {
+    refuse('amountMismatch', `unstaked share amount is ${scaled}, expected ${expected}`)
+  }
+}
 
-      // Kamino stakes the whole share balance rather than the freshly minted
-      // amount, so the argument is the u64 sentinel. A different value is a
-      // behaviour change, not a variation, and is worth stopping on.
-      const argument = anchorU64Argument(data)
-      if (argument === undefined) {
-        return refuse('malformedInstruction', `instruction ${position}: farms stake argument`)
-      }
-      if (argument !== kaminoMaxBaseUnits) {
-        refuse('amountMismatch', `staked share amount is ${argument}, expected ${kaminoMaxBaseUnits}`)
-      }
-      return
-    }
+/**
+ * Moving what the unstake released into the user's own share account. It
+ * takes no argument — it always moves the whole released balance — so
+ * everything checkable here is an account, and the one that matters is the
+ * destination: the vault withdraw burns from that same account, and a
+ * destination belonging to anyone else would hand the position over.
+ */
+const checkFarmsWithdrawUnstakedDeposits = ({
+  context,
+  position,
+  data,
+  accounts,
+  requireMinimumAccounts,
+}: InstructionCheck) => {
+  requireMinimumAccounts(layout.farmsWithdrawUnstakedDeposits.minimumCount)
+  if (!('withdraw' in context.intent.operation)) {
+    return refuse('instructionNotForOperation', 'farm unstaked share withdrawal on a deposit')
+  }
+  if (!hasNoAnchorArgument(data)) {
+    return refuse('malformedInstruction', `instruction ${position}: farms withdrawUnstakedDeposits takes no argument`)
+  }
+  requireOwner(context, accounts[layout.farmsWithdrawUnstakedDeposits.owner], 'unstaked share withdrawal authority')
+  requireFarm(context, accounts[layout.farmsWithdrawUnstakedDeposits.farm])
+  requireFarmUserState(context, accounts[layout.farmsWithdrawUnstakedDeposits.userState])
+  requireUserShareAccount(
+    context,
+    accounts[layout.farmsWithdrawUnstakedDeposits.userShareAccount],
+    'unstaked share destination'
+  )
+}
 
-    case 'farmsUnstake': {
-      // The release of staked shares from the farm, and the one amount in
-      // this feature that is not a u64: a u128 scaled by 10^18, checked in
-      // exact bigint arithmetic with no division and no narrowing. Pinned to
-      // the exact shortfall rather than bounded above by it: a LARGER unstake
-      // would release shares the transaction then leaves sitting out of the
-      // farm and no longer earning — a real loss, silent, and invisible on
-      // the verify screen; a smaller one simply cannot settle.
-      requireMinimumAccounts(layout.farmsUnstake.minimumCount)
-      if (!('withdraw' in intent.operation)) {
-        return refuse('instructionNotForOperation', 'farm unstake on a deposit')
-      }
-      requireOwner(context, accounts[layout.farmsUnstake.owner], 'unstake authority')
-      requireFarm(context, accounts[layout.farmsUnstake.farm])
-      requireFarmUserState(context, accounts[layout.farmsUnstake.userState])
+/**
+ * The sequence already refuses any other payload under the Memo program, so
+ * reaching here with different bytes is impossible — which is exactly why it
+ * is asserted rather than assumed: the tag is the only reason this program is
+ * allow-listed at all. No accounts, either: a memo listing accounts is the
+ * Memo program attesting that they signed, and attribution is not an
+ * attestation.
+ */
+const checkAttributionMemo = ({ position, data, accounts }: InstructionCheck) => {
+  requireNoAccounts(accounts, position, 'attribution memo')
+  if (!isAttributionMemoData(data)) {
+    refuse('malformedInstruction', `instruction ${position}: attribution memo`)
+  }
+}
 
-      const scaled = anchorU128Argument(data)
-      if (scaled === undefined) {
-        return refuse('malformedInstruction', `instruction ${position}: farms unstake argument`)
-      }
-      const expected = kaminoUnstakeShares(intent.operation.withdraw).baseUnits * kaminoFarmsStakeScale
-      if (scaled !== expected) {
-        refuse('amountMismatch', `unstaked share amount is ${scaled}, expected ${expected}`)
-      }
-      return
-    }
+/**
+ * The account and amount checks each matched instruction must pass, one entry
+ * per template step. A record rather than a switch so every check stands on
+ * its own, and so a template step added without a check is a type error
+ * rather than an instruction that silently goes unchecked.
+ */
+const instructionChecks: Record<KaminoInstructionKind, (check: InstructionCheck) => void> = {
+  computeUnitLimit: checkComputeUnitLimit,
+  computeUnitPrice: checkComputeUnitPrice,
+  createTokenAccount: checkCreateTokenAccount,
+  wrapSolTransfer: checkWrapSolTransfer,
+  syncNative: checkSyncNative,
+  closeTokenAccount: checkCloseTokenAccount,
+  kvaultDeposit: checkKvaultDeposit,
+  kvaultWithdraw: checkKvaultWithdraw,
+  farmsInitializeUser: checkFarmsInitializeUser,
+  farmsStake: checkFarmsStake,
+  farmsUnstake: checkFarmsUnstake,
+  farmsWithdrawUnstakedDeposits: checkFarmsWithdrawUnstakedDeposits,
+  attributionMemo: checkAttributionMemo,
+}
 
-    case 'farmsWithdrawUnstakedDeposits': {
-      // Moving what the unstake released into the user's own share account.
-      // It takes no argument — it always moves the whole released balance —
-      // so everything checkable here is an account, and the one that matters
-      // is the destination: the vault withdraw burns from that same account,
-      // and a destination belonging to anyone else would hand the position over.
-      requireMinimumAccounts(layout.farmsWithdrawUnstakedDeposits.minimumCount)
-      if (!('withdraw' in intent.operation)) {
-        return refuse('instructionNotForOperation', 'farm unstaked share withdrawal on a deposit')
-      }
-      if (!hasNoAnchorArgument(data)) {
-        return refuse(
+const validateInstruction = (context: Context, kind: KaminoInstructionKind, position: number) => {
+  const accounts = instructionAccounts(context, position)
+  instructionChecks[kind]({
+    context,
+    position,
+    data: context.transaction.message.compiledInstructions[position].data,
+    accounts,
+    requireMinimumAccounts: minimum => {
+      if (accounts.length < minimum) {
+        refuse(
           'malformedInstruction',
-          `instruction ${position}: farms withdrawUnstakedDeposits takes no argument`
+          `instruction ${position}: ${kaminoInstructionKindName[kind]} needs ${minimum} accounts`
         )
       }
-      requireOwner(context, accounts[layout.farmsWithdrawUnstakedDeposits.owner], 'unstaked share withdrawal authority')
-      requireFarm(context, accounts[layout.farmsWithdrawUnstakedDeposits.farm])
-      requireFarmUserState(context, accounts[layout.farmsWithdrawUnstakedDeposits.userState])
-      requireUserShareAccount(
-        context,
-        accounts[layout.farmsWithdrawUnstakedDeposits.userShareAccount],
-        'unstaked share destination'
-      )
-      return
-    }
-
-    case 'attributionMemo': {
-      // The sequence already refuses any other payload under the Memo
-      // program, so reaching here with different bytes is impossible — which
-      // is exactly why it is asserted rather than assumed: the tag is the
-      // only reason this program is allow-listed at all. No accounts, either:
-      // a memo listing accounts is the Memo program attesting that they
-      // signed, and attribution is not an attestation.
-      requireNoAccounts(accounts, position, 'attribution memo')
-      if (!isAttributionMemoData(data)) {
-        refuse('malformedInstruction', `instruction ${position}: attribution memo`)
-      }
-      return
-    }
-  }
+    },
+  })
 }
 
 /**
