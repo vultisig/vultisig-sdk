@@ -19,10 +19,27 @@ export {
 import * as evm from './evm'
 
 export { evm }
-export type { EvmBalance, EvmGasPrice, GetEvmBalancesParams, GetTokenApprovalsResult, TokenApproval } from './evm'
+export type {
+  BuildErc20ApprovalTxParams,
+  BuildErc20ApprovalTxResult,
+  Erc20ApprovalAmountMode,
+  Erc20ApprovalTxEnvelope,
+  Erc20ApprovalValidationHooks,
+  Erc20ApprovalValidationOptions,
+  EvmBalance,
+  EvmGasPrice,
+  GetEvmBalancesParams,
+  GetTokenApprovalsResult,
+  NormalizedErc20Approval,
+  ParseErc20ApprovalAmountParams,
+  ParseErc20ApprovalAmountResult,
+  TokenApproval,
+} from './evm'
 export {
   abiDecode,
   abiEncode,
+  buildErc20ApprovalTx,
+  DEFAULT_MAX_APPROVAL_TO_BALANCE_RATIO,
   encodeErc20Approve,
   encodeErc20Revoke,
   evmCall,
@@ -32,6 +49,7 @@ export {
   getEvmBalances,
   getTokenApprovals,
   MAX_UINT256,
+  parseErc20ApprovalAmount,
   resolve4ByteSelector,
   resolveEns,
 } from './evm'

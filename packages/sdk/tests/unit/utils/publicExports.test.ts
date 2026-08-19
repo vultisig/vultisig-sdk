@@ -85,6 +85,8 @@ describe('@vultisig/sdk public exports', () => {
   it('exports encodeErc20Approve, encodeErc20Revoke, MAX_UINT256 (ERC-20 approve/revoke calldata)', () => {
     expect(typeof sdk.encodeErc20Approve).toBe('function')
     expect(typeof sdk.encodeErc20Revoke).toBe('function')
+    expect(typeof sdk.buildErc20ApprovalTx).toBe('function')
+    expect(typeof sdk.parseErc20ApprovalAmount).toBe('function')
     expect(sdk.MAX_UINT256).toBe((1n << 256n) - 1n)
   })
 
