@@ -10,7 +10,7 @@ import { keccak256 } from 'viem'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { hashes as xrplHashes } from 'xrpl'
 
-import { RawBroadcastService } from '@/vault/services/RawBroadcastService'
+import { broadcastRawTx, RawBroadcastService } from '@/vault/services/RawBroadcastService'
 import { VaultError, VaultErrorCode } from '@/vault/VaultError'
 
 const makeRippleRawTx = () =>
@@ -848,6 +848,24 @@ describe('RawBroadcastService', () => {
     ).rejects.toMatchObject({
       code: VaultErrorCode.BroadcastFailed,
       message: expect.stringContaining('engine result'),
+    })
+  })
+
+  describe('broadcastRawTx (standalone, vault-free export)', () => {
+    it('broadcasts through the same chain-agnostic dispatch as the class method, without a vault instance', async () => {
+      mockGetEvmClient.mockReturnValue({
+        sendRawTransaction: vi.fn().mockResolvedValue('0xstandalonehash'),
+      })
+
+      const hash = await broadcastRawTx({ chain: Chain.Ethereum, rawTx: '0xabc' })
+
+      expect(hash).toBe('0xstandalonehash')
+    })
+
+    it('throws UnsupportedChain for chains without a raw broadcast path, same as the class method', async () => {
+      await expect(broadcastRawTx({ chain: Chain.Cardano, rawTx: '00' })).rejects.toMatchObject({
+        code: VaultErrorCode.UnsupportedChain,
+      })
     })
   })
 })
