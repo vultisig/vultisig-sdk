@@ -184,7 +184,9 @@ function addressToWord(addr: string): string {
 }
 
 function uintToHex(n: bigint | number, byteLength: number): string {
-  return BigInt(n).toString(16).padStart(byteLength * 2, '0')
+  return BigInt(n)
+    .toString(16)
+    .padStart(byteLength * 2, '0')
 }
 
 /** Hand-encode a CCTP V1 depositForBurn message per Circle's documented byte layout. */
