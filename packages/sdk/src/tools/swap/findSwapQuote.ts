@@ -13,6 +13,18 @@ import {
 import type { BoundSwapQuote, SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
 
 export type { FindSwapQuotesResult, SwapAffiliateConfig, SwapQuoteCandidate, SwapQuoteProviderExcludeName }
+export type {
+  GeneralSwapProviderRiskMetadata,
+  GeneralSwapQuotePolicy,
+  ResolveGeneralSwapQuotePolicyInput,
+} from '@vultisig/core-chain/swap/quote/generalSwapQuotePolicy'
+export {
+  DEFAULT_GENERAL_SWAP_QUOTE_SLIPPAGE_TOLERANCE_PERCENT,
+  generalSwapProviderRiskMetadata,
+  isSameChainEvmErc20SellForQuotePolicy,
+  resolveGeneralSwapQuotePolicy,
+  SAME_CHAIN_EVM_ERC20_SELL_EXCLUDED_PROVIDERS,
+} from '@vultisig/core-chain/swap/quote/generalSwapQuotePolicy'
 
 export type FindSwapQuoteParams = {
   fromChain: Chain

@@ -4,10 +4,21 @@ export type {
   BoundSwapQuote,
   FindSwapQuoteParams,
   FindSwapQuotesResult,
+  GeneralSwapProviderRiskMetadata,
+  GeneralSwapQuotePolicy,
+  ResolveGeneralSwapQuotePolicyInput,
   SwapQuote,
   SwapQuoteCandidate,
 } from './findSwapQuote'
-export { findSwapQuote, findSwapQuotes } from './findSwapQuote'
+export {
+  DEFAULT_GENERAL_SWAP_QUOTE_SLIPPAGE_TOLERANCE_PERCENT,
+  findSwapQuote,
+  findSwapQuotes,
+  generalSwapProviderRiskMetadata,
+  isSameChainEvmErc20SellForQuotePolicy,
+  resolveGeneralSwapQuotePolicy,
+  SAME_CHAIN_EVM_ERC20_SELL_EXCLUDED_PROVIDERS,
+} from './findSwapQuote'
 export type { JupiterQuoteResponse, JupiterSwapParams, JupiterSwapResult } from './jupiter'
 export {
   buildJupiterSwapTx,
