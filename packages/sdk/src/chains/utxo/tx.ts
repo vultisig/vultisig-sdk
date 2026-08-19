@@ -879,6 +879,11 @@ export function buildUtxoSendTx(opts: BuildUtxoSendOptions): UtxoTxBuilderResult
   const inputs = opts.utxos
   if (inputs.length === 0) throw new Error('no UTXOs provided')
   if (opts.amount <= 0n) throw new Error('amount must be greater than zero')
+  if (opts.amount <= spec.dustLimit) {
+    throw new Error(
+      `amount is dust for ${opts.chain}: amount=${opts.amount} dustLimit=${spec.dustLimit}. Send amount must be greater than dustLimit.`
+    )
+  }
 
   const inputTotal = inputs.reduce((s, u) => s + u.value, 0n)
 

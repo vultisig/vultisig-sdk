@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest'
 
-import { getUtxoChainSpec } from './tx'
+import { buildUtxoSendTx, getUtxoChainSpec } from './tx'
+
+const COMPRESSED_PUBKEY = Uint8Array.from(
+  '02'
+    .concat('aa'.repeat(32))
+    .match(/.{2}/g)!
+    .map(b => parseInt(b, 16))
+)
+
+const BTC_ADDRESS = 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4'
 
 // UTXO-02 (audit r2): the sdk keeps its OWN per-chain dustLimit map (UTXO_SPECS) separate from core's
 // minUtxo. Both must carry the corrected Litecoin P2WPKH dust — the shared standard 2_940n litoshi (LTC's
@@ -24,5 +33,19 @@ describe('getUtxoChainSpec — Litecoin dust threshold (UTXO-02)', () => {
 
   it('leaves Bitcoin unchanged', () => {
     expect(getUtxoChainSpec('Bitcoin').dustLimit).toBe(546n)
+  })
+
+  it('rejects primary send outputs at or below the chain dust threshold', () => {
+    expect(() =>
+      buildUtxoSendTx({
+        chain: 'Bitcoin',
+        fromAddress: BTC_ADDRESS,
+        toAddress: BTC_ADDRESS,
+        amount: getUtxoChainSpec('Bitcoin').dustLimit,
+        utxos: [{ hash: '11'.repeat(32), index: 0, value: 100_000n }],
+        feeRate: 1,
+        compressedPubKey: COMPRESSED_PUBKEY,
+      })
+    ).toThrow('amount is dust for Bitcoin: amount=546 dustLimit=546')
   })
 })
