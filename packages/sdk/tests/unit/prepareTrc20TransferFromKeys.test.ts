@@ -87,16 +87,16 @@ describe('prepareTrc20TransferFromKeys', () => {
     expect('memo' in tx).toBe(false)
   })
 
-  it('forwards a memo when provided (THORChain / exchange deposit memos)', () => {
-    const memo = 'SWAP:BTC.BTC:bc1qexample:0'
-    const tx = prepareTrc20TransferFromKeys({
-      contractAddress: USDT_CONTRACT,
-      from: FROM,
-      to: TO,
-      amount: '500000',
-      memo,
-    })
-    expect(tx.memo).toBe(memo)
+  it('rejects memo input instead of implying it is part of TRC-20 calldata', () => {
+    expect(() =>
+      prepareTrc20TransferFromKeys({
+        contractAddress: USDT_CONTRACT,
+        from: FROM,
+        to: TO,
+        amount: '500000',
+        memo: 'SWAP:BTC.BTC:bc1qexample:0',
+      })
+    ).toThrow(/memo is not supported/)
   })
 
   it('honors a custom feeLimitSun', () => {
