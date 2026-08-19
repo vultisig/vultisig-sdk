@@ -356,17 +356,19 @@ program
   .command('import <file>')
   .description('Import vault from .vult file')
   .option('--password <password>', 'Password to decrypt the vault file')
+  .option('--replace', 'Replace an existing compatible local vault share')
   .addHelpText(
     'after',
     `
 Examples:
   vultisig import ~/vault-backup.vult
-  vultisig import ~/vault-backup.vult --password mypassword`
+  vultisig import ~/vault-backup.vult --password mypassword
+  vultisig import ~/vault-backup.vult --replace`
   )
   .action(
-    withExit(async (file: string, options: { password?: string }) => {
+    withExit(async (file: string, options: { password?: string; replace?: boolean }) => {
       const context = await init(program.opts().vault)
-      await executeImport(context, file, options.password)
+      await executeImport(context, file, options.password, options.replace)
     })
   )
 
