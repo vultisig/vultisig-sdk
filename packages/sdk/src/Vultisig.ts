@@ -71,7 +71,7 @@ import { FastVault } from './vault/FastVault'
 import { SecureVault } from './vault/SecureVault'
 import { VaultBase } from './vault/VaultBase'
 import { VaultError, VaultErrorCode } from './vault/VaultError'
-import { VaultManager } from './VaultManager'
+import { type VaultImportOptions, VaultManager } from './VaultManager'
 
 // Re-export constants
 export {
@@ -960,6 +960,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    *
    * @param vultContent - The .vult file content as a string
    * @param password - Optional password for encrypted vaults
+   * @param options - Explicit conflict handling for an existing logical vault
    * @returns Imported vault instance
    *
    * @example
@@ -968,9 +969,9 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * const vault = await sdk.importVault(vultContent, 'password123')
    * ```
    */
-  async importVault(vultContent: string, password?: string): Promise<VaultBase> {
+  async importVault(vultContent: string, password?: string, options?: VaultImportOptions): Promise<VaultBase> {
     await this.ensureInitialized()
-    const { vault } = await this.vaultManager.importVaultWithResult(vultContent, password, notice => {
+    const { vault } = await this.vaultManager.importVaultWithResult(vultContent, password, options, notice => {
       this.emit('legacyVaultBackupMigrated', notice)
     })
 
