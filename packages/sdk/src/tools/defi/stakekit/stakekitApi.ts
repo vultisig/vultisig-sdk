@@ -388,9 +388,7 @@ export async function ensureTransactionsBuilt(
   apiKey?: string
 ): Promise<YieldActionResponse> {
   if (Array.isArray(action_response.transactions) && action_response.transactions.length > 0) {
-    const needsBuild = action_response.transactions.some(
-      t => t.status === 'CREATED' && t.unsignedTransaction == null
-    )
+    const needsBuild = action_response.transactions.some(t => t.status === 'CREATED' && t.unsignedTransaction == null)
     if (needsBuild) {
       const built = await Promise.all(
         action_response.transactions.map(async tx => {
