@@ -14,6 +14,7 @@ import { getTxStatus as coreTxStatus } from '@vultisig/core-chain/tx/status'
 import type { TxStatusResult } from '@vultisig/core-chain/tx/status/resolver'
 import { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
 import { vaultConfig } from '@vultisig/core-config'
+import { hasServer } from '@vultisig/core-mpc/devices/localPartyId'
 import { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
 import { fromCommVault } from '@vultisig/core-mpc/types/utils/commVault'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
@@ -87,15 +88,6 @@ export type VaultSaveOptions = {
    * local and persisted edits touch different top-level mutable fields.
    */
   conflictStrategy?: 'reject' | 'merge-metadata'
-}
-
-/**
- * Determine vault type based on signer names
- * Fast vaults have one signer that starts with "Server-"
- * Secure vaults have only device signers (no "Server-" prefix)
- */
-function determineVaultType(signers: string[]): 'fast' | 'secure' {
-  return signers.some(signer => signer.startsWith('Server-')) ? 'fast' : 'secure'
 }
 
 // ===== Vault-name / export-filename safety policy (single source of truth) =====
@@ -362,7 +354,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     }
 
     // Determine vault type
-    const vaultType = determineVaultType(this.coreVault.signers as string[])
+    const vaultType = hasServer(this.coreVault.signers) ? 'fast' : 'secure'
 
     // Build VaultData
     this.vaultData = {
