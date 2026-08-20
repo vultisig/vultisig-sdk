@@ -242,6 +242,21 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.isCosmosMemoWithinCap(rn.Chain.Osmosis, 'a'.repeat(257))).toBe(false)
   })
 
+  it('exports the Cosmos staking validator helpers from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(typeof rn.getCosmosValidators).toBe('function')
+    expect(typeof rn.getCosmosValidator).toBe('function')
+    expect(typeof rn.getValidatorsUrl).toBe('function')
+    expect(typeof rn.getValidatorUrl).toBe('function')
+    expect(rn.getValidatorsUrl(rn.Chain.Cosmos, { status: 'BOND_STATUS_BONDED', limit: 25 })).toContain(
+      'status=BOND_STATUS_BONDED'
+    )
+    expect(rn.getValidatorUrl(rn.Chain.Cosmos, 'cosmosvaloper1validator')).toContain(
+      '/validators/cosmosvaloper1validator'
+    )
+  })
+
   it('exports the generic CosmWasm execute message builder from the RN root surface', async () => {
     const sdk = await import('../../../../src/platforms/react-native/index')
 
