@@ -174,12 +174,15 @@ describe('getCosmosGovernanceProposals', () => {
     }
   )
 
-  it('rejects an unsupported chain', async () => {
-    await expect(
-      // @ts-expect-error — intentionally passing a non-gov chain
-      getCosmosGovernanceProposals({ chain: 'Bitcoin' })
-    ).rejects.toThrow(/unsupported chain/)
-  })
+  it.each(['Bitcoin', 'toString', 'constructor', '__proto__'] as const)(
+    'rejects unsupported chain input %s for proposal reads',
+    async chain => {
+      await expect(
+        // @ts-expect-error — intentionally passing a non-gov chain-like runtime string
+        getCosmosGovernanceProposals({ chain })
+      ).rejects.toThrow(/unsupported chain/)
+    }
+  )
 })
 
 describe('prepareCosmosVote', () => {
@@ -307,11 +310,21 @@ describe('prepareCosmosVote', () => {
     ).rejects.toThrow(/does not match expected "cosmos"/)
   })
 
-  it('rejects a malformed bech32 address', async () => {
+  it('rejects a malformed bech32 voter address', async () => {
     await expect(
-      prepareCosmosVote({ chain: 'Cosmos', voter: 'not-an-address', proposalId: '1', option: 'yes' })
-    ).rejects.toThrow(/malformed bech32/)
+      prepareCosmosVote({ chain: 'Cosmos', voter: 'not-bech32', proposalId: '1', option: 'yes' })
+    ).rejects.toThrow(/invalid voter address: malformed bech32/)
   })
+
+  it.each(['toString', 'constructor', '__proto__'] as const)(
+    'rejects unsupported chain input %s for vote prep',
+    async chain => {
+      await expect(
+        // @ts-expect-error — intentionally passing a non-gov chain-like runtime string
+        prepareCosmosVote({ chain, voter: COSMOS_ADDR, proposalId: '1', option: 'yes' })
+      ).rejects.toThrow(/unsupported chain/)
+    }
+  )
 
   it('rejects a non-positive proposalId', async () => {
     const fetchImpl = mockFetch([authRoute('1', '0')])
