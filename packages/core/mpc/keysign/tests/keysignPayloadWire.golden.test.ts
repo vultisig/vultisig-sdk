@@ -66,12 +66,12 @@ const stakeRujiWireHex =
 // to serializer-path code (e.g. normalizeKeysignPayloadFromJson,
 // mapSwapPayload) that alters wire bytes for ANY fixture - not just the one
 // rich fixture pinned below - will fail here.
-const expectedCorpusDigest = '648ead4d4aa03f3683d091c84275fc0c8cf87d9ef991a2e4e0b996bbdf745ca8'
+const expectedCorpusDigest = '71a0bc013214cd0f4812988c5668783fb08c2421b5f8dc999e6aaa69447245d9'
 
 const expectedPerFileDigests: Record<string, string> = {
   'arb.json': 'b11f8989372fd8a51909c37b5da0d79138a647359685b916a2e905973d585e1f',
   'bsc.json': '123820d49abf4400c28d42789d9f5aee1191bd06ec5010cc800c360d53efbfb9',
-  'cardano.json': 'e1d344954b676398daaa2bd42c06dd0bfeadfc315cd0b0173aedd11bb1c7fbad',
+  'cardano.json': '9b6946664b8c02fe093bddfe12b8755eb5d17af14c50279bb7856aafa3adf1f6',
   'cosmos-sdk-sign-amino.json': '18b4811f7b03e6026c409445f1a37fc63a107842e15091de5af4f55e4c0c1a84',
   'cosmos-sdk-sign-direct.json': '658ce08b15e5f3d9fb0688ea44a93819064bcf1d3f7a996f435e1f73b607bd25',
   'cosmos.json': '757dc75b8dc2f077c990d51e0fb2849128af39f4b006fb34b4a4053243bfb93d',
