@@ -111,12 +111,17 @@ const GOV_CHAIN_CONFIG: Record<GovChain, GovChainConfig> = {
 
 const isGovChain = (chain: string): chain is GovChain => Object.prototype.hasOwnProperty.call(GOV_CHAIN_CONFIG, chain)
 
-const GOV_CHAIN_BY_ID = Object.fromEntries(
-  Object.entries(GOV_CHAIN_CONFIG).map(([chain, config]) => [config.chainId, chain])
-) as Record<GovChainId, GovChain>
+const GOV_CHAIN_BY_ID = Object.assign(
+  Object.create(null) as Record<GovChainId, GovChain>,
+  Object.fromEntries(Object.entries(GOV_CHAIN_CONFIG).map(([chain, config]) => [config.chainId, chain]))
+)
 
-const resolveGovChain = (input: GovChainInput): GovChain | undefined =>
-  isGovChain(input) ? input : GOV_CHAIN_BY_ID[input as GovChainId]
+const resolveGovChain = (input: GovChainInput): GovChain | undefined => {
+  if (isGovChain(input)) return input
+  return Object.prototype.hasOwnProperty.call(GOV_CHAIN_BY_ID, input)
+    ? GOV_CHAIN_BY_ID[input as GovChainId]
+    : undefined
+}
 
 const SUPPORTED_CHAINS = [...Object.keys(GOV_CHAIN_CONFIG), ...Object.keys(GOV_CHAIN_BY_ID)].sort().join(', ')
 
