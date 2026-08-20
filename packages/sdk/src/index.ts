@@ -1096,6 +1096,7 @@ export {
   TRC20_TRANSFER_SELECTOR,
   utxoFeeRate,
   VerifierClient,
+  yieldNetworkToCanonicalChain,
 } from './tools'
 
 // The protobuf builder is environment-neutral despite its historical RN path.

@@ -153,6 +153,13 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.getCustomRpcOverride(sdk.Chain.Ethereum)).toBeUndefined()
   })
 
+  it('exports the canonical yield.xyz network -> chain mapping (sdk#1953)', () => {
+    expect(typeof sdk.yieldNetworkToCanonicalChain).toBe('function')
+    expect(sdk.yieldNetworkToCanonicalChain('ethereum')).toBe('Ethereum')
+    expect(sdk.yieldNetworkToCanonicalChain('solana')).toBe('Solana')
+    expect(sdk.yieldNetworkToCanonicalChain('not-a-real-network')).toBeNull()
+  })
+
   it('exports prepareTrc20TransferFromKeys (pure-crypto TRC-20 builder for mcp-ts/backend)', () => {
     expect(typeof sdk.prepareTrc20TransferFromKeys).toBe('function')
     expect(sdk.TRC20_TRANSFER_SELECTOR).toBe('transfer(address,uint256)')

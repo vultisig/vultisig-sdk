@@ -29,6 +29,7 @@ import {
   getYield,
   searchYields,
 } from './stakekitApi'
+import { YIELD_EVM_NETWORK_SLUGS, yieldNetworkToCanonicalChain } from './yieldNetworkChain'
 
 // Re-export all types and scan request builders from the API module
 export type {
@@ -50,6 +51,9 @@ export type {
   YieldTransaction,
 } from './stakekitApi'
 export { buildYieldActionScanRequest, buildYieldStepScanRequest } from './stakekitApi'
+// Canonical yield.xyz network -> Vultisig chain mapping (sdk#1953). Exported
+// so app/backend consumers can import this instead of growing their own copy.
+export { yieldNetworkToCanonicalChain } from './yieldNetworkChain'
 
 // --- Inline withScanRequest helper ---
 // (mcp-ts's withScanRequest isn't available in the SDK — inline it here)
@@ -58,61 +62,9 @@ function withScanRequest<T extends object>(scanRequest: ScanRequest, rest: T): {
   return { scan_request: scanRequest, ...rest }
 }
 
-// --- Network mappings ---
-
-/**
- * Map a yield.xyz network slug to the PascalCase chain name the app uses everywhere.
- * Mirrors mcp-ts's `yieldNetworkToCanonicalChain`.
- */
-function yieldNetworkToCanonicalChain(network: string): string | null {
-  switch (network) {
-    case 'ethereum':
-      return 'Ethereum'
-    case 'arbitrum':
-      return 'Arbitrum'
-    case 'base':
-      return 'Base'
-    case 'optimism':
-      return 'Optimism'
-    case 'polygon':
-      return 'Polygon'
-    case 'avalanche-c':
-      return 'Avalanche'
-    case 'binance':
-      return 'BSC'
-    case 'cronos':
-      return 'CronosChain'
-    case 'zksync':
-      return 'Zksync'
-    case 'sei':
-      return 'Sei'
-    case 'solana':
-      return 'Solana'
-    case 'sui':
-      return 'Sui'
-    case 'tron':
-      return 'Tron'
-    case 'ton':
-      return 'Ton'
-    default:
-      return null
-  }
-}
-
 // EVM-family network slugs — EVM steps get the flat {to, value, data} shape (NO tx_encoding).
 // Non-EVM steps get the tx_encoding wrapper.
-const EVM_NETWORKS = new Set([
-  'ethereum',
-  'arbitrum',
-  'base',
-  'optimism',
-  'polygon',
-  'avalanche-c',
-  'binance',
-  'cronos',
-  'zksync',
-  'sei',
-])
+const EVM_NETWORKS = YIELD_EVM_NETWORK_SLUGS
 
 // --- parseActionDisplay (LOAD-BEARING — port byte-identical from yield-tools.ts:158-484) ---
 
