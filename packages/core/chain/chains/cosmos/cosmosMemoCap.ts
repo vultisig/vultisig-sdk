@@ -54,6 +54,47 @@ export const getCosmosMemoMaxBytesByChainId = (chainId: string): number => {
 }
 
 /**
+ * Per-chain caps on the ICS-20 **packet** memo (`MsgTransfer.memo`) - a
+ * structurally different field from the outer `TxBody.memo` capped by
+ * {@link getCosmosMemoMaxBytesByChainId}, and one that legitimately carries far
+ * more data (PFM / forward payloads).
+ *
+ * MEASURED EVIDENCE (152 real columbus-5 Skip envelopes, 2026-05-30 ->
+ * 2026-07-18):
+ *   80 successes: packet memo <= 1001 bytes
+ *   72 failures:  packet memo >= 1122 bytes
+ * Perfectly separated, so the true cap is bracketed in (1001, 1122]; 1024 is
+ * the round value inside that bracket. Every one of those 152 envelopes has an
+ * EMPTY outer memo - the payload lives entirely in the packet memo for
+ * IBC-source legs - which is exactly why the outer-memo check alone never sees
+ * the overflow.
+ *
+ * DO NOT default this table to 256 or reuse `getCosmosMemoMaxBytesByChainId`
+ * for packet memos. The 80 WORKING USTC<->LUNC routes carry packet memos of
+ * 698-1001 bytes on columbus-5 itself, so a 256-byte packet cap would reject
+ * every one of those healthy routes. Chains with no explicit entry default to a
+ * permissive ibc-go-scale ceiling instead, because most do not cap this field
+ * tightly and guessing tight here silently blocks working corridors.
+ */
+const COSMOS_PACKET_MEMO_MAX_BYTES_BY_CHAIN_ID: Readonly<Record<string, number>> = {
+  'columbus-5': 1024,
+}
+
+/** Permissive ibc-go-scale ceiling for chains with no measured packet-memo cap. */
+export const COSMOS_PACKET_MEMO_DEFAULT_MAX_BYTES = 32768
+
+/**
+ * The byte cap for a chain's ICS-20 packet memo, keyed by live chain-id.
+ *
+ * Deliberately NOT the outer-memo cap: a packet memo that exceeds this is
+ * rejected at broadcast, but one that merely exceeds the *outer* cap is fine,
+ * and conflating them rejects healthy routes. Check both fields, each against
+ * its own cap.
+ */
+export const getCosmosPacketMemoMaxBytesByChainId = (chainId: string): number =>
+  COSMOS_PACKET_MEMO_MAX_BYTES_BY_CHAIN_ID[chainId] ?? COSMOS_PACKET_MEMO_DEFAULT_MAX_BYTES
+
+/**
  * True when `memo`'s UTF-8 byte length fits within `chain`'s live
  * `MaxMemoCharacters` cap. Uses `TextEncoder` (not Node's `Buffer`) so this
  * is safe to call from the RN bridge too.

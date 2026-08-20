@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest'
 
 import {
   COSMOS_MEMO_DEFAULT_MAX_BYTES,
+  COSMOS_PACKET_MEMO_DEFAULT_MAX_BYTES,
   getCosmosMemoMaxBytes,
   getCosmosMemoMaxBytesByChainId,
+  getCosmosPacketMemoMaxBytesByChainId,
   isCosmosMemoWithinCap,
 } from './cosmosMemoCap'
 
@@ -78,5 +80,33 @@ describe('isCosmosMemoWithinCap', () => {
     const emojiMemo = '🚀'.repeat(65) // 260 bytes, over TerraClassic's 256 cap
     expect(emojiMemo.length).toBeLessThan(260)
     expect(isCosmosMemoWithinCap(CosmosChain.TerraClassic, emojiMemo)).toBe(false)
+  })
+})
+
+describe('getCosmosPacketMemoMaxBytesByChainId', () => {
+  it('caps the columbus-5 packet memo at the measured bracket, NOT the 256B outer cap', () => {
+    expect(getCosmosPacketMemoMaxBytesByChainId('columbus-5')).toBe(1024)
+  })
+
+  // This is the whole point of a separate table, and the assertion most worth
+  // keeping. 80 measured WORKING USTC<->LUNC routes carry columbus-5 packet
+  // memos of 698-1001 bytes. Reusing the outer 256B cap here - the obvious
+  // "simplification" - rejects every one of them.
+  it('admits the 698-1001 byte packet memos that real working routes carry', () => {
+    const cap = getCosmosPacketMemoMaxBytesByChainId('columbus-5')
+    expect(cap).toBeGreaterThan(1001)
+    expect(cap).toBeGreaterThan(getCosmosMemoMaxBytesByChainId('columbus-5'))
+  })
+
+  // The measured failures start at 1122 bytes, so the cap must sit below that.
+  it('stays under the measured failure floor of 1122 bytes', () => {
+    expect(getCosmosPacketMemoMaxBytesByChainId('columbus-5')).toBeLessThan(1122)
+  })
+
+  it('defaults unmeasured chains to the permissive ceiling, not the outer default', () => {
+    expect(getCosmosPacketMemoMaxBytesByChainId('cosmoshub-4')).toBe(COSMOS_PACKET_MEMO_DEFAULT_MAX_BYTES)
+    expect(getCosmosPacketMemoMaxBytesByChainId('osmosis-1')).toBe(COSMOS_PACKET_MEMO_DEFAULT_MAX_BYTES)
+    expect(getCosmosPacketMemoMaxBytesByChainId('agoric-3')).toBe(COSMOS_PACKET_MEMO_DEFAULT_MAX_BYTES)
+    expect(COSMOS_PACKET_MEMO_DEFAULT_MAX_BYTES).toBeGreaterThan(COSMOS_MEMO_DEFAULT_MAX_BYTES)
   })
 })

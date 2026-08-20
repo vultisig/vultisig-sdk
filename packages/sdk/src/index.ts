@@ -274,8 +274,10 @@ export {
 // other cosmos chain) and mcp-ts's own copy of the same table.
 export {
   COSMOS_MEMO_DEFAULT_MAX_BYTES,
+  COSMOS_PACKET_MEMO_DEFAULT_MAX_BYTES,
   getCosmosMemoMaxBytes,
   getCosmosMemoMaxBytesByChainId,
+  getCosmosPacketMemoMaxBytesByChainId,
   isCosmosMemoWithinCap,
 } from '@vultisig/core-chain/chains/cosmos/cosmosMemoCap'
 

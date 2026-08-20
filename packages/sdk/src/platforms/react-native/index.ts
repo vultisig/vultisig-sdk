@@ -87,8 +87,10 @@ export {
 // entrypoint (sdk#1538) so RN consumers don't hand-roll their own memo-cap table.
 export {
   COSMOS_MEMO_DEFAULT_MAX_BYTES,
+  COSMOS_PACKET_MEMO_DEFAULT_MAX_BYTES,
   getCosmosMemoMaxBytes,
   getCosmosMemoMaxBytesByChainId,
+  getCosmosPacketMemoMaxBytesByChainId,
   isCosmosMemoWithinCap,
 } from '@vultisig/core-chain/chains/cosmos/cosmosMemoCap'
 
