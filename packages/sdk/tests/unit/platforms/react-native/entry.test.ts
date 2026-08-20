@@ -217,6 +217,18 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(deriveAddressFromPublicKey).toHaveBeenNthCalledWith(2, 60, publicKey)
   })
 
+  it('exports isValidTokenId (WalletCoreLike) for non-address token families from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    // Sui and a malformed Ripple id never reach the walletCore-dependent
+    // address-validation branch, so an empty stub is safe here.
+    const walletCore = {} as import('@vultisig/walletcore-native').WalletCoreLike
+
+    expect(typeof rn.isValidTokenId).toBe('function')
+    expect(rn.isValidTokenId({ chain: rn.Chain.Sui, id: '0x2::sui::SUI', walletCore })).toBe(true)
+    expect(rn.isValidTokenId({ chain: rn.Chain.Sui, id: 'not-a-struct-tag', walletCore })).toBe(false)
+    expect(rn.isValidTokenId({ chain: rn.Chain.Ripple, id: 'not-a-composite-id', walletCore })).toBe(false)
+  })
+
   it('exports the shared THORChain secured-asset catalog from the RN entry', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
