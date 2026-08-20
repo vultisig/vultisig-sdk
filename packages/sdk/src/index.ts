@@ -123,6 +123,12 @@ export { parseThorSwapMemo } from './utils/thorSwapMemo'
 export type { UtxoChainName } from './chains/utxo/addressBrand'
 export { assertUtxoAddressBrand, isUtxoAddressBrandValid } from './chains/utxo/addressBrand'
 
+// Custom TOKEN id validation (as opposed to the address validation above).
+// Most chains identify a token by its address (contract/mint), but Sui uses a
+// Move struct tag and XRPL uses a composite currency.issuer id — this covers
+// those non-address token families too.
+export { isValidTokenId } from '@vultisig/core-chain/utils/isValidTokenId'
+
 // ============================================================================
 // PUBLIC API - Tx Shape Normalization (pure, vault-free)
 // ============================================================================
