@@ -132,7 +132,9 @@ test.after(async () => {
 })
 
 function startDevServer() {
-  const devArgs = ['workspace', '@vultisig/example-browser', 'dev', '--host', '127.0.0.1', '--port', '0']
+  // The preceding build test already prepares the local SDK. Start Vite directly
+  // so this assertion does not repeat the several-minute SDK build via `predev`.
+  const devArgs = ['workspace', '@vultisig/example-browser', 'exec', 'vite', '--host', '127.0.0.1', '--port', '0']
   const fullDevCommand = formatShellCommand('yarn', devArgs)
   const child = spawn('yarn', devArgs, {
     cwd: repoRoot,
