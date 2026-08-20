@@ -725,4 +725,11 @@ export const stakekit = {
   buildEnter: stakekitBuildEnter,
   buildExit: stakekitBuildExit,
   buildManage: stakekitBuildManage,
+  // Canonical display/parser/validation helpers (issue #1913), promoted
+  // under their existing canonical names, no aliasing, so `sdk.defi.stakekit.*`
+  // matches the flat exports 1:1.
+  parseActionDisplay,
+  buildYieldActionScanRequest,
+  validateStakekitActionAddress,
+  validateStakekitActionInput,
 } as const

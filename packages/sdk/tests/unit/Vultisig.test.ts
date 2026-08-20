@@ -112,6 +112,50 @@ describe('Vultisig', () => {
     })
   })
 
+  describe('defi.stakekit namespace', () => {
+    it('exposes the full sdk.defi.stakekit surface on a fresh instance', () => {
+      expect(sdk.defi.stakekit).toBeDefined()
+      expect(typeof sdk.defi.stakekit.search).toBe('function')
+      expect(typeof sdk.defi.stakekit.details).toBe('function')
+      expect(typeof sdk.defi.stakekit.balances).toBe('function')
+      expect(typeof sdk.defi.stakekit.buildEnter).toBe('function')
+      expect(typeof sdk.defi.stakekit.buildExit).toBe('function')
+      expect(typeof sdk.defi.stakekit.buildManage).toBe('function')
+      expect(typeof sdk.defi.stakekit.parseActionDisplay).toBe('function')
+      expect(typeof sdk.defi.stakekit.buildYieldActionScanRequest).toBe('function')
+      expect(typeof sdk.defi.stakekit.validateStakekitActionAddress).toBe('function')
+      expect(typeof sdk.defi.stakekit.validateStakekitActionInput).toBe('function')
+    })
+
+    it('sdk.defi.stakekit.validateStakekitActionAddress delegates to the canonical implementation', () => {
+      expect(sdk.defi.stakekit.validateStakekitActionAddress('0x' + '1'.repeat(40))).toBeNull()
+      expect(sdk.defi.stakekit.validateStakekitActionAddress('0x' + '1'.repeat(41))).toMatch(/Invalid 0x-prefixed/)
+    })
+
+    it('sdk.defi.stakekit.validateStakekitActionInput delegates to the canonical implementation', () => {
+      expect(sdk.defi.stakekit.validateStakekitActionInput('0x' + '1'.repeat(40), '1.5')).toBeNull()
+      expect(sdk.defi.stakekit.validateStakekitActionInput('0x' + '1'.repeat(40), 'not-a-number')).toMatch(
+        /Invalid amount/
+      )
+    })
+
+    it('sdk.defi.stakekit.parseActionDisplay is the byte-identical canonical implementation', () => {
+      const result = sdk.defi.stakekit.parseActionDisplay({
+        id: 'action-1',
+        intent: 'ENTER',
+        type: 'stake',
+        yieldId: 'ethereum-eth-native-staking',
+        amount: '1',
+        amountRaw: '1000000000000000000',
+        amountUsd: '3000',
+        transactions: [],
+      })
+
+      expect(result.provider).toBe('yield_xyz')
+      expect(result.transactions).toEqual([])
+    })
+  })
+
   describe('supported chains', () => {
     it('should return all supported chains', () => {
       const chains = SUPPORTED_CHAINS
