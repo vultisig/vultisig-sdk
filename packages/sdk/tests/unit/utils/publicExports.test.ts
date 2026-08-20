@@ -82,6 +82,14 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.evmCheckAllowance).toBe('function')
   })
 
+  it('exports provider-aware swap arrival status normalization', () => {
+    expect(typeof sdk.getSwapArrivalStatus).toBe('function')
+    expect(typeof sdk.Vultisig.getSwapArrivalStatus).toBe('function')
+    expect(typeof sdk.isSwapArrivalStatusTerminal).toBe('function')
+    expect(typeof sdk.SwapArrivalStatusRequestError).toBe('function')
+    expect(sdk.swapArrivalProviders).toEqual(['thorchain', 'mayachain', 'skip', 'li.fi'])
+  })
+
   it('exports encodeErc20Approve, encodeErc20Revoke, MAX_UINT256 (ERC-20 approve/revoke calldata)', () => {
     expect(typeof sdk.encodeErc20Approve).toBe('function')
     expect(typeof sdk.encodeErc20Revoke).toBe('function')
