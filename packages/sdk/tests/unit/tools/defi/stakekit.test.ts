@@ -185,6 +185,88 @@ describe('sdk.defi.stakekit', () => {
     })
   })
 
+  // /yields/enabled returns ONLY the products a given project's API key may
+  // deposit into. The cache key omitted the credential entirely, so the first
+  // caller's allowed set was served to every other caller for the full 5-minute
+  // TTL - leaking one project's enabled products to another AND hiding products
+  // the second project actually has.
+  //
+  // The module-level cache persists across tests in this file, so each case
+  // below uses a `type` value no other test uses, keeping it off shared entries.
+  describe('enabled-yield cache is scoped per API key (sdk#1789)', () => {
+    const okOnce = (products: unknown[]) =>
+      ({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: products, hasNextPage: false }),
+        text: async () => '',
+      }) as Response
+
+    it("does not serve one API key's enabled set to a different key", async () => {
+      const alpha = makeProduct({ id: 'ethereum-eth-lido-staking' })
+      const beta = makeProduct({ id: 'ethereum-usdc-aave-v3-lending' })
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(okOnce([alpha]))
+        .mockResolvedValueOnce(okOnce([beta]))
+      globalThis.fetch = fetchMock
+
+      const q = { network: 'ethereum', type: 'iso-two-keys' }
+      const first = await stakekitSearch({ ...q, apiKey: 'project-key-AAA' })
+      const second = await stakekitSearch({ ...q, apiKey: 'project-key-BBB' })
+
+      // Identical query, different credential -> must actually be fetched again.
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      expect(first[0].id).toBe('ethereum-eth-lido-staking')
+      expect(second[0].id).toBe('ethereum-usdc-aave-v3-lending')
+    })
+
+    it('treats an unauthenticated call as its own scope, not a keyed one', async () => {
+      const keyed = makeProduct({ id: 'ethereum-eth-lido-staking' })
+      const anon = makeProduct({ id: 'ethereum-usdc-aave-v3-lending' })
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(okOnce([keyed]))
+        .mockResolvedValueOnce(okOnce([anon]))
+      globalThis.fetch = fetchMock
+
+      const q = { network: 'ethereum', type: 'iso-anon' }
+      const withKey = await stakekitSearch({ ...q, apiKey: 'project-key-AAA' })
+      const withoutKey = await stakekitSearch(q)
+
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      expect(withKey[0].id).toBe('ethereum-eth-lido-staking')
+      expect(withoutKey[0].id).toBe('ethereum-usdc-aave-v3-lending')
+    })
+
+    // The other half: scoping must not defeat caching for the caller it belongs
+    // to, or this trades a correctness bug for hammering the upstream.
+    it('still caches when the same key repeats the same query', async () => {
+      const product = makeProduct({ id: 'ethereum-eth-lido-staking' })
+      const fetchMock = vi.fn().mockResolvedValue(okOnce([product]))
+      globalThis.fetch = fetchMock
+
+      const q = { network: 'ethereum', type: 'iso-same-key', apiKey: 'project-key-AAA' }
+      await stakekitSearch(q)
+      await stakekitSearch(q)
+
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    })
+
+    // Surrounding whitespace is not a different credential.
+    it('does not split the cache on incidental whitespace around the key', async () => {
+      const product = makeProduct({ id: 'ethereum-eth-lido-staking' })
+      const fetchMock = vi.fn().mockResolvedValue(okOnce([product]))
+      globalThis.fetch = fetchMock
+
+      const q = { network: 'ethereum', type: 'iso-trim' }
+      await stakekitSearch({ ...q, apiKey: 'project-key-AAA' })
+      await stakekitSearch({ ...q, apiKey: '  project-key-AAA  ' })
+
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    })
+  })
+
   describe('parseActionDisplay', () => {
     it('EVM steps: flat shape with NO tx_encoding field, provider: "yield_xyz" at top level', () => {
       const resp = makeEvmActionResponse()
