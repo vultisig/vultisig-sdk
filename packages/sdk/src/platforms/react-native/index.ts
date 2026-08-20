@@ -148,6 +148,7 @@ export type { WalletCoreLike } from '@vultisig/walletcore-native'
 // RN wrappers accept WalletCoreLike from @vultisig/walletcore-native
 // so consumers don't need to cast to @trustwallet/wallet-core's WalletCore.
 export { deriveAddress, getCoinType, getPublicKey, isValidAddress } from './chainHelpers'
+export { tendermintRpcUrl } from '@vultisig/core-chain/chains/cosmos/tendermintRpcUrl'
 
 // MPC keysign (uses MpcEngine — no direct WASM imports)
 export { keysign } from '@vultisig/core-mpc/keysign'
