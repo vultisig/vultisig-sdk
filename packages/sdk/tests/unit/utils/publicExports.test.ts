@@ -1,5 +1,6 @@
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
+import * as isValidTokenIdModule from '@vultisig/core-chain/utils/isValidTokenId'
 import { describe, expect, it } from 'vitest'
 
 import * as sdk from '../../../src/index'
@@ -151,6 +152,18 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.getCustomRpcOverrides()).toEqual({ [sdk.Chain.Ethereum]: 'https://rpc.example' })
     sdk.clearCustomRpcOverride(sdk.Chain.Ethereum)
     expect(sdk.getCustomRpcOverride(sdk.Chain.Ethereum)).toBeUndefined()
+  })
+
+  it('exports isValidTokenId for non-address token families (Sui struct tags, XRPL currency.issuer)', () => {
+    expect(sdk.isValidTokenId).toBe(isValidTokenIdModule.isValidTokenId)
+
+    // Sui + a malformed Ripple id never reach the walletCore-dependent
+    // address-validation branch, so these are safe to exercise for real here.
+    expect(sdk.isValidTokenId({ chain: sdk.Chain.Sui, id: '0x2::sui::SUI', walletCore: {} as never })).toBe(true)
+    expect(sdk.isValidTokenId({ chain: sdk.Chain.Sui, id: 'not-a-struct-tag', walletCore: {} as never })).toBe(false)
+    expect(sdk.isValidTokenId({ chain: sdk.Chain.Ripple, id: 'not-a-composite-id', walletCore: {} as never })).toBe(
+      false
+    )
   })
 
   it('exports prepareTrc20TransferFromKeys (pure-crypto TRC-20 builder for mcp-ts/backend)', () => {
