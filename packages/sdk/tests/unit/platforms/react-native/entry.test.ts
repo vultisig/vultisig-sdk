@@ -3,6 +3,7 @@ import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc
 import { AuthInfo, SignDoc, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 
+import * as sdkRn from '../../../../src/platforms/react-native/index'
 import { cosmosTxFeeGasParityCases } from '../../../fixtures/cosmosTxFeeGasParity'
 
 process.env.VULTISIG_STRICT_SINGLETON = '0'
@@ -94,6 +95,18 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(storage).toBeDefined()
     expect(typeof storage.get).toBe('function')
     expect(rn.DEFAULT_CHAINS).toBe(rn.defaultChains)
+  })
+
+  it('re-exports root swap helpers needed by React Native consumers', () => {
+    expect(typeof sdkRn.acrossQuote).toBe('function')
+    expect(Array.isArray(sdkRn.acrossSupportedChains)).toBe(true)
+    expect(typeof sdkRn.buildJupiterSwapTx).toBe('function')
+    expect(typeof sdkRn.resolveJupiterFeeAccount).toBe('function')
+    expect(typeof sdkRn.runSkipSwap).toBe('function')
+    expect(typeof sdkRn.skipChainIdToChainName).toBe('function')
+    expect(typeof sdkRn.findSwapQuote).toBe('function')
+    expect(sdkRn.SOL_NATIVE_MINT).toBe('So11111111111111111111111111111111111111112')
+    expect(sdkRn.JUPITER_PLATFORM_FEE_BPS).toBe(50)
   })
 
   it('exports default chain canonicals on the RN entrypoint', async () => {
