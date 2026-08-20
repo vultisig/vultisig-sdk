@@ -5,18 +5,6 @@
  * encode calldata directly from the public contract ABIs via viem.
  */
 
-export const RIVER_FACTORY_ABI = [
-  { type: 'function', name: 'troveManagerCount', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
-  {
-    type: 'function',
-    name: 'troveManagers',
-    stateMutability: 'view',
-    inputs: [{ type: 'uint256' }],
-    outputs: [{ type: 'address' }],
-  },
-  { type: 'function', name: 'gasCompensation', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
-] as const
-
 export const RIVER_TROVE_MANAGER_ABI = [
   { type: 'function', name: 'collateralToken', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
   { type: 'function', name: 'sortedTroves', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
