@@ -118,9 +118,7 @@ const GOV_CHAIN_BY_ID = Object.assign(
 
 const resolveGovChain = (input: GovChainInput): GovChain | undefined => {
   if (isGovChain(input)) return input
-  return Object.prototype.hasOwnProperty.call(GOV_CHAIN_BY_ID, input)
-    ? GOV_CHAIN_BY_ID[input as GovChainId]
-    : undefined
+  return Object.prototype.hasOwnProperty.call(GOV_CHAIN_BY_ID, input) ? GOV_CHAIN_BY_ID[input as GovChainId] : undefined
 }
 
 const SUPPORTED_CHAINS = [...Object.keys(GOV_CHAIN_CONFIG), ...Object.keys(GOV_CHAIN_BY_ID)].sort().join(', ')
