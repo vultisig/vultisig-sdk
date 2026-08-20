@@ -124,10 +124,15 @@ describe('acrossQuote', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('rejects a non-Ethereum origin (current factory slice)', async () => {
+  it('rejects a non-Ethereum origin (current factory slice) — runtime defense-in-depth even for a caller that bypasses the sdk#1906-narrowed sourceChain type', async () => {
     await expect(
       acrossQuote({
-        sourceChain: 'Base',
+        // sdk#1906 narrowed sourceChain's TYPE to the literal 'Ethereum' so the public
+        // contract stops advertising multi-origin support it doesn't have. The runtime
+        // check stays regardless — a JS caller, or a TS caller going through `as any`,
+        // can still reach this path, so the cast here is deliberate: it's exercising
+        // the runtime guard, not the type system.
+        sourceChain: 'Base' as unknown as 'Ethereum',
         destinationChain: 'Arbitrum',
         inputToken: BASE_USDC,
         outputToken: ETH_USDC,
