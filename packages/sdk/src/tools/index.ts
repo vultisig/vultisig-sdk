@@ -235,10 +235,14 @@ export {
 
 // DeFi protocol primitives (sdk.defi.*) — build UNSIGNED calldata/msgs only
 export type {
+  ArkisPoolKind,
+  ArkisUnsignedTx,
   BalancerTokenApi,
   BalancerV3SwapCalldata,
   BalancerV3SwapKind,
   BalancerV3SwapPath,
+  BuildArkisSupplyParams,
+  BuildArkisSupplyResult,
   BuildBalancerV3SwapCalldataParams,
   BuildBuyPtParams,
   BuildGlifRedeemParams,
@@ -257,6 +261,7 @@ export type {
   PendleMarketSummary,
   PendlePtBuildResult,
   PendleUnsignedTx,
+  ResolveArkisPoolKindResult,
   ScanRequest,
   UnsupportedScanRequest,
   Validator,
@@ -273,6 +278,9 @@ export type {
   YieldTransaction,
 } from './defi'
 export {
+  ARKIS_BOOK_URLS,
+  ARKIS_OFFICIAL_ADDRESSES,
+  buildArkisSupplyTx,
   buildBalancerV3SwapCalldata,
   buildBuyPt,
   buildGlifRedeemSticnt,
@@ -287,12 +295,14 @@ export {
   glifPoolWriteAbi,
   isPendleChain,
   parseActionDisplay,
+  parseArkisTokenAmount,
   pendle,
   PENDLE_ROUTER_V4,
   PENDLE_SUPPORTED_CHAINS,
   PendleBuildError,
   pendleMarket,
   pendleMarkets,
+  resolveArkisPoolKind,
   stakekit,
   stakekitBalances,
   stakekitBuildEnter,
