@@ -352,6 +352,8 @@ assert.equal(
   'root exposes sdk.cosmos.gov'
 )
 assert.equal(root.cosmos.gov.prepareCosmosVote, root.prepareCosmosVote, 'sdk.cosmos.gov keeps the flat vote helper')
+assert.equal(root.amount.convert, root.convertAmount, 'root exposes sdk.amount.convert')
+assert.equal(root.amount.toBaseUnits, root.toBaseUnits, 'sdk.amount keeps the flat toBaseUnits helper')
 
 assert.equal(typeof node.Vultisig, 'function', '@vultisig/sdk/node exports Vultisig')
 assert.equal(node.evm.encodeErc20Approve, node.encodeErc20Approve, '@vultisig/sdk/node exposes sdk.evm')
@@ -361,6 +363,7 @@ assert.equal(
   node.prepareCosmosVote,
   '@vultisig/sdk/node exposes sdk.cosmos.gov'
 )
+assert.equal(node.amount.convert, node.convertAmount, '@vultisig/sdk/node exposes sdk.amount.convert')
 
 assert.equal(
   path.basename(seedphraseEntry),
@@ -387,6 +390,7 @@ assert.equal(
   browser.prepareCosmosVote,
   '@vultisig/sdk/browser exposes sdk.cosmos.gov'
 )
+assert.equal(browser.amount.convert, browser.convertAmount, '@vultisig/sdk/browser exposes sdk.amount.convert')
 assert.ok(vite && (vite.default || vite), '@vultisig/sdk/vite resolves')
 assert.equal(
   path.basename(reactNativeEntry),
@@ -471,7 +475,7 @@ import type {
 } from '@vultisig/sdk/react-native'
 import type { Vultisig } from '@vultisig/sdk/node'
 import type { ElectronMainCrypto, Vultisig as ElectronMainVultisig } from '@vultisig/sdk/electron/main'
-import { cosmos, evm, token } from '@vultisig/sdk'
+import { amount, cosmos, evm, token } from '@vultisig/sdk'
 import {
   normalizeMnemonic,
   type Bip39Language,
@@ -516,6 +520,7 @@ export type ReactNativeExtended = ReactNativeExtendedChainRegistry<typeof extens
 export type CosmosNamespace = typeof cosmos
 export type EvmNamespace = typeof evm
 export type TokenNamespace = typeof token
+export type AmountNamespace = typeof amount
 export type RootUtxoBrandResult = typeof rootUtxoBrandValid
 export type ReactNativeUtxoBrandResult = typeof reactNativeUtxoBrandValid
 export type SeedphraseLanguage = Bip39Language
