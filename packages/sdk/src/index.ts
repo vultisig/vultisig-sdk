@@ -376,6 +376,23 @@ export * from './signable-transaction'
 export type { GetSwapExplorerUrlInput, SwapExplorerProvider } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 export { getSwapExplorerUrl, swapExplorerProviders } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 
+// Provider-aware swap arrival normalization. One status vocabulary for
+// THORChain, MayaChain, Skip Go and LI.FI keeps app and agent pollers thin.
+export type {
+  GetSwapArrivalStatusInput,
+  SwapArrivalPendingStage,
+  SwapArrivalProvider,
+  SwapArrivalStatusHosts,
+  SwapArrivalStatusResult,
+} from '@vultisig/core-chain/swap/utils/getSwapArrivalStatus'
+export {
+  defaultSwapArrivalStatusHosts,
+  getSwapArrivalStatus,
+  isSwapArrivalStatusTerminal,
+  swapArrivalProviders,
+  SwapArrivalStatusRequestError,
+} from '@vultisig/core-chain/swap/utils/getSwapArrivalStatus'
+
 // Chain-native block explorer URL builder (address/tx) for the non-swap case.
 export { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
 
@@ -731,6 +748,7 @@ export { CosmosMsgType } from './types'
 
 export type {
   AcrossChain,
+  AcrossOriginChain,
   AcrossQuote,
   AcrossQuoteParams,
   AmountUnits,
@@ -755,6 +773,7 @@ export type {
   CardanoNativeToken,
   CctpAttestationResult,
   CctpBridgeResult,
+  CctpBurnMessage,
   CctpChainConfig,
   CctpClaimResult,
   CctpUnsignedTx,
@@ -886,6 +905,7 @@ export type { BuildCosmosWasmExecuteMsgParams, CosmWasmExecuteFund } from './too
 export {
   abiDecode,
   abiEncode,
+  ACROSS_ORIGIN_CHAIN,
   acrossQuote,
   acrossSupportedChains,
   AMOUNT_DRIFT_BLOCK_PCT,
@@ -933,7 +953,9 @@ export {
   COSMOS_SWAP_GAS_LIMIT,
   cosmosBalanceChains,
   cosmosStaking,
+  decode,
   decodeBittensorAddress,
+  decodeCctpBurnMessage,
   decodeCosmosTx,
   decodeEvmTx,
   decodeFromToolResult,
@@ -961,6 +983,7 @@ export {
   GAS_UNITS,
   getCardanoBalance,
   getCctpChain,
+  getCctpChainNameByDomain,
   getChainGasPriceGwei,
   getCoinBalance,
   getCosmosBalance,
@@ -1091,6 +1114,11 @@ export { buildCosmosWasmExecuteTx } from './platforms/react-native/chains/cosmos
 // service is exposed for callers that already hold a vault and need the richer
 // chain-specific fee shape (base fee / priority / cosmos gas limit, etc).
 export { GasEstimationService } from './vault/services/GasEstimationService'
+
+// Vault-free raw broadcast: submit a pre-signed raw transaction through the
+// SDK's chain-agnostic broadcaster without needing a vault instance. Backs
+// `VaultBase.broadcastRawTx`, which wraps this same call with vault events.
+export { broadcastRawTx } from './vault/services/RawBroadcastService'
 
 // ============================================================================
 // PUBLIC API - DeFi protocol primitives (sdk.defi.*) — unsigned-tx builders
