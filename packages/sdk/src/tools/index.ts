@@ -42,7 +42,7 @@ export { cosmosBalanceChains, getCosmosBalance, isCosmosBalanceChain } from './b
 
 // Canonical bytes oracle (calldata -> chain-agnostic Envelope)
 export type { AssetRef, ChainFamily, DecodeFromToolResultInput, Envelope, EnvelopeKind } from './decode'
-export { decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from './decode'
+export { decode, decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from './decode'
 
 // DEX primitives (read-only / pure math + on-chain quotes — no signing, no broadcast)
 export * as dex from './dex'
@@ -146,6 +146,7 @@ export { getCosmosGovernanceProposals, prepareCosmosVote } from './cosmos'
 // Swap
 export type {
   AcrossChain,
+  AcrossOriginChain,
   AcrossQuote,
   AcrossQuoteParams,
   AstroportSwapResult,
@@ -167,6 +168,7 @@ export type {
   SwapQuoteCandidate,
 } from './swap'
 export {
+  ACROSS_ORIGIN_CHAIN,
   acrossQuote,
   acrossSupportedChains,
   assembleAstroportSwap,
@@ -205,6 +207,7 @@ export type {
   BuildCctpClaimParams,
   CctpAttestationResult,
   CctpBridgeResult,
+  CctpBurnMessage,
   CctpChainConfig,
   CctpClaimResult,
   CctpUnsignedTx,
@@ -215,8 +218,10 @@ export {
   cctpAttestationApiBase,
   cctpChains,
   cctpSupportedChains,
+  decodeCctpBurnMessage,
   formatUsdc,
   getCctpChain,
+  getCctpChainNameByDomain,
   normalizeHexBytes,
   parseUsdcAmount,
 } from './bridge'
