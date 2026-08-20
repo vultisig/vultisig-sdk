@@ -947,6 +947,7 @@ export {
   COSMOS_SWAP_GAS_LIMIT,
   cosmosBalanceChains,
   cosmosStaking,
+  decode,
   decodeBittensorAddress,
   decodeCctpBurnMessage,
   decodeCosmosTx,
