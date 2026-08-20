@@ -363,6 +363,14 @@ export async function prepareTrc20TransferFromKeys(...args: unknown[]) {
   return mod.prepareTrc20TransferFromKeys(...(args as Parameters<typeof mod.prepareTrc20TransferFromKeys>))
 }
 
+// Canonical resolver for `buildSplTransfer`'s safety-critical `isToken2022`
+// flag (sdk#1728) — kept in parity with the root SDK entrypoint. The RN
+// rollup build already redirects this bare specifier to
+// `overrides/getSplAssociatedAccount.ts` (see `rnOverrideMap` in
+// rollup.platforms.config.js), which defers its own `@solana/web3.js` import
+// inside the async body, so this is safe as a static re-export.
+export { getSplAssociatedAccount } from '@vultisig/core-chain/chains/solana/spl/getSplAssociatedAccount'
+
 // Lazy import: `splTransfer` statically pulls `@solana/web3.js`, which reads
 // `globalThis.Buffer` at module-init. Deferring the import inside the async
 // body keeps it out of the eager RN bundle graph (same rationale as the
