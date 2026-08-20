@@ -1,5 +1,14 @@
 # @vultisig/core-mpc
 
+## 1.20.3
+
+### Patch Changes
+
+- [#1879](https://github.com/vultisig/vultisig-sdk/pull/1879) [`62ef869`](https://github.com/vultisig/vultisig-sdk/commit/62ef86962d7d7f562e75ac655f321e7912e5368a) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Include TerraClassic's signed USTC burn-tax surcharge in the displayed send-fee total by deriving both values from the same Cosmos fee-amount list.
+
+- Updated dependencies [[`088b905`](https://github.com/vultisig/vultisig-sdk/commit/088b9058f47eff8dc84929e89fdf4ddfde7e42e6), [`088b905`](https://github.com/vultisig/vultisig-sdk/commit/088b9058f47eff8dc84929e89fdf4ddfde7e42e6)]:
+  - @vultisig/core-chain@2.39.0
+
 ## 1.20.2
 
 ### Patch Changes
