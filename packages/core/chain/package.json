@@ -2033,6 +2033,11 @@
       "import": "./dist/swap/SwapFee.js",
       "default": "./dist/swap/SwapFee.js"
     },
+    "./swap/utils/getSwapArrivalStatus": {
+      "types": "./dist/swap/utils/getSwapArrivalStatus/index.d.ts",
+      "import": "./dist/swap/utils/getSwapArrivalStatus/index.js",
+      "default": "./dist/swap/utils/getSwapArrivalStatus/index.js"
+    },
     "./swap/utils/getSwapExplorerUrl": {
       "types": "./dist/swap/utils/getSwapExplorerUrl/index.d.ts",
       "import": "./dist/swap/utils/getSwapExplorerUrl/index.js",
