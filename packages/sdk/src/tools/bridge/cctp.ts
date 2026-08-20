@@ -115,6 +115,10 @@ export const cctpSupportedChains = Object.keys(cctpChains)
 /** Lookup CCTP config for a chain. Returns undefined for unsupported chains. */
 export const getCctpChain = (chainName: string): CctpChainConfig | undefined => cctpChains[chainName]
 
+/** Reverse-lookup a CCTP domain ID back to its registered chain name (architecture#1733). */
+export const getCctpChainNameByDomain = (domain: number): string | undefined =>
+  Object.keys(cctpChains).find(name => cctpChains[name]?.domain === domain)
+
 /**
  * Circle CCTP attestation API base URL.
  *

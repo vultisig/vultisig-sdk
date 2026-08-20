@@ -15,5 +15,8 @@ export {
   cctpSupportedChains,
   getCctpAttestation,
   getCctpChain,
+  getCctpChainNameByDomain,
   waitForCctpAttestation,
 } from './cctp'
+export type { CctpBurnMessage } from './decodeCctpBurnMessage'
+export { decodeCctpBurnMessage } from './decodeCctpBurnMessage'
