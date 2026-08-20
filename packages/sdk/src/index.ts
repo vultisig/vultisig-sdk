@@ -117,6 +117,12 @@ export { address, validate } from './utils/addressValidation'
 export { checkChainPrefix } from './utils/chainPrefix'
 export type { ParsedThorSwapMemo } from './utils/thorSwapMemo'
 export { parseThorSwapMemo } from './utils/thorSwapMemo'
+export {
+  decodeRippleXAddress,
+  encodeRippleXAddress,
+  isValidRippleXAddress,
+  normalizeRippleDestination,
+} from '@vultisig/core-chain/chains/ripple/address'
 
 // Canonical UTXO wrong-chain guard. Consumers should import this instead of
 // maintaining local bech32 HRP / Base58Check version / CashAddr matrices.
