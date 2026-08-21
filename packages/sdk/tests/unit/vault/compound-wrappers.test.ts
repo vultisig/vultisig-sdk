@@ -14,6 +14,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Token } from '../../../src/types'
 import { resolveTokenRef } from '../../../src/vault/tokenRef'
+import { VaultBase } from '../../../src/vault/VaultBase'
 import { VaultError, VaultErrorCode } from '../../../src/vault/VaultError'
 
 // ---------------------------------------------------------------------------
@@ -75,6 +76,7 @@ function createMockVault() {
     // Service mocks
     transactionBuilder: {
       estimateSendFee: vi.fn().mockResolvedValue(BigInt(21000)),
+      extractMessageHashes: vi.fn().mockResolvedValue(['abc']),
     },
 
     // Method mocks
@@ -106,6 +108,9 @@ function createMockVault() {
     prepareSendTx: vi.fn().mockResolvedValue(mockKeysignPayload),
     sign: vi.fn().mockResolvedValue(mockSignature),
     broadcastTx: vi.fn().mockResolvedValue('0xTxHash123'),
+    balanceService: {
+      getBalance: vi.fn().mockResolvedValue({ amount: '1000000000000000000' }),
+    },
     getSwapQuote: vi.fn().mockResolvedValue({
       bestQuote: { provider: 'thorchain', expectedOutput: '100', minOutput: '95' },
       balance: BigInt(1000000000000000000),
@@ -113,6 +118,14 @@ function createMockVault() {
       fromCoin: { ticker: 'ETH', decimals: 18 },
       toCoin: { ticker: 'BTC', decimals: 8 },
       warnings: [],
+      quote: {
+        general: {
+          provider: '1inch',
+          tx: { evm: { from: '0x', to: '0x', data: '0x', value: '0', gasLimit: 21_000n } },
+          dstAmount: '100',
+        },
+      },
+      fees: { network: BigInt(1000000000000000), total: BigInt(1000000000000000) },
     }),
     prepareSwapTx: vi.fn().mockResolvedValue({
       keysignPayload: mockKeysignPayload,
@@ -744,6 +757,158 @@ describe('swap', () => {
     expect(result.txHash).toBe('0xTxHash123')
     expect(result.chain).toBe('Ethereum')
     expect(result.quote).toBeDefined()
+  })
+
+  it('routes swap(max) through the quote maxSwapable amount before prepare/sign', async () => {
+    const actualVault = Object.create(VaultBase.prototype) as VaultBase & ReturnType<typeof createMockVault>
+    Object.assign(actualVault, vault)
+    actualVault.getSwapQuote = vi
+      .fn()
+      .mockResolvedValueOnce({
+        bestQuote: { provider: 'thorchain', expectedOutput: '100', minOutput: '95' },
+        balance: 1_000_000_000_000_000_000n,
+        maxSwapable: 999_000_000_000_000_000n,
+        fromCoin: { ticker: 'ETH', decimals: 18 },
+        toCoin: { ticker: 'BTC', decimals: 8 },
+        warnings: [],
+        quote: {
+          general: {
+            provider: '1inch',
+            tx: { evm: { from: '0x', to: '0x', data: '0x', value: '0', gasLimit: 21_000n } },
+            dstAmount: '100',
+          },
+        },
+        fees: { network: 1_000_000_000_000_000n, total: 1_000_000_000_000_000n },
+      })
+      .mockResolvedValueOnce({
+        bestQuote: { provider: 'thorchain', expectedOutput: '99', minOutput: '94' },
+        balance: 1_000_000_000_000_000_000n,
+        maxSwapable: 999_000_000_000_000_000n,
+        fromCoin: { ticker: 'ETH', decimals: 18 },
+        toCoin: { ticker: 'BTC', decimals: 8 },
+        warnings: [],
+        quote: {
+          general: {
+            provider: '1inch',
+            tx: { evm: { from: '0x', to: '0x', data: '0x', value: '0', gasLimit: 21_000n } },
+            dstAmount: '99',
+          },
+        },
+        fees: { network: 1_000_000_000_000_000n, total: 1_000_000_000_000_000n },
+      })
+
+    await actualVault.swap({
+      fromChain: Chain.Ethereum,
+      fromSymbol: 'ETH',
+      toChain: Chain.Bitcoin,
+      toSymbol: 'BTC',
+      amount: 'max',
+    })
+
+    expect(actualVault.balanceService.getBalance).toHaveBeenCalledWith(Chain.Ethereum, undefined)
+    expect(actualVault.getSwapQuote).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ amount: '1.0', recipient: undefined })
+    )
+    expect(actualVault.getSwapQuote).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ amount: '0.999', recipient: undefined })
+    )
+    expect(actualVault.prepareSwapTx).toHaveBeenCalledWith(expect.objectContaining({ amount: '0.999' }))
+  })
+
+  it('fails closed for swap(max) when the replacement quote reports a lower maxSwapable than the requested amount', async () => {
+    // Quote 1 says maxSwapable = 0.999 ETH → we request that.
+    // Quote 2 (fresh best-provider selection) picks a different provider with higher gas,
+    // now reports maxSwapable = 0.500 ETH. Signing the 0.999 ETH amount from quote 1 would
+    // strand funds or fail at broadcast. The post-refetch assert must fire.
+    const actualVault = Object.create(VaultBase.prototype) as VaultBase & ReturnType<typeof createMockVault>
+    Object.assign(actualVault, vault)
+    actualVault.getSwapQuote = vi
+      .fn()
+      .mockResolvedValueOnce({
+        bestQuote: { provider: '1inch', expectedOutput: '100', minOutput: '95' },
+        balance: 1_000_000_000_000_000_000n,
+        maxSwapable: 999_000_000_000_000_000n,
+        fromCoin: { ticker: 'ETH', decimals: 18 },
+        toCoin: { ticker: 'BTC', decimals: 8 },
+        warnings: [],
+        quote: {
+          general: {
+            provider: '1inch',
+            tx: { evm: { from: '0x', to: '0x', data: '0x', value: '0', gasLimit: 21_000n } },
+            dstAmount: '100',
+          },
+        },
+        fees: { network: 1_000_000_000_000_000n, total: 1_000_000_000_000_000n },
+      })
+      .mockResolvedValueOnce({
+        bestQuote: { provider: 'kyber', expectedOutput: '50', minOutput: '47' },
+        balance: 1_000_000_000_000_000_000n,
+        maxSwapable: 500_000_000_000_000_000n,
+        fromCoin: { ticker: 'ETH', decimals: 18 },
+        toCoin: { ticker: 'BTC', decimals: 8 },
+        warnings: [],
+        quote: {
+          general: {
+            provider: 'kyber',
+            tx: { evm: { from: '0x', to: '0x', data: '0x', value: '0', gasLimit: 250_000n } },
+            dstAmount: '50',
+          },
+        },
+        fees: { network: 500_000_000_000_000_000n, total: 500_000_000_000_000_000n },
+      })
+
+    await expect(
+      actualVault.swap({
+        fromChain: Chain.Ethereum,
+        fromSymbol: 'ETH',
+        toChain: Chain.Bitcoin,
+        toSymbol: 'BTC',
+        amount: 'max',
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.InvalidAmount,
+      message: expect.stringContaining('replacement quote reports a lower maxSwapable'),
+    })
+    expect(actualVault.prepareSwapTx).not.toHaveBeenCalled()
+  })
+
+  it('fails closed for swap(max) when the quote cannot compute a fee-safe native amount', async () => {
+    const actualVault = Object.create(VaultBase.prototype) as VaultBase & ReturnType<typeof createMockVault>
+    Object.assign(actualVault, vault)
+    actualVault.getSwapQuote = vi.fn().mockResolvedValue({
+      bestQuote: { provider: 'swapkit', expectedOutput: '100', minOutput: '95' },
+      balance: 100_000_000n,
+      maxSwapable: 0n,
+      fromCoin: { ticker: 'BTC', decimals: 8 },
+      toCoin: { ticker: 'ETH', decimals: 18 },
+      warnings: [],
+      quote: {
+        general: {
+          provider: 'swapkit',
+          tx: { transfer: { to: 'bc1qdeposit', amount: 99_500_000n, memo: 'memo' } },
+          dstAmount: '100',
+        },
+      },
+      fees: { network: 0n, total: 0n },
+    })
+    actualVault.balanceService.getBalance = vi.fn().mockResolvedValue({ amount: '100000000' })
+
+    await expect(
+      actualVault.swap({
+        fromChain: Chain.Bitcoin,
+        fromSymbol: 'BTC',
+        toChain: Chain.Ethereum,
+        toSymbol: 'ETH',
+        amount: 'max',
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.InvalidAmount,
+      message:
+        'Cannot swap max BTC: source-chain network fee is not computable from the quote; choose an explicit amount',
+    })
+    expect(actualVault.prepareSwapTx).not.toHaveBeenCalled()
   })
 })
 

@@ -1584,13 +1584,22 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       // "not computable from this quote". Consumers needing the real max must call
       // estimateSendFee() separately.
       const isTransferRoute = 'general' in quoteResult.quote.quote && 'transfer' in quoteResult.quote.quote.general.tx
+      // Native cross-chain routes (THORChain/Maya) expose `fees.network` as the
+      // DESTINATION-chain outbound fee, in THOR 1e8 units — wrong asset AND wrong
+      // decimals to subtract from the source balance. BTC→ETH would subtract an
+      // ETH-denominated outbound from sats and clamp legitimate max swaps to 0;
+      // ETH→BTC would subtract ~30k from wei and reserve essentially nothing for
+      // gas. Treat native routes as non-computable here (fail-closed) until a
+      // real source-unit fee estimator is threaded through.
+      const isNativeRoute = 'native' in quoteResult.quote.quote
 
       if (!isNative) {
         maxSwapable = balance
-      } else if (!isTransferRoute) {
+      } else if (!isTransferRoute && !isNativeRoute) {
         maxSwapable = getMaxValue(balance, quoteResult.fees.network)
       }
-      // else: transfer route native — maxSwapable stays 0n (unknown until broadcast-time fee estimate)
+      // else: transfer route or native cross-chain route — maxSwapable stays 0n
+      // (unknown until broadcast-time source-unit fee estimate)
     } catch {
       // Balance enrichment is best-effort — quote is still valid without it
     }
@@ -2030,9 +2039,9 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       resolvedAmount = this.formatUnits(BigInt(bal.amount), fromToken.decimals)
       if (BigInt(bal.amount) <= 0n) throw new VaultError(VaultErrorCode.InvalidAmount, 'Zero balance — nothing to swap')
     }
-    const normalizedAmount = this.validateHumanSwapAmount(resolvedAmount, fromToken.decimals)
+    let normalizedAmount = this.validateHumanSwapAmount(resolvedAmount, fromToken.decimals)
 
-    const quote = await this.getSwapQuote({
+    let quote = await this.getSwapQuote({
       fromCoin,
       toCoin,
       amount: normalizedAmount,
@@ -2040,6 +2049,44 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       slippageTolerance,
       excludeProviders,
     })
+
+    if (amount === 'max') {
+      if (quote.maxSwapable <= 0n) {
+        throw new VaultError(
+          VaultErrorCode.InvalidAmount,
+          `Cannot swap max ${fromToken.ticker}: source-chain network fee is not computable from the quote; choose an explicit amount`
+        )
+      }
+
+      const feeAwareAmount = this.validateHumanSwapAmount(
+        this.formatUnits(quote.maxSwapable, fromToken.decimals),
+        fromToken.decimals
+      )
+      if (feeAwareAmount !== normalizedAmount) {
+        normalizedAmount = feeAwareAmount
+        quote = await this.getSwapQuote({
+          fromCoin,
+          toCoin,
+          amount: normalizedAmount,
+          recipient: normalizedRecipient,
+          slippageTolerance,
+          excludeProviders,
+        })
+
+        // Quote 2 is a FRESH best-provider selection with recomputed gas — it can
+        // legitimately report a lower (or 0) maxSwapable than quote 1. Signing the
+        // quote-1-derived amount when quote 2 itself says it's unsafe would still
+        // strand funds or fail at broadcast. Fail-closed against quote 2's own view.
+        const requestedBaseUnits = toChainAmount(normalizedAmount, fromToken.decimals)
+        if (requestedBaseUnits <= 0n || requestedBaseUnits > quote.maxSwapable) {
+          throw new VaultError(
+            VaultErrorCode.InvalidAmount,
+            `Cannot swap max ${fromToken.ticker}: the replacement quote reports a lower maxSwapable (${quote.maxSwapable}) than the requested amount (${requestedBaseUnits}); retry with an explicit amount`
+          )
+        }
+      }
+    }
+
     if (dryRun) return { dryRun: true, quote }
 
     const { keysignPayload, approvalPayload } = await this.prepareSwapTx({
