@@ -133,6 +133,35 @@ export class VaultManager {
     }
   }
 
+  private repairLegacyFastVaultType(vaultData: VaultData): VaultData {
+    return vaultData.type === 'secure' && hasServer(vaultData.signers) ? { ...vaultData, type: 'fast' } : vaultData
+  }
+
+  private async repairStoredLegacyFastVaultType(key: string, vaultData: VaultData): Promise<VaultData | null> {
+    let current = vaultData
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const repaired = this.repairLegacyFastVaultType(current)
+      if (repaired === current) return current
+
+      if (!this.storage.compareAndSet) {
+        await this.storage.set(key, repaired)
+        return repaired
+      }
+
+      if (await this.storage.compareAndSet(key, current, repaired)) return repaired
+
+      const latest = await this.storage.get<VaultData>(key)
+      if (!latest) return null
+      current = latest
+    }
+
+    throw new VaultError(
+      VaultErrorCode.InvalidVault,
+      `Vault "${vaultData.name}" changed repeatedly while repairing its legacy fast-vault type`
+    )
+  }
+
   private decodeVaultPayload(vultContent: string, password?: string): CoreVault {
     const container = vaultContainerFromString(vultContent.trim())
     let vaultBase64 = container.vault
@@ -370,11 +399,17 @@ export class VaultManager {
    * Returns appropriate subclass based on vault type
    */
   createVaultInstance(vaultData: VaultData, persisted = true): VaultBase {
+    // Older SDKs classified only `Server-*` signers as fast vaults. Repair
+    // already-persisted legacy `VultiServer-*` records before subclass
+    // dispatch so they can be loaded again. Storage-backed load paths also
+    // persist the canonical type before constructing the vault.
+    const repairedVaultData = this.repairLegacyFastVaultType(vaultData)
+
     // Fail early if vault is encrypted but no password callback provided
-    if (vaultData.isEncrypted && !this.context.config.onPasswordRequired) {
+    if (repairedVaultData.isEncrypted && !this.context.config.onPasswordRequired) {
       throw new VaultError(
         VaultErrorCode.InvalidConfig,
-        `Vault "${vaultData.name}" is password-protected but no onPasswordRequired callback was provided. ` +
+        `Vault "${repairedVaultData.name}" is password-protected but no onPasswordRequired callback was provided. ` +
           'Pass onPasswordRequired in the Vultisig constructor: ' +
           'new Vultisig({ onPasswordRequired: async () => password })'
       )
@@ -383,11 +418,11 @@ export class VaultManager {
     const vaultContext = this.createVaultContext()
 
     // Factory pattern - return appropriate subclass based on vault type
-    if (vaultData.type === 'fast') {
+    if (repairedVaultData.type === 'fast') {
       const fastSigningService = new FastSigningService(this.context.serverManager, this.context.wasmProvider)
-      return FastVault.fromStorage(vaultData, fastSigningService, vaultContext, persisted)
+      return FastVault.fromStorage(repairedVaultData, fastSigningService, vaultContext, persisted)
     } else {
-      return SecureVault.fromStorage(vaultData, vaultContext, persisted)
+      return SecureVault.fromStorage(repairedVaultData, vaultContext, persisted)
     }
   }
 
@@ -592,10 +627,12 @@ export class VaultManager {
     const vaults: VaultBase[] = []
 
     for (const key of vaultKeys) {
-      const vaultData = await this.storage.get<VaultData>(key)
+      const storedVaultData = await this.storage.get<VaultData>(key)
 
-      if (vaultData) {
+      if (storedVaultData) {
         try {
+          const vaultData = await this.repairStoredLegacyFastVaultType(key, storedVaultData)
+          if (!vaultData) continue
           vaults.push(this.createVaultInstance(vaultData))
         } catch {
           // Skip vaults that can't be instantiated (e.g., encrypted vault
@@ -623,11 +660,15 @@ export class VaultManager {
    * ```
    */
   async getVaultById(id: string): Promise<VaultBase | null> {
-    const vaultData = await this.storage.get<VaultData>(`vault:${id}`)
+    const key = `vault:${id}`
+    const storedVaultData = await this.storage.get<VaultData>(key)
 
-    if (!vaultData) {
+    if (!storedVaultData) {
       return null
     }
+
+    const vaultData = await this.repairStoredLegacyFastVaultType(key, storedVaultData)
+    if (!vaultData) return null
 
     return this.createVaultInstance(vaultData)
   }
