@@ -145,7 +145,9 @@ export class VaultManager {
       if (repaired === current) return current
 
       if (!this.storage.compareAndSet) {
-        await this.storage.set(key, repaired)
+        // Legacy adapters cannot persist the repair without risking a stale
+        // snapshot overwriting a concurrent vault update. Load the canonical
+        // instance now and let a later ordinary save use its revision checks.
         return repaired
       }
 
