@@ -19,7 +19,7 @@ import qrcode from 'qrcode-terminal'
 
 import type { CommandContext, TransactionResult } from '../core'
 import { ensureVaultUnlocked } from '../core'
-import { ConfirmationRequiredError } from '../core/errors'
+import { ConfirmationRequiredError, InvalidInputError } from '../core/errors'
 import { createSpinner, info, isJsonOutput, isNonInteractive, isSilent, outputJson, printResult } from '../lib/output'
 import { confirmTransaction, displayTransactionResult } from '../ui'
 
@@ -85,6 +85,11 @@ function getCosmosChainConfig(chain: Chain): CosmosChainConfig {
 /**
  * Parse funds string into array of coins
  * Format: "denom:amount" or "denom:amount,denom2:amount2"
+ *
+ * bead vultisig-5ze6w: previously accepted negative amounts like "rune:-1000000"
+ * silently. cosmos SDK would reject at broadcast, wasting the user's confirm
+ * step. Now validated up-front: amount must be a non-negative integer decimal
+ * string (cosmos coin amounts are unsigned integer base units).
  */
 function parseFunds(fundsStr?: string): ParsedFund[] {
   if (!fundsStr) return []
@@ -92,7 +97,12 @@ function parseFunds(fundsStr?: string): ParsedFund[] {
   return fundsStr.split(',').map(fund => {
     const [denom, amount] = fund.trim().split(':')
     if (!denom || !amount) {
-      throw new Error(`Invalid funds format: "${fund}". Expected "denom:amount"`)
+      throw new InvalidInputError(`Invalid funds format: "${fund}". Expected "denom:amount"`)
+    }
+    if (!/^\d+$/.test(amount)) {
+      throw new InvalidInputError(
+        `Invalid funds amount: "${amount}" in "${fund}" — expected a non-negative integer base-unit amount (cosmos coins are unsigned)`
+      )
     }
     return { denom: denom.toLowerCase(), amount }
   })
@@ -107,12 +117,25 @@ export async function executeExecute(ctx: CommandContext, params: ExecuteParams)
   // Validate chain is supported and source the execution metadata from the SDK canonicals.
   const chainConfig = getCosmosChainConfig(params.chain)
 
-  // Parse and validate message JSON
+  // Parse and validate message JSON.
+  // bead vultisig-b0ome: 3 related loose-validation issues fixed here:
+  //   (1) Previously `throw new Error` on parse failure was misclassified as
+  //       UNKNOWN_ERROR / exit 7 by the CLI error mapper. Typed InvalidInputError
+  //       (exit 4) is the correct shape — same class as z3xkg's broadcast fix.
+  //   (2) `[1,2,3]` and `null` were accepted as msg. CosmWasm execute msgs MUST
+  //       be JSON objects per the spec (the InstantiateMsg / ExecuteMsg contracts
+  //       are always struct-shaped). Now rejected up-front.
+  //   (3) Primitives (string / number / bool) fall out of the same check.
   let msg: object
   try {
     msg = JSON.parse(params.msg)
   } catch {
-    throw new Error(`Invalid JSON message: ${params.msg}`)
+    throw new InvalidInputError(`Invalid JSON message: ${params.msg}`)
+  }
+  if (msg === null || typeof msg !== 'object' || Array.isArray(msg)) {
+    throw new InvalidInputError(
+      `CosmWasm execute msg must be a JSON object (received ${msg === null ? 'null' : Array.isArray(msg) ? 'array' : typeof msg})`
+    )
   }
 
   // Parse funds
