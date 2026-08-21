@@ -1,4 +1,5 @@
 import { encodeTrc20TransferParam, tronBase58ToEvmHex } from '../../abi/tron'
+import { assertSafeEvmDestination } from '../../utils/dangerousAddresses'
 
 /**
  * `transfer(address,uint256)` — the TRC-20 transfer function signature. The
@@ -89,9 +90,24 @@ export const prepareTrc20TransferFromKeys = (params: PrepareTrc20TransferFromKey
   // Validate every address as TRON base58check up-front (throws on bad
   // checksum / wrong prefix / wrong length). This is the fund-safety gate:
   // a typoed-but-decodable address must surface as an error, not a misroute.
-  tronBase58ToEvmHex(contractAddress)
+  const contractEvmHex = tronBase58ToEvmHex(contractAddress)
   tronBase58ToEvmHex(from)
-  // encodeTrc20TransferParam re-validates `to` via tronBase58ToEvmHex.
+  const toEvmHex = tronBase58ToEvmHex(to)
+
+  // Defense-in-depth: reject known EVM burn/dead destinations even on Tron.
+  // A TRON base58 address wraps the same 20-byte payload, so sending to a
+  // base58 view of 0x0000... / 0x...dead / 0xdead...942069 is still an
+  // unrecoverable burn.
+  assertSafeEvmDestination(`0x${toEvmHex}`)
+
+  // Reject self-contract sends: transferring a token to its own contract
+  // address is the same unrecoverable-funds class recently hardened in the
+  // generic send path.
+  if (toEvmHex.toLowerCase() === contractEvmHex.toLowerCase()) {
+    throw new Error(
+      `prepareTrc20TransferFromKeys: refusing to transfer ${contractAddress} tokens to the token contract itself (${to})`
+    )
+  }
 
   // Fund-safety / WYSIWYS: `amount` MUST be a plain non-negative decimal
   // integer string. `BigInt()` is far too permissive for a value-bearing

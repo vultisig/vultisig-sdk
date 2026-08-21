@@ -11,6 +11,9 @@ const TO = 'TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH'
 // 20-byte EVM-style hex (computed independently via base58check decode).
 const USDT_EVM_HEX = 'a614f803b6fd780986a42c78ec9c7f77e6ded13c'
 const TO_EVM_HEX = 'c8599111f29c1e1e061265b4af93ea1f274ad78a'
+const ZERO_EVM_HEX = '0000000000000000000000000000000000000000'
+const DEAD_EVM_HEX = '000000000000000000000000000000000000dead'
+const DEAD_VARIANT_EVM_HEX = 'dead000000000000000042069420694206942069'
 
 describe('tron abi address helpers', () => {
   it('decodes base58check → EVM hex (20 bytes, no prefix)', () => {
@@ -197,6 +200,32 @@ describe('prepareTrc20TransferFromKeys', () => {
       feeLimitSun: '050000000',
     })
     expect(tx.feeLimitSun).toBe('50000000')
+  })
+
+  it.each([
+    ['zero-address burn', tronHexToBase58(ZERO_EVM_HEX)],
+    ['dead-address burn', tronHexToBase58(DEAD_EVM_HEX)],
+    ['dead-variant burn', tronHexToBase58(DEAD_VARIANT_EVM_HEX)],
+  ])('rejects a dangerous burn destination wrapped as TRON base58 (%s)', (_label, burnDestination) => {
+    expect(() =>
+      prepareTrc20TransferFromKeys({
+        contractAddress: USDT_CONTRACT,
+        from: FROM,
+        to: burnDestination,
+        amount: '1000000',
+      })
+    ).toThrow(/Refusing to build transaction/)
+  })
+
+  it('rejects sending a TRC-20 to its own contract address', () => {
+    expect(() =>
+      prepareTrc20TransferFromKeys({
+        contractAddress: USDT_CONTRACT,
+        from: FROM,
+        to: USDT_CONTRACT,
+        amount: '1000000',
+      })
+    ).toThrow(/token contract itself/)
   })
 
   it('rejects an invalid (bad-checksum) recipient before encoding (fund-safety)', () => {
