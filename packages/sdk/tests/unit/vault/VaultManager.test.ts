@@ -319,7 +319,9 @@ describe('VaultManager', () => {
 
       const staleSecure = SecureVault.fromStorage(
         staleData,
-        (vaultManager as unknown as { createVaultContext(): Parameters<typeof SecureVault.fromStorage>[1] }).createVaultContext()
+        (
+          vaultManager as unknown as { createVaultContext(): Parameters<typeof SecureVault.fromStorage>[1] }
+        ).createVaultContext()
       )
       const loaded = await vaultManager.getVaultById(imported.id)
 
