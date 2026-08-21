@@ -280,6 +280,29 @@ describe('VaultManager', () => {
       expect(vault.type).toBe('fast')
     })
 
+    it('repairs a legacy VultiServer vault persisted with the stale secure type', async () => {
+      const vult = encodeUnencryptedVult(
+        buildMinimalSecureVaultBinary({
+          signers: ['SyntheticDevice', 'VultiServer-legacy'],
+        })
+      )
+      const imported = await vaultManager.importVault(vult)
+      const stored = await memoryStorage.get<typeof imported.data>(`vault:${imported.id}`)
+      expect(stored).not.toBeNull()
+      await memoryStorage.set(`vault:${imported.id}`, {
+        ...stored!,
+        type: 'secure',
+      })
+
+      const loaded = await vaultManager.getVaultById(imported.id)
+
+      expect(loaded).toBeInstanceOf(FastVault)
+      expect(loaded?.type).toBe('fast')
+      expect(await memoryStorage.get<{ type: string }>(`vault:${imported.id}`)).toMatchObject({ type: 'fast' })
+      await loaded?.save()
+      expect(await memoryStorage.get<{ type: string }>(`vault:${imported.id}`)).toMatchObject({ type: 'fast' })
+    })
+
     it('rejects an exact duplicate unless replacement is explicit', async () => {
       const vult = encodeUnencryptedVult(buildMinimalSecureVaultBinary())
       await vaultManager.importVault(vult)
