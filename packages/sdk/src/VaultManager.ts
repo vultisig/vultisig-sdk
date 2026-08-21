@@ -155,9 +155,13 @@ export class VaultManager {
       if (!Number.isSafeInteger(currentRevision) || currentRevision < 0) {
         throw new VaultError(VaultErrorCode.InvalidVault, `Vault ${current.id} has an invalid storage revision`)
       }
+      const nextRevision = currentRevision + 1
+      if (!Number.isSafeInteger(nextRevision)) {
+        throw new VaultError(VaultErrorCode.InvalidVault, `Vault ${current.id} has an invalid storage revision`)
+      }
       const repairedPersisted = {
         ...repaired,
-        revision: currentRevision + 1,
+        revision: nextRevision,
         lastModified: Date.now(),
       }
 
