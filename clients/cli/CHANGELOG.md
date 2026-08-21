@@ -1,5 +1,18 @@
 # @vultisig/cli
 
+## 5.2.0
+
+### Minor Changes
+
+- [#1719](https://github.com/vultisig/vultisig-sdk/pull/1719) [`ac213ac`](https://github.com/vultisig/vultisig-sdk/commit/ac213ac23f49e0d3ea3ad1cb10a055f28c921469) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add direct unsigned CLI preparation commands for contract calls, IBC, SPL, TRC-20, Jetton, Sui tokens, Polkadot assets, Cosmos staking, and CW-20 transfers.
+
+### Patch Changes
+
+- Updated dependencies [[`397c2b6`](https://github.com/vultisig/vultisig-sdk/commit/397c2b6629fdc7002d55bd95bb8585dce78de416), [`df144e9`](https://github.com/vultisig/vultisig-sdk/commit/df144e9e21c2fb64e73efcf12ac35c958dbf1c7b), [`7d6a014`](https://github.com/vultisig/vultisig-sdk/commit/7d6a01440fd0b855356cce81469b5b5a91665862)]:
+  - @vultisig/sdk@5.2.0
+  - @vultisig/core-chain@3.0.0
+  - @vultisig/rujira@69.0.0
+
 ## 5.1.0
 
 ### Patch Changes

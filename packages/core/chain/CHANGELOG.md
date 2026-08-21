@@ -1,5 +1,11 @@
 # @vultisig/core-chain
 
+## 3.0.0
+
+### Major Changes
+
+- [#1891](https://github.com/vultisig/vultisig-sdk/pull/1891) [`7d6a014`](https://github.com/vultisig/vultisig-sdk/commit/7d6a01440fd0b855356cce81469b5b5a91665862) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Standardize signed-transaction broadcast adapters on one typed accepted-or-failed result contract.
+
 ## 2.39.0
 
 ### Minor Changes
