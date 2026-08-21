@@ -937,15 +937,27 @@ program
 // Command: Broadcast raw transaction
 program
   .command('broadcast')
-  .description('Broadcast a pre-signed raw transaction')
+  .description('Broadcast a pre-signed raw transaction. Previews by default — pass --yes to confirm.')
   .requiredOption('--chain <chain>', 'Target blockchain')
-  .requiredOption('--raw-tx <hex>', 'Hex-encoded signed transaction')
+  .requiredOption(
+    '--raw-tx <payload>',
+    "Signed tx in the chain's own encoding (hex for evm/utxo/polkadot/bittensor/ripple, base58/base64 for solana, base64 protobuf or JSON tx_bytes for cosmos, JSON for sui/tron, base64 BOC for ton)"
+  )
+  .option('-y, --yes', 'Confirm broadcast without an interactive prompt (required in non-interactive contexts)')
+  .addHelpText(
+    'after',
+    `
+Note: the confirmation preview shows the raw tx payload (truncated), not a
+decoded to/value — it answers "did you mean to broadcast this", not "is this
+the correct destination and amount".`
+  )
   .action(
-    withExit(async (options: { chain: string; rawTx: string }) => {
+    withExit(async (options: { chain: string; rawTx: string; yes?: boolean }) => {
       const context = await init(program.opts().vault)
       await executeBroadcast(context, {
         chain: resolveChainOrThrow(options.chain),
         rawTx: options.rawTx,
+        yes: options.yes,
       })
     })
   )

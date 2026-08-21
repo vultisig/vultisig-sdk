@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CommandContext } from '../core'
 import { ConfirmationRequiredError } from '../core/errors'
 import { resetOutput, setNonInteractive } from '../lib/output'
+import { executeBroadcast } from './broadcast'
 import { executeExecute } from './execute'
 import { executeRujiraSwap, executeRujiraWithdraw } from './rujira'
 import { executeAddressBook } from './settings'
@@ -263,6 +264,16 @@ describe('confirmation-bound flows refuse before any stdout preview (non-interac
         l1Address: '0xdeadbeef',
       })
     )
+  })
+
+  // REVIEW FIX (should-fix 4): every other broadcast test stubs isNonInteractive
+  // directly, which never proves the real wiring — index.ts's preAction hook
+  // calling setNonInteractive(resolveNonInteractive(...)) before the command
+  // action runs — actually reaches executeBroadcast. This uses the real
+  // lib/output module (not mocked in this file), so it fails only if that
+  // wiring is genuinely broken.
+  it('broadcast refuses before vault.broadcastRawTx / preview', async () => {
+    await expectFailsClosed(() => executeBroadcast(makeTrapVaultCtx(), { chain: Chain.Ethereum, rawTx: '0xdeadbeef' }))
   })
 })
 
