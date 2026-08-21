@@ -924,6 +924,7 @@ export {
   buildAstroportSwap,
   buildBalancerV3SwapCalldata,
   buildBuyPt,
+  bridge,
   buildCctpBridge,
   buildCctpClaim,
   buildCosmosWasmExecuteMsg,
