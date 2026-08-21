@@ -190,11 +190,34 @@ describe('fast-vault flows honor the shared non-interactive definition (not stdi
       dispose: () => {},
     } as unknown as CommandContext
 
-    await executeCreateFast(ctx, { name: 'v', password: 'p', email: 'e@x.io' })
+    // Fixture uses a VALID password (>=8 chars) so the pure input validation added by 33sz9 does
+    // not short-circuit before the branch this test is about. The assertion is two-step auto-enable,
+    // not password policy.
+    await executeCreateFast(ctx, { name: 'v', password: 'password1', email: 'e@x.io' })
 
     // persistPending:true is the two-step branch — the flow exits pending
     // verification instead of falling through to the interactive OTP loop.
     expect(createFastVault).toHaveBeenCalledWith(expect.objectContaining({ persistPending: true }))
+    expect(stdoutSpy).not.toHaveBeenCalled()
+  })
+
+  // 33sz9 round 2: this encodes the distinction the poisoned-ctx harness cannot express on its own.
+  // PURE client-side validation is allowed to precede the chokepoint - it touches no ctx, performs
+  // no I/O, and writes nothing to stdout, so nothing is provisioned and nothing leaks. Anything that
+  // reaches through ctx is NOT allowed to (see the wxbbp case, where ctx.sdk.validateSeedphrase
+  // would spin up the SDK and pre-load WASM for a request the gate was about to refuse).
+  //
+  // So invalid input in a non-interactive session surfacing InvalidInputError is BY DESIGN, not a
+  // breach of the fail-closed contract - the user learns the real problem instead of a misleading
+  // CONFIRMATION_REQUIRED, which is exactly what bead 33sz9 is about.
+  it('create (fast) surfaces InvalidInputError for bad input, by design, before the gate', async () => {
+    const createFastVault = vi.fn().mockResolvedValue('vault-id-123')
+    const ctx = { sdk: { createFastVault }, dispose: () => {} } as unknown as CommandContext
+
+    await expect(executeCreateFast(ctx, { name: 'v', password: 'x', email: 'e@x.io' })).rejects.toThrow(/password/i)
+    // The point of validating early: no server-side vault state was provisioned.
+    expect(createFastVault).not.toHaveBeenCalled()
+    // And the machine-output channel is still clean.
     expect(stdoutSpy).not.toHaveBeenCalled()
   })
 
@@ -206,7 +229,9 @@ describe('fast-vault flows honor the shared non-interactive definition (not stdi
       executeCreateFromSeedphraseFast(makeCtx(), {
         mnemonic: 'abandon '.repeat(11) + 'about',
         name: 'v',
-        password: 'p',
+        // Valid password for the same reason as above: this test asserts the fail-closed gate, not
+        // the input validation that now runs alongside it.
+        password: 'password1',
         email: 'e@x.io',
       })
     )

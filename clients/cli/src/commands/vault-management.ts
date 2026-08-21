@@ -1,6 +1,7 @@
 /**
  * Vault Management Commands - create, import, export, verify, switch, rename, info, vaults
  */
+import { validateEmail } from '@vultisig/lib-utils/validation/validateEmail'
 import type { Chain, VaultBase } from '@vultisig/sdk'
 import { FastVault } from '@vultisig/sdk'
 import chalk from 'chalk'
@@ -33,6 +34,130 @@ import {
 } from '../lib/output'
 import { prompt } from '../lib/prompt'
 import { displayVaultInfo, displayVaultsList, setupVaultEvents } from '../ui'
+
+/**
+ * bead vultisig-33sz9: validate the fast-vault create inputs BEFORE the
+ * server round-trip. Previously accepted `--email notemail` (creates a
+ * vault that can never receive OTP), `--password x` (1-char passwords
+ * protecting MPC keyshares), and `--name ""` (server 500). Each
+ * successful invalid input provisioned real server-side FastVault state,
+ * polluting the server with orphaned records and letting a bad UI or
+ * shell wrapper generate garbage vaults trivially.
+ *
+ * All three checks are intentionally minimal and stated at the same
+ * layer so the diagnostic order is deterministic: name → email → password.
+ * The password floor is 8 chars (industry-standard lower bound; NIST
+ * SP 800-63B allows 8+ with no upper cap). Email is a syntactic sanity
+ * check, not a mailability guarantee — the OTP send later confirms
+ * deliverability, but 'notemail' can't possibly work.
+ */
+const PASSWORD_MIN_LENGTH = 8
+
+/**
+ * bead 33sz9 review (neavra, PR #1749, should-fix 4): reuse @vultisig/lib-utils'
+ * validateEmail as the baseline check instead of a fully hand-rolled regex, so this
+ * agrees with what other Vultisig clients (mobile, web) already accept/reject on the
+ * RFC-shaped syntax. Layered on top: rules the shared validator does not enforce but
+ * that matter specifically for OTP deliverability at fast-vault CREATE time — a bare
+ * hostname ("user@localhost"), a missing TLD ("no@dot"), or a dot-adjacent local part
+ * ("a.@x.com") pass the shared validator but can never receive real mail. These extra
+ * rules are intentionally create-time-only; see requireNonEmptyEmailForResend below
+ * for why `verify --resend` does not run this at all.
+ */
+function looksLikeFastVaultEmail(email: string): boolean {
+  if (validateEmail(email) !== undefined) return false
+
+  const [localPart, domain] = email.split('@')
+  if (!localPart || !domain) return false
+  if (localPart.startsWith('.') || localPart.endsWith('.') || localPart.includes('..')) return false
+  if (domain.startsWith('.') || domain.endsWith('.') || domain.includes('..')) return false
+  if (!domain.includes('.')) return false
+
+  const domainLabels = domain.split('.')
+  if (domainLabels.some(label => label.length === 0 || label.startsWith('-') || label.endsWith('-'))) return false
+
+  return true
+}
+
+function normalizeFastVaultEmailOrThrow(emailInput?: string): string {
+  const email = emailInput?.trim() ?? ''
+  if (email.length === 0) {
+    throw new InvalidInputError('Email is required for fast-vault operations', undefined, [
+      'Pass a valid --email address',
+    ])
+  }
+  if (!looksLikeFastVaultEmail(email)) {
+    throw new InvalidInputError(
+      `Email address does not look valid: "${email}"`,
+      'A fast-vault OTP is sent to this address — an invalid address creates an orphaned vault.',
+      ['Pass a well-formed --email like you@example.com']
+    )
+  }
+  return email
+}
+
+const graphemeSegmenter = new Intl.Segmenter('en', { granularity: 'grapheme' })
+
+function normalizeFastVaultPasswordOrThrow(passwordInput?: string): string {
+  const password = passwordInput ?? ''
+  const passwordCharacters = [...graphemeSegmenter.segment(password)].length
+  if (passwordCharacters < PASSWORD_MIN_LENGTH) {
+    throw new InvalidInputError(
+      `Password too short (${passwordCharacters} chars, minimum ${PASSWORD_MIN_LENGTH})`,
+      'The vault password protects your MPC keyshares — a short password is a real security risk.',
+      [`Pass a --password at least ${PASSWORD_MIN_LENGTH} characters`]
+    )
+  }
+  return password
+}
+
+/**
+ * bead 33sz9 review (neavra, PR #1749, blocking-1): `verify --resend` targets a vault
+ * that already exists on the server — its email/password were validated (or not) by
+ * whichever client created it, possibly under an older/looser rule set, and the
+ * server already accepted them. Re-running validateFastVaultCreateInputs' strictness
+ * here would lock a legitimately-created vault out of its own OTP resend: a legacy
+ * password shorter than the current 8-char floor, or an 8-emoji password that passed
+ * the old UTF-16-length check but not today's grapheme count, or an email another
+ * Vultisig client accepted at create time but this CLI's stricter syntax check would
+ * now reject. Resend only needs proof the caller supplied *something* to send to the
+ * server — the server is the source of truth on whether the credential is correct.
+ */
+function requireNonEmptyEmailForResend(emailInput?: string): string {
+  const email = emailInput?.trim() ?? ''
+  if (email.length === 0) {
+    throw new InvalidInputError('Email is required to resend verification', undefined, [
+      'Pass the --email used when the vault was created',
+    ])
+  }
+  return email
+}
+
+function requireNonEmptyPasswordForResend(passwordInput?: string): string {
+  const password = passwordInput ?? ''
+  if (password.length === 0) {
+    throw new InvalidInputError('Password is required to resend verification', undefined, [
+      'Pass the --password used when the vault was created',
+    ])
+  }
+  return password
+}
+
+export function validateFastVaultCreateInputs(input: { name?: string; email?: string; password?: string }): {
+  name: string
+  email: string
+  password: string
+} {
+  const name = input.name?.trim() ?? ''
+  if (name.length === 0) {
+    throw new InvalidInputError('Vault name is required and cannot be empty', undefined, ['Pass a non-empty --name'])
+  }
+
+  const email = normalizeFastVaultEmailOrThrow(input.email)
+  const password = normalizeFastVaultPasswordOrThrow(input.password)
+
+  return { name, email, password }
+}
 
 /**
  * Race a promise against an abort signal
@@ -70,12 +195,19 @@ export type SecureVaultOptions = {
  * Create a fast vault (server-assisted 2-of-2)
  */
 export async function executeCreateFast(ctx: CommandContext, options: FastVaultOptions): Promise<VaultBase> {
+  // bead vultisig-33sz9: validate the inputs BEFORE the server round-trip.
+  const { name, email, password } = validateFastVaultCreateInputs({
+    name: options.name,
+    email: options.email,
+    password: options.password,
+  })
+
   // Auto-enable two-step mode in non-interactive sessions (shared definition:
   // non-TTY stdout OR stdin, or --non-interactive/--ci). Keying off stdin alone
   // would let a redirected-stdout run create server-side vault state and only
   // then die on the OTP prompt — a side effect before the fail-closed refusal.
   const twoStep = options.twoStep || isNonInteractive()
-  const { name, password, email, signal } = options
+  const { signal } = options
 
   if (!options.twoStep && twoStep) {
     info('Non-interactive session detected. Using --two-step mode automatically.')
@@ -367,7 +499,14 @@ export async function executeVerify(
                 type: 'input' as const,
                 name: 'email',
                 message: 'Email address:',
-                validate: (input: string) => input.includes('@') || 'Please enter a valid email',
+                validate: (input: string) => {
+                  try {
+                    requireNonEmptyEmailForResend(input)
+                    return true
+                  } catch {
+                    return 'Please enter the email used when the vault was created'
+                  }
+                },
               },
             ]
           : []),
@@ -378,7 +517,14 @@ export async function executeVerify(
                 name: 'password',
                 message: 'Vault password:',
                 mask: '*',
-                validate: (input: string) => input.length >= 8 || 'Password must be at least 8 characters',
+                validate: (input: string) => {
+                  try {
+                    requireNonEmptyPasswordForResend(input)
+                    return true
+                  } catch {
+                    return 'Please enter the password used when the vault was created'
+                  }
+                },
               },
             ]
           : []),
@@ -387,9 +533,12 @@ export async function executeVerify(
       password = password || answers.password
     }
 
+    email = requireNonEmptyEmailForResend(email)
+    password = requireNonEmptyPasswordForResend(password)
+
     const spinner = createSpinner('Resending verification email...')
     try {
-      await ctx.sdk.resendVaultVerification({ vaultId, email: email!, password: password! })
+      await ctx.sdk.resendVaultVerification({ vaultId, email, password })
       spinner.succeed('Verification email sent!')
       info('Check your inbox for the new verification code.')
     } catch (resendErr: any) {
@@ -878,11 +1027,21 @@ export async function executeCreateFromSeedphraseFast(
   ctx: CommandContext,
   options: CreateFromSeedphraseFastOptions
 ): Promise<VaultBase> {
+  // bead vultisig-33sz9: validate name/email/password BEFORE the mnemonic +
+  // interactive checks. Same reasoning as executeCreateFast — these three
+  // inputs get sent to the FastVault server if not caught here, and each
+  // invalid one is trivially detectable client-side.
+  const { name, email, password } = validateFastVaultCreateInputs({
+    name: options.name,
+    email: options.email,
+    password: options.password,
+  })
+
   // This flow has no two-step mode: it always ends in an interactive email-OTP
   // prompt. Refuse up-front in a non-interactive session so no server-side vault
   // state is created before the prompt chokepoint would reject anyway.
   requireInteractive('Seedphrase fast-vault import requires interactive email-OTP entry; run it in a terminal.')
-  const { mnemonic, name, password, email, discoverChains, chains, signal, usePhantomSolanaPath } = options
+  const { mnemonic, discoverChains, chains, signal, usePhantomSolanaPath } = options
 
   // jscpd:ignore-start
   // 1. Validate seedphrase first

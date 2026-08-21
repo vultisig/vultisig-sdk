@@ -21,7 +21,7 @@ import {
   InvalidInputError,
   VaultNotFoundError,
 } from '../../core/errors'
-import { configureOutput, resetOutput } from '../../lib/output'
+import { configureOutput, resetOutput, setNonInteractive } from '../../lib/output'
 import { executeVaults, executeVerify } from '../vault-management'
 
 let stdout: string[]
@@ -157,6 +157,59 @@ describe('verify --resend failure', () => {
         expect((err as AuthRequiredError).code).toBe('AUTH_REQUIRED')
       }
     )
+  })
+
+  // A whitespace-only --email is truthy at the flag-presence check (`!email`), so it
+  // skips straight to the post-prompt re-validation below instead of the interactive
+  // fallback — unlike an empty --password, which is falsy and would route into the
+  // (unmocked, hanging-in-tests) prompt path instead; that case is covered via the
+  // mocked prompt in vault-management.test.ts's should-fix-5 tests.
+  it('rejects a whitespace-only resend email before any SDK call', async () => {
+    const resendVaultVerification = vi.fn().mockResolvedValue(undefined)
+    const ctx = {
+      sdk: { resendVaultVerification },
+      dispose: () => {},
+    } as unknown as CommandContext
+
+    await expect(
+      executeVerify(ctx, 'v1', { resend: true, email: '   ', password: 'password123' })
+    ).rejects.toBeInstanceOf(InvalidInputError)
+    expect(resendVaultVerification).not.toHaveBeenCalled()
+  })
+
+  // bead 33sz9 review (neavra, PR #1749, blocking-1): resend must accept whatever
+  // credential the vault was actually created with, not re-run create-time
+  // strictness. These fixtures would all be REJECTED by validateFastVaultCreateInputs
+  // (create's password floor is 8 graphemes; create's email check requires a TLD and
+  // rejects dot-adjacent local parts) — proving resend no longer shares that gate.
+  it('resends for a legacy password shorter than the current create-time minimum', async () => {
+    // Non-interactive so a successful resend with no --code returns immediately
+    // instead of falling through to a real (unmocked) OTP prompt.
+    setNonInteractive(true)
+    const resendVaultVerification = vi.fn().mockResolvedValue(undefined)
+    const ctx = {
+      sdk: { resendVaultVerification },
+      dispose: () => {},
+    } as unknown as CommandContext
+
+    const result = await executeVerify(ctx, 'v1', { resend: true, email: 'e@x.io', password: 'x' })
+
+    expect(result).toBe(true)
+    expect(resendVaultVerification).toHaveBeenCalledWith({ vaultId: 'v1', email: 'e@x.io', password: 'x' })
+  })
+
+  it('resends for an email that fails the CLI create-time syntax check (missing TLD)', async () => {
+    setNonInteractive(true)
+    const resendVaultVerification = vi.fn().mockResolvedValue(undefined)
+    const ctx = {
+      sdk: { resendVaultVerification },
+      dispose: () => {},
+    } as unknown as CommandContext
+
+    const result = await executeVerify(ctx, 'v1', { resend: true, email: 'no@dot', password: 'password123' })
+
+    expect(result).toBe(true)
+    expect(resendVaultVerification).toHaveBeenCalledWith({ vaultId: 'v1', email: 'no@dot', password: 'password123' })
   })
 })
 
