@@ -117,6 +117,11 @@ configureWasm(async () => {
 // Re-export entire public API
 export * from '../../index'
 
+// Signing primitives ship via the platform entrypoints rather than the root
+// barrel so Node/browser/electron/chrome consumers can use the same
+// `chains.<family>.*` surface the RN entry already exposes.
+export { chains } from '../react-native/chains'
+
 // Export platform-specific implementations for users to pass to Vultisig
 export { ElectronMainCrypto, ElectronMainPolyfills, FileStorage }
 
