@@ -5,6 +5,10 @@ import { describe, expect, it } from 'vitest'
 
 import * as sdk from '../../../src/index'
 import * as dangerousAddresses from '../../../src/utils/dangerousAddresses'
+import {
+  buildSignAminoKeysignPayload as canonicalBuildSignAminoKeysignPayload,
+  buildSignDirectKeysignPayload as canonicalBuildSignDirectKeysignPayload,
+} from '../../../src/vault/services/cosmos'
 import { cosmosTxFeeGasParityCases } from '../../fixtures/cosmosTxFeeGasParity'
 
 const dangerousAddressCanonicalExports = [
@@ -357,6 +361,11 @@ describe('@vultisig/sdk public exports', () => {
     const requiredFee = (gasLimit * 28_325n) / 1000n
     expect(sdk.TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS).toBeGreaterThanOrEqual(requiredFee)
     expect(msg.typeUrl).toBe('/cosmos.staking.v1beta1.MsgBeginRedelegate')
+  })
+
+  it('exports the canonical Cosmos custom-signing payload builders', () => {
+    expect(sdk.buildSignAminoKeysignPayload).toBe(canonicalBuildSignAminoKeysignPayload)
+    expect(sdk.buildSignDirectKeysignPayload).toBe(canonicalBuildSignDirectKeysignPayload)
   })
 
   it('exports seedphrase import chain support policy for consumers', () => {
