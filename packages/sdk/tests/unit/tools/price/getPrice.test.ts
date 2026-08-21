@@ -108,6 +108,23 @@ describe('getPrice', () => {
     )
   })
 
+  it.each([
+    ['Avalanche', 'avalanche'],
+    ['Zksync', 'zksync'],
+    ['Sei', 'sei-v2'],
+  ])('Route 1: uses the canonical CoinGecko platform for %s', async (chain, platform) => {
+    const contract = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+    mockQueryUrl.mockResolvedValueOnce({ [contract.toLowerCase()]: simplePrice(1.0) })
+    mockQueryUrl.mockResolvedValueOnce({ id: 'usd-coin', symbol: 'usdc', name: 'USD Coin' })
+
+    const quote = await getPrice({ tokenContract: contract, chain })
+
+    expect(quote.chain).toBe(chain)
+    expect(mockQueryUrl).toHaveBeenCalledWith(
+      expect.stringContaining(`/simple/token_price/${platform}?contract_addresses=${contract.toLowerCase()}`)
+    )
+  })
+
   it('Route 1: skips the metadata fetch when symbol+name+id provided', async () => {
     const contract = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
     mockQueryUrl.mockResolvedValueOnce({ [contract.toLowerCase()]: simplePrice(1.0) })

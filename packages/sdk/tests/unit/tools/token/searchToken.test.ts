@@ -75,7 +75,7 @@ describe('searchToken', () => {
     expect(results[0].deployments).toHaveLength(0)
   })
 
-  it('filters to unknown platforms', async () => {
+  it('maps canonical CoinGecko platforms back to SDK chains', async () => {
     mockQueryUrl.mockResolvedValueOnce({
       coins: [{ id: 'test-token', name: 'Test', symbol: 'TEST', market_cap_rank: null }],
     })
@@ -83,6 +83,10 @@ describe('searchToken', () => {
     mockQueryUrl.mockResolvedValueOnce({
       id: 'test-token',
       detail_platforms: {
+        'avalanche': { contract_address: '0xavax', decimal_place: 18 },
+        'zksync': { contract_address: '0xzk', decimal_place: 18 },
+        sei: { contract_address: '0xsei', decimal_place: 18 },
+        'the-open-network': { contract_address: 'EQTON', decimal_place: 9 },
         'some-unknown-chain': { contract_address: '0xabc', decimal_place: 18 },
         ethereum: { contract_address: '0xdef', decimal_place: 18 },
       },
@@ -90,9 +94,16 @@ describe('searchToken', () => {
 
     const results = await searchToken('TEST')
 
-    // Only ethereum should be mapped, unknown chain skipped
-    expect(results[0].deployments).toHaveLength(1)
-    expect(results[0].deployments[0].chain).toBe('Ethereum')
+    expect(results[0].deployments).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ chain: 'Avalanche', contractAddress: '0xavax', decimals: 18 }),
+        expect.objectContaining({ chain: 'Zksync', contractAddress: '0xzk', decimals: 18 }),
+        expect.objectContaining({ chain: 'Sei', contractAddress: '0xsei', decimals: 18 }),
+        expect.objectContaining({ chain: 'Ton', contractAddress: 'EQTON', decimals: 9 }),
+        expect.objectContaining({ chain: 'Ethereum', contractAddress: '0xdef', decimals: 18 }),
+      ])
+    )
+    expect(results[0].deployments).toHaveLength(5)
   })
 
   // Regression for sdk#1219: XRPL issued currencies (curated in

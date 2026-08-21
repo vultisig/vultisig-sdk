@@ -1,6 +1,7 @@
 import { rootApiUrl } from '@vultisig/core-config'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
+import { coinGeckoPlatformForChain } from '../coingecko/platforms'
 import { isKnownNativePriceSymbol, NATIVE_COINGECKO_IDS, symbolFromCoinGeckoId } from './coinGeckoIds'
 
 /**
@@ -22,28 +23,6 @@ const coinGeckoApiUrl = `${rootApiUrl}/coingeicko/api/v3`
 
 const evmAddressRE = /^0x[0-9a-fA-F]{40}$/
 const solanaAddressRE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/
-
-/**
- * CoinGecko asset-platform IDs keyed by Vultisig chain display name. Used when
- * pricing a token by its contract address.
- */
-const chainToPlatform: Readonly<Record<string, string>> = {
-  Ethereum: 'ethereum',
-  BSC: 'binance-smart-chain',
-  Polygon: 'polygon-pos',
-  Arbitrum: 'arbitrum-one',
-  Optimism: 'optimistic-ethereum',
-  Avalanche: 'avalanche',
-  Base: 'base',
-  Solana: 'solana',
-  Mantle: 'mantle',
-  Blast: 'blast',
-  Zksync: 'zksync',
-  CronosChain: 'cronos',
-  Hyperliquid: 'hyperliquid',
-  Sei: 'sei-network',
-  Robinhood: 'robinhood',
-}
 
 /** Parameters describing the token to price. Provide at least one identity. */
 export type PriceQuery = {
@@ -175,7 +154,7 @@ export const getPrice = async (query: PriceQuery): Promise<PriceQuote> => {
     if (!chain) {
       throw new Error('chain is required when looking up a token by contract address')
     }
-    const platform = chainToPlatform[chain]
+    const platform = coinGeckoPlatformForChain(chain)
     if (!platform) {
       throw new Error(`unsupported chain "${chain}" for token price lookup`)
     }
