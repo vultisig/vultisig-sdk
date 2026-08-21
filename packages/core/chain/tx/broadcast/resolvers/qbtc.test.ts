@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { Chain } from '../../../Chain'
+import { BroadcastErrorCode } from '../resolver'
 import { DeliverTxFailedError } from '../transientRetry'
 
-const { mockVerify } = vi.hoisted(() => ({ mockVerify: vi.fn(async () => {}) }))
+const { mockVerify } = vi.hoisted(() => ({ mockVerify: vi.fn(async (_input: any) => {}) }))
 vi.mock('../verifyBroadcastByHash', () => ({ verifyBroadcastByHash: mockVerify }))
 vi.mock('@vultisig/core-chain/chains/cosmos/qbtc/tendermintRpcUrl', () => ({ qbtcRestUrl: 'https://qbtc.test' }))
 
@@ -31,12 +32,13 @@ describe('broadcastQbtcTx — DeliverTx false-success', () => {
     vi.unstubAllGlobals()
   })
 
-  it('throws DeliverTxFailedError when CheckTx passes but DeliverTx fails (out-of-gas)', async () => {
+  it('returns a failed result when CheckTx passes but DeliverTx fails (out-of-gas)', async () => {
     stubFetch({
       checkTx: { tx_response: { code: 0, txhash: 'ABC123' } },
       inclusion: { tx_response: { code: 11, raw_log: 'out of gas' } },
     })
-    await expect(broadcastQbtcTx({ chain: Chain.QBTC, tx })).rejects.toBeInstanceOf(DeliverTxFailedError)
+    const result = await broadcastQbtcTx({ chain: Chain.QBTC, tx })
+    expect(result).toMatchObject({ status: 'failed', retryable: false, cause: expect.any(DeliverTxFailedError) })
   })
 
   it('resolves cleanly when both CheckTx and DeliverTx succeed', async () => {
@@ -44,7 +46,10 @@ describe('broadcastQbtcTx — DeliverTx false-success', () => {
       checkTx: { tx_response: { code: 0, txhash: 'ABC123' } },
       inclusion: { tx_response: { code: 0 } },
     })
-    await expect(broadcastQbtcTx({ chain: Chain.QBTC, tx })).resolves.toBeUndefined()
+    await expect(broadcastQbtcTx({ chain: Chain.QBTC, tx })).resolves.toMatchObject({
+      status: 'accepted',
+      txHash: 'ABC123',
+    })
     expect(mockVerify).not.toHaveBeenCalled()
   })
 
@@ -52,6 +57,40 @@ describe('broadcastQbtcTx — DeliverTx false-success', () => {
     stubFetch({ checkTx: {} })
     await broadcastQbtcTx({ chain: Chain.QBTC, tx })
     expect(mockVerify).toHaveBeenCalledOnce()
+  })
+
+  it('returns a definitive failure when a missing CheckTx hash cannot be verified', async () => {
+    const missingHash = new Error('QBTC broadcast: missing txhash on CheckTx response')
+    stubFetch({ checkTx: { tx_response: { code: 0 } } })
+    mockVerify.mockRejectedValueOnce(missingHash)
+
+    await expect(broadcastQbtcTx({ chain: Chain.QBTC, tx })).resolves.toEqual({
+      status: 'failed',
+      code: 'BROADCAST_REJECTED',
+      retryable: false,
+      cause: missingHash,
+    })
+  })
+
+  it('preserves a transient HTTP status in the cause used by the dispatcher retry classifier', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+        statusText: 'Service Unavailable',
+        url: 'https://qbtc.test/cosmos/tx/v1beta1/txs',
+        text: async () => 'opaque provider body',
+      })
+    )
+    mockVerify.mockImplementationOnce(({ error }) => Promise.reject(error))
+
+    await expect(broadcastQbtcTx({ chain: Chain.QBTC, tx })).resolves.toMatchObject({
+      status: 'failed',
+      code: BroadcastErrorCode.Transport,
+      retryable: true,
+      cause: expect.objectContaining({ status: 503 }),
+    })
   })
 
   it('verifies by hash on a CheckTx rejection (non-zero code)', async () => {
@@ -67,7 +106,10 @@ describe('broadcastQbtcTx — DeliverTx false-success', () => {
         throw new Error('network down')
       },
     })
-    await expect(broadcastQbtcTx({ chain: Chain.QBTC, tx })).resolves.toBeUndefined()
+    await expect(broadcastQbtcTx({ chain: Chain.QBTC, tx })).resolves.toMatchObject({
+      status: 'accepted',
+      txHash: 'ABC123',
+    })
     expect(mockVerify).not.toHaveBeenCalled()
   })
 })

@@ -31,6 +31,35 @@ const COMMAND_EXAMPLES: Record<string, { enumValues?: Record<string, string[]>; 
   execute: {
     examples: ['vultisig execute THORChain <contract> \'{"swap":{}}\''],
   },
+  'prep.contract-call': {
+    examples: [
+      'vultisig prep contract-call Ethereum <contractAddress> approve --sender <senderAddress> --abi \'[{"type":"function","name":"approve","inputs":[{"type":"address","name":"spender"},{"type":"uint256","name":"amount"}]}]\' --args \'["<spenderAddress>","1000000"]\'',
+    ],
+  },
+  'prep.ibc-transfer': {
+    examples: ['vultisig prep ibc-transfer Osmosis osmo1... cosmos1... uosmo 1000000 --to-chain Cosmos'],
+  },
+  'prep.spl-transfer': {
+    examples: ['vultisig prep spl-transfer <mint> <from> <to> 1000000 6'],
+  },
+  'prep.trc20-transfer': {
+    examples: ['vultisig prep trc20-transfer <contract> <from> <to> 1000000'],
+  },
+  'prep.jetton-transfer': {
+    examples: ['vultisig prep jetton-transfer <recipient> <senderJettonWallet> 1000000 5'],
+  },
+  'prep.sui-token-transfer': {
+    examples: ['vultisig prep sui-token-transfer <coinType> <from> <to> 1000000 --decimals 6'],
+  },
+  'prep.polkadot-asset-send': {
+    examples: ['vultisig prep polkadot-asset-send 1984 <from> <to> 1000000'],
+  },
+  'prep.cosmos-staking': {
+    examples: ['vultisig prep cosmos-staking delegate <delegator> <validator> 5000000 uosmo'],
+  },
+  'prep.cw20-transfer': {
+    examples: ['vultisig prep cw20-transfer osmo <contract> <recipient> 1000000 <sender>'],
+  },
   'swap-quote': {
     examples: ['vultisig swap-quote Ethereum Bitcoin 0.1 --output json'],
   },

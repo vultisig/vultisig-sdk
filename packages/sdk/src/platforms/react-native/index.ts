@@ -109,6 +109,12 @@ export {
   parseThorchainSecuredAssets,
   thorchainSecuredAssetFallback,
 } from '@vultisig/core-chain/chains/cosmos/thor/securedAssets'
+
+// Canonical Cosmos custom-message signing payload builders. Keep this
+// hand-curated RN surface aligned with the root SDK entrypoint.
+export type { BuildSignAminoPayloadInput, BuildSignDirectPayloadInput } from '../../vault/services/cosmos'
+export { buildSignAminoKeysignPayload, buildSignDirectKeysignPayload } from '../../vault/services/cosmos'
+
 // XRP Ledger issued-currency canonicals — pure helpers/tables that are safe on
 // the RN graph and should stay in parity with the root SDK entrypoint.
 export {
@@ -147,7 +153,7 @@ export type { WalletCoreLike } from '@vultisig/walletcore-native'
 // Address derivation and chain utilities
 // RN wrappers accept WalletCoreLike from @vultisig/walletcore-native
 // so consumers don't need to cast to @trustwallet/wallet-core's WalletCore.
-export { deriveAddress, getCoinType, getPublicKey, isValidAddress } from './chainHelpers'
+export { deriveAddress, getCoinType, getPublicKey, isValidAddress, isValidTokenId } from './chainHelpers'
 
 // MPC keysign (uses MpcEngine — no direct WASM imports)
 export { keysign } from '@vultisig/core-mpc/keysign'
@@ -596,6 +602,46 @@ export {
   parseUsdcAmount,
 } from '../../tools/bridge'
 
+// Read-only + unsigned swap helpers already exported from the root SDK entry.
+// RN-safe: Across is quote-only fetch + viem checksum logic; Jupiter/Skip export
+// unsigned-build helpers and pure registries/constants used by Station's mobile
+// signing flow. Mirroring them here keeps React Native consumers on the same
+// public SDK surface instead of re-importing root-only helpers or copying logic.
+export type {
+  AcrossChain,
+  AcrossQuote,
+  AcrossQuoteParams,
+  JupiterQuoteResponse,
+  JupiterSwapParams,
+  JupiterSwapResult,
+  SkipChainIdsToAffiliates,
+  SkipSwapArgs,
+  SkipSwapErrorEnvelope,
+  SkipSwapOutcome,
+  SkipSwapSuccess,
+  SkipUnsignedMsg,
+  SwapQuote,
+} from '../../tools/swap'
+export {
+  acrossQuote,
+  acrossSupportedChains,
+  buildJupiterSwapTx,
+  buildSkipAffiliates,
+  findSwapQuote,
+  JUPITER_AFFILIATE_FEE_ATAS,
+  JUPITER_AFFILIATE_FEE_OWNER,
+  JUPITER_API_BASE_URL,
+  JUPITER_DEFAULT_SLIPPAGE_BPS,
+  JUPITER_PLATFORM_FEE_BPS,
+  quoteSkipRoute,
+  resolveJupiterFeeAccount,
+  resolveLuncFloorUsd,
+  runSkipSwap,
+  SKIP_AFFILIATE_ADDRESS_BY_CHAIN,
+  skipChainIdToChainName,
+  SOL_NATIVE_MINT,
+} from '../../tools/swap'
+
 // Noon USDC vault helpers. The root SDK entry already exports these canonicals,
 // but the RN allow-list omitted them, pushing first-party mobile consumers back
 // toward local API/calldata wrappers for the same vault contract.
@@ -726,7 +772,7 @@ export { getSolBalance, getSplTokenBalance } from '../../tools/balance/solana'
 
 // Pure helpers — no chain client deps
 export type { AssetRef, ChainFamily, DecodeFromToolResultInput, Envelope, EnvelopeKind } from '../../tools/decode'
-export { decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from '../../tools/decode'
+export { decode, decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from '../../tools/decode'
 // Exact base-units -> human decimal-string conversion (pure bigint string
 // arithmetic, no float64 round-trip), pairing-QR payload generation, and the
 // notification-vault-id helper are all deterministic utilities with no live
