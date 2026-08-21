@@ -132,6 +132,25 @@ describe('getCosmosSigningInputs IBC transfer guards', () => {
     expect(input.memo).toBe('exchange:deposit:42')
   })
 
+  it.each([
+    ['missing channel', () => `Osmosis::${recipient}`],
+    ['malformed channel', () => `Osmosis:channel-x:${recipient}`],
+  ])('refuses an Osmosis routing memo with a %s', (_, buildMemo) => {
+    expect(() =>
+      getCosmosSigningInputs({
+        keysignPayload: buildPayload({
+          memo: buildMemo(),
+          ibcDenomTraces: {
+            path: 'transfer/channel-141',
+            baseDenom: 'uatom',
+            latestBlock: '12345_1751328000000000000',
+          },
+        }),
+        walletCore,
+      })
+    ).toThrow(/well-formed source channel/)
+  })
+
   it('preserves uint64 account identifiers above the JavaScript safe-integer range', async () => {
     const accountNumber = 9_007_199_254_740_993n
     const sequence = 18_446_744_073_709_551_615n
