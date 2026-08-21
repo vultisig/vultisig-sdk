@@ -55,9 +55,7 @@ describe('evm raced-public-rpc broadcast', () => {
   })
 
   it('throws for a chain with no public endpoints configured', async () => {
-    await expect(broadcastEvmTxRacedPublicRpc(EvmChain.Base, RAW)).rejects.toThrow(
-      /not configured for Base/
-    )
+    await expect(broadcastEvmTxRacedPublicRpc(EvmChain.Base, RAW)).rejects.toThrow(/not configured for Base/)
     expect(mockQueryUrl).not.toHaveBeenCalled()
   })
 })

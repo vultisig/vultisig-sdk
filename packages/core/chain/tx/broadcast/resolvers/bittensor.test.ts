@@ -19,10 +19,14 @@ describe('broadcastBittensorTx', () => {
 
   beforeEach(() => vi.clearAllMocks())
 
-  it('returns silently when the node accepts the extrinsic', async () => {
+  it('returns the canonical result when the node accepts the extrinsic', async () => {
     mocks.queryUrl.mockResolvedValue({ result: '0xdeadbeef' })
 
-    await expect(broadcastBittensorTx({ chain, tx })).resolves.toBeUndefined()
+    await expect(broadcastBittensorTx({ chain, tx })).resolves.toEqual({
+      status: 'accepted',
+      finality: 'pending',
+      txHash: '0xdeadbeef',
+    })
     expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
   })
 
@@ -31,7 +35,7 @@ describe('broadcastBittensorTx', () => {
       error: { code: 1013, message: 'TRANSACTION ALREADY IMPORTED' },
     })
 
-    await expect(broadcastBittensorTx({ chain, tx })).resolves.toBeUndefined()
+    await expect(broadcastBittensorTx({ chain, tx })).resolves.toEqual({ status: 'accepted', finality: 'pending' })
     expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
   })
 
@@ -40,7 +44,7 @@ describe('broadcastBittensorTx', () => {
       error: { code: 1010, message: 'Invalid Transaction', data: 'Already known' },
     })
 
-    await expect(broadcastBittensorTx({ chain, tx })).resolves.toBeUndefined()
+    await expect(broadcastBittensorTx({ chain, tx })).resolves.toEqual({ status: 'accepted', finality: 'pending' })
     expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
   })
 
@@ -48,9 +52,12 @@ describe('broadcastBittensorTx', () => {
     mocks.queryUrl.mockResolvedValue({
       error: { code: 1010, message: 'Transaction is temporarily banned' },
     })
-    mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
+    mocks.verifyBroadcastByHash.mockResolvedValue('0xverified')
 
-    await broadcastBittensorTx({ chain, tx })
+    await expect(broadcastBittensorTx({ chain, tx })).resolves.toMatchObject({
+      status: 'accepted',
+      txHash: '0xverified',
+    })
 
     expect(mocks.verifyBroadcastByHash).toHaveBeenCalledOnce()
     expect((mocks.verifyBroadcastByHash.mock.calls[0]![0].error as Error).message).toBe(
@@ -66,7 +73,7 @@ describe('broadcastBittensorTx', () => {
         data: 'Transaction has a bad signature',
       },
     })
-    mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
+    mocks.verifyBroadcastByHash.mockResolvedValue('0xverified')
 
     await broadcastBittensorTx({ chain, tx })
 
@@ -78,7 +85,7 @@ describe('broadcastBittensorTx', () => {
 
   it('routes a response without a result or error through verification', async () => {
     mocks.queryUrl.mockResolvedValue({})
-    mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
+    mocks.verifyBroadcastByHash.mockResolvedValue('0xverified')
 
     await broadcastBittensorTx({ chain, tx })
 
@@ -92,19 +99,22 @@ describe('broadcastBittensorTx', () => {
       throw error
     })
 
-    const error = await broadcastBittensorTx({ chain, tx }).catch(caught => caught)
+    const result = await broadcastBittensorTx({ chain, tx })
 
-    expect(error).toBeInstanceOf(Error)
-    expect(error).toHaveProperty('message', 'Bittensor broadcast failed: missing extrinsic hash in RPC response')
-    expect(isTransientBroadcastError(error)).toBe(false)
+    expect(result).toMatchObject({ status: 'failed', retryable: false })
+    expect(result).toHaveProperty('cause.message', 'Bittensor broadcast failed: missing extrinsic hash in RPC response')
+    expect(isTransientBroadcastError(result.status === 'failed' ? result.cause : undefined)).toBe(false)
   })
 
   it('routes transport failures through verification', async () => {
     const error = new Error('ECONNRESET')
     mocks.queryUrl.mockRejectedValue(error)
-    mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
+    mocks.verifyBroadcastByHash.mockResolvedValue('0xverified')
 
-    await broadcastBittensorTx({ chain, tx })
+    await expect(broadcastBittensorTx({ chain, tx })).resolves.toMatchObject({
+      status: 'accepted',
+      txHash: '0xverified',
+    })
 
     expect(mocks.verifyBroadcastByHash).toHaveBeenCalledOnce()
     expect(mocks.verifyBroadcastByHash.mock.calls[0]![0].error).toBe(error)

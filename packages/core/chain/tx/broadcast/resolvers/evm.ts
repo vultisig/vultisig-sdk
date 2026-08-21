@@ -4,33 +4,42 @@ import { attempt } from '@vultisig/lib-utils/attempt'
 import { isInError } from '@vultisig/lib-utils/error/isInError'
 import { ensureHexPrefix } from '@vultisig/lib-utils/hex/ensureHexPrefix'
 
-import { BroadcastTxResolver } from '../resolver'
+import { broadcastAccepted, broadcastFailed, BroadcastTxResolver, isRetryableBroadcastCause } from '../resolver'
 import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
 import { broadcastEvmTxRacedPublicRpc } from './evmRacedPublicRpc'
 
 export const broadcastEvmTx: BroadcastTxResolver<EvmChain> = async ({ chain, tx, strategy }) => {
-  const serializedTransaction = ensureHexPrefix(Buffer.from(tx.encoded).toString('hex'))
+  try {
+    const serializedTransaction = ensureHexPrefix(Buffer.from(tx.encoded).toString('hex'))
 
-  if (strategy === 'raced-public-rpc') {
-    await broadcastEvmTxRacedPublicRpc(chain, serializedTransaction)
-    return
+    if (strategy === 'raced-public-rpc') {
+      await broadcastEvmTxRacedPublicRpc(chain, serializedTransaction)
+      return broadcastAccepted()
+    }
+
+    const client = getEvmClient(chain)
+
+    const result = await attempt(
+      client.sendRawTransaction({
+        serializedTransaction,
+      })
+    )
+
+    if ('data' in result) {
+      return broadcastAccepted(result.data)
+    }
+
+    const { error } = result
+    if (error && isInError(error, 'already known', 'transaction already exists', 'tx already in mempool')) {
+      return broadcastAccepted()
+    }
+
+    try {
+      return broadcastAccepted(await verifyBroadcastByHash({ chain, tx, error }))
+    } catch (cause) {
+      return broadcastFailed(cause, isRetryableBroadcastCause(error))
+    }
+  } catch (cause) {
+    return broadcastFailed(cause, isRetryableBroadcastCause(cause))
   }
-
-  const client = getEvmClient(chain)
-
-  const { error } = await attempt(
-    client.sendRawTransaction({
-      serializedTransaction,
-    })
-  )
-
-  if (!error) {
-    return
-  }
-
-  if (isInError(error, 'already known', 'transaction already exists', 'tx already in mempool')) {
-    return
-  }
-
-  await verifyBroadcastByHash({ chain, tx, error })
 }

@@ -1,8 +1,6 @@
 import { ChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
 
-import { BroadcastTxResolver } from './resolver'
-
-export type { BroadcastStrategy } from './resolver'
+import { broadcastFailed, BroadcastTxResolver, isBroadcastTxResult, isRetryableBroadcastCause } from './resolver'
 import { broadcastBittensorTx } from './resolvers/bittensor'
 import { broadcastCardanoTx } from './resolvers/cardano'
 import { broadcastCosmosTx } from './resolvers/cosmos'
@@ -34,13 +32,50 @@ const resolvers: Record<ChainKind, BroadcastTxResolver<any>> = {
 
 const hasResolverOwnedRetry = (chainKind: ChainKind): boolean => chainKind === 'evm' || chainKind === 'solana'
 
-export const broadcastTx: BroadcastTxResolver = input => {
+export type {
+  BroadcastAcceptedResult,
+  BroadcastFailedResult,
+  BroadcastProviderDetails,
+  BroadcastStrategy,
+  BroadcastTxResolver,
+  BroadcastTxResult,
+} from './resolver'
+export { BroadcastErrorCode } from './resolver'
+
+export const broadcastTx: BroadcastTxResolver = async input => {
   const chainKind = getChainKind(input.chain)
   const resolver = resolvers[chainKind]
 
-  if (hasResolverOwnedRetry(chainKind)) {
-    return resolver(input)
+  const resolveOnce = async () => {
+    try {
+      const result = await resolver(input)
+      if (isBroadcastTxResult(result)) return result
+
+      return broadcastFailed(new Error('Broadcast resolver returned an invalid result'), false, {
+        provider: result,
+      })
+    } catch (cause) {
+      return broadcastFailed(cause, isRetryableBroadcastCause(cause))
+    }
   }
 
-  return withTransientBroadcastRetry(() => resolver(input))
+  if (hasResolverOwnedRetry(chainKind)) {
+    return resolveOnce()
+  }
+
+  try {
+    return await withTransientBroadcastRetry(async () => {
+      const result = await resolveOnce()
+      if (result.status === 'failed' && result.retryable) throw result
+
+      return result
+    })
+  } catch (cause) {
+    if (isBroadcastTxResult(cause)) return cause
+    // The public boundary is total even if a future resolver forgets to
+    // normalize an exception. Default to non-retryable unless the cause is a
+    // recognizable transport failure; blindly retrying an ambiguous signed
+    // transaction can double-submit it.
+    return broadcastFailed(cause, isRetryableBroadcastCause(cause))
+  }
 }

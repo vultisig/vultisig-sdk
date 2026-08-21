@@ -988,7 +988,20 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     nextData.revision = (actualRevision ?? 0) + 1
     nextData.lastModified = Date.now()
 
-    await this.storage.set(key, cloneVaultData(nextData))
+    const nextSnapshot = cloneVaultData(nextData)
+    if (this.storage.compareAndSet) {
+      const replaced = await this.storage.compareAndSet(key, currentData, nextSnapshot)
+      if (!replaced) {
+        const latestData = await this.storage.get<VaultData>(key)
+        const latestRevision = latestData ? getVaultRevision(latestData) : null
+        throw new VaultConflictError(this.vaultData.id, expectedRevision, latestRevision)
+      }
+    } else {
+      // Legacy custom adapters may omit compareAndSet, so ordinary saves retain
+      // the historical set fallback. Import is stricter and rejects such an
+      // adapter before writing because key-share replacement must be atomic.
+      await this.storage.set(key, nextSnapshot)
+    }
     this.restorePersistedVaultData(nextData)
     this.syncRuntimeFromVaultData()
     this.emit('saved', { vaultId: this.vaultData.id })

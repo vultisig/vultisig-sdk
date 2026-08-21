@@ -2,9 +2,9 @@ import { Chain, CosmosChain, VaultBasedCosmosChain } from '@vultisig/core-chain/
 import { cosmosFeeCoinDenom } from '@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom'
 import { getCosmosGasLimit } from '@vultisig/core-chain/chains/cosmos/cosmosGasLimitRecord'
 import { resolveCosmosGasLimit } from '@vultisig/core-chain/chains/cosmos/resolveCosmosGasLimit'
+import { isTerraClassicUstcCoin } from '@vultisig/core-chain/chains/cosmos/terraClassicTax'
 import { getCosmosChainKind } from '@vultisig/core-chain/chains/cosmos/utils/getCosmosChainKind'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
-import { areEqualCoins } from '@vultisig/core-chain/coin/Coin'
 import {
   getNativeSwapChainIdFromDenomPrefix,
   nativeSwapChainIds,
@@ -544,32 +544,32 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
         return
       }
 
-      const { ibcDenomTraces } = getRecordUnionValue(chainSpecific, 'ibcEnabled')
+      // Terra Classic bank-denom sends (currently USTC / uusd) pay gas plus
+      // burn tax in the send denom itself. `CosmosSpecific.gas` already
+      // contains that complete amount, computed by the initiator, so emit one
+      // uusd fee coin exactly like the current Swift and Kotlin signers.
+      //
+      // Scoped to PLAIN sends only (mirrors the initiator's `isPlainSend` gate
+      // in `getCosmosChainSpecific`): an IBC transfer of USTC still prices
+      // `gas` in `uluna` (chain-specific pricing, not the uusd surcharge), so
+      // relabeling its denom to uusd here would sign a fee coin that doesn't
+      // match what was actually priced.
+      const isPlainSend = ibcSpecific?.transactionType === TransactionType.UNSPECIFIED
+      if (isPlainSend && isTerraClassicUstcCoin(coin)) {
+        return [
+          TW.Cosmos.Proto.Amount.create({
+            amount: feeAmount.toString(),
+            denom: coin.id,
+          }),
+        ]
+      }
 
-      const amounts: TW.Cosmos.Proto.Amount[] = [
+      return [
         TW.Cosmos.Proto.Amount.create({
           amount: feeAmount.toString(),
           denom: chainFeeDenom,
         }),
       ]
-
-      // Terra Classic stability-tax surcharge for USTC (uusd) sends.
-      // The burn-tax amount is pre-computed dynamically in getCosmosChainSpecific
-      // and stored in ibcDenomTraces.baseDenom so this sync path can use it.
-      // baseDenom is '' for all non-USTC chains; '0' when rate is zero.
-      if (areEqualCoins(coin, { chain: Chain.TerraClassic, id: 'uusd' })) {
-        const burnTaxAmount = BigInt(ibcDenomTraces?.baseDenom || '0')
-        if (burnTaxAmount > 0n) {
-          amounts.push(
-            TW.Cosmos.Proto.Amount.create({
-              denom: coin.id,
-              amount: burnTaxAmount.toString(),
-            })
-          )
-        }
-      }
-
-      return amounts
     }
 
     const ibcSpecific = chainKind === 'ibcEnabled' ? getRecordUnionValue(chainSpecific, 'ibcEnabled') : undefined

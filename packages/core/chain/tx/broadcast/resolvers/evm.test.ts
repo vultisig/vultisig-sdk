@@ -50,10 +50,15 @@ describe('broadcastEvmTx', () => {
   })
 
   it('does not swallow a raced-public-rpc failure into the default proxy path', async () => {
-    mockRaced.mockRejectedValue(new Error('raced-public-rpc broadcast failed for Ethereum'))
+    const cause = new Error('raced-public-rpc broadcast failed for Ethereum')
+    mockRaced.mockRejectedValue(cause)
 
-    await expect(broadcastEvmTx({ chain: EvmChain.Ethereum, tx, strategy: 'raced-public-rpc' })).rejects.toThrow(
-      /raced-public-rpc broadcast failed/
+    await expect(broadcastEvmTx({ chain: EvmChain.Ethereum, tx, strategy: 'raced-public-rpc' })).resolves.toMatchObject(
+      {
+        status: 'failed',
+        retryable: false,
+        cause,
+      }
     )
     expect(mockSendRaw).not.toHaveBeenCalled()
   })
