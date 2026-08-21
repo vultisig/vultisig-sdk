@@ -109,6 +109,12 @@ export {
   parseThorchainSecuredAssets,
   thorchainSecuredAssetFallback,
 } from '@vultisig/core-chain/chains/cosmos/thor/securedAssets'
+
+// Canonical Cosmos custom-message signing payload builders. Keep this
+// hand-curated RN surface aligned with the root SDK entrypoint.
+export type { BuildSignAminoPayloadInput, BuildSignDirectPayloadInput } from '../../vault/services/cosmos'
+export { buildSignAminoKeysignPayload, buildSignDirectKeysignPayload } from '../../vault/services/cosmos'
+
 // XRP Ledger issued-currency canonicals — pure helpers/tables that are safe on
 // the RN graph and should stay in parity with the root SDK entrypoint.
 export {
@@ -147,7 +153,7 @@ export type { WalletCoreLike } from '@vultisig/walletcore-native'
 // Address derivation and chain utilities
 // RN wrappers accept WalletCoreLike from @vultisig/walletcore-native
 // so consumers don't need to cast to @trustwallet/wallet-core's WalletCore.
-export { deriveAddress, getCoinType, getPublicKey, isValidAddress } from './chainHelpers'
+export { deriveAddress, getCoinType, getPublicKey, isValidAddress, isValidTokenId } from './chainHelpers'
 
 // MPC keysign (uses MpcEngine — no direct WASM imports)
 export { keysign } from '@vultisig/core-mpc/keysign'
