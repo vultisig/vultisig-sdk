@@ -292,6 +292,36 @@ describe('sdk.defi.stakekit', () => {
       expect(step1.max_fee_per_gas).toBe('0x5f5e100')
     })
 
+    it('preserves snake_case EIP-1559 priority-fee hints from gasEstimate', () => {
+      const resp = makeEvmActionResponse({
+        transactions: [
+          {
+            id: 'tx-snake-gas',
+            title: 'Supply USDC',
+            type: 'SUPPLY',
+            network: 'base',
+            status: 'CREATED',
+            unsignedTransaction: JSON.stringify({
+              to: '0xfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed',
+              data: '0xdeadbeef',
+              value: '0x0',
+            }),
+            gasEstimate: JSON.stringify({
+              gas_limit: '210000',
+              max_fee_per_gas: '0x5',
+              max_priority_fee_per_gas: '0x2',
+            }),
+          },
+        ],
+      })
+
+      const display = parseActionDisplay(resp)
+      const step0 = display.transactions[0] as Record<string, unknown>
+      expect(step0.gas_limit).toBe('210000')
+      expect(step0.max_fee_per_gas).toBe('0x5')
+      expect(step0.max_priority_fee_per_gas).toBe('0x2')
+    })
+
     it('Non-EVM (Solana) step has tx_encoding: "solana-tx"', () => {
       const resp = makeSolanaActionResponse()
       const display = parseActionDisplay(resp)

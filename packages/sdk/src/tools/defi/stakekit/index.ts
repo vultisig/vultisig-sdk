@@ -185,7 +185,8 @@ function canonicalizeEvmStep(step: DecodedYieldStep): Record<string, unknown> | 
     (typeof ge.max_fee_per_gas === 'string' ? ge.max_fee_per_gas : null)
   const maxPrioVal =
     (typeof ur.maxPriorityFeePerGas === 'string' ? ur.maxPriorityFeePerGas : null) ??
-    (typeof ge.maxPriorityFeePerGas === 'string' ? ge.maxPriorityFeePerGas : null)
+    (typeof ge.maxPriorityFeePerGas === 'string' ? ge.maxPriorityFeePerGas : null) ??
+    (typeof ge.max_priority_fee_per_gas === 'string' ? ge.max_priority_fee_per_gas : null)
   if (gasLimitVal !== null) out.gas_limit = gasLimitVal
   if (maxFeeVal !== null) out.max_fee_per_gas = maxFeeVal
   if (maxPrioVal !== null) out.max_priority_fee_per_gas = maxPrioVal
