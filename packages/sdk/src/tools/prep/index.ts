@@ -32,7 +32,12 @@ export {
   supportedIbcDestinationsFrom,
 } from './ibcTransfer'
 export { prepareJettonTransferTxFromKeys, type PrepareJettonTransferTxFromKeysParams } from './jettonTransfer'
-export { getMaxSendAmountFromKeys, type GetMaxSendAmountFromKeysParams } from './maxSend'
+export {
+  computeMaxSendFromBalance,
+  type ComputeMaxSendFromBalanceParams,
+  getMaxSendAmountFromKeys,
+  type GetMaxSendAmountFromKeysParams,
+} from './maxSend'
 export {
   POLKADOT_ASSET_HUB_KNOWN_ASSETS,
   preparePolkadotAssetSend,
