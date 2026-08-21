@@ -1,5 +1,6 @@
 import { EvmChain } from '@vultisig/core-chain/Chain'
-import { getEvmClient } from '@vultisig/core-chain/chains/evm/client'
+
+import { EvmGasPrice, evmGasPrice } from '../evm/gasPrice'
 
 /**
  * Gas units consumed by the supported tx archetypes. A plain native/ERC-20
@@ -66,10 +67,14 @@ export type CompareCostsResult = {
   skipped: CompareCostsSkipped[]
 }
 
-/** Fetch the current gas price (gwei, 4 dp) for a single EVM chain. */
+/**
+ * Fetch the current gas price (gwei, 4 dp) for a single EVM chain.
+ * Reuses `evmGasPrice` so sub-display non-zero wei values do not round down to
+ * a misleading `0 gwei` / zero-native-cost result here.
+ */
 export const getChainGasPriceGwei = async (chain: EvmChain): Promise<number> => {
-  const wei = await getEvmClient(chain).getGasPrice()
-  return parseFloat((Number(wei) / 1e9).toFixed(4))
+  const { gasPriceGwei } = await evmGasPrice(chain)
+  return gasPriceGwei
 }
 
 /**
@@ -91,7 +96,9 @@ export const compareCosts = async (params: CompareCostsParams = {}): Promise<Com
   const gasUnits = GAS_UNITS[txType]
   const prices = params.nativeUsdPrices ?? {}
 
-  const settlements = await Promise.allSettled(chains.map(chain => getChainGasPriceGwei(chain)))
+  const settlements: PromiseSettledResult<EvmGasPrice>[] = await Promise.allSettled(
+    chains.map(chain => evmGasPrice(chain))
+  )
 
   const results: CompareCostsEntry[] = []
   const skipped: CompareCostsSkipped[] = []
@@ -107,8 +114,13 @@ export const compareCosts = async (params: CompareCostsParams = {}): Promise<Com
       return
     }
 
-    const gasPriceGwei = settlement.value
-    const estTxCostNative = parseFloat((gasPriceGwei * 1e-9 * gasUnits).toFixed(12))
+    // Cost math ALWAYS uses the exact `gasPriceWei` bigint, never the
+    // display-rounded `gasPriceGwei`. Two sub-display wei prices (e.g. 10_001
+    // vs 49_999) both clamp to the same 0.0001 gwei for display, but are ~5x
+    // apart in reality, so ranking off the clamped gwei would tie or misorder
+    // them. `gasPriceGwei` is passed through untouched for UI display only.
+    const { gasPriceWei, gasPriceGwei } = settlement.value
+    const estTxCostNative = Number(gasPriceWei * BigInt(gasUnits)) / 1e18
     const nativeUsd = prices[chain] ?? null
     const estTxCostUsd = nativeUsd !== null ? parseFloat((estTxCostNative * nativeUsd).toFixed(6)) : null
 
