@@ -1,5 +1,17 @@
 # @vultisig/sdk
 
+## 5.2.0
+
+### Minor Changes
+
+- [#1899](https://github.com/vultisig/vultisig-sdk/pull/1899) [`df144e9`](https://github.com/vultisig/vultisig-sdk/commit/df144e9e21c2fb64e73efcf12ac35c958dbf1c7b) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Export the canonical Cosmos SignAmino and SignDirect keysign payload builders from the root and React Native SDK surfaces.
+
+### Patch Changes
+
+- [#1688](https://github.com/vultisig/vultisig-sdk/pull/1688) [`397c2b6`](https://github.com/vultisig/vultisig-sdk/commit/397c2b6629fdc7002d55bd95bb8585dce78de416) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Return the deterministic Bittensor extrinsic hash for duplicate or timeout-style raw broadcast submissions.
+
+- [#1891](https://github.com/vultisig/vultisig-sdk/pull/1891) [`7d6a014`](https://github.com/vultisig/vultisig-sdk/commit/7d6a01440fd0b855356cce81469b5b5a91665862) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Standardize signed-transaction broadcast adapters on one typed accepted-or-failed result contract.
+
 ## 5.1.1
 
 ### Patch Changes
