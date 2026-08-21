@@ -124,7 +124,7 @@ const IBC_CHANNEL_BY_ROUTE: Map<string, string> = (() => {
 })()
 
 /** source_channel for a given (from_chain → to_chain_id) route, or null. */
-function resolveSourceChannelByDestChain(fromChain: string, toChainId: string): string | null {
+export function resolveSourceChannelByDestChain(fromChain: string, toChainId: string): string | null {
   return IBC_CHANNEL_BY_ROUTE.get(`${fromChain}→${toChainId}`) ?? null
 }
 

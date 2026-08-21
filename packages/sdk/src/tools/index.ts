@@ -380,6 +380,7 @@ export {
   prepareIbcTransfer,
   type PrepareIbcTransferParams,
   type PrepareIbcTransferResult,
+  resolveSourceChannelByDestChain,
   prepareJettonTransferTxFromKeys,
   type PrepareJettonTransferTxFromKeysParams,
   preparePolkadotAssetSend,
