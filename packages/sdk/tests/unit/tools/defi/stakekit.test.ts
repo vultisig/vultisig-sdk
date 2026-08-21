@@ -605,6 +605,89 @@ describe('sdk.defi.stakekit', () => {
       const r = result as Record<string, unknown>
       expect(r.cooldown_days).toBeUndefined()
     })
+
+    it('keeps validatorAddresses inside args on REST exit fallback', async () => {
+      const validatorProduct = makeProduct({
+        id: 'ethereum-eth-lido-staking-r63-validator-exit',
+        args: {
+          enter: { addresses: {}, args: {} },
+          exit: {
+            addresses: {},
+            args: { validatorAddresses: { required: true }, amount: { required: true } },
+          },
+        },
+        validators: [
+          {
+            name: 'Lido validator',
+            address: '0xvalidator',
+            apr: 0.04,
+            commission: 0,
+            stakedBalance: '0',
+            preferred: true,
+          },
+        ],
+      })
+      const actionResp: YieldActionResponse = {
+        id: 'action-exit-validator',
+        intent: 'EXIT',
+        type: 'UNSTAKE',
+        yieldId: 'ethereum-eth-lido-staking-r63-validator-exit',
+        amount: '1',
+        amountRaw: '1000000000000000000',
+        amountUsd: '1',
+        transactions: [
+          {
+            id: 'tx-exit-validator',
+            title: 'Unstake ETH',
+            type: 'UNSTAKE',
+            network: 'ethereum',
+            status: 'CREATED',
+            unsignedTransaction: JSON.stringify({
+              to: '0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84',
+              value: '0x0',
+              data: '0x1234',
+              from: '0x1234567890123456789012345678901234567890',
+            }),
+            gasEstimate: '{}',
+          },
+        ],
+      }
+      const fetchMock = vi.fn().mockImplementation((url: unknown, opts?: RequestInit) => {
+        const u = String(url)
+        if (u.includes('/mcp')) {
+          return Promise.reject(new Error('MCP unavailable'))
+        }
+        if (u.includes('/actions/exit')) {
+          const body = JSON.parse(String(opts?.body ?? '{}')) as Record<string, unknown>
+          expect(body.validatorAddresses).toBeUndefined()
+          expect(body.args).toMatchObject({
+            amount: '1',
+            validatorAddresses: ['0xvalidator'],
+          })
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => actionResp,
+            text: async () => JSON.stringify(actionResp),
+          } as Response)
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => validatorProduct,
+          text: async () => JSON.stringify(validatorProduct),
+        } as Response)
+      })
+      globalThis.fetch = fetchMock
+
+      await stakekitBuildExit({
+        yieldId: 'ethereum-eth-lido-staking-r63-validator-exit',
+        address: '0x1234567890123456789012345678901234567890',
+        amount: '1',
+      })
+
+      expect(fetchMock).toHaveBeenCalled()
+    })
   })
 
   describe('stakekitBalances', () => {
