@@ -11,7 +11,7 @@
 import { Chain } from '@vultisig/sdk'
 import { describe, expect, it } from 'vitest'
 
-import { resolveChainOrThrow } from './chain-resolver'
+import { resolveChainOrThrow, suggestChainNames } from './chain-resolver'
 import { ExitCode, InvalidChainError } from './errors'
 
 describe('resolveChainOrThrow', () => {
@@ -51,5 +51,56 @@ describe('resolveChainOrThrow', () => {
 
   it('does not accept the empty string as a chain', () => {
     expect(() => resolveChainOrThrow('')).toThrow(InvalidChainError)
+  })
+
+  // bead vultisig-7eymb: `Cronos` (the brand) forced users to know the SDK enum
+  // name `CronosChain`. Did-you-mean suggestion surfaces the closest match(es)
+  // in both the human hint AND the error context so JSON callers can consume.
+  it('suggests CronosChain when user types the Cronos brand', () => {
+    try {
+      resolveChainOrThrow('Cronos')
+      throw new Error('expected resolveChainOrThrow to throw')
+    } catch (err) {
+      const chainErr = err as InvalidChainError
+      expect(chainErr.hint ?? '').toMatch(/Did you mean.*CronosChain/)
+      // context.suggestions is a comma-joined string (context values must be strings)
+      expect(chainErr.context?.suggestions ?? '').toContain(Chain.CronosChain)
+    }
+  })
+
+  it('falls back to the generic hint when no suggestion is close enough', () => {
+    try {
+      resolveChainOrThrow('zzzzzzzz')
+      throw new Error('expected resolveChainOrThrow to throw')
+    } catch (err) {
+      const chainErr = err as InvalidChainError
+      // No did-you-mean, just the original generic hint.
+      expect(chainErr.hint ?? '').toMatch(/vultisig chains/)
+      expect(chainErr.hint ?? '').not.toMatch(/Did you mean/)
+    }
+  })
+})
+
+describe('suggestChainNames', () => {
+  it('suggests CronosChain for Cronos (prefix match, high score)', () => {
+    const s = suggestChainNames('Cronos')
+    expect(s[0]).toBe(Chain.CronosChain)
+  })
+
+  it('is case-insensitive', () => {
+    expect(suggestChainNames('cronos')[0]).toBe(Chain.CronosChain)
+    expect(suggestChainNames('CRONOS')[0]).toBe(Chain.CronosChain)
+  })
+
+  it('returns [] for empty input', () => {
+    expect(suggestChainNames('')).toEqual([])
+    expect(suggestChainNames('   ')).toEqual([])
+  })
+
+  it('caps the number of suggestions', () => {
+    // A short common substring like "chain" matches multiple entries — the limit
+    // guards against dumping half the enum into the error hint.
+    const s = suggestChainNames('chain', 2)
+    expect(s.length).toBeLessThanOrEqual(2)
   })
 })
