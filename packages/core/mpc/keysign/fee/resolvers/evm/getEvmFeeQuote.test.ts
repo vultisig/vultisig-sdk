@@ -1,4 +1,5 @@
 import { EvmChain } from '@vultisig/core-chain/Chain'
+import { deriveEvmGasLimit } from '@vultisig/core-chain/tx/fee/evm/evmGasLimit'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 
 const mocks = vi.hoisted(() => {
@@ -168,6 +169,60 @@ describe('getEvmFeeQuote gas limit buffering', () => {
     const quote = await getEvmFeeQuote({
       keysignPayload: {} as never,
       minimumGasLimit: 3_000_000_000n,
+    })
+
+    expect(quote.gasLimit).toBe(3_000_000_000n)
+  })
+
+  // sdk#1847: the Mantle NATIVE floor (deriveEvmGasLimit -> minimumGasLimit here) dropped
+  // from 90_000_000n to 400_000n. These two tests pin the capGasLimit contract that fix
+  // relies on: a real eth_estimateGas answer higher than the floor still wins (the floor is
+  // only a fallback, never a forced minimum that overrides a live estimate), and the floor
+  // still protects a native send when live estimation is unavailable.
+  it('a native Mantle send uses the LIVE eth_estimateGas answer when it exceeds the new 400_000n floor', async () => {
+    mocks.getKeysignCoin.mockReturnValue(makeCoin(EvmChain.Mantle))
+    mocks.getKeysignSwapPayload.mockReturnValue(undefined)
+    mocks.client.estimateGas.mockResolvedValueOnce(650_000n)
+
+    const quote = await getEvmFeeQuote({
+      keysignPayload: { toAddress: router } as never,
+      minimumGasLimit: 400_000n,
+    })
+
+    // Native (non-swap, non-data) sends are not buffered - the live estimate passes through.
+    expect(quote.gasLimit).toBe(650_000n)
+    expect(mocks.client.estimateGas).toHaveBeenCalled()
+  })
+
+  it('a native Mantle send falls back to the new 400_000n floor when live estimation fails (still a real safety net, not the old 90,000,000n)', async () => {
+    mocks.getKeysignCoin.mockReturnValue(makeCoin(EvmChain.Mantle))
+    mocks.getKeysignSwapPayload.mockReturnValue(undefined)
+    mocks.client.estimateGas.mockRejectedValueOnce(new Error('execution reverted'))
+
+    const quote = await getEvmFeeQuote({
+      keysignPayload: { toAddress: router } as never,
+      minimumGasLimit: 400_000n,
+    })
+
+    expect(quote.gasLimit).toBe(400_000n)
+  })
+
+  it('sdk#1938: a memo-less Mantle ERC-20 send signs the 3_000_000_000n data-bearing floor, not the 120_000n token-table default, when estimation fails', async () => {
+    // Mirrors chainSpecific/resolvers/evm.ts's real call shape for a plain token send:
+    // coin.id set (it's an ERC-20), no memo/swap payload so getData() returns undefined,
+    // and minimumGasLimit computed via the REAL deriveEvmGasLimit (not a literal) so this
+    // test actually guards the fix in evmGasLimit.ts, not just the capGasLimit contract.
+    mocks.getKeysignCoin.mockReturnValue({ ...makeCoin(EvmChain.Mantle), id: router })
+    mocks.getKeysignSwapPayload.mockReturnValue(undefined)
+    mocks.client.estimateGas.mockRejectedValueOnce(new Error('execution reverted'))
+
+    const coin = { ...makeCoin(EvmChain.Mantle), id: router }
+    const minimumGasLimit = deriveEvmGasLimit({ coin, data: undefined })
+    expect(minimumGasLimit).toBe(3_000_000_000n)
+
+    const quote = await getEvmFeeQuote({
+      keysignPayload: { toAddress: router } as never,
+      minimumGasLimit,
     })
 
     expect(quote.gasLimit).toBe(3_000_000_000n)
