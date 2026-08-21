@@ -47,7 +47,7 @@
  */
 
 import { sha256 } from '@noble/hashes/sha2.js'
-import bs58check from 'bs58check'
+import { base58CheckTronDecodeBytes } from '@vultisig/core-chain/coin/balance/resolvers/tron'
 
 import { concatProtoBytes, fieldBytes, fieldInt64, fieldString, fieldVarint } from './proto'
 
@@ -190,18 +190,7 @@ function hexToBytes(hex: string): Uint8Array {
  * Tron's protobuf carries addresses as raw bytes, not the base58check string.
  */
 export function tronAddressToBytes(address: string): Uint8Array {
-  // `bs58check` v4 published both named and default exports; handle both.
-
-  const mod = bs58check as unknown as { decode?: (s: string) => Uint8Array } & {
-    default?: { decode: (s: string) => Uint8Array }
-  }
-  const decode = mod.decode ?? mod.default?.decode
-  if (!decode) throw new Error('bs58check.decode unavailable')
-  const bytes = decode(address)
-  if (bytes.length !== 21 || bytes[0] !== 0x41) {
-    throw new Error(`invalid Tron address: ${address} (length=${bytes.length})`)
-  }
-  return bytes
+  return base58CheckTronDecodeBytes(address)
 }
 
 // ---------------------------------------------------------------------------
