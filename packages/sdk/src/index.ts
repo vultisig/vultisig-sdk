@@ -1181,4 +1181,11 @@ export type {
 // PUBLIC API - ABI Constants
 // ============================================================================
 
-export { ERC20_ABI, ERC1155_ABI } from './abi'
+export {
+  encodeTrc20TransferParam,
+  ERC20_ABI,
+  ERC1155_ABI,
+  tronBase58ToEvmHex,
+  tronBase58ToHex,
+  tronHexToBase58,
+} from './abi'
