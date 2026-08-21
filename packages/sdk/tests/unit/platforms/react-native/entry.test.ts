@@ -441,6 +441,8 @@ describe('RN entry exposes pure chain helpers and registry', () => {
     const tx = await import('../../../../src/tx')
     const decode = await import('../../../../src/tools/decode')
     const pairing = await import('../../../../src/services/buildKeygenPairingQrPayload')
+    const isValidTxHashMod = await import('@vultisig/core-chain/tx/isValidTxHash')
+    const getTxStatusMod = await import('@vultisig/core-chain/tx/status')
 
     expect(rn.parseChain).toBe(parse.parseChain)
     expect(rn.parseTicker).toBe(parse.parseTicker)
@@ -457,6 +459,8 @@ describe('RN entry exposes pure chain helpers and registry', () => {
     expect(rn.decode.decodeCosmosTx).toBe(decode.decodeCosmosTx)
     expect(rn.decode.decodeEvmTx).toBe(decode.decodeEvmTx)
     expect(rn.buildKeygenPairingQrPayload).toBe(pairing.buildKeygenPairingQrPayload)
+    expect(rn.getTxStatus).toBe(getTxStatusMod.getTxStatus)
+    expect(rn.isValidTxHash).toBe(isValidTxHashMod.isValidTxHash)
   })
 
   it('re-exports canonical swap tracker URL helpers from the RN entrypoint', async () => {

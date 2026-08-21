@@ -779,6 +779,13 @@ export { decode, decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from '../..
 // chain client dependency. Re-export them here so RN consumers do not have to
 // deep-import internal service/util paths.
 export { buildKeygenPairingQrPayload } from '../../services/buildKeygenPairingQrPayload'
+// tx status + hash validation (sdk#1224 hand-curated-gap class). Narrow
+// subpaths, not the full `../../tools` barrel — that barrel eagerly re-exports
+// prep/defi/dex/verifier/price, which this file otherwise keeps out of
+// Metro's eager RN bundle via lazy `await import('../../tools/prep/*')`
+// wrappers (Metro doesn't tree-shake).
+export { isValidTxHash } from '@vultisig/core-chain/tx/isValidTxHash'
+export { getTxStatus } from '@vultisig/core-chain/tx/status'
 export { computeNotificationVaultId } from '../../utils/computeNotificationVaultId'
 export type {
   AmountDirection,
