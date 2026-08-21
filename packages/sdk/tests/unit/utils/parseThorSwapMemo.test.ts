@@ -30,6 +30,22 @@ describe('parseThorSwapMemo', () => {
       expect(parsed.toChain).toBe(Chain.Ethereum)
     })
 
+    it('parses secured-asset notation (ETH-USDC-0X...) using the first separator as the chain boundary', () => {
+      const parsed = parseThorSwapMemo('=:ETH-USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48:0xabc::v0:50')
+      expect(parsed.destChainCode).toBe('ETH')
+      expect(parsed.destAsset).toBe('USDC')
+      expect(parsed.destAddress).toBe('0xabc')
+      expect(parsed.toChain).toBe(Chain.Ethereum)
+    })
+
+    it('parses secured-asset notation with no contract suffix (XRP-XRP)', () => {
+      const parsed = parseThorSwapMemo('=:XRP-XRP:rf7SyXdM3aZqkz9bmgGgX6V3eC8oJ8wxYY::v0:50')
+      expect(parsed.destChainCode).toBe('XRP')
+      expect(parsed.destAsset).toBe('XRP')
+      expect(parsed.destAddress).toBe('rf7SyXdM3aZqkz9bmgGgX6V3eC8oJ8wxYY')
+      expect(parsed.toChain).toBe(Chain.Ripple)
+    })
+
     it('accepts memo without slippage suffix', () => {
       const parsed = parseThorSwapMemo('=:BTC.BTC:bc1qzmsk98gqtfvxhfrye8p7xkxlj6g9q6a2yj3yj2')
       expect(parsed.destChainCode).toBe('BTC')

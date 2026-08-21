@@ -1,4 +1,5 @@
 import { Chain } from '@vultisig/core-chain/Chain'
+import { findThorchainMemoAssetSeparatorIndex } from '@vultisig/core-chain/swap/native/thorchainMemoAsset'
 
 import { VaultError, VaultErrorCode } from '../vault/VaultError'
 
@@ -59,6 +60,8 @@ const THOR_MEMO_ASSET_SHORTCUTS: Record<string, string> = {
  * - `destChainCode` is the raw memo chain prefix (`XRP`, `ETH`, ...).
  * - `destAsset` is the asset ticker only — any ERC-20 contract suffix
  *   (`USDC-0X...`) is stripped because SDK swap callers take the ticker.
+ *   Secured-asset notation (`ETH-USDC-0X...`, `XRP-XRP`) uses the FIRST
+ *   separator as the chain boundary, not the last `-` inside the denom.
  * - `destAddress` is the user-supplied destination on the destination chain.
  *   May be empty when the memo omits it (THORChain treats this as "refund to
  *   source"). FUND-SAFETY: callers MUST validate this against the vault's own
@@ -79,7 +82,8 @@ export type ParsedThorSwapMemo = {
  *
  * Accepts the shorthand notation documented at
  * https://docs.thorchain.org/concepts/asset-notation#asset-shorthand
- * (`x` → `XRP.XRP`, `e` → `ETH.ETH`, ...).
+ * (`x` → `XRP.XRP`, `e` → `ETH.ETH`, ...), plus THORChain secured-asset
+ * notation (`CHAIN-ASSET`) that first-party consumers now emit/display.
  *
  * Throws `VaultError(NotImplemented)` for non-swap memos and
  * `VaultError(InvalidConfig)` for malformed swap memos. Unknown destination
@@ -98,19 +102,21 @@ export function parseThorSwapMemo(memo: string): ParsedThorSwapMemo {
   const parts = memoBody.split(':')
 
   let chainAsset = parts[0]
-  if (chainAsset && !chainAsset.includes('.')) {
+  if (chainAsset && !chainAsset.includes('.') && !chainAsset.includes('-')) {
     const expanded = THOR_MEMO_ASSET_SHORTCUTS[chainAsset.toLowerCase()]
     if (expanded) chainAsset = expanded
   }
 
-  if (!chainAsset || !chainAsset.includes('.')) {
+  const separatorIndex = chainAsset ? findThorchainMemoAssetSeparatorIndex(chainAsset) : -1
+  if (!chainAsset || separatorIndex === -1) {
     throw new VaultError(
       VaultErrorCode.InvalidConfig,
       `parseThorSwapMemo: malformed swap memo '${memo}': missing CHAIN.ASSET in first segment.`
     )
   }
 
-  const [destChainCode, destAssetRaw] = chainAsset.split('.')
+  const destChainCode = chainAsset.slice(0, separatorIndex).toUpperCase()
+  const destAssetRaw = chainAsset.slice(separatorIndex + 1)
   const toChain = THOR_MEMO_CHAIN_TO_ENUM[destChainCode]
   if (!toChain) {
     throw new VaultError(
