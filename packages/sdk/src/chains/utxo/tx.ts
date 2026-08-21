@@ -48,7 +48,21 @@ type UtxoScriptKind = 'p2pkh' | 'p2wpkh' | 'p2sh'
 
 type UtxoChainSpec = {
   scriptType: UtxoScriptKind
-  /** Minimum output value in base units; smaller outputs are dust */
+  /**
+   * A conservative dust floor in base units, sized for THIS chain's
+   * `scriptType` output (the sender's/chain's canonical type, e.g. P2WPKH on
+   * Bitcoin). NOT necessarily the real dust floor for every recipient script
+   * type this chain can pay out to — real per-script-type floors differ
+   * (a P2PKH output needs a larger floor than P2WPKH; a P2SH output differs
+   * again), and this single constant is not derived from `toAddress`'s
+   * decoded type. Known gap (sdk#1142 review): applying this to a
+   * non-`scriptType` recipient can both under-reject (a genuinely-dust
+   * P2PKH/P2SH output on a P2WPKH-`scriptType` chain slips through) and
+   * over-reject (a perfectly relayable P2WPKH output gets refused using a
+   * P2PKH-sized floor on a P2PKH-`scriptType` chain). Fixing this properly
+   * needs a verified per-script-type floor for every chain here, not a
+   * guess — tracked as a follow-up, not fixed in this pass.
+   */
   dustLimit: bigint
   /** BIP44/84 slip44 coin type — matches vultisig address derivation */
   slip44: number
@@ -644,7 +658,14 @@ function serializeOutputs(
   dustLimit: bigint,
   opReturnScript?: Uint8Array
 ): { outputsWithCount: Uint8Array; outputsRaw: Uint8Array } {
-  const hasChange = changeScriptPubKey && change > dustLimit
+  // sdk#1142 review: Bitcoin's own dust rule is `value < threshold => dust`,
+  // so `change === dustLimit` exactly is a standard, relayable output, not
+  // dust. The primary-send guard (buildUtxoSendTx) already accepts
+  // `amount === dustLimit` via its `<` comparison — using `>` here instead
+  // of `>=` disagreed with that at the exact boundary, silently folding a
+  // dustLimit-exact change output into the miner fee instead of paying it
+  // back to the sender.
+  const hasChange = changeScriptPubKey && change >= dustLimit
   let numOutputs = 1
   if (hasChange) numOutputs++
   if (opReturnScript) numOutputs++
@@ -912,6 +933,28 @@ export function buildUtxoSendTx(opts: BuildUtxoSendOptions): UtxoTxBuilderResult
     throw new Error(
       `buildUtxoSendTx: fromAddress decodes to ${fromDec.type} but chain ${opts.chain} expects ${spec.scriptType} ` +
         `(fromAddress=${opts.fromAddress}). Pass an address that matches the chain's scriptType.`
+    )
+  }
+
+  // Dust floor on the PRIMARY send output. `spec.dustLimit` otherwise only
+  // gates the change output (via serializeOutputs), so a below-dust send would
+  // build an unrelayable/rejected output and burn an MPC signing ceremony on a
+  // tx that can never confirm. Fail fast, before any fee math or sighash work.
+  //
+  // Deliberately placed AFTER the address-type validation above, for the same
+  // reason that block states: an unsupported or mismatched `fromAddress` must
+  // surface its own meaningful error rather than be masked by an amount
+  // complaint. A P2SH `fromAddress` sending a below-dust amount is a P2SH
+  // problem first, and reporting the dust limit instead would send the caller
+  // to fix the wrong thing.
+  if (opts.amount < spec.dustLimit) {
+    // "below the SDK's conservative dust floor", not "the dust limit" — this
+    // constant is sized for `spec.scriptType`, not necessarily for
+    // `toAddress`'s actual decoded script type (sdk#1142 review, see the
+    // UtxoChainSpec.dustLimit doc comment). Don't hand a refused caller a
+    // number that overclaims precision it doesn't have.
+    throw new Error(
+      `amount ${opts.amount} is below the ${opts.chain} SDK's conservative dust floor ${spec.dustLimit}`
     )
   }
 
