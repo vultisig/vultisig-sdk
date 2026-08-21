@@ -151,7 +151,17 @@ export class VaultManager {
         return repaired
       }
 
-      if (await this.storage.compareAndSet(key, current, repaired)) return repaired
+      const currentRevision = current.revision ?? 0
+      if (!Number.isSafeInteger(currentRevision) || currentRevision < 0) {
+        throw new VaultError(VaultErrorCode.InvalidVault, `Vault ${current.id} has an invalid storage revision`)
+      }
+      const repairedPersisted = {
+        ...repaired,
+        revision: currentRevision + 1,
+        lastModified: Date.now(),
+      }
+
+      if (await this.storage.compareAndSet(key, current, repairedPersisted)) return repairedPersisted
 
       const latest = await this.storage.get<VaultData>(key)
       if (!latest) return null

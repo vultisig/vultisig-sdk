@@ -36,6 +36,7 @@ import { FileStorage } from '../../../src/platforms/node/storage'
 import { MemoryStorage } from '../../../src/storage/MemoryStorage'
 import type { Storage } from '../../../src/storage/types'
 import { FastVault } from '../../../src/vault/FastVault'
+import { SecureVault } from '../../../src/vault/SecureVault'
 import { VaultConflictError, VaultImportErrorCode } from '../../../src/vault/VaultError'
 import { VaultManager } from '../../../src/VaultManager'
 
@@ -301,6 +302,30 @@ describe('VaultManager', () => {
       expect(await memoryStorage.get<{ type: string }>(`vault:${imported.id}`)).toMatchObject({ type: 'fast' })
       await loaded?.save()
       expect(await memoryStorage.get<{ type: string }>(`vault:${imported.id}`)).toMatchObject({ type: 'fast' })
+    })
+
+    it('rejects a stale secure instance after repairing a persisted legacy fast vault type', async () => {
+      const vult = encodeUnencryptedVult(
+        buildMinimalSecureVaultBinary({
+          signers: ['SyntheticDevice', 'VultiServer-legacy'],
+        })
+      )
+      const imported = await vaultManager.importVault(vult)
+      const key = `vault:${imported.id}`
+      const stored = await memoryStorage.get<typeof imported.data>(key)
+      expect(stored).not.toBeNull()
+      const staleData = { ...stored!, type: 'secure' as const }
+      await memoryStorage.set(key, staleData)
+
+      const staleSecure = SecureVault.fromStorage(
+        staleData,
+        (vaultManager as unknown as { createVaultContext(): Parameters<typeof SecureVault.fromStorage>[1] }).createVaultContext()
+      )
+      const loaded = await vaultManager.getVaultById(imported.id)
+
+      expect(loaded).toBeInstanceOf(FastVault)
+      await expect(staleSecure.rename('Stale writer')).rejects.toBeInstanceOf(VaultConflictError)
+      expect(await memoryStorage.get<{ type: string }>(key)).toMatchObject({ type: 'fast' })
     })
 
     it('does not overwrite a concurrent update when legacy storage cannot persist the type repair atomically', async () => {
