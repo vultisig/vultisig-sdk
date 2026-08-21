@@ -198,10 +198,13 @@ describe('fast-vault flows honor the shared non-interactive definition (not stdi
     expect(stdoutSpy).not.toHaveBeenCalled()
   })
 
-  it('import-seedphrase (fast) refuses up-front, before any server-side vault creation', async () => {
-    // makeCtx traps every sdk access: reaching validateSeedphrase or
-    // createFastVaultFromSeedphrase would throw the trap error, not the typed
-    // refusal — so this also proves the guard fires before any side effect.
+  // wxbbp round 3: a SHAPE-VALID mnemonic in a non-interactive session must still hit the
+  // interactive-required gate — the precheck only reorders the diagnostic for invalid input,
+  // it does not weaken the OTP requirement for valid input. makeCtx traps every sdk access:
+  // reaching validateSeedphrase or createFastVaultFromSeedphrase would throw the trap error,
+  // not the typed refusal, so this also proves the guard fires before any side effect once
+  // the ctx-free precheck has passed.
+  it('import-seedphrase (fast) with a shape-valid mnemonic still requires interactive OTP', async () => {
     await expectFailsClosed(() =>
       executeCreateFromSeedphraseFast(makeCtx(), {
         mnemonic: 'abandon '.repeat(11) + 'about',
@@ -210,6 +213,26 @@ describe('fast-vault flows honor the shared non-interactive definition (not stdi
         email: 'e@x.io',
       })
     )
+  })
+
+  // wxbbp round 3: a BAD mnemonic in a non-interactive session must report the mnemonic
+  // problem, not CONFIRMATION_REQUIRED — that's the whole point of the bead. The ctx-free
+  // word-count precheck now runs BEFORE `requireInteractive`, so a wrong word count throws
+  // a plain diagnostic Error and never touches makeCtx's poisoned ctx (proving the precheck
+  // stays ctx-free even ahead of the gate).
+  it('import-seedphrase (fast) with a BAD mnemonic reports the mnemonic problem, not CONFIRMATION_REQUIRED', async () => {
+    await expect(
+      executeCreateFromSeedphraseFast(makeCtx(), {
+        // 11 words - wrong count, so the pure precheck rejects it on shape alone.
+        mnemonic: 'abandon '.repeat(10) + 'about',
+        name: 'v',
+        password: 'p',
+        email: 'e@x.io',
+      })
+    ).rejects.toThrow(/Mnemonic must be 12 or 24 words, got 11/)
+    expect(stdoutSpy).not.toHaveBeenCalled()
+    expect(consoleLogSpy).not.toHaveBeenCalled()
+    expect(consoleTableSpy).not.toHaveBeenCalled()
   })
 })
 

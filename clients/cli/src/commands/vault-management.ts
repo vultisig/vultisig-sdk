@@ -2,7 +2,7 @@
  * Vault Management Commands - create, import, export, verify, switch, rename, info, vaults
  */
 import type { Chain, VaultBase } from '@vultisig/sdk'
-import { FastVault } from '@vultisig/sdk'
+import { FastVault, SEEDPHRASE_WORD_COUNTS } from '@vultisig/sdk'
 import chalk from 'chalk'
 import { randomBytes } from 'crypto'
 import { promises as fs } from 'fs'
@@ -878,11 +878,29 @@ export async function executeCreateFromSeedphraseFast(
   ctx: CommandContext,
   options: CreateFromSeedphraseFastOptions
 ): Promise<VaultBase> {
-  // This flow has no two-step mode: it always ends in an interactive email-OTP
-  // prompt. Refuse up-front in a non-interactive session so no server-side vault
-  // state is created before the prompt chokepoint would reject anyway.
-  requireInteractive('Seedphrase fast-vault import requires interactive email-OTP entry; run it in a terminal.')
   const { mnemonic, name, password, email, discoverChains, chains, signal, usePhantomSolanaPath } = options
+
+  // bead vultisig-wxbbp: a user with a mistyped or garbage mnemonic used to hit
+  // "requires interactive email-OTP entry; run it in a terminal" first and never
+  // learned the real problem was the mnemonic. Mnemonic typos vastly outnumber
+  // accidental non-interactive invocations, so the shape check must win the race.
+  //
+  // This is a PURE, ctx-free check against `SEEDPHRASE_WORD_COUNTS` (a plain exported
+  // constant) - no SDK instance, no WASM, no ctx access - so it's safe to run before
+  // `requireInteractive` without touching anything `nontty-prompt.test.ts`'s poisoned
+  // ctx would trap on. Full SDK-backed validation (wordlist/checksum) still runs after
+  // the interactive gate below, unchanged. Reports the COUNT only and never echoes the
+  // words, matching SeedphraseValidator's own handling of a secret.
+  const wordCount = mnemonic.trim().split(/\s+/).filter(Boolean).length
+  if (!SEEDPHRASE_WORD_COUNTS.includes(wordCount as (typeof SEEDPHRASE_WORD_COUNTS)[number])) {
+    throw new Error(`Mnemonic must be ${SEEDPHRASE_WORD_COUNTS.join(' or ')} words, got ${wordCount}`)
+  }
+
+  // This flow has no two-step mode: it always ends in an interactive email-OTP prompt. Refuse
+  // up-front in a non-interactive session so no server-side vault state is created before the
+  // prompt chokepoint would reject anyway. A shape-valid mnemonic still hits this gate; only
+  // the ctx-free precheck above is allowed ahead of it.
+  requireInteractive('Seedphrase fast-vault import requires interactive email-OTP entry; run it in a terminal.')
 
   // jscpd:ignore-start
   // 1. Validate seedphrase first
