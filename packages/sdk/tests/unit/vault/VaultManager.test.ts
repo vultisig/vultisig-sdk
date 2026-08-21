@@ -330,6 +330,29 @@ describe('VaultManager', () => {
       expect(await memoryStorage.get<{ type: string }>(key)).toMatchObject({ type: 'fast' })
     })
 
+    it('rejects a legacy type repair that would overflow the storage revision', async () => {
+      const vult = encodeUnencryptedVult(
+        buildMinimalSecureVaultBinary({
+          signers: ['SyntheticDevice', 'VultiServer-legacy'],
+        })
+      )
+      const imported = await vaultManager.importVault(vult)
+      const key = `vault:${imported.id}`
+      const stored = await memoryStorage.get<typeof imported.data>(key)
+      expect(stored).not.toBeNull()
+      await memoryStorage.set(key, {
+        ...stored!,
+        type: 'secure',
+        revision: Number.MAX_SAFE_INTEGER,
+      })
+
+      await expect(vaultManager.getVaultById(imported.id)).rejects.toThrow('invalid storage revision')
+      expect(await memoryStorage.get<{ revision: number; type: string }>(key)).toMatchObject({
+        revision: Number.MAX_SAFE_INTEGER,
+        type: 'secure',
+      })
+    })
+
     it('does not overwrite a concurrent update when legacy storage cannot persist the type repair atomically', async () => {
       const vult = encodeUnencryptedVult(
         buildMinimalSecureVaultBinary({
