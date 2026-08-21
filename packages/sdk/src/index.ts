@@ -1105,6 +1105,7 @@ export {
   TERRA_LCD,
   THORCHAIN_NODE_URL,
   token,
+  toPolicyEnvelope,
   TRC20_TRANSFER_SELECTOR,
   utxoFeeRate,
   VerifierClient,

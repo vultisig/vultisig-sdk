@@ -339,6 +339,7 @@ export {
   ResultKind,
   sanitizeAmount,
   scaleDecimalClaimToAtomic,
+  toPolicyEnvelope,
   type Verdict,
 } from './policy'
 

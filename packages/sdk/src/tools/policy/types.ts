@@ -126,6 +126,17 @@ export type Envelope = {
   decoded?: boolean
   /** Human-readable reason when `decoded === false`. */
   decodeError?: string
+  /**
+   * Set when the source amount string could not be parsed as a non-negative
+   * integer (malformed, negative, or scientific notation). `amount` is left
+   * `null` in this case (the existing "unknown -> skip the amount check"
+   * convention {@link evaluatePolicy}/{@link checkInvariants} already apply),
+   * NOT `decoded: false` - flipping that flag would also silence the
+   * unrelated recipient/chain/memo checks this envelope can still answer.
+   * A caller that wants to escalate an unparseable amount to BLOCK should
+   * check this field explicitly; the policy layer does not do that for you.
+   */
+  amountParseError?: string
 }
 
 /** A named fund-safety invariant the agent must never violate. */

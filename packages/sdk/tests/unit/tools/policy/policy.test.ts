@@ -1,5 +1,7 @@
+import { type Address, encodeFunctionData, getAddress, type Hex, parseAbi, serializeTransaction } from 'viem'
 import { describe, expect, it } from 'vitest'
 
+import { decodeFromToolResult } from '@/tools/decode'
 import {
   chainAliasMap,
   chainsMatch,
@@ -14,6 +16,7 @@ import {
   policy,
   ResultKind,
   scaleDecimalClaimToAtomic,
+  toPolicyEnvelope,
 } from '@/tools/policy'
 
 const usdc = (recipient: string, amount: bigint): Envelope => ({
@@ -23,6 +26,23 @@ const usdc = (recipient: string, amount: bigint): Envelope => ({
   asset: { symbol: 'USDC', decimals: 6 },
   amount,
 })
+
+const POLICY_USDC = getAddress('0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48')
+const POLICY_RECIPIENT = getAddress('0x70997970C51812dc3A010C7d01b50e0d17dc79C8')
+
+function buildEvmTx(to: Address, data: Hex, value = 0n, chainId = 1): Hex {
+  return serializeTransaction({
+    to,
+    value,
+    data,
+    chainId,
+    nonce: 0,
+    gas: 60_000n,
+    maxFeePerGas: 30_000_000_000n,
+    maxPriorityFeePerGas: 1_000_000_000n,
+    type: 'eip1559',
+  })
+}
 
 describe('evaluatePolicy', () => {
   it('BLOCKs on recipient mismatch (send 1 USDC to 0xAAA vs envelope 0xBBB)', () => {
@@ -223,6 +243,153 @@ describe('checkInvariants', () => {
       userMemo: '',
     })
     expect(violations).toHaveLength(0)
+  })
+})
+
+describe('toPolicyEnvelope', () => {
+  it('adapts the decoder envelope into the policy envelope shape', () => {
+    const envelope = toPolicyEnvelope({
+      chain: 'base',
+      family: 'evm',
+      kind: 'transfer',
+      recipient: '0xAAA',
+      asset: { symbol: 'USDC', contract: POLICY_USDC, decimals: 6 },
+      amount: '1000000',
+      spender: '',
+      decoded: true,
+      decodeError: '',
+    })
+
+    expect(envelope).toEqual({
+      chainId: 'base',
+      recipient: '0xAAA',
+      asset: { symbol: 'USDC', contract: POLICY_USDC, decimals: 6 },
+      amount: 1000000n,
+      decoded: true,
+      decodeError: '',
+    })
+  })
+
+  it('lets policy consume decodeFromToolResult output without a consumer-written shim', () => {
+    const data = encodeFunctionData({
+      abi: parseAbi(['function transfer(address to, uint256 value)']),
+      functionName: 'transfer',
+      args: [POLICY_RECIPIENT, 1_000_000n],
+    })
+    const decoded = decodeFromToolResult({
+      family: 'evm',
+      chain: 'ethereum',
+      payload: buildEvmTx(POLICY_USDC, data),
+      args: { token: 'USDC' },
+    })
+
+    const verdict = policy.evaluate(
+      { chain: 'ethereum', recipient: POLICY_RECIPIENT, asset: 'USDC', amount: '1', amountUnits: 'human' },
+      policy.fromDecodedEnvelope(decoded)
+    )
+
+    expect(decoded.decoded).toBe(true)
+    expect(verdict.result).toBe(ResultKind.Pass)
+  })
+
+  it('sdk#1402: an unparseable amount skips only the amount check, not the whole envelope (does not flip decoded)', () => {
+    const envelope = toPolicyEnvelope({
+      chain: 'base',
+      family: 'evm',
+      kind: 'transfer',
+      recipient: '0xAAA',
+      asset: { symbol: 'USDC', contract: POLICY_USDC, decimals: 6 },
+      amount: '1e6',
+      spender: '',
+      decoded: true,
+      decodeError: '',
+    })
+
+    // amount:null means "unknown -> skip the amount check" (existing
+    // convention) - NOT "the whole envelope is untrustworthy". Flipping
+    // decoded to false here used to silently erase unrelated
+    // recipient/chain/memo findings for any envelope whose amount string
+    // happened to be malformed.
+    expect(envelope.amount).toBeNull()
+    expect(envelope.decoded).toBe(true)
+    expect(envelope.decodeError).toBe('')
+    expect(envelope.amountParseError).toContain('invalid decoded atomic amount')
+
+    // Recipient/chain checks still run against an unparseable-amount envelope.
+    const claim: IntentClaim = { chain: 'base', recipient: '0xBBB', amount: '1', amountUnits: 'human' }
+    expect(evaluatePolicy(claim, envelope).result).toBe(ResultKind.Block)
+    expect(checkInvariants({ claim, envelope }).some(v => v.invariant === Invariant.RecipientMatchesIntent)).toBe(
+      true
+    )
+  })
+
+  it('sdk#1402: a negative amount is rejected as unparseable, not silently accepted (would disable the amount check)', () => {
+    const envelope = toPolicyEnvelope({
+      chain: 'cosmoshub-4',
+      family: 'cosmos',
+      kind: 'transfer',
+      recipient: 'cosmos1attacker',
+      asset: { symbol: 'ATOM', contract: '', decimals: 6 },
+      amount: '-1000000',
+      spender: '',
+      decoded: true,
+      decodeError: '',
+    })
+
+    expect(envelope.amount).toBeNull()
+    expect(envelope.decoded).toBe(true)
+    expect(envelope.amountParseError).toContain('invalid decoded atomic amount')
+
+    // With amount:null the I5 (never-exceed-balance) invariant is skipped -
+    // callers MUST treat a present amountParseError as untrustworthy.
+    expect(checkInvariants({ claim: { amount: '5', amountUnits: 'human' }, envelope, balance: 1_000_000n })).toEqual(
+      []
+    )
+  })
+
+  it('sdk#1402: a non-string envelope.amount (undefined/number/bigint) never throws (decode/fromToolResult.ts contract)', () => {
+    for (const badAmount of [undefined, 1_000_000, 1_000_000n] as const) {
+      const envelope = toPolicyEnvelope({
+        chain: 'base',
+        family: 'evm',
+        kind: 'transfer',
+        recipient: '0xAAA',
+        asset: { symbol: 'USDC', contract: '', decimals: 6 },
+        amount: badAmount as unknown as string,
+        spender: '',
+        decoded: true,
+        decodeError: '',
+      })
+
+      expect(envelope.amount).toBeNull()
+      expect(envelope.decoded).toBe(false)
+      expect(envelope.decodeError).toContain('not a string')
+    }
+  })
+
+  it('sdk#1402: a non-transfer kind (approve) fails closed instead of laundering into a transfer-shaped PASS', () => {
+    // Real shape: EVM approve has no value recipient (spender is the real
+    // counterparty), so rebuilding it as a transfer-shaped envelope let an
+    // unlimited-approval tx compare cleanly against a plain-send claim.
+    const envelope = toPolicyEnvelope({
+      chain: 'ethereum',
+      family: 'evm',
+      kind: 'approve',
+      recipient: '',
+      asset: { symbol: 'USDC', contract: '', decimals: 6 },
+      amount: '1000000',
+      spender: '0xDeaDBeEf00000000000000000000000000000000',
+      decoded: true,
+      decodeError: '',
+    })
+
+    expect(envelope.decoded).toBe(false)
+    expect(envelope.decodeError).toContain('approve')
+
+    const claim: IntentClaim = { chain: 'ethereum', recipient: '0x7099...79C8', amount: '1', amountUnits: 'human' }
+    // Undecoded envelope -> WARN, not the false PASS an approve-laundered-as-
+    // transfer used to produce.
+    expect(evaluatePolicy(claim, envelope).result).toBe(ResultKind.Warn)
   })
 })
 
