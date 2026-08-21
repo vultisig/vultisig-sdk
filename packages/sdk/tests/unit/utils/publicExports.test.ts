@@ -184,7 +184,12 @@ describe('@vultisig/sdk public exports', () => {
     expect(tx.parameter).toHaveLength(128)
   })
 
-  it('exports canonical Sui/UTXO prep constants alongside the prep builders', () => {
+  it('exports canonical IBC + Sui/UTXO prep helpers alongside the prep builders', () => {
+    expect(typeof sdk.prepareIbcTransfer).toBe('function')
+    expect(typeof sdk.normaliseIbcChainId).toBe('function')
+    expect(typeof sdk.supportedIbcDestinationsFrom).toBe('function')
+    expect(sdk.IBC_MSG_TRANSFER_TYPE_URL).toBe('/ibc.applications.transfer.v1.MsgTransfer')
+    expect(typeof sdk.prepareSuiTokenTransferFromKeys).toBe('function')
     expect(sdk.SUI_NATIVE_COIN_TYPE).toBe('0x2::sui::SUI')
     expect(sdk.CONSOLIDATE_CHAINS).toEqual([
       sdk.Chain.Bitcoin,
