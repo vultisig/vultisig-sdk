@@ -76,6 +76,19 @@
       "require": "./dist/vite/index.cjs",
       "default": "./dist/vite/index.js"
     },
+    "./tools": {
+      "types": "./dist/tools/index.d.ts",
+      "browser": "./dist/tools/index.js",
+      "worker": "./dist/tools/index.js",
+      "react-native": "./dist/tools/index.js",
+      "node": {
+        "import": "./dist/tools/index.js",
+        "require": "./dist/tools/index.cjs"
+      },
+      "import": "./dist/tools/index.js",
+      "require": "./dist/tools/index.cjs",
+      "default": "./dist/tools/index.cjs"
+    },
     "./tools/parse": {
       "types": "./dist/tools/parse/index.d.ts",
       "browser": "./dist/tools/parse/index.js",

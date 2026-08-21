@@ -121,6 +121,7 @@ export default defineConfig([
   // Dedicated public subpath types — keep these as first-class bundles so
   // package-name imports resolve to narrow declarations instead of the root
   // index type graph.
+  createSubpathTypesConfig('src/tools/index.ts', 'dist/tools/index.d.ts'),
   createSubpathTypesConfig('src/tools/parse/index.ts', 'dist/tools/parse/index.d.ts'),
   createSubpathTypesConfig('src/tools/defi/index.ts', 'dist/tools/defi/index.d.ts'),
   createSubpathTypesConfig('src/tools/gas/index.ts', 'dist/tools/gas/index.d.ts'),

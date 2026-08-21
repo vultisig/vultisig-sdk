@@ -11,6 +11,7 @@ const typesRollupConfig = readFileSync(path.join(sdkRoot, 'rollup.types.config.j
 
 describe('public API subpath exports', () => {
   it('publishes dedicated export-map entries for every narrow public surface', () => {
+    const toolsExport = sdkPackageJson.exports['./tools']
     const parseExport = sdkPackageJson.exports['./tools/parse']
     const defiExport = sdkPackageJson.exports['./tools/defi']
     const bridgeExport = sdkPackageJson.exports['./tools/bridge']
@@ -21,6 +22,12 @@ describe('public API subpath exports', () => {
     const decodeExport = sdkPackageJson.exports['./tools/decode']
     const txExport = sdkPackageJson.exports['./tx']
 
+    expect(toolsExport).toMatchObject({
+      types: './dist/tools/index.d.ts',
+      import: './dist/tools/index.js',
+      require: './dist/tools/index.cjs',
+      default: './dist/tools/index.cjs',
+    })
     expect(parseExport).toMatchObject({
       types: './dist/tools/parse/index.d.ts',
       import: './dist/tools/parse/index.js',
@@ -76,6 +83,7 @@ describe('public API subpath exports', () => {
       default: './dist/tx/index.cjs',
     })
 
+    expect(JSON.stringify(toolsExport)).not.toContain('dist/index.node')
     expect(JSON.stringify(parseExport)).not.toContain('dist/index.node')
     expect(JSON.stringify(defiExport)).not.toContain('dist/index.node')
     expect(JSON.stringify(bridgeExport)).not.toContain('dist/index.node')
@@ -88,6 +96,8 @@ describe('public API subpath exports', () => {
   })
 
   it('keeps dedicated JS and d.ts bundle generation wired for every narrow public surface', () => {
+    expect(platformRollupConfig).toContain("input: './src/tools/index.ts'")
+    expect(platformRollupConfig).toContain("distBase: 'tools'")
     expect(platformRollupConfig).toContain("input: './src/tools/parse/index.ts'")
     expect(platformRollupConfig).toContain("distBase: 'tools/parse'")
     expect(platformRollupConfig).toContain("input: './src/tools/defi/index.ts'")
@@ -107,6 +117,7 @@ describe('public API subpath exports', () => {
     expect(platformRollupConfig).toContain("input: './src/tx/index.ts'")
     expect(platformRollupConfig).toContain("distBase: 'tx'")
 
+    expect(typesRollupConfig).toContain("createSubpathTypesConfig('src/tools/index.ts', 'dist/tools/index.d.ts')")
     expect(typesRollupConfig).toContain(
       "createSubpathTypesConfig('src/tools/parse/index.ts', 'dist/tools/parse/index.d.ts')"
     )
