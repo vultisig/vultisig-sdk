@@ -1,5 +1,11 @@
 # @vultisig/sdk
 
+## 5.1.1
+
+### Patch Changes
+
+- [#2147](https://github.com/vultisig/vultisig-sdk/pull/2147) [`95fcff9`](https://github.com/vultisig/vultisig-sdk/commit/95fcff9ecf860551b4ae5815736018b831f78f36) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Populate Solana `SigningOutput.signatures` when compiling dApp-supplied raw transactions so downstream transaction-hash resolution returns the spliced fee-payer signature instead of crashing after keysign.
+
 ## 5.1.0
 
 ### Minor Changes
