@@ -3,6 +3,7 @@ import { MsgSend } from 'cosmjs-types/cosmos/bank/v1beta1/tx'
 import { MsgDelegate, MsgUndelegate } from 'cosmjs-types/cosmos/staking/v1beta1/tx'
 import { TxBody, TxRaw } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import { MsgExecuteContract } from 'cosmjs-types/cosmwasm/wasm/v1/tx'
+import { MsgTransfer } from 'cosmjs-types/ibc/applications/transfer/v1/tx'
 
 import type { Envelope } from './types'
 
@@ -169,6 +170,17 @@ export function decodeCosmosTx(bytes: Uint8Array, chainHint: string): Envelope {
           env.amount = msg.amount.amount
           env.asset.contract = msg.amount.denom
           env.asset.symbol = denomToSymbol(msg.amount.denom)
+        }
+        return env
+      }
+      case '/ibc.applications.transfer.v1.MsgTransfer': {
+        const msg = MsgTransfer.decode(any.value)
+        env.kind = 'transfer'
+        env.recipient = msg.receiver
+        if (msg.token) {
+          env.amount = msg.token.amount
+          env.asset.contract = msg.token.denom
+          env.asset.symbol = denomToSymbol(msg.token.denom)
         }
         return env
       }
