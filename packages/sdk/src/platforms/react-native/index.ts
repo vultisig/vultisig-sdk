@@ -469,7 +469,7 @@ export {
 
 // DeFi protocol primitives (unsigned calldata builders) — sdk.defi.*
 // Pure builders, RN-safe. Statically re-exported so RN consumers can reach
-// the full defi namespace (arkis + balancer + glif + pendle + 3jane).
+// the full defi namespace (arkis + balancer + glif + pendle + 3jane + stakekit).
 export type {
   BalancerTokenApi,
   BalancerV3SwapCalldata,
@@ -491,6 +491,38 @@ export {
   GLIF_ICN_TOKEN_DECIMALS,
   glifPoolWriteAbi,
 } from '../../tools/defi/glif'
+export type {
+  EvmScanRequest,
+  PendingAction,
+  ScanRequest,
+  UnsupportedScanRequest,
+  Validator,
+  YieldActionResponse,
+  YieldArgs,
+  YieldBalance,
+  YieldDiscoverMetadata,
+  YieldDiscoverOpportunity,
+  YieldDiscoverToken,
+  YieldListResponse,
+  YieldMetadata,
+  YieldProduct,
+  YieldToken,
+  YieldTransaction,
+} from '../../tools/defi/stakekit'
+export {
+  buildYieldActionScanRequest,
+  buildYieldStepScanRequest,
+  parseActionDisplay,
+  stakekit,
+  stakekitBalances,
+  stakekitBuildEnter,
+  stakekitBuildExit,
+  stakekitBuildManage,
+  stakekitDetails,
+  stakekitSearch,
+  validateStakekitActionAddress,
+  validateStakekitActionInput,
+} from '../../tools/defi/stakekit'
 export type {
   BuildThreeJaneSupplyUsdcParams,
   BuildThreeJaneSupplyUsdcResult,
