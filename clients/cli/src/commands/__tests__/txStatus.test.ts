@@ -10,6 +10,11 @@ import { configureOutput, resetOutput, setSilentMode } from '../../lib/output'
 import { executeTxStatus, resolveTimeoutMs, resolveTxStatusParams } from '../tx-status'
 
 const EVM_HASH = '0x' + 'a'.repeat(64)
+// UTXO hashes carry NO 0x prefix - isValidTxHash.ts gates evm on HEX_64_PREFIXED and utxo on
+// HEX_64. tx-status validates shape BEFORE any RPC (its own header says so), so passing EVM_HASH
+// with Chain.Bitcoin threw InvalidTxHashError and the two noWait cases below never reached the
+// branch they exist to test.
+const BTC_HASH = 'a'.repeat(64)
 
 function makeCtx(getTxStatus: ReturnType<typeof vi.fn>) {
   return {
@@ -188,6 +193,34 @@ describe('executeTxStatus', () => {
     const out = await executeTxStatus(ctx, { chain: Chain.Ethereum, txHash: EVM_HASH, noWait: true })
     expect(out.status).toBe('not_found')
     expect(getTxStatus).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports not_found without throwing in --no-wait mode for a UTXO-shaped hash', async () => {
+    const getTxStatus = vi.fn().mockResolvedValue({ status: 'not_found', isKnown: false })
+    const ctx = makeCtx(getTxStatus)
+
+    const out = await executeTxStatus(ctx, { chain: Chain.Bitcoin, txHash: BTC_HASH, noWait: true })
+    expect(out.status).toBe('not_found')
+    expect(out.isKnown).toBe(false)
+    expect(getTxStatus).toHaveBeenCalledTimes(1)
+  })
+
+  it('does NOT rewrite pending+isKnown:false in --no-wait mode — provider uncertainty must stay pending', async () => {
+    const getTxStatus = vi.fn().mockResolvedValue({ status: 'pending', isKnown: false })
+    const ctx = makeCtx(getTxStatus)
+
+    const out = await executeTxStatus(ctx, { chain: Chain.Bitcoin, txHash: BTC_HASH, noWait: true })
+    expect(out.status).toBe('pending')
+    expect(out.isKnown).toBe(false)
+  })
+
+  it('does NOT map pending+isKnown:true to not_found — a real in-mempool tx must stay pending', async () => {
+    const getTxStatus = vi.fn().mockResolvedValue({ status: 'pending', isKnown: true })
+    const ctx = makeCtx(getTxStatus)
+
+    const out = await executeTxStatus(ctx, { chain: Chain.Bitcoin, txHash: BTC_HASH, noWait: true })
+    expect(out.status).toBe('pending')
+    expect(out.isKnown).toBe(true)
   })
 
   it('does NOT record a resolution for a non-terminal status — a not_found tx stays guarded', async () => {

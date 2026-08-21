@@ -18,21 +18,14 @@ describe('getUtxoTxStatus', () => {
     vi.clearAllMocks()
   })
 
-  it('returns isKnown:false when Blockchair has no record of the hash at all — verify-by-hash MUST NOT swallow broadcast errors for unknown hashes', async () => {
-    // Regression for the false-success bug (VA-88 broadcast-verify audit, 2026-07-08):
-    // broadcastUtxoTx/broadcastCardanoTx fall through to verifyBroadcastByHash on an
-    // ambiguous submit error (BadInputsUTxO/txn-mempool-conflict/already known). That
-    // safety net swallows the error iff getUtxoTxStatus reports status:'pending' AND
-    // isKnown !== false. Pre-fix this resolver returned plain `{status:'pending'}` for
-    // a hash Blockchair has NEVER seen, so undefined isKnown passed the guard and a
-    // genuine broadcast failure (e.g. spent/invalid inputs, tx never reached the
-    // network) was reported as success — the app showed a "done" screen with a
-    // locally computed hash that had no on-chain counterpart. Mirrors cosmos.ts:15 /
-    // evm.ts:52 / polkadot.ts:36 / ripple.ts:25.
+  it('returns not_found when Blockchair successfully answers but has no record of the hash', async () => {
+    // A successful empty lookup is different from a transport failure: the provider answered
+    // and said the hash is absent. Surface that as a real miss so CLI callers do not turn a
+    // typo or dropped tx into a misleading forever-pending result.
     mocks.queryUrl.mockResolvedValue({ data: {} })
 
     const result = await getUtxoTxStatus({ chain: UtxoChain.Bitcoin, hash })
-    expect(result).toEqual({ status: 'pending', isKnown: false })
+    expect(result).toEqual({ status: 'not_found', isKnown: false })
   })
 
   it('returns isKnown:false on network/API error', async () => {

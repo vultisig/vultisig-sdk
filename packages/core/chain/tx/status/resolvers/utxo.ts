@@ -24,19 +24,21 @@ export const getUtxoTxStatus: TxStatusResolver<UtxoBasedChain> = async ({ chain,
 
   const { data: response, error } = await attempt(queryUrl<BlockchairTxResponse>(url))
 
-  if (error || !response || !response.data[hash]) {
-    // Transient RPC/network failure OR Blockchair affirmatively has no record of this
-    // hash at all — either way we can't confirm the tx is genuinely known. isKnown:false
-    // so verifyBroadcastByHash's safety net does NOT swallow a real broadcast failure as
-    // success (mirrors the isKnown convention every other chain resolver already uses —
-    // cosmos.ts/evm.ts/polkadot.ts/ripple.ts/solana.ts). Before this, a genuinely-failed
-    // broadcast (e.g. BadInputsUTxO, tx never reached the network) and a real in-flight
-    // tx were indistinguishable here — both returned bare `{status:'pending'}`, which
-    // verifyBroadcastByHash's `isKnown !== false` check treated as a confirmed positive.
+  if (error || !response) {
+    // Transport / provider failure: we could not ask Blockchair the question at all, so the
+    // tx stays ambiguous. Keep the non-terminal `pending` + `isKnown:false` shape so callers
+    // do NOT mistake an outage for evidence that the hash never existed.
     return { status: 'pending', isKnown: false }
   }
 
-  const tx = response.data[hash].transaction
+  const indexedTx = response.data[hash]
+  if (!indexedTx) {
+    // Blockchair answered successfully and affirmatively has no record of this hash.
+    // That is a genuine miss, not transport uncertainty.
+    return { status: 'not_found', isKnown: false }
+  }
+
+  const tx = indexedTx.transaction
 
   if (tx.block_id === null || tx.block_id === -1) {
     // Blockchair HAS indexed this hash (mempool, not yet mined) — a real positive signal
