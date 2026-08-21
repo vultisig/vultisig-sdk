@@ -942,12 +942,11 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   /** @internal Replaces constructor defaults with a stored or pending snapshot. */
   protected restorePersistedVaultData(vaultData: VaultData, persisted = true): void {
     const snapshot = cloneVaultData(vaultData)
-    if (snapshot.type === 'secure' && hasServer(snapshot.signers)) {
-      snapshot.type = 'fast'
-    }
-    getVaultRevision(snapshot)
-    this.vaultData = snapshot
-    this.persistedVaultData = cloneVaultData(snapshot)
+    const canonicalSnapshot =
+      snapshot.type === 'secure' && hasServer(snapshot.signers) ? { ...snapshot, type: 'fast' as const } : snapshot
+    getVaultRevision(canonicalSnapshot)
+    this.vaultData = canonicalSnapshot
+    this.persistedVaultData = cloneVaultData(canonicalSnapshot)
     this.hasPersistedRecord = persisted
   }
 
