@@ -18,6 +18,43 @@ import {
   formatBigintAmount,
 } from '../ui'
 
+/**
+ * Compute the resolved max-send display amount from what the SDK already
+ * returned. bead vultisig-2lnf8.
+ *
+ * - Token max: `dryResult.total` IS the amount (fee is paid in a different
+ *   token, per VaultBase.ts:1782 isTokenSend branch). Pass through unchanged.
+ * - Native max: `dryResult.total = amountBigInt + fee` at the SDK layer, so
+ *   the display amount is `total - fee`. Uses BigInt-scaled arithmetic on the
+ *   decimal strings so 18-decimal chains don't lose precision through float
+ *   subtraction.
+ */
+export const resolvedMaxAmount = (isTokenSend: boolean, total: string, fee: string): string => {
+  if (isTokenSend) return total
+  // Decide the scale from the widest fractional part; then convert both to that
+  // scale as BigInt, subtract, and format back. Handles arbitrary decimal widths
+  // (chains from 6dec cosmos to 18dec ETH share this path).
+  const totalDot = total.indexOf('.')
+  const feeDot = fee.indexOf('.')
+  const totalFrac = totalDot < 0 ? 0 : total.length - totalDot - 1
+  const feeFrac = feeDot < 0 ? 0 : fee.length - feeDot - 1
+  const scale = Math.max(totalFrac, feeFrac)
+  const scaleBI = (s: string): bigint => {
+    const dot = s.indexOf('.')
+    const whole = dot < 0 ? s : s.slice(0, dot)
+    const frac = dot < 0 ? '' : s.slice(dot + 1)
+    const padded = frac.padEnd(scale, '0')
+    return BigInt((whole || '0') + padded)
+  }
+  const diff = scaleBI(total) - scaleBI(fee)
+  if (diff <= 0n) return '0'
+  if (scale === 0) return diff.toString()
+  const s = diff.toString().padStart(scale + 1, '0')
+  const whole = s.slice(0, -scale) || '0'
+  const frac = s.slice(-scale).replace(/0+$/, '')
+  return frac ? `${whole}.${frac}` : whole
+}
+
 const getSendPreviewDetails = (
   chain: Chain,
   keysignPayload: KeysignPayload
@@ -124,6 +161,22 @@ async function previewDryRun(
     )
   }
 
+  // bead vultisig-2lnf8: `params.amount` echoes the raw user input verbatim, so
+  // `--max` leaked as `amount: 'max'` in the sign-card display even though the
+  // SDK already resolved it to (balance - fee) in `amountBigInt` (VaultBase.ts
+  // :1750-1754). Rehydrate the display value from what the SDK already gave us —
+  // for a token max, `dryResult.total` IS the amount (fee is paid in a different
+  // token, isTokenSend branch of VaultBase.ts:1782). For a native max, we
+  // subtract via BigInt string arithmetic to avoid float-precision loss at
+  // 18-decimal chains: amount = total - fee, both scaled to `decimals` first.
+  // Non-max amounts pass through unchanged so any user-typed decimal is preserved.
+  //
+  // Contrast: swap-quote already exposes the resolved value via a distinct
+  // `maxSwapable` field (clients/cli/src/commands/swap.ts). This aligns send's
+  // display with that pattern without introducing a new field.
+  const amountDisplay =
+    params.amount === 'max' ? resolvedMaxAmount(isTokenSend, dryResult.total, dryResult.fee) : params.amount
+
   // fee/total come straight from the build the SDK just did. They were previously
   // dropped from the JSON result even though the human preview below prints the fee
   // and `total` is what the insufficient-balance check compares against — so
@@ -132,7 +185,7 @@ async function previewDryRun(
     dryRun: true,
     chain: params.chain,
     to,
-    amount: params.amount,
+    amount: amountDisplay,
     symbol: balance.symbol,
     ...(dryResult.contractAddress ? { contractAddress: dryResult.contractAddress } : {}),
     fee: dryResult.fee,
