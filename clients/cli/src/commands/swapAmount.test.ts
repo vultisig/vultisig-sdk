@@ -158,4 +158,49 @@ describe('CLI swap amount precision', () => {
       expect(swap).not.toHaveBeenCalled()
     }
   )
+
+  it('warns when --slippage 0 is passed (bead ehedh)', async () => {
+    const { ctx } = makeContext()
+
+    const result = await executeSwap(ctx, {
+      fromChain: Chain.Ethereum,
+      toChain: Chain.Bitcoin,
+      amount: '1',
+      slippage: 0,
+      dryRun: true,
+    })
+
+    expect(result).toMatchObject({ dryRun: true })
+    // executeSwap returns SwapDryRunResult | { txHash, quote }; TS cannot narrow that from the
+    // dryRun:true argument, and `warnings` only exists on the dry-run arm. Narrow on the
+    // discriminant rather than casting, so a future broadcast-shaped return fails here loudly
+    // instead of being silently asserted against.
+    if (!('dryRun' in result)) throw new Error('expected a dry-run result, got a broadcast result')
+    expect(result.warnings).toEqual(
+      expect.arrayContaining([expect.stringMatching(/slippage.*0.*revert|revert.*slippage.*0/i)])
+    )
+  })
+
+  it('does NOT add the slippage-0 warning when slippage is undefined or >0', async () => {
+    const { ctx } = makeContext()
+
+    const r1 = await executeSwap(ctx, {
+      fromChain: Chain.Ethereum,
+      toChain: Chain.Bitcoin,
+      amount: '1',
+      dryRun: true,
+    })
+    if (!('dryRun' in r1)) throw new Error('expected a dry-run result, got a broadcast result')
+    expect(r1.warnings ?? []).not.toEqual(expect.arrayContaining([expect.stringMatching(/slippage.*0.*revert/i)]))
+
+    const r2 = await executeSwap(ctx, {
+      fromChain: Chain.Ethereum,
+      toChain: Chain.Bitcoin,
+      amount: '1',
+      slippage: 1,
+      dryRun: true,
+    })
+    if (!('dryRun' in r2)) throw new Error('expected a dry-run result, got a broadcast result')
+    expect(r2.warnings ?? []).not.toEqual(expect.arrayContaining([expect.stringMatching(/slippage.*0.*revert/i)]))
+  })
 })
