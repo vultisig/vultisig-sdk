@@ -346,6 +346,7 @@ describe('VaultManager', () => {
         revision: Number.MAX_SAFE_INTEGER,
       })
 
+      await expect(vaultManager.listVaults()).rejects.toThrow('invalid storage revision')
       await expect(vaultManager.getVaultById(imported.id)).rejects.toThrow('invalid storage revision')
       expect(await memoryStorage.get<{ revision: number; type: string }>(key)).toMatchObject({
         revision: Number.MAX_SAFE_INTEGER,
@@ -402,6 +403,11 @@ describe('VaultManager', () => {
       expect(loaded?.type).toBe('fast')
       expect(setCalls).toBe(0)
       expect(await memoryStorage.get(key)).toMatchObject({ name: 'Concurrent rename', type: 'secure' })
+
+      await loaded?.load()
+      expect(loaded?.type).toBe('fast')
+      await loaded?.save()
+      expect(await memoryStorage.get(key)).toMatchObject({ name: 'Concurrent rename', type: 'fast' })
     })
 
     it('rejects an exact duplicate unless replacement is explicit', async () => {

@@ -646,9 +646,10 @@ export class VaultManager {
       const storedVaultData = await this.storage.get<VaultData>(key)
 
       if (storedVaultData) {
+        const vaultData = await this.repairStoredLegacyFastVaultType(key, storedVaultData)
+        if (!vaultData) continue
+
         try {
-          const vaultData = await this.repairStoredLegacyFastVaultType(key, storedVaultData)
-          if (!vaultData) continue
           vaults.push(this.createVaultInstance(vaultData))
         } catch {
           // Skip vaults that can't be instantiated (e.g., encrypted vault
