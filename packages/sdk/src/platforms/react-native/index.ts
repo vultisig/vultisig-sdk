@@ -323,6 +323,21 @@ export { buildCw20TransferMsg } from '../../tools/prep/cw20Transfer'
 // Asset Hub send builder (same hand-curated-allow-list gap as prior prep builders).
 export { POLKADOT_ASSET_HUB_KNOWN_ASSETS, preparePolkadotAssetSend } from '../../tools/prep/polkadotAssetSend'
 export { SUI_NATIVE_COIN_TYPE } from '../../tools/prep/suiTokenTransfer'
+export type { PrepareIbcTransferParams, PrepareIbcTransferResult } from '../../tools/prep/ibcTransfer'
+export {
+  IBC_CHAIN_HRP,
+  IBC_CHAIN_REVISION,
+  IBC_CHANNEL_DEST,
+  IBC_MSG_TRANSFER_TYPE_URL,
+  normaliseIbcChainId,
+  prepareIbcTransfer,
+  supportedIbcDestinationsFrom,
+} from '../../tools/prep/ibcTransfer'
+export type { PrepareSuiTokenTransferFromKeysParams } from '../../tools/prep/suiTokenTransfer'
+export async function prepareSuiTokenTransferFromKeys(...args: unknown[]) {
+  const mod = await import('../../tools/prep/suiTokenTransfer')
+  return mod.prepareSuiTokenTransferFromKeys(...(args as Parameters<typeof mod.prepareSuiTokenTransferFromKeys>))
+}
 export { TRC20_TRANSFER_SELECTOR } from '../../tools/prep/trc20'
 export { CONSOLIDATE_CHAINS } from '../../tools/prep/utxoConsolidate'
 
@@ -485,6 +500,17 @@ export type {
   GlifUnsignedTx,
 } from '../../tools/defi'
 export { buildBalancerV3SwapCalldata, defi } from '../../tools/defi'
+export {
+  buildYieldActionScanRequest,
+  parseActionDisplay,
+  stakekitBalances,
+  stakekitBuildEnter,
+  stakekitBuildExit,
+  stakekitBuildManage,
+  stakekitDetails,
+  stakekitSearch,
+  validateStakekitActionInput,
+} from '../../tools/defi'
 export {
   buildGlifRedeemSticnt,
   buildGlifStakeIcnt,
@@ -813,6 +839,26 @@ export { getThorchainInboundAddress } from '@vultisig/core-chain/chains/cosmos/t
 export * from '@vultisig/core-chain/chains/cosmos/thor/lp'
 export type { GetSwapExplorerUrlInput, SwapExplorerProvider } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 export { getSwapExplorerUrl, swapExplorerProviders } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
+export {
+  getNativeSwapMinAmountIn,
+  NATIVE_SWAP_MIN_OUTBOUND_FEE_MULTIPLIER,
+} from '@vultisig/core-chain/swap/native/minimum/getNativeSwapMinAmountIn'
+export {
+  JUPITER_AFFILIATE_FEE_ATAS,
+  JUPITER_AFFILIATE_FEE_OWNER,
+  JUPITER_API_BASE_URL,
+  JUPITER_DEFAULT_SLIPPAGE_BPS,
+  JUPITER_PLATFORM_FEE_BPS,
+  SOL_NATIVE_MINT,
+} from '../../tools/swap/jupiterConstants'
+export async function buildJupiterSwapTx(...args: unknown[]) {
+  const mod = await import('../../tools/swap/jupiter')
+  return mod.buildJupiterSwapTx(...(args as Parameters<typeof mod.buildJupiterSwapTx>))
+}
+export async function resolveJupiterFeeAccount(...args: unknown[]) {
+  const mod = await import('../../tools/swap/jupiter')
+  return mod.resolveJupiterFeeAccount(...(args as Parameters<typeof mod.resolveJupiterFeeAccount>))
+}
 export { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
 export async function fiatToAmount(...args: unknown[]) {
   const mod = await import('../../utils/fiatToAmount')
