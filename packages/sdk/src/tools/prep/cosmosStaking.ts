@@ -38,6 +38,7 @@ import { Buffer } from 'buffer'
 
 import { CosmosMsgType } from '../../types/cosmos-msg'
 import { concat, encodeCoin, encodeString, field } from '../../utils/cosmosProto'
+import { validatorRoleForHrp } from '../swap/skip/cosmosAddressGuard'
 
 // ---------------------------------------------------------------------------
 // Input validation (pure, no network). Ported from mcp-ts cosmos-staking.ts.
@@ -78,13 +79,13 @@ function validateDenom(value: string, fieldName = 'denom'): string {
 type AddressRole = 'account' | 'validator'
 
 /**
- * Classify a decoded bech32 HRP. Mirrors mcp-ts `validatorRoleForHrp`
- * (src/lib/cosmos-address-guard.ts). An HRP ending in `valoper`/`valcons` is a
- * validator key, NOT a spendable account.
+ * Classify a decoded bech32 HRP. An HRP ending in `valoper`/`valcons` is a
+ * validator key, NOT a spendable account. Shares the canonical classifier
+ * with `swap/skip/cosmosAddressGuard.ts` and `prep/ibcTransfer.ts` so the
+ * fund-safety rule can't drift between call sites (sdk#1969).
  */
 function hrpIsValidatorRole(hrp: string): boolean {
-  const lower = hrp.toLowerCase()
-  return lower.endsWith('valoper') || lower.endsWith('valcons')
+  return validatorRoleForHrp(hrp) !== null
 }
 
 /**
