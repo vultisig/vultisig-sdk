@@ -8,10 +8,20 @@
  * `vault.balance(chain, tokenId)` all route through here, so a single ref cannot
  * mean one asset to the send path and something else to the balance path.
  *
- * Lookup order is deliberate and additive: symbol/ticker is tried BEFORE
- * contract address, and the user's own tokens before the well-known registry.
- * Every ref that resolved before this module existed resolves to exactly the
- * same token — the only change is that refs which used to throw now resolve.
+ * Lookup order is deliberate and additive: for a plain ticker ref, symbol is
+ * tried BEFORE contract address, and the user's own tokens before the well-known
+ * registry. Every ref that resolved before this module existed resolves to
+ * exactly the same token — the only change is that refs which used to throw now
+ * resolve.
+ *
+ * ADDRESS-SHAPED refs are the exception, and it is a fund-safety one (sdk#1634):
+ * they never match a symbol at all. Vault token symbols are attacker-controlled
+ * strings persisted from on-chain discovery, so a symbol-first order let a scam
+ * token whose `symbol` field is set to the LITERAL TEXT of real USDC's contract
+ * address capture a send in which the victim typed that genuine address
+ * correctly — resolving amount, decimals and the keysign target to the scam
+ * contract. Address-shaped refs threw entirely before this module existed, so
+ * refusing to symbol-match them changes nothing that ever resolved.
  */
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getChainKind } from '@vultisig/core-chain/ChainKind'
@@ -67,6 +77,30 @@ function tokenAssetId(chain: Chain, token: Token): string {
 class AmbiguousTokenRefError extends VaultError {}
 
 /**
+ * Is this ref an asset ADDRESS/id rather than a ticker? (sdk#1634)
+ *
+ * Deliberately shape-based and chain-agnostic rather than a per-chain address
+ * validator: the question here is only "could a human have meant this as a
+ * ticker?", and getting a false NEGATIVE reopens the spoofing hole.
+ *
+ * - `0x` + 40 hex (EVM) and `0x` + 64 hex (Sui/Aptos-style) are matched exactly.
+ * - Anything longer than a ticker can legitimately be is treated as an address.
+ *   The SDK's own `tickerSchema` caps a ticker at 20 characters, so a longer ref
+ *   is not a ticker by this SDK's own definition. That covers Solana SPL mints
+ *   (32-44 base58), Tron (34), Cosmos bech32 contracts, and the CLI's stored
+ *   `<Chain>-<address>` id form, without guessing at per-chain encodings.
+ */
+function isAddressShapedRef(ref: string): boolean {
+  if (/^0x[0-9a-fA-F]{40}$/.test(ref) || /^0x[0-9a-fA-F]{64}$/.test(ref)) return true
+  // Discovery-disambiguated symbols (`WIDGET@1deadbeef`, see tokenSymbolBase's
+  // `@[a-z0-9]{8,}$` suffix) can exceed the ticker length cap below but are
+  // never address-shaped — no supported chain's address format contains `@`.
+  if (ref.includes('@')) return false
+  // Mirrors MAX_TICKER_LENGTH in tools/parse/tickerSchema.ts.
+  return ref.length > 20
+}
+
+/**
  * Resolve a token ref to its ticker, decimals and contract address.
  *
  * @param chain Chain the ref is scoped to
@@ -82,8 +116,19 @@ export function resolveTokenRef(chain: Chain, ref: string | undefined, userToken
   }
 
   const upper = ref.toUpperCase()
-  const symbolMatches = userTokens.filter(t => t.symbol?.toUpperCase() === upper)
-  const baseSymbolMatches = userTokens.filter(t => tokenSymbolBase(t.symbol)?.toUpperCase() === upper)
+  const addressShaped = isAddressShapedRef(ref)
+
+  // sdk#1634: an ADDRESS-SHAPED ref never considers a symbol match at all — not
+  // for ambiguity detection, and not for resolution. Vault token symbols are
+  // attacker-controlled strings persisted from on-chain discovery; matching a
+  // ref that's shaped like an address by symbol is what let a poisoned token
+  // capture a correctly-typed real contract address. `symbolMatches` /
+  // `baseSymbolMatches` are left empty rather than skipping the block below, so
+  // the existing ambiguity check naturally stays a no-op for address-shaped refs.
+  const symbolMatches = addressShaped ? [] : userTokens.filter(t => t.symbol?.toUpperCase() === upper)
+  const baseSymbolMatches = addressShaped
+    ? []
+    : userTokens.filter(t => tokenSymbolBase(t.symbol)?.toUpperCase() === upper)
   const distinctSymbolAssets = new Map([...symbolMatches, ...baseSymbolMatches].map(t => [tokenAssetId(chain, t), t]))
 
   if (distinctSymbolAssets.size > 1) {
@@ -94,15 +139,18 @@ export function resolveTokenRef(chain: Chain, ref: string | undefined, userToken
     )
   }
 
-  // 1. The user's configured tokens — by symbol first, then by contract address
-  //    or stored id. Legacy `<Chain>-<address>` ids and canonical bare ids are
-  //    treated as the same storage identity.
-  const token =
-    symbolMatches[0] ??
+  // 1. The user's configured tokens — by symbol first (for a plain ticker ref
+  //    only — never for an address-shaped one, see above), then by contract
+  //    address or stored id. Legacy `<Chain>-<address>` ids and canonical bare
+  //    ids are treated as the same storage identity. An address the vault does
+  //    not hold must fall through to the registry or fail — never resolve via
+  //    an attacker-named symbol.
+  const userIdMatch =
     userTokens.find(t => tokenIdsMatch(chain, t.contractAddress, ref) || tokenIdsMatch(chain, t.id, ref)) ??
     userTokens.find(
       t => caseInsensitiveTokenIdsMatch(chain, t.contractAddress, ref) || caseInsensitiveTokenIdsMatch(chain, t.id, ref)
     )
+  const token = addressShaped ? userIdMatch : (symbolMatches[0] ?? userIdMatch)
   if (token) {
     return {
       ticker: token.symbol ?? token.contractAddress ?? token.id,
@@ -111,12 +159,14 @@ export function resolveTokenRef(chain: Chain, ref: string | undefined, userToken
     }
   }
 
-  // 2. Well-known token registry (no network call) — ticker first, then id.
+  // 2. Well-known token registry (no network call) — id first for an address-shaped
+  //    ref, ticker otherwise. The registry is curated rather than attacker-populated,
+  //    so its tickers are not the sdk#1634 hazard; the ordering is kept consistent
+  //    with step 1 so an address-shaped ref means the same thing at both layers.
   const known = knownTokens[chain] ?? []
-  const match =
-    known.find(t => t.ticker.toUpperCase() === upper) ??
-    known.find(t => tokenIdsMatch(chain, t.id, ref)) ??
-    known.find(t => caseInsensitiveTokenIdsMatch(chain, t.id, ref))
+  const knownIdMatch =
+    known.find(t => tokenIdsMatch(chain, t.id, ref)) ?? known.find(t => caseInsensitiveTokenIdsMatch(chain, t.id, ref))
+  const match = addressShaped ? knownIdMatch : (known.find(t => t.ticker.toUpperCase() === upper) ?? knownIdMatch)
   if (match) return { ticker: match.ticker, decimals: match.decimals, contractAddress: match.id }
 
   throw new VaultError(
