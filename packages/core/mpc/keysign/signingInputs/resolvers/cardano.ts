@@ -17,6 +17,22 @@ const amountToBytes = (amount: bigint): Uint8Array => {
   return Uint8Array.from(Buffer.from(padded, 'hex'))
 }
 
+// sdk#429: for a native-token (CNT) send, `keysignPayload.toAmount` is the
+// token quantity in the token's own base units, NOT lovelace — it is NOT
+// interchangeable with the recipient output's ADA value. Reusing it as
+// `transferMessage.amount` (as done for plain ADA sends, where `toAmount` IS
+// lovelace) produces a recipient output funded with e.g. 0.665 ADA for a
+// 0.665 USDM send, below Cardano's min-UTxO floor (~0.85-1 ADA for a
+// single-asset output) — the network rejects it post-signing (Ogmios 3125
+// "insufficiently funded outputs"), after the co-signers already converged on
+// signing the doomed body. WalletCore's Cardano planner does not compute or
+// enforce min-UTxO on the output side (it only caps `plan.amount`, never
+// raises it), so nothing downstream saves us from an under-funded output.
+// Static 1.5 ADA comfortably covers a single-asset CNT output; computing the
+// exact min-UTxO from the bundle's CBOR size is an explicit follow-up (not
+// needed while a send supports at most one CNT per transfer).
+const CARDANO_CNT_MIN_UTXO_LOVELACE = 1_500_000n
+
 export const getCardanoSigningInputs: SigningInputsResolver<'cardano'> = ({ keysignPayload, walletCore }) => {
   const { sendMaxAmount, ttl, byteFee } = getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'cardano')
 
@@ -36,7 +52,9 @@ export const getCardanoSigningInputs: SigningInputsResolver<'cardano'> = ({ keys
   const isSendMax = sendMaxAmount && !isTokenSend
   const sendAmount = isSendMax
     ? bigIntSum(keysignPayload.utxoInfo.map(({ amount }) => amount)) - byteFee
-    : BigInt(keysignPayload.toAmount)
+    : isTokenSend
+      ? CARDANO_CNT_MIN_UTXO_LOVELACE
+      : BigInt(keysignPayload.toAmount)
 
   // CIP-20 memo: hand the already-CBOR-encoded auxiliary data to WalletCore,
   // which commits its Blake2b-256 hash into the tx body (key 7) and embeds the
