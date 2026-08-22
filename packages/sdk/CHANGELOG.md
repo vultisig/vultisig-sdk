@@ -1,5 +1,15 @@
 # @vultisig/sdk
 
+## 6.0.0
+
+### Major Changes
+
+- [#1825](https://github.com/vultisig/vultisig-sdk/pull/1825) [`eccbc25`](https://github.com/vultisig/vultisig-sdk/commit/eccbc25a1fd61fb9eb03494afb0d5ceb6977be8c) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Return WalletCore parity input from TON builders and fail closed before TON fast-sign dispatch unless its independently derived signing hash matches. `walletCoreTxInputData` is now required for every `chain === 'ton'` call to `fastVaultSign` / `schnorrSign` — the parity check was previously skipped whenever a caller omitted it, which meant it never protected real TON sends. Callers on `buildTonSendTx` / `buildTonJettonTransferTx` must thread the builder's `walletCoreTxInputData` through to the signer; `buildTonTxFromSigningPayload` (prebuilt/yield.xyz payloads) cannot supply one yet and will now be rejected at dispatch instead of signing unchecked. `FastVaultSignOptions.chain` is also now required (was optional) and throws `InvalidConfig` when omitted. Also align TRC-20 raw protobuf bytes with WalletCore's proto3 default-field encoding.
+
+### Patch Changes
+
+- [#2040](https://github.com/vultisig/vultisig-sdk/pull/2040) [`2faf1a2`](https://github.com/vultisig/vultisig-sdk/commit/2faf1a2b833b1fc0f10a02ad2c8bec50ef4b1f57) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - `parseThorSwapMemo` no longer rejects THORChain secured-asset `CHAIN-ASSET` notation (`ETH-USDC-0x…`, `XRP-XRP`). It previously required a dotted `CHAIN.ASSET` first segment and threw on any secured-asset memo. The parser now locates the chain boundary using the same first-separator logic SDK core already centralizes in `findThorchainMemoAssetSeparatorIndex`, so both dotted and secured-asset swap memos parse correctly.
+
 ## 5.2.0
 
 ### Minor Changes
