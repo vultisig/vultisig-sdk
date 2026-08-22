@@ -1097,6 +1097,7 @@ export {
   stakekitSearch,
   stripChainPrefix,
   SUI_NATIVE_COIN_TYPE,
+  resolveSourceChannelByDestChain,
   supportedIbcDestinationsFrom,
   supportedUtxoBalanceChains,
   SwapQuoteExpiredError,
