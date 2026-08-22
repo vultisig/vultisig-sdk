@@ -138,8 +138,17 @@ export function supportedIbcDestinationsFrom(fromChain: string): string[] {
 
 // ── chain name aliases ──────────────────────────────────────────────────────
 
-/** Vultisig canonical chain names → IBC chain-IDs. */
-const VULTISIG_NAME_TO_CHAIN_ID: Record<string, string> = {
+/**
+ * Vultisig canonical chain names → IBC chain-IDs. sdk#1803: this table had
+ * fallen behind IBC_CHANNEL_DEST — Celestia, Juno, Axelar, Neutron, and
+ * Injective are all live IBC_CHANNEL_DEST destinations (reachable from
+ * osmosis-1 / phoenix-1) with no alias here, so a caller passing the
+ * canonical name (as this module's own docs promise) got a false "no
+ * supported IBC channel" rejection even though the route genuinely exists.
+ * Every entry below was diffed directly against the current IBC_CHANNEL_DEST
+ * destination set — keep this in sync when that table grows.
+ */
+export const VULTISIG_NAME_TO_CHAIN_ID: Record<string, string> = {
   Cosmos: 'cosmoshub-4',
   Osmosis: 'osmosis-1',
   Terra: 'phoenix-1',
@@ -151,6 +160,11 @@ const VULTISIG_NAME_TO_CHAIN_ID: Record<string, string> = {
   MayaChain: 'mayachain-mainnet-v1',
   THORChain: 'thorchain-1',
   Stride: 'stride-1',
+  Celestia: 'celestia',
+  Juno: 'juno-1',
+  Axelar: 'axelar-dojo-1',
+  Neutron: 'neutron-1',
+  Injective: 'injective-1',
 }
 
 /**
