@@ -279,6 +279,21 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.parseThorSwapMemo).toBe('function')
   })
 
+  it('exports the canonical signature-algorithm classification (ECDSA vs EdDSA) per chain', () => {
+    expect(typeof sdk.getSignatureAlgorithm).toBe('function')
+    expect(sdk.signatureAlgorithms).toBeDefined()
+
+    // Ripple / EVM / Cosmos / Terra / THOR / Tron -> ecdsa
+    for (const chain of [sdk.Chain.Ripple, sdk.Chain.Ethereum, sdk.Chain.Cosmos, sdk.Chain.TerraClassic, sdk.Chain.THORChain, sdk.Chain.Tron]) {
+      expect(sdk.getSignatureAlgorithm(chain)).toBe('ecdsa')
+    }
+
+    // Solana / Sui / Polkadot / Bittensor / Ton / Cardano -> eddsa
+    for (const chain of [sdk.Chain.Solana, sdk.Chain.Sui, sdk.Chain.Polkadot, sdk.Chain.Bittensor, sdk.Chain.Ton, sdk.Chain.Cardano]) {
+      expect(sdk.getSignatureAlgorithm(chain)).toBe('eddsa')
+    }
+  })
+
   it('exports the shared THORChain secured-asset catalog helpers', () => {
     expect(typeof sdk.getThorchainSecuredAssetCatalog).toBe('function')
     expect(typeof sdk.createThorchainSecuredAssetCatalog).toBe('function')
