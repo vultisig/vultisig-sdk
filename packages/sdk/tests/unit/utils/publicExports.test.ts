@@ -210,6 +210,17 @@ describe('@vultisig/sdk public exports', () => {
         fromChain: sdk.Chain.Base,
       })
     ).toBe('https://scan.li.fi/tx/0xabc')
+    expect(typeof sdk.getSwapKitTrackerUrl).toBe('function')
+    expect(sdk.getSwapKitTrackerUrl({ chain: sdk.Chain.Ethereum, txHash: '0xabc' })).toBe(
+      'https://track.swapkit.dev/?hash=0xabc&chainId=1'
+    )
+    expect(
+      sdk.getSwapExplorerUrl({
+        provider: 'swapkit',
+        txHash: '0xabc',
+        fromChain: sdk.Chain.Ethereum,
+      })
+    ).toBe('https://track.swapkit.dev/?hash=0xabc&chainId=1')
   })
 
   it('exports Noon USDC yield helpers for Windows and Station consumers', () => {

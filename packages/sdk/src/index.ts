@@ -381,6 +381,7 @@ export * from './signable-transaction'
 // chain-only explorer URLs when rendering swap tx history.
 export type { GetSwapExplorerUrlInput, SwapExplorerProvider } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 export { getSwapExplorerUrl, swapExplorerProviders } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
+export { getSwapKitTrackerUrl, swapKitTrackerChainIds } from '@vultisig/core-chain/swap/general/swapkit/getSwapKitTrackerUrl'
 
 // Provider-aware swap arrival normalization. One status vocabulary for
 // THORChain, MayaChain, Skip Go and LI.FI keeps app and agent pollers thin.
