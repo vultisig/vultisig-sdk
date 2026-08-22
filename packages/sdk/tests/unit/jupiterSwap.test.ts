@@ -514,4 +514,30 @@ describe('buildJupiterSwapTx — affiliate ON (injected treasury ATA)', () => {
     const swapBody = JSON.parse((swapCall?.[1] as RequestInit).body as string)
     expect(swapBody).not.toHaveProperty('feeAccount')
   })
+
+  // --- sdk#1732: a blank mint is a resolution failure, not native-SOL intent ---
+
+  it.each([
+    ['from', { fromContractAddress: '', toContractAddress: USDC_MINT }],
+    ['from (whitespace)', { fromContractAddress: '   ', toContractAddress: USDC_MINT }],
+    ['to', { fromContractAddress: USDC_MINT, toContractAddress: '' }],
+    ['to (whitespace)', { fromContractAddress: USDC_MINT, toContractAddress: '  \t ' }],
+  ])('rejects a blank %s mint instead of quoting native SOL (sdk#1732)', async (_label, mints) => {
+    // Before the fix `'' || SOL_NATIVE_MINT` made this a valid SOL swap quote, so a
+    // consumer whose token lookup missed swapped the wrong asset. The same-mint check
+    // does not catch it — the other side is a real mint.
+    await expect(buildJupiterSwapTx({ userPublicKey: USER, amountBaseUnits: 100_000_000n, ...mints })).rejects.toThrow(
+      /was blank/
+    )
+  })
+
+  it('still treats an OMITTED mint as explicit native SOL (sdk#1732)', async () => {
+    // The distinction the fix rests on: omission is intent, blank is an accident.
+    const res = await buildJupiterSwapTx({
+      userPublicKey: USER,
+      toContractAddress: USDC_MINT,
+      amountBaseUnits: 100_000_000n,
+    })
+    expect(res.inputMint).toBe(SOL_NATIVE_MINT)
+  })
 })
