@@ -513,6 +513,13 @@ describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
     ).toBe(50n * 1_000_000_000n)
   })
 
+  it('exports the EVM priority-fee floor/ceiling tables from the RN entry (vultisig-sdk#1157)', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(rn.evmPriorityFeeCeilingWeiByChain[rn.Chain.Ethereum]).toBe(500n * 1_000_000_000n)
+    expect(rn.evmPriorityFeeFloorWeiByChain[rn.Chain.Polygon]).toBe(30n * 1_000_000_000n)
+  })
+
   it('exports the canonical gas comparison helpers from the RN entry', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
     const gas = await import('../../../../src/tools/gas')

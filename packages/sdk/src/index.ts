@@ -449,7 +449,11 @@ export {
 // its EvmChain; `getEvmRpcUrl` returns the canonical default/custom-RPC-resolved
 // endpoint for that chain.
 export { getEvmChainByChainId, getEvmChainId, getEvmRpcUrl } from '@vultisig/core-chain/chains/evm/chainInfo'
-export { clampEvmPriorityFee } from '@vultisig/core-chain/tx/fee/evm/clampEvmPriorityFee'
+export {
+  clampEvmPriorityFee,
+  priorityFeeCeilingWeiByChain as evmPriorityFeeCeilingWeiByChain,
+  priorityFeeFloorWeiByChain as evmPriorityFeeFloorWeiByChain,
+} from '@vultisig/core-chain/tx/fee/evm/clampEvmPriorityFee'
 
 // Noon USDC yield vault SDK boundary. Consumers should use these helpers
 // instead of calling Noon/Accountable APIs or hand-encoding ERC-7540 calldata.

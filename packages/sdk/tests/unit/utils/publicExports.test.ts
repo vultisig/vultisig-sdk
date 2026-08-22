@@ -301,6 +301,17 @@ describe('@vultisig/sdk public exports', () => {
     ).toBe(50n * 1_000_000_000n)
   })
 
+  // vultisig-sdk#1157: the EVM priority-fee floor/ceiling tables backing
+  // `clampEvmPriorityFee` are the canonical source these tables should
+  // migrate to, so they must be importable from the public root entry point
+  // (not just reachable indirectly via the clamp function).
+  it('exports the EVM priority-fee floor/ceiling tables as the canonical single source of truth', () => {
+    expect(sdk.evmPriorityFeeCeilingWeiByChain[sdk.Chain.Ethereum]).toBe(500n * 1_000_000_000n)
+    expect(sdk.evmPriorityFeeCeilingWeiByChain[sdk.Chain.Polygon]).toBe(3_000n * 1_000_000_000n)
+    expect(sdk.evmPriorityFeeFloorWeiByChain[sdk.Chain.Ethereum]).toBe(1n * 1_000_000_000n)
+    expect(sdk.evmPriorityFeeFloorWeiByChain[sdk.Chain.Polygon]).toBe(30n * 1_000_000_000n)
+  })
+
   it('exports gas comparison helpers from the root sdk surface', () => {
     expect(typeof sdk.compareCosts).toBe('function')
     expect(Array.isArray(sdk.DEFAULT_COMPARE_CHAINS)).toBe(true)
