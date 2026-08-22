@@ -60,6 +60,7 @@ describe('@vultisig/sdk/seedphrase public surface', () => {
         'getWordlist',
         'isSeedphraseImportSupportedChain',
         'normalizeMnemonic',
+        'prepareSeedphraseImportPrelude',
         'validateSeedphrase',
       ].sort()
     )
@@ -69,5 +70,6 @@ describe('@vultisig/sdk/seedphrase public surface', () => {
         'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'
       )
     ).toBe('english')
+    expect(typeof seedphrase.prepareSeedphraseImportPrelude).toBe('function')
   })
 })
