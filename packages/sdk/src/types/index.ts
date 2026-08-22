@@ -610,6 +610,16 @@ export type MessageSignature = {
   algorithm: 'ECDSA' | 'EdDSA'
 }
 
+/** Canonical 65-byte EIP-712 signature plus the digest that was signed. */
+export type TypedDataSignature = {
+  signature: string
+  r: string
+  s: string
+  v: number
+  hash: string
+  chain: Chain
+}
+
 export type Portfolio = {
   /** Balances with fiat values populated */
   balances: Balance[]
