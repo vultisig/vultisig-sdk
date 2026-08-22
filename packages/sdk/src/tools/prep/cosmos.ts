@@ -76,6 +76,9 @@ export const prepareSignAminoTxFromKeys = async (
     publicKey,
     libType: identity.libType,
     skipChainSpecificFetch: options?.skipChainSpecificFetch,
+    // sdk#1809: pre-fetched account metadata, required when the fetch is skipped.
+    accountNumber: options?.accountNumber,
+    sequence: options?.sequence,
   })
 }
 
@@ -136,5 +139,7 @@ export const prepareSignDirectTxFromKeys = async (
     publicKey,
     libType: identity.libType,
     skipChainSpecificFetch: options?.skipChainSpecificFetch,
+    // sdk#1809: pre-fetched sequence, required when the fetch is skipped.
+    sequence: options?.sequence,
   })
 }

@@ -28,6 +28,7 @@ import {
 } from '@vultisig/core-mpc/types/vultisig/keysign/v1/wasm_execute_contract_payload_pb'
 
 import type { CosmosFeeInput, CosmosMsgInput, SignAminoInput, SignDirectInput } from '../../../types/cosmos'
+import { VaultError, VaultErrorCode } from '../../VaultError'
 
 /**
  * Minimal public-key contract the Cosmos payload builders need — just the raw
@@ -49,6 +50,10 @@ export type BuildSignAminoPayloadInput = SignAminoInput & {
   publicKey: CosmosBuilderPublicKey
   libType: KeysignLibType
   skipChainSpecificFetch?: boolean
+  /** Pre-fetched account number. Required when `skipChainSpecificFetch`. sdk#1809. */
+  accountNumber?: string
+  /** Pre-fetched account sequence. Required when `skipChainSpecificFetch`. sdk#1809. */
+  sequence?: string
 }
 
 /**
@@ -60,6 +65,33 @@ export type BuildSignDirectPayloadInput = SignDirectInput & {
   publicKey: CosmosBuilderPublicKey
   libType: KeysignLibType
   skipChainSpecificFetch?: boolean
+  /** Pre-fetched account sequence. Required when `skipChainSpecificFetch`. sdk#1809. */
+  sequence?: string
+}
+
+/**
+ * sdk#1809: `skipChainSpecificFetch` advertises offline / pre-fetched signing,
+ * but the account metadata it skips fetching used to fall back to `'0'`. A
+ * Cosmos signature is bound to (account_number, sequence), so a zero default is
+ * not a neutral placeholder - it produces a signature the chain rejects for any
+ * account that has ever transacted. Fail closed and name the field instead.
+ */
+function requirePrefetched(builder: string, field: 'accountNumber' | 'sequence', value: string | undefined): string {
+  if (value === undefined || value === '') {
+    throw new VaultError(
+      VaultErrorCode.InvalidConfig,
+      `${builder}: ${field} is required when skipChainSpecificFetch is true. ` +
+        `Pass the pre-fetched value (e.g. from getCosmosAccountInfo) - defaulting it to '0' would ` +
+        `bind the signature to the wrong account state and the chain would reject the broadcast.`
+    )
+  }
+  if (!/^[0-9]+$/.test(value)) {
+    throw new VaultError(
+      VaultErrorCode.InvalidConfig,
+      `${builder}: ${field} must be a plain non-negative integer string, got ${JSON.stringify(value)}`
+    )
+  }
+  return value
 }
 
 /**
@@ -170,11 +202,15 @@ function buildSignDirectData(bodyBytes: string, authInfoBytes: string, chainId: 
 export async function buildSignAminoKeysignPayload(input: BuildSignAminoPayloadInput): Promise<KeysignPayload> {
   const { chain, coin, msgs, fee, memo, vaultId, localPartyId, publicKey, libType, skipChainSpecificFetch } = input
 
-  // Get account info from chain unless skipped
-  let accountNumber = '0'
-  let sequence = '0'
+  // Get account info from chain unless skipped. When skipped, the caller must
+  // supply what the fetch would have returned (sdk#1809) — see requirePrefetched.
+  let accountNumber: string
+  let sequence: string
 
-  if (!skipChainSpecificFetch) {
+  if (skipChainSpecificFetch) {
+    accountNumber = requirePrefetched('buildSignAminoKeysignPayload', 'accountNumber', input.accountNumber)
+    sequence = requirePrefetched('buildSignAminoKeysignPayload', 'sequence', input.sequence)
+  } else {
     const accountInfo = await getCosmosAccountInfo({
       chain,
       address: coin.address,
@@ -238,10 +274,14 @@ export async function buildSignDirectKeysignPayload(input: BuildSignDirectPayloa
     skipChainSpecificFetch,
   } = input
 
-  // Get sequence from chain unless skipped
-  let sequence = '0'
+  // Get sequence from chain unless skipped. When skipped, the caller must
+  // supply what the fetch would have returned (sdk#1809). `accountNumber` is
+  // already part of the SignDirect input, so only `sequence` is needed here.
+  let sequence: string
 
-  if (!skipChainSpecificFetch) {
+  if (skipChainSpecificFetch) {
+    sequence = requirePrefetched('buildSignDirectKeysignPayload', 'sequence', input.sequence)
+  } else {
     const accountInfo = await getCosmosAccountInfo({
       chain,
       address: coin.address,
