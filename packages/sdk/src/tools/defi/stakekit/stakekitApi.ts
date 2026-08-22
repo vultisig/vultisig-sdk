@@ -141,7 +141,7 @@ export type YieldTransaction = {
   type: string // APPROVAL, SUPPLY, STAKE, UNSTAKE, etc.
   network: string
   status: string
-  unsignedTransaction: string // JSON string — needs JSON.parse
+  unsignedTransaction: string | null // JSON string — needs JSON.parse; null while yield.xyz is still building it
   gasEstimate: string // JSON string — needs JSON.parse
 }
 
@@ -392,24 +392,39 @@ export async function callYieldActionREST(
     throw new Error(`${prefix}: ${humanMsg}`)
   }
   const action_response = (await resp.json()) as YieldActionResponse
-  // Some chains return the action with status:"CREATED" and every
-  // transactions[].unsignedTransaction === null because yield.xyz hasn't
-  // built the payload yet. PATCH each null tx to advance it.
+  return ensureTransactionsBuilt(action_response, apiKey)
+}
+
+/**
+ * Some chains (Tron native staking, occasional Sui/TON) return the action
+ * with `status:"CREATED"` and every `transactions[].unsignedTransaction ===
+ * null` because yield.xyz hasn't built the payload yet — it's an async
+ * background job. The build only advances when each transaction is PATCH'd
+ * to `WAITING_FOR_SIGNATURE`. EVM and most Solana yields return the payload
+ * synchronously, so this loop is a no-op for them.
+ *
+ * Exported so every caller of a yield.xyz action response — REST
+ * (`callYieldActionREST`) and the hosted MCP path (`callYieldActionWithFallback`)
+ * alike — applies the SAME PATCH step, and so a consumer resolving an action
+ * from elsewhere (e.g. a backend that hit the hosted MCP directly) doesn't
+ * have to duplicate this loop.
+ */
+export async function ensureTransactionsBuilt(
+  action_response: YieldActionResponse,
+  apiKey?: string
+): Promise<YieldActionResponse> {
   if (Array.isArray(action_response.transactions) && action_response.transactions.length > 0) {
-    const needsBuild = action_response.transactions.some(
-      t => (t as { unsignedTransaction?: unknown }).unsignedTransaction == null
-    )
+    const needsBuild = action_response.transactions.some(t => t.status === 'CREATED' && t.unsignedTransaction == null)
     if (needsBuild) {
       const built = await Promise.all(
         action_response.transactions.map(async tx => {
-          const txRec = tx as { id?: string; unsignedTransaction?: unknown }
-          if (typeof txRec.id !== 'string' || txRec.unsignedTransaction != null) {
-            return tx as unknown
+          if (typeof tx.id !== 'string' || tx.status !== 'CREATED' || tx.unsignedTransaction != null) {
+            return tx
           }
-          return await buildYieldTransaction(txRec.id, tx, apiKey)
+          return (await buildYieldTransaction(tx.id, tx, apiKey)) as YieldTransaction
         })
       )
-      action_response.transactions = built as YieldActionResponse['transactions']
+      action_response.transactions = built
     }
   }
   return action_response
@@ -457,7 +472,23 @@ export async function callYieldActionWithFallback(args: {
     return JSON.stringify(json)
   }
   try {
-    return await callYieldMCP(args.mcpToolName, args.mcpArgs, args.apiKey)
+    const raw = await callYieldMCP(args.mcpToolName, args.mcpArgs, args.apiKey)
+    // The hosted MCP path returns the action response as-is — it never
+    // PATCH'd a still-building (`unsignedTransaction: null`) transaction,
+    // unlike callYieldActionREST above. Without this, an async-build chain
+    // (e.g. sui-sui-native-staking) that happens to route through MCP
+    // returns a success-shaped payload with an unbuilt transaction; apply
+    // the SAME build step here so both paths converge on a fully-built
+    // action response. Best-effort: a response that doesn't parse as
+    // YieldActionResponse (or has no transactions to build) is returned
+    // unchanged — downstream parsing/validation still runs on it.
+    try {
+      const parsed = JSON.parse(raw) as YieldActionResponse
+      const built = await ensureTransactionsBuilt(parsed, args.apiKey)
+      return JSON.stringify(built)
+    } catch {
+      return raw
+    }
   } catch (mcpErr) {
     const mcpMsg = mcpErr instanceof Error ? mcpErr.message : String(mcpErr)
     try {
@@ -512,7 +543,8 @@ type EvmUnsignedTx = {
   data?: string
 }
 
-function asEvmUnsignedTx(raw: string): EvmUnsignedTx | null {
+function asEvmUnsignedTx(raw: string | null): EvmUnsignedTx | null {
+  if (typeof raw !== 'string') return null
   try {
     const parsed = JSON.parse(raw) as unknown
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null
