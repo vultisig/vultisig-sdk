@@ -416,6 +416,14 @@ const STAKEKIT_NETWORK_ALIASES: Readonly<Record<string, string>> = {
   bnbchain: 'binance',
   avalanche: 'avalanche-c',
   avax: 'avalanche-c',
+  // sdk#1640: `CronosChain` is this SDK's OWN canonical Chain id, and it was the
+  // one canonical id in StakeKit's supported set that did not round-trip. Without
+  // this, `balances({ network: 'CronosChain' })` sent the literal `cronoschain`
+  // upstream — an unknown slug — and returned `[]`, which reads as "you hold
+  // nothing on Cronos" rather than "that network name was not understood".
+  cronoschain: 'cronos',
+  'cronos chain': 'cronos',
+  'cronos-chain': 'cronos',
 }
 
 const normalizeStakekitNetwork = (network: string): string => {
