@@ -1,5 +1,21 @@
 # @vultisig/core-chain
 
+## 3.0.0
+
+### Major Changes
+
+- [#1891](https://github.com/vultisig/vultisig-sdk/pull/1891) [`7d6a014`](https://github.com/vultisig/vultisig-sdk/commit/7d6a01440fd0b855356cce81469b5b5a91665862) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Standardize signed-transaction broadcast adapters on one typed accepted-or-failed result contract.
+
+## 2.39.0
+
+### Minor Changes
+
+- [#1810](https://github.com/vultisig/vultisig-sdk/pull/1810) [`088b905`](https://github.com/vultisig/vultisig-sdk/commit/088b9058f47eff8dc84929e89fdf4ddfde7e42e6) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add provider-aware swap arrival status normalization for THORChain, MayaChain, Skip Go, and LI.FI.
+
+### Patch Changes
+
+- [#1810](https://github.com/vultisig/vultisig-sdk/pull/1810) [`088b905`](https://github.com/vultisig/vultisig-sdk/commit/088b9058f47eff8dc84929e89fdf4ddfde7e42e6) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fix three unsafe terminal-state gaps in `getSwapArrivalStatus`: LI.FI `DONE/PARTIAL` (user received a different token than requested) is now reported as a distinct `partial` status instead of being flattened into `success`; malformed or unknown Midgard action statuses now throw `SwapArrivalStatusRequestError` instead of being reported as a terminal `error`; and THOR/Maya node-only completion now reads THORNode's `planned_out_txs[].refund` flag to report `success`/`refunded` when available, instead of always forcing an artificial `pending` state.
+
 ## 2.38.0
 
 ### Minor Changes
