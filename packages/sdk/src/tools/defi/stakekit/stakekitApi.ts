@@ -554,18 +554,44 @@ export function buildYieldStepScanRequest(tx: YieldTransaction): ScanRequest {
   return req
 }
 
+// yield.xyz step `type` for an allowance-setting leg (e.g. ERC-20 approve before a SUPPLY/STAKE
+// deposit). Never the value-moving action itself.
+const APPROVAL_STEP_TYPE = 'APPROVAL'
+
 /**
- * Build the scan_request for a yield action's RESPONSE envelope.
- * Returns the first non-unsupported step scan_request; falls back to
- * `{kind: 'unsupported', reason: 'no_compiled_txs'}` when all steps are unsupported.
+ * Build a scan_request for EVERY step in a yield action's transactions[], 1:1 aligned by index
+ * (result[i] corresponds to resp.transactions[i]). Prefer this over the singular
+ * buildYieldActionScanRequest when a consumer can scan the full multi-step flow (e.g. an
+ * `[approve, deposit]` action) instead of a single scalar field.
+ */
+export function buildYieldActionScanRequests(resp: YieldActionResponse): ScanRequest[] {
+  if (!resp.transactions?.length) return []
+  return resp.transactions.map(buildYieldStepScanRequest)
+}
+
+/**
+ * Build the LEGACY singular scan_request for a yield action's RESPONSE envelope.
+ *
+ * Prefers the first step that is BOTH supported AND not an APPROVAL leg, so a consumer reading
+ * only this scalar field sees the value-moving action (SUPPLY/STAKE/UNSTAKE/WITHDRAW/etc.), not
+ * the allowance-setting approve — a common EVM shape is `[APPROVAL, SUPPLY]`, and scanning the
+ * approve instead of the deposit is a security-scan blind spot on the leg that actually moves
+ * value. Falls back to the first supported step (even an approval) when every step is either an
+ * approval or unsupported, and finally to `unsupported` when nothing usable exists at all — so
+ * this never regresses the old any-supported-step behavior, it only re-prioritizes among
+ * supported steps. New callers should prefer buildYieldActionScanRequests (the full 1:1-aligned
+ * array) so they aren't limited to a single leg in the first place.
  */
 export function buildYieldActionScanRequest(resp: YieldActionResponse): ScanRequest {
   if (!resp.transactions?.length) {
     return { kind: 'unsupported', reason: 'no_compiled_txs' }
   }
+  let firstSupported: ScanRequest | undefined
   for (const step of resp.transactions) {
     const req = buildYieldStepScanRequest(step)
-    if (req.kind !== 'unsupported') return req
+    if (req.kind === 'unsupported') continue
+    if (!firstSupported) firstSupported = req
+    if (step.type?.toUpperCase() !== APPROVAL_STEP_TYPE) return req
   }
-  return { kind: 'unsupported', reason: 'no_compiled_txs' }
+  return firstSupported ?? { kind: 'unsupported', reason: 'no_compiled_txs' }
 }

@@ -24,6 +24,7 @@ import type {
 } from './stakekitApi'
 import {
   buildYieldActionScanRequest,
+  buildYieldActionScanRequests,
   callYieldActionWithFallback,
   getBalances,
   getYield,
@@ -49,13 +50,20 @@ export type {
   YieldToken,
   YieldTransaction,
 } from './stakekitApi'
-export { buildYieldActionScanRequest, buildYieldStepScanRequest } from './stakekitApi'
+export { buildYieldActionScanRequest, buildYieldActionScanRequests, buildYieldStepScanRequest } from './stakekitApi'
 
 // --- Inline withScanRequest helper ---
 // (mcp-ts's withScanRequest isn't available in the SDK — inline it here)
 
-function withScanRequest<T extends object>(scanRequest: ScanRequest, rest: T): { scan_request: ScanRequest } & T {
-  return { scan_request: scanRequest, ...rest }
+// sdk#1918: scan_request stays the legacy scalar (now leg-aware — see
+// buildYieldActionScanRequest), scan_requests is the new 1:1-aligned array so a consumer that
+// wants to scan every step (not just the one buildYieldActionScanRequest happens to prefer) can.
+function withScanRequest<T extends object>(
+  scanRequest: ScanRequest,
+  scanRequests: ScanRequest[],
+  rest: T
+): { scan_request: ScanRequest; scan_requests: ScanRequest[] } & T {
+  return { scan_request: scanRequest, scan_requests: scanRequests, ...rest }
 }
 
 // --- Network mappings ---
@@ -598,7 +606,8 @@ export async function stakekitBuildEnter(params: {
 
   const display = parseActionDisplay(actionData)
   const scanRequest = buildYieldActionScanRequest(actionData)
-  return withScanRequest(scanRequest, display)
+  const scanRequests = buildYieldActionScanRequests(actionData)
+  return withScanRequest(scanRequest, scanRequests, display)
 }
 
 /**
@@ -659,9 +668,10 @@ export async function stakekitBuildExit(params: {
 
   const display = parseActionDisplay(actionData)
   const scanRequest = buildYieldActionScanRequest(actionData)
+  const scanRequests = buildYieldActionScanRequests(actionData)
   const cooldownDays = yieldMeta?.metadata?.cooldownPeriod?.days ?? null
   return {
-    ...withScanRequest(scanRequest, display),
+    ...withScanRequest(scanRequest, scanRequests, display),
     ...(cooldownDays !== null ? { cooldown_days: cooldownDays } : {}),
   }
 }
@@ -714,7 +724,8 @@ export async function stakekitBuildManage(params: {
 
   const display = parseActionDisplay(actionData)
   const scanRequest = buildYieldActionScanRequest(actionData)
-  return withScanRequest(scanRequest, display)
+  const scanRequests = buildYieldActionScanRequests(actionData)
+  return withScanRequest(scanRequest, scanRequests, display)
 }
 
 /** The sdk.defi.stakekit namespace surface. */
