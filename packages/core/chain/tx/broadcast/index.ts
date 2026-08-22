@@ -36,6 +36,7 @@ export type {
   BroadcastAcceptedResult,
   BroadcastFailedResult,
   BroadcastProviderDetails,
+  BroadcastStrategy,
   BroadcastTxResolver,
   BroadcastTxResult,
 } from './resolver'

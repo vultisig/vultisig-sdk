@@ -10,6 +10,7 @@ import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { getCoinValue } from '@vultisig/core-chain/coin/utils/getCoinValue'
 import { signatureAlgorithms } from '@vultisig/core-chain/signing/SignatureAlgorithm'
+import type { BroadcastStrategy } from '@vultisig/core-chain/tx/broadcast'
 import { getTxStatus as coreTxStatus } from '@vultisig/core-chain/tx/status'
 import type { TxStatusResult } from '@vultisig/core-chain/tx/status/resolver'
 import { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
@@ -1422,12 +1423,17 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   /**
    * Broadcast a signed transaction to the blockchain network
    */
-  async broadcastTx(params: { chain: Chain; keysignPayload: KeysignPayload; signature: Signature }): Promise<string> {
-    const { chain, keysignPayload, signature } = params
+  async broadcastTx(params: {
+    chain: Chain
+    keysignPayload: KeysignPayload
+    signature: Signature
+    strategy?: BroadcastStrategy
+  }): Promise<string> {
+    const { chain, keysignPayload, signature, strategy } = params
 
     try {
       // Delegate to BroadcastService
-      const txHash = await this.broadcastService.broadcastTx({ chain, keysignPayload, signature })
+      const txHash = await this.broadcastService.broadcastTx({ chain, keysignPayload, signature, strategy })
 
       // Emit success event
       this.emit('transactionBroadcast', {
