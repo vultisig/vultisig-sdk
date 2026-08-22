@@ -416,6 +416,10 @@ const STAKEKIT_NETWORK_ALIASES: Readonly<Record<string, string>> = {
   bnbchain: 'binance',
   avalanche: 'avalanche-c',
   avax: 'avalanche-c',
+  // The SDK's own canonical Chain enum value ('CronosChain') otherwise
+  // round-trips wrong through this table — StakeKit's slug is just 'cronos'.
+  cronoschain: 'cronos',
+  'cronos chain': 'cronos',
 }
 
 const normalizeStakekitNetwork = (network: string): string => {

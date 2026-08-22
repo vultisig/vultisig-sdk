@@ -139,6 +139,24 @@ describe('sdk.defi.stakekit', () => {
       expect(new URL(requestUrl).searchParams.get('network')).toBe('binance')
     })
 
+    // sdk#1640: the SDK's own canonical Chain enum value ('CronosChain') used
+    // to round-trip wrong through this table — 'cronoschain' was sent to
+    // StakeKit verbatim, an unknown slug, silently returning an empty result.
+    it('normalizes the SDK canonical CronosChain identifier to the StakeKit cronos slug', async () => {
+      const fetchMock = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: [], hasNextPage: false }),
+        text: async () => '',
+      } as Response)
+      globalThis.fetch = fetchMock
+
+      await stakekitSearch({ network: 'CronosChain' })
+
+      const requestUrl = String(fetchMock.mock.calls[0]?.[0])
+      expect(new URL(requestUrl).searchParams.get('network')).toBe('cronos')
+    })
+
     it('returns rows with YieldDiscoverOpportunity-compatible shape: apy is fraction, provider nested in metadata, id present', async () => {
       const product = makeProduct()
       globalThis.fetch = vi.fn().mockResolvedValueOnce({
