@@ -65,6 +65,11 @@
       "import": "./dist/chainRegistry.js",
       "default": "./dist/chainRegistry.js"
     },
+    "./chainIdentity": {
+      "types": "./dist/chainIdentity.d.ts",
+      "import": "./dist/chainIdentity.js",
+      "default": "./dist/chainIdentity.js"
+    },
     "./chains/bittensor/client": {
       "types": "./dist/chains/bittensor/client.d.ts",
       "import": "./dist/chains/bittensor/client.js",
