@@ -1,3 +1,4 @@
+import { BroadcastTxError } from '@cosmjs/stargate'
 import { HttpResponseError } from '@vultisig/lib-utils/fetch/HttpResponseError'
 
 import { CosmosSequenceMismatchError } from './cosmosSequenceMismatch'
@@ -110,6 +111,21 @@ export const isTransientBroadcastError = (error: unknown): boolean => {
     }
 
     if (current instanceof DeliverTxFailedError) {
+      return false
+    }
+
+    // cosmjs's StargateClient.broadcastTxSync rejects with BroadcastTxError on
+    // a non-zero CheckTx code — the tx was rejected by the node before it ever
+    // reached the mempool. Its message is chain-controlled text (`log`), which
+    // can read exactly like a transient network failure (ante-handler/wasm
+    // errors routinely say "aborted", "timed out", "connection reset"). A
+    // resend of the same bytes can't succeed differently — the node already
+    // rejected it — so this is terminal, same as DeliverTxFailedError. Without
+    // this check the message-regex test below would misclassify it as
+    // transient, retry, and have the resend's "tx already exists in cache"
+    // swallowed as a false success (see sdk#1383, the CheckTx sibling of the
+    // DeliverTx-failure bug sdk#1316 already closed).
+    if (current instanceof BroadcastTxError) {
       return false
     }
 
