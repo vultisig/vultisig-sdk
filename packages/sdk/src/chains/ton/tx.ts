@@ -16,6 +16,7 @@
  * initialize WalletCore WASM and never reaches `@ton/crypto-primitives`, so
  * the RN builder path does not need the `crypto.subtle` polyfill.
  */
+import { tonConfig } from '@vultisig/core-chain/chains/ton/config'
 import { Address, beginCell, Cell, internal, SendMode, storeMessageRelaxed } from '@ton/core'
 import { TW } from '@trustwallet/wallet-core'
 
@@ -340,8 +341,6 @@ export function buildTonSendTx(opts: BuildTonSendOptions): TonWalletCoreBackedTx
 // ---------------------------------------------------------------------------
 
 const JETTON_TRANSFER_OPCODE = 0xf8a7ea5
-/** Standard 0.08 TON gas budget for a Jetton contract call. */
-const JETTON_GAS_AMOUNT_NANO = 80000000n
 /** 1 nanoton forward amount — the minimum that triggers a transfer_notification. */
 const JETTON_FORWARD_AMOUNT_NANO = 1n
 
@@ -372,6 +371,7 @@ export function buildTonJettonTransferTx(opts: BuildTonJettonTransferOptions): T
 
   const destinationAddr = Address.parse(opts.to)
   const jettonWalletAddr = Address.parse(opts.jettonWalletAddress)
+  const isActiveDestination = opts.isActiveDestination ?? true
 
   let jettonBody = beginCell()
     .storeUint(JETTON_TRANSFER_OPCODE, 32)
@@ -380,7 +380,7 @@ export function buildTonJettonTransferTx(opts: BuildTonJettonTransferOptions): T
     .storeAddress(destinationAddr)
     .storeAddress(wallet.address) // response_destination for excess TON
     .storeBit(false) // no custom_payload
-    .storeCoins((opts.isActiveDestination ?? true) ? JETTON_FORWARD_AMOUNT_NANO : 0n)
+    .storeCoins(isActiveDestination ? JETTON_FORWARD_AMOUNT_NANO : 0n)
 
   if (opts.memo) {
     const commentCell = buildCommentBody(opts.memo)
@@ -406,7 +406,7 @@ export function buildTonJettonTransferTx(opts: BuildTonJettonTransferOptions): T
       storeMessageRelaxed(
         internal({
           to: jettonWalletAddr,
-          value: JETTON_GAS_AMOUNT_NANO,
+          value: isActiveDestination ? tonConfig.jettonAmount : tonConfig.jettonAmountNewWallet,
           bounce: true,
           body: bodyCell,
         }),
