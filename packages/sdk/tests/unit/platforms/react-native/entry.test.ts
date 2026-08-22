@@ -483,6 +483,25 @@ describe('RN entry exposes pure chain helpers and registry', () => {
     expect(rn.readNoonVaultState).toBe(noon.readNoonVaultState)
     expect(rn.fetchNoonUsdcVaultMetrics).toBe(noon.fetchNoonUsdcVaultMetrics)
   })
+
+  it('re-exports the new StakeKit canonicals from the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const stakekit = await import('../../../../src/tools/defi/stakekit')
+
+    expect(rn.stakekit).toBe(stakekit.stakekit)
+    expect(rn.stakekitBuildEnter).toBe(stakekit.stakekitBuildEnter)
+    expect(rn.stakekitBuildExit).toBe(stakekit.stakekitBuildExit)
+    expect(rn.stakekitBuildManage).toBe(stakekit.stakekitBuildManage)
+    expect(rn.stakekitSearch).toBe(stakekit.stakekitSearch)
+    expect(rn.stakekitDetails).toBe(stakekit.stakekitDetails)
+    expect(rn.stakekitBalances).toBe(stakekit.stakekitBalances)
+    expect(rn.parseActionDisplay).toBe(stakekit.parseActionDisplay)
+    expect(rn.buildYieldActionScanRequest).toBe(stakekit.buildYieldActionScanRequest)
+    expect(rn.buildYieldStepScanRequest).toBe(stakekit.buildYieldStepScanRequest)
+    // sdk#1902: the action preflight validators belong to the same canonical set.
+    expect(rn.validateStakekitActionAddress).toBe(stakekit.validateStakekitActionAddress)
+    expect(rn.validateStakekitActionInput).toBe(stakekit.validateStakekitActionInput)
+  })
 })
 
 // Same parity guard for the hardened human-amount -> base-units parser: the RN

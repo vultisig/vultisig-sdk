@@ -493,6 +493,33 @@ export {
   glifPoolWriteAbi,
 } from '../../tools/defi/glif'
 export type {
+  YieldActionResponse,
+  YieldArgs,
+  YieldBalance,
+  YieldDiscoverMetadata,
+  YieldDiscoverOpportunity,
+  YieldDiscoverToken,
+  YieldListResponse,
+  YieldMetadata,
+  YieldProduct,
+  YieldToken,
+  YieldTransaction,
+} from '../../tools/defi/stakekit'
+export {
+  buildYieldActionScanRequest,
+  buildYieldStepScanRequest,
+  parseActionDisplay,
+  stakekit,
+  stakekitBalances,
+  stakekitBuildEnter,
+  stakekitBuildExit,
+  stakekitBuildManage,
+  stakekitDetails,
+  stakekitSearch,
+  validateStakekitActionAddress,
+  validateStakekitActionInput,
+} from '../../tools/defi/stakekit'
+export type {
   BuildThreeJaneSupplyUsdcParams,
   BuildThreeJaneSupplyUsdcResult,
   ThreeJaneTranche,

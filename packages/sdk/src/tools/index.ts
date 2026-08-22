@@ -303,6 +303,8 @@ export {
   stakekitDetails,
   stakekitSearch,
   stripChainPrefix,
+  validateStakekitActionAddress,
+  validateStakekitActionInput,
 } from './defi'
 
 // Verifier client
