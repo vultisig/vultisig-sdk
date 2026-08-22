@@ -1,4 +1,4 @@
-import { buildTonJettonTransferTx, type TonTxBuilderResult } from '../../chains/ton/tx'
+import { buildTonJettonTransferTx, type TonWalletCoreBackedTxBuilderResult } from '../../chains/ton/tx'
 import type { VaultIdentity } from './types'
 
 /**
@@ -49,9 +49,10 @@ export type PrepareJettonTransferTxFromKeysParams = {
  * This is PURE CRYPTO: it constructs the unsigned signing-payload BoC + the
  * V4R2 external-message envelope and returns a `finalize(sigHex)` closure. It
  * NEVER signs and NEVER broadcasts — `vault.sign` stays on-device. The
- * returned `signingHashHex` is what the EdDSA MPC engine signs; feed the
- * resulting 64-byte Ed25519 signature back through `finalize` to obtain the
- * broadcast-ready BoC.
+ * returned `signingHashHex` is what the EdDSA MPC engine signs. Pass the
+ * accompanying `walletCoreTxInputData` to `fastVaultSign` so it can verify
+ * the hash independently before dispatch, then feed the resulting 64-byte
+ * Ed25519 signature through `finalize` to obtain the broadcast-ready BoC.
  *
  * For TON the wallet's Ed25519 key is the vault's root EdDSA public key
  * directly (no chain-code derivation), so `identity.eddsaPublicKey` is passed
@@ -71,7 +72,7 @@ export type PrepareJettonTransferTxFromKeysParams = {
 export const prepareJettonTransferTxFromKeys = (
   identity: VaultIdentity,
   params: PrepareJettonTransferTxFromKeysParams
-): TonTxBuilderResult => {
+): TonWalletCoreBackedTxBuilderResult => {
   if (params.amount <= 0n) {
     throw new Error('Amount must be greater than zero')
   }
