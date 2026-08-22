@@ -18,6 +18,7 @@ describe('public API subpath exports', () => {
     const balanceExport = sdkPackageJson.exports['./tools/balance']
     const tronExport = sdkPackageJson.exports['./chains/tron']
     const utxoExport = sdkPackageJson.exports['./chains/utxo']
+    const seedphraseExport = sdkPackageJson.exports['./seedphrase']
     const decodeExport = sdkPackageJson.exports['./tools/decode']
     const txExport = sdkPackageJson.exports['./tx']
 
@@ -63,6 +64,12 @@ describe('public API subpath exports', () => {
       require: './dist/chains/utxo/index.cjs',
       default: './dist/chains/utxo/index.cjs',
     })
+    expect(seedphraseExport).toMatchObject({
+      types: './dist/seedphrase/index.d.ts',
+      import: './dist/seedphrase/index.js',
+      require: './dist/seedphrase/index.cjs',
+      default: './dist/seedphrase/index.cjs',
+    })
     expect(decodeExport).toMatchObject({
       types: './dist/tools/decode/index.d.ts',
       import: './dist/tools/decode/index.js',
@@ -102,6 +109,8 @@ describe('public API subpath exports', () => {
     expect(platformRollupConfig).toContain("distBase: 'chains/tron'")
     expect(platformRollupConfig).toContain("input: './src/chains/utxo/index.ts'")
     expect(platformRollupConfig).toContain("distBase: 'chains/utxo'")
+    expect(platformRollupConfig).toContain("input: './src/seedphrase/index.ts'")
+    expect(platformRollupConfig).toContain("distBase: 'seedphrase'")
     expect(platformRollupConfig).toContain("input: './src/tools/decode/index.ts'")
     expect(platformRollupConfig).toContain("distBase: 'tools/decode'")
     expect(platformRollupConfig).toContain("input: './src/tx/index.ts'")
@@ -127,6 +136,9 @@ describe('public API subpath exports', () => {
     )
     expect(typesRollupConfig).toContain(
       "createSubpathTypesConfig('src/chains/utxo/index.ts', 'dist/chains/utxo/index.d.ts')"
+    )
+    expect(typesRollupConfig).toContain(
+      "createSubpathTypesConfig('src/seedphrase/index.ts', 'dist/seedphrase/index.d.ts')"
     )
     expect(typesRollupConfig).toContain(
       "createSubpathTypesConfig('src/tools/decode/index.ts', 'dist/tools/decode/index.d.ts')"
