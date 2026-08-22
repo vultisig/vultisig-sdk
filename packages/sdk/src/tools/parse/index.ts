@@ -46,6 +46,8 @@
  * that is the concern of TASK-021. Keeping resolution out of this module
  * avoids the symbol→token collision landmines described in the audit.
  */
+export type { ParseAssetRefResult, SplitAssetRefResult } from './assetRef'
+export { parseAssetRef, splitAssetRef } from './assetRef'
 export type { ParseChainResult } from './chainSchema'
 export { chainSchema, parseChain } from './chainSchema'
 export type { ParseTickerResult } from './tickerSchema'

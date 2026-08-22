@@ -79,8 +79,8 @@ export { fromChainAmountExact } from '@vultisig/core-chain/amount/fromChainAmoun
 // Use `parseChain` / `parseTicker` to validate strings from LLM output,
 // HTTP bodies, or CLI args BEFORE passing them to any SDK tool — you get a
 // typed error instead of a late crash inside getChainKind / resolvers[].
-export type { ParseChainResult, ParseTickerResult } from './tools/parse'
-export { chainSchema, parseChain, parseTicker, tickerSchema } from './tools/parse'
+export type { ParseAssetRefResult, ParseChainResult, ParseTickerResult, SplitAssetRefResult } from './tools/parse'
+export { chainSchema, parseAssetRef, parseChain, parseTicker, splitAssetRef, tickerSchema } from './tools/parse'
 
 // Pure-crypto chain-math normalizers (decimals/amount-scale/fee/token-symbol).
 // Ported from the agent-backend validator — PURE math only, no grounding.
