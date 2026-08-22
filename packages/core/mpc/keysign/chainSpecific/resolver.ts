@@ -14,6 +14,11 @@ export type GetChainSpecificInput<C extends KeysignChainSpecificKey = KeysignCha
   walletCore: WalletCore
   /** XRPL DestinationTag, carried in RippleSpecific for Ripple payments. */
   destinationTag?: number
+  /**
+   * UTXO-only. When true, WalletCore plans a single-output sweep.
+   * Ignored by non-UTXO resolvers. Defaults to false.
+   */
+  sendMaxAmount?: boolean
 } & (C extends 'ethereumSpecific'
   ? {
       feeSettings?: FeeSettings<'evm'>
