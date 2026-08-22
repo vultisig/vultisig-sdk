@@ -435,6 +435,24 @@ export {
   resolve4ByteSelector,
   resolveEns,
 } from '../../tools/evm'
+export type { CheckoutUsdcChain, DecodedApproveParams, DecodedDepositWithMemoParams } from '../../tools/payments'
+export {
+  AGENT_ROUTER_ADDRESS,
+  APPROVE_SELECTOR,
+  assertCheckoutRouterVersion,
+  buildApproveCalldata,
+  buildDepositWithMemoCalldata,
+  CHECKOUT_CHAIN_IDS,
+  decodeApproveCalldata,
+  decodeDepositWithMemoCalldata,
+  DEPOSIT_MEMO_RE,
+  DEPOSIT_WITH_MEMO_SELECTOR,
+  isValidDepositMemo,
+  resolveCheckoutChainId,
+  resolveUsdcContract,
+  ROUTER_VERSION_PINNED,
+  USDC_CONTRACTS,
+} from '../../tools/payments'
 
 // EVM chainId ↔ chain mapping plus the canonical priority-fee sanity clamp.
 // Same single source of truth exported from the generic entry (src/index.ts)

@@ -337,6 +337,16 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.riverStatusName).toBe(river.riverStatusName)
   })
 
+  it('re-exports the direct-checkout USDC router helpers on the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(rn.AGENT_ROUTER_ADDRESS).toBe('0xFEEEeeEE643d6AD9eBC6B2025a03eB2290A72bBf')
+    expect(rn.ROUTER_VERSION_PINNED).toBe(1)
+    expect(typeof rn.buildApproveCalldata).toBe('function')
+    expect(typeof rn.buildDepositWithMemoCalldata).toBe('function')
+    expect(typeof rn.assertCheckoutRouterVersion).toBe('function')
+  })
+
   it('re-exports XRPL issued-currency canonicals on the RN entrypoint', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
