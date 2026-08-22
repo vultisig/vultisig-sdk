@@ -1998,6 +1998,11 @@
       "import": "./dist/swap/quote/findSwapQuote.js",
       "default": "./dist/swap/quote/findSwapQuote.js"
     },
+    "./swap/quote/generalSwapQuotePolicy": {
+      "types": "./dist/swap/quote/generalSwapQuotePolicy.d.ts",
+      "import": "./dist/swap/quote/generalSwapQuotePolicy.js",
+      "default": "./dist/swap/quote/generalSwapQuotePolicy.js"
+    },
     "./swap/quote/getSwapQuoteProviderName": {
       "types": "./dist/swap/quote/getSwapQuoteProviderName.d.ts",
       "import": "./dist/swap/quote/getSwapQuoteProviderName.js",
