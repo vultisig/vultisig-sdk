@@ -260,6 +260,10 @@ export type {
   PendlePtBuildResult,
   PendleUnsignedTx,
   ScanRequest,
+  StakekitActionDisplay,
+  StakekitActionResult,
+  StakekitDetailsResult,
+  StakekitExitResult,
   UnsupportedScanRequest,
   Validator,
   YieldActionResponse,
@@ -303,6 +307,7 @@ export {
   stakekitDetails,
   stakekitSearch,
   stripChainPrefix,
+  yieldNetworkToCanonicalChain,
 } from './defi'
 
 // Verifier client
