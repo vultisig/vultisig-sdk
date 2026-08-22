@@ -279,6 +279,14 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.parseThorSwapMemo).toBe('function')
   })
 
+  it('exports the canonical token-candidate helpers from the root sdk surface', () => {
+    expect(typeof sdk.normalizeTokenCandidates).toBe('function')
+    expect(typeof sdk.pickClearTokenCandidate).toBe('function')
+    expect(typeof sdk.findContractIdentity).toBe('function')
+    expect(typeof sdk.classifyTokenInput).toBe('function')
+    expect(sdk.classifyTokenInput('USDC')).toBe('native_or_symbol')
+  })
+
   it('exports the shared THORChain secured-asset catalog helpers', () => {
     expect(typeof sdk.getThorchainSecuredAssetCatalog).toBe('function')
     expect(typeof sdk.createThorchainSecuredAssetCatalog).toBe('function')
