@@ -423,6 +423,10 @@ describe('RN entry exposes pure chain helpers and registry', () => {
 
     expect(typeof rn.fromChainAmountExact).toBe('function')
     expect(rn.fromChainAmountExact(123456789012345678901n, 18)).toBe('123.456789012345678901')
+    expect(typeof rn.fromChainAmount).toBe('function')
+    expect(typeof rn.fromChainAmountDisplay).toBe('function')
+    expect(rn.fromChainAmount(1_000_000n, 6)).toBe(1)
+    expect(rn.fromChainAmountDisplay('999999999999999999999999', 18)).toBe('999999.999999999999999999')
 
     expect(typeof rn.getBlockExplorerUrl).toBe('function')
     expect(rn.getBlockExplorerUrl({ chain: rn.Chain.Ethereum, entity: 'address', value: '0xabc' })).toBe(
