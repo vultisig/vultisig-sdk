@@ -278,6 +278,10 @@ export type {
   ConsolidateChain,
   ConsolidateUtxo,
   GetMaxSendAmountFromKeysParams,
+  IbcCosmosTx,
+  IbcMsgTransfer,
+  PrepareIbcTransferParams,
+  PrepareIbcTransferResult,
   PrepareJettonTransferTxFromKeysParams,
   PreparePolkadotAssetSendParams,
   PreparePolkadotAssetSendResult,
@@ -316,6 +320,19 @@ export {
 export type { BuildCosmosWasmExecuteMsgParams, CosmWasmExecuteFund } from '../../tools/prep/cosmosWasmExecute'
 export { buildCosmosWasmExecuteMsg } from '../../tools/prep/cosmosWasmExecute'
 export { buildCw20TransferMsg } from '../../tools/prep/cw20Transfer'
+// Pure IBC transfer prep helpers depend on data tables + protobuf/bech32 only,
+// so they are RN-safe static re-exports. Omitting them here strands React Native
+// consumers on the hand-curated entrypoint even though the root SDK already
+// exports the canonical ICS-20 route/channel/HRP helper family.
+export {
+  IBC_CHAIN_HRP,
+  IBC_CHAIN_REVISION,
+  IBC_CHANNEL_DEST,
+  IBC_MSG_TRANSFER_TYPE_URL,
+  normaliseIbcChainId,
+  prepareIbcTransfer,
+  supportedIbcDestinationsFrom,
+} from '../../tools/prep/ibcTransfer'
 // `preparePolkadotAssetSend` is pure-crypto (@polkadot/util + @polkadot/util-crypto,
 // both RN-safe) with no MPC/wasm dependency, so it ships as a static re-export
 // rather than a lazy `await import(...)` wrapper. `POLKADOT_ASSET_HUB_KNOWN_ASSETS`
