@@ -3,11 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 // Mock the folder-local fetch helper so every test exercises the pure
 // decode/parse/format/validate logic without a live network call.
 const mockFetchJson = vi.fn()
+const mockFetchText = vi.fn()
 vi.mock('@/tools/balance/rpc', async () => {
   const actual = await vi.importActual<typeof import('@/tools/balance/rpc')>('@/tools/balance/rpc')
   return {
     ...actual,
     fetchJson: (...args: unknown[]) => mockFetchJson(...args),
+    fetchText: (...args: unknown[]) => mockFetchText(...args),
   }
 })
 
@@ -106,18 +108,41 @@ describe('getXrpBalance', () => {
 })
 
 describe('getTrxBalance', () => {
-  beforeEach(() => mockFetchJson.mockReset())
+  beforeEach(() => {
+    mockFetchJson.mockReset()
+    mockFetchText.mockReset()
+  })
 
   it('formats SUN into TRX', async () => {
-    mockFetchJson.mockResolvedValueOnce({ balance: 12_500_000 })
+    mockFetchText.mockResolvedValueOnce('{"balance":12500000}')
     const r = await getTrxBalance(TRON_ADDR)
     expect(r.balanceSun).toBe(12_500_000)
+    expect(r.balanceSunRaw).toBe('12500000')
     expect(r.balanceTrx).toBe('12.5')
+  })
+
+  it('keeps full precision for a >2^53 SUN balance', async () => {
+    const raw = '9007199254740993'
+    mockFetchText.mockResolvedValueOnce(`{"balance":${raw}}`)
+    const r = await getTrxBalance(TRON_ADDR)
+    expect(r.balanceSunRaw).toBe(raw)
+    expect(r.balanceTrx).toBe('9007199254.740993')
+    expect(r.balanceSunRaw).not.toBe(String(r.balanceSun))
+  })
+
+  it('treats a missing TRX balance as zero', async () => {
+    mockFetchText.mockResolvedValueOnce('{"account_name":"empty"}')
+    await expect(getTrxBalance(TRON_ADDR)).resolves.toMatchObject({
+      balanceSun: 0,
+      balanceSunRaw: '0',
+      balanceTrx: '0',
+    })
   })
 
   it('rejects a non-Tron address before any RPC call', async () => {
     await expect(getTrxBalance('0xdeadbeef')).rejects.toThrow(/not a valid Tron address/)
     expect(mockFetchJson).not.toHaveBeenCalled()
+    expect(mockFetchText).not.toHaveBeenCalled()
   })
 })
 
