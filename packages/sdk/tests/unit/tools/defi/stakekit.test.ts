@@ -415,6 +415,60 @@ describe('sdk.defi.stakekit', () => {
       }
     })
 
+    it('checks each step against its own network when a non-EVM step comes first', () => {
+      const resp = makeEvmActionResponse({
+        transactions: [
+          {
+            id: 'tx-sol',
+            title: 'Stake SOL',
+            type: 'STAKE',
+            network: 'solana',
+            status: 'CREATED',
+            unsignedTransaction: 'AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==',
+            gasEstimate: '{}',
+          },
+          {
+            id: 'tx-evm',
+            title: 'Deposit',
+            type: 'SUPPLY',
+            network: 'base',
+            status: 'CREATED',
+            unsignedTransaction: JSON.stringify({ data: '0xdeadbeef' }),
+            gasEstimate: '{}',
+          },
+        ],
+      })
+
+      expect(finalizeStakekitAction(resp).status).toBe('incomplete')
+    })
+
+    it('does not apply EVM shape checks to a later non-EVM step', () => {
+      const resp = makeEvmActionResponse({
+        transactions: [
+          {
+            id: 'tx-evm',
+            title: 'Approve',
+            type: 'APPROVAL',
+            network: 'base',
+            status: 'CREATED',
+            unsignedTransaction: JSON.stringify({ to: '0xabc123', data: '0xdeadbeef' }),
+            gasEstimate: '{}',
+          },
+          {
+            id: 'tx-sol',
+            title: 'Stake SOL',
+            type: 'STAKE',
+            network: 'solana',
+            status: 'CREATED',
+            unsignedTransaction: 'AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==',
+            gasEstimate: '{}',
+          },
+        ],
+      })
+
+      expect(finalizeStakekitAction(resp).status).toBe('signable')
+    })
+
     it('precedence: a permanent failure wins over an also-incomplete sibling step', () => {
       const resp = makeEvmActionResponse({
         transactions: [

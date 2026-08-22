@@ -19,7 +19,6 @@ import type {
   Validator,
   YieldActionResponse,
   YieldBalance,
-  YieldBuildFailure,
   YieldProduct,
   YieldTransaction,
 } from './stakekitApi'
@@ -498,23 +497,15 @@ function stakekitActionHasUncanonicalizableNetwork(data: YieldActionResponse): b
 
 /** Detect a step whose `unsignedTransaction` never actually got built —
  * either missing entirely, or (EVM only) present but structurally
- * incomplete (`to`/`data` missing). Non-EVM canonical networks trust only
- * "missing payload" since the shape checks are EVM-calldata-specific. */
+ * incomplete (`to`/`data` missing). Each step is checked against its own
+ * network; non-EVM steps only check for a missing payload here since the
+ * shape checks are EVM-calldata-specific. */
 function stakekitActionBuildIncomplete(data: YieldActionResponse): boolean {
   const steps = data.transactions
   if (!Array.isArray(steps) || steps.length === 0) return false
-  const firstNetwork = typeof steps[0]?.network === 'string' ? steps[0].network : null
-  if (!firstNetwork) return false
-  if (!EVM_NETWORKS.has(firstNetwork)) {
-    if (!CANONICAL_NON_EVM_NETWORKS.has(firstNetwork)) return false
-    return steps.some(
-      tx =>
-        CANONICAL_NON_EVM_NETWORKS.has(typeof tx.network === 'string' ? tx.network : '') &&
-        (typeof tx.unsignedTransaction !== 'string' || tx.unsignedTransaction.length === 0)
-    )
-  }
   return steps.some(tx => {
     if (typeof tx.unsignedTransaction !== 'string' || tx.unsignedTransaction.length === 0) return true
+    if (typeof tx.network !== 'string' || !EVM_NETWORKS.has(tx.network)) return false
     let parsed: unknown
     try {
       parsed = JSON.parse(tx.unsignedTransaction)
