@@ -33,7 +33,15 @@ export type AssetRef = {
 }
 
 /** Kind of effect inferred from the decoded calldata / message. */
-export type EnvelopeKind = 'transfer' | 'approve' | 'delegate' | 'undelegate' | 'contractCall' | 'unknown'
+export type EnvelopeKind =
+  | 'transfer'
+  | 'approve'
+  | 'delegate'
+  | 'undelegate'
+  | 'redelegate'
+  | 'withdrawReward'
+  | 'contractCall'
+  | 'unknown'
 
 /**
  * Decoded, chain-agnostic representation of a pending transaction.
