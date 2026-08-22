@@ -47,6 +47,12 @@ import { COW_VAULT_RELAYER_ADDRESS, cowSwapSupportedChains } from './cowswap/con
  * address. Its quote and co-signer paths therefore require an independent benign Blockaid
  * reputation verdict via {@link assertSwapKitAddressReputation}; the response-local
  * `targetAddress` equality check remains defense in depth only.
+ *
+ * The legacy unattributed (`''`) provider (sdk#1500) is likewise no longer a bare log-only pass:
+ * a destination that happens to already be a known enforced router (true of every real historical
+ * fixture - see {@link isKnownAggregatorRouterAddress}) stays log-only, but anything else requires
+ * the same independent Blockaid reputation verdict via
+ * {@link assertLegacyUnattributedAddressReputation}. See that guard for the full threat model.
  */
 
 // 1inch Aggregation Router V5 (legacy). Same address as
@@ -121,9 +127,10 @@ const RECOGNIZED_DYNAMIC_OR_LEGACY_PROVIDERS: ReadonlySet<string> = new Set(['sw
 /**
  * Signing-path re-assert (sdk#1358): the same allow-list check as {@link assertKnownAggregatorRouter},
  * but keyed off an arbitrary provider STRING (the value carried in KeysignSwapPayload.general.provider,
- * which is a plain `string`). Fixed-router providers fail closed against their allowlists, SwapKit
- * fails closed against an independent Blockaid reputation verdict, and only the legacy `''`
- * unattributed provider remains log-only. Anything else is rejected outright (sdk#1457, see below).
+ * which is a plain `string`). Fixed-router providers fail closed against their allowlists, SwapKit and
+ * an unrecognized-address legacy `''` destination both fail closed against an independent Blockaid
+ * reputation verdict, and a genuinely known-router legacy `''` destination remains log-only. Anything
+ * else is rejected outright (sdk#1457, see below).
  *
  * WHY THIS EXISTS SEPARATELY FROM quote construction: a compromised initiator (or server composing the
  * intent) can hand a co-signer a KeysignPayload whose swapPayload.quote.tx.to was NEVER run through the
@@ -149,7 +156,17 @@ const RECOGNIZED_DYNAMIC_OR_LEGACY_PROVIDERS: ReadonlySet<string> = new Set(['sw
  * these originally shrank "relabel to escape enforcement" from "any string at all" to that closed set.
  * sdk#1458 subsequently removes li.fi from the residual gap using its official Diamond deployments
  * and applies an independent Blockaid reputation check to SwapKit destinations on both quote and
- * co-signer paths. The legacy unattributed value remains the only log-only compatibility case.
+ * co-signer paths.
+ *
+ * sdk#1500 closes the LAST bare log-only path: `''` was still a full bypass regardless of `address` -
+ * a payload could relabel ANY malicious destination as `''` and skip every check above (proven by the
+ * pre-fix regression test this file used to carry, which asserted a `''`-labelled ATTACKER address did
+ * NOT throw). Real historical `''` fixtures (mobileFixtures.golden.test.ts's arb.json/lifiswap.json,
+ * which predate the `provider` field entirely) turn out to always carry a destination that already IS
+ * a known enforced router - proven against the fixtures themselves. So `''` now only stays log-only
+ * when the destination independently matches a known router (real backward compat, not a bypass); any
+ * other `''`-labelled destination requires the same independent Blockaid reputation verdict SwapKit
+ * uses, via {@link assertLegacyUnattributedAddressReputation}.
  *
  * This guard remains MONOTONIC beyond that residual gap: it only ever THROWS (rejects) or no-ops - it
  * never makes anything signable that wasn't already.
@@ -172,11 +189,35 @@ export function assertKnownAggregatorRouterOnSigningPath(provider: string, addre
         'whose provider label does not match any known aggregator (enforced or unenforced).'
     )
   }
-  // Legacy unattributed payloads remain log-only for compatibility with historical mobile captures.
+  // provider === '' (legacy unattributed) here. sdk#1500: only a destination that independently
+  // matches a known router stays log-only; anything else needs the asynchronous reputation guard.
+  if (address && !isKnownAggregatorRouterAddress(address, chain)) {
+    throw new Error(
+      `Legacy unattributed swap destination (${address}) on ${chain} does not match any known aggregator router ` +
+        '— refusing a synchronous log-only pass; requires the asynchronous independent reputation guard.'
+    )
+  }
   // Log the actual provider so the usage dataset isn't poisoned by a coerced label. Skip a genuinely empty address.
   if (address) {
     logUnenforcedAggregatorDestination(provider, address)
   }
+}
+
+/**
+ * Non-throwing existence check: does `address` match ANY enforced provider's known router on
+ * `chain`? sdk#1500: used to opportunistically treat a legacy unattributed (`''`) destination as
+ * already proven safe when it happens to coincide with a real allowlisted router — exactly the
+ * shape of every real historical mobile fixture that predates the `provider` field.
+ */
+export function isKnownAggregatorRouterAddress(address: string, chain: Chain): boolean {
+  return (['1inch', 'kyber', 'cowswap', 'li.fi'] satisfies EnforcedRouterProvider[]).some(provider => {
+    try {
+      assertKnownAggregatorRouter(provider, address, chain)
+      return true
+    } catch {
+      return false
+    }
+  })
 }
 
 /**
@@ -185,7 +226,7 @@ export function assertKnownAggregatorRouterOnSigningPath(provider: string, addre
  * verdicts all fail closed.
  */
 async function assertAggregatorAddressReputation(
-  provider: 'LI.FI' | 'SwapKit',
+  provider: 'LI.FI' | 'SwapKit' | 'Legacy',
   address: string,
   chain: Chain,
   role = 'destination'
@@ -237,6 +278,20 @@ export function assertLifiApprovalAddress(address: string, chain: Chain): Promis
   }
 
   return assertAggregatorAddressReputation('LI.FI', address, chain, 'approval spender')
+}
+
+/**
+ * sdk#1500: independent trust boundary for a legacy unattributed (`''` provider) destination or
+ * approval spender that does NOT already match a known enforced router (see
+ * {@link isKnownAggregatorRouterAddress}) — the same Blockaid reputation floor SwapKit uses,
+ * applied to the one remaining bare log-only bypass.
+ */
+export function assertLegacyUnattributedAddressReputation(
+  address: string,
+  chain: Chain,
+  role = 'destination'
+): Promise<void> {
+  return assertAggregatorAddressReputation('Legacy', address, chain, role)
 }
 
 /**

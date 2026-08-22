@@ -7,6 +7,7 @@ import {
   assertKnownAggregatorRouter,
   assertKnownAggregatorRouterOnSigningPath,
   assertSwapKitDestinationMatchesTarget,
+  isKnownAggregatorRouterAddress,
   logUnenforcedAggregatorDestination,
 } from './knownAggregatorRouters'
 import { swapKitSourceChains } from './swapkit/SwapKitEnabledChains'
@@ -247,13 +248,43 @@ describe('assertKnownAggregatorRouterOnSigningPath — sdk#1457 provider-string 
 
   // sdk#1457 backward-compat: real mobile golden fixtures (mobileFixtures.golden.test.ts's
   // arb.json "via 1inch" / lifiswap.json) carry NO `provider` at all - mapSwapPayload.ts
-  // deliberately falls back to `''` rather than mislabeling them '1inch'. `''` must stay in the
-  // same unenforced/log-only bucket it was already in, or this fix would break real historical
-  // signing flows, not just close the spoofing gap.
-  it('does NOT reject the legacy unattributed (empty-string) provider - real historical fixtures rely on this', () => {
+  // deliberately falls back to `''` rather than mislabeling them '1inch'. Their destinations are
+  // real 1inch V6 / LI.FI Diamond addresses (proven against the fixtures themselves), so `''`
+  // stays log-only ONLY when the destination already matches a known router.
+  it('does NOT reject the legacy unattributed (empty-string) provider when the destination is a known router - real historical fixtures rely on this', () => {
     const spy = vi.spyOn(console, 'info').mockImplementation(() => {})
-    expect(() => assertKnownAggregatorRouterOnSigningPath('', ATTACKER_ADDRESS, Chain.Ethereum)).not.toThrow()
+    expect(() => assertKnownAggregatorRouterOnSigningPath('', ONE_INCH_V6, Chain.Ethereum)).not.toThrow()
+    expect(() => assertKnownAggregatorRouterOnSigningPath('', LIFI_DIAMOND, Chain.Ethereum)).not.toThrow()
     spy.mockRestore()
+  })
+
+  // sdk#1500: before this fix, `''` was a full bypass regardless of `address` - a payload could
+  // relabel ANY malicious destination as `''` and skip every check above. This is the regression
+  // test for that closed gap: an attacker-controlled address paired with `''` must now be rejected
+  // synchronously (requiring the caller to fall back to the asynchronous reputation guard), not
+  // silently logged and passed.
+  it('REJECTS a legacy unattributed (empty-string) provider whose destination is not a known router (sdk#1500 relabel-to-empty-string bypass)', () => {
+    expect(() => assertKnownAggregatorRouterOnSigningPath('', ATTACKER_ADDRESS, Chain.Ethereum)).toThrow(
+      /does not match any known aggregator router/
+    )
+  })
+})
+
+describe('isKnownAggregatorRouterAddress — sdk#1500 legacy-destination fast path', () => {
+  it('matches every enforced provider router it was built from', () => {
+    expect(isKnownAggregatorRouterAddress(ONE_INCH_V6, Chain.Ethereum)).toBe(true)
+    expect(isKnownAggregatorRouterAddress(KYBER_V2, Chain.Ethereum)).toBe(true)
+    expect(isKnownAggregatorRouterAddress(LIFI_DIAMOND, Chain.Ethereum)).toBe(true)
+    expect(isKnownAggregatorRouterAddress(COW_VAULT_RELAYER_ADDRESS, cowSwapSupportedChains[0])).toBe(true)
+  })
+
+  it('is chain-scoped, mirroring assertKnownAggregatorRouter', () => {
+    expect(isKnownAggregatorRouterAddress(ONE_INCH_V6_ZKSYNC, Chain.Zksync)).toBe(true)
+    expect(isKnownAggregatorRouterAddress(ONE_INCH_V6_ZKSYNC, Chain.Ethereum)).toBe(false)
+  })
+
+  it('returns false for an address that matches no known router', () => {
+    expect(isKnownAggregatorRouterAddress(ATTACKER_ADDRESS, Chain.Ethereum)).toBe(false)
   })
 })
 
