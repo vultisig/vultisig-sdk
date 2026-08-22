@@ -347,6 +347,7 @@ export type { RecipientSanityFlag, RecipientSanityInput, RecipientSanityResult }
 export { isMalformedEvmAddress, isNullAddress, isSelfSend, recipientSanity } from './validate'
 
 // Vault-free prep helpers (KeysignPayload construction without a full vault)
+export type { Prep } from './prep'
 export {
   buildCosmosWasmExecuteMsg,
   type BuildCosmosWasmExecuteMsgParams,
@@ -376,6 +377,7 @@ export {
   type IbcMsgTransfer,
   normaliseIbcChainId,
   POLKADOT_ASSET_HUB_KNOWN_ASSETS,
+  prep,
   prepareContractCallTxFromKeys,
   prepareIbcTransfer,
   type PrepareIbcTransferParams,

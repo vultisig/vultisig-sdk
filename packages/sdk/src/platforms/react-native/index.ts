@@ -498,6 +498,12 @@ export type {
   ThreeJaneTranche,
   ThreeJaneTxStep,
 } from '../../tools/defi/threeJane'
+// Vault-free prep helpers (KeysignPayload construction without a full vault)
+// Pure builders, RN-safe. Mirrors the root SDK entry so mobile consumers can
+// reach the documented grouped `sdk.prep.*` surface instead of rebuilding
+// their own namespace wrapper around the flat exports.
+export type { Prep } from '../../tools/prep'
+export { prep } from '../../tools/prep'
 
 // Cosmos staking + distribution module (LCD queries — read-only,
 // vault-free, generic over every ibcEnabled cosmos chain). Mirrors the

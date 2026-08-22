@@ -66,3 +66,42 @@ export {
   prepareUtxoConsolidateTxFromKeys,
   type PrepareUtxoConsolidateTxFromKeysParams,
 } from './utxoConsolidate'
+
+import * as contractCall from './contractCall'
+import * as cosmos from './cosmos'
+import { cosmosStaking } from './cosmosStaking'
+import * as cosmosWasmExecute from './cosmosWasmExecute'
+import * as cw20Transfer from './cw20Transfer'
+import * as ibcTransfer from './ibcTransfer'
+import * as jettonTransfer from './jettonTransfer'
+import * as maxSend from './maxSend'
+import * as polkadotAssetSend from './polkadotAssetSend'
+import * as send from './send'
+import * as splTransfer from './splTransfer'
+import * as suiTokenTransfer from './suiTokenTransfer'
+import * as swap from './swap'
+import * as thorchainMsgDeposit from './thorchainMsgDeposit'
+import * as trc20 from './trc20'
+import * as utxoConsolidate from './utxoConsolidate'
+
+/** Grouped namespace object, exposed as `sdk.prep`. */
+export const prep = {
+  contractCall,
+  cosmos,
+  cosmosStaking,
+  cosmosWasmExecute,
+  cw20Transfer,
+  ibcTransfer,
+  jettonTransfer,
+  maxSend,
+  polkadotAssetSend,
+  send,
+  splTransfer,
+  suiTokenTransfer,
+  swap,
+  thorchainMsgDeposit,
+  trc20,
+  utxoConsolidate,
+} as const
+
+export type Prep = typeof prep

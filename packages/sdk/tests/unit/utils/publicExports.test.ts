@@ -239,6 +239,16 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.defi.arkis.ARKIS_OFFICIAL_ADDRESSES.dispatcher).toBe('0x2f01D7CFfe62673B3D2b680295A2D047F3848e4c')
   })
 
+  it('exports the sdk.prep namespace alongside the flat prep helpers', () => {
+    expect(sdk.prep).toBeDefined()
+    expect(typeof sdk.prep.ibcTransfer.prepareIbcTransfer).toBe('function')
+    expect(sdk.prep.ibcTransfer.prepareIbcTransfer).toBe(sdk.prepareIbcTransfer)
+    expect(typeof sdk.prep.trc20.prepareTrc20TransferFromKeys).toBe('function')
+    expect(sdk.prep.trc20.prepareTrc20TransferFromKeys).toBe(sdk.prepareTrc20TransferFromKeys)
+    expect(typeof sdk.prep.cosmosStaking.delegate).toBe('function')
+    expect(typeof sdk.prep.splTransfer.buildSplTransfer).toBe('function')
+  })
+
   it('exports Balancer V3 calldata builder on the root sdk surface alongside other DeFi builders', () => {
     expect(typeof sdk.buildBalancerV3SwapCalldata).toBe('function')
     expect(typeof sdk.buildBuyPt).toBe('function')
