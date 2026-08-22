@@ -474,6 +474,15 @@ describe('RN entry exposes pure chain helpers and registry', () => {
     ).toBe('https://scan.li.fi/tx/0xabc')
   })
 
+  it('re-exports the canonical LI.FI fee-chain resolver from the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const feeChain = await import('@vultisig/core-chain/swap/general/lifi/api/lifiSwapFeeChain')
+    const { lifiSwapChainId } = await import('@vultisig/core-chain/swap/general/lifi/LifiSwapEnabledChains')
+
+    expect(rn.resolveSwapFeeChain).toBe(feeChain.resolveSwapFeeChain)
+    expect(rn.resolveSwapFeeChain(lifiSwapChainId[rn.Chain.Ethereum], rn.Chain.Solana)).toBe(rn.Chain.Ethereum)
+  })
+
   it('re-exports Noon vault helpers from the RN entrypoint', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
     const noon = await import('@vultisig/core-chain/chains/evm/noon')
