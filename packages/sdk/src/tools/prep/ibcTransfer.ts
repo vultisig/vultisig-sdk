@@ -130,8 +130,9 @@ function resolveSourceChannelByDestChain(fromChain: string, toChainId: string): 
 
 /** Supported destination chain-IDs reachable FROM the given source chain. */
 export function supportedIbcDestinationsFrom(fromChain: string): string[] {
+  const normalizedFromChain = normaliseIbcChainId(fromChain)
   return Array.from(IBC_CHANNEL_BY_ROUTE.keys())
-    .filter(routeKey => routeKey.startsWith(`${fromChain}→`))
+    .filter(routeKey => routeKey.startsWith(`${normalizedFromChain}→`))
     .map(routeKey => routeKey.split('→')[1]!)
     .sort()
 }

@@ -80,6 +80,11 @@ describe('prepareIbcTransfer', () => {
     expect(r.sourceChannel).toBe('channel-0')
   })
 
+  it('supportedIbcDestinationsFrom accepts Vultisig canonical source names too', () => {
+    expect(supportedIbcDestinationsFrom('Osmosis')).toEqual(supportedIbcDestinationsFrom('osmosis-1'))
+    expect(supportedIbcDestinationsFrom('Cosmos')).toEqual(supportedIbcDestinationsFrom('cosmoshub-4'))
+  })
+
   it('normaliseIbcChainId maps every Vultisig canonical name to its IBC chain-ID (mcp-ts parity)', () => {
     // Mirror of mcp-ts build_ibc_transfer VULTISIG_NAME_TO_CHAIN_ID. THORChain /
     // MayaChain have no IBC_CHANNEL_DEST route, but the alias must still resolve
