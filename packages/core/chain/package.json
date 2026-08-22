@@ -1633,6 +1633,11 @@
       "import": "./dist/security/dangerousAddresses.js",
       "default": "./dist/security/dangerousAddresses.js"
     },
+    "./security/tokenTransferGuards": {
+      "types": "./dist/security/tokenTransferGuards.d.ts",
+      "import": "./dist/security/tokenTransferGuards.js",
+      "default": "./dist/security/tokenTransferGuards.js"
+    },
     "./signing/SignatureAlgorithm": {
       "types": "./dist/signing/SignatureAlgorithm.d.ts",
       "import": "./dist/signing/SignatureAlgorithm.js",
