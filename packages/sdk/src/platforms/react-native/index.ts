@@ -259,7 +259,7 @@ export { deriveAddress, getCoinType, getPublicKey, isValidAddress, isValidTokenI
 // MPC keysign (uses MpcEngine — no direct WASM imports)
 export { keysign } from '@vultisig/core-mpc/keysign'
 
-// Seedphrase helpers, types, and import policy.
+// Seedphrase helpers, types, import policy, and prelude.
 // Re-export the RN-safe mnemonic / validation / derivation surface directly
 // from the underlying modules instead of the canonical ../../seedphrase barrel.
 // That barrel also exports ChainDiscoveryService, whose static import graph
@@ -282,6 +282,12 @@ export {
 } from '../../seedphrase/languageDetection'
 export type { ChainPrivateKey, DeriveChainPrivateKeysOptions, DerivedChainKey } from '../../seedphrase/MasterKeyDeriver'
 export { cosmosPathTerra, MasterKeyDeriver } from '../../seedphrase/MasterKeyDeriver'
+export {
+  prepareSeedphraseImportPrelude,
+  type SeedphraseImportPreludeInput,
+  type SeedphraseImportPreludeProgressLabels,
+  type SeedphraseImportPreludeResult,
+} from '../../seedphrase/prepareSeedphraseImportPrelude'
 export { cleanMnemonic, SeedphraseValidator, validateSeedphrase } from '../../seedphrase/SeedphraseValidator'
 export type {
   Bip39Language,

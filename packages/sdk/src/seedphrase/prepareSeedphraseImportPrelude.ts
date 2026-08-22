@@ -24,7 +24,7 @@ export type SeedphraseImportPreludeInput = {
   onChainDiscovery?: (progress: ChainDiscoveryProgress) => void
   validator: SeedphraseValidator
   keyDeriver: MasterKeyDeriver
-  discoveryService: ChainDiscoveryService
+  discoveryService: Pick<ChainDiscoveryService, 'discoverChains'>
   reportProgress: (step: VaultCreationStep) => void
   progressLabels: SeedphraseImportPreludeProgressLabels
 }

@@ -10,6 +10,7 @@ import type {
   PollTxStatusUntilFinalResult as PollTxStatusUntilFinalResultFromReactNative,
 } from '../../../../src/platforms/react-native/index'
 import * as sdkRn from '../../../../src/platforms/react-native/index'
+import type { ChainDiscoveryService } from '../../../../src/seedphrase/ChainDiscoveryService'
 import type * as stakekitTypes from '../../../../src/tools/defi/stakekit'
 import * as recipientChecks from '../../../../src/tools/validate/recipientSanity'
 import type {
@@ -456,7 +457,10 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.DEFAULT_CHAINS).toEqual(['Bitcoin', 'Ethereum', 'THORChain', 'Solana', 'BSC'])
   })
 
-  it('re-exports the RN-safe seedphrase helper family from the RN entrypoint without the eager discovery service', async () => {
+  it('re-exports the RN-safe seedphrase helper family and prelude without the eager discovery service', async () => {
+    expectTypeOf<Pick<ChainDiscoveryService, 'discoverChains'>>().toExtend<
+      sdkRn.SeedphraseImportPreludeInput['discoveryService']
+    >()
     const rn = await import('../../../../src/platforms/react-native/index')
     const types = await import('../../../../src/seedphrase/types')
     const language = await import('../../../../src/seedphrase/languageDetection')
@@ -475,6 +479,7 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.cleanMnemonic).toBe(validator.cleanMnemonic)
     expect(rn.SeedphraseValidator).toBe(validator.SeedphraseValidator)
     expect(rn.validateSeedphrase).toBe(validator.validateSeedphrase)
+    expect(typeof rn.prepareSeedphraseImportPrelude).toBe('function')
     expect(rn.MasterKeyDeriver).toBe(deriver.MasterKeyDeriver)
     expect(rn.cosmosPathTerra).toBe(deriver.cosmosPathTerra)
     expect(rn.assertSeedphraseImportSupportsChains).toBe(constants.assertSeedphraseImportSupportsChains)
@@ -482,6 +487,8 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.isSeedphraseImportSupportedChain).toBe(constants.isSeedphraseImportSupportedChain)
     expect(rn.SEEDPHRASE_IMPORT_SUPPORTED_CHAINS).toBe(constants.SEEDPHRASE_IMPORT_SUPPORTED_CHAINS)
     expect(rn.SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS).toBe(constants.SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS)
+    expect(rn.SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS).toContain(rn.Chain.Cardano)
+    expect(rn.isSeedphraseImportSupportedChain(rn.Chain.Bitcoin)).toBe(true)
 
     expect('ChainDiscoveryService' in rn).toBe(false)
     expect('TransportError' in rn).toBe(false)
