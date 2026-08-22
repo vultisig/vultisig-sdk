@@ -21,7 +21,7 @@ import { getUtxoFeeAmount } from './resolvers/utxo'
 type Input = {
   keysignPayload: KeysignPayload
   walletCore: WalletCore
-  publicKey: PublicKey
+  publicKey: PublicKey | null
 }
 
 const resolvers: Record<ChainKind, FeeAmountResolver> = {

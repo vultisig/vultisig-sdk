@@ -17,7 +17,8 @@ import { getKeysignCoin } from '../utils/getKeysignCoin'
 type RefineKeysignAmountInput = {
   keysignPayload: KeysignPayload
   walletCore: WalletCore
-  publicKey: PublicKey
+  /** Not read by any fee resolver (they derive from `keysignPayload.coin.hexPublicKey`); accepted as null for the `hexPublicKeyOverride` signing path. */
+  publicKey: PublicKey | null
   balance: bigint
 }
 
