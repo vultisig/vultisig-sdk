@@ -1,5 +1,6 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getSwapQuoteSafetyFingerprint } from '@vultisig/core-chain/swap/quote/getSwapQuoteSafetyFingerprint'
+import { encodeFunctionData, parseAbi } from 'viem'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { mockBuildSwapKeysignPayload, mockGetPublicKey, mockGetWalletCore } = vi.hoisted(() => ({
@@ -563,6 +564,100 @@ describe('prepareSwapTxFromKeys — amount consistency (ABTS/plan 005)', () => {
         swapQuote: quote,
       })
     ).resolves.toBeDefined()
+  })
+
+  it('throws when decoded EVM-general calldata sell amount does not match the requested amount', async () => {
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + 600)
+    const data = encodeFunctionData({
+      abi: parseAbi([
+        'function swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, address[] path, address to, uint256 deadline)',
+      ]),
+      functionName: 'swapExactTokensForTokens',
+      args: [
+        500_000_000_000_000_000n,
+        1n,
+        ['0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'],
+        '0x1111111111111111111111111111111111111111',
+        deadline,
+      ],
+    })
+    const quote = bindSwapQuote(
+      { general: { tx: { evm: { to: '0xrouter', data, value: '0' } } } },
+      1_000_000_000_000_000_000n
+    )
+
+    await expect(
+      prepareSwapTxFromKeys(baseIdentity, {
+        fromCoin: ethCoin,
+        toCoin: btcCoin,
+        amount: '1',
+        swapQuote: quote,
+      })
+    ).rejects.toThrow(/committed sell amount encoded in the EVM swap calldata/)
+
+    expect(mockBuildSwapKeysignPayload).not.toHaveBeenCalled()
+  })
+
+  it('builds when decoded EVM-general calldata sell amount matches the requested amount', async () => {
+    mockBuildSwapKeysignPayload.mockResolvedValue({ __mock: 'payload' })
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + 600)
+    const data = encodeFunctionData({
+      abi: parseAbi([
+        'function swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, address[] path, address to, uint256 deadline)',
+      ]),
+      functionName: 'swapExactTokensForTokens',
+      args: [
+        1_000_000_000_000_000_000n,
+        1n,
+        ['0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'],
+        '0x1111111111111111111111111111111111111111',
+        deadline,
+      ],
+    })
+    const quote = bindSwapQuote(
+      { general: { tx: { evm: { to: '0xrouter', data, value: '0' } } } },
+      1_000_000_000_000_000_000n
+    )
+
+    await expect(
+      prepareSwapTxFromKeys(baseIdentity, {
+        fromCoin: ethCoin,
+        toCoin: btcCoin,
+        amount: '1',
+        swapQuote: quote,
+      })
+    ).resolves.toBeDefined()
+  })
+
+  it('throws when decoded EVM-general calldata deadline is in the past', async () => {
+    const data = encodeFunctionData({
+      abi: parseAbi([
+        'function swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, address[] path, address to, uint256 deadline)',
+      ]),
+      functionName: 'swapExactTokensForTokens',
+      args: [
+        1_000_000_000_000_000_000n,
+        1n,
+        ['0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'],
+        '0x1111111111111111111111111111111111111111',
+        1_700_000_000n,
+      ],
+    })
+    const quote = bindSwapQuote(
+      { general: { tx: { evm: { to: '0xrouter', data, value: '0' } } } },
+      1_000_000_000_000_000_000n
+    )
+
+    await expect(
+      prepareSwapTxFromKeys(baseIdentity, {
+        fromCoin: ethCoin,
+        toCoin: btcCoin,
+        amount: '1',
+        swapQuote: quote,
+      })
+    ).rejects.toThrow(SwapQuoteExpiredError)
+
+    expect(mockBuildSwapKeysignPayload).not.toHaveBeenCalled()
   })
 
   it('accepts a scientific-notation amount on a transfer-route quote (transfer excluded from amount check)', async () => {
