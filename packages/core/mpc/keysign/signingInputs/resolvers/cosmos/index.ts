@@ -37,7 +37,7 @@ const getNativeSwapPayload = (keysignPayload: Parameters<typeof getKeysignSwapPa
   return getRecordUnionValue(swapPayload, 'native')
 }
 
-const getThorchainDepositAsset = ({
+export const getThorchainDepositAsset = ({
   assetCoin,
   chain,
   secured,
@@ -53,6 +53,11 @@ const getThorchainDepositAsset = ({
   const chainId =
     (nativeSwapChainIds as Record<string, string>)[assetCoin.chain] ??
     nativeSwapChainIds[chain as VaultBasedCosmosChain]
+  if (!chainId) {
+    throw new Error(
+      `Unresolved THORChain deposit-asset chain id: neither asset chain "${assetCoin.chain}" nor cosmos chain "${chain}" has a nativeSwapChainIds entry`
+    )
+  }
   const { contractAddress } = assetCoin
   // The `TICKER-CONTRACT` symbol form belongs to secured-asset withdrawals only,
   // where `assetCoin` is the L1 coin being pulled off THORChain and
