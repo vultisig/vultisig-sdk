@@ -1,4 +1,5 @@
 import { fromBinary, toBinary } from '@bufbuild/protobuf'
+import { hasServer } from '@vultisig/core-mpc/devices/localPartyId'
 import { fromCommVault } from '@vultisig/core-mpc/types/utils/commVault'
 import {
   type VaultContainer,
@@ -130,6 +131,51 @@ export class VaultManager {
       wasmProvider: this.context.wasmProvider,
       pushNotificationService: this.context.pushNotificationService,
     }
+  }
+
+  private repairLegacyFastVaultType(vaultData: VaultData): VaultData {
+    return vaultData.type === 'secure' && hasServer(vaultData.signers) ? { ...vaultData, type: 'fast' } : vaultData
+  }
+
+  private async repairStoredLegacyFastVaultType(key: string, vaultData: VaultData): Promise<VaultData | null> {
+    let current = vaultData
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const repaired = this.repairLegacyFastVaultType(current)
+      if (repaired === current) return current
+
+      if (!this.storage.compareAndSet) {
+        // Legacy adapters cannot persist the repair without risking a stale
+        // snapshot overwriting a concurrent vault update. Load the canonical
+        // instance now and let a later ordinary save use its revision checks.
+        return repaired
+      }
+
+      const currentRevision = current.revision ?? 0
+      if (!Number.isSafeInteger(currentRevision) || currentRevision < 0) {
+        throw new VaultError(VaultErrorCode.InvalidVault, `Vault ${current.id} has an invalid storage revision`)
+      }
+      const nextRevision = currentRevision + 1
+      if (!Number.isSafeInteger(nextRevision)) {
+        throw new VaultError(VaultErrorCode.InvalidVault, `Vault ${current.id} has an invalid storage revision`)
+      }
+      const repairedPersisted = {
+        ...repaired,
+        revision: nextRevision,
+        lastModified: Date.now(),
+      }
+
+      if (await this.storage.compareAndSet(key, current, repairedPersisted)) return repairedPersisted
+
+      const latest = await this.storage.get<VaultData>(key)
+      if (!latest) return null
+      current = latest
+    }
+
+    throw new VaultError(
+      VaultErrorCode.InvalidVault,
+      `Vault "${vaultData.name}" changed repeatedly while repairing its legacy fast-vault type`
+    )
   }
 
   private decodeVaultPayload(vultContent: string, password?: string): CoreVault {
@@ -369,11 +415,17 @@ export class VaultManager {
    * Returns appropriate subclass based on vault type
    */
   createVaultInstance(vaultData: VaultData, persisted = true): VaultBase {
+    // Older SDKs classified only `Server-*` signers as fast vaults. Repair
+    // already-persisted legacy `VultiServer-*` records before subclass
+    // dispatch so they can be loaded again. Storage-backed load paths also
+    // persist the canonical type before constructing the vault.
+    const repairedVaultData = this.repairLegacyFastVaultType(vaultData)
+
     // Fail early if vault is encrypted but no password callback provided
-    if (vaultData.isEncrypted && !this.context.config.onPasswordRequired) {
+    if (repairedVaultData.isEncrypted && !this.context.config.onPasswordRequired) {
       throw new VaultError(
         VaultErrorCode.InvalidConfig,
-        `Vault "${vaultData.name}" is password-protected but no onPasswordRequired callback was provided. ` +
+        `Vault "${repairedVaultData.name}" is password-protected but no onPasswordRequired callback was provided. ` +
           'Pass onPasswordRequired in the Vultisig constructor: ' +
           'new Vultisig({ onPasswordRequired: async () => password })'
       )
@@ -382,11 +434,11 @@ export class VaultManager {
     const vaultContext = this.createVaultContext()
 
     // Factory pattern - return appropriate subclass based on vault type
-    if (vaultData.type === 'fast') {
+    if (repairedVaultData.type === 'fast') {
       const fastSigningService = new FastSigningService(this.context.serverManager, this.context.wasmProvider)
-      return FastVault.fromStorage(vaultData, fastSigningService, vaultContext, persisted)
+      return FastVault.fromStorage(repairedVaultData, fastSigningService, vaultContext, persisted)
     } else {
-      return SecureVault.fromStorage(vaultData, vaultContext, persisted)
+      return SecureVault.fromStorage(repairedVaultData, vaultContext, persisted)
     }
   }
 
@@ -445,7 +497,7 @@ export class VaultManager {
       await this.validateImportConflict(existingVault, parsedVault, password, options.conflictResolution ?? 'reject')
 
       // Determine vault type from parsed vault
-      const vaultType = parsedVault.signers.some((s: string) => s.startsWith('Server-')) ? 'fast' : 'secure'
+      const vaultType = hasServer(parsedVault.signers) ? 'fast' : 'secure'
 
       // Create vault context from SDK context
       const vaultContext = this.createVaultContext()
@@ -591,9 +643,12 @@ export class VaultManager {
     const vaults: VaultBase[] = []
 
     for (const key of vaultKeys) {
-      const vaultData = await this.storage.get<VaultData>(key)
+      const storedVaultData = await this.storage.get<VaultData>(key)
 
-      if (vaultData) {
+      if (storedVaultData) {
+        const vaultData = await this.repairStoredLegacyFastVaultType(key, storedVaultData)
+        if (!vaultData) continue
+
         try {
           vaults.push(this.createVaultInstance(vaultData))
         } catch {
@@ -622,11 +677,15 @@ export class VaultManager {
    * ```
    */
   async getVaultById(id: string): Promise<VaultBase | null> {
-    const vaultData = await this.storage.get<VaultData>(`vault:${id}`)
+    const key = `vault:${id}`
+    const storedVaultData = await this.storage.get<VaultData>(key)
 
-    if (!vaultData) {
+    if (!storedVaultData) {
       return null
     }
+
+    const vaultData = await this.repairStoredLegacyFastVaultType(key, storedVaultData)
+    if (!vaultData) return null
 
     return this.createVaultInstance(vaultData)
   }

@@ -71,6 +71,14 @@ beforeAll(async () => {
 }, 120_000)
 
 describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
+  it('exports canonical fast-vault detection helpers', async () => {
+    const canonical = await import('@vultisig/core-mpc/devices/localPartyId')
+
+    expect(reactNativeEntry.hasServer).toBe(canonical.hasServer)
+    expect(reactNativeEntry.isServer).toBe(canonical.isServer)
+    expect(reactNativeEntry.hasServer(['Android-current', 'VultiServer-legacy'])).toBe(true)
+  })
+
   it.each([
     'EVM_DANGEROUS_ADDRESSES',
     'SOLANA_DANGEROUS_ADDRESSES',
