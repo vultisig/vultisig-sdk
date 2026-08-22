@@ -134,6 +134,13 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(Object.values(rn.IbcEnabledCosmosChain)).not.toContain(rn.Chain.THORChain)
   })
 
+  it('exports the canonical Cosmos Tendermint/Stargate RPC registry from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(rn.tendermintRpcUrl[rn.Chain.Cosmos]).toBe('https://cosmos-rpc.publicnode.com:443')
+    expect(rn.tendermintRpcUrl[rn.Chain.THORChain]).toBe('https://gateway.liquify.com/chain/thorchain_rpc')
+  })
+
   it.each(cosmosTxFeeGasParityCases)(
     'exports the canonical $chain fee denom, fee amount, and gas limit together',
     async ({ chain, feeDenom, feeAmount, gasLimit }) => {
