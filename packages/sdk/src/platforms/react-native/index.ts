@@ -446,6 +446,10 @@ export {
 export { getEvmChainByChainId, getEvmChainId } from '@vultisig/core-chain/chains/evm/chainInfo'
 export { clampEvmPriorityFee } from '@vultisig/core-chain/tx/fee/evm/clampEvmPriorityFee'
 
+// Per-chain EVM gas-floor table — see src/index.ts for the full drift-class
+// rationale (sdk#1351). Pure data + a sum helper, no chain-client deps.
+export { EVM_GAS_FLOOR_WEI, getEvmMaxFeeFloorWei } from '@vultisig/core-chain/tx/fee/evm/evmGasFloor'
+
 // Gas / fee primitives (read-only — uses global `fetch` + type-only imports,
 // no heavy chain client at module init). The RN allow-list omitted these so RN
 // consumers (vultiagent-app) couldn't resolve current UTXO sat/vB rates OR the
