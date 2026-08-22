@@ -49,8 +49,20 @@ const getRippleIssuedCurrencyBalance = async ({ address, id }: { address: string
   return balance > 0 ? balance : BigInt(0)
 }
 
-/** Spendable native XRP: total balance minus the base and owner reserves. */
-const getRippleNativeBalance = async (address: string): Promise<bigint> => {
+/**
+ * Native XRP balance broken down into its on-ledger components, in drops.
+ *
+ * `total` is the raw on-ledger balance, `reserve` the locked base + owner
+ * reserve, and `spendable = max(0, total - reserve)` — the number every
+ * existing balance consumer receives as "the balance".
+ */
+export type RippleNativeBalanceDetail = {
+  total: bigint
+  spendable: bigint
+  reserve: bigint
+}
+
+export const getRippleNativeBalanceDetail = async (address: string): Promise<RippleNativeBalanceDetail> => {
   const [accountResult, networkResult] = await Promise.all([
     attempt(getRippleAccountInfo(address)),
     attempt(getRippleNetworkInfo()),
@@ -58,7 +70,7 @@ const getRippleNativeBalance = async (address: string): Promise<bigint> => {
 
   if ('error' in accountResult) {
     if (isInError(accountResult.error, 'Account not found', 'actNotFound')) {
-      return BigInt(0)
+      return { total: BigInt(0), spendable: BigInt(0), reserve: BigInt(0) }
     }
 
     throw accountResult.error
@@ -83,7 +95,17 @@ const getRippleNativeBalance = async (address: string): Promise<bigint> => {
   const totalReserve = BigInt(reserve_base) + BigInt(account_data.OwnerCount) * BigInt(reserve_inc)
   const spendableBalance = totalBalance - totalReserve
 
-  return spendableBalance > 0 ? spendableBalance : BigInt(0)
+  return {
+    total: totalBalance,
+    reserve: totalReserve,
+    spendable: spendableBalance > 0 ? spendableBalance : BigInt(0),
+  }
+}
+
+/** Spendable native XRP: total balance minus the base and owner reserves. */
+const getRippleNativeBalance = async (address: string): Promise<bigint> => {
+  const { spendable } = await getRippleNativeBalanceDetail(address)
+  return spendable
 }
 
 export const getRippleCoinBalance: CoinBalanceResolver = async input =>
