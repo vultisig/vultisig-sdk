@@ -1186,6 +1186,10 @@ export type JoinSecureOptions = {
   mnemonic?: string
   password?: string
   devices?: number
+  /** Use Phantom wallet derivation path for Solana */
+  usePhantomSolanaPath?: boolean
+  /** Use Cosmos coin-type path for Terra / TerraClassic */
+  useCosmosPathTerra?: boolean
   signal?: AbortSignal
 }
 
@@ -1193,7 +1197,7 @@ export type JoinSecureOptions = {
  * Join an existing SecureVault creation session
  */
 export async function executeJoinSecure(ctx: CommandContext, options: JoinSecureOptions): Promise<VaultBase> {
-  const { qrPayload, mnemonic, password, devices, signal } = options
+  const { qrPayload, mnemonic, password, devices, usePhantomSolanaPath, useCosmosPathTerra, signal } = options
 
   if (!devices || devices < 2) {
     throw new Error('devices is required when joining a SecureVault (minimum 2)')
@@ -1207,6 +1211,8 @@ export async function executeJoinSecure(ctx: CommandContext, options: JoinSecure
         mnemonic,
         password,
         devices,
+        usePhantomSolanaPath,
+        useCosmosPathTerra,
         onProgress: step => {
           spinner.text = `${step.message} (${step.progress}%)`
         },
