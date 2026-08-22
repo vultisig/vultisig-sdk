@@ -100,6 +100,18 @@ export function validatePackedExportTargets(manifest, packageRoot) {
   return targets
 }
 
+function validatePackedReactNativeCosmosPayloadExports(packageRoot) {
+  const runtimePath = path.join(packageRoot, 'dist/index.react-native.js')
+  const declarationsPath = path.join(packageRoot, 'dist/index.react-native.d.ts')
+  const runtimeSource = readFileSync(runtimePath, 'utf8')
+  const declarationSource = readFileSync(declarationsPath, 'utf8')
+
+  for (const symbol of ['buildSignAminoKeysignPayload', 'buildSignDirectKeysignPayload']) {
+    assert.ok(runtimeSource.includes(symbol), `react-native bundle exports ${symbol}`)
+    assert.ok(declarationSource.includes(symbol), `react-native types export ${symbol}`)
+  }
+}
+
 export function resolveConditionalTarget(value, activeConditions) {
   if (typeof value === 'string') return value
   if (Array.isArray(value)) {
@@ -283,6 +295,16 @@ assert.equal(typeof root?.fiatToAmount, 'function', 'root import exports fiatToA
 assert.equal(typeof root?.normalizeChain, 'function', 'root import exports normalizeChain')
 assert.equal(typeof root?.fromChainAmountExact, 'function', 'root import exports fromChainAmountExact')
 assert.equal(typeof root?.getBlockExplorerUrl, 'function', 'root import exports getBlockExplorerUrl')
+assert.equal(
+  typeof root?.buildSignAminoKeysignPayload,
+  'function',
+  'root import exports buildSignAminoKeysignPayload'
+)
+assert.equal(
+  typeof root?.buildSignDirectKeysignPayload,
+  'function',
+  'root import exports buildSignDirectKeysignPayload'
+)
 assert.ok(root?.chainRegistry !== undefined, 'root import exports chainRegistry')
 assert.equal(typeof root?.deriveFromChainRegistry, 'function', 'root import exports deriveFromChainRegistry')
 assert.equal(typeof root?.extendChainRegistry, 'function', 'root import exports extendChainRegistry')
@@ -348,8 +370,17 @@ void ${alias}Keys`
     path.join(consumerRoot, 'verify-types.ts'),
     `${typeImports}
 ${declarationAssertions}
-import { Chain, chainRegistry, deriveFromChainRegistry, extendChainRegistry } from '@vultisig/sdk'
+import {
+  Chain,
+  buildSignAminoKeysignPayload,
+  buildSignDirectKeysignPayload,
+  chainRegistry,
+  deriveFromChainRegistry,
+  extendChainRegistry,
+} from '@vultisig/sdk'
 import type {
+  BuildSignAminoPayloadInput,
+  BuildSignDirectPayloadInput,
   ChainDescriptor,
   ChainDescriptorRegistry,
   ChainExplorerDescriptor,
@@ -360,6 +391,12 @@ import type {
 import type {
   ChainDescriptor as ReactNativeChainDescriptor,
   ExtendedChainRegistry as ReactNativeExtendedChainRegistry,
+} from '@vultisig/sdk/react-native'
+import {
+  buildSignAminoKeysignPayload as buildSignAminoKeysignPayloadReactNative,
+  buildSignDirectKeysignPayload as buildSignDirectKeysignPayloadReactNative,
+  type BuildSignAminoPayloadInput as BuildSignAminoPayloadInputReactNative,
+  type BuildSignDirectPayloadInput as BuildSignDirectPayloadInputReactNative,
 } from '@vultisig/sdk/react-native'
 import type { Vultisig } from '@vultisig/sdk/node'
 import type { ElectronMainCrypto, Vultisig as ElectronMainVultisig } from '@vultisig/sdk/electron/main'
@@ -381,6 +418,14 @@ export type ExplorerShape = typeof explorer
 export type ExtendedShape = typeof extended
 export type ReactNativeDescriptor = ReactNativeChainDescriptor
 export type ReactNativeExtended = ReactNativeExtendedChainRegistry<typeof extension>
+export type CosmosAminoInput = BuildSignAminoPayloadInput
+export type CosmosDirectInput = BuildSignDirectPayloadInput
+export type CosmosAminoInputReactNative = BuildSignAminoPayloadInputReactNative
+export type CosmosDirectInputReactNative = BuildSignDirectPayloadInputReactNative
+export type CosmosAminoBuilder = typeof buildSignAminoKeysignPayload
+export type CosmosDirectBuilder = typeof buildSignDirectKeysignPayload
+export type CosmosAminoBuilderReactNative = typeof buildSignAminoKeysignPayloadReactNative
+export type CosmosDirectBuilderReactNative = typeof buildSignDirectKeysignPayloadReactNative
 `
   )
 
@@ -464,6 +509,7 @@ export async function checkSdkPackageExports({
     )
 
     const targets = validatePackedExportTargets(sourceManifest, packageRoot)
+    validatePackedReactNativeCosmosPayloadExports(packageRoot)
     const importCases = collectNodeRuntimeCases(sourceManifest, 'import')
     const requireCases = collectNodeRuntimeCases(sourceManifest, 'require')
     if (!importCases.length || !requireCases.length) {
