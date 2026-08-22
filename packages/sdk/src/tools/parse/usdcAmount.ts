@@ -32,3 +32,12 @@ export const parseUsdcAmount = (value: string): bigint => {
   const fractionalUnits = fractionalPart === '' ? 0n : BigInt(fractionalPart)
   return BigInt(wholePart) * 10n ** BigInt(USDC_DECIMALS) + fractionalUnits
 }
+
+/** Format a raw 6-decimal USDC amount back to a human-readable string. */
+export const formatUsdc = (raw: bigint): string => {
+  const divisor = 10n ** BigInt(USDC_DECIMALS)
+  const whole = raw / divisor
+  const fractional = raw % divisor
+  if (fractional === 0n) return whole.toString()
+  return `${whole}.${fractional.toString().padStart(USDC_DECIMALS, '0').replace(/0+$/, '')}`
+}
