@@ -108,7 +108,8 @@ const parseLcdAccount = (resp: LcdAccountResponse): ParsedAccount => {
 // vultiagent-app#1017 + mcp-ts#266). Keys are the chain id used by
 // cosmos-sdk; chains not in this map have no fallback (degrade fail-closed
 // behaviour preserved).
-const COSMOS_LCD_FALLBACK_URLS: Partial<Record<CosmosChain, string>> = {
+/** Intentional Partial: a missing chain fails closed (no second LCD path). */
+export const cosmosLcdFallbackUrls: Partial<Record<CosmosChain, string>> = {
   [Chain.Cosmos]: 'https://cosmos-api.polkachu.com',
   [Chain.Osmosis]: 'https://osmosis-api.polkachu.com',
   // rest.cosmos.directory/kujira proxies across multiple independent providers
@@ -182,7 +183,7 @@ const fetchAccountViaLcd = async (chain: CosmosChain, address: string): Promise<
   // Network/5xx failure is not evidence that the account is absent. Try the
   // registered fallback, then propagate the failure if exact data is still
   // unavailable instead of silently constructing a sequence-zero payload.
-  const fallback = COSMOS_LCD_FALLBACK_URLS[chain]
+  const fallback = cosmosLcdFallbackUrls[chain]
   if (!fallback) throw primary.error
   const secondary = await tryLcd(fallback, address)
   if (secondary.status === 'found') return secondary.account
