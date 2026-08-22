@@ -239,15 +239,16 @@ export type {
 // that hangs Hermes at module init).
 export type { BroadcastSolanaTxOptions, BuildSolanaSendOptions, SolanaTxBuilderResult } from './chains/solana'
 
-// TON bridge type surface — reimplementation built on @ton/core only, which
-// is Hermes-safe (uses jssha via @ton/crypto peer dep, not crypto.subtle).
-// Consumers MUST install `@ton/core` as a peer dep; we never reach into
-// `@ton/crypto-primitives`.
+// TON bridge type surface — reimplementation built on @ton/core plus
+// WalletCore's generated protobuf namespace for pre-dispatch parity input.
+// The builder does not initialize WalletCore WASM or reach into
+// @ton/crypto-primitives.
 export type {
   BuildTonJettonTransferOptions,
   BuildTonSendOptions,
   TonTxBuilderResult,
   TonV4R2Wallet,
+  TonWalletCoreBackedTxBuilderResult,
   TonWalletInfo,
   TonWalletStatus,
 } from './chains/ton'
