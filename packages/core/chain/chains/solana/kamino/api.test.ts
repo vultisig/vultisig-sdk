@@ -1,12 +1,11 @@
 import { HttpResponseError } from '@vultisig/lib-utils/fetch/HttpResponseError'
+import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@vultisig/lib-utils/query/queryUrl', () => ({ queryUrl: vi.fn() }))
 
-import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
-
-import { kaminoConfig } from './config'
 import { fetchKaminoPnl, fetchKaminoUserPositions, fetchKaminoVaultState } from './api'
+import { kaminoConfig } from './config'
 import { KaminoServiceError } from './KaminoServiceError'
 
 const httpError = (status: number, body: unknown) =>
