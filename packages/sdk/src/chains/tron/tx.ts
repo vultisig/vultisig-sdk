@@ -47,7 +47,7 @@
  */
 
 import { sha256 } from '@noble/hashes/sha2.js'
-import bs58check from 'bs58check'
+import { decodeTronBase58Address } from '@vultisig/core-chain/chains/tron/address'
 
 import { concatProtoBytes, fieldBytes, fieldInt64, fieldString, fieldVarint } from './proto'
 
@@ -185,23 +185,17 @@ function hexToBytes(hex: string): Uint8Array {
 
 /**
  * Decode a Tron base58check address to its raw 21-byte form
- * (prefix 0x41 + 20-byte keccak hash of the pubkey).
+ * (network prefix + 20-byte keccak hash of the pubkey).
  *
  * Tron's protobuf carries addresses as raw bytes, not the base58check string.
+ *
+ * Delegates checksum/prefix validation to the canonical shared decoder in
+ * `@vultisig/core-chain/chains/tron/address` — also consumed by core-chain's
+ * balance/discovery resolvers, so mainnet (0x41) and Nile testnet (0xa0)
+ * addresses are accepted identically on every first-party surface.
  */
 export function tronAddressToBytes(address: string): Uint8Array {
-  // `bs58check` v4 published both named and default exports; handle both.
-
-  const mod = bs58check as unknown as { decode?: (s: string) => Uint8Array } & {
-    default?: { decode: (s: string) => Uint8Array }
-  }
-  const decode = mod.decode ?? mod.default?.decode
-  if (!decode) throw new Error('bs58check.decode unavailable')
-  const bytes = decode(address)
-  if (bytes.length !== 21 || bytes[0] !== 0x41) {
-    throw new Error(`invalid Tron address: ${address} (length=${bytes.length})`)
-  }
-  return bytes
+  return decodeTronBase58Address(address)
 }
 
 // ---------------------------------------------------------------------------
