@@ -8,6 +8,7 @@ export type {
   TonTxBuilderResult,
 } from './tx'
 export {
+  assertTonSigningPayloadNoHostileDrain,
   buildTonJettonTransferTx,
   buildTonSendTx,
   buildTonTxFromSigningPayload,
