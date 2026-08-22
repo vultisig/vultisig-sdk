@@ -326,48 +326,64 @@ export { SUI_NATIVE_COIN_TYPE } from '../../tools/prep/suiTokenTransfer'
 export { TRC20_TRANSFER_SELECTOR } from '../../tools/prep/trc20'
 export { CONSOLIDATE_CHAINS } from '../../tools/prep/utxoConsolidate'
 
-export async function getMaxSendAmountFromKeys(...args: unknown[]) {
+export async function getMaxSendAmountFromKeys(
+  ...args: Parameters<(typeof import('../../tools/prep/maxSend'))['getMaxSendAmountFromKeys']>
+) {
   const mod = await import('../../tools/prep/maxSend')
-  return mod.getMaxSendAmountFromKeys(...(args as Parameters<typeof mod.getMaxSendAmountFromKeys>))
+  return mod.getMaxSendAmountFromKeys(...args)
 }
 
-export async function prepareContractCallTxFromKeys(...args: unknown[]) {
+export async function prepareContractCallTxFromKeys(
+  ...args: Parameters<(typeof import('../../tools/prep/contractCall'))['prepareContractCallTxFromKeys']>
+) {
   const mod = await import('../../tools/prep/contractCall')
-  return mod.prepareContractCallTxFromKeys(...(args as Parameters<typeof mod.prepareContractCallTxFromKeys>))
+  return mod.prepareContractCallTxFromKeys(...args)
 }
 
-export async function prepareJettonTransferTxFromKeys(...args: unknown[]) {
+export async function prepareJettonTransferTxFromKeys(
+  ...args: Parameters<(typeof import('../../tools/prep/jettonTransfer'))['prepareJettonTransferTxFromKeys']>
+) {
   const mod = await import('../../tools/prep/jettonTransfer')
-  return mod.prepareJettonTransferTxFromKeys(...(args as Parameters<typeof mod.prepareJettonTransferTxFromKeys>))
+  return mod.prepareJettonTransferTxFromKeys(...args)
 }
 
-export async function prepareSendTxFromKeys(...args: unknown[]) {
+export async function prepareSendTxFromKeys(
+  ...args: Parameters<(typeof import('../../tools/prep/send'))['prepareSendTxFromKeys']>
+) {
   const mod = await import('../../tools/prep/send')
-  return mod.prepareSendTxFromKeys(...(args as Parameters<typeof mod.prepareSendTxFromKeys>))
+  return mod.prepareSendTxFromKeys(...args)
 }
 
-export async function prepareSignAminoTxFromKeys(...args: unknown[]) {
+export async function prepareSignAminoTxFromKeys(
+  ...args: Parameters<(typeof import('../../tools/prep/cosmos'))['prepareSignAminoTxFromKeys']>
+) {
   const mod = await import('../../tools/prep/cosmos')
-  return mod.prepareSignAminoTxFromKeys(...(args as Parameters<typeof mod.prepareSignAminoTxFromKeys>))
+  return mod.prepareSignAminoTxFromKeys(...args)
 }
 
-export async function prepareSignDirectTxFromKeys(...args: unknown[]) {
+export async function prepareSignDirectTxFromKeys(
+  ...args: Parameters<(typeof import('../../tools/prep/cosmos'))['prepareSignDirectTxFromKeys']>
+) {
   const mod = await import('../../tools/prep/cosmos')
-  return mod.prepareSignDirectTxFromKeys(...(args as Parameters<typeof mod.prepareSignDirectTxFromKeys>))
+  return mod.prepareSignDirectTxFromKeys(...args)
 }
 
-export async function prepareSwapTxFromKeys(...args: unknown[]) {
+export async function prepareSwapTxFromKeys(
+  ...args: Parameters<(typeof import('../../tools/prep/swap'))['prepareSwapTxFromKeys']>
+) {
   const mod = await import('../../tools/prep/swap')
-  return mod.prepareSwapTxFromKeys(...(args as Parameters<typeof mod.prepareSwapTxFromKeys>))
+  return mod.prepareSwapTxFromKeys(...args)
 }
 
 // TRON TRC-20 transfer calldata builder (pure crypto — @noble/hashes only,
 // no RPC, no signing). RN-safe; lazy-imported to match the prep helper pattern
 // above. Without this, RN consumers (Station / vultisig-windows) couldn't reach
 // the reviewed base58check + ABI encode and would have to re-port it.
-export async function prepareTrc20TransferFromKeys(...args: unknown[]) {
+export async function prepareTrc20TransferFromKeys(
+  ...args: Parameters<(typeof import('../../tools/prep/trc20'))['prepareTrc20TransferFromKeys']>
+) {
   const mod = await import('../../tools/prep/trc20')
-  return mod.prepareTrc20TransferFromKeys(...(args as Parameters<typeof mod.prepareTrc20TransferFromKeys>))
+  return mod.prepareTrc20TransferFromKeys(...args)
 }
 
 // Lazy import: `splTransfer` statically pulls `@solana/web3.js`, which reads
@@ -375,14 +391,18 @@ export async function prepareTrc20TransferFromKeys(...args: unknown[]) {
 // body keeps it out of the eager RN bundle graph (same rationale as the
 // getSplAccounts / getSplAssociatedAccount overrides). The underlying builder
 // is synchronous; this wrapper just defers module evaluation.
-export async function buildSplTransfer(...args: unknown[]) {
+export async function buildSplTransfer(
+  ...args: Parameters<(typeof import('../../tools/prep/splTransfer'))['buildSplTransfer']>
+) {
   const mod = await import('../../tools/prep/splTransfer')
-  return mod.buildSplTransfer(...(args as Parameters<typeof mod.buildSplTransfer>))
+  return mod.buildSplTransfer(...args)
 }
 
-export async function prepareUtxoConsolidateTxFromKeys(...args: unknown[]) {
+export async function prepareUtxoConsolidateTxFromKeys(
+  ...args: Parameters<(typeof import('../../tools/prep/utxoConsolidate'))['prepareUtxoConsolidateTxFromKeys']>
+) {
   const mod = await import('../../tools/prep/utxoConsolidate')
-  return mod.prepareUtxoConsolidateTxFromKeys(...(args as Parameters<typeof mod.prepareUtxoConsolidateTxFromKeys>))
+  return mod.prepareUtxoConsolidateTxFromKeys(...args)
 }
 
 // Cosmos gas-fee primitives (pure crypto: gas limits + canonical fee label).
@@ -749,17 +769,21 @@ export {
 // import to call time matches the proven RN polkadot-resolver pattern in
 // ./getCoinBalance and keeps the eager bundle free of @polkadot/api.
 export type { PolkadotAssetBalance, PolkadotNativeBalance } from '../../tools/balance'
-export async function balancePolkadot(...args: unknown[]) {
+export async function balancePolkadot(...args: Parameters<(typeof import('../../tools/balance'))['balancePolkadot']>) {
   const mod = await import('../../tools/balance')
-  return mod.balancePolkadot(...(args as Parameters<typeof mod.balancePolkadot>))
+  return mod.balancePolkadot(...args)
 }
-export async function getPolkadotNativeBalance(...args: unknown[]) {
+export async function getPolkadotNativeBalance(
+  ...args: Parameters<(typeof import('../../tools/balance'))['getPolkadotNativeBalance']>
+) {
   const mod = await import('../../tools/balance')
-  return mod.getPolkadotNativeBalance(...(args as Parameters<typeof mod.getPolkadotNativeBalance>))
+  return mod.getPolkadotNativeBalance(...args)
 }
-export async function getPolkadotAssetBalance(...args: unknown[]) {
+export async function getPolkadotAssetBalance(
+  ...args: Parameters<(typeof import('../../tools/balance'))['getPolkadotAssetBalance']>
+) {
   const mod = await import('../../tools/balance')
-  return mod.getPolkadotAssetBalance(...(args as Parameters<typeof mod.getPolkadotAssetBalance>))
+  return mod.getPolkadotAssetBalance(...args)
 }
 
 // Solana balance reads (native SOL + SPL/Token-2022). Safe to re-export
@@ -814,9 +838,9 @@ export * from '@vultisig/core-chain/chains/cosmos/thor/lp'
 export type { GetSwapExplorerUrlInput, SwapExplorerProvider } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 export { getSwapExplorerUrl, swapExplorerProviders } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 export { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
-export async function fiatToAmount(...args: unknown[]) {
+export async function fiatToAmount(...args: Parameters<(typeof import('../../utils/fiatToAmount'))['fiatToAmount']>) {
   const mod = await import('../../utils/fiatToAmount')
-  return mod.fiatToAmount(...(args as Parameters<typeof mod.fiatToAmount>))
+  return mod.fiatToAmount(...args)
 }
 export type { ParseChainResult, ParseTickerResult } from '../../tools/parse'
 export { chainSchema, parseChain, parseTicker, tickerSchema } from '../../tools/parse'
@@ -841,9 +865,11 @@ export { normalizeChain, UnknownChainError } from '../../utils/normalizeChain'
 export { resolveChainReference } from '../../utils/resolveChainReference'
 export type { ParsedThorSwapMemo } from '../../utils/thorSwapMemo'
 export { parseThorSwapMemo } from '../../utils/thorSwapMemo'
-export async function parseKeygenQR(...args: unknown[]) {
+export async function parseKeygenQR(
+  ...args: Parameters<(typeof import('../../utils/parseKeygenQR'))['parseKeygenQR']>
+) {
   const mod = await import('../../utils/parseKeygenQR')
-  return mod.parseKeygenQR(...(args as Parameters<typeof mod.parseKeygenQR>))
+  return mod.parseKeygenQR(...args)
 }
 export { ValidationHelpers } from '../../utils/validation'
 
