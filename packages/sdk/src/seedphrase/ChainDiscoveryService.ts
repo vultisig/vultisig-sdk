@@ -7,7 +7,7 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
-import { getSignatureAlgorithm } from '@vultisig/core-chain/signing/SignatureAlgorithm'
+import { isEddsaChain } from '@vultisig/core-chain/signing/SignatureAlgorithm'
 
 import { assertSeedphraseImportSupportsChains, SEEDPHRASE_IMPORT_SUPPORTED_CHAINS } from '../constants'
 import type { WasmProvider } from '../context/SdkContext'
@@ -513,6 +513,6 @@ export class ChainDiscoveryService {
    * Check if a chain uses EdDSA signature algorithm
    */
   isEddsaChain(chain: Chain): boolean {
-    return getSignatureAlgorithm(chain) === 'eddsa'
+    return isEddsaChain(chain)
   }
 }

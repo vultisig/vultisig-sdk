@@ -21,3 +21,5 @@ export const signatureAlgorithms: Record<ChainKind, SignatureAlgorithm> = {
 }
 
 export const getSignatureAlgorithm = (chain: Chain): SignatureAlgorithm => signatureAlgorithms[getChainKind(chain)]
+
+export const isEddsaChain = (chain: Chain): boolean => getSignatureAlgorithm(chain) === 'eddsa'
