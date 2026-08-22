@@ -443,7 +443,7 @@ export {
 // the Hyperliquid 998/999 client↔server chainId drift class and EVM fee-policy
 // forks. Pure lookup/policy helpers, no chain-client deps, so safe as static
 // re-exports.
-export { getEvmChainByChainId, getEvmChainId } from '@vultisig/core-chain/chains/evm/chainInfo'
+export { getEvmChainByChainId, getEvmChainId, getEvmRpcUrl } from '@vultisig/core-chain/chains/evm/chainInfo'
 export { clampEvmPriorityFee } from '@vultisig/core-chain/tx/fee/evm/clampEvmPriorityFee'
 
 // Gas / fee primitives (read-only — uses global `fetch` + type-only imports,
