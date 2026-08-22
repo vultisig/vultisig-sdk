@@ -109,6 +109,12 @@ export {
   parseThorchainSecuredAssets,
   thorchainSecuredAssetFallback,
 } from '@vultisig/core-chain/chains/cosmos/thor/securedAssets'
+
+// Canonical Cosmos custom-message signing payload builders. Keep this
+// hand-curated RN surface aligned with the root SDK entrypoint.
+export type { BuildSignAminoPayloadInput, BuildSignDirectPayloadInput } from '../../vault/services/cosmos'
+export { buildSignAminoKeysignPayload, buildSignDirectKeysignPayload } from '../../vault/services/cosmos'
+
 // XRP Ledger issued-currency canonicals — pure helpers/tables that are safe on
 // the RN graph and should stay in parity with the root SDK entrypoint.
 export {
@@ -233,15 +239,16 @@ export type {
 // that hangs Hermes at module init).
 export type { BroadcastSolanaTxOptions, BuildSolanaSendOptions, SolanaTxBuilderResult } from './chains/solana'
 
-// TON bridge type surface — reimplementation built on @ton/core only, which
-// is Hermes-safe (uses jssha via @ton/crypto peer dep, not crypto.subtle).
-// Consumers MUST install `@ton/core` as a peer dep; we never reach into
-// `@ton/crypto-primitives`.
+// TON bridge type surface — reimplementation built on @ton/core plus
+// WalletCore's generated protobuf namespace for pre-dispatch parity input.
+// The builder does not initialize WalletCore WASM or reach into
+// @ton/crypto-primitives.
 export type {
   BuildTonJettonTransferOptions,
   BuildTonSendOptions,
   TonTxBuilderResult,
   TonV4R2Wallet,
+  TonWalletCoreBackedTxBuilderResult,
   TonWalletInfo,
   TonWalletStatus,
 } from './chains/ton'

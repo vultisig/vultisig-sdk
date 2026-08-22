@@ -254,6 +254,62 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.isCosmosMemoWithinCap(rn.Chain.Osmosis, 'a'.repeat(257))).toBe(false)
   })
 
+  it('exports the canonical Cosmos custom-signing payload builders from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const canonical = await import('../../../../src/vault/services/cosmos')
+
+    expect(rn.buildSignAminoKeysignPayload).toBe(canonical.buildSignAminoKeysignPayload)
+    expect(rn.buildSignDirectKeysignPayload).toBe(canonical.buildSignDirectKeysignPayload)
+  })
+
+  // sdk#1657 - buildSignAminoKeysignPayload/buildSignDirectKeysignPayload only
+  // ever call `publicKey.data()`, but their exported `publicKey` type was
+  // pinned to @trustwallet/wallet-core's `PublicKey`. RN consumers hold a
+  // @vultisig/walletcore-native `NativePublicKeyInstance` instead, which is
+  // not that class, so the RN-published type forced a cast. This test assigns
+  // a `NativePublicKeyInstance`-typed value directly to `publicKey` with no
+  // `as` — it fails to compile (not just fails at runtime) if the export ever
+  // narrows back to the TrustWallet WASM type.
+  it('accepts a React Native NativePublicKeyInstance as publicKey with no cast', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    const nativePublicKey: import('@vultisig/walletcore-native').NativePublicKeyInstance = {
+      _handle: 1,
+      data: () => new Uint8Array([1, 2, 3]),
+      uncompressed() {
+        return this
+      },
+      compressed() {
+        return this
+      },
+      verify: () => true,
+      verifyAsDER: () => true,
+      delete: () => {},
+    }
+
+    const payload = await rn.buildSignAminoKeysignPayload({
+      chain: rn.Chain.Cosmos,
+      coin: {
+        chain: rn.Chain.Cosmos,
+        address: 'cosmos1abcdef',
+        decimals: 6,
+        ticker: 'ATOM',
+      },
+      msgs: [],
+      fee: {
+        amount: [{ denom: 'uatom', amount: '5000' }],
+        gas: '200000',
+      },
+      vaultId: 'vault-ecdsa',
+      localPartyId: 'device-1',
+      publicKey: nativePublicKey,
+      libType: 'DKLS',
+      skipChainSpecificFetch: true,
+    })
+
+    expect(payload.coin?.hexPublicKey).toBe('010203')
+  })
+
   it('exports the generic CosmWasm execute message builder from the RN root surface', async () => {
     const sdk = await import('../../../../src/platforms/react-native/index')
 
