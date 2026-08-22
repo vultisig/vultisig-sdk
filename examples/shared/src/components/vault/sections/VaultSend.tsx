@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ISDKAdapter } from '../../../adapters'
 import { useSDKAdapter } from '../../../adapters'
 import type { CoinInfo, ProgressStep, TokenInfo, VaultInfo } from '../../../types'
+import { getChainNativeDecimals, getChainNativeTicker } from '../../../utils/formatting'
 import Button from '../../common/Button'
 import Input from '../../common/Input'
 import Select from '../../common/Select'
@@ -94,7 +95,7 @@ export default function VaultSend({ vault }: VaultSendProps) {
         chain: formData.chain,
         address,
         decimals: balance.decimals,
-        ticker: balance.symbol || getChainTicker(formData.chain),
+        ticker: balance.symbol || getChainNativeTicker(formData.chain),
         id: formData.tokenId || undefined,
       }
       const maxInfo = await sdk.getMaxSendAmount(vault.id, {
@@ -117,7 +118,7 @@ export default function VaultSend({ vault }: VaultSendProps) {
     setProgress(null)
 
     const chain = formData.chain
-    const decimals = selectedToken?.decimals ?? getChainDecimals(chain)
+    const decimals = selectedToken?.decimals ?? getChainNativeDecimals(chain)
     const parsedAmount = parseSendAmountToBigInt(formData.amount, decimals)
     if (!parsedAmount.ok) {
       setError(parsedAmount.message)
@@ -178,7 +179,7 @@ export default function VaultSend({ vault }: VaultSendProps) {
         chain,
         address,
         decimals,
-        ticker: selectedToken?.symbol ?? getChainTicker(chain),
+        ticker: selectedToken?.symbol ?? getChainNativeTicker(chain),
         id: selectedToken?.id,
       }
 
@@ -267,7 +268,7 @@ export default function VaultSend({ vault }: VaultSendProps) {
     label: chain,
   }))
 
-  const sendDecimals = selectedToken?.decimals ?? getChainDecimals(formData.chain)
+  const sendDecimals = selectedToken?.decimals ?? getChainNativeDecimals(formData.chain)
   const amountParseState = parseSendAmountToBigInt(formData.amount, sendDecimals)
   const recipientOk = formData.recipient.trim().length > 0
   const canSend = Boolean(formData.chain) && recipientOk && amountParseState.ok
@@ -508,58 +509,6 @@ function formatAmount(amount: string | bigint, decimals: number): string {
   let fractionalStr = fractionalPart.toString().padStart(decimals, '0')
   fractionalStr = fractionalStr.replace(/0+$/, '').slice(0, 6)
   return `${wholePart}.${fractionalStr}`
-}
-
-// Get native token ticker for a chain
-function getChainTicker(chain: string): string {
-  const tickerMap: Record<string, string> = {
-    Bitcoin: 'BTC',
-    'Bitcoin-Cash': 'BCH',
-    Litecoin: 'LTC',
-    Dogecoin: 'DOGE',
-    Dash: 'DASH',
-    Zcash: 'ZEC',
-    Ethereum: 'ETH',
-    Polygon: 'POL',
-    Avalanche: 'AVAX',
-    BSC: 'BNB',
-    Arbitrum: 'ETH',
-    Optimism: 'ETH',
-    Base: 'ETH',
-    Solana: 'SOL',
-    Cosmos: 'ATOM',
-    THORChain: 'RUNE',
-    MayaChain: 'CACAO',
-    Sui: 'SUI',
-    Ripple: 'XRP',
-  }
-  return tickerMap[chain] ?? chain
-}
-
-// Get native token decimals for common chains
-function getChainDecimals(chain: string): number {
-  const decimalsMap: Record<string, number> = {
-    Bitcoin: 8,
-    'Bitcoin-Cash': 8,
-    Litecoin: 8,
-    Dogecoin: 8,
-    Dash: 8,
-    Zcash: 8,
-    Ethereum: 18,
-    Polygon: 18,
-    Avalanche: 18,
-    BSC: 18,
-    Arbitrum: 18,
-    Optimism: 18,
-    Base: 18,
-    Solana: 9,
-    Cosmos: 6,
-    THORChain: 8,
-    MayaChain: 10,
-    Sui: 9,
-    Ripple: 6,
-  }
-  return decimalsMap[chain] ?? 18
 }
 
 // Format fee from raw amount + decimals
