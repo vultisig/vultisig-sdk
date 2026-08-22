@@ -1,4 +1,5 @@
 // Circle CCTP — registry + unsigned bridge/claim calldata builders
+export { assertCctpMintSideHasCode, CctpMintSideCodeError } from './assertCctpMintSideCode'
 export type { BuildCctpBridgeParams, CctpBridgeResult, CctpUnsignedTx } from './buildCctpBridge'
 export { buildCctpBridge, formatUsdc, parseUsdcAmount } from './buildCctpBridge'
 export type { BuildCctpClaimParams, CctpClaimResult } from './buildCctpClaim'
