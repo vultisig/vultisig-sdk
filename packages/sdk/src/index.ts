@@ -1072,6 +1072,7 @@ export {
   prepareThorchainMsgDepositTxFromKeys,
   prepareTrc20TransferFromKeys,
   prepareUtxoConsolidateTxFromKeys,
+  price,
   quoteSkipRoute,
   recipientSanity,
   resolve4ByteSelector,

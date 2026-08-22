@@ -125,6 +125,10 @@ export {
   NATIVE_COINGECKO_IDS,
   symbolFromCoinGeckoId,
 } from './price'
+import * as price from './price'
+// Namespace handle so callers can use the documented `sdk.price.getPrice(...)`
+// ergonomic alongside the flat named exports (parity with sdk.gas.*, sdk.defi.*).
+export { price }
 
 // Cosmos governance (read proposals + build unsigned MsgVote envelope)
 import * as cosmos from './cosmos'
