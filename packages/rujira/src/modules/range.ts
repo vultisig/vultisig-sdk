@@ -478,11 +478,12 @@ export class RujiraRange {
 
   // ------------------- Builders -------------------
 
-  buildCreatePosition(params: CreatePositionParams): RangeTransactionParams {
+  async buildCreatePosition(params: CreatePositionParams): Promise<RangeTransactionParams> {
     assertPairAddress(params.pairAddress)
     assertConfig(params.config)
     assertCoin('base', params.base)
     assertCoin('quote', params.quote)
+    await this.assertAuthoritativePair(params.pairAddress, params.base, params.quote)
     return {
       contractAddress: params.pairAddress,
       executeMsg: {
@@ -502,15 +503,45 @@ export class RujiraRange {
     }
   }
 
-  buildDeposit(params: DepositParams): RangeTransactionParams {
+  async buildDeposit(params: DepositParams): Promise<RangeTransactionParams> {
     assertPairAddress(params.pairAddress)
     assertIdx(params.idx)
     assertCoin('base', params.base)
     assertCoin('quote', params.quote)
+    await this.assertAuthoritativePair(params.pairAddress, params.base, params.quote)
     return {
       contractAddress: params.pairAddress,
       executeMsg: { range: { deposit: { idx: params.idx } } },
       funds: [params.base, params.quote].sort((a, b) => (a.denom < b.denom ? -1 : 1)),
+    }
+  }
+
+  /**
+   * Prove `pairAddress` is the AUTHORITATIVE FIN pair contract for
+   * `(base, quote)` before it is trusted as a signable contract sink.
+   *
+   * `assertPairAddress` only checks bech32 shape — any valid thor1... contract
+   * passes it, including one that has nothing to do with the requested market.
+   * A caller (or an LLM-driven agent acting on stale/hallucinated data) could
+   * otherwise supply a bech32-valid but wrong contract and have funds escrowed
+   * to it. Resolving the market through the same GraphQL registry
+   * `getPairAddress` already uses, and requiring an exact address match, closes
+   * that gap in-package instead of leaving every downstream caller to
+   * re-implement it (see agent-backend-ts's local compensation, sdk#1513).
+   */
+  private async assertAuthoritativePair(pairAddress: string, base: Coin, quote: Coin): Promise<void> {
+    const resolved = await this.getPairAddress(base.denom, quote.denom)
+    if (!resolved) {
+      throw new RujiraError(
+        RujiraErrorCode.INVALID_PARAMS,
+        `pairAddress ${pairAddress} could not be proven: no FIN pair found for ${base.denom}/${quote.denom}`
+      )
+    }
+    if (resolved.address !== pairAddress) {
+      throw new RujiraError(
+        RujiraErrorCode.INVALID_PARAMS,
+        `pairAddress ${pairAddress} is not the authoritative FIN pair for ${base.denom}/${quote.denom} (expected ${resolved.address})`
+      )
     }
   }
 
