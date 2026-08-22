@@ -1,7 +1,12 @@
 import { EvmChain } from '@vultisig/core-chain/Chain'
 import { describe, expect, it } from 'vitest'
 
-import { BlockaidEVMSimulation, parseBlockaidEvmSimulation } from './core'
+import {
+  BlockaidEVMSimulation,
+  BlockaidSolanaSimulation,
+  parseBlockaidEvmSimulation,
+  parseBlockaidSolanaSimulation,
+} from './core'
 
 type AssetDiff = BlockaidEVMSimulation['account_summary']['assets_diffs'][number]
 type Asset = AssetDiff['asset']
@@ -315,5 +320,152 @@ describe('parseBlockaidEvmSimulation', () => {
       amount: 100n,
     })
     expect(result?.changes[0].coin.ticker).toBe('ETH')
+  })
+})
+
+describe('parseBlockaidSolanaSimulation', () => {
+  const WSOL_MINT = 'So11111111111111111111111111111111111111112'
+  const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+
+  type SolanaAssetDiff = BlockaidSolanaSimulation['account_summary']['account_assets_diff'][number]
+  type SolanaSide = NonNullable<SolanaAssetDiff['in']>
+
+  const solSide = (rawValue: string): SolanaSide => ({ usd_price: 0, summary: '', value: 0, raw_value: rawValue })
+
+  const solDiff = (parts: Partial<SolanaAssetDiff> & Pick<SolanaAssetDiff, 'asset'>): SolanaAssetDiff => ({
+    in: null,
+    out: null,
+    asset_type: parts.asset.type,
+    ...parts,
+  })
+
+  const nativeSolAsset = { type: 'SOL' as const, symbol: 'SOL', decimals: 9, logo: '' }
+  const wsolAsset = { type: 'TOKEN' as const, address: WSOL_MINT, symbol: 'WSOL', decimals: 9, logo: '' }
+  const usdcAsset = { type: 'TOKEN' as const, address: USDC_MINT, symbol: 'USDC', decimals: 6, logo: '' }
+
+  const buildSolanaSimulation = (diffs: SolanaAssetDiff[]): BlockaidSolanaSimulation => ({
+    account_summary: { account_assets_diff: diffs },
+  })
+
+  it('nets a wrap-then-spend (SOL out + WSOL in) to a single transfer, not a bogus SOL->WSOL swap (sdk#1997)', async () => {
+    // Captured Kamino Allez SOL vault deposit shape from the issue: wraps SOL
+    // then spends it, leaving only the WSOL token account's rent-exempt
+    // residual (2_039_280) as an `in` leg.
+    const result = await parseBlockaidSolanaSimulation(
+      buildSolanaSimulation([
+        solDiff({ asset: nativeSolAsset, out: solSide('59435000') }),
+        solDiff({ asset: wsolAsset, in: solSide('2039280') }),
+      ])
+    )
+
+    expect(result).toEqual({
+      transfer: {
+        fromMint: WSOL_MINT,
+        fromAmount: 57395720n, // 59_435_000 - 2_039_280 net spend, not the raw 2_039_280 residual
+      },
+    })
+  })
+
+  it('nets the reverse direction (WSOL out + SOL in, an unwrap/close) without inventing a receive amount', async () => {
+    // Reverse of the captured case: unwrapping/closing a WSOL account nets a
+    // POSITIVE change (a receive), which this parser's `swap`/`transfer`
+    // contract has no shape for — it must throw instead of mislabeling a
+    // receive as an outgoing transfer.
+    await expect(
+      parseBlockaidSolanaSimulation(
+        buildSolanaSimulation([
+          solDiff({ asset: wsolAsset, out: solSide('2039280') }),
+          solDiff({ asset: nativeSolAsset, in: solSide('59435000') }),
+        ])
+      )
+    ).rejects.toThrow('Invalid simulation data: no out value for transfer')
+  })
+
+  it('still emits a genuine swap between two distinct mints', async () => {
+    const result = await parseBlockaidSolanaSimulation(
+      buildSolanaSimulation([
+        solDiff({ asset: nativeSolAsset, out: solSide('1000000000') }),
+        solDiff({ asset: usdcAsset, in: solSide('150000000') }),
+      ])
+    )
+
+    expect(result).toEqual({
+      swap: {
+        fromMint: WSOL_MINT,
+        toMint: USDC_MINT,
+        fromAmount: 1000000000n,
+        toAmount: 150000000n,
+        toAssetDecimal: 6,
+      },
+    })
+  })
+
+  it('drops the native SOL fee leg from a 3-diff simulation before netting', async () => {
+    const result = await parseBlockaidSolanaSimulation(
+      buildSolanaSimulation([
+        solDiff({ asset: nativeSolAsset, out: solSide('5000') }), // network fee
+        solDiff({ asset: nativeSolAsset, out: solSide('1000000000') }),
+        solDiff({ asset: usdcAsset, in: solSide('150000000') }),
+      ])
+    )
+
+    expect(result).toMatchObject({
+      swap: { fromMint: WSOL_MINT, toMint: USDC_MINT, fromAmount: 1000000000n, toAmount: 150000000n },
+    })
+  })
+
+  it('emits a plain transfer for a single-mint send', async () => {
+    const result = await parseBlockaidSolanaSimulation(
+      buildSolanaSimulation([solDiff({ asset: usdcAsset, out: solSide('42000000') })])
+    )
+
+    expect(result).toEqual({ transfer: { fromMint: USDC_MINT, fromAmount: 42000000n } })
+  })
+
+  it('resolves native SOL to the WSOL mint via the diff-level asset_type even when asset.type disagrees (inconsistent Blockaid metadata)', async () => {
+    // Some Blockaid responses carry asset_type: 'SOL' at the diff level while
+    // asset.type says 'TOKEN' with no address — mirrors the native-SOL-fee
+    // filter's own dual check a few lines above in the source.
+    const inconsistentNativeSol: SolanaAssetDiff['asset'] = {
+      type: 'TOKEN',
+      symbol: 'SOL',
+      decimals: 9,
+      logo: '',
+    }
+
+    const result = await parseBlockaidSolanaSimulation(
+      buildSolanaSimulation([
+        { asset: inconsistentNativeSol, out: solSide('59435000'), in: null, asset_type: 'SOL' },
+        solDiff({ asset: wsolAsset, in: solSide('2039280') }),
+      ])
+    )
+
+    expect(result).toEqual({
+      transfer: {
+        fromMint: WSOL_MINT,
+        fromAmount: 57395720n,
+      },
+    })
+  })
+
+  it('throws rather than guess when three distinct nonzero mints remain', async () => {
+    await expect(
+      parseBlockaidSolanaSimulation(
+        buildSolanaSimulation([
+          solDiff({ asset: nativeSolAsset, out: solSide('1000000000') }),
+          solDiff({ asset: usdcAsset, in: solSide('150000000') }),
+          solDiff({
+            asset: {
+              type: 'TOKEN',
+              address: 'BonkMintReadyToLaunchXXXXXXXXXXXXXXXXXXXXX',
+              symbol: 'BONK',
+              decimals: 5,
+              logo: '',
+            },
+            in: solSide('9999'),
+          }),
+        ])
+      )
+    ).rejects.toThrow('Invalid simulation data')
   })
 })
