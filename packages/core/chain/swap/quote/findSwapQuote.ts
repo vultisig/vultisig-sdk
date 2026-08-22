@@ -51,7 +51,7 @@ import { pick } from '@vultisig/lib-utils/record/pick'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 
 import { cloneSwapSafetyValue, getSwapQuoteSafetyFingerprint } from './getSwapQuoteSafetyFingerprint'
-import type { BoundSwapQuote, SwapQuote } from './SwapQuote'
+import type { BoundSwapQuote, SafetyBoundSwapQuote, SwapQuote } from './SwapQuote'
 
 /** Optional per-aggregator affiliate overrides. When absent each aggregator
  * falls back to its own vultisig-0 default — no behavior change for existing
@@ -152,7 +152,7 @@ const bindQuoteSafetyMetadata = (
   from: AccountCoin,
   to: AccountCoin,
   requestedAmount: bigint
-): BoundSwapQuote => {
+): SafetyBoundSwapQuote => {
   const now = Date.now()
   const expiresAt = 'native' in quote.quote ? quote.quote.native.expiry * 1000 : now + GENERAL_QUOTE_PREPARATION_TTL_MS
   const effectiveExpiresAt =
@@ -1014,15 +1014,21 @@ export const findSwapQuotes = async (input: FindSwapQuoteInput): Promise<FindSwa
 
   const settled = await Promise.allSettled(
     fetchers.map(async (fetcher): Promise<RankedSwapQuote> => {
-      const quote = bindQuoteSafetyMetadata(
+      const boundQuote = bindQuoteSafetyMetadata(
         await withTimeout(fetcher.fetch(), QUOTE_FETCH_TIMEOUT_MS),
         from,
         to,
         amount
       )
+      const outputAmount = getComparableOutputAmount(boundQuote, to, fetcher.providerName)
+      // Carry the same normalized output ranking already computed for
+      // best-quote selection onto the returned quote itself (architecture#2081)
+      // — a consumer no longer needs to re-derive native-precision -> base-unit
+      // conversion (or general-provider destination-fee subtraction) downstream.
+      const quote: BoundSwapQuote = { ...boundQuote, comparableOutputAmount: outputAmount }
       return {
         quote,
-        outputAmount: getComparableOutputAmount(quote, to, fetcher.providerName),
+        outputAmount,
         sourceGasUnits: getSameChainEvmSourceGasUnits(quote, from, to),
         providerName: fetcher.providerName,
       }
@@ -1098,9 +1104,23 @@ export const findSwapQuotes = async (input: FindSwapQuoteInput): Promise<FindSwa
     const belowMinimumMessage = preferred
       ? belowMinimumByProvider.get(preferred)!
       : [...belowMinimumByProvider.values()][0]
+    // Attach the proactively-computed THORChain minimum as structured metadata
+    // when the surfaced hint came from THORChain itself — MayaChain and the
+    // general aggregators have their own (untracked) thresholds, so metadata is
+    // only ever attached for the protocol `computeNativeMin` actually models.
+    const nativeMin = preferred === 'THORChain' ? await computeNativeMin() : null
     throw new SwapError(
       SwapErrorCode.AmountBelowMinimum,
-      `Amount below the minimum required by a swap provider. ${belowMinimumMessage}`
+      `Amount below the minimum required by a swap provider. ${belowMinimumMessage}`,
+      nativeMin
+        ? {
+            nativeMin: {
+              swapChain: nativeMin.swapChain,
+              minAmountInBaseUnits: nativeMin.minAmountInBaseUnits,
+              minAmountInHuman: nativeMin.minAmountInHuman,
+            },
+          }
+        : undefined
     )
   }
 
@@ -1197,5 +1217,12 @@ export const findSwapQuote = async (input: FindSwapQuoteInput): Promise<BoundSwa
 const belowNativeMinimumError = (min: NativeSwapMinAmountIn, from: AccountCoin): SwapError =>
   new SwapError(
     SwapErrorCode.AmountBelowMinimum,
-    `Amount is below the minimum for this swap. Minimum is ~${min.minAmountInHuman} ${from.ticker}. Please increase the amount.`
+    `Amount is below the minimum for this swap. Minimum is ~${min.minAmountInHuman} ${from.ticker}. Please increase the amount.`,
+    {
+      nativeMin: {
+        swapChain: min.swapChain,
+        minAmountInBaseUnits: min.minAmountInBaseUnits,
+        minAmountInHuman: min.minAmountInHuman,
+      },
+    }
   )

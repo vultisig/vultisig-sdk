@@ -22,6 +22,17 @@ export type SwapQuote = {
   expiresAt?: number
   /** Mutation/stale-reuse binding for the request identity, expiry, and exact returned transaction. */
   safetyFingerprint?: string
+  /**
+   * Expected output amount in the destination coin's base units
+   * (`to.decimals`), normalized the same way regardless of provider: native
+   * THOR/Maya quotes report `expected_amount_out` in chain-specific precision
+   * (see `nativeSwapAmountToCoinBaseUnit`), general aggregators report
+   * `dstAmount` already in destination-token base units minus destination-side
+   * fees. This is the exact value `findSwapQuote`'s own best-quote ranking
+   * compares, exposed so consumers don't have to re-derive it (and drift on
+   * the native precision conversion) themselves.
+   */
+  comparableOutputAmount?: bigint
 }
 
 /**
@@ -29,5 +40,7 @@ export type SwapQuote = {
  * present. Keep this as the live returned object (structured cloning is safe);
  * JSON round-tripping loses required runtime value types such as `bigint`.
  */
-export type BoundSwapQuote = SwapQuote &
+export type SafetyBoundSwapQuote = SwapQuote &
   Required<Pick<SwapQuote, 'requestedAmount' | 'expiresAt' | 'safetyFingerprint'>>
+
+export type BoundSwapQuote = SafetyBoundSwapQuote & Required<Pick<SwapQuote, 'comparableOutputAmount'>>

@@ -14,6 +14,7 @@ import {
   getNativeSwapMinAmountIn,
   NativeSwapMinAmountIn,
 } from '@vultisig/core-chain/swap/native/minimum/getNativeSwapMinAmountIn'
+import { SwapError } from '@vultisig/core-chain/swap/SwapError'
 import { HttpResponseError } from '@vultisig/lib-utils/fetch/HttpResponseError'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -849,6 +850,93 @@ describe('findSwapQuote parallel selection', () => {
       'Amount is below the minimum for this swap. Minimum is ~0.05 ATOM. Please increase the amount.'
     )
     expect(getNativeSwapQuote).not.toHaveBeenCalled()
+  })
+
+  it('attaches structured nativeMin metadata on the sole-route THORChain below-minimum error (architecture#2081)', async () => {
+    // Regression for architecture#2081: a consumer used to have to re-fetch the
+    // native quote endpoint itself to recover a structured minimum — the SDK
+    // now attaches the same NativeSwapMinAmountIn data it already computed.
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('should not be called'))
+    vi.mocked(getNativeSwapMinAmountIn).mockResolvedValue(minResult(1_000_000n, '0.05'))
+
+    try {
+      await findSwapQuote({ ...nativeOnlyCoins, amount: 1n })
+      throw new Error('Expected findSwapQuote to reject')
+    } catch (error) {
+      expect(error).toBeInstanceOf(SwapError)
+      expect((error as SwapError).metadata?.nativeMin).toEqual({
+        swapChain: Chain.THORChain,
+        minAmountInBaseUnits: 1_000_000n,
+        minAmountInHuman: '0.05',
+      })
+    }
+  })
+
+  it('attaches structured nativeMin metadata when THORChain surfaces the preferred below-minimum hint', async () => {
+    // Multi-provider pair where THORChain itself is the below-minimum signal
+    // picked by belowMinimumProviderOrder — metadata should still be attached
+    // even though this is a different throw site than the sole-route case above.
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('kyber fail'))
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('inch fail'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('lifi fail'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('swapkit fail'))
+    vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) => {
+      if (swapChain === Chain.THORChain) {
+        throw new Error('amount below minimum required')
+      }
+      throw new Error('maya fail')
+    })
+    vi.mocked(getNativeSwapMinAmountIn).mockResolvedValue(minResult(2_000_000n, '0.02'))
+
+    try {
+      await findSwapQuote({ ...evmSameChainCoins, amount: 1n })
+      throw new Error('Expected findSwapQuote to reject')
+    } catch (error) {
+      expect(error).toBeInstanceOf(SwapError)
+      expect((error as SwapError).metadata?.nativeMin).toEqual({
+        swapChain: Chain.THORChain,
+        minAmountInBaseUnits: 2_000_000n,
+        minAmountInHuman: '0.02',
+      })
+    }
+  })
+
+  it('omits nativeMin metadata when MayaChain is the selected native failure', async () => {
+    vi.mocked(getCowSwapQuote).mockRejectedValue(new Error('cowswap fail'))
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('kyber fail'))
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('inch fail'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('lifi fail'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('swapkit fail'))
+    vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) => {
+      if (swapChain === Chain.THORChain) {
+        throw new Error('thor fail')
+      }
+      throw new Error('trading is halted')
+    })
+
+    await expect(findSwapQuote({ ...evmSameChainCoins, amount: 1n })).rejects.toThrow(
+      'temporarily unavailable — trading is halted on MayaChain'
+    )
+    expect(getNativeSwapMinAmountIn).not.toHaveBeenCalled()
+  })
+
+  it('omits nativeMin metadata when a non-THORChain provider surfaces the below-minimum hint', async () => {
+    // SwapKit/Chainflip's own minimum has nothing to do with the THORChain
+    // economics `computeNativeMin` models — attaching it would be misleading.
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('kyber fail'))
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('inch fail'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('lifi fail'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('CHAINFLIP: Amount below minimum: 0.0003 BTC required'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('trading is halted'))
+
+    try {
+      await findSwapQuote({ ...evmSameChainCoins, amount: 1n })
+      throw new Error('Expected findSwapQuote to reject')
+    } catch (error) {
+      expect(error).toBeInstanceOf(SwapError)
+      expect((error as SwapError).metadata?.nativeMin).toBeUndefined()
+    }
+    expect(getNativeSwapMinAmountIn).not.toHaveBeenCalled()
   })
 
   it('surfaces a sole-route THORChain halt before the computed minimum (#696)', async () => {
