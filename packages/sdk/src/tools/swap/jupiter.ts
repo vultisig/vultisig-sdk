@@ -86,6 +86,27 @@ export const JUPITER_DEFAULT_SLIPPAGE_BPS = 50
 
 const JUPITER_TIMEOUT_MS = 15_000
 
+/**
+ * sdk#1738: the shared `api.vultisig.com/jup` proxy rate-limits per source IP, and a
+ * caller that shares one egress IP across its whole fleet can trip it mid-turn — a
+ * single Solana swap flow makes several calls (discovery + quote + swap-build). A bare
+ * 429 propagating straight up gets flattened by callers into an opaque "couldn't get a
+ * Solana swap quote" with no retry hint.
+ *
+ * Retry a 429 in-process with a short linear backoff; the window has usually reset
+ * within a couple hundred milliseconds. Bounded, so a persistently-limited window still
+ * surfaces as an error rather than looping.
+ *
+ * Ported from the implementation agent-backend-ts already ran
+ * (`src/mastra/tools/mcp/tools/swap/jupiterSwap.ts`), so a consumer deleting its
+ * backend-local Jupiter copy in favour of this helper keeps the same resilience instead
+ * of regressing to single-shot.
+ */
+const JUPITER_MAX_RETRIES = 2
+const JUPITER_RETRY_BACKOFF_MS = 300
+
+const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms))
+
 /** @deprecated Jupiter fee accounts are derived and prepended per swap. */
 export const JUPITER_AFFILIATE_FEE_ATAS: Readonly<Record<string, string>> = {}
 
@@ -158,22 +179,34 @@ export type JupiterSwapResult = {
 }
 
 const fetchJupiter = async <T>(input: string, init?: RequestInit): Promise<T> => {
-  const response = await fetch(input, {
-    ...init,
-    signal: AbortSignal.timeout(JUPITER_TIMEOUT_MS),
-  })
+  let lastErr: Error | undefined
+  for (let attempt = 0; attempt <= JUPITER_MAX_RETRIES; attempt++) {
+    if (attempt > 0) await sleep(JUPITER_RETRY_BACKOFF_MS * attempt)
 
-  const data = (await response.json().catch(() => undefined)) as unknown
+    const response = await fetch(input, {
+      ...init,
+      signal: AbortSignal.timeout(JUPITER_TIMEOUT_MS),
+    })
 
-  if (!response.ok) {
-    const msg =
-      typeof data === 'object' && data !== null && 'error' in data
-        ? (data as { error: string }).error
-        : response.statusText
-    throw new Error(`Jupiter API error (${response.status}): ${msg}`)
+    const data = (await response.json().catch(() => undefined)) as unknown
+
+    if (!response.ok) {
+      const msg =
+        typeof data === 'object' && data !== null && 'error' in data
+          ? (data as { error: string }).error
+          : response.statusText
+      lastErr = new Error(`Jupiter API error (${response.status}): ${msg}`)
+      // Only 429 is worth an in-process retry. A genuine 4xx (bad request, no route on
+      // Jupiter's own side) or a persistent 5xx will not heal by immediately re-asking,
+      // and retrying those just multiplies latency on a request that is already lost.
+      if (response.status === 429 && attempt < JUPITER_MAX_RETRIES) continue
+      throw lastErr
+    }
+
+    return data as T
   }
-
-  return data as T
+  // Unreachable — the loop always returns or throws — but keeps the return type honest.
+  throw lastErr ?? new Error('Jupiter API error: exhausted retries')
 }
 
 /**

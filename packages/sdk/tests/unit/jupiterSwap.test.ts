@@ -514,4 +514,144 @@ describe('buildJupiterSwapTx — affiliate ON (injected treasury ATA)', () => {
     const swapBody = JSON.parse((swapCall?.[1] as RequestInit).body as string)
     expect(swapBody).not.toHaveProperty('feeAccount')
   })
+
+  // --- sdk#1738: bounded 429 retry against the shared api.vultisig.com/jup proxy ---
+  //
+  // These use fake timers: the retry sleeps 300ms then 600ms, and a real-timer version
+  // would add ~0.9s of wall clock per exhaustion test for no extra coverage.
+
+  it('retries a 429 and succeeds on the retry (sdk#1738)', async () => {
+    let quoteCalls = 0
+    fetchSpy = vi.fn(async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url.includes('/quote')) {
+        quoteCalls++
+        if (quoteCalls === 1) {
+          return new Response(JSON.stringify({ error: 'rate limit' }), {
+            status: 429,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        }
+      }
+      const body = url.includes('/quote') ? fakeQuote : fakeSwap
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    })
+    vi.stubGlobal('fetch', fetchSpy)
+    vi.useFakeTimers()
+    try {
+      const promise = buildJupiterSwapTx({
+        userPublicKey: USER,
+        toContractAddress: USDC_MINT,
+        amountBaseUnits: 100_000_000n,
+      })
+      await vi.runAllTimersAsync()
+      const res = await promise
+      // The transient 429 is absorbed: the caller sees a normal successful quote.
+      expect(res.outAmount).toBe('14230000')
+      expect(quoteCalls).toBe(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('gives up after the retry budget and surfaces the 429 (sdk#1738)', async () => {
+    let quoteCalls = 0
+    fetchSpy = vi.fn(async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url.includes('/quote')) {
+        quoteCalls++
+        return new Response(JSON.stringify({ error: 'rate limit' }), {
+          status: 429,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      return new Response(JSON.stringify(fakeSwap), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    })
+    vi.stubGlobal('fetch', fetchSpy)
+    vi.useFakeTimers()
+    try {
+      const promise = buildJupiterSwapTx({
+        userPublicKey: USER,
+        toContractAddress: USDC_MINT,
+        amountBaseUnits: 100_000_000n,
+      }).catch((e: unknown) => e as Error)
+      await vi.runAllTimersAsync()
+      const err = await promise
+      expect(String(err)).toMatch(/429/)
+      // Bounded, not infinite: 1 initial attempt + JUPITER_MAX_RETRIES.
+      expect(quoteCalls).toBe(3)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('spaces the retries on a 300ms linear backoff (sdk#1738)', async () => {
+    // Pins the SCHEDULE, not just the final count: a regression to 0ms backoff (or to
+    // exponential) would still end at 3 calls and slip past the exhaustion test above.
+    let quoteCalls = 0
+    fetchSpy = vi.fn(async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url.includes('/quote')) {
+        quoteCalls++
+        return new Response(JSON.stringify({ error: 'rate limit' }), {
+          status: 429,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      return new Response(JSON.stringify(fakeSwap), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    })
+    vi.stubGlobal('fetch', fetchSpy)
+    vi.useFakeTimers()
+    try {
+      const settled = buildJupiterSwapTx({
+        userPublicKey: USER,
+        toContractAddress: USDC_MINT,
+        amountBaseUnits: 100_000_000n,
+      }).catch((e: unknown) => e as Error)
+
+      // Let the initial attempt run, then walk each backoff boundary.
+      await vi.advanceTimersByTimeAsync(0)
+      expect(quoteCalls).toBe(1)
+
+      await vi.advanceTimersByTimeAsync(299)
+      expect(quoteCalls).toBe(1) // first retry has not fired yet
+
+      await vi.advanceTimersByTimeAsync(1)
+      expect(quoteCalls).toBe(2) // fires at t=300 (300 * attempt 1)
+
+      await vi.advanceTimersByTimeAsync(599)
+      expect(quoteCalls).toBe(2) // second retry waits 600ms, not another 300ms
+
+      await vi.advanceTimersByTimeAsync(1)
+      expect(quoteCalls).toBe(3) // fires at t=900 cumulative (300 * attempt 2)
+
+      await vi.runAllTimersAsync()
+      expect(String(await settled)).toMatch(/429/)
+      expect(quoteCalls).toBe(3) // and stops there
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does NOT retry a non-429 error status (sdk#1738)', async () => {
+    let quoteCalls = 0
+    fetchSpy = vi.fn(async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url.includes('/quote')) {
+        quoteCalls++
+        return new Response(JSON.stringify({ error: 'no route found' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      return new Response(JSON.stringify(fakeSwap), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    })
+    vi.stubGlobal('fetch', fetchSpy)
+
+    await expect(
+      buildJupiterSwapTx({ userPublicKey: USER, toContractAddress: USDC_MINT, amountBaseUnits: 100_000_000n })
+    ).rejects.toThrow(/400/)
+    // A 4xx will not heal by re-asking — retrying it only multiplies latency.
+    expect(quoteCalls).toBe(1)
+  })
 })
