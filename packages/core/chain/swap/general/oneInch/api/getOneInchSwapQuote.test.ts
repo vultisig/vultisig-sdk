@@ -1,5 +1,6 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
+import { encodeFunctionData, parseAbi } from 'viem'
 import { describe, expect, it, vi } from 'vitest'
 
 import { getOneInchSwapQuote } from './getOneInchSwapQuote'
@@ -262,5 +263,61 @@ describe('getOneInchSwapQuote — token-source tx.value guard (P3 hardening)', (
 
     const quote = await getOneInchSwapQuote({ account, fromCoinId: '0xsrc', toCoinId: '0xdst', amount: 1_000_000n })
     expect('evm' in quote.tx ? quote.tx.evm.value : undefined).toBe('0')
+  })
+})
+
+describe('getOneInchSwapQuote — known-selector min-out bind', () => {
+  const REAL_ROUTER = '0x111111125421ca6dc452d289314280a0f8842a65'
+  const V6_SWAP = parseAbi([
+    'function swap(address executor, (address srcToken, address dstToken, address srcReceiver, address dstReceiver, uint256 amount, uint256 minReturnAmount, uint256 flags) desc, bytes data)',
+  ])
+  const ZERO = '0x0000000000000000000000000000000000000001' as const
+
+  function encodeV6Swap(minReturnAmount: bigint): `0x${string}` {
+    return encodeFunctionData({
+      abi: V6_SWAP,
+      functionName: 'swap',
+      args: [
+        ZERO,
+        {
+          srcToken: ZERO,
+          dstToken: ZERO,
+          srcReceiver: ZERO,
+          dstReceiver: ZERO,
+          amount: 1_000_000n,
+          minReturnAmount,
+          flags: 0n,
+        },
+        '0x',
+      ],
+    })
+  }
+
+  it('REJECTS a quote whose decoded minReturn is 1 wei against a large dstAmount', async () => {
+    vi.mocked(queryUrl).mockResolvedValueOnce({
+      dstAmount: '1000000000',
+      tx: {
+        from: '0xsender',
+        to: REAL_ROUTER,
+        data: encodeV6Swap(1n),
+        value: '0',
+        gasPrice: '1',
+        gas: 210000,
+      },
+    })
+
+    await expect(
+      getOneInchSwapQuote({ account, fromCoinId: '0xsrc', toCoinId: '0xdst', amount: 1_000_000n })
+    ).rejects.toThrow(/minReturn \(1\) is below dstAmount\*\(1-slippage\) floor/)
+  })
+
+  it('still accepts undecodable calldata (unknown selectors stay signable)', async () => {
+    vi.mocked(queryUrl).mockResolvedValueOnce({
+      dstAmount: '1000000000',
+      tx: { from: '0xsender', to: REAL_ROUTER, data: '0xdeadbeef', value: '0', gasPrice: '1', gas: 210000 },
+    })
+
+    const quote = await getOneInchSwapQuote({ account, fromCoinId: '0xsrc', toCoinId: '0xdst', amount: 1_000_000n })
+    expect(quote.dstAmount).toBe('1000000000')
   })
 })
