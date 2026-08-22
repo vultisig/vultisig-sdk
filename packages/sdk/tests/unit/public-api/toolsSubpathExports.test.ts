@@ -19,6 +19,7 @@ describe('public API subpath exports', () => {
     const tronExport = sdkPackageJson.exports['./chains/tron']
     const utxoExport = sdkPackageJson.exports['./chains/utxo']
     const decodeExport = sdkPackageJson.exports['./tools/decode']
+    const prepExport = sdkPackageJson.exports['./tools/prep']
     const txExport = sdkPackageJson.exports['./tx']
 
     expect(parseExport).toMatchObject({
@@ -69,6 +70,12 @@ describe('public API subpath exports', () => {
       require: './dist/tools/decode/index.cjs',
       default: './dist/tools/decode/index.cjs',
     })
+    expect(prepExport).toMatchObject({
+      types: './dist/tools/prep/index.d.ts',
+      import: './dist/tools/prep/index.js',
+      require: './dist/tools/prep/index.cjs',
+      default: './dist/tools/prep/index.cjs',
+    })
     expect(txExport).toMatchObject({
       types: './dist/tx/index.d.ts',
       import: './dist/tx/index.js',
@@ -84,6 +91,7 @@ describe('public API subpath exports', () => {
     expect(JSON.stringify(tronExport)).not.toContain('dist/index.node')
     expect(JSON.stringify(utxoExport)).not.toContain('dist/index.node')
     expect(JSON.stringify(decodeExport)).not.toContain('dist/index.node')
+    expect(JSON.stringify(prepExport)).not.toContain('dist/index.node')
     expect(JSON.stringify(txExport)).not.toContain('dist/index.node')
   })
 
@@ -104,6 +112,8 @@ describe('public API subpath exports', () => {
     expect(platformRollupConfig).toContain("distBase: 'chains/utxo'")
     expect(platformRollupConfig).toContain("input: './src/tools/decode/index.ts'")
     expect(platformRollupConfig).toContain("distBase: 'tools/decode'")
+    expect(platformRollupConfig).toContain("input: './src/tools/prep/index.ts'")
+    expect(platformRollupConfig).toContain("distBase: 'tools/prep'")
     expect(platformRollupConfig).toContain("input: './src/tx/index.ts'")
     expect(platformRollupConfig).toContain("distBase: 'tx'")
 
@@ -130,6 +140,9 @@ describe('public API subpath exports', () => {
     )
     expect(typesRollupConfig).toContain(
       "createSubpathTypesConfig('src/tools/decode/index.ts', 'dist/tools/decode/index.d.ts')"
+    )
+    expect(typesRollupConfig).toContain(
+      "createSubpathTypesConfig('src/tools/prep/index.ts', 'dist/tools/prep/index.d.ts')"
     )
     expect(typesRollupConfig).toContain("createSubpathTypesConfig('src/tx/index.ts', 'dist/tx/index.d.ts')")
   })
