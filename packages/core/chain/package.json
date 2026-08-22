@@ -240,6 +240,11 @@
       "import": "./dist/chains/cosmos/cosmosGasLimitRecord.js",
       "default": "./dist/chains/cosmos/cosmosGasLimitRecord.js"
     },
+    "./chains/cosmos/cosmosHrp": {
+      "types": "./dist/chains/cosmos/cosmosHrp.d.ts",
+      "import": "./dist/chains/cosmos/cosmosHrp.js",
+      "default": "./dist/chains/cosmos/cosmosHrp.js"
+    },
     "./chains/cosmos/cosmosMemoCap": {
       "types": "./dist/chains/cosmos/cosmosMemoCap.d.ts",
       "import": "./dist/chains/cosmos/cosmosMemoCap.js",

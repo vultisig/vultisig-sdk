@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import { CosmosChain } from '../../Chain'
-import { COSMOS_CHAIN_ID_HRP, getCosmosChainHrp } from './cosmosHrp'
 import { getCosmosChainId } from './chainInfo'
+import { COSMOS_CHAIN_ID_HRP, getCosmosChainHrp } from './cosmosHrp'
 
 // architecture#1787 — this registry consolidates four independently-maintained,
 // overlapping tables (SDK gov.ts's CHAIN_HRP, ibcTransfer.ts's IBC_CHAIN_HRP,
