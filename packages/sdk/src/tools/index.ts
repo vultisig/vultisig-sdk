@@ -211,6 +211,8 @@ export type {
   CctpChainConfig,
   CctpClaimResult,
   CctpUnsignedTx,
+  GetCctpAttestationOptions,
+  WaitForCctpAttestationOptions,
 } from './bridge'
 export {
   buildCctpBridge,
@@ -220,10 +222,12 @@ export {
   cctpSupportedChains,
   decodeCctpBurnMessage,
   formatUsdc,
+  getCctpAttestation,
   getCctpChain,
   getCctpChainNameByDomain,
   normalizeHexBytes,
   parseUsdcAmount,
+  waitForCctpAttestation,
 } from './bridge'
 
 // Gas / fee primitives (cosmos gas-fee label + gas limits)

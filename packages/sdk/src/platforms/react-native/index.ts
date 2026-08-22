@@ -590,6 +590,8 @@ export type {
   CctpChainConfig,
   CctpClaimResult,
   CctpUnsignedTx,
+  GetCctpAttestationOptions,
+  WaitForCctpAttestationOptions,
 } from '../../tools/bridge'
 export {
   buildCctpBridge,
@@ -598,9 +600,11 @@ export {
   cctpChains,
   cctpSupportedChains,
   formatUsdc,
+  getCctpAttestation,
   getCctpChain,
   normalizeHexBytes,
   parseUsdcAmount,
+  waitForCctpAttestation,
 } from '../../tools/bridge'
 
 // Read-only + unsigned swap helpers already exported from the root SDK entry.

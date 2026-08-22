@@ -903,8 +903,10 @@ export type { BuildSplTransferParams, SplTransferResult } from './tools'
 export type {
   CosmosStakingMsgEnvelope,
   DelegateParams,
+  GetCctpAttestationOptions,
   RedelegateParams,
   UndelegateParams,
+  WaitForCctpAttestationOptions,
   WithdrawRewardsParams,
 } from './tools'
 export type { BuildCosmosWasmExecuteMsgParams, CosmWasmExecuteFund } from './tools'
@@ -988,6 +990,7 @@ export {
   gas,
   GAS_UNITS,
   getCardanoBalance,
+  getCctpAttestation,
   getCctpChain,
   getCctpChainNameByDomain,
   getChainGasPriceGwei,
@@ -1108,6 +1111,7 @@ export {
   TRC20_TRANSFER_SELECTOR,
   utxoFeeRate,
   VerifierClient,
+  waitForCctpAttestation,
 } from './tools'
 
 // The protobuf builder is environment-neutral despite its historical RN path.
