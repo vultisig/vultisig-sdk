@@ -209,12 +209,29 @@ export type EvmScanRequest = {
   data: string
 }
 
+/**
+ * A Solana yield step's pre-built transaction bytes (architecture#1670).
+ * yield.xyz compiles Solana transactions server-side and returns the
+ * serialised bytes directly as `unsignedTransaction` — hex, base64, or a
+ * `{serialized|tx}` string wrapper (mirrors `canonicalizeSolanaStep`'s
+ * candidate extraction in `../stakekit/index.ts`). `serializedTx` is
+ * passed through AS-IS (encoding not normalized here — the SDK's scan
+ * contract is a decode-only signal, not a wired Blockaid request body);
+ * callers that need base58/base64 do that normalization themselves.
+ */
+export type SolanaScanRequest = {
+  kind: 'solana'
+  chain: 'Solana'
+  accountAddress?: string
+  serializedTx: string
+}
+
 export type UnsupportedScanRequest = {
   kind: 'unsupported'
   reason: string
 }
 
-export type ScanRequest = EvmScanRequest | UnsupportedScanRequest
+export type ScanRequest = EvmScanRequest | SolanaScanRequest | UnsupportedScanRequest
 
 // --- API functions ---
 
@@ -529,10 +546,58 @@ function asEvmUnsignedTx(raw: string): EvmUnsignedTx | null {
 }
 
 /**
- * Build a scan_request for ONE step in a yield action's transactions[].
- * Returns an unsupported sentinel when the network/envelope shape can't be decoded.
+ * Extract the raw Solana tx-bytes candidate from a step's `unsignedTransaction`
+ * (hex, base64, or a `{serialized|tx}` string wrapper). Byte-identical
+ * extraction logic to `canonicalizeSolanaStep` in `../stakekit/index.ts` —
+ * duplicated rather than imported because `index.ts` imports THIS module, and
+ * scan-request building needs to stay a level below the canonicalizer to avoid
+ * a circular import.
  */
-export function buildYieldStepScanRequest(tx: YieldTransaction): ScanRequest {
+function extractSolanaTxCandidate(unsignedTransaction: string): string | null {
+  let candidate: string | null = null
+  try {
+    const maybeObj = JSON.parse(unsignedTransaction) as unknown
+    if (maybeObj && typeof maybeObj === 'object') {
+      const obj = maybeObj as { serialized?: unknown; tx?: unknown }
+      candidate =
+        (typeof obj.serialized === 'string' && obj.serialized) || (typeof obj.tx === 'string' && obj.tx) || null
+    }
+  } catch {
+    candidate = unsignedTransaction
+  }
+  if (candidate === null && unsignedTransaction.length > 0) {
+    candidate = unsignedTransaction
+  }
+  return candidate
+}
+
+/**
+ * Build a scan_request for ONE step in a yield action's transactions[].
+ * Returns an unsupported sentinel when the network/envelope shape can't be
+ * decoded, or when the chain has no first-party scan surface yet.
+ *
+ * `solanaAccountAddress` (architecture#1670): the signer's Solana base58
+ * wallet address, needed by downstream Blockaid-style scanners that require
+ * an `account_address` alongside the tx bytes. Absent it, a Solana step still
+ * yields a real `solana` scan_request (bytes present) rather than falling
+ * back to `unsupported` — the caller can attach the address itself if known.
+ */
+export function buildYieldStepScanRequest(tx: YieldTransaction, solanaAccountAddress?: string): ScanRequest {
+  if (tx.network === 'solana') {
+    const candidate = extractSolanaTxCandidate(tx.unsignedTransaction)
+    if (!candidate) {
+      const req: ScanRequest = { kind: 'unsupported', reason: 'no_compiled_txs' }
+      return req
+    }
+    const req: ScanRequest = {
+      kind: 'solana',
+      chain: 'Solana',
+      ...(solanaAccountAddress ? { accountAddress: solanaAccountAddress } : {}),
+      serializedTx: candidate,
+    }
+    return req
+  }
+
   const evmChain = yieldNetworkToEvmChain(tx.network)
   if (!evmChain) {
     const req: ScanRequest = { kind: 'unsupported', reason: 'chain_not_supported' }
@@ -555,17 +620,27 @@ export function buildYieldStepScanRequest(tx: YieldTransaction): ScanRequest {
 }
 
 /**
+ * Build a scan_request for EVERY step in a yield action's transactions[],
+ * 1:1 with the input array — including `unsupported` entries (architecture#1670).
+ * Unlike {@link buildYieldActionScanRequest} (which surfaces only the first
+ * scannable step, for backward compatibility with the historical single-slot
+ * contract), this hands a caller ALL steps so a multi-step action (e.g.
+ * approve→stake) can be scanned in full rather than just its first leg.
+ */
+export function buildYieldActionScanRequests(resp: YieldActionResponse, solanaAccountAddress?: string): ScanRequest[] {
+  if (!resp.transactions?.length) return []
+  return resp.transactions.map(step => buildYieldStepScanRequest(step, solanaAccountAddress))
+}
+
+/**
  * Build the scan_request for a yield action's RESPONSE envelope.
  * Returns the first non-unsupported step scan_request; falls back to
- * `{kind: 'unsupported', reason: 'no_compiled_txs'}` when all steps are unsupported.
+ * `{kind: 'unsupported', reason: 'no_compiled_txs'}` when all steps are
+ * unsupported. Kept for backward compatibility with the historical
+ * single-slot contract — use {@link buildYieldActionScanRequests} (plural)
+ * for full multi-step coverage.
  */
-export function buildYieldActionScanRequest(resp: YieldActionResponse): ScanRequest {
-  if (!resp.transactions?.length) {
-    return { kind: 'unsupported', reason: 'no_compiled_txs' }
-  }
-  for (const step of resp.transactions) {
-    const req = buildYieldStepScanRequest(step)
-    if (req.kind !== 'unsupported') return req
-  }
-  return { kind: 'unsupported', reason: 'no_compiled_txs' }
+export function buildYieldActionScanRequest(resp: YieldActionResponse, solanaAccountAddress?: string): ScanRequest {
+  const requests = buildYieldActionScanRequests(resp, solanaAccountAddress)
+  return requests.find(req => req.kind !== 'unsupported') ?? { kind: 'unsupported', reason: 'no_compiled_txs' }
 }
