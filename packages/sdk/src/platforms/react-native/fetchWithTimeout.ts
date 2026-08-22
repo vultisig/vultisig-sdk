@@ -1,4 +1,9 @@
-export const DEFAULT_RN_FETCH_TIMEOUT_MS = 30_000
+import { DEFAULT_QUERY_TIMEOUT_MS } from '@vultisig/lib-utils/query/queryUrl'
+
+// Reuse the shared queryUrl default so the RN and non-RN HTTP timeouts can't
+// silently drift apart (sdk#1374) - RN's own AbortController-based
+// cancellation lives in `withFetchTimeout` below, only the deadline is shared.
+export const DEFAULT_RN_FETCH_TIMEOUT_MS = DEFAULT_QUERY_TIMEOUT_MS
 
 export class FetchTimeoutError extends Error {
   readonly timeoutMs: number

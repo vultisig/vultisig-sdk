@@ -25,8 +25,11 @@ export type LifiSwapEnabledChain = (typeof lifiSwapEnabledChains)[number]
 
 // Pinned to `ChainId.SOL` in `@lifi/sdk` (from @lifi/types
 // src/chains/base.ts). Kept as a numeric literal so this module does not
-// load `@lifi/sdk` at module-init on Hermes.
-const LIFI_CHAIN_ID_SOL = 1151111081099710 as ChainId
+// load `@lifi/sdk` at module-init on Hermes. Exported (rather than
+// module-private) so a non-RN unit test can assert it against the live
+// `ChainId.SOL` enum value, catching a LiFi renumber instead of drifting
+// silently (sdk#1374).
+export const LIFI_CHAIN_ID_SOL = 1151111081099710 as ChainId
 
 export const lifiSwapChainId: Record<LifiSwapEnabledChain, ChainId> = {
   ...makeRecord(Object.values(EvmChain), chain => hexToNumber(getEvmChainId(chain))),
