@@ -1,6 +1,6 @@
 import { Resolver } from '@vultisig/lib-utils/types/Resolver'
 
-import { Chain } from '../../Chain'
+import { Chain, EvmChain } from '../../Chain'
 import { SigningOutput } from '../../tw/signingOutput'
 import { isTransientBroadcastError } from './transientRetry'
 
@@ -96,16 +96,25 @@ export const isBroadcastTxResult = (value: unknown): value is BroadcastTxResult 
 
 /**
  * `default` — single RPC via the chain client (current behaviour).
- * `raced-public-rpc` — EVM-only opt-in: race public endpoints so a
+ * `raced-public-rpc` — Ethereum-only opt-in: race public endpoints so a
  * Blink-Protect / private-mempool proxy cannot silently drop the tx.
  */
 export type BroadcastStrategy = 'default' | 'raced-public-rpc'
 
-export type BroadcastTxResolver<T extends Chain = Chain> = Resolver<
-  {
-    chain: T
-    tx: SigningOutput<T>
-    strategy?: BroadcastStrategy
-  },
-  Promise<BroadcastTxResult>
->
+export type BroadcastStrategyInput<T extends Chain = Chain> =
+  | {
+      chain: T
+      strategy?: 'default'
+    }
+  | (T extends typeof EvmChain.Ethereum
+      ? {
+          chain: T
+          strategy: 'raced-public-rpc'
+        }
+      : never)
+
+export type BroadcastTxInput<T extends Chain = Chain> = BroadcastStrategyInput<T> & {
+  tx: SigningOutput<T>
+}
+
+export type BroadcastTxResolver<T extends Chain = Chain> = Resolver<BroadcastTxInput<T>, Promise<BroadcastTxResult>>

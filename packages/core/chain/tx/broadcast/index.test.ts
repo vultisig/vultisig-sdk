@@ -142,6 +142,43 @@ describe('broadcastTx transient retry dispatcher', () => {
   })
 })
 
+describe('broadcastTx strategy guard', () => {
+  const tx = {} as any
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it.each([
+    [EvmChain.Polygon, mocks.evm],
+    [OtherChain.Cardano, mocks.cardano],
+  ] as const)(
+    'rejects raced-public-rpc for non-Ethereum chain %s before resolver dispatch',
+    async (chain, resolver) => {
+      // @ts-expect-error raced-public-rpc is restricted to Ethereum at the public type boundary.
+      const result = await broadcastTx({ chain, tx, strategy: 'raced-public-rpc' })
+
+      expect(result).toMatchObject({
+        status: 'failed',
+        code: BroadcastErrorCode.Rejected,
+        retryable: false,
+        cause: expect.objectContaining({
+          message: 'raced-public-rpc broadcast strategy is only supported for Ethereum',
+        }),
+      })
+      expect(resolver).not.toHaveBeenCalled()
+    }
+  )
+
+  it('dispatches raced-public-rpc for Ethereum', async () => {
+    const accepted = broadcastAccepted('ethereum-hash')
+    mocks.evm.mockResolvedValue(accepted)
+
+    await expect(broadcastTx({ chain: EvmChain.Ethereum, tx, strategy: 'raced-public-rpc' })).resolves.toEqual(accepted)
+    expect(mocks.evm).toHaveBeenCalledWith({ chain: EvmChain.Ethereum, tx, strategy: 'raced-public-rpc' })
+  })
+})
+
 describe('broadcast result safety guards', () => {
   const tx = {} as any
 

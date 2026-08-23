@@ -1,3 +1,4 @@
+import { EvmChain } from '@vultisig/core-chain/Chain'
 import { ChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
 
 import { broadcastFailed, BroadcastTxResolver, isBroadcastTxResult, isRetryableBroadcastCause } from './resolver'
@@ -37,12 +38,18 @@ export type {
   BroadcastFailedResult,
   BroadcastProviderDetails,
   BroadcastStrategy,
+  BroadcastStrategyInput,
+  BroadcastTxInput,
   BroadcastTxResolver,
   BroadcastTxResult,
 } from './resolver'
 export { BroadcastErrorCode } from './resolver'
 
 export const broadcastTx: BroadcastTxResolver = async input => {
+  if (input.strategy === 'raced-public-rpc' && input.chain !== EvmChain.Ethereum) {
+    return broadcastFailed(new Error('raced-public-rpc broadcast strategy is only supported for Ethereum'), false)
+  }
+
   const chainKind = getChainKind(input.chain)
   const resolver = resolvers[chainKind]
 
