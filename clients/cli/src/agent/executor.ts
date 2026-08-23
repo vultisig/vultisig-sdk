@@ -6,17 +6,25 @@
  * Each handler takes `(toolCallId, input)` and returns a `RecentAction` ready
  * to be flushed into the next outbound `context.recent_actions`.
  */
-import type { EvmChain, VaultBase, Vultisig } from '@vultisig/sdk'
+import type {
+  EvmChain,
+  ParsedTxReadyEnvelope,
+  ParsedTxReadySend,
+  ParsedTxReadyThorLpDeposit,
+  ParsedTxReadyThorSwapDeposit,
+  VaultBase,
+  Vultisig,
+} from '@vultisig/sdk'
 import {
   Chain,
-  chainFeeCoin,
   computeEip712Hash,
   getChainKind,
   getEvmRpcUrl,
   knownTokensIndex,
-  parseThorSwapMemo,
+  parseTxReadyEnvelope,
   resolveChainReference,
   toCanonicalEvmSignature,
+  TxReadyParseError,
   VaultError,
   VaultErrorCode,
   Vultisig as VultisigSdk,
@@ -974,8 +982,8 @@ export class AgentExecutor {
   }
 
   /**
-   * Non-EVM signing path: parse the agent's tx_ready envelope into a
-   * `vault.send`-shaped argument bag and call through. The SDK already
+   * Non-EVM signing path: parse the agent's tx_ready envelope through the
+   * SDK's canonical discriminated contract and call through. The SDK already
    * handles per-chain prepare/sign/broadcast internally via
    * `VaultBase.prepareSendTx` virtuals — sdk-cli only owns envelope
    * parsing here, not chain-specific signing logic.
@@ -1012,27 +1020,20 @@ export class AgentExecutor {
       )
     }
 
-    // THORChain / MayaChain MsgDeposit branch — agent emitted a deposit
-    // envelope sourcing from the cosmos chain natively. Dispatch by memo
-    // prefix: `=:` is a swap (Phase D), `+:` / `-:` are LP add/remove
-    // (Phase E). Anything else is loan / validator ops, out of scope.
-    if (txArgs.msg_type === 'deposit' && (chain === Chain.THORChain || chain === Chain.MayaChain)) {
-      const memo: string = typeof txArgs.memo === 'string' ? txArgs.memo : ''
-      if (memo.startsWith('=:')) {
-        return this.signThorMsgDepositSwap(serverTxData, chain)
-      }
-      if (memo.startsWith('+:') || memo.startsWith('-:')) {
-        return this.signThorMsgDepositLp(serverTxData, chain)
-      }
+    const parsed = parseTxReadyForCli(serverTxData, chain)
+    if (parsed.kind === 'thor-swap-deposit') {
+      return this.signThorMsgDepositSwap(parsed)
+    }
+    if (parsed.kind === 'thor-lp-deposit') {
+      return this.signThorMsgDepositLp(parsed)
+    }
+    if (parsed.kind !== 'send') {
       throw new VaultError(
-        VaultErrorCode.NotImplemented,
-        `signNonEvmServerTx: MsgDeposit memo prefix not supported on ${chain}: '${memo}'. ` +
-          `Supported prefixes: '=:' (swap), '+:' (LP add), '-:' (LP remove). ` +
-          `Loan / validator ops are out of scope.`
+        VaultErrorCode.InvalidConfig,
+        `signNonEvmServerTx: expected a non-EVM send/deposit envelope, got ${parsed.kind}`
       )
     }
-
-    const args = parseNonEvmEnvelope(serverTxData, chain)
+    const args = parsed
     if (this.verbose)
       process.stderr.write(
         `[sign_non_evm_server_tx] chain=${chain}, to=${args.to}, amount=${args.amount}${args.symbol ? ` ${args.symbol}` : ''}, memo=${args.memo ? `"${args.memo}"` : '(none)'}\n`
@@ -1086,47 +1087,21 @@ export class AgentExecutor {
    * cross-account route cannot be silently replaced with the vault's address.
    * An omitted destination keeps the existing self-swap default.
    */
-  private async signThorMsgDepositSwap(serverTxData: any, chain: Chain): Promise<Record<string, unknown>> {
-    const txArgs = serverTxData?.txArgs ?? {}
-    const memo: string = typeof txArgs.memo === 'string' ? txArgs.memo : ''
-    const parsed = parseThorSwapMemo(memo)
-    if (/\s/.test(parsed.destAddress)) {
-      throw new VaultError(
-        VaultErrorCode.InvalidConfig,
-        `signThorMsgDepositSwap: destination address in memo '${memo}' must not contain whitespace.`
-      )
-    }
-
-    const toChain = parsed.toChain
-
-    // From-asset: derived from the source chain's native ticker (RUNE on
-    // THORChain, CACAO on MayaChain).
-    const fromSymbol = chain === Chain.THORChain ? 'RUNE' : 'CACAO'
-
-    // Convert base-units amount → decimal string for vault.swap. We refuse
-    // to fall through with a default (e.g. '0') because that would mask
-    // malformed envelopes by silently submitting a zero-value swap.
-    const amountRaw = typeof txArgs.amount === 'string' ? txArgs.amount : undefined
-    if (!amountRaw) {
-      throw new VaultError(
-        VaultErrorCode.InvalidConfig,
-        `signThorMsgDepositSwap: missing or non-string 'amount' field on ${chain} envelope`
-      )
-    }
-    const amountDecimal = convertBaseUnitsToDecimal(chain, amountRaw, 'signThorMsgDepositSwap')
+  private async signThorMsgDepositSwap(parsed: ParsedTxReadyThorSwapDeposit): Promise<Record<string, unknown>> {
+    const { amount, chain, fromSymbol, memo, recipient, toChain, toSymbol } = parsed
 
     if (this.verbose)
       process.stderr.write(
-        `[sign_thor_msg_deposit_swap] ${fromSymbol}@${chain} → ${parsed.destAsset}@${toChain}, amount=${amountDecimal}, memo='${memo}'\n`
+        `[sign_thor_msg_deposit_swap] ${fromSymbol}@${chain} → ${toSymbol}@${toChain}, amount=${amount}, memo='${memo}'\n`
       )
 
     const result = await this.vault.swap({
       fromChain: chain,
       fromSymbol,
       toChain,
-      toSymbol: parsed.destAsset,
-      amount: amountDecimal,
-      ...(parsed.destAddress && { recipient: parsed.destAddress }),
+      toSymbol,
+      amount,
+      ...(recipient && { recipient }),
     })
 
     if (result.dryRun) {
@@ -1162,32 +1137,17 @@ export class AgentExecutor {
    * as base units directly (no decimal conversion) since the agent
    * already emits RUNE / CACAO in base units.
    */
-  private async signThorMsgDepositLp(serverTxData: any, chain: Chain): Promise<Record<string, unknown>> {
-    const txArgs = serverTxData?.txArgs ?? {}
-    const memo: string = typeof txArgs.memo === 'string' ? txArgs.memo : ''
-    const amountRaw: string | undefined = typeof txArgs.amount === 'string' ? txArgs.amount : undefined
-    if (!amountRaw) {
-      throw new VaultError(
-        VaultErrorCode.InvalidConfig,
-        `signThorMsgDepositLp: missing or non-string 'amount' field on ${chain} envelope`
-      )
-    }
-    // Defense against magnitude-bug envelopes (mirrors parseNonEvmEnvelope's
-    // 26-digit cap). Pass base units through to vault.signMsgDeposit verbatim.
-    if (amountRaw.length > MAX_AMOUNT_DIGITS) {
-      throw new VaultError(
-        VaultErrorCode.InvalidAmount,
-        `signThorMsgDepositLp: amount '${amountRaw}' for ${chain} exceeds ${MAX_AMOUNT_DIGITS}-digit safety bound. ` +
-          'Likely a quote-side bug. Refusing to sign.'
-      )
-    }
+  private async signThorMsgDepositLp(parsed: ParsedTxReadyThorLpDeposit): Promise<Record<string, unknown>> {
+    const { amountBaseUnits, chain, memo } = parsed
 
     if (this.verbose)
-      process.stderr.write(`[sign_thor_msg_deposit_lp] chain=${chain}, memo='${memo}', amountBaseUnits=${amountRaw}\n`)
+      process.stderr.write(
+        `[sign_thor_msg_deposit_lp] chain=${chain}, memo='${memo}', amountBaseUnits=${amountBaseUnits}\n`
+      )
 
     const result = await this.vault.signMsgDeposit({
       chain,
-      amountBaseUnits: amountRaw,
+      amountBaseUnits,
       memo,
     })
     this.pendingPayloads.clear()
@@ -2116,15 +2076,7 @@ export function extractNestedTx(txReadyData: any): any {
 /**
  * Argument bag for `vault.send`, parsed from a non-EVM tx_ready envelope.
  */
-export type NonEvmSendArgs = {
-  chain: Chain
-  to: string
-  /** Decimal amount string (human units), suitable for `vault.send`. */
-  amount: string
-  /** Optional token symbol; omit for native sends. */
-  symbol?: string
-  memo?: string
-}
+export type NonEvmSendArgs = Omit<ParsedTxReadySend, 'kind' | 'envelope'>
 
 /**
  * Parse a tx_ready envelope from the agent into `vault.send`-shaped args.
@@ -2164,84 +2116,36 @@ export type NonEvmSendArgs = {
  * never reach those branches today (envelopes for those chains hit the
  * stale-CLI-build error pre-PR-D), but the throw is defensive.
  */
-const MAX_AMOUNT_DIGITS = 26
-
-/**
- * Convert a base-unit integer-string amount → decimal string using the
- * chain's native fee-coin decimals. Used by both `parseNonEvmEnvelope`
- * (non-EVM send dispatch) and `signThorMsgDepositSwap` (RUNE/CACAO swap
- * dispatch). Keeping the validation logic in one place ensures both paths
- * fail closed identically on:
- *
- * 1. **Magnitude-bug envelopes** — amount strings longer than 26 digits
- *    (10^26 wei = 10^8 ETH = ~$300B). Defensive bound against quote-side
- *    bugs producing magnitude-wrong envelopes.
- * 2. **Unregistered chain decimals** — `chainFeeCoin[chain]?.decimals`
- *    must not silently fall back to a default. A missing registry entry
- *    on a chain this dispatcher claims to support is a real bug; we
- *    throw `UnsupportedChain` instead of substituting 8 and producing a
- *    magnitude-wrong swap.
- * 3. **Non-numeric / overflow amounts** — `BigInt()` parse failures are
- *    surfaced as `InvalidAmount` with context.
- */
-function convertBaseUnitsToDecimal(chain: Chain, amountRaw: string, context: string): string {
-  if (amountRaw.length > MAX_AMOUNT_DIGITS) {
-    throw new VaultError(
-      VaultErrorCode.InvalidAmount,
-      `${context}: amount '${amountRaw}' for ${chain} exceeds ${MAX_AMOUNT_DIGITS}-digit safety bound. ` +
-        'Likely a quote-side bug. Refusing to sign.'
-    )
-  }
-  const decimals = chainFeeCoin[chain]?.decimals
-  if (decimals === undefined) {
-    throw new VaultError(VaultErrorCode.UnsupportedChain, `${context}: no native decimals registered for ${chain}`)
-  }
+function parseTxReadyForCli(serverTxData: unknown, defaultChain: Chain): ParsedTxReadyEnvelope {
   try {
-    return formatUnits(BigInt(amountRaw), decimals)
-  } catch (err: any) {
-    throw new VaultError(
-      VaultErrorCode.InvalidAmount,
-      `${context}: failed to convert amount '${amountRaw}' for ${chain}: ${err?.message ?? err}`
-    )
+    return parseTxReadyEnvelope(serverTxData, { defaultChain })
+  } catch (error) {
+    if (!(error instanceof TxReadyParseError)) throw error
+    const code =
+      error.code === 'INVALID_AMOUNT'
+        ? VaultErrorCode.InvalidAmount
+        : error.code === 'UNKNOWN_CHAIN'
+          ? VaultErrorCode.UnsupportedChain
+          : error.code === 'UNSUPPORTED_DEPOSIT' || error.code === 'UNSUPPORTED_ENVELOPE'
+            ? VaultErrorCode.NotImplemented
+            : VaultErrorCode.InvalidConfig
+    throw new VaultError(code, error.message)
   }
 }
 
 export function parseNonEvmEnvelope(serverTxData: any, chain: Chain): NonEvmSendArgs {
-  const txArgs = serverTxData?.txArgs ?? serverTxData
-  if (!txArgs || typeof txArgs !== 'object') {
+  if (!serverTxData || typeof serverTxData !== 'object') {
     throw new VaultError(VaultErrorCode.InvalidConfig, 'parseNonEvmEnvelope: envelope missing txArgs')
   }
-
-  const to: string | undefined = typeof txArgs.to === 'string' ? txArgs.to : undefined
-  if (!to) {
-    throw new VaultError(VaultErrorCode.InvalidConfig, `parseNonEvmEnvelope: missing 'to' field for ${chain}`)
+  const parsed = parseTxReadyForCli(serverTxData, chain)
+  if (parsed.kind !== 'send') {
+    throw new VaultError(
+      VaultErrorCode.InvalidConfig,
+      `parseNonEvmEnvelope: expected send envelope, got ${parsed.kind}`
+    )
   }
-
-  const amountRaw: string | undefined = typeof txArgs.amount === 'string' ? txArgs.amount : undefined
-  if (!amountRaw) {
-    throw new VaultError(VaultErrorCode.InvalidConfig, `parseNonEvmEnvelope: missing 'amount' field for ${chain}`)
-  }
-
-  // Convert base units (e.g. "1000" sats) → decimal string ("0.00001")
-  // using the chain's native fee-coin decimals. vault.send's parseAmount
-  // re-multiplies by the same decimals to recover bigint base units.
-  const amountDecimal = convertBaseUnitsToDecimal(chain, amountRaw, 'parseNonEvmEnvelope')
-
-  // Token symbol — for native sends, leave undefined (vault.send defaults
-  // to native). resolved.labels.token_resolved is the agent-resolved
-  // symbol; for native it equals the chain's native ticker (BTC/SOL/RUNE).
-  // Phase D PR 0 only wires native sends; non-native (e.g. SPL, TRC-20)
-  // is PR 1+ scope.
-  let symbol: string | undefined
-  const tokenResolved = serverTxData?.resolved?.labels?.token_resolved
-  const nativeTicker = chainFeeCoin[chain]?.ticker
-  if (typeof tokenResolved === 'string' && tokenResolved !== nativeTicker) {
-    symbol = tokenResolved
-  }
-
-  const memo: string | undefined = typeof txArgs.memo === 'string' && txArgs.memo.length > 0 ? txArgs.memo : undefined
-
-  return { chain, to, amount: amountDecimal, symbol, memo }
+  const { amount, memo, symbol, to } = parsed
+  return { chain: parsed.chain, to, amount, symbol, memo }
 }
 
 /**
