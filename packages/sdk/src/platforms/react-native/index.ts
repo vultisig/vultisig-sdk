@@ -164,6 +164,24 @@ export { keysign } from '@vultisig/core-mpc/keysign'
 // That barrel also exports ChainDiscoveryService, whose static import graph
 // reaches the eager core getCoinBalance dispatcher and pulls Hermes-hostile
 // Solana / Polkadot balance resolver deps into module init.
+export {
+  assertSeedphraseImportSupportsChains,
+  getUnsupportedSeedphraseImportChains,
+  isSeedphraseImportSupportedChain,
+  SEEDPHRASE_IMPORT_SUPPORTED_CHAINS,
+  SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS,
+} from '../../constants'
+export {
+  BIP39_WORDLISTS,
+  detectMnemonicLanguage,
+  findInvalidWords,
+  findInvalidWordsAcrossAllLanguages,
+  getWordlist,
+  normalizeMnemonic,
+} from '../../seedphrase/languageDetection'
+export type { ChainPrivateKey, DeriveChainPrivateKeysOptions, DerivedChainKey } from '../../seedphrase/MasterKeyDeriver'
+export { cosmosPathTerra, MasterKeyDeriver } from '../../seedphrase/MasterKeyDeriver'
+export { cleanMnemonic, SeedphraseValidator, validateSeedphrase } from '../../seedphrase/SeedphraseValidator'
 export type {
   Bip39Language,
   ChainDiscoveryPhase,
@@ -179,24 +197,6 @@ export type {
   SeedphraseWordCount,
 } from '../../seedphrase/types'
 export { BIP39_LANGUAGES, SEEDPHRASE_WORD_COUNTS } from '../../seedphrase/types'
-export {
-  BIP39_WORDLISTS,
-  detectMnemonicLanguage,
-  findInvalidWords,
-  findInvalidWordsAcrossAllLanguages,
-  getWordlist,
-  normalizeMnemonic,
-} from '../../seedphrase/languageDetection'
-export { cleanMnemonic, SeedphraseValidator, validateSeedphrase } from '../../seedphrase/SeedphraseValidator'
-export type { ChainPrivateKey, DerivedChainKey, DeriveChainPrivateKeysOptions } from '../../seedphrase/MasterKeyDeriver'
-export { cosmosPathTerra, MasterKeyDeriver } from '../../seedphrase/MasterKeyDeriver'
-export {
-  assertSeedphraseImportSupportsChains,
-  getUnsupportedSeedphraseImportChains,
-  isSeedphraseImportSupportedChain,
-  SEEDPHRASE_IMPORT_SUPPORTED_CHAINS,
-  SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS,
-} from '../../constants'
 
 // Vault-backup import/export crypto contract. The RN-safe implementations live
 // under this platform surface already, but first-party mobile consumers could
