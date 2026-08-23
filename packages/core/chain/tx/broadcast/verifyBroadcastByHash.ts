@@ -35,7 +35,7 @@ export const broadcastVerificationBaseDelayMs = 500
  * before the original error is rethrown. Verification is a safety net, never
  * a new failure mode.
  */
-export const verifyBroadcastByHash = async <T extends Chain>({ chain, tx, error }: VerifyInput<T>): Promise<void> => {
+export const verifyBroadcastByHash = async <T extends Chain>({ chain, tx, error }: VerifyInput<T>): Promise<string> => {
   let hash: string
 
   try {
@@ -57,7 +57,7 @@ export const verifyBroadcastByHash = async <T extends Chain>({ chain, tx, error 
       const isKnownPending = result.status === 'pending' && result.isKnown !== false
 
       if (result.status === 'success' || isKnownPending) {
-        return
+        return hash
       }
 
       if (result.status === 'error') {
