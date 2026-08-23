@@ -11,60 +11,119 @@
  * module NEVER signs and NEVER broadcasts — the caller routes the envelope
  * through the wallet's signing path.
  *
- * Chains are keyed by the SDK `IbcEnabledCosmosChain` enum and resolve their
- * LCD root from the shared `cosmosRpcUrl` registry, so there's no second
- * chain-id/REST-URL table to drift. Address validation uses `@cosmjs/encoding`
- * (already a core-chain dependency) rather than a hand-rolled bech32 decoder.
+ * First-class wallet chains reuse the SDK's `IbcEnabledCosmosChain`, chain-id,
+ * and LCD registries. Governance-only chains additionally supported by the
+ * agent backend are declared here because they do not have wallet/RPC support
+ * in core-chain. Address validation uses `@cosmjs/encoding` (already a
+ * core-chain dependency) rather than a hand-rolled bech32 decoder.
  */
 import { fromBech32, toBech32 } from '@cosmjs/encoding'
 import { IbcEnabledCosmosChain } from '@vultisig/core-chain/Chain'
 import { getCosmosChainId } from '@vultisig/core-chain/chains/cosmos/chainInfo'
 import { cosmosRpcUrl } from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
-import { getAuthAccountUrl } from '@vultisig/core-chain/chains/cosmos/staking/lcdQueries'
 
 // ── chain support ──────────────────────────────────────────────────────────
 
+type GovernanceOnlyChain = 'Celestia' | 'Injective' | 'Neutron' | 'Sei' | 'Stride'
+
 /** Chains this module serves governance reads/votes for. */
-export type GovChain = IbcEnabledCosmosChain
+export type GovChain = IbcEnabledCosmosChain | GovernanceOnlyChain
 
-/**
- * Expected bech32 HRP (human-readable prefix) per gov chain, used to reject a
- * voter address that belongs to a different chain (e.g. an `osmo1…` address
- * submitted as a Cosmos Hub vote). No centralized HRP map exists in core-chain,
- * so it's declared here for the small, stable set of gov chains.
- */
-const CHAIN_HRP: Record<GovChain, string> = {
-  Cosmos: 'cosmos',
-  Osmosis: 'osmo',
-  Dydx: 'dydx',
-  Kujira: 'kujira',
-  Terra: 'terra',
-  TerraClassic: 'terra',
-  Noble: 'noble',
-  Akash: 'akash',
+/** Network chain IDs accepted as aliases for their canonical `GovChain`. */
+export type GovChainId =
+  | 'akashnet-2'
+  | 'celestia'
+  | 'columbus-5'
+  | 'cosmoshub-4'
+  | 'dydx-mainnet-1'
+  | 'injective-1'
+  | 'kaiyo-1'
+  | 'neutron-1'
+  | 'noble-1'
+  | 'osmosis-1'
+  | 'pacific-1'
+  | 'phoenix-1'
+  | 'stride-1'
+
+/** Canonical SDK chain name or its network chain ID. */
+export type GovChainInput = GovChain | GovChainId
+
+type GovChainConfig = {
+  chainId: GovChainId
+  hrp: string
+  lcdRoot: string
+  usesGovV1: boolean
 }
 
+const coreGovChainConfig = (chain: IbcEnabledCosmosChain, hrp: string, usesGovV1 = true): GovChainConfig => ({
+  chainId: getCosmosChainId(chain) as GovChainId,
+  hrp,
+  lcdRoot: cosmosRpcUrl[chain],
+  usesGovV1,
+})
+
 /**
- * Whether a chain serves the modern `gov/v1` endpoint. TerraClassic
- * (columbus-5) runs an older Cosmos SDK and only exposes `gov/v1beta1`; the
- * rest prefer `gov/v1` and fall back to `v1beta1` on 404/501.
+ * Governance transport metadata. First-class wallet chains keep using the
+ * core-chain registries; the five governance-only entries mirror the backend's
+ * wider canonical set. Their REST roots are public endpoints from the Cosmos
+ * chain registry.
  */
-const GOV_V1: Record<GovChain, boolean> = {
-  Cosmos: true,
-  Osmosis: true,
-  Dydx: true,
-  Kujira: true,
-  Terra: true,
-  TerraClassic: false,
-  Noble: true,
-  Akash: true,
+const GOV_CHAIN_CONFIG: Record<GovChain, GovChainConfig> = {
+  Cosmos: coreGovChainConfig('Cosmos', 'cosmos'),
+  Osmosis: coreGovChainConfig('Osmosis', 'osmo'),
+  Dydx: coreGovChainConfig('Dydx', 'dydx'),
+  Kujira: coreGovChainConfig('Kujira', 'kujira'),
+  Terra: coreGovChainConfig('Terra', 'terra'),
+  TerraClassic: coreGovChainConfig('TerraClassic', 'terra', false),
+  Noble: coreGovChainConfig('Noble', 'noble'),
+  Akash: coreGovChainConfig('Akash', 'akash'),
+  Sei: {
+    chainId: 'pacific-1',
+    hrp: 'sei',
+    lcdRoot: 'https://sei-rest.publicnode.com',
+    usesGovV1: false,
+  },
+  Injective: {
+    chainId: 'injective-1',
+    hrp: 'inj',
+    lcdRoot: 'https://injective-rest.publicnode.com',
+    usesGovV1: true,
+  },
+  Neutron: {
+    chainId: 'neutron-1',
+    hrp: 'neutron',
+    lcdRoot: 'https://neutron-rest.publicnode.com',
+    usesGovV1: true,
+  },
+  Celestia: {
+    chainId: 'celestia',
+    hrp: 'celestia',
+    lcdRoot: 'https://celestia-rest.publicnode.com',
+    usesGovV1: true,
+  },
+  Stride: {
+    chainId: 'stride-1',
+    hrp: 'stride',
+    lcdRoot: 'https://stride-api.polkachu.com',
+    usesGovV1: true,
+  },
 }
 
-const isGovChain = (chain: string): chain is GovChain => Object.prototype.hasOwnProperty.call(CHAIN_HRP, chain)
+const isGovChain = (chain: string): chain is GovChain => Object.prototype.hasOwnProperty.call(GOV_CHAIN_CONFIG, chain)
 
-const SUPPORTED_CHAINS = Object.keys(CHAIN_HRP).sort().join(', ')
+const GOV_CHAIN_BY_ID = Object.assign(
+  Object.create(null) as Record<GovChainId, GovChain>,
+  Object.fromEntries(Object.entries(GOV_CHAIN_CONFIG).map(([chain, config]) => [config.chainId, chain]))
+)
 
-const lcdRoot = (chain: GovChain): string => cosmosRpcUrl[chain]
+const resolveGovChain = (input: GovChainInput): GovChain | undefined => {
+  if (isGovChain(input)) return input
+  return Object.prototype.hasOwnProperty.call(GOV_CHAIN_BY_ID, input) ? GOV_CHAIN_BY_ID[input as GovChainId] : undefined
+}
+
+const SUPPORTED_CHAINS = [...Object.keys(GOV_CHAIN_CONFIG), ...Object.keys(GOV_CHAIN_BY_ID)].sort().join(', ')
+
+const lcdRoot = (chain: GovChain): string => GOV_CHAIN_CONFIG[chain].lcdRoot
 
 // ── proposal status maps ────────────────────────────────────────────────────
 
@@ -79,10 +138,10 @@ const STATUS_V1: Record<ProposalStatus, string> = {
 }
 
 const STATUS_V1BETA1: Record<ProposalStatus, string> = {
-  voting: 'PROPOSAL_STATUS_VOTING_PERIOD',
-  passed: 'PROPOSAL_STATUS_PASSED',
-  rejected: 'PROPOSAL_STATUS_REJECTED',
-  deposit_period: 'PROPOSAL_STATUS_DEPOSIT_PERIOD',
+  voting: '2',
+  passed: '3',
+  rejected: '4',
+  deposit_period: '1',
   all: '0',
 }
 
@@ -304,7 +363,7 @@ function parseAuthAccount(resp: AuthAccountResponse): { accountNumber: string; s
 // ── public: read proposals ───────────────────────────────────────────────────
 
 export type GetCosmosGovernanceProposalsParams = {
-  chain: GovChain
+  chain: GovChainInput
   /** Status filter. Defaults to `voting`. */
   status?: ProposalStatus
   /** Max proposals per page (1-100, default 20). */
@@ -328,15 +387,16 @@ export type GetCosmosGovernanceProposalsParams = {
 export async function getCosmosGovernanceProposals(
   params: GetCosmosGovernanceProposalsParams
 ): Promise<GetGovernanceProposalsResult> {
-  const { chain, status = 'voting', limit: rawLimit, fetchImpl, signal } = params
-  if (!isGovChain(chain)) {
-    throw new Error(`unsupported chain "${chain}" — supported: ${SUPPORTED_CHAINS}`)
+  const { chain: chainInput, status = 'voting', limit: rawLimit, fetchImpl, signal } = params
+  const chain = resolveGovChain(chainInput)
+  if (!chain) {
+    throw new Error(`unsupported chain "${chainInput}" — supported: ${SUPPORTED_CHAINS}`)
   }
   const limit = Math.min(Math.max(rawLimit ?? 20, 1), 100)
   const opts: FetchOpts = { fetchImpl, signal }
 
   let proposals: GovernanceProposal[]
-  if (GOV_V1[chain]) {
+  if (GOV_CHAIN_CONFIG[chain].usesGovV1) {
     try {
       proposals = await fetchProposalsV1(chain, status, limit, opts)
     } catch (e) {
@@ -353,7 +413,7 @@ export async function getCosmosGovernanceProposals(
 
   return {
     chain,
-    chainId: getCosmosChainId(chain),
+    chainId: GOV_CHAIN_CONFIG[chain].chainId,
     status,
     count: proposals.length,
     proposals,
@@ -363,7 +423,7 @@ export async function getCosmosGovernanceProposals(
 // ── public: build unsigned vote envelope ─────────────────────────────────────
 
 export type PrepareCosmosVoteParams = {
-  chain: GovChain
+  chain: GovChainInput
   /** Bech32 voter address (HRP must match the chain). */
   voter: string
   /** Governance proposal ID (positive integer string, e.g. "42"). */
@@ -393,14 +453,15 @@ export type PrepareCosmosVoteParams = {
  * ```
  */
 export async function prepareCosmosVote(params: PrepareCosmosVoteParams): Promise<CosmosVoteEnvelope> {
-  const { chain, voter: rawVoter, proposalId, option, metadata, fetchImpl, signal } = params
+  const { chain: chainInput, voter: rawVoter, proposalId, option, metadata, fetchImpl, signal } = params
 
-  if (!isGovChain(chain)) {
-    throw new Error(`unsupported chain "${chain}" — supported: ${SUPPORTED_CHAINS}`)
+  const chain = resolveGovChain(chainInput)
+  if (!chain) {
+    throw new Error(`unsupported chain "${chainInput}" — supported: ${SUPPORTED_CHAINS}`)
   }
 
   // Validate voter bech32 address + chain HRP, then normalize (re-encode).
-  const expectedHrp = CHAIN_HRP[chain]
+  const expectedHrp = GOV_CHAIN_CONFIG[chain].hrp
   let decoded: ReturnType<typeof fromBech32>
   try {
     decoded = fromBech32(rawVoter.trim())
@@ -437,7 +498,10 @@ export async function prepareCosmosVote(params: PrepareCosmosVoteParams): Promis
   let accountNumber = '0'
   let sequence = '0'
   try {
-    const resp = await lcdGet<AuthAccountResponse>(getAuthAccountUrl(chain, voter), { fetchImpl, signal })
+    const resp = await lcdGet<AuthAccountResponse>(`${lcdRoot(chain)}/cosmos/auth/v1beta1/accounts/${voter}`, {
+      fetchImpl,
+      signal,
+    })
     const parsed = parseAuthAccount(resp)
     if (parsed) {
       accountNumber = parsed.accountNumber
@@ -461,7 +525,7 @@ export async function prepareCosmosVote(params: PrepareCosmosVoteParams): Promis
     action: 'governance_vote',
     signingMode: 'ecdsa_secp256k1',
     chain,
-    chainId: getCosmosChainId(chain),
+    chainId: GOV_CHAIN_CONFIG[chain].chainId,
     voter,
     proposalId,
     option,
