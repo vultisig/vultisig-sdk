@@ -373,15 +373,18 @@ export type {
   BuildSplTransferParams,
   ConsolidateChain,
   ConsolidateUtxo,
+  EvmTxNumberish,
   GetMaxSendAmountFromKeysParams,
   PrepareJettonTransferTxFromKeysParams,
   PreparePolkadotAssetSendParams,
   PreparePolkadotAssetSendResult,
+  PrepareRawEvmTxFromKeysParams,
   PrepareSendTxFromKeysParams,
   PrepareSwapTxFromKeysParams,
   PrepareTrc20TransferFromKeysParams,
   PrepareUtxoConsolidateResult,
   PrepareUtxoConsolidateTxFromKeysParams,
+  RawEvmTxEnvelope,
   SplTransferResult,
   UnsignedTrc20Transfer,
   VaultIdentity,
@@ -430,6 +433,11 @@ export async function getMaxSendAmountFromKeys(...args: unknown[]) {
 export async function prepareContractCallTxFromKeys(...args: unknown[]) {
   const mod = await import('../../tools/prep/contractCall')
   return mod.prepareContractCallTxFromKeys(...(args as Parameters<typeof mod.prepareContractCallTxFromKeys>))
+}
+
+export async function prepareRawEvmTxFromKeys(...args: unknown[]) {
+  const mod = await import('../../tools/prep/rawEvm')
+  return mod.prepareRawEvmTxFromKeys(...(args as Parameters<typeof mod.prepareRawEvmTxFromKeys>))
 }
 
 export async function prepareJettonTransferTxFromKeys(...args: unknown[]) {

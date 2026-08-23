@@ -37,6 +37,7 @@ import type { Storage } from '../storage/types'
 // barrel pulls in cosmos.ts → buildCosmosPayload → @vultisig/core-chain THORChain
 // modules at module-load time, which breaks vitest setups that mock chainFeeCoin.
 import { computeMaxSendFromBalance } from '../tools/prep/maxSend'
+import type { PrepareRawEvmTxFromKeysParams } from '../tools/prep/rawEvm'
 import { vaultDataToIdentity } from '../tools/prep/types'
 import { pollTxStatusUntilFinal } from '../tx'
 // Types
@@ -1287,6 +1288,14 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   ): Promise<KeysignPayload> {
     const senderAddress = params.senderAddress ?? (await this.address(params.chain))
     return this.transactionBuilder.prepareContractCallTx({ ...params, senderAddress })
+  }
+
+  /** Prepare an already-built raw EVM transaction without caller-side payload patching. */
+  async prepareRawEvmTx(
+    params: Omit<PrepareRawEvmTxFromKeysParams, 'senderAddress'> & { senderAddress?: string }
+  ): Promise<KeysignPayload> {
+    const senderAddress = params.senderAddress ?? (await this.address(params.chain))
+    return this.transactionBuilder.prepareRawEvmTx({ ...params, senderAddress })
   }
 
   /**
