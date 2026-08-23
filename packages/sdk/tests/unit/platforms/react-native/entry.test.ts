@@ -117,6 +117,22 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.DEFAULT_CHAINS).toEqual(['Bitcoin', 'Ethereum', 'THORChain', 'Solana', 'BSC'])
   })
 
+  it('re-exports the complete canonical seedphrase helper family from the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const seedphrase = await import('../../../../src/seedphrase')
+
+    for (const [name, value] of Object.entries(seedphrase)) {
+      expect(rn[name as keyof typeof rn]).toBe(value)
+    }
+
+    expect(rn.normalizeMnemonic('  ABANDON\nABANDON  ')).toBe('abandon abandon')
+    expect(
+      rn.detectMnemonicLanguage(
+        'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'
+      )
+    ).toBe('english')
+  })
+
   it('exports the canonical Cosmos fee helpers, gas-limit tables, and cosmos chain subsets from the RN entry', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 

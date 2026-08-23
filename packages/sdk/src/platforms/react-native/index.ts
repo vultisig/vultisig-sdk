@@ -158,9 +158,10 @@ export { deriveAddress, getCoinType, getPublicKey, isValidAddress, isValidTokenI
 // MPC keysign (uses MpcEngine — no direct WASM imports)
 export { keysign } from '@vultisig/core-mpc/keysign'
 
-// Seedphrase validation (uses @scure/bip39, RN-compatible)
-export { validateSeedphrase } from '../../seedphrase/SeedphraseValidator'
-export { SEEDPHRASE_WORD_COUNTS } from '../../seedphrase/types'
+// Canonical seedphrase helpers, types, and import/discovery services.
+// Keep this surface in lockstep with @vultisig/sdk/seedphrase so React Native
+// consumers do not need platform-local mnemonic or chain-discovery copies.
+export * from '../../seedphrase'
 
 // Vault-backup import/export crypto contract. The RN-safe implementations live
 // under this platform surface already, but first-party mobile consumers could
