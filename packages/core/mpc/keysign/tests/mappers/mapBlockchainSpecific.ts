@@ -27,11 +27,11 @@ export const mapBlockchainSpecific = (bsRaw: any) => {
         gasLimit: bigIntOrUndefined(c.gas_limit ?? c.gasLimit),
         sequence: numberOrUndefined(c.sequence),
         transactionType: numberOrUndefined(c.transaction_type ?? c.transactionType),
-        ibcDenomTrace: ibc
+        ibcDenomTraces: ibc
           ? {
               baseDenom: ibc.base_denom ?? ibc.baseDenom,
               path: ibc.path,
-              height: ibc.height, // keep as string (fixtures use "block_height_epoch" format)
+              latestBlock: ibc.height ?? ibc.latest_block ?? ibc.latestBlock,
             }
           : undefined,
       },

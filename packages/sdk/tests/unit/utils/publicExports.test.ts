@@ -1,9 +1,14 @@
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
+import * as isValidTokenIdModule from '@vultisig/core-chain/utils/isValidTokenId'
 import { describe, expect, it } from 'vitest'
 
 import * as sdk from '../../../src/index'
 import * as dangerousAddresses from '../../../src/utils/dangerousAddresses'
+import {
+  buildSignAminoKeysignPayload as canonicalBuildSignAminoKeysignPayload,
+  buildSignDirectKeysignPayload as canonicalBuildSignDirectKeysignPayload,
+} from '../../../src/vault/services/cosmos'
 import { cosmosTxFeeGasParityCases } from '../../fixtures/cosmosTxFeeGasParity'
 
 const dangerousAddressCanonicalExports = [
@@ -151,6 +156,18 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.getCustomRpcOverrides()).toEqual({ [sdk.Chain.Ethereum]: 'https://rpc.example' })
     sdk.clearCustomRpcOverride(sdk.Chain.Ethereum)
     expect(sdk.getCustomRpcOverride(sdk.Chain.Ethereum)).toBeUndefined()
+  })
+
+  it('exports isValidTokenId for non-address token families (Sui struct tags, XRPL currency.issuer)', () => {
+    expect(sdk.isValidTokenId).toBe(isValidTokenIdModule.isValidTokenId)
+
+    // Sui + a malformed Ripple id never reach the walletCore-dependent
+    // address-validation branch, so these are safe to exercise for real here.
+    expect(sdk.isValidTokenId({ chain: sdk.Chain.Sui, id: '0x2::sui::SUI', walletCore: {} as never })).toBe(true)
+    expect(sdk.isValidTokenId({ chain: sdk.Chain.Sui, id: 'not-a-struct-tag', walletCore: {} as never })).toBe(false)
+    expect(sdk.isValidTokenId({ chain: sdk.Chain.Ripple, id: 'not-a-composite-id', walletCore: {} as never })).toBe(
+      false
+    )
   })
 
   it('exports prepareTrc20TransferFromKeys (pure-crypto TRC-20 builder for mcp-ts/backend)', () => {
@@ -344,6 +361,11 @@ describe('@vultisig/sdk public exports', () => {
     const requiredFee = (gasLimit * 28_325n) / 1000n
     expect(sdk.TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS).toBeGreaterThanOrEqual(requiredFee)
     expect(msg.typeUrl).toBe('/cosmos.staking.v1beta1.MsgBeginRedelegate')
+  })
+
+  it('exports the canonical Cosmos custom-signing payload builders', () => {
+    expect(sdk.buildSignAminoKeysignPayload).toBe(canonicalBuildSignAminoKeysignPayload)
+    expect(sdk.buildSignDirectKeysignPayload).toBe(canonicalBuildSignDirectKeysignPayload)
   })
 
   it('exports seedphrase import chain support policy for consumers', () => {
