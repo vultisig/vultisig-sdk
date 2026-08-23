@@ -32,7 +32,8 @@ describe('usdcCalldata', () => {
     expect(isValidDepositMemo('sub_ZZZZ2222AAAA')).toBe(true)
     expect(isValidDepositMemo('Cp_AB23CD45EF67')).toBe(false)
     expect(isValidDepositMemo('pack_AB23CD45EF67')).toBe(false)
-    expect(isValidDepositMemo('cp_short')).toBe(false)
+    expect(isValidDepositMemo('cp_AB23CD45EF6')).toBe(false)
+    expect(isValidDepositMemo('cp_AB23CD45EF60')).toBe(false)
   })
 
   it('pins router v1 and treats a missing version as v1; any other version fails closed', () => {
@@ -68,6 +69,22 @@ describe('usdcCalldata', () => {
       amount: 5_000_000n,
     })
     expect(decodeDepositWithMemoCalldata(buildApproveCalldata(SPENDER, 1n))).toBeNull()
+  })
+
+  it('rejects invalid deposit memos before encoding', () => {
+    expect(() => buildDepositWithMemoCalldata(TOKEN, 1n, 'cp_AB23CD45EF6')).toThrow(/invalid deposit memo/)
+    expect(() => buildDepositWithMemoCalldata(TOKEN, 1n, 'sub_AB23CD45EF60')).toThrow(/invalid deposit memo/)
+  })
+
+  it('accepts uint256 amount bounds and rejects values outside them', () => {
+    const maxUint256 = (1n << 256n) - 1n
+
+    expect(decodeDepositWithMemoCalldata(buildDepositWithMemoCalldata(TOKEN, 0n, 'cp_AB23CD45EF67'))?.amount).toBe(0n)
+    expect(
+      decodeDepositWithMemoCalldata(buildDepositWithMemoCalldata(TOKEN, maxUint256, 'cp_AB23CD45EF67'))?.amount
+    ).toBe(maxUint256)
+    expect(() => buildDepositWithMemoCalldata(TOKEN, -1n, 'cp_AB23CD45EF67')).toThrow(/uint256 range/)
+    expect(() => buildDepositWithMemoCalldata(TOKEN, maxUint256 + 1n, 'cp_AB23CD45EF67')).toThrow(/uint256 range/)
   })
 
   it('exposes the CREATE2 AgentRouter address', () => {

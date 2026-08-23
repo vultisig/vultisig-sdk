@@ -1,6 +1,6 @@
 import { getAddress } from 'viem'
 
-import { encodeErc20Approve } from '../evm/encodeErc20Approve'
+import { encodeErc20Approve, MAX_UINT256 } from '../evm/encodeErc20Approve'
 
 /**
  * Router version this SDK surface is pinned to. A checkout response returning
@@ -10,10 +10,9 @@ export const ROUTER_VERSION_PINNED = 1
 
 /**
  * Valid deposit_memo shape: `cp_` credit-pack or `sub_` subscription.
- * Intentionally wider than current producers (`<prefix>_` + 12 base32 chars)
- * so a future body extension cannot brick the gate.
+ * The body is at least 12 RFC 4648 base32 characters.
  */
-export const DEPOSIT_MEMO_RE = /^(?:cp|sub)_[A-Za-z0-9_]{8,}$/
+export const DEPOSIT_MEMO_RE = /^(?:cp|sub)_[A-Z2-7]{12,}$/
 
 /** Circle native USDC on checkout-supported chains. */
 export const USDC_CONTRACTS = {
@@ -82,6 +81,13 @@ function padHex(hex: string, byteLen: number): string {
 }
 
 export function buildDepositWithMemoCalldata(token: string, amount: bigint, memo: string): `0x${string}` {
+  if (!isValidDepositMemo(memo)) {
+    throw new Error('usdcCalldata: invalid deposit memo')
+  }
+  if (amount < 0n || amount > MAX_UINT256) {
+    throw new Error('usdcCalldata: deposit amount is outside uint256 range')
+  }
+
   const selector = DEPOSIT_WITH_MEMO_SELECTOR.replace(/^0x/i, '')
   const paddedToken = padHex(getAddress(token), 32)
   const paddedAmount = padHex(amount.toString(16), 32)
