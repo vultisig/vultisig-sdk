@@ -24,6 +24,7 @@ import { FastSigningService } from './services/FastSigningService'
 import { VaultData } from './types'
 import { FastVault } from './vault/FastVault'
 import { SecureVault } from './vault/SecureVault'
+import { canonicalizeVaultData } from './vault/utils/canonicalizeVaultData'
 import { VaultBase } from './vault/VaultBase'
 import {
   VaultConflictError,
@@ -133,15 +134,11 @@ export class VaultManager {
     }
   }
 
-  private repairLegacyFastVaultType(vaultData: VaultData): VaultData {
-    return vaultData.type === 'secure' && hasServer(vaultData.signers) ? { ...vaultData, type: 'fast' } : vaultData
-  }
-
   private async repairStoredLegacyFastVaultType(key: string, vaultData: VaultData): Promise<VaultData | null> {
     let current = vaultData
 
     for (let attempt = 0; attempt < 3; attempt++) {
-      const repaired = this.repairLegacyFastVaultType(current)
+      const repaired = canonicalizeVaultData(current)
       if (repaired === current) return current
 
       if (!this.storage.compareAndSet) {
@@ -419,7 +416,7 @@ export class VaultManager {
     // already-persisted legacy `VultiServer-*` records before subclass
     // dispatch so they can be loaded again. Storage-backed load paths also
     // persist the canonical type before constructing the vault.
-    const repairedVaultData = this.repairLegacyFastVaultType(vaultData)
+    const repairedVaultData = canonicalizeVaultData(vaultData)
 
     // Fail early if vault is encrypted but no password callback provided
     if (repairedVaultData.isEncrypted && !this.context.config.onPasswordRequired) {
@@ -646,15 +643,15 @@ export class VaultManager {
       const storedVaultData = await this.storage.get<VaultData>(key)
 
       if (storedVaultData) {
-        const vaultData = await this.repairStoredLegacyFastVaultType(key, storedVaultData)
-        if (!vaultData) continue
-
         try {
+          const vaultData = await this.repairStoredLegacyFastVaultType(key, storedVaultData)
+          if (!vaultData) continue
           vaults.push(this.createVaultInstance(vaultData))
         } catch {
-          // Skip vaults that can't be instantiated (e.g., encrypted vault
-          // without onPasswordRequired). They're still accessible individually
-          // via getVaultById() once the callback is provided.
+          // Skip vaults that can't be repaired or instantiated. A malformed
+          // record must not prevent callers from enumerating healthy vaults.
+          // The record remains accessible individually via getVaultById(),
+          // which reports the underlying error.
         }
       }
     }

@@ -79,6 +79,7 @@ import { TransactionBuilder } from './services/TransactionBuilder'
 // Swap types
 import type { SwapPrepareResult, SwapQuoteParams, SwapQuoteResult, SwapTxParams } from './swap-types'
 import { type ResolvedTokenInfo, resolveTokenRef, resolveTokenRefId } from './tokenRef'
+import { canonicalizeVaultData } from './utils/canonicalizeVaultData'
 import { VaultConflictError, VaultError, VaultErrorCode } from './VaultError'
 import { VaultConfig } from './VaultServices'
 
@@ -941,9 +942,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
   /** @internal Replaces constructor defaults with a stored or pending snapshot. */
   protected restorePersistedVaultData(vaultData: VaultData, persisted = true): void {
-    const snapshot = cloneVaultData(vaultData)
-    const canonicalSnapshot =
-      snapshot.type === 'secure' && hasServer(snapshot.signers) ? { ...snapshot, type: 'fast' as const } : snapshot
+    const canonicalSnapshot = canonicalizeVaultData(cloneVaultData(vaultData))
     getVaultRevision(canonicalSnapshot)
     this.vaultData = canonicalSnapshot
     this.persistedVaultData = cloneVaultData(canonicalSnapshot)

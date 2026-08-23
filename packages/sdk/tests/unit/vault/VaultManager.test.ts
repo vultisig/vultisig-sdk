@@ -304,7 +304,7 @@ describe('VaultManager', () => {
       expect(await memoryStorage.get<{ type: string }>(`vault:${imported.id}`)).toMatchObject({ type: 'fast' })
     })
 
-    it('rejects a stale secure instance after repairing a persisted legacy fast vault type', async () => {
+    it('rejects direct SecureVault construction for legacy fast-vault data', async () => {
       const vult = encodeUnencryptedVult(
         buildMinimalSecureVaultBinary({
           signers: ['SyntheticDevice', 'VultiServer-legacy'],
@@ -317,16 +317,17 @@ describe('VaultManager', () => {
       const staleData = { ...stored!, type: 'secure' as const }
       await memoryStorage.set(key, staleData)
 
-      const staleSecure = SecureVault.fromStorage(
-        staleData,
-        (
-          vaultManager as unknown as { createVaultContext(): Parameters<typeof SecureVault.fromStorage>[1] }
-        ).createVaultContext()
-      )
+      expect(() =>
+        SecureVault.fromStorage(
+          staleData,
+          (
+            vaultManager as unknown as { createVaultContext(): Parameters<typeof SecureVault.fromStorage>[1] }
+          ).createVaultContext()
+        )
+      ).toThrow('Cannot create SecureVault from fast vault data')
       const loaded = await vaultManager.getVaultById(imported.id)
 
       expect(loaded).toBeInstanceOf(FastVault)
-      await expect(staleSecure.rename('Stale writer')).rejects.toBeInstanceOf(VaultConflictError)
       expect(await memoryStorage.get<{ type: string }>(key)).toMatchObject({ type: 'fast' })
     })
 
@@ -340,13 +341,22 @@ describe('VaultManager', () => {
       const key = `vault:${imported.id}`
       const stored = await memoryStorage.get<typeof imported.data>(key)
       expect(stored).not.toBeNull()
+      const healthy = await vaultManager.importVault(
+        encodeUnencryptedVult(
+          buildMinimalSecureVaultBinary({
+            name: 'Healthy vault',
+            ecdsaPublicKey: `03${'33'.repeat(32)}`,
+            eddsaPublicKey: '44'.repeat(32),
+          })
+        )
+      )
       await memoryStorage.set(key, {
         ...stored!,
         type: 'secure',
         revision: Number.MAX_SAFE_INTEGER,
       })
 
-      await expect(vaultManager.listVaults()).rejects.toThrow('invalid storage revision')
+      await expect(vaultManager.listVaults()).resolves.toMatchObject([{ id: healthy.id, name: 'Healthy vault' }])
       await expect(vaultManager.getVaultById(imported.id)).rejects.toThrow('invalid storage revision')
       expect(await memoryStorage.get<{ revision: number; type: string }>(key)).toMatchObject({
         revision: Number.MAX_SAFE_INTEGER,
