@@ -1020,7 +1020,7 @@ export class AgentExecutor {
       )
     }
 
-    const parsed = parseTxReadyForCli(serverTxData, chain, this.vault.getTokens(chain))
+    const parsed = parseTxReadyForCli(serverTxData, chain, this.vault.getTokens?.(chain) ?? [])
     if (parsed.kind === 'thor-swap-deposit') {
       return this.signThorMsgDepositSwap(parsed)
     }
