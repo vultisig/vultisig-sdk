@@ -279,6 +279,10 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.parseThorSwapMemo).toBe('function')
   })
 
+  it('exports the secure-join relay committee poller for headless coordinators', () => {
+    expect(typeof sdk.waitForRelayPeerCommittee).toBe('function')
+  })
+
   it('exports the shared THORChain secured-asset catalog helpers', () => {
     expect(typeof sdk.getThorchainSecuredAssetCatalog).toBe('function')
     expect(typeof sdk.createThorchainSecuredAssetCatalog).toBe('function')

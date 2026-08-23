@@ -390,6 +390,13 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     ])
   })
 
+  it('exports the secure-join relay committee poller on the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const service = await import('../../../../src/services/waitForRelayPeerCommittee')
+
+    expect(rn.waitForRelayPeerCommittee).toBe(service.waitForRelayPeerCommittee)
+  })
+
   it('exports the RN vault-backup helpers and constants from the RN entry', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
     const rnEncrypt = await import('../../../../src/platforms/react-native/polyfills/encryptVaultBackupWithPassword')
