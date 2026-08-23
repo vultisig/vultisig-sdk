@@ -6,6 +6,7 @@ export type {
   BuildTonSendOptions,
   BuildTonTxFromSigningPayloadOptions,
   TonTxBuilderResult,
+  TonWalletCoreBackedTxBuilderResult,
 } from './tx'
 export {
   assertTonSigningPayloadNoHostileDrain,
