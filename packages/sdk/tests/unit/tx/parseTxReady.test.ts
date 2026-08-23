@@ -75,6 +75,50 @@ describe('parseTxReadyEnvelope', () => {
     }
   })
 
+  it('uses known token decimals for non-native sends', () => {
+    const parsed = parseTxReadyEnvelope({
+      chain: 'Solana',
+      resolved: { labels: { token_resolved: 'USDC' } },
+      txArgs: {
+        chain: 'Solana',
+        tx_encoding: 'solana-tx',
+        to: 'solana-recipient',
+        amount: '1000000',
+      },
+    })
+
+    expect(parsed).toMatchObject({
+      kind: 'send',
+      chain: Chain.Solana,
+      amount: '1',
+      symbol: 'USDC',
+    })
+  })
+
+  it('uses configured token decimals and rejects unresolved token sends', () => {
+    const envelope = {
+      chain: 'Solana',
+      resolved: { labels: { token_resolved: 'CUSTOM' } },
+      txArgs: { chain: 'Solana', to: 'solana-recipient', amount: '123456' },
+    }
+
+    expect(
+      parseTxReadyEnvelope(envelope, {
+        tokens: [
+          {
+            id: 'custom-mint',
+            symbol: 'CUSTOM',
+            name: 'Custom',
+            decimals: 5,
+            chainId: Chain.Solana,
+          },
+        ],
+      })
+    ).toMatchObject({ kind: 'send', amount: '1.23456', symbol: 'CUSTOM' })
+
+    expect(() => parseTxReadyEnvelope(envelope)).toThrow(/token decimals unavailable/)
+  })
+
   it('parses a THORChain swap deposit into canonical vault.swap args', () => {
     const parsed = parseTxReadyEnvelope({
       chain: 'THORChain',

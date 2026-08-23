@@ -3,8 +3,10 @@ import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { formatUnits } from 'viem'
 
+import type { Token } from '../types'
 import { resolveChainReference } from '../utils/resolveChainReference'
 import { parseThorSwapMemo } from '../utils/thorSwapMemo'
+import { resolveTokenRef } from '../vault/tokenRef'
 
 export type TxReadyObject = Record<string, unknown>
 
@@ -125,6 +127,8 @@ export class TxReadyParseError extends Error {
 export type ParseTxReadyOptions = {
   /** Consumer-owned fallback for legacy envelopes that omit chain metadata. */
   defaultChain?: Chain
+  /** Vault-configured tokens used to resolve non-native send decimals. */
+  tokens?: Token[]
 }
 
 const MAX_AMOUNT_DIGITS = 26
@@ -242,14 +246,14 @@ const assertAmount = (amountRaw: unknown, chain: Chain, context: string): string
   return amountRaw
 }
 
-const toDecimalAmount = (amountRaw: unknown, chain: Chain, context: string): string => {
+const toDecimalAmount = (amountRaw: unknown, chain: Chain, context: string, decimals?: number): string => {
   const amount = assertAmount(amountRaw, chain, context)
-  const decimals = chainFeeCoin[chain]?.decimals
-  if (decimals === undefined) {
+  const resolvedDecimals = decimals ?? chainFeeCoin[chain]?.decimals
+  if (resolvedDecimals === undefined) {
     throw new TxReadyParseError('UNKNOWN_CHAIN', `${context}: no native decimals registered for ${chain}`)
   }
   try {
-    return formatUnits(BigInt(amount), decimals)
+    return formatUnits(BigInt(amount), resolvedDecimals)
   } catch (error) {
     throw new TxReadyParseError(
       'INVALID_AMOUNT',
@@ -409,14 +413,30 @@ export const parseTxReadyEnvelope = (value: unknown, options: ParseTxReadyOption
 
   const tokenResolved = envelope.resolved?.labels?.['token_resolved']
   const nativeTicker = chainFeeCoin[chain]?.ticker
-  const symbol = typeof tokenResolved === 'string' && tokenResolved !== nativeTicker ? tokenResolved : undefined
+  const symbol =
+    typeof tokenResolved === 'string' && tokenResolved.toUpperCase() !== nativeTicker?.toUpperCase()
+      ? tokenResolved
+      : undefined
   const memo = typeof sendArgs['memo'] === 'string' && sendArgs['memo'].length > 0 ? sendArgs['memo'] : undefined
+
+  let decimals: number | undefined
+  if (symbol) {
+    try {
+      decimals = resolveTokenRef(chain, symbol, options.tokens ?? []).decimals
+    } catch (error) {
+      throw new TxReadyParseError(
+        'INVALID_ENVELOPE',
+        `tx_ready send: token decimals unavailable for '${symbol}' on ${chain}`,
+        { cause: error }
+      )
+    }
+  }
 
   return {
     kind: 'send',
     chain,
     to,
-    amount: toDecimalAmount(sendArgs['amount'], chain, 'tx_ready send'),
+    amount: toDecimalAmount(sendArgs['amount'], chain, 'tx_ready send', decimals),
     ...(symbol && { symbol }),
     ...(memo && { memo }),
     envelope,

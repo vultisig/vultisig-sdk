@@ -1020,7 +1020,7 @@ export class AgentExecutor {
       )
     }
 
-    const parsed = parseTxReadyForCli(serverTxData, chain)
+    const parsed = parseTxReadyForCli(serverTxData, chain, this.vault.getTokens(chain))
     if (parsed.kind === 'thor-swap-deposit') {
       return this.signThorMsgDepositSwap(parsed)
     }
@@ -2096,12 +2096,12 @@ export type NonEvmSendArgs = Omit<ParsedTxReadySend, 'kind' | 'envelope'>
  *       }
  *     }
  *
- * `amount` is ALWAYS base-unit integer (sats / lamports / uatom-equiv /
- * wei) **by contract** — confirmed via live envelope capture across BTC,
- * SOL, RUNE on 2026-05-10. We convert to a decimal string before passing
- * to `vault.send`, which then re-parses to bigint via the chain's native
- * decimals. Round-trip is lossless via viem's `formatUnits` /
- * `parseUnits`.
+ * `amount` is ALWAYS a base-unit integer **by contract** — confirmed via
+ * live envelope capture across BTC, SOL, and RUNE on 2026-05-10. Native
+ * sends use the chain coin's decimals; token sends use the canonical token
+ * resolver with vault-configured tokens. We convert to a decimal string
+ * before passing to `vault.send`, which re-parses it with the same token
+ * metadata. Round-trip is lossless via viem's `formatUnits` / `parseUnits`.
  *
  * **Defensive amount-length bound** (per PR #439 review finding 4): if
  * THORChain or mcp-ts ever returns a 26+ digit amount (10^26 wei = 10^8
@@ -2116,9 +2116,13 @@ export type NonEvmSendArgs = Omit<ParsedTxReadySend, 'kind' | 'envelope'>
  * never reach those branches today (envelopes for those chains hit the
  * stale-CLI-build error pre-PR-D), but the throw is defensive.
  */
-function parseTxReadyForCli(serverTxData: unknown, defaultChain: Chain): ParsedTxReadyEnvelope {
+function parseTxReadyForCli(
+  serverTxData: unknown,
+  defaultChain: Chain,
+  tokens: ReturnType<VaultBase['getTokens']> = []
+): ParsedTxReadyEnvelope {
   try {
-    return parseTxReadyEnvelope(serverTxData, { defaultChain })
+    return parseTxReadyEnvelope(serverTxData, { defaultChain, tokens })
   } catch (error) {
     if (!(error instanceof TxReadyParseError)) throw error
     const code =
@@ -2133,11 +2137,15 @@ function parseTxReadyForCli(serverTxData: unknown, defaultChain: Chain): ParsedT
   }
 }
 
-export function parseNonEvmEnvelope(serverTxData: any, chain: Chain): NonEvmSendArgs {
+export function parseNonEvmEnvelope(
+  serverTxData: any,
+  chain: Chain,
+  tokens: ReturnType<VaultBase['getTokens']> = []
+): NonEvmSendArgs {
   if (!serverTxData || typeof serverTxData !== 'object') {
     throw new VaultError(VaultErrorCode.InvalidConfig, 'parseNonEvmEnvelope: envelope missing txArgs')
   }
-  const parsed = parseTxReadyForCli(serverTxData, chain)
+  const parsed = parseTxReadyForCli(serverTxData, chain, tokens)
   if (parsed.kind !== 'send') {
     throw new VaultError(
       VaultErrorCode.InvalidConfig,
