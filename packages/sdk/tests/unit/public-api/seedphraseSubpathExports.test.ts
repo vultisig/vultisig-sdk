@@ -17,7 +17,6 @@ describe('@vultisig/sdk/seedphrase public surface', () => {
 
     expect(seedphraseExport).toMatchObject({
       types: './dist/seedphrase/index.d.ts',
-      'react-native': './dist/seedphrase/index.js',
       node: {
         import: './dist/seedphrase/index.js',
         require: './dist/seedphrase/index.cjs',

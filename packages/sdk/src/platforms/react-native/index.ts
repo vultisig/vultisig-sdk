@@ -158,10 +158,45 @@ export { deriveAddress, getCoinType, getPublicKey, isValidAddress, isValidTokenI
 // MPC keysign (uses MpcEngine — no direct WASM imports)
 export { keysign } from '@vultisig/core-mpc/keysign'
 
-// Canonical seedphrase helpers, types, and import/discovery services.
-// Keep this surface in lockstep with @vultisig/sdk/seedphrase so React Native
-// consumers do not need platform-local mnemonic or chain-discovery copies.
-export * from '../../seedphrase'
+// Seedphrase helpers, types, and import policy.
+// Re-export the RN-safe mnemonic / validation / derivation surface directly
+// from the underlying modules instead of the canonical ../../seedphrase barrel.
+// That barrel also exports ChainDiscoveryService, whose static import graph
+// reaches the eager core getCoinBalance dispatcher and pulls Hermes-hostile
+// Solana / Polkadot balance resolver deps into module init.
+export type {
+  Bip39Language,
+  ChainDiscoveryPhase,
+  ChainDiscoveryProgress,
+  ChainDiscoveryResult,
+  CreateFastVaultFromSeedphraseOptions,
+  CreateSecureVaultFromSeedphraseOptions,
+  DerivedMasterKeys,
+  JoinSecureVaultOptions,
+  SeedphraseImportResult,
+  SeedphraseValidation,
+  SeedphraseValidationOptions,
+  SeedphraseWordCount,
+} from '../../seedphrase/types'
+export { BIP39_LANGUAGES, SEEDPHRASE_WORD_COUNTS } from '../../seedphrase/types'
+export {
+  BIP39_WORDLISTS,
+  detectMnemonicLanguage,
+  findInvalidWords,
+  findInvalidWordsAcrossAllLanguages,
+  getWordlist,
+  normalizeMnemonic,
+} from '../../seedphrase/languageDetection'
+export { cleanMnemonic, SeedphraseValidator, validateSeedphrase } from '../../seedphrase/SeedphraseValidator'
+export type { ChainPrivateKey, DerivedChainKey, DeriveChainPrivateKeysOptions } from '../../seedphrase/MasterKeyDeriver'
+export { cosmosPathTerra, MasterKeyDeriver } from '../../seedphrase/MasterKeyDeriver'
+export {
+  assertSeedphraseImportSupportsChains,
+  getUnsupportedSeedphraseImportChains,
+  isSeedphraseImportSupportedChain,
+  SEEDPHRASE_IMPORT_SUPPORTED_CHAINS,
+  SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS,
+} from '../../constants'
 
 // Vault-backup import/export crypto contract. The RN-safe implementations live
 // under this platform surface already, but first-party mobile consumers could
