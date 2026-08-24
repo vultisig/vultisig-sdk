@@ -14,6 +14,7 @@ import { knownTokens } from '@vultisig/core-chain/coin/knownTokens'
 import type { SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { pollTxStatusUntilFinal } from '../../src/tx'
 import { VaultError, VaultErrorCode } from '../../src/vault/VaultError'
 
 // ---------------------------------------------------------------------------
@@ -486,8 +487,8 @@ describe('resolveTokenInfo knownTokens fallback', () => {
 
 describe('waitForConfirmation behavior', () => {
   /**
-   * We reproduce the waitForConfirmation logic from VaultBase exactly,
-   * calling a mock getTxStatus to verify polling behavior.
+   * Exercise the SDK's shared tx-finality helper with VaultBase-equivalent
+   * error mapping, instead of duplicating the poll loop inline.
    */
   async function waitForConfirmation(
     getTxStatus: (params: { chain: Chain; txHash: string }) => Promise<{ status: string }>,
@@ -496,19 +497,21 @@ describe('waitForConfirmation behavior', () => {
     timeoutMs = 60_000,
     intervalMs = 3_000
   ): Promise<void> {
-    const deadline = Date.now() + timeoutMs
-    while (Date.now() < deadline) {
-      try {
-        const result = await getTxStatus({ chain, txHash })
-        if (result.status === 'success') return
-        if (result.status === 'error')
-          throw new VaultError(VaultErrorCode.BroadcastFailed, `Approval tx failed: ${txHash}`)
-      } catch (e) {
-        if (e instanceof VaultError && e.code !== VaultErrorCode.NetworkError) throw e
-      }
-      await new Promise(resolve => setTimeout(resolve, intervalMs))
+    const outcome = await pollTxStatusUntilFinal({
+      chain,
+      txHash,
+      timeoutMs,
+      intervalMs,
+      getTxStatus: async params => getTxStatus(params as { chain: Chain; txHash: string }) as any,
+      shouldRetryError: error => !(error instanceof VaultError) || error.code === VaultErrorCode.NetworkError,
+    })
+
+    if (outcome.result?.status === 'error') {
+      throw new VaultError(VaultErrorCode.BroadcastFailed, `Approval tx failed: ${txHash}`)
     }
-    throw new VaultError(VaultErrorCode.Timeout, `Approval tx not confirmed within ${timeoutMs / 1000}s: ${txHash}`)
+    if (outcome.timedOut) {
+      throw new VaultError(VaultErrorCode.Timeout, `Approval tx not confirmed within ${timeoutMs / 1000}s: ${txHash}`)
+    }
   }
 
   it('should proceed immediately when approval returns success on first poll', async () => {
