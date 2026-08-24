@@ -109,6 +109,12 @@ export {
   parseThorchainSecuredAssets,
   thorchainSecuredAssetFallback,
 } from '@vultisig/core-chain/chains/cosmos/thor/securedAssets'
+
+// Canonical Cosmos custom-message signing payload builders. Keep this
+// hand-curated RN surface aligned with the root SDK entrypoint.
+export type { BuildSignAminoPayloadInput, BuildSignDirectPayloadInput } from '../../vault/services/cosmos'
+export { buildSignAminoKeysignPayload, buildSignDirectKeysignPayload } from '../../vault/services/cosmos'
+
 // XRP Ledger issued-currency canonicals — pure helpers/tables that are safe on
 // the RN graph and should stay in parity with the root SDK entrypoint.
 export {
@@ -147,7 +153,7 @@ export type { WalletCoreLike } from '@vultisig/walletcore-native'
 // Address derivation and chain utilities
 // RN wrappers accept WalletCoreLike from @vultisig/walletcore-native
 // so consumers don't need to cast to @trustwallet/wallet-core's WalletCore.
-export { deriveAddress, getCoinType, getPublicKey, isValidAddress } from './chainHelpers'
+export { deriveAddress, getCoinType, getPublicKey, isValidAddress, isValidTokenId } from './chainHelpers'
 
 // MPC keysign (uses MpcEngine — no direct WASM imports)
 export { keysign } from '@vultisig/core-mpc/keysign'
@@ -186,7 +192,7 @@ export { configureMpc, ensureMpcEngine, getMpcEngine } from '@vultisig/mpc-types
 
 // Vault + fast vault lifecycle classes
 export { FastVaultFromSeedphraseService } from '../../services/FastVaultFromSeedphraseService'
-export { FastVault } from '../../vault/FastVault'
+export { FastVault, hasServer, isServer } from '../../vault'
 export type { VaultImportConflictResolution, VaultImportOptions } from '../../VaultManager'
 export { VaultManager } from '../../VaultManager'
 export type { VultisigConfig } from '../../Vultisig'
@@ -233,15 +239,16 @@ export type {
 // that hangs Hermes at module init).
 export type { BroadcastSolanaTxOptions, BuildSolanaSendOptions, SolanaTxBuilderResult } from './chains/solana'
 
-// TON bridge type surface — reimplementation built on @ton/core only, which
-// is Hermes-safe (uses jssha via @ton/crypto peer dep, not crypto.subtle).
-// Consumers MUST install `@ton/core` as a peer dep; we never reach into
-// `@ton/crypto-primitives`.
+// TON bridge type surface — reimplementation built on @ton/core plus
+// WalletCore's generated protobuf namespace for pre-dispatch parity input.
+// The builder does not initialize WalletCore WASM or reach into
+// @ton/crypto-primitives.
 export type {
   BuildTonJettonTransferOptions,
   BuildTonSendOptions,
   TonTxBuilderResult,
   TonV4R2Wallet,
+  TonWalletCoreBackedTxBuilderResult,
   TonWalletInfo,
   TonWalletStatus,
 } from './chains/ton'
@@ -532,6 +539,8 @@ export type {
   GetCosmosGovernanceProposalsParams,
   GetGovernanceProposalsResult,
   GovChain,
+  GovChainId,
+  GovChainInput,
   GovernanceProposal,
   PrepareCosmosVoteParams,
   ProposalStatus,
@@ -766,7 +775,7 @@ export { getSolBalance, getSplTokenBalance } from '../../tools/balance/solana'
 
 // Pure helpers — no chain client deps
 export type { AssetRef, ChainFamily, DecodeFromToolResultInput, Envelope, EnvelopeKind } from '../../tools/decode'
-export { decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from '../../tools/decode'
+export { decode, decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from '../../tools/decode'
 // Exact base-units -> human decimal-string conversion (pure bigint string
 // arithmetic, no float64 round-trip), pairing-QR payload generation, and the
 // notification-vault-id helper are all deterministic utilities with no live
