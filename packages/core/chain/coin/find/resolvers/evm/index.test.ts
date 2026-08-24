@@ -262,6 +262,20 @@ describe('findEvmCoins', () => {
     await expect(findEvmCoins({ chain: EvmChain.Ethereum, address })).resolves.toEqual([{ ...vthorCatalog, address }])
   })
 
+  it('still surfaces curated Ethereum holdings when the 1inch balance request fails hard', async () => {
+    // A transient 1inch failure (not NoDataError) used to abort discovery
+    // before the curated catalog scan ran, hiding vTHOR entirely.
+    const address = '0x1111111111111111111111111111111111111111'
+    const vthorCatalog = knownTokens[EvmChain.Ethereum].find(c => c.ticker === 'vTHOR')!
+
+    queryOneInchMock.mockRejectedValue(new Error('HTTP 500'))
+    getEvmChainBalancesMock.mockResolvedValue({
+      [accountCoinKeyToString({ chain: EvmChain.Ethereum, id: vthorCatalog.id!, address })]: 1n,
+    })
+
+    await expect(findEvmCoins({ chain: EvmChain.Ethereum, address })).resolves.toEqual([{ ...vthorCatalog, address }])
+  })
+
   it('dedupes an Ethereum token held in both sources, keeping curated metadata (THOR)', async () => {
     const address = '0x1111111111111111111111111111111111111111'
     const thorCatalog = knownTokens[EvmChain.Ethereum].find(c => c.ticker === 'THOR')!

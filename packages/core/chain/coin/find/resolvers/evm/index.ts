@@ -110,7 +110,16 @@ export const findEvmCoins: FindCoinsResolver<EvmChain> = async ({ address, chain
   if ('data' in balanceResult) {
     balanceData = balanceResult.data ?? {}
   } else if (!(balanceResult.error instanceof NoDataError)) {
-    throw balanceResult.error
+    // On hybrid chains the curated catalog scan below can still surface
+    // holdings, so a transient 1inch failure must degrade discovery rather
+    // than abort it (and hide e.g. vTHOR entirely).
+    if (!hybridDiscoveryChains.includes(chain)) {
+      throw balanceResult.error
+    }
+    console.warn(
+      `[findEvmCoins] 1inch balance lookup failed on ${chain}; falling back to the curated catalog scan`,
+      balanceResult.error
+    )
   }
 
   // Filter tokens with non-zero balance
