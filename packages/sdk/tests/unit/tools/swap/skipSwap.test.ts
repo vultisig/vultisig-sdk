@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   buildSkipAffiliates,
@@ -8,82 +8,92 @@ import {
   SKIP_AFFILIATE_ADDRESS_BY_CHAIN,
   skipChainIdToChainName,
   type SkipSwapArgs,
-} from '@/tools/swap/skip'
+} from "@/tools/swap/skip";
 
 // OSMO (osmosis-1) → ATOM (cosmoshub-4) single-signature happy path.
 const baseArgs: SkipSwapArgs = {
-  fromAddress: 'osmo1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
-  toAddress: 'cosmos1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
-  sourceChainId: 'osmosis-1',
-  sourceAssetDenom: 'uosmo',
-  destChainId: 'cosmoshub-4',
-  destAssetDenom: 'uatom',
-  amountIn: '1000000',
-}
+  fromAddress: "osmo1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  toAddress: "cosmos1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  sourceChainId: "osmosis-1",
+  sourceAssetDenom: "uosmo",
+  destChainId: "cosmoshub-4",
+  destAssetDenom: "uatom",
+  amountIn: "1000000",
+};
 
 const okRoute = {
-  amount_in: '1000000',
-  amount_out: '120000',
-  estimated_amount_out: '120000',
+  amount_in: "1000000",
+  amount_out: "120000",
+  estimated_amount_out: "120000",
   txs_required: 1,
-  usd_amount_in: '0.45',
-  usd_amount_out: '0.44',
+  usd_amount_in: "0.45",
+  usd_amount_out: "0.44",
   does_swap: true,
-  swap_venue: { name: 'osmosis-poolmanager', chain_id: 'osmosis-1' },
-  swap_venues: [{ name: 'osmosis-poolmanager', chain_id: 'osmosis-1' }],
-  chain_ids: ['osmosis-1', 'cosmoshub-4'],
-  required_chain_addresses: ['osmosis-1', 'cosmoshub-4'],
+  swap_venue: { name: "osmosis-poolmanager", chain_id: "osmosis-1" },
+  swap_venues: [{ name: "osmosis-poolmanager", chain_id: "osmosis-1" }],
+  chain_ids: ["osmosis-1", "cosmoshub-4"],
+  required_chain_addresses: ["osmosis-1", "cosmoshub-4"],
   estimated_route_duration_seconds: 60,
-  operations: [{ swap: { swap_in: { swap_operations: [{}] } } }, { transfer: {} }],
-  swap_price_impact_percent: '0.12',
-}
+  operations: [
+    { swap: { swap_in: { swap_operations: [{}] } } },
+    { transfer: {} },
+  ],
+  swap_price_impact_percent: "0.12",
+};
 
 const okMsgs = {
   txs: [
     {
       cosmos_tx: {
-        chain_id: 'osmosis-1',
+        chain_id: "osmosis-1",
         signer_address: baseArgs.fromAddress,
-        msgs: [{ msg: '{}', msg_type_url: '/ibc.applications.transfer.v1.MsgTransfer' }],
-        memo: '',
+        msgs: [
+          {
+            msg: "{}",
+            msg_type_url: "/ibc.applications.transfer.v1.MsgTransfer",
+          },
+        ],
+        memo: "",
       },
     },
   ],
   msgs: [],
-  min_amount_out: '118800',
+  min_amount_out: "118800",
   route: okRoute,
-}
+};
 
-function mockFetchSequence(responses: Array<{ status?: number; body: unknown }>) {
-  let call = 0
+function mockFetchSequence(
+  responses: Array<{ status?: number; body: unknown }>,
+) {
+  let call = 0;
   vi.stubGlobal(
-    'fetch',
+    "fetch",
     vi.fn(async () => {
-      const r = responses[Math.min(call, responses.length - 1)]!
-      call += 1
+      const r = responses[Math.min(call, responses.length - 1)]!;
+      call += 1;
       return {
         ok: (r.status ?? 200) >= 200 && (r.status ?? 200) < 300,
         status: r.status ?? 200,
         headers: { get: () => null },
         text: async () => JSON.stringify(r.body),
-      } as unknown as Response
-    })
-  )
+      } as unknown as Response;
+    }),
+  );
 }
 
 afterEach(() => {
-  vi.unstubAllGlobals()
-  vi.restoreAllMocks()
-})
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
-describe('skipChainIdToChainName', () => {
-  it('maps known cosmos + evm chain ids and returns undefined for unsupported', () => {
-    expect(skipChainIdToChainName('osmosis-1')).toBe('Osmosis')
-    expect(skipChainIdToChainName('cosmoshub-4')).toBe('Cosmos')
-    expect(skipChainIdToChainName('1')).toBe('Ethereum')
-    expect(skipChainIdToChainName('agoric-3')).toBeUndefined()
-    expect(skipChainIdToChainName('celestia')).toBeUndefined()
-  })
+describe("skipChainIdToChainName", () => {
+  it("maps known cosmos + evm chain ids and returns undefined for unsupported", () => {
+    expect(skipChainIdToChainName("osmosis-1")).toBe("Osmosis");
+    expect(skipChainIdToChainName("cosmoshub-4")).toBe("Cosmos");
+    expect(skipChainIdToChainName("1")).toBe("Ethereum");
+    expect(skipChainIdToChainName("agoric-3")).toBeUndefined();
+    expect(skipChainIdToChainName("celestia")).toBeUndefined();
+  });
 
   // Regression: Skip publishes dYdX mainnet as `dydx-mainnet-1` (the canonical
   // network id, matching mcp-ts COSMOS_CHAINS). The SDK cosmos chainInfo map
@@ -91,140 +101,176 @@ describe('skipChainIdToChainName', () => {
   // firstUnsupportedCustodyChain wrongly flagged any Skip route custodying on
   // dYdX as `skip_unsupported_route_chain` (over-rejection). The SDK can derive
   // a dYdX key, so the route IS recoverable and must NOT be rejected.
-  it('resolves dYdX via its real Skip chain id (dydx-mainnet-1, not dydx-1)', () => {
-    expect(skipChainIdToChainName('dydx-mainnet-1')).toBe('Dydx')
+  it("resolves dYdX via its real Skip chain id (dydx-mainnet-1, not dydx-1)", () => {
+    expect(skipChainIdToChainName("dydx-mainnet-1")).toBe("Dydx");
     // The old wrong id must NOT resolve to a Vultisig-signable chain.
-    expect(skipChainIdToChainName('dydx-1')).toBeUndefined()
-  })
-})
+    expect(skipChainIdToChainName("dydx-1")).toBeUndefined();
+  });
+});
 
-describe('resolveLuncFloorUsd', () => {
-  it('defaults on undefined/garbage, honours explicit values incl. 0', () => {
-    expect(resolveLuncFloorUsd(undefined)).toBe(0.05)
-    expect(resolveLuncFloorUsd(NaN)).toBe(0.05)
-    expect(resolveLuncFloorUsd(-1)).toBe(0.05)
-    expect(resolveLuncFloorUsd(0)).toBe(0)
-    expect(resolveLuncFloorUsd(0.5)).toBe(0.5)
-  })
-})
+describe("resolveLuncFloorUsd", () => {
+  it("defaults on undefined/garbage, honours explicit values incl. 0", () => {
+    expect(resolveLuncFloorUsd(undefined)).toBe(0.05);
+    expect(resolveLuncFloorUsd(NaN)).toBe(0.05);
+    expect(resolveLuncFloorUsd(-1)).toBe(0.05);
+    expect(resolveLuncFloorUsd(0)).toBe(0);
+    expect(resolveLuncFloorUsd(0.5)).toBe(0.5);
+  });
+});
 
-describe('buildSkipAffiliates', () => {
-  it('omits when no bps or no treasury address; builds for a known swap chain', () => {
-    expect(buildSkipAffiliates('osmosis-1', undefined)).toBeUndefined()
-    expect(buildSkipAffiliates('osmosis-1', 0)).toBeUndefined()
-    expect(buildSkipAffiliates('unknown-chain', 50)).toBeUndefined()
-    expect(buildSkipAffiliates('osmosis-1', 50)).toEqual({
-      'osmosis-1': {
-        affiliates: [{ basis_points_fee: '50', address: expect.stringMatching(/^osmo1/) }],
+describe("buildSkipAffiliates", () => {
+  it("omits when no bps or no treasury address; builds for a known swap chain", () => {
+    expect(buildSkipAffiliates("osmosis-1", undefined)).toBeUndefined();
+    expect(buildSkipAffiliates("osmosis-1", 0)).toBeUndefined();
+    expect(buildSkipAffiliates("unknown-chain", 50)).toBeUndefined();
+    expect(buildSkipAffiliates("osmosis-1", 50)).toEqual({
+      "osmosis-1": {
+        affiliates: [
+          { basis_points_fee: "50", address: expect.stringMatching(/^osmo1/) },
+        ],
       },
-    })
-  })
+    });
+  });
 
   // Fund-skim regression: the fee recipient addresses are the protocol treasury.
   // Pin the exact bytes so a corrupted/redirected receiver address (an attacker
   // silently skimming the user's swap output) trips a test rather than shipping.
-  it('routes the affiliate fee to the pinned Vultisig treasury addresses (no redirect)', () => {
-    const STATION_EVM_FEE_RECEIVER = '0x649E1289fD780C2F9A3D27476511283EB0d0076D'
-    expect(SKIP_AFFILIATE_ADDRESS_BY_CHAIN['osmosis-1']).toBe('osmo18ggw7cvgera63srls32a8fl4gtzmmphfzlfndf')
-    expect(SKIP_AFFILIATE_ADDRESS_BY_CHAIN['phoenix-1']).toBe('terra1lvhuqayxe4yrxa2js6lq9frnugflur2l2gwp7h')
-    expect(SKIP_AFFILIATE_ADDRESS_BY_CHAIN['columbus-5']).toBe('terra1lvhuqayxe4yrxa2js6lq9frnugflur2l2gwp7h')
+  it("routes the affiliate fee to the pinned Vultisig treasury addresses (no redirect)", () => {
+    const STATION_EVM_FEE_RECEIVER =
+      "0x649E1289fD780C2F9A3D27476511283EB0d0076D";
+    expect(SKIP_AFFILIATE_ADDRESS_BY_CHAIN["osmosis-1"]).toBe(
+      "osmo18ggw7cvgera63srls32a8fl4gtzmmphfzlfndf",
+    );
+    expect(SKIP_AFFILIATE_ADDRESS_BY_CHAIN["phoenix-1"]).toBe(
+      "terra1lvhuqayxe4yrxa2js6lq9frnugflur2l2gwp7h",
+    );
+    expect(SKIP_AFFILIATE_ADDRESS_BY_CHAIN["columbus-5"]).toBe(
+      "terra1lvhuqayxe4yrxa2js6lq9frnugflur2l2gwp7h",
+    );
     // Every EVM swap-venue chain must route to the same single treasury receiver.
-    for (const evmChainId of ['1', '42161', '10', '8453', '137', '43114', '56']) {
-      expect(SKIP_AFFILIATE_ADDRESS_BY_CHAIN[evmChainId]).toBe(STATION_EVM_FEE_RECEIVER)
+    for (const evmChainId of [
+      "1",
+      "42161",
+      "10",
+      "8453",
+      "137",
+      "43114",
+      "56",
+    ]) {
+      expect(SKIP_AFFILIATE_ADDRESS_BY_CHAIN[evmChainId]).toBe(
+        STATION_EVM_FEE_RECEIVER,
+      );
     }
     // And the built envelope carries that pinned receiver, not just a shape match.
-    expect(buildSkipAffiliates('1', 50)).toEqual({
-      '1': { affiliates: [{ basis_points_fee: '50', address: STATION_EVM_FEE_RECEIVER }] },
-    })
-  })
-})
+    expect(buildSkipAffiliates("1", 50)).toEqual({
+      "1": {
+        affiliates: [
+          { basis_points_fee: "50", address: STATION_EVM_FEE_RECEIVER },
+        ],
+      },
+    });
+  });
+});
 
-describe('runSkipSwap input validation (no network)', () => {
-  beforeEach(() => mockFetchSequence([{ body: okRoute }, { body: okMsgs }]))
+describe("runSkipSwap input validation (no network)", () => {
+  beforeEach(() => mockFetchSequence([{ body: okRoute }, { body: okMsgs }]));
 
-  it('rejects an EVM-shaped address on a cosmos chain', async () => {
+  it("rejects an EVM-shaped address on a cosmos chain", async () => {
     const out = await runSkipSwap({
       ...baseArgs,
-      fromAddress: '0x1234567890123456789012345678901234567890',
-    })
-    expect(out.ok).toBe(false)
-    if (!out.ok) expect(out.envelope.error).toBe('invalid_input')
-  })
+      fromAddress: "0x1234567890123456789012345678901234567890",
+    });
+    expect(out.ok).toBe(false);
+    if (!out.ok) expect(out.envelope.error).toBe("invalid_input");
+  });
 
-  it('rejects a validator operator (valoper) recipient — fund safety', async () => {
+  it("rejects a validator operator (valoper) recipient — fund safety", async () => {
     const out = await runSkipSwap({
       ...baseArgs,
-      toAddress: 'cosmosvaloper1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
-    })
-    expect(out.ok).toBe(false)
+      toAddress: "cosmosvaloper1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    });
+    expect(out.ok).toBe(false);
     if (!out.ok) {
-      expect(out.envelope.error).toBe('invalid_input')
-      expect(out.envelope.message).toMatch(/validator OPERATOR/)
+      expect(out.envelope.error).toBe("invalid_input");
+      expect(out.envelope.message).toMatch(/validator OPERATOR/);
     }
-  })
+  });
 
-  it('rejects amountIn <= 0', async () => {
-    const out = await runSkipSwap({ ...baseArgs, amountIn: '0' })
-    expect(out.ok).toBe(false)
-    if (!out.ok) expect(out.envelope.error).toBe('invalid_input')
-  })
+  it("rejects amountIn <= 0", async () => {
+    const out = await runSkipSwap({ ...baseArgs, amountIn: "0" });
+    expect(out.ok).toBe(false);
+    if (!out.ok) expect(out.envelope.error).toBe("invalid_input");
+  });
 
-  it('rejects out-of-range slippage', async () => {
-    const out = await runSkipSwap({ ...baseArgs, slippageTolerancePercent: 9 })
-    expect(out.ok).toBe(false)
-    if (!out.ok) expect(out.envelope.error).toBe('invalid_input')
-  })
-})
+  it("rejects out-of-range slippage", async () => {
+    const out = await runSkipSwap({ ...baseArgs, slippageTolerancePercent: 9 });
+    expect(out.ok).toBe(false);
+    if (!out.ok) expect(out.envelope.error).toBe("invalid_input");
+  });
+});
 
-describe('runSkipSwap happy path (mocked Skip)', () => {
-  it('returns an unsigned single-tx cosmos envelope with quote + metadata', async () => {
-    mockFetchSequence([{ body: okRoute }, { body: okMsgs }])
-    const out = await runSkipSwap(baseArgs)
-    expect(out.ok).toBe(true)
+describe("runSkipSwap happy path (mocked Skip)", () => {
+  it("returns an unsigned single-tx cosmos envelope with quote + metadata", async () => {
+    mockFetchSequence([{ body: okRoute }, { body: okMsgs }]);
+    const out = await runSkipSwap(baseArgs);
+    expect(out.ok).toBe(true);
     if (out.ok) {
-      expect(out.tx_type).toBe('skip_swap')
-      expect(out.multi_tx).toBe(false)
-      expect(out.tx_count).toBe(1)
-      expect(out.unsigned_msgs).toHaveLength(1)
-      expect(out.unsigned_msgs[0]!.signing_method).toBe('cosmos')
-      expect(out.unsigned_msgs[0]!.chain_id).toBe('osmosis-1')
-      expect(out.quote.min_amount_out).toBe('118800')
-      expect(out.quote.route_description).toContain('osmosis-1 → cosmoshub-4')
-      expect(out.metadata.skip_chain_path).toEqual(['osmosis-1', 'cosmoshub-4'])
+      expect(out.tx_type).toBe("skip_swap");
+      expect(out.multi_tx).toBe(false);
+      expect(out.tx_count).toBe(1);
+      expect(out.unsigned_msgs).toHaveLength(1);
+      expect(out.unsigned_msgs[0]!.signing_method).toBe("cosmos");
+      expect(out.unsigned_msgs[0]!.chain_id).toBe("osmosis-1");
+      expect(out.quote.min_amount_out).toBe("118800");
+      expect(out.quote.route_description).toContain("osmosis-1 → cosmoshub-4");
+      expect(out.metadata.skip_chain_path).toEqual([
+        "osmosis-1",
+        "cosmoshub-4",
+      ]);
     }
-  })
-})
+  });
+});
 
-describe('runSkipSwap fund-safety guards (mocked Skip)', () => {
-  it('rejects multi-signature routes unless opted in', async () => {
-    mockFetchSequence([{ body: { ...okRoute, txs_required: 2 } }])
-    const out = await runSkipSwap(baseArgs)
-    expect(out.ok).toBe(false)
-    if (!out.ok) expect(out.envelope.error).toBe('skip_multi_tx_route_rejected')
-  })
+describe("runSkipSwap fund-safety guards (mocked Skip)", () => {
+  it("rejects multi-signature routes unless opted in", async () => {
+    mockFetchSequence([{ body: { ...okRoute, txs_required: 2 } }]);
+    const out = await runSkipSwap(baseArgs);
+    expect(out.ok).toBe(false);
+    if (!out.ok)
+      expect(out.envelope.error).toBe("skip_multi_tx_route_rejected");
+  });
 
-  it('rejects routes that custody funds on an unsupported chain', async () => {
-    mockFetchSequence([{ body: { ...okRoute, required_chain_addresses: ['osmosis-1', 'agoric-3', 'cosmoshub-4'] } }])
-    const out = await runSkipSwap(baseArgs)
-    expect(out.ok).toBe(false)
+  it("rejects routes that custody funds on an unsupported chain", async () => {
+    mockFetchSequence([
+      {
+        body: {
+          ...okRoute,
+          required_chain_addresses: ["osmosis-1", "agoric-3", "cosmoshub-4"],
+        },
+      },
+    ]);
+    const out = await runSkipSwap(baseArgs);
+    expect(out.ok).toBe(false);
     if (!out.ok) {
-      expect(out.envelope.error).toBe('skip_unsupported_route_chain')
-      expect(out.envelope.chain_id).toBe('agoric-3')
+      expect(out.envelope.error).toBe("skip_unsupported_route_chain");
+      expect(out.envelope.chain_id).toBe("agoric-3");
     }
-  })
+  });
 
   it('surfaces a Skip "no routes" 200 message as a 404 envelope', async () => {
-    mockFetchSequence([{ body: { message: 'no routes found', txs_required: 0 } }])
-    const out = await runSkipSwap(baseArgs)
-    expect(out.ok).toBe(false)
+    mockFetchSequence([
+      { body: { message: "no routes found", txs_required: 0 } },
+    ]);
+    const out = await runSkipSwap(baseArgs);
+    expect(out.ok).toBe(false);
     if (!out.ok) {
-      expect(out.envelope.error).toBe('skip_api_error')
-      expect(out.envelope.status).toBe(404)
+      expect(out.envelope.error).toBe("skip_api_error");
+      expect(out.envelope.status).toBe(404);
     }
-  })
-})
+  });
+});
 
-describe('multi-tx memo-cap regression (SDK-vs-abts reconciliation, VA-86)', () => {
+describe("multi-tx memo-cap regression (SDK-vs-abts reconciliation, VA-86)", () => {
   // BEFORE this fix: the memo-cap check only ran `if (!isMultiTx)` and only
   // inspected the FIRST cosmos leg. A multi-tx route (allowMultiTx:true)
   // with an over-cap memo on a NON-FIRST leg sailed through undetected and
@@ -235,24 +281,38 @@ describe('multi-tx memo-cap regression (SDK-vs-abts reconciliation, VA-86)', () 
   // (no intermediate-chain address requirement to satisfy in the mock).
   const multiTxArgs: SkipSwapArgs = {
     ...baseArgs,
-    toAddress: 'terra1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
-    destChainId: 'columbus-5',
-    destAssetDenom: 'uluna',
+    toAddress: "terra1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    destChainId: "columbus-5",
+    destAssetDenom: "uluna",
     allowMultiTx: true,
-  }
+  };
 
-  it('catches an over-cap memo on a non-first leg of a multi-tx route', async () => {
-    const overCapMemo = 'a'.repeat(300) // over columbus-5's 256-byte MaxMemoCharacters cap
-    const chainIds = ['osmosis-1', 'columbus-5']
+  it("catches an over-cap memo on a non-first leg of a multi-tx route", async () => {
+    const overCapMemo = "a".repeat(300); // over columbus-5's 256-byte MaxMemoCharacters cap
+    const chainIds = ["osmosis-1", "columbus-5"];
     mockFetchSequence([
-      { body: { ...okRoute, txs_required: 2, chain_ids: chainIds, required_chain_addresses: chainIds } },
+      {
+        body: {
+          ...okRoute,
+          txs_required: 2,
+          chain_ids: chainIds,
+          required_chain_addresses: chainIds,
+        },
+      },
       {
         body: {
           txs: [
-            { cosmos_tx: { chain_id: 'osmosis-1', signer_address: multiTxArgs.fromAddress, msgs: [], memo: '' } },
             {
               cosmos_tx: {
-                chain_id: 'columbus-5',
+                chain_id: "osmosis-1",
+                signer_address: multiTxArgs.fromAddress,
+                msgs: [],
+                memo: "",
+              },
+            },
+            {
+              cosmos_tx: {
+                chain_id: "columbus-5",
                 signer_address: multiTxArgs.fromAddress,
                 msgs: [],
                 memo: overCapMemo,
@@ -260,83 +320,126 @@ describe('multi-tx memo-cap regression (SDK-vs-abts reconciliation, VA-86)', () 
             },
           ],
           msgs: [],
-          min_amount_out: '118800',
-          route: { ...okRoute, txs_required: 2, chain_ids: chainIds, required_chain_addresses: chainIds },
+          min_amount_out: "118800",
+          route: {
+            ...okRoute,
+            txs_required: 2,
+            chain_ids: chainIds,
+            required_chain_addresses: chainIds,
+          },
         },
       },
-    ])
+    ]);
 
-    const out = await runSkipSwap(multiTxArgs)
+    const out = await runSkipSwap(multiTxArgs);
 
-    expect(out.ok).toBe(false)
+    expect(out.ok).toBe(false);
     if (!out.ok) {
-      expect(out.envelope.error).toBe('skip_source_memo_too_long')
-      expect(out.envelope.source_chain_id).toBe('columbus-5')
-      expect(out.envelope.memo_bytes).toBe(300)
-      expect(out.envelope.memo_max_bytes).toBe(256)
+      expect(out.envelope.error).toBe("skip_source_memo_too_long");
+      expect(out.envelope.source_chain_id).toBe("columbus-5");
+      expect(out.envelope.memo_bytes).toBe(300);
+      expect(out.envelope.memo_max_bytes).toBe(256);
     }
-  })
+  });
 
-  it('accepts a multi-tx route when every leg fits its own chain cap', async () => {
-    const chainIds = ['osmosis-1', 'columbus-5']
+  it("accepts a multi-tx route when every leg fits its own chain cap", async () => {
+    const chainIds = ["osmosis-1", "columbus-5"];
     mockFetchSequence([
-      { body: { ...okRoute, txs_required: 2, chain_ids: chainIds, required_chain_addresses: chainIds } },
+      {
+        body: {
+          ...okRoute,
+          txs_required: 2,
+          chain_ids: chainIds,
+          required_chain_addresses: chainIds,
+        },
+      },
       {
         body: {
           txs: [
-            { cosmos_tx: { chain_id: 'osmosis-1', signer_address: multiTxArgs.fromAddress, msgs: [], memo: '' } },
             {
               cosmos_tx: {
-                chain_id: 'columbus-5',
+                chain_id: "osmosis-1",
                 signer_address: multiTxArgs.fromAddress,
                 msgs: [],
-                memo: 'a'.repeat(256), // exactly at the cap, not over
+                memo: "",
+              },
+            },
+            {
+              cosmos_tx: {
+                chain_id: "columbus-5",
+                signer_address: multiTxArgs.fromAddress,
+                msgs: [],
+                memo: "a".repeat(256), // exactly at the cap, not over
               },
             },
           ],
           msgs: [],
-          min_amount_out: '118800',
-          route: { ...okRoute, txs_required: 2, chain_ids: chainIds, required_chain_addresses: chainIds },
+          min_amount_out: "118800",
+          route: {
+            ...okRoute,
+            txs_required: 2,
+            chain_ids: chainIds,
+            required_chain_addresses: chainIds,
+          },
         },
       },
-    ])
+    ]);
 
-    const out = await runSkipSwap(multiTxArgs)
+    const out = await runSkipSwap(multiTxArgs);
 
-    expect(out.ok).toBe(true)
-    if (out.ok) expect(out.multi_tx).toBe(true)
-  })
+    expect(out.ok).toBe(true);
+    if (out.ok) expect(out.multi_tx).toBe(true);
+  });
 
   // Codex review (this fix): removing the isMultiTx gate means the memo-cap
   // preflight now runs on every multi-tx leg, including a malformed one. A
   // leg with `cosmos_tx: null` (key present, value null) must be skipped by
   // the preflight rather than crash on `cosmosTx.memo` - and correctly caught
   // downstream by validateTxEnvelopes as a malformed envelope instead.
-  it('does not crash on a malformed leg (cosmos_tx: null) and surfaces the existing malformed-envelope error', async () => {
-    const chainIds = ['osmosis-1', 'columbus-5']
+  it("does not crash on a malformed leg (cosmos_tx: null) and surfaces the existing malformed-envelope error", async () => {
+    const chainIds = ["osmosis-1", "columbus-5"];
     mockFetchSequence([
-      { body: { ...okRoute, txs_required: 2, chain_ids: chainIds, required_chain_addresses: chainIds } },
+      {
+        body: {
+          ...okRoute,
+          txs_required: 2,
+          chain_ids: chainIds,
+          required_chain_addresses: chainIds,
+        },
+      },
       {
         body: {
           txs: [
-            { cosmos_tx: { chain_id: 'osmosis-1', signer_address: multiTxArgs.fromAddress, msgs: [], memo: '' } },
+            {
+              cosmos_tx: {
+                chain_id: "osmosis-1",
+                signer_address: multiTxArgs.fromAddress,
+                msgs: [],
+                memo: "",
+              },
+            },
             { cosmos_tx: null },
           ],
           msgs: [],
-          min_amount_out: '118800',
-          route: { ...okRoute, txs_required: 2, chain_ids: chainIds, required_chain_addresses: chainIds },
+          min_amount_out: "118800",
+          route: {
+            ...okRoute,
+            txs_required: 2,
+            chain_ids: chainIds,
+            required_chain_addresses: chainIds,
+          },
         },
       },
-    ])
+    ]);
 
-    const out = await runSkipSwap(multiTxArgs)
+    const out = await runSkipSwap(multiTxArgs);
 
-    expect(out.ok).toBe(false)
-    if (!out.ok) expect(out.envelope.error).toBe('skip_msgs_tx_malformed')
-  })
-})
+    expect(out.ok).toBe(false);
+    if (!out.ok) expect(out.envelope.error).toBe("skip_msgs_tx_malformed");
+  });
+});
 
-describe('ICS-20 packet-memo cap (abts#2458)', () => {
+describe("ICS-20 packet-memo cap (abts#2458)", () => {
   // The SDK measured ONLY `cosmos_tx.memo` and its comment asserted the inner
   // packet memo "is unbounded". Both halves were wrong, in opposite directions:
   //
@@ -352,10 +455,10 @@ describe('ICS-20 packet-memo cap (abts#2458)', () => {
   // admission that a naive fix breaks.
   const packetArgs: SkipSwapArgs = {
     ...baseArgs,
-    toAddress: 'terra1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
-    destChainId: 'columbus-5',
-    destAssetDenom: 'uluna',
-  }
+    toAddress: "terra1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    destChainId: "columbus-5",
+    destAssetDenom: "uluna",
+  };
 
   /**
    * A single-tx route whose only leg is on `args.destChainId`, with an EMPTY
@@ -367,10 +470,14 @@ describe('ICS-20 packet-memo cap (abts#2458)', () => {
   function packetMemoLeg(
     msgs: Array<{ msg: string; msg_type_url: string }>,
     args: SkipSwapArgs = packetArgs,
-    topLevelMemo = ''
+    topLevelMemo = "",
   ) {
-    const chainIds = [args.sourceChainId, args.destChainId]
-    const route = { ...okRoute, chain_ids: chainIds, required_chain_addresses: chainIds }
+    const chainIds = [args.sourceChainId, args.destChainId];
+    const route = {
+      ...okRoute,
+      chain_ids: chainIds,
+      required_chain_addresses: chainIds,
+    };
     return [
       { body: route },
       {
@@ -386,108 +493,164 @@ describe('ICS-20 packet-memo cap (abts#2458)', () => {
             },
           ],
           msgs: [],
-          min_amount_out: '118800',
+          min_amount_out: "118800",
           route,
         },
       },
-    ]
+    ];
   }
 
   const msgTransfer = (memo: string) => ({
     msg: JSON.stringify({ receiver: packetArgs.toAddress, memo }),
-    msg_type_url: '/ibc.applications.transfer.v1.MsgTransfer',
-  })
+    msg_type_url: "/ibc.applications.transfer.v1.MsgTransfer",
+  });
 
-  it('rejects a columbus-5 packet memo over the packet cap, despite an empty top-level memo', async () => {
-    mockFetchSequence(packetMemoLeg([msgTransfer('a'.repeat(1500))]))
+  it("rejects a columbus-5 packet memo over the packet cap, despite an empty top-level memo", async () => {
+    mockFetchSequence(packetMemoLeg([msgTransfer("a".repeat(1500))]));
 
-    const out = await runSkipSwap(packetArgs)
+    const out = await runSkipSwap(packetArgs);
 
-    expect(out.ok).toBe(false)
+    expect(out.ok).toBe(false);
     if (!out.ok) {
-      expect(out.envelope.error).toBe('skip_source_memo_too_long')
-      expect(out.envelope.source_chain_id).toBe('columbus-5')
-      expect(out.envelope.memo_bytes).toBe(1500)
+      expect(out.envelope.error).toBe("skip_source_memo_too_long");
+      expect(out.envelope.source_chain_id).toBe("columbus-5");
+      expect(out.envelope.memo_bytes).toBe(1500);
       // The PACKET cap, not the 256-byte outer one.
-      expect(out.envelope.memo_max_bytes).toBe(1024)
-      expect(out.envelope.memo_field).toBe('packet')
+      expect(out.envelope.memo_max_bytes).toBe(1024);
+      expect(out.envelope.memo_field).toBe("packet");
     }
-  })
+  });
 
   // THE regression guard. 698-1001 bytes is the measured range of working
   // routes; every one of these would be rejected if the packet memo were
   // measured against the outer 256-byte cap.
-  it.each([698, 850, 1001])('admits a %dB packet memo - the measured working-route range', async bytes => {
-    mockFetchSequence(packetMemoLeg([msgTransfer('a'.repeat(bytes))]))
-    const out = await runSkipSwap(packetArgs)
-    expect(out.ok).toBe(true)
-  })
+  it.each([698, 850, 1001])(
+    "admits a %dB packet memo - the measured working-route range",
+    async (bytes) => {
+      mockFetchSequence(packetMemoLeg([msgTransfer("a".repeat(bytes))]));
+      const out = await runSkipSwap(packetArgs);
+      expect(out.ok).toBe(true);
+    },
+  );
 
-  it('admits a packet memo exactly at the cap and rejects one byte over', async () => {
-    mockFetchSequence(packetMemoLeg([msgTransfer('a'.repeat(1024))]))
-    expect((await runSkipSwap(packetArgs)).ok).toBe(true)
+  it("admits a packet memo exactly at the cap and rejects one byte over", async () => {
+    mockFetchSequence(packetMemoLeg([msgTransfer("a".repeat(1024))]));
+    expect((await runSkipSwap(packetArgs)).ok).toBe(true);
 
-    mockFetchSequence(packetMemoLeg([msgTransfer('a'.repeat(1025))]))
-    const over = await runSkipSwap(packetArgs)
-    expect(over.ok).toBe(false)
-    if (!over.ok) expect(over.envelope.memo_bytes).toBe(1025)
-  })
+    mockFetchSequence(packetMemoLeg([msgTransfer("a".repeat(1025))]));
+    const over = await runSkipSwap(packetArgs);
+    expect(over.ok).toBe(false);
+    if (!over.ok) expect(over.envelope.memo_bytes).toBe(1025);
+  });
 
   // Chains with no measured packet cap get the permissive ceiling. Keplr
   // broadcasts ~1500B packet memos on cosmoshub-4 without error.
-  it('does not reject a large packet memo on a chain with no measured cap (cosmoshub-4)', async () => {
-    mockFetchSequence(packetMemoLeg([msgTransfer('a'.repeat(1500))], baseArgs))
-    const out = await runSkipSwap(baseArgs)
-    expect(out.ok).toBe(true)
-  })
+  it("does not reject a large packet memo on a chain with no measured cap (cosmoshub-4)", async () => {
+    mockFetchSequence(packetMemoLeg([msgTransfer("a".repeat(1500))], baseArgs));
+    const out = await runSkipSwap(baseArgs);
+    expect(out.ok).toBe(true);
+  });
 
   // The outer-memo check is unchanged and still uses the outer cap. Skip's
   // wasm-execute legs populate the top-level memo instead, and those overflow
   // at 256 - a genuinely different failure mode from the packet one.
-  it('still applies the 256B outer cap to the top-level memo, reported as the outer field', async () => {
-    mockFetchSequence(packetMemoLeg([msgTransfer('a'.repeat(700))], packetArgs, 'b'.repeat(300)))
+  it("still applies the 256B outer cap to the top-level memo, reported as the outer field", async () => {
+    mockFetchSequence(
+      packetMemoLeg(
+        [msgTransfer("a".repeat(700))],
+        packetArgs,
+        "b".repeat(300),
+      ),
+    );
 
-    const out = await runSkipSwap(packetArgs)
+    const out = await runSkipSwap(packetArgs);
 
-    expect(out.ok).toBe(false)
+    expect(out.ok).toBe(false);
     if (!out.ok) {
-      expect(out.envelope.memo_bytes).toBe(300)
-      expect(out.envelope.memo_max_bytes).toBe(256)
-      expect(out.envelope.memo_field).toBe('outer')
+      expect(out.envelope.memo_bytes).toBe(300);
+      expect(out.envelope.memo_max_bytes).toBe(256);
+      expect(out.envelope.memo_field).toBe("outer");
     }
-  })
+  });
 
-  it('ignores a non-MsgTransfer message carrying a large memo field', async () => {
+  it("ignores a non-MsgTransfer message carrying a large memo field", async () => {
     mockFetchSequence(
-      packetMemoLeg([{ msg: JSON.stringify({ memo: 'a'.repeat(1500) }), msg_type_url: '/cosmos.bank.v1beta1.MsgSend' }])
-    )
-    const out = await runSkipSwap(packetArgs)
-    expect(out.ok).toBe(true)
-  })
+      packetMemoLeg([
+        {
+          msg: JSON.stringify({ memo: "a".repeat(1500) }),
+          msg_type_url: "/cosmos.bank.v1beta1.MsgSend",
+        },
+      ]),
+    );
+    const out = await runSkipSwap(packetArgs);
+    expect(out.ok).toBe(true);
+  });
 
-  it('does not crash on a MsgTransfer whose msg body is not valid JSON', async () => {
-    mockFetchSequence(packetMemoLeg([{ msg: '{not json', msg_type_url: msgTransfer('').msg_type_url }]))
-    const out = await runSkipSwap(packetArgs)
-    expect(out.ok).toBe(true)
-  })
-
-  it('takes the largest packet memo when a leg carries several MsgTransfers', async () => {
+  it("does not crash on a MsgTransfer whose msg body is not valid JSON", async () => {
     mockFetchSequence(
-      packetMemoLeg([msgTransfer('a'.repeat(10)), msgTransfer('a'.repeat(1500)), msgTransfer('a'.repeat(5))])
-    )
+      packetMemoLeg([
+        { msg: "{not json", msg_type_url: msgTransfer("").msg_type_url },
+      ]),
+    );
+    const out = await runSkipSwap(packetArgs);
+    expect(out.ok).toBe(true);
+  });
 
-    const out = await runSkipSwap(packetArgs)
+  it("takes the largest packet memo when a leg carries several MsgTransfers", async () => {
+    mockFetchSequence(
+      packetMemoLeg([
+        msgTransfer("a".repeat(10)),
+        msgTransfer("a".repeat(1500)),
+        msgTransfer("a".repeat(5)),
+      ]),
+    );
 
-    expect(out.ok).toBe(false)
-    if (!out.ok) expect(out.envelope.memo_bytes).toBe(1500)
-  })
-})
+    const out = await runSkipSwap(packetArgs);
 
-describe('quoteSkipRoute (quote-only path)', () => {
-  it('returns the raw route on success', async () => {
-    mockFetchSequence([{ body: okRoute }])
-    const route = await quoteSkipRoute(baseArgs)
-    expect(route.txs_required).toBe(1)
-    expect(route.estimated_amount_out).toBe('120000')
-  })
-})
+    expect(out.ok).toBe(false);
+    if (!out.ok) expect(out.envelope.memo_bytes).toBe(1500);
+  });
+});
+
+// sdk#1363: Skip's /msgs_direct can return an `svm_tx` (Solana) wrapper
+// alongside evm_tx/cosmos_tx, which this integration doesn't parse and locks
+// the fail-closed behavior as intentional rather than a silent gap. Not a
+// fund-safety issue because the request is refused before any tx reaches the
+// signing layer.
+describe("svm_tx (Solana) legs are refused, not silently mis-parsed (sdk#1363)", () => {
+  it("rejects a route whose only leg is an svm_tx wrapper", async () => {
+    mockFetchSequence([
+      { body: okRoute },
+      {
+        body: {
+          txs: [
+            {
+              svm_tx: {
+                chain_id: "solana",
+                signer_address: baseArgs.fromAddress,
+                instructions: [],
+              },
+            },
+          ],
+          msgs: [],
+          min_amount_out: "118800",
+          route: okRoute,
+        },
+      },
+    ]);
+
+    const out = await runSkipSwap(baseArgs);
+
+    expect(out.ok).toBe(false);
+    if (!out.ok) expect(out.envelope.error).toBe("skip_msgs_tx_malformed");
+  });
+});
+
+describe("quoteSkipRoute (quote-only path)", () => {
+  it("returns the raw route on success", async () => {
+    mockFetchSequence([{ body: okRoute }]);
+    const route = await quoteSkipRoute(baseArgs);
+    expect(route.txs_required).toBe(1);
+    expect(route.estimated_amount_out).toBe("120000");
+  });
+});

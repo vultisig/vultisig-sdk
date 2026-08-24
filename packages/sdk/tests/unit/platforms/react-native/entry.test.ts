@@ -71,6 +71,14 @@ beforeAll(async () => {
 }, 120_000)
 
 describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
+  it('exports canonical fast-vault detection helpers', async () => {
+    const canonical = await import('@vultisig/core-mpc/devices/localPartyId')
+
+    expect(reactNativeEntry.hasServer).toBe(canonical.hasServer)
+    expect(reactNativeEntry.isServer).toBe(canonical.isServer)
+    expect(reactNativeEntry.hasServer(['Android-current', 'VultiServer-legacy'])).toBe(true)
+  })
+
   it.each([
     'EVM_DANGEROUS_ADDRESSES',
     'SOLANA_DANGEROUS_ADDRESSES',
@@ -217,6 +225,18 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(deriveAddressFromPublicKey).toHaveBeenNthCalledWith(2, 60, publicKey)
   })
 
+  it('exports isValidTokenId (WalletCoreLike) for non-address token families from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    // Sui and a malformed Ripple id never reach the walletCore-dependent
+    // address-validation branch, so an empty stub is safe here.
+    const walletCore = {} as import('@vultisig/walletcore-native').WalletCoreLike
+
+    expect(typeof rn.isValidTokenId).toBe('function')
+    expect(rn.isValidTokenId({ chain: rn.Chain.Sui, id: '0x2::sui::SUI', walletCore })).toBe(true)
+    expect(rn.isValidTokenId({ chain: rn.Chain.Sui, id: 'not-a-struct-tag', walletCore })).toBe(false)
+    expect(rn.isValidTokenId({ chain: rn.Chain.Ripple, id: 'not-a-composite-id', walletCore })).toBe(false)
+  })
+
   it('exports the shared THORChain secured-asset catalog from the RN entry', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
@@ -240,6 +260,62 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.getCosmosMemoMaxBytesByChainId('phoenix-1')).toBe(512)
     expect(rn.isCosmosMemoWithinCap(rn.Chain.Osmosis, 'a'.repeat(256))).toBe(true)
     expect(rn.isCosmosMemoWithinCap(rn.Chain.Osmosis, 'a'.repeat(257))).toBe(false)
+  })
+
+  it('exports the canonical Cosmos custom-signing payload builders from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const canonical = await import('../../../../src/vault/services/cosmos')
+
+    expect(rn.buildSignAminoKeysignPayload).toBe(canonical.buildSignAminoKeysignPayload)
+    expect(rn.buildSignDirectKeysignPayload).toBe(canonical.buildSignDirectKeysignPayload)
+  })
+
+  // sdk#1657 - buildSignAminoKeysignPayload/buildSignDirectKeysignPayload only
+  // ever call `publicKey.data()`, but their exported `publicKey` type was
+  // pinned to @trustwallet/wallet-core's `PublicKey`. RN consumers hold a
+  // @vultisig/walletcore-native `NativePublicKeyInstance` instead, which is
+  // not that class, so the RN-published type forced a cast. This test assigns
+  // a `NativePublicKeyInstance`-typed value directly to `publicKey` with no
+  // `as` — it fails to compile (not just fails at runtime) if the export ever
+  // narrows back to the TrustWallet WASM type.
+  it('accepts a React Native NativePublicKeyInstance as publicKey with no cast', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    const nativePublicKey: import('@vultisig/walletcore-native').NativePublicKeyInstance = {
+      _handle: 1,
+      data: () => new Uint8Array([1, 2, 3]),
+      uncompressed() {
+        return this
+      },
+      compressed() {
+        return this
+      },
+      verify: () => true,
+      verifyAsDER: () => true,
+      delete: () => {},
+    }
+
+    const payload = await rn.buildSignAminoKeysignPayload({
+      chain: rn.Chain.Cosmos,
+      coin: {
+        chain: rn.Chain.Cosmos,
+        address: 'cosmos1abcdef',
+        decimals: 6,
+        ticker: 'ATOM',
+      },
+      msgs: [],
+      fee: {
+        amount: [{ denom: 'uatom', amount: '5000' }],
+        gas: '200000',
+      },
+      vaultId: 'vault-ecdsa',
+      localPartyId: 'device-1',
+      publicKey: nativePublicKey,
+      libType: 'DKLS',
+      skipChainSpecificFetch: true,
+    })
+
+    expect(payload.coin?.hexPublicKey).toBe('010203')
   })
 
   it('exports the generic CosmWasm execute message builder from the RN root surface', async () => {
