@@ -174,7 +174,7 @@ describe('legacy vault backup import migration', () => {
 
     await sdk.initialize()
     await expect(sdk.importVault(legacyVultContent, password)).rejects.toMatchObject({
-      code: 'CORRUPTED_DATA',
+      code: 'PERSISTENCE_FAILED',
     })
 
     expect(await storage.get(`vault:${SYNTH_ECDSA_PK}`)).not.toBeNull()
