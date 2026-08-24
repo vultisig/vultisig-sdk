@@ -69,8 +69,10 @@ const decodeTransportMessage = (message: string): string => {
 }
 
 const transientMessagePatterns = [
+  /\b(?:ECONNRESET|ECONNREFUSED|ECONNABORTED|ETIMEDOUT|ENETRESET|ENETUNREACH|EHOSTUNREACH|EAI_AGAIN)\b/i,
   /\bfetch failed\b/i,
   /\bfailed to fetch\b/i,
+  /\bload failed\b/i,
   /\bnetwork error\b/i,
   /\bnetwork request failed\b/i,
   /\brequest timed out\b/i,
@@ -128,7 +130,7 @@ export const isTransientBroadcastError = (error: unknown): boolean => {
     }
 
     if (current instanceof HttpResponseError) {
-      return current.status === 429 || (current.status >= 500 && current.status <= 599)
+      return current.status === 408 || current.status === 429 || (current.status >= 500 && current.status <= 599)
     }
 
     if (typeof current === 'object') {
@@ -138,7 +140,7 @@ export const isTransientBroadcastError = (error: unknown): boolean => {
       }
 
       const status = (current as { status?: unknown }).status
-      if (typeof status === 'number' && (status === 429 || (status >= 500 && status <= 599))) {
+      if (typeof status === 'number' && (status === 408 || status === 429 || (status >= 500 && status <= 599))) {
         return true
       }
     }
