@@ -1,5 +1,5 @@
-export type { AcrossChain, AcrossQuote, AcrossQuoteParams } from './acrossQuote'
-export { acrossQuote, acrossSupportedChains } from './acrossQuote'
+export type { AcrossChain, AcrossOriginChain, AcrossQuote, AcrossQuoteParams } from './acrossQuote'
+export { ACROSS_ORIGIN_CHAIN, acrossQuote, acrossSupportedChains } from './acrossQuote'
 export type {
   BoundSwapQuote,
   FindSwapQuoteParams,

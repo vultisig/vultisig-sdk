@@ -6,12 +6,50 @@ import * as fs from 'fs/promises'
 import * as os from 'os'
 import * as path from 'path'
 
+import { storageValuesEqual } from '../../storage/storageValuesEqual'
 import type { Storage, StorageMetadata, StoredValue } from '../../storage/types'
 import { STORAGE_VERSION, StorageError, StorageErrorCode } from '../../storage/types'
+import { tryLockFile, unlockFile } from './fileLock'
 
 function getDefaultBasePath(): string {
   const override = process.env.VULTISIG_CONFIG_DIR?.trim()
   return override ? override : path.join(os.homedir(), '.vultisig')
+}
+
+const WINDOWS_ENCODED_KEY_PREFIX = '.__vultisig_key__'
+const WINDOWS_INVALID_FILENAME_CHARACTERS = /[<>:"/\\|?*]/
+const WINDOWS_RESERVED_FILENAME = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i
+
+function needsWindowsFilenameEncoding(key: string): boolean {
+  return (
+    key.startsWith(WINDOWS_ENCODED_KEY_PREFIX) ||
+    WINDOWS_INVALID_FILENAME_CHARACTERS.test(key) ||
+    Array.from(key).some(character => character.charCodeAt(0) < 32) ||
+    WINDOWS_RESERVED_FILENAME.test(key) ||
+    key.endsWith('.') ||
+    key.endsWith(' ')
+  )
+}
+
+function storageFileName(key: string): string {
+  if (process.platform === 'win32' && needsWindowsFilenameEncoding(key)) {
+    return `${WINDOWS_ENCODED_KEY_PREFIX}${Buffer.from(key, 'utf8').toString('base64url')}`
+  }
+  return key.replace(/[/\\]/g, '_')
+}
+
+function storageKeyFromFileName(fileName: string): string {
+  if (process.platform !== 'win32' || !fileName.startsWith(WINDOWS_ENCODED_KEY_PREFIX)) {
+    return fileName
+  }
+
+  try {
+    const encoded = fileName.slice(WINDOWS_ENCODED_KEY_PREFIX.length)
+    const key = Buffer.from(encoded, 'base64url').toString('utf8')
+    return needsWindowsFilenameEncoding(key) && storageFileName(key) === fileName ? key : fileName
+  } catch {
+    return fileName
+  }
 }
 
 export class FileStorage implements Storage {
@@ -47,27 +85,87 @@ export class FileStorage implements Storage {
   }
 
   private getFilePath(key: string): string {
-    const sanitized = key.replace(/[/\\]/g, '_')
+    const fileName = storageFileName(key)
     if (key.startsWith('cache:')) {
-      return path.join(this.basePath, 'cache', `${sanitized}.json`)
+      return path.join(this.basePath, 'cache', `${fileName}.json`)
     }
-    return path.join(this.basePath, `${sanitized}.json`)
+    return path.join(this.basePath, `${fileName}.json`)
+  }
+
+  private async readValue<T>(key: string): Promise<T | null> {
+    try {
+      const content = await fs.readFile(this.getFilePath(key), 'utf-8')
+      const stored = JSON.parse(content) as StoredValue<T>
+      return stored.value
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+      throw error
+    }
+  }
+
+  private async writeValue<T>(key: string, value: T): Promise<void> {
+    const filePath = this.getFilePath(key)
+    const metadata: StorageMetadata = {
+      version: STORAGE_VERSION,
+      createdAt: Date.now(),
+      lastModified: Date.now(),
+    }
+    const stored: StoredValue<T> = { value, metadata }
+    const tempPath = `${filePath}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}.tmp`
+
+    await fs.mkdir(path.dirname(filePath), { recursive: true })
+    await fs.writeFile(tempPath, JSON.stringify(stored, null, 2), {
+      encoding: 'utf-8',
+      mode: 0o600,
+      flag: 'wx',
+    })
+    await fs.rename(tempPath, filePath)
+  }
+
+  private async removeValue(key: string): Promise<void> {
+    await fs.unlink(this.getFilePath(key)).catch(error => {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    })
+  }
+
+  private async withStorageLock<T>(key: string, operation: () => Promise<T>): Promise<T> {
+    await this.ensureDirectory()
+    const lockPath = path.join(this.basePath, '.storage.lock')
+    const startedAt = Date.now()
+    // Keep one storage-wide sentinel stable: advisory locks are inode-scoped,
+    // and replacing or unlinking it could split contenders across locks. The
+    // kernel releases the lock automatically when a process exits.
+    const lockHandle = await fs.open(lockPath, 'a+', 0o600)
+    let acquired = false
+
+    try {
+      while (!acquired) {
+        acquired = tryLockFile(lockHandle.fd)
+        if (acquired) break
+
+        if (Date.now() - startedAt > 5_000) {
+          throw new StorageError(StorageErrorCode.StorageUnavailable, `Timed out locking value for key "${key}"`)
+        }
+        await new Promise(resolve => setTimeout(resolve, 10))
+      }
+
+      return await operation()
+    } finally {
+      try {
+        if (acquired) {
+          unlockFile(lockHandle.fd)
+        }
+      } finally {
+        await lockHandle.close()
+      }
+    }
   }
 
   async get<T>(key: string): Promise<T | null> {
     await this.ensureDirectory()
 
     try {
-      const filePath = this.getFilePath(key)
-      try {
-        await fs.access(filePath)
-      } catch {
-        return null
-      }
-
-      const content = await fs.readFile(filePath, 'utf-8')
-      const stored = JSON.parse(content) as StoredValue<T>
-      return stored.value
+      return await this.readValue<T>(key)
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         return null
@@ -77,32 +175,10 @@ export class FileStorage implements Storage {
   }
 
   async set<T>(key: string, value: T): Promise<void> {
-    await this.ensureDirectory()
-
-    const metadata: StorageMetadata = {
-      version: STORAGE_VERSION,
-      createdAt: Date.now(),
-      lastModified: Date.now(),
-    }
-
-    const stored: StoredValue<T> = { value, metadata }
-
     try {
-      const filePath = this.getFilePath(key)
-      // Use unique temp file to avoid race conditions with concurrent writes
-      const tempPath = `${filePath}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}.tmp`
-
-      // Ensure parent directory exists right before writing
-      await fs.mkdir(path.dirname(filePath), { recursive: true })
-
-      await fs.writeFile(tempPath, JSON.stringify(stored, null, 2), {
-        encoding: 'utf-8',
-        mode: 0o600,
-        flag: 'wx',
-      })
-
-      await fs.rename(tempPath, filePath)
+      await this.withStorageLock(key, () => this.writeValue(key, value))
     } catch (error) {
+      if (error instanceof StorageError) throw error
       if ((error as NodeJS.ErrnoException).code === 'ENOSPC') {
         throw new StorageError(StorageErrorCode.QuotaExceeded, 'Disk space quota exceeded', error as Error)
       }
@@ -110,20 +186,35 @@ export class FileStorage implements Storage {
     }
   }
 
-  async remove(key: string): Promise<void> {
-    await this.ensureDirectory()
-
+  async compareAndSet<T>(key: string, expectedValue: T | null, value: T | null): Promise<boolean> {
     try {
-      const filePath = this.getFilePath(key)
-      try {
-        await fs.access(filePath)
-        await fs.unlink(filePath)
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-          throw error
+      return await this.withStorageLock(key, async () => {
+        const currentValue = await this.readValue<T>(key)
+        if (!storageValuesEqual(currentValue, expectedValue)) {
+          return false
         }
-      }
+
+        if (value === null) {
+          await this.removeValue(key)
+        } else {
+          await this.writeValue(key, value)
+        }
+        return true
+      })
     } catch (error) {
+      if (error instanceof StorageError) throw error
+      if ((error as NodeJS.ErrnoException).code === 'ENOSPC') {
+        throw new StorageError(StorageErrorCode.QuotaExceeded, 'Disk space quota exceeded', error as Error)
+      }
+      throw new StorageError(StorageErrorCode.Unknown, `Failed to conditionally write key "${key}"`, error as Error)
+    }
+  }
+
+  async remove(key: string): Promise<void> {
+    try {
+      await this.withStorageLock(key, () => this.removeValue(key))
+    } catch (error) {
+      if (error instanceof StorageError) throw error
       throw new StorageError(StorageErrorCode.Unknown, `Failed to remove key "${key}"`, error as Error)
     }
   }
@@ -137,7 +228,7 @@ export class FileStorage implements Storage {
       const files = await fs.readdir(this.basePath)
       for (const file of files) {
         if (file.endsWith('.json') && !file.endsWith('.tmp')) {
-          keys.push(file.slice(0, -5))
+          keys.push(storageKeyFromFileName(file.slice(0, -5)))
         }
       }
 
@@ -146,7 +237,7 @@ export class FileStorage implements Storage {
         const cacheFiles = await fs.readdir(cacheDir)
         for (const file of cacheFiles) {
           if (file.endsWith('.json') && !file.endsWith('.tmp')) {
-            keys.push(file.slice(0, -5))
+            keys.push(storageKeyFromFileName(file.slice(0, -5)))
           }
         }
       } catch (error) {
@@ -162,26 +253,12 @@ export class FileStorage implements Storage {
   }
 
   async clear(): Promise<void> {
-    await this.ensureDirectory()
-
     try {
-      const files = await fs.readdir(this.basePath)
-      await Promise.all(
-        files.filter(file => file.endsWith('.json')).map(file => fs.unlink(path.join(this.basePath, file)))
-      )
-
-      try {
-        const cacheDir = path.join(this.basePath, 'cache')
-        const cacheFiles = await fs.readdir(cacheDir)
-        await Promise.all(
-          cacheFiles.filter(file => file.endsWith('.json')).map(file => fs.unlink(path.join(cacheDir, file)))
-        )
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-          throw error
-        }
-      }
+      await this.withStorageLock('*', async () => {
+        await Promise.all((await this.list()).map(key => this.removeValue(key)))
+      })
     } catch (error) {
+      if (error instanceof StorageError) throw error
       throw new StorageError(StorageErrorCode.Unknown, 'Failed to clear storage', error as Error)
     }
   }
