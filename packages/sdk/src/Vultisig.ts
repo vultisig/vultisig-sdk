@@ -8,6 +8,11 @@ import { getCoinPrices as coreCoinPrices } from '@vultisig/core-chain/coin/price
 import { getCoinPricesWithChange as coreCoinPricesWithChange } from '@vultisig/core-chain/coin/price/getCoinPricesWithChange'
 import { scanAddressWithBlockaid } from '@vultisig/core-chain/security/blockaid/address'
 import { scanSiteWithBlockaid } from '@vultisig/core-chain/security/blockaid/site'
+import {
+  getSwapArrivalStatus,
+  type GetSwapArrivalStatusInput,
+  type SwapArrivalStatusResult,
+} from '@vultisig/core-chain/swap/utils/getSwapArrivalStatus'
 import { getSwapExplorerUrl, type SwapExplorerProvider } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 import { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
 import { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
@@ -71,7 +76,7 @@ import { FastVault } from './vault/FastVault'
 import { SecureVault } from './vault/SecureVault'
 import { VaultBase } from './vault/VaultBase'
 import { VaultError, VaultErrorCode } from './vault/VaultError'
-import { VaultManager } from './VaultManager'
+import { type VaultImportOptions, VaultManager } from './VaultManager'
 
 // Re-export constants
 export {
@@ -960,6 +965,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    *
    * @param vultContent - The .vult file content as a string
    * @param password - Optional password for encrypted vaults
+   * @param options - Explicit conflict handling for an existing logical vault
    * @returns Imported vault instance
    *
    * @example
@@ -968,9 +974,9 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * const vault = await sdk.importVault(vultContent, 'password123')
    * ```
    */
-  async importVault(vultContent: string, password?: string): Promise<VaultBase> {
+  async importVault(vultContent: string, password?: string, options?: VaultImportOptions): Promise<VaultBase> {
     await this.ensureInitialized()
-    const { vault } = await this.vaultManager.importVaultWithResult(vultContent, password, notice => {
+    const { vault } = await this.vaultManager.importVaultWithResult(vultContent, password, options, notice => {
       this.emit('legacyVaultBackupMigrated', notice)
     })
 
@@ -1241,6 +1247,11 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    */
   static getSwapExplorerUrl(provider: SwapExplorerProvider, txHash: string, fromChain: Chain): string {
     return getSwapExplorerUrl({ provider, txHash, fromChain })
+  }
+
+  /** Read and normalize one THORChain, MayaChain, Skip Go, or LI.FI swap status snapshot. */
+  static getSwapArrivalStatus(input: GetSwapArrivalStatusInput): Promise<SwapArrivalStatusResult> {
+    return getSwapArrivalStatus(input)
   }
 
   /**

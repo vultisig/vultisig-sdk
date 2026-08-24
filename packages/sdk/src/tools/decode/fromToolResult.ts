@@ -33,7 +33,13 @@ function asArgsObject(args: DecodeFromToolResultInput['args']): Record<string, u
 
 function inferFamily(input: DecodeFromToolResultInput, args: Record<string, unknown>): ChainFamily | undefined {
   if (input.family) return input.family
-  const chain = (input.chain ?? (args['chain'] as string) ?? (args['from_chain'] as string) ?? '')
+  const chain = (
+    input.chain ??
+    (args['chain'] as string) ??
+    (args['from_chain'] as string) ??
+    (args['fromChain'] as string) ??
+    ''
+  )
     .toString()
     .toLowerCase()
     .trim()
@@ -92,13 +98,13 @@ function resolvePayload(
     return withFamilyError(family, family === 'evm' ? hexToBytes(p) : tryBase64ThenHex(p))
   }
   if (family === 'evm') {
-    const hex = args['unsigned_payload']
+    const hex = args['unsigned_payload'] ?? args['unsignedPayload']
     if (typeof hex === 'string' && hex.length > 0) return withFamilyError(family, hexToBytes(hex))
-    return { error: 'evm: no payload — pass `payload` or args.unsigned_payload (hex)' }
+    return { error: 'evm: no payload — pass `payload` or args.unsigned_payload / args.unsignedPayload (hex)' }
   }
-  const b64 = args['cosmos_payload'] ?? args['payload']
+  const b64 = args['cosmos_payload'] ?? args['cosmosPayload'] ?? args['payload']
   if (typeof b64 === 'string' && b64.length > 0) return withFamilyError(family, tryBase64ThenHex(b64))
-  return { error: 'cosmos: no payload — pass `payload` or args.cosmos_payload (base64)' }
+  return { error: 'cosmos: no payload — pass `payload` or args.cosmos_payload / args.cosmosPayload (base64)' }
 }
 
 function withFamilyError(family: ChainFamily, result: PayloadResult): PayloadResult {
@@ -143,7 +149,15 @@ function tryBase64ThenHex(s: string): PayloadResult {
  */
 export function decodeFromToolResult(input: DecodeFromToolResultInput): Envelope {
   const args = asArgsObject(input.args)
-  const chainHint = (input.chain ?? (args['chain'] as string) ?? (args['from_chain'] as string) ?? '').toString().trim()
+  const chainHint = (
+    input.chain ??
+    (args['chain'] as string) ??
+    (args['from_chain'] as string) ??
+    (args['fromChain'] as string) ??
+    ''
+  )
+    .toString()
+    .trim()
   const family = inferFamily(input, args)
 
   if (!family) {
