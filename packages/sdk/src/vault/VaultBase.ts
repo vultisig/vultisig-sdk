@@ -38,6 +38,7 @@ import type { Storage } from '../storage/types'
 // modules at module-load time, which breaks vitest setups that mock chainFeeCoin.
 import { computeMaxSendFromBalance } from '../tools/prep/maxSend'
 import { vaultDataToIdentity } from '../tools/prep/types'
+import { pollTxStatusUntilFinal } from '../tx'
 // Types
 import {
   Balance,
@@ -2044,21 +2045,68 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     const toCoin = this.buildAccountCoin(toChain, toAddress, toToken)
 
     let resolvedAmount = amount
+    // Reusable when the fee-aware ceiling turns out to BE the whole balance -
+    // there is then nothing to re-quote and the probe is the final quote.
+    let maxProbeQuote: SwapQuoteResult | undefined
+
     if (amount === 'max') {
       const bal = await this.balanceService.getBalance(fromChain, fromToken.contractAddress)
-      resolvedAmount = this.formatUnits(BigInt(bal.amount), fromToken.decimals)
-      if (BigInt(bal.amount) <= 0n) throw new VaultError(VaultErrorCode.InvalidAmount, 'Zero balance — nothing to swap')
+      const balance = BigInt(bal.amount)
+      if (balance <= 0n) throw new VaultError(VaultErrorCode.InvalidAmount, 'Zero balance — nothing to swap')
+
+      // Quote at the full balance FIRST, purely to learn this route's
+      // `maxSwapable`. Committing the full balance directly (what this used to
+      // do) over-commits a native swap by exactly the network fee, so it fails
+      // at prepare/broadcast with insufficient funds - after the caller has
+      // already been told the swap was viable. `send({ amount: 'max' })` has
+      // always resolved its ceiling before building; this brings swap in line.
+      const fullAmount = this.validateHumanSwapAmount(this.formatUnits(balance, fromToken.decimals), fromToken.decimals)
+      const probe = await this.getSwapQuote({
+        fromCoin,
+        toCoin,
+        amount: fullAmount,
+        recipient: normalizedRecipient,
+        slippageTolerance,
+        excludeProviders,
+      })
+
+      // 0n means "not computable from this quote", NOT "nothing is swappable":
+      // deposit-channel (transfer) routes price the source-chain fee at
+      // broadcast time, so the quote cannot say what is safe. Fail closed with
+      // an actionable message rather than guess a fee on a fund path.
+      //
+      // The typeof check is deliberate belt-and-braces: `getSwapQuote` always
+      // populates `maxSwapable`, but an override or a partial quote must land
+      // in the fail-closed branch rather than fall through into an over-commit.
+      if (typeof probe.maxSwapable !== 'bigint' || probe.maxSwapable <= 0n) {
+        throw new VaultError(
+          VaultErrorCode.InvalidAmount,
+          `Cannot compute a fee-aware max for this ${fromToken.ticker} route: the source-chain fee is only known at ` +
+            `broadcast time. Estimate the fee separately and pass an explicit amount instead of "max".`
+        )
+      }
+
+      if (probe.maxSwapable >= balance) {
+        // Token route - gas is paid in the native asset, so the whole token
+        // balance is swappable and the probe already quotes the final amount.
+        resolvedAmount = fullAmount
+        maxProbeQuote = probe
+      } else {
+        resolvedAmount = this.formatUnits(probe.maxSwapable, fromToken.decimals)
+      }
     }
     const normalizedAmount = this.validateHumanSwapAmount(resolvedAmount, fromToken.decimals)
 
-    const quote = await this.getSwapQuote({
-      fromCoin,
-      toCoin,
-      amount: normalizedAmount,
-      recipient: normalizedRecipient,
-      slippageTolerance,
-      excludeProviders,
-    })
+    const quote =
+      maxProbeQuote ??
+      (await this.getSwapQuote({
+        fromCoin,
+        toCoin,
+        amount: normalizedAmount,
+        recipient: normalizedRecipient,
+        slippageTolerance,
+        excludeProviders,
+      }))
     if (dryRun) return { dryRun: true, quote }
 
     const { keysignPayload, approvalPayload } = await this.prepareSwapTx({
@@ -2267,19 +2315,21 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     timeoutMs = 60_000,
     intervalMs = 3_000
   ): Promise<void> {
-    const deadline = Date.now() + timeoutMs
-    while (Date.now() < deadline) {
-      try {
-        const result = await this.getTxStatus({ chain, txHash })
-        if (result.status === 'success') return
-        if (result.status === 'error')
-          throw new VaultError(VaultErrorCode.BroadcastFailed, `Approval tx failed: ${txHash}`)
-      } catch (e) {
-        if (e instanceof VaultError && e.code !== VaultErrorCode.NetworkError) throw e
-      }
-      await new Promise(resolve => setTimeout(resolve, intervalMs))
+    const outcome = await pollTxStatusUntilFinal({
+      chain,
+      txHash,
+      timeoutMs,
+      intervalMs,
+      getTxStatus: params => this.getTxStatus(params),
+      shouldRetryError: error => !(error instanceof VaultError) || error.code === VaultErrorCode.NetworkError,
+    })
+
+    if (outcome.result?.status === 'error') {
+      throw new VaultError(VaultErrorCode.BroadcastFailed, `Approval tx failed: ${txHash}`)
     }
-    throw new VaultError(VaultErrorCode.Timeout, `Approval tx not confirmed within ${timeoutMs / 1000}s: ${txHash}`)
+    if (outcome.timedOut) {
+      throw new VaultError(VaultErrorCode.Timeout, `Approval tx not confirmed within ${timeoutMs / 1000}s: ${txHash}`)
+    }
   }
 
   private formatUnits(value: bigint, decimals: number): string {
