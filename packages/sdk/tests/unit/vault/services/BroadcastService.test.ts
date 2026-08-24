@@ -1,4 +1,6 @@
 import { Chain } from '@vultisig/core-chain/Chain'
+import { CosmosSequenceMismatchError } from '@vultisig/core-chain/tx/broadcast/cosmosSequenceMismatch'
+import { broadcastAccepted, broadcastFailed } from '@vultisig/core-chain/tx/broadcast/resolver'
 import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -107,8 +109,8 @@ describe('BroadcastService', () => {
     mockGetTxStatus.mockResolvedValue({ status: 'success' })
   })
 
-  it('falls back to the locally computed hash when the resolver returns void (evm/cosmos/sui/ripple/ton/polkadot/bittensor)', async () => {
-    mockCoreBroadcastTx.mockResolvedValue(undefined)
+  it('falls back to the locally computed hash when the accepted result has no hash', async () => {
+    mockCoreBroadcastTx.mockResolvedValue(broadcastAccepted())
     mockGetTxHash.mockResolvedValue('0xlocally-computed-hash')
 
     const hash = await service.broadcastTx({
@@ -121,8 +123,8 @@ describe('BroadcastService', () => {
     expect(mockGetTxHash).toHaveBeenCalledOnce()
   })
 
-  it('prefers the resolver-returned hash over the local computation when the resolver returns a bare string (utxo/cardano)', async () => {
-    mockCoreBroadcastTx.mockResolvedValue('node-returned-hash')
+  it('prefers the canonical hash from the accepted result over local computation', async () => {
+    mockCoreBroadcastTx.mockResolvedValue(broadcastAccepted('node-returned-hash'))
     mockGetTxHash.mockResolvedValue('should-never-be-used')
 
     const hash = await service.broadcastTx({
@@ -135,11 +137,8 @@ describe('BroadcastService', () => {
     expect(mockGetTxHash).not.toHaveBeenCalled()
   })
 
-  it('prefers the resolver-returned txid over the local computation for the Tron response shape', async () => {
-    mockCoreBroadcastTx.mockResolvedValue({
-      txid: 'tron-node-hash',
-      result: true,
-    })
+  it('uses the normalized canonical Tron hash', async () => {
+    mockCoreBroadcastTx.mockResolvedValue(broadcastAccepted('tron-node-hash'))
     mockGetTxHash.mockResolvedValue('should-never-be-used')
 
     const hash = await service.broadcastTx({
@@ -152,8 +151,8 @@ describe('BroadcastService', () => {
     expect(mockGetTxHash).not.toHaveBeenCalled()
   })
 
-  it('falls back to the local hash when the resolver returns an empty string', async () => {
-    mockCoreBroadcastTx.mockResolvedValue('')
+  it('falls back to the local hash when the accepted result omits a hash', async () => {
+    mockCoreBroadcastTx.mockResolvedValue(broadcastAccepted())
     mockGetTxHash.mockResolvedValue('local-fallback-hash')
 
     const hash = await service.broadcastTx({
@@ -165,8 +164,8 @@ describe('BroadcastService', () => {
     expect(hash).toBe('local-fallback-hash')
   })
 
-  it('falls back to the local hash when the resolver returns an object without a usable txid', async () => {
-    mockCoreBroadcastTx.mockResolvedValue({ result: true })
+  it('falls back to the local hash when accepted provider details contain no canonical hash', async () => {
+    mockCoreBroadcastTx.mockResolvedValue(broadcastAccepted(undefined, { provider: { result: true } }))
     mockGetTxHash.mockResolvedValue('local-fallback-hash')
 
     const hash = await service.broadcastTx({
@@ -180,7 +179,9 @@ describe('BroadcastService', () => {
 
   it('resolves each broadcast input independently and returns the last transaction hash (approve + swap)', async () => {
     mockGetEncodedSigningInputs.mockResolvedValue(['approve-input', 'swap-input'])
-    mockCoreBroadcastTx.mockResolvedValueOnce(undefined).mockResolvedValueOnce('swap-node-hash')
+    mockCoreBroadcastTx
+      .mockResolvedValueOnce(broadcastAccepted())
+      .mockResolvedValueOnce(broadcastAccepted('swap-node-hash'))
     mockGetTxHash.mockResolvedValue('approve-local-hash')
 
     const hash = await service.broadcastTx({
@@ -190,14 +191,14 @@ describe('BroadcastService', () => {
     })
 
     expect(hash).toBe('swap-node-hash')
-    // Only the first (void-resolver) iteration needed the local fallback.
+    // Only the first hashless accepted result needed the local fallback.
     expect(mockGetTxHash).toHaveBeenCalledOnce()
   })
 
   it('uses an injected broadcaster without calling the network broadcaster', async () => {
     mockGetEncodedSigningInputs.mockResolvedValue(['approve-input', 'swap-input'])
     mockGetTxHash.mockResolvedValueOnce('approve-local-hash').mockResolvedValueOnce('swap-local-hash')
-    const injectedBroadcaster = vi.fn().mockResolvedValue(undefined)
+    const injectedBroadcaster = vi.fn().mockResolvedValue(broadcastAccepted())
     const injectedService = new BroadcastService(extractMessageHashes, wasmProvider, injectedBroadcaster)
 
     await injectedService.broadcastTx({ chain: Chain.Ethereum, keysignPayload, signature })
@@ -208,7 +209,7 @@ describe('BroadcastService', () => {
 
   it('carries already-broadcast hashes when a later input fails', async () => {
     mockGetEncodedSigningInputs.mockResolvedValue(['approve-input', 'swap-input'])
-    mockCoreBroadcastTx.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('swap rejected'))
+    mockCoreBroadcastTx.mockResolvedValueOnce(broadcastAccepted()).mockRejectedValueOnce(new Error('swap rejected'))
     mockGetTxHash.mockResolvedValueOnce('approve-local-hash')
 
     const promise = service.broadcastTx({ chain: Chain.Ethereum, keysignPayload, signature })
@@ -232,6 +233,19 @@ describe('BroadcastService', () => {
     })
   })
 
+  it('maps a failed broadcast result while retaining its original cause', async () => {
+    const cause = new Error('RPC rejected the transaction')
+    mockCoreBroadcastTx.mockResolvedValue(broadcastFailed(cause, false))
+
+    const error = await service.broadcastTx({ chain: Chain.Ethereum, keysignPayload, signature }).catch(value => value)
+
+    expect(error).toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('BROADCAST_REJECTED'),
+    })
+    expect(error.originalError.cause).toBe(cause)
+  })
+
   it('waits for ERC-20 approval confirmation before broadcasting the swap input', async () => {
     const events: string[] = []
     mockGetEncodedSigningInputs.mockResolvedValue(['approval-input', 'swap-input'])
@@ -239,6 +253,7 @@ describe('BroadcastService', () => {
     mockDecodeSigningOutput.mockImplementation((_chain, tx) => tx)
     const injectedBroadcaster = vi.fn(async () => {
       events.push('broadcast')
+      return broadcastAccepted()
     })
     mockGetTxHash.mockImplementation(async ({ tx }) => (tx.includes('approval-input') ? '0xapproval' : '0xswap'))
     mockGetTxStatus.mockImplementation(async ({ hash }) => {
@@ -271,7 +286,7 @@ describe('BroadcastService', () => {
     mockGetEncodedSigningInputs.mockResolvedValue(['approval-input', 'swap-input'])
     mockCompileTx.mockImplementation(({ txInputData }) => txInputData)
     mockDecodeSigningOutput.mockImplementation((_chain, tx) => tx)
-    mockCoreBroadcastTx.mockResolvedValue(undefined)
+    mockCoreBroadcastTx.mockResolvedValue(broadcastAccepted())
     mockGetTxHash.mockImplementation(async ({ tx }) => (tx.includes('approval-input') ? '0xapproval' : '0xswap'))
     mockGetTxStatus.mockResolvedValue({ status: 'error' })
 
@@ -302,7 +317,7 @@ describe('BroadcastService', () => {
     mockGetEncodedSigningInputs.mockResolvedValue(['approval-input', 'swap-input'])
     mockCompileTx.mockImplementation(({ txInputData }) => txInputData)
     mockDecodeSigningOutput.mockImplementation((_chain, tx) => tx)
-    mockCoreBroadcastTx.mockResolvedValue(undefined)
+    mockCoreBroadcastTx.mockResolvedValue(broadcastAccepted())
     mockGetTxHash.mockImplementation(async ({ tx }) => (tx.includes('approval-input') ? '0xapproval' : '0xswap'))
     mockGetTxStatus.mockResolvedValue({ status: 'pending' })
 
@@ -333,7 +348,7 @@ describe('BroadcastService', () => {
     mockGetEncodedSigningInputs.mockResolvedValue(['approval-input', 'swap-input'])
     mockCompileTx.mockImplementation(({ txInputData }) => txInputData)
     mockDecodeSigningOutput.mockImplementation((_chain, tx) => tx)
-    mockCoreBroadcastTx.mockResolvedValue(undefined)
+    mockCoreBroadcastTx.mockResolvedValue(broadcastAccepted())
     mockGetTxHash.mockResolvedValue('0xapproval')
     mockGetTxStatus.mockReturnValue(new Promise(() => {}))
 
@@ -363,7 +378,7 @@ describe('BroadcastService', () => {
 
   it('does not wait between multiple inputs without an ERC-20 approval payload', async () => {
     mockGetEncodedSigningInputs.mockResolvedValue(['first-input', 'second-input'])
-    mockCoreBroadcastTx.mockResolvedValue(undefined)
+    mockCoreBroadcastTx.mockResolvedValue(broadcastAccepted())
     mockGetTxHash.mockResolvedValueOnce('0xfirst').mockResolvedValueOnce('0xsecond')
 
     await service.broadcastTx({
@@ -374,5 +389,19 @@ describe('BroadcastService', () => {
 
     expect(mockCoreBroadcastTx).toHaveBeenCalledTimes(2)
     expect(mockGetTxStatus).not.toHaveBeenCalled()
+  })
+
+  it('preserves typed Cosmos stale-sequence recovery through the public broadcast error', async () => {
+    const mismatch = new CosmosSequenceMismatchError({
+      expectedSequence: 255n,
+      signedSequence: 254n,
+    })
+    mockCoreBroadcastTx.mockResolvedValue(broadcastFailed(mismatch, false))
+
+    await expect(service.broadcastTx({ chain: Chain.Cosmos, keysignPayload, signature })).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('start a new signing ceremony'),
+      originalError: expect.objectContaining({ cause: mismatch }),
+    })
   })
 })

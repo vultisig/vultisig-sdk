@@ -1,5 +1,7 @@
 import { bech32 } from '@scure/base'
 
+import { validatorRoleForHrp } from '../swap/skip/cosmosAddressGuard'
+
 /**
  * Pure-crypto ICS-20 IBC transfer builder.
  *
@@ -98,6 +100,10 @@ export const IBC_CHANNEL_DEST: Record<ChannelKey, string> = {
   'osmosis-1/channel-6994': 'celestia',
   // cosmoshub-4 outbound
   'cosmoshub-4/channel-141': 'osmosis-1',
+  // Noble direct ATOM<>USDC path. Backend already patched this route locally;
+  // keep the SDK table in sync so prepareIbcTransfer() and downstream route
+  // discovery don't reject a path first-party consumers already accept.
+  'cosmoshub-4/channel-536': 'noble-1',
 }
 
 /**
@@ -174,18 +180,6 @@ function chainRevisionNumber(chainId: string): number {
     if (!Number.isNaN(n)) return n
   }
   return 1
-}
-
-/**
- * Classify a bech32 HRP as a validator role (fund safety). A `...valoper` /
- * `...valcons` address is NOT a spendable wallet — funds bank-sent to it are
- * unrecoverable. Returns null for plain account HRPs.
- */
-function validatorRoleForHrp(hrp: string): 'operator' | 'consensus' | null {
-  const lower = hrp.toLowerCase()
-  if (lower.endsWith('valoper')) return 'operator'
-  if (lower.endsWith('valcons')) return 'consensus'
-  return null
 }
 
 /**

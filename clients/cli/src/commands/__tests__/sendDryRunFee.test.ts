@@ -26,6 +26,7 @@ function makeVault(opts: {
   fee: string
   total: string
   balance: string
+  resolvedAmount?: string
   payloadMemo?: string
   payloadDestinationTag?: number
 }) {
@@ -36,6 +37,8 @@ function makeVault(opts: {
       feeSymbol: 'ETH',
       total: opts.total,
       keysignPayload: {
+        coin: { decimals: 18 },
+        toAmount: opts.resolvedAmount ?? '1000000000000000000',
         memo: opts.payloadMemo,
         blockchainSpecific:
           opts.payloadDestinationTag === undefined
@@ -64,6 +67,7 @@ function makeTokenVault(opts: {
   tokenBalance: string
   nativeBalance: string
   tokenSymbol?: string
+  contractAddress?: string
 }) {
   return {
     send: vi.fn(async () => ({
@@ -71,7 +75,11 @@ function makeTokenVault(opts: {
       fee: opts.fee,
       feeSymbol: 'ETH',
       total: opts.total,
-      keysignPayload: { some: 'payload' },
+      contractAddress: opts.contractAddress,
+      keysignPayload: {
+        coin: { decimals: 6 },
+        toAmount: '50000000',
+      },
     })),
     balance: vi.fn(async (_chain: unknown, tokenId?: string) =>
       tokenId
@@ -108,6 +116,30 @@ async function sendJson(vault: never, options: never = params) {
 }
 
 describe('send --dry-run preview', () => {
+  it('discloses the exact token contract in JSON and the human preview', async () => {
+    const contractAddress = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'
+    const vault = makeTokenVault({
+      fee: '0.0021',
+      total: '1.0',
+      tokenBalance: '5.0',
+      nativeBalance: '2.0',
+      tokenSymbol: 'USDC.e',
+      contractAddress,
+    })
+
+    expect((await sendJson(vault, tokenParams)).contractAddress).toBe(contractAddress)
+
+    configureOutput({ format: 'table', silent: false })
+    const logs: string[] = []
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+      logs.push(args.map(String).join(' '))
+    })
+    const result = (await sendTransaction(vault, tokenParams)) as SendDryRunResult
+
+    expect(result.contractAddress).toBe(contractAddress)
+    expect(logs.join('\n')).toContain(`Amount:  1.0 USDC.e (${contractAddress})`)
+  })
+
   it('returns the fee and total the build produced', async () => {
     const result = (await sendTransaction(
       makeVault({ fee: '0.0021', total: '1.0021', balance: '5.0' }),
@@ -116,6 +148,10 @@ describe('send --dry-run preview', () => {
 
     expect(result.fee).toBe('0.0021')
     expect(result.total).toBe('1.0021')
+    // Assert on the returned object, not JSON output: JSON.stringify drops
+    // undefined-valued keys, so only this catches an unguarded
+    // `contractAddress: undefined` leaking into the native-send result.
+    expect(result).not.toHaveProperty('contractAddress')
   })
 
   it('carries fee and total into the JSON envelope, not just the human preview', async () => {
@@ -127,6 +163,44 @@ describe('send --dry-run preview', () => {
       total: '1.0021',
       balance: '5.0',
     })
+    expect(data).not.toHaveProperty('contractAddress')
+  })
+
+  it('serializes the resolved amount and max flag for a max send', async () => {
+    const data = await sendJson(
+      makeVault({
+        fee: '0.0021',
+        total: '1.5021',
+        balance: '2.0',
+        resolvedAmount: '1500000000000000000',
+      }),
+      { ...(params as object), amount: 'max' } as never
+    )
+
+    expect(data.amount).toBe('1.5')
+    expect(data.isMax).toBe(true)
+  })
+
+  it('leaves a non-max send amount unchanged and omits the max flag', async () => {
+    const data = await sendJson(makeVault({ fee: '0.0021', total: '1.0021', balance: '5.0' }))
+
+    expect(data.amount).toBe('1.0')
+    expect(data).not.toHaveProperty('isMax')
+  })
+
+  it('leaves the human max-send preview unchanged', async () => {
+    configureOutput({ format: 'table', silent: false })
+    const logs: string[] = []
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+      logs.push(args.map(String).join(' '))
+    })
+
+    await sendTransaction(
+      makeVault({ fee: '0.0021', total: '1.5021', balance: '2.0', resolvedAmount: '1500000000000000000' }),
+      { ...(params as object), amount: 'max' } as never
+    )
+
+    expect(logs.join('\n')).toContain('Amount:  max ETH')
   })
 
   it('surfaces the signable payload memo in JSON instead of echoing the input', async () => {
@@ -341,6 +415,20 @@ describe('send --dry-run preview — token sends', () => {
   it('does not warn about the fee when the native balance covers it', async () => {
     const vault = makeTokenVault({ fee: '0.0001', total: '1.0', tokenBalance: '50.0', nativeBalance: '0.5' })
     expect((await sendJson(vault, tokenParams)).warning).toBeUndefined()
+  })
+
+  it('does not perform the CLI native gas balance read for a max token send', async () => {
+    const vault = makeTokenVault({ fee: '0.0001', total: '50.0', tokenBalance: '50.0', nativeBalance: '0.5' })
+
+    expect(
+      (
+        await sendJson(vault, {
+          ...(tokenParams as object),
+          amount: 'max',
+        } as never)
+      ).warning
+    ).toBeUndefined()
+    expect((vault as unknown as { balance: ReturnType<typeof vi.fn> }).balance).toHaveBeenCalledTimes(1)
   })
 
   it('reports both shortfalls when neither the token nor the gas balance is enough', async () => {

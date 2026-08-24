@@ -3348,6 +3348,111 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@koromix/koffi-darwin-arm64@npm:3.1.4":
+  version: 3.1.4
+  resolution: "@koromix/koffi-darwin-arm64@npm:3.1.4"
+  conditions: os=darwin & cpu=arm64
+  languageName: node
+  linkType: hard
+
+"@koromix/koffi-darwin-x64@npm:3.1.4":
+  version: 3.1.4
+  resolution: "@koromix/koffi-darwin-x64@npm:3.1.4"
+  conditions: os=darwin & cpu=x64
+  languageName: node
+  linkType: hard
+
+"@koromix/koffi-freebsd-arm64@npm:3.1.4":
+  version: 3.1.4
+  resolution: "@koromix/koffi-freebsd-arm64@npm:3.1.4"
+  conditions: os=freebsd & cpu=arm64
+  languageName: node
+  linkType: hard
+
+"@koromix/koffi-freebsd-ia32@npm:3.1.4":
+  version: 3.1.4
+  resolution: "@koromix/koffi-freebsd-ia32@npm:3.1.4"
+  conditions: os=freebsd & cpu=ia32
+  languageName: node
+  linkType: hard
+
+"@koromix/koffi-freebsd-x64@npm:3.1.4":
+  version: 3.1.4
+  resolution: "@koromix/koffi-freebsd-x64@npm:3.1.4"
+  conditions: os=freebsd & cpu=x64
+  languageName: node
+  linkType: hard
+
+"@koromix/koffi-linux-arm64@npm:3.1.4":
+  version: 3.1.4
+  resolution: "@koromix/koffi-linux-arm64@npm:3.1.4"
+  conditions: os=linux & cpu=arm64
+  languageName: node
+  linkType: hard
+
+"@koromix/koffi-linux-ia32@npm:3.1.4":
+  version: 3.1.4
+  resolution: "@koromix/koffi-linux-ia32@npm:3.1.4"
+  conditions: os=linux & cpu=ia32
+  languageName: node
+  linkType: hard
+
+"@koromix/koffi-linux-loong64@npm:3.1.4":
+  version: 3.1.4
+  resolution: "@koromix/koffi-linux-loong64@npm:3.1.4"
+  conditions: os=linux & cpu=loong64
+  languageName: node
+  linkType: hard
+
+"@koromix/koffi-linux-riscv64@npm:3.1.4":
+  version: 3.1.4
+  resolution: "@koromix/koffi-linux-riscv64@npm:3.1.4"
+  conditions: os=linux & cpu=riscv64
+  languageName: node
+  linkType: hard
+
+"@koromix/koffi-linux-x64@npm:3.1.4":
+  version: 3.1.4
+  resolution: "@koromix/koffi-linux-x64@npm:3.1.4"
+  conditions: os=linux & cpu=x64
+  languageName: node
+  linkType: hard
+
+"@koromix/koffi-openbsd-ia32@npm:3.1.4":
+  version: 3.1.4
+  resolution: "@koromix/koffi-openbsd-ia32@npm:3.1.4"
+  conditions: os=openbsd & cpu=ia32
+  languageName: node
+  linkType: hard
+
+"@koromix/koffi-openbsd-x64@npm:3.1.4":
+  version: 3.1.4
+  resolution: "@koromix/koffi-openbsd-x64@npm:3.1.4"
+  conditions: os=openbsd & cpu=x64
+  languageName: node
+  linkType: hard
+
+"@koromix/koffi-win32-arm64@npm:3.1.4":
+  version: 3.1.4
+  resolution: "@koromix/koffi-win32-arm64@npm:3.1.4"
+  conditions: os=win32 & cpu=arm64
+  languageName: node
+  linkType: hard
+
+"@koromix/koffi-win32-ia32@npm:3.1.4":
+  version: 3.1.4
+  resolution: "@koromix/koffi-win32-ia32@npm:3.1.4"
+  conditions: os=win32 & cpu=ia32
+  languageName: node
+  linkType: hard
+
+"@koromix/koffi-win32-x64@npm:3.1.4":
+  version: 3.1.4
+  resolution: "@koromix/koffi-win32-x64@npm:3.1.4"
+  conditions: os=win32 & cpu=x64
+  languageName: node
+  linkType: hard
+
 "@lifi/sdk@npm:^4.1.0":
   version: 4.1.0
   resolution: "@lifi/sdk@npm:4.1.0"
@@ -3441,6 +3546,13 @@ __metadata:
     zod:
       optional: false
   checksum: 10c0/7c4bc339205b1652330cd4e6b121cc859079655f2b9c0506bbb15563ba0d07924bda3d949705530532db7f4d2cb86d633dc8f92bc32803d97c7bece2ac63e29f
+  languageName: node
+  linkType: hard
+
+"@msgpack/msgpack@npm:^3.1.2":
+  version: 3.1.3
+  resolution: "@msgpack/msgpack@npm:3.1.3"
+  checksum: 10c0/1fa9a760a58e64e121561d17977b680198ff24d83e951df3896f8639d06824f2cba20af92a19940461e0d5d6dc696bd01222bd901164759432eadd0f482d0816
   languageName: node
   linkType: hard
 
@@ -7019,6 +7131,7 @@ __metadata:
     "@cosmjs/encoding": "npm:^0.39.0"
     "@cosmjs/proto-signing": "npm:^0.39.0"
     "@cosmjs/stargate": "npm:^0.39.0"
+    "@msgpack/msgpack": "npm:^3.1.2"
     "@napi-rs/keyring": "npm:^1.3.0"
     "@noble/hashes": "npm:^2.2.0"
     "@types/inquirer": "npm:^9.0.10"
@@ -7065,7 +7178,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@vultisig/core-chain@npm:2.32.0, @vultisig/core-chain@workspace:^, @vultisig/core-chain@workspace:packages/core/chain":
+"@vultisig/core-chain@npm:3.0.0, @vultisig/core-chain@workspace:^, @vultisig/core-chain@workspace:packages/core/chain":
   version: 0.0.0-use.local
   resolution: "@vultisig/core-chain@workspace:packages/core/chain"
   dependencies:
@@ -7087,7 +7200,7 @@ __metadata:
     "@ton/crypto": "npm:^3.3.0"
     "@trustwallet/wallet-core": "npm:^4.7.0"
     "@vultisig/core-config": "npm:0.9.1"
-    "@vultisig/lib-utils": "npm:0.10.4"
+    "@vultisig/lib-utils": "npm:0.10.5"
     bip32: "npm:^5.0.1"
     bitcoinjs-lib: "npm:^7.0.1"
     bs58: "npm:^6.0.0"
@@ -7120,12 +7233,12 @@ __metadata:
     "@noble/hashes": "npm:^1.8.0"
     "@solana/web3.js": "npm:^1.98.4"
     "@trustwallet/wallet-core": "npm:^4.7.0"
-    "@vultisig/core-chain": "npm:2.32.0"
+    "@vultisig/core-chain": "npm:3.0.0"
     "@vultisig/core-config": "npm:0.9.1"
     "@vultisig/lib-dkls": "npm:0.9.0"
     "@vultisig/lib-mldsa": "npm:0.9.0"
     "@vultisig/lib-schnorr": "npm:0.9.0"
-    "@vultisig/lib-utils": "npm:0.10.4"
+    "@vultisig/lib-utils": "npm:0.10.5"
     "@vultisig/mpc-types": "npm:0.2.3"
     bitcoinjs-lib: "npm:^7.0.1"
     bs58: "npm:^6.0.0"
@@ -7225,7 +7338,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@vultisig/lib-utils@npm:0.10.4, @vultisig/lib-utils@workspace:packages/lib/utils":
+"@vultisig/lib-utils@npm:0.10.5, @vultisig/lib-utils@workspace:packages/lib/utils":
   version: 0.0.0-use.local
   resolution: "@vultisig/lib-utils@workspace:packages/lib/utils"
   dependencies:
@@ -7303,7 +7416,7 @@ __metadata:
     typescript: "npm:^6.0.3"
     vitest: "npm:^4.1.8"
   peerDependencies:
-    "@vultisig/sdk": ">=4.1.0"
+    "@vultisig/sdk": ">=5.2.0"
   languageName: unknown
   linkType: soft
 
@@ -7371,6 +7484,7 @@ __metadata:
     i18next: "npm:^26.3.1"
     i18next-http-backend: "npm:^4.0.1"
     isomorphic-fetch: "npm:^3.0.0"
+    koffi: "npm:^3.1.4"
     node-fetch: "npm:^3.3.2"
     node-localstorage: "npm:^3.0.5"
     path-browserify: "npm:^1.0.1"
@@ -7399,6 +7513,7 @@ __metadata:
     "@vultisig/mpc-native": "workspace:*"
     "@vultisig/walletcore-native": "workspace:*"
     expo-crypto: ^13.0.0 || ^14.0.0 || ^15.0.0 || ^55.0.0
+    expo-sqlite: ^14.0.3 || ^15.0.0 || ^16.0.0 || ^55.0.0 || ^56.0.0 || ^57.0.0
     vite: ^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0
   peerDependenciesMeta:
     "@react-native-async-storage/async-storage":
@@ -7408,6 +7523,8 @@ __metadata:
     "@vultisig/walletcore-native":
       optional: true
     expo-crypto:
+      optional: true
+    expo-sqlite:
       optional: true
     vite:
       optional: true
@@ -13799,6 +13916,60 @@ __metadata:
   languageName: node
   linkType: hard
 
+"koffi@npm:^3.1.4":
+  version: 3.1.4
+  resolution: "koffi@npm:3.1.4"
+  dependencies:
+    "@koromix/koffi-darwin-arm64": "npm:3.1.4"
+    "@koromix/koffi-darwin-x64": "npm:3.1.4"
+    "@koromix/koffi-freebsd-arm64": "npm:3.1.4"
+    "@koromix/koffi-freebsd-ia32": "npm:3.1.4"
+    "@koromix/koffi-freebsd-x64": "npm:3.1.4"
+    "@koromix/koffi-linux-arm64": "npm:3.1.4"
+    "@koromix/koffi-linux-ia32": "npm:3.1.4"
+    "@koromix/koffi-linux-loong64": "npm:3.1.4"
+    "@koromix/koffi-linux-riscv64": "npm:3.1.4"
+    "@koromix/koffi-linux-x64": "npm:3.1.4"
+    "@koromix/koffi-openbsd-ia32": "npm:3.1.4"
+    "@koromix/koffi-openbsd-x64": "npm:3.1.4"
+    "@koromix/koffi-win32-arm64": "npm:3.1.4"
+    "@koromix/koffi-win32-ia32": "npm:3.1.4"
+    "@koromix/koffi-win32-x64": "npm:3.1.4"
+  dependenciesMeta:
+    "@koromix/koffi-darwin-arm64":
+      optional: true
+    "@koromix/koffi-darwin-x64":
+      optional: true
+    "@koromix/koffi-freebsd-arm64":
+      optional: true
+    "@koromix/koffi-freebsd-ia32":
+      optional: true
+    "@koromix/koffi-freebsd-x64":
+      optional: true
+    "@koromix/koffi-linux-arm64":
+      optional: true
+    "@koromix/koffi-linux-ia32":
+      optional: true
+    "@koromix/koffi-linux-loong64":
+      optional: true
+    "@koromix/koffi-linux-riscv64":
+      optional: true
+    "@koromix/koffi-linux-x64":
+      optional: true
+    "@koromix/koffi-openbsd-ia32":
+      optional: true
+    "@koromix/koffi-openbsd-x64":
+      optional: true
+    "@koromix/koffi-win32-arm64":
+      optional: true
+    "@koromix/koffi-win32-ia32":
+      optional: true
+    "@koromix/koffi-win32-x64":
+      optional: true
+  checksum: 10c0/5f705d33275aa6215b7659765df32c5031674c8a0e147bb5647e8b0523b1eedf3e6fe0315b57f6a36400782a283c881b8c92c62309400705c71112674c38a38c
+  languageName: node
+  linkType: hard
+
 "lan-network@npm:^0.2.1":
   version: 0.2.1
   resolution: "lan-network@npm:0.2.1"
@@ -15271,12 +15442,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"nanoid@npm:^3.3.16":
-  version: 3.3.16
-  resolution: "nanoid@npm:3.3.16"
+"nanoid@npm:^3.3.18":
+  version: 3.3.18
+  resolution: "nanoid@npm:3.3.18"
   bin:
     nanoid: bin/nanoid.cjs
-  checksum: 10c0/bbf2dcffe22d2b62d16de2711752070b539c0f644c7916f823ad6521986b2078cbe524f2d6240f58c46e9141ea0c7b87a029e100c0f7f175228cacaf30e41bba
+  checksum: 10c0/b994b4e396730f8be2520923284e2040d61eaee55cc6d4935ef6d38d34bafdc46133eda4d3faea5073bda545aa6079d82b886caeac5c731cf9ac18bcc1301425
   languageName: node
   linkType: hard
 
@@ -18914,15 +19085,15 @@ __metadata:
   linkType: hard
 
 "tar@npm:^7.5.4, tar@npm:^7.5.7":
-  version: 7.5.20
-  resolution: "tar@npm:7.5.20"
+  version: 7.5.22
+  resolution: "tar@npm:7.5.22"
   dependencies:
     "@isaacs/fs-minipass": "npm:^4.0.0"
     chownr: "npm:^3.0.0"
     minipass: "npm:^7.1.2"
     minizlib: "npm:^3.1.0"
     yallist: "npm:^5.0.0"
-  checksum: 10c0/4df4335c6d958b76adf1eaced55889dec3ca1c51f450658a074af80694bb0d9c154a8e93fdf4da617372d1575b121295379993961bbe4cd4b0867c0e5689846a
+  checksum: 10c0/1311f6be85a8157ac4c9147bae43e13923d2a1aae15e4aa1bd5239e4e03d2cf53cfe103dde7f35832fbb4c938b042856bc8e9a0afd29abd05e2d1608788c4fea
   languageName: node
   linkType: hard
 

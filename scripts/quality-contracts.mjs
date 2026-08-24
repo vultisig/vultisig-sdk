@@ -6,8 +6,8 @@
  * - MCP packed bin metadata + temp installed `vmcp --help` smoke
  * - CLI dist + packed install smoke: --help and hidden `schema` JSON
  *
- * Temp installs use YARN_CACHE_FOLDER pointing at the repo's Yarn cache so CI stays
- * mostly offline after `yarn install --immutable`.
+ * Temp installs use a disposable Yarn cache beneath the run's work root. This
+ * prevents unique `file:` archives from accumulating in the user-global cache.
  */
 
 import { spawnSync } from 'node:child_process'
@@ -17,6 +17,9 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { checkSdkPackageExports } from './check-sdk-package-exports.mjs'
+import { createDisposableYarnEnv } from './quality-contracts-cache.mjs'
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(__dirname, '..')
 
@@ -24,6 +27,10 @@ const CLI_ENTRY = path.join(repoRoot, 'clients/cli/dist/index.js')
 const SDK_DIST_MARKER = path.join(repoRoot, 'packages/sdk/dist/index.node.esm.js')
 const YARN_CLI = path.join(repoRoot, '.yarn/releases/yarn-4.16.0.cjs')
 const PACKAGE_CONTRACT_WORKSPACES = ['@vultisig/mpc-types', '@vultisig/mpc-wasm']
+const WINDOWS_CORE_CHAIN_EXPORTS = [
+  './chains/thorchain/ruji/services/fetchMergeableTokenBalances',
+  './chains/thorchain/ruji/services/fetchStakeView',
+]
 const NODE_BUILTINS = new Set(builtinModules.map(name => name.replace(/^node:/, '')))
 
 /** Collect relative paths like `./dist/foo.js` from package.json `exports` */
@@ -123,6 +130,30 @@ function validateTarballExportFiles(packageRoot) {
     const abs = packageRelativePath(packageRoot, rel)
     if (!existsSync(abs)) {
       throw new Error(`${pkg.name} export target missing from packed tarball: ${rel} -> ${abs}`)
+    }
+  }
+}
+
+function validateWindowsCoreChainExports(packageRoot) {
+  const pkgPath = path.join(packageRoot, 'package.json')
+  const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'))
+
+  for (const subpath of WINDOWS_CORE_CHAIN_EXPORTS) {
+    const contract = pkg.exports?.[subpath]
+    if (!contract) {
+      throw new Error(`@vultisig/core-chain is missing a Windows consumer export: ${subpath}`)
+    }
+
+    const rels = collectExportRelativePaths(contract)
+    if (!rels.size) {
+      throw new Error(`@vultisig/core-chain Windows consumer export has no target: ${subpath}`)
+    }
+
+    for (const rel of rels) {
+      const abs = packageRelativePath(packageRoot, rel)
+      if (!existsSync(abs)) {
+        throw new Error(`@vultisig/core-chain Windows consumer target is missing: ${subpath} -> ${rel}`)
+      }
     }
   }
 }
@@ -242,118 +273,6 @@ function validatePackedWorkspaceExports(workRoot, workspaceName) {
   return { packageRoot, tgzPath }
 }
 
-function packedConsumerSmoke(workRoot, tgzPath) {
-  const consumer = path.join(workRoot, 'consumer')
-  mkdirSync(consumer, { recursive: true })
-
-  writeFileSync(
-    path.join(consumer, 'package.json'),
-    JSON.stringify(
-      {
-        name: 'vultisig-contract-consumer',
-        private: true,
-        type: 'module',
-        packageManager: 'yarn@4.16.0',
-      },
-      null,
-      2
-    ) + '\n'
-  )
-  writeFileSync(path.join(consumer, '.yarnrc.yml'), 'nodeLinker: node-modules\n')
-
-  const cacheFolder = path.join(repoRoot, '.yarn/cache')
-  const env = {
-    ...process.env,
-    ...(existsSync(cacheFolder) ? { YARN_CACHE_FOLDER: cacheFolder } : {}),
-  }
-
-  runYarn(['add', `@vultisig/sdk@file:${tgzPath}`], { cwd: consumer, env, stdio: 'inherit' })
-
-  const verifyPath = path.join(consumer, 'verify-contracts.mjs')
-  writeFileSync(
-    verifyPath,
-    `import assert from 'node:assert/strict'
-import * as root from '@vultisig/sdk'
-import * as node from '@vultisig/sdk/node'
-import * as browser from '@vultisig/sdk/browser'
-import * as vite from '@vultisig/sdk/vite'
-import { existsSync } from 'node:fs'
-import { createRequire } from 'node:module'
-import path from 'node:path'
-
-const require = createRequire(import.meta.url)
-const entry = require.resolve('@vultisig/sdk')
-const pkgDir = path.resolve(path.dirname(entry), '..')
-const electronMainEntry = require.resolve('@vultisig/sdk/electron/main')
-const electronMain = require('@vultisig/sdk/electron/main')
-const electronMainImport = await import('@vultisig/sdk/electron/main')
-
-assert.equal(typeof root.Vultisig, 'function', 'root exports Vultisig')
-assert.ok(root.Chain !== undefined, 'root exports Chain')
-assert.equal(typeof root.fiatToAmount, 'function', 'root exports fiatToAmount')
-assert.equal(typeof root.normalizeChain, 'function', 'root exports normalizeChain')
-
-assert.equal(typeof node.Vultisig, 'function', '@vultisig/sdk/node exports Vultisig')
-
-assert.ok(browser.Chain !== undefined, '@vultisig/sdk/browser resolves')
-assert.ok(vite && (vite.default || vite), '@vultisig/sdk/vite resolves')
-assert.equal(
-  path.basename(electronMainEntry),
-  'index.electron-main.cjs',
-  '@vultisig/sdk/electron/main resolves the Electron main process bundle'
-)
-assert.equal(typeof electronMain.Vultisig, 'function', '@vultisig/sdk/electron/main exports Vultisig')
-assert.equal(typeof electronMainImport.Vultisig, 'function', 'ESM import resolves @vultisig/sdk/electron/main')
-assert.equal(
-  typeof electronMainImport.ElectronMainCrypto,
-  'function',
-  'ESM import exposes Electron-specific exports'
-)
-
-const rnJs = path.join(pkgDir, 'dist/index.react-native.js')
-assert.ok(existsSync(rnJs), 'react-native bundle file exists on disk')
-const rnDts = path.join(pkgDir, 'dist/index.react-native.d.ts')
-assert.ok(existsSync(rnDts), 'react-native types exist on disk')
-const electronMainDts = path.join(pkgDir, 'dist/index.electron-main.d.ts')
-assert.ok(existsSync(electronMainDts), 'electron main types exist on disk')
-`
-  )
-
-  run(process.execPath, [verifyPath], { cwd: consumer, env })
-
-  // Optional: TypeScript can resolve subpaths (declaration smoke via tsc if available)
-  const tscBin = path.join(repoRoot, 'node_modules/typescript/bin/tsc')
-  if (existsSync(tscBin)) {
-    const tsconfig = {
-      compilerOptions: {
-        module: 'NodeNext',
-        moduleResolution: 'NodeNext',
-        strict: true,
-        noEmit: true,
-        skipLibCheck: true,
-      },
-    }
-    writeFileSync(path.join(consumer, 'tsconfig.json'), JSON.stringify(tsconfig, null, 2) + '\n')
-    writeFileSync(
-      path.join(consumer, 'types-smoke.ts'),
-      `import type { Chain } from '@vultisig/sdk'
-import type { Vultisig } from '@vultisig/sdk/node'
-import type { ElectronMainCrypto, Vultisig as ElectronMainVultisig } from '@vultisig/sdk/electron/main'
-import '@vultisig/sdk/browser'
-import '@vultisig/sdk/vite'
-export type X = Chain
-export type Y = Vultisig
-export type Z = ElectronMainVultisig
-export type ElectronCrypto = ElectronMainCrypto
-`
-    )
-    run(process.execPath, [tscBin, '-p', path.join(consumer, 'tsconfig.json')], {
-      cwd: consumer,
-      env,
-    })
-  }
-}
-
 function packedCliBinSmoke(
   workRoot,
   cliTgzPath,
@@ -397,11 +316,7 @@ function packedCliBinSmoke(
   )
   writeFileSync(path.join(consumer, '.yarnrc.yml'), 'nodeLinker: node-modules\n')
 
-  const cacheFolder = path.join(repoRoot, '.yarn/cache')
-  const env = {
-    ...process.env,
-    ...(existsSync(cacheFolder) ? { YARN_CACHE_FOLDER: cacheFolder } : {}),
-  }
+  const env = createDisposableYarnEnv(workRoot)
 
   runYarn(['install', '--no-immutable'], {
     cwd: consumer,
@@ -460,11 +375,7 @@ function packedMcpBinSmoke(workRoot, tgzPath, sdkTgzPath, clientSharedTgzPath) {
   )
   writeFileSync(path.join(consumer, '.yarnrc.yml'), 'nodeLinker: node-modules\n')
 
-  const cacheFolder = path.join(repoRoot, '.yarn/cache')
-  const env = {
-    ...process.env,
-    ...(existsSync(cacheFolder) ? { YARN_CACHE_FOLDER: cacheFolder } : {}),
-  }
+  const env = createDisposableYarnEnv(workRoot)
 
   runYarn(['install', '--no-immutable'], {
     cwd: consumer,
@@ -489,7 +400,7 @@ function packedMcpBinSmoke(workRoot, tgzPath, sdkTgzPath, clientSharedTgzPath) {
   }
 }
 
-function main() {
+async function main() {
   assertSdkBuilt()
   smokeCli()
 
@@ -499,9 +410,11 @@ function main() {
 
     const tgzPath = packWorkspace(workRoot, '@vultisig/sdk', 'sdk.tgz')
 
-    validateTarballExportFiles(extractPackage(workRoot, tgzPath, 'sdk'))
-
-    packedConsumerSmoke(workRoot, tgzPath)
+    await checkSdkPackageExports({
+      build: false,
+      workRoot: path.join(workRoot, 'sdk-package-exports'),
+      tarballPath: tgzPath,
+    })
 
     const { tgzPath: rujiraTgzPath } = validatePackedWorkspaceExports(workRoot, '@vultisig/rujira')
 
@@ -513,7 +426,11 @@ function main() {
 
     const { tgzPath: libUtilsTgzPath } = validatePackedWorkspaceExports(workRoot, '@vultisig/lib-utils')
 
-    const { tgzPath: coreChainTgzPath } = validatePackedWorkspaceExports(workRoot, '@vultisig/core-chain')
+    const { packageRoot: coreChainPackageRoot, tgzPath: coreChainTgzPath } = validatePackedWorkspaceExports(
+      workRoot,
+      '@vultisig/core-chain'
+    )
+    validateWindowsCoreChainExports(coreChainPackageRoot)
 
     const { tgzPath: clientSharedTgzPath } = validatePackedWorkspaceExports(workRoot, '@vultisig/client-shared')
 
@@ -550,7 +467,7 @@ function main() {
 }
 
 try {
-  main()
+  await main()
 } catch (e) {
   console.error(e.message || e)
   process.exitCode = 1

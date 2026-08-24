@@ -29,6 +29,39 @@ yarn build:sdk
 yarn test
 ```
 
+### Git worktrees and shared dependencies
+
+A worktree must not use the primary checkout's `node_modules` symlink without
+local workspace overrides. Otherwise `@vultisig/*` imports can resolve to the
+primary checkout, so a worktree test may stay green while its source is broken.
+Writing to `node_modules/@vultisig` through that top-level symlink can also
+delete the primary checkout's workspace links.
+
+The safest option is a normal install inside the worktree. To reuse an existing
+checkout's third-party dependencies, run this from the worktree root instead of
+creating or editing workspace links by hand:
+
+```bash
+yarn worktree:setup --from /path/to/primary/vultisig-sdk
+```
+
+The helper keeps the shared top-level `node_modules` read-only, creates
+worktree-owned overrides under each workspace, verifies that every override
+points back into the worktree, and rebuilds shared packages there. It refuses
+to write through a symlinked per-workspace directory.
+
+Before trusting a worktree test result, run the must-fail resolution control:
+
+```bash
+yarn worktree:check
+```
+
+The check exits nonzero when a workspace link is missing, broken, or resolves
+outside the current checkout. Root `yarn test`, `yarn check`, `yarn check:agent`,
+and `yarn check:ci` run this control before loading project packages. Never remove or replace
+`<worktree>/node_modules/@vultisig/*` directly when the top-level
+`node_modules` is shared; that path belongs to the primary checkout.
+
 ## Project Structure
 
 This is a Yarn workspaces monorepo:
@@ -142,28 +175,29 @@ yarn test:all
 
 ## Available Scripts
 
-| Script                           | Description                                                                                                                                                                                 |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `yarn build:sdk`                 | Build the SDK with all workspace dependencies                                                                                                                                               |
-| `yarn build:rujira`              | Build the Rujira package                                                                                                                                                                    |
-| `yarn test`                      | Run SDK tests                                                                                                                                                                               |
-| `yarn test:rujira`               | Run Rujira tests                                                                                                                                                                            |
-| `yarn test:unit`                 | Run unit tests only                                                                                                                                                                         |
-| `yarn test:integration`          | Run integration tests                                                                                                                                                                       |
-| `yarn test:e2e`                  | Run end-to-end tests (requires vault)                                                                                                                                                       |
-| `yarn lint`                      | Run ESLint across all packages                                                                                                                                                              |
-| `yarn lint:fix`                  | Auto-fix linting issues                                                                                                                                                                     |
-| `yarn format`                    | Format code with Prettier                                                                                                                                                                   |
-| `yarn typecheck`                 | Run TypeScript type checking                                                                                                                                                                |
-| `yarn typecheck:example-browser` | Type-check `examples/shared` and the browser example with repo-local TypeScript                                                                                                             |
-| `yarn knip`                      | Find unused exports and unreachable files (see `.config/knip.jsonc`)                                                                                                                        |
-| `yarn quality:health`            | Run architecture, duplication, complexity, secrets, dependency audit, and docs health detectors                                                                                             |
-| `yarn quality:docs`              | Run Markdown syntax and local-link checks                                                                                                                                                   |
-| `yarn quality:contracts`         | SDK tarball export validation, temp packed-consumer import/type smoke, and CLI dist `--help` + `schema` JSON (run after `yarn build:sdk` and `yarn cli:build`; included in `yarn check:ci`) |
-| `yarn check`                     | Run typecheck, lint, knip, and Prettier check in parallel                                                                                                                                   |
-| `yarn check:agent`               | Run the core static gate subset sequentially after verifying repo-local ESLint and TypeScript                                                                                               |
-| `yarn build:shared`              | Build shared `@vultisig/core-*` / `@vultisig/lib-*` packages                                                                                                                                |
-| `yarn docs`                      | Generate TypeDoc API documentation                                                                                                                                                          |
+| Script                             | Description                                                                                                                                                                                 |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `yarn build:sdk`                   | Build the SDK with all workspace dependencies                                                                                                                                               |
+| `yarn build:rujira`                | Build the Rujira package                                                                                                                                                                    |
+| `yarn test`                        | Run SDK tests                                                                                                                                                                               |
+| `yarn test:rujira`                 | Run Rujira tests                                                                                                                                                                            |
+| `yarn test:unit`                   | Run unit tests only                                                                                                                                                                         |
+| `yarn test:integration`            | Run integration tests                                                                                                                                                                       |
+| `yarn test:e2e`                    | Run end-to-end tests (requires vault)                                                                                                                                                       |
+| `yarn lint`                        | Run ESLint across all packages                                                                                                                                                              |
+| `yarn lint:fix`                    | Auto-fix linting issues                                                                                                                                                                     |
+| `yarn format`                      | Format code with Prettier                                                                                                                                                                   |
+| `yarn typecheck`                   | Run TypeScript type checking                                                                                                                                                                |
+| `yarn typecheck:example-browser`   | Type-check `examples/shared` and the browser example with repo-local TypeScript                                                                                                             |
+| `yarn knip`                        | Find unused exports and unreachable files (see `.config/knip.jsonc`)                                                                                                                        |
+| `yarn quality:health`              | Run architecture, duplication, complexity, secrets, dependency audit, and docs health detectors                                                                                             |
+| `yarn quality:docs`                | Run Markdown syntax and local-link checks                                                                                                                                                   |
+| `yarn quality:contracts`           | SDK tarball export validation, temp packed-consumer import/type smoke, and CLI dist `--help` + `schema` JSON (run after `yarn build:sdk` and `yarn cli:build`; included in `yarn check:ci`) |
+| `yarn quality:sdk-package-exports` | Build and pack the SDK, verify every manifest export target, and exercise Node-safe imports/requires from a clean consumer                                                                  |
+| `yarn check`                       | Run typecheck, lint, knip, and Prettier check in parallel                                                                                                                                   |
+| `yarn check:agent`                 | Run the core static gate subset sequentially after verifying repo-local ESLint and TypeScript                                                                                               |
+| `yarn build:shared`                | Build shared `@vultisig/core-*` / `@vultisig/lib-*` packages                                                                                                                                |
+| `yarn docs`                        | Generate TypeDoc API documentation                                                                                                                                                          |
 
 ## Pull Request Process
 

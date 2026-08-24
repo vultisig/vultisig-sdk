@@ -1,4 +1,4 @@
-import { VaultError, VaultErrorCode } from '@vultisig/sdk'
+import { VaultError, VaultErrorCode, type VaultImportOptions } from '@vultisig/sdk'
 import { dialog, type IpcMain } from 'electron'
 import * as fs from 'fs/promises'
 
@@ -120,18 +120,21 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
     }
   )
 
-  ipcMain.handle('vault:import', async (_event, vultContent: string, password?: string) => {
-    const sdk = getSDK()
-    const vault = await sdk.importVault(vultContent, password)
-    return {
-      id: vault.id,
-      name: vault.name,
-      type: vault.type,
-      chains: vault.chains,
-      threshold: vault.threshold,
-      signerCount: vault.signers.length,
+  ipcMain.handle(
+    'vault:import',
+    async (_event, vultContent: string, password?: string, options?: VaultImportOptions) => {
+      const sdk = getSDK()
+      const vault = await sdk.importVault(vultContent, password, options)
+      return {
+        id: vault.id,
+        name: vault.name,
+        type: vault.type,
+        chains: vault.chains,
+        threshold: vault.threshold,
+        signerCount: vault.signers.length,
+      }
     }
-  })
+  )
 
   ipcMain.handle('vault:isEncrypted', async (_event, vultContent: string) => {
     const sdk = getSDK()
@@ -452,8 +455,11 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
     const vault = await sdk.getVaultById(vaultId)
     if (!vault) throw new VaultError(VaultErrorCode.VaultNotFound, 'Vault not found')
     const quote = await vault.getSwapQuote(params)
-    // Serialize for IPC (convert BigInt to string)
-    return JSON.parse(JSON.stringify(quote, (_key, value) => (typeof value === 'bigint' ? value.toString() : value)))
+    // Electron IPC uses structured clone, which preserves the BigInt and
+    // Uint8Array values covered by the quote safety fingerprint. JSON
+    // serialization would change those values and make a valid quote fail the
+    // preparation-time integrity check when it returns from the renderer.
+    return quote
   })
 
   ipcMain.handle('vault:prepareSwapTx', async (_event, vaultId: string, params: any) => {
@@ -461,8 +467,9 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
     const vault = await sdk.getVaultById(vaultId)
     if (!vault) throw new VaultError(VaultErrorCode.VaultNotFound, 'Vault not found')
     const result = await vault.prepareSwapTx(params)
-    // Serialize for IPC (convert BigInt to string)
-    return JSON.parse(JSON.stringify(result, (_key, value) => (typeof value === 'bigint' ? value.toString() : value)))
+    // Preserve the echoed quote's BigInt and Uint8Array values so it remains
+    // consistent with the safety binding when it crosses Electron IPC.
+    return result
   })
 
   // === TRANSACTION OPERATIONS ===

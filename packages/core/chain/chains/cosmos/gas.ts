@@ -2,7 +2,7 @@ import { Chain, CosmosChain, IbcEnabledCosmosChain } from '../../Chain'
 import type { CoinKey } from '../../coin/Coin'
 import { getFeeAmountFromGasPrice, type ParsedDecimal, parseDecimal } from './cosmosDecimal'
 import { cosmosFeeCoinDenom } from './cosmosFeeCoinDenom'
-import { getCosmosGasLimit } from './cosmosGasLimitRecord'
+import { getCosmosGasLimit, getCosmosStakingGasLimit } from './cosmosGasLimitRecord'
 import { getCosmosRpcUrl } from './getCosmosRpcUrl'
 import { getOsmosisDynamicFeeFloor } from './osmosisDynamicFee'
 
@@ -31,6 +31,36 @@ export const MAYA_SEND_FEE_BASE_UNITS = 2000000000n
  * `TerraClassicTax.ULUNA_BASE_GAS`.
  */
 export const TERRA_CLASSIC_ULUNA_BASE_GAS = 8_497_500n
+
+/**
+ * Terra Classic's `uluna` fee paired with the STAKING gas limit
+ * (`getCosmosStakingGasLimit({ chain: TerraClassic })`, currently 4M), priced
+ * at the same 28.325 uluna/gas chain minimum as `TERRA_CLASSIC_ULUNA_BASE_GAS`.
+ *
+ * TerraClassic staking runs ~13x hotter than a native send (4M vs 300k gas),
+ * so `TERRA_CLASSIC_ULUNA_BASE_GAS` under-prices it by a wide margin, and a
+ * consumer pairing the staking gas limit with the send-fee constant (or any
+ * other stale hand-picked LUNC figure) gets a SignDoc the node rejects for
+ * insufficient fees before delegate / undelegate / redelegate / withdraw-
+ * rewards can execute. Computed from `getCosmosStakingGasLimit` rather than
+ * hardcoded so a future retune of the staking gas limit can't silently
+ * desync the paired fee the way the gas-limit-only bump in vultisig-sdk#1839
+ * originally did.
+ */
+export const TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS = getFeeAmountFromGasPrice(
+  getCosmosStakingGasLimit({ chain: Chain.TerraClassic }),
+  parseDecimal('28.325')!
+)
+
+/**
+ * Terra Classic's `uusd` fee at the static 300k gas limit:
+ * `300_000 × 0.75 uusd/gas`. USTC bank-denom sends pay both gas and burn
+ * tax in `uusd`, so their base cannot reuse the native `uluna` amount.
+ *
+ * Matches iOS `TerraClassicTax.uusdBaseGas` and Android
+ * `TerraClassicTax.UUSD_BASE_GAS`.
+ */
+export const TERRA_CLASSIC_UUSD_BASE_GAS = 225_000n
 
 export const cosmosGasRecord: Record<IbcEnabledCosmosChain, bigint> = {
   [Chain.Cosmos]: COSMOS_SEND_FEE_DEFAULT,

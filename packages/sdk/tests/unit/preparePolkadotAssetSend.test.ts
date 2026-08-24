@@ -105,6 +105,14 @@ describe('preparePolkadotAssetSend', () => {
     )
   })
 
+  it('rejects amounts above the pallet_assets u128 ceiling', () => {
+    const ok = preparePolkadotAssetSend({ assetId: 1984, from: BOB, to: ALICE, amount: (1n << 128n) - 1n })
+    expect(ok.amount).toBe(((1n << 128n) - 1n).toString())
+    expect(() => preparePolkadotAssetSend({ assetId: 1984, from: BOB, to: ALICE, amount: 1n << 128n })).toThrow(
+      /2\^128-1|u128/
+    )
+  })
+
   it('rejects non-u32 / non-positive asset ids', () => {
     expect(() => preparePolkadotAssetSend({ assetId: 0, from: BOB, to: ALICE, amount: 1n })).toThrow(
       /Invalid Polkadot asset id/

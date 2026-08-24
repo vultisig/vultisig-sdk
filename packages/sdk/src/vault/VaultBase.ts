@@ -14,6 +14,7 @@ import { getTxStatus as coreTxStatus } from '@vultisig/core-chain/tx/status'
 import type { TxStatusResult } from '@vultisig/core-chain/tx/status/resolver'
 import { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
 import { vaultConfig } from '@vultisig/core-config'
+import { hasServer } from '@vultisig/core-mpc/devices/localPartyId'
 import { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
 import { fromCommVault } from '@vultisig/core-mpc/types/utils/commVault'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
@@ -78,6 +79,7 @@ import { TransactionBuilder } from './services/TransactionBuilder'
 // Swap types
 import type { SwapPrepareResult, SwapQuoteParams, SwapQuoteResult, SwapTxParams } from './swap-types'
 import { type ResolvedTokenInfo, resolveTokenRef, resolveTokenRefId } from './tokenRef'
+import { canonicalizeVaultData } from './utils/canonicalizeVaultData'
 import { VaultConflictError, VaultError, VaultErrorCode } from './VaultError'
 import { VaultConfig } from './VaultServices'
 
@@ -87,15 +89,6 @@ export type VaultSaveOptions = {
    * local and persisted edits touch different top-level mutable fields.
    */
   conflictStrategy?: 'reject' | 'merge-metadata'
-}
-
-/**
- * Determine vault type based on signer names
- * Fast vaults have one signer that starts with "Server-"
- * Secure vaults have only device signers (no "Server-" prefix)
- */
-function determineVaultType(signers: string[]): 'fast' | 'secure' {
-  return signers.some(signer => signer.startsWith('Server-')) ? 'fast' : 'secure'
 }
 
 // ===== Vault-name / export-filename safety policy (single source of truth) =====
@@ -362,7 +355,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     }
 
     // Determine vault type
-    const vaultType = determineVaultType(this.coreVault.signers as string[])
+    const vaultType = hasServer(this.coreVault.signers) ? 'fast' : 'secure'
 
     // Build VaultData
     this.vaultData = {
@@ -472,7 +465,10 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       this.fiatValueService,
       this.discountTierService
     )
-    this.tokenDiscoveryService = new TokenDiscoveryService(chain => this.address(chain))
+    this.tokenDiscoveryService = new TokenDiscoveryService(
+      chain => this.address(chain),
+      chain => this.getTokens(chain)
+    )
     this.securityService = new SecurityService(this.wasmProvider)
 
     // Setup event-driven cache invalidation
@@ -946,10 +942,10 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
   /** @internal Replaces constructor defaults with a stored or pending snapshot. */
   protected restorePersistedVaultData(vaultData: VaultData, persisted = true): void {
-    const snapshot = cloneVaultData(vaultData)
-    getVaultRevision(snapshot)
-    this.vaultData = snapshot
-    this.persistedVaultData = cloneVaultData(snapshot)
+    const canonicalSnapshot = canonicalizeVaultData(cloneVaultData(vaultData))
+    getVaultRevision(canonicalSnapshot)
+    this.vaultData = canonicalSnapshot
+    this.persistedVaultData = cloneVaultData(canonicalSnapshot)
     this.hasPersistedRecord = persisted
   }
 
@@ -984,7 +980,20 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     nextData.revision = (actualRevision ?? 0) + 1
     nextData.lastModified = Date.now()
 
-    await this.storage.set(key, cloneVaultData(nextData))
+    const nextSnapshot = cloneVaultData(nextData)
+    if (this.storage.compareAndSet) {
+      const replaced = await this.storage.compareAndSet(key, currentData, nextSnapshot)
+      if (!replaced) {
+        const latestData = await this.storage.get<VaultData>(key)
+        const latestRevision = latestData ? getVaultRevision(latestData) : null
+        throw new VaultConflictError(this.vaultData.id, expectedRevision, latestRevision)
+      }
+    } else {
+      // Legacy custom adapters may omit compareAndSet, so ordinary saves retain
+      // the historical set fallback. Import is stricter and rejects such an
+      // adapter before writing because key-share replacement must be atomic.
+      await this.storage.set(key, nextSnapshot)
+    }
     this.restorePersistedVaultData(nextData)
     this.syncRuntimeFromVaultData()
     this.emit('saved', { vaultId: this.vaultData.id })
@@ -1307,10 +1316,17 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     // Fetch balance via BalanceService so cache / balanceUpdated event / VaultError
     // wrapping all fire. The vault-free `getMaxSendAmountFromKeys` skips these
     // (no cache/events in the MCP / agent context); vault callers must not.
-    const balance = await this.balanceService.getBalance(params.coin.chain, params.coin.id)
+    const [balance, nativeBalance] = await Promise.all([
+      this.balanceService.getBalance(params.coin.chain, params.coin.id),
+      params.coin.id === undefined ? undefined : this.balanceService.getBalance(params.coin.chain),
+    ])
     return computeMaxSendFromBalance(
       vaultDataToIdentity(this.coreVault),
-      { ...params, balance: BigInt(balance.amount) },
+      {
+        ...params,
+        balance: BigInt(balance.amount),
+        nativeBalance: nativeBalance === undefined ? undefined : BigInt(nativeBalance.amount),
+      },
       walletCore
     )
   }
@@ -1921,7 +1937,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     return { balances, totalValue: total.toFixed(2), currency }
   }
 
-  /** Send tokens. Use amount "max" to send entire balance minus fees. Set dryRun for fee estimate without signing. */
+  /** Send tokens. Use amount "max" for the native balance minus fees, or the full token balance when native gas is covered. Set dryRun for fee estimates without signing. */
   async send(params: {
     chain: Chain
     to: string
@@ -1964,6 +1980,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       const isTokenSend = Boolean(tokenInfo.contractAddress)
       return {
         dryRun: true,
+        ...(tokenInfo.contractAddress ? { contractAddress: tokenInfo.contractAddress } : {}),
         fee: this.formatUnits(fee, isTokenSend ? native.decimals : tokenInfo.decimals),
         feeSymbol: native.ticker,
         // Denominated in the asset being sent, so it is directly comparable to

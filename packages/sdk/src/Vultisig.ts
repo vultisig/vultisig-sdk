@@ -1,5 +1,6 @@
 import { banxaSupportedChains } from '@vultisig/core-chain/banxa'
 import { Chain } from '@vultisig/core-chain/Chain'
+import { getThorchainSwapDestinationAssets } from '@vultisig/core-chain/chains/cosmos/thor/securedAssets'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { findCoins as coreFindCoins } from '@vultisig/core-chain/coin/find'
 import { knownTokens, knownTokensIndex } from '@vultisig/core-chain/coin/knownTokens'
@@ -7,6 +8,11 @@ import { getCoinPrices as coreCoinPrices } from '@vultisig/core-chain/coin/price
 import { getCoinPricesWithChange as coreCoinPricesWithChange } from '@vultisig/core-chain/coin/price/getCoinPricesWithChange'
 import { scanAddressWithBlockaid } from '@vultisig/core-chain/security/blockaid/address'
 import { scanSiteWithBlockaid } from '@vultisig/core-chain/security/blockaid/site'
+import {
+  getSwapArrivalStatus,
+  type GetSwapArrivalStatusInput,
+  type SwapArrivalStatusResult,
+} from '@vultisig/core-chain/swap/utils/getSwapArrivalStatus'
 import { getSwapExplorerUrl, type SwapExplorerProvider } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 import { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
 import { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
@@ -70,7 +76,7 @@ import { FastVault } from './vault/FastVault'
 import { SecureVault } from './vault/SecureVault'
 import { VaultBase } from './vault/VaultBase'
 import { VaultError, VaultErrorCode } from './vault/VaultError'
-import { VaultManager } from './VaultManager'
+import { type VaultImportOptions, VaultManager } from './VaultManager'
 
 // Re-export constants
 export {
@@ -959,6 +965,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    *
    * @param vultContent - The .vult file content as a string
    * @param password - Optional password for encrypted vaults
+   * @param options - Explicit conflict handling for an existing logical vault
    * @returns Imported vault instance
    *
    * @example
@@ -967,9 +974,9 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * const vault = await sdk.importVault(vultContent, 'password123')
    * ```
    */
-  async importVault(vultContent: string, password?: string): Promise<VaultBase> {
+  async importVault(vultContent: string, password?: string, options?: VaultImportOptions): Promise<VaultBase> {
     await this.ensureInitialized()
-    const { vault } = await this.vaultManager.importVaultWithResult(vultContent, password, notice => {
+    const { vault } = await this.vaultManager.importVaultWithResult(vultContent, password, options, notice => {
       this.emit('legacyVaultBackupMigrated', notice)
     })
 
@@ -1242,6 +1249,11 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     return getSwapExplorerUrl({ provider, txHash, fromChain })
   }
 
+  /** Read and normalize one THORChain, MayaChain, Skip Go, or LI.FI swap status snapshot. */
+  static getSwapArrivalStatus(input: GetSwapArrivalStatusInput): Promise<SwapArrivalStatusResult> {
+    return getSwapArrivalStatus(input)
+  }
+
   /**
    * Type guard to check if a vault is a FastVault
    * @param vault - The vault to check
@@ -1311,6 +1323,27 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       decimals: coin.decimals,
       logo: coin.logo,
       priceProviderId: coin.priceProviderId,
+    }))
+  }
+
+  /**
+   * Get the complete token universe for a swap destination picker.
+   * THORChain secured assets are refreshed from THORChain with the SDK's
+   * explicit offline fallback; other chains retain the built-in registry.
+   */
+  static async getSwapDestinationTokens(chain: Chain): Promise<TokenInfo[]> {
+    const coins = chain === Chain.THORChain ? await getThorchainSwapDestinationAssets() : (knownTokens[chain] ?? [])
+    return coins.map(coin => ({
+      chain: coin.chain,
+      tokenId: coin.id,
+      contractAddress: coin.id,
+      ticker: coin.ticker,
+      decimals: coin.decimals,
+      logo: coin.logo,
+      priceProviderId: coin.priceProviderId,
+      ...('isSecured' in coin && coin.isSecured === true && 'l1Asset' in coin && typeof coin.l1Asset === 'string'
+        ? { isSecured: true as const, l1Asset: coin.l1Asset }
+        : {}),
     }))
   }
 

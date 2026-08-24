@@ -16,6 +16,9 @@ export {
 } from './balance'
 
 // EVM utilities
+import * as evm from './evm'
+
+export { evm }
 export type { EvmBalance, EvmGasPrice, GetEvmBalancesParams, GetTokenApprovalsResult, TokenApproval } from './evm'
 export {
   abiDecode,
@@ -39,7 +42,7 @@ export { cosmosBalanceChains, getCosmosBalance, isCosmosBalanceChain } from './b
 
 // Canonical bytes oracle (calldata -> chain-agnostic Envelope)
 export type { AssetRef, ChainFamily, DecodeFromToolResultInput, Envelope, EnvelopeKind } from './decode'
-export { decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from './decode'
+export { decode, decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from './decode'
 
 // DEX primitives (read-only / pure math + on-chain quotes — no signing, no broadcast)
 export * as dex from './dex'
@@ -65,6 +68,9 @@ export type { UtxoFeeRate } from './gas'
 export { MAYACHAIN_NODE_URL, THORCHAIN_NODE_URL, utxoFeeRate } from './gas'
 
 // Token utilities
+import * as token from './token'
+
+export { token }
 export type {
   Coin,
   CoinKey,
@@ -121,11 +127,16 @@ export {
 } from './price'
 
 // Cosmos governance (read proposals + build unsigned MsgVote envelope)
+import * as cosmos from './cosmos'
+
+export { cosmos }
 export type {
   CosmosVoteEnvelope,
   GetCosmosGovernanceProposalsParams,
   GetGovernanceProposalsResult,
   GovChain,
+  GovChainId,
+  GovChainInput,
   GovernanceProposal,
   PrepareCosmosVoteParams,
   ProposalStatus,
@@ -137,11 +148,14 @@ export { getCosmosGovernanceProposals, prepareCosmosVote } from './cosmos'
 // Swap
 export type {
   AcrossChain,
+  AcrossOriginChain,
   AcrossQuote,
   AcrossQuoteParams,
   AstroportSwapResult,
+  BoundSwapQuote,
   BuildAstroportSwapParams,
   FindSwapQuoteParams,
+  FindSwapQuotesResult,
   JupiterQuoteResponse,
   JupiterSwapParams,
   JupiterSwapResult,
@@ -153,8 +167,10 @@ export type {
   SkipSwapSuccess,
   SkipUnsignedMsg,
   SwapQuote,
+  SwapQuoteCandidate,
 } from './swap'
 export {
+  ACROSS_ORIGIN_CHAIN,
   acrossQuote,
   acrossSupportedChains,
   assembleAstroportSwap,
@@ -166,6 +182,7 @@ export {
   computeAstroportMinReceive,
   DEFAULT_LUNC_NOTIONAL_FLOOR_USD,
   findSwapQuote,
+  findSwapQuotes,
   getNativeSwapDecimals,
   getNativeSwapMinAmountIn,
   JUPITER_AFFILIATE_FEE_ATAS,
@@ -192,6 +209,7 @@ export type {
   BuildCctpClaimParams,
   CctpAttestationResult,
   CctpBridgeResult,
+  CctpBurnMessage,
   CctpChainConfig,
   CctpClaimResult,
   CctpUnsignedTx,
@@ -202,8 +220,10 @@ export {
   cctpAttestationApiBase,
   cctpChains,
   cctpSupportedChains,
+  decodeCctpBurnMessage,
   formatUsdc,
   getCctpChain,
+  getCctpChainNameByDomain,
   normalizeHexBytes,
   parseUsdcAmount,
 } from './bridge'
@@ -386,6 +406,7 @@ export {
   type SplTransferResult,
   SUI_NATIVE_COIN_TYPE,
   supportedIbcDestinationsFrom,
+  SwapQuoteExpiredError,
   TRC20_TRANSFER_SELECTOR,
   type UndelegateParams,
   type UnsignedTrc20Transfer,
