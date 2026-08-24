@@ -1,6 +1,6 @@
 import { sha256 } from '@noble/hashes/sha2'
 import { bytesToHex } from '@noble/hashes/utils'
-import { Chain } from '@vultisig/core-chain/Chain'
+import { Chain, OtherChain } from '@vultisig/core-chain/Chain'
 import { bittensorRpcUrl } from '@vultisig/core-chain/chains/bittensor/client'
 import { polkadotRpcUrl } from '@vultisig/core-chain/chains/polkadot/client'
 import { tronRpcUrl } from '@vultisig/core-chain/chains/tron/config'
@@ -10,7 +10,7 @@ import { keccak256 } from 'viem'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { hashes as xrplHashes } from 'xrpl'
 
-import { RawBroadcastService } from '@/vault/services/RawBroadcastService'
+import { broadcastRawTx, RawBroadcastService } from '@/vault/services/RawBroadcastService'
 import { VaultError, VaultErrorCode } from '@/vault/VaultError'
 
 const makeRippleRawTx = () =>
@@ -36,6 +36,8 @@ const {
   mockCosmosGetTx,
   mockExecuteSuiTx,
   mockRippleRequest,
+  mockGetBittensorTxHash,
+  mockGetCustomRpcOverride,
 } = vi.hoisted(() => ({
   mockQueryUrl: vi.fn(),
   mockGetEvmClient: vi.fn(),
@@ -47,6 +49,12 @@ const {
   mockCosmosGetTx: vi.fn(),
   mockExecuteSuiTx: vi.fn(),
   mockRippleRequest: vi.fn(),
+  mockGetBittensorTxHash: vi.fn(),
+  mockGetCustomRpcOverride: vi.fn(),
+}))
+
+vi.mock('@vultisig/core-chain/chains/customRpc/customRpcOverrides', () => ({
+  getCustomRpcOverride: (...args: unknown[]) => mockGetCustomRpcOverride(...args),
 }))
 
 vi.mock('@vultisig/lib-utils/query/queryUrl', () => ({
@@ -84,6 +92,10 @@ vi.mock('@vultisig/core-chain/chains/ripple/client', () => ({
   })),
 }))
 
+vi.mock('@vultisig/core-chain/tx/hash/resolvers/bittensor', () => ({
+  getBittensorTxHash: (...args: unknown[]) => mockGetBittensorTxHash(...args),
+}))
+
 describe('RawBroadcastService', () => {
   const service = new RawBroadcastService()
 
@@ -113,6 +125,8 @@ describe('RawBroadcastService', () => {
         tx_json: { hash: 'xrp-hash' },
       },
     })
+    mockGetBittensorTxHash.mockReturnValue('0xbittensorhash')
+    mockGetCustomRpcOverride.mockReturnValue(undefined)
   })
 
   it('throws UnsupportedChain for chains without a raw broadcast path', async () => {
@@ -557,13 +571,14 @@ describe('RawBroadcastService', () => {
   })
 
   it('broadcasts Bittensor extrinsic via JSON-RPC', async () => {
-    mockQueryUrl.mockResolvedValue({ result: '0xbtensor' })
+    const bittensorHash = `0x${'ab'.repeat(32)}`
+    mockQueryUrl.mockResolvedValue({ result: bittensorHash })
 
     const hash = await service.broadcastRawTx({
       chain: Chain.Bittensor,
       rawTx: 'beef',
     })
-    expect(hash).toBe('0xbtensor')
+    expect(hash).toBe(bittensorHash)
     expect(mockQueryUrl).toHaveBeenCalledWith(
       bittensorRpcUrl,
       expect.objectContaining({
@@ -572,15 +587,214 @@ describe('RawBroadcastService', () => {
     )
   })
 
-  it('throws on a malformed Bittensor response with neither result nor error', async () => {
-    mockQueryUrl.mockResolvedValue({})
+  it.each([
+    {},
+    { result: {} },
+    { result: 123 },
+    { result: '0xbtensor' },
+    { result: `0x${'ab'.repeat(32)}`, error: { message: 'Already Imported' } },
+  ])('throws on malformed Bittensor JSON-RPC response %#', async response => {
+    mockQueryUrl.mockResolvedValue(response)
 
     await expect(
       service.broadcastRawTx({
         chain: Chain.Bittensor,
         rawTx: 'beef',
       })
-    ).rejects.toThrow(/missing extrinsic hash/)
+    ).rejects.toThrow(/malformed JSON-RPC response|invalid extrinsic hash/)
+  })
+
+  it('uses the configured Bittensor RPC override', async () => {
+    mockGetCustomRpcOverride.mockReturnValue('https://controlled-bittensor.test')
+    mockQueryUrl.mockResolvedValue({ result: `0x${'ab'.repeat(32)}` })
+
+    await service.broadcastRawTx({ chain: Chain.Bittensor, rawTx: 'beef' })
+
+    expect(mockGetCustomRpcOverride).toHaveBeenCalledWith(OtherChain.Bittensor)
+    expect(mockQueryUrl).toHaveBeenCalledWith(
+      'https://controlled-bittensor.test',
+      expect.objectContaining({
+        body: expect.objectContaining({ method: 'author_submitExtrinsic' }),
+      })
+    )
+  })
+
+  it.each(['Already Imported', 'TRANSACTION ALREADY IMPORTED'])(
+    'returns Bittensor raw tx hash for duplicate response %j',
+    async duplicateMessage => {
+      mockQueryUrl.mockResolvedValue({
+        error: {
+          message: duplicateMessage,
+        },
+      })
+
+      const hash = await service.broadcastRawTx({
+        chain: Chain.Bittensor,
+        rawTx: 'beef',
+      })
+
+      expect(hash).toBe('0xbittensorhash')
+      expect(mockGetBittensorTxHash).toHaveBeenCalledWith({
+        encoded: Buffer.from('beef', 'hex'),
+      })
+    }
+  )
+
+  it.each(['Already Imported', 'TRANSACTION ALREADY IMPORTED'])(
+    'returns Bittensor raw tx hash for duplicate submit failure %j',
+    async duplicateMessage => {
+      mockQueryUrl.mockRejectedValue(new Error(duplicateMessage))
+
+      const hash = await service.broadcastRawTx({
+        chain: Chain.Bittensor,
+        rawTx: 'beef',
+      })
+
+      expect(hash).toBe('0xbittensorhash')
+      expect(mockGetBittensorTxHash).toHaveBeenCalledWith({
+        encoded: Buffer.from('beef', 'hex'),
+      })
+      expect(mockQueryUrl).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it('verifies a timeout-style JSON-RPC error via taostats before returning a hash', async () => {
+    mockQueryUrl
+      .mockResolvedValueOnce({
+        error: {
+          message: 'request timed out',
+        },
+      })
+      .mockResolvedValueOnce({
+        pagination: { page: 1, limit: 1, total: 1 },
+        data: [{ hash: '0xbittensorhash', block_number: 1, success: true, timestamp: '2026-01-01T00:00:00Z' }],
+      })
+
+    const hash = await service.broadcastRawTx({
+      chain: Chain.Bittensor,
+      rawTx: '0xbeef',
+    })
+
+    expect(hash).toBe('0xbittensorhash')
+    expect(mockGetBittensorTxHash).toHaveBeenCalledWith({
+      encoded: Buffer.from('beef', 'hex'),
+    })
+    // The submit-timeout branch must confirm the extrinsic actually landed (via taostats)
+    // before handing back a hash - a locally-computed hash is not proof of broadcast.
+    expect(mockQueryUrl).toHaveBeenCalledTimes(2)
+    expect(mockQueryUrl.mock.calls[1][0]).toContain('tao-tx/v1')
+  })
+
+  it('fails closed when a timeout-style JSON-RPC error cannot be verified on-chain', async () => {
+    mockQueryUrl
+      .mockResolvedValueOnce({
+        error: {
+          message: 'request timed out',
+        },
+      })
+      .mockResolvedValueOnce({
+        pagination: { page: 1, limit: 1, total: 0 },
+        data: [],
+      })
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Bittensor,
+        rawTx: '0xbeef',
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+    })
+    expect(mockQueryUrl).toHaveBeenCalledTimes(2)
+  })
+
+  it.each([
+    'request timed out',
+    'queryUrl: request timed out after 20000ms (https://bittensor-finney.api.onfinality.io/public)',
+  ])('verifies a timeout-style submit failure %j via taostats before returning a hash', async timeoutMessage => {
+    mockQueryUrl.mockRejectedValueOnce(new Error(timeoutMessage)).mockResolvedValueOnce({
+      pagination: { page: 1, limit: 1, total: 1 },
+      data: [{ hash: '0xbittensorhash', block_number: 1, success: true, timestamp: '2026-01-01T00:00:00Z' }],
+    })
+
+    const hash = await service.broadcastRawTx({
+      chain: Chain.Bittensor,
+      rawTx: '0xbeef',
+    })
+
+    expect(hash).toBe('0xbittensorhash')
+    expect(mockGetBittensorTxHash).toHaveBeenCalledWith({
+      encoded: Buffer.from('beef', 'hex'),
+    })
+    expect(mockQueryUrl).toHaveBeenCalledTimes(2)
+  })
+
+  it('fails closed when a timeout-style submit failure cannot be verified on-chain', async () => {
+    mockQueryUrl.mockRejectedValueOnce(new Error('request timed out')).mockRejectedValueOnce(new Error('network down'))
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Bittensor,
+        rawTx: '0xbeef',
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+    })
+    expect(mockQueryUrl).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not verify duplicate-style Bittensor errors (idempotent immediate return)', async () => {
+    mockQueryUrl.mockResolvedValueOnce({
+      error: {
+        message: 'Already Imported',
+      },
+    })
+
+    const hash = await service.broadcastRawTx({
+      chain: Chain.Bittensor,
+      rawTx: '0xbeef',
+    })
+
+    expect(hash).toBe('0xbittensorhash')
+    // Duplicate detection is a strong in-mempool signal on its own; it must NOT go through
+    // the taostats verification poll the timeout branch requires.
+    expect(mockQueryUrl).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    'Invalid transaction: timeout value is unsupported',
+    'Transaction timed out during validation',
+    'Already Imported transaction is invalid',
+  ])('does not treat unrelated thrown error %j as a Bittensor duplicate', async errorMessage => {
+    mockQueryUrl.mockRejectedValue(new Error(errorMessage))
+
+    await expect(service.broadcastRawTx({ chain: Chain.Bittensor, rawTx: '0xbeef' })).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining(errorMessage),
+    })
+  })
+
+  it.each([
+    'Invalid transaction: timeout value is unsupported',
+    'Transaction timed out during validation',
+    'Already Imported transaction is invalid',
+  ])('does not treat unrelated JSON-RPC error %j as a Bittensor duplicate', async errorMessage => {
+    mockQueryUrl.mockResolvedValue({ error: { message: errorMessage } })
+
+    await expect(service.broadcastRawTx({ chain: Chain.Bittensor, rawTx: '0xbeef' })).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining(errorMessage),
+    })
+  })
+
+  it.each(['', 'abc', 'zz'])('rejects malformed Bittensor raw tx %j before submission', async rawTx => {
+    await expect(service.broadcastRawTx({ chain: Chain.Bittensor, rawTx })).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('non-empty, even-length hexadecimal bytes'),
+    })
+
+    expect(mockQueryUrl).not.toHaveBeenCalled()
+    expect(mockGetBittensorTxHash).not.toHaveBeenCalled()
   })
 
   it('broadcasts Tron transaction JSON', async () => {
@@ -848,6 +1062,24 @@ describe('RawBroadcastService', () => {
     ).rejects.toMatchObject({
       code: VaultErrorCode.BroadcastFailed,
       message: expect.stringContaining('engine result'),
+    })
+  })
+
+  describe('broadcastRawTx (standalone, vault-free export)', () => {
+    it('broadcasts through the same chain-agnostic dispatch as the class method, without a vault instance', async () => {
+      mockGetEvmClient.mockReturnValue({
+        sendRawTransaction: vi.fn().mockResolvedValue('0xstandalonehash'),
+      })
+
+      const hash = await broadcastRawTx({ chain: Chain.Ethereum, rawTx: '0xabc' })
+
+      expect(hash).toBe('0xstandalonehash')
+    })
+
+    it('throws UnsupportedChain for chains without a raw broadcast path, same as the class method', async () => {
+      await expect(broadcastRawTx({ chain: Chain.Cardano, rawTx: '00' })).rejects.toMatchObject({
+        code: VaultErrorCode.UnsupportedChain,
+      })
     })
   })
 })
