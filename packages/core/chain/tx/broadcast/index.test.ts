@@ -2,49 +2,90 @@ import { HttpResponseError } from '@vultisig/lib-utils/fetch/HttpResponseError'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
-  broadcastBittensorTx: vi.fn(),
-  broadcastCardanoTx: vi.fn(),
-  broadcastCosmosTx: vi.fn(),
-  broadcastEvmTx: vi.fn(),
-  broadcastPolkadotTx: vi.fn(),
-  broadcastQbtcTx: vi.fn(),
-  broadcastRippleTx: vi.fn(),
-  broadcastSolanaTx: vi.fn(),
-  broadcastSuiTx: vi.fn(),
-  broadcastTonTx: vi.fn(),
-  broadcastTronTx: vi.fn(),
-  broadcastUtxoTx: vi.fn(),
+  bittensor: vi.fn(),
+  cardano: vi.fn(),
+  cosmos: vi.fn(),
+  evm: vi.fn(),
+  polkadot: vi.fn(),
+  qbtc: vi.fn(),
+  ripple: vi.fn(),
+  solana: vi.fn(),
+  sui: vi.fn(),
+  ton: vi.fn(),
+  tron: vi.fn(),
+  utxo: vi.fn(),
 }))
 
-vi.mock('./resolvers/bittensor', () => ({
-  broadcastBittensorTx: mocks.broadcastBittensorTx,
-}))
-vi.mock('./resolvers/cardano', () => ({
-  broadcastCardanoTx: mocks.broadcastCardanoTx,
-}))
-vi.mock('./resolvers/cosmos', () => ({
-  broadcastCosmosTx: mocks.broadcastCosmosTx,
-}))
-vi.mock('./resolvers/evm', () => ({ broadcastEvmTx: mocks.broadcastEvmTx }))
-vi.mock('./resolvers/polkadot', () => ({
-  broadcastPolkadotTx: mocks.broadcastPolkadotTx,
-}))
-vi.mock('./resolvers/qbtc', () => ({ broadcastQbtcTx: mocks.broadcastQbtcTx }))
-vi.mock('./resolvers/ripple', () => ({
-  broadcastRippleTx: mocks.broadcastRippleTx,
-}))
-vi.mock('./resolvers/solana', () => ({
-  broadcastSolanaTx: mocks.broadcastSolanaTx,
-}))
-vi.mock('./resolvers/sui', () => ({ broadcastSuiTx: mocks.broadcastSuiTx }))
-vi.mock('./resolvers/ton', () => ({ broadcastTonTx: mocks.broadcastTonTx }))
-vi.mock('./resolvers/tron', () => ({ broadcastTronTx: mocks.broadcastTronTx }))
-vi.mock('./resolvers/utxo', () => ({ broadcastUtxoTx: mocks.broadcastUtxoTx }))
+vi.mock('./resolvers/bittensor', () => ({ broadcastBittensorTx: mocks.bittensor }))
+vi.mock('./resolvers/cardano', () => ({ broadcastCardanoTx: mocks.cardano }))
+vi.mock('./resolvers/cosmos', () => ({ broadcastCosmosTx: mocks.cosmos }))
+vi.mock('./resolvers/evm', () => ({ broadcastEvmTx: mocks.evm }))
+vi.mock('./resolvers/polkadot', () => ({ broadcastPolkadotTx: mocks.polkadot }))
+vi.mock('./resolvers/qbtc', () => ({ broadcastQbtcTx: mocks.qbtc }))
+vi.mock('./resolvers/ripple', () => ({ broadcastRippleTx: mocks.ripple }))
+vi.mock('./resolvers/solana', () => ({ broadcastSolanaTx: mocks.solana }))
+vi.mock('./resolvers/sui', () => ({ broadcastSuiTx: mocks.sui }))
+vi.mock('./resolvers/ton', () => ({ broadcastTonTx: mocks.ton }))
+vi.mock('./resolvers/tron', () => ({ broadcastTronTx: mocks.tron }))
+vi.mock('./resolvers/utxo', () => ({ broadcastUtxoTx: mocks.utxo }))
 
-import { Chain, OtherChain } from '../../Chain'
+import { Chain, CosmosChain, EvmChain, OtherChain, UtxoChain } from '../../Chain'
+import type { ChainKind } from '../../ChainKind'
 import { broadcastTx } from '.'
 import { CosmosSequenceMismatchError } from './cosmosSequenceMismatch'
+import { broadcastAccepted, BroadcastErrorCode, broadcastFailed, isRetryableBroadcastCause } from './resolver'
 import { broadcastRetryMaxAttempts, isTransientBroadcastError } from './transientRetry'
+
+const cases = {
+  bittensor: { chain: OtherChain.Bittensor, resolver: mocks.bittensor },
+  cardano: { chain: OtherChain.Cardano, resolver: mocks.cardano },
+  cosmos: { chain: CosmosChain.Cosmos, resolver: mocks.cosmos },
+  evm: { chain: EvmChain.Ethereum, resolver: mocks.evm },
+  polkadot: { chain: OtherChain.Polkadot, resolver: mocks.polkadot },
+  qbtc: { chain: OtherChain.QBTC, resolver: mocks.qbtc },
+  ripple: { chain: OtherChain.Ripple, resolver: mocks.ripple },
+  solana: { chain: OtherChain.Solana, resolver: mocks.solana },
+  sui: { chain: OtherChain.Sui, resolver: mocks.sui },
+  ton: { chain: OtherChain.Ton, resolver: mocks.ton },
+  tron: { chain: OtherChain.Tron, resolver: mocks.tron },
+  utxo: { chain: UtxoChain.Bitcoin, resolver: mocks.utxo },
+} satisfies Record<ChainKind, { chain: Chain; resolver: ReturnType<typeof vi.fn> }>
+
+describe.each(Object.entries(cases))('broadcastTx %s adapter contract', (kind, { chain, resolver }) => {
+  const tx = {} as any
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('returns the shared accepted result', async () => {
+    const accepted = broadcastAccepted(`${kind}-hash`)
+    resolver.mockResolvedValue(accepted)
+
+    await expect(broadcastTx({ chain, tx })).resolves.toEqual(accepted)
+    expect(resolver).toHaveBeenCalledWith({ chain, tx })
+  })
+
+  it('returns the shared definitive failure result', async () => {
+    const failed = broadcastFailed(new Error(`${kind} rejected`), false)
+    resolver.mockResolvedValue(failed)
+
+    await expect(broadcastTx({ chain, tx })).resolves.toEqual(failed)
+  })
+
+  it('quarantines raw provider responses under namespaced details', async () => {
+    const rawProviderResponse = { txid: `${kind}-raw`, result: true }
+    resolver.mockResolvedValue(rawProviderResponse)
+
+    await expect(broadcastTx({ chain, tx })).resolves.toEqual({
+      status: 'failed',
+      code: BroadcastErrorCode.Rejected,
+      retryable: false,
+      cause: expect.objectContaining({ message: 'Broadcast resolver returned an invalid result' }),
+      details: { provider: rawProviderResponse },
+    })
+  })
+})
 
 describe('broadcastTx transient retry dispatcher', () => {
   const tx = { encoded: new Uint8Array([1, 2, 3]) } as any
@@ -57,55 +98,123 @@ describe('broadcastTx transient retry dispatcher', () => {
     vi.useRealTimers()
   })
 
-  it('retries transient transport errors for non-Solana/non-EVM resolvers', async () => {
+  it('retries transient result failures for non-Solana/non-EVM resolvers', async () => {
     vi.useFakeTimers()
-    mocks.broadcastCardanoTx.mockRejectedValueOnce(new Error('fetch failed')).mockResolvedValueOnce('hash')
+    const cause = new Error('fetch failed')
+    mocks.cardano.mockResolvedValueOnce(broadcastFailed(cause, true)).mockResolvedValueOnce(broadcastAccepted('hash'))
 
     const promise = broadcastTx({ chain: OtherChain.Cardano, tx })
-
     await vi.advanceTimersByTimeAsync(250)
-    await expect(promise).resolves.toBe('hash')
 
-    expect(mocks.broadcastCardanoTx).toHaveBeenCalledTimes(2)
+    await expect(promise).resolves.toEqual(broadcastAccepted('hash'))
+    expect(mocks.cardano).toHaveBeenCalledTimes(2)
   })
 
-  it('stops after the bounded retry budget for persistent transient errors', async () => {
+  it('stops after the bounded retry budget and returns the last transient failure', async () => {
     vi.useFakeTimers()
-    const error = new Error('socket hang up')
-    mocks.broadcastTonTx.mockRejectedValue(error)
+    const failed = broadcastFailed(new Error('socket hang up'), true)
+    mocks.ton.mockResolvedValue(failed)
 
     const promise = broadcastTx({ chain: OtherChain.Ton, tx })
-    const assertion = expect(promise).rejects.toBe(error)
-
     await vi.advanceTimersByTimeAsync(750)
-    await assertion
 
-    expect(mocks.broadcastTonTx).toHaveBeenCalledTimes(broadcastRetryMaxAttempts)
+    await expect(promise).resolves.toEqual(failed)
+    expect(mocks.ton).toHaveBeenCalledTimes(broadcastRetryMaxAttempts)
   })
 
-  it('does not retry node rejection errors', async () => {
-    const error = new Error('BadInputsUTxO')
-    mocks.broadcastCardanoTx.mockRejectedValue(error)
+  it('does not retry node rejection results', async () => {
+    const failed = broadcastFailed(new Error('BadInputsUTxO'), false)
+    mocks.cardano.mockResolvedValue(failed)
 
-    await expect(broadcastTx({ chain: OtherChain.Cardano, tx })).rejects.toBe(error)
-
-    expect(mocks.broadcastCardanoTx).toHaveBeenCalledTimes(1)
+    await expect(broadcastTx({ chain: OtherChain.Cardano, tx })).resolves.toEqual(failed)
+    expect(mocks.cardano).toHaveBeenCalledTimes(1)
   })
 
-  it('classifies structured HTTP 429 and 5xx errors as transient but not HTTP 400', () => {
+  it('does not add dispatcher retry on top of resolver-owned retry', async () => {
+    const failed = broadcastFailed(new Error('fetch failed'), true)
+    mocks.solana.mockResolvedValueOnce(failed)
+    mocks.evm.mockResolvedValueOnce(failed)
+
+    await expect(broadcastTx({ chain: Chain.Solana, tx })).resolves.toEqual(failed)
+    await expect(broadcastTx({ chain: Chain.Ethereum, tx })).resolves.toEqual(failed)
+    expect(mocks.solana).toHaveBeenCalledTimes(1)
+    expect(mocks.evm).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('broadcast result safety guards', () => {
+  const tx = {} as any
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('normalizes thrown transport failures instead of leaking them', async () => {
+    const cause = new Error('ECONNRESET')
+    mocks.evm.mockRejectedValue(cause)
+
+    await expect(broadcastTx({ chain: EvmChain.Ethereum, tx: {} as any })).resolves.toEqual({
+      status: 'failed',
+      code: BroadcastErrorCode.Transport,
+      retryable: true,
+      cause,
+    })
+  })
+
+  it('does not classify an ambiguous local TypeError as retryable', async () => {
+    const cause = new TypeError('Cannot read properties of undefined')
+    mocks.evm.mockRejectedValue(cause)
+
+    await expect(broadcastTx({ chain: EvmChain.Ethereum, tx: {} as any })).resolves.toEqual({
+      status: 'failed',
+      code: BroadcastErrorCode.Rejected,
+      retryable: false,
+      cause,
+    })
+  })
+
+  it('quarantines contradictory and provider-native result shapes', async () => {
+    const contradictory = {
+      status: 'failed',
+      code: BroadcastErrorCode.Rejected,
+      retryable: true,
+      cause: new Error('rejected'),
+    }
+    mocks.evm.mockResolvedValueOnce(contradictory)
+
+    await expect(broadcastTx({ chain: EvmChain.Ethereum, tx: {} as any })).resolves.toMatchObject({
+      status: 'failed',
+      code: BroadcastErrorCode.Rejected,
+      retryable: false,
+      details: { provider: contradictory },
+    })
+
+    const rawProviderResult = { status: 'accepted', finality: 'pending', txid: 'provider-native-hash' }
+    mocks.evm.mockResolvedValueOnce(rawProviderResult)
+    await expect(broadcastTx({ chain: EvmChain.Ethereum, tx: {} as any })).resolves.toMatchObject({
+      status: 'failed',
+      details: { provider: rawProviderResult },
+    })
+  })
+
+  it('classifies structured HTTP and common fetch transport failures', () => {
     const httpError = (status: number) =>
       new HttpResponseError({
-        message: `HTTP ${status}`,
+        message: 'opaque body',
         status,
         statusText: 'status',
         url: 'https://example.invalid',
         body: null,
       })
 
-    expect(isTransientBroadcastError(httpError(429))).toBe(true)
-    expect(isTransientBroadcastError(httpError(503))).toBe(true)
-    expect(isTransientBroadcastError(httpError(400))).toBe(false)
-    expect(isTransientBroadcastError(httpError(600))).toBe(false)
+    expect(isRetryableBroadcastCause(httpError(408))).toBe(true)
+    expect(isRetryableBroadcastCause(httpError(429))).toBe(true)
+    expect(isRetryableBroadcastCause(httpError(503))).toBe(true)
+    expect(isRetryableBroadcastCause(httpError(400))).toBe(false)
+    expect(isRetryableBroadcastCause(httpError(600))).toBe(false)
+    for (const message of ['fetch failed', 'Failed to fetch', 'Network request failed', 'Load failed']) {
+      expect(isTransientBroadcastError(new TypeError(message))).toBe(true)
+    }
   })
 
   it('terminates when an error cause chain is cyclic', () => {
@@ -115,35 +224,17 @@ describe('broadcastTx transient retry dispatcher', () => {
     expect(isTransientBroadcastError(error)).toBe(false)
   })
 
-  it.each(['fetch failed', 'Failed to fetch', 'Network request failed'])(
-    'classifies common fetch transport error %s as transient',
-    message => {
-      expect(isTransientBroadcastError(new Error(message))).toBe(true)
-    }
-  )
-
-  it('does not add dispatcher retry on top of Solana or EVM resolver-owned retries', async () => {
-    const error = new Error('fetch failed')
-    mocks.broadcastSolanaTx.mockRejectedValueOnce(error)
-    mocks.broadcastEvmTx.mockRejectedValueOnce(error)
-
-    await expect(broadcastTx({ chain: Chain.Solana, tx })).rejects.toBe(error)
-    await expect(broadcastTx({ chain: Chain.Ethereum, tx })).rejects.toBe(error)
-
-    expect(mocks.broadcastSolanaTx).toHaveBeenCalledTimes(1)
-    expect(mocks.broadcastEvmTx).toHaveBeenCalledTimes(1)
-  })
-
   it('does not retry a stale Cosmos sequence that requires re-signing', async () => {
     const error = new CosmosSequenceMismatchError({
       expectedSequence: 255n,
       signedSequence: 254n,
     })
-    mocks.broadcastCosmosTx.mockRejectedValue(error)
+    const failed = broadcastFailed(error, false)
+    mocks.cosmos.mockResolvedValue(failed)
 
-    await expect(broadcastTx({ chain: Chain.Cosmos, tx })).rejects.toBe(error)
+    await expect(broadcastTx({ chain: Chain.Cosmos, tx })).resolves.toEqual(failed)
 
-    expect(mocks.broadcastCosmosTx).toHaveBeenCalledTimes(1)
+    expect(mocks.cosmos).toHaveBeenCalledTimes(1)
   })
 
   it('retries a future Cosmos sequence after its predecessor may have landed', async () => {
@@ -152,12 +243,12 @@ describe('broadcastTx transient retry dispatcher', () => {
       expectedSequence: 254n,
       signedSequence: 255n,
     })
-    mocks.broadcastCosmosTx.mockRejectedValueOnce(error).mockResolvedValueOnce(undefined)
+    mocks.cosmos.mockResolvedValueOnce(broadcastFailed(error, true)).mockResolvedValueOnce(broadcastAccepted())
 
     const promise = broadcastTx({ chain: Chain.Cosmos, tx })
 
     await vi.advanceTimersByTimeAsync(250)
-    await expect(promise).resolves.toBeUndefined()
-    expect(mocks.broadcastCosmosTx).toHaveBeenCalledTimes(2)
+    await expect(promise).resolves.toEqual(broadcastAccepted())
+    expect(mocks.cosmos).toHaveBeenCalledTimes(2)
   })
 })
