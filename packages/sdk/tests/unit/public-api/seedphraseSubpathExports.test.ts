@@ -28,6 +28,7 @@ describe('@vultisig/sdk/seedphrase public surface', () => {
     expect(JSON.stringify(seedphraseExport)).not.toContain('dist/index.node')
     expect(seedphraseExport).not.toHaveProperty('browser')
     expect(seedphraseExport).not.toHaveProperty('worker')
+    expect(seedphraseExport).not.toHaveProperty('react-native')
   })
 
   it('keeps dedicated runtime and declaration bundle generation wired', () => {
