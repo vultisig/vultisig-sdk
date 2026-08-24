@@ -22,6 +22,8 @@ export type { VaultConfig, VaultSaveOptions } from './vault'
 export {
   BroadcastPartialFailureError,
   FastVault,
+  hasServer,
+  isServer,
   SecureVault,
   VaultBase,
   VaultConflictError,
@@ -146,13 +148,22 @@ export type {
   ParsedTxReadyThorLpDeposit,
   ParsedTxReadyThorSwapDeposit,
   ParseTxReadyOptions,
+  PollTxStatusUntilFinalParams,
+  PollTxStatusUntilFinalResult,
   TxReadyEnvelope,
   TxReadyEvmLeg,
   TxReadyObject,
   TxReadyParseErrorCode,
   TxReadyTxArgs,
 } from './tx'
-export { normalizeTx, parseTxReadyEnvelope, splitMultiTx, TxNormalizeError, TxReadyParseError } from './tx'
+export {
+  normalizeTx,
+  parseTxReadyEnvelope,
+  pollTxStatusUntilFinal,
+  splitMultiTx,
+  TxNormalizeError,
+  TxReadyParseError,
+} from './tx'
 
 // ============================================================================
 // PUBLIC API - Canonical Contract / Token Registry (knownContracts)

@@ -14,3 +14,5 @@ export type {
   TxReadyTxArgs,
 } from './parseTxReady'
 export { parseTxReadyEnvelope, TxReadyParseError } from './parseTxReady'
+export type { PollTxStatusUntilFinalParams, PollTxStatusUntilFinalResult } from './pollTxStatusUntilFinal'
+export { pollTxStatusUntilFinal } from './pollTxStatusUntilFinal'
