@@ -1,8 +1,9 @@
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
 import { AuthInfo, SignDoc, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 
+import * as sdkRn from '../../../../src/platforms/react-native/index'
 import { cosmosTxFeeGasParityCases } from '../../../fixtures/cosmosTxFeeGasParity'
 
 process.env.VULTISIG_STRICT_SINGLETON = '0'
@@ -10,6 +11,30 @@ process.env.VULTISIG_STRICT_SINGLETON = '0'
 vi.mock('expo-crypto', () => ({
   randomUUID: () => '00000000-0000-4000-8000-000000000000',
   getRandomValues: <T extends ArrayBufferView | null>(a: T) => a,
+}))
+
+vi.mock('expo-sqlite', () => ({
+  openDatabaseAsync: async () => ({
+    execAsync: async () => {},
+    getAllAsync: async () => [],
+    getFirstAsync: async () => null,
+    runAsync: async () => ({}),
+    withExclusiveTransactionAsync: async (
+      task: (transaction: {
+        execAsync: () => Promise<void>
+        getAllAsync: () => Promise<never[]>
+        getFirstAsync: () => Promise<null>
+        runAsync: () => Promise<object>
+      }) => Promise<void>
+    ) => {
+      await task({
+        execAsync: async () => {},
+        getAllAsync: async () => [],
+        getFirstAsync: async () => null,
+        runAsync: async () => ({}),
+      })
+    },
+  }),
 }))
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
@@ -35,7 +60,25 @@ vi.mock('@vultisig/walletcore-native', () => ({
   NativeWalletCore: { getInstance: async () => ({}) },
 }))
 
+let reactNativeEntry: Awaited<typeof import('../../../../src/platforms/react-native/index')>
+let dangerousAddresses: Awaited<typeof import('../../../../src/utils/dangerousAddresses')>
+
+beforeAll(async () => {
+  ;[reactNativeEntry, dangerousAddresses] = await Promise.all([
+    import('../../../../src/platforms/react-native/index'),
+    import('../../../../src/utils/dangerousAddresses'),
+  ])
+}, 120_000)
+
 describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
+  it('exports canonical fast-vault detection helpers', async () => {
+    const canonical = await import('@vultisig/core-mpc/devices/localPartyId')
+
+    expect(reactNativeEntry.hasServer).toBe(canonical.hasServer)
+    expect(reactNativeEntry.isServer).toBe(canonical.isServer)
+    expect(reactNativeEntry.hasServer(['Android-current', 'VultiServer-legacy'])).toBe(true)
+  })
+
   it.each([
     'EVM_DANGEROUS_ADDRESSES',
     'SOLANA_DANGEROUS_ADDRESSES',
@@ -47,10 +90,7 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     'assertSafeEvmDestination',
     'assertSafeDestination',
   ] as const)('re-exports dangerous-address canonical %s by identity', async name => {
-    const rn = await import('../../../../src/platforms/react-native/index')
-    const dangerousAddresses = await import('../../../../src/utils/dangerousAddresses')
-
-    expect(rn[name]).toBe(dangerousAddresses[name])
+    expect(reactNativeEntry[name]).toBe(dangerousAddresses[name])
   })
 
   it('registers crypto + storage on module load so Vultisig({}) does not throw', async () => {
@@ -63,6 +103,18 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(storage).toBeDefined()
     expect(typeof storage.get).toBe('function')
     expect(rn.DEFAULT_CHAINS).toBe(rn.defaultChains)
+  })
+
+  it('re-exports root swap helpers needed by React Native consumers', () => {
+    expect(typeof sdkRn.acrossQuote).toBe('function')
+    expect(Array.isArray(sdkRn.acrossSupportedChains)).toBe(true)
+    expect(typeof sdkRn.buildJupiterSwapTx).toBe('function')
+    expect(typeof sdkRn.resolveJupiterFeeAccount).toBe('function')
+    expect(typeof sdkRn.runSkipSwap).toBe('function')
+    expect(typeof sdkRn.skipChainIdToChainName).toBe('function')
+    expect(typeof sdkRn.findSwapQuote).toBe('function')
+    expect(sdkRn.SOL_NATIVE_MINT).toBe('So11111111111111111111111111111111111111112')
+    expect(sdkRn.JUPITER_PLATFORM_FEE_BPS).toBe(50)
   })
 
   it('exports default chain canonicals on the RN entrypoint', async () => {
@@ -173,6 +225,18 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(deriveAddressFromPublicKey).toHaveBeenNthCalledWith(2, 60, publicKey)
   })
 
+  it('exports isValidTokenId (WalletCoreLike) for non-address token families from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    // Sui and a malformed Ripple id never reach the walletCore-dependent
+    // address-validation branch, so an empty stub is safe here.
+    const walletCore = {} as import('@vultisig/walletcore-native').WalletCoreLike
+
+    expect(typeof rn.isValidTokenId).toBe('function')
+    expect(rn.isValidTokenId({ chain: rn.Chain.Sui, id: '0x2::sui::SUI', walletCore })).toBe(true)
+    expect(rn.isValidTokenId({ chain: rn.Chain.Sui, id: 'not-a-struct-tag', walletCore })).toBe(false)
+    expect(rn.isValidTokenId({ chain: rn.Chain.Ripple, id: 'not-a-composite-id', walletCore })).toBe(false)
+  })
+
   it('exports the shared THORChain secured-asset catalog from the RN entry', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
@@ -196,6 +260,62 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.getCosmosMemoMaxBytesByChainId('phoenix-1')).toBe(512)
     expect(rn.isCosmosMemoWithinCap(rn.Chain.Osmosis, 'a'.repeat(256))).toBe(true)
     expect(rn.isCosmosMemoWithinCap(rn.Chain.Osmosis, 'a'.repeat(257))).toBe(false)
+  })
+
+  it('exports the canonical Cosmos custom-signing payload builders from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const canonical = await import('../../../../src/vault/services/cosmos')
+
+    expect(rn.buildSignAminoKeysignPayload).toBe(canonical.buildSignAminoKeysignPayload)
+    expect(rn.buildSignDirectKeysignPayload).toBe(canonical.buildSignDirectKeysignPayload)
+  })
+
+  // sdk#1657 - buildSignAminoKeysignPayload/buildSignDirectKeysignPayload only
+  // ever call `publicKey.data()`, but their exported `publicKey` type was
+  // pinned to @trustwallet/wallet-core's `PublicKey`. RN consumers hold a
+  // @vultisig/walletcore-native `NativePublicKeyInstance` instead, which is
+  // not that class, so the RN-published type forced a cast. This test assigns
+  // a `NativePublicKeyInstance`-typed value directly to `publicKey` with no
+  // `as` — it fails to compile (not just fails at runtime) if the export ever
+  // narrows back to the TrustWallet WASM type.
+  it('accepts a React Native NativePublicKeyInstance as publicKey with no cast', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    const nativePublicKey: import('@vultisig/walletcore-native').NativePublicKeyInstance = {
+      _handle: 1,
+      data: () => new Uint8Array([1, 2, 3]),
+      uncompressed() {
+        return this
+      },
+      compressed() {
+        return this
+      },
+      verify: () => true,
+      verifyAsDER: () => true,
+      delete: () => {},
+    }
+
+    const payload = await rn.buildSignAminoKeysignPayload({
+      chain: rn.Chain.Cosmos,
+      coin: {
+        chain: rn.Chain.Cosmos,
+        address: 'cosmos1abcdef',
+        decimals: 6,
+        ticker: 'ATOM',
+      },
+      msgs: [],
+      fee: {
+        amount: [{ denom: 'uatom', amount: '5000' }],
+        gas: '200000',
+      },
+      vaultId: 'vault-ecdsa',
+      localPartyId: 'device-1',
+      publicKey: nativePublicKey,
+      libType: 'DKLS',
+      skipChainSpecificFetch: true,
+    })
+
+    expect(payload.coin?.hexPublicKey).toBe('010203')
   })
 
   it('exports the generic CosmWasm execute message builder from the RN root surface', async () => {
@@ -354,6 +474,10 @@ describe('RN entry exposes pure chain helpers and registry', () => {
     expect(rn.decodeFromToolResult).toBe(decode.decodeFromToolResult)
     expect(rn.decodeCosmosTx).toBe(decode.decodeCosmosTx)
     expect(rn.decodeEvmTx).toBe(decode.decodeEvmTx)
+    // sdk#1310: sdk.decode.fromToolResult is the documented canonical shape.
+    expect(rn.decode.fromToolResult).toBe(decode.decodeFromToolResult)
+    expect(rn.decode.decodeCosmosTx).toBe(decode.decodeCosmosTx)
+    expect(rn.decode.decodeEvmTx).toBe(decode.decodeEvmTx)
     expect(rn.buildKeygenPairingQrPayload).toBe(pairing.buildKeygenPairingQrPayload)
   })
 
