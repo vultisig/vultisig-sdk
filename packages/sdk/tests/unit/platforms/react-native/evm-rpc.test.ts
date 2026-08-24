@@ -5,6 +5,8 @@ const mocks = vi.hoisted(() => ({
   sendRawTransaction: vi.fn(),
   getTransactionReceipt: vi.fn(),
   getTransaction: vi.fn(),
+  getBlock: vi.fn(),
+  getGasPrice: vi.fn(),
 }))
 
 vi.mock('viem', async importOriginal => {
@@ -19,7 +21,7 @@ vi.mock('viem', async importOriginal => {
 
 import { keccak256 } from 'viem'
 
-import { broadcastEvmRawTx } from '../../../../src/platforms/react-native/chains/evm/rpc'
+import { broadcastEvmRawTx, getEvmSuggestedFees } from '../../../../src/platforms/react-native/chains/evm/rpc'
 
 const RPC_URL = 'http://127.0.0.1:8545'
 const RAW_TX = '0x010203' as const
@@ -85,5 +87,62 @@ describe('React Native EVM raw broadcast idempotency', () => {
     mocks.getTransaction.mockResolvedValue(null)
 
     await expect(broadcastEvmRawTx(RPC_URL, EvmChain.Ethereum, RAW_TX)).rejects.toBe(originalError)
+  })
+})
+
+const GWEI = 1_000_000_000n
+
+// Regression for sdk#1178: getEvmSuggestedFees previously returned naive
+// baseFee/10 with no per-chain floor, so a quiet-block RPC quote could
+// collapse toward zero and sit unmined in the public mempool. It now runs
+// through the SDK's own canonical clampEvmPriorityFee floor/ceiling policy.
+describe('React Native getEvmSuggestedFees floor policy', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('floors a near-zero quiet-block priority fee on Ethereum to the 1 gwei minimum tip', async () => {
+    // baseFee/10 here is far below the 1 gwei floor.
+    mocks.getBlock.mockResolvedValue({ baseFeePerGas: 1_000n })
+
+    const fees = await getEvmSuggestedFees(RPC_URL, EvmChain.Ethereum)
+
+    expect(fees.maxPriorityFeePerGas).toBe(1n * GWEI)
+    expect(fees.maxFeePerGas).toBe(1_000n * 2n + 1n * GWEI)
+  })
+
+  it('floors a near-zero quiet-block priority fee on Polygon to the 30 gwei minimum tip', async () => {
+    mocks.getBlock.mockResolvedValue({ baseFeePerGas: 1_000n })
+
+    const fees = await getEvmSuggestedFees(RPC_URL, EvmChain.Polygon)
+
+    expect(fees.maxPriorityFeePerGas).toBe(30n * GWEI)
+  })
+
+  it('does not floor an L2 with no configured floor (Arbitrum) — 10% of base fee stands', async () => {
+    mocks.getBlock.mockResolvedValue({ baseFeePerGas: 100n * GWEI })
+
+    const fees = await getEvmSuggestedFees(RPC_URL, EvmChain.Arbitrum)
+
+    expect(fees.maxPriorityFeePerGas).toBe(10n * GWEI)
+  })
+
+  it('clamps a wildly inflated RPC-reported priority fee to the sanity ceiling', async () => {
+    // 10% of an absurd base fee would blow past Ethereum's 500 gwei ceiling.
+    mocks.getBlock.mockResolvedValue({ baseFeePerGas: 100_000n * GWEI })
+
+    const fees = await getEvmSuggestedFees(RPC_URL, EvmChain.Ethereum)
+
+    expect(fees.maxPriorityFeePerGas).toBe(500n * GWEI)
+  })
+
+  it('falls back to getGasPrice when the block has no baseFeePerGas', async () => {
+    mocks.getBlock.mockResolvedValue({ baseFeePerGas: null })
+    mocks.getGasPrice.mockResolvedValue(50n * GWEI)
+
+    const fees = await getEvmSuggestedFees(RPC_URL, EvmChain.Arbitrum)
+
+    expect(fees.baseFeePerGas).toBe(50n * GWEI)
+    expect(mocks.getGasPrice).toHaveBeenCalledOnce()
   })
 })
