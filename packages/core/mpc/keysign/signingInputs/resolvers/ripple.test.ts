@@ -143,6 +143,18 @@ describe('getRippleSigningInputs -- TrustSet build path (issued currency)', () =
     expect(input.account).toBe(ACCOUNT)
   })
 
+  // sdk#1200: fee is an int64 proto field; an out-of-range gas must throw
+  // rather than silently two's-complement-wrap via Long.fromString.
+  it('throws instead of silently wrapping an out-of-int64-range fee', async () => {
+    const payload = buildTrustSetPayload('1000000000000000')
+    const rippleSpecific = create(RippleSpecificSchema, { sequence: 100n, gas: 1n << 63n, lastLedgerSequence: 200n })
+    payload.blockchainSpecific = { case: 'rippleSpecific', value: rippleSpecific }
+
+    await expect(async () => {
+      await getRippleSigningInputs({ keysignPayload: payload, walletCore })
+    }).rejects.toThrow(/out of int64 range/)
+  })
+
   it('native XRP still builds a Payment, never a TrustSet', async () => {
     const [input] = await getRippleSigningInputs({
       keysignPayload: buildPaymentPayload(),
