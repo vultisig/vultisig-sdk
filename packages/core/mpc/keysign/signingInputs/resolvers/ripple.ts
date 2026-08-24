@@ -6,6 +6,7 @@ import {
   toXrplCurrencyCode,
 } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
 import { attempt } from '@vultisig/lib-utils/attempt'
+import { assertBoundedInt } from '@vultisig/lib-utils/bigint/assertBoundedInt'
 import { assertField } from '@vultisig/lib-utils/record/assertField'
 import { TW } from '@trustwallet/wallet-core'
 import Long from 'long'
@@ -287,7 +288,9 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
 
   const input = TW.Ripple.Proto.SigningInput.create({
     account,
-    fee: Long.fromString(gas.toString()),
+    // sdk#1200: bound before Long.fromString rather than letting an out-of-
+    // range magnitude silently two's-complement-wrap the signed int64 fee.
+    fee: Long.fromString(assertBoundedInt(gas.toString(), 'int64')),
     sequence: Number(sequence),
     lastLedgerSequence: Number(lastLedgerSequence),
     publicKey: getKeysignTwPublicKey(keysignPayload),
