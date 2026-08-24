@@ -11,7 +11,7 @@
  * an indefinite `pending`, so a typo'd or dropped hash can never poll forever.
  */
 import type { TxStatusResult } from '@vultisig/sdk'
-import { Chain, isValidTxHash, Vultisig } from '@vultisig/sdk'
+import { Chain, isValidTxHash, pollTxStatusUntilFinal, Vultisig } from '@vultisig/sdk'
 
 import { recordResolution } from '../agent/broadcastJournal'
 import type { CommandContext } from '../core'
@@ -45,7 +45,7 @@ export function resolveTxStatusParams(params: TxStatusParams): TxStatusParams {
   return params
 }
 
-const POLL_INTERVAL_MS = 5_000
+export const POLL_INTERVAL_MS = 5_000
 const DEFAULT_TIMEOUT_SEC = 120
 
 // Statuses that end the poll. Only the two on-chain outcomes are terminal.
@@ -88,22 +88,27 @@ export async function executeTxStatus(
     let result = await vault.getTxStatus({ chain: params.chain, txHash: params.txHash })
 
     if (!params.noWait && !isTerminal(result.status)) {
-      const deadline = Date.now() + resolveTimeoutMs(params.timeoutSec)
+      const timeoutMs = resolveTimeoutMs(params.timeoutSec)
       let waited = 0
+      const outcome = await pollTxStatusUntilFinal({
+        chain: params.chain,
+        txHash: params.txHash,
+        initialResult: result,
+        timeoutMs,
+        intervalMs: pollIntervalMs,
+        getTxStatus: (pollParams: { chain: Chain; txHash: string }) => vault.getTxStatus(pollParams),
+        isTerminal: (candidate: TxStatusResult) => isTerminal(candidate.status),
+        sleep: async (ms: number) => {
+          waited += ms
+          spinner.text = `Transaction ${result.status}... (${Math.round(waited / 1000)}s)`
+          await sleep(ms)
+        },
+      })
 
-      while (!isTerminal(result.status)) {
-        const remainingMs = deadline - Date.now()
-        if (remainingMs <= 0) {
-          spinner.fail(`Gave up waiting after ${Math.round(waited / 1000)}s (status: ${result.status})`)
-          throw giveUpError(params, result, waited)
-        }
-        // Cap the sleep at the remaining budget so a small --timeout can't
-        // oversleep past its deadline by up to a full poll interval.
-        const sleepMs = Math.min(pollIntervalMs, remainingMs)
-        waited += sleepMs
-        spinner.text = `Transaction ${result.status}... (${Math.round(waited / 1000)}s)`
-        await sleep(sleepMs)
-        result = await vault.getTxStatus({ chain: params.chain, txHash: params.txHash })
+      if (outcome.result) result = outcome.result
+      if (outcome.timedOut) {
+        spinner.fail(`Gave up waiting after ${Math.round(outcome.elapsedMs / 1000)}s (status: ${result.status})`)
+        throw giveUpError(params, result, outcome.elapsedMs)
       }
     }
 
