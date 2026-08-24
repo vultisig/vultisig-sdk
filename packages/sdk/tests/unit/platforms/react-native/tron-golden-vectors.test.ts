@@ -83,7 +83,7 @@ function encodeTriggerSmartContract(from: Uint8Array, contract: Uint8Array, data
   const w = new BinaryWriter()
   w.tag(1, WireType.LengthDelimited).bytes(from)
   w.tag(2, WireType.LengthDelimited).bytes(contract)
-  w.tag(3, WireType.Varint).int64(0n)
+  // Proto3 omits the default-zero call_value field, as WalletCore does.
   w.tag(4, WireType.LengthDelimited).bytes(data)
   return w.finish()
 }
