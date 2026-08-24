@@ -3,12 +3,13 @@ import { OtherChain } from '@vultisig/core-chain/Chain'
 import { getSuiClient } from '@vultisig/core-chain/chains/sui/client'
 import {
   describeSuiExecutionFailure,
+  getSuiResultTransaction,
   isSuiExecutionSuccess,
   SuiTransactionResultLike,
 } from '@vultisig/core-chain/chains/sui/transactionResult'
 import { attempt } from '@vultisig/lib-utils/attempt'
 
-import { BroadcastTxResolver } from '../resolver'
+import { broadcastAccepted, broadcastFailed, BroadcastTxResolver, isRetryableBroadcastCause } from '../resolver'
 import { DeliverTxFailedError } from '../transientRetry'
 import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
 
@@ -19,25 +20,26 @@ export const assertSuiTxSucceeded = (result: SuiTransactionResultLike | null | u
 }
 
 export const broadcastSuiTx: BroadcastTxResolver<OtherChain.Sui> = async ({ chain, tx }) => {
-  const { data: response, error } = await attempt(
-    getSuiClient().executeTransaction({
-      transaction: fromBase64(tx.unsignedTx),
-      signatures: [tx.signature],
-      // sdk#1398: without requesting effects, execution resolves with a digest even when the tx
-      // executed but ABORTED (MoveAbort / InsufficientGas) — an RPC-level success that is NOT
-      // execution success. Ask for effects so we can tell the two apart.
-      include: { effects: true },
-    })
+  const result = await attempt(
+    Promise.resolve().then(() =>
+      getSuiClient().executeTransaction({
+        transaction: fromBase64(tx.unsignedTx),
+        signatures: [tx.signature],
+        include: { effects: true },
+      })
+    )
   )
 
-  if (error) {
-    await verifyBroadcastByHash({ chain, tx, error })
-    return
+  if ('error' in result) {
+    const { error } = result
+    try {
+      return broadcastAccepted(await verifyBroadcastByHash({ chain, tx, error }))
+    } catch (cause) {
+      return broadcastFailed(cause, isRetryableBroadcastCause(error))
+    }
   }
 
-  if (!response) {
-    return
-  }
+  const response = result.data
 
   // Mirror the status resolver (status/resolvers/sui.ts): ONLY an explicit `$kind: 'Transaction'`
   // with `status.success === true` is execution success. A `FailedTransaction` (MoveAbort /
@@ -49,7 +51,11 @@ export const broadcastSuiTx: BroadcastTxResolver<OtherChain.Sui> = async ({ chai
   // `instanceof` BEFORE its message-regex runs: a Sui abort error string routinely contains
   // "aborted"/"timed out", which the transient patterns match — a bare Error would be misclassified
   // as transient and the aborted tx re-sent by withTransientBroadcastRetry.
-  assertSuiTxSucceeded(response)
+  try {
+    assertSuiTxSucceeded(response)
+  } catch (cause) {
+    return broadcastFailed(cause, false, { provider: response })
+  }
 
-  return response
+  return broadcastAccepted(getSuiResultTransaction(response)?.digest, { provider: response })
 }
