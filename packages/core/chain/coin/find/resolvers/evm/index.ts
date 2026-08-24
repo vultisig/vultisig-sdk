@@ -88,11 +88,13 @@ export const findEvmCoins: FindCoinsResolver<EvmChain> = async ({ address, chain
     EvmChain.Zksync,
   ]
 
-  // 1inch /balance indexes these chains but /token metadata is incomplete
-  // (Robinhood's 96 stock tokens 404), so the 1inch pass is unioned with a
-  // multicall scan of the curated knownTokens catalog — either path alone
-  // drops holdings (curated also carries LINK, absent from 1inch's index).
-  const hybridDiscoveryChains: EvmChain[] = [EvmChain.Robinhood]
+  // 1inch /balance only reports whitelisted tokens, so on these chains the
+  // 1inch pass is unioned with a multicall scan of the curated knownTokens
+  // catalog — either path alone drops holdings. Robinhood: /token metadata is
+  // incomplete (its 96 stock tokens 404) and the whitelist misses LINK.
+  // Ethereum: the whitelist misses vTHOR, THORSwap's staking receipt, so it
+  // never surfaced after staking (#2205).
+  const hybridDiscoveryChains: EvmChain[] = [EvmChain.Robinhood, EvmChain.Ethereum]
 
   if (!oneInchSupportedChains.includes(chain) && !hybridDiscoveryChains.includes(chain)) {
     return []
