@@ -1,5 +1,6 @@
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
+import { resolveTokenPriceId as canonicalResolveTokenPriceId } from '@vultisig/core-chain/coin/price/resolveTokenPriceId'
 import { AuthInfo, SignDoc, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -140,6 +141,17 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.IbcEnabledCosmosChain.TerraClassic).toBe('TerraClassic')
     expect(rn.VaultBasedCosmosChain.THORChain).toBe('THORChain')
     expect(Object.values(rn.IbcEnabledCosmosChain)).not.toContain(rn.Chain.THORChain)
+  })
+
+  it('exports the canonical token -> CoinGecko price-id resolver on the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(rn.resolveTokenPriceId).toBe(canonicalResolveTokenPriceId)
+    expect(rn.resolveTokenPriceId(rn.Chain.Ethereum)).toBe('ethereum')
+    expect(rn.resolveTokenPriceId(rn.Chain.TerraClassic, 'uluna')).toBe('terra-luna')
+    expect(rn.resolveTokenPriceId(rn.Chain.Solana, 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')).toBe('usd-coin')
+    expect(rn.resolveTokenPriceId(rn.Chain.Base, '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913')).toBe('usd-coin')
+    expect(rn.resolveTokenPriceId(rn.Chain.Solana, 'not-a-known-token')).toBeUndefined()
   })
 
   it.each(cosmosTxFeeGasParityCases)(
