@@ -97,3 +97,53 @@ describe('getTronSigningInputs -- FREEZE: / UNFREEZE: feeLimit semantics (BUG-7)
     expect(input.transaction?.feeLimit?.equals(Long.ZERO)).toBe(true)
   })
 })
+
+describe('getTronSigningInputs -- bounded int64 fee/gas fields (sdk#1200)', () => {
+  const buildTriggerSmartContractPayload = ({
+    callValue,
+    gasEstimation = 100_000_000n,
+  }: {
+    callValue?: string
+    gasEstimation?: bigint
+  }) =>
+    create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, {
+        chain: Chain.Tron,
+        ticker: 'TRX',
+        address: OWNER,
+        decimals: 6,
+        isNativeToken: true,
+      }),
+      blockchainSpecific: {
+        case: 'tronSpecific',
+        value: makeTronSpecific(gasEstimation),
+      },
+      contractPayload: {
+        case: 'tronTriggerSmartContractPayload',
+        value: {
+          ownerAddress: OWNER,
+          contractAddress: OWNER,
+          callValue,
+          data: '',
+        },
+      },
+    })
+
+  it('feeLimit throws instead of silently wrapping an out-of-int64-range gasEstimation', () => {
+    const payload = buildTriggerSmartContractPayload({ gasEstimation: 1n << 63n })
+    expect(() => getTronSigningInputs({ keysignPayload: payload, walletCore })).toThrow(/out of int64 range/)
+  })
+
+  it('callValue throws instead of silently wrapping an out-of-int64-range value', () => {
+    const payload = buildTriggerSmartContractPayload({ callValue: (1n << 63n).toString() })
+    expect(() => getTronSigningInputs({ keysignPayload: payload, walletCore })).toThrow(/out of int64 range/)
+  })
+
+  it('an in-range feeLimit/callValue still resolves correctly (no false-reject)', async () => {
+    const payload = buildTriggerSmartContractPayload({ callValue: '1000000', gasEstimation: 50_000_000n })
+    const [input] = await getTronSigningInputs({ keysignPayload: payload, walletCore })
+
+    expect(input.transaction?.feeLimit?.toString()).toBe('50000000')
+    expect(input.transaction?.triggerSmartContract?.callValue?.toString()).toBe('1000000')
+  })
+})
