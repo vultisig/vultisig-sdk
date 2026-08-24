@@ -158,8 +158,21 @@ export { deriveAddress, getCoinType, getPublicKey, isValidAddress, isValidTokenI
 // MPC keysign (uses MpcEngine — no direct WASM imports)
 export { keysign } from '@vultisig/core-mpc/keysign'
 
-// Seedphrase validation (uses @scure/bip39, RN-compatible)
+// Seedphrase validation + import prelude (uses @scure/bip39, RN-compatible)
+export {
+  prepareSeedphraseImportPrelude,
+  type SeedphraseImportPreludeInput,
+  type SeedphraseImportPreludeProgressLabels,
+  type SeedphraseImportPreludeResult,
+} from '../../seedphrase/prepareSeedphraseImportPrelude'
 export { validateSeedphrase } from '../../seedphrase/SeedphraseValidator'
+export {
+  assertSeedphraseImportSupportsChains,
+  getUnsupportedSeedphraseImportChains,
+  isSeedphraseImportSupportedChain,
+  SEEDPHRASE_IMPORT_SUPPORTED_CHAINS,
+  SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS,
+} from '../../constants'
 export { SEEDPHRASE_WORD_COUNTS } from '../../seedphrase/types'
 
 // Vault-backup import/export crypto contract. The RN-safe implementations live

@@ -125,6 +125,19 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.DEFAULT_CHAINS).toEqual(['Bitcoin', 'Ethereum', 'THORChain', 'Solana', 'BSC'])
   })
 
+  it('exports the seedphrase import support policy + prelude helpers on the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(typeof rn.prepareSeedphraseImportPrelude).toBe('function')
+    expect(typeof rn.assertSeedphraseImportSupportsChains).toBe('function')
+    expect(typeof rn.getUnsupportedSeedphraseImportChains).toBe('function')
+    expect(typeof rn.isSeedphraseImportSupportedChain).toBe('function')
+    expect(Array.isArray(rn.SEEDPHRASE_IMPORT_SUPPORTED_CHAINS)).toBe(true)
+    expect(Array.isArray(rn.SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS)).toBe(true)
+    expect(rn.SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS).toContain(rn.Chain.Cardano)
+    expect(rn.isSeedphraseImportSupportedChain(rn.Chain.Bitcoin)).toBe(true)
+  })
+
   it('exports the canonical Cosmos fee helpers, gas-limit tables, and cosmos chain subsets from the RN entry', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
