@@ -14,6 +14,7 @@
 // ============================================================================
 
 // Core SDK class
+export type { VaultImportConflictResolution, VaultImportOptions } from './VaultManager'
 export { Vultisig } from './Vultisig'
 
 // Vault management
@@ -21,6 +22,8 @@ export type { VaultConfig, VaultSaveOptions } from './vault'
 export {
   BroadcastPartialFailureError,
   FastVault,
+  hasServer,
+  isServer,
   SecureVault,
   VaultBase,
   VaultConflictError,
@@ -122,6 +125,12 @@ export { parseThorSwapMemo } from './utils/thorSwapMemo'
 export type { UtxoChainName } from './chains/utxo/addressBrand'
 export { assertUtxoAddressBrand, isUtxoAddressBrandValid } from './chains/utxo/addressBrand'
 
+// Custom TOKEN id validation (as opposed to the address validation above).
+// Most chains identify a token by its address (contract/mint), but Sui uses a
+// Move struct tag and XRPL uses a composite currency.issuer id — this covers
+// those non-address token families too.
+export { isValidTokenId } from '@vultisig/core-chain/utils/isValidTokenId'
+
 // ============================================================================
 // PUBLIC API - Tx Shape Normalization (pure, vault-free)
 // ============================================================================
@@ -131,6 +140,7 @@ export { assertUtxoAddressBrand, isUtxoAddressBrandValid } from './chains/utxo/a
 // legs. Ports the normalize/split half of the agent-backend's
 // enrichBuildResult + splitMultiTx; SSE/Redis sequencing stays in the backend.
 export type { NormalizeArgs, NormalizedTx, SignableTxCandidatePayload, ToolOutputCandidate, TxReadyPayload } from './tx'
+export type { PollTxStatusUntilFinalParams, PollTxStatusUntilFinalResult } from './tx'
 export {
   asRecord,
   buildTxReadyFromToolOutput,
@@ -147,6 +157,7 @@ export {
   splitMultiTx,
   TxNormalizeError,
 } from './tx'
+export { pollTxStatusUntilFinal } from './tx'
 
 // ============================================================================
 // PUBLIC API - Canonical Contract / Token Registry (knownContracts)
@@ -293,6 +304,12 @@ export {
   isCosmosMemoWithinCap,
 } from '@vultisig/core-chain/chains/cosmos/cosmosMemoCap'
 
+// Canonical Cosmos custom-message signing payload builders. Export these from
+// the SDK boundary so consumers do not have to assemble KeysignPayload values
+// themselves or import from internal vault-service paths.
+export type { BuildSignAminoPayloadInput, BuildSignDirectPayloadInput } from './vault/services/cosmos'
+export { buildSignAminoKeysignPayload, buildSignDirectKeysignPayload } from './vault/services/cosmos'
+
 // Fiat currency types
 export type { FiatCurrency } from '@vultisig/core-config/FiatCurrency'
 export {
@@ -383,6 +400,23 @@ export * from './signable-transaction'
 // chain-only explorer URLs when rendering swap tx history.
 export type { GetSwapExplorerUrlInput, SwapExplorerProvider } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 export { getSwapExplorerUrl, swapExplorerProviders } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
+
+// Provider-aware swap arrival normalization. One status vocabulary for
+// THORChain, MayaChain, Skip Go and LI.FI keeps app and agent pollers thin.
+export type {
+  GetSwapArrivalStatusInput,
+  SwapArrivalPendingStage,
+  SwapArrivalProvider,
+  SwapArrivalStatusHosts,
+  SwapArrivalStatusResult,
+} from '@vultisig/core-chain/swap/utils/getSwapArrivalStatus'
+export {
+  defaultSwapArrivalStatusHosts,
+  getSwapArrivalStatus,
+  isSwapArrivalStatusTerminal,
+  swapArrivalProviders,
+  SwapArrivalStatusRequestError,
+} from '@vultisig/core-chain/swap/utils/getSwapArrivalStatus'
 
 // Chain-native block explorer URL builder (address/tx) for the non-swap case.
 export { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
@@ -693,6 +727,8 @@ export type {
   GetCosmosGovernanceProposalsParams,
   GetGovernanceProposalsResult,
   GovChain,
+  GovChainId,
+  GovChainInput,
   GovernanceProposal,
   PrepareCosmosVoteParams,
   ProposalStatus,
@@ -739,6 +775,7 @@ export { CosmosMsgType } from './types'
 
 export type {
   AcrossChain,
+  AcrossOriginChain,
   AcrossQuote,
   AcrossQuoteParams,
   AmountUnits,
@@ -763,6 +800,7 @@ export type {
   CardanoNativeToken,
   CctpAttestationResult,
   CctpBridgeResult,
+  CctpBurnMessage,
   CctpChainConfig,
   CctpClaimResult,
   CctpUnsignedTx,
@@ -894,6 +932,7 @@ export type { BuildCosmosWasmExecuteMsgParams, CosmWasmExecuteFund } from './too
 export {
   abiDecode,
   abiEncode,
+  ACROSS_ORIGIN_CHAIN,
   acrossQuote,
   acrossSupportedChains,
   AMOUNT_DRIFT_BLOCK_PCT,
@@ -941,7 +980,9 @@ export {
   COSMOS_SWAP_GAS_LIMIT,
   cosmosBalanceChains,
   cosmosStaking,
+  decode,
   decodeBittensorAddress,
+  decodeCctpBurnMessage,
   decodeCosmosTx,
   decodeEvmTx,
   decodeFromToolResult,
@@ -969,6 +1010,7 @@ export {
   GAS_UNITS,
   getCardanoBalance,
   getCctpChain,
+  getCctpChainNameByDomain,
   getChainGasPriceGwei,
   getCoinBalance,
   getCosmosBalance,
@@ -1099,6 +1141,11 @@ export { buildCosmosWasmExecuteTx } from './platforms/react-native/chains/cosmos
 // service is exposed for callers that already hold a vault and need the richer
 // chain-specific fee shape (base fee / priority / cosmos gas limit, etc).
 export { GasEstimationService } from './vault/services/GasEstimationService'
+
+// Vault-free raw broadcast: submit a pre-signed raw transaction through the
+// SDK's chain-agnostic broadcaster without needing a vault instance. Backs
+// `VaultBase.broadcastRawTx`, which wraps this same call with vault events.
+export { broadcastRawTx } from './vault/services/RawBroadcastService'
 
 // ============================================================================
 // PUBLIC API - DeFi protocol primitives (sdk.defi.*) — unsigned-tx builders
