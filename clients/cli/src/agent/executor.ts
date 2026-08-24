@@ -75,6 +75,42 @@ function decodeErc20Transfer(calldata: string): { recipient: Address; amount: bi
   }
 }
 
+type ResolvedTokenIdentity = { symbol: string; contract: string }
+
+/** Parse mcp-ts's fixed-suffix token descriptor without trusting token-symbol delimiters. */
+function resolvedTokenIdentity(label: string | undefined): ResolvedTokenIdentity {
+  if (!label) return { symbol: '', contract: '' }
+  const match = label.match(/^(.*) \((.*) on [^,]+, \d+ dec, source: [^)]+\)$/su)
+  if (!match) return { symbol: '', contract: '' }
+
+  const [, symbol, assetId] = match
+  return {
+    symbol,
+    contract: assetId.toLowerCase() === 'native' ? '' : assetId,
+  }
+}
+
+function appendContractAfter(summary: string, assetLabel: string, contract: string, fromEnd = false): string {
+  if (!assetLabel || !contract) return summary
+  const assetIndex = fromEnd ? summary.lastIndexOf(assetLabel) : summary.indexOf(assetLabel)
+  if (assetIndex < 0) return summary
+  const assetEnd = assetIndex + assetLabel.length
+  const suffix = ` (${contract})`
+  if (summary.startsWith(suffix, assetEnd)) return summary
+  return `${summary.slice(0, assetEnd)}${suffix}${summary.slice(assetEnd)}`
+}
+
+/** Add resolved contracts to the sell/buy sides without changing native-only summaries. */
+function discloseSwapTokenContracts(head: string, labels: Record<string, string>): string {
+  const fromToken = resolvedTokenIdentity(labels.from_token)
+  const toToken = resolvedTokenIdentity(labels.to_token)
+  const sellLabel = labels.amount_in || labels.from_token_symbol || fromToken.symbol
+  const buyLabel = labels.expected_output || labels.to_token_symbol || toToken.symbol
+
+  const disclosedSell = appendContractAfter(head, sellLabel, fromToken.contract)
+  return appendContractAfter(disclosedSell, buyLabel, toToken.contract, true)
+}
+
 // `Set<string>.has()` returns a plain boolean, so it never narrows `Chain` down to
 // the `EvmChain` union that `getEvmRpcUrl` takes. This predicate keeps membership
 // byte-identical to the set above rather than delegating to `isChainOfKind(chain,
@@ -555,11 +591,13 @@ export class AgentExecutor {
       // quote_summary already embeds the provider ("… via kyber"); only append
       // the provider when we fall back to building the head ourselves.
       const usedQuoteSummary = !!labels.quote_summary
-      const head =
+      const head = discloseSwapTokenContracts(
         labels.quote_summary ||
-        `swap ${labels.amount_in ?? p?.txArgs?.amount ?? '?'} ${labels.from_token_symbol ?? ''} → ${
-          labels.to_token_symbol ?? ''
-        }`.trim()
+          `swap ${labels.amount_in ?? p?.txArgs?.amount ?? '?'} ${labels.from_token_symbol ?? ''} → ${
+            labels.to_token_symbol ?? ''
+          }`.trim(),
+        labels
+      )
       const parts = [head, `on ${stored.chain}`]
       if (!usedQuoteSummary && labels.provider) parts.push(`via ${labels.provider}`)
       if (p?.__multiLeg) parts.push('(+ token approval — 2 transactions)')
