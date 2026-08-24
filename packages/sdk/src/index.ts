@@ -22,6 +22,8 @@ export type { VaultConfig, VaultSaveOptions } from './vault'
 export {
   BroadcastPartialFailureError,
   FastVault,
+  hasServer,
+  isServer,
   SecureVault,
   VaultBase,
   VaultConflictError,
@@ -122,6 +124,12 @@ export { parseThorSwapMemo } from './utils/thorSwapMemo'
 // maintaining local bech32 HRP / Base58Check version / CashAddr matrices.
 export type { UtxoChainName } from './chains/utxo/addressBrand'
 export { assertUtxoAddressBrand, isUtxoAddressBrandValid } from './chains/utxo/addressBrand'
+
+// Custom TOKEN id validation (as opposed to the address validation above).
+// Most chains identify a token by its address (contract/mint), but Sui uses a
+// Move struct tag and XRPL uses a composite currency.issuer id — this covers
+// those non-address token families too.
+export { isValidTokenId } from '@vultisig/core-chain/utils/isValidTokenId'
 
 // ============================================================================
 // PUBLIC API - Tx Shape Normalization (pure, vault-free)
@@ -278,6 +286,12 @@ export {
   getCosmosMemoMaxBytesByChainId,
   isCosmosMemoWithinCap,
 } from '@vultisig/core-chain/chains/cosmos/cosmosMemoCap'
+
+// Canonical Cosmos custom-message signing payload builders. Export these from
+// the SDK boundary so consumers do not have to assemble KeysignPayload values
+// themselves or import from internal vault-service paths.
+export type { BuildSignAminoPayloadInput, BuildSignDirectPayloadInput } from './vault/services/cosmos'
+export { buildSignAminoKeysignPayload, buildSignDirectKeysignPayload } from './vault/services/cosmos'
 
 // Fiat currency types
 export type { FiatCurrency } from '@vultisig/core-config/FiatCurrency'
@@ -696,6 +710,8 @@ export type {
   GetCosmosGovernanceProposalsParams,
   GetGovernanceProposalsResult,
   GovChain,
+  GovChainId,
+  GovChainInput,
   GovernanceProposal,
   PrepareCosmosVoteParams,
   ProposalStatus,

@@ -5,12 +5,20 @@ import { basename, join } from 'path'
 import { blake2b } from '@noble/hashes/blake2b'
 import { Chain, UtxoChain } from '@vultisig/core-chain/Chain'
 import { initWasm, type WalletCore } from '@trustwallet/wallet-core'
-import { beforeAll, describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { getEncodedSigningInputs } from '../signingInputs'
 import { getPreSigningHashes } from '../../tx/preSigningHashes'
 import { normalizeKeysignPayloadFromJson } from './helpers/normalizeKeysignPayloadFromJson'
 import { resolveChainFromFixture } from './helpers/resolveChainFromFixture'
+
+const { fixtureZcashBranchId } = vi.hoisted(() => ({
+  fixtureZcashBranchId: 'c2d6d0b4',
+}))
+
+vi.mock('@vultisig/core-chain/chains/utxo/zcashBranchId', () => ({
+  getZcashBranchIdHex: vi.fn(async () => fixtureZcashBranchId),
+}))
 
 type MobileFixtureCase = {
   name: string
@@ -72,8 +80,71 @@ describe('mobile keysign pre-image hash golden fixtures', () => {
   })
 
   it(`loads the recovered Android/iOS fixture corpus (${cases.length} cases)`, () => {
-    expect(cases.length).toBe(71)
-    expect(new Set(cases.map(({ fixtureFile }) => fixtureFile)).size).toBe(23)
+    expect(cases.length).toBe(93)
+    expect(new Set(cases.map(({ fixtureFile }) => fixtureFile)).size).toBe(31)
+  })
+
+  it('uses the branch ID committed with the Zcash mobile vector', () => {
+    const zcashCases = cases.filter(({ fixtureFile }) => fixtureFile === 'utxo-dash-zcash.json')
+    const branchIds = zcashCases
+      .filter(({ name }) => name === 'Send Zcash')
+      .map(({ keysign_payload }) => {
+        const payload = keysign_payload as {
+          BlockchainSpecific?: { UtxoSpecific?: { zcash_branch_id?: string } }
+        }
+        return payload.BlockchainSpecific?.UtxoSpecific?.zcash_branch_id
+      })
+
+    expect(branchIds).toEqual([fixtureZcashBranchId])
+  })
+
+  it('keeps every newly covered EVM native send chain-specific', async () => {
+    const fixtureFiles = new Set(['evm-chain-matrix.json', 'sei.json'])
+    const nativeCases = cases.filter(
+      ({ fixtureFile, keysign_payload }) =>
+        fixtureFiles.has(fixtureFile) &&
+        typeof keysign_payload === 'object' &&
+        keysign_payload !== null &&
+        'coin' in keysign_payload &&
+        typeof keysign_payload.coin === 'object' &&
+        keysign_payload.coin !== null &&
+        'is_native_token' in keysign_payload.coin &&
+        keysign_payload.coin.is_native_token === true
+    )
+
+    const chains = nativeCases.map(({ keysign_payload }) => {
+      const payload = normalizeKeysignPayloadFromJson(keysign_payload)
+      return resolveChainFromFixture(payload.coin?.chain ?? '')
+    })
+    expect([...chains].sort()).toEqual(
+      [
+        Chain.Avalanche,
+        Chain.Base,
+        Chain.Blast,
+        Chain.CronosChain,
+        Chain.Hyperliquid,
+        Chain.Mantle,
+        Chain.Optimism,
+        Chain.Sei,
+        Chain.Zksync,
+      ].sort()
+    )
+
+    const hashes = await Promise.all(
+      nativeCases.map(async ({ keysign_payload }) => {
+        const payload = normalizeKeysignPayloadFromJson(keysign_payload)
+        const chain = resolveChainFromFixture(payload.coin?.chain ?? '')
+        const signingInputs = await getEncodedSigningInputs({ keysignPayload: payload, walletCore })
+        const actual = signingInputs.flatMap(input =>
+          getPreSigningHashes({ walletCore, chain, txInputData: input, keysignPayload: payload }).map(toHex)
+        )
+
+        expect(actual).toHaveLength(1)
+        return actual[0]
+      })
+    )
+
+    expect(new Set(hashes).size).toBe(hashes.length)
   })
 
   for (const testCase of cases) {
