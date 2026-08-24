@@ -50,6 +50,7 @@ import { serializeTransaction } from 'viem'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import { Chain } from '@vultisig/core-chain/Chain'
+import { cardanoTxBodyHash } from '@vultisig/core-chain/chains/cardano/cip30/cardanoTxBodyHash'
 import { getCardanoTxTtl } from '@vultisig/core-chain/chains/cardano/cip30/cardanoTxTtl'
 import { utxoChainScriptType } from '@vultisig/core-chain/chains/utxo/tx/UtxoScriptType'
 import { zcashBranchIdToWalletCoreHex } from '@vultisig/core-chain/chains/utxo/zcashBranchId'
@@ -956,6 +957,7 @@ describe('compileTx golden vectors', () => {
 
     expect(hex(compiledOutput.txId)).toBe(hex(hashes[0]))
     expect(hex(compiledOutput.encoded)).toBe(EXPECTED_CARDANO_SIGNED_CBOR)
+    expect(hex(cardanoTxBodyHash(hex(compiledOutput.encoded)))).toBe(hex(hashes[0]))
     expect(getCardanoTxTtl(compiledOutput.encoded)).toBe(500_000n)
   })
 
