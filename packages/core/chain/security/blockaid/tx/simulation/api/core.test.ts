@@ -1,7 +1,14 @@
 import { EvmChain } from '@vultisig/core-chain/Chain'
 import { describe, expect, it } from 'vitest'
 
-import { BlockaidEVMSimulation, parseBlockaidEvmSimulation } from './core'
+import {
+  BlockaidEVMSimulation,
+  BlockaidSolanaSimulation,
+  BlockaidSuiSimulation,
+  parseBlockaidEvmSimulation,
+  parseBlockaidSolanaSimulation,
+  parseBlockaidSuiSimulation,
+} from './core'
 
 type AssetDiff = BlockaidEVMSimulation['account_summary']['assets_diffs'][number]
 type Asset = AssetDiff['asset']
@@ -315,5 +322,226 @@ describe('parseBlockaidEvmSimulation', () => {
       amount: 100n,
     })
     expect(result?.changes[0].coin.ticker).toBe('ETH')
+  })
+})
+
+type SolanaDiff = BlockaidSolanaSimulation['account_summary']['account_assets_diff'][number]
+type SolanaAsset = SolanaDiff['asset']
+type SolanaSide = NonNullable<SolanaDiff['in']>
+
+const WSOL_MINT = 'So11111111111111111111111111111111111111112'
+
+const solSide = (rawValue: string): SolanaSide => ({
+  usd_price: 0,
+  summary: '',
+  value: 0,
+  raw_value: rawValue,
+})
+
+const nativeSol: SolanaAsset = { type: 'SOL', symbol: 'SOL', decimals: 9, logo: '' }
+
+const splToken = (address: string, symbol: string, decimals = 9): SolanaAsset => ({
+  type: 'TOKEN',
+  symbol,
+  address,
+  decimals,
+  logo: '',
+})
+
+const solDiff = (asset: SolanaAsset, sides: { in?: SolanaSide; out?: SolanaSide }): SolanaDiff => ({
+  asset,
+  asset_type: asset.type,
+  in: sides.in ?? null,
+  out: sides.out ?? null,
+})
+
+const solanaSimulation = (diffs: SolanaDiff[]): BlockaidSolanaSimulation => ({
+  account_summary: { account_assets_diff: diffs },
+})
+
+const SPL_A = splToken('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', 'AAA', 6)
+const SPL_B = splToken('BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB', 'BBB', 6)
+const RECEIPT = splToken('ReCeIpT111111111111111111111111111111111111', 'rcpt')
+const WSOL = splToken(WSOL_MINT, 'wSOL')
+
+describe('parseBlockaidSolanaSimulation', () => {
+  // The sdk#2091 counterexample: a wrapped-SOL withdrawal netting to SOL
+  // received. Reporting any remaining out-leg would state money LEAVING on a
+  // transaction that nets to money received — a reversed approval direction.
+  it('declines a three-diff withdrawal whose native leg is the principal inflow', async () => {
+    const simulation = solanaSimulation([
+      solDiff(nativeSol, { in: solSide('1500000000') }),
+      solDiff(WSOL, { out: solSide('2039280') }),
+      solDiff(RECEIPT, { out: solSide('1490000000') }),
+    ])
+
+    await expect(parseBlockaidSolanaSimulation(simulation)).rejects.toThrow()
+  })
+
+  it('declines a three-diff deposit whose native leg is the principal outflow', async () => {
+    const simulation = solanaSimulation([
+      solDiff(nativeSol, { out: solSide('500000000') }),
+      solDiff(WSOL, { out: solSide('2039280') }),
+      solDiff(RECEIPT, { in: solSide('490000000') }),
+    ])
+
+    await expect(parseBlockaidSolanaSimulation(simulation)).rejects.toThrow()
+  })
+
+  it('still nets a token swap by excluding a gas-sized native out-leg', async () => {
+    const simulation = solanaSimulation([
+      solDiff(SPL_A, { out: solSide('1000000') }),
+      solDiff(SPL_B, { in: solSide('2500000') }),
+      solDiff(nativeSol, { out: solSide('5000') }),
+    ])
+
+    expect(await parseBlockaidSolanaSimulation(simulation)).toEqual({
+      swap: {
+        fromMint: SPL_A.address,
+        toMint: SPL_B.address,
+        fromAmount: 1000000n,
+        toAmount: 2500000n,
+        toAssetDecimal: 6,
+      },
+    })
+  })
+
+  it('keeps a rent-refund-sized native in-leg from blocking a token swap headline', async () => {
+    const simulation = solanaSimulation([
+      solDiff(SPL_A, { out: solSide('1000000') }),
+      solDiff(SPL_B, { in: solSide('2500000') }),
+      solDiff(nativeSol, { in: solSide('2039280') }),
+    ])
+
+    expect(await parseBlockaidSolanaSimulation(simulation)).toEqual({
+      swap: {
+        fromMint: SPL_A.address,
+        toMint: SPL_B.address,
+        fromAmount: 1000000n,
+        toAmount: 2500000n,
+        toAssetDecimal: 6,
+      },
+    })
+  })
+
+  it('reports a token send after excluding the gas-sized native out-leg', async () => {
+    const simulation = solanaSimulation([
+      solDiff(SPL_A, { out: solSide('750000') }),
+      solDiff(nativeSol, { out: solSide('5000') }),
+    ])
+
+    expect(await parseBlockaidSolanaSimulation(simulation)).toEqual({
+      transfer: { fromMint: SPL_A.address, fromAmount: 750000n },
+    })
+  })
+
+  it('locks the swap direction regardless of diff order', async () => {
+    const simulation = solanaSimulation([
+      solDiff(SPL_B, { in: solSide('2500000') }),
+      solDiff(SPL_A, { out: solSide('1000000') }),
+    ])
+
+    expect(await parseBlockaidSolanaSimulation(simulation)).toEqual({
+      swap: {
+        fromMint: SPL_A.address,
+        toMint: SPL_B.address,
+        fromAmount: 1000000n,
+        toAmount: 2500000n,
+        toAssetDecimal: 6,
+      },
+    })
+  })
+
+  it('declines two simultaneous spends rather than reporting only the first', async () => {
+    const simulation = solanaSimulation([
+      solDiff(SPL_A, { out: solSide('1000000') }),
+      solDiff(SPL_B, { out: solSide('2500000') }),
+    ])
+
+    await expect(parseBlockaidSolanaSimulation(simulation)).rejects.toThrow()
+  })
+
+  it('reports a lone gas-sized native send instead of filtering it away', async () => {
+    const simulation = solanaSimulation([solDiff(nativeSol, { out: solSide('5000000') })])
+
+    expect(await parseBlockaidSolanaSimulation(simulation)).toEqual({
+      transfer: { fromMint: WSOL_MINT, fromAmount: 5000000n },
+    })
+  })
+
+  it('declines a SOL-to-wrapped-SOL pair instead of calling it a swap', async () => {
+    const simulation = solanaSimulation([
+      solDiff(nativeSol, { out: solSide('1000000000') }),
+      solDiff(WSOL, { in: solSide('1000000000') }),
+    ])
+
+    await expect(parseBlockaidSolanaSimulation(simulation)).rejects.toThrow()
+  })
+})
+
+type SuiDiff = NonNullable<NonNullable<BlockaidSuiSimulation['account_summary']>['account_assets_diffs']>[number]
+type SuiAsset = SuiDiff['asset']
+
+const nativeSuiAsset: SuiAsset = { type: 'NATIVE', symbol: 'SUI', decimals: 9 }
+
+const suiCoin = (id: string, symbol: string): SuiAsset => ({
+  type: 'COIN',
+  id,
+  symbol,
+  decimals: 9,
+})
+
+const suiDiff = (asset: SuiAsset, sides: { in?: number; out?: number }): SuiDiff => ({
+  asset,
+  in: sides.in === undefined ? null : { raw_value: sides.in },
+  out: sides.out === undefined ? null : { raw_value: sides.out },
+})
+
+const suiSimulation = (diffs: SuiDiff[]): BlockaidSuiSimulation => ({
+  account_summary: { account_assets_diffs: diffs },
+})
+
+const SUI_COIN_A = suiCoin('0xaaa::coin::AAA', 'AAA')
+const SUI_COIN_B = suiCoin('0xbbb::coin::BBB', 'BBB')
+
+describe('parseBlockaidSuiSimulation', () => {
+  it('declines when the native leg is the principal outflow instead of hiding it', async () => {
+    const simulation = suiSimulation([
+      suiDiff(nativeSuiAsset, { out: 5_000_000_000 }),
+      suiDiff(SUI_COIN_A, { out: 1_000_000 }),
+      suiDiff(SUI_COIN_B, { in: 2_500_000 }),
+    ])
+
+    expect(await parseBlockaidSuiSimulation(simulation)).toBeNull()
+  })
+
+  it('still nets a coin swap by excluding a gas-sized native out-leg', async () => {
+    const simulation = suiSimulation([
+      suiDiff(SUI_COIN_A, { out: 1_000_000 }),
+      suiDiff(SUI_COIN_B, { in: 2_500_000 }),
+      suiDiff(nativeSuiAsset, { out: 3_000_000 }),
+    ])
+
+    const result = await parseBlockaidSuiSimulation(simulation)
+    expect(result).toMatchObject({
+      swap: {
+        from: { coinType: '0xaaa::coin::AAA' },
+        to: { coinType: '0xbbb::coin::BBB' },
+        fromAmount: 1000000n,
+        toAmount: 2500000n,
+      },
+    })
+  })
+
+  it('reports a coin send after excluding the gas-sized native out-leg', async () => {
+    const simulation = suiSimulation([
+      suiDiff(SUI_COIN_A, { out: 750_000 }),
+      suiDiff(nativeSuiAsset, { out: 3_000_000 }),
+    ])
+
+    const result = await parseBlockaidSuiSimulation(simulation)
+    expect(result).toMatchObject({
+      transfer: { from: { coinType: '0xaaa::coin::AAA' }, fromAmount: 750000n },
+    })
   })
 })

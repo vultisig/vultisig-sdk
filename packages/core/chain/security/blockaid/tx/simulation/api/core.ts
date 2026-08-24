@@ -88,11 +88,27 @@ const toBigInt = (raw: number | string): bigint | null => {
   return BigInt(raw)
 }
 
+// A native leg may be excluded from the headline only on evidence that it
+// is gas noise: a single-sided movement bounded by a generous fee ceiling.
+// Excluding on array shape alone can delete the transaction's principal
+// leg and hide — or reverse — the displayed direction (vultisig-sdk#2091).
+const SUI_GAS_AND_STORAGE_CEILING = 50_000_000n // 0.05 SUI in MIST
+
+const isSuiGasNoiseDiff = (diff: BlockaidSuiRawAssetDiff): boolean => {
+  if (!isNativeSui(diff.asset)) return false
+  const side = diff.out && !diff.in ? diff.out : diff.in && !diff.out ? diff.in : null
+  if (!side) return false
+  const raw = toBigInt(side.raw_value)
+  return raw !== null && raw >= 0n && raw <= SUI_GAS_AND_STORAGE_CEILING
+}
+
 /**
  * Parse a Blockaid Sui simulation into the user's net balance changes,
  * mirroring how Solana classifies into a `swap` or `transfer` headline.
  *
- * Only emits a headline when the relevant diff set is unambiguous:
+ * Only emits a headline when the diff set is unambiguous after excluding
+ * at most one gas-sized native leg (a native leg is never excluded on
+ * position alone — a principal SUI movement stays in the summary):
  *   - exactly one out-only diff → `transfer`
  *   - exactly two diffs, one out-only + one in-only on different assets
  *     → `swap`
@@ -108,14 +124,11 @@ export const parseBlockaidSuiSimulation = async (
   const assetDiffs = simulation.account_summary?.account_assets_diffs ?? simulation.account_summary?.account_assets_diff
   if (!assetDiffs || assetDiffs.length === 0) return null
 
-  // When we have 3 items and one is native SUI, filter it out and use the
-  // other two tokens — the native SUI is likely the gas charge, not part of
-  // the swap itself. Same heuristic as Solana.
   let relevantDiffs = assetDiffs
-  if (assetDiffs.length === 3) {
-    const nativeIdx = assetDiffs.findIndex(diff => isNativeSui(diff.asset))
-    if (nativeIdx !== -1) {
-      relevantDiffs = assetDiffs.filter((_, i) => i !== nativeIdx)
+  if (assetDiffs.length > 1) {
+    const gasNoiseIdx = assetDiffs.findIndex(isSuiGasNoiseDiff)
+    if (gasNoiseIdx !== -1) {
+      relevantDiffs = assetDiffs.filter((_, i) => i !== gasNoiseIdx)
     }
   }
 
@@ -247,83 +260,110 @@ export type BlockaidEVMSimulation = {
   }
 }
 
+type BlockaidSolanaAssetDiff = BlockaidSolanaSimulation['account_summary']['account_assets_diff'][number]
+
+const WRAPPED_SOL_MINT = 'So11111111111111111111111111111111111111112'
+
+const isNativeSol = (diff: BlockaidSolanaAssetDiff): boolean => diff.asset.type === 'SOL' || diff.asset_type === 'SOL'
+
+// Native SOL and the wrapped-SOL token map to the same mint on purpose:
+// a SOL↔WSOL pair is a wrap, not a swap, and gets declined by the
+// same-mint check below rather than shown as an exchange.
+const solanaMintOf = (asset: BlockaidSolanaAssetDiff['asset']): string =>
+  asset.type === 'SOL' ? WRAPPED_SOL_MINT : shouldBePresent(asset.address)
+
+// A native-SOL leg may be excluded from the headline only on evidence that
+// it is gas noise — a single-sided movement bounded by what a fee payer can
+// plausibly lose (or regain) to fees, priority fees, and rent on temporary
+// accounts. Excluding on array shape alone can delete the transaction's
+// principal leg and reverse the displayed direction (vultisig-sdk#2091).
+const SOL_GAS_AND_RENT_CEILING = 10_000_000n // 0.01 SOL in lamports
+
+const isSolGasNoiseDiff = (diff: BlockaidSolanaAssetDiff): boolean => {
+  if (!isNativeSol(diff)) return false
+  const side = diff.out && !diff.in ? diff.out : diff.in && !diff.out ? diff.in : null
+  if (!side) return false
+  const raw = toBigInt(side.raw_value)
+  return raw !== null && raw >= 0n && raw <= SOL_GAS_AND_RENT_CEILING
+}
+
+/**
+ * Parse a Blockaid Solana simulation into a `swap` or `transfer` headline
+ * for the approval screen.
+ *
+ * Emits a headline only when the diff set is unambiguous after excluding
+ * at most one gas-sized native-SOL leg (a native leg is never excluded on
+ * position alone — a principal SOL movement stays in the summary):
+ *   - exactly one out-only diff → `transfer`
+ *   - exactly two diffs, one out-only + one in-only on different mints
+ *     → `swap`
+ *
+ * Anything else throws: a headline computed from a subset of the legs can
+ * hide a movement or reverse the displayed direction (vultisig-sdk#2091).
+ * Callers treat the throw as "no preview" and fall back to their raw or
+ * decoded transaction view.
+ */
 export const parseBlockaidSolanaSimulation = async (
   simulation: BlockaidSolanaSimulation
 ): Promise<BlockaidSolanaSimulationInfo> => {
   const assetDiffs = simulation.account_summary.account_assets_diff
 
-  // When we have 3 items and one is native SOL, filter it out and use the other two tokens.
-  // The native SOL is likely the transaction fee, not part of the swap itself.
   let relevantDiffs = assetDiffs
-  if (assetDiffs.length === 3) {
-    const nativeSolIndex = assetDiffs.findIndex(diff => diff.asset.type === 'SOL' || diff.asset_type === 'SOL')
-    if (nativeSolIndex !== -1) {
-      relevantDiffs = assetDiffs.filter((_, index) => index !== nativeSolIndex)
+  if (assetDiffs.length > 1) {
+    const gasNoiseIndex = assetDiffs.findIndex(isSolGasNoiseDiff)
+    if (gasNoiseIndex !== -1) {
+      relevantDiffs = assetDiffs.filter((_, index) => index !== gasNoiseIndex)
     }
   }
 
   if (relevantDiffs.length === 1) {
-    const [potentialOutAsset] = relevantDiffs
+    const [diff] = relevantDiffs
 
-    if (!potentialOutAsset.out) {
-      throw new Error('Invalid simulation data: no out value for transfer')
+    // A diff that also carries an `in` side is not a plain send — the net
+    // could even be a receive, so a "you're sending" headline would lie.
+    if (!diff.out || diff.in) {
+      throw new Error('Invalid simulation data: no unambiguous out value for transfer')
+    }
+
+    const fromAmount = toBigInt(diff.out.raw_value)
+    if (fromAmount === null) {
+      throw new Error('Invalid simulation data: malformed transfer amount')
     }
 
     return {
       transfer: {
-        fromMint:
-          potentialOutAsset.asset.type === 'SOL'
-            ? 'So11111111111111111111111111111111111111112'
-            : shouldBePresent(potentialOutAsset.asset.address),
-        fromAmount: BigInt(shouldBePresent(potentialOutAsset.out).raw_value),
+        fromMint: solanaMintOf(diff.asset),
+        fromAmount,
       },
     }
   }
 
-  if (relevantDiffs.length > 1) {
-    const [potentialOutAsset, potentialInAsset] = relevantDiffs
-    const { inAsset, inValue } = potentialInAsset.in
-      ? {
-          inAsset: potentialInAsset.asset,
-          inValue: potentialInAsset.in,
-        }
-      : {
-          inAsset: potentialOutAsset.asset,
-          inValue: potentialOutAsset.in,
-        }
+  if (relevantDiffs.length === 2) {
+    const [a, b] = relevantDiffs
+    const outDiff = !a.in && a.out ? a : !b.in && b.out ? b : null
+    const inDiff = !a.out && a.in ? a : !b.out && b.in ? b : null
 
-    const { outAsset, outValue } = potentialOutAsset.out
-      ? {
-          outAsset: potentialOutAsset.asset,
-          outValue: potentialOutAsset.out,
+    if (outDiff && inDiff) {
+      const fromMint = solanaMintOf(outDiff.asset)
+      const toMint = solanaMintOf(inDiff.asset)
+      const fromAmount = toBigInt(shouldBePresent(outDiff.out).raw_value)
+      const toAmount = toBigInt(shouldBePresent(inDiff.in).raw_value)
+
+      if (fromMint !== toMint && fromAmount !== null && toAmount !== null) {
+        return {
+          swap: {
+            fromMint,
+            toMint,
+            fromAmount,
+            toAmount,
+            toAssetDecimal: inDiff.asset.decimals,
+          },
         }
-      : {
-          outAsset: potentialInAsset.asset,
-          outValue: potentialInAsset.out,
-        }
-    if (outAsset && inAsset && outValue && inValue) {
-      return {
-        swap: {
-          fromMint:
-            outAsset.type === 'SOL' ? 'So11111111111111111111111111111111111111112' : shouldBePresent(outAsset.address),
-          toMint:
-            inAsset.type === 'SOL' ? 'So11111111111111111111111111111111111111112' : shouldBePresent(inAsset.address),
-          fromAmount: BigInt(shouldBePresent(outValue).raw_value),
-          toAmount: BigInt(shouldBePresent(inValue).raw_value),
-          toAssetDecimal: inAsset.decimals,
-        },
-      }
-    } else if (outAsset && outValue) {
-      return {
-        transfer: {
-          fromMint:
-            outAsset.type === 'SOL' ? 'So11111111111111111111111111111111111111112' : shouldBePresent(outAsset.address),
-          fromAmount: BigInt(shouldBePresent(outValue).raw_value),
-        },
       }
     }
   }
-  throw new Error('Invalid simulation data')
+
+  throw new Error('Invalid simulation data: ambiguous asset diffs')
 }
 
 type EvmAssetDiff = BlockaidEVMSimulation['account_summary']['assets_diffs'][number]
