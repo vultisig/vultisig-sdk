@@ -1,5 +1,7 @@
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
+import * as coinFinderChainKindModule from '@vultisig/core-chain/coin/find/CoinFinderChainKind'
+import * as cosmosChainInfoModule from '@vultisig/core-chain/chains/cosmos/chainInfo'
 import { AuthInfo, SignDoc, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -132,6 +134,17 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.IbcEnabledCosmosChain.TerraClassic).toBe('TerraClassic')
     expect(rn.VaultBasedCosmosChain.THORChain).toBe('THORChain')
     expect(Object.values(rn.IbcEnabledCosmosChain)).not.toContain(rn.Chain.THORChain)
+  })
+
+  it('exports coin-finder chain kinds and Cosmos chain-id lookups from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(rn.coinFinderChainKinds).toBe(coinFinderChainKindModule.coinFinderChainKinds)
+    expect(rn.coinFinderChainKinds).toEqual(['evm', 'cosmos', 'solana', 'cardano', 'ripple'])
+    expect(rn.getCosmosChainId).toBe(cosmosChainInfoModule.getCosmosChainId)
+    expect(rn.getCosmosChainByChainId).toBe(cosmosChainInfoModule.getCosmosChainByChainId)
+    expect(rn.getCosmosChainId(rn.Chain.THORChain)).toBe('thorchain-1')
+    expect(rn.getCosmosChainByChainId('noble-1')).toBe(rn.Chain.Noble)
   })
 
   it.each(cosmosTxFeeGasParityCases)(

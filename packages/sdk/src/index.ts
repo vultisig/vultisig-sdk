@@ -255,10 +255,13 @@ export {
 } from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
 export type { RpcHealthResult } from '@vultisig/core-chain/chains/customRpc/rpcHealthProbe'
 export { probeRpcHealth } from '@vultisig/core-chain/chains/customRpc/rpcHealthProbe'
+export type { CoinFinderChainKind } from '@vultisig/core-chain/coin/find/CoinFinderChainKind'
+export { coinFinderChainKinds } from '@vultisig/core-chain/coin/find/CoinFinderChainKind'
 
 // Cosmos chain metadata — surfaced so consumers stop re-declaring LCD urls /
 // fee denoms / gas limits (e.g. mcp-ts lib/cosmos-chains.ts).
 export { cosmosFeeCoinDenom } from '@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom'
+export { getCosmosChainByChainId, getCosmosChainId } from '@vultisig/core-chain/chains/cosmos/chainInfo'
 export {
   getCosmosAllowedFeeDenoms,
   isCosmosFeeDenomAllowed,

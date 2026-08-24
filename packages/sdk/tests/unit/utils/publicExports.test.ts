@@ -1,5 +1,7 @@
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
+import * as coinFinderChainKindModule from '@vultisig/core-chain/coin/find/CoinFinderChainKind'
+import * as cosmosChainInfoModule from '@vultisig/core-chain/chains/cosmos/chainInfo'
 import * as isValidTokenIdModule from '@vultisig/core-chain/utils/isValidTokenId'
 import { describe, expect, it } from 'vitest'
 
@@ -156,6 +158,18 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.getCustomRpcOverrides()).toEqual({ [sdk.Chain.Ethereum]: 'https://rpc.example' })
     sdk.clearCustomRpcOverride(sdk.Chain.Ethereum)
     expect(sdk.getCustomRpcOverride(sdk.Chain.Ethereum)).toBeUndefined()
+  })
+
+  it('exports the coin-finder chain-kind canonical list from the root SDK entrypoint', () => {
+    expect(sdk.coinFinderChainKinds).toBe(coinFinderChainKindModule.coinFinderChainKinds)
+    expect(sdk.coinFinderChainKinds).toEqual(['evm', 'cosmos', 'solana', 'cardano', 'ripple'])
+  })
+
+  it('exports the canonical Cosmos chain-id lookup helpers from the root SDK entrypoint', () => {
+    expect(sdk.getCosmosChainId).toBe(cosmosChainInfoModule.getCosmosChainId)
+    expect(sdk.getCosmosChainByChainId).toBe(cosmosChainInfoModule.getCosmosChainByChainId)
+    expect(sdk.getCosmosChainId(sdk.Chain.TerraClassic)).toBe('columbus-5')
+    expect(sdk.getCosmosChainByChainId('phoenix-1')).toBe(sdk.Chain.Terra)
   })
 
   it('exports isValidTokenId for non-address token families (Sui struct tags, XRPL currency.issuer)', () => {
