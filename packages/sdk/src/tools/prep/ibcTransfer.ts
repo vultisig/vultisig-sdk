@@ -1,5 +1,7 @@
 import { bech32 } from '@scure/base'
 
+import { validatorRoleForHrp } from '../swap/skip/cosmosAddressGuard'
+
 /**
  * Pure-crypto ICS-20 IBC transfer builder.
  *
@@ -190,18 +192,6 @@ function chainRevisionNumber(chainId: string): number {
     if (!Number.isNaN(n)) return n
   }
   return 1
-}
-
-/**
- * Classify a bech32 HRP as a validator role (fund safety). A `...valoper` /
- * `...valcons` address is NOT a spendable wallet — funds bank-sent to it are
- * unrecoverable. Returns null for plain account HRPs.
- */
-function validatorRoleForHrp(hrp: string): 'operator' | 'consensus' | null {
-  const lower = hrp.toLowerCase()
-  if (lower.endsWith('valoper')) return 'operator'
-  if (lower.endsWith('valcons')) return 'consensus'
-  return null
 }
 
 /**
