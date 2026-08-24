@@ -51,6 +51,7 @@ const external = [
   '7z-wasm',
   '@vultisig/mpc-types',
   '@vultisig/mpc-native',
+  'koffi',
 ]
 
 // Rewrite WASM import paths for bundled output.
@@ -426,6 +427,7 @@ const configs = {
         '@react-native-async-storage/async-storage',
         '@trustwallet/wallet-core',
         'expo-crypto',
+        'expo-sqlite',
         // Node builtins — kept external; consumers must map these to
         // empty modules via metro.config.js `resolver.extraNodeModules`.
         // The SDK ships `dist/shims/empty-rn.js` as the canonical target.
