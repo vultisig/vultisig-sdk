@@ -15,6 +15,7 @@ export type {
   BuildTonTxFromSigningPayloadOptions,
   TonTxBuilderResult,
   TonV4R2Wallet,
+  TonWalletCoreBackedTxBuilderResult,
   TonWalletInfo,
   TonWalletStatus,
 } from '../../../../chains/ton'
