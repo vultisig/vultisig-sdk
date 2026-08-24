@@ -23,16 +23,32 @@ function createMockVault(): VaultBase {
   } as unknown as VaultBase
 }
 
-const APPROVE_TX = { to: '0xUSDC', value: '0', data: '0x095ea7b3' + '0'.repeat(120), gas_limit: '60000' }
-const SWAP_TX = { to: '0xRouter', value: '0', data: '0xdeadbeef', gas_limit: '250000' }
 const USDC_CONTRACT = '0x3c499c542cef5e3811e1192ce70d8cc03d5c3359'
 const WETH_CONTRACT = '0x4200000000000000000000000000000000000006'
+const ETH_USDC_CONTRACT = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+const SPOOFED_CONTRACT = '0xdac17f958d2ee523a2206206994597c13d831ec7'
+const APPROVE_TX = {
+  to: USDC_CONTRACT,
+  value: '0',
+  data: '0x095ea7b3' + '0'.repeat(120),
+  gas_limit: '60000',
+}
+const SWAP_TX = { to: '0xRouter', value: '0', data: '0xdeadbeef', gas_limit: '250000' }
 
-function makeMultiLegEnvelope(labels: Record<string, string>) {
+function makeMultiLegEnvelope(
+  labels: Record<string, unknown>,
+  options: { approvalTx?: Record<string, unknown>; toChain?: string } = {}
+) {
   return {
     chain: 'Base',
     from_chain: 'Base',
-    approvalTxArgs: { chain: 'Base', chain_id: '8453', from: '0xsender', tx: APPROVE_TX },
+    ...(options.toChain ? { to_chain: options.toChain } : {}),
+    approvalTxArgs: {
+      chain: 'Base',
+      chain_id: '8453',
+      from: '0xsender',
+      tx: options.approvalTx ?? APPROVE_TX,
+    },
     txArgs: { chain: 'Base', chain_id: '8453', from: '0xsender', tx: SWAP_TX },
     resolved: { labels },
   }
@@ -50,13 +66,17 @@ describe('AgentExecutor.getPendingSummary', () => {
       executor.storeServerTransaction(
         makeMultiLegEnvelope({
           quote_summary: '0.01 USDC → ~0.000006 ETH via kyber',
+          from_token: `USDC (${USDC_CONTRACT} on Base, 6 dec, source: known)`,
+          from_token_symbol: 'USDC',
+          to_token: 'ETH (native on Base, 18 dec, source: native)',
+          to_token_symbol: 'ETH',
           provider: 'kyber',
           estimated_fee: '~0.0000038 ETH',
         })
       )
     ).toBe(true)
     const summary = executor.getPendingSummary()!
-    expect(summary).toContain('0.01 USDC → ~0.000006 ETH via kyber')
+    expect(summary).toContain(`0.01 USDC (${USDC_CONTRACT}) → ~0.000006 ETH via kyber`)
     expect(summary).toContain('on Base')
     expect(summary).toContain('(+ token approval — 2 transactions)')
     expect(summary).toContain('est. fee ~0.0000038 ETH')
@@ -68,16 +88,16 @@ describe('AgentExecutor.getPendingSummary', () => {
     const executor = new AgentExecutor(createMockVault())
     executor.storeServerTransaction(
       makeMultiLegEnvelope({
-        quote_summary: '2 USDC → ~24.17 POL via swapkit',
-        from_token: `USDC (${USDC_CONTRACT} on Polygon, 6 dec, source: known)`,
+        quote_summary: '2 USDC → ~0.001 ETH via swapkit',
+        from_token: `USDC (${USDC_CONTRACT} on Base, 6 dec, source: known)`,
         from_token_symbol: 'USDC',
-        to_token: 'POL (native on Polygon, 18 dec, source: native)',
-        to_token_symbol: 'POL',
+        to_token: 'ETH (native on Base, 18 dec, source: native)',
+        to_token_symbol: 'ETH',
       })
     )
 
     expect(executor.getPendingSummary()).toBe(
-      `2 USDC (${USDC_CONTRACT}) → ~24.17 POL via swapkit on Base (+ token approval — 2 transactions)`
+      `2 USDC (${USDC_CONTRACT}) → ~0.001 ETH via swapkit on Base (+ token approval — 2 transactions)`
     )
   })
 
@@ -86,7 +106,7 @@ describe('AgentExecutor.getPendingSummary', () => {
     executor.storeServerTransaction(
       makeMultiLegEnvelope({
         quote_summary: '2 USDC → ~0.001 WETH via swapkit',
-        from_token: `USDC (${USDC_CONTRACT} on Polygon, 6 dec, source: known)`,
+        from_token: `USDC (${USDC_CONTRACT} on Base, 6 dec, source: known)`,
         from_token_symbol: 'USDC',
         to_token: `WETH (${WETH_CONTRACT} on Base, 18 dec, source: known)`,
         to_token_symbol: 'WETH',
@@ -98,6 +118,227 @@ describe('AgentExecutor.getPendingSummary', () => {
     )
   })
 
+  it('uses the signed approval target and suppresses a mismatching sell-label contract', () => {
+    const executor = new AgentExecutor(createMockVault())
+    const mismatchingClaim = '0x1111111111111111111111111111111111111111'
+    executor.storeServerTransaction(
+      makeMultiLegEnvelope({
+        quote_summary: '2 USDC → ~0.001 WETH via swapkit',
+        from_token: `USDC (${mismatchingClaim} on Base, 6 dec, source: rpc)`,
+        from_token_symbol: 'USDC',
+        to_token: `WETH (${WETH_CONTRACT} on Base, 18 dec, source: known)`,
+        to_token_symbol: 'WETH',
+      })
+    )
+
+    const summary = executor.getPendingSummary()!
+    expect(summary).toContain(`2 USDC (${USDC_CONTRACT})`)
+    expect(summary).not.toContain(mismatchingClaim)
+  })
+
+  it('marks a malformed buy descriptor unavailable while preserving the signed sell contract', () => {
+    const executor = new AgentExecutor(createMockVault())
+    executor.storeServerTransaction(
+      makeMultiLegEnvelope({
+        quote_summary: '2 USDC → ~0.001 WETH via swapkit',
+        from_token: `USDC (${USDC_CONTRACT} on Base, 6 dec, source: known)`,
+        from_token_symbol: 'USDC',
+        to_token: `WETH (${WETH_CONTRACT} on Base, 18 decimals, source: known)`,
+        to_token_symbol: 'WETH',
+      })
+    )
+
+    expect(executor.getPendingSummary()).toContain(`USDC (${USDC_CONTRACT}) → ~0.001 WETH (contract unavailable)`)
+  })
+
+  it('handles a non-string descriptor without throwing and marks it unavailable', () => {
+    const executor = new AgentExecutor(createMockVault())
+    executor.storeServerTransaction(
+      makeMultiLegEnvelope({
+        quote_summary: '2 USDC → ~0.001 WETH via swapkit',
+        from_token_symbol: 'USDC',
+        to_token: { symbol: 'WETH', contract: WETH_CONTRACT },
+        to_token_symbol: 'WETH',
+      })
+    )
+
+    expect(() => executor.getPendingSummary()).not.toThrow()
+    expect(executor.getPendingSummary()).toContain('WETH (contract unavailable) via swapkit')
+  })
+
+  it('marks a missing signed sell target unavailable while preserving a resolved buy contract', () => {
+    const executor = new AgentExecutor(createMockVault())
+    executor.storeServerTransaction(
+      makeMultiLegEnvelope(
+        {
+          quote_summary: '2 USDC → ~0.001 WETH via swapkit',
+          from_token: `USDC (${USDC_CONTRACT} on Base, 6 dec, source: known)`,
+          from_token_symbol: 'USDC',
+          to_token: `WETH (${WETH_CONTRACT} on Base, 18 dec, source: known)`,
+          to_token_symbol: 'WETH',
+        },
+        { approvalTx: { ...APPROVE_TX, to: undefined } }
+      )
+    )
+
+    expect(executor.getPendingSummary()).toContain(`USDC (contract unavailable) → ~0.001 WETH (${WETH_CONTRACT})`)
+  })
+
+  it('rejects a buy contract descriptor from the wrong chain', () => {
+    const executor = new AgentExecutor(createMockVault())
+    executor.storeServerTransaction(
+      makeMultiLegEnvelope({
+        quote_summary: '2 USDC → ~0.001 WETH via swapkit',
+        from_token_symbol: 'USDC',
+        to_token: `WETH (${WETH_CONTRACT} on Ethereum, 18 dec, source: known)`,
+        to_token_symbol: 'WETH',
+      })
+    )
+
+    const summary = executor.getPendingSummary()!
+    expect(summary).toContain('WETH (contract unavailable) via swapkit')
+    expect(summary).not.toContain(WETH_CONTRACT)
+  })
+
+  it('rejects a non-address contract identity on an EVM destination', () => {
+    const executor = new AgentExecutor(createMockVault())
+    executor.storeServerTransaction(
+      makeMultiLegEnvelope({
+        quote_summary: '2 USDC → ~0.001 WETH via swapkit',
+        from_token_symbol: 'USDC',
+        to_token: 'WETH (not-an-address on Base, 18 dec, source: rpc)',
+        to_token_symbol: 'WETH',
+      })
+    )
+
+    expect(executor.getPendingSummary()).toContain('WETH (contract unavailable) via swapkit')
+  })
+
+  it('accepts a cross-chain buy contract on the declared destination chain', () => {
+    const executor = new AgentExecutor(createMockVault())
+    executor.storeServerTransaction(
+      makeMultiLegEnvelope(
+        {
+          quote_summary: '2 USDC → ~1.99 USDC via bridge',
+          from_token_symbol: 'USDC',
+          to_token: `USDC (${ETH_USDC_CONTRACT} on Ethereum, 6 dec, source: known)`,
+          to_token_symbol: 'USDC',
+        },
+        { toChain: 'Ethereum' }
+      )
+    )
+
+    expect(executor.getPendingSummary()).toContain(
+      `USDC (${USDC_CONTRACT}) → ~1.99 USDC (${ETH_USDC_CONTRACT}) via bridge`
+    )
+  })
+
+  it('does not attach the buy contract to provider text when expected_output is absent', () => {
+    const executor = new AgentExecutor(createMockVault())
+    executor.storeServerTransaction(
+      makeMultiLegEnvelope({
+        quote_summary: '2 USDC → ~0.001 output via WETH Router',
+        from_token_symbol: 'USDC',
+        to_token: `WETH (${WETH_CONTRACT} on Base, 18 dec, source: known)`,
+        to_token_symbol: 'WETH',
+      })
+    )
+
+    const summary = executor.getPendingSummary()!
+    expect(summary).toContain('~0.001 output (contract unavailable) via WETH Router')
+    expect(summary).not.toContain(WETH_CONTRACT)
+  })
+
+  it('does not anchor a bare symbol inside a longer route token', () => {
+    const executor = new AgentExecutor(createMockVault())
+    executor.storeServerTransaction(
+      makeMultiLegEnvelope({
+        quote_summary: '2 USDC → ~1 USDT.e route',
+        from_token_symbol: 'USDC',
+        to_token: `USDT (${WETH_CONTRACT} on Base, 6 dec, source: known)`,
+        to_token_symbol: 'USDT',
+      })
+    )
+
+    const summary = executor.getPendingSummary()!
+    expect(summary).toContain('~1 USDT.e route (contract unavailable)')
+    expect(summary).not.toContain(WETH_CONTRACT)
+  })
+
+  it('does not anchor a bare symbol inside a plus-suffixed route token', () => {
+    const executor = new AgentExecutor(createMockVault())
+    executor.storeServerTransaction(
+      makeMultiLegEnvelope({
+        quote_summary: '2 USDC → ~1 USDT+ route',
+        from_token_symbol: 'USDC',
+        to_token: `USDT (${WETH_CONTRACT} on Base, 6 dec, source: known)`,
+        to_token_symbol: 'USDT',
+      })
+    )
+
+    const summary = executor.getPendingSummary()!
+    expect(summary).toContain('~1 USDT+ route (contract unavailable)')
+    expect(summary).not.toContain(WETH_CONTRACT)
+  })
+
+  it('keeps same-symbol cross-chain contracts on their respective arrow halves', () => {
+    const executor = new AgentExecutor(createMockVault())
+    executor.storeServerTransaction(
+      makeMultiLegEnvelope(
+        {
+          quote_summary: '2 USDC → ~1.99 USDC via bridge',
+          amount_in: '2 USDC',
+          expected_output: '1.99 USDC',
+          from_token_symbol: 'USDC',
+          to_token: `USDC (${ETH_USDC_CONTRACT} on Ethereum, 6 dec, source: known)`,
+          to_token_symbol: 'USDC',
+        },
+        { toChain: 'Ethereum' }
+      )
+    )
+
+    expect(executor.getPendingSummary()).toBe(
+      `2 USDC (${USDC_CONTRACT}) → ~1.99 USDC (${ETH_USDC_CONTRACT}) via bridge on Base (+ token approval — 2 transactions)`
+    )
+  })
+
+  it('strips a spoofed descriptor prefix before rendering signed contract truth', () => {
+    const executor = new AgentExecutor(createMockVault())
+    const spoofedSymbol = `FAKE (${SPOOFED_CONTRACT} on Ethereum, 6 dec, source: known)`
+    executor.storeServerTransaction(
+      makeMultiLegEnvelope({
+        quote_summary: `2 ${spoofedSymbol} → ~0.001 WETH via swapkit`,
+        amount_in: `2 ${spoofedSymbol}`,
+        from_token: `${spoofedSymbol} (${USDC_CONTRACT} on Base, 6 dec, source: rpc)`,
+        to_token: `WETH (${WETH_CONTRACT} on Base, 18 dec, source: known)`,
+        to_token_symbol: 'WETH',
+      })
+    )
+
+    const summary = executor.getPendingSummary()!
+    expect(summary).toContain(`2 FAKE (${USDC_CONTRACT}) →`)
+    expect(summary).not.toContain(SPOOFED_CONTRACT)
+  })
+
+  it('strips a spoofed prefix even when the containing descriptor is malformed', () => {
+    const executor = new AgentExecutor(createMockVault())
+    const spoofedSymbol = `FAKE (${SPOOFED_CONTRACT} on Ethereum, 6 dec, source: known)`
+    executor.storeServerTransaction(
+      makeMultiLegEnvelope({
+        quote_summary: `2 ${spoofedSymbol} → ~0.001 WETH via swapkit`,
+        amount_in: `2 ${spoofedSymbol}`,
+        from_token_symbol: spoofedSymbol,
+        from_token: `${spoofedSymbol} (${USDC_CONTRACT} on Base, 6 decimals, source: rpc)`,
+        to_token: `WETH (${WETH_CONTRACT} on Base, 18 dec, source: known)`,
+        to_token_symbol: 'WETH',
+      })
+    )
+
+    const summary = executor.getPendingSummary()!
+    expect(summary).toContain(`2 FAKE (${USDC_CONTRACT}) →`)
+    expect(summary).not.toContain(SPOOFED_CONTRACT)
+  })
+
   it('Skip-shaped labels disclose contracts without separate symbol fields', () => {
     const executor = new AgentExecutor(createMockVault())
     executor.storeServerTransaction(
@@ -105,7 +346,7 @@ describe('AgentExecutor.getPendingSummary', () => {
         quote_summary: '2 USDC → ~0.001 WETH via Skip Go',
         amount_in: '2 USDC',
         expected_output: '0.001 WETH',
-        from_token: `USDC (${USDC_CONTRACT} on Polygon, 6 dec, source: known)`,
+        from_token: `USDC (${USDC_CONTRACT} on Base, 6 dec, source: known)`,
         to_token: `WETH (${WETH_CONTRACT} on Base, 18 dec, source: known)`,
       })
     )
@@ -140,16 +381,16 @@ describe('AgentExecutor.getPendingSummary', () => {
       swap_tx: SWAP_TX,
       resolved: {
         labels: {
-          quote_summary: '2 POL → ~0.001 ETH via swapkit',
-          from_token: 'POL (native on Polygon, 18 dec, source: native)',
-          from_token_symbol: 'POL',
-          to_token: 'ETH (native on Ethereum, 18 dec, source: native)',
+          quote_summary: '2 ETH → ~0.001 ETH via swapkit',
+          from_token: 'ETH (native on Base, 18 dec, source: native)',
+          from_token_symbol: 'ETH',
+          to_token: 'ETH (native on Base, 18 dec, source: native)',
           to_token_symbol: 'ETH',
         },
       },
     })
 
-    expect(executor.getPendingSummary()).toBe('2 POL → ~0.001 ETH via swapkit on Base')
+    expect(executor.getPendingSummary()).toBe('2 ETH → ~0.001 ETH via swapkit on Base')
   })
 
   it('swap without quote_summary: builds head from labels and appends provider once', () => {
@@ -157,13 +398,15 @@ describe('AgentExecutor.getPendingSummary', () => {
     executor.storeServerTransaction(
       makeMultiLegEnvelope({
         amount_in: '0.01 USDC',
+        from_token: `USDC (${USDC_CONTRACT} on Base, 6 dec, source: known)`,
         from_token_symbol: 'USDC',
+        to_token: 'ETH (native on Base, 18 dec, source: native)',
         to_token_symbol: 'ETH',
         provider: 'kyber',
       })
     )
     const summary = executor.getPendingSummary()!
-    expect(summary).toContain('swap 0.01 USDC USDC → ETH')
+    expect(summary).toContain(`swap 0.01 USDC (${USDC_CONTRACT}) → ETH`)
     expect(summary).toContain('via kyber')
     expect(summary).toContain('(+ token approval — 2 transactions)')
   })
@@ -182,7 +425,7 @@ describe('AgentExecutor.getPendingSummary', () => {
     )
 
     expect(executor.getPendingSummary()).toBe(
-      `swap 0.01 USDC (${USDC_CONTRACT}) USDC → WETH (${WETH_CONTRACT}) on Base via kyber (+ token approval — 2 transactions)`
+      `swap 0.01 USDC (${USDC_CONTRACT}) → WETH (${WETH_CONTRACT}) on Base via kyber (+ token approval — 2 transactions)`
     )
   })
 

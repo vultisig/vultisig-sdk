@@ -67,7 +67,10 @@ function decodeErc20Transfer(calldata: string): { recipient: Address; amount: bi
   if (calldata.slice(0, ERC20_TRANSFER_SELECTOR.length).toLowerCase() !== ERC20_TRANSFER_SELECTOR) return null
 
   try {
-    const decoded = decodeFunctionData({ abi: ERC20_TRANSFER_ABI, data: calldata as Hex })
+    const decoded = decodeFunctionData({
+      abi: ERC20_TRANSFER_ABI,
+      data: calldata as Hex,
+    })
     const [recipient, amount] = decoded.args as readonly [Address, bigint]
     return { recipient, amount }
   } catch {
@@ -75,40 +78,176 @@ function decodeErc20Transfer(calldata: string): { recipient: Address; amount: bi
   }
 }
 
-type ResolvedTokenIdentity = { symbol: string; contract: string }
+type ResolvedTokenIdentity = {
+  rawSymbol: string
+  displaySymbol: string
+  kind: 'native' | 'token' | 'unresolved'
+  contract?: string
+}
 
-/** Parse mcp-ts's fixed-suffix token descriptor without trusting token-symbol delimiters. */
-function resolvedTokenIdentity(label: string | undefined): ResolvedTokenIdentity {
-  if (!label) return { symbol: '', contract: '' }
-  const match = label.match(/^(.*) \((.*) on [^,]+, \d+ dec, source: [^)]+\)$/su)
-  if (!match) return { symbol: '', contract: '' }
+const tokenLabel = (value: unknown): string => (typeof value === 'string' ? value : '')
 
-  const [, symbol, assetId] = match
+/** Keep descriptor-shaped, attacker-controlled symbol text out of the consent line. */
+function safeTokenSymbol(symbol: string): {
+  displaySymbol: string
+  suspicious: boolean
+} {
+  const suspiciousAt = symbol.search(/0x[0-9a-f]{40}|\([^)]*\bon\b[^)]*\)/iu)
+  if (suspiciousAt < 0) return { displaySymbol: symbol, suspicious: false }
+
+  const safePrefix = symbol.slice(0, suspiciousAt).trim()
+  const displaySymbol = safePrefix.match(/^[\p{L}\p{N}][\p{L}\p{N}._+-]*/u)?.[0] ?? 'token'
+  return { displaySymbol, suspicious: true }
+}
+
+function unresolvedTokenIdentity(label: unknown): ResolvedTokenIdentity {
+  if (typeof label !== 'string') return { rawSymbol: '', displaySymbol: '', kind: 'unresolved' }
+  const suffixAt = label.lastIndexOf(' (')
+  const rawSymbol = (suffixAt > 0 ? label.slice(0, suffixAt) : label).trim()
   return {
-    symbol,
-    contract: assetId.toLowerCase() === 'native' ? '' : assetId,
+    rawSymbol,
+    displaySymbol: safeTokenSymbol(rawSymbol).displaySymbol,
+    kind: 'unresolved',
   }
 }
 
-function appendContractAfter(summary: string, assetLabel: string, contract: string, fromEnd = false): string {
-  if (!assetLabel || !contract) return summary
-  const assetIndex = fromEnd ? summary.lastIndexOf(assetLabel) : summary.indexOf(assetLabel)
-  if (assetIndex < 0) return summary
-  const assetEnd = assetIndex + assetLabel.length
-  const suffix = ` (${contract})`
-  if (summary.startsWith(suffix, assetEnd)) return summary
-  return `${summary.slice(0, assetEnd)}${suffix}${summary.slice(assetEnd)}`
+function untrustedSymbolIdentity(symbol: unknown): ResolvedTokenIdentity {
+  const rawSymbol = tokenLabel(symbol)
+  return {
+    rawSymbol,
+    displaySymbol: safeTokenSymbol(rawSymbol).displaySymbol,
+    kind: 'unresolved',
+  }
 }
 
-/** Add resolved contracts to the sell/buy sides without changing native-only summaries. */
-function discloseSwapTokenContracts(head: string, labels: Record<string, string>): string {
-  const fromToken = resolvedTokenIdentity(labels.from_token)
-  const toToken = resolvedTokenIdentity(labels.to_token)
-  const sellLabel = labels.amount_in || labels.from_token_symbol || fromToken.symbol
-  const buyLabel = labels.expected_output || labels.to_token_symbol || toToken.symbol
+/** Parse and chain-check mcp-ts's fixed-suffix token descriptor. */
+function resolvedTokenIdentity(label: unknown, expectedChain: unknown): ResolvedTokenIdentity {
+  const unresolved = unresolvedTokenIdentity(label)
+  if (typeof label !== 'string') return unresolved
+  const match = label.match(/^([\s\S]*) \(([\s\S]*?) on ([^,]+), \d+ dec, source: [^)]+\)$/u)
+  if (!match) return unresolved
 
-  const disclosedSell = appendContractAfter(head, sellLabel, fromToken.contract)
-  return appendContractAfter(disclosedSell, buyLabel, toToken.contract, true)
+  const [, rawSymbol, rawAssetId, descriptorChain] = match
+  const { displaySymbol, suspicious } = safeTokenSymbol(rawSymbol)
+  const parsedChain = resolveChainReference(descriptorChain)
+  const routedChain =
+    typeof expectedChain === 'string' || typeof expectedChain === 'number'
+      ? resolveChainReference(expectedChain)
+      : undefined
+  if (suspicious || !parsedChain || !routedChain || parsedChain !== routedChain) {
+    return { rawSymbol, displaySymbol, kind: 'unresolved' }
+  }
+
+  const assetId = rawAssetId.trim()
+  if (!assetId) return { rawSymbol, displaySymbol, kind: 'unresolved' }
+  if (assetId.toLowerCase() === 'native') return { rawSymbol, displaySymbol, kind: 'native' }
+  if (getChainKind(routedChain) === 'evm' && !/^0x[0-9a-f]{40}$/iu.test(assetId)) {
+    return { rawSymbol, displaySymbol, kind: 'unresolved' }
+  }
+  return { rawSymbol, displaySymbol, kind: 'token', contract: assetId }
+}
+
+function replaceUnsafeSymbol(text: string, identity: ResolvedTokenIdentity): string {
+  if (!identity.rawSymbol || identity.rawSymbol === identity.displaySymbol) return text
+  return text.split(identity.rawSymbol).join(identity.displaySymbol)
+}
+
+/** Find a complete asset label, not a prefix such as USDT inside USDT.e. */
+function anchorEnd(text: string, label: string): number {
+  if (!label) return -1
+  const tokenChar = /[\p{L}\p{N}._+-]/u
+  let searchFrom = text.length
+  while (searchFrom >= 0) {
+    const index = text.lastIndexOf(label, searchFrom)
+    if (index < 0) return -1
+    const before = text[index - 1]
+    const after = text[index + label.length]
+    if ((!before || !tokenChar.test(before)) && (!after || !tokenChar.test(after))) return index + label.length
+    searchFrom = index - 1
+  }
+  return -1
+}
+
+function hasAnchor(text: string, anchors: string[]): boolean {
+  return anchors.some(anchor => anchorEnd(text, anchor) >= 0)
+}
+
+/** Choose the trade arrow whose halves contain the declared sell/buy labels. */
+function splitSwapHead(head: string, sellAnchors: string[], buyAnchors: string[]) {
+  let best: { left: string; buy: string; provider: string; score: number } | undefined
+  let arrowAt = head.indexOf('→')
+  while (arrowAt >= 0) {
+    const left = head.slice(0, arrowAt)
+    const right = head.slice(arrowAt + 1)
+    const viaAt = right.indexOf(' via ')
+    const buy = viaAt >= 0 ? right.slice(0, viaAt) : right
+    const provider = viaAt >= 0 ? right.slice(viaAt) : ''
+    const score = Number(hasAnchor(left, sellAnchors)) + Number(hasAnchor(buy, buyAnchors))
+    if (!best || score > best.score) {
+      best = { left, buy, provider, score }
+    }
+    arrowAt = head.indexOf('→', arrowAt + 1)
+  }
+  return best
+}
+
+function discloseSwapSide(side: string, anchors: string[], suffix: string): string {
+  if (!suffix) return side
+  for (const anchor of anchors) {
+    const end = anchorEnd(side, anchor)
+    if (end >= 0) return `${side.slice(0, end)}${suffix}${side.slice(end)}`
+  }
+  return `${side.trimEnd()} (contract unavailable)${side.slice(side.trimEnd().length)}`
+}
+
+/**
+ * Add contract truth to each trade half. The sell address comes only from the
+ * signed approval payload; the buy address remains a chain-checked label claim.
+ */
+function discloseSwapTokenContracts(
+  head: string,
+  labels: Record<string, unknown>,
+  payload: any,
+  sourceChain: Chain
+): string {
+  const destinationChain = payload?.to_chain === undefined ? sourceChain : payload.to_chain
+  const fromToken = resolvedTokenIdentity(labels.from_token, sourceChain)
+  const toToken = resolvedTokenIdentity(labels.to_token, destinationChain)
+  const fromSymbol = untrustedSymbolIdentity(labels.from_token_symbol)
+  const toSymbol = untrustedSymbolIdentity(labels.to_token_symbol)
+  const rawApprovalTarget = tokenLabel(extractNestedTx(payload?.approvalTxArgs)?.to)
+  const approvalTarget = /^0x[0-9a-f]{40}$/iu.test(rawApprovalTarget) ? rawApprovalTarget : ''
+
+  const symbolIdentities = [fromToken, fromSymbol, toToken, toSymbol]
+  const sanitizeText = (value: unknown) =>
+    symbolIdentities.reduce((text, identity) => replaceUnsafeSymbol(text, identity), tokenLabel(value))
+  const sanitizedHead = sanitizeText(head)
+  const sellAnchors = [sanitizeText(labels.amount_in), fromSymbol.displaySymbol, fromToken.displaySymbol].filter(
+    Boolean
+  )
+  const buyAnchors = [sanitizeText(labels.expected_output), toSymbol.displaySymbol, toToken.displaySymbol].filter(
+    Boolean
+  )
+
+  const sellSuffix = payload?.approvalTxArgs
+    ? approvalTarget
+      ? ` (${approvalTarget})`
+      : ' (contract unavailable)'
+    : fromToken.kind === 'native'
+      ? ''
+      : ' (contract unavailable)'
+  const buySuffix =
+    toToken.kind === 'native'
+      ? ''
+      : toToken.kind === 'token' && toToken.contract
+        ? ` (${toToken.contract})`
+        : ' (contract unavailable)'
+
+  const halves = splitSwapHead(sanitizedHead, sellAnchors, buyAnchors)
+  if (!halves) return `${sanitizedHead} (contract unavailable)`
+  const sell = discloseSwapSide(halves.left, sellAnchors, sellSuffix)
+  const buy = discloseSwapSide(halves.buy, buyAnchors, buySuffix)
+  return `${sell}→${buy}${halves.provider}`
 }
 
 // `Set<string>.has()` returns a plain boolean, so it never narrows `Chain` down to
@@ -590,18 +729,21 @@ export class AgentExecutor {
     if (isSwap) {
       // quote_summary already embeds the provider ("… via kyber"); only append
       // the provider when we fall back to building the head ourselves.
-      const usedQuoteSummary = !!labels.quote_summary
+      const quoteSummary = tokenLabel(labels.quote_summary)
+      const usedQuoteSummary = !!quoteSummary
+      const amountIn = tokenLabel(labels.amount_in) || tokenLabel(p?.txArgs?.amount) || '?'
+      const fromSymbol = tokenLabel(labels.from_token_symbol)
+      const sellHead = fromSymbol && !amountIn.endsWith(` ${fromSymbol}`) ? `${amountIn} ${fromSymbol}` : amountIn
       const head = discloseSwapTokenContracts(
-        labels.quote_summary ||
-          `swap ${labels.amount_in ?? p?.txArgs?.amount ?? '?'} ${labels.from_token_symbol ?? ''} → ${
-            labels.to_token_symbol ?? ''
-          }`.trim(),
-        labels
+        quoteSummary || `swap ${sellHead} → ${tokenLabel(labels.to_token_symbol) || '?'}`,
+        labels,
+        p,
+        stored.chain
       )
       const parts = [head, `on ${stored.chain}`]
-      if (!usedQuoteSummary && labels.provider) parts.push(`via ${labels.provider}`)
+      if (!usedQuoteSummary && tokenLabel(labels.provider)) parts.push(`via ${tokenLabel(labels.provider)}`)
       if (p?.__multiLeg) parts.push('(+ token approval — 2 transactions)')
-      if (labels.estimated_fee) parts.push(`est. fee ${labels.estimated_fee}`)
+      if (tokenLabel(labels.estimated_fee)) parts.push(`est. fee ${tokenLabel(labels.estimated_fee)}`)
       return parts.join(' ')
     }
     // Name the token contract from the payload that gets signed, not from label

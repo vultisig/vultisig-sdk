@@ -2,4 +2,4 @@
 '@vultisig/cli': patch
 ---
 
-Disclose non-native token contract addresses in swap consent summaries.
+Derive swap sell-token contracts from signed approval payloads and mark unresolved contract disclosures explicitly.
