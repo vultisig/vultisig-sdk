@@ -98,6 +98,27 @@ type StoredPayload = {
   timestamp: number
 }
 
+function stripEmbeddedPayloadContract(value: string, disclosedContract: string): string {
+  if (!disclosedContract) return value
+  const escapedContract = disclosedContract.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const normalizedContract = disclosedContract.toLowerCase()
+  return value
+    .replace(new RegExp(escapedContract, 'gi'), '')
+    .replace(/0x([0-9a-fA-F]{2,8})(?:…|\.{3})([0-9a-fA-F]{2,8})/g, (match, prefix: string, suffix: string) => {
+      const normalizedPrefix = `0x${prefix}`.toLowerCase()
+      return normalizedContract.startsWith(normalizedPrefix) && normalizedContract.endsWith(suffix.toLowerCase())
+        ? ''
+        : match
+    })
+    .replace(/\(\s*\)/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
+function formatTokenContractDisclosure(disclosedContract: string): string {
+  return disclosedContract ? ` (token contract ${disclosedContract})` : ''
+}
+
 export class AgentExecutor {
   private vault: VaultBase
   /** Owning SDK (optional); used for address book backed by app storage */
@@ -592,15 +613,65 @@ export class AgentExecutor {
       return this.renderErc20TransferSummary(transfer.amount, contractTo, stored.chain, to)
     }
 
-    const amount = labels.resolved_amount ?? p?.txArgs?.amount ?? '?'
+    const disclosedContract = isContractSend && contractTo.toLowerCase() !== to.toLowerCase() ? contractTo : ''
+    return this.renderLabelSendSummary(p, labels, stored.chain, to, disclosedContract)
+  }
+
+  /**
+   * Render the send summary from producer labels — the fallback for native,
+   * non-EVM, and non-transfer envelopes only (decoded ERC-20 transfers are
+   * rendered from calldata by renderErc20TransferSummary above). De-duplicates
+   * token/chain/contract details the label may repeat, anchored to the routed
+   * chain and the payload-derived contract disclosure.
+   */
+  private renderLabelSendSummary(
+    p: any,
+    labels: Record<string, string>,
+    chain: Chain,
+    to: string,
+    disclosedContract: string
+  ): string {
+    // The signed payload is authoritative. Rich producer labels may repeat its
+    // address; remove only exact or matching truncated copies
+    // (case-insensitively), clean up an empty parenthetical wrapper, and
+    // preserve every other label detail for the existing de-dup logic.
+    const amount = stripEmbeddedPayloadContract(labels.resolved_amount ?? p?.txArgs?.amount ?? '?', disclosedContract)
     // Include the asset symbol so a confirmation prompt can never be ambiguous
     // between native and tokens (e.g. "send 100 on Base to …" — ETH? USDC?).
-    // resolved_amount usually already embeds it; de-dup when both are set.
-    const symbol = labels.token_resolved || labels.token_symbol || ''
-    const amountWithSymbol = symbol && !amount.endsWith(` ${symbol}`) ? `${amount} ${symbol}` : amount
-    const contractPart =
-      isContractSend && contractTo.toLowerCase() !== to.toLowerCase() ? ` (token contract ${contractTo})` : ''
-    return `send ${amountWithSymbol} on ${stored.chain} to ${to}${contractPart}`
+    // token_resolved may be either a bare ticker or a richer label such as
+    // "USDC.e on Polygon (0x…)". De-dup against the ticker while preserving
+    // the richer chain/contract disclosure as the summary suffix. When the
+    // amount already embeds the full label, do not render its details again:
+    // omit the suffix if the label positively names the exact routed chain,
+    // otherwise append only the routed location so a conflicting or negated
+    // chain mention cannot hide it.
+    // The label shape is an out-of-repo producer convention, so only remove the
+    // first exact "on <routed chain>" fragment and keep any remainder verbatim:
+    // an unrecognised shape must never omit either embedded details or the route.
+    const tokenLabel = stripEmbeddedPayloadContract(
+      (labels.token_resolved || labels.token_symbol || '').trim(),
+      disclosedContract
+    )
+    const symbol = tokenLabel.split(/\s+/, 1)[0]
+    const escapedChain = String(chain).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    // Strip the negation together with the chain ("not on Polygon"): removing
+    // only "on <chain>" would leave a dangling "not" in front of the recipient,
+    // and the routed location is re-anchored below regardless.
+    const routedChainPattern = new RegExp(`(?:^|\\s)(?:not\\s+)?on ${escapedChain}(?=\\s|$)`)
+    // Reordered labels put the routed chain after the contract details
+    // ("USDC.e (0x…) on Polygon"), so accept the fragment anywhere in the
+    // context — but a negated mention ("not on Polygon") must not count.
+    const positiveRoutedChainPattern = new RegExp(`(?:^|\\s)(?<!\\bnot\\s+)on ${escapedChain}(?=\\s|$)`)
+    const tokenContext = tokenLabel.slice(symbol.length)
+    const labelCarriesRoutedChain = positiveRoutedChainPattern.test(tokenContext)
+    const tokenDetail = tokenContext.replace(routedChainPattern, '').trim()
+    const amountEmbedsTokenLabel = tokenLabel.length > 0 && amount.endsWith(` ${tokenLabel}`)
+    const amountWithSymbol =
+      symbol && !amount.endsWith(` ${symbol}`) && !amountEmbedsTokenLabel ? `${amount} ${symbol}` : amount
+    const tokenDetailSuffix = amountEmbedsTokenLabel || !tokenDetail ? '' : ` ${tokenDetail}`
+    const location = amountEmbedsTokenLabel && labelCarriesRoutedChain ? '' : `on ${chain}${tokenDetailSuffix}`
+    const contractPart = formatTokenContractDisclosure(disclosedContract)
+    return `send ${amountWithSymbol}${location ? ` ${location}` : ''} to ${to}${contractPart}`
   }
 
   /**

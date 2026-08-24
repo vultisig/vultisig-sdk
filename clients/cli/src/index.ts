@@ -37,6 +37,15 @@ import {
   executeInfo,
   executeJoinSecure,
   executePortfolio,
+  executePrepContractCall,
+  executePrepCosmosStaking,
+  executePrepCw20Transfer,
+  executePrepIbcTransfer,
+  executePrepJettonTransfer,
+  executePrepPolkadotAssetSend,
+  executePrepSplTransfer,
+  executePrepSuiTokenTransfer,
+  executePrepTrc20Transfer,
   executeRename,
   executeRujiraBalance,
   executeRujiraDeposit,
@@ -347,17 +356,19 @@ program
   .command('import <file>')
   .description('Import vault from .vult file')
   .option('--password <password>', 'Password to decrypt the vault file')
+  .option('--replace', 'Replace an existing compatible local vault share')
   .addHelpText(
     'after',
     `
 Examples:
   vultisig import ~/vault-backup.vult
-  vultisig import ~/vault-backup.vult --password mypassword`
+  vultisig import ~/vault-backup.vult --password mypassword
+  vultisig import ~/vault-backup.vult --replace`
   )
   .action(
-    withExit(async (file: string, options: { password?: string }) => {
+    withExit(async (file: string, options: { password?: string; replace?: boolean }) => {
       const context = await init(program.opts().vault)
-      await executeImport(context, file, options.password)
+      await executeImport(context, file, options.password, options.replace)
     })
   )
 
@@ -596,7 +607,15 @@ program
   .option('--password <password>', 'Vault password (required for --resend)')
   .action(
     withExit(
-      async (vaultId: string, options: { resend?: boolean; code?: string; email?: string; password?: string }) => {
+      async (
+        vaultId: string,
+        options: {
+          resend?: boolean
+          code?: string
+          email?: string
+          password?: string
+        }
+      ) => {
         const context = await init(program.opts().vault)
         // executeVerify throws a typed error on failure; it no longer signals
         // failure via a `false` return that this had to re-throw (which produced a
@@ -712,6 +731,145 @@ See also: balance, tx-status`
     )
   )
 
+// Command: Build unsigned transaction-preparation payloads directly through the SDK.
+const prepCmd = program
+  .command('prep')
+  .description('Build unsigned transaction payloads with SDK preparation helpers (never signs or broadcasts)')
+
+const loadPrepVault = async (identity: string | undefined) => {
+  if (identity !== undefined) return undefined
+  const context = await init(program.opts().vault)
+  return context.ensureActiveVault()
+}
+
+prepCmd
+  .command('contract-call <chain> <contractAddress> <functionName>')
+  .description('Build an unsigned EVM contract-call KeysignPayload')
+  .requiredOption('--abi <json>', 'Solidity ABI JSON array')
+  .requiredOption('--sender <address>', 'Sender EVM address')
+  .option('--args <json>', 'Function arguments as a JSON array')
+  .option('--value <baseUnits>', 'Native value in base units', '0')
+  .option('--gas-limit <baseUnits>', 'Custom EVM gas limit (requires --max-priority-fee-per-gas)')
+  .option('--max-priority-fee-per-gas <baseUnits>', 'Custom EVM priority fee (requires --gas-limit)')
+  .option('--identity <json>', 'Public VaultIdentity JSON; otherwise use the active vault')
+  .action(
+    withExit(async (chain: string, contractAddress: string, functionName: string, options) => {
+      const vault = await loadPrepVault(options.identity)
+      await executePrepContractCall(vault, resolveChainOrThrow(chain), contractAddress, functionName, options)
+    })
+  )
+
+prepCmd
+  .command('ibc-transfer <fromChain> <fromAddress> <toAddress> <denom> <amount>')
+  .description('Build an unsigned ICS-20 IBC MsgTransfer envelope')
+  .option('--to-chain <chainId>', 'Destination chain ID or Vultisig chain name')
+  .option('--source-channel <channel>', 'IBC source channel (channel-N)')
+  .option('--timeout-height <revision/height>', 'IBC timeout height (default: 0/0)')
+  .option('--timeout-timestamp <nanoseconds>', 'Future Unix timeout in nanoseconds')
+  .option('--account-number <number>', 'Source-chain account number')
+  .option('--sequence <number>', 'Source-chain account sequence')
+  .option('--memo <memo>', 'IBC packet memo')
+  .option('--now-ms <milliseconds>', 'Override current time for deterministic default timeout')
+  .action(
+    withExit(
+      async (fromChain: string, fromAddress: string, toAddress: string, denom: string, amount: string, options) => {
+        executePrepIbcTransfer(fromChain, fromAddress, toAddress, denom, amount, options)
+      }
+    )
+  )
+
+prepCmd
+  .command('spl-transfer <mint> <from> <to> <amount> <decimals>')
+  .description('Build an unsigned SPL transferChecked instruction with derived ATAs')
+  .option('--token-2022', 'Use the Token-2022 program instead of the legacy SPL Token program')
+  .action(
+    withExit(async (mint: string, from: string, to: string, amount: string, decimals: string, options) => {
+      executePrepSplTransfer(mint, from, to, amount, decimals, options)
+    })
+  )
+
+prepCmd
+  .command('trc20-transfer <contractAddress> <from> <to> <amount>')
+  .description('Build an unsigned TRC-20 transfer descriptor')
+  .option('--memo <memo>', 'Optional TRON transaction memo')
+  .option('--fee-limit-sun <amount>', 'Energy/bandwidth ceiling in SUN')
+  .action(
+    withExit(async (contractAddress: string, from: string, to: string, amount: string, options) => {
+      executePrepTrc20Transfer(contractAddress, from, to, amount, options)
+    })
+  )
+
+prepCmd
+  .command('jetton-transfer <receiver> <jettonWalletAddress> <amount> <seqno>')
+  .description('Build an unsigned TON Jetton transfer signing payload')
+  .option('--memo <memo>', 'Forward comment (up to 123 UTF-8 bytes)')
+  .option('--valid-until <seconds>', 'Unix-seconds expiry')
+  .option('--workchain <number>', 'Sender wallet workchain (default: 0)')
+  .option('--identity <json>', 'Public VaultIdentity JSON; otherwise use the active vault')
+  .action(
+    withExit(async (receiver: string, jettonWalletAddress: string, amount: string, seqno: string, options) => {
+      const vault = await loadPrepVault(options.identity)
+      executePrepJettonTransfer(vault, receiver, jettonWalletAddress, amount, seqno, options)
+    })
+  )
+
+prepCmd
+  .command('sui-token-transfer <coinType> <from> <to> <amount>')
+  .description('Build an unsigned Sui coin-object token-transfer KeysignPayload')
+  .option('--decimals <number>', 'Token decimals metadata')
+  .option('--ticker <symbol>', 'Token ticker metadata')
+  .option('--identity <json>', 'Public VaultIdentity JSON; otherwise use the active vault')
+  .action(
+    withExit(async (coinType: string, from: string, to: string, amount: string, options) => {
+      const vault = await loadPrepVault(options.identity)
+      await executePrepSuiTokenTransfer(vault, coinType, from, to, amount, options)
+    })
+  )
+
+prepCmd
+  .command('polkadot-asset-send <assetId> <from> <to> <amount>')
+  .description('Build an unsigned Polkadot Asset Hub transferKeepAlive call')
+  .option('--decimals <number>', 'Asset decimals override')
+  .option('--ticker <symbol>', 'Asset ticker override')
+  .action(
+    withExit(async (assetId: string, from: string, to: string, amount: string, options) => {
+      executePrepPolkadotAssetSend(assetId, from, to, amount, options)
+    })
+  )
+
+prepCmd
+  .command('cosmos-staking <action> <delegatorAddress> <validatorAddress> [amount] [denom]')
+  .description('Build an unsigned Cosmos delegate, undelegate, redelegate, or withdraw message')
+  .option('--validator-dst <address>', 'Destination validator for redelegate')
+  .option('--account-prefix <prefix>', 'Expected delegator bech32 prefix')
+  .option('--validator-prefix <prefix>', 'Expected validator bech32 prefix')
+  .action(
+    withExit(
+      async (
+        action: string,
+        delegatorAddress: string,
+        validatorAddress: string,
+        amount: string | undefined,
+        denom: string | undefined,
+        options
+      ) => {
+        executePrepCosmosStaking(action, delegatorAddress, validatorAddress, amount, denom, options)
+      }
+    )
+  )
+
+prepCmd
+  .command('cw20-transfer <bech32Prefix> <contract> <recipient> <amount> <sender>')
+  .description('Build an unsigned CosmWasm CW-20 transfer message')
+  .option('--native-denoms <csv>', 'Comma-separated native denoms to reject on this route')
+  .action(
+    withExit(
+      async (bech32Prefix: string, contract: string, recipient: string, amount: string, sender: string, options) => {
+        executePrepCw20Transfer(bech32Prefix, contract, recipient, amount, sender, options)
+      }
+    )
+  )
+
 // Command: Execute CosmWasm contract (for Rujira FIN swaps, etc.)
 program
   .command('execute <chain> <contract> <msg>')
@@ -734,7 +892,13 @@ Examples:
         chainStr: string,
         contract: string,
         msg: string,
-        options: { funds?: string; memo?: string; dryRun?: boolean; yes?: boolean; password?: string }
+        options: {
+          funds?: string
+          memo?: string
+          dryRun?: boolean
+          yes?: boolean
+          password?: string
+        }
       ) => {
         const context = await init(program.opts().vault, options.password)
         // A decline throws ConfirmationRequiredError (exit 12) — see `send` above.
@@ -1649,7 +1813,12 @@ authCmd
       const vaults = await executeAuthStatus()
       if (isJsonOutput()) {
         outputJson({
-          vaults: vaults.map(v => ({ id: v.id, name: v.name, filePath: v.filePath, hasCredentials: v.hasCredentials })),
+          vaults: vaults.map(v => ({
+            id: v.id,
+            name: v.name,
+            filePath: v.filePath,
+            hasCredentials: v.hasCredentials,
+          })),
         })
         return
       }
@@ -1674,7 +1843,11 @@ authCmd
     withExit(async (options: { vaultId?: string; all?: boolean }) => {
       await executeAuthLogout({ vaultId: options.vaultId, all: options.all })
       if (isJsonOutput()) {
-        outputJson({ cleared: true, vaultId: options.vaultId ?? null, all: !!options.all })
+        outputJson({
+          cleared: true,
+          vaultId: options.vaultId ?? null,
+          all: !!options.all,
+        })
       } else {
         printResult(chalk.green('Credentials cleared.'))
       }
