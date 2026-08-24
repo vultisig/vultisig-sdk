@@ -87,11 +87,21 @@ type ResolvedTokenIdentity = {
 
 const tokenLabel = (value: unknown): string => (typeof value === 'string' ? value : '')
 
+// Real token symbols stay far below this; longer "symbols" are either spoof
+// carriers (an embedded Solana mint is 44 chars) or hostile padding for the
+// descriptor regexes below, which backtrack superlinearly on long inputs.
+const MAX_TOKEN_SYMBOL_LENGTH = 32
+const MAX_TOKEN_LABEL_LENGTH = 512
+
 /** Keep descriptor-shaped, attacker-controlled symbol text out of the consent line. */
 function safeTokenSymbol(symbol: string): {
   displaySymbol: string
   suspicious: boolean
 } {
+  if (symbol.length > MAX_TOKEN_SYMBOL_LENGTH) {
+    const displaySymbol = symbol.match(/^[\p{L}\p{N}][\p{L}\p{N}._+-]{0,31}/u)?.[0] ?? 'token'
+    return { displaySymbol, suspicious: true }
+  }
   const suspiciousAt = symbol.search(/0x[0-9a-f]{40}|\([^)]*\bon\b[^)]*\)/iu)
   if (suspiciousAt < 0) return { displaySymbol: symbol, suspicious: false }
 
@@ -101,7 +111,9 @@ function safeTokenSymbol(symbol: string): {
 }
 
 function unresolvedTokenIdentity(label: unknown): ResolvedTokenIdentity {
-  if (typeof label !== 'string') return { rawSymbol: '', displaySymbol: '', kind: 'unresolved' }
+  if (typeof label !== 'string' || label.length > MAX_TOKEN_LABEL_LENGTH) {
+    return { rawSymbol: '', displaySymbol: '', kind: 'unresolved' }
+  }
   const suffixAt = label.lastIndexOf(' (')
   const rawSymbol = (suffixAt > 0 ? label.slice(0, suffixAt) : label).trim()
   return {
@@ -120,10 +132,16 @@ function untrustedSymbolIdentity(symbol: unknown): ResolvedTokenIdentity {
   }
 }
 
-/** Parse and chain-check mcp-ts's fixed-suffix token descriptor. */
+/**
+ * Parse and chain-check mcp-ts's fixed-suffix token descriptor. An
+ * `expectedChain` of `undefined` means the envelope carries no routed-chain
+ * signal (Skip prep omits `labels.to_chain`); the descriptor's own chain is
+ * accepted then — it is the same producer-trust tier either way, and the
+ * check exists to catch drift, not to out-vote the producer.
+ */
 function resolvedTokenIdentity(label: unknown, expectedChain: unknown): ResolvedTokenIdentity {
   const unresolved = unresolvedTokenIdentity(label)
-  if (typeof label !== 'string') return unresolved
+  if (typeof label !== 'string' || label.length > MAX_TOKEN_LABEL_LENGTH) return unresolved
   const match = label.match(/^([\s\S]*) \(([\s\S]*?) on ([^,]+), \d+ dec, source: [^)]+\)$/u)
   if (!match) return unresolved
 
@@ -131,9 +149,11 @@ function resolvedTokenIdentity(label: unknown, expectedChain: unknown): Resolved
   const { displaySymbol, suspicious } = safeTokenSymbol(rawSymbol)
   const parsedChain = resolveChainReference(descriptorChain)
   const routedChain =
-    typeof expectedChain === 'string' || typeof expectedChain === 'number'
-      ? resolveChainReference(expectedChain)
-      : undefined
+    expectedChain === undefined
+      ? parsedChain
+      : typeof expectedChain === 'string' || typeof expectedChain === 'number'
+        ? resolveChainReference(expectedChain)
+        : undefined
   if (suspicious || !parsedChain || !routedChain || parsedChain !== routedChain) {
     return { rawSymbol, displaySymbol, kind: 'unresolved' }
   }
@@ -141,7 +161,12 @@ function resolvedTokenIdentity(label: unknown, expectedChain: unknown): Resolved
   const assetId = rawAssetId.trim()
   if (!assetId) return { rawSymbol, displaySymbol, kind: 'unresolved' }
   if (assetId.toLowerCase() === 'native') return { rawSymbol, displaySymbol, kind: 'native' }
-  if (getChainKind(routedChain) === 'evm' && !/^0x[0-9a-f]{40}$/iu.test(assetId)) {
+  if (getChainKind(routedChain) === 'evm') {
+    if (!/^0x[0-9a-f]{40}$/iu.test(assetId)) return { rawSymbol, displaySymbol, kind: 'unresolved' }
+  } else if (!/^[\p{L}\p{N}:._/-]{1,128}$/u.test(assetId)) {
+    // Non-EVM asset ids (Solana mints, Cosmos denoms, THOR assets) have no
+    // single shape, but none contain whitespace or control characters — and
+    // this string is interpolated into the consent line.
     return { rawSymbol, displaySymbol, kind: 'unresolved' }
   }
   return { rawSymbol, displaySymbol, kind: 'token', contract: assetId }
@@ -152,20 +177,21 @@ function replaceUnsafeSymbol(text: string, identity: ResolvedTokenIdentity): str
   return text.split(identity.rawSymbol).join(identity.displaySymbol)
 }
 
-/** Find a complete asset label, not a prefix such as USDT inside USDT.e. */
+/**
+ * Anchor only at the END of a trade half: a complete asset label (never a
+ * prefix such as USDT inside USDT.e) whose match closes the half. Interior
+ * matches are refused — route prose can mention any symbol, and annotating
+ * an interior mention would misattribute the contract.
+ */
 function anchorEnd(text: string, label: string): number {
   if (!label) return -1
   const tokenChar = /[\p{L}\p{N}._+-]/u
-  let searchFrom = text.length
-  while (searchFrom >= 0) {
-    const index = text.lastIndexOf(label, searchFrom)
-    if (index < 0) return -1
-    const before = text[index - 1]
-    const after = text[index + label.length]
-    if ((!before || !tokenChar.test(before)) && (!after || !tokenChar.test(after))) return index + label.length
-    searchFrom = index - 1
-  }
-  return -1
+  const trimmedLength = text.trimEnd().length
+  const index = trimmedLength - label.length
+  if (index < 0 || !text.startsWith(label, index)) return -1
+  const before = text[index - 1]
+  if (before && tokenChar.test(before)) return -1
+  return trimmedLength
 }
 
 function hasAnchor(text: string, anchors: string[]): boolean {
@@ -210,12 +236,29 @@ function discloseSwapTokenContracts(
   payload: any,
   sourceChain: Chain
 ): string {
-  const destinationChain = payload?.to_chain === undefined ? sourceChain : payload.to_chain
+  // The routed destination lives in `labels.to_chain` (the mcp-ts prep
+  // envelope has no top-level `to_chain`); Skip prep omits it entirely, in
+  // which case the descriptor's own chain stands (see resolvedTokenIdentity).
+  const destinationChain =
+    typeof labels.to_chain === 'string'
+      ? labels.to_chain
+      : typeof payload?.to_chain === 'string' || typeof payload?.to_chain === 'number'
+        ? payload.to_chain
+        : undefined
   const fromToken = resolvedTokenIdentity(labels.from_token, sourceChain)
   const toToken = resolvedTokenIdentity(labels.to_token, destinationChain)
   const fromSymbol = untrustedSymbolIdentity(labels.from_token_symbol)
   const toSymbol = untrustedSymbolIdentity(labels.to_token_symbol)
-  const rawApprovalTarget = tokenLabel(extractNestedTx(payload?.approvalTxArgs)?.to)
+  // Mirror the approve-leg signer exactly: signMultiLeg re-parents
+  // approvalTxArgs as `txArgs` and clears the sibling tx fields, so the
+  // signed approve target is `approvalTxArgs.tx.to` and nothing else.
+  // Reading any other nested shape here (the extractNestedTx precedence
+  // chain) would let a hostile envelope render one address while the signer
+  // broadcasts an approve to another.
+  const approvalArgs = payload?.approvalTxArgs
+  const rawApprovalTarget = tokenLabel(
+    approvalArgs && typeof approvalArgs === 'object' ? approvalArgs.tx?.to : undefined
+  )
   const approvalTarget = /^0x[0-9a-f]{40}$/iu.test(rawApprovalTarget) ? rawApprovalTarget : ''
 
   const symbolIdentities = [fromToken, fromSymbol, toToken, toSymbol]
