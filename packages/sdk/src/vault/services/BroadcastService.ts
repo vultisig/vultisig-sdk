@@ -16,29 +16,6 @@ import type { Signature } from '../../types'
 import { convertToKeysignSignatures } from '../utils/convertSignature'
 import { VaultError, VaultErrorCode } from '../VaultError'
 
-/**
- * Broadcast resolvers return `Promise<unknown>` and are inconsistent in shape: utxo/cardano
- * resolve a bare hash string, tron resolves the raw RPC response object (`{ txid, ... }`), and
- * most others (evm/cosmos/sui/ripple/ton/polkadot/bittensor) resolve void. When the resolver DID
- * echo back a hash, prefer it over a locally re-derived one - it is the node's own authoritative
- * value, not a client-side guess about what the node will have computed.
- */
-const extractResolverTxHash = (broadcastResult: unknown): string | undefined => {
-  if (typeof broadcastResult === 'string' && broadcastResult.length > 0) {
-    return broadcastResult
-  }
-  if (
-    broadcastResult &&
-    typeof broadcastResult === 'object' &&
-    'txid' in broadcastResult &&
-    typeof (broadcastResult as { txid?: unknown }).txid === 'string' &&
-    (broadcastResult as { txid: string }).txid.length > 0
-  ) {
-    return (broadcastResult as { txid: string }).txid
-  }
-  return undefined
-}
-
 type BroadcastPartialFailureInput = {
   chain: Chain
   broadcastedTxHashes: string[]
@@ -189,7 +166,7 @@ export class BroadcastService {
         })
 
         const signingOutput = decodeSigningOutput(chain, compiledTx)
-        let broadcastResult: unknown
+        let broadcastResult: Awaited<ReturnType<typeof coreBroadcastTx>>
         try {
           broadcastResult = await this.broadcastTransaction({
             chain,
@@ -207,7 +184,27 @@ export class BroadcastService {
           throw error
         }
 
-        const inputTxHash = extractResolverTxHash(broadcastResult) ?? (await getTxHash({ chain, tx: signingOutput }))
+        if (broadcastResult.status === 'failed') {
+          const cause =
+            broadcastResult.cause instanceof Error ? broadcastResult.cause : new Error(String(broadcastResult.cause))
+          const error = new Error(
+            `${broadcastResult.code} (retryable=${broadcastResult.retryable}): ${cause.message}`,
+            {
+              cause,
+            }
+          )
+          if (broadcastedTxHashes.length > 0) {
+            throw new BroadcastPartialFailureError({
+              chain,
+              broadcastedTxHashes,
+              failedInputIndex: index,
+              cause: error,
+            })
+          }
+          throw error
+        }
+
+        const inputTxHash = broadcastResult.txHash ?? (await getTxHash({ chain, tx: signingOutput }))
         broadcastedTxHashes.push(inputTxHash)
         txHash = inputTxHash
 
