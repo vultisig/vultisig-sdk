@@ -428,7 +428,7 @@ describe('AgentExecutor.getPendingSummary', () => {
     expect(summary).toContain('USDT (contract unavailable) via jupiter')
   })
 
-  it('non-native sell without an approval leg renders the unavailable marker', () => {
+  it('falls back to the chain-checked sell descriptor when no approval leg is present', () => {
     const executor = new AgentExecutor(createMockVault())
     executor.storeServerTransaction({
       chain: 'Base',
@@ -438,6 +438,29 @@ describe('AgentExecutor.getPendingSummary', () => {
         labels: {
           quote_summary: '2 USDC → ~0.001 ETH via swapkit',
           from_token: `USDC (${USDC_CONTRACT} on Base, 6 dec, source: known)`,
+          from_token_symbol: 'USDC',
+          to_token: 'ETH (native on Base, 18 dec, source: native)',
+          to_token_symbol: 'ETH',
+        },
+      },
+    })
+
+    expect(executor.getPendingSummary()).toBe(`2 USDC (${USDC_CONTRACT}) → ~0.001 ETH via swapkit on Base`)
+  })
+
+  it.each([
+    ['malformed', `USDC (${USDC_CONTRACT} on Base, 6 decimals, source: known)`],
+    ['wrong-chain', `USDC (${USDC_CONTRACT} on Ethereum, 6 dec, source: known)`],
+  ])('keeps the unavailable marker for a %s no-approval sell descriptor', (_case, fromToken) => {
+    const executor = new AgentExecutor(createMockVault())
+    executor.storeServerTransaction({
+      chain: 'Base',
+      from_chain: 'Base',
+      txArgs: { chain: 'Base', chain_id: '8453', from: '0xsender', tx: SWAP_TX },
+      resolved: {
+        labels: {
+          quote_summary: '2 USDC → ~0.001 ETH via swapkit',
+          from_token: fromToken,
           from_token_symbol: 'USDC',
           to_token: 'ETH (native on Base, 18 dec, source: native)',
           to_token_symbol: 'ETH',

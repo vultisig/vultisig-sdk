@@ -245,8 +245,9 @@ function discloseSwapSide(side: string, anchors: string[], suffix: string): stri
 }
 
 /**
- * Add contract truth to each trade half. The sell address comes only from the
- * signed approval payload; the buy address remains a chain-checked label claim.
+ * Add contract truth to each trade half. The sell address comes from the signed
+ * approval payload when present, otherwise from a chain-checked label claim.
+ * The buy address remains a chain-checked label claim.
  */
 function discloseSwapTokenContracts(
   head: string,
@@ -297,7 +298,9 @@ function discloseSwapTokenContracts(
       : ' (contract unavailable)'
     : fromToken.kind === 'native'
       ? ''
-      : ' (contract unavailable)'
+      : fromToken.kind === 'token' && fromToken.contract
+        ? ` (${fromToken.contract})`
+        : ' (contract unavailable)'
   const buySuffix =
     toToken.kind === 'native'
       ? ''
