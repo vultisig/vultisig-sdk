@@ -262,6 +262,7 @@ export { chains } from './chains'
 
 // EVM bridge type surface — consumers can import these directly from the RN
 // entry without reaching through `chains.evm.*`.
+export { buildErc20ApproveTx, buildErc20TransferTx, buildEvmContractCallTx, buildEvmSendTx } from './chains/evm'
 export type {
   BuildErc20ApproveOptions,
   BuildErc20TransferOptions,
@@ -273,6 +274,7 @@ export type {
 // Solana bridge type surface — pure primitive reimplementation that does NOT
 // pull @solana/web3.js (and therefore avoids the rpc-websockets / ws cascade
 // that hangs Hermes at module init).
+export { buildSolanaSendTx } from './chains/solana'
 export type { BroadcastSolanaTxOptions, BuildSolanaSendOptions, SolanaTxBuilderResult } from './chains/solana'
 
 // TON bridge type surface — reimplementation built on @ton/core plus
