@@ -495,6 +495,8 @@ describe('RN entry exposes pure chain helpers and registry', () => {
     expect(rn.normalizeTx).toBe(tx.normalizeTx)
     expect(rn.splitMultiTx).toBe(tx.splitMultiTx)
     expect(rn.TxNormalizeError).toBe(tx.TxNormalizeError)
+    expect(rn.parseTxReadyEnvelope).toBe(tx.parseTxReadyEnvelope)
+    expect(rn.TxReadyParseError).toBe(tx.TxReadyParseError)
     expect(rn.decodeFromToolResult).toBe(decode.decodeFromToolResult)
     expect(rn.decodeCosmosTx).toBe(decode.decodeCosmosTx)
     expect(rn.decodeEvmTx).toBe(decode.decodeEvmTx)
