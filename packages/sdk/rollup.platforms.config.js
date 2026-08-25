@@ -337,6 +337,10 @@ const configs = {
       distBase: 'tools/gas',
     }),
     ...createSubpathConfigs({
+      input: './src/tools/token/index.ts',
+      distBase: 'tools/token',
+    }),
+    ...createSubpathConfigs({
       input: './src/tools/bridge/index.ts',
       distBase: 'tools/bridge',
     }),
@@ -363,6 +367,10 @@ const configs = {
     ...createSubpathConfigs({
       input: './src/tx/index.ts',
       distBase: 'tx',
+    }),
+    ...createSubpathConfigs({
+      input: './src/services/index.ts',
+      distBase: 'services',
     }),
   ],
   browser: {
