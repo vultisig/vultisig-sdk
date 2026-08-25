@@ -3,7 +3,15 @@ import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc
 import { AuthInfo, SignDoc, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 
+import type {
+  PollTxStatusUntilFinalParams as PollTxStatusUntilFinalParamsFromReactNative,
+  PollTxStatusUntilFinalResult as PollTxStatusUntilFinalResultFromReactNative,
+} from '../../../../src/platforms/react-native/index'
 import * as sdkRn from '../../../../src/platforms/react-native/index'
+import type {
+  PollTxStatusUntilFinalParams as PollTxStatusUntilFinalParamsFromTx,
+  PollTxStatusUntilFinalResult as PollTxStatusUntilFinalResultFromTx,
+} from '../../../../src/tx'
 import { cosmosTxFeeGasParityCases } from '../../../fixtures/cosmosTxFeeGasParity'
 
 process.env.VULTISIG_STRICT_SINGLETON = '0'
@@ -62,6 +70,10 @@ vi.mock('@vultisig/walletcore-native', () => ({
 
 let reactNativeEntry: Awaited<typeof import('../../../../src/platforms/react-native/index')>
 let dangerousAddresses: Awaited<typeof import('../../../../src/utils/dangerousAddresses')>
+
+function assertAssignable<A, B>(_check: (a: A, b: B) => void): true {
+  return true
+}
 
 beforeAll(async () => {
   ;[reactNativeEntry, dangerousAddresses] = await Promise.all([
@@ -509,6 +521,22 @@ describe('RN entry exposes pure chain helpers and registry', () => {
     expect(rn.decode.decodeCosmosTx).toBe(decode.decodeCosmosTx)
     expect(rn.decode.decodeEvmTx).toBe(decode.decodeEvmTx)
     expect(rn.buildKeygenPairingQrPayload).toBe(pairing.buildKeygenPairingQrPayload)
+  })
+
+  it('re-exports the transaction-status poller and its public types from the RN entrypoint', async () => {
+    const tx = await import('../../../../src/tx')
+
+    expect(reactNativeEntry.pollTxStatusUntilFinal).toBe(tx.pollTxStatusUntilFinal)
+    assertAssignable<PollTxStatusUntilFinalParamsFromReactNative, PollTxStatusUntilFinalParamsFromTx>((rn, tx) => {
+      tx = rn
+      rn = tx
+    })
+    assertAssignable<PollTxStatusUntilFinalResultFromReactNative, PollTxStatusUntilFinalResultFromTx>((rn, tx) => {
+      tx = rn
+      rn = tx
+    })
+
+    expect(true).toBe(true)
   })
 
   it('re-exports canonical swap tracker URL helpers from the RN entrypoint', async () => {
