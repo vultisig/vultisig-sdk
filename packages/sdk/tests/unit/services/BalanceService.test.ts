@@ -149,6 +149,22 @@ describe('BalanceService', () => {
     expect(getCoinBalance).not.toHaveBeenCalled()
   })
 
+  it('reports only the actually unavailable XRP when the reserve requirement exceeds the balance', async () => {
+    vi.mocked(getRippleNativeBalanceDetail).mockResolvedValue({
+      total: 500_000n,
+      reserve: 500_000n,
+      spendable: 0n,
+    })
+    const service = makeService()
+
+    const balance = await service.getBalance(Chain.Ripple)
+
+    expect(balance.amount).toBe('0')
+    expect(balance.totalAmount).toBe('500000')
+    expect(balance.reserveAmount).toBe('500000')
+    expect(BigInt(balance.amount) + BigInt(balance.reserveAmount!)).toBe(BigInt(balance.totalAmount!))
+  })
+
   it('leaves Ripple token balances on the plain resolver without a breakdown', async () => {
     vi.mocked(getCoinBalance).mockResolvedValue(7_000_000n)
     const service = makeService()

@@ -100,12 +100,12 @@ describe('getRippleCoinBalance', () => {
       await expect(getRippleCoinBalance(nativeCoin)).resolves.toBe(23_400_000n)
     })
 
-    it('keeps the real total and reserve when spendable floors at zero', async () => {
+    it('caps the locked reserve at the total when the requirement exceeds the balance', async () => {
       mockLedger({ balance: '500000', ownerCount: 0 })
 
       await expect(getRippleNativeBalanceDetail(ADDRESS)).resolves.toEqual({
         total: 500_000n,
-        reserve: 1_000_000n,
+        reserve: 500_000n,
         spendable: 0n,
       })
     })

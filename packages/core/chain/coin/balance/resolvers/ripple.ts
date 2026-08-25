@@ -52,9 +52,9 @@ const getRippleIssuedCurrencyBalance = async ({ address, id }: { address: string
 /**
  * Native XRP balance broken down into its on-ledger components, in drops.
  *
- * `total` is the raw on-ledger balance, `reserve` the locked base + owner
- * reserve, and `spendable = max(0, total - reserve)` — the number every
- * existing balance consumer receives as "the balance".
+ * `total` is the raw on-ledger balance, `reserve` the balance actually locked
+ * by the base + owner reserve requirement, and `spendable = total - reserve`
+ * — the number every existing balance consumer receives as "the balance".
  */
 export type RippleNativeBalanceDetail = {
   total: bigint
@@ -92,13 +92,13 @@ export const getRippleNativeBalanceDetail = async (address: string): Promise<Rip
 
   // `OwnerCount` already counts every owned ledger object, trust lines included,
   // so the trust-line count must not be added again here.
-  const totalReserve = BigInt(reserve_base) + BigInt(account_data.OwnerCount) * BigInt(reserve_inc)
-  const spendableBalance = totalBalance - totalReserve
+  const reserveRequirement = BigInt(reserve_base) + BigInt(account_data.OwnerCount) * BigInt(reserve_inc)
+  const reserve = reserveRequirement > totalBalance ? totalBalance : reserveRequirement
 
   return {
     total: totalBalance,
-    reserve: totalReserve,
-    spendable: spendableBalance > 0 ? spendableBalance : BigInt(0),
+    reserve,
+    spendable: totalBalance - reserve,
   }
 }
 

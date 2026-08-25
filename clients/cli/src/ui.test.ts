@@ -73,6 +73,21 @@ describe('displayBalance reserve labeling', () => {
     expect(logs.find(line => line.includes('Reserve:'))).toContain('1.4 XRP locked (3.765052 XRP total on ledger)')
   })
 
+  it('renders a consistent breakdown when the XRP balance is below the reserve requirement', () => {
+    const logs = captureLogs()
+
+    displayBalance('Ripple', {
+      ...xrpBalance,
+      amount: '0',
+      formattedAmount: '0',
+      totalAmount: '500000',
+      reserveAmount: '500000',
+    })
+
+    expect(logs.find(line => line.includes('Amount:'))).toBe('  Amount: 0 XRP (spendable)')
+    expect(logs.find(line => line.includes('Reserve:'))).toBe('  Reserve: 0.5 XRP locked (0.5 XRP total on ledger)')
+  })
+
   it('keeps balances without a reserve byte-identical', () => {
     const logs = captureLogs()
 
