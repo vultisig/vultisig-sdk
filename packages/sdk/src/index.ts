@@ -450,8 +450,11 @@ export {
 // Native tickers are already exported via `chainFeeCoin`. `getEvmChainId`
 // returns the hex chainId; `getEvmChainByChainId` resolves a hex chainId back to
 // its EvmChain; `getEvmRpcUrl` returns the canonical default/custom-RPC-resolved
-// endpoint for that chain.
+// endpoint for that chain. Blockaid's supported EVM-chain canonicals stay here too
+// so scan-request consumers do not hand-maintain a second chain-name map.
 export { getEvmChainByChainId, getEvmChainId, getEvmRpcUrl } from '@vultisig/core-chain/chains/evm/chainInfo'
+export { blockaidEvmChain, blockaidSupportedEvmChains } from '@vultisig/core-chain/security/blockaid/evmChains'
+export type { BlockaidSupportedEvmChain } from '@vultisig/core-chain/security/blockaid/evmChains'
 export { clampEvmPriorityFee } from '@vultisig/core-chain/tx/fee/evm/clampEvmPriorityFee'
 
 // Noon USDC yield vault SDK boundary. Consumers should use these helpers

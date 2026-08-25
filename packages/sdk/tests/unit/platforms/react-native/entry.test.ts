@@ -1,5 +1,6 @@
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
+import * as blockaidEvmChains from '@vultisig/core-chain/security/blockaid/evmChains'
 import { AuthInfo, SignDoc, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -115,6 +116,13 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(typeof sdkRn.findSwapQuote).toBe('function')
     expect(sdkRn.SOL_NATIVE_MINT).toBe('So11111111111111111111111111111111111111112')
     expect(sdkRn.JUPITER_PLATFORM_FEE_BPS).toBe(50)
+  })
+
+  it('re-exports the canonical Blockaid EVM chain map on the RN entrypoint', () => {
+    expect(sdkRn.blockaidEvmChain).toBe(blockaidEvmChains.blockaidEvmChain)
+    expect(sdkRn.blockaidSupportedEvmChains).toBe(blockaidEvmChains.blockaidSupportedEvmChains)
+    expect(Object.values(sdkRn.blockaidEvmChain)).toContain('hyperevm')
+    expect(sdkRn.blockaidSupportedEvmChains).toContain('Base')
   })
 
   it('exports default chain canonicals on the RN entrypoint', async () => {

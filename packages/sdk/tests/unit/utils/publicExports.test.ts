@@ -1,5 +1,6 @@
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
+import * as blockaidEvmChains from '@vultisig/core-chain/security/blockaid/evmChains'
 import * as isValidTokenIdModule from '@vultisig/core-chain/utils/isValidTokenId'
 import { describe, expect, it } from 'vitest'
 
@@ -156,6 +157,13 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.getCustomRpcOverrides()).toEqual({ [sdk.Chain.Ethereum]: 'https://rpc.example' })
     sdk.clearCustomRpcOverride(sdk.Chain.Ethereum)
     expect(sdk.getCustomRpcOverride(sdk.Chain.Ethereum)).toBeUndefined()
+  })
+
+  it('exports the canonical Blockaid EVM chain map from the root SDK entrypoint', () => {
+    expect(sdk.blockaidEvmChain).toBe(blockaidEvmChains.blockaidEvmChain)
+    expect(sdk.blockaidSupportedEvmChains).toBe(blockaidEvmChains.blockaidSupportedEvmChains)
+    expect(Object.values(sdk.blockaidEvmChain)).toContain('hyperevm')
+    expect(sdk.blockaidSupportedEvmChains).toContain('Base')
   })
 
   it('exports isValidTokenId for non-address token families (Sui struct tags, XRPL currency.issuer)', () => {
