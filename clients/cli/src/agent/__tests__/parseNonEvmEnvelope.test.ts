@@ -182,6 +182,46 @@ describe('parseNonEvmEnvelope', () => {
       ).toThrow(/failed to convert amount/)
     })
 
+    it('throws on a non-native token_resolved label instead of forwarding the symbol', () => {
+      const splUsdc = {
+        chain: 'Solana',
+        resolved: {
+          labels: {
+            resolved_amount: '1 USDC',
+            token_resolved: 'USDC',
+          },
+        },
+        txArgs: {
+          chain: 'Solana',
+          to: 'iwMx27vvAiaQteMhdpSBVDRztiSt1Cxwcfkm6SQBpxA',
+          amount: '1000000',
+        },
+      }
+
+      expect(() => parseNonEvmEnvelope(splUsdc, Chain.Solana)).toThrow(/non-native token 'USDC'/)
+      try {
+        parseNonEvmEnvelope(splUsdc, Chain.Solana)
+        expect.fail('expected throw')
+      } catch (err) {
+        expect(err).toBeInstanceOf(VaultError)
+        expect((err as VaultError).code).toBe(VaultErrorCode.NotImplemented)
+      }
+    })
+
+    it('still omits symbol for a native token_resolved label', () => {
+      const nativeSol = {
+        chain: 'Solana',
+        resolved: { labels: { token_resolved: 'SOL' } },
+        txArgs: {
+          chain: 'Solana',
+          to: 'iwMx27vvAiaQteMhdpSBVDRztiSt1Cxwcfkm6SQBpxA',
+          amount: '1000000',
+        },
+      }
+
+      expect(parseNonEvmEnvelope(nativeSol, Chain.Solana).symbol).toBeUndefined()
+    })
+
     it('throws VaultError instances (not plain Error) for downstream normalizeAgentError', () => {
       try {
         parseNonEvmEnvelope({} as any, Chain.Bitcoin)
