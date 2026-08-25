@@ -14,6 +14,7 @@ import { getTxStatus as coreTxStatus } from '@vultisig/core-chain/tx/status'
 import type { TxStatusResult } from '@vultisig/core-chain/tx/status/resolver'
 import { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
 import { vaultConfig } from '@vultisig/core-config'
+import { hasServer } from '@vultisig/core-mpc/devices/localPartyId'
 import { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
 import { fromCommVault } from '@vultisig/core-mpc/types/utils/commVault'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
@@ -37,6 +38,7 @@ import type { Storage } from '../storage/types'
 // modules at module-load time, which breaks vitest setups that mock chainFeeCoin.
 import { computeMaxSendFromBalance } from '../tools/prep/maxSend'
 import { vaultDataToIdentity } from '../tools/prep/types'
+import { pollTxStatusUntilFinal } from '../tx'
 // Types
 import {
   Balance,
@@ -78,6 +80,7 @@ import { TransactionBuilder } from './services/TransactionBuilder'
 // Swap types
 import type { SwapPrepareResult, SwapQuoteParams, SwapQuoteResult, SwapTxParams } from './swap-types'
 import { type ResolvedTokenInfo, resolveTokenRef, resolveTokenRefId } from './tokenRef'
+import { canonicalizeVaultData } from './utils/canonicalizeVaultData'
 import { VaultConflictError, VaultError, VaultErrorCode } from './VaultError'
 import { VaultConfig } from './VaultServices'
 
@@ -87,15 +90,6 @@ export type VaultSaveOptions = {
    * local and persisted edits touch different top-level mutable fields.
    */
   conflictStrategy?: 'reject' | 'merge-metadata'
-}
-
-/**
- * Determine vault type based on signer names
- * Fast vaults have one signer that starts with "Server-"
- * Secure vaults have only device signers (no "Server-" prefix)
- */
-function determineVaultType(signers: string[]): 'fast' | 'secure' {
-  return signers.some(signer => signer.startsWith('Server-')) ? 'fast' : 'secure'
 }
 
 // ===== Vault-name / export-filename safety policy (single source of truth) =====
@@ -362,7 +356,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     }
 
     // Determine vault type
-    const vaultType = determineVaultType(this.coreVault.signers as string[])
+    const vaultType = hasServer(this.coreVault.signers) ? 'fast' : 'secure'
 
     // Build VaultData
     this.vaultData = {
@@ -949,10 +943,10 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
   /** @internal Replaces constructor defaults with a stored or pending snapshot. */
   protected restorePersistedVaultData(vaultData: VaultData, persisted = true): void {
-    const snapshot = cloneVaultData(vaultData)
-    getVaultRevision(snapshot)
-    this.vaultData = snapshot
-    this.persistedVaultData = cloneVaultData(snapshot)
+    const canonicalSnapshot = canonicalizeVaultData(cloneVaultData(vaultData))
+    getVaultRevision(canonicalSnapshot)
+    this.vaultData = canonicalSnapshot
+    this.persistedVaultData = cloneVaultData(canonicalSnapshot)
     this.hasPersistedRecord = persisted
   }
 
@@ -2025,21 +2019,68 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     const toCoin = this.buildAccountCoin(toChain, toAddress, toToken)
 
     let resolvedAmount = amount
+    // Reusable when the fee-aware ceiling turns out to BE the whole balance -
+    // there is then nothing to re-quote and the probe is the final quote.
+    let maxProbeQuote: SwapQuoteResult | undefined
+
     if (amount === 'max') {
       const bal = await this.balanceService.getBalance(fromChain, fromToken.contractAddress)
-      resolvedAmount = this.formatUnits(BigInt(bal.amount), fromToken.decimals)
-      if (BigInt(bal.amount) <= 0n) throw new VaultError(VaultErrorCode.InvalidAmount, 'Zero balance — nothing to swap')
+      const balance = BigInt(bal.amount)
+      if (balance <= 0n) throw new VaultError(VaultErrorCode.InvalidAmount, 'Zero balance — nothing to swap')
+
+      // Quote at the full balance FIRST, purely to learn this route's
+      // `maxSwapable`. Committing the full balance directly (what this used to
+      // do) over-commits a native swap by exactly the network fee, so it fails
+      // at prepare/broadcast with insufficient funds - after the caller has
+      // already been told the swap was viable. `send({ amount: 'max' })` has
+      // always resolved its ceiling before building; this brings swap in line.
+      const fullAmount = this.validateHumanSwapAmount(this.formatUnits(balance, fromToken.decimals), fromToken.decimals)
+      const probe = await this.getSwapQuote({
+        fromCoin,
+        toCoin,
+        amount: fullAmount,
+        recipient: normalizedRecipient,
+        slippageTolerance,
+        excludeProviders,
+      })
+
+      // 0n means "not computable from this quote", NOT "nothing is swappable":
+      // deposit-channel (transfer) routes price the source-chain fee at
+      // broadcast time, so the quote cannot say what is safe. Fail closed with
+      // an actionable message rather than guess a fee on a fund path.
+      //
+      // The typeof check is deliberate belt-and-braces: `getSwapQuote` always
+      // populates `maxSwapable`, but an override or a partial quote must land
+      // in the fail-closed branch rather than fall through into an over-commit.
+      if (typeof probe.maxSwapable !== 'bigint' || probe.maxSwapable <= 0n) {
+        throw new VaultError(
+          VaultErrorCode.InvalidAmount,
+          `Cannot compute a fee-aware max for this ${fromToken.ticker} route: the source-chain fee is only known at ` +
+            `broadcast time. Estimate the fee separately and pass an explicit amount instead of "max".`
+        )
+      }
+
+      if (probe.maxSwapable >= balance) {
+        // Token route - gas is paid in the native asset, so the whole token
+        // balance is swappable and the probe already quotes the final amount.
+        resolvedAmount = fullAmount
+        maxProbeQuote = probe
+      } else {
+        resolvedAmount = this.formatUnits(probe.maxSwapable, fromToken.decimals)
+      }
     }
     const normalizedAmount = this.validateHumanSwapAmount(resolvedAmount, fromToken.decimals)
 
-    const quote = await this.getSwapQuote({
-      fromCoin,
-      toCoin,
-      amount: normalizedAmount,
-      recipient: normalizedRecipient,
-      slippageTolerance,
-      excludeProviders,
-    })
+    const quote =
+      maxProbeQuote ??
+      (await this.getSwapQuote({
+        fromCoin,
+        toCoin,
+        amount: normalizedAmount,
+        recipient: normalizedRecipient,
+        slippageTolerance,
+        excludeProviders,
+      }))
     if (dryRun) return { dryRun: true, quote }
 
     const { keysignPayload, approvalPayload } = await this.prepareSwapTx({
@@ -2248,19 +2289,21 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     timeoutMs = 60_000,
     intervalMs = 3_000
   ): Promise<void> {
-    const deadline = Date.now() + timeoutMs
-    while (Date.now() < deadline) {
-      try {
-        const result = await this.getTxStatus({ chain, txHash })
-        if (result.status === 'success') return
-        if (result.status === 'error')
-          throw new VaultError(VaultErrorCode.BroadcastFailed, `Approval tx failed: ${txHash}`)
-      } catch (e) {
-        if (e instanceof VaultError && e.code !== VaultErrorCode.NetworkError) throw e
-      }
-      await new Promise(resolve => setTimeout(resolve, intervalMs))
+    const outcome = await pollTxStatusUntilFinal({
+      chain,
+      txHash,
+      timeoutMs,
+      intervalMs,
+      getTxStatus: params => this.getTxStatus(params),
+      shouldRetryError: error => !(error instanceof VaultError) || error.code === VaultErrorCode.NetworkError,
+    })
+
+    if (outcome.result?.status === 'error') {
+      throw new VaultError(VaultErrorCode.BroadcastFailed, `Approval tx failed: ${txHash}`)
     }
-    throw new VaultError(VaultErrorCode.Timeout, `Approval tx not confirmed within ${timeoutMs / 1000}s: ${txHash}`)
+    if (outcome.timedOut) {
+      throw new VaultError(VaultErrorCode.Timeout, `Approval tx not confirmed within ${timeoutMs / 1000}s: ${txHash}`)
+    }
   }
 
   private formatUnits(value: bigint, decimals: number): string {
