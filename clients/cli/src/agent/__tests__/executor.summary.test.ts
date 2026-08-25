@@ -546,9 +546,12 @@ describe('AgentExecutor.getPendingSummary', () => {
       })
     )
 
-    expect(executor.getPendingSummary()).toBe(
-      `2 ${adversarialSymbol} (${USDC_CONTRACT}) → ~0.001 WETH (${WETH_CONTRACT}) via swapkit on Base (+ token approval — 2 transactions)`
+    const summary = executor.getPendingSummary()!
+    expect(summary).toBe(
+      `2 SCAM (${USDC_CONTRACT}) → ~0.001 WETH (${WETH_CONTRACT}) via swapkit on Base (+ token approval — 2 transactions)`
     )
+    expect(summary).not.toContain('\n')
+    expect(summary).not.toContain('→ ETH')
   })
 
   it('native-only swap summary remains byte-identical', () => {

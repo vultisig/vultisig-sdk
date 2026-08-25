@@ -99,15 +99,17 @@ function safeTokenSymbol(symbol: string): {
   displaySymbol: string
   suspicious: boolean
 } {
+  const defaultDisplaySymbol = symbol.match(/^[\p{L}\p{N}][\p{L}\p{N}._+-]{0,31}/u)?.[0] ?? 'token'
   if (symbol.length > MAX_TOKEN_SYMBOL_LENGTH) {
-    const displaySymbol = symbol.match(/^[\p{L}\p{N}][\p{L}\p{N}._+-]{0,31}/u)?.[0] ?? 'token'
-    return { displaySymbol, suspicious: true }
+    return { displaySymbol: defaultDisplaySymbol, suspicious: true }
   }
   const suspiciousAt = symbol.search(/0x[0-9a-f]{40}|\([^)]*\bon\b[^)]*\)/iu)
-  if (suspiciousAt < 0) return { displaySymbol: symbol, suspicious: false }
+  const candidate = (suspiciousAt < 0 ? symbol : symbol.slice(0, suspiciousAt)).trim()
+  const displaySymbol = candidate.match(/^[\p{L}\p{N}][\p{L}\p{N}._+-]*/u)?.[0] ?? 'token'
+  if (suspiciousAt < 0 && candidate === displaySymbol) {
+    return { displaySymbol, suspicious: false }
+  }
 
-  const safePrefix = symbol.slice(0, suspiciousAt).trim()
-  const displaySymbol = safePrefix.match(/^[\p{L}\p{N}][\p{L}\p{N}._+-]*/u)?.[0] ?? 'token'
   return { displaySymbol, suspicious: true }
 }
 
