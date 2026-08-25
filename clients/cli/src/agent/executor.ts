@@ -201,6 +201,21 @@ function hasAnchor(text: string, anchors: string[]): boolean {
   return anchors.some(anchor => anchorEnd(text, anchor) >= 0)
 }
 
+/** A quote summary must describe exactly one sell-to-buy transition. */
+function hasSingleSwapDelimiter(summary: string, labels: Record<string, unknown>): boolean {
+  // Ignore arrows embedded in declared symbols: those symbols are sanitized
+  // before rendering and therefore are not structural route delimiters.
+  const identities = [
+    unresolvedTokenIdentity(labels.from_token),
+    untrustedSymbolIdentity(labels.from_token_symbol),
+    unresolvedTokenIdentity(labels.to_token),
+    untrustedSymbolIdentity(labels.to_token_symbol),
+  ]
+  const structuralSummary = identities.reduce((text, identity) => replaceUnsafeSymbol(text, identity), summary)
+  const firstArrow = structuralSummary.indexOf('→')
+  return firstArrow >= 0 && structuralSummary.indexOf('→', firstArrow + 1) < 0
+}
+
 /** Choose the trade arrow whose halves contain the declared sell/buy labels. */
 function splitSwapHead(head: string, sellAnchors: string[], buyAnchors: string[]) {
   let best: { left: string; buy: string; provider: string; score: number } | undefined
@@ -241,13 +256,14 @@ function discloseSwapTokenContracts(
 ): string {
   // The routed destination lives in `labels.to_chain` (the mcp-ts prep
   // envelope has no top-level `to_chain`); Skip prep omits it entirely, in
-  // which case the descriptor's own chain stands (see resolvedTokenIdentity).
-  const destinationChain =
-    typeof labels.to_chain === 'string'
-      ? labels.to_chain
-      : typeof payload?.to_chain === 'string' || typeof payload?.to_chain === 'number'
-        ? payload.to_chain
-        : undefined
+  // which case a legacy top-level value may stand in. Preserve an unsupported
+  // present label so resolvedTokenIdentity rejects it instead of trusting a
+  // contradictory payload fallback.
+  const destinationChain = Object.hasOwn(labels, 'to_chain')
+    ? (labels.to_chain ?? null)
+    : typeof payload?.to_chain === 'string' || typeof payload?.to_chain === 'number'
+      ? payload.to_chain
+      : undefined
   const fromToken = resolvedTokenIdentity(labels.from_token, sourceChain)
   const toToken = resolvedTokenIdentity(labels.to_token, destinationChain)
   const fromSymbol = untrustedSymbolIdentity(labels.from_token_symbol)
@@ -796,7 +812,8 @@ export class AgentExecutor {
     if (isSwap) {
       // quote_summary already embeds the provider ("… via kyber"); only append
       // the provider when we fall back to building the head ourselves.
-      const quoteSummary = tokenLabel(labels.quote_summary)
+      const rawQuoteSummary = tokenLabel(labels.quote_summary)
+      const quoteSummary = hasSingleSwapDelimiter(rawQuoteSummary, labels) ? rawQuoteSummary : ''
       const usedQuoteSummary = !!quoteSummary
       const amountIn = tokenLabel(labels.amount_in) || tokenLabel(p?.txArgs?.amount) || '?'
       const fromSymbol = tokenLabel(labels.from_token_symbol)

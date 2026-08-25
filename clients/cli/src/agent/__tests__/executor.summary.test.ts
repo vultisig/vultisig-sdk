@@ -38,7 +38,7 @@ const SWAP_TX = { to: '0xRouter', value: '0', data: '0xdeadbeef', gas_limit: '25
 
 function makeMultiLegEnvelope(
   labels: Record<string, unknown>,
-  options: { approvalTx?: Record<string, unknown>; toChain?: string } = {}
+  options: { approvalTx?: Record<string, unknown>; toChain?: string | number } = {}
 ) {
   return {
     chain: 'Base',
@@ -52,7 +52,7 @@ function makeMultiLegEnvelope(
     txArgs: { chain: 'Base', chain_id: '8453', from: '0xsender', tx: SWAP_TX },
     // The real mcp-ts prep envelope carries the routed destination inside
     // resolved.labels (`to_chain`), never at the top level.
-    resolved: { labels: { ...(options.toChain ? { to_chain: options.toChain } : {}), ...labels } },
+    resolved: { labels: { ...(options.toChain !== undefined ? { to_chain: options.toChain } : {}), ...labels } },
   }
 }
 
@@ -175,6 +175,27 @@ describe('AgentExecutor.getPendingSummary', () => {
     expect(summary).not.toContain(WETH_CONTRACT)
   })
 
+  it('falls back to resolved labels when quote_summary contains multiple route delimiters', () => {
+    const executor = new AgentExecutor(createMockVault())
+    executor.storeServerTransaction(
+      makeMultiLegEnvelope({
+        quote_summary: '2 USDC → ETH → 1 WETH',
+        amount_in: '2 USDC',
+        from_token: `USDC (${USDC_CONTRACT} on Base, 6 dec, source: known)`,
+        from_token_symbol: 'USDC',
+        to_token: `WETH (${WETH_CONTRACT} on Base, 18 dec, source: known)`,
+        to_token_symbol: 'WETH',
+        provider: 'swapkit',
+      })
+    )
+
+    const summary = executor.getPendingSummary()!
+    expect(summary).toBe(
+      `swap 2 USDC (${USDC_CONTRACT}) → WETH (${WETH_CONTRACT}) on Base via swapkit (+ token approval — 2 transactions)`
+    )
+    expect(summary).not.toContain('→ ETH →')
+  })
+
   it('marks a malformed buy descriptor unavailable while preserving the signed sell contract', () => {
     const executor = new AgentExecutor(createMockVault())
     executor.storeServerTransaction(
@@ -236,6 +257,42 @@ describe('AgentExecutor.getPendingSummary', () => {
         { toChain: 'Base' }
       )
     )
+
+    const summary = executor.getPendingSummary()!
+    expect(summary).toContain('WETH (contract unavailable) via swapkit')
+    expect(summary).not.toContain(WETH_CONTRACT)
+  })
+
+  it('uses numeric labels.to_chain when resolving the destination token identity', () => {
+    const executor = new AgentExecutor(createMockVault())
+    const envelope = makeMultiLegEnvelope(
+      {
+        quote_summary: '2 USDC → ~0.001 WETH via swapkit',
+        from_token_symbol: 'USDC',
+        to_token: `WETH (${WETH_CONTRACT} on Base, 18 dec, source: known)`,
+        to_token_symbol: 'WETH',
+      },
+      { toChain: 8453 }
+    )
+    ;(envelope as Record<string, unknown>).to_chain = 'Ethereum'
+    executor.storeServerTransaction(envelope)
+
+    const summary = executor.getPendingSummary()!
+    expect(summary).toContain(`WETH (${WETH_CONTRACT}) via swapkit`)
+    expect(summary).not.toContain('WETH (contract unavailable)')
+  })
+
+  it('does not fall back to payload.to_chain when labels.to_chain is present but unsupported', () => {
+    const executor = new AgentExecutor(createMockVault())
+    const envelope = makeMultiLegEnvelope({
+      quote_summary: '2 USDC → ~0.001 WETH via swapkit',
+      from_token_symbol: 'USDC',
+      to_token: `WETH (${WETH_CONTRACT} on Base, 18 dec, source: known)`,
+      to_token_symbol: 'WETH',
+      to_chain: { chainId: 8453 },
+    })
+    ;(envelope as Record<string, unknown>).to_chain = 8453
+    executor.storeServerTransaction(envelope)
 
     const summary = executor.getPendingSummary()!
     expect(summary).toContain('WETH (contract unavailable) via swapkit')
