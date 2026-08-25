@@ -21,7 +21,6 @@ import {
   getChainKind,
   getEvmRpcUrl,
   knownTokensIndex,
-  parseThorSwapMemo,
   parseTxReadyEnvelope,
   pollTxStatusUntilFinal,
   resolveChainReference,
