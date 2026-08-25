@@ -1,6 +1,6 @@
 ---
-'@vultisig/core-chain': patch
-'@vultisig/core-mpc': patch
+'@vultisig/core-chain': major
+'@vultisig/core-mpc': major
 '@vultisig/sdk': major
 '@vultisig/cli': major
 '@vultisig/mcp': major
