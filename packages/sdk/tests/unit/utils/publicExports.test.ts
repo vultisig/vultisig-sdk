@@ -66,10 +66,12 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.extendChainRegistry).toBe('function')
   })
 
-  it('exports tx-shape normalization primitives (normalizeTx, splitMultiTx)', () => {
+  it('exports tx-shape normalization and tx-ready parsing primitives', () => {
     expect(typeof sdk.normalizeTx).toBe('function')
     expect(typeof sdk.splitMultiTx).toBe('function')
     expect(typeof sdk.TxNormalizeError).toBe('function')
+    expect(typeof sdk.parseTxReadyEnvelope).toBe('function')
+    expect(typeof sdk.TxReadyParseError).toBe('function')
   })
 
   it('exports the knownContracts canonical registry + lookup helpers', () => {
