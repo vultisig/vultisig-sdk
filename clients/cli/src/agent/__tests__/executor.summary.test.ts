@@ -8,6 +8,7 @@
  */
 import type { VaultBase } from '@vultisig/sdk'
 import { Chain } from '@vultisig/sdk'
+import { getAddress } from 'viem'
 import { describe, expect, it, vi } from 'vitest'
 
 import { AgentExecutor } from '../executor'
@@ -650,6 +651,445 @@ describe('AgentExecutor.getPendingSummary', () => {
       })
     ).toBe(true)
     expect(executor.getPendingSummary()).toBe('send 0.5 USDC on Base to 0xRecipientAddr')
+  })
+
+  // The tokenLabel guard in executor.ts is ONLY load-bearing when resolved_amount carries the FULL
+  // rich label rather than the bare ticker. The sibling case below uses '0.05 USDC.e', for which
+  // `amount.endsWith(' ' + symbol)` already short-circuits - so it passes with the guard REMOVED and
+  // pins nothing. This is the shape that regressed: narrowing `symbol` to the first word made the
+  // endsWith miss, and the whole label was appended a second time.
+  //
+  //   without the guard: 'send 0.05 USDC.e on Polygon (0x2791...4174) USDC.e to ...'
+  it('does not re-append the ticker when resolved_amount already carries the FULL rich label', () => {
+    const executor = new AgentExecutor(createMockVault())
+
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Polygon',
+        txArgs: { chain: 'Polygon', tx: { to: '0x2791…4174', value: '0' } },
+        resolved: {
+          labels: {
+            resolved_amount: '0.05 USDC.e on Polygon (0x2791…4174)',
+            token_resolved: 'USDC.e on Polygon (0x2791…4174)',
+            recipient_echo: '0x58C4…5C35',
+          },
+        },
+      })
+    ).toBe(true)
+    const summary = executor.getPendingSummary()!
+    expect(summary).toBe('send 0.05 USDC.e on Polygon (0x2791…4174) to 0x58C4…5C35')
+    // The assertion that actually catches the regression: exactly one occurrence of each.
+    expect(summary.match(/USDC\.e/g)).toHaveLength(1)
+    expect(summary.match(/Polygon/g)).toHaveLength(1)
+    expect(summary.match(/0x2791…4174/g)).toHaveLength(1)
+  })
+
+  it('discloses rich token, routed chain, and payload-derived ERC-20 contract exactly once', () => {
+    const executor = new AgentExecutor(createMockVault())
+    const recipient = '0x58C4b38BfA5C2a84f9D3483D04B2C2e8906e5C35'
+    const labelContract = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'
+    const payloadContract = labelContract.toLowerCase()
+
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Polygon',
+        txArgs: {
+          chain: 'Polygon',
+          to: recipient,
+          tx: {
+            to: payloadContract,
+            value: '0',
+            data: `0xa9059cbb${'0'.repeat(24)}${recipient.slice(2).toLowerCase()}${'c350'.padStart(64, '0')}`,
+          },
+        },
+        resolved: {
+          labels: {
+            resolved_amount: `0.05 USDC.e on Polygon (${labelContract})`,
+            token_resolved: `USDC.e on Polygon (${labelContract})`,
+          },
+        },
+      })
+    ).toBe(true)
+    const summary = executor.getPendingSummary()!
+    expect(summary.match(/USDC\.e/g)).toHaveLength(1)
+    expect(summary.match(/on Polygon/g)).toHaveLength(1)
+    expect(summary.match(/0x2791bca1f2de4661ed88a30c99a7a9449aa84174/gi)).toHaveLength(1)
+    // The consent recipient derives from the decoded calldata (WYSIWYS), which
+    // viem returns in canonical EIP-55 checksum form.
+    expect(summary).toBe(`send 0.05 USDC.e on Polygon to ${getAddress(recipient)} (token contract ${payloadContract})`)
+  })
+
+  it('strips a truncated payload-derived ERC-20 contract from rich token labels', () => {
+    const executor = new AgentExecutor(createMockVault())
+    const recipient = '0x58C4b38BfA5C2a84f9D3483D04B2C2e8906e5C35'
+    const payloadContract = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'
+    const truncatedContract = '0x2791…4174'
+
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Polygon',
+        txArgs: {
+          chain: 'Polygon',
+          to: recipient,
+          tx: {
+            to: payloadContract,
+            value: '0',
+            data: `0xa9059cbb${'0'.repeat(24)}${recipient.slice(2).toLowerCase()}${'c350'.padStart(64, '0')}`,
+          },
+        },
+        resolved: {
+          labels: {
+            resolved_amount: `0.05 USDC.e on Polygon (${truncatedContract})`,
+            token_resolved: `USDC.e on Polygon (${truncatedContract})`,
+          },
+        },
+      })
+    ).toBe(true)
+    const summary = executor.getPendingSummary()!
+    expect(summary.match(/USDC\.e/g)).toHaveLength(1)
+    expect(summary.match(/on Polygon/g)).toHaveLength(1)
+    expect(summary.match(/0x2791bca1f2de4661ed88a30c99a7a9449aa84174/gi)).toHaveLength(1)
+    expect(summary.match(/0x2791…4174/g) ?? []).toHaveLength(0)
+    expect(summary).toBe(`send 0.05 USDC.e on Polygon to ${getAddress(recipient)} (token contract ${payloadContract})`)
+  })
+
+  // The disclosure tests above use a9059cbb transfer calldata, so they render
+  // via renderErc20TransferSummary and never reach the label fallback. The
+  // next four tests pin the SAME guarantees on the fallback path itself
+  // (transfer === null: native sends and non-transfer contract calldata),
+  // where renderLabelSendSummary / stripEmbeddedPayloadContract actually run.
+  it('renders a native send via the label fallback, not the decoded-transfer branch', () => {
+    const labelSpy = vi.spyOn(AgentExecutor.prototype as any, 'renderLabelSendSummary')
+    const transferSpy = vi.spyOn(AgentExecutor.prototype as any, 'renderErc20TransferSummary')
+    try {
+      const executor = new AgentExecutor(createMockVault())
+      expect(
+        executor.storeServerTransaction({
+          chain: 'Polygon',
+          txArgs: { chain: 'Polygon', to: '0x58C4…5C35', tx: { to: '0x58C4…5C35', value: '1' } },
+          resolved: { labels: { resolved_amount: '0.01 POL' } },
+        })
+      ).toBe(true)
+      expect(executor.getPendingSummary()).toBe('send 0.01 POL on Polygon to 0x58C4…5C35')
+      expect(labelSpy).toHaveBeenCalledTimes(1)
+      expect(transferSpy).not.toHaveBeenCalled()
+    } finally {
+      labelSpy.mockRestore()
+      transferSpy.mockRestore()
+    }
+  })
+
+  it('fallback path: strips a negated routed-chain phrase without leaving a dangling "not"', () => {
+    const executor = new AgentExecutor(createMockVault())
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Polygon',
+        txArgs: { chain: 'Polygon', tx: { to: '0x58C4…5C35', value: '1' } },
+        resolved: {
+          labels: {
+            resolved_amount: '0.05 USDC.e',
+            token_resolved: 'USDC.e not on Polygon',
+            recipient_echo: '0x58C4…5C35',
+          },
+        },
+      })
+    ).toBe(true)
+    const summary = executor.getPendingSummary()!
+    expect(summary).toBe('send 0.05 USDC.e on Polygon to 0x58C4…5C35')
+    // The regression this pins: stripping only "on Polygon" left "… on Polygon not to …".
+    expect(summary).not.toMatch(/\bnot\b/)
+  })
+
+  it('fallback path: discloses the payload contract once for a non-transfer contract send', () => {
+    const executor = new AgentExecutor(createMockVault())
+    const recipient = '0x58C4b38BfA5C2a84f9D3483D04B2C2e8906e5C35'
+    const labelContract = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'
+    const payloadContract = labelContract.toLowerCase()
+
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Polygon',
+        txArgs: {
+          chain: 'Polygon',
+          to: recipient,
+          tx: { to: payloadContract, value: '0', data: `0x095ea7b3${'0'.repeat(120)}` },
+        },
+        resolved: {
+          labels: {
+            resolved_amount: `0.05 USDC.e on Polygon (${labelContract})`,
+            token_resolved: `USDC.e on Polygon (${labelContract})`,
+          },
+        },
+      })
+    ).toBe(true)
+    const summary = executor.getPendingSummary()!
+    expect(summary).toBe(`send 0.05 USDC.e on Polygon to ${recipient} (token contract ${payloadContract})`)
+    expect(summary.match(/USDC\.e/g)).toHaveLength(1)
+    expect(summary.match(/on Polygon/g)).toHaveLength(1)
+    expect(summary.match(/0x2791bca1f2de4661ed88a30c99a7a9449aa84174/gi)).toHaveLength(1)
+  })
+
+  it('fallback path: strips an ASCII-ellipsis truncated payload contract like the Unicode form', () => {
+    const executor = new AgentExecutor(createMockVault())
+    const recipient = '0x58C4b38BfA5C2a84f9D3483D04B2C2e8906e5C35'
+    const payloadContract = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'
+    const truncatedContract = '0x2791...4174'
+
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Polygon',
+        txArgs: {
+          chain: 'Polygon',
+          to: recipient,
+          tx: { to: payloadContract, value: '0', data: `0x095ea7b3${'0'.repeat(120)}` },
+        },
+        resolved: {
+          labels: {
+            resolved_amount: `0.05 USDC.e on Polygon (${truncatedContract})`,
+            token_resolved: `USDC.e on Polygon (${truncatedContract})`,
+          },
+        },
+      })
+    ).toBe(true)
+    const summary = executor.getPendingSummary()!
+    expect(summary).toBe(`send 0.05 USDC.e on Polygon to ${recipient} (token contract ${payloadContract})`)
+    expect(summary.match(/0x2791\.\.\.4174/g) ?? []).toHaveLength(0)
+  })
+
+  // Decoded ERC-20 transfers render from calldata and ignore labels entirely
+  // (WYSIWYS), so this label-preservation guarantee is pinned on the
+  // non-transfer contract-send path (approve calldata) where labels still
+  // drive the summary and only exact/truncated CONTRACT copies are stripped.
+  it('preserves a truncated non-contract address in rich token labels', () => {
+    const executor = new AgentExecutor(createMockVault())
+    const recipient = '0x58C4b38BfA5C2a84f9D3483D04B2C2e8906e5C35'
+    const truncatedRecipient = '0x58C4…5C35'
+    const payloadContract = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'
+
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Polygon',
+        txArgs: {
+          chain: 'Polygon',
+          to: recipient,
+          tx: {
+            to: payloadContract,
+            value: '0',
+            data: `0x095ea7b3${'0'.repeat(120)}`,
+          },
+        },
+        resolved: {
+          labels: {
+            resolved_amount: `0.05 USDC.e on Polygon (${truncatedRecipient})`,
+            token_resolved: `USDC.e on Polygon (${truncatedRecipient})`,
+          },
+        },
+      })
+    ).toBe(true)
+    expect(executor.getPendingSummary()).toContain(truncatedRecipient)
+  })
+
+  it('renders rich token, native, and bare token labels without duplicated consent details', () => {
+    const executor = new AgentExecutor(createMockVault())
+
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Polygon',
+        txArgs: { chain: 'Polygon', tx: { to: '0x2791…4174', value: '0' } },
+        resolved: {
+          labels: {
+            resolved_amount: '0.05 USDC.e',
+            token_resolved: 'USDC.e on Polygon (0x2791…4174)',
+            recipient_echo: '0x58C4…5C35',
+          },
+        },
+      })
+    ).toBe(true)
+    const tokenSummary = executor.getPendingSummary()!
+    expect(tokenSummary).toBe('send 0.05 USDC.e on Polygon (0x2791…4174) to 0x58C4…5C35')
+    expect(tokenSummary.match(/USDC\.e/g)).toHaveLength(1)
+    expect(tokenSummary.match(/Polygon/g)).toHaveLength(1)
+    expect(tokenSummary).toContain('(0x2791…4174)')
+
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Polygon',
+        txArgs: { chain: 'Polygon', tx: { to: '0x2791…4174', value: '0' } },
+        resolved: {
+          labels: {
+            resolved_amount: '0.05 USDC.e',
+            token_resolved: 'USDC.e (0x2791…4174)',
+            recipient_echo: '0x58C4…5C35',
+          },
+        },
+      })
+    ).toBe(true)
+    expect(executor.getPendingSummary()).toBe('send 0.05 USDC.e on Polygon (0x2791…4174) to 0x58C4…5C35')
+
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Polygon',
+        txArgs: { chain: 'Polygon', tx: { to: '0x58C4…5C35', value: '1' } },
+        resolved: { labels: { resolved_amount: '0.01 POL', recipient_echo: '0x58C4…5C35' } },
+      })
+    ).toBe(true)
+    expect(executor.getPendingSummary()).toBe('send 0.01 POL on Polygon to 0x58C4…5C35')
+
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Base',
+        txArgs: { chain: 'Base', to: '0xRecipientAddr', amount: '500000', tx: { to: '0xUSDC', value: '0' } },
+        resolved: { labels: { token_resolved: 'USDC' } },
+      })
+    ).toBe(true)
+    expect(executor.getPendingSummary()).toBe('send 500000 USDC on Base to 0xRecipientAddr')
+  })
+
+  it('does not append a rich token label already embedded in the resolved amount', () => {
+    const executor = new AgentExecutor(createMockVault())
+    const tokenLabel = 'USDC.e on Polygon (0x2791…4174)'
+
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Polygon',
+        txArgs: { chain: 'Polygon', tx: { to: '0x2791…4174', value: '0' } },
+        resolved: {
+          labels: {
+            resolved_amount: `0.05 ${tokenLabel}`,
+            token_resolved: tokenLabel,
+            recipient_echo: '0x58C4…5C35',
+          },
+        },
+      })
+    ).toBe(true)
+    const summary = executor.getPendingSummary()!
+    expect(summary).toBe(`send 0.05 ${tokenLabel} to 0x58C4…5C35`)
+    expect(summary.match(/USDC\.e on Polygon \(0x2791…4174\)/g)).toHaveLength(1)
+  })
+
+  it('does not repeat the routed chain when a reordered embedded label names it after the contract', () => {
+    const executor = new AgentExecutor(createMockVault())
+    const tokenLabel = 'USDC.e (0x2791…4174) on Polygon'
+
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Polygon',
+        txArgs: { chain: 'Polygon', tx: { to: '0x2791…4174', value: '0' } },
+        resolved: {
+          labels: {
+            resolved_amount: `0.05 ${tokenLabel}`,
+            token_resolved: tokenLabel,
+            recipient_echo: '0x58C4…5C35',
+          },
+        },
+      })
+    ).toBe(true)
+    const summary = executor.getPendingSummary()!
+    expect(summary).toBe(`send 0.05 ${tokenLabel} to 0x58C4…5C35`)
+    expect(summary.match(/on Polygon/g)).toHaveLength(1)
+  })
+
+  it.each([
+    [
+      'a different primary chain',
+      'USDC.e on Ethereum (0xA0b8…eB48)',
+      'send 0.05 USDC.e on Ethereum (0xA0b8…eB48) on Polygon to 0x58C4…5C35',
+    ],
+    [
+      'the routed chain only in a secondary negated phrase',
+      'USDC.e on Ethereum (0xA0b8…eB48) not on Polygon',
+      'send 0.05 USDC.e on Ethereum (0xA0b8…eB48) not on Polygon on Polygon to 0x58C4…5C35',
+    ],
+    [
+      'the routed chain only in a reordered negated phrase',
+      'USDC.e (0xA0b8…eB48) not on Polygon',
+      'send 0.05 USDC.e (0xA0b8…eB48) not on Polygon on Polygon to 0x58C4…5C35',
+    ],
+  ])('keeps the routed chain when an embedded full token label names %s', (_shape, tokenLabel, expected) => {
+    const executor = new AgentExecutor(createMockVault())
+
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Polygon',
+        txArgs: { chain: 'Polygon', tx: { to: '0xA0b8…eB48', value: '0' } },
+        resolved: {
+          labels: {
+            resolved_amount: `0.05 ${tokenLabel}`,
+            token_resolved: tokenLabel,
+            recipient_echo: '0x58C4…5C35',
+          },
+        },
+      })
+    ).toBe(true)
+    expect(executor.getPendingSummary()).toBe(expected)
+  })
+
+  it.each([
+    [
+      'multi-word asset name',
+      '0.05 USD Coin',
+      'USD Coin on Polygon (0x2791…4174)',
+      'send 0.05 USD Coin USD on Polygon Coin (0x2791…4174) to 0x58C4…5C35',
+    ],
+    [
+      'lowercase chain in label',
+      '0.05 USDC.e',
+      'USDC.e on polygon (0x2791…4174)',
+      'send 0.05 USDC.e on Polygon on polygon (0x2791…4174) to 0x58C4…5C35',
+    ],
+    [
+      'chain named twice in label',
+      '0.05 USDC.e',
+      'USDC.e on Polygon on Polygon (0x2791…4174)',
+      'send 0.05 USDC.e on Polygon on Polygon (0x2791…4174) to 0x58C4…5C35',
+    ],
+  ])('keeps the non-lossy fallback for %s', (_shape, resolvedAmount, tokenLabel, expected) => {
+    const executor = new AgentExecutor(createMockVault())
+
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Polygon',
+        txArgs: { chain: 'Polygon', tx: { to: '0x2791…4174', value: '0' } },
+        resolved: {
+          labels: {
+            resolved_amount: resolvedAmount,
+            token_resolved: tokenLabel,
+            recipient_echo: '0x58C4…5C35',
+          },
+        },
+      })
+    ).toBe(true)
+    const summary = executor.getPendingSummary()!
+    expect(summary).toBe(expected)
+    expect(summary).toContain('(0x2791…4174)')
+  })
+
+  it('never drops label details it cannot parse — unexpected shapes stay verbatim', () => {
+    const executor = new AgentExecutor(createMockVault())
+    const store = (token_resolved: string) =>
+      executor.storeServerTransaction({
+        chain: 'Polygon',
+        txArgs: { chain: 'Polygon', tx: { to: '0x2791…4174', value: '0' } },
+        resolved: {
+          labels: { resolved_amount: '0.05 USDC.e', token_resolved, recipient_echo: '0x58C4…5C35' },
+        },
+      })
+
+    // Contract before the chain: the disclosure must survive re-ordering.
+    expect(store('USDC.e (0x2791…4174) on Polygon')).toBe(true)
+    expect(executor.getPendingSummary()).toBe('send 0.05 USDC.e on Polygon (0x2791…4174) to 0x58C4…5C35')
+
+    // Trailing annotation after the contract: keep everything.
+    expect(store('USDC.e on Polygon (0x2791…4174) [bridged]')).toBe(true)
+    expect(executor.getPendingSummary()).toBe('send 0.05 USDC.e on Polygon (0x2791…4174) [bridged] to 0x58C4…5C35')
+
+    // Label claims a different chain than the routed transaction: the routed
+    // chain anchors the summary, but the conflicting claim must stay visible.
+    expect(store('USDC.e on Ethereum (0xA0b8…eB48)')).toBe(true)
+    const mismatch = executor.getPendingSummary()!
+    expect(mismatch).toBe('send 0.05 USDC.e on Polygon on Ethereum (0xA0b8…eB48) to 0x58C4…5C35')
+    expect(mismatch).toContain('on Ethereum')
+    expect(mismatch).toContain('(0xA0b8…eB48)')
   })
 })
 
