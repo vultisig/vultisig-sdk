@@ -125,6 +125,44 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.DEFAULT_CHAINS).toEqual(['Bitcoin', 'Ethereum', 'THORChain', 'Solana', 'BSC'])
   })
 
+  it('re-exports the RN-safe seedphrase helper family from the RN entrypoint without the eager discovery service', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const types = await import('../../../../src/seedphrase/types')
+    const language = await import('../../../../src/seedphrase/languageDetection')
+    const validator = await import('../../../../src/seedphrase/SeedphraseValidator')
+    const deriver = await import('../../../../src/seedphrase/MasterKeyDeriver')
+    const constants = await import('../../../../src/constants')
+
+    expect(rn.BIP39_LANGUAGES).toBe(types.BIP39_LANGUAGES)
+    expect(rn.SEEDPHRASE_WORD_COUNTS).toBe(types.SEEDPHRASE_WORD_COUNTS)
+    expect(rn.BIP39_WORDLISTS).toBe(language.BIP39_WORDLISTS)
+    expect(rn.detectMnemonicLanguage).toBe(language.detectMnemonicLanguage)
+    expect(rn.findInvalidWords).toBe(language.findInvalidWords)
+    expect(rn.findInvalidWordsAcrossAllLanguages).toBe(language.findInvalidWordsAcrossAllLanguages)
+    expect(rn.getWordlist).toBe(language.getWordlist)
+    expect(rn.normalizeMnemonic).toBe(language.normalizeMnemonic)
+    expect(rn.cleanMnemonic).toBe(validator.cleanMnemonic)
+    expect(rn.SeedphraseValidator).toBe(validator.SeedphraseValidator)
+    expect(rn.validateSeedphrase).toBe(validator.validateSeedphrase)
+    expect(rn.MasterKeyDeriver).toBe(deriver.MasterKeyDeriver)
+    expect(rn.cosmosPathTerra).toBe(deriver.cosmosPathTerra)
+    expect(rn.assertSeedphraseImportSupportsChains).toBe(constants.assertSeedphraseImportSupportsChains)
+    expect(rn.getUnsupportedSeedphraseImportChains).toBe(constants.getUnsupportedSeedphraseImportChains)
+    expect(rn.isSeedphraseImportSupportedChain).toBe(constants.isSeedphraseImportSupportedChain)
+    expect(rn.SEEDPHRASE_IMPORT_SUPPORTED_CHAINS).toBe(constants.SEEDPHRASE_IMPORT_SUPPORTED_CHAINS)
+    expect(rn.SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS).toBe(constants.SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS)
+
+    expect('ChainDiscoveryService' in rn).toBe(false)
+    expect('TransportError' in rn).toBe(false)
+
+    expect(rn.normalizeMnemonic('  ABANDON\nABANDON  ')).toBe('abandon abandon')
+    expect(
+      rn.detectMnemonicLanguage(
+        'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'
+      )
+    ).toBe('english')
+  })
+
   it('exports the canonical Cosmos fee helpers, gas-limit tables, and cosmos chain subsets from the RN entry', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
@@ -461,6 +499,8 @@ describe('RN entry exposes pure chain helpers and registry', () => {
     expect(rn.buildTxReadyFromToolOutput).toBe(tx.buildTxReadyFromToolOutput)
     expect(rn.payloadLooksSignable).toBe(tx.payloadLooksSignable)
     expect(rn.CLI_SIGNABLE_FLAT_TOOLS).toBe(tx.CLI_SIGNABLE_FLAT_TOOLS)
+    expect(rn.parseTxReadyEnvelope).toBe(tx.parseTxReadyEnvelope)
+    expect(rn.TxReadyParseError).toBe(tx.TxReadyParseError)
     expect(rn.decodeFromToolResult).toBe(decode.decodeFromToolResult)
     expect(rn.decodeCosmosTx).toBe(decode.decodeCosmosTx)
     expect(rn.decodeEvmTx).toBe(decode.decodeEvmTx)

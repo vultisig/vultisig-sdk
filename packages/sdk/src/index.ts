@@ -41,7 +41,7 @@ export {
 export { ValidationHelpers } from './utils/validation'
 
 // ============================================================================
-// PUBLIC API - Conversion / Normalization Utilities (vault-free)
+// PUBLIC API - Transaction Preparation / Normalization Utilities (vault-free)
 // ============================================================================
 
 export type {
@@ -139,8 +139,26 @@ export { isValidTokenId } from '@vultisig/core-chain/utils/isValidTokenId'
 // multi-tx build results (approve+swap, generic transactions[]) into ordered
 // legs. Ports the normalize/split half of the agent-backend's
 // enrichBuildResult + splitMultiTx; SSE/Redis sequencing stays in the backend.
-export type { NormalizeArgs, NormalizedTx, SignableTxCandidatePayload, ToolOutputCandidate, TxReadyPayload } from './tx'
-export type { PollTxStatusUntilFinalParams, PollTxStatusUntilFinalResult } from './tx'
+export type {
+  NormalizeArgs,
+  NormalizedTx,
+  ParsedTxReadyEnvelope,
+  ParsedTxReadyRawEvm,
+  ParsedTxReadySend,
+  ParsedTxReadyThorLpDeposit,
+  ParsedTxReadyThorSwapDeposit,
+  ParseTxReadyOptions,
+  PollTxStatusUntilFinalParams,
+  PollTxStatusUntilFinalResult,
+  SignableTxCandidatePayload,
+  ToolOutputCandidate,
+  TxReadyEnvelope,
+  TxReadyEvmLeg,
+  TxReadyObject,
+  TxReadyParseErrorCode,
+  TxReadyPayload,
+  TxReadyTxArgs,
+} from './tx'
 export {
   asRecord,
   buildTxReadyFromToolOutput,
@@ -151,13 +169,15 @@ export {
   deriveToolOutputCandidate,
   DIVERGENT_FIELD_TOOLS,
   normalizeTx,
+  parseTxReadyEnvelope,
   payloadLooksSignable,
   POLYMARKET_DEPOSIT_TOOL,
   POLYMARKET_SETUP_TRADING_TOOL,
+  pollTxStatusUntilFinal,
   splitMultiTx,
   TxNormalizeError,
+  TxReadyParseError,
 } from './tx'
-export { pollTxStatusUntilFinal } from './tx'
 
 // ============================================================================
 // PUBLIC API - Canonical Contract / Token Registry (knownContracts)
