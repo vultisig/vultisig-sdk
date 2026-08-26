@@ -35,7 +35,8 @@ const identity: VaultIdentity = {
 const senderAddress = '0x000000000000000000000000000000000000abcd'
 const contractAddress = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
 
-const makePayload = () => ({
+const makePayload = (toAmount = '0') => ({
+  toAmount,
   blockchainSpecific: {
     case: 'ethereumSpecific' as const,
     value: {
@@ -90,7 +91,7 @@ describe('prepareRawEvmTxFromKeys', () => {
   })
 
   it('preserves a value-bearing raw call and accepts 0x-prefixed integers', async () => {
-    await prepareRawEvmTxFromKeys(identity, {
+    const payload = await prepareRawEvmTxFromKeys(identity, {
       chain: Chain.Polygon,
       senderAddress,
       tx: {
@@ -105,6 +106,23 @@ describe('prepareRawEvmTxFromKeys', () => {
     expect(mockBuildSendKeysignPayload).toHaveBeenCalledWith(
       expect.objectContaining({ amount: 1_000_000_000_000_000_000n, memo: '0xd0e30db0' })
     )
+    expect(payload.toAmount).toBe('1000000000000000000')
+  })
+
+  it('restores the exact raw value even if the shared send builder clamps the native amount', async () => {
+    mockBuildSendKeysignPayload.mockImplementationOnce(async () => makePayload('777'))
+
+    const payload = await prepareRawEvmTxFromKeys(identity, {
+      chain: Chain.Base,
+      senderAddress,
+      tx: {
+        to: contractAddress,
+        value: '1000',
+        data: '0xd0e30db0',
+      },
+    })
+
+    expect(payload.toAmount).toBe('1000')
   })
 
   it('rejects non-EVM chains before loading WalletCore', async () => {

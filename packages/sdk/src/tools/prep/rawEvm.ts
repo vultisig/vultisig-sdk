@@ -113,6 +113,11 @@ export const prepareRawEvmTxFromKeys = async (
     libType: identity.libType,
   })
 
+  // `buildSendKeysignPayload` applies send-style amount refinement for native-fee
+  // coins. A caller-supplied raw envelope must preserve its explicit `tx.value`
+  // exactly rather than silently clamping it to `balance - estimatedFee`.
+  payload.toAmount = value.toString()
+
   const evmSpecific = getBlockchainSpecificValue(payload.blockchainSpecific, 'ethereumSpecific')
   if (gasLimit !== undefined) evmSpecific.gasLimit = gasLimit.toString()
   if (maxFeePerGas !== undefined) evmSpecific.maxFeePerGasWei = maxFeePerGas.toString()
