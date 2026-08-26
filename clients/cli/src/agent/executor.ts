@@ -1236,7 +1236,7 @@ export class AgentExecutor {
   /**
    * Sign and broadcast a server-built EVM transaction (raw EVM tx from
    * tx_ready SSE). The SDK raw-envelope helper owns zero-value calldata,
-   * nonce, gas-limit, and fee mapping so this path never patches a payload.
+   * gas-limit, and fee mapping; the CLI reconciles its nonce with local state.
    */
   private async signEvmServerTx(
     serverTxData: any,
@@ -1295,6 +1295,9 @@ export class AgentExecutor {
           nonce: swapTx.nonce,
         },
       })
+
+      // Reconcile a server-provided nonce with locally tracked broadcasts.
+      await this.patchEvmNonce(chain, keysignPayload)
 
       // Extract message hashes and sign
       const messageHashes = await this.vault.extractMessageHashes(keysignPayload)

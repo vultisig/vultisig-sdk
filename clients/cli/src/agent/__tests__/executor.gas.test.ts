@@ -16,8 +16,10 @@ type EvmNonceAccess = {
   fetchEvmPendingNonce(chain: Chain): Promise<bigint | null>
   patchEvmNonce(chain: Chain, payload: ReturnType<typeof createEvmPayload>): Promise<void>
   stateStore: {
+    acquireChainLock: ReturnType<typeof vi.fn>
     clearEvmState: ReturnType<typeof vi.fn>
     getNextEvmNonce: ReturnType<typeof vi.fn>
+    recordEvmNonce: ReturnType<typeof vi.fn>
   }
 }
 
@@ -54,8 +56,10 @@ function createSigningVault(payload: ReturnType<typeof createEvmPayload>): Vault
 function withNonceState(executor: AgentExecutor, nextNonce: bigint) {
   const access = executor as unknown as EvmNonceAccess
   access.stateStore = {
+    acquireChainLock: vi.fn().mockResolvedValue(vi.fn()),
     clearEvmState: vi.fn(),
     getNextEvmNonce: vi.fn().mockReturnValue(nextNonce),
+    recordEvmNonce: vi.fn(),
   }
   return access
 }
@@ -145,6 +149,47 @@ describe('AgentExecutor raw EVM envelope preparation', () => {
     expect(vault.sign).toHaveBeenCalledOnce()
     expect(vault.broadcastTx).toHaveBeenCalledOnce()
     expect(result.tx_hash).toBe('0xtxhash')
+  })
+
+  it('reconciles a stale raw nonce with locally pending transactions before signing', async () => {
+    const payload = createEvmPayload()
+    payload.blockchainSpecific.value.nonce = 7n
+    const vault = createSigningVault(payload)
+    const executor = new AgentExecutor(vault)
+    const nonceAccess = withNonceState(executor, 8n)
+    const fetchMock = vi.fn().mockResolvedValue({
+      json: vi.fn().mockResolvedValue({
+        jsonrpc: '2.0',
+        result: '0x8',
+      }),
+      ok: true,
+      status: 200,
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await (executor as unknown as EvmSigner).signEvmServerTx(
+      {
+        chain: Chain.Ethereum,
+        tx: {
+          data: '0x',
+          gasLimit: 21_000n,
+          maxFeePerGas: 3_000_000_000n,
+          maxPriorityFeePerGas: 1_000_000_000n,
+          nonce: 7n,
+          to: '0xrecipient',
+          value: 1n,
+        },
+      },
+      Chain.Ethereum,
+      {}
+    )
+
+    expect(payload.blockchainSpecific.value.nonce).toBe(8n)
+    expect(vault.extractMessageHashes).toHaveBeenCalledWith(payload)
+    expect(vault.sign).toHaveBeenCalledWith(expect.objectContaining({ transaction: payload }), {})
+    expect(nonceAccess.stateStore.recordEvmNonce).toHaveBeenCalledWith(Chain.Ethereum, 8n)
+    expect(nonceAccess.stateStore.clearEvmState).not.toHaveBeenCalled()
+    expect(fetchMock).toHaveBeenCalledOnce()
   })
 })
 
