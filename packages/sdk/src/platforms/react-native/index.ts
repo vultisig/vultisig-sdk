@@ -158,9 +158,45 @@ export { deriveAddress, getCoinType, getPublicKey, isValidAddress, isValidTokenI
 // MPC keysign (uses MpcEngine — no direct WASM imports)
 export { keysign } from '@vultisig/core-mpc/keysign'
 
-// Seedphrase validation (uses @scure/bip39, RN-compatible)
-export { validateSeedphrase } from '../../seedphrase/SeedphraseValidator'
-export { SEEDPHRASE_WORD_COUNTS } from '../../seedphrase/types'
+// Seedphrase helpers, types, and import policy.
+// Re-export the RN-safe mnemonic / validation / derivation surface directly
+// from the underlying modules instead of the canonical ../../seedphrase barrel.
+// That barrel also exports ChainDiscoveryService, whose static import graph
+// reaches the eager core getCoinBalance dispatcher and pulls Hermes-hostile
+// Solana / Polkadot balance resolver deps into module init.
+export {
+  assertSeedphraseImportSupportsChains,
+  getUnsupportedSeedphraseImportChains,
+  isSeedphraseImportSupportedChain,
+  SEEDPHRASE_IMPORT_SUPPORTED_CHAINS,
+  SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS,
+} from '../../constants'
+export {
+  BIP39_WORDLISTS,
+  detectMnemonicLanguage,
+  findInvalidWords,
+  findInvalidWordsAcrossAllLanguages,
+  getWordlist,
+  normalizeMnemonic,
+} from '../../seedphrase/languageDetection'
+export type { ChainPrivateKey, DeriveChainPrivateKeysOptions, DerivedChainKey } from '../../seedphrase/MasterKeyDeriver'
+export { cosmosPathTerra, MasterKeyDeriver } from '../../seedphrase/MasterKeyDeriver'
+export { cleanMnemonic, SeedphraseValidator, validateSeedphrase } from '../../seedphrase/SeedphraseValidator'
+export type {
+  Bip39Language,
+  ChainDiscoveryPhase,
+  ChainDiscoveryProgress,
+  ChainDiscoveryResult,
+  CreateFastVaultFromSeedphraseOptions,
+  CreateSecureVaultFromSeedphraseOptions,
+  DerivedMasterKeys,
+  JoinSecureVaultOptions,
+  SeedphraseImportResult,
+  SeedphraseValidation,
+  SeedphraseValidationOptions,
+  SeedphraseWordCount,
+} from '../../seedphrase/types'
+export { BIP39_LANGUAGES, SEEDPHRASE_WORD_COUNTS } from '../../seedphrase/types'
 
 // Vault-backup import/export crypto contract. The RN-safe implementations live
 // under this platform surface already, but first-party mobile consumers could
@@ -823,7 +859,20 @@ export async function fiatToAmount(...args: unknown[]) {
 export type { ParseChainResult, ParseTickerResult } from '../../tools/parse'
 export { chainSchema, parseChain, parseTicker, tickerSchema } from '../../tools/parse'
 export type { NormalizeArgs, NormalizedTx } from '../../tx'
-export { normalizeTx, splitMultiTx, TxNormalizeError } from '../../tx'
+export type {
+  ParsedTxReadyEnvelope,
+  ParsedTxReadyRawEvm,
+  ParsedTxReadySend,
+  ParsedTxReadyThorLpDeposit,
+  ParsedTxReadyThorSwapDeposit,
+  ParseTxReadyOptions,
+  TxReadyEnvelope,
+  TxReadyEvmLeg,
+  TxReadyObject,
+  TxReadyParseErrorCode,
+  TxReadyTxArgs,
+} from '../../tx'
+export { normalizeTx, parseTxReadyEnvelope, splitMultiTx, TxNormalizeError, TxReadyParseError } from '../../tx'
 export { computePersonalSignHash, formatEcdsaSignature65 } from '../../utils/eip191'
 export { coerceEip712ChainId, computeEip712Hash, toCanonicalEvmSignature } from '../../utils/eip712'
 export {
