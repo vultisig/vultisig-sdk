@@ -117,6 +117,15 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(sdkRn.JUPITER_PLATFORM_FEE_BPS).toBe(50)
   })
 
+  it('exports the documented bridge and gas namespace handles on the RN entrypoint', async () => {
+    const bridgeTools = await import('../../../../src/tools/bridge')
+    const gasTools = await import('../../../../src/tools/gas')
+
+    expect(sdkRn.bridge.getCctpChain).toBe(bridgeTools.getCctpChain)
+    expect(sdkRn.gas.compareCosts).toBe(gasTools.compareCosts)
+    expect(sdkRn.gas.cosmos.getCosmosGasLimit).toBe(gasTools.getCosmosGasLimit)
+  })
+
   it('exports default chain canonicals on the RN entrypoint', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 

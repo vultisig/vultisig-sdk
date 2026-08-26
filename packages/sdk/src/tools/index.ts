@@ -47,6 +47,11 @@ export { decode, decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from './dec
 // DEX primitives (read-only / pure math + on-chain quotes — no signing, no broadcast)
 export * as dex from './dex'
 
+// Bridge — Circle CCTP unsigned bridge/claim calldata builders
+import * as bridge from './bridge'
+
+export { bridge }
+
 // Gas / fee fan-out
 export type { CompareCostsEntry, CompareCostsParams, CompareCostsResult, CompareCostsSkipped, GasTxType } from './gas'
 export { compareCosts, DEFAULT_COMPARE_CHAINS, GAS_UNITS, getChainGasPriceGwei } from './gas'
