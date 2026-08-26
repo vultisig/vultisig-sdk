@@ -17,6 +17,7 @@ import { withoutUndefinedFields } from '@vultisig/lib-utils/record/withoutUndefi
 import { Minutes } from '@vultisig/lib-utils/time'
 import { convertDuration } from '@vultisig/lib-utils/time/convertDuration'
 
+import { DklsMaliciousPartyError, getDklsAbortAndBanPartyCode } from './error'
 import { initializeMpcLib } from '../lib/initialize'
 import { makeSignSession, SignSession } from '../lib/signSession'
 import { deleteMpcRelayMessage } from '../message/relay/delete'
@@ -162,7 +163,21 @@ export const keysign = async ({
         )
       }
 
-      const accepted = session.inputMessage(fromMpcServerMessage(msg.body, hexEncryptionKey))
+      const accepted = (() => {
+        try {
+          return session.inputMessage(fromMpcServerMessage(msg.body, hexEncryptionKey))
+        } catch (error) {
+          if (signatureAlgorithm === 'ecdsa') {
+            const code = getDklsAbortAndBanPartyCode(error)
+            if (code !== undefined) {
+              throw new DklsMaliciousPartyError(code)
+            }
+          }
+
+          throw error
+        }
+      })()
+
       if (accepted) {
         processedMessages[cacheKey] = true
         return
