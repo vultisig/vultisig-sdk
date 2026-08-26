@@ -17,8 +17,14 @@ const dklsAbortAndBanPartyMinCode = 100
 const dklsAbortAndBanPartyMaxCode = 109
 
 export class DklsMaliciousPartyError extends Error {
-  // 1-based index into the setup message's party order (devices: [localPartyId, ...peers]);
-  // only the initiating device knows that order, see keysign()'s `partyId` resolution.
+  // dkls23-rs embeds the sender's keyshare-assigned party_id (fixed at keygen time),
+  // not their index in the *current* signing session's device order. `partyId` below
+  // is resolved against this call's `[localPartyId, ...peers]` order as a best effort:
+  // it's correct for 2-of-2 FastVault (keygen and signing always use the same 2
+  // devices), but is NOT reliable for N-of-M SecureVault, where a later signing
+  // session can involve a different subset/order of devices than keygen did. Treat
+  // `partyId` as a hint, not a guarantee, until it's resolved from the vault's
+  // original keygen party order (see vault.signers) instead.
   public readonly partyIndex: number
   public partyId?: string
 

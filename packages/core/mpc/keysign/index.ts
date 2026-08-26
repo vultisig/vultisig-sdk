@@ -51,9 +51,12 @@ const rethrowKeysignError = (
     const code = getDklsAbortAndBanPartyCode(error)
     if (code !== undefined) {
       const maliciousPartyError = new DklsMaliciousPartyError(code)
-      // Only the initiator's setup message defines this party order; a joiner's
-      // own [localPartyId, ...peers] generally differs, so resolving there would
-      // misattribute the banned party.
+      // Best-effort only: partyIndex is the banned party's keygen-time party_id
+      // (see DklsMaliciousPartyError), which this session's `devices` order matches
+      // only when it's identical to keygen's — always true for 2-of-2 FastVault, not
+      // guaranteed for N-of-M SecureVault. Also only the initiator's setup message
+      // defines this session's party order; a joiner's own [localPartyId, ...peers]
+      // generally differs, so resolving there would misattribute the banned party.
       if (isInitiatingDevice) {
         maliciousPartyError.partyId = devices[maliciousPartyError.partyIndex - 1]
       }
