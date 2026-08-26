@@ -472,14 +472,15 @@ export {
   resolveEns,
 } from '../../tools/evm'
 
-// EVM chainId ↔ chain mapping plus the canonical priority-fee sanity clamp.
+// EVM chainId ↔ chain mapping plus the canonical numeric accessor and
+// priority-fee sanity clamp.
 // Same single source of truth exported from the generic entry (src/index.ts)
 // — the RN allow-list omitted these so RN consumers (Station) had to
 // hand-maintain their own chainId table and fee sanity policy, risking both
 // the Hyperliquid 998/999 client↔server chainId drift class and EVM fee-policy
 // forks. Pure lookup/policy helpers, no chain-client deps, so safe as static
 // re-exports.
-export { getEvmChainByChainId, getEvmChainId } from '@vultisig/core-chain/chains/evm/chainInfo'
+export { getEvmChainByChainId, getEvmChainId, getEvmNumericChainId } from '@vultisig/core-chain/chains/evm/chainInfo'
 export { clampEvmPriorityFee } from '@vultisig/core-chain/tx/fee/evm/clampEvmPriorityFee'
 
 // Gas / fee primitives (read-only — uses global `fetch` + type-only imports,

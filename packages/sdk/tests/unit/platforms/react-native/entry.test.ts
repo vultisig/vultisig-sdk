@@ -552,9 +552,11 @@ describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
     expect(typeof rn.getEvmChainId).toBe('function')
+    expect(typeof rn.getEvmNumericChainId).toBe('function')
     expect(typeof rn.getEvmChainByChainId).toBe('function')
     expect(typeof rn.clampEvmPriorityFee).toBe('function')
     expect(rn.getEvmChainId(rn.Chain.Ethereum)).toBe('0x1')
+    expect(rn.getEvmNumericChainId(rn.Chain.Ethereum)).toBe(1)
     expect(rn.getEvmChainByChainId('0x1')).toBe(rn.Chain.Ethereum)
     expect(
       rn.clampEvmPriorityFee(rn.Chain.Base as Parameters<typeof rn.clampEvmPriorityFee>[0], 75n * 1_000_000_000n)
