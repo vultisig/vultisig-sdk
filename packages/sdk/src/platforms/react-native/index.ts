@@ -50,6 +50,7 @@ import { configureWasm } from '../../context/wasmRuntime'
 import { configureCrypto } from '../../crypto'
 import * as cosmos from '../../tools/cosmos'
 import * as evm from '../../tools/evm'
+import type { prepareRawEvmTxFromKeys as PrepareRawEvmTxFromKeys } from '../../tools/prep/rawEvm'
 import * as token from '../../tools/token'
 import { ReactNativeCrypto } from './crypto'
 import { ReactNativeStorage } from './storage'
@@ -435,7 +436,7 @@ export async function prepareContractCallTxFromKeys(...args: unknown[]) {
   return mod.prepareContractCallTxFromKeys(...(args as Parameters<typeof mod.prepareContractCallTxFromKeys>))
 }
 
-export async function prepareRawEvmTxFromKeys(...args: unknown[]) {
+export async function prepareRawEvmTxFromKeys(...args: Parameters<typeof PrepareRawEvmTxFromKeys>) {
   const mod = await import('../../tools/prep/rawEvm')
   return mod.prepareRawEvmTxFromKeys(...(args as Parameters<typeof mod.prepareRawEvmTxFromKeys>))
 }
