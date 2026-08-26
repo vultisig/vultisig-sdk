@@ -22,6 +22,8 @@ export type { VaultConfig, VaultSaveOptions } from './vault'
 export {
   BroadcastPartialFailureError,
   FastVault,
+  hasServer,
+  isServer,
   SecureVault,
   VaultBase,
   VaultConflictError,
@@ -39,7 +41,7 @@ export {
 export { ValidationHelpers } from './utils/validation'
 
 // ============================================================================
-// PUBLIC API - Conversion / Normalization Utilities (vault-free)
+// PUBLIC API - Transaction Preparation / Normalization Utilities (vault-free)
 // ============================================================================
 
 export type {
@@ -137,8 +139,31 @@ export { isValidTokenId } from '@vultisig/core-chain/utils/isValidTokenId'
 // multi-tx build results (approve+swap, generic transactions[]) into ordered
 // legs. Ports the normalize/split half of the agent-backend's
 // enrichBuildResult + splitMultiTx; SSE/Redis sequencing stays in the backend.
-export type { NormalizeArgs, NormalizedTx } from './tx'
-export { normalizeTx, splitMultiTx, TxNormalizeError } from './tx'
+export type {
+  NormalizeArgs,
+  NormalizedTx,
+  ParsedTxReadyEnvelope,
+  ParsedTxReadyRawEvm,
+  ParsedTxReadySend,
+  ParsedTxReadyThorLpDeposit,
+  ParsedTxReadyThorSwapDeposit,
+  ParseTxReadyOptions,
+  PollTxStatusUntilFinalParams,
+  PollTxStatusUntilFinalResult,
+  TxReadyEnvelope,
+  TxReadyEvmLeg,
+  TxReadyObject,
+  TxReadyParseErrorCode,
+  TxReadyTxArgs,
+} from './tx'
+export {
+  normalizeTx,
+  parseTxReadyEnvelope,
+  pollTxStatusUntilFinal,
+  splitMultiTx,
+  TxNormalizeError,
+  TxReadyParseError,
+} from './tx'
 
 // ============================================================================
 // PUBLIC API - Canonical Contract / Token Registry (knownContracts)
