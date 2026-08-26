@@ -213,13 +213,13 @@ export const keysign = async ({
     throw error
   }
 
-  const signature = await (async () => {
-    try {
-      return await session.finish()
-    } catch (error) {
-      rethrowKeysignError(error, signatureAlgorithm)
-    }
-  })()
+  let signature: Uint8Array
+  try {
+    signature = await Promise.resolve(session.finish())
+  } catch (error) {
+    rethrowKeysignError(error, signatureAlgorithm)
+    throw error
+  }
 
   const result: KeysignSignature =
     signatureAlgorithm === 'mldsa'
