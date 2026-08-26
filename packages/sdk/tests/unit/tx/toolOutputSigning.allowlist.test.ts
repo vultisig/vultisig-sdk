@@ -25,7 +25,7 @@ import {
   DIVERGENT_FIELD_TOOLS,
   POLYMARKET_DEPOSIT_TOOL,
   POLYMARKET_SETUP_TRADING_TOOL,
-} from '../toolOutputSigning'
+} from '../../../src/tx/toolOutputSigning'
 
 describe('CLI_SIGNABLE_FLAT_TOOLS', () => {
   it('contains the polymarket flat builders (their calldata rides tool-output)', () => {
