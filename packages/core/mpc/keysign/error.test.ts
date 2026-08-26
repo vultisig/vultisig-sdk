@@ -16,6 +16,10 @@ describe('getDklsAbortAndBanPartyCode', () => {
     expect(getDklsAbortAndBanPartyCode(new Error('signSessionInputMessage failed (code: 103)'))).toBe(103)
   })
 
+  it('extracts iOS native error code messages', () => {
+    expect(getDklsAbortAndBanPartyCode(new Error('signSessionFinish failed with error code 103'))).toBe(103)
+  })
+
   it('extracts symbolic DKLS abort-and-ban constants', () => {
     expect(getDklsAbortAndBanPartyCode('LIB_ABORT_PROTOCOL_AND_BAN_PARTY_10')).toBe(109)
   })

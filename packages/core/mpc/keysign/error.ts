@@ -37,7 +37,8 @@ export const getDklsAbortAndBanPartyCode = (error: unknown): number | undefined 
 
   const message = error instanceof Error ? error.message : String(error)
   const code = Number(
-    message.match(/\bcode:\s*(\d+)\b/)?.[1] ?? message.match(/\bLIB_ABORT_PROTOCOL_AND_BAN_PARTY_(\d+)\b/)?.[1]
+    message.match(/\b(?:code:\s*|error code\s+)(\d+)\b/)?.[1] ??
+      message.match(/\bLIB_ABORT_PROTOCOL_AND_BAN_PARTY_(\d+)\b/)?.[1]
   )
 
   if (Number.isInteger(code) && code >= 1 && code <= 10 && message.includes('LIB_ABORT_PROTOCOL_AND_BAN_PARTY_')) {

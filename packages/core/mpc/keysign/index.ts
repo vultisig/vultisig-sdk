@@ -41,6 +41,17 @@ type KeysignInput = {
 
 const maxInboundWaitTime: Minutes = 3
 
+const rethrowKeysignError = (error: unknown, signatureAlgorithm: SignatureAlgorithm): never => {
+  if (signatureAlgorithm === 'ecdsa') {
+    const code = getDklsAbortAndBanPartyCode(error)
+    if (code !== undefined) {
+      throw new DklsMaliciousPartyError(code)
+    }
+  }
+
+  throw error
+}
+
 export const keysign = async ({
   keyShare,
   signatureAlgorithm,
@@ -167,14 +178,7 @@ export const keysign = async ({
         try {
           return session.inputMessage(fromMpcServerMessage(msg.body, hexEncryptionKey))
         } catch (error) {
-          if (signatureAlgorithm === 'ecdsa') {
-            const code = getDklsAbortAndBanPartyCode(error)
-            if (code !== undefined) {
-              throw new DklsMaliciousPartyError(code)
-            }
-          }
-
-          throw error
+          rethrowKeysignError(error, signatureAlgorithm)
         }
       })()
 
@@ -209,7 +213,13 @@ export const keysign = async ({
     throw error
   }
 
-  const signature = await session.finish()
+  const signature = await (async () => {
+    try {
+      return await session.finish()
+    } catch (error) {
+      rethrowKeysignError(error, signatureAlgorithm)
+    }
+  })()
 
   const result: KeysignSignature =
     signatureAlgorithm === 'mldsa'
