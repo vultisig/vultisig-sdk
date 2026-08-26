@@ -13,10 +13,10 @@
     "expo-module.config.json"
   ],
   "peerDependencies": {
-    "expo": "^56.0.8"
+    "expo": ">=56.0.12"
   },
   "devDependencies": {
-    "expo": "^56.0.12"
+    "expo": ">=56.0.12"
   },
   "dependencies": {
     "@expo/config-plugins": "^56.0.8",
