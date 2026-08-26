@@ -23,6 +23,10 @@ type EvmNonceAccess = {
   }
 }
 
+type EvmGasAccess = {
+  patchEvmGas(chain: Chain, payload: ReturnType<typeof createEvmPayload>): Promise<void>
+}
+
 function createEvmPayload() {
   return {
     blockchainSpecific: {
@@ -64,18 +68,21 @@ function withNonceState(executor: AgentExecutor, nextNonce: bigint) {
   return access
 }
 
+function stubGasRefresh(executor: AgentExecutor) {
+  return vi.spyOn(executor as unknown as EvmGasAccess, 'patchEvmGas').mockResolvedValue(undefined)
+}
+
 afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
 
 describe('AgentExecutor raw EVM envelope preparation', () => {
-  it('passes the raw transaction fields to the SDK helper without post-build RPC mutation', async () => {
+  it('passes raw transaction fields to the SDK helper and refreshes gas before hashing', async () => {
     const payload = createEvmPayload()
     const vault = createSigningVault(payload)
     const executor = new AgentExecutor(vault)
-    const fetchMock = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
+    const patchGas = stubGasRefresh(executor)
 
     const result = await (executor as unknown as EvmSigner).signEvmServerTx(
       {
@@ -109,13 +116,17 @@ describe('AgentExecutor raw EVM envelope preparation', () => {
     expect(vault.sign).toHaveBeenCalledOnce()
     expect(vault.broadcastTx).toHaveBeenCalledOnce()
     expect(result.tx_hash).toBe('0xtxhash')
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(patchGas).toHaveBeenCalledWith(Chain.Ethereum, payload)
+    expect(patchGas.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(vault.extractMessageHashes).mock.invocationCallOrder[0]
+    )
   })
 
   it('preserves value-bearing camelCase main-call fields through sign and broadcast', async () => {
     const payload = createEvmPayload()
     const vault = createSigningVault(payload)
     const executor = new AgentExecutor(vault)
+    stubGasRefresh(executor)
 
     const result = await (executor as unknown as EvmSigner).signEvmServerTx(
       {
@@ -157,6 +168,7 @@ describe('AgentExecutor raw EVM envelope preparation', () => {
     const vault = createSigningVault(payload)
     const executor = new AgentExecutor(vault)
     const nonceAccess = withNonceState(executor, 8n)
+    stubGasRefresh(executor)
     const fetchMock = vi.fn().mockResolvedValue({
       json: vi.fn().mockResolvedValue({
         jsonrpc: '2.0',

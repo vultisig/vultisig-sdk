@@ -1299,6 +1299,10 @@ export class AgentExecutor {
       // Reconcile a server-provided nonce with locally tracked broadcasts.
       await this.patchEvmNonce(chain, keysignPayload)
 
+      // Refresh the fee envelope immediately before hashing/signing so a raw
+      // transaction prepared earlier is not underpriced after base-fee drift.
+      await this.patchEvmGas(chain, keysignPayload)
+
       // Extract message hashes and sign
       const messageHashes = await this.vault.extractMessageHashes(keysignPayload)
 
