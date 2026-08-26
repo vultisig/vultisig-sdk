@@ -1315,6 +1315,16 @@
       "import": "./dist/coin/price/evm/getErc20Prices.js",
       "default": "./dist/coin/price/evm/getErc20Prices.js"
     },
+    "./coin/price/evm/getEvmVaultTokenPrices": {
+      "types": "./dist/coin/price/evm/getEvmVaultTokenPrices.d.ts",
+      "import": "./dist/coin/price/evm/getEvmVaultTokenPrices.js",
+      "default": "./dist/coin/price/evm/getEvmVaultTokenPrices.js"
+    },
+    "./coin/price/evm/getLifiTokenPrices": {
+      "types": "./dist/coin/price/evm/getLifiTokenPrices.d.ts",
+      "import": "./dist/coin/price/evm/getLifiTokenPrices.js",
+      "default": "./dist/coin/price/evm/getLifiTokenPrices.js"
+    },
     "./coin/price/getCoinPrices": {
       "types": "./dist/coin/price/getCoinPrices.d.ts",
       "import": "./dist/coin/price/getCoinPrices.js",
@@ -1324,6 +1334,11 @@
       "types": "./dist/coin/price/getCoinPricesWithChange.d.ts",
       "import": "./dist/coin/price/getCoinPricesWithChange.js",
       "default": "./dist/coin/price/getCoinPricesWithChange.js"
+    },
+    "./coin/price/getUsdToFiatRate": {
+      "types": "./dist/coin/price/getUsdToFiatRate.d.ts",
+      "import": "./dist/coin/price/getUsdToFiatRate.js",
+      "default": "./dist/coin/price/getUsdToFiatRate.js"
     },
     "./coin/price/queryCoingeickoPrices": {
       "types": "./dist/coin/price/queryCoingeickoPrices.d.ts",
