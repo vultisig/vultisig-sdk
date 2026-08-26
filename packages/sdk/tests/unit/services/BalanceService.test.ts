@@ -209,7 +209,11 @@ describe('BalanceService', () => {
     })
     const service = makeReadService([collisionTokenA, collisionTokenB])
     const proto = VaultBase.prototype as unknown as Record<string, (...args: never[]) => unknown>
-    const getSwapQuote = vi.fn().mockResolvedValue({ provider: 'test' })
+    // Model getSwapQuote's real contract: it always returns `balance` and
+    // `maxSwapable` alongside the quote. swap({amount:'max'}) resolves its
+    // ceiling from maxSwapable, so a mock omitting it is not a faithful double.
+    // ALPHA is a token, so the whole balance is swappable (gas is paid in ETH).
+    const getSwapQuote = vi.fn().mockResolvedValue({ provider: 'test', balance: 5_000_000n, maxSwapable: 5_000_000n })
     const vault = {
       _tokens: { [Chain.Ethereum]: [collisionTokenA, collisionTokenB] },
       getTokens: proto.getTokens,
