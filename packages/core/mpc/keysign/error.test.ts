@@ -26,7 +26,9 @@ describe('getDklsAbortAndBanPartyCode', () => {
 
   it('extracts the Android symbolic-in-context shape', () => {
     expect(
-      getDklsAbortAndBanPartyCode(new Error('signSessionInputMessage failed (code: LIB_ABORT_PROTOCOL_AND_BAN_PARTY_4)'))
+      getDklsAbortAndBanPartyCode(
+        new Error('signSessionInputMessage failed (code: LIB_ABORT_PROTOCOL_AND_BAN_PARTY_4)')
+      )
     ).toBe(103)
   })
 
