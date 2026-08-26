@@ -1,5 +1,31 @@
 # @vultisig/core-mpc
 
+## 2.0.0
+
+### Major Changes
+
+- [#2218](https://github.com/vultisig/vultisig-sdk/pull/2218) [`d043dc4`](https://github.com/vultisig/vultisig-sdk/commit/d043dc43d9fe33a3160c2739150fd6294f0e7eff) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Unify the workspace on the coordinated Noble/Scure v2 stack and align related workspace peer dependency ranges.
+
+### Patch Changes
+
+- [#2148](https://github.com/vultisig/vultisig-sdk/pull/2148) [`dd82325`](https://github.com/vultisig/vultisig-sdk/commit/dd82325ee2f5700429178cb513b338dac27aa281) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Align Cosmos IBC signing with the mobile signers by unpacking the source-channel routing memo and signing only the optional user memo.
+
+- [#2154](https://github.com/vultisig/vultisig-sdk/pull/2154) [`e2be3d4`](https://github.com/vultisig/vultisig-sdk/commit/e2be3d41214b988c3b917538e26dbe1e123725de) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Export canonical server-signer helpers from the SDK root and React Native entrypoints, recognize legacy `VultiServer-*` signers, and route SDK fast-vault classification through the shared detector.
+
+- [#2023](https://github.com/vultisig/vultisig-sdk/pull/2023) [`3203589`](https://github.com/vultisig/vultisig-sdk/commit/3203589af5da361dfc51695aad4fef77afa2d78e) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(encoding): bound TRON/Solana/Ripple fee-and-gas fields before `Long.fromString`
+
+  `Long.fromString` (and `BigInt()`) silently two's-complement-wraps an out-of-range magnitude instead of throwing (e.g. `2^64 -> 0`, `2^63 -> -2^63`). Six fee/gas sites fed by third-party gas estimation / swap-aggregator data routed raw values straight into it with no bound - a wrapped TRON `feeLimit`/`callValue`/`callTokenValue` could authorize an outsized fee burn, and a wrapped Solana priority fee or Ripple network fee misprices the transaction:
+
+  - `packages/core/mpc/keysign/signingInputs/resolvers/tron.ts` - `feeLimit` (4 sites, from `tronSpecific.gasEstimation`), `callValue`, `callTokenValue`
+  - `packages/core/mpc/keysign/signingInputs/resolvers/solana/send.ts` - `priorityFee`
+  - `packages/core/mpc/keysign/signingInputs/resolvers/ripple.ts` - `fee` (from `rippleSpecific.gas`)
+
+  New `assertBoundedInt(value, 'int64' | 'uint64')` in `@vultisig/lib-utils/bigint/assertBoundedInt` validates a decimal integer string against the proto field's declared 64-bit range and throws instead of letting the wrap happen, matching each field's real signedness (TRON's are `int64`, Solana's priority fee is `uint64`, Ripple's fee is `int64`). In-range values are unaffected - this is fail-closed only.
+
+- Updated dependencies [[`d043dc4`](https://github.com/vultisig/vultisig-sdk/commit/d043dc43d9fe33a3160c2739150fd6294f0e7eff), [`6c535ae`](https://github.com/vultisig/vultisig-sdk/commit/6c535ae3aed1c376d2e1bbbeb100e8b5c21c8929), [`3203589`](https://github.com/vultisig/vultisig-sdk/commit/3203589af5da361dfc51695aad4fef77afa2d78e), [`4c30666`](https://github.com/vultisig/vultisig-sdk/commit/4c306668690f798ff4fb9094cf16dd26eaafa8e7), [`821c8a7`](https://github.com/vultisig/vultisig-sdk/commit/821c8a73dd7d3aee55eaca59c22adc1ce8dae2f2)]:
+  - @vultisig/core-chain@4.0.0
+  - @vultisig/lib-utils@0.10.6
+
 ## 1.20.5
 
 ### Patch Changes
