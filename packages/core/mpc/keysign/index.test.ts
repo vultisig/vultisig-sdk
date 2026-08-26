@@ -62,7 +62,51 @@ describe('keysign', () => {
     }).catch(error => error)
 
     expect(error).toBeInstanceOf(DklsMaliciousPartyError)
-    expect(error).toMatchObject({ code: 103 })
+    // devices = [local, peer]; code 103 -> partyIndex 4, out of range for a 2-party session
+    expect(error).toMatchObject({ code: 103, partyIndex: 4, partyId: undefined })
     expect(mocks.finish).toHaveBeenCalledOnce()
+  })
+
+  it('maps ECDSA inputMessage WASM abort-and-ban throws to DklsMaliciousPartyError', async () => {
+    mocks.inputMessage.mockImplementation(() => {
+      throw new Error('Abort the protocol and ban the party ID 3')
+    })
+
+    const error = await keysign({
+      keyShare: 'key-share',
+      signatureAlgorithm: 'ecdsa',
+      message: '00',
+      chainPath: "m/44'/60'/0'/0/0",
+      localPartyId: 'local',
+      peers: ['a', 'b', 'c', 'd', 'e'],
+      serverUrl: 'https://relay.example',
+      sessionId: 'session',
+      hexEncryptionKey: '00',
+      isInitiatingDevice: true,
+    }).catch(error => error)
+
+    expect(error).toBeInstanceOf(DklsMaliciousPartyError)
+    // devices = [local, a, b, c, d, e]; code 103 -> partyIndex 4 -> devices[3] = 'c'
+    expect(error).toMatchObject({ code: 103, partyIndex: 4, partyId: 'c' })
+  })
+
+  it('does not resolve partyId when not the initiating device', async () => {
+    mocks.finish.mockRejectedValue(new Error('signSessionFinish failed with error code 103'))
+
+    const error = await keysign({
+      keyShare: 'key-share',
+      signatureAlgorithm: 'ecdsa',
+      message: '00',
+      chainPath: "m/44'/60'/0'/0/0",
+      localPartyId: 'local',
+      peers: ['peer'],
+      serverUrl: 'https://relay.example',
+      sessionId: 'session',
+      hexEncryptionKey: '00',
+      isInitiatingDevice: false,
+    }).catch(error => error)
+
+    expect(error).toBeInstanceOf(DklsMaliciousPartyError)
+    expect(error).toMatchObject({ code: 103, partyId: undefined })
   })
 })

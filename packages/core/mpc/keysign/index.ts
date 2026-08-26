@@ -41,11 +41,23 @@ type KeysignInput = {
 
 const maxInboundWaitTime: Minutes = 3
 
-const rethrowKeysignError = (error: unknown, signatureAlgorithm: SignatureAlgorithm): never => {
+const rethrowKeysignError = (
+  error: unknown,
+  signatureAlgorithm: SignatureAlgorithm,
+  devices: string[],
+  isInitiatingDevice: boolean
+): never => {
   if (signatureAlgorithm === 'ecdsa') {
     const code = getDklsAbortAndBanPartyCode(error)
     if (code !== undefined) {
-      throw new DklsMaliciousPartyError(code)
+      const maliciousPartyError = new DklsMaliciousPartyError(code)
+      // Only the initiator's setup message defines this party order; a joiner's
+      // own [localPartyId, ...peers] generally differs, so resolving there would
+      // misattribute the banned party.
+      if (isInitiatingDevice) {
+        maliciousPartyError.partyId = devices[maliciousPartyError.partyIndex - 1]
+      }
+      throw maliciousPartyError
     }
   }
 
@@ -67,13 +79,14 @@ export const keysign = async ({
   await initializeMpcLib(signatureAlgorithm)
 
   const messageId = getMessageHash(message)
+  const devices = [localPartyId, ...peers]
 
   const setupMessage = await ensureSetupMessage({
     keyShare,
     signatureAlgorithm,
     message,
     chainPath,
-    devices: [localPartyId, ...peers],
+    devices,
     serverUrl,
     sessionId,
     hexEncryptionKey,
@@ -178,7 +191,7 @@ export const keysign = async ({
         try {
           return session.inputMessage(fromMpcServerMessage(msg.body, hexEncryptionKey))
         } catch (error) {
-          rethrowKeysignError(error, signatureAlgorithm)
+          rethrowKeysignError(error, signatureAlgorithm, devices, isInitiatingDevice)
         }
       })()
 
@@ -215,10 +228,9 @@ export const keysign = async ({
 
   let signature: Uint8Array
   try {
-    signature = await Promise.resolve(session.finish())
+    signature = await session.finish()
   } catch (error) {
-    rethrowKeysignError(error, signatureAlgorithm)
-    throw error
+    return rethrowKeysignError(error, signatureAlgorithm, devices, isInitiatingDevice)
   }
 
   const result: KeysignSignature =
