@@ -1,5 +1,16 @@
 # @vultisig/core-mpc
 
+## 2.0.1
+
+### Patch Changes
+
+- [#2224](https://github.com/vultisig/vultisig-sdk/pull/2224) [`3121503`](https://github.com/vultisig/vultisig-sdk/commit/3121503831e4bc6f491c69cf2e69bf3ddcc87853) Thanks [@johnnyluo](https://github.com/johnnyluo)! - Throw a typed `DklsMaliciousPartyError` when DKLS keysign reports native or vs-wasm abort-and-ban party codes, and resolve the banned `partyId` from the setup-message party order on the initiating device.
+
+- [#2227](https://github.com/vultisig/vultisig-sdk/pull/2227) [`6d3c754`](https://github.com/vultisig/vultisig-sdk/commit/6d3c754ed1abe6153e648243ff0339ff0ba50bf1) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add TRON Stake 2.0 expired-unfreeze withdrawal signing with strict native-TRX payload validation and WalletCore 4.7.3 support.
+
+- Updated dependencies [[`bbe43cb`](https://github.com/vultisig/vultisig-sdk/commit/bbe43cb91976138015ab4ad29c14a7b0e14f8cb4), [`6d3c754`](https://github.com/vultisig/vultisig-sdk/commit/6d3c754ed1abe6153e648243ff0339ff0ba50bf1)]:
+  - @vultisig/core-chain@4.0.1
+
 ## 2.0.0
 
 ### Major Changes
