@@ -247,12 +247,7 @@ function terminalAnchorSymbol(anchor: string): string {
   return anchor.trim().match(/[\p{L}\p{N}][\p{L}\p{N}._+-]*$/u)?.[0] ?? ''
 }
 
-function discloseSwapSide(
-  side: string,
-  anchors: string[],
-  suffix: string,
-  expectedSymbol: string
-): string {
+function discloseSwapSide(side: string, anchors: string[], suffix: string, expectedSymbol: string): string {
   for (const anchor of anchors) {
     const end = anchorEnd(side, anchor)
     if (end < 0) continue
