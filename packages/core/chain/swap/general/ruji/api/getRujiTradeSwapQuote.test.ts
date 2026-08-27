@@ -113,6 +113,24 @@ describe('getRujiTradeSwapQuote', () => {
     ).rejects.toThrow('untrusted RUNE ↔ bRUNE FIN contract')
   })
 
+  it('selects the pinned market when an untrusted pair match is returned first', async () => {
+    vi.mocked(queryUrl)
+      .mockResolvedValueOnce({
+        data: {
+          fin: [
+            { ...marketResponse.data.fin[0], address: 'thor12a9rpf9u2ulwuezxkh6uas4au7xnde8umdua5t' },
+            marketResponse.data.fin[0],
+          ],
+        },
+      })
+      .mockResolvedValueOnce({ data: { denoms: ['x/brune', 'rune'] } })
+      .mockResolvedValueOnce({ data: { returned: '998124', fee: '1500' } })
+
+    await expect(
+      getRujiTradeSwapQuote({ from: rune, to: brune, amount: 1_000_000n, destination: address })
+    ).resolves.toMatchObject({ tx: { cosmosWasm: { contract: address } } })
+  })
+
   it('normalizes validated THORChain addresses before building the route', async () => {
     vi.mocked(queryUrl)
       .mockResolvedValueOnce({

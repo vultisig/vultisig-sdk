@@ -102,20 +102,22 @@ const findFinMarket = async (fromAsset: RujiTradeAsset, toAsset: RujiTradeAsset)
   }
 
   const expected = new Set([fromAsset.quoteAsset.toLowerCase(), toAsset.quoteAsset.toLowerCase()])
-  const market = response.data?.fin?.find(candidate => {
+  const matchingMarkets = response.data?.fin?.filter(candidate => {
     const actual = new Set([candidate.assetBase.asset.toLowerCase(), candidate.assetQuote.asset.toLowerCase()])
     return actual.size === expected.size && [...actual].every(asset => expected.has(asset))
   })
+  const market = matchingMarkets?.find(
+    candidate => candidate.address.trim().toLowerCase() === rujiTradeRuneBruneMarketContract
+  )
 
   if (!market) {
+    if (matchingMarkets?.length) {
+      throw new Error('RUJI Trade market discovery returned an untrusted RUNE ↔ bRUNE FIN contract.')
+    }
     throw new Error(`No RUJI Trade FIN market found for ${fromAsset.quoteAsset} ↔ ${toAsset.quoteAsset}.`)
   }
 
   const address = assertThorAddress(market.address, 'market contract')
-  if (address.toLowerCase() !== rujiTradeRuneBruneMarketContract) {
-    throw new Error('RUJI Trade market discovery returned an untrusted RUNE ↔ bRUNE FIN contract.')
-  }
-
   return { ...market, address }
 }
 
