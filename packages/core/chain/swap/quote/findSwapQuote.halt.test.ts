@@ -7,7 +7,7 @@ import { getNativeSwapMinAmountIn } from '@vultisig/core-chain/swap/native/minim
 import { SwapError, SwapErrorCode } from '@vultisig/core-chain/swap/SwapError'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { evmToSolanaCoins, minimalGeneralQuote } from './__tests__/swapQuoteFixtures'
+import { evmSameChainCoins, evmToSolanaCoins, minimalGeneralQuote } from './__tests__/swapQuoteFixtures'
 import { findSwapQuotes } from './findSwapQuote'
 
 vi.mock('@vultisig/core-chain/swap/native/minimum/getNativeSwapMinAmountIn', () => ({
@@ -121,6 +121,28 @@ describe('findSwapQuotes with a halted native protocol', () => {
     expect((error as SwapError).code).toBe(SwapErrorCode.TradingHalted)
     expect(getLifiSwapQuote).not.toHaveBeenCalled()
     expect(getSwapKitQuote).not.toHaveBeenCalled()
+  })
+
+  it('reports a second native protocol that timed out as unreachable, not halted', async () => {
+    // Ethereum -> Ethereum routes through both THORChain and MayaChain; excluding
+    // every aggregator leaves the two native protocols on their own.
+    vi.mocked(getNativeSwapTradingHalt).mockImplementation(async ({ swapChain }) =>
+      swapChain === Chain.THORChain
+        ? { swapChain: Chain.THORChain, haltedChains: ['ETH'], reasons: ['ETH chain trading paused'] }
+        : null
+    )
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(timeoutError())
+
+    const error = await findSwapQuotes({
+      ...evmSameChainCoins,
+      amount: 10n ** 18n,
+      excludeProviders: ['cowswap', 'kyber', '1inch', 'li.fi', 'swapkit'],
+    }).catch((e: unknown) => e)
+
+    expect((error as SwapError).code).toBe(SwapErrorCode.AllProvidersFailed)
+    expect((error as SwapError).message).toContain('MayaChain')
+    // Native fetchers stay out of the retry set — only MayaChain was ever asked.
+    expect(getNativeSwapQuote).toHaveBeenCalledTimes(1)
   })
 
   it('does not retry transient aggregator failures when no native protocol is halted', async () => {

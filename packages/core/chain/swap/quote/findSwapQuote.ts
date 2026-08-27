@@ -391,7 +391,11 @@ const isTradingHaltedRejection = (reason: unknown): boolean =>
   asTradingHaltedSwapError(reason) !== null ||
   isTradingHaltedMsg(reason instanceof Error ? reason.message : String(reason))
 
-/** Indexes of the rejected non-native fetchers that failed transiently. */
+/**
+ * Indexes of the rejected non-native fetchers that failed transiently — the
+ * retry set. Native fetchers are excluded: re-asking the protocol that raised
+ * the halt would only re-confirm it.
+ */
 const getTransientAggregatorIndexes = (
   settled: PromiseSettledResult<RankedSwapQuote>[],
   fetchers: SwapQuoteFetcher[]
@@ -401,6 +405,26 @@ const getTransientAggregatorIndexes = (
     !nativeSwapProviderNames.has(fetchers[index].providerName) &&
     isTransientProviderFailure(result.reason)
       ? [index]
+      : []
+  )
+
+/**
+ * Providers that failed transiently without reporting a halt themselves — routes
+ * that never declined this pair and could still fill it. A halt raised elsewhere
+ * cannot speak for them, so their presence rules out reporting the pair as
+ * halted. Unlike the retry set this includes a non-halted native protocol: when
+ * THORChain is halted and MayaChain merely timed out, MayaChain is unreachable,
+ * not halted.
+ */
+const getUnreachableProviderNames = (
+  settled: PromiseSettledResult<RankedSwapQuote>[],
+  fetchers: SwapQuoteFetcher[]
+): SwapQuoteProviderName[] =>
+  settled.flatMap((result, index) =>
+    result.status === 'rejected' &&
+    !isTradingHaltedRejection(result.reason) &&
+    isTransientProviderFailure(result.reason)
+      ? [fetchers[index].providerName]
       : []
   )
 
@@ -472,11 +496,12 @@ type HaltAllFailErrorInput = {
  * wins, since that provider is responding and the amount is the actionable
  * lever. (#604)
  *
- * The halt only speaks for the provider that raised it, though. An aggregator
- * still unreachable after its retry never declined this pair, so reporting a halt
- * would send the user off to wait out an outage that was never blocking their
- * route — while the truthful answer is that the route which could have filled
- * simply could not be reached. (#2167)
+ * The halt only speaks for the provider that raised it, though. Any other route
+ * that was merely unreachable — an aggregator still failing after its retry, or a
+ * second native protocol that timed out — never declined this pair, so reporting
+ * a halt would send the user off to wait out an outage that was never blocking
+ * their route, while the truthful answer is that the route which could have
+ * filled simply could not be reached. (#2167)
  */
 const getHaltAllFailError = ({
   settled,
@@ -488,9 +513,7 @@ const getHaltAllFailError = ({
     return null
   }
 
-  const unreachableProviders = getTransientAggregatorIndexes(settled, fetchers).map(
-    index => fetchers[index].providerName
-  )
+  const unreachableProviders = getUnreachableProviderNames(settled, fetchers)
 
   if (isEmpty(unreachableProviders)) {
     return (
