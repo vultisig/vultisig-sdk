@@ -186,6 +186,20 @@ async function withStorageWriteLock<T>(storage: Storage, key: string, operation:
   return result
 }
 
+const supportedChains = new Set<string>(Object.values(Chain))
+
+/**
+ * Narrows persisted `VaultData.chains` (an unvalidated `string[]`) to chains this
+ * build still supports, dropping any the SDK has since removed.
+ *
+ * Without this, a chain retired from {@link Chain} survives in storage and is cast
+ * straight back into `_userChains`, where every registry lookup keyed on it
+ * (`chainFeeCoin`, `cosmosRpcUrl`, `chainRegistry`, …) yields `undefined` and
+ * throws at the point of use rather than being ignored here.
+ */
+const toSupportedChains = (chains: readonly string[]): Chain[] =>
+  chains.filter((chain): chain is Chain => supportedChains.has(chain))
+
 /**
  * VaultBase - Abstract base class for all vault types
  *
@@ -399,7 +413,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     // Initialize runtime state
     this._userChains =
       this.vaultData.chains.length > 0
-        ? this.vaultData.chains.map(c => c as Chain)
+        ? toSupportedChains(this.vaultData.chains)
         : (this.config?.defaultChains ?? DEFAULT_CHAINS)
     this._currency = this.vaultData.currency
     this._tokens = this.vaultData.tokens
@@ -784,7 +798,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
       // Update runtime state
       this._currency = loadedVaultData.currency
-      this._userChains = loadedVaultData.chains.map(c => c as Chain)
+      this._userChains = toSupportedChains(loadedVaultData.chains)
       this._tokens = loadedVaultData.tokens
 
       // Sync CoreVault with VaultData
@@ -918,7 +932,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
     // Update runtime state
     this._currency = loadedVaultData.currency
-    this._userChains = loadedVaultData.chains.map(c => c as Chain)
+    this._userChains = toSupportedChains(loadedVaultData.chains)
     this._tokens = loadedVaultData.tokens
 
     // Sync CoreVault
@@ -1049,7 +1063,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
   private syncRuntimeFromVaultData(): void {
     this._currency = this.vaultData.currency
-    this._userChains = this.vaultData.chains.map(chain => chain as Chain)
+    this._userChains = toSupportedChains(this.vaultData.chains)
     this._tokens = this.vaultData.tokens
     this.coreVault.publicKeys = this.vaultData.publicKeys
     this.coreVault.hexChainCode = this.vaultData.hexChainCode
