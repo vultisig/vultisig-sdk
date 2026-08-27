@@ -69,16 +69,19 @@ const bindSwapQuote = (
     expiresAt = Date.now() + 600_000,
     fromCoin = ethCoin,
     toCoin = btcCoin,
-  }: { expiresAt?: number; fromCoin?: any; toCoin?: any } = {}
+    recipient,
+  }: { expiresAt?: number; fromCoin?: any; toCoin?: any; recipient?: string } = {}
 ) =>
   ({
     quote,
     discounts: [],
+    recipient,
     requestedAmount,
     expiresAt,
     safetyFingerprint: getSwapQuoteSafetyFingerprint({
       from: fromCoin,
       to: toCoin,
+      recipient,
       requestedAmount,
       expiresAt,
       quote,
@@ -459,6 +462,36 @@ describe('prepareSwapTxFromKeys — amount consistency (ABTS/plan 005)', () => {
         swapQuote: quote,
       })
     ).resolves.toBeDefined()
+  })
+
+  it('forwards the safety-bound effective RUJI recipient to keysign validation', async () => {
+    mockBuildSwapKeysignPayload.mockResolvedValue({ __mock: 'payload' })
+    const recipient = 'thor1customrecipient'
+    const quote = bindSwapQuote(
+      {
+        general: {
+          tx: {
+            cosmosWasm: {
+              sender: thorCoin.address,
+              contract: 'thor1contract',
+              executeMsg: JSON.stringify({ swap: { min: { min_return: '1', to: recipient } } }),
+              funds: [{ denom: 'rune', amount: '100000000' }],
+            },
+          },
+        },
+      },
+      100_000_000n,
+      { fromCoin: thorCoin, toCoin: bruneCoin, recipient }
+    )
+
+    await prepareSwapTxFromKeys(baseIdentity, {
+      fromCoin: thorCoin,
+      toCoin: bruneCoin,
+      amount: '1',
+      swapQuote: quote,
+    })
+
+    expect(mockBuildSwapKeysignPayload).toHaveBeenCalledWith(expect.objectContaining({ recipient }))
   })
 
   it('rejects a RUJI Trade CosmWasm route without exactly one positive source fund', async () => {

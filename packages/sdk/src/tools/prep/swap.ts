@@ -65,6 +65,7 @@ const assertQuoteSafetyBinding = (params: PrepareSwapTxFromKeysParams, requested
   const expectedFingerprint = getSwapQuoteSafetyFingerprint({
     from: params.fromCoin,
     to: params.toCoin,
+    recipient: swapQuote.recipient,
     requestedAmount: boundAmount,
     expiresAt,
     quote: swapQuote.quote,
@@ -195,6 +196,7 @@ export const prepareSwapTxFromKeys = async (
   return buildSwapKeysignPayload({
     fromCoin: safeParams.fromCoin,
     toCoin: safeParams.toCoin,
+    recipient: safeParams.swapQuote.recipient ?? safeParams.toCoin.address,
     amount: safeParams.amount,
     swapQuote: safeParams.swapQuote,
     vaultId: identity.ecdsaPublicKey,

@@ -28,6 +28,7 @@ vi.mock('@vultisig/core-mpc/keysign/utxo/getKeysignUtxoInfo', () => ({
 import { buildSwapKeysignPayload } from './build'
 
 const address = 'thor1vk6trmz42cjrh4zcxczeaacnsv3snv4f22x8ccu203dqde7vtaxsyevlec'
+const customRecipient = 'thor12a9rpf9u2ulwuezxkh6uas4au7xnde8umdua5t'
 const publicKey = { data: () => new Uint8Array([1, 2, 3]) } as never
 
 const buildInput = {
@@ -104,6 +105,30 @@ describe('buildSwapKeysignPayload RUJI Trade', () => {
       buildSwapKeysignPayload({
         ...buildInput,
         swapQuote: makeQuote('rune', 'thor1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqm7g9t'),
+      })
+    ).rejects.toThrow('guarded FIN swap execute message')
+    expect(mocks.getChainSpecific).not.toHaveBeenCalled()
+  })
+
+  it('accepts the effective custom recipient instead of requiring the destination account', async () => {
+    const payload = await buildSwapKeysignPayload({
+      ...buildInput,
+      recipient: ` ${customRecipient.toUpperCase()} `,
+      swapQuote: makeQuote('rune', customRecipient),
+    })
+
+    expect(payload.contractPayload).toMatchObject({
+      case: 'wasmExecuteContractPayload',
+      value: { executeMsg: expect.stringContaining(customRecipient) },
+    })
+  })
+
+  it('fails closed when the FIN recipient does not match the effective custom recipient', async () => {
+    await expect(
+      buildSwapKeysignPayload({
+        ...buildInput,
+        recipient: customRecipient,
+        swapQuote: makeQuote(),
       })
     ).rejects.toThrow('guarded FIN swap execute message')
     expect(mocks.getChainSpecific).not.toHaveBeenCalled()

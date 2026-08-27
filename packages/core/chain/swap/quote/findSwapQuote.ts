@@ -124,7 +124,7 @@ type SwapQuoteFetcher = {
   fetch: () => Promise<UnboundSwapQuote>
 }
 
-type UnboundSwapQuote = Omit<SwapQuote, 'requestedAmount' | 'expiresAt' | 'safetyFingerprint'>
+type UnboundSwapQuote = Omit<SwapQuote, 'recipient' | 'requestedAmount' | 'expiresAt' | 'safetyFingerprint'>
 
 /**
  * A single fetched swap route: the fully bound quote (request amount, expiry,
@@ -164,6 +164,7 @@ const bindQuoteSafetyMetadata = (
   quote: UnboundSwapQuote,
   from: AccountCoin,
   to: AccountCoin,
+  recipient: string,
   requestedAmount: bigint
 ): BoundSwapQuote => {
   const now = Date.now()
@@ -178,11 +179,13 @@ const bindQuoteSafetyMetadata = (
 
   return {
     ...quote,
+    recipient,
     requestedAmount,
     expiresAt: effectiveExpiresAt,
     safetyFingerprint: getSwapQuoteSafetyFingerprint({
       from,
       to,
+      recipient,
       requestedAmount,
       expiresAt: effectiveExpiresAt,
       quote: quote.quote,
@@ -1213,7 +1216,13 @@ export const findSwapQuotes = async (input: FindSwapQuoteInput): Promise<FindSwa
   const runFetchers = (list: SwapQuoteFetcher[], timeoutMs: number): Promise<PromiseSettledResult<RankedSwapQuote>[]> =>
     Promise.allSettled(
       list.map(async (fetcher): Promise<RankedSwapQuote> => {
-        const quote = bindQuoteSafetyMetadata(await withTimeout(fetcher.fetch(), timeoutMs), from, to, amount)
+        const quote = bindQuoteSafetyMetadata(
+          await withTimeout(fetcher.fetch(), timeoutMs),
+          from,
+          to,
+          normalizedRecipient ?? to.address,
+          amount
+        )
         return {
           quote,
           outputAmount: getComparableOutputAmount(quote, to, fetcher.providerName),

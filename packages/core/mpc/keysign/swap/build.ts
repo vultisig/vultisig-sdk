@@ -1,5 +1,6 @@
 import { Buffer } from 'buffer'
 import { create } from '@bufbuild/protobuf'
+import { fromBech32 } from '@cosmjs/encoding'
 import { buildSignBitcoinFromPsbt } from '@vultisig/core-chain/chains/utxo/tx/buildSignBitcoinFromPsbt'
 import { fromChainAmountDisplay } from '@vultisig/core-chain/amount/fromChainAmountExact'
 import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
@@ -45,6 +46,8 @@ import { Psbt } from 'bitcoinjs-lib'
 export type BuildSwapKeysignPayloadInput = {
   fromCoin: AccountCoin
   toCoin: AccountCoin
+  /** Effective output recipient. Defaults to `toCoin.address` for legacy callers. */
+  recipient?: string
   amount: string | number
   swapQuote: SwapQuote
   vaultId: string
@@ -64,7 +67,25 @@ export type BuildSwapKeysignPayloadInput = {
 type TransferSwapTx = Extract<GeneralSwapTx, { transfer: unknown }>['transfer']
 type CosmosWasmSwapTx = Extract<GeneralSwapTx, { cosmosWasm: unknown }>['cosmosWasm']
 
-const getRujiTradeFundAmount = (tx: CosmosWasmSwapTx, fromCoin: AccountCoin, toCoin: AccountCoin): bigint => {
+const getThorAddressIdentity = (address: string): string | undefined => {
+  try {
+    const decoded = fromBech32(address.trim())
+    if (decoded.prefix.toLowerCase() !== 'thor' || (decoded.data.length !== 20 && decoded.data.length !== 32)) {
+      return undefined
+    }
+
+    return Buffer.from(decoded.data).toString('hex')
+  } catch {
+    return undefined
+  }
+}
+
+const areEqualThorAddresses = (left: string, right: string): boolean => {
+  const leftIdentity = getThorAddressIdentity(left)
+  return leftIdentity !== undefined && leftIdentity === getThorAddressIdentity(right)
+}
+
+const getRujiTradeFundAmount = (tx: CosmosWasmSwapTx, fromCoin: AccountCoin, effectiveRecipient: string): bigint => {
   const expectedDenom =
     fromCoin.chain === Chain.THORChain && fromCoin.id === undefined && fromCoin.ticker.toUpperCase() === 'RUNE'
       ? 'rune'
@@ -75,7 +96,7 @@ const getRujiTradeFundAmount = (tx: CosmosWasmSwapTx, fromCoin: AccountCoin, toC
   if (!expectedDenom) {
     throw new Error('RUJI Trade CosmWasm swaps require a THORChain RUNE or bRUNE source coin.')
   }
-  if (tx.sender !== fromCoin.address) {
+  if (!areEqualThorAddresses(tx.sender, fromCoin.address)) {
     throw new Error('RUJI Trade CosmWasm sender does not match the source account.')
   }
   if (!tx.contract.trim() || !tx.executeMsg.trim()) {
@@ -100,7 +121,7 @@ const getRujiTradeFundAmount = (tx: CosmosWasmSwapTx, fromCoin: AccountCoin, toC
     !/^\d+$/.test(min.min_return) ||
     BigInt(min.min_return) <= 0n ||
     typeof min.to !== 'string' ||
-    min.to !== toCoin.address
+    !areEqualThorAddresses(min.to, effectiveRecipient)
   ) {
     throw new Error('RUJI Trade CosmWasm route must contain a guarded FIN swap execute message.')
   }
@@ -196,6 +217,7 @@ const getSwapKitSignData = (fromCoin: AccountCoin, transfer: TransferSwapTx): Ke
 export const buildSwapKeysignPayload = async ({
   fromCoin,
   toCoin,
+  recipient,
   amount,
   swapQuote,
   vaultId,
@@ -235,7 +257,9 @@ export const buildSwapKeysignPayload = async ({
       return result
     },
   })
-  const cosmosWasmAmount = cosmosWasmTx ? getRujiTradeFundAmount(cosmosWasmTx, fromCoin, toCoin) : undefined
+  const cosmosWasmAmount = cosmosWasmTx
+    ? getRujiTradeFundAmount(cosmosWasmTx, fromCoin, recipient ?? toCoin.address)
+    : undefined
   const requestedChainAmount = toChainAmount(amount, fromCoin.decimals)
   if (cosmosWasmAmount !== undefined && cosmosWasmAmount !== requestedChainAmount) {
     throw new Error('RUJI Trade CosmWasm fund amount does not match the requested swap amount.')

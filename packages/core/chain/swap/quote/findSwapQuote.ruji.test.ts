@@ -27,6 +27,7 @@ vi.mock('@vultisig/core-chain/swap/native/halts/getNativeSwapTradingHalt', () =>
 import { findSwapQuotes } from './findSwapQuote'
 
 const address = 'thor1vk6trmz42cjrh4zcxczeaacnsv3snv4f22x8ccu203dqde7vtaxsyevlec'
+const customRecipient = 'thor12a9rpf9u2ulwuezxkh6uas4au7xnde8umdua5t'
 const rune: AccountCoin = {
   chain: Chain.THORChain,
   address,
@@ -41,7 +42,7 @@ const brune: AccountCoin = {
   decimals: 8,
 }
 
-const quoteFor = (from: AccountCoin): GeneralSwapQuote => ({
+const quoteFor = (from: AccountCoin, recipient = address): GeneralSwapQuote => ({
   provider: 'ruji',
   dstAmount: '998124',
   expiresAt: Date.now() + 120_000,
@@ -49,7 +50,7 @@ const quoteFor = (from: AccountCoin): GeneralSwapQuote => ({
     cosmosWasm: {
       sender: from.address,
       contract: address,
-      executeMsg: JSON.stringify({ swap: { min: { min_return: '988142', to: address } } }),
+      executeMsg: JSON.stringify({ swap: { min: { min_return: '988142', to: recipient } } }),
       funds: [{ denom: from.id === 'x/brune' ? 'x/brune' : 'rune', amount: '1000000' }],
     },
   },
@@ -80,6 +81,7 @@ describe('findSwapQuotes RUJI Trade routing', () => {
     expect(result.ranked).toHaveLength(1)
     expect(result.ranked[0].providerName).toBe('RUJI Trade')
     expect(result.best.quote).toHaveProperty('general.provider', 'ruji')
+    expect(result.best.recipient).toBe(address)
     expect(mocks.getRujiTradeSwapQuote).toHaveBeenCalledWith({
       from,
       to,
@@ -90,16 +92,17 @@ describe('findSwapQuotes RUJI Trade routing', () => {
   })
 
   it('forwards an explicit THORChain recipient because the FIN execute message supports it', async () => {
-    mocks.getRujiTradeSwapQuote.mockResolvedValueOnce(quoteFor(rune))
+    mocks.getRujiTradeSwapQuote.mockResolvedValueOnce(quoteFor(rune, customRecipient))
 
-    await findSwapQuotes({
+    const result = await findSwapQuotes({
       from: rune,
       to: brune,
       amount: 1_000_000n,
-      recipient: address,
+      recipient: ` ${customRecipient} `,
       excludeProviders: ['SwapKit'],
     })
 
-    expect(mocks.getRujiTradeSwapQuote).toHaveBeenCalledWith(expect.objectContaining({ destination: address }))
+    expect(result.best.recipient).toBe(customRecipient)
+    expect(mocks.getRujiTradeSwapQuote).toHaveBeenCalledWith(expect.objectContaining({ destination: customRecipient }))
   })
 })
