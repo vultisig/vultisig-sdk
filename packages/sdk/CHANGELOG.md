@@ -1,5 +1,19 @@
 # @vultisig/sdk
 
+## 6.1.0
+
+### Minor Changes
+
+- [#2026](https://github.com/vultisig/vultisig-sdk/pull/2026) [`344b41f`](https://github.com/vultisig/vultisig-sdk/commit/344b41fad752cf9ee79c4f7cd7815832257f344c) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export the validation and address-format canonicals from the React Native entry: `amountMatches`, `feeMatches`, `normalizeTokenSymbol`, `tokenDecimals`, `scaleHumanToRaw`, `scaleRawToHuman`, `decimalsFor`, `computeEvmFee`, `isValidTokenSymbolFormat`, `ValidateNormalizerError`, `canonicalChainTag`, `classifyAddress`, `isAddressValidForChain`, `isSolanaAddress`, `supportedChainTags`, `address`, `validate` and `checkChainPrefix`. They are pure, vault-free and platform-neutral, but were reachable only from the root entry, so React Native consumers had to deep-import or keep an app-local mirror. Adds an RN entry test that walks the whole runtime surface of each canonical module, so a helper added later and wired only into the root entry fails rather than silently reopening the gap.
+
+### Patch Changes
+
+- [#2224](https://github.com/vultisig/vultisig-sdk/pull/2224) [`3121503`](https://github.com/vultisig/vultisig-sdk/commit/3121503831e4bc6f491c69cf2e69bf3ddcc87853) Thanks [@johnnyluo](https://github.com/johnnyluo)! - Throw a typed `DklsMaliciousPartyError` when DKLS keysign reports native or vs-wasm abort-and-ban party codes, and resolve the banned `partyId` from the setup-message party order on the initiating device.
+
+- [#2228](https://github.com/vultisig/vultisig-sdk/pull/2228) [`bbe43cb`](https://github.com/vultisig/vultisig-sdk/commit/bbe43cb91976138015ab4ad29c14a7b0e14f8cb4) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Export `getEvmNumericChainId` from the SDK root and React Native public entries. The accessor is derived from the canonical EVM chain registry, and the React Native transaction builder now consumes it instead of maintaining a duplicate numeric chain-id table.
+
+- [#2227](https://github.com/vultisig/vultisig-sdk/pull/2227) [`6d3c754`](https://github.com/vultisig/vultisig-sdk/commit/6d3c754ed1abe6153e648243ff0339ff0ba50bf1) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add TRON Stake 2.0 expired-unfreeze withdrawal signing with strict native-TRX payload validation and WalletCore 4.7.3 support.
+
 ## 6.0.0
 
 ### Major Changes
