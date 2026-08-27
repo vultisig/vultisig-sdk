@@ -33,7 +33,7 @@ const publicKey = { data: () => new Uint8Array([1, 2, 3]) } as never
 const buildInput = {
   fromCoin: { chain: Chain.THORChain, address, ticker: 'RUNE', decimals: 8 },
   toCoin: { chain: Chain.THORChain, address, id: 'x/brune', ticker: 'bRUNE', decimals: 8 },
-  amount: 1,
+  amount: 0.01,
   vaultId: 'vault-id',
   localPartyId: 'local-party',
   fromPublicKey: publicKey,
@@ -42,7 +42,7 @@ const buildInput = {
   walletCore: {} as never,
 }
 
-const makeQuote = (denom = 'rune', recipient = address): SwapQuote => ({
+const makeQuote = (denom = 'rune', recipient = address, fundAmount = '1000000'): SwapQuote => ({
   discounts: [],
   quote: {
     general: {
@@ -53,7 +53,7 @@ const makeQuote = (denom = 'rune', recipient = address): SwapQuote => ({
           sender: address,
           contract: address,
           executeMsg: JSON.stringify({ swap: { min: { min_return: '988142', to: recipient } } }),
-          funds: [{ denom, amount: '1000000' }],
+          funds: [{ denom, amount: fundAmount }],
         },
       },
     },
@@ -106,6 +106,19 @@ describe('buildSwapKeysignPayload RUJI Trade', () => {
         swapQuote: makeQuote('rune', 'thor1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqm7g9t'),
       })
     ).rejects.toThrow('guarded FIN swap execute message')
+    expect(mocks.getChainSpecific).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { label: 'smaller', fundAmount: '999999' },
+    { label: 'larger', fundAmount: '1000001' },
+  ])('fails closed when the FIN fund amount is $label than requested', async ({ fundAmount }) => {
+    await expect(
+      buildSwapKeysignPayload({
+        ...buildInput,
+        swapQuote: makeQuote('rune', address, fundAmount),
+      })
+    ).rejects.toThrow('fund amount does not match the requested swap amount')
     expect(mocks.getChainSpecific).not.toHaveBeenCalled()
   })
 })

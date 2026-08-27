@@ -236,7 +236,11 @@ export const buildSwapKeysignPayload = async ({
     },
   })
   const cosmosWasmAmount = cosmosWasmTx ? getRujiTradeFundAmount(cosmosWasmTx, fromCoin, toCoin) : undefined
-  const chainAmount = transferTx?.amount ?? cosmosWasmAmount ?? toChainAmount(amount, fromCoin.decimals)
+  const requestedChainAmount = toChainAmount(amount, fromCoin.decimals)
+  if (cosmosWasmAmount !== undefined && cosmosWasmAmount !== requestedChainAmount) {
+    throw new Error('RUJI Trade CosmWasm fund amount does not match the requested swap amount.')
+  }
+  const chainAmount = transferTx?.amount ?? cosmosWasmAmount ?? requestedChainAmount
 
   const fromCoinHexPublicKey = Buffer.from(fromPublicKey.data()).toString('hex')
   const toCoinHexPublicKey = Buffer.from(toPublicKey.data()).toString('hex')
