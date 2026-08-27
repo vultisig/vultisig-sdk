@@ -110,6 +110,19 @@ describe('buildSwapKeysignPayload RUJI Trade', () => {
     expect(mocks.getChainSpecific).not.toHaveBeenCalled()
   })
 
+  it('fails closed when the route targets an untrusted FIN contract', async () => {
+    const quote = makeQuote()
+    if (!('general' in quote.quote) || !('cosmosWasm' in quote.quote.general.tx)) {
+      throw new Error('Expected RUJI Trade CosmWasm quote')
+    }
+    quote.quote.general.tx.cosmosWasm.contract = customRecipient
+
+    await expect(buildSwapKeysignPayload({ ...buildInput, swapQuote: quote })).rejects.toThrow(
+      'untrusted RUNE ↔ bRUNE FIN contract'
+    )
+    expect(mocks.getChainSpecific).not.toHaveBeenCalled()
+  })
+
   it('accepts the effective custom recipient instead of requiring the destination account', async () => {
     const payload = await buildSwapKeysignPayload({
       ...buildInput,

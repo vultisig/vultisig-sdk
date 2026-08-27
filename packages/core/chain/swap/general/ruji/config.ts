@@ -2,6 +2,9 @@ import { Chain } from '@vultisig/core-chain/Chain'
 
 export const rujiTradeSwapEnabledChains = [Chain.THORChain] as const
 
+/** Supported FIN market for the only supported RUJI Trade pair: THOR.RUNE ↔ x/brune. */
+export const rujiTradeRuneBruneMarketContract = 'thor1vk6trmz42cjrh4zcxczeaacnsv3snv4f22x8ccu203dqde7vtaxsyevlec'
+
 export const rujiTradeAsset = {
   rune: {
     quoteAsset: 'THOR.RUNE',

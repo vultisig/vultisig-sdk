@@ -103,6 +103,16 @@ describe('getRujiTradeSwapQuote', () => {
     ).rejects.toThrow('contract config does not match')
   })
 
+  it('fails closed when discovery returns a valid but untrusted FIN contract', async () => {
+    vi.mocked(queryUrl).mockResolvedValueOnce({
+      data: { fin: [{ ...marketResponse.data.fin[0], address: 'thor12a9rpf9u2ulwuezxkh6uas4au7xnde8umdua5t' }] },
+    })
+
+    await expect(
+      getRujiTradeSwapQuote({ from: rune, to: brune, amount: 1_000_000n, destination: address })
+    ).rejects.toThrow('untrusted RUNE ↔ bRUNE FIN contract')
+  })
+
   it('normalizes validated THORChain addresses before building the route', async () => {
     vi.mocked(queryUrl)
       .mockResolvedValueOnce({

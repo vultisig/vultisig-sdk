@@ -13,6 +13,7 @@ import { areEqualCoins } from '@vultisig/core-chain/coin/Coin'
 import { COW_VAULT_RELAYER_ADDRESS } from '@vultisig/core-chain/swap/general/cowswap/config'
 import { encodeCowSwapKeysignData } from '@vultisig/core-chain/swap/general/cowswap/keysign/cowSwapKeysignData'
 import { GeneralSwapTx } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
+import { rujiTradeRuneBruneMarketContract } from '@vultisig/core-chain/swap/general/ruji/config'
 import { getSwapDestinationAddress } from '@vultisig/core-chain/swap/keysign/getSwapDestinationAddress'
 import { nativeSwapQuoteToSwapPayload } from '@vultisig/core-mpc/swap/native/utils/nativeSwapQuoteToSwapPayload'
 import { SwapQuote, SwapQuoteResult } from '@vultisig/core-chain/swap/quote/SwapQuote'
@@ -101,6 +102,9 @@ const getRujiTradeFundAmount = (tx: CosmosWasmSwapTx, fromCoin: AccountCoin, eff
   }
   if (!tx.contract.trim() || !tx.executeMsg.trim()) {
     throw new Error('RUJI Trade CosmWasm route is missing its contract or execute message.')
+  }
+  if (!areEqualThorAddresses(tx.contract, rujiTradeRuneBruneMarketContract)) {
+    throw new Error('RUJI Trade CosmWasm route targets an untrusted RUNE ↔ bRUNE FIN contract.')
   }
   if (tx.funds.length !== 1 || tx.funds[0].denom.toLowerCase() !== expectedDenom) {
     throw new Error(`RUJI Trade CosmWasm route must attach exactly one ${expectedDenom} fund.`)

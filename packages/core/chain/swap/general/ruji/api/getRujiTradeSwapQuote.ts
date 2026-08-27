@@ -8,6 +8,7 @@ import {
   rujiTradeAsset,
   rujiTradeDefaultSlippageBps,
   rujiTradeQuoteTtlMs,
+  rujiTradeRuneBruneMarketContract,
 } from '@vultisig/core-chain/swap/general/ruji/config'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
@@ -110,7 +111,12 @@ const findFinMarket = async (fromAsset: RujiTradeAsset, toAsset: RujiTradeAsset)
     throw new Error(`No RUJI Trade FIN market found for ${fromAsset.quoteAsset} ↔ ${toAsset.quoteAsset}.`)
   }
 
-  return { ...market, address: assertThorAddress(market.address, 'market contract') }
+  const address = assertThorAddress(market.address, 'market contract')
+  if (address.toLowerCase() !== rujiTradeRuneBruneMarketContract) {
+    throw new Error('RUJI Trade market discovery returned an untrusted RUNE ↔ bRUNE FIN contract.')
+  }
+
+  return { ...market, address }
 }
 
 const calculateMinimumOutput = (expectedOutput: string, slippageBps: number): string => {
