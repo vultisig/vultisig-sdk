@@ -133,6 +133,24 @@ describe('findSwapQuotes ranked candidate set', () => {
     }
   })
 
+  it('exposes the ranked outputAmount on the returned quote itself (architecture#2081)', async () => {
+    // Regression for architecture#2081: consumers reading only the bound quote
+    // (not `findSwapQuotes`' separate `ranked` array) used to have no way to
+    // learn the comparable destination-unit output without re-deriving the
+    // native-precision conversion themselves.
+    vi.mocked(getKyberSwapQuote).mockResolvedValue(minimalGeneralQuote('300', 'kyber'))
+    vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) => minimalNativeQuote(swapChain, '20000'))
+
+    const { best, ranked } = await findSwapQuotes({ ...evmSameChainCoins, amount: 1n })
+
+    const bestCandidate = ranked.find(candidate => candidate.quote === best)
+    expect(bestCandidate).toBeDefined()
+    expect(best.comparableOutputAmount).toBe(bestCandidate!.outputAmount)
+    for (const candidate of ranked) {
+      expect(candidate.quote.comparableOutputAmount).toBe(candidate.outputAmount)
+    }
+  })
+
   it('resolves findSwapQuote to the same provider as the best candidate', async () => {
     vi.mocked(getLifiSwapQuote).mockResolvedValue(minimalGeneralQuote('1000000', 'li.fi'))
     vi.mocked(getSwapKitQuote).mockResolvedValue(minimalGeneralQuote('999000', 'swapkit'))
