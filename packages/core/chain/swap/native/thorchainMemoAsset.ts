@@ -30,7 +30,7 @@ const contractSuffixLength = 6
  * pool existence), so Solana/Noble — which have no THORChain LP pools but ARE
  * valid swap destinations — have no entry. We union the two rather than
  * replacing it outright: `thorChainSwapEnabledChains` is itself missing chains
- * (Dash/Kujira/Arbitrum/Zcash) that the LP map already resolves correctly, so a
+ * (Dash/Arbitrum/Zcash) that the LP map already resolves correctly, so a
  * straight swap of authority would regress those. We deliberately do NOT use the
  * broader `nativeSwapChainIds`, which also carries MayaChain-only entries (e.g.
  * Cardano, MayaChain itself) that aren't valid THORChain destinations.

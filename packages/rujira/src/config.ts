@@ -68,7 +68,6 @@ export const THORCHAIN_TO_SDK_CHAIN: Record<string, string> = {
   GAIA: 'Cosmos',
   THOR: 'THORChain',
   MAYA: 'MayaChain',
-  KUJI: 'Kujira',
   DASH: 'Dash',
   ARB: 'Arbitrum',
   ZEC: 'Zcash',

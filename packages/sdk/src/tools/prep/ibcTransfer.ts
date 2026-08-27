@@ -146,7 +146,6 @@ const VULTISIG_NAME_TO_CHAIN_ID: Record<string, string> = {
   Osmosis: 'osmosis-1',
   Terra: 'phoenix-1',
   TerraClassic: 'columbus-5',
-  Kujira: 'kaiyo-1',
   Akash: 'akashnet-2',
   Noble: 'noble-1',
   Dydx: 'dydx-mainnet-1',

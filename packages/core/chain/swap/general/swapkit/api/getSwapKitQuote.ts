@@ -108,7 +108,6 @@ const swapKitChainId: Record<SwapKitEnabledChain, string> = {
   [Chain.Dash]: 'DASH',
   [Chain.Dogecoin]: 'DOGE',
   [Chain.Ethereum]: 'ETH',
-  [Chain.Kujira]: 'KUJI',
   [Chain.Litecoin]: 'LTC',
   [Chain.MayaChain]: 'MAYA',
   [Chain.Optimism]: 'OP',

@@ -39,7 +39,6 @@ export const swapKitEnabledChains = [
   ...swapKitSourceChains,
   Chain.Cosmos,
   Chain.Dash,
-  Chain.Kujira,
   Chain.MayaChain,
   Chain.THORChain,
 ] as const

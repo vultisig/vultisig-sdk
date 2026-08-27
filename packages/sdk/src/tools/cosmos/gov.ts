@@ -72,7 +72,6 @@ const GOV_CHAIN_CONFIG: Record<GovChain, GovChainConfig> = {
   Cosmos: coreGovChainConfig('Cosmos', 'cosmos'),
   Osmosis: coreGovChainConfig('Osmosis', 'osmo'),
   Dydx: coreGovChainConfig('Dydx', 'dydx'),
-  Kujira: coreGovChainConfig('Kujira', 'kujira'),
   Terra: coreGovChainConfig('Terra', 'terra'),
   TerraClassic: coreGovChainConfig('TerraClassic', 'terra', false),
   Noble: coreGovChainConfig('Noble', 'noble'),

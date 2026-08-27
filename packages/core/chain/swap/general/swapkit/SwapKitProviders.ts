@@ -43,7 +43,6 @@ const swapKitProviderChainId: Record<SwapKitEnabledChain, string> = {
   [Chain.Cardano]: 'cardano',
   [Chain.Cosmos]: 'cosmos',
   [Chain.Dash]: 'dash',
-  [Chain.Kujira]: 'kaiyo-1',
   [Chain.MayaChain]: 'mayachain-mainnet-v1',
   [Chain.Sui]: 'sui',
   [Chain.THORChain]: 'thorchain-1',

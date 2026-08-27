@@ -89,7 +89,6 @@ describe('prepareIbcTransfer', () => {
     expect(normaliseIbcChainId('Osmosis')).toBe('osmosis-1')
     expect(normaliseIbcChainId('Terra')).toBe('phoenix-1')
     expect(normaliseIbcChainId('TerraClassic')).toBe('columbus-5')
-    expect(normaliseIbcChainId('Kujira')).toBe('kaiyo-1')
     expect(normaliseIbcChainId('Akash')).toBe('akashnet-2')
     expect(normaliseIbcChainId('Noble')).toBe('noble-1')
     expect(normaliseIbcChainId('Dydx')).toBe('dydx-mainnet-1')
