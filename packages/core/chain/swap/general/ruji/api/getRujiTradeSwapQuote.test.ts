@@ -92,6 +92,41 @@ describe('getRujiTradeSwapQuote', () => {
     ).rejects.toThrow('contract config does not match')
   })
 
+  it('fails closed when discovery returns duplicate FIN denominations', async () => {
+    vi.mocked(queryUrl)
+      .mockResolvedValueOnce(marketResponse)
+      .mockResolvedValueOnce({ data: { denoms: ['rune', 'rune'] } })
+      .mockResolvedValueOnce({ data: { returned: '998124', fee: '1500' } })
+
+    await expect(
+      getRujiTradeSwapQuote({ from: rune, to: brune, amount: 1_000_000n, destination: address })
+    ).rejects.toThrow('contract config does not match')
+  })
+
+  it('normalizes validated THORChain addresses before building the route', async () => {
+    vi.mocked(queryUrl)
+      .mockResolvedValueOnce({
+        data: { fin: [{ ...marketResponse.data.fin[0], address: ` ${address} ` }] },
+      })
+      .mockResolvedValueOnce({ data: { denoms: ['x/brune', 'rune'] } })
+      .mockResolvedValueOnce({ data: { returned: '998124', fee: '1500' } })
+
+    const quote = await getRujiTradeSwapQuote({
+      from: { ...rune, address: ` ${address} ` },
+      to: brune,
+      amount: 1_000_000n,
+      destination: ` ${address} `,
+    })
+
+    expect(quote.tx).toMatchObject({
+      cosmosWasm: {
+        sender: address,
+        contract: address,
+        executeMsg: JSON.stringify({ swap: { min: { min_return: '988142', to: address } } }),
+      },
+    })
+  })
+
   it('recognizes only the two supported THORChain assets', () => {
     expect(isRujiTradeSwapPair(rune, brune)).toBe(true)
     expect(isRujiTradeSwapPair(brune, rune)).toBe(true)

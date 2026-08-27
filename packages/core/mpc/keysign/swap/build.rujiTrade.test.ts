@@ -42,7 +42,7 @@ const buildInput = {
   walletCore: {} as never,
 }
 
-const makeQuote = (denom = 'rune'): SwapQuote => ({
+const makeQuote = (denom = 'rune', recipient = address): SwapQuote => ({
   discounts: [],
   quote: {
     general: {
@@ -52,7 +52,7 @@ const makeQuote = (denom = 'rune'): SwapQuote => ({
         cosmosWasm: {
           sender: address,
           contract: address,
-          executeMsg: JSON.stringify({ swap: { min: { min_return: '988142', to: address } } }),
+          executeMsg: JSON.stringify({ swap: { min: { min_return: '988142', to: recipient } } }),
           funds: [{ denom, amount: '1000000' }],
         },
       },
@@ -96,6 +96,16 @@ describe('buildSwapKeysignPayload RUJI Trade', () => {
     await expect(buildSwapKeysignPayload({ ...buildInput, swapQuote: makeQuote('x/brune') })).rejects.toThrow(
       'exactly one rune fund'
     )
+    expect(mocks.getChainSpecific).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when the FIN recipient does not match the destination account', async () => {
+    await expect(
+      buildSwapKeysignPayload({
+        ...buildInput,
+        swapQuote: makeQuote('rune', 'thor1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqm7g9t'),
+      })
+    ).rejects.toThrow('guarded FIN swap execute message')
     expect(mocks.getChainSpecific).not.toHaveBeenCalled()
   })
 })

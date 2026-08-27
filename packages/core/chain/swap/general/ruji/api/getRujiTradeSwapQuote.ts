@@ -66,15 +66,19 @@ export const isRujiTradeSwapPair = (from: AccountCoin, to: AccountCoin): boolean
   return !!fromAsset && !!toAsset && fromAsset !== toAsset
 }
 
-const assertThorAddress = (address: string, label: string): void => {
+const assertThorAddress = (address: string, label: string): string => {
+  const normalized = address.trim()
+
   try {
-    const decoded = fromBech32(address.trim())
+    const decoded = fromBech32(normalized)
     if (decoded.prefix !== 'thor' || (decoded.data.length !== 20 && decoded.data.length !== 32)) {
       throw new Error('wrong prefix')
     }
   } catch {
     throw new Error(`RUJI Trade ${label} must be a valid THORChain address.`)
   }
+
+  return normalized
 }
 
 const assertUnsignedInteger = (value: string | undefined, label: string): string => {
@@ -106,8 +110,7 @@ const findFinMarket = async (fromAsset: RujiTradeAsset, toAsset: RujiTradeAsset)
     throw new Error(`No RUJI Trade FIN market found for ${fromAsset.quoteAsset} ↔ ${toAsset.quoteAsset}.`)
   }
 
-  assertThorAddress(market.address, 'market contract')
-  return market
+  return { ...market, address: assertThorAddress(market.address, 'market contract') }
 }
 
 const calculateMinimumOutput = (expectedOutput: string, slippageBps: number): string => {
@@ -146,8 +149,8 @@ export const getRujiTradeSwapQuote = async ({
   if (!Number.isInteger(slippageBps) || slippageBps < 0 || slippageBps > 5_000) {
     throw new Error('RUJI Trade slippage must be an integer between 0 and 5000 basis points.')
   }
-  assertThorAddress(from.address, 'sender')
-  assertThorAddress(destination, 'destination')
+  const sender = assertThorAddress(from.address, 'sender')
+  const normalizedDestination = assertThorAddress(destination, 'destination')
 
   const market = await findFinMarket(fromAsset, toAsset)
   const configUrl = getCosmosWasmSmartQueryUrl({ chain: Chain.THORChain, id: market.address }, { config: {} })
@@ -163,7 +166,12 @@ export const getRujiTradeSwapQuote = async ({
 
   const denoms = configResponse.data?.denoms?.map(denom => denom.toLowerCase())
   const expectedDenoms = new Set<string>([rujiTradeAsset.rune.finDenom, rujiTradeAsset.brune.finDenom])
-  if (!denoms || denoms.length !== expectedDenoms.size || !denoms.every(denom => expectedDenoms.has(denom))) {
+  const actualDenoms = denoms ? new Set(denoms) : undefined
+  if (
+    !actualDenoms ||
+    actualDenoms.size !== expectedDenoms.size ||
+    ![...actualDenoms].every(denom => expectedDenoms.has(denom))
+  ) {
     throw new Error('RUJI Trade FIN contract config does not match the RUNE ↔ bRUNE market.')
   }
 
@@ -177,7 +185,7 @@ export const getRujiTradeSwapQuote = async ({
     swap: {
       min: {
         min_return: calculateMinimumOutput(expectedOutput, slippageBps),
-        to: destination,
+        to: normalizedDestination,
       },
     },
   })
@@ -188,7 +196,7 @@ export const getRujiTradeSwapQuote = async ({
     expiresAt: Date.now() + rujiTradeQuoteTtlMs,
     tx: {
       cosmosWasm: {
-        sender: from.address,
+        sender,
         contract: market.address,
         executeMsg,
         funds: [{ denom: fromAsset.finDenom, amount: amount.toString() }],

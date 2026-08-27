@@ -64,7 +64,7 @@ export type BuildSwapKeysignPayloadInput = {
 type TransferSwapTx = Extract<GeneralSwapTx, { transfer: unknown }>['transfer']
 type CosmosWasmSwapTx = Extract<GeneralSwapTx, { cosmosWasm: unknown }>['cosmosWasm']
 
-const getRujiTradeFundAmount = (tx: CosmosWasmSwapTx, fromCoin: AccountCoin): bigint => {
+const getRujiTradeFundAmount = (tx: CosmosWasmSwapTx, fromCoin: AccountCoin, toCoin: AccountCoin): bigint => {
   const expectedDenom =
     fromCoin.chain === Chain.THORChain && fromCoin.id === undefined && fromCoin.ticker.toUpperCase() === 'RUNE'
       ? 'rune'
@@ -100,7 +100,7 @@ const getRujiTradeFundAmount = (tx: CosmosWasmSwapTx, fromCoin: AccountCoin): bi
     !/^\d+$/.test(min.min_return) ||
     BigInt(min.min_return) <= 0n ||
     typeof min.to !== 'string' ||
-    !min.to.trim()
+    min.to !== toCoin.address
   ) {
     throw new Error('RUJI Trade CosmWasm route must contain a guarded FIN swap execute message.')
   }
@@ -235,7 +235,7 @@ export const buildSwapKeysignPayload = async ({
       return result
     },
   })
-  const cosmosWasmAmount = cosmosWasmTx ? getRujiTradeFundAmount(cosmosWasmTx, fromCoin) : undefined
+  const cosmosWasmAmount = cosmosWasmTx ? getRujiTradeFundAmount(cosmosWasmTx, fromCoin, toCoin) : undefined
   const chainAmount = transferTx?.amount ?? cosmosWasmAmount ?? toChainAmount(amount, fromCoin.decimals)
 
   const fromCoinHexPublicKey = Buffer.from(fromPublicKey.data()).toString('hex')
