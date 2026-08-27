@@ -282,6 +282,62 @@ describe('AgentExecutor.getPendingSummary', () => {
     expect(summary).not.toContain('WETH (contract unavailable)')
   })
 
+  it('does not attach a buy contract to a different visible asset symbol', () => {
+    const executor = new AgentExecutor(createMockVault())
+    executor.storeServerTransaction(
+      makeMultiLegEnvelope(
+        {
+          quote_summary: '2 USDC → ~0.001 ETH via swapkit',
+          from_token_symbol: 'USDC',
+          expected_output: '0.001 ETH',
+          to_token: `WETH (${WETH_CONTRACT} on Base, 18 dec, source: known)`,
+          to_token_symbol: 'ETH',
+        },
+        { toChain: 'Base' }
+      )
+    )
+
+    const summary = executor.getPendingSummary()!
+    expect(summary).toContain('ETH (contract unavailable) via swapkit')
+    expect(summary).not.toContain(WETH_CONTRACT)
+  })
+
+  it('does not let a native descriptor suppress the unavailable marker for a different visible asset', () => {
+    const executor = new AgentExecutor(createMockVault())
+    executor.storeServerTransaction(
+      makeMultiLegEnvelope(
+        {
+          quote_summary: '2 USDC → ~0.001 WETH via swapkit',
+          from_token_symbol: 'USDC',
+          expected_output: '0.001 WETH',
+          to_token: 'ETH (native on Base, 18 dec, source: native)',
+          to_token_symbol: 'WETH',
+        },
+        { toChain: 'Base' }
+      )
+    )
+
+    expect(executor.getPendingSummary()).toContain('WETH (contract unavailable) via swapkit')
+  })
+
+  it('does not attach the signed approval target to a different visible sell asset symbol', () => {
+    const executor = new AgentExecutor(createMockVault())
+    executor.storeServerTransaction(
+      makeMultiLegEnvelope({
+        quote_summary: '2 WETH → ~0.001 ETH via swapkit',
+        amount_in: '2 WETH',
+        from_token: `USDC (${USDC_CONTRACT} on Base, 6 dec, source: known)`,
+        from_token_symbol: 'WETH',
+        to_token: 'ETH (native on Base, 18 dec, source: native)',
+        to_token_symbol: 'ETH',
+      })
+    )
+
+    const summary = executor.getPendingSummary()!
+    expect(summary).toContain('2 WETH (contract unavailable) → ~0.001 ETH via swapkit')
+    expect(summary).not.toContain(`WETH (${USDC_CONTRACT})`)
+  })
+
   it('does not fall back to payload.to_chain when labels.to_chain is present but unsupported', () => {
     const executor = new AgentExecutor(createMockVault())
     const envelope = makeMultiLegEnvelope({

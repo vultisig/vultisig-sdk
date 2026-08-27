@@ -243,11 +243,23 @@ function splitSwapHead(head: string, sellAnchors: string[], buyAnchors: string[]
   return best
 }
 
-function discloseSwapSide(side: string, anchors: string[], suffix: string): string {
-  if (!suffix) return side
+function terminalAnchorSymbol(anchor: string): string {
+  return anchor.trim().match(/[\p{L}\p{N}][\p{L}\p{N}._+-]*$/u)?.[0] ?? ''
+}
+
+function discloseSwapSide(
+  side: string,
+  anchors: string[],
+  suffix: string,
+  expectedSymbol: string
+): string {
   for (const anchor of anchors) {
     const end = anchorEnd(side, anchor)
-    if (end >= 0) return `${side.slice(0, end)}${suffix}${side.slice(end)}`
+    if (end < 0) continue
+    const visibleSymbol = terminalAnchorSymbol(anchor)
+    if (expectedSymbol && visibleSymbol && visibleSymbol !== expectedSymbol) break
+    if (!suffix) return side
+    return `${side.slice(0, end)}${suffix}${side.slice(end)}`
   }
   return `${side.trimEnd()} (contract unavailable)${side.slice(side.trimEnd().length)}`
 }
@@ -318,8 +330,10 @@ function discloseSwapTokenContracts(
 
   const halves = splitSwapHead(sanitizedHead, sellAnchors, buyAnchors)
   if (!halves) return `${sanitizedHead} (contract unavailable)`
-  const sell = discloseSwapSide(halves.left, sellAnchors, sellSuffix)
-  const buy = discloseSwapSide(halves.buy, buyAnchors, buySuffix)
+  const sellExpectedSymbol = fromToken.displaySymbol || fromSymbol.displaySymbol
+  const buyExpectedSymbol = toToken.displaySymbol || toSymbol.displaySymbol
+  const sell = discloseSwapSide(halves.left, sellAnchors, sellSuffix, sellExpectedSymbol)
+  const buy = discloseSwapSide(halves.buy, buyAnchors, buySuffix, buyExpectedSymbol)
   return `${sell}→${buy}${halves.provider}`
 }
 
