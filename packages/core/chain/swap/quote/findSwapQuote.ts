@@ -140,6 +140,14 @@ type RankedSwapQuote = SwapQuoteCandidate & {
 
 const QUOTE_FETCH_TIMEOUT_MS = 30_000
 /**
+ * Budget for the single automatic re-attempt of an aggregator that failed
+ * transiently while a native protocol reported a halt (see
+ * `retryTransientFetchersAfterNativeHalt`). Deliberately shorter than the first
+ * attempt: the provider has already had the full budget and is warm, so a second
+ * full window would only double the wait before the all-fail classification.
+ */
+const QUOTE_FETCH_RETRY_TIMEOUT_MS = 10_000
+/**
  * General aggregators do not expose a uniform quote deadline. Keep the bound
  * transaction usable for a normal review-and-sign round trip while the SDK's
  * presentation layer continues to recommend a refresh after 60 seconds.
@@ -368,6 +376,142 @@ const isTransientProviderFailure = (reason: unknown): boolean => {
     /\b429\b/.test(lower) ||
     lower.includes('skip api network error') ||
     TRANSIENT_PROVIDER_CODE_RE.test(msg)
+  )
+}
+
+/**
+ * The providers whose failure can legitimately mean "this pair is halted".
+ * `assertNativeTradingOpen` only ever runs inside a THORChain/MayaChain fetcher,
+ * so a halt is scoped to the native protocol that raised it — every other
+ * fetcher is an aggregator with its own, independent route.
+ */
+const nativeSwapProviderNames: ReadonlySet<SwapQuoteProviderName> = new Set(['THORChain', 'MayaChain'])
+
+const isTradingHaltedRejection = (reason: unknown): boolean =>
+  asTradingHaltedSwapError(reason) !== null ||
+  isTradingHaltedMsg(reason instanceof Error ? reason.message : String(reason))
+
+/** Indexes of the rejected non-native fetchers that failed transiently. */
+const getTransientAggregatorIndexes = (
+  settled: PromiseSettledResult<RankedSwapQuote>[],
+  fetchers: SwapQuoteFetcher[]
+): number[] =>
+  settled.flatMap((result, index) =>
+    result.status === 'rejected' &&
+    !nativeSwapProviderNames.has(fetchers[index].providerName) &&
+    isTransientProviderFailure(result.reason)
+      ? [index]
+      : []
+  )
+
+type RetryTransientFetchersAfterNativeHaltInput = {
+  settled: PromiseSettledResult<RankedSwapQuote>[]
+  fetchers: SwapQuoteFetcher[]
+  runFetchers: (fetchers: SwapQuoteFetcher[], timeoutMs: number) => Promise<PromiseSettledResult<RankedSwapQuote>[]>
+}
+
+/**
+ * One extra attempt at the aggregators that failed transiently while a native
+ * protocol reported a halt. Without it a THORChain halt plus a LiFi/SwapKit
+ * timeout collapses into "trading halted" for the whole pair, even though the
+ * aggregator — which the halt never applied to — usually answers on the very
+ * next tap. Returns the results unchanged when nothing qualifies, otherwise the
+ * original results with each retried outcome merged back in at its fetcher index.
+ */
+const retryTransientFetchersAfterNativeHalt = async ({
+  settled,
+  fetchers,
+  runFetchers,
+}: RetryTransientFetchersAfterNativeHaltInput): Promise<PromiseSettledResult<RankedSwapQuote>[]> => {
+  const nativeHalted = settled.some(
+    (result, index) =>
+      result.status === 'rejected' &&
+      nativeSwapProviderNames.has(fetchers[index].providerName) &&
+      isTradingHaltedRejection(result.reason)
+  )
+
+  if (!nativeHalted) {
+    return settled
+  }
+
+  const retryIndexes = getTransientAggregatorIndexes(settled, fetchers)
+  if (isEmpty(retryIndexes)) {
+    return settled
+  }
+
+  const retried = await runFetchers(
+    retryIndexes.map(index => fetchers[index]),
+    QUOTE_FETCH_RETRY_TIMEOUT_MS
+  )
+
+  const merged = [...settled]
+  retryIndexes.forEach((fetcherIndex, retryIndex) => {
+    merged[fetcherIndex] = retried[retryIndex]
+  })
+
+  return merged
+}
+
+type HaltAllFailErrorInput = {
+  settled: PromiseSettledResult<RankedSwapQuote>[]
+  fetchers: SwapQuoteFetcher[]
+  proactiveTradingHalt: SwapError | null
+  haltedProviders: ReadonlySet<SwapQuoteProviderName>
+}
+
+/**
+ * How an all-fail round in which some provider reported a halt should be
+ * reported, or `null` when nothing halted and the caller should fall through to
+ * its size/no-route classification.
+ *
+ * Trading-halt takes precedence over the speculative computed minimum and the
+ * generic fallback: when a protocol reports a halt, NO amount can route through
+ * it,
+ * so telling the user to "increase the amount" would be actively misleading. A
+ * genuine provider-reported below-minimum (handled by the caller first) still
+ * wins, since that provider is responding and the amount is the actionable
+ * lever. (#604)
+ *
+ * The halt only speaks for the provider that raised it, though. An aggregator
+ * still unreachable after its retry never declined this pair, so reporting a halt
+ * would send the user off to wait out an outage that was never blocking their
+ * route — while the truthful answer is that the route which could have filled
+ * simply could not be reached. (#2167)
+ */
+const getHaltAllFailError = ({
+  settled,
+  fetchers,
+  proactiveTradingHalt,
+  haltedProviders,
+}: HaltAllFailErrorInput): SwapError | null => {
+  if (!proactiveTradingHalt && haltedProviders.size === 0) {
+    return null
+  }
+
+  const unreachableProviders = getTransientAggregatorIndexes(settled, fetchers).map(
+    index => fetchers[index].providerName
+  )
+
+  if (isEmpty(unreachableProviders)) {
+    return (
+      proactiveTradingHalt ??
+      new SwapError(
+        SwapErrorCode.TradingHalted,
+        formatTradingHaltedMessage(`trading is halted on ${[...haltedProviders].join(', ')}`)
+      )
+    )
+  }
+
+  // Worded to stay classifiable downstream: it names the transient category
+  // (which `isTransientProviderFailure` and agent-backend-ts's
+  // `isTransientQuoteError` both key off) and deliberately avoids the halt
+  // wordings, so a consumer re-classifying this message does not read it back as
+  // a hard halt.
+  return new SwapError(
+    SwapErrorCode.AllProvidersFailed,
+    `Swap quote lookup failed: ${unreachableProviders.join(', ')} could not be reached due to a transient ` +
+      `network/timeout error, and the remaining route(s) (${[...haltedProviders].join(', ')}) are ` +
+      `temporarily unavailable. This is not a missing route — retry the same swap shortly.`
   )
 }
 
@@ -1012,26 +1156,34 @@ export const findSwapQuotes = async (input: FindSwapQuoteInput): Promise<FindSwa
     }
   }
 
-  const settled = await Promise.allSettled(
-    fetchers.map(async (fetcher): Promise<RankedSwapQuote> => {
-      const quote = bindQuoteSafetyMetadata(
-        await withTimeout(fetcher.fetch(), QUOTE_FETCH_TIMEOUT_MS),
-        from,
-        to,
-        amount
-      )
-      return {
-        quote,
-        outputAmount: getComparableOutputAmount(quote, to, fetcher.providerName),
-        sourceGasUnits: getSameChainEvmSourceGasUnits(quote, from, to),
-        providerName: fetcher.providerName,
-      }
-    })
-  )
+  const runFetchers = (list: SwapQuoteFetcher[], timeoutMs: number): Promise<PromiseSettledResult<RankedSwapQuote>[]> =>
+    Promise.allSettled(
+      list.map(async (fetcher): Promise<RankedSwapQuote> => {
+        const quote = bindQuoteSafetyMetadata(await withTimeout(fetcher.fetch(), timeoutMs), from, to, amount)
+        return {
+          quote,
+          outputAmount: getComparableOutputAmount(quote, to, fetcher.providerName),
+          sourceGasUnits: getSameChainEvmSourceGasUnits(quote, from, to),
+          providerName: fetcher.providerName,
+        }
+      })
+    )
+
+  let settled = await runFetchers(fetchers, QUOTE_FETCH_TIMEOUT_MS)
   const best = selectBestEligibleQuote(settled)
 
   if (best) {
     return { best, ranked: rankQuoteCandidates(settled) }
+  }
+
+  // A native halt is not a verdict on the aggregators that ran alongside it, so
+  // give the ones that merely blipped (timeout / network / 5xx) a second chance
+  // before the all-fail classification below can report the pair as halted.
+  settled = await retryTransientFetchersAfterNativeHalt({ settled, fetchers, runFetchers })
+  const bestAfterRetry = selectBestEligibleQuote(settled)
+
+  if (bestAfterRetry) {
+    return { best: bestAfterRetry, ranked: rankQuoteCandidates(settled) }
   }
 
   // Scan rejected results for actionable size-related signals. Prefer the most
@@ -1087,7 +1239,10 @@ export const findSwapQuotes = async (input: FindSwapQuoteInput): Promise<FindSwa
       belowMinimumByProvider.set(fetchers[i].providerName, msg)
     }
 
-    if (isTradingHaltedMsg(msg)) {
+    // Matches the typed `SwapError` from `assertNativeTradingOpen` as well as a
+    // provider's halt wording, so the halt reporting below always knows which
+    // protocol raised it.
+    if (isTradingHaltedRejection(result.reason)) {
       haltedProviders.add(fetchers[i].providerName)
     }
   }
@@ -1104,20 +1259,9 @@ export const findSwapQuotes = async (input: FindSwapQuoteInput): Promise<FindSwa
     )
   }
 
-  if (proactiveTradingHalt) {
-    throw proactiveTradingHalt
-  }
-
-  // Trading-halt takes precedence over the speculative computed minimum and the
-  // generic fallback: when a native protocol reports a halt, NO amount can route,
-  // so telling the user to "increase the amount" would be actively misleading. A
-  // genuine provider-reported below-minimum (handled above) still wins, since
-  // that provider is responding and the amount is the actionable lever. (#604)
-  if (haltedProviders.size > 0) {
-    throw new SwapError(
-      SwapErrorCode.TradingHalted,
-      formatTradingHaltedMessage(`trading is halted on ${[...haltedProviders].join(', ')}`)
-    )
+  const haltError = getHaltAllFailError({ settled, fetchers, proactiveTradingHalt, haltedProviders })
+  if (haltError) {
+    throw haltError
   }
 
   // No provider returned a parseable below-minimum hint. Before falling back to
