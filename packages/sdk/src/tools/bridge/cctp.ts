@@ -114,6 +114,114 @@ export const cctpSupportedChains = Object.keys(cctpChains)
 /** Lookup CCTP config for a chain. Returns undefined for unsupported chains. */
 export const getCctpChain = (chainName: string): CctpChainConfig | undefined => cctpChains[chainName]
 
+/** Reverse-lookup a CCTP domain ID back to its registered chain name. */
+export function getCctpChainNameByDomain(domain: number): string | undefined {
+  return Object.keys(cctpChains).find(name => cctpChains[name]?.domain === domain)
+}
+
+/**
+ * Decoded identity of a single CCTP depositForBurn message.
+ *
+ * Callers use this to bind a claim or UI review surface back to the exact burn
+ * identity (source/destination domain, token, recipient, and amount) instead of
+ * blindly trusting raw message bytes.
+ */
+export type CctpBurnMessage = {
+  /** CCTP message envelope version. Only version 0 (V1) is supported. */
+  version: number
+  /** Domain ID of the chain the burn happened on. */
+  sourceDomain: number
+  /** Domain ID of the chain this claim is meant to be submitted on. */
+  destinationDomain: number
+  /** Per-source-domain nonce. */
+  nonce: bigint
+  /** MessageTransmitter-level sender - the source chain's TokenMessenger. */
+  sender: `0x${string}`
+  /** MessageTransmitter-level recipient - the destination chain's TokenMessenger. */
+  recipient: `0x${string}`
+  destinationCaller: `0x${string}`
+  /** Burn-message body version. Only version 0 (V1) is supported. */
+  bodyVersion: number
+  /** ERC-20 token that was burned on the source chain. */
+  burnToken: `0x${string}`
+  /** Address that receives the minted USDC on the destination chain. */
+  mintRecipient: `0x${string}`
+  /** Raw burned amount, in the token's base units. */
+  amount: bigint
+  messageSender: `0x${string}`
+}
+
+const CCTP_MESSAGE_HEADER_BYTES = 116
+const CCTP_BURN_BODY_BYTES = 132
+const CCTP_BURN_MESSAGE_BYTES = CCTP_MESSAGE_HEADER_BYTES + CCTP_BURN_BODY_BYTES
+
+function readBigUint(hexBody: string, byteOffset: number, byteLength: number): bigint {
+  const start = byteOffset * 2
+  const end = start + byteLength * 2
+  const slice = hexBody.slice(start, end)
+  return slice === '' ? 0n : BigInt(`0x${slice}`)
+}
+
+function readBytes32Address(hexBody: string, byteOffset: number): `0x${string}` {
+  const start = byteOffset * 2
+  const word = hexBody.slice(start, start + 64)
+  return `0x${word.slice(24)}` as `0x${string}`
+}
+
+/**
+ * Decode a CCTP V1 depositForBurn message into its identifying fields.
+ *
+ * Throws (never guesses) when the message does not decode unambiguously as a
+ * V1 USDC burn message.
+ */
+export function decodeCctpBurnMessage(messageHex: `0x${string}`): CctpBurnMessage {
+  const hexBody = messageHex.slice(2)
+  const byteLen = hexBody.length / 2
+  if (byteLen !== CCTP_BURN_MESSAGE_BYTES) {
+    throw new Error(
+      `message is ${byteLen} bytes; expected exactly ${CCTP_BURN_MESSAGE_BYTES} bytes ` +
+        `(${CCTP_MESSAGE_HEADER_BYTES}-byte CCTP header + ${CCTP_BURN_BODY_BYTES}-byte depositForBurn body) ` +
+        `for a V1 USDC burn message - cannot identify this burn unambiguously`
+    )
+  }
+
+  const version = Number(readBigUint(hexBody, 0, 4))
+  if (version !== 0) {
+    throw new Error(`unsupported CCTP message version ${version} (this deployment only decodes V1 = version 0)`)
+  }
+  const sourceDomain = Number(readBigUint(hexBody, 4, 4))
+  const destinationDomain = Number(readBigUint(hexBody, 8, 4))
+  const nonce = readBigUint(hexBody, 12, 8)
+  const sender = readBytes32Address(hexBody, 20)
+  const recipient = readBytes32Address(hexBody, 52)
+  const destinationCaller = readBytes32Address(hexBody, 84)
+
+  const bodyOffset = CCTP_MESSAGE_HEADER_BYTES
+  const bodyVersion = Number(readBigUint(hexBody, bodyOffset, 4))
+  if (bodyVersion !== 0) {
+    throw new Error(`unsupported CCTP burn-message body version ${bodyVersion} (this deployment only decodes V1 = version 0)`)
+  }
+  const burnToken = readBytes32Address(hexBody, bodyOffset + 4)
+  const mintRecipient = readBytes32Address(hexBody, bodyOffset + 36)
+  const amount = readBigUint(hexBody, bodyOffset + 68, 32)
+  const messageSender = readBytes32Address(hexBody, bodyOffset + 100)
+
+  return {
+    version,
+    sourceDomain,
+    destinationDomain,
+    nonce,
+    sender,
+    recipient,
+    destinationCaller,
+    bodyVersion,
+    burnToken,
+    mintRecipient,
+    amount,
+    messageSender,
+  }
+}
+
 /**
  * Circle CCTP attestation API base URL.
  *

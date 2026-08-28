@@ -90,6 +90,16 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(Object.values(rn.IbcEnabledCosmosChain)).not.toContain(rn.Chain.THORChain)
   })
 
+
+
+  it('exports the canonical CCTP burn-identity helpers from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(typeof rn.decodeCctpBurnMessage).toBe('function')
+    expect(typeof rn.getCctpChainNameByDomain).toBe('function')
+    expect(rn.getCctpChainNameByDomain(6)).toBe('Base')
+  })
+
   it.each(cosmosTxFeeGasParityCases)(
     'exports the canonical $chain fee denom, fee amount, and gas limit together',
     async ({ chain, feeDenom, feeAmount, gasLimit }) => {

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 import * as sdk from '../../../src/index'
 import * as dangerousAddresses from '../../../src/utils/dangerousAddresses'
+import * as bridge from '../../../src/tools/bridge'
 import { cosmosTxFeeGasParityCases } from '../../fixtures/cosmosTxFeeGasParity'
 
 const dangerousAddressCanonicalExports = [
@@ -143,6 +144,14 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.getCustomRpcOverrides()).toEqual({ [sdk.Chain.Ethereum]: 'https://rpc.example' })
     sdk.clearCustomRpcOverride(sdk.Chain.Ethereum)
     expect(sdk.getCustomRpcOverride(sdk.Chain.Ethereum)).toBeUndefined()
+  })
+
+
+
+  it('exports the canonical CCTP burn-identity helpers for first-party consumers', () => {
+    expect(sdk.decodeCctpBurnMessage).toBe(bridge.decodeCctpBurnMessage)
+    expect(sdk.getCctpChainNameByDomain).toBe(bridge.getCctpChainNameByDomain)
+    expect(sdk.getCctpChainNameByDomain(6)).toBe('Base')
   })
 
   it('exports prepareTrc20TransferFromKeys (pure-crypto TRC-20 builder for mcp-ts/backend)', () => {

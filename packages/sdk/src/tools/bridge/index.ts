@@ -3,5 +3,5 @@ export type { BuildCctpBridgeParams, CctpBridgeResult, CctpUnsignedTx } from './
 export { buildCctpBridge, formatUsdc, parseUsdcAmount } from './buildCctpBridge'
 export type { BuildCctpClaimParams, CctpClaimResult } from './buildCctpClaim'
 export { buildCctpClaim, normalizeHexBytes } from './buildCctpClaim'
-export type { CctpAttestationResult, CctpChainConfig } from './cctp'
-export { cctpAttestationApiBase, cctpChains, cctpSupportedChains, getCctpChain } from './cctp'
+export type { CctpAttestationResult, CctpBurnMessage, CctpChainConfig } from './cctp'
+export { cctpAttestationApiBase, cctpChains, cctpSupportedChains, decodeCctpBurnMessage, getCctpChain, getCctpChainNameByDomain } from './cctp'

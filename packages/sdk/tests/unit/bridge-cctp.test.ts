@@ -6,8 +6,10 @@ import {
   buildCctpClaim,
   cctpChains,
   cctpSupportedChains,
+  decodeCctpBurnMessage,
   formatUsdc,
   getCctpChain,
+  getCctpChainNameByDomain,
   normalizeHexBytes,
   parseUsdcAmount,
 } from '../../src/tools/bridge'
@@ -56,6 +58,40 @@ const messageTransmitterAbi = [
 ] as const
 
 const SENDER = '0x1111111111111111111111111111111111111111'
+
+function padAddress(addr: string): string {
+  return addr.toLowerCase().replace('0x', '').padStart(64, '0')
+}
+
+function padUint(value: bigint, bytes: number): string {
+  return value.toString(16).padStart(bytes * 2, '0')
+}
+
+function buildValidBurnMessage(args: {
+  sourceDomain: number
+  destinationDomain: number
+  sender: string
+  recipient: string
+  burnToken: string
+  mintRecipient: string
+  amount: bigint
+}): `0x${string}` {
+  const header =
+    padUint(0n, 4) +
+    padUint(BigInt(args.sourceDomain), 4) +
+    padUint(BigInt(args.destinationDomain), 4) +
+    padUint(1n, 8) +
+    padAddress(args.sender) +
+    padAddress(args.recipient) +
+    padAddress('0x0000000000000000000000000000000000000000')
+  const body =
+    padUint(0n, 4) +
+    padAddress(args.burnToken) +
+    padAddress(args.mintRecipient) +
+    padUint(args.amount, 32) +
+    padAddress('0x0000000000000000000000000000000000000000')
+  return `0x${header}${body}` as `0x${string}`
+}
 
 describe('parseUsdcAmount', () => {
   it('parses whole + fractional USDC into 6-decimal raw units', () => {
@@ -283,5 +319,33 @@ describe('shared EVM dangerous-address guard', () => {
     // 39 hex chars — not a valid EVM address shape, must not match.
     expect(isEvmBurnAddress('0x00000000000000000000000000000000000dead')).toBe(false)
     expect(() => assertSafeEvmDestination(REAL_EOA)).not.toThrow()
+  })
+})
+
+
+describe('decodeCctpBurnMessage', () => {
+  it('decodes the canonical burn identity and resolves domains back to chain names', () => {
+    const eth = getCctpChain('Ethereum')!
+    const base = getCctpChain('Base')!
+    const message = buildValidBurnMessage({
+      sourceDomain: eth.domain,
+      destinationDomain: base.domain,
+      sender: eth.tokenMessenger,
+      recipient: base.tokenMessenger,
+      burnToken: eth.usdc,
+      mintRecipient: SENDER,
+      amount: 12_500_000n,
+    })
+
+    const burn = decodeCctpBurnMessage(message)
+    expect(burn.sourceDomain).toBe(eth.domain)
+    expect(burn.destinationDomain).toBe(base.domain)
+    expect(burn.sender.toLowerCase()).toBe(eth.tokenMessenger.toLowerCase())
+    expect(burn.recipient.toLowerCase()).toBe(base.tokenMessenger.toLowerCase())
+    expect(burn.burnToken.toLowerCase()).toBe(eth.usdc.toLowerCase())
+    expect(burn.mintRecipient.toLowerCase()).toBe(SENDER.toLowerCase())
+    expect(burn.amount).toBe(12_500_000n)
+    expect(getCctpChainNameByDomain(burn.sourceDomain)).toBe('Ethereum')
+    expect(getCctpChainNameByDomain(burn.destinationDomain)).toBe('Base')
   })
 })

@@ -578,6 +578,7 @@ export type {
   BuildCctpBridgeParams,
   BuildCctpClaimParams,
   CctpAttestationResult,
+  CctpBurnMessage,
   CctpBridgeResult,
   CctpChainConfig,
   CctpClaimResult,
@@ -589,8 +590,10 @@ export {
   cctpAttestationApiBase,
   cctpChains,
   cctpSupportedChains,
+  decodeCctpBurnMessage,
   formatUsdc,
   getCctpChain,
+  getCctpChainNameByDomain,
   normalizeHexBytes,
   parseUsdcAmount,
 } from '../../tools/bridge'
