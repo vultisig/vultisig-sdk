@@ -311,8 +311,13 @@ function discloseSwapTokenContracts(
     Boolean
   )
 
+  const approvalMatchesResolvedSellToken =
+    fromToken.kind === 'token' &&
+    !!fromToken.contract &&
+    !!approvalTarget &&
+    fromToken.contract.toLowerCase() === approvalTarget.toLowerCase()
   const sellSuffix = payload?.approvalTxArgs
-    ? approvalTarget
+    ? approvalMatchesResolvedSellToken
       ? ` (${approvalTarget})`
       : ' (contract unavailable)'
     : fromToken.kind === 'native'
