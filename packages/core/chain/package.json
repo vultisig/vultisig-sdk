@@ -1853,6 +1853,16 @@
       "import": "./dist/swap/general/priceImpactGuard.js",
       "default": "./dist/swap/general/priceImpactGuard.js"
     },
+    "./swap/general/ruji/api/getRujiTradeSwapQuote": {
+      "types": "./dist/swap/general/ruji/api/getRujiTradeSwapQuote.d.ts",
+      "import": "./dist/swap/general/ruji/api/getRujiTradeSwapQuote.js",
+      "default": "./dist/swap/general/ruji/api/getRujiTradeSwapQuote.js"
+    },
+    "./swap/general/ruji/config": {
+      "types": "./dist/swap/general/ruji/config.d.ts",
+      "import": "./dist/swap/general/ruji/config.js",
+      "default": "./dist/swap/general/ruji/config.js"
+    },
     "./swap/general/swapkit/api/getSwapKitQuote": {
       "types": "./dist/swap/general/swapkit/api/getSwapKitQuote.d.ts",
       "import": "./dist/swap/general/swapkit/api/getSwapKitQuote.js",
