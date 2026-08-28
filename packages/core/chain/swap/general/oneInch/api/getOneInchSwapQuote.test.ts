@@ -218,14 +218,14 @@ describe('getOneInchSwapQuote — affiliateFee display (AGG-05)', () => {
 })
 
 describe('getOneInchSwapQuote — token-source tx.value guard (P3 hardening)', () => {
-  const REAL_ROUTER = '0x111111125421ca6dc452d289314280a0f8842a65'
+  const realRouter = '0x111111125421ca6dc452d289314280a0f8842a65'
 
   it('REJECTS a non-zero tx.value for a token-source swap (native-value injection)', async () => {
     vi.mocked(queryUrl).mockResolvedValueOnce({
       dstAmount: '1000000',
       tx: {
         from: '0xsender',
-        to: REAL_ROUTER,
+        to: realRouter,
         data: '0xswap',
         value: '1000000000000000000',
         gasPrice: '1',
@@ -243,7 +243,7 @@ describe('getOneInchSwapQuote — token-source tx.value guard (P3 hardening)', (
       dstAmount: '1000000',
       tx: {
         from: '0xsender',
-        to: REAL_ROUTER,
+        to: realRouter,
         data: '0xswap',
         value: '1000000000000000000',
         gasPrice: '1',
@@ -267,23 +267,23 @@ describe('getOneInchSwapQuote — token-source tx.value guard (P3 hardening)', (
 })
 
 describe('getOneInchSwapQuote — known-selector min-out bind', () => {
-  const REAL_ROUTER = '0x111111125421ca6dc452d289314280a0f8842a65'
-  const V6_SWAP = parseAbi([
+  const realRouter = '0x111111125421ca6dc452d289314280a0f8842a65'
+  const v6Swap = parseAbi([
     'function swap(address executor, (address srcToken, address dstToken, address srcReceiver, address dstReceiver, uint256 amount, uint256 minReturnAmount, uint256 flags) desc, bytes data)',
   ])
-  const ZERO = '0x0000000000000000000000000000000000000001' as const
+  const zero = '0x0000000000000000000000000000000000000001' as const
 
   function encodeV6Swap(minReturnAmount: bigint): `0x${string}` {
     return encodeFunctionData({
-      abi: V6_SWAP,
+      abi: v6Swap,
       functionName: 'swap',
       args: [
-        ZERO,
+        zero,
         {
-          srcToken: ZERO,
-          dstToken: ZERO,
-          srcReceiver: ZERO,
-          dstReceiver: ZERO,
+          srcToken: zero,
+          dstToken: zero,
+          srcReceiver: zero,
+          dstReceiver: zero,
           amount: 1_000_000n,
           minReturnAmount,
           flags: 0n,
@@ -298,7 +298,7 @@ describe('getOneInchSwapQuote — known-selector min-out bind', () => {
       dstAmount: '1000000000',
       tx: {
         from: '0xsender',
-        to: REAL_ROUTER,
+        to: realRouter,
         data: encodeV6Swap(1n),
         value: '0',
         gasPrice: '1',
@@ -314,7 +314,7 @@ describe('getOneInchSwapQuote — known-selector min-out bind', () => {
   it('still accepts undecodable calldata (unknown selectors stay signable)', async () => {
     vi.mocked(queryUrl).mockResolvedValueOnce({
       dstAmount: '1000000000',
-      tx: { from: '0xsender', to: REAL_ROUTER, data: '0xdeadbeef', value: '0', gasPrice: '1', gas: 210000 },
+      tx: { from: '0xsender', to: realRouter, data: '0xdeadbeef', value: '0', gasPrice: '1', gas: 210000 },
     })
 
     const quote = await getOneInchSwapQuote({ account, fromCoinId: '0xsrc', toCoinId: '0xdst', amount: 1_000_000n })

@@ -3,25 +3,27 @@ import { describe, expect, it } from 'vitest'
 
 import { assertOneInchCalldataMinOut, decodeOneInchMinReturn, minAcceptableOneInchOut } from './decodeMinReturn'
 
-const V6_SWAP = parseAbi([
+const v6Swap = parseAbi([
   'function swap(address executor, (address srcToken, address dstToken, address srcReceiver, address dstReceiver, uint256 amount, uint256 minReturnAmount, uint256 flags) desc, bytes data)',
 ])
 
-const UNOSWAP = parseAbi(['function unoswap(uint256 token, uint256 amount, uint256 minReturn, uint256 dex)'])
+const unoswap = parseAbi(['function unoswap(uint256 token, uint256 amount, uint256 minReturn, uint256 dex)'])
+const unoswapTo = parseAbi(['function unoswapTo(address to, uint256 token, uint256 amount, uint256 minReturn, uint256 dex)'])
+const ethUnoswapTo = parseAbi(['function ethUnoswapTo(address to, uint256 minReturn, uint256 dex)'])
 
-const ZERO = '0x0000000000000000000000000000000000000001'
+const zero = '0x0000000000000000000000000000000000000001'
 
 function encodeV6Swap(minReturnAmount: bigint): `0x${string}` {
   return encodeFunctionData({
-    abi: V6_SWAP,
+    abi: v6Swap,
     functionName: 'swap',
     args: [
-      ZERO,
+      zero,
       {
-        srcToken: ZERO,
-        dstToken: ZERO,
-        srcReceiver: ZERO,
-        dstReceiver: ZERO,
+        srcToken: zero,
+        dstToken: zero,
+        srcReceiver: zero,
+        dstReceiver: zero,
         amount: 1_000_000n,
         minReturnAmount,
         flags: 0n,
@@ -38,12 +40,30 @@ describe('decodeOneInchMinReturn', () => {
 
   it('reads minReturn from unoswap', () => {
     const data = encodeFunctionData({
-      abi: UNOSWAP,
+      abi: unoswap,
       functionName: 'unoswap',
       args: [1n, 1_000_000n, 990_000n, 0n],
     })
     expect(decodeOneInchMinReturn(data)).toBe(990_000n)
   })
+
+it('reads minReturn from unoswapTo', () => {
+  const data = encodeFunctionData({
+    abi: unoswapTo,
+    functionName: 'unoswapTo',
+    args: [zero, 1n, 1_000_000n, 989_000n, 0n],
+  })
+  expect(decodeOneInchMinReturn(data)).toBe(989_000n)
+})
+
+it('reads minReturn from ethUnoswapTo', () => {
+  const data = encodeFunctionData({
+    abi: ethUnoswapTo,
+    functionName: 'ethUnoswapTo',
+    args: [zero, 988_000n, 0n],
+  })
+  expect(decodeOneInchMinReturn(data)).toBe(988_000n)
+})
 
   it('returns undefined for unknown selectors (do not brick production)', () => {
     expect(decodeOneInchMinReturn('0xdeadbeef')).toBeUndefined()
@@ -64,6 +84,28 @@ describe('assertOneInchCalldataMinOut', () => {
     const floor = minAcceptableOneInchOut(dstAmount, 0.5)
     expect(() => assertOneInchCalldataMinOut(encodeV6Swap(floor), dstAmount, 0.5)).not.toThrow()
   })
+
+it('refuses a known-selector unoswapTo whose minReturn is below the slippage floor', () => {
+  const data = encodeFunctionData({
+    abi: unoswapTo,
+    functionName: 'unoswapTo',
+    args: [zero, 1n, 1_000_000n, 1n, 0n],
+  })
+  expect(() => assertOneInchCalldataMinOut(data, '1000000000', 0.5)).toThrow(
+    /minReturn \(1\) is below dstAmount\*\(1-slippage\) floor/
+  )
+})
+
+it('refuses a known-selector ethUnoswapTo whose minReturn is below the slippage floor', () => {
+  const data = encodeFunctionData({
+    abi: ethUnoswapTo,
+    functionName: 'ethUnoswapTo',
+    args: [zero, 1n, 0n],
+  })
+  expect(() => assertOneInchCalldataMinOut(data, '1000000000', 0.5)).toThrow(
+    /minReturn \(1\) is below dstAmount\*\(1-slippage\) floor/
+  )
+})
 
   it('does not refuse undecodable calldata', () => {
     expect(() => assertOneInchCalldataMinOut('0xdeadbeef', '1000000000', 0.5)).not.toThrow()
