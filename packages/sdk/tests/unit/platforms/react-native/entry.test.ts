@@ -584,6 +584,10 @@ describe('RN entry exposes pure chain helpers and registry', () => {
 
     expect(rn.getSwapExplorerUrl).toBe(swap.getSwapExplorerUrl)
     expect(rn.swapExplorerProviders).toBe(swap.swapExplorerProviders)
+    expect(typeof rn.getSwapKitTrackerUrl).toBe('function')
+    expect(rn.getSwapKitTrackerUrl({ chain: rn.Chain.Ethereum, txHash: '0xabc' })).toBe(
+      'https://track.swapkit.dev/?hash=0xabc&chainId=1'
+    )
     expect(
       rn.getSwapExplorerUrl({
         provider: 'li.fi',
