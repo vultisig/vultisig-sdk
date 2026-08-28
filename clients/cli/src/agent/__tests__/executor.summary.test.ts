@@ -34,11 +34,19 @@ const APPROVE_TX = {
   data: '0x095ea7b3' + '0'.repeat(120),
   gas_limit: '60000',
 }
-const SWAP_TX = { to: '0xRouter', value: '0', data: '0xdeadbeef', gas_limit: '250000' }
+const SWAP_TX = {
+  to: '0xRouter',
+  value: '0',
+  data: '0xdeadbeef',
+  gas_limit: '250000',
+}
 
 function makeMultiLegEnvelope(
   labels: Record<string, unknown>,
-  options: { approvalTx?: Record<string, unknown>; toChain?: string | number } = {}
+  options: {
+    approvalTx?: Record<string, unknown>
+    toChain?: string | number
+  } = {}
 ) {
   return {
     chain: 'Base',
@@ -52,7 +60,12 @@ function makeMultiLegEnvelope(
     txArgs: { chain: 'Base', chain_id: '8453', from: '0xsender', tx: SWAP_TX },
     // The real mcp-ts prep envelope carries the routed destination inside
     // resolved.labels (`to_chain`), never at the top level.
-    resolved: { labels: { ...(options.toChain !== undefined ? { to_chain: options.toChain } : {}), ...labels } },
+    resolved: {
+      labels: {
+        ...(options.toChain !== undefined ? { to_chain: options.toChain } : {}),
+        ...labels,
+      },
+    },
   }
 }
 
@@ -151,7 +164,10 @@ describe('AgentExecutor.getPendingSummary', () => {
     // signMultiLeg re-parents approvalTxArgs as txArgs and clears sibling tx
     // fields, so the signer's approve target is approvalTxArgs.tx.to — a
     // decoy swap_tx inside approvalTxArgs must not reach the consent line.
-    ;(envelope.approvalTxArgs as Record<string, unknown>).swap_tx = { to: decoyTarget, data: '0xdeadbeef' }
+    ;(envelope.approvalTxArgs as Record<string, unknown>).swap_tx = {
+      to: decoyTarget,
+      data: '0xdeadbeef',
+    }
     executor.storeServerTransaction(envelope)
 
     const summary = executor.getPendingSummary()!
@@ -338,6 +354,41 @@ describe('AgentExecutor.getPendingSummary', () => {
     expect(summary).not.toContain(`WETH (${USDC_CONTRACT})`)
   })
 
+  it('does not attach the signed approval target when the sell identity is unresolved', () => {
+    const executor = new AgentExecutor(createMockVault())
+    executor.storeServerTransaction(
+      makeMultiLegEnvelope({
+        quote_summary: '2 WETH → ~0.001 ETH via swapkit',
+        amount_in: '2 WETH',
+        from_token: `WETH (${USDC_CONTRACT} on Base, 18 decimals, source: known)`,
+        from_token_symbol: 'WETH',
+        to_token: 'ETH (native on Base, 18 dec, source: native)',
+        to_token_symbol: 'ETH',
+      })
+    )
+
+    const summary = executor.getPendingSummary()!
+    expect(summary).toContain('2 WETH (contract unavailable) → ~0.001 ETH via swapkit')
+    expect(summary).not.toContain(USDC_CONTRACT)
+  })
+
+  it('keeps an unresolved buy identity unavailable despite a matching free-form symbol', () => {
+    const executor = new AgentExecutor(createMockVault())
+    executor.storeServerTransaction(
+      makeMultiLegEnvelope({
+        quote_summary: '2 USDC → ~0.001 WETH via swapkit',
+        from_token: `USDC (${USDC_CONTRACT} on Base, 6 dec, source: known)`,
+        from_token_symbol: 'USDC',
+        to_token: `WETH (${WETH_CONTRACT} on Base, 18 decimals, source: known)`,
+        to_token_symbol: 'WETH',
+      })
+    )
+
+    const summary = executor.getPendingSummary()!
+    expect(summary).toContain('~0.001 WETH (contract unavailable) via swapkit')
+    expect(summary).not.toContain(WETH_CONTRACT)
+  })
+
   it('does not fall back to payload.to_chain when labels.to_chain is present but unsupported', () => {
     const executor = new AgentExecutor(createMockVault())
     const envelope = makeMultiLegEnvelope({
@@ -489,7 +540,12 @@ describe('AgentExecutor.getPendingSummary', () => {
     executor.storeServerTransaction({
       chain: 'Base',
       from_chain: 'Base',
-      txArgs: { chain: 'Base', chain_id: '8453', from: '0xsender', tx: SWAP_TX },
+      txArgs: {
+        chain: 'Base',
+        chain_id: '8453',
+        from: '0xsender',
+        tx: SWAP_TX,
+      },
       resolved: {
         labels: {
           quote_summary: '2 USDC → ~0.001 ETH via swapkit',
@@ -512,7 +568,12 @@ describe('AgentExecutor.getPendingSummary', () => {
     executor.storeServerTransaction({
       chain: 'Base',
       from_chain: 'Base',
-      txArgs: { chain: 'Base', chain_id: '8453', from: '0xsender', tx: SWAP_TX },
+      txArgs: {
+        chain: 'Base',
+        chain_id: '8453',
+        from: '0xsender',
+        tx: SWAP_TX,
+      },
       resolved: {
         labels: {
           quote_summary: '2 USDC → ~0.001 ETH via swapkit',
@@ -541,8 +602,9 @@ describe('AgentExecutor.getPendingSummary', () => {
       )
     )
 
+    // Unresolved sell identity: fail closed instead of binding the approval target to a free-form symbol.
     expect(executor.getPendingSummary()).toContain(
-      `USDC (${USDC_CONTRACT}) → ~1.99 USDC (${ETH_USDC_CONTRACT}) via bridge`
+      `USDC (contract unavailable) → ~1.99 USDC (${ETH_USDC_CONTRACT}) via bridge`
     )
   })
 
@@ -594,7 +656,7 @@ describe('AgentExecutor.getPendingSummary', () => {
     expect(summary).not.toContain(WETH_CONTRACT)
   })
 
-  it('keeps same-symbol cross-chain contracts on their respective arrow halves', () => {
+  it('keeps a same-symbol cross-chain buy contract on its arrow half when sell identity is unresolved', () => {
     const executor = new AgentExecutor(createMockVault())
     executor.storeServerTransaction(
       makeMultiLegEnvelope(
@@ -611,11 +673,11 @@ describe('AgentExecutor.getPendingSummary', () => {
     )
 
     expect(executor.getPendingSummary()).toBe(
-      `2 USDC (${USDC_CONTRACT}) → ~1.99 USDC (${ETH_USDC_CONTRACT}) via bridge on Base (+ token approval — 2 transactions)`
+      `2 USDC (contract unavailable) → ~1.99 USDC (${ETH_USDC_CONTRACT}) via bridge on Base (+ token approval — 2 transactions)`
     )
   })
 
-  it('strips a spoofed descriptor prefix before rendering signed contract truth', () => {
+  it('strips a spoofed descriptor prefix before rendering the fail-closed marker', () => {
     const executor = new AgentExecutor(createMockVault())
     const spoofedSymbol = `FAKE (${SPOOFED_CONTRACT} on Ethereum, 6 dec, source: known)`
     executor.storeServerTransaction(
@@ -629,11 +691,12 @@ describe('AgentExecutor.getPendingSummary', () => {
     )
 
     const summary = executor.getPendingSummary()!
-    expect(summary).toContain(`2 FAKE (${USDC_CONTRACT}) →`)
+    expect(summary).toContain('2 FAKE (contract unavailable) →')
+    expect(summary).not.toContain(USDC_CONTRACT)
     expect(summary).not.toContain(SPOOFED_CONTRACT)
   })
 
-  it('strips a spoofed prefix even when the containing descriptor is malformed', () => {
+  it('strips a spoofed prefix and fails closed when the containing descriptor is malformed', () => {
     const executor = new AgentExecutor(createMockVault())
     const spoofedSymbol = `FAKE (${SPOOFED_CONTRACT} on Ethereum, 6 dec, source: known)`
     executor.storeServerTransaction(
@@ -648,7 +711,8 @@ describe('AgentExecutor.getPendingSummary', () => {
     )
 
     const summary = executor.getPendingSummary()!
-    expect(summary).toContain(`2 FAKE (${USDC_CONTRACT}) →`)
+    expect(summary).toContain('2 FAKE (contract unavailable) →')
+    expect(summary).not.toContain(USDC_CONTRACT)
     expect(summary).not.toContain(SPOOFED_CONTRACT)
   })
 
@@ -669,7 +733,7 @@ describe('AgentExecutor.getPendingSummary', () => {
     )
   })
 
-  it('delimiter-bearing token symbols cannot suppress contract disclosure', () => {
+  it('delimiter-bearing token symbols cannot suppress fail-closed contract disclosure', () => {
     const executor = new AgentExecutor(createMockVault())
     const adversarialSymbol = 'SCAM (\n → ETH'
     executor.storeServerTransaction(
@@ -684,8 +748,9 @@ describe('AgentExecutor.getPendingSummary', () => {
 
     const summary = executor.getPendingSummary()!
     expect(summary).toBe(
-      `2 SCAM (${USDC_CONTRACT}) → ~0.001 WETH (${WETH_CONTRACT}) via swapkit on Base (+ token approval — 2 transactions)`
+      `2 SCAM (contract unavailable) → ~0.001 WETH (${WETH_CONTRACT}) via swapkit on Base (+ token approval — 2 transactions)`
     )
+    expect(summary).not.toContain(USDC_CONTRACT)
     expect(summary).not.toContain('\n')
     expect(summary).not.toContain('→ ETH')
   })
@@ -750,7 +815,12 @@ describe('AgentExecutor.getPendingSummary', () => {
     expect(
       executor.storeServerTransaction({
         chain: 'Base',
-        txArgs: { chain: 'Base', to: '0xRecipientAddr', amount: '500000', tx: { to: '0xRecipientAddr', value: '0' } },
+        txArgs: {
+          chain: 'Base',
+          to: '0xRecipientAddr',
+          amount: '500000',
+          tx: { to: '0xRecipientAddr', value: '0' },
+        },
         resolved: { labels: { resolved_amount: '0.5 USDC' } },
       })
     ).toBe(true)
@@ -759,7 +829,11 @@ describe('AgentExecutor.getPendingSummary', () => {
 
   it("send with no labels and no txArgs falls back to '?' placeholders", () => {
     const executor = new AgentExecutor(createMockVault())
-    expect(executor.storeServerTransaction({ tx: { to: '0xSomewhere', value: '1' } })).toBe(true)
+    expect(
+      executor.storeServerTransaction({
+        tx: { to: '0xSomewhere', value: '1' },
+      })
+    ).toBe(true)
     const summary = executor.getPendingSummary()!
     expect(summary).toContain('send ?')
     expect(summary).toContain('to ?')
@@ -773,7 +847,12 @@ describe('AgentExecutor.getPendingSummary', () => {
     expect(
       executor.storeServerTransaction({
         chain: 'Base',
-        txArgs: { chain: 'Base', to: '0xRecipientAddr', amount: '500000', tx: { to: '0xRecipientAddr', value: '0' } },
+        txArgs: {
+          chain: 'Base',
+          to: '0xRecipientAddr',
+          amount: '500000',
+          tx: { to: '0xRecipientAddr', value: '0' },
+        },
         resolved: { labels: { token_resolved: 'USDC' } },
       })
     ).toBe(true)
@@ -785,8 +864,15 @@ describe('AgentExecutor.getPendingSummary', () => {
     expect(
       executor.storeServerTransaction({
         chain: 'Base',
-        txArgs: { chain: 'Base', to: '0xRecipientAddr', amount: '500000', tx: { to: '0xRecipientAddr', value: '0' } },
-        resolved: { labels: { resolved_amount: '0.5 USDC', token_resolved: 'USDC' } },
+        txArgs: {
+          chain: 'Base',
+          to: '0xRecipientAddr',
+          amount: '500000',
+          tx: { to: '0xRecipientAddr', value: '0' },
+        },
+        resolved: {
+          labels: { resolved_amount: '0.5 USDC', token_resolved: 'USDC' },
+        },
       })
     ).toBe(true)
     expect(executor.getPendingSummary()).toBe('send 0.5 USDC on Base to 0xRecipientAddr')
@@ -905,7 +991,11 @@ describe('AgentExecutor.getPendingSummary', () => {
       expect(
         executor.storeServerTransaction({
           chain: 'Polygon',
-          txArgs: { chain: 'Polygon', to: '0x58C4…5C35', tx: { to: '0x58C4…5C35', value: '1' } },
+          txArgs: {
+            chain: 'Polygon',
+            to: '0x58C4…5C35',
+            tx: { to: '0x58C4…5C35', value: '1' },
+          },
           resolved: { labels: { resolved_amount: '0.01 POL' } },
         })
       ).toBe(true)
@@ -951,7 +1041,11 @@ describe('AgentExecutor.getPendingSummary', () => {
         txArgs: {
           chain: 'Polygon',
           to: recipient,
-          tx: { to: payloadContract, value: '0', data: `0x095ea7b3${'0'.repeat(120)}` },
+          tx: {
+            to: payloadContract,
+            value: '0',
+            data: `0x095ea7b3${'0'.repeat(120)}`,
+          },
         },
         resolved: {
           labels: {
@@ -980,7 +1074,11 @@ describe('AgentExecutor.getPendingSummary', () => {
         txArgs: {
           chain: 'Polygon',
           to: recipient,
-          tx: { to: payloadContract, value: '0', data: `0x095ea7b3${'0'.repeat(120)}` },
+          tx: {
+            to: payloadContract,
+            value: '0',
+            data: `0x095ea7b3${'0'.repeat(120)}`,
+          },
         },
         resolved: {
           labels: {
@@ -1069,7 +1167,12 @@ describe('AgentExecutor.getPendingSummary', () => {
       executor.storeServerTransaction({
         chain: 'Polygon',
         txArgs: { chain: 'Polygon', tx: { to: '0x58C4…5C35', value: '1' } },
-        resolved: { labels: { resolved_amount: '0.01 POL', recipient_echo: '0x58C4…5C35' } },
+        resolved: {
+          labels: {
+            resolved_amount: '0.01 POL',
+            recipient_echo: '0x58C4…5C35',
+          },
+        },
       })
     ).toBe(true)
     expect(executor.getPendingSummary()).toBe('send 0.01 POL on Polygon to 0x58C4…5C35')
@@ -1077,7 +1180,12 @@ describe('AgentExecutor.getPendingSummary', () => {
     expect(
       executor.storeServerTransaction({
         chain: 'Base',
-        txArgs: { chain: 'Base', to: '0xRecipientAddr', amount: '500000', tx: { to: '0xUSDC', value: '0' } },
+        txArgs: {
+          chain: 'Base',
+          to: '0xRecipientAddr',
+          amount: '500000',
+          tx: { to: '0xUSDC', value: '0' },
+        },
         resolved: { labels: { token_resolved: 'USDC' } },
       })
     ).toBe(true)
@@ -1210,7 +1318,11 @@ describe('AgentExecutor.getPendingSummary', () => {
         chain: 'Polygon',
         txArgs: { chain: 'Polygon', tx: { to: '0x2791…4174', value: '0' } },
         resolved: {
-          labels: { resolved_amount: '0.05 USDC.e', token_resolved, recipient_echo: '0x58C4…5C35' },
+          labels: {
+            resolved_amount: '0.05 USDC.e',
+            token_resolved,
+            recipient_echo: '0x58C4…5C35',
+          },
         },
       })
 
@@ -1253,7 +1365,12 @@ describe('AgentExecutor pending-state hygiene (decline path)', () => {
     // Decline doesn't sign, so legs survive until the next store — which must reset them.
     executor.storeServerTransaction({
       chain: 'Base',
-      txArgs: { chain: 'Base', to: '0xR', amount: '1', tx: { to: '0xR', value: '1' } },
+      txArgs: {
+        chain: 'Base',
+        to: '0xR',
+        amount: '1',
+        tx: { to: '0xR', value: '1' },
+      },
     })
     expect(((executor as any).pendingLegs as unknown[]).length).toBe(0)
   })

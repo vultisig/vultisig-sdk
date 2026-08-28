@@ -247,7 +247,10 @@ function terminalAnchorSymbol(anchor: string): string {
   return anchor.trim().match(/[\p{L}\p{N}][\p{L}\p{N}._+-]*$/u)?.[0] ?? ''
 }
 
-function discloseSwapSide(side: string, anchors: string[], suffix: string, expectedSymbol: string): string {
+function discloseSwapSide(side: string, anchors: string[], suffix: string, expectedSymbol?: string): string {
+  if (!expectedSymbol) {
+    return `${side.trimEnd()} (contract unavailable)${side.slice(side.trimEnd().length)}`
+  }
   for (const anchor of anchors) {
     const end = anchorEnd(side, anchor)
     if (end < 0) continue
@@ -260,9 +263,10 @@ function discloseSwapSide(side: string, anchors: string[], suffix: string, expec
 }
 
 /**
- * Add contract truth to each trade half. The sell address comes from the signed
- * approval payload when present, otherwise from a chain-checked label claim.
- * The buy address remains a chain-checked label claim.
+ * Add contract truth to each resolved trade half. The sell address comes from
+ * the signed approval payload when present, otherwise from a chain-checked
+ * label claim. The buy address remains a chain-checked label claim. Unresolved
+ * identities fail closed without attaching a concrete contract.
  */
 function discloseSwapTokenContracts(
   head: string,
@@ -325,10 +329,20 @@ function discloseSwapTokenContracts(
 
   const halves = splitSwapHead(sanitizedHead, sellAnchors, buyAnchors)
   if (!halves) return `${sanitizedHead} (contract unavailable)`
-  const sellExpectedSymbol = fromToken.displaySymbol || fromSymbol.displaySymbol
-  const buyExpectedSymbol = toToken.displaySymbol || toSymbol.displaySymbol
-  const sell = discloseSwapSide(halves.left, sellAnchors, sellSuffix, sellExpectedSymbol)
-  const buy = discloseSwapSide(halves.buy, buyAnchors, buySuffix, buyExpectedSymbol)
+  const sellResolved = fromToken.kind !== 'unresolved'
+  const buyResolved = toToken.kind !== 'unresolved'
+  const sell = discloseSwapSide(
+    halves.left,
+    sellAnchors,
+    sellResolved ? sellSuffix : '',
+    sellResolved ? fromToken.displaySymbol : undefined
+  )
+  const buy = discloseSwapSide(
+    halves.buy,
+    buyAnchors,
+    buyResolved ? buySuffix : '',
+    buyResolved ? toToken.displaySymbol : undefined
+  )
   return `${sell}→${buy}${halves.provider}`
 }
 
