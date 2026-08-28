@@ -129,6 +129,7 @@ export default defineConfig([
   // Canonical seedphrase helpers and import/discovery services are published
   // as a narrow declaration surface alongside their dedicated runtime bundle.
   createSubpathTypesConfig('src/seedphrase/index.ts', 'dist/seedphrase/index.d.ts'),
+  createSubpathTypesConfig('src/services/index.ts', 'dist/services/index.d.ts'),
   createSubpathTypesConfig('src/tools/decode/index.ts', 'dist/tools/decode/index.d.ts'),
   createSubpathTypesConfig('src/tx/index.ts', 'dist/tx/index.d.ts'),
 ])

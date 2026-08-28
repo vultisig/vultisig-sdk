@@ -732,6 +732,8 @@ export { decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from '../../tools/d
 // chain client dependency. Re-export them here so RN consumers do not have to
 // deep-import internal service/util paths.
 export { buildKeygenPairingQrPayload } from '../../services/buildKeygenPairingQrPayload'
+export { JoinSecureVaultService } from '../../services/JoinSecureVaultService'
+export { SecureVaultFromSeedphraseService } from '../../services/SecureVaultFromSeedphraseService'
 export { computeNotificationVaultId } from '../../utils/computeNotificationVaultId'
 export type {
   AmountDirection,

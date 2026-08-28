@@ -348,6 +348,10 @@ const configs = {
       distBase: 'seedphrase',
     }),
     ...createSubpathConfigs({
+      input: './src/services/index.ts',
+      distBase: 'services',
+    }),
+    ...createSubpathConfigs({
       input: './src/tools/decode/index.ts',
       distBase: 'tools/decode',
     }),

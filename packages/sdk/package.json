@@ -151,6 +151,19 @@
       "require": "./dist/seedphrase/index.cjs",
       "default": "./dist/seedphrase/index.cjs"
     },
+    "./services": {
+      "types": "./dist/services/index.d.ts",
+      "browser": "./dist/services/index.js",
+      "worker": "./dist/services/index.js",
+      "react-native": "./dist/services/index.js",
+      "node": {
+        "import": "./dist/services/index.js",
+        "require": "./dist/services/index.cjs"
+      },
+      "import": "./dist/services/index.js",
+      "require": "./dist/services/index.cjs",
+      "default": "./dist/services/index.cjs"
+    },
     "./tools/decode": {
       "types": "./dist/tools/decode/index.d.ts",
       "browser": "./dist/tools/decode/index.js",

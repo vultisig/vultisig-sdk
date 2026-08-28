@@ -485,6 +485,9 @@ export type { PerformReshareParams } from './services/SecureVaultCreationService
 
 // QR payload parsing / generation (for programmatic multi-device coordination)
 export { buildKeygenPairingQrPayload } from './services/buildKeygenPairingQrPayload'
+export { FastVaultFromSeedphraseService } from './services/FastVaultFromSeedphraseService'
+export { JoinSecureVaultService } from './services/JoinSecureVaultService'
+export { SecureVaultFromSeedphraseService } from './services/SecureVaultFromSeedphraseService'
 export type { ParsedKeygenQR } from './utils/parseKeygenQR'
 export { parseKeygenQR } from './utils/parseKeygenQR'
 
