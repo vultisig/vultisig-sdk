@@ -4,6 +4,11 @@ import * as isValidTokenIdModule from '@vultisig/core-chain/utils/isValidTokenId
 import { describe, expect, it } from 'vitest'
 
 import * as sdk from '../../../src/index'
+import { buildCip20AuxData as canonicalBuildCip20AuxData } from '../../../src/chains/cardano'
+import {
+  decodeSolanaRawTx as canonicalDecodeSolanaRawTx,
+  deriveSolanaRawTxSignature as canonicalDeriveSolanaRawTxSignature,
+} from '../../../src/chains/solana'
 import * as dangerousAddresses from '../../../src/utils/dangerousAddresses'
 import {
   buildSignAminoKeysignPayload as canonicalBuildSignAminoKeysignPayload,
@@ -22,6 +27,10 @@ const dangerousAddressCanonicalExports = [
   'assertSafeEvmDestination',
   'assertSafeDestination',
 ] as const
+
+const solanaSignatureBytes = Uint8Array.from({ length: 64 }, (_, index) => index + 1)
+const solanaRawTxBytes = Uint8Array.from([1, ...solanaSignatureBytes, 0])
+const solanaRawTxBase64 = Buffer.from(solanaRawTxBytes).toString('base64')
 
 describe('@vultisig/sdk public exports', () => {
   it.each(dangerousAddressCanonicalExports)('re-exports dangerous-address canonical %s by identity', name => {
@@ -205,6 +214,24 @@ describe('@vultisig/sdk public exports', () => {
   it('exports Solana balance reads (native SOL + SPL) for mcp-ts consumers', () => {
     expect(typeof sdk.getSolBalance).toBe('function')
     expect(typeof sdk.getSplTokenBalance).toBe('function')
+  })
+
+  it('exports Solana raw-tx decode/signature helpers on the root SDK surface by identity and behavior', () => {
+    expect(sdk.decodeSolanaRawTx).toBe(canonicalDecodeSolanaRawTx)
+    expect(sdk.deriveSolanaRawTxSignature).toBe(canonicalDeriveSolanaRawTxSignature)
+    expect(sdk.decodeSolanaRawTx(solanaRawTxBase64, 'base64')).toEqual(solanaRawTxBytes)
+    expect(sdk.deriveSolanaRawTxSignature(solanaRawTxBase64, 'base64')).toBe(
+      canonicalDeriveSolanaRawTxSignature(solanaRawTxBase64, 'base64')
+    )
+  })
+
+  it('exports Cardano CIP-20 aux-data builder on the root SDK surface by identity and behavior', () => {
+    expect(sdk.buildCip20AuxData).toBe(canonicalBuildCip20AuxData)
+
+    const { auxDataCbor, auxDataHash } = sdk.buildCip20AuxData('hello 🌍')
+
+    expect(auxDataCbor).toEqual(canonicalBuildCip20AuxData('hello 🌍').auxDataCbor)
+    expect(auxDataHash).toHaveLength(32)
   })
 
   it('exports canonical swap tracker URL helpers for first-party consumers', () => {
