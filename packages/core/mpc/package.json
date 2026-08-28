@@ -1091,7 +1091,7 @@
     "@bufbuild/protobuf": "^2.13.0",
     "@cosmjs/encoding": "^0.39.0",
     "@mysten/sui": "^2.22.1",
-    "@noble/hashes": "^2.2.0",
+    "@noble/hashes": "^2.3.0",
     "@solana/web3.js": "^1.98.4",
     "@trustwallet/wallet-core": "^4.7.3",
     "@vultisig/core-chain": "4.0.1",
