@@ -74,6 +74,11 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.TxReadyParseError).toBe('function')
   })
 
+  it('exports the raw EVM envelope keysign helper', () => {
+    expect(typeof sdk.prepareRawEvmTxFromKeys).toBe('function')
+    expect(typeof sdk.VaultBase.prototype.prepareRawEvmTx).toBe('function')
+  })
+
   it('exports the knownContracts canonical registry + lookup helpers', () => {
     expect(typeof sdk.isKnownContract).toBe('function')
     expect(typeof sdk.isCanonicalEvmContract).toBe('function')
