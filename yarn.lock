@@ -7064,7 +7064,7 @@ __metadata:
     bitcoinjs-lib: "npm:^7.0.1"
     bs58: "npm:^6.0.0"
     bs58check: "npm:^4.0.0"
-    cbor-x: "npm:^1.6.4"
+    cbor-x: "npm:^1.6.6"
     date-fns: "npm:^4.4.0"
     ethers: "npm:^6.17.0"
     long: "npm:^5.3.2"
@@ -7331,7 +7331,7 @@ __metadata:
     bs58: "npm:^6.0.0"
     bs58check: "npm:^4.0.0"
     buffer: "npm:^6.0.3"
-    cbor-x: "npm:^1.6.4"
+    cbor-x: "npm:^1.6.6"
     concurrently: "npm:^10.0.3"
     cosmjs-types: "npm:^0.11.0"
     crypto-browserify: "npm:^3.12.1"
@@ -8931,15 +8931,15 @@ __metadata:
   languageName: node
   linkType: hard
 
-"cbor-x@npm:^1.6.4":
-  version: 1.6.4
-  resolution: "cbor-x@npm:1.6.4"
+"cbor-x@npm:^1.6.6":
+  version: 1.6.6
+  resolution: "cbor-x@npm:1.6.6"
   dependencies:
     cbor-extract: "npm:^2.2.2"
   dependenciesMeta:
     cbor-extract:
       optional: true
-  checksum: 10c0/fa8fc366063fbaa56b4e3930633873becf38ba087824f7dbc77700b0c352c2ffe1b8cf72954659bda29ea2765c63eed494aaf0b5219534d77fdf7ceaec40d286
+  checksum: 10c0/674e952750dad24f8546a84e7fde3955bcf601397d7d40337f0d222d98d2e9ebe463b33694380f3330942a0ec607a8ddee02358fe023d3706722273cf963b73b
   languageName: node
   linkType: hard
 
