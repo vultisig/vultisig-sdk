@@ -133,7 +133,7 @@ describe('AgentExecutor.getPendingSummary', () => {
     )
   })
 
-  it('uses the signed approval target and suppresses a mismatching sell-label contract', () => {
+  it('fails closed when the signed approval target disagrees with the resolved sell descriptor', () => {
     const executor = new AgentExecutor(createMockVault())
     const mismatchingClaim = '0x1111111111111111111111111111111111111111'
     executor.storeServerTransaction(
@@ -147,7 +147,8 @@ describe('AgentExecutor.getPendingSummary', () => {
     )
 
     const summary = executor.getPendingSummary()!
-    expect(summary).toContain(`2 USDC (${USDC_CONTRACT})`)
+    expect(summary).toContain('2 USDC (contract unavailable)')
+    expect(summary).not.toContain(USDC_CONTRACT)
     expect(summary).not.toContain(mismatchingClaim)
   })
 
