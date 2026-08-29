@@ -1,4 +1,4 @@
-import { sha512 } from '@noble/hashes/sha512'
+import { sha512 } from '@noble/hashes/sha2.js'
 
 const ed25519GroupOrder = BigInt('0x1000000000000000000000000000000014DEF9DEA2F79CD65812631A5CF5D3ED')
 
