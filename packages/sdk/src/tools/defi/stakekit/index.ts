@@ -163,7 +163,12 @@ function decodeYieldTransaction(tx: YieldTransaction): DecodedYieldStep {
 function canonicalizeEvmStep(step: DecodedYieldStep): Record<string, unknown> | null {
   const u = step.unsignedTransaction
   if (typeof u !== 'object') return null
-  const evm = u as { to?: unknown; value?: unknown; data?: unknown; from?: unknown }
+  const evm = u as {
+    to?: unknown
+    value?: unknown
+    data?: unknown
+    from?: unknown
+  }
   if (typeof evm.to !== 'string' || typeof evm.data !== 'string') return null
   const ur = u as Record<string, unknown>
   const out: Record<string, unknown> = {
@@ -352,10 +357,14 @@ export function parseActionDisplay(data: YieldActionResponse) {
 export type StakekitActionDisplay = ReturnType<typeof parseActionDisplay>
 
 /** Canonical result of the enter/manage builders: the display envelope with `scan_request` prepended. */
-export type StakekitActionResult = { scan_request: ScanRequest } & StakekitActionDisplay
+export type StakekitActionResult = {
+  scan_request: ScanRequest
+} & StakekitActionDisplay
 
 /** Canonical result of {@link stakekitBuildExit}: an action result plus the cooldown period, when known. */
-export type StakekitExitResult = StakekitActionResult & { cooldown_days?: number }
+export type StakekitExitResult = StakekitActionResult & {
+  cooldown_days?: number
+}
 
 // --- Validator picker ---
 
@@ -506,10 +515,7 @@ export type StakekitDetailsResult = {
 }
 
 /** Get full yield product metadata. */
-export async function stakekitDetails(params: {
-  apiKey?: string
-  yieldId: string
-}): Promise<StakekitDetailsResult> {
+export async function stakekitDetails(params: { apiKey?: string; yieldId: string }): Promise<StakekitDetailsResult> {
   const p = await getYield(params.yieldId, params.apiKey)
   return {
     id: p.id,
@@ -527,7 +533,11 @@ export async function stakekitDetails(params: {
     rewardClaiming: p.metadata.rewardClaiming ?? '',
     enterEnabled: p.status.enter,
     exitEnabled: p.status.exit,
-    acceptedTokens: p.tokens.map(t => ({ symbol: t.symbol, network: t.network, address: t.address })),
+    acceptedTokens: p.tokens.map(t => ({
+      symbol: t.symbol,
+      network: t.network,
+      address: t.address,
+    })),
   }
 }
 
@@ -594,7 +604,10 @@ export async function stakekitBuildEnter(params: {
   const resolved = await resolveActionArgs(
     params.yieldId,
     'enter',
-    { validatorAddresses: params.validatorAddresses, tronResource: params.tronResource },
+    {
+      validatorAddresses: params.validatorAddresses,
+      tronResource: params.tronResource,
+    },
     params.apiKey
   )
 
@@ -655,7 +668,10 @@ export async function stakekitBuildExit(params: {
   const resolved = await resolveActionArgs(
     params.yieldId,
     'exit',
-    { validatorAddresses: params.validatorAddresses, tronResource: params.tronResource },
+    {
+      validatorAddresses: params.validatorAddresses,
+      tronResource: params.tronResource,
+    },
     params.apiKey
   )
 
