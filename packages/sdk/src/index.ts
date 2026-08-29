@@ -1149,6 +1149,7 @@ export {
   resolveEns,
   resolveJupiterFeeAccount,
   resolveLuncFloorUsd,
+  resolveSourceChannelByDestChain,
   resolveUsdcPaymentChainId,
   resolveUsdcPaymentContract,
   ResultKind,

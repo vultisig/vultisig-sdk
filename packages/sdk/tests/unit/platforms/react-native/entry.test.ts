@@ -744,6 +744,9 @@ describe('RN entry exposes canonical IBC + Sui prep helpers', () => {
 
     expect(rn.prepareIbcTransfer).toBe(prep.prepareIbcTransfer)
     expect(rn.prepareIbcTransfer).toBe(ibcTransfer.prepareIbcTransfer)
+    expect(rn.resolveSourceChannelByDestChain).toBe(prep.resolveSourceChannelByDestChain)
+    expect(rn.resolveSourceChannelByDestChain).toBe(ibcTransfer.resolveSourceChannelByDestChain)
+    expect(rn.resolveSourceChannelByDestChain('cosmoshub-4', 'noble-1')).toBe('channel-536')
     expect(rn.supportedIbcDestinationsFrom).toBe(prep.supportedIbcDestinationsFrom)
     expect(rn.normaliseIbcChainId).toBe(ibcTransfer.normaliseIbcChainId)
     expect(rn.IBC_MSG_TRANSFER_TYPE_URL).toBe(ibcTransfer.IBC_MSG_TRANSFER_TYPE_URL)
