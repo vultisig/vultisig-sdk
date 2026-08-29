@@ -2072,7 +2072,10 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
         // `maxSwapable`. Committing the full balance directly over-commits a
         // native swap by exactly the network fee, so resolve the fee-aware max
         // before prepare/broadcast.
-        const fullAmount = this.validateHumanSwapAmount(this.formatUnits(balance, fromToken.decimals), fromToken.decimals)
+        const fullAmount = this.validateHumanSwapAmount(
+          this.formatUnits(balance, fromToken.decimals),
+          fromToken.decimals
+        )
         const probe = await this.getSwapQuote({
           fromCoin,
           toCoin,
