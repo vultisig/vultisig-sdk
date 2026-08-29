@@ -1972,7 +1972,16 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       amountBigInt = this.parseAmount(amount, tokenInfo.decimals)
     }
 
-    const keysignPayload = await this.prepareSendTx({ coin, receiver: to, amount: amountBigInt, memo, destinationTag })
+    const keysignPayload = await this.prepareSendTx({
+      coin,
+      receiver: to,
+      amount: amountBigInt,
+      memo,
+      destinationTag,
+      // This is the one place the SDK knows MAX was asked for rather than inferring
+      // it, so the payload records it here or nowhere.
+      sendMaxAmount: amount === 'max',
+    })
 
     if (dryRun) {
       const fee = await this.transactionBuilder.estimateSendFee({
