@@ -47,7 +47,6 @@ describe('getCosmosChainHrp', () => {
     expect(getCosmosChainHrp(CosmosChain.THORChain)).toBe('thor')
     expect(getCosmosChainHrp(CosmosChain.MayaChain)).toBe('maya')
   })
-
 })
 
 describe('COSMOS_CHAIN_ID_HRP', () => {
