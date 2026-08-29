@@ -32,6 +32,24 @@ const lstatIfPresent = file => {
 
 const isLinkedWorktree = repoRoot => lstatIfPresent(path.join(repoRoot, '.git'))?.isFile() ?? false
 
+const gitCommonDirectory = repoRoot => {
+  const dotGit = path.join(repoRoot, '.git')
+  const stat = lstatIfPresent(dotGit)
+  if (!stat) throw new Error(`Missing Git metadata: ${dotGit}`)
+  if (stat.isDirectory()) return realpathSync(dotGit)
+  if (!stat.isFile()) throw new Error(`Invalid Git metadata: ${dotGit}`)
+
+  const match = readFileSync(dotGit, 'utf8').trim().match(/^gitdir:\s*(.+)$/i)
+  if (!match) throw new Error(`Invalid Git worktree metadata: ${dotGit}`)
+  const gitDirectory = path.resolve(repoRoot, match[1])
+  const commonDirectoryFile = path.join(gitDirectory, 'commondir')
+  if (!existsSync(commonDirectoryFile)) {
+    throw new Error(`Missing Git common-directory metadata: ${commonDirectoryFile}`)
+  }
+
+  return realpathSync(path.resolve(gitDirectory, readFileSync(commonDirectoryFile, 'utf8').trim()))
+}
+
 const expandWorkspacePattern = (repoRoot, pattern) => {
   let candidates = [repoRoot]
 
@@ -285,7 +303,11 @@ const assertMatchingRepository = (repoRoot, sourceRoot) => {
 
   const targetPackage = readJson(path.join(repoRoot, 'package.json'))
   const sourcePackage = readJson(path.join(sourceRoot, 'package.json'))
-  if (targetPackage.name !== sourcePackage.name || targetPackage.packageManager !== sourcePackage.packageManager) {
+  if (
+    targetPackage.name !== sourcePackage.name ||
+    targetPackage.packageManager !== sourcePackage.packageManager ||
+    gitCommonDirectory(repoRoot) !== gitCommonDirectory(sourceRoot)
+  ) {
     throw new Error('The --from path is not a matching checkout of this repository')
   }
 }
