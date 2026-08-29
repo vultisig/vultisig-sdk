@@ -15,7 +15,12 @@ import path from 'node:path'
 import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 
-import { setupWorkspaceOverrides, verifyWorktreeResolution } from './setup-worktree.mjs'
+import {
+  repairNestedNodeModulesLink,
+  setupWorkspaceOverrides,
+  setupWorktreeDependencies,
+  verifyWorktreeResolution,
+} from './setup-worktree.mjs'
 
 const packageManager = 'yarn@4.16.0'
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -33,6 +38,28 @@ const resolveFrom = (manifest, specifier) =>
     ],
     { encoding: 'utf8' }
   )
+
+const installFixturePackage = (nodeModules, version, marker) => {
+  const packageRoot = path.join(nodeModules, 'version-probe')
+  mkdirSync(packageRoot, { recursive: true })
+  writeJson(path.join(packageRoot, 'package.json'), {
+    name: 'version-probe',
+    version,
+    main: 'index.js',
+  })
+  writeFileSync(path.join(packageRoot, 'index.js'), `module.exports = ${JSON.stringify(marker)}\n`)
+}
+
+const markAsLinkedWorktree = (repoRoot, mainRoot) => {
+  const commonGitDirectory = path.join(mainRoot, '.git')
+  const worktreeGitDirectory = path.join(commonGitDirectory, 'worktrees', path.basename(repoRoot))
+  mkdirSync(worktreeGitDirectory, { recursive: true })
+  writeFileSync(path.join(worktreeGitDirectory, 'commondir'), '../..\n')
+  writeFileSync(
+    path.join(repoRoot, '.git'),
+    `gitdir: ${worktreeGitDirectory}\n`
+  )
+}
 
 const createRepo = root => {
   mkdirSync(path.join(root, 'packages/a'), { recursive: true })
@@ -186,6 +213,109 @@ test('check accepts a real worktree install whose root workspace links target th
     }
 
     assert.deepEqual(verifyWorktreeResolution(worktreeRoot), { mode: 'local-install', overrides: 2 })
+  })
+})
+
+test('local setup removes only a validated nested alias and preserves worktree dependency resolution', () => {
+  withFixture(({ mainRoot, worktreeRoot }) => {
+    markAsLinkedWorktree(worktreeRoot, mainRoot)
+    rmSync(path.join(worktreeRoot, 'node_modules'))
+    mkdirSync(path.join(worktreeRoot, 'node_modules/@vultisig'), { recursive: true })
+    for (const name of ['a', 'b']) {
+      symlinkSync(
+        path.relative(path.join(worktreeRoot, 'node_modules/@vultisig'), path.join(worktreeRoot, `packages/${name}`)),
+        path.join(worktreeRoot, `node_modules/@vultisig/${name}`)
+      )
+    }
+
+    installFixturePackage(path.join(mainRoot, 'node_modules'), '2.2.0', 'main-2.2.0')
+    installFixturePackage(path.join(worktreeRoot, 'node_modules'), '1.8.0', 'worktree-1.8.0')
+    symlinkSync(path.join(mainRoot, 'node_modules'), path.join(worktreeRoot, 'node_modules/node_modules'))
+
+    assert.throws(
+      () => verifyWorktreeResolution(worktreeRoot),
+      /node_modules\/node_modules is an unsafe nested symlink/
+    )
+    assert.deepEqual(setupWorktreeDependencies(worktreeRoot, mainRoot), {
+      nestedLink: { removed: 1 },
+      nodeModules: { mode: 'local-install', created: false },
+      overrides: {
+        created: 0,
+        removed: 0,
+        replaced: 0,
+        reused: 0,
+        skipped: 'root node_modules is a local directory',
+      },
+      receipt: { mode: 'local-install', overrides: 2 },
+    })
+
+    const manifest = path.join(worktreeRoot, 'packages/a/package.json')
+    assert.equal(
+      realpathSync(resolveFrom(manifest, 'version-probe')),
+      realpathSync(path.join(worktreeRoot, 'node_modules/version-probe/index.js'))
+    )
+    assert.equal(
+      execFileSync(
+        process.execPath,
+        ['-e', 'process.stdout.write(require(process.argv[1]))', resolveFrom(manifest, 'version-probe')],
+        {
+          encoding: 'utf8',
+        }
+      ),
+      'worktree-1.8.0'
+    )
+    assert.equal(
+      JSON.parse(readFileSync(path.join(mainRoot, 'node_modules/version-probe/package.json'), 'utf8')).version,
+      '2.2.0'
+    )
+  })
+})
+
+test('local setup refuses to remove a nested symlink with an unexpected target', () => {
+  withFixture(({ mainRoot, worktreeRoot }) => {
+    markAsLinkedWorktree(worktreeRoot, mainRoot)
+    rmSync(path.join(worktreeRoot, 'node_modules'))
+    mkdirSync(path.join(worktreeRoot, 'node_modules'), { recursive: true })
+    const unexpectedRoot = path.join(path.dirname(worktreeRoot), 'unexpected-node-modules')
+    mkdirSync(unexpectedRoot)
+    const nestedLink = path.join(worktreeRoot, 'node_modules/node_modules')
+    symlinkSync(unexpectedRoot, nestedLink)
+
+    assert.throws(
+      () => repairNestedNodeModulesLink(worktreeRoot, mainRoot),
+      /Refusing to remove unexpected nested node_modules symlink/
+    )
+    assert.equal(realpathSync(nestedLink), realpathSync(unexpectedRoot))
+  })
+})
+
+test('local setup rejects a same-package source from a different Git repository', () => {
+  withFixture(({ mainRoot, worktreeRoot }) => {
+    markAsLinkedWorktree(worktreeRoot, mainRoot)
+    rmSync(path.join(worktreeRoot, 'node_modules'))
+    mkdirSync(path.join(worktreeRoot, 'node_modules'), { recursive: true })
+
+    const unrelatedRoot = path.join(path.dirname(worktreeRoot), 'unrelated')
+    createRepo(unrelatedRoot)
+    execFileSync('git', ['init'], { cwd: unrelatedRoot, stdio: 'ignore' })
+    mkdirSync(path.join(unrelatedRoot, 'node_modules'))
+    const nestedLink = path.join(worktreeRoot, 'node_modules/node_modules')
+    symlinkSync(path.join(unrelatedRoot, 'node_modules'), nestedLink)
+
+    assert.throws(
+      () => repairNestedNodeModulesLink(worktreeRoot, unrelatedRoot),
+      /The --from path is not a matching checkout of this repository/
+    )
+    assert.equal(realpathSync(nestedLink), realpathSync(path.join(unrelatedRoot, 'node_modules')))
+  })
+})
+
+test('primary checkout check ignores its package-manager-owned nested symlink', () => {
+  withFixture(({ mainRoot }) => {
+    mkdirSync(path.join(mainRoot, '.git'))
+    symlinkSync(path.join(mainRoot, 'node_modules'), path.join(mainRoot, 'node_modules/node_modules'))
+
+    assert.deepEqual(verifyWorktreeResolution(mainRoot), { mode: 'local-install', overrides: 2 })
   })
 })
 
