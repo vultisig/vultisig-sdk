@@ -470,10 +470,15 @@ export {
 // hand-maintaining their own copies that can drift (the Hyperliquid 998/999
 // client↔server chainId bug class and the client-side fee-policy fork class).
 // Native tickers are already exported via `chainFeeCoin`. `getEvmChainId`
-// returns the hex chainId; `getEvmChainByChainId` resolves a hex chainId back to
-// its EvmChain; `getEvmRpcUrl` returns the canonical default/custom-RPC-resolved
-// endpoint for that chain.
-export { getEvmChainByChainId, getEvmChainId, getEvmRpcUrl } from '@vultisig/core-chain/chains/evm/chainInfo'
+// returns the hex chainId; `getEvmNumericChainId` returns the EIP-155 number;
+// `getEvmChainByChainId` resolves a hex chainId back to its EvmChain; and
+// `getEvmRpcUrl` returns the canonical default/custom-RPC-resolved endpoint.
+export {
+  getEvmChainByChainId,
+  getEvmChainId,
+  getEvmNumericChainId,
+  getEvmRpcUrl,
+} from '@vultisig/core-chain/chains/evm/chainInfo'
 export { clampEvmPriorityFee } from '@vultisig/core-chain/tx/fee/evm/clampEvmPriorityFee'
 
 // Noon USDC yield vault SDK boundary. Consumers should use these helpers
@@ -584,6 +589,18 @@ export type {
   SwapQuoteProviderExcludeName,
   SwapQuoteProviderName,
 } from '@vultisig/core-chain/swap/quote/findSwapQuote'
+
+// THOR/Maya native-swap metadata — surfaced so consumers stop re-declaring
+// which chains route through THORChain/MayaChain and their asset-notation
+// chain IDs (e.g. vultiagent-app's local thorchainDispatchValidators.ts).
+export type { NativeSwapChain, NativeSwapChainId } from '@vultisig/core-chain/swap/native/NativeSwapChain'
+export {
+  getNativeSwapChainId,
+  getNativeSwapChainIdFromDenomPrefix,
+  nativeSwapChainIds,
+  nativeSwapChains,
+  nativeSwapEnabledChainsRecord,
+} from '@vultisig/core-chain/swap/native/NativeSwapChain'
 
 // THORChain limit orders (`=<` advanced swap queue). The memo IS the order, so
 // `parseLimitSwapMemo` / `getKeysignLimitSwapOrder` are how any device — the
@@ -1007,6 +1024,7 @@ export {
   evmCheckAllowance,
   evmGasPrice,
   evmTxInfo,
+  type EvmTxNumberish,
   findSwapQuote,
   findSwapQuotes,
   formatDot,
@@ -1091,6 +1109,8 @@ export {
   prepareIbcTransfer,
   prepareJettonTransferTxFromKeys,
   preparePolkadotAssetSend,
+  prepareRawEvmTxFromKeys,
+  type PrepareRawEvmTxFromKeysParams,
   prepareSendTxFromKeys,
   prepareSignAminoTxFromKeys,
   prepareSignDirectTxFromKeys,
@@ -1100,6 +1120,7 @@ export {
   prepareTrc20TransferFromKeys,
   prepareUtxoConsolidateTxFromKeys,
   quoteSkipRoute,
+  type RawEvmTxEnvelope,
   recipientSanity,
   resolve4ByteSelector,
   resolveContract,

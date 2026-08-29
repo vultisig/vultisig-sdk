@@ -1223,9 +1223,8 @@ export class AgentExecutor {
 
   /**
    * Sign and broadcast a server-built EVM transaction (raw EVM tx from
-   * tx_ready SSE). Uses vault.prepareSendTx with memo field to carry the
-   * calldata, plus EVM-specific nonce/lock plumbing that Phase B's
-   * `signMultiLeg` depends on for back-to-back approve+main broadcasts.
+   * tx_ready SSE). The SDK raw-envelope helper owns zero-value calldata,
+   * gas-limit, and fee mapping; the CLI reconciles its nonce with local state.
    */
   private async signEvmServerTx(
     serverTxData: any,
@@ -1257,16 +1256,6 @@ export class AgentExecutor {
     await this.acquireEvmLockIfNeeded(chain)
 
     try {
-      const address = await this.vault.address(chain)
-      const balance = await this.vault.balance(chain)
-
-      const coin: AccountCoin = {
-        chain,
-        address,
-        decimals: (balance as any).decimals || 18,
-        ticker: (balance as any).symbol || chain.toString(),
-      }
-
       const amount = BigInt(swapTx.value || '0')
       const hasCalldata = !!(swapTx.data && swapTx.data !== '0x')
 
@@ -1282,42 +1271,24 @@ export class AgentExecutor {
         }
       }
 
-      // Build keysign payload using prepareSendTx - memo field carries EVM calldata
-      // For 0-value contract calls (e.g. approve), use a tiny amount to bypass the SDK's
-      // refineKeysignAmount check, then patch toAmount back to "0" after building.
-      const buildAmount = amount === 0n && hasCalldata ? 1n : amount
-      const keysignPayload = await this.vault.prepareSendTx({
-        coin,
-        receiver: swapTx.to,
-        amount: buildAmount,
-        memo: swapTx.data,
+      const keysignPayload = await this.vault.prepareRawEvmTx({
+        chain,
+        tx: {
+          to: swapTx.to,
+          value: swapTx.value ?? 0n,
+          data: swapTx.data ?? '0x',
+          gasLimit: swapTx.gasLimit ?? swapTx.gas_limit,
+          maxFeePerGas: swapTx.maxFeePerGas ?? swapTx.max_fee_per_gas,
+          maxPriorityFeePerGas: swapTx.maxPriorityFeePerGas ?? swapTx.max_priority_fee_per_gas,
+          nonce: swapTx.nonce,
+        },
       })
 
-      // Patch toAmount to actual value for 0-value contract calls
-      if (amount === 0n && hasCalldata) {
-        ;(keysignPayload as any).toAmount = '0'
-      }
-
-      // Patch EVM nonce if local state is ahead of on-chain
+      // Reconcile a server-provided nonce with locally tracked broadcasts.
       await this.patchEvmNonce(chain, keysignPayload)
 
-      // If the server provided a gas_limit, use it — the MCP server's estimate
-      // is more accurate for complex DeFi calls (e.g. Pendle router ~1.2M gas)
-      // that the SDK's prepareSendTx may underestimate.
-      if (swapTx.gas_limit) {
-        const bs = (keysignPayload as any).blockchainSpecific
-        if (bs?.case === 'ethereumSpecific' && bs.value?.gasLimit) {
-          const serverGas = swapTx.gas_limit.toString()
-          const currentGas = bs.value.gasLimit.toString()
-          // Use the higher of server estimate and SDK estimate
-          if (BigInt(serverGas) > BigInt(currentGas)) {
-            bs.value.gasLimit = serverGas
-            if (this.verbose) process.stderr.write(`[gas] Using server gas_limit: ${serverGas} (was ${currentGas})\n`)
-          }
-        }
-      }
-
-      // Refresh gas estimate — base fee may have drifted since prepareSendTx
+      // Refresh the fee envelope immediately before hashing/signing so a raw
+      // transaction prepared earlier is not underpriced after base-fee drift.
       await this.patchEvmGas(chain, keysignPayload)
 
       // Extract message hashes and sign

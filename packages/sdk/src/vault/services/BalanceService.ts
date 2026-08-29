@@ -3,6 +3,7 @@ import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import { type AccountCoinKey, accountCoinKeyToString } from '@vultisig/core-chain/coin/AccountCoin'
 import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 import { getEvmChainBalances } from '@vultisig/core-chain/coin/balance/getEvmChainBalances'
+import { getRippleNativeBalanceDetail } from '@vultisig/core-chain/coin/balance/resolvers/ripple'
 import type { Address } from 'viem'
 
 import { formatBalance } from '../../adapters/formatBalance'
@@ -64,17 +65,30 @@ export class BalanceService {
 
       address = await this.getAddress(chain)
 
+      // Native XRP carries a locked reserve the plain resolver cannot express:
+      // fetch the {total, spendable, reserve} breakdown (same RPC calls) so the
+      // reserve can be surfaced, while `amount` stays the spendable number.
+      const rippleDetail =
+        chain === Chain.Ripple && assetId === undefined ? await getRippleNativeBalanceDetail(address) : undefined
+
       // Core handles balance fetching for ALL chains
       // Supports: native, ERC-20, SPL, wasm tokens automatically
-      const rawBalance = await getCoinBalance({
-        chain,
-        address,
-        id: assetId, // Contract address / chain-level asset id, never the vault's storage key
-      })
+      const rawBalance =
+        rippleDetail !== undefined
+          ? rippleDetail.spendable
+          : await getCoinBalance({
+              chain,
+              address,
+              id: assetId, // Contract address / chain-level asset id, never the vault's storage key
+            })
 
       // Format using adapter
       const tokens = knownToken ? { [chain]: [knownToken] } : this.getTokensRecord()
       const balance = formatBalance(rawBalance, chain, resultId, tokens)
+      if (rippleDetail !== undefined) {
+        balance.totalAmount = rippleDetail.total.toString()
+        balance.reserveAmount = rippleDetail.reserve.toString()
+      }
 
       // Cache with configured TTL
       await this.cacheService.setScoped(key, CacheScope.BALANCE, balance)
