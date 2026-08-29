@@ -732,10 +732,8 @@ const TON_DRAIN_SEND_MODE_MASK = SendMode.CARRY_ALL_REMAINING_BALANCE | SendMode
  * comment for the fail-open/fail-closed split).
  */
 export function assertTonSigningPayloadNoHostileDrain(signingPayload: string): void {
-  if (typeof signingPayload !== 'string' || signingPayload.length === 0) {
-    throw new Error(
-      'TON_PREBUILT_PAYLOAD_UNREADABLE: no signing payload to inspect — refusing to sign unchecked.'
-    )
+  if (typeof signingPayload !== 'string' || signingPayload.trim().length === 0) {
+    throw new Error('TON_PREBUILT_PAYLOAD_UNREADABLE: no signing payload to inspect — refusing to sign unchecked.')
   }
 
   let slice: Slice

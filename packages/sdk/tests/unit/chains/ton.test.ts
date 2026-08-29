@@ -332,7 +332,7 @@ describe('chains/ton / assertTonSigningPayloadNoHostileDrain (architecture#1994)
       .storeUint(VALID_UNTIL, 32)
       .storeUint(opts.seqno ?? 1, 32)
       .storeUint(opts.op ?? 0, 8)
-      .storeUint(opts.sendMode ?? (SendMode.PAY_GAS_SEPARATELY | SendMode.IGNORE_ERRORS), 8)
+      .storeUint(opts.sendMode ?? SendMode.PAY_GAS_SEPARATELY | SendMode.IGNORE_ERRORS, 8)
       .storeRef(innerMsg)
       .endCell()
 
@@ -377,6 +377,7 @@ describe('chains/ton / assertTonSigningPayloadNoHostileDrain (architecture#1994)
 
   it('fails CLOSED on an absent/empty payload (nothing to inspect)', () => {
     expect(() => assertTonSigningPayloadNoHostileDrain('')).toThrow(/TON_PREBUILT_PAYLOAD_UNREADABLE/)
+    expect(() => assertTonSigningPayloadNoHostileDrain('   ')).toThrow(/TON_PREBUILT_PAYLOAD_UNREADABLE/)
     expect(() => assertTonSigningPayloadNoHostileDrain(undefined as unknown as string)).toThrow(
       /TON_PREBUILT_PAYLOAD_UNREADABLE/
     )
@@ -473,7 +474,11 @@ describe('chains/ton / assertTonSigningPayloadNoHostileDrain (architecture#1994)
       beginCell()
         .store(storeMessageRelaxed(internal({ to: RECIPIENT, value: 7n, bounce: false })))
         .endCell()
-    const b = beginCell().storeUint(TON_V4R2_SUB_WALLET_ID, 32).storeUint(VALID_UNTIL, 32).storeUint(1, 32).storeUint(0, 8)
+    const b = beginCell()
+      .storeUint(TON_V4R2_SUB_WALLET_ID, 32)
+      .storeUint(VALID_UNTIL, 32)
+      .storeUint(1, 32)
+      .storeUint(0, 8)
     for (let i = 0; i < 4; i += 1) {
       b.storeUint(SendMode.PAY_GAS_SEPARATELY | SendMode.IGNORE_ERRORS, 8).storeRef(legit())
     }
