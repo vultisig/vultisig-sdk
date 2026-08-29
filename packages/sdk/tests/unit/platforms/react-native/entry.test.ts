@@ -454,6 +454,16 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.riverStatusName).toBe(river.riverStatusName)
   })
 
+  it('re-exports the canonical StakeKit network mapper on the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const stakekit = await import('../../../../src/tools/defi/stakekit/yieldNetworkChain')
+
+    expect(rn.yieldNetworkToCanonicalChain).toBe(stakekit.yieldNetworkToCanonicalChain)
+    expect(rn.yieldNetworkToCanonicalChain('ethereum')).toBe('Ethereum')
+    expect(rn.yieldNetworkToCanonicalChain('solana')).toBe('Solana')
+    expect(rn.yieldNetworkToCanonicalChain('not-a-real-network')).toBeNull()
+  })
+
   it('re-exports XRPL issued-currency canonicals on the RN entrypoint', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
