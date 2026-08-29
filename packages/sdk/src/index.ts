@@ -590,6 +590,18 @@ export type {
   SwapQuoteProviderName,
 } from '@vultisig/core-chain/swap/quote/findSwapQuote'
 
+// THOR/Maya native-swap metadata — surfaced so consumers stop re-declaring
+// which chains route through THORChain/MayaChain and their asset-notation
+// chain IDs (e.g. vultiagent-app's local thorchainDispatchValidators.ts).
+export type { NativeSwapChain, NativeSwapChainId } from '@vultisig/core-chain/swap/native/NativeSwapChain'
+export {
+  getNativeSwapChainId,
+  getNativeSwapChainIdFromDenomPrefix,
+  nativeSwapChainIds,
+  nativeSwapChains,
+  nativeSwapEnabledChainsRecord,
+} from '@vultisig/core-chain/swap/native/NativeSwapChain'
+
 // THORChain limit orders (`=<` advanced swap queue). The memo IS the order, so
 // `parseLimitSwapMemo` / `getKeysignLimitSwapOrder` are how any device — the
 // initiator or a co-signer reviewing a payload it did not build — reads an

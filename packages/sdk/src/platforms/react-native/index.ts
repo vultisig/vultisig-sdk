@@ -376,11 +376,14 @@ export type {
   ConsolidateUtxo,
   EvmTxNumberish,
   GetMaxSendAmountFromKeysParams,
+  PrepareIbcTransferParams,
+  PrepareIbcTransferResult,
   PrepareJettonTransferTxFromKeysParams,
   PreparePolkadotAssetSendParams,
   PreparePolkadotAssetSendResult,
   PrepareRawEvmTxFromKeysParams,
   PrepareSendTxFromKeysParams,
+  PrepareSuiTokenTransferFromKeysParams,
   PrepareSwapTxFromKeysParams,
   PrepareTrc20TransferFromKeysParams,
   PrepareUtxoConsolidateResult,
@@ -395,6 +398,16 @@ export type {
 // buffer (RN-safe, no mpc/keysign), so unlike the other prep helpers they are
 // statically re-exported rather than lazy-imported. Omitting them here would
 // break the hand-curated RN export list for vultiagent-app consumers.
+export {
+  IBC_CHAIN_HRP,
+  IBC_CHAIN_REVISION,
+  IBC_CHANNEL_DEST,
+  IBC_MSG_TRANSFER_TYPE_URL,
+  normaliseIbcChainId,
+  prepareIbcTransfer,
+  prepareSuiTokenTransferFromKeys,
+  supportedIbcDestinationsFrom,
+} from '../../tools/prep'
 export type {
   CosmosStakingMsgEnvelope,
   DelegateParams,
@@ -921,6 +934,17 @@ export { getThorchainInboundAddress } from '@vultisig/core-chain/chains/cosmos/t
 export * from '@vultisig/core-chain/chains/cosmos/thor/lp'
 export type { GetSwapExplorerUrlInput, SwapExplorerProvider } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 export { getSwapExplorerUrl, swapExplorerProviders } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
+// THOR/Maya native-swap metadata — surfaced so RN consumers stop re-declaring
+// which chains route through THORChain/MayaChain and their asset-notation
+// chain IDs (parity with the root SDK entry).
+export type { NativeSwapChain, NativeSwapChainId } from '@vultisig/core-chain/swap/native/NativeSwapChain'
+export {
+  getNativeSwapChainId,
+  getNativeSwapChainIdFromDenomPrefix,
+  nativeSwapChainIds,
+  nativeSwapChains,
+  nativeSwapEnabledChainsRecord,
+} from '@vultisig/core-chain/swap/native/NativeSwapChain'
 export { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
 export async function fiatToAmount(...args: unknown[]) {
   const mod = await import('../../utils/fiatToAmount')
