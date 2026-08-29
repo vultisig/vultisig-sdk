@@ -377,7 +377,7 @@ describe('chains/ton / assertTonSigningPayloadNoHostileDrain (architecture#1994)
 
   it('fails CLOSED on an absent/empty payload (nothing to inspect)', () => {
     expect(() => assertTonSigningPayloadNoHostileDrain('')).toThrow(/TON_PREBUILT_PAYLOAD_UNREADABLE/)
-    expect(() => assertTonSigningPayloadNoHostileDrain('   ')).toThrow(/TON_PREBUILT_PAYLOAD_UNREADABLE/)
+    expect(() => assertTonSigningPayloadNoHostileDrain(' \t\r\n ')).toThrow(/TON_PREBUILT_PAYLOAD_UNREADABLE/)
     expect(() => assertTonSigningPayloadNoHostileDrain(undefined as unknown as string)).toThrow(
       /TON_PREBUILT_PAYLOAD_UNREADABLE/
     )
