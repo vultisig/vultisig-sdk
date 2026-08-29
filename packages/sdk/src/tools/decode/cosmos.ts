@@ -178,6 +178,7 @@ export function decodeCosmosTx(bytes: Uint8Array, chainHint: string): Envelope {
         env.kind = 'redelegate'
         // The destination (new) validator — where the stake ends up.
         env.recipient = msg.validatorDstAddress
+        env.validatorSrcAddress = msg.validatorSrcAddress
         if (msg.amount) {
           env.amount = msg.amount.amount
           env.asset.contract = msg.amount.denom

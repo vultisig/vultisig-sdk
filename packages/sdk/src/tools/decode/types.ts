@@ -75,6 +75,14 @@ export type Envelope = {
    */
   recipient: string
 
+  /**
+   * Source validator for Cosmos redelegations. Undefined for every other action.
+   * This is material to a redelegation: two payloads with the same destination
+   * and amount but different source validators must not produce the same
+   * canonical envelope.
+   */
+  validatorSrcAddress?: string
+
   /** Token being moved. */
   asset: AssetRef
 
