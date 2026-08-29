@@ -93,6 +93,77 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(reactNativeEntry[name]).toBe(dangerousAddresses[name])
   })
 
+  // sdk#1772: the RN entry omitted the whole validation / address-format
+  // canonical family, so mobile consumers had to deep-import or keep an
+  // app-local mirror - the exact duplicated-not-imported drift these helpers
+  // were added to remove.
+  //
+  // This asserts the ENTIRE runtime surface of each canonical module is
+  // re-exported, rather than a hand-listed set of names. A hand-listed set only
+  // catches what someone remembered to list; walking the module catches a
+  // helper ADDED to it later and wired only into the root entry, which is how
+  // the gap opened in the first place.
+  it.each([
+    ['utils/validateNormalizers', () => import('../../../../src/utils/validateNormalizers')],
+    ['utils/addressFormat', () => import('../../../../src/utils/addressFormat')],
+    ['utils/addressValidation', () => import('../../../../src/utils/addressValidation')],
+    ['utils/chainPrefix', () => import('../../../../src/utils/chainPrefix')],
+    ['tools/policy', () => import('../../../../src/tools/policy')],
+  ] as const)('re-exports every runtime export of %s on the RN entry, by identity', async (_name, load) => {
+    const rn = (await import('../../../../src/platforms/react-native/index')) as Record<string, unknown>
+    const mod = (await load()) as Record<string, unknown>
+
+    const expected = Object.keys(mod).filter(k => k !== 'default')
+    expect(expected.length).toBeGreaterThan(0)
+
+    const missing = expected.filter(k => !(k in rn))
+    expect(missing).toEqual([])
+
+    // Identity, not just presence: a re-export that shadows the canonical with
+    // a local reimplementation would satisfy `in rn` while still drifting.
+    for (const key of expected) {
+      expect(rn[key]).toBe(mod[key])
+    }
+  })
+
+  // Root parity for the same family. The RN entry may legitimately omit
+  // node-only surfaces, so this is deliberately scoped to these modules rather
+  // than the whole root surface - a blanket root-vs-RN diff is 186 names today
+  // and would be noise, not signal.
+  it('matches the root entry for the validation / address-format family', async () => {
+    const rn = (await import('../../../../src/platforms/react-native/index')) as Record<string, unknown>
+    const root = (await import('../../../../src/index')) as Record<string, unknown>
+
+    const family = [
+      'amountMatches',
+      'computeEvmFee',
+      'decimalsFor',
+      'feeMatches',
+      'isValidTokenSymbolFormat',
+      'normalizeTokenSymbol',
+      'scaleHumanToRaw',
+      'scaleRawToHuman',
+      'tokenDecimals',
+      'ValidateNormalizerError',
+      'canonicalChainTag',
+      'classifyAddress',
+      'isAddressValidForChain',
+      'isSolanaAddress',
+      'supportedChainTags',
+      'address',
+      'validate',
+      'checkChainPrefix',
+      'policy',
+      'checkInvariants',
+      'evaluatePolicy',
+    ]
+
+    for (const key of family) {
+      expect(root[key], `root entry lost ${key}`).toBeDefined()
+      expect(rn[key], `RN entry is missing ${key}`).toBe(root[key])
+    }
+  })
+
   it('registers crypto + storage on module load so Vultisig({}) does not throw', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
     const { randomUUID } = await import('../../../../src/crypto')
@@ -123,6 +194,44 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(Array.isArray(rn.DEFAULT_CHAINS)).toBe(true)
     expect(Array.isArray(rn.defaultChains)).toBe(true)
     expect(rn.DEFAULT_CHAINS).toEqual(['Bitcoin', 'Ethereum', 'THORChain', 'Solana', 'BSC'])
+  })
+
+  it('re-exports the RN-safe seedphrase helper family from the RN entrypoint without the eager discovery service', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const types = await import('../../../../src/seedphrase/types')
+    const language = await import('../../../../src/seedphrase/languageDetection')
+    const validator = await import('../../../../src/seedphrase/SeedphraseValidator')
+    const deriver = await import('../../../../src/seedphrase/MasterKeyDeriver')
+    const constants = await import('../../../../src/constants')
+
+    expect(rn.BIP39_LANGUAGES).toBe(types.BIP39_LANGUAGES)
+    expect(rn.SEEDPHRASE_WORD_COUNTS).toBe(types.SEEDPHRASE_WORD_COUNTS)
+    expect(rn.BIP39_WORDLISTS).toBe(language.BIP39_WORDLISTS)
+    expect(rn.detectMnemonicLanguage).toBe(language.detectMnemonicLanguage)
+    expect(rn.findInvalidWords).toBe(language.findInvalidWords)
+    expect(rn.findInvalidWordsAcrossAllLanguages).toBe(language.findInvalidWordsAcrossAllLanguages)
+    expect(rn.getWordlist).toBe(language.getWordlist)
+    expect(rn.normalizeMnemonic).toBe(language.normalizeMnemonic)
+    expect(rn.cleanMnemonic).toBe(validator.cleanMnemonic)
+    expect(rn.SeedphraseValidator).toBe(validator.SeedphraseValidator)
+    expect(rn.validateSeedphrase).toBe(validator.validateSeedphrase)
+    expect(rn.MasterKeyDeriver).toBe(deriver.MasterKeyDeriver)
+    expect(rn.cosmosPathTerra).toBe(deriver.cosmosPathTerra)
+    expect(rn.assertSeedphraseImportSupportsChains).toBe(constants.assertSeedphraseImportSupportsChains)
+    expect(rn.getUnsupportedSeedphraseImportChains).toBe(constants.getUnsupportedSeedphraseImportChains)
+    expect(rn.isSeedphraseImportSupportedChain).toBe(constants.isSeedphraseImportSupportedChain)
+    expect(rn.SEEDPHRASE_IMPORT_SUPPORTED_CHAINS).toBe(constants.SEEDPHRASE_IMPORT_SUPPORTED_CHAINS)
+    expect(rn.SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS).toBe(constants.SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS)
+
+    expect('ChainDiscoveryService' in rn).toBe(false)
+    expect('TransportError' in rn).toBe(false)
+
+    expect(rn.normalizeMnemonic('  ABANDON\nABANDON  ')).toBe('abandon abandon')
+    expect(
+      rn.detectMnemonicLanguage(
+        'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'
+      )
+    ).toBe('english')
   })
 
   it('exports the canonical Cosmos fee helpers, gas-limit tables, and cosmos chain subsets from the RN entry', async () => {
@@ -457,6 +566,8 @@ describe('RN entry exposes pure chain helpers and registry', () => {
     expect(rn.normalizeTx).toBe(tx.normalizeTx)
     expect(rn.splitMultiTx).toBe(tx.splitMultiTx)
     expect(rn.TxNormalizeError).toBe(tx.TxNormalizeError)
+    expect(rn.parseTxReadyEnvelope).toBe(tx.parseTxReadyEnvelope)
+    expect(rn.TxReadyParseError).toBe(tx.TxReadyParseError)
     expect(rn.decodeFromToolResult).toBe(decode.decodeFromToolResult)
     expect(rn.decodeCosmosTx).toBe(decode.decodeCosmosTx)
     expect(rn.decodeEvmTx).toBe(decode.decodeEvmTx)
@@ -530,9 +641,11 @@ describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
     expect(typeof rn.getEvmChainId).toBe('function')
+    expect(typeof rn.getEvmNumericChainId).toBe('function')
     expect(typeof rn.getEvmChainByChainId).toBe('function')
     expect(typeof rn.clampEvmPriorityFee).toBe('function')
     expect(rn.getEvmChainId(rn.Chain.Ethereum)).toBe('0x1')
+    expect(rn.getEvmNumericChainId(rn.Chain.Ethereum)).toBe(1)
     expect(rn.getEvmChainByChainId('0x1')).toBe(rn.Chain.Ethereum)
     expect(
       rn.clampEvmPriorityFee(rn.Chain.Base as Parameters<typeof rn.clampEvmPriorityFee>[0], 75n * 1_000_000_000n)

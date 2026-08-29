@@ -1,5 +1,5 @@
-import { sha256 } from '@noble/hashes/sha256'
-import { bytesToHex } from '@noble/hashes/utils'
+import { sha256 } from '@noble/hashes/sha2.js'
+import { bytesToHex } from '@noble/hashes/utils.js'
 import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 
 import type { SwapQuoteResult } from './SwapQuote'
@@ -7,6 +7,7 @@ import type { SwapQuoteResult } from './SwapQuote'
 type Input = {
   from: AccountCoin
   to: AccountCoin
+  recipient?: string
   requestedAmount: bigint
   expiresAt: number
   quote: SwapQuoteResult
@@ -72,7 +73,14 @@ const coinIdentity = ({ chain, address, id, ticker, decimals }: AccountCoin) => 
  * Pure and platform-neutral so preparation can recompute the same value before
  * any wallet/key/payload work.
  */
-export const getSwapQuoteSafetyFingerprint = ({ from, to, requestedAmount, expiresAt, quote }: Input): string =>
+export const getSwapQuoteSafetyFingerprint = ({
+  from,
+  to,
+  recipient,
+  requestedAmount,
+  expiresAt,
+  quote,
+}: Input): string =>
   bytesToHex(
     sha256(
       new TextEncoder().encode(
@@ -80,6 +88,7 @@ export const getSwapQuoteSafetyFingerprint = ({ from, to, requestedAmount, expir
           version: 1,
           from: coinIdentity(from),
           to: coinIdentity(to),
+          recipient,
           requestedAmount,
           expiresAt,
           quote,

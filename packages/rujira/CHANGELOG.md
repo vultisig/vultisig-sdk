@@ -1,5 +1,11 @@
 # @vultisig/rujira
 
+## 70.0.0
+
+### Major Changes
+
+- [#2218](https://github.com/vultisig/vultisig-sdk/pull/2218) [`d043dc4`](https://github.com/vultisig/vultisig-sdk/commit/d043dc43d9fe33a3160c2739150fd6294f0e7eff) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Unify the workspace on the coordinated Noble/Scure v2 stack and align related workspace peer dependency ranges.
+
 ## 69.0.0
 
 ### Patch Changes
