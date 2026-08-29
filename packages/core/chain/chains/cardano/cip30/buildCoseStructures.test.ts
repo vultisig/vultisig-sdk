@@ -7,7 +7,6 @@
 import { describe, expect, it } from 'vitest'
 
 import { buildCoseKey, buildCoseSign1, buildProtectedHeaderBytes, buildSigStructure } from './buildCoseStructures'
-import { cborArray, cborBytes, cborText } from './cardanoCborPrimitives'
 
 const hex = (bytes: Uint8Array) => Buffer.from(bytes).toString('hex')
 const bytesOf = (...values: number[]) => Uint8Array.from(values)
@@ -59,41 +58,25 @@ describe('buildProtectedHeaderBytes / buildSigStructure / buildCoseSign1', () =>
     const protectedBytes = buildProtectedHeaderBytes(addressBytes)
     const result = buildSigStructure(protectedBytes, payload)
 
-    const expected = cborArray([
-      cborText('Signature1'),
-      cborBytes(protectedBytes),
-      cborBytes(new Uint8Array(0)),
-      cborBytes(payload),
-    ])
+    // Independently hand-derived golden encoding:
+    // array(4), tstr(10) "Signature1", bstr(16) protected headers,
+    // bstr(0) external AAD, bstr(4) payload.
+    const expectedHex = '846a5369676e61747572653150a2012767616464726573734401aabbcc4044deadbeef'
 
-    expect(hex(result)).toBe(hex(expected))
+    expect(hex(result)).toBe(expectedHex)
   })
 
   it('buildCoseSign1 embeds the SAME protected-header bytes buildProtectedHeaderBytes returns (Sig_structure/COSE_Sign1 consistency)', () => {
     const result = buildCoseSign1({ addressBytes, payload, signature })
-    const expectedProtected = buildProtectedHeaderBytes(addressBytes)
 
     // COSE_Sign1 = [protected: bstr, unprotected: {}, payload: bstr, signature: bstr]
-    // array(4) head is 0x84; map(0) head (empty unprotected headers) is 0xA0.
-    const reconstructed = concatBytes([
-      Uint8Array.of(0x84),
-      cborBytes(expectedProtected),
-      Uint8Array.of(0xa0),
-      cborBytes(payload),
-      cborBytes(signature),
-    ])
+    // Independently hand-derived golden encoding: array(4), bstr(16) protected
+    // headers, map(0), bstr(4) payload, bstr(64) signature.
+    const expectedHex =
+      '8450a2012767616464726573734401aabbcca044deadbeef5840' +
+      '4242424242424242424242424242424242424242424242424242424242424242' +
+      '4242424242424242424242424242424242424242424242424242424242424242'
 
-    expect(hex(result)).toBe(hex(reconstructed))
+    expect(hex(result)).toBe(expectedHex)
   })
 })
-
-function concatBytes(parts: Uint8Array[]): Uint8Array {
-  const total = parts.reduce((n, p) => n + p.length, 0)
-  const out = new Uint8Array(total)
-  let offset = 0
-  for (const p of parts) {
-    out.set(p, offset)
-    offset += p.length
-  }
-  return out
-}

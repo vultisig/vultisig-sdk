@@ -42,7 +42,7 @@ describe('getThorchainDepositAsset', () => {
 
   it('resolves via the cosmos chain fallback when assetCoin.chain has no entry', () => {
     const result = getThorchainDepositAsset({
-      assetCoin: { chain: Chain.THORChain, ticker: 'TCY' },
+      assetCoin: { chain: Chain.Sui, ticker: 'TCY' },
       chain: Chain.THORChain,
       secured: false,
     })
