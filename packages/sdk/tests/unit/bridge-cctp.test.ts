@@ -416,7 +416,9 @@ describe('extractCctpMessageFromReceipt', () => {
   })
 
   it('accepts a bare logs array (not wrapped in a receipt)', () => {
-    const result = extractCctpMessageFromReceipt([{ topics: [messageSentTopic as `0x${string}`], data: messageSentData }])
+    const result = extractCctpMessageFromReceipt([
+      { topics: [messageSentTopic as `0x${string}`], data: messageSentData },
+    ])
     expect(result.message).toBe(message)
     expect(result.messageHash).toBe(keccak256(message))
   })

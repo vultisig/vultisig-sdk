@@ -48,7 +48,9 @@ export type ExtractedCctpMessage = {
  * confirmed yet, or is not a CCTP `depositForBurn` receipt.
  */
 export const extractCctpMessageFromReceipt = (receiptOrLogs: CctpReceiptLike): ExtractedCctpMessage => {
-  const logs = Array.isArray(receiptOrLogs) ? receiptOrLogs : (receiptOrLogs as { logs: readonly CctpReceiptLog[] }).logs
+  const logs = Array.isArray(receiptOrLogs)
+    ? receiptOrLogs
+    : (receiptOrLogs as { logs: readonly CctpReceiptLog[] }).logs
 
   const messageSentLog = logs.find(log => log.topics[0]?.toLowerCase() === messageSentTopic.toLowerCase())
   if (!messageSentLog) {
