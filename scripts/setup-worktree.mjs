@@ -30,6 +30,8 @@ const lstatIfPresent = file => {
   }
 }
 
+const isLinkedWorktree = repoRoot => lstatIfPresent(path.join(repoRoot, '.git'))?.isFile() ?? false
+
 const expandWorkspacePattern = (repoRoot, pattern) => {
   let candidates = [repoRoot]
 
@@ -199,19 +201,40 @@ const verifyLinkTarget = ({ consumer, link, workspace }, repoRoot) => {
   return null
 }
 
+const verifyNestedNodeModulesLink = repoRoot => {
+  if (!isLinkedWorktree(repoRoot)) return null
+
+  const nestedLink = path.join(repoRoot, 'node_modules', 'node_modules')
+  const stat = lstatIfPresent(nestedLink)
+  if (!stat?.isSymbolicLink()) return null
+
+  let target
+  try {
+    target = realpathSync(nestedLink)
+  } catch (error) {
+    return `node_modules/node_modules is an invalid nested symlink: ${error.message}`
+  }
+
+  return `node_modules/node_modules is an unsafe nested symlink resolving to ${target}; run \`yarn worktree:setup --from /path/to/main/clone\` before trusting tests`
+}
+
 const verifyInstalledWorkspaceLinks = (repoRoot, workspaces) => {
-  const failures = workspaces.flatMap(workspace => {
-    const link = path.join(repoRoot, 'node_modules', ...workspace.name.split('/'))
-    const failure = verifyLinkTarget(
-      {
-        consumer: { label: 'root install' },
-        link,
-        workspace,
-      },
-      repoRoot
-    )
-    return failure ? [failure] : []
-  })
+  const nestedLinkFailure = verifyNestedNodeModulesLink(repoRoot)
+  const failures = [
+    ...(nestedLinkFailure ? [nestedLinkFailure] : []),
+    ...workspaces.flatMap(workspace => {
+      const link = path.join(repoRoot, 'node_modules', ...workspace.name.split('/'))
+      const failure = verifyLinkTarget(
+        {
+          consumer: { label: 'root install' },
+          link,
+          workspace,
+        },
+        repoRoot
+      )
+      return failure ? [failure] : []
+    }),
+  ]
 
   if (failures.length > 0) {
     throw new Error(`Worktree module-resolution check failed:\n- ${failures.join('\n- ')}`)
@@ -267,12 +290,64 @@ const assertMatchingRepository = (repoRoot, sourceRoot) => {
   }
 }
 
+export const repairNestedNodeModulesLink = (repoRoot, sourceRoot = null) => {
+  if (!isLinkedWorktree(repoRoot)) {
+    throw new Error('Nested node_modules repair must run from a linked Git worktree')
+  }
+
+  const rootNodeModules = path.join(repoRoot, 'node_modules')
+  const rootStat = lstatIfPresent(rootNodeModules)
+  if (!rootStat || rootStat.isSymbolicLink()) {
+    return { removed: 0, skipped: 'root node_modules is missing or shared' }
+  }
+  if (!rootStat.isDirectory()) throw new Error('Worktree node_modules is not a directory')
+
+  const nestedLink = path.join(rootNodeModules, 'node_modules')
+  const nestedStat = lstatIfPresent(nestedLink)
+  if (!nestedStat) return { removed: 0 }
+  if (!nestedStat.isSymbolicLink()) {
+    throw new Error('Refusing to replace non-symlink path: node_modules/node_modules')
+  }
+
+  let target
+  try {
+    target = realpathSync(nestedLink)
+  } catch (error) {
+    throw new Error(`Refusing to remove invalid nested node_modules symlink: ${error.message}`)
+  }
+
+  const allowedTargets = new Set([realpathSync(rootNodeModules)])
+  if (sourceRoot) {
+    assertMatchingRepository(repoRoot, sourceRoot)
+    const sourceNodeModules = path.join(sourceRoot, 'node_modules')
+    const sourceStat = lstatIfPresent(sourceNodeModules)
+    if (!sourceStat) throw new Error(`Source node_modules does not exist: ${sourceNodeModules}`)
+    const resolvedSourceNodeModules = realpathSync(sourceNodeModules)
+    if (!lstatSync(resolvedSourceNodeModules).isDirectory()) {
+      throw new Error(`Source node_modules is not a directory: ${sourceNodeModules}`)
+    }
+    allowedTargets.add(resolvedSourceNodeModules)
+  }
+
+  if (!allowedTargets.has(target)) {
+    throw new Error(
+      `Refusing to remove unexpected nested node_modules symlink to ${target}; pass --from only for its matching checkout`
+    )
+  }
+
+  unlinkSync(nestedLink)
+  return { removed: 1 }
+}
+
 export const ensureSharedNodeModules = (repoRoot, sourceRoot) => {
   const rootNodeModules = path.join(repoRoot, 'node_modules')
   const rootStat = lstatIfPresent(rootNodeModules)
 
   if (rootStat) {
-    if (rootStat.isDirectory() && !rootStat.isSymbolicLink()) return { mode: 'local-install', created: false }
+    if (rootStat.isDirectory() && !rootStat.isSymbolicLink()) {
+      if (sourceRoot) assertMatchingRepository(repoRoot, sourceRoot)
+      return { mode: 'local-install', created: false }
+    }
     if (!rootStat.isSymbolicLink()) throw new Error('Worktree node_modules is neither a directory nor a symlink')
 
     if (sourceRoot) {
@@ -363,6 +438,14 @@ export const setupWorkspaceOverrides = repoRoot => {
   return result
 }
 
+export const setupWorktreeDependencies = (repoRoot, sourceRoot = null) => {
+  const nodeModules = ensureSharedNodeModules(repoRoot, sourceRoot)
+  const nestedLink = repairNestedNodeModulesLink(repoRoot, sourceRoot)
+  const overrides = setupWorkspaceOverrides(repoRoot)
+  const receipt = verifyWorktreeResolution(repoRoot)
+  return { nestedLink, nodeModules, overrides, receipt }
+}
+
 const assertLinkedWorktree = repoRoot => {
   const gitEntry = lstatIfPresent(path.join(repoRoot, '.git'))
   if (!gitEntry?.isFile()) {
@@ -412,14 +495,17 @@ const main = () => {
     }
 
     assertLinkedWorktree(defaultRepoRoot)
-    const nodeModules = ensureSharedNodeModules(defaultRepoRoot, options.sourceRoot)
-    const overrides = setupWorkspaceOverrides(defaultRepoRoot)
-    const receipt = verifyWorktreeResolution(defaultRepoRoot)
+    const { nestedLink, nodeModules, overrides, receipt } = setupWorktreeDependencies(
+      defaultRepoRoot,
+      options.sourceRoot
+    )
 
     console.log(
       `[vultisig-worktree] node_modules=${nodeModules.mode}; overrides created=${overrides.created}, replaced=${
         overrides.replaced
-      }, removed=${overrides.removed}, reused=${overrides.reused}; verified=${receipt.overrides}.`
+      }, removed=${overrides.removed}, reused=${overrides.reused}; nested links removed=${
+        nestedLink.removed
+      }; verified=${receipt.overrides}.`
     )
 
     if (options.build) runBuild(defaultRepoRoot)
