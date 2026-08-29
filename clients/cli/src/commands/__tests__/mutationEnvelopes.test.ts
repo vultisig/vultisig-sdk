@@ -115,6 +115,21 @@ describe('switch', () => {
     expect(env.data).toMatchObject({ switched: true, isActive: true })
     expect(env.data.vault).toMatchObject({ id: 'vault-1', name: 'Vultisig Cluster #1' })
   })
+
+  it('passes explicit replacement only when requested', async () => {
+    const vault = { ...vaultStub, on: vi.fn() }
+    const importVault = vi.fn(async () => vault)
+    const ctx = {
+      sdk: { importVault },
+      setActiveVault: vi.fn(async () => {}),
+    } as unknown as CommandContext
+    const file = path.join(await fs.mkdtemp(path.join(os.tmpdir(), 'vsig-import-replace-')), 'v.vult')
+    await fs.writeFile(file, 'VULT-BYTES')
+
+    await executeImport(ctx, file, 'pw', true)
+
+    expect(importVault).toHaveBeenCalledWith('VULT-BYTES', 'pw', { conflictResolution: 'replace' })
+  })
 })
 
 describe('rename', () => {
