@@ -131,7 +131,7 @@ function validateBech32(value: string, fieldName: string, expectedPrefix?: strin
   // Role guard runs BEFORE the optional exact-prefix check so the explicit,
   // fund-safety-flavored message wins over a generic prefix mismatch.
   if (expectedRole !== undefined) {
-    const isValidator = hrpIsValidatorRole(decoded.prefix)
+    const isValidator = validatorRoleForHrp(decoded.prefix) !== null
     if (expectedRole === 'account' && isValidator) {
       throw new Error(
         `invalid ${fieldName}: "${decoded.prefix}1..." is a validator key, not a spendable account. ` +

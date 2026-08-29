@@ -1,4 +1,5 @@
 import { Chain } from '@vultisig/core-chain/Chain'
+import { findThorchainMemoAssetSeparatorIndex } from '@vultisig/core-chain/swap/native/thorchainMemoAsset'
 
 import { VaultError, VaultErrorCode } from '../vault/VaultError'
 
@@ -98,19 +99,25 @@ export function parseThorSwapMemo(memo: string): ParsedThorSwapMemo {
   const parts = memoBody.split(':')
 
   let chainAsset = parts[0]
-  if (chainAsset && !chainAsset.includes('.')) {
+  if (chainAsset && findThorchainMemoAssetSeparatorIndex(chainAsset) === -1) {
     const expanded = THOR_MEMO_ASSET_SHORTCUTS[chainAsset.toLowerCase()]
     if (expanded) chainAsset = expanded
   }
 
-  if (!chainAsset || !chainAsset.includes('.')) {
+  // First separator only, never the last: a secured asset spells its whole
+  // denom with `-` (`eth-usdc-0x…`), so this must agree with SDK core's own
+  // memo-asset boundary logic or the two would disagree on where a chain
+  // prefix ends. See findThorchainMemoAssetSeparatorIndex.
+  const separatorIndex = chainAsset ? findThorchainMemoAssetSeparatorIndex(chainAsset) : -1
+  if (!chainAsset || separatorIndex === -1) {
     throw new VaultError(
       VaultErrorCode.InvalidConfig,
       `parseThorSwapMemo: malformed swap memo '${memo}': missing CHAIN.ASSET in first segment.`
     )
   }
 
-  const [destChainCode, destAssetRaw] = chainAsset.split('.')
+  const destChainCode = chainAsset.slice(0, separatorIndex)
+  const destAssetRaw = chainAsset.slice(separatorIndex + 1)
   const toChain = THOR_MEMO_CHAIN_TO_ENUM[destChainCode]
   if (!toChain) {
     throw new VaultError(
