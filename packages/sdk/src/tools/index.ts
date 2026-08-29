@@ -49,14 +49,14 @@ export {
   isUsdcPaymentChain,
   lookupUsdcPaymentChain,
   MAX_UINT256,
+  resolve4ByteSelector,
+  resolveEns,
   resolveUsdcPaymentChainId,
   resolveUsdcPaymentContract,
   USDC_CONTRACTS,
   USDC_PAYMENT_CHAIN_CONFIG,
   USDC_PAYMENT_CHAINS,
   USDC_PAYMENT_DECIMALS,
-  resolve4ByteSelector,
-  resolveEns,
 } from './evm'
 
 // Balance reads (pure decode + decimal-scale, no signing/broadcast)

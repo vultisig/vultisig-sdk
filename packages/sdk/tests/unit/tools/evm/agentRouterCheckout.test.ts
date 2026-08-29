@@ -1,4 +1,4 @@
-import { encodeFunctionData, erc20Abi, stringToHex } from 'viem'
+import { encodeFunctionData, stringToHex } from 'viem'
 import { describe, expect, it } from 'vitest'
 
 import {
