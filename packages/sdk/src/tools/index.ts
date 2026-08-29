@@ -412,6 +412,7 @@ export {
   type PrepareUtxoConsolidateTxFromKeysParams,
   type RawEvmTxEnvelope,
   type RedelegateParams,
+  resolveSourceChannelByDestChain,
   type SplTransferResult,
   SUI_NATIVE_COIN_TYPE,
   supportedIbcDestinationsFrom,
