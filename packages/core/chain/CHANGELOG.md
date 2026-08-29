@@ -1,5 +1,66 @@
 # @vultisig/core-chain
 
+## 4.0.1
+
+### Patch Changes
+
+- [#2228](https://github.com/vultisig/vultisig-sdk/pull/2228) [`bbe43cb`](https://github.com/vultisig/vultisig-sdk/commit/bbe43cb91976138015ab4ad29c14a7b0e14f8cb4) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Export `getEvmNumericChainId` from the SDK root and React Native public entries. The accessor is derived from the canonical EVM chain registry, and the React Native transaction builder now consumes it instead of maintaining a duplicate numeric chain-id table.
+
+- [#2227](https://github.com/vultisig/vultisig-sdk/pull/2227) [`6d3c754`](https://github.com/vultisig/vultisig-sdk/commit/6d3c754ed1abe6153e648243ff0339ff0ba50bf1) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add TRON Stake 2.0 expired-unfreeze withdrawal signing with strict native-TRX payload validation and WalletCore 4.7.3 support.
+
+## 4.0.0
+
+### Major Changes
+
+- [#2218](https://github.com/vultisig/vultisig-sdk/pull/2218) [`d043dc4`](https://github.com/vultisig/vultisig-sdk/commit/d043dc43d9fe33a3160c2739150fd6294f0e7eff) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Unify the workspace on the coordinated Noble/Scure v2 stack and align related workspace peer dependency ranges.
+
+### Minor Changes
+
+- [#2024](https://github.com/vultisig/vultisig-sdk/pull/2024) [`821c8a7`](https://github.com/vultisig/vultisig-sdk/commit/821c8a73dd7d3aee55eaca59c22adc1ce8dae2f2) Thanks [@neavra](https://github.com/neavra)! - Label XRP spendable-vs-total balance. `getRippleNativeBalanceDetail` exposes the `{ total, spendable, reserve }` breakdown of a native XRP balance (the existing resolvers keep returning the spendable number, so no consumer changes meaning). SDK `Balance` gains optional `totalAmount`/`reserveAmount` fields, populated for native XRP. The CLI labels the spendable headline and prints the locked reserve for XRP balances; all other chains render unchanged.
+
+### Patch Changes
+
+- [#2164](https://github.com/vultisig/vultisig-sdk/pull/2164) [`6c535ae`](https://github.com/vultisig/vultisig-sdk/commit/6c535ae3aed1c376d2e1bbbeb100e8b5c21c8929) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Route the Kamino Earn API through the Vultisig proxy. Upstream answers the CORS preflight with a 404 and returns no `access-control-allow-origin` on the build endpoints, so a browser refuses the POST that deposits and withdrawals depend on — the flows hung on the review screen in any webview. Native clients never saw it, because CORS is enforced by the browser rather than the server.
+
+- [#2023](https://github.com/vultisig/vultisig-sdk/pull/2023) [`3203589`](https://github.com/vultisig/vultisig-sdk/commit/3203589af5da361dfc51695aad4fef77afa2d78e) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(encoding): bound TRON/Solana/Ripple fee-and-gas fields before `Long.fromString`
+
+  `Long.fromString` (and `BigInt()`) silently two's-complement-wraps an out-of-range magnitude instead of throwing (e.g. `2^64 -> 0`, `2^63 -> -2^63`). Six fee/gas sites fed by third-party gas estimation / swap-aggregator data routed raw values straight into it with no bound - a wrapped TRON `feeLimit`/`callValue`/`callTokenValue` could authorize an outsized fee burn, and a wrapped Solana priority fee or Ripple network fee misprices the transaction:
+
+  - `packages/core/mpc/keysign/signingInputs/resolvers/tron.ts` - `feeLimit` (4 sites, from `tronSpecific.gasEstimation`), `callValue`, `callTokenValue`
+  - `packages/core/mpc/keysign/signingInputs/resolvers/solana/send.ts` - `priorityFee`
+  - `packages/core/mpc/keysign/signingInputs/resolvers/ripple.ts` - `fee` (from `rippleSpecific.gas`)
+
+  New `assertBoundedInt(value, 'int64' | 'uint64')` in `@vultisig/lib-utils/bigint/assertBoundedInt` validates a decimal integer string against the proto field's declared 64-bit range and throws instead of letting the wrap happen, matching each field's real signedness (TRON's are `int64`, Solana's priority fee is `uint64`, Ripple's fee is `int64`). In-range values are unaffected - this is fail-closed only.
+
+- [#2209](https://github.com/vultisig/vultisig-sdk/pull/2209) [`4c30666`](https://github.com/vultisig/vultisig-sdk/commit/4c306668690f798ff4fb9094cf16dd26eaafa8e7) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Surface THOR and vTHOR on Ethereum discovery and price vTHOR by its redeemable THOR value, with LI.FI fallback pricing for curated EVM tokens CoinGecko does not list.
+
+- Updated dependencies [[`3203589`](https://github.com/vultisig/vultisig-sdk/commit/3203589af5da361dfc51695aad4fef77afa2d78e)]:
+  - @vultisig/lib-utils@0.10.6
+
+## 3.0.0
+
+### Major Changes
+
+- [#1891](https://github.com/vultisig/vultisig-sdk/pull/1891) [`7d6a014`](https://github.com/vultisig/vultisig-sdk/commit/7d6a01440fd0b855356cce81469b5b5a91665862) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Standardize signed-transaction broadcast adapters on one typed accepted-or-failed result contract.
+
+## 2.39.0
+
+### Minor Changes
+
+- [#1810](https://github.com/vultisig/vultisig-sdk/pull/1810) [`088b905`](https://github.com/vultisig/vultisig-sdk/commit/088b9058f47eff8dc84929e89fdf4ddfde7e42e6) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add provider-aware swap arrival status normalization for THORChain, MayaChain, Skip Go, and LI.FI.
+
+### Patch Changes
+
+- [#1810](https://github.com/vultisig/vultisig-sdk/pull/1810) [`088b905`](https://github.com/vultisig/vultisig-sdk/commit/088b9058f47eff8dc84929e89fdf4ddfde7e42e6) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fix three unsafe terminal-state gaps in `getSwapArrivalStatus`: LI.FI `DONE/PARTIAL` (user received a different token than requested) is now reported as a distinct `partial` status instead of being flattened into `success`; malformed or unknown Midgard action statuses now throw `SwapArrivalStatusRequestError` instead of being reported as a terminal `error`; and THOR/Maya node-only completion now reads THORNode's `planned_out_txs[].refund` flag to report `success`/`refunded` when available, instead of always forcing an artificial `pending` state.
+
+## 2.38.0
+
+### Minor Changes
+
+- [#2074](https://github.com/vultisig/vultisig-sdk/pull/2074) [`8929244`](https://github.com/vultisig/vultisig-sdk/commit/8929244cdb3b21059a46eabac6d4d9684e18a633) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Add the Kamino Earn data layer under `chains/solana/kamino`: a REST client for the kVaults API (vault state, metrics, user positions, PnL) with a typed error envelope that separates retryable statuses from permanent refusals; a curated vault registry pinning each launch vault's identity (mints, decimals, farm, curator, risk tier); distinct token- and share-denominated amount types over exact `bigint` base units, with exact-rate conversions that truncate toward zero so a sized withdraw can never over-request (the API rewrites an over-sized withdraw to `u64::MAX` — withdraw everything); vault-info hydration that refuses responses disagreeing with the pinned identity and derives the effective deposit/withdraw minimums the on-chain program actually accepts; and position parsing with a spendable-balance rule that stays strictly below the reported balance.
+
+- [#2124](https://github.com/vultisig/vultisig-sdk/pull/2124) [`514e31f`](https://github.com/vultisig/vultisig-sdk/commit/514e31f084c241792f3a9b2436074c324a909c0f) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Add the Kamino Earn transaction pipeline under `chains/solana/kamino/tx`: build the unsigned deposit/withdraw transactions (with the withdraw-everything sentinel refused before a request leaves the device); inject the attribution memo and the compute-budget pair into the built v0 transaction without disturbing address-lookup-table indexes; replace the recent blockhash immediately before keysign; a fail-closed validator that admits only allow-listed programs, matches the exact instruction sequence each operation produces (both withdraw discriminators, the farms unstake pair, exactly one memo carrying exactly the attribution tag), pins every account that decides where money goes against the registry and local ATA/PDA derivations, pins every spend amount, and refuses unexplained writable accounts; and an offline decoder that lets a co-signing device derive an independent claim about what the bytes do — vault identified through the signer's own share account, both withdraw shapes accepted, the farm release bounded by the withdraw itself.
+
 ## 2.37.0
 
 ### Minor Changes
