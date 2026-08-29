@@ -6,7 +6,7 @@
  * signature. These tests pin the wire format of the three primitives the
  * RN bridge re-exports.
  */
-import { blake2b } from '@noble/hashes/blake2b'
+import { blake2b } from '@noble/hashes/blake2.js'
 import { describe, expect, it } from 'vitest'
 
 import {
