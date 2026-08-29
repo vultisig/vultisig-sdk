@@ -17,6 +17,10 @@
   "dependencies": {
     "@vultisig/mpc-types": "workspace:*"
   },
+  "devDependencies": {
+    "@noble/curves": "^2.2.0",
+    "@noble/hashes": "^2.2.0"
+  },
   "publishConfig": {
     "access": "public"
   }

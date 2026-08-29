@@ -1,4 +1,4 @@
-import { blake2b } from '@noble/hashes/blake2b'
+import { blake2b } from '@noble/hashes/blake2.js'
 import { cborArray, cborMap, cborText, cborUint } from '@vultisig/core-chain/chains/cardano/cip30/cardanoCborPrimitives'
 
 /** CIP-20 limits each metadata text chunk to 64 UTF-8 bytes. */
