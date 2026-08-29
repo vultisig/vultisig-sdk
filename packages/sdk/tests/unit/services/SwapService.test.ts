@@ -945,28 +945,21 @@ describe('SwapService', () => {
   })
 
   describe('prepareSwapTx', () => {
-    it('should prepare swap transaction', async () => {
-      const { buildSwapKeysignPayload } = await import('@vultisig/core-mpc/keysign/swap/build')
-
-      const mockKeysignPayload = {
-        coin: {},
-        toAmount: '1000000000',
-        toAddress: '0x...',
-        vaultLocalPartyId: 'local-party-1',
-        vaultPublicKeyEcdsa: 'mock-ecdsa-pubkey',
-        swapPayload: {
-          case: 'oneinchSwapPayload',
-          value: {},
-        },
-        blockchainSpecific: {
-          case: 'ethereumSpecific',
-          value: {},
-        },
+    const createEvmMockQuoteResult = (): SwapQuoteResult => {
+      const fromCoin = {
+        chain: Chain.Ethereum,
+        address: '0x1234567890abcdef1234567890abcdef12345678',
+        ticker: 'ETH',
+        decimals: 18,
       }
-
-      vi.mocked(buildSwapKeysignPayload).mockResolvedValue(mockKeysignPayload as any)
-
-      const mockQuoteResult: SwapQuoteResult = {
+      const toCoin = {
+        chain: Chain.Ethereum,
+        address: '0x1234567890abcdef1234567890abcdef12345678',
+        ticker: 'USDC',
+        decimals: 6,
+        tokenId: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+      }
+      const quote: SwapQuoteResult = {
         quote: {
           quote: {
             general: {
@@ -989,38 +982,49 @@ describe('SwapService', () => {
         },
         estimatedOutput: 1000000000n,
         provider: '1inch',
-        expiresAt: Date.now() + 60000,
+        expiresAt: Date.now() + 60_000,
         requiresApproval: false,
         fees: { network: 0n, total: 0n },
         warnings: [],
-        fromCoin: { chain: Chain.Ethereum, ticker: 'ETH', decimals: 18 },
-        toCoin: {
-          chain: Chain.Ethereum,
-          ticker: 'USDC',
-          decimals: 6,
-          tokenId: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-        },
+        fromCoin,
+        toCoin,
         balance: 10n ** 18n,
         maxSwapable: 10n ** 18n,
       }
-      mockQuoteResult.quote.safetyFingerprint = getSwapQuoteSafetyFingerprint({
-        from: {
-          chain: Chain.Ethereum,
-          address: '0x1234567890abcdef1234567890abcdef12345678',
-          ticker: 'ETH',
-          decimals: 18,
-        },
-        to: {
-          chain: Chain.Ethereum,
-          address: '0x1234567890abcdef1234567890abcdef12345678',
-          id: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-          ticker: 'USDC',
-          decimals: 6,
-        },
-        requestedAmount: mockQuoteResult.quote.requestedAmount as bigint,
-        expiresAt: mockQuoteResult.quote.expiresAt as number,
-        quote: mockQuoteResult.quote.quote,
+
+      quote.quote.safetyFingerprint = getSwapQuoteSafetyFingerprint({
+        from: fromCoin,
+        to: { ...toCoin, id: toCoin.tokenId },
+        requestedAmount: quote.quote.requestedAmount,
+        expiresAt: quote.quote.expiresAt,
+        quote: quote.quote.quote,
       })
+
+      return quote
+    }
+
+    it('should prepare swap transaction', async () => {
+      const { buildSwapKeysignPayload } = await import('@vultisig/core-mpc/keysign/swap/build')
+
+      const mockKeysignPayload = {
+        coin: {},
+        toAmount: '1000000000',
+        toAddress: '0x...',
+        vaultLocalPartyId: 'local-party-1',
+        vaultPublicKeyEcdsa: 'mock-ecdsa-pubkey',
+        swapPayload: {
+          case: 'oneinchSwapPayload',
+          value: {},
+        },
+        blockchainSpecific: {
+          case: 'ethereumSpecific',
+          value: {},
+        },
+      }
+
+      vi.mocked(buildSwapKeysignPayload).mockResolvedValue(mockKeysignPayload as any)
+
+      const mockQuoteResult = createEvmMockQuoteResult()
 
       const result = await service.prepareSwapTx({
         fromCoin: {
@@ -1067,54 +1071,7 @@ describe('SwapService', () => {
       }
       vi.mocked(buildSwapKeysignPayload).mockResolvedValue(mockKeysignPayload as any)
 
-      const mockQuoteResult: SwapQuoteResult = {
-        quote: {
-          quote: {
-            general: {
-              dstAmount: '1000000000',
-              provider: '1inch',
-              tx: { evm: { from: '0x...', to: '0x...', data: '0x...', value: '0' } },
-            },
-          },
-          discounts: [],
-          requestedAmount: 1_000_000_000_000_000_000n,
-          expiresAt: Date.now() + 60_000,
-          safetyFingerprint: '',
-        },
-        estimatedOutput: 1000000000n,
-        provider: '1inch',
-        expiresAt: Date.now() + 60000,
-        requiresApproval: false,
-        fees: { network: 0n, total: 0n },
-        warnings: [],
-        fromCoin: { chain: Chain.Ethereum, ticker: 'ETH', decimals: 18 },
-        toCoin: {
-          chain: Chain.Ethereum,
-          ticker: 'USDC',
-          decimals: 6,
-          tokenId: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-        },
-        balance: 10n ** 18n,
-        maxSwapable: 10n ** 18n,
-      }
-      mockQuoteResult.quote.safetyFingerprint = getSwapQuoteSafetyFingerprint({
-        from: {
-          chain: Chain.Ethereum,
-          address: '0x1234567890abcdef1234567890abcdef12345678',
-          ticker: 'ETH',
-          decimals: 18,
-        },
-        to: {
-          chain: Chain.Ethereum,
-          address: '0x1234567890abcdef1234567890abcdef12345678',
-          id: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-          ticker: 'USDC',
-          decimals: 6,
-        },
-        requestedAmount: mockQuoteResult.quote.requestedAmount as bigint,
-        expiresAt: mockQuoteResult.quote.expiresAt as number,
-        quote: mockQuoteResult.quote.quote,
-      })
+      const mockQuoteResult = createEvmMockQuoteResult()
 
       const result = await service.prepareSwapTx({
         fromCoin: {
