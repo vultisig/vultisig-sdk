@@ -1238,7 +1238,7 @@ See the `/examples` directory for complete sample applications:
 
 ## Requirements
 
-- Node.js 20+
+- Node.js 20.19+
 - Modern browser with WebAssembly support
 - Electron 20+ (for desktop applications)
 - Network access for VultiServer communication (for Fast Vault features)
@@ -1256,7 +1256,7 @@ See the `/examples` directory for complete sample applications:
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 20.19+
 - Yarn 4.x
 
 ### Setup
