@@ -189,6 +189,15 @@ export {
   rippleTokenId,
   toXrplCurrencyCode,
 } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
+// XRP destination/X-address normalization — same RN-safety rationale as the
+// issued-currency canonicals above.
+export type { RippleDestination } from '@vultisig/core-chain/chains/ripple/address'
+export {
+  decodeRippleXAddress,
+  encodeRippleXAddress,
+  isValidRippleXAddress,
+  normalizeRippleDestination,
+} from '@vultisig/core-chain/chains/ripple/address'
 
 // Custom-RPC canonicals — pure helpers/registry state that stay safe on the RN
 // graph and must remain in parity with the root SDK entrypoint.
@@ -406,6 +415,7 @@ export {
   normaliseIbcChainId,
   prepareIbcTransfer,
   prepareSuiTokenTransferFromKeys,
+  resolveSourceChannelByDestChain,
   supportedIbcDestinationsFrom,
 } from '../../tools/prep'
 export type {

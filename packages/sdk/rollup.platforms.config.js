@@ -365,6 +365,10 @@ const configs = {
       distBase: 'tools/policy',
     }),
     ...createSubpathConfigs({
+      input: './src/tools/price/index.ts',
+      distBase: 'tools/price',
+    }),
+    ...createSubpathConfigs({
       input: './src/tx/index.ts',
       distBase: 'tx',
     }),
