@@ -76,6 +76,12 @@ describe('getTonChainSpecific — bounceable', () => {
     expect(res.bounceable).toBe(true)
   })
 
+  it('does not mark a swap payload bounceable when the destination is missing', async () => {
+    const res = await resolve(buildPayload({ toAddress: '', swapPayload }))
+
+    expect(res.bounceable).toBe(false)
+  })
+
   it('honours an EQ destination on a plain send', async () => {
     const res = await resolve(buildPayload({ toAddress: bounceableAddress }))
 
