@@ -35,6 +35,8 @@ import { createSdkContext } from '../../../src/context/SdkContextBuilder'
 import { FileStorage } from '../../../src/platforms/node/storage'
 import { MemoryStorage } from '../../../src/storage/MemoryStorage'
 import type { Storage } from '../../../src/storage/types'
+import { FastVault } from '../../../src/vault/FastVault'
+import { SecureVault } from '../../../src/vault/SecureVault'
 import { VaultConflictError, VaultImportErrorCode } from '../../../src/vault/VaultError'
 import { VaultManager } from '../../../src/VaultManager'
 
@@ -264,6 +266,158 @@ describe('VaultManager', () => {
       const vult = encodeEncryptedVult(buildMinimalSecureVaultBinary(), pwd)
       const vault = await vaultManager.importVault(vult, pwd)
       expect(vault.id).toBe(SYNTH_ECDSA_PK)
+    })
+
+    it('imports a legacy VultiServer signer backup as a fast vault', async () => {
+      const vult = encodeUnencryptedVult(
+        buildMinimalSecureVaultBinary({
+          signers: ['SyntheticDevice', 'VultiServer-legacy'],
+        })
+      )
+
+      const vault = await vaultManager.importVault(vult)
+
+      expect(vault).toBeInstanceOf(FastVault)
+      expect(vault.type).toBe('fast')
+    })
+
+    it('repairs a legacy VultiServer vault persisted with the stale secure type', async () => {
+      const vult = encodeUnencryptedVult(
+        buildMinimalSecureVaultBinary({
+          signers: ['SyntheticDevice', 'VultiServer-legacy'],
+        })
+      )
+      const imported = await vaultManager.importVault(vult)
+      const stored = await memoryStorage.get<typeof imported.data>(`vault:${imported.id}`)
+      expect(stored).not.toBeNull()
+      await memoryStorage.set(`vault:${imported.id}`, {
+        ...stored!,
+        type: 'secure',
+      })
+
+      const loaded = await vaultManager.getVaultById(imported.id)
+
+      expect(loaded).toBeInstanceOf(FastVault)
+      expect(loaded?.type).toBe('fast')
+      expect(await memoryStorage.get<{ type: string }>(`vault:${imported.id}`)).toMatchObject({ type: 'fast' })
+      await loaded?.save()
+      expect(await memoryStorage.get<{ type: string }>(`vault:${imported.id}`)).toMatchObject({ type: 'fast' })
+    })
+
+    it('rejects direct SecureVault construction for legacy fast-vault data', async () => {
+      const vult = encodeUnencryptedVult(
+        buildMinimalSecureVaultBinary({
+          signers: ['SyntheticDevice', 'VultiServer-legacy'],
+        })
+      )
+      const imported = await vaultManager.importVault(vult)
+      const key = `vault:${imported.id}`
+      const stored = await memoryStorage.get<typeof imported.data>(key)
+      expect(stored).not.toBeNull()
+      const staleData = { ...stored!, type: 'secure' as const }
+      await memoryStorage.set(key, staleData)
+
+      expect(() =>
+        SecureVault.fromStorage(
+          staleData,
+          (
+            vaultManager as unknown as { createVaultContext(): Parameters<typeof SecureVault.fromStorage>[1] }
+          ).createVaultContext()
+        )
+      ).toThrow('Cannot create SecureVault from fast vault data')
+      const loaded = await vaultManager.getVaultById(imported.id)
+
+      expect(loaded).toBeInstanceOf(FastVault)
+      expect(await memoryStorage.get<{ type: string }>(key)).toMatchObject({ type: 'fast' })
+    })
+
+    it('rejects a legacy type repair that would overflow the storage revision', async () => {
+      const vult = encodeUnencryptedVult(
+        buildMinimalSecureVaultBinary({
+          signers: ['SyntheticDevice', 'VultiServer-legacy'],
+        })
+      )
+      const imported = await vaultManager.importVault(vult)
+      const key = `vault:${imported.id}`
+      const stored = await memoryStorage.get<typeof imported.data>(key)
+      expect(stored).not.toBeNull()
+      const healthy = await vaultManager.importVault(
+        encodeUnencryptedVult(
+          buildMinimalSecureVaultBinary({
+            name: 'Healthy vault',
+            ecdsaPublicKey: `03${'33'.repeat(32)}`,
+            eddsaPublicKey: '44'.repeat(32),
+          })
+        )
+      )
+      await memoryStorage.set(key, {
+        ...stored!,
+        type: 'secure',
+        revision: Number.MAX_SAFE_INTEGER,
+      })
+
+      await expect(vaultManager.listVaults()).resolves.toMatchObject([{ id: healthy.id, name: 'Healthy vault' }])
+      await expect(vaultManager.getVaultById(imported.id)).rejects.toThrow('invalid storage revision')
+      expect(await memoryStorage.get<{ revision: number; type: string }>(key)).toMatchObject({
+        revision: Number.MAX_SAFE_INTEGER,
+        type: 'secure',
+      })
+    })
+
+    it('does not overwrite a concurrent update when legacy storage cannot persist the type repair atomically', async () => {
+      const vult = encodeUnencryptedVult(
+        buildMinimalSecureVaultBinary({
+          signers: ['SyntheticDevice', 'VultiServer-legacy'],
+        })
+      )
+      const imported = await vaultManager.importVault(vult)
+      const key = `vault:${imported.id}`
+      const stored = await memoryStorage.get<typeof imported.data>(key)
+      expect(stored).not.toBeNull()
+      await memoryStorage.set(key, { ...stored!, type: 'secure' })
+
+      let concurrentUpdateInjected = false
+      let setCalls = 0
+      const legacyStorage: Storage = {
+        async get<T>(storageKey: string): Promise<T | null> {
+          const value = await memoryStorage.get<T>(storageKey)
+          if (storageKey === key && value && !concurrentUpdateInjected) {
+            concurrentUpdateInjected = true
+            await memoryStorage.set(key, { ...(value as typeof stored), name: 'Concurrent rename' })
+          }
+          return value
+        },
+        async set<T>(storageKey: string, value: T): Promise<void> {
+          setCalls += 1
+          await memoryStorage.set(storageKey, value)
+        },
+        remove: memoryStorage.remove.bind(memoryStorage),
+        list: memoryStorage.list.bind(memoryStorage),
+        clear: memoryStorage.clear.bind(memoryStorage),
+      }
+      const legacyManager = new VaultManager(
+        createSdkContext({
+          storage: legacyStorage,
+          serverEndpoints: {
+            fastVault: 'https://test-api.vultisig.com/vault',
+            messageRelay: 'https://test-api.vultisig.com/router',
+          },
+          defaultChains: [Chain.Bitcoin, Chain.Ethereum, Chain.Solana],
+          defaultCurrency: 'USD',
+        })
+      )
+
+      const loaded = await legacyManager.getVaultById(imported.id)
+
+      expect(loaded).toBeInstanceOf(FastVault)
+      expect(loaded?.type).toBe('fast')
+      expect(setCalls).toBe(0)
+      expect(await memoryStorage.get(key)).toMatchObject({ name: 'Concurrent rename', type: 'secure' })
+
+      await loaded?.load()
+      expect(loaded?.type).toBe('fast')
+      await loaded?.save()
+      expect(await memoryStorage.get(key)).toMatchObject({ name: 'Concurrent rename', type: 'fast' })
     })
 
     it('rejects an exact duplicate unless replacement is explicit', async () => {
