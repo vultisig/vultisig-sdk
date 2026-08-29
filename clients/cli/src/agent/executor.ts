@@ -1964,10 +1964,12 @@ export class AgentExecutor {
       }
 
       // Verify there are actually pending txs in the mempool before using a
-      // higher local nonce. Compare with the original payload baseline: when
-      // pending RPC already advanced that baseline, clearing persisted local
-      // state could reuse the highest locally broadcast nonce after a restart.
-      if (pendingNonce !== null && pendingNonce === payloadNonce) {
+      // higher local nonce. The explicit server nonce is not a reliable
+      // confirmed-state baseline, so compare pending against a fresh latest
+      // lookup. This preserves local progress when pending advanced the server
+      // nonce while still clearing a stale local gap when pending === latest.
+      const latestNonce = pendingNonce === null ? null : await this.fetchEvmLatestNonce(chain)
+      if (latestNonce !== null && pendingNonce === latestNonce) {
         // No pending txs — local state is stale (txs were dropped from mempool)
         if (this.verbose)
           process.stderr.write(
@@ -1980,7 +1982,8 @@ export class AgentExecutor {
       // Safety: if the gap is large (>3) and we couldn't verify pending txs,
       // assume local state is stale rather than risk a large nonce gap
       const nonceGap = nextNonce - rpcNonce
-      if (pendingNonce === null && nonceGap > 3n) {
+      const pendingStateVerified = pendingNonce !== null && latestNonce !== null
+      if (!pendingStateVerified && nonceGap > 3n) {
         process.stderr.write(
           `[nonce] Warning: pending nonce was not verified for ${chain}; signing will continue with on-chain nonce ${rpcNonce} because the local gap is ${nonceGap}\n`
         )
@@ -1989,7 +1992,7 @@ export class AgentExecutor {
       }
 
       bs.value.nonce = nextNonce
-      if (pendingNonce === null) {
+      if (!pendingStateVerified) {
         process.stderr.write(
           `[nonce] Warning: pending nonce was not verified for ${chain}; signing will continue with local nonce ${nextNonce}\n`
         )
@@ -2123,6 +2126,18 @@ export class AgentExecutor {
    * Returns null if the RPC call fails (non-fatal).
    */
   private async fetchEvmPendingNonce(chain: Chain): Promise<bigint | null> {
+    return this.fetchEvmNonce(chain, 'pending')
+  }
+
+  /**
+   * Fetch the confirmed nonce from RPC (eth_getTransactionCount with "latest" tag).
+   * Returns null if the RPC call fails (non-fatal).
+   */
+  private async fetchEvmLatestNonce(chain: Chain): Promise<bigint | null> {
+    return this.fetchEvmNonce(chain, 'latest')
+  }
+
+  private async fetchEvmNonce(chain: Chain, blockTag: 'latest' | 'pending'): Promise<bigint | null> {
     // The old CLI-local map returned `undefined` for a non-EVM chain and the
     // caller bailed on the falsy URL. The shared resolver has no such escape
     // hatch, so keep the guard explicit: without it a non-EVM chain would POST
@@ -2138,7 +2153,7 @@ export class AgentExecutor {
         body: JSON.stringify({
           jsonrpc: '2.0',
           method: 'eth_getTransactionCount',
-          params: [address, 'pending'],
+          params: [address, blockTag],
           id: 1,
         }),
         signal: AbortSignal.timeout(5000),
