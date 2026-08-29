@@ -1,8 +1,4 @@
-export type {
-  CheckoutUsdcChain,
-  DecodedApproveParams,
-  DecodedDepositWithMemoParams,
-} from "./usdcCalldata";
+export type { CheckoutUsdcChain, DecodedApproveParams, DecodedDepositWithMemoParams } from './usdcCalldata'
 export {
   AGENT_ROUTER_ADDRESS,
   APPROVE_SELECTOR,
@@ -19,4 +15,4 @@ export {
   resolveUsdcContract,
   ROUTER_VERSION_PINNED,
   USDC_CONTRACTS,
-} from "./usdcCalldata";
+} from './usdcCalldata'
