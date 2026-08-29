@@ -706,3 +706,25 @@ describe('RN entry exposes canonical EIP-712 helpers', () => {
     expect(rn.toCanonicalEvmSignature).toBe(eip712.toCanonicalEvmSignature)
   })
 })
+
+describe('RN entry exposes canonical IBC + Sui prep helpers', () => {
+  it('re-exports the canonical IBC + Sui prep helpers from the RN root surface', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const prep = await import('../../../../src/tools/prep')
+    const ibcTransfer = await import('../../../../src/tools/prep/ibcTransfer')
+    const suiTokenTransfer = await import('../../../../src/tools/prep/suiTokenTransfer')
+
+    expect(rn.prepareIbcTransfer).toBe(prep.prepareIbcTransfer)
+    expect(rn.prepareIbcTransfer).toBe(ibcTransfer.prepareIbcTransfer)
+    expect(rn.supportedIbcDestinationsFrom).toBe(prep.supportedIbcDestinationsFrom)
+    expect(rn.normaliseIbcChainId).toBe(ibcTransfer.normaliseIbcChainId)
+    expect(rn.IBC_MSG_TRANSFER_TYPE_URL).toBe(ibcTransfer.IBC_MSG_TRANSFER_TYPE_URL)
+    expect(rn.IBC_CHAIN_HRP).toBe(ibcTransfer.IBC_CHAIN_HRP)
+    expect(rn.IBC_CHAIN_REVISION).toBe(ibcTransfer.IBC_CHAIN_REVISION)
+    expect(rn.IBC_CHANNEL_DEST).toBe(ibcTransfer.IBC_CHANNEL_DEST)
+
+    expect(rn.prepareSuiTokenTransferFromKeys).toBe(prep.prepareSuiTokenTransferFromKeys)
+    expect(rn.prepareSuiTokenTransferFromKeys).toBe(suiTokenTransfer.prepareSuiTokenTransferFromKeys)
+    expect(rn.SUI_NATIVE_COIN_TYPE).toBe(suiTokenTransfer.SUI_NATIVE_COIN_TYPE)
+  })
+})
