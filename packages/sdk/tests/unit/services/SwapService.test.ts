@@ -81,6 +81,7 @@ import type { WasmProvider } from '../../../src/context/SdkContext'
 import type { VaultEvents } from '../../../src/events/types'
 import { SwapService } from '../../../src/vault/services/SwapService'
 import type { SwapQuoteResult } from '../../../src/vault/swap-types'
+import { VaultErrorCode } from '../../../src/vault/VaultError'
 
 describe('SwapService', () => {
   let service: SwapService
@@ -230,9 +231,7 @@ describe('SwapService', () => {
         amountBaseUnits: 1_500_000_000_000_000_000n, // 1.5 ETH in wei
       })
 
-      expect(findSwapQuote).toHaveBeenCalledWith(
-        expect.objectContaining({ amount: 1_500_000_000_000_000_000n })
-      )
+      expect(findSwapQuote).toHaveBeenCalledWith(expect.objectContaining({ amount: 1_500_000_000_000_000_000n }))
     })
 
     it('rejects when both amount and amountBaseUnits are provided', async () => {
@@ -263,6 +262,21 @@ describe('SwapService', () => {
           toCoin: { chain: Chain.Bitcoin, address: 'bc1qxxx...', ticker: 'BTC', decimals: 8 },
         } as any)
       ).rejects.toThrow(/exactly one of/)
+    })
+
+    it.each([0n, -1n])('rejects non-positive amountBaseUnits (%s)', async amountBaseUnits => {
+      await expect(
+        service.getQuote({
+          fromCoin: {
+            chain: Chain.Ethereum,
+            address: '0x1234567890abcdef1234567890abcdef12345678',
+            ticker: 'ETH',
+            decimals: 18,
+          },
+          toCoin: { chain: Chain.Bitcoin, address: 'bc1qxxx...', ticker: 'BTC', decimals: 8 },
+          amountBaseUnits,
+        })
+      ).rejects.toMatchObject({ code: VaultErrorCode.InvalidAmount })
     })
 
     it('forwards affiliateConfig to findSwapQuote (sdk#1150)', async () => {
@@ -1139,14 +1153,54 @@ describe('SwapService', () => {
             ticker: 'ETH',
             decimals: 18,
           },
-          toCoin: { chain: Chain.Ethereum, address: '0x1234567890abcdef1234567890abcdef12345678', ticker: 'USDC', decimals: 6 },
+          toCoin: {
+            chain: Chain.Ethereum,
+            address: '0x1234567890abcdef1234567890abcdef12345678',
+            ticker: 'USDC',
+            decimals: 6,
+          },
           amount: 1.0,
           amountBaseUnits: 1_000_000_000_000_000_000n,
           swapQuote: {
-            quote: { quote: { general: {} }, discounts: [], requestedAmount: 1n, expiresAt: Date.now() + 60_000, safetyFingerprint: '' },
+            quote: {
+              quote: { general: {} },
+              discounts: [],
+              requestedAmount: 1n,
+              expiresAt: Date.now() + 60_000,
+              safetyFingerprint: '',
+            },
           } as any,
         })
       ).rejects.toThrow(/exactly one of/)
+    })
+
+    it.each([0n, -1n])('rejects non-positive amountBaseUnits (%s) in prepareSwapTx', async amountBaseUnits => {
+      await expect(
+        service.prepareSwapTx({
+          fromCoin: {
+            chain: Chain.Ethereum,
+            address: '0x1234567890abcdef1234567890abcdef12345678',
+            ticker: 'ETH',
+            decimals: 18,
+          },
+          toCoin: {
+            chain: Chain.Ethereum,
+            address: '0x1234567890abcdef1234567890abcdef12345678',
+            ticker: 'USDC',
+            decimals: 6,
+          },
+          amountBaseUnits,
+          swapQuote: {
+            quote: {
+              quote: { general: {} },
+              discounts: [],
+              requestedAmount: 1n,
+              expiresAt: Date.now() + 60_000,
+              safetyFingerprint: '',
+            },
+          } as any,
+        })
+      ).rejects.toMatchObject({ code: VaultErrorCode.InvalidAmount })
     })
 
     it('should reject expired quotes', async () => {
