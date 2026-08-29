@@ -114,13 +114,18 @@ describe('decodeErc20Approve', () => {
 describe('decodeErc20RecipientFromSig', () => {
   it('extracts the recipient from a transfer(address,uint256) signature + args', () => {
     expect(decodeErc20RecipientFromSig('transfer(address,uint256)', [SAFE, '1000000'])).toBe(SAFE)
+    expect(decodeErc20RecipientFromSig('transfer(address,uint)', [SAFE, '1000000'])).toBe(SAFE)
     expect(decodeErc20RecipientFromSig('function transfer(address to, uint256 amount)', [SAFE, '1'])).toBe(SAFE)
   })
 
   it('extracts the SECOND address for transferFrom/safeTransferFrom (never the "from")', () => {
     const from = '0x1111111111111111111111111111111111111111'
     expect(decodeErc20RecipientFromSig('transferFrom(address,address,uint256)', [from, SAFE, '1'])).toBe(SAFE)
+    expect(decodeErc20RecipientFromSig('transferFrom(address,address,uint)', [from, SAFE, '1'])).toBe(SAFE)
     expect(decodeErc20RecipientFromSig('safeTransferFrom(address,address,uint256)', [from, SAFE, '1'])).toBe(SAFE)
+    expect(
+      decodeErc20RecipientFromSig('safeTransferFrom(address,address,uint256,bytes)', [from, SAFE, '1', '0x'])
+    ).toBe(SAFE)
   })
 
   it('returns null for a non-transfer signature (e.g. approve)', () => {
@@ -129,6 +134,11 @@ describe('decodeErc20RecipientFromSig', () => {
 
   it('returns null for malformed input (wrong arg types, missing args, non-array args)', () => {
     expect(decodeErc20RecipientFromSig('transfer(uint256,uint256)', ['1', '1'])).toBeNull()
+    expect(decodeErc20RecipientFromSig('transfer(address)', [SAFE])).toBeNull()
+    expect(decodeErc20RecipientFromSig('transfer(address,bytes32)', [SAFE, '0x00'])).toBeNull()
+    expect(decodeErc20RecipientFromSig('transferFrom(address,address)', [SAFE, SAFE])).toBeNull()
+    expect(decodeErc20RecipientFromSig('transferFrom(address,address,bytes32)', [SAFE, SAFE, '0x00'])).toBeNull()
+    expect(decodeErc20RecipientFromSig('transfer(address,uint256) trailing', [SAFE, '1'])).toBeNull()
     expect(decodeErc20RecipientFromSig('transfer(address,uint256)', [SAFE])).not.toBeNull() // args[0] present is enough
     expect(decodeErc20RecipientFromSig('transfer(address,uint256)', 'not-an-array')).toBeNull()
     expect(decodeErc20RecipientFromSig(123, [SAFE, '1'])).toBeNull()

@@ -189,20 +189,31 @@ export function decodeErc20RecipientFromSig(functionSig: unknown, args: unknown)
   const m = functionSig
     .replace(/^\s*function\s+/i, '')
     .trim()
-    .match(/^(\w+)\s*\(([^)]*)\)/)
+    .match(/^(\w+)\s*\(([^)]*)\)$/)
   if (!m) return null
   const name = m[1]
   // Strip any inline arg names ("address to" → "address") so we compare pure types.
   const argTypes = m[2].split(',').map(t => t.trim().split(/\s+/)[0])
+  const isUint256 = (type: string) => type === 'uint' || type === 'uint256'
   let idx: number
-  if (name === 'transfer' && argTypes[0] === 'address') {
+  if (name === 'transfer' && argTypes.length === 2 && argTypes[0] === 'address' && isUint256(argTypes[1])) {
     idx = 0 // transfer(address to, uint256 amount) — recipient is the FIRST arg
   } else if (
-    (name === 'transferFrom' || name === 'safeTransferFrom') &&
+    name === 'transferFrom' &&
+    argTypes.length === 3 &&
     argTypes[0] === 'address' &&
-    argTypes[1] === 'address'
+    argTypes[1] === 'address' &&
+    isUint256(argTypes[2])
   ) {
-    idx = 1 // transferFrom/safeTransferFrom(address from, address to, …) — recipient is the SECOND arg
+    idx = 1 // transferFrom(address from, address to, uint256 amount) — recipient is the SECOND arg
+  } else if (
+    name === 'safeTransferFrom' &&
+    (argTypes.length === 3 || (argTypes.length === 4 && argTypes[3] === 'bytes')) &&
+    argTypes[0] === 'address' &&
+    argTypes[1] === 'address' &&
+    isUint256(argTypes[2])
+  ) {
+    idx = 1 // ERC-721 safeTransferFrom overloads — recipient is the SECOND arg
   } else {
     return null
   }
