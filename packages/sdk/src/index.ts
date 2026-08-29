@@ -262,6 +262,17 @@ export {
   toXrplCurrencyCode,
 } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
 
+// Canonical XRP destination/X-address normalization — decode/encode XLS-5d
+// X-addresses and normalize a classic-or-X-address into a Payment destination
+// + tag. Consumers should import these instead of deep-importing core-chain.
+export type { RippleDestination } from '@vultisig/core-chain/chains/ripple/address'
+export {
+  decodeRippleXAddress,
+  encodeRippleXAddress,
+  isValidRippleXAddress,
+  normalizeRippleDestination,
+} from '@vultisig/core-chain/chains/ripple/address'
+
 // Custom-RPC canonicals — surfaced so consumers can use the SDK-owned per-chain
 // override registry + health probe instead of deep-importing core internals or
 // rebuilding the same feature in app/backend code.
@@ -304,6 +315,14 @@ export { tendermintRpcUrl } from '@vultisig/core-chain/chains/cosmos/tendermintR
 // maintained copies in agent-backend-ts (skip-swap.ts's full per-chain table,
 // execute_send.ts's TerraClassic-only hardcoded 256 check that missed every
 // other cosmos chain) and mcp-ts's own copy of the same table.
+// Cardano transaction-validity policy. Exported so app / CLI / backend build
+// the same TTL the keysign resolver and the broadcast freshness guard judge it
+// by, instead of each hardcoding its own slot offset (vultiagent-app#2538).
+export {
+  cardanoBroadcastTtlSafetyMargin,
+  cardanoSlotOffset,
+  getCardanoSendTtl,
+} from '@vultisig/core-chain/chains/cardano/config'
 export {
   COSMOS_MEMO_DEFAULT_MAX_BYTES,
   getCosmosMemoMaxBytes,
@@ -1128,6 +1147,7 @@ export {
   resolveEns,
   resolveJupiterFeeAccount,
   resolveLuncFloorUsd,
+  resolveSourceChannelByDestChain,
   ResultKind,
   runSkipSwap,
   sanitizeAmount,
