@@ -50,6 +50,7 @@ import { configureWasm } from '../../context/wasmRuntime'
 import { configureCrypto } from '../../crypto'
 import * as cosmos from '../../tools/cosmos'
 import * as evm from '../../tools/evm'
+import type { prepareRawEvmTxFromKeys as PrepareRawEvmTxFromKeys } from '../../tools/prep/rawEvm'
 import * as token from '../../tools/token'
 import { ReactNativeCrypto } from './crypto'
 import { ReactNativeStorage } from './storage'
@@ -188,6 +189,15 @@ export {
   rippleTokenId,
   toXrplCurrencyCode,
 } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
+// XRP destination/X-address normalization — same RN-safety rationale as the
+// issued-currency canonicals above.
+export type { RippleDestination } from '@vultisig/core-chain/chains/ripple/address'
+export {
+  decodeRippleXAddress,
+  encodeRippleXAddress,
+  isValidRippleXAddress,
+  normalizeRippleDestination,
+} from '@vultisig/core-chain/chains/ripple/address'
 
 // Custom-RPC canonicals — pure helpers/registry state that stay safe on the RN
 // graph and must remain in parity with the root SDK entrypoint.
@@ -373,15 +383,21 @@ export type {
   BuildSplTransferParams,
   ConsolidateChain,
   ConsolidateUtxo,
+  EvmTxNumberish,
   GetMaxSendAmountFromKeysParams,
+  PrepareIbcTransferParams,
+  PrepareIbcTransferResult,
   PrepareJettonTransferTxFromKeysParams,
   PreparePolkadotAssetSendParams,
   PreparePolkadotAssetSendResult,
+  PrepareRawEvmTxFromKeysParams,
   PrepareSendTxFromKeysParams,
+  PrepareSuiTokenTransferFromKeysParams,
   PrepareSwapTxFromKeysParams,
   PrepareTrc20TransferFromKeysParams,
   PrepareUtxoConsolidateResult,
   PrepareUtxoConsolidateTxFromKeysParams,
+  RawEvmTxEnvelope,
   SplTransferResult,
   UnsignedTrc20Transfer,
   VaultIdentity,
@@ -391,6 +407,16 @@ export type {
 // buffer (RN-safe, no mpc/keysign), so unlike the other prep helpers they are
 // statically re-exported rather than lazy-imported. Omitting them here would
 // break the hand-curated RN export list for vultiagent-app consumers.
+export {
+  IBC_CHAIN_HRP,
+  IBC_CHAIN_REVISION,
+  IBC_CHANNEL_DEST,
+  IBC_MSG_TRANSFER_TYPE_URL,
+  normaliseIbcChainId,
+  prepareIbcTransfer,
+  prepareSuiTokenTransferFromKeys,
+  supportedIbcDestinationsFrom,
+} from '../../tools/prep'
 export type {
   CosmosStakingMsgEnvelope,
   DelegateParams,
@@ -430,6 +456,11 @@ export async function getMaxSendAmountFromKeys(...args: unknown[]) {
 export async function prepareContractCallTxFromKeys(...args: unknown[]) {
   const mod = await import('../../tools/prep/contractCall')
   return mod.prepareContractCallTxFromKeys(...(args as Parameters<typeof mod.prepareContractCallTxFromKeys>))
+}
+
+export async function prepareRawEvmTxFromKeys(...args: Parameters<typeof PrepareRawEvmTxFromKeys>) {
+  const mod = await import('../../tools/prep/rawEvm')
+  return mod.prepareRawEvmTxFromKeys(...(args as Parameters<typeof mod.prepareRawEvmTxFromKeys>))
 }
 
 export async function prepareJettonTransferTxFromKeys(...args: unknown[]) {
@@ -912,6 +943,17 @@ export { getThorchainInboundAddress } from '@vultisig/core-chain/chains/cosmos/t
 export * from '@vultisig/core-chain/chains/cosmos/thor/lp'
 export type { GetSwapExplorerUrlInput, SwapExplorerProvider } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 export { getSwapExplorerUrl, swapExplorerProviders } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
+// THOR/Maya native-swap metadata — surfaced so RN consumers stop re-declaring
+// which chains route through THORChain/MayaChain and their asset-notation
+// chain IDs (parity with the root SDK entry).
+export type { NativeSwapChain, NativeSwapChainId } from '@vultisig/core-chain/swap/native/NativeSwapChain'
+export {
+  getNativeSwapChainId,
+  getNativeSwapChainIdFromDenomPrefix,
+  nativeSwapChainIds,
+  nativeSwapChains,
+  nativeSwapEnabledChainsRecord,
+} from '@vultisig/core-chain/swap/native/NativeSwapChain'
 export { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
 export async function fiatToAmount(...args: unknown[]) {
   const mod = await import('../../utils/fiatToAmount')

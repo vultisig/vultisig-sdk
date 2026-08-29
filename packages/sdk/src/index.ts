@@ -262,6 +262,17 @@ export {
   toXrplCurrencyCode,
 } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
 
+// Canonical XRP destination/X-address normalization — decode/encode XLS-5d
+// X-addresses and normalize a classic-or-X-address into a Payment destination
+// + tag. Consumers should import these instead of deep-importing core-chain.
+export type { RippleDestination } from '@vultisig/core-chain/chains/ripple/address'
+export {
+  decodeRippleXAddress,
+  encodeRippleXAddress,
+  isValidRippleXAddress,
+  normalizeRippleDestination,
+} from '@vultisig/core-chain/chains/ripple/address'
+
 // Custom-RPC canonicals — surfaced so consumers can use the SDK-owned per-chain
 // override registry + health probe instead of deep-importing core internals or
 // rebuilding the same feature in app/backend code.
@@ -589,6 +600,18 @@ export type {
   SwapQuoteProviderExcludeName,
   SwapQuoteProviderName,
 } from '@vultisig/core-chain/swap/quote/findSwapQuote'
+
+// THOR/Maya native-swap metadata — surfaced so consumers stop re-declaring
+// which chains route through THORChain/MayaChain and their asset-notation
+// chain IDs (e.g. vultiagent-app's local thorchainDispatchValidators.ts).
+export type { NativeSwapChain, NativeSwapChainId } from '@vultisig/core-chain/swap/native/NativeSwapChain'
+export {
+  getNativeSwapChainId,
+  getNativeSwapChainIdFromDenomPrefix,
+  nativeSwapChainIds,
+  nativeSwapChains,
+  nativeSwapEnabledChainsRecord,
+} from '@vultisig/core-chain/swap/native/NativeSwapChain'
 
 // THORChain limit orders (`=<` advanced swap queue). The memo IS the order, so
 // `parseLimitSwapMemo` / `getKeysignLimitSwapOrder` are how any device — the
@@ -1012,6 +1035,7 @@ export {
   evmCheckAllowance,
   evmGasPrice,
   evmTxInfo,
+  type EvmTxNumberish,
   findSwapQuote,
   findSwapQuotes,
   formatDot,
@@ -1096,6 +1120,8 @@ export {
   prepareIbcTransfer,
   prepareJettonTransferTxFromKeys,
   preparePolkadotAssetSend,
+  prepareRawEvmTxFromKeys,
+  type PrepareRawEvmTxFromKeysParams,
   prepareSendTxFromKeys,
   prepareSignAminoTxFromKeys,
   prepareSignDirectTxFromKeys,
@@ -1105,6 +1131,7 @@ export {
   prepareTrc20TransferFromKeys,
   prepareUtxoConsolidateTxFromKeys,
   quoteSkipRoute,
+  type RawEvmTxEnvelope,
   recipientSanity,
   resolve4ByteSelector,
   resolveContract,

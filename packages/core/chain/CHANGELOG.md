@@ -1,5 +1,17 @@
 # @vultisig/core-chain
 
+## 4.1.0
+
+### Minor Changes
+
+- [#2234](https://github.com/vultisig/vultisig-sdk/pull/2234) [`0697060`](https://github.com/vultisig/vultisig-sdk/commit/0697060107c7fe1c8ec818d3e0eae01557d9d96f) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add RUJI Trade quoting and CosmWasm execution for native RUNE and bRUNE swaps through the SDK's normal swap flow.
+
+### Patch Changes
+
+- [#2235](https://github.com/vultisig/vultisig-sdk/pull/2235) [`3fff7cf`](https://github.com/vultisig/vultisig-sdk/commit/3fff7cfdfe23d2d5622f7caa87a6f1525329f07e) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(swap): stop reporting a native trading halt when an aggregator could still fill
+
+  `findSwapQuotes` collapsed a THORChain/MayaChain halt plus a transient aggregator failure into `TradingHalted` for the whole pair, so an ETH→SOL quote surfaced "trading halted" whenever LiFi/SwapKit happened to time out. A halt is scoped to the native protocol that raised it: those aggregators now get one automatic re-attempt, and when they are still unreachable the error reports the transient failure instead of a halt the user cannot retry out of. Halt-only pairs still throw `TradingHalted`.
+
 ## 4.0.1
 
 ### Patch Changes
