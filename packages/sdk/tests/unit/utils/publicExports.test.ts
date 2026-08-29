@@ -291,12 +291,26 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.signatureAlgorithms).toBeDefined()
 
     // Ripple / EVM / Cosmos / Terra / THOR / Tron -> ecdsa
-    for (const chain of [sdk.Chain.Ripple, sdk.Chain.Ethereum, sdk.Chain.Cosmos, sdk.Chain.TerraClassic, sdk.Chain.THORChain, sdk.Chain.Tron]) {
+    for (const chain of [
+      sdk.Chain.Ripple,
+      sdk.Chain.Ethereum,
+      sdk.Chain.Cosmos,
+      sdk.Chain.TerraClassic,
+      sdk.Chain.THORChain,
+      sdk.Chain.Tron,
+    ]) {
       expect(sdk.getSignatureAlgorithm(chain)).toBe('ecdsa')
     }
 
     // Solana / Sui / Polkadot / Bittensor / Ton / Cardano -> eddsa
-    for (const chain of [sdk.Chain.Solana, sdk.Chain.Sui, sdk.Chain.Polkadot, sdk.Chain.Bittensor, sdk.Chain.Ton, sdk.Chain.Cardano]) {
+    for (const chain of [
+      sdk.Chain.Solana,
+      sdk.Chain.Sui,
+      sdk.Chain.Polkadot,
+      sdk.Chain.Bittensor,
+      sdk.Chain.Ton,
+      sdk.Chain.Cardano,
+    ]) {
       expect(sdk.getSignatureAlgorithm(chain)).toBe('eddsa')
     }
   })
