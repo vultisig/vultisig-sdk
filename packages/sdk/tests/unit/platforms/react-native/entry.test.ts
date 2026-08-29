@@ -443,6 +443,32 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     })
   })
 
+  it('exports the canonical CosmWasm tx builder from the RN root surface', async () => {
+    const sdk = await import('../../../../src/platforms/react-native/index')
+
+    expect(typeof sdk.buildCosmosWasmExecuteTx).toBe('function')
+    expect(
+      sdk.buildCosmosWasmExecuteTx({
+        chainId: 'thorchain-1',
+        fromAddress: 'thor1sender',
+        contractAddress: 'thor1contract',
+        executeMsgJson: JSON.stringify({ swap: { minimum_output: '123' } }),
+        funds: [{ denom: 'rune', amount: '42' }],
+        sequence: 7,
+        accountNumber: 9,
+        pubKeyBytes: new Uint8Array([1, 2, 3]),
+        gasLimit: 180000,
+        feeDenom: 'rune',
+        feeAmount: '2000000',
+      })
+    ).toMatchObject({
+      signDocBytes: expect.any(Uint8Array),
+      txBodyBytes: expect.any(Uint8Array),
+      authInfoBytes: expect.any(Uint8Array),
+      finalize: expect.any(Function),
+    })
+  })
+
   it('re-exports the root River helper family on the RN entrypoint', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
     const river = await import('../../../../src/tools/defi/river')
