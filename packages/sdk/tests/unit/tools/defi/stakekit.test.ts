@@ -1,3 +1,4 @@
+import { Buffer as NodeBuffer } from 'buffer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { YieldActionResponse, YieldDiscoverOpportunity } from '@/tools/defi/stakekit'
@@ -426,7 +427,8 @@ describe('sdk.defi.stakekit', () => {
       expect(result.status).toBe('provider_error')
       if (result.status === 'provider_error') {
         expect(result.message).toMatch(/requires at least 1 SUI/i)
-        expect(result.message).toMatch(/0\.5/) // cites the resolved amount
+        expect(result.message).toContain('this request was for ~0.5 SUI')
+        expect(result.message).not.toMatch(/you have/i)
         expect(result.message).not.toMatch(/try again in a moment/i)
         expect(result.message).not.toMatch(/MoveAbort|MoveLocation/) // raw provider dump never surfaces
       }
@@ -499,6 +501,35 @@ describe('sdk.defi.stakekit', () => {
       expect(result.status).not.toBe('unsignable_sui')
     })
 
+    it('detects Sui JSON intent without relying on a global Buffer polyfill', () => {
+      const originalBuffer = globalThis.Buffer
+      try {
+        ;(globalThis as { Buffer?: typeof Buffer }).Buffer = undefined
+        const jsonIntent = {
+          gasData: { budget: null, payment: null },
+          commands: [{ MoveCall: {} }],
+          inputs: [],
+        }
+        const resp = makeEvmActionResponse({
+          transactions: [
+            {
+              id: 'tx-sui-no-global-buffer',
+              title: 'Stake',
+              type: 'STAKE',
+              network: 'sui',
+              status: 'WAITING_FOR_SIGNATURE',
+              unsignedTransaction: NodeBuffer.from(JSON.stringify(jsonIntent), 'utf8').toString('base64'),
+              gasEstimate: '{}',
+            },
+          ],
+        })
+
+        expect(finalizeStakekitAction(resp).status).toBe('unsignable_sui')
+      } finally {
+        globalThis.Buffer = originalBuffer
+      }
+    })
+
     it('unsupported_chain: a network with no SDK signer (e.g. Polkadot) declines instead of shipping a raw blob', () => {
       const resp = makeEvmActionResponse({
         transactions: [
@@ -536,6 +567,18 @@ describe('sdk.defi.stakekit', () => {
       if (result.status === 'incomplete') {
         expect(result.message).toMatch(/try again in a moment/i)
       }
+    })
+
+    it('incomplete: an empty transaction list is never classified as signable', () => {
+      const result = finalizeStakekitAction(makeEvmActionResponse({ transactions: [] }))
+      expect(result.status).toBe('incomplete')
+    })
+
+    it('incomplete: a malformed runtime response without transactions is never classified as signable', () => {
+      const malformed = makeEvmActionResponse()
+      delete (malformed as Partial<YieldActionResponse>).transactions
+
+      expect(finalizeStakekitAction(malformed).status).toBe('incomplete')
     })
 
     it('checks each step against its own network when a non-EVM step comes first', () => {

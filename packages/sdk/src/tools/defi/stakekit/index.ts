@@ -14,6 +14,8 @@
 //   - Non-EVM steps: HAVE tx_encoding field (solana-tx, sui-tx, tron-tx, ton-tx)
 //   - All-or-nothing: if any step fails to canonicalize, decoded[] used for ALL steps
 
+import { Buffer } from 'buffer'
+
 import type {
   ScanRequest,
   Validator,
@@ -415,7 +417,7 @@ export function honestStakekitBuildFailureMessage(tx: YieldTransaction, resolved
   ) {
     return (
       `SUI native staking requires at least ${SUI_NATIVE_STAKING_MIN_SUI} SUI` +
-      (resolvedAmount ? `; you have ~${resolvedAmount} SUI.` : '.')
+      (resolvedAmount ? `; this request was for ~${resolvedAmount} SUI.` : '.')
     )
   }
   return `The provider rejected this stake: ${sanitizeStakekitRejectionReason(err.reason)}.`
@@ -505,7 +507,7 @@ function stakekitActionHasUncanonicalizableNetwork(data: YieldActionResponse): b
  * shape checks are EVM-calldata-specific. */
 function stakekitActionBuildIncomplete(data: YieldActionResponse): boolean {
   const steps = data.transactions
-  if (!Array.isArray(steps) || steps.length === 0) return false
+  if (!Array.isArray(steps) || steps.length === 0) return true
   return steps.some(tx => {
     if (typeof tx.unsignedTransaction !== 'string' || tx.unsignedTransaction.length === 0) return true
     if (typeof tx.network !== 'string' || !EVM_NETWORKS.has(tx.network)) return false
