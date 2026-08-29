@@ -46,22 +46,24 @@ const oneInchMinReturnDecoders: readonly MinReturnDecoder[] = [
     ]) as Abi,
     pick: args => (typeof args[2] === 'bigint' ? args[2] : undefined),
   },
-{
-  abi: parseAbi(['function unoswapTo(address to, uint256 token, uint256 amount, uint256 minReturn, uint256 dex)']) as Abi,
-  pick: args => (typeof args[3] === 'bigint' ? args[3] : undefined),
-},
-{
-  abi: parseAbi([
-    'function unoswapTo2(address to, uint256 token, uint256 amount, uint256 minReturn, uint256 dex, uint256 dex2)',
-  ]) as Abi,
-  pick: args => (typeof args[3] === 'bigint' ? args[3] : undefined),
-},
-{
-  abi: parseAbi([
-    'function unoswapTo3(address to, uint256 token, uint256 amount, uint256 minReturn, uint256 dex, uint256 dex2, uint256 dex3)',
-  ]) as Abi,
-  pick: args => (typeof args[3] === 'bigint' ? args[3] : undefined),
-},
+  {
+    abi: parseAbi([
+      'function unoswapTo(uint256 to, uint256 token, uint256 amount, uint256 minReturn, uint256 dex)',
+    ]) as Abi,
+    pick: args => (typeof args[3] === 'bigint' ? args[3] : undefined),
+  },
+  {
+    abi: parseAbi([
+      'function unoswapTo2(uint256 to, uint256 token, uint256 amount, uint256 minReturn, uint256 dex, uint256 dex2)',
+    ]) as Abi,
+    pick: args => (typeof args[3] === 'bigint' ? args[3] : undefined),
+  },
+  {
+    abi: parseAbi([
+      'function unoswapTo3(uint256 to, uint256 token, uint256 amount, uint256 minReturn, uint256 dex, uint256 dex2, uint256 dex3)',
+    ]) as Abi,
+    pick: args => (typeof args[3] === 'bigint' ? args[3] : undefined),
+  },
   {
     abi: parseAbi(['function ethUnoswap(uint256 minReturn, uint256 dex)']) as Abi,
     pick: args => (typeof args[0] === 'bigint' ? args[0] : undefined),
@@ -75,15 +77,17 @@ const oneInchMinReturnDecoders: readonly MinReturnDecoder[] = [
     pick: args => (typeof args[0] === 'bigint' ? args[0] : undefined),
   },
   {
-    abi: parseAbi(['function ethUnoswapTo(address to, uint256 minReturn, uint256 dex)']) as Abi,
+    abi: parseAbi(['function ethUnoswapTo(uint256 to, uint256 minReturn, uint256 dex)']) as Abi,
     pick: args => (typeof args[1] === 'bigint' ? args[1] : undefined),
   },
   {
-    abi: parseAbi(['function ethUnoswapTo2(address to, uint256 minReturn, uint256 dex, uint256 dex2)']) as Abi,
+    abi: parseAbi(['function ethUnoswapTo2(uint256 to, uint256 minReturn, uint256 dex, uint256 dex2)']) as Abi,
     pick: args => (typeof args[1] === 'bigint' ? args[1] : undefined),
   },
   {
-    abi: parseAbi(['function ethUnoswapTo3(address to, uint256 minReturn, uint256 dex, uint256 dex2, uint256 dex3)']) as Abi,
+    abi: parseAbi([
+      'function ethUnoswapTo3(uint256 to, uint256 minReturn, uint256 dex, uint256 dex2, uint256 dex3)',
+    ]) as Abi,
     pick: args => (typeof args[1] === 'bigint' ? args[1] : undefined),
   },
 ]

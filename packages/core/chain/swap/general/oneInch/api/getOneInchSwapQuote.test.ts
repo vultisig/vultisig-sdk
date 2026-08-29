@@ -258,7 +258,7 @@ describe('getOneInchSwapQuote — token-source tx.value guard (P3 hardening)', (
   it('accepts a zero tx.value for a token-source swap', async () => {
     vi.mocked(queryUrl).mockResolvedValueOnce({
       dstAmount: '1000000',
-      tx: { from: '0xsender', to: REAL_ROUTER, data: '0xswap', value: '0', gasPrice: '1', gas: 210000 },
+      tx: { from: '0xsender', to: realRouter, data: '0xswap', value: '0', gasPrice: '1', gas: 210000 },
     })
 
     const quote = await getOneInchSwapQuote({ account, fromCoinId: '0xsrc', toCoinId: '0xdst', amount: 1_000_000n })
