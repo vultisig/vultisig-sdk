@@ -8,6 +8,11 @@ import { getCoinPrices as coreCoinPrices } from '@vultisig/core-chain/coin/price
 import { getCoinPricesWithChange as coreCoinPricesWithChange } from '@vultisig/core-chain/coin/price/getCoinPricesWithChange'
 import { scanAddressWithBlockaid } from '@vultisig/core-chain/security/blockaid/address'
 import { scanSiteWithBlockaid } from '@vultisig/core-chain/security/blockaid/site'
+import {
+  getSwapArrivalStatus,
+  type GetSwapArrivalStatusInput,
+  type SwapArrivalStatusResult,
+} from '@vultisig/core-chain/swap/utils/getSwapArrivalStatus'
 import { getSwapExplorerUrl, type SwapExplorerProvider } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 import { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
 import { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
@@ -1244,6 +1249,11 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     return getSwapExplorerUrl({ provider, txHash, fromChain })
   }
 
+  /** Read and normalize one THORChain, MayaChain, Skip Go, or LI.FI swap status snapshot. */
+  static getSwapArrivalStatus(input: GetSwapArrivalStatusInput): Promise<SwapArrivalStatusResult> {
+    return getSwapArrivalStatus(input)
+  }
+
   /**
    * Type guard to check if a vault is a FastVault
    * @param vault - The vault to check
@@ -1294,6 +1304,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
         ticker: coin.ticker,
         decimals: coin.decimals,
         logo: coin.logo,
+        ...(coin.priceProviderId === undefined ? {} : { priceProviderId: coin.priceProviderId }),
         ...(coin.isHidden === undefined ? {} : { isHidden: coin.isHidden }),
       }
     })
