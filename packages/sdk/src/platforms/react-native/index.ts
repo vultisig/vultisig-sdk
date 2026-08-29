@@ -86,6 +86,15 @@ export {
 // "will this memo fit before broadcast rejects it with sdk code 12 (memo too
 // long) after the user has already signed?" Kept in parity with the root SDK
 // entrypoint (sdk#1538) so RN consumers don't hand-roll their own memo-cap table.
+// Cardano transaction-validity policy. Exported so app / CLI / backend build
+// the same TTL the keysign resolver and the broadcast freshness guard judge it
+// by, instead of each hardcoding its own slot offset (vultiagent-app#2538).
+export {
+  cardanoBroadcastTtlSafetyMargin,
+  cardanoSlotOffset,
+  getCardanoSendTtl,
+} from '@vultisig/core-chain/chains/cardano/config'
+
 // Pure-crypto chain-math normalizers + pure address-format validation.
 // Vault-free, network-free and platform-neutral, so RN gets the same canonicals
 // as the root entry (sdk#1772). Without them a mobile consumer has to
