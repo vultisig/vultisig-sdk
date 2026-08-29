@@ -361,6 +361,10 @@ const configs = {
       distBase: 'tools/decode',
     }),
     ...createSubpathConfigs({
+      input: './src/tools/policy/index.ts',
+      distBase: 'tools/policy',
+    }),
+    ...createSubpathConfigs({
       input: './src/tools/price/index.ts',
       distBase: 'tools/price',
     }),
