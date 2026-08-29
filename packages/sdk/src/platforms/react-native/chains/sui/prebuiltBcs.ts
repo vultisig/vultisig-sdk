@@ -385,7 +385,7 @@ export function assertSuiPrebuiltSenderMatchesVault(txBytes: Uint8Array, expecte
   }
 }
 
-export const __testing__ = {
+export const testing = {
   BcsCursor,
   skipProgrammableTransaction,
 }
