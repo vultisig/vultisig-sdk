@@ -1,6 +1,7 @@
 ---
 '@vultisig/core-chain': patch
 '@vultisig/core-mpc': patch
+'@vultisig/sdk': patch
 ---
 
 fix(ton): send swap deposits bounceable so a rejected deposit is refunded
