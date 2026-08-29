@@ -146,6 +146,15 @@ describe('decodeAgentRouterDepositWithMemo', () => {
   it('fails closed (null) on garbage bytes', () => {
     expect(decodeAgentRouterDepositWithMemo('0xdeadbeef')).toBeNull()
   })
+
+  it('fails closed (null) when the ABI memo bytes are not valid UTF-8', () => {
+    const calldata = encodeFunctionData({
+      abi: depositWithMemoAbi,
+      functionName: 'depositWithMemo',
+      args: [USDC_ETH as `0x${string}`, AMOUNT, '0xff'],
+    })
+    expect(decodeAgentRouterDepositWithMemo(calldata)).toBeNull()
+  })
 })
 
 describe('formatCheckoutUsdcDisplay', () => {
@@ -157,4 +166,11 @@ describe('formatCheckoutUsdcDisplay', () => {
     expect(formatCheckoutUsdcDisplay(0)).toBe('0.00')
     expect(formatCheckoutUsdcDisplay(20_000_000)).toBe('20.00')
   })
+
+  it.each([NaN, Infinity, -Infinity, 1.5, Number.MAX_SAFE_INTEGER + 1, Number.MIN_SAFE_INTEGER - 1])(
+    'rejects non-safe-integer microdollar input %s',
+    microdollars => {
+      expect(() => formatCheckoutUsdcDisplay(microdollars)).toThrow('microdollars must be a safe integer')
+    }
+  )
 })

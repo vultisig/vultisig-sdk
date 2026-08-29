@@ -20,7 +20,7 @@
  * therefore also recovers the memo (both source copies only decoded the
  * static token/amount head, never the dynamic memo tail).
  */
-import { decodeFunctionData, encodeFunctionData, getAddress, hexToString, stringToHex } from 'viem'
+import { decodeFunctionData, encodeFunctionData, getAddress, hexToBytes, stringToHex } from 'viem'
 
 // --- USDC payment-chain registry ---
 
@@ -115,6 +115,10 @@ export function resolveUsdcPaymentChainId(chain: string): number {
  * microdollar -> decimal parsing MUST go through this one function.
  */
 export function formatCheckoutUsdcDisplay(microdollars: number): string {
+  if (!Number.isSafeInteger(microdollars)) {
+    throw new Error('formatCheckoutUsdcDisplay: microdollars must be a safe integer')
+  }
+
   const negative = microdollars < 0
   const abs = Math.abs(microdollars)
   // Round to nearest cent: add half a cent (5_000 microdollars) before truncating.
@@ -197,7 +201,8 @@ export function decodeAgentRouterDepositWithMemo(calldata: string): DecodedAgent
     const normalized = calldata.startsWith('0x') ? (calldata as `0x${string}`) : (`0x${calldata}` as `0x${string}`)
     const { args } = decodeFunctionData({ abi: AGENT_ROUTER_DEPOSIT_WITH_MEMO_ABI, data: normalized })
     const [token, amount, memoHex] = args
-    return { token, amount, memo: hexToString(memoHex) }
+    const memo = new TextDecoder('utf-8', { fatal: true }).decode(hexToBytes(memoHex))
+    return { token, amount, memo }
   } catch {
     return null
   }
