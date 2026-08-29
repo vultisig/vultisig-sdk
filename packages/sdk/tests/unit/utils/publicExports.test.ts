@@ -66,10 +66,17 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.extendChainRegistry).toBe('function')
   })
 
-  it('exports tx-shape normalization primitives (normalizeTx, splitMultiTx)', () => {
+  it('exports tx-shape normalization and tx-ready parsing primitives', () => {
     expect(typeof sdk.normalizeTx).toBe('function')
     expect(typeof sdk.splitMultiTx).toBe('function')
     expect(typeof sdk.TxNormalizeError).toBe('function')
+    expect(typeof sdk.parseTxReadyEnvelope).toBe('function')
+    expect(typeof sdk.TxReadyParseError).toBe('function')
+  })
+
+  it('exports the raw EVM envelope keysign helper', () => {
+    expect(typeof sdk.prepareRawEvmTxFromKeys).toBe('function')
+    expect(typeof sdk.VaultBase.prototype.prepareRawEvmTx).toBe('function')
   })
 
   it('exports the knownContracts canonical registry + lookup helpers', () => {
@@ -289,10 +296,12 @@ describe('@vultisig/sdk public exports', () => {
 
   it('exports canonical EVM chain-id, RPC, and priority-fee-clamp helpers from the root sdk surface', () => {
     expect(typeof sdk.getEvmChainId).toBe('function')
+    expect(typeof sdk.getEvmNumericChainId).toBe('function')
     expect(typeof sdk.getEvmChainByChainId).toBe('function')
     expect(typeof sdk.getEvmRpcUrl).toBe('function')
     expect(typeof sdk.clampEvmPriorityFee).toBe('function')
     expect(sdk.getEvmChainId(sdk.Chain.Mantle)).toBe('0x1388')
+    expect(sdk.getEvmNumericChainId(sdk.Chain.Mantle)).toBe(5000)
     expect(sdk.getEvmChainByChainId('0x3e7')).toBe(sdk.Chain.Hyperliquid)
     expect(sdk.getEvmRpcUrl(sdk.Chain.Ethereum)).toBe('https://api.vultisig.com/eth/')
     expect(sdk.getEvmRpcUrl(sdk.Chain.Hyperliquid)).toBe('https://api.vultisig.com/hyperevm/')
