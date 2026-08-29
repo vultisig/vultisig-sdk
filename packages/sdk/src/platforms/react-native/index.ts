@@ -424,6 +424,7 @@ export {
   normaliseIbcChainId,
   prepareIbcTransfer,
   prepareSuiTokenTransferFromKeys,
+  resolveSourceChannelByDestChain,
   supportedIbcDestinationsFrom,
 } from '../../tools/prep'
 export type {
