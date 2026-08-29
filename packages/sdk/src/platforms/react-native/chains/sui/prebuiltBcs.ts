@@ -153,8 +153,6 @@ function skipArgument(c: BcsCursor): void {
     case 0: // GasCoin
       return
     case 1: // Input(u16)
-      c.skip(2)
-      return
     case 2: // Result(u16)
       c.skip(2)
       return
@@ -182,13 +180,11 @@ function skipObjectArg(c: BcsCursor): void {
   const tag = c.readUleb128()
   switch (tag) {
     case 0: // ImmOrOwnedObject
+    case 2: // Receiving
       skipSuiObjectRef(c)
       return
     case 1: // SharedObject
       skipSharedObjectRef(c)
-      return
-    case 2: // Receiving
-      skipSuiObjectRef(c)
       return
     default:
       throw new Error(`Sui prebuilt BCS: unknown ObjectArg variant ${tag}`)
@@ -270,9 +266,6 @@ function skipCommand(c: BcsCursor): void {
       skipArgument(c)
       return
     case 2: // SplitCoins { coin: Argument, amounts: Vec<Argument> }
-      skipArgument(c)
-      skipVector(c, () => skipArgument(c))
-      return
     case 3: // MergeCoins { destination: Argument, sources: Vec<Argument> }
       skipArgument(c)
       skipVector(c, () => skipArgument(c))
