@@ -41,7 +41,7 @@ export {
 export { ValidationHelpers } from './utils/validation'
 
 // ============================================================================
-// PUBLIC API - Conversion / Normalization Utilities (vault-free)
+// PUBLIC API - Transaction Preparation / Normalization Utilities (vault-free)
 // ============================================================================
 
 export type {
@@ -139,9 +139,31 @@ export { isValidTokenId } from '@vultisig/core-chain/utils/isValidTokenId'
 // multi-tx build results (approve+swap, generic transactions[]) into ordered
 // legs. Ports the normalize/split half of the agent-backend's
 // enrichBuildResult + splitMultiTx; SSE/Redis sequencing stays in the backend.
-export type { NormalizeArgs, NormalizedTx } from './tx'
-export type { PollTxStatusUntilFinalParams, PollTxStatusUntilFinalResult } from './tx'
-export { normalizeTx, pollTxStatusUntilFinal, splitMultiTx, TxNormalizeError } from './tx'
+export type {
+  NormalizeArgs,
+  NormalizedTx,
+  ParsedTxReadyEnvelope,
+  ParsedTxReadyRawEvm,
+  ParsedTxReadySend,
+  ParsedTxReadyThorLpDeposit,
+  ParsedTxReadyThorSwapDeposit,
+  ParseTxReadyOptions,
+  PollTxStatusUntilFinalParams,
+  PollTxStatusUntilFinalResult,
+  TxReadyEnvelope,
+  TxReadyEvmLeg,
+  TxReadyObject,
+  TxReadyParseErrorCode,
+  TxReadyTxArgs,
+} from './tx'
+export {
+  normalizeTx,
+  parseTxReadyEnvelope,
+  pollTxStatusUntilFinal,
+  splitMultiTx,
+  TxNormalizeError,
+  TxReadyParseError,
+} from './tx'
 
 // ============================================================================
 // PUBLIC API - Canonical Contract / Token Registry (knownContracts)
@@ -448,10 +470,15 @@ export {
 // hand-maintaining their own copies that can drift (the Hyperliquid 998/999
 // client↔server chainId bug class and the client-side fee-policy fork class).
 // Native tickers are already exported via `chainFeeCoin`. `getEvmChainId`
-// returns the hex chainId; `getEvmChainByChainId` resolves a hex chainId back to
-// its EvmChain; `getEvmRpcUrl` returns the canonical default/custom-RPC-resolved
-// endpoint for that chain.
-export { getEvmChainByChainId, getEvmChainId, getEvmRpcUrl } from '@vultisig/core-chain/chains/evm/chainInfo'
+// returns the hex chainId; `getEvmNumericChainId` returns the EIP-155 number;
+// `getEvmChainByChainId` resolves a hex chainId back to its EvmChain; and
+// `getEvmRpcUrl` returns the canonical default/custom-RPC-resolved endpoint.
+export {
+  getEvmChainByChainId,
+  getEvmChainId,
+  getEvmNumericChainId,
+  getEvmRpcUrl,
+} from '@vultisig/core-chain/chains/evm/chainInfo'
 export { clampEvmPriorityFee } from '@vultisig/core-chain/tx/fee/evm/clampEvmPriorityFee'
 
 // Noon USDC yield vault SDK boundary. Consumers should use these helpers
@@ -985,6 +1012,7 @@ export {
   evmCheckAllowance,
   evmGasPrice,
   evmTxInfo,
+  type EvmTxNumberish,
   findSwapQuote,
   findSwapQuotes,
   formatDot,
@@ -1069,6 +1097,8 @@ export {
   prepareIbcTransfer,
   prepareJettonTransferTxFromKeys,
   preparePolkadotAssetSend,
+  prepareRawEvmTxFromKeys,
+  type PrepareRawEvmTxFromKeysParams,
   prepareSendTxFromKeys,
   prepareSignAminoTxFromKeys,
   prepareSignDirectTxFromKeys,
@@ -1078,6 +1108,7 @@ export {
   prepareTrc20TransferFromKeys,
   prepareUtxoConsolidateTxFromKeys,
   quoteSkipRoute,
+  type RawEvmTxEnvelope,
   recipientSanity,
   resolve4ByteSelector,
   resolveContract,

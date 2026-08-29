@@ -1,6 +1,6 @@
 // Core functions (functional dispatch) - Direct imports from core
 import { fromBinary } from '@bufbuild/protobuf'
-import { sha256 } from '@noble/hashes/sha2'
+import { sha256 } from '@noble/hashes/sha2.js'
 import { getMaxValue } from '@vultisig/core-chain/amount/getMaxValue'
 import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import { banxaSupportedChains, getBanxaBuyUrl } from '@vultisig/core-chain/banxa'
@@ -37,6 +37,7 @@ import type { Storage } from '../storage/types'
 // barrel pulls in cosmos.ts → buildCosmosPayload → @vultisig/core-chain THORChain
 // modules at module-load time, which breaks vitest setups that mock chainFeeCoin.
 import { computeMaxSendFromBalance } from '../tools/prep/maxSend'
+import type { PrepareRawEvmTxFromKeysParams } from '../tools/prep/rawEvm'
 import { vaultDataToIdentity } from '../tools/prep/types'
 import { pollTxStatusUntilFinal } from '../tx'
 // Types
@@ -1289,6 +1290,14 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     return this.transactionBuilder.prepareContractCallTx({ ...params, senderAddress })
   }
 
+  /** Prepare an already-built raw EVM transaction without caller-side payload patching. */
+  async prepareRawEvmTx(
+    params: Omit<PrepareRawEvmTxFromKeysParams, 'senderAddress'> & { senderAddress?: string }
+  ): Promise<KeysignPayload> {
+    const senderAddress = params.senderAddress ?? (await this.address(params.chain))
+    return this.transactionBuilder.prepareRawEvmTx({ ...params, senderAddress })
+  }
+
   /**
    * Get the maximum sendable amount for a coin, accounting for network fees
    *
@@ -2019,21 +2028,68 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     const toCoin = this.buildAccountCoin(toChain, toAddress, toToken)
 
     let resolvedAmount = amount
+    // Reusable when the fee-aware ceiling turns out to BE the whole balance -
+    // there is then nothing to re-quote and the probe is the final quote.
+    let maxProbeQuote: SwapQuoteResult | undefined
+
     if (amount === 'max') {
       const bal = await this.balanceService.getBalance(fromChain, fromToken.contractAddress)
-      resolvedAmount = this.formatUnits(BigInt(bal.amount), fromToken.decimals)
-      if (BigInt(bal.amount) <= 0n) throw new VaultError(VaultErrorCode.InvalidAmount, 'Zero balance — nothing to swap')
+      const balance = BigInt(bal.amount)
+      if (balance <= 0n) throw new VaultError(VaultErrorCode.InvalidAmount, 'Zero balance — nothing to swap')
+
+      // Quote at the full balance FIRST, purely to learn this route's
+      // `maxSwapable`. Committing the full balance directly (what this used to
+      // do) over-commits a native swap by exactly the network fee, so it fails
+      // at prepare/broadcast with insufficient funds - after the caller has
+      // already been told the swap was viable. `send({ amount: 'max' })` has
+      // always resolved its ceiling before building; this brings swap in line.
+      const fullAmount = this.validateHumanSwapAmount(this.formatUnits(balance, fromToken.decimals), fromToken.decimals)
+      const probe = await this.getSwapQuote({
+        fromCoin,
+        toCoin,
+        amount: fullAmount,
+        recipient: normalizedRecipient,
+        slippageTolerance,
+        excludeProviders,
+      })
+
+      // 0n means "not computable from this quote", NOT "nothing is swappable":
+      // deposit-channel (transfer) routes price the source-chain fee at
+      // broadcast time, so the quote cannot say what is safe. Fail closed with
+      // an actionable message rather than guess a fee on a fund path.
+      //
+      // The typeof check is deliberate belt-and-braces: `getSwapQuote` always
+      // populates `maxSwapable`, but an override or a partial quote must land
+      // in the fail-closed branch rather than fall through into an over-commit.
+      if (typeof probe.maxSwapable !== 'bigint' || probe.maxSwapable <= 0n) {
+        throw new VaultError(
+          VaultErrorCode.InvalidAmount,
+          `Cannot compute a fee-aware max for this ${fromToken.ticker} route: the source-chain fee is only known at ` +
+            `broadcast time. Estimate the fee separately and pass an explicit amount instead of "max".`
+        )
+      }
+
+      if (probe.maxSwapable >= balance) {
+        // Token route - gas is paid in the native asset, so the whole token
+        // balance is swappable and the probe already quotes the final amount.
+        resolvedAmount = fullAmount
+        maxProbeQuote = probe
+      } else {
+        resolvedAmount = this.formatUnits(probe.maxSwapable, fromToken.decimals)
+      }
     }
     const normalizedAmount = this.validateHumanSwapAmount(resolvedAmount, fromToken.decimals)
 
-    const quote = await this.getSwapQuote({
-      fromCoin,
-      toCoin,
-      amount: normalizedAmount,
-      recipient: normalizedRecipient,
-      slippageTolerance,
-      excludeProviders,
-    })
+    const quote =
+      maxProbeQuote ??
+      (await this.getSwapQuote({
+        fromCoin,
+        toCoin,
+        amount: normalizedAmount,
+        recipient: normalizedRecipient,
+        slippageTolerance,
+        excludeProviders,
+      }))
     if (dryRun) return { dryRun: true, quote }
 
     const { keysignPayload, approvalPayload } = await this.prepareSwapTx({
