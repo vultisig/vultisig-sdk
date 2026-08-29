@@ -16,9 +16,15 @@ type EvmNonceAccess = {
   fetchEvmPendingNonce(chain: Chain): Promise<bigint | null>
   patchEvmNonce(chain: Chain, payload: ReturnType<typeof createEvmPayload>): Promise<void>
   stateStore: {
+    acquireChainLock: ReturnType<typeof vi.fn>
     clearEvmState: ReturnType<typeof vi.fn>
     getNextEvmNonce: ReturnType<typeof vi.fn>
+    recordEvmNonce: ReturnType<typeof vi.fn>
   }
+}
+
+type EvmGasAccess = {
+  patchEvmGas(chain: Chain, payload: ReturnType<typeof createEvmPayload>): Promise<void>
 }
 
 function createEvmPayload() {
@@ -44,35 +50,26 @@ function createSigningVault(payload: ReturnType<typeof createEvmPayload>): Vault
     isEncrypted: false,
     address: vi.fn().mockResolvedValue('0xsender'),
     balance: vi.fn().mockResolvedValue({ decimals: 18, symbol: 'ETH' }),
-    prepareSendTx: vi.fn().mockResolvedValue(payload),
+    prepareRawEvmTx: vi.fn().mockResolvedValue(payload),
     extractMessageHashes: vi.fn().mockResolvedValue(['0xmessage']),
     sign: vi.fn().mockResolvedValue({ r: '0xr', s: '0xs', recoveryId: 0 }),
     broadcastTx: vi.fn().mockResolvedValue('0xtxhash'),
   } as unknown as VaultBase
 }
 
-function serverTransaction(chain: Chain) {
-  return {
-    chain,
-    send_tx: {
-      data: '0x',
-      to: '0xrecipient',
-      value: '1',
-    },
-  }
-}
-
-async function signEvm(executor: AgentExecutor, chain: Chain) {
-  return (executor as unknown as EvmSigner).signEvmServerTx(serverTransaction(chain), chain, {})
-}
-
 function withNonceState(executor: AgentExecutor, nextNonce: bigint) {
   const access = executor as unknown as EvmNonceAccess
   access.stateStore = {
+    acquireChainLock: vi.fn().mockResolvedValue(vi.fn()),
     clearEvmState: vi.fn(),
     getNextEvmNonce: vi.fn().mockReturnValue(nextNonce),
+    recordEvmNonce: vi.fn(),
   }
   return access
+}
+
+function stubGasRefresh(executor: AgentExecutor) {
+  return vi.spyOn(executor as unknown as EvmGasAccess, 'patchEvmGas').mockResolvedValue(undefined)
 }
 
 afterEach(() => {
@@ -80,148 +77,131 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('AgentExecutor EVM gas refresh', () => {
-  it('warns without verbose and signs with the original estimate after an HTTP failure', async () => {
+describe('AgentExecutor raw EVM envelope preparation', () => {
+  it('passes raw transaction fields to the SDK helper and refreshes gas before hashing', async () => {
     const payload = createEvmPayload()
     const vault = createSigningVault(payload)
     const executor = new AgentExecutor(vault)
-    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
-    // Keep a valid-looking result so the HTTP status remains the only failure signal.
-    const fetchMock = vi.fn().mockResolvedValue({
-      json: vi.fn().mockResolvedValue({
-        jsonrpc: '2.0',
-        result: { baseFeePerGas: '0x3b9aca00' },
-      }),
-      ok: false,
-      status: 521,
+    const patchGas = stubGasRefresh(executor)
+
+    const result = await (executor as unknown as EvmSigner).signEvmServerTx(
+      {
+        chain: Chain.Ethereum,
+        tx: {
+          data: '0x095ea7b3',
+          gas_limit: '60000',
+          max_fee_per_gas: '3000000000',
+          max_priority_fee_per_gas: '1000000000',
+          nonce: '7',
+          to: '0xrecipient',
+          value: '0',
+        },
+      },
+      Chain.Ethereum,
+      {}
+    )
+
+    expect(vault.prepareRawEvmTx).toHaveBeenCalledWith({
+      chain: Chain.Ethereum,
+      tx: {
+        data: '0x095ea7b3',
+        gasLimit: '60000',
+        maxFeePerGas: '3000000000',
+        maxPriorityFeePerGas: '1000000000',
+        nonce: '7',
+        to: '0xrecipient',
+        value: '0',
+      },
     })
-    vi.stubGlobal('fetch', fetchMock)
-
-    const result = await signEvm(executor, Chain.Ethereum)
-
-    expect(stderr).toHaveBeenCalledWith(expect.stringContaining('gas estimate was not refreshed for Ethereum'))
-    expect(payload.blockchainSpecific.value.maxFeePerGasWei).toBe('2000000000')
     expect(vault.sign).toHaveBeenCalledOnce()
     expect(vault.broadcastTx).toHaveBeenCalledOnce()
     expect(result.tx_hash).toBe('0xtxhash')
-    expect(fetchMock).toHaveBeenCalledWith('https://api.vultisig.com/eth/', expect.objectContaining({ method: 'POST' }))
+    expect(patchGas).toHaveBeenCalledWith(Chain.Ethereum, payload)
+    expect(patchGas.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(vault.extractMessageHashes).mock.invocationCallOrder[0]
+    )
   })
 
-  it('warns without verbose and signs with the original estimate after an HTTP-200 JSON-RPC error', async () => {
+  it('preserves value-bearing camelCase main-call fields through sign and broadcast', async () => {
     const payload = createEvmPayload()
     const vault = createSigningVault(payload)
     const executor = new AgentExecutor(vault)
-    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
-    // Keep a valid-looking result so the JSON-RPC error remains the only failure signal.
+    stubGasRefresh(executor)
+
+    const result = await (executor as unknown as EvmSigner).signEvmServerTx(
+      {
+        chain: Chain.Base,
+        tx: {
+          data: '0xd0e30db0',
+          gasLimit: 125_000n,
+          maxFeePerGas: 3_000_000_000n,
+          maxPriorityFeePerGas: 1_000_000_000n,
+          nonce: 8n,
+          to: '0xrecipient',
+          value: 1_000_000_000_000_000n,
+        },
+      },
+      Chain.Ethereum,
+      {}
+    )
+
+    expect(vault.prepareRawEvmTx).toHaveBeenCalledWith({
+      chain: Chain.Base,
+      tx: {
+        data: '0xd0e30db0',
+        gasLimit: 125_000n,
+        maxFeePerGas: 3_000_000_000n,
+        maxPriorityFeePerGas: 1_000_000_000n,
+        nonce: 8n,
+        to: '0xrecipient',
+        value: 1_000_000_000_000_000n,
+      },
+    })
+    expect(vault.sign).toHaveBeenCalledOnce()
+    expect(vault.broadcastTx).toHaveBeenCalledOnce()
+    expect(result.tx_hash).toBe('0xtxhash')
+  })
+
+  it('reconciles a stale raw nonce with locally pending transactions before signing', async () => {
+    const payload = createEvmPayload()
+    payload.blockchainSpecific.value.nonce = 7n
+    const vault = createSigningVault(payload)
+    const executor = new AgentExecutor(vault)
+    const nonceAccess = withNonceState(executor, 8n)
+    stubGasRefresh(executor)
     const fetchMock = vi.fn().mockResolvedValue({
       json: vi.fn().mockResolvedValue({
-        error: { code: -32051, message: 'tenant disabled' },
         jsonrpc: '2.0',
-        result: { baseFeePerGas: '0x3b9aca00' },
+        result: '0x8',
       }),
       ok: true,
       status: 200,
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    const result = await signEvm(executor, Chain.Ethereum)
+    await (executor as unknown as EvmSigner).signEvmServerTx(
+      {
+        chain: Chain.Ethereum,
+        tx: {
+          data: '0x',
+          gasLimit: 21_000n,
+          maxFeePerGas: 3_000_000_000n,
+          maxPriorityFeePerGas: 1_000_000_000n,
+          nonce: 7n,
+          to: '0xrecipient',
+          value: 1n,
+        },
+      },
+      Chain.Ethereum,
+      {}
+    )
 
-    expect(stderr).toHaveBeenCalledWith(expect.stringContaining('gas estimate was not refreshed for Ethereum'))
-    expect(payload.blockchainSpecific.value.maxFeePerGasWei).toBe('2000000000')
-    expect(vault.sign).toHaveBeenCalledOnce()
-    expect(vault.broadcastTx).toHaveBeenCalledOnce()
-    expect(result.tx_hash).toBe('0xtxhash')
-    expect(fetchMock).toHaveBeenCalledWith('https://api.vultisig.com/eth/', expect.objectContaining({ method: 'POST' }))
-  })
-
-  it('warns without verbose and signs with the original estimate when the base fee is absent', async () => {
-    const payload = createEvmPayload()
-    const vault = createSigningVault(payload)
-    const executor = new AgentExecutor(vault)
-    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
-    const fetchMock = vi.fn().mockResolvedValue({
-      json: vi.fn().mockResolvedValue({
-        jsonrpc: '2.0',
-        result: {},
-      }),
-      ok: true,
-      status: 200,
-    })
-    vi.stubGlobal('fetch', fetchMock)
-
-    const result = await signEvm(executor, Chain.Ethereum)
-
-    expect(stderr).toHaveBeenCalledWith(expect.stringContaining('gas estimate was not refreshed for Ethereum'))
-    expect(payload.blockchainSpecific.value.maxFeePerGasWei).toBe('2000000000')
-    expect(vault.sign).toHaveBeenCalledOnce()
-    expect(vault.broadcastTx).toHaveBeenCalledOnce()
-    expect(result.tx_hash).toBe('0xtxhash')
-    expect(fetchMock).toHaveBeenCalledWith('https://api.vultisig.com/eth/', expect.objectContaining({ method: 'POST' }))
-  })
-
-  it.each([
-    ['hex string', '0x0'],
-    ['JSON number', 0],
-  ])(
-    'silently keeps the original estimate when BSC reports a legitimate zero base fee as a %s',
-    async (_representation, baseFeePerGas) => {
-      const payload = createEvmPayload()
-      payload.blockchainSpecific.value.maxFeePerGasWei = '500000000'
-      const vault = createSigningVault(payload)
-      const executor = new AgentExecutor(vault)
-      const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
-      const fetchMock = vi.fn().mockResolvedValue({
-        json: vi.fn().mockResolvedValue({
-          jsonrpc: '2.0',
-          result: { baseFeePerGas },
-        }),
-        ok: true,
-        status: 200,
-      })
-      vi.stubGlobal('fetch', fetchMock)
-
-      const result = await signEvm(executor, Chain.BSC)
-
-      expect(stderr).not.toHaveBeenCalledWith(expect.stringContaining('gas estimate was not refreshed'))
-      expect(payload.blockchainSpecific.value.maxFeePerGasWei).toBe('500000000')
-      expect(vault.sign).toHaveBeenCalledOnce()
-      expect(vault.broadcastTx).toHaveBeenCalledOnce()
-      expect(result.tx_hash).toBe('0xtxhash')
-      expect(fetchMock).toHaveBeenCalledWith(
-        'https://api.vultisig.com/bsc/',
-        expect.objectContaining({ method: 'POST' })
-      )
-    }
-  )
-
-  // These successful-refresh cases pin the endpoint URLs; behavioural coverage lives in the cases above.
-  // The literals are the canonical `getEvmRpcUrl` values (packages/core/chain/chains/evm/chainInfo.ts),
-  // spelled out rather than computed so a silent map change fails here instead of asserting itself.
-  it.each([
-    [Chain.Ethereum, 'https://api.vultisig.com/eth/'],
-    [Chain.Polygon, 'https://api.vultisig.com/polygon/'],
-  ])('does not warn after a successful %s gas refresh', async (chain, rpcUrl) => {
-    const payload = createEvmPayload()
-    const vault = createSigningVault(payload)
-    const executor = new AgentExecutor(vault)
-    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
-    const fetchMock = vi.fn().mockResolvedValue({
-      json: vi.fn().mockResolvedValue({
-        jsonrpc: '2.0',
-        result: { baseFeePerGas: '0x3b9aca00' },
-      }),
-      ok: true,
-      status: 200,
-    })
-    vi.stubGlobal('fetch', fetchMock)
-
-    await signEvm(executor, chain)
-
-    expect(stderr).not.toHaveBeenCalledWith(expect.stringContaining('gas estimate was not refreshed'))
-    expect(payload.blockchainSpecific.value.maxFeePerGasWei).toBe('3500000000')
-    expect(vault.sign).toHaveBeenCalledOnce()
-    expect(vault.broadcastTx).toHaveBeenCalledOnce()
-    expect(fetchMock).toHaveBeenCalledWith(rpcUrl, expect.objectContaining({ method: 'POST' }))
+    expect(payload.blockchainSpecific.value.nonce).toBe(8n)
+    expect(vault.extractMessageHashes).toHaveBeenCalledWith(payload)
+    expect(vault.sign).toHaveBeenCalledWith(expect.objectContaining({ transaction: payload }), {})
+    expect(nonceAccess.stateStore.recordEvmNonce).toHaveBeenCalledWith(Chain.Ethereum, 8n)
+    expect(nonceAccess.stateStore.clearEvmState).not.toHaveBeenCalled()
+    expect(fetchMock).toHaveBeenCalledOnce()
   })
 })
 
