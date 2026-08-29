@@ -39,6 +39,12 @@ export {
   type PreparePolkadotAssetSendParams,
   type PreparePolkadotAssetSendResult,
 } from './polkadotAssetSend'
+export {
+  type EvmTxNumberish,
+  prepareRawEvmTxFromKeys,
+  type PrepareRawEvmTxFromKeysParams,
+  type RawEvmTxEnvelope,
+} from './rawEvm'
 export { prepareSendTxFromKeys, type PrepareSendTxFromKeysParams } from './send'
 export { buildSplTransfer, type BuildSplTransferParams, type SplTransferResult } from './splTransfer'
 export {
@@ -46,7 +52,7 @@ export {
   type PrepareSuiTokenTransferFromKeysParams,
   SUI_NATIVE_COIN_TYPE,
 } from './suiTokenTransfer'
-export { prepareSwapTxFromKeys, type PrepareSwapTxFromKeysParams } from './swap'
+export { prepareSwapTxFromKeys, type PrepareSwapTxFromKeysParams, SwapQuoteExpiredError } from './swap'
 export {
   prepareThorchainMsgDepositTxFromKeys,
   type PrepareThorchainMsgDepositTxFromKeysParams,

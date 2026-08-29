@@ -21,6 +21,10 @@ import {
   OneInchAffiliateConfig,
 } from '@vultisig/core-chain/swap/general/oneInch/api/getOneInchSwapQuote'
 import { oneInchSwapEnabledChains } from '@vultisig/core-chain/swap/general/oneInch/OneInchSwapEnabledChains'
+import {
+  getRujiTradeSwapQuote,
+  isRujiTradeSwapPair,
+} from '@vultisig/core-chain/swap/general/ruji/api/getRujiTradeSwapQuote'
 import { getSwapKitQuote } from '@vultisig/core-chain/swap/general/swapkit/api/getSwapKitQuote'
 import {
   swapKitEnabledChains,
@@ -50,7 +54,8 @@ import { HttpResponseError } from '@vultisig/lib-utils/fetch/HttpResponseError'
 import { pick } from '@vultisig/lib-utils/record/pick'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 
-import { SwapQuote } from './SwapQuote'
+import { cloneSwapSafetyValue, getSwapQuoteSafetyFingerprint } from './getSwapQuoteSafetyFingerprint'
+import type { BoundSwapQuote, SwapQuote } from './SwapQuote'
 
 /** Optional per-aggregator affiliate overrides. When absent each aggregator
  * falls back to its own vultisig-0 default — no behavior change for existing
@@ -74,8 +79,8 @@ export type FindSwapQuoteInput = Record<TransferDirection, AccountCoin> & {
    * Optional external recipient for the swapped output. When omitted the swap
    * pays out to the user's own derived address (existing behavior). When set,
    * only providers that route the output to an explicit address are used —
-   * native THORChain/MayaChain (memo destination) and CowSwap (order
-   * `receiver`); aggregators that would silently pay the initiator are skipped
+   * native THORChain/MayaChain (memo destination), CowSwap (order `receiver`),
+   * and RUJI Trade (FIN execute `to`); aggregators that would silently pay the initiator are skipped
    * so funds are never sent to the wrong address.
    */
   recipient?: string
@@ -83,7 +88,7 @@ export type FindSwapQuoteInput = Record<TransferDirection, AccountCoin> & {
    * Optional slippage tolerance, expressed in PERCENT (e.g. `0.5` = 0.5%,
    * `3` = 3%). When omitted each provider keeps its own default. Applied to the
    * general aggregators that accept a slippage override (1inch, KyberSwap, LiFi,
-   * SwapKit); CowSwap (RFQ limit order) and the native THORChain/MayaChain
+   * SwapKit, RUJI Trade); CowSwap (RFQ limit order) and the native THORChain/MayaChain
    * protocols use their own protection mechanisms and ignore this value.
    */
   slippageTolerance?: number
@@ -108,6 +113,7 @@ export type SwapQuoteProviderName =
   | 'LiFi'
   | 'SwapKit'
   | 'Jupiter'
+  | 'RUJI Trade'
   | 'THORChain'
   | 'MayaChain'
 
@@ -115,17 +121,77 @@ export type SwapQuoteProviderExcludeName = SwapQuoteProviderName | GeneralSwapPr
 
 type SwapQuoteFetcher = {
   providerName: SwapQuoteProviderName
-  fetch: () => Promise<SwapQuote>
+  fetch: () => Promise<UnboundSwapQuote>
 }
 
-type RankedSwapQuote = {
-  quote: SwapQuote
-  outputAmount: bigint
-  sourceGasUnits?: bigint
+type UnboundSwapQuote = Omit<SwapQuote, 'recipient' | 'requestedAmount' | 'expiresAt' | 'safetyFingerprint'>
+
+/**
+ * A single fetched swap route: the fully bound quote (request amount, expiry,
+ * safety fingerprint), the provider that produced it, and its comparable net
+ * output in the destination token's smallest units. `outputAmount` is the
+ * exact value best-quote selection ranks by, so consumers can present
+ * alternatives ordered the same way the auto-selection sees them.
+ */
+export type SwapQuoteCandidate = {
+  quote: BoundSwapQuote
   providerName: SwapQuoteProviderName
+  outputAmount: bigint
+}
+
+type RankedSwapQuote = SwapQuoteCandidate & {
+  sourceGasUnits?: bigint
 }
 
 const QUOTE_FETCH_TIMEOUT_MS = 30_000
+/**
+ * Budget for the single automatic re-attempt of an aggregator that failed
+ * transiently while a native protocol reported a halt (see
+ * `retryTransientFetchersAfterNativeHalt`). Deliberately shorter than the first
+ * attempt: the provider has already had the full budget and is warm, so a second
+ * full window would only double the wait before the all-fail classification.
+ */
+const QUOTE_FETCH_RETRY_TIMEOUT_MS = 10_000
+/**
+ * General aggregators do not expose a uniform quote deadline. Keep the bound
+ * transaction usable for a normal review-and-sign round trip while the SDK's
+ * presentation layer continues to recommend a refresh after 60 seconds.
+ * Provider-supplied deadlines (currently CoW's `validTo`) still win when sooner.
+ */
+export const GENERAL_QUOTE_PREPARATION_TTL_MS = 5 * 60_000
+
+const bindQuoteSafetyMetadata = (
+  quote: UnboundSwapQuote,
+  from: AccountCoin,
+  to: AccountCoin,
+  recipient: string,
+  requestedAmount: bigint
+): BoundSwapQuote => {
+  const now = Date.now()
+  const expiresAt =
+    'native' in quote.quote
+      ? quote.quote.native.expiry * 1000
+      : (quote.quote.general.expiresAt ?? now + GENERAL_QUOTE_PREPARATION_TTL_MS)
+  const effectiveExpiresAt =
+    'general' in quote.quote && 'cowswap_order' in quote.quote.general.tx
+      ? Math.min(expiresAt, quote.quote.general.tx.cowswap_order.validTo * 1000)
+      : expiresAt
+
+  return {
+    ...quote,
+    recipient,
+    requestedAmount,
+    expiresAt: effectiveExpiresAt,
+    safetyFingerprint: getSwapQuoteSafetyFingerprint({
+      from,
+      to,
+      recipient,
+      requestedAmount,
+      expiresAt: effectiveExpiresAt,
+      quote: quote.quote,
+    }),
+  }
+}
 
 // Node/undici network-layer error codes — mirrors agent-backend-ts's
 // `TRANSIENT_QUOTE_CODE_RE` (execute_swap.ts) for the same reason: a provider's raw
@@ -159,6 +225,7 @@ export const providerPreferenceOrder: readonly SwapQuoteProviderName[] = [
   // competes for same-chain ERC-20 EVM pairs (see fetcher registration below);
   // for every other pair it simply isn't in the candidate set.
   'CowSwap',
+  'RUJI Trade',
   'THORChain',
   'MayaChain',
   // Jupiter is slotted ahead of the EVM/multi-chain aggregators: it only enters
@@ -189,6 +256,7 @@ const swapQuoteProviderExcludeAlias: Record<GeneralSwapProvider, SwapQuoteProvid
   swapkit: 'SwapKit',
   cowswap: 'CowSwap',
   jupiter: 'Jupiter',
+  ruji: 'RUJI Trade',
 }
 
 const swapQuoteProviderExcludeNames = new Set<SwapQuoteProviderExcludeName>([
@@ -325,6 +393,165 @@ const isTransientProviderFailure = (reason: unknown): boolean => {
 }
 
 /**
+ * The providers whose failure can legitimately mean "this pair is halted".
+ * `assertNativeTradingOpen` only ever runs inside a THORChain/MayaChain fetcher,
+ * so a halt is scoped to the native protocol that raised it — every other
+ * fetcher is an aggregator with its own, independent route.
+ */
+const nativeSwapProviderNames: ReadonlySet<SwapQuoteProviderName> = new Set(['THORChain', 'MayaChain'])
+
+const isTradingHaltedRejection = (reason: unknown): boolean =>
+  asTradingHaltedSwapError(reason) !== null ||
+  isTradingHaltedMsg(reason instanceof Error ? reason.message : String(reason))
+
+/**
+ * Indexes of the rejected non-native fetchers that failed transiently — the
+ * retry set. Native fetchers are excluded: re-asking the protocol that raised
+ * the halt would only re-confirm it.
+ */
+const getTransientAggregatorIndexes = (
+  settled: PromiseSettledResult<RankedSwapQuote>[],
+  fetchers: SwapQuoteFetcher[]
+): number[] =>
+  settled.flatMap((result, index) =>
+    result.status === 'rejected' &&
+    !nativeSwapProviderNames.has(fetchers[index].providerName) &&
+    isTransientProviderFailure(result.reason)
+      ? [index]
+      : []
+  )
+
+/**
+ * Providers that failed transiently without reporting a halt themselves — routes
+ * that never declined this pair and could still fill it. A halt raised elsewhere
+ * cannot speak for them, so their presence rules out reporting the pair as
+ * halted. Unlike the retry set this includes a non-halted native protocol: when
+ * THORChain is halted and MayaChain merely timed out, MayaChain is unreachable,
+ * not halted.
+ */
+const getUnreachableProviderNames = (
+  settled: PromiseSettledResult<RankedSwapQuote>[],
+  fetchers: SwapQuoteFetcher[]
+): SwapQuoteProviderName[] =>
+  settled.flatMap((result, index) =>
+    result.status === 'rejected' &&
+    !isTradingHaltedRejection(result.reason) &&
+    isTransientProviderFailure(result.reason)
+      ? [fetchers[index].providerName]
+      : []
+  )
+
+type RetryTransientFetchersAfterNativeHaltInput = {
+  settled: PromiseSettledResult<RankedSwapQuote>[]
+  fetchers: SwapQuoteFetcher[]
+  runFetchers: (fetchers: SwapQuoteFetcher[], timeoutMs: number) => Promise<PromiseSettledResult<RankedSwapQuote>[]>
+}
+
+/**
+ * One extra attempt at the aggregators that failed transiently while a native
+ * protocol reported a halt. Without it a THORChain halt plus a LiFi/SwapKit
+ * timeout collapses into "trading halted" for the whole pair, even though the
+ * aggregator — which the halt never applied to — usually answers on the very
+ * next tap. Returns the results unchanged when nothing qualifies, otherwise the
+ * original results with each retried outcome merged back in at its fetcher index.
+ */
+const retryTransientFetchersAfterNativeHalt = async ({
+  settled,
+  fetchers,
+  runFetchers,
+}: RetryTransientFetchersAfterNativeHaltInput): Promise<PromiseSettledResult<RankedSwapQuote>[]> => {
+  const nativeHalted = settled.some(
+    (result, index) =>
+      result.status === 'rejected' &&
+      nativeSwapProviderNames.has(fetchers[index].providerName) &&
+      isTradingHaltedRejection(result.reason)
+  )
+
+  if (!nativeHalted) {
+    return settled
+  }
+
+  const retryIndexes = getTransientAggregatorIndexes(settled, fetchers)
+  if (isEmpty(retryIndexes)) {
+    return settled
+  }
+
+  const retried = await runFetchers(
+    retryIndexes.map(index => fetchers[index]),
+    QUOTE_FETCH_RETRY_TIMEOUT_MS
+  )
+
+  const merged = [...settled]
+  retryIndexes.forEach((fetcherIndex, retryIndex) => {
+    merged[fetcherIndex] = retried[retryIndex]
+  })
+
+  return merged
+}
+
+type HaltAllFailErrorInput = {
+  settled: PromiseSettledResult<RankedSwapQuote>[]
+  fetchers: SwapQuoteFetcher[]
+  proactiveTradingHalt: SwapError | null
+  haltedProviders: ReadonlySet<SwapQuoteProviderName>
+}
+
+/**
+ * How an all-fail round in which some provider reported a halt should be
+ * reported, or `null` when nothing halted and the caller should fall through to
+ * its size/no-route classification.
+ *
+ * Trading-halt takes precedence over the speculative computed minimum and the
+ * generic fallback: when a protocol reports a halt, NO amount can route through
+ * it,
+ * so telling the user to "increase the amount" would be actively misleading. A
+ * genuine provider-reported below-minimum (handled by the caller first) still
+ * wins, since that provider is responding and the amount is the actionable
+ * lever. (#604)
+ *
+ * The halt only speaks for the provider that raised it, though. Any other route
+ * that was merely unreachable — an aggregator still failing after its retry, or a
+ * second native protocol that timed out — never declined this pair, so reporting
+ * a halt would send the user off to wait out an outage that was never blocking
+ * their route, while the truthful answer is that the route which could have
+ * filled simply could not be reached. (#2167)
+ */
+const getHaltAllFailError = ({
+  settled,
+  fetchers,
+  proactiveTradingHalt,
+  haltedProviders,
+}: HaltAllFailErrorInput): SwapError | null => {
+  if (!proactiveTradingHalt && haltedProviders.size === 0) {
+    return null
+  }
+
+  const unreachableProviders = getUnreachableProviderNames(settled, fetchers)
+
+  if (isEmpty(unreachableProviders)) {
+    return (
+      proactiveTradingHalt ??
+      new SwapError(
+        SwapErrorCode.TradingHalted,
+        formatTradingHaltedMessage(`trading is halted on ${[...haltedProviders].join(', ')}`)
+      )
+    )
+  }
+
+  // Worded to stay classifiable downstream: it names the transient category
+  // (which `isTransientProviderFailure` and agent-backend-ts's
+  // `isTransientQuoteError` both key off) and deliberately avoids the halt
+  // wordings, so a consumer re-classifying this message does not read it back as
+  // a hard halt.
+  return new SwapError(
+    SwapErrorCode.AllProvidersFailed,
+    `Swap quote lookup failed: ${unreachableProviders.join(', ')} could not be reached due to a transient ` +
+      `network/timeout error, and the remaining route(s) (${[...haltedProviders].join(', ')}) are ` +
+      `temporarily unavailable. This is not a missing route — retry the same swap shortly.`
+  )
+}
+
+/**
  * Tuning point for issue #605's banded routing rule. 50 bps = 0.5%.
  * Adjust this when product wants a wider or narrower provider-preference band.
  */
@@ -365,7 +592,8 @@ const getGeneralDestinationSideFeeAmount = ({ quote, to }: { quote: SwapQuote; t
     general.provider === 'kyber' ||
     general.provider === 'swapkit' ||
     general.provider === 'jupiter' ||
-    general.provider === 'cowswap'
+    general.provider === 'cowswap' ||
+    general.provider === 'ruji'
   if (!providerAlreadyNet && explicitFee && isSameCoinKey(explicitFee, to)) {
     return rebaseDecimals(explicitFee.amount, explicitFee.decimals, to.decimals)
   }
@@ -426,7 +654,7 @@ const getSameChainEvmSourceGasUnits = (q: SwapQuote, from: AccountCoin, to: Acco
   return undefined
 }
 
-function selectBestEligibleQuote(settled: PromiseSettledResult<RankedSwapQuote>[]): SwapQuote | null {
+function selectBestEligibleQuote(settled: PromiseSettledResult<RankedSwapQuote>[]): BoundSwapQuote | null {
   const candidates: RankedSwapQuote[] = []
 
   for (let i = 0; i < settled.length; i++) {
@@ -488,6 +716,27 @@ function selectBestEligibleQuote(settled: PromiseSettledResult<RankedSwapQuote>[
 
   return selected?.quote ?? null
 }
+
+// Every fulfilled candidate, sorted best→worst by comparable net output.
+// Exact-output ties break by provider preference order so the returned list is
+// deterministic regardless of `Promise.allSettled` resolution order. Rejected
+// fetchers (including quotes whose output amount could not be parsed) are
+// already absent from the fulfilled set, so they never appear in the ranking.
+const rankQuoteCandidates = (settled: PromiseSettledResult<RankedSwapQuote>[]): SwapQuoteCandidate[] =>
+  settled
+    .filter((result): result is PromiseFulfilledResult<RankedSwapQuote> => result.status === 'fulfilled')
+    .map(result => result.value)
+    .sort((a, b) => {
+      if (a.outputAmount !== b.outputAmount) {
+        return a.outputAmount > b.outputAmount ? -1 : 1
+      }
+      return getProviderPreferenceRank(a.providerName) - getProviderPreferenceRank(b.providerName)
+    })
+    .map(({ quote, providerName, outputAmount }) => ({
+      quote,
+      providerName,
+      outputAmount,
+    }))
 
 // `slippageTolerance` is a percent (e.g. 0.5 = 0.5%). Reject invalid values up
 // front so they don't propagate into every provider call and fail with
@@ -574,6 +823,7 @@ type ProviderSlippage = {
   lifiFraction: number | undefined
   kyberBps: number | undefined
   jupiterBps: number | undefined
+  rujiBps: number | undefined
 }
 const toProviderSlippage = (slippageTolerance: number | undefined): ProviderSlippage => {
   const bps = slippageTolerance !== undefined ? Math.round(slippageTolerance * 100) : undefined
@@ -585,20 +835,46 @@ const toProviderSlippage = (slippageTolerance: number | undefined): ProviderSlip
     lifiFraction: slippageTolerance !== undefined ? slippageTolerance / 100 : undefined,
     kyberBps: bps,
     jupiterBps: bps,
+    rujiBps: bps,
   }
 }
 
-export const findSwapQuote = async ({
-  from,
-  to,
-  amount,
-  referral,
-  vultDiscountTier,
-  affiliateConfig,
-  recipient,
-  slippageTolerance,
-  excludeProviders,
-}: FindSwapQuoteInput): Promise<SwapQuote> => {
+/**
+ * Best quote plus every fetched candidate, so a consumer can offer route
+ * selection instead of only the auto-selected winner.
+ */
+export type FindSwapQuotesResult = {
+  /** The auto-selected winner — identical to what `findSwapQuote` returns. */
+  best: BoundSwapQuote
+  /**
+   * Every successfully fetched quote (including `best`), sorted best→worst by
+   * comparable net output. `best` is not necessarily `ranked[0]`: within the
+   * preference band the auto-selection may prefer a lower-output provider (see
+   * `providerPreferenceOrder`).
+   */
+  ranked: SwapQuoteCandidate[]
+}
+
+/**
+ * Fetches quotes from every eligible provider in parallel and returns the
+ * auto-selected best quote together with the full ranked candidate set. Error
+ * behavior is identical to `findSwapQuote`: when no provider yields a usable
+ * quote, the same classified `SwapError` is thrown.
+ */
+export const findSwapQuotes = async (input: FindSwapQuoteInput): Promise<FindSwapQuotesResult> => {
+  // Provider requests yield before the returned transaction is safety-bound. Own a synchronous
+  // snapshot so caller mutations cannot make a response for pair A receive pair B's fingerprint.
+  const {
+    from,
+    to,
+    amount,
+    referral,
+    vultDiscountTier,
+    affiliateConfig,
+    recipient,
+    slippageTolerance,
+    excludeProviders,
+  } = cloneSwapSafetyValue(input)
   // Runtime guard: THORName affiliateFeeAddress must be lowercase.
   // THORChain memo parsing is case-sensitive — passing 'STVS' instead of 'stvs'
   // silently routes affiliate fees to the vultisig-0 default instead of the
@@ -621,8 +897,8 @@ export const findSwapQuote = async ({
   const referralDiscount: SwapDiscount[] = referral ? [{ referral: {} }] : []
 
   // When the caller requests an external recipient, restrict routing to the
-  // providers that send the swapped output to an explicit address (native +
-  // CowSwap). Aggregators that pay the initiator would silently misroute funds,
+  // providers that send the swapped output to an explicit address (native,
+  // CowSwap, and RUJI Trade). Aggregators that pay the initiator would silently misroute funds,
   // so they are not offered for custom-recipient swaps until they thread the
   // receiver through (tracked in vultisig/vultisig-windows#4131).
   // Trim and treat empty/whitespace strings as no recipient, so route gating
@@ -648,6 +924,7 @@ export const findSwapQuote = async ({
     lifiFraction: lifiSlippageFraction,
     kyberBps: kyberSlippageBps,
     jupiterBps: jupiterSlippageBps,
+    rujiBps: rujiSlippageBps,
     nativeBps: nativeSlippageBps,
   } = toProviderSlippage(slippageTolerance)
 
@@ -660,7 +937,7 @@ export const findSwapQuote = async ({
   const getNativeFetchers = (): SwapQuoteFetcher[] =>
     matchingSwapChains.map(swapChain => ({
       providerName: swapChain === Chain.THORChain ? 'THORChain' : 'MayaChain',
-      fetch: async (): Promise<SwapQuote> => {
+      fetch: async (): Promise<UnboundSwapQuote> => {
         await assertNativeTradingOpen({ from, to, swapChain })
 
         const fromDecimals = from.decimals
@@ -691,6 +968,23 @@ export const findSwapQuote = async ({
     const toChain = to.chain
     const chainAmount = amount
 
+    if (isRujiTradeSwapPair(from, to)) {
+      result.push({
+        providerName: 'RUJI Trade',
+        fetch: async (): Promise<UnboundSwapQuote> => {
+          const general = await getRujiTradeSwapQuote({
+            from,
+            to,
+            amount: chainAmount,
+            destination: normalizedRecipient ?? to.address,
+            slippageBps: rujiSlippageBps,
+          })
+
+          return { quote: { general }, discounts: [] }
+        },
+      })
+    }
+
     // CowSwap (Phase 2 — off-chain RFQ orders). Gated to same-chain ERC-20 →
     // ERC-20 pairs on a CowSwap-supported EVM chain. Both sides must be ERC-20
     // (`from.id` and `to.id` present): selling native ETH needs the GPv2
@@ -715,7 +1009,7 @@ export const findSwapQuote = async ({
       const buyToken = to.id
       result.push({
         providerName: 'CowSwap',
-        fetch: async (): Promise<SwapQuote> => {
+        fetch: async (): Promise<UnboundSwapQuote> => {
           const general = await getCowSwapQuote({
             sellToken,
             buyToken,
@@ -739,7 +1033,7 @@ export const findSwapQuote = async ({
     ) {
       result.push({
         providerName: 'KyberSwap',
-        fetch: async (): Promise<SwapQuote> => {
+        fetch: async (): Promise<UnboundSwapQuote> => {
           const general = await getKyberSwapQuote({
             from: {
               ...from,
@@ -763,7 +1057,7 @@ export const findSwapQuote = async ({
     if (!hasCustomRecipient && isOneOf(from.chain, oneInchSwapEnabledChains) && from.chain === to.chain) {
       result.push({
         providerName: '1inch',
-        fetch: async (): Promise<SwapQuote> => {
+        fetch: async (): Promise<UnboundSwapQuote> => {
           const general = await getOneInchSwapQuote({
             account: pick(from, ['address', 'chain']),
             // Pass the raw `.id` (undefined for a chain's native/fee coin) — NOT a ticker
@@ -793,7 +1087,7 @@ export const findSwapQuote = async ({
     if (!hasCustomRecipient && isOneOf(fromChain, jupiterSwapEnabledChains) && fromChain === toChain) {
       result.push({
         providerName: 'Jupiter',
-        fetch: async (): Promise<SwapQuote> => {
+        fetch: async (): Promise<UnboundSwapQuote> => {
           const general = await getJupiterSwapQuote({
             from: {
               ...from,
@@ -817,7 +1111,7 @@ export const findSwapQuote = async ({
     if (!hasCustomRecipient && isOneOf(fromChain, lifiSwapEnabledChains) && isOneOf(toChain, lifiSwapEnabledChains)) {
       result.push({
         providerName: 'LiFi',
-        fetch: async (): Promise<SwapQuote> => {
+        fetch: async (): Promise<UnboundSwapQuote> => {
           const general = await getLifiSwapQuote({
             from: {
               ...from,
@@ -841,7 +1135,7 @@ export const findSwapQuote = async ({
     if (!hasCustomRecipient && isOneOf(fromChain, swapKitSourceChains) && isOneOf(toChain, swapKitEnabledChains)) {
       result.push({
         providerName: 'SwapKit',
-        fetch: async (): Promise<SwapQuote> => {
+        fetch: async (): Promise<UnboundSwapQuote> => {
           const general = await getSwapKitQuote({
             from: {
               ...from,
@@ -919,21 +1213,40 @@ export const findSwapQuote = async ({
     }
   }
 
-  const settled = await Promise.allSettled(
-    fetchers.map(async (fetcher): Promise<RankedSwapQuote> => {
-      const quote = await withTimeout(fetcher.fetch(), QUOTE_FETCH_TIMEOUT_MS)
-      return {
-        quote,
-        outputAmount: getComparableOutputAmount(quote, to, fetcher.providerName),
-        sourceGasUnits: getSameChainEvmSourceGasUnits(quote, from, to),
-        providerName: fetcher.providerName,
-      }
-    })
-  )
+  const runFetchers = (list: SwapQuoteFetcher[], timeoutMs: number): Promise<PromiseSettledResult<RankedSwapQuote>[]> =>
+    Promise.allSettled(
+      list.map(async (fetcher): Promise<RankedSwapQuote> => {
+        const quote = bindQuoteSafetyMetadata(
+          await withTimeout(fetcher.fetch(), timeoutMs),
+          from,
+          to,
+          normalizedRecipient ?? to.address,
+          amount
+        )
+        return {
+          quote,
+          outputAmount: getComparableOutputAmount(quote, to, fetcher.providerName),
+          sourceGasUnits: getSameChainEvmSourceGasUnits(quote, from, to),
+          providerName: fetcher.providerName,
+        }
+      })
+    )
+
+  let settled = await runFetchers(fetchers, QUOTE_FETCH_TIMEOUT_MS)
   const best = selectBestEligibleQuote(settled)
 
   if (best) {
-    return best
+    return { best, ranked: rankQuoteCandidates(settled) }
+  }
+
+  // A native halt is not a verdict on the aggregators that ran alongside it, so
+  // give the ones that merely blipped (timeout / network / 5xx) a second chance
+  // before the all-fail classification below can report the pair as halted.
+  settled = await retryTransientFetchersAfterNativeHalt({ settled, fetchers, runFetchers })
+  const bestAfterRetry = selectBestEligibleQuote(settled)
+
+  if (bestAfterRetry) {
+    return { best: bestAfterRetry, ranked: rankQuoteCandidates(settled) }
   }
 
   // Scan rejected results for actionable size-related signals. Prefer the most
@@ -951,6 +1264,7 @@ export const findSwapQuote = async ({
   // resolution order. (#535 r3 — NeO preferably-blocking response.)
   const belowMinimumProviderOrder: SwapQuoteProviderName[] = [
     'CowSwap',
+    'RUJI Trade',
     'KyberSwap',
     '1inch',
     'Jupiter',
@@ -989,7 +1303,10 @@ export const findSwapQuote = async ({
       belowMinimumByProvider.set(fetchers[i].providerName, msg)
     }
 
-    if (isTradingHaltedMsg(msg)) {
+    // Matches the typed `SwapError` from `assertNativeTradingOpen` as well as a
+    // provider's halt wording, so the halt reporting below always knows which
+    // protocol raised it.
+    if (isTradingHaltedRejection(result.reason)) {
       haltedProviders.add(fetchers[i].providerName)
     }
   }
@@ -1006,20 +1323,9 @@ export const findSwapQuote = async ({
     )
   }
 
-  if (proactiveTradingHalt) {
-    throw proactiveTradingHalt
-  }
-
-  // Trading-halt takes precedence over the speculative computed minimum and the
-  // generic fallback: when a native protocol reports a halt, NO amount can route,
-  // so telling the user to "increase the amount" would be actively misleading. A
-  // genuine provider-reported below-minimum (handled above) still wins, since
-  // that provider is responding and the amount is the actionable lever. (#604)
-  if (haltedProviders.size > 0) {
-    throw new SwapError(
-      SwapErrorCode.TradingHalted,
-      formatTradingHaltedMessage(`trading is halted on ${[...haltedProviders].join(', ')}`)
-    )
+  const haltError = getHaltAllFailError({ settled, fetchers, proactiveTradingHalt, haltedProviders })
+  if (haltError) {
+    throw haltError
   }
 
   // No provider returned a parseable below-minimum hint. Before falling back to
@@ -1087,6 +1393,14 @@ export const findSwapQuote = async ({
     `No swap route found after trying ${failedProviders.join(', ')}.`
   )
 }
+
+/**
+ * The auto-selected best swap quote across all eligible providers — equivalent
+ * to `findSwapQuotes(input)`'s `best`. Use `findSwapQuotes` when the
+ * alternatives matter (e.g. a route picker).
+ */
+export const findSwapQuote = async (input: FindSwapQuoteInput): Promise<BoundSwapQuote> =>
+  (await findSwapQuotes(input)).best
 
 const belowNativeMinimumError = (min: NativeSwapMinAmountIn, from: AccountCoin): SwapError =>
   new SwapError(

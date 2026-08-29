@@ -49,7 +49,12 @@ import {
   executeTxStatus,
   executeVaults,
 } from '../commands'
-import { loadActiveVaultSafely, shouldAutoSelectActiveVault } from '../core'
+import {
+  loadActiveVaultSafely,
+  resolveChainOrThrow,
+  resolveOptionalChainOrThrow,
+  shouldAutoSelectActiveVault,
+} from '../core'
 import { ConfirmationRequiredError } from '../core/errors'
 import { stopAllSpinners } from '../lib/output'
 import { createCompleter, findChainByName } from './completer'
@@ -491,13 +496,15 @@ export class ShellSession {
   }
 
   private async importVault(args: string[]): Promise<void> {
-    if (args.length === 0) {
-      console.log(chalk.yellow('Usage: import <file>'))
+    const replace = args.includes('--replace')
+    const fileArgs = args.filter(arg => arg !== '--replace')
+    if (fileArgs.length === 0) {
+      console.log(chalk.yellow('Usage: import [--replace] <file>'))
       return
     }
 
-    const filePath = args.join(' ')
-    const vault = await executeImport(this.ctx, filePath)
+    const filePath = fileArgs.join(' ')
+    const vault = await executeImport(this.ctx, filePath, undefined, replace)
     this.ctx.addVault(vault)
     this.eventBuffer.setupVaultListeners(vault)
   }
@@ -693,7 +700,7 @@ export class ShellSession {
 
     await this.withCancellation(() =>
       executeBalance(this.ctx, {
-        chain: chainStr ? findChainByName(chainStr) || (chainStr as Chain) : undefined,
+        chain: resolveOptionalChainOrThrow(chainStr),
         includeTokens,
         raw,
       })
@@ -729,7 +736,7 @@ export class ShellSession {
     }
 
     const [chainStr, to, amount, ...rest] = args
-    const chain = findChainByName(chainStr) || (chainStr as Chain)
+    const chain = resolveChainOrThrow(chainStr)
 
     let tokenId: string | undefined
     let memo: string | undefined
@@ -787,7 +794,7 @@ export class ShellSession {
       return
     }
     const [chainStr, txHash, ...rest] = args
-    const chain = findChainByName(chainStr) || (chainStr as Chain)
+    const chain = resolveChainOrThrow(chainStr)
     const noWait = rest.includes('--no-wait')
     await this.withCancellation(() => executeTxStatus(this.ctx, { chain, txHash, noWait }))
   }
@@ -831,7 +838,7 @@ export class ShellSession {
     }
 
     const chainStr = args[0]
-    const chain = findChainByName(chainStr) || (chainStr as Chain)
+    const chain = resolveChainOrThrow(chainStr)
 
     let add: string | undefined
     let remove: string | undefined
@@ -858,8 +865,8 @@ export class ShellSession {
     }
 
     const [fromChainStr, toChainStr, amountStr, ...rest] = args
-    const fromChain = findChainByName(fromChainStr) || (fromChainStr as Chain)
-    const toChain = findChainByName(toChainStr) || (toChainStr as Chain)
+    const fromChain = resolveChainOrThrow(fromChainStr, 'source chain')
+    const toChain = resolveChainOrThrow(toChainStr, 'destination chain')
     const amount = amountStr
 
     let fromToken: string | undefined
@@ -889,8 +896,8 @@ export class ShellSession {
     }
 
     const [fromChainStr, toChainStr, amountStr, ...rest] = args
-    const fromChain = findChainByName(fromChainStr) || (fromChainStr as Chain)
-    const toChain = findChainByName(toChainStr) || (toChainStr as Chain)
+    const fromChain = resolveChainOrThrow(fromChainStr, 'source chain')
+    const toChain = resolveChainOrThrow(toChainStr, 'destination chain')
     const amount = amountStr
 
     let fromToken: string | undefined
@@ -941,7 +948,7 @@ export class ShellSession {
         remove = args[i + 1]
         i++
       } else if (args[i] === '--chain' && i + 1 < args.length) {
-        chain = findChainByName(args[i + 1]) || (args[i + 1] as Chain)
+        chain = resolveChainOrThrow(args[i + 1]!, 'chain')
         i++
       }
     }

@@ -79,10 +79,39 @@ describe('getMaxSendAmountFromKeys', () => {
     expect(mockGetCoinBalance).toHaveBeenCalledWith(coin)
   })
 
-  it('forwards token coin (with id) to getCoinBalance for ERC-20 max', async () => {
-    const balance = 5_000_000n
-    const fee = 1_500_000n
+  it('treats a coin with an empty id as native', async () => {
+    const balance = 1_000_000_000_000_000_000n
+    const fee = 20_000_000_000_000_000n
     mockGetCoinBalance.mockResolvedValue(balance)
+    mockGetSendFeeEstimate.mockResolvedValue(fee)
+
+    const coin = {
+      chain: Chain.Ethereum,
+      address: '0xfrom',
+      id: '',
+      decimals: 18,
+      ticker: 'ETH',
+    } as any
+
+    const result = await getMaxSendAmountFromKeys(baseIdentity, {
+      coin,
+      receiver: '0xto',
+    })
+
+    expect(result).toEqual({
+      balance,
+      fee,
+      maxSendable: balance - fee,
+    })
+    expect(mockGetCoinBalance).toHaveBeenCalledTimes(1)
+    expect(mockGetCoinBalance).toHaveBeenCalledWith(coin)
+  })
+
+  it('returns the full 6-decimal ERC-20 balance and checks the native gas balance', async () => {
+    const balance = 16_140_000n
+    const fee = 20_000_000_000_000_000n
+    const nativeBalance = 8_530_000_000_000_000_000n
+    mockGetCoinBalance.mockImplementation(async coin => (coin.id ? balance : nativeBalance))
     mockGetSendFeeEstimate.mockResolvedValue(fee)
 
     const tokenCoin = {
@@ -98,11 +127,80 @@ describe('getMaxSendAmountFromKeys', () => {
       receiver: '0xto',
     })
 
-    expect(mockGetCoinBalance).toHaveBeenCalledWith(tokenCoin)
-    expect(mockGetCoinBalance.mock.calls[0][0].id).toBe('0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')
     expect(result.balance).toBe(balance)
     expect(result.fee).toBe(fee)
-    expect(result.maxSendable).toBe(balance - fee)
+    expect(result.maxSendable).toBe(balance)
+    expect(mockGetCoinBalance).toHaveBeenNthCalledWith(1, tokenCoin)
+    expect(mockGetCoinBalance).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ chain: Chain.Ethereum, address: '0xfrom', ticker: 'ETH' })
+    )
+    expect(mockGetCoinBalance.mock.calls[1][0].id).toBeUndefined()
+    expect(mockGetCoinBalance.mock.calls[0][0].id).toBe('0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')
+  })
+
+  it('returns the full balance for an 18-decimal ERC-20 token', async () => {
+    const balance = 4_000_000_000_000_000_000n
+    const fee = 20_000_000_000_000_000n
+    const nativeBalance = 1_000_000_000_000_000_000n
+    mockGetCoinBalance.mockImplementation(async coin => (coin.id ? balance : nativeBalance))
+    mockGetSendFeeEstimate.mockResolvedValue(fee)
+
+    const result = await getMaxSendAmountFromKeys(baseIdentity, {
+      coin: {
+        chain: Chain.Ethereum,
+        address: '0xfrom',
+        id: '0x18decimaltoken',
+        decimals: 18,
+        ticker: 'TOKEN18',
+      } as any,
+      receiver: '0xto',
+    })
+
+    expect(result).toEqual({ balance, fee, maxSendable: balance })
+  })
+
+  it('rejects a token max-send when the native balance cannot cover gas', async () => {
+    const tokenBalance = 16_140_000n
+    const fee = 20_000_000_000_000_000n
+    const nativeBalance = 10_000_000_000_000_000n
+    mockGetCoinBalance.mockImplementation(async coin => (coin.id ? tokenBalance : nativeBalance))
+    mockGetSendFeeEstimate.mockResolvedValue(fee)
+
+    await expect(
+      getMaxSendAmountFromKeys(baseIdentity, {
+        coin: {
+          chain: Chain.Ethereum,
+          address: '0xfrom',
+          id: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+          decimals: 6,
+          ticker: 'USDC',
+        } as any,
+        receiver: '0xto',
+      })
+    ).rejects.toThrow(
+      'Insufficient native ETH balance for gas: 10000000000000000 available, 20000000000000000 required'
+    )
+  })
+
+  it('allows a token max-send when the native balance exactly covers gas', async () => {
+    const tokenBalance = 16_140_000n
+    const fee = 20_000_000_000_000_000n
+    mockGetCoinBalance.mockImplementation(async coin => (coin.id ? tokenBalance : fee))
+    mockGetSendFeeEstimate.mockResolvedValue(fee)
+
+    await expect(
+      getMaxSendAmountFromKeys(baseIdentity, {
+        coin: {
+          chain: Chain.Ethereum,
+          address: '0xfrom',
+          id: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+          decimals: 6,
+          ticker: 'USDC',
+        } as any,
+        receiver: '0xto',
+      })
+    ).resolves.toEqual({ balance: tokenBalance, fee, maxSendable: tokenBalance })
   })
 
   it('returns maxSendable === 0n when fee exceeds balance', async () => {
@@ -225,6 +323,59 @@ describe('getMaxSendAmountFromKeys', () => {
     const call = mockGetSendFeeEstimate.mock.calls[0][0]
     expect(call.publicKey).toBeNull()
     expect(call.hexPublicKeyOverride).toBe('mldsa-pubkey-hex')
+  })
+
+  it('subtracts the in-kind uusd fee for a full-balance TerraClassic USTC send (does not overdraft)', async () => {
+    // Regression for #1519: USTC (uusd) pays gas + burn tax in uusd itself,
+    // not in native uluna. A full-balance send must reserve the fee from the
+    // same uusd balance instead of returning the whole balance untouched.
+    const balance = 200_000_000n
+    const fee = 1_225_000n
+    mockGetCoinBalance.mockResolvedValue(balance)
+    mockGetSendFeeEstimate.mockResolvedValue(fee)
+
+    const coin = {
+      chain: Chain.TerraClassic,
+      address: 'terra1from',
+      id: 'uusd',
+      decimals: 6,
+      ticker: 'USTC',
+    } as any
+
+    const result = await getMaxSendAmountFromKeys(baseIdentity, {
+      coin,
+      receiver: 'terra1to',
+    })
+
+    expect(result).toEqual({
+      balance,
+      fee,
+      maxSendable: balance - fee,
+    })
+    // No separate native uluna balance lookup — the fee comes out of the
+    // same uusd balance, unlike an ordinary (non-fee) cosmos token.
+    expect(mockGetCoinBalance).toHaveBeenCalledTimes(1)
+    expect(mockGetCoinBalance).toHaveBeenCalledWith(coin)
+  })
+
+  it('returns maxSendable === 0n for TerraClassic USTC when the in-kind fee exceeds balance', async () => {
+    const balance = 1_000n
+    const fee = 1_225_000n
+    mockGetCoinBalance.mockResolvedValue(balance)
+    mockGetSendFeeEstimate.mockResolvedValue(fee)
+
+    const result = await getMaxSendAmountFromKeys(baseIdentity, {
+      coin: {
+        chain: Chain.TerraClassic,
+        address: 'terra1from',
+        id: 'uusd',
+        decimals: 6,
+        ticker: 'USTC',
+      } as any,
+      receiver: 'terra1to',
+    })
+
+    expect(result.maxSendable).toBe(0n)
   })
 
   it('forwards chainPublicKeys to getPublicKey (seedphrase-imported vault)', async () => {

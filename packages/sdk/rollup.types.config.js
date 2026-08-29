@@ -118,10 +118,19 @@ export default defineConfig([
     external: ['vite'],
     plugins: [dts(dtsPluginOptions)],
   },
-  // Dedicated public tool subpath types — keep these as first-class bundles so
-  // package-name imports like `@vultisig/sdk/tools/parse` resolve to narrow
-  // declarations instead of the root index type graph.
+  // Dedicated public subpath types — keep these as first-class bundles so
+  // package-name imports resolve to narrow declarations instead of the root
+  // index type graph.
   createSubpathTypesConfig('src/tools/parse/index.ts', 'dist/tools/parse/index.d.ts'),
   createSubpathTypesConfig('src/tools/defi/index.ts', 'dist/tools/defi/index.d.ts'),
+  createSubpathTypesConfig('src/tools/gas/index.ts', 'dist/tools/gas/index.d.ts'),
   createSubpathTypesConfig('src/tools/bridge/index.ts', 'dist/tools/bridge/index.d.ts'),
+  createSubpathTypesConfig('src/tools/balance/index.ts', 'dist/tools/balance/index.d.ts'),
+  createSubpathTypesConfig('src/chains/tron/index.ts', 'dist/chains/tron/index.d.ts'),
+  createSubpathTypesConfig('src/chains/utxo/index.ts', 'dist/chains/utxo/index.d.ts'),
+  // Canonical seedphrase helpers and import/discovery services are published
+  // as a narrow declaration surface alongside their dedicated runtime bundle.
+  createSubpathTypesConfig('src/seedphrase/index.ts', 'dist/seedphrase/index.d.ts'),
+  createSubpathTypesConfig('src/tools/decode/index.ts', 'dist/tools/decode/index.d.ts'),
+  createSubpathTypesConfig('src/tx/index.ts', 'dist/tx/index.d.ts'),
 ])

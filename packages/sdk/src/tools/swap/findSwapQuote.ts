@@ -3,12 +3,16 @@ import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import type { VultDiscountTier } from '@vultisig/core-chain/swap/affiliate'
 import {
   findSwapQuote as coreFindSwapQuote,
+  FindSwapQuoteInput,
+  findSwapQuotes as coreFindSwapQuotes,
+  FindSwapQuotesResult,
   SwapAffiliateConfig,
+  SwapQuoteCandidate,
   SwapQuoteProviderExcludeName,
 } from '@vultisig/core-chain/swap/quote/findSwapQuote'
-import type { SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
+import type { BoundSwapQuote, SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
 
-export type { SwapAffiliateConfig, SwapQuoteProviderExcludeName }
+export type { FindSwapQuotesResult, SwapAffiliateConfig, SwapQuoteCandidate, SwapQuoteProviderExcludeName }
 
 export type FindSwapQuoteParams = {
   fromChain: Chain
@@ -63,7 +67,7 @@ export type FindSwapQuoteParams = {
   excludeProviders?: SwapQuoteProviderExcludeName[]
 }
 
-export type { SwapQuote }
+export type { BoundSwapQuote, SwapQuote }
 
 /**
  * Find the best swap quote across all providers (THORChain, MayaChain, 1inch, LiFi, KyberSwap).
@@ -84,7 +88,19 @@ export type { SwapQuote }
  * })
  * ```
  */
-export const findSwapQuote = async (params: FindSwapQuoteParams): Promise<SwapQuote> => {
+export const findSwapQuote = async (params: FindSwapQuoteParams): Promise<BoundSwapQuote> =>
+  coreFindSwapQuote(toCoreFindSwapQuoteInput(params))
+
+/**
+ * Find the best swap quote plus the full ranked candidate set, so callers can
+ * offer route selection instead of only the auto-selected winner. Same inputs
+ * and error behavior as `findSwapQuote`; the winner equals what `findSwapQuote`
+ * returns.
+ */
+export const findSwapQuotes = async (params: FindSwapQuoteParams): Promise<FindSwapQuotesResult> =>
+  coreFindSwapQuotes(toCoreFindSwapQuoteInput(params))
+
+const toCoreFindSwapQuoteInput = (params: FindSwapQuoteParams): FindSwapQuoteInput => {
   const from: AccountCoin = {
     chain: params.fromChain,
     address: params.fromAddress,
@@ -101,7 +117,7 @@ export const findSwapQuote = async (params: FindSwapQuoteParams): Promise<SwapQu
     id: params.toTokenId,
   }
 
-  return coreFindSwapQuote({
+  return {
     from,
     to,
     amount: params.amount,
@@ -111,5 +127,5 @@ export const findSwapQuote = async (params: FindSwapQuoteParams): Promise<SwapQu
     recipient: params.recipient,
     slippageTolerance: params.slippageTolerance,
     excludeProviders: params.excludeProviders,
-  })
+  }
 }

@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/mcp",
-  "version": "0.1.22",
+  "version": "1.0.0",
   "description": "MCP server for Vultisig SDK - Model Context Protocol wrapper over wallet operations",
   "type": "module",
   "bin": {
@@ -54,7 +54,7 @@
     "vitest": "^4.1.8"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=20.19.0"
   },
   "publishConfig": {
     "access": "public",

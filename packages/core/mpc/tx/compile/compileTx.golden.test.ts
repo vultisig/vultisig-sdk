@@ -40,7 +40,7 @@ import { readFileSync } from 'fs'
 import { join } from 'path'
 
 import { create, toBinary } from '@bufbuild/protobuf'
-import { blake2b } from '@noble/hashes/blake2b'
+import { blake2b } from '@noble/hashes/blake2.js'
 import { deriveCardanoAddress } from '@vultisig/core-chain/publicKey/address/cardano'
 import { initWasm, TW, type WalletCore } from '@trustwallet/wallet-core'
 import type { PrivateKey, PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
@@ -50,6 +50,7 @@ import { serializeTransaction } from 'viem'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import { Chain } from '@vultisig/core-chain/Chain'
+import { cardanoTxBodyHash } from '@vultisig/core-chain/chains/cardano/cip30/cardanoTxBodyHash'
 import { getCardanoTxTtl } from '@vultisig/core-chain/chains/cardano/cip30/cardanoTxTtl'
 import { utxoChainScriptType } from '@vultisig/core-chain/chains/utxo/tx/UtxoScriptType'
 import { zcashBranchIdToWalletCoreHex } from '@vultisig/core-chain/chains/utxo/zcashBranchId'
@@ -238,8 +239,8 @@ const signatureForHash = ({
 
   return {
     msg: '',
-    r: hex(signature.slice(0, 32).reverse()),
-    s: hex(signature.slice(32, 64).reverse()),
+    r: hex(signature.slice(0, 32)),
+    s: hex(signature.slice(32, 64)),
     der_signature: '',
   }
 }
@@ -956,6 +957,7 @@ describe('compileTx golden vectors', () => {
 
     expect(hex(compiledOutput.txId)).toBe(hex(hashes[0]))
     expect(hex(compiledOutput.encoded)).toBe(EXPECTED_CARDANO_SIGNED_CBOR)
+    expect(hex(cardanoTxBodyHash(hex(compiledOutput.encoded)))).toBe(hex(hashes[0]))
     expect(getCardanoTxTtl(compiledOutput.encoded)).toBe(500_000n)
   })
 
@@ -1033,8 +1035,8 @@ describe('compileTx golden vectors', () => {
     const sig = privateKey.sign(hashes[0], walletCore.Curve.ed25519)
     const keysignSig: KeysignSignature = {
       msg: '',
-      r: hex(sig.slice(0, 32).reverse()),
-      s: hex(sig.slice(32, 64).reverse()),
+      r: hex(sig.slice(0, 32)),
+      s: hex(sig.slice(32, 64)),
       der_signature: '',
     }
 

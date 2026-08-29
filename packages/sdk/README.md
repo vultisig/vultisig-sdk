@@ -255,6 +255,9 @@ import { Vultisig, Chain, CosmosMsgType } from '@vultisig/sdk'
 
 // Look up known tokens (static, no vault needed)
 const tokens = Vultisig.getKnownTokens(Chain.Ethereum)
+// Swap pickers should use the dynamic destination universe. On THORChain this
+// refreshes secured assets from THORChain and uses the static list only offline.
+const swapDestinations = await Vultisig.getSwapDestinationTokens(Chain.THORChain)
 const usdc = Vultisig.getKnownToken(Chain.Ethereum, '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48')
 
 // Get native fee coin info
@@ -871,6 +874,14 @@ deprecated compatibility alias.
 
 Look up a specific token by its canonical chain-specific ID (case-insensitive). Returns null if not found. `TokenInfo.contractAddress` remains as a deprecated alias for `tokenId`.
 
+#### `Vultisig.getSwapDestinationTokens(chain): Promise<TokenInfo[]>`
+
+Get the complete token universe for a swap destination picker. THORChain
+secured assets come from the live shared catalog, with the built-in list used
+only as an explicit offline fallback; other chains use the built-in registry.
+Secured entries include `isSecured: true` and their canonical `l1Asset` so the
+picker can label them without parsing token IDs.
+
 #### `Vultisig.getFeeCoin(chain): FeeCoinInfo`
 
 Get the native fee coin info for a chain (e.g., ETH for Ethereum, BTC for Bitcoin).
@@ -1227,7 +1238,7 @@ See the `/examples` directory for complete sample applications:
 
 ## Requirements
 
-- Node.js 20+
+- Node.js 20.19+
 - Modern browser with WebAssembly support
 - Electron 20+ (for desktop applications)
 - Network access for VultiServer communication (for Fast Vault features)
@@ -1245,7 +1256,7 @@ See the `/examples` directory for complete sample applications:
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 20.19+
 - Yarn 4.x
 
 ### Setup

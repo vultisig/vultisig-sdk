@@ -11,6 +11,10 @@ export type TokenInfo = {
   decimals: number
   logo?: string
   priceProviderId?: string
+  /** True when this is a THORChain bank representation of an L1 asset. */
+  isSecured?: true
+  /** Canonical L1 identity for a THORChain secured asset. */
+  l1Asset?: string
 }
 
 /** Native fee coin info for a chain */
@@ -32,6 +36,8 @@ export type DiscoveredToken = {
   ticker: string
   decimals: number
   logo?: string
+  /** Optional CoinGecko / pricing identifier from canonical token metadata. */
+  priceProviderId?: string
   balance?: string
   isHidden?: boolean
 }

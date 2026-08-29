@@ -1,4 +1,5 @@
 import { Chain } from '@vultisig/core-chain/Chain'
+import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getCowSwapQuote } from '@vultisig/core-chain/swap/general/cowswap/api/getCowSwapQuote'
 import type { GeneralSwapQuote } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
 import { getJupiterSwapQuote } from '@vultisig/core-chain/swap/general/jupiter/api/getJupiterSwapQuote'
@@ -13,11 +14,17 @@ import {
   getNativeSwapMinAmountIn,
   NativeSwapMinAmountIn,
 } from '@vultisig/core-chain/swap/native/minimum/getNativeSwapMinAmountIn'
-import { NativeSwapQuote } from '@vultisig/core-chain/swap/native/NativeSwapQuote'
 import { HttpResponseError } from '@vultisig/lib-utils/fetch/HttpResponseError'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { findSwapQuote } from './findSwapQuote'
+import {
+  evmSameChainCoins,
+  minimalCowSwapQuote,
+  minimalGeneralQuote,
+  minimalNativeQuote,
+} from './__tests__/swapQuoteFixtures'
+import { findSwapQuote, GENERAL_QUOTE_PREPARATION_TTL_MS } from './findSwapQuote'
+import { getSwapQuoteSafetyFingerprint } from './getSwapQuoteSafetyFingerprint'
 
 vi.mock('@vultisig/core-chain/swap/general/cowswap/api/getCowSwapQuote', () => ({
   getCowSwapQuote: vi.fn(),
@@ -55,68 +62,6 @@ vi.mock('@vultisig/core-chain/swap/native/minimum/getNativeSwapMinAmountIn', () 
   getNativeSwapMinAmountIn: vi.fn(),
 }))
 
-const evmSameChainCoins = {
-  from: {
-    chain: Chain.Ethereum,
-    address: '0xsender',
-    id: '0xsrc',
-    decimals: 18,
-    ticker: 'SRC',
-  },
-  to: {
-    chain: Chain.Ethereum,
-    address: '0xsender',
-    id: '0xdst',
-    decimals: 6,
-    ticker: 'DST',
-  },
-} as const
-
-function minimalGeneralQuote(
-  dstAmount: string,
-  provider: 'kyber' | '1inch' | 'swapkit' | 'li.fi' | 'jupiter',
-  tx: GeneralSwapQuote['tx'] = {
-    evm: {
-      from: '0xsender',
-      to: '0xrouter',
-      data: '0x',
-      value: '0',
-    },
-  }
-): GeneralSwapQuote {
-  const base = {
-    dstAmount,
-    tx,
-  }
-  return { ...base, provider }
-}
-
-function minimalCowSwapQuote(dstAmount: string, sellAmount = '1000000000000000000'): GeneralSwapQuote {
-  return {
-    dstAmount,
-    provider: 'cowswap',
-    tx: {
-      cowswap_order: {
-        sellToken: '0xsrc',
-        buyToken: '0xdst',
-        receiver: '0xsender',
-        sellAmount,
-        buyAmount: dstAmount,
-        validTo: 1,
-        appData: '0x',
-        appDataHash: '0x',
-        feeAmount: '0',
-        kind: 'sell',
-        partiallyFillable: false,
-        sellTokenBalance: 'erc20',
-        buyTokenBalance: 'erc20',
-        chainId: 1,
-        apiBase: 'https://api.cow.fi/mainnet',
-      },
-    },
-  }
-}
-
 async function expectRejectedWithExactMessage(promise: Promise<unknown>, expectedMessage: string): Promise<void> {
   try {
     await promise
@@ -124,21 +69,6 @@ async function expectRejectedWithExactMessage(promise: Promise<unknown>, expecte
   } catch (error) {
     expect(error).toBeInstanceOf(Error)
     expect((error as Error).message).toBe(expectedMessage)
-  }
-}
-
-function minimalNativeQuote(swapChain: Chain, expected_amount_out: string): NativeSwapQuote {
-  return {
-    swapChain: swapChain as NativeSwapQuote['swapChain'],
-    expected_amount_out,
-    expiry: 0,
-    fees: { affiliate: '0', asset: '0', outbound: '0', total: '0' },
-    memo: '',
-    notes: '',
-    outbound_delay_blocks: 0,
-    outbound_delay_seconds: 0,
-    recommended_min_amount_in: '0',
-    warning: '',
   }
 }
 
@@ -205,6 +135,85 @@ describe('findSwapQuote parallel selection', () => {
       throw new Error('Expected general quote')
     }
     expect(quote.quote.general.provider).toBe('kyber')
+  })
+
+  it('binds the request identity, source amount, expiry, and returned transaction to a general quote', async () => {
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('skip swapkit'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('native unavailable'))
+    vi.mocked(getKyberSwapQuote).mockResolvedValue(minimalGeneralQuote('1000000', 'kyber'))
+
+    const requestedAmount = 123n
+    const before = Date.now()
+    const quote = await findSwapQuote({
+      ...evmSameChainCoins,
+      amount: requestedAmount,
+    })
+    const after = Date.now()
+
+    expect(quote.requestedAmount).toBe(requestedAmount)
+    expect(quote.expiresAt).toBeGreaterThanOrEqual(before + GENERAL_QUOTE_PREPARATION_TTL_MS)
+    expect(quote.expiresAt).toBeLessThanOrEqual(after + GENERAL_QUOTE_PREPARATION_TTL_MS)
+    expect(quote.safetyFingerprint).toBe(
+      getSwapQuoteSafetyFingerprint({
+        ...evmSameChainCoins,
+        recipient: evmSameChainCoins.to.address,
+        requestedAmount,
+        expiresAt: quote.expiresAt as number,
+        quote: quote.quote,
+      })
+    )
+    expect(quote.safetyFingerprint).toMatch(/^[0-9a-f]{64}$/)
+  })
+
+  it('binds a deferred provider response to the entry snapshot when caller coins mutate', async () => {
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('skip swapkit'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('native unavailable'))
+
+    let resolveKyber!: (quote: GeneralSwapQuote) => void
+    vi.mocked(getKyberSwapQuote).mockReturnValue(
+      new Promise(resolve => {
+        resolveKyber = resolve
+      })
+    )
+
+    const input: { from: AccountCoin; to: AccountCoin; amount: bigint } = {
+      from: { ...evmSameChainCoins.from },
+      to: { ...evmSameChainCoins.to },
+      amount: 123n,
+    }
+    const expectedFrom = { ...input.from }
+    const expectedTo = { ...input.to }
+    const pending = findSwapQuote(input)
+
+    input.to.id = '0xmutated-destination'
+    input.to.address = '0xmutated-account'
+    resolveKyber(minimalGeneralQuote('1000000', 'kyber'))
+
+    const quote = await pending
+    expect(quote.safetyFingerprint).toBe(
+      getSwapQuoteSafetyFingerprint({
+        from: expectedFrom,
+        to: expectedTo,
+        recipient: expectedTo.address,
+        requestedAmount: input.amount,
+        expiresAt: quote.expiresAt as number,
+        quote: quote.quote,
+      })
+    )
+    expect(quote.safetyFingerprint).not.toBe(
+      getSwapQuoteSafetyFingerprint({
+        from: input.from,
+        to: input.to,
+        recipient: expectedTo.address,
+        requestedAmount: input.amount,
+        expiresAt: quote.expiresAt as number,
+        quote: quote.quote,
+      })
+    )
   })
 
   it('does not let a failing provider hide a succeeding one', async () => {
@@ -405,7 +414,10 @@ describe('findSwapQuote parallel selection', () => {
     vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))
     vi.mocked(getJupiterSwapQuote).mockResolvedValue(minimalGeneralQuote('1000000', 'jupiter'))
 
-    const quote = await findSwapQuote({ ...solanaSameChainCoins, amount: 100000000n })
+    const quote = await findSwapQuote({
+      ...solanaSameChainCoins,
+      amount: 100000000n,
+    })
 
     expect('general' in quote.quote).toBe(true)
     if (!('general' in quote.quote)) {
@@ -498,13 +510,26 @@ describe('findSwapQuote parallel selection', () => {
     vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) => minimalNativeQuote(swapChain, '1000'))
 
     await findSwapQuote({
-      from: { chain: Chain.Cardano, address: 'addr1source', decimals: 6, ticker: 'ADA' },
-      to: { chain: Chain.Ethereum, address: '0xdestination', decimals: 18, ticker: 'ETH' },
+      from: {
+        chain: Chain.Cardano,
+        address: 'addr1source',
+        decimals: 6,
+        ticker: 'ADA',
+      },
+      to: {
+        chain: Chain.Ethereum,
+        address: '0xdestination',
+        decimals: 18,
+        ticker: 'ETH',
+      },
       amount: 1_000_000n,
     })
 
     expect(getNativeSwapQuote).toHaveBeenCalledWith(
-      expect.objectContaining({ swapChain: Chain.MayaChain, from: expect.objectContaining({ chain: Chain.Cardano }) })
+      expect.objectContaining({
+        swapChain: Chain.MayaChain,
+        from: expect.objectContaining({ chain: Chain.Cardano }),
+      })
     )
   })
 
@@ -851,7 +876,10 @@ describe('findSwapQuote parallel selection', () => {
       minimalNativeQuote(swapChain, '100000000')
     )
 
-    const quote = await findSwapQuote({ ...nativeOnlyCoins, amount: 1_000_000n })
+    const quote = await findSwapQuote({
+      ...nativeOnlyCoins,
+      amount: 1_000_000n,
+    })
 
     expect('native' in quote.quote).toBe(true)
   })
@@ -875,8 +903,18 @@ describe('findSwapQuote parallel selection', () => {
     // only compute THORChain's minimum, so eager-failing on it would wrongly
     // block an amount MayaChain might fill at a lower minimum. Quotes must fire.
     const thorAndMayaCoins = {
-      from: { chain: Chain.THORChain, address: 'thor1src', decimals: 8, ticker: 'RUNE' },
-      to: { chain: Chain.Bitcoin, address: 'bc1qdst', decimals: 8, ticker: 'BTC' },
+      from: {
+        chain: Chain.THORChain,
+        address: 'thor1src',
+        decimals: 8,
+        ticker: 'RUNE',
+      },
+      to: {
+        chain: Chain.Bitcoin,
+        address: 'bc1qdst',
+        decimals: 8,
+        ticker: 'BTC',
+      },
     } as const
     vi.mocked(getNativeSwapMinAmountIn).mockResolvedValue(minResult(1_000_000n, '0.01'))
     vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) =>
@@ -1544,12 +1582,24 @@ describe('findSwapQuote net-output provider selection (issues #605/#804)', () =>
     vi.mocked(getCowSwapQuote).mockResolvedValue(minimalCowSwapQuote('1000000'))
     vi.mocked(getKyberSwapQuote).mockResolvedValue(
       minimalGeneralQuote('1000000', 'kyber', {
-        evm: { from: '0xsender', to: '0xrouter', data: '0x', value: '0', gasLimit: 100_000n },
+        evm: {
+          from: '0xsender',
+          to: '0xrouter',
+          data: '0x',
+          value: '0',
+          gasLimit: 100_000n,
+        },
       })
     )
     vi.mocked(getOneInchSwapQuote).mockResolvedValue(
       minimalGeneralQuote('1000000', '1inch', {
-        evm: { from: '0xsender', to: '0xrouter', data: '0x', value: '0', gasLimit: 90_000n },
+        evm: {
+          from: '0xsender',
+          to: '0xrouter',
+          data: '0x',
+          value: '0',
+          gasLimit: 90_000n,
+        },
       })
     )
     vi.mocked(getSwapKitQuote).mockResolvedValue(minimalGeneralQuote('1000000', 'swapkit'))

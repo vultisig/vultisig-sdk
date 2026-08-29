@@ -1,17 +1,20 @@
 import { solanaRpcUrl } from '@vultisig/core-chain/chains/solana/client'
 
 const LAMPORTS_PER_SOL = 1_000_000_000n
+const MAX_SAFE_LAMPORTS = BigInt(Number.MAX_SAFE_INTEGER)
 
 /** Native SOL balance for a Solana address. */
 export type SolBalance = {
   /** The queried owner address (base58). */
   address: string
   /**
-   * Raw balance in lamports (1 SOL = 1e9 lamports) as a JS number. Convenient,
-   * but lossy above `Number.MAX_SAFE_INTEGER` (~9.007M SOL) - prefer
-   * `lamportsRaw` for exact u64 precision. `sol` is always exact regardless.
+   * Raw balance in lamports (1 SOL = 1e9 lamports) as a JS number, for
+   * convenience. `null` when the exact value exceeds
+   * `Number.MAX_SAFE_INTEGER` (~9.007M SOL) and can't be represented without
+   * precision loss - use `lamportsRaw` for exact u64 precision in that case.
+   * `sol` is always exact regardless.
    */
-  lamports: number
+  lamports: number | null
   /** Raw balance in lamports as a base-10 string (lossless u64 precision). */
   lamportsRaw: string
   /** Human-readable SOL amount (trailing zeros trimmed; exact across the u64 range). */
@@ -121,7 +124,7 @@ export const getSolBalance = async (address: string): Promise<SolBalance> => {
 
   return {
     address,
-    lamports: Number(lamportsBig),
+    lamports: lamportsBig <= MAX_SAFE_LAMPORTS ? Number(lamportsBig) : null,
     lamportsRaw,
     sol: formatLamports(lamportsBig),
     asOf: new Date().toISOString(),
