@@ -654,4 +654,3 @@ function formatAmount(amount: string | bigint, decimals: number): string {
 
   return `${wholePart}.${fractionalStr}`
 }
-
