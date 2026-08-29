@@ -622,7 +622,7 @@ export type {
   Defi,
   GlifUnsignedTx,
 } from '../../tools/defi'
-export { buildBalancerV3SwapCalldata, defi } from '../../tools/defi'
+export { buildBalancerV3SwapCalldata, defi, yieldNetworkToCanonicalChain } from '../../tools/defi'
 export {
   buildGlifRedeemSticnt,
   buildGlifStakeIcnt,

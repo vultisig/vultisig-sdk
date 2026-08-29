@@ -12,6 +12,8 @@ import { sha256 } from '@noble/hashes/sha2.js'
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
+import { yieldNetworkToEvmChain } from './yieldNetworkChain'
+
 // --- Module constants (NOT process.env) ---
 
 const STAKEKIT_API_BASE = 'https://api.stakek.it/v1'
@@ -474,36 +476,6 @@ export async function callYieldActionWithFallback(args: {
 }
 
 // --- Scan request builders ---
-
-/**
- * Map yield.xyz network slugs to EVM chain names (PascalCase).
- */
-function yieldNetworkToEvmChain(network: string): string | null {
-  switch (network) {
-    case 'ethereum':
-      return 'Ethereum'
-    case 'arbitrum':
-      return 'Arbitrum'
-    case 'base':
-      return 'Base'
-    case 'optimism':
-      return 'Optimism'
-    case 'polygon':
-      return 'Polygon'
-    case 'avalanche-c':
-      return 'Avalanche'
-    case 'binance':
-      return 'BSC'
-    case 'cronos':
-      return 'CronosChain'
-    case 'zksync':
-      return 'Zksync'
-    case 'sei':
-      return 'Sei'
-    default:
-      return null
-  }
-}
 
 type EvmUnsignedTx = {
   from?: string

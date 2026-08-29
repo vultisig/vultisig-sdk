@@ -180,6 +180,13 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.getCustomRpcOverride(sdk.Chain.Ethereum)).toBeUndefined()
   })
 
+  it('exports the canonical yield.xyz network -> chain mapping (sdk#1953)', () => {
+    expect(typeof sdk.yieldNetworkToCanonicalChain).toBe('function')
+    expect(sdk.yieldNetworkToCanonicalChain('ethereum')).toBe('Ethereum')
+    expect(sdk.yieldNetworkToCanonicalChain('solana')).toBe('Solana')
+    expect(sdk.yieldNetworkToCanonicalChain('not-a-real-network')).toBeNull()
+  })
+
   it('exports isValidTokenId for non-address token families (Sui struct tags, XRPL currency.issuer)', () => {
     expect(sdk.isValidTokenId).toBe(isValidTokenIdModule.isValidTokenId)
 
