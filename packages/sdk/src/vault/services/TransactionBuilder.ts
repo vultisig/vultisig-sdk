@@ -22,6 +22,7 @@ import type { WasmProvider } from '../../context/SdkContext'
 // modules at module-load time, which breaks vitest setups that mock chainFeeCoin.
 import { prepareContractCallTxFromKeys } from '../../tools/prep/contractCall'
 import { prepareSignAminoTxFromKeys, prepareSignDirectTxFromKeys } from '../../tools/prep/cosmos'
+import { prepareRawEvmTxFromKeys, type PrepareRawEvmTxFromKeysParams } from '../../tools/prep/rawEvm'
 import { prepareSendTxFromKeys } from '../../tools/prep/send'
 import { prepareThorchainMsgDepositTxFromKeys } from '../../tools/prep/thorchainMsgDeposit'
 import { vaultDataToIdentity } from '../../tools/prep/types'
@@ -236,6 +237,14 @@ export class TransactionBuilder {
     const walletCore = await this.wasmProvider.getWalletCore()
     return this.wrapAsVaultError('contract call', () =>
       prepareContractCallTxFromKeys(vaultDataToIdentity(this.vaultData), params, walletCore)
+    )
+  }
+
+  /** Build a final keysign payload from an already-built raw EVM envelope. */
+  async prepareRawEvmTx(params: PrepareRawEvmTxFromKeysParams): Promise<KeysignPayload> {
+    const walletCore = await this.wasmProvider.getWalletCore()
+    return this.wrapAsVaultError('raw EVM transaction', () =>
+      prepareRawEvmTxFromKeys(vaultDataToIdentity(this.vaultData), params, walletCore)
     )
   }
 

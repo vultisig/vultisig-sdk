@@ -14,6 +14,7 @@ import { knownTokens } from '@vultisig/core-chain/coin/knownTokens'
 import type { SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { pollTxStatusUntilFinal } from '../../src/tx'
 import { VaultError, VaultErrorCode } from '../../src/vault/VaultError'
 
 // ---------------------------------------------------------------------------
@@ -30,7 +31,7 @@ describe('signMessage EIP-191 multi-byte correctness', () => {
 
   for (const { label, message } of cases) {
     it(`should match ethers.hashMessage for ${label}: "${message}"`, async () => {
-      const { keccak_256 } = await import('@noble/hashes/sha3')
+      const { keccak_256 } = await import('@noble/hashes/sha3.js')
       const { hashMessage } = await import('ethers')
 
       // Reproduce VaultBase signMessage hashing logic (EIP-191 with byte length)
@@ -47,7 +48,7 @@ describe('signMessage EIP-191 multi-byte correctness', () => {
   }
 
   it('should differ from naive string.length for multi-byte messages', async () => {
-    const { keccak_256 } = await import('@noble/hashes/sha3')
+    const { keccak_256 } = await import('@noble/hashes/sha3.js')
 
     const message = '\u{1F600}hello\u{1F30D}' // emoji: 4+5+4 = 13 bytes, but 7 JS chars
     const msgBytes = new TextEncoder().encode(message)
@@ -64,8 +65,8 @@ describe('signMessage EIP-191 multi-byte correctness', () => {
   })
 
   it('should produce SHA-256 (not keccak) for non-EVM chain messages', async () => {
-    const { keccak_256 } = await import('@noble/hashes/sha3')
-    const { sha256 } = await import('@noble/hashes/sha2')
+    const { keccak_256 } = await import('@noble/hashes/sha3.js')
+    const { sha256 } = await import('@noble/hashes/sha2.js')
 
     const message = 'test message'
     const msgBytes = new TextEncoder().encode(message)
@@ -486,8 +487,8 @@ describe('resolveTokenInfo knownTokens fallback', () => {
 
 describe('waitForConfirmation behavior', () => {
   /**
-   * We reproduce the waitForConfirmation logic from VaultBase exactly,
-   * calling a mock getTxStatus to verify polling behavior.
+   * Exercise the SDK's shared tx-finality helper with VaultBase-equivalent
+   * error mapping, instead of duplicating the poll loop inline.
    */
   async function waitForConfirmation(
     getTxStatus: (params: { chain: Chain; txHash: string }) => Promise<{ status: string }>,
@@ -496,19 +497,21 @@ describe('waitForConfirmation behavior', () => {
     timeoutMs = 60_000,
     intervalMs = 3_000
   ): Promise<void> {
-    const deadline = Date.now() + timeoutMs
-    while (Date.now() < deadline) {
-      try {
-        const result = await getTxStatus({ chain, txHash })
-        if (result.status === 'success') return
-        if (result.status === 'error')
-          throw new VaultError(VaultErrorCode.BroadcastFailed, `Approval tx failed: ${txHash}`)
-      } catch (e) {
-        if (e instanceof VaultError && e.code !== VaultErrorCode.NetworkError) throw e
-      }
-      await new Promise(resolve => setTimeout(resolve, intervalMs))
+    const outcome = await pollTxStatusUntilFinal({
+      chain,
+      txHash,
+      timeoutMs,
+      intervalMs,
+      getTxStatus: async params => getTxStatus(params as { chain: Chain; txHash: string }) as any,
+      shouldRetryError: error => !(error instanceof VaultError) || error.code === VaultErrorCode.NetworkError,
+    })
+
+    if (outcome.result?.status === 'error') {
+      throw new VaultError(VaultErrorCode.BroadcastFailed, `Approval tx failed: ${txHash}`)
     }
-    throw new VaultError(VaultErrorCode.Timeout, `Approval tx not confirmed within ${timeoutMs / 1000}s: ${txHash}`)
+    if (outcome.timedOut) {
+      throw new VaultError(VaultErrorCode.Timeout, `Approval tx not confirmed within ${timeoutMs / 1000}s: ${txHash}`)
+    }
   }
 
   it('should proceed immediately when approval returns success on first poll', async () => {
