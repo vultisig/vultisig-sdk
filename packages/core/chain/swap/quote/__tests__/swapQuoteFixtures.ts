@@ -25,6 +25,26 @@ export const evmSameChainCoins = {
   },
 } as const
 
+/**
+ * Ethereum → Solana: the cross-chain pair from the trading-halt report. It
+ * registers exactly three fetchers — THORChain (native), LiFi and SwapKit — so a
+ * halt on the native leg still leaves two aggregators that can fill the swap.
+ */
+export const evmToSolanaCoins = {
+  from: {
+    chain: Chain.Ethereum,
+    address: '0xsender',
+    decimals: 18,
+    ticker: 'ETH',
+  },
+  to: {
+    chain: Chain.Solana,
+    address: 'SoLsender',
+    decimals: 9,
+    ticker: 'SOL',
+  },
+} as const
+
 /** An aggregator quote with the minimal fields ranking and binding need. */
 export function minimalGeneralQuote(
   dstAmount: string,
