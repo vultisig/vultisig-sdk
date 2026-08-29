@@ -3,8 +3,7 @@ import { getTwChainId } from '@vultisig/core-chain/chains/evm/tx/tw/getTwChainId
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import type { EvmChain } from '../../../src'
-import { Chain, getEvmChainByChainId, getEvmChainId } from '../../../src'
-import { getEvmNumericChainId } from '../../../src/platforms/react-native/chains/evm/tx'
+import { Chain, getEvmChainByChainId, getEvmChainId, getEvmNumericChainId } from '../../../src'
 
 // Canonical EVM chainIds (numeric), the single source of truth the app and
 // agent-backend-ts previously hand-maintained as their own copies. Pinning
@@ -30,13 +29,16 @@ const CANONICAL_EVM_CHAIN_IDS = {
 } satisfies Record<EvmChain, number>
 
 describe('EVM chainId public API', () => {
-  it('exposes getEvmChainId and getEvmChainByChainId from the SDK public entry', () => {
+  it('exposes hex, numeric, and reverse chainId helpers from the SDK public entry', () => {
     expect(typeof getEvmChainId).toBe('function')
+    expect(typeof getEvmNumericChainId).toBe('function')
     expect(typeof getEvmChainByChainId).toBe('function')
   })
 
-  it('pins every EVM chainId (hex) to its canonical numeric value', () => {
+  it('pins every public numeric and hex EVM chainId to the canonical value', () => {
     for (const [chain, numericId] of Object.entries(CANONICAL_EVM_CHAIN_IDS)) {
+      expect(getEvmNumericChainId(chain as EvmChain)).toBe(numericId)
+
       const hex = getEvmChainId(chain as EvmChain)
       expect(hex.startsWith('0x')).toBe(true)
       expect(parseInt(hex, 16)).toBe(numericId)
@@ -51,7 +53,7 @@ describe('EVM chainId public API', () => {
   })
 
   it('pins the Hyperliquid mainnet chainId to 999 (not testnet 998)', () => {
-    expect(parseInt(getEvmChainId(Chain.Hyperliquid), 16)).toBe(999)
+    expect(getEvmNumericChainId(Chain.Hyperliquid)).toBe(999)
   })
 })
 
@@ -59,18 +61,15 @@ describe('EVM chainId public API', () => {
 // source. It says nothing about the chainId that actually lands in the
 // SIGNED preimage on the wallet-core path
 // (`CoinTypeExt.chainId(getCoinType(chain))`, wired through `getTwChainId`),
-// or the hand-mirrored copy the React Native tx builder keeps at
-// `platforms/react-native/chains/evm/tx.ts`. Both were previously unpinned:
-// a wrong `getCoinType` mapping, or a typo'd RN table entry, could silently
-// sign a transaction against the WRONG chainId (a replay/misdirection bug -
-// the signed tx would be valid on a DIFFERENT chain) while every display
-// surface kept showing the right value, and the suite above stayed green.
+// A wrong `getCoinType` mapping could silently sign a transaction against the
+// WRONG chainId (a replay/misdirection bug - the signed tx would be valid on a
+// DIFFERENT chain) while every display surface kept showing the right value,
+// and the suite above stayed green.
 //
-// Both loops below iterate `CANONICAL_EVM_CHAIN_IDS`, which `satisfies
+// The loop below iterates `CANONICAL_EVM_CHAIN_IDS`, which `satisfies
 // Record<EvmChain, number>` keeps exhaustive against the `EvmChain` enum at
-// compile time - a newly added EVM chain is automatically exercised by both
-// assertions the moment its canonical id is added above (and the build
-// fails if it isn't).
+// compile time - a newly added EVM chain is automatically exercised the moment
+// its canonical id is added above (and the build fails if it isn't).
 //
 // Hyperliquid and Sei aren't wallet-core-native coin types (`getCoinType`
 // maps both to `CoinType.ethereum`), so `getTwChainId` special-cases them by
@@ -87,12 +86,6 @@ describe('EVM chainId signed-preimage sources', () => {
   it('pins the wallet-core signed chainId (CoinTypeExt.chainId via getTwChainId) for every EVM chain', () => {
     for (const [chain, numericId] of Object.entries(CANONICAL_EVM_CHAIN_IDS)) {
       expect(getTwChainId({ walletCore, chain: chain as EvmChain })).toBe(String(numericId))
-    }
-  })
-
-  it('pins the React Native hand-mirrored evmChainIds table (platforms/react-native/chains/evm/tx.ts) for every EVM chain', () => {
-    for (const [chain, numericId] of Object.entries(CANONICAL_EVM_CHAIN_IDS)) {
-      expect(getEvmNumericChainId(chain as EvmChain)).toBe(numericId)
     }
   })
 })
