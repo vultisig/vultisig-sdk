@@ -1112,6 +1112,7 @@ export {
   NATIVE_SWAP_MIN_OUTBOUND_FEE_MULTIPLIER,
   normaliseIbcChainId,
   normalizeHexBytes,
+  normalizeStakekitNetwork,
   parseActionDisplay,
   parseAmountBig,
   parseUsdcAmount,
@@ -1157,6 +1158,7 @@ export {
   skipChainIdToChainName,
   SOL_NATIVE_MINT,
   stakekit,
+  STAKEKIT_NETWORK_ALIASES,
   stakekitBalances,
   stakekitBuildEnter,
   stakekitBuildExit,
@@ -1176,6 +1178,7 @@ export {
   TRC20_TRANSFER_SELECTOR,
   utxoFeeRate,
   VerifierClient,
+  yieldNetworkToCanonicalChain,
 } from './tools'
 
 // The protobuf builder is environment-neutral despite its historical RN path.
