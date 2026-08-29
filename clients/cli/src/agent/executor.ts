@@ -1570,12 +1570,17 @@ export class AgentExecutor {
         },
       })
 
-      // Reconcile a server-provided nonce with locally tracked broadcasts.
-      await this.patchEvmNonce(chain, keysignPayload)
+      // Snapshot nonce grace before either network refresh. A slow gas lookup
+      // must not age a recent local broadcast out of its protection.
+      const nonceGraceAge = Date.now() - (this.evmLastBroadcast.get(chain.toString()) ?? 0)
 
       // Refresh the fee envelope immediately before hashing/signing so a raw
       // transaction prepared earlier is not underpriced after base-fee drift.
       await this.patchEvmGas(chain, keysignPayload)
+
+      // Reconcile the server nonce with pending RPC and locally tracked
+      // broadcasts after any potentially slow fee refresh.
+      await this.patchEvmNonce(chain, keysignPayload, nonceGraceAge)
 
       // Extract message hashes and sign
       const messageHashes = await this.vault.extractMessageHashes(keysignPayload)
@@ -1904,21 +1909,36 @@ export class AgentExecutor {
   }
 
   /**
-   * Patch the EVM nonce in a keysign payload if our local state is ahead of on-chain.
-   * The payload's blockchainSpecific.ethereumSpecific.nonce was set from RPC during
-   * prepareSendTx(). If we have locally-tracked pending txs, we override with a higher value.
+   * Refresh the EVM nonce from pending RPC state, then patch it if our local state
+   * is further ahead. Raw server envelopes may carry a nonce that became stale
+   * before signing, so the RPC refresh must not depend on local state existing.
    *
    * Also detects evicted txs: if local state claims a higher nonce but there are
    * no pending txs in the mempool (pending == latest), the intermediate txs were
    * dropped and local state is stale.
    */
-  private async patchEvmNonce(chain: Chain, payload: any): Promise<void> {
-    if (!this.stateStore || !isEvmChain(chain)) return
+  private async patchEvmNonce(chain: Chain, payload: any, capturedBroadcastAge?: number): Promise<void> {
+    if (!isEvmChain(chain)) return
 
     const bs = payload.blockchainSpecific
     if (!bs || bs.case !== 'ethereumSpecific') return
 
-    const rpcNonce = bs.value.nonce as bigint
+    // Snapshot grace eligibility before the RPC await. A slow or timed-out
+    // lookup must not age a recent local broadcast out of its protection.
+    const recentBroadcastAge = capturedBroadcastAge ?? Date.now() - (this.evmLastBroadcast.get(chain.toString()) ?? 0)
+    const hasRecentBroadcast = recentBroadcastAge < 30_000
+
+    const payloadNonce = bs.value.nonce as bigint
+    const pendingNonce = await this.fetchEvmPendingNonce(chain)
+    const rpcNonce = pendingNonce !== null && pendingNonce > payloadNonce ? pendingNonce : payloadNonce
+
+    if (rpcNonce !== payloadNonce) {
+      bs.value.nonce = rpcNonce
+      if (this.verbose) process.stderr.write(`[nonce] Refreshed ${chain} nonce: ${payloadNonce} → ${rpcNonce}\n`)
+    }
+
+    if (!this.stateStore) return
+
     const nextNonce = this.stateStore.getNextEvmNonce(chain, rpcNonce)
 
     if (nextNonce !== rpcNonce) {
@@ -1934,11 +1954,10 @@ export class AgentExecutor {
       // the same RPC. Tradeoff: a genuinely-evicted tx within the 30s window
       // would cause the next sign to use a stuck nonce instead of recovering;
       // STATE_TTL_MS (10 min) bounds the worst case. See vultisig-sdk#357.
-      const lastBroadcast = this.evmLastBroadcast.get(chain.toString()) ?? 0
-      if (Date.now() - lastBroadcast < 30_000) {
+      if (hasRecentBroadcast) {
         if (this.verbose)
           process.stderr.write(
-            `[nonce] Keeping local nonce ${nextNonce} for ${chain} (broadcast ${Date.now() - lastBroadcast}ms ago)\n`
+            `[nonce] Keeping local nonce ${nextNonce} for ${chain} (broadcast ${recentBroadcastAge}ms ago)\n`
           )
         bs.value.nonce = nextNonce
         return
@@ -1946,7 +1965,6 @@ export class AgentExecutor {
 
       // Verify there are actually pending txs in the mempool before using a higher nonce.
       // If pending nonce == confirmed nonce, all intermediate txs were evicted.
-      const pendingNonce = await this.fetchEvmPendingNonce(chain)
       if (pendingNonce !== null && pendingNonce === rpcNonce) {
         // No pending txs — local state is stale (txs were dropped from mempool)
         if (this.verbose)
