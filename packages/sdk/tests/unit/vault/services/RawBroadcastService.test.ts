@@ -1,5 +1,5 @@
-import { sha256 } from '@noble/hashes/sha2'
-import { bytesToHex } from '@noble/hashes/utils'
+import { sha256 } from '@noble/hashes/sha2.js'
+import { bytesToHex } from '@noble/hashes/utils.js'
 import { Chain, OtherChain } from '@vultisig/core-chain/Chain'
 import { bittensorRpcUrl } from '@vultisig/core-chain/chains/bittensor/client'
 import { polkadotRpcUrl } from '@vultisig/core-chain/chains/polkadot/client'
