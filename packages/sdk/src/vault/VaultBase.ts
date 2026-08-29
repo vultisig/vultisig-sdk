@@ -1225,7 +1225,10 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    */
   async balances(chains?: Chain[], includeTokens = false): Promise<Record<string, Balance>> {
     const chainsToFetch = chains || this._userChains
-    return this.balanceService.getBalances({ chains: chainsToFetch, includeTokens })
+    return this.balanceService.getBalances({
+      chains: chainsToFetch,
+      includeTokens,
+    })
   }
 
   /**
@@ -1295,7 +1298,10 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    */
   async updateBalances(chains?: Chain[], includeTokens = false): Promise<Record<string, Balance>> {
     const chainsToUpdate = chains || this._userChains
-    return this.balanceService.updateBalances({ chains: chainsToUpdate, includeTokens })
+    return this.balanceService.updateBalances({
+      chains: chainsToUpdate,
+      includeTokens,
+    })
   }
 
   // ===== GAS ESTIMATION =====
@@ -1376,18 +1382,28 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    * ```
    */
   async prepareContractCallTx(
-    params: Omit<ContractCallTxParams, 'senderAddress'> & { senderAddress?: string }
+    params: Omit<ContractCallTxParams, 'senderAddress'> & {
+      senderAddress?: string
+    }
   ): Promise<KeysignPayload> {
     const senderAddress = params.senderAddress ?? (await this.address(params.chain))
-    return this.transactionBuilder.prepareContractCallTx({ ...params, senderAddress })
+    return this.transactionBuilder.prepareContractCallTx({
+      ...params,
+      senderAddress,
+    })
   }
 
   /** Prepare an already-built raw EVM transaction without caller-side payload patching. */
   async prepareRawEvmTx(
-    params: Omit<PrepareRawEvmTxFromKeysParams, 'senderAddress'> & { senderAddress?: string }
+    params: Omit<PrepareRawEvmTxFromKeysParams, 'senderAddress'> & {
+      senderAddress?: string
+    }
   ): Promise<KeysignPayload> {
     const senderAddress = params.senderAddress ?? (await this.address(params.chain))
-    return this.transactionBuilder.prepareRawEvmTx({ ...params, senderAddress })
+    return this.transactionBuilder.prepareRawEvmTx({
+      ...params,
+      senderAddress,
+    })
   }
 
   /**
@@ -1411,7 +1427,13 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     // Validate receiver before fetching balance so bad input doesn't waste a
     // network round-trip. computeMaxSendFromBalance re-validates for the
     // vault-free path; two checks at different layers is acceptable.
-    if (!isValidRecipient({ chain: params.coin.chain, address: params.receiver, walletCore })) {
+    if (
+      !isValidRecipient({
+        chain: params.coin.chain,
+        address: params.receiver,
+        walletCore,
+      })
+    ) {
       throw new VaultError(
         VaultErrorCode.InvalidConfig,
         `Invalid receiver address for chain ${params.coin.chain}: ${params.receiver}`
@@ -1524,7 +1546,11 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
     try {
       // Delegate to BroadcastService
-      const txHash = await this.broadcastService.broadcastTx({ chain, keysignPayload, signature })
+      const txHash = await this.broadcastService.broadcastTx({
+        chain,
+        keysignPayload,
+        signature,
+      })
 
       // Emit success event
       this.emit('transactionBroadcast', {
@@ -1574,7 +1600,10 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     const { chain, rawTx } = params
 
     try {
-      const txHash = await this.rawBroadcastService.broadcastRawTx({ chain, rawTx })
+      const txHash = await this.rawBroadcastService.broadcastRawTx({
+        chain,
+        rawTx,
+      })
 
       // Emit success event
       this.emit('transactionBroadcast', {
@@ -1617,10 +1646,18 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     const { chain, txHash, lastValidBlockHeight } = params
 
     try {
-      const result = await coreTxStatus({ chain, hash: txHash, lastValidBlockHeight })
+      const result = await coreTxStatus({
+        chain,
+        hash: txHash,
+        lastValidBlockHeight,
+      })
 
       if (result.status === 'success') {
-        this.emit('transactionConfirmed', { chain, txHash, receipt: result.receipt })
+        this.emit('transactionConfirmed', {
+          chain,
+          txHash,
+          receipt: result.receipt,
+        })
       } else if (result.status === 'error' || result.status === 'expired') {
         this.emit('transactionFailed', { chain, txHash })
       }
@@ -2025,7 +2062,11 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     const hash = chainKind === 'evm' ? computePersonalSignHash(message) : sha256(msgBytes)
 
     const sig = await this.signBytes({ data: hash, chain }, options)
-    return { signature: sig.signature.startsWith('0x') ? sig.signature : '0x' + sig.signature, chain, algorithm }
+    return {
+      signature: sig.signature.startsWith('0x') ? sig.signature : '0x' + sig.signature,
+      chain,
+      algorithm,
+    }
   }
 
   /** All balances across configured chains as a flat array. */
@@ -2062,7 +2103,13 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
     let amountBigInt: bigint
     if (amount === 'max') {
-      const maxInfo = await this.getMaxSendAmount({ coin, receiver: to, memo, destinationTag, tonGasless })
+      const maxInfo = await this.getMaxSendAmount({
+        coin,
+        receiver: to,
+        memo,
+        destinationTag,
+        tonGasless,
+      })
       if (maxInfo.maxSendable <= 0n)
         throw new VaultError(VaultErrorCode.InvalidAmount, 'Insufficient balance to cover network fees')
       amountBigInt = maxInfo.maxSendable
@@ -2114,8 +2161,16 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     }
 
     const messageHashes = await this.extractMessageHashes(keysignPayload)
-    const signature = await this.sign({ transaction: keysignPayload, chain, messageHashes })
-    return { dryRun: false, txHash: await this.broadcastTx({ chain, keysignPayload, signature }), chain }
+    const signature = await this.sign({
+      transaction: keysignPayload,
+      chain,
+      messageHashes,
+    })
+    return {
+      dryRun: false,
+      txHash: await this.broadcastTx({ chain, keysignPayload, signature }),
+      chain,
+    }
   }
 
   /**
@@ -2178,52 +2233,55 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     } else {
       let resolvedAmount = amount!
       if (amount === 'max') {
-      const bal = await this.balanceService.getBalance(fromChain, fromToken.contractAddress)
-      const balance = BigInt(bal.amount)
-      if (balance <= 0n) throw new VaultError(VaultErrorCode.InvalidAmount, 'Zero balance — nothing to swap')
+        const bal = await this.balanceService.getBalance(fromChain, fromToken.contractAddress)
+        const balance = BigInt(bal.amount)
+        if (balance <= 0n) throw new VaultError(VaultErrorCode.InvalidAmount, 'Zero balance — nothing to swap')
 
-      // Quote at the full balance FIRST, purely to learn this route's
-      // `maxSwapable`. Committing the full balance directly (what this used to
-      // do) over-commits a native swap by exactly the network fee, so it fails
-      // at prepare/broadcast with insufficient funds - after the caller has
-      // already been told the swap was viable. `send({ amount: 'max' })` has
-      // always resolved its ceiling before building; this brings swap in line.
-      const fullAmount = this.validateHumanSwapAmount(this.formatUnits(balance, fromToken.decimals), fromToken.decimals)
-      const probe = await this.getSwapQuote({
-        fromCoin,
-        toCoin,
-        amount: fullAmount,
-        recipient: normalizedRecipient,
-        slippageTolerance,
-        excludeProviders,
-      })
-
-      // 0n means "not computable from this quote", NOT "nothing is swappable":
-      // deposit-channel (transfer) routes price the source-chain fee at
-      // broadcast time, so the quote cannot say what is safe. Fail closed with
-      // an actionable message rather than guess a fee on a fund path.
-      //
-      // The typeof check is deliberate belt-and-braces: `getSwapQuote` always
-      // populates `maxSwapable`, but an override or a partial quote must land
-      // in the fail-closed branch rather than fall through into an over-commit.
-      if (typeof probe.maxSwapable !== 'bigint' || probe.maxSwapable <= 0n) {
-        throw new VaultError(
-          VaultErrorCode.InvalidAmount,
-          `Cannot compute a fee-aware max for this ${fromToken.ticker} route: the source-chain fee is only known at ` +
-            `broadcast time. Estimate the fee separately and pass an explicit amount instead of "max".`
+        // Quote at the full balance FIRST, purely to learn this route's
+        // `maxSwapable`. Committing the full balance directly over-commits a
+        // native swap by exactly the network fee, so resolve the fee-aware max
+        // before prepare/broadcast.
+        const fullAmount = this.validateHumanSwapAmount(
+          this.formatUnits(balance, fromToken.decimals),
+          fromToken.decimals
         )
-      }
+        const probe = await this.getSwapQuote({
+          fromCoin,
+          toCoin,
+          amount: fullAmount,
+          recipient: normalizedRecipient,
+          slippageTolerance,
+          excludeProviders,
+        })
 
-      if (probe.maxSwapable >= balance) {
-        // Token route - gas is paid in the native asset, so the whole token
-        // balance is swappable and the probe already quotes the final amount.
-        resolvedAmount = fullAmount
-        maxProbeQuote = probe
-      } else {
-        resolvedAmount = this.formatUnits(probe.maxSwapable, fromToken.decimals)
+        // 0n means "not computable from this quote", NOT "nothing is swappable":
+        // deposit-channel (transfer) routes price the source-chain fee at
+        // broadcast time, so the quote cannot say what is safe. Fail closed with
+        // an actionable message rather than guess a fee on a fund path.
+        //
+        // The typeof check is deliberate belt-and-braces: `getSwapQuote` always
+        // populates `maxSwapable`, but an override or a partial quote must land
+        // in the fail-closed branch rather than fall through into an over-commit.
+        if (typeof probe.maxSwapable !== 'bigint' || probe.maxSwapable <= 0n) {
+          throw new VaultError(
+            VaultErrorCode.InvalidAmount,
+            `Cannot compute a fee-aware max for this ${fromToken.ticker} route: the source-chain fee is only known at ` +
+              `broadcast time. Estimate the fee separately and pass an explicit amount instead of "max".`
+          )
+        }
+
+        if (probe.maxSwapable >= balance) {
+          // Token route - gas is paid in the native asset, so the whole token
+          // balance is swappable and the probe already quotes the final amount.
+          resolvedAmount = fullAmount
+          maxProbeQuote = probe
+        } else {
+          resolvedAmount = this.formatUnits(probe.maxSwapable, fromToken.decimals)
+        }
       }
+      swapAmountInput = {
+        amount: this.validateHumanSwapAmount(resolvedAmount, fromToken.decimals),
       }
-      swapAmountInput = { amount: this.validateHumanSwapAmount(resolvedAmount, fromToken.decimals) }
     }
 
     const quote =
@@ -2260,10 +2318,18 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     }
 
     const messageHashes = await this.extractMessageHashes(keysignPayload)
-    const signature = await this.sign({ transaction: keysignPayload, chain: fromChain, messageHashes })
+    const signature = await this.sign({
+      transaction: keysignPayload,
+      chain: fromChain,
+      messageHashes,
+    })
     return {
       dryRun: false,
-      txHash: await this.broadcastTx({ chain: fromChain, keysignPayload, signature }),
+      txHash: await this.broadcastTx({
+        chain: fromChain,
+        keysignPayload,
+        signature,
+      }),
       chain: fromChain,
       quote,
     }
@@ -2339,7 +2405,11 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       memo,
     })
     const messageHashes = await this.extractMessageHashes(keysignPayload)
-    const signature = await this.sign({ transaction: keysignPayload, chain, messageHashes })
+    const signature = await this.sign({
+      transaction: keysignPayload,
+      chain,
+      messageHashes,
+    })
     return {
       chain,
       txHash: await this.broadcastTx({ chain, keysignPayload, signature }),
@@ -2377,8 +2447,16 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
     const { chain } = params
     const messageHashes = await this.extractMessageHashes(keysignPayload)
-    const signature = await this.sign({ transaction: keysignPayload, chain, messageHashes })
-    return { dryRun: false, txHash: await this.broadcastTx({ chain, keysignPayload, signature }), chain }
+    const signature = await this.sign({
+      transaction: keysignPayload,
+      chain,
+      messageHashes,
+    })
+    return {
+      dryRun: false,
+      txHash: await this.broadcastTx({ chain, keysignPayload, signature }),
+      chain,
+    }
   }
 
   // ===== PRIVATE HELPERS =====
