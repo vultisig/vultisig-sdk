@@ -438,7 +438,7 @@ describe('sdk.defi.stakekit', () => {
       expect(result.transactions[0].status).toBe('WAITING_FOR_SIGNATURE')
     })
 
-    it('keeps the original (still-null) entry when the PATCH fails', async () => {
+    it('fails closed when the PATCH leaves an eligible transaction unbuilt', async () => {
       const original = {
         id: 'tx-async',
         title: 'Freeze bandwidth',
@@ -456,10 +456,7 @@ describe('sdk.defi.stakekit', () => {
         text: async () => 'server error',
       } as Response)
 
-      const result = await ensureTransactionsBuilt(resp)
-
-      expect(result.transactions[0]).toBe(original)
-      expect(result.transactions[0].unsignedTransaction).toBeNull()
+      await expect(ensureTransactionsBuilt(resp)).rejects.toThrow('yield_xyz_transaction_build_failed: tx-async')
     })
 
     it('does not PATCH a non-CREATED transaction even if unsignedTransaction is null', async () => {
@@ -690,6 +687,102 @@ describe('sdk.defi.stakekit', () => {
       // The build step ran BEFORE parseActionDisplay, so the returned step
       // carries real calldata, not a null/decoded-fallback shape.
       expect(txs[0].to).toBe('0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48')
+    })
+
+    it('fails closed when hosted-MCP and REST PATCH attempts leave a partial built set', async () => {
+      const product = makeProduct()
+      const pendingActionResp = makeEvmActionResponse({
+        transactions: [
+          {
+            id: 'tx-built',
+            title: 'Approve',
+            type: 'APPROVAL',
+            network: 'base',
+            status: 'CREATED',
+            unsignedTransaction: null,
+            gasEstimate: '{}',
+          },
+          {
+            id: 'tx-unbuilt',
+            title: 'Stake',
+            type: 'STAKE',
+            network: 'base',
+            status: 'CREATED',
+            unsignedTransaction: null,
+            gasEstimate: '{}',
+          },
+        ],
+      })
+      const builtTx = {
+        ...pendingActionResp.transactions[0],
+        status: 'WAITING_FOR_SIGNATURE',
+        unsignedTransaction: JSON.stringify({
+          to: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+          value: '0x0',
+          data: '0x',
+        }),
+      }
+      const fetchMock = vi.fn().mockImplementation((url: unknown) => {
+        const u = String(url)
+        if (u.includes('/yields/')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => product,
+            text: async () => JSON.stringify(product),
+          } as Response)
+        }
+        if (u.includes('/mcp')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => ({
+              result: {
+                content: [{ text: JSON.stringify(pendingActionResp) }],
+              },
+            }),
+            text: async () => '',
+          } as Response)
+        }
+        if (u.includes('/actions/')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => pendingActionResp,
+            text: async () => JSON.stringify(pendingActionResp),
+          } as Response)
+        }
+        if (u.includes('/transactions/tx-built')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => builtTx,
+            text: async () => JSON.stringify(builtTx),
+          } as Response)
+        }
+        if (u.includes('/transactions/tx-unbuilt')) {
+          return Promise.resolve({
+            ok: false,
+            status: 500,
+            json: async () => ({}),
+            text: async () => 'server error',
+          } as Response)
+        }
+        throw new Error(`unexpected fetch: ${u}`)
+      })
+      globalThis.fetch = fetchMock
+
+      await expect(
+        stakekitBuildEnter({
+          yieldId: 'base-usdc-aave-v3-lending',
+          address: '0x1234567890123456789012345678901234567890',
+          amount: '100',
+        })
+      ).rejects.toThrow(
+        'yield.xyz action failed on BOTH hosted MCP and REST fallback — MCP: yield_xyz_transaction_build_failed: tx-unbuilt; REST: yield_xyz_transaction_build_failed: tx-unbuilt'
+      )
+
+      expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('/transactions/tx-unbuilt'))).toHaveLength(2)
     })
   })
 

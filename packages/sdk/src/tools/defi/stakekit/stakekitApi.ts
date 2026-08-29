@@ -427,6 +427,14 @@ export async function ensureTransactionsBuilt(
       action_response.transactions = built
     }
   }
+
+  const unbuiltTransaction = Array.isArray(action_response.transactions)
+    ? action_response.transactions.find(tx => tx.status === 'CREATED' && tx.unsignedTransaction == null)
+    : undefined
+  if (unbuiltTransaction) {
+    throw new Error(`yield_xyz_transaction_build_failed: ${unbuiltTransaction.id}`)
+  }
+
   return action_response
 }
 
@@ -479,16 +487,17 @@ export async function callYieldActionWithFallback(args: {
     // (e.g. sui-sui-native-staking) that happens to route through MCP
     // returns a success-shaped payload with an unbuilt transaction; apply
     // the SAME build step here so both paths converge on a fully-built
-    // action response. Best-effort: a response that doesn't parse as
-    // YieldActionResponse (or has no transactions to build) is returned
-    // unchanged — downstream parsing/validation still runs on it.
+    // action response. A response that doesn't parse as YieldActionResponse
+    // is returned unchanged for downstream validation, but a parsed action
+    // must not continue while an eligible transaction is still unbuilt.
+    let parsed: YieldActionResponse
     try {
-      const parsed = JSON.parse(raw) as YieldActionResponse
-      const built = await ensureTransactionsBuilt(parsed, args.apiKey)
-      return JSON.stringify(built)
+      parsed = JSON.parse(raw) as YieldActionResponse
     } catch {
       return raw
     }
+    const built = await ensureTransactionsBuilt(parsed, args.apiKey)
+    return JSON.stringify(built)
   } catch (mcpErr) {
     const mcpMsg = mcpErr instanceof Error ? mcpErr.message : String(mcpErr)
     try {
