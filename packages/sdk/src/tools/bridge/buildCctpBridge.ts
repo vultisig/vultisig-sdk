@@ -18,10 +18,13 @@
 import { encodeFunctionData, getAddress, isAddress } from 'viem'
 
 import { assertSafeEvmDestination } from '../../utils/dangerousAddresses'
-import { parseUsdcAmount, USDC_DECIMALS } from '../parse/usdcAmount'
+import { formatUsdc, parseUsdcAmount } from '../parse/usdcAmount'
 import { type CctpChainConfig, cctpSupportedChains, getCctpChain } from './cctp'
 
-export { parseUsdcAmount } from '../parse/usdcAmount'
+// Re-exported so `@vultisig/sdk/tools/bridge` keeps exposing both helpers at
+// the path consumers already import them from; the definitions live next to
+// each other in tools/parse/usdcAmount.ts (sdk#1931).
+export { formatUsdc, parseUsdcAmount } from '../parse/usdcAmount'
 
 /** uint256 max — defense-in-depth overflow clamp. */
 const MAX_UINT256 = (1n << 256n) - 1n
@@ -113,13 +116,6 @@ export type CctpBridgeResult = {
 }
 
 /** Format a raw 6-decimal USDC amount back to a human-readable string. */
-export const formatUsdc = (raw: bigint): string => {
-  const divisor = 10n ** BigInt(USDC_DECIMALS)
-  const whole = raw / divisor
-  const frac = raw % divisor
-  if (frac === 0n) return whole.toString()
-  return `${whole}.${frac.toString().padStart(USDC_DECIMALS, '0').replace(/0+$/, '')}`
-}
 
 /**
  * Build the bytes32 mintRecipient from a 20-byte EVM address. CCTP's
