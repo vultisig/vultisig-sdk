@@ -8,6 +8,8 @@
 // Ported from mcp-ts/src/lib/yield-api.ts.
 // Builds UNSIGNED calldata only — never signs, never broadcasts.
 
+import { sha256 } from '@noble/hashes/sha2.js'
+import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 // --- Module constants (NOT process.env) ---
@@ -28,6 +30,30 @@ function authHeaders(apiKey?: string, extra: Record<string, string> = {}): Recor
   const headers: Record<string, string> = { ...extra }
   if (apiKey) headers['X-API-KEY'] = apiKey
   return headers
+}
+
+/**
+ * Cache-key fragment identifying WHICH credential a cached response was
+ * fetched with.
+ *
+ * Any cache whose upstream request carries an auth header has to key on that
+ * auth scope, because the response is a function of the credential. Without
+ * this, `/yields/enabled` - which returns only the products a given project's
+ * API key may deposit into - is cached under the query string alone, so the
+ * first caller's allowed set is served to every other caller for the next five
+ * minutes. That both leaks one project's enabled products to another and
+ * suppresses products the second project actually has.
+ *
+ * Truncated SHA-256, never the key itself: cache keys end up in debugging
+ * output, and a credential must not be reconstructible from one. 64 bits is
+ * ample when the only requirement is that distinct keys do not collide.
+ */
+function apiKeyScope(apiKey?: string): string {
+  const trimmed = apiKey?.trim()
+  // A request with no key is its own scope - it hits the same endpoint
+  // unauthenticated and gets a different answer than any keyed request.
+  if (!trimmed) return 'anon'
+  return bytesToHex(sha256(utf8ToBytes(trimmed))).slice(0, 16)
 }
 
 // --- Simple TTL cache (same pattern as defi-llama.ts) ---
@@ -214,7 +240,7 @@ export async function searchYields(params: {
   if (params.provider) query.set('provider', params.provider)
   if (params.limit) query.set('limit', String(params.limit))
 
-  const cacheKey = `yield:search:${query.toString()}`
+  const cacheKey = `yield:search:${apiKeyScope(params.apiKey)}:${query.toString()}`
   const cached = getCached<YieldProduct[]>(cacheKey)
   if (cached) return cached
 
@@ -234,7 +260,7 @@ export async function searchYields(params: {
 }
 
 export async function getYield(yieldId: string, apiKey?: string): Promise<YieldProduct> {
-  const cacheKey = `yield:detail:${yieldId}`
+  const cacheKey = `yield:detail:${apiKeyScope(apiKey)}:${yieldId}`
   const cached = getCached<YieldProduct>(cacheKey)
   if (cached) return cached
 
@@ -427,7 +453,10 @@ export async function fetchStakekitBalancesBatch(
     const body = await resp.text().catch(() => '')
     throw new Error(`yield.xyz ${resp.status}: ${body.slice(0, 200)}`)
   }
-  const json = (await resp.json()) as { items?: StakekitBalanceItem[] | null; errors?: StakekitBalancesResult['errors'] | null }
+  const json = (await resp.json()) as {
+    items?: StakekitBalanceItem[] | null
+    errors?: StakekitBalancesResult['errors'] | null
+  }
   // yield.xyz has been observed to return `items: null` on edge errors.
   return {
     items: Array.isArray(json?.items) ? json.items : [],

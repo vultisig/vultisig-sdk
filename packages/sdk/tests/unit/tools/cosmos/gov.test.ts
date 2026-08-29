@@ -1,3 +1,4 @@
+import { toBech32 } from '@cosmjs/encoding'
 import { describe, expect, it, vi } from 'vitest'
 
 import { getCosmosGovernanceProposals, prepareCosmosVote } from '@/tools/cosmos/gov'
@@ -5,6 +6,44 @@ import { getCosmosGovernanceProposals, prepareCosmosVote } from '@/tools/cosmos/
 // Deterministic valid bech32 test addresses (20-byte payloads).
 const COSMOS_ADDR = 'cosmos1qurswpc8qurswpc8qurswpc8qurswpc8nn86qp'
 const OSMO_ADDR = 'osmo1qurswpc8qurswpc8qurswpc8qurswpc8mg52kn'
+
+const extendedGovernanceChains = [
+  {
+    chain: 'Sei',
+    chainId: 'pacific-1',
+    hrp: 'sei',
+    lcdRoot: 'https://sei-rest.publicnode.com',
+    govVersion: 'v1beta1',
+  },
+  {
+    chain: 'Injective',
+    chainId: 'injective-1',
+    hrp: 'inj',
+    lcdRoot: 'https://injective-rest.publicnode.com',
+    govVersion: 'v1',
+  },
+  {
+    chain: 'Neutron',
+    chainId: 'neutron-1',
+    hrp: 'neutron',
+    lcdRoot: 'https://neutron-rest.publicnode.com',
+    govVersion: 'v1',
+  },
+  {
+    chain: 'Celestia',
+    chainId: 'celestia',
+    hrp: 'celestia',
+    lcdRoot: 'https://celestia-rest.publicnode.com',
+    govVersion: 'v1',
+  },
+  {
+    chain: 'Stride',
+    chainId: 'stride-1',
+    hrp: 'stride',
+    lcdRoot: 'https://stride-api.polkachu.com',
+    govVersion: 'v1',
+  },
+] as const
 
 /** Build a fetch stub that returns `body` (JSON) for any URL matching `match`. */
 function mockFetch(routes: Array<{ match: RegExp; status?: number; body: unknown }>): typeof fetch {
@@ -94,12 +133,56 @@ describe('getCosmosGovernanceProposals', () => {
     expect(res.count).toBe(0)
   })
 
-  it('rejects an unsupported chain', async () => {
-    await expect(
-      // @ts-expect-error — intentionally passing a non-gov chain
-      getCosmosGovernanceProposals({ chain: 'Bitcoin' })
-    ).rejects.toThrow(/unsupported chain/)
+  it.each([
+    ['deposit_period', '1'],
+    ['voting', '2'],
+    ['passed', '3'],
+    ['rejected', '4'],
+    ['all', '0'],
+  ] as const)('encodes the TerraClassic %s status as gov/v1beta1 integer %s', async (status, expected) => {
+    let requestedUrl = ''
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      requestedUrl = String(input)
+      return { ok: true, status: 200, json: async () => ({ proposals: [] }) } as Response
+    }) as unknown as typeof fetch
+
+    await getCosmosGovernanceProposals({ chain: 'TerraClassic', status, fetchImpl })
+
+    const url = new URL(requestedUrl)
+    expect(url.pathname).toBe('/cosmos/gov/v1beta1/proposals')
+    expect(url.searchParams.get('proposal_status')).toBe(expected)
   })
+
+  it.each(extendedGovernanceChains)(
+    'supports $chain governance via both the canonical name and $chainId alias',
+    async ({ chain, chainId, lcdRoot, govVersion }) => {
+      const requestedUrls: string[] = []
+      const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+        requestedUrls.push(String(input))
+        return { ok: true, status: 200, json: async () => ({ proposals: [] }) } as Response
+      }) as unknown as typeof fetch
+
+      const byName = await getCosmosGovernanceProposals({ chain, fetchImpl })
+      const byChainId = await getCosmosGovernanceProposals({ chain: chainId, fetchImpl })
+
+      expect(byName).toMatchObject({ chain, chainId, count: 0 })
+      expect(byChainId).toMatchObject({ chain, chainId, count: 0 })
+      expect(requestedUrls).toEqual([
+        expect.stringMatching(new RegExp(`^${lcdRoot}/cosmos/gov/${govVersion}/proposals\\?`)),
+        expect.stringMatching(new RegExp(`^${lcdRoot}/cosmos/gov/${govVersion}/proposals\\?`)),
+      ])
+    }
+  )
+
+  it.each(['Bitcoin', 'toString', 'constructor', '__proto__'] as const)(
+    'rejects unsupported chain input %s for proposal reads',
+    async chain => {
+      await expect(
+        // @ts-expect-error — intentionally passing a non-gov chain-like runtime string
+        getCosmosGovernanceProposals({ chain })
+      ).rejects.toThrow(/unsupported chain/)
+    }
+  )
 })
 
 describe('prepareCosmosVote', () => {
@@ -134,6 +217,33 @@ describe('prepareCosmosVote', () => {
     })
     expect(env.metadata).toBeUndefined()
   })
+
+  it.each(extendedGovernanceChains)(
+    'builds a $chain vote from the $chainId alias with the correct HRP and LCD',
+    async ({ chain, chainId, hrp, lcdRoot }) => {
+      const voter = toBech32(hrp, new Uint8Array(20).fill(7))
+      let requestedUrl = ''
+      const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+        requestedUrl = String(input)
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ account: { account_number: '12', sequence: '3' } }),
+        } as Response
+      }) as unknown as typeof fetch
+
+      const env = await prepareCosmosVote({
+        chain: chainId,
+        voter,
+        proposalId: '9',
+        option: 'yes',
+        fetchImpl,
+      })
+
+      expect(env).toMatchObject({ chain, chainId, voter, accountNumber: '12', sequence: '3' })
+      expect(requestedUrl).toBe(`${lcdRoot}/cosmos/auth/v1beta1/accounts/${voter}`)
+    }
+  )
 
   it('maps every vote option to its VOTE_OPTION_* constant', async () => {
     const fetchImpl = mockFetch([authRoute('1', '0')])
@@ -200,11 +310,21 @@ describe('prepareCosmosVote', () => {
     ).rejects.toThrow(/does not match expected "cosmos"/)
   })
 
-  it('rejects a malformed bech32 address', async () => {
+  it('rejects a malformed bech32 voter address', async () => {
     await expect(
-      prepareCosmosVote({ chain: 'Cosmos', voter: 'not-an-address', proposalId: '1', option: 'yes' })
-    ).rejects.toThrow(/malformed bech32/)
+      prepareCosmosVote({ chain: 'Cosmos', voter: 'not-bech32', proposalId: '1', option: 'yes' })
+    ).rejects.toThrow(/invalid voter address: malformed bech32/)
   })
+
+  it.each(['toString', 'constructor', '__proto__'] as const)(
+    'rejects unsupported chain input %s for vote prep',
+    async chain => {
+      await expect(
+        // @ts-expect-error — intentionally passing a non-gov chain-like runtime string
+        prepareCosmosVote({ chain, voter: COSMOS_ADDR, proposalId: '1', option: 'yes' })
+      ).rejects.toThrow(/unsupported chain/)
+    }
+  )
 
   it('rejects a non-positive proposalId', async () => {
     const fetchImpl = mockFetch([authRoute('1', '0')])
