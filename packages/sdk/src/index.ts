@@ -1142,6 +1142,7 @@ export {
   resolveEns,
   resolveJupiterFeeAccount,
   resolveLuncFloorUsd,
+  resolveSourceChannelByDestChain,
   ResultKind,
   runSkipSwap,
   sanitizeAmount,
