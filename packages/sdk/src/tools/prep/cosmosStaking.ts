@@ -79,16 +79,6 @@ function validateDenom(value: string, fieldName = 'denom'): string {
 type AddressRole = 'account' | 'validator'
 
 /**
- * Classify a decoded bech32 HRP. An HRP ending in `valoper`/`valcons` is a
- * validator key, NOT a spendable account. Shares the canonical classifier
- * with `swap/skip/cosmosAddressGuard.ts` and `prep/ibcTransfer.ts` so the
- * fund-safety rule can't drift between call sites (sdk#1969).
- */
-function hrpIsValidatorRole(hrp: string): boolean {
-  return validatorRoleForHrp(hrp) !== null
-}
-
-/**
  * Validate a bech32 cosmos address with an optional expected human-readable
  * prefix (hrp). Rejects malformed bech32 and prefix mismatches, and checks the
  * decoded payload is a 20- or 32-byte account/operator key (rejects IBC channel
@@ -126,7 +116,9 @@ function validateBech32(value: string, fieldName: string, expectedPrefix?: strin
     decoded = bech32.decode(trimmed)
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error)
-    throw new Error(`invalid ${fieldName}: malformed bech32 (${msg})`, { cause: error })
+    throw new Error(`invalid ${fieldName}: malformed bech32 (${msg})`, {
+      cause: error,
+    })
   }
   // Role guard runs BEFORE the optional exact-prefix check so the explicit,
   // fund-safety-flavored message wins over a generic prefix mismatch.
@@ -155,7 +147,9 @@ function validateBech32(value: string, fieldName: string, expectedPrefix?: strin
     payload = bech32.fromWords(decoded.words)
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error)
-    throw new Error(`invalid ${fieldName}: malformed bech32 data (${msg})`, { cause: error })
+    throw new Error(`invalid ${fieldName}: malformed bech32 data (${msg})`, {
+      cause: error,
+    })
   }
   if (payload.length !== 20 && payload.length !== 32) {
     throw new Error(`invalid ${fieldName}: expected 20- or 32-byte payload, got ${payload.length}`)
