@@ -403,6 +403,7 @@ export type StakekitBalancesResult = {
 
 /** Per-request cap enforced by the yield.xyz batched-balances endpoint. */
 export const STAKEKIT_BALANCE_QUERIES_PER_REQUEST = 25
+const STAKEKIT_BALANCE_REQUEST_TIMEOUT_MS = 15_000
 
 /**
  * Split an arbitrary-length query list into `size`-sized chunks so a caller
@@ -443,24 +444,36 @@ export async function fetchStakekitBalancesBatch(
   }
 
   const url = `${YIELD_XYZ_API_BASE}/yields/balances`
-  const resp = await fetch(url, {
-    method: 'POST',
-    signal: AbortSignal.timeout(15_000),
-    headers: authHeaders(apiKey, { 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ queries }),
-  })
-  if (!resp.ok) {
-    const body = await resp.text().catch(() => '')
-    throw new Error(`yield.xyz ${resp.status}: ${body.slice(0, 200)}`)
-  }
-  const json = (await resp.json()) as {
-    items?: StakekitBalanceItem[] | null
-    errors?: StakekitBalancesResult['errors'] | null
-  }
-  // yield.xyz has been observed to return `items: null` on edge errors.
-  return {
-    items: Array.isArray(json?.items) ? json.items : [],
-    errors: Array.isArray(json?.errors) ? json.errors : [],
+  // This helper is part of the React Native SDK surface. Older Hermes
+  // runtimes do not implement AbortSignal.timeout(), so use the portable
+  // AbortController pattern shared by the other RN-exported fetch helpers.
+  const controller = new AbortController()
+  const timeoutId = setTimeout(
+    () => controller.abort(new Error(`yield.xyz balances timeout after ${STAKEKIT_BALANCE_REQUEST_TIMEOUT_MS}ms`)),
+    STAKEKIT_BALANCE_REQUEST_TIMEOUT_MS
+  )
+  try {
+    const resp = await fetch(url, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: authHeaders(apiKey, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ queries }),
+    })
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => '')
+      throw new Error(`yield.xyz ${resp.status}: ${body.slice(0, 200)}`)
+    }
+    const json = (await resp.json()) as {
+      items?: StakekitBalanceItem[] | null
+      errors?: StakekitBalancesResult['errors'] | null
+    }
+    // yield.xyz has been observed to return `items: null` on edge errors.
+    return {
+      items: Array.isArray(json?.items) ? json.items : [],
+      errors: Array.isArray(json?.errors) ? json.errors : [],
+    }
+  } finally {
+    clearTimeout(timeoutId)
   }
 }
 

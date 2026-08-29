@@ -73,6 +73,7 @@ describe('fetchStakekitBalancesBatch', () => {
 
   afterEach(() => {
     globalThis.fetch = originalFetch
+    vi.unstubAllGlobals()
     vi.restoreAllMocks()
   })
 
@@ -112,6 +113,18 @@ describe('fetchStakekitBalancesBatch', () => {
     await fetchStakekitBalancesBatch([{ network: 'ethereum', address: '0xa' }])
     const init = fetchMock.mock.calls[0]?.[1] as { headers: Record<string, string> }
     expect(init.headers['X-API-KEY']).toBeUndefined()
+  })
+
+  it('works when AbortSignal.timeout is unavailable, as on older Hermes', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ items: [], errors: [] }) })
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+    vi.stubGlobal('AbortSignal', {})
+
+    await expect(fetchStakekitBalancesBatch([{ network: 'ethereum', address: '0xa' }])).resolves.toEqual({
+      items: [],
+      errors: [],
+    })
+    expect((fetchMock.mock.calls[0]?.[1] as RequestInit).signal).toBeInstanceOf(Object)
   })
 
   it('throws on non-200 response and includes body for diagnostics', async () => {
