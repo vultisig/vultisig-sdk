@@ -93,6 +93,77 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(reactNativeEntry[name]).toBe(dangerousAddresses[name])
   })
 
+  // sdk#1772: the RN entry omitted the whole validation / address-format
+  // canonical family, so mobile consumers had to deep-import or keep an
+  // app-local mirror - the exact duplicated-not-imported drift these helpers
+  // were added to remove.
+  //
+  // This asserts the ENTIRE runtime surface of each canonical module is
+  // re-exported, rather than a hand-listed set of names. A hand-listed set only
+  // catches what someone remembered to list; walking the module catches a
+  // helper ADDED to it later and wired only into the root entry, which is how
+  // the gap opened in the first place.
+  it.each([
+    ['utils/validateNormalizers', () => import('../../../../src/utils/validateNormalizers')],
+    ['utils/addressFormat', () => import('../../../../src/utils/addressFormat')],
+    ['utils/addressValidation', () => import('../../../../src/utils/addressValidation')],
+    ['utils/chainPrefix', () => import('../../../../src/utils/chainPrefix')],
+    ['tools/policy', () => import('../../../../src/tools/policy')],
+  ] as const)('re-exports every runtime export of %s on the RN entry, by identity', async (_name, load) => {
+    const rn = (await import('../../../../src/platforms/react-native/index')) as Record<string, unknown>
+    const mod = (await load()) as Record<string, unknown>
+
+    const expected = Object.keys(mod).filter(k => k !== 'default')
+    expect(expected.length).toBeGreaterThan(0)
+
+    const missing = expected.filter(k => !(k in rn))
+    expect(missing).toEqual([])
+
+    // Identity, not just presence: a re-export that shadows the canonical with
+    // a local reimplementation would satisfy `in rn` while still drifting.
+    for (const key of expected) {
+      expect(rn[key]).toBe(mod[key])
+    }
+  })
+
+  // Root parity for the same family. The RN entry may legitimately omit
+  // node-only surfaces, so this is deliberately scoped to these modules rather
+  // than the whole root surface - a blanket root-vs-RN diff is 186 names today
+  // and would be noise, not signal.
+  it('matches the root entry for the validation / address-format family', async () => {
+    const rn = (await import('../../../../src/platforms/react-native/index')) as Record<string, unknown>
+    const root = (await import('../../../../src/index')) as Record<string, unknown>
+
+    const family = [
+      'amountMatches',
+      'computeEvmFee',
+      'decimalsFor',
+      'feeMatches',
+      'isValidTokenSymbolFormat',
+      'normalizeTokenSymbol',
+      'scaleHumanToRaw',
+      'scaleRawToHuman',
+      'tokenDecimals',
+      'ValidateNormalizerError',
+      'canonicalChainTag',
+      'classifyAddress',
+      'isAddressValidForChain',
+      'isSolanaAddress',
+      'supportedChainTags',
+      'address',
+      'validate',
+      'checkChainPrefix',
+      'policy',
+      'checkInvariants',
+      'evaluatePolicy',
+    ]
+
+    for (const key of family) {
+      expect(root[key], `root entry lost ${key}`).toBeDefined()
+      expect(rn[key], `RN entry is missing ${key}`).toBe(root[key])
+    }
+  })
+
   it('registers crypto + storage on module load so Vultisig({}) does not throw', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
     const { randomUUID } = await import('../../../../src/crypto')
@@ -644,5 +715,27 @@ describe('RN entry exposes canonical EIP-712 helpers', () => {
     expect(rn.coerceEip712ChainId).toBe(eip712.coerceEip712ChainId)
     expect(rn.computeEip712Hash).toBe(eip712.computeEip712Hash)
     expect(rn.toCanonicalEvmSignature).toBe(eip712.toCanonicalEvmSignature)
+  })
+})
+
+describe('RN entry exposes canonical IBC + Sui prep helpers', () => {
+  it('re-exports the canonical IBC + Sui prep helpers from the RN root surface', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const prep = await import('../../../../src/tools/prep')
+    const ibcTransfer = await import('../../../../src/tools/prep/ibcTransfer')
+    const suiTokenTransfer = await import('../../../../src/tools/prep/suiTokenTransfer')
+
+    expect(rn.prepareIbcTransfer).toBe(prep.prepareIbcTransfer)
+    expect(rn.prepareIbcTransfer).toBe(ibcTransfer.prepareIbcTransfer)
+    expect(rn.supportedIbcDestinationsFrom).toBe(prep.supportedIbcDestinationsFrom)
+    expect(rn.normaliseIbcChainId).toBe(ibcTransfer.normaliseIbcChainId)
+    expect(rn.IBC_MSG_TRANSFER_TYPE_URL).toBe(ibcTransfer.IBC_MSG_TRANSFER_TYPE_URL)
+    expect(rn.IBC_CHAIN_HRP).toBe(ibcTransfer.IBC_CHAIN_HRP)
+    expect(rn.IBC_CHAIN_REVISION).toBe(ibcTransfer.IBC_CHAIN_REVISION)
+    expect(rn.IBC_CHANNEL_DEST).toBe(ibcTransfer.IBC_CHANNEL_DEST)
+
+    expect(rn.prepareSuiTokenTransferFromKeys).toBe(prep.prepareSuiTokenTransferFromKeys)
+    expect(rn.prepareSuiTokenTransferFromKeys).toBe(suiTokenTransfer.prepareSuiTokenTransferFromKeys)
+    expect(rn.SUI_NATIVE_COIN_TYPE).toBe(suiTokenTransfer.SUI_NATIVE_COIN_TYPE)
   })
 })

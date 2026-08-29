@@ -50,6 +50,7 @@ import { configureWasm } from '../../context/wasmRuntime'
 import { configureCrypto } from '../../crypto'
 import * as cosmos from '../../tools/cosmos'
 import * as evm from '../../tools/evm'
+import type { prepareRawEvmTxFromKeys as PrepareRawEvmTxFromKeys } from '../../tools/prep/rawEvm'
 import * as token from '../../tools/token'
 import { ReactNativeCrypto } from './crypto'
 import { ReactNativeStorage } from './storage'
@@ -85,6 +86,66 @@ export {
 // "will this memo fit before broadcast rejects it with sdk code 12 (memo too
 // long) after the user has already signed?" Kept in parity with the root SDK
 // entrypoint (sdk#1538) so RN consumers don't hand-roll their own memo-cap table.
+// Pure-crypto chain-math normalizers + pure address-format validation.
+// Vault-free, network-free and platform-neutral, so RN gets the same canonicals
+// as the root entry (sdk#1772). Without them a mobile consumer has to
+// deep-import or keep an app-local mirror - the duplicated-not-imported drift
+// these helpers exist to remove. `entry.test.ts` asserts the WHOLE surface of
+// each source module is re-exported here, so a helper added to one of them and
+// wired only into the root entry fails loudly.
+export {
+  canonicalChainTag,
+  classifyAddress,
+  isAddressValidForChain,
+  isSolanaAddress,
+  supportedChainTags,
+} from '../../utils/addressFormat'
+export type { AddressFamily, AddressRole, ChainPrefixResult } from '../../utils/addressValidation'
+export { address, validate } from '../../utils/addressValidation'
+export { checkChainPrefix } from '../../utils/chainPrefix'
+
+// Pure intent<->envelope policy diff (vault-free, no signing/broadcast).
+// Root already exports the full flat surface; RN did not (sdk#1408).
+export type {
+  AmountUnits,
+  FieldDiff,
+  IntentClaim,
+  InvariantInput,
+  InvariantViolation,
+  AssetRef as PolicyAssetRef,
+  Envelope as PolicyEnvelope,
+  Verdict,
+} from '../../tools/policy'
+export {
+  AMOUNT_DRIFT_BLOCK_PCT,
+  AMOUNT_DRIFT_WARN_PCT,
+  amountDriftPct,
+  chainAliasMap,
+  chainsMatch,
+  checkInvariants,
+  claimInterpretations,
+  evaluatePolicy,
+  Invariant,
+  isZeroAmount,
+  parseAmountBig,
+  PLAUSIBLE_TOKEN_DECIMALS,
+  policy,
+  ResultKind,
+  sanitizeAmount,
+  scaleDecimalClaimToAtomic,
+} from '../../tools/policy'
+export {
+  amountMatches,
+  computeEvmFee,
+  decimalsFor,
+  feeMatches,
+  isValidTokenSymbolFormat,
+  normalizeTokenSymbol,
+  scaleHumanToRaw,
+  scaleRawToHuman,
+  tokenDecimals,
+  ValidateNormalizerError,
+} from '../../utils/validateNormalizers'
 export {
   COSMOS_MEMO_DEFAULT_MAX_BYTES,
   getCosmosMemoMaxBytes,
@@ -313,15 +374,21 @@ export type {
   BuildSplTransferParams,
   ConsolidateChain,
   ConsolidateUtxo,
+  EvmTxNumberish,
   GetMaxSendAmountFromKeysParams,
+  PrepareIbcTransferParams,
+  PrepareIbcTransferResult,
   PrepareJettonTransferTxFromKeysParams,
   PreparePolkadotAssetSendParams,
   PreparePolkadotAssetSendResult,
+  PrepareRawEvmTxFromKeysParams,
   PrepareSendTxFromKeysParams,
+  PrepareSuiTokenTransferFromKeysParams,
   PrepareSwapTxFromKeysParams,
   PrepareTrc20TransferFromKeysParams,
   PrepareUtxoConsolidateResult,
   PrepareUtxoConsolidateTxFromKeysParams,
+  RawEvmTxEnvelope,
   SplTransferResult,
   UnsignedTrc20Transfer,
   VaultIdentity,
@@ -331,6 +398,16 @@ export type {
 // buffer (RN-safe, no mpc/keysign), so unlike the other prep helpers they are
 // statically re-exported rather than lazy-imported. Omitting them here would
 // break the hand-curated RN export list for vultiagent-app consumers.
+export {
+  IBC_CHAIN_HRP,
+  IBC_CHAIN_REVISION,
+  IBC_CHANNEL_DEST,
+  IBC_MSG_TRANSFER_TYPE_URL,
+  normaliseIbcChainId,
+  prepareIbcTransfer,
+  prepareSuiTokenTransferFromKeys,
+  supportedIbcDestinationsFrom,
+} from '../../tools/prep'
 export type {
   CosmosStakingMsgEnvelope,
   DelegateParams,
@@ -370,6 +447,11 @@ export async function getMaxSendAmountFromKeys(...args: unknown[]) {
 export async function prepareContractCallTxFromKeys(...args: unknown[]) {
   const mod = await import('../../tools/prep/contractCall')
   return mod.prepareContractCallTxFromKeys(...(args as Parameters<typeof mod.prepareContractCallTxFromKeys>))
+}
+
+export async function prepareRawEvmTxFromKeys(...args: Parameters<typeof PrepareRawEvmTxFromKeys>) {
+  const mod = await import('../../tools/prep/rawEvm')
+  return mod.prepareRawEvmTxFromKeys(...(args as Parameters<typeof mod.prepareRawEvmTxFromKeys>))
 }
 
 export async function prepareJettonTransferTxFromKeys(...args: unknown[]) {
