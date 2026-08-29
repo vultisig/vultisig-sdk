@@ -1148,7 +1148,8 @@ export class AgentExecutor {
    * `ParsedTxReadyThorSwapDeposit` instead of re-parsing ad hoc fields here.
    */
   private async signThorMsgDepositSwap(parsed: ParsedTxReadyThorSwapDeposit): Promise<Record<string, unknown>> {
-    const { amountBaseUnits, chain, fromSymbol, memo, recipient, toChain, toSymbol } = parsed
+    const { amountBaseUnits: amountBaseUnitsRaw, chain, fromSymbol, memo, recipient, toChain, toSymbol } = parsed
+    const amountBaseUnits = BigInt(amountBaseUnitsRaw)
 
     if (this.verbose)
       process.stderr.write(
