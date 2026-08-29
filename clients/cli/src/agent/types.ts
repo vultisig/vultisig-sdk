@@ -4,10 +4,16 @@
  * Types for the agent chat system including SSE events,
  * backend API types, action execution, and UI interfaces.
  */
-import type { Vultisig } from '@vultisig/sdk'
+import type { TxReadyEnvelope, TxReadyObject, Vultisig } from '@vultisig/sdk'
 
 import type { AgentErrorCode } from './agentErrors'
-import type { BalanceSummaryCard, PolymarketMarketsCard, TurnOutcome, YieldOpportunitiesCard } from './cards'
+import type {
+  BalanceSummaryCard,
+  HlOrderConfirmationCard,
+  PolymarketMarketsCard,
+  TurnOutcome,
+  YieldOpportunitiesCard,
+} from './cards'
 
 export type ProtocolWarning = {
   code: 'PROTOCOL_DRIFT'
@@ -27,6 +33,25 @@ export type ProposedTransaction = {
   /** One-line human summary of the built transaction — the same text the gate showed. */
   summary: string
   /** Chain the built transaction targets, when the buffered envelope identified one. */
+  chain?: string
+}
+
+/**
+ * Audit record emitted once an approved signing request's body has run.
+ * It captures the exact one-line summary that was authorized (sampled at
+ * approval time, before the buffer is consumed) plus whether the signing
+ * body succeeded — an approval whose body failed must not read as a signed
+ * transaction. Transaction hashes and lifecycle status are reported
+ * separately once available.
+ */
+export type SigningRecord = {
+  /** The signing tool that passed the gate (`sign_tx` / `sign_typed_data`). */
+  tool: string
+  /** One-line audit rendering of the summary presented to the confirmation policy. */
+  summary: string
+  /** Whether the signing body reported success. `false` means approved but NOT signed/broadcast. */
+  success: boolean
+  /** Chain the buffered transaction targets, when one is available. */
   chain?: string
 }
 
@@ -288,13 +313,8 @@ export type InstallRequired = {
   description?: string
 }
 
-/**
- * Summary transaction row from non-streaming JSON responses.
- *
- * Permissive tx_ready payload shape while the backend schema evolves.
- * TODO: replace with a concrete interface or union when tx_ready stabilizes.
- */
-export type TxReadyPayloadFields = Record<string, unknown>
+/** Summary transaction row from non-streaming JSON responses. */
+export type TxReadyPayloadFields = TxReadyObject
 
 export type Transaction = {
   sequence: number
@@ -313,40 +333,8 @@ export type Transaction = {
   tx?: TxReadyPayloadFields
 }
 
-/**
- * SSE `tx_ready` payload — backend may nest swap/send payloads or attach `tx`.
- * Kept separate from {@link Transaction} so optional nested fields type-check.
- */
-export type TxReadyPayload = {
-  sequence?: number
-  chain?: string
-  chain_id?: string
-  action?: string
-  signing_mode?: string
-  unsigned_tx_hex?: string
-  tx_details?: Record<string, unknown>
-  keysign_payload?: string
-  swap_tx?: Record<string, unknown>
-  send_tx?: Record<string, unknown>
-  tx?: Record<string, unknown>
-  /**
-   * Multi-leg (approve + main) envelope legs. The executor's
-   * `storeServerTransaction` buffers both legs and `signMultiLeg` signs the
-   * approve, waits for its receipt, then signs the main leg. Each leg nests its
-   * own flat tx under `.tx`. Populated by the client-side tool-output enrichment
-   * for a bundled approve→main (see `toolOutputSigning.ts`) and by mcp-ts
-   * `execute_*` envelopes.
-   */
-  approvalTxArgs?: Record<string, unknown>
-  txArgs?: Record<string, unknown>
-  /**
-   * Internal marker: this signable envelope was synthesized client-side by
-   * `toolOutputSigning.ts` from a `tool-output-available` frame, not received on
-   * the `tx_ready` channel. Used only to render an accurate confirm-gate summary
-   * (`AgentExecutor.getPendingSummary`); inert to signing.
-   */
-  __buildTx?: boolean
-}
+/** SDK-owned wire contract for SSE `tx_ready` and execute-prep payloads. */
+export type TxReadyPayload = TxReadyEnvelope
 
 export type TokenSearchResult = {
   tokens: TokenInfo[]
@@ -446,6 +434,7 @@ export type PipeOutputEvent =
       status: TxLifecycleStatus
       explorer_url?: string
     }
+  | { type: 'signing_record'; record: SigningRecord }
   | { type: 'assistant'; content: string }
   | { type: 'balance_summary'; card: BalanceSummaryCard }
   | { type: 'yield_opportunities'; card: YieldOpportunitiesCard }
@@ -483,6 +472,7 @@ export type UICallbacks = {
   /** Render a server-built balance_summary card (data-balance_summary SSE part,
    *  or the legacy verbatim-echo fallback parsed from message content). */
   onBalanceSummary?: (card: BalanceSummaryCard) => void
+  onHlOrderConfirmation?: (card: HlOrderConfirmationCard) => void
   /** Render a server-built yield_opportunities card (data-yield_opportunities SSE
    *  part, or the legacy verbatim-echo fallback parsed from message content). */
   onYieldOpportunities?: (card: YieldOpportunitiesCard) => void
@@ -497,6 +487,8 @@ export type UICallbacks = {
    *  read-safe path's actual result — `agent ask` without `--yes` is documented
    *  to report the proposed transaction rather than sign it. */
   onProposedTransaction?: (proposed: ProposedTransaction) => void
+  /** Fired after an approved signing request's body has run, with its outcome. */
+  onSigningRecord?: (record: SigningRecord) => void
   onSuggestions: (suggestions: Suggestion[]) => void
   onTxStatus: (txHash: string, chain: string, status: TxLifecycleStatus, explorerUrl?: string) => void
   onError: (message: string, code: AgentErrorCode) => void

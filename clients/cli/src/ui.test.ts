@@ -6,6 +6,9 @@ import { resetOutput, setNonInteractive } from './lib/output'
 import {
   confirmSwap,
   confirmTransaction,
+  displayBalance,
+  displayBalancesTable,
+  displayPortfolio,
   displayTransactionPreview,
   formatBalanceAmount,
   formatBigintAmount,
@@ -39,6 +42,123 @@ describe('confirm prompts fail closed in non-interactive mode', () => {
   })
 })
 
+// The XRP account reserve made balances read as missing funds: the headline is
+// the spendable (post-reserve) number, but nothing said so. Reserve-carrying
+// balances must be labeled; every other chain's render stays byte-identical.
+describe('displayBalance reserve labeling', () => {
+  const captureLogs = () => {
+    const logs: string[] = []
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+      logs.push(args.map(String).join(' '))
+    })
+    return logs
+  }
+
+  const xrpBalance = {
+    amount: '2365052',
+    formattedAmount: '2.365052',
+    decimals: 6,
+    symbol: 'XRP',
+    chainId: 'Ripple',
+    totalAmount: '3765052',
+    reserveAmount: '1400000',
+  }
+
+  it('labels the spendable headline and prints the reserve breakdown', () => {
+    const logs = captureLogs()
+
+    displayBalance('Ripple', xrpBalance)
+
+    expect(logs.find(line => line.includes('Amount:'))).toContain('2.365052 XRP (spendable)')
+    expect(logs.find(line => line.includes('Reserve:'))).toContain('1.4 XRP locked (3.765052 XRP total on ledger)')
+  })
+
+  it('renders a consistent breakdown when the XRP balance is below the reserve requirement', () => {
+    const logs = captureLogs()
+
+    displayBalance('Ripple', {
+      ...xrpBalance,
+      amount: '0',
+      formattedAmount: '0',
+      totalAmount: '500000',
+      reserveAmount: '500000',
+    })
+
+    expect(logs.find(line => line.includes('Amount:'))).toBe('  Amount: 0 XRP (spendable)')
+    expect(logs.find(line => line.includes('Reserve:'))).toBe('  Reserve: 0.5 XRP locked (0.5 XRP total on ledger)')
+  })
+
+  it('keeps balances without a reserve byte-identical', () => {
+    const logs = captureLogs()
+
+    displayBalance('Bitcoin', {
+      amount: '100000000',
+      formattedAmount: '1',
+      decimals: 8,
+      symbol: 'BTC',
+      chainId: 'Bitcoin',
+    })
+
+    expect(logs.find(line => line.includes('Amount:'))).toBe('  Amount: 1 BTC')
+    expect(logs.some(line => line.includes('Reserve:'))).toBe(false)
+    expect(logs.some(line => line.includes('spendable'))).toBe(false)
+  })
+
+  it('does not label a zero reserve', () => {
+    const logs = captureLogs()
+
+    displayBalance('Ripple', { ...xrpBalance, totalAmount: xrpBalance.amount, reserveAmount: '0' })
+
+    expect(logs.find(line => line.includes('Amount:'))).toBe('  Amount: 2.365052 XRP')
+    expect(logs.some(line => line.includes('Reserve:'))).toBe(false)
+  })
+
+  it('marks the portfolio Amount cell as spendable only for reserve-carrying rows', () => {
+    const rows: object[][] = []
+    vi.spyOn(console, 'table').mockImplementation((data: object[]) => {
+      rows.push(data)
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    displayPortfolio(
+      {
+        totalValue: { amount: '10.00', currency: 'usd', lastUpdated: 0 },
+        chainBalances: [
+          { chain: Chain.Ripple, balance: xrpBalance },
+          {
+            chain: Chain.Bitcoin,
+            balance: { amount: '100000000', formattedAmount: '1', decimals: 8, symbol: 'BTC', chainId: 'Bitcoin' },
+          },
+        ],
+      },
+      'usd'
+    )
+
+    expect(rows[0]).toEqual([
+      expect.objectContaining({ Chain: Chain.Ripple, Amount: '2.365052 (spendable)' }),
+      expect.objectContaining({ Chain: Chain.Bitcoin, Amount: '1' }),
+    ])
+  })
+
+  it('marks the table Amount cell as spendable only for reserve-carrying rows', () => {
+    const rows: object[][] = []
+    vi.spyOn(console, 'table').mockImplementation((data: object[]) => {
+      rows.push(data)
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    displayBalancesTable({
+      Ripple: xrpBalance,
+      Bitcoin: { amount: '100000000', formattedAmount: '1', decimals: 8, symbol: 'BTC', chainId: 'Bitcoin' },
+    })
+
+    expect(rows[0]).toEqual([
+      expect.objectContaining({ Chain: 'Ripple', Amount: '2.365052 (spendable)' }),
+      expect.objectContaining({ Chain: 'Bitcoin', Amount: '1' }),
+    ])
+  })
+})
+
 describe('displayTransactionPreview', () => {
   it('escapes terminal control bytes in the confirmation memo', () => {
     const memo = `literal\\x0A${String.fromCharCode(0, 10, 13, 27, 127, 155)}tail`
@@ -52,6 +172,47 @@ describe('displayTransactionPreview', () => {
     const memoLine = logs.find(line => line.includes('Memo:'))
     expect(memoLine).toContain('literal\\\\x0A\\x00\\x0A\\x0D\\x1B\\x7F\\x9Btail')
     expect(memoLine).not.toContain(memo)
+  })
+
+  it('discloses the token contract on the Amount line, escaped, and omits it when absent', () => {
+    const logs: string[] = []
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+      logs.push(args.map(String).join(' '))
+    })
+
+    const contractAddress = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'
+    displayTransactionPreview(
+      'from',
+      'to',
+      '1.0',
+      'USDC.e',
+      Chain.Polygon,
+      undefined,
+      undefined,
+      undefined,
+      contractAddress
+    )
+    expect(logs.find(line => line.includes('Amount:'))).toContain(`Amount: 1.0 USDC.e (${contractAddress})`)
+
+    logs.length = 0
+    displayTransactionPreview(
+      'from',
+      'to',
+      '1.0',
+      'USDC.e',
+      Chain.Polygon,
+      undefined,
+      undefined,
+      undefined,
+      `evil${String.fromCharCode(27)}[2J`
+    )
+    const escapedLine = logs.find(line => line.includes('Amount:'))
+    expect(escapedLine).toContain('evil\\x1B[2J')
+    expect(escapedLine).not.toContain(String.fromCharCode(27))
+
+    logs.length = 0
+    displayTransactionPreview('from', 'to', '1.0', 'ETH', Chain.Ethereum)
+    expect(logs.find(line => line.includes('Amount:'))).toBe('  Amount: 1.0 ETH')
   })
 })
 

@@ -2,7 +2,11 @@ import type { WalletCore } from '@trustwallet/wallet-core'
 import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
-import type { SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
+import {
+  cloneSwapSafetyValue,
+  getSwapQuoteSafetyFingerprint,
+} from '@vultisig/core-chain/swap/quote/getSwapQuoteSafetyFingerprint'
+import type { BoundSwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
 import { buildSwapKeysignPayload } from '@vultisig/core-mpc/keysign/swap/build'
 import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
@@ -14,39 +18,89 @@ export type PrepareSwapTxFromKeysParams = {
   fromCoin: AccountCoin
   toCoin: AccountCoin
   amount: string | number
-  swapQuote: SwapQuote
+  /** Live bound quote returned by `findSwapQuote`; do not JSON round-trip it. */
+  swapQuote: BoundSwapQuote
 }
 
+/** Catchable signal that the caller should fetch a fresh quote and retry. */
+export class SwapQuoteExpiredError extends Error {
+  readonly code = 'SWAP_QUOTE_EXPIRED'
+
+  constructor(message: string) {
+    super(message)
+    this.name = 'SwapQuoteExpiredError'
+  }
+}
+
+// Snapshot all amount/coin/quote inputs synchronously. Validation and payload construction must
+// consume the same immutable-by-ownership copy: wallet and UTXO resolution both yield, so retaining
+// caller-owned objects after the fingerprint check would create a mutation window before signing.
+const snapshotPreparationParams = (params: PrepareSwapTxFromKeysParams): PrepareSwapTxFromKeysParams =>
+  cloneSwapSafetyValue(params)
+
 // Fund-safety, agent-reachable (audit ABTS-005/plan 005): this is the vault-free swap builder,
-// so it's the one path an agent (no key shares) can drive. It previously enforced NEITHER quote
-// expiry NOR amount↔quote consistency, unlike the vault-wrapped `SwapService.prepareSwapTx`.
-//
-// Native-quote expiry (`quote.native.expiry`) is a REAL absolute deadline sourced from the
-// THORChain/Maya quote API — mirrors core's own `assertQuoteNotExpired`
-// (nativeSwapQuoteToSwapPayload.ts).
-// CoW-swap expiry (`cowswap_order.validTo`) is a Unix-second deadline on the EIP-712 order itself.
-// Other general-quote routes carry no expiry field the SDK can assert here.
+// so it validates the source amount and expiry bound by `findSwapQuote` before any wallet-core or
+// public-key work. Embedded native/CoW deadlines are retained below as defense-in-depth.
+const assertQuoteSafetyBinding = (params: PrepareSwapTxFromKeysParams, requestedAmount: bigint): void => {
+  const { swapQuote } = params
+  const { requestedAmount: boundAmount, expiresAt, safetyFingerprint } = swapQuote
+  if (
+    typeof boundAmount !== 'bigint' ||
+    typeof expiresAt !== 'number' ||
+    !Number.isFinite(expiresAt) ||
+    typeof safetyFingerprint !== 'string'
+  ) {
+    throw new Error(
+      'prepareSwapTxFromKeys: swap quote is missing its amount/expiry safety binding; refresh it with findSwapQuote before signing'
+    )
+  }
+  if (expiresAt <= Date.now()) {
+    throw new SwapQuoteExpiredError('prepareSwapTxFromKeys: swap quote has expired; refresh the quote before signing')
+  }
+  if (boundAmount !== requestedAmount) {
+    throw new Error(
+      `prepareSwapTxFromKeys: requested amount (${requestedAmount} base units) does not match the quote's requested source amount (${boundAmount} base units) — the quote may be stale or for a different request`
+    )
+  }
+  const expectedFingerprint = getSwapQuoteSafetyFingerprint({
+    from: params.fromCoin,
+    to: params.toCoin,
+    recipient: swapQuote.recipient,
+    requestedAmount: boundAmount,
+    expiresAt,
+    quote: swapQuote.quote,
+  })
+  if (safetyFingerprint !== expectedFingerprint) {
+    throw new Error(
+      'prepareSwapTxFromKeys: swap quote does not match the requested coins, amount, value types, or original transaction; fetch a fresh quote without JSON round-tripping it'
+    )
+  }
+}
+
+// Native-quote expiry (`quote.native.expiry`) is a real absolute deadline sourced from the
+// THORChain/Maya quote API. CoW's `validTo` is the deadline on the EIP-712 order itself.
 const assertNativeQuoteNotExpired = (expirySeconds: number): void => {
   if (expirySeconds <= Math.floor(Date.now() / 1000)) {
-    throw new Error('prepareSwapTxFromKeys: native swap quote has expired; refresh the quote before signing')
+    throw new SwapQuoteExpiredError(
+      'prepareSwapTxFromKeys: native swap quote has expired; refresh the quote before signing'
+    )
   }
 }
 
 const assertCowQuoteNotExpired = (validTo: number): void => {
   if (validTo <= Math.floor(Date.now() / 1000)) {
-    throw new Error(
+    throw new SwapQuoteExpiredError(
       'prepareSwapTxFromKeys: CoW swap order has expired (validTo in the past); refresh the quote before signing'
     )
   }
 }
 
-// Cross-checks the caller's `amount` against the quote's CoW gross sell amount only.
-// `general.transfer` amount is provider-committed and legitimately diverges from the caller's
-// input by small fee adjustments (e.g. request 100_000n → committed 99_999n), so an exact
-// comparison would false-reject every UTXO/Cosmos SwapKit route. For CoW the gross value
-// (sellAmount + feeAmount) is what gets committed to the EIP-712 order the caller must sign,
-// and the caller's amount is expected to match it exactly.
-// Native/evm/solana fail open — no confidently-comparable committed sell field is available.
+// Defense-in-depth for providers whose tx shape carries an exact source amount: the quote-level
+// requested amount must also match the gross value committed to the EIP-712 order or CosmWasm
+// funds. Native/evm/solana do not expose a separate committed-sell field here, so they
+// intentionally fail open after the quote-level amount binding above; `transfer.amount` may
+// legitimately differ (for example, 100_000n -> 99_999n) because providers subtract
+// deposit-channel fees.
 const assertAmountMatchesCommittedSellAmount = (params: PrepareSwapTxFromKeysParams): void => {
   const { quote } = params.swapQuote
   if (!('general' in quote)) return
@@ -55,6 +109,13 @@ const assertAmountMatchesCommittedSellAmount = (params: PrepareSwapTxFromKeysPar
     evm: () => undefined,
     solana: () => undefined,
     transfer: () => undefined,
+    cosmosWasm: ({ funds }) => {
+      if (funds.length !== 1 || !/^[1-9]\d*$/.test(funds[0].amount)) {
+        throw new Error('prepareSwapTxFromKeys: CosmWasm route must commit exactly one positive integer source fund')
+      }
+
+      return BigInt(funds[0].amount)
+    },
     cowswap_order: order => BigInt(order.sellAmount) + BigInt(order.feeAmount),
   })
   if (committed === undefined) return
@@ -62,7 +123,7 @@ const assertAmountMatchesCommittedSellAmount = (params: PrepareSwapTxFromKeysPar
   const requested = toChainAmount(params.amount, params.fromCoin.decimals)
   if (requested !== committed) {
     throw new Error(
-      `prepareSwapTxFromKeys: requested amount (${requested} base units) does not match the CoW order's committed gross sell amount (${committed} base units) — the quote may be stale or for a different request`
+      `prepareSwapTxFromKeys: requested amount (${requested} base units) does not match the route's committed source amount (${committed} base units) — the quote may be stale or for a different request`
     )
   }
 }
@@ -76,12 +137,10 @@ const assertAmountMatchesCommittedSellAmount = (params: PrepareSwapTxFromKeysPar
  *
  * Coin-input resolution must be performed by the caller — the vault layer owns
  * that responsibility because it requires `getAddress`. This helper enforces
- * quote-expiry (native quotes) and amount↔quote consistency (general quotes
- * with a confidently-comparable committed sell amount) itself, so every
- * caller — vault-wrapped and vault-free alike — gets those checks; see the
- * inline reasoning above `assertNativeQuoteNotExpired` /
- * `assertAmountMatchesCommittedSellAmount` for exactly what is and isn't
- * covered.
+ * quote expiry and caller-amount↔quote consistency itself, so every caller —
+ * vault-wrapped and vault-free alike — gets those checks. The raw quote must
+ * come from `findSwapQuote`, which binds the requested base-unit amount and an
+ * absolute expiry before returning it.
  *
  * If the swap requires an ERC-20 approval, the resulting payload will have
  * `erc20ApprovePayload` set by core; this wrapper returns the payload as-is
@@ -98,19 +157,22 @@ export const prepareSwapTxFromKeys = async (
   params: PrepareSwapTxFromKeysParams,
   walletCoreOverride?: WalletCore
 ): Promise<KeysignPayload> => {
-  const { quote } = params.swapQuote
+  const safeParams = snapshotPreparationParams(params)
+  const { quote } = safeParams.swapQuote
+  const requestedAmount = toChainAmount(safeParams.amount, safeParams.fromCoin.decimals)
+  assertQuoteSafetyBinding(safeParams, requestedAmount)
   if ('native' in quote) {
     assertNativeQuoteNotExpired(quote.native.expiry)
   }
   if ('general' in quote && 'cowswap_order' in quote.general.tx) {
     assertCowQuoteNotExpired(quote.general.tx.cowswap_order.validTo)
   }
-  assertAmountMatchesCommittedSellAmount(params)
+  assertAmountMatchesCommittedSellAmount(safeParams)
 
   const walletCore = walletCoreOverride ?? (await getWalletCore())
 
   const fromPublicKey = getPublicKey({
-    chain: params.fromCoin.chain,
+    chain: safeParams.fromCoin.chain,
     walletCore,
     publicKeys: {
       ecdsa: identity.ecdsaPublicKey,
@@ -121,7 +183,7 @@ export const prepareSwapTxFromKeys = async (
   })
 
   const toPublicKey = getPublicKey({
-    chain: params.toCoin.chain,
+    chain: safeParams.toCoin.chain,
     walletCore,
     publicKeys: {
       ecdsa: identity.ecdsaPublicKey,
@@ -132,10 +194,11 @@ export const prepareSwapTxFromKeys = async (
   })
 
   return buildSwapKeysignPayload({
-    fromCoin: params.fromCoin,
-    toCoin: params.toCoin,
-    amount: params.amount,
-    swapQuote: params.swapQuote,
+    fromCoin: safeParams.fromCoin,
+    toCoin: safeParams.toCoin,
+    recipient: safeParams.swapQuote.recipient ?? safeParams.toCoin.address,
+    amount: safeParams.amount,
+    swapQuote: safeParams.swapQuote,
     vaultId: identity.ecdsaPublicKey,
     localPartyId: identity.localPartyId,
     fromPublicKey,

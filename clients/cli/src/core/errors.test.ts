@@ -469,6 +469,15 @@ describe('classifyError with VaultImportError', () => {
     const result = classifyError(err)
     expect(result).toBeInstanceOf(UsageError)
   })
+
+  it('gives duplicate imports a CLI-native replacement instruction', () => {
+    const err = new VaultImportError(VaultImportErrorCode.DUPLICATE_VAULT, 'pass a TypeScript option')
+    const result = classifyError(err)
+
+    expect(result).toBeInstanceOf(UsageError)
+    expect(result.message).toContain('--replace')
+    expect(result.message).not.toContain('TypeScript')
+  })
 })
 
 describe('anticipated CLI taxonomy regressions', () => {
@@ -745,17 +754,31 @@ describe('anticipated CLI taxonomy regressions', () => {
       )
     })
 
-    it('keeps a Cosmos account-sequence-mismatch rejection retryable', () => {
-      // Code 32 ("incorrect account sequence") is not in the permanent allowlist — a
-      // gap in the account's sequence is a transient MPC-race shape that can resolve
-      // once the intervening sequence lands, so the identical signed bytes may still
-      // succeed on a later attempt.
-      expectTransient(
+    it('classifies a stale Cosmos account sequence as non-retryable and requires re-signing', () => {
+      const result = classifyError(
         new VaultError(
           VaultErrorCode.BroadcastFailed,
           'Failed to broadcast transaction on Cosmos: Broadcasting transaction failed with code 32 (codespace: sdk). Log: account sequence mismatch, expected 5, got 4: incorrect account sequence'
         )
       )
+
+      expect(result).toBeInstanceOf(InvalidInputError)
+      expect(result.retryable).toBe(false)
+      expect(result.hint).toContain('start a new signing ceremony')
+      expect(result.hint).toContain('cannot succeed')
+    })
+
+    it('keeps a future Cosmos account sequence retryable while its predecessor is pending', () => {
+      const result = classifyError(
+        new VaultError(
+          VaultErrorCode.BroadcastFailed,
+          'Failed to broadcast transaction on Cosmos: Broadcasting transaction failed with code 32 (codespace: sdk). Log: account sequence mismatch, expected 4, got 5: incorrect account sequence'
+        )
+      )
+
+      expect(result).toBeInstanceOf(ExternalServiceError)
+      expect(result.retryable).toBe(true)
+      expect(result.hint).toContain('future account sequence')
     })
 
     it('keeps a Cosmos rejection from a non-root codespace retryable', () => {

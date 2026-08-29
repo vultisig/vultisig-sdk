@@ -18,10 +18,13 @@
 import { encodeFunctionData, getAddress, isAddress } from 'viem'
 
 import { assertSafeEvmDestination } from '../../utils/dangerousAddresses'
+import { formatUsdc, parseUsdcAmount } from '../parse/usdcAmount'
 import { type CctpChainConfig, cctpSupportedChains, getCctpChain } from './cctp'
 
-/** USDC has 6 decimals across all CCTP-supported chains. */
-const USDC_DECIMALS = 6
+// Re-exported so `@vultisig/sdk/tools/bridge` keeps exposing both helpers at
+// the path consumers already import them from; the definitions live next to
+// each other in tools/parse/usdcAmount.ts (sdk#1931).
+export { formatUsdc, parseUsdcAmount } from '../parse/usdcAmount'
 
 /** uint256 max — defense-in-depth overflow clamp. */
 const MAX_UINT256 = (1n << 256n) - 1n
@@ -112,72 +115,7 @@ export type CctpBridgeResult = {
   amountUsdc: string
 }
 
-/**
- * parseUsdcAmount converts a human-readable USDC amount (e.g. "10",
- * "10.5") into raw 6-decimal units. Mirrors the Go/mcp-ts side. Exported
- * for unit tests.
- *
- * @throws if the amount is empty, negative, non-numeric, or has more
- * than 6 decimal places.
- */
-export const parseUsdcAmount = (s: string): bigint => {
-  const trimmed = s.trim()
-  if (trimmed === '') {
-    throw new Error('empty amount')
-  }
-  if (trimmed.startsWith('-')) {
-    throw new Error('negative amounts not allowed')
-  }
-
-  const dotIdx = trimmed.indexOf('.')
-  let wholePart: string
-  let fracPart: string
-  if (dotIdx === -1) {
-    wholePart = trimmed
-    fracPart = ''
-  } else {
-    wholePart = trimmed.slice(0, dotIdx)
-    fracPart = trimmed.slice(dotIdx + 1)
-    if (fracPart.includes('.')) {
-      throw new Error(`invalid amount: multiple decimal points in ${s}`)
-    }
-  }
-
-  if (wholePart === '') {
-    wholePart = '0'
-  }
-
-  if (fracPart.length > USDC_DECIMALS) {
-    throw new Error(`too many decimal places (max ${USDC_DECIMALS} for USDC): ${s}`)
-  }
-
-  let wholeInt: bigint
-  try {
-    wholeInt = BigInt(wholePart)
-  } catch {
-    throw new Error(`invalid integer part: ${wholePart}`)
-  }
-
-  while (fracPart.length < USDC_DECIMALS) {
-    fracPart += '0'
-  }
-  if (fracPart.length > 0 && !/^\d+$/.test(fracPart)) {
-    throw new Error(`invalid fractional part: ${fracPart}`)
-  }
-
-  const fracInt = fracPart.length > 0 ? BigInt(fracPart) : 0n
-  const multiplier = 10n ** BigInt(USDC_DECIMALS)
-  return wholeInt * multiplier + fracInt
-}
-
 /** Format a raw 6-decimal USDC amount back to a human-readable string. */
-export const formatUsdc = (raw: bigint): string => {
-  const divisor = 10n ** BigInt(USDC_DECIMALS)
-  const whole = raw / divisor
-  const frac = raw % divisor
-  if (frac === 0n) return whole.toString()
-  return `${whole}.${frac.toString().padStart(USDC_DECIMALS, '0').replace(/0+$/, '')}`
-}
 
 /**
  * Build the bytes32 mintRecipient from a 20-byte EVM address. CCTP's

@@ -72,9 +72,17 @@ export type GeneralSwapTx =
         permitRequired?: true
       }
     }
+  | {
+      cosmosWasm: {
+        sender: string
+        contract: string
+        executeMsg: string
+        funds: Array<{ denom: string; amount: string }>
+      }
+    }
 
 /**
- * Quote returned by an EVM/Solana general-purpose swap aggregator.
+ * Quote returned by a general-purpose swap provider.
  *
  * Consumers building a "View on Explorer" link should call
  * `getSwapExplorerUrl({ provider, txHash, fromChain })` from
@@ -87,5 +95,23 @@ export type GeneralSwapQuote = {
   dstAmount: string
   provider: GeneralSwapProvider
   routeProvider?: string
+  /** Absolute provider quote expiry in milliseconds, when supplied. */
+  expiresAt?: number
+  /**
+   * Signed price impact of the route as a FRACTION, not a percent: `0.0133`
+   * means 1.33% of output lost, and a negative value is a favorable trade.
+   *
+   * Do NOT hand this to `evaluatePriceImpactPercent` — it takes a percent, so
+   * `0.45` would be read as 0.45% rather than 45% and pass a ceiling it should
+   * fail. Scale it first (`fraction * 100`), or use
+   * `evaluateImpactFromFractionString` when the raw string is still in hand.
+   *
+   * Absent whenever no usable figure was found, not as a property of the
+   * provider: today only SwapKit routes populate it, from `meta.priceImpact`
+   * with a `totalSlippageBps` fallback, and even those omit it when neither is
+   * a finite number. Consumers hide the row rather than substitute anything
+   * for it.
+   */
+  priceImpactFraction?: number
   tx: GeneralSwapTx
 }

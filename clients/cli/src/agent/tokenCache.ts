@@ -11,8 +11,9 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs'
-import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
+
+import { getVultisigConfigDir } from '@vultisig/client-shared'
 
 export type AgentTokenCacheScope = {
   publicKey: string
@@ -28,8 +29,7 @@ const LOCK_MAX_WAIT_MS = 5_000
 const LOCK_STALE_MS = 30_000
 
 export function getTokenCachePath(): string {
-  const dir = process.env.VULTISIG_CONFIG_DIR ?? join(homedir(), '.vultisig')
-  return join(dir, 'agent-tokens.json')
+  return join(getVultisigConfigDir(), 'agent-tokens.json')
 }
 
 /** A token is valid only for the exact vault/backend/profile tuple that minted it. */

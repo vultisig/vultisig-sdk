@@ -1,5 +1,7 @@
 import { HttpResponseError } from '@vultisig/lib-utils/fetch/HttpResponseError'
 
+import { CosmosSequenceMismatchError } from './cosmosSequenceMismatch'
+
 /**
  * A transaction was included on-chain but its execution genuinely failed
  * (e.g. Cosmos DeliverTx code !== 0 — a wasm revert, out-of-gas, a
@@ -66,8 +68,10 @@ const decodeTransportMessage = (message: string): string => {
 }
 
 const transientMessagePatterns = [
+  /\b(?:ECONNRESET|ECONNREFUSED|ECONNABORTED|ETIMEDOUT|ENETRESET|ENETUNREACH|EHOSTUNREACH|EAI_AGAIN)\b/i,
   /\bfetch failed\b/i,
   /\bfailed to fetch\b/i,
+  /\bload failed\b/i,
   /\bnetwork error\b/i,
   /\bnetwork request failed\b/i,
   /\brequest timed out\b/i,
@@ -99,12 +103,18 @@ export const isTransientBroadcastError = (error: unknown): boolean => {
   while (current != null && !seen.has(current)) {
     seen.add(current)
 
+    if (current instanceof CosmosSequenceMismatchError) {
+      // A future sequence can become valid when its missing predecessor lands.
+      // A stale sequence is already consumed and must be rebuilt/re-signed.
+      return current.recovery === 'wait'
+    }
+
     if (current instanceof DeliverTxFailedError) {
       return false
     }
 
     if (current instanceof HttpResponseError) {
-      return current.status === 429 || (current.status >= 500 && current.status <= 599)
+      return current.status === 408 || current.status === 429 || (current.status >= 500 && current.status <= 599)
     }
 
     if (typeof current === 'object') {
@@ -114,7 +124,7 @@ export const isTransientBroadcastError = (error: unknown): boolean => {
       }
 
       const status = (current as { status?: unknown }).status
-      if (typeof status === 'number' && (status === 429 || (status >= 500 && status <= 599))) {
+      if (typeof status === 'number' && (status === 408 || status === 429 || (status >= 500 && status <= 599))) {
         return true
       }
     }

@@ -24,7 +24,7 @@ export type { MpcLib }
 import type { CosmosChain, EvmChain, OtherChain, UtxoChain } from '@vultisig/core-chain/Chain'
 export type { CosmosChain, EvmChain, OtherChain, UtxoChain }
 export type { Chain as ChainType } from '@vultisig/core-chain/Chain'
-export { Chain } from '@vultisig/core-chain/Chain'
+export { Chain, IbcEnabledCosmosChain, VaultBasedCosmosChain } from '@vultisig/core-chain/Chain'
 
 // VaultFolder and VaultSecurityType not available in copied core - using local types
 export type VaultFolder = 'fast' | 'secure'
@@ -77,6 +77,7 @@ export type ExportOptions = {
 }
 
 export type Balance = {
+  /** Spendable balance in base units — for chains with a locked reserve (XRP), the reserve is already subtracted */
   amount: string
   formattedAmount: string
   decimals: number
@@ -86,6 +87,10 @@ export type Balance = {
   value?: number
   fiatValue?: number
   fiatCurrency?: string
+  /** Total on-ledger balance in base units, reserve included (Ripple native only) */
+  totalAmount?: string
+  /** Locked reserve in base units that is not spendable (Ripple native only) */
+  reserveAmount?: string
 }
 
 export type MaxSendAmount = {
@@ -93,7 +98,7 @@ export type MaxSendAmount = {
   balance: bigint
   /** Estimated network fee in base units */
   fee: bigint
-  /** Maximum sendable amount (balance - fee) */
+  /** Maximum sendable amount (full token balance, or native balance minus fee) */
   maxSendable: bigint
 }
 
@@ -623,6 +628,8 @@ export type SendResult =
   | { dryRun: false; txHash: string; chain: Chain }
   | {
       dryRun: true
+      /** Resolved token contract address / chain-specific asset id. Omitted for native sends. */
+      contractAddress?: string
       /** Network fee, denominated in the chain's native asset (`feeSymbol`). */
       fee: string
       /** Ticker of the asset the fee is paid in — always the chain's native asset. */

@@ -3,6 +3,7 @@ import {
   type ChainKind,
   getChainKind,
   StorageError,
+  toCosmosSequenceMismatchError,
   VaultError,
   VaultErrorCode,
   VaultImportError,
@@ -447,8 +448,10 @@ const decodeRpcDetails = (details: string): string => {
 // 5 "insufficient funds" (fund the account and the identical bytes land), 13
 // "insufficient fee" (min-gas-prices is node-local config; another node accepts the same
 // bytes), 9 "unknown address" (the account materializes on first receipt) — are
-// recoverable and must stay retryable. So is 32 "incorrect account sequence", a transient
-// MPC-race shape that resolves once the intervening sequence lands.
+// recoverable and must stay retryable. Code 32 "incorrect account sequence" is handled
+// separately and direction-aware above: a future sequence can become valid after its
+// predecessor lands, while an already-consumed stale sequence requires rebuilding and
+// re-signing.
 //
 // Any other codespace, any unlisted code, or a code/message mismatch falls through to
 // retryable.
@@ -612,6 +615,20 @@ function classifyVaultError(err: VaultError): VsigError {
       // spoof the DeliverTx skeleton and strand a genuinely-retryable error here.
       const broadcastChain = getBroadcastErrorChain(err.message)
       const isCosmosBroadcast = broadcastChain !== undefined && getChainKind(broadcastChain) === 'cosmos'
+      const sequenceMismatch = isCosmosBroadcast ? toCosmosSequenceMismatchError(err) : undefined
+      if (sequenceMismatch?.recovery === 'resign') {
+        return new InvalidInputError(
+          err.message,
+          'The account sequence changed after this transaction was prepared. Rebuild the transaction with the latest sequence and start a new signing ceremony; retrying the same signed bytes cannot succeed.'
+        )
+      }
+      if (sequenceMismatch?.recovery === 'wait') {
+        return new ExternalServiceError(
+          err.message,
+          'This transaction uses a future account sequence. Wait for the preceding transaction to be accepted before retrying these signed bytes.',
+          ['If the chain advances past this sequence, rebuild the transaction and start a new signing ceremony']
+        )
+      }
       if (isCosmosBroadcast && matchCosmosDeliverTxFailure(err.message)) {
         // Deliberately does NOT assert "sequence consumed / gas spent" as universal fact:
         // an ANTE-stage failure (e.g. code 5 when the fee can't be deducted because the
@@ -684,6 +701,14 @@ export function classifyError(err: Error): VsigError {
       case VaultImportErrorCode.PASSWORD_REQUIRED:
       case VaultImportErrorCode.INVALID_PASSWORD:
         return new AuthRequiredError(err.message)
+      case VaultImportErrorCode.DUPLICATE_VAULT:
+        return new UsageError('Vault already exists. Re-run the import with --replace to replace a compatible share.')
+      case VaultImportErrorCode.STALE_SHARE:
+        return new UsageError('Import refused: this backup contains a stale or different local vault share.')
+      case VaultImportErrorCode.OTHER_DEVICE_SHARE:
+        return new UsageError('Import refused: this backup belongs to another device in the same vault.')
+      case VaultImportErrorCode.EXISTING_VAULT_PASSWORD_REQUIRED:
+        return new AuthRequiredError('Unlock the existing local vault before replacing its share.')
       default:
         return new UsageError(err.message)
     }

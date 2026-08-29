@@ -1,8 +1,11 @@
 import type { WalletCore } from '@trustwallet/wallet-core'
 import { getMaxValue } from '@vultisig/core-chain/amount/getMaxValue'
 import { Chain } from '@vultisig/core-chain/Chain'
+import { isTerraClassicUstcCoin } from '@vultisig/core-chain/chains/cosmos/terraClassicTax'
 import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
+import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
+import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
 import { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
 import type { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
@@ -23,6 +26,7 @@ export type GetMaxSendAmountFromKeysParams = {
 
 export type ComputeMaxSendFromBalanceParams = GetMaxSendAmountFromKeysParams & {
   balance: bigint
+  nativeBalance?: bigint
 }
 
 /**
@@ -83,7 +87,23 @@ export const computeMaxSendFromBalance = async (
     feeSettings: params.feeSettings,
   })
 
-  const maxSendable = getMaxValue(params.balance, fee)
+  // TerraClassic USTC pays its fee (base gas + burn tax) in `uusd` — the same
+  // denom/balance being sent — unlike every other non-fee-coin token, which
+  // pays gas from a separate native balance. Treat it like a native send: no
+  // native-balance gas check, and the fee comes out of the same balance.
+  const paysFeeInOwnBalance = isFeeCoin(params.coin) || isTerraClassicUstcCoin(params.coin)
+  const isTokenSend = !paysFeeInOwnBalance
+  if (isTokenSend) {
+    const native = chainFeeCoin[params.coin.chain]
+    const nativeBalance = shouldBePresent(params.nativeBalance, `Native ${native.ticker} balance for token max-send`)
+    if (nativeBalance < fee) {
+      throw new Error(
+        `Insufficient native ${native.ticker} balance for gas: ${nativeBalance} available, ${fee} required`
+      )
+    }
+  }
+
+  const maxSendable = isTokenSend ? params.balance : getMaxValue(params.balance, fee)
 
   return { balance: params.balance, fee, maxSendable }
 }
@@ -93,8 +113,10 @@ export const computeMaxSendFromBalance = async (
  * without requiring an instantiated vault. Vault-free equivalent of
  * `vault.getMaxSendAmount()`.
  *
- * Fetches the on-chain balance, estimates the send fee at full balance, and
- * returns `balance - fee` (or `0n` if fee exceeds balance).
+ * Fetches the on-chain balance and estimates the send fee at full balance.
+ * Native sends return `balance - fee` (or `0n` if fee exceeds balance). Token
+ * sends return the full token balance after verifying the native balance can
+ * cover the fee.
  *
  * `walletCore` is optional; when omitted, falls back to the SDK's globally-configured
  * `getWalletCore()` (used by MCP / vault-free callers). Wrappers with an injected
@@ -109,5 +131,9 @@ export const getMaxSendAmountFromKeys = async (
   // Receiver validation lives in computeMaxSendFromBalance (the canonical check
   // for all callers) — don't duplicate it here.
   const balance = await getCoinBalance(params.coin)
-  return computeMaxSendFromBalance(identity, { ...params, balance }, walletCore)
+  const nativeBalance =
+    isFeeCoin(params.coin) || isTerraClassicUstcCoin(params.coin)
+      ? undefined
+      : await getCoinBalance({ ...chainFeeCoin[params.coin.chain], address: params.coin.address })
+  return computeMaxSendFromBalance(identity, { ...params, balance, nativeBalance }, walletCore)
 }

@@ -33,9 +33,28 @@ export const escapeTerminalControls = (value: string): string =>
     return isTerminalControl ? `\\x${codePoint.toString(16).padStart(2, '0').toUpperCase()}` : character
   }).join('')
 
+/**
+ * A balance whose chain locks part of the total on-ledger (native XRP account
+ * reserve). The headline `formattedAmount`/`amount` is already the spendable
+ * number; without a label the locked reserve looks like missing funds.
+ */
+const hasLockedReserve = (balance: Balance): boolean =>
+  balance.reserveAmount !== undefined && balance.reserveAmount !== '0' && balance.totalAmount !== undefined
+
+/** Table Amount cell: mark reserve-carrying balances as spendable, others unchanged. */
+const formatAmountCell = (balance: Balance): string =>
+  hasLockedReserve(balance) ? `${balance.formattedAmount} (spendable)` : balance.formattedAmount
+
 export function displayBalance(chain: string, balance: Balance, _raw = false): void {
   printResult(chalk.cyan(`\n${chain} Balance:`))
-  printResult(`  Amount: ${balance.formattedAmount} ${balance.symbol}`)
+  printResult(
+    `  Amount: ${balance.formattedAmount} ${balance.symbol}${hasLockedReserve(balance) ? ' (spendable)' : ''}`
+  )
+  if (hasLockedReserve(balance) && balance.totalAmount !== undefined) {
+    const reserve = formatBalanceAmount(balance.reserveAmount!, balance.decimals)
+    const total = formatBalanceAmount(balance.totalAmount, balance.decimals)
+    printResult(`  Reserve: ${reserve} ${balance.symbol} locked (${total} ${balance.symbol} total on ledger)`)
+  }
   if (balance.fiatValue && balance.fiatCurrency) {
     printResult(`  Value:  ${balance.fiatValue.toFixed(2)} ${balance.fiatCurrency}`)
   }
@@ -46,7 +65,7 @@ export function displayBalancesTable(balances: Record<string, Balance>, _raw = f
 
   const tableData = Object.entries(balances).map(([chain, balance]) => ({
     Chain: chain,
-    Amount: balance.formattedAmount,
+    Amount: formatAmountCell(balance),
     Symbol: balance.symbol,
     Value:
       balance.fiatValue && balance.fiatCurrency ? `${balance.fiatValue.toFixed(2)} ${balance.fiatCurrency}` : 'N/A',
@@ -74,7 +93,7 @@ export function displayPortfolio(portfolio: PortfolioSummary, currency: FiatCurr
   const table = portfolio.chainBalances.flatMap(({ chain, balance, value, tokens }) => [
     {
       Chain: chain,
-      Amount: balance.formattedAmount,
+      Amount: formatAmountCell(balance),
       Symbol: balance.symbol,
       Value: value ? `${value.amount} ${value.currency.toUpperCase()}` : 'N/A',
     },
@@ -164,7 +183,8 @@ export function displayTransactionPreview(
   chain: Chain,
   memo?: string,
   destinationTag?: number,
-  gas?: GasInfo
+  gas?: GasInfo,
+  contractAddress?: string
 ): void {
   if (gas) {
     const bigIntReplacer = (_k: string, v: unknown) => (typeof v === 'bigint' ? v.toString() : v)
@@ -174,7 +194,7 @@ export function displayTransactionPreview(
   printResult(chalk.cyan('\nTransaction Preview:'))
   printResult(`  From:   ${fromAddress}`)
   printResult(`  To:     ${toAddress}`)
-  printResult(`  Amount: ${amount} ${symbol}`)
+  printResult(`  Amount: ${amount} ${symbol}${contractAddress ? ` (${escapeTerminalControls(contractAddress)})` : ''}`)
   printResult(`  Chain:  ${chain}`)
   if (memo) {
     printResult(`  Memo:   ${escapeTerminalControls(memo)}`)
@@ -243,7 +263,7 @@ export function setupVaultEvents(vault: VaultBase): void {
   // Balance updates
   vault.on('balanceUpdated', ({ chain, balance, tokenId }: any) => {
     const asset = tokenId ? `${balance.symbol} token` : balance.symbol
-    info(chalk.blue(`i Balance updated for ${chain} (${asset}): ${balance.formattedAmount}`))
+    info(chalk.blue(`i Balance updated for ${chain} (${asset}): ${formatAmountCell(balance)}`))
   })
 
   // Transaction broadcast
