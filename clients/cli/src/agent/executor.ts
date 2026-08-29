@@ -1963,9 +1963,11 @@ export class AgentExecutor {
         return
       }
 
-      // Verify there are actually pending txs in the mempool before using a higher nonce.
-      // If pending nonce == confirmed nonce, all intermediate txs were evicted.
-      if (pendingNonce !== null && pendingNonce === rpcNonce) {
+      // Verify there are actually pending txs in the mempool before using a
+      // higher local nonce. Compare with the original payload baseline: when
+      // pending RPC already advanced that baseline, clearing persisted local
+      // state could reuse the highest locally broadcast nonce after a restart.
+      if (pendingNonce !== null && pendingNonce === payloadNonce) {
         // No pending txs — local state is stale (txs were dropped from mempool)
         if (this.verbose)
           process.stderr.write(

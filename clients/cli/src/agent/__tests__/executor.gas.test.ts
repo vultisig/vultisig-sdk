@@ -303,6 +303,38 @@ describe('AgentExecutor raw EVM envelope preparation', () => {
     expect(nonceAccess.stateStore.recordEvmNonce).toHaveBeenCalledWith(Chain.Ethereum, 9n)
   })
 
+  it('preserves persisted local progress when pending RPC already advanced the server nonce', async () => {
+    const payload = createEvmPayload()
+    payload.blockchainSpecific.value.nonce = 7n
+    const vault = createSigningVault(payload)
+    const executor = new AgentExecutor(vault)
+    const nonceAccess = withNonceState(executor, 9n)
+    stubGasRefresh(executor)
+    stubPendingNonce(executor, 8n)
+
+    await (executor as unknown as EvmSigner).signEvmServerTx(
+      {
+        chain: Chain.Ethereum,
+        tx: {
+          data: '0x',
+          gasLimit: 21_000n,
+          maxFeePerGas: 3_000_000_000n,
+          maxPriorityFeePerGas: 1_000_000_000n,
+          nonce: 7n,
+          to: '0xrecipient',
+          value: 1n,
+        },
+      },
+      Chain.Ethereum,
+      {}
+    )
+
+    expect(payload.blockchainSpecific.value.nonce).toBe(9n)
+    expect(vault.sign).toHaveBeenCalledWith(expect.objectContaining({ transaction: payload }), {})
+    expect(nonceAccess.stateStore.clearEvmState).not.toHaveBeenCalled()
+    expect(nonceAccess.stateStore.recordEvmNonce).toHaveBeenCalledWith(Chain.Ethereum, 9n)
+  })
+
   it('keeps recent local state when gas refresh crosses the grace boundary before nonce reconciliation', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-08-29T00:00:00Z'))
