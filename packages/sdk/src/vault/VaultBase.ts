@@ -1259,6 +1259,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     memo?: string
     destinationTag?: number
     feeSettings?: FeeSettings
+    sendMaxAmount?: boolean
   }): Promise<KeysignPayload> {
     return this.transactionBuilder.prepareSendTx(params)
   }

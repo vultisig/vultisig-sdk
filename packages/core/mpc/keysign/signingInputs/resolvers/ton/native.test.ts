@@ -2,6 +2,7 @@ import { Buffer } from 'buffer'
 
 import { Chain } from '@vultisig/core-chain/Chain'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import { TW } from '@trustwallet/wallet-core'
 import { describe, expect, it } from 'vitest'
 
 import { buildNativeTonTransfer, buildNativeTonTransferFromMessage, tonAmountToBytes } from './native'
@@ -34,7 +35,6 @@ describe('TON signing input amount encoding', () => {
     const transfer = buildNativeTonTransfer({
       keysignPayload: buildPayload('1000000000'),
       bounceable: true,
-      sendMaxAmount: false,
     })
 
     expect(Buffer.from(transfer.amount).toString('hex')).toBe('3b9aca00')
@@ -45,7 +45,6 @@ describe('TON signing input amount encoding', () => {
       buildNativeTonTransfer({
         keysignPayload: buildPayload('-1'),
         bounceable: true,
-        sendMaxAmount: false,
       })
     ).toThrow('TON amount must be a non-negative integer')
   })
@@ -75,5 +74,36 @@ describe('TON signing input amount encoding', () => {
 
   it('rejects oversized decimal strings before bigint conversion', () => {
     expect(() => tonAmountToBytes('1'.repeat(10_000))).toThrow('TON amount exceeds the VarUInteger 16 maximum')
+  })
+})
+
+describe('TON MAX send', () => {
+  const { ATTACH_ALL_CONTRACT_BALANCE, PAY_FEES_SEPARATELY } = TW.TheOpenNetwork.Proto.SendMode
+
+  // `ATTACH_ALL_CONTRACT_BALANCE` hands the contract a sweep it resolves when the
+  // transaction executes, so the amount that moves is whatever the balance is then —
+  // not the number the user approved. A MAX send has to be an ordinary amount.
+  const maxSendAmount = '9990000000'
+
+  it('signs the amount it was given rather than a zero-amount sweep', () => {
+    const transfer = buildNativeTonTransfer({
+      keysignPayload: buildPayload(maxSendAmount),
+      bounceable: true,
+    })
+
+    expect(tonAmountToBytes(maxSendAmount).equals(Buffer.from(transfer.amount))).toBe(true)
+    // Asserted as bits rather than an exact mode so this keeps holding as other flags
+    // in the same field come and go.
+    expect(transfer.mode & PAY_FEES_SEPARATELY).toBe(PAY_FEES_SEPARATELY)
+    expect(transfer.mode & ATTACH_ALL_CONTRACT_BALANCE).toBe(0)
+  })
+
+  it('never signs a zero amount for a non-zero send', () => {
+    const transfer = buildNativeTonTransfer({
+      keysignPayload: buildPayload(maxSendAmount),
+      bounceable: true,
+    })
+
+    expect(Buffer.from(transfer.amount).toString('hex')).not.toBe('00')
   })
 })
