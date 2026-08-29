@@ -292,7 +292,7 @@ describe('prepareIbcTransfer', () => {
     // normaliseIbcChainId(); route discovery must agree, or callers get a
     // route that prepareIbcTransfer accepts but supportedIbcDestinationsFrom
     // reports as unsupported.
-    const byName = supportedIbcDestinationsFrom('Osmosis')
+    const byName = supportedIbcDestinationsFrom(' Osmosis ')
     const byChainId = supportedIbcDestinationsFrom('osmosis-1')
     expect(byName).toEqual(byChainId)
     expect(byName).toContain('cosmoshub-4')
