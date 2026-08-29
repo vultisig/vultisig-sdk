@@ -46,7 +46,7 @@ type BuildCoseSign1Input = {
 /**
  * Build and return the full COSE_Sign1 CBOR:
  *
- *     [protected: bstr, unprotected: {}, payload: bstr, signature: bstr]
+ *     [protected: bstr, unprotected: { "hashed": false }, payload: bstr, signature: bstr]
  *
  * Also returns the `protectedSerialized` bytes needed to compute the
  * Sig_structure before signing.
@@ -55,7 +55,7 @@ export const buildCoseSign1 = ({ addressBytes, payload, signature }: BuildCoseSi
   const protectedSerialized = buildProtectedHeaders(addressBytes)
   return cborArray([
     cborBytes(protectedSerialized),
-    cborMap([]), // empty unprotected headers
+    cborMap([[cborText('hashed'), Uint8Array.of(0xf4)]]), // `false` per RFC 8949 §3.3
     cborBytes(payload),
     cborBytes(signature),
   ])
