@@ -82,6 +82,14 @@ function stubGasRefresh(executor: AgentExecutor) {
   return vi.spyOn(executor as unknown as EvmGasAccess, 'patchEvmGas').mockResolvedValue(undefined)
 }
 
+function stubPendingNonce(executor: AgentExecutor, nonce: bigint | null) {
+  return vi.spyOn(executor as unknown as EvmNonceAccess, 'fetchEvmPendingNonce').mockResolvedValue(nonce)
+}
+
+function stubLatestNonce(executor: AgentExecutor, nonce: bigint | null) {
+  return vi.spyOn(executor as unknown as EvmNonceAccess, 'fetchEvmLatestNonce').mockResolvedValue(nonce)
+}
+
 function mockEvmFeeRpc(baseFee: bigint, priorityFee: bigint) {
   const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
     const request = JSON.parse(String(init?.body)) as { method: string }
@@ -98,14 +106,6 @@ function mockEvmFeeRpc(baseFee: bigint, priorityFee: bigint) {
   })
   vi.stubGlobal('fetch', fetchMock)
   return fetchMock
-}
-
-function stubPendingNonce(executor: AgentExecutor, nonce: bigint | null) {
-  return vi.spyOn(executor as unknown as EvmNonceAccess, 'fetchEvmPendingNonce').mockResolvedValue(nonce)
-}
-
-function stubLatestNonce(executor: AgentExecutor, nonce: bigint | null) {
-  return vi.spyOn(executor as unknown as EvmNonceAccess, 'fetchEvmLatestNonce').mockResolvedValue(nonce)
 }
 
 afterEach(() => {
@@ -209,6 +209,7 @@ describe('AgentExecutor raw EVM envelope preparation', () => {
     const executor = new AgentExecutor(vault)
     const nonceAccess = withNonceState(executor, 7n)
     stubGasRefresh(executor)
+    stubLatestNonce(executor, 7n)
     const fetchMock = vi.fn().mockResolvedValue({
       json: vi.fn().mockResolvedValue({
         jsonrpc: '2.0',
@@ -284,6 +285,7 @@ describe('AgentExecutor raw EVM envelope preparation', () => {
     const nonceAccess = withNonceState(executor, 9n)
     stubGasRefresh(executor)
     const fetchPendingNonce = stubPendingNonce(executor, 8n)
+    stubLatestNonce(executor, 7n)
 
     await (executor as unknown as EvmSigner).signEvmServerTx(
       {
@@ -374,6 +376,40 @@ describe('AgentExecutor raw EVM envelope preparation', () => {
     expect(nonceAccess.stateStore.recordEvmNonce).toHaveBeenCalledWith(Chain.Ethereum, 7n)
   })
 
+  it('raises the nonce floor when latest advances beyond the earlier local and payload state', async () => {
+    const payload = createEvmPayload()
+    payload.blockchainSpecific.value.nonce = 5n
+    const vault = createSigningVault(payload)
+    const executor = new AgentExecutor(vault)
+    const nonceAccess = withNonceState(executor, 7n)
+    stubGasRefresh(executor)
+    stubLatestNonce(executor, 8n)
+    stubPendingNonce(executor, 6n)
+
+    await (executor as unknown as EvmSigner).signEvmServerTx(
+      {
+        chain: Chain.Ethereum,
+        tx: {
+          data: '0x',
+          gasLimit: 21_000n,
+          maxFeePerGas: 3_000_000_000n,
+          maxPriorityFeePerGas: 1_000_000_000n,
+          nonce: 5n,
+          to: '0xrecipient',
+          value: 1n,
+        },
+      },
+      Chain.Ethereum,
+      {}
+    )
+
+    expect(payload.blockchainSpecific.value.nonce).toBe(8n)
+    expect(vault.sign).toHaveBeenCalledWith(expect.objectContaining({ transaction: payload }), {})
+    expect(nonceAccess.stateStore.getNextEvmNonce).toHaveBeenCalledWith(Chain.Ethereum, 8n)
+    expect(nonceAccess.stateStore.clearEvmState).not.toHaveBeenCalled()
+    expect(nonceAccess.stateStore.recordEvmNonce).toHaveBeenCalledWith(Chain.Ethereum, 8n)
+  })
+
   it('keeps recent local state when gas refresh crosses the grace boundary before nonce reconciliation', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-08-29T00:00:00Z'))
@@ -453,7 +489,7 @@ describe('AgentExecutor EVM pending nonce', () => {
     )
     expect(payload.blockchainSpecific.value.nonce).toBe(3n)
     expect(nonceAccess.stateStore.clearEvmState).not.toHaveBeenCalled()
-    expect(fetchMock).toHaveBeenCalledOnce()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
   it('keeps the existing on-chain fallback when a correct large-gap local state cannot be verified', async () => {
@@ -481,7 +517,7 @@ describe('AgentExecutor EVM pending nonce', () => {
     )
     expect(payload.blockchainSpecific.value.nonce).toBe(1n)
     expect(nonceAccess.stateStore.clearEvmState).toHaveBeenCalledWith(Chain.Ethereum)
-    expect(fetchMock).toHaveBeenCalledOnce()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
   it('returns null for a JSON-RPC error delivered over HTTP 200', async () => {
@@ -614,7 +650,7 @@ describe('AgentExecutor EVM pending nonce', () => {
     expect(payload.blockchainSpecific.value.nonce).toBe(5n)
     expect(nonceAccess.stateStore.clearEvmState).not.toHaveBeenCalled()
     await expect(nonceAccess.fetchEvmPendingNonce(Chain.Ethereum)).resolves.toBeNull()
-    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 })
 

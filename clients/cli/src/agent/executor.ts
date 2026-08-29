@@ -1929,8 +1929,16 @@ export class AgentExecutor {
     const hasRecentBroadcast = recentBroadcastAge < 30_000
 
     const payloadNonce = bs.value.nonce as bigint
+    // Read latest before pending whenever stale local-state detection is needed.
+    // The later pending snapshot is then the freshest nonce floor and should be
+    // >= latest on a consistent RPC view. Recent local broadcasts skip latest
+    // because their grace period wins regardless of mempool visibility.
+    const latestNonce = this.stateStore && !hasRecentBroadcast ? await this.fetchEvmLatestNonce(chain) : null
     const pendingNonce = await this.fetchEvmPendingNonce(chain)
-    const rpcNonce = pendingNonce !== null && pendingNonce > payloadNonce ? pendingNonce : payloadNonce
+    const rpcNonce = [payloadNonce, latestNonce, pendingNonce].reduce<bigint>(
+      (highest, nonce) => (nonce !== null && nonce > highest ? nonce : highest),
+      payloadNonce
+    )
 
     if (rpcNonce !== payloadNonce) {
       bs.value.nonce = rpcNonce
@@ -1966,9 +1974,9 @@ export class AgentExecutor {
       // Verify there are actually pending txs in the mempool before using a
       // higher local nonce. The explicit server nonce is not a reliable
       // confirmed-state baseline, so compare pending against a fresh latest
-      // lookup. This preserves local progress when pending advanced the server
-      // nonce while still clearing a stale local gap when pending === latest.
-      const latestNonce = pendingNonce === null ? null : await this.fetchEvmLatestNonce(chain)
+      // lookup. Reading latest first and pending second preserves local progress
+      // when pending advanced the server nonce while still clearing a stale
+      // local gap when pending === latest.
       if (latestNonce !== null && pendingNonce === latestNonce) {
         // No pending txs — local state is stale (txs were dropped from mempool)
         if (this.verbose)
@@ -1982,7 +1990,7 @@ export class AgentExecutor {
       // Safety: if the gap is large (>3) and we couldn't verify pending txs,
       // assume local state is stale rather than risk a large nonce gap
       const nonceGap = nextNonce - rpcNonce
-      const pendingStateVerified = pendingNonce !== null && latestNonce !== null
+      const pendingStateVerified = pendingNonce !== null && latestNonce !== null && pendingNonce >= latestNonce
       if (!pendingStateVerified && nonceGap > 3n) {
         process.stderr.write(
           `[nonce] Warning: pending nonce was not verified for ${chain}; signing will continue with on-chain nonce ${rpcNonce} because the local gap is ${nonceGap}\n`
