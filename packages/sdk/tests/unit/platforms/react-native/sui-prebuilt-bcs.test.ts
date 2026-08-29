@@ -21,9 +21,9 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import {
-  __testing__,
   assertSuiPrebuiltSenderMatchesVault,
   extractSuiPrebuiltSender,
+  testing,
 } from '../../../../src/platforms/react-native/chains/sui/prebuiltBcs'
 
 function hexToBytes(hex: string): Uint8Array {
@@ -153,7 +153,7 @@ describe('assertSuiPrebuiltSenderMatchesVault', () => {
 })
 
 describe('readUleb128 32-bit range', () => {
-  const { BcsCursor } = __testing__
+  const { BcsCursor } = testing
 
   // A bitwise accumulator (`result |= (byte & 0x7f) << shift`) coerces to
   // int32, so these SILENTLY TRUNCATE instead of throwing: a length prefix
