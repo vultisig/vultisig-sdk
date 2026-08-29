@@ -676,7 +676,10 @@ describe('tron / WalletCore cross-check (fund-safety net)', () => {
 
   const SENDER_PRIVATE_KEY = new Uint8Array(32).fill(7)
   const RECIPIENT_PRIVATE_KEY = new Uint8Array(32).fill(8)
+  const TOKEN_PRIVATE_KEY = new Uint8Array(32).fill(9)
   const AMOUNT = 250_000_000n
+  const TOKEN_AMOUNT = 1_000_000n
+  const FEE_LIMIT = 100_000_000n
   const EXPIRATION = 1_700_000_060_000n
   const TIMESTAMP = 1_700_000_000_000n
 
@@ -726,6 +729,55 @@ describe('tron / WalletCore cross-check (fund-safety net)', () => {
     return { output, sender, recipient }
   }
 
+  function buildWalletCoreTrc20SignedOutput() {
+    const senderPrivateKey = walletCore.PrivateKey.createWithData(SENDER_PRIVATE_KEY)
+    const sender = walletCore.AnyAddress.createWithPublicKey(
+      senderPrivateKey.getPublicKeySecp256k1(false),
+      walletCore.CoinType.tron
+    ).description()
+    const recipient = walletCore.AnyAddress.createWithPublicKey(
+      walletCore.PrivateKey.createWithData(RECIPIENT_PRIVATE_KEY).getPublicKeySecp256k1(false),
+      walletCore.CoinType.tron
+    ).description()
+    const tokenAddress = walletCore.AnyAddress.createWithPublicKey(
+      walletCore.PrivateKey.createWithData(TOKEN_PRIVATE_KEY).getPublicKeySecp256k1(false),
+      walletCore.CoinType.tron
+    ).description()
+
+    const signingInput = TW.Tron.Proto.SigningInput.create({
+      transaction: TW.Tron.Proto.Transaction.create({
+        triggerSmartContract: TW.Tron.Proto.TriggerSmartContract.create({
+          ownerAddress: sender,
+          contractAddress: tokenAddress,
+          data: buildTrc20CallData(recipient, TOKEN_AMOUNT),
+        }),
+        timestamp: Long.fromString(TIMESTAMP.toString()),
+        blockHeader: TW.Tron.Proto.BlockHeader.create({
+          timestamp: Long.fromString(TIMESTAMP.toString()),
+          number: Long.fromNumber(56_000_000),
+          version: 31,
+          txTrieRoot: new Uint8Array(32).fill(0x01),
+          parentHash: new Uint8Array(32).fill(0x02),
+          witnessAddress: new Uint8Array(21).fill(0x03),
+        }),
+        expiration: Long.fromString(EXPIRATION.toString()),
+        feeLimit: Long.fromString(FEE_LIMIT.toString()),
+      }),
+    })
+
+    const output = TW.Tron.Proto.SigningOutput.decode(
+      walletCore.AnySigner.sign(
+        TW.Tron.Proto.SigningInput.encode({
+          ...signingInput,
+          privateKey: senderPrivateKey.data(),
+        }).finish(),
+        walletCore.CoinType.tron
+      )
+    )
+
+    return { output, sender, recipient, tokenAddress }
+  }
+
   it("a THORChain-swap-memo'd native TRX send matches WalletCore's raw_data byte-for-byte", () => {
     const memo = 'SWAP:THOR.RUNE:thor1zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz:0'
     const { output, sender, recipient } = buildWalletCoreSignedOutput(memo)
@@ -764,5 +816,25 @@ describe('tron / WalletCore cross-check (fund-safety net)', () => {
     })
 
     expect(ours.unsignedRawHex).toBe(walletCoreRawDataHex)
+  })
+
+  it('a TRC-20 transfer matches WalletCore through timestamp and fee_limit field ordering', () => {
+    const { output, sender, recipient, tokenAddress } = buildWalletCoreTrc20SignedOutput()
+    const walletCoreRawDataHex = (JSON.parse(output.json) as { raw_data_hex: string }).raw_data_hex
+
+    const ours = buildTrc20TransferTx({
+      from: sender,
+      to: recipient,
+      tokenAddress,
+      amount: TOKEN_AMOUNT,
+      feeLimit: FEE_LIMIT,
+      refBlockBytes: output.refBlockBytes,
+      refBlockHash: output.refBlockHash,
+      expiration: EXPIRATION,
+      timestamp: TIMESTAMP,
+    })
+
+    expect(ours.unsignedRawHex).toBe(walletCoreRawDataHex)
+    expect(ours.signingHashHex).toBe(bytesToHex(output.id))
   })
 })

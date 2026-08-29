@@ -244,7 +244,9 @@ function buildTriggerSmartContract(from: string, tokenAddress: string, callData:
   return concatProtoBytes(
     fieldBytes(1, tronAddressToBytes(from)),
     fieldBytes(2, tronAddressToBytes(tokenAddress)),
-    fieldInt64(3, 0n), // call_value — must be 0 for TRC-20 transfers
+    // call_value is a proto3 scalar. Zero is its default and WalletCore omits
+    // the field entirely; writing an explicit field-3 zero changes the raw
+    // bytes and signing hash even though the semantic value is unchanged.
     fieldBytes(4, callData)
   )
 }
