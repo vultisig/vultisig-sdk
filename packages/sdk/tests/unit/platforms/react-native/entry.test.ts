@@ -1,7 +1,7 @@
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
 import { AuthInfo, SignDoc, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
-import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { beforeAll, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
 import * as sdkRn from '../../../../src/platforms/react-native/index'
 import { cosmosTxFeeGasParityCases } from '../../../fixtures/cosmosTxFeeGasParity'
@@ -510,6 +510,7 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
   it('exports the Jupiter config constants + lazy swap builder from the RN entry, matching the root SDK values', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
     const root = await import('../../../../src/index')
+    const jupiter = await import('../../../../src/tools/swap/jupiter')
 
     expect(rn.SOL_NATIVE_MINT).toBe(root.SOL_NATIVE_MINT)
     expect(rn.JUPITER_AFFILIATE_FEE_OWNER).toBe(root.JUPITER_AFFILIATE_FEE_OWNER)
@@ -521,9 +522,19 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     // The builder/resolver are lazy (`await import('../../tools/swap/jupiter')`)
     // so RN/Metro doesn't eagerly bundle `@solana/web3.js`; calling them still
     // reaches the same underlying implementation as the root SDK export.
-    expect(rn.buildJupiterSwapTx).toBeTypeOf('function')
-    expect(rn.resolveJupiterFeeAccount).toBeTypeOf('function')
-    await expect(rn.buildJupiterSwapTx({} as never)).rejects.toThrow()
+    expectTypeOf(rn.buildJupiterSwapTx).toEqualTypeOf<typeof jupiter.buildJupiterSwapTx>()
+    expectTypeOf(rn.resolveJupiterFeeAccount).toEqualTypeOf<typeof jupiter.resolveJupiterFeeAccount>()
+
+    await expect(
+      rn.buildJupiterSwapTx({
+        userPublicKey: 'wrapper-argument-forwarding',
+        amountBaseUnits: 0n,
+      })
+    ).rejects.toThrow('Jupiter swap amount must be greater than zero')
+
+    await expect(rn.resolveJupiterFeeAccount(rn.SOL_NATIVE_MINT)).resolves.toEqual(
+      await jupiter.resolveJupiterFeeAccount(rn.SOL_NATIVE_MINT)
+    )
   })
 
   it('exports the RN vault-backup helpers and constants from the RN entry', async () => {

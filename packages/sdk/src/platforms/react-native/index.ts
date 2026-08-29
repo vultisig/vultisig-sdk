@@ -549,13 +549,17 @@ export type { JupiterAffiliateConfig } from '@vultisig/core-chain/swap/general/j
 // `await import(...)` so RN/Metro doesn't eagerly bundle it (same rationale
 // as `buildSplTransfer` above). Without this, RN consumers (Station) had no
 // canonical import path for the SDK-owned same-chain Solana swap builder.
-export async function buildJupiterSwapTx(...args: unknown[]) {
+export async function buildJupiterSwapTx(
+  ...args: Parameters<typeof import('../../tools/swap/jupiter').buildJupiterSwapTx>
+) {
   const mod = await import('../../tools/swap/jupiter')
-  return mod.buildJupiterSwapTx(...(args as Parameters<typeof mod.buildJupiterSwapTx>))
+  return mod.buildJupiterSwapTx(...args)
 }
-export async function resolveJupiterFeeAccount(...args: unknown[]) {
+export async function resolveJupiterFeeAccount(
+  ...args: Parameters<typeof import('../../tools/swap/jupiter').resolveJupiterFeeAccount>
+) {
   const mod = await import('../../tools/swap/jupiter')
-  return mod.resolveJupiterFeeAccount(...(args as Parameters<typeof mod.resolveJupiterFeeAccount>))
+  return mod.resolveJupiterFeeAccount(...args)
 }
 
 // EVM utilities (viem-backed — requires app to install `viem` as a peer dep)
