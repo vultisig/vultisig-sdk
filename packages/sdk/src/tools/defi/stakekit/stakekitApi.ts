@@ -8,8 +8,8 @@
 // Ported from mcp-ts/src/lib/yield-api.ts.
 // Builds UNSIGNED calldata only — never signs, never broadcasts.
 
-import { sha256 } from '@noble/hashes/sha2'
-import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils'
+import { sha256 } from '@noble/hashes/sha2.js'
+import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 // --- Module constants (NOT process.env) ---
