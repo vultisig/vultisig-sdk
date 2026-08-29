@@ -4,4 +4,4 @@ export type {
   ThreeJaneTranche,
   ThreeJaneTxStep,
 } from './buildSupplyUsdc'
-export { buildThreeJaneSupplyUsdc, parseUsdcAmount, THREE_JANE_ADDRESSES } from './buildSupplyUsdc'
+export { buildThreeJaneSupplyUsdc, formatUsdc, parseUsdcAmount, THREE_JANE_ADDRESSES } from './buildSupplyUsdc'

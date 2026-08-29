@@ -158,6 +158,7 @@ describe('findSwapQuote parallel selection', () => {
     expect(quote.safetyFingerprint).toBe(
       getSwapQuoteSafetyFingerprint({
         ...evmSameChainCoins,
+        recipient: evmSameChainCoins.to.address,
         requestedAmount,
         expiresAt: quote.expiresAt as number,
         quote: quote.quote,
@@ -197,6 +198,7 @@ describe('findSwapQuote parallel selection', () => {
       getSwapQuoteSafetyFingerprint({
         from: expectedFrom,
         to: expectedTo,
+        recipient: expectedTo.address,
         requestedAmount: input.amount,
         expiresAt: quote.expiresAt as number,
         quote: quote.quote,
@@ -206,6 +208,7 @@ describe('findSwapQuote parallel selection', () => {
       getSwapQuoteSafetyFingerprint({
         from: input.from,
         to: input.to,
+        recipient: expectedTo.address,
         requestedAmount: input.amount,
         expiresAt: quote.expiresAt as number,
         quote: quote.quote,
