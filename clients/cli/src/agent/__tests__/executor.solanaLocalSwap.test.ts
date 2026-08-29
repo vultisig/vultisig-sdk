@@ -52,7 +52,6 @@ describe('AgentExecutor — buildAndSignSolanaSwapLocally amount handling', () =
       from_chain: 'Solana',
       to_chain: 'Solana',
       amount: '1500000000', // 1.5 SOL in lamports
-      from_decimals: 9,
       from_address: undefined,
       to_address: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
     }
@@ -61,12 +60,11 @@ describe('AgentExecutor — buildAndSignSolanaSwapLocally amount handling', () =
     // dispatch (chain==='Solana' && (swap_tx || provider)) needs a much
     // larger fixture unrelated to what this regression pins: the amount
     // resolution inside this specific builder.
-    const result = await (executor as unknown as { buildAndSignSolanaSwapLocally: (d: unknown) => Promise<unknown> })
-      .buildAndSignSolanaSwapLocally(serverTxData)
+    const result = await (
+      executor as unknown as { buildAndSignSolanaSwapLocally: (d: unknown) => Promise<unknown> }
+    ).buildAndSignSolanaSwapLocally(serverTxData)
 
-    expect(vault.getSwapQuote).toHaveBeenCalledWith(
-      expect.objectContaining({ amountBaseUnits: 1_500_000_000n })
-    )
+    expect(vault.getSwapQuote).toHaveBeenCalledWith(expect.objectContaining({ amountBaseUnits: 1_500_000_000n }))
     expect(vault.getSwapQuote).toHaveBeenCalledWith(expect.not.objectContaining({ amount: expect.anything() }))
     expect(vault.prepareSwapTx).toHaveBeenCalledWith(
       expect.objectContaining({ amountBaseUnits: 1_500_000_000n, autoApprove: true })
@@ -82,12 +80,12 @@ describe('AgentExecutor — buildAndSignSolanaSwapLocally amount handling', () =
       from_chain: 'Solana',
       to_chain: 'Solana',
       amount: 'not-a-number',
-      from_decimals: 9,
     }
 
     await expect(
-      (executor as unknown as { buildAndSignSolanaSwapLocally: (d: unknown) => Promise<unknown> })
-        .buildAndSignSolanaSwapLocally(serverTxData)
+      (
+        executor as unknown as { buildAndSignSolanaSwapLocally: (d: unknown) => Promise<unknown> }
+      ).buildAndSignSolanaSwapLocally(serverTxData)
     ).rejects.toThrow(/Invalid amount in tx_ready data for local Solana swap build/)
     expect(vault.getSwapQuote).not.toHaveBeenCalled()
   })

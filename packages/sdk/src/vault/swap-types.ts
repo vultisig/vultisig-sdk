@@ -237,6 +237,9 @@ const assertExactlyOneAmountInput = (params: SwapAmountInput): void => {
       'Provide exactly one of `amount` (human-readable) or `amountBaseUnits` (source coin smallest units).'
     )
   }
+  if (hasBaseUnits && params.amountBaseUnits! <= 0n) {
+    throw new VaultError(VaultErrorCode.InvalidAmount, '`amountBaseUnits` must be greater than zero.')
+  }
 }
 
 /**
