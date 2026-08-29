@@ -55,6 +55,12 @@ export const getTonChainSpecific: GetChainSpecificResolver<'tonSpecific'> = asyn
     // A swap deposit lands on a router or escrow contract, and there are ordinary
     // reasons for such a contract to reject: an expired quote, a paused pool, a
     // route that closed between quote and broadcast. Those have to come back.
+    //
+    // Checked before the destination rules on purpose: a swap deposit is bounceable
+    // because of what the transfer IS, not because of what its destination field
+    // happens to spell. A route that reached here always carries a destination —
+    // `buildTransferTx` rejects a quote without a target address — so this is about
+    // keeping the reason straight, not about tolerating a missing one.
     if (getKeysignSwapPayload(keysignPayload)) {
       return true
     }
