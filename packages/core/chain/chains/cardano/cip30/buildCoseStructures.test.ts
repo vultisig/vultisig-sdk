@@ -69,11 +69,12 @@ describe('buildProtectedHeaderBytes / buildSigStructure / buildCoseSign1', () =>
   it('buildCoseSign1 embeds the SAME protected-header bytes buildProtectedHeaderBytes returns (Sig_structure/COSE_Sign1 consistency)', () => {
     const result = buildCoseSign1({ addressBytes, payload, signature })
 
-    // COSE_Sign1 = [protected: bstr, unprotected: {}, payload: bstr, signature: bstr]
+    // COSE_Sign1 = [protected: bstr, unprotected: { "hashed": false }, payload: bstr, signature: bstr]
     // Independently hand-derived golden encoding: array(4), bstr(16) protected
-    // headers, map(0), bstr(4) payload, bstr(64) signature.
+    // headers, map(1) containing tstr(6) "hashed": false, bstr(4) payload,
+    // bstr(64) signature.
     const expectedHex =
-      '8450a2012767616464726573734401aabbcca044deadbeef5840' +
+      '8450a2012767616464726573734401aabbcca166686173686564f444deadbeef5840' +
       '4242424242424242424242424242424242424242424242424242424242424242' +
       '4242424242424242424242424242424242424242424242424242424242424242'
 
