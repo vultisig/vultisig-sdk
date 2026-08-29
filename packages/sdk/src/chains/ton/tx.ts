@@ -16,7 +16,7 @@
  * initialize WalletCore WASM and never reaches `@ton/crypto-primitives`, so
  * the RN builder path does not need the `crypto.subtle` polyfill.
  */
-import { Address, beginCell, Cell, internal, SendMode, storeMessageRelaxed, type Slice } from '@ton/core'
+import { Address, beginCell, Cell, internal, SendMode, type Slice, storeMessageRelaxed } from '@ton/core'
 import { TW } from '@trustwallet/wallet-core'
 
 import { buildV4R2Wallet, storeStateInitCell, TON_V4R2_SUB_WALLET_ID } from './walletV4R2'
