@@ -192,6 +192,34 @@ type SkipMsgsDirectResponse = {
 
 /* ── helpers ── */
 
+type ParsedMsgTransferMemo = { ok: true; memo: string } | { ok: false; reason: string }
+
+/**
+ * Decode the protobuf-JSON body for an ICS-20 MsgTransfer. Proto3 JSON may
+ * omit the scalar `memo` field when it is the default empty string, but when
+ * present it must be a string. All other body shapes are malformed envelopes.
+ */
+function parseMsgTransferMemo(body: unknown): ParsedMsgTransferMemo {
+  if (typeof body !== 'string') return { ok: false, reason: 'msg body is not a string' }
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(body)
+  } catch {
+    return { ok: false, reason: 'msg body is not valid JSON' }
+  }
+
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return { ok: false, reason: 'msg body is not a JSON object' }
+  }
+
+  const memo = (parsed as { memo?: unknown }).memo
+  if (memo === undefined) return { ok: true, memo: '' }
+  if (typeof memo !== 'string') return { ok: false, reason: 'memo is not a string' }
+
+  return { ok: true, memo }
+}
+
 function isLuncRoute(sourceChainId: string, destChainId: string): boolean {
   return sourceChainId === COLUMBUS_5 || destChainId === COLUMBUS_5
 }
@@ -267,14 +295,10 @@ function getCosmosLegMemoInfos(
     if (Array.isArray(cosmosTx.msgs)) {
       for (const msg of cosmosTx.msgs) {
         if (!msg || msg.msg_type_url !== CosmosMsgType.MSG_TRANSFER_URL) continue
-        if (typeof msg.msg !== 'string') continue
-        let parsed: { memo?: unknown }
-        try {
-          parsed = JSON.parse(msg.msg) as { memo?: unknown }
-        } catch {
-          continue
-        }
-        if (typeof parsed.memo !== 'string') continue
+        const parsed = parseMsgTransferMemo(msg.msg)
+        // validateTxEnvelopes reports malformed bodies as a structured error;
+        // this earlier cap scan must remain total until that validation runs.
+        if (!parsed.ok) continue
         const bytes = encoder.encode(parsed.memo).length
         if (bytes > packetMemoBytes) packetMemoBytes = bytes
       }
@@ -1098,7 +1122,10 @@ function validateTxEnvelopes(txs: unknown[], msgsChainPath: string[]): SkipSwapE
         tx_index: i,
       }
     }
-    const tx = txRaw as { evm_tx?: { chain_id?: unknown } | null; cosmos_tx?: { chain_id?: unknown } | null }
+    const tx = txRaw as {
+      evm_tx?: { chain_id?: unknown } | null
+      cosmos_tx?: { chain_id?: unknown; msgs?: unknown } | null
+    }
     const hasEvm = tx.evm_tx !== undefined && tx.evm_tx !== null
     const hasCosmos = tx.cosmos_tx !== undefined && tx.cosmos_tx !== null
     if (hasEvm === hasCosmos) {
@@ -1123,6 +1150,41 @@ function validateTxEnvelopes(txs: unknown[], msgsChainPath: string[]): SkipSwapE
         tx_index: i,
         tx_chain_id: txChainRaw,
         canonical_chain_path: msgsChainPath,
+      }
+    }
+    if (hasCosmos) {
+      const cosmosMsgs = tx.cosmos_tx?.msgs
+      if (!Array.isArray(cosmosMsgs)) {
+        return {
+          error: 'skip_msgs_tx_malformed',
+          message: `Skip /msgs_direct tx ${i} cosmos_tx.msgs is not an array — refusing to sign a malformed envelope.`,
+          tx_index: i,
+        }
+      }
+      for (let msgIndex = 0; msgIndex < cosmosMsgs.length; msgIndex++) {
+        const msgRaw = cosmosMsgs[msgIndex]
+        if (msgRaw == null || typeof msgRaw !== 'object' || Array.isArray(msgRaw)) {
+          return {
+            error: 'skip_msgs_tx_malformed',
+            message: `Skip /msgs_direct tx ${i} msg ${msgIndex} is not an object — refusing to sign a malformed envelope.`,
+            tx_index: i,
+            msg_index: msgIndex,
+          }
+        }
+        const msg = msgRaw as { msg_type_url?: unknown; msg?: unknown }
+        if (msg.msg_type_url !== CosmosMsgType.MSG_TRANSFER_URL) continue
+
+        const parsed = parseMsgTransferMemo(msg.msg)
+        if (!parsed.ok) {
+          return {
+            error: 'skip_msgs_tx_malformed',
+            message:
+              `Skip /msgs_direct tx ${i} MsgTransfer ${msgIndex} ${parsed.reason} — ` +
+              'refusing to sign a malformed envelope.',
+            tx_index: i,
+            msg_index: msgIndex,
+          }
+        }
       }
     }
   }

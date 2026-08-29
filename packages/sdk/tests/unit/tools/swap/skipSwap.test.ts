@@ -545,10 +545,34 @@ describe('ICS-20 packet-memo cap (abts#2458)', () => {
     expect(out.ok).toBe(true)
   })
 
-  it('does not crash on a MsgTransfer whose msg body is not valid JSON', async () => {
+  it('rejects a MsgTransfer whose msg body is not valid JSON as a malformed envelope', async () => {
     mockFetchSequence(packetMemoLeg([{ msg: '{not json', msg_type_url: msgTransfer('').msg_type_url }]))
     const out = await runSkipSwap(packetArgs)
-    expect(out.ok).toBe(true)
+    expect(out.ok).toBe(false)
+    if (!out.ok) expect(out.envelope.error).toBe('skip_msgs_tx_malformed')
+  })
+
+  it('rejects a MsgTransfer whose valid JSON body is null as a malformed envelope', async () => {
+    mockFetchSequence(packetMemoLeg([{ msg: 'null', msg_type_url: msgTransfer('').msg_type_url }]))
+    const out = await runSkipSwap(packetArgs)
+    expect(out.ok).toBe(false)
+    if (!out.ok) expect(out.envelope.error).toBe('skip_msgs_tx_malformed')
+  })
+
+  it('accepts an omitted default memo but rejects a present non-string memo', async () => {
+    mockFetchSequence(
+      packetMemoLeg([
+        { msg: JSON.stringify({ receiver: packetArgs.toAddress }), msg_type_url: msgTransfer('').msg_type_url },
+      ])
+    )
+    expect((await runSkipSwap(packetArgs)).ok).toBe(true)
+
+    mockFetchSequence(
+      packetMemoLeg([{ msg: JSON.stringify({ memo: null }), msg_type_url: msgTransfer('').msg_type_url }])
+    )
+    const out = await runSkipSwap(packetArgs)
+    expect(out.ok).toBe(false)
+    if (!out.ok) expect(out.envelope.error).toBe('skip_msgs_tx_malformed')
   })
 
   it('takes the largest packet memo when a leg carries several MsgTransfers', async () => {
