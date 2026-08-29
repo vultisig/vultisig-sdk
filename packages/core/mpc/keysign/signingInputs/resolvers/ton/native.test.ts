@@ -2,8 +2,10 @@ import { Buffer } from 'buffer'
 
 import { Chain } from '@vultisig/core-chain/Chain'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import { TW, WalletCore } from '@trustwallet/wallet-core'
 import { describe, expect, it } from 'vitest'
 
+import { buildJettonTransfer } from './jetton'
 import { buildNativeTonTransfer, buildNativeTonTransferFromMessage, tonAmountToBytes } from './native'
 
 const TON_ADDRESS = 'EQAtiFQ15MZBgpAGwD1jfJm6maz5otBOPefyw9Wc3MVmMgzp'
@@ -75,5 +77,47 @@ describe('TON signing input amount encoding', () => {
 
   it('rejects oversized decimal strings before bigint conversion', () => {
     expect(() => tonAmountToBytes('1'.repeat(10_000))).toThrow('TON amount exceeds the VarUInteger 16 maximum')
+  })
+})
+
+describe('TON send mode', () => {
+  const { ATTACH_ALL_CONTRACT_BALANCE, IGNORE_ACTION_PHASE_ERRORS, PAY_FEES_SEPARATELY } =
+    TW.TheOpenNetwork.Proto.SendMode
+
+  // A wallet contract signed with IGNORE_ACTION_PHASE_ERRORS skips an outgoing transfer it
+  // cannot carry out instead of failing: the transaction lands un-aborted with the seqno
+  // consumed and nothing moved, and no status check can tell that apart from a real send.
+  // These modes are also part of the signing preimage, so a change here silently breaks
+  // keysign against any co-signer still on the previous mode.
+  const transfers = {
+    'a native send': () =>
+      buildNativeTonTransfer({ keysignPayload: buildPayload('1000000000'), bounceable: true, sendMaxAmount: false }),
+    'a MAX native send': () =>
+      buildNativeTonTransfer({ keysignPayload: buildPayload('0'), bounceable: true, sendMaxAmount: true }),
+    'a dApp signTon message': () =>
+      buildNativeTonTransferFromMessage({ to: TON_ADDRESS, amount: '1000000000', bounceable: true }),
+    'a Jetton send': () =>
+      buildJettonTransfer({
+        keysignPayload: buildPayload('1000'),
+        walletCore: {
+          TONAddressConverter: { toUserFriendly: () => TON_ADDRESS },
+        } as unknown as WalletCore,
+        jettonAddress: TON_ADDRESS,
+        isActiveDestination: true,
+      }),
+  }
+
+  it.each(Object.entries(transfers))('never ignores action-phase errors on %s', (_, buildTransfer) => {
+    expect(buildTransfer().mode & IGNORE_ACTION_PHASE_ERRORS).toBe(0)
+  })
+
+  it('pays fees separately on a fixed-amount send', () => {
+    expect(transfers['a native send']().mode).toBe(PAY_FEES_SEPARATELY)
+    expect(transfers['a dApp signTon message']().mode).toBe(PAY_FEES_SEPARATELY)
+    expect(transfers['a Jetton send']().mode).toBe(PAY_FEES_SEPARATELY)
+  })
+
+  it('sweeps the contract balance on a MAX send', () => {
+    expect(transfers['a MAX native send']().mode).toBe(ATTACH_ALL_CONTRACT_BALANCE)
   })
 })

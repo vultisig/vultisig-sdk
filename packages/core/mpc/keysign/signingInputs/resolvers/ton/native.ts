@@ -66,16 +66,34 @@ export const tonAmountToBytes = (amount: string | bigint): Buffer => {
   return Buffer.from(numberToEvenHex(value), 'hex')
 }
 
+/**
+ * Send mode for every app-initiated TON transfer.
+ *
+ * `PAY_FEES_SEPARATELY` (+1) charges forwarding fees to the wallet balance instead of
+ * deducting them from the transferred value, so the recipient gets the amount we showed.
+ *
+ * `IGNORE_ACTION_PHASE_ERRORS` (+2) is deliberately absent. With it set, a wallet contract
+ * that cannot carry out its outgoing transfer skips the action instead of failing: the
+ * transaction lands un-aborted with the seqno consumed and nothing moved, which on chain is
+ * indistinguishable from a successful send. Without it the transfer fails visibly and the
+ * user's funds stay put.
+ *
+ * The mode is part of the signing preimage: every co-signing device derives the hash from
+ * this payload, so changing it here breaks keysign with any client that has not changed too.
+ */
+export const tonSendMode = TW.TheOpenNetwork.Proto.SendMode.PAY_FEES_SEPARATELY
+
+/**
+ * Builds the single WalletCore transfer for an app-initiated native TON send.
+ * A MAX send switches to `ATTACH_ALL_CONTRACT_BALANCE` and signs `amount = 0`,
+ * letting the contract sweep whatever remains at execution time.
+ */
 export const buildNativeTonTransfer = ({
   keysignPayload,
   bounceable,
   sendMaxAmount,
 }: BuildNativeTonTransferInput): TW.TheOpenNetwork.Proto.Transfer => {
-  const mode =
-    (sendMaxAmount
-      ? TW.TheOpenNetwork.Proto.SendMode.ATTACH_ALL_CONTRACT_BALANCE
-      : TW.TheOpenNetwork.Proto.SendMode.PAY_FEES_SEPARATELY) |
-    TW.TheOpenNetwork.Proto.SendMode.IGNORE_ACTION_PHASE_ERRORS
+  const mode = sendMaxAmount ? TW.TheOpenNetwork.Proto.SendMode.ATTACH_ALL_CONTRACT_BALANCE : tonSendMode
 
   const amount = sendMaxAmount ? 0n : keysignPayload.toAmount
 
@@ -88,6 +106,10 @@ export const buildNativeTonTransfer = ({
   })
 }
 
+/**
+ * Builds a transfer for one message of a dApp-supplied `signTon` request. The
+ * message carries its own payload/stateInit, so no comment is attached here.
+ */
 export const buildNativeTonTransferFromMessage = ({
   to,
   amount,
@@ -95,9 +117,6 @@ export const buildNativeTonTransferFromMessage = ({
   stateInit,
   bounceable,
 }: BuildNativeTonTransferFromMessageInput): TW.TheOpenNetwork.Proto.Transfer => {
-  const mode =
-    TW.TheOpenNetwork.Proto.SendMode.PAY_FEES_SEPARATELY | TW.TheOpenNetwork.Proto.SendMode.IGNORE_ACTION_PHASE_ERRORS
-
   return TW.TheOpenNetwork.Proto.Transfer.create({
     dest: to,
     amount: tonAmountToBytes(amount),
@@ -105,6 +124,6 @@ export const buildNativeTonTransferFromMessage = ({
     comment: '',
     customPayload: payload || undefined,
     stateInit: stateInit || undefined,
-    mode,
+    mode: tonSendMode,
   })
 }

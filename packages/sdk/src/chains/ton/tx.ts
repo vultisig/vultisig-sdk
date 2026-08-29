@@ -140,8 +140,19 @@ export type TonWalletCoreBackedTxBuilderResult = TonTxBuilderResult & {
   walletCoreTxInputData: Uint8Array
 }
 
-const walletCoreTonSendMode =
-  TW.TheOpenNetwork.Proto.SendMode.PAY_FEES_SEPARATELY | TW.TheOpenNetwork.Proto.SendMode.IGNORE_ACTION_PHASE_ERRORS
+/**
+ * Send mode for every app-initiated TON transfer, in WalletCore's enum.
+ *
+ * `IGNORE_ACTION_PHASE_ERRORS` (+2) is deliberately absent: with it set, a wallet contract
+ * that cannot carry out its outgoing transfer skips the action rather than failing, so the
+ * transaction lands un-aborted with the seqno consumed and nothing moved — on chain that is
+ * indistinguishable from a real send. Must stay numerically equal to `tonCellSendMode` below —
+ * the two encode the same field, and any drift between them changes the signing hash.
+ */
+const walletCoreTonSendMode = TW.TheOpenNetwork.Proto.SendMode.PAY_FEES_SEPARATELY
+
+/** The same send mode in `@ton/core`'s enum, used when building the V4R2 signing cell. */
+const tonCellSendMode = SendMode.PAY_GAS_SEPARATELY
 
 function assertWalletCoreTonWalletOptions(opts: { subWalletId?: number; workchain?: number }): {
   subWalletId: number
@@ -193,14 +204,13 @@ function buildSigningPayloadCell(args: {
 }): Cell {
   // V4R2 signing message layout:
   //   subWalletId(32) || validUntil(32) || seqno(32) || op(8) || sendMode(8) || ref(innerMsg)
-  // op=0 for simple order; sendMode = PAY_GAS_SEPARATELY | IGNORE_ERRORS.
-  const sendMode = SendMode.PAY_GAS_SEPARATELY | SendMode.IGNORE_ERRORS
+  // op=0 for simple order.
   return beginCell()
     .storeUint(args.subWalletId, 32)
     .storeUint(args.validUntil, 32)
     .storeUint(args.seqno, 32)
     .storeUint(0, 8)
-    .storeUint(sendMode, 8)
+    .storeUint(tonCellSendMode, 8)
     .storeRef(args.innerMsg)
     .endCell()
 }
