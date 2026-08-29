@@ -1,4 +1,4 @@
-import { sha256 } from '@noble/hashes/sha2'
+import { sha256 } from '@noble/hashes/sha2.js'
 
 /**
  * TRON address + TRC-20 ABI helpers (pure crypto — no RPC, no signing).
