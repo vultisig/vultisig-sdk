@@ -4,7 +4,7 @@
  * Types for the agent chat system including SSE events,
  * backend API types, action execution, and UI interfaces.
  */
-import type { Vultisig } from '@vultisig/sdk'
+import type { TxReadyEnvelope, TxReadyObject, Vultisig } from '@vultisig/sdk'
 
 import type { AgentErrorCode } from './agentErrors'
 import type {
@@ -313,13 +313,8 @@ export type InstallRequired = {
   description?: string
 }
 
-/**
- * Summary transaction row from non-streaming JSON responses.
- *
- * Permissive tx_ready payload shape while the backend schema evolves.
- * TODO: replace with a concrete interface or union when tx_ready stabilizes.
- */
-export type TxReadyPayloadFields = Record<string, unknown>
+/** Summary transaction row from non-streaming JSON responses. */
+export type TxReadyPayloadFields = TxReadyObject
 
 export type Transaction = {
   sequence: number
@@ -338,40 +333,8 @@ export type Transaction = {
   tx?: TxReadyPayloadFields
 }
 
-/**
- * SSE `tx_ready` payload — backend may nest swap/send payloads or attach `tx`.
- * Kept separate from {@link Transaction} so optional nested fields type-check.
- */
-export type TxReadyPayload = {
-  sequence?: number
-  chain?: string
-  chain_id?: string
-  action?: string
-  signing_mode?: string
-  unsigned_tx_hex?: string
-  tx_details?: Record<string, unknown>
-  keysign_payload?: string
-  swap_tx?: Record<string, unknown>
-  send_tx?: Record<string, unknown>
-  tx?: Record<string, unknown>
-  /**
-   * Multi-leg (approve + main) envelope legs. The executor's
-   * `storeServerTransaction` buffers both legs and `signMultiLeg` signs the
-   * approve, waits for its receipt, then signs the main leg. Each leg nests its
-   * own flat tx under `.tx`. Populated by the client-side tool-output enrichment
-   * for a bundled approve→main (see `toolOutputSigning.ts`) and by mcp-ts
-   * `execute_*` envelopes.
-   */
-  approvalTxArgs?: Record<string, unknown>
-  txArgs?: Record<string, unknown>
-  /**
-   * Internal marker: this signable envelope was synthesized client-side by
-   * `toolOutputSigning.ts` from a `tool-output-available` frame, not received on
-   * the `tx_ready` channel. Used only to render an accurate confirm-gate summary
-   * (`AgentExecutor.getPendingSummary`); inert to signing.
-   */
-  __buildTx?: boolean
-}
+/** SDK-owned wire contract for SSE `tx_ready` and execute-prep payloads. */
+export type TxReadyPayload = TxReadyEnvelope
 
 export type TokenSearchResult = {
   tokens: TokenInfo[]
