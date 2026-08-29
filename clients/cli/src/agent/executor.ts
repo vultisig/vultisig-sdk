@@ -143,13 +143,7 @@ function untrustedSymbolIdentity(symbol: unknown): ResolvedTokenIdentity {
   }
 }
 
-/**
- * Parse and chain-check mcp-ts's fixed-suffix token descriptor. An
- * `expectedChain` of `undefined` means the envelope carries no routed-chain
- * signal (Skip prep omits `labels.to_chain`); the descriptor's own chain is
- * accepted then — it is the same producer-trust tier either way, and the
- * check exists to catch drift, not to out-vote the producer.
- */
+/** Parse and chain-check mcp-ts's fixed-suffix token descriptor. */
 function resolvedTokenIdentity(label: unknown, expectedChain: unknown): ResolvedTokenIdentity {
   const unresolved = unresolvedTokenIdentity(label)
   if (typeof label !== 'string' || label.length > MAX_TOKEN_LABEL_LENGTH) return unresolved
@@ -160,11 +154,9 @@ function resolvedTokenIdentity(label: unknown, expectedChain: unknown): Resolved
   const { displaySymbol, suspicious } = safeTokenSymbol(rawSymbol)
   const parsedChain = resolveChainReference(descriptorChain)
   const routedChain =
-    expectedChain === undefined
-      ? parsedChain
-      : typeof expectedChain === 'string' || typeof expectedChain === 'number'
-        ? resolveChainReference(expectedChain)
-        : undefined
+    typeof expectedChain === 'string' || typeof expectedChain === 'number'
+      ? resolveChainReference(expectedChain)
+      : undefined
   if (suspicious || !parsedChain || !routedChain || parsedChain !== routedChain) {
     return { rawSymbol, displaySymbol, kind: 'unresolved' }
   }
@@ -275,10 +267,11 @@ function discloseSwapTokenContracts(
   sourceChain: Chain
 ): string {
   // The routed destination lives in `labels.to_chain` (the mcp-ts prep
-  // envelope has no top-level `to_chain`); Skip prep omits it entirely, in
-  // which case a legacy top-level value may stand in. Preserve an unsupported
-  // present label so resolvedTokenIdentity rejects it instead of trusting a
-  // contradictory payload fallback.
+  // envelope has no top-level `to_chain`). A legacy top-level value may stand
+  // in when the label is absent. Preserve an unsupported present label so
+  // resolvedTokenIdentity rejects it instead of trusting a contradictory
+  // payload fallback; if neither route exists, the descriptor must not
+  // authenticate its own chain.
   const destinationChain = Object.hasOwn(labels, 'to_chain')
     ? (labels.to_chain ?? null)
     : typeof payload?.to_chain === 'string' || typeof payload?.to_chain === 'number'

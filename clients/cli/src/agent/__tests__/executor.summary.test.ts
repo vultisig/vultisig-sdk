@@ -46,6 +46,7 @@ function makeMultiLegEnvelope(
   options: {
     approvalTx?: Record<string, unknown>
     toChain?: string | number
+    omitToChain?: boolean
   } = {}
 ) {
   return {
@@ -62,7 +63,7 @@ function makeMultiLegEnvelope(
     // resolved.labels (`to_chain`), never at the top level.
     resolved: {
       labels: {
-        ...(options.toChain !== undefined ? { to_chain: options.toChain } : {}),
+        ...(options.omitToChain ? {} : { to_chain: options.toChain ?? 'Base' }),
         ...labels,
       },
     },
@@ -407,22 +408,24 @@ describe('AgentExecutor.getPendingSummary', () => {
     expect(summary).not.toContain(WETH_CONTRACT)
   })
 
-  it('accepts a cross-chain buy descriptor when the envelope names no routed chain (Skip shape)', () => {
+  it('rejects an Ethereum buy descriptor when a Base envelope names no routed destination chain', () => {
     const executor = new AgentExecutor(createMockVault())
-    const atomDenom = 'ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2'
     executor.storeServerTransaction(
-      makeMultiLegEnvelope({
-        quote_summary: '2 USDC → ~0.5 ATOM via Skip Go',
-        amount_in: '2 USDC',
-        expected_output: '0.5 ATOM',
-        from_token: `USDC (${USDC_CONTRACT} on Base, 6 dec, source: known)`,
-        to_token: `ATOM (${atomDenom} on Cosmos, 6 dec, source: known)`,
-      })
+      makeMultiLegEnvelope(
+        {
+          quote_summary: '2 USDC → ~1.99 USDC via bridge',
+          amount_in: '2 USDC',
+          expected_output: '1.99 USDC',
+          from_token: `USDC (${USDC_CONTRACT} on Base, 6 dec, source: known)`,
+          to_token: `USDC (${ETH_USDC_CONTRACT} on Ethereum, 6 dec, source: known)`,
+        },
+        { omitToChain: true }
+      )
     )
 
     const summary = executor.getPendingSummary()!
-    expect(summary).toContain(`~0.5 ATOM (${atomDenom}) via Skip Go`)
-    expect(summary).not.toContain('contract unavailable')
+    expect(summary).toContain('~1.99 USDC (contract unavailable) via bridge on Base')
+    expect(summary).not.toContain(ETH_USDC_CONTRACT)
   })
 
   it('cross-chain native destination renders without an unavailable marker', () => {
@@ -549,6 +552,7 @@ describe('AgentExecutor.getPendingSummary', () => {
       },
       resolved: {
         labels: {
+          to_chain: 'Base',
           quote_summary: '2 USDC → ~0.001 ETH via swapkit',
           from_token: `USDC (${USDC_CONTRACT} on Base, 6 dec, source: known)`,
           from_token_symbol: 'USDC',
@@ -577,6 +581,7 @@ describe('AgentExecutor.getPendingSummary', () => {
       },
       resolved: {
         labels: {
+          to_chain: 'Base',
           quote_summary: '2 USDC → ~0.001 ETH via swapkit',
           from_token: fromToken,
           from_token_symbol: 'USDC',
@@ -763,6 +768,7 @@ describe('AgentExecutor.getPendingSummary', () => {
       swap_tx: SWAP_TX,
       resolved: {
         labels: {
+          to_chain: 'Base',
           quote_summary: '2 ETH → ~0.001 ETH via swapkit',
           from_token: 'ETH (native on Base, 18 dec, source: native)',
           from_token_symbol: 'ETH',
