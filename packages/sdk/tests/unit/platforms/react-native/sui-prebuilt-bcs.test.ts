@@ -56,7 +56,7 @@ const SIMPLE_PTB_SENDER_B = hexToBytes(SIMPLE_PTB_SENDER_B_HEX)
 
 // Same PTB as SIMPLE_PTB_SENDER_A, but the first Command's tag (offset 123)
 // is corrupted from 0x02 (SplitCoins) to 0x63 - a Command variant that
-// doesn't exist. Proves fail-open covers "unrecognized structure", not just
+// doesn't exist. Proves fail-closed covers "unrecognized structure", not just
 // truncation.
 const CORRUPTED_COMMAND_TAG_PTB_HEX =
   '0000030008010000000000000001003333333333333333333333333333333333333333333333333333333333' +
