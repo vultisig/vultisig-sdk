@@ -1,4 +1,4 @@
-import { blake2b } from '@noble/hashes/blake2b'
+import { blake2b } from '@noble/hashes/blake2.js'
 import { OtherChain } from '@vultisig/core-chain/Chain'
 import { cardanoCborEncoder } from '@vultisig/core-chain/chains/cardano/cip30/cborEncoder'
 
