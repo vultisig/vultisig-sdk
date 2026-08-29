@@ -111,14 +111,25 @@ const onwarn = (warning, warn) => {
 // `Response.body` streaming, which Hermes' fetch does not provide.
 const rnOverrideMap = {
   'packages/core/chain/chains/solana/client.ts': 'src/platforms/react-native/overrides/solanaClient.ts',
+  'packages/core/chain/dist/chains/solana/client.js': 'src/platforms/react-native/overrides/solanaClient.ts',
   'packages/core/chain/chains/sui/client.ts': 'src/platforms/react-native/overrides/suiClient.ts',
+  'packages/core/chain/dist/chains/sui/client.js': 'src/platforms/react-native/overrides/suiClient.ts',
   'packages/core/chain/swap/general/lifi/LifiSwapEnabledChains.ts':
     'src/platforms/react-native/overrides/lifiSwapEnabledChains.ts',
+  'packages/core/chain/dist/swap/general/lifi/LifiSwapEnabledChains.js':
+    'src/platforms/react-native/overrides/lifiSwapEnabledChains.ts',
   'packages/core/chain/chains/solana/spl/getSplAccounts.ts': 'src/platforms/react-native/overrides/getSplAccounts.ts',
+  'packages/core/chain/dist/chains/solana/spl/getSplAccounts.js':
+    'src/platforms/react-native/overrides/getSplAccounts.ts',
   'packages/core/chain/chains/solana/spl/getSplAssociatedAccount.ts':
     'src/platforms/react-native/overrides/getSplAssociatedAccount.ts',
+  'packages/core/chain/dist/chains/solana/spl/getSplAssociatedAccount.js':
+    'src/platforms/react-native/overrides/getSplAssociatedAccount.ts',
   'packages/core/chain/coin/balance/resolvers/solana.ts': 'src/platforms/react-native/overrides/resolverSolana.ts',
+  'packages/core/chain/dist/coin/balance/resolvers/solana.js': 'src/platforms/react-native/overrides/resolverSolana.ts',
   'packages/core/chain/swap/general/lifi/api/getLifiSwapQuote.ts':
+    'src/platforms/react-native/overrides/getLifiSwapQuote.ts',
+  'packages/core/chain/dist/swap/general/lifi/api/getLifiSwapQuote.js':
     'src/platforms/react-native/overrides/getLifiSwapQuote.ts',
 }
 
@@ -171,14 +182,6 @@ const createPlugins = (platformOptions = {}) => {
   return [
     alias({
       entries: [
-        {
-          find: /^@vultisig\/core-chain\/(.*)/,
-          replacement: `${path.resolve(currentDir, '../core/chain')}/$1`,
-        },
-        {
-          find: /^@vultisig\/core-mpc\/(.*)/,
-          replacement: `${path.resolve(currentDir, '../core/mpc')}/$1`,
-        },
         {
           find: /^@vultisig\/core-config$/,
           replacement: path.resolve(currentDir, '../core/config/index.ts'),
@@ -569,15 +572,9 @@ const configs = {
               find: /^tiny-secp256k1$/,
               replacement: path.resolve(currentDir, 'src/platforms/react-native/shims/tiny-secp256k1.ts'),
             },
-            // Resolve workspace packages to source TS for bundling
-            {
-              find: /^@vultisig\/core-chain\/(.*)/,
-              replacement: path.resolve(currentDir, '../core/chain/$1'),
-            },
-            {
-              find: /^@vultisig\/core-mpc\/(.*)/,
-              replacement: path.resolve(currentDir, '../core/mpc/$1'),
-            },
+            // Resolve the remaining source-bundled workspace packages.
+            // core-chain and core-mpc intentionally go through their package
+            // export maps so the SDK build exercises the published graph.
             {
               find: /^@vultisig\/core-config(.*)/,
               replacement: path.resolve(currentDir, '../core/config$1'),

@@ -117,7 +117,9 @@ function validateCliSchemaOutput(stdout, label) {
 function smokeCli() {
   assertCliBuilt()
   run(process.execPath, [CLI_ENTRY, '--help'], { cwd: repoRoot })
-  const schemaRes = run(process.execPath, [CLI_ENTRY, 'schema'], { cwd: repoRoot })
+  const schemaRes = run(process.execPath, [CLI_ENTRY, 'schema'], {
+    cwd: repoRoot,
+  })
   validateCliSchemaOutput(schemaRes.stdout, 'CLI "schema"')
 }
 
@@ -273,6 +275,120 @@ function validatePackedWorkspaceExports(workRoot, workspaceName) {
   return { packageRoot, tgzPath }
 }
 
+function packedPackageGraphSmoke(workRoot, { sdkTgzPath, coreChainTgzPath, coreMpcTgzPath, mpcTypesTgzPath }) {
+  const consumer = path.join(workRoot, 'package-graph-consumer')
+  mkdirSync(consumer, { recursive: true })
+
+  const localPackages = {
+    '@vultisig/core-chain': `file:${coreChainTgzPath}`,
+    '@vultisig/core-mpc': `file:${coreMpcTgzPath}`,
+    '@vultisig/mpc-types': `file:${mpcTypesTgzPath}`,
+    '@vultisig/sdk': `file:${sdkTgzPath}`,
+  }
+  writeFileSync(
+    path.join(consumer, 'package.json'),
+    `${JSON.stringify(
+      {
+        name: 'vultisig-package-graph-consumer',
+        private: true,
+        type: 'module',
+        packageManager: 'yarn@4.16.0',
+        dependencies: localPackages,
+        resolutions: localPackages,
+      },
+      null,
+      2
+    )}\n`
+  )
+  writeFileSync(path.join(consumer, '.yarnrc.yml'), 'nodeLinker: node-modules\n')
+  writeFileSync(
+    path.join(consumer, 'verify-package-graph.mjs'),
+    `import assert from 'node:assert/strict'
+import { buildSignBitcoinFromPsbt } from '@vultisig/core-chain/chains/utxo/tx/buildSignBitcoinFromPsbt'
+import { SignBitcoinSchema as compatibilitySchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/wasm_execute_contract_payload_pb'
+import { SignBitcoinSchema as canonicalSchema } from '@vultisig/mpc-types/types/vultisig/keysign/v1/wasm_execute_contract_payload_pb'
+import { Chain } from '@vultisig/sdk'
+
+assert.strictEqual(compatibilitySchema, canonicalSchema)
+const signBitcoin = buildSignBitcoinFromPsbt({
+  psbt: { data: { inputs: [] }, txInputs: [], txOutputs: [], version: 2, locktime: 0 },
+  senderAddress: '',
+})
+assert.equal(signBitcoin.$typeName, 'vultisig.keysign.v1.SignBitcoin')
+assert.equal(signBitcoin.inputs.length, 0)
+assert.equal(Chain.Bitcoin, 'Bitcoin')
+console.log('Packed package graph ESM smoke passed')
+`
+  )
+  writeFileSync(
+    path.join(consumer, 'verify-sdk-require.cjs'),
+    `const assert = require('node:assert/strict')
+const sdk = require('@vultisig/sdk')
+assert.equal(sdk.Chain.Bitcoin, 'Bitcoin')
+console.log('Packed SDK CommonJS smoke passed')
+`
+  )
+  writeFileSync(
+    path.join(consumer, 'verify-package-graph-types.ts'),
+    `import type { SignBitcoin as CanonicalSignBitcoin } from '@vultisig/mpc-types/types/vultisig/keysign/v1/wasm_execute_contract_payload_pb'
+import type { SignBitcoin as CompatibleSignBitcoin } from '@vultisig/core-mpc/types/vultisig/keysign/v1/wasm_execute_contract_payload_pb'
+import type { buildSignBitcoinFromPsbt } from '@vultisig/core-chain/chains/utxo/tx/buildSignBitcoinFromPsbt'
+import type { Chain } from '@vultisig/sdk'
+
+declare const canonical: CanonicalSignBitcoin
+const compatible: CompatibleSignBitcoin = canonical
+export type PackageGraphBuilder = typeof buildSignBitcoinFromPsbt
+export type PackageGraphChain = Chain
+void compatible
+`
+  )
+  writeFileSync(
+    path.join(consumer, 'tsconfig.json'),
+    `${JSON.stringify(
+      {
+        compilerOptions: {
+          module: 'NodeNext',
+          moduleResolution: 'NodeNext',
+          strict: true,
+          noEmit: true,
+          skipLibCheck: true,
+        },
+        include: ['verify-package-graph-types.ts'],
+      },
+      null,
+      2
+    )}\n`
+  )
+
+  const env = createDisposableYarnEnv(workRoot)
+  runYarn(['install', '--no-immutable'], {
+    cwd: consumer,
+    env,
+    stdio: 'inherit',
+  })
+  run(process.execPath, ['verify-package-graph.mjs'], {
+    cwd: consumer,
+    env,
+    stdio: 'inherit',
+  })
+  run(process.execPath, ['verify-sdk-require.cjs'], {
+    cwd: consumer,
+    env,
+    stdio: 'inherit',
+  })
+
+  const typescriptBin = path.join(repoRoot, 'node_modules/typescript/bin/tsc')
+  if (!existsSync(typescriptBin)) {
+    throw new Error('TypeScript is required to verify the packed package graph')
+  }
+  run(process.execPath, [typescriptBin, '--project', 'tsconfig.json'], {
+    cwd: consumer,
+    env,
+    stdio: 'inherit',
+  })
+  console.log('Packed package graph declaration smoke passed')
+}
+
 function packedCliBinSmoke(
   workRoot,
   cliTgzPath,
@@ -418,8 +534,9 @@ async function main() {
 
     const { tgzPath: rujiraTgzPath } = validatePackedWorkspaceExports(workRoot, '@vultisig/rujira')
 
+    const packageContracts = new Map()
     for (const workspaceName of PACKAGE_CONTRACT_WORKSPACES) {
-      validatePackedWorkspaceExports(workRoot, workspaceName)
+      packageContracts.set(workspaceName, validatePackedWorkspaceExports(workRoot, workspaceName))
     }
 
     const { tgzPath: coreConfigTgzPath } = validatePackedWorkspaceExports(workRoot, '@vultisig/core-config')
@@ -431,6 +548,15 @@ async function main() {
       '@vultisig/core-chain'
     )
     validateWindowsCoreChainExports(coreChainPackageRoot)
+
+    const { tgzPath: coreMpcTgzPath } = validatePackedWorkspaceExports(workRoot, '@vultisig/core-mpc')
+
+    packedPackageGraphSmoke(workRoot, {
+      sdkTgzPath: tgzPath,
+      coreChainTgzPath,
+      coreMpcTgzPath,
+      mpcTypesTgzPath: packageContracts.get('@vultisig/mpc-types').tgzPath,
+    })
 
     const { tgzPath: clientSharedTgzPath } = validatePackedWorkspaceExports(workRoot, '@vultisig/client-shared')
 
