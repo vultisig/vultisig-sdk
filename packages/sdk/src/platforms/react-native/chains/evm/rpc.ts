@@ -15,6 +15,7 @@
  */
 
 import { EvmChain } from '@vultisig/core-chain/Chain'
+import { clampEvmPriorityFee } from '@vultisig/core-chain/tx/fee/evm/clampEvmPriorityFee'
 import { attempt } from '@vultisig/lib-utils/attempt'
 import { isInError } from '@vultisig/lib-utils/error/isInError'
 import { memoize } from '@vultisig/lib-utils/memoize'
@@ -55,8 +56,12 @@ export const getEvmNonce = async (rpcUrl: string, chain: EvmChain, address: `0x$
 
 /**
  * Suggested EIP-1559 fee fields, mirroring the app's convention:
- *   - `maxPriorityFeePerGas = baseFee / 10`  (10% of base fee tip)
- *   - `maxFeePerGas = baseFee * 2 + priorityFee`
+ *   - `maxPriorityFeePerGas = baseFee / 10`  (10% of base fee tip), clamped
+ *     through the SDK's canonical `clampEvmPriorityFee` per-chain floor/
+ *     ceiling policy (e.g. floors Ethereum at 1 gwei, Polygon at 30 gwei, so
+ *     a quiet-block RPC quote that collapses toward zero still carries
+ *     enough tip to get included instead of sitting in the mempool)
+ *   - `maxFeePerGas = baseFee * 2 + priorityFee` (using the clamped priority fee)
  *
  * Caller should use these verbatim, or override if the UI offers a tip slider.
  */
@@ -71,7 +76,7 @@ export const getEvmSuggestedFees = async (
   const client = getClient(chain, rpcUrl)
   const block = await client.getBlock()
   const baseFeePerGas = block.baseFeePerGas ?? (await client.getGasPrice())
-  const maxPriorityFeePerGas = baseFeePerGas / 10n
+  const maxPriorityFeePerGas = clampEvmPriorityFee(chain, baseFeePerGas / 10n)
   const maxFeePerGas = baseFeePerGas * 2n + maxPriorityFeePerGas
   return { baseFeePerGas, maxPriorityFeePerGas, maxFeePerGas }
 }
