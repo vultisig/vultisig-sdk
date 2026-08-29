@@ -1,5 +1,37 @@
 # @vultisig/sdk
 
+## 6.2.0
+
+### Minor Changes
+
+- [#2225](https://github.com/vultisig/vultisig-sdk/pull/2225) [`95edf12`](https://github.com/vultisig/vultisig-sdk/commit/95edf1264827d0a63baa9d0580817caf2dffdc9e) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add a canonical raw EVM transaction-envelope keysign helper and use it in the CLI signing path.
+
+- [#1389](https://github.com/vultisig/vultisig-sdk/pull/1389) [`e1e73cb`](https://github.com/vultisig/vultisig-sdk/commit/e1e73cb5a67de6c77731b2d58ed7b2cb547e1228) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export the RN-safe `prepareIbcTransfer` and `prepareSuiTokenTransferFromKeys` helpers from `@vultisig/sdk/react-native`, along with their public support types/constants so React Native consumers no longer need deep imports for IBC and Sui token transfer prep.
+
+- [#2234](https://github.com/vultisig/vultisig-sdk/pull/2234) [`0697060`](https://github.com/vultisig/vultisig-sdk/commit/0697060107c7fe1c8ec818d3e0eae01557d9d96f) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add RUJI Trade quoting and CosmWasm execution for native RUNE and bRUNE swaps through the SDK's normal swap flow.
+
+### Patch Changes
+
+- [#2017](https://github.com/vultisig/vultisig-sdk/pull/2017) [`8a98b44`](https://github.com/vultisig/vultisig-sdk/commit/8a98b44e1f4438212e6deb7cca8491e23940118c) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export the canonical THOR/Maya native-swap metadata (`nativeSwapChains`, `nativeSwapChainIds`, `nativeSwapEnabledChainsRecord`, `getNativeSwapChainId`, `getNativeSwapChainIdFromDenomPrefix`, and the `NativeSwapChain`/`NativeSwapChainId` types) from both the root `@vultisig/sdk` entry and `@vultisig/sdk/react-native`. The SDK already owned this data, but first-party consumers (e.g. vultiagent-app's local `thorchainDispatchValidators.ts`) had no supported way to import it and kept app-local copies of which chains route through THORChain/MayaChain and their asset-notation chain IDs.
+
+- [#2235](https://github.com/vultisig/vultisig-sdk/pull/2235) [`3fff7cf`](https://github.com/vultisig/vultisig-sdk/commit/3fff7cfdfe23d2d5622f7caa87a6f1525329f07e) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(swap): stop reporting a native trading halt when an aggregator could still fill
+
+  `findSwapQuotes` collapsed a THORChain/MayaChain halt plus a transient aggregator failure into `TradingHalted` for the whole pair, so an ETH→SOL quote surfaced "trading halted" whenever LiFi/SwapKit happened to time out. A halt is scoped to the native protocol that raised it: those aggregators now get one automatic re-attempt, and when they are still unreachable the error reports the transient failure instead of a halt the user cannot retry out of. Halt-only pairs still throw `TradingHalted`.
+
+## 6.1.0
+
+### Minor Changes
+
+- [#2026](https://github.com/vultisig/vultisig-sdk/pull/2026) [`344b41f`](https://github.com/vultisig/vultisig-sdk/commit/344b41fad752cf9ee79c4f7cd7815832257f344c) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export the validation and address-format canonicals from the React Native entry: `amountMatches`, `feeMatches`, `normalizeTokenSymbol`, `tokenDecimals`, `scaleHumanToRaw`, `scaleRawToHuman`, `decimalsFor`, `computeEvmFee`, `isValidTokenSymbolFormat`, `ValidateNormalizerError`, `canonicalChainTag`, `classifyAddress`, `isAddressValidForChain`, `isSolanaAddress`, `supportedChainTags`, `address`, `validate` and `checkChainPrefix`. They are pure, vault-free and platform-neutral, but were reachable only from the root entry, so React Native consumers had to deep-import or keep an app-local mirror. Adds an RN entry test that walks the whole runtime surface of each canonical module, so a helper added later and wired only into the root entry fails rather than silently reopening the gap.
+
+### Patch Changes
+
+- [#2224](https://github.com/vultisig/vultisig-sdk/pull/2224) [`3121503`](https://github.com/vultisig/vultisig-sdk/commit/3121503831e4bc6f491c69cf2e69bf3ddcc87853) Thanks [@johnnyluo](https://github.com/johnnyluo)! - Throw a typed `DklsMaliciousPartyError` when DKLS keysign reports native or vs-wasm abort-and-ban party codes, and resolve the banned `partyId` from the setup-message party order on the initiating device.
+
+- [#2228](https://github.com/vultisig/vultisig-sdk/pull/2228) [`bbe43cb`](https://github.com/vultisig/vultisig-sdk/commit/bbe43cb91976138015ab4ad29c14a7b0e14f8cb4) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Export `getEvmNumericChainId` from the SDK root and React Native public entries. The accessor is derived from the canonical EVM chain registry, and the React Native transaction builder now consumes it instead of maintaining a duplicate numeric chain-id table.
+
+- [#2227](https://github.com/vultisig/vultisig-sdk/pull/2227) [`6d3c754`](https://github.com/vultisig/vultisig-sdk/commit/6d3c754ed1abe6153e648243ff0339ff0ba50bf1) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add TRON Stake 2.0 expired-unfreeze withdrawal signing with strict native-TRX payload validation and WalletCore 4.7.3 support.
+
 ## 6.0.0
 
 ### Major Changes

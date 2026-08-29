@@ -74,6 +74,11 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.TxReadyParseError).toBe('function')
   })
 
+  it('exports the raw EVM envelope keysign helper', () => {
+    expect(typeof sdk.prepareRawEvmTxFromKeys).toBe('function')
+    expect(typeof sdk.VaultBase.prototype.prepareRawEvmTx).toBe('function')
+  })
+
   it('exports the knownContracts canonical registry + lookup helpers', () => {
     expect(typeof sdk.isKnownContract).toBe('function')
     expect(typeof sdk.isCanonicalEvmContract).toBe('function')
@@ -425,5 +430,17 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof proto.prepareSendTx).toBe('function')
     expect(typeof proto.prepareSwapTx).toBe('function')
     expect(typeof proto.prepareContractCallTx).toBe('function')
+  })
+
+  it('exports the canonical THOR/Maya native-swap metadata (sdk#1988)', async () => {
+    const nativeSwapChain = await import('@vultisig/core-chain/swap/native/NativeSwapChain')
+
+    expect(sdk.nativeSwapChains).toBe(nativeSwapChain.nativeSwapChains)
+    expect(sdk.nativeSwapChainIds).toBe(nativeSwapChain.nativeSwapChainIds)
+    expect(sdk.nativeSwapEnabledChainsRecord).toBe(nativeSwapChain.nativeSwapEnabledChainsRecord)
+    expect(sdk.getNativeSwapChainId).toBe(nativeSwapChain.getNativeSwapChainId)
+    expect(sdk.getNativeSwapChainIdFromDenomPrefix).toBe(nativeSwapChain.getNativeSwapChainIdFromDenomPrefix)
+    expect(sdk.getNativeSwapChainId(sdk.Chain.THORChain)).toBe('THOR')
+    expect(sdk.getNativeSwapChainIdFromDenomPrefix('eth')).toBe('ETH')
   })
 })
