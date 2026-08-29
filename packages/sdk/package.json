@@ -177,6 +177,32 @@
       "require": "./dist/tools/decode/index.cjs",
       "default": "./dist/tools/decode/index.cjs"
     },
+    "./tools/policy": {
+      "types": "./dist/tools/policy/index.d.ts",
+      "browser": "./dist/tools/policy/index.js",
+      "worker": "./dist/tools/policy/index.js",
+      "react-native": "./dist/tools/policy/index.js",
+      "node": {
+        "import": "./dist/tools/policy/index.js",
+        "require": "./dist/tools/policy/index.cjs"
+      },
+      "import": "./dist/tools/policy/index.js",
+      "require": "./dist/tools/policy/index.cjs",
+      "default": "./dist/tools/policy/index.cjs"
+    },
+    "./tools/price": {
+      "types": "./dist/tools/price/index.d.ts",
+      "browser": "./dist/tools/price/index.js",
+      "worker": "./dist/tools/price/index.js",
+      "react-native": "./dist/tools/price/index.js",
+      "node": {
+        "import": "./dist/tools/price/index.js",
+        "require": "./dist/tools/price/index.cjs"
+      },
+      "import": "./dist/tools/price/index.js",
+      "require": "./dist/tools/price/index.cjs",
+      "default": "./dist/tools/price/index.cjs"
+    },
     "./tx": {
       "types": "./dist/tx/index.d.ts",
       "browser": "./dist/tx/index.js",
