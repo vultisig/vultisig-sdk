@@ -1,10 +1,6 @@
 export { abiDecode } from './abiDecode'
 export { abiEncode } from './abiEncode'
-export type {
-  DecodedAgentRouterDeposit,
-  UsdcPaymentChain,
-  UsdcPaymentChainConfig,
-} from './agentRouterCheckout'
+export type { DecodedAgentRouterDeposit, UsdcPaymentChain, UsdcPaymentChainConfig } from './agentRouterCheckout'
 export {
   AGENT_ROUTER_ADDRESS,
   AGENT_ROUTER_DEPOSIT_WITH_MEMO_SELECTOR,

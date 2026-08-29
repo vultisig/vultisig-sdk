@@ -51,9 +51,9 @@ export const USDC_PAYMENT_CHAIN_CONFIG = {
   },
 } as const
 
-export const USDC_PAYMENT_CHAINS = Object.freeze(
-  Object.keys(USDC_PAYMENT_CHAIN_CONFIG)
-) as ReadonlyArray<keyof typeof USDC_PAYMENT_CHAIN_CONFIG>
+export const USDC_PAYMENT_CHAINS = Object.freeze(Object.keys(USDC_PAYMENT_CHAIN_CONFIG)) as ReadonlyArray<
+  keyof typeof USDC_PAYMENT_CHAIN_CONFIG
+>
 export type UsdcPaymentChain = (typeof USDC_PAYMENT_CHAINS)[number]
 export type UsdcPaymentChainConfig = (typeof USDC_PAYMENT_CHAIN_CONFIG)[UsdcPaymentChain]
 

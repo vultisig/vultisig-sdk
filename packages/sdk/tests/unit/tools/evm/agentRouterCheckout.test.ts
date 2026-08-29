@@ -54,7 +54,11 @@ describe('USDC payment-chain registry', () => {
   it('isUsdcPaymentChain / lookupUsdcPaymentChain agree on supported vs unsupported chains', () => {
     expect(isUsdcPaymentChain('Ethereum')).toBe(true)
     expect(isUsdcPaymentChain('Solana')).toBe(false)
-    expect(lookupUsdcPaymentChain('Base')).toEqual({ scannerChain: 'base', chainId: 8453, contract: USDC_CONTRACTS.Base })
+    expect(lookupUsdcPaymentChain('Base')).toEqual({
+      scannerChain: 'base',
+      chainId: 8453,
+      contract: USDC_CONTRACTS.Base,
+    })
     expect(lookupUsdcPaymentChain('Solana')).toBeUndefined()
   })
 
