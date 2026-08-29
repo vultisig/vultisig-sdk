@@ -154,6 +154,11 @@ const walletCoreTonSendMode = TW.TheOpenNetwork.Proto.SendMode.PAY_FEES_SEPARATE
 /** The same send mode in `@ton/core`'s enum, used when building the V4R2 signing cell. */
 const tonCellSendMode = SendMode.PAY_GAS_SEPARATELY
 
+/**
+ * Narrows caller-supplied wallet options to the only shape these builders can encode.
+ * Anything but workchain 0 on a V4R2 sub-wallet throws, because the WalletCore parity
+ * input emitted alongside the cell cannot represent it and would silently disagree.
+ */
 function assertWalletCoreTonWalletOptions(opts: { subWalletId?: number; workchain?: number }): {
   subWalletId: number
   workchain: 0
@@ -196,6 +201,11 @@ function encodeWalletCoreTonSigningInput(args: {
   return TW.TheOpenNetwork.Proto.SigningInput.encode(input).finish()
 }
 
+/**
+ * Builds the V4R2 cell that gets signed: the wallet header followed by a reference to
+ * the internal message. This is the preimage every co-signer hashes, so field order,
+ * bit widths and the send mode must match WalletCore's encoder exactly.
+ */
 function buildSigningPayloadCell(args: {
   subWalletId: number
   validUntil: number

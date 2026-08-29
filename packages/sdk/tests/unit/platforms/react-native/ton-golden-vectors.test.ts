@@ -132,6 +132,10 @@ function packReferenceHeader(subWalletId: number, validUntil: number, seqno: num
   return buf
 }
 
+/**
+ * Assembles the reference signing payload from the independently packed header, so a
+ * regression in the SDK's own `storeUint()` sequence shows up as a hash mismatch.
+ */
 function buildReferenceSigningPayload(subWalletId: number, validUntil: number, seqno: number, innerMsg: Cell): Cell {
   // No IGNORE_ERRORS: an action-phase failure must abort the transfer rather than
   // silently consume the seqno while moving nothing.
