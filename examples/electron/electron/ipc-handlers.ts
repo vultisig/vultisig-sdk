@@ -1,4 +1,4 @@
-import { VaultError, VaultErrorCode } from '@vultisig/sdk'
+import { VaultError, VaultErrorCode, type VaultImportOptions } from '@vultisig/sdk'
 import { dialog, type IpcMain } from 'electron'
 import * as fs from 'fs/promises'
 
@@ -120,18 +120,21 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
     }
   )
 
-  ipcMain.handle('vault:import', async (_event, vultContent: string, password?: string) => {
-    const sdk = getSDK()
-    const vault = await sdk.importVault(vultContent, password)
-    return {
-      id: vault.id,
-      name: vault.name,
-      type: vault.type,
-      chains: vault.chains,
-      threshold: vault.threshold,
-      signerCount: vault.signers.length,
+  ipcMain.handle(
+    'vault:import',
+    async (_event, vultContent: string, password?: string, options?: VaultImportOptions) => {
+      const sdk = getSDK()
+      const vault = await sdk.importVault(vultContent, password, options)
+      return {
+        id: vault.id,
+        name: vault.name,
+        type: vault.type,
+        chains: vault.chains,
+        threshold: vault.threshold,
+        signerCount: vault.signers.length,
+      }
     }
-  })
+  )
 
   ipcMain.handle('vault:isEncrypted', async (_event, vultContent: string) => {
     const sdk = getSDK()
