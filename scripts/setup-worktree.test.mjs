@@ -297,7 +297,7 @@ test('local setup rejects a same-package source from a different Git repository'
 
     const unrelatedRoot = path.join(path.dirname(worktreeRoot), 'unrelated')
     createRepo(unrelatedRoot)
-    mkdirSync(path.join(unrelatedRoot, '.git'))
+    execFileSync('git', ['init'], { cwd: unrelatedRoot, stdio: 'ignore' })
     mkdirSync(path.join(unrelatedRoot, 'node_modules'))
     const nestedLink = path.join(worktreeRoot, 'node_modules/node_modules')
     symlinkSync(path.join(unrelatedRoot, 'node_modules'), nestedLink)
