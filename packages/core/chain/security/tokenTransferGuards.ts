@@ -197,7 +197,11 @@ export function decodeErc20RecipientFromSig(functionSig: unknown, args: unknown)
   let idx: number
   if (name === 'transfer' && argTypes[0] === 'address') {
     idx = 0 // transfer(address to, uint256 amount) — recipient is the FIRST arg
-  } else if ((name === 'transferFrom' || name === 'safeTransferFrom') && argTypes[0] === 'address' && argTypes[1] === 'address') {
+  } else if (
+    (name === 'transferFrom' || name === 'safeTransferFrom') &&
+    argTypes[0] === 'address' &&
+    argTypes[1] === 'address'
+  ) {
     idx = 1 // transferFrom/safeTransferFrom(address from, address to, …) — recipient is the SECOND arg
   } else {
     return null
