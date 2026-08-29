@@ -16,9 +16,9 @@
  * initialize WalletCore WASM and never reaches `@ton/crypto-primitives`, so
  * the RN builder path does not need the `crypto.subtle` polyfill.
  */
-import { tonConfig } from '@vultisig/core-chain/chains/ton/config'
 import { Address, beginCell, Cell, internal, SendMode, storeMessageRelaxed } from '@ton/core'
 import { TW } from '@trustwallet/wallet-core'
+import { tonConfig } from '@vultisig/core-chain/chains/ton/config'
 
 import { buildV4R2Wallet, storeStateInitCell, TON_V4R2_SUB_WALLET_ID } from './walletV4R2'
 
@@ -264,7 +264,11 @@ function buildExternalMessageCell(args: {
 export function buildTonSendTx(opts: BuildTonSendOptions): TonWalletCoreBackedTxBuilderResult {
   const { subWalletId, workchain } = assertWalletCoreTonWalletOptions(opts)
   const pubKey = hexToBytes(opts.publicKeyEd25519)
-  const wallet = buildV4R2Wallet({ publicKeyEd25519: pubKey, workchain, walletId: subWalletId })
+  const wallet = buildV4R2Wallet({
+    publicKeyEd25519: pubKey,
+    workchain,
+    walletId: subWalletId,
+  })
   const destination = Address.parse(opts.to)
 
   const innerMsg = beginCell()
@@ -367,7 +371,11 @@ export type BuildTonJettonTransferOptions = {
 export function buildTonJettonTransferTx(opts: BuildTonJettonTransferOptions): TonWalletCoreBackedTxBuilderResult {
   const { subWalletId, workchain } = assertWalletCoreTonWalletOptions(opts)
   const pubKey = hexToBytes(opts.publicKeyEd25519)
-  const wallet = buildV4R2Wallet({ publicKeyEd25519: pubKey, workchain, walletId: subWalletId })
+  const wallet = buildV4R2Wallet({
+    publicKeyEd25519: pubKey,
+    workchain,
+    walletId: subWalletId,
+  })
 
   const destinationAddr = Address.parse(opts.to)
   const jettonWalletAddr = Address.parse(opts.jettonWalletAddress)
@@ -434,13 +442,19 @@ export function buildTonJettonTransferTx(opts: BuildTonJettonTransferOptions): T
     validUntil,
     message: TW.TheOpenNetwork.Proto.Transfer.create({
       dest: opts.jettonWalletAddress,
-      amount: tonUnsignedIntegerToBytes('Jetton gas amount', JETTON_GAS_AMOUNT_NANO),
+      amount: tonUnsignedIntegerToBytes(
+        'Jetton gas amount',
+        isActiveDestination ? tonConfig.jettonAmount : tonConfig.jettonAmountNewWallet
+      ),
       mode: walletCoreTonSendMode,
       comment: opts.memo ?? '',
       bounceable: true,
       jettonTransfer: TW.TheOpenNetwork.Proto.JettonTransfer.create({
         jettonAmount: tonUnsignedIntegerToBytes('Jetton amount', opts.amount),
-        toOwner: destinationAddr.toString({ bounceable: true, testOnly: false }),
+        toOwner: destinationAddr.toString({
+          bounceable: true,
+          testOnly: false,
+        }),
         responseAddress: fromAddress,
         forwardAmount: tonUnsignedIntegerToBytes(
           'Jetton forward amount',
