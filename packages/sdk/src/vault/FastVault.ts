@@ -19,6 +19,7 @@ import type {
 } from '../types'
 import { normalizeToHex } from '../utils/bytes'
 import { createVaultBackup } from '../utils/export'
+import { canonicalizeVaultData } from './utils/canonicalizeVaultData'
 import { VaultBase } from './VaultBase'
 import { VaultError, VaultErrorCode } from './VaultError'
 
@@ -473,6 +474,8 @@ export class FastVault extends VaultBase {
     context: VaultContext,
     persisted = true
   ): FastVault {
+    vaultData = canonicalizeVaultData(vaultData)
+
     // Validate vault type
     if (vaultData.type !== 'fast') {
       throw new VaultError(VaultErrorCode.InvalidVault, `Cannot create FastVault from ${vaultData.type} vault data`)
