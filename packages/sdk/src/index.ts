@@ -314,6 +314,14 @@ export {
 // maintained copies in agent-backend-ts (skip-swap.ts's full per-chain table,
 // execute_send.ts's TerraClassic-only hardcoded 256 check that missed every
 // other cosmos chain) and mcp-ts's own copy of the same table.
+// Cardano transaction-validity policy. Exported so app / CLI / backend build
+// the same TTL the keysign resolver and the broadcast freshness guard judge it
+// by, instead of each hardcoding its own slot offset (vultiagent-app#2538).
+export {
+  cardanoBroadcastTtlSafetyMargin,
+  cardanoSlotOffset,
+  getCardanoSendTtl,
+} from '@vultisig/core-chain/chains/cardano/config'
 export {
   COSMOS_MEMO_DEFAULT_MAX_BYTES,
   getCosmosMemoMaxBytes,
