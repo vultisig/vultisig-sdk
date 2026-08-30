@@ -36,6 +36,10 @@ export type {
   PendingAction,
   ScanRequest,
   SolanaScanRequest,
+  StakekitBalanceEntry,
+  StakekitBalanceItem,
+  StakekitBalanceQuery,
+  StakekitBalancesResult,
   UnsupportedScanRequest,
   Validator,
   YieldActionResponse,
@@ -50,7 +54,15 @@ export type {
   YieldToken,
   YieldTransaction,
 } from './stakekitApi'
-export { buildYieldActionScanRequest, buildYieldActionScanRequests, buildYieldStepScanRequest } from './stakekitApi'
+export {
+  buildYieldActionScanRequest,
+  buildYieldActionScanRequests,
+  buildYieldStepScanRequest,
+  chunkStakekitBalanceQueries,
+  fetchAllStakekitBalances,
+  fetchStakekitBalancesBatch,
+  STAKEKIT_BALANCE_QUERIES_PER_REQUEST,
+} from './stakekitApi'
 
 // --- Inline withScanRequest helper ---
 // (mcp-ts's withScanRequest isn't available in the SDK — inline it here)
