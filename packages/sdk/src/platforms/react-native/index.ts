@@ -621,6 +621,7 @@ export type {
   BuildGlifStakeResult,
   Defi,
   GlifUnsignedTx,
+  SolanaScanRequest,
   StakekitBalanceEntry,
   StakekitBalanceItem,
   StakekitBalanceQuery,
@@ -628,6 +629,7 @@ export type {
 } from '../../tools/defi'
 export {
   buildBalancerV3SwapCalldata,
+  buildYieldActionScanRequests,
   chunkStakekitBalanceQueries,
   defi,
   fetchAllStakekitBalances,
