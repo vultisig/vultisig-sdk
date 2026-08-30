@@ -35,6 +35,10 @@ export type {
   EvmScanRequest,
   PendingAction,
   ScanRequest,
+  StakekitBalanceEntry,
+  StakekitBalanceItem,
+  StakekitBalanceQuery,
+  StakekitBalancesResult,
   UnsupportedScanRequest,
   Validator,
   YieldActionResponse,
@@ -48,6 +52,12 @@ export type {
   YieldProduct,
   YieldToken,
   YieldTransaction,
+} from './stakekitApi'
+export {
+  chunkStakekitBalanceQueries,
+  fetchAllStakekitBalances,
+  fetchStakekitBalancesBatch,
+  STAKEKIT_BALANCE_QUERIES_PER_REQUEST,
 } from './stakekitApi'
 export { buildYieldActionScanRequest, buildYieldStepScanRequest } from './stakekitApi'
 
@@ -303,7 +313,10 @@ function canonicalizeTonStep(step: DecodedYieldStep): Record<string, unknown> | 
  *   - EVM steps: flat `{to, value, data, action, description, from?, gas_limit?, ...}` — NO `tx_encoding`
  *   - Non-EVM steps: `{tx_encoding: 'solana-tx'|'sui-tx'|'tron-tx'|'ton-tx', chain, data, action, description}`
  *   - `provider: "yield_xyz"` at action level (load-bearing for app chip routing, NEVER rename)
- *   - All-or-nothing: if any step fails to canonicalize → decoded[] used for ALL steps
+ *   - Per-step degrade: a step that fails to canonicalize (e.g. an unsupported
+ *     network like Cardano) falls back to its `decoded` form; steps that DID
+ *     canonicalize stay canonical. One unsupported step no longer nukes the
+ *     canonicalized form of every other step in the action.
  *   - `chain` field (PascalCase) derived from first tx network
  */
 export function parseActionDisplay(data: YieldActionResponse) {
@@ -327,9 +340,9 @@ export function parseActionDisplay(data: YieldActionResponse) {
     return null
   })
 
-  // All-or-nothing: if any step fails to canonicalize, fall back to `decoded` for all steps.
-  const allCanonicalized = canonicalSteps.every(s => s !== null)
-  const transactions = allCanonicalized ? (canonicalSteps as NonNullable<(typeof canonicalSteps)[number]>[]) : []
+  // Per-step degrade: keep whichever steps canonicalized; fall back to that
+  // step's `decoded` form only for the steps that failed to canonicalize.
+  const transactions = canonicalSteps.map((step, i) => step ?? decoded[i])
 
   return {
     intent: data.intent,
@@ -340,7 +353,7 @@ export function parseActionDisplay(data: YieldActionResponse) {
     chain,
     // `provider: "yield_xyz"` — LOAD-BEARING for app chip routing, NEVER rename
     provider: 'yield_xyz',
-    transactions: transactions.length > 0 ? transactions : decoded,
+    transactions,
   }
 }
 
@@ -639,8 +652,11 @@ export async function stakekitBuildExit(params: {
       restAction: 'exit',
       restBody: {
         addresses: { address: params.address },
-        args: { amount: params.amount, ...resolved.extras },
-        ...(resolved.validatorAddressesForREST ? { validatorAddresses: resolved.validatorAddressesForREST } : {}),
+        args: {
+          amount: params.amount,
+          ...resolved.extras,
+          ...(resolved.validatorAddressesForREST ? { validatorAddresses: resolved.validatorAddressesForREST } : {}),
+        },
       },
       apiKey: params.apiKey,
       preferRest: params.yieldId.startsWith('tron-'),

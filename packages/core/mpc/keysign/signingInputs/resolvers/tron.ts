@@ -1,5 +1,7 @@
 import { Buffer } from 'buffer'
+import { Chain } from '@vultisig/core-chain/Chain'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
+import { assertBoundedInt } from '@vultisig/lib-utils/bigint/assertBoundedInt'
 import { bigIntToHex } from '@vultisig/lib-utils/bigint/bigIntToHex'
 import { stripHexPrefix } from '@vultisig/lib-utils/hex/stripHexPrefix'
 import { matchDiscriminatedUnion } from '@vultisig/lib-utils/matchDiscriminatedUnion'
@@ -10,6 +12,15 @@ import Long from 'long'
 import { getBlockchainSpecificValue } from '../../chainSpecific/KeysignChainSpecific'
 import { getKeysignSwapPayload } from '../../swap/getKeysignSwapPayload'
 import { SigningInputsResolver } from '../resolver'
+
+// sdk#1200: callValue / callTokenValue / feeLimit are all TRON int64 proto
+// fields fed by third-party gas estimation / swap-aggregator data — bound
+// them before Long.fromString rather than letting an out-of-range magnitude
+// silently two's-complement-wrap (e.g. a wrapped feeLimit authorizing an
+// outsized fee burn).
+const toBoundedTronLong = (value: string) => Long.fromString(assertBoundedInt(value, 'int64'))
+
+const withdrawExpireUnfreezeMemo = 'WITHDRAW_EXPIRE_UNFREEZE'
 
 const createTronBlockHeader = (tronSpecific: {
   blockHeaderTimestamp: bigint | number | string
@@ -32,6 +43,45 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
   const tronSpecific = getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'tronSpecific')
 
   const memo = keysignPayload.memo ?? ''
+
+  // WithdrawExpireUnfreezeContract (Stake 2.0) claims every matured
+  // unfreezing entry for the owner. The contract has no destination, amount,
+  // or resource fields, so the keysign payload carries an exact internal memo
+  // marker and a display-only amount. Fail closed on any marker collision
+  // instead of silently replacing another transaction shape with this claim.
+  if (memo.startsWith(withdrawExpireUnfreezeMemo)) {
+    const coin = shouldBePresent(keysignPayload.coin)
+    const ownerAddress = shouldBePresent(coin.address)
+    const isNativeTrx =
+      coin.chain === Chain.Tron && coin.ticker === 'TRX' && coin.isNativeToken && !coin.contractAddress
+    const hasAlternatePayload =
+      keysignPayload.contractPayload.case !== undefined || keysignPayload.swapPayload.case !== undefined
+    const hasValidDisplayAmount = /^\d+$/.test(keysignPayload.toAmount)
+
+    if (
+      memo !== withdrawExpireUnfreezeMemo ||
+      !isNativeTrx ||
+      keysignPayload.toAddress !== ownerAddress ||
+      !hasValidDisplayAmount ||
+      hasAlternatePayload
+    ) {
+      throw new Error('Invalid TRON expired-unfreeze claim payload')
+    }
+
+    const input = TW.Tron.Proto.SigningInput.create({
+      transaction: TW.Tron.Proto.Transaction.create({
+        withdrawExpireUnfreeze: TW.Tron.Proto.WithdrawExpireUnfreezeContract.create({
+          ownerAddress,
+        }),
+        timestamp: Long.fromString(tronSpecific.timestamp.toString()),
+        expiration: Long.fromString(tronSpecific.expiration.toString()),
+        feeLimit: Long.ZERO,
+        blockHeader: createTronBlockHeader(tronSpecific),
+      }),
+    })
+
+    return [input]
+  }
 
   // FreezeBalanceV2 (Stake 2.0) — dispatch based on memo prefix
   if (memo.startsWith('FREEZE:')) {
@@ -130,12 +180,12 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
             triggerSmartContract: TW.Tron.Proto.TriggerSmartContract.create({
               ownerAddress: value.ownerAddress,
               contractAddress: value.contractAddress,
-              callValue: value.callValue ? Long.fromString(value.callValue?.toString()) : undefined,
+              callValue: value.callValue ? toBoundedTronLong(value.callValue.toString()) : undefined,
               data: value.data ? Buffer.from(value.data, 'hex') : undefined,
-              callTokenValue: value.callTokenValue ? Long.fromString(value.callTokenValue?.toString()) : undefined,
+              callTokenValue: value.callTokenValue ? toBoundedTronLong(value.callTokenValue.toString()) : undefined,
               tokenId: value.tokenId ? Long.fromString(value.tokenId?.toString()) : undefined,
             }),
-            feeLimit: Long.fromString(tronSpecific.gasEstimation.toString()),
+            feeLimit: toBoundedTronLong(tronSpecific.gasEstimation.toString()),
           }
         },
         tronTransferAssetContractPayload: value => {
@@ -146,7 +196,7 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
               amount: Long.fromString(value.amount),
               assetName: value.assetName,
             }),
-            feeLimit: Long.fromString(tronSpecific.gasEstimation.toString()),
+            feeLimit: toBoundedTronLong(tronSpecific.gasEstimation.toString()),
           }
         },
         wasmExecuteContractPayload: () => {
@@ -218,7 +268,7 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
 
         const input = TW.Tron.Proto.SigningInput.create({
           transaction: TW.Tron.Proto.Transaction.create({
-            feeLimit: Long.fromString(tronSpecific.gasEstimation.toString()),
+            feeLimit: toBoundedTronLong(tronSpecific.gasEstimation.toString()),
             transferTrc20Contract: contract,
             timestamp: Long.fromString(tronSpecific.timestamp.toString()),
             blockHeader: TW.Tron.Proto.BlockHeader.create({
@@ -281,7 +331,7 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
 
   const input = TW.Tron.Proto.SigningInput.create({
     transaction: TW.Tron.Proto.Transaction.create({
-      feeLimit: Long.fromString(tronSpecific.gasEstimation.toString()),
+      feeLimit: toBoundedTronLong(tronSpecific.gasEstimation.toString()),
       transferTrc20Contract: contract,
       timestamp: Long.fromString(tronSpecific.timestamp.toString()),
       blockHeader: TW.Tron.Proto.BlockHeader.create({

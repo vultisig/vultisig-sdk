@@ -66,6 +66,7 @@ const assertQuoteSafetyBinding = (params: PrepareSwapTxFromKeysParams, requested
   const expectedFingerprint = getSwapQuoteSafetyFingerprint({
     from: params.fromCoin,
     to: params.toCoin,
+    recipient: swapQuote.recipient,
     requestedAmount: boundAmount,
     expiresAt,
     quote: swapQuote.quote,
@@ -95,13 +96,13 @@ const assertCowQuoteNotExpired = (validTo: number): void => {
   }
 }
 
-// Defense-in-depth: the quote-level requested amount must also match a value
-// committed inside the signable payload when we can read one. CoW exposes
-// sellAmount+feeAmount on the order. EVM-general quotes bury the sell in
-// aggregator calldata — decode known exact-in shapes and compare; unknown
-// selectors stay fail-open (a wrong decode would brick valid swaps).
-// `transfer.amount` may legitimately differ (for example, 100_000n -> 99_999n)
-// because providers subtract deposit-channel fees.
+// Defense-in-depth for providers whose tx shape carries an exact source amount: the quote-level
+// requested amount must also match the gross value committed to the signable payload when we can
+// read one. CoW exposes sellAmount+feeAmount on the order. CosmWasm routes commit their source
+// funds directly. EVM-general quotes bury the sell amount and optional deadline in aggregator
+// calldata, so decode known exact-in shapes and compare; unknown selectors intentionally fail open
+// rather than bricking a valid route with a bad decode. `transfer.amount` may legitimately differ
+// (for example, 100_000n -> 99_999n) because providers subtract deposit-channel fees.
 const assertAmountMatchesCommittedSellAmount = (params: PrepareSwapTxFromKeysParams): void => {
   const { quote } = params.swapQuote
   if (!('general' in quote)) return
@@ -110,16 +111,22 @@ const assertAmountMatchesCommittedSellAmount = (params: PrepareSwapTxFromKeysPar
     evm: tx => decodeEvmGeneralSwapCommitment(tx.data, tx.value)?.sellAmount,
     solana: () => undefined,
     transfer: () => undefined,
+    cosmosWasm: ({ funds }) => {
+      if (funds.length !== 1 || !/^[1-9]\d*$/.test(funds[0].amount)) {
+        throw new Error('prepareSwapTxFromKeys: CosmWasm route must commit exactly one positive integer source fund')
+      }
+
+      return BigInt(funds[0].amount)
+    },
     cowswap_order: order => BigInt(order.sellAmount) + BigInt(order.feeAmount),
   })
   if (committed === undefined) return
 
   const requested = toChainAmount(params.amount, params.fromCoin.decimals)
   if (requested !== committed) {
-    const label =
-      'cowswap_order' in quote.general.tx
-        ? "CoW order's committed gross sell amount"
-        : 'committed sell amount encoded in the EVM swap calldata'
+    const label = 'evm' in quote.general.tx
+      ? 'committed sell amount encoded in the EVM swap calldata'
+      : "route's committed source amount"
     throw new Error(
       `prepareSwapTxFromKeys: requested amount (${requested} base units) does not match the ${label} (${committed} base units) — the quote may be stale or for a different request`
     )
@@ -209,6 +216,7 @@ export const prepareSwapTxFromKeys = async (
   return buildSwapKeysignPayload({
     fromCoin: safeParams.fromCoin,
     toCoin: safeParams.toCoin,
+    recipient: safeParams.swapQuote.recipient ?? safeParams.toCoin.address,
     amount: safeParams.amount,
     swapQuote: safeParams.swapQuote,
     vaultId: identity.ecdsaPublicKey,

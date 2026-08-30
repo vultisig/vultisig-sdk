@@ -8,12 +8,21 @@
 // Ported from mcp-ts/src/lib/yield-api.ts.
 // Builds UNSIGNED calldata only — never signs, never broadcasts.
 
+import { sha256 } from '@noble/hashes/sha2.js'
+import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 // --- Module constants (NOT process.env) ---
 
 const STAKEKIT_API_BASE = 'https://api.stakek.it/v1'
 const STAKEKIT_MCP_URL = 'https://mcp.yield.xyz/mcp'
+// The multi-network batched balances endpoint below is validated against
+// THIS host with the `{queries:[{network,address}]}` body shape — NOT
+// interchangeable with STAKEKIT_API_BASE, whose `/yields/balances` expects
+// the different `[{addresses:{address},integrationId}]` array shape (see
+// `getBalances` below). Both are yield.xyz/StakeKit; different hosts validate
+// different request contracts on the same path.
+const YIELD_XYZ_API_BASE = 'https://api.yield.xyz/v1'
 
 // --- Auth helper — apiKey is injectable ---
 
@@ -21,6 +30,30 @@ function authHeaders(apiKey?: string, extra: Record<string, string> = {}): Recor
   const headers: Record<string, string> = { ...extra }
   if (apiKey) headers['X-API-KEY'] = apiKey
   return headers
+}
+
+/**
+ * Cache-key fragment identifying WHICH credential a cached response was
+ * fetched with.
+ *
+ * Any cache whose upstream request carries an auth header has to key on that
+ * auth scope, because the response is a function of the credential. Without
+ * this, `/yields/enabled` - which returns only the products a given project's
+ * API key may deposit into - is cached under the query string alone, so the
+ * first caller's allowed set is served to every other caller for the next five
+ * minutes. That both leaks one project's enabled products to another and
+ * suppresses products the second project actually has.
+ *
+ * Truncated SHA-256, never the key itself: cache keys end up in debugging
+ * output, and a credential must not be reconstructible from one. 64 bits is
+ * ample when the only requirement is that distinct keys do not collide.
+ */
+function apiKeyScope(apiKey?: string): string {
+  const trimmed = apiKey?.trim()
+  // A request with no key is its own scope - it hits the same endpoint
+  // unauthenticated and gets a different answer than any keyed request.
+  if (!trimmed) return 'anon'
+  return bytesToHex(sha256(utf8ToBytes(trimmed))).slice(0, 16)
 }
 
 // --- Simple TTL cache (same pattern as defi-llama.ts) ---
@@ -207,7 +240,7 @@ export async function searchYields(params: {
   if (params.provider) query.set('provider', params.provider)
   if (params.limit) query.set('limit', String(params.limit))
 
-  const cacheKey = `yield:search:${query.toString()}`
+  const cacheKey = `yield:search:${apiKeyScope(params.apiKey)}:${query.toString()}`
   const cached = getCached<YieldProduct[]>(cacheKey)
   if (cached) return cached
 
@@ -227,7 +260,7 @@ export async function searchYields(params: {
 }
 
 export async function getYield(yieldId: string, apiKey?: string): Promise<YieldProduct> {
-  const cacheKey = `yield:detail:${yieldId}`
+  const cacheKey = `yield:detail:${apiKeyScope(apiKey)}:${yieldId}`
   const cached = getCached<YieldProduct>(cacheKey)
   if (cached) return cached
 
@@ -305,6 +338,189 @@ export async function getBalances(
     }
   }
   return out
+}
+
+// --- Batched multi-network balances (architecture#1765) ---
+//
+// Ported from vultiagent-app's `src/features/dashboard/lib/yieldXyzPositions.ts`
+// (the app's local positions client) — the SDK's `getBalances` above is
+// single-network only and requires an extra `searchYields` round trip per
+// network to enumerate yield IDs. This queries `{network, address}` pairs
+// DIRECTLY across any number of networks in one logical call, batched at the
+// yield.xyz-enforced cap of 25 queries per HTTP request. Uses `api.yield.xyz`
+// (not `STAKEKIT_API_BASE`/`api.stakek.it`) — see the `YIELD_XYZ_API_BASE`
+// comment above for why the two hosts are not interchangeable here.
+
+/** One (network, address) balances query. */
+export type StakekitBalanceQuery = {
+  network: string
+  address: string
+}
+
+export type StakekitBalanceEntry = {
+  address?: string
+  amount: string
+  amountRaw?: string
+  amountUsd?: string
+  type: string
+  isEarning?: boolean
+  token: {
+    symbol: string
+    name: string
+    decimals: number
+    network: string
+    logoURI?: string
+    coinGeckoId?: string
+    address?: string
+  }
+  pendingActions: Array<{ type: string; [k: string]: unknown }>
+}
+
+/** One yield product's aggregated balances for the queried address(es). */
+export type StakekitBalanceItem = {
+  yieldId: string
+  balances: StakekitBalanceEntry[]
+  rewardRate?: {
+    total: number
+    rateType: string
+    components?: Array<{
+      rate: number
+      rateType: string
+      yieldSource?: string
+      description?: string
+      token: { symbol: string; name: string; decimals: number; network: string }
+    }>
+  }
+}
+
+export type StakekitBalancesResult = {
+  items: StakekitBalanceItem[]
+  /** Per-query failures the server captured without 5xx-ing the whole request,
+   * OR per-chunk rejections synthesized client-side in `fetchAllStakekitBalances`
+   * when an entire batch's fetch rejects (see that function). */
+  errors: Array<{ query?: { network?: string; address?: string }; message?: string }>
+}
+
+/** Per-request cap enforced by the yield.xyz batched-balances endpoint. */
+export const STAKEKIT_BALANCE_QUERIES_PER_REQUEST = 25
+const STAKEKIT_BALANCE_REQUEST_TIMEOUT_MS = 15_000
+
+/**
+ * Split an arbitrary-length query list into `size`-sized chunks so a caller
+ * never exceeds the per-request cap. Pure function, safe for fixture tests.
+ */
+export function chunkStakekitBalanceQueries(
+  queries: StakekitBalanceQuery[],
+  size: number = STAKEKIT_BALANCE_QUERIES_PER_REQUEST
+): StakekitBalanceQuery[][] {
+  if (!Number.isInteger(size) || size <= 0) {
+    throw new Error(`chunkStakekitBalanceQueries: size must be a positive integer, got ${size}`)
+  }
+  if (queries.length === 0) return []
+  const chunks: StakekitBalanceQuery[][] = []
+  for (let i = 0; i < queries.length; i += size) {
+    chunks.push(queries.slice(i, i + size))
+  }
+  return chunks
+}
+
+/**
+ * Fetch yield positions for one batch of ≤25 `{network, address}` queries.
+ * Throws on non-200, request timeout, or invalid JSON. Callers needing an
+ * arbitrary-length query list should use `fetchAllStakekitBalances` instead,
+ * which chunks and merges.
+ */
+export async function fetchStakekitBalancesBatch(
+  queries: StakekitBalanceQuery[],
+  apiKey?: string
+): Promise<StakekitBalancesResult> {
+  if (queries.length === 0) {
+    return { items: [], errors: [] }
+  }
+  if (queries.length > STAKEKIT_BALANCE_QUERIES_PER_REQUEST) {
+    throw new Error(
+      `fetchStakekitBalancesBatch: batch size ${queries.length} exceeds cap ${STAKEKIT_BALANCE_QUERIES_PER_REQUEST}`
+    )
+  }
+
+  const url = `${YIELD_XYZ_API_BASE}/yields/balances`
+  // This helper is part of the React Native SDK surface. Older Hermes
+  // runtimes do not implement AbortSignal.timeout(), so use the portable
+  // AbortController pattern shared by the other RN-exported fetch helpers.
+  const controller = new AbortController()
+  const timeoutId = setTimeout(
+    () => controller.abort(new Error(`yield.xyz balances timeout after ${STAKEKIT_BALANCE_REQUEST_TIMEOUT_MS}ms`)),
+    STAKEKIT_BALANCE_REQUEST_TIMEOUT_MS
+  )
+  try {
+    const resp = await fetch(url, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: authHeaders(apiKey, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ queries }),
+    })
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => '')
+      throw new Error(`yield.xyz ${resp.status}: ${body.slice(0, 200)}`)
+    }
+    const json = (await resp.json()) as {
+      items?: StakekitBalanceItem[] | null
+      errors?: StakekitBalancesResult['errors'] | null
+    }
+    // yield.xyz has been observed to return `items: null` on edge errors.
+    return {
+      items: Array.isArray(json?.items) ? json.items : [],
+      errors: Array.isArray(json?.errors) ? json.errors : [],
+    }
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
+/**
+ * Fetch yield positions for ANY number of `{network, address}` queries by
+ * chunking into ≤25-query requests and merging results. A single failing
+ * batch does not abort the others — its failure lands in `errors[]` with
+ * enough context (first network + batch size) to be diagnosable, address
+ * elided (PII). Throws only when EVERY batch fails, so a caller can
+ * distinguish "partial data" (still useful) from "the whole fetch failed".
+ */
+export async function fetchAllStakekitBalances(
+  queries: StakekitBalanceQuery[],
+  apiKey?: string
+): Promise<StakekitBalancesResult> {
+  const chunks = chunkStakekitBalanceQueries(queries)
+  if (chunks.length === 0) return { items: [], errors: [] }
+
+  const results = await Promise.allSettled(chunks.map(chunk => fetchStakekitBalancesBatch(chunk, apiKey)))
+
+  const items: StakekitBalanceItem[] = []
+  const errors: StakekitBalancesResult['errors'] = []
+  let fulfilledCount = 0
+  results.forEach((r, idx) => {
+    const chunk = chunks[idx]
+    if (r.status === 'fulfilled') {
+      fulfilledCount += 1
+      items.push(...r.value.items)
+      errors.push(...r.value.errors)
+    } else {
+      const firstNetwork = chunk?.[0]?.network ?? '?'
+      errors.push({
+        message: r.reason instanceof Error ? r.reason.message : String(r.reason),
+        query: { network: `${firstNetwork} (batch of ${chunk?.length ?? 0})` },
+      })
+    }
+  })
+
+  if (fulfilledCount === 0 && results.length > 0) {
+    const firstErr = results.find((r): r is PromiseRejectedResult => r.status === 'rejected')
+    const reason = firstErr?.reason
+    throw reason instanceof Error
+      ? reason
+      : new Error(`fetchAllStakekitBalances: all ${results.length} batch(es) failed — ${String(reason ?? 'unknown')}`)
+  }
+
+  return { items, errors }
 }
 
 export async function callYieldMCP(toolName: string, args: Record<string, unknown>, apiKey?: string): Promise<string> {
