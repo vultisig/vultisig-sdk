@@ -959,6 +959,14 @@ describe('scan-request coverage (architecture#1670)', () => {
     expect(req).toEqual({ kind: 'unsupported', reason: 'no_compiled_txs' })
   })
 
+  it('rejects a malformed JSON Solana wrapper instead of scanning the wrapper text as transaction bytes', () => {
+    const req = buildYieldStepScanRequest({
+      network: 'solana',
+      unsignedTransaction: '{}',
+    } as YieldTransaction)
+    expect(req).toEqual({ kind: 'unsupported', reason: 'no_compiled_txs' })
+  })
+
   it('a chain with no first-party scan surface still yields unsupported: chain_not_supported', () => {
     const req = buildYieldStepScanRequest(makeSolanaTx({ network: 'cosmos-hub' }))
     expect(req).toEqual({ kind: 'unsupported', reason: 'chain_not_supported' })

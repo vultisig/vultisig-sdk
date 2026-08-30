@@ -554,21 +554,16 @@ function asEvmUnsignedTx(raw: string): EvmUnsignedTx | null {
  * a circular import.
  */
 function extractSolanaTxCandidate(unsignedTransaction: string): string | null {
-  let candidate: string | null = null
   try {
     const maybeObj = JSON.parse(unsignedTransaction) as unknown
     if (maybeObj && typeof maybeObj === 'object') {
       const obj = maybeObj as { serialized?: unknown; tx?: unknown }
-      candidate =
-        (typeof obj.serialized === 'string' && obj.serialized) || (typeof obj.tx === 'string' && obj.tx) || null
+      return (typeof obj.serialized === 'string' && obj.serialized) || (typeof obj.tx === 'string' && obj.tx) || null
     }
+    return null
   } catch {
-    candidate = unsignedTransaction
+    return unsignedTransaction || null
   }
-  if (candidate === null && unsignedTransaction.length > 0) {
-    candidate = unsignedTransaction
-  }
-  return candidate
 }
 
 /**

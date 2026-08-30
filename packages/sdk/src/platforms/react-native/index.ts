@@ -621,8 +621,9 @@ export type {
   BuildGlifStakeResult,
   Defi,
   GlifUnsignedTx,
+  SolanaScanRequest,
 } from '../../tools/defi'
-export { buildBalancerV3SwapCalldata, defi } from '../../tools/defi'
+export { buildBalancerV3SwapCalldata, buildYieldActionScanRequests, defi } from '../../tools/defi'
 export {
   buildGlifRedeemSticnt,
   buildGlifStakeIcnt,
