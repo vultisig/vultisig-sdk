@@ -26,6 +26,7 @@
  * Skip's grpc-gateway returns structured `{code, message, details}` errors;
  * `SkipApiError` surfaces `code` (stable) rather than regexing messages.
  */
+import { COSMOS_CHAIN_ID_HRP } from '@vultisig/core-chain/chains/cosmos/cosmosHrp'
 import {
   getCosmosMemoMaxBytesByChainId,
   getCosmosPacketMemoMaxBytesByChainId,
@@ -433,23 +434,10 @@ function isUstcRoute(args: SkipSwapArgs): boolean {
  * Expected bech32 HRP per supported cosmos chain id. Without this the generic
  * `^[a-z]+1...` regex would accept `terra1...` for `cosmoshub-4` (and vice
  * versa) — the user signs with a vault-derived key on the wrong chain.
+ * Sourced from the canonical `COSMOS_CHAIN_ID_HRP` registry
+ * (architecture#1787) instead of a local copy.
  */
-const COSMOS_CHAIN_HRPS: Record<string, string> = {
-  'cosmoshub-4': 'cosmos',
-  'osmosis-1': 'osmo',
-  'phoenix-1': 'terra',
-  'columbus-5': 'terra',
-  'noble-1': 'noble',
-  'neutron-1': 'neutron',
-  'kaiyo-1': 'kujira',
-  'thorchain-1': 'thor',
-  'mayachain-mainnet-v1': 'maya',
-  'dydx-mainnet-1': 'dydx',
-  'stride-1': 'stride',
-  'agoric-3': 'agoric',
-  celestia: 'celestia',
-  'injective-1': 'inj',
-}
+const COSMOS_CHAIN_HRPS: Record<string, string> = COSMOS_CHAIN_ID_HRP
 
 function validateAddressShape(address: string, chainId: string, field: string): void {
   if (isEvmChainId(chainId)) {
