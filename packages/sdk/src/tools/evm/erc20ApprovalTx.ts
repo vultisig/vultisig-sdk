@@ -127,6 +127,9 @@ const parseHumanTokenAmount = (amount: string, decimals: number): bigint => {
   }
 
   if (wholePart === '') {
+    if (fracPart === '') {
+      throw new Error(`invalid amount: ${amount}`)
+    }
     wholePart = '0'
   }
   if (!/^[0-9]+$/.test(wholePart)) {

@@ -22,6 +22,7 @@ export { evm }
 export type {
   BuildErc20ApprovalTxParams,
   BuildErc20ApprovalTxResult,
+  DecodedAgentRouterDeposit,
   Erc20ApprovalAmountMode,
   Erc20ApprovalTxEnvelope,
   Erc20ApprovalValidationHooks,
@@ -34,24 +35,40 @@ export type {
   ParseErc20ApprovalAmountParams,
   ParseErc20ApprovalAmountResult,
   TokenApproval,
+  UsdcPaymentChain,
+  UsdcPaymentChainConfig,
 } from './evm'
 export {
   abiDecode,
   abiEncode,
+  AGENT_ROUTER_ADDRESS,
+  AGENT_ROUTER_DEPOSIT_WITH_MEMO_SELECTOR,
   buildErc20ApprovalTx,
+  CHECKOUT_CHAIN_IDS,
+  decodeAgentRouterDepositWithMemo,
   DEFAULT_MAX_APPROVAL_TO_BALANCE_RATIO,
+  encodeAgentRouterDepositWithMemo,
   encodeErc20Approve,
   encodeErc20Revoke,
   evmCall,
   evmCheckAllowance,
   evmGasPrice,
   evmTxInfo,
+  formatCheckoutUsdcDisplay,
   getEvmBalances,
   getTokenApprovals,
+  isUsdcPaymentChain,
+  lookupUsdcPaymentChain,
   MAX_UINT256,
   parseErc20ApprovalAmount,
   resolve4ByteSelector,
   resolveEns,
+  resolveUsdcPaymentChainId,
+  resolveUsdcPaymentContract,
+  USDC_CONTRACTS,
+  USDC_PAYMENT_CHAIN_CONFIG,
+  USDC_PAYMENT_CHAINS,
+  USDC_PAYMENT_DECIMALS,
 } from './evm'
 
 // Balance reads (pure decode + decimal-scale, no signing/broadcast)
@@ -60,7 +77,7 @@ export { cosmosBalanceChains, getCosmosBalance, isCosmosBalanceChain } from './b
 
 // Canonical bytes oracle (calldata -> chain-agnostic Envelope)
 export type { AssetRef, ChainFamily, DecodeFromToolResultInput, Envelope, EnvelopeKind } from './decode'
-export { decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from './decode'
+export { decode, decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from './decode'
 
 // DEX primitives (read-only / pure math + on-chain quotes — no signing, no broadcast)
 export * as dex from './dex'
@@ -153,6 +170,8 @@ export type {
   GetCosmosGovernanceProposalsParams,
   GetGovernanceProposalsResult,
   GovChain,
+  GovChainId,
+  GovChainInput,
   GovernanceProposal,
   PrepareCosmosVoteParams,
   ProposalStatus,
@@ -164,6 +183,7 @@ export { getCosmosGovernanceProposals, prepareCosmosVote } from './cosmos'
 // Swap
 export type {
   AcrossChain,
+  AcrossOriginChain,
   AcrossQuote,
   AcrossQuoteParams,
   AstroportSwapResult,
@@ -185,6 +205,7 @@ export type {
   SwapQuoteCandidate,
 } from './swap'
 export {
+  ACROSS_ORIGIN_CHAIN,
   acrossQuote,
   acrossSupportedChains,
   assembleAstroportSwap,
@@ -223,6 +244,7 @@ export type {
   BuildCctpClaimParams,
   CctpAttestationResult,
   CctpBridgeResult,
+  CctpBurnMessage,
   CctpChainConfig,
   CctpClaimResult,
   CctpUnsignedTx,
@@ -233,8 +255,10 @@ export {
   cctpAttestationApiBase,
   cctpChains,
   cctpSupportedChains,
+  decodeCctpBurnMessage,
   formatUsdc,
   getCctpChain,
+  getCctpChainNameByDomain,
   normalizeHexBytes,
   parseUsdcAmount,
 } from './bridge'
@@ -273,6 +297,11 @@ export type {
   PendlePtBuildResult,
   PendleUnsignedTx,
   ScanRequest,
+  SolanaScanRequest,
+  StakekitBalanceEntry,
+  StakekitBalanceItem,
+  StakekitBalanceQuery,
+  StakekitBalancesResult,
   UnsupportedScanRequest,
   Validator,
   YieldActionResponse,
@@ -295,8 +324,12 @@ export {
   buildRedeem,
   buildSellPt,
   buildYieldActionScanRequest,
+  buildYieldActionScanRequests,
   buildYieldStepScanRequest,
+  chunkStakekitBalanceQueries,
   defi,
+  fetchAllStakekitBalances,
+  fetchStakekitBalancesBatch,
   GLIF_ICN_BASE_ADDRESSES,
   GLIF_ICN_TOKEN_DECIMALS,
   glifPoolWriteAbi,
@@ -309,6 +342,7 @@ export {
   pendleMarket,
   pendleMarkets,
   stakekit,
+  STAKEKIT_BALANCE_QUERIES_PER_REQUEST,
   stakekitBalances,
   stakekitBuildEnter,
   stakekitBuildExit,
@@ -379,6 +413,7 @@ export {
   type CosmosStakingMsgEnvelope,
   type CosmWasmExecuteFund,
   type DelegateParams,
+  type EvmTxNumberish,
   getMaxSendAmountFromKeys,
   type GetMaxSendAmountFromKeysParams,
   IBC_CHAIN_HRP,
@@ -398,6 +433,8 @@ export {
   preparePolkadotAssetSend,
   type PreparePolkadotAssetSendParams,
   type PreparePolkadotAssetSendResult,
+  prepareRawEvmTxFromKeys,
+  type PrepareRawEvmTxFromKeysParams,
   prepareSendTxFromKeys,
   type PrepareSendTxFromKeysParams,
   prepareSignAminoTxFromKeys,
@@ -413,7 +450,9 @@ export {
   type PrepareUtxoConsolidateResult,
   prepareUtxoConsolidateTxFromKeys,
   type PrepareUtxoConsolidateTxFromKeysParams,
+  type RawEvmTxEnvelope,
   type RedelegateParams,
+  resolveSourceChannelByDestChain,
   type SplTransferResult,
   SUI_NATIVE_COIN_TYPE,
   supportedIbcDestinationsFrom,

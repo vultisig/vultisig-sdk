@@ -1,3 +1,5 @@
+import { rootApiUrl } from '@vultisig/core-config'
+
 /**
  * Constants for Kamino Earn vaults (kVaults) on Solana.
  *
@@ -6,8 +8,17 @@
  * every built transaction must be validated on-device before it is signed.
  */
 export const kaminoConfig = {
-  /** Kamino's public REST API. No key, no auth header. */
-  apiBaseUrl: 'https://api.kamino.finance',
+  /**
+   * Kamino's REST API, reached through the Vultisig proxy like every other
+   * third-party API this package calls.
+   *
+   * Not a preference. Upstream answers the CORS preflight with a 404 and
+   * returns no `access-control-allow-origin` on the build endpoints, so a
+   * browser refuses the POST that deposits and withdrawals depend on. Native
+   * clients never notice — CORS is enforced by the browser, not the server —
+   * which is why this surfaced only in a webview.
+   */
+  apiBaseUrl: `${rootApiUrl}/kamino`,
 
   /** The kVaults program every deposit and withdraw invokes. */
   programId: 'KvauGMspG5k6rtzrqqn7WNn3oZdyKqLKwK2XWQ8FLjd',

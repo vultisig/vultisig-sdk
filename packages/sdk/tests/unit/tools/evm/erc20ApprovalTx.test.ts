@@ -68,6 +68,10 @@ describe('parseErc20ApprovalAmount', () => {
   it('requires decimals for human-readable specific amounts', () => {
     expect(() => parseErc20ApprovalAmount({ amount: '1.2' })).toThrow(/decimals are required/)
   })
+
+  it('rejects a bare decimal point instead of treating it as revoke', () => {
+    expect(() => parseErc20ApprovalAmount({ amount: '.', decimals: 6 })).toThrow(/invalid amount/)
+  })
 })
 
 describe('buildErc20ApprovalTx', () => {
