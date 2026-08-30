@@ -217,6 +217,7 @@ export function decodeErc20RecipientFromSig(functionSig: unknown, args: unknown)
   } else {
     return null
   }
+  if (args.length !== argTypes.length) return null
   const raw = args[idx]
   if (typeof raw !== 'string') return null
   const addr = raw.trim().toLowerCase()

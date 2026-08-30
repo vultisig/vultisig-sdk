@@ -84,7 +84,10 @@ const approveCalldata = (spender20: string, amountHex = AMOUNT_1) => `0x095ea7b3
 
 describe('decodeErc20Approve', () => {
   it('extracts the spender + amount from raw approve calldata', () => {
-    expect(decodeErc20Approve(approveCalldata(SAFE))).toEqual({ spender: SAFE, amount: 1n })
+    expect(decodeErc20Approve(approveCalldata(SAFE))).toEqual({
+      spender: SAFE,
+      amount: 1n,
+    })
     const unlimited = decodeErc20Approve(approveCalldata(SAFE, MAX_UINT256_HEX))
     expect(unlimited?.spender).toBe(SAFE)
     expect(unlimited?.amount).toBe((1n << 256n) - 1n)
@@ -139,7 +142,8 @@ describe('decodeErc20RecipientFromSig', () => {
     expect(decodeErc20RecipientFromSig('transferFrom(address,address)', [SAFE, SAFE])).toBeNull()
     expect(decodeErc20RecipientFromSig('transferFrom(address,address,bytes32)', [SAFE, SAFE, '0x00'])).toBeNull()
     expect(decodeErc20RecipientFromSig('transfer(address,uint256) trailing', [SAFE, '1'])).toBeNull()
-    expect(decodeErc20RecipientFromSig('transfer(address,uint256)', [SAFE])).not.toBeNull() // args[0] present is enough
+    expect(decodeErc20RecipientFromSig('transfer(address,uint256)', [SAFE])).toBeNull()
+    expect(decodeErc20RecipientFromSig('transfer(address,uint256)', [SAFE, '1', 'extra'])).toBeNull()
     expect(decodeErc20RecipientFromSig('transfer(address,uint256)', 'not-an-array')).toBeNull()
     expect(decodeErc20RecipientFromSig(123, [SAFE, '1'])).toBeNull()
   })
