@@ -93,6 +93,21 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(reactNativeEntry[name]).toBe(dangerousAddresses[name])
   })
 
+  it('re-exports the plural StakeKit scan-request builder by identity', async () => {
+    const stakekit = await import('../../../../src/tools/defi/stakekit')
+    expect(reactNativeEntry.buildYieldActionScanRequests).toBe(stakekit.buildYieldActionScanRequests)
+  })
+
+  it.each([
+    'chunkStakekitBalanceQueries',
+    'fetchAllStakekitBalances',
+    'fetchStakekitBalancesBatch',
+    'STAKEKIT_BALANCE_QUERIES_PER_REQUEST',
+  ] as const)('re-exports StakeKit batched-balances canonical %s by identity', async name => {
+    const stakekit = await import('../../../../src/tools/defi/stakekit')
+    expect(reactNativeEntry[name]).toBe(stakekit[name])
+  })
+
   // sdk#1772: the RN entry omitted the whole validation / address-format
   // canonical family, so mobile consumers had to deep-import or keep an
   // app-local mirror - the exact duplicated-not-imported drift these helpers
