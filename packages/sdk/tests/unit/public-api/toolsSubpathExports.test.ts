@@ -22,6 +22,7 @@ describe('public API subpath exports', () => {
     const decodeExport = sdkPackageJson.exports['./tools/decode']
     const policyExport = sdkPackageJson.exports['./tools/policy']
     const txExport = sdkPackageJson.exports['./tx']
+    const serverExport = sdkPackageJson.exports['./server']
 
     expect(parseExport).toMatchObject({
       types: './dist/tools/parse/index.d.ts',
@@ -89,6 +90,12 @@ describe('public API subpath exports', () => {
       require: './dist/tx/index.cjs',
       default: './dist/tx/index.cjs',
     })
+    expect(serverExport).toMatchObject({
+      types: './dist/server/index.d.ts',
+      import: './dist/server/index.js',
+      require: './dist/server/index.cjs',
+      default: './dist/server/index.cjs',
+    })
 
     expect(JSON.stringify(parseExport)).not.toContain('dist/index.node')
     expect(JSON.stringify(defiExport)).not.toContain('dist/index.node')
@@ -100,6 +107,7 @@ describe('public API subpath exports', () => {
     expect(JSON.stringify(decodeExport)).not.toContain('dist/index.node')
     expect(JSON.stringify(policyExport)).not.toContain('dist/index.node')
     expect(JSON.stringify(txExport)).not.toContain('dist/index.node')
+    expect(JSON.stringify(serverExport)).not.toContain('dist/index.node')
   })
 
   it('keeps dedicated JS and d.ts bundle generation wired for every narrow public surface', () => {
@@ -125,6 +133,8 @@ describe('public API subpath exports', () => {
     expect(platformRollupConfig).toContain("distBase: 'tools/policy'")
     expect(platformRollupConfig).toContain("input: './src/tx/index.ts'")
     expect(platformRollupConfig).toContain("distBase: 'tx'")
+    expect(platformRollupConfig).toContain("input: './src/server/index.ts'")
+    expect(platformRollupConfig).toContain("distBase: 'server'")
 
     expect(typesRollupConfig).toContain(
       "createSubpathTypesConfig('src/tools/parse/index.ts', 'dist/tools/parse/index.d.ts')"
@@ -157,5 +167,6 @@ describe('public API subpath exports', () => {
       "createSubpathTypesConfig('src/tools/policy/index.ts', 'dist/tools/policy/index.d.ts')"
     )
     expect(typesRollupConfig).toContain("createSubpathTypesConfig('src/tx/index.ts', 'dist/tx/index.d.ts')")
+    expect(typesRollupConfig).toContain("createSubpathTypesConfig('src/server/index.ts', 'dist/server/index.d.ts')")
   })
 })
