@@ -483,6 +483,21 @@ export {
   XRP_DANGEROUS_ADDRESSES,
 } from './utils/dangerousAddresses'
 
+// Token-transfer / ERC-20-calldata destination guards (architecture#1774).
+// A sibling to the burn-address guard above: rejects a transfer whose
+// RECIPIENT is itself a known token contract, plus the calldata decoders
+// needed to find that recipient when it's hidden inside an ERC-20
+// transfer/transferFrom call rather than a plain send. Exported so
+// first-party consumers stop hand-maintaining a private fork.
+export {
+  assertSafeTokenTransferDestination,
+  decodeErc20Approve,
+  decodeErc20Recipient,
+  decodeErc20RecipientFromSig,
+  ERC20_APPROVE_SELECTOR,
+  isErc20TransferCalldata,
+} from './utils/dangerousAddresses'
+
 // EVM chainId ↔ chain mapping plus the canonical priority-fee sanity clamp.
 // Single source of truth for the per-chain EVM chainId table and fee-ceiling
 // policy so consumers (app, agent-backend-ts) import it instead of
@@ -869,6 +884,7 @@ export type {
   CosmosBalanceChain,
   CosmosBalanceEntry,
   CosmosBalanceResult,
+  DecodedAgentRouterDeposit,
   DecodeFromToolResultInput,
   Defi,
   Envelope,
@@ -933,6 +949,7 @@ export type {
   SkipSwapOutcome,
   SkipSwapSuccess,
   SkipUnsignedMsg,
+  SolanaScanRequest,
   SolBalance,
   SplTokenBalance,
   StakekitBalanceEntry,
@@ -957,6 +974,8 @@ export type {
   TrxBalance,
   UnsignedTrc20Transfer,
   UnsupportedScanRequest,
+  UsdcPaymentChain,
+  UsdcPaymentChainConfig,
   UtxoBalance,
   UtxoBalanceChain,
   UtxoFeeRate,
@@ -991,6 +1010,8 @@ export {
   ACROSS_ORIGIN_CHAIN,
   acrossQuote,
   acrossSupportedChains,
+  AGENT_ROUTER_ADDRESS,
+  AGENT_ROUTER_DEPOSIT_WITH_MEMO_SELECTOR,
   AMOUNT_DRIFT_BLOCK_PCT,
   AMOUNT_DRIFT_WARN_PCT,
   amountDriftPct,
@@ -1017,6 +1038,7 @@ export {
   buildUndelegateMsg,
   buildWithdrawRewardsMsg,
   buildYieldActionScanRequest,
+  buildYieldActionScanRequests,
   buildYieldStepScanRequest,
   cctpAttestationApiBase,
   cctpChains,
@@ -1025,6 +1047,7 @@ export {
   chainFeeCoin,
   chainsMatch,
   checkInvariants,
+  CHECKOUT_CHAIN_IDS,
   chunkStakekitBalanceQueries,
   claimInterpretations,
   classifyAstroportAsset,
@@ -1038,6 +1061,7 @@ export {
   cosmosBalanceChains,
   cosmosStaking,
   decode,
+  decodeAgentRouterDepositWithMemo,
   decodeBittensorAddress,
   decodeCctpBurnMessage,
   decodeCosmosTx,
@@ -1049,6 +1073,7 @@ export {
   deriveAddressFromKeys,
   dex,
   DOT_DECIMALS,
+  encodeAgentRouterDepositWithMemo,
   encodeErc20Approve,
   encodeErc20Revoke,
   estimateCosmosSwapFeeLabel,
@@ -1063,6 +1088,7 @@ export {
   fetchStakekitBalancesBatch,
   findSwapQuote,
   findSwapQuotes,
+  formatCheckoutUsdcDisplay,
   formatDot,
   formatUsdc,
   formatUtxoBalance,
@@ -1114,6 +1140,7 @@ export {
   isNullAddress,
   isPendleChain,
   isSelfSend,
+  isUsdcPaymentChain,
   isValidTxHash,
   isZeroAmount,
   JUPITER_AFFILIATE_FEE_ATAS,
@@ -1123,6 +1150,7 @@ export {
   JUPITER_PLATFORM_FEE_BPS,
   knownTokens,
   knownTokensIndex,
+  lookupUsdcPaymentChain,
   MAX_UINT256,
   MAYACHAIN_NODE_URL,
   NATIVE_COINGECKO_IDS,
@@ -1164,6 +1192,8 @@ export {
   resolveJupiterFeeAccount,
   resolveLuncFloorUsd,
   resolveSourceChannelByDestChain,
+  resolveUsdcPaymentChainId,
+  resolveUsdcPaymentContract,
   ResultKind,
   runSkipSwap,
   sanitizeAmount,
@@ -1192,6 +1222,10 @@ export {
   THORCHAIN_NODE_URL,
   token,
   TRC20_TRANSFER_SELECTOR,
+  USDC_CONTRACTS,
+  USDC_PAYMENT_CHAIN_CONFIG,
+  USDC_PAYMENT_CHAINS,
+  USDC_PAYMENT_DECIMALS,
   utxoFeeRate,
   VerifierClient,
 } from './tools'

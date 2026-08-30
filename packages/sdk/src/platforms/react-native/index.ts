@@ -629,6 +629,7 @@ export type {
   BuildGlifStakeResult,
   Defi,
   GlifUnsignedTx,
+  SolanaScanRequest,
   StakekitBalanceEntry,
   StakekitBalanceItem,
   StakekitBalanceQuery,
@@ -636,6 +637,7 @@ export type {
 } from '../../tools/defi'
 export {
   buildBalancerV3SwapCalldata,
+  buildYieldActionScanRequests,
   chunkStakekitBalanceQueries,
   defi,
   fetchAllStakekitBalances,
@@ -1049,9 +1051,15 @@ export { assertUtxoAddressBrand, isUtxoAddressBrandValid } from '../../chains/ut
 export {
   assertSafeDestination,
   assertSafeEvmDestination,
+  assertSafeTokenTransferDestination,
+  decodeErc20Approve,
+  decodeErc20Recipient,
+  decodeErc20RecipientFromSig,
+  ERC20_APPROVE_SELECTOR,
   EVM_DANGEROUS_ADDRESSES,
   getChainDangerousReason,
   getEvmDangerousReason,
+  isErc20TransferCalldata,
   isEvmBurnAddress,
   SOLANA_DANGEROUS_ADDRESSES,
   UTXO_DANGEROUS_ADDRESSES,
