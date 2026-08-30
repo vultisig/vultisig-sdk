@@ -51,6 +51,11 @@ import { configureCrypto } from '../../crypto'
 import * as cosmos from '../../tools/cosmos'
 import * as evm from '../../tools/evm'
 import type { prepareRawEvmTxFromKeys as PrepareRawEvmTxFromKeys } from '../../tools/prep/rawEvm'
+import type { prepareSuiTokenTransferFromKeys as PrepareSuiTokenTransferFromKeys } from '../../tools/prep/suiTokenTransfer'
+import type {
+  buildJupiterSwapTx as BuildJupiterSwapTx,
+  resolveJupiterFeeAccount as ResolveJupiterFeeAccount,
+} from '../../tools/swap/jupiter'
 import * as token from '../../tools/token'
 import { ReactNativeCrypto } from './crypto'
 import { ReactNativeStorage } from './storage'
@@ -394,14 +399,11 @@ export type {
   ConsolidateUtxo,
   EvmTxNumberish,
   GetMaxSendAmountFromKeysParams,
-  PrepareIbcTransferParams,
-  PrepareIbcTransferResult,
   PrepareJettonTransferTxFromKeysParams,
   PreparePolkadotAssetSendParams,
   PreparePolkadotAssetSendResult,
   PrepareRawEvmTxFromKeysParams,
   PrepareSendTxFromKeysParams,
-  PrepareSuiTokenTransferFromKeysParams,
   PrepareSwapTxFromKeysParams,
   PrepareTrc20TransferFromKeysParams,
   PrepareUtxoConsolidateResult,
@@ -416,17 +418,7 @@ export type {
 // buffer (RN-safe, no mpc/keysign), so unlike the other prep helpers they are
 // statically re-exported rather than lazy-imported. Omitting them here would
 // break the hand-curated RN export list for vultiagent-app consumers.
-export {
-  IBC_CHAIN_HRP,
-  IBC_CHAIN_REVISION,
-  IBC_CHANNEL_DEST,
-  IBC_MSG_TRANSFER_TYPE_URL,
-  normaliseIbcChainId,
-  prepareIbcTransfer,
-  prepareSuiTokenTransferFromKeys,
-  resolveSourceChannelByDestChain,
-  supportedIbcDestinationsFrom,
-} from '../../tools/prep'
+export { resolveSourceChannelByDestChain } from '../../tools/prep'
 export type {
   CosmosStakingMsgEnvelope,
   DelegateParams,
@@ -466,9 +458,11 @@ export {
   supportedIbcDestinationsFrom,
 } from '../../tools/prep/ibcTransfer'
 export type { PrepareSuiTokenTransferFromKeysParams } from '../../tools/prep/suiTokenTransfer'
-export async function prepareSuiTokenTransferFromKeys(...args: unknown[]) {
+export async function prepareSuiTokenTransferFromKeys(
+  ...args: Parameters<typeof PrepareSuiTokenTransferFromKeys>
+): Promise<Awaited<ReturnType<typeof PrepareSuiTokenTransferFromKeys>>> {
   const mod = await import('../../tools/prep/suiTokenTransfer')
-  return mod.prepareSuiTokenTransferFromKeys(...(args as Parameters<typeof mod.prepareSuiTokenTransferFromKeys>))
+  return mod.prepareSuiTokenTransferFromKeys(...args)
 }
 export { TRC20_TRANSFER_SELECTOR } from '../../tools/prep/trc20'
 export { CONSOLIDATE_CHAINS } from '../../tools/prep/utxoConsolidate'
@@ -792,21 +786,13 @@ export type {
 export {
   acrossQuote,
   acrossSupportedChains,
-  buildJupiterSwapTx,
   buildSkipAffiliates,
   findSwapQuote,
-  JUPITER_AFFILIATE_FEE_ATAS,
-  JUPITER_AFFILIATE_FEE_OWNER,
-  JUPITER_API_BASE_URL,
-  JUPITER_DEFAULT_SLIPPAGE_BPS,
-  JUPITER_PLATFORM_FEE_BPS,
   quoteSkipRoute,
-  resolveJupiterFeeAccount,
   resolveLuncFloorUsd,
   runSkipSwap,
   SKIP_AFFILIATE_ADDRESS_BY_CHAIN,
   skipChainIdToChainName,
-  SOL_NATIVE_MINT,
 } from '../../tools/swap'
 
 // Noon USDC vault helpers. The root SDK entry already exports these canonicals,
@@ -1002,13 +988,17 @@ export {
   JUPITER_PLATFORM_FEE_BPS,
   SOL_NATIVE_MINT,
 } from '../../tools/swap/jupiterConstants'
-export async function buildJupiterSwapTx(...args: unknown[]) {
+export async function buildJupiterSwapTx(
+  ...args: Parameters<typeof BuildJupiterSwapTx>
+): Promise<Awaited<ReturnType<typeof BuildJupiterSwapTx>>> {
   const mod = await import('../../tools/swap/jupiter')
-  return mod.buildJupiterSwapTx(...(args as Parameters<typeof mod.buildJupiterSwapTx>))
+  return mod.buildJupiterSwapTx(...args)
 }
-export async function resolveJupiterFeeAccount(...args: unknown[]) {
+export async function resolveJupiterFeeAccount(
+  ...args: Parameters<typeof ResolveJupiterFeeAccount>
+): Promise<Awaited<ReturnType<typeof ResolveJupiterFeeAccount>>> {
   const mod = await import('../../tools/swap/jupiter')
-  return mod.resolveJupiterFeeAccount(...(args as Parameters<typeof mod.resolveJupiterFeeAccount>))
+  return mod.resolveJupiterFeeAccount(...args)
 }
 export { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
 export async function fiatToAmount(...args: unknown[]) {
