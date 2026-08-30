@@ -93,6 +93,21 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(reactNativeEntry[name]).toBe(dangerousAddresses[name])
   })
 
+  it('re-exports the plural StakeKit scan-request builder by identity', async () => {
+    const stakekit = await import('../../../../src/tools/defi/stakekit')
+    expect(reactNativeEntry.buildYieldActionScanRequests).toBe(stakekit.buildYieldActionScanRequests)
+  })
+
+  it.each([
+    'chunkStakekitBalanceQueries',
+    'fetchAllStakekitBalances',
+    'fetchStakekitBalancesBatch',
+    'STAKEKIT_BALANCE_QUERIES_PER_REQUEST',
+  ] as const)('re-exports StakeKit batched-balances canonical %s by identity', async name => {
+    const stakekit = await import('../../../../src/tools/defi/stakekit')
+    expect(reactNativeEntry[name]).toBe(stakekit[name])
+  })
+
   // sdk#1772: the RN entry omitted the whole validation / address-format
   // canonical family, so mobile consumers had to deep-import or keep an
   // app-local mirror - the exact duplicated-not-imported drift these helpers
@@ -469,6 +484,23 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.toXrplCurrencyCode('RLUSD')).toBe('524C555344000000000000000000000000000000')
   })
 
+  it('re-exports XRP destination/X-address normalization on the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(typeof rn.decodeRippleXAddress).toBe('function')
+    expect(typeof rn.encodeRippleXAddress).toBe('function')
+    expect(typeof rn.isValidRippleXAddress).toBe('function')
+    expect(typeof rn.normalizeRippleDestination).toBe('function')
+
+    const classicAddress = 'raJ1Aqkhf19P7cyUc33MMVAzgvHPvtNFC'
+    expect(rn.normalizeRippleDestination(classicAddress)).toEqual({ address: classicAddress })
+
+    const xAddress = rn.encodeRippleXAddress(classicAddress, 42)
+    expect(rn.isValidRippleXAddress(xAddress)).toBe(true)
+    expect(rn.decodeRippleXAddress(xAddress)).toEqual({ address: classicAddress, destinationTag: 42 })
+    expect(rn.normalizeRippleDestination(xAddress)).toEqual({ address: classicAddress, destinationTag: 42 })
+  })
+
   it('re-exports the custom-RPC canonicals on the RN entrypoint', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
@@ -727,6 +759,9 @@ describe('RN entry exposes canonical IBC + Sui prep helpers', () => {
 
     expect(rn.prepareIbcTransfer).toBe(prep.prepareIbcTransfer)
     expect(rn.prepareIbcTransfer).toBe(ibcTransfer.prepareIbcTransfer)
+    expect(rn.resolveSourceChannelByDestChain).toBe(prep.resolveSourceChannelByDestChain)
+    expect(rn.resolveSourceChannelByDestChain).toBe(ibcTransfer.resolveSourceChannelByDestChain)
+    expect(rn.resolveSourceChannelByDestChain('cosmoshub-4', 'noble-1')).toBe('channel-536')
     expect(rn.supportedIbcDestinationsFrom).toBe(prep.supportedIbcDestinationsFrom)
     expect(rn.normaliseIbcChainId).toBe(ibcTransfer.normaliseIbcChainId)
     expect(rn.IBC_MSG_TRANSFER_TYPE_URL).toBe(ibcTransfer.IBC_MSG_TRANSFER_TYPE_URL)
