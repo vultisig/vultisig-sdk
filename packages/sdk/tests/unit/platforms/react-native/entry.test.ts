@@ -93,6 +93,12 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(reactNativeEntry[name]).toBe(dangerousAddresses[name])
   })
 
+  it('re-exports the canonical Blockchair base URL helper by identity', async () => {
+    const canonical = await import('@vultisig/core-chain/chains/utxo/client/getBlockchairBaseUrl')
+
+    expect(reactNativeEntry.getBlockchairBaseUrl).toBe(canonical.getBlockchairBaseUrl)
+  })
+
   it.each([
     'chunkStakekitBalanceQueries',
     'fetchAllStakekitBalances',
