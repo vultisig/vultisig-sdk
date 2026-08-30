@@ -34,6 +34,7 @@
     "build:shared": "node scripts/build-shared-packages.mjs",
     "worktree:setup": "node scripts/setup-worktree.mjs",
     "worktree:check": "node scripts/setup-worktree.mjs --check",
+    "worktree:deps": "node scripts/setup-worktree.mjs --deps",
     "check:shared-exports": "node scripts/build-shared-packages.mjs --check",
     "pack:shared": "node scripts/pack-shared-packages.mjs",
     "sync-packages": "syncpack fix-mismatches",

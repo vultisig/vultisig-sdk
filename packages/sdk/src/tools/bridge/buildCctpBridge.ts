@@ -149,24 +149,33 @@ const addressToBytes32 = (addr: `0x${string}`): `0x${string}` => {
  * ```
  */
 export const buildCctpBridge = (params: BuildCctpBridgeParams): CctpBridgeResult => {
-  const srcChainName = params.sourceChain.trim()
-  const dstChainName = params.destinationChain.trim()
+  const srcInput = params.sourceChain.trim()
+  const dstInput = params.destinationChain.trim()
+
+  // Resolve BEFORE the same-chain guard. Comparing the raw strings would let
+  // `('base', 'Base')` through as two different chains and then build a bridge
+  // from a chain to itself, which is exactly the failure alias tolerance would
+  // otherwise introduce.
+  const srcCctp: CctpChainConfig | undefined = getCctpChain(srcInput)
+  if (!srcCctp) {
+    throw new Error(
+      `source chain ${JSON.stringify(srcInput)} is not supported by CCTP. Supported: ${cctpSupportedChains.join(', ')}`
+    )
+  }
+  const dstCctp: CctpChainConfig | undefined = getCctpChain(dstInput)
+  if (!dstCctp) {
+    throw new Error(
+      `destination chain ${JSON.stringify(dstInput)} is not supported by CCTP. Supported: ${cctpSupportedChains.join(', ')}`
+    )
+  }
+
+  // Canonical names from here on, so the emitted envelope always carries
+  // `"Base"` regardless of whether the caller wrote `base`, `BASE` or an alias.
+  const srcChainName = srcCctp.chain
+  const dstChainName = dstCctp.chain
 
   if (srcChainName === dstChainName) {
     throw new Error('sourceChain and destinationChain must be different')
-  }
-
-  const srcCctp: CctpChainConfig | undefined = getCctpChain(srcChainName)
-  if (!srcCctp) {
-    throw new Error(
-      `source chain ${JSON.stringify(srcChainName)} is not supported by CCTP. Supported: ${cctpSupportedChains.join(', ')}`
-    )
-  }
-  const dstCctp: CctpChainConfig | undefined = getCctpChain(dstChainName)
-  if (!dstCctp) {
-    throw new Error(
-      `destination chain ${JSON.stringify(dstChainName)} is not supported by CCTP. Supported: ${cctpSupportedChains.join(', ')}`
-    )
   }
 
   const rawAmount = parseUsdcAmount(params.amount)
