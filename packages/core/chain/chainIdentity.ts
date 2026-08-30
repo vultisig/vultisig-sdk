@@ -40,7 +40,7 @@ const otherChainCaip2 = {
   [OtherChain.Sui]: 'sui:mainnet',
   [OtherChain.Polkadot]: 'polkadot:91b171bb158e2d3848fa23a9f1c25182',
   [OtherChain.Bittensor]: 'bittensor:finney',
-  [OtherChain.Ton]: 'ton:-239',
+  [OtherChain.Ton]: 'tvm:-239',
   [OtherChain.Ripple]: 'xrpl:0',
   [OtherChain.Tron]: 'tron:mainnet',
   [OtherChain.Cardano]: 'cip34:1-764824073',

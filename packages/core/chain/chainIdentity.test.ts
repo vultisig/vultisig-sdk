@@ -34,6 +34,12 @@ describe('chainIdentity', () => {
     expect(toChainId(Chain.Robinhood)).toBe('eip155:4663')
   })
 
+  it('uses the canonical TVM CAIP-2 id for TON', () => {
+    expect(toChainId(Chain.Ton)).toBe('tvm:-239')
+    expect(chainFromChainId('tvm:-239')).toBe(Chain.Ton)
+    expect(isChainId('tvm:-239')).toBe(true)
+  })
+
   it('round-trips every chain through chainFromChainId', () => {
     for (const chain of Object.values(Chain)) {
       expect(chainFromChainId(toChainId(chain))).toBe(chain)
