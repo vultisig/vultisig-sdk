@@ -110,7 +110,7 @@ function mapArguments(cmd: Command) {
   }))
 }
 
-export function executeSchema(prog: Command): void {
+export function executeSchema(prog: Command): Promise<void> {
   const schema = {
     name: prog.name(),
     version: getVersion(),
@@ -151,5 +151,13 @@ export function executeSchema(prog: Command): void {
         }
       }),
   }
-  process.stdout.write(`${JSON.stringify(schema, null, 2)}\n`)
+  return new Promise((resolve, reject) => {
+    process.stdout.write(`${JSON.stringify(schema, null, 2)}\n`, error => {
+      if (error) {
+        reject(error)
+        return
+      }
+      resolve()
+    })
+  })
 }

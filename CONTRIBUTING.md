@@ -56,11 +56,32 @@ Before trusting a worktree test result, run the must-fail resolution control:
 yarn worktree:check
 ```
 
+When a linked worktree needs to install or update dependencies, use the guarded
+operation instead of running Yarn directly:
+
+```bash
+yarn worktree:deps -- install --immutable
+yarn worktree:deps -- up <package>@<version>
+```
+
+The guard builds every workspace that publishes generated executable targets
+before Yarn links them. After the requested operation succeeds or fails, it
+restores the worktree-owned workspace overrides and reruns the resolution
+control. A failed Yarn operation keeps its original exit status, even when the
+guard also reports a recovery problem.
+
 The check exits nonzero when a workspace link is missing, broken, or resolves
-outside the current checkout. Root `yarn test`, `yarn check`, `yarn check:agent`,
-and `yarn check:ci` run this control before loading project packages. Never remove or replace
-`<worktree>/node_modules/@vultisig/*` directly when the top-level
-`node_modules` is shared; that path belongs to the primary checkout.
+outside the current checkout. For an independently installed worktree it also
+rejects a nested `node_modules/node_modules` symlink, which can make Node load a
+different third-party dependency graph. Running `yarn worktree:setup --from
+/path/to/primary/vultisig-sdk` removes that link only when it resolves to the
+worktree's own `node_modules` or the declared matching checkout; any other target
+fails closed.
+
+Root `yarn test`, `yarn check`, `yarn check:agent`, and `yarn check:ci` run this
+control before loading project packages. Never remove or replace
+`<worktree>/node_modules/@vultisig/*` directly when the top-level `node_modules`
+is shared; that path belongs to the primary checkout.
 
 ## Project Structure
 
