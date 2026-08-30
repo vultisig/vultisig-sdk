@@ -78,4 +78,26 @@ describe('getSwapDestinationAddress', () => {
 
     expect(getSwapDestinationAddress({ quote, fromCoin })).toBe('bc1qdeposit')
   })
+
+  it('returns the FIN contract for RUJI Trade CosmWasm routes', () => {
+    const quote: SwapQuote = {
+      discounts: [],
+      quote: {
+        general: {
+          dstAmount: '998124',
+          provider: 'ruji',
+          tx: {
+            cosmosWasm: {
+              sender: 'thor1sender',
+              contract: 'thor1fincontract',
+              executeMsg: '{"swap":{}}',
+              funds: [{ denom: 'rune', amount: '1000000' }],
+            },
+          },
+        },
+      },
+    }
+
+    expect(getSwapDestinationAddress({ quote, fromCoin })).toBe('thor1fincontract')
+  })
 })
