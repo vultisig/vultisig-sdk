@@ -35,6 +35,10 @@ export type {
   EvmScanRequest,
   PendingAction,
   ScanRequest,
+  StakekitBalanceEntry,
+  StakekitBalanceItem,
+  StakekitBalanceQuery,
+  StakekitBalancesResult,
   UnsupportedScanRequest,
   Validator,
   YieldActionResponse,
@@ -48,6 +52,12 @@ export type {
   YieldProduct,
   YieldToken,
   YieldTransaction,
+} from './stakekitApi'
+export {
+  chunkStakekitBalanceQueries,
+  fetchAllStakekitBalances,
+  fetchStakekitBalancesBatch,
+  STAKEKIT_BALANCE_QUERIES_PER_REQUEST,
 } from './stakekitApi'
 export { buildYieldActionScanRequest, buildYieldStepScanRequest } from './stakekitApi'
 
