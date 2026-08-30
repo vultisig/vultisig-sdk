@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url'
 
 const scriptPath = fileURLToPath(import.meta.url)
 const defaultRepoRoot = path.resolve(path.dirname(scriptPath), '..')
+const supportedDependencyOperations = new Set(['add', 'install', 'remove', 'up'])
 
 const readJson = file => JSON.parse(readFileSync(file, 'utf8'))
 
@@ -28,6 +29,26 @@ const lstatIfPresent = file => {
     if (error?.code === 'ENOENT') return null
     throw error
   }
+}
+
+const isLinkedWorktree = repoRoot => lstatIfPresent(path.join(repoRoot, '.git'))?.isFile() ?? false
+
+const gitCommonDirectory = repoRoot => {
+  const dotGit = path.join(repoRoot, '.git')
+  const stat = lstatIfPresent(dotGit)
+  if (!stat) throw new Error(`Missing Git metadata: ${dotGit}`)
+  if (stat.isDirectory()) return realpathSync(dotGit)
+  if (!stat.isFile()) throw new Error(`Invalid Git metadata: ${dotGit}`)
+
+  const match = readFileSync(dotGit, 'utf8').trim().match(/^gitdir:\s*(.+)$/i)
+  if (!match) throw new Error(`Invalid Git worktree metadata: ${dotGit}`)
+  const gitDirectory = path.resolve(repoRoot, match[1])
+  const commonDirectoryFile = path.join(gitDirectory, 'commondir')
+  if (!existsSync(commonDirectoryFile)) {
+    throw new Error(`Missing Git common-directory metadata: ${commonDirectoryFile}`)
+  }
+
+  return realpathSync(path.resolve(gitDirectory, readFileSync(commonDirectoryFile, 'utf8').trim()))
 }
 
 const expandWorkspacePattern = (repoRoot, pattern) => {
@@ -199,19 +220,40 @@ const verifyLinkTarget = ({ consumer, link, workspace }, repoRoot) => {
   return null
 }
 
+const verifyNestedNodeModulesLink = repoRoot => {
+  if (!isLinkedWorktree(repoRoot)) return null
+
+  const nestedLink = path.join(repoRoot, 'node_modules', 'node_modules')
+  const stat = lstatIfPresent(nestedLink)
+  if (!stat?.isSymbolicLink()) return null
+
+  let target
+  try {
+    target = realpathSync(nestedLink)
+  } catch (error) {
+    return `node_modules/node_modules is an invalid nested symlink: ${error.message}`
+  }
+
+  return `node_modules/node_modules is an unsafe nested symlink resolving to ${target}; run \`yarn worktree:setup --from /path/to/main/clone\` before trusting tests`
+}
+
 const verifyInstalledWorkspaceLinks = (repoRoot, workspaces) => {
-  const failures = workspaces.flatMap(workspace => {
-    const link = path.join(repoRoot, 'node_modules', ...workspace.name.split('/'))
-    const failure = verifyLinkTarget(
-      {
-        consumer: { label: 'root install' },
-        link,
-        workspace,
-      },
-      repoRoot
-    )
-    return failure ? [failure] : []
-  })
+  const nestedLinkFailure = verifyNestedNodeModulesLink(repoRoot)
+  const failures = [
+    ...(nestedLinkFailure ? [nestedLinkFailure] : []),
+    ...workspaces.flatMap(workspace => {
+      const link = path.join(repoRoot, 'node_modules', ...workspace.name.split('/'))
+      const failure = verifyLinkTarget(
+        {
+          consumer: { label: 'root install' },
+          link,
+          workspace,
+        },
+        repoRoot
+      )
+      return failure ? [failure] : []
+    }),
+  ]
 
   if (failures.length > 0) {
     throw new Error(`Worktree module-resolution check failed:\n- ${failures.join('\n- ')}`)
@@ -262,9 +304,62 @@ const assertMatchingRepository = (repoRoot, sourceRoot) => {
 
   const targetPackage = readJson(path.join(repoRoot, 'package.json'))
   const sourcePackage = readJson(path.join(sourceRoot, 'package.json'))
-  if (targetPackage.name !== sourcePackage.name || targetPackage.packageManager !== sourcePackage.packageManager) {
+  if (
+    targetPackage.name !== sourcePackage.name ||
+    targetPackage.packageManager !== sourcePackage.packageManager ||
+    gitCommonDirectory(repoRoot) !== gitCommonDirectory(sourceRoot)
+  ) {
     throw new Error('The --from path is not a matching checkout of this repository')
   }
+}
+
+export const repairNestedNodeModulesLink = (repoRoot, sourceRoot = null) => {
+  if (!isLinkedWorktree(repoRoot)) {
+    throw new Error('Nested node_modules repair must run from a linked Git worktree')
+  }
+
+  const rootNodeModules = path.join(repoRoot, 'node_modules')
+  const rootStat = lstatIfPresent(rootNodeModules)
+  if (!rootStat || rootStat.isSymbolicLink()) {
+    return { removed: 0, skipped: 'root node_modules is missing or shared' }
+  }
+  if (!rootStat.isDirectory()) throw new Error('Worktree node_modules is not a directory')
+
+  const nestedLink = path.join(rootNodeModules, 'node_modules')
+  const nestedStat = lstatIfPresent(nestedLink)
+  if (!nestedStat) return { removed: 0 }
+  if (!nestedStat.isSymbolicLink()) {
+    throw new Error('Refusing to replace non-symlink path: node_modules/node_modules')
+  }
+
+  let target
+  try {
+    target = realpathSync(nestedLink)
+  } catch (error) {
+    throw new Error(`Refusing to remove invalid nested node_modules symlink: ${error.message}`)
+  }
+
+  const allowedTargets = new Set([realpathSync(rootNodeModules)])
+  if (sourceRoot) {
+    assertMatchingRepository(repoRoot, sourceRoot)
+    const sourceNodeModules = path.join(sourceRoot, 'node_modules')
+    const sourceStat = lstatIfPresent(sourceNodeModules)
+    if (!sourceStat) throw new Error(`Source node_modules does not exist: ${sourceNodeModules}`)
+    const resolvedSourceNodeModules = realpathSync(sourceNodeModules)
+    if (!lstatSync(resolvedSourceNodeModules).isDirectory()) {
+      throw new Error(`Source node_modules is not a directory: ${sourceNodeModules}`)
+    }
+    allowedTargets.add(resolvedSourceNodeModules)
+  }
+
+  if (!allowedTargets.has(target)) {
+    throw new Error(
+      `Refusing to remove unexpected nested node_modules symlink to ${target}; pass --from only for its matching checkout`
+    )
+  }
+
+  unlinkSync(nestedLink)
+  return { removed: 1 }
 }
 
 export const ensureSharedNodeModules = (repoRoot, sourceRoot) => {
@@ -272,7 +367,10 @@ export const ensureSharedNodeModules = (repoRoot, sourceRoot) => {
   const rootStat = lstatIfPresent(rootNodeModules)
 
   if (rootStat) {
-    if (rootStat.isDirectory() && !rootStat.isSymbolicLink()) return { mode: 'local-install', created: false }
+    if (rootStat.isDirectory() && !rootStat.isSymbolicLink()) {
+      if (sourceRoot) assertMatchingRepository(repoRoot, sourceRoot)
+      return { mode: 'local-install', created: false }
+    }
     if (!rootStat.isSymbolicLink()) throw new Error('Worktree node_modules is neither a directory nor a symlink')
 
     if (sourceRoot) {
@@ -363,6 +461,14 @@ export const setupWorkspaceOverrides = repoRoot => {
   return result
 }
 
+export const setupWorktreeDependencies = (repoRoot, sourceRoot = null) => {
+  const nodeModules = ensureSharedNodeModules(repoRoot, sourceRoot)
+  const nestedLink = repairNestedNodeModulesLink(repoRoot, sourceRoot)
+  const overrides = setupWorkspaceOverrides(repoRoot)
+  const receipt = verifyWorktreeResolution(repoRoot)
+  return { nestedLink, nodeModules, overrides, receipt }
+}
+
 const assertLinkedWorktree = repoRoot => {
   const gitEntry = lstatIfPresent(path.join(repoRoot, '.git'))
   if (!gitEntry?.isFile()) {
@@ -399,9 +505,173 @@ const runBuild = repoRoot => {
   if (build.status !== 0) throw new Error(`Shared package build failed with exit ${build.status ?? 1}`)
 }
 
+const normalizeBinEntries = bin => {
+  if (typeof bin === 'string') return [bin]
+  if (!bin || typeof bin !== 'object' || Array.isArray(bin)) return []
+  return Object.values(bin)
+}
+
+export const workspaceBinBuilds = repoRoot =>
+  readWorkspaces(repoRoot)
+    .flatMap(workspace => {
+      const manifest = readJson(path.join(workspace.dir, 'package.json'))
+      const targets = [...new Set(normalizeBinEntries(manifest.bin))]
+      if (targets.length === 0) return []
+      if (!manifest.scripts?.build) {
+        throw new Error(`${workspace.name} declares bin targets but has no build script`)
+      }
+
+      return [{ ...workspace, targets }]
+    })
+    .sort((left, right) => left.name.localeCompare(right.name))
+
+const verifyGeneratedBinTargets = builds => {
+  for (const build of builds) {
+    for (const target of build.targets) {
+      if (typeof target !== 'string' || target.length === 0 || path.isAbsolute(target)) {
+        throw new Error(`${build.name} declares an unsafe bin target: ${String(target)}`)
+      }
+      const resolved = path.resolve(build.dir, target)
+      const relative = path.relative(build.dir, resolved)
+      if (relative.startsWith('..') || path.isAbsolute(relative)) {
+        throw new Error(`${build.name} declares a bin target outside its workspace: ${target}`)
+      }
+      if (!existsSync(resolved) || !lstatSync(resolved).isFile()) {
+        throw new Error(`${build.name} build did not create bin target ${target}`)
+      }
+    }
+  }
+}
+
+export const parseDependencyOperationArgs = args => {
+  const operationArgs = args[0] === '--' ? args.slice(1) : [...args]
+  if (operationArgs.length === 0) {
+    throw new Error('Pass a Yarn dependency operation after --')
+  }
+  if (!supportedDependencyOperations.has(operationArgs[0])) {
+    throw new Error(`Unsupported Yarn operation ${operationArgs[0]}; expected add, install, remove, or up`)
+  }
+  if (operationArgs.some(arg => arg === '--cwd' || arg.startsWith('--cwd=') || arg === '-C' || arg.startsWith('-C'))) {
+    throw new Error('The guarded dependency operation cannot target a different checkout')
+  }
+  return operationArgs
+}
+
+const commandResult = (runCommand, args, repoRoot) => {
+  let result
+  try {
+    result = runCommand('yarn', args, {
+      cwd: repoRoot,
+      env: process.env,
+      stdio: 'inherit',
+    })
+  } catch (error) {
+    return { status: 1, message: error.message }
+  }
+  if (result?.error) {
+    return { status: 1, message: result.error.message }
+  }
+  return { status: Number.isInteger(result?.status) ? result.status : 1 }
+}
+
+export const runGuardedDependencyOperation = ({
+  repoRoot = defaultRepoRoot,
+  operationArgs,
+  runCommand = spawnSync,
+  restoreOverrides = setupWorkspaceOverrides,
+  verifyResolution = verifyWorktreeResolution,
+} = {}) => {
+  assertLinkedWorktree(repoRoot)
+  const normalizedOperation = parseDependencyOperationArgs(operationArgs ?? [])
+  const initialResolution = verifyResolution(repoRoot)
+  const binBuilds = workspaceBinBuilds(repoRoot)
+  let primaryFailure = null
+
+  for (const build of binBuilds) {
+    const result = commandResult(runCommand, ['workspace', build.name, 'build'], repoRoot)
+    if (result.status !== 0) {
+      primaryFailure = {
+        stage: `build ${build.name}`,
+        status: result.status,
+        message: result.message ?? `${build.name} build failed with exit ${result.status}`,
+      }
+      break
+    }
+  }
+
+  if (!primaryFailure) {
+    try {
+      verifyGeneratedBinTargets(binBuilds)
+    } catch (error) {
+      primaryFailure = { stage: 'verify generated bin targets', status: 1, message: error.message }
+    }
+  }
+
+  if (!primaryFailure) {
+    const result = commandResult(runCommand, normalizedOperation, repoRoot)
+    if (result.status !== 0) {
+      primaryFailure = {
+        stage: `yarn ${normalizedOperation[0]}`,
+        status: result.status,
+        message: result.message ?? `Yarn dependency operation failed with exit ${result.status}`,
+      }
+    }
+  }
+
+  let restoration = null
+  const recoveryFailures = []
+  try {
+    restoration = restoreOverrides(repoRoot)
+  } catch (error) {
+    recoveryFailures.push(`workspace override restoration failed: ${error.message}`)
+  }
+
+  let finalResolution = null
+  try {
+    finalResolution = verifyResolution(repoRoot)
+  } catch (error) {
+    recoveryFailures.push(`worktree resolution check failed: ${error.message}`)
+  }
+
+  return {
+    status: primaryFailure?.status ?? (recoveryFailures.length > 0 ? 1 : 0),
+    operation: normalizedOperation,
+    binWorkspaces: binBuilds.map(({ name }) => name),
+    initialResolution,
+    restoration,
+    finalResolution,
+    primaryFailure,
+    recoveryFailures,
+  }
+}
+
+const runDependencyOperation = operationArgs => {
+  const receipt = runGuardedDependencyOperation({ operationArgs })
+
+  if (receipt.primaryFailure) {
+    console.error(`[vultisig-worktree-deps] ${receipt.primaryFailure.message}`)
+  }
+  for (const failure of receipt.recoveryFailures) {
+    console.error(`[vultisig-worktree-deps] ${failure}`)
+  }
+
+  if (receipt.finalResolution) {
+    console.log(
+      `[vultisig-worktree-deps] resolution=${receipt.finalResolution.mode}; ` +
+        `verified=${receipt.finalResolution.overrides}; ` +
+        `restored=${receipt.restoration ? 'yes' : 'no'}.`
+    )
+  }
+  process.exitCode = receipt.status
+}
+
 const main = () => {
   let options
   try {
+    if (process.argv[2] === '--deps') {
+      runDependencyOperation(process.argv.slice(3))
+      return
+    }
     options = parseArgs(process.argv.slice(2))
     if (options.check) {
       const receipt = verifyWorktreeResolution(defaultRepoRoot)
@@ -412,14 +682,17 @@ const main = () => {
     }
 
     assertLinkedWorktree(defaultRepoRoot)
-    const nodeModules = ensureSharedNodeModules(defaultRepoRoot, options.sourceRoot)
-    const overrides = setupWorkspaceOverrides(defaultRepoRoot)
-    const receipt = verifyWorktreeResolution(defaultRepoRoot)
+    const { nestedLink, nodeModules, overrides, receipt } = setupWorktreeDependencies(
+      defaultRepoRoot,
+      options.sourceRoot
+    )
 
     console.log(
       `[vultisig-worktree] node_modules=${nodeModules.mode}; overrides created=${overrides.created}, replaced=${
         overrides.replaced
-      }, removed=${overrides.removed}, reused=${overrides.reused}; verified=${receipt.overrides}.`
+      }, removed=${overrides.removed}, reused=${overrides.reused}; nested links removed=${
+        nestedLink.removed
+      }; verified=${receipt.overrides}.`
     )
 
     if (options.build) runBuild(defaultRepoRoot)
@@ -428,7 +701,9 @@ const main = () => {
     console.error(`[vultisig-worktree] ${error.message}`)
     console.error(
       'Usage: node scripts/setup-worktree.mjs [--from /path/to/main/clone] [--skip-build]\n' +
-        '       node scripts/setup-worktree.mjs --check'
+        '       node scripts/setup-worktree.mjs --check\n' +
+        '       node scripts/setup-worktree.mjs --deps -- install [--immutable]\n' +
+        '       node scripts/setup-worktree.mjs --deps -- up <package>@<version>'
     )
     process.exitCode = 1
   }
