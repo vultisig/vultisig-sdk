@@ -286,6 +286,7 @@ export {
   buildYieldActionScanRequest,
   buildYieldStepScanRequest,
   defi,
+  ensureTransactionsBuilt,
   GLIF_ICN_BASE_ADDRESSES,
   GLIF_ICN_TOKEN_DECIMALS,
   glifPoolWriteAbi,

@@ -1036,6 +1036,7 @@ export {
   DOT_DECIMALS,
   encodeErc20Approve,
   encodeErc20Revoke,
+  ensureTransactionsBuilt,
   estimateCosmosSwapFeeLabel,
   evaluatePolicy,
   evm,

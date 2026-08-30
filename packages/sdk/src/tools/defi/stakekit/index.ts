@@ -49,7 +49,7 @@ export type {
   YieldToken,
   YieldTransaction,
 } from './stakekitApi'
-export { buildYieldActionScanRequest, buildYieldStepScanRequest } from './stakekitApi'
+export { buildYieldActionScanRequest, buildYieldStepScanRequest, ensureTransactionsBuilt } from './stakekitApi'
 
 // --- Inline withScanRequest helper ---
 // (mcp-ts's withScanRequest isn't available in the SDK — inline it here)
@@ -122,7 +122,7 @@ type DecodedYieldStep = {
   title: string
   type: string
   network: string
-  unsignedTransaction: Record<string, unknown> | string
+  unsignedTransaction: Record<string, unknown> | string | null
   gasEstimateObj: Record<string, unknown> | null
 }
 
@@ -131,13 +131,15 @@ type DecodedYieldStep = {
 // cognitive-complexity gate. Behaviour is byte-identical to the inlined port.
 function decodeYieldTransaction(tx: YieldTransaction): DecodedYieldStep {
   let unsigned: Record<string, unknown> | null = null
-  try {
-    const parsed = JSON.parse(tx.unsignedTransaction) as unknown
-    if (parsed && typeof parsed === 'object') {
-      unsigned = parsed as Record<string, unknown>
+  if (typeof tx.unsignedTransaction === 'string') {
+    try {
+      const parsed = JSON.parse(tx.unsignedTransaction) as unknown
+      if (parsed && typeof parsed === 'object') {
+        unsigned = parsed as Record<string, unknown>
+      }
+    } catch {
+      // Keep raw on parse failure
     }
-  } catch {
-    // Keep raw on parse failure
   }
   let gasInfo: Record<string, unknown> | null = null
   try {
