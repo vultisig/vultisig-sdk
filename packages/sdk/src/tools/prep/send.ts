@@ -3,6 +3,7 @@ import { Chain } from '@vultisig/core-chain/Chain'
 import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
 import { assertSafeDestination } from '@vultisig/core-chain/security/dangerousAddresses'
+import { assertSafeTokenTransferDestination } from '@vultisig/core-chain/security/tokenTransferGuards'
 import { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
 import type { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
 import { buildSendKeysignPayload } from '@vultisig/core-mpc/keysign/send/build'
@@ -71,12 +72,21 @@ export const prepareSendTxFromKeys = async (
   // contract address. Tokens sent to their own contract are unrecoverable for
   // almost all users (the contract has no sweep path for arbitrary senders).
   // This applies to ERC-20 and any token where `coin.id` encodes the contract
-  // address — native sends (no `coin.id`) are unaffected.
+  // address — native sends (no `coin.id`) are unaffected. Kept as an
+  // UNCONDITIONAL check (not registry-gated) so a brand-new/unlisted token's
+  // own contract is caught even before it's indexed anywhere.
   if (params.coin.id !== undefined && params.coin.id.trim().toLowerCase() === params.receiver.trim().toLowerCase()) {
     throw new Error(
       `Refusing to build transaction: recipient ${params.receiver} is the token contract address for ${params.coin.ticker}. Sending tokens to their own contract is almost certainly a mistake and funds would be unrecoverable.`
     )
   }
+
+  // Fund-safety (architecture#1774): reject sends where the recipient is a
+  // DIFFERENT known token's contract (not the one being sent — that case is
+  // already caught above). Registry-based (only fires for a contract in
+  // `knownTokensIndex`), so it's additive coverage on top of the unconditional
+  // self-check, not a replacement for it.
+  assertSafeTokenTransferDestination(params.coin.chain, params.receiver, params.coin.id)
 
   const isQbtc = params.coin.chain === Chain.QBTC
 
