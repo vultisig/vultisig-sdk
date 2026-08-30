@@ -14,6 +14,8 @@ describe('getUtxoTxHash', () => {
   })
 
   it('falls back to transactionId when signingResultV2.txid is empty', () => {
-    expect(getUtxoTxHash({ transactionId: 'aabbccdd', signingResultV2: {} } as never)).toBe('aabbccdd')
+    expect(
+      getUtxoTxHash({ transactionId: 'aabbccdd', signingResultV2: { txid: new Uint8Array() } } as never)
+    ).toBe('aabbccdd')
   })
 })
