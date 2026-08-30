@@ -95,9 +95,9 @@ const workspaceManifestPaths = rootPackage => {
   return [...manifests]
 }
 
-const collectDirectPackageNames = () => {
+const collectDirectDescriptors = () => {
   const rootPackage = readJson(join(repoRoot, 'package.json'))
-  const names = new Set()
+  const descriptors = new Set()
 
   for (const manifestPath of workspaceManifestPaths(rootPackage)) {
     let manifest
@@ -108,17 +108,23 @@ const collectDirectPackageNames = () => {
     }
 
     for (const field of dependencyFields) {
-      for (const name of Object.keys(manifest[field] ?? {})) {
-        names.add(name)
+      for (const [name, range] of Object.entries(manifest[field] ?? {})) {
+        descriptors.add(`${name}@${range}`)
+        descriptors.add(`${name}@npm:${range}`)
       }
     }
 
-    for (const selector of Object.keys(manifest.resolutions ?? {})) {
-      names.add(packageNameFromResolutionSelector(selector))
+    for (const [selector, range] of Object.entries(manifest.resolutions ?? {})) {
+      const name = packageNameFromResolutionSelector(selector)
+      descriptors.add(`${name}@${range}`)
+      descriptors.add(`${name}@npm:${range}`)
+      descriptors.add(selector)
+      descriptors.add(`${selector}@${range}`)
+      descriptors.add(`${selector}@npm:${range}`)
     }
   }
 
-  return names
+  return descriptors
 }
 
 const parseYarnLock = () => {
@@ -151,7 +157,7 @@ const parseYarnLock = () => {
       return {
         name: resolved.name,
         version: resolved.version,
-        descriptors: entry.descriptorText.split(/,\s+/),
+        descriptors: entry.descriptorText.split(/,\s+/).map(descriptor => descriptor.replace(/^"|"$/g, '')),
       }
     })
     .filter(Boolean)
@@ -175,9 +181,9 @@ const fetchPackageMetadata = async name => {
 }
 
 const main = async () => {
-  const directNames = collectDirectPackageNames()
+  const directDescriptors = collectDirectDescriptors()
   const directResolved = parseYarnLock()
-    .filter(entry => directNames.has(entry.name))
+    .filter(entry => entry.descriptors.some(descriptor => directDescriptors.has(descriptor)))
     .sort((a, b) => a.name.localeCompare(b.name) || a.version.localeCompare(b.version))
 
   const metadataByPackage = new Map()

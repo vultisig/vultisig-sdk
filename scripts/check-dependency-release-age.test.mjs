@@ -14,7 +14,7 @@ const writeFixtureRepo = () => {
     JSON.stringify({
       name: 'fixture',
       workspaces: ['packages/*'],
-      dependencies: { postcss: '^8.5.18' },
+      dependencies: { postcss: '^8.5.18', aliaspkg: 'npm:postcss@^8.5.18' },
       resolutions: { postcss: '^8.5.18' },
     })
   )
@@ -23,9 +23,15 @@ const writeFixtureRepo = () => {
     [
       '# generated',
       '',
-      '"postcss@npm:^8.5.18":',
+      '"aliaspkg@npm:postcss@^8.5.18", "postcss@npm:^8.5.18":',
       '  version: 8.5.22',
       '  resolution: "postcss@npm:8.5.22"',
+      '  languageName: node',
+      '  linkType: hard',
+      '',
+      '"postcss@npm:^8.4.0":',
+      '  version: 8.5.23',
+      '  resolution: "postcss@npm:8.5.23"',
       '  languageName: node',
       '  linkType: hard',
       '',
@@ -34,7 +40,7 @@ const writeFixtureRepo = () => {
   writeFileSync(
     join(dir, 'metadata.json'),
     JSON.stringify({
-      postcss: { time: { '8.5.22': '2026-07-22T12:00:00.000Z' } },
+      postcss: { time: { '8.5.22': '2026-07-22T12:00:00.000Z', '8.5.23': '2026-08-03T12:00:00.000Z' } },
     })
   )
   return dir
