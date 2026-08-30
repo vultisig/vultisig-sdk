@@ -34,13 +34,22 @@ describe('parseErc20ApprovalAmount', () => {
     })
   })
 
-  it('scales human-readable amounts to base units and truncates extra precision', () => {
-    expect(parseErc20ApprovalAmount({ amount: '100.1234567', decimals: 6 })).toEqual({
+  it('scales human-readable amounts to base units when precision fits token decimals', () => {
+    expect(parseErc20ApprovalAmount({ amount: '100.123456', decimals: 6 })).toEqual({
       amountBaseUnits: 100123456n,
       amountMode: 'specific',
       amountIsBaseUnits: false,
       decimals: 6,
     })
+  })
+
+  it('rejects discarded non-zero fractional precision beyond token decimals', () => {
+    expect(() => parseErc20ApprovalAmount({ amount: '100.1234567', decimals: 6 })).toThrow(
+      /more precision than token decimals/
+    )
+    expect(() => parseErc20ApprovalAmount({ amount: '0.0000001', decimals: 6 })).toThrow(
+      /more precision than token decimals/
+    )
   })
 
   it('uses strict plain decimal integers for base-unit amounts', () => {

@@ -135,6 +135,9 @@ const parseHumanTokenAmount = (amount: string, decimals: number): bigint => {
   if (fracPart.length > 0 && !/^[0-9]+$/.test(fracPart)) {
     throw new Error(`invalid fractional part: ${fracPart}`)
   }
+  if (fracPart.length > decimals && /[1-9]/.test(fracPart.slice(decimals))) {
+    throw new Error(`amount has more precision than token decimals (${decimals}): ${amount}`)
+  }
 
   const normalizedFrac = fracPart.slice(0, decimals).padEnd(decimals, '0')
   const wholeInt = BigInt(wholePart)
