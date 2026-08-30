@@ -29,6 +29,7 @@ export {
   prepareIbcTransfer,
   type PrepareIbcTransferParams,
   type PrepareIbcTransferResult,
+  resolveSourceChannelByDestChain,
   supportedIbcDestinationsFrom,
 } from './ibcTransfer'
 export { prepareJettonTransferTxFromKeys, type PrepareJettonTransferTxFromKeysParams } from './jettonTransfer'
