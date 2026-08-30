@@ -124,6 +124,7 @@ export default defineConfig([
   createSubpathTypesConfig('src/tools/parse/index.ts', 'dist/tools/parse/index.d.ts'),
   createSubpathTypesConfig('src/tools/defi/index.ts', 'dist/tools/defi/index.d.ts'),
   createSubpathTypesConfig('src/tools/gas/index.ts', 'dist/tools/gas/index.d.ts'),
+  createSubpathTypesConfig('src/tools/token/index.ts', 'dist/tools/token/index.d.ts'),
   createSubpathTypesConfig('src/tools/bridge/index.ts', 'dist/tools/bridge/index.d.ts'),
   createSubpathTypesConfig('src/tools/balance/index.ts', 'dist/tools/balance/index.d.ts'),
   createSubpathTypesConfig('src/chains/tron/index.ts', 'dist/chains/tron/index.d.ts'),
@@ -137,4 +138,5 @@ export default defineConfig([
   // coupling, so the subpath ships the same all-platform conditions as ./tools/decode.
   createSubpathTypesConfig('src/tools/price/index.ts', 'dist/tools/price/index.d.ts'),
   createSubpathTypesConfig('src/tx/index.ts', 'dist/tx/index.d.ts'),
+  createSubpathTypesConfig('src/services/index.ts', 'dist/services/index.d.ts'),
 ])
