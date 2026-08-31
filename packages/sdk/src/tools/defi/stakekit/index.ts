@@ -23,7 +23,7 @@ import type {
   YieldTransaction,
 } from './stakekitApi'
 import {
-  buildYieldActionScanRequest,
+  buildYieldActionScanRequests,
   callYieldActionWithFallback,
   getBalances,
   getYield,
@@ -35,6 +35,11 @@ export type {
   EvmScanRequest,
   PendingAction,
   ScanRequest,
+  SolanaScanRequest,
+  StakekitBalanceEntry,
+  StakekitBalanceItem,
+  StakekitBalanceQuery,
+  StakekitBalancesResult,
   UnsupportedScanRequest,
   Validator,
   YieldActionResponse,
@@ -49,13 +54,34 @@ export type {
   YieldToken,
   YieldTransaction,
 } from './stakekitApi'
-export { buildYieldActionScanRequest, buildYieldStepScanRequest } from './stakekitApi'
+export {
+  buildYieldActionScanRequest,
+  buildYieldActionScanRequests,
+  buildYieldStepScanRequest,
+  chunkStakekitBalanceQueries,
+  fetchAllStakekitBalances,
+  fetchStakekitBalancesBatch,
+  STAKEKIT_BALANCE_QUERIES_PER_REQUEST,
+} from './stakekitApi'
 
 // --- Inline withScanRequest helper ---
 // (mcp-ts's withScanRequest isn't available in the SDK — inline it here)
-
-function withScanRequest<T extends object>(scanRequest: ScanRequest, rest: T): { scan_request: ScanRequest } & T {
-  return { scan_request: scanRequest, ...rest }
+//
+// `scan_request` (singular) is kept for backward compatibility with the
+// historical single-slot contract (first scannable step). `scan_requests`
+// (plural, architecture#1670) is additive: ALL steps 1:1 with
+// `transactions[]`, so a multi-step action (e.g. approve→stake) or a
+// non-EVM step can be handed to a downstream scanner in full instead of
+// losing coverage past the first leg.
+function withScanRequests<T extends object>(
+  scanRequests: ScanRequest[],
+  rest: T
+): { scan_request: ScanRequest; scan_requests: ScanRequest[] } & T {
+  const primary = scanRequests.find(req => req.kind !== 'unsupported') ?? {
+    kind: 'unsupported' as const,
+    reason: 'no_compiled_txs',
+  }
+  return { scan_request: primary, scan_requests: scanRequests, ...rest }
 }
 
 // --- Network mappings ---
@@ -303,7 +329,10 @@ function canonicalizeTonStep(step: DecodedYieldStep): Record<string, unknown> | 
  *   - EVM steps: flat `{to, value, data, action, description, from?, gas_limit?, ...}` — NO `tx_encoding`
  *   - Non-EVM steps: `{tx_encoding: 'solana-tx'|'sui-tx'|'tron-tx'|'ton-tx', chain, data, action, description}`
  *   - `provider: "yield_xyz"` at action level (load-bearing for app chip routing, NEVER rename)
- *   - All-or-nothing: if any step fails to canonicalize → decoded[] used for ALL steps
+ *   - Per-step degrade: a step that fails to canonicalize (e.g. an unsupported
+ *     network like Cardano) falls back to its `decoded` form; steps that DID
+ *     canonicalize stay canonical. One unsupported step no longer nukes the
+ *     canonicalized form of every other step in the action.
  *   - `chain` field (PascalCase) derived from first tx network
  */
 export function parseActionDisplay(data: YieldActionResponse) {
@@ -327,9 +356,9 @@ export function parseActionDisplay(data: YieldActionResponse) {
     return null
   })
 
-  // All-or-nothing: if any step fails to canonicalize, fall back to `decoded` for all steps.
-  const allCanonicalized = canonicalSteps.every(s => s !== null)
-  const transactions = allCanonicalized ? (canonicalSteps as NonNullable<(typeof canonicalSteps)[number]>[]) : []
+  // Per-step degrade: keep whichever steps canonicalized; fall back to that
+  // step's `decoded` form only for the steps that failed to canonicalize.
+  const transactions = canonicalSteps.map((step, i) => step ?? decoded[i])
 
   return {
     intent: data.intent,
@@ -340,7 +369,7 @@ export function parseActionDisplay(data: YieldActionResponse) {
     chain,
     // `provider: "yield_xyz"` — LOAD-BEARING for app chip routing, NEVER rename
     provider: 'yield_xyz',
-    transactions: transactions.length > 0 ? transactions : decoded,
+    transactions,
   }
 }
 
@@ -416,6 +445,14 @@ const STAKEKIT_NETWORK_ALIASES: Readonly<Record<string, string>> = {
   bnbchain: 'binance',
   avalanche: 'avalanche-c',
   avax: 'avalanche-c',
+  // sdk#1640: `CronosChain` is this SDK's OWN canonical Chain id, and it was the
+  // one canonical id in StakeKit's supported set that did not round-trip. Without
+  // this, `balances({ network: 'CronosChain' })` sent the literal `cronoschain`
+  // upstream — an unknown slug — and returned `[]`, which reads as "you hold
+  // nothing on Cronos" rather than "that network name was not understood".
+  cronoschain: 'cronos',
+  'cronos chain': 'cronos',
+  'cronos-chain': 'cronos',
 }
 
 const normalizeStakekitNetwork = (network: string): string => {
@@ -597,8 +634,8 @@ export async function stakekitBuildEnter(params: {
   if (!actionData.transactions) throw new Error('yield.xyz returned no transactions')
 
   const display = parseActionDisplay(actionData)
-  const scanRequest = buildYieldActionScanRequest(actionData)
-  return withScanRequest(scanRequest, display)
+  const scanRequests = buildYieldActionScanRequests(actionData, params.address)
+  return withScanRequests(scanRequests, display)
 }
 
 /**
@@ -639,8 +676,11 @@ export async function stakekitBuildExit(params: {
       restAction: 'exit',
       restBody: {
         addresses: { address: params.address },
-        args: { amount: params.amount, ...resolved.extras },
-        ...(resolved.validatorAddressesForREST ? { validatorAddresses: resolved.validatorAddressesForREST } : {}),
+        args: {
+          amount: params.amount,
+          ...resolved.extras,
+          ...(resolved.validatorAddressesForREST ? { validatorAddresses: resolved.validatorAddressesForREST } : {}),
+        },
       },
       apiKey: params.apiKey,
       preferRest: params.yieldId.startsWith('tron-'),
@@ -658,10 +698,10 @@ export async function stakekitBuildExit(params: {
   if (!actionData.transactions) throw new Error('yield.xyz returned no transactions')
 
   const display = parseActionDisplay(actionData)
-  const scanRequest = buildYieldActionScanRequest(actionData)
+  const scanRequests = buildYieldActionScanRequests(actionData, params.address)
   const cooldownDays = yieldMeta?.metadata?.cooldownPeriod?.days ?? null
   return {
-    ...withScanRequest(scanRequest, display),
+    ...withScanRequests(scanRequests, display),
     ...(cooldownDays !== null ? { cooldown_days: cooldownDays } : {}),
   }
 }
@@ -713,8 +753,8 @@ export async function stakekitBuildManage(params: {
   if (!actionData.transactions) throw new Error('yield.xyz returned no transactions')
 
   const display = parseActionDisplay(actionData)
-  const scanRequest = buildYieldActionScanRequest(actionData)
-  return withScanRequest(scanRequest, display)
+  const scanRequests = buildYieldActionScanRequests(actionData, params.address)
+  return withScanRequests(scanRequests, display)
 }
 
 /** The sdk.defi.stakekit namespace surface. */
