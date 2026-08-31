@@ -89,6 +89,12 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     'getChainDangerousReason',
     'assertSafeEvmDestination',
     'assertSafeDestination',
+    'assertSafeTokenTransferDestination',
+    'decodeErc20Approve',
+    'decodeErc20Recipient',
+    'decodeErc20RecipientFromSig',
+    'ERC20_APPROVE_SELECTOR',
+    'isErc20TransferCalldata',
   ] as const)('re-exports dangerous-address canonical %s by identity', async name => {
     expect(reactNativeEntry[name]).toBe(dangerousAddresses[name])
   })
