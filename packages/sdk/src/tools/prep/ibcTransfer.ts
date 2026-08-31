@@ -1,4 +1,5 @@
 import { bech32 } from '@scure/base'
+import { COSMOS_CHAIN_ID_HRP } from '@vultisig/core-chain/chains/cosmos/cosmosHrp'
 
 import { validatorRoleForHrp } from '../swap/skip/cosmosAddressGuard'
 
@@ -32,24 +33,9 @@ import { validatorRoleForHrp } from '../swap/skip/cosmosAddressGuard'
 
 type ChannelKey = `${string}/${string}` // `${fromChain}/${channel}`
 
-/** Chain-ID → bech32 HRP, for address validation. */
-export const IBC_CHAIN_HRP: Record<string, string> = {
-  'phoenix-1': 'terra',
-  'columbus-5': 'terra',
-  'cosmoshub-4': 'cosmos',
-  'osmosis-1': 'osmo',
-  'kaiyo-1': 'kujira',
-  'neutron-1': 'neutron',
-  'axelar-dojo-1': 'axelar',
-  'injective-1': 'inj',
-  'juno-1': 'juno',
-  'stargaze-1': 'stars',
-  'noble-1': 'noble',
-  'akashnet-2': 'akash',
-  'dydx-mainnet-1': 'dydx',
-  'stride-1': 'stride',
-  celestia: 'celestia',
-}
+/** Chain-ID → bech32 HRP, for address validation. Sourced from the canonical
+ * `COSMOS_CHAIN_ID_HRP` registry (architecture#1787) instead of a local copy. */
+export const IBC_CHAIN_HRP: Record<string, string> = COSMOS_CHAIN_ID_HRP
 
 /** Chain-ID → IBC revision number (for timeout_height defaulting). */
 export const IBC_CHAIN_REVISION: Record<string, number> = {
