@@ -125,6 +125,10 @@ export { parseThorSwapMemo } from './utils/thorSwapMemo'
 export type { UtxoChainName } from './chains/utxo/addressBrand'
 export { assertUtxoAddressBrand, isUtxoAddressBrandValid } from './chains/utxo/addressBrand'
 
+// Canonical Blockchair chain-scoped base URL (`${rootApiUrl}/blockchair/${chain}`).
+// Consumers should import this instead of reconstructing the path locally.
+export { getBlockchairBaseUrl } from '@vultisig/core-chain/chains/utxo/client/getBlockchairBaseUrl'
+
 // Custom TOKEN id validation (as opposed to the address validation above).
 // Most chains identify a token by its address (contract/mint), but Sui uses a
 // Move struct tag and XRPL uses a composite currency.issuer id — this covers
