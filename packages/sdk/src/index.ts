@@ -126,6 +126,10 @@ export { parseThorSwapMemo } from './utils/thorSwapMemo'
 export type { UtxoChainName } from './chains/utxo/addressBrand'
 export { assertUtxoAddressBrand, isUtxoAddressBrandValid } from './chains/utxo/addressBrand'
 
+// Canonical Blockchair chain-scoped base URL (`${rootApiUrl}/blockchair/${chain}`).
+// Consumers should import this instead of reconstructing the path locally.
+export { getBlockchairBaseUrl } from '@vultisig/core-chain/chains/utxo/client/getBlockchairBaseUrl'
+
 // Custom TOKEN id validation (as opposed to the address validation above).
 // Most chains identify a token by its address (contract/mint), but Sui uses a
 // Move struct tag and XRPL uses a composite currency.issuer id — this covers
@@ -482,6 +486,21 @@ export {
   SOLANA_DANGEROUS_ADDRESSES,
   UTXO_DANGEROUS_ADDRESSES,
   XRP_DANGEROUS_ADDRESSES,
+} from './utils/dangerousAddresses'
+
+// Token-transfer / ERC-20-calldata destination guards (architecture#1774).
+// A sibling to the burn-address guard above: rejects a transfer whose
+// RECIPIENT is itself a known token contract, plus the calldata decoders
+// needed to find that recipient when it's hidden inside an ERC-20
+// transfer/transferFrom call rather than a plain send. Exported so
+// first-party consumers stop hand-maintaining a private fork.
+export {
+  assertSafeTokenTransferDestination,
+  decodeErc20Approve,
+  decodeErc20Recipient,
+  decodeErc20RecipientFromSig,
+  ERC20_APPROVE_SELECTOR,
+  isErc20TransferCalldata,
 } from './utils/dangerousAddresses'
 
 // EVM chainId ↔ chain mapping plus the canonical priority-fee sanity clamp.
