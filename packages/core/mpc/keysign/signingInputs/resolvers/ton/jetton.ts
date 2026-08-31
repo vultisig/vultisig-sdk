@@ -21,6 +21,14 @@ export const buildJettonTransfer = ({
   jettonAddress,
   isActiveDestination,
 }: BuildJettonTransferInput): TW.TheOpenNetwork.Proto.Transfer => {
+  // `TonSpecific.jettonAddress` is a plain proto string that defaults to '' when the
+  // sender's jetton wallet could not be resolved, and '' survives every null/undefined
+  // check on the way here. Signing that would broadcast a transfer to no destination,
+  // so refuse it — including for a payload built by some other device.
+  if (!jettonAddress.trim()) {
+    throw new Error('Cannot build a TON Jetton transfer: the sender jetton wallet address is missing')
+  }
+
   const coin = getKeysignCoin(keysignPayload)
 
   const destinationAddress = walletCore.TONAddressConverter.toUserFriendly(keysignPayload.toAddress, true, false)
