@@ -24,9 +24,14 @@ describe('getTonMessageBounceable', () => {
     expect(getTonMessageBounceable(address.toString({ bounceable: false, testOnly: true }))).toBe(false)
   })
 
-  it('treats a raw address as non-bounceable — it declares no tag', () => {
-    expect(getTonMessageBounceable(Address.parse(bounceable).toRawString())).toBe(false)
-    expect(getTonMessageBounceable(Address.parse(masterchainBounceable).toRawString())).toBe(false)
+  it('treats a raw address without stateInit as bounceable', () => {
+    expect(getTonMessageBounceable(Address.parse(bounceable).toRawString())).toBe(true)
+    expect(getTonMessageBounceable(Address.parse(masterchainBounceable).toRawString())).toBe(true)
+  })
+
+  it('treats a raw deployment destination with stateInit as non-bounceable', () => {
+    expect(getTonMessageBounceable(Address.parse(bounceable).toRawString(), true)).toBe(false)
+    expect(getTonMessageBounceable(Address.parse(masterchainBounceable).toRawString(), true)).toBe(false)
   })
 
   it('treats an unparseable address as non-bounceable instead of throwing', () => {

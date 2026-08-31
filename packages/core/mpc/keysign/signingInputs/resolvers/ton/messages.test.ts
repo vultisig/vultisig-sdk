@@ -18,7 +18,7 @@ const masterchainDestination = 'Ef8t6cZkqFuHjJ_a_ydEK_tu3LHWRA4JZXRyewLY4j8FZ6B5
 type BuildPayloadInput = {
   bounceable: boolean
   memo?: string
-  tonMessages?: Array<{ to: string; amount: string }>
+  tonMessages?: Array<{ to: string; amount: string; stateInit?: string }>
 }
 
 const buildPayload = ({ bounceable, memo = '', tonMessages }: BuildPayloadInput): KeysignPayload =>
@@ -95,12 +95,24 @@ describe('getTonSigningInputs — dApp messages carry their own bounce flag', ()
     expect(messages).toEqual([{ dest: nonBounceableDestination, bounceable: false }])
   })
 
-  it('treats a raw destination as non-bounceable', async () => {
+  it('treats a raw destination without stateInit as bounceable', async () => {
     const rawDestination = '0:e62deead89c718fee2d9b1fbab75838db2136e0a7f084bcd4a709f29e8ce8848'
     const messages = await buildMessages(
       buildPayload({
         bounceable: true,
         tonMessages: [{ to: rawDestination, amount: '1000000' }],
+      })
+    )
+
+    expect(messages).toEqual([{ dest: rawDestination, bounceable: true }])
+  })
+
+  it('treats a raw deployment destination with stateInit as non-bounceable', async () => {
+    const rawDestination = '0:e62deead89c718fee2d9b1fbab75838db2136e0a7f084bcd4a709f29e8ce8848'
+    const messages = await buildMessages(
+      buildPayload({
+        bounceable: true,
+        tonMessages: [{ to: rawDestination, amount: '1000000', stateInit: 'te6ccgEBAQEAAwAAAgE=' }],
       })
     )
 
