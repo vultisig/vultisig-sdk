@@ -137,4 +137,5 @@ export default defineConfig([
   // coupling, so the subpath ships the same all-platform conditions as ./tools/decode.
   createSubpathTypesConfig('src/tools/price/index.ts', 'dist/tools/price/index.d.ts'),
   createSubpathTypesConfig('src/tx/index.ts', 'dist/tx/index.d.ts'),
+  createSubpathTypesConfig('src/server/index.ts', 'dist/server/index.d.ts'),
 ])
