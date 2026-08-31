@@ -2123,6 +2123,11 @@
       "import": "./dist/tx/broadcast/resolvers/evm.js",
       "default": "./dist/tx/broadcast/resolvers/evm.js"
     },
+    "./tx/broadcast/resolvers/evmRacedPublicRpc": {
+      "types": "./dist/tx/broadcast/resolvers/evmRacedPublicRpc.d.ts",
+      "import": "./dist/tx/broadcast/resolvers/evmRacedPublicRpc.js",
+      "default": "./dist/tx/broadcast/resolvers/evmRacedPublicRpc.js"
+    },
     "./tx/broadcast/resolvers/polkadot": {
       "types": "./dist/tx/broadcast/resolvers/polkadot.d.ts",
       "import": "./dist/tx/broadcast/resolvers/polkadot.js",
