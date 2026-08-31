@@ -1,6 +1,5 @@
 import { isTonStakingComment } from '@vultisig/core-chain/chains/ton/staking'
 import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
-import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { TW } from '@trustwallet/wallet-core'
 
 import { getBlockchainSpecificValue } from '../../../chainSpecific/KeysignChainSpecific'
@@ -42,7 +41,7 @@ export const getTonSigningInputs: SigningInputsResolver<'ton'> = ({ keysignPaylo
             : buildJettonTransfer({
                 keysignPayload,
                 walletCore,
-                jettonAddress: shouldBePresent(jettonAddress, 'Jetton address'),
+                jettonAddress,
                 isActiveDestination,
               }),
         ]
