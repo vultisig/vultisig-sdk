@@ -1033,6 +1033,7 @@ export * from '../../signable-transaction'
 // with the generic entry so the app can remove its local brand matrix.
 export type { UtxoChainName } from '../../chains/utxo/addressBrand'
 export { assertUtxoAddressBrand, isUtxoAddressBrandValid } from '../../chains/utxo/addressBrand'
+export { getBlockchairBaseUrl } from '@vultisig/core-chain/chains/utxo/client/getBlockchairBaseUrl'
 
 // Dangerous/burn-address guard. Single source of truth for "is this destination
 // a burn/black-hole address that no key controls?" across EVM, Solana, UTXO and
@@ -1043,9 +1044,15 @@ export { assertUtxoAddressBrand, isUtxoAddressBrandValid } from '../../chains/ut
 export {
   assertSafeDestination,
   assertSafeEvmDestination,
+  assertSafeTokenTransferDestination,
+  decodeErc20Approve,
+  decodeErc20Recipient,
+  decodeErc20RecipientFromSig,
+  ERC20_APPROVE_SELECTOR,
   EVM_DANGEROUS_ADDRESSES,
   getChainDangerousReason,
   getEvmDangerousReason,
+  isErc20TransferCalldata,
   isEvmBurnAddress,
   SOLANA_DANGEROUS_ADDRESSES,
   UTXO_DANGEROUS_ADDRESSES,
