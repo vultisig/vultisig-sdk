@@ -89,8 +89,35 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     'getChainDangerousReason',
     'assertSafeEvmDestination',
     'assertSafeDestination',
+    'assertSafeTokenTransferDestination',
+    'decodeErc20Approve',
+    'decodeErc20Recipient',
+    'decodeErc20RecipientFromSig',
+    'ERC20_APPROVE_SELECTOR',
+    'isErc20TransferCalldata',
   ] as const)('re-exports dangerous-address canonical %s by identity', async name => {
     expect(reactNativeEntry[name]).toBe(dangerousAddresses[name])
+  })
+
+  it('re-exports the canonical Blockchair base URL helper by identity', async () => {
+    const canonical = await import('@vultisig/core-chain/chains/utxo/client/getBlockchairBaseUrl')
+
+    expect(reactNativeEntry.getBlockchairBaseUrl).toBe(canonical.getBlockchairBaseUrl)
+  })
+
+  it('re-exports the plural StakeKit scan-request builder by identity', async () => {
+    const stakekit = await import('../../../../src/tools/defi/stakekit')
+    expect(reactNativeEntry.buildYieldActionScanRequests).toBe(stakekit.buildYieldActionScanRequests)
+  })
+
+  it.each([
+    'chunkStakekitBalanceQueries',
+    'fetchAllStakekitBalances',
+    'fetchStakekitBalancesBatch',
+    'STAKEKIT_BALANCE_QUERIES_PER_REQUEST',
+  ] as const)('re-exports StakeKit batched-balances canonical %s by identity', async name => {
+    const stakekit = await import('../../../../src/tools/defi/stakekit')
+    expect(reactNativeEntry[name]).toBe(stakekit[name])
   })
 
   // sdk#1772: the RN entry omitted the whole validation / address-format
