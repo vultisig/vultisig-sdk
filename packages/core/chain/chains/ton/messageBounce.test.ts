@@ -29,9 +29,26 @@ describe('getTonMessageBounceable', () => {
     expect(getTonMessageBounceable(Address.parse(masterchainBounceable).toRawString())).toBe(true)
   })
 
+  it('accepts the canonical raw form whatever the hex case', () => {
+    expect(getTonMessageBounceable(Address.parse(bounceable).toRawString().toUpperCase())).toBe(true)
+  })
+
   it('treats a raw deployment destination with stateInit as non-bounceable', () => {
     expect(getTonMessageBounceable(Address.parse(bounceable).toRawString(), true)).toBe(false)
     expect(getTonMessageBounceable(Address.parse(masterchainBounceable).toRawString(), true)).toBe(false)
+  })
+
+  // `Address.parseRaw` accepts these without throwing (it `parseInt`s the workchain),
+  // so the round-trip check is what keeps a malformed destination from being signed
+  // bounceable.
+  it('treats a malformed raw address as non-bounceable', () => {
+    const hash = Address.parse(bounceable).hash.toString('hex')
+
+    expect(getTonMessageBounceable(`0junk:${hash}`)).toBe(false)
+    expect(getTonMessageBounceable(`00:${hash}`)).toBe(false)
+    expect(getTonMessageBounceable(`0x0:${hash}`)).toBe(false)
+    expect(getTonMessageBounceable(`0:${hash.slice(0, -2)}`)).toBe(false)
+    expect(getTonMessageBounceable(`0junk:${hash}`, true)).toBe(false)
   })
 
   it('treats an unparseable address as non-bounceable instead of throwing', () => {

@@ -11,15 +11,17 @@ import { attempt } from '@vultisig/lib-utils/attempt'
  * - an already-deployed contract/router address, which must default bounceable so a
  *   rejection refunds instead of absorbing the transfer
  *
- * Unparseable input is non-bounceable here too; the signer rejects such a destination on
- * its own. The flag is part of the signed body, so every co-signer has to derive it from
- * the same place: the message's own address plus whether the message carries `stateInit`,
- * never a wallet-level default.
+ * Only the canonical raw spelling counts as a raw address: `Address.parseRaw` is lenient
+ * (`parseInt` on the workchain, any hex case), so anything that does not round-trip to
+ * `workchain:hex` is treated like other unparseable input and reported non-bounceable;
+ * the signer rejects such a destination on its own. The flag is part of the signed body,
+ * so every co-signer has to derive it from the same place: the message's own address plus
+ * whether the message carries `stateInit`, never a wallet-level default.
  */
 export const getTonMessageBounceable = (address: string, hasStateInit = false): boolean => {
   if (!Address.isFriendly(address)) {
     const parsedRaw = attempt(() => Address.parseRaw(address))
-    if ('error' in parsedRaw) {
+    if ('error' in parsedRaw || parsedRaw.data.toRawString() !== address.toLowerCase()) {
       return false
     }
 
