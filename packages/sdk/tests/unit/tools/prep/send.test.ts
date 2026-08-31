@@ -314,4 +314,24 @@ describe('prepareSendTxFromKeys', () => {
 
     expect(mockBuildSendKeysignPayload).toHaveBeenCalledTimes(1)
   })
+
+  it('rejects a USDC send whose recipient is a DIFFERENT known token contract (architecture#1774)', async () => {
+    const usdcContract = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+    const usdtContract = '0xdac17f958d2ee523a2206206994597c13d831ec7'
+    await expect(
+      prepareSendTxFromKeys(baseIdentity, {
+        coin: {
+          chain: Chain.Ethereum,
+          address: '0xfrom',
+          decimals: 6,
+          ticker: 'USDC',
+          id: usdcContract,
+        } as any,
+        receiver: usdtContract,
+        amount: 1_000_000n,
+      })
+    ).rejects.toThrow(/destination.*is the USDT token contract/)
+
+    expect(mockBuildSendKeysignPayload).not.toHaveBeenCalled()
+  })
 })

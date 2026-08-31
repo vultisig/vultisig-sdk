@@ -57,16 +57,28 @@ export const getTonChainSpecific: GetChainSpecificResolver<'tonSpecific'> = asyn
   })
 
   if (coin.id) {
-    const { data: jettonWallet } = await attempt(
+    // A Jetton transfer is a message to the SENDER's own jetton wallet, so without
+    // that address there is no transaction to build. Leaving the empty-string default
+    // in place does not stop anything downstream — the signing path's presence check
+    // only rejects null/undefined — so a failed lookup would otherwise be signed as a
+    // transfer to nowhere. This lookup fails transiently (RPC timeout, indexer lag),
+    // so it stays a plain retryable Error rather than a BuildKeysignPayloadError.
+    const jettonWallet = await attempt(
       getJettonWalletAddress({
         ownerAddress: address,
         jettonMasterAddress: coin.id,
       })
     )
 
-    if (jettonWallet) {
-      result.jettonAddress = jettonWallet
+    if ('error' in jettonWallet || !jettonWallet.data.trim()) {
+      throw new Error(
+        `Unable to resolve the ${coin.ticker} jetton wallet owned by ${address}. ` +
+          'Refusing to build a Jetton transfer without it.',
+        'error' in jettonWallet ? { cause: jettonWallet.error } : undefined
+      )
     }
+
+    result.jettonAddress = jettonWallet.data
 
     if (receiver) {
       const { data: destWalletState } = await attempt(getTonWalletState(receiver))
