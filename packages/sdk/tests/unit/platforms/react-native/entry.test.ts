@@ -89,8 +89,20 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     'getChainDangerousReason',
     'assertSafeEvmDestination',
     'assertSafeDestination',
+    'assertSafeTokenTransferDestination',
+    'decodeErc20Approve',
+    'decodeErc20Recipient',
+    'decodeErc20RecipientFromSig',
+    'ERC20_APPROVE_SELECTOR',
+    'isErc20TransferCalldata',
   ] as const)('re-exports dangerous-address canonical %s by identity', async name => {
     expect(reactNativeEntry[name]).toBe(dangerousAddresses[name])
+  })
+
+  it('re-exports the canonical Blockchair base URL helper by identity', async () => {
+    const canonical = await import('@vultisig/core-chain/chains/utxo/client/getBlockchairBaseUrl')
+
+    expect(reactNativeEntry.getBlockchairBaseUrl).toBe(canonical.getBlockchairBaseUrl)
   })
 
   it('re-exports the plural StakeKit scan-request builder by identity', async () => {
