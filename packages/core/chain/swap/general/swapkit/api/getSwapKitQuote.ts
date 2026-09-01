@@ -623,10 +623,11 @@ const getTransferAmount = ({ depositAmount, tx }: SwapKitSwapResponse, amount: b
  *
  * More than one entry is rejected rather than ignored: only `tx[0]` is ever
  * built, so a multi-transfer route would be signed as a partial deposit that
- * under-funds the swap.
+ * under-funds the swap. The count is checked before the entry shape so a
+ * malformed trailing entry cannot slip a multi-transfer array past this guard.
  */
 const getTransferTxEntry = (tx: unknown): Record<string, unknown> | undefined => {
-  if (!Array.isArray(tx) || tx.length === 0 || !tx.every(isRecord)) {
+  if (!Array.isArray(tx) || tx.length === 0) {
     return undefined
   }
 
@@ -636,7 +637,7 @@ const getTransferTxEntry = (tx: unknown): Record<string, unknown> | undefined =>
     )
   }
 
-  return tx[0]
+  return isRecord(tx[0]) ? tx[0] : undefined
 }
 
 const areEqualTransferAddresses = (left: string, right: string, chain: SwapKitSourceChain): boolean =>

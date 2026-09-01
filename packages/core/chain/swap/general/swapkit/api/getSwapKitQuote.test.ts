@@ -581,6 +581,17 @@ describe('getSwapKitQuote', () => {
         })
       ).rejects.toThrow(/returned 2 transfers/)
     })
+
+    it('rejects a multi-transfer tx[] even when a trailing entry is malformed — the count is checked before the shape', async () => {
+      // A non-record second entry must not turn the array into "no entry" and
+      // hand tx[0] straight to the resolvers with the multi-transfer guard skipped.
+      await expect(
+        stubTransferRoute({
+          targetAddress: TON_DEPOSIT_BOUNCEABLE,
+          tx: [{ address: TON_DEPOSIT_BOUNCEABLE, amount: '0.001' }, 'invalid'],
+        })
+      ).rejects.toThrow(/returned 2 transfers/)
+    })
   })
 
   it('maps Solana source routes to the existing serialized transaction payload', async () => {
