@@ -9,7 +9,7 @@ import { buildNativeTonTransfer, buildNativeTonTransferFromMessage, tonAmountToB
 
 const TON_ADDRESS = 'EQAtiFQ15MZBgpAGwD1jfJm6maz5otBOPefyw9Wc3MVmMgzp'
 
-const buildPayload = (toAmount: string): KeysignPayload =>
+const buildPayload = (toAmount: string, memo = ''): KeysignPayload =>
   ({
     coin: {
       chain: Chain.Ton,
@@ -21,7 +21,7 @@ const buildPayload = (toAmount: string): KeysignPayload =>
     },
     toAddress: TON_ADDRESS,
     toAmount,
-    memo: '',
+    memo,
   }) as KeysignPayload
 
 describe('TON signing input amount encoding', () => {
@@ -105,5 +105,25 @@ describe('TON MAX send', () => {
     })
 
     expect(Buffer.from(transfer.amount).toString('hex')).not.toBe('00')
+  })
+})
+
+// A native comment is the message body's own cell, so it gets the whole 1023
+// bits minus the 32-bit opcode — unlike a jetton comment, which shares its cell
+// with the transfer fields and gets a fraction of that.
+describe('TON native comment capacity', () => {
+  const build = (memo: string) =>
+    buildNativeTonTransfer({ keysignPayload: buildPayload('1000000000', memo), bounceable: true })
+
+  it('carries a comment that fills the cell exactly', () => {
+    expect(build('x'.repeat(123)).comment).toBe('x'.repeat(123))
+  })
+
+  it('rejects one byte more', () => {
+    expect(() => build('x'.repeat(124))).toThrow(/at most 123 bytes \(got 124\)/)
+  })
+
+  it('counts UTF-8 bytes rather than characters', () => {
+    expect(() => build('→'.repeat(42))).toThrow(/got 126/)
   })
 })
