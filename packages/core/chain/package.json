@@ -2417,6 +2417,7 @@
     "@trustwallet/wallet-core": "^4.7.3",
     "@vultisig/core-config": "0.9.1",
     "@vultisig/lib-utils": "0.10.6",
+    "@vultisig/mpc-types": "workspace:*",
     "bip32": "^5.0.1",
     "bitcoinjs-lib": "^7.0.1",
     "bs58": "^6.0.0",
