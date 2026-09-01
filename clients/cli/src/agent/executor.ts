@@ -6,6 +6,7 @@
  * Each handler takes `(toolCallId, input)` and returns a `RecentAction` ready
  * to be flushed into the next outbound `context.recent_actions`.
  */
+import { evmChainTxFeeFormat } from '@vultisig/core-chain/chains/evm/tx/fee'
 import type {
   EvmChain,
   ParsedTxReadyEnvelope,
@@ -2004,10 +2005,9 @@ export class AgentExecutor {
       const currentPriorityFee = BigInt(bs.value.priorityFee || '0')
       const currentMaxFee = BigInt(bs.value.maxFeePerGasWei || '0')
 
-      // BSC is the sole EVM chain that signs legacy type-0 transactions in the
-      // shared fee mapper. Its priorityFee field is ignored by WalletCore, so
-      // preserve the existing gas-price refresh without synthesizing a tip.
-      const isEip1559 = chain !== Chain.BSC
+      // Use the same fee-format table as the WalletCore signing mapper so a
+      // future legacy-chain addition cannot silently receive EIP-1559 fields.
+      const isEip1559 = evmChainTxFeeFormat[chain] === 'enveloped'
       let priorityFee = currentPriorityFee
 
       if (isEip1559) {
@@ -2052,10 +2052,6 @@ export class AgentExecutor {
       // during the MPC signing window (15-60 seconds)
       const minMaxFee = (baseFee * 25n) / 10n + priorityFee
       const patchedMaxFee = currentMaxFee < minMaxFee ? minMaxFee : currentMaxFee
-
-      if (isEip1559 && priorityFee > patchedMaxFee) {
-        priorityFee = patchedMaxFee
-      }
 
       if (priorityFee !== currentPriorityFee) {
         bs.value.priorityFee = priorityFee.toString()

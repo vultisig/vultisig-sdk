@@ -47,7 +47,7 @@ export class BroadcastPartialFailureError extends Error {
     this.name = 'BroadcastPartialFailureError'
     this.broadcastedTxHashes = broadcastedTxHashes
     this.failedInputIndex = failedInputIndex
-    this.originalError = cause instanceof Error ? cause : new Error(String(cause))
+    this.originalError = toSafeBroadcastError(cause)
   }
 }
 

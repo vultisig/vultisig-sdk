@@ -23,10 +23,13 @@ export const formatBroadcastFailureReason = (cause: unknown): string => {
   return reason.replace(LONG_HEX_PAYLOAD, '[signed transaction redacted]').trim()
 }
 
-/** Build a diagnostic Error whose public message is safe while retaining the cause in memory. */
+/** Build a diagnostic Error whose entire caller-visible graph is safe to inspect. */
 export const toSafeBroadcastError = (cause: unknown): Error => {
   const reason = formatBroadcastFailureReason(cause)
   if (cause instanceof Error && cause.message === reason) return cause
 
-  return new Error(reason, { cause })
+  // Do not retain an unsafe error as `.cause`: console.error/util.inspect and
+  // structured loggers recursively traverse cause chains even when message and
+  // JSON serialization are clean.
+  return new Error(reason)
 }
