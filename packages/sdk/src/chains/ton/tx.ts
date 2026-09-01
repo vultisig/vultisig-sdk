@@ -226,6 +226,11 @@ function buildSigningPayloadCell(args: {
     .endCell()
 }
 
+/**
+ * The text-comment body cell for a native transfer: 32-bit zero opcode then the
+ * UTF-8 memo. Returns `undefined` for an empty memo so the caller can omit the
+ * body entirely; throws if the memo will not fit the cell.
+ */
 function buildCommentBody(memo: string | undefined): Cell | undefined {
   if (!memo) return undefined
   // Native cap only. A jetton comment shares its cell with the transfer fields

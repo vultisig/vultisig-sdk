@@ -1,6 +1,6 @@
 ---
 '@vultisig/core-chain': minor
-'@vultisig/core-mpc': minor
+'@vultisig/core-mpc': major
 '@vultisig/sdk': minor
 ---
 
