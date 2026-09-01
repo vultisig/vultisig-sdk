@@ -16,6 +16,7 @@ import { pollTxStatusUntilFinal } from '../../tx'
 import type { Signature } from '../../types'
 import { convertToKeysignSignatures } from '../utils/convertSignature'
 import { VaultError, VaultErrorCode } from '../VaultError'
+import { formatBroadcastFailureReason, toSafeBroadcastError } from './broadcastError'
 
 type BroadcastPartialFailureInput = {
   chain: Chain
@@ -35,7 +36,7 @@ export class BroadcastPartialFailureError extends Error {
   readonly originalError?: Error
 
   constructor({ chain, broadcastedTxHashes, failedInputIndex, cause }: BroadcastPartialFailureInput) {
-    const errorMessage = cause instanceof Error ? cause.message : String(cause)
+    const errorMessage = formatBroadcastFailureReason(cause)
     super(
       `Broadcast failed on ${chain} input ${failedInputIndex + 1} after ${
         broadcastedTxHashes.length
@@ -186,8 +187,7 @@ export class BroadcastService {
         }
 
         if (broadcastResult.status === 'failed') {
-          const cause =
-            broadcastResult.cause instanceof Error ? broadcastResult.cause : new Error(String(broadcastResult.cause))
+          const cause = toSafeBroadcastError(broadcastResult.cause)
           const error = new Error(
             `${broadcastResult.code} (retryable=${broadcastResult.retryable}): ${cause.message}`,
             {
@@ -225,10 +225,11 @@ export class BroadcastService {
 
       return txHash
     } catch (error) {
+      const safeError = toSafeBroadcastError(error)
       throw new VaultError(
         VaultErrorCode.BroadcastFailed,
-        `Failed to broadcast transaction on ${chain}: ${error instanceof Error ? error.message : String(error)}`,
-        error instanceof Error ? error : new Error(String(error))
+        `Failed to broadcast transaction on ${chain}: ${safeError.message}`,
+        safeError
       )
     }
   }

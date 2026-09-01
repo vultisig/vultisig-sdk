@@ -31,6 +31,7 @@ import { hashes as xrplHashes } from 'xrpl'
 
 import { decodeSolanaRawTx, deriveSolanaRawTxSignature } from '../../chains/solana/rawTx'
 import { VaultError, VaultErrorCode } from '../VaultError'
+import { toSafeBroadcastError } from './broadcastError'
 
 type BlockchairBroadcastResponse =
   | {
@@ -204,10 +205,11 @@ export class RawBroadcastService {
       if (error instanceof VaultError) {
         throw error
       }
+      const safeError = toSafeBroadcastError(error)
       throw new VaultError(
         VaultErrorCode.BroadcastFailed,
-        `Failed to broadcast raw transaction on ${chain}: ${error instanceof Error ? error.message : String(error)}`,
-        error instanceof Error ? error : new Error(String(error))
+        `Failed to broadcast raw transaction on ${chain}: ${safeError.message}`,
+        safeError
       )
     }
   }

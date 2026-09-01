@@ -17,6 +17,7 @@ import type {
 } from '@vultisig/sdk'
 import {
   Chain,
+  clampEvmPriorityFee,
   computeEip712Hash,
   getChainKind,
   getEvmRpcUrl,
@@ -2000,21 +2001,73 @@ export class AgentExecutor {
         throw new Error(`Failed to fetch current base fee for ${chain}`)
       }
       const baseFee = BigInt(data.result.baseFeePerGas)
-      if (baseFee === 0n) return
-
       const currentPriorityFee = BigInt(bs.value.priorityFee || '0')
       const currentMaxFee = BigInt(bs.value.maxFeePerGasWei || '0')
+
+      // BSC is the sole EVM chain that signs legacy type-0 transactions in the
+      // shared fee mapper. Its priorityFee field is ignored by WalletCore, so
+      // preserve the existing gas-price refresh without synthesizing a tip.
+      const isEip1559 = chain !== Chain.BSC
+      let priorityFee = currentPriorityFee
+
+      if (isEip1559) {
+        if (currentPriorityFee > 0n) {
+          // Respect builder-supplied tips. The canonical clamp is also the
+          // source of hard per-chain floors; only adopt an upward adjustment
+          // here so its defensive ceiling cannot clobber an explicit value.
+          const clampedPriorityFee = clampEvmPriorityFee(chain, currentPriorityFee)
+          priorityFee = clampedPriorityFee > currentPriorityFee ? clampedPriorityFee : currentPriorityFee
+        } else {
+          let rpcPriorityFee = 0n
+
+          try {
+            const priorityRes = await fetch(rpcUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                jsonrpc: '2.0',
+                method: 'eth_maxPriorityFeePerGas',
+                params: [],
+                id: 2,
+              }),
+              signal: AbortSignal.timeout(5000),
+            })
+            const priorityData = (await priorityRes.json()) as any
+            if (priorityRes.ok && !priorityData?.error && priorityData?.result !== undefined) {
+              rpcPriorityFee = BigInt(priorityData.result)
+            }
+          } catch {
+            // Fall back to a base-fee-derived suggestion below. The base fee
+            // has already been refreshed successfully, so a failed optional
+            // tip RPC must not leave an EIP-1559 transaction at zero tip.
+          }
+
+          const fallbackPriorityFee = baseFee > 9n ? baseFee / 10n : 1n
+          priorityFee = clampEvmPriorityFee(chain, rpcPriorityFee > 0n ? rpcPriorityFee : fallbackPriorityFee)
+        }
+      }
 
       // Minimum maxFeePerGas = baseFee * 2.5 + priorityFee
       // The 2.5x multiplier provides headroom for base fee fluctuations
       // during the MPC signing window (15-60 seconds)
-      const minMaxFee = (baseFee * 25n) / 10n + currentPriorityFee
+      const minMaxFee = (baseFee * 25n) / 10n + priorityFee
+      const patchedMaxFee = currentMaxFee < minMaxFee ? minMaxFee : currentMaxFee
 
-      if (currentMaxFee < minMaxFee) {
-        bs.value.maxFeePerGasWei = minMaxFee.toString()
+      if (isEip1559 && priorityFee > patchedMaxFee) {
+        priorityFee = patchedMaxFee
+      }
+
+      if (priorityFee !== currentPriorityFee) {
+        bs.value.priorityFee = priorityFee.toString()
+        if (this.verbose)
+          process.stderr.write(`[gas] Patched ${chain} maxPriorityFeePerGas: ${currentPriorityFee} → ${priorityFee}\n`)
+      }
+
+      if (currentMaxFee < patchedMaxFee) {
+        bs.value.maxFeePerGasWei = patchedMaxFee.toString()
         if (this.verbose)
           process.stderr.write(
-            `[gas] Bumped ${chain} maxFeePerGas: ${currentMaxFee} → ${minMaxFee} (baseFee=${baseFee})\n`
+            `[gas] Bumped ${chain} maxFeePerGas: ${currentMaxFee} → ${patchedMaxFee} (baseFee=${baseFee})\n`
           )
       }
     } catch {
