@@ -13,8 +13,13 @@ import { buildNativeTonTransfer, buildNativeTonTransferFromMessage } from './nat
 export const getTonSigningInputs: SigningInputsResolver<'ton'> = ({ keysignPayload, walletCore }) => {
   const coin = getKeysignCoin(keysignPayload)
 
-  const { expireAt, sequenceNumber, bounceable, sendMaxAmount, jettonAddress, isActiveDestination } =
-    getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'tonSpecific')
+  // `sendMaxAmount` is deliberately not read here. A MAX send is the displayed
+  // `balance - fee` carried in `toAmount` like any other amount, so the signed bytes
+  // are identical either way and the flag stays descriptive metadata.
+  const { expireAt, sequenceNumber, bounceable, jettonAddress, isActiveDestination } = getBlockchainSpecificValue(
+    keysignPayload.blockchainSpecific,
+    'tonSpecific'
+  )
 
   const isStakeOp = isTonStakingComment(keysignPayload.memo)
 
@@ -40,7 +45,6 @@ export const getTonSigningInputs: SigningInputsResolver<'ton'> = ({ keysignPaylo
             ? buildNativeTonTransfer({
                 keysignPayload,
                 bounceable: isStakeOp ? true : !!bounceable,
-                sendMaxAmount,
               })
             : buildJettonTransfer({
                 keysignPayload,
