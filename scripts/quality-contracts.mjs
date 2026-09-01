@@ -311,11 +311,43 @@ import { Chain } from '@vultisig/sdk'
 
 assert.strictEqual(compatibilitySchema, canonicalSchema)
 const signBitcoin = buildSignBitcoinFromPsbt({
-  psbt: { data: { inputs: [] }, txInputs: [], txOutputs: [], version: 2, locktime: 0 },
+  psbt: {
+    data: {
+      inputs: [
+        {
+          witnessUtxo: {
+            script: Buffer.from('00140000000000000000000000000000000000000000', 'hex'),
+            value: 12_345n,
+          },
+        },
+      ],
+    },
+    txInputs: [{ hash: Buffer.alloc(32, 1), index: 2, sequence: 0xfffffffe }],
+    txOutputs: [{ script: Buffer.from('6a02cafe', 'hex'), value: 1_234n }],
+    version: 2,
+    locktime: 0,
+  },
   senderAddress: '',
 })
 assert.equal(signBitcoin.$typeName, 'vultisig.keysign.v1.SignBitcoin')
-assert.equal(signBitcoin.inputs.length, 0)
+assert.deepEqual(
+  {
+    hash: signBitcoin.inputs[0].hash,
+    index: signBitcoin.inputs[0].index,
+    amount: signBitcoin.inputs[0].amount,
+    scriptType: signBitcoin.inputs[0].scriptType,
+    sequence: signBitcoin.inputs[0].sequence,
+  },
+  { hash: '01'.repeat(32), index: 2, amount: 12_345n, scriptType: 'p2wpkh', sequence: 0xfffffffe }
+)
+assert.deepEqual(
+  {
+    amount: signBitcoin.outputs[0].amount,
+    opReturnData: signBitcoin.outputs[0].opReturnData,
+    scriptPubKey: signBitcoin.outputs[0].scriptPubKey,
+  },
+  { amount: 1_234n, opReturnData: 'cafe', scriptPubKey: '6a02cafe' }
+)
 assert.equal(Chain.Bitcoin, 'Bitcoin')
 console.log('Packed package graph ESM smoke passed')
 `

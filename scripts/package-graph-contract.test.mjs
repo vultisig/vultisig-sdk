@@ -6,10 +6,11 @@ import test from 'node:test'
 const repoRoot = path.resolve(import.meta.dirname, '..')
 const readJson = relativePath => JSON.parse(readFileSync(path.join(repoRoot, relativePath), 'utf8'))
 
+const skippedSourceDirectories = new Set(['dist', 'node_modules'])
 const walkSourceFiles = directory =>
   readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
     const entryPath = path.join(directory, entry.name)
-    if (entry.isDirectory()) return entry.name === 'dist' ? [] : walkSourceFiles(entryPath)
+    if (entry.isDirectory()) return skippedSourceDirectories.has(entry.name) ? [] : walkSourceFiles(entryPath)
     return entry.isFile() && /\.[cm]?[jt]sx?$/.test(entry.name) ? [entryPath] : []
   })
 
@@ -28,10 +29,14 @@ test('published SDK packages declare an acyclic package graph', () => {
     ])
   )
 
-  assert.deepEqual(graph['@vultisig/mpc-types'], [])
-  assert.deepEqual(graph['@vultisig/core-chain'], ['@vultisig/mpc-types'])
-  assert.deepEqual(graph['@vultisig/core-mpc'], ['@vultisig/core-chain', '@vultisig/mpc-types'])
-  assert.deepEqual(graph['@vultisig/sdk'], ['@vultisig/core-chain', '@vultisig/core-mpc', '@vultisig/mpc-types'])
+  assert.deepEqual([...graph['@vultisig/mpc-types']].sort(), [])
+  assert.deepEqual([...graph['@vultisig/core-chain']].sort(), ['@vultisig/mpc-types'])
+  assert.deepEqual([...graph['@vultisig/core-mpc']].sort(), ['@vultisig/core-chain', '@vultisig/mpc-types'])
+  assert.deepEqual([...graph['@vultisig/sdk']].sort(), [
+    '@vultisig/core-chain',
+    '@vultisig/core-mpc',
+    '@vultisig/mpc-types',
+  ])
 
   const visited = new Set()
   const active = new Set()
