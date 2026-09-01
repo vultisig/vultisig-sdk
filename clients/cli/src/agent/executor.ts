@@ -73,6 +73,12 @@ const EVM_CHAINS = new Set<string>([
 const ERC20_TRANSFER_SELECTOR = '0xa9059cbb'
 const ERC20_TRANSFER_ABI = parseAbi(['function transfer(address to, uint256 value)'])
 
+const changedByMoreThanHalf = (before: bigint, after: bigint): boolean => {
+  if (before === after) return false
+  const difference = before > after ? before - after : after - before
+  return difference * 2n > before
+}
+
 /** Decode the recipient and amount that an ERC-20 transfer will actually use. */
 function decodeErc20Transfer(calldata: string): { recipient: Address; amount: bigint } | null {
   if (calldata.slice(0, ERC20_TRANSFER_SELECTOR.length).toLowerCase() !== ERC20_TRANSFER_SELECTOR) return null
@@ -1984,7 +1990,60 @@ export class AgentExecutor {
     if (!bs || bs.case !== 'ethereumSpecific') return
 
     const rpcUrl = getEvmRpcUrl(chain)
+    const currentPriorityFee = BigInt(bs.value.priorityFee || '0')
+    const currentMaxFee = BigInt(bs.value.maxFeePerGasWei || '0')
+    const isEip1559 = evmChainTxFeeFormat[chain] === 'enveloped'
+    const baseFee = await this.fetchEvmBaseFee(chain, rpcUrl)
 
+    // Use the same fee-format table as the WalletCore signing mapper so a
+    // future legacy-chain addition cannot silently receive EIP-1559 fields.
+    let priorityFee = currentPriorityFee
+
+    if (isEip1559) {
+      if (currentPriorityFee > 0n) {
+        priorityFee = clampEvmPriorityFee(chain, currentPriorityFee)
+        if (priorityFee < currentPriorityFee) {
+          process.stderr.write(
+            `[gas] Warning: ${chain} maxPriorityFeePerGas ${currentPriorityFee} exceeded the safety ceiling; clamped to ${priorityFee}\n`
+          )
+        }
+      } else {
+        const rpcPriorityFee = baseFee === null ? 0n : await this.fetchEvmPriorityFee(rpcUrl)
+
+        const baseFeeFallback = baseFee === null ? 0n : baseFee / 10n
+        const fallbackPriorityFee = baseFeeFallback < 2_000_000_000n ? baseFeeFallback : 2_000_000_000n
+        priorityFee = clampEvmPriorityFee(chain, rpcPriorityFee > 0n ? rpcPriorityFee : fallbackPriorityFee)
+      }
+    }
+
+    // When the base fee is known, keep 2.5x headroom for the MPC signing
+    // window. When it is unavailable, the max fee must still cover the
+    // statically clamped tip so a dead RPC cannot leave an invalid envelope.
+    const minMaxFee = baseFee === null ? priorityFee : (baseFee * 25n) / 10n + priorityFee
+    const patchedMaxFee = currentMaxFee < minMaxFee ? minMaxFee : currentMaxFee
+
+    if (priorityFee !== currentPriorityFee) {
+      bs.value.priorityFee = priorityFee.toString()
+      if (this.verbose)
+        process.stderr.write(`[gas] Patched ${chain} maxPriorityFeePerGas: ${currentPriorityFee} → ${priorityFee}\n`)
+    }
+
+    if (currentMaxFee < patchedMaxFee) {
+      bs.value.maxFeePerGasWei = patchedMaxFee.toString()
+      if (this.verbose)
+        process.stderr.write(
+          `[gas] Bumped ${chain} maxFeePerGas: ${currentMaxFee} → ${patchedMaxFee} (baseFee=${baseFee ?? 'unavailable'})\n`
+        )
+    }
+
+    if (changedByMoreThanHalf(currentPriorityFee, priorityFee) || changedByMoreThanHalf(currentMaxFee, patchedMaxFee)) {
+      process.stderr.write(
+        `[gas] Notice: ${chain} fees adjusted after confirmation: maxPriorityFeePerGas ${currentPriorityFee} → ${priorityFee}, maxFeePerGas ${currentMaxFee} → ${patchedMaxFee}\n`
+      )
+    }
+  }
+
+  private async fetchEvmBaseFee(chain: Chain, rpcUrl: string): Promise<bigint | null> {
     try {
       const res = await fetch(rpcUrl, {
         method: 'POST',
@@ -2001,76 +2060,36 @@ export class AgentExecutor {
       if (!res.ok || data?.error || data?.result?.baseFeePerGas === undefined || data?.result?.baseFeePerGas === null) {
         throw new Error(`Failed to fetch current base fee for ${chain}`)
       }
-      const baseFee = BigInt(data.result.baseFeePerGas)
-      const currentPriorityFee = BigInt(bs.value.priorityFee || '0')
-      const currentMaxFee = BigInt(bs.value.maxFeePerGasWei || '0')
 
-      // Use the same fee-format table as the WalletCore signing mapper so a
-      // future legacy-chain addition cannot silently receive EIP-1559 fields.
-      const isEip1559 = evmChainTxFeeFormat[chain] === 'enveloped'
-      let priorityFee = currentPriorityFee
-
-      if (isEip1559) {
-        if (currentPriorityFee > 0n) {
-          // Respect builder-supplied tips. The canonical clamp is also the
-          // source of hard per-chain floors; only adopt an upward adjustment
-          // here so its defensive ceiling cannot clobber an explicit value.
-          const clampedPriorityFee = clampEvmPriorityFee(chain, currentPriorityFee)
-          priorityFee = clampedPriorityFee > currentPriorityFee ? clampedPriorityFee : currentPriorityFee
-        } else {
-          let rpcPriorityFee = 0n
-
-          try {
-            const priorityRes = await fetch(rpcUrl, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                jsonrpc: '2.0',
-                method: 'eth_maxPriorityFeePerGas',
-                params: [],
-                id: 2,
-              }),
-              signal: AbortSignal.timeout(5000),
-            })
-            const priorityData = (await priorityRes.json()) as any
-            if (priorityRes.ok && !priorityData?.error && priorityData?.result !== undefined) {
-              rpcPriorityFee = BigInt(priorityData.result)
-            }
-          } catch {
-            // Fall back to a base-fee-derived suggestion below. The base fee
-            // has already been refreshed successfully, so a failed optional
-            // tip RPC must not leave an EIP-1559 transaction at zero tip.
-          }
-
-          const fallbackPriorityFee = baseFee > 9n ? baseFee / 10n : 1n
-          priorityFee = clampEvmPriorityFee(chain, rpcPriorityFee > 0n ? rpcPriorityFee : fallbackPriorityFee)
-        }
-      }
-
-      // Minimum maxFeePerGas = baseFee * 2.5 + priorityFee
-      // The 2.5x multiplier provides headroom for base fee fluctuations
-      // during the MPC signing window (15-60 seconds)
-      const minMaxFee = (baseFee * 25n) / 10n + priorityFee
-      const patchedMaxFee = currentMaxFee < minMaxFee ? minMaxFee : currentMaxFee
-
-      if (priorityFee !== currentPriorityFee) {
-        bs.value.priorityFee = priorityFee.toString()
-        if (this.verbose)
-          process.stderr.write(`[gas] Patched ${chain} maxPriorityFeePerGas: ${currentPriorityFee} → ${priorityFee}\n`)
-      }
-
-      if (currentMaxFee < patchedMaxFee) {
-        bs.value.maxFeePerGasWei = patchedMaxFee.toString()
-        if (this.verbose)
-          process.stderr.write(
-            `[gas] Bumped ${chain} maxFeePerGas: ${currentMaxFee} → ${patchedMaxFee} (baseFee=${baseFee})\n`
-          )
-      }
+      return BigInt(data.result.baseFeePerGas)
     } catch {
-      // Non-fatal — keep the original gas estimate
       process.stderr.write(
         `[gas] Warning: gas estimate was not refreshed for ${chain}; signing will continue with the original estimate\n`
       )
+      return null
+    }
+  }
+
+  private async fetchEvmPriorityFee(rpcUrl: string): Promise<bigint> {
+    try {
+      const res = await fetch(rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'eth_maxPriorityFeePerGas',
+          params: [],
+          id: 2,
+        }),
+        signal: AbortSignal.timeout(5000),
+      })
+      const data = (await res.json()) as any
+      if (!res.ok || data?.error || data?.result === undefined) return 0n
+
+      return BigInt(data.result)
+    } catch {
+      // The tip RPC is optional. The caller applies a bounded fallback.
+      return 0n
     }
   }
 

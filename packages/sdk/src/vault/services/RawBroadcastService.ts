@@ -31,7 +31,7 @@ import { hashes as xrplHashes } from 'xrpl'
 
 import { decodeSolanaRawTx, deriveSolanaRawTxSignature } from '../../chains/solana/rawTx'
 import { VaultError, VaultErrorCode } from '../VaultError'
-import { toSafeBroadcastError } from './broadcastError'
+import { formatBroadcastFailureReason, toSafeBroadcastError } from './broadcastError'
 
 type BlockchairBroadcastResponse =
   | {
@@ -203,7 +203,11 @@ export class RawBroadcastService {
       throw new VaultError(VaultErrorCode.UnsupportedChain, `Raw broadcast not yet supported for chain: ${chain}`)
     } catch (error) {
       if (error instanceof VaultError) {
-        throw error
+        const safeMessage = formatBroadcastFailureReason(error)
+        const safeOriginalError = error.originalError ? toSafeBroadcastError(error.originalError) : undefined
+        if (safeMessage === error.message && safeOriginalError === error.originalError) throw error
+
+        throw new VaultError(error.code, safeMessage, safeOriginalError)
       }
       const safeError = toSafeBroadcastError(error)
       throw new VaultError(

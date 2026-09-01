@@ -1,4 +1,5 @@
 import { inspect } from 'node:util'
+import { runInNewContext } from 'node:vm'
 
 import { Chain } from '@vultisig/core-chain/Chain'
 import { CosmosSequenceMismatchError } from '@vultisig/core-chain/tx/broadcast/cosmosSequenceMismatch'
@@ -7,7 +8,7 @@ import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Signature } from '@/types'
-import { formatBroadcastFailureReason } from '@/vault/services/broadcastError'
+import { formatBroadcastFailureReason, toSafeBroadcastError } from '@/vault/services/broadcastError'
 import { BroadcastPartialFailureError, BroadcastService } from '@/vault/services/BroadcastService'
 import { VaultErrorCode } from '@/vault/VaultError'
 
@@ -241,8 +242,11 @@ describe('BroadcastService', () => {
     })
   })
 
-  it('maps a failed broadcast result while retaining its original cause', async () => {
-    const cause = new Error('RPC rejected the transaction')
+  it('maps a failed broadcast result without retaining a raw transaction in its cause chain', async () => {
+    const signedRawTx = `0x${'aa'.repeat(256)}`
+    const cause = new Error('execution reverted', {
+      cause: new Error(`RPC rejected the transaction; raw=${signedRawTx}`),
+    })
     mockCoreBroadcastTx.mockResolvedValue(broadcastFailed(cause, false))
 
     const error = await service.broadcastTx({ chain: Chain.Ethereum, keysignPayload, signature }).catch(value => value)
@@ -251,7 +255,7 @@ describe('BroadcastService', () => {
       code: VaultErrorCode.BroadcastFailed,
       message: expect.stringContaining('BROADCAST_REJECTED'),
     })
-    expect(error.originalError.cause).toBe(cause)
+    expect(inspect(error, { depth: 10 })).not.toContain(signedRawTx)
   })
 
   it('keeps the RPC rejection reason but removes the signed raw transaction from the public error', async () => {
@@ -439,5 +443,100 @@ describe('formatBroadcastFailureReason', () => {
     expect(formatBroadcastFailureReason(new Error(`transaction rejected; raw=${signedRawTx}`))).toBe(
       'transaction rejected; raw=[signed transaction redacted]'
     )
+  })
+
+  it('removes a nested signed payload while preserving a well-formed transaction hash', () => {
+    const signedRawTx = `0x${'ab'.repeat(256)}`
+    const txHash = `0x${'cd'.repeat(32)}`
+    const cause = new Error(`execution reverted for ${txHash}`, {
+      cause: new Error(`request body: ${signedRawTx}`),
+    })
+
+    const safeError = toSafeBroadcastError(cause)
+    const inspected = inspect(safeError, { depth: 10 })
+
+    expect(inspected).not.toContain(signedRawTx)
+    expect(safeError.message).toContain(txHash)
+  })
+
+  it('does not preserve an error whose enumerable request field contains a signed payload', () => {
+    const signedRawTx = `0x${'ef'.repeat(256)}`
+    const cause = Object.assign(new Error('RPC rejected the transaction'), {
+      request: { body: signedRawTx },
+    })
+
+    const safeError = toSafeBroadcastError(cause)
+
+    expect(safeError).not.toBe(cause)
+    expect(inspect(safeError, { depth: 10 })).not.toContain(signedRawTx)
+  })
+
+  it('does not preserve signed payloads stored in Map fields', () => {
+    const signedRawTx = `0x${'12'.repeat(128)}`
+    const cause = Object.assign(new Error('RPC rejected the transaction'), {
+      request: new Map([['body', signedRawTx]]),
+    })
+
+    const safeError = toSafeBroadcastError(cause)
+
+    expect(safeError).not.toBe(cause)
+    expect(inspect(safeError, { depth: 10 })).not.toContain(signedRawTx)
+  })
+
+  it('does not preserve signed payloads stored in Set fields', () => {
+    const signedRawTx = `0x${'34'.repeat(128)}`
+    const cause = Object.assign(new Error('RPC rejected the transaction'), {
+      response: new Set([signedRawTx]),
+    })
+
+    const safeError = toSafeBroadcastError(cause)
+
+    expect(safeError).not.toBe(cause)
+    expect(inspect(safeError, { depth: 10 })).not.toContain(signedRawTx)
+  })
+
+  it.each([
+    ['Map', 'new Map([["body", signedRawTx]])'],
+    ['Set', 'new Set([signedRawTx])'],
+  ])('does not preserve signed payloads stored in cross-realm %s fields', (_name, expression) => {
+    const signedRawTx = `0x${'56'.repeat(128)}`
+    const container = runInNewContext(expression, { signedRawTx })
+    const cause = Object.assign(new Error('RPC rejected the transaction'), { container })
+
+    const safeError = toSafeBroadcastError(cause)
+
+    expect(container).not.toBeInstanceOf(expression.startsWith('new Map') ? Map : Set)
+    expect(safeError).not.toBe(cause)
+    expect(inspect(safeError, { depth: 10 })).not.toContain(signedRawTx)
+  })
+
+  it('does not preserve inherited custom inspectors', () => {
+    const signedRawTx = `0x${'78'.repeat(128)}`
+    class InspectableRequest {
+      [Symbol.for('nodejs.util.inspect.custom')]() {
+        return signedRawTx
+      }
+    }
+    const cause = Object.assign(new Error('RPC rejected the transaction'), {
+      request: new InspectableRequest(),
+    })
+
+    expect(inspect(cause, { depth: 10 })).toContain(signedRawTx)
+
+    const safeError = toSafeBroadcastError(cause)
+
+    expect(safeError).not.toBe(cause)
+    expect(inspect(safeError, { depth: 10 })).not.toContain(signedRawTx)
+  })
+
+  it.each([
+    ['ArrayBuffer', new Uint8Array(64).buffer],
+    ['ArrayBuffer view', new Uint8Array(64)],
+    ['cross-realm ArrayBuffer', runInNewContext('new Uint8Array(64).buffer')],
+    ['cross-realm ArrayBuffer view', runInNewContext('new Uint8Array(64)')],
+  ])('does not preserve inspectable binary payloads in %s fields', (_name, payload) => {
+    const cause = Object.assign(new Error('RPC rejected the transaction'), { payload })
+
+    expect(toSafeBroadcastError(cause)).not.toBe(cause)
   })
 })
