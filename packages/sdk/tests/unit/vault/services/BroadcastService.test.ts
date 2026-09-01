@@ -1,3 +1,5 @@
+import { inspect } from 'node:util'
+
 import { Chain } from '@vultisig/core-chain/Chain'
 import { CosmosSequenceMismatchError } from '@vultisig/core-chain/tx/broadcast/cosmosSequenceMismatch'
 import { broadcastAccepted, broadcastFailed } from '@vultisig/core-chain/tx/broadcast/resolver'
@@ -209,8 +211,11 @@ describe('BroadcastService', () => {
   })
 
   it('carries already-broadcast hashes when a later input fails', async () => {
+    const signedRawTx = `0x${'ef'.repeat(256)}`
     mockGetEncodedSigningInputs.mockResolvedValue(['approve-input', 'swap-input'])
-    mockCoreBroadcastTx.mockResolvedValueOnce(broadcastAccepted()).mockRejectedValueOnce(new Error('swap rejected'))
+    mockCoreBroadcastTx
+      .mockResolvedValueOnce(broadcastAccepted())
+      .mockRejectedValueOnce(new Error(`swap rejected; raw=${signedRawTx}`))
     mockGetTxHash.mockResolvedValueOnce('approve-local-hash')
 
     const promise = service.broadcastTx({ chain: Chain.Ethereum, keysignPayload, signature })
@@ -223,6 +228,8 @@ describe('BroadcastService', () => {
       }),
     })
     await expect(promise).rejects.toHaveProperty('originalError', expect.any(BroadcastPartialFailureError))
+    const error = await promise.catch(value => value)
+    expect(inspect(error, { depth: 10 })).not.toContain(signedRawTx)
   })
 
   it('wraps a broadcast failure in a BroadcastFailed VaultError', async () => {
@@ -262,6 +269,7 @@ describe('BroadcastService', () => {
     })
     expect(error.message).not.toContain(signedRawTx)
     expect(error.toJSON().originalError).not.toContain(signedRawTx)
+    expect(inspect(error, { depth: 10 })).not.toContain(signedRawTx)
   })
 
   it('waits for ERC-20 approval confirmation before broadcasting the swap input', async () => {

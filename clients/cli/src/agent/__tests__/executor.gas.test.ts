@@ -433,18 +433,32 @@ describe('AgentExecutor EIP-1559 fee refresh', () => {
     expect(fetchMock).toHaveBeenCalledOnce()
   })
 
-  it('raises maxFeePerGas as needed to keep the signed priority fee within the fee cap', async () => {
+  it('raises a below-floor builder tip without consulting the priority RPC', async () => {
     const payload = createEvmPayload()
-    payload.blockchainSpecific.value.maxFeePerGasWei = '1'
-    payload.blockchainSpecific.value.priorityFee = '40000000000'
+    payload.blockchainSpecific.value.maxFeePerGasWei = '100000000000'
+    payload.blockchainSpecific.value.priorityFee = '1000000000'
     const executor = new AgentExecutor(createSigningVault(payload))
-    mockEvmFeeRpc(10_000_000_000n, 0n)
+    const fetchMock = mockEvmFeeRpc(10_000_000_000n, 99_000_000_000n)
 
     await (executor as unknown as EvmGasAccess).patchEvmGas(Chain.Polygon, payload)
 
-    expect(BigInt(payload.blockchainSpecific.value.priorityFee)).toBeLessThanOrEqual(
-      BigInt(payload.blockchainSpecific.value.maxFeePerGasWei)
-    )
+    expect(payload.blockchainSpecific.value.priorityFee).toBe('30000000000')
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
+
+  it('clamps an anomalous RPC tip and raises maxFeePerGas to preserve the fee-cap invariant', async () => {
+    const payload = createEvmPayload()
+    payload.blockchainSpecific.value.maxFeePerGasWei = '1'
+    payload.blockchainSpecific.value.priorityFee = '0'
+    const executor = new AgentExecutor(createSigningVault(payload))
+    mockEvmFeeRpc(10_000_000_000n, 10_000_000_000_000n)
+
+    await (executor as unknown as EvmGasAccess).patchEvmGas(Chain.Base, payload)
+
+    const priorityFee = BigInt(payload.blockchainSpecific.value.priorityFee)
+    const maxFee = BigInt(payload.blockchainSpecific.value.maxFeePerGasWei)
+    expect(priorityFee).toBe(50_000_000_000n)
+    expect(priorityFee).toBeLessThanOrEqual(maxFee)
   })
 
   it('uses a nonzero base-fee fallback when an EIP-1559 RPC suggests a zero tip', async () => {
@@ -457,6 +471,42 @@ describe('AgentExecutor EIP-1559 fee refresh', () => {
     await (executor as unknown as EvmGasAccess).patchEvmGas(Chain.Base, payload)
 
     expect(BigInt(payload.blockchainSpecific.value.priorityFee)).toBeGreaterThan(0n)
+  })
+
+  it('uses the fallback when the optional priority RPC throws', async () => {
+    const payload = createEvmPayload()
+    payload.blockchainSpecific.value.maxFeePerGasWei = '0'
+    payload.blockchainSpecific.value.priorityFee = '0'
+    const executor = new AgentExecutor(createSigningVault(payload))
+    const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      const request = JSON.parse(String(init?.body)) as { method: string }
+      if (request.method === 'eth_maxPriorityFeePerGas') throw new Error('unsupported method')
+
+      return {
+        json: vi.fn().mockResolvedValue({ jsonrpc: '2.0', result: { baseFeePerGas: '0x2540be400' } }),
+        ok: true,
+        status: 200,
+      }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await (executor as unknown as EvmGasAccess).patchEvmGas(Chain.Base, payload)
+
+    expect(payload.blockchainSpecific.value.priorityFee).toBe('1000000000')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('still establishes an EIP-1559 tip when the current base fee is zero', async () => {
+    const payload = createEvmPayload()
+    payload.blockchainSpecific.value.maxFeePerGasWei = '0'
+    payload.blockchainSpecific.value.priorityFee = '0'
+    const executor = new AgentExecutor(createSigningVault(payload))
+    mockEvmFeeRpc(0n, 2_000_000_000n)
+
+    await (executor as unknown as EvmGasAccess).patchEvmGas(Chain.Base, payload)
+
+    expect(payload.blockchainSpecific.value.priorityFee).toBe('2000000000')
+    expect(payload.blockchainSpecific.value.maxFeePerGasWei).toBe('2000000000')
   })
 
   it('leaves the legacy BSC priority field untouched', async () => {
