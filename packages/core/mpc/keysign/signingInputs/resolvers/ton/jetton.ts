@@ -7,7 +7,7 @@ import { WalletCore } from '@trustwallet/wallet-core'
 
 import { getKeysignAmount } from '../../../utils/getKeysignAmount'
 import { getKeysignCoin } from '../../../utils/getKeysignCoin'
-import { tonAmountToBytes } from './native'
+import { tonAmountToBytes, tonSendMode } from './native'
 
 type BuildJettonTransferInput = {
   keysignPayload: KeysignPayload
@@ -16,6 +16,12 @@ type BuildJettonTransferInput = {
   isActiveDestination: boolean
 }
 
+/**
+ * Builds the transfer that carries a Jetton send: a fixed TON amount to the
+ * sender's own Jetton wallet, wrapping the Jetton payload. `forwardAmount` is 1
+ * nanoton only when the destination is already active, so an inactive recipient
+ * isn't charged for a notification it cannot receive.
+ */
 export const buildJettonTransfer = ({
   keysignPayload,
   walletCore,
@@ -51,15 +57,12 @@ export const buildJettonTransfer = ({
     forwardAmount: tonAmountToBytes(forwardAmount),
   })
 
-  const mode =
-    TW.TheOpenNetwork.Proto.SendMode.PAY_FEES_SEPARATELY | TW.TheOpenNetwork.Proto.SendMode.IGNORE_ACTION_PHASE_ERRORS
-
   return TW.TheOpenNetwork.Proto.Transfer.create({
     dest: jettonAddress,
     amount: tonAmountToBytes(tonConfig.jettonAmount),
     bounceable: true,
     comment: keysignPayload.memo ?? '',
-    mode,
+    mode: tonSendMode,
     jettonTransfer,
   })
 }
