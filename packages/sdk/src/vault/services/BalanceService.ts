@@ -40,6 +40,19 @@ export class BalanceService {
     return this.getBalanceForAsset(chain, tokenId)
   }
 
+  /**
+   * Whether `address` is still the account this vault acts on for `chain`.
+   *
+   * Balance cache keys name a chain and an asset, not an account. A TON vault
+   * can switch between its V4R2 and W5 accounts while a fetch started for the
+   * old one is still in flight; that fetch must not land in the cache after the
+   * switch, or the new account would read the old account's balance until the
+   * TTL expires. The result is still returned to the caller that asked for it.
+   */
+  private async isStillCurrentAddress(chain: Chain, address: string): Promise<boolean> {
+    return (await this.getAddress(chain)) === address
+  }
+
   private async getBalanceForAsset(
     chain: Chain,
     tokenId?: string,
@@ -88,6 +101,10 @@ export class BalanceService {
       if (rippleDetail !== undefined) {
         balance.totalAmount = rippleDetail.total.toString()
         balance.reserveAmount = rippleDetail.reserve.toString()
+      }
+
+      if (!(await this.isStillCurrentAddress(chain, address))) {
+        return balance
       }
 
       // Cache with configured TTL
@@ -231,6 +248,7 @@ export class BalanceService {
     })
 
     const tokensRecord = this.getTokensRecord()
+    const isCurrentAddress = await this.isStillCurrentAddress(chain, address)
     for (const request of uncached) {
       const rawBalance = rawBalances[accountCoinKeyToString(request.coinKey)]
       // A key MISSING from the multicall result means that coin was omitted/failed (a transient RPC
@@ -243,7 +261,7 @@ export class BalanceService {
       const formatTokens = request.token ? { [chain]: [request.token] } : tokensRecord
       const balance = formatBalance(present ? rawBalance : 0n, chain, request.tokenId, formatTokens)
 
-      if (present) {
+      if (present && isCurrentAddress) {
         await this.cacheService.setScoped(request.cacheKey, CacheScope.BALANCE, balance)
         this.emitBalanceUpdated({ chain, balance, tokenId: request.tokenId })
       }

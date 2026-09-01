@@ -787,9 +787,19 @@ Join an existing SecureVault creation session. Auto-detects keygen vs seedphrase
 - `options.onProgress?: (step: VaultCreationStep) => void` - Progress callback
 - `options.onDeviceJoined?: (deviceId, total, required) => void` - Device join callback
 
-#### `vault.address(chain): Promise<string>`
+#### `vault.address(chain, options?): Promise<string>`
 
 Derive a blockchain address for the given chain (called on Vault instance).
+
+- `options.tonWalletVersion?: 'v4r2' | 'v5r1'` - TON only. Derives for that wallet contract for this one call without changing which account the vault acts on; use it to show the other account. Omitted, the vault's selected contract is used.
+
+#### `vault.tonWalletVersion: 'v4r2' | 'v5r1'`
+
+The TON wallet contract this vault acts on. `'v4r2'` unless `setTonWalletVersion` chose W5.
+
+#### `vault.setTonWalletVersion(version): Promise<void>`
+
+Select which of the key's two TON accounts the vault acts on. W5 (`'v5r1'`) is a different address with its own balance; after this call `address`, `send`, balances, swaps and fee estimation all resolve to the selected account, and balance caches are dropped. The selection lives on the vault instance — persist the user's choice and re-apply it after loading the vault.
 
 #### `importVault(vultContent, password?): Promise<VaultBase>`
 

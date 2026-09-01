@@ -875,3 +875,76 @@ describe('BalanceService', () => {
     })
   })
 })
+
+// Balance cache keys name a chain and an asset, not an account. A TON vault can
+// switch between its V4R2 and W5 accounts (`setTonWalletVersion`) while a fetch
+// for the old account is still in flight; that result must not be cached after
+// the switch, or the new account would read the old one's balance.
+describe('BalanceService — a fetch for a previous TON account never lands after a switch', () => {
+  const v4r2Address = 'UQCf6aQfV3vc8KLtPI_lROY64hUeR1oyNfdbwXB-gwDaKZmi'
+  const w5Address = 'UQCvaZohosTA0ak9ZFMs-cvL1JrXqogqJH8sI2uO6k8clJpn'
+
+  const makeService = () => {
+    const cache = new CacheService(new MemoryStorage(), 'vault-1', {})
+    let currentAddress = v4r2Address
+    const service = new BalanceService(
+      cache,
+      vi.fn(),
+      vi.fn(),
+      async () => currentAddress,
+      () => [],
+      () => ({}),
+      () => {},
+      async () => {},
+      vi.fn(),
+      vi.fn()
+    )
+    // What `VaultBase.setTonWalletVersion` does: the account changes and the
+    // balance scope is dropped.
+    const switchTo = async (address: string) => {
+      currentAddress = address
+      await cache.invalidateScope(CacheScope.BALANCE)
+    }
+
+    return { service, cache, switchTo }
+  }
+
+  it('drops the late result instead of caching it, so the new account fetches its own balance', async () => {
+    const { service, cache, switchTo } = makeService()
+    let resolveOldFetch: (value: bigint) => void = () => {}
+    vi.mocked(getCoinBalance).mockImplementationOnce(
+      () =>
+        new Promise<bigint>(resolve => {
+          resolveOldFetch = resolve
+        })
+    )
+
+    const oldRequest = service.getBalance(Chain.Ton)
+    await flushMicrotasks()
+    await switchTo(w5Address)
+
+    resolveOldFetch(100n)
+    const oldBalance = await oldRequest
+
+    // The caller that asked for the old account still gets its answer …
+    expect(oldBalance.amount).toBe('100')
+    // … but nothing was written for the account the vault is on now.
+    expect(cache.getScoped('ton:native', CacheScope.BALANCE)).toBeNull()
+
+    vi.mocked(getCoinBalance).mockResolvedValueOnce(5n)
+    const newBalance = await service.getBalance(Chain.Ton)
+
+    expect(newBalance.amount).toBe('5')
+    expect(vi.mocked(getCoinBalance)).toHaveBeenLastCalledWith(expect.objectContaining({ address: w5Address }))
+    expect(cache.getScoped<{ amount: string }>('ton:native', CacheScope.BALANCE)?.amount).toBe('5')
+  })
+
+  it('still caches a fetch whose account did not change underneath it', async () => {
+    const { service, cache } = makeService()
+    vi.mocked(getCoinBalance).mockResolvedValueOnce(7n)
+
+    await service.getBalance(Chain.Ton)
+
+    expect(cache.getScoped<{ amount: string }>('ton:native', CacheScope.BALANCE)?.amount).toBe('7')
+  })
+})
