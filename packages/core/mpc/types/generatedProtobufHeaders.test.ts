@@ -1,5 +1,6 @@
 /**
- * Guards `packages/core/mpc/types/**` files named `*_pb.ts` (protoc-gen-es output).
+ * Guards the canonical generated protobuf sources across core-mpc and
+ * mpc-types. Compatibility wrappers are checked separately below.
  *
  * Hand-written helpers live under `types/utils/` and are not matched by
  * `*_pb.ts`. Manual edits or accidental generator upgrades should trip this
@@ -13,6 +14,8 @@ import { describe, expect, it } from 'vitest'
 
 const mpcDir = join(fileURLToPath(new URL('.', import.meta.url)), '..')
 const typesDir = join(mpcDir, 'types')
+const sharedTypesDir = join(mpcDir, '../../mpc-types/src/types')
+const signingTypesCompatibilityWrapper = join(typesDir, 'vultisig/keysign/v1/wasm_execute_contract_payload_pb.ts')
 
 const walk = (dir: string): string[] =>
   readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
@@ -25,10 +28,11 @@ const walk = (dir: string): string[] =>
     return entry.isFile() ? [path] : []
   })
 
-describe('generated protobuf headers (mpc/types, *_pb.ts)', () => {
-  const files = walk(typesDir)
+describe('generated protobuf headers (*_pb.ts)', () => {
+  const files = [...walk(typesDir), ...walk(sharedTypesDir)]
     .filter(abs => abs.endsWith('_pb.ts'))
     .filter(abs => !abs.includes(`types${sep}utils`))
+    .filter(abs => abs !== signingTypesCompatibilityWrapper)
 
   it('discovers only expected *_pb.ts files', () => {
     expect(files.length).toBeGreaterThan(0)
@@ -36,6 +40,12 @@ describe('generated protobuf headers (mpc/types, *_pb.ts)', () => {
       expect(f.endsWith('_pb.ts')).toBe(true)
       expect(f.includes(`types${sep}utils`)).toBe(false)
     }
+  })
+
+  it('keeps the core-mpc signing schema path as a compatibility export', () => {
+    expect(readFileSync(signingTypesCompatibilityWrapper, 'utf8')).toMatch(
+      /export \* from ["']@vultisig\/mpc-types\/types\/vultisig\/keysign\/v1\/wasm_execute_contract_payload_pb["'];?/
+    )
   })
 
   it('each file starts with protoc-gen-es banner + @generated from file + eslint-disable', () => {
