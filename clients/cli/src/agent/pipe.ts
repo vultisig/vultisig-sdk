@@ -73,6 +73,23 @@ export class PipeInterface {
     this.rl.on('line', async (line: string) => {
       const trimmed = line.trim()
       if (!trimmed) return
+
+      // Commands that resolve an in-flight prompt must bypass the serialized
+      // message queue. A message can be awaiting one of these responses, so
+      // queueing the response behind that message would deadlock the session.
+      // A response with no matching prompt remains a harmless no-op, matching
+      // the previous protocol behavior.
+      try {
+        const cmd = JSON.parse(trimmed) as PipeInputCommand
+        if (cmd.type === 'confirm' || cmd.type === 'password') {
+          this.handleControlCommand(cmd)
+          return
+        }
+      } catch {
+        // Preserve serialized error ordering by letting the queue below parse
+        // and report malformed input.
+      }
+
       lines.push(trimmed)
 
       // Process lines if not already processing
@@ -249,19 +266,9 @@ export class PipeInterface {
         break
       }
 
-      case 'password': {
-        if (this.pendingPasswordResolve) {
-          this.pendingPasswordResolve(cmd.password)
-          this.pendingPasswordResolve = null
-        }
-        break
-      }
-
+      case 'password':
       case 'confirm': {
-        if (this.pendingConfirmResolve) {
-          this.pendingConfirmResolve(cmd.confirmed)
-          this.pendingConfirmResolve = null
-        }
+        this.handleControlCommand(cmd)
         break
       }
 
@@ -271,6 +278,21 @@ export class PipeInterface {
           message: `Unknown command type: ${(cmd as { type?: string }).type}`,
           code: AgentErrorCode.INVALID_INPUT,
         })
+    }
+  }
+
+  private handleControlCommand(cmd: Extract<PipeInputCommand, { type: 'confirm' | 'password' }>): void {
+    if (cmd.type === 'password') {
+      if (this.pendingPasswordResolve) {
+        this.pendingPasswordResolve(cmd.password)
+        this.pendingPasswordResolve = null
+      }
+      return
+    }
+
+    if (this.pendingConfirmResolve) {
+      this.pendingConfirmResolve(cmd.confirmed)
+      this.pendingConfirmResolve = null
     }
   }
 
