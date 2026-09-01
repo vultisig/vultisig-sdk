@@ -72,6 +72,24 @@ function stubGasRefresh(executor: AgentExecutor) {
   return vi.spyOn(executor as unknown as EvmGasAccess, 'patchEvmGas').mockResolvedValue(undefined)
 }
 
+function mockEvmFeeRpc(baseFee: bigint, priorityFee: bigint) {
+  const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+    const request = JSON.parse(String(init?.body)) as { method: string }
+    const result =
+      request.method === 'eth_getBlockByNumber'
+        ? { baseFeePerGas: `0x${baseFee.toString(16)}` }
+        : `0x${priorityFee.toString(16)}`
+
+    return {
+      json: vi.fn().mockResolvedValue({ jsonrpc: '2.0', result }),
+      ok: true,
+      status: 200,
+    }
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  return fetchMock
+}
+
 afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
@@ -382,5 +400,75 @@ describe('AgentExecutor EVM pending nonce', () => {
     expect(nonceAccess.stateStore.clearEvmState).not.toHaveBeenCalled()
     await expect(nonceAccess.fetchEvmPendingNonce(Chain.Ethereum)).resolves.toBeNull()
     expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('AgentExecutor EIP-1559 fee refresh', () => {
+  it('fills a zero Polygon tip from RPC and applies the pinned validator minimum', async () => {
+    const payload = createEvmPayload()
+    payload.blockchainSpecific.value.maxFeePerGasWei = '0'
+    payload.blockchainSpecific.value.priorityFee = '0'
+    const executor = new AgentExecutor(createSigningVault(payload))
+    mockEvmFeeRpc(10_000_000_000n, 1_000_000_000n)
+
+    await (executor as unknown as EvmGasAccess).patchEvmGas(Chain.Polygon, payload)
+
+    const priorityFee = BigInt(payload.blockchainSpecific.value.priorityFee)
+    const maxFee = BigInt(payload.blockchainSpecific.value.maxFeePerGasWei)
+    expect(priorityFee).toBeGreaterThan(0n)
+    expect(priorityFee).toBeGreaterThanOrEqual(25_000_000_000n)
+    expect(priorityFee).toBeLessThanOrEqual(maxFee)
+  })
+
+  it('keeps a builder-supplied nonzero tip when it is above the hard chain floor', async () => {
+    const payload = createEvmPayload()
+    payload.blockchainSpecific.value.maxFeePerGasWei = '100000000000'
+    payload.blockchainSpecific.value.priorityFee = '40000000000'
+    const executor = new AgentExecutor(createSigningVault(payload))
+    const fetchMock = mockEvmFeeRpc(10_000_000_000n, 99_000_000_000n)
+
+    await (executor as unknown as EvmGasAccess).patchEvmGas(Chain.Polygon, payload)
+
+    expect(payload.blockchainSpecific.value.priorityFee).toBe('40000000000')
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
+
+  it('raises maxFeePerGas as needed to keep the signed priority fee within the fee cap', async () => {
+    const payload = createEvmPayload()
+    payload.blockchainSpecific.value.maxFeePerGasWei = '1'
+    payload.blockchainSpecific.value.priorityFee = '40000000000'
+    const executor = new AgentExecutor(createSigningVault(payload))
+    mockEvmFeeRpc(10_000_000_000n, 0n)
+
+    await (executor as unknown as EvmGasAccess).patchEvmGas(Chain.Polygon, payload)
+
+    expect(BigInt(payload.blockchainSpecific.value.priorityFee)).toBeLessThanOrEqual(
+      BigInt(payload.blockchainSpecific.value.maxFeePerGasWei)
+    )
+  })
+
+  it('uses a nonzero base-fee fallback when an EIP-1559 RPC suggests a zero tip', async () => {
+    const payload = createEvmPayload()
+    payload.blockchainSpecific.value.maxFeePerGasWei = '0'
+    payload.blockchainSpecific.value.priorityFee = '0'
+    const executor = new AgentExecutor(createSigningVault(payload))
+    mockEvmFeeRpc(10_000_000_000n, 0n)
+
+    await (executor as unknown as EvmGasAccess).patchEvmGas(Chain.Base, payload)
+
+    expect(BigInt(payload.blockchainSpecific.value.priorityFee)).toBeGreaterThan(0n)
+  })
+
+  it('leaves the legacy BSC priority field untouched', async () => {
+    const payload = createEvmPayload()
+    payload.blockchainSpecific.value.maxFeePerGasWei = '0'
+    payload.blockchainSpecific.value.priorityFee = '0'
+    const executor = new AgentExecutor(createSigningVault(payload))
+    const fetchMock = mockEvmFeeRpc(10_000_000_000n, 5_000_000_000n)
+
+    await (executor as unknown as EvmGasAccess).patchEvmGas(Chain.BSC, payload)
+
+    expect(payload.blockchainSpecific.value.priorityFee).toBe('0')
+    expect(fetchMock).toHaveBeenCalledOnce()
   })
 })

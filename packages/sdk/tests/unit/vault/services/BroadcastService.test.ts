@@ -5,6 +5,7 @@ import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Signature } from '@/types'
+import { formatBroadcastFailureReason } from '@/vault/services/broadcastError'
 import { BroadcastPartialFailureError, BroadcastService } from '@/vault/services/BroadcastService'
 import { VaultErrorCode } from '@/vault/VaultError'
 
@@ -246,6 +247,23 @@ describe('BroadcastService', () => {
     expect(error.originalError.cause).toBe(cause)
   })
 
+  it('keeps the RPC rejection reason but removes the signed raw transaction from the public error', async () => {
+    const signedRawTx = `0x${'ab'.repeat(256)}`
+    const cause = Object.assign(new Error(`RPC request failed. Request body: ${signedRawTx}`), {
+      details: 'transaction gas price below minimum: gas tip cap 0, minimum needed 25000000000',
+    })
+    mockCoreBroadcastTx.mockResolvedValue(broadcastFailed(cause, false))
+
+    const error = await service.broadcastTx({ chain: Chain.Polygon, keysignPayload, signature }).catch(value => value)
+
+    expect(error).toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('gas tip cap 0, minimum needed 25000000000'),
+    })
+    expect(error.message).not.toContain(signedRawTx)
+    expect(error.toJSON().originalError).not.toContain(signedRawTx)
+  })
+
   it('waits for ERC-20 approval confirmation before broadcasting the swap input', async () => {
     const events: string[] = []
     mockGetEncodedSigningInputs.mockResolvedValue(['approval-input', 'swap-input'])
@@ -403,5 +421,15 @@ describe('BroadcastService', () => {
       message: expect.stringContaining('start a new signing ceremony'),
       originalError: expect.objectContaining({ cause: mismatch }),
     })
+  })
+})
+
+describe('formatBroadcastFailureReason', () => {
+  it('redacts a long signed payload when no structured RPC detail is available', () => {
+    const signedRawTx = `0x${'cd'.repeat(256)}`
+
+    expect(formatBroadcastFailureReason(new Error(`transaction rejected; raw=${signedRawTx}`))).toBe(
+      'transaction rejected; raw=[signed transaction redacted]'
+    )
   })
 })
