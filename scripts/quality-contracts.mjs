@@ -275,16 +275,20 @@ function validatePackedWorkspaceExports(workRoot, workspaceName) {
   return { packageRoot, tgzPath }
 }
 
-function packedPackageGraphSmoke(workRoot, { sdkTgzPath, coreChainTgzPath, coreMpcTgzPath, mpcTypesTgzPath }) {
-  const consumer = path.join(workRoot, 'package-graph-consumer')
-  mkdirSync(consumer, { recursive: true })
-
-  const localPackages = {
+function packageGraphResolutions({ sdkTgzPath, coreChainTgzPath, coreMpcTgzPath, mpcTypesTgzPath }) {
+  return {
     '@vultisig/core-chain': `file:${coreChainTgzPath}`,
     '@vultisig/core-mpc': `file:${coreMpcTgzPath}`,
     '@vultisig/mpc-types': `file:${mpcTypesTgzPath}`,
     '@vultisig/sdk': `file:${sdkTgzPath}`,
   }
+}
+
+function packedPackageGraphSmoke(workRoot, packageGraphTarballs) {
+  const consumer = path.join(workRoot, 'package-graph-consumer')
+  mkdirSync(consumer, { recursive: true })
+
+  const localPackages = packageGraphResolutions(packageGraphTarballs)
   writeFileSync(
     path.join(consumer, 'package.json'),
     `${JSON.stringify(
@@ -428,6 +432,8 @@ function packedCliBinSmoke(
   clientSharedTgzPath,
   rujiraTgzPath,
   coreChainTgzPath,
+  coreMpcTgzPath,
+  mpcTypesTgzPath,
   coreConfigTgzPath,
   libUtilsTgzPath
 ) {
@@ -437,11 +443,10 @@ function packedCliBinSmoke(
   const localDeps = {
     '@vultisig/cli': `file:${cliTgzPath}`,
     '@vultisig/client-shared': `file:${clientSharedTgzPath}`,
-    '@vultisig/core-chain': `file:${coreChainTgzPath}`,
     '@vultisig/core-config': `file:${coreConfigTgzPath}`,
     '@vultisig/lib-utils': `file:${libUtilsTgzPath}`,
     '@vultisig/rujira': `file:${rujiraTgzPath}`,
-    '@vultisig/sdk': `file:${sdkTgzPath}`,
+    ...packageGraphResolutions({ sdkTgzPath, coreChainTgzPath, coreMpcTgzPath, mpcTypesTgzPath }),
   }
   const dependencies = {
     '@vultisig/cli': localDeps['@vultisig/cli'],
@@ -495,9 +500,23 @@ function packedCliBinSmoke(
   validateCliSchemaOutput(schemaRes.stdout, 'Packed CLI "schema"')
 }
 
-function packedMcpBinSmoke(workRoot, tgzPath, sdkTgzPath, clientSharedTgzPath) {
+function packedMcpBinSmoke(
+  workRoot,
+  tgzPath,
+  sdkTgzPath,
+  clientSharedTgzPath,
+  coreChainTgzPath,
+  coreMpcTgzPath,
+  mpcTypesTgzPath
+) {
   const consumer = path.join(workRoot, 'mcp-consumer')
   mkdirSync(consumer, { recursive: true })
+
+  const localDeps = {
+    '@vultisig/client-shared': `file:${clientSharedTgzPath}`,
+    '@vultisig/mcp': `file:${tgzPath}`,
+    ...packageGraphResolutions({ sdkTgzPath, coreChainTgzPath, coreMpcTgzPath, mpcTypesTgzPath }),
+  }
 
   writeFileSync(
     path.join(consumer, 'package.json'),
@@ -508,14 +527,9 @@ function packedMcpBinSmoke(workRoot, tgzPath, sdkTgzPath, clientSharedTgzPath) {
         type: 'module',
         packageManager: 'yarn@4.16.0',
         dependencies: {
-          '@vultisig/client-shared': `file:${clientSharedTgzPath}`,
-          '@vultisig/mcp': `file:${tgzPath}`,
-          '@vultisig/sdk': `file:${sdkTgzPath}`,
+          '@vultisig/mcp': localDeps['@vultisig/mcp'],
         },
-        resolutions: {
-          '@vultisig/client-shared': `file:${clientSharedTgzPath}`,
-          '@vultisig/sdk': `file:${sdkTgzPath}`,
-        },
+        resolutions: localDeps,
       },
       null,
       2
@@ -603,6 +617,8 @@ async function main() {
       clientSharedTgzPath,
       rujiraTgzPath,
       coreChainTgzPath,
+      coreMpcTgzPath,
+      packageContracts.get('@vultisig/mpc-types').tgzPath,
       coreConfigTgzPath,
       libUtilsTgzPath
     )
@@ -610,7 +626,15 @@ async function main() {
     const mcpTgzPath = packWorkspace(workRoot, '@vultisig/mcp', 'mcp.tgz')
     const mcpPackageRoot = extractPackage(workRoot, mcpTgzPath, 'mcp')
     validateTarballBinFiles(mcpPackageRoot, ['vmcp', 'vultisig-mcp'])
-    packedMcpBinSmoke(workRoot, mcpTgzPath, tgzPath, clientSharedTgzPath)
+    packedMcpBinSmoke(
+      workRoot,
+      mcpTgzPath,
+      tgzPath,
+      clientSharedTgzPath,
+      coreChainTgzPath,
+      coreMpcTgzPath,
+      packageContracts.get('@vultisig/mpc-types').tgzPath
+    )
 
     console.log('quality:contracts OK')
   } finally {
