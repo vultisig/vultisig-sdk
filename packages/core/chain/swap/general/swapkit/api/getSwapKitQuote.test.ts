@@ -480,6 +480,109 @@ describe('getSwapKitQuote', () => {
     })
   })
 
+  // SwapKit states the deposit destination and size in up to three independent
+  // response fields, and the resolvers take the first one present. These pin
+  // that a response which disagrees with itself is refused rather than resolved
+  // by precedence — while the forms of one TON account still compare equal.
+  describe('transfer-route self-agreement (sdk#2188)', () => {
+    const TON_DEPOSIT_BOUNCEABLE = 'EQCIcjES4cQET0z6nRixZ0MdvTB4u3_8triztLSrIIrDkpgJ'
+    const TON_DEPOSIT_NON_BOUNCEABLE = 'UQCIcjES4cQET0z6nRixZ0MdvTB4u3_8triztLSrIIrDksXM'
+    const TON_ATTACKER_ADDRESS = 'EQCrq6urq6urq6urq6urq6urq6urq6urq6urq6urq6urq8Uk'
+    const TON_SOURCE = { chain: Chain.Ton, address: 'UQSource', ticker: 'TON', decimals: 9 } as const
+
+    const stubTransferRoute = (
+      swapResponse: Record<string, unknown>,
+      from: { chain: SwapKitSourceChain; address: string; ticker: string; decimals: number } = TON_SOURCE
+    ) => {
+      vi.stubGlobal(
+        'fetch',
+        vi
+          .fn()
+          .mockResolvedValueOnce(
+            response({ routes: [{ routeId: 'transfer-route', providers: ['NEAR'], expectedBuyAmount: '0.01' }] })
+          )
+          .mockResolvedValueOnce(response({ expectedBuyAmount: '0.009', providers: ['NEAR'], ...swapResponse }))
+      )
+      configureSwapKit({ apiKey: undefined })
+
+      return getSwapKitQuote({
+        from,
+        to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
+        amount: 1_000_000n,
+      })
+    }
+
+    it('rejects a tx[0].address that names a different account than targetAddress', async () => {
+      await expect(
+        stubTransferRoute({
+          targetAddress: TON_DEPOSIT_BOUNCEABLE,
+          tx: [{ address: TON_ATTACKER_ADDRESS, amount: '0.001' }],
+        })
+      ).rejects.toThrow(/disagrees with itself about the destination/)
+    })
+
+    it('rejects a depositAddress that diverges from targetAddress, with no tx[] involved', async () => {
+      await expect(
+        stubTransferRoute({ targetAddress: TON_DEPOSIT_BOUNCEABLE, depositAddress: TON_ATTACKER_ADDRESS })
+      ).rejects.toThrow(/disagrees with itself about the destination/)
+    })
+
+    it('accepts one TON account spelled EQ… in targetAddress and UQ… in tx[] — bounceability is not identity', async () => {
+      const quote = await stubTransferRoute({
+        targetAddress: TON_DEPOSIT_BOUNCEABLE,
+        tx: [{ address: TON_DEPOSIT_NON_BOUNCEABLE, amount: '0.001' }],
+      })
+
+      expect(quote.tx).toMatchObject({ transfer: { to: TON_DEPOSIT_BOUNCEABLE, amount: 1_000_000n } })
+    })
+
+    it('compares non-TON destinations byte for byte — base58 is case-sensitive, so case must not be normalized away', async () => {
+      await expect(
+        stubTransferRoute(
+          { targetAddress: 'rDeposit', depositAddress: 'rdeposit' },
+          {
+            chain: Chain.Ripple,
+            address: 'rSource',
+            ticker: 'XRP',
+            decimals: 6,
+          }
+        )
+      ).rejects.toThrow(/disagrees with itself about the destination/)
+    })
+
+    it('rejects a tx[0].amount that diverges from depositAmount', async () => {
+      await expect(
+        stubTransferRoute({
+          targetAddress: TON_DEPOSIT_BOUNCEABLE,
+          depositAmount: '0.001',
+          tx: [{ address: TON_DEPOSIT_BOUNCEABLE, amount: '0.002' }],
+        })
+      ).rejects.toThrow(/disagrees with itself about the amount/)
+    })
+
+    it('accepts a decimal depositAmount and a base-unit tx[0].amount that agree once normalized', async () => {
+      const quote = await stubTransferRoute({
+        targetAddress: TON_DEPOSIT_BOUNCEABLE,
+        depositAmount: '0.001',
+        tx: [{ address: TON_DEPOSIT_BOUNCEABLE, amount: '1000000' }],
+      })
+
+      expect(quote.tx).toMatchObject({ transfer: { to: TON_DEPOSIT_BOUNCEABLE, amount: 1_000_000n } })
+    })
+
+    it('rejects a multi-transfer tx[] rather than signing only the first and under-funding the swap', async () => {
+      await expect(
+        stubTransferRoute({
+          targetAddress: TON_DEPOSIT_BOUNCEABLE,
+          tx: [
+            { address: TON_DEPOSIT_BOUNCEABLE, amount: '0.001' },
+            { address: TON_DEPOSIT_BOUNCEABLE, amount: '0.002' },
+          ],
+        })
+      ).rejects.toThrow(/returned 2 transfers/)
+    })
+  })
+
   it('maps Solana source routes to the existing serialized transaction payload', async () => {
     vi.stubGlobal(
       'fetch',
