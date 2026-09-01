@@ -87,7 +87,9 @@ describe('chains/ton', () => {
       )
       .endCell()
 
-    const sendMode = SendMode.PAY_GAS_SEPARATELY | SendMode.IGNORE_ERRORS
+    // No IGNORE_ERRORS: an action-phase failure must abort the transfer rather than
+    // silently consume the seqno while moving nothing.
+    const sendMode = SendMode.PAY_GAS_SEPARATELY
     const expectedPayload = beginCell()
       .storeUint(TON_V4R2_SUB_WALLET_ID, 32)
       .storeUint(validUntil, 32)

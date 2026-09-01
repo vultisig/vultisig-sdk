@@ -2,9 +2,10 @@ import { Buffer } from 'buffer'
 
 import { Chain } from '@vultisig/core-chain/Chain'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
-import { TW } from '@trustwallet/wallet-core'
+import { TW, WalletCore } from '@trustwallet/wallet-core'
 import { describe, expect, it } from 'vitest'
 
+import { buildJettonTransfer } from './jetton'
 import { buildNativeTonTransfer, buildNativeTonTransferFromMessage, tonAmountToBytes } from './native'
 
 const TON_ADDRESS = 'EQAtiFQ15MZBgpAGwD1jfJm6maz5otBOPefyw9Wc3MVmMgzp'
@@ -74,6 +75,45 @@ describe('TON signing input amount encoding', () => {
 
   it('rejects oversized decimal strings before bigint conversion', () => {
     expect(() => tonAmountToBytes('1'.repeat(10_000))).toThrow('TON amount exceeds the VarUInteger 16 maximum')
+  })
+})
+
+describe('TON send mode', () => {
+  const { ATTACH_ALL_CONTRACT_BALANCE, IGNORE_ACTION_PHASE_ERRORS, PAY_FEES_SEPARATELY } =
+    TW.TheOpenNetwork.Proto.SendMode
+
+  // A wallet contract signed with IGNORE_ACTION_PHASE_ERRORS skips an outgoing transfer it
+  // cannot carry out instead of failing: the transaction lands un-aborted with the seqno
+  // consumed and nothing moved, and no status check can tell that apart from a real send.
+  // These modes are also part of the signing preimage, so a change here silently breaks
+  // keysign against any co-signer still on the previous mode.
+  const transfers = {
+    'a native send': () => buildNativeTonTransfer({ keysignPayload: buildPayload('1000000000'), bounceable: true }),
+    'a dApp signTon message': () =>
+      buildNativeTonTransferFromMessage({ to: TON_ADDRESS, amount: '1000000000', bounceable: true }),
+    'a Jetton send': () =>
+      buildJettonTransfer({
+        keysignPayload: buildPayload('1000'),
+        walletCore: {
+          TONAddressConverter: { toUserFriendly: () => TON_ADDRESS },
+        } as unknown as WalletCore,
+        jettonAddress: TON_ADDRESS,
+        isActiveDestination: true,
+      }),
+  }
+
+  it.each(Object.entries(transfers))('never ignores action-phase errors on %s', (_, buildTransfer) => {
+    expect(buildTransfer().mode & IGNORE_ACTION_PHASE_ERRORS).toBe(0)
+  })
+
+  it.each(Object.entries(transfers))('pays fees separately on %s', (_, buildTransfer) => {
+    expect(buildTransfer().mode).toBe(PAY_FEES_SEPARATELY)
+  })
+
+  // A MAX send is an ordinary `balance - fee` amount, so nothing sweeps the contract
+  // balance at execution time. See the "TON MAX send" block below.
+  it.each(Object.entries(transfers))('never sweeps the contract balance on %s', (_, buildTransfer) => {
+    expect(buildTransfer().mode & ATTACH_ALL_CONTRACT_BALANCE).toBe(0)
   })
 })
 
