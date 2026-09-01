@@ -17,6 +17,7 @@ import { initWasm, TW, type WalletCore } from '@trustwallet/wallet-core'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { tonV5R1WalletId } from '@vultisig/core-chain/chains/ton/wallet'
 import { getPreSigningHashes } from '@vultisig/core-mpc/tx/preSigningHashes'
+import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import {
@@ -126,12 +127,13 @@ describe('W5 wallet view', () => {
     )
     const [theirs] = Cell.fromBoc(Buffer.from(stateInit, 'base64'))
 
+    const code = shouldBePresent(wallet.init.code, 'W5 code cell')
+    const data = shouldBePresent(wallet.init.data, 'W5 data cell')
+
     expect(TON_V5R1_WALLET_ID).toBe(tonV5R1WalletId)
-    expect(wallet.init.code.hash().toString('hex')).toBe(
-      '20834b7b72b112147e1b2fb457b84e74d1a30f04f737d4f62a668e9552d2b72f'
-    )
-    expect(wallet.init.code.hash().toString('hex')).toBe(theirs!.refs[0]!.hash().toString('hex'))
-    expect(wallet.init.data.hash().toString('hex')).toBe(theirs!.refs[1]!.hash().toString('hex'))
+    expect(code.hash().toString('hex')).toBe('20834b7b72b112147e1b2fb457b84e74d1a30f04f737d4f62a668e9552d2b72f')
+    expect(code.hash().toString('hex')).toBe(theirs!.refs[0]!.hash().toString('hex'))
+    expect(data.hash().toString('hex')).toBe(theirs!.refs[1]!.hash().toString('hex'))
     expect(wallet.addressString({ bounceable: false })).toBe(native.senderAddress)
   })
 
