@@ -21,6 +21,11 @@
       "types": "./dist/store.d.ts",
       "import": "./dist/store.js",
       "default": "./dist/store.js"
+    },
+    "./types/vultisig/keysign/v1/wasm_execute_contract_payload_pb": {
+      "types": "./dist/types/vultisig/keysign/v1/wasm_execute_contract_payload_pb.d.ts",
+      "import": "./dist/types/vultisig/keysign/v1/wasm_execute_contract_payload_pb.js",
+      "default": "./dist/types/vultisig/keysign/v1/wasm_execute_contract_payload_pb.js"
     }
   },
   "files": [
@@ -31,6 +36,9 @@
     "./dist/runtime.js",
     "./dist/store.js"
   ],
+  "dependencies": {
+    "@bufbuild/protobuf": "^2.13.0"
+  },
   "peerDependencies": {
     "@vultisig/mpc-wasm": ">=0.1.5"
   },
