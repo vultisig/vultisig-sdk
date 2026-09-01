@@ -36,6 +36,12 @@ export type BuildSendKeysignPayloadInput = {
   libType: KeysignLibType
   walletCore: WalletCore
   feeSettings?: FeeSettings
+  /**
+   * Whether the caller's UI offered this as a MAX send. Recorded in TonSpecific;
+   * the amount signed is `amount` either way, so this describes the send rather
+   * than changing it.
+   */
+  sendMaxAmount?: boolean
 }
 
 export const buildSendKeysignPayload = async ({
@@ -51,6 +57,7 @@ export const buildSendKeysignPayload = async ({
   walletCore,
   libType,
   feeSettings,
+  sendMaxAmount,
 }: BuildSendKeysignPayloadInput) => {
   const hexPublicKey = hexPublicKeyOverride ?? (publicKey ? Buffer.from(publicKey.data()).toString('hex') : undefined)
   if (!hexPublicKey) {
@@ -111,12 +118,14 @@ export const buildSendKeysignPayload = async ({
         walletCore,
         transactionType: TransactionType.GENERIC_CONTRACT,
         destinationTag: effectiveDestinationTag,
+        sendMaxAmount,
       })
     : await getChainSpecific({
         keysignPayload,
         feeSettings,
         walletCore,
         destinationTag: effectiveDestinationTag,
+        sendMaxAmount,
       })
 
   const balance = await getCoinBalance(coin)
