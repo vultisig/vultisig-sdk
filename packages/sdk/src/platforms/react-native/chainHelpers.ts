@@ -8,6 +8,7 @@
  */
 import type { WalletCore } from '@trustwallet/wallet-core'
 import type { Chain } from '@vultisig/core-chain/Chain'
+import type { TonWalletVersion } from '@vultisig/core-chain/chains/ton/wallet'
 import { getCoinType as coreGetCoinType } from '@vultisig/core-chain/coin/coinType'
 import { deriveAddress as coreDeriveAddress } from '@vultisig/core-chain/publicKey/address/deriveAddress'
 import { getPublicKey as coreGetPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
@@ -39,6 +40,8 @@ type DeriveAddressInput = {
   chain: Chain
   publicKey: any
   walletCore: WalletCoreLike
+  /** TON only: wallet contract to derive for. Defaults to V4R2. */
+  tonWalletVersion?: TonWalletVersion
 }
 
 /** Derive the on-chain address. Accepts WalletCoreLike. */

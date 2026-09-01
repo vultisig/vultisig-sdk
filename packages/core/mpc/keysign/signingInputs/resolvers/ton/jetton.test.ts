@@ -32,7 +32,7 @@ const walletCore = {
 } as unknown as WalletCore
 
 const build = (jettonAddress: string) =>
-  buildJettonTransfer({ keysignPayload, walletCore, jettonAddress, isActiveDestination: true })
+  buildJettonTransfer({ keysignPayload, walletCore, jettonAddress, isActiveDestination: true, walletVersion: 'v4r2' })
 
 describe('buildJettonTransfer', () => {
   it('sends to the resolved sender jetton wallet', () => {

@@ -1,4 +1,5 @@
 import { Chain } from '@vultisig/core-chain/Chain'
+import { defaultTonWalletVersion, type TonWalletVersion } from '@vultisig/core-chain/chains/ton/wallet'
 import { deriveAddress } from '@vultisig/core-chain/publicKey/address/deriveAddress'
 import { deriveQbtcAddress } from '@vultisig/core-chain/publicKey/address/deriveQbtcAddress'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
@@ -15,6 +16,11 @@ import { VaultError, VaultErrorCode } from '../VaultError'
  * Handles address derivation and caching for vault chains.
  * Uses CacheService with ADDRESS scope for automatic storage persistence.
  */
+export type GetAddressOptions = {
+  /** TON only: which wallet contract to derive. Defaults to V4R2. */
+  tonWalletVersion?: TonWalletVersion
+}
+
 export class AddressService {
   constructor(
     private vaultData: CoreVault,
@@ -25,10 +31,19 @@ export class AddressService {
   /**
    * Get address for specified chain
    * Uses CacheService with automatic persistent caching
+   *
+   * For TON, `options.tonWalletVersion` selects the wallet contract. The default
+   * is V4R2 — the account every existing vault already uses; `'v5r1'` is the same
+   * key's W5 account, cached under its own key so the two never alias.
    */
-  async getAddress(chain: Chain): Promise<string> {
+  async getAddress(chain: Chain, options: GetAddressOptions = {}): Promise<string> {
     assertValidChain(chain)
-    return this.cacheService.getOrComputeScoped(chain.toLowerCase(), CacheScope.ADDRESS, async () => {
+    const tonWalletVersion = chain === Chain.Ton ? (options.tonWalletVersion ?? defaultTonWalletVersion) : undefined
+    const cacheKey =
+      tonWalletVersion && tonWalletVersion !== defaultTonWalletVersion
+        ? `${chain.toLowerCase()}:${tonWalletVersion}`
+        : chain.toLowerCase()
+    return this.cacheService.getOrComputeScoped(cacheKey, CacheScope.ADDRESS, async () => {
       // Derive address (expensive WASM operation)
       try {
         if (chain === Chain.QBTC) {
@@ -52,6 +67,7 @@ export class AddressService {
           chain,
           publicKey,
           walletCore,
+          tonWalletVersion,
         })
       } catch (error) {
         throw new VaultError(

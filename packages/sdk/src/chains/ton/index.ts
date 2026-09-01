@@ -17,3 +17,5 @@ export {
 } from './tx'
 export type { TonV4R2Wallet } from './walletV4R2'
 export { buildV4R2Wallet, TON_V4R2_SUB_WALLET_ID } from './walletV4R2'
+export type { TonV5R1Wallet } from './walletV5R1'
+export { buildV5R1Wallet, TON_V5R1_WALLET_ID } from './walletV5R1'

@@ -18,8 +18,10 @@
  */
 import { Address, beginCell, Cell, internal, SendMode, storeMessageRelaxed } from '@ton/core'
 import { TW } from '@trustwallet/wallet-core'
+import type { TonWalletVersion } from '@vultisig/core-chain/chains/ton/wallet'
 
-import { buildV4R2Wallet, storeStateInitCell, TON_V4R2_SUB_WALLET_ID } from './walletV4R2'
+import { buildV4R2Wallet, storeStateInitCell, TON_V4R2_SUB_WALLET_ID, type TonV4R2Wallet } from './walletV4R2'
+import { buildV5R1Wallet, TON_V5R1_WALLET_ID } from './walletV5R1'
 
 // ---------------------------------------------------------------------------
 // Hex utils (RN-safe; no Buffer dependency in the hot path)
@@ -53,14 +55,35 @@ function bytesToHex(bytes: Uint8Array): string {
 // ---------------------------------------------------------------------------
 
 /**
+ * The wallet contract a builder targets. Every existing Vultisig TON account
+ * is V4R2; W5 (`v5r1`) is the same key's *other* address and an explicit
+ * opt-in — never inferred, because the two hold separate balances.
+ */
+const defaultWalletVersion: TonWalletVersion = 'v4r2'
+
+/**
+ * The wallet view (address + StateInit) for a key under the given contract.
+ */
+function buildTonWallet(opts: {
+  walletVersion: TonWalletVersion
+  publicKeyEd25519: Uint8Array
+  workchain?: number
+  walletId?: number
+}): TonV4R2Wallet {
+  return opts.walletVersion === 'v5r1' ? buildV5R1Wallet(opts) : buildV4R2Wallet(opts)
+}
+
+/**
  * Derive a user-friendly (EQ.../UQ...) TON address from an Ed25519 pubkey hex.
- * Defaults: workchain=0, non-bounceable, mainnet-flagged.
+ * Defaults: workchain=0, non-bounceable, mainnet-flagged, wallet V4R2. Pass
+ * `walletVersion: 'v5r1'` for the same key's W5 address.
  */
 export function deriveTonAddress(
   publicKeyEd25519Hex: string,
-  opts: { workchain?: number; bounceable?: boolean; testOnly?: boolean } = {}
+  opts: { workchain?: number; bounceable?: boolean; testOnly?: boolean; walletVersion?: TonWalletVersion } = {}
 ): string {
-  const wallet = buildV4R2Wallet({
+  const wallet = buildTonWallet({
+    walletVersion: opts.walletVersion ?? defaultWalletVersion,
     publicKeyEd25519: hexToBytes(publicKeyEd25519Hex),
     workchain: opts.workchain,
   })
@@ -71,7 +94,7 @@ export function deriveTonAddress(
 }
 
 // ---------------------------------------------------------------------------
-// Native TON transfer (wallet V4R2)
+// Native TON transfer (wallet V4R2 or W5)
 // ---------------------------------------------------------------------------
 
 export type BuildTonSendOptions = {
@@ -90,12 +113,19 @@ export type BuildTonSendOptions = {
   /** Unix seconds after which the message is invalid. Default = now + 600. */
   validUntil?: number
   /**
-   * Sub-wallet ID. WalletCore 4.7.0 only supports the V4R2 default (698983191).
-   * Other values are rejected because they cannot receive independent parity proof.
+   * Sub-wallet ID. WalletCore 4.7.0 supports one id per contract — 698983191 for
+   * V4R2, 2147483409 for W5 — so anything else is rejected: it could not receive
+   * an independent parity proof.
    */
   subWalletId?: number
   /** Sender wallet workchain. WalletCore-backed transfers currently support only 0. */
   workchain?: number
+  /**
+   * Wallet contract to sign for. Defaults to V4R2. `'v5r1'` targets the key's W5
+   * wallet, a different address with its own balance — opt in only once funds are
+   * there.
+   */
+  walletVersion?: TonWalletVersion
 }
 
 export type TonTxBuilderResult = {
@@ -141,39 +171,62 @@ export type TonWalletCoreBackedTxBuilderResult = TonTxBuilderResult & {
 }
 
 /**
- * Send mode for every app-initiated TON transfer, in WalletCore's enum.
+ * Send mode for an app-initiated TON transfer, in WalletCore's enum.
  *
- * `IGNORE_ACTION_PHASE_ERRORS` (+2) is deliberately absent: with it set, a wallet contract
- * that cannot carry out its outgoing transfer skips the action rather than failing, so the
- * transaction lands un-aborted with the seqno consumed and nothing moved — on chain that is
- * indistinguishable from a real send. Must stay numerically equal to `tonCellSendMode` below —
- * the two encode the same field, and any drift between them changes the signing hash.
+ * For V4R2, `IGNORE_ACTION_PHASE_ERRORS` (+2) is deliberately absent: with it set, a
+ * wallet contract that cannot carry out its outgoing transfer skips the action rather
+ * than failing, so the transaction lands un-aborted with the seqno consumed and nothing
+ * moved — on chain that is indistinguishable from a real send.
+ *
+ * W5 has no such choice: its code refuses an external request unless every action
+ * carries the flag, because a guaranteed seqno advance is its replay protection, and
+ * WalletCore enforces the same rule before it will build the message. The resulting
+ * blindness is covered by the status resolver, which reads the action phase.
+ *
+ * Must stay numerically equal to `getTonCellSendMode` below — the two encode the same
+ * field, and any drift between them changes the signing hash.
  */
-const walletCoreTonSendMode = TW.TheOpenNetwork.Proto.SendMode.PAY_FEES_SEPARATELY
+function getWalletCoreTonSendMode(walletVersion: TonWalletVersion): number {
+  const base = TW.TheOpenNetwork.Proto.SendMode.PAY_FEES_SEPARATELY
+  return walletVersion === 'v5r1' ? base | TW.TheOpenNetwork.Proto.SendMode.IGNORE_ACTION_PHASE_ERRORS : base
+}
 
-/** The same send mode in `@ton/core`'s enum, used when building the V4R2 signing cell. */
-const tonCellSendMode = SendMode.PAY_GAS_SEPARATELY
+/** The same send mode in `@ton/core`'s enum, used when building the signing cell. */
+function getTonCellSendMode(walletVersion: TonWalletVersion): number {
+  return walletVersion === 'v5r1' ? SendMode.PAY_GAS_SEPARATELY | SendMode.IGNORE_ERRORS : SendMode.PAY_GAS_SEPARATELY
+}
+
+const pinnedWalletId: Record<TonWalletVersion, { id: number; label: string }> = {
+  v4r2: { id: TON_V4R2_SUB_WALLET_ID, label: 'V4R2 sub-wallet ID' },
+  v5r1: { id: TON_V5R1_WALLET_ID, label: 'W5 wallet ID' },
+}
 
 /**
  * Narrows caller-supplied wallet options to the only shape these builders can encode.
- * Anything but workchain 0 on a V4R2 sub-wallet throws, because the WalletCore parity
- * input emitted alongside the cell cannot represent it and would silently disagree.
+ * Anything but workchain 0 on the contract's one supported wallet id throws, because the
+ * WalletCore parity input emitted alongside the cell cannot represent it and would
+ * silently disagree.
  */
-function assertWalletCoreTonWalletOptions(opts: { subWalletId?: number; workchain?: number }): {
+function assertWalletCoreTonWalletOptions(opts: {
+  subWalletId?: number
+  workchain?: number
+  walletVersion?: TonWalletVersion
+}): {
   subWalletId: number
   workchain: 0
+  walletVersion: TonWalletVersion
 } {
+  const walletVersion = opts.walletVersion ?? defaultWalletVersion
   const workchain = opts.workchain ?? 0
   if (workchain !== 0) {
     throw new Error(`TON WalletCore parity supports only workchain 0, got ${workchain}`)
   }
-  const subWalletId = opts.subWalletId ?? TON_V4R2_SUB_WALLET_ID
-  if (subWalletId !== TON_V4R2_SUB_WALLET_ID) {
-    throw new Error(
-      `TON WalletCore parity supports only V4R2 sub-wallet ID ${TON_V4R2_SUB_WALLET_ID}, got ${subWalletId}`
-    )
+  const { id: expectedWalletId, label } = pinnedWalletId[walletVersion]
+  const subWalletId = opts.subWalletId ?? expectedWalletId
+  if (subWalletId !== expectedWalletId) {
+    throw new Error(`TON WalletCore parity supports only ${label} ${expectedWalletId}, got ${subWalletId}`)
   }
-  return { subWalletId, workchain: 0 }
+  return { subWalletId, workchain: 0, walletVersion }
 }
 
 function tonUnsignedIntegerToBytes(field: string, value: bigint): Uint8Array {
@@ -190,9 +243,13 @@ function encodeWalletCoreTonSigningInput(args: {
   seqno: number
   validUntil: number
   message: TW.TheOpenNetwork.Proto.ITransfer
+  walletVersion: TonWalletVersion
 }): Uint8Array {
   const input = TW.TheOpenNetwork.Proto.SigningInput.create({
-    walletVersion: TW.TheOpenNetwork.Proto.WalletVersion.WALLET_V4_R2,
+    walletVersion:
+      args.walletVersion === 'v5r1'
+        ? TW.TheOpenNetwork.Proto.WalletVersion.WALLET_V5_R1
+        : TW.TheOpenNetwork.Proto.WalletVersion.WALLET_V4_R2,
     expireAt: args.validUntil,
     sequenceNumber: args.seqno,
     publicKey: args.publicKey,
@@ -202,25 +259,66 @@ function encodeWalletCoreTonSigningInput(args: {
 }
 
 /**
- * Builds the V4R2 cell that gets signed: the wallet header followed by a reference to
- * the internal message. This is the preimage every co-signer hashes, so field order,
- * bit widths and the send mode must match WalletCore's encoder exactly.
+ * The expiry WalletCore stamps on a wallet's first request (seqno 0), for both
+ * contracts: `SigningRequestBuilder` replaces the caller's `expire_at` with
+ * `u32::MAX` whenever `sequence_number == 0`. The deploying message must not be
+ * time-boxed the way a routine send is, and since the value is part of the
+ * pre-image, any other choice hashes differently from every co-signer.
+ */
+const STATE_INIT_EXPIRE_AT = 0xffffffff
+
+/** The expiry that goes into the signed request: the caller's, except on a first send. */
+function effectiveValidUntil(seqno: number, validUntil: number | undefined): number {
+  return seqno === 0 ? STATE_INIT_EXPIRE_AT : (validUntil ?? Math.floor(Date.now() / 1000) + 600)
+}
+
+/** W5 `signed_external` request opcode. */
+const W5_SIGNED_EXTERNAL_OPCODE = 0x7369676e
+/** W5 `action_send_msg` opcode. */
+const W5_ACTION_SEND_MSG_OPCODE = 0x0ec3c86d
+
+/**
+ * Builds the cell that gets signed. This is the preimage every co-signer hashes, so
+ * field order, bit widths and the send mode must match WalletCore's encoder exactly.
+ *
+ * V4R2:
+ *   subWalletId(32) || validUntil(32) || seqno(32) || op(8)=0 || sendMode(8) || ref(innerMsg)
+ *
+ * W5 (`signed_external`, signature appended by `buildExternalMessageCell`):
+ *   0x7369676e(32) || walletId(int32) || validUntil(32) || seqno(32) || 1 || ref(outList) || 0
+ * where the single action is `action_send_msg#0ec3c86d mode(8)` with refs
+ * [prev = empty list, innerMsg] — the shape WalletCore builds for one message.
  */
 function buildSigningPayloadCell(args: {
+  walletVersion: TonWalletVersion
   subWalletId: number
   validUntil: number
   seqno: number
   innerMsg: Cell
 }): Cell {
-  // V4R2 signing message layout:
-  //   subWalletId(32) || validUntil(32) || seqno(32) || op(8) || sendMode(8) || ref(innerMsg)
-  // op=0 for simple order.
+  if (args.walletVersion === 'v5r1') {
+    const outList = beginCell()
+      .storeUint(W5_ACTION_SEND_MSG_OPCODE, 32)
+      .storeUint(getTonCellSendMode('v5r1'), 8)
+      .storeRef(beginCell().endCell())
+      .storeRef(args.innerMsg)
+      .endCell()
+    return beginCell()
+      .storeUint(W5_SIGNED_EXTERNAL_OPCODE, 32)
+      .storeInt(args.subWalletId, 32)
+      .storeUint(args.validUntil, 32)
+      .storeUint(args.seqno, 32)
+      .storeBit(true)
+      .storeRef(outList)
+      .storeBit(false)
+      .endCell()
+  }
   return beginCell()
     .storeUint(args.subWalletId, 32)
     .storeUint(args.validUntil, 32)
     .storeUint(args.seqno, 32)
     .storeUint(0, 8)
-    .storeUint(tonCellSendMode, 8)
+    .storeUint(getTonCellSendMode('v4r2'), 8)
     .storeRef(args.innerMsg)
     .endCell()
 }
@@ -237,6 +335,7 @@ function buildCommentBody(memo: string | undefined): Cell | undefined {
 }
 
 function buildExternalMessageCell(args: {
+  walletVersion: TonWalletVersion
   walletAddress: Address
   signature: Uint8Array
   signingPayload: Cell
@@ -259,11 +358,12 @@ function buildExternalMessageCell(args: {
     ext.storeBit(false)
   }
 
-  // Body is the signed transfer cell (signature || signingPayload slice).
-  const bodyCell = beginCell()
-    .storeBuffer(Buffer.from(args.signature))
-    .storeSlice(args.signingPayload.asSlice())
-    .endCell()
+  // Body is the signed request. V4R2 puts the signature first; W5's
+  // `signed_external` puts it last, after the request it covers.
+  const bodyCell =
+    args.walletVersion === 'v5r1'
+      ? beginCell().storeSlice(args.signingPayload.asSlice()).storeBuffer(Buffer.from(args.signature)).endCell()
+      : beginCell().storeBuffer(Buffer.from(args.signature)).storeSlice(args.signingPayload.asSlice()).endCell()
 
   ext.storeBit(true).storeRef(bodyCell)
   return ext.endCell()
@@ -281,9 +381,9 @@ function buildExternalMessageCell(args: {
  *   4. Broadcast `signedBocBase64` via `broadcastTonTx`.
  */
 export function buildTonSendTx(opts: BuildTonSendOptions): TonWalletCoreBackedTxBuilderResult {
-  const { subWalletId, workchain } = assertWalletCoreTonWalletOptions(opts)
+  const { subWalletId, workchain, walletVersion } = assertWalletCoreTonWalletOptions(opts)
   const pubKey = hexToBytes(opts.publicKeyEd25519)
-  const wallet = buildV4R2Wallet({ publicKeyEd25519: pubKey, workchain, walletId: subWalletId })
+  const wallet = buildTonWallet({ walletVersion, publicKeyEd25519: pubKey, workchain, walletId: subWalletId })
   const destination = Address.parse(opts.to)
 
   const innerMsg = beginCell()
@@ -303,8 +403,9 @@ export function buildTonSendTx(opts: BuildTonSendOptions): TonWalletCoreBackedTx
     )
     .endCell()
 
-  const validUntil = opts.validUntil ?? Math.floor(Date.now() / 1000) + 600
+  const validUntil = effectiveValidUntil(opts.seqno, opts.validUntil)
   const signingPayload = buildSigningPayloadCell({
+    walletVersion,
     subWalletId,
     validUntil,
     seqno: opts.seqno,
@@ -319,13 +420,14 @@ export function buildTonSendTx(opts: BuildTonSendOptions): TonWalletCoreBackedTx
   const fromAddress = wallet.addressString({ bounceable: false })
   const stateInitCell = opts.seqno === 0 ? storeStateInitCell(wallet.init) : undefined
   const walletCoreTxInputData = encodeWalletCoreTonSigningInput({
+    walletVersion,
     publicKey: pubKey,
     seqno: opts.seqno,
     validUntil,
     message: TW.TheOpenNetwork.Proto.Transfer.create({
       dest: opts.to,
       amount: tonUnsignedIntegerToBytes('amount', opts.amount),
-      mode: walletCoreTonSendMode,
+      mode: getWalletCoreTonSendMode(walletVersion),
       comment: opts.memo ?? '',
       bounceable: opts.bounceable,
     }),
@@ -342,6 +444,7 @@ export function buildTonSendTx(opts: BuildTonSendOptions): TonWalletCoreBackedTx
         throw new Error(`TON signature must be 64 bytes (R||S), got ${signature.length}`)
       }
       const ext = buildExternalMessageCell({
+        walletVersion,
         walletAddress: wallet.address,
         signature,
         signingPayload,
@@ -379,16 +482,18 @@ export type BuildTonJettonTransferOptions = {
   memo?: string
   seqno: number
   validUntil?: number
-  /** WalletCore 4.7.0 supports only the V4R2 default (698983191). */
+  /** WalletCore 4.7.0 supports one id per contract: 698983191 for V4R2, 2147483409 for W5. */
   subWalletId?: number
   /** WalletCore-backed transfers currently support only workchain 0. */
   workchain?: number
+  /** Wallet contract to sign for. Defaults to V4R2; `'v5r1'` is the key's separate W5 account. */
+  walletVersion?: TonWalletVersion
 }
 
 export function buildTonJettonTransferTx(opts: BuildTonJettonTransferOptions): TonWalletCoreBackedTxBuilderResult {
-  const { subWalletId, workchain } = assertWalletCoreTonWalletOptions(opts)
+  const { subWalletId, workchain, walletVersion } = assertWalletCoreTonWalletOptions(opts)
   const pubKey = hexToBytes(opts.publicKeyEd25519)
-  const wallet = buildV4R2Wallet({ publicKeyEd25519: pubKey, workchain, walletId: subWalletId })
+  const wallet = buildTonWallet({ walletVersion, publicKeyEd25519: pubKey, workchain, walletId: subWalletId })
 
   const destinationAddr = Address.parse(opts.to)
   const jettonWalletAddr = Address.parse(opts.jettonWalletAddress)
@@ -436,8 +541,9 @@ export function buildTonJettonTransferTx(opts: BuildTonJettonTransferOptions): T
     )
     .endCell()
 
-  const validUntil = opts.validUntil ?? Math.floor(Date.now() / 1000) + 600
+  const validUntil = effectiveValidUntil(opts.seqno, opts.validUntil)
   const signingPayload = buildSigningPayloadCell({
+    walletVersion,
     subWalletId,
     validUntil,
     seqno: opts.seqno,
@@ -449,13 +555,14 @@ export function buildTonJettonTransferTx(opts: BuildTonJettonTransferOptions): T
   const fromAddress = wallet.addressString({ bounceable: false })
   const stateInitCell = opts.seqno === 0 ? storeStateInitCell(wallet.init) : undefined
   const walletCoreTxInputData = encodeWalletCoreTonSigningInput({
+    walletVersion,
     publicKey: pubKey,
     seqno: opts.seqno,
     validUntil,
     message: TW.TheOpenNetwork.Proto.Transfer.create({
       dest: opts.jettonWalletAddress,
       amount: tonUnsignedIntegerToBytes('Jetton gas amount', JETTON_GAS_AMOUNT_NANO),
-      mode: walletCoreTonSendMode,
+      mode: getWalletCoreTonSendMode(walletVersion),
       comment: opts.memo ?? '',
       bounceable: true,
       jettonTransfer: TW.TheOpenNetwork.Proto.JettonTransfer.create({
@@ -481,6 +588,7 @@ export function buildTonJettonTransferTx(opts: BuildTonJettonTransferOptions): T
         throw new Error(`TON signature must be 64 bytes (R||S), got ${signature.length}`)
       }
       const ext = buildExternalMessageCell({
+        walletVersion,
         walletAddress: wallet.address,
         signature,
         signingPayload,
@@ -570,6 +678,13 @@ export type BuildTonTxFromSigningPayloadOptions = {
    * needs this.
    */
   workchain?: number
+  /**
+   * Wallet contract the payload was built for. Defaults to V4R2. It decides
+   * the envelope's sender address, the StateInit attached on a first send,
+   * and where the signature goes — V4R2 prefixes it, W5 appends it — so a
+   * payload built for one contract must not be finalized as the other.
+   */
+  walletVersion?: TonWalletVersion
 }
 
 function decodeSigningPayload(input: string): Cell {
@@ -656,7 +771,8 @@ export function buildTonTxFromSigningPayload(opts: BuildTonTxFromSigningPayloadO
     throw new Error(`TON publicKeyEd25519 must be 32 bytes, got ${pubKey.length}`)
   }
   const workchain = opts.workchain ?? 0
-  const wallet = buildV4R2Wallet({ publicKeyEd25519: pubKey, workchain })
+  const walletVersion = opts.walletVersion ?? defaultWalletVersion
+  const wallet = buildTonWallet({ walletVersion, publicKeyEd25519: pubKey, workchain })
 
   const signingPayload = decodeSigningPayload(opts.signingPayloadBoc)
 
@@ -679,6 +795,7 @@ export function buildTonTxFromSigningPayload(opts: BuildTonTxFromSigningPayloadO
         throw new Error(`TON signature must be 64 bytes (R||S), got ${signature.length}`)
       }
       const ext = buildExternalMessageCell({
+        walletVersion,
         walletAddress: wallet.address,
         signature,
         signingPayload,

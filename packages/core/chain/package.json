@@ -1025,6 +1025,11 @@
       "import": "./dist/chains/ton/staking.js",
       "default": "./dist/chains/ton/staking.js"
     },
+    "./chains/ton/wallet": {
+      "types": "./dist/chains/ton/wallet.d.ts",
+      "import": "./dist/chains/ton/wallet.js",
+      "default": "./dist/chains/ton/wallet.js"
+    },
     "./chains/tron/config": {
       "types": "./dist/chains/tron/config.d.ts",
       "import": "./dist/chains/tron/config.js",

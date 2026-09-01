@@ -68,7 +68,7 @@ import type { DiscoveredToken, TokenInfo } from '../types/tokens'
 import { computePersonalSignHash } from '../utils/eip191'
 import { createVaultBackup } from '../utils/export'
 // Vault services
-import { AddressService } from './services/AddressService'
+import { AddressService, type GetAddressOptions } from './services/AddressService'
 import { BalanceService } from './services/BalanceService'
 import { BroadcastService } from './services/BroadcastService'
 import { GasEstimationService } from './services/GasEstimationService'
@@ -1134,8 +1134,8 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   /**
    * Get address for specified chain
    */
-  async address(chain: Chain): Promise<string> {
-    return this.addressService.getAddress(chain)
+  async address(chain: Chain, options?: GetAddressOptions): Promise<string> {
+    return this.addressService.getAddress(chain, options)
   }
 
   /**

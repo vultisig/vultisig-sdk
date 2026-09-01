@@ -1,3 +1,5 @@
+import type { TonWalletVersion } from '@vultisig/core-chain/chains/ton/wallet'
+
 import { buildTonJettonTransferTx, type TonWalletCoreBackedTxBuilderResult } from '../../chains/ton/tx'
 import type { VaultIdentity } from './types'
 
@@ -38,6 +40,8 @@ export type PrepareJettonTransferTxFromKeysParams = {
   validUntil?: number
   /** Sender wallet workchain. Default 0 (basechain). */
   workchain?: number
+  /** Wallet contract the sender's TON account lives in. Default V4R2; `'v5r1'` for the key's W5 account. */
+  walletVersion?: TonWalletVersion
 }
 
 /**
@@ -90,5 +94,6 @@ export const prepareJettonTransferTxFromKeys = (
     seqno: params.seqno,
     validUntil: params.validUntil,
     workchain: params.workchain,
+    walletVersion: params.walletVersion,
   })
 }
