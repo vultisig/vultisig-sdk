@@ -68,6 +68,12 @@ const btcAddress = await vault.address('Bitcoin')
 const ethAddress = await vault.address('Ethereum')
 const solAddress = await vault.address('Solana')
 
+// TON has two wallet contracts. Every vault starts on V4R2; W5 (v5r1) is a
+// different address for the same key, with its own balance. Select it per vault
+// and send/balances/swaps all follow; pass a version to preview the other account.
+await vault.address('Ton', { tonWalletVersion: 'v5r1' }) // preview only
+vault.setTonWalletVersion('v5r1') // now vault.address('Ton') and vault.send({ chain: 'Ton', ... }) use W5
+
 console.log('BTC:', btcAddress) // bc1q...
 console.log('ETH:', ethAddress) // 0x...
 console.log('SOL:', solAddress) // 9WzD...

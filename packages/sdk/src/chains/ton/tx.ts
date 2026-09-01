@@ -27,6 +27,7 @@ import { buildV5R1Wallet, TON_V5R1_WALLET_ID } from './walletV5R1'
 // Hex utils (RN-safe; no Buffer dependency in the hot path)
 // ---------------------------------------------------------------------------
 
+/** Decodes a hex string (optionally `0x`-prefixed) into bytes; rejects odd lengths and non-hex characters. */
 function hexToBytes(hex: string): Uint8Array {
   const clean = hex.startsWith('0x') ? hex.slice(2) : hex
   if (clean.length % 2 !== 0) {
@@ -42,6 +43,7 @@ function hexToBytes(hex: string): Uint8Array {
   return bytes
 }
 
+/** Lower-case hex encoding of a byte array. */
 function bytesToHex(bytes: Uint8Array): string {
   let out = ''
   for (let i = 0; i < bytes.length; i++) {
@@ -229,6 +231,7 @@ function assertWalletCoreTonWalletOptions(opts: {
   return { subWalletId, workchain: 0, walletVersion }
 }
 
+/** Big-endian bytes of a non-negative amount, the form WalletCore's TON proto carries amounts in. */
 function tonUnsignedIntegerToBytes(field: string, value: bigint): Uint8Array {
   if (value < 0n) {
     throw new Error(`TON ${field} must be a non-negative integer`)
@@ -238,6 +241,11 @@ function tonUnsignedIntegerToBytes(field: string, value: bigint): Uint8Array {
   return hexToBytes(hex)
 }
 
+/**
+ * The WalletCore `SigningInput` that mirrors what this builder signs, so a
+ * dispatcher can have WalletCore derive the pre-image independently and fail
+ * closed if the two disagree.
+ */
 function encodeWalletCoreTonSigningInput(args: {
   publicKey: Uint8Array
   seqno: number
@@ -323,6 +331,11 @@ function buildSigningPayloadCell(args: {
     .endCell()
 }
 
+/**
+ * The text-comment body cell for a native transfer: 32-bit zero opcode then the
+ * UTF-8 memo. Returns `undefined` for an empty memo so the caller can omit the
+ * body entirely; throws if the memo will not fit the cell.
+ */
 function buildCommentBody(memo: string | undefined): Cell | undefined {
   if (!memo) return undefined
   // Max 123 UTF-8 bytes fit in a single cell slice (1023 bits - 32-bit opcode).
@@ -334,6 +347,12 @@ function buildCommentBody(memo: string | undefined): Cell | undefined {
   return beginCell().storeUint(0, 32).storeStringTail(memo).endCell()
 }
 
+/**
+ * Wraps the signed request in the external message the network accepts:
+ * `ext_in_msg_info` addressed to the wallet, the StateInit when this is the
+ * deploying first send, and the body carrying the request plus signature in the
+ * contract's order.
+ */
 function buildExternalMessageCell(args: {
   walletVersion: TonWalletVersion
   walletAddress: Address
@@ -490,6 +509,11 @@ export type BuildTonJettonTransferOptions = {
   walletVersion?: TonWalletVersion
 }
 
+/**
+ * Build an unsigned Jetton transfer: an internal message to the sender's own
+ * Jetton wallet carrying the TEP-74 `transfer` body, wrapped in the wallet
+ * contract's request. Same signing flow and result contract as `buildTonSendTx`.
+ */
 export function buildTonJettonTransferTx(opts: BuildTonJettonTransferOptions): TonWalletCoreBackedTxBuilderResult {
   const { subWalletId, workchain, walletVersion } = assertWalletCoreTonWalletOptions(opts)
   const pubKey = hexToBytes(opts.publicKeyEd25519)
@@ -687,6 +711,7 @@ export type BuildTonTxFromSigningPayloadOptions = {
   walletVersion?: TonWalletVersion
 }
 
+/** Parses a caller-supplied signing-payload BoC given as base64 or (optionally `0x`-prefixed) hex. */
 function decodeSigningPayload(input: string): Cell {
   // Encoding detection (CodeRabbit #516 R2). The serialized BoC arrives
   // as either hex or base64, and yield.xyz uses both depending on the

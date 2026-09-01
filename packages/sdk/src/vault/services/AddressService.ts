@@ -22,6 +22,8 @@ export type GetAddressOptions = {
 }
 
 export class AddressService {
+  private tonWalletVersion: TonWalletVersion = defaultTonWalletVersion
+
   constructor(
     private vaultData: CoreVault,
     private cacheService: CacheService,
@@ -29,16 +31,33 @@ export class AddressService {
   ) {}
 
   /**
+   * The TON wallet contract this vault's account lives in. Every address lookup
+   * that does not name a version — including the ones behind `send`, balances,
+   * swaps and fee estimation — resolves to this account, so selecting W5 here is
+   * what makes the whole vault act on the W5 account rather than only `address()`.
+   */
+  getTonWalletVersion(): TonWalletVersion {
+    return this.tonWalletVersion
+  }
+
+  /** Selects which of the key's two TON accounts the vault acts on. Both stay cached under their own keys. */
+  setTonWalletVersion(tonWalletVersion: TonWalletVersion): void {
+    this.tonWalletVersion = tonWalletVersion
+  }
+
+  /**
    * Get address for specified chain
    * Uses CacheService with automatic persistent caching
    *
-   * For TON, `options.tonWalletVersion` selects the wallet contract. The default
-   * is V4R2 — the account every existing vault already uses; `'v5r1'` is the same
-   * key's W5 account, cached under its own key so the two never alias.
+   * For TON, `options.tonWalletVersion` names a contract for this one lookup —
+   * the way a migration screen shows the other account — without changing the
+   * vault's selection; omitted, the lookup uses the selected contract (V4R2 unless
+   * `setTonWalletVersion` said otherwise). Each contract's address is cached under
+   * its own key so the two never alias.
    */
   async getAddress(chain: Chain, options: GetAddressOptions = {}): Promise<string> {
     assertValidChain(chain)
-    const tonWalletVersion = chain === Chain.Ton ? (options.tonWalletVersion ?? defaultTonWalletVersion) : undefined
+    const tonWalletVersion = chain === Chain.Ton ? (options.tonWalletVersion ?? this.tonWalletVersion) : undefined
     const cacheKey =
       tonWalletVersion && tonWalletVersion !== defaultTonWalletVersion
         ? `${chain.toLowerCase()}:${tonWalletVersion}`
