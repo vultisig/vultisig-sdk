@@ -9,5 +9,5 @@
   "expireAt": 1800000000,
   "workchain": 0,
   "subWalletId": 698983191,
-  "expectedSigningHashHex": "c137f35651e51e7969649545350ada9e53925e823ae6dd8d77d8b2d3f7fc0383"
+  "expectedSigningHashHex": "ee4d34cf0e3ad801312f6cfad716e202c91049da4f4704852ce7b01ff8133e66"
 }

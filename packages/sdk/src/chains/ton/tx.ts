@@ -140,9 +140,25 @@ export type TonWalletCoreBackedTxBuilderResult = TonTxBuilderResult & {
   walletCoreTxInputData: Uint8Array
 }
 
-const walletCoreTonSendMode =
-  TW.TheOpenNetwork.Proto.SendMode.PAY_FEES_SEPARATELY | TW.TheOpenNetwork.Proto.SendMode.IGNORE_ACTION_PHASE_ERRORS
+/**
+ * Send mode for every app-initiated TON transfer, in WalletCore's enum.
+ *
+ * `IGNORE_ACTION_PHASE_ERRORS` (+2) is deliberately absent: with it set, a wallet contract
+ * that cannot carry out its outgoing transfer skips the action rather than failing, so the
+ * transaction lands un-aborted with the seqno consumed and nothing moved — on chain that is
+ * indistinguishable from a real send. Must stay numerically equal to `tonCellSendMode` below —
+ * the two encode the same field, and any drift between them changes the signing hash.
+ */
+const walletCoreTonSendMode = TW.TheOpenNetwork.Proto.SendMode.PAY_FEES_SEPARATELY
 
+/** The same send mode in `@ton/core`'s enum, used when building the V4R2 signing cell. */
+const tonCellSendMode = SendMode.PAY_GAS_SEPARATELY
+
+/**
+ * Narrows caller-supplied wallet options to the only shape these builders can encode.
+ * Anything but workchain 0 on a V4R2 sub-wallet throws, because the WalletCore parity
+ * input emitted alongside the cell cannot represent it and would silently disagree.
+ */
 function assertWalletCoreTonWalletOptions(opts: { subWalletId?: number; workchain?: number }): {
   subWalletId: number
   workchain: 0
@@ -185,6 +201,11 @@ function encodeWalletCoreTonSigningInput(args: {
   return TW.TheOpenNetwork.Proto.SigningInput.encode(input).finish()
 }
 
+/**
+ * Builds the V4R2 cell that gets signed: the wallet header followed by a reference to
+ * the internal message. This is the preimage every co-signer hashes, so field order,
+ * bit widths and the send mode must match WalletCore's encoder exactly.
+ */
 function buildSigningPayloadCell(args: {
   subWalletId: number
   validUntil: number
@@ -193,14 +214,13 @@ function buildSigningPayloadCell(args: {
 }): Cell {
   // V4R2 signing message layout:
   //   subWalletId(32) || validUntil(32) || seqno(32) || op(8) || sendMode(8) || ref(innerMsg)
-  // op=0 for simple order; sendMode = PAY_GAS_SEPARATELY | IGNORE_ERRORS.
-  const sendMode = SendMode.PAY_GAS_SEPARATELY | SendMode.IGNORE_ERRORS
+  // op=0 for simple order.
   return beginCell()
     .storeUint(args.subWalletId, 32)
     .storeUint(args.validUntil, 32)
     .storeUint(args.seqno, 32)
     .storeUint(0, 8)
-    .storeUint(sendMode, 8)
+    .storeUint(tonCellSendMode, 8)
     .storeRef(args.innerMsg)
     .endCell()
 }
