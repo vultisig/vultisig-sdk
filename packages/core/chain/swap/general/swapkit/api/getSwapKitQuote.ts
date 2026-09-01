@@ -1,7 +1,7 @@
 import { base64Decode } from '@bufbuild/protobuf/wire'
 import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import { Chain } from '@vultisig/core-chain/Chain'
-import { areEqualTonAddresses } from '@vultisig/core-chain/chains/ton/address'
+import { areEqualTonAddresses, tonAddressToBounceable } from '@vultisig/core-chain/chains/ton/address'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { usdc } from '@vultisig/core-chain/coin/knownTokens'
@@ -24,6 +24,7 @@ import {
 } from '@vultisig/core-chain/swap/general/swapkit/SwapKitProviders'
 import { SwapFee } from '@vultisig/core-chain/swap/SwapFee'
 import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
+import { attempt } from '@vultisig/lib-utils/attempt'
 import { withoutUndefinedFields } from '@vultisig/lib-utils/record/withoutUndefinedFields'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 import { address as btcAddress, networks, Psbt } from 'bitcoinjs-lib'
@@ -640,6 +641,27 @@ const getTransferTxEntry = (tx: unknown): Record<string, unknown> | undefined =>
   return isRecord(tx[0]) ? tx[0] : undefined
 }
 
+/**
+ * The agreed TON deposit destination in its bounceable (`EQ…`) form.
+ *
+ * `assertTransferAgreement` compares TON spellings by account, so a route whose
+ * fields spell one account as `UQ…`, raw `0:hex` and `EQ…` passes — and the
+ * spelling that wins the precedence order is what the signer would otherwise
+ * read the bounce flag from. A deposit that goes out non-bounceable to a
+ * rejecting contract is absorbed instead of refunded, so the agreed account is
+ * re-spelled bounceable here, whichever field it came from. A string that is
+ * not a TON address at all cannot be a deposit destination and is refused.
+ */
+const toCanonicalTonDeposit = (destination: string): string => {
+  const canonical = attempt(() => tonAddressToBounceable(destination))
+
+  if ('error' in canonical) {
+    throw new Error(`SwapKit transfer route returned an invalid TON deposit address: ${destination}`)
+  }
+
+  return canonical.data
+}
+
 const areEqualTransferAddresses = (left: string, right: string, chain: SwapKitSourceChain): boolean =>
   chain === Chain.Ton ? areEqualTonAddresses(left, right) : left === right
 
@@ -782,11 +804,13 @@ const buildTransferTx = (
 ): GeneralSwapTx => {
   assertTransferAgreement(response, from.chain, from.decimals)
 
-  const to = getTransferTargetAddress(response)
+  const agreedDestination = getTransferTargetAddress(response)
 
-  if (!to) {
+  if (!agreedDestination) {
     throw new Error('SwapKit transfer route did not return a target address.')
   }
+
+  const to = from.chain === Chain.Ton ? toCanonicalTonDeposit(agreedDestination) : agreedDestination
 
   // SwapKit renames base64 tx types on the wire without versioning — `SOLANA`
   // became `SERIALIZED_BASE64` and `CARDANO` became `CBOR` mid-flight (iOS

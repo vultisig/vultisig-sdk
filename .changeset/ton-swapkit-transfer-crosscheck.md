@@ -10,3 +10,5 @@ A SwapKit `/v3/swap` response states the deposit destination in up to three inde
 `buildTransferTx` now refuses a response that disagrees with itself, on either the destination or the amount, instead of resolving the ambiguity by precedence. It also rejects a multi-entry `tx[]` rather than silently signing only the first transfer and under-funding the swap.
 
 Destinations are compared per chain: TON spells one account as `EQ…`, `UQ…` or raw `workchain:hex`, so the new `areEqualTonAddresses` helper compares parsed accounts there, while every other transfer chain stays byte-for-byte (base58 is case-sensitive — normalizing case away would let two different addresses pass as one).
+
+The agreed TON destination is re-spelled in its bounceable (`EQ…`) form whichever field it came from. The agreement check treats `UQ…`, raw and `EQ…` spellings of one account as equal — correctly — but the signer reads the bounce flag off the spelling, so a route that won precedence with a `UQ…` or raw spelling would have sent the deposit non-bounceable, where a rejecting contract absorbs it instead of refunding. A destination that is not a TON address at all is refused.

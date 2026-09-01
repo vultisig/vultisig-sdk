@@ -1,4 +1,5 @@
 import { Chain } from '@vultisig/core-chain/Chain'
+import { tonAddressToRaw } from '@vultisig/core-chain/chains/ton/address'
 import { scanAddressWithBlockaid } from '@vultisig/core-chain/security/blockaid/address'
 import { configureSwapKit, getSwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
 import type { SwapKitSourceChain } from '@vultisig/core-chain/swap/general/swapkit/SwapKitEnabledChains'
@@ -55,7 +56,7 @@ const transferSourceFixtures: TransferSourceFixture[] = [
   ['Ripple', Chain.Ripple, 'XRP', 6, 'rSource', 'rDeposit'],
   ['Zcash', Chain.Zcash, 'ZEC', 8, 't1Source', 't1Deposit'],
   ['Tron', Chain.Tron, 'TRX', 6, 'TSource', 'TDeposit'],
-  ['TON', Chain.Ton, 'TON', 9, 'UQSource', 'UQDeposit'],
+  ['TON', Chain.Ton, 'TON', 9, 'UQSource', 'EQCIcjES4cQET0z6nRixZ0MdvTB4u3_8triztLSrIIrDkpgJ'],
 ]
 
 describe('getSwapKitQuote', () => {
@@ -460,7 +461,11 @@ describe('getSwapKitQuote', () => {
           response({ routes: [{ routeId: 'ton-array-route', providers: ['NEAR'], expectedBuyAmount: '0.01' }] })
         )
         .mockResolvedValueOnce(
-          response({ expectedBuyAmount: '0.009', providers: ['NEAR'], tx: [{ address: 'UQDeposit', amount: '0.001' }] })
+          response({
+            expectedBuyAmount: '0.009',
+            providers: ['NEAR'],
+            tx: [{ address: 'UQCIcjES4cQET0z6nRixZ0MdvTB4u3_8triztLSrIIrDksXM', amount: '0.001' }],
+          })
         )
     )
     configureSwapKit({ apiKey: undefined })
@@ -471,11 +476,15 @@ describe('getSwapKitQuote', () => {
       amount: 1n,
     })
 
+    // The deposit is re-spelled bounceable whichever form the route used; the
+    // payload keeps the route's bytes verbatim.
     expect(quote.tx).toEqual({
       transfer: {
-        to: 'UQDeposit',
+        to: 'EQCIcjES4cQET0z6nRixZ0MdvTB4u3_8triztLSrIIrDkpgJ',
         amount: 1_000_000n,
-        txPayload: textEncoder.encode('[{"address":"UQDeposit","amount":"0.001"}]'),
+        txPayload: textEncoder.encode(
+          '[{"address":"UQCIcjES4cQET0z6nRixZ0MdvTB4u3_8triztLSrIIrDksXM","amount":"0.001"}]'
+        ),
       },
     })
   })
@@ -534,6 +543,27 @@ describe('getSwapKitQuote', () => {
       })
 
       expect(quote.tx).toMatchObject({ transfer: { to: TON_DEPOSIT_BOUNCEABLE, amount: 1_000_000n } })
+    })
+
+    // The agreement check ignores bounceability on purpose, so the spelling that
+    // wins precedence must not be allowed to carry a non-bounceable intent into
+    // the signer: a rejected non-bounceable deposit is absorbed, not refunded.
+    it.each([
+      ['UQ…', TON_DEPOSIT_NON_BOUNCEABLE],
+      ['raw 0:hex', tonAddressToRaw(TON_DEPOSIT_BOUNCEABLE)],
+    ])('re-spells a %s targetAddress that won precedence over an EQ… tx[] entry as bounceable', async (_, spelling) => {
+      const quote = await stubTransferRoute({
+        targetAddress: spelling,
+        tx: [{ address: TON_DEPOSIT_BOUNCEABLE, amount: '0.001' }],
+      })
+
+      expect(quote.tx).toMatchObject({ transfer: { to: TON_DEPOSIT_BOUNCEABLE } })
+    })
+
+    it('refuses a TON destination that is not an address at all rather than signing to it', async () => {
+      await expect(stubTransferRoute({ targetAddress: 'not-a-ton-address' })).rejects.toThrow(
+        /invalid TON deposit address/
+      )
     })
 
     it('compares non-TON destinations byte for byte — base58 is case-sensitive, so case must not be normalized away', async () => {
