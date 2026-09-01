@@ -1165,7 +1165,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     }
 
     this.addressService.setTonWalletVersion(tonWalletVersion)
-    await this.cacheService.invalidateScope(CacheScope.BALANCE)
+    await this.balanceService.onAccountChanged()
   }
 
   /**

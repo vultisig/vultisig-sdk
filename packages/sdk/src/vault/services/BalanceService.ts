@@ -19,6 +19,16 @@ import { VaultError, VaultErrorCode } from '../VaultError'
  * Uses CacheService with BALANCE scope for automatic TTL-based caching.
  */
 export class BalanceService {
+  /**
+   * Bumped every time the vault switches the account a chain resolves to (a TON
+   * vault moving between its V4R2 and W5 wallets). Cache keys name a chain and
+   * an asset, not an account, so a fetch captures the generation before it
+   * starts and writes only if it is unchanged — checked synchronously right
+   * before each write, so a switch cannot slip in between the check and the
+   * write the way it could with an awaited address comparison.
+   */
+  private accountGeneration = 0
+
   constructor(
     private cacheService: CacheService,
     private emitBalanceUpdated: (data: { chain: Chain; balance: Balance; tokenId?: string }) => void,
@@ -41,16 +51,13 @@ export class BalanceService {
   }
 
   /**
-   * Whether `address` is still the account this vault acts on for `chain`.
-   *
-   * Balance cache keys name a chain and an asset, not an account. A TON vault
-   * can switch between its V4R2 and W5 accounts while a fetch started for the
-   * old one is still in flight; that fetch must not land in the cache after the
-   * switch, or the new account would read the old account's balance until the
-   * TTL expires. The result is still returned to the caller that asked for it.
+   * Tell the service the vault now resolves to a different account: any fetch
+   * already in flight for the old account will still answer its caller but will
+   * not be cached or emitted, and everything cached so far is dropped.
    */
-  private async isStillCurrentAddress(chain: Chain, address: string): Promise<boolean> {
-    return (await this.getAddress(chain)) === address
+  async onAccountChanged(): Promise<void> {
+    this.accountGeneration += 1
+    await this.cacheService.invalidateScope(CacheScope.BALANCE)
   }
 
   private async getBalanceForAsset(
@@ -76,6 +83,7 @@ export class BalanceService {
           ? resultId
           : normalizedTokenIdentity(chain, stripLegacyTokenIdPrefix(chain, knownAssetId))
 
+      const generation = this.accountGeneration
       address = await this.getAddress(chain)
 
       // Native XRP carries a locked reserve the plain resolver cannot express:
@@ -103,7 +111,7 @@ export class BalanceService {
         balance.reserveAmount = rippleDetail.reserve.toString()
       }
 
-      if (!(await this.isStillCurrentAddress(chain, address))) {
+      if (generation !== this.accountGeneration) {
         return balance
       }
 
@@ -198,6 +206,7 @@ export class BalanceService {
    * and caches/emits each fetched balance exactly like getBalance() does.
    */
   private async getEvmBalancesBatched(chain: EvmChain): Promise<Array<readonly [string, Balance]>> {
+    const generation = this.accountGeneration
     const address = await this.getAddress(chain)
     const tokens = this.getTokens(chain)
 
@@ -248,7 +257,6 @@ export class BalanceService {
     })
 
     const tokensRecord = this.getTokensRecord()
-    const isCurrentAddress = await this.isStillCurrentAddress(chain, address)
     for (const request of uncached) {
       const rawBalance = rawBalances[accountCoinKeyToString(request.coinKey)]
       // A key MISSING from the multicall result means that coin was omitted/failed (a transient RPC
@@ -261,7 +269,7 @@ export class BalanceService {
       const formatTokens = request.token ? { [chain]: [request.token] } : tokensRecord
       const balance = formatBalance(present ? rawBalance : 0n, chain, request.tokenId, formatTokens)
 
-      if (present && isCurrentAddress) {
+      if (present && generation === this.accountGeneration) {
         await this.cacheService.setScoped(request.cacheKey, CacheScope.BALANCE, balance)
         this.emitBalanceUpdated({ chain, balance, tokenId: request.tokenId })
       }

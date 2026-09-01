@@ -900,10 +900,10 @@ describe('BalanceService — a fetch for a previous TON account never lands afte
       vi.fn()
     )
     // What `VaultBase.setTonWalletVersion` does: the account changes and the
-    // balance scope is dropped.
-    const switchTo = async (address: string) => {
+    // service is told, which drops the balance scope.
+    const switchTo = (address: string) => {
       currentAddress = address
-      await cache.invalidateScope(CacheScope.BALANCE)
+      return service.onAccountChanged()
     }
 
     return { service, cache, switchTo }
@@ -937,6 +937,52 @@ describe('BalanceService — a fetch for a previous TON account never lands afte
     expect(newBalance.amount).toBe('5')
     expect(vi.mocked(getCoinBalance)).toHaveBeenLastCalledWith(expect.objectContaining({ address: w5Address }))
     expect(cache.getScoped<{ amount: string }>('ton:native', CacheScope.BALANCE)?.amount).toBe('5')
+  })
+
+  // The narrowest window: the balance has already arrived, and the switch lands
+  // in the same tick — after any check that awaited something could have
+  // resolved, before the write. The generation is compared synchronously right
+  // before writing, so this cannot get through.
+  it('drops a result that arrived just before the switch, in the same tick', async () => {
+    const { service, cache, switchTo } = makeService()
+    let resolveOldFetch: (value: bigint) => void = () => {}
+    vi.mocked(getCoinBalance).mockImplementationOnce(
+      () =>
+        new Promise<bigint>(resolve => {
+          resolveOldFetch = resolve
+        })
+    )
+
+    const oldRequest = service.getBalance(Chain.Ton)
+    await flushMicrotasks()
+
+    resolveOldFetch(100n)
+    const switching = switchTo(w5Address)
+    await oldRequest
+    await switching
+
+    expect(cache.getScoped('ton:native', CacheScope.BALANCE)).toBeNull()
+  })
+
+  it('applies the same rule to a batched EVM fetch', async () => {
+    const { service, cache, switchTo } = makeService()
+    let resolveBatch: (value: Record<string, bigint>) => void = () => {}
+    vi.mocked(getEvmChainBalances).mockImplementationOnce(
+      () =>
+        new Promise<Record<string, bigint>>(resolve => {
+          resolveBatch = resolve
+        })
+    )
+
+    const request = service.getBalances({ chains: Chain.Ethereum, includeTokens: true })
+    await flushMicrotasks()
+
+    resolveBatch({ [accountCoinKeyToString({ chain: Chain.Ethereum, address: v4r2Address })]: 1n })
+    const switching = switchTo(w5Address)
+    await request
+    await switching
+
+    expect(cache.getScoped('ethereum:native', CacheScope.BALANCE)).toBeNull()
   })
 
   it('still caches a fetch whose account did not change underneath it', async () => {
