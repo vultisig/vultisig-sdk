@@ -1,8 +1,7 @@
-import { Address, Cell } from '@ton/core'
+import { Address } from '@ton/core'
 import { PublicKey, WalletCore } from '@trustwallet/wallet-core/dist/src/wallet-core'
-import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
+import { getTonV5R1Address, tonV5R1WalletId } from '@vultisig/core-chain/chains/ton/walletV5R1'
 import { match } from '@vultisig/lib-utils/match'
-import { Buffer } from 'buffer'
 
 /**
  * The wallet contracts a Vultisig TON account can live in. The same Ed25519
@@ -19,21 +18,13 @@ export type TonWalletVersion = (typeof tonWalletVersions)[number]
  */
 export const defaultTonWalletVersion: TonWalletVersion = 'v4r2'
 
-/**
- * W5R1 wallet id on mainnet, as the contract stores it: the network's global
- * id (-239) XOR'd with the client context `1 | workchain 0 | version 0 |
- * subwallet 0` (0x80000000), giving 0x7FFFFF11. WalletCore hardcodes this
- * value for `WALLET_V5_R1`, so it is the only id that can be co-signed.
- */
-export const tonV5R1WalletId = 2147483409
+export { tonV5R1WalletId }
 
 /**
  * How many outgoing messages one external request may carry. V4 is limited by
  * the wallet code; W5 by the 255-entry action list.
  */
 export const tonMaxMessagesPerRequest: Record<TonWalletVersion, number> = { v4r2: 4, v5r1: 255 }
-
-const baseWorkchain = 0
 
 type DeriveTonAddressInput = {
   publicKey: PublicKey
@@ -44,22 +35,19 @@ type DeriveTonAddressInput = {
 /**
  * The user-friendly, non-bounceable (`UQ…`) address of this key's wallet
  * under the given contract. V4R2 is WalletCore's own TON derivation; W5 is the
- * hash of the StateInit WalletCore builds for it, which is what the contract
- * will be deployed from on the first send.
+ * hash of the StateInit the contract is deployed from, built with `@ton/core`
+ * from the key bytes alone — no WalletCore feature beyond the public key, so it
+ * also works on React Native, whose native bridge exposes no `TONWallet`.
  */
 export const deriveTonAddress = ({ publicKey, walletCore, version }: DeriveTonAddressInput): string =>
   match(version, {
     v4r2: () => walletCore.CoinTypeExt.deriveAddressFromPublicKey(walletCore.CoinType.ton, publicKey),
-    v5r1: () => {
-      const stateInitBoc = walletCore.TONWallet.buildV5R1StateInit(publicKey, baseWorkchain, tonV5R1WalletId)
-      const [stateInit] = Cell.fromBoc(Buffer.from(stateInitBoc, 'base64'))
-
-      return new Address(baseWorkchain, shouldBePresent(stateInit, 'W5 state init').hash()).toString({
+    v5r1: () =>
+      getTonV5R1Address({ publicKey: publicKey.data() }).toString({
         bounceable: false,
         testOnly: false,
         urlSafe: true,
-      })
-    },
+      }),
   })
 
 type ResolveTonWalletVersionInput = {

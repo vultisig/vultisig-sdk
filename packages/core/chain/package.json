@@ -1030,6 +1030,11 @@
       "import": "./dist/chains/ton/wallet.js",
       "default": "./dist/chains/ton/wallet.js"
     },
+    "./chains/ton/walletV5R1": {
+      "types": "./dist/chains/ton/walletV5R1.d.ts",
+      "import": "./dist/chains/ton/walletV5R1.js",
+      "default": "./dist/chains/ton/walletV5R1.js"
+    },
     "./chains/tron/config": {
       "types": "./dist/chains/tron/config.d.ts",
       "import": "./dist/chains/tron/config.js",
