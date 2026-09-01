@@ -1,13 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { mockGetJettonWalletAddress, mockGetKeysignCoin, mockGetTonAccountInfo, mockGetTonWalletState } = vi.hoisted(
-  () => ({
-    mockGetJettonWalletAddress: vi.fn(),
-    mockGetKeysignCoin: vi.fn(),
-    mockGetTonAccountInfo: vi.fn(),
-    mockGetTonWalletState: vi.fn(),
-  })
-)
+const {
+  mockGetCoinBalance,
+  mockGetJettonWalletAddress,
+  mockGetKeysignCoin,
+  mockGetTonAccountInfo,
+  mockGetTonWalletState,
+} = vi.hoisted(() => ({
+  mockGetCoinBalance: vi.fn(async () => 0n),
+  mockGetJettonWalletAddress: vi.fn(),
+  mockGetKeysignCoin: vi.fn(),
+  mockGetTonAccountInfo: vi.fn(),
+  mockGetTonWalletState: vi.fn(),
+}))
 
 vi.mock('@vultisig/core-chain/chains/ton/account/getTonAccountInfo', () => ({
   getTonAccountInfo: mockGetTonAccountInfo,
@@ -17,7 +22,7 @@ vi.mock('@vultisig/core-chain/chains/ton/api', () => ({
   getTonWalletState: mockGetTonWalletState,
 }))
 vi.mock('@vultisig/core-chain/coin/balance', () => ({
-  getCoinBalance: vi.fn(async () => 0n),
+  getCoinBalance: mockGetCoinBalance,
 }))
 vi.mock('../../../fee/resolvers/ton', () => ({ getTonFeeAmount: () => 0n }))
 vi.mock('../../../utils/getKeysignCoin', () => ({
@@ -64,6 +69,49 @@ describe('getTonChainSpecific — seqno on an uninitialized wallet', () => {
     })
     const res = await resolve(buildPayload({ toAddress: bounceableAddress }))
     expect(res.sequenceNumber).toBe(7n)
+  })
+})
+
+describe('getTonChainSpecific — sendMaxAmount', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockGetKeysignCoin.mockReturnValue(nativeCoin)
+    mockGetTonAccountInfo.mockResolvedValue({ account_state: { seqno: 1 } })
+    mockGetTonWalletState.mockResolvedValue('active')
+    mockGetCoinBalance.mockResolvedValue(1_000_000_000n)
+  })
+
+  // Amount sits one nanoton under the balance above, which the removed heuristic read
+  // as a MAX send.
+  const nearBalancePayload = buildPayload({
+    toAddress: bounceableAddress,
+    toAmount: '999999999',
+  })
+
+  it('records the flag the caller passed, whatever the amount looks like', async () => {
+    const dustSend = buildPayload({ toAddress: bounceableAddress, toAmount: '1' })
+
+    const res = await getTonChainSpecific({
+      keysignPayload: dustSend,
+      walletCore: {} as never,
+      sendMaxAmount: true,
+    })
+
+    expect(res.sendMaxAmount).toBe(true)
+  })
+
+  // The removed heuristic flagged any `amount + fee >= balance` send as MAX, so typing
+  // an amount near your balance silently relabelled an ordinary send.
+  it('leaves a near-balance send unflagged when the caller did not ask for MAX', async () => {
+    const res = await resolve(nearBalancePayload)
+
+    expect(res.sendMaxAmount).toBe(false)
+  })
+
+  it('does not read the balance at all — nothing is inferred from it', async () => {
+    await resolve(nearBalancePayload)
+
+    expect(mockGetCoinBalance).not.toHaveBeenCalled()
   })
 })
 

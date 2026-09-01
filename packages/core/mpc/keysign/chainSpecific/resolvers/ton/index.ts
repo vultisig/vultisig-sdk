@@ -2,13 +2,10 @@ import { create } from '@bufbuild/protobuf'
 import { getTonAccountInfo } from '@vultisig/core-chain/chains/ton/account/getTonAccountInfo'
 import { getTonAddressBounceability } from '@vultisig/core-chain/chains/ton/address'
 import { getJettonWalletAddress, getTonWalletState } from '@vultisig/core-chain/chains/ton/api'
-import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 import { TonSpecificSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { attempt } from '@vultisig/lib-utils/attempt'
 
-import { getTonFeeAmount } from '../../../fee/resolvers/ton'
 import { getKeysignSwapPayload } from '../../../swap/getKeysignSwapPayload'
-import { getKeysignAmount } from '../../../utils/getKeysignAmount'
 import { getKeysignCoin } from '../../../utils/getKeysignCoin'
 import { GetChainSpecificResolver } from '../../resolver'
 
@@ -16,10 +13,15 @@ const tonWalletStateUninitialized = 'uninit'
 
 /**
  * Resolves the TON-specific keysign fields: the sender's seqno, an expiry, whether the
- * transfer bounces on rejection, whether it sweeps the balance, and — for Jettons — the
- * sender's Jetton wallet and whether the destination is deployed.
+ * transfer bounces on rejection, and — for Jettons — the sender's Jetton wallet and
+ * whether the destination is deployed. `sendMaxAmount` is recorded from the caller
+ * rather than inferred, so an ordinary send that happens to sit close to the balance is
+ * not relabelled a MAX send.
  */
-export const getTonChainSpecific: GetChainSpecificResolver<'tonSpecific'> = async ({ keysignPayload }) => {
+export const getTonChainSpecific: GetChainSpecificResolver<'tonSpecific'> = async ({
+  keysignPayload,
+  sendMaxAmount = false,
+}) => {
   const coin = getKeysignCoin(keysignPayload)
   const { address } = coin
   const receiver = keysignPayload.toAddress
@@ -35,18 +37,6 @@ export const getTonChainSpecific: GetChainSpecificResolver<'tonSpecific'> = asyn
   // than returning null and crashing this destructure.
   const { account_state } = await getTonAccountInfo(address)
   const sequenceNumber = BigInt(account_state?.seqno ?? 0)
-
-  const getSendMaxAmount = async () => {
-    if (coin.id) return false
-
-    const amount = getKeysignAmount(keysignPayload)
-    if (!amount) return false
-
-    const balance = await getCoinBalance(coin)
-    const fee = getTonFeeAmount(coin)
-
-    return amount + fee >= balance
-  }
 
   // Whether the transfer goes out bounceable, which decides what happens to the funds
   // when the destination rejects the message: a bounceable transfer is refunded, a
@@ -80,7 +70,7 @@ export const getTonChainSpecific: GetChainSpecificResolver<'tonSpecific'> = asyn
     sequenceNumber,
     expireAt: BigInt(Math.floor(Date.now() / 1000) + 600),
     bounceable: await getIsBounceable(),
-    sendMaxAmount: await getSendMaxAmount(),
+    sendMaxAmount,
     jettonAddress: '',
     isActiveDestination: false,
   })
