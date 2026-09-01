@@ -35,11 +35,13 @@ const buildPayload = ({
   receiver = 'rDestinationBBBBBBBBBBBBBBBBBBBBBB',
   destinationTag = 12345,
   omitDestinationTag = false,
+  sendMaxAmount,
 }: {
   memo?: string
   receiver?: string
   destinationTag?: number
   omitDestinationTag?: boolean
+  sendMaxAmount?: boolean
 } = {}) =>
   buildSendKeysignPayload({
     coin: rippleCoin,
@@ -53,6 +55,7 @@ const buildPayload = ({
     hexPublicKeyOverride: `02${'ab'.repeat(32)}`,
     libType: 'DKLS',
     walletCore: {} as never,
+    sendMaxAmount,
   })
 
 const expectRippleDestinationTag = (payload: KeysignPayload, destinationTag: number) => {
@@ -134,5 +137,31 @@ describe('buildSendKeysignPayload XRP DestinationTag compatibility', () => {
         destinationTag: 12345,
       })
     ).rejects.toMatchObject({ type: 'ripple-destination-tag-invalid' })
+  })
+})
+
+describe('buildSendKeysignPayload MAX intent', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getCoinBalanceMock.mockResolvedValue(2_000_000n)
+    getKeysignUtxoInfoMock.mockResolvedValue(undefined)
+    getChainSpecificMock.mockResolvedValue({
+      case: 'rippleSpecific',
+      value: create(RippleSpecificSchema, { sequence: 1n, gas: 15n, lastLedgerSequence: 2n }),
+    })
+  })
+
+  // The chain-specific resolver records MAX rather than deriving it, so it only ever
+  // knows what this builder forwards.
+  it('forwards the caller MAX flag to the chain-specific resolver', async () => {
+    await buildPayload({ sendMaxAmount: true })
+
+    expect(getChainSpecificMock).toHaveBeenCalledWith(expect.objectContaining({ sendMaxAmount: true }))
+  })
+
+  it('leaves the flag unset when the caller did not pass one', async () => {
+    await buildPayload()
+
+    expect(getChainSpecificMock).toHaveBeenCalledWith(expect.objectContaining({ sendMaxAmount: undefined }))
   })
 })

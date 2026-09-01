@@ -36,7 +36,6 @@ describe('TON signing input amount encoding', () => {
     const transfer = buildNativeTonTransfer({
       keysignPayload: buildPayload('1000000000'),
       bounceable: true,
-      sendMaxAmount: false,
     })
 
     expect(Buffer.from(transfer.amount).toString('hex')).toBe('3b9aca00')
@@ -47,7 +46,6 @@ describe('TON signing input amount encoding', () => {
       buildNativeTonTransfer({
         keysignPayload: buildPayload('-1'),
         bounceable: true,
-        sendMaxAmount: false,
       })
     ).toThrow('TON amount must be a non-negative integer')
   })
@@ -90,10 +88,7 @@ describe('TON send mode', () => {
   // These modes are also part of the signing preimage, so a change here silently breaks
   // keysign against any co-signer still on the previous mode.
   const transfers = {
-    'a native send': () =>
-      buildNativeTonTransfer({ keysignPayload: buildPayload('1000000000'), bounceable: true, sendMaxAmount: false }),
-    'a MAX native send': () =>
-      buildNativeTonTransfer({ keysignPayload: buildPayload('0'), bounceable: true, sendMaxAmount: true }),
+    'a native send': () => buildNativeTonTransfer({ keysignPayload: buildPayload('1000000000'), bounceable: true }),
     'a dApp signTon message': () =>
       buildNativeTonTransferFromMessage({ to: TON_ADDRESS, amount: '1000000000', bounceable: true }),
     'a Jetton send': () =>
@@ -111,13 +106,44 @@ describe('TON send mode', () => {
     expect(buildTransfer().mode & IGNORE_ACTION_PHASE_ERRORS).toBe(0)
   })
 
-  it('pays fees separately on a fixed-amount send', () => {
-    expect(transfers['a native send']().mode).toBe(PAY_FEES_SEPARATELY)
-    expect(transfers['a dApp signTon message']().mode).toBe(PAY_FEES_SEPARATELY)
-    expect(transfers['a Jetton send']().mode).toBe(PAY_FEES_SEPARATELY)
+  it.each(Object.entries(transfers))('pays fees separately on %s', (_, buildTransfer) => {
+    expect(buildTransfer().mode).toBe(PAY_FEES_SEPARATELY)
   })
 
-  it('sweeps the contract balance on a MAX send', () => {
-    expect(transfers['a MAX native send']().mode).toBe(ATTACH_ALL_CONTRACT_BALANCE)
+  // A MAX send is an ordinary `balance - fee` amount, so nothing sweeps the contract
+  // balance at execution time. See the "TON MAX send" block below.
+  it.each(Object.entries(transfers))('never sweeps the contract balance on %s', (_, buildTransfer) => {
+    expect(buildTransfer().mode & ATTACH_ALL_CONTRACT_BALANCE).toBe(0)
+  })
+})
+
+describe('TON MAX send', () => {
+  const { ATTACH_ALL_CONTRACT_BALANCE, PAY_FEES_SEPARATELY } = TW.TheOpenNetwork.Proto.SendMode
+
+  // `ATTACH_ALL_CONTRACT_BALANCE` hands the contract a sweep it resolves when the
+  // transaction executes, so the amount that moves is whatever the balance is then —
+  // not the number the user approved. A MAX send has to be an ordinary amount.
+  const maxSendAmount = '9990000000'
+
+  it('signs the amount it was given rather than a zero-amount sweep', () => {
+    const transfer = buildNativeTonTransfer({
+      keysignPayload: buildPayload(maxSendAmount),
+      bounceable: true,
+    })
+
+    expect(tonAmountToBytes(maxSendAmount).equals(Buffer.from(transfer.amount))).toBe(true)
+    // Asserted as bits rather than an exact mode so this keeps holding as other flags
+    // in the same field come and go.
+    expect(transfer.mode & PAY_FEES_SEPARATELY).toBe(PAY_FEES_SEPARATELY)
+    expect(transfer.mode & ATTACH_ALL_CONTRACT_BALANCE).toBe(0)
+  })
+
+  it('never signs a zero amount for a non-zero send', () => {
+    const transfer = buildNativeTonTransfer({
+      keysignPayload: buildPayload(maxSendAmount),
+      bounceable: true,
+    })
+
+    expect(Buffer.from(transfer.amount).toString('hex')).not.toBe('00')
   })
 })

@@ -14,7 +14,6 @@ type BuildNativeTonTransferFromMessageInput = {
 type BuildNativeTonTransferInput = {
   keysignPayload: KeysignPayload
   bounceable: boolean
-  sendMaxAmount: boolean
 }
 
 /** TON cell limit is 1023 bits; comment uses ~32 bits opcode + text. Max ~123 bytes. */
@@ -85,24 +84,24 @@ export const tonSendMode = TW.TheOpenNetwork.Proto.SendMode.PAY_FEES_SEPARATELY
 
 /**
  * Builds the single WalletCore transfer for an app-initiated native TON send.
- * A MAX send switches to `ATTACH_ALL_CONTRACT_BALANCE` and signs `amount = 0`,
- * letting the contract sweep whatever remains at execution time.
+ *
+ * Always signs `keysignPayload.toAmount` under `tonSendMode`, including for a MAX send.
+ * The alternative — `ATTACH_ALL_CONTRACT_BALANCE` with `amount = 0` — hands the wallet
+ * contract a sweep it resolves at execution time, so the transaction moves whatever the
+ * balance happens to be when it lands rather than the number the user approved. A MAX
+ * send is just `balance - fee` as an ordinary amount, and that fee is the reserve the
+ * send mode then draws on.
  */
 export const buildNativeTonTransfer = ({
   keysignPayload,
   bounceable,
-  sendMaxAmount,
 }: BuildNativeTonTransferInput): TW.TheOpenNetwork.Proto.Transfer => {
-  const mode = sendMaxAmount ? TW.TheOpenNetwork.Proto.SendMode.ATTACH_ALL_CONTRACT_BALANCE : tonSendMode
-
-  const amount = sendMaxAmount ? 0n : keysignPayload.toAmount
-
   return TW.TheOpenNetwork.Proto.Transfer.create({
     dest: keysignPayload.toAddress,
-    amount: tonAmountToBytes(amount),
+    amount: tonAmountToBytes(keysignPayload.toAmount),
     bounceable,
     comment: toSafeComment(keysignPayload.memo || ''),
-    mode,
+    mode: tonSendMode,
   })
 }
 

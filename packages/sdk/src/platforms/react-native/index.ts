@@ -86,6 +86,15 @@ export {
 // "will this memo fit before broadcast rejects it with sdk code 12 (memo too
 // long) after the user has already signed?" Kept in parity with the root SDK
 // entrypoint (sdk#1538) so RN consumers don't hand-roll their own memo-cap table.
+// Cardano transaction-validity policy. Exported so app / CLI / backend build
+// the same TTL the keysign resolver and the broadcast freshness guard judge it
+// by, instead of each hardcoding its own slot offset (vultiagent-app#2538).
+export {
+  cardanoBroadcastTtlSafetyMargin,
+  cardanoSlotOffset,
+  getCardanoSendTtl,
+} from '@vultisig/core-chain/chains/cardano/config'
+
 // Pure-crypto chain-math normalizers + pure address-format validation.
 // Vault-free, network-free and platform-neutral, so RN gets the same canonicals
 // as the root entry (sdk#1772). Without them a mobile consumer has to
@@ -189,6 +198,15 @@ export {
   rippleTokenId,
   toXrplCurrencyCode,
 } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
+// XRP destination/X-address normalization — same RN-safety rationale as the
+// issued-currency canonicals above.
+export type { RippleDestination } from '@vultisig/core-chain/chains/ripple/address'
+export {
+  decodeRippleXAddress,
+  encodeRippleXAddress,
+  isValidRippleXAddress,
+  normalizeRippleDestination,
+} from '@vultisig/core-chain/chains/ripple/address'
 
 // Custom-RPC canonicals — pure helpers/registry state that stay safe on the RN
 // graph and must remain in parity with the root SDK entrypoint.
@@ -406,6 +424,7 @@ export {
   normaliseIbcChainId,
   prepareIbcTransfer,
   prepareSuiTokenTransferFromKeys,
+  resolveSourceChannelByDestChain,
   supportedIbcDestinationsFrom,
 } from '../../tools/prep'
 export type {
@@ -602,8 +621,21 @@ export type {
   BuildGlifStakeResult,
   Defi,
   GlifUnsignedTx,
+  SolanaScanRequest,
+  StakekitBalanceEntry,
+  StakekitBalanceItem,
+  StakekitBalanceQuery,
+  StakekitBalancesResult,
 } from '../../tools/defi'
-export { buildBalancerV3SwapCalldata, defi } from '../../tools/defi'
+export {
+  buildBalancerV3SwapCalldata,
+  buildYieldActionScanRequests,
+  chunkStakekitBalanceQueries,
+  defi,
+  fetchAllStakekitBalances,
+  fetchStakekitBalancesBatch,
+  STAKEKIT_BALANCE_QUERIES_PER_REQUEST,
+} from '../../tools/defi'
 export {
   buildGlifRedeemSticnt,
   buildGlifStakeIcnt,
@@ -1001,6 +1033,7 @@ export * from '../../signable-transaction'
 // with the generic entry so the app can remove its local brand matrix.
 export type { UtxoChainName } from '../../chains/utxo/addressBrand'
 export { assertUtxoAddressBrand, isUtxoAddressBrandValid } from '../../chains/utxo/addressBrand'
+export { getBlockchairBaseUrl } from '@vultisig/core-chain/chains/utxo/client/getBlockchairBaseUrl'
 
 // Dangerous/burn-address guard. Single source of truth for "is this destination
 // a burn/black-hole address that no key controls?" across EVM, Solana, UTXO and
@@ -1011,9 +1044,15 @@ export { assertUtxoAddressBrand, isUtxoAddressBrandValid } from '../../chains/ut
 export {
   assertSafeDestination,
   assertSafeEvmDestination,
+  assertSafeTokenTransferDestination,
+  decodeErc20Approve,
+  decodeErc20Recipient,
+  decodeErc20RecipientFromSig,
+  ERC20_APPROVE_SELECTOR,
   EVM_DANGEROUS_ADDRESSES,
   getChainDangerousReason,
   getEvmDangerousReason,
+  isErc20TransferCalldata,
   isEvmBurnAddress,
   SOLANA_DANGEROUS_ADDRESSES,
   UTXO_DANGEROUS_ADDRESSES,
