@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   mockGetCoinBalance,
@@ -234,5 +234,49 @@ describe('getTonChainSpecific — jetton wallet resolution', () => {
 
     expect(mockGetJettonWalletAddress).not.toHaveBeenCalled()
     expect(res.jettonAddress).toBe('')
+  })
+})
+
+describe('getTonChainSpecific — expireAt honours a dApp deadline', () => {
+  const now = 1_753_579_000
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers({ now: now * 1000 })
+    mockGetKeysignCoin.mockReturnValue(nativeCoin)
+    mockGetTonAccountInfo.mockResolvedValue({ account_state: { seqno: 1 } })
+    mockGetTonWalletState.mockResolvedValue('active')
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  const payload = buildPayload({ toAddress: bounceableAddress, toAmount: '1' })
+
+  it('signs the wallet default of ten minutes when the caller sets no deadline', async () => {
+    const res = await resolve(payload)
+
+    expect(res.expireAt).toBe(BigInt(now + 600))
+  })
+
+  it('tightens the expiry to a dApp deadline that comes sooner', async () => {
+    const res = await getTonChainSpecific({ keysignPayload: payload, walletCore: {} as never, validUntil: now + 60 })
+
+    expect(res.expireAt).toBe(BigInt(now + 60))
+  })
+
+  // The dApp's window can only shrink the wallet's own; a generous deadline must not
+  // keep a signed message replayable for longer than ten minutes.
+  it('keeps the wallet default when the dApp deadline is later', async () => {
+    const res = await getTonChainSpecific({ keysignPayload: payload, walletCore: {} as never, validUntil: now + 3600 })
+
+    expect(res.expireAt).toBe(BigInt(now + 600))
+  })
+
+  it('fails the build for a deadline that has already passed', async () => {
+    await expect(
+      getTonChainSpecific({ keysignPayload: payload, walletCore: {} as never, validUntil: now - 1 })
+    ).rejects.toThrow('has already passed')
   })
 })

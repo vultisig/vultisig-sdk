@@ -50,7 +50,16 @@ export type GetChainSpecificInput<C extends KeysignChainSpecificKey = KeysignCha
                 refBlockHashHex?: string
                 thirdPartyGasLimitEstimation?: bigint
               }
-            : {})
+            : C extends 'tonSpecific'
+              ? {
+                  /**
+                   * Deadline (unix seconds) a dApp attached to the request — a TonConnect
+                   * `sendTransaction` `valid_until`. Caps the wallet's own expiry; a deadline
+                   * already in the past fails the build instead of signing a dead transaction.
+                   */
+                  validUntil?: number
+                }
+              : {})
 
 export type GetChainSpecificResolver<C extends KeysignChainSpecificKey = KeysignChainSpecificKey> = Resolver<
   GetChainSpecificInput<C>,

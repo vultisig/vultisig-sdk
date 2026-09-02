@@ -11,6 +11,33 @@ import { GetChainSpecificResolver } from '../../resolver'
 
 const tonWalletStateUninitialized = 'uninit'
 
+/** How long a wallet message stays valid when the caller sets no tighter deadline. */
+const tonWalletExpirySeconds = 600
+
+type ResolveTonExpireAtInput = {
+  now: number
+  validUntil?: number
+}
+
+/**
+ * The `expireAt` to sign. The wallet's own 10-minute window is the ceiling; a dApp
+ * deadline (`valid_until`) can only tighten it, never extend it. A deadline that has
+ * already passed by build time fails here rather than producing a transaction the
+ * network will reject.
+ */
+const resolveTonExpireAt = ({ now, validUntil }: ResolveTonExpireAtInput): number => {
+  const walletDeadline = now + tonWalletExpirySeconds
+  if (validUntil === undefined) {
+    return walletDeadline
+  }
+
+  if (!Number.isFinite(validUntil) || validUntil <= now) {
+    throw new Error(`TON request deadline (valid_until ) has already passed`)
+  }
+
+  return Math.min(walletDeadline, Math.floor(validUntil))
+}
+
 /**
  * Resolves the TON-specific keysign fields: the sender's seqno, an expiry, whether the
  * transfer bounces on rejection, and — for Jettons — the sender's Jetton wallet and
@@ -21,6 +48,7 @@ const tonWalletStateUninitialized = 'uninit'
 export const getTonChainSpecific: GetChainSpecificResolver<'tonSpecific'> = async ({
   keysignPayload,
   sendMaxAmount = false,
+  validUntil,
 }) => {
   const coin = getKeysignCoin(keysignPayload)
   const { address } = coin
@@ -68,7 +96,7 @@ export const getTonChainSpecific: GetChainSpecificResolver<'tonSpecific'> = asyn
 
   const result = create(TonSpecificSchema, {
     sequenceNumber,
-    expireAt: BigInt(Math.floor(Date.now() / 1000) + 600),
+    expireAt: BigInt(resolveTonExpireAt({ now: Math.floor(Date.now() / 1000), validUntil })),
     bounceable: await getIsBounceable(),
     sendMaxAmount,
     jettonAddress: '',
