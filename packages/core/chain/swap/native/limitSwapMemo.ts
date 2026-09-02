@@ -284,6 +284,7 @@ const isBase58CheckPayload = (address: string, expectedVersion: readonly number[
 
 type LimitSwapDestinationValidator = (address: string) => boolean
 
+// Bound Base58 inputs with shape checks before invoking quadratic checksum codecs.
 // Keep this exhaustive even though unsupported chains deliberately map to
 // `undefined`: adding a Chain must force an explicit decision about whether
 // THORChain limit swaps can safely validate destinations for it.
@@ -307,12 +308,14 @@ const limitSwapDestinationValidators: Record<Chain, LimitSwapDestinationValidato
     new RegExp(`^(bc1[ac-hj-np-z02-9]{11,71}|[13][${base58AddressChars}]{25,34})$`, 'i').test(address),
   [Chain.BitcoinCash]: address =>
     new RegExp(`^([qp][0-9a-z]{41}|[13][${base58AddressChars}]{25,34})$`, 'i').test(address),
-  [Chain.Dash]: address => isBase58CheckPayload(address, [0x4c], 20),
+  [Chain.Dash]: address =>
+    new RegExp(`^X[${base58AddressChars}]{33}$`).test(address) && isBase58CheckPayload(address, [0x4c], 20),
   [Chain.Dogecoin]: address => new RegExp(`^D[5-9A-HJ-NP-U][${base58AddressChars}]{32}$`).test(address),
   [Chain.Litecoin]: address =>
     new RegExp(`^(ltc1[ac-hj-np-z02-9]{11,71}|[LM3][${base58AddressChars}]{25,34})$`, 'i').test(address),
   [Chain.Zcash]: address =>
-    isBase58CheckPayload(address, [0x1c, 0xb8], 20) || isBase58CheckPayload(address, [0x1c, 0xbd], 20),
+    new RegExp(`^t[13][${base58AddressChars}]{33}$`).test(address) &&
+    (isBase58CheckPayload(address, [0x1c, 0xb8], 20) || isBase58CheckPayload(address, [0x1c, 0xbd], 20)),
 
   [Chain.Cosmos]: address => isBech32Address(address, 'cosmos'),
   [Chain.Osmosis]: undefined,
@@ -329,8 +332,10 @@ const limitSwapDestinationValidators: Record<Chain, LimitSwapDestinationValidato
   [Chain.Polkadot]: undefined,
   [Chain.Bittensor]: undefined,
   [Chain.Ton]: undefined,
-  [Chain.Ripple]: isValidClassicAddress,
-  [Chain.Tron]: address => isBase58CheckPayload(address, [0x41], 20),
+  [Chain.Ripple]: address =>
+    new RegExp(`^r[${base58AddressChars}]{24,34}$`).test(address) && isValidClassicAddress(address),
+  [Chain.Tron]: address =>
+    new RegExp(`^T[${base58AddressChars}]{33}$`).test(address) && isBase58CheckPayload(address, [0x41], 20),
   [Chain.Cardano]: undefined,
   [Chain.QBTC]: undefined,
 }

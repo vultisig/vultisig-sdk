@@ -7,6 +7,7 @@ import {
   buildLimitSwapMemo,
   getLimitSwapLimitAmount,
   getLimitSwapSourceChainKind,
+  parseLimitSwapMemo,
   validateLimitSwapInputs,
 } from './limitSwapMemo'
 
@@ -228,6 +229,17 @@ describe('validateLimitSwapInputs', () => {
       })
     ).not.toThrow()
   })
+
+  it.each(base58DestinationVectors)(
+    'rejects an oversized $chain destination before expensive checksum decoding',
+    ({ targetAsset, valid }) => {
+      const oversized = valid + '1'.repeat(32_000)
+      expect(() => validateLimitSwapInputs({ ...validInput, target_asset: targetAsset, dest_addr: oversized })).toThrow(
+        /dest_addr is not a valid/
+      )
+      expect(() => parseLimitSwapMemo(`=<:${targetAsset}:${oversized}:100/14400/0`)).toThrow(/dest_addr is not a valid/)
+    }
+  )
 
   it.each(base58DestinationVectors)(
     'rejects a checksum-corrupted but shape-valid $chain destination',
