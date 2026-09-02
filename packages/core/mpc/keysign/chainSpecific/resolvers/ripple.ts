@@ -32,6 +32,7 @@ export const getRippleLastLedgerSequence = (ledgerCurrentIndex: number | undefin
 export const getRippleChainSpecific: GetChainSpecificResolver<'rippleSpecific'> = async ({
   keysignPayload,
   destinationTag,
+  transactionType,
 }) => {
   const coin = getKeysignCoin(keysignPayload)
   const { address } = coin
@@ -46,6 +47,12 @@ export const getRippleChainSpecific: GetChainSpecificResolver<'rippleSpecific'> 
     destinationTag,
     memo: keysignPayload.memo,
   })
+  // Preserve existing trust-line callers, but an ordinary send explicitly
+  // selects Payment: sending tokens back to their issuer is also a Payment.
+  const isTrustSet =
+    transactionType === undefined
+      ? originatesRippleTrustSet(keysignPayload)
+      : transactionType === TransactionType.RIPPLE_TRUST_SET
 
   const [senderAccount, networkInfo, destinationAccountResult] = await Promise.all([
     getRippleAccountInfo(address),
@@ -75,7 +82,7 @@ export const getRippleChainSpecific: GetChainSpecificResolver<'rippleSpecific'> 
   // XRP Ledger rejects a Payment to an account with lsfRequireDestTag when no
   // tag is present. Fail closed on lookup errors other than an unfunded
   // destination: without an account object there is no RequireDestTag flag.
-  if (toAddress && destinationAccountResult !== undefined && !coin.id && effectiveDestinationTag === undefined) {
+  if (toAddress && destinationAccountResult !== undefined && !isTrustSet && effectiveDestinationTag === undefined) {
     if ('error' in destinationAccountResult) {
       if (!destinationUnfunded) {
         // This lookup can fail transiently, so keep it retryable. Only
@@ -91,6 +98,12 @@ export const getRippleChainSpecific: GetChainSpecificResolver<'rippleSpecific'> 
   }
 
   if (destinationUnfunded) {
+    if (coin.id) {
+      throw new Error(
+        `Cannot send an XRP issued currency to ${toAddress}: the destination account is not activated. ` +
+          'Activate it with the XRP base reserve before sending tokens.'
+      )
+    }
     const toAmount = BigInt(shouldBePresent(keysignPayload.toAmount))
     if (toAmount < BigInt(reserve_base)) {
       throw new Error(
@@ -113,8 +126,6 @@ export const getRippleChainSpecific: GetChainSpecificResolver<'rippleSpecific'> 
   // Only genuine originations are declared. Stamping a token send would make
   // every signer agree to build a TrustSet from it, which is worse than the
   // divergence: the ceremony completes over an operation nobody asked for.
-  const isTrustSet = originatesRippleTrustSet(keysignPayload)
-
   return create(RippleSpecificSchema, {
     sequence: BigInt(account_data.Sequence),
     lastLedgerSequence: getRippleLastLedgerSequence(ledgerCurrentIndex),

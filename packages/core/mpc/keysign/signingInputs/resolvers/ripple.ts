@@ -1,6 +1,7 @@
 import { Buffer } from 'buffer'
 import {
   formatIssuedCurrencyValue,
+  getSignableIssuedCurrencyAmount,
   parseIssuedCurrencyValue,
   parseRippleTokenId,
   toXrplCurrencyCode,
@@ -11,6 +12,7 @@ import { assertField } from '@vultisig/lib-utils/record/assertField'
 import { TW } from '@trustwallet/wallet-core'
 import Long from 'long'
 
+import { TransactionType } from '../../../types/vultisig/keysign/v1/blockchain_specific_pb'
 import { getBlockchainSpecificValue } from '../../chainSpecific/KeysignChainSpecific'
 import { getKeysignTwPublicKey } from '../../tw/getKeysignTwPublicKey'
 import { isRippleTrustSet } from '../../utils/isRippleTrustSet'
@@ -57,7 +59,12 @@ const parseXrplAmount = (value: unknown): ParsedXrplAmount | undefined => {
   if ('error' in normalizedCurrency) {
     return undefined
   }
-  return { kind: 'issued', currency: normalizedCurrency.data, issuer, units: parsed.data }
+  return {
+    kind: 'issued',
+    currency: normalizedCurrency.data,
+    issuer,
+    units: parsed.data,
+  }
 }
 
 // True only if `deliverMin` is the same asset as `amount` (native XRP, or the
@@ -206,30 +213,55 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
     return { rawJson }
   }
 
+  const getIssuedCurrencyAmount = (): TW.Ripple.Proto.CurrencyAmount | undefined => {
+    if (coin.isNativeToken) {
+      return undefined
+    }
+
+    if (!coin.contractAddress) {
+      throw new Error('XRP issued-currency operation requires a coin carrying a token id')
+    }
+
+    const { currency, issuer } = parseRippleTokenId(coin.contractAddress)
+
+    const amount = BigInt(keysignPayload.toAmount)
+    if (!isRippleTrustSet(keysignPayload) && amount === 0n) {
+      throw new Error('XRP issued-currency Payment amount must be positive')
+    }
+    return TW.Ripple.Proto.CurrencyAmount.create(
+      getSignableIssuedCurrencyAmount({
+        currency,
+        issuer,
+        amount,
+        decimals: coin.decimals,
+      })
+    )
+  }
+
+  const rawJson = getRawJson()
+  const issuedCurrencyAmount = rawJson ? undefined : getIssuedCurrencyAmount()
+
   // A TrustSet opens or modifies a trust line, and the keysign amount is its
-  // LIMIT rather than a transfer. `RippleSpecific.transaction_type` says so
-  // explicitly; when it is absent the coin's shape decides, which is how every
-  // signer shipped before that field behaves — honouring it keeps a TrustSet
-  // byte-identical across a mixed-version committee. Native XRP falls through
-  // to the Payment path below.
+  // LIMIT rather than a transfer. The coin shape cannot distinguish it from an
+  // issued-currency Payment, so the operation discriminator is authoritative.
+  // A signer that predates the discriminator will infer TrustSet for the same
+  // token Payment and derive different signing bytes: MPC then fails closed
+  // instead of completing a different operation than the initiator reviewed.
   const getTrustSet = (): Pick<TW.Ripple.Proto.ISigningInput, 'opTrustSet'> | undefined => {
     if (!isRippleTrustSet(keysignPayload)) {
       return undefined
     }
 
-    if (coin.isNativeToken || !coin.contractAddress) {
+    if (!issuedCurrencyAmount) {
       throw new Error('XRP TrustSet requires an issued-currency coin carrying a token id')
     }
-
-    const { currency, issuer } = parseRippleTokenId(coin.contractAddress)
+    if (keysignPayload.toAddress !== issuedCurrencyAmount.issuer) {
+      throw new Error('XRP TrustSet destination does not match the issued-currency issuer')
+    }
 
     return {
       opTrustSet: TW.Ripple.Proto.OperationTrustSet.create({
-        limitAmount: TW.Ripple.Proto.CurrencyAmount.create({
-          currency: toXrplCurrencyCode(currency),
-          issuer,
-          value: formatIssuedCurrencyValue(BigInt(keysignPayload.toAmount), coin.decimals),
-        }),
+        limitAmount: issuedCurrencyAmount,
       }),
     }
   }
@@ -254,11 +286,19 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
     if (distinctMemo) {
       const memoDataHex = Buffer.from(distinctMemo, 'utf8').toString('hex').toUpperCase()
 
+      const paymentAmount = issuedCurrencyAmount
+        ? {
+            currency: issuedCurrencyAmount.currency,
+            issuer: issuedCurrencyAmount.issuer,
+            value: issuedCurrencyAmount.value,
+          }
+        : keysignPayload.toAmount
+
       const txJson = {
         TransactionType: 'Payment',
         Account: account,
         Destination: keysignPayload.toAddress,
-        Amount: keysignPayload.toAmount,
+        Amount: paymentAmount,
         Fee: gas.toString(),
         Sequence: Number(sequence),
         LastLedgerSequence: Number(lastLedgerSequence),
@@ -280,10 +320,19 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
     return {
       opPayment: TW.Ripple.Proto.OperationPayment.create({
         destination: keysignPayload.toAddress,
-        amount: Long.fromString(keysignPayload.toAmount),
+        ...(issuedCurrencyAmount
+          ? { currencyAmount: issuedCurrencyAmount }
+          : { amount: Long.fromString(keysignPayload.toAmount) }),
         ...(destinationTag === undefined ? {} : { destinationTag: Long.fromNumber(destinationTag) as any }),
       }),
     }
+  }
+
+  if (
+    keysignPayload.signData.case !== 'signRipple' &&
+    ![TransactionType.UNSPECIFIED, TransactionType.RIPPLE_TRUST_SET].includes(rippleSpecific.transactionType)
+  ) {
+    throw new Error(`Unsupported XRP transaction type: ${rippleSpecific.transactionType}`)
   }
 
   const input = TW.Ripple.Proto.SigningInput.create({
@@ -294,7 +343,7 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
     sequence: Number(sequence),
     lastLedgerSequence: Number(lastLedgerSequence),
     publicKey: getKeysignTwPublicKey(keysignPayload),
-    ...(getRawJson() ?? getTrustSet() ?? getPayment()),
+    ...(rawJson ?? getTrustSet() ?? getPayment()),
   })
 
   return [input]

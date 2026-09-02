@@ -13,6 +13,10 @@ export type TxReceiptInfo = {
   feeAmount: bigint
   feeDecimals: number
   feeTicker: string
+  /** XRPL delivered value: native XRP drops, or issued-token decimal units. Never inferred from requested Amount. */
+  deliveredAmount?: string
+  deliveredCurrency?: string
+  deliveredIssuer?: string
 }
 
 export type TxStatusResult = {

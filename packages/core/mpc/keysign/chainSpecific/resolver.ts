@@ -50,7 +50,12 @@ export type GetChainSpecificInput<C extends KeysignChainSpecificKey = KeysignCha
                 refBlockHashHex?: string
                 thirdPartyGasLimitEstimation?: bigint
               }
-            : {})
+            : C extends 'rippleSpecific'
+              ? {
+                  /** Explicit send intent overrides the legacy issuer-address TrustSet inference. */
+                  transactionType?: TransactionType.UNSPECIFIED | TransactionType.RIPPLE_TRUST_SET
+                }
+              : {})
 
 export type GetChainSpecificResolver<C extends KeysignChainSpecificKey = KeysignChainSpecificKey> = Resolver<
   GetChainSpecificInput<C>,

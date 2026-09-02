@@ -3,7 +3,40 @@ import { getRippleClient } from '@vultisig/core-chain/chains/ripple/client'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { attempt } from '@vultisig/lib-utils/attempt'
 
-import { TxStatusResolver } from '../resolver'
+import { TxReceiptInfo, TxStatusResolver } from '../resolver'
+
+const getDeliveredReceipt = (deliveredAmount: unknown): Partial<TxReceiptInfo> => {
+  if (typeof deliveredAmount === 'string') {
+    return /^\d+$/.test(deliveredAmount)
+      ? {
+          deliveredAmount,
+          deliveredCurrency: 'XRP',
+        }
+      : {}
+  }
+
+  if (!deliveredAmount || typeof deliveredAmount !== 'object') {
+    return {}
+  }
+
+  const { value, currency, issuer } = deliveredAmount as Record<string, unknown>
+  if (
+    typeof value !== 'string' ||
+    !/^\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(value) ||
+    typeof currency !== 'string' ||
+    !currency ||
+    typeof issuer !== 'string' ||
+    !issuer
+  ) {
+    return {}
+  }
+
+  return {
+    deliveredAmount: value,
+    deliveredCurrency: currency,
+    deliveredIssuer: issuer,
+  }
+}
 
 export const getRippleTxStatus: TxStatusResolver<OtherChain.Ripple> = async ({ hash }) => {
   const client = await getRippleClient()
@@ -27,7 +60,7 @@ export const getRippleTxStatus: TxStatusResolver<OtherChain.Ripple> = async ({ h
 
   const { validated, meta, tx_json } = response.result as {
     validated?: boolean
-    meta?: { TransactionResult?: string }
+    meta?: { TransactionResult?: string; delivered_amount?: unknown }
     tx_json?: { Fee?: string }
   }
 
@@ -41,12 +74,14 @@ export const getRippleTxStatus: TxStatusResolver<OtherChain.Ripple> = async ({ h
     const status = success ? 'success' : 'error'
     const feeStr = tx_json?.Fee
     const feeCoin = chainFeeCoin[Chain.Ripple]
+    const deliveredReceipt = success ? getDeliveredReceipt(meta?.delivered_amount) : {}
     const receipt =
       feeStr != null && feeStr !== ''
         ? {
             feeAmount: BigInt(feeStr),
             feeDecimals: feeCoin.decimals,
             feeTicker: feeCoin.ticker,
+            ...deliveredReceipt,
           }
         : undefined
 

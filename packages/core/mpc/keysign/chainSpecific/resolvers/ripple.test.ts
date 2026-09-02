@@ -73,7 +73,10 @@ const payload = (toAddress: string, toAmount: string) =>
 
 describe('getRippleChainSpecific — reserve belongs on Amount, not the burned Fee', () => {
   it('funded destination: gas is the network fee only (no reserve added)', async () => {
-    const res = await getRippleChainSpecific({ keysignPayload: payload(DEST_FUNDED, '1000'), walletCore: {} as never })
+    const res = await getRippleChainSpecific({
+      keysignPayload: payload(DEST_FUNDED, '1000'),
+      walletCore: {} as never,
+    })
     expect(res.gas).toBe(EXPECTED_NETWORK_FEE)
     expect(res.lastLedgerSequence).toBe(160n)
   })
@@ -83,7 +86,10 @@ describe('getRippleChainSpecific — reserve belongs on Amount, not the burned F
     vi.mocked(getRippleAccountInfo).mockResolvedValueOnce(accountInfoWithoutLedgerCurrentIndex())
 
     await expect(
-      getRippleChainSpecific({ keysignPayload: payload(DEST_FUNDED, '1000'), walletCore: {} as never })
+      getRippleChainSpecific({
+        keysignPayload: payload(DEST_FUNDED, '1000'),
+        walletCore: {} as never,
+      })
     ).rejects.toThrow(/ledger_current_index/i)
   })
 
@@ -99,7 +105,10 @@ describe('getRippleChainSpecific — reserve belongs on Amount, not the burned F
 
   it('unfunded destination with amount < reserve: rejects instead of building a doomed/wasteful tx', async () => {
     await expect(
-      getRippleChainSpecific({ keysignPayload: payload(DEST_UNFUNDED, '500000'), walletCore: {} as never })
+      getRippleChainSpecific({
+        keysignPayload: payload(DEST_UNFUNDED, '500000'),
+        walletCore: {} as never,
+      })
     ).rejects.toThrow(/not yet activated|base reserve/i)
   })
 
@@ -120,7 +129,10 @@ describe('getRippleChainSpecific — reserve belongs on Amount, not the burned F
     )
 
     await expect(
-      getRippleChainSpecific({ keysignPayload: payload(DEST_FUNDED, '1000000'), walletCore: {} as never })
+      getRippleChainSpecific({
+        keysignPayload: payload(DEST_FUNDED, '1000000'),
+        walletCore: {} as never,
+      })
     ).rejects.toMatchObject({ type: 'ripple-destination-tag-required' })
   })
 
@@ -132,7 +144,10 @@ describe('getRippleChainSpecific — reserve belongs on Amount, not the burned F
     const keysignPayload = payload(DEST_FUNDED, '1000000')
     keysignPayload.memo = '0'
 
-    const result = await getRippleChainSpecific({ keysignPayload, walletCore: {} as never })
+    const result = await getRippleChainSpecific({
+      keysignPayload,
+      walletCore: {} as never,
+    })
     expect(result.destinationTag).toBe(0)
   })
 
@@ -222,7 +237,12 @@ describe('getRippleChainSpecific — states the XRPL operation on the wire', () 
     dAppPayload.toAddress = ''
     dAppPayload.signData = {
       case: 'signRipple',
-      value: { rawJson: JSON.stringify({ TransactionType: 'OfferCreate', Account: SENDER }) },
+      value: {
+        rawJson: JSON.stringify({
+          TransactionType: 'OfferCreate',
+          Account: SENDER,
+        }),
+      },
     } as never
 
     const res = await getRippleChainSpecific({
@@ -277,6 +297,54 @@ describe('getRippleChainSpecific — only genuine trust lines are declared', () 
     expect(res.transactionType).toBe(TransactionType.UNSPECIFIED)
   })
 
+  it('checks DestinationTag requirements for an issued-currency Payment', async () => {
+    const { getRippleAccountInfo } = await import('@vultisig/core-chain/chains/ripple/account/info')
+    vi.mocked(getRippleAccountInfo).mockImplementation(async address =>
+      accountInfo(address === RECIPIENT ? REQUIRE_DESTINATION_TAG : 0)
+    )
+
+    await expect(
+      getRippleChainSpecific({
+        keysignPayload: issuedCurrencyPayloadTo(RECIPIENT),
+        walletCore: {} as never,
+      })
+    ).rejects.toMatchObject({ type: 'ripple-destination-tag-required' })
+  })
+
+  it('keeps an explicitly requested token Payment to its issuer a Payment', async () => {
+    const result = await getRippleChainSpecific({
+      keysignPayload: issuedCurrencyPayloadTo(ISSUER),
+      walletCore: {} as never,
+      transactionType: TransactionType.UNSPECIFIED,
+    })
+
+    expect(result.transactionType).toBe(TransactionType.UNSPECIFIED)
+  })
+
+  it('checks the issuer destination tag when explicitly sending a redemption Payment', async () => {
+    const { getRippleAccountInfo } = await import('@vultisig/core-chain/chains/ripple/account/info')
+    vi.mocked(getRippleAccountInfo).mockImplementation(async address =>
+      accountInfo(address === ISSUER ? REQUIRE_DESTINATION_TAG : 0)
+    )
+
+    await expect(
+      getRippleChainSpecific({
+        keysignPayload: issuedCurrencyPayloadTo(ISSUER),
+        walletCore: {} as never,
+        transactionType: TransactionType.UNSPECIFIED,
+      })
+    ).rejects.toMatchObject({ type: 'ripple-destination-tag-required' })
+  })
+
+  it('rejects an issued-currency Payment to an unactivated destination', async () => {
+    await expect(
+      getRippleChainSpecific({
+        keysignPayload: issuedCurrencyPayloadTo(DEST_UNFUNDED),
+        walletCore: {} as never,
+      })
+    ).rejects.toThrow(/issued currency.*not activated/i)
+  })
+
   it('declares a trust line, which is addressed to the issuer', async () => {
     const res = await getRippleChainSpecific({
       keysignPayload: issuedCurrencyPayloadTo(ISSUER),
@@ -300,7 +368,10 @@ describe('getRippleChainSpecific — only genuine trust lines are declared', () 
       toAmount: '5000000000000000',
     })
 
-    const res = await getRippleChainSpecific({ keysignPayload: payload, walletCore: {} as never })
+    const res = await getRippleChainSpecific({
+      keysignPayload: payload,
+      walletCore: {} as never,
+    })
 
     expect(res.transactionType).toBe(TransactionType.UNSPECIFIED)
   })
