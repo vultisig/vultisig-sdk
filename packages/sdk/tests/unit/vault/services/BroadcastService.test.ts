@@ -430,6 +430,37 @@ describe('BroadcastService', () => {
     expect(mockCoreBroadcastTx).toHaveBeenCalledOnce()
   })
 
+  it('does not broadcast the swap input when the approval transaction expires', async () => {
+    mockGetEncodedSigningInputs.mockResolvedValue(['approval-input', 'swap-input'])
+    mockCompileTx.mockImplementation(({ txInputData }) => txInputData)
+    mockDecodeSigningOutput.mockImplementation((_chain, tx) => tx)
+    mockCoreBroadcastTx.mockResolvedValue(broadcastAccepted())
+    mockGetTxHash.mockImplementation(async ({ tx }) => (tx.includes('approval-input') ? '0xapproval' : '0xswap'))
+    mockGetTxStatus.mockResolvedValue({ status: 'expired', isKnown: true })
+
+    const approvalService = new BroadcastService(extractMessageHashes, wasmProvider, {
+      approvalConfirmationIntervalMs: 1,
+      approvalConfirmationTimeoutMs: 100,
+    })
+
+    await expect(
+      approvalService.broadcastTx({
+        chain: Chain.Ethereum,
+        keysignPayload: { erc20ApprovePayload: {} } as KeysignPayload,
+        signature,
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('Approval tx expired'),
+      originalError: expect.objectContaining({
+        broadcastedTxHashes: ['0xapproval'],
+        failedInputIndex: 0,
+      }),
+    })
+
+    expect(mockCoreBroadcastTx).toHaveBeenCalledOnce()
+  })
+
   it('does not broadcast the swap input when approval confirmation times out', async () => {
     mockGetEncodedSigningInputs.mockResolvedValue(['approval-input', 'swap-input'])
     mockCompileTx.mockImplementation(({ txInputData }) => txInputData)
