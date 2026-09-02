@@ -635,7 +635,7 @@ describe('AgentExecutor EIP-1559 fee refresh', () => {
     expect(payload.blockchainSpecific.value.maxFeePerGasWei).toBe('2000000000')
   })
 
-  it('leaves the legacy BSC priority field untouched', async () => {
+  it('leaves legacy BSC fee fields byte-untouched and skips all fee RPCs', async () => {
     const payload = createEvmPayload()
     payload.blockchainSpecific.value.maxFeePerGasWei = '0'
     payload.blockchainSpecific.value.priorityFee = '0'
@@ -644,7 +644,10 @@ describe('AgentExecutor EIP-1559 fee refresh', () => {
 
     await (executor as unknown as EvmGasAccess).patchEvmGas(Chain.BSC, payload)
 
+    // Legacy maxFeePerGasWei is the signing mapper's gasPrice — a nonzero base
+    // fee must never rewrite it through the EIP-1559 headroom formula.
     expect(payload.blockchainSpecific.value.priorityFee).toBe('0')
-    expect(fetchMock).toHaveBeenCalledOnce()
+    expect(payload.blockchainSpecific.value.maxFeePerGasWei).toBe('0')
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })

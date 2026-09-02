@@ -19,6 +19,10 @@ const hasCustomInspect = (value: object): boolean => {
     while (current && !prototypes.has(current)) {
       prototypes.add(current)
       if (Object.getOwnPropertyDescriptor(current, CUSTOM_INSPECT)) return true
+      // A toJSON hook (own or inherited, data or accessor) runs on
+      // JSON.stringify of the retained error and can resurface a signed
+      // payload the enumerable-field walk never saw. Treat it as unsafe.
+      if (Object.getOwnPropertyDescriptor(current, 'toJSON')) return true
       current = Object.getPrototypeOf(current)
     }
     return false

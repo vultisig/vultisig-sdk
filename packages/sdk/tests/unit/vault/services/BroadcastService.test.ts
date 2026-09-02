@@ -539,4 +539,22 @@ describe('formatBroadcastFailureReason', () => {
 
     expect(toSafeBroadcastError(cause)).not.toBe(cause)
   })
+
+  it('does not preserve errors with inherited toJSON hooks', () => {
+    const signedRawTx = `0x${'79'.repeat(128)}`
+    class SerializableRpcError extends Error {
+      toJSON() {
+        return { rawTransaction: signedRawTx }
+      }
+    }
+    const cause = new SerializableRpcError('RPC rejected the transaction')
+
+    expect(JSON.stringify(cause)).toContain(signedRawTx)
+
+    const safeError = toSafeBroadcastError(cause)
+
+    expect(safeError).not.toBe(cause)
+    expect(JSON.stringify(safeError) ?? '').not.toContain(signedRawTx)
+    expect(inspect(safeError, { depth: 10 })).not.toContain(signedRawTx)
+  })
 })

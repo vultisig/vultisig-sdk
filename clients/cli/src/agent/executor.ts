@@ -1989,31 +1989,34 @@ export class AgentExecutor {
     const bs = payload.blockchainSpecific
     if (!bs || bs.case !== 'ethereumSpecific') return
 
+    // Use the same fee-format table as the WalletCore signing mapper so a
+    // future legacy-chain addition cannot silently receive EIP-1559 fields.
+    // Legacy (type-0) chains are left byte-untouched: their maxFeePerGasWei is
+    // consumed as gasPrice by the signing mapper, and the EIP-1559 headroom
+    // formula below must never rewrite it.
+    const isEip1559 = evmChainTxFeeFormat[chain] === 'enveloped'
+    if (!isEip1559) return
+
     const rpcUrl = getEvmRpcUrl(chain)
     const currentPriorityFee = BigInt(bs.value.priorityFee || '0')
     const currentMaxFee = BigInt(bs.value.maxFeePerGasWei || '0')
-    const isEip1559 = evmChainTxFeeFormat[chain] === 'enveloped'
     const baseFee = await this.fetchEvmBaseFee(chain, rpcUrl)
 
-    // Use the same fee-format table as the WalletCore signing mapper so a
-    // future legacy-chain addition cannot silently receive EIP-1559 fields.
     let priorityFee = currentPriorityFee
 
-    if (isEip1559) {
-      if (currentPriorityFee > 0n) {
-        priorityFee = clampEvmPriorityFee(chain, currentPriorityFee)
-        if (priorityFee < currentPriorityFee) {
-          process.stderr.write(
-            `[gas] Warning: ${chain} maxPriorityFeePerGas ${currentPriorityFee} exceeded the safety ceiling; clamped to ${priorityFee}\n`
-          )
-        }
-      } else {
-        const rpcPriorityFee = baseFee === null ? 0n : await this.fetchEvmPriorityFee(rpcUrl)
-
-        const baseFeeFallback = baseFee === null ? 0n : baseFee / 10n
-        const fallbackPriorityFee = baseFeeFallback < 2_000_000_000n ? baseFeeFallback : 2_000_000_000n
-        priorityFee = clampEvmPriorityFee(chain, rpcPriorityFee > 0n ? rpcPriorityFee : fallbackPriorityFee)
+    if (currentPriorityFee > 0n) {
+      priorityFee = clampEvmPriorityFee(chain, currentPriorityFee)
+      if (priorityFee < currentPriorityFee) {
+        process.stderr.write(
+          `[gas] Warning: ${chain} maxPriorityFeePerGas ${currentPriorityFee} exceeded the safety ceiling; clamped to ${priorityFee}\n`
+        )
       }
+    } else {
+      const rpcPriorityFee = baseFee === null ? 0n : await this.fetchEvmPriorityFee(rpcUrl)
+
+      const baseFeeFallback = baseFee === null ? 0n : baseFee / 10n
+      const fallbackPriorityFee = baseFeeFallback < 2_000_000_000n ? baseFeeFallback : 2_000_000_000n
+      priorityFee = clampEvmPriorityFee(chain, rpcPriorityFee > 0n ? rpcPriorityFee : fallbackPriorityFee)
     }
 
     // When the base fee is known, keep 2.5x headroom for the MPC signing
