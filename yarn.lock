@@ -7049,6 +7049,7 @@ __metadata:
     "@cosmjs/stargate": "npm:^0.39.0"
     "@lifi/sdk": "npm:^4.1.0"
     "@mysten/sui": "npm:^2.22.1"
+    "@noble/curves": "npm:^2.2.0"
     "@noble/hashes": "npm:^2.2.0"
     "@polkadot/api": "npm:^16.5.6"
     "@polkadot/util": "npm:^14.0.3"
@@ -7408,7 +7409,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@xmldom/xmldom@npm:^0.8.8":
+"@xmldom/xmldom@npm:0.8.15":
   version: 0.8.15
   resolution: "@xmldom/xmldom@npm:0.8.15"
   checksum: 10c0/59d09b85824b684fba5a0a224d5b43abea1a0d745e8d8b8136a7013e996eb6da122fdbb3deb32ed1621923a10e1937b1f7917cea43481d9d5b976e8c1ff836c1
@@ -13479,7 +13480,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"js-yaml@npm:^3.15.1":
+"js-yaml@npm:^3.15.2":
   version: 3.15.2
   resolution: "js-yaml@npm:3.15.2"
   dependencies:
@@ -13491,7 +13492,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"js-yaml@npm:^4.3.1":
+"js-yaml@npm:^4.3.2":
   version: 4.3.2
   resolution: "js-yaml@npm:4.3.2"
   dependencies:

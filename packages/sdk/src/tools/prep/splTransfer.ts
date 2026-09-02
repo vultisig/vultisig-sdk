@@ -6,6 +6,7 @@ import {
 } from '@solana/spl-token'
 import { type AccountMeta, PublicKey } from '@solana/web3.js'
 import { assertSafeDestination } from '@vultisig/core-chain/security/dangerousAddresses'
+import { isValidSolanaRecipient } from '@vultisig/core-chain/utils/isValidSolanaRecipient'
 import { Buffer } from 'buffer'
 
 /**
@@ -114,6 +115,7 @@ const isValidSolanaPubkey = (addr: string): boolean => {
  *
  * Fund-safety guards (ported from mcp-ts `build_spl_transfer_tx`):
  *  - `from`/`to`/`mint` must each be valid 32-byte base58 pubkeys.
+ *  - `to` must be an on-curve wallet key, not an ATA or another PDA.
  *  - `to` is rejected if it is a known Solana burn/program destination
  *    (System Program, SPL Token Program, Wrapped SOL mint, Incinerator) — the
  *    same `assertSafeDestination` guard `prepareSendTxFromKeys` applies.
@@ -155,6 +157,12 @@ export const buildSplTransfer = (params: BuildSplTransferParams): SplTransferRes
   // since #1698; this SPL path is otherwise identical in risk profile and had
   // silently fallen out of parity with it.
   assertSafeDestination('Solana', to)
+  if (!isValidSolanaRecipient(to)) {
+    throw new Error(
+      `buildSplTransfer: invalid Solana \`to\` recipient ${to}. ` +
+        'Send to an on-curve wallet address, not a token account or program-derived address.'
+    )
+  }
   // Fund-safety: a mint IS a valid 32-byte base58 pubkey, so it passes the
   // pubkey check above and isn't on any burn-list. Sending to the mint credits
   // an ATA owned by the mint authority, not the user → funds lost. Reject it.
