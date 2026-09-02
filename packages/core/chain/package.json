@@ -1005,6 +1005,11 @@
       "import": "./dist/chains/ton/config.js",
       "default": "./dist/chains/ton/config.js"
     },
+    "./chains/ton/failure": {
+      "types": "./dist/chains/ton/failure.d.ts",
+      "import": "./dist/chains/ton/failure.js",
+      "default": "./dist/chains/ton/failure.js"
+    },
     "./chains/ton/messageBody/decode": {
       "types": "./dist/chains/ton/messageBody/decode.d.ts",
       "import": "./dist/chains/ton/messageBody/decode.js",

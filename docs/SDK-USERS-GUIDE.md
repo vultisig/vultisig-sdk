@@ -1357,6 +1357,12 @@ const checkStatus = async () => {
   - `feeAmount: bigint` - Fee paid in base units
   - `feeDecimals: number` - Decimal places for the fee token
   - `feeTicker: string` - Fee token symbol (e.g., "ETH", "BTC")
+- `failure?: TxFailureInfo` - Why an `error` status happened, when the chain exposes a reason:
+  - `reason: string` - Stable, chain-specific identifier a UI can translate (TON: `seqno-mismatch`, `expired`, `insufficient-funds`, … — see `TonTxFailureReason`)
+  - `message: string` - Plain-language explanation with the remedy, e.g. an expired TON transaction says to check the device clock
+  - `exitCode?: number` - Raw contract/VM code when there is one (TON: 33/133 seqno, 36/136 expired, …)
+
+On TON the same explanations cover a broadcast the wallet contract refuses: the failed broadcast's `cause` is a `TonBroadcastRejectedError` whose `failure` carries the reason and whose `message` is the remedy, so "another transaction went first" and "your device clock is off" never surface as an opaque `exitcode=133` / `exitcode=136`.
 
 EVM RPCs can explicitly distinguish a missing receipt from an unknown hash and return `not_found`. Some non-EVM providers do not distinguish an absent transaction from a failed lookup; those resolvers conservatively return `pending` with `isKnown: false`.
 

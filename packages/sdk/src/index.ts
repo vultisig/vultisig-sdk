@@ -65,6 +65,13 @@ export { fiatToAmount, FiatToAmountError } from './utils/fiatToAmount'
 export { normalizeChain, UnknownChainError } from './utils/normalizeChain'
 export { resolveChainReference } from './utils/resolveChainReference'
 export { ChainAmountParseError, toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
+export type { TonTxFailure, TonTxFailureReason, TonTxPhase } from '@vultisig/core-chain/chains/ton/failure'
+export {
+  getTonTxFailure,
+  parseTonBroadcastRejection,
+  TonBroadcastRejectedError,
+  tonTxFailureReasons,
+} from '@vultisig/core-chain/chains/ton/failure'
 export {
   CosmosSequenceMismatchError,
   toCosmosSequenceMismatchError,
@@ -401,6 +408,7 @@ export type {
   SwapQuoteResult,
   SwapTxParams,
   Token,
+  TxFailureInfo,
   TxReceiptInfo,
   TxStatusResult,
   UtxoGasInfo,

@@ -1,4 +1,5 @@
 import { OtherChain } from '@vultisig/core-chain/Chain'
+import { parseTonBroadcastRejection, TonBroadcastRejectedError } from '@vultisig/core-chain/chains/ton/failure'
 import { rootApiUrl } from '@vultisig/core-config'
 import { attempt } from '@vultisig/lib-utils/attempt'
 import { isInError } from '@vultisig/lib-utils/error/isInError'
@@ -32,6 +33,14 @@ export const broadcastTonTx: BroadcastTxResolver<OtherChain.Ton> = async ({ chai
   try {
     return broadcastAccepted(await verifyBroadcastByHash({ chain, tx, error }))
   } catch (cause) {
+    // The wallet contract refusing the message (seqno replay, expired
+    // valid_until, bad signature …) is final: re-sending the same bytes gets
+    // the same refusal, and the user needs the reason, not a retry.
+    const failure = parseTonBroadcastRejection(cause)
+    if (failure) {
+      return broadcastFailed(new TonBroadcastRejectedError(failure, cause), false)
+    }
+
     return broadcastFailed(cause, responseMissingHash ? false : isRetryableBroadcastCause(error))
   }
 }
