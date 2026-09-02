@@ -5,7 +5,15 @@ import { decodeFromToolResult } from './fromToolResult'
 export { decodeCosmosTx } from './cosmos'
 export { decodeEvmTx } from './evm'
 export { decodeFromToolResult } from './fromToolResult'
-export type { AssetRef, ChainFamily, DecodeFromToolResultInput, Envelope, EnvelopeKind } from './types'
+export type {
+  AssetRef,
+  ChainFamily,
+  CosmosEnvelopeAction,
+  CosmosVoteOption,
+  DecodeFromToolResultInput,
+  Envelope,
+  EnvelopeKind,
+} from './types'
 
 /**
  * Canonical `sdk.decode` namespace — the shape documented as the "bytes

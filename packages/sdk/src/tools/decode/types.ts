@@ -40,8 +40,25 @@ export type EnvelopeKind =
   | 'undelegate'
   | 'redelegate'
   | 'withdrawReward'
+  | 'vote'
   | 'contractCall'
   | 'unknown'
+
+/** Governance vote options emitted by the SDK's Cosmos vote builder. */
+export type CosmosVoteOption = 'VOTE_OPTION_YES' | 'VOTE_OPTION_ABSTAIN' | 'VOTE_OPTION_NO' | 'VOTE_OPTION_NO_WITH_VETO'
+
+/**
+ * Cosmos-specific fields that cannot be represented by the transfer-shaped
+ * envelope without overloading recipient, amount, asset, or spender.
+ */
+export type CosmosEnvelopeAction = {
+  type: 'vote'
+  voterAddress: string
+  proposalId: string
+  voteOption: CosmosVoteOption
+  /** Present for cosmos.gov.v1 votes; omitted for the legacy v1beta1 shape. */
+  metadata?: string
+}
 
 /**
  * Decoded, chain-agnostic representation of a pending transaction.
@@ -96,6 +113,9 @@ export type Envelope = {
    * Approved spender for approve/permit transactions (EVM). Empty otherwise.
    */
   spender: string
+
+  /** Cosmos action-specific wire fields. Omitted for all other actions. */
+  cosmosAction?: CosmosEnvelopeAction
 
   /** True when the bytes decoded successfully. */
   decoded: boolean
