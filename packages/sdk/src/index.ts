@@ -887,6 +887,8 @@ export type {
   CosmosBalanceChain,
   CosmosBalanceEntry,
   CosmosBalanceResult,
+  CosmosEnvelopeAction,
+  CosmosVoteOption,
   DecodedAgentRouterDeposit,
   DecodeFromToolResultInput,
   Defi,
