@@ -192,18 +192,36 @@ export const findRnOverrideTarget = id => {
 
 export const rnOverridePlugin = () => {
   const matchedTargets = new Set()
+  // `this.resolve()` below re-runs Rollup's full resolution chain (alias,
+  // node-resolve, commonjs, ...) for every non-entry import in the graph.
+  // Widely-imported modules (e.g. the solana/sui clients this plugin exists
+  // to override) get asked for repeatedly by many different importers, and
+  // without caching each ask pays that full nested-resolution cost again.
+  // On the full core+lib+platform module graph this measurably slows down
+  // (and, under CI resource contention, can time out) every platform build,
+  // not just react-native. Memoize by (importer, source) — deterministic
+  // for a given build — and cache the in-flight promise too so concurrent
+  // asks for the same pair don't race duplicate resolutions.
+  const resolveCache = new Map()
 
   return {
     name: 'vultisig-rn-path-override',
     buildStart() {
       matchedTargets.clear()
+      resolveCache.clear()
     },
     async resolveId(source, importer, options) {
       if (options?.isEntry) return null
-      const resolved = await this.resolve(source, importer, {
-        ...options,
-        skipSelf: true,
-      })
+      const cacheKey = `${importer || ''}::${source}`
+      let resolvedPromise = resolveCache.get(cacheKey)
+      if (!resolvedPromise) {
+        resolvedPromise = this.resolve(source, importer, {
+          ...options,
+          skipSelf: true,
+        })
+        resolveCache.set(cacheKey, resolvedPromise)
+      }
+      const resolved = await resolvedPromise
       if (!resolved || resolved.external) return null
       const target = findRnOverrideTarget(resolved.id)
       if (!target) return null
