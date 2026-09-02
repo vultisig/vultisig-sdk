@@ -72,6 +72,20 @@ describe('clampEvmPriorityFee', () => {
     expect(clampEvmPriorityFee(EvmChain.Ethereum, gwei(1))).toBe(gwei(1))
   })
 
+  it('has a priority-fee ceiling for every EvmChain (adding a chain fails here until one is chosen)', () => {
+    const absurd = 10n ** 24n
+    for (const chain of Object.values(EvmChain)) {
+      const clamped = clampEvmPriorityFee(chain, absurd)
+      expect(clamped).toBeLessThan(absurd)
+      expect(clamped).toBeGreaterThan(0n)
+    }
+  })
+
+  it('floors only the tip-auction chains (Ethereum, Polygon); every other EVM chain is an intentional floor gap', () => {
+    const floored = Object.values(EvmChain).filter(chain => clampEvmPriorityFee(chain, 1n) > 1n)
+    expect(floored.sort()).toEqual([EvmChain.Ethereum, EvmChain.Polygon].sort())
+  })
+
   it.each([
     ['Arbitrum', EvmChain.Arbitrum],
     ['Base', EvmChain.Base],
