@@ -7037,7 +7037,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@vultisig/core-chain@npm:4.1.0, @vultisig/core-chain@workspace:*, @vultisig/core-chain@workspace:^, @vultisig/core-chain@workspace:packages/core/chain":
+"@vultisig/core-chain@npm:4.1.1, @vultisig/core-chain@workspace:*, @vultisig/core-chain@workspace:^, @vultisig/core-chain@workspace:packages/core/chain":
   version: 0.0.0-use.local
   resolution: "@vultisig/core-chain@workspace:packages/core/chain"
   dependencies:
@@ -7093,7 +7093,7 @@ __metadata:
     "@noble/hashes": "npm:^2.2.0"
     "@solana/web3.js": "npm:^1.98.4"
     "@trustwallet/wallet-core": "npm:^4.7.3"
-    "@vultisig/core-chain": "npm:4.1.0"
+    "@vultisig/core-chain": "npm:4.1.1"
     "@vultisig/core-config": "npm:0.9.1"
     "@vultisig/lib-dkls": "npm:0.9.0"
     "@vultisig/lib-mldsa": "npm:0.9.0"
@@ -7234,14 +7234,14 @@ __metadata:
   resolution: "@vultisig/mpc-native@workspace:packages/mpc-native"
   dependencies:
     "@expo/config-plugins": "npm:^56.0.8"
-    "@vultisig/mpc-types": "workspace:^0.2.0"
+    "@vultisig/mpc-types": "workspace:^0.3.0"
     expo: "npm:>=56.0.12"
   peerDependencies:
     expo: ">=56.0.12"
   languageName: unknown
   linkType: soft
 
-"@vultisig/mpc-types@workspace:*, @vultisig/mpc-types@workspace:^0.2.0, @vultisig/mpc-types@workspace:packages/mpc-types":
+"@vultisig/mpc-types@workspace:*, @vultisig/mpc-types@workspace:^0.3.0, @vultisig/mpc-types@workspace:packages/mpc-types":
   version: 0.0.0-use.local
   resolution: "@vultisig/mpc-types@workspace:packages/mpc-types"
   dependencies:

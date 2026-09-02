@@ -1,4 +1,5 @@
 import { Buffer } from 'buffer'
+import { validateTonComment } from '@vultisig/core-chain/chains/ton/comment'
 import { TonWalletVersion } from '@vultisig/core-chain/chains/ton/wallet'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { numberToEvenHex } from '@vultisig/lib-utils/hex/numberToHex'
@@ -18,26 +19,6 @@ type BuildNativeTonTransferInput = {
   keysignPayload: KeysignPayload
   bounceable: boolean
   walletVersion: TonWalletVersion
-}
-
-/** TON cell limit is 1023 bits; comment uses ~32 bits opcode + text. Max ~123 bytes. */
-const tonCommentMaxBytes = 123
-
-const tonCommentTooLongError = `TON memo exceeds ${tonCommentMaxBytes} bytes and would be truncated; reject oversized memos upstream`
-
-export const toSafeComment = (payload: string): string => {
-  const bytes = new TextEncoder().encode(payload)
-  if (bytes.length > tonCommentMaxBytes) {
-    throw new Error(tonCommentTooLongError)
-  }
-  return payload
-}
-
-export const validateTonComment = (memo: string): void => {
-  const bytes = new TextEncoder().encode(memo)
-  if (bytes.length > tonCommentMaxBytes) {
-    throw new Error(`TON memo must be at most ${tonCommentMaxBytes} bytes (got ${bytes.length})`)
-  }
 }
 
 const tonUnsignedDecimalRegex = /^\d+$/
@@ -118,11 +99,14 @@ export const buildNativeTonTransfer = ({
   bounceable,
   walletVersion,
 }: BuildNativeTonTransferInput): TW.TheOpenNetwork.Proto.Transfer => {
+  const comment = keysignPayload.memo || ''
+  validateTonComment({ memo: comment })
+
   return TW.TheOpenNetwork.Proto.Transfer.create({
     dest: keysignPayload.toAddress,
     amount: tonAmountToBytes(keysignPayload.toAmount),
     bounceable,
-    comment: toSafeComment(keysignPayload.memo || ''),
+    comment,
     mode: getTonSendMode(walletVersion),
   })
 }
