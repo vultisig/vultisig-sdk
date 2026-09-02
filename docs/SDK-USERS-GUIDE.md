@@ -1890,9 +1890,10 @@ for (const token of tokens) {
 // Also works for Solana (SPL via Jupiter), Cosmos (IBC), Cardano, Ripple and TON
 const solTokens = await vault.discoverTokens(Chain.Solana)
 
-// TON returns verified jettons only (curated list + the ton-assets whitelist);
-// counterfeits such as fake USDT never reach the vault. Classify any jetton with
-// getTonJettonVerification from '@vultisig/core-chain/chains/ton/jetton/verification'.
+// TON returns verified jettons only (curated list + the ton-assets whitelist):
+// unverified and counterfeit jettons — fake USDT above all — are left out of the
+// discovery results, though the address still holds them on chain. Classify any
+// jetton with getTonJettonVerification from '@vultisig/core-chain/chains/ton/jetton/verification'.
 const jettons = await vault.discoverTokens(Chain.Ton)
 ```
 

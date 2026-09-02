@@ -50,6 +50,22 @@ describe('makeTonVerifiedJettonRegistry', () => {
 
     expect(registry.byAddress[USDT_RAW]).toEqual({ address: USDT_RAW, symbol: 'USDT', priceProviderId: 'tether' })
   })
+
+  it('still indexes the symbol and name of a same-address duplicate, since both describe the verified jetton', async () => {
+    const { makeTonVerifiedJettonRegistry } = await loadModule()
+    const { resolveTonJettonVerification } = await import('./verification')
+
+    const registry = makeTonVerifiedJettonRegistry([
+      { address: USDT_RAW, symbol: 'USDT' },
+      { address: USDT_RAW, symbol: 'USD₮', name: 'Tether USD' },
+    ])
+
+    expect(registry.names.has('TETHERUSD')).toBe(true)
+    // A counterfeit that copies only the whitelist's name spelling is still caught.
+    expect(
+      resolveTonJettonVerification({ address: '0:' + 'ab'.repeat(32), symbol: 'TUSD', name: 'Tether USD', registry })
+    ).toBe('scam')
+  })
 })
 
 describe('getTonVerifiedJettonRegistry', () => {

@@ -45,7 +45,15 @@ export type TonVerifiedJettonRegistry = {
   names: Set<string>
 }
 
-/** Builds a registry from a list of verified jettons; earlier entries win on address collisions. */
+/**
+ * Builds a registry from a list of verified jettons. On an address collision the
+ * earlier entry's metadata is kept in `byAddress`, but every entry's symbol and
+ * name are indexed: two entries for one address describe the same verified
+ * contract, and a counterfeit may copy either spelling. Our curated USDT carries
+ * the ticker `USDT` and no name; only the ton-assets duplicate contributes
+ * `USD₮` and `Tether USD`, so dropping it would let a "Tether USD" impostor
+ * through as merely unverified.
+ */
 export const makeTonVerifiedJettonRegistry = (jettons: VerifiedJetton[]): TonVerifiedJettonRegistry => {
   const registry: TonVerifiedJettonRegistry = { byAddress: {}, symbols: new Set(), names: new Set() }
 
