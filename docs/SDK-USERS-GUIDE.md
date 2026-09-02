@@ -1887,8 +1887,13 @@ for (const token of tokens) {
   console.log(`${token.ticker}: balance ${token.balance}`)
 }
 
-// Also works for Solana (SPL via Jupiter) and Cosmos (IBC)
+// Also works for Solana (SPL via Jupiter), Cosmos (IBC), Cardano, Ripple and TON
 const solTokens = await vault.discoverTokens(Chain.Solana)
+
+// TON returns verified jettons only (curated list + the ton-assets whitelist);
+// counterfeits such as fake USDT never reach the vault. Classify any jetton with
+// getTonJettonVerification from '@vultisig/core-chain/chains/ton/jetton/verification'.
+const jettons = await vault.discoverTokens(Chain.Ton)
 ```
 
 ### Resolving Token Metadata

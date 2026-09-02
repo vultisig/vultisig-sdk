@@ -32,3 +32,11 @@ export const tonAddressToBounceable = (address: string): string => {
 
   return parsed.toString({ bounceable: true, testOnly: false, urlSafe: true })
 }
+
+/**
+ * Lower-cased raw (`workchain:hex`) form of a raw or user-friendly TON address.
+ * Toncenter answers in upper-case hex and ton-assets lists lower-case hex, so
+ * every lookup keyed by a jetton master address must go through this first.
+ */
+export const tonAddressToRawKey = (address: string): string =>
+  (address.includes(':') ? address : tonAddressToRaw(address)).toLowerCase()

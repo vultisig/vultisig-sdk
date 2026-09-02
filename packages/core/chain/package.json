@@ -1005,6 +1005,21 @@
       "import": "./dist/chains/ton/config.js",
       "default": "./dist/chains/ton/config.js"
     },
+    "./chains/ton/jetton/symbol": {
+      "types": "./dist/chains/ton/jetton/symbol.d.ts",
+      "import": "./dist/chains/ton/jetton/symbol.js",
+      "default": "./dist/chains/ton/jetton/symbol.js"
+    },
+    "./chains/ton/jetton/verification": {
+      "types": "./dist/chains/ton/jetton/verification.d.ts",
+      "import": "./dist/chains/ton/jetton/verification.js",
+      "default": "./dist/chains/ton/jetton/verification.js"
+    },
+    "./chains/ton/jetton/verifiedRegistry": {
+      "types": "./dist/chains/ton/jetton/verifiedRegistry.d.ts",
+      "import": "./dist/chains/ton/jetton/verifiedRegistry.js",
+      "default": "./dist/chains/ton/jetton/verifiedRegistry.js"
+    },
     "./chains/ton/messageBody/decode": {
       "types": "./dist/chains/ton/messageBody/decode.d.ts",
       "import": "./dist/chains/ton/messageBody/decode.js",
@@ -1290,6 +1305,11 @@
       "import": "./dist/coin/find/resolvers/solana/index.js",
       "default": "./dist/coin/find/resolvers/solana/index.js"
     },
+    "./coin/find/resolvers/ton": {
+      "types": "./dist/coin/find/resolvers/ton.d.ts",
+      "import": "./dist/coin/find/resolvers/ton.js",
+      "default": "./dist/coin/find/resolvers/ton.js"
+    },
     "./coin/jupiter/token": {
       "types": "./dist/coin/jupiter/token.d.ts",
       "import": "./dist/coin/jupiter/token.js",
@@ -1419,6 +1439,11 @@
       "types": "./dist/coin/token/metadata/resolvers/tron.d.ts",
       "import": "./dist/coin/token/metadata/resolvers/tron.js",
       "default": "./dist/coin/token/metadata/resolvers/tron.js"
+    },
+    "./coin/tokenVerification": {
+      "types": "./dist/coin/tokenVerification.d.ts",
+      "import": "./dist/coin/tokenVerification.js",
+      "default": "./dist/coin/tokenVerification.js"
     },
     "./coin/utils/findByTicker": {
       "types": "./dist/coin/utils/findByTicker.d.ts",
