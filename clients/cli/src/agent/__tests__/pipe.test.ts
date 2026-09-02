@@ -472,6 +472,59 @@ describe('PipeInterface NDJSON input loop', () => {
     expect(JSON.stringify(events)).not.toContain('late-secret')
   })
 
+  it('denies a confirmation requested after stdin has closed instead of waiting forever', async () => {
+    let releaseTurn: (() => void) | undefined
+    const turnBlocked = new Promise<void>(resolve => {
+      releaseTurn = resolve
+    })
+    let authorized: boolean | undefined
+    const sendMessage = vi.fn(async (_content: string, ui: UICallbacks) => {
+      await turnBlocked
+      authorized = await ui.requestConfirmation('Sign transaction?')
+      ui.onDone()
+    })
+    const { started } = startPipe(sendMessage)
+
+    send({ type: 'message', content: 'send funds' })
+    await waitUntil(() => sendMessage.mock.calls.length === 1)
+    rl.close()
+    releaseTurn?.()
+
+    await withTimeout(started)
+    expect(authorized).toBe(false)
+    expect(events).toContainEqual({ type: 'done' })
+  })
+
+  it('rejects a password requested after stdin has closed instead of waiting forever', async () => {
+    let releaseTurn: (() => void) | undefined
+    const turnBlocked = new Promise<void>(resolve => {
+      releaseTurn = resolve
+    })
+    let failure: unknown
+    const sendMessage = vi.fn(async (_content: string, ui: UICallbacks) => {
+      await turnBlocked
+      try {
+        await ui.requestPassword()
+      } catch (err: unknown) {
+        failure = err
+      }
+      ui.onDone()
+    })
+    const { started } = startPipe(sendMessage)
+
+    send({ type: 'message', content: 'unlock vault' })
+    await waitUntil(() => sendMessage.mock.calls.length === 1)
+    rl.close()
+    releaseTurn?.()
+
+    await withTimeout(started)
+    expect(failure).toMatchObject({
+      message: 'Password input closed before a reply was received',
+      code: AgentErrorCode.PASSWORD_REQUIRED,
+    })
+    expect(events).toContainEqual({ type: 'done' })
+  })
+
   it('keeps message handlers strictly ordered', async () => {
     let releaseFirst: (() => void) | undefined
     const firstBlocked = new Promise<void>(resolve => {

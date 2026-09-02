@@ -18,6 +18,7 @@ export class PipeInterface {
   private session: AgentSession
   private rl: readline.Interface | null = null
   private stopped = false
+  private inputClosed = false
   private pendingPasswordResolve: ((password: string) => void) | null = null
   private pendingPasswordReject: ((reason: Error) => void) | null = null
   private pendingConfirmResolve: ((confirmed: boolean) => void) | null = null
@@ -117,6 +118,7 @@ export class PipeInterface {
     })
 
     this.rl.on('close', () => {
+      this.inputClosed = true
       inputDone = true
       this.settlePendingPrompts('Password input closed before a reply was received')
       // If not currently processing, stop immediately
@@ -226,6 +228,17 @@ export class PipeInterface {
       },
 
       requestPassword: (): Promise<string> => {
+        // A prompt registered after stdin closed can never be answered, and no
+        // further close event will settle it — fail it immediately instead.
+        if (this.inputClosed) {
+          const password = Promise.reject<string>(
+            Object.assign(new Error('Password input closed before a reply was received'), {
+              code: AgentErrorCode.PASSWORD_REQUIRED,
+            })
+          )
+          void password.catch(() => undefined)
+          return password
+        }
         // In via-agent mode, wait for a password command from stdin
         const password = new Promise<string>((resolve, reject) => {
           this.pendingPasswordResolve = resolve
@@ -245,6 +258,7 @@ export class PipeInterface {
       },
 
       requestConfirmation: async (message: string): Promise<boolean> => {
+        if (this.inputClosed) return false
         return new Promise(resolve => {
           this.pendingConfirmResolve = resolve
           this.emit({
