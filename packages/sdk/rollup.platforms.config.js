@@ -109,18 +109,58 @@ const onwarn = (warning, warn) => {
 // bodies so the module graph stays cold until the first real call. The Sui
 // override additionally swaps gRPC for GraphQL RPC: grpc-web needs
 // `Response.body` streaming, which Hermes' fetch does not provide.
-const rnOverrideMap = {
-  'packages/core/chain/chains/solana/client.ts': 'src/platforms/react-native/overrides/solanaClient.ts',
-  'packages/core/chain/chains/sui/client.ts': 'src/platforms/react-native/overrides/suiClient.ts',
-  'packages/core/chain/swap/general/lifi/LifiSwapEnabledChains.ts':
-    'src/platforms/react-native/overrides/lifiSwapEnabledChains.ts',
-  'packages/core/chain/chains/solana/spl/getSplAccounts.ts': 'src/platforms/react-native/overrides/getSplAccounts.ts',
-  'packages/core/chain/chains/solana/spl/getSplAssociatedAccount.ts':
-    'src/platforms/react-native/overrides/getSplAssociatedAccount.ts',
-  'packages/core/chain/coin/balance/resolvers/solana.ts': 'src/platforms/react-native/overrides/resolverSolana.ts',
-  'packages/core/chain/swap/general/lifi/api/getLifiSwapQuote.ts':
-    'src/platforms/react-native/overrides/getLifiSwapQuote.ts',
-}
+export const rnOverrideTargets = [
+  {
+    name: 'Solana client',
+    suffixes: ['packages/core/chain/chains/solana/client.ts', 'packages/core/chain/dist/chains/solana/client.js'],
+    override: 'src/platforms/react-native/overrides/solanaClient.ts',
+  },
+  {
+    name: 'Sui client',
+    suffixes: ['packages/core/chain/chains/sui/client.ts', 'packages/core/chain/dist/chains/sui/client.js'],
+    override: 'src/platforms/react-native/overrides/suiClient.ts',
+  },
+  {
+    name: 'LI.FI enabled chains',
+    suffixes: [
+      'packages/core/chain/swap/general/lifi/LifiSwapEnabledChains.ts',
+      'packages/core/chain/dist/swap/general/lifi/LifiSwapEnabledChains.js',
+    ],
+    override: 'src/platforms/react-native/overrides/lifiSwapEnabledChains.ts',
+  },
+  {
+    name: 'Solana SPL accounts',
+    suffixes: [
+      'packages/core/chain/chains/solana/spl/getSplAccounts.ts',
+      'packages/core/chain/dist/chains/solana/spl/getSplAccounts.js',
+    ],
+    override: 'src/platforms/react-native/overrides/getSplAccounts.ts',
+  },
+  {
+    name: 'Solana associated account',
+    suffixes: [
+      'packages/core/chain/chains/solana/spl/getSplAssociatedAccount.ts',
+      'packages/core/chain/dist/chains/solana/spl/getSplAssociatedAccount.js',
+    ],
+    override: 'src/platforms/react-native/overrides/getSplAssociatedAccount.ts',
+  },
+  {
+    name: 'Solana balance resolver',
+    suffixes: [
+      'packages/core/chain/coin/balance/resolvers/solana.ts',
+      'packages/core/chain/dist/coin/balance/resolvers/solana.js',
+    ],
+    override: 'src/platforms/react-native/overrides/resolverSolana.ts',
+  },
+  {
+    name: 'LI.FI quote',
+    suffixes: [
+      'packages/core/chain/swap/general/lifi/api/getLifiSwapQuote.ts',
+      'packages/core/chain/dist/swap/general/lifi/api/getLifiSwapQuote.js',
+    ],
+    override: 'src/platforms/react-native/overrides/getLifiSwapQuote.ts',
+  },
+]
 
 // Minimum path-segment depth that every override-map key MUST have. The
 // override fires on `id.endsWith(suffix)`, so a shallow suffix (say,
@@ -130,40 +170,65 @@ const rnOverrideMap = {
 // contributor who shortens an entry fails loud at build time rather than
 // silently misrouting a chain's client code.
 const MIN_OVERRIDE_SUFFIX_DEPTH = 4
-for (const suffix of Object.keys(rnOverrideMap)) {
-  const segments = suffix.split('/').filter(Boolean).length
-  if (segments < MIN_OVERRIDE_SUFFIX_DEPTH) {
-    throw new Error(
-      `rnOverrideMap: suffix ${JSON.stringify(suffix)} has only ${segments} segments — ` +
-        `minimum is ${MIN_OVERRIDE_SUFFIX_DEPTH} to avoid collisions with unrelated modules ` +
-        `that happen to share the trailing path components.`
-    )
+for (const target of rnOverrideTargets) {
+  for (const suffix of target.suffixes) {
+    const segments = suffix.split('/').filter(Boolean).length
+    if (segments < MIN_OVERRIDE_SUFFIX_DEPTH) {
+      throw new Error(
+        `rnOverrideTargets: suffix ${JSON.stringify(suffix)} has only ${segments} segments — ` +
+          `minimum is ${MIN_OVERRIDE_SUFFIX_DEPTH} to avoid collisions with unrelated modules ` +
+          `that happen to share the trailing path components.`
+      )
+    }
   }
 }
 
-const rnOverridePlugin = () => ({
-  name: 'vultisig-rn-path-override',
-  async resolveId(source, importer, options) {
-    if (options?.isEntry) return null
-    const resolved = await this.resolve(source, importer, {
-      ...options,
-      skipSelf: true,
-    })
-    if (!resolved || resolved.external) return null
-    const id = resolved.id.replace(/\\/g, '/')
-    for (const [suffix, override] of Object.entries(rnOverrideMap)) {
-      if (id.endsWith('/' + suffix) || id.endsWith(suffix)) {
-        // Log once per distinct (source, override) pair so reviewers can
-        // audit which real-world imports the override actually intercepts.
-        // Uses `this.info` so it goes through Rollup's warning pipeline
-        // instead of stdout (keeps `rollup -w` output clean-able).
-        this.info?.(`[vultisig-rn-path-override] ${source} → ${override}`)
-        return path.resolve(currentDir, override)
+export const findRnOverrideTarget = id => {
+  const normalizedId = id.replace(/\\/g, '/')
+  return rnOverrideTargets.find(target =>
+    target.suffixes.some(suffix => normalizedId.endsWith('/' + suffix) || normalizedId.endsWith(suffix))
+  )
+}
+
+export const rnOverridePlugin = () => {
+  const matchedTargets = new Set()
+
+  return {
+    name: 'vultisig-rn-path-override',
+    buildStart() {
+      matchedTargets.clear()
+    },
+    async resolveId(source, importer, options) {
+      if (options?.isEntry) return null
+      const resolved = await this.resolve(source, importer, {
+        ...options,
+        skipSelf: true,
+      })
+      if (!resolved || resolved.external) return null
+      const target = findRnOverrideTarget(resolved.id)
+      if (!target) return null
+
+      matchedTargets.add(target.name)
+      // Log once per distinct (source, override) pair so reviewers can
+      // audit which real-world imports the override actually intercepts.
+      // Uses `this.info` so it goes through Rollup's warning pipeline
+      // instead of stdout (keeps `rollup -w` output clean-able).
+      this.info?.(`[vultisig-rn-path-override] ${source} → ${target.override}`)
+      return path.resolve(currentDir, target.override)
+    },
+    buildEnd(error) {
+      if (error) return
+      const missingTargets = rnOverrideTargets.filter(target => !matchedTargets.has(target.name))
+      if (missingTargets.length > 0) {
+        this.error(
+          `React Native build did not intercept required core-chain override target(s): ${missingTargets
+            .map(target => `${target.name} (${target.suffixes.join(' or ')})`)
+            .join(', ')}`
+        )
       }
-    }
-    return null
-  },
-})
+    },
+  }
+}
 
 const createPlugins = (platformOptions = {}) => {
   const { preferBuiltins = false, browser = false, replaceOptions = {} } = platformOptions
@@ -171,14 +236,6 @@ const createPlugins = (platformOptions = {}) => {
   return [
     alias({
       entries: [
-        {
-          find: /^@vultisig\/core-chain\/(.*)/,
-          replacement: `${path.resolve(currentDir, '../core/chain')}/$1`,
-        },
-        {
-          find: /^@vultisig\/core-mpc\/(.*)/,
-          replacement: `${path.resolve(currentDir, '../core/mpc')}/$1`,
-        },
         {
           find: /^@vultisig\/core-config$/,
           replacement: path.resolve(currentDir, '../core/config/index.ts'),
@@ -569,15 +626,9 @@ const configs = {
               find: /^tiny-secp256k1$/,
               replacement: path.resolve(currentDir, 'src/platforms/react-native/shims/tiny-secp256k1.ts'),
             },
-            // Resolve workspace packages to source TS for bundling
-            {
-              find: /^@vultisig\/core-chain\/(.*)/,
-              replacement: path.resolve(currentDir, '../core/chain/$1'),
-            },
-            {
-              find: /^@vultisig\/core-mpc\/(.*)/,
-              replacement: path.resolve(currentDir, '../core/mpc/$1'),
-            },
+            // Resolve the remaining source-bundled workspace packages.
+            // core-chain and core-mpc intentionally go through their package
+            // export maps so the SDK build exercises the published graph.
             {
               find: /^@vultisig\/core-config(.*)/,
               replacement: path.resolve(currentDir, '../core/config$1'),

@@ -1,3 +1,4 @@
+import { validateTonComment } from '@vultisig/core-chain/chains/ton/comment'
 import { tonConfig } from '@vultisig/core-chain/chains/ton/config'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
@@ -6,7 +7,7 @@ import { WalletCore } from '@trustwallet/wallet-core'
 
 import { getKeysignAmount } from '../../../utils/getKeysignAmount'
 import { getKeysignCoin } from '../../../utils/getKeysignCoin'
-import { toSafeComment, tonAmountToBytes } from './native'
+import { tonAmountToBytes, tonSendMode } from './native'
 
 type BuildJettonTransferInput = {
   keysignPayload: KeysignPayload
@@ -15,6 +16,12 @@ type BuildJettonTransferInput = {
   isActiveDestination: boolean
 }
 
+/**
+ * Builds the transfer that carries a Jetton send: a fixed TON amount to the
+ * sender's own Jetton wallet, wrapping the Jetton payload. `forwardAmount` is 1
+ * nanoton only when the destination is already active, so an inactive recipient
+ * isn't charged for a notification it cannot receive.
+ */
 export const buildJettonTransfer = ({
   keysignPayload,
   walletCore,
@@ -33,24 +40,29 @@ export const buildJettonTransfer = ({
 
   const destinationAddress = walletCore.TONAddressConverter.toUserFriendly(keysignPayload.toAddress, true, false)
 
+  const amount = shouldBePresent(getKeysignAmount(keysignPayload))
   const forwardAmount = isActiveDestination ? 1n : 0n
 
+  // A jetton comment rides inline in `forward_payload`, sharing one cell with
+  // the fields below, so its cap is far smaller than a native transfer's 123
+  // bytes and moves with the amount. Validating against the native cap here is
+  // what let an oversized memo through to WalletCore, which answers with a bare
+  // "Internal error" once the cell overflows.
+  validateTonComment({ memo: keysignPayload.memo ?? '', jetton: { amount, isActiveDestination } })
+
   const jettonTransfer = TW.TheOpenNetwork.Proto.JettonTransfer.create({
-    jettonAmount: tonAmountToBytes(shouldBePresent(getKeysignAmount(keysignPayload))),
+    jettonAmount: tonAmountToBytes(amount),
     toOwner: destinationAddress,
     responseAddress: coin.address,
     forwardAmount: tonAmountToBytes(forwardAmount),
   })
 
-  const mode =
-    TW.TheOpenNetwork.Proto.SendMode.PAY_FEES_SEPARATELY | TW.TheOpenNetwork.Proto.SendMode.IGNORE_ACTION_PHASE_ERRORS
-
   return TW.TheOpenNetwork.Proto.Transfer.create({
     dest: jettonAddress,
     amount: tonAmountToBytes(tonConfig.jettonAmount),
     bounceable: true,
-    comment: toSafeComment(keysignPayload.memo ?? ''),
-    mode,
+    comment: keysignPayload.memo ?? '',
+    mode: tonSendMode,
     jettonTransfer,
   })
 }
