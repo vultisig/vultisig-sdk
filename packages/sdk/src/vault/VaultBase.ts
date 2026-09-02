@@ -1528,7 +1528,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
       if (result.status === 'success') {
         this.emit('transactionConfirmed', { chain, txHash, receipt: result.receipt })
-      } else if (result.status === 'error') {
+      } else if (result.status === 'error' || result.status === 'expired') {
         this.emit('transactionFailed', { chain, txHash })
       }
 
@@ -2317,8 +2317,10 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       shouldRetryError: error => !(error instanceof VaultError) || error.code === VaultErrorCode.NetworkError,
     })
 
-    if (outcome.result?.status === 'error') {
-      throw new VaultError(VaultErrorCode.BroadcastFailed, `Approval tx failed: ${txHash}`)
+    if (outcome.result?.status !== 'success' && !outcome.timedOut) {
+      const status = outcome.result?.status ?? 'unknown'
+      const outcomeLabel = status === 'error' ? 'failed' : status
+      throw new VaultError(VaultErrorCode.BroadcastFailed, `Approval tx ${outcomeLabel}: ${txHash}`)
     }
     if (outcome.timedOut) {
       throw new VaultError(VaultErrorCode.Timeout, `Approval tx not confirmed within ${timeoutMs / 1000}s: ${txHash}`)

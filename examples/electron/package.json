@@ -9,6 +9,7 @@
     "build": "tsc && vite build",
     "build:electron": "npm run build && electron-builder",
     "preview": "vite preview",
+    "test": "vitest run electron/**/*.test.ts",
     "typecheck": "tsc --noEmit",
     "dist": "npm run build && electron-builder",
     "dist:mac": "npm run build && electron-builder --mac",
