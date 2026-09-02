@@ -89,8 +89,35 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     'getChainDangerousReason',
     'assertSafeEvmDestination',
     'assertSafeDestination',
+    'assertSafeTokenTransferDestination',
+    'decodeErc20Approve',
+    'decodeErc20Recipient',
+    'decodeErc20RecipientFromSig',
+    'ERC20_APPROVE_SELECTOR',
+    'isErc20TransferCalldata',
   ] as const)('re-exports dangerous-address canonical %s by identity', async name => {
     expect(reactNativeEntry[name]).toBe(dangerousAddresses[name])
+  })
+
+  it('re-exports the canonical Blockchair base URL helper by identity', async () => {
+    const canonical = await import('@vultisig/core-chain/chains/utxo/client/getBlockchairBaseUrl')
+
+    expect(reactNativeEntry.getBlockchairBaseUrl).toBe(canonical.getBlockchairBaseUrl)
+  })
+
+  it('re-exports the plural StakeKit scan-request builder by identity', async () => {
+    const stakekit = await import('../../../../src/tools/defi/stakekit')
+    expect(reactNativeEntry.buildYieldActionScanRequests).toBe(stakekit.buildYieldActionScanRequests)
+  })
+
+  it.each([
+    'chunkStakekitBalanceQueries',
+    'fetchAllStakekitBalances',
+    'fetchStakekitBalancesBatch',
+    'STAKEKIT_BALANCE_QUERIES_PER_REQUEST',
+  ] as const)('re-exports StakeKit batched-balances canonical %s by identity', async name => {
+    const stakekit = await import('../../../../src/tools/defi/stakekit')
+    expect(reactNativeEntry[name]).toBe(stakekit[name])
   })
 
   // sdk#1772: the RN entry omitted the whole validation / address-format
@@ -469,6 +496,23 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.toXrplCurrencyCode('RLUSD')).toBe('524C555344000000000000000000000000000000')
   })
 
+  it('re-exports XRP destination/X-address normalization on the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(typeof rn.decodeRippleXAddress).toBe('function')
+    expect(typeof rn.encodeRippleXAddress).toBe('function')
+    expect(typeof rn.isValidRippleXAddress).toBe('function')
+    expect(typeof rn.normalizeRippleDestination).toBe('function')
+
+    const classicAddress = 'raJ1Aqkhf19P7cyUc33MMVAzgvHPvtNFC'
+    expect(rn.normalizeRippleDestination(classicAddress)).toEqual({ address: classicAddress })
+
+    const xAddress = rn.encodeRippleXAddress(classicAddress, 42)
+    expect(rn.isValidRippleXAddress(xAddress)).toBe(true)
+    expect(rn.decodeRippleXAddress(xAddress)).toEqual({ address: classicAddress, destinationTag: 42 })
+    expect(rn.normalizeRippleDestination(xAddress)).toEqual({ address: classicAddress, destinationTag: 42 })
+  })
+
   it('re-exports the custom-RPC canonicals on the RN entrypoint', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
@@ -678,6 +722,17 @@ describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
     )
   })
 
+  it('exports the canonical THOR/Maya native-swap metadata from the RN entry (sdk#1988)', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const nativeSwapChain = await import('@vultisig/core-chain/swap/native/NativeSwapChain')
+
+    expect(rn.nativeSwapChains).toBe(nativeSwapChain.nativeSwapChains)
+    expect(rn.nativeSwapChainIds).toBe(nativeSwapChain.nativeSwapChainIds)
+    expect(rn.nativeSwapEnabledChainsRecord).toBe(nativeSwapChain.nativeSwapEnabledChainsRecord)
+    expect(rn.getNativeSwapChainId).toBe(nativeSwapChain.getNativeSwapChainId)
+    expect(rn.getNativeSwapChainIdFromDenomPrefix).toBe(nativeSwapChain.getNativeSwapChainIdFromDenomPrefix)
+  })
+
   it('exports the THORChain LP v2 helper family from the RN entry', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
     const thorLp = await import('@vultisig/core-chain/chains/cosmos/thor/lp')
@@ -704,5 +759,30 @@ describe('RN entry exposes canonical EIP-712 helpers', () => {
     expect(rn.coerceEip712ChainId).toBe(eip712.coerceEip712ChainId)
     expect(rn.computeEip712Hash).toBe(eip712.computeEip712Hash)
     expect(rn.toCanonicalEvmSignature).toBe(eip712.toCanonicalEvmSignature)
+  })
+})
+
+describe('RN entry exposes canonical IBC + Sui prep helpers', () => {
+  it('re-exports the canonical IBC + Sui prep helpers from the RN root surface', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const prep = await import('../../../../src/tools/prep')
+    const ibcTransfer = await import('../../../../src/tools/prep/ibcTransfer')
+    const suiTokenTransfer = await import('../../../../src/tools/prep/suiTokenTransfer')
+
+    expect(rn.prepareIbcTransfer).toBe(prep.prepareIbcTransfer)
+    expect(rn.prepareIbcTransfer).toBe(ibcTransfer.prepareIbcTransfer)
+    expect(rn.resolveSourceChannelByDestChain).toBe(prep.resolveSourceChannelByDestChain)
+    expect(rn.resolveSourceChannelByDestChain).toBe(ibcTransfer.resolveSourceChannelByDestChain)
+    expect(rn.resolveSourceChannelByDestChain('cosmoshub-4', 'noble-1')).toBe('channel-536')
+    expect(rn.supportedIbcDestinationsFrom).toBe(prep.supportedIbcDestinationsFrom)
+    expect(rn.normaliseIbcChainId).toBe(ibcTransfer.normaliseIbcChainId)
+    expect(rn.IBC_MSG_TRANSFER_TYPE_URL).toBe(ibcTransfer.IBC_MSG_TRANSFER_TYPE_URL)
+    expect(rn.IBC_CHAIN_HRP).toBe(ibcTransfer.IBC_CHAIN_HRP)
+    expect(rn.IBC_CHAIN_REVISION).toBe(ibcTransfer.IBC_CHAIN_REVISION)
+    expect(rn.IBC_CHANNEL_DEST).toBe(ibcTransfer.IBC_CHANNEL_DEST)
+
+    expect(rn.prepareSuiTokenTransferFromKeys).toBe(prep.prepareSuiTokenTransferFromKeys)
+    expect(rn.prepareSuiTokenTransferFromKeys).toBe(suiTokenTransfer.prepareSuiTokenTransferFromKeys)
+    expect(rn.SUI_NATIVE_COIN_TYPE).toBe(suiTokenTransfer.SUI_NATIVE_COIN_TYPE)
   })
 })

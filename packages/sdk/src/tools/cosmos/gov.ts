@@ -20,6 +20,7 @@
 import { fromBech32, toBech32 } from '@cosmjs/encoding'
 import { IbcEnabledCosmosChain } from '@vultisig/core-chain/Chain'
 import { getCosmosChainId } from '@vultisig/core-chain/chains/cosmos/chainInfo'
+import { getCosmosChainHrp } from '@vultisig/core-chain/chains/cosmos/cosmosHrp'
 import { cosmosRpcUrl } from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
 
 // ── chain support ──────────────────────────────────────────────────────────
@@ -37,7 +38,6 @@ export type GovChainId =
   | 'cosmoshub-4'
   | 'dydx-mainnet-1'
   | 'injective-1'
-  | 'kaiyo-1'
   | 'neutron-1'
   | 'noble-1'
   | 'osmosis-1'
@@ -55,9 +55,9 @@ type GovChainConfig = {
   usesGovV1: boolean
 }
 
-const coreGovChainConfig = (chain: IbcEnabledCosmosChain, hrp: string, usesGovV1 = true): GovChainConfig => ({
+const coreGovChainConfig = (chain: IbcEnabledCosmosChain, usesGovV1 = true): GovChainConfig => ({
   chainId: getCosmosChainId(chain) as GovChainId,
-  hrp,
+  hrp: getCosmosChainHrp(chain),
   lcdRoot: cosmosRpcUrl[chain],
   usesGovV1,
 })
@@ -69,13 +69,13 @@ const coreGovChainConfig = (chain: IbcEnabledCosmosChain, hrp: string, usesGovV1
  * chain registry.
  */
 const GOV_CHAIN_CONFIG: Record<GovChain, GovChainConfig> = {
-  Cosmos: coreGovChainConfig('Cosmos', 'cosmos'),
-  Osmosis: coreGovChainConfig('Osmosis', 'osmo'),
-  Dydx: coreGovChainConfig('Dydx', 'dydx'),
-  Terra: coreGovChainConfig('Terra', 'terra'),
-  TerraClassic: coreGovChainConfig('TerraClassic', 'terra', false),
-  Noble: coreGovChainConfig('Noble', 'noble'),
-  Akash: coreGovChainConfig('Akash', 'akash'),
+  Cosmos: coreGovChainConfig('Cosmos'),
+  Osmosis: coreGovChainConfig('Osmosis'),
+  Dydx: coreGovChainConfig('Dydx'),
+  Terra: coreGovChainConfig('Terra'),
+  TerraClassic: coreGovChainConfig('TerraClassic', false),
+  Noble: coreGovChainConfig('Noble'),
+  Akash: coreGovChainConfig('Akash'),
   Sei: {
     chainId: 'pacific-1',
     hrp: 'sei',

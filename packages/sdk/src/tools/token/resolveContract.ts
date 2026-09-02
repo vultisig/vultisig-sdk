@@ -1,5 +1,6 @@
 import { PublicKey } from '@solana/web3.js'
 import { CosmosChain, EvmChain } from '@vultisig/core-chain/Chain'
+import { getCosmosChainHrp } from '@vultisig/core-chain/chains/cosmos/cosmosHrp'
 import { getCosmosWasmTokenInfoUrl } from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
 import { getEvmClient } from '@vultisig/core-chain/chains/evm/client'
 import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
@@ -60,12 +61,12 @@ type Cw20Chain = (typeof CW20_CHAINS)[number]
 // BEFORE any RPC fires, instead of querying the Osmosis LCD with a Terra
 // address (which would 404 against a different contract namespace, or worse,
 // silently hit a same-shaped address on the wrong chain). Mirrors mcp-ts's
-// `validateBech32Contract(addr, expectedPrefix)` prefix guard.
-const CW20_CHAIN_PREFIX: Record<Cw20Chain, string> = {
-  [CosmosChain.TerraClassic]: 'terra',
-  [CosmosChain.Terra]: 'terra',
-  [CosmosChain.Osmosis]: 'osmo',
-}
+// `validateBech32Contract(addr, expectedPrefix)` prefix guard. Sourced from
+// the canonical `getCosmosChainHrp` registry (architecture#1787) instead of
+// a local copy.
+const CW20_CHAIN_PREFIX: Record<Cw20Chain, string> = Object.fromEntries(
+  CW20_CHAINS.map(chain => [chain, getCosmosChainHrp(chain)])
+) as Record<Cw20Chain, string>
 
 const isEvmChain = (chain: string): chain is EvmChain => Object.values(EvmChain).includes(chain as EvmChain)
 

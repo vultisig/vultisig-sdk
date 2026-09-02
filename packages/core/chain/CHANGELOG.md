@@ -1,5 +1,38 @@
 # @vultisig/core-chain
 
+## 4.1.1
+
+### Patch Changes
+
+- [#2297](https://github.com/vultisig/vultisig-sdk/pull/2297) [`c0eafeb`](https://github.com/vultisig/vultisig-sdk/commit/c0eafeb12df42cffa70ef6951c081a74383e5fa2) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Make the SDK package graph explicit and acyclic. Shared Bitcoin signing protobuf schemas now live in `@vultisig/mpc-types`, `@vultisig/core-mpc` preserves its existing schema subpath as a compatibility export, and SDK builds resolve the declared core packages through their published export maps.
+
+- [#2252](https://github.com/vultisig/vultisig-sdk/pull/2252) [`ef252e4`](https://github.com/vultisig/vultisig-sdk/commit/ef252e40b590a6cad9f303f7aba743c617442f90) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(ton): stop hiding action-phase failures on sends and in status
+
+  Every TON send OR'd `IGNORE_ACTION_PHASE_ERRORS` into the wallet contract's send mode, which tells the contract to skip an outgoing transfer it cannot carry out instead of failing. The transaction then landed un-aborted with the seqno consumed and nothing moved, and the status resolver — which read only `aborted` and `compute_ph.exit_code` — reported it as confirmed. The user was told a transfer succeeded while the funds never left.
+
+  The flag is now dropped from native, MAX, dApp `signTon`, and Jetton sends (both the WalletCore and the React Native builders), and `getTonTxStatus` reads the action phase (`success`, `no_funds`, `result_code`, `skipped_actions`) alongside the compute phase. A transaction the indexer knows but has not yet described stays pending instead of counting as success.
+
+  Dropping the flag changes the signed body, so TON signing hashes move. Clients must upgrade together: a co-signer on an older build derives a different hash and the keysign fails. The mobile and cross-encoder golden corpora are re-recorded to the new values.
+
+- [#2093](https://github.com/vultisig/vultisig-sdk/pull/2093) [`bfe0292`](https://github.com/vultisig/vultisig-sdk/commit/bfe0292e3876fb7acc7044bac1b544c27aba8919) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Publishes token-transfer / ERC-20-calldata destination safety helpers alongside the existing burn-address guard (`assertSafeDestination`): `assertSafeTokenTransferDestination` (rejects a transfer whose recipient is itself a known token contract — not just its own, any registered token's), `isErc20TransferCalldata`, `decodeErc20Recipient`, `decodeErc20Approve`, and `decodeErc20RecipientFromSig`, all re-exported from `@vultisig/sdk`. Previously only `agent-backend-ts` had this guard family as a private fork; `packages/sdk/src/tools/prep/send.ts`'s inline own-token-contract check is now additionally backed by the registry-based guard (catching sends to a _different_ known token's contract, on top of the existing unconditional self-contract check).
+
+- [#2092](https://github.com/vultisig/vultisig-sdk/pull/2092) [`acd0b2e`](https://github.com/vultisig/vultisig-sdk/commit/acd0b2eaa882669a399fb378e51244ed4199ee47) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Consolidates four independently-maintained, overlapping Cosmos-family bech32 HRP tables — `tools/cosmos/gov.ts`'s `CHAIN_HRP`, `tools/prep/ibcTransfer.ts`'s `IBC_CHAIN_HRP`, `tools/swap/skip/skipSwap.ts`'s `COSMOS_CHAIN_HRPS`, and `tools/token/resolveContract.ts`'s `CW20_CHAIN_PREFIX` — into a single canonical registry, `COSMOS_CHAIN_ID_HRP`/`getCosmosChainHrp` (`@vultisig/core-chain/chains/cosmos/cosmosHrp`). All four consumers now derive their HRP checks from the same source instead of hand-maintained local copies that could drift from each other. As a side effect, Skip swap address validation now also HRP-checks four chain-ids (`axelar-dojo-1`, `juno-1`, `stargaze-1`, `akashnet-2`) it previously had no entry for and silently skipped — strictly safer, not a behavior change for any chain that was already validated. Deliberately does not touch `utils/addressFormat.ts`'s separate `cosmosHRPByChain`/`cosmosValoperByChain` tables, which are keyed by a different (lowercase chain-tag) space and ported 1:1 from a Go reference for cross-language parity.
+
+- Updated dependencies [[`c0eafeb`](https://github.com/vultisig/vultisig-sdk/commit/c0eafeb12df42cffa70ef6951c081a74383e5fa2)]:
+  - @vultisig/mpc-types@0.3.0
+
+## 4.1.0
+
+### Minor Changes
+
+- [#2234](https://github.com/vultisig/vultisig-sdk/pull/2234) [`0697060`](https://github.com/vultisig/vultisig-sdk/commit/0697060107c7fe1c8ec818d3e0eae01557d9d96f) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add RUJI Trade quoting and CosmWasm execution for native RUNE and bRUNE swaps through the SDK's normal swap flow.
+
+### Patch Changes
+
+- [#2235](https://github.com/vultisig/vultisig-sdk/pull/2235) [`3fff7cf`](https://github.com/vultisig/vultisig-sdk/commit/3fff7cfdfe23d2d5622f7caa87a6f1525329f07e) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(swap): stop reporting a native trading halt when an aggregator could still fill
+
+  `findSwapQuotes` collapsed a THORChain/MayaChain halt plus a transient aggregator failure into `TradingHalted` for the whole pair, so an ETH→SOL quote surfaced "trading halted" whenever LiFi/SwapKit happened to time out. A halt is scoped to the native protocol that raised it: those aggregators now get one automatic re-attempt, and when they are still unreachable the error reports the transient failure instead of a halt the user cannot retry out of. Halt-only pairs still throw `TradingHalted`.
+
 ## 4.0.1
 
 ### Patch Changes

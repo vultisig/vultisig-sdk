@@ -74,6 +74,11 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.TxReadyParseError).toBe('function')
   })
 
+  it('exports the raw EVM envelope keysign helper', () => {
+    expect(typeof sdk.prepareRawEvmTxFromKeys).toBe('function')
+    expect(typeof sdk.VaultBase.prototype.prepareRawEvmTx).toBe('function')
+  })
+
   it('exports the knownContracts canonical registry + lookup helpers', () => {
     expect(typeof sdk.isKnownContract).toBe('function')
     expect(typeof sdk.isCanonicalEvmContract).toBe('function')
@@ -136,6 +141,21 @@ describe('@vultisig/sdk public exports', () => {
       currency: '524C555344000000000000000000000000000000',
       issuer: 'rIssuer',
     })
+  })
+
+  it('exports XRP destination/X-address normalization from the root SDK entrypoint', () => {
+    expect(typeof sdk.decodeRippleXAddress).toBe('function')
+    expect(typeof sdk.encodeRippleXAddress).toBe('function')
+    expect(typeof sdk.isValidRippleXAddress).toBe('function')
+    expect(typeof sdk.normalizeRippleDestination).toBe('function')
+
+    const classicAddress = 'raJ1Aqkhf19P7cyUc33MMVAzgvHPvtNFC'
+    expect(sdk.normalizeRippleDestination(classicAddress)).toEqual({ address: classicAddress })
+
+    const xAddress = sdk.encodeRippleXAddress(classicAddress, 42)
+    expect(sdk.isValidRippleXAddress(xAddress)).toBe(true)
+    expect(sdk.decodeRippleXAddress(xAddress)).toEqual({ address: classicAddress, destinationTag: 42 })
+    expect(sdk.normalizeRippleDestination(xAddress)).toEqual({ address: classicAddress, destinationTag: 42 })
   })
 
   it('exports the custom-RPC registry + health-probe canonicals from the root SDK entrypoint', () => {
@@ -425,5 +445,17 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof proto.prepareSendTx).toBe('function')
     expect(typeof proto.prepareSwapTx).toBe('function')
     expect(typeof proto.prepareContractCallTx).toBe('function')
+  })
+
+  it('exports the canonical THOR/Maya native-swap metadata (sdk#1988)', async () => {
+    const nativeSwapChain = await import('@vultisig/core-chain/swap/native/NativeSwapChain')
+
+    expect(sdk.nativeSwapChains).toBe(nativeSwapChain.nativeSwapChains)
+    expect(sdk.nativeSwapChainIds).toBe(nativeSwapChain.nativeSwapChainIds)
+    expect(sdk.nativeSwapEnabledChainsRecord).toBe(nativeSwapChain.nativeSwapEnabledChainsRecord)
+    expect(sdk.getNativeSwapChainId).toBe(nativeSwapChain.getNativeSwapChainId)
+    expect(sdk.getNativeSwapChainIdFromDenomPrefix).toBe(nativeSwapChain.getNativeSwapChainIdFromDenomPrefix)
+    expect(sdk.getNativeSwapChainId(sdk.Chain.THORChain)).toBe('THOR')
+    expect(sdk.getNativeSwapChainIdFromDenomPrefix('eth')).toBe('ETH')
   })
 })

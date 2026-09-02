@@ -13,6 +13,7 @@ import {
   IBC_MSG_TRANSFER_TYPE_URL,
   normaliseIbcChainId,
   prepareIbcTransfer,
+  resolveSourceChannelByDestChain,
   supportedIbcDestinationsFrom,
 } from '@/tools/prep/ibcTransfer'
 
@@ -112,6 +113,12 @@ describe('prepareIbcTransfer', () => {
     })
     expect(r.destChain).toBe('osmosis-1')
     expect(r.sourceChannel).toBe('channel-1')
+  })
+
+  it('exports the reverse route lookup used by prepareIbcTransfer', () => {
+    expect(resolveSourceChannelByDestChain('osmosis-1', 'cosmoshub-4')).toBe('channel-0')
+    expect(resolveSourceChannelByDestChain('cosmoshub-4', 'noble-1')).toBe('channel-536')
+    expect(resolveSourceChannelByDestChain('cosmoshub-4', 'juno-1')).toBeNull()
   })
 
   it('cross-validates sourceChannel + toChainId and throws on a mismatched pair', () => {

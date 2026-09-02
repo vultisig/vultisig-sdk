@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-mpc",
-  "version": "2.0.1",
+  "version": "2.1.1",
   "description": "MPC, keysign, and vault types shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -1094,13 +1094,13 @@
     "@noble/hashes": "^2.2.0",
     "@solana/web3.js": "^1.98.4",
     "@trustwallet/wallet-core": "^4.7.3",
-    "@vultisig/core-chain": "4.0.1",
+    "@vultisig/core-chain": "4.1.1",
     "@vultisig/core-config": "0.9.1",
     "@vultisig/lib-dkls": "0.9.0",
     "@vultisig/lib-mldsa": "0.9.0",
     "@vultisig/lib-schnorr": "0.9.0",
     "@vultisig/lib-utils": "0.10.6",
-    "@vultisig/mpc-types": "0.2.3",
+    "@vultisig/mpc-types": "workspace:*",
     "bitcoinjs-lib": "^7.0.1",
     "bs58": "^6.0.0",
     "buffer": "^6.0.3",

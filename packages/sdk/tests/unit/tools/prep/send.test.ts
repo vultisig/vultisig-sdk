@@ -284,6 +284,19 @@ describe('prepareSendTxFromKeys', () => {
     expect(mockBuildSendKeysignPayload).toHaveBeenCalledTimes(1)
   })
 
+  // MAX is recorded from the caller, never re-derived downstream, so it only reaches
+  // the payload if this layer passes it along.
+  it('forwards the MAX flag to the payload builder', async () => {
+    await prepareSendTxFromKeys(baseIdentity, {
+      coin: { chain: Chain.Ton, address: 'UQfrom', decimals: 9, ticker: 'TON' } as any,
+      receiver: 'UQto',
+      amount: 9_950_000_000n,
+      sendMaxAmount: true,
+    })
+
+    expect(mockBuildSendKeysignPayload).toHaveBeenCalledWith(expect.objectContaining({ sendMaxAmount: true }))
+  })
+
   it('allows ERC-20 send to a different address (not the token contract)', async () => {
     const usdcContract = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
     const recipient = '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045'
@@ -300,5 +313,25 @@ describe('prepareSendTxFromKeys', () => {
     })
 
     expect(mockBuildSendKeysignPayload).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects a USDC send whose recipient is a DIFFERENT known token contract (architecture#1774)', async () => {
+    const usdcContract = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+    const usdtContract = '0xdac17f958d2ee523a2206206994597c13d831ec7'
+    await expect(
+      prepareSendTxFromKeys(baseIdentity, {
+        coin: {
+          chain: Chain.Ethereum,
+          address: '0xfrom',
+          decimals: 6,
+          ticker: 'USDC',
+          id: usdcContract,
+        } as any,
+        receiver: usdtContract,
+        amount: 1_000_000n,
+      })
+    ).rejects.toThrow(/destination.*is the USDT token contract/)
+
+    expect(mockBuildSendKeysignPayload).not.toHaveBeenCalled()
   })
 })

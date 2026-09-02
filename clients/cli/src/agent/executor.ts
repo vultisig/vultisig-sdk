@@ -76,12 +76,272 @@ function decodeErc20Transfer(calldata: string): { recipient: Address; amount: bi
   if (calldata.slice(0, ERC20_TRANSFER_SELECTOR.length).toLowerCase() !== ERC20_TRANSFER_SELECTOR) return null
 
   try {
-    const decoded = decodeFunctionData({ abi: ERC20_TRANSFER_ABI, data: calldata as Hex })
+    const decoded = decodeFunctionData({
+      abi: ERC20_TRANSFER_ABI,
+      data: calldata as Hex,
+    })
     const [recipient, amount] = decoded.args as readonly [Address, bigint]
     return { recipient, amount }
   } catch {
     throw new Error('Invalid ERC-20 transfer calldata — refusing to sign')
   }
+}
+
+type ResolvedTokenIdentity = {
+  rawSymbol: string
+  displaySymbol: string
+  kind: 'native' | 'token' | 'unresolved'
+  contract?: string
+}
+
+const tokenLabel = (value: unknown): string => (typeof value === 'string' ? value : '')
+
+// Real token symbols stay far below this; longer "symbols" are either spoof
+// carriers (an embedded Solana mint is 44 chars) or hostile padding for the
+// descriptor regexes below, which backtrack superlinearly on long inputs.
+const MAX_TOKEN_SYMBOL_LENGTH = 32
+const MAX_TOKEN_LABEL_LENGTH = 512
+
+/** Keep descriptor-shaped, attacker-controlled symbol text out of the consent line. */
+function safeTokenSymbol(symbol: string): {
+  displaySymbol: string
+  suspicious: boolean
+} {
+  const defaultDisplaySymbol = symbol.match(/^[\p{L}\p{N}][\p{L}\p{N}._+-]{0,31}/u)?.[0] ?? 'token'
+  if (symbol.length > MAX_TOKEN_SYMBOL_LENGTH) {
+    return { displaySymbol: defaultDisplaySymbol, suspicious: true }
+  }
+  const suspiciousAt = symbol.search(/0x[0-9a-f]{40}|\([^)]*\bon\b[^)]*\)/iu)
+  const candidate = (suspiciousAt < 0 ? symbol : symbol.slice(0, suspiciousAt)).trim()
+  const displaySymbol = candidate.match(/^[\p{L}\p{N}][\p{L}\p{N}._+-]*/u)?.[0] ?? 'token'
+  if (suspiciousAt < 0 && candidate === displaySymbol) {
+    return { displaySymbol, suspicious: false }
+  }
+
+  return { displaySymbol, suspicious: true }
+}
+
+function unresolvedTokenIdentity(label: unknown): ResolvedTokenIdentity {
+  if (typeof label !== 'string' || label.length > MAX_TOKEN_LABEL_LENGTH) {
+    return { rawSymbol: '', displaySymbol: '', kind: 'unresolved' }
+  }
+  const suffixAt = label.lastIndexOf(' (')
+  const rawSymbol = (suffixAt > 0 ? label.slice(0, suffixAt) : label).trim()
+  return {
+    rawSymbol,
+    displaySymbol: safeTokenSymbol(rawSymbol).displaySymbol,
+    kind: 'unresolved',
+  }
+}
+
+function untrustedSymbolIdentity(symbol: unknown): ResolvedTokenIdentity {
+  const rawSymbol = tokenLabel(symbol)
+  return {
+    rawSymbol,
+    displaySymbol: safeTokenSymbol(rawSymbol).displaySymbol,
+    kind: 'unresolved',
+  }
+}
+
+/** Parse and chain-check mcp-ts's fixed-suffix token descriptor. */
+function resolvedTokenIdentity(label: unknown, expectedChain: unknown): ResolvedTokenIdentity {
+  const unresolved = unresolvedTokenIdentity(label)
+  if (typeof label !== 'string' || label.length > MAX_TOKEN_LABEL_LENGTH) return unresolved
+  const match = label.match(/^([\s\S]*) \(([\s\S]*?) on ([^,]+), \d+ dec, source: [^)]+\)$/u)
+  if (!match) return unresolved
+
+  const [, rawSymbol, rawAssetId, descriptorChain] = match
+  const { displaySymbol, suspicious } = safeTokenSymbol(rawSymbol)
+  const parsedChain = resolveChainReference(descriptorChain)
+  const routedChain =
+    typeof expectedChain === 'string' || typeof expectedChain === 'number'
+      ? resolveChainReference(expectedChain)
+      : undefined
+  if (suspicious || !parsedChain || !routedChain || parsedChain !== routedChain) {
+    return { rawSymbol, displaySymbol, kind: 'unresolved' }
+  }
+
+  const assetId = rawAssetId.trim()
+  if (!assetId) return { rawSymbol, displaySymbol, kind: 'unresolved' }
+  if (assetId.toLowerCase() === 'native') return { rawSymbol, displaySymbol, kind: 'native' }
+  if (getChainKind(routedChain) === 'evm') {
+    if (!/^0x[0-9a-f]{40}$/iu.test(assetId)) return { rawSymbol, displaySymbol, kind: 'unresolved' }
+  } else if (!/^[\p{L}\p{N}:._/-]{1,128}$/u.test(assetId)) {
+    // Non-EVM asset ids (Solana mints, Cosmos denoms, THOR assets) have no
+    // single shape, but none contain whitespace or control characters — and
+    // this string is interpolated into the consent line.
+    return { rawSymbol, displaySymbol, kind: 'unresolved' }
+  }
+  return { rawSymbol, displaySymbol, kind: 'token', contract: assetId }
+}
+
+function replaceUnsafeSymbol(text: string, identity: ResolvedTokenIdentity): string {
+  if (!identity.rawSymbol || identity.rawSymbol === identity.displaySymbol) return text
+  return text.split(identity.rawSymbol).join(identity.displaySymbol)
+}
+
+/**
+ * Anchor only at the END of a trade half: a complete asset label (never a
+ * prefix such as USDT inside USDT.e) whose match closes the half. Interior
+ * matches are refused — route prose can mention any symbol, and annotating
+ * an interior mention would misattribute the contract.
+ */
+function anchorEnd(text: string, label: string): number {
+  if (!label) return -1
+  const tokenChar = /[\p{L}\p{N}._+-]/u
+  const trimmedLength = text.trimEnd().length
+  const index = trimmedLength - label.length
+  if (index < 0 || !text.startsWith(label, index)) return -1
+  const before = text[index - 1]
+  if (before && tokenChar.test(before)) return -1
+  return trimmedLength
+}
+
+function hasAnchor(text: string, anchors: string[]): boolean {
+  return anchors.some(anchor => anchorEnd(text, anchor) >= 0)
+}
+
+/** A quote summary must describe exactly one sell-to-buy transition. */
+function hasSingleSwapDelimiter(summary: string, labels: Record<string, unknown>): boolean {
+  // Ignore arrows embedded in declared symbols: those symbols are sanitized
+  // before rendering and therefore are not structural route delimiters.
+  const identities = [
+    unresolvedTokenIdentity(labels.from_token),
+    untrustedSymbolIdentity(labels.from_token_symbol),
+    unresolvedTokenIdentity(labels.to_token),
+    untrustedSymbolIdentity(labels.to_token_symbol),
+  ]
+  const structuralSummary = identities.reduce((text, identity) => replaceUnsafeSymbol(text, identity), summary)
+  const firstArrow = structuralSummary.indexOf('→')
+  return firstArrow >= 0 && structuralSummary.indexOf('→', firstArrow + 1) < 0
+}
+
+/** Choose the trade arrow whose halves contain the declared sell/buy labels. */
+function splitSwapHead(head: string, sellAnchors: string[], buyAnchors: string[]) {
+  let best: { left: string; buy: string; provider: string; score: number } | undefined
+  let arrowAt = head.indexOf('→')
+  while (arrowAt >= 0) {
+    const left = head.slice(0, arrowAt)
+    const right = head.slice(arrowAt + 1)
+    const viaAt = right.indexOf(' via ')
+    const buy = viaAt >= 0 ? right.slice(0, viaAt) : right
+    const provider = viaAt >= 0 ? right.slice(viaAt) : ''
+    const score = Number(hasAnchor(left, sellAnchors)) + Number(hasAnchor(buy, buyAnchors))
+    if (!best || score > best.score) {
+      best = { left, buy, provider, score }
+    }
+    arrowAt = head.indexOf('→', arrowAt + 1)
+  }
+  return best
+}
+
+function terminalAnchorSymbol(anchor: string): string {
+  return anchor.trim().match(/[\p{L}\p{N}][\p{L}\p{N}._+-]*$/u)?.[0] ?? ''
+}
+
+function discloseSwapSide(side: string, anchors: string[], suffix: string, expectedSymbol?: string): string {
+  if (!expectedSymbol) {
+    return `${side.trimEnd()} (contract unavailable)${side.slice(side.trimEnd().length)}`
+  }
+  for (const anchor of anchors) {
+    const end = anchorEnd(side, anchor)
+    if (end < 0) continue
+    const visibleSymbol = terminalAnchorSymbol(anchor)
+    if (expectedSymbol && visibleSymbol && visibleSymbol !== expectedSymbol) break
+    if (!suffix) return side
+    return `${side.slice(0, end)}${suffix}${side.slice(end)}`
+  }
+  return `${side.trimEnd()} (contract unavailable)${side.slice(side.trimEnd().length)}`
+}
+
+/**
+ * Add contract truth to each resolved trade half. The sell address comes from
+ * the signed approval payload when present, otherwise from a chain-checked
+ * label claim. The buy address remains a chain-checked label claim. Unresolved
+ * identities fail closed without attaching a concrete contract.
+ */
+function discloseSwapTokenContracts(
+  head: string,
+  labels: Record<string, unknown>,
+  payload: any,
+  sourceChain: Chain
+): string {
+  // The routed destination lives in `labels.to_chain` (the mcp-ts prep
+  // envelope has no top-level `to_chain`). A legacy top-level value may stand
+  // in when the label is absent. Preserve an unsupported present label so
+  // resolvedTokenIdentity rejects it instead of trusting a contradictory
+  // payload fallback; if neither route exists, the descriptor must not
+  // authenticate its own chain.
+  const destinationChain = Object.hasOwn(labels, 'to_chain')
+    ? (labels.to_chain ?? null)
+    : typeof payload?.to_chain === 'string' || typeof payload?.to_chain === 'number'
+      ? payload.to_chain
+      : undefined
+  const fromToken = resolvedTokenIdentity(labels.from_token, sourceChain)
+  const toToken = resolvedTokenIdentity(labels.to_token, destinationChain)
+  const fromSymbol = untrustedSymbolIdentity(labels.from_token_symbol)
+  const toSymbol = untrustedSymbolIdentity(labels.to_token_symbol)
+  // Mirror the approve-leg signer exactly: signMultiLeg re-parents
+  // approvalTxArgs as `txArgs` and clears the sibling tx fields, so the
+  // signed approve target is `approvalTxArgs.tx.to` and nothing else.
+  // Reading any other nested shape here (the extractNestedTx precedence
+  // chain) would let a hostile envelope render one address while the signer
+  // broadcasts an approve to another.
+  const approvalArgs = payload?.approvalTxArgs
+  const rawApprovalTarget = tokenLabel(
+    approvalArgs && typeof approvalArgs === 'object' ? approvalArgs.tx?.to : undefined
+  )
+  const approvalTarget = /^0x[0-9a-f]{40}$/iu.test(rawApprovalTarget) ? rawApprovalTarget : ''
+
+  const symbolIdentities = [fromToken, fromSymbol, toToken, toSymbol]
+  const sanitizeText = (value: unknown) =>
+    symbolIdentities.reduce((text, identity) => replaceUnsafeSymbol(text, identity), tokenLabel(value))
+  const sanitizedHead = sanitizeText(head)
+  const sellAnchors = [sanitizeText(labels.amount_in), fromSymbol.displaySymbol, fromToken.displaySymbol].filter(
+    Boolean
+  )
+  const buyAnchors = [sanitizeText(labels.expected_output), toSymbol.displaySymbol, toToken.displaySymbol].filter(
+    Boolean
+  )
+
+  const approvalMatchesResolvedSellToken =
+    fromToken.kind === 'token' &&
+    !!fromToken.contract &&
+    !!approvalTarget &&
+    fromToken.contract.toLowerCase() === approvalTarget.toLowerCase()
+  const sellSuffix = payload?.approvalTxArgs
+    ? approvalMatchesResolvedSellToken
+      ? ` (${approvalTarget})`
+      : ' (contract unavailable)'
+    : fromToken.kind === 'native'
+      ? ''
+      : fromToken.kind === 'token' && fromToken.contract
+        ? ` (${fromToken.contract})`
+        : ' (contract unavailable)'
+  const buySuffix =
+    toToken.kind === 'native'
+      ? ''
+      : toToken.kind === 'token' && toToken.contract
+        ? ` (${toToken.contract})`
+        : ' (contract unavailable)'
+
+  const halves = splitSwapHead(sanitizedHead, sellAnchors, buyAnchors)
+  if (!halves) return `${sanitizedHead} (contract unavailable)`
+  const sellResolved = fromToken.kind !== 'unresolved'
+  const buyResolved = toToken.kind !== 'unresolved'
+  const sell = discloseSwapSide(
+    halves.left,
+    sellAnchors,
+    sellResolved ? sellSuffix : '',
+    sellResolved ? fromToken.displaySymbol : undefined
+  )
+  const buy = discloseSwapSide(
+    halves.buy,
+    buyAnchors,
+    buyResolved ? buySuffix : '',
+    buyResolved ? toToken.displaySymbol : undefined
+  )
+  return `${sell}→${buy}${halves.provider}`
 }
 
 // `Set<string>.has()` returns a plain boolean, so it never narrows `Chain` down to
@@ -584,16 +844,22 @@ export class AgentExecutor {
     if (isSwap) {
       // quote_summary already embeds the provider ("… via kyber"); only append
       // the provider when we fall back to building the head ourselves.
-      const usedQuoteSummary = !!labels.quote_summary
-      const head =
-        labels.quote_summary ||
-        `swap ${labels.amount_in ?? p?.txArgs?.amount ?? '?'} ${labels.from_token_symbol ?? ''} → ${
-          labels.to_token_symbol ?? ''
-        }`.trim()
+      const rawQuoteSummary = tokenLabel(labels.quote_summary)
+      const quoteSummary = hasSingleSwapDelimiter(rawQuoteSummary, labels) ? rawQuoteSummary : ''
+      const usedQuoteSummary = !!quoteSummary
+      const amountIn = tokenLabel(labels.amount_in) || tokenLabel(p?.txArgs?.amount) || '?'
+      const fromSymbol = tokenLabel(labels.from_token_symbol)
+      const sellHead = fromSymbol && !amountIn.endsWith(` ${fromSymbol}`) ? `${amountIn} ${fromSymbol}` : amountIn
+      const head = discloseSwapTokenContracts(
+        quoteSummary || `swap ${sellHead} → ${tokenLabel(labels.to_token_symbol) || '?'}`,
+        labels,
+        p,
+        stored.chain
+      )
       const parts = [head, `on ${stored.chain}`]
-      if (!usedQuoteSummary && labels.provider) parts.push(`via ${labels.provider}`)
+      if (!usedQuoteSummary && tokenLabel(labels.provider)) parts.push(`via ${tokenLabel(labels.provider)}`)
       if (p?.__multiLeg) parts.push('(+ token approval — 2 transactions)')
-      if (labels.estimated_fee) parts.push(`est. fee ${labels.estimated_fee}`)
+      if (tokenLabel(labels.estimated_fee)) parts.push(`est. fee ${tokenLabel(labels.estimated_fee)}`)
       return parts.join(' ')
     }
     // Name the token contract from the payload that gets signed, not from label
@@ -1235,9 +1501,8 @@ export class AgentExecutor {
 
   /**
    * Sign and broadcast a server-built EVM transaction (raw EVM tx from
-   * tx_ready SSE). Uses vault.prepareSendTx with memo field to carry the
-   * calldata, plus EVM-specific nonce/lock plumbing that Phase B's
-   * `signMultiLeg` depends on for back-to-back approve+main broadcasts.
+   * tx_ready SSE). The SDK raw-envelope helper owns zero-value calldata,
+   * gas-limit, and fee mapping; the CLI reconciles its nonce with local state.
    */
   private async signEvmServerTx(
     serverTxData: any,
@@ -1269,16 +1534,6 @@ export class AgentExecutor {
     await this.acquireEvmLockIfNeeded(chain)
 
     try {
-      const address = await this.vault.address(chain)
-      const balance = await this.vault.balance(chain)
-
-      const coin: AccountCoin = {
-        chain,
-        address,
-        decimals: (balance as any).decimals || 18,
-        ticker: (balance as any).symbol || chain.toString(),
-      }
-
       const amount = BigInt(swapTx.value || '0')
       const hasCalldata = !!(swapTx.data && swapTx.data !== '0x')
 
@@ -1294,42 +1549,24 @@ export class AgentExecutor {
         }
       }
 
-      // Build keysign payload using prepareSendTx - memo field carries EVM calldata
-      // For 0-value contract calls (e.g. approve), use a tiny amount to bypass the SDK's
-      // refineKeysignAmount check, then patch toAmount back to "0" after building.
-      const buildAmount = amount === 0n && hasCalldata ? 1n : amount
-      const keysignPayload = await this.vault.prepareSendTx({
-        coin,
-        receiver: swapTx.to,
-        amount: buildAmount,
-        memo: swapTx.data,
+      const keysignPayload = await this.vault.prepareRawEvmTx({
+        chain,
+        tx: {
+          to: swapTx.to,
+          value: swapTx.value ?? 0n,
+          data: swapTx.data ?? '0x',
+          gasLimit: swapTx.gasLimit ?? swapTx.gas_limit,
+          maxFeePerGas: swapTx.maxFeePerGas ?? swapTx.max_fee_per_gas,
+          maxPriorityFeePerGas: swapTx.maxPriorityFeePerGas ?? swapTx.max_priority_fee_per_gas,
+          nonce: swapTx.nonce,
+        },
       })
 
-      // Patch toAmount to actual value for 0-value contract calls
-      if (amount === 0n && hasCalldata) {
-        ;(keysignPayload as any).toAmount = '0'
-      }
-
-      // Patch EVM nonce if local state is ahead of on-chain
+      // Reconcile a server-provided nonce with locally tracked broadcasts.
       await this.patchEvmNonce(chain, keysignPayload)
 
-      // If the server provided a gas_limit, use it — the MCP server's estimate
-      // is more accurate for complex DeFi calls (e.g. Pendle router ~1.2M gas)
-      // that the SDK's prepareSendTx may underestimate.
-      if (swapTx.gas_limit) {
-        const bs = (keysignPayload as any).blockchainSpecific
-        if (bs?.case === 'ethereumSpecific' && bs.value?.gasLimit) {
-          const serverGas = swapTx.gas_limit.toString()
-          const currentGas = bs.value.gasLimit.toString()
-          // Use the higher of server estimate and SDK estimate
-          if (BigInt(serverGas) > BigInt(currentGas)) {
-            bs.value.gasLimit = serverGas
-            if (this.verbose) process.stderr.write(`[gas] Using server gas_limit: ${serverGas} (was ${currentGas})\n`)
-          }
-        }
-      }
-
-      // Refresh gas estimate — base fee may have drifted since prepareSendTx
+      // Refresh the fee envelope immediately before hashing/signing so a raw
+      // transaction prepared earlier is not underpriced after base-fee drift.
       await this.patchEvmGas(chain, keysignPayload)
 
       // Extract message hashes and sign
