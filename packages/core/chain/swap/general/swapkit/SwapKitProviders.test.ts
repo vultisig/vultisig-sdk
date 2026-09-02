@@ -36,7 +36,10 @@ describe('SwapKitProviders', () => {
         'fetch',
         vi.fn(async () =>
           response([
-            { provider: 'NEAR', enabledChainIds: ['bitcoincash', '1', 'solana'] },
+            {
+              provider: 'NEAR',
+              enabledChainIds: ['bitcoincash', '1', 'solana'],
+            },
             { provider: 'UNISWAP_V3', enabledChainIds: ['1', '42161'] },
           ])
         )
@@ -66,7 +69,10 @@ describe('SwapKitProviders', () => {
         'fetch',
         vi.fn(async () =>
           response([
-            { provider: 'MAYACHAIN_STREAMING', enabledChainIds: ['zcash', '1'] },
+            {
+              provider: 'MAYACHAIN_STREAMING',
+              enabledChainIds: ['zcash', '1'],
+            },
             { provider: 'NEAR', enabledChainIds: ['1'] },
           ])
         )
@@ -74,6 +80,25 @@ describe('SwapKitProviders', () => {
 
       // Zcash -> ETH only co-enabled on MAYACHAIN_STREAMING, which is filtered out.
       await expect(isSwapKitPairSupported({ from: Chain.Zcash, to: Chain.Ethereum })).resolves.toBe(false)
+    })
+
+    it('ignores providers outside the quote allowlist when they are the only provider enabling both chains', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () =>
+          response([
+            { provider: 'UNLISTED_DEX', enabledChainIds: ['bitcoincash', '4663'] },
+            { provider: 'NEAR', enabledChainIds: ['bitcoincash'] },
+          ])
+        )
+      )
+
+      await expect(
+        isSwapKitPairSupported({
+          from: Chain.BitcoinCash,
+          to: Chain.Robinhood,
+        })
+      ).resolves.toBe(false)
     })
 
     it('fails open (returns true) when the providers snapshot is empty', async () => {
@@ -157,7 +182,10 @@ describe('SwapKitProviders', () => {
       const fetchMock = vi.fn()
       vi.stubGlobal('fetch', fetchMock)
 
-      await expect(resolveSwapKitChainMetadata(chain)).resolves.toEqual({ assetPrefix, providerChainId })
+      await expect(resolveSwapKitChainMetadata(chain)).resolves.toEqual({
+        assetPrefix,
+        providerChainId,
+      })
       expect(fetchMock).not.toHaveBeenCalled()
     })
 

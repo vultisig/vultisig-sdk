@@ -242,7 +242,12 @@ const getSwapKitTokens = async (provider: string): Promise<SwapKitTokenInfo[] | 
     return null
   }
 
-  tokensCache.set(cacheKey, { baseUrl, provider, tokens: result.data, fetchedAt: Date.now() })
+  tokensCache.set(cacheKey, {
+    baseUrl,
+    provider,
+    tokens: result.data,
+    fetchedAt: Date.now(),
+  })
   return result.data
 }
 
@@ -358,7 +363,7 @@ export const getSwapKitProviders = async (): Promise<SwapKitProviderInfo[]> => {
 /**
  * SwapKit collapses "amount below provider minimum" and "pair not supported" into
  * the same `noRoutesFound` 404, so the envelope alone can't disambiguate them.
- * Cross-check the cached `/providers` snapshot: if a single non-excluded provider
+ * Cross-check the cached `/providers` snapshot: if a single quote-allowlisted provider
  * enables BOTH chains, the pair is structurally supported, so a no-route result
  * must be amount-related. Mirrors vultisig-ios #4418.
  *
@@ -388,7 +393,7 @@ export const isSwapKitPairSupported = async ({
 
   return providers.some(
     ({ provider, enabledChainIds }) =>
-      !swapKitExcludedProviders.has(normalizeSwapKitProvider(provider)) &&
+      swapKitAllowedProviderNames.has(normalizeSwapKitProvider(provider)) &&
       enabledChainIds.includes(fromId) &&
       enabledChainIds.includes(toId)
   )
