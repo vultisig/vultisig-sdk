@@ -281,16 +281,21 @@ describe('getTonChainSpecific — expireAt honours a dApp deadline', () => {
   })
 
   // `now + 0.5` is in the future by the raw comparison but floors to `now`, which
-  // would sign a message already expired at broadcast.
+  // would sign a message already expired at broadcast. The rejection names the
+  // deadline as the dApp sent it, so the caller can see what was refused.
   it('fails the build for a deadline less than a second away', async () => {
+    const deadline = now + 0.5
+
     await expect(
-      getTonChainSpecific({ keysignPayload: payload, walletCore: {} as never, validUntil: now + 0.5 })
-    ).rejects.toThrow('has already passed')
+      getTonChainSpecific({ keysignPayload: payload, walletCore: {} as never, validUntil: deadline })
+    ).rejects.toThrow(`valid_until ${deadline}) has already passed`)
   })
 
   it('fails the build for a deadline that has already passed', async () => {
+    const deadline = now - 1
+
     await expect(
-      getTonChainSpecific({ keysignPayload: payload, walletCore: {} as never, validUntil: now - 1 })
-    ).rejects.toThrow('has already passed')
+      getTonChainSpecific({ keysignPayload: payload, walletCore: {} as never, validUntil: deadline })
+    ).rejects.toThrow(`valid_until ${deadline}) has already passed`)
   })
 })
