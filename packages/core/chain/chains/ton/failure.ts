@@ -16,7 +16,6 @@ export const tonTxFailureReasons = [
   'out-of-gas',
   'invalid-destination',
   'not-enough-jettons',
-  'jetton-gas-underfunded',
   'jetton-unauthorized',
   'action-failed',
   'aborted',
@@ -39,9 +38,13 @@ export type TonTxFailure = {
 /**
  * Compute-phase exit codes. The sender's wallet contract throws the first block
  * from `recv_external`: wallet v3/v4 use 33–36, W5 uses 133–136 for the same
- * checks. 13 / -14 are the TVM's out-of-gas codes. 705–709 come from the
- * standard jetton wallet (TEP-74). Everything else is a contract-specific
- * revert we can only report by number.
+ * checks. 13 / -14 are the TVM's out-of-gas codes. 705 and 706 come from the
+ * standard jetton wallet (TEP-74) and mean the same thing on a transfer and on
+ * a burn; its 707 and 709 are deliberately absent because the reference
+ * contract reuses each for two unrelated checks (707: unauthorized incoming
+ * transfer, or too little TON on a burn; 709: too little TON on a transfer, or
+ * an unexpected bounced op), and the code alone cannot tell which. Everything
+ * else is a contract-specific revert we can only report by number.
  */
 const computeExitCodeReasons: Record<number, TonTxFailureReason> = {
   33: 'seqno-mismatch',
@@ -55,9 +58,7 @@ const computeExitCodeReasons: Record<number, TonTxFailureReason> = {
   13: 'out-of-gas',
   [-14]: 'out-of-gas',
   705: 'jetton-unauthorized',
-  707: 'jetton-unauthorized',
   706: 'not-enough-jettons',
-  709: 'jetton-gas-underfunded',
 }
 
 /**
@@ -92,8 +93,6 @@ const failureMessages: Record<TonTxFailureReason, string> = {
   'out-of-gas': 'The transaction ran out of gas before it could finish. Attach more TON to the transfer and try again.',
   'invalid-destination': 'The destination address is not valid on TON. Check the address and try again.',
   'not-enough-jettons': 'This wallet does not hold enough of the token to send that amount.',
-  'jetton-gas-underfunded':
-    'Not enough TON was attached to pay for the token transfer. Keep about 0.05 TON for fees and try again.',
   'jetton-unauthorized':
     'The token contract refused the transfer because this wallet is not allowed to move these tokens.',
   'action-failed':

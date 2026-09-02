@@ -1361,6 +1361,7 @@ const checkStatus = async () => {
   - `reason: string` - Stable, chain-specific identifier a UI can translate (TON: `seqno-mismatch`, `expired`, `insufficient-funds`, … — see `TonTxFailureReason`)
   - `message: string` - Plain-language explanation with the remedy, e.g. an expired TON transaction says to check the device clock
   - `exitCode?: number` - Raw contract/VM code when there is one (TON: 33/133 seqno, 36/136 expired, …)
+  - `phase?: string` - Execution phase that produced the code (TON: `compute` or `action`; action-phase 36 is an invalid destination, compute-phase 36 is the wallet's expiry)
 
 On TON the same explanations cover a broadcast the wallet contract refuses: the failed broadcast's `cause` is a `TonBroadcastRejectedError` whose `failure` carries the reason and whose `message` is the remedy, so "another transaction went first" and "your device clock is off" never surface as an opaque `exitcode=133` / `exitcode=136`.
 

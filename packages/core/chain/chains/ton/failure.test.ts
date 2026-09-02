@@ -28,8 +28,6 @@ describe('getTonComputeFailure', () => {
     [-14, 'out-of-gas'],
     [705, 'jetton-unauthorized'],
     [706, 'not-enough-jettons'],
-    [707, 'jetton-unauthorized'],
-    [709, 'jetton-gas-underfunded'],
   ] as const)('maps exit code %i to %s', (exitCode, reason) => {
     expect(getTonComputeFailure(exitCode)).toMatchObject({ reason, phase: 'compute', exitCode })
   })
@@ -41,6 +39,13 @@ describe('getTonComputeFailure', () => {
   it('tells the user another transaction went first for a seqno mismatch', () => {
     expect(getTonComputeFailure(133)?.message).toMatch(/processed first/)
   })
+
+  it.each([707, 709])(
+    'leaves jetton-wallet code %i generic, because the reference contract reuses it for two unrelated checks',
+    exitCode => {
+      expect(getTonComputeFailure(exitCode)).toMatchObject({ reason: 'contract-rejected', exitCode })
+    }
+  )
 
   it('reports an unknown code by number', () => {
     expect(getTonComputeFailure(137)).toEqual({
