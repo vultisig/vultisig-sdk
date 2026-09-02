@@ -274,6 +274,20 @@ describe('getTonChainSpecific — expireAt honours a dApp deadline', () => {
     expect(res.expireAt).toBe(BigInt(now + 600))
   })
 
+  it('floors a fractional deadline to whole seconds', async () => {
+    const res = await getTonChainSpecific({ keysignPayload: payload, walletCore: {} as never, validUntil: now + 60.9 })
+
+    expect(res.expireAt).toBe(BigInt(now + 60))
+  })
+
+  // `now + 0.5` is in the future by the raw comparison but floors to `now`, which
+  // would sign a message already expired at broadcast.
+  it('fails the build for a deadline less than a second away', async () => {
+    await expect(
+      getTonChainSpecific({ keysignPayload: payload, walletCore: {} as never, validUntil: now + 0.5 })
+    ).rejects.toThrow('has already passed')
+  })
+
   it('fails the build for a deadline that has already passed', async () => {
     await expect(
       getTonChainSpecific({ keysignPayload: payload, walletCore: {} as never, validUntil: now - 1 })

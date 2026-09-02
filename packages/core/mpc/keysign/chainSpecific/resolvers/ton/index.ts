@@ -31,11 +31,14 @@ const resolveTonExpireAt = ({ now, validUntil }: ResolveTonExpireAtInput): numbe
     return walletDeadline
   }
 
-  if (!Number.isFinite(validUntil) || validUntil <= now) {
-    throw new Error(`TON request deadline (valid_until ) has already passed`)
+  // Whole seconds only: flooring first means a deadline less than a second out is
+  // caught here rather than signed as an expiry equal to `now`.
+  const deadline = Number.isFinite(validUntil) ? Math.floor(validUntil) : Number.NaN
+  if (!(deadline > now)) {
+    throw new Error(`TON request deadline (valid_until ${validUntil}) has already passed`)
   }
 
-  return Math.min(walletDeadline, Math.floor(validUntil))
+  return Math.min(walletDeadline, deadline)
 }
 
 /**
