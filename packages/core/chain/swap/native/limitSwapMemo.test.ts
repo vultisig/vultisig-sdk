@@ -29,6 +29,34 @@ const validInput: LimitSwapMemoInput = {
   expiry_hours: 24,
 }
 
+const base58DestinationVectors = [
+  {
+    chain: 'Dash',
+    targetAsset: 'DASH.DASH',
+    valid: 'XanAvE5GMB8CsPH78B9moJq9viEVKvCS4f',
+    wrongVersion: 'Xz7muLNZ4Mb5gpRC9bV6HS6wZDVRyAowVU',
+  },
+  {
+    chain: 'Zcash',
+    targetAsset: 'ZEC.ZEC',
+    valid: 't1Hxw6JqWMnhDK5jRCieg5bFHM2qt7UtQvu',
+    wrongVersion: 't1hJY5R8o4yA68WsWE8yzZiX4yY6pmQRiKY',
+  },
+  {
+    chain: 'Ripple',
+    targetAsset: 'XRP.XRP',
+    valid: 'rMwNibdiFaEzsTaFCG1NnmAM3Rv3vHUy5L',
+  },
+  {
+    chain: 'Tron',
+    targetAsset: 'TRON.TRX',
+    valid: 'TA4Y62o6YC2Zsck9rZVGTvqW1AQ7X9zTnj',
+    wrongVersion: 'TZQ9596PFNVSh3tEsypax47Hdff4DKLkmj',
+  },
+] as const
+
+const corruptChecksum = (address: string): string => `${address.slice(0, -1)}${address.endsWith('1') ? '2' : '1'}`
+
 describe('buildLimitSwapMemo', () => {
   it.each(fixtures)('matches fixture $name', ({ inputs, expected_memo, source_chain_kind, affiliate_included }) => {
     const memo = buildLimitSwapMemo(inputs)
@@ -190,6 +218,42 @@ describe('validateLimitSwapInputs', () => {
       })
     ).toThrow(/printable ASCII/)
   })
+
+  it.each(base58DestinationVectors)('accepts a checksummed $chain mainnet destination', ({ targetAsset, valid }) => {
+    expect(() =>
+      validateLimitSwapInputs({
+        ...validInput,
+        target_asset: targetAsset,
+        dest_addr: valid,
+      })
+    ).not.toThrow()
+  })
+
+  it.each(base58DestinationVectors)(
+    'rejects a checksum-corrupted but shape-valid $chain destination',
+    ({ targetAsset, valid }) => {
+      expect(() =>
+        validateLimitSwapInputs({
+          ...validInput,
+          target_asset: targetAsset,
+          dest_addr: corruptChecksum(valid),
+        })
+      ).toThrow(/dest_addr is not a valid/)
+    }
+  )
+
+  it.each(base58DestinationVectors.filter(vector => 'wrongVersion' in vector))(
+    'rejects a checksummed $chain destination carrying the wrong network version',
+    ({ targetAsset, wrongVersion }) => {
+      expect(() =>
+        validateLimitSwapInputs({
+          ...validInput,
+          target_asset: targetAsset,
+          dest_addr: wrongVersion,
+        })
+      ).toThrow(/dest_addr is not a valid/)
+    }
+  )
 
   it('rejects invalid source amounts', () => {
     expect(() =>

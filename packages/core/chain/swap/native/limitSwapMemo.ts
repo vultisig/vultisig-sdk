@@ -1,5 +1,7 @@
 import { fromBech32 } from '@cosmjs/encoding'
 import { PublicKey } from '@solana/web3.js'
+import bs58check from 'bs58check'
+import { isValidClassicAddress } from 'ripple-address-codec'
 
 import { Chain } from '../../Chain'
 import { getChainKind } from '../../ChainKind'
@@ -268,6 +270,18 @@ const isSolanaAddress = (address: string): boolean => {
   }
 }
 
+const isBase58CheckPayload = (address: string, expectedVersion: readonly number[], payloadLength: number): boolean => {
+  try {
+    const decoded = bs58check.decode(address)
+    return (
+      decoded.length === expectedVersion.length + payloadLength &&
+      expectedVersion.every((byte, index) => decoded[index] === byte)
+    )
+  } catch {
+    return false
+  }
+}
+
 type LimitSwapDestinationValidator = (address: string) => boolean
 
 // Keep this exhaustive even though unsupported chains deliberately map to
@@ -293,11 +307,12 @@ const limitSwapDestinationValidators: Record<Chain, LimitSwapDestinationValidato
     new RegExp(`^(bc1[ac-hj-np-z02-9]{11,71}|[13][${base58AddressChars}]{25,34})$`, 'i').test(address),
   [Chain.BitcoinCash]: address =>
     new RegExp(`^([qp][0-9a-z]{41}|[13][${base58AddressChars}]{25,34})$`, 'i').test(address),
-  [Chain.Dash]: address => new RegExp(`^X[${base58AddressChars}]{33}$`).test(address),
+  [Chain.Dash]: address => isBase58CheckPayload(address, [0x4c], 20),
   [Chain.Dogecoin]: address => new RegExp(`^D[5-9A-HJ-NP-U][${base58AddressChars}]{32}$`).test(address),
   [Chain.Litecoin]: address =>
     new RegExp(`^(ltc1[ac-hj-np-z02-9]{11,71}|[LM3][${base58AddressChars}]{25,34})$`, 'i').test(address),
-  [Chain.Zcash]: address => new RegExp(`^t[13][${base58AddressChars}]{33}$`).test(address),
+  [Chain.Zcash]: address =>
+    isBase58CheckPayload(address, [0x1c, 0xb8], 20) || isBase58CheckPayload(address, [0x1c, 0xbd], 20),
 
   [Chain.Cosmos]: address => isBech32Address(address, 'cosmos'),
   [Chain.Osmosis]: undefined,
@@ -314,8 +329,8 @@ const limitSwapDestinationValidators: Record<Chain, LimitSwapDestinationValidato
   [Chain.Polkadot]: undefined,
   [Chain.Bittensor]: undefined,
   [Chain.Ton]: undefined,
-  [Chain.Ripple]: address => new RegExp(`^r[${base58AddressChars}]{24,34}$`).test(address),
-  [Chain.Tron]: address => new RegExp(`^T[${base58AddressChars}]{33}$`).test(address),
+  [Chain.Ripple]: isValidClassicAddress,
+  [Chain.Tron]: address => isBase58CheckPayload(address, [0x41], 20),
   [Chain.Cardano]: undefined,
   [Chain.QBTC]: undefined,
 }
