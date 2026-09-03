@@ -65,7 +65,6 @@ export const TERRA_CLASSIC_UUSD_BASE_GAS = 225_000n
 export const cosmosGasRecord: Record<IbcEnabledCosmosChain, bigint> = {
   [Chain.Cosmos]: COSMOS_SEND_FEE_DEFAULT,
   [Chain.Osmosis]: 9000n,
-  [Chain.Kujira]: COSMOS_SEND_FEE_DEFAULT,
   [Chain.Terra]: COSMOS_SEND_FEE_DEFAULT,
   [Chain.Dydx]: 2500000000000000n,
   [Chain.TerraClassic]: TERRA_CLASSIC_ULUNA_BASE_GAS,
