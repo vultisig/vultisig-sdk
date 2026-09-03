@@ -9,7 +9,7 @@ import { initializeMpcLib } from '../lib/initialize'
 import { mpcDebugLog } from '../mpcDebugLog'
 import { deleteMpcRelayMessage } from '../message/relay/delete'
 import { getMpcRelayMessages } from '../message/relay/get'
-import { sendMpcRelayMessage } from '../message/relay/send'
+import { runMpcRelayProcessing, sendMpcRelayMessages } from '../message/relay/send'
 import { fromMpcServerMessage, toMpcServerMessage } from '../message/server'
 import { waitForSetupMessage } from '../message/setup/get'
 import { uploadMpcSetupMessage } from '../message/setup/upload'
@@ -69,51 +69,58 @@ export class Schnorr {
     this.timeoutMs = options?.timeoutMs ?? 60000 // Default to 1 minute (60000ms)
   }
 
-  private async processOutbound(session: MpcSession<unknown>, messageId?: string): Promise<boolean> {
-    try {
-      const message = session.outputMessage()
-      if (message === undefined) {
-        if (this.isKeygenComplete) {
-          mpcDebugLog('stop processOutbound')
-          return true
-        } else {
-          await sleep(100) // backoff for 100ms
-          return await this.processOutbound(session, messageId)
-        }
-      }
-      mpcDebugLog('outbound message:', message)
-      const messageToSend = toMpcServerMessage(message.body, this.hexEncryptionKey)
-      message?.receivers.forEach(receiver => {
-        // send message to receiver
-        sendMpcRelayMessage({
-          serverUrl: this.serverURL,
-          sessionId: this.sessionId,
-          message: {
-            session_id: this.sessionId,
-            from: this.localPartyId,
-            to: [receiver],
-            body: messageToSend,
-            hash: getMessageHash(base64Encode(message.body)),
-            sequence_no: this.sequenceNo,
-          },
-          messageId,
-        })
-        this.sequenceNo++
-      })
-      await sleep(100)
-      return await this.processOutbound(session, messageId)
-    } catch (error) {
-      console.error('processOutbound error:', error)
+  private async processOutbound(
+    session: MpcSession<unknown>,
+    signal: AbortSignal,
+    messageId?: string
+  ): Promise<boolean> {
+    if (signal.aborted) {
+      return true
+    }
+
+    const message = session.outputMessage()
+    if (message === undefined) {
       if (this.isKeygenComplete) {
         mpcDebugLog('stop processOutbound')
         return true
       }
+
       await sleep(100)
-      return await this.processOutbound(session, messageId)
+      return this.processOutbound(session, signal, messageId)
     }
+
+    mpcDebugLog('outbound message:', message)
+    const body = toMpcServerMessage(message.body, this.hexEncryptionKey)
+
+    this.sequenceNo = await sendMpcRelayMessages({
+      serverUrl: this.serverURL,
+      sessionId: this.sessionId,
+      messageId,
+      receivers: message.receivers,
+      sequenceNo: this.sequenceNo,
+      message: {
+        session_id: this.sessionId,
+        from: this.localPartyId,
+        body,
+        hash: getMessageHash(base64Encode(message.body)),
+      },
+      signal,
+    })
+
+    await sleep(100)
+    return this.processOutbound(session, signal, messageId)
   }
 
-  private async processInbound(session: MpcSession<unknown>, start: number, messageId?: string): Promise<boolean> {
+  private async processInbound(
+    session: MpcSession<unknown>,
+    signal: AbortSignal,
+    start: number,
+    messageId?: string
+  ): Promise<boolean> {
+    if (signal.aborted) {
+      return false
+    }
+
     // Same as DKLS: empty relay polls must honor elapsed time or we spin forever.
     if (Date.now() - start > this.timeoutMs) {
       mpcDebugLog('timeout')
@@ -126,13 +133,21 @@ export class Schnorr {
         localPartyId: this.localPartyId,
         sessionId: this.sessionId,
         messageId,
+        signal,
       })
+      if (signal.aborted) {
+        return false
+      }
       if (parsedMessages.length === 0) {
         // no message to download, backoff for 100ms
         await sleep(100)
-        return await this.processInbound(session, start, messageId)
+        return this.processInbound(session, signal, start, messageId)
       }
       for (const msg of parsedMessages) {
+        if (signal.aborted) {
+          return false
+        }
+
         const cacheKey = `${msg.session_id}-${msg.from}-${msg.hash}`
         if (this.cache[cacheKey]) {
           continue
@@ -153,14 +168,18 @@ export class Schnorr {
           sessionId: this.sessionId,
           messageHash: msg.hash,
           messageId,
+          signal,
         })
       }
       await sleep(100)
-      return await this.processInbound(session, start, messageId)
+      return this.processInbound(session, signal, start, messageId)
     } catch (error) {
+      if (signal.aborted) {
+        return false
+      }
       console.error('processInbound error:', error)
       await sleep(100)
-      return await this.processInbound(session, start, messageId)
+      return this.processInbound(session, signal, start, messageId)
     }
   }
 
@@ -191,9 +210,10 @@ export class Schnorr {
         throw new Error('invalid keygen type')
       }
       const start = Date.now()
-      const outbound = this.processOutbound(session, messageId)
-      const inbound = this.processInbound(session, start, messageId)
-      const [, inboundResult] = await Promise.all([outbound, inbound])
+      const inboundResult = await runMpcRelayProcessing({
+        processOutbound: signal => this.processOutbound(session, signal, messageId),
+        processInbound: signal => this.processInbound(session, signal, start, messageId),
+      })
       if (inboundResult) {
         const keyShare = await session.finish()
         return {
@@ -276,9 +296,10 @@ export class Schnorr {
 
       try {
         const start = Date.now()
-        const outbound = this.processOutbound(session, messageId)
-        const inbound = this.processInbound(session, start, messageId)
-        const [, inboundResult] = await Promise.all([outbound, inbound])
+        const inboundResult = await runMpcRelayProcessing({
+          processOutbound: signal => this.processOutbound(session, signal, messageId),
+          processInbound: signal => this.processInbound(session, signal, start, messageId),
+        })
         if (inboundResult) {
           const finalKeyShare = await session.finish()
           if (finalKeyShare === undefined) {
@@ -401,9 +422,10 @@ export class Schnorr {
       }
       const exchangeMessageId = protocolMessageId
       const start = Date.now()
-      const outbound = this.processOutbound(session, exchangeMessageId)
-      const inbound = this.processInbound(session, start, exchangeMessageId)
-      const [, inboundResult] = await Promise.all([outbound, inbound])
+      const inboundResult = await runMpcRelayProcessing({
+        processOutbound: signal => this.processOutbound(session, signal, exchangeMessageId),
+        processInbound: signal => this.processInbound(session, signal, start, exchangeMessageId),
+      })
       if (inboundResult) {
         const keyShare = await session.finish()
         return {
