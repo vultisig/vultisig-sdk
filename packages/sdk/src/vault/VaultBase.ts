@@ -6,6 +6,7 @@ import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import { banxaSupportedChains, getBanxaBuyUrl } from '@vultisig/core-chain/banxa'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getChainKind } from '@vultisig/core-chain/ChainKind'
+import { getEvmChainByChainId } from '@vultisig/core-chain/chains/evm/chainInfo'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { getCoinValue } from '@vultisig/core-chain/coin/utils/getCoinValue'
@@ -22,6 +23,8 @@ import { VaultSchema } from '@vultisig/core-mpc/types/vultisig/vault/v1/vault_pb
 import { vaultContainerFromString } from '@vultisig/core-mpc/vault/utils/vaultContainerFromString'
 import { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 import { fromBase64 } from '@vultisig/lib-utils/fromBase64'
+import { numberToHex } from '@vultisig/lib-utils/hex/numberToHex'
+import { recoverAddress } from 'viem'
 
 import { DEFAULT_CHAINS } from '../constants'
 // SDK utilities
@@ -58,7 +61,9 @@ import {
   SignDirectInput,
   SigningMode,
   SigningPayload,
+  SignTypedDataParams,
   Token,
+  TypedDataSignature,
   Value,
   VaultData,
 } from '../types'
@@ -66,6 +71,7 @@ import type { ContractCallTxParams } from '../types/contractCall'
 import type { TransactionSimulationResult, TransactionValidationResult } from '../types/security'
 import type { DiscoveredToken, TokenInfo } from '../types/tokens'
 import { computePersonalSignHash } from '../utils/eip191'
+import { coerceEip712ChainId, computeEip712Hash, toCanonicalEvmSignature } from '../utils/eip712'
 import { createVaultBackup } from '../utils/export'
 // Vault services
 import { AddressService } from './services/AddressService'
@@ -1947,6 +1953,64 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
     const sig = await this.signBytes({ data: hash, chain }, options)
     return { signature: sig.signature.startsWith('0x') ? sig.signature : '0x' + sig.signature, chain, algorithm }
+  }
+
+  /** Sign EIP-712 typed data with canonical low-S EVM signature assembly. */
+  async signTypedData(
+    params: SignTypedDataParams,
+    options?: { signal?: AbortSignal }
+  ): Promise<TypedDataSignature> {
+    const typedData = (params?.typedData ?? {}) as Record<string, unknown>
+    const domain = (typedData.domain ?? {}) as Record<string, unknown>
+    const types = (typedData.types ?? {}) as Record<string, Array<{ name: string; type: string }>>
+    const message = (typedData.message ?? {}) as Record<string, unknown>
+    const primaryType = (typedData.primaryType ?? typedData.primary_type) as string | undefined
+    if (!domain || !Object.keys(domain).length || !types || !message || !primaryType) {
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        'signTypedData requires typedData.domain, typedData.types, typedData.message, and typedData.primaryType'
+      )
+    }
+
+    let chain = params.chain
+    if (!chain && domain.chainId !== undefined) {
+      const normalizedChainId = coerceEip712ChainId(domain.chainId)
+      const evmChainId = typeof normalizedChainId === 'bigint' ? `0x${normalizedChainId.toString(16)}` : numberToHex(normalizedChainId)
+      chain = (getEvmChainByChainId(evmChainId) as Chain | undefined) ?? Chain.Ethereum
+    }
+    chain ??= Chain.Ethereum
+
+    const hash = computeEip712Hash(domain, types, primaryType, message)
+    const sig = await this.signBytes({ data: hash, chain }, options)
+    const { r, s, recovery } = toCanonicalEvmSignature(sig.signature, sig.recovery ?? 0)
+    const v = recovery + 27
+    const signature = `0x${r}${s}${v.toString(16).padStart(2, '0')}`
+
+    const expectedAddress = await this.address(chain)
+    const recoveredAddress = await recoverAddress({
+      hash: hash as `0x${string}`,
+      signature: signature as `0x${string}`,
+    })
+    if (recoveredAddress.toLowerCase() !== expectedAddress.toLowerCase()) {
+      throw new Error(
+        `SIGNATURE_RECOVERY_MISMATCH: wrong vault context for EIP-712 signing — ` +
+          `the loaded vault "${this.name}" (id ${this.id}) reports EVM address ` +
+          `${expectedAddress} for ${chain}, but the signature recovered to ${recoveredAddress}. ` +
+          `The signing keyshare does not belong to the expected vault address. This is a deterministic ` +
+          `vault-context error, not a transient signing failure — retrying will not help. ` +
+          `Verify the correct vault/keyshare is loaded into the executor context before signing again.`
+      )
+    }
+
+    return {
+      signature,
+      hash,
+      chain,
+      r: `0x${r}`,
+      s: `0x${s}`,
+      v,
+      recovery,
+    }
   }
 
   /** All balances across configured chains as a flat array. */

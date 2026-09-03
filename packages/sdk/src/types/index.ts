@@ -313,7 +313,8 @@ export type SignMessageParams = {
 }
 
 export type SignTypedDataParams = {
-  chain: Chain
+  /** Optional explicit chain override. Falls back to domain.chainId, then Ethereum. */
+  chain?: Chain
   typedData: Record<string, unknown>
   password?: string
 }
@@ -613,6 +614,23 @@ export type MessageSignature = {
   chain: Chain
   /** Signature algorithm used */
   algorithm: 'ECDSA' | 'EdDSA'
+}
+
+export type TypedDataSignature = {
+  /** 65-byte Ethereum signature (0x + r + s + v). */
+  signature: string
+  /** Canonical EIP-712 digest that was signed. */
+  hash: string
+  /** Chain resolved for the signing key/address lookup. */
+  chain: Chain
+  /** Low-S canonicalized r component. */
+  r: string
+  /** Low-S canonicalized s component. */
+  s: string
+  /** Ethereum recovery byte (27 or 28). */
+  v: number
+  /** Recovery parity before Ethereum's 27/28 offset. */
+  recovery: number
 }
 
 export type Portfolio = {

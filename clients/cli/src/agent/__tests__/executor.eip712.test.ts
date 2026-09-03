@@ -41,7 +41,7 @@ async function mockSign(hash: string): Promise<{ signature: string; format: stri
 }
 
 function createSigningMockVault(): VaultBase {
-  return {
+  const vault = {
     name: 'mock-vault',
     id: 'vault-mock-eip712',
     type: 'fast',
@@ -50,6 +50,11 @@ function createSigningMockVault(): VaultBase {
     address: vi.fn().mockResolvedValue(TEST_ADDRESS),
     signBytes: vi.fn(async ({ data }: { data: string }) => mockSign(data)),
   } as unknown as VaultBase
+  ;(vault as VaultBase & { signTypedData: typeof VaultBase.prototype.signTypedData }).signTypedData =
+    async function (params, options) {
+      return VaultBase.prototype.signTypedData.call(this, params, options)
+    }
+  return vault
 }
 
 // Pin a digest against the two independent reference encoders — viem (what
