@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process'
-import { existsSync, readdirSync, statSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -27,11 +28,18 @@ const requiredOutputs = [
   'dist/vite/index.d.ts',
 ].map(file => path.join(sdkRoot, file))
 
-const sharedInputPaths = [
+const workspaceDependencyInputs = [path.join(repoRoot, 'package.json'), path.join(repoRoot, 'yarn.lock')]
+
+const sharedBuildRecipeInputs = [
   path.join(repoRoot, '.config/tsconfig.shared-publish.json'),
   path.join(repoRoot, 'scripts/build-shared-packages.mjs'),
   path.join(repoRoot, 'scripts/fix-dist-esm-relative-imports.mjs'),
   path.join(repoRoot, 'scripts/generate-shared-exports.mjs'),
+]
+
+const sharedInputPaths = [
+  ...workspaceDependencyInputs,
+  ...sharedBuildRecipeInputs,
   path.join(repoRoot, 'packages/core/chain'),
   path.join(repoRoot, 'packages/core/mpc'),
   path.join(repoRoot, 'packages/core/config'),
@@ -41,6 +49,8 @@ const sharedInputPaths = [
 ].filter(existsSync)
 
 const inputPaths = [
+  ...workspaceDependencyInputs,
+  ...sharedBuildRecipeInputs,
   path.join(sdkRoot, 'src'),
   path.join(sdkRoot, 'package.json'),
   path.join(sdkRoot, 'rollup.platforms.config.js'),
@@ -59,35 +69,110 @@ function fail(message) {
   process.exit(1)
 }
 
-function newestMtimeMs(target) {
-  const stat = statSync(target)
-  if (!stat.isDirectory()) return stat.mtimeMs
+const generatedManifests = new Set(
+  [
+    'packages/core/config/package.json',
+    'packages/core/chain/package.json',
+    'packages/core/mpc/package.json',
+    'packages/lib/utils/package.json',
+    'packages/mpc-types/package.json',
+    'packages/mpc-wasm/package.json',
+  ].map(file => path.join(repoRoot, file))
+)
 
-  let newest = stat.mtimeMs
-  for (const entry of readdirSync(target, { withFileTypes: true })) {
-    if (entry.isDirectory() && ignoredDirs.has(entry.name)) continue
+function inputFingerprint(inputs) {
+  const hash = createHash('sha256')
 
-    const child = path.join(target, entry.name)
-    const childMtime = newestMtimeMs(child)
-    if (childMtime > newest) newest = childMtime
+  const visit = target => {
+    const stat = statSync(target)
+    if (stat.isDirectory()) {
+      for (const entry of readdirSync(target, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+        if (entry.isDirectory() && ignoredDirs.has(entry.name)) continue
+        visit(path.join(target, entry.name))
+      }
+    } else {
+      // Export maps are derived by the shared build; the other manifest fields
+      // remain real inputs. Hash file content and paths to catch renames and deletes.
+      let content = readFileSync(target)
+      if (generatedManifests.has(target)) {
+        const manifest = JSON.parse(content.toString('utf8'))
+        delete manifest.exports
+        content = Buffer.from(JSON.stringify(manifest))
+      }
+      hash.update(JSON.stringify([path.relative(repoRoot, target), content.length]))
+      hash.update(content)
+    }
   }
-  return newest
+  for (const input of inputs) visit(input)
+  return hash.digest('hex')
 }
 
-function hasFreshSdkBuild() {
-  if (!requiredOutputs.every(existsSync)) return false
-
-  const oldestOutput = Math.min(...requiredOutputs.map(file => statSync(file).mtimeMs))
-  const newestInput = Math.max(...inputPaths.map(newestMtimeMs))
-  return oldestOutput >= newestInput
+function buildState(kind) {
+  const shared = kind === 'shared'
+  return {
+    inputs: shared ? sharedInputPaths : inputPaths,
+    outputs: shared ? requiredSharedOutputs : requiredOutputs,
+    receipt: path.join(repoRoot, '.rollup.cache/browser-sdk-build', `${kind}.json`),
+  }
 }
 
-function hasFreshSharedBuild() {
-  if (!requiredSharedOutputs.every(existsSync)) return false
+function outputIdentity(outputs, kind) {
+  const files = outputs.map(file => {
+    const stat = statSync(file)
+    return [path.relative(repoRoot, file), stat.size, stat.mtimeMs]
+  })
+  const exports =
+    kind === 'shared'
+      ? [...generatedManifests]
+          .filter(existsSync)
+          .map(file => [path.relative(repoRoot, file), JSON.parse(readFileSync(file, 'utf8')).exports])
+      : []
+  return { files, exports }
+}
 
-  const oldestOutput = Math.min(...requiredSharedOutputs.map(file => statSync(file).mtimeMs))
-  const newestInput = Math.max(...sharedInputPaths.map(newestMtimeMs))
-  return oldestOutput >= newestInput
+function beginBuild(kind) {
+  const { inputs, receipt } = buildState(kind)
+  mkdirSync(path.dirname(receipt), { recursive: true })
+  rmSync(receipt, { force: true })
+  writeFileSync(`${receipt}.pending`, inputFingerprint(inputs))
+}
+
+function recordBuild(kind) {
+  const { inputs, outputs, receipt } = buildState(kind)
+  if (!outputs.every(existsSync)) fail(`Cannot record ${kind} build: required artifacts are missing.`)
+  let before
+  try {
+    before = readFileSync(`${receipt}.pending`, 'utf8')
+  } catch {
+    fail(`Cannot record ${kind} build: run --begin ${kind} before building.`)
+  }
+  if (before !== inputFingerprint(inputs)) {
+    fail(`Inputs changed during the ${kind} build. Retry the build before reusing its artifacts.`)
+  }
+  writeFileSync(
+    receipt,
+    JSON.stringify({
+      version: 1,
+      inputs: before,
+      outputs: outputIdentity(outputs, kind),
+    }) + '\n'
+  )
+}
+
+function hasFreshBuild(kind) {
+  const { inputs, outputs, receipt } = buildState(kind)
+  if (!outputs.every(existsSync)) return false
+  let recorded
+  try {
+    recorded = JSON.parse(readFileSync(receipt, 'utf8'))
+  } catch {
+    return false
+  }
+  return (
+    recorded?.version === 1 &&
+    recorded.inputs === inputFingerprint(inputs) &&
+    JSON.stringify(recorded.outputs) === JSON.stringify(outputIdentity(outputs, kind))
+  )
 }
 
 function buildSharedPackages() {
@@ -146,6 +231,23 @@ function assertSdkResolves() {
 }
 
 assertWorkspaceLayout()
-if (!hasFreshSharedBuild()) buildSharedPackages()
-if (!hasFreshSdkBuild()) buildSdk()
-assertSdkResolves()
+const args = process.argv.slice(2)
+if (args.length > 0) {
+  if (args.length !== 2 || !['--begin', '--record'].includes(args[0]) || !['shared', 'sdk'].includes(args[1])) {
+    fail('Usage: ensure-local-sdk-build.mjs [--begin|--record shared|sdk]')
+  }
+  if (args[0] === '--begin') beginBuild(args[1])
+  else recordBuild(args[1])
+} else {
+  if (!hasFreshBuild('shared')) {
+    beginBuild('shared')
+    buildSharedPackages()
+    recordBuild('shared')
+  }
+  if (!hasFreshBuild('sdk')) {
+    beginBuild('sdk')
+    buildSdk()
+    recordBuild('sdk')
+  }
+  assertSdkResolves()
+}
