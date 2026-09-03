@@ -294,6 +294,30 @@ describe('getSwapKitQuote', () => {
     expect('transfer' in quote.tx && quote.tx.transfer.swapFee).toBeUndefined()
   })
 
+  it.each([
+    ['a bare exponent', '1e+'],
+    ['a non-numeric amount', 'abc'],
+  ])('keeps a transfer route signable when the fee amount is %s', async (_label, amount) => {
+    // `amount` is an unvalidated string from the proxy. Parsing it throws an
+    // error of its own kind, which used to escape the display-fee guard and
+    // fail a route that signs perfectly well without the fee row.
+    const quote = await stubTransferRoute({
+      fees: [{ type: 'affiliate', amount, asset: 'ZEC.ZEC', chain: 'ZEC' }],
+    })
+
+    expect('transfer' in quote.tx && quote.tx.transfer.to).toBe('t1Deposit')
+    expect('transfer' in quote.tx && quote.tx.transfer.swapFee).toBeUndefined()
+  })
+
+  it('keeps an EVM route signable when the fee amount cannot be parsed', async () => {
+    const quote = await stubEvmRoute({
+      fees: [{ type: 'affiliate', amount: '1e+', asset: 'ETH.USDC-0xusdc', chain: 'ETH' }],
+    })
+
+    expect('evm' in quote.tx && quote.tx.evm.to).toBe('0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1')
+    expect('evm' in quote.tx && quote.tx.evm.affiliateFee).toBeUndefined()
+  })
+
   it('leaves the transfer fee absent when SwapKit itemizes none', async () => {
     const quote = await stubTransferRoute()
 

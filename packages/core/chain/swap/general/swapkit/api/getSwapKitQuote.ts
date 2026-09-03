@@ -497,6 +497,14 @@ const matchesSwapKitFeeChain = (feeChain: string | undefined, coinChain: SwapKit
   return normalized === coinChain.toLowerCase() || normalized === swapKitChainId[coinChain].toLowerCase()
 }
 
+const toSwapKitFeeAmount = (amount: string, decimals: number, type: string): bigint => {
+  try {
+    return toChainAmount(amount, decimals)
+  } catch (error) {
+    throw new SwapKitFeeShapeError(`SwapKit ${type} fee amount "${amount}" is not a decimal number.`, { cause: error })
+  }
+}
+
 const getSwapKitSwapFee = (
   fees: SwapKitSwapResponse['fees'],
   from: AccountCoin<SwapKitSourceChain>,
@@ -531,7 +539,12 @@ const getSwapKitSwapFee = (
     }
 
     const current: SwapFee = {
-      amount: toChainAmount(fee.amount, candidate.coin.decimals),
+      // The proxy's `amount` is an unvalidated string. `toChainAmount` throws
+      // its own error for a malformed one ("1e+", "abc"), which would escape
+      // the display-fee guard and take down a route that is otherwise
+      // signable. An amount we cannot parse is exactly an unresolvable fee
+      // shape, so it is reported as one.
+      amount: toSwapKitFeeAmount(fee.amount, candidate.coin.decimals, type),
       chain: candidate.coin.chain,
       id: candidate.coin.id,
       decimals: candidate.coin.decimals,
