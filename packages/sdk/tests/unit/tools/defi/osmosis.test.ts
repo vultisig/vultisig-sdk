@@ -300,6 +300,49 @@ describe('sdk.defi.osmosis — fund-safety validation', () => {
     ).toThrow(/must be less than/)
   })
 
+  it('rejects duplicate denoms in join-pool deposits', () => {
+    expect(() =>
+      osmosis.buildJoinPool({
+        sender: SENDER,
+        poolId: '1',
+        shareOutAmount: '1',
+        tokenInMaxs: [
+          { denom: UOSMO, amount: '1' },
+          { denom: UOSMO, amount: '2' },
+        ],
+      })
+    ).toThrow(/duplicate denom entries/)
+  })
+
+  it('rejects duplicate denoms in exit-pool minimum outputs', () => {
+    expect(() =>
+      osmosis.buildExitPool({
+        sender: SENDER,
+        poolId: '1',
+        shareInAmount: '1',
+        tokenOutMins: [
+          { denom: UOSMO, amount: '0' },
+          { denom: UOSMO, amount: '1' },
+        ],
+      })
+    ).toThrow(/duplicate denom entries/)
+  })
+
+  it('rejects duplicate denoms in concentrated-liquidity token lists', () => {
+    expect(() =>
+      osmosis.buildCreatePosition({
+        sender: SENDER,
+        poolId: '1',
+        lowerTick: '0',
+        upperTick: '1',
+        tokensProvided: [
+          { denom: UOSMO, amount: '1' },
+          { denom: UOSMO, amount: '2' },
+        ],
+      })
+    ).toThrow(/duplicate denom entries/)
+  })
+
   // ---- uint64 / int64 silent-wrap guards (the encoder truncates mod 2^64) ----
 
   const U64_MAX = (1n << 64n) - 1n
