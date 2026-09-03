@@ -5,7 +5,7 @@ import { getMaxValue } from '@vultisig/core-chain/amount/getMaxValue'
 import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import { banxaSupportedChains, getBanxaBuyUrl } from '@vultisig/core-chain/banxa'
 import { Chain } from '@vultisig/core-chain/Chain'
-import { getChainKind } from '@vultisig/core-chain/ChainKind'
+import { getChainKind, isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { getCoinValue } from '@vultisig/core-chain/coin/utils/getCoinValue'
@@ -22,6 +22,8 @@ import { VaultSchema } from '@vultisig/core-mpc/types/vultisig/vault/v1/vault_pb
 import { vaultContainerFromString } from '@vultisig/core-mpc/vault/utils/vaultContainerFromString'
 import { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 import { fromBase64 } from '@vultisig/lib-utils/fromBase64'
+
+import { type Abi, decodeFunctionResult, encodeFunctionData, erc20Abi, getAddress } from 'viem'
 
 import { DEFAULT_CHAINS } from '../constants'
 // SDK utilities
@@ -52,6 +54,7 @@ import {
   MessageSignature,
   Portfolio,
   SendResult,
+  TypedDataSignature,
   SignAminoInput,
   Signature,
   SignBytesOptions,
@@ -65,7 +68,10 @@ import {
 import type { ContractCallTxParams } from '../types/contractCall'
 import type { TransactionSimulationResult, TransactionValidationResult } from '../types/security'
 import type { DiscoveredToken, TokenInfo } from '../types/tokens'
+import { evmCall } from '../tools/evm/evmCall'
+import { MAX_UINT256 } from '../tools/evm/encodeErc20Approve'
 import { computePersonalSignHash } from '../utils/eip191'
+import { computeEip712Hash, toCanonicalEvmSignature } from '../utils/eip712'
 import { createVaultBackup } from '../utils/export'
 // Vault services
 import { AddressService } from './services/AddressService'
@@ -2257,6 +2263,98 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     const messageHashes = await this.extractMessageHashes(keysignPayload)
     const signature = await this.sign({ transaction: keysignPayload, chain, messageHashes })
     return { dryRun: false, txHash: await this.broadcastTx({ chain, keysignPayload, signature }), chain }
+  }
+
+  /**
+   * ERC-20 `approve(spender, amount)`. `token` is a symbol or contract address.
+   * Pass `amount: "max"` for unlimited allowance.
+   */
+  async approve(params: {
+    chain: Chain
+    token: string
+    spender: string
+    amount: string
+    dryRun?: boolean
+  }): Promise<ContractCallResult> {
+    const { chain, token, spender, amount, dryRun } = params
+    if (!isChainOfKind(chain, 'evm')) {
+      throw new VaultError(VaultErrorCode.ChainNotSupported, `approve only supports EVM chains. Got: ${chain}`)
+    }
+    const tokenInfo = this.resolveTokenInfo(chain, token)
+    if (!tokenInfo.contractAddress) {
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        `approve requires an ERC-20 token, not the native asset ${tokenInfo.ticker} on ${chain}`
+      )
+    }
+    const value = amount.trim().toLowerCase() === 'max' ? MAX_UINT256 : this.parseAmount(amount, tokenInfo.decimals)
+    return this.contractCall({
+      chain,
+      contractAddress: tokenInfo.contractAddress,
+      abi: erc20Abi,
+      functionName: 'approve',
+      args: [getAddress(spender), value],
+      dryRun,
+    })
+  }
+
+  /**
+   * Read-only EVM contract call (`eth_call`). No signing.
+   */
+  async readContract(params: {
+    chain: Chain
+    contract: string
+    abi: readonly unknown[]
+    functionName: string
+    args?: readonly unknown[]
+  }): Promise<unknown> {
+    const { chain, contract, abi, functionName, args } = params
+    if (!isChainOfKind(chain, 'evm')) {
+      throw new VaultError(VaultErrorCode.ChainNotSupported, `readContract only supports EVM chains. Got: ${chain}`)
+    }
+    const data = encodeFunctionData({
+      abi: abi as Abi,
+      functionName,
+      args: args ?? [],
+    })
+    const raw = await evmCall(chain, { to: getAddress(contract), data })
+    return decodeFunctionResult({ abi: abi as Abi, functionName, data: raw })
+  }
+
+  /**
+   * Sign EIP-712 typed data. Hashes locally with the same helper the CLI uses,
+   * then signs the 32-byte digest via `signBytes`.
+   */
+  async signTypedData(
+    params: {
+      chain?: Chain
+      domain: Record<string, unknown>
+      types: Record<string, Array<{ name: string; type: string }>>
+      primaryType: string
+      message: Record<string, unknown>
+    },
+    options?: { signal?: AbortSignal }
+  ): Promise<TypedDataSignature> {
+    const chain = params.chain ?? Chain.Ethereum
+    if (!isChainOfKind(chain, 'evm')) {
+      throw new VaultError(VaultErrorCode.ChainNotSupported, `signTypedData only supports EVM chains. Got: ${chain}`)
+    }
+    const { domain, types, primaryType, message } = params
+    if (!domain || !types || !primaryType || !message) {
+      throw new VaultError(VaultErrorCode.InvalidConfig, 'signTypedData requires domain, types, primaryType, and message')
+    }
+    const hash = computeEip712Hash(domain, types, primaryType, message)
+    const sig = await this.signBytes({ data: hash, chain }, options)
+    const { r, s, recovery } = toCanonicalEvmSignature(sig.signature, sig.recovery ?? 0)
+    const v = recovery + 27
+    return {
+      signature: `0x${r}${s}${v.toString(16).padStart(2, '0')}`,
+      r: `0x${r}`,
+      s: `0x${s}`,
+      v,
+      hash,
+      chain,
+    }
   }
 
   // ===== PRIVATE HELPERS =====

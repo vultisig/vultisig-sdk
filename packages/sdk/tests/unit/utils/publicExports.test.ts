@@ -445,6 +445,10 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof proto.prepareSendTx).toBe('function')
     expect(typeof proto.prepareSwapTx).toBe('function')
     expect(typeof proto.prepareContractCallTx).toBe('function')
+    expect(typeof proto.contractCall).toBe('function')
+    expect(typeof proto.approve).toBe('function')
+    expect(typeof proto.readContract).toBe('function')
+    expect(typeof proto.signTypedData).toBe('function')
   })
 
   it('exports the canonical THOR/Maya native-swap metadata (sdk#1988)', async () => {
