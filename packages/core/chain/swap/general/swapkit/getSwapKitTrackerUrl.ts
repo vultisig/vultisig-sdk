@@ -18,6 +18,8 @@ export const swapKitTrackerChainIds = {
   [Chain.Optimism]: '10',
   [Chain.Blast]: '81457',
   [Chain.Zksync]: '324',
+  [Chain.Hyperliquid]: '999',
+  [Chain.Robinhood]: '4663',
   [Chain.Tron]: '728126428',
   [Chain.Cardano]: 'cardano',
   [Chain.Ton]: 'ton',

@@ -1,4 +1,7 @@
 import { Chain } from '@vultisig/core-chain/Chain'
+import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
+import { blockaidEvmChain, BlockaidSupportedEvmChain } from '@vultisig/core-chain/security/blockaid/evmChains'
+import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
 
 export const swapKitSourceChains = [
   Chain.Ethereum,
@@ -8,6 +11,7 @@ export const swapKitSourceChains = [
   Chain.BSC,
   Chain.Optimism,
   Chain.Polygon,
+  Chain.Hyperliquid,
   Chain.Solana,
   Chain.Bitcoin,
   Chain.BitcoinCash,
@@ -33,10 +37,11 @@ export const swapKitSourceChains = [
   Chain.Cardano,
 ] as const
 
-export type SwapKitSourceChain = (typeof swapKitSourceChains)[number]
+export type SwapKitSourceChain = (typeof swapKitSourceChains)[number] | BlockaidSupportedEvmChain
 
 export const swapKitEnabledChains = [
   ...swapKitSourceChains,
+  Chain.Robinhood,
   Chain.Cosmos,
   Chain.Dash,
   Chain.MayaChain,
@@ -44,3 +49,14 @@ export const swapKitEnabledChains = [
 ] as const
 
 export type SwapKitEnabledChain = (typeof swapKitEnabledChains)[number]
+
+/**
+ * Source-side eligibility is deliberately stricter than destination support.
+ * Existing non-EVM transaction builders stay explicitly listed, while EVM
+ * chains may be discovered from SwapKit's live catalog only when the SDK can
+ * screen their returned router through Blockaid. This keeps Robinhood
+ * destination-only until Blockaid adds chain 4663 without closing future safe
+ * EVM corridors behind another SwapKit allowlist change.
+ */
+export const isSwapKitSourceChain = (chain: Chain): chain is SwapKitSourceChain =>
+  isOneOf(chain, swapKitSourceChains) || (isChainOfKind(chain, 'evm') && chain in blockaidEvmChain)
