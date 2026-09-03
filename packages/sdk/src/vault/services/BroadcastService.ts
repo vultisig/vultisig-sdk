@@ -16,6 +16,7 @@ import { pollTxStatusUntilFinal } from '../../tx'
 import type { Signature } from '../../types'
 import { convertToKeysignSignatures } from '../utils/convertSignature'
 import { VaultError, VaultErrorCode } from '../VaultError'
+import { formatBroadcastFailureReason, toSafeBroadcastError } from './broadcastError'
 
 type BroadcastPartialFailureInput = {
   chain: Chain
@@ -43,7 +44,7 @@ export class BroadcastPartialFailureError extends Error {
     failedInputIndex,
     cause,
   }: BroadcastPartialFailureInput) {
-    const errorMessage = cause instanceof Error ? cause.message : String(cause)
+    const errorMessage = formatBroadcastFailureReason(cause)
     super(
       `Broadcast failed on ${chain} input ${
         failedInputIndex + 1
@@ -55,7 +56,7 @@ export class BroadcastPartialFailureError extends Error {
     this.broadcastedTxHashes = broadcastedTxHashes
     this.submittedTxCount = submittedTxCount
     this.failedInputIndex = failedInputIndex
-    this.originalError = cause instanceof Error ? cause : new Error(String(cause))
+    this.originalError = toSafeBroadcastError(cause)
   }
 }
 
@@ -185,8 +186,7 @@ export class BroadcastService {
           })
 
           if (broadcastResult.status === 'failed') {
-            const cause =
-              broadcastResult.cause instanceof Error ? broadcastResult.cause : new Error(String(broadcastResult.cause))
+            const cause = toSafeBroadcastError(broadcastResult.cause)
             throw new Error(`${broadcastResult.code} (retryable=${broadcastResult.retryable}): ${cause.message}`, {
               cause,
             })
@@ -223,10 +223,11 @@ export class BroadcastService {
         throw error
       }
 
+      const safeError = toSafeBroadcastError(error)
       throw new VaultError(
         VaultErrorCode.BroadcastFailed,
-        `Failed to broadcast transaction on ${chain}: ${error instanceof Error ? error.message : String(error)}`,
-        error instanceof Error ? error : new Error(String(error))
+        `Failed to broadcast transaction on ${chain}: ${safeError.message}`,
+        safeError
       )
     }
   }
