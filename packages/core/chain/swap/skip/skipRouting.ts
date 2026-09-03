@@ -25,7 +25,6 @@ export const isTerraChain = (chain: string): boolean => TERRA_CHAINS.has(chain a
 const SKIP_ROUTABLE_COSMOS_CHAINS: ReadonlySet<Chain> = new Set([
   CosmosChain.Cosmos,
   CosmosChain.Osmosis,
-  CosmosChain.Kujira,
   CosmosChain.Terra,
   CosmosChain.TerraClassic,
   CosmosChain.Akash,
