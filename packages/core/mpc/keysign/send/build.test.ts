@@ -107,7 +107,7 @@ describe('buildSendKeysignPayload XRP DestinationTag compatibility', () => {
     })
 
     expect(getChainSpecificMock).toHaveBeenCalledWith(
-      expect.objectContaining({ transactionType: TransactionType.UNSPECIFIED })
+      expect.objectContaining({ transactionType: TransactionType.RIPPLE_PAYMENT })
     )
     expect(payload.coin?.isNativeToken).toBe(false)
     expect(payload.toAmount).toBe('1500000000000000')

@@ -1104,6 +1104,36 @@ describe('getRippleSigningInputs -- TrustSet discriminator (RippleSpecific.trans
     expect(input.opPayment).toBeFalsy()
   })
 
+  it('keeps legacy undiscriminated TrustSet payloads compatible', async () => {
+    const payload = buildTrustSetPayload('1500000000000000')
+    payload.blockchainSpecific = {
+      case: 'rippleSpecific',
+      value: makeRippleSpecific(undefined, TransactionType.UNSPECIFIED),
+    }
+
+    const [input] = await getRippleSigningInputs({ keysignPayload: payload, walletCore })
+
+    expect(input.opTrustSet).toBeTruthy()
+    expect(input.opPayment).toBeFalsy()
+  })
+
+  it('keeps an explicit issued-currency Payment to the issuer on the Payment path', async () => {
+    const payload = buildTrustSetPayload('1500000000000000')
+    payload.blockchainSpecific = {
+      case: 'rippleSpecific',
+      value: makeRippleSpecific(undefined, TransactionType.RIPPLE_PAYMENT),
+    }
+
+    const [input] = await getRippleSigningInputs({ keysignPayload: payload, walletCore })
+
+    expect(input.opTrustSet).toBeFalsy()
+    expect(input.opPayment?.currencyAmount).toMatchObject({
+      currency: toXrplCurrencyCode('RLUSD'),
+      issuer: RLUSD_ISSUER,
+      value: '1.5',
+    })
+  })
+
   it('rejects an explicit TrustSet whose reviewed destination is not the issuer', () => {
     const payload = buildDiscriminatedTrustSetPayload('1500000000000000')
     payload.toAddress = 'rDestinationAddressForTests9876543210'

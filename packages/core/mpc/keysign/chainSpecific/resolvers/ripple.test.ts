@@ -315,10 +315,10 @@ describe('getRippleChainSpecific — only genuine trust lines are declared', () 
     const result = await getRippleChainSpecific({
       keysignPayload: issuedCurrencyPayloadTo(ISSUER),
       walletCore: {} as never,
-      transactionType: TransactionType.UNSPECIFIED,
+      transactionType: TransactionType.RIPPLE_PAYMENT,
     })
 
-    expect(result.transactionType).toBe(TransactionType.UNSPECIFIED)
+    expect(result.transactionType).toBe(TransactionType.RIPPLE_PAYMENT)
   })
 
   it('checks the issuer destination tag when explicitly sending a redemption Payment', async () => {
@@ -331,7 +331,7 @@ describe('getRippleChainSpecific — only genuine trust lines are declared', () 
       getRippleChainSpecific({
         keysignPayload: issuedCurrencyPayloadTo(ISSUER),
         walletCore: {} as never,
-        transactionType: TransactionType.UNSPECIFIED,
+        transactionType: TransactionType.RIPPLE_PAYMENT,
       })
     ).rejects.toMatchObject({ type: 'ripple-destination-tag-required' })
   })

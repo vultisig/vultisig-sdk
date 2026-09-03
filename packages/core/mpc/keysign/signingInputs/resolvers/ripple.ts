@@ -330,7 +330,9 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
 
   if (
     keysignPayload.signData.case !== 'signRipple' &&
-    ![TransactionType.UNSPECIFIED, TransactionType.RIPPLE_TRUST_SET].includes(rippleSpecific.transactionType)
+    ![TransactionType.UNSPECIFIED, TransactionType.RIPPLE_TRUST_SET, TransactionType.RIPPLE_PAYMENT].includes(
+      rippleSpecific.transactionType
+    )
   ) {
     throw new Error(`Unsupported XRP transaction type: ${rippleSpecific.transactionType}`)
   }

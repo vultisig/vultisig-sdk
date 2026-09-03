@@ -44,15 +44,19 @@ export const originatesRippleTrustSet = (keysignPayload: KeysignPayload): boolea
   return 'data' in issuer && issuer.data === toAddress
 }
 
-/**
- * Whether this Ripple payload explicitly describes a TrustSet. The non-native
- * coin shape is deliberately insufficient because an issued-currency Payment
- * has the same shape. Current signers require the discriminator; an older
- * signer that still infers TrustSet for an ordinary token Payment derives a
- * different preimage, making that mixed-version ceremony fail closed.
- */
+/** Whether this Ripple payload describes a TrustSet, including legacy payloads. */
 export const isRippleTrustSet = (keysignPayload: KeysignPayload): boolean => {
   const { transactionType } = getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'rippleSpecific')
 
-  return transactionType === TransactionType.RIPPLE_TRUST_SET
+  if (transactionType === TransactionType.RIPPLE_TRUST_SET) {
+    return true
+  }
+  if (transactionType === TransactionType.RIPPLE_PAYMENT) {
+    return false
+  }
+
+  // Payloads created before the discriminator existed have the proto3 default.
+  // Preserve their TrustSet behavior; new Payments are explicit so the same
+  // non-native coin shape is no longer ambiguous.
+  return originatesRippleTrustSet(keysignPayload)
 }

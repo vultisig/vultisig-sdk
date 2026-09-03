@@ -132,6 +132,10 @@ export const getRippleChainSpecific: GetChainSpecificResolver<'rippleSpecific'> 
     // Fee is the network fee only — the reserve rides on the Payment amount.
     gas: networkFee,
     ...(effectiveDestinationTag !== undefined ? { destinationTag: effectiveDestinationTag } : {}),
-    ...(isTrustSet ? { transactionType: TransactionType.RIPPLE_TRUST_SET } : {}),
+    ...(isTrustSet
+      ? { transactionType: TransactionType.RIPPLE_TRUST_SET }
+      : transactionType === TransactionType.RIPPLE_PAYMENT
+        ? { transactionType: TransactionType.RIPPLE_PAYMENT }
+        : {}),
   })
 }

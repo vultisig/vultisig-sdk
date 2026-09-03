@@ -174,7 +174,7 @@ export const buildSendKeysignPayload = async ({
         walletCore,
         destinationTag: effectiveDestinationTag,
         sendMaxAmount,
-        ...(coin.chain === Chain.Ripple ? { transactionType: TransactionType.UNSPECIFIED } : {}),
+        ...(coin.chain === Chain.Ripple ? { transactionType: TransactionType.RIPPLE_PAYMENT } : {}),
       })
 
   const balance = await getCoinBalance(coin)

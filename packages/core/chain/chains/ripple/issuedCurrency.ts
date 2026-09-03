@@ -19,13 +19,21 @@ const hexCurrencyCodeLength = 40
 const hexCurrencyCodeRegex = /^[0-9a-fA-F]{40}$/
 
 const asciiToHexCurrencyCode = (currency: string): string => {
-  const bytes = Buffer.from(currency, 'ascii')
+  const bytes = [...currency].map(character => {
+    const code = character.charCodeAt(0)
+    if (code > 127) {
+      throw new Error('Unsupported XRP issued-currency code: expected ASCII or a 160-bit hex code')
+    }
+
+    return code
+  })
   if (bytes.length > 20) {
     throw new Error(`XRPL currency code too long: "${currency}" (max 20 bytes)`)
   }
 
-  return Buffer.concat([bytes, Buffer.alloc(20 - bytes.length)])
-    .toString('hex')
+  return [...bytes, ...Array<number>(20 - bytes.length).fill(0)]
+    .map(byte => byte.toString(16).padStart(2, '0'))
+    .join('')
     .toUpperCase()
 }
 

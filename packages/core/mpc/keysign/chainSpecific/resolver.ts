@@ -53,7 +53,7 @@ export type GetChainSpecificInput<C extends KeysignChainSpecificKey = KeysignCha
             : C extends 'rippleSpecific'
               ? {
                   /** Explicit send intent overrides the legacy issuer-address TrustSet inference. */
-                  transactionType?: TransactionType.UNSPECIFIED | TransactionType.RIPPLE_TRUST_SET
+                  transactionType?: TransactionType.RIPPLE_PAYMENT | TransactionType.RIPPLE_TRUST_SET
                 }
               : {})
 
