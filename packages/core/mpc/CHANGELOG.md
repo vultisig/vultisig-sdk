@@ -1,5 +1,130 @@
 # @vultisig/core-mpc
 
+## 2.1.1
+
+### Patch Changes
+
+- [#2297](https://github.com/vultisig/vultisig-sdk/pull/2297) [`c0eafeb`](https://github.com/vultisig/vultisig-sdk/commit/c0eafeb12df42cffa70ef6951c081a74383e5fa2) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Make the SDK package graph explicit and acyclic. Shared Bitcoin signing protobuf schemas now live in `@vultisig/mpc-types`, `@vultisig/core-mpc` preserves its existing schema subpath as a compatibility export, and SDK builds resolve the declared core packages through their published export maps.
+
+- [#2006](https://github.com/vultisig/vultisig-sdk/pull/2006) [`3d40017`](https://github.com/vultisig/vultisig-sdk/commit/3d400171facf1107472e827c4ef48d7dd99843f1) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Throw a domain error naming both unresolved chains when `getThorchainDepositAsset` can't resolve a native-swap chain id, instead of failing with a bare `Cannot read properties of undefined (reading 'toUpperCase')` TypeError on the secured-asset path (and silently building an invalid `chain: undefined` proto on the unsecured path). Also adds test coverage for the previously-untested CIP-8/CIP-30 `buildCoseStructures` CBOR encoders.
+
+- [#2252](https://github.com/vultisig/vultisig-sdk/pull/2252) [`ef252e4`](https://github.com/vultisig/vultisig-sdk/commit/ef252e40b590a6cad9f303f7aba743c617442f90) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(ton): stop hiding action-phase failures on sends and in status
+
+  Every TON send OR'd `IGNORE_ACTION_PHASE_ERRORS` into the wallet contract's send mode, which tells the contract to skip an outgoing transfer it cannot carry out instead of failing. The transaction then landed un-aborted with the seqno consumed and nothing moved, and the status resolver — which read only `aborted` and `compute_ph.exit_code` — reported it as confirmed. The user was told a transfer succeeded while the funds never left.
+
+  The flag is now dropped from native, MAX, dApp `signTon`, and Jetton sends (both the WalletCore and the React Native builders), and `getTonTxStatus` reads the action phase (`success`, `no_funds`, `result_code`, `skipped_actions`) alongside the compute phase. A transaction the indexer knows but has not yet described stays pending instead of counting as success.
+
+  Dropping the flag changes the signed body, so TON signing hashes move. Clients must upgrade together: a co-signer on an older build derives a different hash and the keysign fails. The mobile and cross-encoder golden corpora are re-recorded to the new values.
+
+- [#2280](https://github.com/vultisig/vultisig-sdk/pull/2280) [`4e23e92`](https://github.com/vultisig/vultisig-sdk/commit/4e23e9205310e46564bc1782b57499b2a39d7a5f) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(ton): refuse to build a Jetton transfer when the sender jetton wallet cannot be resolved
+
+  A Jetton transfer is a message to the sender's _own_ jetton wallet, and that address was resolved with a swallowed failure: `TonSpecific.jettonAddress` starts as `''`, a failed lookup left it `''`, and `''` is not null or undefined, so every presence check downstream waved it through. The result was a signable transaction whose destination was the empty string — a failed network lookup producing a broadcastable transfer that moves nothing.
+
+  The chain-specific resolver now throws when the lookup fails or comes back blank, keeping the underlying failure as the error's `cause`. It stays a plain `Error` rather than a `BuildKeysignPayloadError` because an RPC timeout or indexer lag is retryable, not bad user input.
+
+  `buildJettonTransfer` rejects a blank jetton wallet address as well, so a payload built elsewhere — an older client, another device in a keysign — cannot get a destination-less transfer signed here either.
+
+- [#2256](https://github.com/vultisig/vultisig-sdk/pull/2256) [`4561c65`](https://github.com/vultisig/vultisig-sdk/commit/4561c6584f62fa78d17546bcc119e31b6ea665cb) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(ton): a MAX send signs the amount it displayed, and MAX is no longer guessed
+
+  A TON MAX send showed the user `balance - fee` and then signed something else: `amount = 0` under `ATTACH_ALL_CONTRACT_BALANCE`, which tells the wallet contract to sweep whatever the balance happens to be when the transaction executes. Worse, nothing marked a send as MAX — it was inferred from `amount + fee >= balance`, so an ordinary send that landed near the balance was silently upgraded to a full-balance sweep.
+
+  The signing path now always signs `keysignPayload.toAmount` under `PAY_FEES_SEPARATELY`, for MAX and ordinary sends alike; a MAX send is just `balance - fee` as an ordinary amount, and that fee is the reserve the send mode draws on. The signed bytes no longer depend on the flag at all.
+
+  `sendMaxAmount` becomes an explicit input threaded from the caller (`prepareSendTx` / `prepareSendTxFromKeys` / `buildSendKeysignPayload` → `getChainSpecific`), defaulting to `false`, and is recorded in `TonSpecific` as description rather than instruction. Removing the inference also drops a balance lookup from every TON send.
+
+  TON MAX sends that previously relied on the sweep to cover an amount larger than `balance - fee` will now fail on chain instead of moving more than was shown. Callers should pass the displayed `balance - fee` as `amount` and set `sendMaxAmount: true` alongside it.
+
+- Updated dependencies [[`c0eafeb`](https://github.com/vultisig/vultisig-sdk/commit/c0eafeb12df42cffa70ef6951c081a74383e5fa2), [`ef252e4`](https://github.com/vultisig/vultisig-sdk/commit/ef252e40b590a6cad9f303f7aba743c617442f90), [`bfe0292`](https://github.com/vultisig/vultisig-sdk/commit/bfe0292e3876fb7acc7044bac1b544c27aba8919), [`acd0b2e`](https://github.com/vultisig/vultisig-sdk/commit/acd0b2eaa882669a399fb378e51244ed4199ee47)]:
+  - @vultisig/mpc-types@0.3.0
+  - @vultisig/core-chain@4.1.1
+
+## 2.1.0
+
+### Minor Changes
+
+- [#2234](https://github.com/vultisig/vultisig-sdk/pull/2234) [`0697060`](https://github.com/vultisig/vultisig-sdk/commit/0697060107c7fe1c8ec818d3e0eae01557d9d96f) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add RUJI Trade quoting and CosmWasm execution for native RUNE and bRUNE swaps through the SDK's normal swap flow.
+
+### Patch Changes
+
+- Updated dependencies [[`3fff7cf`](https://github.com/vultisig/vultisig-sdk/commit/3fff7cfdfe23d2d5622f7caa87a6f1525329f07e), [`0697060`](https://github.com/vultisig/vultisig-sdk/commit/0697060107c7fe1c8ec818d3e0eae01557d9d96f)]:
+  - @vultisig/core-chain@4.1.0
+
+## 2.0.1
+
+### Patch Changes
+
+- [#2224](https://github.com/vultisig/vultisig-sdk/pull/2224) [`3121503`](https://github.com/vultisig/vultisig-sdk/commit/3121503831e4bc6f491c69cf2e69bf3ddcc87853) Thanks [@johnnyluo](https://github.com/johnnyluo)! - Throw a typed `DklsMaliciousPartyError` when DKLS keysign reports native or vs-wasm abort-and-ban party codes, and resolve the banned `partyId` from the setup-message party order on the initiating device.
+
+- [#2227](https://github.com/vultisig/vultisig-sdk/pull/2227) [`6d3c754`](https://github.com/vultisig/vultisig-sdk/commit/6d3c754ed1abe6153e648243ff0339ff0ba50bf1) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add TRON Stake 2.0 expired-unfreeze withdrawal signing with strict native-TRX payload validation and WalletCore 4.7.3 support.
+
+- Updated dependencies [[`bbe43cb`](https://github.com/vultisig/vultisig-sdk/commit/bbe43cb91976138015ab4ad29c14a7b0e14f8cb4), [`6d3c754`](https://github.com/vultisig/vultisig-sdk/commit/6d3c754ed1abe6153e648243ff0339ff0ba50bf1)]:
+  - @vultisig/core-chain@4.0.1
+
+## 2.0.0
+
+### Major Changes
+
+- [#2218](https://github.com/vultisig/vultisig-sdk/pull/2218) [`d043dc4`](https://github.com/vultisig/vultisig-sdk/commit/d043dc43d9fe33a3160c2739150fd6294f0e7eff) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Unify the workspace on the coordinated Noble/Scure v2 stack and align related workspace peer dependency ranges.
+
+### Patch Changes
+
+- [#2148](https://github.com/vultisig/vultisig-sdk/pull/2148) [`dd82325`](https://github.com/vultisig/vultisig-sdk/commit/dd82325ee2f5700429178cb513b338dac27aa281) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Align Cosmos IBC signing with the mobile signers by unpacking the source-channel routing memo and signing only the optional user memo.
+
+- [#2154](https://github.com/vultisig/vultisig-sdk/pull/2154) [`e2be3d4`](https://github.com/vultisig/vultisig-sdk/commit/e2be3d41214b988c3b917538e26dbe1e123725de) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Export canonical server-signer helpers from the SDK root and React Native entrypoints, recognize legacy `VultiServer-*` signers, and route SDK fast-vault classification through the shared detector.
+
+- [#2023](https://github.com/vultisig/vultisig-sdk/pull/2023) [`3203589`](https://github.com/vultisig/vultisig-sdk/commit/3203589af5da361dfc51695aad4fef77afa2d78e) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(encoding): bound TRON/Solana/Ripple fee-and-gas fields before `Long.fromString`
+
+  `Long.fromString` (and `BigInt()`) silently two's-complement-wraps an out-of-range magnitude instead of throwing (e.g. `2^64 -> 0`, `2^63 -> -2^63`). Six fee/gas sites fed by third-party gas estimation / swap-aggregator data routed raw values straight into it with no bound - a wrapped TRON `feeLimit`/`callValue`/`callTokenValue` could authorize an outsized fee burn, and a wrapped Solana priority fee or Ripple network fee misprices the transaction:
+
+  - `packages/core/mpc/keysign/signingInputs/resolvers/tron.ts` - `feeLimit` (4 sites, from `tronSpecific.gasEstimation`), `callValue`, `callTokenValue`
+  - `packages/core/mpc/keysign/signingInputs/resolvers/solana/send.ts` - `priorityFee`
+  - `packages/core/mpc/keysign/signingInputs/resolvers/ripple.ts` - `fee` (from `rippleSpecific.gas`)
+
+  New `assertBoundedInt(value, 'int64' | 'uint64')` in `@vultisig/lib-utils/bigint/assertBoundedInt` validates a decimal integer string against the proto field's declared 64-bit range and throws instead of letting the wrap happen, matching each field's real signedness (TRON's are `int64`, Solana's priority fee is `uint64`, Ripple's fee is `int64`). In-range values are unaffected - this is fail-closed only.
+
+- Updated dependencies [[`d043dc4`](https://github.com/vultisig/vultisig-sdk/commit/d043dc43d9fe33a3160c2739150fd6294f0e7eff), [`6c535ae`](https://github.com/vultisig/vultisig-sdk/commit/6c535ae3aed1c376d2e1bbbeb100e8b5c21c8929), [`3203589`](https://github.com/vultisig/vultisig-sdk/commit/3203589af5da361dfc51695aad4fef77afa2d78e), [`4c30666`](https://github.com/vultisig/vultisig-sdk/commit/4c306668690f798ff4fb9094cf16dd26eaafa8e7), [`821c8a7`](https://github.com/vultisig/vultisig-sdk/commit/821c8a73dd7d3aee55eaca59c22adc1ce8dae2f2)]:
+  - @vultisig/core-chain@4.0.0
+  - @vultisig/lib-utils@0.10.6
+
+## 1.20.5
+
+### Patch Changes
+
+- Updated dependencies [[`7d6a014`](https://github.com/vultisig/vultisig-sdk/commit/7d6a01440fd0b855356cce81469b5b5a91665862)]:
+  - @vultisig/core-chain@3.0.0
+
+## 1.20.4
+
+### Patch Changes
+
+- [#2147](https://github.com/vultisig/vultisig-sdk/pull/2147) [`95fcff9`](https://github.com/vultisig/vultisig-sdk/commit/95fcff9ecf860551b4ae5815736018b831f78f36) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Populate Solana `SigningOutput.signatures` when compiling dApp-supplied raw transactions so downstream transaction-hash resolution returns the spliced fee-payer signature instead of crashing after keysign.
+
+## 1.20.3
+
+### Patch Changes
+
+- [#1879](https://github.com/vultisig/vultisig-sdk/pull/1879) [`62ef869`](https://github.com/vultisig/vultisig-sdk/commit/62ef86962d7d7f562e75ac655f321e7912e5368a) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Include TerraClassic's signed USTC burn-tax surcharge in the displayed send-fee total by deriving both values from the same Cosmos fee-amount list.
+
+- Updated dependencies [[`088b905`](https://github.com/vultisig/vultisig-sdk/commit/088b9058f47eff8dc84929e89fdf4ddfde7e42e6), [`088b905`](https://github.com/vultisig/vultisig-sdk/commit/088b9058f47eff8dc84929e89fdf4ddfde7e42e6)]:
+  - @vultisig/core-chain@2.39.0
+
+## 1.20.2
+
+### Patch Changes
+
+- Updated dependencies [[`8929244`](https://github.com/vultisig/vultisig-sdk/commit/8929244cdb3b21059a46eabac6d4d9684e18a633), [`514e31f`](https://github.com/vultisig/vultisig-sdk/commit/514e31f084c241792f3a9b2436074c324a909c0f)]:
+  - @vultisig/core-chain@2.38.0
+
+## 1.20.1
+
+### Patch Changes
+
+- [#1880](https://github.com/vultisig/vultisig-sdk/pull/1880) [`39b8762`](https://github.com/vultisig/vultisig-sdk/commit/39b8762aeed25382bf803944c1b2c2066f6224a6) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Resolve MayaChain's displayed native transaction fee from live network parameters and clarify vault-based Cosmos fee signing semantics.
+
+- Updated dependencies [[`f7caa39`](https://github.com/vultisig/vultisig-sdk/commit/f7caa39ad2eb3d322031d8ac56ae832a9108e6d4), [`50257ad`](https://github.com/vultisig/vultisig-sdk/commit/50257ad213a36952509f3548100334e5f3e44a09), [`69b1c2e`](https://github.com/vultisig/vultisig-sdk/commit/69b1c2e4026e62a83151957a91651eaa982d0a13), [`687f1ad`](https://github.com/vultisig/vultisig-sdk/commit/687f1adea7c81dde4a5f21520ea1cdbbf34e10fd), [`76163b6`](https://github.com/vultisig/vultisig-sdk/commit/76163b6e533cb0178c999e5b6554bddf4517718e)]:
+  - @vultisig/core-chain@2.37.0
+  - @vultisig/lib-utils@0.10.5
+
 ## 1.20.0
 
 ### Minor Changes

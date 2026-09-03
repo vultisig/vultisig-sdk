@@ -2,9 +2,9 @@ import { Chain, CosmosChain, VaultBasedCosmosChain } from '@vultisig/core-chain/
 import { cosmosFeeCoinDenom } from '@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom'
 import { getCosmosGasLimit } from '@vultisig/core-chain/chains/cosmos/cosmosGasLimitRecord'
 import { resolveCosmosGasLimit } from '@vultisig/core-chain/chains/cosmos/resolveCosmosGasLimit'
+import { isTerraClassicUstcCoin } from '@vultisig/core-chain/chains/cosmos/terraClassicTax'
 import { getCosmosChainKind } from '@vultisig/core-chain/chains/cosmos/utils/getCosmosChainKind'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
-import { areEqualCoins } from '@vultisig/core-chain/coin/Coin'
 import {
   getNativeSwapChainIdFromDenomPrefix,
   nativeSwapChainIds,
@@ -37,7 +37,7 @@ const getNativeSwapPayload = (keysignPayload: Parameters<typeof getKeysignSwapPa
   return getRecordUnionValue(swapPayload, 'native')
 }
 
-const getThorchainDepositAsset = ({
+export const getThorchainDepositAsset = ({
   assetCoin,
   chain,
   secured,
@@ -53,6 +53,11 @@ const getThorchainDepositAsset = ({
   const chainId =
     (nativeSwapChainIds as Record<string, string>)[assetCoin.chain] ??
     nativeSwapChainIds[chain as VaultBasedCosmosChain]
+  if (!chainId) {
+    throw new Error(
+      `Unresolved THORChain deposit-asset chain id: neither asset chain "${assetCoin.chain}" nor cosmos chain "${chain}" has a nativeSwapChainIds entry`
+    )
+  }
   const { contractAddress } = assetCoin
   // The `TICKER-CONTRACT` symbol form belongs to secured-asset withdrawals only,
   // where `assetCoin` is the L1 coin being pulled off THORChain and
@@ -176,8 +181,9 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
         }
       }
       if (transactionType === TransactionType.IBC_TRANSFER) {
-        const memo = shouldBePresent(keysignPayload.memo)
-        const [, channel] = memo.split(':')
+        const packedMemo = shouldBePresent(keysignPayload.memo)
+        const [, channel, , ...userMemoParts] = packedMemo.split(':')
+        const userMemo = userMemoParts.join(':') || undefined
 
         // COSMOS-03: sourceChannel is derived from an unvalidated memo
         // split. An undefined/empty/malformed channel would sign a
@@ -185,7 +191,7 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
         // through an unintended channel. Fail closed.
         if (!channel || !/^channel-\d+$/.test(channel)) {
           throw new Error(
-            `Cosmos signing input: IBC transfer memo "${memo}" does not contain a well-formed source channel (expected "<prefix>:channel-<n>[:...]").`
+            `Cosmos signing input: IBC transfer memo "${packedMemo}" does not contain a well-formed source channel (expected "<prefix>:channel-<n>[:...]").`
           )
         }
 
@@ -223,7 +229,12 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
               }),
             }),
           ],
-          txMemo: memo,
+          // `keysignPayload.memo` packs routing fields so every signing peer
+          // can reconstruct the MsgTransfer. Only the optional fourth field is
+          // the user's transaction memo. Signing the packed routing string as
+          // the tx memo diverges from the mobile signers and leaks internal
+          // routing metadata on-chain.
+          txMemo: userMemo,
         }
       }
 
@@ -536,34 +547,40 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
     }
 
     const getFeeAmounts = (feeAmount: bigint) => {
-      if (chainKind !== 'ibcEnabled') return
+      if (chainKind !== 'ibcEnabled') {
+        // THORChain and MayaChain charge their native transaction fee inside
+        // message processing, not from cosmos-sdk authInfo.fee.amount. Their
+        // displayed network fee is therefore informational protocol state and
+        // must not be inserted into the signed Cosmos fee coins.
+        return
+      }
 
-      const { ibcDenomTraces } = getRecordUnionValue(chainSpecific, 'ibcEnabled')
+      // Terra Classic bank-denom sends (currently USTC / uusd) pay gas plus
+      // burn tax in the send denom itself. `CosmosSpecific.gas` already
+      // contains that complete amount, computed by the initiator, so emit one
+      // uusd fee coin exactly like the current Swift and Kotlin signers.
+      //
+      // Scoped to PLAIN sends only (mirrors the initiator's `isPlainSend` gate
+      // in `getCosmosChainSpecific`): an IBC transfer of USTC still prices
+      // `gas` in `uluna` (chain-specific pricing, not the uusd surcharge), so
+      // relabeling its denom to uusd here would sign a fee coin that doesn't
+      // match what was actually priced.
+      const isPlainSend = ibcSpecific?.transactionType === TransactionType.UNSPECIFIED
+      if (isPlainSend && isTerraClassicUstcCoin(coin)) {
+        return [
+          TW.Cosmos.Proto.Amount.create({
+            amount: feeAmount.toString(),
+            denom: coin.id,
+          }),
+        ]
+      }
 
-      const amounts: TW.Cosmos.Proto.Amount[] = [
+      return [
         TW.Cosmos.Proto.Amount.create({
           amount: feeAmount.toString(),
           denom: chainFeeDenom,
         }),
       ]
-
-      // Terra Classic stability-tax surcharge for USTC (uusd) sends.
-      // The burn-tax amount is pre-computed dynamically in getCosmosChainSpecific
-      // and stored in ibcDenomTraces.baseDenom so this sync path can use it.
-      // baseDenom is '' for all non-USTC chains; '0' when rate is zero.
-      if (areEqualCoins(coin, { chain: Chain.TerraClassic, id: 'uusd' })) {
-        const burnTaxAmount = BigInt(ibcDenomTraces?.baseDenom || '0')
-        if (burnTaxAmount > 0n) {
-          amounts.push(
-            TW.Cosmos.Proto.Amount.create({
-              denom: coin.id,
-              amount: burnTaxAmount.toString(),
-            })
-          )
-        }
-      }
-
-      return amounts
     }
 
     const ibcSpecific = chainKind === 'ibcEnabled' ? getRecordUnionValue(chainSpecific, 'ibcEnabled') : undefined

@@ -4,7 +4,7 @@
  * Gap this fills: `cosmos-staking.test.ts` cross-checks the staking/distribution
  * msgs (MsgDelegate/MsgUndelegate/MsgBeginRedelegate/MsgWithdrawDelegatorReward)
  * against cosmjs-types, but the plain `cosmos.bank.v1beta1.MsgSend` path used
- * by every generic Cosmos-SDK send (Cosmos Hub, Osmosis, Kujira, Terra, ...)
+ * by every generic Cosmos-SDK send (Cosmos Hub, Osmosis, Terra, ...)
  * had no byte-level cross-check.
  *
  * Strategy: independently re-encode the ENTIRE signable envelope (MsgSend Any
@@ -125,7 +125,7 @@ function buildReferenceSignDoc(memo: string): { signDocBytes: Uint8Array; txBody
 }
 
 describe('cosmos / buildCosmosSendTx — MsgSend golden vectors', () => {
-  describe('generic cosmos-sdk bank.MsgSend (Cosmos Hub / Osmosis / Kujira / ...)', () => {
+  describe('generic cosmos-sdk bank.MsgSend (Cosmos Hub / Osmosis / ...)', () => {
     it('produces SignDoc bytes byte-identical to an independent cosmjs-types encode', () => {
       const result = buildCosmosSendTx({
         chainName: 'Cosmos',

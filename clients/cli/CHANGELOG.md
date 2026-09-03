@@ -1,5 +1,118 @@
 # @vultisig/cli
 
+## 6.3.0
+
+### Patch Changes
+
+- [#2202](https://github.com/vultisig/vultisig-sdk/pull/2202) [`2d90f80`](https://github.com/vultisig/vultisig-sdk/commit/2d90f803055e7c1325ab1dc1966e17431740cb1f) Thanks [@neavra](https://github.com/neavra)! - Derive swap sell-token contracts from signed approval payloads and mark unresolved contract disclosures explicitly.
+
+- Updated dependencies [[`c0eafeb`](https://github.com/vultisig/vultisig-sdk/commit/c0eafeb12df42cffa70ef6951c081a74383e5fa2), [`b2f63b7`](https://github.com/vultisig/vultisig-sdk/commit/b2f63b70c4dac0001f0f40521efa4412f1d9e1cb), [`536c320`](https://github.com/vultisig/vultisig-sdk/commit/536c32028bf1f66897bf018c19f36c298545841a), [`78be14e`](https://github.com/vultisig/vultisig-sdk/commit/78be14ea9f1f011ded932ce6a9be5c19cf5694d0), [`76be65f`](https://github.com/vultisig/vultisig-sdk/commit/76be65fc297a43de6313b9dce3b096e6f764831a), [`e23780f`](https://github.com/vultisig/vultisig-sdk/commit/e23780f0b292cd76e80c72c5ccdcdafebd73a735), [`30499f8`](https://github.com/vultisig/vultisig-sdk/commit/30499f83f9909d8eb9bc1d310b25fdadb5c240e7), [`534154b`](https://github.com/vultisig/vultisig-sdk/commit/534154b6e9daaffad5d2e4958af3ead5fa940f21), [`3d40017`](https://github.com/vultisig/vultisig-sdk/commit/3d400171facf1107472e827c4ef48d7dd99843f1), [`c0c08f0`](https://github.com/vultisig/vultisig-sdk/commit/c0c08f0bd2337147d6b92ca7f391115edd7db62b), [`2869ae6`](https://github.com/vultisig/vultisig-sdk/commit/2869ae60bc157e2020a541e31a50afabef4e9edc), [`ef252e4`](https://github.com/vultisig/vultisig-sdk/commit/ef252e40b590a6cad9f303f7aba743c617442f90), [`4e23e92`](https://github.com/vultisig/vultisig-sdk/commit/4e23e9205310e46564bc1782b57499b2a39d7a5f), [`4561c65`](https://github.com/vultisig/vultisig-sdk/commit/4561c6584f62fa78d17546bcc119e31b6ea665cb), [`fc876a7`](https://github.com/vultisig/vultisig-sdk/commit/fc876a7fb561041539cb257a814d078304de6857), [`d08babd`](https://github.com/vultisig/vultisig-sdk/commit/d08babd96c36b193f8788605ed59871da1483ff3), [`4292e31`](https://github.com/vultisig/vultisig-sdk/commit/4292e3127e56bc2c92f2ac7b0a2886fcb0445043), [`d267ff6`](https://github.com/vultisig/vultisig-sdk/commit/d267ff66b9cf6d0b5898d40ec1f37cda6decb707), [`5f7dd00`](https://github.com/vultisig/vultisig-sdk/commit/5f7dd007cb5026d7c3ebe414fa5952f3419df570), [`bfe0292`](https://github.com/vultisig/vultisig-sdk/commit/bfe0292e3876fb7acc7044bac1b544c27aba8919), [`acd0b2e`](https://github.com/vultisig/vultisig-sdk/commit/acd0b2eaa882669a399fb378e51244ed4199ee47), [`f86320b`](https://github.com/vultisig/vultisig-sdk/commit/f86320bcfbee02b2f27473ac41a042db307596f6)]:
+  - @vultisig/core-chain@4.1.1
+  - @vultisig/sdk@6.3.0
+
+## 6.2.0
+
+### Minor Changes
+
+- [#1389](https://github.com/vultisig/vultisig-sdk/pull/1389) [`e1e73cb`](https://github.com/vultisig/vultisig-sdk/commit/e1e73cb5a67de6c77731b2d58ed7b2cb547e1228) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export the RN-safe `prepareIbcTransfer` and `prepareSuiTokenTransferFromKeys` helpers from `@vultisig/sdk/react-native`, along with their public support types/constants so React Native consumers no longer need deep imports for IBC and Sui token transfer prep.
+
+### Patch Changes
+
+- [#2225](https://github.com/vultisig/vultisig-sdk/pull/2225) [`95edf12`](https://github.com/vultisig/vultisig-sdk/commit/95edf1264827d0a63baa9d0580817caf2dffdc9e) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add a canonical raw EVM transaction-envelope keysign helper and use it in the CLI signing path.
+
+- Updated dependencies [[`8a98b44`](https://github.com/vultisig/vultisig-sdk/commit/8a98b44e1f4438212e6deb7cca8491e23940118c), [`95edf12`](https://github.com/vultisig/vultisig-sdk/commit/95edf1264827d0a63baa9d0580817caf2dffdc9e), [`e1e73cb`](https://github.com/vultisig/vultisig-sdk/commit/e1e73cb5a67de6c77731b2d58ed7b2cb547e1228), [`3fff7cf`](https://github.com/vultisig/vultisig-sdk/commit/3fff7cfdfe23d2d5622f7caa87a6f1525329f07e), [`0697060`](https://github.com/vultisig/vultisig-sdk/commit/0697060107c7fe1c8ec818d3e0eae01557d9d96f)]:
+  - @vultisig/sdk@6.2.0
+  - @vultisig/core-chain@4.1.0
+
+## 6.0.0
+
+### Major Changes
+
+- [#2218](https://github.com/vultisig/vultisig-sdk/pull/2218) [`d043dc4`](https://github.com/vultisig/vultisig-sdk/commit/d043dc43d9fe33a3160c2739150fd6294f0e7eff) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Unify the workspace on the coordinated Noble/Scure v2 stack and align related workspace peer dependency ranges.
+
+### Minor Changes
+
+- [#2024](https://github.com/vultisig/vultisig-sdk/pull/2024) [`821c8a7`](https://github.com/vultisig/vultisig-sdk/commit/821c8a73dd7d3aee55eaca59c22adc1ce8dae2f2) Thanks [@neavra](https://github.com/neavra)! - Label XRP spendable-vs-total balance. `getRippleNativeBalanceDetail` exposes the `{ total, spendable, reserve }` breakdown of a native XRP balance (the existing resolvers keep returning the spendable number, so no consumer changes meaning). SDK `Balance` gains optional `totalAmount`/`reserveAmount` fields, populated for native XRP. The CLI labels the spendable headline and prints the locked reserve for XRP balances; all other chains render unchanged.
+
+### Patch Changes
+
+- [#2176](https://github.com/vultisig/vultisig-sdk/pull/2176) [`d2edffd`](https://github.com/vultisig/vultisig-sdk/commit/d2edffd98730daa474d0c2f35a305d5277e3eb15) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Export a canonical typed parser for backend `tx_ready` and execute-prep envelopes, and migrate the CLI's non-EVM and THOR/Maya execution routing to that shared contract.
+
+- [#1736](https://github.com/vultisig/vultisig-sdk/pull/1736) [`b58da97`](https://github.com/vultisig/vultisig-sdk/commit/b58da972a3830eb11449401d97ae6b5e62189501) Thanks [@neavra](https://github.com/neavra)! - Fix agent send consent summaries so token tickers, chains, and contract details render exactly once; strip negated routed-chain phrases without leaving a dangling "not" and strip ASCII-ellipsis truncated contract copies like the Unicode form.
+
+- [#1760](https://github.com/vultisig/vultisig-sdk/pull/1760) [`9759c64`](https://github.com/vultisig/vultisig-sdk/commit/9759c6429225afe0ee96a8b51aff6b79026e1b8b) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Preserve optional `priceProviderId` on `discoverTokens()` results so downstream consumers can price newly discovered tokens without app-local metadata backfills.
+
+- [#1870](https://github.com/vultisig/vultisig-sdk/pull/1870) [`3e37e69`](https://github.com/vultisig/vultisig-sdk/commit/3e37e69fdc60d63cb53a2ef7c74b01aa930b27e1) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add a public `pollTxStatusUntilFinal` helper to `@vultisig/sdk` and reuse it across SDK/CLI transaction finality polling paths.
+
+- [#2018](https://github.com/vultisig/vultisig-sdk/pull/2018) [`3163f30`](https://github.com/vultisig/vultisig-sdk/commit/3163f30ed91dad7c9e8f860c6d4dbb6e61899be8) Thanks [@neavra](https://github.com/neavra)! - The aggregate `balance` and `portfolio` views now say they only cover the vault's enabled chains. When the enabled set is a strict subset of the SDK-supported chains, the human output appends a hint pointing at `vultisig balance <chain>` and `vultisig chains --add <chain>`, and JSON mode carries the same text in a dedicated `scopeHint` field (omitted when every supported chain is enabled). The balances/portfolio payloads and the scoped `balance <chain>` path are unchanged.
+
+- Updated dependencies [[`d043dc4`](https://github.com/vultisig/vultisig-sdk/commit/d043dc43d9fe33a3160c2739150fd6294f0e7eff), [`d2edffd`](https://github.com/vultisig/vultisig-sdk/commit/d2edffd98730daa474d0c2f35a305d5277e3eb15), [`9759c64`](https://github.com/vultisig/vultisig-sdk/commit/9759c6429225afe0ee96a8b51aff6b79026e1b8b), [`eccbc25`](https://github.com/vultisig/vultisig-sdk/commit/eccbc25a1fd61fb9eb03494afb0d5ceb6977be8c), [`bd44426`](https://github.com/vultisig/vultisig-sdk/commit/bd44426fe80b160d8c9a0a866e3cbb759bf781ba), [`dd82325`](https://github.com/vultisig/vultisig-sdk/commit/dd82325ee2f5700429178cb513b338dac27aa281), [`e6375ee`](https://github.com/vultisig/vultisig-sdk/commit/e6375ee8a4d77035b4ae8dae01184b2100ac8ca7), [`e2be3d4`](https://github.com/vultisig/vultisig-sdk/commit/e2be3d41214b988c3b917538e26dbe1e123725de), [`f170bdd`](https://github.com/vultisig/vultisig-sdk/commit/f170bdddafd80d892cd35a050cf8f5393776a6a0), [`6c535ae`](https://github.com/vultisig/vultisig-sdk/commit/6c535ae3aed1c376d2e1bbbeb100e8b5c21c8929), [`5bf33f2`](https://github.com/vultisig/vultisig-sdk/commit/5bf33f264c90ec4055d2c12e90222bec9aea501b), [`3203589`](https://github.com/vultisig/vultisig-sdk/commit/3203589af5da361dfc51695aad4fef77afa2d78e), [`3e37e69`](https://github.com/vultisig/vultisig-sdk/commit/3e37e69fdc60d63cb53a2ef7c74b01aa930b27e1), [`4c30666`](https://github.com/vultisig/vultisig-sdk/commit/4c306668690f798ff4fb9094cf16dd26eaafa8e7), [`1672265`](https://github.com/vultisig/vultisig-sdk/commit/16722657dcefafff32744a7673c277e403e62a77), [`2faf1a2`](https://github.com/vultisig/vultisig-sdk/commit/2faf1a2b833b1fc0f10a02ad2c8bec50ef4b1f57), [`beaca3c`](https://github.com/vultisig/vultisig-sdk/commit/beaca3c086679a8b87592fb69ca30a0a9d1877db), [`5500717`](https://github.com/vultisig/vultisig-sdk/commit/5500717036e760ed81d4880c66bda559d37331cd), [`d04f246`](https://github.com/vultisig/vultisig-sdk/commit/d04f246a992f3256e4fe7151e5319003d8ae267a), [`da2ea4e`](https://github.com/vultisig/vultisig-sdk/commit/da2ea4e1ae00f17cfec3d27da4fff2e6cb5b1190), [`821c8a7`](https://github.com/vultisig/vultisig-sdk/commit/821c8a73dd7d3aee55eaca59c22adc1ce8dae2f2)]:
+  - @vultisig/core-chain@4.0.0
+  - @vultisig/sdk@6.0.0
+  - @vultisig/rujira@70.0.0
+  - @vultisig/client-shared@0.3.5
+
+## 5.2.0
+
+### Minor Changes
+
+- [#1719](https://github.com/vultisig/vultisig-sdk/pull/1719) [`ac213ac`](https://github.com/vultisig/vultisig-sdk/commit/ac213ac23f49e0d3ea3ad1cb10a055f28c921469) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add direct unsigned CLI preparation commands for contract calls, IBC, SPL, TRC-20, Jetton, Sui tokens, Polkadot assets, Cosmos staking, and CW-20 transfers.
+
+### Patch Changes
+
+- Updated dependencies [[`397c2b6`](https://github.com/vultisig/vultisig-sdk/commit/397c2b6629fdc7002d55bd95bb8585dce78de416), [`df144e9`](https://github.com/vultisig/vultisig-sdk/commit/df144e9e21c2fb64e73efcf12ac35c958dbf1c7b), [`7d6a014`](https://github.com/vultisig/vultisig-sdk/commit/7d6a01440fd0b855356cce81469b5b5a91665862)]:
+  - @vultisig/sdk@5.2.0
+  - @vultisig/core-chain@3.0.0
+  - @vultisig/rujira@69.0.0
+
+## 5.1.0
+
+### Patch Changes
+
+- [#1879](https://github.com/vultisig/vultisig-sdk/pull/1879) [`62ef869`](https://github.com/vultisig/vultisig-sdk/commit/62ef86962d7d7f562e75ac655f321e7912e5368a) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Align Cardano max-send and Terra Classic USTC signing inputs with the current Swift and Kotlin signers so the shared mobile fixture hashes pass without SDK-only overrides.
+
+- [#1905](https://github.com/vultisig/vultisig-sdk/pull/1905) [`d13fc6a`](https://github.com/vultisig/vultisig-sdk/commit/d13fc6a9da44e2efa4bbdde73aaf85459702c039) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export root swap helpers from the React Native SDK entrypoint so mobile consumers can use the same Across, Jupiter, and Skip canonicals without local copies.
+
+- Updated dependencies [[`62ef869`](https://github.com/vultisig/vultisig-sdk/commit/62ef86962d7d7f562e75ac655f321e7912e5368a), [`4696cbb`](https://github.com/vultisig/vultisig-sdk/commit/4696cbb8259cac4b2d19091dbe41c20a988993da), [`a81c444`](https://github.com/vultisig/vultisig-sdk/commit/a81c444371b41cf6582a3e85db9f24765f4516fa), [`d13fc6a`](https://github.com/vultisig/vultisig-sdk/commit/d13fc6a9da44e2efa4bbdde73aaf85459702c039), [`088b905`](https://github.com/vultisig/vultisig-sdk/commit/088b9058f47eff8dc84929e89fdf4ddfde7e42e6), [`088b905`](https://github.com/vultisig/vultisig-sdk/commit/088b9058f47eff8dc84929e89fdf4ddfde7e42e6), [`62ef869`](https://github.com/vultisig/vultisig-sdk/commit/62ef86962d7d7f562e75ac655f321e7912e5368a), [`b46ff2e`](https://github.com/vultisig/vultisig-sdk/commit/b46ff2eb628bf63ecf95609460cd5c713cde6384), [`cd45b6d`](https://github.com/vultisig/vultisig-sdk/commit/cd45b6d62611d4a2f2a578f9c1bf576961715886), [`2111255`](https://github.com/vultisig/vultisig-sdk/commit/21112551209022deeb12cd33ca043c199a980b9d), [`4d18164`](https://github.com/vultisig/vultisig-sdk/commit/4d1816467a78d5bd7c121cb9506efec7385e877a), [`4ce260c`](https://github.com/vultisig/vultisig-sdk/commit/4ce260c360e35e4f76ea7f3dec98c20b47ed0b9b), [`2f1fbbe`](https://github.com/vultisig/vultisig-sdk/commit/2f1fbbe2e2b0fdc901b76f358e078a23e65d3910)]:
+  - @vultisig/sdk@5.1.0
+  - @vultisig/core-chain@2.39.0
+  - @vultisig/rujira@68.0.0
+
+## 5.0.0
+
+### Patch Changes
+
+- Updated dependencies [[`3ed3179`](https://github.com/vultisig/vultisig-sdk/commit/3ed31790b62b4c7f7b1fdbc477f72edebbb2e097), [`8929244`](https://github.com/vultisig/vultisig-sdk/commit/8929244cdb3b21059a46eabac6d4d9684e18a633), [`514e31f`](https://github.com/vultisig/vultisig-sdk/commit/514e31f084c241792f3a9b2436074c324a909c0f), [`952bcdf`](https://github.com/vultisig/vultisig-sdk/commit/952bcdf767621908d1db58d624a4d41a17e7108b)]:
+  - @vultisig/sdk@5.0.0
+  - @vultisig/core-chain@2.38.0
+  - @vultisig/client-shared@0.3.4
+  - @vultisig/rujira@67.0.0
+
+## 4.7.0
+
+### Patch Changes
+
+- [#1779](https://github.com/vultisig/vultisig-sdk/pull/1779) [`e5937ee`](https://github.com/vultisig/vultisig-sdk/commit/e5937ee938eb19adc423a7d5ca29cee71f0592f4) Thanks [@neavra](https://github.com/neavra)! - Store CLI-managed token IDs as bare lowercase EVM contract addresses, retain reads of legacy chain-prefixed IDs, and use stable ecosystem token names in discovery. Ambiguous token symbols now fail closed, discovery collisions use address-derived discriminators, and re-adding legacy-stored contracts remains idempotent. Token removal now emits the standard JSON success envelope and token-add help documents its required name.
+
+- [#1881](https://github.com/vultisig/vultisig-sdk/pull/1881) [`f7caa39`](https://github.com/vultisig/vultisig-sdk/commit/f7caa39ad2eb3d322031d8ac56ae832a9108e6d4) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Surface Cosmos account-sequence mismatches with direction-aware recovery: stale signed transactions now require rebuilding and a new signing ceremony, while future-sequence transactions may wait for their predecessor and retry. Preserve peer-broadcast hash verification and retry only the recoverable future-sequence case.
+
+- [#1664](https://github.com/vultisig/vultisig-sdk/pull/1664) [`42d46b6`](https://github.com/vultisig/vultisig-sdk/commit/42d46b640bb7577d2cc98af31a8776fa04728fd2) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export `buildBalancerV3SwapCalldata` from the root SDK surface so Node and browser consumers can import it the same way React Native consumers already can.
+
+- [#1662](https://github.com/vultisig/vultisig-sdk/pull/1662) [`ef3d8f2`](https://github.com/vultisig/vultisig-sdk/commit/ef3d8f2e37d5c8686835b9f14d36c10e2eab3a08) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export the custom-RPC override registry and health-probe helpers from the root and React Native SDK entrypoints.
+
+- [#1872](https://github.com/vultisig/vultisig-sdk/pull/1872) [`94fe7b4`](https://github.com/vultisig/vultisig-sdk/commit/94fe7b482d5df9d382064c089c107acbd39524e4) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Publish `@vultisig/sdk/tools/balance` as a real package subpath with dedicated JS and declaration bundles.
+
+- [#1875](https://github.com/vultisig/vultisig-sdk/pull/1875) [`3f88a88`](https://github.com/vultisig/vultisig-sdk/commit/3f88a888a07906912732684fd9d631b7ebf36d7b) Thanks [@neavra](https://github.com/neavra)! - Validate ERC-20 transfer recipient AND amount from calldata before agent signing consent; render the consent amount from the signed calldata (trusted decimals when the token is known, raw base units with an unverified marker otherwise) so a producer label cannot understate the amount.
+
+- [#1495](https://github.com/vultisig/vultisig-sdk/pull/1495) [`3d0fd71`](https://github.com/vultisig/vultisig-sdk/commit/3d0fd71b923d57e52ae5760656051be22323947d) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export the canonical `IbcEnabledCosmosChain` and `VaultBasedCosmosChain` subsets from the root and React Native SDK entrypoints so first-party consumers can stop mirroring staking-chain allowlists.
+
+- [#1498](https://github.com/vultisig/vultisig-sdk/pull/1498) [`e869b4d`](https://github.com/vultisig/vultisig-sdk/commit/e869b4d0a1da17d6278ca37c991673a9b4dd0c8d) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export `buildKeygenPairingQrPayload` from the root and React Native SDK entrypoints so first-party consumers can build canonical secure-vault pairing QR payloads without deep-importing internal service paths.
+
+- Updated dependencies [[`e5937ee`](https://github.com/vultisig/vultisig-sdk/commit/e5937ee938eb19adc423a7d5ca29cee71f0592f4), [`f7caa39`](https://github.com/vultisig/vultisig-sdk/commit/f7caa39ad2eb3d322031d8ac56ae832a9108e6d4), [`144cc70`](https://github.com/vultisig/vultisig-sdk/commit/144cc7085d63eb6111ae5f8b0fc948af224ecc21), [`42d46b6`](https://github.com/vultisig/vultisig-sdk/commit/42d46b640bb7577d2cc98af31a8776fa04728fd2), [`fbdd174`](https://github.com/vultisig/vultisig-sdk/commit/fbdd174c24a79b81559e1775e33841fb024ef142), [`ef3d8f2`](https://github.com/vultisig/vultisig-sdk/commit/ef3d8f2e37d5c8686835b9f14d36c10e2eab3a08), [`50257ad`](https://github.com/vultisig/vultisig-sdk/commit/50257ad213a36952509f3548100334e5f3e44a09), [`94fe7b4`](https://github.com/vultisig/vultisig-sdk/commit/94fe7b482d5df9d382064c089c107acbd39524e4), [`69b1c2e`](https://github.com/vultisig/vultisig-sdk/commit/69b1c2e4026e62a83151957a91651eaa982d0a13), [`39b8762`](https://github.com/vultisig/vultisig-sdk/commit/39b8762aeed25382bf803944c1b2c2066f6224a6), [`f914e7c`](https://github.com/vultisig/vultisig-sdk/commit/f914e7c1c6f430fa54116f4c0a82f19919e0fbf6), [`687f1ad`](https://github.com/vultisig/vultisig-sdk/commit/687f1adea7c81dde4a5f21520ea1cdbbf34e10fd), [`76163b6`](https://github.com/vultisig/vultisig-sdk/commit/76163b6e533cb0178c999e5b6554bddf4517718e), [`3d0fd71`](https://github.com/vultisig/vultisig-sdk/commit/3d0fd71b923d57e52ae5760656051be22323947d), [`e869b4d`](https://github.com/vultisig/vultisig-sdk/commit/e869b4d0a1da17d6278ca37c991673a9b4dd0c8d), [`0a73b05`](https://github.com/vultisig/vultisig-sdk/commit/0a73b056a6d9fa1dc3c4c115e8c9850bcede0403), [`01f92f5`](https://github.com/vultisig/vultisig-sdk/commit/01f92f5b20461e62625b743d27a6a7571f9b0d74), [`2a35932`](https://github.com/vultisig/vultisig-sdk/commit/2a35932cbde4eddad4edf9462e9f0b4063a56f62)]:
+  - @vultisig/sdk@4.7.0
+  - @vultisig/core-chain@2.37.0
+  - @vultisig/rujira@66.0.0
+
 ## 4.6.0
 
 ### Minor Changes

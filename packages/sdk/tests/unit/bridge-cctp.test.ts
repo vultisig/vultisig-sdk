@@ -116,6 +116,63 @@ describe('buildCctpBridge', () => {
     expect((decodedBurn.args[3] as string).toLowerCase()).toBe(base.usdc.toLowerCase())
   })
 
+  // sdk#1911: the rest of the SDK routes chain strings through normalizeChain;
+  // CCTP was an exact-match object index, so callers had to pre-normalize for
+  // this one family and any alias added to the canonicals later would work
+  // everywhere except here.
+  describe('accepts the chain spellings the rest of the SDK accepts (sdk#1911)', () => {
+    it.each(['base', 'BASE', 'Base', ' base '])('resolves %j to the canonical Base config', input => {
+      expect(getCctpChain(input)).toBe(cctpChains.Base)
+    })
+
+    it('still returns undefined for a chain that normalizes but is not CCTP-supported', () => {
+      // Solana is a real chain the normalizer resolves; it just has no CCTP V1
+      // config here. It must answer the same as an unresolvable string.
+      expect(getCctpChain('Solana')).toBeUndefined()
+      expect(getCctpChain('solana')).toBeUndefined()
+      expect(getCctpChain('definitely-not-a-chain')).toBeUndefined()
+      expect(getCctpChain('')).toBeUndefined()
+    })
+
+    it('builds the same envelope from a lowercase spelling as from the canonical one', () => {
+      const canonical = buildCctpBridge({
+        sourceChain: 'Base',
+        destinationChain: 'Arbitrum',
+        amount: '10',
+        from: SENDER,
+      })
+      const lowercased = buildCctpBridge({
+        sourceChain: 'base',
+        destinationChain: 'arbitrum',
+        amount: '10',
+        from: SENDER,
+      })
+
+      expect(lowercased).toEqual(canonical)
+      // And the envelope carries the CANONICAL name, not what the caller typed.
+      expect(lowercased.chain).toBe('Base')
+      expect(lowercased.toChain).toBe('Arbitrum')
+    })
+
+    // The trap alias tolerance introduces: comparing the RAW strings would see
+    // 'base' !== 'Base' as two different chains and happily build a bridge from
+    // a chain to itself. The guard has to run on canonical names.
+    it('still rejects a same-chain bridge written with two different spellings', () => {
+      expect(() =>
+        buildCctpBridge({ sourceChain: 'base', destinationChain: 'Base', amount: '1', from: SENDER })
+      ).toThrow(/must be different/)
+      expect(() =>
+        buildCctpBridge({ sourceChain: 'BASE', destinationChain: ' base ', amount: '1', from: SENDER })
+      ).toThrow(/must be different/)
+    })
+
+    it("reports the caller's own spelling in the unsupported-chain error", () => {
+      expect(() =>
+        buildCctpBridge({ sourceChain: 'nonsense-chain', destinationChain: 'Base', amount: '1', from: SENDER })
+      ).toThrow(/"nonsense-chain"/)
+    })
+  })
+
   it('rejects identical source/destination chains', () => {
     expect(() => buildCctpBridge({ sourceChain: 'Base', destinationChain: 'Base', amount: '1', from: SENDER })).toThrow(
       /must be different/
@@ -171,31 +228,222 @@ describe('buildCctpBridge', () => {
   })
 })
 
+// architecture#1733 — burn-identity binding fixtures, ported from
+// agent-backend-ts's build-cctp-claim-usdc-encode.test.ts. Hand-encodes real
+// CCTP V1 depositForBurn messages (header + burn body, per Circle's
+// documented byte layout) against the REAL cctpChains registry
+// addresses/domains — never a second hardcoded copy.
+const CCTP_RECIPIENT = '0x1234567890123456789012345678901234567890'
+const CCTP_ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
+
+function addressToWord(addr: string): string {
+  return addr.replace(/^0x/i, '').toLowerCase().padStart(64, '0')
+}
+
+function uintToHex(n: bigint | number, byteLength: number): string {
+  return BigInt(n)
+    .toString(16)
+    .padStart(byteLength * 2, '0')
+}
+
+/** Hand-encode a CCTP V1 depositForBurn message per Circle's documented byte layout. */
+function buildCctpMessage(opts: {
+  version?: number
+  sourceDomain: number
+  destinationDomain: number
+  nonce?: bigint
+  sender: string
+  recipient: string
+  destinationCaller?: string
+  bodyVersion?: number
+  burnToken: string
+  mintRecipient: string
+  amount: bigint
+  messageSender?: string
+}): `0x${string}` {
+  const header =
+    uintToHex(opts.version ?? 0, 4) +
+    uintToHex(opts.sourceDomain, 4) +
+    uintToHex(opts.destinationDomain, 4) +
+    uintToHex(opts.nonce ?? 1n, 8) +
+    addressToWord(opts.sender) +
+    addressToWord(opts.recipient) +
+    addressToWord(opts.destinationCaller ?? CCTP_ZERO_ADDRESS)
+  const body =
+    uintToHex(opts.bodyVersion ?? 0, 4) +
+    addressToWord(opts.burnToken) +
+    addressToWord(opts.mintRecipient) +
+    uintToHex(opts.amount, 32) +
+    addressToWord(opts.messageSender ?? opts.sender)
+  return `0x${header}${body}` as `0x${string}`
+}
+
+// Valid attestation shape (65-byte multiple) — content doesn't matter for
+// these tests since buildCctpClaim never verifies the ECDSA signature itself
+// (that's the destination contract's job on-chain); only the byte-length
+// guard runs here.
+const CCTP_ATTESTATION = `0x${'ab'.repeat(65)}` as `0x${string}`
+
+function validBurnMessage(overrides: Partial<Parameters<typeof buildCctpMessage>[0]> = {}) {
+  return buildCctpMessage({
+    sourceDomain: cctpChains.Ethereum!.domain,
+    destinationDomain: cctpChains.Base!.domain,
+    sender: cctpChains.Ethereum!.tokenMessenger,
+    recipient: cctpChains.Base!.tokenMessenger,
+    burnToken: cctpChains.Ethereum!.usdc,
+    mintRecipient: CCTP_RECIPIENT,
+    amount: 10_000_000n, // 10 USDC (6 decimals)
+    ...overrides,
+  })
+}
+
 describe('buildCctpClaim', () => {
-  it('builds a single receiveMessage tx (arbitrum)', () => {
-    const message = '0x' + 'ab'.repeat(200) // arbitrary even-length hex
-    const attestation = '0x' + 'cd'.repeat(65) // exactly 65 bytes (valid V1)
+  it('accepts a genuinely matching message and surfaces the decoded burn identity', () => {
+    const res = buildCctpClaim({
+      sourceChain: 'Ethereum',
+      destinationChain: 'Base',
+      message: validBurnMessage(),
+      attestation: CCTP_ATTESTATION,
+    })
 
-    const res = buildCctpClaim({ destinationChain: 'Arbitrum', message, attestation })
-
-    const arb = getCctpChain('Arbitrum')!
-    expect(res.chain).toBe('Arbitrum')
-    expect(res.chainId).toBe(42161)
-    expect(res.tx.to.toLowerCase()).toBe(arb.messageTransmitter.toLowerCase())
-    expect(res.tx.value).toBe('0')
+    expect(res.chain).toBe('Base')
+    expect(res.tx.to.toLowerCase()).toBe(cctpChains.Base!.messageTransmitter.toLowerCase())
 
     const decoded = decodeFunctionData({ abi: messageTransmitterAbi, data: res.tx.data })
     expect(decoded.functionName).toBe('receiveMessage')
-    expect(decoded.args[0]).toBe(message)
-    expect(decoded.args[1]).toBe(attestation)
+    expect((decoded.args[0] as string).toLowerCase()).toBe(validBurnMessage().toLowerCase())
+    expect((decoded.args[1] as string).toLowerCase()).toBe(CCTP_ATTESTATION.toLowerCase())
+
+    // Previously-opaque burn identity is now surfaced.
+    expect(res.burn.sourceDomain).toBe(cctpChains.Ethereum!.domain)
+    expect(res.burn.destinationDomain).toBe(cctpChains.Base!.domain)
+    expect(res.burn.mintRecipient.toLowerCase()).toBe(CCTP_RECIPIENT.toLowerCase())
+    expect(res.burn.amount).toBe(10_000_000n)
+    expect(res.burn.nonce).toBe(1n)
+  })
+
+  it('REFUSES a claim when the message destination domain does not match destinationChain (wrong-burn core fix)', () => {
+    // Isolate the domain check from the sibling recipient-contract check:
+    // only destinationDomain is wrong (claims Arbitrum) while header.recipient
+    // still matches Base's TokenMessenger, so a regression in the domain
+    // check alone (not the recipient check) is what this test pins.
+    const wrongDestMessage = validBurnMessage({
+      destinationDomain: cctpChains.Arbitrum!.domain,
+      recipient: cctpChains.Base!.tokenMessenger,
+    })
+    expect(() =>
+      buildCctpClaim({
+        sourceChain: 'Ethereum',
+        destinationChain: 'Base',
+        message: wrongDestMessage,
+        attestation: CCTP_ATTESTATION,
+      })
+    ).toThrow(/destination domain mismatch/i)
+  })
+
+  it('REFUSES a claim when the message source domain does not match sourceChain', () => {
+    const wrongSourceMessage = validBurnMessage({
+      sourceDomain: cctpChains.Optimism!.domain,
+      sender: cctpChains.Optimism!.tokenMessenger,
+    })
+    expect(() =>
+      buildCctpClaim({
+        sourceChain: 'Ethereum',
+        destinationChain: 'Base',
+        message: wrongSourceMessage,
+        attestation: CCTP_ATTESTATION,
+      })
+    ).toThrow(/source domain mismatch/i)
+  })
+
+  it("REFUSES a claim burning a token other than the source chain's registered USDC", () => {
+    const wrongTokenMessage = validBurnMessage({ burnToken: '0xdeaddeaddeaddeaddeaddeaddeaddeaddeaddead' })
+    expect(() =>
+      buildCctpClaim({
+        sourceChain: 'Ethereum',
+        destinationChain: 'Base',
+        message: wrongTokenMessage,
+        attestation: CCTP_ATTESTATION,
+      })
+    ).toThrow(/not.*registered usdc/i)
+  })
+
+  it('REFUSES (fail-closed) a message that does not decode as a well-formed V1 burn message', () => {
+    expect(() =>
+      buildCctpClaim({
+        sourceChain: 'Ethereum',
+        destinationChain: 'Base',
+        message: '0x1234',
+        attestation: CCTP_ATTESTATION,
+      })
+    ).toThrow(/cannot identify the burn/i)
+  })
+
+  it('REFUSES a claim whose burn message mints to the dead address', () => {
+    const DEAD_ADDRESS = '0x000000000000000000000000000000000000dEaD'
+    expect(() =>
+      buildCctpClaim({
+        sourceChain: 'Ethereum',
+        destinationChain: 'Base',
+        message: validBurnMessage({ mintRecipient: DEAD_ADDRESS }),
+        attestation: CCTP_ATTESTATION,
+      })
+    ).toThrow(/dead address/i)
+  })
+
+  it('REFUSES a claim whose burn message mints to the zero address', () => {
+    expect(() =>
+      buildCctpClaim({
+        sourceChain: 'Ethereum',
+        destinationChain: 'Base',
+        message: validBurnMessage({ mintRecipient: CCTP_ZERO_ADDRESS }),
+        attestation: CCTP_ATTESTATION,
+      })
+    ).toThrow(/zero address/i)
+  })
+
+  it('still BUILDS a claim for an ordinary recipient — the mint-recipient guard is not a blanket refusal', () => {
+    // Guard against the vacuous version of this suite: if the floor rejected
+    // everything, the two tests above would pass and the guard would be dead.
+    expect(() =>
+      buildCctpClaim({
+        sourceChain: 'Ethereum',
+        destinationChain: 'Base',
+        message: validBurnMessage(),
+        attestation: CCTP_ATTESTATION,
+      })
+    ).not.toThrow()
+  })
+
+  it('rejects an unsupported sourceChain / destinationChain', () => {
+    expect(() =>
+      buildCctpClaim({
+        sourceChain: 'NotAChain',
+        destinationChain: 'Base',
+        message: validBurnMessage(),
+        attestation: CCTP_ATTESTATION,
+      })
+    ).toThrow(/source chain.*not supported/i)
+    expect(() =>
+      buildCctpClaim({
+        sourceChain: 'Ethereum',
+        destinationChain: 'NotAChain',
+        message: validBurnMessage(),
+        attestation: CCTP_ATTESTATION,
+      })
+    ).toThrow(/destination chain.*not supported/i)
   })
 
   it('rejects an attestation that is not a multiple of 65 bytes', () => {
-    const message = '0x' + 'ab'.repeat(100)
     const badAttestation = '0x' + 'cd'.repeat(64) // 64 bytes, not 65
-    expect(() => buildCctpClaim({ destinationChain: 'Arbitrum', message, attestation: badAttestation })).toThrow(
-      /multiple of 65/
-    )
+    expect(() =>
+      buildCctpClaim({
+        sourceChain: 'Ethereum',
+        destinationChain: 'Base',
+        message: validBurnMessage(),
+        attestation: badAttestation,
+      })
+    ).toThrow(/multiple of 65/)
   })
 
   it('rejects malformed hex', () => {

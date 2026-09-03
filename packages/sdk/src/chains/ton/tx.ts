@@ -11,12 +11,14 @@
  *   - `buildTonSendTx`            — native TON transfer (wallet V4R2)
  *   - `buildTonJettonTransferTx`  — Jetton (TRC-20-equivalent) transfer
  *
- * Hermes / crypto.subtle notes: this module imports only from `@ton/core`
- * (peer-dep, pulls `jssha` from `@ton/crypto`, both pure JS) and our own
- * `./walletV4R2` / `./crypto-rn`. It never reaches `@ton/crypto-primitives`
- * so the RN bundle does not need the `crypto.subtle` polyfill.
+ * Hermes / crypto.subtle notes: this module uses `@ton/core` plus
+ * WalletCore's generated protobuf namespace to emit parity input. It does not
+ * initialize WalletCore WASM and never reaches `@ton/crypto-primitives`, so
+ * the RN builder path does not need the `crypto.subtle` polyfill.
  */
 import { Address, beginCell, Cell, internal, SendMode, storeMessageRelaxed } from '@ton/core'
+import { TW } from '@trustwallet/wallet-core'
+import { type TonJettonCommentContext, validateTonComment } from '@vultisig/core-chain/chains/ton/comment'
 
 import { buildV4R2Wallet, storeStateInitCell, TON_V4R2_SUB_WALLET_ID } from './walletV4R2'
 
@@ -89,11 +91,11 @@ export type BuildTonSendOptions = {
   /** Unix seconds after which the message is invalid. Default = now + 600. */
   validUntil?: number
   /**
-   * Sub-wallet ID. Defaults to the V4R2 constant (698983191 for workchain 0).
-   * Only override if you're targeting a non-default sub-wallet.
+   * Sub-wallet ID. WalletCore 4.7.0 only supports the V4R2 default (698983191).
+   * Other values are rejected because they cannot receive independent parity proof.
    */
   subWalletId?: number
-  /** Sender wallet workchain. Default 0. */
+  /** Sender wallet workchain. WalletCore-backed transfers currently support only 0. */
   workchain?: number
 }
 
@@ -111,6 +113,16 @@ export type TonTxBuilderResult = {
    */
   fromAddress: string
   /**
+   * Encoded WalletCore TON SigningInput for an independent pre-dispatch
+   * signing-hash check. Native and Jetton builders always provide it;
+   * arbitrary prebuilt signing payloads cannot be represented by WalletCore
+   * and therefore omit it. `fastVaultSign` / `schnorrSign` now require this
+   * field for every `chain === 'ton'` sign — a result that omits it (i.e.
+   * anything from `buildTonTxFromSigningPayload`) will fail closed at
+   * dispatch time rather than reach MPC unchecked.
+   */
+  walletCoreTxInputData?: Uint8Array
+  /**
    * Call once an Ed25519 signature (64 bytes, hex) is available to produce
    * the base64 BOC for `broadcastTonTx`.
    */
@@ -125,6 +137,76 @@ export type TonTxBuilderResult = {
   }
 }
 
+export type TonWalletCoreBackedTxBuilderResult = TonTxBuilderResult & {
+  walletCoreTxInputData: Uint8Array
+}
+
+/**
+ * Send mode for every app-initiated TON transfer, in WalletCore's enum.
+ *
+ * `IGNORE_ACTION_PHASE_ERRORS` (+2) is deliberately absent: with it set, a wallet contract
+ * that cannot carry out its outgoing transfer skips the action rather than failing, so the
+ * transaction lands un-aborted with the seqno consumed and nothing moved — on chain that is
+ * indistinguishable from a real send. Must stay numerically equal to `tonCellSendMode` below —
+ * the two encode the same field, and any drift between them changes the signing hash.
+ */
+const walletCoreTonSendMode = TW.TheOpenNetwork.Proto.SendMode.PAY_FEES_SEPARATELY
+
+/** The same send mode in `@ton/core`'s enum, used when building the V4R2 signing cell. */
+const tonCellSendMode = SendMode.PAY_GAS_SEPARATELY
+
+/**
+ * Narrows caller-supplied wallet options to the only shape these builders can encode.
+ * Anything but workchain 0 on a V4R2 sub-wallet throws, because the WalletCore parity
+ * input emitted alongside the cell cannot represent it and would silently disagree.
+ */
+function assertWalletCoreTonWalletOptions(opts: { subWalletId?: number; workchain?: number }): {
+  subWalletId: number
+  workchain: 0
+} {
+  const workchain = opts.workchain ?? 0
+  if (workchain !== 0) {
+    throw new Error(`TON WalletCore parity supports only workchain 0, got ${workchain}`)
+  }
+  const subWalletId = opts.subWalletId ?? TON_V4R2_SUB_WALLET_ID
+  if (subWalletId !== TON_V4R2_SUB_WALLET_ID) {
+    throw new Error(
+      `TON WalletCore parity supports only V4R2 sub-wallet ID ${TON_V4R2_SUB_WALLET_ID}, got ${subWalletId}`
+    )
+  }
+  return { subWalletId, workchain: 0 }
+}
+
+function tonUnsignedIntegerToBytes(field: string, value: bigint): Uint8Array {
+  if (value < 0n) {
+    throw new Error(`TON ${field} must be a non-negative integer`)
+  }
+  let hex = value.toString(16)
+  if (hex.length % 2 !== 0) hex = `0${hex}`
+  return hexToBytes(hex)
+}
+
+function encodeWalletCoreTonSigningInput(args: {
+  publicKey: Uint8Array
+  seqno: number
+  validUntil: number
+  message: TW.TheOpenNetwork.Proto.ITransfer
+}): Uint8Array {
+  const input = TW.TheOpenNetwork.Proto.SigningInput.create({
+    walletVersion: TW.TheOpenNetwork.Proto.WalletVersion.WALLET_V4_R2,
+    expireAt: args.validUntil,
+    sequenceNumber: args.seqno,
+    publicKey: args.publicKey,
+    messages: [args.message],
+  })
+  return TW.TheOpenNetwork.Proto.SigningInput.encode(input).finish()
+}
+
+/**
+ * Builds the V4R2 cell that gets signed: the wallet header followed by a reference to
+ * the internal message. This is the preimage every co-signer hashes, so field order,
+ * bit widths and the send mode must match WalletCore's encoder exactly.
+ */
 function buildSigningPayloadCell(args: {
   subWalletId: number
   validUntil: number
@@ -133,25 +215,28 @@ function buildSigningPayloadCell(args: {
 }): Cell {
   // V4R2 signing message layout:
   //   subWalletId(32) || validUntil(32) || seqno(32) || op(8) || sendMode(8) || ref(innerMsg)
-  // op=0 for simple order; sendMode = PAY_GAS_SEPARATELY | IGNORE_ERRORS.
-  const sendMode = SendMode.PAY_GAS_SEPARATELY | SendMode.IGNORE_ERRORS
+  // op=0 for simple order.
   return beginCell()
     .storeUint(args.subWalletId, 32)
     .storeUint(args.validUntil, 32)
     .storeUint(args.seqno, 32)
     .storeUint(0, 8)
-    .storeUint(sendMode, 8)
+    .storeUint(tonCellSendMode, 8)
     .storeRef(args.innerMsg)
     .endCell()
 }
 
+/**
+ * The text-comment body cell for a native transfer: 32-bit zero opcode then the
+ * UTF-8 memo. Returns `undefined` for an empty memo so the caller can omit the
+ * body entirely; throws if the memo will not fit the cell.
+ */
 function buildCommentBody(memo: string | undefined): Cell | undefined {
   if (!memo) return undefined
-  // Max 123 UTF-8 bytes fit in a single cell slice (1023 bits - 32-bit opcode).
-  const encoded = new TextEncoder().encode(memo)
-  if (encoded.length > 123) {
-    throw new Error(`TON memo exceeds 123 bytes (got ${encoded.length}); reject upstream`)
-  }
+  // Native cap only. A jetton comment shares its cell with the transfer fields
+  // and gets a smaller, amount-dependent budget, which the jetton builder
+  // checks against the body it is actually filling.
+  validateTonComment({ memo })
   // 0x00000000 opcode marks a text comment in the TON convention.
   return beginCell().storeUint(0, 32).storeStringTail(memo).endCell()
 }
@@ -194,14 +279,16 @@ function buildExternalMessageCell(args: {
  *
  * Signing flow:
  *   1. Call this function with seqno+pubkey+recipient.
- *   2. Pass `result.signingHashHex` to the EdDSA signer (e.g. Vultisig's schnorrSign).
+ *   2. When using `fastVaultSign`, pass both `result.signingHashHex` and
+ *      `result.walletCoreTxInputData`; the latter lets the signer fail closed
+ *      if WalletCore derives a different hash.
  *   3. Pass the 64-byte Ed25519 signature (hex) to `result.finalize`.
  *   4. Broadcast `signedBocBase64` via `broadcastTonTx`.
  */
-export function buildTonSendTx(opts: BuildTonSendOptions): TonTxBuilderResult {
+export function buildTonSendTx(opts: BuildTonSendOptions): TonWalletCoreBackedTxBuilderResult {
+  const { subWalletId, workchain } = assertWalletCoreTonWalletOptions(opts)
   const pubKey = hexToBytes(opts.publicKeyEd25519)
-  const workchain = opts.workchain ?? 0
-  const wallet = buildV4R2Wallet({ publicKeyEd25519: pubKey, workchain })
+  const wallet = buildV4R2Wallet({ publicKeyEd25519: pubKey, workchain, walletId: subWalletId })
   const destination = Address.parse(opts.to)
 
   const innerMsg = beginCell()
@@ -222,8 +309,6 @@ export function buildTonSendTx(opts: BuildTonSendOptions): TonTxBuilderResult {
     .endCell()
 
   const validUntil = opts.validUntil ?? Math.floor(Date.now() / 1000) + 600
-  const subWalletId = opts.subWalletId ?? TON_V4R2_SUB_WALLET_ID + workchain
-
   const signingPayload = buildSigningPayloadCell({
     subWalletId,
     validUntil,
@@ -238,11 +323,24 @@ export function buildTonSendTx(opts: BuildTonSendOptions): TonTxBuilderResult {
 
   const fromAddress = wallet.addressString({ bounceable: false })
   const stateInitCell = opts.seqno === 0 ? storeStateInitCell(wallet.init) : undefined
+  const walletCoreTxInputData = encodeWalletCoreTonSigningInput({
+    publicKey: pubKey,
+    seqno: opts.seqno,
+    validUntil,
+    message: TW.TheOpenNetwork.Proto.Transfer.create({
+      dest: opts.to,
+      amount: tonUnsignedIntegerToBytes('amount', opts.amount),
+      mode: walletCoreTonSendMode,
+      comment: opts.memo ?? '',
+      bounceable: opts.bounceable,
+    }),
+  })
 
   return {
     signingHashHex,
     unsignedBocHex,
     fromAddress,
+    walletCoreTxInputData,
     finalize: (signatureHex: string) => {
       const signature = hexToBytes(signatureHex)
       if (signature.length !== 64) {
@@ -286,14 +384,16 @@ export type BuildTonJettonTransferOptions = {
   memo?: string
   seqno: number
   validUntil?: number
+  /** WalletCore 4.7.0 supports only the V4R2 default (698983191). */
   subWalletId?: number
+  /** WalletCore-backed transfers currently support only workchain 0. */
   workchain?: number
 }
 
-export function buildTonJettonTransferTx(opts: BuildTonJettonTransferOptions): TonTxBuilderResult {
+export function buildTonJettonTransferTx(opts: BuildTonJettonTransferOptions): TonWalletCoreBackedTxBuilderResult {
+  const { subWalletId, workchain } = assertWalletCoreTonWalletOptions(opts)
   const pubKey = hexToBytes(opts.publicKeyEd25519)
-  const workchain = opts.workchain ?? 0
-  const wallet = buildV4R2Wallet({ publicKeyEd25519: pubKey, workchain })
+  const wallet = buildV4R2Wallet({ publicKeyEd25519: pubKey, workchain, walletId: subWalletId })
 
   const destinationAddr = Address.parse(opts.to)
   const jettonWalletAddr = Address.parse(opts.jettonWalletAddress)
@@ -342,8 +442,6 @@ export function buildTonJettonTransferTx(opts: BuildTonJettonTransferOptions): T
     .endCell()
 
   const validUntil = opts.validUntil ?? Math.floor(Date.now() / 1000) + 600
-  const subWalletId = opts.subWalletId ?? TON_V4R2_SUB_WALLET_ID + workchain
-
   const signingPayload = buildSigningPayloadCell({
     subWalletId,
     validUntil,
@@ -355,11 +453,33 @@ export function buildTonJettonTransferTx(opts: BuildTonJettonTransferOptions): T
   const unsignedBocHex = bytesToHex(new Uint8Array(signingPayload.toBoc({ idx: false })))
   const fromAddress = wallet.addressString({ bounceable: false })
   const stateInitCell = opts.seqno === 0 ? storeStateInitCell(wallet.init) : undefined
+  const walletCoreTxInputData = encodeWalletCoreTonSigningInput({
+    publicKey: pubKey,
+    seqno: opts.seqno,
+    validUntil,
+    message: TW.TheOpenNetwork.Proto.Transfer.create({
+      dest: opts.jettonWalletAddress,
+      amount: tonUnsignedIntegerToBytes('Jetton gas amount', JETTON_GAS_AMOUNT_NANO),
+      mode: walletCoreTonSendMode,
+      comment: opts.memo ?? '',
+      bounceable: true,
+      jettonTransfer: TW.TheOpenNetwork.Proto.JettonTransfer.create({
+        jettonAmount: tonUnsignedIntegerToBytes('Jetton amount', opts.amount),
+        toOwner: destinationAddr.toString({ bounceable: true, testOnly: false }),
+        responseAddress: fromAddress,
+        forwardAmount: tonUnsignedIntegerToBytes(
+          'Jetton forward amount',
+          (opts.isActiveDestination ?? true) ? JETTON_FORWARD_AMOUNT_NANO : 0n
+        ),
+      }),
+    }),
+  })
 
   return {
     signingHashHex,
     unsignedBocHex,
     fromAddress,
+    walletCoreTxInputData,
     finalize: (signatureHex: string) => {
       const signature = hexToBytes(signatureHex)
       if (signature.length !== 64) {
@@ -524,6 +644,16 @@ function decodeSigningPayload(input: string): Cell {
  *          the decoded payload's serialized form (NOT the input
  *          string verbatim — equality holds at the byte level after
  *          BoC re-serialization).
+ *
+ * IMPORTANT: this result never carries `walletCoreTxInputData` — an opaque
+ * prebuilt payload's inner message can encode an arbitrary contract call
+ * (e.g. a yield.xyz staking-pool invocation), so it cannot be reliably
+ * reconstructed into a WalletCore `Transfer` for independent parity proof.
+ * `fastVaultSign` / `schnorrSign` require that field for every TON sign, so
+ * a caller that goes `buildTonTxFromSigningPayload(...) -> schnorrSign(...)`
+ * will now get a `MissingSigningParityInput` rejection instead of reaching
+ * MPC. There is currently no supported way to sign a prebuilt TON payload
+ * through the fast-sign path in this SDK version.
  */
 export function buildTonTxFromSigningPayload(opts: BuildTonTxFromSigningPayloadOptions): TonTxBuilderResult {
   const pubKey = hexToBytes(opts.publicKeyEd25519)
@@ -573,10 +703,13 @@ export function buildTonTxFromSigningPayload(opts: BuildTonTxFromSigningPayloadO
 // the tx builder throws mid-encoding.
 // ---------------------------------------------------------------------------
 
-/** Throws if `memo` exceeds the 123-byte TON comment cell capacity. */
-export function validateTonMemo(memo: string): void {
-  const encoded = new TextEncoder().encode(memo)
-  if (encoded.length > 123) {
-    throw new Error(`TON memo must be at most 123 bytes (got ${encoded.length})`)
-  }
+/**
+ * Throws if `memo` will not fit the cell it is destined for.
+ *
+ * Pass `jetton` for a Jetton transfer: its comment rides inline in the transfer
+ * body's `forward_payload`, so the cap is far below the native 123 bytes and
+ * shrinks as the amount grows. Without it the native cap applies.
+ */
+export function validateTonMemo(memo: string, jetton?: TonJettonCommentContext): void {
+  validateTonComment({ memo, jetton })
 }

@@ -1,11 +1,12 @@
 import { MsgSend } from 'cosmjs-types/cosmos/bank/v1beta1/tx'
-import { MsgDelegate, MsgUndelegate } from 'cosmjs-types/cosmos/staking/v1beta1/tx'
+import { MsgBeginRedelegate, MsgDelegate, MsgUndelegate } from 'cosmjs-types/cosmos/staking/v1beta1/tx'
 import { TxBody, TxRaw } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import { Any } from 'cosmjs-types/google/protobuf/any'
 import { type Address, encodeFunctionData, getAddress, type Hex, parseAbi, serializeTransaction } from 'viem'
 import { describe, expect, it } from 'vitest'
 
 import { decodeFromToolResult } from '@/tools/decode'
+import { buildRedelegateMsg, buildWithdrawRewardsMsg } from '@/tools/prep/cosmosStaking'
 
 /**
  * The keystone bytes-oracle: `decodeFromToolResult` is the ONE decoder shared by
@@ -144,6 +145,21 @@ describe('decodeFromToolResult — EVM half (viem)', () => {
     expect(env.amount).toBe('7')
   })
 
+  it('pulls the payload from args.unsignedPayload (camelCase alias)', () => {
+    const data = encodeFunctionData({
+      abi: parseAbi(['function transfer(address to, uint256 value)']),
+      functionName: 'transfer',
+      args: [RECIPIENT, 7n],
+    })
+    const env = decodeFromToolResult({
+      family: 'evm',
+      chain: 'ethereum',
+      args: { unsignedPayload: buildEvmTx(USDC, data) },
+    })
+    expect(env.recipient).toBe(RECIPIENT)
+    expect(env.amount).toBe('7')
+  })
+
   it('resolves typed tx chain ids through the canonical SDK registry for newer EVM chains', () => {
     const data = encodeFunctionData({
       abi: parseAbi(['function transfer(address to, uint256 value)']),
@@ -250,6 +266,22 @@ describe('decodeFromToolResult — Cosmos half (cosmjs-types proto3)', () => {
       family: 'cosmos',
       chain: 'cosmoshub-4',
       args: { cosmos_payload: buildCosmosTx([any]) },
+    })
+    expect(env.recipient).toBe(TO)
+    expect(env.amount).toBe('9')
+  })
+
+  it('pulls base64 payload from args.cosmosPayload (camelCase alias)', () => {
+    const any = Any.fromPartial({
+      typeUrl: '/cosmos.bank.v1beta1.MsgSend',
+      value: MsgSend.encode(
+        MsgSend.fromPartial({ fromAddress: FROM, toAddress: TO, amount: [{ denom: 'uatom', amount: '9' }] })
+      ).finish(),
+    })
+    const env = decodeFromToolResult({
+      family: 'cosmos',
+      chain: 'cosmoshub-4',
+      args: { cosmosPayload: buildCosmosTx([any]) },
     })
     expect(env.recipient).toBe(TO)
     expect(env.amount).toBe('9')
@@ -453,6 +485,91 @@ describe('decodeFromToolResult — cosmos undelegate kind (audit)', () => {
   })
 })
 
+describe('decodeFromToolResult — cosmos redelegate + withdraw-reward kinds', () => {
+  const FROM = 'cosmos1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmmk8rs6'
+  const SRC_VALIDATOR = 'cosmosvaloper14w46h2at4w46h2at4w46h2at4w46h2ate6wqaw'
+  const OTHER_SRC_VALIDATOR = 'cosmosvaloper1zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3x6w7nk'
+  const DST_VALIDATOR = 'cosmosvaloper1ehxumnwdehxumnwdehxumnwdehxumnwd5t3zwj'
+
+  it('decodes a MsgBeginRedelegate: dst validator recipient + amount', () => {
+    const any = Any.fromPartial({
+      typeUrl: '/cosmos.staking.v1beta1.MsgBeginRedelegate',
+      value: MsgBeginRedelegate.encode(
+        MsgBeginRedelegate.fromPartial({
+          delegatorAddress: FROM,
+          validatorSrcAddress: SRC_VALIDATOR,
+          validatorDstAddress: DST_VALIDATOR,
+          amount: { denom: 'uatom', amount: '2500000' },
+        })
+      ).finish(),
+    })
+    const env = decodeFromToolResult({ family: 'cosmos', chain: 'cosmoshub-4', payload: buildCosmosTx([any]) })
+    expect(env.decoded).toBe(true)
+    expect(env.kind).toBe('redelegate')
+    // The recipient is the DESTINATION validator, not the source.
+    expect(env.recipient).toBe(DST_VALIDATOR)
+    expect(env.recipient).not.toBe(SRC_VALIDATOR)
+    expect(env.validatorSrcAddress).toBe(SRC_VALIDATOR)
+    expect(env.amount).toBe('2500000')
+    expect(env.asset.symbol).toBe('ATOM')
+
+    const mutatedSource = Any.fromPartial({
+      typeUrl: '/cosmos.staking.v1beta1.MsgBeginRedelegate',
+      value: MsgBeginRedelegate.encode(
+        MsgBeginRedelegate.fromPartial({
+          delegatorAddress: FROM,
+          validatorSrcAddress: OTHER_SRC_VALIDATOR,
+          validatorDstAddress: DST_VALIDATOR,
+          amount: { denom: 'uatom', amount: '2500000' },
+        })
+      ).finish(),
+    })
+    const mutatedEnv = decodeFromToolResult({
+      family: 'cosmos',
+      chain: 'cosmoshub-4',
+      payload: buildCosmosTx([mutatedSource]),
+    })
+    expect(mutatedEnv).toMatchObject({
+      decoded: true,
+      kind: 'redelegate',
+      recipient: DST_VALIDATOR,
+      validatorSrcAddress: OTHER_SRC_VALIDATOR,
+      amount: '2500000',
+    })
+    expect(mutatedEnv).not.toEqual(env)
+  })
+
+  it('round-trips the production redelegate builder through protobuf bytes', () => {
+    const built = buildRedelegateMsg({
+      delegatorAddress: FROM,
+      validatorSrcAddress: SRC_VALIDATOR,
+      validatorDstAddress: DST_VALIDATOR,
+      amount: '1000000',
+      denom: 'uatom',
+    })
+    const any = Any.fromPartial({ typeUrl: built.typeUrl, value: Buffer.from(built.valueBase64, 'base64') })
+    const env = decodeFromToolResult({ family: 'cosmos', chain: 'cosmoshub-4', payload: buildCosmosTx([any]) })
+    expect(env).toMatchObject({
+      decoded: true,
+      kind: 'redelegate',
+      recipient: DST_VALIDATOR,
+      validatorSrcAddress: SRC_VALIDATOR,
+      amount: '1000000',
+    })
+  })
+
+  it('decodes a MsgWithdrawDelegatorReward: validator recipient, amount unknown', () => {
+    const built = buildWithdrawRewardsMsg({ delegatorAddress: FROM, validatorAddress: SRC_VALIDATOR })
+    const any = Any.fromPartial({ typeUrl: built.typeUrl, value: Buffer.from(built.valueBase64, 'base64') })
+    const env = decodeFromToolResult({ family: 'cosmos', chain: 'cosmoshub-4', payload: buildCosmosTx([any]) })
+    expect(env.decoded).toBe(true)
+    expect(env.kind).toBe('withdrawReward')
+    expect(env.recipient).toBe(SRC_VALIDATOR)
+    // Reward amount is computed on-chain, never on the wire.
+    expect(env.amount).toBe('')
+  })
+})
+
 describe('decodeFromToolResult — dispatch / guards', () => {
   it('infers EVM family from a known chain hint', () => {
     const data = encodeFunctionData({
@@ -494,6 +611,17 @@ describe('decodeFromToolResult — dispatch / guards', () => {
       expect(env.recipient).toBe(to)
     }
   )
+
+  it('infers the chain from args.fromChain (camelCase alias) when no explicit chain is given', () => {
+    const data = encodeFunctionData({
+      abi: parseAbi(['function transfer(address to, uint256 value)']),
+      functionName: 'transfer',
+      args: [RECIPIENT, 1n],
+    })
+    const env = decodeFromToolResult({ args: { fromChain: 'base' }, payload: buildEvmTx(USDC, data) })
+    expect(env.family).toBe('evm')
+    expect(env.recipient).toBe(RECIPIENT)
+  })
 
   it('fails closed when neither family nor a known chain is given', () => {
     const env = decodeFromToolResult({ payload: '0x1234' })

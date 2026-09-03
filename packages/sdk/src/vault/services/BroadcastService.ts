@@ -12,36 +12,16 @@ import { compileTx } from '@vultisig/core-mpc/tx/compile/compileTx'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 
 import type { WasmProvider } from '../../context/SdkContext'
+import { pollTxStatusUntilFinal } from '../../tx'
 import type { Signature } from '../../types'
 import { convertToKeysignSignatures } from '../utils/convertSignature'
 import { VaultError, VaultErrorCode } from '../VaultError'
-
-/**
- * Broadcast resolvers return `Promise<unknown>` and are inconsistent in shape: utxo/cardano
- * resolve a bare hash string, tron resolves the raw RPC response object (`{ txid, ... }`), and
- * most others (evm/cosmos/sui/ripple/ton/polkadot/bittensor) resolve void. When the resolver DID
- * echo back a hash, prefer it over a locally re-derived one - it is the node's own authoritative
- * value, not a client-side guess about what the node will have computed.
- */
-const extractResolverTxHash = (broadcastResult: unknown): string | undefined => {
-  if (typeof broadcastResult === 'string' && broadcastResult.length > 0) {
-    return broadcastResult
-  }
-  if (
-    broadcastResult &&
-    typeof broadcastResult === 'object' &&
-    'txid' in broadcastResult &&
-    typeof (broadcastResult as { txid?: unknown }).txid === 'string' &&
-    (broadcastResult as { txid: string }).txid.length > 0
-  ) {
-    return (broadcastResult as { txid: string }).txid
-  }
-  return undefined
-}
+import { formatBroadcastFailureReason, toSafeBroadcastError } from './broadcastError'
 
 type BroadcastPartialFailureInput = {
   chain: Chain
   broadcastedTxHashes: string[]
+  submittedTxCount?: number
   failedInputIndex: number
   cause: unknown
 }
@@ -53,22 +33,30 @@ type ApprovalConfirmationOptions = {
 
 export class BroadcastPartialFailureError extends Error {
   readonly broadcastedTxHashes: string[]
+  readonly submittedTxCount: number
   readonly failedInputIndex: number
   readonly originalError?: Error
 
-  constructor({ chain, broadcastedTxHashes, failedInputIndex, cause }: BroadcastPartialFailureInput) {
-    const errorMessage = cause instanceof Error ? cause.message : String(cause)
+  constructor({
+    chain,
+    broadcastedTxHashes,
+    submittedTxCount = broadcastedTxHashes.length,
+    failedInputIndex,
+    cause,
+  }: BroadcastPartialFailureInput) {
+    const errorMessage = formatBroadcastFailureReason(cause)
     super(
-      `Broadcast failed on ${chain} input ${failedInputIndex + 1} after ${
-        broadcastedTxHashes.length
-      } transaction(s) were submitted: ${errorMessage}. Broadcasted transaction hashes: ${broadcastedTxHashes.join(
+      `Broadcast failed on ${chain} input ${
+        failedInputIndex + 1
+      } after ${submittedTxCount} transaction(s) were submitted: ${errorMessage}. Broadcasted transaction hashes: ${broadcastedTxHashes.join(
         ', '
       )}`
     )
     this.name = 'BroadcastPartialFailureError'
     this.broadcastedTxHashes = broadcastedTxHashes
+    this.submittedTxCount = submittedTxCount
     this.failedInputIndex = failedInputIndex
-    this.originalError = cause instanceof Error ? cause : new Error(String(cause))
+    this.originalError = toSafeBroadcastError(cause)
   }
 }
 
@@ -116,7 +104,8 @@ export class BroadcastService {
    *
    * @returns Transaction hash (string) on success
    *
-   * @throws {VaultError} With code BroadcastFailed if broadcast fails
+   * @throws {BroadcastPartialFailureError} When the operation fails after one or more transactions were broadcast
+   * @throws {VaultError} With code BroadcastFailed if broadcast fails before any transaction was broadcast
    *
    * @example
    * ```typescript
@@ -174,63 +163,71 @@ export class BroadcastService {
       let txHash = ''
       const shouldConfirmApprovalFirst = !!keysignPayload.erc20ApprovePayload && txInputsArray.length > 1
       const broadcastedTxHashes: string[] = []
+      let submittedTxCount = 0
       for (const [index, txInputData] of txInputsArray.entries()) {
-        const compiledTx = compileTx({
-          publicKey,
-          txInputData,
-          signatures: keysignSignatures,
-          chain,
-          walletCore,
-          // Required for payload-keyed compile branches (signSolana raw
-          // transactions splice the signature into the original bytes,
-          // sdk#1204 — matches the keysignPayload extractMessageHashes
-          // already passes to getPreSigningHashes).
-          keysignPayload,
-        })
-
-        const signingOutput = decodeSigningOutput(chain, compiledTx)
-        let broadcastResult: unknown
         try {
-          broadcastResult = await this.broadcastTransaction({
+          const compiledTx = compileTx({
+            publicKey,
+            txInputData,
+            signatures: keysignSignatures,
+            chain,
+            walletCore,
+            // Required for payload-keyed compile branches (signSolana raw
+            // transactions splice the signature into the original bytes,
+            // sdk#1204 — matches the keysignPayload extractMessageHashes
+            // already passes to getPreSigningHashes).
+            keysignPayload,
+          })
+
+          const signingOutput = decodeSigningOutput(chain, compiledTx)
+          const broadcastResult = await this.broadcastTransaction({
             chain,
             tx: signingOutput,
           })
+
+          if (broadcastResult.status === 'failed') {
+            const cause = toSafeBroadcastError(broadcastResult.cause)
+            throw new Error(`${broadcastResult.code} (retryable=${broadcastResult.retryable}): ${cause.message}`, {
+              cause,
+            })
+          }
+
+          submittedTxCount += 1
+          const inputTxHash = broadcastResult.txHash ?? (await getTxHash({ chain, tx: signingOutput }))
+          broadcastedTxHashes.push(inputTxHash)
+          txHash = inputTxHash
+
+          if (shouldConfirmApprovalFirst && index === 0) {
+            await this.waitForConfirmation(chain, txHash)
+          }
         } catch (error) {
-          if (broadcastedTxHashes.length > 0) {
+          if (error instanceof BroadcastPartialFailureError) {
+            throw error
+          }
+          if (submittedTxCount > 0) {
             throw new BroadcastPartialFailureError({
               chain,
               broadcastedTxHashes,
+              submittedTxCount,
               failedInputIndex: index,
               cause: error,
             })
           }
           throw error
         }
-
-        const inputTxHash = extractResolverTxHash(broadcastResult) ?? (await getTxHash({ chain, tx: signingOutput }))
-        broadcastedTxHashes.push(inputTxHash)
-        txHash = inputTxHash
-
-        if (shouldConfirmApprovalFirst && index === 0) {
-          try {
-            await this.waitForConfirmation(chain, txHash)
-          } catch (error) {
-            throw new BroadcastPartialFailureError({
-              chain,
-              broadcastedTxHashes,
-              failedInputIndex: index,
-              cause: error,
-            })
-          }
-        }
       }
 
       return txHash
     } catch (error) {
+      if (error instanceof BroadcastPartialFailureError) {
+        throw error
+      }
+
+      const safeError = toSafeBroadcastError(error)
       throw new VaultError(
         VaultErrorCode.BroadcastFailed,
-        `Failed to broadcast transaction on ${chain}: ${error instanceof Error ? error.message : String(error)}`,
-        error instanceof Error ? error : new Error(String(error))
+        `Failed to broadcast transaction on ${chain}: ${safeError.message}`,
+        safeError
       )
     }
   }
@@ -238,38 +235,21 @@ export class BroadcastService {
   private async waitForConfirmation(chain: Chain, txHash: string): Promise<void> {
     const timeoutMs = this.confirmationOptions.approvalConfirmationTimeoutMs ?? 60_000
     const intervalMs = this.confirmationOptions.approvalConfirmationIntervalMs ?? 3_000
-    const deadline = Date.now() + timeoutMs
-    let lastError: unknown
+    const outcome = await pollTxStatusUntilFinal({
+      chain,
+      txHash,
+      timeoutMs,
+      intervalMs,
+      getTxStatus: ({ chain, txHash }) => getTxStatus({ chain, hash: txHash }),
+      shouldRetryError: () => true,
+    })
 
-    while (Date.now() <= deadline) {
-      const requestBudgetMs = deadline - Date.now()
-      if (requestBudgetMs <= 0) break
-
-      let requestTimeout: number | ReturnType<typeof setTimeout> | undefined
-      const result = await Promise.race([
-        getTxStatus({ chain, hash: txHash }).catch(error => {
-          lastError = error
-          return undefined
-        }),
-        new Promise<undefined>(resolve => {
-          requestTimeout = setTimeout(resolve, requestBudgetMs)
-        }),
-      ]).finally(() => {
-        if (requestTimeout) clearTimeout(requestTimeout)
-      })
-
-      if (result?.status === 'success') return
-      if (result?.status === 'error') {
-        throw new Error(`Approval tx failed: ${txHash}`)
-      }
-
-      const remainingMs = deadline - Date.now()
-      if (remainingMs <= 0) break
-
-      await new Promise(resolve => setTimeout(resolve, Math.min(intervalMs, remainingMs)))
+    if (outcome.result?.status === 'success') return
+    if (outcome.result?.status === 'error') {
+      throw new Error(`Approval tx failed: ${txHash}`)
     }
 
-    const suffix = lastError instanceof Error ? ` Last status error: ${lastError.message}` : ''
+    const suffix = outcome.lastError instanceof Error ? ` Last status error: ${outcome.lastError.message}` : ''
     throw new Error(`Approval tx not confirmed within ${timeoutMs / 1000}s: ${txHash}.${suffix}`)
   }
 }

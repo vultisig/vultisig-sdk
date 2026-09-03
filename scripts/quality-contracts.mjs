@@ -17,6 +17,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { checkSdkPackageExports } from './check-sdk-package-exports.mjs'
 import { createDisposableYarnEnv } from './quality-contracts-cache.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -116,7 +117,9 @@ function validateCliSchemaOutput(stdout, label) {
 function smokeCli() {
   assertCliBuilt()
   run(process.execPath, [CLI_ENTRY, '--help'], { cwd: repoRoot })
-  const schemaRes = run(process.execPath, [CLI_ENTRY, 'schema'], { cwd: repoRoot })
+  const schemaRes = run(process.execPath, [CLI_ENTRY, 'schema'], {
+    cwd: repoRoot,
+  })
   validateCliSchemaOutput(schemaRes.stdout, 'CLI "schema"')
 }
 
@@ -272,263 +275,154 @@ function validatePackedWorkspaceExports(workRoot, workspaceName) {
   return { packageRoot, tgzPath }
 }
 
-function packedConsumerSmoke(workRoot, tgzPath) {
-  const consumer = path.join(workRoot, 'consumer')
+function packageGraphResolutions({ sdkTgzPath, coreChainTgzPath, coreMpcTgzPath, mpcTypesTgzPath }) {
+  return {
+    '@vultisig/core-chain': `file:${coreChainTgzPath}`,
+    '@vultisig/core-mpc': `file:${coreMpcTgzPath}`,
+    '@vultisig/mpc-types': `file:${mpcTypesTgzPath}`,
+    '@vultisig/sdk': `file:${sdkTgzPath}`,
+  }
+}
+
+function packedPackageGraphSmoke(workRoot, packageGraphTarballs) {
+  const consumer = path.join(workRoot, 'package-graph-consumer')
   mkdirSync(consumer, { recursive: true })
 
+  const localPackages = packageGraphResolutions(packageGraphTarballs)
   writeFileSync(
     path.join(consumer, 'package.json'),
-    JSON.stringify(
+    `${JSON.stringify(
       {
-        name: 'vultisig-contract-consumer',
+        name: 'vultisig-package-graph-consumer',
         private: true,
         type: 'module',
         packageManager: 'yarn@4.16.0',
+        dependencies: localPackages,
+        resolutions: localPackages,
       },
       null,
       2
-    ) + '\n'
+    )}\n`
   )
   writeFileSync(path.join(consumer, '.yarnrc.yml'), 'nodeLinker: node-modules\n')
-
-  const env = createDisposableYarnEnv(workRoot)
-
-  runYarn(['add', `@vultisig/sdk@file:${tgzPath}`], { cwd: consumer, env, stdio: 'inherit' })
-
-  const verifyPath = path.join(consumer, 'verify-contracts.mjs')
   writeFileSync(
-    verifyPath,
+    path.join(consumer, 'verify-package-graph.mjs'),
     `import assert from 'node:assert/strict'
-import * as root from '@vultisig/sdk'
-import * as node from '@vultisig/sdk/node'
-import * as browser from '@vultisig/sdk/browser'
-import * as seedphrase from '@vultisig/sdk/seedphrase'
-import * as vite from '@vultisig/sdk/vite'
-import { existsSync, readFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
-import path from 'node:path'
+import { buildSignBitcoinFromPsbt } from '@vultisig/core-chain/chains/utxo/tx/buildSignBitcoinFromPsbt'
+import { SignBitcoinSchema as compatibilitySchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/wasm_execute_contract_payload_pb'
+import { SignBitcoinSchema as canonicalSchema } from '@vultisig/mpc-types/types/vultisig/keysign/v1/wasm_execute_contract_payload_pb'
+import { Chain } from '@vultisig/sdk'
 
-const require = createRequire(import.meta.url)
-const entry = require.resolve('@vultisig/sdk')
-const pkgDir = path.resolve(path.dirname(entry), '..')
-const electronMainEntry = require.resolve('@vultisig/sdk/electron/main')
-const reactNativeEntry = require.resolve('@vultisig/sdk/react-native')
-const seedphraseEntry = require.resolve('@vultisig/sdk/seedphrase')
-const electronMain = require('@vultisig/sdk/electron/main')
-const seedphraseRequire = require('@vultisig/sdk/seedphrase')
-const electronMainImport = await import('@vultisig/sdk/electron/main')
-
-assert.equal(typeof root.Vultisig, 'function', 'root exports Vultisig')
-assert.ok(root.Chain !== undefined, 'root exports Chain')
-assert.equal(typeof root.fiatToAmount, 'function', 'root exports fiatToAmount')
-assert.equal(typeof root.normalizeChain, 'function', 'root exports normalizeChain')
-assert.equal(typeof root.fromChainAmountExact, 'function', 'root exports fromChainAmountExact')
-assert.equal(typeof root.getBlockExplorerUrl, 'function', 'root exports getBlockExplorerUrl')
-assert.equal(typeof root.assertUtxoAddressBrand, 'function', 'root exports assertUtxoAddressBrand')
-assert.equal(typeof root.isUtxoAddressBrandValid, 'function', 'root exports isUtxoAddressBrandValid')
-assert.equal(
-  root.isUtxoAddressBrandValid('D5ERdEN1gsouFSs7zsq7VYJxyWP6dP28H1', 'Dogecoin'),
-  true,
-  'packed root validates a Dogecoin address for Dogecoin'
+assert.strictEqual(compatibilitySchema, canonicalSchema)
+const signBitcoin = buildSignBitcoinFromPsbt({
+  psbt: {
+    data: {
+      inputs: [
+        {
+          witnessUtxo: {
+            script: Buffer.from('00140000000000000000000000000000000000000000', 'hex'),
+            value: 12_345n,
+          },
+        },
+      ],
+    },
+    txInputs: [{ hash: Buffer.alloc(32, 1), index: 2, sequence: 0xfffffffe }],
+    txOutputs: [{ script: Buffer.from('6a02cafe', 'hex'), value: 1_234n }],
+    version: 2,
+    locktime: 0,
+  },
+  senderAddress: '',
+})
+assert.equal(signBitcoin.$typeName, 'vultisig.keysign.v1.SignBitcoin')
+assert.deepEqual(
+  {
+    hash: signBitcoin.inputs[0].hash,
+    index: signBitcoin.inputs[0].index,
+    amount: signBitcoin.inputs[0].amount,
+    scriptType: signBitcoin.inputs[0].scriptType,
+    sequence: signBitcoin.inputs[0].sequence,
+  },
+  { hash: '01'.repeat(32), index: 2, amount: 12_345n, scriptType: 'p2wpkh', sequence: 0xfffffffe }
 )
-assert.equal(
-  root.isUtxoAddressBrandValid('D5ERdEN1gsouFSs7zsq7VYJxyWP6dP28H1', 'Bitcoin'),
-  false,
-  'packed root rejects a Dogecoin address for Bitcoin'
+assert.deepEqual(
+  {
+    amount: signBitcoin.outputs[0].amount,
+    opReturnData: signBitcoin.outputs[0].opReturnData,
+    scriptPubKey: signBitcoin.outputs[0].scriptPubKey,
+  },
+  { amount: 1_234n, opReturnData: 'cafe', scriptPubKey: '6a02cafe' }
 )
-assert.throws(
-  () => root.assertUtxoAddressBrand('D5ERdEN1gsouFSs7zsq7VYJxyWP6dP28H1', 'Bitcoin'),
-  /UTXO address brand mismatch/,
-  'packed root exposes the throwing UTXO brand guard'
-)
-assert.ok(root.chainRegistry !== undefined, 'root exports chainRegistry')
-assert.equal(typeof root.deriveFromChainRegistry, 'function', 'root exports deriveFromChainRegistry')
-assert.equal(typeof root.extendChainRegistry, 'function', 'root exports extendChainRegistry')
-assert.equal(root.evm.encodeErc20Approve, root.encodeErc20Approve, 'root exposes sdk.evm')
-assert.equal(root.token.resolveContract, root.resolveContract, 'root exposes sdk.token')
-assert.equal(
-  root.cosmos.gov.getCosmosGovernanceProposals,
-  root.getCosmosGovernanceProposals,
-  'root exposes sdk.cosmos.gov'
-)
-assert.equal(root.cosmos.gov.prepareCosmosVote, root.prepareCosmosVote, 'sdk.cosmos.gov keeps the flat vote helper')
-
-assert.equal(typeof node.Vultisig, 'function', '@vultisig/sdk/node exports Vultisig')
-assert.equal(node.evm.encodeErc20Approve, node.encodeErc20Approve, '@vultisig/sdk/node exposes sdk.evm')
-assert.equal(node.token.resolveContract, node.resolveContract, '@vultisig/sdk/node exposes sdk.token')
-assert.equal(
-  node.cosmos.gov.prepareCosmosVote,
-  node.prepareCosmosVote,
-  '@vultisig/sdk/node exposes sdk.cosmos.gov'
-)
-
-assert.equal(
-  path.basename(seedphraseEntry),
-  'index.cjs',
-  '@vultisig/sdk/seedphrase resolves the dedicated CommonJS bundle'
-)
-assert.equal(typeof seedphraseRequire.normalizeMnemonic, 'function', 'CommonJS seedphrase subpath loads')
-assert.equal(seedphrase.normalizeMnemonic('  ABANDON   ABANDON  '), 'abandon abandon')
-assert.equal(
-  seedphrase.detectMnemonicLanguage(
-    'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'
-  ),
-  'english'
-)
-assert.equal(typeof seedphrase.SeedphraseValidator, 'function')
-assert.equal(typeof seedphrase.MasterKeyDeriver, 'function')
-assert.equal(typeof seedphrase.ChainDiscoveryService, 'function')
-
-assert.ok(browser.Chain !== undefined, '@vultisig/sdk/browser resolves')
-assert.equal(browser.evm.encodeErc20Approve, browser.encodeErc20Approve, '@vultisig/sdk/browser exposes sdk.evm')
-assert.equal(browser.token.resolveContract, browser.resolveContract, '@vultisig/sdk/browser exposes sdk.token')
-assert.equal(
-  browser.cosmos.gov.prepareCosmosVote,
-  browser.prepareCosmosVote,
-  '@vultisig/sdk/browser exposes sdk.cosmos.gov'
-)
-assert.ok(vite && (vite.default || vite), '@vultisig/sdk/vite resolves')
-assert.equal(
-  path.basename(reactNativeEntry),
-  'index.react-native.js',
-  '@vultisig/sdk/react-native resolves the React Native bundle'
-)
-assert.equal(
-  path.basename(electronMainEntry),
-  'index.electron-main.cjs',
-  '@vultisig/sdk/electron/main resolves the Electron main process bundle'
-)
-assert.equal(typeof electronMain.Vultisig, 'function', '@vultisig/sdk/electron/main exports Vultisig')
-assert.equal(typeof electronMainImport.Vultisig, 'function', 'ESM import resolves @vultisig/sdk/electron/main')
-assert.equal(
-  typeof electronMainImport.ElectronMainCrypto,
-  'function',
-  'ESM import exposes Electron-specific exports'
-)
-
-const rnJs = path.join(pkgDir, 'dist/index.react-native.js')
-assert.ok(existsSync(rnJs), 'react-native bundle file exists on disk')
-const rnDts = path.join(pkgDir, 'dist/index.react-native.d.ts')
-assert.ok(existsSync(rnDts), 'react-native types exist on disk')
-for (const symbol of [
-  'chainRegistry',
-  'deriveFromChainRegistry',
-  'extendChainRegistry',
-  'getBlockExplorerUrl',
-  'assertUtxoAddressBrand',
-  'isUtxoAddressBrandValid',
-]) {
-  assert.ok(readFileSync(rnJs, 'utf8').includes(symbol), \`react-native bundle exports \${symbol}\`)
-  assert.ok(readFileSync(rnDts, 'utf8').includes(symbol), \`react-native types export \${symbol}\`)
-}
-const electronMainDts = path.join(pkgDir, 'dist/index.electron-main.d.ts')
-assert.ok(existsSync(electronMainDts), 'electron main types exist on disk')
+assert.equal(Chain.Bitcoin, 'Bitcoin')
+console.log('Packed package graph ESM smoke passed')
 `
   )
-
-  run(process.execPath, [verifyPath], { cwd: consumer, env })
-
-  // Optional: TypeScript can resolve subpaths (declaration smoke via tsc if available)
-  const tscBin = path.join(repoRoot, 'node_modules/typescript/bin/tsc')
-  if (existsSync(tscBin)) {
-    const tsconfig = {
-      compilerOptions: {
-        module: 'NodeNext',
-        moduleResolution: 'NodeNext',
-        strict: true,
-        noEmit: true,
-        skipLibCheck: true,
-      },
-    }
-    writeFileSync(path.join(consumer, 'tsconfig.json'), JSON.stringify(tsconfig, null, 2) + '\n')
-    writeFileSync(
-      path.join(consumer, 'types-smoke.ts'),
-      `import {
-  Chain,
-  assertUtxoAddressBrand,
-  chainRegistry,
-  deriveFromChainRegistry,
-  extendChainRegistry,
-  isUtxoAddressBrandValid,
-} from '@vultisig/sdk'
-import type {
-  ChainDescriptor,
-  ChainDescriptorRegistry,
-  ChainExplorerDescriptor,
-  ChainExtensionRecord,
-  ChainKind,
-  ExtendedChainRegistry,
-  UtxoChainName,
-} from '@vultisig/sdk'
-import {
-  assertUtxoAddressBrand as assertReactNativeUtxoAddressBrand,
-  isUtxoAddressBrandValid as isReactNativeUtxoAddressBrandValid,
-} from '@vultisig/sdk/react-native'
-import type {
-  ChainDescriptor as ReactNativeChainDescriptor,
-  ExtendedChainRegistry as ReactNativeExtendedChainRegistry,
-  UtxoChainName as ReactNativeUtxoChainName,
-} from '@vultisig/sdk/react-native'
-import type { Vultisig } from '@vultisig/sdk/node'
-import type { ElectronMainCrypto, Vultisig as ElectronMainVultisig } from '@vultisig/sdk/electron/main'
-import { cosmos, evm, token } from '@vultisig/sdk'
-import {
-  normalizeMnemonic,
-  type Bip39Language,
-  type ChainDiscoveryResult,
-  type SeedphraseValidation,
-} from '@vultisig/sdk/seedphrase'
-import '@vultisig/sdk/browser'
-import '@vultisig/sdk/vite'
-
-const descriptor: ChainDescriptor = chainRegistry[Chain.Ethereum]
-const registry: ChainDescriptorRegistry = chainRegistry
-const explorer: ChainExplorerDescriptor = descriptor.explorer
-const extension: ChainExtensionRecord = deriveFromChainRegistry(({ kind }) => ({ kind }))
-const extended: ExtendedChainRegistry<typeof extension> = extendChainRegistry(extension)
-const utxoChain: UtxoChainName = 'Bitcoin'
-const reactNativeUtxoChain: ReactNativeUtxoChainName = 'Litecoin'
-const rootUtxoBrandValid: boolean = isUtxoAddressBrandValid(
-  'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4',
-  utxoChain
-)
-const reactNativeUtxoBrandValid: boolean = isReactNativeUtxoAddressBrandValid(
-  'ltc1qw508d6qejxtdg4y5r3zarvary0c5xw7kgmn4n9',
-  reactNativeUtxoChain
-)
-assertUtxoAddressBrand('bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4', utxoChain)
-assertReactNativeUtxoAddressBrand(
-  'ltc1qw508d6qejxtdg4y5r3zarvary0c5xw7kgmn4n9',
-  reactNativeUtxoChain
-)
-
-export type X = Chain
-export type Y = Vultisig
-export type Z = ElectronMainVultisig
-export type ElectronCrypto = ElectronMainCrypto
-export type RegistryKind = ChainKind
-export type RegistryDescriptor = typeof descriptor
-export type RegistryShape = typeof registry
-export type ExplorerShape = typeof explorer
-export type ExtendedShape = typeof extended
-export type ReactNativeDescriptor = ReactNativeChainDescriptor
-export type ReactNativeExtended = ReactNativeExtendedChainRegistry<typeof extension>
-export type CosmosNamespace = typeof cosmos
-export type EvmNamespace = typeof evm
-export type TokenNamespace = typeof token
-export type RootUtxoBrandResult = typeof rootUtxoBrandValid
-export type ReactNativeUtxoBrandResult = typeof reactNativeUtxoBrandValid
-export type SeedphraseLanguage = Bip39Language
-export type SeedphraseDiscovery = ChainDiscoveryResult
-export type SeedphraseValidationResult = SeedphraseValidation
-export const normalizedMnemonic: string = normalizeMnemonic(' ABANDON  ABOUT ')
+  writeFileSync(
+    path.join(consumer, 'verify-sdk-require.cjs'),
+    `const assert = require('node:assert/strict')
+const sdk = require('@vultisig/sdk')
+assert.equal(sdk.Chain.Bitcoin, 'Bitcoin')
+console.log('Packed SDK CommonJS smoke passed')
 `
-    )
-    run(process.execPath, [tscBin, '-p', path.join(consumer, 'tsconfig.json')], {
-      cwd: consumer,
-      env,
-    })
+  )
+  writeFileSync(
+    path.join(consumer, 'verify-package-graph-types.ts'),
+    `import type { SignBitcoin as CanonicalSignBitcoin } from '@vultisig/mpc-types/types/vultisig/keysign/v1/wasm_execute_contract_payload_pb'
+import type { SignBitcoin as CompatibleSignBitcoin } from '@vultisig/core-mpc/types/vultisig/keysign/v1/wasm_execute_contract_payload_pb'
+import type { buildSignBitcoinFromPsbt } from '@vultisig/core-chain/chains/utxo/tx/buildSignBitcoinFromPsbt'
+import type { Chain } from '@vultisig/sdk'
+
+declare const canonical: CanonicalSignBitcoin
+const compatible: CompatibleSignBitcoin = canonical
+export type PackageGraphBuilder = typeof buildSignBitcoinFromPsbt
+export type PackageGraphChain = Chain
+void compatible
+`
+  )
+  writeFileSync(
+    path.join(consumer, 'tsconfig.json'),
+    `${JSON.stringify(
+      {
+        compilerOptions: {
+          module: 'NodeNext',
+          moduleResolution: 'NodeNext',
+          strict: true,
+          noEmit: true,
+          skipLibCheck: true,
+        },
+        include: ['verify-package-graph-types.ts'],
+      },
+      null,
+      2
+    )}\n`
+  )
+
+  const env = createDisposableYarnEnv(workRoot)
+  runYarn(['install', '--no-immutable'], {
+    cwd: consumer,
+    env,
+    stdio: 'inherit',
+  })
+  run(process.execPath, ['verify-package-graph.mjs'], {
+    cwd: consumer,
+    env,
+    stdio: 'inherit',
+  })
+  run(process.execPath, ['verify-sdk-require.cjs'], {
+    cwd: consumer,
+    env,
+    stdio: 'inherit',
+  })
+
+  const typescriptBin = path.join(repoRoot, 'node_modules/typescript/bin/tsc')
+  if (!existsSync(typescriptBin)) {
+    throw new Error('TypeScript is required to verify the packed package graph')
   }
+  run(process.execPath, [typescriptBin, '--project', 'tsconfig.json'], {
+    cwd: consumer,
+    env,
+    stdio: 'inherit',
+  })
+  console.log('Packed package graph declaration smoke passed')
 }
 
 function packedCliBinSmoke(
@@ -538,6 +432,8 @@ function packedCliBinSmoke(
   clientSharedTgzPath,
   rujiraTgzPath,
   coreChainTgzPath,
+  coreMpcTgzPath,
+  mpcTypesTgzPath,
   coreConfigTgzPath,
   libUtilsTgzPath
 ) {
@@ -547,11 +443,10 @@ function packedCliBinSmoke(
   const localDeps = {
     '@vultisig/cli': `file:${cliTgzPath}`,
     '@vultisig/client-shared': `file:${clientSharedTgzPath}`,
-    '@vultisig/core-chain': `file:${coreChainTgzPath}`,
     '@vultisig/core-config': `file:${coreConfigTgzPath}`,
     '@vultisig/lib-utils': `file:${libUtilsTgzPath}`,
     '@vultisig/rujira': `file:${rujiraTgzPath}`,
-    '@vultisig/sdk': `file:${sdkTgzPath}`,
+    ...packageGraphResolutions({ sdkTgzPath, coreChainTgzPath, coreMpcTgzPath, mpcTypesTgzPath }),
   }
   const dependencies = {
     '@vultisig/cli': localDeps['@vultisig/cli'],
@@ -605,9 +500,23 @@ function packedCliBinSmoke(
   validateCliSchemaOutput(schemaRes.stdout, 'Packed CLI "schema"')
 }
 
-function packedMcpBinSmoke(workRoot, tgzPath, sdkTgzPath, clientSharedTgzPath) {
+function packedMcpBinSmoke(
+  workRoot,
+  tgzPath,
+  sdkTgzPath,
+  clientSharedTgzPath,
+  coreChainTgzPath,
+  coreMpcTgzPath,
+  mpcTypesTgzPath
+) {
   const consumer = path.join(workRoot, 'mcp-consumer')
   mkdirSync(consumer, { recursive: true })
+
+  const localDeps = {
+    '@vultisig/client-shared': `file:${clientSharedTgzPath}`,
+    '@vultisig/mcp': `file:${tgzPath}`,
+    ...packageGraphResolutions({ sdkTgzPath, coreChainTgzPath, coreMpcTgzPath, mpcTypesTgzPath }),
+  }
 
   writeFileSync(
     path.join(consumer, 'package.json'),
@@ -618,14 +527,9 @@ function packedMcpBinSmoke(workRoot, tgzPath, sdkTgzPath, clientSharedTgzPath) {
         type: 'module',
         packageManager: 'yarn@4.16.0',
         dependencies: {
-          '@vultisig/client-shared': `file:${clientSharedTgzPath}`,
-          '@vultisig/mcp': `file:${tgzPath}`,
-          '@vultisig/sdk': `file:${sdkTgzPath}`,
+          '@vultisig/mcp': localDeps['@vultisig/mcp'],
         },
-        resolutions: {
-          '@vultisig/client-shared': `file:${clientSharedTgzPath}`,
-          '@vultisig/sdk': `file:${sdkTgzPath}`,
-        },
+        resolutions: localDeps,
       },
       null,
       2
@@ -658,7 +562,7 @@ function packedMcpBinSmoke(workRoot, tgzPath, sdkTgzPath, clientSharedTgzPath) {
   }
 }
 
-function main() {
+async function main() {
   assertSdkBuilt()
   smokeCli()
 
@@ -668,14 +572,17 @@ function main() {
 
     const tgzPath = packWorkspace(workRoot, '@vultisig/sdk', 'sdk.tgz')
 
-    validateTarballExportFiles(extractPackage(workRoot, tgzPath, 'sdk'))
-
-    packedConsumerSmoke(workRoot, tgzPath)
+    await checkSdkPackageExports({
+      build: false,
+      workRoot: path.join(workRoot, 'sdk-package-exports'),
+      tarballPath: tgzPath,
+    })
 
     const { tgzPath: rujiraTgzPath } = validatePackedWorkspaceExports(workRoot, '@vultisig/rujira')
 
+    const packageContracts = new Map()
     for (const workspaceName of PACKAGE_CONTRACT_WORKSPACES) {
-      validatePackedWorkspaceExports(workRoot, workspaceName)
+      packageContracts.set(workspaceName, validatePackedWorkspaceExports(workRoot, workspaceName))
     }
 
     const { tgzPath: coreConfigTgzPath } = validatePackedWorkspaceExports(workRoot, '@vultisig/core-config')
@@ -687,6 +594,15 @@ function main() {
       '@vultisig/core-chain'
     )
     validateWindowsCoreChainExports(coreChainPackageRoot)
+
+    const { tgzPath: coreMpcTgzPath } = validatePackedWorkspaceExports(workRoot, '@vultisig/core-mpc')
+
+    packedPackageGraphSmoke(workRoot, {
+      sdkTgzPath: tgzPath,
+      coreChainTgzPath,
+      coreMpcTgzPath,
+      mpcTypesTgzPath: packageContracts.get('@vultisig/mpc-types').tgzPath,
+    })
 
     const { tgzPath: clientSharedTgzPath } = validatePackedWorkspaceExports(workRoot, '@vultisig/client-shared')
 
@@ -701,6 +617,8 @@ function main() {
       clientSharedTgzPath,
       rujiraTgzPath,
       coreChainTgzPath,
+      coreMpcTgzPath,
+      packageContracts.get('@vultisig/mpc-types').tgzPath,
       coreConfigTgzPath,
       libUtilsTgzPath
     )
@@ -708,7 +626,15 @@ function main() {
     const mcpTgzPath = packWorkspace(workRoot, '@vultisig/mcp', 'mcp.tgz')
     const mcpPackageRoot = extractPackage(workRoot, mcpTgzPath, 'mcp')
     validateTarballBinFiles(mcpPackageRoot, ['vmcp', 'vultisig-mcp'])
-    packedMcpBinSmoke(workRoot, mcpTgzPath, tgzPath, clientSharedTgzPath)
+    packedMcpBinSmoke(
+      workRoot,
+      mcpTgzPath,
+      tgzPath,
+      clientSharedTgzPath,
+      coreChainTgzPath,
+      coreMpcTgzPath,
+      packageContracts.get('@vultisig/mpc-types').tgzPath
+    )
 
     console.log('quality:contracts OK')
   } finally {
@@ -723,7 +649,7 @@ function main() {
 }
 
 try {
-  main()
+  await main()
 } catch (e) {
   console.error(e.message || e)
   process.exitCode = 1
