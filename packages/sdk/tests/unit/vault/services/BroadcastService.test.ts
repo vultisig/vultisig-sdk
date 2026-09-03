@@ -231,7 +231,7 @@ describe('BroadcastService', () => {
       submittedTxCount: 1,
       failedInputIndex: 1,
       originalError: expect.objectContaining({
-        message: 'swap rejected',
+        message: 'swap rejected; raw=[signed transaction redacted]',
       }),
     })
     expect(inspect(error, { depth: 10 })).not.toContain(signedRawTx)
