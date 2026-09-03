@@ -37,6 +37,16 @@ describe('getKeysignSwapProviderName', () => {
     expect(getKeysignSwapProviderName(swapkitPayload('NEAR'))).toBe('SwapKit (NEAR)')
   })
 
+  it('appends the route on an EVM-shaped payload too', () => {
+    // EVM and Solana SwapKit routes ride OneInchSwapPayload, which now carries
+    // the same tag the transfer-route payload does.
+    const payload = {
+      general: { provider: 'swapkit', subProvider: 'NEAR', quote: { dstAmount: '0' } },
+    } as unknown as KeysignSwapPayload
+
+    expect(getKeysignSwapProviderName(payload)).toBe('SwapKit (NEAR)')
+  })
+
   it('names the aggregator alone when the payload carries no route', () => {
     // Senders that predate `sub_provider` leave it empty, and payload shapes
     // without the field never had one.

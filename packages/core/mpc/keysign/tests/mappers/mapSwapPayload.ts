@@ -72,6 +72,8 @@ export const mapSwapPayload = (spRaw: any): KeysignPayload['swapPayload'] | unde
         // fall back to '' - an unattributed provider must NOT be enforced as 1inch. The guard is a
         // pure gate, so this never changes any pinned pre-signing hash; it only stops the mislabel.
         provider: o.provider ?? o.Provider ?? '',
+        // Route tag (proto field 7), accepting either casing like the fields above.
+        subProvider: o.sub_provider ?? o.subProvider ?? '',
       },
     }
 

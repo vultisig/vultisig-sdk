@@ -9,17 +9,15 @@ import { KeysignSwapPayload } from './KeysignSwapPayload'
  *
  * Matches `getSwapQuoteProviderName`, which the initiator renders from the live
  * quote, down to the `Provider (ROUTE)` shape — the two screens describe one
- * swap, so a co-signer comparing them should read the same words. The route
- * tag survives only on payloads that carry `sub_provider`; the rest name the
- * aggregator alone, as they always have.
+ * swap, so a co-signer comparing them should read the same words. Aggregators
+ * that route directly, and senders that predate `sub_provider`, leave it empty
+ * and are named alone.
  */
 export const getKeysignSwapProviderName = (swapPayload: KeysignSwapPayload) =>
   matchRecordUnion<KeysignSwapPayload, string>(swapPayload, {
     native: ({ chain }) => chain,
-    general: payload => {
-      const { provider } = payload
+    general: ({ provider, subProvider }) => {
       const name = isOneOf(provider, generalSwapProviders) ? generalSwapProviderName[provider] : provider
-      const subProvider = 'subProvider' in payload ? payload.subProvider : undefined
 
       return subProvider ? `${name} (${subProvider})` : name
     },

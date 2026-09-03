@@ -487,6 +487,7 @@ export const buildSwapKeysignPayload = async ({
             tx,
           }),
           provider: quote.provider,
+          subProvider: quote.routeProvider ?? '',
         }),
       }
 
