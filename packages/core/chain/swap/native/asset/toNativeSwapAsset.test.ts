@@ -170,7 +170,6 @@ describe('toNativeSwapAsset — fee-coin ticker matches the THORChain/MayaChain 
     [Chain.Solana]: 'SOL',
     [Chain.Tron]: 'TRX',
     [Chain.Noble]: 'USDC',
-    [Chain.Kujira]: 'KUJI',
     [Chain.Dash]: 'DASH',
     [Chain.Arbitrum]: 'ETH',
     [Chain.Zcash]: 'ZEC',
