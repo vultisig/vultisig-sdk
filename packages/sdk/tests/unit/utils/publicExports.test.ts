@@ -4,6 +4,7 @@ import * as isValidTokenIdModule from '@vultisig/core-chain/utils/isValidTokenId
 import { describe, expect, it } from 'vitest'
 
 import * as sdk from '../../../src/index'
+import * as defi from '../../../src/tools/defi'
 import * as dangerousAddresses from '../../../src/utils/dangerousAddresses'
 import {
   buildSignAminoKeysignPayload as canonicalBuildSignAminoKeysignPayload,
@@ -259,6 +260,17 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.defi.arkis.parseArkisTokenAmount).toBe('function')
     expect(typeof sdk.defi.arkis.resolveArkisPoolKind).toBe('function')
     expect(sdk.defi.arkis.ARKIS_OFFICIAL_ADDRESSES.dispatcher).toBe('0x2f01D7CFfe62673B3D2b680295A2D047F3848e4c')
+  })
+
+  it('exports the Arkis helper family as named public imports on the defi subpath and root sdk surface', () => {
+    expect(typeof defi.buildArkisSupplyTx).toBe('function')
+    expect(typeof defi.parseArkisTokenAmount).toBe('function')
+    expect(typeof defi.resolveArkisPoolKind).toBe('function')
+    expect(defi.ARKIS_BOOK_URLS).toBe(sdk.ARKIS_BOOK_URLS)
+    expect(defi.ARKIS_OFFICIAL_ADDRESSES).toBe(sdk.ARKIS_OFFICIAL_ADDRESSES)
+    expect(defi.buildArkisSupplyTx).toBe(sdk.buildArkisSupplyTx)
+    expect(defi.parseArkisTokenAmount).toBe(sdk.parseArkisTokenAmount)
+    expect(defi.resolveArkisPoolKind).toBe(sdk.resolveArkisPoolKind)
   })
 
   it('exports Balancer V3 calldata builder on the root sdk surface alongside other DeFi builders', () => {
