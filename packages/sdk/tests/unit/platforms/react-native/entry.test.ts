@@ -4,6 +4,11 @@ import { AuthInfo, SignDoc, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 
 import * as sdkRn from '../../../../src/platforms/react-native/index'
+import { buildCip20AuxData as canonicalBuildCip20AuxData } from '../../../../src/chains/cardano'
+import {
+  decodeSolanaRawTx as canonicalDecodeSolanaRawTx,
+  deriveSolanaRawTxSignature as canonicalDeriveSolanaRawTxSignature,
+} from '../../../../src/chains/solana'
 import { cosmosTxFeeGasParityCases } from '../../../fixtures/cosmosTxFeeGasParity'
 
 process.env.VULTISIG_STRICT_SINGLETON = '0'
@@ -62,6 +67,9 @@ vi.mock('@vultisig/walletcore-native', () => ({
 
 let reactNativeEntry: Awaited<typeof import('../../../../src/platforms/react-native/index')>
 let dangerousAddresses: Awaited<typeof import('../../../../src/utils/dangerousAddresses')>
+const solanaSignatureBytes = Uint8Array.from({ length: 64 }, (_, index) => index + 1)
+const solanaRawTxBytes = Uint8Array.from([1, ...solanaSignatureBytes, 0])
+const solanaRawTxBase64 = Buffer.from(solanaRawTxBytes).toString('base64')
 
 beforeAll(async () => {
   ;[reactNativeEntry, dangerousAddresses] = await Promise.all([
@@ -213,6 +221,28 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(typeof sdkRn.findSwapQuote).toBe('function')
     expect(sdkRn.SOL_NATIVE_MINT).toBe('So11111111111111111111111111111111111111112')
     expect(sdkRn.JUPITER_PLATFORM_FEE_BPS).toBe(50)
+  })
+
+  it('re-exports Solana raw-tx decode/signature helpers on the RN entry by identity and behavior', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(rn.decodeSolanaRawTx).toBe(canonicalDecodeSolanaRawTx)
+    expect(rn.deriveSolanaRawTxSignature).toBe(canonicalDeriveSolanaRawTxSignature)
+    expect(rn.decodeSolanaRawTx(solanaRawTxBase64, 'base64')).toEqual(solanaRawTxBytes)
+    expect(rn.deriveSolanaRawTxSignature(solanaRawTxBase64, 'base64')).toBe(
+      canonicalDeriveSolanaRawTxSignature(solanaRawTxBase64, 'base64')
+    )
+  })
+
+  it('re-exports Cardano CIP-20 aux-data builder on the RN entry by identity and behavior', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(rn.buildCip20AuxData).toBe(canonicalBuildCip20AuxData)
+
+    const { auxDataCbor, auxDataHash } = rn.buildCip20AuxData('hello 🌍')
+
+    expect(auxDataCbor).toEqual(canonicalBuildCip20AuxData('hello 🌍').auxDataCbor)
+    expect(auxDataHash).toHaveLength(32)
   })
 
   it('exports default chain canonicals on the RN entrypoint', async () => {

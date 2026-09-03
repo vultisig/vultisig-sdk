@@ -353,6 +353,11 @@ export type {
 // pull @solana/web3.js (and therefore avoids the rpc-websockets / ws cascade
 // that hangs Hermes at module init).
 export type { BroadcastSolanaTxOptions, BuildSolanaSendOptions, SolanaTxBuilderResult } from './chains/solana'
+export type { SolanaRawTxEncoding } from './chains/solana'
+
+// Cardano/Solana pure public helpers shared with the root SDK surface.
+export { buildCip20AuxData } from './chains/cardano'
+export { decodeSolanaRawTx, deriveSolanaRawTxSignature } from './chains/solana'
 
 // TON bridge type surface — reimplementation built on @ton/core plus
 // WalletCore's generated protobuf namespace for pre-dispatch parity input.

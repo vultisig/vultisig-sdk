@@ -1235,6 +1235,11 @@ export { buildCosmosWasmExecuteTx } from './platforms/react-native/chains/cosmos
 // chain-specific fee shape (base fee / priority / cosmos gas limit, etc).
 export { GasEstimationService } from './vault/services/GasEstimationService'
 
+// Public pure helpers for raw Solana tx decoding/signature derivation and Cardano CIP-20 aux data.
+export type { SolanaRawTxEncoding } from './chains/solana'
+export { decodeSolanaRawTx, deriveSolanaRawTxSignature } from './chains/solana'
+export { buildCip20AuxData } from './chains/cardano'
+
 // Vault-free raw broadcast: submit a pre-signed raw transaction through the
 // SDK's chain-agnostic broadcaster without needing a vault instance. Backs
 // `VaultBase.broadcastRawTx`, which wraps this same call with vault events.
