@@ -441,12 +441,14 @@ export {
   buildWithdrawRewardsMsg,
   cosmosStaking,
 } from '../../tools/prep/cosmosStaking'
-// Pure CosmWasm Amino message builders (only depend on JSON/bech32 — no
+// Pure CosmWasm helpers (only depend on JSON/bech32/protobuf writers — no
 // WalletCore or native crypto, safe as static re-exports on the RN graph).
 // Keep this list aligned with the root entrypoint: package exports resolve
 // React Native consumers to this hand-curated module.
 export type { BuildCosmosWasmExecuteMsgParams, CosmWasmExecuteFund } from '../../tools/prep/cosmosWasmExecute'
 export { buildCosmosWasmExecuteMsg } from '../../tools/prep/cosmosWasmExecute'
+export type { BuildCosmosWasmExecuteOptions, CosmosTxBuilderResult } from './chains/cosmos'
+export { buildCosmosWasmExecuteTx } from './chains/cosmos'
 export { buildCw20TransferMsg } from '../../tools/prep/cw20Transfer'
 // `preparePolkadotAssetSend` is pure-crypto (@polkadot/util + @polkadot/util-crypto,
 // both RN-safe) with no MPC/wasm dependency, so it ships as a static re-export
