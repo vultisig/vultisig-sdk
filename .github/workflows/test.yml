@@ -153,6 +153,9 @@ jobs:
       - name: Install dependencies
         run: yarn install --immutable
 
+      - name: Check dependency release-age cooldown
+        run: yarn deps:release-age
+
       - name: Run static quality gate (lint, types, knip, Prettier, SDK/CLI contracts)
         run: yarn check:ci
 
