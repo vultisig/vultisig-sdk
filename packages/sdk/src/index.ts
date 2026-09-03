@@ -627,6 +627,18 @@ export type {
   SwapQuoteProviderExcludeName,
   SwapQuoteProviderName,
 } from '@vultisig/core-chain/swap/quote/findSwapQuote'
+export type {
+  GeneralSwapProviderRiskMetadata,
+  GeneralSwapQuotePolicy,
+  ResolveGeneralSwapQuotePolicyInput,
+} from '@vultisig/core-chain/swap/quote/generalSwapQuotePolicy'
+export {
+  DEFAULT_GENERAL_SWAP_QUOTE_SLIPPAGE_TOLERANCE_PERCENT,
+  generalSwapProviderRiskMetadata,
+  isSameChainEvmErc20SellForQuotePolicy,
+  resolveGeneralSwapQuotePolicy,
+  SAME_CHAIN_EVM_ERC20_SELL_EXCLUDED_PROVIDERS,
+} from '@vultisig/core-chain/swap/quote/generalSwapQuotePolicy'
 
 // THOR/Maya native-swap metadata — surfaced so consumers stop re-declaring
 // which chains route through THORChain/MayaChain and their asset-notation
