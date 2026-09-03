@@ -81,6 +81,14 @@ describe('prepareIbcTransfer', () => {
     expect(r.sourceChannel).toBe('channel-0')
   })
 
+  it('has no route to Kujira — the chain is permanently offline', () => {
+    // Kujira's `Chain` enum member is gone, but these tables are keyed by raw
+    // chain-ID, so the enum removal alone left `kaiyo-1` advertised and
+    // routable. Both entries must stay out.
+    expect(supportedIbcDestinationsFrom('osmosis-1')).not.toContain('kaiyo-1')
+    expect(resolveSourceChannelByDestChain('osmosis-1', 'kaiyo-1')).toBeNull()
+  })
+
   it('normaliseIbcChainId maps every Vultisig canonical name to its IBC chain-ID (mcp-ts parity)', () => {
     // Mirror of mcp-ts build_ibc_transfer VULTISIG_NAME_TO_CHAIN_ID. THORChain /
     // MayaChain have no IBC_CHANNEL_DEST route, but the alias must still resolve
