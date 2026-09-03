@@ -325,6 +325,20 @@ describe('@vultisig/sdk public exports', () => {
     ).toBe(50n * 1_000_000_000n)
   })
 
+  it('exports the shared EVM gas-floor table used by app+abts to stop hand-copying it (sdk#1351)', () => {
+    expect(sdk.EVM_GAS_FLOOR_WEI[sdk.Chain.BSC as keyof typeof sdk.EVM_GAS_FLOOR_WEI]).toEqual({
+      basePerGas: 1_000_000_000n,
+      priorityPerGas: 3_000_000_000n,
+    })
+    expect(typeof sdk.getEvmMaxFeeFloorWei).toBe('function')
+    expect(sdk.getEvmMaxFeeFloorWei(sdk.Chain.Polygon as Parameters<typeof sdk.getEvmMaxFeeFloorWei>[0])).toBe(
+      31_000_000_000n
+    )
+    expect(sdk.getEvmMaxFeeFloorWei(sdk.Chain.Avalanche as Parameters<typeof sdk.getEvmMaxFeeFloorWei>[0])).toBe(
+      undefined
+    )
+  })
+
   it('exports gas comparison helpers from the root sdk surface', () => {
     expect(typeof sdk.compareCosts).toBe('function')
     expect(Array.isArray(sdk.DEFAULT_COMPARE_CHAINS)).toBe(true)

@@ -519,6 +519,16 @@ export {
 } from '@vultisig/core-chain/chains/evm/chainInfo'
 export { clampEvmPriorityFee } from '@vultisig/core-chain/tx/fee/evm/clampEvmPriorityFee'
 
+// Per-chain EVM gas-floor table — single source of truth for the client/
+// server-computed-fee floor previously hand-copied between vultiagent-app's
+// MIN_PRIORITY_FEE_BY_CHAIN/MIN_MAX_FEE_BY_CHAIN and agent-backend-ts's
+// GAS_FLOORS_WEI, synced by comment rather than import (the exact drift
+// class above — the app's copy had already lost an Ethereum entry abts
+// carries). Distinct from clampEvmPriorityFee: that clamps an RPC-*reported*
+// fee on the SDK's own signing path; this floors a fee before it reaches an
+// RPC estimate at all.
+export { EVM_GAS_FLOOR_WEI, getEvmMaxFeeFloorWei } from '@vultisig/core-chain/tx/fee/evm/evmGasFloor'
+
 // Noon USDC yield vault SDK boundary. Consumers should use these helpers
 // instead of calling Noon/Accountable APIs or hand-encoding ERC-7540 calldata.
 export type {

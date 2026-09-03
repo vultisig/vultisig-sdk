@@ -2193,6 +2193,11 @@
       "import": "./dist/tx/fee/evm/clampEvmPriorityFee.js",
       "default": "./dist/tx/fee/evm/clampEvmPriorityFee.js"
     },
+    "./tx/fee/evm/evmGasFloor": {
+      "types": "./dist/tx/fee/evm/evmGasFloor.d.ts",
+      "import": "./dist/tx/fee/evm/evmGasFloor.js",
+      "default": "./dist/tx/fee/evm/evmGasFloor.js"
+    },
     "./tx/fee/evm/evmGasLimit": {
       "types": "./dist/tx/fee/evm/evmGasLimit.d.ts",
       "import": "./dist/tx/fee/evm/evmGasLimit.js",
