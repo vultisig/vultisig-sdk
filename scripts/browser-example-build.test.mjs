@@ -11,6 +11,7 @@ import {
   renameSync,
   rmSync,
   statSync,
+  symlinkSync,
   utimesSync,
   writeFileSync,
 } from 'node:fs'
@@ -172,6 +173,14 @@ test('browser SDK freshness reuses builds after output churn and unchanged expor
     const result = fixture.prepare()
     assert.equal(result.status, 0, result.stderr)
   }
+  assert.deepEqual(fixture.builds(), [])
+})
+
+test('browser SDK freshness skips symbolic links during input traversal', { skip: isWin }, t => {
+  const fixture = freshnessFixture(t)
+  symlinkSync(fixture.root, path.join(fixture.root, 'packages/sdk/src/cycle'), 'dir')
+  const result = fixture.prepare()
+  assert.equal(result.status, 0, result.stderr)
   assert.deepEqual(fixture.builds(), [])
 })
 

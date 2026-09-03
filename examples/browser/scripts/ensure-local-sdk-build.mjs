@@ -87,7 +87,7 @@ function inputFingerprint(inputs) {
     const stat = statSync(target)
     if (stat.isDirectory()) {
       for (const entry of readdirSync(target, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-        if (entry.isDirectory() && ignoredDirs.has(entry.name)) continue
+        if (ignoredDirs.has(entry.name) || entry.isSymbolicLink()) continue
         visit(path.join(target, entry.name))
       }
     } else {
@@ -168,11 +168,15 @@ function hasFreshBuild(kind) {
   } catch {
     return false
   }
-  return (
-    recorded?.version === 1 &&
-    recorded.inputs === inputFingerprint(inputs) &&
-    JSON.stringify(recorded.outputs) === JSON.stringify(outputIdentity(outputs, kind))
-  )
+  try {
+    return (
+      recorded?.version === 1 &&
+      recorded.inputs === inputFingerprint(inputs) &&
+      JSON.stringify(recorded.outputs) === JSON.stringify(outputIdentity(outputs, kind))
+    )
+  } catch {
+    return false
+  }
 }
 
 function buildSharedPackages() {
