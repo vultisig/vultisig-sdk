@@ -78,6 +78,42 @@ describe('getRippleTxStatus', () => {
     })
   })
 
+  it('accepts the maximum native XRP supply in drops', async () => {
+    mocks.request.mockResolvedValue({
+      result: {
+        validated: true,
+        meta: { TransactionResult: 'tesSUCCESS', delivered_amount: '100000000000000000' },
+        tx_json: { Fee: '20', TransactionType: 'Payment' },
+      },
+    })
+
+    const result = await getRippleTxStatus({ chain: OtherChain.Ripple, hash })
+    expect(result.receipt).toMatchObject({
+      deliveredAmount: '100000000000000000',
+      deliveredCurrency: 'XRP',
+    })
+  })
+
+  it.each(['1e95', '1e-81', '12345678901234560'])('accepts issued-currency value boundary %s', async value => {
+    mocks.request.mockResolvedValue({
+      result: {
+        validated: true,
+        meta: {
+          TransactionResult: 'tesSUCCESS',
+          delivered_amount: {
+            currency: 'USD',
+            issuer: 'rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B',
+            value,
+          },
+        },
+        tx_json: { Fee: '20', TransactionType: 'Payment' },
+      },
+    })
+
+    const result = await getRippleTxStatus({ chain: OtherChain.Ripple, hash })
+    expect(result.receipt).toMatchObject({ deliveredAmount: value })
+  })
+
   it('reports an MPT delivered_amount without treating it as issued currency', async () => {
     const mptIssuanceId = '000004C463C52827307480341125DA0577DEFC38405B0E3E'
     mocks.request.mockResolvedValue({
@@ -187,12 +223,20 @@ describe('getRippleTxStatus', () => {
     'unavailable',
     'NaN',
     '-1',
+    '100000000000000001',
     {},
     { value: '1' },
     { value: 'NaN', currency: 'USD', issuer: 'rIssuer' },
     { value: '1', currency: 'XRP', issuer: 'rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B' },
     { value: '1', currency: 'US', issuer: 'rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B' },
     { value: '1', currency: 'USD', issuer: 'rInvalid' },
+    { value: '1e96', currency: 'USD', issuer: 'rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B' },
+    { value: '1e-82', currency: 'USD', issuer: 'rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B' },
+    {
+      value: '12345678901234567',
+      currency: 'USD',
+      issuer: 'rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B',
+    },
     { value: '1', mpt_issuance_id: 'NOT_AN_MPT_ID' },
     {
       value: '1',

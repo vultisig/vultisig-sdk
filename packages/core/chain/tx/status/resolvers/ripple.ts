@@ -7,11 +7,28 @@ import { isValidClassicAddress } from 'ripple-address-codec'
 
 import { TxReceiptInfo, TxStatusResolver } from '../resolver'
 
+const maxXrpDrops = 100_000_000_000_000_000n
+
+const isValidIssuedCurrencyValue = (value: string): boolean => {
+  const match = /^(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/.exec(value)
+  if (!match) return false
+
+  const [, integer, fraction = '', exponent = '0'] = match
+  const digits = `${integer}${fraction}`
+  const firstNonZero = digits.search(/[1-9]/)
+  if (firstNonZero === -1) return true
+
+  const significantDigits = digits.slice(firstNonZero).replace(/0+$/, '').length
+  const magnitude = BigInt(digits.length - firstNonZero - fraction.length - 1) + BigInt(exponent)
+
+  return significantDigits <= 16 && magnitude >= -81n && magnitude <= 95n
+}
+
 const getDeliveredReceipt = (meta: Record<string, unknown>): Partial<TxReceiptInfo> => {
   const deliveredAmount = 'delivered_amount' in meta ? meta.delivered_amount : meta.DeliveredAmount
 
   if (typeof deliveredAmount === 'string') {
-    return /^\d+$/.test(deliveredAmount)
+    return /^\d+$/.test(deliveredAmount) && BigInt(deliveredAmount) <= maxXrpDrops
       ? {
           deliveredAmount,
           deliveredCurrency: 'XRP',
@@ -45,7 +62,7 @@ const getDeliveredReceipt = (meta: Record<string, unknown>): Partial<TxReceiptIn
 
   if (
     typeof value !== 'string' ||
-    !/^\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(value) ||
+    !isValidIssuedCurrencyValue(value) ||
     typeof currency !== 'string' ||
     !isValidXrplCurrencyCode(currency) ||
     ['XRP', '0'.repeat(40), '0000000000000000000000005852500000000000'].includes(currency.toUpperCase()) ||
