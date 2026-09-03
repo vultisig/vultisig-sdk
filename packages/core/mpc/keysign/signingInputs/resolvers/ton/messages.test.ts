@@ -2,8 +2,8 @@ import { create } from '@bufbuild/protobuf'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { TonSpecificSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
-import { WalletCore } from '@trustwallet/wallet-core'
-import { describe, expect, it } from 'vitest'
+import { initWasm, TW, WalletCore } from '@trustwallet/wallet-core'
+import { beforeAll, describe, expect, it } from 'vitest'
 
 import { getTonSigningInputs } from './index'
 
@@ -134,5 +134,90 @@ describe('getTonSigningInputs — app-initiated sends keep the wallet-level flag
     expect(await buildMessages(buildPayload({ bounceable: false, memo: 'Deposit' }))).toEqual([
       { dest: nonBounceableDestination, bounceable: true },
     ])
+  })
+})
+
+// The field-only tests above read the flag the resolver decided. They cannot see
+// whether the destination that carries it is one WalletCore would actually sign, and
+// that gap is what let a noncanonical raw spelling be signed with the wrong flag: the
+// old guard demanded a canonical `workchain:hex` round-trip, so `00:<hash>` fell
+// through to non-bounceable while WalletCore compiled it happily as workchain 0 — a
+// rejected contract call would have kept the funds instead of refunding them. These
+// drive the real signer to prove both halves.
+describe('getTonSigningInputs — noncanonical raw destinations sign like the canonical one', () => {
+  let walletCore: WalletCore
+
+  beforeAll(async () => {
+    walletCore = await initWasm()
+  }, 120_000)
+
+  const accountHash = 'e62deead89c718fee2d9b1fbab75838db2136e0a7f084bcd4a709f29e8ce8848'
+
+  const compile = async (to: string, stateInit?: string) => {
+    const [input] = await getTonSigningInputs({
+      keysignPayload: buildPayload({
+        bounceable: false,
+        tonMessages: [{ to, amount: '1000000', ...(stateInit ? { stateInit } : {}) }],
+      }),
+      walletCore,
+    })
+
+    const output = TW.TxCompiler.Proto.PreSigningOutput.decode(
+      walletCore.TransactionCompiler.preImageHashes(
+        walletCore.CoinType.ton,
+        TW.TheOpenNetwork.Proto.SigningInput.encode(input).finish()
+      )
+    )
+
+    return {
+      bounceable: input.messages[0].bounceable,
+      error: output.errorMessage,
+      preImage: walletCore.HexCoding.encode(output.data),
+    }
+  }
+
+  it('signs the same bytes for every spelling of one account, so the refund rule cannot turn on formatting', async () => {
+    const canonical = await compile(`0:${accountHash}`)
+
+    expect(canonical.error).toBe('')
+    expect(canonical.bounceable).toBe(true)
+
+    for (const spelling of [
+      `00:${accountHash}`,
+      `000:${accountHash}`,
+      `+0:${accountHash}`,
+      `-0:${accountHash}`,
+      `0:0x${accountHash}`,
+      `0:${accountHash.toUpperCase()}`,
+    ]) {
+      const compiled = await compile(spelling)
+
+      // Signable: WalletCore accepts the spelling, so whatever flag we chose is signed.
+      expect(compiled.error).toBe('')
+      expect(compiled.bounceable).toBe(true)
+      expect(compiled.preImage).toBe(canonical.preImage)
+    }
+  })
+
+  it('still signs a noncanonical raw deployment non-bounceable', async () => {
+    const stateInit = 'te6ccgEBAQEAAwAAAgE='
+    const canonical = await compile(`0:${accountHash}`, stateInit)
+    const noncanonical = await compile(`00:${accountHash}`, stateInit)
+
+    expect(canonical.bounceable).toBe(false)
+    expect(noncanonical.bounceable).toBe(false)
+    expect(noncanonical.error).toBe('')
+    expect(noncanonical.preImage).toBe(canonical.preImage)
+  })
+
+  // Without this the equality assertions above would hold even if the flag were
+  // ignored: the bounce bit has to be visible in the signed bytes for them to mean
+  // anything.
+  it('proves the bounce flag is part of what gets signed', async () => {
+    const call = await compile(`0:${accountHash}`)
+    const deployment = await compile(`0:${accountHash}`, 'te6ccgEBAQEAAwAAAgE=')
+
+    expect(call.bounceable).not.toBe(deployment.bounceable)
+    expect(call.preImage).not.toBe(deployment.preImage)
   })
 })
