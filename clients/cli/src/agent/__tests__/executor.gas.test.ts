@@ -459,7 +459,7 @@ describe('AgentExecutor EIP-1559 fee refresh', () => {
       const request = JSON.parse(String(init?.body)) as { method: string }
       if (request.method === 'eth_getBlockByNumber') throw new Error('ECONNREFUSED')
       return {
-        json: vi.fn().mockResolvedValue({ jsonrpc: '2.0', result: `0x${(40_000_000_000n).toString(16)}` }),
+        json: vi.fn().mockResolvedValue({ jsonrpc: '2.0', result: `0x${40_000_000_000n.toString(16)}` }),
         ok: true,
         status: 200,
       }
