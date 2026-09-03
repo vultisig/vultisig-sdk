@@ -29,7 +29,6 @@ describe('getSwapKitTrackerUrl', () => {
     [Chain.Zcash, 'zcash'],
     [Chain.Sui, 'sui'],
     [Chain.Dogecoin, 'dogecoin'],
-    [Chain.Kujira, 'kaiyo-1'],
     [Chain.MayaChain, 'mayachain-mainnet-v1'],
     [Chain.THORChain, 'thorchain-1'],
   ])('maps %s to chainId=%s', (chain, chainId) => {
@@ -39,7 +38,7 @@ describe('getSwapKitTrackerUrl', () => {
   })
 
   it('keeps the map and the test matrix exhaustive', () => {
-    expect(Object.keys(swapKitTrackerChainIds)).toHaveLength(27)
+    expect(Object.keys(swapKitTrackerChainIds)).toHaveLength(26)
   })
 
   it('encodes the hash without altering it', () => {
