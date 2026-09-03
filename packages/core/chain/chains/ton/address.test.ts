@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  areEqualTonAddresses,
-  getTonAddressBounceability,
-  tonAddressToBounceable,
-  tonAddressToRaw,
-} from './address'
+import { areEqualTonAddresses, getTonAddressBounceability, tonAddressToBounceable, tonAddressToRaw } from './address'
 
 // One account in every spelling it has, so a test that claims two forms name the
 // same account is actually asserting that and not comparing two accounts.
