@@ -462,6 +462,15 @@ export type {
   ExtendedChainRegistry,
 } from '@vultisig/core-chain/chainRegistry'
 export { chainRegistry, deriveFromChainRegistry, extendChainRegistry } from '@vultisig/core-chain/chainRegistry'
+export type { AssetId, ChainId } from '@vultisig/core-chain/chainIdentity'
+export {
+  chainFromChainId,
+  chainIds,
+  isChainId,
+  toChainId,
+  toNativeAssetId,
+  toTokenAssetId,
+} from '@vultisig/core-chain/chainIdentity'
 
 // Skip Go routing-eligibility predicates. Single source of truth for "does this
 // from/to chain pair route through Skip Go?" — consolidated here so consumers

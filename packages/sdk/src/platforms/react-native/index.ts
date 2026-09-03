@@ -962,6 +962,15 @@ export type {
   ExtendedChainRegistry,
 } from '@vultisig/core-chain/chainRegistry'
 export { chainRegistry, deriveFromChainRegistry, extendChainRegistry } from '@vultisig/core-chain/chainRegistry'
+export type { AssetId, ChainId } from '@vultisig/core-chain/chainIdentity'
+export {
+  chainFromChainId,
+  chainIds,
+  isChainId,
+  toChainId,
+  toNativeAssetId,
+  toTokenAssetId,
+} from '@vultisig/core-chain/chainIdentity'
 export { getThorchainInboundAddress } from '@vultisig/core-chain/chains/cosmos/thor/getThorchainInboundAddress'
 export * from '@vultisig/core-chain/chains/cosmos/thor/lp'
 export type { GetSwapExplorerUrlInput, SwapExplorerProvider } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
