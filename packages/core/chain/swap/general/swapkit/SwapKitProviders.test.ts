@@ -2,7 +2,12 @@ import { Chain } from '@vultisig/core-chain/Chain'
 import { configureSwapKit } from '@vultisig/core-chain/swap/general/swapkit/config'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { getSwapKitProviders, isSwapKitPairSupported, resetSwapKitProvidersCache } from './SwapKitProviders'
+import {
+  getSwapKitProviders,
+  isSwapKitPairSupported,
+  resetSwapKitProvidersCache,
+  resolveSwapKitChainMetadata,
+} from './SwapKitProviders'
 
 const response = (body: unknown, ok = true, status = 200) =>
   ({
@@ -31,7 +36,10 @@ describe('SwapKitProviders', () => {
         'fetch',
         vi.fn(async () =>
           response([
-            { provider: 'NEAR', enabledChainIds: ['bitcoincash', '1', 'solana'] },
+            {
+              provider: 'NEAR',
+              enabledChainIds: ['bitcoincash', '1', 'solana'],
+            },
             { provider: 'UNISWAP_V3', enabledChainIds: ['1', '42161'] },
           ])
         )
@@ -61,7 +69,10 @@ describe('SwapKitProviders', () => {
         'fetch',
         vi.fn(async () =>
           response([
-            { provider: 'MAYACHAIN_STREAMING', enabledChainIds: ['zcash', '1'] },
+            {
+              provider: 'MAYACHAIN_STREAMING',
+              enabledChainIds: ['zcash', '1'],
+            },
             { provider: 'NEAR', enabledChainIds: ['1'] },
           ])
         )
@@ -69,6 +80,25 @@ describe('SwapKitProviders', () => {
 
       // Zcash -> ETH only co-enabled on MAYACHAIN_STREAMING, which is filtered out.
       await expect(isSwapKitPairSupported({ from: Chain.Zcash, to: Chain.Ethereum })).resolves.toBe(false)
+    })
+
+    it('ignores providers outside the quote allowlist when they are the only provider enabling both chains', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () =>
+          response([
+            { provider: 'UNLISTED_DEX', enabledChainIds: ['bitcoincash', '4663'] },
+            { provider: 'NEAR', enabledChainIds: ['bitcoincash'] },
+          ])
+        )
+      )
+
+      await expect(
+        isSwapKitPairSupported({
+          from: Chain.BitcoinCash,
+          to: Chain.Robinhood,
+        })
+      ).resolves.toBe(false)
     })
 
     it('fails open (returns true) when the providers snapshot is empty', async () => {
@@ -132,6 +162,94 @@ describe('SwapKitProviders', () => {
       await vi.advanceTimersByTimeAsync(5_000)
 
       await expect(providersPromise).resolves.toEqual([])
+    })
+
+    it('normalizes the current supportedChainIds response field', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => response([{ provider: 'FLASHNET', supportedChainIds: ['4663', '999'] }]))
+      )
+
+      await expect(getSwapKitProviders()).resolves.toEqual([{ provider: 'FLASHNET', enabledChainIds: ['4663', '999'] }])
+    })
+  })
+
+  describe('resolveSwapKitChainMetadata', () => {
+    it.each([
+      [Chain.Robinhood, '4663', 'HOOD'],
+      [Chain.Hyperliquid, '999', 'HYPEREVM'],
+    ] as const)('pins the live-confirmed %s identifiers', async (chain, providerChainId, assetPrefix) => {
+      const fetchMock = vi.fn()
+      vi.stubGlobal('fetch', fetchMock)
+
+      await expect(resolveSwapKitChainMetadata(chain)).resolves.toEqual({
+        assetPrefix,
+        providerChainId,
+      })
+      expect(fetchMock).not.toHaveBeenCalled()
+    })
+
+    it('opens an unlisted EVM destination when its canonical id has one unambiguous catalog prefix', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi
+          .fn()
+          .mockResolvedValueOnce(response([{ provider: 'ONEINCH', enabledChainIds: ['81457'] }]))
+          .mockResolvedValueOnce(response({ tokens: [{ chain: 'BLAST', chainId: 81457 }] }))
+      )
+
+      await expect(resolveSwapKitChainMetadata(Chain.Blast)).resolves.toEqual({
+        assetPrefix: 'BLAST',
+        providerChainId: '81457',
+      })
+    })
+
+    it('skips a dynamic chain when providers disagree about its asset prefix', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi
+          .fn()
+          .mockResolvedValueOnce(
+            response([
+              { provider: 'FLASHNET', enabledChainIds: ['81457'] },
+              { provider: 'ONEINCH', enabledChainIds: ['81457'] },
+            ])
+          )
+          .mockResolvedValueOnce(response({ tokens: [{ chain: 'BLAST', chainId: '81457' }] }))
+          .mockResolvedValueOnce(response({ tokens: [{ chain: 'BLAST_ALT', chainId: '81457' }] }))
+      )
+
+      await expect(resolveSwapKitChainMetadata(Chain.Blast)).resolves.toBeUndefined()
+    })
+
+    it('skips a dynamic chain when an advertising provider omits its catalog identity', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi
+          .fn()
+          .mockResolvedValueOnce(
+            response([
+              { provider: 'FLASHNET', enabledChainIds: ['81457'] },
+              { provider: 'ONEINCH', enabledChainIds: ['81457'] },
+            ])
+          )
+          .mockResolvedValueOnce(response({ tokens: [{ chain: 'BLAST', chainId: '81457' }] }))
+          .mockResolvedValueOnce(response({ tokens: [{ chain: 'ETH', chainId: '1' }] }))
+      )
+
+      await expect(resolveSwapKitChainMetadata(Chain.Blast)).resolves.toBeUndefined()
+    })
+
+    it('skips only the dynamic chain when any required token catalog is unavailable', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi
+          .fn()
+          .mockResolvedValueOnce(response([{ provider: 'FLASHNET', enabledChainIds: ['81457'] }]))
+          .mockResolvedValueOnce(response({}, false, 503))
+      )
+
+      await expect(resolveSwapKitChainMetadata(Chain.Blast)).resolves.toBeUndefined()
     })
   })
 })

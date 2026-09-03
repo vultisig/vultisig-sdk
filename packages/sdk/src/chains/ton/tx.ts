@@ -18,6 +18,7 @@
  */
 import { Address, beginCell, Cell, internal, SendMode, storeMessageRelaxed } from '@ton/core'
 import { TW } from '@trustwallet/wallet-core'
+import { type TonJettonCommentContext, validateTonComment } from '@vultisig/core-chain/chains/ton/comment'
 
 import { buildV4R2Wallet, storeStateInitCell, TON_V4R2_SUB_WALLET_ID } from './walletV4R2'
 
@@ -140,9 +141,25 @@ export type TonWalletCoreBackedTxBuilderResult = TonTxBuilderResult & {
   walletCoreTxInputData: Uint8Array
 }
 
-const walletCoreTonSendMode =
-  TW.TheOpenNetwork.Proto.SendMode.PAY_FEES_SEPARATELY | TW.TheOpenNetwork.Proto.SendMode.IGNORE_ACTION_PHASE_ERRORS
+/**
+ * Send mode for every app-initiated TON transfer, in WalletCore's enum.
+ *
+ * `IGNORE_ACTION_PHASE_ERRORS` (+2) is deliberately absent: with it set, a wallet contract
+ * that cannot carry out its outgoing transfer skips the action rather than failing, so the
+ * transaction lands un-aborted with the seqno consumed and nothing moved — on chain that is
+ * indistinguishable from a real send. Must stay numerically equal to `tonCellSendMode` below —
+ * the two encode the same field, and any drift between them changes the signing hash.
+ */
+const walletCoreTonSendMode = TW.TheOpenNetwork.Proto.SendMode.PAY_FEES_SEPARATELY
 
+/** The same send mode in `@ton/core`'s enum, used when building the V4R2 signing cell. */
+const tonCellSendMode = SendMode.PAY_GAS_SEPARATELY
+
+/**
+ * Narrows caller-supplied wallet options to the only shape these builders can encode.
+ * Anything but workchain 0 on a V4R2 sub-wallet throws, because the WalletCore parity
+ * input emitted alongside the cell cannot represent it and would silently disagree.
+ */
 function assertWalletCoreTonWalletOptions(opts: { subWalletId?: number; workchain?: number }): {
   subWalletId: number
   workchain: 0
@@ -185,6 +202,11 @@ function encodeWalletCoreTonSigningInput(args: {
   return TW.TheOpenNetwork.Proto.SigningInput.encode(input).finish()
 }
 
+/**
+ * Builds the V4R2 cell that gets signed: the wallet header followed by a reference to
+ * the internal message. This is the preimage every co-signer hashes, so field order,
+ * bit widths and the send mode must match WalletCore's encoder exactly.
+ */
 function buildSigningPayloadCell(args: {
   subWalletId: number
   validUntil: number
@@ -193,25 +215,28 @@ function buildSigningPayloadCell(args: {
 }): Cell {
   // V4R2 signing message layout:
   //   subWalletId(32) || validUntil(32) || seqno(32) || op(8) || sendMode(8) || ref(innerMsg)
-  // op=0 for simple order; sendMode = PAY_GAS_SEPARATELY | IGNORE_ERRORS.
-  const sendMode = SendMode.PAY_GAS_SEPARATELY | SendMode.IGNORE_ERRORS
+  // op=0 for simple order.
   return beginCell()
     .storeUint(args.subWalletId, 32)
     .storeUint(args.validUntil, 32)
     .storeUint(args.seqno, 32)
     .storeUint(0, 8)
-    .storeUint(sendMode, 8)
+    .storeUint(tonCellSendMode, 8)
     .storeRef(args.innerMsg)
     .endCell()
 }
 
+/**
+ * The text-comment body cell for a native transfer: 32-bit zero opcode then the
+ * UTF-8 memo. Returns `undefined` for an empty memo so the caller can omit the
+ * body entirely; throws if the memo will not fit the cell.
+ */
 function buildCommentBody(memo: string | undefined): Cell | undefined {
   if (!memo) return undefined
-  // Max 123 UTF-8 bytes fit in a single cell slice (1023 bits - 32-bit opcode).
-  const encoded = new TextEncoder().encode(memo)
-  if (encoded.length > 123) {
-    throw new Error(`TON memo exceeds 123 bytes (got ${encoded.length}); reject upstream`)
-  }
+  // Native cap only. A jetton comment shares its cell with the transfer fields
+  // and gets a smaller, amount-dependent budget, which the jetton builder
+  // checks against the body it is actually filling.
+  validateTonComment({ memo })
   // 0x00000000 opcode marks a text comment in the TON convention.
   return beginCell().storeUint(0, 32).storeStringTail(memo).endCell()
 }
@@ -678,10 +703,13 @@ export function buildTonTxFromSigningPayload(opts: BuildTonTxFromSigningPayloadO
 // the tx builder throws mid-encoding.
 // ---------------------------------------------------------------------------
 
-/** Throws if `memo` exceeds the 123-byte TON comment cell capacity. */
-export function validateTonMemo(memo: string): void {
-  const encoded = new TextEncoder().encode(memo)
-  if (encoded.length > 123) {
-    throw new Error(`TON memo must be at most 123 bytes (got ${encoded.length})`)
-  }
+/**
+ * Throws if `memo` will not fit the cell it is destined for.
+ *
+ * Pass `jetton` for a Jetton transfer: its comment rides inline in the transfer
+ * body's `forward_payload`, so the cap is far below the native 123 bytes and
+ * shrinks as the amount grows. Without it the native cap applies.
+ */
+export function validateTonMemo(memo: string, jetton?: TonJettonCommentContext): void {
+  validateTonComment({ memo, jetton })
 }
