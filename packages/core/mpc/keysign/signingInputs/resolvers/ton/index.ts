@@ -1,6 +1,5 @@
 import { isTonStakingComment } from '@vultisig/core-chain/chains/ton/staking'
 import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
-import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { TW } from '@trustwallet/wallet-core'
 
 import { getBlockchainSpecificValue } from '../../../chainSpecific/KeysignChainSpecific'
@@ -13,8 +12,13 @@ import { buildNativeTonTransfer, buildNativeTonTransferFromMessage } from './nat
 export const getTonSigningInputs: SigningInputsResolver<'ton'> = ({ keysignPayload, walletCore }) => {
   const coin = getKeysignCoin(keysignPayload)
 
-  const { expireAt, sequenceNumber, bounceable, sendMaxAmount, jettonAddress, isActiveDestination } =
-    getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'tonSpecific')
+  // `sendMaxAmount` is deliberately not read here. A MAX send is the displayed
+  // `balance - fee` carried in `toAmount` like any other amount, so the signed bytes
+  // are identical either way and the flag stays descriptive metadata.
+  const { expireAt, sequenceNumber, bounceable, jettonAddress, isActiveDestination } = getBlockchainSpecificValue(
+    keysignPayload.blockchainSpecific,
+    'tonSpecific'
+  )
 
   const isStakeOp = isTonStakingComment(keysignPayload.memo)
 
@@ -37,12 +41,11 @@ export const getTonSigningInputs: SigningInputsResolver<'ton'> = ({ keysignPaylo
             ? buildNativeTonTransfer({
                 keysignPayload,
                 bounceable: isStakeOp ? true : !!bounceable,
-                sendMaxAmount,
               })
             : buildJettonTransfer({
                 keysignPayload,
                 walletCore,
-                jettonAddress: shouldBePresent(jettonAddress, 'Jetton address'),
+                jettonAddress,
                 isActiveDestination,
               }),
         ]

@@ -16,7 +16,7 @@ export const mapBlockchainSpecific = (bsRaw: any) => {
     }
   }
 
-  // Cosmos-family chains (CosmosSpecific, Terra/TerraClassic/Kujira/ATOM share this)
+  // Cosmos-family chains (CosmosSpecific, Terra/TerraClassic/ATOM share this)
   if (bsRaw.CosmosSpecific || bsRaw.cosmosSpecific) {
     const c = bsRaw.CosmosSpecific ?? bsRaw.cosmosSpecific
     const ibc = c.ibc_denom_trace ?? c.ibcDenomTrace
