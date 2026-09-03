@@ -14,6 +14,8 @@ describe('getSwapKitTrackerUrl', () => {
     [Chain.Optimism, '10'],
     [Chain.Blast, '81457'],
     [Chain.Zksync, '324'],
+    [Chain.Hyperliquid, '999'],
+    [Chain.Robinhood, '4663'],
     [Chain.Tron, '728126428'],
     [Chain.Cardano, 'cardano'],
     [Chain.Ton, 'ton'],
@@ -37,7 +39,7 @@ describe('getSwapKitTrackerUrl', () => {
   })
 
   it('keeps the map and the test matrix exhaustive', () => {
-    expect(Object.keys(swapKitTrackerChainIds)).toHaveLength(25)
+    expect(Object.keys(swapKitTrackerChainIds)).toHaveLength(27)
   })
 
   it('encodes the hash without altering it', () => {

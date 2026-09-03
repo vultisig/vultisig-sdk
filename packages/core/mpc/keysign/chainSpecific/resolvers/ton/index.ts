@@ -1,9 +1,11 @@
 import { create } from '@bufbuild/protobuf'
 import { getTonAccountInfo } from '@vultisig/core-chain/chains/ton/account/getTonAccountInfo'
+import { getTonAddressBounceability } from '@vultisig/core-chain/chains/ton/address'
 import { getJettonWalletAddress, getTonWalletState } from '@vultisig/core-chain/chains/ton/api'
 import { TonSpecificSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { attempt } from '@vultisig/lib-utils/attempt'
 
+import { getKeysignSwapPayload } from '../../../swap/getKeysignSwapPayload'
 import { getKeysignCoin } from '../../../utils/getKeysignCoin'
 import { GetChainSpecificResolver } from '../../resolver'
 
@@ -36,15 +38,32 @@ export const getTonChainSpecific: GetChainSpecificResolver<'tonSpecific'> = asyn
   const { account_state } = await getTonAccountInfo(address)
   const sequenceNumber = BigInt(account_state?.seqno ?? 0)
 
+  // Whether the transfer goes out bounceable, which decides what happens to the funds
+  // when the destination rejects the message: a bounceable transfer is refunded, a
+  // non-bounceable one is absorbed by the destination and gone.
   const getIsBounceable = async () => {
-    if (receiver) {
-      const { data: walletState } = await attempt(getTonWalletState(receiver))
-      const isUninitialized = walletState === tonWalletStateUninitialized
-      if (!isUninitialized && receiver.startsWith('E')) {
-        return true
-      }
+    if (!receiver) {
+      return false
     }
-    return false
+
+    // A swap deposit lands on a router or escrow contract, and there are ordinary
+    // reasons for such a contract to reject: an expired quote, a paused pool, a
+    // route that closed between quote and broadcast. Those have to come back.
+    if (getKeysignSwapPayload(keysignPayload)) {
+      return true
+    }
+
+    // An undeployed account has no code to reject anything, so a bounceable message
+    // is simply returned and the transfer never lands. Those must go non-bounceable.
+    const { data: walletState } = await attempt(getTonWalletState(receiver))
+    if (walletState === tonWalletStateUninitialized) {
+      return false
+    }
+
+    // A raw `0:hex` destination declares no intent, so it defaults to bounceable —
+    // the safe side for anything that might be a contract. Only an explicit `UQ…`
+    // opts out.
+    return getTonAddressBounceability(receiver) !== 'nonBounceable'
   }
 
   const result = create(TonSpecificSchema, {

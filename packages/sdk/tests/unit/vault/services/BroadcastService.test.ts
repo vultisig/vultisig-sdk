@@ -205,7 +205,11 @@ describe('BroadcastService', () => {
     const injectedBroadcaster = vi.fn().mockResolvedValue(broadcastAccepted())
     const injectedService = new BroadcastService(extractMessageHashes, wasmProvider, injectedBroadcaster)
 
-    await injectedService.broadcastTx({ chain: Chain.Ethereum, keysignPayload, signature })
+    await injectedService.broadcastTx({
+      chain: Chain.Ethereum,
+      keysignPayload,
+      signature,
+    })
 
     expect(injectedBroadcaster).toHaveBeenCalledTimes(2)
     expect(mockCoreBroadcastTx).not.toHaveBeenCalled()
@@ -219,18 +223,99 @@ describe('BroadcastService', () => {
       .mockRejectedValueOnce(new Error(`swap rejected; raw=${signedRawTx}`))
     mockGetTxHash.mockResolvedValueOnce('approve-local-hash')
 
-    const promise = service.broadcastTx({ chain: Chain.Ethereum, keysignPayload, signature })
+    const error = await service.broadcastTx({ chain: Chain.Ethereum, keysignPayload, signature }).catch(value => value)
 
-    await expect(promise).rejects.toMatchObject({
-      code: VaultErrorCode.BroadcastFailed,
+    expect(error).toBeInstanceOf(BroadcastPartialFailureError)
+    expect(error).toMatchObject({
+      broadcastedTxHashes: ['approve-local-hash'],
+      submittedTxCount: 1,
+      failedInputIndex: 1,
       originalError: expect.objectContaining({
-        broadcastedTxHashes: ['approve-local-hash'],
-        failedInputIndex: 1,
+        message: 'swap rejected',
       }),
     })
-    await expect(promise).rejects.toHaveProperty('originalError', expect.any(BroadcastPartialFailureError))
-    const error = await promise.catch(value => value)
     expect(inspect(error, { depth: 10 })).not.toContain(signedRawTx)
+  })
+
+  it('exposes a partial failure when a later input returns a failed result', async () => {
+    const cause = new Error('swap rejected by RPC')
+    mockGetEncodedSigningInputs.mockResolvedValue(['approve-input', 'swap-input'])
+    mockCoreBroadcastTx.mockResolvedValueOnce(broadcastAccepted()).mockResolvedValueOnce(broadcastFailed(cause, false))
+    mockGetTxHash.mockResolvedValueOnce('approve-local-hash')
+
+    const error = await service.broadcastTx({ chain: Chain.Ethereum, keysignPayload, signature }).catch(value => value)
+
+    expect(error).toBeInstanceOf(BroadcastPartialFailureError)
+    expect(error).toMatchObject({
+      broadcastedTxHashes: ['approve-local-hash'],
+      submittedTxCount: 1,
+      failedInputIndex: 1,
+      originalError: expect.objectContaining({
+        cause,
+        message: expect.stringContaining('BROADCAST_REJECTED'),
+      }),
+    })
+  })
+
+  it('exposes a partial failure when compiling a later input fails', async () => {
+    const cause = new Error('swap compilation failed')
+    mockGetEncodedSigningInputs.mockResolvedValue(['approve-input', 'swap-input'])
+    mockCompileTx.mockImplementation(({ txInputData }) => {
+      if (txInputData === 'swap-input') throw cause
+      return txInputData
+    })
+    mockDecodeSigningOutput.mockImplementation((_chain, tx) => tx)
+    mockCoreBroadcastTx.mockResolvedValue(broadcastAccepted('approve-node-hash'))
+
+    const error = await service.broadcastTx({ chain: Chain.Ethereum, keysignPayload, signature }).catch(value => value)
+
+    expect(error).toBeInstanceOf(BroadcastPartialFailureError)
+    expect(error).toMatchObject({
+      broadcastedTxHashes: ['approve-node-hash'],
+      submittedTxCount: 1,
+      failedInputIndex: 1,
+      originalError: cause,
+    })
+    expect(mockCoreBroadcastTx).toHaveBeenCalledOnce()
+  })
+
+  it('exposes a partial failure when decoding a later input fails', async () => {
+    const cause = new Error('swap decoding failed')
+    mockGetEncodedSigningInputs.mockResolvedValue(['approve-input', 'swap-input'])
+    mockCompileTx.mockImplementation(({ txInputData }) => txInputData)
+    mockDecodeSigningOutput.mockImplementation((_chain, tx) => {
+      if (tx === 'swap-input') throw cause
+      return tx
+    })
+    mockCoreBroadcastTx.mockResolvedValue(broadcastAccepted('approve-node-hash'))
+
+    const error = await service.broadcastTx({ chain: Chain.Ethereum, keysignPayload, signature }).catch(value => value)
+
+    expect(error).toBeInstanceOf(BroadcastPartialFailureError)
+    expect(error).toMatchObject({
+      broadcastedTxHashes: ['approve-node-hash'],
+      submittedTxCount: 1,
+      failedInputIndex: 1,
+      originalError: cause,
+    })
+    expect(mockCoreBroadcastTx).toHaveBeenCalledOnce()
+  })
+
+  it('exposes a partial failure when an accepted transaction hash cannot be derived', async () => {
+    const cause = new Error('hash derivation failed')
+    mockCoreBroadcastTx.mockResolvedValue(broadcastAccepted())
+    mockGetTxHash.mockRejectedValue(cause)
+
+    const error = await service.broadcastTx({ chain: Chain.Ethereum, keysignPayload, signature }).catch(value => value)
+
+    expect(error).toBeInstanceOf(BroadcastPartialFailureError)
+    expect(error).toMatchObject({
+      broadcastedTxHashes: [],
+      submittedTxCount: 1,
+      failedInputIndex: 0,
+      originalError: cause,
+      message: expect.stringContaining('after 1 transaction(s) were submitted'),
+    })
   })
 
   it('wraps a broadcast failure in a BroadcastFailed VaultError', async () => {
@@ -325,18 +410,20 @@ describe('BroadcastService', () => {
       approvalConfirmationTimeoutMs: 100,
     })
 
-    await expect(
-      approvalService.broadcastTx({
+    const error = await approvalService
+      .broadcastTx({
         chain: Chain.Ethereum,
         keysignPayload: { erc20ApprovePayload: {} } as KeysignPayload,
         signature,
       })
-    ).rejects.toMatchObject({
-      code: VaultErrorCode.BroadcastFailed,
-      message: expect.stringContaining('Approval tx failed'),
+      .catch(value => value)
+
+    expect(error).toBeInstanceOf(BroadcastPartialFailureError)
+    expect(error).toMatchObject({
+      broadcastedTxHashes: ['0xapproval'],
+      failedInputIndex: 0,
       originalError: expect.objectContaining({
-        broadcastedTxHashes: ['0xapproval'],
-        failedInputIndex: 0,
+        message: 'Approval tx failed: 0xapproval',
       }),
     })
 
@@ -356,18 +443,20 @@ describe('BroadcastService', () => {
       approvalConfirmationTimeoutMs: 0,
     })
 
-    await expect(
-      approvalService.broadcastTx({
+    const error = await approvalService
+      .broadcastTx({
         chain: Chain.Ethereum,
         keysignPayload: { erc20ApprovePayload: {} } as KeysignPayload,
         signature,
       })
-    ).rejects.toMatchObject({
-      code: VaultErrorCode.BroadcastFailed,
-      message: expect.stringContaining('Approval tx not confirmed within 0s'),
+      .catch(value => value)
+
+    expect(error).toBeInstanceOf(BroadcastPartialFailureError)
+    expect(error).toMatchObject({
+      broadcastedTxHashes: ['0xapproval'],
+      failedInputIndex: 0,
       originalError: expect.objectContaining({
-        broadcastedTxHashes: ['0xapproval'],
-        failedInputIndex: 0,
+        message: expect.stringContaining('Approval tx not confirmed within 0s'),
       }),
     })
 
@@ -387,18 +476,20 @@ describe('BroadcastService', () => {
       approvalConfirmationTimeoutMs: 20,
     })
 
-    await expect(
-      approvalService.broadcastTx({
+    const error = await approvalService
+      .broadcastTx({
         chain: Chain.Ethereum,
         keysignPayload: { erc20ApprovePayload: {} } as KeysignPayload,
         signature,
       })
-    ).rejects.toMatchObject({
-      code: VaultErrorCode.BroadcastFailed,
-      message: expect.stringContaining('Approval tx not confirmed within 0.02s'),
+      .catch(value => value)
+
+    expect(error).toBeInstanceOf(BroadcastPartialFailureError)
+    expect(error).toMatchObject({
+      broadcastedTxHashes: ['0xapproval'],
+      failedInputIndex: 0,
       originalError: expect.objectContaining({
-        broadcastedTxHashes: ['0xapproval'],
-        failedInputIndex: 0,
+        message: expect.stringContaining('Approval tx not confirmed within 0.02s'),
       }),
     })
 
