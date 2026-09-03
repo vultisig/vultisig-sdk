@@ -62,15 +62,19 @@ const computeExitCodeReasons: Record<number, TonTxFailureReason> = {
 }
 
 /**
- * Action-phase result codes. 36 here means an invalid destination — it is not
- * the wallet's `expired` (36), which can only come from the compute phase. 37
- * and 40 are the two shapes of "not enough TON": for the value itself, and for
- * the gas that carries the message.
+ * Action-phase result codes that mean one thing. 36 here is an invalid destination,
+ * not the wallet's `expired` (36), which can only come from the compute phase. 37 is
+ * "Not enough GRAMs" and says so on its own.
+ *
+ * 40 is deliberately absent. It reads "Cannot process a message — not enough funds,
+ * the message is too large, or its Merkle depth is too big", so naming it a funding
+ * failure would send a user to top up their balance when the payload is what has to
+ * change. Codes like it fall through to `no_funds` below, the only authoritative
+ * funding signal in the phase.
  */
 const actionResultCodeReasons: Record<number, TonTxFailureReason> = {
   36: 'invalid-destination',
   37: 'insufficient-funds',
-  40: 'insufficient-funds',
 }
 
 /**
@@ -96,7 +100,7 @@ const failureMessages: Record<TonTxFailureReason, string> = {
   'jetton-unauthorized':
     'The token contract refused the transfer because this wallet is not allowed to move these tokens.',
   'action-failed':
-    'The wallet accepted the transaction but could not carry out the transfer, so nothing was sent. The network fee was still charged. Check the balance and try again.',
+    'The wallet accepted the transaction but could not carry out the transfer, so nothing was sent. The network fee was still charged. Check the transaction and try again.',
   aborted: 'The network aborted this transaction before it could carry out the transfer.',
   'contract-rejected': 'The contract rejected the transaction.',
 }
@@ -128,9 +132,11 @@ type TonActionPhaseOutcome = {
 }
 
 /**
- * Classifies a failed action phase. A non-zero result code is the most specific
- * signal; `no_funds` without one still means the transfer could not be paid
- * for; a skipped or unsuccessful action with neither is a generic no-op send.
+ * Classifies a failed action phase. A result code the table names wins; an
+ * unnamed one is read as a funding failure only when `no_funds` backs it, and
+ * otherwise stays generic with the code attached. `no_funds` without any code
+ * still means the transfer could not be paid for, and a skipped or unsuccessful
+ * action with neither is a generic no-op send.
  */
 export const getTonActionFailure = (action: TonActionPhaseOutcome | undefined): TonTxFailure | undefined => {
   if (!action) return undefined
@@ -138,7 +144,10 @@ export const getTonActionFailure = (action: TonActionPhaseOutcome | undefined): 
   const { success, no_funds, result_code, skipped_actions } = action
 
   if (result_code !== undefined && result_code !== 0) {
-    return makeFailure(actionResultCodeReasons[result_code] ?? 'action-failed', 'action', result_code)
+    // A code the table does not name is a funding failure only when the node says so.
+    const reason = actionResultCodeReasons[result_code] ?? (no_funds === true ? 'insufficient-funds' : 'action-failed')
+
+    return makeFailure(reason, 'action', result_code)
   }
 
   if (no_funds === true) return makeFailure('insufficient-funds', 'action')

@@ -66,9 +66,30 @@ describe('getTonActionFailure', () => {
     })
   })
 
-  it.each([37, 40])('reads result code %i as insufficient funds', resultCode => {
-    expect(getTonActionFailure({ result_code: resultCode })).toMatchObject({ reason: 'insufficient-funds' })
-    expect(getTonActionFailure({ result_code: resultCode })?.message).toMatch(/0\.05 TON/)
+  it('reads result code 37 as insufficient funds on its own — it means exactly that', () => {
+    expect(getTonActionFailure({ result_code: 37 })).toMatchObject({ reason: 'insufficient-funds' })
+    expect(getTonActionFailure({ result_code: 37 })?.message).toMatch(/0\.05 TON/)
+  })
+
+  // 40 is "not enough funds, the message is too large, or its Merkle depth is too
+  // big". Reading every 40 as a funding failure would tell someone to top up when the
+  // payload is what has to shrink.
+  it('leaves result code 40 generic unless the node reports no funds', () => {
+    expect(getTonActionFailure({ success: false, result_code: 40 })).toMatchObject({
+      reason: 'action-failed',
+      phase: 'action',
+      exitCode: 40,
+    })
+    expect(getTonActionFailure({ success: false, result_code: 40 })?.message).not.toMatch(/0\.05 TON/)
+
+    expect(getTonActionFailure({ success: false, no_funds: true, result_code: 40 })).toMatchObject({
+      reason: 'insufficient-funds',
+      exitCode: 40,
+    })
+  })
+
+  it('does not send an oversized-message failure to top up its balance', () => {
+    expect(getTonActionFailure({ success: false, result_code: 40 })?.message).not.toMatch(/balance/i)
   })
 
   it('reads no_funds without a result code as insufficient funds', () => {
