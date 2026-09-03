@@ -5,7 +5,9 @@ import { attempt } from '@vultisig/lib-utils/attempt'
 
 import { TxReceiptInfo, TxStatusResolver } from '../resolver'
 
-const getDeliveredReceipt = (deliveredAmount: unknown): Partial<TxReceiptInfo> => {
+const getDeliveredReceipt = (meta: Record<string, unknown>): Partial<TxReceiptInfo> => {
+  const deliveredAmount = 'delivered_amount' in meta ? meta.delivered_amount : meta.DeliveredAmount
+
   if (typeof deliveredAmount === 'string') {
     return /^\d+$/.test(deliveredAmount)
       ? {
@@ -19,7 +21,26 @@ const getDeliveredReceipt = (deliveredAmount: unknown): Partial<TxReceiptInfo> =
     return {}
   }
 
-  const { value, currency, issuer } = deliveredAmount as Record<string, unknown>
+  const { value, currency, issuer, mpt_issuance_id: mptIssuanceId } = deliveredAmount as Record<string, unknown>
+  if ('mpt_issuance_id' in deliveredAmount) {
+    if (
+      typeof value === 'string' &&
+      /^\d{1,19}$/.test(value) &&
+      BigInt(value) <= 9_223_372_036_854_775_807n &&
+      typeof mptIssuanceId === 'string' &&
+      /^[A-F0-9]{48}$/i.test(mptIssuanceId) &&
+      currency === undefined &&
+      issuer === undefined
+    ) {
+      return {
+        deliveredAmount: value,
+        deliveredMptIssuanceId: mptIssuanceId,
+      }
+    }
+
+    return {}
+  }
+
   if (
     typeof value !== 'string' ||
     !/^\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(value) ||
@@ -60,8 +81,8 @@ export const getRippleTxStatus: TxStatusResolver<OtherChain.Ripple> = async ({ h
 
   const { validated, meta, tx_json } = response.result as {
     validated?: boolean
-    meta?: { TransactionResult?: string; delivered_amount?: unknown }
-    tx_json?: { Fee?: string }
+    meta?: { TransactionResult?: string; delivered_amount?: unknown; DeliveredAmount?: unknown }
+    tx_json?: { Fee?: string; TransactionType?: string }
   }
 
   if (validated) {
@@ -74,7 +95,7 @@ export const getRippleTxStatus: TxStatusResolver<OtherChain.Ripple> = async ({ h
     const status = success ? 'success' : 'error'
     const feeStr = tx_json?.Fee
     const feeCoin = chainFeeCoin[Chain.Ripple]
-    const deliveredReceipt = success ? getDeliveredReceipt(meta?.delivered_amount) : {}
+    const deliveredReceipt = success && tx_json?.TransactionType === 'Payment' ? getDeliveredReceipt(meta) : {}
     const receipt =
       feeStr != null && feeStr !== ''
         ? {
