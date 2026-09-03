@@ -301,6 +301,13 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.parseThorSwapMemo).toBe('function')
   })
 
+  it('exports the canonical LI.FI fee-chain resolver from the root sdk surface', async () => {
+    const { lifiSwapChainId } = await import('@vultisig/core-chain/swap/general/lifi/LifiSwapEnabledChains')
+
+    expect(typeof sdk.resolveSwapFeeChain).toBe('function')
+    expect(sdk.resolveSwapFeeChain(lifiSwapChainId[sdk.Chain.Ethereum], sdk.Chain.Solana)).toBe(sdk.Chain.Ethereum)
+  })
+
   it('exports the shared THORChain secured-asset catalog helpers', () => {
     expect(typeof sdk.getThorchainSecuredAssetCatalog).toBe('function')
     expect(typeof sdk.createThorchainSecuredAssetCatalog).toBe('function')
