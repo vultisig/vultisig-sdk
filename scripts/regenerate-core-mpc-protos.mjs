@@ -6,7 +6,9 @@ import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const typesDir = join(repoRoot, 'packages/core/mpc/types')
+const coreTypesDir = join(repoRoot, 'packages/core/mpc/types')
+const sharedTypesDir = join(repoRoot, 'packages/mpc-types/src/types')
+const compatibilityWrappers = new Set([join(coreTypesDir, 'vultisig/keysign/v1/wasm_execute_contract_payload_pb.ts')])
 
 const usage = `
 Usage:
@@ -32,26 +34,40 @@ const walk = dir =>
     return entry.isFile() ? [path] : []
   })
 
-const generatedFiles = walk(typesDir)
-  .filter(file => file.endsWith('_pb.ts'))
-  .filter(file => !file.includes('/types/utils/'))
+const sourceFilesFrom = dir =>
+  walk(dir)
+    .filter(file => file.endsWith('_pb.ts'))
+    .filter(file => !file.includes('/types/utils/'))
+    .filter(file => !compatibilityWrappers.has(file))
+    .map(file => {
+      const lines = readFileSync(file, 'utf8').split(/\r?\n/)
+      const match = lines[1]?.match(/^\/\/ @generated from file (.+?) \(/)
+      if (!match) {
+        throw new Error(`Missing @generated from file header in ${file}`)
+      }
+      return match[1]
+    })
 
-const sourceFiles = generatedFiles.map(file => {
-  const lines = readFileSync(file, 'utf8').split(/\r?\n/)
-  const match = lines[1]?.match(/^\/\/ @generated from file (.+?) \(/)
-  if (!match) {
-    throw new Error(`Missing @generated from file header in ${file}`)
-  }
-  return match[1]
-})
+const coreSourceFiles = sourceFilesFrom(coreTypesDir)
+const sharedSourceFiles = sourceFilesFrom(sharedTypesDir)
 
 const groups = [
   {
-    name: 'vultisig/commondata',
+    name: 'vultisig/commondata core-mpc types',
     env: 'COMMONDATA_DIR',
     requiredFile: 'vultisig/keysign/v1/keysign_message.proto',
-    files: sourceFiles.filter(file => file.startsWith('vultisig/')).sort(),
+    files: coreSourceFiles.filter(file => file.startsWith('vultisig/')).sort(),
     out: 'packages/core/mpc/types',
+    protocGenEsVersion: '2.11.0',
+    opts: ['target=ts'],
+    rootCandidates: ['', 'proto', 'protos'],
+  },
+  {
+    name: 'vultisig/commondata shared signing types',
+    env: 'COMMONDATA_DIR',
+    requiredFile: 'vultisig/keysign/v1/wasm_execute_contract_payload.proto',
+    files: sharedSourceFiles.filter(file => file.startsWith('vultisig/')).sort(),
+    out: 'packages/mpc-types/src/types',
     protocGenEsVersion: '2.11.0',
     opts: ['target=ts'],
     rootCandidates: ['', 'proto', 'protos'],
@@ -60,7 +76,7 @@ const groups = [
     name: 'vultisig/recipes plugin types',
     env: 'RECIPES_DIR',
     requiredFile: 'policy.proto',
-    files: sourceFiles.filter(file => !file.startsWith('vultisig/')).sort(),
+    files: coreSourceFiles.filter(file => !file.startsWith('vultisig/')).sort(),
     out: 'packages/core/mpc/types/plugin',
     protocGenEsVersion: '2.10.2',
     opts: ['target=ts', 'json_types=true'],

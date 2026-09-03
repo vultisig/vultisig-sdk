@@ -60,6 +60,7 @@ const transferSourceFixtures: TransferSourceFixture[] = [
 
 describe('getSwapKitQuote', () => {
   beforeEach(() => {
+    resetSwapKitProvidersCache()
     mockScanAddressWithBlockaid.mockReset()
     mockScanAddressWithBlockaid.mockResolvedValue({ resultType: 'Benign', features: ['trusted'] })
   })
@@ -67,6 +68,99 @@ describe('getSwapKitQuote', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     configureSwapKit({ apiKey: undefined, baseUrl: 'https://api.vultisig.com/swapkit-win' })
+  })
+
+  const evmQuoteResponse = () =>
+    response({ routes: [{ routeId: 'catalog-route', providers: ['FLASHNET'], expectedBuyAmount: '1' }] })
+
+  const evmSwapResponse = () =>
+    response({
+      expectedBuyAmount: '1',
+      providers: ['FLASHNET'],
+      targetAddress: EVM_TARGET_ADDRESS,
+      tx: { from: '0xsender', to: EVM_TARGET_ADDRESS, data: '0xabcdef', value: '0', gas: '21000' },
+    })
+
+  const stubStaticEvmRoute = () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(evmQuoteResponse()).mockResolvedValueOnce(evmSwapResponse())
+    vi.stubGlobal('fetch', fetchMock)
+    configureSwapKit({ baseUrl: 'https://swapkit.example' })
+
+    return fetchMock
+  }
+
+  const stubCatalogEvmRoute = ({ providerChainId, assetPrefix }: { providerChainId: string; assetPrefix: string }) => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(response([{ provider: 'FLASHNET', supportedChainIds: [providerChainId] }]))
+      .mockResolvedValueOnce(
+        response({ provider: 'FLASHNET', tokens: [{ chain: assetPrefix, chainId: providerChainId }] })
+      )
+      .mockResolvedValueOnce(evmQuoteResponse())
+      .mockResolvedValueOnce(evmSwapResponse())
+
+    vi.stubGlobal('fetch', fetchMock)
+    configureSwapKit({ baseUrl: 'https://swapkit.example' })
+
+    return fetchMock
+  }
+
+  it('quotes a HyperEVM source with the live-confirmed HYPEREVM/999 identifiers', async () => {
+    const fetchMock = stubStaticEvmRoute()
+
+    const quote = await getSwapKitQuote({
+      from: { chain: Chain.Hyperliquid, address: '0xsender', ticker: 'HYPE', decimals: 18 },
+      to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
+      amount: 1_000_000_000_000_000_000n,
+    })
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({
+      sellAsset: 'HYPEREVM.HYPE',
+      buyAsset: 'ETH.ETH',
+    })
+    expect(quote.provider).toBe('swapkit')
+    expect(mockScanAddressWithBlockaid).toHaveBeenCalledWith(EVM_TARGET_ADDRESS, 'hyperevm')
+  })
+
+  it('quotes Robinhood as a destination with the live-confirmed HOOD/4663 identifiers', async () => {
+    const fetchMock = stubStaticEvmRoute()
+
+    await getSwapKitQuote({
+      from: { chain: Chain.Ethereum, address: '0xsender', ticker: 'ETH', decimals: 18 },
+      to: { chain: Chain.Robinhood, address: '0xdestination', ticker: 'ETH', decimals: 18 },
+      amount: 1_000_000_000_000_000_000n,
+    })
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({
+      sellAsset: 'ETH.ETH',
+      buyAsset: 'HOOD.ETH',
+    })
+  })
+
+  it('rejects Robinhood as a source before any catalog or quote request', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      getSwapKitQuote({
+        from: { chain: Chain.Robinhood, address: '0xsender', ticker: 'ETH', decimals: 18 },
+        to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
+        amount: 1_000_000_000_000_000_000n,
+      })
+    ).rejects.toThrow('unavailable without safe signing and Blockaid coverage')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('quotes a catalog-recognized EVM destination without a SwapKit enabled-list row', async () => {
+    const fetchMock = stubCatalogEvmRoute({ providerChainId: '81457', assetPrefix: 'BLAST' })
+
+    await getSwapKitQuote({
+      from: { chain: Chain.Ethereum, address: '0xsender', ticker: 'ETH', decimals: 18 },
+      to: { chain: Chain.Blast, address: '0xdestination', ticker: 'ETH', decimals: 18 },
+      amount: 1_000_000_000_000_000_000n,
+    })
+
+    expect(JSON.parse(fetchMock.mock.calls[2][1].body).buyAsset).toBe('BLAST.ETH')
   })
 
   it('quotes and builds an EVM transaction while filtering native THOR/Maya routes', async () => {

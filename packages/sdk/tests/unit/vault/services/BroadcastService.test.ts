@@ -1,3 +1,6 @@
+import { inspect } from 'node:util'
+import { runInNewContext } from 'node:vm'
+
 import { Chain } from '@vultisig/core-chain/Chain'
 import { CosmosSequenceMismatchError } from '@vultisig/core-chain/tx/broadcast/cosmosSequenceMismatch'
 import { broadcastAccepted, broadcastFailed } from '@vultisig/core-chain/tx/broadcast/resolver'
@@ -5,6 +8,7 @@ import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Signature } from '@/types'
+import { formatBroadcastFailureReason, toSafeBroadcastError } from '@/vault/services/broadcastError'
 import { BroadcastPartialFailureError, BroadcastService } from '@/vault/services/BroadcastService'
 import { VaultErrorCode } from '@/vault/VaultError'
 
@@ -201,27 +205,117 @@ describe('BroadcastService', () => {
     const injectedBroadcaster = vi.fn().mockResolvedValue(broadcastAccepted())
     const injectedService = new BroadcastService(extractMessageHashes, wasmProvider, injectedBroadcaster)
 
-    await injectedService.broadcastTx({ chain: Chain.Ethereum, keysignPayload, signature })
+    await injectedService.broadcastTx({
+      chain: Chain.Ethereum,
+      keysignPayload,
+      signature,
+    })
 
     expect(injectedBroadcaster).toHaveBeenCalledTimes(2)
     expect(mockCoreBroadcastTx).not.toHaveBeenCalled()
   })
 
   it('carries already-broadcast hashes when a later input fails', async () => {
+    const signedRawTx = `0x${'ef'.repeat(256)}`
     mockGetEncodedSigningInputs.mockResolvedValue(['approve-input', 'swap-input'])
-    mockCoreBroadcastTx.mockResolvedValueOnce(broadcastAccepted()).mockRejectedValueOnce(new Error('swap rejected'))
+    mockCoreBroadcastTx
+      .mockResolvedValueOnce(broadcastAccepted())
+      .mockRejectedValueOnce(new Error(`swap rejected; raw=${signedRawTx}`))
     mockGetTxHash.mockResolvedValueOnce('approve-local-hash')
 
-    const promise = service.broadcastTx({ chain: Chain.Ethereum, keysignPayload, signature })
+    const error = await service.broadcastTx({ chain: Chain.Ethereum, keysignPayload, signature }).catch(value => value)
 
-    await expect(promise).rejects.toMatchObject({
-      code: VaultErrorCode.BroadcastFailed,
+    expect(error).toBeInstanceOf(BroadcastPartialFailureError)
+    expect(error).toMatchObject({
+      broadcastedTxHashes: ['approve-local-hash'],
+      submittedTxCount: 1,
+      failedInputIndex: 1,
       originalError: expect.objectContaining({
-        broadcastedTxHashes: ['approve-local-hash'],
-        failedInputIndex: 1,
+        message: 'swap rejected; raw=[signed transaction redacted]',
       }),
     })
-    await expect(promise).rejects.toHaveProperty('originalError', expect.any(BroadcastPartialFailureError))
+    expect(inspect(error, { depth: 10 })).not.toContain(signedRawTx)
+  })
+
+  it('exposes a partial failure when a later input returns a failed result', async () => {
+    const cause = new Error('swap rejected by RPC')
+    mockGetEncodedSigningInputs.mockResolvedValue(['approve-input', 'swap-input'])
+    mockCoreBroadcastTx.mockResolvedValueOnce(broadcastAccepted()).mockResolvedValueOnce(broadcastFailed(cause, false))
+    mockGetTxHash.mockResolvedValueOnce('approve-local-hash')
+
+    const error = await service.broadcastTx({ chain: Chain.Ethereum, keysignPayload, signature }).catch(value => value)
+
+    expect(error).toBeInstanceOf(BroadcastPartialFailureError)
+    expect(error).toMatchObject({
+      broadcastedTxHashes: ['approve-local-hash'],
+      submittedTxCount: 1,
+      failedInputIndex: 1,
+      originalError: expect.objectContaining({
+        cause,
+        message: expect.stringContaining('BROADCAST_REJECTED'),
+      }),
+    })
+  })
+
+  it('exposes a partial failure when compiling a later input fails', async () => {
+    const cause = new Error('swap compilation failed')
+    mockGetEncodedSigningInputs.mockResolvedValue(['approve-input', 'swap-input'])
+    mockCompileTx.mockImplementation(({ txInputData }) => {
+      if (txInputData === 'swap-input') throw cause
+      return txInputData
+    })
+    mockDecodeSigningOutput.mockImplementation((_chain, tx) => tx)
+    mockCoreBroadcastTx.mockResolvedValue(broadcastAccepted('approve-node-hash'))
+
+    const error = await service.broadcastTx({ chain: Chain.Ethereum, keysignPayload, signature }).catch(value => value)
+
+    expect(error).toBeInstanceOf(BroadcastPartialFailureError)
+    expect(error).toMatchObject({
+      broadcastedTxHashes: ['approve-node-hash'],
+      submittedTxCount: 1,
+      failedInputIndex: 1,
+      originalError: cause,
+    })
+    expect(mockCoreBroadcastTx).toHaveBeenCalledOnce()
+  })
+
+  it('exposes a partial failure when decoding a later input fails', async () => {
+    const cause = new Error('swap decoding failed')
+    mockGetEncodedSigningInputs.mockResolvedValue(['approve-input', 'swap-input'])
+    mockCompileTx.mockImplementation(({ txInputData }) => txInputData)
+    mockDecodeSigningOutput.mockImplementation((_chain, tx) => {
+      if (tx === 'swap-input') throw cause
+      return tx
+    })
+    mockCoreBroadcastTx.mockResolvedValue(broadcastAccepted('approve-node-hash'))
+
+    const error = await service.broadcastTx({ chain: Chain.Ethereum, keysignPayload, signature }).catch(value => value)
+
+    expect(error).toBeInstanceOf(BroadcastPartialFailureError)
+    expect(error).toMatchObject({
+      broadcastedTxHashes: ['approve-node-hash'],
+      submittedTxCount: 1,
+      failedInputIndex: 1,
+      originalError: cause,
+    })
+    expect(mockCoreBroadcastTx).toHaveBeenCalledOnce()
+  })
+
+  it('exposes a partial failure when an accepted transaction hash cannot be derived', async () => {
+    const cause = new Error('hash derivation failed')
+    mockCoreBroadcastTx.mockResolvedValue(broadcastAccepted())
+    mockGetTxHash.mockRejectedValue(cause)
+
+    const error = await service.broadcastTx({ chain: Chain.Ethereum, keysignPayload, signature }).catch(value => value)
+
+    expect(error).toBeInstanceOf(BroadcastPartialFailureError)
+    expect(error).toMatchObject({
+      broadcastedTxHashes: [],
+      submittedTxCount: 1,
+      failedInputIndex: 0,
+      originalError: cause,
+      message: expect.stringContaining('after 1 transaction(s) were submitted'),
+    })
   })
 
   it('wraps a broadcast failure in a BroadcastFailed VaultError', async () => {
@@ -233,8 +327,11 @@ describe('BroadcastService', () => {
     })
   })
 
-  it('maps a failed broadcast result while retaining its original cause', async () => {
-    const cause = new Error('RPC rejected the transaction')
+  it('maps a failed broadcast result without retaining a raw transaction in its cause chain', async () => {
+    const signedRawTx = `0x${'aa'.repeat(256)}`
+    const cause = new Error('execution reverted', {
+      cause: new Error(`RPC rejected the transaction; raw=${signedRawTx}`),
+    })
     mockCoreBroadcastTx.mockResolvedValue(broadcastFailed(cause, false))
 
     const error = await service.broadcastTx({ chain: Chain.Ethereum, keysignPayload, signature }).catch(value => value)
@@ -243,7 +340,25 @@ describe('BroadcastService', () => {
       code: VaultErrorCode.BroadcastFailed,
       message: expect.stringContaining('BROADCAST_REJECTED'),
     })
-    expect(error.originalError.cause).toBe(cause)
+    expect(inspect(error, { depth: 10 })).not.toContain(signedRawTx)
+  })
+
+  it('keeps the RPC rejection reason but removes the signed raw transaction from the public error', async () => {
+    const signedRawTx = `0x${'ab'.repeat(256)}`
+    const cause = Object.assign(new Error(`RPC request failed. Request body: ${signedRawTx}`), {
+      details: 'transaction gas price below minimum: gas tip cap 0, minimum needed 25000000000',
+    })
+    mockCoreBroadcastTx.mockResolvedValue(broadcastFailed(cause, false))
+
+    const error = await service.broadcastTx({ chain: Chain.Polygon, keysignPayload, signature }).catch(value => value)
+
+    expect(error).toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('gas tip cap 0, minimum needed 25000000000'),
+    })
+    expect(error.message).not.toContain(signedRawTx)
+    expect(error.toJSON().originalError).not.toContain(signedRawTx)
+    expect(inspect(error, { depth: 10 })).not.toContain(signedRawTx)
   })
 
   it('waits for ERC-20 approval confirmation before broadcasting the swap input', async () => {
@@ -295,18 +410,20 @@ describe('BroadcastService', () => {
       approvalConfirmationTimeoutMs: 100,
     })
 
-    await expect(
-      approvalService.broadcastTx({
+    const error = await approvalService
+      .broadcastTx({
         chain: Chain.Ethereum,
         keysignPayload: { erc20ApprovePayload: {} } as KeysignPayload,
         signature,
       })
-    ).rejects.toMatchObject({
-      code: VaultErrorCode.BroadcastFailed,
-      message: expect.stringContaining('Approval tx failed'),
+      .catch(value => value)
+
+    expect(error).toBeInstanceOf(BroadcastPartialFailureError)
+    expect(error).toMatchObject({
+      broadcastedTxHashes: ['0xapproval'],
+      failedInputIndex: 0,
       originalError: expect.objectContaining({
-        broadcastedTxHashes: ['0xapproval'],
-        failedInputIndex: 0,
+        message: 'Approval tx failed: 0xapproval',
       }),
     })
 
@@ -326,18 +443,20 @@ describe('BroadcastService', () => {
       approvalConfirmationTimeoutMs: 0,
     })
 
-    await expect(
-      approvalService.broadcastTx({
+    const error = await approvalService
+      .broadcastTx({
         chain: Chain.Ethereum,
         keysignPayload: { erc20ApprovePayload: {} } as KeysignPayload,
         signature,
       })
-    ).rejects.toMatchObject({
-      code: VaultErrorCode.BroadcastFailed,
-      message: expect.stringContaining('Approval tx not confirmed within 0s'),
+      .catch(value => value)
+
+    expect(error).toBeInstanceOf(BroadcastPartialFailureError)
+    expect(error).toMatchObject({
+      broadcastedTxHashes: ['0xapproval'],
+      failedInputIndex: 0,
       originalError: expect.objectContaining({
-        broadcastedTxHashes: ['0xapproval'],
-        failedInputIndex: 0,
+        message: expect.stringContaining('Approval tx not confirmed within 0s'),
       }),
     })
 
@@ -357,18 +476,20 @@ describe('BroadcastService', () => {
       approvalConfirmationTimeoutMs: 20,
     })
 
-    await expect(
-      approvalService.broadcastTx({
+    const error = await approvalService
+      .broadcastTx({
         chain: Chain.Ethereum,
         keysignPayload: { erc20ApprovePayload: {} } as KeysignPayload,
         signature,
       })
-    ).rejects.toMatchObject({
-      code: VaultErrorCode.BroadcastFailed,
-      message: expect.stringContaining('Approval tx not confirmed within 0.02s'),
+      .catch(value => value)
+
+    expect(error).toBeInstanceOf(BroadcastPartialFailureError)
+    expect(error).toMatchObject({
+      broadcastedTxHashes: ['0xapproval'],
+      failedInputIndex: 0,
       originalError: expect.objectContaining({
-        broadcastedTxHashes: ['0xapproval'],
-        failedInputIndex: 0,
+        message: expect.stringContaining('Approval tx not confirmed within 0.02s'),
       }),
     })
 
@@ -403,5 +524,128 @@ describe('BroadcastService', () => {
       message: expect.stringContaining('start a new signing ceremony'),
       originalError: expect.objectContaining({ cause: mismatch }),
     })
+  })
+})
+
+describe('formatBroadcastFailureReason', () => {
+  it('redacts a long signed payload when no structured RPC detail is available', () => {
+    const signedRawTx = `0x${'cd'.repeat(256)}`
+
+    expect(formatBroadcastFailureReason(new Error(`transaction rejected; raw=${signedRawTx}`))).toBe(
+      'transaction rejected; raw=[signed transaction redacted]'
+    )
+  })
+
+  it('removes a nested signed payload while preserving a well-formed transaction hash', () => {
+    const signedRawTx = `0x${'ab'.repeat(256)}`
+    const txHash = `0x${'cd'.repeat(32)}`
+    const cause = new Error(`execution reverted for ${txHash}`, {
+      cause: new Error(`request body: ${signedRawTx}`),
+    })
+
+    const safeError = toSafeBroadcastError(cause)
+    const inspected = inspect(safeError, { depth: 10 })
+
+    expect(inspected).not.toContain(signedRawTx)
+    expect(safeError.message).toContain(txHash)
+  })
+
+  it('does not preserve an error whose enumerable request field contains a signed payload', () => {
+    const signedRawTx = `0x${'ef'.repeat(256)}`
+    const cause = Object.assign(new Error('RPC rejected the transaction'), {
+      request: { body: signedRawTx },
+    })
+
+    const safeError = toSafeBroadcastError(cause)
+
+    expect(safeError).not.toBe(cause)
+    expect(inspect(safeError, { depth: 10 })).not.toContain(signedRawTx)
+  })
+
+  it('does not preserve signed payloads stored in Map fields', () => {
+    const signedRawTx = `0x${'12'.repeat(128)}`
+    const cause = Object.assign(new Error('RPC rejected the transaction'), {
+      request: new Map([['body', signedRawTx]]),
+    })
+
+    const safeError = toSafeBroadcastError(cause)
+
+    expect(safeError).not.toBe(cause)
+    expect(inspect(safeError, { depth: 10 })).not.toContain(signedRawTx)
+  })
+
+  it('does not preserve signed payloads stored in Set fields', () => {
+    const signedRawTx = `0x${'34'.repeat(128)}`
+    const cause = Object.assign(new Error('RPC rejected the transaction'), {
+      response: new Set([signedRawTx]),
+    })
+
+    const safeError = toSafeBroadcastError(cause)
+
+    expect(safeError).not.toBe(cause)
+    expect(inspect(safeError, { depth: 10 })).not.toContain(signedRawTx)
+  })
+
+  it.each([
+    ['Map', 'new Map([["body", signedRawTx]])'],
+    ['Set', 'new Set([signedRawTx])'],
+  ])('does not preserve signed payloads stored in cross-realm %s fields', (_name, expression) => {
+    const signedRawTx = `0x${'56'.repeat(128)}`
+    const container = runInNewContext(expression, { signedRawTx })
+    const cause = Object.assign(new Error('RPC rejected the transaction'), { container })
+
+    const safeError = toSafeBroadcastError(cause)
+
+    expect(container).not.toBeInstanceOf(expression.startsWith('new Map') ? Map : Set)
+    expect(safeError).not.toBe(cause)
+    expect(inspect(safeError, { depth: 10 })).not.toContain(signedRawTx)
+  })
+
+  it('does not preserve inherited custom inspectors', () => {
+    const signedRawTx = `0x${'78'.repeat(128)}`
+    class InspectableRequest {
+      [Symbol.for('nodejs.util.inspect.custom')]() {
+        return signedRawTx
+      }
+    }
+    const cause = Object.assign(new Error('RPC rejected the transaction'), {
+      request: new InspectableRequest(),
+    })
+
+    expect(inspect(cause, { depth: 10 })).toContain(signedRawTx)
+
+    const safeError = toSafeBroadcastError(cause)
+
+    expect(safeError).not.toBe(cause)
+    expect(inspect(safeError, { depth: 10 })).not.toContain(signedRawTx)
+  })
+
+  it.each([
+    ['ArrayBuffer', new Uint8Array(64).buffer],
+    ['ArrayBuffer view', new Uint8Array(64)],
+    ['cross-realm ArrayBuffer', runInNewContext('new Uint8Array(64).buffer')],
+    ['cross-realm ArrayBuffer view', runInNewContext('new Uint8Array(64)')],
+  ])('does not preserve inspectable binary payloads in %s fields', (_name, payload) => {
+    const cause = Object.assign(new Error('RPC rejected the transaction'), { payload })
+
+    expect(toSafeBroadcastError(cause)).not.toBe(cause)
+  })
+
+  it('does not preserve errors with inherited toJSON hooks', () => {
+    const signedRawTx = `0x${'79'.repeat(128)}`
+    class SerializableRpcError extends Error {
+      toJSON() {
+        return { rawTransaction: signedRawTx }
+      }
+    }
+    const cause = new SerializableRpcError('RPC rejected the transaction')
+
+    expect(JSON.stringify(cause)).toContain(signedRawTx)
+
+    const safeError = toSafeBroadcastError(cause)
+
+    expect(safeError).not.toBe(cause)
+    expect(JSON.stringify(safeError) ?? '').not.toContain(signedRawTx)
+    expect(inspect(safeError, { depth: 10 })).not.toContain(signedRawTx)
   })
 })
