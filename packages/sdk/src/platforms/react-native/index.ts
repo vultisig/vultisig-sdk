@@ -69,7 +69,10 @@ configureDefaultStorage(() => new ReactNativeStorage())
 
 // Chain enum and types
 export { Chain, IbcEnabledCosmosChain, VaultBasedCosmosChain } from '@vultisig/core-chain/Chain'
+export type { CoinFinderChainKind } from '@vultisig/core-chain/coin/find/CoinFinderChainKind'
+export { coinFinderChainKinds } from '@vultisig/core-chain/coin/find/CoinFinderChainKind'
 export { cosmosFeeCoinDenom } from '@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom'
+export { getCosmosChainByChainId, getCosmosChainId } from '@vultisig/core-chain/chains/cosmos/chainInfo'
 export {
   getCosmosAllowedFeeDenoms,
   isCosmosFeeDenomAllowed,
