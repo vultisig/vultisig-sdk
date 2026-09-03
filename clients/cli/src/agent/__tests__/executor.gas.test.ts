@@ -446,7 +446,32 @@ describe('AgentExecutor EIP-1559 fee refresh', () => {
         'fees adjusted after confirmation: maxPriorityFeePerGas 0 → 30000000000, maxFeePerGas 0 → 30000000000'
       )
     )
-    expect(fetchMock).toHaveBeenCalledOnce()
+    // Base-fee and priority-fee lookups are independent requests.
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('fills a zero tip from the live priority-fee RPC even when the base-fee RPC fails', async () => {
+    const payload = createEvmPayload()
+    payload.blockchainSpecific.value.maxFeePerGasWei = '0'
+    payload.blockchainSpecific.value.priorityFee = '0'
+    const executor = new AgentExecutor(createSigningVault(payload))
+    const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      const request = JSON.parse(String(init?.body)) as { method: string }
+      if (request.method === 'eth_getBlockByNumber') throw new Error('ECONNREFUSED')
+      return {
+        json: vi.fn().mockResolvedValue({ jsonrpc: '2.0', result: `0x${(40_000_000_000n).toString(16)}` }),
+        ok: true,
+        status: 200,
+      }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await (executor as unknown as EvmGasAccess).patchEvmGas(Chain.Polygon, payload)
+
+    // The live 40 gwei suggestion wins over the 30 gwei floor fallback.
+    expect(payload.blockchainSpecific.value.priorityFee).toBe('40000000000')
+    expect(payload.blockchainSpecific.value.maxFeePerGasWei).toBe('40000000000')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
   it('fills a zero Polygon tip from RPC and applies the pinned validator minimum', async () => {

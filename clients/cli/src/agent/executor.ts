@@ -2012,7 +2012,9 @@ export class AgentExecutor {
         )
       }
     } else {
-      const rpcPriorityFee = baseFee === null ? 0n : await this.fetchEvmPriorityFee(rpcUrl)
+      // The two RPCs fail independently — a dead eth_getBlockByNumber must not
+      // discard a live eth_maxPriorityFeePerGas suggestion.
+      const rpcPriorityFee = await this.fetchEvmPriorityFee(rpcUrl)
 
       const baseFeeFallback = baseFee === null ? 0n : baseFee / 10n
       const fallbackPriorityFee = baseFeeFallback < 2_000_000_000n ? baseFeeFallback : 2_000_000_000n
