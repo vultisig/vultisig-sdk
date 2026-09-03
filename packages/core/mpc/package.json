@@ -616,6 +616,11 @@
       "import": "./dist/keysign/swap/getKeysignLimitSwapOrder.js",
       "default": "./dist/keysign/swap/getKeysignLimitSwapOrder.js"
     },
+    "./keysign/swap/getKeysignSwapFeeFields": {
+      "types": "./dist/keysign/swap/getKeysignSwapFeeFields.d.ts",
+      "import": "./dist/keysign/swap/getKeysignSwapFeeFields.js",
+      "default": "./dist/keysign/swap/getKeysignSwapFeeFields.js"
+    },
     "./keysign/swap/getKeysignSwapPayload": {
       "types": "./dist/keysign/swap/getKeysignSwapPayload.d.ts",
       "import": "./dist/keysign/swap/getKeysignSwapPayload.js",

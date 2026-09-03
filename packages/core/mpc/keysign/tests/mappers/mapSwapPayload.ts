@@ -138,6 +138,17 @@ export const mapSwapPayload = (spRaw: any): KeysignPayload['swapPayload'] | unde
         memo: s.memo,
         subProvider: s.sub_provider ?? s.subProvider ?? '',
         swapId: s.swap_id ?? s.swapId ?? '',
+        // Provider fee and its coin context (proto fields 12-15), accepting
+        // either casing for the same reason the 1inch branch above does.
+        swapFee: String(s.swap_fee ?? s.swapFee ?? ''),
+        swapFeeChain: s.swap_fee_chain ?? s.swapFeeChain,
+        swapFeeTokenId: s.swap_fee_token_id ?? s.swapFeeTokenId,
+        swapFeeDecimals:
+          s.swap_fee_decimals != null
+            ? Number(s.swap_fee_decimals)
+            : s.swapFeeDecimals != null
+              ? Number(s.swapFeeDecimals)
+              : undefined,
       },
     }
 
