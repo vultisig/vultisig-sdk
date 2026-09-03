@@ -2,7 +2,7 @@ import { rootApiUrl } from '@vultisig/core-config'
 import { toBatches } from '@vultisig/lib-utils/array/toBatches'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
-import { tonAddressToRaw, tonAddressToRawKey } from './address'
+import { tonAddressToRawKey } from './address'
 
 const tonApiUrl = `${rootApiUrl}/ton`
 
@@ -74,8 +74,8 @@ const queryOwnerJettonWallet = async ({
   wallet?: JettonWallet
   addressBook: JettonWalletResponse['address_book']
 }> => {
-  const rawOwner = tonAddressToRaw(ownerAddress)
-  const rawMaster = tonAddressToRaw(jettonMasterAddress)
+  const rawOwner = tonAddressToRawKey(ownerAddress)
+  const rawMaster = tonAddressToRawKey(jettonMasterAddress)
 
   const url = `${tonApiUrl}/v3/jetton/wallets?owner_address=${rawOwner}&jetton_address=${rawMaster}`
   const response = await queryUrl<JettonWalletResponse>(url)
@@ -305,7 +305,9 @@ const ownerJettonWalletsMaxPages = 20
  * unfiltered lists).
  */
 export const getOwnerJettonWallets = async (ownerAddress: string): Promise<OwnerJettonWallets> => {
-  const rawOwner = tonAddressToRaw(ownerAddress)
+  // Accept the owner in either spelling: `tonAddressToRaw` alone would base64-decode
+  // a raw `0:hex` address into garbage and the proxy would answer with no wallets.
+  const rawOwner = tonAddressToRawKey(ownerAddress)
   const wallets: OwnerJettonWallet[] = []
   const masters: Record<string, JettonMasterMetadata> = {}
   const userFriendlyAddresses: Record<string, string> = {}

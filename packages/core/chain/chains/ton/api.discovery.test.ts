@@ -71,6 +71,24 @@ describe('getOwnerJettonWallets', () => {
     expect(result.userFriendlyAddresses[key]).toBe(USDT)
   })
 
+  it('discovers the same holdings for the raw and the user-friendly spelling of an owner', async () => {
+    queryUrlMock.mockResolvedValue({
+      jetton_wallets: [walletEntry(RAW_USDT)],
+      address_book: { [RAW_USDT]: { user_friendly: USDT } },
+      metadata: { [RAW_USDT]: { is_indexed: true, token_info: [usdtTokenInfo] } },
+    })
+
+    const fromFriendly = await getOwnerJettonWallets(OWNER)
+    const fromRaw = await getOwnerJettonWallets(RAW_OWNER)
+    const fromLowerCaseRaw = await getOwnerJettonWallets(RAW_OWNER.toLowerCase())
+
+    const requestedOwners = queryUrlMock.mock.calls.map(([url]) => readParam(url as string, 'owner_address'))
+    expect(new Set(requestedOwners)).toEqual(new Set([RAW_OWNER.toLowerCase()]))
+    expect(fromRaw).toEqual(fromFriendly)
+    expect(fromLowerCaseRaw).toEqual(fromFriendly)
+    expect(fromFriendly.wallets).toHaveLength(1)
+  })
+
   it('drops wallets that belong to someone else when the proxy returns an unfiltered list', async () => {
     queryUrlMock.mockResolvedValue({
       jetton_wallets: [walletEntry(RAW_USDT, `0:${'F'.repeat(64)}`), walletEntry(rawAddress(7))],
