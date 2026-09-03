@@ -470,6 +470,18 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     })
   })
 
+  it('re-exports the pure EVM and Solana tx builders from the RN entrypoint by identity', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const evm = await import('../../../../src/platforms/react-native/chains/evm')
+    const solana = await import('../../../../src/platforms/react-native/chains/solana')
+
+    expect(rn.buildEvmSendTx).toBe(evm.buildEvmSendTx)
+    expect(rn.buildErc20TransferTx).toBe(evm.buildErc20TransferTx)
+    expect(rn.buildErc20ApproveTx).toBe(evm.buildErc20ApproveTx)
+    expect(rn.buildEvmContractCallTx).toBe(evm.buildEvmContractCallTx)
+    expect(rn.buildSolanaSendTx).toBe(solana.buildSolanaSendTx)
+  })
+
   it('re-exports the root River helper family on the RN entrypoint', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
     const river = await import('../../../../src/tools/defi/river')

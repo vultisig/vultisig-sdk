@@ -438,6 +438,14 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.buildCosmosWasmExecuteTx).toBe('function')
   })
 
+  it('exports the pure EVM and Solana tx builders from the root SDK surface', () => {
+    expect(typeof sdk.buildSolanaSendTx).toBe('function')
+    expect(typeof sdk.buildEvmSendTx).toBe('function')
+    expect(typeof sdk.buildErc20TransferTx).toBe('function')
+    expect(typeof sdk.buildErc20ApproveTx).toBe('function')
+    expect(typeof sdk.buildEvmContractCallTx).toBe('function')
+  })
+
   it('VaultBase prototype exposes prep-only primitives used by mcp-ts execute_* tools', () => {
     // prepareSendTx / prepareSwapTx / prepareContractCallTx are public instance
     // methods on VaultBase — they build a KeysignPayload without broadcasting.

@@ -1229,6 +1229,25 @@ export {
 export type { BuildCosmosWasmExecuteOptions, CosmosTxBuilderResult } from './platforms/react-native/chains/cosmos/tx'
 export { buildCosmosWasmExecuteTx } from './platforms/react-native/chains/cosmos/tx'
 
+// The RN-native Solana/EVM tx builders are also environment-neutral pure
+// builders despite their historical RN path. Export them from the root so
+// CLI/backend consumers stop deep-importing or re-implementing tx assembly.
+export type { BuildSolanaSendOptions, SolanaTxBuilderResult } from './platforms/react-native/chains/solana/tx'
+export { buildSolanaSendTx } from './platforms/react-native/chains/solana/tx'
+export type {
+  BuildErc20ApproveOptions,
+  BuildErc20TransferOptions,
+  BuildEvmContractCallOptions,
+  BuildEvmSendOptions,
+  EvmTxBuilderResult,
+} from './platforms/react-native/chains/evm/tx'
+export {
+  buildErc20ApproveTx,
+  buildErc20TransferTx,
+  buildEvmContractCallTx,
+  buildEvmSendTx,
+} from './platforms/react-native/chains/evm/tx'
+
 // Vault-bound gas/fee estimation (chain-specific fee floor for a loaded vault).
 // The pure read-only per-chain gas price lives in `evmGasPrice` above; this
 // service is exposed for callers that already hold a vault and need the richer
