@@ -18,7 +18,11 @@ export type PrepareTrc20TransferFromKeysParams = {
   to: string
   /** Amount in token base units (integer string). */
   amount: string
-  /** Optional memo (THORChain swap memo, exchange deposit memo). Maps to the TRON proto `data` field. */
+  /**
+   * Unsupported for this pure calldata descriptor. TRC-20 `parameter` is only
+   * the ABI payload for `transfer(address,uint256)`; callers that need Tron
+   * transaction-level `raw_data.data` must use the lower-level Tron tx builder.
+   */
   memo?: string
   /**
    * Energy/bandwidth cost ceiling for the TriggerSmartContract, in SUN.
@@ -52,8 +56,6 @@ export type UnsignedTrc20Transfer = {
   feeLimitSun: string
   /** Amount in token base units. */
   amount: string
-  /** Optional memo (maps to proto `data`). */
-  memo?: string
 }
 
 const DEFAULT_FEE_LIMIT_SUN = '100000000' // 100 TRX
@@ -85,6 +87,12 @@ const DEFAULT_FEE_LIMIT_SUN = '100000000' // 100 TRX
  */
 export const prepareTrc20TransferFromKeys = (params: PrepareTrc20TransferFromKeysParams): UnsignedTrc20Transfer => {
   const { contractAddress, from, to, amount, memo, feeLimitSun } = params
+
+  if (memo !== undefined) {
+    throw new Error(
+      'prepareTrc20TransferFromKeys: memo is not supported for TRC-20 calldata descriptors; use buildTrc20TransferTx data for Tron transaction-level memo bytes'
+    )
+  }
 
   // Validate every address as TRON base58check up-front (throws on bad
   // checksum / wrong prefix / wrong length). This is the fund-safety gate:
@@ -151,6 +159,5 @@ export const prepareTrc20TransferFromKeys = (params: PrepareTrc20TransferFromKey
     // Echo the canonical decimal (not the raw input) so the descriptor's
     // displayed amount is byte-identical to what the calldata encodes.
     amount: canonicalAmount,
-    ...(memo ? { memo } : {}),
   }
 }
