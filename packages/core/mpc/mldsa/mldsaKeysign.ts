@@ -5,7 +5,7 @@ import { base64Encode } from '@vultisig/lib-utils/base64Encode'
 import { getMessageHash } from '../getMessageHash'
 import { deleteMpcRelayMessage } from '../message/relay/delete'
 import { getMpcRelayMessages } from '../message/relay/get'
-import { sendMpcRelayMessage } from '../message/relay/send'
+import { runMpcRelayProcessing, sendMpcRelayMessages } from '../message/relay/send'
 import { fromMpcServerMessage, toMpcServerMessage } from '../message/server'
 import { waitForSetupMessage } from '../message/setup/get'
 import { uploadMpcSetupMessage } from '../message/setup/upload'
@@ -59,46 +59,52 @@ export class MldsaKeysign {
     this.timeoutMs = input.timeoutMs ?? 60000
   }
 
-  private async processOutbound(session: SignSession, messageId: string): Promise<boolean> {
-    try {
-      const message = session.outputMessage()
-      if (message === undefined) {
-        if (this.isKeysignComplete) {
-          return true
-        }
-        await sleep(100)
-        return this.processOutbound(session, messageId)
+  private async processOutbound(session: SignSession, signal: AbortSignal, messageId: string): Promise<boolean> {
+    if (signal.aborted) {
+      return true
+    }
+
+    const message = session.outputMessage()
+    if (message === undefined) {
+      if (this.isKeysignComplete) {
+        return true
       }
 
-      const body = toMpcServerMessage(message.body, this.hexEncryptionKey)
-
-      message.receivers.forEach(receiver => {
-        sendMpcRelayMessage({
-          serverUrl: this.serverURL,
-          sessionId: this.sessionId,
-          message: {
-            session_id: this.sessionId,
-            from: this.localPartyId,
-            to: [receiver],
-            body,
-            hash: getMessageHash(base64Encode(message.body)),
-            sequence_no: this.sequenceNo,
-          },
-          messageId,
-        })
-        this.sequenceNo++
-      })
-
       await sleep(100)
-      return this.processOutbound(session, messageId)
-    } catch (error) {
-      console.error('MLDSA keysign processOutbound error:', error)
-      await sleep(100)
-      return this.processOutbound(session, messageId)
+      return this.processOutbound(session, signal, messageId)
     }
+
+    const body = toMpcServerMessage(message.body, this.hexEncryptionKey)
+
+    this.sequenceNo = await sendMpcRelayMessages({
+      serverUrl: this.serverURL,
+      sessionId: this.sessionId,
+      messageId,
+      receivers: message.receivers,
+      sequenceNo: this.sequenceNo,
+      message: {
+        session_id: this.sessionId,
+        from: this.localPartyId,
+        body,
+        hash: getMessageHash(base64Encode(message.body)),
+      },
+      signal,
+    })
+
+    await sleep(100)
+    return this.processOutbound(session, signal, messageId)
   }
 
-  private async processInbound(session: SignSession, start: number, messageId: string): Promise<boolean> {
+  private async processInbound(
+    session: SignSession,
+    signal: AbortSignal,
+    start: number,
+    messageId: string
+  ): Promise<boolean> {
+    if (signal.aborted) {
+      return false
+    }
+
     try {
       const elapsed = Date.now() - start
       if (elapsed > this.timeoutMs * 2) {
@@ -111,14 +117,22 @@ export class MldsaKeysign {
         localPartyId: this.localPartyId,
         sessionId: this.sessionId,
         messageId,
+        signal,
       })
+      if (signal.aborted) {
+        return false
+      }
 
       if (parsedMessages.length === 0) {
         await sleep(100)
-        return this.processInbound(session, start, messageId)
+        return this.processInbound(session, signal, start, messageId)
       }
 
       for (const msg of parsedMessages) {
+        if (signal.aborted) {
+          return false
+        }
+
         const cacheKey = `${msg.session_id}-${msg.from}-${msg.hash}`
         if (this.cache[cacheKey]) {
           continue
@@ -139,15 +153,19 @@ export class MldsaKeysign {
           sessionId: this.sessionId,
           messageHash: msg.hash,
           messageId,
+          signal,
         })
       }
 
       await sleep(100)
-      return this.processInbound(session, start, messageId)
+      return this.processInbound(session, signal, start, messageId)
     } catch (error) {
+      if (signal.aborted) {
+        return false
+      }
       console.error('MLDSA keysign processInbound error:', error)
       await sleep(100)
-      return this.processInbound(session, start, messageId)
+      return this.processInbound(session, signal, start, messageId)
     }
   }
 
@@ -185,9 +203,10 @@ export class MldsaKeysign {
     const session = new SignSession(setupMessage, this.localPartyId, keyShare)
 
     const start = Date.now()
-    const outbound = this.processOutbound(session, messageId)
-    const inbound = this.processInbound(session, start, messageId)
-    const [, inboundResult] = await Promise.all([outbound, inbound])
+    const inboundResult = await runMpcRelayProcessing({
+      processOutbound: signal => this.processOutbound(session, signal, messageId),
+      processInbound: signal => this.processInbound(session, signal, start, messageId),
+    })
 
     if (inboundResult) {
       const signature = session.finish()

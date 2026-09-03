@@ -6,7 +6,7 @@ import { getKeygenThreshold } from '../getKeygenThreshold'
 import { getMessageHash } from '../getMessageHash'
 import { deleteMpcRelayMessage } from '../message/relay/delete'
 import { getMpcRelayMessages } from '../message/relay/get'
-import { sendMpcRelayMessage } from '../message/relay/send'
+import { runMpcRelayProcessing, sendMpcRelayMessages } from '../message/relay/send'
 import { fromMpcServerMessage, toMpcServerMessage } from '../message/server'
 import { waitForSetupMessage } from '../message/setup/get'
 import { uploadMpcSetupMessage } from '../message/setup/upload'
@@ -61,46 +61,47 @@ export class MldsaKeygen {
     this.setupMessageId = options?.setupMessageId ?? this.messageId
   }
 
-  private async processOutbound(session: KeygenSession): Promise<boolean> {
-    try {
-      const message = session.outputMessage()
-      if (message === undefined) {
-        if (this.isKeygenComplete) {
-          return true
-        }
-        await sleep(100)
-        return this.processOutbound(session)
+  private async processOutbound(session: KeygenSession, signal: AbortSignal): Promise<boolean> {
+    if (signal.aborted) {
+      return true
+    }
+
+    const message = session.outputMessage()
+    if (message === undefined) {
+      if (this.isKeygenComplete) {
+        return true
       }
 
-      const body = toMpcServerMessage(message.body, this.hexEncryptionKey)
-
-      message.receivers.forEach(receiver => {
-        sendMpcRelayMessage({
-          serverUrl: this.serverURL,
-          sessionId: this.sessionId,
-          message: {
-            session_id: this.sessionId,
-            from: this.localPartyId,
-            to: [receiver],
-            body,
-            hash: getMessageHash(base64Encode(message.body)),
-            sequence_no: this.sequenceNo,
-          },
-          messageId: this.messageId,
-        })
-        this.sequenceNo++
-      })
-
       await sleep(100)
-      return this.processOutbound(session)
-    } catch (error) {
-      console.error('MLDSA processOutbound error:', error)
-      await sleep(100)
-      return this.processOutbound(session)
+      return this.processOutbound(session, signal)
     }
+
+    const body = toMpcServerMessage(message.body, this.hexEncryptionKey)
+
+    this.sequenceNo = await sendMpcRelayMessages({
+      serverUrl: this.serverURL,
+      sessionId: this.sessionId,
+      messageId: this.messageId,
+      receivers: message.receivers,
+      sequenceNo: this.sequenceNo,
+      message: {
+        session_id: this.sessionId,
+        from: this.localPartyId,
+        body,
+        hash: getMessageHash(base64Encode(message.body)),
+      },
+      signal,
+    })
+
+    await sleep(100)
+    return this.processOutbound(session, signal)
   }
 
-  private async processInbound(session: KeygenSession, start: number): Promise<boolean> {
+  private async processInbound(session: KeygenSession, signal: AbortSignal, start: number): Promise<boolean> {
+    if (signal.aborted) {
+      return false
+    }
+
     try {
       const elapsed = Date.now() - start
       if (elapsed > this.timeoutMs * 2) {
@@ -113,14 +114,22 @@ export class MldsaKeygen {
         localPartyId: this.localPartyId,
         sessionId: this.sessionId,
         messageId: this.messageId,
+        signal,
       })
+      if (signal.aborted) {
+        return false
+      }
 
       if (parsedMessages.length === 0) {
         await sleep(100)
-        return this.processInbound(session, start)
+        return this.processInbound(session, signal, start)
       }
 
       for (const msg of parsedMessages) {
+        if (signal.aborted) {
+          return false
+        }
+
         const cacheKey = `${msg.session_id}-${msg.from}-${msg.hash}`
         if (this.cache[cacheKey]) {
           continue
@@ -141,15 +150,19 @@ export class MldsaKeygen {
           sessionId: this.sessionId,
           messageHash: msg.hash,
           messageId: this.messageId,
+          signal,
         })
       }
 
       await sleep(100)
-      return this.processInbound(session, start)
+      return this.processInbound(session, signal, start)
     } catch (error) {
+      if (signal.aborted) {
+        return false
+      }
       console.error('MLDSA processInbound error:', error)
       await sleep(100)
-      return this.processInbound(session, start)
+      return this.processInbound(session, signal, start)
     }
   }
 
@@ -182,9 +195,10 @@ export class MldsaKeygen {
       const session = new KeygenSession(this.setupMessage, this.localPartyId)
 
       const start = Date.now()
-      const outbound = this.processOutbound(session)
-      const inbound = this.processInbound(session, start)
-      const [, inboundResult] = await Promise.all([outbound, inbound])
+      const inboundResult = await runMpcRelayProcessing({
+        processOutbound: signal => this.processOutbound(session, signal),
+        processInbound: signal => this.processInbound(session, signal, start),
+      })
 
       if (inboundResult) {
         const keyShare: Keyshare = session.finish()
