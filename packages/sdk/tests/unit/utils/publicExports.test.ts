@@ -1,5 +1,9 @@
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
+import {
+  cloneSwapSafetyValue as canonicalCloneSwapSafetyValue,
+  getSwapQuoteSafetyFingerprint as canonicalGetSwapQuoteSafetyFingerprint,
+} from '@vultisig/core-chain/swap/quote/getSwapQuoteSafetyFingerprint'
 import * as isValidTokenIdModule from '@vultisig/core-chain/utils/isValidTokenId'
 import { describe, expect, it } from 'vitest'
 
@@ -100,6 +104,11 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.isSwapArrivalStatusTerminal).toBe('function')
     expect(typeof sdk.SwapArrivalStatusRequestError).toBe('function')
     expect(sdk.swapArrivalProviders).toEqual(['thorchain', 'mayachain', 'skip', 'li.fi'])
+  })
+
+  it('exports the canonical swap quote safety fingerprint helpers by identity', () => {
+    expect(sdk.getSwapQuoteSafetyFingerprint).toBe(canonicalGetSwapQuoteSafetyFingerprint)
+    expect(sdk.cloneSwapSafetyValue).toBe(canonicalCloneSwapSafetyValue)
   })
 
   it('exports encodeErc20Approve, encodeErc20Revoke, MAX_UINT256 (ERC-20 approve/revoke calldata)', () => {

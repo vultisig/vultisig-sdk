@@ -1,5 +1,9 @@
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
+import {
+  cloneSwapSafetyValue as canonicalCloneSwapSafetyValue,
+  getSwapQuoteSafetyFingerprint as canonicalGetSwapQuoteSafetyFingerprint,
+} from '@vultisig/core-chain/swap/quote/getSwapQuoteSafetyFingerprint'
 import { AuthInfo, SignDoc, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -211,6 +215,8 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(typeof sdkRn.runSkipSwap).toBe('function')
     expect(typeof sdkRn.skipChainIdToChainName).toBe('function')
     expect(typeof sdkRn.findSwapQuote).toBe('function')
+    expect(sdkRn.getSwapQuoteSafetyFingerprint).toBe(canonicalGetSwapQuoteSafetyFingerprint)
+    expect(sdkRn.cloneSwapSafetyValue).toBe(canonicalCloneSwapSafetyValue)
     expect(sdkRn.SOL_NATIVE_MINT).toBe('So11111111111111111111111111111111111111112')
     expect(sdkRn.JUPITER_PLATFORM_FEE_BPS).toBe(50)
   })

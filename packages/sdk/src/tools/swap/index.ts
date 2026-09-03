@@ -1,5 +1,6 @@
 export type { AcrossChain, AcrossOriginChain, AcrossQuote, AcrossQuoteParams } from './acrossQuote'
 export { ACROSS_ORIGIN_CHAIN, acrossQuote, acrossSupportedChains } from './acrossQuote'
+export { cloneSwapSafetyValue, getSwapQuoteSafetyFingerprint } from '@vultisig/core-chain/swap/quote/getSwapQuoteSafetyFingerprint'
 export type {
   BoundSwapQuote,
   FindSwapQuoteParams,
