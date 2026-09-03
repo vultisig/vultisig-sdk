@@ -190,6 +190,9 @@ describe('getRippleTxStatus', () => {
     {},
     { value: '1' },
     { value: 'NaN', currency: 'USD', issuer: 'rIssuer' },
+    { value: '1', currency: 'XRP', issuer: 'rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B' },
+    { value: '1', currency: 'US', issuer: 'rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B' },
+    { value: '1', currency: 'USD', issuer: 'rInvalid' },
     { value: '1', mpt_issuance_id: 'NOT_AN_MPT_ID' },
     {
       value: '1',

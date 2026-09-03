@@ -1,7 +1,9 @@
 import { Chain, OtherChain } from '@vultisig/core-chain/Chain'
 import { getRippleClient } from '@vultisig/core-chain/chains/ripple/client'
+import { isValidXrplCurrencyCode } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { attempt } from '@vultisig/lib-utils/attempt'
+import { isValidClassicAddress } from 'ripple-address-codec'
 
 import { TxReceiptInfo, TxStatusResolver } from '../resolver'
 
@@ -45,9 +47,10 @@ const getDeliveredReceipt = (meta: Record<string, unknown>): Partial<TxReceiptIn
     typeof value !== 'string' ||
     !/^\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(value) ||
     typeof currency !== 'string' ||
-    !currency ||
+    !isValidXrplCurrencyCode(currency) ||
+    ['XRP', '0'.repeat(40), '0000000000000000000000005852500000000000'].includes(currency.toUpperCase()) ||
     typeof issuer !== 'string' ||
-    !issuer
+    !isValidClassicAddress(issuer)
   ) {
     return {}
   }

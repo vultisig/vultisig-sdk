@@ -98,7 +98,7 @@ export const getRippleChainSpecific: GetChainSpecificResolver<'rippleSpecific'> 
   }
 
   if (destinationUnfunded) {
-    if (coin.id) {
+    if (!keysignPayload.coin?.isNativeToken) {
       throw new Error(
         `Cannot send an XRP issued currency to ${toAddress}: the destination account is not activated. ` +
           'Activate it with the XRP base reserve before sending tokens.'

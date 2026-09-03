@@ -345,6 +345,18 @@ describe('getRippleChainSpecific — only genuine trust lines are declared', () 
     ).rejects.toThrow(/issued currency.*not activated/i)
   })
 
+  it('classifies an idless non-native coin as issued currency for an unactivated destination', async () => {
+    const keysignPayload = issuedCurrencyPayloadTo(DEST_UNFUNDED)
+    keysignPayload.coin!.contractAddress = ''
+
+    await expect(
+      getRippleChainSpecific({
+        keysignPayload,
+        walletCore: {} as never,
+      })
+    ).rejects.toThrow(/issued currency.*not activated/i)
+  })
+
   it('declares a trust line, which is addressed to the issuer', async () => {
     const res = await getRippleChainSpecific({
       keysignPayload: issuedCurrencyPayloadTo(ISSUER),
