@@ -32,7 +32,7 @@ const platformToChain: Record<string, Chain> = {
   polkadot: Chain.Polkadot,
 }
 
-type TokenDeployment = {
+export type TokenDeployment = {
   chain: Chain
   /**
    * The chain's own canonical token identifier — an EVM/CW-20 contract
@@ -46,7 +46,7 @@ type TokenDeployment = {
   decimals?: number
 }
 
-type TokenSearchResult = {
+export type TokenSearchResult = {
   id: string
   name: string
   symbol: string

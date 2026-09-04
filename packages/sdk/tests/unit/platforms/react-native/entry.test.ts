@@ -596,6 +596,16 @@ describe('RN entry exposes pure chain helpers and registry', () => {
     expect(rn.chainRegistry[rn.Chain.Ethereum].explorer.baseUrl).toBe('https://etherscan.io')
   })
 
+  it('re-exports the canonical token-candidate helpers from the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const selection = await import('../../../../src/tools/token/tokenSelection')
+
+    expect(rn.normalizeTokenCandidates).toBe(selection.normalizeTokenCandidates)
+    expect(rn.pickClearTokenCandidate).toBe(selection.pickClearTokenCandidate)
+    expect(rn.findContractIdentity).toBe(selection.findContractIdentity)
+    expect(rn.classifyTokenInput).toBe(selection.classifyTokenInput)
+  })
+
   it('re-exports the recent pure parse/normalize/decode helpers from the RN entrypoint', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
     const parse = await import('../../../../src/tools/parse')
