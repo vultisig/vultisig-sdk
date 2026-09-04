@@ -14,6 +14,12 @@ export type GetChainSpecificInput<C extends KeysignChainSpecificKey = KeysignCha
   walletCore: WalletCore
   /** XRPL DestinationTag, carried in RippleSpecific for Ripple payments. */
   destinationTag?: number
+  /**
+   * Whether the caller's UI offered this as a MAX send, carried in TonSpecific.
+   * Must come from the flow that drew the button — inferring it from the amount
+   * mislabels an ordinary send that happens to sit close to the balance.
+   */
+  sendMaxAmount?: boolean
 } & (C extends 'ethereumSpecific'
   ? {
       feeSettings?: FeeSettings<'evm'>

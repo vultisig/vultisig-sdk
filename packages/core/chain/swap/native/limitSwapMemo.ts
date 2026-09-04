@@ -302,7 +302,6 @@ const limitSwapDestinationValidators: Record<Chain, LimitSwapDestinationValidato
   [Chain.Cosmos]: address => isBech32Address(address, 'cosmos'),
   [Chain.Osmosis]: undefined,
   [Chain.Dydx]: undefined,
-  [Chain.Kujira]: address => isBech32Address(address, 'kujira'),
   [Chain.Terra]: undefined,
   [Chain.TerraClassic]: undefined,
   [Chain.Noble]: address => isBech32Address(address, 'noble'),
