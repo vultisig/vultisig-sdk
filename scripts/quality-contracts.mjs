@@ -18,7 +18,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { checkSdkPackageExports } from './check-sdk-package-exports.mjs'
-import { createDisposableYarnEnv } from './quality-contracts-cache.mjs'
+import { createDisposableYarnEnv, runDisposableYarnInstall } from './quality-contracts-cache.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(__dirname, '..')
@@ -26,6 +26,7 @@ const repoRoot = path.resolve(__dirname, '..')
 const CLI_ENTRY = path.join(repoRoot, 'clients/cli/dist/index.js')
 const SDK_DIST_MARKER = path.join(repoRoot, 'packages/sdk/dist/index.node.esm.js')
 const YARN_CLI = path.join(repoRoot, '.yarn/releases/yarn-4.16.0.cjs')
+const PACKED_CONSUMER_INSTALL_TIMEOUT_MS = 10 * 60 * 1000
 const PACKAGE_CONTRACT_WORKSPACES = ['@vultisig/mpc-types', '@vultisig/mpc-wasm']
 const WINDOWS_CORE_CHAIN_EXPORTS = [
   './chains/thorchain/ruji/services/fetchMergeableTokenBalances',
@@ -55,11 +56,18 @@ function packageRelativePath(packageRoot, rel) {
 }
 
 function run(cmd, args, opts = {}) {
-  const res = spawnSync(cmd, args, {
-    encoding: 'utf8',
-    maxBuffer: 20 * 1024 * 1024,
-    ...opts,
-  })
+  return assertRunSucceeded(
+    cmd,
+    args,
+    spawnSync(cmd, args, {
+      encoding: 'utf8',
+      maxBuffer: 20 * 1024 * 1024,
+      ...opts,
+    })
+  )
+}
+
+function assertRunSucceeded(cmd, args, res) {
   if (res.error) throw res.error
   if (res.status !== 0) {
     const msg = [`Command failed: ${cmd} ${args.join(' ')}`, res.stdout?.trim(), res.stderr?.trim()]
@@ -70,12 +78,47 @@ function run(cmd, args, opts = {}) {
   return res
 }
 
+function yarnCommand(args) {
+  if (existsSync(YARN_CLI)) {
+    return { cmd: process.execPath, args: [YARN_CLI, ...args] }
+  }
+  return { cmd: 'yarn', args }
+}
+
+function runPackedConsumerInstall(opts = {}) {
+  if (!existsSync(YARN_CLI)) {
+    throw new Error(`Repository-pinned Yarn bundle is missing: ${YARN_CLI}`)
+  }
+
+  const command = {
+    cmd: process.execPath,
+    args: [YARN_CLI, 'install', '--no-immutable'],
+  }
+  const result = runDisposableYarnInstall(
+    () =>
+      spawnSync(command.cmd, command.args, {
+        encoding: 'utf8',
+        maxBuffer: 20 * 1024 * 1024,
+        timeout: PACKED_CONSUMER_INSTALL_TIMEOUT_MS,
+        killSignal: 'SIGTERM',
+        ...opts,
+      }),
+    {
+      onRetry: () => {
+        console.warn(
+          `Packed-consumer install exceeded ${PACKED_CONSUMER_INSTALL_TIMEOUT_MS}ms; retrying once after a transport timeout.`
+        )
+      },
+    }
+  )
+
+  return assertRunSucceeded(command.cmd, command.args, result)
+}
+
 /** Prefer repo-pinned Yarn so pack/add behave like CI. */
 function runYarn(args, opts = {}) {
-  if (existsSync(YARN_CLI)) {
-    return run(process.execPath, [YARN_CLI, ...args], opts)
-  }
-  return run('yarn', args, opts)
+  const command = yarnCommand(args)
+  return run(command.cmd, command.args, opts)
 }
 
 function assertCliBuilt() {
@@ -397,7 +440,7 @@ void compatible
   )
 
   const env = createDisposableYarnEnv(workRoot)
-  runYarn(['install', '--no-immutable'], {
+  runPackedConsumerInstall({
     cwd: consumer,
     env,
     stdio: 'inherit',
@@ -471,7 +514,7 @@ function packedCliBinSmoke(
 
   const env = createDisposableYarnEnv(workRoot)
 
-  runYarn(['install', '--no-immutable'], {
+  runPackedConsumerInstall({
     cwd: consumer,
     env,
     stdio: 'inherit',
@@ -539,7 +582,7 @@ function packedMcpBinSmoke(
 
   const env = createDisposableYarnEnv(workRoot)
 
-  runYarn(['install', '--no-immutable'], {
+  runPackedConsumerInstall({
     cwd: consumer,
     env,
     stdio: 'inherit',
