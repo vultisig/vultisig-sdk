@@ -55,6 +55,10 @@ describe('@vultisig/sdk public exports', () => {
   it('exports fromChainAmountExact, getBlockExplorerUrl, and the chain registry', () => {
     expect(typeof sdk.fromChainAmountExact).toBe('function')
     expect(sdk.fromChainAmountExact(123456789012345678901n, 18)).toBe('123.456789012345678901')
+    expect(typeof sdk.fromChainAmount).toBe('function')
+    expect(typeof sdk.fromChainAmountDisplay).toBe('function')
+    expect(sdk.fromChainAmount(1_000_000n, 6)).toBe(1)
+    expect(sdk.fromChainAmountDisplay('999999999999999999999999', 18)).toBe('999999.999999999999999999')
 
     expect(typeof sdk.getBlockExplorerUrl).toBe('function')
     expect(sdk.getBlockExplorerUrl({ chain: sdk.Chain.Ethereum, entity: 'address', value: '0xabc' })).toBe(
