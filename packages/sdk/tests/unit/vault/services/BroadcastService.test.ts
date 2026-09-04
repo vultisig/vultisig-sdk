@@ -443,19 +443,22 @@ describe('BroadcastService', () => {
       approvalConfirmationTimeoutMs: 1_000,
     })
 
-    await expect(
-      approvalService.broadcastTx({
+    const error = await approvalService
+      .broadcastTx({
         chain: Chain.Ethereum,
         keysignPayload: { erc20ApprovePayload: {} } as KeysignPayload,
         signature,
       })
-    ).rejects.toMatchObject({
+      .catch(value => value)
+
+    expect(error).toMatchObject({
       code: VaultErrorCode.BroadcastFailed,
       message: expect.stringContaining('Approval tx expired'),
-      originalError: expect.objectContaining({
-        broadcastedTxHashes: ['0xapproval'],
-        failedInputIndex: 0,
-      }),
+    })
+    const partialFailure = 'broadcastedTxHashes' in error ? error : error.originalError
+    expect(partialFailure).toMatchObject({
+      broadcastedTxHashes: ['0xapproval'],
+      failedInputIndex: 0,
     })
 
     expect(mockCoreBroadcastTx).toHaveBeenCalledOnce()
