@@ -1,4 +1,5 @@
 import { Address } from '@ton/core'
+import { attempt } from '@vultisig/lib-utils/attempt'
 import { fromBase64 } from '@vultisig/lib-utils/fromBase64'
 
 /** Converts base64url encoding to standard base64 so `Buffer.from` can decode it. */
@@ -31,4 +32,28 @@ export const tonAddressToBounceable = (address: string): string => {
   const parsed = address.includes(':') ? Address.parseRaw(address) : Address.parse(address)
 
   return parsed.toString({ bounceable: true, testOnly: false, urlSafe: true })
+}
+
+/**
+ * What a TON destination address declares about bouncing. `unspecified` covers the
+ * raw `0:hex` spelling and anything unparseable — those carry no tag byte at all,
+ * which is exactly the case a leading-character check cannot express.
+ */
+export type TonAddressBounceability = 'bounceable' | 'nonBounceable' | 'unspecified'
+
+/**
+ * Reads the bounce tag out of a user-friendly TON address instead of inferring it
+ * from the leading `E`/`U`. The tag lives in the first byte of the base64 payload
+ * (`0x11` bounceable / `0x51` not, `| 0x80` on testnet) and is checksum-protected,
+ * so a raw or corrupted address reports `unspecified` rather than a flag it never
+ * declared — leaving the caller to pick the safe default for its own context.
+ */
+export const getTonAddressBounceability = (address: string): TonAddressBounceability => {
+  const parsed = attempt(() => Address.parseFriendly(address))
+
+  if ('error' in parsed) {
+    return 'unspecified'
+  }
+
+  return parsed.data.isBounceable ? 'bounceable' : 'nonBounceable'
 }

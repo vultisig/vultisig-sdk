@@ -8,8 +8,6 @@ const dtsPluginOptions = {
       '@/*': ['./src/*'],
       '@helpers/*': ['./tests/e2e/helpers/*'],
       '@types': ['./src/types'],
-      '@vultisig/core-chain/*': ['../core/chain/*'],
-      '@vultisig/core-mpc/*': ['../core/mpc/*'],
       '@vultisig/core-config': ['../core/config/index.ts'],
       '@vultisig/core-config/*': ['../core/config/*'],
       '@vultisig/lib-utils/*': ['../lib/utils/*'],
@@ -133,5 +131,10 @@ export default defineConfig([
   createSubpathTypesConfig('src/seedphrase/index.ts', 'dist/seedphrase/index.d.ts'),
   createSubpathTypesConfig('src/tools/decode/index.ts', 'dist/tools/decode/index.d.ts'),
   createSubpathTypesConfig('src/tools/prep/index.ts', 'dist/tools/prep/index.d.ts'),
+  createSubpathTypesConfig('src/tools/policy/index.ts', 'dist/tools/policy/index.d.ts'),
+  // Canonical price helpers (sdk#1781): pure fetch/format helpers with no platform
+  // coupling, so the subpath ships the same all-platform conditions as ./tools/decode.
+  createSubpathTypesConfig('src/tools/price/index.ts', 'dist/tools/price/index.d.ts'),
   createSubpathTypesConfig('src/tx/index.ts', 'dist/tx/index.d.ts'),
+  createSubpathTypesConfig('src/server/index.ts', 'dist/server/index.d.ts'),
 ])
