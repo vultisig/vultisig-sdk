@@ -451,13 +451,13 @@ describe('BroadcastService', () => {
       })
       .catch(value => value)
 
+    expect(error).toBeInstanceOf(BroadcastPartialFailureError)
     expect(error).toMatchObject({
-      message: expect.stringContaining('Approval tx expired'),
-    })
-    const partialFailure = 'broadcastedTxHashes' in error ? error : error.originalError
-    expect(partialFailure).toMatchObject({
       broadcastedTxHashes: ['0xapproval'],
       failedInputIndex: 0,
+      originalError: expect.objectContaining({
+        message: expect.stringContaining('Approval tx expired'),
+      }),
     })
 
     expect(mockCoreBroadcastTx).toHaveBeenCalledOnce()
@@ -625,7 +625,9 @@ describe('formatBroadcastFailureReason', () => {
   ])('does not preserve signed payloads stored in cross-realm %s fields', (_name, expression) => {
     const signedRawTx = `0x${'56'.repeat(128)}`
     const container = runInNewContext(expression, { signedRawTx })
-    const cause = Object.assign(new Error('RPC rejected the transaction'), { container })
+    const cause = Object.assign(new Error('RPC rejected the transaction'), {
+      container,
+    })
 
     const safeError = toSafeBroadcastError(cause)
 
@@ -659,7 +661,9 @@ describe('formatBroadcastFailureReason', () => {
     ['cross-realm ArrayBuffer', runInNewContext('new Uint8Array(64).buffer')],
     ['cross-realm ArrayBuffer view', runInNewContext('new Uint8Array(64)')],
   ])('does not preserve inspectable binary payloads in %s fields', (_name, payload) => {
-    const cause = Object.assign(new Error('RPC rejected the transaction'), { payload })
+    const cause = Object.assign(new Error('RPC rejected the transaction'), {
+      payload,
+    })
 
     expect(toSafeBroadcastError(cause)).not.toBe(cause)
   })
