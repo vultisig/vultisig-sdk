@@ -22,6 +22,7 @@ import type { WasmProvider } from '../../context/SdkContext'
 // modules at module-load time, which breaks vitest setups that mock chainFeeCoin.
 import { prepareContractCallTxFromKeys } from '../../tools/prep/contractCall'
 import { prepareSignAminoTxFromKeys, prepareSignDirectTxFromKeys } from '../../tools/prep/cosmos'
+import { prepareRawEvmTxFromKeys, type PrepareRawEvmTxFromKeysParams } from '../../tools/prep/rawEvm'
 import { prepareSendTxFromKeys } from '../../tools/prep/send'
 import { prepareThorchainMsgDepositTxFromKeys } from '../../tools/prep/thorchainMsgDeposit'
 import { vaultDataToIdentity } from '../../tools/prep/types'
@@ -65,6 +66,9 @@ export class TransactionBuilder {
    * @param params.memo - Optional transaction memo (for chains that support it)
    * @param params.destinationTag - Optional XRP DestinationTag, independent from memo
    * @param params.feeSettings - Optional custom fee settings (FeeSettings - chain-specific)
+   * @param params.sendMaxAmount - Set when the amount came from a MAX button. Recorded in
+   *   the payload; `amount` is still exactly what gets signed, so pass the same
+   *   `balance - fee` figure the UI displayed.
    *
    * @returns A KeysignPayload ready to be signed with the sign() method
    *
@@ -90,6 +94,7 @@ export class TransactionBuilder {
     memo?: string
     destinationTag?: number
     feeSettings?: FeeSettings
+    sendMaxAmount?: boolean
   }): Promise<KeysignPayload> {
     if (params.amount <= 0n) {
       throw new VaultError(VaultErrorCode.InvalidAmount, 'Amount must be greater than zero')
@@ -236,6 +241,14 @@ export class TransactionBuilder {
     const walletCore = await this.wasmProvider.getWalletCore()
     return this.wrapAsVaultError('contract call', () =>
       prepareContractCallTxFromKeys(vaultDataToIdentity(this.vaultData), params, walletCore)
+    )
+  }
+
+  /** Build a final keysign payload from an already-built raw EVM envelope. */
+  async prepareRawEvmTx(params: PrepareRawEvmTxFromKeysParams): Promise<KeysignPayload> {
+    const walletCore = await this.wasmProvider.getWalletCore()
+    return this.wrapAsVaultError('raw EVM transaction', () =>
+      prepareRawEvmTxFromKeys(vaultDataToIdentity(this.vaultData), params, walletCore)
     )
   }
 

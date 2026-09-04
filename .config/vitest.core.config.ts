@@ -12,6 +12,8 @@ export default defineConfig({
   root,
   resolve: {
     alias: {
+      '@noble/curves': resolve(root, 'node_modules/@noble/curves'),
+      '@noble/hashes': resolve(root, 'node_modules/@noble/hashes'),
       '@vultisig/core-chain': resolve(root, 'packages/core/chain'),
       '@vultisig/core-mpc': resolve(root, 'packages/core/mpc'),
       '@vultisig/core-config': resolve(root, 'packages/core/config'),
@@ -27,5 +29,10 @@ export default defineConfig({
     include: ['packages/core/**/*.test.ts', 'packages/lib/**/*.test.ts', 'packages/mpc-wasm/**/*.test.ts'],
     exclude: ['**/node_modules/**', '**/dist/**'],
     pool: 'forks',
+    server: {
+      deps: {
+        inline: ['@noble/curves', '@noble/hashes'],
+      },
+    },
   },
 })

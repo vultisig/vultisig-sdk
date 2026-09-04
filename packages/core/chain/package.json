@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "2.36.0",
+  "version": "4.1.1",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -239,6 +239,11 @@
       "types": "./dist/chains/cosmos/cosmosGasLimitRecord.d.ts",
       "import": "./dist/chains/cosmos/cosmosGasLimitRecord.js",
       "default": "./dist/chains/cosmos/cosmosGasLimitRecord.js"
+    },
+    "./chains/cosmos/cosmosHrp": {
+      "types": "./dist/chains/cosmos/cosmosHrp.d.ts",
+      "import": "./dist/chains/cosmos/cosmosHrp.js",
+      "default": "./dist/chains/cosmos/cosmosHrp.js"
     },
     "./chains/cosmos/cosmosMemoCap": {
       "types": "./dist/chains/cosmos/cosmosMemoCap.d.ts",
@@ -765,6 +770,96 @@
       "import": "./dist/chains/solana/jito.js",
       "default": "./dist/chains/solana/jito.js"
     },
+    "./chains/solana/kamino/amount": {
+      "types": "./dist/chains/solana/kamino/amount.d.ts",
+      "import": "./dist/chains/solana/kamino/amount.js",
+      "default": "./dist/chains/solana/kamino/amount.js"
+    },
+    "./chains/solana/kamino/api": {
+      "types": "./dist/chains/solana/kamino/api.d.ts",
+      "import": "./dist/chains/solana/kamino/api.js",
+      "default": "./dist/chains/solana/kamino/api.js"
+    },
+    "./chains/solana/kamino/baseUnits": {
+      "types": "./dist/chains/solana/kamino/baseUnits.d.ts",
+      "import": "./dist/chains/solana/kamino/baseUnits.js",
+      "default": "./dist/chains/solana/kamino/baseUnits.js"
+    },
+    "./chains/solana/kamino/config": {
+      "types": "./dist/chains/solana/kamino/config.d.ts",
+      "import": "./dist/chains/solana/kamino/config.js",
+      "default": "./dist/chains/solana/kamino/config.js"
+    },
+    "./chains/solana/kamino/decimal": {
+      "types": "./dist/chains/solana/kamino/decimal.d.ts",
+      "import": "./dist/chains/solana/kamino/decimal.js",
+      "default": "./dist/chains/solana/kamino/decimal.js"
+    },
+    "./chains/solana/kamino/KaminoServiceError": {
+      "types": "./dist/chains/solana/kamino/KaminoServiceError.d.ts",
+      "import": "./dist/chains/solana/kamino/KaminoServiceError.js",
+      "default": "./dist/chains/solana/kamino/KaminoServiceError.js"
+    },
+    "./chains/solana/kamino/models": {
+      "types": "./dist/chains/solana/kamino/models.d.ts",
+      "import": "./dist/chains/solana/kamino/models.js",
+      "default": "./dist/chains/solana/kamino/models.js"
+    },
+    "./chains/solana/kamino/position": {
+      "types": "./dist/chains/solana/kamino/position.d.ts",
+      "import": "./dist/chains/solana/kamino/position.js",
+      "default": "./dist/chains/solana/kamino/position.js"
+    },
+    "./chains/solana/kamino/rate": {
+      "types": "./dist/chains/solana/kamino/rate.d.ts",
+      "import": "./dist/chains/solana/kamino/rate.js",
+      "default": "./dist/chains/solana/kamino/rate.js"
+    },
+    "./chains/solana/kamino/registry": {
+      "types": "./dist/chains/solana/kamino/registry.d.ts",
+      "import": "./dist/chains/solana/kamino/registry.js",
+      "default": "./dist/chains/solana/kamino/registry.js"
+    },
+    "./chains/solana/kamino/tx/actions": {
+      "types": "./dist/chains/solana/kamino/tx/actions.d.ts",
+      "import": "./dist/chains/solana/kamino/tx/actions.js",
+      "default": "./dist/chains/solana/kamino/tx/actions.js"
+    },
+    "./chains/solana/kamino/tx/computeBudget": {
+      "types": "./dist/chains/solana/kamino/tx/computeBudget.d.ts",
+      "import": "./dist/chains/solana/kamino/tx/computeBudget.js",
+      "default": "./dist/chains/solana/kamino/tx/computeBudget.js"
+    },
+    "./chains/solana/kamino/tx/decode": {
+      "types": "./dist/chains/solana/kamino/tx/decode.d.ts",
+      "import": "./dist/chains/solana/kamino/tx/decode.js",
+      "default": "./dist/chains/solana/kamino/tx/decode.js"
+    },
+    "./chains/solana/kamino/tx/instructions": {
+      "types": "./dist/chains/solana/kamino/tx/instructions.d.ts",
+      "import": "./dist/chains/solana/kamino/tx/instructions.js",
+      "default": "./dist/chains/solana/kamino/tx/instructions.js"
+    },
+    "./chains/solana/kamino/tx/sequence": {
+      "types": "./dist/chains/solana/kamino/tx/sequence.d.ts",
+      "import": "./dist/chains/solana/kamino/tx/sequence.js",
+      "default": "./dist/chains/solana/kamino/tx/sequence.js"
+    },
+    "./chains/solana/kamino/tx/validate": {
+      "types": "./dist/chains/solana/kamino/tx/validate.d.ts",
+      "import": "./dist/chains/solana/kamino/tx/validate.js",
+      "default": "./dist/chains/solana/kamino/tx/validate.js"
+    },
+    "./chains/solana/kamino/tx/wire": {
+      "types": "./dist/chains/solana/kamino/tx/wire.d.ts",
+      "import": "./dist/chains/solana/kamino/tx/wire.js",
+      "default": "./dist/chains/solana/kamino/tx/wire.js"
+    },
+    "./chains/solana/kamino/vaultInfo": {
+      "types": "./dist/chains/solana/kamino/vaultInfo.d.ts",
+      "import": "./dist/chains/solana/kamino/vaultInfo.js",
+      "default": "./dist/chains/solana/kamino/vaultInfo.js"
+    },
     "./chains/solana/solanaConfig": {
       "types": "./dist/chains/solana/solanaConfig.d.ts",
       "import": "./dist/chains/solana/solanaConfig.js",
@@ -899,6 +994,11 @@
       "types": "./dist/chains/ton/api.d.ts",
       "import": "./dist/chains/ton/api.js",
       "default": "./dist/chains/ton/api.js"
+    },
+    "./chains/ton/comment": {
+      "types": "./dist/chains/ton/comment.d.ts",
+      "import": "./dist/chains/ton/comment.js",
+      "default": "./dist/chains/ton/comment.js"
     },
     "./chains/ton/config": {
       "types": "./dist/chains/ton/config.d.ts",
@@ -1225,6 +1325,16 @@
       "import": "./dist/coin/price/evm/getErc20Prices.js",
       "default": "./dist/coin/price/evm/getErc20Prices.js"
     },
+    "./coin/price/evm/getEvmVaultTokenPrices": {
+      "types": "./dist/coin/price/evm/getEvmVaultTokenPrices.d.ts",
+      "import": "./dist/coin/price/evm/getEvmVaultTokenPrices.js",
+      "default": "./dist/coin/price/evm/getEvmVaultTokenPrices.js"
+    },
+    "./coin/price/evm/getLifiTokenPrices": {
+      "types": "./dist/coin/price/evm/getLifiTokenPrices.d.ts",
+      "import": "./dist/coin/price/evm/getLifiTokenPrices.js",
+      "default": "./dist/coin/price/evm/getLifiTokenPrices.js"
+    },
     "./coin/price/getCoinPrices": {
       "types": "./dist/coin/price/getCoinPrices.d.ts",
       "import": "./dist/coin/price/getCoinPrices.js",
@@ -1234,6 +1344,11 @@
       "types": "./dist/coin/price/getCoinPricesWithChange.d.ts",
       "import": "./dist/coin/price/getCoinPricesWithChange.js",
       "default": "./dist/coin/price/getCoinPricesWithChange.js"
+    },
+    "./coin/price/getUsdToFiatRate": {
+      "types": "./dist/coin/price/getUsdToFiatRate.d.ts",
+      "import": "./dist/coin/price/getUsdToFiatRate.js",
+      "default": "./dist/coin/price/getUsdToFiatRate.js"
     },
     "./coin/price/queryCoingeickoPrices": {
       "types": "./dist/coin/price/queryCoingeickoPrices.d.ts",
@@ -1543,6 +1658,11 @@
       "import": "./dist/security/dangerousAddresses.js",
       "default": "./dist/security/dangerousAddresses.js"
     },
+    "./security/tokenTransferGuards": {
+      "types": "./dist/security/tokenTransferGuards.d.ts",
+      "import": "./dist/security/tokenTransferGuards.js",
+      "default": "./dist/security/tokenTransferGuards.js"
+    },
     "./signing/SignatureAlgorithm": {
       "types": "./dist/signing/SignatureAlgorithm.d.ts",
       "import": "./dist/signing/SignatureAlgorithm.js",
@@ -1748,6 +1868,16 @@
       "import": "./dist/swap/general/priceImpactGuard.js",
       "default": "./dist/swap/general/priceImpactGuard.js"
     },
+    "./swap/general/ruji/api/getRujiTradeSwapQuote": {
+      "types": "./dist/swap/general/ruji/api/getRujiTradeSwapQuote.d.ts",
+      "import": "./dist/swap/general/ruji/api/getRujiTradeSwapQuote.js",
+      "default": "./dist/swap/general/ruji/api/getRujiTradeSwapQuote.js"
+    },
+    "./swap/general/ruji/config": {
+      "types": "./dist/swap/general/ruji/config.d.ts",
+      "import": "./dist/swap/general/ruji/config.js",
+      "default": "./dist/swap/general/ruji/config.js"
+    },
     "./swap/general/swapkit/api/getSwapKitQuote": {
       "types": "./dist/swap/general/swapkit/api/getSwapKitQuote.d.ts",
       "import": "./dist/swap/general/swapkit/api/getSwapKitQuote.js",
@@ -1942,6 +2072,11 @@
       "types": "./dist/swap/SwapFee.d.ts",
       "import": "./dist/swap/SwapFee.js",
       "default": "./dist/swap/SwapFee.js"
+    },
+    "./swap/utils/getSwapArrivalStatus": {
+      "types": "./dist/swap/utils/getSwapArrivalStatus/index.d.ts",
+      "import": "./dist/swap/utils/getSwapArrivalStatus/index.js",
+      "default": "./dist/swap/utils/getSwapArrivalStatus/index.js"
     },
     "./swap/utils/getSwapExplorerUrl": {
       "types": "./dist/swap/utils/getSwapExplorerUrl/index.d.ts",
@@ -2271,7 +2406,7 @@
     "@cosmjs/stargate": "^0.39.0",
     "@lifi/sdk": "^4.1.0",
     "@mysten/sui": "^2.22.1",
-    "@noble/hashes": "^1.8.0",
+    "@noble/hashes": "^2.2.0",
     "@polkadot/api": "^16.5.6",
     "@polkadot/util": "^14.0.3",
     "@polkadot/util-crypto": "^14.0.3",
@@ -2279,9 +2414,10 @@
     "@solana/web3.js": "^1.98.4",
     "@ton/core": "^0.63.1",
     "@ton/crypto": "^3.3.0",
-    "@trustwallet/wallet-core": "^4.7.0",
+    "@trustwallet/wallet-core": "^4.7.3",
     "@vultisig/core-config": "0.9.1",
-    "@vultisig/lib-utils": "0.10.4",
+    "@vultisig/lib-utils": "0.10.6",
+    "@vultisig/mpc-types": "workspace:*",
     "bip32": "^5.0.1",
     "bitcoinjs-lib": "^7.0.1",
     "bs58": "^6.0.0",
