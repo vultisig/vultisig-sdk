@@ -235,7 +235,10 @@ export type {
   CctpBurnMessage,
   CctpChainConfig,
   CctpClaimResult,
+  CctpReceiptLike,
+  CctpReceiptLog,
   CctpUnsignedTx,
+  ExtractedCctpMessage,
 } from './bridge'
 export {
   buildCctpBridge,
@@ -244,6 +247,7 @@ export {
   cctpChains,
   cctpSupportedChains,
   decodeCctpBurnMessage,
+  extractCctpMessageFromReceipt,
   formatUsdc,
   getCctpChain,
   getCctpChainNameByDomain,
