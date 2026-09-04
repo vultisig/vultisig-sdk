@@ -17,6 +17,12 @@ const yarnCli = path.join(repoRoot, '.yarn/releases/yarn-4.16.0.cjs')
 const platformTargetPattern = /(?:^|[./-])(browser|chrome-extension|react-native|rn-preamble)(?:[./-]|$)/
 const runtimeUnsafePlatformPattern = /(?:^|[./-])(react-native|rn-preamble)(?:[./-]|$)/
 const builtInTypeConditions = new Set(['types', 'import', 'require', 'node', 'node-addons', 'default'])
+const packedDependencyFields = ['dependencies', 'optionalDependencies']
+const coordinatedSdkPackageNames = new Set([
+  '@vultisig/core-chain',
+  '@vultisig/core-mpc',
+  '@vultisig/mpc-types',
+])
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -40,6 +46,57 @@ function runYarn(args, options = {}) {
     return run(process.execPath, [yarnCli, ...args], options)
   }
   return run('yarn', args, options)
+}
+
+export function collectLocalWorkspaceDependencyNames(
+  rootPackageName,
+  packedManifests,
+  localPackageNames = coordinatedSdkPackageNames
+) {
+  const pending = [rootPackageName]
+  const visited = new Set()
+  const dependencies = new Set()
+
+  while (pending.length) {
+    const packageName = pending.pop()
+    if (visited.has(packageName)) continue
+    visited.add(packageName)
+
+    const manifest = packedManifests.get(packageName)
+    if (!manifest) continue
+
+    for (const field of packedDependencyFields) {
+      for (const [dependencyName, selector] of Object.entries(manifest[field] ?? {})) {
+        if (dependencyName === rootPackageName || !localPackageNames.has(dependencyName)) continue
+        const dependencyManifest = packedManifests.get(dependencyName)
+        if (!dependencyManifest) {
+          throw new Error(`Missing packed manifest for coordinated SDK dependency ${dependencyName}`)
+        }
+        if (selector !== dependencyManifest.version) {
+          throw new Error(
+            `${packageName} requires ${dependencyName}@${selector}, but the coordinated local archive is ` +
+              `${dependencyName}@${dependencyManifest.version}`
+          )
+        }
+        if (!dependencies.has(dependencyName)) {
+          dependencies.add(dependencyName)
+          pending.push(dependencyName)
+        }
+      }
+    }
+  }
+
+  return [...dependencies].sort()
+}
+
+export function createPackedConsumerManifest(localPackages = {}) {
+  return {
+    name: 'vultisig-sdk-package-export-consumer',
+    private: true,
+    type: 'module',
+    packageManager: 'yarn@4.16.0',
+    ...(Object.keys(localPackages).length ? { resolutions: localPackages } : {}),
+  }
 }
 
 export function collectExportTargets(exportsField) {
@@ -252,19 +309,10 @@ export function collectTypeCustomConditionSets(manifest) {
   return [...conditionSets.values()]
 }
 
-function writeConsumerRuntimeFiles(consumerRoot, importCases, requireCases) {
+function writeConsumerRuntimeFiles(consumerRoot, importCases, requireCases, localPackages) {
   writeFileSync(
     path.join(consumerRoot, 'package.json'),
-    `${JSON.stringify(
-      {
-        name: 'vultisig-sdk-package-export-consumer',
-        private: true,
-        type: 'module',
-        packageManager: 'yarn@4.16.0',
-      },
-      null,
-      2
-    )}\n`
+    `${JSON.stringify(createPackedConsumerManifest(localPackages), null, 2)}\n`
   )
   writeFileSync(path.join(consumerRoot, '.yarnrc.yml'), 'nodeLinker: node-modules\n')
 
@@ -478,6 +526,37 @@ function packSdk(tarballPath) {
   })
 }
 
+function packLocalSdkDependencies(workRoot, packedSdkManifest) {
+  const dependencyRoot = path.join(workRoot, 'sdk-dependencies')
+  mkdirSync(dependencyRoot, { recursive: true })
+  const packedManifests = new Map([[packedSdkManifest.name, packedSdkManifest]])
+  const tarballs = new Map()
+
+  for (const packageName of coordinatedSdkPackageNames) {
+    const archiveName = `${packageName.replace(/^@/, '').replaceAll(/[^a-z0-9]+/gi, '-')}.tgz`
+    const tarballPath = path.join(dependencyRoot, archiveName)
+    runYarn(['workspace', packageName, 'pack', '--out', tarballPath], {
+      cwd: repoRoot,
+      stdio: 'inherit',
+    })
+    const extractRoot = path.join(dependencyRoot, `${archiveName}.extract`)
+    mkdirSync(extractRoot, { recursive: true })
+    run('tar', ['-xzf', tarballPath, '-C', extractRoot])
+    packedManifests.set(
+      packageName,
+      JSON.parse(readFileSync(path.join(extractRoot, 'package', 'package.json'), 'utf8'))
+    )
+    tarballs.set(packageName, tarballPath)
+  }
+
+  return Object.fromEntries(
+    collectLocalWorkspaceDependencyNames(packedSdkManifest.name, packedManifests).map(packageName => [
+      packageName,
+      `file:${tarballs.get(packageName)}`,
+    ])
+  )
+}
+
 export async function checkSdkPackageExports({
   build = true,
   workRoot: providedWorkRoot,
@@ -518,7 +597,8 @@ export async function checkSdkPackageExports({
 
     const consumerRoot = path.join(workRoot, 'consumer')
     mkdirSync(consumerRoot, { recursive: true })
-    writeConsumerRuntimeFiles(consumerRoot, importCases, requireCases)
+    const localPackages = packLocalSdkDependencies(workRoot, packedManifest)
+    writeConsumerRuntimeFiles(consumerRoot, importCases, requireCases, localPackages)
     const env = installPackedSdk(consumerRoot, tarballPath)
 
     run(process.execPath, ['verify-imports.mjs'], { cwd: consumerRoot, env, stdio: 'inherit' })

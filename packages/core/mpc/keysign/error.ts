@@ -2,6 +2,7 @@ export type BuildKeysignPayloadErrorType =
   | 'not-enough-funds'
   | 'ripple-destination-tag-invalid'
   | 'ripple-destination-tag-required'
+  | 'ton-memo-too-long'
 
 export class BuildKeysignPayloadError extends Error {
   constructor(

@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/sdk",
-  "version": "6.2.0",
+  "version": "6.3.0",
   "description": "The self-custody MPC wallet SDK for AI agents. Bitcoin, Ethereum, Solana & 36+ chains via DKLS23 threshold signatures. TypeScript, multi-platform (Node, browser, React Native).",
   "type": "module",
   "main": "dist/index.node.cjs",
@@ -246,7 +246,7 @@
   "scripts": {
     "_____BUILD_____": "",
     "clean": "rm -rf dist",
-    "build": "yarn clean && yarn build:platforms && yarn build:types",
+    "build": "node ../../examples/browser/scripts/ensure-local-sdk-build.mjs --begin sdk && yarn clean && yarn build:platforms && yarn build:types && node ../../examples/browser/scripts/ensure-local-sdk-build.mjs --record sdk",
     "build:js": "yarn build:platforms",
     "build:types": "NODE_OPTIONS=--max-old-space-size=8192 rollup -c rollup.types.config.js",
     "dev": "BUILD_TARGET=node rollup -c rollup.platforms.config.js -w",
@@ -363,6 +363,8 @@
     "@ton/core": "^0.63.1",
     "@ton/crypto": "^3.3.0",
     "@trustwallet/wallet-core": "^4.7.3",
+    "@vultisig/core-chain": "workspace:*",
+    "@vultisig/core-mpc": "workspace:*",
     "@vultisig/lib-dkls": "workspace:*",
     "@vultisig/lib-mldsa": "workspace:*",
     "@vultisig/lib-schnorr": "workspace:*",

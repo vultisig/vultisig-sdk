@@ -4,7 +4,7 @@ import {
   BitcoinOutputSchema,
   SignBitcoin,
   SignBitcoinSchema,
-} from '@vultisig/core-mpc/types/vultisig/keysign/v1/wasm_execute_contract_payload_pb'
+} from '@vultisig/mpc-types/types/vultisig/keysign/v1/wasm_execute_contract_payload_pb'
 import { address as btcAddress, Network, networks, opcodes, Psbt, script as bscript, Transaction } from 'bitcoinjs-lib'
 
 /** Supported script types for PSBT decomposition. */
