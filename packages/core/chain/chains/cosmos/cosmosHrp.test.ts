@@ -25,7 +25,6 @@ describe('getCosmosChainHrp', () => {
     expect(getCosmosChainHrp(CosmosChain.Cosmos)).toBe('cosmos')
     expect(getCosmosChainHrp(CosmosChain.Osmosis)).toBe('osmo')
     expect(getCosmosChainHrp(CosmosChain.Dydx)).toBe('dydx')
-    expect(getCosmosChainHrp(CosmosChain.Kujira)).toBe('kujira')
     expect(getCosmosChainHrp(CosmosChain.Terra)).toBe('terra')
     expect(getCosmosChainHrp(CosmosChain.TerraClassic)).toBe('terra')
     expect(getCosmosChainHrp(CosmosChain.Noble)).toBe('noble')
@@ -38,7 +37,6 @@ describe('getCosmosChainHrp', () => {
     expect(getCosmosChainHrp(CosmosChain.TerraClassic)).toBe('terra')
     expect(getCosmosChainHrp(CosmosChain.Terra)).toBe('terra')
     expect(getCosmosChainHrp(CosmosChain.Osmosis)).toBe('osmo')
-    expect(getCosmosChainHrp(CosmosChain.Kujira)).toBe('kujira')
   })
 
   // THORChain/MayaChain are vault-based (not IBC-enabled), so gov.ts/CW20
