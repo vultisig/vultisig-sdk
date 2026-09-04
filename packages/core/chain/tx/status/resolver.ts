@@ -13,6 +13,14 @@ export type TxReceiptInfo = {
   feeAmount: bigint
   feeDecimals: number
   feeTicker: string
+  /** XRPL Payment delivery from validated metadata: XRP drops, issued-currency units, or MPT base units. */
+  deliveredAmount?: string
+  /** Identifies a classic issued currency, or `XRP` for a native delivery. */
+  deliveredCurrency?: string
+  /** Present only for a classic issued-currency delivery. */
+  deliveredIssuer?: string
+  /** Present only for a multi-purpose-token delivery. */
+  deliveredMptIssuanceId?: string
 }
 
 export type TxStatusResult = {
