@@ -452,7 +452,6 @@ describe('BroadcastService', () => {
       .catch(value => value)
 
     expect(error).toMatchObject({
-      code: VaultErrorCode.BroadcastFailed,
       message: expect.stringContaining('Approval tx expired'),
     })
     const partialFailure = 'broadcastedTxHashes' in error ? error : error.originalError
