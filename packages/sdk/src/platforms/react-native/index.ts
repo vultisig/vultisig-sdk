@@ -742,7 +742,10 @@ export type {
   CctpBridgeResult,
   CctpChainConfig,
   CctpClaimResult,
+  CctpReceiptLike,
+  CctpReceiptLog,
   CctpUnsignedTx,
+  ExtractedCctpMessage,
 } from '../../tools/bridge'
 export {
   buildCctpBridge,
@@ -750,6 +753,7 @@ export {
   cctpAttestationApiBase,
   cctpChains,
   cctpSupportedChains,
+  extractCctpMessageFromReceipt,
   formatUsdc,
   getCctpChain,
   normalizeHexBytes,
@@ -1033,6 +1037,7 @@ export * from '../../signable-transaction'
 // with the generic entry so the app can remove its local brand matrix.
 export type { UtxoChainName } from '../../chains/utxo/addressBrand'
 export { assertUtxoAddressBrand, isUtxoAddressBrandValid } from '../../chains/utxo/addressBrand'
+export { getBlockchairBaseUrl } from '@vultisig/core-chain/chains/utxo/client/getBlockchairBaseUrl'
 
 // Dangerous/burn-address guard. Single source of truth for "is this destination
 // a burn/black-hole address that no key controls?" across EVM, Solana, UTXO and
