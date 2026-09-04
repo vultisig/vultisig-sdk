@@ -18,7 +18,9 @@ export class PipeInterface {
   private session: AgentSession
   private rl: readline.Interface | null = null
   private stopped = false
+  private inputClosed = false
   private pendingPasswordResolve: ((password: string) => void) | null = null
+  private pendingPasswordReject: ((reason: Error) => void) | null = null
   private pendingConfirmResolve: ((confirmed: boolean) => void) | null = null
 
   constructor(session: AgentSession) {
@@ -64,8 +66,8 @@ export class PipeInterface {
       })
     }
 
-    // Collect all lines, then process them
-    const lines: string[] = []
+    // Collect parsed commands, then process them
+    const commands: PipeInputCommand[] = []
     let inputDone = false
     let processing = false
 
@@ -73,38 +75,54 @@ export class PipeInterface {
     this.rl.on('line', async (line: string) => {
       const trimmed = line.trim()
       if (!trimmed) return
-      lines.push(trimmed)
+
+      let cmd: PipeInputCommand
+      try {
+        cmd = JSON.parse(trimmed) as PipeInputCommand
+      } catch {
+        // Malformed control replies must not wait behind the message whose
+        // prompt they were intended to answer. Keep this error static because
+        // JSON parser messages can include fragments of malformed input.
+        this.emitInvalidInput('Malformed JSON input')
+        return
+      }
+
+      // Commands that resolve an in-flight prompt must bypass the serialized
+      // message queue. A message can be awaiting one of these responses, so
+      // queueing the response behind that message would deadlock the session.
+      if (cmd?.type === 'confirm' || cmd?.type === 'password') {
+        this.handleControlCommand(cmd)
+        return
+      }
+
+      commands.push(cmd)
 
       // Process lines if not already processing
       if (!processing) {
         processing = true
-        while (lines.length > 0) {
-          const nextLine = lines.shift()!
+        while (commands.length > 0) {
+          const nextCommand = commands.shift()!
           try {
-            const cmd = JSON.parse(nextLine) as PipeInputCommand
-            await this.handleCommand(cmd)
+            await this.handleCommand(nextCommand)
           } catch (err: unknown) {
-            const { message, code } = normalizeAgentError(err)
-            this.emit({
-              type: 'error',
-              message: `Invalid input: ${message}`,
-              code: code === AgentErrorCode.UNKNOWN_ERROR ? AgentErrorCode.INVALID_INPUT : code,
-            })
+            this.emitInvalidInput(err)
           }
         }
         processing = false
 
         // If input is done and no more lines, stop
-        if (inputDone && lines.length === 0) {
+        if (inputDone && commands.length === 0) {
           this.stop()
         }
       }
     })
 
     this.rl.on('close', () => {
+      this.inputClosed = true
       inputDone = true
+      this.settlePendingPrompts('Password input closed before a reply was received')
       // If not currently processing, stop immediately
-      if (!processing && lines.length === 0) {
+      if (!processing && commands.length === 0) {
         this.stop()
       }
     })
@@ -209,10 +227,22 @@ export class PipeInterface {
         this.emit({ type: 'done' })
       },
 
-      requestPassword: async (): Promise<string> => {
+      requestPassword: (): Promise<string> => {
+        // A prompt registered after stdin closed can never be answered, and no
+        // further close event will settle it — fail it immediately instead.
+        if (this.inputClosed) {
+          const password = Promise.reject<string>(
+            Object.assign(new Error('Password input closed before a reply was received'), {
+              code: AgentErrorCode.PASSWORD_REQUIRED,
+            })
+          )
+          void password.catch(() => undefined)
+          return password
+        }
         // In via-agent mode, wait for a password command from stdin
-        return new Promise(resolve => {
+        const password = new Promise<string>((resolve, reject) => {
           this.pendingPasswordResolve = resolve
+          this.pendingPasswordReject = reject
           // Signal that password is needed
           this.emit({
             type: 'error',
@@ -220,9 +250,15 @@ export class PipeInterface {
             code: AgentErrorCode.PASSWORD_REQUIRED,
           })
         })
+        // Keep an ignored prompt promise from becoming an unhandled rejection
+        // when EOF or turn cleanup rejects it. Awaiting callers still receive
+        // the rejection from the original promise.
+        void password.catch(() => undefined)
+        return password
       },
 
       requestConfirmation: async (message: string): Promise<boolean> => {
+        if (this.inputClosed) return false
         return new Promise(resolve => {
           this.pendingConfirmResolve = resolve
           this.emit({
@@ -245,23 +281,15 @@ export class PipeInterface {
           const { message, code } = normalizeAgentError(err)
           this.emit({ type: 'error', message, code })
           this.emit({ type: 'done' })
+        } finally {
+          this.settlePendingPrompts('Password request cancelled because the turn ended')
         }
         break
       }
 
-      case 'password': {
-        if (this.pendingPasswordResolve) {
-          this.pendingPasswordResolve(cmd.password)
-          this.pendingPasswordResolve = null
-        }
-        break
-      }
-
+      case 'password':
       case 'confirm': {
-        if (this.pendingConfirmResolve) {
-          this.pendingConfirmResolve(cmd.confirmed)
-          this.pendingConfirmResolve = null
-        }
+        this.handleControlCommand(cmd)
         break
       }
 
@@ -272,6 +300,63 @@ export class PipeInterface {
           code: AgentErrorCode.INVALID_INPUT,
         })
     }
+  }
+
+  private handleControlCommand(cmd: Extract<PipeInputCommand, { type: 'confirm' | 'password' }>): void {
+    if (cmd.type === 'password') {
+      if (!this.pendingPasswordResolve) {
+        this.emitInvalidInput('No pending password request for this reply')
+        return
+      }
+
+      if (typeof cmd.password !== 'string') {
+        this.emitInvalidInput('Password reply must contain a string password')
+        return
+      }
+
+      const resolve = this.pendingPasswordResolve
+      this.pendingPasswordResolve = null
+      this.pendingPasswordReject = null
+      resolve(cmd.password)
+      return
+    }
+
+    if (!this.pendingConfirmResolve) {
+      this.emitInvalidInput('No pending confirmation for this reply')
+      return
+    }
+
+    if (cmd.confirmed !== true && cmd.confirmed !== false) {
+      this.emitInvalidInput('Confirmation reply must contain a boolean confirmed value')
+      return
+    }
+
+    const resolve = this.pendingConfirmResolve
+    this.pendingConfirmResolve = null
+    resolve(cmd.confirmed === true)
+  }
+
+  private settlePendingPrompts(passwordMessage: string): void {
+    const confirmResolve = this.pendingConfirmResolve
+    this.pendingConfirmResolve = null
+    confirmResolve?.(false)
+
+    const passwordReject = this.pendingPasswordReject
+    this.pendingPasswordResolve = null
+    this.pendingPasswordReject = null
+    if (passwordReject) {
+      const error = Object.assign(new Error(passwordMessage), { code: AgentErrorCode.PASSWORD_REQUIRED })
+      passwordReject(error)
+    }
+  }
+
+  private emitInvalidInput(err: unknown): void {
+    const { message, code } = normalizeAgentError(err)
+    this.emit({
+      type: 'error',
+      message: `Invalid input: ${message}`,
+      code: code === AgentErrorCode.UNKNOWN_ERROR ? AgentErrorCode.INVALID_INPUT : code,
+    })
   }
 
   private emit(event: PipeOutputEvent): void {
