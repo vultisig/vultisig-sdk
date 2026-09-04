@@ -394,6 +394,8 @@ export type {
   ConsolidateUtxo,
   EvmTxNumberish,
   GetMaxSendAmountFromKeysParams,
+  IbcCosmosTx,
+  IbcMsgTransfer,
   PrepareIbcTransferParams,
   PrepareIbcTransferResult,
   PrepareJettonTransferTxFromKeysParams,
@@ -403,6 +405,7 @@ export type {
   PrepareSendTxFromKeysParams,
   PrepareSuiTokenTransferFromKeysParams,
   PrepareSwapTxFromKeysParams,
+  PrepareThorchainMsgDepositTxFromKeysParams,
   PrepareTrc20TransferFromKeysParams,
   PrepareUtxoConsolidateResult,
   PrepareUtxoConsolidateTxFromKeysParams,
@@ -505,6 +508,16 @@ export async function prepareSwapTxFromKeys(...args: unknown[]) {
 export async function prepareTrc20TransferFromKeys(...args: unknown[]) {
   const mod = await import('../../tools/prep/trc20')
   return mod.prepareTrc20TransferFromKeys(...(args as Parameters<typeof mod.prepareTrc20TransferFromKeys>))
+}
+
+// The THOR/Maya deposit builder is reachable from the root entrypoint but fell
+// through the hand-curated RN prep allow-list (sdk#1926). Keep it lazy-imported
+// like the WalletCore-dependent prep helpers above.
+export async function prepareThorchainMsgDepositTxFromKeys(...args: unknown[]) {
+  const mod = await import('../../tools/prep/thorchainMsgDeposit')
+  return mod.prepareThorchainMsgDepositTxFromKeys(
+    ...(args as Parameters<typeof mod.prepareThorchainMsgDepositTxFromKeys>)
+  )
 }
 
 // Lazy import: `splTransfer` statically pulls `@solana/web3.js`, which reads
