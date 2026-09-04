@@ -16,7 +16,7 @@
  * initialize WalletCore WASM and never reaches `@ton/crypto-primitives`, so
  * the RN builder path does not need the `crypto.subtle` polyfill.
  */
-import { Address, beginCell, Cell, internal, SendMode, storeMessageRelaxed } from '@ton/core'
+import { Address, beginCell, Cell, internal, SendMode, type Slice, storeMessageRelaxed } from '@ton/core'
 import { TW } from '@trustwallet/wallet-core'
 import { type TonJettonCommentContext, validateTonComment } from '@vultisig/core-chain/chains/ton/comment'
 
@@ -695,6 +695,107 @@ export function buildTonTxFromSigningPayload(opts: BuildTonTxFromSigningPayloadO
         extMessageHashHex: bytesToHex(ext.hash()),
       }
     },
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Signing-payload hostile-drain guard
+//
+// `buildTonTxFromSigningPayload` signs WHATEVER bytes it's given —
+// deterministically, no policy check. A consumer that feeds it a
+// server-supplied payload (yield.xyz staking actions, WalletConnect / dApp
+// signing) is trusting that server not to smuggle a wallet-hijack or
+// full-balance drain into a transaction the user believes is a bounded
+// staking deposit. This decodes the exact wire layout
+// `buildSigningPayloadCell` writes — subWalletId(32) || validUntil(32) ||
+// seqno(32) || op(8) || [sendMode(8) || ref(innerMsg)] per outgoing message
+// — and refuses the two unambiguous drains a bounded-amount action never
+// needs:
+//
+//   - a non-zero wallet `op`. Wallet V4R2 uses op=0 for a simple send; any
+//     other value is a plugin install/remove action that would grant a
+//     non-self extension ONGOING spend authority over the wallet without a
+//     further MPC signature.
+//   - SendMode.CARRY_ALL_REMAINING_BALANCE (128) or
+//     SendMode.DESTROY_ACCOUNT_IF_ZERO (32) on any outgoing message, which
+//     sends the wallet's ENTIRE remaining balance and/or self-destructs it,
+//     ignoring the message's own bounded `value` field entirely.
+//
+// Recipient/amount matching is explicitly OUT of scope (same call Solana's
+// assertSafeSolanaSwapInstructions and Sui's PTB guard make): a hardcoded
+// destination allowlist is a maintenance-heavy false-reject risk, not a
+// safety win, for pools that rotate/expand. This is a structural policy
+// fence on the two wallet-level actions no legitimate bounded action ever
+// needs — not a display bind.
+//
+// Fail posture: fail OPEN on a decode failure (never crash on hostile-but-
+// unparseable bytes — the wallet contract itself will reject bytes it can't
+// parse), fail CLOSED on an absent/empty payload (nothing to inspect means
+// the caller's contract broke, not that the payload is benign). "Fail open"
+// is scoped to bytes we could NOT read — it must never retract a hostile
+// fact already read out of bytes we COULD, so both checks fire eagerly, in
+// slice order, before the next read that might throw:
+//
+//   - `op` is checked BEFORE the outgoing-message walk. A real op!=0 body
+//     is `plugin_wc:int8 || plugin_balance:Grams || ^state_init || ^body`
+//     — NOT the `sendMode:8 || ^msg` sequence the walk expects. Walking it
+//     first throws inside the ref decode and a naive fail-open catch would
+//     swallow the plugin op entirely.
+//   - each `sendMode` is checked the instant it's read, before its ref is
+//     consumed. Collecting modes first and judging after the loop would
+//     let one trailing undecodable ref retract a drain mode already read
+//     off an earlier message.
+// ---------------------------------------------------------------------------
+
+const TON_DRAIN_SEND_MODE_MASK = SendMode.CARRY_ALL_REMAINING_BALANCE | SendMode.DESTROY_ACCOUNT_IF_ZERO
+
+/**
+ * Inspects a TON wallet-V4R2 signing-payload BoC (hex or base64 — same
+ * auto-detection as `buildTonTxFromSigningPayload`) for a hostile wallet-op
+ * or full-balance-drain send mode. Throws before any MPC signing should
+ * happen; never throws on bytes it merely couldn't parse (see header
+ * comment for the fail-open/fail-closed split).
+ */
+export function assertTonSigningPayloadNoHostileDrain(signingPayload: string): void {
+  if (typeof signingPayload !== 'string' || signingPayload.trim().length === 0) {
+    throw new Error('TON_PREBUILT_PAYLOAD_UNREADABLE: no signing payload to inspect — refusing to sign unchecked.')
+  }
+
+  let slice: Slice
+  let op: number
+  try {
+    slice = decodeSigningPayload(signingPayload).beginParse()
+    slice.loadUint(32) // subWalletId
+    slice.loadUint(32) // validUntil
+    slice.loadUint(32) // seqno
+    op = slice.loadUint(8)
+  } catch {
+    return // header itself unreadable — unknown schema, fail open
+  }
+
+  if (op !== 0) {
+    throw new Error(
+      `TON_PREBUILT_HOSTILE_OP: signing-payload op=${op} is not a simple send (0), ` +
+        'this looks like a wallet plugin install/remove action, which would grant a non-self ' +
+        'party ongoing spend authority over the wallet. Refusing to sign.'
+    )
+  }
+
+  while (slice.remainingRefs > 0) {
+    let mode: number
+    try {
+      mode = slice.loadUint(8)
+    } catch {
+      return // truncated mid-walk — fail open on what we couldn't read
+    }
+    if ((mode & TON_DRAIN_SEND_MODE_MASK) !== 0) {
+      throw new Error(
+        `TON_PREBUILT_HOSTILE_DRAIN_MODE: outgoing message sendMode=${mode} carries the wallet's ` +
+          "entire remaining balance and/or self-destructs it, ignoring the message's own value " +
+          'entirely. Refusing to sign a potential full-wallet drain.'
+      )
+    }
+    slice.loadRef()
   }
 }
 
