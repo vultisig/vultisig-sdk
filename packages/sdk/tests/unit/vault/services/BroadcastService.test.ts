@@ -440,7 +440,7 @@ describe('BroadcastService', () => {
 
     const approvalService = new BroadcastService(extractMessageHashes, wasmProvider, {
       approvalConfirmationIntervalMs: 1,
-      approvalConfirmationTimeoutMs: 100,
+      approvalConfirmationTimeoutMs: 1_000,
     })
 
     await expect(
