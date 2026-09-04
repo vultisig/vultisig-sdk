@@ -361,6 +361,12 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(deriveAddressFromPublicKey).toHaveBeenNthCalledWith(2, 60, publicKey)
   })
 
+  it('exports getSplAssociatedAccount, the isToken2022 resolver for buildSplTransfer (sdk#1728)', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(typeof rn.getSplAssociatedAccount).toBe('function')
+  })
+
   it('exports isValidTokenId (WalletCoreLike) for non-address token families from the RN entry', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
     // Sui and a malformed Ripple id never reach the walletCore-dependent

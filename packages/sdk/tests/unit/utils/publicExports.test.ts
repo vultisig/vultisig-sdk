@@ -180,6 +180,10 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.getCustomRpcOverride(sdk.Chain.Ethereum)).toBeUndefined()
   })
 
+  it('exports getSplAssociatedAccount, the isToken2022 resolver for buildSplTransfer (sdk#1728)', () => {
+    expect(typeof sdk.getSplAssociatedAccount).toBe('function')
+  })
+
   it('exports isValidTokenId for non-address token families (Sui struct tags, XRPL currency.issuer)', () => {
     expect(sdk.isValidTokenId).toBe(isValidTokenIdModule.isValidTokenId)
 
