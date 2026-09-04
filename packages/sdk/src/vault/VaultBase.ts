@@ -2029,20 +2029,46 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     return { dryRun: false, txHash: await this.broadcastTx({ chain, keysignPayload, signature }), chain }
   }
 
-  /** Swap tokens. Use amount "max" to swap entire balance. Set dryRun for quote without signing. */
+  /**
+   * Swap tokens. Use amount "max" to swap entire balance. Set dryRun for quote
+   * without signing. Provide exactly one of `amount` (human-readable, or
+   * "max") or `amountBaseUnits` (source token smallest units — "max" is not
+   * supported on this path; resolve the balance yourself first). The base-
+   * units path exists for callers that already hold an authoritative
+   * base-unit amount (e.g. rehydrating a swap from a backend tx envelope) and
+   * would otherwise have to reconstruct a human-readable decimal string
+   * themselves just to call in.
+   */
   async swap(params: {
     fromChain: Chain
     fromSymbol: string
     toChain: Chain
     toSymbol: string
-    amount: string
+    amount?: string
+    amountBaseUnits?: bigint
     recipient?: string
     slippageTolerance?: number
     excludeProviders?: import('./swap-types').SwapQuoteParams['excludeProviders']
     dryRun?: boolean
   }): Promise<CompoundSwapResult> {
-    const { fromChain, fromSymbol, toChain, toSymbol, amount, recipient, slippageTolerance, excludeProviders, dryRun } =
-      params
+    const {
+      fromChain,
+      fromSymbol,
+      toChain,
+      toSymbol,
+      amount,
+      amountBaseUnits,
+      recipient,
+      slippageTolerance,
+      excludeProviders,
+      dryRun,
+    } = params
+    if ((amount !== undefined) === (amountBaseUnits !== undefined)) {
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        'swap: provide exactly one of `amount` (human-readable, or "max") or `amountBaseUnits`.'
+      )
+    }
     const fromToken = this.resolveTokenInfo(fromChain, fromSymbol)
     const toToken = this.resolveTokenInfo(toChain, toSymbol)
     const [fromAddress, defaultToAddress] = await Promise.all([this.address(fromChain), this.address(toChain)])
@@ -2051,65 +2077,65 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     const fromCoin = this.buildAccountCoin(fromChain, fromAddress, fromToken)
     const toCoin = this.buildAccountCoin(toChain, toAddress, toToken)
 
-    let resolvedAmount = amount
-    // Reusable when the fee-aware ceiling turns out to BE the whole balance -
-    // there is then nothing to re-quote and the probe is the final quote.
+    let swapAmountInput: { amount: string } | { amountBaseUnits: bigint }
     let maxProbeQuote: SwapQuoteResult | undefined
 
-    if (amount === 'max') {
-      const bal = await this.balanceService.getBalance(fromChain, fromToken.contractAddress)
-      const balance = BigInt(bal.amount)
-      if (balance <= 0n) throw new VaultError(VaultErrorCode.InvalidAmount, 'Zero balance — nothing to swap')
+    if (amountBaseUnits !== undefined) {
+      if (amountBaseUnits <= 0n) {
+        throw new VaultError(VaultErrorCode.InvalidAmount, `Invalid amount: "${amountBaseUnits}"`)
+      }
+      swapAmountInput = { amountBaseUnits }
+    } else {
+      let resolvedAmount = amount!
+      if (amount === 'max') {
+        const bal = await this.balanceService.getBalance(fromChain, fromToken.contractAddress)
+        const balance = BigInt(bal.amount)
+        if (balance <= 0n) throw new VaultError(VaultErrorCode.InvalidAmount, 'Zero balance — nothing to swap')
 
-      // Quote at the full balance FIRST, purely to learn this route's
-      // `maxSwapable`. Committing the full balance directly (what this used to
-      // do) over-commits a native swap by exactly the network fee, so it fails
-      // at prepare/broadcast with insufficient funds - after the caller has
-      // already been told the swap was viable. `send({ amount: 'max' })` has
-      // always resolved its ceiling before building; this brings swap in line.
-      const fullAmount = this.validateHumanSwapAmount(this.formatUnits(balance, fromToken.decimals), fromToken.decimals)
-      const probe = await this.getSwapQuote({
-        fromCoin,
-        toCoin,
-        amount: fullAmount,
-        recipient: normalizedRecipient,
-        slippageTolerance,
-        excludeProviders,
-      })
-
-      // 0n means "not computable from this quote", NOT "nothing is swappable":
-      // deposit-channel (transfer) routes price the source-chain fee at
-      // broadcast time, so the quote cannot say what is safe. Fail closed with
-      // an actionable message rather than guess a fee on a fund path.
-      //
-      // The typeof check is deliberate belt-and-braces: `getSwapQuote` always
-      // populates `maxSwapable`, but an override or a partial quote must land
-      // in the fail-closed branch rather than fall through into an over-commit.
-      if (typeof probe.maxSwapable !== 'bigint' || probe.maxSwapable <= 0n) {
-        throw new VaultError(
-          VaultErrorCode.InvalidAmount,
-          `Cannot compute a fee-aware max for this ${fromToken.ticker} route: the source-chain fee is only known at ` +
-            `broadcast time. Estimate the fee separately and pass an explicit amount instead of "max".`
+        // Quote at the full balance FIRST, purely to learn this route's
+        // `maxSwapable`. Committing the full balance directly over-commits a
+        // native swap by exactly the network fee, so resolve the fee-aware max
+        // before prepare/broadcast.
+        const fullAmount = this.validateHumanSwapAmount(
+          this.formatUnits(balance, fromToken.decimals),
+          fromToken.decimals
         )
+        const probe = await this.getSwapQuote({
+          fromCoin,
+          toCoin,
+          amount: fullAmount,
+          recipient: normalizedRecipient,
+          slippageTolerance,
+          excludeProviders,
+        })
+
+        if (typeof probe.maxSwapable !== 'bigint' || probe.maxSwapable <= 0n) {
+          throw new VaultError(
+            VaultErrorCode.InvalidAmount,
+            `Cannot compute a fee-aware max for this ${fromToken.ticker} route: the source-chain fee is only known at ` +
+              `broadcast time. Estimate the fee separately and pass an explicit amount instead of "max".`
+          )
+        }
+
+        if (probe.maxSwapable >= balance) {
+          // Token route: gas is paid in the native asset, so the full token
+          // balance remains swappable and the probe already quotes the final amount.
+          resolvedAmount = fullAmount
+          maxProbeQuote = probe
+        } else {
+          resolvedAmount = this.formatUnits(probe.maxSwapable, fromToken.decimals)
+        }
       }
 
-      if (probe.maxSwapable >= balance) {
-        // Token route - gas is paid in the native asset, so the whole token
-        // balance is swappable and the probe already quotes the final amount.
-        resolvedAmount = fullAmount
-        maxProbeQuote = probe
-      } else {
-        resolvedAmount = this.formatUnits(probe.maxSwapable, fromToken.decimals)
-      }
+      swapAmountInput = { amount: this.validateHumanSwapAmount(resolvedAmount, fromToken.decimals) }
     }
-    const normalizedAmount = this.validateHumanSwapAmount(resolvedAmount, fromToken.decimals)
 
     const quote =
       maxProbeQuote ??
       (await this.getSwapQuote({
         fromCoin,
         toCoin,
-        amount: normalizedAmount,
+        ...swapAmountInput,
         recipient: normalizedRecipient,
         slippageTolerance,
         excludeProviders,
@@ -2119,7 +2145,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     const { keysignPayload, approvalPayload } = await this.prepareSwapTx({
       fromCoin,
       toCoin,
-      amount: normalizedAmount,
+      ...swapAmountInput,
       swapQuote: quote,
     })
     if (approvalPayload) {

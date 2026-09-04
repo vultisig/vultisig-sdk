@@ -1414,31 +1414,20 @@ export class AgentExecutor {
   }
 
   /**
-   * Sign and broadcast a THORChain / MayaChain MsgDeposit-style swap
-   * envelope by reconstructing `vault.swap` args from the memo.
+   * Sign and broadcast a THORChain / MayaChain MsgDeposit envelope whose memo is
+   * a swap (`=:CHAIN.SYMBOL:DEST[:LIMIT][/AFFILIATE[:BPS]]`).
    *
-   * The agent emits envelopes shaped:
-   *   { txArgs: { chain: 'THORChain', tx_encoding: 'cosmos-msg',
-   *               to: '', amount: '<base>', denom: 'rune',
-   *               memo: '=:DEST_CHAIN.DEST_ASSET:DEST_ADDR::v0:slippage_bps',
-   *               msg_type: 'deposit' } }
-   *
-   * The memo is THORChain's standard swap memo. We parse out the
-   * destination chain + asset, look up the corresponding `Chain` enum,
-   * then call `vault.swap` which builds the MsgDeposit internally.
-   *
-   * The destination encoded in the server-issued memo is forwarded through
-   * `vault.swap({ recipient })`. The SDK uses the same recipient both for the
-   * destination coin and the THORChain/MayaChain quote request, so an explicit
-   * cross-account route cannot be silently replaced with the vault's address.
-   * An omitted destination keeps the existing self-swap default.
+   * The parser is the single source of truth for the destination route and
+   * authoritative base-unit amount, so sdk-cli consumes the already-normalized
+   * `ParsedTxReadyThorSwapDeposit` instead of re-parsing ad hoc fields here.
    */
   private async signThorMsgDepositSwap(parsed: ParsedTxReadyThorSwapDeposit): Promise<Record<string, unknown>> {
-    const { amount, chain, fromSymbol, memo, recipient, toChain, toSymbol } = parsed
+    const { amountBaseUnits: amountBaseUnitsRaw, chain, fromSymbol, memo, recipient, toChain, toSymbol } = parsed
+    const amountBaseUnits = BigInt(amountBaseUnitsRaw)
 
     if (this.verbose)
       process.stderr.write(
-        `[sign_thor_msg_deposit_swap] ${fromSymbol}@${chain} → ${toSymbol}@${toChain}, amount=${amount}, memo='${memo}'\n`
+        `[sign_thor_msg_deposit_swap] ${fromSymbol}@${chain} → ${toSymbol}@${toChain}, amount=${amountBaseUnits} (base units), memo='${memo}'\n`
       )
 
     const result = await this.vault.swap({
@@ -1446,7 +1435,7 @@ export class AgentExecutor {
       fromSymbol,
       toChain,
       toSymbol,
-      amount,
+      amountBaseUnits,
       ...(recipient && { recipient }),
     })
 
@@ -1789,18 +1778,18 @@ export class AgentExecutor {
 
     const fromToken = serverTxData.from_address as string | undefined
     const toToken = serverTxData.to_address as string | undefined
-    const fromDecimals = serverTxData.from_decimals as number | undefined
-    if (fromDecimals == null)
-      throw Object.assign(new Error('Missing from_decimals in tx_ready data for local Solana swap build'), {
-        _phase: 'prepare',
-      })
 
     const fromCoin = { chain: fromChain, token: fromToken || undefined }
     const toCoin = { chain: toChain, token: toToken || undefined }
 
-    let humanAmount: string
+    // `amountStr` is already the authoritative base-units amount from the
+    // backend tx envelope — hand it straight to the SDK's `amountBaseUnits`
+    // path (architecture#2080) instead of reconstructing a human decimal
+    // string (which needed `from_decimals` purely to undo what the backend
+    // had already scaled).
+    let amountBaseUnits: bigint
     try {
-      humanAmount = formatUnits(BigInt(amountStr), fromDecimals)
+      amountBaseUnits = BigInt(amountStr)
     } catch {
       throw Object.assign(new Error(`Invalid amount in tx_ready data for local Solana swap build: ${amountStr}`), {
         _phase: 'prepare',
@@ -1809,7 +1798,7 @@ export class AgentExecutor {
 
     if (this.verbose)
       process.stderr.write(
-        `[solana_local_swap] from=${fromChainName} to=${toChainName || fromChainName} amount=${amountStr} human=${humanAmount}\n`
+        `[solana_local_swap] from=${fromChainName} to=${toChainName || fromChainName} amount=${amountBaseUnits} (base units)\n`
       )
 
     // Unlock vault if needed
@@ -1826,13 +1815,13 @@ export class AgentExecutor {
       quote = await this.vault.getSwapQuote({
         fromCoin: fromCoin as any,
         toCoin: toCoin as any,
-        amount: humanAmount,
+        amountBaseUnits,
       })
 
       swapResult = await this.vault.prepareSwapTx({
         fromCoin: fromCoin as any,
         toCoin: toCoin as any,
-        amount: humanAmount,
+        amountBaseUnits,
         swapQuote: quote,
         autoApprove: true,
       })
