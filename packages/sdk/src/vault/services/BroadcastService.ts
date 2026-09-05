@@ -245,8 +245,9 @@ export class BroadcastService {
     })
 
     if (outcome.result?.status === 'success') return
-    if (outcome.result?.status === 'error') {
-      throw new Error(`Approval tx failed: ${txHash}`)
+    if (outcome.result?.status === 'error' || outcome.result?.status === 'expired') {
+      const outcomeLabel = outcome.result.status === 'error' ? 'failed' : 'expired'
+      throw new Error(`Approval tx ${outcomeLabel}: ${txHash}`)
     }
 
     const suffix = outcome.lastError instanceof Error ? ` Last status error: ${outcome.lastError.message}` : ''
