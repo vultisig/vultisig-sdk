@@ -1,12 +1,15 @@
 import { create } from '@bufbuild/protobuf'
 import { getRippleAccountInfo } from '@vultisig/core-chain/chains/ripple/account/info'
+import { getRippleAccountLines } from '@vultisig/core-chain/chains/ripple/account/lines'
+import { parseRippleTokenId } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
+import { findRippleTrustLine } from '@vultisig/core-chain/chains/ripple/trustLine'
 import { getRippleNetworkInfo } from '@vultisig/core-chain/chains/ripple/network/info'
 import {
   RippleSpecificSchema,
   TransactionType,
 } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
-import { attempt } from '@vultisig/lib-utils/attempt'
+import { attempt, withFallback } from '@vultisig/lib-utils/attempt'
 import { isInError } from '@vultisig/lib-utils/error/isInError'
 import { maxBigInt } from '@vultisig/lib-utils/math/maxBigInt'
 
@@ -20,6 +23,14 @@ const minProtocolFee = 15n
 const baseFeeMultiplier = 2n
 const rippleRequireDestinationTagFlag = 0x00020000
 const lastLedgerSequenceOffset = 60
+
+/**
+ * `AccountRoot.TransferRate` encoding for "no transfer fee". The field is
+ * absent or zero on most issuers; anything above this billionths-denominated
+ * unit rate means the issuer charges a fee on every hop.
+ * @see https://xrpl.org/docs/concepts/tokens/transfer-fees
+ */
+const rippleNoTransferFeeRate = 1_000_000_000
 
 export const getRippleLastLedgerSequence = (ledgerCurrentIndex: number | undefined): bigint => {
   if (ledgerCurrentIndex === undefined || !Number.isSafeInteger(ledgerCurrentIndex) || ledgerCurrentIndex <= 0) {
@@ -54,11 +65,38 @@ export const getRippleChainSpecific: GetChainSpecificResolver<'rippleSpecific'> 
       ? originatesRippleTrustSet(keysignPayload)
       : transactionType === TransactionType.RIPPLE_TRUST_SET
 
-  const [senderAccount, networkInfo, destinationAccountResult] = await Promise.all([
-    getRippleAccountInfo(address),
-    getRippleNetworkInfo(),
-    toAddress ? attempt(getRippleAccountInfo(toAddress)) : undefined,
-  ])
+  // A verbatim dApp transaction is signed exactly as supplied, so the token
+  // pre-flights below — which describe a Payment this resolver would build —
+  // do not apply to it.
+  const isVerbatimDappTx = keysignPayload.signData.case === 'signRipple'
+  const isIssuedCurrencySend =
+    !isTrustSet && !isVerbatimDappTx && !!keysignPayload.coin && !keysignPayload.coin.isNativeToken
+
+  // A payload with no parseable token id cannot name an asset to pre-flight.
+  // The signing-input resolver rejects that shape outright; here it only means
+  // there is nothing to look up.
+  const tokenId = isIssuedCurrencySend ? coin.id : undefined
+  const issuedCurrency = tokenId
+    ? withFallback(
+        attempt(() => parseRippleTokenId(tokenId)),
+        undefined
+      )
+    : undefined
+
+  // Sending a token back to its issuer redeems it: the issuer needs no trust
+  // line to itself and charges no transfer fee, so neither pre-flight applies.
+  const redeemsToIssuer = issuedCurrency !== undefined && toAddress === issuedCurrency.issuer
+
+  const [senderAccount, networkInfo, destinationAccountResult, destinationLinesResult, issuerAccountResult] =
+    await Promise.all([
+      getRippleAccountInfo(address),
+      getRippleNetworkInfo(),
+      toAddress ? attempt(getRippleAccountInfo(toAddress)) : undefined,
+      issuedCurrency && toAddress && !redeemsToIssuer ? attempt(getRippleAccountLines(toAddress)) : undefined,
+      issuedCurrency && toAddress && !redeemsToIssuer && address !== issuedCurrency.issuer
+        ? attempt(getRippleAccountInfo(issuedCurrency.issuer))
+        : undefined,
+    ])
 
   const { validated_ledger, load_factor, load_base } = networkInfo
   const { base_fee, reserve_base } = shouldBePresent(validated_ledger)
@@ -98,8 +136,18 @@ export const getRippleChainSpecific: GetChainSpecificResolver<'rippleSpecific'> 
   }
 
   if (destinationUnfunded) {
+    // A TrustSet is addressed to the issuer, not to a payee. Saying "activate
+    // it before sending tokens" would tell the user to fund somebody else's
+    // account; an issuer that does not exist simply cannot be trusted.
+    if (isTrustSet) {
+      throw new BuildKeysignPayloadError(
+        'ripple-trust-line-issuer-not-activated',
+        `Cannot open an XRP trust line to ${toAddress}: that issuer account does not exist on the ledger.`
+      )
+    }
     if (!keysignPayload.coin?.isNativeToken) {
-      throw new Error(
+      throw new BuildKeysignPayloadError(
+        'ripple-destination-not-activated',
         `Cannot send an XRP issued currency to ${toAddress}: the destination account is not activated. ` +
           'Activate it with the XRP base reserve before sending tokens.'
       )
@@ -111,6 +159,47 @@ export const getRippleChainSpecific: GetChainSpecificResolver<'rippleSpecific'> 
           `Payment amount to be at least the base reserve (${reserve_base} drops) to create a new ` +
           `account. The send amount is ${toAmount.toString()} drops. Increase the amount to at least ` +
           `the reserve, or send to an already-activated account.`
+      )
+    }
+  }
+
+  // XRPL rejects a token Payment to an account holding no trust line for that
+  // exact (currency, issuer) with tecNO_LINE / tecPATH_DRY — the transaction is
+  // still applied, so the fee is burned and the sequence consumed. Checking the
+  // destination's lines turns that into a pre-review failure. Fail closed on a
+  // lookup error: without the lines there is no evidence a line exists.
+  if (issuedCurrency && toAddress && !redeemsToIssuer) {
+    if (destinationLinesResult === undefined || 'error' in destinationLinesResult) {
+      // Transient RPC failures must stay retryable, so this is not a
+      // BuildKeysignPayloadError.
+      throw new Error(`Unable to verify whether XRP destination ${toAddress} holds a trust line for ${coin.ticker}`)
+    }
+
+    if (!findRippleTrustLine({ lines: destinationLinesResult.data, ...issuedCurrency })) {
+      throw new BuildKeysignPayloadError(
+        'ripple-destination-trust-line-missing',
+        `Cannot send ${coin.ticker} to ${toAddress}: that account holds no trust line for this token, ` +
+          'so the XRP Ledger would reject the payment. The recipient has to open one first.'
+      )
+    }
+  }
+
+  // An issuer that charges a transfer fee debits the sender Amount x (1 + rate),
+  // which exceeds the SendMax that XRPL defaults to Amount — the payment fails
+  // with tecPATH_PARTIAL and burns the fee. Covering the fee needs an explicit
+  // SendMax on the wire, which RippleSpecific cannot yet carry, so refuse the
+  // send rather than let it fail on-ledger.
+  if (issuerAccountResult !== undefined) {
+    if ('error' in issuerAccountResult) {
+      throw new Error(`Unable to verify whether the ${coin.ticker} issuer charges an XRP transfer fee`)
+    }
+
+    const { TransferRate } = issuerAccountResult.data.account_data
+    if (TransferRate !== undefined && TransferRate > rippleNoTransferFeeRate) {
+      throw new BuildKeysignPayloadError(
+        'ripple-issuer-transfer-fee-unsupported',
+        `Cannot send ${coin.ticker}: its issuer charges a transfer fee, which needs a SendMax this ` +
+          'payload cannot express yet. Sending it back to the issuer still works.'
       )
     }
   }
