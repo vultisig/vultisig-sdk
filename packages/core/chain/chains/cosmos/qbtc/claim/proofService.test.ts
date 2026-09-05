@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { ClaimProofError, ClaimProofErrorCode } from './ClaimProofError'
 import { checkProofServiceHealth, generateClaimProof } from './proofService'
 
 const originalFetch = globalThis.fetch
@@ -178,5 +179,31 @@ describe('generateClaimProof', () => {
     await expect(generateClaimProof({ ...validInput, broadcast: true })).rejects.toThrow(
       'Invalid proof service response: invalid tx_hash'
     )
+  })
+
+  describe('response validation throws a typed ClaimProofError', () => {
+    it.each([
+      ['missing proof', { ...validResponse, proof: '' }, ClaimProofErrorCode.MissingProof],
+      ['invalid message_hash', { ...validResponse, message_hash: 'not-hex' }, ClaimProofErrorCode.InvalidMessageHash],
+      ['invalid address_hash', { ...validResponse, address_hash: 'not-hex' }, ClaimProofErrorCode.InvalidAddressHash],
+      [
+        'invalid qbtc_address_hash',
+        { ...validResponse, qbtc_address_hash: 'not-hex' },
+        ClaimProofErrorCode.InvalidQbtcAddressHash,
+      ],
+      [
+        'invalid pub_key_hash_sha256',
+        { ...validResponse, pub_key_hash_sha256: 'aa' },
+        ClaimProofErrorCode.InvalidPubKeyHashSha256,
+      ],
+      ['invalid tx_hash', { ...validResponse, tx_hash: 'too-short' }, ClaimProofErrorCode.InvalidTxHash],
+    ])('%s -> %s', async (_label, response, expectedCode) => {
+      mockFetch(response)
+
+      const error = await generateClaimProof(validInput).catch((e: unknown) => e)
+
+      expect(error).toBeInstanceOf(ClaimProofError)
+      expect((error as InstanceType<typeof ClaimProofError>).code).toBe(expectedCode)
+    })
   })
 })

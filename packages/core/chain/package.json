@@ -305,6 +305,11 @@
       "import": "./dist/chains/cosmos/qbtc/claim/ClaimableUtxo.js",
       "default": "./dist/chains/cosmos/qbtc/claim/ClaimableUtxo.js"
     },
+    "./chains/cosmos/qbtc/claim/ClaimProofError": {
+      "types": "./dist/chains/cosmos/qbtc/claim/ClaimProofError.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/claim/ClaimProofError.js",
+      "default": "./dist/chains/cosmos/qbtc/claim/ClaimProofError.js"
+    },
     "./chains/cosmos/qbtc/claim/computeClaimHashes": {
       "types": "./dist/chains/cosmos/qbtc/claim/computeClaimHashes.d.ts",
       "import": "./dist/chains/cosmos/qbtc/claim/computeClaimHashes.js",
