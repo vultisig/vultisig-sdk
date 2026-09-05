@@ -58,6 +58,31 @@ export const getTonAddressBounceability = (address: string): TonAddressBounceabi
   return parsed.data.isBounceable ? 'bounceable' : 'nonBounceable'
 }
 
+const parseTonAddress = (address: string): Address | undefined => {
+  try {
+    return Address.parse(address.trim())
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Whether two TON addresses name the same account.
+ *
+ * One account has several textual spellings — raw `workchain:hex`, bounceable
+ * `EQ…`, non-bounceable `UQ…`, and the base64 / base64url variants of both —
+ * and only the flag byte and checksum differ between `EQ` and `UQ`. String
+ * equality therefore reports differences that do not exist, which matters
+ * wherever two independently sourced addresses are cross-checked before money
+ * moves. Input that does not parse as a TON address falls back to exact
+ * comparison rather than being reported as a match.
+ */
+export const areEqualTonAddresses = (left: string, right: string): boolean => {
+  const parsedLeft = parseTonAddress(left)
+  const parsedRight = parseTonAddress(right)
+
+  return parsedLeft && parsedRight ? parsedLeft.equals(parsedRight) : left.trim() === right.trim()
+}
 /**
  * Lower-cased raw (`workchain:hex`) form of a raw or user-friendly TON address.
  * Toncenter answers in upper-case hex and ton-assets lists lower-case hex, so
