@@ -167,6 +167,26 @@ describe('getEvmFeeQuote', () => {
       expect(quote.maxPriorityFeePerGas).toBe(1n * gwei)
     })
 
+    it('never lets a caller minimum raise a successful simulation', async () => {
+      const simulated = await getEvmFeeQuote({
+        keysignPayload: emptyPayload,
+        minimumGasLimit: 800_000n,
+      })
+
+      // 1.5x the 310,252 simulation is below the 600k swap default, which a
+      // route without a gas figure counts as; the 800k minimum plays no part.
+      expect(simulated.gasLimit).toBe(600_000n)
+
+      mocks.client.estimateGas.mockRejectedValueOnce(new Error('execution reverted'))
+
+      const fallback = await getEvmFeeQuote({
+        keysignPayload: emptyPayload,
+        minimumGasLimit: 800_000n,
+      })
+
+      expect(fallback.gasLimit).toBe(1_200_000n)
+    })
+
     it('inflates the Mantle swap default and signs a zero tip', async () => {
       mocks.getKeysignCoin.mockReturnValue(makeCoin(EvmChain.Mantle))
       mocks.client.estimateGas.mockRejectedValueOnce(new Error('execution reverted'))
@@ -255,6 +275,26 @@ describe('getEvmFeeQuote', () => {
       })
 
       expect(quote.gasLimit).toBe(40_000n)
+    })
+
+    it('never lets a caller minimum raise a successful simulation', async () => {
+      mocks.client.estimateGas.mockResolvedValue(30_000n)
+
+      const simulated = await getEvmFeeQuote({
+        keysignPayload: transferPayload,
+        minimumGasLimit: 800_000n,
+      })
+
+      expect(simulated.gasLimit).toBe(30_000n)
+
+      mocks.client.estimateGas.mockRejectedValueOnce(new Error('execution reverted'))
+
+      const fallback = await getEvmFeeQuote({
+        keysignPayload: transferPayload,
+        minimumGasLimit: 800_000n,
+      })
+
+      expect(fallback.gasLimit).toBe(800_000n)
     })
   })
 

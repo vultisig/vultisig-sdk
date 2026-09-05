@@ -43,7 +43,10 @@ type GetEvmFeeQuoteInput = {
   feeSettings?: FeeSettings<'evm'>
   /** Gas limit the transaction's author (a dApp, an aggregator route) asks for. */
   thirdPartyGasLimitEstimation?: bigint
-  /** Extra floor on the fallback taken when the transaction cannot be simulated. */
+  /**
+   * Extra floor on the value that stands in for a failed simulation. Never
+   * raises a successful estimate.
+   */
   minimumGasLimit?: bigint
 }
 
@@ -82,32 +85,33 @@ export const getEvmFeeQuote = async ({
   const swapPayload = getKeysignSwapPayload(keysignPayload)
   const kind = getEvmTxKind(keysignPayload, swapPayload)
 
-  const fallbackGasLimit = bigIntMax(
-    match(kind, {
-      transfer: () => getEvmTransferGasLimit(coin),
-      contractCall: () => getEvmContractCallGasLimit(chain),
-      swap: () => getEvmContractCallGasLimit(chain),
-      routerDeposit: () => evmRouterDepositGasLimit,
-    }),
-    minimumGasLimit ?? 0n
-  )
+  const kindGasLimit = match(kind, {
+    transfer: () => getEvmTransferGasLimit(coin),
+    contractCall: () => getEvmContractCallGasLimit(chain),
+    swap: () => getEvmContractCallGasLimit(chain),
+    routerDeposit: () => evmRouterDepositGasLimit,
+  })
+  // Stands in for a simulation that failed. A caller minimum only ever raises
+  // this stand-in, never a real estimate.
+  const fallbackGasLimit = bigIntMax(kindGasLimit, minimumGasLimit ?? 0n)
   const requestedGasLimit = thirdPartyGasLimitEstimation ?? 0n
 
   const resolveGasLimit = (estimatedGasLimit: bigint | undefined): bigint =>
     match(kind, {
       // A transfer costs what its simulation says, raised to the per-chain floor.
-      transfer: () => bigIntMax(estimatedGasLimit ?? 0n, fallbackGasLimit, requestedGasLimit),
+      transfer: () => bigIntMax(estimatedGasLimit ?? fallbackGasLimit, kindGasLimit, requestedGasLimit),
       // A contract call gets headroom over its simulation (or the fallback), and
       // never less than what its author asked for.
       contractCall: () => inflateGasLimit(bigIntMax(estimatedGasLimit ?? fallbackGasLimit, requestedGasLimit)),
       // A swap is signed with the larger of the route's own gas and the inflated
-      // simulation; a route that carries no gas figure counts as the fallback.
+      // simulation; a route that carries no gas figure counts as the swap default.
       swap: () =>
         bigIntMax(
-          requestedGasLimit > 0n ? requestedGasLimit : fallbackGasLimit,
+          requestedGasLimit > 0n ? requestedGasLimit : kindGasLimit,
           inflateGasLimit(estimatedGasLimit ?? fallbackGasLimit)
         ),
-      routerDeposit: () => bigIntMax(fallbackGasLimit, requestedGasLimit),
+      // A router deposit is never simulated and is sized from its fixed limit.
+      routerDeposit: () => bigIntMax(kindGasLimit, requestedGasLimit),
     })
 
   const isLegacyPriced = evmChainTxFeeFormat[chain] === 'legacy'
