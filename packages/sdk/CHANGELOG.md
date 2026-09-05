@@ -1,5 +1,13 @@
 # @vultisig/sdk
 
+## 7.1.1
+
+### Patch Changes
+
+- [#1860](https://github.com/vultisig/vultisig-sdk/pull/1860) [`fd7507a`](https://github.com/vultisig/vultisig-sdk/commit/fd7507af5d9dc14938da80372bc3c1a8ec02a459) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Preserve snake_case StakeKit EIP-1559 `max_priority_fee_per_gas` hints when canonicalizing EVM yield steps.
+
+- [#2043](https://github.com/vultisig/vultisig-sdk/pull/2043) [`052f2e3`](https://github.com/vultisig/vultisig-sdk/commit/052f2e3b56509c1ddc2bcc14f21d0d1a5ee5d674) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - The SDK already computed the canonical signing-algorithm (ECDSA vs EdDSA vs mldsa) decision per chain internally (`@vultisig/core-chain/signing/SignatureAlgorithm`), but never exposed it on the public `@vultisig/sdk` surface. First-party consumers (agent-backend's swap/get-address/get-receive-info tools) were re-declaring local EdDSA chain sets to make the same decision. `getSignatureAlgorithm` and `signatureAlgorithms` are now re-exported from the SDK root so consumers can import one canonical seam instead of duplicating the mapping.
+
 ## 7.1.0
 
 ### Minor Changes
