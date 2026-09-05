@@ -128,7 +128,17 @@ export const getUtxoBalance = async (
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
   const url = `${base.replace(/\/+$/, '')}/${blockchairPath(chain)}/dashboards/address/${encodeURIComponent(address)}`
 
-  const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) })
+  // Hermes-compatible timeout: `AbortSignal.timeout()` is Node 17.3+ and not
+  // available on older RN/Hermes runtimes — build the same behaviour with
+  // AbortController + setTimeout (mirrors src/chains/tron/rpc.ts).
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+  let response: Response
+  try {
+    response = await fetch(url, { signal: controller.signal })
+  } finally {
+    clearTimeout(timeoutId)
+  }
   if (!response.ok) {
     throw new Error(`getUtxoBalance: Blockchair returned ${response.status} for ${chain} address ${address}.`)
   }
