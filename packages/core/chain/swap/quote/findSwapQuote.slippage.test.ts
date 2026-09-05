@@ -28,6 +28,10 @@ vi.mock('@vultisig/core-chain/swap/general/swapkit/api/getSwapKitQuote', () => (
 vi.mock('@vultisig/core-chain/swap/native/api/getNativeSwapQuote', () => ({
   getNativeSwapQuote: vi.fn(),
 }))
+// Keep these routing assertions independent of live THORChain halt status.
+vi.mock('@vultisig/core-chain/swap/native/halts/getNativeSwapTradingHalt', () => ({
+  getNativeSwapTradingHalt: vi.fn().mockResolvedValue(null),
+}))
 vi.mock('@vultisig/core-chain/swap/native/minimum/getNativeSwapMinAmountIn', () => ({
   getNativeSwapMinAmountIn: vi.fn().mockResolvedValue(null),
 }))
