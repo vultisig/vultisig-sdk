@@ -19,6 +19,11 @@ describe('chain-aware curated token lookup', () => {
     }
   })
 
+  it.each(['toString', 'valueOf', 'constructor', '__proto__'])('rejects inherited object name %s', id => {
+    expect(knownTokensIndex[Chain.Solana][id]).toBeUndefined()
+    expect(getKnownToken({ chain: Chain.Solana, id })).toBeUndefined()
+  })
+
   it('retains EVM case-insensitivity and canonical metadata', () => {
     for (const id of [usdc.id, usdc.id.toLowerCase(), usdc.id.toUpperCase()]) {
       expect(getKnownToken({ chain: Chain.Ethereum, id })?.id).toBe(usdc.id)

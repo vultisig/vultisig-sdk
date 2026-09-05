@@ -325,6 +325,10 @@ describe('Vultisig static methods', () => {
 })
 
 describe('case-sensitive public static token lookup', () => {
+  it.each(['toString', 'valueOf', 'constructor', '__proto__'])('returns null for unknown identifier %s', id => {
+    expect(Vultisig.getKnownToken(Chain.Solana, id)).toBeNull()
+  })
+
   it('resolves canonical Solana and Ripple identifiers and rejects altered variants', () => {
     for (const chain of [Chain.Solana, Chain.Ripple]) {
       for (const coin of knownTokens[chain]) {

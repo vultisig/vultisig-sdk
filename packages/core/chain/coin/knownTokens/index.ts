@@ -1339,7 +1339,7 @@ export const knownTokens = makeRecord(Object.values(Chain), chain => {
 type KnownIndex = Record<Chain, Record<string, KnownCoin>>
 
 export const knownTokensIndex: KnownIndex = makeRecord(Object.values(Chain), chain => {
-  const byId: Record<string, KnownCoin> = {}
+  const byId: Record<string, KnownCoin> = Object.create(null)
   for (const coin of knownTokens[chain] ?? []) {
     if (!coin.id) continue
     byId[getKnownTokenIndexId(chain, coin.id)] = coin
