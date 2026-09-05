@@ -13,7 +13,7 @@ import { getRippleClient } from '@vultisig/core-chain/chains/ripple/client'
 import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
 import { getSuiClient } from '@vultisig/core-chain/chains/sui/client'
 import { getSuiResultTransaction } from '@vultisig/core-chain/chains/sui/transactionResult'
-import { tronRpcUrl } from '@vultisig/core-chain/chains/tron/config'
+import { broadcastTronTransaction } from '@vultisig/core-chain/chains/tron/queryTron'
 import { getBlockchairBaseUrl } from '@vultisig/core-chain/chains/utxo/client/getBlockchairBaseUrl'
 import { isRippleInFlightEngineResult } from '@vultisig/core-chain/tx/broadcast/resolvers/ripple'
 import { assertSuiTxSucceeded } from '@vultisig/core-chain/tx/broadcast/resolvers/sui'
@@ -660,10 +660,7 @@ export class RawBroadcastService {
     const txJson = JSON.parse(rawTx)
 
     const { data: response, error } = await attempt(
-      queryUrl<{ txid?: string; result?: boolean; code?: string; message?: string }>(
-        `${tronRpcUrl}/wallet/broadcasttransaction`,
-        { body: txJson }
-      )
+      broadcastTronTransaction(txJson, deriveTronRawTxHash(txJson) ?? undefined)
     )
 
     if (error) {

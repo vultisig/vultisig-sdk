@@ -957,6 +957,23 @@ describe('RawBroadcastService', () => {
     })
   })
 
+  it.each(['REVERT', 'expired'])('preserves %s after an ambiguous Tron broadcast finds its hash', async outcome => {
+    const rawDataHex = '010203'
+    const hash = bytesToHex(sha256(Buffer.from(rawDataHex, 'hex')))
+    mockQueryUrl.mockReset()
+    mockQueryUrl
+      .mockRejectedValueOnce(new TypeError('lost response'))
+      .mockResolvedValueOnce({ txID: hash })
+      .mockResolvedValueOnce(
+        outcome === 'REVERT' ? { id: hash, blockNumber: 12345, receipt: { result: 'REVERT' } } : {}
+      )
+    if (outcome === 'expired') mockQueryUrl.mockResolvedValueOnce({ txID: hash, raw_data: { expiration: 1 } })
+    await expect(
+      service.broadcastRawTx({ chain: Chain.Tron, rawTx: JSON.stringify({ raw_data_hex: rawDataHex, txID: hash }) })
+    ).rejects.toMatchObject({ code: VaultErrorCode.BroadcastFailed })
+    expect(mockQueryUrl.mock.calls.filter(([url]) => String(url).endsWith('/broadcasttransaction'))).toHaveLength(1)
+  })
+
   it('broadcasts Ripple tx blob', async () => {
     const hash = await service.broadcastRawTx({
       chain: Chain.Ripple,
