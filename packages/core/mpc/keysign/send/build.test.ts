@@ -113,15 +113,24 @@ describe('buildSendKeysignPayload XRP DestinationTag compatibility', () => {
     expect(payload.toAmount).toBe('1500000000000000')
   })
 
-  it('rejects inexact issued amounts before preparing a transaction for review', async () => {
-    await expect(
-      buildPayload({
+  it.each([
+    { label: 'inexact', amount: 12_345_678_901_234_567n, message: /16 significant digits/ },
+    { label: 'zero', amount: 0n, message: /must be positive/ },
+  ])(
+    'rejects an $label issued amount as bad input, before preparing a transaction for review',
+    async ({ amount, message }) => {
+      // A domain error rather than a bare Error so callers stop retrying and
+      // surface the reason instead of a generic failure.
+      const build = buildPayload({
         coin: { ...rippleKnownIssuedTokens[0], address: rippleCoin.address },
-        amount: 12_345_678_901_234_567n,
+        amount,
       })
-    ).rejects.toThrow(/16 significant digits/)
-    expect(getChainSpecificMock).not.toHaveBeenCalled()
-  })
+
+      await expect(build).rejects.toMatchObject({ type: 'ripple-issued-currency-amount-invalid' })
+      await expect(build).rejects.toThrow(message)
+      expect(getChainSpecificMock).not.toHaveBeenCalled()
+    }
+  )
 
   it('treats the empty memo supplied by Windows as absent for tag-only dual-write', async () => {
     const payload = await buildPayload({ memo: '' })
