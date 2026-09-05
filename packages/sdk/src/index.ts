@@ -574,6 +574,7 @@ export {
 
 // Seedphrase validation and vault creation from seedphrase types
 export type {
+  ChainDiscoveryAggregate,
   ChainDiscoveryPhase,
   ChainDiscoveryProgress,
   ChainDiscoveryResult,
@@ -872,6 +873,8 @@ export type {
   CctpBurnMessage,
   CctpChainConfig,
   CctpClaimResult,
+  CctpReceiptLike,
+  CctpReceiptLog,
   CctpUnsignedTx,
   ChainFamily,
   Coin,
@@ -894,6 +897,7 @@ export type {
   EvmBalance,
   EvmGasPrice,
   EvmScanRequest,
+  ExtractedCctpMessage,
   FieldDiff,
   FindSwapQuoteParams,
   FindSwapQuotesResult,
@@ -1086,6 +1090,7 @@ export {
   evmGasPrice,
   evmTxInfo,
   type EvmTxNumberish,
+  extractCctpMessageFromReceipt,
   fetchAllStakekitBalances,
   fetchStakekitBalancesBatch,
   findSwapQuote,

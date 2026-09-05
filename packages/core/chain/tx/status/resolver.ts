@@ -7,12 +7,20 @@ import { Chain } from '../../Chain'
 // no final receipt yet". Keeping them distinct stops a typo'd or dropped hash from
 // being polled as `pending` forever. Resolvers that can't tell the two apart may
 // still return `pending` (with `isKnown: false`).
-type TxStatus = 'pending' | 'success' | 'error' | 'not_found'
+type TxStatus = 'pending' | 'success' | 'error' | 'expired' | 'not_found'
 
 export type TxReceiptInfo = {
   feeAmount: bigint
   feeDecimals: number
   feeTicker: string
+  /** XRPL Payment delivery from validated metadata: XRP drops, issued-currency units, or MPT base units. */
+  deliveredAmount?: string
+  /** Identifies a classic issued currency, or `XRP` for a native delivery. */
+  deliveredCurrency?: string
+  /** Present only for a classic issued-currency delivery. */
+  deliveredIssuer?: string
+  /** Present only for a multi-purpose-token delivery. */
+  deliveredMptIssuanceId?: string
 }
 
 /**
