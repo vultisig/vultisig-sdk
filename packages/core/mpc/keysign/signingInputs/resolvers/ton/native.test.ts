@@ -6,7 +6,7 @@ import { TW, WalletCore } from '@trustwallet/wallet-core'
 import { describe, expect, it } from 'vitest'
 
 import { buildJettonTransfer } from './jetton'
-import { buildNativeTonTransfer, buildNativeTonTransferFromMessage, tonAmountToBytes } from './native'
+import { buildNativeTonTransfer, buildNativeTonTransferFromMessage, getTonSendMode, tonAmountToBytes } from './native'
 
 const TON_ADDRESS = 'EQAtiFQ15MZBgpAGwD1jfJm6maz5otBOPefyw9Wc3MVmMgzp'
 
@@ -36,6 +36,7 @@ describe('TON signing input amount encoding', () => {
     const transfer = buildNativeTonTransfer({
       keysignPayload: buildPayload('1000000000'),
       bounceable: true,
+      walletVersion: 'v4r2',
     })
 
     expect(Buffer.from(transfer.amount).toString('hex')).toBe('3b9aca00')
@@ -46,6 +47,7 @@ describe('TON signing input amount encoding', () => {
       buildNativeTonTransfer({
         keysignPayload: buildPayload('-1'),
         bounceable: true,
+        walletVersion: 'v4r2',
       })
     ).toThrow('TON amount must be a non-negative integer')
   })
@@ -56,6 +58,7 @@ describe('TON signing input amount encoding', () => {
         to: TON_ADDRESS,
         amount: '-1',
         bounceable: true,
+        walletVersion: 'v4r2',
       })
     ).toThrow('TON amount must be a non-negative integer')
   })
@@ -88,11 +91,18 @@ describe('TON send mode', () => {
   // These modes are also part of the signing preimage, so a change here silently breaks
   // keysign against any co-signer still on the previous mode.
   const transfers = {
-    'a native send': () => buildNativeTonTransfer({ keysignPayload: buildPayload('1000000000'), bounceable: true }),
+    'a native send': () =>
+      buildNativeTonTransfer({ keysignPayload: buildPayload('1000000000'), bounceable: true, walletVersion: 'v4r2' }),
     'a dApp signTon message': () =>
-      buildNativeTonTransferFromMessage({ to: TON_ADDRESS, amount: '1000000000', bounceable: true }),
+      buildNativeTonTransferFromMessage({
+        to: TON_ADDRESS,
+        amount: '1000000000',
+        bounceable: true,
+        walletVersion: 'v4r2',
+      }),
     'a Jetton send': () =>
       buildJettonTransfer({
+        walletVersion: 'v4r2',
         keysignPayload: buildPayload('1000'),
         walletCore: {
           TONAddressConverter: { toUserFriendly: () => TON_ADDRESS },
@@ -129,6 +139,7 @@ describe('TON MAX send', () => {
     const transfer = buildNativeTonTransfer({
       keysignPayload: buildPayload(maxSendAmount),
       bounceable: true,
+      walletVersion: 'v4r2',
     })
 
     expect(tonAmountToBytes(maxSendAmount).equals(Buffer.from(transfer.amount))).toBe(true)
@@ -142,9 +153,46 @@ describe('TON MAX send', () => {
     const transfer = buildNativeTonTransfer({
       keysignPayload: buildPayload(maxSendAmount),
       bounceable: true,
+      walletVersion: 'v4r2',
     })
 
     expect(Buffer.from(transfer.amount).toString('hex')).not.toBe('00')
+  })
+})
+
+describe('TON send mode on a W5 wallet', () => {
+  const { IGNORE_ACTION_PHASE_ERRORS, PAY_FEES_SEPARATELY } = TW.TheOpenNetwork.Proto.SendMode
+
+  // W5's code refuses an external request unless every action ignores action-phase
+  // errors — a guaranteed seqno advance is its replay protection — so on W5 the
+  // flag is not a choice. The status resolver's action-phase check is what keeps a
+  // skipped transfer from being reported as a success.
+  it.each([
+    [
+      'a native send',
+      () =>
+        buildNativeTonTransfer({ keysignPayload: buildPayload('1000000000'), bounceable: true, walletVersion: 'v5r1' }),
+    ],
+    [
+      'a dApp signTon message',
+      () =>
+        buildNativeTonTransferFromMessage({
+          to: TON_ADDRESS,
+          amount: '1000000000',
+          bounceable: true,
+          walletVersion: 'v5r1',
+        }),
+    ],
+  ])('sets the ignore-errors flag the contract requires on %s', (_, build) => {
+    const { mode } = build()
+
+    expect(mode & PAY_FEES_SEPARATELY).toBe(PAY_FEES_SEPARATELY)
+    expect(mode & IGNORE_ACTION_PHASE_ERRORS).toBe(IGNORE_ACTION_PHASE_ERRORS)
+  })
+
+  it('reports each contract mode from one place', () => {
+    expect(getTonSendMode('v4r2') & IGNORE_ACTION_PHASE_ERRORS).toBe(0)
+    expect(getTonSendMode('v5r1')).toBe(getTonSendMode('v4r2') | IGNORE_ACTION_PHASE_ERRORS)
   })
 })
 
@@ -153,7 +201,11 @@ describe('TON MAX send', () => {
 // with the transfer fields and gets a fraction of that.
 describe('TON native comment capacity', () => {
   const build = (memo: string) =>
-    buildNativeTonTransfer({ keysignPayload: buildPayload('1000000000', memo), bounceable: true })
+    buildNativeTonTransfer({
+      keysignPayload: buildPayload('1000000000', memo),
+      bounceable: true,
+      walletVersion: 'v4r2',
+    })
 
   it('carries a comment that fills the cell exactly', () => {
     expect(build('x'.repeat(123)).comment).toBe('x'.repeat(123))

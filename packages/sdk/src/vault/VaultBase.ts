@@ -6,6 +6,7 @@ import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import { banxaSupportedChains, getBanxaBuyUrl } from '@vultisig/core-chain/banxa'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getChainKind } from '@vultisig/core-chain/ChainKind'
+import type { TonWalletVersion } from '@vultisig/core-chain/chains/ton/wallet'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { getCoinValue } from '@vultisig/core-chain/coin/utils/getCoinValue'
@@ -68,7 +69,7 @@ import type { DiscoveredToken, TokenInfo } from '../types/tokens'
 import { computePersonalSignHash } from '../utils/eip191'
 import { createVaultBackup } from '../utils/export'
 // Vault services
-import { AddressService } from './services/AddressService'
+import { AddressService, type GetAddressOptions } from './services/AddressService'
 import { BalanceService } from './services/BalanceService'
 import { BroadcastService } from './services/BroadcastService'
 import { GasEstimationService } from './services/GasEstimationService'
@@ -1146,10 +1147,39 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   // ===== ADDRESS METHODS =====
 
   /**
-   * Get address for specified chain
+   * Get address for specified chain.
+   *
+   * For TON, `options.tonWalletVersion` previews one contract's address without
+   * changing which account the vault acts on; see {@link setTonWalletVersion}.
    */
-  async address(chain: Chain): Promise<string> {
-    return this.addressService.getAddress(chain)
+  async address(chain: Chain, options?: GetAddressOptions): Promise<string> {
+    return this.addressService.getAddress(chain, options)
+  }
+
+  /** The TON wallet contract this vault acts on. V4R2 unless {@link setTonWalletVersion} chose W5. */
+  get tonWalletVersion(): TonWalletVersion {
+    return this.addressService.getTonWalletVersion()
+  }
+
+  /**
+   * Select which of the key's two TON accounts this vault acts on.
+   *
+   * W5 (`'v5r1'`) is a different address from V4R2 with its own balance, so the
+   * choice has to be made once and honoured everywhere: after this call every
+   * un-versioned address lookup — `address`, `send`, balances, swaps, fee
+   * estimation, token discovery — resolves to the selected account. Balance
+   * caches are dropped because they belong to the previous account.
+   *
+   * The selection lives on this vault instance; persist the user's choice and
+   * re-apply it after loading the vault.
+   */
+  async setTonWalletVersion(tonWalletVersion: TonWalletVersion): Promise<void> {
+    if (tonWalletVersion === this.addressService.getTonWalletVersion()) {
+      return
+    }
+
+    this.addressService.setTonWalletVersion(tonWalletVersion)
+    await this.balanceService.onAccountChanged()
   }
 
   /**
