@@ -9,9 +9,11 @@ import {
   stakekitBalances,
   stakekitBuildEnter,
   stakekitBuildExit,
+  stakekitDetails,
   stakekitSearch,
   validateStakekitActionAddress,
   validateStakekitActionInput,
+  yieldNetworkToCanonicalChain,
 } from '@/tools/defi/stakekit'
 
 // Minimal yield product fixture that matches YieldDiscoverOpportunity shape
@@ -455,11 +457,11 @@ describe('sdk.defi.stakekit', () => {
           text: async () => JSON.stringify(actionResp),
         } as Response)
 
-      const result = (await stakekitBuildEnter({
+      const result = await stakekitBuildEnter({
         yieldId: 'solana-sol-marinade-staking',
         address: 'SoLwaLLetAddr1111111111111111111111111111',
         amount: '1',
-      })) as { scan_requests: Array<Record<string, unknown>> }
+      })
 
       expect(result.scan_requests[0]).toMatchObject({
         kind: 'solana',
@@ -754,6 +756,67 @@ describe('sdk.defi.stakekit', () => {
     })
   })
 
+  describe('stakekitDetails', () => {
+    it('returns the canonical StakekitDetailsResult shape from a StakeKit product', async () => {
+      // Distinct yieldId — getYield caches by id for 5 min, and other tests in
+      // this file already populate the cache for 'ethereum-eth-lido-staking'.
+      const product = makeProduct({
+        id: 'ethereum-eth-lido-staking-details-test',
+        metadata: {
+          name: 'Lido Staked ETH',
+          type: 'liquid-staking',
+          provider: { name: 'Lido' },
+          cooldownPeriod: { days: 3 },
+          warmupPeriod: { days: 1 },
+          rewardSchedule: 'daily',
+          rewardClaiming: 'auto',
+        },
+        fee: { enabled: true, percentage: 10 },
+      })
+
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => product,
+        text: async () => JSON.stringify(product),
+      } as Response)
+
+      const result = await stakekitDetails({ yieldId: 'ethereum-eth-lido-staking-details-test' })
+
+      expect(result).toEqual({
+        id: 'ethereum-eth-lido-staking-details-test',
+        name: 'Lido Staked ETH',
+        token: 'ETH',
+        network: 'ethereum',
+        apy: 0.0421,
+        type: 'liquid-staking',
+        provider: 'Lido',
+        isAvailable: true,
+        fee: { percentage: 10 },
+        cooldownDays: 3,
+        warmupDays: 1,
+        rewardSchedule: 'daily',
+        rewardClaiming: 'auto',
+        enterEnabled: true,
+        exitEnabled: true,
+        acceptedTokens: [{ symbol: 'ETH', network: 'ethereum', address: undefined }],
+      })
+    })
+  })
+
+  describe('yieldNetworkToCanonicalChain', () => {
+    it('maps known yield.xyz network slugs to the app PascalCase chain name', () => {
+      expect(yieldNetworkToCanonicalChain('ethereum')).toBe('Ethereum')
+      expect(yieldNetworkToCanonicalChain('avalanche-c')).toBe('Avalanche')
+      expect(yieldNetworkToCanonicalChain('binance')).toBe('BSC')
+      expect(yieldNetworkToCanonicalChain('solana')).toBe('Solana')
+    })
+
+    it('returns null for unrecognized network slugs', () => {
+      expect(yieldNetworkToCanonicalChain('not-a-real-network')).toBeNull()
+    })
+  })
+
   describe('stakekitBalances', () => {
     it('uses the same canonical network aliases as search', async () => {
       const fetchMock = vi.fn().mockResolvedValueOnce({
@@ -956,11 +1019,11 @@ describe('scan-request coverage (architecture#1670)', () => {
           }),
       } as Response)
 
-    const result = (await stakekitBuildEnter({
+    const result = await stakekitBuildEnter({
       yieldId: 'cosmos-atom-some-staking',
       address: 'cosmos1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqnrql8a',
       amount: '1',
-    })) as { scan_request: unknown; scan_requests: unknown[] }
+    })
 
     expect(result.scan_requests).toEqual([{ kind: 'unsupported', reason: 'chain_not_supported' }])
     expect(result.scan_request).toEqual({ kind: 'unsupported', reason: 'no_compiled_txs' })
