@@ -1,7 +1,7 @@
+import { queryTron } from '@vultisig/core-chain/chains/tron/queryTron'
 import { Buffer } from 'buffer'
 import { AccountCoinKey } from '@vultisig/core-chain/coin/AccountCoin'
 import { getTronAccountResources } from '@vultisig/core-chain/chains/tron/resources/getTronAccountResources'
-import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import base58 from 'bs58'
 
 import { getEnergyPrice } from './energyPrice'
@@ -47,9 +47,9 @@ export const getTrc20TransferFee = async ({ coin, receiver, amount }: GetTrc20Tr
 
   const parameter = buildTrc20TransferParameter(recipientAddressHex, amount)
 
-  const url = 'https://api.trongrid.io/wallet/triggerconstantcontract'
+  const url = '/wallet/triggerconstantcontract'
 
-  const responseData = await queryUrl<TriggerContractResponse>(url, {
+  const responseData = await queryTron<TriggerContractResponse>(url, {
     headers: {
       accept: 'application/json',
     },

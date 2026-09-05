@@ -120,7 +120,7 @@ describe('getTrc20TransferFee', () => {
   it('throws when triggerconstantcontract returns an empty/malformed response (no result field)', async () => {
     mockQueryUrl.mockResolvedValue({})
 
-    await expect(getTrc20TransferFee(baseInput)).rejects.toThrow(/did not return a successful estimate/)
+    await expect(getTrc20TransferFee(baseInput)).rejects.toThrow(/contract response is malformed/)
   })
 
   it('throws when triggerconstantcontract simulation reverts (result.result === false)', async () => {

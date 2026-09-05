@@ -1,5 +1,5 @@
 import { OtherChain } from '@vultisig/core-chain/Chain'
-import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
+import { queryTron } from '@vultisig/core-chain/chains/tron/queryTron'
 
 import { TokenMetadataResolver } from '../resolver'
 
@@ -8,11 +8,11 @@ type TriggerConstantContractResponse = {
 }
 
 export const getTronTokenMetadata: TokenMetadataResolver<OtherChain.Tron> = async ({ id }) => {
-  const url = 'https://api.trongrid.io/wallet/triggerconstantcontract'
+  const url = '/wallet/triggerconstantcontract'
   const ownerAddress = 'T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb'
 
   const [symbolResult, decimalsResult] = await Promise.all([
-    queryUrl<TriggerConstantContractResponse>(url, {
+    queryTron<TriggerConstantContractResponse>(url, {
       body: {
         contract_address: id,
         function_selector: 'symbol()',
@@ -20,7 +20,7 @@ export const getTronTokenMetadata: TokenMetadataResolver<OtherChain.Tron> = asyn
         visible: true,
       },
     }),
-    queryUrl<TriggerConstantContractResponse>(url, {
+    queryTron<TriggerConstantContractResponse>(url, {
       body: {
         contract_address: id,
         function_selector: 'decimals()',

@@ -153,11 +153,10 @@ describe('getTronTxStatus', () => {
     expect(result).toEqual({ status: 'pending', isKnown: true }) // no receipt → pending, not success
   })
 
-  it('returns isKnown:false on network error', async () => {
+  it('propagates an outage instead of manufacturing pending state', async () => {
     mocks.queryUrl.mockRejectedValue(new Error('network failure'))
 
-    const result = await getTronTxStatus({ chain: OtherChain.Tron, hash })
-    expect(result).toEqual({ status: 'pending', isKnown: false })
+    await expect(getTronTxStatus({ chain: OtherChain.Tron, hash })).rejects.toThrow('network failure')
   })
 
   it('returns not_found when Tron RPC returns an empty unknown-hash payload', async () => {

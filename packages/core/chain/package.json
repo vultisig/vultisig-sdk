@@ -1040,6 +1040,11 @@
       "import": "./dist/chains/tron/getTronBlockInfo.js",
       "default": "./dist/chains/tron/getTronBlockInfo.js"
     },
+    "./chains/tron/queryTron": {
+      "types": "./dist/chains/tron/queryTron.d.ts",
+      "import": "./dist/chains/tron/queryTron.js",
+      "default": "./dist/chains/tron/queryTron.js"
+    },
     "./chains/tron/resources": {
       "types": "./dist/chains/tron/resources/index.d.ts",
       "import": "./dist/chains/tron/resources/index.js",

@@ -35,55 +35,46 @@ describe('getEnergyPrice', () => {
     expect(queryUrlMock).toHaveBeenCalledTimes(1)
   })
 
-  it('falls back to 100n when fetch throws', async () => {
+  it('throws when fetch throws', async () => {
     queryUrlMock.mockRejectedValue(new Error('network error'))
 
     const { getEnergyPrice } = await loadModule()
-    const price = await getEnergyPrice()
-
-    expect(price).toBe(100n)
+    await expect(getEnergyPrice()).rejects.toThrow()
   })
 
-  it('falls back to 100n when getEnergyFee key is absent', async () => {
+  it('throws when getEnergyFee key is absent', async () => {
     queryUrlMock.mockResolvedValue({
       chainParameter: [{ key: 'someOtherParam', value: 999 }],
     })
 
     const { getEnergyPrice } = await loadModule()
-    const price = await getEnergyPrice()
-
-    expect(price).toBe(100n)
+    await expect(getEnergyPrice()).rejects.toThrow()
   })
 
-  it('falls back to 100n when chainParameter array is missing', async () => {
+  it('throws when chainParameter array is missing', async () => {
     queryUrlMock.mockResolvedValue({})
 
     const { getEnergyPrice } = await loadModule()
-    const price = await getEnergyPrice()
-
-    expect(price).toBe(100n)
+    await expect(getEnergyPrice()).rejects.toThrow()
   })
 
-  it('falls back to 100n when getEnergyFee value is 0', async () => {
+  it('throws when getEnergyFee value is 0', async () => {
     // value: 0 would produce BigInt(0) -> totalEnergy * 0n = 0n -> free fees -> tx fails on-chain
     queryUrlMock.mockResolvedValue({
       chainParameter: [{ key: 'getEnergyFee', value: 0 }],
     })
 
     const { getEnergyPrice } = await loadModule()
-    const price = await getEnergyPrice()
-
-    expect(price).toBe(100n)
+    await expect(getEnergyPrice()).rejects.toThrow()
   })
 
   it('recovers immediately after a failed fetch (errors are not cached)', async () => {
-    // Call 1: network error -> fallback
+    // Call 1: network error -> explicit failure
     queryUrlMock.mockRejectedValue(new Error('network error'))
     const { getEnergyPrice } = await loadModule()
-    const fallbackPrice = await getEnergyPrice()
-    expect(fallbackPrice).toBe(100n)
+    await expect(getEnergyPrice()).rejects.toThrow()
 
-    // Call 2: TronGrid recovers -> should return live price, NOT cached fallback
+    // Call 2: TronGrid recovers -> should return live price, not a cached value
     queryUrlMock.mockResolvedValue({
       chainParameter: [{ key: 'getEnergyFee', value: 420 }],
     })

@@ -1,5 +1,4 @@
-import { tronRpcUrl } from '@vultisig/core-chain/chains/tron/config'
-import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
+import { queryTron } from '@vultisig/core-chain/chains/tron/queryTron'
 
 import { TronAccountResources, TronUnfreezingEntry } from './types'
 
@@ -29,10 +28,10 @@ type TronGetAccountResourceResponse = {
 
 export const getTronAccountResources = async (address: string): Promise<TronAccountResources> => {
   const [account, resource] = await Promise.all([
-    queryUrl<TronGetAccountResponse>(`${tronRpcUrl}/wallet/getaccount`, {
+    queryTron<TronGetAccountResponse>('/wallet/getaccount', {
       body: { address, visible: true },
     }),
-    queryUrl<TronGetAccountResourceResponse>(`${tronRpcUrl}/wallet/getaccountresource`, {
+    queryTron<TronGetAccountResourceResponse>('/wallet/getaccountresource', {
       body: { address, visible: true },
     }),
   ])

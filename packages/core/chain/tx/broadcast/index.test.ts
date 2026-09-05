@@ -134,11 +134,14 @@ describe('broadcastTx transient retry dispatcher', () => {
     const failed = broadcastFailed(new Error('fetch failed'), true)
     mocks.solana.mockResolvedValueOnce(failed)
     mocks.evm.mockResolvedValueOnce(failed)
+    mocks.tron.mockResolvedValueOnce(failed)
 
     await expect(broadcastTx({ chain: Chain.Solana, tx })).resolves.toEqual(failed)
     await expect(broadcastTx({ chain: Chain.Ethereum, tx })).resolves.toEqual(failed)
+    await expect(broadcastTx({ chain: Chain.Tron, tx })).resolves.toEqual(failed)
     expect(mocks.solana).toHaveBeenCalledTimes(1)
     expect(mocks.evm).toHaveBeenCalledTimes(1)
+    expect(mocks.tron).toHaveBeenCalledTimes(1)
   })
 })
 

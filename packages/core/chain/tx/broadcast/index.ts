@@ -30,7 +30,8 @@ const resolvers: Record<ChainKind, BroadcastTxResolver<any>> = {
   tron: broadcastTronTx,
 }
 
-const hasResolverOwnedRetry = (chainKind: ChainKind): boolean => chainKind === 'evm' || chainKind === 'solana'
+const hasResolverOwnedRetry = (chainKind: ChainKind): boolean =>
+  chainKind === 'evm' || chainKind === 'solana' || chainKind === 'tron'
 
 export type {
   BroadcastAcceptedResult,

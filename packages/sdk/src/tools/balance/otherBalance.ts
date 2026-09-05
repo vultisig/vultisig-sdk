@@ -1,3 +1,4 @@
+import { queryTron } from '@vultisig/core-chain/chains/tron/queryTron'
 /**
  * Native + token balance reads for non-EVM, non-Cosmos chains:
  * XRP / TRON / TON / Sui / Cardano. Ported from mcp-ts `balance/other-balance.ts`
@@ -39,7 +40,7 @@ function assertTronAddress(addr: string): void {
 
 /**
  * ABI-encode a Tron base58check address as a 32-byte EVM word for a
- * triggersmartcontract `parameter`.
+ * triggerconstantcontract `parameter`.
  *
  * A Tron `T…` address base58check-decodes to 21 bytes: a 0x41 prefix + the
  * 20-byte EVM-style address (the trailing 4 bytes are the checksum). The
@@ -158,10 +159,7 @@ export type TrxBalance = {
 export async function getTrxBalance(address: string): Promise<TrxBalance> {
   if (!address) throw new Error('No TRON address provided.')
   assertTronAddress(address)
-  const response = await fetchJson<{ balance?: number }>('https://tron-rpc.publicnode.com/wallet/getaccount', {
-    address,
-    visible: true,
-  })
+  const response = await queryTron<{ balance?: number }>('/wallet/getaccount', { body: { address, visible: true } })
   const sun = response.balance ?? 0
   return {
     address,
@@ -183,14 +181,14 @@ export type TronAccountResources = {
 export async function getTronAccountResources(address: string): Promise<TronAccountResources> {
   if (!address) throw new Error('No TRON address provided.')
   assertTronAddress(address)
-  const response = await fetchJson<{
+  const response = await queryTron<{
     freeNetUsed?: number
     freeNetLimit?: number
     EnergyUsed?: number
     EnergyLimit?: number
     NetUsed?: number
     NetLimit?: number
-  }>('https://tron-rpc.publicnode.com/wallet/getaccountresource', { address, visible: true })
+  }>('/wallet/getaccountresource', { body: { address, visible: true } })
 
   return {
     address,
@@ -212,7 +210,7 @@ export type Trc20TokenBalance = {
 
 /**
  * Query a TRC-20 token balance for a TRON address via on-chain
- * triggersmartcontract reads (balanceOf / decimals / symbol).
+ * triggerconstantcontract reads (balanceOf / decimals / symbol).
  */
 export async function getTrc20TokenBalance(address: string, contractAddress: string): Promise<Trc20TokenBalance> {
   if (!address) throw new Error('No TRON address provided.')
@@ -220,12 +218,14 @@ export async function getTrc20TokenBalance(address: string, contractAddress: str
   assertTronAddress(contractAddress)
 
   const trigger = (functionSelector: string, parameter: string) =>
-    fetchJson<{ constant_result?: string[] }>('https://tron-rpc.publicnode.com/wallet/triggersmartcontract', {
-      owner_address: address,
-      contract_address: contractAddress,
-      function_selector: functionSelector,
-      parameter,
-      visible: true,
+    queryTron<{ constant_result?: string[] }>('/wallet/triggerconstantcontract', {
+      body: {
+        owner_address: address,
+        contract_address: contractAddress,
+        function_selector: functionSelector,
+        parameter,
+        visible: true,
+      },
     })
 
   const [balResp, decResp, symResp] = await Promise.all([
@@ -237,7 +237,7 @@ export async function getTrc20TokenBalance(address: string, contractAddress: str
     trigger('symbol()', ''),
   ])
 
-  // Fail closed: a reverted / malformed triggersmartcontract call returns an
+  // Fail closed: a reverted / malformed triggerconstantcontract call returns an
   // HTTP-200 body with no `constant_result`. Reading that as 0 would report a
   // funded holder as empty (fund-visibility bug), so surface it as an error.
   const hexBalance = balResp.constant_result?.[0]

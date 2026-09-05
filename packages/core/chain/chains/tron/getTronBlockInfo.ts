@@ -1,7 +1,5 @@
+import { queryTron } from '@vultisig/core-chain/chains/tron/queryTron'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
-import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
-
-import { tronRpcUrl } from './config'
 
 type TronBlockHeader = {
   raw_data?: {
@@ -44,7 +42,7 @@ type GetTronBlockInfoInput = {
 }
 
 const getBlockByNum = async (num: number) => {
-  return await queryUrl<TronBlock>(`${tronRpcUrl}/wallet/getblockbynum`, {
+  return await queryTron<TronBlock>('/wallet/getblockbynum', {
     body: { num },
   })
 }
@@ -78,9 +76,9 @@ export async function getTronBlockInfo({
   refBlockBytesHex,
   refBlockHashHex,
 }: GetTronBlockInfoInput): Promise<BlockChainSpecificTron> {
-  const url = `${tronRpcUrl}/wallet/getnowblock`
+  const url = '/wallet/getnowblock'
 
-  let currentBlock = await queryUrl<TronBlock>(url, {
+  let currentBlock = await queryTron<TronBlock>(url, {
     body: {},
   })
   if (refBlockBytesHex && refBlockHashHex) {
