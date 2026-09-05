@@ -6,20 +6,15 @@ import { TransactionType } from '../../types/vultisig/keysign/v1/blockchain_spec
 import { getBlockchainSpecificValue } from '../chainSpecific/KeysignChainSpecific'
 
 /**
- * Whether the payload's shape alone reads as a TrustSet — i.e. how every signer
- * that predates `RippleSpecific.transaction_type` decides.
+ * Whether the payload's shape can describe an issued-currency operation.
  *
- * Deliberately broad, and **only** for the signing fallback. Clients already in
- * the field infer TrustSet from a non-native Ripple coin alone, so honouring
- * that same inference is what keeps a TrustSet byte-identical across a
- * mixed-version committee. Narrowing it would break MPC parity with every
- * signer already released.
+ * Deliberately broad, and used only while originating a TrustSet discriminator.
  *
  * Do not use this to decide what a payload *is*: an issued-currency Payment has
  * the same shape. Use {@link originatesRippleTrustSet} when originating.
  *
- * A verbatim dApp transaction (`signRipple`) is excluded — it is signed exactly
- * as given and never rebuilt from the coin.
+ * A verbatim dApp transaction (`signRipple`) is excluded because it is signed
+ * exactly as given and never rebuilt from the coin.
  */
 export const hasRippleTrustSetShape = ({ signData, coin }: KeysignPayload): boolean =>
   signData.case !== 'signRipple' && !!coin && !coin.isNativeToken && !!coin.contractAddress
@@ -34,8 +29,9 @@ export const hasRippleTrustSetShape = ({ signData, coin }: KeysignPayload): bool
  * one — turning what used to be a safe divergence into a completed ceremony
  * over an operation the user never asked for.
  *
- * A TrustSet is addressed to the *issuer*: it is the party being trusted. A
- * Payment is addressed to a recipient. That is what separates them here.
+ * Legacy trust-line callers address the issuer. This remains a compatibility
+ * heuristic, not operation identity: redemption Payments also address their
+ * issuer. Ordinary send builders must explicitly select Payment instead.
  */
 export const originatesRippleTrustSet = (keysignPayload: KeysignPayload): boolean => {
   if (!hasRippleTrustSetShape(keysignPayload)) {
@@ -48,24 +44,19 @@ export const originatesRippleTrustSet = (keysignPayload: KeysignPayload): boolea
   return 'data' in issuer && issuer.data === toAddress
 }
 
-/**
- * Whether this Ripple payload describes a TrustSet — opening or modifying a
- * trust line, where the keysign amount is the trust-line LIMIT — rather than a
- * Payment that transfers the token.
- *
- * A non-native Ripple coin cannot say this on its own: the same
- * `(currency, issuer)` pair means either operation, and the two produce
- * different signed bytes. `RippleSpecific.transaction_type` states it
- * explicitly, so it wins when present, and the shape decides only when it is
- * absent — which is the mixed-version case documented on
- * {@link hasRippleTrustSetShape}.
- */
+/** Whether this Ripple payload describes a TrustSet, including legacy payloads. */
 export const isRippleTrustSet = (keysignPayload: KeysignPayload): boolean => {
   const { transactionType } = getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'rippleSpecific')
 
   if (transactionType === TransactionType.RIPPLE_TRUST_SET) {
     return true
   }
+  if (transactionType === TransactionType.RIPPLE_PAYMENT) {
+    return false
+  }
 
-  return hasRippleTrustSetShape(keysignPayload)
+  // Payloads created before the discriminator existed have the proto3 default.
+  // Preserve their TrustSet behavior; new Payments are explicit so the same
+  // non-native coin shape is no longer ambiguous.
+  return originatesRippleTrustSet(keysignPayload)
 }
