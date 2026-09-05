@@ -398,6 +398,8 @@ export {
   type BuildSplTransferParams,
   buildUndelegateMsg,
   buildWithdrawRewardsMsg,
+  computeMaxSendFromBalance,
+  type ComputeMaxSendFromBalanceParams,
   CONSOLIDATE_CHAINS,
   type ConsolidateChain,
   type ConsolidateUtxo,
