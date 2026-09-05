@@ -55,6 +55,35 @@ type TronTxInfoResponse = {
   }
 }
 
+type TronRawTxResponse = {
+  txID?: string
+  raw_data?: {
+    expiration?: number
+  }
+}
+
+const getUnconfirmedTronStatus = async ({ hash, infoIsKnown }: { hash: string; infoIsKnown: boolean }) => {
+  const { data: rawTx } = await attempt(
+    queryUrl<TronRawTxResponse>(`${tronRpcUrl}/wallet/gettransactionbyid`, {
+      body: { value: hash },
+    })
+  )
+
+  const rawTxMatchesHash = rawTx?.txID?.toLowerCase() === hash.toLowerCase()
+  if (!rawTxMatchesHash) {
+    return infoIsKnown
+      ? { status: 'pending' as const, isKnown: true }
+      : { status: 'not_found' as const, isKnown: false }
+  }
+
+  const expiration = rawTx.raw_data?.expiration
+  if (expiration !== undefined && Date.now() > expiration) {
+    return { status: 'expired' as const, isKnown: true }
+  }
+
+  return { status: 'pending' as const, isKnown: true }
+}
+
 export const getTronTxStatus: TxStatusResolver<OtherChain.Tron> = async ({ hash }) => {
   const url = `${tronRpcUrl}/wallet/gettransactioninfobyid`
 
@@ -69,11 +98,11 @@ export const getTronTxStatus: TxStatusResolver<OtherChain.Tron> = async ({ hash 
   }
 
   if (!tx.id) {
-    return { status: 'not_found', isKnown: false }
+    return getUnconfirmedTronStatus({ hash, infoIsKnown: false })
   }
 
   if (tx.blockNumber === undefined || tx.blockNumber === 0) {
-    return { status: 'pending', isKnown: true }
+    return getUnconfirmedTronStatus({ hash, infoIsKnown: true })
   }
 
   // 1. top-level result === "FAILED" → error
