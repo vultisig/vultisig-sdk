@@ -1,6 +1,7 @@
 import { base64Decode } from '@bufbuild/protobuf/wire'
 import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import { Chain } from '@vultisig/core-chain/Chain'
+import { areEqualTonAddresses, tonAddressToBounceable } from '@vultisig/core-chain/chains/ton/address'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { usdc } from '@vultisig/core-chain/coin/knownTokens'
@@ -30,6 +31,7 @@ import {
 } from '@vultisig/core-chain/swap/general/swapkit/SwapKitProviders'
 import { SwapFee } from '@vultisig/core-chain/swap/SwapFee'
 import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
+import { attempt } from '@vultisig/lib-utils/attempt'
 import { withoutUndefinedFields } from '@vultisig/lib-utils/record/withoutUndefinedFields'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 import { address as btcAddress, networks, Psbt } from 'bitcoinjs-lib'
@@ -564,20 +566,123 @@ const toTransferAmount = (value: string | number | bigint, decimals: number): bi
   return value.includes('.') ? toChainAmount(value, decimals) : BigInt(value)
 }
 
+const isTransferAmountValue = (value: unknown): value is string | number | bigint =>
+  typeof value === 'string' || typeof value === 'number' || typeof value === 'bigint'
+
 const getTransferAmount = ({ depositAmount, tx }: SwapKitSwapResponse, amount: bigint, decimals: number): bigint => {
   if (depositAmount) {
     return toChainAmount(depositAmount, decimals)
   }
 
-  if (
-    Array.isArray(tx) &&
-    isRecord(tx[0]) &&
-    (typeof tx[0].amount === 'string' || typeof tx[0].amount === 'number' || typeof tx[0].amount === 'bigint')
-  ) {
+  if (Array.isArray(tx) && isRecord(tx[0]) && isTransferAmountValue(tx[0].amount)) {
     return toTransferAmount(tx[0].amount, decimals)
   }
 
   return amount
+}
+
+/**
+ * The single transfer SwapKit describes in its `tx[]` array, or `undefined`
+ * when `tx` is any other shape — an EVM object, an opaque PSBT / PTB string, or
+ * absent because `disableBuildTx` was sent.
+ *
+ * More than one entry is rejected rather than ignored: only `tx[0]` is ever
+ * built, so a multi-transfer route would be signed as a partial deposit that
+ * under-funds the swap. The count is checked before the entry shape so a
+ * malformed trailing entry cannot slip a multi-transfer array past this guard.
+ */
+const getTransferTxEntry = (tx: unknown): Record<string, unknown> | undefined => {
+  if (!Array.isArray(tx) || tx.length === 0) {
+    return undefined
+  }
+
+  if (tx.length > 1) {
+    throw new Error(
+      `SwapKit transfer route returned ${tx.length} transfers; only the first would be signed, so the swap would be under-funded.`
+    )
+  }
+
+  return isRecord(tx[0]) ? tx[0] : undefined
+}
+
+/**
+ * The agreed TON deposit destination in its bounceable (`EQ…`) form.
+ *
+ * `assertTransferAgreement` compares TON spellings by account, so a route whose
+ * fields spell one account as `UQ…`, raw `0:hex` and `EQ…` passes — and the
+ * spelling that wins the precedence order is what the signer would otherwise
+ * read the bounce flag from. A deposit that goes out non-bounceable to a
+ * rejecting contract is absorbed instead of refunded, so the agreed account is
+ * re-spelled bounceable here, whichever field it came from. A string that is
+ * not a TON address at all cannot be a deposit destination and is refused.
+ */
+const toCanonicalTonDeposit = (destination: string): string => {
+  const canonical = attempt(() => tonAddressToBounceable(destination))
+
+  if ('error' in canonical) {
+    throw new Error(`SwapKit transfer route returned an invalid TON deposit address: ${destination}`)
+  }
+
+  return canonical.data
+}
+
+const areEqualTransferAddresses = (left: string, right: string, chain: SwapKitSourceChain): boolean =>
+  chain === Chain.Ton ? areEqualTonAddresses(left, right) : left === right
+
+/**
+ * Fail closed when the `/v3/swap` response disagrees with itself about where
+ * the deposit goes or how large it is.
+ *
+ * `targetAddress`, `depositAddress` and `tx[]` are independent fields carrying
+ * the same fact, and the resolvers above take the first one that is present and
+ * never look at the rest. So a response whose halves diverge — a provider bug,
+ * an API change, a tampered payload — signs whichever field happens to win the
+ * precedence order while the others name a different recipient or size, and
+ * nothing downstream can tell. Neither field is authoritative enough to pick a
+ * winner from, so a divergence is refused instead of resolved.
+ *
+ * Addresses are compared per chain because TON spells one account as `EQ…`,
+ * `UQ…` or raw `workchain:hex` — comparing those as strings would reject
+ * healthy routes.
+ */
+const assertTransferAgreement = (response: SwapKitSwapResponse, chain: SwapKitSourceChain, decimals: number): void => {
+  const entry = getTransferTxEntry(response.tx)
+
+  const destinations = [
+    { field: 'targetAddress', value: response.targetAddress },
+    { field: 'depositAddress', value: response.depositAddress },
+    { field: 'tx[0].address', value: typeof entry?.address === 'string' ? entry.address : undefined },
+  ].flatMap(({ field, value }) => (value?.trim() ? [{ field, value: value.trim() }] : []))
+
+  const [primaryDestination, ...otherDestinations] = destinations
+  if (primaryDestination) {
+    const divergent = otherDestinations.find(
+      ({ value }) => !areEqualTransferAddresses(value, primaryDestination.value, chain)
+    )
+
+    if (divergent) {
+      throw new Error(
+        `SwapKit transfer route disagrees with itself about the destination: ` +
+          `${primaryDestination.field} is ${primaryDestination.value} but ${divergent.field} is ${divergent.value}.`
+      )
+    }
+  }
+
+  const txAmountValue = entry && isTransferAmountValue(entry.amount) ? entry.amount : undefined
+  if (txAmountValue === undefined || !response.depositAmount) {
+    return
+  }
+
+  const txAmount = toTransferAmount(txAmountValue, decimals)
+  const depositAmount = toChainAmount(response.depositAmount, decimals)
+
+  if (txAmount !== depositAmount) {
+    throw new Error(
+      `SwapKit transfer route disagrees with itself about the amount: ` +
+        `depositAmount is ${response.depositAmount} (${depositAmount} base units) ` +
+        `but tx[0].amount is ${txAmountValue} (${txAmount} base units).`
+    )
+  }
 }
 
 const shouldUseTransferTx = (chain: SwapKitSourceChain): chain is (typeof swapKitTransferSourceChains)[number] =>
@@ -661,11 +766,15 @@ const buildTransferTx = (
   from: AccountCoin<SwapKitSourceChain>,
   amount: bigint
 ): GeneralSwapTx => {
-  const to = getTransferTargetAddress(response)
+  assertTransferAgreement(response, from.chain, from.decimals)
 
-  if (!to) {
+  const agreedDestination = getTransferTargetAddress(response)
+
+  if (!agreedDestination) {
     throw new Error('SwapKit transfer route did not return a target address.')
   }
+
+  const to = from.chain === Chain.Ton ? toCanonicalTonDeposit(agreedDestination) : agreedDestination
 
   // SwapKit renames base64 tx types on the wire without versioning — `SOLANA`
   // became `SERIALIZED_BASE64` and `CARDANO` became `CBOR` mid-flight (iOS
