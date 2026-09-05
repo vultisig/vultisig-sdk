@@ -333,6 +333,91 @@ describe('getSwapKitQuote', () => {
     expect('evm' in quote.tx && quote.tx.evm.affiliateFee).toBeUndefined()
   })
 
+  const stubTransferRoute = ({ fees }: { fees?: unknown[] } = {}) => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        response({ routes: [{ routeId: 'near-transfer-route', providers: ['NEAR'], expectedBuyAmount: '144.49' }] })
+      )
+      .mockResolvedValueOnce(
+        response({
+          expectedBuyAmount: '144.49',
+          providers: ['NEAR'],
+          targetAddress: 't1Deposit',
+          ...(fees ? { fees } : {}),
+        })
+      )
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    return getSwapKitQuote({
+      from: { chain: Chain.Zcash, address: 't1Source', ticker: 'ZEC', decimals: 8 },
+      to: { chain: Chain.Tron, address: 'TDestination', ticker: 'TRX', decimals: 6 },
+      amount: 9_332_136n,
+    })
+  }
+
+  it('surfaces the affiliate fee SwapKit itemizes on a transfer route', async () => {
+    // A transfer route reaches a cosigning peer through SwapKitSwapPayload,
+    // which is the only place the fee can travel: the peer holds no quote. Left
+    // off, its verify screen showed network fee alone and a total that
+    // understated the swap (vultisig-windows#4362).
+    const quote = await stubTransferRoute({
+      fees: [
+        { type: 'affiliate', amount: '0.0025', asset: 'ZEC.ZEC', chain: 'ZEC' },
+        { type: 'network', amount: '0.0001', asset: 'ZEC.ZEC', chain: 'ZEC' },
+      ],
+    })
+
+    expect('transfer' in quote.tx && quote.tx.transfer.swapFee).toEqual({
+      amount: 250_000n,
+      chain: Chain.Zcash,
+      id: undefined,
+      decimals: 8,
+    })
+  })
+
+  it('keeps a transfer route signable when the fee shape cannot be resolved', async () => {
+    // Same terms as the EVM branch: the fee is display-only here, so an
+    // unexpected asset must not take down a route that would otherwise sign.
+    const quote = await stubTransferRoute({
+      fees: [{ type: 'affiliate', amount: '0.04', asset: 'ETH.ETH', chain: 'ETH' }],
+    })
+
+    expect('transfer' in quote.tx && quote.tx.transfer.to).toBe('t1Deposit')
+    expect('transfer' in quote.tx && quote.tx.transfer.swapFee).toBeUndefined()
+  })
+
+  it.each([
+    ['a bare exponent', '1e+'],
+    ['a non-numeric amount', 'abc'],
+  ])('keeps a transfer route signable when the fee amount is %s', async (_label, amount) => {
+    // `amount` is an unvalidated string from the proxy. Parsing it throws an
+    // error of its own kind, which used to escape the display-fee guard and
+    // fail a route that signs perfectly well without the fee row.
+    const quote = await stubTransferRoute({
+      fees: [{ type: 'affiliate', amount, asset: 'ZEC.ZEC', chain: 'ZEC' }],
+    })
+
+    expect('transfer' in quote.tx && quote.tx.transfer.to).toBe('t1Deposit')
+    expect('transfer' in quote.tx && quote.tx.transfer.swapFee).toBeUndefined()
+  })
+
+  it('keeps an EVM route signable when the fee amount cannot be parsed', async () => {
+    const quote = await stubEvmRoute({
+      fees: [{ type: 'affiliate', amount: '1e+', asset: 'ETH.USDC-0xusdc', chain: 'ETH' }],
+    })
+
+    expect('evm' in quote.tx && quote.tx.evm.to).toBe('0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1')
+    expect('evm' in quote.tx && quote.tx.evm.affiliateFee).toBeUndefined()
+  })
+
+  it('leaves the transfer fee absent when SwapKit itemizes none', async () => {
+    const quote = await stubTransferRoute()
+
+    expect('transfer' in quote.tx && quote.tx.transfer.swapFee).toBeUndefined()
+  })
+
   it('reads price impact from the route meta', async () => {
     const quote = await stubEvmRoute({ route: { meta: { priceImpact: -0.0039 }, totalSlippageBps: 120 } })
 

@@ -444,6 +444,14 @@ const matchesSwapKitFeeChain = (
   return normalized === coinChain.toLowerCase() || normalized === assetPrefix.toLowerCase()
 }
 
+const toSwapKitFeeAmount = (amount: string, decimals: number, type: string): bigint => {
+  try {
+    return toChainAmount(amount, decimals)
+  } catch (error) {
+    throw new SwapKitFeeShapeError(`SwapKit ${type} fee amount "${amount}" is not a decimal number.`, { cause: error })
+  }
+}
+
 const getSwapKitSwapFee = (
   fees: SwapKitSwapResponse['fees'],
   from: AccountCoin<SwapKitSourceChain>,
@@ -487,7 +495,12 @@ const getSwapKitSwapFee = (
     }
 
     const current: SwapFee = {
-      amount: toChainAmount(fee.amount, candidate.coin.decimals),
+      // The proxy's `amount` is an unvalidated string. `toChainAmount` throws
+      // its own error for a malformed one ("1e+", "abc"), which would escape
+      // the display-fee guard and take down a route that is otherwise
+      // signable. An amount we cannot parse is exactly an unresolvable fee
+      // shape, so it is reported as one.
+      amount: toSwapKitFeeAmount(fee.amount, candidate.coin.decimals, type),
       chain: candidate.coin.chain,
       id: candidate.coin.id,
       decimals: candidate.coin.decimals,
@@ -656,11 +669,25 @@ const getBitcoinPsbtDestinationAmount = ({
   }
 }
 
-const buildTransferTx = (
-  response: SwapKitSwapResponse,
-  from: AccountCoin<SwapKitSourceChain>,
+type BuildTransferTxInput = {
+  response: SwapKitSwapResponse
+  from: AccountCoin<SwapKitSourceChain>
+  toCoin: AccountCoin
   amount: bigint
-): GeneralSwapTx => {
+  routeProvider: string | undefined
+  fromMetadata: SwapKitChainMetadata
+  toMetadata: SwapKitChainMetadata
+}
+
+const buildTransferTx = ({
+  response,
+  from,
+  toCoin,
+  amount,
+  routeProvider,
+  fromMetadata,
+  toMetadata,
+}: BuildTransferTxInput): GeneralSwapTx => {
   const to = getTransferTargetAddress(response)
 
   if (!to) {
@@ -687,6 +714,18 @@ const buildTransferTx = (
       ? getBitcoinPsbtDestinationAmount({ txPayload, senderAddress: from.address, targetAddress: to })
       : undefined
 
+  // Same fee the EVM branch surfaces, and absent on the same terms: a zero or
+  // unresolved amount is reported as no fee rather than as a fee of nothing.
+  const swapFee = getSwapKitDisplaySwapFee({
+    fees: response.fees,
+    from,
+    to: toCoin,
+    routeProvider,
+    fromMetadata,
+    toMetadata,
+    route: 'transfer',
+  })
+
   const transfer = {
     to,
     amount: psbtDestinationAmount ?? getTransferAmount(response, amount, from.decimals),
@@ -695,6 +734,7 @@ const buildTransferTx = (
     ...(response.tx ? { txPayload } : {}),
     ...(response.inboundAddress ? { inboundAddress: response.inboundAddress } : {}),
     ...(response.swapId ? { swapId: response.swapId } : {}),
+    ...(swapFee && swapFee.amount > 0n ? { swapFee } : {}),
   }
 
   return { transfer }
@@ -726,7 +766,7 @@ const buildSwapKitTx = (
   }
 
   if (shouldUseTransferTx(from.chain)) {
-    return buildTransferTx(response, from, amount)
+    return buildTransferTx({ response, from, toCoin: to, amount, routeProvider, fromMetadata, toMetadata })
   }
 
   return buildEvmTx({
@@ -735,45 +775,48 @@ const buildSwapKitTx = (
     targetAddress: response.targetAddress,
     chain: from.chain,
     approvalTx: response.approvalTx,
-    affiliateFee: getSwapKitEvmSwapFee({
+    affiliateFee: getSwapKitDisplaySwapFee({
       fees: response.fees,
       from,
       to,
       routeProvider,
       fromMetadata,
       toMetadata,
+      route: 'EVM',
     }),
   })
 }
 
-type GetSwapKitEvmSwapFeeInput = {
+type GetSwapKitDisplaySwapFeeInput = {
   fees: SwapKitSwapResponse['fees']
   from: AccountCoin<SwapKitSourceChain>
   to: AccountCoin
   routeProvider: string | undefined
   fromMetadata: SwapKitChainMetadata
   toMetadata: SwapKitChainMetadata
+  route: 'EVM' | 'transfer'
 }
 
 /**
- * SwapKit's affiliate/service fee for an EVM route, or `undefined` when its
- * shape cannot be resolved.
+ * SwapKit's affiliate/service fee for an EVM or transfer route, or `undefined`
+ * when its shape cannot be resolved.
  *
- * The fee is not part of the signed EVM transaction — `from`/`to`/`data`/
- * `value`/`gas` are — so an unexpected shape must never take down a route that
- * would otherwise sign. Only [SwapKitFeeShapeError] is swallowed; anything else
- * is a bug in the resolution and stays loud. The Solana branch calls
- * `getSwapKitSwapFee` bare and lets it throw on purpose: its tx type requires
- * the fee, so an unresolved one really is fatal there.
+ * The fee is not part of what either route signs — calldata for EVM, a
+ * destination and an amount for a transfer — so an unexpected shape must never
+ * take down a route that would otherwise sign. Only [SwapKitFeeShapeError] is
+ * swallowed; anything else is a bug in the resolution and stays loud. The
+ * Solana branch calls `getSwapKitSwapFee` bare and lets it throw on purpose:
+ * its tx type requires the fee, so an unresolved one really is fatal there.
  */
-const getSwapKitEvmSwapFee = ({
+const getSwapKitDisplaySwapFee = ({
   fees,
   from,
   to,
   routeProvider,
   fromMetadata,
   toMetadata,
-}: GetSwapKitEvmSwapFeeInput): SwapFee | undefined => {
+  route,
+}: GetSwapKitDisplaySwapFeeInput): SwapFee | undefined => {
   try {
     return getSwapKitSwapFee(fees, from, to, routeProvider, fromMetadata, toMetadata)
   } catch (error) {
@@ -781,7 +824,7 @@ const getSwapKitEvmSwapFee = ({
       throw error
     }
 
-    console.warn('[getSwapKitQuote] unresolved SwapKit fee on an EVM route; reporting none', error)
+    console.warn(`[getSwapKitQuote] unresolved SwapKit fee on a ${route} route; reporting none`, error)
     return undefined
   }
 }

@@ -2,17 +2,21 @@
 // @generated from file vultisig/keysign/v1/swapkit_swap_payload.proto (package vultisig.keysign.v1, syntax proto3)
 /* eslint-disable */
 
-import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
-import { fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
-import type { Coin } from "./coin_pb";
-import { file_vultisig_keysign_v1_coin } from "./coin_pb";
-import type { Message } from "@bufbuild/protobuf";
+import type { GenFile, GenMessage } from '@bufbuild/protobuf/codegenv2'
+import { fileDesc, messageDesc } from '@bufbuild/protobuf/codegenv2'
+import type { Coin } from './coin_pb'
+import { file_vultisig_keysign_v1_coin } from './coin_pb'
+import type { Message } from '@bufbuild/protobuf'
 
 /**
  * Describes the file vultisig/keysign/v1/swapkit_swap_payload.proto.
  */
-export const file_vultisig_keysign_v1_swapkit_swap_payload: GenFile = /*@__PURE__*/
-  fileDesc("Ci52dWx0aXNpZy9rZXlzaWduL3YxL3N3YXBraXRfc3dhcF9wYXlsb2FkLnByb3RvEhN2dWx0aXNpZy5rZXlzaWduLnYxItACChJTd2FwS2l0U3dhcFBheWxvYWQSLAoJZnJvbV9jb2luGAEgASgLMhkudnVsdGlzaWcua2V5c2lnbi52MS5Db2luEioKB3RvX2NvaW4YAiABKAsyGS52dWx0aXNpZy5rZXlzaWduLnYxLkNvaW4SEwoLZnJvbV9hbW91bnQYAyABKAkSGQoRdG9fYW1vdW50X2RlY2ltYWwYBCABKAkSDwoHdHhfdHlwZRgFIAEoCRISCgp0eF9wYXlsb2FkGAYgASgMEhYKDnRhcmdldF9hZGRyZXNzGAcgASgJEhwKD2luYm91bmRfYWRkcmVzcxgIIAEoCUgAiAEBEhEKBG1lbW8YCSABKAlIAYgBARIUCgxzdWJfcHJvdmlkZXIYCiABKAkSDwoHc3dhcF9pZBgLIAEoCUISChBfaW5ib3VuZF9hZGRyZXNzQgcKBV9tZW1vQlQKE3Z1bHRpc2lnLmtleXNpZ24udjFaOGdpdGh1Yi5jb20vdnVsdGlzaWcvY29tbW9uZGF0YS9nby92dWx0aXNpZy9rZXlzaWduL3YxO3YxugICVlNiBnByb3RvMw", [file_vultisig_keysign_v1_coin]);
+export const file_vultisig_keysign_v1_swapkit_swap_payload: GenFile =
+  /*@__PURE__*/
+  fileDesc(
+    'Ci52dWx0aXNpZy9rZXlzaWduL3YxL3N3YXBraXRfc3dhcF9wYXlsb2FkLnByb3RvEhN2dWx0aXNpZy5rZXlzaWduLnYxIv4DChJTd2FwS2l0U3dhcFBheWxvYWQSLAoJZnJvbV9jb2luGAEgASgLMhkudnVsdGlzaWcua2V5c2lnbi52MS5Db2luEioKB3RvX2NvaW4YAiABKAsyGS52dWx0aXNpZy5rZXlzaWduLnYxLkNvaW4SEwoLZnJvbV9hbW91bnQYAyABKAkSGQoRdG9fYW1vdW50X2RlY2ltYWwYBCABKAkSDwoHdHhfdHlwZRgFIAEoCRISCgp0eF9wYXlsb2FkGAYgASgMEhYKDnRhcmdldF9hZGRyZXNzGAcgASgJEhwKD2luYm91bmRfYWRkcmVzcxgIIAEoCUgAiAEBEhEKBG1lbW8YCSABKAlIAYgBARIUCgxzdWJfcHJvdmlkZXIYCiABKAkSDwoHc3dhcF9pZBgLIAEoCRIQCghzd2FwX2ZlZRgMIAEoCRIbCg5zd2FwX2ZlZV9jaGFpbhgNIAEoCUgCiAEBEh4KEXN3YXBfZmVlX3Rva2VuX2lkGA4gASgJSAOIAQESHgoRc3dhcF9mZWVfZGVjaW1hbHMYDyABKAVIBIgBAUISChBfaW5ib3VuZF9hZGRyZXNzQgcKBV9tZW1vQhEKD19zd2FwX2ZlZV9jaGFpbkIUChJfc3dhcF9mZWVfdG9rZW5faWRCFAoSX3N3YXBfZmVlX2RlY2ltYWxzQlQKE3Z1bHRpc2lnLmtleXNpZ24udjFaOGdpdGh1Yi5jb20vdnVsdGlzaWcvY29tbW9uZGF0YS9nby92dWx0aXNpZy9rZXlzaWduL3YxO3YxugICVlNiBnByb3RvMw',
+    [file_vultisig_keysign_v1_coin]
+  )
 
 /**
  * SwapKit-routed swap whose wire shape doesn't fit the EVM-typed
@@ -33,32 +37,32 @@ export const file_vultisig_keysign_v1_swapkit_swap_payload: GenFile = /*@__PURE_
  *
  * @generated from message vultisig.keysign.v1.SwapKitSwapPayload
  */
-export type SwapKitSwapPayload = Message<"vultisig.keysign.v1.SwapKitSwapPayload"> & {
+export type SwapKitSwapPayload = Message<'vultisig.keysign.v1.SwapKitSwapPayload'> & {
   /**
    * Identity — same as every other swap payload.
    *
    * @generated from field: vultisig.keysign.v1.Coin from_coin = 1;
    */
-  fromCoin?: Coin;
+  fromCoin?: Coin
 
   /**
    * @generated from field: vultisig.keysign.v1.Coin to_coin = 2;
    */
-  toCoin?: Coin;
+  toCoin?: Coin
 
   /**
    * Raw, in source-asset base units.
    *
    * @generated from field: string from_amount = 3;
    */
-  fromAmount: string;
+  fromAmount: string
 
   /**
    * Human-readable, decimal-formatted expected output amount.
    *
    * @generated from field: string to_amount_decimal = 4;
    */
-  toAmountDecimal: string;
+  toAmountDecimal: string
 
   /**
    * SwapKit's `meta.txType` verbatim. Drives the peer-side dispatcher:
@@ -76,7 +80,7 @@ export type SwapKitSwapPayload = Message<"vultisig.keysign.v1.SwapKitSwapPayload
    *
    * @generated from field: string tx_type = 5;
    */
-  txType: string;
+  txType: string
 
   /**
    * Raw unsigned-transaction bytes returned by POST /v3/swap.
@@ -95,7 +99,7 @@ export type SwapKitSwapPayload = Message<"vultisig.keysign.v1.SwapKitSwapPayload
    *
    * @generated from field: bytes tx_payload = 6;
    */
-  txPayload: Uint8Array;
+  txPayload: Uint8Array
 
   /**
    * Deposit address on the source chain. For PSBT this duplicates info
@@ -104,7 +108,7 @@ export type SwapKitSwapPayload = Message<"vultisig.keysign.v1.SwapKitSwapPayload
    *
    * @generated from field: string target_address = 7;
    */
-  targetAddress: string;
+  targetAddress: string
 
   /**
    * THORChain-style inbound vault address. Optional — populated only for
@@ -114,7 +118,7 @@ export type SwapKitSwapPayload = Message<"vultisig.keysign.v1.SwapKitSwapPayload
    *
    * @generated from field: optional string inbound_address = 8;
    */
-  inboundAddress?: string;
+  inboundAddress?: string
 
   /**
    * Optional memo. SwapKit V3 returned null for every chain spike result
@@ -123,7 +127,7 @@ export type SwapKitSwapPayload = Message<"vultisig.keysign.v1.SwapKitSwapPayload
    *
    * @generated from field: optional string memo = 9;
    */
-  memo?: string;
+  memo?: string
 
   /**
    * Sub-provider tag for the verify screen, e.g. "CHAINFLIP", "NEAR",
@@ -132,7 +136,7 @@ export type SwapKitSwapPayload = Message<"vultisig.keysign.v1.SwapKitSwapPayload
    *
    * @generated from field: string sub_provider = 10;
    */
-  subProvider: string;
+  subProvider: string
 
   /**
    * SwapKit swap identifier — persisted for tracking and analytics.
@@ -141,13 +145,49 @@ export type SwapKitSwapPayload = Message<"vultisig.keysign.v1.SwapKitSwapPayload
    *
    * @generated from field: string swap_id = 11;
    */
-  swapId: string;
-};
+  swapId: string
+
+  /**
+   * Provider fee for this swap, raw in base units of the coin identified by
+   * the three fields below. Empty for routes that carry no provider fee.
+   *
+   * A cosigning peer holds no quote, so a fee omitted here is a fee it can
+   * neither recover nor display — it would show a total that understates
+   * what the swap costs. EVM and Solana SwapKit routes carry the same data
+   * as OneInchTransaction fields 7-10; these mirror them for the transfer
+   * routes that ride this payload instead.
+   *
+   * @generated from field: string swap_fee = 12;
+   */
+  swapFee: string
+
+  /**
+   * Coin context for `swap_fee`. The amount alone is not enough because
+   * providers attribute the fee to different coins (e.g. KyberSwap charges
+   * it in the destination token; LI.FI / 1inch / SwapKit charge it in the
+   * source chain's fee coin). Receivers need these fields to compute the
+   * correct fiat-equivalent value. All three are optional for backwards
+   * compatibility with senders that do not yet populate them.
+   *
+   * @generated from field: optional string swap_fee_chain = 13;
+   */
+  swapFeeChain?: string
+
+  /**
+   * @generated from field: optional string swap_fee_token_id = 14;
+   */
+  swapFeeTokenId?: string
+
+  /**
+   * @generated from field: optional int32 swap_fee_decimals = 15;
+   */
+  swapFeeDecimals?: number
+}
 
 /**
  * Describes the message vultisig.keysign.v1.SwapKitSwapPayload.
  * Use `create(SwapKitSwapPayloadSchema)` to create a new message.
  */
-export const SwapKitSwapPayloadSchema: GenMessage<SwapKitSwapPayload> = /*@__PURE__*/
-  messageDesc(file_vultisig_keysign_v1_swapkit_swap_payload, 0);
-
+export const SwapKitSwapPayloadSchema: GenMessage<SwapKitSwapPayload> =
+  /*@__PURE__*/
+  messageDesc(file_vultisig_keysign_v1_swapkit_swap_payload, 0)

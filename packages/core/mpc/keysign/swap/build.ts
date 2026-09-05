@@ -17,6 +17,7 @@ import { rujiTradeRuneBruneMarketContract } from '@vultisig/core-chain/swap/gene
 import { getSwapDestinationAddress } from '@vultisig/core-chain/swap/keysign/getSwapDestinationAddress'
 import { nativeSwapQuoteToSwapPayload } from '@vultisig/core-mpc/swap/native/utils/nativeSwapQuoteToSwapPayload'
 import { SwapQuote, SwapQuoteResult } from '@vultisig/core-chain/swap/quote/SwapQuote'
+import { SwapFee } from '@vultisig/core-chain/swap/SwapFee'
 import { getChainSpecific } from '@vultisig/core-mpc/keysign/chainSpecific'
 import { getBlockchainSpecificValue } from '@vultisig/core-mpc/keysign/chainSpecific/KeysignChainSpecific'
 import { refineKeysignUtxo } from '@vultisig/core-mpc/keysign/refine/utxo'
@@ -218,6 +219,25 @@ const getSwapKitSignData = (fromCoin: AccountCoin, transfer: TransferSwapTx): Ke
  * UTXO signing (via `getUtxoSigningInputs`) relies on this invariant — it reads
  * `keysignPayload.toAddress` directly for the `general` swap arm.
  */
+/**
+ * The `swap_fee` group of a swap payload — amount plus the coin context that
+ * makes it priceable — for a fee that may not exist.
+ *
+ * An absent fee yields an empty amount and no coin context, which is how a
+ * receiver tells "no fee" from a fee it can't price. Never emit a zero amount
+ * with a coin: that reads as a swap that costs nothing.
+ */
+const toCommSwapFee = (swapFee: SwapFee | undefined) => ({
+  swapFee: swapFee ? swapFee.amount.toString() : '',
+  ...(swapFee
+    ? {
+        swapFeeChain: swapFee.chain,
+        swapFeeTokenId: swapFee.id,
+        swapFeeDecimals: swapFee.decimals,
+      }
+    : {}),
+})
+
 export const buildSwapKeysignPayload = async ({
   fromCoin,
   toCoin,
@@ -359,6 +379,7 @@ export const buildSwapKeysignPayload = async ({
             ...(transfer.memo ? { memo: transfer.memo } : {}),
             subProvider: quote.routeProvider ?? '',
             swapId: transfer.swapId ?? '',
+            ...toCommSwapFee(transfer.swapFee),
           }),
         }
       }
@@ -372,14 +393,7 @@ export const buildSwapKeysignPayload = async ({
             value,
             gasPrice: '',
             gas: 0n,
-            swapFee: affiliateFee ? affiliateFee.amount.toString() : '',
-            ...(affiliateFee
-              ? {
-                  swapFeeChain: affiliateFee.chain,
-                  swapFeeTokenId: affiliateFee.id,
-                  swapFeeDecimals: affiliateFee.decimals,
-                }
-              : {}),
+            ...toCommSwapFee(affiliateFee),
           }
         },
         solana: ({ data, swapFee }) => ({
@@ -396,14 +410,14 @@ export const buildSwapKeysignPayload = async ({
         }),
         // Non-SwapKit transfer routes can still use the existing general display shape.
         // SwapKit transfer routes return above with the dedicated commondata payload.
-        transfer: ({ to }) => ({
+        transfer: ({ to, swapFee }) => ({
           from: fromCoin.address,
           to,
           data: '',
           value: '',
           gasPrice: '',
           gas: 0n,
-          swapFee: '',
+          ...toCommSwapFee(swapFee),
         }),
         cosmosWasm: ({ sender, contract, executeMsg, funds }) => ({
           from: sender,
@@ -473,6 +487,7 @@ export const buildSwapKeysignPayload = async ({
             tx,
           }),
           provider: quote.provider,
+          subProvider: quote.routeProvider ?? '',
         }),
       }
 
