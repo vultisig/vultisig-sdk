@@ -94,6 +94,18 @@ describe('getTrc20TransferFee', () => {
     mockGetTronAccountResources.mockResolvedValue(makeResources(0))
   })
 
+  it.each([64_285, 130_285])('propagates recipient-specific %i energy into the fee amount', async energy => {
+    mockQueryUrl.mockResolvedValue(successResult({ energy_used: energy }))
+    const receiver = 'THHsfg2eNiv6MSXC4y5d4t5wkvRVADRKiF'
+    const feeLimit = await getTrc20TransferFee({ ...baseInput, receiver })
+    const fee = await getTrc20TransferFeeAmount({ feeLimit, fromAddress: coin.address })
+    expect(fee).toBe(BigInt(energy) * ENERGY_PRICE)
+    expect(mockQueryUrl.mock.calls[0][1]?.body).toMatchObject({
+      parameter:
+        '0000000000000000000000005050a4f4b3f9338c3472dcc01a87c76a144b3c9c00000000000000000000000000000000000000000000000000000000000f4240',
+    })
+  })
+
   it('calls /wallet/triggerconstantcontract, not /walletsolidity/...', async () => {
     mockQueryUrl.mockResolvedValue(successResult({ energy_used: 100, energy_penalty: 0 }))
 
