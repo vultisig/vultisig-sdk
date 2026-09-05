@@ -390,6 +390,22 @@ const configs = {
       distBase: 'tools/defi',
     }),
     ...createSubpathConfigs({
+      input: './src/tools/dex/index.ts',
+      distBase: 'tools/dex',
+    }),
+    ...createSubpathConfigs({
+      input: './src/tools/evm/index.ts',
+      distBase: 'tools/evm',
+    }),
+    ...createSubpathConfigs({
+      input: './src/tools/cosmos/index.ts',
+      distBase: 'tools/cosmos',
+    }),
+    ...createSubpathConfigs({
+      input: './src/signable-transaction/index.ts',
+      distBase: 'signable-transaction',
+    }),
+    ...createSubpathConfigs({
       input: './src/tools/gas/index.ts',
       distBase: 'tools/gas',
     }),

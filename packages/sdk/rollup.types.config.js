@@ -132,6 +132,10 @@ export default defineConfig([
   // as a narrow declaration surface alongside their dedicated runtime bundle.
   createSubpathTypesConfig('src/seedphrase/index.ts', 'dist/seedphrase/index.d.ts'),
   createSubpathTypesConfig('src/tools/decode/index.ts', 'dist/tools/decode/index.d.ts'),
+  createSubpathTypesConfig('src/tools/dex/index.ts', 'dist/tools/dex/index.d.ts'),
+  createSubpathTypesConfig('src/tools/evm/index.ts', 'dist/tools/evm/index.d.ts'),
+  createSubpathTypesConfig('src/tools/cosmos/index.ts', 'dist/tools/cosmos/index.d.ts'),
+  createSubpathTypesConfig('src/signable-transaction/index.ts', 'dist/signable-transaction/index.d.ts'),
   createSubpathTypesConfig('src/tools/policy/index.ts', 'dist/tools/policy/index.d.ts'),
   // Canonical price helpers (sdk#1781): pure fetch/format helpers with no platform
   // coupling, so the subpath ships the same all-platform conditions as ./tools/decode.
