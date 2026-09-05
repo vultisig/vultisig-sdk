@@ -7,9 +7,11 @@ import test from 'node:test'
 import {
   collectExportTargets,
   collectIntrospectableRuntimeCases,
+  collectLocalWorkspaceDependencyNames,
   collectNodeRuntimeCases,
   collectRuntimeExportKeys,
   collectTypeCustomConditionSets,
+  createPackedConsumerManifest,
   validatePackedExportTargets,
 } from './check-sdk-package-exports.mjs'
 
@@ -59,6 +61,83 @@ test('walks every conditional target without a subpath allow-list', () => {
       { subpath: './new-surface', conditions: ['types'], target: './dist/new.d.ts' },
       { subpath: './new-surface', conditions: ['import'], target: './dist/new.js' },
     ]
+  )
+})
+
+test('packed consumers resolve the complete local SDK dependency graph without npm publication', () => {
+  const workspaceManifests = new Map([
+    [
+      '@vultisig/sdk',
+      {
+        version: '6.3.0',
+        dependencies: {
+          '@vultisig/core-chain': '4.1.1',
+          '@vultisig/core-mpc': '2.1.1',
+          '@vultisig/lib-dkls': '0.9.0',
+        },
+        peerDependencies: {
+          '@vultisig/mpc-native': '*',
+        },
+      },
+    ],
+    ['@vultisig/core-chain', { version: '4.1.1', dependencies: { '@vultisig/mpc-types': '0.3.0' } }],
+    [
+      '@vultisig/core-mpc',
+      {
+        version: '2.1.1',
+        dependencies: {
+          '@vultisig/core-chain': '4.1.1',
+          '@vultisig/mpc-types': '0.3.0',
+        },
+      },
+    ],
+    ['@vultisig/mpc-types', { version: '0.3.0', dependencies: {} }],
+    ['@vultisig/lib-dkls', { version: '0.9.0', dependencies: {} }],
+  ])
+
+  assert.deepEqual(collectLocalWorkspaceDependencyNames('@vultisig/sdk', workspaceManifests), [
+    '@vultisig/core-chain',
+    '@vultisig/core-mpc',
+    '@vultisig/mpc-types',
+  ])
+
+  assert.deepEqual(
+    createPackedConsumerManifest({
+      '@vultisig/core-chain': 'file:/tmp/vultisig-core-chain-4.1.1.tgz',
+      '@vultisig/core-mpc': 'file:/tmp/vultisig-core-mpc-2.1.1.tgz',
+      '@vultisig/mpc-types': 'file:/tmp/vultisig-mpc-types-0.3.0.tgz',
+    }),
+    {
+      name: 'vultisig-sdk-package-export-consumer',
+      private: true,
+      type: 'module',
+      packageManager: 'yarn@4.16.0',
+      resolutions: {
+        '@vultisig/core-chain': 'file:/tmp/vultisig-core-chain-4.1.1.tgz',
+        '@vultisig/core-mpc': 'file:/tmp/vultisig-core-mpc-2.1.1.tgz',
+        '@vultisig/mpc-types': 'file:/tmp/vultisig-mpc-types-0.3.0.tgz',
+      },
+    }
+  )
+})
+
+test('packed consumers reject an incompatible coordinated dependency selector', () => {
+  const packedManifests = new Map([
+    [
+      '@vultisig/sdk',
+      { version: '6.3.0', dependencies: { '@vultisig/core-mpc': '2.1.1' } },
+    ],
+    [
+      '@vultisig/core-mpc',
+      { version: '2.1.1', dependencies: { '@vultisig/core-chain': '4.1.0' } },
+    ],
+    ['@vultisig/core-chain', { version: '4.1.1', dependencies: {} }],
+    ['@vultisig/mpc-types', { version: '0.3.0', dependencies: {} }],
+  ])
+
+  assert.throws(
+    () => collectLocalWorkspaceDependencyNames('@vultisig/sdk', packedManifests),
+    /core-mpc requires @vultisig\/core-chain@4\.1\.0.*local archive.*4\.1\.1/
   )
 })
 

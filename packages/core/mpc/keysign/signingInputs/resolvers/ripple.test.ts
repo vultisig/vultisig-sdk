@@ -1,8 +1,9 @@
 import { Buffer } from 'buffer'
+import { createHash } from 'crypto'
 import { readFileSync } from 'fs'
 
 import { create, fromBinary, toBinary } from '@bufbuild/protobuf'
-import { type WalletCore, initWasm } from '@trustwallet/wallet-core'
+import { TW, type WalletCore, initWasm } from '@trustwallet/wallet-core'
 import { Chain } from '@vultisig/core-chain/Chain'
 import {
   rippleIssuedCurrencyDecimals,
@@ -16,6 +17,7 @@ import {
 import { CoinSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/coin_pb'
 import { KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { beforeAll, describe, expect, it } from 'vitest'
+import { decode, encodeForSigning } from 'ripple-binary-codec'
 
 import { getPreSigningHashes } from '../../../tx/preSigningHashes'
 import { getEncodedSigningInputs } from '../index'
@@ -29,11 +31,15 @@ const RLUSD_ISSUER = 'rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De'
 // Dummy 33-byte secp256k1 public key (hex) for getKeysignTwPublicKey.
 const HEX_PUBLIC_KEY = `02${'ab'.repeat(32)}`
 
-const makeRippleSpecific = (destinationTag?: number) => {
+const makeRippleSpecific = (
+  destinationTag?: number,
+  transactionType: TransactionType = TransactionType.UNSPECIFIED
+) => {
   const rippleSpecific = create(RippleSpecificSchema, {
     sequence: 100n,
     gas: 15n,
     lastLedgerSequence: 200n,
+    transactionType,
   })
 
   // Set this optional scalar directly so its field presence is explicit in this
@@ -59,8 +65,29 @@ const buildTrustSetPayload = (toAmount: string) =>
     }),
     toAddress: RLUSD_ISSUER,
     toAmount,
-    blockchainSpecific: { case: 'rippleSpecific', value: makeRippleSpecific() },
+    blockchainSpecific: {
+      case: 'rippleSpecific',
+      value: makeRippleSpecific(undefined, TransactionType.RIPPLE_TRUST_SET),
+    },
   })
+
+const buildIssuedPaymentPayload = ({
+  destinationTag,
+  memo,
+}: {
+  destinationTag?: number
+  memo?: string
+} = {}) => {
+  const payload = buildTrustSetPayload('1500000000000000')
+  payload.toAddress = 'rDestinationAddressForTests9876543210'
+  payload.memo = memo
+  payload.blockchainSpecific = {
+    case: 'rippleSpecific',
+    value: makeRippleSpecific(destinationTag),
+  }
+
+  return payload
+}
 
 const buildPaymentPayload = ({
   destinationTag,
@@ -147,8 +174,15 @@ describe('getRippleSigningInputs -- TrustSet build path (issued currency)', () =
   // rather than silently two's-complement-wrap via Long.fromString.
   it('throws instead of silently wrapping an out-of-int64-range fee', async () => {
     const payload = buildTrustSetPayload('1000000000000000')
-    const rippleSpecific = create(RippleSpecificSchema, { sequence: 100n, gas: 1n << 63n, lastLedgerSequence: 200n })
-    payload.blockchainSpecific = { case: 'rippleSpecific', value: rippleSpecific }
+    const rippleSpecific = create(RippleSpecificSchema, {
+      sequence: 100n,
+      gas: 1n << 63n,
+      lastLedgerSequence: 200n,
+    })
+    payload.blockchainSpecific = {
+      case: 'rippleSpecific',
+      value: rippleSpecific,
+    }
 
     await expect(async () => {
       await getRippleSigningInputs({ keysignPayload: payload, walletCore })
@@ -299,6 +333,83 @@ describe('getRippleSigningInputs -- TrustSet build path (issued currency)', () =
   })
 })
 
+describe('getRippleSigningInputs -- issued-currency Payment build path', () => {
+  it('builds an exact CurrencyAmount Payment without partial-payment flags', async () => {
+    const [input] = await getRippleSigningInputs({
+      keysignPayload: buildIssuedPaymentPayload(),
+      walletCore,
+    })
+
+    expect(input.opTrustSet).toBeFalsy()
+    expect(input.opPayment?.amount).toBeFalsy()
+    expect(input.opPayment?.currencyAmount).toMatchObject({
+      currency: '524C555344000000000000000000000000000000',
+      issuer: RLUSD_ISSUER,
+      value: '1.5',
+    })
+    expect(input.flags.toString()).toBe('0')
+  })
+
+  it('preserves DestinationTag on a typed issued-currency Payment', async () => {
+    const [input] = await getRippleSigningInputs({
+      keysignPayload: buildIssuedPaymentPayload({ destinationTag: 12345 }),
+      walletCore,
+    })
+
+    expect(input.opPayment?.currencyAmount?.value).toBe('1.5')
+    expect(input.opPayment?.destinationTag.toString()).toBe('12345')
+  })
+
+  it('preserves an independent memo and exact issued amount in raw JSON', async () => {
+    const [input] = await getRippleSigningInputs({
+      keysignPayload: buildIssuedPaymentPayload({
+        destinationTag: 12345,
+        memo: 'invoice 67890',
+      }),
+      walletCore,
+    })
+
+    expect(input.opPayment).toBeFalsy()
+    expect(JSON.parse(input.rawJson!)).toMatchObject({
+      TransactionType: 'Payment',
+      Destination: 'rDestinationAddressForTests9876543210',
+      DestinationTag: 12345,
+      Amount: {
+        currency: '524C555344000000000000000000000000000000',
+        issuer: RLUSD_ISSUER,
+        value: '1.5',
+      },
+      Memos: [{ Memo: { MemoData: '696E766F696365203637383930' } }],
+    })
+    expect(JSON.parse(input.rawJson!).Flags).toBeUndefined()
+  })
+
+  it('rejects a non-native coin without an issued-currency token id', () => {
+    const payload = buildIssuedPaymentPayload()
+    payload.coin!.contractAddress = ''
+
+    expect(() => getRippleSigningInputs({ keysignPayload: payload, walletCore })).toThrow(/requires a coin carrying/)
+  })
+
+  it.each(['0', '-1', '12345678901234567'])('rejects an invalid or rounded Payment quantity %s', toAmount => {
+    const payload = buildIssuedPaymentPayload()
+    payload.toAmount = toAmount
+    expect(() => getRippleSigningInputs({ keysignPayload: payload, walletCore })).toThrow(/amount|representable/)
+  })
+
+  it('rejects an unrelated transaction discriminator instead of guessing', () => {
+    const payload = buildIssuedPaymentPayload()
+    payload.blockchainSpecific = {
+      case: 'rippleSpecific',
+      value: makeRippleSpecific(undefined, TransactionType.VOTE),
+    }
+
+    expect(() => getRippleSigningInputs({ keysignPayload: payload, walletCore })).toThrow(
+      /Unsupported XRP transaction type/
+    )
+  })
+})
+
 describe('getRippleSigningInputs -- rawJson build path (dApp-supplied tx)', () => {
   const offerCreateJson = JSON.stringify({
     TransactionType: 'OfferCreate',
@@ -335,6 +446,19 @@ describe('getRippleSigningInputs -- rawJson build path (dApp-supplied tx)', () =
     expect(input.rawJson).toBe(offerCreateJson)
     expect(input.opPayment).toBeFalsy()
     expect(input.opTrustSet).toBeFalsy()
+  })
+
+  it('does not require issued-currency coin metadata for a verbatim dApp transaction', async () => {
+    const payload = buildSignRipplePayload()
+    payload.coin!.isNativeToken = false
+    payload.coin!.contractAddress = ''
+
+    const [input] = await getRippleSigningInputs({
+      keysignPayload: payload,
+      walletCore,
+    })
+
+    expect(input.rawJson).toBe(offerCreateJson)
   })
 
   it('still carries the signer public key so WalletCore can sign', async () => {
@@ -721,7 +845,11 @@ describe('getRippleSigningInputs -- rawJson build path (dApp-supplied tx)', () =
           Destination: payload.toAddress,
           Amount: { currency: 'RLUSD', issuer: RLUSD_ISSUER, value: '1.5' },
           SendMax: { currency: 'RLUSD', issuer: RLUSD_ISSUER, value: '2' },
-          DeliverMin: { currency: 'RLUSD', issuer: 'rSomeOtherIssuer00000000000000000', value: '1.5' },
+          DeliverMin: {
+            currency: 'RLUSD',
+            issuer: 'rSomeOtherIssuer00000000000000000',
+            value: '1.5',
+          },
           Flags: 131072,
         }),
       },
@@ -885,6 +1013,68 @@ describe('getRippleSigningInputs interop vector', () => {
     expect(hex(txInputData)).toBe(vector.expected.serializedSigningInputHex)
     expect(hex(preSigningHash)).toBe(vector.expected.preSigningHashHex)
   })
+
+  it.each([undefined, 'invoice 67890'])('signs and decodes an exact issued Payment (memo: %s)', async memo => {
+    const privateKey = interopWalletCore.PrivateKey.createWithData(new Uint8Array(32).fill(1))
+    const publicKey = privateKey.getPublicKeySecp256k1(true)
+    try {
+      const payload = buildIssuedPaymentPayload({
+        destinationTag: 12345,
+        memo,
+      })
+      payload.coin!.address = interopWalletCore.AnyAddress.createWithPublicKey(
+        publicKey,
+        interopWalletCore.CoinType.xrp
+      ).description()
+      payload.coin!.hexPublicKey = hex(publicKey.data())
+      payload.toAddress = vector.input.toAddress
+      payload.toAmount = '1234567890123456'
+      const [input] = await getRippleSigningInputs({
+        keysignPayload: payload,
+        walletCore: interopWalletCore,
+      })
+      const output = TW.Ripple.Proto.SigningOutput.decode(
+        interopWalletCore.AnySigner.sign(
+          TW.Ripple.Proto.SigningInput.encode({
+            ...input,
+            privateKey: privateKey.data(),
+          }).finish(),
+          interopWalletCore.CoinType.xrp
+        )
+      )
+      expect(output.error).toBe(0)
+      const decoded = decode(hex(output.encoded))
+      expect(decoded).toMatchObject({
+        TransactionType: 'Payment',
+        Account: payload.coin!.address,
+        Destination: payload.toAddress,
+        Amount: {
+          currency: '524C555344000000000000000000000000000000',
+          issuer: RLUSD_ISSUER,
+          value: '1.234567890123456',
+        },
+        DestinationTag: 12345,
+        Fee: '15',
+        Sequence: 100,
+        LastLedgerSequence: 200,
+      })
+      expect(Number(decoded.Flags ?? 0) & 0x00020000).toBe(0)
+      const [hash] = getPreSigningHashes({
+        walletCore: interopWalletCore,
+        chain: Chain.Ripple,
+        txInputData: TW.Ripple.Proto.SigningInput.encode(input).finish(),
+      })
+      expect(hex(hash)).toBe(
+        createHash('sha512')
+          .update(Buffer.from(encodeForSigning(decoded), 'hex'))
+          .digest('hex')
+          .slice(0, 64)
+      )
+    } finally {
+      publicKey.delete()
+      privateKey.delete()
+    }
+  })
 })
 
 describe('getRippleSigningInputs -- TrustSet discriminator (RippleSpecific.transaction_type)', () => {
@@ -896,7 +1086,10 @@ describe('getRippleSigningInputs -- TrustSet discriminator (RippleSpecific.trans
       lastLedgerSequence: 200n,
       transactionType: TransactionType.RIPPLE_TRUST_SET,
     })
-    payload.blockchainSpecific = { case: 'rippleSpecific', value: rippleSpecific }
+    payload.blockchainSpecific = {
+      case: 'rippleSpecific',
+      value: rippleSpecific,
+    }
 
     return payload
   }
@@ -911,39 +1104,90 @@ describe('getRippleSigningInputs -- TrustSet discriminator (RippleSpecific.trans
     expect(input.opPayment).toBeFalsy()
   })
 
-  it('signs identically whether or not the discriminator is present', async () => {
-    // The whole point: a peer that predates the field infers TrustSet from the
-    // coin, so both devices must serialize the same bytes or the ceremony
-    // diverges and never completes.
-    const amount = '1500000000000000'
+  it('keeps legacy undiscriminated TrustSet payloads compatible', async () => {
+    const payload = buildTrustSetPayload('1500000000000000')
+    payload.blockchainSpecific = {
+      case: 'rippleSpecific',
+      value: makeRippleSpecific(undefined, TransactionType.UNSPECIFIED),
+    }
 
-    const [discriminated] = await getRippleSigningInputs({
-      keysignPayload: buildDiscriminatedTrustSetPayload(amount),
-      walletCore,
-    })
-    const [inferred] = await getRippleSigningInputs({
-      keysignPayload: buildTrustSetPayload(amount),
-      walletCore,
-    })
+    const [input] = await getRippleSigningInputs({ keysignPayload: payload, walletCore })
 
-    expect(discriminated.opTrustSet).toEqual(inferred.opTrustSet)
+    expect(input.opTrustSet).toBeTruthy()
+    expect(input.opPayment).toBeFalsy()
   })
 
-  it('produces byte-identical signing input across a mixed-version committee', async () => {
+  it('keeps an explicit issued-currency Payment to the issuer on the Payment path', async () => {
+    const payload = buildTrustSetPayload('1500000000000000')
+    payload.blockchainSpecific = {
+      case: 'rippleSpecific',
+      value: makeRippleSpecific(undefined, TransactionType.RIPPLE_PAYMENT),
+    }
+
+    const [input] = await getRippleSigningInputs({ keysignPayload: payload, walletCore })
+
+    expect(input.opTrustSet).toBeFalsy()
+    expect(input.opPayment?.currencyAmount).toMatchObject({
+      currency: toXrplCurrencyCode('RLUSD'),
+      issuer: RLUSD_ISSUER,
+      value: '1.5',
+    })
+  })
+
+  it('rejects an explicit TrustSet whose reviewed destination is not the issuer', () => {
+    const payload = buildDiscriminatedTrustSetPayload('1500000000000000')
+    payload.toAddress = 'rDestinationAddressForTests9876543210'
+
+    expect(() => getRippleSigningInputs({ keysignPayload: payload, walletCore })).toThrow(
+      /destination does not match.*issuer/
+    )
+  })
+
+  it('treats an unspecified non-native payload as a Payment, not a TrustSet', async () => {
     const amount = '1500000000000000'
+    const payload = buildTrustSetPayload(amount)
+    payload.toAddress = 'rDestinationAddressForTests9876543210'
+    payload.blockchainSpecific = {
+      case: 'rippleSpecific',
+      value: makeRippleSpecific(),
+    }
 
-    const [discriminated, inferred] = await Promise.all([
-      getEncodedSigningInputs({
-        keysignPayload: buildDiscriminatedTrustSetPayload(amount),
-        walletCore,
-      }),
-      getEncodedSigningInputs({
-        keysignPayload: buildTrustSetPayload(amount),
-        walletCore,
-      }),
-    ])
+    const [input] = await getRippleSigningInputs({
+      keysignPayload: payload,
+      walletCore,
+    })
 
-    expect(Buffer.from(discriminated[0]).toString('hex')).toBe(Buffer.from(inferred[0]).toString('hex'))
+    expect(input.opPayment?.currencyAmount?.value).toBe('1.5')
+    expect(input.opTrustSet).toBeFalsy()
+  })
+
+  it('fails closed across a token-payment committee containing a legacy shape-inference signer', async () => {
+    const modernPayload = buildIssuedPaymentPayload()
+    const [modernInput] = await getRippleSigningInputs({
+      keysignPayload: modernPayload,
+      walletCore,
+    })
+    const legacyInferredInput = TW.Ripple.Proto.SigningInput.create({
+      account: modernInput.account,
+      fee: modernInput.fee,
+      sequence: modernInput.sequence,
+      lastLedgerSequence: modernInput.lastLedgerSequence,
+      publicKey: modernInput.publicKey,
+      // This is the operation an older resolver infers from the exact same
+      // non-native coin shape, regardless of the Payment destination.
+      opTrustSet: TW.Ripple.Proto.OperationTrustSet.create({
+        limitAmount: TW.Ripple.Proto.CurrencyAmount.create({
+          currency: '524C555344000000000000000000000000000000',
+          issuer: RLUSD_ISSUER,
+          value: '1.5',
+        }),
+      }),
+    })
+
+    const modernBytes = TW.Ripple.Proto.SigningInput.encode(modernInput).finish()
+    const legacyBytes = TW.Ripple.Proto.SigningInput.encode(legacyInferredInput).finish()
+
+    expect(Buffer.from(modernBytes).toString('hex')).not.toBe(Buffer.from(legacyBytes).toString('hex'))
   })
 
   it('leaves native XRP a Payment even though the field is unset', async () => {

@@ -60,7 +60,7 @@ export const verifyBroadcastByHash = async <T extends Chain>({ chain, tx, error 
         return hash
       }
 
-      if (result.status === 'error') {
+      if (result.status === 'error' || result.status === 'expired') {
         break
       }
     }

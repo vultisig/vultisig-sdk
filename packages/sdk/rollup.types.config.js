@@ -8,8 +8,6 @@ const dtsPluginOptions = {
       '@/*': ['./src/*'],
       '@helpers/*': ['./tests/e2e/helpers/*'],
       '@types': ['./src/types'],
-      '@vultisig/core-chain/*': ['../core/chain/*'],
-      '@vultisig/core-mpc/*': ['../core/mpc/*'],
       '@vultisig/core-config': ['../core/config/index.ts'],
       '@vultisig/core-config/*': ['../core/config/*'],
       '@vultisig/lib-utils/*': ['../lib/utils/*'],
