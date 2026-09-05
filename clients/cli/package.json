@@ -91,16 +91,16 @@
   },
   "devDependencies": {
     "@types/inquirer": "^9.0.10",
-    "@types/node": "^26.1.1",
+    "@types/node": "^26.4.1",
     "@types/tabtab": "^3.0.4",
     "@types/ws": "^8.18.1",
     "@vultisig/core-mpc": "workspace:^",
-    "esbuild": "^0.28.1",
+    "esbuild": "^0.28.2",
     "ethers": "^6.17.0",
     "node-pty": "^1.1.0",
-    "tsx": "^4.22.4",
+    "tsx": "^4.23.13",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.11"
   },
   "engines": {
     "node": ">=20.19.0"
