@@ -887,9 +887,10 @@ describe('BalanceService — a fetch for a previous TON account never lands afte
   const makeService = () => {
     const cache = new CacheService(new MemoryStorage(), 'vault-1', {})
     let currentAddress = v4r2Address
+    const emitBalanceUpdated = vi.fn()
     const service = new BalanceService(
       cache,
-      vi.fn(),
+      emitBalanceUpdated,
       vi.fn(),
       async () => currentAddress,
       () => [],
@@ -906,7 +907,7 @@ describe('BalanceService — a fetch for a previous TON account never lands afte
       return service.onAccountChanged()
     }
 
-    return { service, cache, switchTo }
+    return { service, cache, emitBalanceUpdated, switchTo }
   }
 
   it('drops the late result instead of caching it, so the new account fetches its own balance', async () => {
@@ -962,6 +963,41 @@ describe('BalanceService — a fetch for a previous TON account never lands afte
     await switching
 
     expect(cache.getScoped('ton:native', CacheScope.BALANCE)).toBeNull()
+  })
+
+  // The write is awaited, so a switch can land inside it — after the check that
+  // guards the write, before the announcement. `balanceUpdated` names a chain and an
+  // asset but no account, so an event fired here credits the old account's balance to
+  // the new one, and whichever of the write and the switch's scope-clear lands last
+  // decides whether the cache keeps it too.
+  it('neither announces nor keeps a balance when the switch lands during the cache write', async () => {
+    const { service, cache, emitBalanceUpdated, switchTo } = makeService()
+    vi.mocked(getCoinBalance).mockResolvedValueOnce(100n)
+
+    const setScoped = cache.setScoped.bind(cache)
+    vi.spyOn(cache, 'setScoped').mockImplementationOnce(async (key, scope, value) => {
+      await switchTo(w5Address)
+      return setScoped(key, scope, value)
+    })
+
+    const balance = await service.getBalance(Chain.Ton)
+
+    // The caller that asked for the old account still gets its answer …
+    expect(balance.amount).toBe('100')
+    // … and neither the vault nor the cache hears about it.
+    expect(emitBalanceUpdated).not.toHaveBeenCalled()
+    expect(cache.getScoped('ton:native', CacheScope.BALANCE)).toBeNull()
+  })
+
+  it('announces a balance normally when no switch interrupts the write', async () => {
+    const { service, emitBalanceUpdated } = makeService()
+    vi.mocked(getCoinBalance).mockResolvedValueOnce(100n)
+
+    await service.getBalance(Chain.Ton)
+
+    expect(emitBalanceUpdated).toHaveBeenCalledWith(
+      expect.objectContaining({ chain: Chain.Ton, balance: expect.objectContaining({ amount: '100' }) })
+    )
   })
 
   it('applies the same rule to a batched EVM fetch', async () => {
