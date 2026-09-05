@@ -13,7 +13,8 @@ import { getSwapKitQuote } from '@vultisig/core-chain/swap/general/swapkit/api/g
 import { getSwapDestinationAddress } from '@vultisig/core-chain/swap/keysign/getSwapDestinationAddress'
 import { KeysignPayload, KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { initWasm, WalletCore } from '@trustwallet/wallet-core'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { getTonChainSpecific } from '../chainSpecific/resolvers/ton'
 import { getTonSigningInputs } from '../signingInputs/resolvers/ton'
@@ -50,6 +51,15 @@ const response = (body: unknown) => {
     json: async () => body,
   }
 }
+
+// The signing resolver derives the sender's wallet contract from the vault key
+// to tell a V4R2 account from a W5 one, so this needs the real WalletCore
+// rather than a stub. `SENDER` is the V4R2 address of the key below.
+let walletCore: WalletCore
+
+beforeAll(async () => {
+  walletCore = await initWasm()
+})
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -98,11 +108,11 @@ describe('SwapKit TON deposit — bounce flag through the final signing input', 
       memo: '',
     })
 
-    const tonSpecific = await getTonChainSpecific({ keysignPayload, walletCore: {} as never })
+    const tonSpecific = await getTonChainSpecific({ keysignPayload, walletCore })
     expect(tonSpecific.bounceable).toBe(true)
 
     keysignPayload.blockchainSpecific = { case: 'tonSpecific', value: tonSpecific }
-    const [input] = await getTonSigningInputs({ keysignPayload, walletCore: {} as never })
+    const [input] = await getTonSigningInputs({ keysignPayload, walletCore })
     const [message] = input.messages
 
     expect(shouldBePresent(message, 'TON transfer').dest).toBe(DEPOSIT_BOUNCEABLE)
