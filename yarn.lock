@@ -5369,6 +5369,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@scure/base@npm:^2.4.0":
+  version: 2.4.0
+  resolution: "@scure/base@npm:2.4.0"
+  checksum: 10c0/985a4bdcafa4289e0cb8b6d53453347308d5ff6ffcbe84d8fac102374fb419b52db565e98fa3931b79a4be1cc3218583065bbca27dfaabca687aac0f3db3639d
+  languageName: node
+  linkType: hard
+
 "@scure/bip32@npm:1.7.0, @scure/bip32@npm:^1.7.0":
   version: 1.7.0
   resolution: "@scure/bip32@npm:1.7.0"
@@ -7311,7 +7318,7 @@ __metadata:
     "@rollup/plugin-replace": "npm:^6.0.3"
     "@rollup/plugin-terser": "npm:^1.0.0"
     "@rollup/plugin-typescript": "npm:^12.3.0"
-    "@scure/base": "npm:^2.2.0"
+    "@scure/base": "npm:^2.4.0"
     "@scure/bip39": "npm:^2.2.0"
     "@solana/spl-token": "npm:^0.4.14"
     "@solana/web3.js": "npm:^1.98.4"
