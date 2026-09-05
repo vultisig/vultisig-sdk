@@ -1,5 +1,6 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import { KnownCoin } from '@vultisig/core-chain/coin/Coin'
+import { isValidClassicAddress } from 'ripple-address-codec'
 
 /**
  * Owner-reserve locked by each XRP Ledger object a wallet owns, including every
@@ -17,14 +18,36 @@ const hexCurrencyCodeLength = 40
 
 const hexCurrencyCodeRegex = /^[0-9a-fA-F]{40}$/
 
+/**
+ * Characters XRPL permits inside a 3-character standard currency code. Both
+ * letter cases are legal on the ledger, so `usd` is a distinct currency from
+ * `USD` rather than a malformed code.
+ * @see https://xrpl.org/docs/references/protocol/data-types/currency-formats
+ */
+const standardCurrencyCharacters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789<>(){}[]|?!@#$%^&*'
+
+/**
+ * Codes the ledger reserves for native XRP. Compared case-insensitively so a
+ * lookalike such as `xrp` cannot be signed as though it were a token.
+ */
+const nativeCurrencyCodes = ['XRP', '0'.repeat(40), '0000000000000000000000005852500000000000']
+
 const asciiToHexCurrencyCode = (currency: string): string => {
-  const bytes = Buffer.from(currency, 'ascii')
+  const bytes = [...currency].map(character => {
+    const code = character.charCodeAt(0)
+    if (code > 127) {
+      throw new Error('Unsupported XRP issued-currency code: expected ASCII or a 160-bit hex code')
+    }
+
+    return code
+  })
   if (bytes.length > 20) {
     throw new Error(`XRPL currency code too long: "${currency}" (max 20 bytes)`)
   }
 
-  return Buffer.concat([bytes, Buffer.alloc(20 - bytes.length)])
-    .toString('hex')
+  return [...bytes, ...Array<number>(20 - bytes.length).fill(0)]
+    .map(byte => byte.toString(16).padStart(2, '0'))
+    .join('')
     .toUpperCase()
 }
 
@@ -92,7 +115,8 @@ export const parseRippleTokenId = (id: string): RippleIssuedCurrency => {
 /**
  * Formats an issued-currency base-unit amount as an XRPL value string: a plain
  * decimal (never scientific notation) with trailing-zero fractional digits
- * trimmed. XRPL issued amounts allow up to 15 significant digits.
+ * trimmed. This formats values for display; use getSignableIssuedCurrencyAmount
+ * when the value must be exactly representable on the ledger.
  */
 export const formatIssuedCurrencyValue = (amount: bigint, decimals: number): string => {
   const negative = amount < 0n
@@ -106,9 +130,54 @@ export const formatIssuedCurrencyValue = (amount: bigint, decimals: number): str
   return negative && magnitude !== '0' ? `-${magnitude}` : magnitude
 }
 
+/** Construct an issued amount without letting a signer change its asset or round its value. */
+export const getSignableIssuedCurrencyAmount = ({
+  currency,
+  issuer,
+  amount,
+  decimals,
+}: RippleIssuedCurrency & { amount: bigint; decimals: number }) => {
+  if ([...currency].some(character => character.charCodeAt(0) > 127)) {
+    throw new Error('Unsupported XRP issued-currency code: expected ASCII or a 160-bit hex code')
+  }
+  const code = toXrplCurrencyCode(currency)
+  const standardCode =
+    code.length === standardCurrencyCodeLength &&
+    [...code].every(character => standardCurrencyCharacters.includes(character))
+  if ((!standardCode && !hexCurrencyCodeRegex.test(code)) || nativeCurrencyCodes.includes(code.toUpperCase())) {
+    throw new Error('Unsupported XRP issued-currency code: signing must preserve its exact identity')
+  }
+  if (!isValidClassicAddress(issuer)) {
+    throw new Error('Invalid XRP issued-currency issuer address')
+  }
+  if (!Number.isInteger(decimals) || decimals < 0 || decimals > 96 || amount < 0n) {
+    throw new Error('Invalid XRP issued-currency amount or decimal scale')
+  }
+  // XRPL uses a 16-digit mantissa and exponent [-96, 80]. Reject rather than
+  // silently truncating a quantity that the user already reviewed.
+  const digits = amount.toString()
+  const significantDigits = digits.replace(/0+$/, '').length
+  const magnitude = digits.length - decimals - 1
+  if (amount !== 0n && (significantDigits > 16 || magnitude < -81 || magnitude > 95)) {
+    throw new Error('XRP issued-currency amount is not exactly representable (maximum 16 significant digits)')
+  }
+  // WalletCore checks the exponent after trimming trailing zeroes, before
+  // padding the mantissa to 16 digits. Keep all signers within that supported
+  // subset and reject unsupported values before review, not during signing.
+  const trimmedExponent = digits.length - significantDigits - decimals
+  if (amount !== 0n && trimmedExponent > 80) {
+    throw new Error('XRP issued-currency amount exceeds the supported signer exponent')
+  }
+  return {
+    currency: code,
+    issuer,
+    value: formatIssuedCurrencyValue(amount, decimals),
+  }
+}
+
 /**
- * XRPL issued currencies carry up to 15 significant decimal digits rather than a
- * fixed on-chain decimal count. We model them internally with this many decimals.
+ * XRPL issued currencies carry up to 16 significant decimal digits rather than a
+ * fixed on-chain decimal count. Our fixed-point balance model uses 15 decimals.
  */
 export const rippleIssuedCurrencyDecimals = 15
 

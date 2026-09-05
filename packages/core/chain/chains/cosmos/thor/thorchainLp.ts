@@ -10,7 +10,6 @@ export const thorchainLpChainCode: Partial<Record<Chain, string>> = {
   [Chain.Dogecoin]: 'DOGE',
   [Chain.Ethereum]: 'ETH',
   [Chain.Cosmos]: 'GAIA',
-  [Chain.Kujira]: 'KUJI',
   [Chain.Litecoin]: 'LTC',
   [Chain.THORChain]: 'THOR',
   [Chain.Tron]: 'TRON',

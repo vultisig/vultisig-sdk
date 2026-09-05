@@ -1,11 +1,8 @@
 import { getRippleAccountInfo } from '@vultisig/core-chain/chains/ripple/account/info'
 import { getRippleAccountLines } from '@vultisig/core-chain/chains/ripple/account/lines'
-import {
-  parseIssuedCurrencyValue,
-  parseRippleTokenId,
-  toXrplCurrencyCode,
-} from '@vultisig/core-chain/chains/ripple/issuedCurrency'
+import { parseIssuedCurrencyValue, parseRippleTokenId } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
 import { getRippleNetworkInfo } from '@vultisig/core-chain/chains/ripple/network/info'
+import { findRippleTrustLine } from '@vultisig/core-chain/chains/ripple/trustLine'
 import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { attempt } from '@vultisig/lib-utils/attempt'
@@ -35,10 +32,7 @@ const getRippleIssuedCurrencyBalance = async ({ address, id }: { address: string
     throw linesResult.error
   }
 
-  const line = linesResult.data.find(
-    ({ account, currency: lineCurrency }) =>
-      account === issuer && toXrplCurrencyCode(lineCurrency) === toXrplCurrencyCode(currency)
-  )
+  const line = findRippleTrustLine({ lines: linesResult.data, currency, issuer })
 
   if (!line) {
     return BigInt(0)

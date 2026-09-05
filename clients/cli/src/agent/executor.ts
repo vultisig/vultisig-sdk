@@ -6,6 +6,7 @@
  * Each handler takes `(toolCallId, input)` and returns a `RecentAction` ready
  * to be flushed into the next outbound `context.recent_actions`.
  */
+import { evmChainTxFeeFormat } from '@vultisig/core-chain/chains/evm/tx/fee'
 import type {
   EvmChain,
   ParsedTxReadyEnvelope,
@@ -17,6 +18,7 @@ import type {
 } from '@vultisig/sdk'
 import {
   Chain,
+  clampEvmPriorityFee,
   computeEip712Hash,
   getChainKind,
   getEvmRpcUrl,
@@ -70,6 +72,12 @@ const EVM_CHAINS = new Set<string>([
 
 const ERC20_TRANSFER_SELECTOR = '0xa9059cbb'
 const ERC20_TRANSFER_ABI = parseAbi(['function transfer(address to, uint256 value)'])
+
+const changedByMoreThanHalf = (before: bigint, after: bigint): boolean => {
+  if (before === after) return false
+  const difference = before > after ? before - after : after - before
+  return difference * 2n > before
+}
 
 /** Decode the recipient and amount that an ERC-20 transfer will actually use. */
 function decodeErc20Transfer(calldata: string): { recipient: Address; amount: bigint } | null {
@@ -1562,12 +1570,17 @@ export class AgentExecutor {
         },
       })
 
-      // Reconcile a server-provided nonce with locally tracked broadcasts.
-      await this.patchEvmNonce(chain, keysignPayload)
+      // Snapshot nonce grace before either network refresh. A slow gas lookup
+      // must not age a recent local broadcast out of its protection.
+      const nonceGraceAge = Date.now() - (this.evmLastBroadcast.get(chain.toString()) ?? 0)
 
       // Refresh the fee envelope immediately before hashing/signing so a raw
       // transaction prepared earlier is not underpriced after base-fee drift.
       await this.patchEvmGas(chain, keysignPayload)
+
+      // Reconcile the server nonce with pending RPC and locally tracked
+      // broadcasts after any potentially slow fee refresh.
+      await this.patchEvmNonce(chain, keysignPayload, nonceGraceAge)
 
       // Extract message hashes and sign
       const messageHashes = await this.vault.extractMessageHashes(keysignPayload)
@@ -1896,21 +1909,44 @@ export class AgentExecutor {
   }
 
   /**
-   * Patch the EVM nonce in a keysign payload if our local state is ahead of on-chain.
-   * The payload's blockchainSpecific.ethereumSpecific.nonce was set from RPC during
-   * prepareSendTx(). If we have locally-tracked pending txs, we override with a higher value.
+   * Refresh the EVM nonce from pending RPC state, then patch it if our local state
+   * is further ahead. Raw server envelopes may carry a nonce that became stale
+   * before signing, so the RPC refresh must not depend on local state existing.
    *
    * Also detects evicted txs: if local state claims a higher nonce but there are
    * no pending txs in the mempool (pending == latest), the intermediate txs were
    * dropped and local state is stale.
    */
-  private async patchEvmNonce(chain: Chain, payload: any): Promise<void> {
-    if (!this.stateStore || !isEvmChain(chain)) return
+  private async patchEvmNonce(chain: Chain, payload: any, capturedBroadcastAge?: number): Promise<void> {
+    if (!isEvmChain(chain)) return
 
     const bs = payload.blockchainSpecific
     if (!bs || bs.case !== 'ethereumSpecific') return
 
-    const rpcNonce = bs.value.nonce as bigint
+    // Snapshot grace eligibility before the RPC await. A slow or timed-out
+    // lookup must not age a recent local broadcast out of its protection.
+    const recentBroadcastAge = capturedBroadcastAge ?? Date.now() - (this.evmLastBroadcast.get(chain.toString()) ?? 0)
+    const hasRecentBroadcast = recentBroadcastAge < 30_000
+
+    const payloadNonce = bs.value.nonce as bigint
+    // Read latest before pending whenever stale local-state detection is needed.
+    // The later pending snapshot is then the freshest nonce floor and should be
+    // >= latest on a consistent RPC view. Recent local broadcasts skip latest
+    // because their grace period wins regardless of mempool visibility.
+    const latestNonce = this.stateStore && !hasRecentBroadcast ? await this.fetchEvmLatestNonce(chain) : null
+    const pendingNonce = await this.fetchEvmPendingNonce(chain)
+    const rpcNonce = [payloadNonce, latestNonce, pendingNonce].reduce<bigint>(
+      (highest, nonce) => (nonce !== null && nonce > highest ? nonce : highest),
+      payloadNonce
+    )
+
+    if (rpcNonce !== payloadNonce) {
+      bs.value.nonce = rpcNonce
+      if (this.verbose) process.stderr.write(`[nonce] Refreshed ${chain} nonce: ${payloadNonce} → ${rpcNonce}\n`)
+    }
+
+    if (!this.stateStore) return
+
     const nextNonce = this.stateStore.getNextEvmNonce(chain, rpcNonce)
 
     if (nextNonce !== rpcNonce) {
@@ -1926,20 +1962,22 @@ export class AgentExecutor {
       // the same RPC. Tradeoff: a genuinely-evicted tx within the 30s window
       // would cause the next sign to use a stuck nonce instead of recovering;
       // STATE_TTL_MS (10 min) bounds the worst case. See vultisig-sdk#357.
-      const lastBroadcast = this.evmLastBroadcast.get(chain.toString()) ?? 0
-      if (Date.now() - lastBroadcast < 30_000) {
+      if (hasRecentBroadcast) {
         if (this.verbose)
           process.stderr.write(
-            `[nonce] Keeping local nonce ${nextNonce} for ${chain} (broadcast ${Date.now() - lastBroadcast}ms ago)\n`
+            `[nonce] Keeping local nonce ${nextNonce} for ${chain} (broadcast ${recentBroadcastAge}ms ago)\n`
           )
         bs.value.nonce = nextNonce
         return
       }
 
-      // Verify there are actually pending txs in the mempool before using a higher nonce.
-      // If pending nonce == confirmed nonce, all intermediate txs were evicted.
-      const pendingNonce = await this.fetchEvmPendingNonce(chain)
-      if (pendingNonce !== null && pendingNonce === rpcNonce) {
+      // Verify there are actually pending txs in the mempool before using a
+      // higher local nonce. The explicit server nonce is not a reliable
+      // confirmed-state baseline, so compare pending against a fresh latest
+      // lookup. Reading latest first and pending second preserves local progress
+      // when pending advanced the server nonce while still clearing a stale
+      // local gap when pending === latest.
+      if (latestNonce !== null && pendingNonce === latestNonce) {
         // No pending txs — local state is stale (txs were dropped from mempool)
         if (this.verbose)
           process.stderr.write(
@@ -1952,7 +1990,8 @@ export class AgentExecutor {
       // Safety: if the gap is large (>3) and we couldn't verify pending txs,
       // assume local state is stale rather than risk a large nonce gap
       const nonceGap = nextNonce - rpcNonce
-      if (pendingNonce === null && nonceGap > 3n) {
+      const pendingStateVerified = pendingNonce !== null && latestNonce !== null && pendingNonce >= latestNonce
+      if (!pendingStateVerified && nonceGap > 3n) {
         process.stderr.write(
           `[nonce] Warning: pending nonce was not verified for ${chain}; signing will continue with on-chain nonce ${rpcNonce} because the local gap is ${nonceGap}\n`
         )
@@ -1961,7 +2000,7 @@ export class AgentExecutor {
       }
 
       bs.value.nonce = nextNonce
-      if (pendingNonce === null) {
+      if (!pendingStateVerified) {
         process.stderr.write(
           `[nonce] Warning: pending nonce was not verified for ${chain}; signing will continue with local nonce ${nextNonce}\n`
         )
@@ -1981,8 +2020,66 @@ export class AgentExecutor {
     const bs = payload.blockchainSpecific
     if (!bs || bs.case !== 'ethereumSpecific') return
 
-    const rpcUrl = getEvmRpcUrl(chain)
+    // Use the same fee-format table as the WalletCore signing mapper so a
+    // future legacy-chain addition cannot silently receive EIP-1559 fields.
+    // Legacy (type-0) chains are left byte-untouched: their maxFeePerGasWei is
+    // consumed as gasPrice by the signing mapper, and the EIP-1559 headroom
+    // formula below must never rewrite it.
+    const isEip1559 = evmChainTxFeeFormat[chain] === 'enveloped'
+    if (!isEip1559) return
 
+    const rpcUrl = getEvmRpcUrl(chain)
+    const currentPriorityFee = BigInt(bs.value.priorityFee || '0')
+    const currentMaxFee = BigInt(bs.value.maxFeePerGasWei || '0')
+    const baseFee = await this.fetchEvmBaseFee(chain, rpcUrl)
+
+    let priorityFee = currentPriorityFee
+
+    if (currentPriorityFee > 0n) {
+      priorityFee = clampEvmPriorityFee(chain, currentPriorityFee)
+      if (priorityFee < currentPriorityFee) {
+        process.stderr.write(
+          `[gas] Warning: ${chain} maxPriorityFeePerGas ${currentPriorityFee} exceeded the safety ceiling; clamped to ${priorityFee}\n`
+        )
+      }
+    } else {
+      // The two RPCs fail independently — a dead eth_getBlockByNumber must not
+      // discard a live eth_maxPriorityFeePerGas suggestion.
+      const rpcPriorityFee = await this.fetchEvmPriorityFee(rpcUrl)
+
+      const baseFeeFallback = baseFee === null ? 0n : baseFee / 10n
+      const fallbackPriorityFee = baseFeeFallback < 2_000_000_000n ? baseFeeFallback : 2_000_000_000n
+      priorityFee = clampEvmPriorityFee(chain, rpcPriorityFee > 0n ? rpcPriorityFee : fallbackPriorityFee)
+    }
+
+    // When the base fee is known, keep 2.5x headroom for the MPC signing
+    // window. When it is unavailable, the max fee must still cover the
+    // statically clamped tip so a dead RPC cannot leave an invalid envelope.
+    const minMaxFee = baseFee === null ? priorityFee : (baseFee * 25n) / 10n + priorityFee
+    const patchedMaxFee = currentMaxFee < minMaxFee ? minMaxFee : currentMaxFee
+
+    if (priorityFee !== currentPriorityFee) {
+      bs.value.priorityFee = priorityFee.toString()
+      if (this.verbose)
+        process.stderr.write(`[gas] Patched ${chain} maxPriorityFeePerGas: ${currentPriorityFee} → ${priorityFee}\n`)
+    }
+
+    if (currentMaxFee < patchedMaxFee) {
+      bs.value.maxFeePerGasWei = patchedMaxFee.toString()
+      if (this.verbose)
+        process.stderr.write(
+          `[gas] Bumped ${chain} maxFeePerGas: ${currentMaxFee} → ${patchedMaxFee} (baseFee=${baseFee ?? 'unavailable'})\n`
+        )
+    }
+
+    if (changedByMoreThanHalf(currentPriorityFee, priorityFee) || changedByMoreThanHalf(currentMaxFee, patchedMaxFee)) {
+      process.stderr.write(
+        `[gas] Notice: ${chain} fees adjusted after confirmation: maxPriorityFeePerGas ${currentPriorityFee} → ${priorityFee}, maxFeePerGas ${currentMaxFee} → ${patchedMaxFee}\n`
+      )
+    }
+  }
+
+  private async fetchEvmBaseFee(chain: Chain, rpcUrl: string): Promise<bigint | null> {
     try {
       const res = await fetch(rpcUrl, {
         method: 'POST',
@@ -1999,29 +2096,36 @@ export class AgentExecutor {
       if (!res.ok || data?.error || data?.result?.baseFeePerGas === undefined || data?.result?.baseFeePerGas === null) {
         throw new Error(`Failed to fetch current base fee for ${chain}`)
       }
-      const baseFee = BigInt(data.result.baseFeePerGas)
-      if (baseFee === 0n) return
 
-      const currentPriorityFee = BigInt(bs.value.priorityFee || '0')
-      const currentMaxFee = BigInt(bs.value.maxFeePerGasWei || '0')
-
-      // Minimum maxFeePerGas = baseFee * 2.5 + priorityFee
-      // The 2.5x multiplier provides headroom for base fee fluctuations
-      // during the MPC signing window (15-60 seconds)
-      const minMaxFee = (baseFee * 25n) / 10n + currentPriorityFee
-
-      if (currentMaxFee < minMaxFee) {
-        bs.value.maxFeePerGasWei = minMaxFee.toString()
-        if (this.verbose)
-          process.stderr.write(
-            `[gas] Bumped ${chain} maxFeePerGas: ${currentMaxFee} → ${minMaxFee} (baseFee=${baseFee})\n`
-          )
-      }
+      return BigInt(data.result.baseFeePerGas)
     } catch {
-      // Non-fatal — keep the original gas estimate
       process.stderr.write(
         `[gas] Warning: gas estimate was not refreshed for ${chain}; signing will continue with the original estimate\n`
       )
+      return null
+    }
+  }
+
+  private async fetchEvmPriorityFee(rpcUrl: string): Promise<bigint> {
+    try {
+      const res = await fetch(rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'eth_maxPriorityFeePerGas',
+          params: [],
+          id: 2,
+        }),
+        signal: AbortSignal.timeout(5000),
+      })
+      const data = (await res.json()) as any
+      if (!res.ok || data?.error || data?.result === undefined) return 0n
+
+      return BigInt(data.result)
+    } catch {
+      // The tip RPC is optional. The caller applies a bounded fallback.
+      return 0n
     }
   }
 
@@ -2030,6 +2134,18 @@ export class AgentExecutor {
    * Returns null if the RPC call fails (non-fatal).
    */
   private async fetchEvmPendingNonce(chain: Chain): Promise<bigint | null> {
+    return this.fetchEvmNonce(chain, 'pending')
+  }
+
+  /**
+   * Fetch the confirmed nonce from RPC (eth_getTransactionCount with "latest" tag).
+   * Returns null if the RPC call fails (non-fatal).
+   */
+  private async fetchEvmLatestNonce(chain: Chain): Promise<bigint | null> {
+    return this.fetchEvmNonce(chain, 'latest')
+  }
+
+  private async fetchEvmNonce(chain: Chain, blockTag: 'latest' | 'pending'): Promise<bigint | null> {
     // The old CLI-local map returned `undefined` for a non-EVM chain and the
     // caller bailed on the falsy URL. The shared resolver has no such escape
     // hatch, so keep the guard explicit: without it a non-EVM chain would POST
@@ -2045,7 +2161,7 @@ export class AgentExecutor {
         body: JSON.stringify({
           jsonrpc: '2.0',
           method: 'eth_getTransactionCount',
-          params: [address, 'pending'],
+          params: [address, blockTag],
           id: 1,
         }),
         signal: AbortSignal.timeout(5000),

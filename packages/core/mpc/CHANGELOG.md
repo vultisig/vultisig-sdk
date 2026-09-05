@@ -1,5 +1,113 @@
 # @vultisig/core-mpc
 
+## 3.0.1
+
+### Patch Changes
+
+- [#2323](https://github.com/vultisig/vultisig-sdk/pull/2323) [`8a50970`](https://github.com/vultisig/vultisig-sdk/commit/8a50970438de64cdbeb281cf73925026e3ce3cf7) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Refuse XRPL issued-currency Payments the ledger would reject — a destination holding no trust line for the token, and an issuer that charges a transfer fee the payload cannot yet cover with a SendMax — instead of burning the fee on-chain. Accept the lowercase standard currency codes XRPL permits, report bad amounts and unusable destinations as domain errors, and pin both encoders against a shared issued-currency signing vector.
+
+- [#2310](https://github.com/vultisig/vultisig-sdk/pull/2310) [`af6c643`](https://github.com/vultisig/vultisig-sdk/commit/af6c643e9afa39cb0b4432a01cec40e4de4d8ecc) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(ton): let a dApp deadline tighten the signed expiry
+
+  `getTonChainSpecific` always signed `expireAt = now + 600`, so the `valid_until` a TonConnect `sendTransaction` carries never reached the wallet message: a request with a 60-second window was signed with a ten-minute one, and a broadcast landing after the dApp's window could execute on chain while the dApp already treated it as expired and retried.
+
+  `GetChainSpecificInput` now takes an optional `validUntil` (unix seconds) for `tonSpecific`. The signed `expireAt` is `min(now + 600, validUntil)` — the wallet's own window remains the ceiling — and a deadline already in the past fails the build instead of signing a transaction the network would reject. Callers that pass nothing keep the previous behaviour; co-signers read `expireAt` from the payload, so only what the initiator writes changes.
+
+  The expiry is computed last, after the seqno, bounceability and jetton-metadata lookups: each is a network round trip, so a deadline still ahead when the build starts can be behind by the time it finishes, and the wallet's own ten-minute window now starts when the payload is finished rather than being partly spent on those lookups.
+
+- Updated dependencies [[`8a50970`](https://github.com/vultisig/vultisig-sdk/commit/8a50970438de64cdbeb281cf73925026e3ce3cf7), [`af6c643`](https://github.com/vultisig/vultisig-sdk/commit/af6c643e9afa39cb0b4432a01cec40e4de4d8ecc), [`20de22f`](https://github.com/vultisig/vultisig-sdk/commit/20de22f49c244ffc065011291754f89ef0d6e61a), [`34f0faa`](https://github.com/vultisig/vultisig-sdk/commit/34f0faa7208ad594b8d18a3a2806c0f7867f2c85)]:
+  - @vultisig/core-chain@5.1.0
+
+## 3.0.0
+
+### Major Changes
+
+- [#2237](https://github.com/vultisig/vultisig-sdk/pull/2237) [`7d4c116`](https://github.com/vultisig/vultisig-sdk/commit/7d4c116cc7a940e96abf075790c4a387edd03987) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Remove Kujira (KUJI) chain support. Kujira wound down in 2025 and every RPC/LCD endpoint the SDK shipped for it is now dead (the polkachu hosts no longer resolve; publicnode 404s), so balances, sends, swaps, staking and governance on Kujira cannot function.
+
+  `Chain.Kujira` / `CosmosChain.Kujira` are removed from the chain union, along with the Kujira entries in the chain registry, cosmos RPC/LCD/fee/gas/memo tables, SwapKit + Skip + native-swap routing, the Kujira token list, IBC chain-id mapping, governance config and address derivation.
+
+  The IBC tables in `tools/prep/ibcTransfer.ts` are keyed by raw chain-ID rather than the `Chain` enum, so they are cleared explicitly: `kaiyo-1` is dropped from `IBC_CHAIN_REVISION` and the `osmosis-1/channel-259` route from `IBC_CHANNEL_DEST`. `supportedIbcDestinationsFrom('osmosis-1')` no longer advertises `kaiyo-1`, and `resolveSourceChannelByDestChain('osmosis-1', 'kaiyo-1')` returns `null`.
+
+  `COSMOS_CHAIN_ID_HRP` keeps its `kaiyo-1` → `kujira` entry: it is a pure bech32-prefix lookup that makes nothing routable, and it is still needed to decode historic `kujira1…` addresses.
+
+  The `chains/cosmos/thor/kujira-merge` module is intentionally **kept**: it describes the six Kujira-origin tokens (KUJI, rKUJI, FUZN, NSTK, WINK, LVN) that migrated onto THORChain as `thor.*` secured assets, plus their IBC representations on Cosmos Hub and Osmosis. Those assets are unaffected and keep resolving.
+
+  Consumers holding a persisted `Chain.Kujira` value must drop it — the symbol no longer type-checks.
+
+- [#2298](https://github.com/vultisig/vultisig-sdk/pull/2298) [`1716a79`](https://github.com/vultisig/vultisig-sdk/commit/1716a7946bf617ff16f8bb15f33b279efbb4a87d) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(ton): one correct comment validator, run before the user signs
+
+  TON comment length was checked against a fixed 123 bytes wherever it was checked at all. That number is right for a native transfer, where the comment is the message body's own cell, and wrong for a jetton transfer, where the comment rides inline in the transfer body's `forward_payload` and shares one 1023-bit cell with the opcode, query id, amount, both addresses and the forward amount. The real jetton cap is roughly 34–39 bytes and SHRINKS as the amount grows, because `VarUInteger 16` widens a byte at a time. Anything above it reached WalletCore, which refuses to pack the cell and fails the keysign with a bare "Internal error" — after the user had reviewed and approved the transaction. Memos are load-bearing on TON; an exchange deposit without the right one loses the funds.
+
+  New `@vultisig/core-chain/chains/ton/comment` owns the rule for both shapes: `tonNativeCommentMaxBytes`, `getTonJettonCommentMaxBytes({ amount, isActiveDestination })`, `getTonCommentMaxBytes` for a send form that wants to count down against the real limit, and `validateTonComment`. The amount-dependent widths are measured by encoding them, not predicted, and a test drives real WalletCore at each cap and one byte past it to prove the two agree.
+
+  `buildSendKeysignPayload` now validates the memo at the end of the build, where the final signed amount and `isActiveDestination` are both known, and raises a non-retryable `BuildKeysignPayloadError('ton-memo-too-long')`. That moves the failure from keysign to the point where the payload is assembled — the verify screen — for every consumer, with no client-side change. The signing-input resolvers still validate, so a payload built by another device or an older client cannot get an unpackable comment signed here either.
+
+  **Breaking:** `validateTonComment` is no longer exported from `@vultisig/core-mpc/keysign/signingInputs/resolvers/ton/native`, and takes `{ memo, jetton? }` instead of a bare string. Import it from `@vultisig/core-chain/chains/ton/comment`. `validateTonMemo` in the SDK's TON surface keeps its signature and gains an optional second argument for jetton context.
+
+### Minor Changes
+
+- [#2316](https://github.com/vultisig/vultisig-sdk/pull/2316) [`b19c5d5`](https://github.com/vultisig/vultisig-sdk/commit/b19c5d56f4d00d92493f8da74ff80d92b1d87c68) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add exact XRP Ledger issued-currency Payments and authoritative delivered-amount receipts for XRP, issued currencies, and MPTs while preserving native XRP and explicit TrustSet behavior.
+
+### Patch Changes
+
+- [#2282](https://github.com/vultisig/vultisig-sdk/pull/2282) [`a711b6c`](https://github.com/vultisig/vultisig-sdk/commit/a711b6ca8a8a7ae39d0efbb1c919b23b6538a1b8) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(ton): derive each dApp message's bounce flag from its own destination
+
+  A dApp `signTon` batch stamped every message with the single wallet-level `TonSpecific.bounceable`, which the chain-specific resolver computes from the first message's destination alone. The bounce bit a message declares lives in its own address tag — `EQ…`/`kQ…` bounceable, `UQ…`/`0Q…` not, a raw `workchain:hex` address none — so a batch with mixed destinations, or a first destination that is not yet deployed, signed the wrong bit on some of its messages, and a co-signer deriving the flag per address computed a different hash for the same payload.
+
+  Each dApp message now takes the flag from its own destination (`getTonMessageBounceable` in `@vultisig/core-chain/chains/ton/messageBounce`); a raw `workchain:hex` address carries no tag, so it defaults to bounceable — an already-deployed contract must refund a rejection — unless the message carries `stateInit`, the deployment case whose destination has no code yet to bounce from. Every raw spelling WalletCore signs counts as the same account here: leading zeros, an explicit sign and a `0x`-prefixed hash all name one address and compile to one pre-image, so `00:<hash>` cannot be signed non-bounceable while `0:<hash>` is signed bounceable. App-initiated single sends are unchanged and keep the wallet-level flag and the nominator-pool override.
+
+  The bounce bit is part of the signed body, so TON signing hashes move for dApp batches whose destinations do not all share the first message's flag. Co-signers must apply the same per-message rule.
+
+- [#2255](https://github.com/vultisig/vultisig-sdk/pull/2255) [`ef6a8bb`](https://github.com/vultisig/vultisig-sdk/commit/ef6a8bb0007c6576179e5a8cb10aa47820075b57) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(ton): send swap deposits bounceable so a rejected deposit is refunded
+
+  TON transfers were marked bounceable only when the destination string started with `E`. Swap providers hand back deposit addresses in the `UQ…` (non-bounceable) form, so every TON swap deposit went out non-bounceable — and a router or escrow contract that rejects a message (expired quote, paused pool, closed route) _absorbs_ a non-bounceable transfer instead of returning it. The funds were gone.
+
+  Swap deposits are now always sent bounceable. The prefix check is replaced by a real read of the address's bounce tag, so raw `0:hex` destinations — which declare no bounceability at all and which the prefix check silently treated as non-bounceable — default to bounceable, the safe side for anything that might be a contract. Sends to an undeployed account stay non-bounceable, since such an account cannot accept a bounceable message, and an explicit `UQ…` destination is still honoured.
+
+  Adds `getTonAddressBounceability` to `@vultisig/core-chain/chains/ton/address`.
+
+- [#2318](https://github.com/vultisig/vultisig-sdk/pull/2318) [`26a83ed`](https://github.com/vultisig/vultisig-sdk/commit/26a83ed417c9543f9c92d28cbb1bd35f0f914817) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fix TRON transaction lifecycle safety across fee preparation, status polling, and broadcast. Native TRX bandwidth estimates now measure the WalletCore-serialized signed transaction including memo bytes, default transaction times use the fetched block timestamp, expired raw transactions terminate polling, and successful broadcasts must return the deterministic local transaction hash.
+
+- Updated dependencies [[`1b3fb49`](https://github.com/vultisig/vultisig-sdk/commit/1b3fb498ad3f78b84b92b9f09b41fe8956fc5e9a), [`7d4c116`](https://github.com/vultisig/vultisig-sdk/commit/7d4c116cc7a940e96abf075790c4a387edd03987), [`7b65284`](https://github.com/vultisig/vultisig-sdk/commit/7b65284f7fe73f538283a201a416efdbbda0830c), [`1716a79`](https://github.com/vultisig/vultisig-sdk/commit/1716a7946bf617ff16f8bb15f33b279efbb4a87d), [`a711b6c`](https://github.com/vultisig/vultisig-sdk/commit/a711b6ca8a8a7ae39d0efbb1c919b23b6538a1b8), [`ef6a8bb`](https://github.com/vultisig/vultisig-sdk/commit/ef6a8bb0007c6576179e5a8cb10aa47820075b57), [`26a83ed`](https://github.com/vultisig/vultisig-sdk/commit/26a83ed417c9543f9c92d28cbb1bd35f0f914817), [`b19c5d5`](https://github.com/vultisig/vultisig-sdk/commit/b19c5d56f4d00d92493f8da74ff80d92b1d87c68)]:
+  - @vultisig/core-chain@5.0.0
+
+## 2.1.1
+
+### Patch Changes
+
+- [#2297](https://github.com/vultisig/vultisig-sdk/pull/2297) [`c0eafeb`](https://github.com/vultisig/vultisig-sdk/commit/c0eafeb12df42cffa70ef6951c081a74383e5fa2) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Make the SDK package graph explicit and acyclic. Shared Bitcoin signing protobuf schemas now live in `@vultisig/mpc-types`, `@vultisig/core-mpc` preserves its existing schema subpath as a compatibility export, and SDK builds resolve the declared core packages through their published export maps.
+
+- [#2006](https://github.com/vultisig/vultisig-sdk/pull/2006) [`3d40017`](https://github.com/vultisig/vultisig-sdk/commit/3d400171facf1107472e827c4ef48d7dd99843f1) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Throw a domain error naming both unresolved chains when `getThorchainDepositAsset` can't resolve a native-swap chain id, instead of failing with a bare `Cannot read properties of undefined (reading 'toUpperCase')` TypeError on the secured-asset path (and silently building an invalid `chain: undefined` proto on the unsecured path). Also adds test coverage for the previously-untested CIP-8/CIP-30 `buildCoseStructures` CBOR encoders.
+
+- [#2252](https://github.com/vultisig/vultisig-sdk/pull/2252) [`ef252e4`](https://github.com/vultisig/vultisig-sdk/commit/ef252e40b590a6cad9f303f7aba743c617442f90) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(ton): stop hiding action-phase failures on sends and in status
+
+  Every TON send OR'd `IGNORE_ACTION_PHASE_ERRORS` into the wallet contract's send mode, which tells the contract to skip an outgoing transfer it cannot carry out instead of failing. The transaction then landed un-aborted with the seqno consumed and nothing moved, and the status resolver — which read only `aborted` and `compute_ph.exit_code` — reported it as confirmed. The user was told a transfer succeeded while the funds never left.
+
+  The flag is now dropped from native, MAX, dApp `signTon`, and Jetton sends (both the WalletCore and the React Native builders), and `getTonTxStatus` reads the action phase (`success`, `no_funds`, `result_code`, `skipped_actions`) alongside the compute phase. A transaction the indexer knows but has not yet described stays pending instead of counting as success.
+
+  Dropping the flag changes the signed body, so TON signing hashes move. Clients must upgrade together: a co-signer on an older build derives a different hash and the keysign fails. The mobile and cross-encoder golden corpora are re-recorded to the new values.
+
+- [#2280](https://github.com/vultisig/vultisig-sdk/pull/2280) [`4e23e92`](https://github.com/vultisig/vultisig-sdk/commit/4e23e9205310e46564bc1782b57499b2a39d7a5f) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(ton): refuse to build a Jetton transfer when the sender jetton wallet cannot be resolved
+
+  A Jetton transfer is a message to the sender's _own_ jetton wallet, and that address was resolved with a swallowed failure: `TonSpecific.jettonAddress` starts as `''`, a failed lookup left it `''`, and `''` is not null or undefined, so every presence check downstream waved it through. The result was a signable transaction whose destination was the empty string — a failed network lookup producing a broadcastable transfer that moves nothing.
+
+  The chain-specific resolver now throws when the lookup fails or comes back blank, keeping the underlying failure as the error's `cause`. It stays a plain `Error` rather than a `BuildKeysignPayloadError` because an RPC timeout or indexer lag is retryable, not bad user input.
+
+  `buildJettonTransfer` rejects a blank jetton wallet address as well, so a payload built elsewhere — an older client, another device in a keysign — cannot get a destination-less transfer signed here either.
+
+- [#2256](https://github.com/vultisig/vultisig-sdk/pull/2256) [`4561c65`](https://github.com/vultisig/vultisig-sdk/commit/4561c6584f62fa78d17546bcc119e31b6ea665cb) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(ton): a MAX send signs the amount it displayed, and MAX is no longer guessed
+
+  A TON MAX send showed the user `balance - fee` and then signed something else: `amount = 0` under `ATTACH_ALL_CONTRACT_BALANCE`, which tells the wallet contract to sweep whatever the balance happens to be when the transaction executes. Worse, nothing marked a send as MAX — it was inferred from `amount + fee >= balance`, so an ordinary send that landed near the balance was silently upgraded to a full-balance sweep.
+
+  The signing path now always signs `keysignPayload.toAmount` under `PAY_FEES_SEPARATELY`, for MAX and ordinary sends alike; a MAX send is just `balance - fee` as an ordinary amount, and that fee is the reserve the send mode draws on. The signed bytes no longer depend on the flag at all.
+
+  `sendMaxAmount` becomes an explicit input threaded from the caller (`prepareSendTx` / `prepareSendTxFromKeys` / `buildSendKeysignPayload` → `getChainSpecific`), defaulting to `false`, and is recorded in `TonSpecific` as description rather than instruction. Removing the inference also drops a balance lookup from every TON send.
+
+  TON MAX sends that previously relied on the sweep to cover an amount larger than `balance - fee` will now fail on chain instead of moving more than was shown. Callers should pass the displayed `balance - fee` as `amount` and set `sendMaxAmount: true` alongside it.
+
+- Updated dependencies [[`c0eafeb`](https://github.com/vultisig/vultisig-sdk/commit/c0eafeb12df42cffa70ef6951c081a74383e5fa2), [`ef252e4`](https://github.com/vultisig/vultisig-sdk/commit/ef252e40b590a6cad9f303f7aba743c617442f90), [`bfe0292`](https://github.com/vultisig/vultisig-sdk/commit/bfe0292e3876fb7acc7044bac1b544c27aba8919), [`acd0b2e`](https://github.com/vultisig/vultisig-sdk/commit/acd0b2eaa882669a399fb378e51244ed4199ee47)]:
+  - @vultisig/mpc-types@0.3.0
+  - @vultisig/core-chain@4.1.1
+
 ## 2.1.0
 
 ### Minor Changes

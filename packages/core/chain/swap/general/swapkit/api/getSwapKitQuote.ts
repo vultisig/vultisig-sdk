@@ -1,6 +1,7 @@
 import { base64Decode } from '@bufbuild/protobuf/wire'
 import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import { Chain } from '@vultisig/core-chain/Chain'
+import { areEqualTonAddresses, tonAddressToBounceable } from '@vultisig/core-chain/chains/ton/address'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { usdc } from '@vultisig/core-chain/coin/knownTokens'
@@ -10,7 +11,10 @@ import {
   assertSwapKitDestinationMatchesTarget,
 } from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
 import { getSwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
-import { SwapKitEnabledChain, SwapKitSourceChain } from '@vultisig/core-chain/swap/general/swapkit/SwapKitEnabledChains'
+import {
+  isSwapKitSourceChain,
+  SwapKitSourceChain,
+} from '@vultisig/core-chain/swap/general/swapkit/SwapKitEnabledChains'
 import {
   SwapKitAmountBelowMinimumError,
   SwapKitFeeShapeError,
@@ -19,62 +23,27 @@ import {
 import {
   isSwapKitPairSupported,
   normalizeSwapKitProvider,
+  resolveSwapKitChainMetadata,
+  swapKitAllowedProviders,
+  SwapKitChainMetadata,
   swapKitExcludedProviders,
+  SwapKitQuoteProvider,
 } from '@vultisig/core-chain/swap/general/swapkit/SwapKitProviders'
 import { SwapFee } from '@vultisig/core-chain/swap/SwapFee'
 import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
+import { attempt } from '@vultisig/lib-utils/attempt'
 import { withoutUndefinedFields } from '@vultisig/lib-utils/record/withoutUndefinedFields'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 import { address as btcAddress, networks, Psbt } from 'bitcoinjs-lib'
 
-type Input = Record<TransferDirection, AccountCoin<SwapKitEnabledChain>> & {
-  from: AccountCoin<SwapKitSourceChain>
+type Input = Record<TransferDirection, AccountCoin> & {
   amount: bigint
   affiliateBps?: number
   /** Slippage tolerance in percent (e.g. 1 = 1%). Defaults to 3. */
   slippage?: number
 }
 
-type SwapKitProvider =
-  | 'CAMELOT_V3'
-  | 'CHAINFLIP'
-  | 'CHAINFLIP_STREAMING'
-  | 'FLASHNET'
-  | 'GARDEN'
-  | 'HARBOR'
-  | 'JUPITER'
-  | 'NEAR'
-  | 'OKX'
-  | 'ONEINCH'
-  | 'OPENOCEAN_V2'
-  | 'PANCAKESWAP'
-  | 'PANGOLIN_V1'
-  | 'SUSHISWAP_V2'
-  | 'TRADERJOE_V2'
-  | 'UNISWAP_V2'
-  | 'UNISWAP_V3'
-
-const swapKitAllowedProviders: SwapKitProvider[] = [
-  'CHAINFLIP',
-  'CHAINFLIP_STREAMING',
-  'NEAR',
-  'GARDEN',
-  'FLASHNET',
-  'HARBOR',
-  'ONEINCH',
-  'UNISWAP_V2',
-  'UNISWAP_V3',
-  'JUPITER',
-  'OKX',
-  'PANCAKESWAP',
-  'SUSHISWAP_V2',
-  'TRADERJOE_V2',
-  'PANGOLIN_V1',
-  'CAMELOT_V3',
-  'OPENOCEAN_V2',
-]
-
-const swapKitProviderQuoteAttempts: SwapKitProvider[][] = [
+const swapKitProviderQuoteAttempts: readonly (readonly SwapKitQuoteProvider[])[] = [
   swapKitAllowedProviders,
   ['NEAR'],
   ['CHAINFLIP', 'CHAINFLIP_STREAMING'],
@@ -95,32 +64,6 @@ const swapKitProviderQuoteAttempts: SwapKitProvider[][] = [
     'OPENOCEAN_V2',
   ],
 ]
-
-const swapKitChainId: Record<SwapKitEnabledChain, string> = {
-  [Chain.Arbitrum]: 'ARB',
-  [Chain.Avalanche]: 'AVAX',
-  [Chain.Base]: 'BASE',
-  [Chain.Bitcoin]: 'BTC',
-  [Chain.BitcoinCash]: 'BCH',
-  [Chain.BSC]: 'BSC',
-  [Chain.Cardano]: 'ADA',
-  [Chain.Cosmos]: 'GAIA',
-  [Chain.Dash]: 'DASH',
-  [Chain.Dogecoin]: 'DOGE',
-  [Chain.Ethereum]: 'ETH',
-  [Chain.Kujira]: 'KUJI',
-  [Chain.Litecoin]: 'LTC',
-  [Chain.MayaChain]: 'MAYA',
-  [Chain.Optimism]: 'OP',
-  [Chain.Polygon]: 'POL',
-  [Chain.Ripple]: 'XRP',
-  [Chain.Solana]: 'SOL',
-  [Chain.Sui]: 'SUI',
-  [Chain.THORChain]: 'THOR',
-  [Chain.Ton]: 'TON',
-  [Chain.Tron]: 'TRON',
-  [Chain.Zcash]: 'ZEC',
-}
 
 type SwapKitQuoteRoute = {
   routeId: string
@@ -341,13 +284,15 @@ const postSwapKit = async <T>(path: string, body: Record<string, unknown>): Prom
   return data as T
 }
 
-type SwapKitAssetCoin = Pick<AccountCoin<SwapKitEnabledChain>, 'chain' | 'decimals' | 'id' | 'ticker'>
+type SwapKitAssetCoin = Pick<AccountCoin, 'chain' | 'decimals' | 'id' | 'ticker'>
 
-const toSwapKitAsset = ({ chain, id, ticker }: Pick<SwapKitAssetCoin, 'chain' | 'id' | 'ticker'>) => {
-  const chainId = swapKitChainId[chain]
+const toSwapKitAsset = (
+  { chain, id, ticker }: Pick<SwapKitAssetCoin, 'chain' | 'id' | 'ticker'>,
+  { assetPrefix }: SwapKitChainMetadata
+) => {
   const symbol = id ? ticker : chainFeeCoin[chain].ticker
 
-  return id ? `${chainId}.${symbol}-${id}` : `${chainId}.${symbol}`
+  return id ? `${assetPrefix}.${symbol}-${id}` : `${assetPrefix}.${symbol}`
 }
 
 const bigintString = (value: string | number | bigint | undefined, fallback = '0') => {
@@ -487,28 +432,40 @@ const chainflipStableFeeCoin = {
 const isChainflipProvider = (provider: string | undefined) =>
   provider === 'CHAINFLIP' || provider === 'CHAINFLIP_STREAMING'
 
-const matchesSwapKitFeeChain = (feeChain: string | undefined, coinChain: SwapKitEnabledChain) => {
+const matchesSwapKitFeeChain = (
+  feeChain: string | undefined,
+  coinChain: Chain,
+  { assetPrefix }: SwapKitChainMetadata
+) => {
   if (!feeChain) {
     return true
   }
 
   const normalized = feeChain.toLowerCase()
 
-  return normalized === coinChain.toLowerCase() || normalized === swapKitChainId[coinChain].toLowerCase()
+  return normalized === coinChain.toLowerCase() || normalized === assetPrefix.toLowerCase()
 }
 
 const getSwapKitSwapFee = (
   fees: SwapKitSwapResponse['fees'],
   from: AccountCoin<SwapKitSourceChain>,
-  to: AccountCoin<SwapKitEnabledChain>,
-  routeProvider: string | undefined
+  to: AccountCoin,
+  routeProvider: string | undefined,
+  fromMetadata: SwapKitChainMetadata,
+  toMetadata: SwapKitChainMetadata
 ): SwapFee => {
-  const feeCoins: SwapKitAssetCoin[] = [
-    from,
-    to,
-    ...(isChainflipProvider(routeProvider) ? [chainflipStableFeeCoin] : []),
+  const feeCoins: { coin: SwapKitAssetCoin; metadata: SwapKitChainMetadata }[] = [
+    { coin: from, metadata: fromMetadata },
+    { coin: to, metadata: toMetadata },
+    ...(isChainflipProvider(routeProvider)
+      ? [{ coin: chainflipStableFeeCoin, metadata: { assetPrefix: 'ETH', providerChainId: '1' } }]
+      : []),
   ]
-  const candidates = feeCoins.map(coin => ({ coin, asset: toSwapKitAsset(coin).toLowerCase() }))
+  const candidates = feeCoins.map(({ coin, metadata }) => ({
+    coin,
+    metadata,
+    asset: toSwapKitAsset(coin, metadata).toLowerCase(),
+  }))
   let result: SwapFee | undefined
 
   for (const fee of fees ?? []) {
@@ -523,7 +480,8 @@ const getSwapKitSwapFee = (
     }
 
     const candidate = candidates.find(
-      ({ asset, coin }) => asset === fee.asset!.toLowerCase() && matchesSwapKitFeeChain(fee.chain, coin.chain)
+      ({ asset, coin, metadata }) =>
+        asset === fee.asset!.toLowerCase() && matchesSwapKitFeeChain(fee.chain, coin.chain, metadata)
     )
 
     if (!candidate) {
@@ -555,8 +513,10 @@ const buildSolanaTx = (
   tx: unknown,
   fees: SwapKitSwapResponse['fees'],
   from: AccountCoin<SwapKitSourceChain>,
-  to: AccountCoin<SwapKitEnabledChain>,
-  routeProvider: string | undefined
+  to: AccountCoin,
+  routeProvider: string | undefined,
+  fromMetadata: SwapKitChainMetadata,
+  toMetadata: SwapKitChainMetadata
 ): GeneralSwapTx => {
   if (typeof tx !== 'string') {
     throw new Error('SwapKit Solana route did not return a serialized transaction string.')
@@ -565,7 +525,13 @@ const buildSolanaTx = (
   const decimals = chainFeeCoin[Chain.Solana].decimals
   const networkFee = getSwapKitFeeAmount(fees, 'network', decimals)
 
-  return { solana: { data: tx, networkFee, swapFee: getSwapKitSwapFee(fees, from, to, routeProvider) } }
+  return {
+    solana: {
+      data: tx,
+      networkFee,
+      swapFee: getSwapKitSwapFee(fees, from, to, routeProvider, fromMetadata, toMetadata),
+    },
+  }
 }
 
 const getTransferTargetAddress = ({ targetAddress, depositAddress, tx }: SwapKitSwapResponse): string | undefined => {
@@ -600,20 +566,123 @@ const toTransferAmount = (value: string | number | bigint, decimals: number): bi
   return value.includes('.') ? toChainAmount(value, decimals) : BigInt(value)
 }
 
+const isTransferAmountValue = (value: unknown): value is string | number | bigint =>
+  typeof value === 'string' || typeof value === 'number' || typeof value === 'bigint'
+
 const getTransferAmount = ({ depositAmount, tx }: SwapKitSwapResponse, amount: bigint, decimals: number): bigint => {
   if (depositAmount) {
     return toChainAmount(depositAmount, decimals)
   }
 
-  if (
-    Array.isArray(tx) &&
-    isRecord(tx[0]) &&
-    (typeof tx[0].amount === 'string' || typeof tx[0].amount === 'number' || typeof tx[0].amount === 'bigint')
-  ) {
+  if (Array.isArray(tx) && isRecord(tx[0]) && isTransferAmountValue(tx[0].amount)) {
     return toTransferAmount(tx[0].amount, decimals)
   }
 
   return amount
+}
+
+/**
+ * The single transfer SwapKit describes in its `tx[]` array, or `undefined`
+ * when `tx` is any other shape — an EVM object, an opaque PSBT / PTB string, or
+ * absent because `disableBuildTx` was sent.
+ *
+ * More than one entry is rejected rather than ignored: only `tx[0]` is ever
+ * built, so a multi-transfer route would be signed as a partial deposit that
+ * under-funds the swap. The count is checked before the entry shape so a
+ * malformed trailing entry cannot slip a multi-transfer array past this guard.
+ */
+const getTransferTxEntry = (tx: unknown): Record<string, unknown> | undefined => {
+  if (!Array.isArray(tx) || tx.length === 0) {
+    return undefined
+  }
+
+  if (tx.length > 1) {
+    throw new Error(
+      `SwapKit transfer route returned ${tx.length} transfers; only the first would be signed, so the swap would be under-funded.`
+    )
+  }
+
+  return isRecord(tx[0]) ? tx[0] : undefined
+}
+
+/**
+ * The agreed TON deposit destination in its bounceable (`EQ…`) form.
+ *
+ * `assertTransferAgreement` compares TON spellings by account, so a route whose
+ * fields spell one account as `UQ…`, raw `0:hex` and `EQ…` passes — and the
+ * spelling that wins the precedence order is what the signer would otherwise
+ * read the bounce flag from. A deposit that goes out non-bounceable to a
+ * rejecting contract is absorbed instead of refunded, so the agreed account is
+ * re-spelled bounceable here, whichever field it came from. A string that is
+ * not a TON address at all cannot be a deposit destination and is refused.
+ */
+const toCanonicalTonDeposit = (destination: string): string => {
+  const canonical = attempt(() => tonAddressToBounceable(destination))
+
+  if ('error' in canonical) {
+    throw new Error(`SwapKit transfer route returned an invalid TON deposit address: ${destination}`)
+  }
+
+  return canonical.data
+}
+
+const areEqualTransferAddresses = (left: string, right: string, chain: SwapKitSourceChain): boolean =>
+  chain === Chain.Ton ? areEqualTonAddresses(left, right) : left === right
+
+/**
+ * Fail closed when the `/v3/swap` response disagrees with itself about where
+ * the deposit goes or how large it is.
+ *
+ * `targetAddress`, `depositAddress` and `tx[]` are independent fields carrying
+ * the same fact, and the resolvers above take the first one that is present and
+ * never look at the rest. So a response whose halves diverge — a provider bug,
+ * an API change, a tampered payload — signs whichever field happens to win the
+ * precedence order while the others name a different recipient or size, and
+ * nothing downstream can tell. Neither field is authoritative enough to pick a
+ * winner from, so a divergence is refused instead of resolved.
+ *
+ * Addresses are compared per chain because TON spells one account as `EQ…`,
+ * `UQ…` or raw `workchain:hex` — comparing those as strings would reject
+ * healthy routes.
+ */
+const assertTransferAgreement = (response: SwapKitSwapResponse, chain: SwapKitSourceChain, decimals: number): void => {
+  const entry = getTransferTxEntry(response.tx)
+
+  const destinations = [
+    { field: 'targetAddress', value: response.targetAddress },
+    { field: 'depositAddress', value: response.depositAddress },
+    { field: 'tx[0].address', value: typeof entry?.address === 'string' ? entry.address : undefined },
+  ].flatMap(({ field, value }) => (value?.trim() ? [{ field, value: value.trim() }] : []))
+
+  const [primaryDestination, ...otherDestinations] = destinations
+  if (primaryDestination) {
+    const divergent = otherDestinations.find(
+      ({ value }) => !areEqualTransferAddresses(value, primaryDestination.value, chain)
+    )
+
+    if (divergent) {
+      throw new Error(
+        `SwapKit transfer route disagrees with itself about the destination: ` +
+          `${primaryDestination.field} is ${primaryDestination.value} but ${divergent.field} is ${divergent.value}.`
+      )
+    }
+  }
+
+  const txAmountValue = entry && isTransferAmountValue(entry.amount) ? entry.amount : undefined
+  if (txAmountValue === undefined || !response.depositAmount) {
+    return
+  }
+
+  const txAmount = toTransferAmount(txAmountValue, decimals)
+  const depositAmount = toChainAmount(response.depositAmount, decimals)
+
+  if (txAmount !== depositAmount) {
+    throw new Error(
+      `SwapKit transfer route disagrees with itself about the amount: ` +
+        `depositAmount is ${response.depositAmount} (${depositAmount} base units) ` +
+        `but tx[0].amount is ${txAmountValue} (${txAmount} base units).`
+    )
+  }
 }
 
 const shouldUseTransferTx = (chain: SwapKitSourceChain): chain is (typeof swapKitTransferSourceChains)[number] =>
@@ -697,11 +766,15 @@ const buildTransferTx = (
   from: AccountCoin<SwapKitSourceChain>,
   amount: bigint
 ): GeneralSwapTx => {
-  const to = getTransferTargetAddress(response)
+  assertTransferAgreement(response, from.chain, from.decimals)
 
-  if (!to) {
+  const agreedDestination = getTransferTargetAddress(response)
+
+  if (!agreedDestination) {
     throw new Error('SwapKit transfer route did not return a target address.')
   }
+
+  const to = from.chain === Chain.Ton ? toCanonicalTonDeposit(agreedDestination) : agreedDestination
 
   // SwapKit renames base64 tx types on the wire without versioning — `SOLANA`
   // became `SERIALIZED_BASE64` and `CARDANO` became `CBOR` mid-flight (iOS
@@ -751,12 +824,14 @@ const SWAP_SOURCE_TX_BUILD_UNSUPPORTED: ReadonlySet<SwapKitSourceChain> = new Se
 const buildSwapKitTx = (
   response: SwapKitSwapResponse,
   from: AccountCoin<SwapKitSourceChain>,
-  to: AccountCoin<SwapKitEnabledChain>,
+  to: AccountCoin,
   amount: bigint,
-  routeProvider: string | undefined
+  routeProvider: string | undefined,
+  fromMetadata: SwapKitChainMetadata,
+  toMetadata: SwapKitChainMetadata
 ): GeneralSwapTx | Promise<GeneralSwapTx> => {
   if (from.chain === Chain.Solana) {
-    return buildSolanaTx(response.tx, response.fees, from, to, routeProvider)
+    return buildSolanaTx(response.tx, response.fees, from, to, routeProvider, fromMetadata, toMetadata)
   }
 
   if (shouldUseTransferTx(from.chain)) {
@@ -769,15 +844,24 @@ const buildSwapKitTx = (
     targetAddress: response.targetAddress,
     chain: from.chain,
     approvalTx: response.approvalTx,
-    affiliateFee: getSwapKitEvmSwapFee({ fees: response.fees, from, to, routeProvider }),
+    affiliateFee: getSwapKitEvmSwapFee({
+      fees: response.fees,
+      from,
+      to,
+      routeProvider,
+      fromMetadata,
+      toMetadata,
+    }),
   })
 }
 
 type GetSwapKitEvmSwapFeeInput = {
   fees: SwapKitSwapResponse['fees']
   from: AccountCoin<SwapKitSourceChain>
-  to: AccountCoin<SwapKitEnabledChain>
+  to: AccountCoin
   routeProvider: string | undefined
+  fromMetadata: SwapKitChainMetadata
+  toMetadata: SwapKitChainMetadata
 }
 
 /**
@@ -791,9 +875,16 @@ type GetSwapKitEvmSwapFeeInput = {
  * `getSwapKitSwapFee` bare and lets it throw on purpose: its tx type requires
  * the fee, so an unresolved one really is fatal there.
  */
-const getSwapKitEvmSwapFee = ({ fees, from, to, routeProvider }: GetSwapKitEvmSwapFeeInput): SwapFee | undefined => {
+const getSwapKitEvmSwapFee = ({
+  fees,
+  from,
+  to,
+  routeProvider,
+  fromMetadata,
+  toMetadata,
+}: GetSwapKitEvmSwapFeeInput): SwapFee | undefined => {
   try {
-    return getSwapKitSwapFee(fees, from, to, routeProvider)
+    return getSwapKitSwapFee(fees, from, to, routeProvider, fromMetadata, toMetadata)
   } catch (error) {
     if (!(error instanceof SwapKitFeeShapeError)) {
       throw error
@@ -893,7 +984,7 @@ const fetchSwapKitQuoteResponse = async (body: Record<string, unknown>): Promise
 
 const getSwapKitRoutes = async (
   body: Record<string, unknown>,
-  providers: SwapKitProvider[]
+  providers: readonly SwapKitQuoteProvider[]
 ): Promise<SwapKitQuoteRoute[]> => {
   try {
     const quoteResponse = await fetchSwapKitQuoteResponse(withoutUndefinedFields({ ...body, providers }))
@@ -964,17 +1055,31 @@ export const getSwapKitQuote = async ({
   affiliateBps,
   slippage = 3,
 }: Input): Promise<GeneralSwapQuote> => {
-  if (SWAP_SOURCE_TX_BUILD_UNSUPPORTED.has(from.chain)) {
+  if (!isSwapKitSourceChain(from.chain)) {
+    throw new Error(`SwapKit ${from.chain} source swaps are unavailable without safe signing and Blockaid coverage.`)
+  }
+
+  const source = from as AccountCoin<SwapKitSourceChain>
+
+  if (SWAP_SOURCE_TX_BUILD_UNSUPPORTED.has(source.chain)) {
     throw new Error(
-      `SwapKit ${from.chain} source swaps are not yet supported for signing (quote-only for now). ` +
+      `SwapKit ${source.chain} source swaps are not yet supported for signing (quote-only for now). ` +
         'Try a different source chain, or swap the other direction.'
     )
   }
 
+  const [fromMetadata, toMetadata] = await Promise.all([
+    resolveSwapKitChainMetadata(source.chain),
+    resolveSwapKitChainMetadata(to.chain),
+  ])
+  if (!fromMetadata || !toMetadata) {
+    throw new Error(`SwapKit catalog does not unambiguously support ${source.chain} -> ${to.chain}.`)
+  }
+
   const quoteBody = {
-    sellAsset: toSwapKitAsset(from),
-    buyAsset: toSwapKitAsset(to),
-    sellAmount: formatBasicUnitAmount(amount, from.decimals),
+    sellAsset: toSwapKitAsset(source, fromMetadata),
+    buyAsset: toSwapKitAsset(to, toMetadata),
+    sellAmount: formatBasicUnitAmount(amount, source.decimals),
     slippage,
     affiliateFee: affiliateBps,
   }
@@ -988,9 +1093,9 @@ export const getSwapKitQuote = async ({
     // "amount too small" copy instead of a misleading "no route" error (#4418).
     if (
       error instanceof SwapKitNoEligibleRoutesError &&
-      (await isSwapKitPairSupported({ from: from.chain, to: to.chain }))
+      (await isSwapKitPairSupported({ from: source.chain, to: to.chain }))
     ) {
-      throw new SwapKitAmountBelowMinimumError(from.chain, to.chain)
+      throw new SwapKitAmountBelowMinimumError(source.chain, to.chain)
     }
     throw error
   }
@@ -999,11 +1104,11 @@ export const getSwapKitQuote = async ({
     '/v3/swap',
     withoutUndefinedFields({
       routeId: route.routeId,
-      sourceAddress: from.address,
+      sourceAddress: source.address,
       destinationAddress: to.address,
       disableBalanceCheck: true,
       disableBuildTx:
-        shouldUseTransferTx(from.chain) && !swapKitPrebuiltTxSourceChains.has(from.chain) ? true : undefined,
+        shouldUseTransferTx(source.chain) && !swapKitPrebuiltTxSourceChains.has(source.chain) ? true : undefined,
     })
   )
   const routeProvider = getRouteProviderName(swapResponse) ?? getRouteProviderName(route)
@@ -1019,6 +1124,6 @@ export const getSwapKitQuote = async ({
     provider: 'swapkit',
     routeProvider,
     ...(priceImpactFraction === undefined ? {} : { priceImpactFraction }),
-    tx: await buildSwapKitTx(swapResponse, from, to, amount, routeProvider),
+    tx: await buildSwapKitTx(swapResponse, source, to, amount, routeProvider, fromMetadata, toMetadata),
   }
 }

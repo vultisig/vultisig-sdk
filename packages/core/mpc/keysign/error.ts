@@ -1,7 +1,13 @@
 export type BuildKeysignPayloadErrorType =
   | 'not-enough-funds'
+  | 'ripple-destination-not-activated'
   | 'ripple-destination-tag-invalid'
   | 'ripple-destination-tag-required'
+  | 'ripple-destination-trust-line-missing'
+  | 'ripple-issued-currency-amount-invalid'
+  | 'ripple-issuer-transfer-fee-unsupported'
+  | 'ripple-trust-line-issuer-not-activated'
+  | 'ton-memo-too-long'
 
 export class BuildKeysignPayloadError extends Error {
   constructor(

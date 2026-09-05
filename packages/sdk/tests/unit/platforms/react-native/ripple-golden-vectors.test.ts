@@ -49,12 +49,39 @@ type RippleCrossEncoderFixture = {
   expectedSigningHashHex: string
 }
 
+type RippleIssuedCrossEncoderFixture = {
+  senderAddress: string
+  recipientAddress: string
+  senderPublicKeyHex: string
+  issuerAddress: string
+  currencyCode: string
+  decimals: number
+  amountBaseUnits: string
+  expectedValue: string
+  feeDrops: string
+  sequence: number
+  lastLedgerSequence: number
+  destinationTag: number
+  flags?: number
+  memo?: string
+  expectedSigningHashHex: string
+}
+
 const crossEncoderFixture = JSON.parse(
   readFileSync(resolve(__dirname, '../../../../../../testdata/cross-encoder-golden/ripple-payment.json'), 'utf8')
 ) as RippleCrossEncoderFixture
 const crossEncoderMemoFixture = JSON.parse(
   readFileSync(resolve(__dirname, '../../../../../../testdata/cross-encoder-golden/ripple-payment-memo.json'), 'utf8')
 ) as RippleCrossEncoderFixture
+const crossEncoderIssuedFixture = JSON.parse(
+  readFileSync(resolve(__dirname, '../../../../../../testdata/cross-encoder-golden/ripple-issued-payment.json'), 'utf8')
+) as RippleIssuedCrossEncoderFixture
+const crossEncoderIssuedMemoFixture = JSON.parse(
+  readFileSync(
+    resolve(__dirname, '../../../../../../testdata/cross-encoder-golden/ripple-issued-payment-memo.json'),
+    'utf8'
+  )
+) as RippleIssuedCrossEncoderFixture
 
 function encodeDerInteger(hex: string): Buffer {
   let bytes = Buffer.from(hex, 'hex')
@@ -106,6 +133,47 @@ describe('Ripple / buildXrpSendTx golden vectors', () => {
     expect(result.signingHashHex).toBe(crossEncoderMemoFixture.expectedSigningHashHex)
   })
 
+  const buildIssuedFixtureTx = (fixture: RippleIssuedCrossEncoderFixture) =>
+    buildXrpSendTx({
+      account: fixture.senderAddress,
+      destination: fixture.recipientAddress,
+      amount: fixture.amountBaseUnits,
+      issuedCurrency: {
+        currency: fixture.currencyCode,
+        issuer: fixture.issuerAddress,
+        decimals: fixture.decimals,
+      },
+      fee: fixture.feeDrops,
+      sequence: fixture.sequence,
+      lastLedgerSequence: fixture.lastLedgerSequence,
+      signingPubKey: fixture.senderPublicKeyHex,
+      destinationTag: fixture.destinationTag,
+      memo: fixture.memo,
+    })
+
+  it('matches WalletCore for the shared issued-currency Payment fixture', () => {
+    const result = buildIssuedFixtureTx(crossEncoderIssuedFixture)
+
+    // An XRPL token amount is stored as a normalised mantissa/exponent, so the
+    // two encoders agreeing on the hash is what proves neither one rounded the
+    // 16-significant-digit quantity differently.
+    expect(result.tx.Amount).toEqual({
+      currency: crossEncoderIssuedFixture.currencyCode,
+      issuer: crossEncoderIssuedFixture.issuerAddress,
+      value: crossEncoderIssuedFixture.expectedValue,
+    })
+    expect(result.tx.Flags).toBe(crossEncoderIssuedFixture.flags)
+    expect(result.signingHashHex).toBe(crossEncoderIssuedFixture.expectedSigningHashHex)
+  })
+
+  it('matches WalletCore for the shared issued-currency Payment memo fixture', () => {
+    const result = buildIssuedFixtureTx(crossEncoderIssuedMemoFixture)
+
+    expect(result.tx.Flags).toBeUndefined()
+    expect(result.tx.Memos?.[0]?.Memo.MemoType).toBeUndefined()
+    expect(result.signingHashHex).toBe(crossEncoderIssuedMemoFixture.expectedSigningHashHex)
+  })
+
   it('matches an independently-built Payment tx serialized via xrpl.encodeForSigning', () => {
     const result = buildXrpSendTx({
       account: FX.account,
@@ -132,6 +200,45 @@ describe('Ripple / buildXrpSendTx golden vectors', () => {
     const referenceEncodedForSigning = xrplEncodeForSigning(referenceTx)
     expect(result.encodedForSigningHex).toBe(referenceEncodedForSigning)
     expect(result.tx).toEqual(referenceTx)
+  })
+
+  it('builds an exact issued-currency Payment without partial-payment flags', () => {
+    const result = buildXrpSendTx({
+      account: FX.account,
+      destination: FX.destination,
+      amount: '1500000000000000',
+      issuedCurrency: {
+        currency: 'RLUSD',
+        issuer: 'rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De',
+        decimals: 15,
+      },
+      fee: FX.fee,
+      sequence: FX.sequence,
+      lastLedgerSequence: FX.lastLedgerSequence,
+      signingPubKey: FX.signingPubKey,
+      destinationTag: 998877,
+    })
+
+    const referenceTx: Payment = {
+      TransactionType: 'Payment',
+      Flags: 0,
+      Account: FX.account,
+      Destination: FX.destination,
+      Amount: {
+        currency: '524C555344000000000000000000000000000000',
+        issuer: 'rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De',
+        value: '1.5',
+      },
+      Fee: FX.fee,
+      Sequence: FX.sequence,
+      LastLedgerSequence: FX.lastLedgerSequence,
+      SigningPubKey: FX.signingPubKey.toUpperCase(),
+      DestinationTag: 998877,
+    }
+
+    expect(result.tx).toEqual(referenceTx)
+    expect(result.tx.Flags).toBe(0)
+    expect(result.encodedForSigningHex).toBe(xrplEncodeForSigning(referenceTx))
   })
 
   it('matches xrpl.encode for a Payment with DestinationTag and a memo', () => {

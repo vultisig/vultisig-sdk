@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
@@ -155,7 +155,10 @@ test('checkSharedExports fails actionably without rewriting package.json', () =>
 
   try {
     assert.throws(
-      () => checkSharedExports(packageJson, dist, { relativeTo: path.dirname(packageJson) }),
+      () =>
+        checkSharedExports(packageJson, dist, {
+          relativeTo: path.dirname(packageJson),
+        }),
       error => {
         assert.match(error.message, /package\.json has stale generated exports/)
         assert.match(error.message, /Run `yarn build:shared`/)
@@ -182,6 +185,32 @@ test('applySharedExports rewrites package.json when regeneration is requested', 
     const pkg = JSON.parse(readFileSync(packageJson, 'utf8'))
 
     assert.deepEqual(Object.keys(pkg.exports), ['.', './package.json'])
+  } finally {
+    cleanup()
+  }
+})
+
+test('applySharedExports preserves unchanged manifest bytes and mtime but writes changed exports', () => {
+  const { dist, packageJson, cleanup } = scaffold(['index.js'], {
+    description: 'Keep package metadata',
+  })
+  try {
+    applySharedExports(packageJson, dist)
+    utimesSync(packageJson, 1_700_000_000, 1_700_000_000)
+    const before = readFileSync(packageJson, 'utf8')
+    const beforeMtime = statSync(packageJson).mtimeMs
+
+    applySharedExports(packageJson, dist)
+    assert.equal(readFileSync(packageJson, 'utf8'), before)
+    assert.equal(statSync(packageJson).mtimeMs, beforeMtime)
+
+    writeFileSync(path.join(dist, 'added.js'), '')
+    applySharedExports(packageJson, dist)
+    const pkg = JSON.parse(readFileSync(packageJson, 'utf8'))
+    assert.ok(pkg.exports['./added'])
+    assert.equal(pkg.description, 'Keep package metadata')
+    assert.ok(statSync(packageJson).mtimeMs > beforeMtime)
+    assert.doesNotThrow(() => checkSharedExports(packageJson, dist))
   } finally {
     cleanup()
   }
