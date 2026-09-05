@@ -203,6 +203,19 @@
       "require": "./dist/tools/decode/index.cjs",
       "default": "./dist/tools/decode/index.cjs"
     },
+    "./tools/prep": {
+      "types": "./dist/tools/prep/index.d.ts",
+      "browser": "./dist/tools/prep/index.js",
+      "worker": "./dist/tools/prep/index.js",
+      "react-native": "./dist/tools/prep/index.js",
+      "node": {
+        "import": "./dist/tools/prep/index.js",
+        "require": "./dist/tools/prep/index.cjs"
+      },
+      "import": "./dist/tools/prep/index.js",
+      "require": "./dist/tools/prep/index.cjs",
+      "default": "./dist/tools/prep/index.cjs"
+    },
     "./tools/policy": {
       "types": "./dist/tools/policy/index.d.ts",
       "browser": "./dist/tools/policy/index.js",
