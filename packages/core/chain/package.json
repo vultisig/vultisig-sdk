@@ -1025,6 +1025,11 @@
       "import": "./dist/chains/ton/messageBody/types.js",
       "default": "./dist/chains/ton/messageBody/types.js"
     },
+    "./chains/ton/messageBounce": {
+      "types": "./dist/chains/ton/messageBounce.d.ts",
+      "import": "./dist/chains/ton/messageBounce.js",
+      "default": "./dist/chains/ton/messageBounce.js"
+    },
     "./chains/ton/staking": {
       "types": "./dist/chains/ton/staking.d.ts",
       "import": "./dist/chains/ton/staking.js",
