@@ -3,9 +3,11 @@ import { create } from '@bufbuild/protobuf'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { normalizeRippleDestination } from '@vultisig/core-chain/chains/ripple/address'
+import { getSignableIssuedCurrencyAmount, parseRippleTokenId } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
 import { validateTonComment } from '@vultisig/core-chain/chains/ton/comment'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
+import { attempt } from '@vultisig/lib-utils/attempt'
 import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import { getChainSpecific } from '@vultisig/core-mpc/keysign/chainSpecific'
 import { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
@@ -122,6 +124,28 @@ export const buildSendKeysignPayload = async ({
   const effectiveDestinationTag = destinationTag ?? embeddedDestinationTag
   if (effectiveDestinationTag !== undefined) validateDestinationTag(effectiveDestinationTag)
 
+  // Reject an amount the ledger cannot carry exactly while the payload is still
+  // being built, so the user sees why instead of a WalletCore error after
+  // review. Raised as a [BuildKeysignPayloadError] because it is bad input, not
+  // a transient failure: callers stop retrying and show it.
+  if (coin.chain === Chain.Ripple && coin.id) {
+    const tokenId = coin.id
+    const signable = attempt(() => {
+      if (amount <= 0n) {
+        throw new Error('XRP issued-currency Payment amount must be positive')
+      }
+
+      return getSignableIssuedCurrencyAmount({ ...parseRippleTokenId(tokenId), amount, decimals: coin.decimals })
+    })
+
+    if ('error' in signable) {
+      throw new BuildKeysignPayloadError(
+        'ripple-issued-currency-amount-invalid',
+        signable.error instanceof Error ? signable.error.message : String(signable.error)
+      )
+    }
+  }
+
   const cosmosWasmTokenTransferPayload = getCosmosWasmTokenTransferPayload({
     coin,
     receiver: normalizedReceiver,
@@ -168,6 +192,7 @@ export const buildSendKeysignPayload = async ({
         walletCore,
         destinationTag: effectiveDestinationTag,
         sendMaxAmount,
+        ...(coin.chain === Chain.Ripple ? { transactionType: TransactionType.RIPPLE_PAYMENT } : {}),
       })
 
   const balance = await getCoinBalance(coin)
