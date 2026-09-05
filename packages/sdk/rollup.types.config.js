@@ -123,6 +123,8 @@ export default defineConfig([
   createSubpathTypesConfig('src/tools/defi/index.ts', 'dist/tools/defi/index.d.ts'),
   createSubpathTypesConfig('src/tools/gas/index.ts', 'dist/tools/gas/index.d.ts'),
   createSubpathTypesConfig('src/tools/bridge/index.ts', 'dist/tools/bridge/index.d.ts'),
+  createSubpathTypesConfig('src/tools/address/index.ts', 'dist/tools/address/index.d.ts'),
+  createSubpathTypesConfig('src/tools/validate/index.ts', 'dist/tools/validate/index.d.ts'),
   createSubpathTypesConfig('src/tools/balance/index.ts', 'dist/tools/balance/index.d.ts'),
   createSubpathTypesConfig('src/chains/tron/index.ts', 'dist/chains/tron/index.d.ts'),
   createSubpathTypesConfig('src/chains/utxo/index.ts', 'dist/chains/utxo/index.d.ts'),
