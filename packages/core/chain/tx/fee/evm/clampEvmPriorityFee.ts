@@ -45,30 +45,48 @@ const priorityFeeCeilingWeiByChain: Record<EvmChain, bigint> = {
 }
 
 /**
- * Minimum tip (wei) to sign on chains where inclusion is a public tip
- * auction. In quiet fee markets the RPC-suggested maxPriorityFeePerGas
- * collapses to near zero (~0.0004 gwei observed on Ethereum L1); a tx signed
- * with that tip gives block builders no incentive to include it, so it sits
- * in the public mempool until evicted and shows up as "pending then
- * disappeared" on explorers. Mirrors the mobile clients, which floor
- * Ethereum at 1 gwei (iOS FeeService.calculateMaxPriorityFeePerGas, Android
- * EthereumFeeService) and Polygon at 30 gwei (Polygon validators enforce a
- * ~25 gwei minimum tip). L2 sequencers include txs regardless of tip, so
- * rollups deliberately have no floor.
+ * Minimum tip (wei) to sign with, per chain. In quiet fee markets the
+ * RPC-suggested maxPriorityFeePerGas collapses to near zero (~0.0004 gwei
+ * observed on Ethereum L1); on a chain where inclusion is a public tip auction
+ * that gives block builders no incentive to include the transaction, so it
+ * sits in the mempool until evicted and shows up as "pending then disappeared"
+ * on explorers. Tip-auction chains take 1 gwei, Polygon 30 gwei (its
+ * validators enforce a ~25 gwei minimum), and OP-stack rollups a nominal
+ * 20 wei so the signed field is never literally zero. Chains absent here
+ * (Avalanche, Zksync) sign whatever the RPC suggests.
  */
 const priorityFeeFloorWeiByChain: Partial<Record<EvmChain, bigint>> = {
   [EvmChain.Ethereum]: 1n * GWEI,
+  [EvmChain.BSC]: 1n * GWEI,
+  [EvmChain.CronosChain]: 1n * GWEI,
+  [EvmChain.Hyperliquid]: 1n * GWEI,
+  [EvmChain.Sei]: 1n * GWEI,
   [EvmChain.Polygon]: 30n * GWEI,
+  [EvmChain.Base]: 20n,
+  [EvmChain.Blast]: 20n,
+  [EvmChain.Optimism]: 20n,
 }
 
 /**
+ * Chains whose sequencer admits transactions first-come-first-served without a
+ * tip auction, so any priority fee is money paid for nothing. Signed with a
+ * zero tip regardless of what the RPC suggests.
+ */
+const zeroPriorityFeeChains: EvmChain[] = [EvmChain.Arbitrum, EvmChain.Mantle, EvmChain.Robinhood]
+
+/**
  * Clamps an RPC-reported EVM maxPriorityFeePerGas into a per-chain sane
- * range: a generous ceiling against a compromised RPC inflating the fee, and
- * a floor (tip-auction chains only) against an honest RPC suggesting a tip
- * too low to ever be mined. Never throws — a clamp still lets the tx go
- * through at a safe fee, whereas rejecting it would strand the user mid-flow.
+ * range: zero on chains that ignore the tip, a generous ceiling against a
+ * compromised RPC inflating the fee, and a floor (tip-auction chains) against
+ * an honest RPC suggesting a tip too low to ever be mined. Never throws — a
+ * clamp still lets the tx go through at a safe fee, whereas rejecting it would
+ * strand the user mid-flow.
  */
 export const clampEvmPriorityFee = (chain: EvmChain, rpcPriorityFeeWei: bigint): bigint => {
+  if (zeroPriorityFeeChains.includes(chain)) {
+    return 0n
+  }
+
   const ceiling = priorityFeeCeilingWeiByChain[chain]
 
   if (rpcPriorityFeeWei > ceiling) {

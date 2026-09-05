@@ -1,8 +1,15 @@
 import { Chain, EvmChain } from '@vultisig/core-chain/Chain'
 import { evmChainInfo } from '@vultisig/core-chain/chains/evm/chainInfo'
 import { getEvmClient } from '@vultisig/core-chain/chains/evm/client'
+import { evmChainTxFeeFormat } from '@vultisig/core-chain/chains/evm/tx/fee'
 import { getEvmBaseFee } from '@vultisig/core-chain/tx/fee/evm/baseFee'
 import { clampEvmPriorityFee } from '@vultisig/core-chain/tx/fee/evm/clampEvmPriorityFee'
+import {
+  evmRouterDepositGasLimit,
+  getEvmContractCallGasLimit,
+  getEvmTransferGasLimit,
+} from '@vultisig/core-chain/tx/fee/evm/evmGasLimit'
+import { getEvmGasPrice } from '@vultisig/core-chain/tx/fee/evm/gasPrice'
 import { getEvmMaxPriorityFeePerGas } from '@vultisig/core-chain/tx/fee/evm/maxPriorityFeePerGas'
 import { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
 import { getKeysignSwapPayload } from '@vultisig/core-mpc/keysign/swap/getKeysignSwapPayload'
@@ -11,20 +18,19 @@ import { getIsGenericContractCall } from '@vultisig/core-mpc/keysign/utils/getIs
 import { getKeysignAmount } from '@vultisig/core-mpc/keysign/utils/getKeysignAmount'
 import { getKeysignCoin } from '@vultisig/core-mpc/keysign/utils/getKeysignCoin'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
-import { without } from '@vultisig/lib-utils/array/without'
 import { attempt, withFallback } from '@vultisig/lib-utils/attempt'
 import { bigIntMax } from '@vultisig/lib-utils/bigint/bigIntMax'
 import { formatDataToHex } from '@vultisig/lib-utils/formatDataToHex'
+import { match } from '@vultisig/lib-utils/match'
 import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
-import { encodeFunctionData, erc20Abi } from 'viem'
+import { encodeFunctionData, erc20Abi, isHex } from 'viem'
 import { publicActionsL2 } from 'viem/zksync'
 
-const baseFeeMultiplier = (value: bigint) => (value * 15n) / 10n
-const dataTxGasLimitBufferNumerator = 3n
-const dataTxGasLimitBufferDenominator = 2n
-
-const addDataTxGasLimitBuffer = (value: bigint) =>
-  (value * dataTxGasLimitBufferNumerator + dataTxGasLimitBufferDenominator - 1n) / dataTxGasLimitBufferDenominator
+/**
+ * What a transaction does on-chain, which decides how much headroom its gas
+ * limit and its gas price are signed with.
+ */
+type EvmTxKind = 'transfer' | 'contractCall' | 'swap' | 'routerDeposit'
 
 type EvmFeeQuote = {
   gasLimit: bigint
@@ -35,8 +41,33 @@ type EvmFeeQuote = {
 type GetEvmFeeQuoteInput = {
   keysignPayload: KeysignPayload
   feeSettings?: FeeSettings<'evm'>
+  /** Gas limit the transaction's author (a dApp, an aggregator route) asks for. */
   thirdPartyGasLimitEstimation?: bigint
+  /**
+   * Extra floor on the value that stands in for a failed simulation. Never
+   * raises a successful estimate.
+   */
   minimumGasLimit?: bigint
+}
+
+const percentOf = (value: bigint, percent: bigint) => (value * percent) / 100n
+
+// Half again on top of a simulated contract call: a route that turns out to need
+// slightly more gas than its simulation would otherwise revert and forfeit the gas.
+const inflateGasLimit = (value: bigint) => value + value / 2n
+
+const getEvmTxKind = (keysignPayload: KeysignPayload, swapPayload: KeysignSwapPayload | undefined): EvmTxKind => {
+  if (swapPayload) {
+    return 'general' in swapPayload ? 'swap' : 'routerDeposit'
+  }
+
+  const { memo } = keysignPayload
+
+  if (getIsGenericContractCall(keysignPayload) || (memo && isHex(memo))) {
+    return 'contractCall'
+  }
+
+  return 'transfer'
 }
 
 export const getEvmFeeQuote = async ({
@@ -52,31 +83,54 @@ export const getEvmFeeQuote = async ({
   const receiver = keysignPayload.toAddress
   const data = keysignPayload.memo ? formatDataToHex(keysignPayload.memo) : undefined
   const swapPayload = getKeysignSwapPayload(keysignPayload)
-  // Native swaps use chain-specific router builders instead of EVM calldata estimation here.
-  const shouldBufferDataTxGasLimit = Boolean(
-    (data || (swapPayload && 'general' in swapPayload)) && chain !== EvmChain.Mantle
-  )
+  const kind = getEvmTxKind(keysignPayload, swapPayload)
 
-  const resolveGasLimit = (estimatedGasLimit: bigint | undefined): bigint => {
-    // SDK2-03: bigIntMax() with zero args throws an opaque error. Unreachable today
-    // (minimumGasLimit is always supplied), but guard so a future caller that omits every
-    // source fails with a clear, actionable message instead of a bare bigIntMax throw —
-    // and can never silently fall through to an undefined/zero gas limit.
-    const gasLimitSources = without([estimatedGasLimit, thirdPartyGasLimitEstimation, minimumGasLimit], undefined)
-    if (gasLimitSources.length === 0) {
-      throw new Error(
-        'resolveGasLimit: no gas-limit source available (estimated, third-party, and minimum are all undefined)'
-      )
-    }
-    // This selects the highest available floor; it deliberately does not claim
-    // to cap the transaction. A safe upper bound is chain- and call-specific,
-    // so introducing an arbitrary global ceiling here would reject valid calls.
-    const gasLimit = bigIntMax(...gasLimitSources)
+  const kindGasLimit = match(kind, {
+    transfer: () => getEvmTransferGasLimit(coin),
+    contractCall: () => getEvmContractCallGasLimit(chain),
+    swap: () => getEvmContractCallGasLimit(chain),
+    routerDeposit: () => evmRouterDepositGasLimit,
+  })
+  // Stands in for a simulation that failed. A caller minimum only ever raises
+  // this stand-in, never a real estimate.
+  const fallbackGasLimit = bigIntMax(kindGasLimit, minimumGasLimit ?? 0n)
+  const requestedGasLimit = thirdPartyGasLimitEstimation ?? 0n
 
-    return shouldBufferDataTxGasLimit ? addDataTxGasLimitBuffer(gasLimit) : gasLimit
-  }
+  const resolveGasLimit = (estimatedGasLimit: bigint | undefined): bigint =>
+    match(kind, {
+      // A transfer costs what its simulation says, raised to the per-chain floor.
+      transfer: () => bigIntMax(estimatedGasLimit ?? fallbackGasLimit, kindGasLimit, requestedGasLimit),
+      // A contract call gets headroom over its simulation (or the fallback), and
+      // never less than what its author asked for.
+      contractCall: () => inflateGasLimit(bigIntMax(estimatedGasLimit ?? fallbackGasLimit, requestedGasLimit)),
+      // A swap is signed with the larger of the route's own gas and the inflated
+      // simulation; a route that carries no gas figure counts as the swap default.
+      swap: () =>
+        bigIntMax(
+          requestedGasLimit > 0n ? requestedGasLimit : kindGasLimit,
+          inflateGasLimit(estimatedGasLimit ?? fallbackGasLimit)
+        ),
+      // A router deposit is never simulated, so its fixed limit is the stand-in
+      // a caller minimum may raise.
+      routerDeposit: () => bigIntMax(fallbackGasLimit, requestedGasLimit),
+    })
 
-  const getBaseFee = async () => baseFeeMultiplier(await getEvmBaseFee(chain))
+  const isLegacyPriced = evmChainTxFeeFormat[chain] === 'legacy'
+
+  // Headroom against the base fee rising while the keysign runs: 20% on
+  // everything, plus 10% on aggregator swaps, whose quotes go stale fastest
+  // and whose reverts cost the most.
+  const withBaseFeeHeadroom = (baseFee: bigint) =>
+    kind === 'swap' ? percentOf(percentOf(baseFee, 110n), 120n) : percentOf(baseFee, 120n)
+
+  // A legacy-priced chain has a single gas price; a swap gets 10% on top of it.
+  const withGasPriceHeadroom = (gasPrice: bigint) => (kind === 'swap' ? percentOf(gasPrice, 110n) : gasPrice)
+
+  const getBaseFeePerGas = async () =>
+    isLegacyPriced ? withGasPriceHeadroom(await getEvmGasPrice(chain)) : withBaseFeeHeadroom(await getEvmBaseFee(chain))
+
+  const getMaxPriorityFeePerGas = async () =>
+    isLegacyPriced ? 0n : clampEvmPriorityFee(chain, await getEvmMaxPriorityFeePerGas(chain))
 
   const getEstimateGasParams = async () => {
     if (swapPayload) {
@@ -90,7 +144,9 @@ export const getEvmFeeQuote = async ({
       >(swapPayload, {
         native: () => null,
         general: ({ quote }) => {
-          if (!quote?.tx) {
+          // A token route cannot be simulated until its allowance exists, so it
+          // is sized from the route's own gas and the swap fallback instead.
+          if (coin.id || !quote?.tx) {
             return null
           }
 
@@ -140,11 +196,11 @@ export const getEvmFeeQuote = async ({
     }
   }
 
-  const getFeeData = async () => {
+  const getFeeData = async (): Promise<EvmFeeQuote> => {
     if (feeSettings) {
       return {
         gasLimit: feeSettings.gasLimit,
-        baseFeePerGas: await getBaseFee(),
+        baseFeePerGas: await getBaseFeePerGas(),
         maxPriorityFeePerGas: feeSettings.maxPriorityFeePerGas,
       }
     }
@@ -195,14 +251,10 @@ export const getEvmFeeQuote = async ({
         )
       : undefined
 
-    const gasLimit = resolveGasLimit(estimatedGasLimit)
-
-    const baseFeePerGas = baseFeeMultiplier(await getEvmBaseFee(chain))
-
-    const maxPriorityFeePerGas = clampEvmPriorityFee(chain, await getEvmMaxPriorityFeePerGas(chain))
+    const [baseFeePerGas, maxPriorityFeePerGas] = await Promise.all([getBaseFeePerGas(), getMaxPriorityFeePerGas()])
 
     return {
-      gasLimit,
+      gasLimit: resolveGasLimit(estimatedGasLimit),
       baseFeePerGas,
       maxPriorityFeePerGas,
     }

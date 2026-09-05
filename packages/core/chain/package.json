@@ -2233,6 +2233,11 @@
       "import": "./dist/tx/fee/evm/evmGasLimit.js",
       "default": "./dist/tx/fee/evm/evmGasLimit.js"
     },
+    "./tx/fee/evm/gasPrice": {
+      "types": "./dist/tx/fee/evm/gasPrice.d.ts",
+      "import": "./dist/tx/fee/evm/gasPrice.js",
+      "default": "./dist/tx/fee/evm/gasPrice.js"
+    },
     "./tx/fee/evm/gwei": {
       "types": "./dist/tx/fee/evm/gwei.d.ts",
       "import": "./dist/tx/fee/evm/gwei.js",
