@@ -154,6 +154,32 @@
       "require": "./dist/chains/utxo/index.cjs",
       "default": "./dist/chains/utxo/index.cjs"
     },
+    "./chains/ton": {
+      "types": "./dist/chains/ton/index.d.ts",
+      "browser": "./dist/chains/ton/index.js",
+      "worker": "./dist/chains/ton/index.js",
+      "react-native": "./dist/chains/ton/index.js",
+      "node": {
+        "import": "./dist/chains/ton/index.js",
+        "require": "./dist/chains/ton/index.cjs"
+      },
+      "import": "./dist/chains/ton/index.js",
+      "require": "./dist/chains/ton/index.cjs",
+      "default": "./dist/chains/ton/index.cjs"
+    },
+    "./abi": {
+      "types": "./dist/abi/index.d.ts",
+      "browser": "./dist/abi/index.js",
+      "worker": "./dist/abi/index.js",
+      "react-native": "./dist/abi/index.js",
+      "node": {
+        "import": "./dist/abi/index.js",
+        "require": "./dist/abi/index.cjs"
+      },
+      "import": "./dist/abi/index.js",
+      "require": "./dist/abi/index.cjs",
+      "default": "./dist/abi/index.cjs"
+    },
     "./seedphrase": {
       "types": "./dist/seedphrase/index.d.ts",
       "node": {
@@ -246,7 +272,7 @@
   "scripts": {
     "_____BUILD_____": "",
     "clean": "rm -rf dist",
-    "build": "yarn clean && yarn build:platforms && yarn build:types",
+    "build": "node ../../examples/browser/scripts/ensure-local-sdk-build.mjs --begin sdk && yarn clean && yarn build:platforms && yarn build:types && node ../../examples/browser/scripts/ensure-local-sdk-build.mjs --record sdk",
     "build:js": "yarn build:platforms",
     "build:types": "NODE_OPTIONS=--max-old-space-size=8192 rollup -c rollup.types.config.js",
     "dev": "BUILD_TARGET=node rollup -c rollup.platforms.config.js -w",

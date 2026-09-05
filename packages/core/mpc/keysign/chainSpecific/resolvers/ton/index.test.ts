@@ -291,6 +291,33 @@ describe('getTonChainSpecific — expireAt honours a dApp deadline', () => {
     ).rejects.toThrow(`valid_until ${deadline}) has already passed`)
   })
 
+  // Every lookup between entry and return is a network round trip. The deadline used
+  // to be read before them, so a request whose window closed while the jetton
+  // metadata was in flight was still signed — and the network rejects it on arrival.
+  it('fails the build when the deadline passes while the jetton lookups are in flight', async () => {
+    mockGetKeysignCoin.mockReturnValue(jettonCoin)
+    mockGetJettonWalletAddress.mockImplementation(async () => {
+      vi.setSystemTime((now + 120) * 1000)
+      return senderJettonWallet
+    })
+
+    await expect(
+      getTonChainSpecific({ keysignPayload: payload, walletCore: {} as never, validUntil: now + 60 })
+    ).rejects.toThrow(`valid_until ${now + 60}) has already passed`)
+  })
+
+  it('measures the wallet window from the clock after the lookups, not before them', async () => {
+    mockGetKeysignCoin.mockReturnValue(jettonCoin)
+    mockGetJettonWalletAddress.mockImplementation(async () => {
+      vi.setSystemTime((now + 30) * 1000)
+      return senderJettonWallet
+    })
+
+    const res = await resolve(payload)
+
+    expect(res.expireAt).toBe(BigInt(now + 30 + 600))
+  })
+
   it('fails the build for a deadline that has already passed', async () => {
     const deadline = now - 1
 

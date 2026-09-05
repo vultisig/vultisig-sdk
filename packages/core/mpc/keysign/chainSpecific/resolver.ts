@@ -50,16 +50,21 @@ export type GetChainSpecificInput<C extends KeysignChainSpecificKey = KeysignCha
                 refBlockHashHex?: string
                 thirdPartyGasLimitEstimation?: bigint
               }
-            : C extends 'tonSpecific'
+            : C extends 'rippleSpecific'
               ? {
-                  /**
-                   * Deadline (unix seconds) a dApp attached to the request — a TonConnect
-                   * `sendTransaction` `valid_until`. Caps the wallet's own expiry; a deadline
-                   * already in the past fails the build instead of signing a dead transaction.
-                   */
-                  validUntil?: number
+                  /** Explicit send intent overrides the legacy issuer-address TrustSet inference. */
+                  transactionType?: TransactionType.RIPPLE_PAYMENT | TransactionType.RIPPLE_TRUST_SET
                 }
-              : {})
+              : C extends 'tonSpecific'
+                ? {
+                    /**
+                     * Deadline (unix seconds) a dApp attached to the request — a TonConnect
+                     * `sendTransaction` `valid_until`. Caps the wallet's own expiry; a deadline
+                     * already in the past fails the build instead of signing a dead transaction.
+                     */
+                    validUntil?: number
+                  }
+                : {})
 
 export type GetChainSpecificResolver<C extends KeysignChainSpecificKey = KeysignChainSpecificKey> = Resolver<
   GetChainSpecificInput<C>,

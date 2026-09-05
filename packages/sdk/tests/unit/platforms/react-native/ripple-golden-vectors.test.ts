@@ -134,6 +134,45 @@ describe('Ripple / buildXrpSendTx golden vectors', () => {
     expect(result.tx).toEqual(referenceTx)
   })
 
+  it('builds an exact issued-currency Payment without partial-payment flags', () => {
+    const result = buildXrpSendTx({
+      account: FX.account,
+      destination: FX.destination,
+      amount: '1500000000000000',
+      issuedCurrency: {
+        currency: 'RLUSD',
+        issuer: 'rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De',
+        decimals: 15,
+      },
+      fee: FX.fee,
+      sequence: FX.sequence,
+      lastLedgerSequence: FX.lastLedgerSequence,
+      signingPubKey: FX.signingPubKey,
+      destinationTag: 998877,
+    })
+
+    const referenceTx: Payment = {
+      TransactionType: 'Payment',
+      Flags: 0,
+      Account: FX.account,
+      Destination: FX.destination,
+      Amount: {
+        currency: '524C555344000000000000000000000000000000',
+        issuer: 'rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De',
+        value: '1.5',
+      },
+      Fee: FX.fee,
+      Sequence: FX.sequence,
+      LastLedgerSequence: FX.lastLedgerSequence,
+      SigningPubKey: FX.signingPubKey.toUpperCase(),
+      DestinationTag: 998877,
+    }
+
+    expect(result.tx).toEqual(referenceTx)
+    expect(result.tx.Flags).toBe(0)
+    expect(result.encodedForSigningHex).toBe(xrplEncodeForSigning(referenceTx))
+  })
+
   it('matches xrpl.encode for a Payment with DestinationTag and a memo', () => {
     const memo = 'vultisig test memo'
     const result = buildXrpSendTx({
