@@ -19,6 +19,14 @@ vi.mock('@vultisig/core-chain/chains/evm/erc20/getErc20Allowance', () => ({
   getErc20Allowance: vi.fn(),
 }))
 
+// Keep quote fee calculation independent of live RPC response times.
+vi.mock('@vultisig/core-chain/tx/fee/evm/baseFee', () => ({
+  getEvmBaseFee: vi.fn().mockResolvedValue(20_000_000_000n),
+}))
+vi.mock('@vultisig/core-chain/tx/fee/evm/maxPriorityFeePerGas', () => ({
+  getEvmMaxPriorityFeePerGas: vi.fn().mockResolvedValue(2_000_000_000n),
+}))
+
 // Mock isChainOfKind to always work. Partial mock on purpose: chainRegistry builds
 // its descriptors at module scope and calls getChainKind while evm/chainInfo is
 // still importing, so a bare factory here drops that export and the suite dies at
@@ -393,6 +401,7 @@ describe('SwapService', () => {
       expect(result).toBeDefined()
       expect(result.provider).toBe('1inch')
       expect(result.expiresAt).toBe(expiresAt)
+      expect(result.fees.network).toBe(6_600_000_000_000_000n)
       expect(result.requiresApproval).toBe(true)
       expect(result.approvalInfo).toBeDefined()
       expect(result.approvalInfo?.spender).toBe('0x1111111254fb6c44bAC0beD2854e76F90643097d')

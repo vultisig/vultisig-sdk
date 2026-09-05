@@ -32,6 +32,10 @@ vi.mock('@vultisig/core-chain/swap/native/minimum/getNativeSwapMinAmountIn', () 
   getNativeSwapMinAmountIn: vi.fn().mockResolvedValue(null),
 }))
 
+vi.mock('@vultisig/core-chain/swap/native/halts/getNativeSwapTradingHalt', () => ({
+  getNativeSwapTradingHalt: vi.fn().mockResolvedValue(null),
+}))
+
 const erc20A = {
   chain: Chain.Ethereum,
   address: '0xsender',
