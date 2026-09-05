@@ -284,6 +284,7 @@ export type OwnerJettonWallet = {
 }
 
 export type OwnerJettonWallets = {
+  /** One entry per jetton held, deduplicated by master — see `getOwnerJettonWallets`. */
   wallets: OwnerJettonWallet[]
   /** Indexer metadata for the masters behind `wallets`, keyed like `jettonMasterAddress`. */
   masters: Record<string, JettonMasterMetadata>
@@ -293,8 +294,9 @@ export type OwnerJettonWallets = {
 
 const ownerJettonWalletsPageSize = 100
 
-// 2000 distinct jettons is far beyond any real wallet; the cap only guards
-// against a proxy that ignores `offset` and keeps returning the first page.
+// 2000 distinct jettons is far beyond any real wallet. The cap is the last resort
+// for a proxy that keeps serving pages forever; the duplicate check below normally
+// stops long before it.
 const ownerJettonWalletsMaxPages = 20
 
 /**
@@ -303,12 +305,20 @@ const ownerJettonWalletsMaxPages = 20
  * follow-up call per jetton. Pages through the proxy and keeps only wallets
  * whose `owner` is the requested address (the proxy has been seen to return
  * unfiltered lists).
+ *
+ * Each jetton appears once. An owner holds exactly one wallet per master, so a
+ * master seen twice is the same holding served again — which is what a proxy
+ * that ignores `offset` does, replaying page one until the page cap and turning
+ * one balance into twenty. Paging stops as soon as a page adds nothing new,
+ * because a page of holdings already recorded is the end of the list however the
+ * proxy chose to express it.
  */
 export const getOwnerJettonWallets = async (ownerAddress: string): Promise<OwnerJettonWallets> => {
   // Accept the owner in either spelling: `tonAddressToRaw` alone would base64-decode
   // a raw `0:hex` address into garbage and the proxy would answer with no wallets.
   const rawOwner = tonAddressToRawKey(ownerAddress)
   const wallets: OwnerJettonWallet[] = []
+  const seenMasters = new Set<string>()
   const masters: Record<string, JettonMasterMetadata> = {}
   const userFriendlyAddresses: Record<string, string> = {}
 
@@ -316,11 +326,15 @@ export const getOwnerJettonWallets = async (ownerAddress: string): Promise<Owner
     const offset = page * ownerJettonWalletsPageSize
     const url = `${tonApiUrl}/v3/jetton/wallets?owner_address=${rawOwner}&exclude_zero_balance=true&limit=${ownerJettonWalletsPageSize}&offset=${offset}`
     const response = await queryUrl<JettonWalletResponse>(url)
+    const walletsBeforePage = seenMasters.size
 
     for (const wallet of response.jetton_wallets) {
       if (!matchesRawAddress(wallet.owner, rawOwner)) continue
 
       const jettonMasterAddress = tonAddressToRawKey(wallet.jetton)
+      if (seenMasters.has(jettonMasterAddress)) continue
+
+      seenMasters.add(jettonMasterAddress)
       wallets.push({ jettonMasterAddress, balance: BigInt(wallet.balance || '0') })
 
       const indexed = getIndexedMasterInfo(response.metadata, wallet.jetton)
@@ -334,7 +348,8 @@ export const getOwnerJettonWallets = async (ownerAddress: string): Promise<Owner
       }
     }
 
-    if (response.jetton_wallets.length < ownerJettonWalletsPageSize) break
+    const isLastPage = response.jetton_wallets.length < ownerJettonWalletsPageSize
+    if (isLastPage || seenMasters.size === walletsBeforePage) break
   }
 
   return { wallets, masters, userFriendlyAddresses }

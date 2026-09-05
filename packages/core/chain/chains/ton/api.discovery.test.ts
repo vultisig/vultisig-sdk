@@ -115,13 +115,47 @@ describe('getOwnerJettonWallets', () => {
     expect(readParam(queryUrlMock.mock.calls[1][0] as string, 'offset')).toBe('100')
   })
 
-  it('stops after a bounded number of pages if the proxy ignores the offset', async () => {
+  // A proxy that ignores `offset` replays page one. Appending each replay turned a
+  // 100-jetton wallet into 2,000 entries, and the duplicates reached discovery.
+  it('returns each holding once when the proxy ignores the offset and replays a page', async () => {
     const page = Array.from({ length: 100 }, (_, index) => walletEntry(rawAddress(index)))
     queryUrlMock.mockResolvedValue({ jetton_wallets: page, address_book: {} })
 
-    await getOwnerJettonWallets(OWNER)
+    const { wallets } = await getOwnerJettonWallets(OWNER)
+
+    expect(wallets).toHaveLength(100)
+    expect(new Set(wallets.map(({ jettonMasterAddress }) => jettonMasterAddress)).size).toBe(100)
+    // The replayed page adds nothing, which is the end of the list however the proxy
+    // chose to express it, so the loop stops there instead of running to the cap.
+    expect(queryUrlMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('deduplicates a master repeated inside a single page', async () => {
+    queryUrlMock.mockResolvedValue({
+      jetton_wallets: [walletEntry(RAW_USDT), walletEntry(RAW_USDT), walletEntry(rawAddress(1))],
+      address_book: {},
+    })
+
+    const { wallets } = await getOwnerJettonWallets(OWNER)
+
+    expect(wallets.map(({ jettonMasterAddress }) => jettonMasterAddress)).toEqual([
+      RAW_USDT.toLowerCase(),
+      rawAddress(1).toLowerCase(),
+    ])
+  })
+
+  it('still stops at the page cap when every page keeps bringing new holdings', async () => {
+    queryUrlMock.mockImplementation(async (url: string) => ({
+      jetton_wallets: Array.from({ length: 100 }, (_, index) =>
+        walletEntry(rawAddress(Number(readParam(url, 'offset')) + index))
+      ),
+      address_book: {},
+    }))
+
+    const { wallets } = await getOwnerJettonWallets(OWNER)
 
     expect(queryUrlMock).toHaveBeenCalledTimes(20)
+    expect(wallets).toHaveLength(2_000)
   })
 })
 
