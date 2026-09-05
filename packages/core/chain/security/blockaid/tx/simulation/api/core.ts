@@ -247,6 +247,41 @@ export type BlockaidEVMSimulation = {
   }
 }
 
+const WSOL_MINT = 'So11111111111111111111111111111111111111112'
+
+type SolanaAssetDiff = BlockaidSolanaSimulation['account_summary']['account_assets_diff'][number]
+
+// Native SOL and the WSOL mint are the SAME underlying asset for netting
+// purposes: a wrap-then-spend (or an unwrap/withdraw that closes the WSOL
+// account) produces an `out` leg on one and an `in` leg on the other for a
+// single economic movement, not a swap between two assets.
+//
+// Checks BOTH `asset.type` and the diff-level `asset_type` (matching the
+// native-SOL-fee filter a few lines below) — Blockaid responses aren't
+// always internally consistent, and a diff carrying `asset_type: 'SOL'`
+// with `asset.type: 'TOKEN'` would otherwise fall through to
+// `shouldBePresent(asset.address)` and throw instead of resolving to the
+// WSOL mint bucket.
+const solanaMintForAsset = (diff: SolanaAssetDiff): string =>
+  diff.asset.type === 'SOL' || diff.asset_type === 'SOL' ? WSOL_MINT : shouldBePresent(diff.asset.address)
+
+/**
+ * Parse a Blockaid Solana simulation into the user's net balance change,
+ * classified as a `swap` (two distinct mints move) or a `transfer` (one
+ * mint moves net-negative).
+ *
+ * Diffs are grouped by resolved mint and netted (`in - out`) per group,
+ * mirroring `parseBlockaidEvmSimulation`. This collapses a wrap-then-spend or
+ * an unwrap/close-account pair — native SOL and the WSOL mint landing in the
+ * same bucket — into the single net movement it actually is, instead of
+ * surfacing a same-asset "SOL -> WSOL swap" whose destination amount is only
+ * the token account's rent-exempt residual (sdk#1997).
+ *
+ * Throws when the netted result isn't representable as `swap`/`transfer`
+ * (net-zero, a pure net-receive with no matching type, or 3+ distinct
+ * nonzero mints) rather than guess — the caller falls back to showing no
+ * preview, which is safe; a wrong number is not.
+ */
 export const parseBlockaidSolanaSimulation = async (
   simulation: BlockaidSolanaSimulation
 ): Promise<BlockaidSolanaSimulationInfo> => {
@@ -262,67 +297,50 @@ export const parseBlockaidSolanaSimulation = async (
     }
   }
 
-  if (relevantDiffs.length === 1) {
-    const [potentialOutAsset] = relevantDiffs
+  const groups = new Map<string, { mint: string; decimals: number; netRaw: bigint }>()
+  for (const diff of relevantDiffs) {
+    const mint = solanaMintForAsset(diff)
+    const outRaw = diff.out ? BigInt(diff.out.raw_value) : 0n
+    const inRaw = diff.in ? BigInt(diff.in.raw_value) : 0n
+    const existing = groups.get(mint)
+    if (existing) {
+      existing.netRaw += inRaw - outRaw
+    } else {
+      groups.set(mint, { mint, decimals: diff.asset.decimals, netRaw: inRaw - outRaw })
+    }
+  }
 
-    if (!potentialOutAsset.out) {
+  const nonZero = [...groups.values()].filter(group => group.netRaw !== 0n)
+
+  if (nonZero.length === 1) {
+    const [only] = nonZero
+    if (only.netRaw >= 0n) {
       throw new Error('Invalid simulation data: no out value for transfer')
     }
-
     return {
       transfer: {
-        fromMint:
-          potentialOutAsset.asset.type === 'SOL'
-            ? 'So11111111111111111111111111111111111111112'
-            : shouldBePresent(potentialOutAsset.asset.address),
-        fromAmount: BigInt(shouldBePresent(potentialOutAsset.out).raw_value),
+        fromMint: only.mint,
+        fromAmount: -only.netRaw,
       },
     }
   }
 
-  if (relevantDiffs.length > 1) {
-    const [potentialOutAsset, potentialInAsset] = relevantDiffs
-    const { inAsset, inValue } = potentialInAsset.in
-      ? {
-          inAsset: potentialInAsset.asset,
-          inValue: potentialInAsset.in,
-        }
-      : {
-          inAsset: potentialOutAsset.asset,
-          inValue: potentialOutAsset.in,
-        }
-
-    const { outAsset, outValue } = potentialOutAsset.out
-      ? {
-          outAsset: potentialOutAsset.asset,
-          outValue: potentialOutAsset.out,
-        }
-      : {
-          outAsset: potentialInAsset.asset,
-          outValue: potentialInAsset.out,
-        }
-    if (outAsset && inAsset && outValue && inValue) {
+  if (nonZero.length === 2) {
+    const [first, second] = nonZero
+    const [outGroup, inGroup] = first.netRaw < 0n ? [first, second] : [second, first]
+    if (outGroup.netRaw < 0n && inGroup.netRaw > 0n) {
       return {
         swap: {
-          fromMint:
-            outAsset.type === 'SOL' ? 'So11111111111111111111111111111111111111112' : shouldBePresent(outAsset.address),
-          toMint:
-            inAsset.type === 'SOL' ? 'So11111111111111111111111111111111111111112' : shouldBePresent(inAsset.address),
-          fromAmount: BigInt(shouldBePresent(outValue).raw_value),
-          toAmount: BigInt(shouldBePresent(inValue).raw_value),
-          toAssetDecimal: inAsset.decimals,
-        },
-      }
-    } else if (outAsset && outValue) {
-      return {
-        transfer: {
-          fromMint:
-            outAsset.type === 'SOL' ? 'So11111111111111111111111111111111111111112' : shouldBePresent(outAsset.address),
-          fromAmount: BigInt(shouldBePresent(outValue).raw_value),
+          fromMint: outGroup.mint,
+          toMint: inGroup.mint,
+          fromAmount: -outGroup.netRaw,
+          toAmount: inGroup.netRaw,
+          toAssetDecimal: inGroup.decimals,
         },
       }
     }
   }
+
   throw new Error('Invalid simulation data')
 }
 
