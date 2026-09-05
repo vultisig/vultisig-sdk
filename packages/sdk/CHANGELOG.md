@@ -1,5 +1,45 @@
 # @vultisig/sdk
 
+## 7.1.0
+
+### Minor Changes
+
+- [#2305](https://github.com/vultisig/vultisig-sdk/pull/2305) [`20de22f`](https://github.com/vultisig/vultisig-sdk/commit/20de22f49c244ffc065011291754f89ef0d6e61a) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(ton): jetton auto-discovery with verified / unverified / scam classification
+
+  TON wallets get carpet-bombed with counterfeit jettons — fake USDT above all — and until now the SDK could neither find the jettons an address holds nor say which of them to trust: discovery covered EVM, Solana, Cosmos, Cardano and Ripple, and TON shipped nine curated jettons plus manual add. A wallet with no labels cannot protect a user from the most common TON scam.
+
+  `findCoins` now supports `Chain.Ton` (`coinFinderChainKinds` gains `'ton'`). `findTonCoins` lists every jetton with a non-zero balance through the Toncenter proxy in one paged call — the indexer's symbol, name, decimals and logo ride along, so there is no follow-up call per jetton — and returns only jettons that pass verification. Curated metadata wins for jettons we ship ourselves.
+
+  Verification lives in `@vultisig/core-chain/chains/ton/jetton/verification`. The registry of verified jettons (`chains/ton/jetton/verifiedRegistry`) merges our curated TON tokens with Tonkeeper's community-reviewed `ton-assets` whitelist, fetched once an hour and degrading to the curated list alone when unreachable. `resolveTonJettonVerification` is pure: a listed address is `verified`; an unlisted jetton is `scam` when the indexer flags it or when its symbol or name collapses onto a verified jetton's — `normalizeJettonSymbol` folds `USD₮`, Cyrillic `UЅDT`, `$USĐ₮` and full-width forms onto `USDT` — and `unverified` otherwise. `getTonJettonVerification({ id, ticker })` is the one-call form for token rows and approval cards; it judges the master by what it claims on chain, falling back to the local ticker offline. The tiers are the chain-agnostic `TokenVerification` type in `@vultisig/core-chain/coin/tokenVerification`.
+
+  `chains/ton/api` gains `getOwnerJettonWallets` (paged, owner-filtered, one entry per jetton, with embedded master metadata) and `getJettonMastersMetadata` (batched, lenient master lookup keyed by lower-cased raw address), and `chains/ton/address` gains `tonAddressToRawKey`. `vault.discoverTokens(Chain.Ton)` and `Vultisig.discoverTokens` work for TON through the same path.
+
+### Patch Changes
+
+- [#2323](https://github.com/vultisig/vultisig-sdk/pull/2323) [`8a50970`](https://github.com/vultisig/vultisig-sdk/commit/8a50970438de64cdbeb281cf73925026e3ce3cf7) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Refuse XRPL issued-currency Payments the ledger would reject — a destination holding no trust line for the token, and an issuer that charges a transfer fee the payload cannot yet cover with a SendMax — instead of burning the fee on-chain. Accept the lowercase standard currency codes XRPL permits, report bad amounts and unusable destinations as domain errors, and pin both encoders against a shared issued-currency signing vector.
+
+- [#2310](https://github.com/vultisig/vultisig-sdk/pull/2310) [`af6c643`](https://github.com/vultisig/vultisig-sdk/commit/af6c643e9afa39cb0b4432a01cec40e4de4d8ecc) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(ton): let a dApp deadline tighten the signed expiry
+
+  `getTonChainSpecific` always signed `expireAt = now + 600`, so the `valid_until` a TonConnect `sendTransaction` carries never reached the wallet message: a request with a 60-second window was signed with a ten-minute one, and a broadcast landing after the dApp's window could execute on chain while the dApp already treated it as expired and retried.
+
+  `GetChainSpecificInput` now takes an optional `validUntil` (unix seconds) for `tonSpecific`. The signed `expireAt` is `min(now + 600, validUntil)` — the wallet's own window remains the ceiling — and a deadline already in the past fails the build instead of signing a transaction the network would reject. Callers that pass nothing keep the previous behaviour; co-signers read `expireAt` from the payload, so only what the initiator writes changes.
+
+  The expiry is computed last, after the seqno, bounceability and jetton-metadata lookups: each is a network round trip, so a deadline still ahead when the build starts can be behind by the time it finishes, and the wallet's own ten-minute window now starts when the payload is finished rather than being partly spent on those lookups.
+
+- [#2296](https://github.com/vultisig/vultisig-sdk/pull/2296) [`34f0faa`](https://github.com/vultisig/vultisig-sdk/commit/34f0faa7208ad594b8d18a3a2806c0f7867f2c85) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(ton): cross-check SwapKit's `tx[]` transfer against the deposit address and amount it also returns
+
+  A SwapKit `/v3/swap` response states the deposit destination in up to three independent fields — `targetAddress`, `depositAddress`, and the `tx[]` transfer array — and its size in two (`depositAmount`, `tx[0].amount`). The transfer builder took the first field that was present and never looked at the rest, so a response whose halves diverged (provider bug, API change, tampered payload) signed whichever field happened to win the precedence order while the others named a different recipient or a different size. Nothing downstream could tell.
+
+  `buildTransferTx` now refuses a response that disagrees with itself, on either the destination or the amount, instead of resolving the ambiguity by precedence. It also rejects a multi-entry `tx[]` rather than silently signing only the first transfer and under-funding the swap.
+
+  Destinations are compared per chain: TON spells one account as `EQ…`, `UQ…` or raw `workchain:hex`, so the new `areEqualTonAddresses` helper compares parsed accounts there, while every other transfer chain stays byte-for-byte (base58 is case-sensitive — normalizing case away would let two different addresses pass as one).
+
+  The agreed TON destination is re-spelled in its bounceable (`EQ…`) form whichever field it came from. The agreement check treats `UQ…`, raw and `EQ…` spellings of one account as equal — correctly — but the signer reads the bounce flag off the spelling, so a route that won precedence with a `UQ…` or raw spelling would have sent the deposit non-bounceable, where a rejecting contract absorbs it instead of refunding. A destination that is not a TON address at all is refused.
+
+- Updated dependencies [[`8a50970`](https://github.com/vultisig/vultisig-sdk/commit/8a50970438de64cdbeb281cf73925026e3ce3cf7), [`af6c643`](https://github.com/vultisig/vultisig-sdk/commit/af6c643e9afa39cb0b4432a01cec40e4de4d8ecc), [`20de22f`](https://github.com/vultisig/vultisig-sdk/commit/20de22f49c244ffc065011291754f89ef0d6e61a), [`34f0faa`](https://github.com/vultisig/vultisig-sdk/commit/34f0faa7208ad594b8d18a3a2806c0f7867f2c85)]:
+  - @vultisig/core-chain@5.1.0
+  - @vultisig/core-mpc@3.0.1
+
 ## 7.0.0
 
 ### Major Changes
