@@ -1,4 +1,4 @@
-import { decodeFunctionData } from 'viem'
+import { decodeFunctionData, encodeAbiParameters, keccak256 } from 'viem'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -6,6 +6,7 @@ import {
   buildCctpClaim,
   cctpChains,
   cctpSupportedChains,
+  extractCctpMessageFromReceipt,
   formatUsdc,
   getCctpChain,
   normalizeHexBytes,
@@ -114,6 +115,63 @@ describe('buildCctpBridge', () => {
     // mintRecipient is the left-zero-padded 32-byte sender address
     expect(decodedBurn.args[2]).toBe(`0x${'0'.repeat(24)}${SENDER.slice(2).toLowerCase()}`)
     expect((decodedBurn.args[3] as string).toLowerCase()).toBe(base.usdc.toLowerCase())
+  })
+
+  // sdk#1911: the rest of the SDK routes chain strings through normalizeChain;
+  // CCTP was an exact-match object index, so callers had to pre-normalize for
+  // this one family and any alias added to the canonicals later would work
+  // everywhere except here.
+  describe('accepts the chain spellings the rest of the SDK accepts (sdk#1911)', () => {
+    it.each(['base', 'BASE', 'Base', ' base '])('resolves %j to the canonical Base config', input => {
+      expect(getCctpChain(input)).toBe(cctpChains.Base)
+    })
+
+    it('still returns undefined for a chain that normalizes but is not CCTP-supported', () => {
+      // Solana is a real chain the normalizer resolves; it just has no CCTP V1
+      // config here. It must answer the same as an unresolvable string.
+      expect(getCctpChain('Solana')).toBeUndefined()
+      expect(getCctpChain('solana')).toBeUndefined()
+      expect(getCctpChain('definitely-not-a-chain')).toBeUndefined()
+      expect(getCctpChain('')).toBeUndefined()
+    })
+
+    it('builds the same envelope from a lowercase spelling as from the canonical one', () => {
+      const canonical = buildCctpBridge({
+        sourceChain: 'Base',
+        destinationChain: 'Arbitrum',
+        amount: '10',
+        from: SENDER,
+      })
+      const lowercased = buildCctpBridge({
+        sourceChain: 'base',
+        destinationChain: 'arbitrum',
+        amount: '10',
+        from: SENDER,
+      })
+
+      expect(lowercased).toEqual(canonical)
+      // And the envelope carries the CANONICAL name, not what the caller typed.
+      expect(lowercased.chain).toBe('Base')
+      expect(lowercased.toChain).toBe('Arbitrum')
+    })
+
+    // The trap alias tolerance introduces: comparing the RAW strings would see
+    // 'base' !== 'Base' as two different chains and happily build a bridge from
+    // a chain to itself. The guard has to run on canonical names.
+    it('still rejects a same-chain bridge written with two different spellings', () => {
+      expect(() =>
+        buildCctpBridge({ sourceChain: 'base', destinationChain: 'Base', amount: '1', from: SENDER })
+      ).toThrow(/must be different/)
+      expect(() =>
+        buildCctpBridge({ sourceChain: 'BASE', destinationChain: ' base ', amount: '1', from: SENDER })
+      ).toThrow(/must be different/)
+    })
+
+    it("reports the caller's own spelling in the unsupported-chain error", () => {
+      expect(() =>
+        buildCctpBridge({ sourceChain: 'nonsense-chain', destinationChain: 'Base', amount: '1', from: SENDER })
+      ).toThrow(/"nonsense-chain"/)
+    })
   })
 
   it('rejects identical source/destination chains', () => {
@@ -392,6 +450,48 @@ describe('buildCctpClaim', () => {
   it('rejects malformed hex', () => {
     expect(() => normalizeHexBytes('0xZZ', 'message')).toThrow(/not valid hex/)
     expect(() => normalizeHexBytes('0xabc', 'message')).toThrow(/odd hex length/)
+  })
+})
+
+describe('extractCctpMessageFromReceipt', () => {
+  // keccak256("MessageSent(bytes)") — CCTP's canonical event topic0.
+  const messageSentTopic = '0x8c5261668696ce22758910d05bab8f186d6eb247ceac2af2e82c7dc17669b036'
+  const message = ('0x' + '00'.repeat(8) + 'deadbeef'.repeat(4)) as `0x${string}`
+  const messageSentData = encodeAbiParameters([{ type: 'bytes' }], [message])
+
+  it('decodes message + messageHash from a MessageSent log in receipt.logs', () => {
+    const receipt = {
+      logs: [
+        { topics: ['0xnotamatch' as `0x${string}`], data: '0x00' as `0x${string}` },
+        { topics: [messageSentTopic as `0x${string}`], data: messageSentData },
+      ],
+    }
+
+    const result = extractCctpMessageFromReceipt(receipt)
+    expect(result.message).toBe(message)
+    expect(result.messageHash).toBe(keccak256(message))
+  })
+
+  it('accepts a bare logs array (not wrapped in a receipt)', () => {
+    const result = extractCctpMessageFromReceipt([
+      { topics: [messageSentTopic as `0x${string}`], data: messageSentData },
+    ])
+    expect(result.message).toBe(message)
+    expect(result.messageHash).toBe(keccak256(message))
+  })
+
+  it('matches the topic case-insensitively', () => {
+    const result = extractCctpMessageFromReceipt([
+      { topics: [messageSentTopic.toUpperCase().replace('0X', '0x') as `0x${string}`], data: messageSentData },
+    ])
+    expect(result.message).toBe(message)
+  })
+
+  it('throws when no MessageSent log is present', () => {
+    expect(() => extractCctpMessageFromReceipt({ logs: [] })).toThrow(/no MessageSent event found/)
+    expect(() =>
+      extractCctpMessageFromReceipt([{ topics: ['0xdeadbeef' as `0x${string}`], data: '0x00' as `0x${string}` }])
+    ).toThrow(/no MessageSent event found/)
   })
 })
 

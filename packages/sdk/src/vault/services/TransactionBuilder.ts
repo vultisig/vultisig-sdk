@@ -66,6 +66,9 @@ export class TransactionBuilder {
    * @param params.memo - Optional transaction memo (for chains that support it)
    * @param params.destinationTag - Optional XRP DestinationTag, independent from memo
    * @param params.feeSettings - Optional custom fee settings (FeeSettings - chain-specific)
+   * @param params.sendMaxAmount - Set when the amount came from a MAX button. Recorded in
+   *   the payload; `amount` is still exactly what gets signed, so pass the same
+   *   `balance - fee` figure the UI displayed.
    *
    * @returns A KeysignPayload ready to be signed with the sign() method
    *
@@ -91,6 +94,7 @@ export class TransactionBuilder {
     memo?: string
     destinationTag?: number
     feeSettings?: FeeSettings
+    sendMaxAmount?: boolean
   }): Promise<KeysignPayload> {
     if (params.amount <= 0n) {
       throw new VaultError(VaultErrorCode.InvalidAmount, 'Amount must be greater than zero')

@@ -34,12 +34,13 @@
     "build:shared": "node scripts/build-shared-packages.mjs",
     "worktree:setup": "node scripts/setup-worktree.mjs",
     "worktree:check": "node scripts/setup-worktree.mjs --check",
+    "worktree:deps": "node scripts/setup-worktree.mjs --deps",
     "check:shared-exports": "node scripts/build-shared-packages.mjs --check",
     "pack:shared": "node scripts/pack-shared-packages.mjs",
     "sync-packages": "syncpack fix-mismatches",
     "typecheck": "node scripts/check-agent-toolchain.mjs --typescript-only && tsc --project .config/tsconfig.json --noEmit && yarn workspace @vultisig/client-shared typecheck && yarn workspace @vultisig/cli typecheck && yarn workspace @vultisig/mcp typecheck && yarn workspace @vultisig/sdk typecheck && yarn workspace @vultisig/rujira typecheck && yarn workspace @vultisig/example-browser typecheck && yarn workspace @vultisig/example-electron typecheck",
     "typecheck:example-browser": "node scripts/check-agent-toolchain.mjs --typescript-only && yarn workspace @vultisig/examples-shared typecheck && yarn workspace @vultisig/example-browser typecheck",
-    "test": "yarn worktree:check && yarn test:scripts && yarn workspace @vultisig/sdk test && yarn test:rujira && yarn test:core && yarn workspace @vultisig/cli test && yarn workspace @vultisig/mcp test",
+    "test": "yarn worktree:check && yarn test:scripts && yarn workspace @vultisig/sdk test && yarn test:rujira && yarn test:core && yarn workspace @vultisig/cli test && yarn workspace @vultisig/mcp test && yarn test:electron",
     "test:coverage": "yarn workspace @vultisig/sdk test:coverage",
     "test:scripts": "node --test scripts/**/*.test.mjs",
     "test:all": "yarn test:unit; yarn test:integration; yarn test:e2e",
@@ -58,6 +59,7 @@
     "test:e2e:swap-transactions": "yarn workspace @vultisig/sdk test:e2e:swap-transactions",
     "test:e2e:secure-signing": "yarn workspace @vultisig/sdk test:e2e:secure-signing",
     "test:core": "vitest run --config .config/vitest.core.config.ts",
+    "test:electron": "yarn workspace @vultisig/example-electron test",
     "test:cli": "vitest run --config .config/vitest.cli.config.ts",
     "test:rujira": "yarn workspace @vultisig/rujira test",
     "test:watch": "yarn workspace @vultisig/sdk test:watch",
@@ -68,7 +70,7 @@
     "knip": "knip --config .config/knip.jsonc",
     "knip:fix": "knip --config .config/knip.jsonc --fix --allow-remove-files",
     "quality:architecture": "depcruise --config .config/dependency-cruiser.cjs --output-type err .",
-    "quality:audit": "yarn npm audit --recursive --all --severity high",
+    "quality:audit": "node scripts/run-npm-audit.mjs",
     "quality:complexity": "node scripts/run-eslint.mjs --config .config/eslint-health.config.mjs 'packages/sdk/**/*.{js,jsx,ts,tsx}' 'packages/rujira/**/*.{js,jsx,ts,tsx}' 'packages/client-shared/**/*.{js,jsx,ts,tsx}' 'packages/mpc-types/src/**/*.ts' 'packages/core/**/*.ts' 'packages/lib/utils/**/*.{js,jsx,ts,tsx}' 'packages/mpc-native/**/*.{js,jsx,ts,tsx}' 'packages/walletcore-native/**/*.{js,jsx,ts,tsx}' 'clients/**/*.{js,jsx,ts,tsx}' 'examples/**/*.{js,jsx,ts,tsx}'",
     "quality:docs": "yarn quality:docs:markdown && yarn quality:docs:links",
     "quality:docs:links": "git ls-files '*.md' ':!:docs/api/**' ':!:tasks/**' ':!:packages/**/CHANGELOG.md' ':!:clients/**/CHANGELOG.md' | xargs -n 1 markdown-link-check -q -c .config/markdown-link-check.json",
@@ -192,6 +194,7 @@
     "vitest": "^4.1.8"
   },
   "resolutions": {
+    "browserslist": "^4.28.8",
     "nanoid@npm:^3.3.16": "^3.3.18",
     "readable-stream": "3.6.2",
     "@grpc/grpc-js": "1.14.4",
@@ -222,7 +225,7 @@
     "form-data@npm:^4.0.5": "^4.0.6",
     "hono@npm:^4.11.4": "4.12.25",
     "undici": "^7.29.0",
-    "fast-uri": "3.1.5",
+    "fast-uri": "3.1.6",
     "ip-address": ">=10.3.1",
     "linkify-it": "5.0.2",
     "bigint-buffer@npm:^1.1.5": "patch:bigint-buffer@npm%3A1.1.5#~/.yarn/patches/bigint-buffer-npm-1.1.5-785f4ccd92.patch",
@@ -232,6 +235,7 @@
     "brace-expansion@npm:^2.0.2": "2.1.4",
     "brace-expansion@npm:^5.0.5": "5.0.9",
     "tar@npm:^7.5.4": "^7.5.21",
-    "tar@npm:^7.5.7": "^7.5.21"
+    "tar@npm:^7.5.7": "^7.5.21",
+    "toml@npm:^3.0.0": "^4.2.0"
   }
 }

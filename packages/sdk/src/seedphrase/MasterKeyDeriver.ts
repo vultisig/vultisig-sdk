@@ -441,7 +441,6 @@ export class MasterKeyDeriver {
       Cardano: 'cardano',
       Dydx: 'dydx',
       Osmosis: 'osmosis',
-      Kujira: 'kujira',
       Terra: 'terraV2',
       TerraClassic: 'terra',
       Noble: 'noble',

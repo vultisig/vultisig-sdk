@@ -2,8 +2,6 @@ import { Chain, EthereumL2Chain } from '@vultisig/core-chain/Chain'
 import { KnownCoin, KnownCoinMetadata } from '@vultisig/core-chain/coin/Coin'
 import { recordMap } from '@vultisig/lib-utils/record/recordMap'
 
-import { kujiraCoinsMigratedToThorChainMetadata } from '../chains/cosmos/thor/kujira-merge'
-
 const ether: KnownCoinMetadata = {
   ticker: 'ETH',
   logo: 'eth',
@@ -104,10 +102,6 @@ const leanChainFeeCoin: Record<Chain, KnownCoinMetadata> = {
     logo: 'dydx',
     decimals: 18,
     priceProviderId: 'dydx-chain',
-  },
-  [Chain.Kujira]: {
-    ...kujiraCoinsMigratedToThorChainMetadata.kuji,
-    decimals: 6,
   },
   [Chain.Terra]: {
     ticker: 'LUNA',

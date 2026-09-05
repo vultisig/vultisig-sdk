@@ -1,5 +1,6 @@
 import { PublicKey } from '@solana/web3.js'
 import { CosmosChain, EvmChain } from '@vultisig/core-chain/Chain'
+import { getCosmosChainHrp } from '@vultisig/core-chain/chains/cosmos/cosmosHrp'
 import { getCosmosWasmTokenInfoUrl } from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
 import { getEvmClient } from '@vultisig/core-chain/chains/evm/client'
 import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
@@ -14,7 +15,7 @@ import { erc20Abi } from 'viem'
  *
  * Supported token standards / chains:
  *  - ERC-20 (EVM): every {@link EvmChain} (Ethereum, Base, Arbitrum, Polygon, …)
- *  - CW20 (CosmWasm): TerraClassic, Terra, Osmosis, Kujira. Cosmos Hub is
+ *  - CW20 (CosmWasm): TerraClassic, Terra, Osmosis. Cosmos Hub is
  *    intentionally excluded — Gaia ships no CosmWasm module, so
  *    `/cosmwasm/wasm/v1/...` 404s for every address there.
  *  - SPL (Solana): reads the mint account via the parsed-account RPC. SPL mints
@@ -52,7 +53,7 @@ export type ResolveContractResult = {
 
 // CW20 metadata probe is only meaningful on CosmWasm-enabled cosmos chains.
 // Cosmos Hub (Gaia) has no CosmWasm module → excluded.
-const CW20_CHAINS = [CosmosChain.TerraClassic, CosmosChain.Terra, CosmosChain.Osmosis, CosmosChain.Kujira] as const
+const CW20_CHAINS = [CosmosChain.TerraClassic, CosmosChain.Terra, CosmosChain.Osmosis] as const
 type Cw20Chain = (typeof CW20_CHAINS)[number]
 
 // Expected bech32 HRP per CW20 chain. Used to fail closed on wrong-chain
@@ -60,13 +61,12 @@ type Cw20Chain = (typeof CW20_CHAINS)[number]
 // BEFORE any RPC fires, instead of querying the Osmosis LCD with a Terra
 // address (which would 404 against a different contract namespace, or worse,
 // silently hit a same-shaped address on the wrong chain). Mirrors mcp-ts's
-// `validateBech32Contract(addr, expectedPrefix)` prefix guard.
-const CW20_CHAIN_PREFIX: Record<Cw20Chain, string> = {
-  [CosmosChain.TerraClassic]: 'terra',
-  [CosmosChain.Terra]: 'terra',
-  [CosmosChain.Osmosis]: 'osmo',
-  [CosmosChain.Kujira]: 'kujira',
-}
+// `validateBech32Contract(addr, expectedPrefix)` prefix guard. Sourced from
+// the canonical `getCosmosChainHrp` registry (architecture#1787) instead of
+// a local copy.
+const CW20_CHAIN_PREFIX: Record<Cw20Chain, string> = Object.fromEntries(
+  CW20_CHAINS.map(chain => [chain, getCosmosChainHrp(chain)])
+) as Record<Cw20Chain, string>
 
 const isEvmChain = (chain: string): chain is EvmChain => Object.values(EvmChain).includes(chain as EvmChain)
 
@@ -275,7 +275,7 @@ const resolveSpl = async (mintAddress: string): Promise<ResolveContractResult> =
  * Resolve on-chain token metadata for a contract / mint address.
  *
  * @param chain - Chain to probe. Any {@link EvmChain}, the CosmWasm chains
- *   (TerraClassic / Terra / Osmosis / Kujira), or Solana.
+ *   (TerraClassic / Terra / Osmosis), or Solana.
  * @param contractAddress - Contract / mint address (0x hex for EVM, bech32 for
  *   CosmWasm, base58 for Solana).
  * @throws if the chain is unsupported or the address is not a recognized token
@@ -296,6 +296,6 @@ export const resolveContract = async (
   }
   throw new Error(
     `unsupported chain for resolveContract: "${chain}". Supported: EVM chains, ` +
-      `CosmWasm (TerraClassic/Terra/Osmosis/Kujira), and Solana.`
+      `CosmWasm (TerraClassic/Terra/Osmosis), and Solana.`
   )
 }
