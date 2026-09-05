@@ -1117,6 +1117,27 @@ describe('getRippleSigningInputs -- TrustSet discriminator (RippleSpecific.trans
     expect(input.opPayment).toBeFalsy()
   })
 
+  it('signs a TrustSet byte-identically with and without the discriminator', async () => {
+    // A signer that predates `transaction_type` sends an undiscriminated
+    // payload and infers TrustSet from the coin. Both members of that committee
+    // must serialize the same bytes or the ceremony diverges and never
+    // completes, so this is the compatibility guarantee, not an implementation
+    // detail: opening a trust line has to keep working across an upgrade.
+    const amount = '1500000000000000'
+    const legacyPayload = buildTrustSetPayload(amount)
+    legacyPayload.blockchainSpecific = {
+      case: 'rippleSpecific',
+      value: makeRippleSpecific(undefined, TransactionType.UNSPECIFIED),
+    }
+
+    const [discriminated, legacy] = await Promise.all([
+      getEncodedSigningInputs({ keysignPayload: buildDiscriminatedTrustSetPayload(amount), walletCore }),
+      getEncodedSigningInputs({ keysignPayload: legacyPayload, walletCore }),
+    ])
+
+    expect(Buffer.from(legacy[0]).toString('hex')).toBe(Buffer.from(discriminated[0]).toString('hex'))
+  })
+
   it('keeps an explicit issued-currency Payment to the issuer on the Payment path', async () => {
     const payload = buildTrustSetPayload('1500000000000000')
     payload.blockchainSpecific = {
