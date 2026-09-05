@@ -79,8 +79,8 @@ describe('mobile keysign pre-image hash golden fixtures', () => {
     walletCore = await initWasm()
   })
 
-  it(`loads the recovered Android/iOS fixture corpus (${cases.length} cases)`, () => {
-    expect(cases.length).toBe(90)
+  it(`loads the mobile and supplemental fixture corpus (${cases.length} cases)`, () => {
+    expect(cases.length).toBe(95)
     expect(new Set(cases.map(({ fixtureFile }) => fixtureFile)).size).toBe(30)
   })
 
