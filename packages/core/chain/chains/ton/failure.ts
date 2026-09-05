@@ -18,6 +18,7 @@ export const tonTxFailureReasons = [
   'not-enough-jettons',
   'jetton-unauthorized',
   'action-failed',
+  'action-partially-failed',
   'aborted',
   'contract-rejected',
 ] as const
@@ -101,6 +102,8 @@ const failureMessages: Record<TonTxFailureReason, string> = {
     'The token contract refused the transfer because this wallet is not allowed to move these tokens.',
   'action-failed':
     'The wallet accepted the transaction but could not carry out the transfer, so nothing was sent. The network fee was still charged. Check the transaction and try again.',
+  'action-partially-failed':
+    'The wallet could not carry out at least one transfer in this transaction, and others in it may have gone through. The network fee was still charged. Check your transaction history before sending again.',
   aborted: 'The network aborted this transaction before it could carry out the transfer.',
   'contract-rejected': 'The contract rejected the transaction.',
 }
@@ -129,14 +132,30 @@ type TonActionPhaseOutcome = {
   no_funds?: boolean
   result_code?: number
   skipped_actions?: number
+  /** Outgoing messages the phase actually produced, when the node reports it. */
+  msgs_created?: number
 }
+
+/**
+ * Which generic explanation a failed action phase gets.
+ *
+ * Under `IGNORE_ERRORS` — the mode every Vultisig TON send uses — a failing action
+ * is skipped and the remaining ones still go out, so a batch can lose one transfer
+ * and deliver the rest. Telling that user nothing was sent and to try again is how a
+ * duplicate transfer happens, so only the node's own `msgs_created: 0` earns the
+ * "nothing was sent" wording. A node that reports nothing proves nothing either way
+ * and gets the neutral explanation, which reads correctly for both outcomes.
+ */
+const genericActionReason = ({ msgs_created }: TonActionPhaseOutcome): TonTxFailureReason =>
+  msgs_created === 0 ? 'action-failed' : 'action-partially-failed'
 
 /**
  * Classifies a failed action phase. A result code the table names wins; an
  * unnamed one is read as a funding failure only when `no_funds` backs it, and
  * otherwise stays generic with the code attached. `no_funds` without any code
  * still means the transfer could not be paid for, and a skipped or unsuccessful
- * action with neither is a generic no-op send.
+ * action with neither is generic — worded by `genericActionReason`, which will not
+ * claim nothing was sent unless the node says so.
  */
 export const getTonActionFailure = (action: TonActionPhaseOutcome | undefined): TonTxFailure | undefined => {
   if (!action) return undefined
@@ -145,14 +164,15 @@ export const getTonActionFailure = (action: TonActionPhaseOutcome | undefined): 
 
   if (result_code !== undefined && result_code !== 0) {
     // A code the table does not name is a funding failure only when the node says so.
-    const reason = actionResultCodeReasons[result_code] ?? (no_funds === true ? 'insufficient-funds' : 'action-failed')
+    const reason =
+      actionResultCodeReasons[result_code] ?? (no_funds === true ? 'insufficient-funds' : genericActionReason(action))
 
     return makeFailure(reason, 'action', result_code)
   }
 
   if (no_funds === true) return makeFailure('insufficient-funds', 'action')
 
-  if (success === false || (skipped_actions ?? 0) > 0) return makeFailure('action-failed', 'action')
+  if (success === false || (skipped_actions ?? 0) > 0) return makeFailure(genericActionReason(action), 'action')
 
   return undefined
 }

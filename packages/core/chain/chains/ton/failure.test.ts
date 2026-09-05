@@ -75,12 +75,12 @@ describe('getTonActionFailure', () => {
   // big". Reading every 40 as a funding failure would tell someone to top up when the
   // payload is what has to shrink.
   it('leaves result code 40 generic unless the node reports no funds', () => {
-    expect(getTonActionFailure({ success: false, result_code: 40 })).toMatchObject({
+    expect(getTonActionFailure({ success: false, result_code: 40, msgs_created: 0 })).toMatchObject({
       reason: 'action-failed',
       phase: 'action',
       exitCode: 40,
     })
-    expect(getTonActionFailure({ success: false, result_code: 40 })?.message).not.toMatch(/0\.05 TON/)
+    expect(getTonActionFailure({ success: false, result_code: 40, msgs_created: 0 })?.message).not.toMatch(/0\.05 TON/)
 
     expect(getTonActionFailure({ success: false, no_funds: true, result_code: 40 })).toMatchObject({
       reason: 'insufficient-funds',
@@ -89,6 +89,7 @@ describe('getTonActionFailure', () => {
   })
 
   it('does not send an oversized-message failure to top up its balance', () => {
+    expect(getTonActionFailure({ success: false, result_code: 40, msgs_created: 0 })?.message).not.toMatch(/balance/i)
     expect(getTonActionFailure({ success: false, result_code: 40 })?.message).not.toMatch(/balance/i)
   })
 
@@ -98,11 +99,46 @@ describe('getTonActionFailure', () => {
     })
   })
 
-  it('reports a skipped or unsuccessful action without a code as a generic no-op', () => {
-    expect(getTonActionFailure({ success: true, result_code: 0, skipped_actions: 1 })).toMatchObject({
+  // TON skips a failing action and sends the rest, so a skipped action in a batch
+  // does not mean the transaction moved nothing. Only the node's own count of
+  // outgoing messages settles it, and "nothing was sent, try again" aimed at a
+  // batch that already delivered part of itself is how a transfer goes out twice.
+  it('says nothing was sent only when the node reports no outgoing message', () => {
+    expect(getTonActionFailure({ success: false, skipped_actions: 1, msgs_created: 0 })).toMatchObject({
       reason: 'action-failed',
+      phase: 'action',
     })
-    expect(getTonActionFailure({ success: false })).toMatchObject({ reason: 'action-failed' })
+    expect(getTonActionFailure({ success: false, skipped_actions: 1, msgs_created: 0 })?.message).toMatch(
+      /nothing was sent/
+    )
+  })
+
+  it('stays neutral about a batch that skipped one transfer and delivered others', () => {
+    const partial = getTonActionFailure({ success: true, result_code: 0, skipped_actions: 1, msgs_created: 1 })
+
+    expect(partial).toMatchObject({ reason: 'action-partially-failed', phase: 'action' })
+    expect(partial?.message).not.toMatch(/nothing was sent/)
+    expect(partial?.message).toMatch(/history/)
+  })
+
+  it('does not claim nothing was sent when the node reports no message count at all', () => {
+    for (const action of [{ success: false }, { success: true, result_code: 0, skipped_actions: 1 }]) {
+      expect(getTonActionFailure(action)).toMatchObject({ reason: 'action-partially-failed' })
+      expect(getTonActionFailure(action)?.message).not.toMatch(/nothing was sent/)
+    }
+  })
+
+  it('applies the same rule to an unnamed result code', () => {
+    expect(getTonActionFailure({ success: false, result_code: 33, skipped_actions: 1, msgs_created: 2 })).toMatchObject(
+      {
+        reason: 'action-partially-failed',
+        exitCode: 33,
+      }
+    )
+    expect(getTonActionFailure({ success: false, result_code: 33, msgs_created: 0 })).toMatchObject({
+      reason: 'action-failed',
+      exitCode: 33,
+    })
   })
 
   it('is silent for a healthy action phase', () => {

@@ -16,6 +16,7 @@ type TonActionPhase = {
   no_funds?: boolean
   result_code?: number
   skipped_actions?: number
+  msgs_created?: number
 }
 
 type TonTransactionDescription = {

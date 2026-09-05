@@ -147,10 +147,14 @@ describe('getTonTxStatus', () => {
   // The whole point of the resolver: compute succeeds, the transaction is not
   // aborted, and the seqno is consumed — but the action phase moved nothing.
   const failedActionPhases = {
-    'success flag cleared': [{ ...okActionPhase, success: false }, 'action-failed'],
+    'success flag cleared': [{ ...okActionPhase, success: false }, 'action-partially-failed'],
     'no funds to send': [{ ...okActionPhase, no_funds: true }, 'insufficient-funds'],
     'nonzero result code': [{ ...okActionPhase, result_code: 37 }, 'insufficient-funds'],
-    'actions skipped': [{ ...okActionPhase, skipped_actions: 1 }, 'action-failed'],
+    'actions skipped': [{ ...okActionPhase, skipped_actions: 1 }, 'action-partially-failed'],
+    'every action skipped with nothing sent': [
+      { ...okActionPhase, success: false, skipped_actions: 1, msgs_created: 0 },
+      'action-failed',
+    ],
     'result code without a success flag': [{ result_code: 37 }, 'insufficient-funds'],
     'an invalid destination': [{ ...okActionPhase, success: false, result_code: 36 }, 'invalid-destination'],
   } as const
