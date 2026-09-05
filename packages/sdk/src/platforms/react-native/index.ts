@@ -368,6 +368,19 @@ export type {
   TonWalletStatus,
 } from './chains/ton'
 
+// TON failure taxonomy. `chains.ton.broadcastTonTx` rejects with toncenter's own
+// text, which carries the wallet contract's `exitcode=<n>` and nothing else, so an
+// RN consumer needs these to turn a refusal into a reason and a remedy — a replayed
+// seqno and an expired deadline both read as "the network rejected it" and have
+// opposite fixes.
+export type { TonTxFailure, TonTxFailureReason, TonTxPhase } from '@vultisig/core-chain/chains/ton/failure'
+export {
+  getTonTxFailure,
+  parseTonBroadcastRejection,
+  TonBroadcastRejectedError,
+  tonTxFailureReasons,
+} from '@vultisig/core-chain/chains/ton/failure'
+
 // ============================================================================
 // Chain tools — RN-safe surface re-exported for consumers
 // ============================================================================
