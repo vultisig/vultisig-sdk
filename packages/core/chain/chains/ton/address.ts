@@ -83,3 +83,10 @@ export const areEqualTonAddresses = (left: string, right: string): boolean => {
 
   return parsedLeft && parsedRight ? parsedLeft.equals(parsedRight) : left.trim() === right.trim()
 }
+/**
+ * Lower-cased raw (`workchain:hex`) form of a raw or user-friendly TON address.
+ * Toncenter answers in upper-case hex and ton-assets lists lower-case hex, so
+ * every lookup keyed by a jetton master address must go through this first.
+ */
+export const tonAddressToRawKey = (address: string): string =>
+  (address.includes(':') ? address : tonAddressToRaw(address)).toLowerCase()
