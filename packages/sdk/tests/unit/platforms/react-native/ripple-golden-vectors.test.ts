@@ -49,12 +49,39 @@ type RippleCrossEncoderFixture = {
   expectedSigningHashHex: string
 }
 
+type RippleIssuedCrossEncoderFixture = {
+  senderAddress: string
+  recipientAddress: string
+  senderPublicKeyHex: string
+  issuerAddress: string
+  currencyCode: string
+  decimals: number
+  amountBaseUnits: string
+  expectedValue: string
+  feeDrops: string
+  sequence: number
+  lastLedgerSequence: number
+  destinationTag: number
+  flags?: number
+  memo?: string
+  expectedSigningHashHex: string
+}
+
 const crossEncoderFixture = JSON.parse(
   readFileSync(resolve(__dirname, '../../../../../../testdata/cross-encoder-golden/ripple-payment.json'), 'utf8')
 ) as RippleCrossEncoderFixture
 const crossEncoderMemoFixture = JSON.parse(
   readFileSync(resolve(__dirname, '../../../../../../testdata/cross-encoder-golden/ripple-payment-memo.json'), 'utf8')
 ) as RippleCrossEncoderFixture
+const crossEncoderIssuedFixture = JSON.parse(
+  readFileSync(resolve(__dirname, '../../../../../../testdata/cross-encoder-golden/ripple-issued-payment.json'), 'utf8')
+) as RippleIssuedCrossEncoderFixture
+const crossEncoderIssuedMemoFixture = JSON.parse(
+  readFileSync(
+    resolve(__dirname, '../../../../../../testdata/cross-encoder-golden/ripple-issued-payment-memo.json'),
+    'utf8'
+  )
+) as RippleIssuedCrossEncoderFixture
 
 function encodeDerInteger(hex: string): Buffer {
   let bytes = Buffer.from(hex, 'hex')
@@ -104,6 +131,47 @@ describe('Ripple / buildXrpSendTx golden vectors', () => {
     expect(result.tx.Flags).toBeUndefined()
     expect(result.tx.Memos?.[0]?.Memo.MemoType).toBeUndefined()
     expect(result.signingHashHex).toBe(crossEncoderMemoFixture.expectedSigningHashHex)
+  })
+
+  const buildIssuedFixtureTx = (fixture: RippleIssuedCrossEncoderFixture) =>
+    buildXrpSendTx({
+      account: fixture.senderAddress,
+      destination: fixture.recipientAddress,
+      amount: fixture.amountBaseUnits,
+      issuedCurrency: {
+        currency: fixture.currencyCode,
+        issuer: fixture.issuerAddress,
+        decimals: fixture.decimals,
+      },
+      fee: fixture.feeDrops,
+      sequence: fixture.sequence,
+      lastLedgerSequence: fixture.lastLedgerSequence,
+      signingPubKey: fixture.senderPublicKeyHex,
+      destinationTag: fixture.destinationTag,
+      memo: fixture.memo,
+    })
+
+  it('matches WalletCore for the shared issued-currency Payment fixture', () => {
+    const result = buildIssuedFixtureTx(crossEncoderIssuedFixture)
+
+    // An XRPL token amount is stored as a normalised mantissa/exponent, so the
+    // two encoders agreeing on the hash is what proves neither one rounded the
+    // 16-significant-digit quantity differently.
+    expect(result.tx.Amount).toEqual({
+      currency: crossEncoderIssuedFixture.currencyCode,
+      issuer: crossEncoderIssuedFixture.issuerAddress,
+      value: crossEncoderIssuedFixture.expectedValue,
+    })
+    expect(result.tx.Flags).toBe(crossEncoderIssuedFixture.flags)
+    expect(result.signingHashHex).toBe(crossEncoderIssuedFixture.expectedSigningHashHex)
+  })
+
+  it('matches WalletCore for the shared issued-currency Payment memo fixture', () => {
+    const result = buildIssuedFixtureTx(crossEncoderIssuedMemoFixture)
+
+    expect(result.tx.Flags).toBeUndefined()
+    expect(result.tx.Memos?.[0]?.Memo.MemoType).toBeUndefined()
+    expect(result.signingHashHex).toBe(crossEncoderIssuedMemoFixture.expectedSigningHashHex)
   })
 
   it('matches an independently-built Payment tx serialized via xrpl.encodeForSigning', () => {
