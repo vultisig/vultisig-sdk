@@ -646,6 +646,33 @@ describe('RN entry exposes pure chain helpers and registry', () => {
     expect(rn.readNoonVaultState).toBe(noon.readNoonVaultState)
     expect(rn.fetchNoonUsdcVaultMetrics).toBe(noon.fetchNoonUsdcVaultMetrics)
   })
+
+  it('re-exports the half-landed root symbols that were missing from RN', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const ibc = await import('../../../../src/tools/prep/ibcTransfer')
+    const nativeMin = await import('@vultisig/core-chain/swap/native/minimum/getNativeSwapMinAmountIn')
+    const jupiterConstants = await import('../../../../src/tools/swap/jupiterConstants')
+    const defi = await import('../../../../src/tools/defi')
+
+    expect(rn.prepareIbcTransfer).toBe(ibc.prepareIbcTransfer)
+    expect(rn.supportedIbcDestinationsFrom).toBe(ibc.supportedIbcDestinationsFrom)
+    expect(rn.IBC_CHAIN_HRP).toBe(ibc.IBC_CHAIN_HRP)
+    expect(rn.normaliseIbcChainId).toBe(ibc.normaliseIbcChainId)
+    expect(typeof rn.prepareSuiTokenTransferFromKeys).toBe('function')
+
+    expect(rn.getNativeSwapMinAmountIn).toBe(nativeMin.getNativeSwapMinAmountIn)
+    expect(rn.NATIVE_SWAP_MIN_OUTBOUND_FEE_MULTIPLIER).toBe(nativeMin.NATIVE_SWAP_MIN_OUTBOUND_FEE_MULTIPLIER)
+
+    expect(rn.JUPITER_AFFILIATE_FEE_OWNER).toBe(jupiterConstants.JUPITER_AFFILIATE_FEE_OWNER)
+    expect(rn.SOL_NATIVE_MINT).toBe(jupiterConstants.SOL_NATIVE_MINT)
+    expect(typeof rn.buildJupiterSwapTx).toBe('function')
+    expect(typeof rn.resolveJupiterFeeAccount).toBe('function')
+
+    expect(rn.stakekitSearch).toBe(defi.stakekitSearch)
+    expect(rn.stakekitDetails).toBe(defi.stakekitDetails)
+    expect(rn.stakekitBuildEnter).toBe(defi.stakekitBuildEnter)
+    expect(rn.validateStakekitActionInput).toBe(defi.validateStakekitActionInput)
+  })
 })
 
 // Same parity guard for the hardened human-amount -> base-units parser: the RN
