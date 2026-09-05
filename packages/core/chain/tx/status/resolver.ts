@@ -23,10 +23,26 @@ export type TxReceiptInfo = {
   deliveredMptIssuanceId?: string
 }
 
+/**
+ * Why a transaction ended in `error`, when the chain exposes a reason. `reason`
+ * is a stable, chain-specific identifier (see `TonTxFailureReason`) a UI can
+ * translate; `message` is the English explanation with the remedy for consumers
+ * that only print text; `exitCode` is the raw contract/VM code when there is
+ * one, and `phase` names the execution phase that produced it (TON: `compute`
+ * or `action` — the same number means different things in each).
+ */
+export type TxFailureInfo = {
+  reason: string
+  message: string
+  exitCode?: number
+  phase?: string
+}
+
 export type TxStatusResult = {
   status: TxStatus
   isKnown?: boolean
   receipt?: TxReceiptInfo
+  failure?: TxFailureInfo
 }
 
 export type TxStatusInput<T extends Chain = Chain> = {
