@@ -223,6 +223,15 @@ describe('getEvmFeeQuote', () => {
       expect(quote.baseFeePerGas).toBe(120n)
       expect(mocks.client.estimateGas).not.toHaveBeenCalled()
     })
+
+    it('lets a caller minimum raise the fixed limit, since nothing is simulated', async () => {
+      const quote = await getEvmFeeQuote({
+        keysignPayload: { toAddress: router, memo: '=:ETH.ETH:0x4444' } as never,
+        minimumGasLimit: 200_000n,
+      })
+
+      expect(quote.gasLimit).toBe(200_000n)
+    })
   })
 
   describe('transfer', () => {

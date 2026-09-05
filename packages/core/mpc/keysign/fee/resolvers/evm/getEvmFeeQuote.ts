@@ -110,8 +110,9 @@ export const getEvmFeeQuote = async ({
           requestedGasLimit > 0n ? requestedGasLimit : kindGasLimit,
           inflateGasLimit(estimatedGasLimit ?? fallbackGasLimit)
         ),
-      // A router deposit is never simulated and is sized from its fixed limit.
-      routerDeposit: () => bigIntMax(kindGasLimit, requestedGasLimit),
+      // A router deposit is never simulated, so its fixed limit is the stand-in
+      // a caller minimum may raise.
+      routerDeposit: () => bigIntMax(fallbackGasLimit, requestedGasLimit),
     })
 
   const isLegacyPriced = evmChainTxFeeFormat[chain] === 'legacy'
