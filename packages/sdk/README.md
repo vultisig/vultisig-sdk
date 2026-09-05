@@ -944,7 +944,10 @@ Check the on-chain status of a previously broadcast transaction. Supports all ch
 **Returns:**
 
 - `status: 'pending' | 'success' | 'error'` - Current transaction status
-- `receipt?: TxReceiptInfo` - Fee details if available (`feeAmount`, `feeDecimals`, `feeTicker`)
+- `receipt?: TxReceiptInfo` - Fee details if available (`feeAmount`, `feeDecimals`, `feeTicker`). Successful XRPL
+  Payments can also include the authoritative metadata delivery: `deliveredAmount` with either
+  `deliveredCurrency` + `deliveredIssuer` for issued currencies, `deliveredMptIssuanceId` for MPTs, or
+  `deliveredCurrency: 'XRP'` for native XRP. These fields never fall back to the send-side `Amount`/`DeliverMax`.
 
 **Example:**
 

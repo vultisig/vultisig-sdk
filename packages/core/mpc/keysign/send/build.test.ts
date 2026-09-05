@@ -1,8 +1,10 @@
 import { create, fromBinary, toBinary } from '@bufbuild/protobuf'
 import { Chain } from '@vultisig/core-chain/Chain'
+import { rippleKnownIssuedTokens } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
 import {
   RippleSpecificSchema,
   TonSpecificSchema,
+  TransactionType,
 } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
@@ -39,17 +41,21 @@ const buildPayload = ({
   destinationTag = 12345,
   omitDestinationTag = false,
   sendMaxAmount,
+  coin = rippleCoin,
+  amount = 1_000_000n,
 }: {
   memo?: string
   receiver?: string
   destinationTag?: number
   omitDestinationTag?: boolean
   sendMaxAmount?: boolean
+  coin?: Parameters<typeof buildSendKeysignPayload>[0]['coin']
+  amount?: bigint
 } = {}) =>
   buildSendKeysignPayload({
-    coin: rippleCoin,
+    coin,
     receiver,
-    amount: 1_000_000n,
+    amount,
     memo,
     destinationTag: omitDestinationTag ? undefined : destinationTag,
     vaultId: 'vault-public-key',
@@ -92,6 +98,39 @@ describe('buildSendKeysignPayload XRP DestinationTag compatibility', () => {
     expect(roundTrip.memo).toBe('12345')
     expectRippleDestinationTag(roundTrip, 12345)
   })
+
+  it('explicitly requests a Payment instead of inferring TrustSet from the recipient', async () => {
+    const payload = await buildPayload({
+      coin: { ...rippleKnownIssuedTokens[0], address: rippleCoin.address },
+      receiver: 'rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De',
+      amount: 1_500_000_000_000_000n,
+    })
+
+    expect(getChainSpecificMock).toHaveBeenCalledWith(
+      expect.objectContaining({ transactionType: TransactionType.RIPPLE_PAYMENT })
+    )
+    expect(payload.coin?.isNativeToken).toBe(false)
+    expect(payload.toAmount).toBe('1500000000000000')
+  })
+
+  it.each([
+    { label: 'inexact', amount: 12_345_678_901_234_567n, message: /16 significant digits/ },
+    { label: 'zero', amount: 0n, message: /must be positive/ },
+  ])(
+    'rejects an $label issued amount as bad input, before preparing a transaction for review',
+    async ({ amount, message }) => {
+      // A domain error rather than a bare Error so callers stop retrying and
+      // surface the reason instead of a generic failure.
+      const build = buildPayload({
+        coin: { ...rippleKnownIssuedTokens[0], address: rippleCoin.address },
+        amount,
+      })
+
+      await expect(build).rejects.toMatchObject({ type: 'ripple-issued-currency-amount-invalid' })
+      await expect(build).rejects.toThrow(message)
+      expect(getChainSpecificMock).not.toHaveBeenCalled()
+    }
+  )
 
   it('treats the empty memo supplied by Windows as absent for tag-only dual-write', async () => {
     const payload = await buildPayload({ memo: '' })
@@ -150,7 +189,11 @@ describe('buildSendKeysignPayload MAX intent', () => {
     getKeysignUtxoInfoMock.mockResolvedValue(undefined)
     getChainSpecificMock.mockResolvedValue({
       case: 'rippleSpecific',
-      value: create(RippleSpecificSchema, { sequence: 1n, gas: 15n, lastLedgerSequence: 2n }),
+      value: create(RippleSpecificSchema, {
+        sequence: 1n,
+        gas: 15n,
+        lastLedgerSequence: 2n,
+      }),
     })
   })
 
@@ -200,7 +243,13 @@ describe('buildSendKeysignPayload TON memo capacity', () => {
     })
 
     return buildSendKeysignPayload({
-      coin: { chain: Chain.Ton, ticker: id ? 'USDT' : 'TON', address: tonAddress, decimals: id ? 6 : 9, id },
+      coin: {
+        chain: Chain.Ton,
+        ticker: id ? 'USDT' : 'TON',
+        address: tonAddress,
+        decimals: id ? 6 : 9,
+        id,
+      },
       receiver: tonAddress,
       amount,
       memo,
@@ -230,7 +279,10 @@ describe('buildSendKeysignPayload TON memo capacity', () => {
   })
 
   it('keeps a jetton memo that fits the inline forward payload', async () => {
-    const payload = await buildTonPayload({ memo: 'x'.repeat(39), id: 'EQjettonMaster' })
+    const payload = await buildTonPayload({
+      memo: 'x'.repeat(39),
+      id: 'EQjettonMaster',
+    })
 
     expect(payload.memo).toBe('x'.repeat(39))
   })
@@ -242,11 +294,19 @@ describe('buildSendKeysignPayload TON memo capacity', () => {
   })
 
   it('reads the cap from the resolved amount and destination state, not from a constant', async () => {
-    await expect(buildTonPayload({ memo: 'x'.repeat(39), amount: 10n ** 18n, id: 'EQjettonMaster' })).rejects.toThrow(
-      /at most 34 bytes/
-    )
+    await expect(
+      buildTonPayload({
+        memo: 'x'.repeat(39),
+        amount: 10n ** 18n,
+        id: 'EQjettonMaster',
+      })
+    ).rejects.toThrow(/at most 34 bytes/)
 
-    const payload = await buildTonPayload({ memo: 'x'.repeat(40), id: 'EQjettonMaster', isActiveDestination: false })
+    const payload = await buildTonPayload({
+      memo: 'x'.repeat(40),
+      id: 'EQjettonMaster',
+      isActiveDestination: false,
+    })
     expect(payload.memo).toBe('x'.repeat(40))
   })
 
