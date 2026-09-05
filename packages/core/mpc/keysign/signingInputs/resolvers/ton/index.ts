@@ -1,3 +1,4 @@
+import { getTonMessageBounceable } from '@vultisig/core-chain/chains/ton/messageBounce'
 import { isTonStakingComment } from '@vultisig/core-chain/chains/ton/staking'
 import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import { TW } from '@trustwallet/wallet-core'
@@ -33,7 +34,10 @@ export const getTonSigningInputs: SigningInputsResolver<'ton'> = ({ keysignPaylo
             amount: msg.amount,
             payload: msg.payload,
             stateInit: msg.stateInit,
-            bounceable: isStakeOp ? true : !!bounceable,
+            // A dApp declares bounce intent per message, in each destination's own address
+            // tag. The wallet-level flag describes only `toAddress` — the first message —
+            // and applying it to the whole batch signs the wrong bit on the others.
+            bounceable: getTonMessageBounceable(msg.to, !!msg.stateInit),
           })
         )
       : [
