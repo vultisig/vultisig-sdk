@@ -1888,6 +1888,11 @@
       "import": "./dist/swap/general/oneInch/api/OneInchSwapQuoteResponse.js",
       "default": "./dist/swap/general/oneInch/api/OneInchSwapQuoteResponse.js"
     },
+    "./swap/general/oneInch/decodeMinReturn": {
+      "types": "./dist/swap/general/oneInch/decodeMinReturn.d.ts",
+      "import": "./dist/swap/general/oneInch/decodeMinReturn.js",
+      "default": "./dist/swap/general/oneInch/decodeMinReturn.js"
+    },
     "./swap/general/oneInch/oneInchAffiliateConfig": {
       "types": "./dist/swap/general/oneInch/oneInchAffiliateConfig.d.ts",
       "import": "./dist/swap/general/oneInch/oneInchAffiliateConfig.js",
