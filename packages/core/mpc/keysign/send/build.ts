@@ -3,6 +3,7 @@ import { create } from '@bufbuild/protobuf'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { normalizeRippleDestination } from '@vultisig/core-chain/chains/ripple/address'
+import { getSignableIssuedCurrencyAmount, parseRippleTokenId } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
 import { validateTonComment } from '@vultisig/core-chain/chains/ton/comment'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
@@ -122,6 +123,11 @@ export const buildSendKeysignPayload = async ({
   const effectiveDestinationTag = destinationTag ?? embeddedDestinationTag
   if (effectiveDestinationTag !== undefined) validateDestinationTag(effectiveDestinationTag)
 
+  if (coin.chain === Chain.Ripple && coin.id) {
+    if (amount <= 0n) throw new Error('XRP issued-currency Payment amount must be positive')
+    getSignableIssuedCurrencyAmount({ ...parseRippleTokenId(coin.id), amount, decimals: coin.decimals })
+  }
+
   const cosmosWasmTokenTransferPayload = getCosmosWasmTokenTransferPayload({
     coin,
     receiver: normalizedReceiver,
@@ -168,6 +174,7 @@ export const buildSendKeysignPayload = async ({
         walletCore,
         destinationTag: effectiveDestinationTag,
         sendMaxAmount,
+        ...(coin.chain === Chain.Ripple ? { transactionType: TransactionType.RIPPLE_PAYMENT } : {}),
       })
 
   const balance = await getCoinBalance(coin)
