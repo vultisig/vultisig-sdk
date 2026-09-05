@@ -352,6 +352,11 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.MAYA_SEND_FEE_BASE_UNITS).toBe(2_000_000_000n)
   })
 
+  it('exports the canonical Cosmos Tendermint/Stargate RPC registry', () => {
+    expect(sdk.tendermintRpcUrl[sdk.Chain.Cosmos]).toBe('https://cosmos-rpc.publicnode.com:443')
+    expect(sdk.tendermintRpcUrl[sdk.Chain.THORChain]).toBe('https://gateway.liquify.com/chain/thorchain_rpc')
+  })
+
   it('exports the Cosmos staking gas limit helper, including TerraClassic redelegation headroom', () => {
     expect(typeof sdk.getCosmosStakingGasLimit).toBe('function')
     expect(sdk.getCosmosStakingGasLimit({ chain: sdk.Chain.Cosmos })).toBe(350_000n)
