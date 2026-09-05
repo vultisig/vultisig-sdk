@@ -1,5 +1,6 @@
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
+import { resolveTokenPriceId as canonicalResolveTokenPriceId } from '@vultisig/core-chain/coin/price/resolveTokenPriceId'
 import * as isValidTokenIdModule from '@vultisig/core-chain/utils/isValidTokenId'
 import { describe, expect, it } from 'vitest'
 
@@ -30,12 +31,21 @@ describe('@vultisig/sdk public exports', () => {
 
   it('exports fiatToAmount, toChainAmount, and chain-reference normalization utilities', () => {
     expect(typeof sdk.fiatToAmount).toBe('function')
+    expect(sdk.resolveTokenPriceId).toBe(canonicalResolveTokenPriceId)
     expect(typeof sdk.toChainAmount).toBe('function')
     expect(typeof sdk.normalizeChain).toBe('function')
     expect(typeof sdk.resolveChainReference).toBe('function')
     expect(typeof sdk.FiatToAmountError).toBe('function')
     expect(typeof sdk.ChainAmountParseError).toBe('function')
     expect(typeof sdk.UnknownChainError).toBe('function')
+  })
+
+  it('exports the canonical token -> CoinGecko price-id resolver', () => {
+    expect(sdk.resolveTokenPriceId(sdk.Chain.Ethereum)).toBe('ethereum')
+    expect(sdk.resolveTokenPriceId(sdk.Chain.TerraClassic, 'uluna')).toBe('terra-luna')
+    expect(sdk.resolveTokenPriceId(sdk.Chain.Solana, 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')).toBe('usd-coin')
+    expect(sdk.resolveTokenPriceId(sdk.Chain.Base, '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913')).toBe('usd-coin')
+    expect(sdk.resolveTokenPriceId(sdk.Chain.Solana, 'not-a-known-token')).toBeUndefined()
   })
 
   it('exports canonical EIP-712 helpers for first-party consumers', () => {
