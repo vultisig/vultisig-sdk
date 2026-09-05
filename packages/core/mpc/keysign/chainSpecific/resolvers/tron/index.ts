@@ -1,11 +1,13 @@
 import { Buffer } from 'buffer'
 
 import { create } from '@bufbuild/protobuf'
+import { tronRpcUrl } from '@vultisig/core-chain/chains/tron/config'
 import { getTronBlockInfo } from '@vultisig/core-chain/chains/tron/getTronBlockInfo'
 import { getTronAccountResources } from '@vultisig/core-chain/chains/tron/resources/getTronAccountResources'
 import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import { TronSpecificSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
+import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import { TW, type WalletCore } from '@trustwallet/wallet-core'
 import Long from 'long'
 
@@ -19,6 +21,12 @@ import { getTrc20TransferFee } from './fee'
 // sun. 800_000n keeps the pre-existing margin (~2.4× the median signed size)
 // and guards against governance-driven bandwidth price hikes.
 const NATIVE_TRX_SEND_FEE_FALLBACK = 800_000n
+
+// Mainnet getCreateNewAccountFeeInSystemContract and getCreateAccountFee.
+// Activation uses staked bandwidth or a fixed burn, never the free quota:
+// https://tronprotocol.github.io/documentation-en/mechanism-algorithm/resource/
+const TRON_ACCOUNT_ACTIVATION_FEE = 1_000_000n
+const TRON_ACTIVATION_BANDWIDTH_RESERVE = 100_000n
 
 const TRON_SIGNATURE_BYTES = 65
 // java-tron charges one 64-byte transaction-result allowance per contract in
@@ -99,6 +107,23 @@ export const getNativeTronBandwidthBytes = ({
 }
 
 const getNativeTronSendFee = async (input: NativeTronBandwidthInput): Promise<bigint> => {
+  const recipient = await queryUrl<Record<string, unknown>>(`${tronRpcUrl}/wallet/getaccount`, {
+    body: { address: input.toAddress, visible: true },
+  })
+  if (!recipient || typeof recipient !== 'object' || Array.isArray(recipient)) {
+    throw new Error('[tron] invalid recipient account response')
+  }
+  if (Object.keys(recipient).length === 0) {
+    // Reserve the fixed bandwidth burn even when staking could cover it. The
+    // ordinary 800k fallback is not charged on the account-creation path.
+    return TRON_ACCOUNT_ACTIVATION_FEE + TRON_ACTIVATION_BANDWIDTH_RESERVE
+  }
+  // visible=true returns the base58 address, including for a zero-balance
+  // activated account. Never infer activation from balance or an RPC error.
+  if (recipient.address !== input.toAddress || recipient.Error || recipient.error) {
+    throw new Error('[tron] invalid recipient account response')
+  }
+
   try {
     const requiredBandwidth = getNativeTronBandwidthBytes(input)
     const resources = await getTronAccountResources(input.fromAddress)
