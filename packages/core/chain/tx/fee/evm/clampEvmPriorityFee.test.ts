@@ -9,12 +9,10 @@ describe('clampEvmPriorityFee', () => {
   it.each([
     ['Ethereum', EvmChain.Ethereum, gwei(80)], // heavy L1 congestion tip
     ['Polygon', EvmChain.Polygon, gwei(400)], // congestion spike
-    ['Arbitrum', EvmChain.Arbitrum, gwei(1)], // typical L2 tip
     ['Base', EvmChain.Base, gwei(1)],
     ['Optimism', EvmChain.Optimism, gwei(1)],
     ['Blast', EvmChain.Blast, gwei(1)],
     ['Zksync', EvmChain.Zksync, gwei(1)],
-    ['Mantle', EvmChain.Mantle, gwei(1)],
     ['Avalanche', EvmChain.Avalanche, gwei(25)],
     ['BSC', EvmChain.BSC, gwei(3)],
     ['CronosChain', EvmChain.CronosChain, gwei(5)],
@@ -27,7 +25,7 @@ describe('clampEvmPriorityFee', () => {
   it.each([
     ['Ethereum', EvmChain.Ethereum, gwei(10_000)],
     ['Polygon', EvmChain.Polygon, gwei(50_000)],
-    ['Arbitrum', EvmChain.Arbitrum, gwei(5_000)],
+    ['Optimism', EvmChain.Optimism, gwei(5_000)],
     ['Avalanche', EvmChain.Avalanche, gwei(10_000)],
     ['BSC', EvmChain.BSC, gwei(10_000)],
   ])(
@@ -64,6 +62,15 @@ describe('clampEvmPriorityFee', () => {
     expect(clampEvmPriorityFee(EvmChain.Ethereum, fee)).toBe(gwei(1))
   })
 
+  it.each([
+    ['BSC', EvmChain.BSC],
+    ['CronosChain', EvmChain.CronosChain],
+    ['Hyperliquid', EvmChain.Hyperliquid],
+    ['Sei', EvmChain.Sei],
+  ])('floors a near-zero %s tip to 1 gwei like Ethereum', (_label, chain) => {
+    expect(clampEvmPriorityFee(chain, 398_220n)).toBe(gwei(1))
+  })
+
   it('floors a Polygon tip below the validator-enforced minimum to 30 gwei', () => {
     expect(clampEvmPriorityFee(EvmChain.Polygon, gwei(1))).toBe(gwei(30))
   })
@@ -73,13 +80,29 @@ describe('clampEvmPriorityFee', () => {
   })
 
   it.each([
-    ['Arbitrum', EvmChain.Arbitrum],
     ['Base', EvmChain.Base],
     ['Optimism', EvmChain.Optimism],
+    ['Blast', EvmChain.Blast],
+  ])('floors a zero %s tip to a nominal 20 wei', (_label, chain) => {
+    expect(clampEvmPriorityFee(chain, 0n)).toBe(20n)
+    expect(clampEvmPriorityFee(chain, 21n)).toBe(21n)
+  })
+
+  it.each([
     ['Zksync', EvmChain.Zksync],
-  ])('passes a near-zero %s tip through unchanged (rollup sequencers ignore tips)', (_label, chain) => {
+    ['Avalanche', EvmChain.Avalanche],
+  ])('passes a near-zero %s tip through unchanged', (_label, chain) => {
     const nearZero = 398_220n
 
     expect(clampEvmPriorityFee(chain, nearZero)).toBe(nearZero)
+  })
+
+  it.each([
+    ['Arbitrum', EvmChain.Arbitrum],
+    ['Mantle', EvmChain.Mantle],
+    ['Robinhood', EvmChain.Robinhood],
+  ])('signs a zero %s tip whatever the RPC suggests (sequencer ignores tips)', (_label, chain) => {
+    expect(clampEvmPriorityFee(chain, gwei(1))).toBe(0n)
+    expect(clampEvmPriorityFee(chain, gwei(5_000))).toBe(0n)
   })
 })
