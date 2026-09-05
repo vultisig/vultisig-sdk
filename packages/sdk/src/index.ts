@@ -328,8 +328,10 @@ export {
 } from '@vultisig/core-chain/chains/cardano/config'
 export {
   COSMOS_MEMO_DEFAULT_MAX_BYTES,
+  COSMOS_PACKET_MEMO_DEFAULT_MAX_BYTES,
   getCosmosMemoMaxBytes,
   getCosmosMemoMaxBytesByChainId,
+  getCosmosPacketMemoMaxBytesByChainId,
   isCosmosMemoWithinCap,
 } from '@vultisig/core-chain/chains/cosmos/cosmosMemoCap'
 
