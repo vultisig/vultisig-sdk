@@ -37,6 +37,7 @@ import { broadcastTronTx } from './tron'
 
 const originalFetch = globalThis.fetch
 const encoded = new Uint8Array([0x01, 0x02, 0x03])
+const tronTxHash = '010203'
 
 type ContractCase = {
   resolver: BroadcastTxResolver<any>
@@ -125,9 +126,9 @@ const cases: Record<string, ContractCase> = {
   },
   tron: {
     resolver: broadcastTronTx,
-    input: { chain: OtherChain.Tron, tx: { json: { raw_data_hex: '00' } } },
-    txHash: 'tron-hash',
-    accept: () => mocks.queryUrl.mockResolvedValue({ txid: 'tron-hash', result: true }),
+    input: { chain: OtherChain.Tron, tx: { id: encoded, json: { raw_data_hex: '00' } } },
+    txHash: tronTxHash,
+    accept: () => mocks.queryUrl.mockResolvedValue({ txid: tronTxHash, result: true }),
     reject: () =>
       mocks.queryUrl.mockResolvedValue({
         txid: 'tron-hash',

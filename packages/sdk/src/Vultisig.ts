@@ -1276,7 +1276,8 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
 
   /**
    * Discover the tokens an address actually holds on a chain
-   * (1inch for EVM, Jupiter for Solana, LCD for Cosmos, …).
+   * (1inch for EVM, Jupiter for Solana, LCD for Cosmos, Toncenter plus the
+   * ton-assets whitelist for TON — verified jettons only, …).
    *
    * Vault-FREE: takes a raw `{ chain, address }` and returns
    * `DiscoveredToken[]`. The instance method `vault.discoverTokens()`

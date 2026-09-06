@@ -1,9 +1,83 @@
 import { Chain, OtherChain } from '@vultisig/core-chain/Chain'
 import { getRippleClient } from '@vultisig/core-chain/chains/ripple/client'
+import { isValidXrplCurrencyCode } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { attempt } from '@vultisig/lib-utils/attempt'
+import { isValidClassicAddress } from 'ripple-address-codec'
 
-import { TxStatusResolver } from '../resolver'
+import { TxReceiptInfo, TxStatusResolver } from '../resolver'
+
+const maxXrpDrops = 100_000_000_000_000_000n
+
+const isValidIssuedCurrencyValue = (value: string): boolean => {
+  const match = /^(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/.exec(value)
+  if (!match) return false
+
+  const [, integer, fraction = '', exponent = '0'] = match
+  const digits = `${integer}${fraction}`
+  const firstNonZero = digits.search(/[1-9]/)
+  if (firstNonZero === -1) return true
+
+  const significantDigits = digits.slice(firstNonZero).replace(/0+$/, '').length
+  const magnitude = BigInt(digits.length - firstNonZero - fraction.length - 1) + BigInt(exponent)
+
+  return significantDigits <= 16 && magnitude >= -81n && magnitude <= 95n
+}
+
+const getDeliveredReceipt = (meta: Record<string, unknown>): Partial<TxReceiptInfo> => {
+  const deliveredAmount = 'delivered_amount' in meta ? meta.delivered_amount : meta.DeliveredAmount
+
+  if (typeof deliveredAmount === 'string') {
+    return /^\d+$/.test(deliveredAmount) && BigInt(deliveredAmount) <= maxXrpDrops
+      ? {
+          deliveredAmount,
+          deliveredCurrency: 'XRP',
+        }
+      : {}
+  }
+
+  if (!deliveredAmount || typeof deliveredAmount !== 'object') {
+    return {}
+  }
+
+  const { value, currency, issuer, mpt_issuance_id: mptIssuanceId } = deliveredAmount as Record<string, unknown>
+  if ('mpt_issuance_id' in deliveredAmount) {
+    if (
+      typeof value === 'string' &&
+      /^\d{1,19}$/.test(value) &&
+      BigInt(value) <= 9_223_372_036_854_775_807n &&
+      typeof mptIssuanceId === 'string' &&
+      /^[A-F0-9]{48}$/i.test(mptIssuanceId) &&
+      currency === undefined &&
+      issuer === undefined
+    ) {
+      return {
+        deliveredAmount: value,
+        deliveredMptIssuanceId: mptIssuanceId,
+      }
+    }
+
+    return {}
+  }
+
+  if (
+    typeof value !== 'string' ||
+    !isValidIssuedCurrencyValue(value) ||
+    typeof currency !== 'string' ||
+    !isValidXrplCurrencyCode(currency) ||
+    ['XRP', '0'.repeat(40), '0000000000000000000000005852500000000000'].includes(currency.toUpperCase()) ||
+    typeof issuer !== 'string' ||
+    !isValidClassicAddress(issuer)
+  ) {
+    return {}
+  }
+
+  return {
+    deliveredAmount: value,
+    deliveredCurrency: currency,
+    deliveredIssuer: issuer,
+  }
+}
 
 export const getRippleTxStatus: TxStatusResolver<OtherChain.Ripple> = async ({ hash }) => {
   const client = await getRippleClient()
@@ -27,8 +101,8 @@ export const getRippleTxStatus: TxStatusResolver<OtherChain.Ripple> = async ({ h
 
   const { validated, meta, tx_json } = response.result as {
     validated?: boolean
-    meta?: { TransactionResult?: string }
-    tx_json?: { Fee?: string }
+    meta?: { TransactionResult?: string; delivered_amount?: unknown; DeliveredAmount?: unknown }
+    tx_json?: { Fee?: string; TransactionType?: string }
   }
 
   if (validated) {
@@ -41,12 +115,14 @@ export const getRippleTxStatus: TxStatusResolver<OtherChain.Ripple> = async ({ h
     const status = success ? 'success' : 'error'
     const feeStr = tx_json?.Fee
     const feeCoin = chainFeeCoin[Chain.Ripple]
+    const deliveredReceipt = success && tx_json?.TransactionType === 'Payment' ? getDeliveredReceipt(meta) : {}
     const receipt =
       feeStr != null && feeStr !== ''
         ? {
             feeAmount: BigInt(feeStr),
             feeDecimals: feeCoin.decimals,
             feeTicker: feeCoin.ticker,
+            ...deliveredReceipt,
           }
         : undefined
 
