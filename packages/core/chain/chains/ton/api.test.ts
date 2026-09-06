@@ -81,6 +81,19 @@ describe('getJettonWalletAddress', () => {
   })
 })
 
+describe('raw-address inputs', () => {
+  it('reads the same balance whether the owner and master are given raw or user-friendly', async () => {
+    reset([OWNER_WALLET])
+
+    const fromFriendly = await getJettonBalance({ ownerAddress: OWNER, jettonMasterAddress: MASTER })
+    const fromRaw = await getJettonBalance({ ownerAddress: RAW_OWNER, jettonMasterAddress: RAW_MASTER })
+
+    expect(fromRaw).toBe(fromFriendly)
+    expect(fromRaw).toBe(5000000000n)
+    expect(capturedUrls[1]).toContain(`owner_address=${RAW_OWNER.toLowerCase()}`)
+  })
+})
+
 describe('getJettonBalance', () => {
   it('uses owner_address + jetton_address in the proxy request URL', async () => {
     reset([OWNER_WALLET])
