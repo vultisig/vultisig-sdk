@@ -126,6 +126,8 @@ export default defineConfig([
   createSubpathTypesConfig('src/tools/balance/index.ts', 'dist/tools/balance/index.d.ts'),
   createSubpathTypesConfig('src/chains/tron/index.ts', 'dist/chains/tron/index.d.ts'),
   createSubpathTypesConfig('src/chains/utxo/index.ts', 'dist/chains/utxo/index.d.ts'),
+  createSubpathTypesConfig('src/chains/ton/index.ts', 'dist/chains/ton/index.d.ts'),
+  createSubpathTypesConfig('src/abi/index.ts', 'dist/abi/index.d.ts'),
   // Canonical seedphrase helpers and import/discovery services are published
   // as a narrow declaration surface alongside their dedicated runtime bundle.
   createSubpathTypesConfig('src/seedphrase/index.ts', 'dist/seedphrase/index.d.ts'),

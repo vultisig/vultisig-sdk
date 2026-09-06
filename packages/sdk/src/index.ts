@@ -252,6 +252,12 @@ export { Chain, IbcEnabledCosmosChain, VaultBasedCosmosChain } from './types'
 export type { ChainKind } from '@vultisig/core-chain/ChainKind'
 export { getChainKind, isChainOfKind } from '@vultisig/core-chain/ChainKind'
 
+// Signing-algorithm classification — the canonical ECDSA/EdDSA/mldsa dispatch
+// key per chain. Exposed so consumers stop re-declaring EdDSA chain sets
+// locally (the same drift root cause as ChainKind above).
+export type { SignatureAlgorithm } from '@vultisig/core-chain/signing/SignatureAlgorithm'
+export { getSignatureAlgorithm, signatureAlgorithms } from '@vultisig/core-chain/signing/SignatureAlgorithm'
+
 // XRP Ledger issued-currency canonicals — surfaced so consumers stop re-creating
 // `<currency>.<issuer>` ids / 160-bit currency-code normalization outside the SDK.
 export {
@@ -311,6 +317,7 @@ export {
   MAYA_SEND_FEE_BASE_UNITS,
   TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS,
 } from '@vultisig/core-chain/chains/cosmos/gas'
+export { tendermintRpcUrl } from '@vultisig/core-chain/chains/cosmos/tendermintRpcUrl'
 
 // Cosmos x/auth.MaxMemoCharacters cap, per chain — single source of truth for
 // "will this memo fit before broadcast rejects it with sdk code 12 (memo too
@@ -865,6 +872,8 @@ export type {
   CctpBurnMessage,
   CctpChainConfig,
   CctpClaimResult,
+  CctpReceiptLike,
+  CctpReceiptLog,
   CctpUnsignedTx,
   ChainFamily,
   Coin,
@@ -887,6 +896,7 @@ export type {
   EvmBalance,
   EvmGasPrice,
   EvmScanRequest,
+  ExtractedCctpMessage,
   FieldDiff,
   FindSwapQuoteParams,
   FindSwapQuotesResult,
@@ -1079,6 +1089,7 @@ export {
   evmGasPrice,
   evmTxInfo,
   type EvmTxNumberish,
+  extractCctpMessageFromReceipt,
   fetchAllStakekitBalances,
   fetchStakekitBalancesBatch,
   findSwapQuote,

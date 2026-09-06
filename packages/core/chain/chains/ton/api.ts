@@ -1,7 +1,8 @@
 import { rootApiUrl } from '@vultisig/core-config'
+import { toBatches } from '@vultisig/lib-utils/array/toBatches'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
-import { tonAddressToRaw } from './address'
+import { tonAddressToRawKey } from './address'
 
 const tonApiUrl = `${rootApiUrl}/ton`
 
@@ -12,14 +13,42 @@ type JettonWallet = {
   balance: string
 }
 
+type AddressBook = Record<
+  string,
+  {
+    user_friendly: string
+  }
+>
+
+type JettonTokenInfo = {
+  valid?: boolean
+  type?: string
+  name?: string
+  symbol?: string
+  description?: string
+  image?: string
+  is_scam?: boolean
+  extra?: {
+    decimals?: string
+    uri?: string
+    _image_small?: string
+    _image_medium?: string
+    _image_big?: string
+  }
+}
+
+type IndexerMetadata = Record<
+  string,
+  {
+    is_indexed?: boolean
+    token_info?: JettonTokenInfo[]
+  }
+>
+
 type JettonWalletResponse = {
   jetton_wallets: JettonWallet[]
-  address_book: Record<
-    string,
-    {
-      user_friendly: string
-    }
-  >
+  address_book: AddressBook
+  metadata?: IndexerMetadata
 }
 
 type GetJettonWalletInput = {
@@ -45,8 +74,8 @@ const queryOwnerJettonWallet = async ({
   wallet?: JettonWallet
   addressBook: JettonWalletResponse['address_book']
 }> => {
-  const rawOwner = tonAddressToRaw(ownerAddress)
-  const rawMaster = tonAddressToRaw(jettonMasterAddress)
+  const rawOwner = tonAddressToRawKey(ownerAddress)
+  const rawMaster = tonAddressToRawKey(jettonMasterAddress)
 
   const url = `${tonApiUrl}/v3/jetton/wallets?owner_address=${rawOwner}&jetton_address=${rawMaster}`
   const response = await queryUrl<JettonWalletResponse>(url)
@@ -95,22 +124,6 @@ type JettonContent = {
   image?: string
 }
 
-type JettonTokenInfo = {
-  valid?: boolean
-  type?: string
-  name?: string
-  symbol?: string
-  description?: string
-  image?: string
-  extra?: {
-    decimals?: string
-    uri?: string
-    _image_small?: string
-    _image_medium?: string
-    _image_big?: string
-  }
-}
-
 type JettonMasterEntry = {
   address: string
   total_supply?: string
@@ -120,13 +133,82 @@ type JettonMasterEntry = {
 
 type JettonMastersResponse = {
   jetton_masters: JettonMasterEntry[]
-  metadata?: Record<
-    string,
-    {
-      is_indexed?: boolean
-      token_info?: JettonTokenInfo[]
-    }
-  >
+  address_book?: AddressBook
+  metadata?: IndexerMetadata
+}
+
+/**
+ * Display metadata Toncenter holds for a jetton master, without any of the
+ * fields being guaranteed: an unindexed or broken jetton can lack all of them.
+ */
+export type JettonMasterMetadata = {
+  /** Raw `workchain:hex` address, lower-cased (see `tonAddressToRawKey`). */
+  address: string
+  symbol?: string
+  name?: string
+  decimals?: number
+  logo?: string
+  /** `true` when Toncenter's indexer has flagged the jetton as a scam. */
+  isFlaggedScam?: boolean
+}
+
+const nonEmpty = (value: string | undefined): string | undefined => {
+  const trimmed = value?.trim()
+  return trimmed ? trimmed : undefined
+}
+
+const parseDecimals = (value: string | undefined): number | undefined => {
+  if (value === undefined) return undefined
+
+  const parsed = parseInt(value, 10)
+
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+/**
+ * Picks the indexer's validated `jetton_masters` entry for an address, if the
+ * response carries one. Wallet listings also embed entries of type
+ * `jetton_wallets` under the wallet addresses, which are not what we want.
+ */
+const getIndexedMasterInfo = (metadata: IndexerMetadata | undefined, address: string): JettonTokenInfo | undefined =>
+  metadata?.[address]?.token_info?.find(
+    entry => entry.valid === true && (entry.type === undefined || entry.type === 'jetton_masters')
+  )
+
+type ParseJettonMasterMetadataInput = {
+  address: string
+  indexed?: JettonTokenInfo
+  content?: JettonContent
+}
+
+/**
+ * Merges Toncenter's validated indexer entry with the on-chain TEP-64 content,
+ * preferring the indexer. Prefers Toncenter's imgproxy URLs for the logo: the
+ * original `image` URL often serves with `Cross-Origin-Resource-Policy:
+ * same-origin`, which browsers refuse to embed cross-origin, while the
+ * `_image_*` variants are normalized PNGs that load reliably in extension and
+ * desktop pages.
+ */
+const parseJettonMasterMetadata = ({
+  address,
+  indexed,
+  content,
+}: ParseJettonMasterMetadataInput): JettonMasterMetadata => {
+  const logo =
+    nonEmpty(indexed?.extra?._image_medium) ??
+    nonEmpty(indexed?.extra?._image_small) ??
+    nonEmpty(indexed?.extra?._image_big) ??
+    nonEmpty(indexed?.image) ??
+    nonEmpty(content?.image)
+
+  return {
+    address: tonAddressToRawKey(address),
+    symbol: nonEmpty(indexed?.symbol) ?? nonEmpty(content?.symbol),
+    name: nonEmpty(indexed?.name) ?? nonEmpty(content?.name),
+    decimals: parseDecimals(indexed?.extra?.decimals ?? content?.decimals),
+    logo,
+    ...(indexed?.is_scam === undefined ? {} : { isFlaggedScam: indexed.is_scam }),
+  }
 }
 
 export type JettonMasterInfo = {
@@ -139,6 +221,7 @@ export type JettonMasterInfo = {
  * Fetches jetton master metadata (ticker, decimals, logo) from toncenter v3.
  * Prefers Toncenter's validated indexer entry (`token_info` with `valid: true`),
  * falling back to the on-chain TEP-64 `jetton_content` stored in the master.
+ * Throws when the jetton is unknown or has no symbol; decimals default to 9.
  */
 export const getJettonMasterInfo = async (jettonMasterAddress: string): Promise<JettonMasterInfo> => {
   const url = `${tonApiUrl}/v3/jetton/masters?address=${encodeURIComponent(jettonMasterAddress)}&limit=1`
@@ -149,33 +232,125 @@ export const getJettonMasterInfo = async (jettonMasterAddress: string): Promise<
     throw new Error(`No jetton master found for ${jettonMasterAddress}`)
   }
 
-  const nonEmpty = (value: string | undefined): string | undefined => {
-    const trimmed = value?.trim()
-    return trimmed ? trimmed : undefined
-  }
+  const { symbol, decimals, logo } = parseJettonMasterMetadata({
+    address: master.address,
+    indexed: getIndexedMasterInfo(response.metadata, master.address),
+    content: master.jetton_content,
+  })
 
-  const indexed = response.metadata?.[master.address]?.token_info?.find(entry => entry.valid === true)
-  const content = master.jetton_content
-
-  const ticker = nonEmpty(indexed?.symbol) ?? nonEmpty(content?.symbol)
-  if (!ticker) {
+  if (!symbol) {
     throw new Error(`Jetton master ${jettonMasterAddress} has no symbol`)
   }
 
-  const decimalsRaw = indexed?.extra?.decimals ?? content?.decimals
-  const parsedDecimals = decimalsRaw !== undefined ? parseInt(decimalsRaw, 10) : NaN
-  const decimals = Number.isFinite(parsedDecimals) ? parsedDecimals : 9
+  return { ticker: symbol, decimals: decimals ?? 9, logo }
+}
 
-  // Prefer Toncenter's imgproxy URLs: the original `image` URL often serves
-  // with `Cross-Origin-Resource-Policy: same-origin`, which browsers refuse
-  // to embed cross-origin. The `_image_*` variants are normalized PNGs from
-  // `imgproxy.toncenter.com` and load reliably in extension/desktop pages.
-  const logo =
-    nonEmpty(indexed?.extra?._image_medium) ??
-    nonEmpty(indexed?.extra?._image_small) ??
-    nonEmpty(indexed?.extra?._image_big) ??
-    nonEmpty(indexed?.image) ??
-    nonEmpty(content?.image)
+// Toncenter accepts a comma-separated address list; each raw address is ~67
+// chars, so 50 keeps the query string comfortably under gateway URI limits.
+const jettonMastersPerRequest = 50
 
-  return { ticker, decimals, logo }
+/**
+ * Fetches metadata for many jetton masters at once, keyed by lower-cased raw
+ * address. Masters Toncenter does not know are simply absent from the result;
+ * nothing throws for a missing symbol, unlike `getJettonMasterInfo`.
+ */
+export const getJettonMastersMetadata = async (
+  jettonMasterAddresses: string[]
+): Promise<Record<string, JettonMasterMetadata>> => {
+  const rawAddresses = [...new Set(jettonMasterAddresses.map(tonAddressToRawKey))]
+  const result: Record<string, JettonMasterMetadata> = {}
+
+  for (const batch of toBatches(rawAddresses, jettonMastersPerRequest)) {
+    const url = `${tonApiUrl}/v3/jetton/masters?address=${batch.join(',')}&limit=${batch.length}`
+    const response = await queryUrl<JettonMastersResponse>(url)
+
+    for (const master of response.jetton_masters) {
+      const metadata = parseJettonMasterMetadata({
+        address: master.address,
+        indexed: getIndexedMasterInfo(response.metadata, master.address),
+        content: master.jetton_content,
+      })
+      result[metadata.address] = metadata
+    }
+  }
+
+  return result
+}
+
+export type OwnerJettonWallet = {
+  /** Jetton master address as a lower-cased raw key. */
+  jettonMasterAddress: string
+  balance: bigint
+}
+
+export type OwnerJettonWallets = {
+  /** One entry per jetton held, deduplicated by master — see `getOwnerJettonWallets`. */
+  wallets: OwnerJettonWallet[]
+  /** Indexer metadata for the masters behind `wallets`, keyed like `jettonMasterAddress`. */
+  masters: Record<string, JettonMasterMetadata>
+  /** User-friendly spellings Toncenter returned for master addresses, keyed like `jettonMasterAddress`. */
+  userFriendlyAddresses: Record<string, string>
+}
+
+const ownerJettonWalletsPageSize = 100
+
+// 2000 distinct jettons is far beyond any real wallet. The cap is the last resort
+// for a proxy that keeps serving pages forever; the duplicate check below normally
+// stops long before it.
+const ownerJettonWalletsMaxPages = 20
+
+/**
+ * Lists every jetton the owner holds a non-zero balance of, with the master
+ * metadata Toncenter embeds in the same response, so discovery needs no
+ * follow-up call per jetton. Pages through the proxy and keeps only wallets
+ * whose `owner` is the requested address (the proxy has been seen to return
+ * unfiltered lists).
+ *
+ * Each jetton appears once. An owner holds exactly one wallet per master, so a
+ * master seen twice is the same holding served again — which is what a proxy
+ * that ignores `offset` does, replaying page one until the page cap and turning
+ * one balance into twenty. Paging stops as soon as a page adds nothing new,
+ * because a page of holdings already recorded is the end of the list however the
+ * proxy chose to express it.
+ */
+export const getOwnerJettonWallets = async (ownerAddress: string): Promise<OwnerJettonWallets> => {
+  // Accept the owner in either spelling: `tonAddressToRaw` alone would base64-decode
+  // a raw `0:hex` address into garbage and the proxy would answer with no wallets.
+  const rawOwner = tonAddressToRawKey(ownerAddress)
+  const wallets: OwnerJettonWallet[] = []
+  const seenMasters = new Set<string>()
+  const masters: Record<string, JettonMasterMetadata> = {}
+  const userFriendlyAddresses: Record<string, string> = {}
+
+  for (let page = 0; page < ownerJettonWalletsMaxPages; page++) {
+    const offset = page * ownerJettonWalletsPageSize
+    const url = `${tonApiUrl}/v3/jetton/wallets?owner_address=${rawOwner}&exclude_zero_balance=true&limit=${ownerJettonWalletsPageSize}&offset=${offset}`
+    const response = await queryUrl<JettonWalletResponse>(url)
+    const walletsBeforePage = seenMasters.size
+
+    for (const wallet of response.jetton_wallets) {
+      if (!matchesRawAddress(wallet.owner, rawOwner)) continue
+
+      const jettonMasterAddress = tonAddressToRawKey(wallet.jetton)
+      if (seenMasters.has(jettonMasterAddress)) continue
+
+      seenMasters.add(jettonMasterAddress)
+      wallets.push({ jettonMasterAddress, balance: BigInt(wallet.balance || '0') })
+
+      const indexed = getIndexedMasterInfo(response.metadata, wallet.jetton)
+      if (indexed) {
+        masters[jettonMasterAddress] = parseJettonMasterMetadata({ address: wallet.jetton, indexed })
+      }
+
+      const userFriendly = response.address_book?.[wallet.jetton]?.user_friendly
+      if (userFriendly) {
+        userFriendlyAddresses[jettonMasterAddress] = userFriendly
+      }
+    }
+
+    const isLastPage = response.jetton_wallets.length < ownerJettonWalletsPageSize
+    if (isLastPage || seenMasters.size === walletsBeforePage) break
+  }
+
+  return { wallets, masters, userFriendlyAddresses }
 }
