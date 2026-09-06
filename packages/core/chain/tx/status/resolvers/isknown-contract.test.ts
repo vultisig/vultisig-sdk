@@ -86,7 +86,7 @@ describe('status resolver isKnown contract', () => {
       isKnown: false,
     })
 
-    mocks.queryUrl.mockResolvedValueOnce({})
+    mocks.queryUrl.mockResolvedValueOnce({}).mockResolvedValueOnce({})
     await expect(getTronTxStatus({ chain: OtherChain.Tron, hash })).resolves.toEqual({
       status: 'not_found',
       isKnown: false,
@@ -94,7 +94,7 @@ describe('status resolver isKnown contract', () => {
   })
 
   it('marks indexed Tron responses without a terminal receipt as known pending', async () => {
-    mocks.queryUrl.mockResolvedValueOnce({ id: hash, blockNumber: 0 })
+    mocks.queryUrl.mockResolvedValueOnce({ id: hash, blockNumber: 0 }).mockResolvedValueOnce({})
     await expect(getTronTxStatus({ chain: OtherChain.Tron, hash })).resolves.toEqual({
       status: 'pending',
       isKnown: true,
