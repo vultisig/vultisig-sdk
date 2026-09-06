@@ -48,12 +48,17 @@ const buildPayload = ({ bounceable, memo = '', tonMessages }: BuildPayloadInput)
     signData: tonMessages ? { case: 'signTon', value: { tonMessages } } : { case: undefined },
   }) as unknown as KeysignPayload
 
+// A real WalletCore, because the resolver reads the sender's wallet contract off its
+// address to pick the signing version; a stub cannot derive one.
+let walletCore: WalletCore
+
+beforeAll(async () => {
+  walletCore = await initWasm()
+}, 120_000)
+
 // The resolver is synchronous for TON, but its shared signature allows a promise.
 const buildMessages = async (keysignPayload: KeysignPayload) => {
-  const [input] = await getTonSigningInputs({
-    keysignPayload,
-    walletCore: {} as unknown as WalletCore,
-  })
+  const [input] = await getTonSigningInputs({ keysignPayload, walletCore })
 
   return input.messages.map(message => ({
     dest: message.dest,
@@ -145,12 +150,6 @@ describe('getTonSigningInputs — app-initiated sends keep the wallet-level flag
 // rejected contract call would have kept the funds instead of refunding them. These
 // drive the real signer to prove both halves.
 describe('getTonSigningInputs — noncanonical raw destinations sign like the canonical one', () => {
-  let walletCore: WalletCore
-
-  beforeAll(async () => {
-    walletCore = await initWasm()
-  }, 120_000)
-
   const accountHash = 'e62deead89c718fee2d9b1fbab75838db2136e0a7f084bcd4a709f29e8ce8848'
 
   const compile = async (to: string, stateInit?: string) => {
