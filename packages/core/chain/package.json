@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "5.0.0",
+  "version": "5.1.0",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -1059,6 +1059,16 @@
       "types": "./dist/chains/ton/staking.d.ts",
       "import": "./dist/chains/ton/staking.js",
       "default": "./dist/chains/ton/staking.js"
+    },
+    "./chains/ton/wallet": {
+      "types": "./dist/chains/ton/wallet.d.ts",
+      "import": "./dist/chains/ton/wallet.js",
+      "default": "./dist/chains/ton/wallet.js"
+    },
+    "./chains/ton/walletV5R1": {
+      "types": "./dist/chains/ton/walletV5R1.d.ts",
+      "import": "./dist/chains/ton/walletV5R1.js",
+      "default": "./dist/chains/ton/walletV5R1.js"
     },
     "./chains/tron/config": {
       "types": "./dist/chains/tron/config.d.ts",
