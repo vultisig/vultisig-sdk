@@ -187,7 +187,7 @@ describe('getEvmFeeQuote', () => {
       expect(fallback.gasLimit).toBe(1_200_000n)
     })
 
-    it('inflates the Mantle swap default and signs a zero tip', async () => {
+    it('inflates the Mantle swap default and signs a zero tip without asking the network for one', async () => {
       mocks.getKeysignCoin.mockReturnValue(makeCoin(EvmChain.Mantle))
       mocks.client.estimateGas.mockRejectedValueOnce(new Error('execution reverted'))
 
@@ -195,6 +195,7 @@ describe('getEvmFeeQuote', () => {
 
       expect(quote.gasLimit).toBe(4_500_000_000n)
       expect(quote.maxPriorityFeePerGas).toBe(0n)
+      expect(mocks.getEvmMaxPriorityFeePerGas).not.toHaveBeenCalled()
     })
 
     it('prices a legacy-fee chain from its gas price with 10% headroom and no tip', async () => {

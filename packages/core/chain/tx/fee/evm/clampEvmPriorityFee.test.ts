@@ -1,7 +1,7 @@
 import { EvmChain } from '@vultisig/core-chain/Chain'
 import { describe, expect, it } from 'vitest'
 
-import { clampEvmPriorityFee } from './clampEvmPriorityFee'
+import { clampEvmPriorityFee, isZeroPriorityFeeChain } from './clampEvmPriorityFee'
 
 const gwei = (n: number) => BigInt(n) * 1_000_000_000n
 
@@ -104,5 +104,14 @@ describe('clampEvmPriorityFee', () => {
   ])('signs a zero %s tip whatever the RPC suggests (sequencer ignores tips)', (_label, chain) => {
     expect(clampEvmPriorityFee(chain, gwei(1))).toBe(0n)
     expect(clampEvmPriorityFee(chain, gwei(5_000))).toBe(0n)
+    expect(isZeroPriorityFeeChain(chain)).toBe(true)
+  })
+
+  it.each([
+    ['Ethereum', EvmChain.Ethereum],
+    ['Base', EvmChain.Base],
+    ['Zksync', EvmChain.Zksync],
+  ])('reports %s as a chain that does sign a tip', (_label, chain) => {
+    expect(isZeroPriorityFeeChain(chain)).toBe(false)
   })
 })

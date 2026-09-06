@@ -75,6 +75,12 @@ const priorityFeeFloorWeiByChain: Partial<Record<EvmChain, bigint>> = {
 const zeroPriorityFeeChains: EvmChain[] = [EvmChain.Arbitrum, EvmChain.Mantle, EvmChain.Robinhood]
 
 /**
+ * True on a chain whose tip `clampEvmPriorityFee` pins to zero, so a caller can
+ * skip asking the network for a suggestion it would discard anyway.
+ */
+export const isZeroPriorityFeeChain = (chain: EvmChain): boolean => zeroPriorityFeeChains.includes(chain)
+
+/**
  * Clamps an RPC-reported EVM maxPriorityFeePerGas into a per-chain sane
  * range: zero on chains that ignore the tip, a generous ceiling against a
  * compromised RPC inflating the fee, and a floor (tip-auction chains) against

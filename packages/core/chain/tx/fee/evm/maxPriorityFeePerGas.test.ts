@@ -37,6 +37,12 @@ describe('getEvmMaxPriorityFeePerGas', () => {
     await expect(getEvmMaxPriorityFeePerGas(EvmChain.Ethereum)).resolves.toBe(4n)
   })
 
+  it('leaves the tip uncapped instead of failing when the gas price lookup fails', async () => {
+    mocks.client.getGasPrice.mockRejectedValue(new Error('upstream timeout'))
+
+    await expect(getEvmMaxPriorityFeePerGas(EvmChain.Ethereum)).resolves.toBe(9n)
+  })
+
   it.each([
     ['no reward field', {}],
     ['empty rewards', { reward: [] }],

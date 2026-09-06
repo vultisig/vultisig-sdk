@@ -9,8 +9,10 @@ const feeHistoryRewardPercentile = 5
 /**
  * Priority fee to sign with: the highest 5th-percentile tip paid in any of the
  * last ten blocks, so the transaction clears even a busy block, falling back to
- * the node's own suggestion when no history is available. Never above the
- * current gas price, which is all a legacy-priced chain can pay.
+ * the node's own suggestion when no history is available. Capped at the current
+ * gas price when that lookup succeeds; a failed lookup just leaves the tip
+ * uncapped rather than failing the quote, since an EIP-1559 tip stands on its
+ * own without it.
  */
 export const getEvmMaxPriorityFeePerGas = async (chain: EvmChain): Promise<bigint> => {
   const client = getEvmClient(chain)
@@ -22,7 +24,7 @@ export const getEvmMaxPriorityFeePerGas = async (chain: EvmChain): Promise<bigin
         rewardPercentiles: [feeHistoryRewardPercentile],
       })
     ),
-    client.getGasPrice(),
+    attempt(client.getGasPrice()),
   ])
 
   const rewards =
@@ -32,5 +34,9 @@ export const getEvmMaxPriorityFeePerGas = async (chain: EvmChain): Promise<bigin
 
   const priorityFee = rewards.length > 0 ? bigIntMax(...rewards) : await client.estimateMaxPriorityFeePerGas()
 
-  return priorityFee > gasPrice ? gasPrice : priorityFee
+  if ('error' in gasPrice) {
+    return priorityFee
+  }
+
+  return priorityFee > gasPrice.data ? gasPrice.data : priorityFee
 }

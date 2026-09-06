@@ -3,7 +3,7 @@ import { evmChainInfo } from '@vultisig/core-chain/chains/evm/chainInfo'
 import { getEvmClient } from '@vultisig/core-chain/chains/evm/client'
 import { evmChainTxFeeFormat } from '@vultisig/core-chain/chains/evm/tx/fee'
 import { getEvmBaseFee } from '@vultisig/core-chain/tx/fee/evm/baseFee'
-import { clampEvmPriorityFee } from '@vultisig/core-chain/tx/fee/evm/clampEvmPriorityFee'
+import { clampEvmPriorityFee, isZeroPriorityFeeChain } from '@vultisig/core-chain/tx/fee/evm/clampEvmPriorityFee'
 import {
   evmRouterDepositGasLimit,
   getEvmContractCallGasLimit,
@@ -129,8 +129,12 @@ export const getEvmFeeQuote = async ({
   const getBaseFeePerGas = async () =>
     isLegacyPriced ? withGasPriceHeadroom(await getEvmGasPrice(chain)) : withBaseFeeHeadroom(await getEvmBaseFee(chain))
 
+  // A legacy-priced chain carries no tip, and a chain that pins it to zero
+  // needs no network suggestion to discard.
   const getMaxPriorityFeePerGas = async () =>
-    isLegacyPriced ? 0n : clampEvmPriorityFee(chain, await getEvmMaxPriorityFeePerGas(chain))
+    isLegacyPriced || isZeroPriorityFeeChain(chain)
+      ? 0n
+      : clampEvmPriorityFee(chain, await getEvmMaxPriorityFeePerGas(chain))
 
   const getEstimateGasParams = async () => {
     if (swapPayload) {
