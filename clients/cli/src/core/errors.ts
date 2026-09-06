@@ -701,6 +701,14 @@ export function classifyError(err: Error): VsigError {
       case VaultImportErrorCode.PASSWORD_REQUIRED:
       case VaultImportErrorCode.INVALID_PASSWORD:
         return new AuthRequiredError(err.message)
+      case VaultImportErrorCode.DUPLICATE_VAULT:
+        return new UsageError('Vault already exists. Re-run the import with --replace to replace a compatible share.')
+      case VaultImportErrorCode.STALE_SHARE:
+        return new UsageError('Import refused: this backup contains a stale or different local vault share.')
+      case VaultImportErrorCode.OTHER_DEVICE_SHARE:
+        return new UsageError('Import refused: this backup belongs to another device in the same vault.')
+      case VaultImportErrorCode.EXISTING_VAULT_PASSWORD_REQUIRED:
+        return new AuthRequiredError('Unlock the existing local vault before replacing its share.')
       default:
         return new UsageError(err.message)
     }

@@ -136,4 +136,15 @@ describe('getSolanaSendSigningInput priority fee plumbing', () => {
 
     expect(input.priorityFeePrice?.price?.toString()).toBe('1000000')
   })
+
+  // sdk#1200: priorityFeePrice is a uint64 proto field; an out-of-range
+  // priorityFee must throw rather than silently two's-complement-wrap.
+  it('throws instead of silently wrapping an out-of-uint64-range priorityFee', () => {
+    expect(() =>
+      getSolanaSendSigningInput({
+        keysignPayload: buildPayload({ priorityFee: (1n << 64n).toString() }),
+        walletCore,
+      })
+    ).toThrow(/out of uint64 range/)
+  })
 })

@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/lib-utils",
-  "version": "0.10.4",
+  "version": "0.10.6",
   "description": "Shared utilities for Vultisig core packages",
   "license": "MIT",
   "repository": {
@@ -103,6 +103,11 @@
       "types": "./dist/base64Encode.d.ts",
       "import": "./dist/base64Encode.js",
       "default": "./dist/base64Encode.js"
+    },
+    "./bigint/assertBoundedInt": {
+      "types": "./dist/bigint/assertBoundedInt.d.ts",
+      "import": "./dist/bigint/assertBoundedInt.js",
+      "default": "./dist/bigint/assertBoundedInt.js"
     },
     "./bigint/bigIntMax": {
       "types": "./dist/bigint/bigIntMax.d.ts",

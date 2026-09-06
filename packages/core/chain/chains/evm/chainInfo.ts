@@ -102,7 +102,8 @@ const evmDefaultChainInfo: Record<EvmChain, ViemChain> = {
   [EvmChain.Robinhood]: robinhood,
 }
 
-const evmChainId: Record<EvmChain, string> = recordMap(evmDefaultChainInfo, chain => numberToHex(chain.id))
+const evmNumericChainId: Record<EvmChain, number> = recordMap(evmDefaultChainInfo, chain => chain.id)
+const evmChainId: Record<EvmChain, string> = recordMap(evmNumericChainId, numberToHex)
 
 export const evmChainInfo = recordMap(evmDefaultChainInfo, (chain, chainKey) => {
   const rpcUrl = evmChainRpcUrls[chainKey]
@@ -125,6 +126,11 @@ export const getEvmRpcUrl = (chain: EvmChain): string => getCustomRpcOverride(ch
 
 export const getEvmChainId = (chain: EvmChain): string => {
   return evmChainId[chain]
+}
+
+/** Returns the canonical numeric EIP-155 chain ID for a supported EVM chain. */
+export const getEvmNumericChainId = (chain: EvmChain): number => {
+  return evmNumericChainId[chain]
 }
 
 export const getEvmChainByChainId = (chainId: string): EvmChain | undefined => {

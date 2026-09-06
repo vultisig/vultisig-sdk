@@ -10,7 +10,7 @@ import { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorer
  * - `li.fi` → scan.li.fi (or orb.helius.dev for Solana settlement)
  * - `swapkit` → track.swapkit.dev
  * - `cowswap` → explorer.cow.fi order page
- * - `thorchain` / `mayachain` → native chain scanner
+ * - `thorchain` / `ruji` / `mayachain` → native chain scanner
  * - `1inch`, `kyber`, `jupiter` → source-chain explorer fallback
  *
  * Keep this union in sync with iOS `ExplorerLinkBuilder.swift` and Android
@@ -57,6 +57,7 @@ export const getSwapExplorerUrl = ({ provider, txHash, fromChain }: GetSwapExplo
       }
       return `https://scan.li.fi/tx/${txHash}`
     case 'thorchain':
+    case 'ruji':
       return `https://runescan.io/tx/${stripHexPrefix(txHash)}`
     case 'mayachain':
       return `https://www.explorer.mayachain.info/tx/${stripHexPrefix(txHash)}`

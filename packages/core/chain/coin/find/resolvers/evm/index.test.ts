@@ -246,6 +246,63 @@ describe('findEvmCoins', () => {
     await expect(findEvmCoins({ chain: EvmChain.Robinhood, address })).resolves.toEqual([{ ...aaplCatalog, address }])
   })
 
+  it('surfaces curated Ethereum tokens the 1inch whitelist omits (vTHOR)', async () => {
+    // Regression for #2205: vTHOR is not on the 1inch balance whitelist, so
+    // the 1inch-only pass could never see it and staking receipts stayed
+    // invisible. Ethereum is now a hybrid chain: the curated catalog scan
+    // must surface the holding on its own.
+    const address = '0x1111111111111111111111111111111111111111'
+    const vthorCatalog = knownTokens[EvmChain.Ethereum].find(c => c.ticker === 'vTHOR')!
+
+    queryOneInchMock.mockResolvedValueOnce({})
+    getEvmChainBalancesMock.mockResolvedValue({
+      [accountCoinKeyToString({ chain: EvmChain.Ethereum, id: vthorCatalog.id!, address })]: 2000n * 10n ** 18n,
+    })
+
+    await expect(findEvmCoins({ chain: EvmChain.Ethereum, address })).resolves.toEqual([{ ...vthorCatalog, address }])
+  })
+
+  it('still surfaces curated Ethereum holdings when the 1inch balance request fails hard', async () => {
+    // A transient 1inch failure (not NoDataError) used to abort discovery
+    // before the curated catalog scan ran, hiding vTHOR entirely.
+    const address = '0x1111111111111111111111111111111111111111'
+    const vthorCatalog = knownTokens[EvmChain.Ethereum].find(c => c.ticker === 'vTHOR')!
+
+    queryOneInchMock.mockRejectedValue(new Error('HTTP 500'))
+    getEvmChainBalancesMock.mockResolvedValue({
+      [accountCoinKeyToString({ chain: EvmChain.Ethereum, id: vthorCatalog.id!, address })]: 1n,
+    })
+
+    await expect(findEvmCoins({ chain: EvmChain.Ethereum, address })).resolves.toEqual([{ ...vthorCatalog, address }])
+  })
+
+  it('dedupes an Ethereum token held in both sources, keeping curated metadata (THOR)', async () => {
+    const address = '0x1111111111111111111111111111111111111111'
+    const thorCatalog = knownTokens[EvmChain.Ethereum].find(c => c.ticker === 'THOR')!
+    const thorId = thorCatalog.id!.toLowerCase()
+
+    queryOneInchMock.mockResolvedValueOnce({ [thorId]: '1000' }).mockResolvedValueOnce({
+      [thorId]: {
+        address: thorId,
+        symbol: 'THOR',
+        decimals: 18,
+        name: 'Conflicting 1inch Thor',
+        logoURI: 'https://example.com/1inch-thor.png',
+        eip2612: false,
+        tags: [],
+        providers: ['1inch'],
+      },
+    })
+    getEvmChainBalancesMock.mockResolvedValue({
+      [accountCoinKeyToString({ chain: EvmChain.Ethereum, id: thorCatalog.id!, address })]: 1000n,
+    })
+
+    const coins = await findEvmCoins({ chain: EvmChain.Ethereum, address })
+
+    expect(coins).toEqual([{ ...thorCatalog, address }])
+    expect(thorCatalog.priceProviderId).toBe('thorswap')
+  })
+
   it('skips a token whose on-chain metadata lookup fails transiently, keeping the rest', async () => {
     // Both tokens hold a balance and neither is in the 1inch metadata response,
     // so both fall to the on-chain getEvmTokenMetadata path. One RPC read fails

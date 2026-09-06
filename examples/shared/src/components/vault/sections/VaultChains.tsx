@@ -242,7 +242,6 @@ function getChainInfo(chain: string): { type: string; color: string } {
     'THORChain',
     'MayaChain',
     'Dydx',
-    'Kujira',
     'Terra',
     'TerraClassic',
     'Noble',

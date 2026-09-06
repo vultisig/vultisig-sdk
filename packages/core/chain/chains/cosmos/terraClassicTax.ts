@@ -29,7 +29,24 @@
 import { attempt } from '@vultisig/lib-utils/attempt'
 
 import { Chain } from '../../Chain'
+import type { CoinKey } from '../../coin/Coin'
 import { cosmosRpcUrl } from './cosmosRpcUrl'
+
+/**
+ * TerraClassic USTC (bank-denom `uusd`) is the one Cosmos send where the fee
+ * (base gas + burn tax) is paid FROM THE SAME BALANCE being sent, rather than
+ * from the chain's native fee coin (`uluna`). Callers that size a send against
+ * a coin's own balance — refining a full-balance amount down, or computing
+ * max-send — must subtract the fee here instead of treating it like any other
+ * non-fee-coin token whose gas comes out of a separate native balance.
+ *
+ * Scoped to plain bank sends by construction: IBC transfers and other
+ * transaction types never price `CosmosSpecific.gas` in `uusd` (see
+ * `getCosmosChainSpecific`'s `isPlainSend` gate), so this predicate alone is
+ * enough for callers that only ever build plain sends.
+ */
+export const isTerraClassicUstcCoin = (coin: Pick<CoinKey, 'chain' | 'id'>): boolean =>
+  coin.chain === Chain.TerraClassic && coin.id?.toLowerCase() === 'uusd'
 
 // ---------------------------------------------------------------------------
 // LCD endpoints

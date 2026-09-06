@@ -49,6 +49,9 @@ jobs:
           yarn cli:build
           yarn mcp:build
 
+      - name: Validate SDK package export manifest
+        run: yarn quality:sdk-package-exports --skip-build
+
       - name: Get version and check if new
         id: version
         run: |

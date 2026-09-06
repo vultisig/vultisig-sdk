@@ -2,6 +2,7 @@
  * Browser storage implementation with IndexedDB and localStorage fallback
  * Direct implementation without runtime detection
  */
+import { storageValuesEqual } from '../../storage/storageValuesEqual'
 import type { Storage, StorageMetadata, StoredValue } from '../../storage/types'
 import { STORAGE_VERSION, StorageError, StorageErrorCode } from '../../storage/types'
 
@@ -18,6 +19,36 @@ export class BrowserStorage implements Storage {
   private readonly storeName = 'vaults'
   private readonly dbVersion = 1
 
+  private hasLocalStorageMutationLock(): boolean {
+    return typeof navigator !== 'undefined' && Boolean(navigator.locks)
+  }
+
+  private selectLocalStorageMode(): void {
+    this.mode = 'localstorage'
+    if (!this.hasLocalStorageMutationLock()) {
+      // Shadow the prototype method after backend selection. VaultBase performs
+      // a normal set() when CAS is unavailable, while importVault still refuses
+      // to persist without the atomic capability.
+      Object.defineProperty(this, 'compareAndSet', {
+        configurable: true,
+        value: undefined,
+      })
+    }
+  }
+
+  private async withLocalStorageMutationLock<T>(operation: () => Promise<T> | T, required = false): Promise<T> {
+    if (!this.hasLocalStorageMutationLock()) {
+      if (required) {
+        throw new StorageError(
+          StorageErrorCode.StorageUnavailable,
+          'Atomic storage mutations require Web Locks when browser storage uses localStorage'
+        )
+      }
+      return operation()
+    }
+    return navigator.locks.request(`vultisig-storage:${this.dbName}`, operation)
+  }
+
   constructor() {
     void this.startInitialization().catch(() => undefined)
   }
@@ -27,7 +58,7 @@ export class BrowserStorage implements Storage {
 
     if (persistedMode === 'localstorage') {
       this.tryLocalStorage()
-      this.mode = 'localstorage'
+      this.selectLocalStorageMode()
       return
     }
 
@@ -44,7 +75,7 @@ export class BrowserStorage implements Storage {
           this.db = undefined
           this.tryLocalStorage()
           this.persistMode('localstorage')
-          this.mode = 'localstorage'
+          this.selectLocalStorageMode()
           return
         }
 
@@ -65,7 +96,7 @@ export class BrowserStorage implements Storage {
 
     this.tryLocalStorage()
     this.persistMode('localstorage')
-    this.mode = 'localstorage'
+    this.selectLocalStorageMode()
   }
 
   private async ensureInitialized(): Promise<void> {
@@ -243,7 +274,7 @@ export class BrowserStorage implements Storage {
       if (this.mode === 'indexeddb' && this.db) {
         await this.setToIndexedDB(key, stored)
       } else {
-        this.setToLocalStorage(key, stored)
+        await this.withLocalStorageMutationLock(() => this.setToLocalStorage(key, stored))
       }
     } catch (error) {
       if ((error as Error).name === 'QuotaExceededError') {
@@ -254,6 +285,40 @@ export class BrowserStorage implements Storage {
     }
   }
 
+  async compareAndSet<T>(key: string, expectedValue: T | null, value: T | null): Promise<boolean> {
+    await this.ensureInitialized()
+
+    try {
+      if (this.mode === 'indexeddb' && this.db) {
+        return await this.compareAndSetIndexedDB(key, expectedValue, value)
+      }
+
+      return await this.withLocalStorageMutationLock(() => {
+        const currentValue = this.getFromLocalStorage<T>(key)
+        if (!storageValuesEqual(currentValue, expectedValue)) {
+          return false
+        }
+        if (value === null) {
+          localStorage.removeItem(key)
+        } else {
+          const metadata: StorageMetadata = {
+            version: STORAGE_VERSION,
+            createdAt: Date.now(),
+            lastModified: Date.now(),
+          }
+          this.setToLocalStorage(key, { value, metadata })
+        }
+        return true
+      }, true)
+    } catch (error) {
+      if ((error as Error).name === 'QuotaExceededError') {
+        throw new StorageError(StorageErrorCode.QuotaExceeded, 'Browser storage quota exceeded', error as Error)
+      }
+      if (error instanceof StorageError) throw error
+      throw new StorageError(StorageErrorCode.Unknown, `Failed to conditionally write key "${key}"`, error as Error)
+    }
+  }
+
   async remove(key: string): Promise<void> {
     await this.ensureInitialized()
 
@@ -261,7 +326,7 @@ export class BrowserStorage implements Storage {
       if (this.mode === 'indexeddb' && this.db) {
         await this.removeFromIndexedDB(key)
       } else {
-        localStorage.removeItem(key)
+        await this.withLocalStorageMutationLock(() => localStorage.removeItem(key))
       }
     } catch (error) {
       if (error instanceof StorageError) throw error
@@ -291,8 +356,10 @@ export class BrowserStorage implements Storage {
       if (this.mode === 'indexeddb' && this.db) {
         await this.clearIndexedDB()
       } else {
-        const keys = this.listFromLocalStorage()
-        keys.forEach(key => localStorage.removeItem(key))
+        await this.withLocalStorageMutationLock(() => {
+          const keys = this.listFromLocalStorage()
+          keys.forEach(key => localStorage.removeItem(key))
+        })
       }
     } catch (error) {
       if (error instanceof StorageError) throw error
@@ -374,6 +441,40 @@ export class BrowserStorage implements Storage {
     const completion = this.waitForTransaction(transaction)
     transaction.objectStore(this.storeName).put(value, key)
     return completion
+  }
+
+  private async compareAndSetIndexedDB<T>(key: string, expectedValue: T | null, value: T | null): Promise<boolean> {
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(this.storeName, 'readwrite')
+      const store = transaction.objectStore(this.storeName)
+      const request = store.get(key)
+      let matched = false
+      const rejectWith = (error: DOMException | null | undefined) =>
+        reject(error ?? new DOMException('IndexedDB transaction failed', 'UnknownError'))
+
+      request.onsuccess = () => {
+        const current = (request.result as StoredValue<T> | undefined)?.value ?? null
+        if (!storageValuesEqual(current, expectedValue)) {
+          return
+        }
+
+        matched = true
+        if (value === null) {
+          store.delete(key)
+        } else {
+          const metadata: StorageMetadata = {
+            version: STORAGE_VERSION,
+            createdAt: Date.now(),
+            lastModified: Date.now(),
+          }
+          store.put({ value, metadata } satisfies StoredValue<T>, key)
+        }
+      }
+      request.onerror = () => rejectWith(request.error)
+      transaction.oncomplete = () => resolve(matched)
+      transaction.onabort = () => rejectWith(transaction.error)
+      transaction.onerror = () => rejectWith(transaction.error)
+    })
   }
 
   private async removeFromIndexedDB(key: string): Promise<void> {

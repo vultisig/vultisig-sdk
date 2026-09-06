@@ -1,8 +1,9 @@
-import { VaultError, VaultErrorCode } from '@vultisig/sdk'
+import { VaultError, VaultErrorCode, type VaultImportOptions } from '@vultisig/sdk'
 import { dialog, type IpcMain } from 'electron'
 import * as fs from 'fs/promises'
 
 import { getSDK, getSDKModule, rejectPasswordRequest, resolvePasswordRequest } from './sdk'
+import { getTxStatusEvent } from './tx-status-event'
 
 export function registerIpcHandlers(ipcMain: IpcMain): void {
   // === SDK LIFECYCLE ===
@@ -120,18 +121,21 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
     }
   )
 
-  ipcMain.handle('vault:import', async (_event, vultContent: string, password?: string) => {
-    const sdk = getSDK()
-    const vault = await sdk.importVault(vultContent, password)
-    return {
-      id: vault.id,
-      name: vault.name,
-      type: vault.type,
-      chains: vault.chains,
-      threshold: vault.threshold,
-      signerCount: vault.signers.length,
+  ipcMain.handle(
+    'vault:import',
+    async (_event, vultContent: string, password?: string, options?: VaultImportOptions) => {
+      const sdk = getSDK()
+      const vault = await sdk.importVault(vultContent, password, options)
+      return {
+        id: vault.id,
+        name: vault.name,
+        type: vault.type,
+        chains: vault.chains,
+        threshold: vault.threshold,
+        signerCount: vault.signers.length,
+      }
     }
-  })
+  )
 
   ipcMain.handle('vault:isEncrypted', async (_event, vultContent: string) => {
     const sdk = getSDK()
@@ -575,11 +579,8 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
     const vault = await sdk.getVaultById(vaultId)
     if (!vault) throw new VaultError(VaultErrorCode.VaultNotFound, 'Vault not found')
     const result = await vault.getTxStatus({ chain: chain as any, txHash })
-    if (result.status === 'success') {
-      _event.sender.send('vault:transactionConfirmed', { chain, txHash })
-    } else if (result.status === 'error') {
-      _event.sender.send('vault:transactionFailed', { chain, txHash })
-    }
+    const txStatusEvent = getTxStatusEvent(result.status)
+    if (txStatusEvent) _event.sender.send(txStatusEvent, { chain, txHash })
     return {
       status: result.status,
       receipt: result.receipt

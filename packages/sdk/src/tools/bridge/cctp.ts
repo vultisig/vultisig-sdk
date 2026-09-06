@@ -28,6 +28,8 @@
 
 import { EvmChain } from '@vultisig/core-chain/Chain'
 
+import { normalizeChain } from '../../utils/normalizeChain'
+
 /**
  * CCTP contract configuration for a single chain. Mirrors the Go
  * `cctp.ChainConfig` struct, plus the SDK's `EvmChain` enum key and the
@@ -111,8 +113,34 @@ export const cctpChains: Record<string, CctpChainConfig> = {
 /** List of CCTP-supported chain names, for descriptions / error text. */
 export const cctpSupportedChains = Object.keys(cctpChains)
 
-/** Lookup CCTP config for a chain. Returns undefined for unsupported chains. */
-export const getCctpChain = (chainName: string): CctpChainConfig | undefined => cctpChains[chainName]
+/**
+ * Lookup CCTP config for a chain. Returns undefined for unsupported chains.
+ *
+ * Accepts anything the SDK's canonical chain normalizer accepts - `"base"`,
+ * `"Base"`, `"BASE"`, alias and separator forms - rather than only the exact
+ * registry key. The rest of the SDK already routes chain strings through
+ * `normalizeChain`, so a CCTP-only exact-match lookup meant callers had to
+ * pre-normalize for this one family, and any alias added to the canonicals in
+ * future would work everywhere except here (sdk#1911).
+ *
+ * Unknown-chain stays `undefined` rather than throwing: `normalizeChain` throws
+ * `UnknownChainError`, but this function's contract is undefined-for-
+ * unsupported, and a chain that normalizes fine but is not CCTP-supported (say
+ * Solana) has to give the same answer as one that does not normalize at all.
+ */
+export const getCctpChain = (chainName: string): CctpChainConfig | undefined => {
+  const direct = cctpChains[chainName.trim()]
+  if (direct) return direct
+  try {
+    return cctpChains[normalizeChain(chainName)]
+  } catch {
+    return undefined
+  }
+}
+
+/** Reverse-lookup a CCTP domain ID back to its registered chain name (architecture#1733). */
+export const getCctpChainNameByDomain = (domain: number): string | undefined =>
+  Object.keys(cctpChains).find(name => cctpChains[name]?.domain === domain)
 
 /**
  * Circle CCTP attestation API base URL.

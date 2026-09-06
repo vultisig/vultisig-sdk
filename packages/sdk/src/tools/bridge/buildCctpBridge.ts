@@ -18,10 +18,13 @@
 import { encodeFunctionData, getAddress, isAddress } from 'viem'
 
 import { assertSafeEvmDestination } from '../../utils/dangerousAddresses'
-import { parseUsdcAmount, USDC_DECIMALS } from '../parse/usdcAmount'
+import { formatUsdc, parseUsdcAmount } from '../parse/usdcAmount'
 import { type CctpChainConfig, cctpSupportedChains, getCctpChain } from './cctp'
 
-export { parseUsdcAmount } from '../parse/usdcAmount'
+// Re-exported so `@vultisig/sdk/tools/bridge` keeps exposing both helpers at
+// the path consumers already import them from; the definitions live next to
+// each other in tools/parse/usdcAmount.ts (sdk#1931).
+export { formatUsdc, parseUsdcAmount } from '../parse/usdcAmount'
 
 /** uint256 max — defense-in-depth overflow clamp. */
 const MAX_UINT256 = (1n << 256n) - 1n
@@ -113,13 +116,6 @@ export type CctpBridgeResult = {
 }
 
 /** Format a raw 6-decimal USDC amount back to a human-readable string. */
-export const formatUsdc = (raw: bigint): string => {
-  const divisor = 10n ** BigInt(USDC_DECIMALS)
-  const whole = raw / divisor
-  const frac = raw % divisor
-  if (frac === 0n) return whole.toString()
-  return `${whole}.${frac.toString().padStart(USDC_DECIMALS, '0').replace(/0+$/, '')}`
-}
 
 /**
  * Build the bytes32 mintRecipient from a 20-byte EVM address. CCTP's
@@ -153,24 +149,33 @@ const addressToBytes32 = (addr: `0x${string}`): `0x${string}` => {
  * ```
  */
 export const buildCctpBridge = (params: BuildCctpBridgeParams): CctpBridgeResult => {
-  const srcChainName = params.sourceChain.trim()
-  const dstChainName = params.destinationChain.trim()
+  const srcInput = params.sourceChain.trim()
+  const dstInput = params.destinationChain.trim()
+
+  // Resolve BEFORE the same-chain guard. Comparing the raw strings would let
+  // `('base', 'Base')` through as two different chains and then build a bridge
+  // from a chain to itself, which is exactly the failure alias tolerance would
+  // otherwise introduce.
+  const srcCctp: CctpChainConfig | undefined = getCctpChain(srcInput)
+  if (!srcCctp) {
+    throw new Error(
+      `source chain ${JSON.stringify(srcInput)} is not supported by CCTP. Supported: ${cctpSupportedChains.join(', ')}`
+    )
+  }
+  const dstCctp: CctpChainConfig | undefined = getCctpChain(dstInput)
+  if (!dstCctp) {
+    throw new Error(
+      `destination chain ${JSON.stringify(dstInput)} is not supported by CCTP. Supported: ${cctpSupportedChains.join(', ')}`
+    )
+  }
+
+  // Canonical names from here on, so the emitted envelope always carries
+  // `"Base"` regardless of whether the caller wrote `base`, `BASE` or an alias.
+  const srcChainName = srcCctp.chain
+  const dstChainName = dstCctp.chain
 
   if (srcChainName === dstChainName) {
     throw new Error('sourceChain and destinationChain must be different')
-  }
-
-  const srcCctp: CctpChainConfig | undefined = getCctpChain(srcChainName)
-  if (!srcCctp) {
-    throw new Error(
-      `source chain ${JSON.stringify(srcChainName)} is not supported by CCTP. Supported: ${cctpSupportedChains.join(', ')}`
-    )
-  }
-  const dstCctp: CctpChainConfig | undefined = getCctpChain(dstChainName)
-  if (!dstCctp) {
-    throw new Error(
-      `destination chain ${JSON.stringify(dstChainName)} is not supported by CCTP. Supported: ${cctpSupportedChains.join(', ')}`
-    )
   }
 
   const rawAmount = parseUsdcAmount(params.amount)

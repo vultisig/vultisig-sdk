@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // IMPORTANT: Mocks must be defined BEFORE imports
 vi.mock('@vultisig/core-chain/coin/price/getCoinPrices')
-vi.mock('@vultisig/core-chain/coin/price/evm/getErc20Prices')
+vi.mock('@vultisig/core-chain/coin/price/evm/getErc20Prices', () => ({
+  getErc20Prices: vi.fn(),
+}))
 vi.mock('@vultisig/core-chain/coin/price/resolveTokenPriceId', () => ({
   resolveTokenPriceId: vi.fn(),
 }))

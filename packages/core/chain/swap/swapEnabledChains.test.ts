@@ -6,6 +6,7 @@ import { jupiterSwapEnabledChains } from './general/jupiter/JupiterSwapEnabledCh
 import { kyberSwapEnabledChains } from './general/kyber/chains'
 import { lifiSwapEnabledChains } from './general/lifi/LifiSwapEnabledChains'
 import { oneInchSwapEnabledChains } from './general/oneInch/OneInchSwapEnabledChains'
+import { rujiTradeSwapEnabledChains } from './general/ruji/config'
 import { swapKitEnabledChains } from './general/swapkit/SwapKitEnabledChains'
 import { nativeSwapEnabledChains } from './native/NativeSwapChain'
 import { swapEnabledChains } from './swapEnabledChains'
@@ -24,6 +25,7 @@ describe('swapEnabledChains aggregate (sdk#1151)', () => {
     swapKit: swapKitEnabledChains,
     jupiter: jupiterSwapEnabledChains,
     cowSwap: cowSwapSupportedChains,
+    rujiTrade: rujiTradeSwapEnabledChains,
   }
 
   it.each(Object.entries(providerLists))('covers every %s chain', (_provider, chains) => {

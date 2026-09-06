@@ -2,7 +2,7 @@ import { create } from '@bufbuild/protobuf'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getCardanoCurrentSlot } from '@vultisig/core-chain/chains/cardano/client/currentSlot'
 import { cardanoDefaultFee } from '@vultisig/core-chain/chains/cardano/config'
-import { cardanoSlotOffset } from '@vultisig/core-chain/chains/cardano/config'
+import { getCardanoSendTtl } from '@vultisig/core-chain/chains/cardano/config'
 import { getPreSigningOutput } from '@vultisig/core-mpc/keysign/preSigningOutput'
 import { CardanoChainSpecificSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { bigIntSum } from '@vultisig/lib-utils/bigint/bigIntSum'
@@ -81,7 +81,7 @@ export const getCardanoChainSpecific: GetChainSpecificResolver<'cardano'> = asyn
   const amount = getKeysignAmount(keysignPayload)
 
   const currentSlot = await getCardanoCurrentSlot()
-  const ttl = currentSlot + BigInt(cardanoSlotOffset)
+  const ttl = getCardanoSendTtl(currentSlot)
 
   const utxoInfo = keysignPayload.utxoInfo
   const balance = bigIntSum(utxoInfo.map(({ amount }) => amount))

@@ -15,6 +15,8 @@ export type {
   BuildTonTxFromSigningPayloadOptions,
   TonTxBuilderResult,
   TonV4R2Wallet,
+  TonV5R1Wallet,
+  TonWalletCoreBackedTxBuilderResult,
   TonWalletInfo,
   TonWalletStatus,
 } from '../../../../chains/ton'
@@ -24,10 +26,12 @@ export {
   buildTonSendTx,
   buildTonTxFromSigningPayload,
   buildV4R2Wallet,
+  buildV5R1Wallet,
   deriveTonAddress,
   getTonBalance,
   getTonWalletInfo,
   sha256,
   TON_V4R2_SUB_WALLET_ID,
+  TON_V5R1_WALLET_ID,
   validateTonMemo,
 } from '../../../../chains/ton'

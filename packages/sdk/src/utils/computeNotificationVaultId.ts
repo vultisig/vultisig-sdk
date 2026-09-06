@@ -1,4 +1,4 @@
-import { sha256 } from '@noble/hashes/sha2'
+import { sha256 } from '@noble/hashes/sha2.js'
 
 /**
  * Computes the `vault_id` used by the notification server, matching iOS:

@@ -292,7 +292,12 @@ export async function executeCreateSecure(ctx: CommandContext, options: SecureVa
 /**
  * Execute import vault command
  */
-export async function executeImport(ctx: CommandContext, file: string, flagPassword?: string): Promise<VaultBase> {
+export async function executeImport(
+  ctx: CommandContext,
+  file: string,
+  flagPassword?: string,
+  replace = false
+): Promise<VaultBase> {
   // Password priority: --password flag > VAULT_PASSWORD env var > interactive prompt
   let password = flagPassword || process.env.VAULT_PASSWORD || ''
   if (!password) {
@@ -310,7 +315,11 @@ export async function executeImport(ctx: CommandContext, file: string, flagPassw
   const spinner = createSpinner('Importing vault...')
 
   const vultContent = await fs.readFile(file, 'utf-8')
-  const vault = await ctx.sdk.importVault(vultContent, password || undefined)
+  const vault = await ctx.sdk.importVault(
+    vultContent,
+    password || undefined,
+    replace ? { conflictResolution: 'replace' } : undefined
+  )
 
   setupVaultEvents(vault)
   await ctx.setActiveVault(vault)

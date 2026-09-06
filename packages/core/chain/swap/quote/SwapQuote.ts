@@ -16,6 +16,8 @@ export type SwapQuoteResult = {
 export type SwapQuote = {
   quote: SwapQuoteResult
   discounts: SwapDiscount[]
+  /** Effective output recipient bound by `findSwapQuote`. Absent on legacy/manually constructed quotes. */
+  recipient?: string
   /** Source amount, in base units, bound by `findSwapQuote`. Absent on legacy/manually constructed quotes. */
   requestedAmount?: bigint
   /** Absolute quote expiry in milliseconds, bound by `findSwapQuote`. Absent on legacy/manually constructed quotes. */

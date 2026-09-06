@@ -1,10 +1,11 @@
-import { bytesToHex, randomBytes } from '@noble/hashes/utils'
+import { bytesToHex, randomBytes } from '@noble/hashes/utils.js'
 import { capitalizeFirstLetter } from '@vultisig/lib-utils/capitalizeFirstLetter'
 
 import { MpcDevice, mpcDeviceFromDeviceName } from './MpcDevice'
 
 const localPartyIdSeparator = '-'
 const localPartyIdEntropyBytes = 8
+const legacyServerDeviceName = 'vultiserver'
 
 export const generateLocalPartyId = (device: MpcDevice) => {
   const deviceName = device === 'server' ? capitalizeFirstLetter(device) : device
@@ -20,6 +21,10 @@ export const parseLocalPartyId = (localPartyId: string) => {
   return { deviceName, hash }
 }
 
-export const hasServer = (signers: string[]) => signers.some(isServer)
+export const hasServer = (signers: readonly string[]) => signers.some(isServer)
 
-export const isServer = (device: string) => mpcDeviceFromDeviceName(parseLocalPartyId(device).deviceName) === 'server'
+export const isServer = (device: string) => {
+  const { deviceName } = parseLocalPartyId(device)
+
+  return mpcDeviceFromDeviceName(deviceName) === 'server' || deviceName.toLowerCase() === legacyServerDeviceName
+}

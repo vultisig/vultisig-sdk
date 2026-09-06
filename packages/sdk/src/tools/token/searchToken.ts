@@ -1,4 +1,5 @@
 import { Chain } from '@vultisig/core-chain/Chain'
+import { knownTokens } from '@vultisig/core-chain/coin/knownTokens'
 import { rootApiUrl } from '@vultisig/core-config'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
@@ -33,6 +34,14 @@ const platformToChain: Record<string, Chain> = {
 
 type TokenDeployment = {
   chain: Chain
+  /**
+   * The chain's own canonical token identifier — an EVM/CW-20 contract
+   * address, an SPL mint, a Sui coin type, OR (for chains with no address
+   * concept, like XRPL issued currencies) the chain-native composite id
+   * (e.g. `<currency>.<issuer>`, see `rippleTokenId`). Not always a literal
+   * "contract address" despite the field name, which is kept for backwards
+   * compatibility with existing consumers.
+   */
   contractAddress: string
   decimals?: number
 }
@@ -58,6 +67,19 @@ type CoinGeckoDetailResponse = {
   id: string
   detail_platforms: Record<string, { contract_address: string; decimal_place: number | null }>
 }
+
+// XRPL issued currencies (e.g. RLUSD) aren't modeled as CoinGecko "platform
+// deployments" — CoinGecko lists them as a plain coin with no `ripple`
+// contract entry, since XRPL tokens are identified by (currency, issuer), not
+// an address. Overlay the curated `knownTokens[Chain.Ripple]` entries onto
+// the matching CoinGecko coin, keyed by `priceProviderId` (the CoinGecko coin
+// id each curated entry already carries), so `searchToken('RLUSD')` surfaces
+// the same result shape consumers get for contract-deployed tokens.
+const rippleIssuedTokensByCoinGeckoId = new Map(
+  knownTokens[Chain.Ripple]
+    .filter(token => token.priceProviderId)
+    .map(token => [token.priceProviderId as string, token])
+)
 
 /**
  * Search tokens by ticker, name, or contract address across all supported chains.
@@ -125,6 +147,17 @@ export const searchToken = async (query: string, limit = 10): Promise<TokenSearc
           decimals: info.decimal_place ?? undefined,
         })
       }
+    }
+
+    // Overlay any curated XRPL issued currency for this CoinGecko coin, if
+    // its own detail response didn't already surface a Ripple deployment.
+    const rippleToken = rippleIssuedTokensByCoinGeckoId.get(coin.id)
+    if (rippleToken?.id && !deployments.some(d => d.chain === Chain.Ripple)) {
+      deployments.push({
+        chain: Chain.Ripple,
+        contractAddress: rippleToken.id,
+        decimals: rippleToken.decimals,
+      })
     }
 
     return {

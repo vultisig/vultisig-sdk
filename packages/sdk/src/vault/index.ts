@@ -11,6 +11,10 @@ import { VaultBase } from './VaultBase'
 export { FastVault, SecureVault, VaultBase }
 export type { VaultSaveOptions } from './VaultBase'
 
+// Canonical Fast Vault / server-signer detection. This recognizes both current
+// Server-* party IDs and legacy VultiServer-* backups.
+export { hasServer, isServer } from '@vultisig/core-mpc/devices/localPartyId'
+
 // Export errors
 export { BroadcastPartialFailureError } from './services/BroadcastService'
 export { VaultConflictError, VaultError, VaultErrorCode, VaultImportError, VaultImportErrorCode } from './VaultError'

@@ -1,4 +1,4 @@
-import { blake2b } from '@noble/hashes/blake2'
+import { blake2b } from '@noble/hashes/blake2.js'
 
 /**
  * Sui intent prefixes — `[scope, version, app_id]`. Version is always `0` (V0)

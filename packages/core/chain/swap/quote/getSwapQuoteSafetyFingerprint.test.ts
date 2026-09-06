@@ -20,6 +20,16 @@ const fingerprint = (value: unknown) =>
     quote: { general: { value } } as never,
   })
 
+const recipientFingerprint = (recipient: string) =>
+  getSwapQuoteSafetyFingerprint({
+    from: coin,
+    to: coin,
+    recipient,
+    requestedAmount: 1n,
+    expiresAt: 1,
+    quote: { general: { value: 'quote' } } as never,
+  })
+
 describe('getSwapQuoteSafetyFingerprint', () => {
   it('keeps canonical bigint tags distinct from provider object keys', () => {
     expect(fingerprint(5n)).not.toBe(fingerprint({ $bigint: '5' }))
@@ -27,5 +37,9 @@ describe('getSwapQuoteSafetyFingerprint', () => {
 
   it('canonicalizes explicit undefined array values and sparse holes consistently', () => {
     expect(fingerprint([undefined])).toBe(fingerprint(new Array(1)))
+  })
+
+  it('binds the effective output recipient', () => {
+    expect(recipientFingerprint('thor1recipient')).not.toBe(recipientFingerprint('thor1other'))
   })
 })

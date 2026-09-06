@@ -3,6 +3,7 @@ import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import { type AccountCoinKey, accountCoinKeyToString } from '@vultisig/core-chain/coin/AccountCoin'
 import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 import { getEvmChainBalances } from '@vultisig/core-chain/coin/balance/getEvmChainBalances'
+import { getRippleNativeBalanceDetail } from '@vultisig/core-chain/coin/balance/resolvers/ripple'
 import type { Address } from 'viem'
 
 import { formatBalance } from '../../adapters/formatBalance'
@@ -11,6 +12,15 @@ import type { Balance, Token } from '../../types'
 import { normalizedTokenIdentity, resolveTokenRef, stripLegacyTokenIdPrefix, tokenIdsMatch } from '../tokenRef'
 import { VaultError, VaultErrorCode } from '../VaultError'
 
+type PublishBalanceInput = {
+  /** The account generation the fetch started under. */
+  generation: number
+  cacheKey: string
+  chain: Chain
+  balance: Balance
+  tokenId?: string
+}
+
 /**
  * BalanceService
  *
@@ -18,6 +28,16 @@ import { VaultError, VaultErrorCode } from '../VaultError'
  * Uses CacheService with BALANCE scope for automatic TTL-based caching.
  */
 export class BalanceService {
+  /**
+   * Bumped every time the vault switches the account a chain resolves to (a TON
+   * vault moving between its V4R2 and W5 wallets). Cache keys name a chain and
+   * an asset, not an account, so a fetch captures the generation before it
+   * starts and writes only if it is unchanged — checked synchronously right
+   * before each write, so a switch cannot slip in between the check and the
+   * write the way it could with an awaited address comparison.
+   */
+  private accountGeneration = 0
+
   constructor(
     private cacheService: CacheService,
     private emitBalanceUpdated: (data: { chain: Chain; balance: Balance; tokenId?: string }) => void,
@@ -37,6 +57,44 @@ export class BalanceService {
    */
   async getBalance(chain: Chain, tokenId?: string): Promise<Balance> {
     return this.getBalanceForAsset(chain, tokenId)
+  }
+
+  /**
+   * Tell the service the vault now resolves to a different account: any fetch
+   * already in flight for the old account will still answer its caller but will
+   * not be cached or emitted, and everything cached so far is dropped.
+   */
+  async onAccountChanged(): Promise<void> {
+    this.accountGeneration += 1
+    await this.cacheService.invalidateScope(CacheScope.BALANCE)
+  }
+
+  /**
+   * Caches a freshly fetched balance and announces it — unless the vault switched
+   * the account this chain resolves to while the fetch or the write was running.
+   *
+   * The generation is read again after the write because the write is awaited: a
+   * switch during it clears the balance scope, and whichever of the two lands last
+   * decides what the cache holds, so the old account's balance can end up sitting
+   * there for the new one to read. Dropping the key we just wrote settles that, and
+   * the event is then skipped as well — `balanceUpdated` carries no account
+   * identity, so a listener would credit the old account's balance to the new one.
+   * Both checks are synchronous, so nothing can slip between a check and what it
+   * guards.
+   */
+  private async publishBalance({ generation, cacheKey, chain, balance, tokenId }: PublishBalanceInput): Promise<void> {
+    if (generation !== this.accountGeneration) {
+      return
+    }
+
+    await this.cacheService.setScoped(cacheKey, CacheScope.BALANCE, balance)
+
+    if (generation !== this.accountGeneration) {
+      await this.cacheService.invalidateScoped(cacheKey, CacheScope.BALANCE)
+      return
+    }
+
+    this.emitBalanceUpdated({ chain, balance, tokenId })
   }
 
   private async getBalanceForAsset(
@@ -62,29 +120,35 @@ export class BalanceService {
           ? resultId
           : normalizedTokenIdentity(chain, stripLegacyTokenIdPrefix(chain, knownAssetId))
 
+      const generation = this.accountGeneration
       address = await this.getAddress(chain)
+
+      // Native XRP carries a locked reserve the plain resolver cannot express:
+      // fetch the {total, spendable, reserve} breakdown (same RPC calls) so the
+      // reserve can be surfaced, while `amount` stays the spendable number.
+      const rippleDetail =
+        chain === Chain.Ripple && assetId === undefined ? await getRippleNativeBalanceDetail(address) : undefined
 
       // Core handles balance fetching for ALL chains
       // Supports: native, ERC-20, SPL, wasm tokens automatically
-      const rawBalance = await getCoinBalance({
-        chain,
-        address,
-        id: assetId, // Contract address / chain-level asset id, never the vault's storage key
-      })
+      const rawBalance =
+        rippleDetail !== undefined
+          ? rippleDetail.spendable
+          : await getCoinBalance({
+              chain,
+              address,
+              id: assetId, // Contract address / chain-level asset id, never the vault's storage key
+            })
 
       // Format using adapter
       const tokens = knownToken ? { [chain]: [knownToken] } : this.getTokensRecord()
       const balance = formatBalance(rawBalance, chain, resultId, tokens)
+      if (rippleDetail !== undefined) {
+        balance.totalAmount = rippleDetail.total.toString()
+        balance.reserveAmount = rippleDetail.reserve.toString()
+      }
 
-      // Cache with configured TTL
-      await this.cacheService.setScoped(key, CacheScope.BALANCE, balance)
-
-      // Emit balance updated event
-      this.emitBalanceUpdated({
-        chain,
-        balance,
-        tokenId: resultId,
-      })
+      await this.publishBalance({ generation, cacheKey: key, chain, balance, tokenId: resultId })
 
       return balance
     } catch (error) {
@@ -167,6 +231,7 @@ export class BalanceService {
    * and caches/emits each fetched balance exactly like getBalance() does.
    */
   private async getEvmBalancesBatched(chain: EvmChain): Promise<Array<readonly [string, Balance]>> {
+    const generation = this.accountGeneration
     const address = await this.getAddress(chain)
     const tokens = this.getTokens(chain)
 
@@ -230,8 +295,13 @@ export class BalanceService {
       const balance = formatBalance(present ? rawBalance : 0n, chain, request.tokenId, formatTokens)
 
       if (present) {
-        await this.cacheService.setScoped(request.cacheKey, CacheScope.BALANCE, balance)
-        this.emitBalanceUpdated({ chain, balance, tokenId: request.tokenId })
+        await this.publishBalance({
+          generation,
+          cacheKey: request.cacheKey,
+          chain,
+          balance,
+          tokenId: request.tokenId,
+        })
       }
 
       entries.push([request.resultKey, balance] as const)

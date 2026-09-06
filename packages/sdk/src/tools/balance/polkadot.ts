@@ -17,8 +17,8 @@
 // "Cannot assign to read only property 'toString'". Same RN-safe choice the core
 // resolver (resolvers/polkadot.ts) already made.
 
-import { blake2b } from '@noble/hashes/blake2b'
-import { bytesToHex } from '@noble/hashes/utils'
+import { blake2b } from '@noble/hashes/blake2.js'
+import { bytesToHex } from '@noble/hashes/utils.js'
 import { assetHubRpcUrl, polkadotRpcUrl } from '@vultisig/core-chain/chains/polkadot/client'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import bs58 from 'bs58'

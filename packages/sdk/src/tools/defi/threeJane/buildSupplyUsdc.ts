@@ -1,8 +1,8 @@
 import { encodeFunctionData, erc20Abi, getAddress, isAddress } from 'viem'
 
-import { parseUsdcAmount, USDC_DECIMALS } from '../../parse/usdcAmount'
+import { formatUsdc, parseUsdcAmount, USDC_DECIMALS } from '../../parse/usdcAmount'
 
-export { parseUsdcAmount } from '../../parse/usdcAmount'
+export { formatUsdc, parseUsdcAmount } from '../../parse/usdcAmount'
 
 /**
  * 3Jane supplier-side mainnet addresses, pinned from the public docs:
@@ -99,14 +99,6 @@ export type BuildThreeJaneSupplyUsdcResult = {
   minDepositUsdc: string
   /** Unsigned [approve, deposit] sequence. BUILD-ONLY — never signed/broadcast. */
   transactions: [ThreeJaneTxStep, ThreeJaneTxStep]
-}
-
-function formatUsdc(raw: bigint): string {
-  const whole = raw / 10n ** BigInt(USDC_DECIMALS)
-  const frac = raw % 10n ** BigInt(USDC_DECIMALS)
-  if (frac === 0n) return whole.toString()
-  const fracStr = frac.toString().padStart(USDC_DECIMALS, '0').replace(/0+$/, '')
-  return `${whole.toString()}.${fracStr}`
 }
 
 /**

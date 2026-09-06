@@ -43,6 +43,7 @@ export type {
   BuildTonSendOptions,
   TonTxBuilderResult,
   TonV4R2Wallet,
+  TonWalletCoreBackedTxBuilderResult,
   TonWalletInfo,
   TonWalletStatus,
 } from './ton'

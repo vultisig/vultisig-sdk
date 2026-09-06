@@ -1,6 +1,7 @@
 import type { WalletCore } from '@trustwallet/wallet-core'
 import { getMaxValue } from '@vultisig/core-chain/amount/getMaxValue'
 import { Chain } from '@vultisig/core-chain/Chain'
+import { isTerraClassicUstcCoin } from '@vultisig/core-chain/chains/cosmos/terraClassicTax'
 import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
@@ -86,7 +87,12 @@ export const computeMaxSendFromBalance = async (
     feeSettings: params.feeSettings,
   })
 
-  const isTokenSend = !isFeeCoin(params.coin)
+  // TerraClassic USTC pays its fee (base gas + burn tax) in `uusd` — the same
+  // denom/balance being sent — unlike every other non-fee-coin token, which
+  // pays gas from a separate native balance. Treat it like a native send: no
+  // native-balance gas check, and the fee comes out of the same balance.
+  const paysFeeInOwnBalance = isFeeCoin(params.coin) || isTerraClassicUstcCoin(params.coin)
+  const isTokenSend = !paysFeeInOwnBalance
   if (isTokenSend) {
     const native = chainFeeCoin[params.coin.chain]
     const nativeBalance = shouldBePresent(params.nativeBalance, `Native ${native.ticker} balance for token max-send`)
@@ -125,8 +131,9 @@ export const getMaxSendAmountFromKeys = async (
   // Receiver validation lives in computeMaxSendFromBalance (the canonical check
   // for all callers) — don't duplicate it here.
   const balance = await getCoinBalance(params.coin)
-  const nativeBalance = isFeeCoin(params.coin)
-    ? undefined
-    : await getCoinBalance({ ...chainFeeCoin[params.coin.chain], address: params.coin.address })
+  const nativeBalance =
+    isFeeCoin(params.coin) || isTerraClassicUstcCoin(params.coin)
+      ? undefined
+      : await getCoinBalance({ ...chainFeeCoin[params.coin.chain], address: params.coin.address })
   return computeMaxSendFromBalance(identity, { ...params, balance, nativeBalance }, walletCore)
 }

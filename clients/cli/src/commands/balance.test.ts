@@ -1,11 +1,13 @@
+import { readFileSync } from 'node:fs'
+
 import type { Balance, Chain as ChainType, FiatCurrency, Value, VaultBase } from '@vultisig/sdk'
-import { Chain } from '@vultisig/sdk'
+import { Chain, SUPPORTED_CHAINS } from '@vultisig/sdk'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { CommandContext, PortfolioSummary } from '../core'
 import { ExitCode, NetworkError } from '../core/errors'
 import { configureOutput, resetOutput } from '../lib/output'
-import { executeBalance, executePortfolio } from './balance'
+import { buildScopeHint, executeBalance, executePortfolio } from './balance'
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -410,5 +412,176 @@ describe('executeBalance honours --tokens on a single chain', () => {
     expect(balance).toHaveBeenCalledWith(Chain.Ethereum)
     expect(balances).not.toHaveBeenCalled()
     expect(envelope.data).toMatchObject({ chain: Chain.Ethereum, balance: { symbol: 'ETH' } })
+  })
+})
+
+describe('aggregate scope hint (DF-02)', () => {
+  // The aggregate `balance` / `portfolio` views iterate only enabled chains;
+  // the hint is the honesty marker that says so. The scoped `balance <chain>`
+  // path deliberately stays hint-free AND permissive (querying any
+  // SDK-supported chain is the documented escape hatch — do not "fix" it).
+  const allSupported = [...SUPPORTED_CHAINS]
+
+  beforeEach(() => {
+    configureOutput({ format: 'json' })
+  })
+
+  afterEach(() => {
+    resetOutput()
+    vi.restoreAllMocks()
+  })
+
+  function makeAggregateCtx(chains: ChainType[]) {
+    const emitted = { [Chain.Ethereum]: makeBalance('ETH') }
+    const vault = {
+      chains,
+      currency: 'usd' as FiatCurrency,
+      setCurrency: vi.fn(async () => {}),
+      balances: vi.fn(async () => emitted),
+      balance: vi.fn(async () => makeBalance('ETH')),
+      getValue: vi.fn(async () => makeValue('1.00')),
+      getValues: vi.fn(async () => ({ native: makeValue('1.00') })),
+    } as unknown as VaultBase
+    return { ctx: { ensureActiveVault: async () => vault } as unknown as CommandContext, emitted }
+  }
+
+  it('puts the hint in its own JSON field on all-chains balance, leaving the balances payload unchanged', async () => {
+    const { ctx, emitted } = makeAggregateCtx([Chain.Ethereum, Chain.Bitcoin])
+    // Snapshot BEFORE the call: comparing against `emitted` itself would go
+    // blind if the implementation mutated the map in place (e.g. wrote the
+    // hint INTO it) — the reference and the expectation would drift together.
+    const pristine = structuredClone(emitted)
+
+    const envelope = await captureJson(() => executeBalance(ctx, {}))
+    expect(envelope.data.scopeHint).toContain('2 enabled chains')
+    // The machine-readable payload is byte-for-byte what the vault returned.
+    expect(envelope.data.balances).toEqual(pristine)
+    expect(emitted).toEqual(pristine)
+  })
+
+  it('omits the hint when every SDK-supported chain is enabled', async () => {
+    const { ctx } = makeAggregateCtx(allSupported)
+
+    const envelope = await captureJson(() => executeBalance(ctx, {}))
+    expect(envelope.data.scopeHint).toBeUndefined()
+  })
+
+  it('adds the hint to the portfolio JSON envelope in its own field', async () => {
+    const { ctx } = makeAggregateCtx([Chain.Ethereum])
+
+    const envelope = await captureJson(() => executePortfolio(ctx, { currency: 'usd' }))
+    expect(envelope.data.scopeHint).toContain('1 enabled chain of')
+    expect(envelope.data.portfolio.chainBalances).toHaveLength(1)
+    expect(envelope.data.failures).toEqual([])
+  })
+
+  it('keeps the scoped `balance <chain>` output hint-free (path unchanged)', async () => {
+    const { ctx } = makeAggregateCtx([Chain.Ethereum])
+
+    const scoped = await captureJson(() => executeBalance(ctx, { chain: Chain.Ethereum }))
+    expect(scoped.data.scopeHint).toBeUndefined()
+    expect(JSON.stringify(scoped)).not.toContain('enabled chain')
+
+    const scopedTokens = await captureJson(() => executeBalance(ctx, { chain: Chain.Ethereum, includeTokens: true }))
+    expect(scopedTokens.data.scopeHint).toBeUndefined()
+  })
+
+  it('prints the hint on the human-readable all-chains balance output', async () => {
+    configureOutput({ format: 'table', silent: false })
+    const logs: string[] = []
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+      logs.push(args.map(String).join(' '))
+    })
+    vi.spyOn(console, 'table').mockImplementation(() => {})
+
+    const { ctx } = makeAggregateCtx([Chain.Ethereum, Chain.Bitcoin])
+    await executeBalance(ctx, {})
+
+    const joined = logs.join('\n')
+    expect(joined).toContain("won't appear here")
+    expect(joined).toContain('vultisig balance <chain>')
+  })
+
+  it('prints nothing extra on human output when every supported chain is enabled', async () => {
+    // Guards the `if (scopeHint)` gate: without it, a suppressed hint would
+    // print a stray "undefined" line after the table for fully-enabled vaults.
+    configureOutput({ format: 'table', silent: false })
+    const logs: string[] = []
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+      logs.push(args.map(String).join(' '))
+    })
+    vi.spyOn(console, 'table').mockImplementation(() => {})
+
+    const { ctx } = makeAggregateCtx(allSupported)
+    await executeBalance(ctx, {})
+
+    const joined = logs.join('\n')
+    expect(joined).not.toContain('undefined')
+    expect(joined).not.toContain("won't appear here")
+  })
+
+  it('prints the hint on the human-readable portfolio output', async () => {
+    configureOutput({ format: 'table', silent: false })
+    const logs: string[] = []
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+      logs.push(args.map(String).join(' '))
+    })
+    vi.spyOn(console, 'table').mockImplementation(() => {})
+
+    const { ctx } = makeAggregateCtx([Chain.Ethereum])
+    await executePortfolio(ctx, { currency: 'usd' })
+
+    expect(logs.join('\n')).toContain("won't appear here")
+  })
+
+  it('only names commands/flags that actually exist in the CLI definition (stale-hint guard)', async () => {
+    // The hint's escape hatches must stay real: `vultisig balance <chain>` and
+    // `vultisig chains --add <chain>`. If either registration disappears from
+    // index.ts, this test — not a user — catches the stale pointer.
+    const hint = buildScopeHint([Chain.Ethereum])
+    expect(hint).toBeDefined()
+    expect(hint).toContain('vultisig balance <chain>')
+    expect(hint).toContain('vultisig chains --add <chain>')
+
+    const indexSource = readFileSync(new URL('../index.ts', import.meta.url), 'utf8')
+    expect(indexSource).toContain(".command('balance [chain]')")
+    expect(indexSource).toContain(".command('chains')")
+    expect(indexSource).toContain("'--add <chain>'")
+  })
+
+  it('pins the zero-enabled-chains wording (0 uses the plural noun)', () => {
+    // A vault with no enabled chains still gets the hint (0 < supported), and
+    // the plural branch must hold — "0 enabled chain" would read as a bug.
+    const hint = buildScopeHint([])
+    expect(hint).toBe(
+      `Showing the vault's 0 enabled chains of ${SUPPORTED_CHAINS.length} supported. ` +
+        `Funds on other chains won't appear here — run \`vultisig balance <chain>\` to check one, ` +
+        `or \`vultisig chains --add <chain>\` to include it.`
+    )
+  })
+
+  it('ignores duplicate and unsupported entries when deciding whether the hint is suppressed', () => {
+    // VaultBase rehydrates persisted chains with an unchecked cast, and setChains
+    // replaces the list without deduping. If the vault carries duplicates or a
+    // stale unsupported string, the hint must still be driven by the unique
+    // supported set rather than the raw array length.
+    const hint = buildScopeHint([
+      ...SUPPORTED_CHAINS.slice(0, SUPPORTED_CHAINS.length - 1),
+      SUPPORTED_CHAINS[0],
+      'not-a-chain' as ChainType,
+    ])
+    expect(hint).toContain(
+      `Showing the vault's ${SUPPORTED_CHAINS.length - 1} enabled chains of ${SUPPORTED_CHAINS.length} supported.`
+    )
+  })
+
+  it('never claims a scan it did not run (hint is static, no RPC)', () => {
+    // buildScopeHint is a pure function of the enabled-chain list — feeding it
+    // a list can't trigger network I/O, and the wording must not promise
+    // discovered funds, only point at where to look.
+    const hint = buildScopeHint([Chain.Ethereum, Chain.Bitcoin, Chain.Solana])
+    expect(hint).toBeDefined()
+    expect(hint!.toLowerCase()).not.toContain('found')
+    expect(hint!.toLowerCase()).not.toContain('detected')
   })
 })

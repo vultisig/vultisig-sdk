@@ -2,7 +2,9 @@ import { Chain } from '@vultisig/core-chain/Chain'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@vultisig/core-chain/coin/price/getCoinPrices')
-vi.mock('@vultisig/core-chain/coin/price/evm/getErc20Prices')
+vi.mock('@vultisig/core-chain/coin/price/evm/getErc20Prices', () => ({
+  getErc20Prices: vi.fn(),
+}))
 vi.mock('@vultisig/core-chain/coin/chainFeeCoin', () => ({
   chainFeeCoin: {
     Ethereum: { ticker: 'ETH', decimals: 18, priceProviderId: 'ethereum' },

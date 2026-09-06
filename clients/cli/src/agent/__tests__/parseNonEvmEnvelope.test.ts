@@ -6,8 +6,8 @@
  * agent path on 2026-05-10 (see task 100526-sdk-cli-non-evm-signing.md).
  *
  * Critical invariants locked here:
- * - `txArgs.amount` is base-unit integer string; parser converts via
- *   `formatUnits(BigInt(amount), chainDecimals)` before vault.send.
+ * - `txArgs.amount` is a base-unit integer string; parser converts via
+ *   native or resolved token decimals before vault.send.
  * - For native sends, `symbol` is undefined (vault.send defaults to
  *   native chain coin).
  * - Memo passes through unchanged when present, undefined when empty.
@@ -98,6 +98,43 @@ describe('parseNonEvmEnvelope', () => {
       expect(args.amount).toBe('0.001')
       expect(args.to).toBe('iwMx27vvAiaQteMhdpSBVDRztiSt1Cxwcfkm6SQBpxA')
       expect(args.symbol).toBeUndefined()
+    })
+
+    it('converts known SPL token base units with token decimals', () => {
+      const tokenEnvelope = {
+        ...solEnvelope,
+        resolved: {
+          labels: {
+            resolved_amount: '1 USDC',
+            token: 'USDC (SPL token on Solana, 6 dec)',
+            token_resolved: 'USDC',
+          },
+        },
+      }
+
+      const args = parseNonEvmEnvelope(tokenEnvelope, Chain.Solana)
+      expect(args.amount).toBe('1')
+      expect(args.symbol).toBe('USDC')
+    })
+
+    it('forwards vault-configured token metadata to the canonical parser', () => {
+      const customEnvelope = {
+        ...solEnvelope,
+        resolved: { labels: { token_resolved: 'CUSTOM' } },
+        txArgs: { ...solEnvelope.txArgs, amount: '123456' },
+      }
+      const args = parseNonEvmEnvelope(customEnvelope, Chain.Solana, [
+        {
+          id: 'custom-mint',
+          symbol: 'CUSTOM',
+          name: 'Custom',
+          decimals: 5,
+          chainId: Chain.Solana,
+        },
+      ])
+
+      expect(args.amount).toBe('1.23456')
+      expect(args.symbol).toBe('CUSTOM')
     })
   })
 

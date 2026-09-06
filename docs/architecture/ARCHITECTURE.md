@@ -1511,7 +1511,7 @@ This approach means Rujira does not depend on modifications to `packages/core/`.
 ### Dependencies
 
 - `@vultisig/sdk` (peer dependency) — provides vault MPC signing
-- `@cosmjs/cosmwasm-stargate` — CosmWasm client for FIN contract queries
+- `@cosmjs/cosmwasm` — CosmWasm client for FIN contract queries
 
 ---
 

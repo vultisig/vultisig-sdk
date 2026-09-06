@@ -1,5 +1,5 @@
 import { Buffer } from 'buffer'
-import { sha256 } from '@noble/hashes/sha256'
+import { sha256 } from '@noble/hashes/sha2.js'
 
 import { buildQBTCAuthInfo, buildQBTCSignDocFromComponents, buildQBTCTxRaw, type QBTCTxComponents } from './QBTCTx'
 

@@ -5,7 +5,7 @@ import { sendJitoTransaction } from '@vultisig/core-chain/chains/solana/jito'
 import { isInError } from '@vultisig/lib-utils/error/isInError'
 import base58 from 'bs58'
 
-import { BroadcastTxResolver } from '../resolver'
+import { broadcastAccepted, broadcastFailed, BroadcastTxResolver, isRetryableBroadcastCause } from '../resolver'
 import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
 
 const solanaStandardRpcMaxAttempts = 3
@@ -40,16 +40,15 @@ const withSolanaBroadcastReason = (error: unknown): unknown => {
   return new Error([error.message, ...logs].join('\n'), { cause: error })
 }
 
-const sendSolanaRawTransaction = async (rawTransaction: Uint8Array) => {
+const sendSolanaRawTransaction = async (rawTransaction: Uint8Array): Promise<string> => {
   const client = getSolanaClient()
 
   for (let attempt = 1; attempt <= solanaStandardRpcMaxAttempts; attempt++) {
     try {
-      await client.sendRawTransaction(rawTransaction, {
+      return await client.sendRawTransaction(rawTransaction, {
         skipPreflight: false,
         preflightCommitment: 'confirmed',
       })
-      return
     } catch (error) {
       if (isTransientBlockhashError(error) && attempt < solanaStandardRpcMaxAttempts) {
         await wait(solanaStandardRpcRetryDelayMs * attempt)
@@ -58,10 +57,17 @@ const sendSolanaRawTransaction = async (rawTransaction: Uint8Array) => {
       throw error
     }
   }
+
+  throw new Error('Solana broadcast retry loop exhausted')
 }
 
 export const broadcastSolanaTx: BroadcastTxResolver<OtherChain.Solana> = async ({ chain, tx }) => {
-  const rawTransaction = base58.decode(tx.encoded)
+  let rawTransaction: Uint8Array
+  try {
+    rawTransaction = base58.decode(tx.encoded)
+  } catch (cause) {
+    return broadcastFailed(cause, false)
+  }
 
   // Try JITO first for MEV protection, but still relay through standard RPC.
   // JITO can accept sendTransaction without the signature later appearing in
@@ -73,7 +79,7 @@ export const broadcastSolanaTx: BroadcastTxResolver<OtherChain.Solana> = async (
   }
 
   try {
-    await sendSolanaRawTransaction(rawTransaction)
+    return broadcastAccepted(await sendSolanaRawTransaction(rawTransaction))
   } catch (error) {
     // A duplicate-signature error means the node already accepted this exact
     // signed transaction. Treat it as an idempotent success so a headless
@@ -95,12 +101,13 @@ export const broadcastSolanaTx: BroadcastTxResolver<OtherChain.Solana> = async (
     // raw-SDK consumer that broadcasts and skips that confirmation poll is
     // exposed to the optimistic result; the CLI agent always confirms.
     if (isInError(error, 'already been processed', 'AlreadyProcessed')) {
-      return
+      return broadcastAccepted()
     }
-    await verifyBroadcastByHash({
-      chain,
-      tx,
-      error: withSolanaBroadcastReason(error),
-    })
+    const cause = withSolanaBroadcastReason(error)
+    try {
+      return broadcastAccepted(await verifyBroadcastByHash({ chain, tx, error: cause }))
+    } catch (verifiedCause) {
+      return broadcastFailed(verifiedCause, isTransientBlockhashError(error) || isRetryableBroadcastCause(error))
+    }
   }
 }

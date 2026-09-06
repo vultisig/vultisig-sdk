@@ -21,4 +21,28 @@ describe('MemoryStorage', () => {
     firstRead!.nested.value = 'mutated after get'
     await expect(storage.get('value')).resolves.toEqual({ nested: { value: 'initial' } })
   })
+
+  it('applies conditional writes synchronously before yielding', async () => {
+    const storage = new MemoryStorage()
+    const results = await Promise.all([
+      storage.compareAndSet('vault', null, { owner: 'first' }),
+      storage.compareAndSet('vault', null, { owner: 'second' }),
+    ])
+
+    expect(results.filter(Boolean)).toHaveLength(1)
+    await expect(storage.get('vault')).resolves.toEqual(results[0] ? { owner: 'first' } : { owner: 'second' })
+  })
+
+  it('uses the documented JSON serialization contract for conditional writes', async () => {
+    const storage = new MemoryStorage()
+    await storage.set('vault', { owner: 'first', revision: 1 })
+
+    await expect(storage.compareAndSet('vault', { owner: 'first', revision: 1 }, { owner: 'second' })).resolves.toBe(
+      true
+    )
+    await expect(storage.compareAndSet('vault', { owner: 'first', revision: 1 }, { owner: 'third' })).resolves.toBe(
+      false
+    )
+    await expect(storage.get('vault')).resolves.toEqual({ owner: 'second' })
+  })
 })

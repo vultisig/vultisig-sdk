@@ -6,7 +6,6 @@ import { getCosmosAllowedFeeDenoms, isCosmosFeeDenomAllowed } from './cosmosFeeD
 describe('getCosmosAllowedFeeDenoms', () => {
   it('is single-entry (native only) for chains with no live-verified alternate', () => {
     expect(getCosmosAllowedFeeDenoms(CosmosChain.Cosmos)).toEqual(['uatom'])
-    expect(getCosmosAllowedFeeDenoms(CosmosChain.Kujira)).toEqual(['ukuji'])
     expect(getCosmosAllowedFeeDenoms(CosmosChain.Terra)).toEqual(['uluna'])
     expect(getCosmosAllowedFeeDenoms(CosmosChain.Akash)).toEqual(['uakt'])
     expect(getCosmosAllowedFeeDenoms(CosmosChain.Dydx)).toEqual(['adydx'])

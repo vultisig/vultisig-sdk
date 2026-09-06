@@ -60,6 +60,8 @@ vi.mock('@vultisig/core-chain/coin/chainFeeCoin', () => ({
     Mantle: { ticker: 'MNT', decimals: 18, logo: 'mnt' },
     Hyperliquid: { ticker: 'HYPE', decimals: 18, logo: 'hype' },
     Sei: { ticker: 'SEI', decimals: 18, logo: 'sei' },
+    // Required by kujiraCoinsOnThorChain module init — reads THORChain decimals at import time
+    THORChain: { ticker: 'RUNE', decimals: 8, logo: 'rune' },
   },
 }))
 

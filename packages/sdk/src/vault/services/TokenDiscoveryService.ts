@@ -91,6 +91,7 @@ export class TokenDiscoveryService {
           ticker: hasSymbolCollision ? `${ticker}@${addressDiscriminator(tokenId, collidingIdentities)}` : ticker,
           decimals: coin.decimals,
           logo: coin.logo,
+          ...(coin.priceProviderId === undefined ? {} : { priceProviderId: coin.priceProviderId }),
           ...(coin.isHidden === undefined ? {} : { isHidden: coin.isHidden }),
         }
       })
