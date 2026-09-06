@@ -6,7 +6,6 @@ export const cosmosFeeCoinDenom: Record<CosmosChain, string> = {
   [CosmosChain.Osmosis]: 'uosmo',
   [CosmosChain.MayaChain]: 'cacao',
   [CosmosChain.Dydx]: 'adydx',
-  [CosmosChain.Kujira]: 'ukuji',
   [CosmosChain.Terra]: 'uluna',
   [CosmosChain.TerraClassic]: 'uluna',
   [CosmosChain.Noble]: 'uusdc',

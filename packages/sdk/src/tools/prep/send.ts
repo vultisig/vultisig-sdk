@@ -21,6 +21,12 @@ export type PrepareSendTxFromKeysParams = {
   /** XRPL DestinationTag, independent from the transaction memo. */
   destinationTag?: number
   feeSettings?: FeeSettings
+  /**
+   * Set when this came from a MAX button, so the payload records it instead of the
+   * SDK guessing from how close `amount` sits to the balance. `amount` is still the
+   * exact figure signed — pass the same `balance - fee` the UI displayed.
+   */
+  sendMaxAmount?: boolean
 }
 
 /**
@@ -120,5 +126,6 @@ export const prepareSendTxFromKeys = async (
     walletCore,
     libType: identity.libType,
     feeSettings: params.feeSettings,
+    sendMaxAmount: params.sendMaxAmount,
   })
 }

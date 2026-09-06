@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/example-electron",
-  "version": "0.1.167",
+  "version": "0.1.170",
   "private": true,
   "main": "dist-electron/main.js",
   "scripts": {
@@ -9,6 +9,7 @@
     "build": "tsc && vite build",
     "build:electron": "npm run build && electron-builder",
     "preview": "vite preview",
+    "test": "vitest run electron/**/*.test.ts",
     "typecheck": "tsc --noEmit",
     "dist": "npm run build && electron-builder",
     "dist:mac": "npm run build && electron-builder --mac",

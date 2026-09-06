@@ -38,12 +38,6 @@ describe('estimateCosmosSwapFeeLabel', () => {
     expect(estimateCosmosSwapFeeLabel(Chain.Terra)).toBe('~0.0075 LUNA')
   })
 
-  // Kujira's chainFeeCoin ticker is spread from the kujira-merge THOR metadata
-  // (not a literal): a refactor that drops/renames KUJI silently breaks this.
-  it('resolves KUJI ticker via the kujira-merge canonical metadata (7500 ukuji = 0.0075 KUJI)', () => {
-    expect(estimateCosmosSwapFeeLabel(Chain.Kujira)).toBe('~0.0075 KUJI')
-  })
-
   // Noble / Akash / Dydx are Skip-routable cosmos sources the canonical mcp-ts
   // label also covers — dropping them would regress migrating consumers to ''.
   it('covers the remaining Skip-routable cosmos sources (Noble/Akash/Dydx)', () => {
@@ -73,16 +67,7 @@ describe('estimateCosmosSwapFeeLabel', () => {
 
   it('lists exactly the canonical-fee cosmos chains as label-eligible', () => {
     expect([...COSMOS_SWAP_FEE_LABEL_CHAINS].sort()).toEqual(
-      [
-        Chain.Akash,
-        Chain.Cosmos,
-        Chain.Dydx,
-        Chain.Kujira,
-        Chain.Noble,
-        Chain.Osmosis,
-        Chain.Terra,
-        Chain.TerraClassic,
-      ].sort()
+      [Chain.Akash, Chain.Cosmos, Chain.Dydx, Chain.Noble, Chain.Osmosis, Chain.Terra, Chain.TerraClassic].sort()
     )
   })
 })

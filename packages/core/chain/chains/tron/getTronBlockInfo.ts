@@ -90,15 +90,14 @@ export async function getTronBlockInfo({
       refBlockHashHex,
     })
   }
-  const currentTimestampMillis = Math.floor(Date.now())
-  const nowMillis = Math.floor(Date.now())
+  const blockHeaderTimestamp = shouldBePresent(currentBlock.block_header?.raw_data?.timestamp)
   const oneHourMillis = 60 * 60 * 1000
-  expiration = expiration ?? nowMillis + oneHourMillis
+  expiration = expiration ?? blockHeaderTimestamp + oneHourMillis
 
   return {
-    timestamp: timestamp ?? currentTimestampMillis,
+    timestamp: timestamp ?? blockHeaderTimestamp,
     expiration,
-    blockHeaderTimestamp: currentBlock.block_header?.raw_data?.timestamp ?? 0,
+    blockHeaderTimestamp,
     blockHeaderNumber: currentBlock.block_header?.raw_data?.number ?? 0,
     blockHeaderVersion: currentBlock.block_header?.raw_data?.version ?? 0,
     blockHeaderTxTrieRoot: currentBlock.block_header?.raw_data?.txTrieRoot ?? '',

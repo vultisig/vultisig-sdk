@@ -33,7 +33,15 @@ export type AssetRef = {
 }
 
 /** Kind of effect inferred from the decoded calldata / message. */
-export type EnvelopeKind = 'transfer' | 'approve' | 'delegate' | 'undelegate' | 'contractCall' | 'unknown'
+export type EnvelopeKind =
+  | 'transfer'
+  | 'approve'
+  | 'delegate'
+  | 'undelegate'
+  | 'redelegate'
+  | 'withdrawReward'
+  | 'contractCall'
+  | 'unknown'
 
 /**
  * Decoded, chain-agnostic representation of a pending transaction.
@@ -66,6 +74,14 @@ export type Envelope = {
    * Empty when the tx has no single recipient.
    */
   recipient: string
+
+  /**
+   * Source validator for Cosmos redelegations. Undefined for every other action.
+   * This is material to a redelegation: two payloads with the same destination
+   * and amount but different source validators must not produce the same
+   * canonical envelope.
+   */
+  validatorSrcAddress?: string
 
   /** Token being moved. */
   asset: AssetRef

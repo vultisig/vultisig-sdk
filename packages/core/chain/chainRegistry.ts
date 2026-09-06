@@ -67,7 +67,6 @@ export const chainRegistry = Object.freeze({
   [Chain.Ethereum]: descriptor(Chain.Ethereum, 'https://etherscan.io', '/address/', '/tx/'),
   [Chain.Cosmos]: descriptor(Chain.Cosmos, `${cosmosBlockExplorer}/cosmos`, '/address/', '/tx/'),
   [Chain.Dydx]: descriptor(Chain.Dydx, `${cosmosBlockExplorer}/dydx`, '/address/', '/tx/'),
-  [Chain.Kujira]: descriptor(Chain.Kujira, 'https://finder.kujira.network/kaiyo-1', '/address/', '/tx/'),
   [Chain.Avalanche]: descriptor(Chain.Avalanche, 'https://snowtrace.io', '/address/', '/tx/'),
   [Chain.BSC]: descriptor(Chain.BSC, 'https://bscscan.com', '/address/', '/tx/'),
   [Chain.Arbitrum]: descriptor(Chain.Arbitrum, 'https://arbiscan.io', '/address/', '/tx/'),

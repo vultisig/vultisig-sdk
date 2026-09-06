@@ -18,7 +18,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { checkSdkPackageExports } from './check-sdk-package-exports.mjs'
-import { createDisposableYarnEnv } from './quality-contracts-cache.mjs'
+import { createDisposableYarnEnv, runDisposableYarnInstall } from './quality-contracts-cache.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(__dirname, '..')
@@ -26,6 +26,7 @@ const repoRoot = path.resolve(__dirname, '..')
 const CLI_ENTRY = path.join(repoRoot, 'clients/cli/dist/index.js')
 const SDK_DIST_MARKER = path.join(repoRoot, 'packages/sdk/dist/index.node.esm.js')
 const YARN_CLI = path.join(repoRoot, '.yarn/releases/yarn-4.16.0.cjs')
+const PACKED_CONSUMER_INSTALL_TIMEOUT_MS = 10 * 60 * 1000
 const PACKAGE_CONTRACT_WORKSPACES = ['@vultisig/mpc-types', '@vultisig/mpc-wasm']
 const WINDOWS_CORE_CHAIN_EXPORTS = [
   './chains/thorchain/ruji/services/fetchMergeableTokenBalances',
@@ -55,11 +56,18 @@ function packageRelativePath(packageRoot, rel) {
 }
 
 function run(cmd, args, opts = {}) {
-  const res = spawnSync(cmd, args, {
-    encoding: 'utf8',
-    maxBuffer: 20 * 1024 * 1024,
-    ...opts,
-  })
+  return assertRunSucceeded(
+    cmd,
+    args,
+    spawnSync(cmd, args, {
+      encoding: 'utf8',
+      maxBuffer: 20 * 1024 * 1024,
+      ...opts,
+    })
+  )
+}
+
+function assertRunSucceeded(cmd, args, res) {
   if (res.error) throw res.error
   if (res.status !== 0) {
     const msg = [`Command failed: ${cmd} ${args.join(' ')}`, res.stdout?.trim(), res.stderr?.trim()]
@@ -70,12 +78,47 @@ function run(cmd, args, opts = {}) {
   return res
 }
 
+function yarnCommand(args) {
+  if (existsSync(YARN_CLI)) {
+    return { cmd: process.execPath, args: [YARN_CLI, ...args] }
+  }
+  return { cmd: 'yarn', args }
+}
+
+function runPackedConsumerInstall(opts = {}) {
+  if (!existsSync(YARN_CLI)) {
+    throw new Error(`Repository-pinned Yarn bundle is missing: ${YARN_CLI}`)
+  }
+
+  const command = {
+    cmd: process.execPath,
+    args: [YARN_CLI, 'install', '--no-immutable'],
+  }
+  const result = runDisposableYarnInstall(
+    () =>
+      spawnSync(command.cmd, command.args, {
+        encoding: 'utf8',
+        maxBuffer: 20 * 1024 * 1024,
+        timeout: PACKED_CONSUMER_INSTALL_TIMEOUT_MS,
+        killSignal: 'SIGTERM',
+        ...opts,
+      }),
+    {
+      onRetry: () => {
+        console.warn(
+          `Packed-consumer install exceeded ${PACKED_CONSUMER_INSTALL_TIMEOUT_MS}ms; retrying once after a transport timeout.`
+        )
+      },
+    }
+  )
+
+  return assertRunSucceeded(command.cmd, command.args, result)
+}
+
 /** Prefer repo-pinned Yarn so pack/add behave like CI. */
 function runYarn(args, opts = {}) {
-  if (existsSync(YARN_CLI)) {
-    return run(process.execPath, [YARN_CLI, ...args], opts)
-  }
-  return run('yarn', args, opts)
+  const command = yarnCommand(args)
+  return run(command.cmd, command.args, opts)
 }
 
 function assertCliBuilt() {
@@ -117,7 +160,9 @@ function validateCliSchemaOutput(stdout, label) {
 function smokeCli() {
   assertCliBuilt()
   run(process.execPath, [CLI_ENTRY, '--help'], { cwd: repoRoot })
-  const schemaRes = run(process.execPath, [CLI_ENTRY, 'schema'], { cwd: repoRoot })
+  const schemaRes = run(process.execPath, [CLI_ENTRY, 'schema'], {
+    cwd: repoRoot,
+  })
   validateCliSchemaOutput(schemaRes.stdout, 'CLI "schema"')
 }
 
@@ -273,6 +318,156 @@ function validatePackedWorkspaceExports(workRoot, workspaceName) {
   return { packageRoot, tgzPath }
 }
 
+function packageGraphResolutions({ sdkTgzPath, coreChainTgzPath, coreMpcTgzPath, mpcTypesTgzPath }) {
+  return {
+    '@vultisig/core-chain': `file:${coreChainTgzPath}`,
+    '@vultisig/core-mpc': `file:${coreMpcTgzPath}`,
+    '@vultisig/mpc-types': `file:${mpcTypesTgzPath}`,
+    '@vultisig/sdk': `file:${sdkTgzPath}`,
+  }
+}
+
+function packedPackageGraphSmoke(workRoot, packageGraphTarballs) {
+  const consumer = path.join(workRoot, 'package-graph-consumer')
+  mkdirSync(consumer, { recursive: true })
+
+  const localPackages = packageGraphResolutions(packageGraphTarballs)
+  writeFileSync(
+    path.join(consumer, 'package.json'),
+    `${JSON.stringify(
+      {
+        name: 'vultisig-package-graph-consumer',
+        private: true,
+        type: 'module',
+        packageManager: 'yarn@4.16.0',
+        dependencies: localPackages,
+        resolutions: localPackages,
+      },
+      null,
+      2
+    )}\n`
+  )
+  writeFileSync(path.join(consumer, '.yarnrc.yml'), 'nodeLinker: node-modules\n')
+  writeFileSync(
+    path.join(consumer, 'verify-package-graph.mjs'),
+    `import assert from 'node:assert/strict'
+import { buildSignBitcoinFromPsbt } from '@vultisig/core-chain/chains/utxo/tx/buildSignBitcoinFromPsbt'
+import { SignBitcoinSchema as compatibilitySchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/wasm_execute_contract_payload_pb'
+import { SignBitcoinSchema as canonicalSchema } from '@vultisig/mpc-types/types/vultisig/keysign/v1/wasm_execute_contract_payload_pb'
+import { Chain } from '@vultisig/sdk'
+
+assert.strictEqual(compatibilitySchema, canonicalSchema)
+const signBitcoin = buildSignBitcoinFromPsbt({
+  psbt: {
+    data: {
+      inputs: [
+        {
+          witnessUtxo: {
+            script: Buffer.from('00140000000000000000000000000000000000000000', 'hex'),
+            value: 12_345n,
+          },
+        },
+      ],
+    },
+    txInputs: [{ hash: Buffer.alloc(32, 1), index: 2, sequence: 0xfffffffe }],
+    txOutputs: [{ script: Buffer.from('6a02cafe', 'hex'), value: 1_234n }],
+    version: 2,
+    locktime: 0,
+  },
+  senderAddress: '',
+})
+assert.equal(signBitcoin.$typeName, 'vultisig.keysign.v1.SignBitcoin')
+assert.deepEqual(
+  {
+    hash: signBitcoin.inputs[0].hash,
+    index: signBitcoin.inputs[0].index,
+    amount: signBitcoin.inputs[0].amount,
+    scriptType: signBitcoin.inputs[0].scriptType,
+    sequence: signBitcoin.inputs[0].sequence,
+  },
+  { hash: '01'.repeat(32), index: 2, amount: 12_345n, scriptType: 'p2wpkh', sequence: 0xfffffffe }
+)
+assert.deepEqual(
+  {
+    amount: signBitcoin.outputs[0].amount,
+    opReturnData: signBitcoin.outputs[0].opReturnData,
+    scriptPubKey: signBitcoin.outputs[0].scriptPubKey,
+  },
+  { amount: 1_234n, opReturnData: 'cafe', scriptPubKey: '6a02cafe' }
+)
+assert.equal(Chain.Bitcoin, 'Bitcoin')
+console.log('Packed package graph ESM smoke passed')
+`
+  )
+  writeFileSync(
+    path.join(consumer, 'verify-sdk-require.cjs'),
+    `const assert = require('node:assert/strict')
+const sdk = require('@vultisig/sdk')
+assert.equal(sdk.Chain.Bitcoin, 'Bitcoin')
+console.log('Packed SDK CommonJS smoke passed')
+`
+  )
+  writeFileSync(
+    path.join(consumer, 'verify-package-graph-types.ts'),
+    `import type { SignBitcoin as CanonicalSignBitcoin } from '@vultisig/mpc-types/types/vultisig/keysign/v1/wasm_execute_contract_payload_pb'
+import type { SignBitcoin as CompatibleSignBitcoin } from '@vultisig/core-mpc/types/vultisig/keysign/v1/wasm_execute_contract_payload_pb'
+import type { buildSignBitcoinFromPsbt } from '@vultisig/core-chain/chains/utxo/tx/buildSignBitcoinFromPsbt'
+import type { Chain } from '@vultisig/sdk'
+
+declare const canonical: CanonicalSignBitcoin
+const compatible: CompatibleSignBitcoin = canonical
+export type PackageGraphBuilder = typeof buildSignBitcoinFromPsbt
+export type PackageGraphChain = Chain
+void compatible
+`
+  )
+  writeFileSync(
+    path.join(consumer, 'tsconfig.json'),
+    `${JSON.stringify(
+      {
+        compilerOptions: {
+          module: 'NodeNext',
+          moduleResolution: 'NodeNext',
+          strict: true,
+          noEmit: true,
+          skipLibCheck: true,
+        },
+        include: ['verify-package-graph-types.ts'],
+      },
+      null,
+      2
+    )}\n`
+  )
+
+  const env = createDisposableYarnEnv(workRoot)
+  runPackedConsumerInstall({
+    cwd: consumer,
+    env,
+    stdio: 'inherit',
+  })
+  run(process.execPath, ['verify-package-graph.mjs'], {
+    cwd: consumer,
+    env,
+    stdio: 'inherit',
+  })
+  run(process.execPath, ['verify-sdk-require.cjs'], {
+    cwd: consumer,
+    env,
+    stdio: 'inherit',
+  })
+
+  const typescriptBin = path.join(repoRoot, 'node_modules/typescript/bin/tsc')
+  if (!existsSync(typescriptBin)) {
+    throw new Error('TypeScript is required to verify the packed package graph')
+  }
+  run(process.execPath, [typescriptBin, '--project', 'tsconfig.json'], {
+    cwd: consumer,
+    env,
+    stdio: 'inherit',
+  })
+  console.log('Packed package graph declaration smoke passed')
+}
+
 function packedCliBinSmoke(
   workRoot,
   cliTgzPath,
@@ -280,6 +475,8 @@ function packedCliBinSmoke(
   clientSharedTgzPath,
   rujiraTgzPath,
   coreChainTgzPath,
+  coreMpcTgzPath,
+  mpcTypesTgzPath,
   coreConfigTgzPath,
   libUtilsTgzPath
 ) {
@@ -289,11 +486,10 @@ function packedCliBinSmoke(
   const localDeps = {
     '@vultisig/cli': `file:${cliTgzPath}`,
     '@vultisig/client-shared': `file:${clientSharedTgzPath}`,
-    '@vultisig/core-chain': `file:${coreChainTgzPath}`,
     '@vultisig/core-config': `file:${coreConfigTgzPath}`,
     '@vultisig/lib-utils': `file:${libUtilsTgzPath}`,
     '@vultisig/rujira': `file:${rujiraTgzPath}`,
-    '@vultisig/sdk': `file:${sdkTgzPath}`,
+    ...packageGraphResolutions({ sdkTgzPath, coreChainTgzPath, coreMpcTgzPath, mpcTypesTgzPath }),
   }
   const dependencies = {
     '@vultisig/cli': localDeps['@vultisig/cli'],
@@ -318,7 +514,7 @@ function packedCliBinSmoke(
 
   const env = createDisposableYarnEnv(workRoot)
 
-  runYarn(['install', '--no-immutable'], {
+  runPackedConsumerInstall({
     cwd: consumer,
     env,
     stdio: 'inherit',
@@ -347,9 +543,23 @@ function packedCliBinSmoke(
   validateCliSchemaOutput(schemaRes.stdout, 'Packed CLI "schema"')
 }
 
-function packedMcpBinSmoke(workRoot, tgzPath, sdkTgzPath, clientSharedTgzPath) {
+function packedMcpBinSmoke(
+  workRoot,
+  tgzPath,
+  sdkTgzPath,
+  clientSharedTgzPath,
+  coreChainTgzPath,
+  coreMpcTgzPath,
+  mpcTypesTgzPath
+) {
   const consumer = path.join(workRoot, 'mcp-consumer')
   mkdirSync(consumer, { recursive: true })
+
+  const localDeps = {
+    '@vultisig/client-shared': `file:${clientSharedTgzPath}`,
+    '@vultisig/mcp': `file:${tgzPath}`,
+    ...packageGraphResolutions({ sdkTgzPath, coreChainTgzPath, coreMpcTgzPath, mpcTypesTgzPath }),
+  }
 
   writeFileSync(
     path.join(consumer, 'package.json'),
@@ -360,14 +570,9 @@ function packedMcpBinSmoke(workRoot, tgzPath, sdkTgzPath, clientSharedTgzPath) {
         type: 'module',
         packageManager: 'yarn@4.16.0',
         dependencies: {
-          '@vultisig/client-shared': `file:${clientSharedTgzPath}`,
-          '@vultisig/mcp': `file:${tgzPath}`,
-          '@vultisig/sdk': `file:${sdkTgzPath}`,
+          '@vultisig/mcp': localDeps['@vultisig/mcp'],
         },
-        resolutions: {
-          '@vultisig/client-shared': `file:${clientSharedTgzPath}`,
-          '@vultisig/sdk': `file:${sdkTgzPath}`,
-        },
+        resolutions: localDeps,
       },
       null,
       2
@@ -377,7 +582,7 @@ function packedMcpBinSmoke(workRoot, tgzPath, sdkTgzPath, clientSharedTgzPath) {
 
   const env = createDisposableYarnEnv(workRoot)
 
-  runYarn(['install', '--no-immutable'], {
+  runPackedConsumerInstall({
     cwd: consumer,
     env,
     stdio: 'inherit',
@@ -418,8 +623,9 @@ async function main() {
 
     const { tgzPath: rujiraTgzPath } = validatePackedWorkspaceExports(workRoot, '@vultisig/rujira')
 
+    const packageContracts = new Map()
     for (const workspaceName of PACKAGE_CONTRACT_WORKSPACES) {
-      validatePackedWorkspaceExports(workRoot, workspaceName)
+      packageContracts.set(workspaceName, validatePackedWorkspaceExports(workRoot, workspaceName))
     }
 
     const { tgzPath: coreConfigTgzPath } = validatePackedWorkspaceExports(workRoot, '@vultisig/core-config')
@@ -431,6 +637,15 @@ async function main() {
       '@vultisig/core-chain'
     )
     validateWindowsCoreChainExports(coreChainPackageRoot)
+
+    const { tgzPath: coreMpcTgzPath } = validatePackedWorkspaceExports(workRoot, '@vultisig/core-mpc')
+
+    packedPackageGraphSmoke(workRoot, {
+      sdkTgzPath: tgzPath,
+      coreChainTgzPath,
+      coreMpcTgzPath,
+      mpcTypesTgzPath: packageContracts.get('@vultisig/mpc-types').tgzPath,
+    })
 
     const { tgzPath: clientSharedTgzPath } = validatePackedWorkspaceExports(workRoot, '@vultisig/client-shared')
 
@@ -445,6 +660,8 @@ async function main() {
       clientSharedTgzPath,
       rujiraTgzPath,
       coreChainTgzPath,
+      coreMpcTgzPath,
+      packageContracts.get('@vultisig/mpc-types').tgzPath,
       coreConfigTgzPath,
       libUtilsTgzPath
     )
@@ -452,7 +669,15 @@ async function main() {
     const mcpTgzPath = packWorkspace(workRoot, '@vultisig/mcp', 'mcp.tgz')
     const mcpPackageRoot = extractPackage(workRoot, mcpTgzPath, 'mcp')
     validateTarballBinFiles(mcpPackageRoot, ['vmcp', 'vultisig-mcp'])
-    packedMcpBinSmoke(workRoot, mcpTgzPath, tgzPath, clientSharedTgzPath)
+    packedMcpBinSmoke(
+      workRoot,
+      mcpTgzPath,
+      tgzPath,
+      clientSharedTgzPath,
+      coreChainTgzPath,
+      coreMpcTgzPath,
+      packageContracts.get('@vultisig/mpc-types').tgzPath
+    )
 
     console.log('quality:contracts OK')
   } finally {

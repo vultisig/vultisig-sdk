@@ -32,7 +32,6 @@ export const chainSpecificRecord = {
   [Chain.Cosmos]: 'cosmosSpecific',
   [Chain.Osmosis]: 'cosmosSpecific',
   [Chain.Dydx]: 'cosmosSpecific',
-  [Chain.Kujira]: 'cosmosSpecific',
   [Chain.Terra]: 'cosmosSpecific',
   [Chain.TerraClassic]: 'cosmosSpecific',
   [Chain.Noble]: 'cosmosSpecific',
