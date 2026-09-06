@@ -299,6 +299,9 @@ export {
 export { DEFAULT_CHAINS } from '../../constants'
 export { defaultChains } from '@vultisig/core-chain/Chain'
 
+// Canonical TRON address and TRC-20 ABI helpers, shared with the root SDK entrypoint.
+export { encodeTrc20TransferParam, tronBase58ToEvmHex, tronBase58ToHex, tronHexToBase58 } from '../../abi/tron'
+
 // WalletCore provider access
 export { configureWasm, getWalletCore } from '../../context/wasmRuntime'
 
