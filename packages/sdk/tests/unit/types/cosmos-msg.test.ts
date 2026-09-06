@@ -39,7 +39,12 @@ describe('CosmosMsgType', () => {
     expect(CosmosMsgType.MsgWithdrawDelegatorRewardUrl).toBe('/cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward')
   })
 
-  it('should have exactly 15 message types', () => {
-    expect(Object.keys(CosmosMsgType)).toHaveLength(15)
+  it('should have correct cosmos governance vote types', () => {
+    expect(CosmosMsgType.MsgVoteUrl).toBe('/cosmos.gov.v1.MsgVote')
+    expect(CosmosMsgType.MsgVoteV1Beta1Url).toBe('/cosmos.gov.v1beta1.MsgVote')
+  })
+
+  it('should have exactly 17 message types', () => {
+    expect(Object.keys(CosmosMsgType)).toHaveLength(17)
   })
 })
