@@ -301,6 +301,35 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.parseThorSwapMemo).toBe('function')
   })
 
+  it('exports the canonical signature-algorithm classification (ECDSA vs EdDSA) per chain', () => {
+    expect(typeof sdk.getSignatureAlgorithm).toBe('function')
+    expect(sdk.signatureAlgorithms).toBeDefined()
+
+    // Ripple / EVM / Cosmos / Terra / THOR / Tron -> ecdsa
+    for (const chain of [
+      sdk.Chain.Ripple,
+      sdk.Chain.Ethereum,
+      sdk.Chain.Cosmos,
+      sdk.Chain.TerraClassic,
+      sdk.Chain.THORChain,
+      sdk.Chain.Tron,
+    ]) {
+      expect(sdk.getSignatureAlgorithm(chain)).toBe('ecdsa')
+    }
+
+    // Solana / Sui / Polkadot / Bittensor / Ton / Cardano -> eddsa
+    for (const chain of [
+      sdk.Chain.Solana,
+      sdk.Chain.Sui,
+      sdk.Chain.Polkadot,
+      sdk.Chain.Bittensor,
+      sdk.Chain.Ton,
+      sdk.Chain.Cardano,
+    ]) {
+      expect(sdk.getSignatureAlgorithm(chain)).toBe('eddsa')
+    }
+  })
+
   it('exports the shared THORChain secured-asset catalog helpers', () => {
     expect(typeof sdk.getThorchainSecuredAssetCatalog).toBe('function')
     expect(typeof sdk.createThorchainSecuredAssetCatalog).toBe('function')
@@ -350,6 +379,11 @@ describe('@vultisig/sdk public exports', () => {
   it('exports the shared Cosmos send-fee constants used by the parity matrix', () => {
     expect(sdk.COSMOS_SEND_FEE_DEFAULT).toBe(7_500n)
     expect(sdk.MAYA_SEND_FEE_BASE_UNITS).toBe(2_000_000_000n)
+  })
+
+  it('exports the canonical Cosmos Tendermint/Stargate RPC registry', () => {
+    expect(sdk.tendermintRpcUrl[sdk.Chain.Cosmos]).toBe('https://cosmos-rpc.publicnode.com:443')
+    expect(sdk.tendermintRpcUrl[sdk.Chain.THORChain]).toBe('https://gateway.liquify.com/chain/thorchain_rpc')
   })
 
   it('exports the Cosmos staking gas limit helper, including TerraClassic redelegation headroom', () => {
