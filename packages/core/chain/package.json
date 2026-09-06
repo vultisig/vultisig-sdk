@@ -1010,6 +1010,11 @@
       "import": "./dist/chains/ton/config.js",
       "default": "./dist/chains/ton/config.js"
     },
+    "./chains/ton/failure": {
+      "types": "./dist/chains/ton/failure.d.ts",
+      "import": "./dist/chains/ton/failure.js",
+      "default": "./dist/chains/ton/failure.js"
+    },
     "./chains/ton/jetton/symbol": {
       "types": "./dist/chains/ton/jetton/symbol.d.ts",
       "import": "./dist/chains/ton/jetton/symbol.js",
