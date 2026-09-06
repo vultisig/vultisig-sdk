@@ -1339,3 +1339,6 @@ export {
   tronBase58ToHex,
   tronHexToBase58,
 } from './abi'
+
+// Grouped helper families retain the canonical tools implementations.
+export { balance, prep, swap } from './tools'
