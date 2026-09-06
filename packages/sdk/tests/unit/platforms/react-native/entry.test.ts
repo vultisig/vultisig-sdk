@@ -215,6 +215,32 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(sdkRn.JUPITER_PLATFORM_FEE_BPS).toBe(50)
   })
 
+  // RN maps both its runtime and its types to this entry, so anything the root
+  // advertises but this file omits is an import error for RN consumers — and TON is
+  // one of the chains RN broadcasts itself.
+  it('re-exports the TON failure taxonomy by identity, so an RN consumer can read a broadcast refusal', async () => {
+    const failure = await import('@vultisig/core-chain/chains/ton/failure')
+
+    expect(sdkRn.getTonTxFailure).toBe(failure.getTonTxFailure)
+    expect(sdkRn.parseTonBroadcastRejection).toBe(failure.parseTonBroadcastRejection)
+    expect(sdkRn.TonBroadcastRejectedError).toBe(failure.TonBroadcastRejectedError)
+    expect(sdkRn.tonTxFailureReasons).toBe(failure.tonTxFailureReasons)
+  })
+
+  it('explains the error the RN TON broadcast helper actually throws', () => {
+    // The exact shape `chains.ton.broadcastTonTx` raises on a refused external message.
+    const rejection = new Error(
+      'toncenter sendBocReturnHash failed: LITE_SERVER_UNKNOWN: cannot apply external message to current state : ' +
+        'External message was not accepted\nCannot run message on account: inbound external message rejected by ' +
+        'transaction 4C6FE61A4B7925532DEE47DEED8367FB9E918D4B32A9B9EC270BEF9D9C65CA13:\nexitcode=136, steps=13, gas_used=0\n'
+    )
+
+    const failure = sdkRn.parseTonBroadcastRejection(rejection)
+
+    expect(failure).toMatchObject({ reason: 'expired', phase: 'compute', exitCode: 136 })
+    expect(failure?.message).toMatch(/date and time/)
+  })
+
   it('exports default chain canonicals on the RN entrypoint', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 

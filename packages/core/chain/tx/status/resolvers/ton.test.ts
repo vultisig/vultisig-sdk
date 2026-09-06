@@ -103,42 +103,71 @@ describe('getTonTxStatus', () => {
     })
   })
 
-  it('fails an aborted transaction and still reports the fee it burned', async () => {
+  it('fails an aborted transaction, explains it, and still reports the fee it burned', async () => {
     respondWith({ aborted: true, compute_ph: okComputePhase, action: okActionPhase })
 
     await expect(getTonTxStatus({ chain: OtherChain.Ton, hash })).resolves.toEqual({
       status: 'error',
       receipt,
+      failure: { reason: 'aborted', phase: 'compute', message: expect.stringMatching(/aborted/) },
     })
   })
 
-  it('fails a reverted compute phase', async () => {
+  it('fails a reverted compute phase and names the exit code', async () => {
     respondWith({ aborted: false, compute_ph: { exit_code: 37 }, action: okActionPhase })
 
     await expect(getTonTxStatus({ chain: OtherChain.Ton, hash })).resolves.toEqual({
       status: 'error',
       receipt,
+      failure: {
+        reason: 'contract-rejected',
+        phase: 'compute',
+        exitCode: 37,
+        message: 'The contract rejected the transaction (exit code 37).',
+      },
+    })
+  })
+
+  it('explains the wallet-contract failures users actually hit: a replayed seqno and an expired deadline', async () => {
+    respondWith({ aborted: true, compute_ph: { exit_code: 133 } })
+
+    await expect(getTonTxStatus({ chain: OtherChain.Ton, hash })).resolves.toMatchObject({
+      status: 'error',
+      failure: { reason: 'seqno-mismatch', exitCode: 133, message: expect.stringMatching(/processed first/) },
+    })
+
+    respondWith({ aborted: true, compute_ph: { exit_code: 36 } })
+
+    await expect(getTonTxStatus({ chain: OtherChain.Ton, hash })).resolves.toMatchObject({
+      status: 'error',
+      failure: { reason: 'expired', exitCode: 36, message: expect.stringMatching(/date and time/) },
     })
   })
 
   // The whole point of the resolver: compute succeeds, the transaction is not
   // aborted, and the seqno is consumed — but the action phase moved nothing.
   const failedActionPhases = {
-    'success flag cleared': { ...okActionPhase, success: false },
-    'no funds to send': { ...okActionPhase, no_funds: true },
-    'nonzero result code': { ...okActionPhase, result_code: 37 },
-    'actions skipped': { ...okActionPhase, skipped_actions: 1 },
-    'result code without a success flag': { result_code: 37 },
-  }
+    'success flag cleared': [{ ...okActionPhase, success: false }, 'action-partially-failed'],
+    'no funds to send': [{ ...okActionPhase, no_funds: true }, 'insufficient-funds'],
+    'nonzero result code': [{ ...okActionPhase, result_code: 37 }, 'insufficient-funds'],
+    'actions skipped': [{ ...okActionPhase, skipped_actions: 1 }, 'action-partially-failed'],
+    'every action skipped with nothing sent': [
+      { ...okActionPhase, success: false, skipped_actions: 1, msgs_created: 0 },
+      'action-failed',
+    ],
+    'result code without a success flag': [{ result_code: 37 }, 'insufficient-funds'],
+    'an invalid destination': [{ ...okActionPhase, success: false, result_code: 36 }, 'invalid-destination'],
+  } as const
 
   it.each(Object.entries(failedActionPhases))(
     'fails a transaction whose action phase reports %s',
-    async (_, action) => {
+    async (_, [action, reason]) => {
       respondWith({ type: 'ord', aborted: false, compute_ph: okComputePhase, action })
 
-      await expect(getTonTxStatus({ chain: OtherChain.Ton, hash })).resolves.toEqual({
+      await expect(getTonTxStatus({ chain: OtherChain.Ton, hash })).resolves.toMatchObject({
         status: 'error',
         receipt,
+        failure: { reason, phase: 'action' },
       })
     }
   )
