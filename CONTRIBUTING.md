@@ -257,8 +257,8 @@ yarn test:all
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/my-feature`)
 3. Make your changes
-4. Ensure tests pass (`yarn test`)
-5. Ensure quality checks pass (`yarn check` covers typecheck, lint, knip, and Prettier; agents can use `yarn check:agent` for the same core checks with setup guidance; run `yarn check:ci` before relying on full CI parity)
+4. Run focused tests for the affected behavior locally. Required PR CI can own equivalent exhaustive suites; run the broader local suite when CI does not cover the change or early integrated proof is needed.
+5. Run relevant local static checks and real runtime QA. Required checks must actually pass on the current PR revision before merge. Build locally when validating an affected artifact or an unpublished consumer package; see [SDK build concurrency](docs/build-concurrency.md). `yarn check`, `yarn check:agent`, and `yarn check:ci` remain available when full local validation is needed. Follow the [checkout ordering guidance](#order-checks-and-tests-in-one-checkout) when running these commands with the root test suite.
 6. **Add a changeset** if your changes affect the published packages (`yarn changeset`)
 7. Commit with a descriptive message
 8. Push to your fork
@@ -309,14 +309,13 @@ Pre-commit hooks (via Husky) run lint-staged on changed files.
 
 ### Browser Example Checks
 
-Before finishing changes that touch `examples/browser` or `examples/shared`, run:
+For changes that affect browser example types or SDK integration, run the focused check and exercise the changed browser behavior:
 
 ```bash
 yarn typecheck:example-browser
-yarn check:agent
 ```
 
-Both commands use repo-local binaries. If dependencies are missing or TypeScript is too old for `ignoreDeprecations: "6.0"`, they print the setup command instead of falling through to ambiguous `command not found` or `TS5103` failures.
+Required PR CI can own equivalent broad static checks. Run `yarn check:agent` locally when those checks are not covered or early feedback is needed. Both commands use repo-local binaries. If dependencies are missing or TypeScript is too old for `ignoreDeprecations: "6.0"`, they print the setup command instead of falling through to ambiguous `command not found` or `TS5103` failures.
 
 ## Release Process
 
