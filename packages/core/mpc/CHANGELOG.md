@@ -1,5 +1,22 @@
 # @vultisig/core-mpc
 
+## 3.0.1
+
+### Patch Changes
+
+- [#2323](https://github.com/vultisig/vultisig-sdk/pull/2323) [`8a50970`](https://github.com/vultisig/vultisig-sdk/commit/8a50970438de64cdbeb281cf73925026e3ce3cf7) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Refuse XRPL issued-currency Payments the ledger would reject — a destination holding no trust line for the token, and an issuer that charges a transfer fee the payload cannot yet cover with a SendMax — instead of burning the fee on-chain. Accept the lowercase standard currency codes XRPL permits, report bad amounts and unusable destinations as domain errors, and pin both encoders against a shared issued-currency signing vector.
+
+- [#2310](https://github.com/vultisig/vultisig-sdk/pull/2310) [`af6c643`](https://github.com/vultisig/vultisig-sdk/commit/af6c643e9afa39cb0b4432a01cec40e4de4d8ecc) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(ton): let a dApp deadline tighten the signed expiry
+
+  `getTonChainSpecific` always signed `expireAt = now + 600`, so the `valid_until` a TonConnect `sendTransaction` carries never reached the wallet message: a request with a 60-second window was signed with a ten-minute one, and a broadcast landing after the dApp's window could execute on chain while the dApp already treated it as expired and retried.
+
+  `GetChainSpecificInput` now takes an optional `validUntil` (unix seconds) for `tonSpecific`. The signed `expireAt` is `min(now + 600, validUntil)` — the wallet's own window remains the ceiling — and a deadline already in the past fails the build instead of signing a transaction the network would reject. Callers that pass nothing keep the previous behaviour; co-signers read `expireAt` from the payload, so only what the initiator writes changes.
+
+  The expiry is computed last, after the seqno, bounceability and jetton-metadata lookups: each is a network round trip, so a deadline still ahead when the build starts can be behind by the time it finishes, and the wallet's own ten-minute window now starts when the payload is finished rather than being partly spent on those lookups.
+
+- Updated dependencies [[`8a50970`](https://github.com/vultisig/vultisig-sdk/commit/8a50970438de64cdbeb281cf73925026e3ce3cf7), [`af6c643`](https://github.com/vultisig/vultisig-sdk/commit/af6c643e9afa39cb0b4432a01cec40e4de4d8ecc), [`20de22f`](https://github.com/vultisig/vultisig-sdk/commit/20de22f49c244ffc065011291754f89ef0d6e61a), [`34f0faa`](https://github.com/vultisig/vultisig-sdk/commit/34f0faa7208ad594b8d18a3a2806c0f7867f2c85)]:
+  - @vultisig/core-chain@5.1.0
+
 ## 3.0.0
 
 ### Major Changes
