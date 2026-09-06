@@ -961,7 +961,7 @@ program
   .addHelpText(
     'after',
     `
-Statuses: pending, not_found, confirmed, failed
+Statuses: pending, not_found, expired, confirmed, failed
 Malformed hashes fail with INVALID_HASH (exit 4).
 
 Examples:

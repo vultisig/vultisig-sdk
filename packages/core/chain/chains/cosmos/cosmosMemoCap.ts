@@ -19,7 +19,6 @@ export const COSMOS_MEMO_DEFAULT_MAX_BYTES = 256
 const COSMOS_MEMO_MAX_BYTES_BY_CHAIN: Record<CosmosChain, number> = {
   [CosmosChain.Osmosis]: COSMOS_MEMO_DEFAULT_MAX_BYTES,
   [CosmosChain.Dydx]: COSMOS_MEMO_DEFAULT_MAX_BYTES,
-  [CosmosChain.Kujira]: COSMOS_MEMO_DEFAULT_MAX_BYTES,
   // Terra v2 (phoenix-1): live-verified 512 (2026-06-22, /cosmos/auth params) -
   // Terra raised MaxMemoCharacters above the sdk default.
   [CosmosChain.Terra]: 512,

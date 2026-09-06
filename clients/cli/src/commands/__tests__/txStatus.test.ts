@@ -68,6 +68,7 @@ describe('executeTxStatus', () => {
   it.each([
     [{ status: 'pending' as const, isKnown: true }, 'pending'],
     [{ status: 'not_found' as const, isKnown: false }, 'not_found'],
+    [{ status: 'expired' as const, isKnown: true }, 'expired'],
     [{ status: 'success' as const, receipt: undefined }, 'confirmed'],
     [{ status: 'error' as const, receipt: undefined }, 'failed'],
   ])('emits the CLI status %s consistently in JSON mode', async (result, expectedStatus) => {
@@ -87,6 +88,7 @@ describe('executeTxStatus', () => {
   it.each([
     [{ status: 'pending' as const, isKnown: true }, 'pending'],
     [{ status: 'not_found' as const, isKnown: false }, 'not_found'],
+    [{ status: 'expired' as const, isKnown: true }, 'expired'],
     [{ status: 'success' as const, receipt: undefined }, 'confirmed'],
     [{ status: 'error' as const, receipt: undefined }, 'failed'],
   ])('emits the CLI status %s consistently in human mode', async (result, expectedStatus) => {
@@ -127,6 +129,19 @@ describe('executeTxStatus', () => {
     )
     expect(readFileSync(process.env.VULTISIG_BROADCAST_JOURNAL_PATH!, 'utf8')).toContain(
       `"t":"resolved","hash":"${EVM_HASH}","status":"failed"`
+    )
+  })
+
+  it('returns an expired transaction immediately and records a failed broadcast resolution', async () => {
+    const result = { status: 'expired' as const, isKnown: true }
+    const getTxStatus = vi.fn().mockResolvedValue(result)
+
+    await expect(executeTxStatus(makeCtx(getTxStatus), { chain: Chain.Tron, txHash: 'a'.repeat(64) })).resolves.toEqual(
+      result
+    )
+    expect(getTxStatus).toHaveBeenCalledTimes(1)
+    expect(readFileSync(process.env.VULTISIG_BROADCAST_JOURNAL_PATH!, 'utf8')).toContain(
+      `"t":"resolved","hash":"${'a'.repeat(64)}","status":"failed"`
     )
   })
 

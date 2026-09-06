@@ -86,6 +86,12 @@ describe('parseLimitSwapMemo', () => {
     expect(() => parseLimitSwapMemo(wrongChain)).toThrow(/dest_addr is not a valid Bitcoin address/)
   })
 
+  it('rejects a checksum-corrupted but shape-valid Tron destination', () => {
+    const checksumInvalid = '=<:TRON.TRX:TA4Y62o6YC2Zsck9rZVGTvqW1AQ7X9zTn1:100/14400/0'
+
+    expect(() => parseLimitSwapMemo(checksumInvalid)).toThrow(/dest_addr is not a valid Tron address/)
+  })
+
   it('round-trips the memo it was given', () => {
     const { targetAsset, destinationAddress, limit, intervalBlocks, quantity } = parseLimitSwapMemo(validMemo)
 

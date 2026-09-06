@@ -30,7 +30,6 @@ const aliases: Record<string, Chain> = {
   cosmos: Chain.Cosmos,
   gaia: Chain.Cosmos,
   gaiachain: Chain.Cosmos,
-  kujira: Chain.Kujira,
   osmosis: Chain.Osmosis,
   dydx: Chain.Dydx,
   noble: Chain.Noble,

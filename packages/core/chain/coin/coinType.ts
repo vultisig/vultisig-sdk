@@ -28,7 +28,6 @@ export const getCoinType = ({ walletCore: { CoinType }, chain }: Input): CoinTyp
     [Chain.Dash]: () => CoinType.dash,
     [Chain.Solana]: () => CoinType.solana,
     [Chain.Cosmos]: () => CoinType.cosmos,
-    [Chain.Kujira]: () => CoinType.kujira,
     [Chain.Dydx]: () => CoinType.dydx,
     [Chain.Polkadot]: () => CoinType.polkadot,
     [Chain.Bittensor]: () => CoinType.polkadot,

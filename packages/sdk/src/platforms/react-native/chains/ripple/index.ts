@@ -1,6 +1,12 @@
 export type { XrpAccountInfo, XrpSubmitRejectionReason, XrpSubmitResult } from './rpc'
 export { getXrpAccountInfo, getXrpBalance, getXrpLedgerCurrentIndex, submitXrpTx, XrpSubmitRejectedError } from './rpc'
-export type { BuildXrpSendOptions, BuildXrpSendResult, XrpPaymentTx } from './tx'
+export type {
+  BuildXrpSendOptions,
+  BuildXrpSendResult,
+  XrpIssuedCurrencyAmount,
+  XrpIssuedCurrencyPayment,
+  XrpPaymentTx,
+} from './tx'
 export {
   buildXrpSendTx,
   deriveXrpAddress,
