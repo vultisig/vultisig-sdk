@@ -64,7 +64,15 @@ export type { CosmosBalanceChain, CosmosBalanceEntry, CosmosBalanceResult } from
 export { cosmosBalanceChains, getCosmosBalance, isCosmosBalanceChain } from './balance'
 
 // Canonical bytes oracle (calldata -> chain-agnostic Envelope)
-export type { AssetRef, ChainFamily, DecodeFromToolResultInput, Envelope, EnvelopeKind } from './decode'
+export type {
+  AssetRef,
+  ChainFamily,
+  CosmosEnvelopeAction,
+  CosmosVoteOption,
+  DecodeFromToolResultInput,
+  Envelope,
+  EnvelopeKind,
+} from './decode'
 export { decode, decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from './decode'
 
 // DEX primitives (read-only / pure math + on-chain quotes — no signing, no broadcast)
@@ -235,7 +243,10 @@ export type {
   CctpBurnMessage,
   CctpChainConfig,
   CctpClaimResult,
+  CctpReceiptLike,
+  CctpReceiptLog,
   CctpUnsignedTx,
+  ExtractedCctpMessage,
 } from './bridge'
 export {
   buildCctpBridge,
@@ -244,6 +255,7 @@ export {
   cctpChains,
   cctpSupportedChains,
   decodeCctpBurnMessage,
+  extractCctpMessageFromReceipt,
   formatUsdc,
   getCctpChain,
   getCctpChainNameByDomain,

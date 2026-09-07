@@ -487,6 +487,94 @@ describe('buildSwapKeysignPayload transfer routes', () => {
       walletCore: {} as never,
     })
 
+  it('carries the swap fee and its coin through the SwapKit payload', async () => {
+    // The fee is the only cost figure a cosigning peer cannot recompute: it
+    // holds no quote. Dropped here, its verify screen showed the network fee
+    // alone and a total that understated the swap (vultisig-windows#4362).
+    const swapQuote: SwapQuote = {
+      discounts: [],
+      quote: {
+        general: {
+          dstAmount: '144490532',
+          provider: 'swapkit',
+          routeProvider: 'NEAR',
+          tx: {
+            transfer: {
+              to: 't1Deposit',
+              amount: 9_332_136n,
+              txType: 'TRANSFER',
+              swapFee: { amount: 250_000n, chain: Chain.Zcash, decimals: 8 },
+            },
+          },
+        },
+      },
+    }
+
+    const payload = await buildSwapKeysignPayload({
+      fromCoin: { chain: Chain.Zcash, address: 't1Source', ticker: 'ZEC', decimals: 8 },
+      toCoin: { chain: Chain.Tron, address: 'TDestination', ticker: 'TRX', decimals: 6 },
+      amount: 0.09332136,
+      swapQuote,
+      vaultId: 'vault-id',
+      localPartyId: 'local-party',
+      fromPublicKey: publicKey,
+      toPublicKey: publicKey,
+      libType: 'DKLS',
+      walletCore: {} as never,
+    })
+
+    // Over the wire, not just in memory — the peer decodes bytes, and an
+    // unencoded field reaches it as an empty one.
+    const roundtrip = fromBinary(
+      KeysignPayloadSchema,
+      toBinary(KeysignPayloadSchema, create(KeysignPayloadSchema, { swapPayload: payload.swapPayload }))
+    )
+
+    expect(roundtrip.swapPayload.case).toBe('swapkitSwapPayload')
+    if (roundtrip.swapPayload.case === 'swapkitSwapPayload') {
+      expect(roundtrip.swapPayload.value.swapFee).toBe('250000')
+      expect(roundtrip.swapPayload.value.swapFeeChain).toBe(Chain.Zcash)
+      expect(roundtrip.swapPayload.value.swapFeeTokenId).toBeUndefined()
+      expect(roundtrip.swapPayload.value.swapFeeDecimals).toBe(8)
+      expect(roundtrip.swapPayload.value.subProvider).toBe('NEAR')
+    }
+  })
+
+  it('leaves the SwapKit payload fee empty when the route itemizes none', async () => {
+    // An empty amount with no coin is how a peer tells "no fee" from a fee it
+    // cannot price. A zero with a coin would render as a definite $0.00.
+    const swapQuote: SwapQuote = {
+      discounts: [],
+      quote: {
+        general: {
+          dstAmount: '144490532',
+          provider: 'swapkit',
+          tx: { transfer: { to: 't1Deposit', amount: 9_332_136n, txType: 'TRANSFER' } },
+        },
+      },
+    }
+
+    const payload = await buildSwapKeysignPayload({
+      fromCoin: { chain: Chain.Zcash, address: 't1Source', ticker: 'ZEC', decimals: 8 },
+      toCoin: { chain: Chain.Tron, address: 'TDestination', ticker: 'TRX', decimals: 6 },
+      amount: 0.09332136,
+      swapQuote,
+      vaultId: 'vault-id',
+      localPartyId: 'local-party',
+      fromPublicKey: publicKey,
+      toPublicKey: publicKey,
+      libType: 'DKLS',
+      walletCore: {} as never,
+    })
+
+    expect(payload.swapPayload.case).toBe('swapkitSwapPayload')
+    if (payload.swapPayload.case === 'swapkitSwapPayload') {
+      expect(payload.swapPayload.value.swapFee).toBe('')
+      expect(payload.swapPayload.value.swapFeeChain).toBeUndefined()
+      expect(payload.swapPayload.value.swapFeeDecimals).toBeUndefined()
+    }
+  })
+
   it('signs a Sui route even when SwapKit omits or renames the txType', async () => {
     mocks.getChainSpecific.mockResolvedValueOnce({ case: 'suicheSpecific', value: {} })
 

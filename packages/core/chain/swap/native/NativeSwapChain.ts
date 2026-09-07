@@ -44,7 +44,6 @@ export const nativeSwapEnabledChainsRecord = {
   [Chain.MayaChain]: [
     Chain.MayaChain,
     Chain.THORChain,
-    Chain.Kujira,
     Chain.Ethereum,
     Chain.Dash,
     Chain.Bitcoin,
@@ -82,7 +81,6 @@ export const nativeSwapChainIds = {
   [Chain.Litecoin]: 'LTC',
   [Chain.THORChain]: 'THOR',
   [Chain.MayaChain]: 'MAYA',
-  [Chain.Kujira]: 'KUJI',
   [Chain.Dash]: 'DASH',
   [Chain.Arbitrum]: 'ARB',
   [Chain.Zcash]: 'ZEC',
