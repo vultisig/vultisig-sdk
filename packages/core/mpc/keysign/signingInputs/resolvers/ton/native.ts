@@ -1,7 +1,9 @@
 import { Buffer } from 'buffer'
 import { validateTonComment } from '@vultisig/core-chain/chains/ton/comment'
+import { TonWalletVersion } from '@vultisig/core-chain/chains/ton/wallet'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { numberToEvenHex } from '@vultisig/lib-utils/hex/numberToHex'
+import { match } from '@vultisig/lib-utils/match'
 import { TW } from '@trustwallet/wallet-core'
 
 type BuildNativeTonTransferFromMessageInput = {
@@ -10,11 +12,13 @@ type BuildNativeTonTransferFromMessageInput = {
   payload?: string
   stateInit?: string
   bounceable: boolean
+  walletVersion: TonWalletVersion
 }
 
 type BuildNativeTonTransferInput = {
   keysignPayload: KeysignPayload
   bounceable: boolean
+  walletVersion: TonWalletVersion
 }
 
 const tonUnsignedDecimalRegex = /^\d+$/
@@ -64,6 +68,23 @@ export const tonAmountToBytes = (amount: string | bigint): Buffer => {
 export const tonSendMode = TW.TheOpenNetwork.Proto.SendMode.PAY_FEES_SEPARATELY
 
 /**
+ * The send mode for a given wallet contract.
+ *
+ * W5 is the exception to the rule above: its code refuses an external request
+ * unless every action carries `IGNORE_ACTION_PHASE_ERRORS`, because that is
+ * how it guarantees the seqno advances even when an action fails — the
+ * contract's own replay protection. WalletCore enforces the same check before
+ * it will build the message. The blindness the flag causes is covered on the
+ * other side: the status resolver reads the action phase, so a W5 send whose
+ * transfer was skipped reports as failed instead of confirmed.
+ */
+export const getTonSendMode = (walletVersion: TonWalletVersion): number =>
+  match(walletVersion, {
+    v4r2: () => tonSendMode,
+    v5r1: () => tonSendMode | TW.TheOpenNetwork.Proto.SendMode.IGNORE_ACTION_PHASE_ERRORS,
+  })
+
+/**
  * Builds the single WalletCore transfer for an app-initiated native TON send.
  *
  * Always signs `keysignPayload.toAmount` under `tonSendMode`, including for a MAX send.
@@ -76,6 +97,7 @@ export const tonSendMode = TW.TheOpenNetwork.Proto.SendMode.PAY_FEES_SEPARATELY
 export const buildNativeTonTransfer = ({
   keysignPayload,
   bounceable,
+  walletVersion,
 }: BuildNativeTonTransferInput): TW.TheOpenNetwork.Proto.Transfer => {
   const comment = keysignPayload.memo || ''
   validateTonComment({ memo: comment })
@@ -85,7 +107,7 @@ export const buildNativeTonTransfer = ({
     amount: tonAmountToBytes(keysignPayload.toAmount),
     bounceable,
     comment,
-    mode: tonSendMode,
+    mode: getTonSendMode(walletVersion),
   })
 }
 
@@ -99,6 +121,7 @@ export const buildNativeTonTransferFromMessage = ({
   payload = '',
   stateInit,
   bounceable,
+  walletVersion,
 }: BuildNativeTonTransferFromMessageInput): TW.TheOpenNetwork.Proto.Transfer => {
   return TW.TheOpenNetwork.Proto.Transfer.create({
     dest: to,
@@ -107,6 +130,6 @@ export const buildNativeTonTransferFromMessage = ({
     comment: '',
     customPayload: payload || undefined,
     stateInit: stateInit || undefined,
-    mode: tonSendMode,
+    mode: getTonSendMode(walletVersion),
   })
 }
