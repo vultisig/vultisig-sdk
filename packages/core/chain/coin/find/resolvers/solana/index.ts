@@ -8,6 +8,7 @@ import { FindCoinsResolver } from '@vultisig/core-chain/coin/find/resolver'
 import { getJupiterTokens } from '@vultisig/core-chain/coin/jupiter/api'
 import { knownTokensIndex } from '@vultisig/core-chain/coin/knownTokens'
 import { without } from '@vultisig/lib-utils/array/without'
+import { attempt } from '@vultisig/lib-utils/attempt'
 
 type SplHolding = {
   mint: string
@@ -34,9 +35,12 @@ const toHolding = (account: Awaited<ReturnType<typeof getSplAccounts>>[number]):
  *
  * Jupiter answers for a hundred mints per call and CoinGecko for thirty, so a
  * whole wallet costs a handful of calls; decimals come from the token account
- * itself, and curated metadata wins for tokens we ship ourselves. A failed
- * price-id lookup fails the round, since the caller persists the result and a
- * token saved without its price id would stay unpriced for good.
+ * itself, and curated metadata wins for tokens we ship ourselves. When Jupiter
+ * cannot be reached, listed mints are still discovered from registry metadata
+ * and only a mint verified since the registry's last refresh waits for the
+ * next round. A failed price-id lookup, by contrast, fails the round: the
+ * caller persists the result, and a token saved without its price id would
+ * stay unpriced for good.
  */
 export const findSolanaCoins: FindCoinsResolver<OtherChain.Solana> = async ({ address, chain }) => {
   const accounts = await getSplAccounts(address)
@@ -50,7 +54,11 @@ export const findSolanaCoins: FindCoinsResolver<OtherChain.Solana> = async ({ ad
   if (holdings.size === 0) return []
 
   const mints = [...holdings.keys()]
-  const [tokens, registry] = await Promise.all([getJupiterTokens(mints), getSolanaVerifiedTokenRegistry()])
+  const [jupiter, registry] = await Promise.all([attempt(getJupiterTokens(mints)), getSolanaVerifiedTokenRegistry()])
+  if ('error' in jupiter) {
+    console.warn('[solana] Jupiter metadata unavailable; discovering registry-listed mints only', jupiter.error)
+  }
+  const tokens = 'data' in jupiter && jupiter.data ? jupiter.data : {}
 
   const verified = [...holdings.values()].filter(({ mint }) => {
     const token = tokens[mint]

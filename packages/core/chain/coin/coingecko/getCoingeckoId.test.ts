@@ -50,10 +50,16 @@ describe('getSolanaCoingeckoIds', () => {
     await expect(getSolanaCoingeckoIds(['Alpha'])).resolves.toEqual({})
   })
 
-  it('keys the result by the mint as requested, whatever case CoinGecko echoes back', async () => {
+  it('matches mints exactly, since base58 is case-sensitive', async () => {
     queryUrlMock.mockResolvedValue({ data: [entry('abc', 'some-coin')] })
 
-    await expect(getSolanaCoingeckoIds(['AbC'])).resolves.toEqual({ AbC: 'some-coin' })
+    await expect(getSolanaCoingeckoIds(['AbC'])).resolves.toEqual({})
+  })
+
+  it('keeps mints that differ only by case apart', async () => {
+    queryUrlMock.mockResolvedValue({ data: [entry('AbC', 'first-coin'), entry('abc', 'second-coin')] })
+
+    await expect(getSolanaCoingeckoIds(['AbC', 'abc'])).resolves.toEqual({ AbC: 'first-coin', abc: 'second-coin' })
   })
 
   it('makes no request for an empty list', async () => {

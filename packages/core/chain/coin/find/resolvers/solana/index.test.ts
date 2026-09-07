@@ -173,6 +173,18 @@ describe('findSolanaCoins', () => {
     ])
   })
 
+  it('still discovers listed mints from registry metadata when the Jupiter search fails', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    getJupiterTokensMock.mockRejectedValue(new Error('429'))
+
+    const coins = await find()
+
+    expect(coins.map(coin => coin.id)).toEqual([USDC, JLUSDC])
+    expect(coins[1]).toMatchObject({ ticker: 'jlUSDC', logo: 'https://list/jlusdc.png', decimals: 6 })
+    expect(warn).toHaveBeenCalledTimes(1)
+    warn.mockRestore()
+  })
+
   it("trusts Jupiter's own verified flag when the registry has degraded to the curated list", async () => {
     getSolanaVerifiedTokenRegistryMock.mockResolvedValue(
       makeSolanaVerifiedTokenRegistry([{ address: USDC, symbol: 'USDC', decimals: 6, logo: 'usdc' }])

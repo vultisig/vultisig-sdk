@@ -52,6 +52,19 @@ describe('getJupiterTokens', () => {
     await expect(getJupiterTokens(['Alpha'])).resolves.toEqual({ Alpha: token('Alpha') })
   })
 
+  it('drops partial entries rather than passing on a token without a name or decimals', async () => {
+    queryUrlMock.mockResolvedValue([
+      { id: 'NoDecimals', symbol: 'ND', name: 'No decimals' },
+      { id: 'StringDecimals', symbol: 'SD', name: 'String decimals', decimals: '6' },
+      { id: 'NoName', symbol: 'NN', decimals: 6 },
+      token('EmptyName', { name: '' }),
+    ])
+
+    await expect(getJupiterTokens(['NoDecimals', 'StringDecimals', 'NoName', 'EmptyName'])).resolves.toEqual({
+      EmptyName: token('EmptyName', { name: '' }),
+    })
+  })
+
   it('makes no request for an empty list', async () => {
     await expect(getJupiterTokens([])).resolves.toEqual({})
     expect(queryUrlMock).not.toHaveBeenCalled()

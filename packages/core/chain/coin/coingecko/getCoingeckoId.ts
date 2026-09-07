@@ -28,16 +28,17 @@ export const getSolanaCoingeckoId = async ({ id }: { id: string }) => {
 }
 
 /**
- * CoinGecko ids for the given mints, keyed by mint as requested, read from
- * CoinGecko's on-chain index thirty mints per call. A mint it does not index,
- * or lists without a coin id, is absent from the result. A failed call
- * propagates instead of degrading to "no id": a caller that persists the
+ * CoinGecko ids for the given mints, keyed by mint, read from CoinGecko's
+ * on-chain index thirty mints per call. Mints are matched exactly: base58 is
+ * case-sensitive and CoinGecko echoes the on-chain spelling. A mint it does
+ * not index, or lists without a coin id, is absent from the result. A failed
+ * call propagates instead of degrading to "no id": a caller that persists the
  * answer would otherwise store a priced token as unpriced for good, whereas a
  * failed call can simply be retried.
  */
 export const getSolanaCoingeckoIds = async (ids: string[]): Promise<Record<string, string>> => {
   const requested = withoutDuplicates(ids)
-  const requestedByKey = new Map(requested.map(id => [id.toLowerCase(), id]))
+  const wanted = new Set(requested)
 
   const responses = await Promise.all(
     toBatches(requested, mintsPerLookup).map(batch =>
@@ -48,8 +49,10 @@ export const getSolanaCoingeckoIds = async (ids: string[]): Promise<Record<strin
   const result: Record<string, string> = {}
   for (const { data } of responses) {
     for (const { attributes } of data ?? []) {
-      const id = requestedByKey.get(attributes?.address?.toLowerCase() ?? '')
-      if (id && attributes?.coingecko_coin_id) result[id] = attributes.coingecko_coin_id
+      const address = attributes?.address
+      if (address && wanted.has(address) && attributes.coingecko_coin_id) {
+        result[address] = attributes.coingecko_coin_id
+      }
     }
   }
 

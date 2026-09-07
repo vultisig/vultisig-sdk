@@ -17,11 +17,15 @@ const verifiedListTimeoutMs = 60_000
 const isJupiterToken = (value: unknown): value is SolanaJupiterToken => {
   if (typeof value !== 'object' || value === null) return false
 
-  const { id, symbol } = value as { id?: unknown; symbol?: unknown }
+  const { id, symbol, name, decimals } = value as Record<string, unknown>
 
-  return typeof id === 'string' && typeof symbol === 'string'
+  return (
+    typeof id === 'string' && typeof symbol === 'string' && typeof name === 'string' && typeof decimals === 'number'
+  )
 }
 
+// An entry missing a required field is dropped rather than passed on as a
+// partial token that would surface as `decimals: undefined` downstream.
 const parseJupiterTokens = (response: unknown, source: string): SolanaJupiterToken[] => {
   if (!Array.isArray(response)) {
     throw new Error(`Jupiter ${source} did not return a token list`)
