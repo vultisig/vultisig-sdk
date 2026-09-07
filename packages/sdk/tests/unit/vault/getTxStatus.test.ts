@@ -1,6 +1,7 @@
 import { Chain } from '@vultisig/core-chain/Chain'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { VaultBase } from '../../../src/vault/VaultBase'
 import { VaultError, VaultErrorCode } from '../../../src/vault/VaultError'
 
 // Mock the core getTxStatus function
@@ -13,6 +14,10 @@ import { getTxStatus as coreTxStatus } from '@vultisig/core-chain/tx/status'
 const mockCoreTxStatus = vi.mocked(coreTxStatus)
 
 describe('getTxStatus core delegation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
   it('should return pending status', async () => {
     mockCoreTxStatus.mockResolvedValue({ status: 'pending' })
 
@@ -88,6 +93,38 @@ describe('getTxStatus core delegation', () => {
 
     expect(result.status).toBe('success')
     expect(result.receipt?.feeTicker).toBe('ATOM')
+  })
+
+  it('emits the terminal failure event when a transaction has expired', async () => {
+    mockCoreTxStatus.mockResolvedValue({ status: 'expired', isKnown: true })
+    const emit = vi.fn()
+
+    const result = await VaultBase.prototype.getTxStatus.call({ emit } as never, {
+      chain: Chain.Tron,
+      txHash: 'expired-tron-hash',
+    })
+
+    expect(result).toEqual({ status: 'expired', isKnown: true })
+    expect(emit).toHaveBeenCalledWith('transactionFailed', {
+      chain: Chain.Tron,
+      txHash: 'expired-tron-hash',
+    })
+  })
+
+  it('rejects an expired approval instead of treating it as confirmed', async () => {
+    const getTxStatus = vi.fn().mockResolvedValue({ status: 'expired', isKnown: true })
+    const waitForConfirmation = (
+      VaultBase.prototype as unknown as {
+        waitForConfirmation: (chain: Chain, txHash: string, timeoutMs: number, intervalMs: number) => Promise<void>
+      }
+    ).waitForConfirmation
+
+    await expect(
+      waitForConfirmation.call({ getTxStatus }, Chain.Tron, 'expired-approval-hash', 100, 1)
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: 'Approval tx expired: expired-approval-hash',
+    })
   })
 })
 

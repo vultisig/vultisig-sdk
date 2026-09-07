@@ -56,6 +56,20 @@ Before trusting a worktree test result, run the must-fail resolution control:
 yarn worktree:check
 ```
 
+When a linked worktree needs to install or update dependencies, use the guarded
+operation instead of running Yarn directly:
+
+```bash
+yarn worktree:deps -- install --immutable
+yarn worktree:deps -- up <package>@<version>
+```
+
+The guard builds every workspace that publishes generated executable targets
+before Yarn links them. After the requested operation succeeds or fails, it
+restores the worktree-owned workspace overrides and reruns the resolution
+control. A failed Yarn operation keeps its original exit status, even when the
+guard also reports a recovery problem.
+
 The check exits nonzero when a workspace link is missing, broken, or resolves
 outside the current checkout. For an independently installed worktree it also
 rejects a nested `node_modules/node_modules` symlink, which can make Node load a
@@ -125,7 +139,7 @@ We use ESLint and Prettier for code formatting:
 # Check linting
 yarn lint
 
-# Run agent-friendly local static checks with setup guidance
+# Run agent-friendly local checks with setup guidance
 yarn check:agent
 
 # Auto-fix linting issues
@@ -166,6 +180,38 @@ all local Markdown links.
 
 ## Testing
 
+### Order checks and tests in one checkout
+
+Run build preparation, checks, and the root test suite sequentially in the same
+checkout. `yarn test` includes `yarn test:scripts`, whose browser build integration
+tests delete and restore shared build outputs such as `packages/mpc-wasm/dist`.
+Typechecking can also write outputs: the browser example runs `prepare:sdk`
+before TypeScript, and SDK builds clean `packages/sdk/dist` before rebuilding it.
+Even `check:agent` can therefore trigger builds; these checks are not read-only.
+
+After dependency setup, complete the SDK build before checks, then start tests
+only if checks succeed:
+
+```bash
+yarn build:sdk && yarn check:agent && yarn test
+```
+
+For the full CI checks followed by the root test suite, use the existing command:
+
+```bash
+yarn check:all
+```
+
+It runs `yarn check:ci && yarn test`, so a failed check prevents tests from
+starting. Do not launch another build, typecheck, `check`, `check:agent`, or
+`check:ci` command while `test` or `test:scripts` is running in that checkout;
+likewise, let builds finish before starting checks that read their outputs.
+This ordering applies per checkout. Independent checkouts with their own build
+outputs can run concurrently. Focused tests that do not invoke the destructive
+build integration suite need only respect their own build-output dependencies.
+
+### Test suites
+
 ```bash
 # Run unit tests
 yarn test:unit
@@ -202,7 +248,7 @@ yarn test:all
 | `yarn quality:contracts`           | SDK tarball export validation, temp packed-consumer import/type smoke, and CLI dist `--help` + `schema` JSON (run after `yarn build:sdk` and `yarn cli:build`; included in `yarn check:ci`) |
 | `yarn quality:sdk-package-exports` | Build and pack the SDK, verify every manifest export target, and exercise Node-safe imports/requires from a clean consumer                                                                  |
 | `yarn check`                       | Run typecheck, lint, knip, and Prettier check in parallel                                                                                                                                   |
-| `yarn check:agent`                 | Run the core static gate subset sequentially after verifying repo-local ESLint and TypeScript                                                                                               |
+| `yarn check:agent`                 | Run the core checks sequentially after verifying repo-local ESLint and TypeScript                                                                                               |
 | `yarn build:shared`                | Build shared `@vultisig/core-*` / `@vultisig/lib-*` packages                                                                                                                                |
 | `yarn docs`                        | Generate TypeDoc API documentation                                                                                                                                                          |
 
@@ -211,8 +257,8 @@ yarn test:all
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/my-feature`)
 3. Make your changes
-4. Ensure tests pass (`yarn test`)
-5. Ensure quality checks pass (`yarn check` covers typecheck, lint, knip, and Prettier; agents can use `yarn check:agent` for the same core static gates with setup guidance; run `yarn check:ci` before relying on full CI parity)
+4. Run focused tests for the affected behavior locally. Required PR CI can own equivalent exhaustive suites; run the broader local suite when CI does not cover the change or early integrated proof is needed.
+5. Run relevant local static checks and real runtime QA. Required checks must actually pass on the current PR revision before merge. Build locally when validating an affected artifact or an unpublished consumer package; see [SDK build concurrency](docs/build-concurrency.md). `yarn check`, `yarn check:agent`, and `yarn check:ci` remain available when full local validation is needed. Follow the [checkout ordering guidance](#order-checks-and-tests-in-one-checkout) when running these commands with the root test suite.
 6. **Add a changeset** if your changes affect the published packages (`yarn changeset`)
 7. Commit with a descriptive message
 8. Push to your fork
@@ -263,14 +309,13 @@ Pre-commit hooks (via Husky) run lint-staged on changed files.
 
 ### Browser Example Checks
 
-Before finishing changes that touch `examples/browser` or `examples/shared`, run:
+For changes that affect browser example types or SDK integration, run the focused check and exercise the changed browser behavior:
 
 ```bash
 yarn typecheck:example-browser
-yarn check:agent
 ```
 
-Both commands use repo-local binaries. If dependencies are missing or TypeScript is too old for `ignoreDeprecations: "6.0"`, they print the setup command instead of falling through to ambiguous `command not found` or `TS5103` failures.
+Required PR CI can own equivalent broad static checks. Run `yarn check:agent` locally when those checks are not covered or early feedback is needed. Both commands use repo-local binaries. If dependencies are missing or TypeScript is too old for `ignoreDeprecations: "6.0"`, they print the setup command instead of falling through to ambiguous `command not found` or `TS5103` failures.
 
 ## Release Process
 

@@ -23,7 +23,7 @@ import type {
   YieldTransaction,
 } from './stakekitApi'
 import {
-  buildYieldActionScanRequest,
+  buildYieldActionScanRequests,
   callYieldActionWithFallback,
   getBalances,
   getYield,
@@ -35,6 +35,7 @@ export type {
   EvmScanRequest,
   PendingAction,
   ScanRequest,
+  SolanaScanRequest,
   StakekitBalanceEntry,
   StakekitBalanceItem,
   StakekitBalanceQuery,
@@ -54,27 +55,44 @@ export type {
   YieldTransaction,
 } from './stakekitApi'
 export {
+  buildYieldActionScanRequest,
+  buildYieldActionScanRequests,
+  buildYieldStepScanRequest,
   chunkStakekitBalanceQueries,
+  ensureTransactionsBuilt,
   fetchAllStakekitBalances,
   fetchStakekitBalancesBatch,
   STAKEKIT_BALANCE_QUERIES_PER_REQUEST,
 } from './stakekitApi'
-export { buildYieldActionScanRequest, buildYieldStepScanRequest, ensureTransactionsBuilt } from './stakekitApi'
 
 // --- Inline withScanRequest helper ---
 // (mcp-ts's withScanRequest isn't available in the SDK — inline it here)
-
-function withScanRequest<T extends object>(scanRequest: ScanRequest, rest: T): { scan_request: ScanRequest } & T {
-  return { scan_request: scanRequest, ...rest }
+//
+// `scan_request` (singular) is kept for backward compatibility with the
+// historical single-slot contract (first scannable step). `scan_requests`
+// (plural, architecture#1670) is additive: ALL steps 1:1 with
+// `transactions[]`, so a multi-step action (e.g. approve→stake) or a
+// non-EVM step can be handed to a downstream scanner in full instead of
+// losing coverage past the first leg.
+function withScanRequests<T extends object>(
+  scanRequests: ScanRequest[],
+  rest: T
+): { scan_request: ScanRequest; scan_requests: ScanRequest[] } & T {
+  const primary = scanRequests.find(req => req.kind !== 'unsupported') ?? {
+    kind: 'unsupported' as const,
+    reason: 'no_compiled_txs',
+  }
+  return { scan_request: primary, scan_requests: scanRequests, ...rest }
 }
 
 // --- Network mappings ---
 
 /**
  * Map a yield.xyz network slug to the PascalCase chain name the app uses everywhere.
- * Mirrors mcp-ts's `yieldNetworkToCanonicalChain`.
+ * Mirrors mcp-ts's `yieldNetworkToCanonicalChain`. Public so consumers that need
+ * the same network→chain bridge can import it instead of vendoring the mapper.
  */
-function yieldNetworkToCanonicalChain(network: string): string | null {
+export function yieldNetworkToCanonicalChain(network: string): string | null {
   switch (network) {
     case 'ethereum':
       return 'Ethereum'
@@ -174,7 +192,12 @@ function decodeYieldTransaction(tx: YieldTransaction): DecodedYieldStep {
 function canonicalizeEvmStep(step: DecodedYieldStep): Record<string, unknown> | null {
   const u = step.unsignedTransaction
   if (typeof u !== 'object') return null
-  const evm = u as { to?: unknown; value?: unknown; data?: unknown; from?: unknown }
+  const evm = u as {
+    to?: unknown
+    value?: unknown
+    data?: unknown
+    from?: unknown
+  }
   if (typeof evm.to !== 'string' || typeof evm.data !== 'string') return null
   const ur = u as Record<string, unknown>
   const out: Record<string, unknown> = {
@@ -197,7 +220,8 @@ function canonicalizeEvmStep(step: DecodedYieldStep): Record<string, unknown> | 
     (typeof ge.max_fee_per_gas === 'string' ? ge.max_fee_per_gas : null)
   const maxPrioVal =
     (typeof ur.maxPriorityFeePerGas === 'string' ? ur.maxPriorityFeePerGas : null) ??
-    (typeof ge.maxPriorityFeePerGas === 'string' ? ge.maxPriorityFeePerGas : null)
+    (typeof ge.maxPriorityFeePerGas === 'string' ? ge.maxPriorityFeePerGas : null) ??
+    (typeof ge.max_priority_fee_per_gas === 'string' ? ge.max_priority_fee_per_gas : null)
   if (gasLimitVal !== null) out.gas_limit = gasLimitVal
   if (maxFeeVal !== null) out.max_fee_per_gas = maxFeeVal
   if (maxPrioVal !== null) out.max_priority_fee_per_gas = maxPrioVal
@@ -359,6 +383,20 @@ export function parseActionDisplay(data: YieldActionResponse) {
   }
 }
 
+/** Canonical shape returned by {@link parseActionDisplay}. */
+export type StakekitActionDisplay = ReturnType<typeof parseActionDisplay>
+
+/** Canonical result of the enter/manage builders with singular and per-step scan requests. */
+export type StakekitActionResult = {
+  scan_request: ScanRequest
+  scan_requests: ScanRequest[]
+} & StakekitActionDisplay
+
+/** Canonical result of {@link stakekitBuildExit}: an action result plus the cooldown period, when known. */
+export type StakekitExitResult = StakekitActionResult & {
+  cooldown_days?: number
+}
+
 // --- Validator picker ---
 
 function pickValidators(validators: Validator[]): string[] {
@@ -431,6 +469,14 @@ const STAKEKIT_NETWORK_ALIASES: Readonly<Record<string, string>> = {
   bnbchain: 'binance',
   avalanche: 'avalanche-c',
   avax: 'avalanche-c',
+  // sdk#1640: `CronosChain` is this SDK's OWN canonical Chain id, and it was the
+  // one canonical id in StakeKit's supported set that did not round-trip. Without
+  // this, `balances({ network: 'CronosChain' })` sent the literal `cronoschain`
+  // upstream — an unknown slug — and returned `[]`, which reads as "you hold
+  // nothing on Cronos" rather than "that network name was not understood".
+  cronoschain: 'cronos',
+  'cronos chain': 'cronos',
+  'cronos-chain': 'cronos',
 }
 
 const normalizeStakekitNetwork = (network: string): string => {
@@ -487,8 +533,28 @@ export async function stakekitSearch(params: {
   return products
 }
 
+/** Canonical result of {@link stakekitDetails}. */
+export type StakekitDetailsResult = {
+  id: string
+  name: string
+  token: string
+  network: string
+  apy: number
+  type: string
+  provider: string
+  isAvailable: boolean
+  fee: { percentage: number } | null
+  cooldownDays: number
+  warmupDays: number
+  rewardSchedule: string
+  rewardClaiming: string
+  enterEnabled: boolean
+  exitEnabled: boolean
+  acceptedTokens: { symbol: string; network: string; address?: string }[]
+}
+
 /** Get full yield product metadata. */
-export async function stakekitDetails(params: { apiKey?: string; yieldId: string }): Promise<object> {
+export async function stakekitDetails(params: { apiKey?: string; yieldId: string }): Promise<StakekitDetailsResult> {
   const p = await getYield(params.yieldId, params.apiKey)
   return {
     id: p.id,
@@ -506,7 +572,11 @@ export async function stakekitDetails(params: { apiKey?: string; yieldId: string
     rewardClaiming: p.metadata.rewardClaiming ?? '',
     enterEnabled: p.status.enter,
     exitEnabled: p.status.exit,
-    acceptedTokens: p.tokens.map(t => ({ symbol: t.symbol, network: t.network, address: t.address })),
+    acceptedTokens: p.tokens.map(t => ({
+      symbol: t.symbol,
+      network: t.network,
+      address: t.address,
+    })),
   }
 }
 
@@ -567,13 +637,16 @@ export async function stakekitBuildEnter(params: {
   amount: string
   validatorAddresses?: string[]
   tronResource?: 'BANDWIDTH' | 'ENERGY'
-}): Promise<object> {
+}): Promise<StakekitActionResult> {
   const inputErr = validateStakekitActionInput(params.address, params.amount)
   if (inputErr) throw new Error(inputErr)
   const resolved = await resolveActionArgs(
     params.yieldId,
     'enter',
-    { validatorAddresses: params.validatorAddresses, tronResource: params.tronResource },
+    {
+      validatorAddresses: params.validatorAddresses,
+      tronResource: params.tronResource,
+    },
     params.apiKey
   )
 
@@ -612,8 +685,8 @@ export async function stakekitBuildEnter(params: {
   if (!actionData.transactions) throw new Error('yield.xyz returned no transactions')
 
   const display = parseActionDisplay(actionData)
-  const scanRequest = buildYieldActionScanRequest(actionData)
-  return withScanRequest(scanRequest, display)
+  const scanRequests = buildYieldActionScanRequests(actionData, params.address)
+  return withScanRequests(scanRequests, display)
 }
 
 /**
@@ -628,13 +701,16 @@ export async function stakekitBuildExit(params: {
   amount: string
   validatorAddresses?: string[]
   tronResource?: 'BANDWIDTH' | 'ENERGY'
-}): Promise<object> {
+}): Promise<StakekitExitResult> {
   const inputErr = validateStakekitActionInput(params.address, params.amount)
   if (inputErr) throw new Error(inputErr)
   const resolved = await resolveActionArgs(
     params.yieldId,
     'exit',
-    { validatorAddresses: params.validatorAddresses, tronResource: params.tronResource },
+    {
+      validatorAddresses: params.validatorAddresses,
+      tronResource: params.tronResource,
+    },
     params.apiKey
   )
 
@@ -676,10 +752,10 @@ export async function stakekitBuildExit(params: {
   if (!actionData.transactions) throw new Error('yield.xyz returned no transactions')
 
   const display = parseActionDisplay(actionData)
-  const scanRequest = buildYieldActionScanRequest(actionData)
+  const scanRequests = buildYieldActionScanRequests(actionData, params.address)
   const cooldownDays = yieldMeta?.metadata?.cooldownPeriod?.days ?? null
   return {
-    ...withScanRequest(scanRequest, display),
+    ...withScanRequests(scanRequests, display),
     ...(cooldownDays !== null ? { cooldown_days: cooldownDays } : {}),
   }
 }
@@ -701,7 +777,7 @@ export async function stakekitBuildManage(params: {
     | 'UNLOCK_LOCKED'
     | 'RESTAKE'
   passthrough: string
-}): Promise<object> {
+}): Promise<StakekitActionResult> {
   const addrErr = validateStakekitActionAddress(params.address)
   if (addrErr) throw new Error(addrErr)
   const raw = await callYieldActionWithFallback({
@@ -731,8 +807,8 @@ export async function stakekitBuildManage(params: {
   if (!actionData.transactions) throw new Error('yield.xyz returned no transactions')
 
   const display = parseActionDisplay(actionData)
-  const scanRequest = buildYieldActionScanRequest(actionData)
-  return withScanRequest(scanRequest, display)
+  const scanRequests = buildYieldActionScanRequests(actionData, params.address)
+  return withScanRequests(scanRequests, display)
 }
 
 /** The sdk.defi.stakekit namespace surface. */

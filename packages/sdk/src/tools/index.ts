@@ -19,21 +19,44 @@ export {
 import * as evm from './evm'
 
 export { evm }
-export type { EvmBalance, EvmGasPrice, GetEvmBalancesParams, GetTokenApprovalsResult, TokenApproval } from './evm'
+export type {
+  DecodedAgentRouterDeposit,
+  EvmBalance,
+  EvmGasPrice,
+  GetEvmBalancesParams,
+  GetTokenApprovalsResult,
+  TokenApproval,
+  UsdcPaymentChain,
+  UsdcPaymentChainConfig,
+} from './evm'
 export {
   abiDecode,
   abiEncode,
+  AGENT_ROUTER_ADDRESS,
+  AGENT_ROUTER_DEPOSIT_WITH_MEMO_SELECTOR,
+  CHECKOUT_CHAIN_IDS,
+  decodeAgentRouterDepositWithMemo,
+  encodeAgentRouterDepositWithMemo,
   encodeErc20Approve,
   encodeErc20Revoke,
   evmCall,
   evmCheckAllowance,
   evmGasPrice,
   evmTxInfo,
+  formatCheckoutUsdcDisplay,
   getEvmBalances,
   getTokenApprovals,
+  isUsdcPaymentChain,
+  lookupUsdcPaymentChain,
   MAX_UINT256,
   resolve4ByteSelector,
   resolveEns,
+  resolveUsdcPaymentChainId,
+  resolveUsdcPaymentContract,
+  USDC_CONTRACTS,
+  USDC_PAYMENT_CHAIN_CONFIG,
+  USDC_PAYMENT_CHAINS,
+  USDC_PAYMENT_DECIMALS,
 } from './evm'
 
 // Balance reads (pure decode + decimal-scale, no signing/broadcast)
@@ -41,7 +64,15 @@ export type { CosmosBalanceChain, CosmosBalanceEntry, CosmosBalanceResult } from
 export { cosmosBalanceChains, getCosmosBalance, isCosmosBalanceChain } from './balance'
 
 // Canonical bytes oracle (calldata -> chain-agnostic Envelope)
-export type { AssetRef, ChainFamily, DecodeFromToolResultInput, Envelope, EnvelopeKind } from './decode'
+export type {
+  AssetRef,
+  ChainFamily,
+  CosmosEnvelopeAction,
+  CosmosVoteOption,
+  DecodeFromToolResultInput,
+  Envelope,
+  EnvelopeKind,
+} from './decode'
 export { decode, decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from './decode'
 
 // DEX primitives (read-only / pure math + on-chain quotes — no signing, no broadcast)
@@ -212,7 +243,10 @@ export type {
   CctpBurnMessage,
   CctpChainConfig,
   CctpClaimResult,
+  CctpReceiptLike,
+  CctpReceiptLog,
   CctpUnsignedTx,
+  ExtractedCctpMessage,
 } from './bridge'
 export {
   buildCctpBridge,
@@ -221,6 +255,7 @@ export {
   cctpChains,
   cctpSupportedChains,
   decodeCctpBurnMessage,
+  extractCctpMessageFromReceipt,
   formatUsdc,
   getCctpChain,
   getCctpChainNameByDomain,
@@ -262,10 +297,15 @@ export type {
   PendlePtBuildResult,
   PendleUnsignedTx,
   ScanRequest,
+  SolanaScanRequest,
+  StakekitActionDisplay,
+  StakekitActionResult,
   StakekitBalanceEntry,
   StakekitBalanceItem,
   StakekitBalanceQuery,
   StakekitBalancesResult,
+  StakekitDetailsResult,
+  StakekitExitResult,
   UnsupportedScanRequest,
   Validator,
   YieldActionResponse,
@@ -288,6 +328,7 @@ export {
   buildRedeem,
   buildSellPt,
   buildYieldActionScanRequest,
+  buildYieldActionScanRequests,
   buildYieldStepScanRequest,
   chunkStakekitBalanceQueries,
   defi,
@@ -314,6 +355,7 @@ export {
   stakekitDetails,
   stakekitSearch,
   stripChainPrefix,
+  yieldNetworkToCanonicalChain,
 } from './defi'
 
 // Verifier client

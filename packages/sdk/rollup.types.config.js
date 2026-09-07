@@ -8,8 +8,6 @@ const dtsPluginOptions = {
       '@/*': ['./src/*'],
       '@helpers/*': ['./tests/e2e/helpers/*'],
       '@types': ['./src/types'],
-      '@vultisig/core-chain/*': ['../core/chain/*'],
-      '@vultisig/core-mpc/*': ['../core/mpc/*'],
       '@vultisig/core-config': ['../core/config/index.ts'],
       '@vultisig/core-config/*': ['../core/config/*'],
       '@vultisig/lib-utils/*': ['../lib/utils/*'],
@@ -128,6 +126,8 @@ export default defineConfig([
   createSubpathTypesConfig('src/tools/balance/index.ts', 'dist/tools/balance/index.d.ts'),
   createSubpathTypesConfig('src/chains/tron/index.ts', 'dist/chains/tron/index.d.ts'),
   createSubpathTypesConfig('src/chains/utxo/index.ts', 'dist/chains/utxo/index.d.ts'),
+  createSubpathTypesConfig('src/chains/ton/index.ts', 'dist/chains/ton/index.d.ts'),
+  createSubpathTypesConfig('src/abi/index.ts', 'dist/abi/index.d.ts'),
   // Canonical seedphrase helpers and import/discovery services are published
   // as a narrow declaration surface alongside their dedicated runtime bundle.
   createSubpathTypesConfig('src/seedphrase/index.ts', 'dist/seedphrase/index.d.ts'),
@@ -137,4 +137,5 @@ export default defineConfig([
   // coupling, so the subpath ships the same all-platform conditions as ./tools/decode.
   createSubpathTypesConfig('src/tools/price/index.ts', 'dist/tools/price/index.d.ts'),
   createSubpathTypesConfig('src/tx/index.ts', 'dist/tx/index.d.ts'),
+  createSubpathTypesConfig('src/server/index.ts', 'dist/server/index.d.ts'),
 ])

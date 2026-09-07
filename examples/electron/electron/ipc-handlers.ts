@@ -3,6 +3,7 @@ import { dialog, type IpcMain } from 'electron'
 import * as fs from 'fs/promises'
 
 import { getSDK, getSDKModule, rejectPasswordRequest, resolvePasswordRequest } from './sdk'
+import { getTxStatusEvent } from './tx-status-event'
 
 export function registerIpcHandlers(ipcMain: IpcMain): void {
   // === SDK LIFECYCLE ===
@@ -578,11 +579,8 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
     const vault = await sdk.getVaultById(vaultId)
     if (!vault) throw new VaultError(VaultErrorCode.VaultNotFound, 'Vault not found')
     const result = await vault.getTxStatus({ chain: chain as any, txHash })
-    if (result.status === 'success') {
-      _event.sender.send('vault:transactionConfirmed', { chain, txHash })
-    } else if (result.status === 'error') {
-      _event.sender.send('vault:transactionFailed', { chain, txHash })
-    }
+    const txStatusEvent = getTxStatusEvent(result.status)
+    if (txStatusEvent) _event.sender.send(txStatusEvent, { chain, txHash })
     return {
       status: result.status,
       receipt: result.receipt
