@@ -65,6 +65,13 @@ export { fiatToAmount, FiatToAmountError } from './utils/fiatToAmount'
 export { normalizeChain, UnknownChainError } from './utils/normalizeChain'
 export { resolveChainReference } from './utils/resolveChainReference'
 export { ChainAmountParseError, toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
+export type { TonTxFailure, TonTxFailureReason, TonTxPhase } from '@vultisig/core-chain/chains/ton/failure'
+export {
+  getTonTxFailure,
+  parseTonBroadcastRejection,
+  TonBroadcastRejectedError,
+  tonTxFailureReasons,
+} from '@vultisig/core-chain/chains/ton/failure'
 export {
   CosmosSequenceMismatchError,
   toCosmosSequenceMismatchError,
@@ -317,6 +324,7 @@ export {
   MAYA_SEND_FEE_BASE_UNITS,
   TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS,
 } from '@vultisig/core-chain/chains/cosmos/gas'
+export { tendermintRpcUrl } from '@vultisig/core-chain/chains/cosmos/tendermintRpcUrl'
 
 // Cosmos x/auth.MaxMemoCharacters cap, per chain — single source of truth for
 // "will this memo fit before broadcast rejects it with sdk code 12 (memo too
@@ -407,6 +415,7 @@ export type {
   SwapQuoteResult,
   SwapTxParams,
   Token,
+  TxFailureInfo,
   TxReceiptInfo,
   TxStatusResult,
   UtxoGasInfo,
@@ -887,6 +896,8 @@ export type {
   CosmosBalanceChain,
   CosmosBalanceEntry,
   CosmosBalanceResult,
+  CosmosEnvelopeAction,
+  CosmosVoteOption,
   DecodedAgentRouterDeposit,
   DecodeFromToolResultInput,
   Defi,
@@ -956,10 +967,14 @@ export type {
   SolanaScanRequest,
   SolBalance,
   SplTokenBalance,
+  StakekitActionDisplay,
+  StakekitActionResult,
   StakekitBalanceEntry,
   StakekitBalanceItem,
   StakekitBalanceQuery,
   StakekitBalancesResult,
+  StakekitDetailsResult,
+  StakekitExitResult,
   SuiAllBalancesResult,
   SuiBalance,
   SuiCoinBalance,
@@ -1236,6 +1251,7 @@ export {
   USDC_PAYMENT_DECIMALS,
   utxoFeeRate,
   VerifierClient,
+  yieldNetworkToCanonicalChain,
 } from './tools'
 
 // The protobuf builder is environment-neutral despite its historical RN path.
