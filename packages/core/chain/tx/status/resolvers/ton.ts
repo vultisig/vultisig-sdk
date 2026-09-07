@@ -1,4 +1,5 @@
 import { Chain, OtherChain } from '@vultisig/core-chain/Chain'
+import { getTonTxFailure } from '@vultisig/core-chain/chains/ton/failure'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { rootApiUrl } from '@vultisig/core-config'
 import { attempt } from '@vultisig/lib-utils/attempt'
@@ -15,6 +16,7 @@ type TonActionPhase = {
   no_funds?: boolean
   result_code?: number
   skipped_actions?: number
+  msgs_created?: number
 }
 
 type TonTransactionDescription = {
@@ -34,39 +36,14 @@ type TonTransactionsResponse = {
 }
 
 /**
- * TVM exit codes 0 and 1 are the success conventions; any other code is a revert.
- * An absent code means the message had no compute phase (a plain transfer to a
- * wallet), which is not a failure.
- */
-const hasComputePhaseFailed = (computePhase: TonComputePhase | undefined): boolean => {
-  const exitCode = computePhase?.exit_code
-
-  return exitCode !== undefined && exitCode !== 0 && exitCode !== 1
-}
-
-/**
- * The action phase is where the wallet contract actually emits the outgoing
- * transfer, so it is where the money moves. A transaction can pass its compute
- * phase and land un-aborted while its action phase moved nothing — the seqno is
- * consumed either way — so this is what separates a real send from a silent
- * no-op. `result_code` is checked alongside `success` because indexers do not
- * always populate both.
- */
-const hasActionPhaseFailed = (actionPhase: TonActionPhase | undefined): boolean => {
-  if (!actionPhase) {
-    return false
-  }
-
-  const { success, no_funds, result_code, skipped_actions } = actionPhase
-
-  return success === false || no_funds === true || (result_code ?? 0) !== 0 || (skipped_actions ?? 0) > 0
-}
-
-/**
  * Resolves a TON transaction by the hash of the external message that carried it.
  * Success requires the transaction to be un-aborted *and* to have cleared both the
  * compute and the action phase; a transaction the indexer knows but hasn't fully
- * described yet stays pending.
+ * described yet stays pending. The action phase matters because it is where the
+ * wallet actually emits the transfer: a transaction can pass compute and land
+ * un-aborted while moving nothing, with the seqno consumed either way. A failure
+ * comes back explained (`failure`) so the UI can say what went wrong and how to
+ * fix it.
  */
 export const getTonTxStatus: TxStatusResolver<OtherChain.Ton> = async ({ hash }) => {
   const url = `${rootApiUrl}/ton/v3/transactionsByMessage?msg_hash=${hash}&direction=in&limit=1`
@@ -97,10 +74,7 @@ export const getTonTxStatus: TxStatusResolver<OtherChain.Ton> = async ({ hash })
         }
       : undefined
 
-  const failed =
-    description.aborted === true ||
-    hasComputePhaseFailed(description.compute_ph) ||
-    hasActionPhaseFailed(description.action)
+  const failure = getTonTxFailure(description)
 
-  return { status: failed ? 'error' : 'success', receipt }
+  return failure ? { status: 'error', receipt, failure } : { status: 'success', receipt }
 }

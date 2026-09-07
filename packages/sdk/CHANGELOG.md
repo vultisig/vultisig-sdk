@@ -1,5 +1,47 @@
 # @vultisig/sdk
 
+## 7.2.0
+
+### Minor Changes
+
+- [#2306](https://github.com/vultisig/vultisig-sdk/pull/2306) [`a5def09`](https://github.com/vultisig/vultisig-sdk/commit/a5def098e06cf7269174eb6840dc516d78ec55f9) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(ton): explain TON failures in plain language — seqno replay, expired deadline, fees, and the rest
+
+  A TON send that fails today comes back as an opaque `exitcode=133` in a toncenter rejection, or as a bare `error` status with nothing attached. Those two codes — 133 (W5) / 33 (v4) for a replayed seqno and 136 / 36 for an expired `valid_until`, which is almost always a device clock that drifted — dominate TON support load, and the fix is different for each.
+
+  `@vultisig/core-chain/chains/ton/failure` maps a failure to a `TonTxFailure`: a stable `reason` (`seqno-mismatch`, `expired`, `invalid-signature`, `wallet-id-mismatch`, `insufficient-funds`, `out-of-gas`, `invalid-destination`, `not-enough-jettons`, `jetton-unauthorized`, `action-failed`, `action-partially-failed`, `aborted`, `contract-rejected`), the phase it came from, the raw exit code, and an English `message` that says what happened and what to do ("make sure your device's date and time are set automatically, then send it again"; "keep about 0.05 TON spare for fees"). Compute-phase codes cover wallet v3/v4 and W5 alike, the TVM out-of-gas codes and the standard jetton wallet's 705/706 (707 and 709 stay generic: the reference contract reuses each for two unrelated checks); action-phase codes distinguish 36 (invalid destination) from the wallet's 36 (expired), and read 37 as not enough TON. Action code 40 stays generic on purpose: it reads "not enough funds, the message is too large, or its Merkle depth is too big", so it is a funding failure only when the node's own `no_funds` flag backs it, and any other unnamed code is treated the same way.
+
+  A generic action-phase failure only claims "nothing was sent" when the node reports `msgs_created: 0`. Every Vultisig TON send goes out with `IGNORE_ERRORS`, under which a failing action is skipped and the rest still leave, so a batch can lose one transfer and deliver the others — telling that user to retry is how a transfer goes out twice. Without that evidence the failure is `action-partially-failed`, whose message says at least one transfer did not happen, that others may have, and to check the transaction history before sending again.
+
+  `TxStatusResult` gains an optional `failure?: TxFailureInfo` (`reason`, `message`, `exitCode?`, `phase?`), which the TON status resolver now fills for every `error`. `broadcastTonTx` classifies a wallet-contract refusal at broadcast time: the failed result's `cause` is a `TonBroadcastRejectedError` carrying the same `failure`, its `message` is the human explanation, the original toncenter error stays in `cause`, and the refusal is marked non-retryable — resending the same bytes can only be refused again. A seqno refusal whose message is already on chain (a co-signer broadcast first) is still accepted through the existing hash verification. The types, `getTonTxFailure`, `parseTonBroadcastRejection` and `TonBroadcastRejectedError` are re-exported from `@vultisig/sdk`, including its React Native entry — RN broadcasts TON itself and its `broadcastTonTx` rejects with toncenter's raw `exitcode=<n>` text.
+
+- [#2299](https://github.com/vultisig/vultisig-sdk/pull/2299) [`bcca32c`](https://github.com/vultisig/vultisig-sdk/commit/bcca32c885066e2bf224aa37d6666c68a3684956) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(ton): W5 (wallet v5r1) support as an explicit per-account opt-in
+
+  Every Vultisig TON account has been hard-pinned to the V4R2 wallet contract. W5 is the default for new wallets in Tonkeeper and Telegram Wallet and is the gateway to what users now expect from TON — up to 255 messages per request instead of 4, lower fees, and relayer-paid ("gasless") transactions. WalletCore has supported it for a while; nothing here used it.
+
+  A W5 wallet is a _different address_ for the same key, with its own balance, so this is not a switch: V4R2 stays the default everywhere and W5 is selected per account.
+
+  - `@vultisig/core-chain/chains/ton/wallet` (new): `TonWalletVersion` (`'v4r2' | 'v5r1'`), `deriveTonAddress` for either contract, `resolveTonWalletVersion` to tell which contract an address is for a key, the W5 mainnet wallet id, and the per-contract message limits.
+  - `vault.setTonWalletVersion('v5r1')` selects which of the key's two TON accounts the vault acts on: `send`, balances, swaps, fee estimation and every other address lookup follow it, so one selected account is used consistently. `vault.address(chain, { tonWalletVersion })` — like `deriveAddress` / `getChainAddress` / `deriveAddressFromKeys` — names a contract for a single lookup without changing the selection, so a client can show both accounts side by side for a migration flow.
+  - Balance cache keys name a chain and an asset, not an account, so switching between the two accounts drops the balance scope and any fetch already in flight for the old account is neither cached nor announced: it still answers its own caller, but `balanceUpdated` carries no account identity, so emitting it after a switch would credit the old account's balance to the new one.
+  - The keysign signing-input resolver derives the contract from the sender address — the payload has no wallet-version field, and every co-signer reaches the same answer from the shared vault key — and refuses an address that is neither of the key's wallets rather than assuming V4R2. W5 requests carry `IGNORE_ACTION_PHASE_ERRORS`, which the W5 code requires of every external action (its replay protection) and WalletCore enforces; the TON status resolver's action-phase check covers the blindness that flag would otherwise cause. Message counts are capped per contract.
+  - The RN-safe builders (`buildTonSendTx`, `buildTonJettonTransferTx`, `buildTonTxFromSigningPayload`, `deriveTonAddress`, `prepareJettonTransferTxFromKeys`) take `walletVersion`; W5 uses the `signed_external` request layout with the signature appended, byte-identical to WalletCore. New `buildV5R1Wallet` / `TON_V5R1_WALLET_ID` alongside the V4R2 helpers.
+
+  Golden vectors (`testdata/cross-encoder-golden/ton-w5-*.json`) pin the W5 pre-images and are verified against real WalletCore, including the full signed external message. Client-side migration UI (show both accounts, move funds, reconnect dApps) is separate work per platform.
+
+### Patch Changes
+
+- [#2321](https://github.com/vultisig/vultisig-sdk/pull/2321) [`f45627f`](https://github.com/vultisig/vultisig-sdk/commit/f45627f7a986a3491c4586363acbfbdaa5f6b9c3) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Decode modern and legacy Cosmos governance votes into a lossless action-specific shared envelope.
+
+- [#1860](https://github.com/vultisig/vultisig-sdk/pull/1860) [`fd7507a`](https://github.com/vultisig/vultisig-sdk/commit/fd7507af5d9dc14938da80372bc3c1a8ec02a459) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Preserve snake_case StakeKit EIP-1559 `max_priority_fee_per_gas` hints when canonicalizing EVM yield steps.
+
+- [#2043](https://github.com/vultisig/vultisig-sdk/pull/2043) [`052f2e3`](https://github.com/vultisig/vultisig-sdk/commit/052f2e3b56509c1ddc2bcc14f21d0d1a5ee5d674) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - The SDK already computed the canonical signing-algorithm (ECDSA vs EdDSA vs mldsa) decision per chain internally (`@vultisig/core-chain/signing/SignatureAlgorithm`), but never exposed it on the public `@vultisig/sdk` surface. First-party consumers (agent-backend's swap/get-address/get-receive-info tools) were re-declaring local EdDSA chain sets to make the same decision. `getSignatureAlgorithm` and `signatureAlgorithms` are now re-exported from the SDK root so consumers can import one canonical seam instead of duplicating the mapping.
+
+- [#2047](https://github.com/vultisig/vultisig-sdk/pull/2047) [`231070e`](https://github.com/vultisig/vultisig-sdk/commit/231070ea811a79a84b43a98fadd80c2811071c94) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Re-export the canonical Cosmos Tendermint/Stargate RPC registry (`tendermintRpcUrl`) from both the root SDK entry (`packages/sdk/src/index.ts`) and the React Native entry (`packages/sdk/src/platforms/react-native/index.ts`). The core package already used this table for `StargateClient.connect(...)`, and the SDK already surfaced the adjacent Cosmos REST registry (`cosmosRpcUrl`), but downstream consumers needing an actual CosmJS/Stargate RPC connection had no public SDK import for it and were pushed toward mirroring a second local endpoint table.
+
+- Updated dependencies [[`a5def09`](https://github.com/vultisig/vultisig-sdk/commit/a5def098e06cf7269174eb6840dc516d78ec55f9), [`bcca32c`](https://github.com/vultisig/vultisig-sdk/commit/bcca32c885066e2bf224aa37d6666c68a3684956)]:
+  - @vultisig/core-chain@5.2.0
+  - @vultisig/core-mpc@3.1.0
+
 ## 7.1.0
 
 ### Minor Changes
