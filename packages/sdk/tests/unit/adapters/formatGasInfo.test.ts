@@ -197,8 +197,8 @@ describe('formatGasInfo', () => {
       expect(result.gasPrice).toBe('0')
     })
 
-    it('should work for all Cosmos SDK chains (Osmosis, Kujira, dYdX)', () => {
-      const cosmosChains = ['Cosmos', 'Osmosis', 'Kujira', 'dYdX', 'Noble']
+    it('should work for all Cosmos SDK chains (Osmosis, dYdX)', () => {
+      const cosmosChains = ['Cosmos', 'Osmosis', 'dYdX', 'Noble']
 
       for (const chain of cosmosChains) {
         const chainSpecific = {

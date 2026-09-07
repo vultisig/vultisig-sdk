@@ -6,6 +6,7 @@
  * Each handler takes `(toolCallId, input)` and returns a `RecentAction` ready
  * to be flushed into the next outbound `context.recent_actions`.
  */
+import { evmChainTxFeeFormat } from '@vultisig/core-chain/chains/evm/tx/fee'
 import type {
   EvmChain,
   ParsedTxReadyEnvelope,
@@ -17,6 +18,7 @@ import type {
 } from '@vultisig/sdk'
 import {
   Chain,
+  clampEvmPriorityFee,
   computeEip712Hash,
   getChainKind,
   getEvmRpcUrl,
@@ -71,17 +73,283 @@ const EVM_CHAINS = new Set<string>([
 const ERC20_TRANSFER_SELECTOR = '0xa9059cbb'
 const ERC20_TRANSFER_ABI = parseAbi(['function transfer(address to, uint256 value)'])
 
+const changedByMoreThanHalf = (before: bigint, after: bigint): boolean => {
+  if (before === after) return false
+  const difference = before > after ? before - after : after - before
+  return difference * 2n > before
+}
+
 /** Decode the recipient and amount that an ERC-20 transfer will actually use. */
 function decodeErc20Transfer(calldata: string): { recipient: Address; amount: bigint } | null {
   if (calldata.slice(0, ERC20_TRANSFER_SELECTOR.length).toLowerCase() !== ERC20_TRANSFER_SELECTOR) return null
 
   try {
-    const decoded = decodeFunctionData({ abi: ERC20_TRANSFER_ABI, data: calldata as Hex })
+    const decoded = decodeFunctionData({
+      abi: ERC20_TRANSFER_ABI,
+      data: calldata as Hex,
+    })
     const [recipient, amount] = decoded.args as readonly [Address, bigint]
     return { recipient, amount }
   } catch {
     throw new Error('Invalid ERC-20 transfer calldata — refusing to sign')
   }
+}
+
+type ResolvedTokenIdentity = {
+  rawSymbol: string
+  displaySymbol: string
+  kind: 'native' | 'token' | 'unresolved'
+  contract?: string
+}
+
+const tokenLabel = (value: unknown): string => (typeof value === 'string' ? value : '')
+
+// Real token symbols stay far below this; longer "symbols" are either spoof
+// carriers (an embedded Solana mint is 44 chars) or hostile padding for the
+// descriptor regexes below, which backtrack superlinearly on long inputs.
+const MAX_TOKEN_SYMBOL_LENGTH = 32
+const MAX_TOKEN_LABEL_LENGTH = 512
+
+/** Keep descriptor-shaped, attacker-controlled symbol text out of the consent line. */
+function safeTokenSymbol(symbol: string): {
+  displaySymbol: string
+  suspicious: boolean
+} {
+  const defaultDisplaySymbol = symbol.match(/^[\p{L}\p{N}][\p{L}\p{N}._+-]{0,31}/u)?.[0] ?? 'token'
+  if (symbol.length > MAX_TOKEN_SYMBOL_LENGTH) {
+    return { displaySymbol: defaultDisplaySymbol, suspicious: true }
+  }
+  const suspiciousAt = symbol.search(/0x[0-9a-f]{40}|\([^)]*\bon\b[^)]*\)/iu)
+  const candidate = (suspiciousAt < 0 ? symbol : symbol.slice(0, suspiciousAt)).trim()
+  const displaySymbol = candidate.match(/^[\p{L}\p{N}][\p{L}\p{N}._+-]*/u)?.[0] ?? 'token'
+  if (suspiciousAt < 0 && candidate === displaySymbol) {
+    return { displaySymbol, suspicious: false }
+  }
+
+  return { displaySymbol, suspicious: true }
+}
+
+function unresolvedTokenIdentity(label: unknown): ResolvedTokenIdentity {
+  if (typeof label !== 'string' || label.length > MAX_TOKEN_LABEL_LENGTH) {
+    return { rawSymbol: '', displaySymbol: '', kind: 'unresolved' }
+  }
+  const suffixAt = label.lastIndexOf(' (')
+  const rawSymbol = (suffixAt > 0 ? label.slice(0, suffixAt) : label).trim()
+  return {
+    rawSymbol,
+    displaySymbol: safeTokenSymbol(rawSymbol).displaySymbol,
+    kind: 'unresolved',
+  }
+}
+
+function untrustedSymbolIdentity(symbol: unknown): ResolvedTokenIdentity {
+  const rawSymbol = tokenLabel(symbol)
+  return {
+    rawSymbol,
+    displaySymbol: safeTokenSymbol(rawSymbol).displaySymbol,
+    kind: 'unresolved',
+  }
+}
+
+/** Parse and chain-check mcp-ts's fixed-suffix token descriptor. */
+function resolvedTokenIdentity(label: unknown, expectedChain: unknown): ResolvedTokenIdentity {
+  const unresolved = unresolvedTokenIdentity(label)
+  if (typeof label !== 'string' || label.length > MAX_TOKEN_LABEL_LENGTH) return unresolved
+  const match = label.match(/^([\s\S]*) \(([\s\S]*?) on ([^,]+), \d+ dec, source: [^)]+\)$/u)
+  if (!match) return unresolved
+
+  const [, rawSymbol, rawAssetId, descriptorChain] = match
+  const { displaySymbol, suspicious } = safeTokenSymbol(rawSymbol)
+  const parsedChain = resolveChainReference(descriptorChain)
+  const routedChain =
+    typeof expectedChain === 'string' || typeof expectedChain === 'number'
+      ? resolveChainReference(expectedChain)
+      : undefined
+  if (suspicious || !parsedChain || !routedChain || parsedChain !== routedChain) {
+    return { rawSymbol, displaySymbol, kind: 'unresolved' }
+  }
+
+  const assetId = rawAssetId.trim()
+  if (!assetId) return { rawSymbol, displaySymbol, kind: 'unresolved' }
+  if (assetId.toLowerCase() === 'native') return { rawSymbol, displaySymbol, kind: 'native' }
+  if (getChainKind(routedChain) === 'evm') {
+    if (!/^0x[0-9a-f]{40}$/iu.test(assetId)) return { rawSymbol, displaySymbol, kind: 'unresolved' }
+  } else if (!/^[\p{L}\p{N}:._/-]{1,128}$/u.test(assetId)) {
+    // Non-EVM asset ids (Solana mints, Cosmos denoms, THOR assets) have no
+    // single shape, but none contain whitespace or control characters — and
+    // this string is interpolated into the consent line.
+    return { rawSymbol, displaySymbol, kind: 'unresolved' }
+  }
+  return { rawSymbol, displaySymbol, kind: 'token', contract: assetId }
+}
+
+function replaceUnsafeSymbol(text: string, identity: ResolvedTokenIdentity): string {
+  if (!identity.rawSymbol || identity.rawSymbol === identity.displaySymbol) return text
+  return text.split(identity.rawSymbol).join(identity.displaySymbol)
+}
+
+/**
+ * Anchor only at the END of a trade half: a complete asset label (never a
+ * prefix such as USDT inside USDT.e) whose match closes the half. Interior
+ * matches are refused — route prose can mention any symbol, and annotating
+ * an interior mention would misattribute the contract.
+ */
+function anchorEnd(text: string, label: string): number {
+  if (!label) return -1
+  const tokenChar = /[\p{L}\p{N}._+-]/u
+  const trimmedLength = text.trimEnd().length
+  const index = trimmedLength - label.length
+  if (index < 0 || !text.startsWith(label, index)) return -1
+  const before = text[index - 1]
+  if (before && tokenChar.test(before)) return -1
+  return trimmedLength
+}
+
+function hasAnchor(text: string, anchors: string[]): boolean {
+  return anchors.some(anchor => anchorEnd(text, anchor) >= 0)
+}
+
+/** A quote summary must describe exactly one sell-to-buy transition. */
+function hasSingleSwapDelimiter(summary: string, labels: Record<string, unknown>): boolean {
+  // Ignore arrows embedded in declared symbols: those symbols are sanitized
+  // before rendering and therefore are not structural route delimiters.
+  const identities = [
+    unresolvedTokenIdentity(labels.from_token),
+    untrustedSymbolIdentity(labels.from_token_symbol),
+    unresolvedTokenIdentity(labels.to_token),
+    untrustedSymbolIdentity(labels.to_token_symbol),
+  ]
+  const structuralSummary = identities.reduce((text, identity) => replaceUnsafeSymbol(text, identity), summary)
+  const firstArrow = structuralSummary.indexOf('→')
+  return firstArrow >= 0 && structuralSummary.indexOf('→', firstArrow + 1) < 0
+}
+
+/** Choose the trade arrow whose halves contain the declared sell/buy labels. */
+function splitSwapHead(head: string, sellAnchors: string[], buyAnchors: string[]) {
+  let best: { left: string; buy: string; provider: string; score: number } | undefined
+  let arrowAt = head.indexOf('→')
+  while (arrowAt >= 0) {
+    const left = head.slice(0, arrowAt)
+    const right = head.slice(arrowAt + 1)
+    const viaAt = right.indexOf(' via ')
+    const buy = viaAt >= 0 ? right.slice(0, viaAt) : right
+    const provider = viaAt >= 0 ? right.slice(viaAt) : ''
+    const score = Number(hasAnchor(left, sellAnchors)) + Number(hasAnchor(buy, buyAnchors))
+    if (!best || score > best.score) {
+      best = { left, buy, provider, score }
+    }
+    arrowAt = head.indexOf('→', arrowAt + 1)
+  }
+  return best
+}
+
+function terminalAnchorSymbol(anchor: string): string {
+  return anchor.trim().match(/[\p{L}\p{N}][\p{L}\p{N}._+-]*$/u)?.[0] ?? ''
+}
+
+function discloseSwapSide(side: string, anchors: string[], suffix: string, expectedSymbol?: string): string {
+  if (!expectedSymbol) {
+    return `${side.trimEnd()} (contract unavailable)${side.slice(side.trimEnd().length)}`
+  }
+  for (const anchor of anchors) {
+    const end = anchorEnd(side, anchor)
+    if (end < 0) continue
+    const visibleSymbol = terminalAnchorSymbol(anchor)
+    if (expectedSymbol && visibleSymbol && visibleSymbol !== expectedSymbol) break
+    if (!suffix) return side
+    return `${side.slice(0, end)}${suffix}${side.slice(end)}`
+  }
+  return `${side.trimEnd()} (contract unavailable)${side.slice(side.trimEnd().length)}`
+}
+
+/**
+ * Add contract truth to each resolved trade half. The sell address comes from
+ * the signed approval payload when present, otherwise from a chain-checked
+ * label claim. The buy address remains a chain-checked label claim. Unresolved
+ * identities fail closed without attaching a concrete contract.
+ */
+function discloseSwapTokenContracts(
+  head: string,
+  labels: Record<string, unknown>,
+  payload: any,
+  sourceChain: Chain
+): string {
+  // The routed destination lives in `labels.to_chain` (the mcp-ts prep
+  // envelope has no top-level `to_chain`). A legacy top-level value may stand
+  // in when the label is absent. Preserve an unsupported present label so
+  // resolvedTokenIdentity rejects it instead of trusting a contradictory
+  // payload fallback; if neither route exists, the descriptor must not
+  // authenticate its own chain.
+  const destinationChain = Object.hasOwn(labels, 'to_chain')
+    ? (labels.to_chain ?? null)
+    : typeof payload?.to_chain === 'string' || typeof payload?.to_chain === 'number'
+      ? payload.to_chain
+      : undefined
+  const fromToken = resolvedTokenIdentity(labels.from_token, sourceChain)
+  const toToken = resolvedTokenIdentity(labels.to_token, destinationChain)
+  const fromSymbol = untrustedSymbolIdentity(labels.from_token_symbol)
+  const toSymbol = untrustedSymbolIdentity(labels.to_token_symbol)
+  // Mirror the approve-leg signer exactly: signMultiLeg re-parents
+  // approvalTxArgs as `txArgs` and clears the sibling tx fields, so the
+  // signed approve target is `approvalTxArgs.tx.to` and nothing else.
+  // Reading any other nested shape here (the extractNestedTx precedence
+  // chain) would let a hostile envelope render one address while the signer
+  // broadcasts an approve to another.
+  const approvalArgs = payload?.approvalTxArgs
+  const rawApprovalTarget = tokenLabel(
+    approvalArgs && typeof approvalArgs === 'object' ? approvalArgs.tx?.to : undefined
+  )
+  const approvalTarget = /^0x[0-9a-f]{40}$/iu.test(rawApprovalTarget) ? rawApprovalTarget : ''
+
+  const symbolIdentities = [fromToken, fromSymbol, toToken, toSymbol]
+  const sanitizeText = (value: unknown) =>
+    symbolIdentities.reduce((text, identity) => replaceUnsafeSymbol(text, identity), tokenLabel(value))
+  const sanitizedHead = sanitizeText(head)
+  const sellAnchors = [sanitizeText(labels.amount_in), fromSymbol.displaySymbol, fromToken.displaySymbol].filter(
+    Boolean
+  )
+  const buyAnchors = [sanitizeText(labels.expected_output), toSymbol.displaySymbol, toToken.displaySymbol].filter(
+    Boolean
+  )
+
+  const approvalMatchesResolvedSellToken =
+    fromToken.kind === 'token' &&
+    !!fromToken.contract &&
+    !!approvalTarget &&
+    fromToken.contract.toLowerCase() === approvalTarget.toLowerCase()
+  const sellSuffix = payload?.approvalTxArgs
+    ? approvalMatchesResolvedSellToken
+      ? ` (${approvalTarget})`
+      : ' (contract unavailable)'
+    : fromToken.kind === 'native'
+      ? ''
+      : fromToken.kind === 'token' && fromToken.contract
+        ? ` (${fromToken.contract})`
+        : ' (contract unavailable)'
+  const buySuffix =
+    toToken.kind === 'native'
+      ? ''
+      : toToken.kind === 'token' && toToken.contract
+        ? ` (${toToken.contract})`
+        : ' (contract unavailable)'
+
+  const halves = splitSwapHead(sanitizedHead, sellAnchors, buyAnchors)
+  if (!halves) return `${sanitizedHead} (contract unavailable)`
+  const sellResolved = fromToken.kind !== 'unresolved'
+  const buyResolved = toToken.kind !== 'unresolved'
+  const sell = discloseSwapSide(
+    halves.left,
+    sellAnchors,
+    sellResolved ? sellSuffix : '',
+    sellResolved ? fromToken.displaySymbol : undefined
+  )
+  const buy = discloseSwapSide(
+    halves.buy,
+    buyAnchors,
+    buyResolved ? buySuffix : '',
+    buyResolved ? toToken.displaySymbol : undefined
+  )
+  return `${sell}→${buy}${halves.provider}`
 }
 
 // `Set<string>.has()` returns a plain boolean, so it never narrows `Chain` down to
@@ -584,16 +852,22 @@ export class AgentExecutor {
     if (isSwap) {
       // quote_summary already embeds the provider ("… via kyber"); only append
       // the provider when we fall back to building the head ourselves.
-      const usedQuoteSummary = !!labels.quote_summary
-      const head =
-        labels.quote_summary ||
-        `swap ${labels.amount_in ?? p?.txArgs?.amount ?? '?'} ${labels.from_token_symbol ?? ''} → ${
-          labels.to_token_symbol ?? ''
-        }`.trim()
+      const rawQuoteSummary = tokenLabel(labels.quote_summary)
+      const quoteSummary = hasSingleSwapDelimiter(rawQuoteSummary, labels) ? rawQuoteSummary : ''
+      const usedQuoteSummary = !!quoteSummary
+      const amountIn = tokenLabel(labels.amount_in) || tokenLabel(p?.txArgs?.amount) || '?'
+      const fromSymbol = tokenLabel(labels.from_token_symbol)
+      const sellHead = fromSymbol && !amountIn.endsWith(` ${fromSymbol}`) ? `${amountIn} ${fromSymbol}` : amountIn
+      const head = discloseSwapTokenContracts(
+        quoteSummary || `swap ${sellHead} → ${tokenLabel(labels.to_token_symbol) || '?'}`,
+        labels,
+        p,
+        stored.chain
+      )
       const parts = [head, `on ${stored.chain}`]
-      if (!usedQuoteSummary && labels.provider) parts.push(`via ${labels.provider}`)
+      if (!usedQuoteSummary && tokenLabel(labels.provider)) parts.push(`via ${tokenLabel(labels.provider)}`)
       if (p?.__multiLeg) parts.push('(+ token approval — 2 transactions)')
-      if (labels.estimated_fee) parts.push(`est. fee ${labels.estimated_fee}`)
+      if (tokenLabel(labels.estimated_fee)) parts.push(`est. fee ${tokenLabel(labels.estimated_fee)}`)
       return parts.join(' ')
     }
     // Name the token contract from the payload that gets signed, not from label
@@ -1296,12 +1570,17 @@ export class AgentExecutor {
         },
       })
 
-      // Reconcile a server-provided nonce with locally tracked broadcasts.
-      await this.patchEvmNonce(chain, keysignPayload)
+      // Snapshot nonce grace before either network refresh. A slow gas lookup
+      // must not age a recent local broadcast out of its protection.
+      const nonceGraceAge = Date.now() - (this.evmLastBroadcast.get(chain.toString()) ?? 0)
 
       // Refresh the fee envelope immediately before hashing/signing so a raw
       // transaction prepared earlier is not underpriced after base-fee drift.
       await this.patchEvmGas(chain, keysignPayload)
+
+      // Reconcile the server nonce with pending RPC and locally tracked
+      // broadcasts after any potentially slow fee refresh.
+      await this.patchEvmNonce(chain, keysignPayload, nonceGraceAge)
 
       // Extract message hashes and sign
       const messageHashes = await this.vault.extractMessageHashes(keysignPayload)
@@ -1630,21 +1909,44 @@ export class AgentExecutor {
   }
 
   /**
-   * Patch the EVM nonce in a keysign payload if our local state is ahead of on-chain.
-   * The payload's blockchainSpecific.ethereumSpecific.nonce was set from RPC during
-   * prepareSendTx(). If we have locally-tracked pending txs, we override with a higher value.
+   * Refresh the EVM nonce from pending RPC state, then patch it if our local state
+   * is further ahead. Raw server envelopes may carry a nonce that became stale
+   * before signing, so the RPC refresh must not depend on local state existing.
    *
    * Also detects evicted txs: if local state claims a higher nonce but there are
    * no pending txs in the mempool (pending == latest), the intermediate txs were
    * dropped and local state is stale.
    */
-  private async patchEvmNonce(chain: Chain, payload: any): Promise<void> {
-    if (!this.stateStore || !isEvmChain(chain)) return
+  private async patchEvmNonce(chain: Chain, payload: any, capturedBroadcastAge?: number): Promise<void> {
+    if (!isEvmChain(chain)) return
 
     const bs = payload.blockchainSpecific
     if (!bs || bs.case !== 'ethereumSpecific') return
 
-    const rpcNonce = bs.value.nonce as bigint
+    // Snapshot grace eligibility before the RPC await. A slow or timed-out
+    // lookup must not age a recent local broadcast out of its protection.
+    const recentBroadcastAge = capturedBroadcastAge ?? Date.now() - (this.evmLastBroadcast.get(chain.toString()) ?? 0)
+    const hasRecentBroadcast = recentBroadcastAge < 30_000
+
+    const payloadNonce = bs.value.nonce as bigint
+    // Read latest before pending whenever stale local-state detection is needed.
+    // The later pending snapshot is then the freshest nonce floor and should be
+    // >= latest on a consistent RPC view. Recent local broadcasts skip latest
+    // because their grace period wins regardless of mempool visibility.
+    const latestNonce = this.stateStore && !hasRecentBroadcast ? await this.fetchEvmLatestNonce(chain) : null
+    const pendingNonce = await this.fetchEvmPendingNonce(chain)
+    const rpcNonce = [payloadNonce, latestNonce, pendingNonce].reduce<bigint>(
+      (highest, nonce) => (nonce !== null && nonce > highest ? nonce : highest),
+      payloadNonce
+    )
+
+    if (rpcNonce !== payloadNonce) {
+      bs.value.nonce = rpcNonce
+      if (this.verbose) process.stderr.write(`[nonce] Refreshed ${chain} nonce: ${payloadNonce} → ${rpcNonce}\n`)
+    }
+
+    if (!this.stateStore) return
+
     const nextNonce = this.stateStore.getNextEvmNonce(chain, rpcNonce)
 
     if (nextNonce !== rpcNonce) {
@@ -1660,20 +1962,22 @@ export class AgentExecutor {
       // the same RPC. Tradeoff: a genuinely-evicted tx within the 30s window
       // would cause the next sign to use a stuck nonce instead of recovering;
       // STATE_TTL_MS (10 min) bounds the worst case. See vultisig-sdk#357.
-      const lastBroadcast = this.evmLastBroadcast.get(chain.toString()) ?? 0
-      if (Date.now() - lastBroadcast < 30_000) {
+      if (hasRecentBroadcast) {
         if (this.verbose)
           process.stderr.write(
-            `[nonce] Keeping local nonce ${nextNonce} for ${chain} (broadcast ${Date.now() - lastBroadcast}ms ago)\n`
+            `[nonce] Keeping local nonce ${nextNonce} for ${chain} (broadcast ${recentBroadcastAge}ms ago)\n`
           )
         bs.value.nonce = nextNonce
         return
       }
 
-      // Verify there are actually pending txs in the mempool before using a higher nonce.
-      // If pending nonce == confirmed nonce, all intermediate txs were evicted.
-      const pendingNonce = await this.fetchEvmPendingNonce(chain)
-      if (pendingNonce !== null && pendingNonce === rpcNonce) {
+      // Verify there are actually pending txs in the mempool before using a
+      // higher local nonce. The explicit server nonce is not a reliable
+      // confirmed-state baseline, so compare pending against a fresh latest
+      // lookup. Reading latest first and pending second preserves local progress
+      // when pending advanced the server nonce while still clearing a stale
+      // local gap when pending === latest.
+      if (latestNonce !== null && pendingNonce === latestNonce) {
         // No pending txs — local state is stale (txs were dropped from mempool)
         if (this.verbose)
           process.stderr.write(
@@ -1686,7 +1990,8 @@ export class AgentExecutor {
       // Safety: if the gap is large (>3) and we couldn't verify pending txs,
       // assume local state is stale rather than risk a large nonce gap
       const nonceGap = nextNonce - rpcNonce
-      if (pendingNonce === null && nonceGap > 3n) {
+      const pendingStateVerified = pendingNonce !== null && latestNonce !== null && pendingNonce >= latestNonce
+      if (!pendingStateVerified && nonceGap > 3n) {
         process.stderr.write(
           `[nonce] Warning: pending nonce was not verified for ${chain}; signing will continue with on-chain nonce ${rpcNonce} because the local gap is ${nonceGap}\n`
         )
@@ -1695,7 +2000,7 @@ export class AgentExecutor {
       }
 
       bs.value.nonce = nextNonce
-      if (pendingNonce === null) {
+      if (!pendingStateVerified) {
         process.stderr.write(
           `[nonce] Warning: pending nonce was not verified for ${chain}; signing will continue with local nonce ${nextNonce}\n`
         )
@@ -1715,8 +2020,66 @@ export class AgentExecutor {
     const bs = payload.blockchainSpecific
     if (!bs || bs.case !== 'ethereumSpecific') return
 
-    const rpcUrl = getEvmRpcUrl(chain)
+    // Use the same fee-format table as the WalletCore signing mapper so a
+    // future legacy-chain addition cannot silently receive EIP-1559 fields.
+    // Legacy (type-0) chains are left byte-untouched: their maxFeePerGasWei is
+    // consumed as gasPrice by the signing mapper, and the EIP-1559 headroom
+    // formula below must never rewrite it.
+    const isEip1559 = evmChainTxFeeFormat[chain] === 'enveloped'
+    if (!isEip1559) return
 
+    const rpcUrl = getEvmRpcUrl(chain)
+    const currentPriorityFee = BigInt(bs.value.priorityFee || '0')
+    const currentMaxFee = BigInt(bs.value.maxFeePerGasWei || '0')
+    const baseFee = await this.fetchEvmBaseFee(chain, rpcUrl)
+
+    let priorityFee = currentPriorityFee
+
+    if (currentPriorityFee > 0n) {
+      priorityFee = clampEvmPriorityFee(chain, currentPriorityFee)
+      if (priorityFee < currentPriorityFee) {
+        process.stderr.write(
+          `[gas] Warning: ${chain} maxPriorityFeePerGas ${currentPriorityFee} exceeded the safety ceiling; clamped to ${priorityFee}\n`
+        )
+      }
+    } else {
+      // The two RPCs fail independently — a dead eth_getBlockByNumber must not
+      // discard a live eth_maxPriorityFeePerGas suggestion.
+      const rpcPriorityFee = await this.fetchEvmPriorityFee(rpcUrl)
+
+      const baseFeeFallback = baseFee === null ? 0n : baseFee / 10n
+      const fallbackPriorityFee = baseFeeFallback < 2_000_000_000n ? baseFeeFallback : 2_000_000_000n
+      priorityFee = clampEvmPriorityFee(chain, rpcPriorityFee > 0n ? rpcPriorityFee : fallbackPriorityFee)
+    }
+
+    // When the base fee is known, keep 2.5x headroom for the MPC signing
+    // window. When it is unavailable, the max fee must still cover the
+    // statically clamped tip so a dead RPC cannot leave an invalid envelope.
+    const minMaxFee = baseFee === null ? priorityFee : (baseFee * 25n) / 10n + priorityFee
+    const patchedMaxFee = currentMaxFee < minMaxFee ? minMaxFee : currentMaxFee
+
+    if (priorityFee !== currentPriorityFee) {
+      bs.value.priorityFee = priorityFee.toString()
+      if (this.verbose)
+        process.stderr.write(`[gas] Patched ${chain} maxPriorityFeePerGas: ${currentPriorityFee} → ${priorityFee}\n`)
+    }
+
+    if (currentMaxFee < patchedMaxFee) {
+      bs.value.maxFeePerGasWei = patchedMaxFee.toString()
+      if (this.verbose)
+        process.stderr.write(
+          `[gas] Bumped ${chain} maxFeePerGas: ${currentMaxFee} → ${patchedMaxFee} (baseFee=${baseFee ?? 'unavailable'})\n`
+        )
+    }
+
+    if (changedByMoreThanHalf(currentPriorityFee, priorityFee) || changedByMoreThanHalf(currentMaxFee, patchedMaxFee)) {
+      process.stderr.write(
+        `[gas] Notice: ${chain} fees adjusted after confirmation: maxPriorityFeePerGas ${currentPriorityFee} → ${priorityFee}, maxFeePerGas ${currentMaxFee} → ${patchedMaxFee}\n`
+      )
+    }
+  }
+
+  private async fetchEvmBaseFee(chain: Chain, rpcUrl: string): Promise<bigint | null> {
     try {
       const res = await fetch(rpcUrl, {
         method: 'POST',
@@ -1733,29 +2096,36 @@ export class AgentExecutor {
       if (!res.ok || data?.error || data?.result?.baseFeePerGas === undefined || data?.result?.baseFeePerGas === null) {
         throw new Error(`Failed to fetch current base fee for ${chain}`)
       }
-      const baseFee = BigInt(data.result.baseFeePerGas)
-      if (baseFee === 0n) return
 
-      const currentPriorityFee = BigInt(bs.value.priorityFee || '0')
-      const currentMaxFee = BigInt(bs.value.maxFeePerGasWei || '0')
-
-      // Minimum maxFeePerGas = baseFee * 2.5 + priorityFee
-      // The 2.5x multiplier provides headroom for base fee fluctuations
-      // during the MPC signing window (15-60 seconds)
-      const minMaxFee = (baseFee * 25n) / 10n + currentPriorityFee
-
-      if (currentMaxFee < minMaxFee) {
-        bs.value.maxFeePerGasWei = minMaxFee.toString()
-        if (this.verbose)
-          process.stderr.write(
-            `[gas] Bumped ${chain} maxFeePerGas: ${currentMaxFee} → ${minMaxFee} (baseFee=${baseFee})\n`
-          )
-      }
+      return BigInt(data.result.baseFeePerGas)
     } catch {
-      // Non-fatal — keep the original gas estimate
       process.stderr.write(
         `[gas] Warning: gas estimate was not refreshed for ${chain}; signing will continue with the original estimate\n`
       )
+      return null
+    }
+  }
+
+  private async fetchEvmPriorityFee(rpcUrl: string): Promise<bigint> {
+    try {
+      const res = await fetch(rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'eth_maxPriorityFeePerGas',
+          params: [],
+          id: 2,
+        }),
+        signal: AbortSignal.timeout(5000),
+      })
+      const data = (await res.json()) as any
+      if (!res.ok || data?.error || data?.result === undefined) return 0n
+
+      return BigInt(data.result)
+    } catch {
+      // The tip RPC is optional. The caller applies a bounded fallback.
+      return 0n
     }
   }
 
@@ -1764,6 +2134,18 @@ export class AgentExecutor {
    * Returns null if the RPC call fails (non-fatal).
    */
   private async fetchEvmPendingNonce(chain: Chain): Promise<bigint | null> {
+    return this.fetchEvmNonce(chain, 'pending')
+  }
+
+  /**
+   * Fetch the confirmed nonce from RPC (eth_getTransactionCount with "latest" tag).
+   * Returns null if the RPC call fails (non-fatal).
+   */
+  private async fetchEvmLatestNonce(chain: Chain): Promise<bigint | null> {
+    return this.fetchEvmNonce(chain, 'latest')
+  }
+
+  private async fetchEvmNonce(chain: Chain, blockTag: 'latest' | 'pending'): Promise<bigint | null> {
     // The old CLI-local map returned `undefined` for a non-EVM chain and the
     // caller bailed on the falsy URL. The shared resolver has no such escape
     // hatch, so keep the guard explicit: without it a non-EVM chain would POST
@@ -1779,7 +2161,7 @@ export class AgentExecutor {
         body: JSON.stringify({
           jsonrpc: '2.0',
           method: 'eth_getTransactionCount',
-          params: [address, 'pending'],
+          params: [address, blockTag],
           id: 1,
         }),
         signal: AbortSignal.timeout(5000),

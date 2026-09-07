@@ -1,4 +1,5 @@
 import { bech32 } from '@scure/base'
+import { COSMOS_CHAIN_ID_HRP } from '@vultisig/core-chain/chains/cosmos/cosmosHrp'
 
 import { validatorRoleForHrp } from '../swap/skip/cosmosAddressGuard'
 
@@ -32,24 +33,9 @@ import { validatorRoleForHrp } from '../swap/skip/cosmosAddressGuard'
 
 type ChannelKey = `${string}/${string}` // `${fromChain}/${channel}`
 
-/** Chain-ID → bech32 HRP, for address validation. */
-export const IBC_CHAIN_HRP: Record<string, string> = {
-  'phoenix-1': 'terra',
-  'columbus-5': 'terra',
-  'cosmoshub-4': 'cosmos',
-  'osmosis-1': 'osmo',
-  'kaiyo-1': 'kujira',
-  'neutron-1': 'neutron',
-  'axelar-dojo-1': 'axelar',
-  'injective-1': 'inj',
-  'juno-1': 'juno',
-  'stargaze-1': 'stars',
-  'noble-1': 'noble',
-  'akashnet-2': 'akash',
-  'dydx-mainnet-1': 'dydx',
-  'stride-1': 'stride',
-  celestia: 'celestia',
-}
+/** Chain-ID → bech32 HRP, for address validation. Sourced from the canonical
+ * `COSMOS_CHAIN_ID_HRP` registry (architecture#1787) instead of a local copy. */
+export const IBC_CHAIN_HRP: Record<string, string> = COSMOS_CHAIN_ID_HRP
 
 /** Chain-ID → IBC revision number (for timeout_height defaulting). */
 export const IBC_CHAIN_REVISION: Record<string, number> = {
@@ -57,7 +43,6 @@ export const IBC_CHAIN_REVISION: Record<string, number> = {
   'columbus-5': 5,
   'cosmoshub-4': 4,
   'osmosis-1': 1,
-  'kaiyo-1': 1,
   'neutron-1': 1,
   'axelar-dojo-1': 1,
   'injective-1': 1,
@@ -93,7 +78,6 @@ export const IBC_CHANNEL_DEST: Record<ChannelKey, string> = {
   'osmosis-1/channel-1': 'akashnet-2',
   'osmosis-1/channel-6787': 'dydx-mainnet-1',
   'osmosis-1/channel-208': 'axelar-dojo-1',
-  'osmosis-1/channel-259': 'kaiyo-1',
   'osmosis-1/channel-874': 'neutron-1',
   'osmosis-1/channel-122': 'injective-1',
   'osmosis-1/channel-326': 'stride-1',
@@ -126,7 +110,7 @@ const IBC_CHANNEL_BY_ROUTE: Map<string, string> = (() => {
 })()
 
 /** source_channel for a given (from_chain → to_chain_id) route, or null. */
-function resolveSourceChannelByDestChain(fromChain: string, toChainId: string): string | null {
+export function resolveSourceChannelByDestChain(fromChain: string, toChainId: string): string | null {
   return IBC_CHANNEL_BY_ROUTE.get(`${fromChain}→${toChainId}`) ?? null
 }
 
@@ -146,7 +130,6 @@ const VULTISIG_NAME_TO_CHAIN_ID: Record<string, string> = {
   Osmosis: 'osmosis-1',
   Terra: 'phoenix-1',
   TerraClassic: 'columbus-5',
-  Kujira: 'kaiyo-1',
   Akash: 'akashnet-2',
   Noble: 'noble-1',
   Dydx: 'dydx-mainnet-1',

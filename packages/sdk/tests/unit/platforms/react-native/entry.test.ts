@@ -89,8 +89,35 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     'getChainDangerousReason',
     'assertSafeEvmDestination',
     'assertSafeDestination',
+    'assertSafeTokenTransferDestination',
+    'decodeErc20Approve',
+    'decodeErc20Recipient',
+    'decodeErc20RecipientFromSig',
+    'ERC20_APPROVE_SELECTOR',
+    'isErc20TransferCalldata',
   ] as const)('re-exports dangerous-address canonical %s by identity', async name => {
     expect(reactNativeEntry[name]).toBe(dangerousAddresses[name])
+  })
+
+  it('re-exports the canonical Blockchair base URL helper by identity', async () => {
+    const canonical = await import('@vultisig/core-chain/chains/utxo/client/getBlockchairBaseUrl')
+
+    expect(reactNativeEntry.getBlockchairBaseUrl).toBe(canonical.getBlockchairBaseUrl)
+  })
+
+  it('re-exports the plural StakeKit scan-request builder by identity', async () => {
+    const stakekit = await import('../../../../src/tools/defi/stakekit')
+    expect(reactNativeEntry.buildYieldActionScanRequests).toBe(stakekit.buildYieldActionScanRequests)
+  })
+
+  it.each([
+    'chunkStakekitBalanceQueries',
+    'fetchAllStakekitBalances',
+    'fetchStakekitBalancesBatch',
+    'STAKEKIT_BALANCE_QUERIES_PER_REQUEST',
+  ] as const)('re-exports StakeKit batched-balances canonical %s by identity', async name => {
+    const stakekit = await import('../../../../src/tools/defi/stakekit')
+    expect(reactNativeEntry[name]).toBe(stakekit[name])
   })
 
   // sdk#1772: the RN entry omitted the whole validation / address-format
@@ -188,6 +215,32 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(sdkRn.JUPITER_PLATFORM_FEE_BPS).toBe(50)
   })
 
+  // RN maps both its runtime and its types to this entry, so anything the root
+  // advertises but this file omits is an import error for RN consumers — and TON is
+  // one of the chains RN broadcasts itself.
+  it('re-exports the TON failure taxonomy by identity, so an RN consumer can read a broadcast refusal', async () => {
+    const failure = await import('@vultisig/core-chain/chains/ton/failure')
+
+    expect(sdkRn.getTonTxFailure).toBe(failure.getTonTxFailure)
+    expect(sdkRn.parseTonBroadcastRejection).toBe(failure.parseTonBroadcastRejection)
+    expect(sdkRn.TonBroadcastRejectedError).toBe(failure.TonBroadcastRejectedError)
+    expect(sdkRn.tonTxFailureReasons).toBe(failure.tonTxFailureReasons)
+  })
+
+  it('explains the error the RN TON broadcast helper actually throws', () => {
+    // The exact shape `chains.ton.broadcastTonTx` raises on a refused external message.
+    const rejection = new Error(
+      'toncenter sendBocReturnHash failed: LITE_SERVER_UNKNOWN: cannot apply external message to current state : ' +
+        'External message was not accepted\nCannot run message on account: inbound external message rejected by ' +
+        'transaction 4C6FE61A4B7925532DEE47DEED8367FB9E918D4B32A9B9EC270BEF9D9C65CA13:\nexitcode=136, steps=13, gas_used=0\n'
+    )
+
+    const failure = sdkRn.parseTonBroadcastRejection(rejection)
+
+    expect(failure).toMatchObject({ reason: 'expired', phase: 'compute', exitCode: 136 })
+    expect(failure?.message).toMatch(/date and time/)
+  })
+
   it('exports default chain canonicals on the RN entrypoint', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
@@ -249,6 +302,13 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.IbcEnabledCosmosChain.TerraClassic).toBe('TerraClassic')
     expect(rn.VaultBasedCosmosChain.THORChain).toBe('THORChain')
     expect(Object.values(rn.IbcEnabledCosmosChain)).not.toContain(rn.Chain.THORChain)
+  })
+
+  it('exports the canonical Cosmos Tendermint/Stargate RPC registry from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(rn.tendermintRpcUrl[rn.Chain.Cosmos]).toBe('https://cosmos-rpc.publicnode.com:443')
+    expect(rn.tendermintRpcUrl[rn.Chain.THORChain]).toBe('https://gateway.liquify.com/chain/thorchain_rpc')
   })
 
   it.each(cosmosTxFeeGasParityCases)(
@@ -467,6 +527,23 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.rippleOwnerReserveDrops).toBe(200000n)
     expect(Array.isArray(rn.rippleKnownIssuedTokens)).toBe(true)
     expect(rn.toXrplCurrencyCode('RLUSD')).toBe('524C555344000000000000000000000000000000')
+  })
+
+  it('re-exports XRP destination/X-address normalization on the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(typeof rn.decodeRippleXAddress).toBe('function')
+    expect(typeof rn.encodeRippleXAddress).toBe('function')
+    expect(typeof rn.isValidRippleXAddress).toBe('function')
+    expect(typeof rn.normalizeRippleDestination).toBe('function')
+
+    const classicAddress = 'raJ1Aqkhf19P7cyUc33MMVAzgvHPvtNFC'
+    expect(rn.normalizeRippleDestination(classicAddress)).toEqual({ address: classicAddress })
+
+    const xAddress = rn.encodeRippleXAddress(classicAddress, 42)
+    expect(rn.isValidRippleXAddress(xAddress)).toBe(true)
+    expect(rn.decodeRippleXAddress(xAddress)).toEqual({ address: classicAddress, destinationTag: 42 })
+    expect(rn.normalizeRippleDestination(xAddress)).toEqual({ address: classicAddress, destinationTag: 42 })
   })
 
   it('re-exports the custom-RPC canonicals on the RN entrypoint', async () => {
@@ -727,6 +804,9 @@ describe('RN entry exposes canonical IBC + Sui prep helpers', () => {
 
     expect(rn.prepareIbcTransfer).toBe(prep.prepareIbcTransfer)
     expect(rn.prepareIbcTransfer).toBe(ibcTransfer.prepareIbcTransfer)
+    expect(rn.resolveSourceChannelByDestChain).toBe(prep.resolveSourceChannelByDestChain)
+    expect(rn.resolveSourceChannelByDestChain).toBe(ibcTransfer.resolveSourceChannelByDestChain)
+    expect(rn.resolveSourceChannelByDestChain('cosmoshub-4', 'noble-1')).toBe('channel-536')
     expect(rn.supportedIbcDestinationsFrom).toBe(prep.supportedIbcDestinationsFrom)
     expect(rn.normaliseIbcChainId).toBe(ibcTransfer.normaliseIbcChainId)
     expect(rn.IBC_MSG_TRANSFER_TYPE_URL).toBe(ibcTransfer.IBC_MSG_TRANSFER_TYPE_URL)

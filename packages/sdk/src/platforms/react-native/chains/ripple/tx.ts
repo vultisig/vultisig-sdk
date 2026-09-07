@@ -30,6 +30,7 @@ import { hmac } from '@noble/hashes/hmac.js'
 import { ripemd160 } from '@noble/hashes/legacy.js'
 import { sha256, sha512 } from '@noble/hashes/sha2.js'
 import { normalizeRippleDestination } from '@vultisig/core-chain/chains/ripple/address'
+import { getSignableIssuedCurrencyAmount } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
 import { encodeAccountID } from 'ripple-address-codec'
 import { encode as xrplEncode, encodeForSigning } from 'ripple-binary-codec'
 
@@ -145,7 +146,7 @@ export type XrpPaymentTx = {
   Flags?: number
   Account: string
   Destination: string
-  Amount: string
+  Amount: string | XrpIssuedCurrencyAmount
   Fee: string
   Sequence: number
   LastLedgerSequence: number
@@ -155,6 +156,18 @@ export type XrpPaymentTx = {
   TxnSignature?: string
 }
 
+export type XrpIssuedCurrencyAmount = {
+  currency: string
+  issuer: string
+  value: string
+}
+
+export type XrpIssuedCurrencyPayment = {
+  currency: string
+  issuer: string
+  decimals: number
+}
+
 export type BuildXrpSendOptions = {
   /** Sender r-address (classic address). */
   account: string
@@ -162,6 +175,8 @@ export type BuildXrpSendOptions = {
   destination: string
   /** Amount in drops (1 XRP = 1,000,000 drops), as a string. */
   amount: string
+  /** Issued-currency descriptor. When present, `amount` is in token base units. */
+  issuedCurrency?: XrpIssuedCurrencyPayment
   /** Fee in drops, as a string. */
   fee: string
   /** Account sequence (from account_info). */
@@ -240,6 +255,15 @@ export function buildXrpSendTx(opts: BuildXrpSendOptions): BuildXrpSendResult {
   const memoIsLegacyCarrier =
     opts.memo !== undefined && (legacyMemoDestinationTag !== undefined || opts.memo === destinationTag?.toString())
   const hasDistinctMemo = Boolean(opts.memo && !memoIsLegacyCarrier)
+  if (opts.issuedCurrency && BigInt(opts.amount) <= 0n) {
+    throw new Error('XRP issued-currency Payment amount must be positive')
+  }
+  const amount: XrpPaymentTx['Amount'] = opts.issuedCurrency
+    ? getSignableIssuedCurrencyAmount({
+        ...opts.issuedCurrency,
+        amount: BigInt(opts.amount),
+      })
+    : opts.amount
 
   const tx: XrpPaymentTx = {
     TransactionType: 'Payment',
@@ -249,7 +273,7 @@ export function buildXrpSendTx(opts: BuildXrpSendOptions): BuildXrpSendResult {
     ...(hasDistinctMemo ? {} : { Flags: 0 }),
     Account: opts.account,
     Destination: rippleDestination.address,
-    Amount: opts.amount,
+    Amount: amount,
     Fee: opts.fee,
     Sequence: opts.sequence,
     LastLedgerSequence: opts.lastLedgerSequence,

@@ -131,5 +131,40 @@ describe('buildSplTransfer (pure-crypto unsigned SPL transfer)', () => {
         /decimals/
       )
     })
+
+    it('rejects known Solana burn/program destinations (parity with prepareSendTxFromKeys)', () => {
+      // System Program: no private key controls this address.
+      expect(() =>
+        buildSplTransfer({
+          mint: USDC_MINT,
+          from: FROM,
+          to: '11111111111111111111111111111111',
+          amount: 1n,
+          decimals: 6,
+        })
+      ).toThrow(/Refusing to build transaction/)
+
+      // SPL Token Program id: a program, not a wallet.
+      expect(() =>
+        buildSplTransfer({
+          mint: USDC_MINT,
+          from: FROM,
+          to: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+          amount: 1n,
+          decimals: 6,
+        })
+      ).toThrow(/Refusing to build transaction/)
+
+      // Solana Incinerator: funds sent here are permanently destroyed.
+      expect(() =>
+        buildSplTransfer({
+          mint: USDC_MINT,
+          from: FROM,
+          to: '1nc1nerator11111111111111111111111111111111',
+          amount: 1n,
+          decimals: 6,
+        })
+      ).toThrow(/Refusing to build transaction/)
+    })
   })
 })

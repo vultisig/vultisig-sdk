@@ -6,6 +6,7 @@ import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import { banxaSupportedChains, getBanxaBuyUrl } from '@vultisig/core-chain/banxa'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getChainKind } from '@vultisig/core-chain/ChainKind'
+import type { TonWalletVersion } from '@vultisig/core-chain/chains/ton/wallet'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { getCoinValue } from '@vultisig/core-chain/coin/utils/getCoinValue'
@@ -68,7 +69,7 @@ import type { DiscoveredToken, TokenInfo } from '../types/tokens'
 import { computePersonalSignHash } from '../utils/eip191'
 import { createVaultBackup } from '../utils/export'
 // Vault services
-import { AddressService } from './services/AddressService'
+import { AddressService, type GetAddressOptions } from './services/AddressService'
 import { BalanceService } from './services/BalanceService'
 import { BroadcastService } from './services/BroadcastService'
 import { GasEstimationService } from './services/GasEstimationService'
@@ -186,6 +187,20 @@ async function withStorageWriteLock<T>(storage: Storage, key: string, operation:
 
   return result
 }
+
+const supportedChains = new Set<string>(Object.values(Chain))
+
+/**
+ * Narrows persisted `VaultData.chains` (an unvalidated `string[]`) to chains this
+ * build still supports, dropping any the SDK has since removed.
+ *
+ * Without this, a chain retired from {@link Chain} survives in storage and is cast
+ * straight back into `_userChains`, where every registry lookup keyed on it
+ * (`chainFeeCoin`, `cosmosRpcUrl`, `chainRegistry`, …) yields `undefined` and
+ * throws at the point of use rather than being ignored here.
+ */
+const toSupportedChains = (chains: readonly string[]): Chain[] =>
+  chains.filter((chain): chain is Chain => supportedChains.has(chain))
 
 /**
  * VaultBase - Abstract base class for all vault types
@@ -400,7 +415,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     // Initialize runtime state
     this._userChains =
       this.vaultData.chains.length > 0
-        ? this.vaultData.chains.map(c => c as Chain)
+        ? toSupportedChains(this.vaultData.chains)
         : (this.config?.defaultChains ?? DEFAULT_CHAINS)
     this._currency = this.vaultData.currency
     this._tokens = this.vaultData.tokens
@@ -785,7 +800,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
       // Update runtime state
       this._currency = loadedVaultData.currency
-      this._userChains = loadedVaultData.chains.map(c => c as Chain)
+      this._userChains = toSupportedChains(loadedVaultData.chains)
       this._tokens = loadedVaultData.tokens
 
       // Sync CoreVault with VaultData
@@ -919,7 +934,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
     // Update runtime state
     this._currency = loadedVaultData.currency
-    this._userChains = loadedVaultData.chains.map(c => c as Chain)
+    this._userChains = toSupportedChains(loadedVaultData.chains)
     this._tokens = loadedVaultData.tokens
 
     // Sync CoreVault
@@ -1050,7 +1065,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
   private syncRuntimeFromVaultData(): void {
     this._currency = this.vaultData.currency
-    this._userChains = this.vaultData.chains.map(chain => chain as Chain)
+    this._userChains = toSupportedChains(this.vaultData.chains)
     this._tokens = this.vaultData.tokens
     this.coreVault.publicKeys = this.vaultData.publicKeys
     this.coreVault.hexChainCode = this.vaultData.hexChainCode
@@ -1132,10 +1147,39 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   // ===== ADDRESS METHODS =====
 
   /**
-   * Get address for specified chain
+   * Get address for specified chain.
+   *
+   * For TON, `options.tonWalletVersion` previews one contract's address without
+   * changing which account the vault acts on; see {@link setTonWalletVersion}.
    */
-  async address(chain: Chain): Promise<string> {
-    return this.addressService.getAddress(chain)
+  async address(chain: Chain, options?: GetAddressOptions): Promise<string> {
+    return this.addressService.getAddress(chain, options)
+  }
+
+  /** The TON wallet contract this vault acts on. V4R2 unless {@link setTonWalletVersion} chose W5. */
+  get tonWalletVersion(): TonWalletVersion {
+    return this.addressService.getTonWalletVersion()
+  }
+
+  /**
+   * Select which of the key's two TON accounts this vault acts on.
+   *
+   * W5 (`'v5r1'`) is a different address from V4R2 with its own balance, so the
+   * choice has to be made once and honoured everywhere: after this call every
+   * un-versioned address lookup — `address`, `send`, balances, swaps, fee
+   * estimation, token discovery — resolves to the selected account. Balance
+   * caches are dropped because they belong to the previous account.
+   *
+   * The selection lives on this vault instance; persist the user's choice and
+   * re-apply it after loading the vault.
+   */
+  async setTonWalletVersion(tonWalletVersion: TonWalletVersion): Promise<void> {
+    if (tonWalletVersion === this.addressService.getTonWalletVersion()) {
+      return
+    }
+
+    this.addressService.setTonWalletVersion(tonWalletVersion)
+    await this.balanceService.onAccountChanged()
   }
 
   /**
@@ -1259,6 +1303,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     memo?: string
     destinationTag?: number
     feeSettings?: FeeSettings
+    sendMaxAmount?: boolean
   }): Promise<KeysignPayload> {
     return this.transactionBuilder.prepareSendTx(params)
   }
@@ -1527,7 +1572,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
       if (result.status === 'success') {
         this.emit('transactionConfirmed', { chain, txHash, receipt: result.receipt })
-      } else if (result.status === 'error') {
+      } else if (result.status === 'error' || result.status === 'expired') {
         this.emit('transactionFailed', { chain, txHash })
       }
 
@@ -1971,7 +2016,16 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       amountBigInt = this.parseAmount(amount, tokenInfo.decimals)
     }
 
-    const keysignPayload = await this.prepareSendTx({ coin, receiver: to, amount: amountBigInt, memo, destinationTag })
+    const keysignPayload = await this.prepareSendTx({
+      coin,
+      receiver: to,
+      amount: amountBigInt,
+      memo,
+      destinationTag,
+      // This is the one place the SDK knows MAX was asked for rather than inferring
+      // it, so the payload records it here or nowhere.
+      sendMaxAmount: amount === 'max',
+    })
 
     if (dryRun) {
       const fee = await this.transactionBuilder.estimateSendFee({
@@ -2307,8 +2361,10 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       shouldRetryError: error => !(error instanceof VaultError) || error.code === VaultErrorCode.NetworkError,
     })
 
-    if (outcome.result?.status === 'error') {
-      throw new VaultError(VaultErrorCode.BroadcastFailed, `Approval tx failed: ${txHash}`)
+    if (outcome.result?.status !== 'success' && !outcome.timedOut) {
+      const status = outcome.result?.status ?? 'unknown'
+      const outcomeLabel = status === 'error' ? 'failed' : status
+      throw new VaultError(VaultErrorCode.BroadcastFailed, `Approval tx ${outcomeLabel}: ${txHash}`)
     }
     if (outcome.timedOut) {
       throw new VaultError(VaultErrorCode.Timeout, `Approval tx not confirmed within ${timeoutMs / 1000}s: ${txHash}`)

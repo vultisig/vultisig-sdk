@@ -2,56 +2,60 @@
 // @generated from file vultisig/keysign/v1/1inch_swap_payload.proto (package vultisig.keysign.v1, syntax proto3)
 /* eslint-disable */
 
-import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
-import { fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
-import type { Coin } from "./coin_pb";
-import { file_vultisig_keysign_v1_coin } from "./coin_pb";
-import type { Message } from "@bufbuild/protobuf";
+import type { GenFile, GenMessage } from '@bufbuild/protobuf/codegenv2'
+import { fileDesc, messageDesc } from '@bufbuild/protobuf/codegenv2'
+import type { Coin } from './coin_pb'
+import { file_vultisig_keysign_v1_coin } from './coin_pb'
+import type { Message } from '@bufbuild/protobuf'
 
 /**
  * Describes the file vultisig/keysign/v1/1inch_swap_payload.proto.
  */
-export const file_vultisig_keysign_v1_1inch_swap_payload: GenFile = /*@__PURE__*/
-  fileDesc("Cix2dWx0aXNpZy9rZXlzaWduL3YxLzFpbmNoX3N3YXBfcGF5bG9hZC5wcm90bxITdnVsdGlzaWcua2V5c2lnbi52MSKZAgoST25lSW5jaFRyYW5zYWN0aW9uEgwKBGZyb20YASABKAkSCgoCdG8YAiABKAkSDAoEZGF0YRgDIAEoCRINCgV2YWx1ZRgEIAEoCRIRCglnYXNfcHJpY2UYBSABKAkSCwoDZ2FzGAYgASgDEhAKCHN3YXBfZmVlGAcgASgJEhsKDnN3YXBfZmVlX2NoYWluGAggASgJSACIAQESHgoRc3dhcF9mZWVfdG9rZW5faWQYCSABKAlIAYgBARIeChFzd2FwX2ZlZV9kZWNpbWFscxgKIAEoBUgCiAEBQhEKD19zd2FwX2ZlZV9jaGFpbkIUChJfc3dhcF9mZWVfdG9rZW5faWRCFAoSX3N3YXBfZmVlX2RlY2ltYWxzIlcKDE9uZUluY2hRdW90ZRISCgpkc3RfYW1vdW50GAEgASgJEjMKAnR4GAIgASgLMicudnVsdGlzaWcua2V5c2lnbi52MS5PbmVJbmNoVHJhbnNhY3Rpb24i4gEKEk9uZUluY2hTd2FwUGF5bG9hZBIsCglmcm9tX2NvaW4YASABKAsyGS52dWx0aXNpZy5rZXlzaWduLnYxLkNvaW4SKgoHdG9fY29pbhgCIAEoCzIZLnZ1bHRpc2lnLmtleXNpZ24udjEuQ29pbhITCgtmcm9tX2Ftb3VudBgDIAEoCRIZChF0b19hbW91bnRfZGVjaW1hbBgEIAEoCRIwCgVxdW90ZRgFIAEoCzIhLnZ1bHRpc2lnLmtleXNpZ24udjEuT25lSW5jaFF1b3RlEhAKCHByb3ZpZGVyGAYgASgJQlQKE3Z1bHRpc2lnLmtleXNpZ24udjFaOGdpdGh1Yi5jb20vdnVsdGlzaWcvY29tbW9uZGF0YS9nby92dWx0aXNpZy9rZXlzaWduL3YxO3YxugICVlNiBnByb3RvMw", [file_vultisig_keysign_v1_coin]);
+export const file_vultisig_keysign_v1_1inch_swap_payload: GenFile =
+  /*@__PURE__*/
+  fileDesc(
+    'Cix2dWx0aXNpZy9rZXlzaWduL3YxLzFpbmNoX3N3YXBfcGF5bG9hZC5wcm90bxITdnVsdGlzaWcua2V5c2lnbi52MSKZAgoST25lSW5jaFRyYW5zYWN0aW9uEgwKBGZyb20YASABKAkSCgoCdG8YAiABKAkSDAoEZGF0YRgDIAEoCRINCgV2YWx1ZRgEIAEoCRIRCglnYXNfcHJpY2UYBSABKAkSCwoDZ2FzGAYgASgDEhAKCHN3YXBfZmVlGAcgASgJEhsKDnN3YXBfZmVlX2NoYWluGAggASgJSACIAQESHgoRc3dhcF9mZWVfdG9rZW5faWQYCSABKAlIAYgBARIeChFzd2FwX2ZlZV9kZWNpbWFscxgKIAEoBUgCiAEBQhEKD19zd2FwX2ZlZV9jaGFpbkIUChJfc3dhcF9mZWVfdG9rZW5faWRCFAoSX3N3YXBfZmVlX2RlY2ltYWxzIlcKDE9uZUluY2hRdW90ZRISCgpkc3RfYW1vdW50GAEgASgJEjMKAnR4GAIgASgLMicudnVsdGlzaWcua2V5c2lnbi52MS5PbmVJbmNoVHJhbnNhY3Rpb24i+AEKEk9uZUluY2hTd2FwUGF5bG9hZBIsCglmcm9tX2NvaW4YASABKAsyGS52dWx0aXNpZy5rZXlzaWduLnYxLkNvaW4SKgoHdG9fY29pbhgCIAEoCzIZLnZ1bHRpc2lnLmtleXNpZ24udjEuQ29pbhITCgtmcm9tX2Ftb3VudBgDIAEoCRIZChF0b19hbW91bnRfZGVjaW1hbBgEIAEoCRIwCgVxdW90ZRgFIAEoCzIhLnZ1bHRpc2lnLmtleXNpZ24udjEuT25lSW5jaFF1b3RlEhAKCHByb3ZpZGVyGAYgASgJEhQKDHN1Yl9wcm92aWRlchgHIAEoCUJUChN2dWx0aXNpZy5rZXlzaWduLnYxWjhnaXRodWIuY29tL3Z1bHRpc2lnL2NvbW1vbmRhdGEvZ28vdnVsdGlzaWcva2V5c2lnbi92MTt2MboCAlZTYgZwcm90bzM',
+    [file_vultisig_keysign_v1_coin]
+  )
 
 /**
  * @generated from message vultisig.keysign.v1.OneInchTransaction
  */
-export type OneInchTransaction = Message<"vultisig.keysign.v1.OneInchTransaction"> & {
+export type OneInchTransaction = Message<'vultisig.keysign.v1.OneInchTransaction'> & {
   /**
    * @generated from field: string from = 1;
    */
-  from: string;
+  from: string
 
   /**
    * @generated from field: string to = 2;
    */
-  to: string;
+  to: string
 
   /**
    * @generated from field: string data = 3;
    */
-  data: string;
+  data: string
 
   /**
    * @generated from field: string value = 4;
    */
-  value: string;
+  value: string
 
   /**
    * @generated from field: string gas_price = 5;
    */
-  gasPrice: string;
+  gasPrice: string
 
   /**
    * @generated from field: int64 gas = 6;
    */
-  gas: bigint;
+  gas: bigint
 
   /**
    * @generated from field: string swap_fee = 7;
    */
-  swapFee: string;
+  swapFee: string
 
   /**
    * Coin context for `swap_fee`. The amount alone is not enough because
@@ -63,87 +67,103 @@ export type OneInchTransaction = Message<"vultisig.keysign.v1.OneInchTransaction
    *
    * @generated from field: optional string swap_fee_chain = 8;
    */
-  swapFeeChain?: string;
+  swapFeeChain?: string
 
   /**
    * @generated from field: optional string swap_fee_token_id = 9;
    */
-  swapFeeTokenId?: string;
+  swapFeeTokenId?: string
 
   /**
    * @generated from field: optional int32 swap_fee_decimals = 10;
    */
-  swapFeeDecimals?: number;
-};
+  swapFeeDecimals?: number
+}
 
 /**
  * Describes the message vultisig.keysign.v1.OneInchTransaction.
  * Use `create(OneInchTransactionSchema)` to create a new message.
  */
-export const OneInchTransactionSchema: GenMessage<OneInchTransaction> = /*@__PURE__*/
-  messageDesc(file_vultisig_keysign_v1_1inch_swap_payload, 0);
+export const OneInchTransactionSchema: GenMessage<OneInchTransaction> =
+  /*@__PURE__*/
+  messageDesc(file_vultisig_keysign_v1_1inch_swap_payload, 0)
 
 /**
  * @generated from message vultisig.keysign.v1.OneInchQuote
  */
-export type OneInchQuote = Message<"vultisig.keysign.v1.OneInchQuote"> & {
+export type OneInchQuote = Message<'vultisig.keysign.v1.OneInchQuote'> & {
   /**
    * @generated from field: string dst_amount = 1;
    */
-  dstAmount: string;
+  dstAmount: string
 
   /**
    * @generated from field: vultisig.keysign.v1.OneInchTransaction tx = 2;
    */
-  tx?: OneInchTransaction;
-};
+  tx?: OneInchTransaction
+}
 
 /**
  * Describes the message vultisig.keysign.v1.OneInchQuote.
  * Use `create(OneInchQuoteSchema)` to create a new message.
  */
-export const OneInchQuoteSchema: GenMessage<OneInchQuote> = /*@__PURE__*/
-  messageDesc(file_vultisig_keysign_v1_1inch_swap_payload, 1);
+export const OneInchQuoteSchema: GenMessage<OneInchQuote> =
+  /*@__PURE__*/
+  messageDesc(file_vultisig_keysign_v1_1inch_swap_payload, 1)
 
 /**
  * @generated from message vultisig.keysign.v1.OneInchSwapPayload
  */
-export type OneInchSwapPayload = Message<"vultisig.keysign.v1.OneInchSwapPayload"> & {
+export type OneInchSwapPayload = Message<'vultisig.keysign.v1.OneInchSwapPayload'> & {
   /**
    * @generated from field: vultisig.keysign.v1.Coin from_coin = 1;
    */
-  fromCoin?: Coin;
+  fromCoin?: Coin
 
   /**
    * @generated from field: vultisig.keysign.v1.Coin to_coin = 2;
    */
-  toCoin?: Coin;
+  toCoin?: Coin
 
   /**
    * @generated from field: string from_amount = 3;
    */
-  fromAmount: string;
+  fromAmount: string
 
   /**
    * @generated from field: string to_amount_decimal = 4;
    */
-  toAmountDecimal: string;
+  toAmountDecimal: string
 
   /**
    * @generated from field: vultisig.keysign.v1.OneInchQuote quote = 5;
    */
-  quote?: OneInchQuote;
+  quote?: OneInchQuote
 
   /**
    * @generated from field: string provider = 6;
    */
-  provider: string;
-};
+  provider: string
+
+  /**
+   * Sub-provider tag for the verify screen, e.g. "CHAINFLIP", "NEAR". Mirrors
+   * SwapKitSwapPayload.sub_provider, which non-EVM SwapKit routes already
+   * carry. Without it a cosigning peer names the aggregator alone while the
+   * initiator, holding the quote, names the route too — one swap described
+   * two ways on the two screens that are supposed to agree.
+   *
+   * Empty for aggregators that route directly and for senders that predate
+   * this field.
+   *
+   * @generated from field: string sub_provider = 7;
+   */
+  subProvider: string
+}
 
 /**
  * Describes the message vultisig.keysign.v1.OneInchSwapPayload.
  * Use `create(OneInchSwapPayloadSchema)` to create a new message.
  */
-export const OneInchSwapPayloadSchema: GenMessage<OneInchSwapPayload> = /*@__PURE__*/
-  messageDesc(file_vultisig_keysign_v1_1inch_swap_payload, 2);
-
+export const OneInchSwapPayloadSchema: GenMessage<OneInchSwapPayload> =
+  /*@__PURE__*/
+  messageDesc(file_vultisig_keysign_v1_1inch_swap_payload, 2)
