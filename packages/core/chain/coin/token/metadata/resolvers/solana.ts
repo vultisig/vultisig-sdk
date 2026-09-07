@@ -1,21 +1,23 @@
-import { SolanaJupiterToken } from '@vultisig/core-chain/coin/jupiter/token'
-import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
+import { baseJupiterTokensUrl, getJupiterTokens } from '@vultisig/core-chain/coin/jupiter/api'
 
 import { getSolanaCoingeckoId } from '../../../coingecko/getCoingeckoId'
 import { TokenMetadataResolver } from '../resolver'
 
-export const baseJupiterTokensUrl = 'https://api.vultisig.com/jup/tokens/v2'
+/** Kept on this subpath for consumers that read the Jupiter base URL from the resolver module. */
+export { baseJupiterTokensUrl }
 
 export const getSolanaTokenMetadata: TokenMetadataResolver = async ({ id }) => {
-  const [{ decimals, icon, symbol }] = await queryUrl<SolanaJupiterToken[]>(
-    `${baseJupiterTokensUrl}/search?query=${id}`
-  )
+  const token = (await getJupiterTokens([id]))[id]
+  if (!token) {
+    throw new Error(`Jupiter has no metadata for Solana mint ${id}`)
+  }
+
   const coingeckoId = await getSolanaCoingeckoId({ id })
 
   return {
-    decimals,
-    logo: icon,
-    ticker: symbol,
+    decimals: token.decimals,
+    logo: token.icon,
+    ticker: token.symbol,
     priceProviderId: coingeckoId,
   }
 }
