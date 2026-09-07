@@ -326,6 +326,59 @@ describe('findSwapQuote parallel selection', () => {
     expect('general' in quote.quote).toBe(true)
   })
 
+  it.each([
+    [Chain.Hyperliquid, Chain.Ethereum],
+    [Chain.Ethereum, Chain.Robinhood],
+    [Chain.Ethereum, Chain.Blast],
+  ] as const)('dispatches SwapKit for a catalog-resolved %s -> %s corridor', async (fromChain, toChain) => {
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('skip kyber'))
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))
+    vi.mocked(getSwapKitQuote).mockResolvedValue(minimalGeneralQuote('900000', 'swapkit'))
+
+    const from = { chain: fromChain, address: '0xsender', decimals: 18, ticker: 'ETH' }
+    const to = { chain: toChain, address: '0xdestination', decimals: 18, ticker: 'ETH' }
+
+    const quote = await findSwapQuote({ from, to, amount: 1n })
+
+    expect(getSwapKitQuote).toHaveBeenCalledWith(expect.objectContaining({ from, to }))
+    expect('general' in quote.quote && quote.quote.general.provider).toBe('swapkit')
+  })
+
+  it('keeps Robinhood source swaps on other providers while Blockaid coverage is absent', async () => {
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('skip kyber'))
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
+    vi.mocked(getLifiSwapQuote).mockResolvedValue(minimalGeneralQuote('900000', 'li.fi'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))
+
+    const quote = await findSwapQuote({
+      from: { chain: Chain.Robinhood, address: '0xsender', decimals: 18, ticker: 'ETH' },
+      to: { chain: Chain.Ethereum, address: '0xdestination', decimals: 18, ticker: 'ETH' },
+      amount: 1n,
+    })
+
+    expect(getSwapKitQuote).not.toHaveBeenCalled()
+    expect('general' in quote.quote && quote.quote.general.provider).toBe('li.fi')
+  })
+
+  it('keeps a catalog-discovery miss isolated from a competing provider on an opened EVM corridor', async () => {
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('skip kyber'))
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
+    vi.mocked(getLifiSwapQuote).mockResolvedValue(minimalGeneralQuote('900000', 'li.fi'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('SwapKit catalog unavailable'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))
+
+    const quote = await findSwapQuote({
+      from: { chain: Chain.Blast, address: '0xsender', decimals: 18, ticker: 'ETH' },
+      to: { chain: Chain.Ethereum, address: '0xdestination', decimals: 18, ticker: 'ETH' },
+      amount: 1n,
+    })
+
+    expect(getSwapKitQuote).toHaveBeenCalled()
+    expect('general' in quote.quote && quote.quote.general.provider).toBe('li.fi')
+  })
+
   it('breaks ties by earlier fetcher preference order', async () => {
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
     vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('skip swapkit'))

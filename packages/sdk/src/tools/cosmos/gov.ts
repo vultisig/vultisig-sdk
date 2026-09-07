@@ -38,7 +38,6 @@ export type GovChainId =
   | 'cosmoshub-4'
   | 'dydx-mainnet-1'
   | 'injective-1'
-  | 'kaiyo-1'
   | 'neutron-1'
   | 'noble-1'
   | 'osmosis-1'
@@ -73,7 +72,6 @@ const GOV_CHAIN_CONFIG: Record<GovChain, GovChainConfig> = {
   Cosmos: coreGovChainConfig('Cosmos'),
   Osmosis: coreGovChainConfig('Osmosis'),
   Dydx: coreGovChainConfig('Dydx'),
-  Kujira: coreGovChainConfig('Kujira'),
   Terra: coreGovChainConfig('Terra'),
   TerraClassic: coreGovChainConfig('TerraClassic', false),
   Noble: coreGovChainConfig('Noble'),
