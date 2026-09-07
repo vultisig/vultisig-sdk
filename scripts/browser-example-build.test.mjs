@@ -61,6 +61,7 @@ function freshnessFixture(t) {
   write('yarn.lock', '# fixture lockfile\n')
   write('.config/tsconfig.shared-publish.json', '{}\n')
   write('scripts/build-shared-packages.mjs', 'export {}\n')
+  write('scripts/build-sdk-platforms.mjs', 'export {}\n')
   write('scripts/fix-dist-esm-relative-imports.mjs', 'export {}\n')
   write('scripts/generate-shared-exports.mjs', 'export {}\n')
   write('packages/sdk/package.json', '{}')
@@ -182,6 +183,19 @@ test('browser SDK freshness skips symbolic links during input traversal', { skip
   const result = fixture.prepare()
   assert.equal(result.status, 0, result.stderr)
   assert.deepEqual(fixture.builds(), [])
+})
+
+test('browser SDK freshness rebuilds only SDK outputs after its platform runner changes', t => {
+  const fixture = freshnessFixture(t)
+  fixture.write('scripts/build-sdk-platforms.mjs', 'export const changed = true', fixture.outputTime + 1)
+
+  const result = fixture.prepare()
+  assert.equal(result.status, 0, result.stderr)
+  assert.deepEqual(fixture.builds(), [['workspace', '@vultisig/sdk', 'build']])
+
+  const reused = fixture.prepare()
+  assert.equal(reused.status, 0, reused.stderr)
+  assert.deepEqual(fixture.builds(), [['workspace', '@vultisig/sdk', 'build']])
 })
 
 for (const input of [
