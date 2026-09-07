@@ -981,10 +981,14 @@ export type {
   SolanaScanRequest,
   SolBalance,
   SplTokenBalance,
+  StakekitActionDisplay,
+  StakekitActionResult,
   StakekitBalanceEntry,
   StakekitBalanceItem,
   StakekitBalanceQuery,
   StakekitBalancesResult,
+  StakekitDetailsResult,
+  StakekitExitResult,
   SuiAllBalancesResult,
   SuiBalance,
   SuiCoinBalance,
@@ -1258,6 +1262,7 @@ export {
   USDC_PAYMENT_DECIMALS,
   utxoFeeRate,
   VerifierClient,
+  yieldNetworkToCanonicalChain,
 } from './tools'
 
 // The protobuf builder is environment-neutral despite its historical RN path.
