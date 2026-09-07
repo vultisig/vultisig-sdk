@@ -51,6 +51,7 @@ const sharedInputPaths = [
 const inputPaths = [
   ...workspaceDependencyInputs,
   ...sharedBuildRecipeInputs,
+  path.join(repoRoot, 'scripts/build-sdk-platforms.mjs'),
   path.join(sdkRoot, 'src'),
   path.join(sdkRoot, 'package.json'),
   path.join(sdkRoot, 'rollup.platforms.config.js'),

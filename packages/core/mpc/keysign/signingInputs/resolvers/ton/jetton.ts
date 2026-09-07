@@ -1,5 +1,6 @@
 import { validateTonComment } from '@vultisig/core-chain/chains/ton/comment'
 import { tonConfig } from '@vultisig/core-chain/chains/ton/config'
+import { TonWalletVersion } from '@vultisig/core-chain/chains/ton/wallet'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { TW } from '@trustwallet/wallet-core'
@@ -7,13 +8,14 @@ import { WalletCore } from '@trustwallet/wallet-core'
 
 import { getKeysignAmount } from '../../../utils/getKeysignAmount'
 import { getKeysignCoin } from '../../../utils/getKeysignCoin'
-import { tonAmountToBytes, tonSendMode } from './native'
+import { getTonSendMode, tonAmountToBytes } from './native'
 
 type BuildJettonTransferInput = {
   keysignPayload: KeysignPayload
   walletCore: WalletCore
   jettonAddress: string
   isActiveDestination: boolean
+  walletVersion: TonWalletVersion
 }
 
 /**
@@ -27,6 +29,7 @@ export const buildJettonTransfer = ({
   walletCore,
   jettonAddress,
   isActiveDestination,
+  walletVersion,
 }: BuildJettonTransferInput): TW.TheOpenNetwork.Proto.Transfer => {
   // `TonSpecific.jettonAddress` is a plain proto string that defaults to '' when the
   // sender's jetton wallet could not be resolved, and '' survives every null/undefined
@@ -62,7 +65,7 @@ export const buildJettonTransfer = ({
     amount: tonAmountToBytes(tonConfig.jettonAmount),
     bounceable: true,
     comment: keysignPayload.memo ?? '',
-    mode: tonSendMode,
+    mode: getTonSendMode(walletVersion),
     jettonTransfer,
   })
 }

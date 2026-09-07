@@ -41,12 +41,19 @@ describe('getSignableIssuedCurrencyAmount', () => {
     ).toBe('12.34567890123456')
   })
 
-  it.each(['usd', 'XRP', '0'.repeat(40), '0000000000000000000000005852500000000000', '€€€'])(
+  it.each(['XRP', 'xrp', 'Xrp', '0'.repeat(40), '0000000000000000000000005852500000000000', '€€€', 'a b'])(
     'rejects unsafe currency %s',
     currency => {
       expect(() => getSignableIssuedCurrencyAmount({ ...token, currency, amount: 1n })).toThrow(/currency code/)
     }
   )
+
+  // XRPL standard codes permit both letter cases, so `usd` is a currency in its
+  // own right rather than a malformed spelling of `USD`. Rejecting it stranded
+  // any trust line the ledger reported with one.
+  it.each(['usd', 'Usd', 'btc', 'a1b'])('signs a lowercase standard currency %s verbatim', currency => {
+    expect(getSignableIssuedCurrencyAmount({ ...token, currency, amount: 1n }).currency).toBe(currency)
+  })
 
   it.each([-1, 1.5, 97, NaN])('rejects unsupported decimal scale %s', decimals => {
     expect(() => getSignableIssuedCurrencyAmount({ ...token, decimals, amount: 1n })).toThrow(/decimal scale/)

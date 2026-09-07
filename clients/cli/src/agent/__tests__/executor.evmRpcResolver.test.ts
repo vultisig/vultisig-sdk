@@ -59,7 +59,11 @@ describe('AgentExecutor EVM RPC resolution', () => {
       'https://rpc.example/base',
       expect.objectContaining({ method: 'POST' })
     )
-    expect(payload.blockchainSpecific.value.maxFeePerGasWei).toBe('27')
+    // The fixture's 2 wei tip sits below Base's nominal 20 wei floor, so the
+    // clamp raises it; the max fee is then the 10 wei base fee with the
+    // patcher's 2.5x headroom (25) plus that tip.
+    expect(payload.blockchainSpecific.value.priorityFee).toBe('20')
+    expect(payload.blockchainSpecific.value.maxFeePerGasWei).toBe('45')
   })
 
   it('uses the shared sdk getEvmRpcUrl resolver when checking the pending nonce', async () => {

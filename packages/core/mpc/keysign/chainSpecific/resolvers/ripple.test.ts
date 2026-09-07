@@ -13,6 +13,20 @@ const DEST_FUNDED = 'rFundedBBBBBBBBBBBBBBBBBBBBBBBBBBBB'
 const DEST_UNFUNDED = 'rFreshCCCCCCCCCCCCCCCCCCCCCCCCCCCCC'
 
 // base_fee 10, load_factor==load_base ⇒ computedFee = 10*2 = 20 ⇒ networkFee 20.
+const trustLine = (account: string, currency: string) => ({
+  account,
+  currency,
+  balance: '0',
+  limit: '1000000',
+  limit_peer: '0',
+  quality_in: 0,
+  quality_out: 0,
+})
+
+const ISSUER = 'rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De'
+const SOLO_CURRENCY = '534F4C4F00000000000000000000000000000000'
+const SOLO_TOKEN_ID = `${SOLO_CURRENCY}.${ISSUER}`
+
 const RESERVE_BASE = 1_000_000
 const EXPECTED_NETWORK_FEE = 20n
 const REQUIRE_DESTINATION_TAG = 0x00020000
@@ -53,6 +67,12 @@ vi.mock('@vultisig/core-chain/chains/ripple/account/info', () => ({
     }
     return accountInfo()
   }),
+}))
+
+// Every issued-currency send now pre-flights the destination's trust lines, so
+// the default is a destination that already holds the token being sent.
+vi.mock('@vultisig/core-chain/chains/ripple/account/lines', () => ({
+  getRippleAccountLines: vi.fn(async () => [trustLine(ISSUER, SOLO_CURRENCY)]),
 }))
 
 import { getRippleChainSpecific } from './ripple'
@@ -255,9 +275,7 @@ describe('getRippleChainSpecific — states the XRPL operation on the wire', () 
 })
 
 describe('getRippleChainSpecific — only genuine trust lines are declared', () => {
-  const ISSUER = 'rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De'
   const RECIPIENT = 'rFriendDDDDDDDDDDDDDDDDDDDDDDDDDDDD'
-  const SOLO_TOKEN_ID = `534F4C4F00000000000000000000000000000000.${ISSUER}`
 
   beforeEach(async () => {
     const { getRippleAccountInfo } = await import('@vultisig/core-chain/chains/ripple/account/info')
@@ -268,6 +286,9 @@ describe('getRippleChainSpecific — only genuine trust lines are declared', () 
 
       return accountInfo()
     })
+
+    const { getRippleAccountLines } = await import('@vultisig/core-chain/chains/ripple/account/lines')
+    vi.mocked(getRippleAccountLines).mockResolvedValue([trustLine(ISSUER, SOLO_CURRENCY)])
   })
 
   const issuedCurrencyPayloadTo = (toAddress: string) =>
@@ -386,5 +407,133 @@ describe('getRippleChainSpecific — only genuine trust lines are declared', () 
     })
 
     expect(res.transactionType).toBe(TransactionType.UNSPECIFIED)
+  })
+})
+
+describe('getRippleChainSpecific — an issued-currency Payment the ledger would reject is refused first', () => {
+  const RECIPIENT = 'rFriendDDDDDDDDDDDDDDDDDDDDDDDDDDDD'
+
+  const issuedCurrencyPayloadTo = (toAddress: string) =>
+    create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, {
+        chain: Chain.Ripple,
+        ticker: 'SOLO',
+        address: SENDER,
+        contractAddress: SOLO_TOKEN_ID,
+        decimals: 15,
+        isNativeToken: false,
+      }),
+      toAddress,
+      toAmount: '5000000000000000',
+    })
+
+  const send = (toAddress = RECIPIENT) =>
+    getRippleChainSpecific({
+      keysignPayload: issuedCurrencyPayloadTo(toAddress),
+      walletCore: {} as never,
+      transactionType: TransactionType.RIPPLE_PAYMENT,
+    })
+
+  const mockLines = async (lines: ReturnType<typeof trustLine>[]) => {
+    const { getRippleAccountLines } = await import('@vultisig/core-chain/chains/ripple/account/lines')
+    vi.mocked(getRippleAccountLines).mockResolvedValue(lines)
+  }
+
+  const mockIssuerTransferRate = async (transferRate: number) => {
+    const { getRippleAccountInfo } = await import('@vultisig/core-chain/chains/ripple/account/info')
+    vi.mocked(getRippleAccountInfo).mockImplementation(async (address: string) => {
+      if (address === DEST_UNFUNDED) {
+        throw new Error('Account not found.')
+      }
+
+      const info = accountInfo()
+
+      return address === ISSUER ? { ...info, account_data: { ...info.account_data, TransferRate: transferRate } } : info
+    })
+  }
+
+  beforeEach(async () => {
+    const { getRippleAccountInfo } = await import('@vultisig/core-chain/chains/ripple/account/info')
+    vi.mocked(getRippleAccountInfo).mockImplementation(async (address: string) => {
+      if (address === DEST_UNFUNDED) {
+        throw new Error('Account not found.')
+      }
+
+      return accountInfo()
+    })
+
+    await mockLines([trustLine(ISSUER, SOLO_CURRENCY)])
+  })
+
+  it('rejects a token Payment to an account holding no trust line for it', async () => {
+    await mockLines([trustLine(ISSUER, 'USD')])
+
+    await expect(send()).rejects.toMatchObject({ type: 'ripple-destination-trust-line-missing' })
+  })
+
+  it('rejects a trust line to the same currency from a different issuer', async () => {
+    await mockLines([trustLine(RECIPIENT, SOLO_CURRENCY)])
+
+    await expect(send()).rejects.toMatchObject({ type: 'ripple-destination-trust-line-missing' })
+  })
+
+  it('matches the destination line on the normalised currency code', async () => {
+    await mockLines([trustLine(ISSUER, SOLO_CURRENCY.toLowerCase())])
+
+    await expect(send()).resolves.toMatchObject({ transactionType: TransactionType.RIPPLE_PAYMENT })
+  })
+
+  it('stays retryable when the destination trust lines cannot be read', async () => {
+    const { getRippleAccountLines } = await import('@vultisig/core-chain/chains/ripple/account/lines')
+    vi.mocked(getRippleAccountLines).mockRejectedValue(new Error('502 Bad Gateway'))
+
+    // A transient RPC failure is not evidence the line is missing, so it must
+    // not surface as a deterministic BuildKeysignPayloadError.
+    await expect(send()).rejects.toThrow(/Unable to verify.*trust line/i)
+    await expect(send()).rejects.not.toBeInstanceOf(BuildKeysignPayloadError)
+  })
+
+  it('rejects a token whose issuer charges a transfer fee', async () => {
+    // SendMax would have to cover Amount x rate, and RippleSpecific cannot
+    // carry one — the ledger would take the fee and fail with tecPATH_PARTIAL.
+    await mockIssuerTransferRate(1_005_000_000)
+
+    await expect(send()).rejects.toMatchObject({ type: 'ripple-issuer-transfer-fee-unsupported' })
+  })
+
+  it('accepts an issuer that charges no transfer fee', async () => {
+    await mockIssuerTransferRate(1_000_000_000)
+
+    await expect(send()).resolves.toMatchObject({ transactionType: TransactionType.RIPPLE_PAYMENT })
+  })
+
+  it('redeems to the issuer without requiring a trust line or a fee-free issuer', async () => {
+    await mockIssuerTransferRate(1_005_000_000)
+    await mockLines([])
+
+    await expect(send(ISSUER)).resolves.toMatchObject({ transactionType: TransactionType.RIPPLE_PAYMENT })
+  })
+
+  it('leaves a verbatim dApp transaction unchecked', async () => {
+    await mockLines([])
+    const payload = issuedCurrencyPayloadTo(RECIPIENT)
+    payload.signData = {
+      case: 'signRipple',
+      value: { rawJson: JSON.stringify({ TransactionType: 'Payment', Account: SENDER }) },
+    } as never
+
+    await expect(getRippleChainSpecific({ keysignPayload: payload, walletCore: {} as never })).resolves.toBeDefined()
+  })
+
+  it('reports a trust line to a non-existent issuer as such, not as a failed send', async () => {
+    const payload = issuedCurrencyPayloadTo(DEST_UNFUNDED)
+
+    await expect(
+      getRippleChainSpecific({
+        keysignPayload: payload,
+        walletCore: {} as never,
+        transactionType: TransactionType.RIPPLE_TRUST_SET,
+      })
+    ).rejects.toMatchObject({ type: 'ripple-trust-line-issuer-not-activated' })
   })
 })

@@ -18,6 +18,20 @@ const hexCurrencyCodeLength = 40
 
 const hexCurrencyCodeRegex = /^[0-9a-fA-F]{40}$/
 
+/**
+ * Characters XRPL permits inside a 3-character standard currency code. Both
+ * letter cases are legal on the ledger, so `usd` is a distinct currency from
+ * `USD` rather than a malformed code.
+ * @see https://xrpl.org/docs/references/protocol/data-types/currency-formats
+ */
+const standardCurrencyCharacters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789<>(){}[]|?!@#$%^&*'
+
+/**
+ * Codes the ledger reserves for native XRP. Compared case-insensitively so a
+ * lookalike such as `xrp` cannot be signed as though it were a token.
+ */
+const nativeCurrencyCodes = ['XRP', '0'.repeat(40), '0000000000000000000000005852500000000000']
+
 const asciiToHexCurrencyCode = (currency: string): string => {
   const bytes = [...currency].map(character => {
     const code = character.charCodeAt(0)
@@ -127,10 +141,10 @@ export const getSignableIssuedCurrencyAmount = ({
     throw new Error('Unsupported XRP issued-currency code: expected ASCII or a 160-bit hex code')
   }
   const code = toXrplCurrencyCode(currency)
-  const standardCharacters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<>(){}[]|?!@#$%^&*'
-  const standardCode = code.length === 3 && [...code].every(character => standardCharacters.includes(character))
-  const nativeCodes = ['XRP', '0'.repeat(40), '0000000000000000000000005852500000000000']
-  if ((!standardCode && !hexCurrencyCodeRegex.test(code)) || nativeCodes.includes(code)) {
+  const standardCode =
+    code.length === standardCurrencyCodeLength &&
+    [...code].every(character => standardCurrencyCharacters.includes(character))
+  if ((!standardCode && !hexCurrencyCodeRegex.test(code)) || nativeCurrencyCodes.includes(code.toUpperCase())) {
     throw new Error('Unsupported XRP issued-currency code: signing must preserve its exact identity')
   }
   if (!isValidClassicAddress(issuer)) {

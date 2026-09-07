@@ -35,7 +35,7 @@ const walletCore = {
 } as unknown as WalletCore
 
 const build = (jettonAddress: string) =>
-  buildJettonTransfer({ keysignPayload, walletCore, jettonAddress, isActiveDestination: true })
+  buildJettonTransfer({ keysignPayload, walletCore, jettonAddress, isActiveDestination: true, walletVersion: 'v4r2' })
 
 const buildWithMemo = ({
   memo,
@@ -51,6 +51,7 @@ const buildWithMemo = ({
     walletCore,
     jettonAddress: senderJettonWallet,
     isActiveDestination,
+    walletVersion: 'v4r2',
   })
 
 describe('buildJettonTransfer', () => {
