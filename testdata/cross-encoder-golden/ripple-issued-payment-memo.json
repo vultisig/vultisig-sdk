@@ -1,0 +1,20 @@
+{
+  "_description": "Shared WalletCore/WASM (packages/core) and RN-JS/ripple-binary-codec (packages/sdk) golden vector for an XRPL issued-currency Payment carrying a distinct memo. WalletCore uses its raw-JSON path for this shape, which omits the protobuf path's explicit Flags zero and does not add MemoType. The amount carries the full 16 significant digits an XRPL token mantissa allows, so a rounding change in either encoder breaks this.",
+  "senderPrivateKeyHex": "0101010101010101010101010101010101010101010101010101010101010101",
+  "recipientPrivateKeyHex": "0202020202020202020202020202020202020202020202020202020202020202",
+  "senderAddress": "rUaRcsApnVHudsdLD2mut2qCKWq6iLRT2D",
+  "recipientAddress": "r4VYvnjmi9JREsu1PZJQmJEJ6bQ6iPNSTP",
+  "senderPublicKeyHex": "031b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f",
+  "issuerAddress": "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De",
+  "currencyCode": "524C555344000000000000000000000000000000",
+  "tokenTicker": "RLUSD",
+  "decimals": 15,
+  "amountBaseUnits": "1234567890123456",
+  "expectedValue": "1.234567890123456",
+  "feeDrops": "12",
+  "sequence": 5,
+  "lastLedgerSequence": 32000000,
+  "destinationTag": 998877,
+  "expectedSigningHashHex": "eb3788b3a3d806ba665f14bac5fda5d0b0579702c405591d487ec19ff327892d",
+  "memo": "invoice 67890"
+}

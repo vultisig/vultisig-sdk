@@ -1,6 +1,7 @@
 import { base64Decode } from '@bufbuild/protobuf/wire'
 import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import { Chain } from '@vultisig/core-chain/Chain'
+import { areEqualTonAddresses, tonAddressToBounceable } from '@vultisig/core-chain/chains/ton/address'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { usdc } from '@vultisig/core-chain/coin/knownTokens'
@@ -30,6 +31,7 @@ import {
 } from '@vultisig/core-chain/swap/general/swapkit/SwapKitProviders'
 import { SwapFee } from '@vultisig/core-chain/swap/SwapFee'
 import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
+import { attempt } from '@vultisig/lib-utils/attempt'
 import { withoutUndefinedFields } from '@vultisig/lib-utils/record/withoutUndefinedFields'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 import { address as btcAddress, networks, Psbt } from 'bitcoinjs-lib'
@@ -444,6 +446,14 @@ const matchesSwapKitFeeChain = (
   return normalized === coinChain.toLowerCase() || normalized === assetPrefix.toLowerCase()
 }
 
+const toSwapKitFeeAmount = (amount: string, decimals: number, type: string): bigint => {
+  try {
+    return toChainAmount(amount, decimals)
+  } catch (error) {
+    throw new SwapKitFeeShapeError(`SwapKit ${type} fee amount "${amount}" is not a decimal number.`, { cause: error })
+  }
+}
+
 const getSwapKitSwapFee = (
   fees: SwapKitSwapResponse['fees'],
   from: AccountCoin<SwapKitSourceChain>,
@@ -487,7 +497,12 @@ const getSwapKitSwapFee = (
     }
 
     const current: SwapFee = {
-      amount: toChainAmount(fee.amount, candidate.coin.decimals),
+      // The proxy's `amount` is an unvalidated string. `toChainAmount` throws
+      // its own error for a malformed one ("1e+", "abc"), which would escape
+      // the display-fee guard and take down a route that is otherwise
+      // signable. An amount we cannot parse is exactly an unresolvable fee
+      // shape, so it is reported as one.
+      amount: toSwapKitFeeAmount(fee.amount, candidate.coin.decimals, type),
       chain: candidate.coin.chain,
       id: candidate.coin.id,
       decimals: candidate.coin.decimals,
@@ -564,20 +579,123 @@ const toTransferAmount = (value: string | number | bigint, decimals: number): bi
   return value.includes('.') ? toChainAmount(value, decimals) : BigInt(value)
 }
 
+const isTransferAmountValue = (value: unknown): value is string | number | bigint =>
+  typeof value === 'string' || typeof value === 'number' || typeof value === 'bigint'
+
 const getTransferAmount = ({ depositAmount, tx }: SwapKitSwapResponse, amount: bigint, decimals: number): bigint => {
   if (depositAmount) {
     return toChainAmount(depositAmount, decimals)
   }
 
-  if (
-    Array.isArray(tx) &&
-    isRecord(tx[0]) &&
-    (typeof tx[0].amount === 'string' || typeof tx[0].amount === 'number' || typeof tx[0].amount === 'bigint')
-  ) {
+  if (Array.isArray(tx) && isRecord(tx[0]) && isTransferAmountValue(tx[0].amount)) {
     return toTransferAmount(tx[0].amount, decimals)
   }
 
   return amount
+}
+
+/**
+ * The single transfer SwapKit describes in its `tx[]` array, or `undefined`
+ * when `tx` is any other shape — an EVM object, an opaque PSBT / PTB string, or
+ * absent because `disableBuildTx` was sent.
+ *
+ * More than one entry is rejected rather than ignored: only `tx[0]` is ever
+ * built, so a multi-transfer route would be signed as a partial deposit that
+ * under-funds the swap. The count is checked before the entry shape so a
+ * malformed trailing entry cannot slip a multi-transfer array past this guard.
+ */
+const getTransferTxEntry = (tx: unknown): Record<string, unknown> | undefined => {
+  if (!Array.isArray(tx) || tx.length === 0) {
+    return undefined
+  }
+
+  if (tx.length > 1) {
+    throw new Error(
+      `SwapKit transfer route returned ${tx.length} transfers; only the first would be signed, so the swap would be under-funded.`
+    )
+  }
+
+  return isRecord(tx[0]) ? tx[0] : undefined
+}
+
+/**
+ * The agreed TON deposit destination in its bounceable (`EQ…`) form.
+ *
+ * `assertTransferAgreement` compares TON spellings by account, so a route whose
+ * fields spell one account as `UQ…`, raw `0:hex` and `EQ…` passes — and the
+ * spelling that wins the precedence order is what the signer would otherwise
+ * read the bounce flag from. A deposit that goes out non-bounceable to a
+ * rejecting contract is absorbed instead of refunded, so the agreed account is
+ * re-spelled bounceable here, whichever field it came from. A string that is
+ * not a TON address at all cannot be a deposit destination and is refused.
+ */
+const toCanonicalTonDeposit = (destination: string): string => {
+  const canonical = attempt(() => tonAddressToBounceable(destination))
+
+  if ('error' in canonical) {
+    throw new Error(`SwapKit transfer route returned an invalid TON deposit address: ${destination}`)
+  }
+
+  return canonical.data
+}
+
+const areEqualTransferAddresses = (left: string, right: string, chain: SwapKitSourceChain): boolean =>
+  chain === Chain.Ton ? areEqualTonAddresses(left, right) : left === right
+
+/**
+ * Fail closed when the `/v3/swap` response disagrees with itself about where
+ * the deposit goes or how large it is.
+ *
+ * `targetAddress`, `depositAddress` and `tx[]` are independent fields carrying
+ * the same fact, and the resolvers above take the first one that is present and
+ * never look at the rest. So a response whose halves diverge — a provider bug,
+ * an API change, a tampered payload — signs whichever field happens to win the
+ * precedence order while the others name a different recipient or size, and
+ * nothing downstream can tell. Neither field is authoritative enough to pick a
+ * winner from, so a divergence is refused instead of resolved.
+ *
+ * Addresses are compared per chain because TON spells one account as `EQ…`,
+ * `UQ…` or raw `workchain:hex` — comparing those as strings would reject
+ * healthy routes.
+ */
+const assertTransferAgreement = (response: SwapKitSwapResponse, chain: SwapKitSourceChain, decimals: number): void => {
+  const entry = getTransferTxEntry(response.tx)
+
+  const destinations = [
+    { field: 'targetAddress', value: response.targetAddress },
+    { field: 'depositAddress', value: response.depositAddress },
+    { field: 'tx[0].address', value: typeof entry?.address === 'string' ? entry.address : undefined },
+  ].flatMap(({ field, value }) => (value?.trim() ? [{ field, value: value.trim() }] : []))
+
+  const [primaryDestination, ...otherDestinations] = destinations
+  if (primaryDestination) {
+    const divergent = otherDestinations.find(
+      ({ value }) => !areEqualTransferAddresses(value, primaryDestination.value, chain)
+    )
+
+    if (divergent) {
+      throw new Error(
+        `SwapKit transfer route disagrees with itself about the destination: ` +
+          `${primaryDestination.field} is ${primaryDestination.value} but ${divergent.field} is ${divergent.value}.`
+      )
+    }
+  }
+
+  const txAmountValue = entry && isTransferAmountValue(entry.amount) ? entry.amount : undefined
+  if (txAmountValue === undefined || !response.depositAmount) {
+    return
+  }
+
+  const txAmount = toTransferAmount(txAmountValue, decimals)
+  const depositAmount = toChainAmount(response.depositAmount, decimals)
+
+  if (txAmount !== depositAmount) {
+    throw new Error(
+      `SwapKit transfer route disagrees with itself about the amount: ` +
+        `depositAmount is ${response.depositAmount} (${depositAmount} base units) ` +
+        `but tx[0].amount is ${txAmountValue} (${txAmount} base units).`
+    )
+  }
 }
 
 const shouldUseTransferTx = (chain: SwapKitSourceChain): chain is (typeof swapKitTransferSourceChains)[number] =>
@@ -656,16 +774,34 @@ const getBitcoinPsbtDestinationAmount = ({
   }
 }
 
-const buildTransferTx = (
-  response: SwapKitSwapResponse,
-  from: AccountCoin<SwapKitSourceChain>,
+type BuildTransferTxInput = {
+  response: SwapKitSwapResponse
+  from: AccountCoin<SwapKitSourceChain>
+  toCoin: AccountCoin
   amount: bigint
-): GeneralSwapTx => {
-  const to = getTransferTargetAddress(response)
+  routeProvider: string | undefined
+  fromMetadata: SwapKitChainMetadata
+  toMetadata: SwapKitChainMetadata
+}
 
-  if (!to) {
+const buildTransferTx = ({
+  response,
+  from,
+  toCoin,
+  amount,
+  routeProvider,
+  fromMetadata,
+  toMetadata,
+}: BuildTransferTxInput): GeneralSwapTx => {
+  assertTransferAgreement(response, from.chain, from.decimals)
+
+  const agreedDestination = getTransferTargetAddress(response)
+
+  if (!agreedDestination) {
     throw new Error('SwapKit transfer route did not return a target address.')
   }
+
+  const to = from.chain === Chain.Ton ? toCanonicalTonDeposit(agreedDestination) : agreedDestination
 
   // SwapKit renames base64 tx types on the wire without versioning — `SOLANA`
   // became `SERIALIZED_BASE64` and `CARDANO` became `CBOR` mid-flight (iOS
@@ -687,6 +823,18 @@ const buildTransferTx = (
       ? getBitcoinPsbtDestinationAmount({ txPayload, senderAddress: from.address, targetAddress: to })
       : undefined
 
+  // Same fee the EVM branch surfaces, and absent on the same terms: a zero or
+  // unresolved amount is reported as no fee rather than as a fee of nothing.
+  const swapFee = getSwapKitDisplaySwapFee({
+    fees: response.fees,
+    from,
+    to: toCoin,
+    routeProvider,
+    fromMetadata,
+    toMetadata,
+    route: 'transfer',
+  })
+
   const transfer = {
     to,
     amount: psbtDestinationAmount ?? getTransferAmount(response, amount, from.decimals),
@@ -695,6 +843,7 @@ const buildTransferTx = (
     ...(response.tx ? { txPayload } : {}),
     ...(response.inboundAddress ? { inboundAddress: response.inboundAddress } : {}),
     ...(response.swapId ? { swapId: response.swapId } : {}),
+    ...(swapFee && swapFee.amount > 0n ? { swapFee } : {}),
   }
 
   return { transfer }
@@ -726,7 +875,7 @@ const buildSwapKitTx = (
   }
 
   if (shouldUseTransferTx(from.chain)) {
-    return buildTransferTx(response, from, amount)
+    return buildTransferTx({ response, from, toCoin: to, amount, routeProvider, fromMetadata, toMetadata })
   }
 
   return buildEvmTx({
@@ -735,45 +884,48 @@ const buildSwapKitTx = (
     targetAddress: response.targetAddress,
     chain: from.chain,
     approvalTx: response.approvalTx,
-    affiliateFee: getSwapKitEvmSwapFee({
+    affiliateFee: getSwapKitDisplaySwapFee({
       fees: response.fees,
       from,
       to,
       routeProvider,
       fromMetadata,
       toMetadata,
+      route: 'EVM',
     }),
   })
 }
 
-type GetSwapKitEvmSwapFeeInput = {
+type GetSwapKitDisplaySwapFeeInput = {
   fees: SwapKitSwapResponse['fees']
   from: AccountCoin<SwapKitSourceChain>
   to: AccountCoin
   routeProvider: string | undefined
   fromMetadata: SwapKitChainMetadata
   toMetadata: SwapKitChainMetadata
+  route: 'EVM' | 'transfer'
 }
 
 /**
- * SwapKit's affiliate/service fee for an EVM route, or `undefined` when its
- * shape cannot be resolved.
+ * SwapKit's affiliate/service fee for an EVM or transfer route, or `undefined`
+ * when its shape cannot be resolved.
  *
- * The fee is not part of the signed EVM transaction — `from`/`to`/`data`/
- * `value`/`gas` are — so an unexpected shape must never take down a route that
- * would otherwise sign. Only [SwapKitFeeShapeError] is swallowed; anything else
- * is a bug in the resolution and stays loud. The Solana branch calls
- * `getSwapKitSwapFee` bare and lets it throw on purpose: its tx type requires
- * the fee, so an unresolved one really is fatal there.
+ * The fee is not part of what either route signs — calldata for EVM, a
+ * destination and an amount for a transfer — so an unexpected shape must never
+ * take down a route that would otherwise sign. Only [SwapKitFeeShapeError] is
+ * swallowed; anything else is a bug in the resolution and stays loud. The
+ * Solana branch calls `getSwapKitSwapFee` bare and lets it throw on purpose:
+ * its tx type requires the fee, so an unresolved one really is fatal there.
  */
-const getSwapKitEvmSwapFee = ({
+const getSwapKitDisplaySwapFee = ({
   fees,
   from,
   to,
   routeProvider,
   fromMetadata,
   toMetadata,
-}: GetSwapKitEvmSwapFeeInput): SwapFee | undefined => {
+  route,
+}: GetSwapKitDisplaySwapFeeInput): SwapFee | undefined => {
   try {
     return getSwapKitSwapFee(fees, from, to, routeProvider, fromMetadata, toMetadata)
   } catch (error) {
@@ -781,7 +933,7 @@ const getSwapKitEvmSwapFee = ({
       throw error
     }
 
-    console.warn('[getSwapKitQuote] unresolved SwapKit fee on an EVM route; reporting none', error)
+    console.warn(`[getSwapKitQuote] unresolved SwapKit fee on a ${route} route; reporting none`, error)
     return undefined
   }
 }
