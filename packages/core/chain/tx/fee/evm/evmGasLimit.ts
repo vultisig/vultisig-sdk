@@ -1,4 +1,5 @@
 import { EvmChain } from '@vultisig/core-chain/Chain'
+import { hexToBytes } from 'viem'
 
 import { CoinKey } from '../../../coin/Coin'
 
@@ -47,6 +48,22 @@ const erc20TransferGasLimit: Record<EvmChain, bigint> = {
  */
 export const getEvmTransferGasLimit = ({ id, chain }: CoinKey<EvmChain>): bigint =>
   (id ? erc20TransferGasLimit : feeCoinTransferGasLimit)[chain]
+
+// Calldata is priced per byte at the higher of the execution rate (16 gas for a
+// non-zero byte, 4 for a zero byte) and the floor introduced with EIP-7623
+// (10 gas per token, where a zero byte is one token and a non-zero byte four).
+// A plain transfer runs no code, so the floor is what it pays wherever that EIP
+// is active, and it exceeds the execution rate everywhere else.
+const calldataGasPerZeroByte = 10n
+const calldataGasPerNonZeroByte = 40n
+
+/**
+ * Intrinsic gas the calldata of a plain transfer adds to the base cost. Sizes
+ * the fallback for a memo-carrying send that could not be simulated, since a
+ * node refuses a limit below the intrinsic cost outright.
+ */
+export const getEvmCalldataGas = (data: `0x${string}`): bigint =>
+  hexToBytes(data).reduce((gas, byte) => gas + (byte === 0 ? calldataGasPerZeroByte : calldataGasPerNonZeroByte), 0n)
 
 /**
  * Gas limit a contract call (aggregator swap, dApp transaction) falls back to

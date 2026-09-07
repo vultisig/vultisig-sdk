@@ -264,6 +264,38 @@ describe('getEvmFeeQuote', () => {
       expect(quote.gasLimit).toBe(23_000n)
     })
 
+    it('covers the calldata of a long memo when the send cannot be simulated', async () => {
+      mocks.client.estimateGas.mockRejectedValueOnce(new Error('upstream timeout'))
+
+      const quote = await getEvmFeeQuote({
+        keysignPayload: { toAddress: router, memo: 'a'.repeat(1_000) } as never,
+      })
+
+      // The 23k floor plus 1,000 non-zero calldata bytes at the 40 gas floor rate.
+      expect(quote.gasLimit).toBe(63_000n)
+    })
+
+    it('trusts the simulation of a long memo send over the calldata fallback', async () => {
+      mocks.client.estimateGas.mockResolvedValue(61_100n)
+
+      const quote = await getEvmFeeQuote({
+        keysignPayload: { toAddress: router, memo: 'a'.repeat(1_000) } as never,
+      })
+
+      expect(quote.gasLimit).toBe(61_100n)
+    })
+
+    it('does not charge a token transfer fallback for a memo the transfer does not carry', async () => {
+      mocks.getKeysignCoin.mockReturnValue(makeCoin(EvmChain.Ethereum, token))
+      mocks.client.estimateGas.mockRejectedValueOnce(new Error('execution reverted'))
+
+      const quote = await getEvmFeeQuote({
+        keysignPayload: { toAddress: router, toAmount: '1', memo: 'a'.repeat(1_000) } as never,
+      })
+
+      expect(quote.gasLimit).toBe(120_000n)
+    })
+
     it('floors a token transfer at the ERC-20 default and simulates the transfer call', async () => {
       mocks.getKeysignCoin.mockReturnValue(makeCoin(EvmChain.Ethereum, token))
       mocks.client.estimateGas.mockResolvedValue(51_000n)

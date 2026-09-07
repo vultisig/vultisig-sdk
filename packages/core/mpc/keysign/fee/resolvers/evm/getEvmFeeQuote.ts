@@ -6,6 +6,7 @@ import { getEvmBaseFee } from '@vultisig/core-chain/tx/fee/evm/baseFee'
 import { clampEvmPriorityFee, isZeroPriorityFeeChain } from '@vultisig/core-chain/tx/fee/evm/clampEvmPriorityFee'
 import {
   evmRouterDepositGasLimit,
+  getEvmCalldataGas,
   getEvmContractCallGasLimit,
   getEvmTransferGasLimit,
 } from '@vultisig/core-chain/tx/fee/evm/evmGasLimit'
@@ -91,9 +92,14 @@ export const getEvmFeeQuote = async ({
     swap: () => getEvmContractCallGasLimit(chain),
     routerDeposit: () => evmRouterDepositGasLimit,
   })
+  // A fee-coin transfer that could not be simulated still has to cover the
+  // calldata its memo becomes, which the per-chain floor leaves out; a node
+  // refuses a limit below that intrinsic cost outright.
+  const unsimulatedGasLimit =
+    kind === 'transfer' && !coin.id && data ? kindGasLimit + getEvmCalldataGas(data) : kindGasLimit
   // Stands in for a simulation that failed. A caller minimum only ever raises
   // this stand-in, never a real estimate.
-  const fallbackGasLimit = bigIntMax(kindGasLimit, minimumGasLimit ?? 0n)
+  const fallbackGasLimit = bigIntMax(unsimulatedGasLimit, minimumGasLimit ?? 0n)
   const requestedGasLimit = thirdPartyGasLimitEstimation ?? 0n
 
   const resolveGasLimit = (estimatedGasLimit: bigint | undefined): bigint =>

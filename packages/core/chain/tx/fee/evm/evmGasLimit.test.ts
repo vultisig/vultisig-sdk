@@ -1,7 +1,7 @@
 import { EvmChain } from '@vultisig/core-chain/Chain'
 import { describe, expect, it } from 'vitest'
 
-import { deriveEvmGasLimit, getEvmContractCallGasLimit, getEvmTransferGasLimit } from './evmGasLimit'
+import { deriveEvmGasLimit, getEvmCalldataGas, getEvmContractCallGasLimit, getEvmTransferGasLimit } from './evmGasLimit'
 
 const token = '0x3333333333333333333333333333333333333333'
 
@@ -23,6 +23,14 @@ describe('getEvmTransferGasLimit', () => {
     ['Mantle', EvmChain.Mantle, 120_000n],
   ])('floors a %s token transfer', (_label, chain, expected) => {
     expect(getEvmTransferGasLimit({ chain, id: token })).toBe(expected)
+  })
+})
+
+describe('getEvmCalldataGas', () => {
+  it('prices zero and non-zero bytes at the calldata floor rate', () => {
+    expect(getEvmCalldataGas('0x')).toBe(0n)
+    expect(getEvmCalldataGas('0x00ff')).toBe(50n)
+    expect(getEvmCalldataGas(`0x${'61'.repeat(1_000)}`)).toBe(40_000n)
   })
 })
 
