@@ -65,6 +65,13 @@ export { fiatToAmount, FiatToAmountError } from './utils/fiatToAmount'
 export { normalizeChain, UnknownChainError } from './utils/normalizeChain'
 export { resolveChainReference } from './utils/resolveChainReference'
 export { ChainAmountParseError, toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
+export type { TonTxFailure, TonTxFailureReason, TonTxPhase } from '@vultisig/core-chain/chains/ton/failure'
+export {
+  getTonTxFailure,
+  parseTonBroadcastRejection,
+  TonBroadcastRejectedError,
+  tonTxFailureReasons,
+} from '@vultisig/core-chain/chains/ton/failure'
 export {
   CosmosSequenceMismatchError,
   toCosmosSequenceMismatchError,
@@ -252,6 +259,12 @@ export { Chain, IbcEnabledCosmosChain, VaultBasedCosmosChain } from './types'
 export type { ChainKind } from '@vultisig/core-chain/ChainKind'
 export { getChainKind, isChainOfKind } from '@vultisig/core-chain/ChainKind'
 
+// Signing-algorithm classification — the canonical ECDSA/EdDSA/mldsa dispatch
+// key per chain. Exposed so consumers stop re-declaring EdDSA chain sets
+// locally (the same drift root cause as ChainKind above).
+export type { SignatureAlgorithm } from '@vultisig/core-chain/signing/SignatureAlgorithm'
+export { getSignatureAlgorithm, signatureAlgorithms } from '@vultisig/core-chain/signing/SignatureAlgorithm'
+
 // XRP Ledger issued-currency canonicals — surfaced so consumers stop re-creating
 // `<currency>.<issuer>` ids / 160-bit currency-code normalization outside the SDK.
 export {
@@ -311,6 +324,7 @@ export {
   MAYA_SEND_FEE_BASE_UNITS,
   TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS,
 } from '@vultisig/core-chain/chains/cosmos/gas'
+export { tendermintRpcUrl } from '@vultisig/core-chain/chains/cosmos/tendermintRpcUrl'
 
 // Cosmos x/auth.MaxMemoCharacters cap, per chain — single source of truth for
 // "will this memo fit before broadcast rejects it with sdk code 12 (memo too
@@ -401,6 +415,7 @@ export type {
   SwapQuoteResult,
   SwapTxParams,
   Token,
+  TxFailureInfo,
   TxReceiptInfo,
   TxStatusResult,
   UtxoGasInfo,
@@ -881,6 +896,8 @@ export type {
   CosmosBalanceChain,
   CosmosBalanceEntry,
   CosmosBalanceResult,
+  CosmosEnvelopeAction,
+  CosmosVoteOption,
   DecodedAgentRouterDeposit,
   DecodeFromToolResultInput,
   Defi,
