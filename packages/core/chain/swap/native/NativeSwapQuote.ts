@@ -16,7 +16,6 @@ export type NativeSwapQuote = {
   recommended_min_amount_in: string
   liquidity_tolerance_bps?: number
   max_streaming_quantity?: number
-  slippage_bps?: number
   total_swap_seconds?: number
   warning: string
   router?: string
@@ -27,5 +26,11 @@ type NativeSwapFees = {
   asset: string
   outbound: string
   total: string
+  /**
+   * Price impact of the swap, in basis points. This is the slippage alone —
+   * distinct from `total_bps`, which is the total fee relative to the amount
+   * out and merely looks like it.
+   */
+  slippage_bps?: number
   total_bps?: number
 }
