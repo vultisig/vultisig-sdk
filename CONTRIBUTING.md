@@ -139,7 +139,7 @@ We use ESLint and Prettier for code formatting:
 # Check linting
 yarn lint
 
-# Run agent-friendly local static checks with setup guidance
+# Run agent-friendly local checks with setup guidance
 yarn check:agent
 
 # Auto-fix linting issues
@@ -180,6 +180,38 @@ all local Markdown links.
 
 ## Testing
 
+### Order checks and tests in one checkout
+
+Run build preparation, checks, and the root test suite sequentially in the same
+checkout. `yarn test` includes `yarn test:scripts`, whose browser build integration
+tests delete and restore shared build outputs such as `packages/mpc-wasm/dist`.
+Typechecking can also write outputs: the browser example runs `prepare:sdk`
+before TypeScript, and SDK builds clean `packages/sdk/dist` before rebuilding it.
+Even `check:agent` can therefore trigger builds; these checks are not read-only.
+
+After dependency setup, complete the SDK build before checks, then start tests
+only if checks succeed:
+
+```bash
+yarn build:sdk && yarn check:agent && yarn test
+```
+
+For the full CI checks followed by the root test suite, use the existing command:
+
+```bash
+yarn check:all
+```
+
+It runs `yarn check:ci && yarn test`, so a failed check prevents tests from
+starting. Do not launch another build, typecheck, `check`, `check:agent`, or
+`check:ci` command while `test` or `test:scripts` is running in that checkout;
+likewise, let builds finish before starting checks that read their outputs.
+This ordering applies per checkout. Independent checkouts with their own build
+outputs can run concurrently. Focused tests that do not invoke the destructive
+build integration suite need only respect their own build-output dependencies.
+
+### Test suites
+
 ```bash
 # Run unit tests
 yarn test:unit
@@ -216,7 +248,7 @@ yarn test:all
 | `yarn quality:contracts`           | SDK tarball export validation, temp packed-consumer import/type smoke, and CLI dist `--help` + `schema` JSON (run after `yarn build:sdk` and `yarn cli:build`; included in `yarn check:ci`) |
 | `yarn quality:sdk-package-exports` | Build and pack the SDK, verify every manifest export target, and exercise Node-safe imports/requires from a clean consumer                                                                  |
 | `yarn check`                       | Run typecheck, lint, knip, and Prettier check in parallel                                                                                                                                   |
-| `yarn check:agent`                 | Run the core static gate subset sequentially after verifying repo-local ESLint and TypeScript                                                                                               |
+| `yarn check:agent`                 | Run the core checks sequentially after verifying repo-local ESLint and TypeScript                                                                                               |
 | `yarn build:shared`                | Build shared `@vultisig/core-*` / `@vultisig/lib-*` packages                                                                                                                                |
 | `yarn docs`                        | Generate TypeDoc API documentation                                                                                                                                                          |
 
@@ -226,7 +258,7 @@ yarn test:all
 2. Create a feature branch (`git checkout -b feature/my-feature`)
 3. Make your changes
 4. Ensure tests pass (`yarn test`)
-5. Ensure quality checks pass (`yarn check` covers typecheck, lint, knip, and Prettier; agents can use `yarn check:agent` for the same core static gates with setup guidance; run `yarn check:ci` before relying on full CI parity)
+5. Ensure quality checks pass (`yarn check` covers typecheck, lint, knip, and Prettier; agents can use `yarn check:agent` for the same core checks with setup guidance; run `yarn check:ci` before relying on full CI parity)
 6. **Add a changeset** if your changes affect the published packages (`yarn changeset`)
 7. Commit with a descriptive message
 8. Push to your fork
