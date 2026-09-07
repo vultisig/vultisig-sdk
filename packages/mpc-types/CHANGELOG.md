@@ -1,5 +1,11 @@
 # @vultisig/mpc-types
 
+## 0.3.0
+
+### Minor Changes
+
+- [#2297](https://github.com/vultisig/vultisig-sdk/pull/2297) [`c0eafeb`](https://github.com/vultisig/vultisig-sdk/commit/c0eafeb12df42cffa70ef6951c081a74383e5fa2) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Make the SDK package graph explicit and acyclic. Shared Bitcoin signing protobuf schemas now live in `@vultisig/mpc-types`, `@vultisig/core-mpc` preserves its existing schema subpath as a compatibility export, and SDK builds resolve the declared core packages through their published export maps.
+
 ## 0.2.3
 
 ### Patch Changes

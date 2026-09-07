@@ -26,10 +26,7 @@ import {
   isRujiTradeSwapPair,
 } from '@vultisig/core-chain/swap/general/ruji/api/getRujiTradeSwapQuote'
 import { getSwapKitQuote } from '@vultisig/core-chain/swap/general/swapkit/api/getSwapKitQuote'
-import {
-  swapKitEnabledChains,
-  swapKitSourceChains,
-} from '@vultisig/core-chain/swap/general/swapkit/SwapKitEnabledChains'
+import { isSwapKitSourceChain } from '@vultisig/core-chain/swap/general/swapkit/SwapKitEnabledChains'
 import { SwapKitAmountBelowMinimumError } from '@vultisig/core-chain/swap/general/swapkit/SwapKitErrors'
 import { NativeSwapAffiliateConfig } from '@vultisig/core-chain/swap/native/api/affiliate'
 import { getNativeSwapQuote } from '@vultisig/core-chain/swap/native/api/getNativeSwapQuote'
@@ -1132,7 +1129,7 @@ export const findSwapQuotes = async (input: FindSwapQuoteInput): Promise<FindSwa
       })
     }
 
-    if (!hasCustomRecipient && isOneOf(fromChain, swapKitSourceChains) && isOneOf(toChain, swapKitEnabledChains)) {
+    if (!hasCustomRecipient && isSwapKitSourceChain(fromChain)) {
       result.push({
         providerName: 'SwapKit',
         fetch: async (): Promise<UnboundSwapQuote> => {
