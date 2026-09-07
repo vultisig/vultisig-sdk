@@ -53,6 +53,14 @@ export const getBittensorSigningInputs = ({
   keysignPayload: KeysignPayload
   walletCore: WalletCore
 }): Uint8Array[] => {
+  // The Bittensor balance transfer extrinsic has no remark or memo field, so a
+  // memo here could only be dropped on the floor. Fail loudly rather than
+  // silently signing a transfer that omits data the caller believes is
+  // attached - matching the Sui memo throw in the sibling resolver.
+  if (keysignPayload.memo) {
+    throw new Error('Bittensor transactions do not support a memo')
+  }
+
   const toAddress = resolvePolkadotToAddress({
     keysignPayload,
     walletCore,
