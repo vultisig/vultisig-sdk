@@ -78,6 +78,7 @@ export const getKyberSwapTx = async ({
   kyberConfig = kyberSwapAffiliateConfig,
   slippageTolerance = kyberSwapSlippageTolerance,
 }: GetKyberSwapTxInput): Promise<GeneralSwapQuote> => {
+  const affiliateParams = getKyberSwapAffiliateParams(affiliateBps, kyberConfig)
   const buildPayload = {
     routeSummary,
     sender: from.address,
@@ -85,7 +86,7 @@ export const getKyberSwapTx = async ({
     slippageTolerance,
     deadline: Math.round(convertDuration(Date.now() + convertDuration(kyberSwapTxLifespan, 'min', 'ms'), 'ms', 's')),
     enableGasEstimation,
-    ...getKyberSwapAffiliateParams(affiliateBps, kyberConfig),
+    ...affiliateParams,
     ignoreCappedSlippage: false,
   }
 
@@ -138,6 +139,13 @@ export const getKyberSwapTx = async ({
   return {
     dstAmount: amountOut,
     provider: 'kyber',
+    affiliate: {
+      affiliateBps: affiliateParams.feeAmount ?? 0,
+      request: affiliateParams.feeAmount !== undefined ? 'included' : 'omitted',
+      allocations: affiliateParams.feeReceiver
+        ? [{ recipient: affiliateParams.feeReceiver, bps: affiliateParams.feeAmount!, role: 'affiliate' }]
+        : [],
+    },
     tx: {
       evm: {
         from: from.address,
