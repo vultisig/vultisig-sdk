@@ -459,7 +459,7 @@ async function resolveActionArgs(
 
 // --- Builder functions ---
 
-const STAKEKIT_NETWORK_ALIASES: Readonly<Record<string, string>> = {
+export const STAKEKIT_NETWORK_ALIASES: Readonly<Record<string, string>> = {
   bsc: 'binance',
   'bnb chain': 'binance',
   'bnb-chain': 'binance',
@@ -476,7 +476,7 @@ const STAKEKIT_NETWORK_ALIASES: Readonly<Record<string, string>> = {
   'cronos-chain': 'cronos',
 }
 
-const normalizeStakekitNetwork = (network: string): string => {
+export const normalizeStakekitNetwork = (network: string): string => {
   const normalized = network.toLowerCase()
   return STAKEKIT_NETWORK_ALIASES[normalized] ?? normalized
 }
@@ -810,6 +810,9 @@ export async function stakekitBuildManage(params: {
 
 /** The sdk.defi.stakekit namespace surface. */
 export const stakekit = {
+  normalizeNetwork: normalizeStakekitNetwork,
+  networkToCanonicalChain: yieldNetworkToCanonicalChain,
+  NETWORK_ALIASES: STAKEKIT_NETWORK_ALIASES,
   search: stakekitSearch,
   details: stakekitDetails,
   balances: stakekitBalances,

@@ -66,6 +66,13 @@ const baseInput = {
 }
 
 describe('getLifiSwapQuote — integrator override', () => {
+  it.each([0, 30, 50])('preserves explicit %i bps alongside a rounded-zero amount', async affiliateBps => {
+    const { getLifiSwapQuote } = await import('./getLifiSwapQuote')
+    const quote = await getLifiSwapQuote({ ...baseInput, affiliateBps } as never)
+    expect(getQuoteSpy.mock.calls.at(-1)![1].fee).toBe(affiliateBps / 10000)
+    expect(quote.affiliate).toEqual({ affiliateBps, request: 'included' })
+  })
+
   beforeEach(() => {
     getQuoteSpy.mockReset()
     createClientSpy.mockReset()
