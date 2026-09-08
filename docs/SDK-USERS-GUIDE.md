@@ -1351,6 +1351,12 @@ const checkStatus = async () => {
 }
 ```
 
+**Parameters:**
+
+- `chain: Chain` - The chain the transaction was broadcast on
+- `txHash: string` - The transaction hash to look up
+- `lastValidBlockHeight?: number` - Solana only: the block height past which the transaction's blockhash is dead, from the keysign payload (`getKeysignLastValidBlockHeight(keysignPayload)`). With it, an unseen signature past that height is reported `expired`; without it the lookup cannot tell an expired transaction from one that has not propagated yet and keeps reporting `pending`. Ignored by other chains.
+
 **Supported chains:** All chain families (EVM, UTXO, Cosmos, Solana, Sui, Polkadot, Ripple, Tron, Cardano, TON).
 
 **Return type (`TxStatusResult`):**
