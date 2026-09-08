@@ -35,8 +35,12 @@ export const getSolanaTxStatus: TxStatusResolver<OtherChain.Solana> = async ({ h
   }
 
   if (!signatureStatus) {
+    // Past its last valid block height an unseen signature can never land:
+    // that is the chain's own terminal verdict, and every consumer treats
+    // `expired` as final. `not_found` would read as "not propagated yet" and
+    // keep the transaction polling as pending for good.
     if (await isExpiredLastValidBlockHeight(client, lastValidBlockHeight)) {
-      return { status: 'not_found', isKnown: false }
+      return { status: 'expired', isKnown: false }
     }
 
     return { status: 'pending', isKnown: false }

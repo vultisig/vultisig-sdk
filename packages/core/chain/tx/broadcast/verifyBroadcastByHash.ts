@@ -9,6 +9,8 @@ type VerifyInput<T extends Chain> = {
   chain: T
   tx: SigningOutput<T>
   error: unknown
+  /** Solana: lets the status lookup report an unseen signature as expired. */
+  lastValidBlockHeight?: number
 }
 
 export const broadcastVerificationMaxAttempts = 4
@@ -35,7 +37,12 @@ export const broadcastVerificationBaseDelayMs = 500
  * before the original error is rethrown. Verification is a safety net, never
  * a new failure mode.
  */
-export const verifyBroadcastByHash = async <T extends Chain>({ chain, tx, error }: VerifyInput<T>): Promise<string> => {
+export const verifyBroadcastByHash = async <T extends Chain>({
+  chain,
+  tx,
+  error,
+  lastValidBlockHeight,
+}: VerifyInput<T>): Promise<string> => {
   let hash: string
 
   try {
@@ -48,7 +55,7 @@ export const verifyBroadcastByHash = async <T extends Chain>({ chain, tx, error 
     let result: Awaited<ReturnType<typeof getTxStatus>> | undefined
 
     try {
-      result = await getTxStatus({ chain, hash })
+      result = await getTxStatus({ chain, hash, lastValidBlockHeight })
     } catch {
       // Retry status lookup failures within the same bounded window.
     }

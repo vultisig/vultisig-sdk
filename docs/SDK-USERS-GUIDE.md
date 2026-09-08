@@ -1341,6 +1341,9 @@ const checkStatus = async () => {
     case 'pending':
       console.log('Still pending...')
       return false
+    case 'expired':
+      console.log('The transaction can no longer be included; rebuild and re-sign it')
+      return true
     case 'not_found':
       console.log('The node does not currently know this transaction hash')
       return false
@@ -1352,7 +1355,7 @@ const checkStatus = async () => {
 
 **Return type (`TxStatusResult`):**
 
-- `status: 'pending' | 'success' | 'error' | 'not_found'` - Current on-chain status. `not_found` means the node has no record of the hash; it can be transient immediately after broadcast.
+- `status: 'pending' | 'success' | 'error' | 'expired' | 'not_found'` - Current on-chain status. `expired` means the chain itself can no longer include the transaction (a Tron expiration or a Solana blockhash deadline has passed) and is terminal. `not_found` means the node has no record of the hash; it can be transient immediately after broadcast.
 - `receipt?: TxReceiptInfo` - Fee details when available:
   - `feeAmount: bigint` - Fee paid in base units
   - `feeDecimals: number` - Decimal places for the fee token
@@ -1366,6 +1369,8 @@ const checkStatus = async () => {
 On TON the same explanations cover a broadcast the wallet contract refuses: the failed broadcast's `cause` is a `TonBroadcastRejectedError` whose `failure` carries the reason and whose `message` is the remedy, so "another transaction went first" and "your device clock is off" never surface as an opaque `exitcode=133` / `exitcode=136`.
 
 EVM RPCs can explicitly distinguish a missing receipt from an unknown hash and return `not_found`. Some non-EVM providers do not distinguish an absent transaction from a failed lookup; those resolvers conservatively return `pending` with `isKnown: false`.
+
+On Solana, pass the payload's `lastValidBlockHeight` (`getKeysignLastValidBlockHeight(keysignPayload)`, recorded at build time next to the blockhash) as `vault.getTxStatus({ chain, txHash, lastValidBlockHeight })`. Once the chain's block height passes it, an unseen signature is reported `expired` instead of polling as `pending` indefinitely. Broadcasting itself resends the signed bytes every 2 s until the signature is confirmed or that deadline passes; a deadline miss fails with a `SolanaBlockhashExpiredError` (`recovery: 'resign'`, found through wrappers with `toSolanaBlockhashExpiredError`), meaning the transaction must be rebuilt with a fresh blockhash and signed again.
 
 **Error handling:**
 

@@ -48,6 +48,12 @@ export type TxStatusResult = {
 export type TxStatusInput<T extends Chain = Chain> = {
   chain: T
   hash: string
+  /**
+   * Solana: the block height past which the transaction's blockhash is dead,
+   * from the keysign payload. With it, an unseen signature past that height
+   * is reported `expired` instead of polling as `pending` forever. Other
+   * chains ignore it.
+   */
   lastValidBlockHeight?: number
 }
 

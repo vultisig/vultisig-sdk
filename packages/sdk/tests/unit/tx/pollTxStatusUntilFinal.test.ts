@@ -19,6 +19,19 @@ describe('pollTxStatusUntilFinal', () => {
     expect(getTxStatus).toHaveBeenCalledTimes(1)
   })
 
+  it('forwards the Solana blockhash deadline to every status lookup', async () => {
+    const getTxStatus = vi.fn().mockResolvedValue({ status: 'expired', isKnown: false } satisfies TxStatusResult)
+
+    await pollTxStatusUntilFinal({
+      chain: Chain.Solana,
+      txHash: 'sig',
+      lastValidBlockHeight: 312_456_789,
+      getTxStatus,
+    })
+
+    expect(getTxStatus).toHaveBeenCalledWith({ chain: Chain.Solana, txHash: 'sig', lastValidBlockHeight: 312_456_789 })
+  })
+
   it('treats expired as a terminal status', async () => {
     const getTxStatus = vi.fn().mockResolvedValue({ status: 'expired', isKnown: true } satisfies TxStatusResult)
 

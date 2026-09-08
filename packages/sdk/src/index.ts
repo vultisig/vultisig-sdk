@@ -76,6 +76,11 @@ export {
   CosmosSequenceMismatchError,
   toCosmosSequenceMismatchError,
 } from '@vultisig/core-chain/tx/broadcast/cosmosSequenceMismatch'
+export type { SolanaBlockhashExpiredDetails } from '@vultisig/core-chain/tx/broadcast/solanaBlockhashExpired'
+export {
+  SolanaBlockhashExpiredError,
+  toSolanaBlockhashExpiredError,
+} from '@vultisig/core-chain/tx/broadcast/solanaBlockhashExpired'
 
 // Pure-bigint exact base-units -> human decimal-string conversion (no float64
 // round-trip, so it's safe for high-decimal assets). Exported at the root so
