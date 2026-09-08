@@ -128,7 +128,7 @@ for (const group of groups) {
       'version: v2',
       'plugins:',
       '  - local: protoc-gen-es',
-      `    out: ${group.out}`,
+      `    out: ${join(repoRoot, group.out)}`,
       '    opt:',
       ...group.opts.map(opt => `      - ${opt}`),
       '',
@@ -153,7 +153,10 @@ for (const group of groups) {
     `Regenerating ${group.files.length} ${group.name} proto files from ${relative(repoRoot, protoRoot) || protoRoot}`
   )
   try {
-    run('yarn', args)
+    // buf resolves `--path` against the working directory, not against the
+    // input module, so it has to run from the proto root. `out` is absolute
+    // for the same reason.
+    run('yarn', args, { cwd: protoRoot })
   } finally {
     rmSync(tmp, { recursive: true, force: true })
   }

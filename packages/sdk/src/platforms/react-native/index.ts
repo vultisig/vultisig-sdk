@@ -81,6 +81,7 @@ export {
   MAYA_SEND_FEE_BASE_UNITS,
   TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS,
 } from '@vultisig/core-chain/chains/cosmos/gas'
+export { tendermintRpcUrl } from '@vultisig/core-chain/chains/cosmos/tendermintRpcUrl'
 
 // Cosmos x/auth.MaxMemoCharacters cap, per chain — single source of truth for
 // "will this memo fit before broadcast rejects it with sdk code 12 (memo too
@@ -368,6 +369,19 @@ export type {
   TonWalletStatus,
 } from './chains/ton'
 
+// TON failure taxonomy. `chains.ton.broadcastTonTx` rejects with toncenter's own
+// text, which carries the wallet contract's `exitcode=<n>` and nothing else, so an
+// RN consumer needs these to turn a refusal into a reason and a remedy — a replayed
+// seqno and an expired deadline both read as "the network rejected it" and have
+// opposite fixes.
+export type { TonTxFailure, TonTxFailureReason, TonTxPhase } from '@vultisig/core-chain/chains/ton/failure'
+export {
+  getTonTxFailure,
+  parseTonBroadcastRejection,
+  TonBroadcastRejectedError,
+  tonTxFailureReasons,
+} from '@vultisig/core-chain/chains/ton/failure'
+
 // ============================================================================
 // Chain tools — RN-safe surface re-exported for consumers
 // ============================================================================
@@ -649,6 +663,13 @@ export type {
   ThreeJaneTranche,
   ThreeJaneTxStep,
 } from '../../tools/defi/threeJane'
+// Aliased to avoid colliding with the CCTP bridge's `parseUsdcAmount` above —
+// both re-export the same underlying `./parse/usdcAmount` helper.
+export {
+  buildThreeJaneSupplyUsdc,
+  parseUsdcAmount as parseThreeJaneUsdcAmount,
+  THREE_JANE_ADDRESSES,
+} from '../../tools/defi/threeJane'
 
 // Cosmos staking + distribution module (LCD queries — read-only,
 // vault-free, generic over every ibcEnabled cosmos chain). Mirrors the
@@ -929,7 +950,15 @@ export type { SolBalance, SplTokenBalance } from '../../tools/balance/solana'
 export { getSolBalance, getSplTokenBalance } from '../../tools/balance/solana'
 
 // Pure helpers — no chain client deps
-export type { AssetRef, ChainFamily, DecodeFromToolResultInput, Envelope, EnvelopeKind } from '../../tools/decode'
+export type {
+  AssetRef,
+  ChainFamily,
+  CosmosEnvelopeAction,
+  CosmosVoteOption,
+  DecodeFromToolResultInput,
+  Envelope,
+  EnvelopeKind,
+} from '../../tools/decode'
 export { decode, decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from '../../tools/decode'
 // Exact base-units -> human decimal-string conversion (pure bigint string
 // arithmetic, no float64 round-trip), pairing-QR payload generation, and the

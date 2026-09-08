@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/sdk",
-  "version": "7.1.0",
+  "version": "7.2.0",
   "description": "The self-custody MPC wallet SDK for AI agents. Bitcoin, Ethereum, Solana & 36+ chains via DKLS23 threshold signatures. TypeScript, multi-platform (Node, browser, React Native).",
   "type": "module",
   "main": "dist/index.node.cjs",
@@ -277,7 +277,7 @@
     "build:types": "NODE_OPTIONS=--max-old-space-size=8192 rollup -c rollup.types.config.js",
     "dev": "BUILD_TARGET=node rollup -c rollup.platforms.config.js -w",
     "_____PLATFORM_BUILDS_____": "",
-    "build:platforms": "concurrently \"yarn build:platform:node\" \"yarn build:platform:browser\" \"yarn build:platform:electron\" \"yarn build:platform:chrome-extension\" \"yarn build:platform:react-native\" \"yarn build:platform:vite\"",
+    "build:platforms": "node ../../scripts/build-sdk-platforms.mjs \"yarn build:platform:node\" \"yarn build:platform:browser\" \"yarn build:platform:electron\" \"yarn build:platform:chrome-extension\" \"yarn build:platform:react-native\" \"yarn build:platform:vite\"",
     "build:fast": "yarn clean && BUILD_TARGET=node rollup -c rollup.platforms.config.js",
     "build:platform:node": "BUILD_TARGET=node rollup -c rollup.platforms.config.js",
     "build:platform:browser": "BUILD_TARGET=browser rollup -c rollup.platforms.config.js",
