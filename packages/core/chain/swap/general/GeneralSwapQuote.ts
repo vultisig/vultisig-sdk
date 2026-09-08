@@ -1,5 +1,6 @@
 import { SwapFee } from '@vultisig/core-chain/swap/SwapFee'
 
+import type { SwapQuoteAffiliate } from '../quote/SwapQuote'
 import { CowSwapTokenBalance } from './cowswap/sign/buildCowSwapOrder'
 import { CowSwapOrderKind } from './cowswap/types'
 import { GeneralSwapProvider } from './GeneralSwapProvider'
@@ -102,6 +103,8 @@ export type GeneralSwapTx =
  * the source-chain explorer for `1inch` / `jupiter` / `kyber`.
  */
 export type GeneralSwapQuote = {
+  /** Request-bound affiliate metadata. Absent on legacy quotes; zero is a known requested rate. */
+  affiliate?: SwapQuoteAffiliate
   dstAmount: string
   provider: GeneralSwapProvider
   routeProvider?: string
