@@ -4,6 +4,7 @@ import * as isValidTokenIdModule from '@vultisig/core-chain/utils/isValidTokenId
 import { describe, expect, it } from 'vitest'
 
 import * as sdk from '../../../src/index'
+import * as threeJane from '../../../src/tools/defi/threeJane'
 import * as dangerousAddresses from '../../../src/utils/dangerousAddresses'
 import {
   buildSignAminoKeysignPayload as canonicalBuildSignAminoKeysignPayload,
@@ -240,6 +241,15 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.getNoonDepositTxPlan).toBe('function')
     expect(typeof sdk.readNoonVaultState).toBe('function')
     expect(typeof sdk.fetchNoonUsdcVaultMetrics).toBe('function')
+  })
+
+  it('exports the ThreeJane USDC helper values (not just their types) from the root SDK entrypoint', () => {
+    expect(sdk.buildThreeJaneSupplyUsdc).toBe(threeJane.buildThreeJaneSupplyUsdc)
+    expect(sdk.THREE_JANE_ADDRESSES).toBe(threeJane.THREE_JANE_ADDRESSES)
+    // Aliased to avoid colliding with the CCTP bridge's own `parseUsdcAmount`
+    // export, which is also present at the root.
+    expect(sdk.parseThreeJaneUsdcAmount).toBe(threeJane.parseUsdcAmount)
+    expect(typeof sdk.parseUsdcAmount).toBe('function')
   })
 
   it('exports the sdk.decode namespace documented as the canonical bytes-oracle keystone', () => {
