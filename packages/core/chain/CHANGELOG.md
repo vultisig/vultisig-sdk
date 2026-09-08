@@ -1,5 +1,72 @@
 # @vultisig/core-chain
 
+## 5.3.0
+
+### Minor Changes
+
+- [#2325](https://github.com/vultisig/vultisig-sdk/pull/2325) [`7c95286`](https://github.com/vultisig/vultisig-sdk/commit/7c9528622702a1e6f10cd5ff72017779d25e509a) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - EVM fee quotes now size the gas reserve from the transaction itself instead of a flat 600k floor. An aggregator swap is signed with the larger of the route's own gas and 1.5x its simulation (1.5x the 600k default when it cannot be simulated, e.g. a token route quoted before its allowance exists); a THORChain or Maya swap deposit (any transaction carrying the native swap payload) takes a fixed 120k; a plain transfer, including a memo-carrying vault deposit that carries no swap payload, takes its simulation raised to a per-chain floor with no inflation (when it cannot be simulated, that floor plus the intrinsic cost of its memo calldata); a dApp or other contract call keeps 1.5x headroom over its simulation. Base-fee headroom drops from 50% to 20% (32% for swaps), legacy-priced chains (BSC) are priced from `eth_gasPrice` with no tip, and the tip is the highest recent 5th-percentile reward from `eth_feeHistory`, capped at the gas price, with per-chain floors (1 gwei on tip-auction chains, 30 gwei on Polygon, 20 wei on OP-stack rollups) and a zero tip on Arbitrum, Mantle and Robinhood.
+
+  `getEvmFeeQuote`'s `minimumGasLimit` now only raises the value that stands in for a failed simulation and never a successful estimate. `getEvmTransferGasLimit`, `getEvmContractCallGasLimit` and `evmRouterDepositGasLimit` are exported from `@vultisig/core-chain/tx/fee/evm/evmGasLimit`, and `getEvmGasPrice` from `@vultisig/core-chain/tx/fee/evm/gasPrice`.
+
+- [#2328](https://github.com/vultisig/vultisig-sdk/pull/2328) [`741272f`](https://github.com/vultisig/vultisig-sdk/commit/741272f8d3872afdf12d9487d2121dee04c2f363) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Move `slippage_bps` on a native swap quote from the top level into `fees`, where THORChain and MayaChain actually send it.
+
+  `NativeSwapQuote.slippage_bps` was never populated: THORChain's `QuoteSwapResponse` has no such property, and its `QuoteFees` schema declares `slippage_bps` as a required integer. MayaChain's spec agrees. Because the field was optional, every consumer reading it silently got `undefined` rather than a compile error — which is how the price-impact row went missing in the desktop app and extension.
+
+  `NativeSwapFees` now carries `slippage_bps?: number`, and the phantom top-level field is gone so the wrong read cannot compile. This is a type-only change; `getNativeSwapQuote` already spreads the response through verbatim, so no runtime behavior changes.
+
+  Note that `slippage_bps` is the price impact alone and is not interchangeable with the neighbouring `total_bps`, which is the total fee relative to the amount out.
+
+- [#2331](https://github.com/vultisig/vultisig-sdk/pull/2331) [`982d464`](https://github.com/vultisig/vultisig-sdk/commit/982d4645467272f32e33a2df20883c1a7171a7ee) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Publish the SwapKit swap-fee work to the core packages that hold it. [#2315](https://github.com/vultisig/vultisig-sdk/issues/2315) landed
+  `swap_fee` on `SwapKitSwapPayload`, the `getKeysignSwapFeeFields` reader, and the
+  `sub_provider` route tag in `@vultisig/core-mpc`, plus the transfer-route fee
+  resolution in `@vultisig/core-chain` — but its changeset named only
+  `@vultisig/sdk`, so neither core package was versioned and the release skipped
+  both. Clients that consume `@vultisig/core-mpc` directly, rather than through
+  `@vultisig/sdk`, cannot reach the new fee group or its reader until these are
+  republished.
+
+- [#2339](https://github.com/vultisig/vultisig-sdk/pull/2339) [`95cf397`](https://github.com/vultisig/vultisig-sdk/commit/95cf39722b8a4d3e197b26bcef9983ecef6c3703) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(solana): verified / unverified / scam classification for SPL tokens, and verified-only discovery
+
+  Solana discovery kept a mint when a price id could be found for it. That hid legitimate tokens that simply had no CoinGecko listing, and did nothing about the airdropped counterfeits and zero-decimal spam a Solana wallet accumulates — a priced impostor was auto-added, an unpriced real token was not, and neither carried a label.
+
+  `findSolanaCoins` now returns **verified mints only**, priced or not, mirroring TON. Zero-balance token accounts are skipped, Jupiter's search endpoint answers for a hundred mints per call instead of one call per token, CoinGecko ids come from its on-chain multi-token endpoint thirty mints per call, decimals come from the token account itself, and curated metadata wins for tokens we ship ourselves. When Jupiter cannot be reached, listed mints are still discovered from the registry's metadata; a failed price-id lookup, by contrast, fails the round instead of saving the token without a price id for good. Unverified and scam mints can still be added by hand, where the UI labels them.
+
+  Verification lives in `@vultisig/core-chain/chains/solana/spl/verification`. The registry of verified mints (`chains/solana/spl/verifiedRegistry`) merges our curated Solana tokens with Jupiter's verified list, fetched once an hour and degrading to the curated list alone when unreachable. `resolveSolanaTokenVerification` is pure: a listed mint — or one Jupiter itself flags verified — is `verified`; an unlisted mint is `scam` when its symbol or name collapses onto a verified token's, and `unverified` otherwise. `getSolanaTokenVerification({ id, ticker })` is the one-call form for token rows and approval cards; a listed mint is answered from the registry alone, any other mint is judged by what it claims on Jupiter, falling back to the local ticker offline. The tiers are the chain-agnostic `TokenVerification` type.
+
+  The symbol normaliser behind the counterfeit heuristic moves to `@vultisig/core-chain/coin/tokenSymbol` as `normalizeTokenSymbol`; `chains/ton/jetton/symbol` keeps exporting `normalizeJettonSymbol` as an alias. `coin/jupiter/api` gains `getJupiterTokens` (batched, keyed by mint, filtered to the mints asked for) and `getJupiterVerifiedTokens`, `SolanaJupiterToken` carries Jupiter's `isVerified` flag and `tags`, and `coin/coingecko/getCoingeckoId` gains the batched `getSolanaCoingeckoIds`. `getSolanaTokenMetadata` now fails with a clear error for a mint Jupiter does not index instead of a `TypeError`.
+
+### Patch Changes
+
+- [#2002](https://github.com/vultisig/vultisig-sdk/pull/2002) [`2e1ed70`](https://github.com/vultisig/vultisig-sdk/commit/2e1ed704ccd0a360eaf760f1258c7cd8a4401e22) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Net Solana Blockaid simulation diffs by resolved mint (native SOL and the WSOL mint share a bucket) before classifying the result as a `swap` or `transfer`. The wrap-then-spend case previously surfaced as a bogus "SOL to WSOL swap" whose destination amount was only the token account's rent-exempt residual, at up to ~29x smaller than the amount actually leaving. The reverse unwrap/close-account case now rejects the receive-only result instead of inventing a transfer. The parser now nets same-mint legs and only classifies as a swap when two distinct mints remain.
+
+## 5.2.0
+
+### Minor Changes
+
+- [#2306](https://github.com/vultisig/vultisig-sdk/pull/2306) [`a5def09`](https://github.com/vultisig/vultisig-sdk/commit/a5def098e06cf7269174eb6840dc516d78ec55f9) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(ton): explain TON failures in plain language — seqno replay, expired deadline, fees, and the rest
+
+  A TON send that fails today comes back as an opaque `exitcode=133` in a toncenter rejection, or as a bare `error` status with nothing attached. Those two codes — 133 (W5) / 33 (v4) for a replayed seqno and 136 / 36 for an expired `valid_until`, which is almost always a device clock that drifted — dominate TON support load, and the fix is different for each.
+
+  `@vultisig/core-chain/chains/ton/failure` maps a failure to a `TonTxFailure`: a stable `reason` (`seqno-mismatch`, `expired`, `invalid-signature`, `wallet-id-mismatch`, `insufficient-funds`, `out-of-gas`, `invalid-destination`, `not-enough-jettons`, `jetton-unauthorized`, `action-failed`, `action-partially-failed`, `aborted`, `contract-rejected`), the phase it came from, the raw exit code, and an English `message` that says what happened and what to do ("make sure your device's date and time are set automatically, then send it again"; "keep about 0.05 TON spare for fees"). Compute-phase codes cover wallet v3/v4 and W5 alike, the TVM out-of-gas codes and the standard jetton wallet's 705/706 (707 and 709 stay generic: the reference contract reuses each for two unrelated checks); action-phase codes distinguish 36 (invalid destination) from the wallet's 36 (expired), and read 37 as not enough TON. Action code 40 stays generic on purpose: it reads "not enough funds, the message is too large, or its Merkle depth is too big", so it is a funding failure only when the node's own `no_funds` flag backs it, and any other unnamed code is treated the same way.
+
+  A generic action-phase failure only claims "nothing was sent" when the node reports `msgs_created: 0`. Every Vultisig TON send goes out with `IGNORE_ERRORS`, under which a failing action is skipped and the rest still leave, so a batch can lose one transfer and deliver the others — telling that user to retry is how a transfer goes out twice. Without that evidence the failure is `action-partially-failed`, whose message says at least one transfer did not happen, that others may have, and to check the transaction history before sending again.
+
+  `TxStatusResult` gains an optional `failure?: TxFailureInfo` (`reason`, `message`, `exitCode?`, `phase?`), which the TON status resolver now fills for every `error`. `broadcastTonTx` classifies a wallet-contract refusal at broadcast time: the failed result's `cause` is a `TonBroadcastRejectedError` carrying the same `failure`, its `message` is the human explanation, the original toncenter error stays in `cause`, and the refusal is marked non-retryable — resending the same bytes can only be refused again. A seqno refusal whose message is already on chain (a co-signer broadcast first) is still accepted through the existing hash verification. The types, `getTonTxFailure`, `parseTonBroadcastRejection` and `TonBroadcastRejectedError` are re-exported from `@vultisig/sdk`, including its React Native entry — RN broadcasts TON itself and its `broadcastTonTx` rejects with toncenter's raw `exitcode=<n>` text.
+
+- [#2299](https://github.com/vultisig/vultisig-sdk/pull/2299) [`bcca32c`](https://github.com/vultisig/vultisig-sdk/commit/bcca32c885066e2bf224aa37d6666c68a3684956) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(ton): W5 (wallet v5r1) support as an explicit per-account opt-in
+
+  Every Vultisig TON account has been hard-pinned to the V4R2 wallet contract. W5 is the default for new wallets in Tonkeeper and Telegram Wallet and is the gateway to what users now expect from TON — up to 255 messages per request instead of 4, lower fees, and relayer-paid ("gasless") transactions. WalletCore has supported it for a while; nothing here used it.
+
+  A W5 wallet is a _different address_ for the same key, with its own balance, so this is not a switch: V4R2 stays the default everywhere and W5 is selected per account.
+
+  - `@vultisig/core-chain/chains/ton/wallet` (new): `TonWalletVersion` (`'v4r2' | 'v5r1'`), `deriveTonAddress` for either contract, `resolveTonWalletVersion` to tell which contract an address is for a key, the W5 mainnet wallet id, and the per-contract message limits.
+  - `vault.setTonWalletVersion('v5r1')` selects which of the key's two TON accounts the vault acts on: `send`, balances, swaps, fee estimation and every other address lookup follow it, so one selected account is used consistently. `vault.address(chain, { tonWalletVersion })` — like `deriveAddress` / `getChainAddress` / `deriveAddressFromKeys` — names a contract for a single lookup without changing the selection, so a client can show both accounts side by side for a migration flow.
+  - Balance cache keys name a chain and an asset, not an account, so switching between the two accounts drops the balance scope and any fetch already in flight for the old account is neither cached nor announced: it still answers its own caller, but `balanceUpdated` carries no account identity, so emitting it after a switch would credit the old account's balance to the new one.
+  - The keysign signing-input resolver derives the contract from the sender address — the payload has no wallet-version field, and every co-signer reaches the same answer from the shared vault key — and refuses an address that is neither of the key's wallets rather than assuming V4R2. W5 requests carry `IGNORE_ACTION_PHASE_ERRORS`, which the W5 code requires of every external action (its replay protection) and WalletCore enforces; the TON status resolver's action-phase check covers the blindness that flag would otherwise cause. Message counts are capped per contract.
+  - The RN-safe builders (`buildTonSendTx`, `buildTonJettonTransferTx`, `buildTonTxFromSigningPayload`, `deriveTonAddress`, `prepareJettonTransferTxFromKeys`) take `walletVersion`; W5 uses the `signed_external` request layout with the signature appended, byte-identical to WalletCore. New `buildV5R1Wallet` / `TON_V5R1_WALLET_ID` alongside the V4R2 helpers.
+
+  Golden vectors (`testdata/cross-encoder-golden/ton-w5-*.json`) pin the W5 pre-images and are verified against real WalletCore, including the full signed external message. Client-side migration UI (show both accounts, move funds, reconnect dApps) is separate work per platform.
+
 ## 5.1.0
 
 ### Minor Changes

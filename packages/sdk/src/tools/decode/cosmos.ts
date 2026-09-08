@@ -1,11 +1,16 @@
 import { bech32 } from 'bech32'
 import { MsgSend } from 'cosmjs-types/cosmos/bank/v1beta1/tx'
 import { MsgWithdrawDelegatorReward } from 'cosmjs-types/cosmos/distribution/v1beta1/tx'
+import { voteOptionToJSON as voteOptionV1ToJSON } from 'cosmjs-types/cosmos/gov/v1/gov'
+import { MsgVote as MsgVoteV1 } from 'cosmjs-types/cosmos/gov/v1/tx'
+import { voteOptionToJSON as voteOptionV1Beta1ToJSON } from 'cosmjs-types/cosmos/gov/v1beta1/gov'
+import { MsgVote as MsgVoteV1Beta1 } from 'cosmjs-types/cosmos/gov/v1beta1/tx'
 import { MsgBeginRedelegate, MsgDelegate, MsgUndelegate } from 'cosmjs-types/cosmos/staking/v1beta1/tx'
 import { TxBody, TxRaw } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import { MsgExecuteContract } from 'cosmjs-types/cosmwasm/wasm/v1/tx'
 
-import type { Envelope } from './types'
+import { CosmosMsgType } from '../../types/cosmos-msg'
+import type { CosmosVoteOption, Envelope } from './types'
 
 type Cw20Transfer = {
   amount: string
@@ -13,6 +18,18 @@ type Cw20Transfer = {
 }
 
 const CW20_UINT128_MAX = (1n << 128n) - 1n
+
+const toSupportedVoteOption = (option: string): CosmosVoteOption | undefined => {
+  switch (option) {
+    case 'VOTE_OPTION_YES':
+    case 'VOTE_OPTION_ABSTAIN':
+    case 'VOTE_OPTION_NO':
+    case 'VOTE_OPTION_NO_WITH_VETO':
+      return option
+    default:
+      return undefined
+  }
+}
 
 const decodeStrictUtf8 = (bytes: Uint8Array): string | undefined => {
   const decoded = Buffer.from(bytes).toString('utf8')
@@ -136,7 +153,7 @@ export function decodeCosmosTx(bytes: Uint8Array, chainHint: string): Envelope {
   const any = messages[0]
   try {
     switch (any.typeUrl) {
-      case '/cosmos.bank.v1beta1.MsgSend': {
+      case CosmosMsgType.MsgSendUrl: {
         const msg = MsgSend.decode(any.value)
         if (msg.amount.length > 1) {
           return fail(`multi-coin MsgSend (${msg.amount.length} coins) not supported`)
@@ -151,7 +168,7 @@ export function decodeCosmosTx(bytes: Uint8Array, chainHint: string): Envelope {
         }
         return env
       }
-      case '/cosmos.staking.v1beta1.MsgDelegate': {
+      case CosmosMsgType.MsgDelegateUrl: {
         const msg = MsgDelegate.decode(any.value)
         env.kind = 'delegate'
         env.recipient = msg.validatorAddress
@@ -162,7 +179,7 @@ export function decodeCosmosTx(bytes: Uint8Array, chainHint: string): Envelope {
         }
         return env
       }
-      case '/cosmos.staking.v1beta1.MsgUndelegate': {
+      case CosmosMsgType.MsgUndelegateUrl: {
         const msg = MsgUndelegate.decode(any.value)
         env.kind = 'undelegate'
         env.recipient = msg.validatorAddress
@@ -173,7 +190,7 @@ export function decodeCosmosTx(bytes: Uint8Array, chainHint: string): Envelope {
         }
         return env
       }
-      case '/cosmos.staking.v1beta1.MsgBeginRedelegate': {
+      case CosmosMsgType.MsgBeginRedelegateUrl: {
         const msg = MsgBeginRedelegate.decode(any.value)
         env.kind = 'redelegate'
         // The destination (new) validator — where the stake ends up.
@@ -186,7 +203,7 @@ export function decodeCosmosTx(bytes: Uint8Array, chainHint: string): Envelope {
         }
         return env
       }
-      case '/cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward': {
+      case CosmosMsgType.MsgWithdrawDelegatorRewardUrl: {
         const msg = MsgWithdrawDelegatorReward.decode(any.value)
         env.kind = 'withdrawReward'
         env.recipient = msg.validatorAddress
@@ -195,7 +212,36 @@ export function decodeCosmosTx(bytes: Uint8Array, chainHint: string): Envelope {
         // other envelope field the message itself doesn't carry.
         return env
       }
-      case '/cosmwasm.wasm.v1.MsgExecuteContract': {
+      case CosmosMsgType.MsgVoteUrl: {
+        const msg = MsgVoteV1.decode(any.value)
+        const voteOption = toSupportedVoteOption(voteOptionV1ToJSON(msg.option))
+        if (!voteOption) return fail(`unsupported governance vote option ${msg.option}`)
+
+        env.kind = 'vote'
+        env.cosmosAction = {
+          type: 'vote',
+          voterAddress: msg.voter,
+          proposalId: msg.proposalId.toString(),
+          voteOption,
+          metadata: msg.metadata,
+        }
+        return env
+      }
+      case CosmosMsgType.MsgVoteV1Beta1Url: {
+        const msg = MsgVoteV1Beta1.decode(any.value)
+        const voteOption = toSupportedVoteOption(voteOptionV1Beta1ToJSON(msg.option))
+        if (!voteOption) return fail(`unsupported governance vote option ${msg.option}`)
+
+        env.kind = 'vote'
+        env.cosmosAction = {
+          type: 'vote',
+          voterAddress: msg.voter,
+          proposalId: msg.proposalId.toString(),
+          voteOption,
+        }
+        return env
+      }
+      case CosmosMsgType.MsgExecuteContractUrl: {
         const msg = MsgExecuteContract.decode(any.value)
         // CW20 transfers live inside the JSON `msg`; the on-wire recipient is
         // the contract being executed. Recognize only the SDK builder's direct

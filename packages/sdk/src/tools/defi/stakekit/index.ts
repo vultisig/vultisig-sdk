@@ -88,9 +88,10 @@ function withScanRequests<T extends object>(
 
 /**
  * Map a yield.xyz network slug to the PascalCase chain name the app uses everywhere.
- * Mirrors mcp-ts's `yieldNetworkToCanonicalChain`.
+ * Mirrors mcp-ts's `yieldNetworkToCanonicalChain`. Public so consumers that need
+ * the same network→chain bridge can import it instead of vendoring the mapper.
  */
-function yieldNetworkToCanonicalChain(network: string): string | null {
+export function yieldNetworkToCanonicalChain(network: string): string | null {
   switch (network) {
     case 'ethereum':
       return 'Ethereum'
@@ -188,7 +189,12 @@ function decodeYieldTransaction(tx: YieldTransaction): DecodedYieldStep {
 function canonicalizeEvmStep(step: DecodedYieldStep): Record<string, unknown> | null {
   const u = step.unsignedTransaction
   if (typeof u !== 'object') return null
-  const evm = u as { to?: unknown; value?: unknown; data?: unknown; from?: unknown }
+  const evm = u as {
+    to?: unknown
+    value?: unknown
+    data?: unknown
+    from?: unknown
+  }
   if (typeof evm.to !== 'string' || typeof evm.data !== 'string') return null
   const ur = u as Record<string, unknown>
   const out: Record<string, unknown> = {
@@ -211,7 +217,8 @@ function canonicalizeEvmStep(step: DecodedYieldStep): Record<string, unknown> | 
     (typeof ge.max_fee_per_gas === 'string' ? ge.max_fee_per_gas : null)
   const maxPrioVal =
     (typeof ur.maxPriorityFeePerGas === 'string' ? ur.maxPriorityFeePerGas : null) ??
-    (typeof ge.maxPriorityFeePerGas === 'string' ? ge.maxPriorityFeePerGas : null)
+    (typeof ge.maxPriorityFeePerGas === 'string' ? ge.maxPriorityFeePerGas : null) ??
+    (typeof ge.max_priority_fee_per_gas === 'string' ? ge.max_priority_fee_per_gas : null)
   if (gasLimitVal !== null) out.gas_limit = gasLimitVal
   if (maxFeeVal !== null) out.max_fee_per_gas = maxFeeVal
   if (maxPrioVal !== null) out.max_priority_fee_per_gas = maxPrioVal
@@ -373,6 +380,20 @@ export function parseActionDisplay(data: YieldActionResponse) {
   }
 }
 
+/** Canonical shape returned by {@link parseActionDisplay}. */
+export type StakekitActionDisplay = ReturnType<typeof parseActionDisplay>
+
+/** Canonical result of the enter/manage builders with singular and per-step scan requests. */
+export type StakekitActionResult = {
+  scan_request: ScanRequest
+  scan_requests: ScanRequest[]
+} & StakekitActionDisplay
+
+/** Canonical result of {@link stakekitBuildExit}: an action result plus the cooldown period, when known. */
+export type StakekitExitResult = StakekitActionResult & {
+  cooldown_days?: number
+}
+
 // --- Validator picker ---
 
 function pickValidators(validators: Validator[]): string[] {
@@ -438,7 +459,7 @@ async function resolveActionArgs(
 
 // --- Builder functions ---
 
-const STAKEKIT_NETWORK_ALIASES: Readonly<Record<string, string>> = {
+export const STAKEKIT_NETWORK_ALIASES: Readonly<Record<string, string>> = {
   bsc: 'binance',
   'bnb chain': 'binance',
   'bnb-chain': 'binance',
@@ -455,7 +476,7 @@ const STAKEKIT_NETWORK_ALIASES: Readonly<Record<string, string>> = {
   'cronos-chain': 'cronos',
 }
 
-const normalizeStakekitNetwork = (network: string): string => {
+export const normalizeStakekitNetwork = (network: string): string => {
   const normalized = network.toLowerCase()
   return STAKEKIT_NETWORK_ALIASES[normalized] ?? normalized
 }
@@ -509,8 +530,28 @@ export async function stakekitSearch(params: {
   return products
 }
 
+/** Canonical result of {@link stakekitDetails}. */
+export type StakekitDetailsResult = {
+  id: string
+  name: string
+  token: string
+  network: string
+  apy: number
+  type: string
+  provider: string
+  isAvailable: boolean
+  fee: { percentage: number } | null
+  cooldownDays: number
+  warmupDays: number
+  rewardSchedule: string
+  rewardClaiming: string
+  enterEnabled: boolean
+  exitEnabled: boolean
+  acceptedTokens: { symbol: string; network: string; address?: string }[]
+}
+
 /** Get full yield product metadata. */
-export async function stakekitDetails(params: { apiKey?: string; yieldId: string }): Promise<object> {
+export async function stakekitDetails(params: { apiKey?: string; yieldId: string }): Promise<StakekitDetailsResult> {
   const p = await getYield(params.yieldId, params.apiKey)
   return {
     id: p.id,
@@ -528,7 +569,11 @@ export async function stakekitDetails(params: { apiKey?: string; yieldId: string
     rewardClaiming: p.metadata.rewardClaiming ?? '',
     enterEnabled: p.status.enter,
     exitEnabled: p.status.exit,
-    acceptedTokens: p.tokens.map(t => ({ symbol: t.symbol, network: t.network, address: t.address })),
+    acceptedTokens: p.tokens.map(t => ({
+      symbol: t.symbol,
+      network: t.network,
+      address: t.address,
+    })),
   }
 }
 
@@ -589,13 +634,16 @@ export async function stakekitBuildEnter(params: {
   amount: string
   validatorAddresses?: string[]
   tronResource?: 'BANDWIDTH' | 'ENERGY'
-}): Promise<object> {
+}): Promise<StakekitActionResult> {
   const inputErr = validateStakekitActionInput(params.address, params.amount)
   if (inputErr) throw new Error(inputErr)
   const resolved = await resolveActionArgs(
     params.yieldId,
     'enter',
-    { validatorAddresses: params.validatorAddresses, tronResource: params.tronResource },
+    {
+      validatorAddresses: params.validatorAddresses,
+      tronResource: params.tronResource,
+    },
     params.apiKey
   )
 
@@ -650,13 +698,16 @@ export async function stakekitBuildExit(params: {
   amount: string
   validatorAddresses?: string[]
   tronResource?: 'BANDWIDTH' | 'ENERGY'
-}): Promise<object> {
+}): Promise<StakekitExitResult> {
   const inputErr = validateStakekitActionInput(params.address, params.amount)
   if (inputErr) throw new Error(inputErr)
   const resolved = await resolveActionArgs(
     params.yieldId,
     'exit',
-    { validatorAddresses: params.validatorAddresses, tronResource: params.tronResource },
+    {
+      validatorAddresses: params.validatorAddresses,
+      tronResource: params.tronResource,
+    },
     params.apiKey
   )
 
@@ -723,7 +774,7 @@ export async function stakekitBuildManage(params: {
     | 'UNLOCK_LOCKED'
     | 'RESTAKE'
   passthrough: string
-}): Promise<object> {
+}): Promise<StakekitActionResult> {
   const addrErr = validateStakekitActionAddress(params.address)
   if (addrErr) throw new Error(addrErr)
   const raw = await callYieldActionWithFallback({
@@ -759,6 +810,9 @@ export async function stakekitBuildManage(params: {
 
 /** The sdk.defi.stakekit namespace surface. */
 export const stakekit = {
+  normalizeNetwork: normalizeStakekitNetwork,
+  networkToCanonicalChain: yieldNetworkToCanonicalChain,
+  NETWORK_ALIASES: STAKEKIT_NETWORK_ALIASES,
   search: stakekitSearch,
   details: stakekitDetails,
   balances: stakekitBalances,
