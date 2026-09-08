@@ -218,6 +218,7 @@ describe('getSwapKitQuote', () => {
     })
     expect(JSON.parse(fetchMock.mock.calls[1][1].body).disableBuildTx).toBeUndefined()
     expect(quote).toEqual({
+      affiliate: { affiliateBps: 15, request: 'included' },
       dstAmount: '12400000',
       provider: 'swapkit',
       routeProvider: 'NEAR',

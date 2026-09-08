@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "5.2.0",
+  "version": "5.3.0",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -885,6 +885,16 @@
       "import": "./dist/chains/solana/spl/getSplAssociatedAccount.js",
       "default": "./dist/chains/solana/spl/getSplAssociatedAccount.js"
     },
+    "./chains/solana/spl/verification": {
+      "types": "./dist/chains/solana/spl/verification.d.ts",
+      "import": "./dist/chains/solana/spl/verification.js",
+      "default": "./dist/chains/solana/spl/verification.js"
+    },
+    "./chains/solana/spl/verifiedRegistry": {
+      "types": "./dist/chains/solana/spl/verifiedRegistry.d.ts",
+      "import": "./dist/chains/solana/spl/verifiedRegistry.js",
+      "default": "./dist/chains/solana/spl/verifiedRegistry.js"
+    },
     "./chains/solana/staking/apyResolver": {
       "types": "./dist/chains/solana/staking/apyResolver.d.ts",
       "import": "./dist/chains/solana/staking/apyResolver.js",
@@ -1340,6 +1350,11 @@
       "import": "./dist/coin/find/resolvers/ton.js",
       "default": "./dist/coin/find/resolvers/ton.js"
     },
+    "./coin/jupiter/api": {
+      "types": "./dist/coin/jupiter/api.d.ts",
+      "import": "./dist/coin/jupiter/api.js",
+      "default": "./dist/coin/jupiter/api.js"
+    },
     "./coin/jupiter/token": {
       "types": "./dist/coin/jupiter/token.d.ts",
       "import": "./dist/coin/jupiter/token.js",
@@ -1469,6 +1484,11 @@
       "types": "./dist/coin/token/metadata/resolvers/tron.d.ts",
       "import": "./dist/coin/token/metadata/resolvers/tron.js",
       "default": "./dist/coin/token/metadata/resolvers/tron.js"
+    },
+    "./coin/tokenSymbol": {
+      "types": "./dist/coin/tokenSymbol.d.ts",
+      "import": "./dist/coin/tokenSymbol.js",
+      "default": "./dist/coin/tokenSymbol.js"
     },
     "./coin/tokenVerification": {
       "types": "./dist/coin/tokenVerification.d.ts",
