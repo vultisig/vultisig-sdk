@@ -298,10 +298,14 @@ export type {
   PendleUnsignedTx,
   ScanRequest,
   SolanaScanRequest,
+  StakekitActionDisplay,
+  StakekitActionResult,
   StakekitBalanceEntry,
   StakekitBalanceItem,
   StakekitBalanceQuery,
   StakekitBalancesResult,
+  StakekitDetailsResult,
+  StakekitExitResult,
   UnsupportedScanRequest,
   Validator,
   YieldActionResponse,
@@ -334,6 +338,7 @@ export {
   GLIF_ICN_TOKEN_DECIMALS,
   glifPoolWriteAbi,
   isPendleChain,
+  normalizeStakekitNetwork,
   parseActionDisplay,
   pendle,
   PENDLE_ROUTER_V4,
@@ -343,6 +348,7 @@ export {
   pendleMarkets,
   stakekit,
   STAKEKIT_BALANCE_QUERIES_PER_REQUEST,
+  STAKEKIT_NETWORK_ALIASES,
   stakekitBalances,
   stakekitBuildEnter,
   stakekitBuildExit,
@@ -350,6 +356,7 @@ export {
   stakekitDetails,
   stakekitSearch,
   stripChainPrefix,
+  yieldNetworkToCanonicalChain,
 } from './defi'
 
 // Verifier client
@@ -358,6 +365,13 @@ export type {
   BuildThreeJaneSupplyUsdcResult,
   ThreeJaneTranche,
   ThreeJaneTxStep,
+} from './defi/threeJane'
+// Aliased to avoid colliding with the CCTP bridge's `parseUsdcAmount` above —
+// both re-export the same underlying `./parse/usdcAmount` helper.
+export {
+  buildThreeJaneSupplyUsdc,
+  parseUsdcAmount as parseThreeJaneUsdcAmount,
+  THREE_JANE_ADDRESSES,
 } from './defi/threeJane'
 export { VerifierClient } from './verifier'
 
