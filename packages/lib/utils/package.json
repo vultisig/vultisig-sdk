@@ -144,6 +144,11 @@
       "import": "./dist/bigint/decimalStringToBigInt.js",
       "default": "./dist/bigint/decimalStringToBigInt.js"
     },
+    "./bigint/parseNonNegativeBigInt": {
+      "types": "./dist/bigint/parseNonNegativeBigInt.d.ts",
+      "import": "./dist/bigint/parseNonNegativeBigInt.js",
+      "default": "./dist/bigint/parseNonNegativeBigInt.js"
+    },
     "./capitalizeFirstLetter": {
       "types": "./dist/capitalizeFirstLetter.d.ts",
       "import": "./dist/capitalizeFirstLetter.js",

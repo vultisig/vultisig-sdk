@@ -6,6 +6,7 @@ import { bigIntToHex } from '@vultisig/lib-utils/bigint/bigIntToHex'
 import { stripHexPrefix } from '@vultisig/lib-utils/hex/stripHexPrefix'
 import { matchDiscriminatedUnion } from '@vultisig/lib-utils/matchDiscriminatedUnion'
 import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
+import { parseNonNegativeBigInt } from '@vultisig/lib-utils/bigint/parseNonNegativeBigInt'
 import { TW } from '@trustwallet/wallet-core'
 import Long from 'long'
 
@@ -257,7 +258,10 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
           return [input]
         }
 
-        const amountHex = Buffer.from(stripHexPrefix(bigIntToHex(BigInt(keysignPayload.toAmount))), 'hex')
+        const amountHex = Buffer.from(
+          stripHexPrefix(bigIntToHex(parseNonNegativeBigInt(keysignPayload.toAmount))),
+          'hex'
+        )
 
         const contract = TW.Tron.Proto.TransferTRC20Contract.create({
           ownerAddress: shouldBePresent(keysignPayload?.coin?.address),
@@ -320,7 +324,7 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
     return [input]
   }
 
-  const amountHex = Buffer.from(stripHexPrefix(bigIntToHex(BigInt(keysignPayload.toAmount))), 'hex')
+  const amountHex = Buffer.from(stripHexPrefix(bigIntToHex(parseNonNegativeBigInt(keysignPayload.toAmount))), 'hex')
 
   const contract = TW.Tron.Proto.TransferTRC20Contract.create({
     ownerAddress: shouldBePresent(keysignPayload?.coin?.address),
