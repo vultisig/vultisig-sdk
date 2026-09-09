@@ -5,6 +5,7 @@ import { AuthInfo, SignDoc, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import { beforeAll, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
 import * as sdkRn from '../../../../src/platforms/react-native/index'
+import { resolveChainIdReference } from '../../../../src/utils/resolveChainReference'
 import { cosmosTxFeeGasParityCases } from '../../../fixtures/cosmosTxFeeGasParity'
 
 process.env.VULTISIG_STRICT_SINGLETON = '0'
@@ -72,6 +73,14 @@ beforeAll(async () => {
 }, 120_000)
 
 describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
+  it('exports the strict chain-ID resolver by identity with its string-only signature', () => {
+    expect(reactNativeEntry.resolveChainIdReference).toBe(resolveChainIdReference)
+    expectTypeOf(sdkRn.resolveChainIdReference).toEqualTypeOf<(chainId: string) => sdkRn.Chain | undefined>()
+    expect(reactNativeEntry.resolveChainIdReference('phoenix-1')).toBe(sdkRn.Chain.Terra)
+    expect(reactNativeEntry.resolveChainIdReference(' 8453 ')).toBeUndefined()
+    expect(reactNativeEntry.resolveChainReference(' 8453 ')).toBe(sdkRn.Chain.Base)
+  })
+
   it('re-exports Blockaid EVM chain canonicals by identity', () => {
     expect(reactNativeEntry.blockaidEvmChain).toBe(blockaidChains.blockaidEvmChain)
     expect(reactNativeEntry.blockaidSupportedEvmChains).toBe(blockaidChains.blockaidSupportedEvmChains)

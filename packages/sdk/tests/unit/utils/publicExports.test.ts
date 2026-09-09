@@ -7,6 +7,7 @@ import { describe, expect, expectTypeOf, it } from 'vitest'
 import * as sdk from '../../../src/index'
 import * as threeJane from '../../../src/tools/defi/threeJane'
 import * as dangerousAddresses from '../../../src/utils/dangerousAddresses'
+import { resolveChainIdReference } from '../../../src/utils/resolveChainReference'
 import {
   buildSignAminoKeysignPayload as canonicalBuildSignAminoKeysignPayload,
   buildSignDirectKeysignPayload as canonicalBuildSignDirectKeysignPayload,
@@ -26,6 +27,13 @@ const dangerousAddressCanonicalExports = [
 ] as const
 
 describe('@vultisig/sdk public exports', () => {
+  it('exports the strict chain-ID resolver by identity with its string-only signature', () => {
+    expect(sdk.resolveChainIdReference).toBe(resolveChainIdReference)
+    expectTypeOf(sdk.resolveChainIdReference).toEqualTypeOf<(chainId: string) => sdk.Chain | undefined>()
+    expect(sdk.resolveChainIdReference('8453')).toBe(sdk.Chain.Base)
+    expect(sdk.resolveChainIdReference('Ethereum')).toBeUndefined()
+  })
+
   it('re-exports Blockaid EVM chain canonicals by identity', () => {
     expect(sdk.blockaidEvmChain).toBe(blockaidChains.blockaidEvmChain)
     expect(sdk.blockaidSupportedEvmChains).toBe(blockaidChains.blockaidSupportedEvmChains)
