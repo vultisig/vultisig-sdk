@@ -1,6 +1,9 @@
+import type { SwapQuoteAffiliate } from '../quote/SwapQuote'
 import { NativeSwapChain } from './NativeSwapChain'
 
 export type NativeSwapQuote = {
+  /** Request-bound affiliate metadata. Absent on legacy quotes; zero is a known requested rate. */
+  affiliate?: SwapQuoteAffiliate
   swapChain: NativeSwapChain
   dust_threshold?: string
   expected_amount_out: string

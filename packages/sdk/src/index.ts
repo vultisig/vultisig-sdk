@@ -839,6 +839,8 @@ export type {
   TransactionSimulationResult,
   TransactionValidationResult,
 } from './types'
+export type { BlockaidSupportedEvmChain } from '@vultisig/core-chain/security/blockaid/evmChains'
+export { blockaidEvmChain, blockaidSupportedEvmChains } from '@vultisig/core-chain/security/blockaid/evmChains'
 
 // ============================================================================
 // PUBLIC API - Cosmos Message Type Constants
@@ -1054,6 +1056,7 @@ export {
   buildSellPt,
   buildSkipAffiliates,
   buildSplTransfer,
+  buildThreeJaneSupplyUsdc,
   buildUndelegateMsg,
   buildWithdrawRewardsMsg,
   buildYieldActionScanRequest,
@@ -1177,8 +1180,10 @@ export {
   NATIVE_SWAP_MIN_OUTBOUND_FEE_MULTIPLIER,
   normaliseIbcChainId,
   normalizeHexBytes,
+  normalizeStakekitNetwork,
   parseActionDisplay,
   parseAmountBig,
+  parseThreeJaneUsdcAmount,
   parseUsdcAmount,
   pendle,
   PENDLE_ROUTER_V4,
@@ -1225,6 +1230,7 @@ export {
   SOL_NATIVE_MINT,
   stakekit,
   STAKEKIT_BALANCE_QUERIES_PER_REQUEST,
+  STAKEKIT_NETWORK_ALIASES,
   stakekitBalances,
   stakekitBuildEnter,
   stakekitBuildExit,
@@ -1240,6 +1246,7 @@ export {
   TERRA_CHAIN_ID,
   TERRA_LCD,
   THORCHAIN_NODE_URL,
+  THREE_JANE_ADDRESSES,
   token,
   TRC20_TRANSFER_SELECTOR,
   USDC_CONTRACTS,
