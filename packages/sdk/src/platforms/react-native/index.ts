@@ -1009,6 +1009,7 @@ export type {
   EnvelopeKind,
 } from '../../tools/decode'
 export { decode, decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from '../../tools/decode'
+export { isValidTxHash } from '@vultisig/core-chain/tx/isValidTxHash'
 // Exact base-units -> human decimal-string conversion (pure bigint string
 // arithmetic, no float64 round-trip), pairing-QR payload generation, and the
 // notification-vault-id helper are all deterministic utilities with no live

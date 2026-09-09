@@ -1,6 +1,7 @@
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
 import * as blockaidChains from '@vultisig/core-chain/security/blockaid/evmChains'
+import { isValidTxHash } from '@vultisig/core-chain/tx/isValidTxHash'
 import { AuthInfo, SignDoc, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import { beforeAll, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
@@ -83,6 +84,18 @@ beforeAll(async () => {
 }, 120_000)
 
 describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
+  it('re-exports canonical transaction-hash validation with unchanged chain rules', () => {
+    expect(reactNativeEntry.isValidTxHash).toBe(isValidTxHash)
+    expectTypeOf(reactNativeEntry.isValidTxHash).toEqualTypeOf<(chain: sdkRn.Chain, hash: string) => boolean>()
+
+    const hash = 'a'.repeat(64)
+    expect(reactNativeEntry.isValidTxHash(sdkRn.Chain.Ethereum, `0x${hash}`)).toBe(true)
+    expect(reactNativeEntry.isValidTxHash(sdkRn.Chain.Ethereum, hash)).toBe(false)
+    expect(reactNativeEntry.isValidTxHash(sdkRn.Chain.Bitcoin, hash)).toBe(true)
+    expect(reactNativeEntry.isValidTxHash(sdkRn.Chain.Bitcoin, 'not-a-hash')).toBe(false)
+    expect(reactNativeEntry.isValidTxHash(sdkRn.Chain.Ethereum, ` \t0x${hash}\n`)).toBe(true)
+  })
+
   it('re-exports Blockaid EVM chain canonicals by identity', () => {
     expect(reactNativeEntry.blockaidEvmChain).toBe(blockaidChains.blockaidEvmChain)
     expect(reactNativeEntry.blockaidSupportedEvmChains).toBe(blockaidChains.blockaidSupportedEvmChains)
