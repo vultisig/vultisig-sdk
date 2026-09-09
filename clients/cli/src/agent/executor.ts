@@ -336,10 +336,12 @@ function discloseSwapTokenContracts(
   return `${sell}→${buy}${halves.provider}`
 }
 
-// Every chain the shared chain-kind record classifies as EVM gets nonce locking,
-// nonce patching, gas bumping and the multi-leg sequencer. A hand-maintained
-// list used to sit here and had drifted from `EvmChain` (Robinhood was missing,
-// #2356); deriving the predicate keeps the executor in step with the SDK.
+/**
+ * Whether the executor treats `chain` as EVM: nonce locking, nonce patching,
+ * gas bumping and the multi-leg sequencer all key off this. Delegates to the
+ * shared chain-kind record so the answer cannot drift from `EvmChain`; the
+ * hand-maintained list that used to live here had left Robinhood out (#2356).
+ */
 const isEvmChain = (chain: Chain): chain is EvmChain => isChainOfKind(chain, 'evm')
 
 type AccountCoin = {
