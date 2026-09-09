@@ -244,3 +244,16 @@ describe('getBittensorSigningInputs — custom tx-input framing round-trips', ()
     ).toThrow('do not support a memo')
   })
 })
+
+describe('Bittensor amount validation', () => {
+  let walletCore: WalletCore
+  beforeAll(async () => {
+    walletCore = await initWasm()
+  })
+
+  it.each(['', ' ', '\t\n', '0x10', '+1', '-1', '-0', '1.5', '1e3'])('rejects malformed amount %j', async toAmount => {
+    const keysignPayload = buildPayload()
+    keysignPayload.toAmount = toAmount
+    await expect(async () => getBittensorSigningInputs({ keysignPayload, walletCore })).rejects.toThrow(/decimal/)
+  })
+})
