@@ -10,6 +10,7 @@ import { bech32 } from '@scure/base'
 import { describe, expect, it } from 'vitest'
 
 import {
+  IBC_CHANNEL_DEST,
   IBC_MSG_TRANSFER_TYPE_URL,
   normaliseIbcChainId,
   prepareIbcTransfer,
@@ -29,7 +30,70 @@ const TERRA = addr('terra')
 // 2026-07-01T00:00:00Z, comfortably in the future for timeout checks.
 const FIXED_NOW = 1782604800000
 
+const ADDED_DESTINATIONS = [
+  { name: 'Celestia', id: 'celestia', hrp: 'celestia', channel: 'channel-6994' },
+  { name: 'Juno', id: 'juno-1', hrp: 'juno', channel: 'channel-42' },
+  { name: 'Axelar', id: 'axelar-dojo-1', hrp: 'axelar', channel: 'channel-208' },
+  { name: 'Neutron', id: 'neutron-1', hrp: 'neutron', channel: 'channel-874' },
+  { name: 'Injective', id: 'injective-1', hrp: 'inj', channel: 'channel-122' },
+]
+
+const CANONICAL_DESTINATION_NAMES = [
+  'Cosmos',
+  'Osmosis',
+  'Terra',
+  'Akash',
+  'Noble',
+  'Dydx',
+  'Stride',
+  ...ADDED_DESTINATIONS.map(({ name }) => name),
+]
+
 describe('prepareIbcTransfer', () => {
+  it('covers every registered route destination with a canonical name', () => {
+    expect(new Set(CANONICAL_DESTINATION_NAMES.map(normaliseIbcChainId))).toEqual(
+      new Set(Object.values(IBC_CHANNEL_DEST))
+    )
+  })
+
+  it.each(ADDED_DESTINATIONS)('prepares the same unsigned transfer for $name and $id', ({ name, id, hrp, channel }) => {
+    expect(normaliseIbcChainId(name)).toBe(id)
+    expect(normaliseIbcChainId(id)).toBe(id)
+    const input = {
+      fromChain: 'Osmosis',
+      fromAddress: OSMO,
+      toAddress: addr(hrp),
+      denom: 'uosmo',
+      amount: '1',
+      nowMs: FIXED_NOW,
+    }
+    const result = prepareIbcTransfer({ ...input, toChainId: name })
+    expect(result).toEqual(prepareIbcTransfer({ ...input, toChainId: id }))
+    expect(result).toEqual(prepareIbcTransfer({ ...input, sourceChannel: channel }))
+    expect(result).toEqual(prepareIbcTransfer({ ...input, sourceChannel: channel, toChainId: name }))
+    expect(result).toMatchObject({ fromChain: 'osmosis-1', destChain: id, sourceChannel: channel })
+    expect(result.msgTransfer).toMatchObject({
+      source_port: 'transfer',
+      source_channel: channel,
+      token: { denom: 'uosmo', amount: '1' },
+      sender: OSMO,
+      receiver: addr(hrp),
+    })
+    expect(result.cosmosTx.chain_id).toBe('osmosis-1')
+    expect(result.cosmosTx.msgs).toHaveLength(1)
+    expect(result.cosmosTx.msgs[0]!.msg_type_url).toBe(IBC_MSG_TRANSFER_TYPE_URL)
+    expect(JSON.parse(result.cosmosTx.msgs[0]!.msg)).toEqual(result.msgTransfer)
+    expect(() => prepareIbcTransfer({ ...input, toChainId: name, sourceChannel: 'channel-0' })).toThrow(
+      /routes to cosmoshub-4, NOT/
+    )
+    expect(() => prepareIbcTransfer({ ...input, toChainId: name, toAddress: COSMOS })).toThrow(
+      /does not match expected/
+    )
+    expect(() => prepareIbcTransfer({ ...input, fromChain: 'Cosmos', fromAddress: COSMOS, toChainId: name })).toThrow(
+      /no supported IBC channel/
+    )
+  })
+
   it('builds an OSMO→cosmoshub-4 MsgTransfer with channel reverse-resolved from toChainId', () => {
     const r = prepareIbcTransfer({
       fromChain: 'osmosis-1',
