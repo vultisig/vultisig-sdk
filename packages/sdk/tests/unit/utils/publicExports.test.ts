@@ -1,7 +1,8 @@
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
+import * as blockaidChains from '@vultisig/core-chain/security/blockaid/evmChains'
 import * as isValidTokenIdModule from '@vultisig/core-chain/utils/isValidTokenId'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, expectTypeOf, it } from 'vitest'
 
 import * as sdk from '../../../src/index'
 import * as threeJane from '../../../src/tools/defi/threeJane'
@@ -25,6 +26,12 @@ const dangerousAddressCanonicalExports = [
 ] as const
 
 describe('@vultisig/sdk public exports', () => {
+  it('re-exports Blockaid EVM chain canonicals by identity', () => {
+    expect(sdk.blockaidEvmChain).toBe(blockaidChains.blockaidEvmChain)
+    expect(sdk.blockaidSupportedEvmChains).toBe(blockaidChains.blockaidSupportedEvmChains)
+    expectTypeOf<sdk.BlockaidSupportedEvmChain>().toEqualTypeOf<blockaidChains.BlockaidSupportedEvmChain>()
+  })
+
   it.each(dangerousAddressCanonicalExports)('re-exports dangerous-address canonical %s by identity', name => {
     expect(sdk[name]).toBe(dangerousAddresses[name])
   })
