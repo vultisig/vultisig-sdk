@@ -1,12 +1,11 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import { tonAddressToRawKey } from '@vultisig/core-chain/chains/ton/address'
 import { knownTokens } from '@vultisig/core-chain/coin/knownTokens'
+import { normalizeTokenSymbol } from '@vultisig/core-chain/coin/tokenSymbol'
 import { attempt } from '@vultisig/lib-utils/attempt'
 import { memoizeAsync } from '@vultisig/lib-utils/memoizeAsync'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import { convertDuration } from '@vultisig/lib-utils/time/convertDuration'
-
-import { normalizeJettonSymbol } from './symbol'
 
 /**
  * Tonkeeper's community-reviewed jetton whitelist, the list every major TON
@@ -37,7 +36,7 @@ export type VerifiedJetton = {
 /**
  * Verified jettons indexed for the two questions verification asks: "is this
  * address listed?" and "does this symbol or name belong to a listed jetton?".
- * `symbols` and `names` hold `normalizeJettonSymbol` skeletons.
+ * `symbols` and `names` hold `normalizeTokenSymbol` skeletons.
  */
 export type TonVerifiedJettonRegistry = {
   byAddress: Record<string, VerifiedJetton>
@@ -61,10 +60,10 @@ export const makeTonVerifiedJettonRegistry = (jettons: VerifiedJetton[]): TonVer
     const address = tonAddressToRawKey(jetton.address)
     registry.byAddress[address] ??= { ...jetton, address }
 
-    const symbol = normalizeJettonSymbol(jetton.symbol)
+    const symbol = normalizeTokenSymbol(jetton.symbol)
     if (symbol) registry.symbols.add(symbol)
 
-    const name = jetton.name ? normalizeJettonSymbol(jetton.name) : ''
+    const name = jetton.name ? normalizeTokenSymbol(jetton.name) : ''
     if (name) registry.names.add(name)
   }
 

@@ -13,11 +13,13 @@ import { getKyberSwapQuote } from '@vultisig/core-chain/swap/general/kyber/api/q
 import { getLifiSwapQuote } from '@vultisig/core-chain/swap/general/lifi/api/getLifiSwapQuote'
 import { getOneInchSwapQuote } from '@vultisig/core-chain/swap/general/oneInch/api/getOneInchSwapQuote'
 import { getSwapKitQuote } from '@vultisig/core-chain/swap/general/swapkit/api/getSwapKitQuote'
+import { buildNativeAffiliateRequest } from '@vultisig/core-chain/swap/native/api/affiliate'
 import { getNativeSwapQuote } from '@vultisig/core-chain/swap/native/api/getNativeSwapQuote'
 import type { NativeSwapQuote } from '@vultisig/core-chain/swap/native/NativeSwapQuote'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { findSwapQuote, type SwapAffiliateConfig } from './findSwapQuote'
+import { findSwapQuote, findSwapQuotes, type SwapAffiliateConfig } from './findSwapQuote'
+import { getSwapQuoteSafetyFingerprint } from './getSwapQuoteSafetyFingerprint'
 
 vi.mock('@vultisig/core-chain/swap/general/kyber/api/quote', () => ({
   getKyberSwapQuote: vi.fn(),
@@ -307,5 +309,57 @@ describe('SwapAffiliateConfig propagation', () => {
         })
       ).resolves.toBeDefined()
     })
+  })
+})
+
+describe('selected quote affiliate binding', () => {
+  it.each([null, 'gold', 'ultimate'] as const)(
+    'retains provider metadata at tier %s and fingerprints it',
+    async tier => {
+      vi.mocked(getNativeSwapQuote).mockImplementation(async input => ({
+        ...minimalNativeQuote,
+        expiry: Math.floor(Date.now() / 1000) + 600,
+        affiliate: buildNativeAffiliateRequest({
+          swapChain: input.swapChain,
+          affiliateBps: input.affiliateBps!,
+          referral: input.referral,
+          config: input.nativeAffiliateConfig,
+        }).affiliate,
+      }))
+      const result = await findSwapQuotes({
+        ...thorPair,
+        amount: 100000000n,
+        vultDiscountTier: tier,
+        referral: 'referrer',
+        affiliateConfig: mockAffiliateConfig,
+        excludeProviders: ['MayaChain', 'SwapKit', 'LiFi'],
+      })
+      const quote = result.best
+      expect('native' in quote.quote).toBe(true)
+      if (!('native' in quote.quote)) throw new Error('expected native')
+      const requested = vi.mocked(getNativeSwapQuote).mock.calls.at(-1)![0].affiliateBps!
+      expect(quote.quote.native.affiliate?.affiliateBps).toBe(10 + Math.max(0, requested - 15))
+      expect(result.ranked[0].quote).toBe(quote)
+      const clone = structuredClone(quote)
+      const fingerprint = () =>
+        getSwapQuoteSafetyFingerprint({
+          ...thorPair,
+          recipient: clone.recipient,
+          requestedAmount: clone.requestedAmount,
+          expiresAt: clone.expiresAt,
+          quote: clone.quote,
+        })
+      expect(fingerprint()).toBe(quote.safetyFingerprint)
+      if (!('native' in clone.quote)) throw new Error('expected native')
+      clone.quote.native.affiliate!.allocations![0].bps++
+      expect(fingerprint()).not.toBe(quote.safetyFingerprint)
+      expect(quote.quote.native.affiliate!.allocations![0].bps).toBe(10)
+      delete clone.quote.native.affiliate
+      expect(fingerprint()).not.toBe(quote.safetyFingerprint)
+    }
+  )
+
+  it('leaves legacy quotes unknown', () => {
+    expect(minimalNativeQuote.affiliate).toBeUndefined()
   })
 })
