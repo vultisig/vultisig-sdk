@@ -41,8 +41,6 @@ export type SwapKitSourceChain = (typeof swapKitSourceChains)[number] | Blockaid
 
 export const swapKitEnabledChains = [
   ...swapKitSourceChains,
-  // Robinhood is source-eligible as well, through the Blockaid branch of
-  // `isSwapKitSourceChain` below rather than the static list above.
   Chain.Robinhood,
   Chain.Cosmos,
   Chain.Dash,
