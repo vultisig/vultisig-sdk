@@ -1,9 +1,9 @@
 import { tonAddressToRawKey } from '@vultisig/core-chain/chains/ton/address'
 import { getJettonMastersMetadata } from '@vultisig/core-chain/chains/ton/api'
+import { normalizeTokenSymbol } from '@vultisig/core-chain/coin/tokenSymbol'
 import { TokenVerification } from '@vultisig/core-chain/coin/tokenVerification'
 import { attempt } from '@vultisig/lib-utils/attempt'
 
-import { normalizeJettonSymbol } from './symbol'
 import { getTonVerifiedJettonRegistry, TonVerifiedJettonRegistry } from './verifiedRegistry'
 
 type ResolveTonJettonVerificationInput = {
@@ -20,7 +20,7 @@ type ResolveTonJettonVerificationInput = {
  * Classifies a jetton against the verified registry. A listed address is
  * `verified` whatever it calls itself. An unlisted jetton is `scam` when the
  * indexer flags it or when its symbol or name collapses (see
- * `normalizeJettonSymbol`) onto a verified jetton's symbol or name — the
+ * `normalizeTokenSymbol`) onto a verified jetton's symbol or name — the
  * fake-USDT pattern, where the counterfeit is only distinguishable by address.
  * Anything else is `unverified`.
  */
@@ -36,7 +36,7 @@ export const resolveTonJettonVerification = ({
   if (isFlaggedScam) return 'scam'
 
   const impersonates = [symbol, name].some(label => {
-    const skeleton = label ? normalizeJettonSymbol(label) : ''
+    const skeleton = label ? normalizeTokenSymbol(label) : ''
 
     return !!skeleton && (registry.symbols.has(skeleton) || registry.names.has(skeleton))
   })

@@ -1,7 +1,8 @@
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
+import * as blockaidChains from '@vultisig/core-chain/security/blockaid/evmChains'
 import { AuthInfo, SignDoc, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
-import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { beforeAll, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
 import * as sdkRn from '../../../../src/platforms/react-native/index'
 import { cosmosTxFeeGasParityCases } from '../../../fixtures/cosmosTxFeeGasParity'
@@ -71,6 +72,12 @@ beforeAll(async () => {
 }, 120_000)
 
 describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
+  it('re-exports Blockaid EVM chain canonicals by identity', () => {
+    expect(reactNativeEntry.blockaidEvmChain).toBe(blockaidChains.blockaidEvmChain)
+    expect(reactNativeEntry.blockaidSupportedEvmChains).toBe(blockaidChains.blockaidSupportedEvmChains)
+    expectTypeOf<sdkRn.BlockaidSupportedEvmChain>().toEqualTypeOf<blockaidChains.BlockaidSupportedEvmChain>()
+  })
+
   it('exports canonical fast-vault detection helpers', async () => {
     const canonical = await import('@vultisig/core-mpc/devices/localPartyId')
 

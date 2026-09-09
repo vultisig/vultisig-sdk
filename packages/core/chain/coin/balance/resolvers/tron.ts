@@ -25,6 +25,8 @@ export const getTronCoinBalance: CoinBalanceResolver = async input => {
     const data = await queryUrl<{
       result?: { balance?: string }
       balance?: string
+      Error?: string
+      error?: string
     }>(`${tronRpcUrl}/wallet/getaccount`, {
       body: {
         address: input.address,
@@ -32,7 +34,14 @@ export const getTronCoinBalance: CoinBalanceResolver = async input => {
       },
     })
 
-    const balance = data.result?.balance ?? data.balance ?? data.result?.balance?.toString() ?? '0'
+    const gatewayError = data.Error ?? data.error
+    if (gatewayError !== undefined) {
+      throw new Error(`Tron RPC getaccount failed: ${gatewayError || 'unknown gateway error'}`)
+    }
+
+    // Never-funded accounts legitimately return {}. Activated accounts with
+    // no TRX can also omit balance, so preserve zero only after checking errors.
+    const balance = data.result?.balance ?? data.balance ?? '0'
 
     try {
       return BigInt(balance ?? '0')
@@ -114,7 +123,7 @@ async function intRpcCall(method: string, params: any[]): Promise<bigint> {
 
     if (typeof result === 'string') {
       const hexString = result.startsWith('0x') ? result.slice(2) : result
-      if (!hexString) return 0n
+      if (!hexString) throw new Error(`Tron RPC ${method} returned an empty contract result`)
       try {
         return BigInt(`0x${hexString}`)
       } catch (err) {
@@ -131,41 +140,24 @@ async function intRpcCall(method: string, params: any[]): Promise<bigint> {
 }
 
 async function sendRPCRequest<T>(method: string, params: any[], decode: (result: any) => T): Promise<T> {
-  const payload = {
-    jsonrpc: '2.0',
-    method: method,
-    params: params,
-    id: 1,
-  }
-
   const rpcEndpoint = 'https://api.trongrid.io/jsonrpc'
 
-  try {
-    const { error, result } = await queryUrl<{
-      error?: { message: string }
-      result?: any
-    }>(rpcEndpoint, {
-      body: {
-        jsonrpc: '2.0',
-        method: method,
-        params: params,
-        id: 1,
-      },
-    })
+  const { error, result } = await queryUrl<{
+    error?: { code?: number; message?: string }
+    result?: any
+  }>(rpcEndpoint, {
+    body: {
+      jsonrpc: '2.0',
+      method: method,
+      params: params,
+      id: 1,
+    },
+  })
 
-    if (error) {
-      return decode(error.message)
-    } else if (result !== undefined) {
-      return decode(result)
-    } else {
-      throw {
-        code: 500,
-        message: 'Unknown error',
-      }
-    }
-  } catch (error) {
-    console.error('RPC Request Payload:', payload)
-    console.error('Error:', error)
-    throw error
+  if (error) {
+    const code = error.code === undefined ? '' : ` (${error.code})`
+    throw new Error(`Tron RPC ${method} failed${code}: ${error.message || 'unknown provider error'}`)
   }
+  if (result !== undefined) return decode(result)
+  throw new Error(`Tron RPC ${method} returned no result`)
 }

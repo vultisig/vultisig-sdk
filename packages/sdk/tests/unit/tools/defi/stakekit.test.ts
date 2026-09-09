@@ -6,7 +6,10 @@ import {
   buildYieldActionScanRequests,
   buildYieldStepScanRequest,
   ensureTransactionsBuilt,
+  normalizeStakekitNetwork,
   parseActionDisplay,
+  stakekit,
+  STAKEKIT_NETWORK_ALIASES,
   stakekitBalances,
   stakekitBuildEnter,
   stakekitBuildExit,
@@ -1402,5 +1405,43 @@ describe('scan-request coverage (architecture#1670)', () => {
   it('buildYieldActionScanRequests returns [] when the action has no transactions', () => {
     const resp = makeEvmActionResponse({ transactions: [] })
     expect(buildYieldActionScanRequests(resp)).toEqual([])
+  })
+})
+
+describe('StakeKit network canonicalization — public exports', () => {
+  it('normalizeStakekitNetwork aliases known network slugs case-insensitively', () => {
+    expect(normalizeStakekitNetwork('bsc')).toBe('binance')
+    expect(normalizeStakekitNetwork('BSC')).toBe('binance')
+    expect(normalizeStakekitNetwork('BNB Chain')).toBe('binance')
+    expect(normalizeStakekitNetwork('avax')).toBe('avalanche-c')
+    expect(normalizeStakekitNetwork('Avalanche')).toBe('avalanche-c')
+    for (const alias of ['CronosChain', 'Cronos Chain', 'Cronos-Chain']) {
+      expect(normalizeStakekitNetwork(alias)).toBe('cronos')
+      expect(yieldNetworkToCanonicalChain(normalizeStakekitNetwork(alias))).toBe('CronosChain')
+    }
+  })
+
+  it('normalizeStakekitNetwork passes through unaliased slugs unchanged (lowercased)', () => {
+    expect(normalizeStakekitNetwork('ethereum')).toBe('ethereum')
+    expect(normalizeStakekitNetwork('Solana')).toBe('solana')
+  })
+
+  it('STAKEKIT_NETWORK_ALIASES is the exact table normalizeStakekitNetwork reads', () => {
+    expect(STAKEKIT_NETWORK_ALIASES.bsc).toBe('binance')
+    expect(STAKEKIT_NETWORK_ALIASES.avax).toBe('avalanche-c')
+    expect(Object.keys(STAKEKIT_NETWORK_ALIASES).length).toBeGreaterThan(0)
+  })
+
+  it('yieldNetworkToCanonicalChain maps a yield.xyz network slug to the app PascalCase chain name', () => {
+    expect(yieldNetworkToCanonicalChain('ethereum')).toBe('Ethereum')
+    expect(yieldNetworkToCanonicalChain('avalanche-c')).toBe('Avalanche')
+    expect(yieldNetworkToCanonicalChain('binance')).toBe('BSC')
+    expect(yieldNetworkToCanonicalChain('not-a-real-network')).toBeNull()
+  })
+
+  it('the sdk.defi.stakekit namespace exposes the same normalizer functions/table', () => {
+    expect(stakekit.normalizeNetwork).toBe(normalizeStakekitNetwork)
+    expect(stakekit.networkToCanonicalChain).toBe(yieldNetworkToCanonicalChain)
+    expect(stakekit.NETWORK_ALIASES).toBe(STAKEKIT_NETWORK_ALIASES)
   })
 })

@@ -1165,6 +1165,7 @@ export const getSwapKitQuote = async ({
   return {
     dstAmount: parseExpectedBuyAmount(swapResponse.expectedBuyAmount ?? route.expectedBuyAmount, to.decimals),
     provider: 'swapkit',
+    affiliate: affiliateBps === undefined ? undefined : { affiliateBps: quoteBody.affiliateFee!, request: 'included' },
     routeProvider,
     ...(priceImpactFraction === undefined ? {} : { priceImpactFraction }),
     tx: await buildSwapKitTx(swapResponse, source, to, amount, routeProvider, fromMetadata, toMetadata),

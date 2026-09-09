@@ -839,6 +839,8 @@ export type {
   TransactionSimulationResult,
   TransactionValidationResult,
 } from './types'
+export type { BlockaidSupportedEvmChain } from '@vultisig/core-chain/security/blockaid/evmChains'
+export { blockaidEvmChain, blockaidSupportedEvmChains } from '@vultisig/core-chain/security/blockaid/evmChains'
 
 // ============================================================================
 // PUBLIC API - Cosmos Message Type Constants
@@ -1179,6 +1181,7 @@ export {
   NATIVE_SWAP_MIN_OUTBOUND_FEE_MULTIPLIER,
   normaliseIbcChainId,
   normalizeHexBytes,
+  normalizeStakekitNetwork,
   parseActionDisplay,
   parseAmountBig,
   parseThreeJaneUsdcAmount,
@@ -1228,6 +1231,7 @@ export {
   SOL_NATIVE_MINT,
   stakekit,
   STAKEKIT_BALANCE_QUERIES_PER_REQUEST,
+  STAKEKIT_NETWORK_ALIASES,
   stakekitBalances,
   stakekitBuildEnter,
   stakekitBuildExit,
