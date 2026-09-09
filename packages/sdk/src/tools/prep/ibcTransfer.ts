@@ -136,6 +136,11 @@ const VULTISIG_NAME_TO_CHAIN_ID: Record<string, string> = {
   MayaChain: 'mayachain-mainnet-v1',
   THORChain: 'thorchain-1',
   Stride: 'stride-1',
+  Celestia: 'celestia',
+  Juno: 'juno-1',
+  Axelar: 'axelar-dojo-1',
+  Neutron: 'neutron-1',
+  Injective: 'injective-1',
 }
 
 /**
