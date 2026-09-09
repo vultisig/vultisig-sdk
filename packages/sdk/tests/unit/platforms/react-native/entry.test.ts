@@ -138,6 +138,14 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(reactNativeEntry.isValidTxHash(sdkRn.Chain.Ethereum, ` \t0x${hash}\n`)).toBe(true)
   })
 
+  it('exposes the complete price namespace and preserves flat exports', async () => {
+    const priceHelpers = await import('../../../../src/tools/price')
+    expect(sdkRn.price).toBe(priceHelpers)
+    for (const name of Object.keys(priceHelpers) as (keyof typeof priceHelpers)[]) {
+      expect(sdkRn.price[name]).toBe(sdkRn[name])
+    }
+  })
+
   it('re-exports Blockaid EVM chain canonicals by identity', () => {
     expect(reactNativeEntry.blockaidEvmChain).toBe(blockaidChains.blockaidEvmChain)
     expect(reactNativeEntry.blockaidSupportedEvmChains).toBe(blockaidChains.blockaidSupportedEvmChains)
