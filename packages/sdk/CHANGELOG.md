@@ -1,5 +1,33 @@
 # @vultisig/sdk
 
+## 7.4.0
+
+### Minor Changes
+
+- [#2347](https://github.com/vultisig/vultisig-sdk/pull/2347) [`864dfcb`](https://github.com/vultisig/vultisig-sdk/commit/864dfcb375c474f5bcc6f79bf18aeb145489cc47) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Blockaid now covers Robinhood chain (4663) as `robinhood`. Transaction simulation and validation run for Robinhood dApp requests and swaps, so a Uniswap swap on Robinhood shows its balance changes on the verify screen instead of nothing. Because SwapKit's EVM source eligibility keys off Blockaid coverage, Robinhood also becomes a SwapKit source chain, with the returned router screened through the Blockaid address scan like every other covered EVM chain.
+
+- [#2343](https://github.com/vultisig/vultisig-sdk/pull/2343) [`80ba27f`](https://github.com/vultisig/vultisig-sdk/commit/80ba27f30afbeb104a8cc5738b5942467d977c9e) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Preserve requested affiliate rates and native recipient allocations on swap quotes, including explicit zero rates, without changing fees or transaction construction. The optional quote affiliate metadata is covered by the existing mutation fingerprint; older quotes retain an unknown rate.
+
+### Patch Changes
+
+- [#2351](https://github.com/vultisig/vultisig-sdk/pull/2351) [`e5ab020`](https://github.com/vultisig/vultisig-sdk/commit/e5ab020bca842fd92ddd8994946e1d0ea991c73d) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Export the canonical Blockaid EVM chain map, supported-chain list, and type from the SDK, including its React Native entry.
+
+- [#2352](https://github.com/vultisig/vultisig-sdk/pull/2352) [`341df52`](https://github.com/vultisig/vultisig-sdk/commit/341df52d63858f41172be2f61bde7c4ca694ad71) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject missing and malformed amounts before constructing Tron TRC20, Solana, Polkadot, Bittensor and Ripple issued-currency signing inputs. Preserve explicit zero trust-line limits and encode Solana amounts as unsigned uint64 values without overflow.
+
+- [#2341](https://github.com/vultisig/vultisig-sdk/pull/2341) [`ea2e6b7`](https://github.com/vultisig/vultisig-sdk/commit/ea2e6b7f4fc005d93d0a31741f521d7539d3104e) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject negative amounts before hexadecimal encoding so EVM and Cardano transaction inputs cannot silently contain empty amount bytes. Preserve existing encodings for non-negative values, including unsigned Long quantities.
+
+- [#2354](https://github.com/vultisig/vultisig-sdk/pull/2354) [`4fe2d97`](https://github.com/vultisig/vultisig-sdk/commit/4fe2d977cac34de6d0cf0cfefafdb6d484253a56) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject off-curve Solana wallet recipients before preparing sends or fee estimates.
+
+- [#2345](https://github.com/vultisig/vultisig-sdk/pull/2345) [`235282a`](https://github.com/vultisig/vultisig-sdk/commit/235282ad5e2e71eeefb6fa27bc4f84a05d99dd92) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Keep tiny positive EVM gas prices visible in gas comparisons and calculate native fee estimates from raw wei so display rounding cannot erase or inflate them. Rank fully priced comparisons by unrounded USD costs so fees that display as zero still select the cheapest chain.
+
+- [#2344](https://github.com/vultisig/vultisig-sdk/pull/2344) [`f5b79a4`](https://github.com/vultisig/vultisig-sdk/commit/f5b79a4b3ba943a1e80c4f8c01ecf1cd137a155d) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject Tron gateway errors, empty contract balance results, and JSON-RPC errors instead of treating them as zero balances or decoding error messages. Preserve legitimate zero balances and propagate read failures to maximum-send callers.
+
+- [#2342](https://github.com/vultisig/vultisig-sdk/pull/2342) [`598f32b`](https://github.com/vultisig/vultisig-sdk/commit/598f32beed52463606ab5a891bdbd285468f046b) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject UTXO recipient amounts below the chain and recipient script's default dust threshold before preparing signing data. Preserve address-validation precedence and include Dogecoin's required fee surcharge for recipients below 0.01 DOGE in transaction building and coin selection. Fee estimation accepts an optional recipient amount for that surcharge.
+
+- Updated dependencies [[`864dfcb`](https://github.com/vultisig/vultisig-sdk/commit/864dfcb375c474f5bcc6f79bf18aeb145489cc47), [`80ba27f`](https://github.com/vultisig/vultisig-sdk/commit/80ba27f30afbeb104a8cc5738b5942467d977c9e), [`341df52`](https://github.com/vultisig/vultisig-sdk/commit/341df52d63858f41172be2f61bde7c4ca694ad71), [`ea2e6b7`](https://github.com/vultisig/vultisig-sdk/commit/ea2e6b7f4fc005d93d0a31741f521d7539d3104e), [`4fe2d97`](https://github.com/vultisig/vultisig-sdk/commit/4fe2d977cac34de6d0cf0cfefafdb6d484253a56), [`f5b79a4`](https://github.com/vultisig/vultisig-sdk/commit/f5b79a4b3ba943a1e80c4f8c01ecf1cd137a155d)]:
+  - @vultisig/core-chain@5.4.0
+  - @vultisig/core-mpc@3.2.1
+
 ## 7.3.0
 
 ### Minor Changes
