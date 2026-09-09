@@ -102,6 +102,16 @@ export type MaxSendAmount = {
   maxSendable: bigint
 }
 
+/** Public network-fee metadata returned by VaultBase.estimateSendFee(). */
+export type SendFeeEstimate = {
+  /** Estimated network fee in the native fee asset's base units. */
+  feeAmountBase: bigint
+  /** Decimal places used by the native fee asset. */
+  feeDecimals: number
+  /** Ticker of the native fee asset. */
+  feeSymbol: string
+}
+
 export type CachedBalance = {
   balance: Balance
   cachedAt: number // Unix timestamp when cached

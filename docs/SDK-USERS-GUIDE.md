@@ -1144,6 +1144,24 @@ const keysignPayload = await vault.prepareSendTx({
 })
 ```
 
+### Send Fee Estimation
+
+Estimate the network fee for a specific send without signing or broadcasting. The result is always denominated in the chain's native fee asset, including when the asset being sent is a token:
+
+```typescript
+const fee = await vault.estimateSendFee({
+  coin,
+  receiver: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0',
+  amount: 1000000n,
+})
+
+console.log('Fee in base units:', fee.feeAmountBase)
+console.log('Fee asset:', fee.feeSymbol)
+console.log('Fee decimals:', fee.feeDecimals)
+```
+
+For example, sending an ERC-20 token on Ethereum still reports `ETH` and `18` for the fee metadata. Fee estimates depend on the transaction inputs and current network conditions. Use `getMaxSendAmount()` when you need the SDK to fetch the balance and calculate a fee-aware maximum.
+
 ### Signing Arbitrary Bytes
 
 The `signBytes()` method allows you to sign pre-hashed data directly, giving you full control over transaction construction. This is useful when you need to:
@@ -2759,6 +2777,14 @@ class VaultBase {
 
   // Low-level transactions
   prepareSendTx(params: SendTxParams): Promise<KeysignPayload>
+  estimateSendFee(params: {
+    coin: AccountCoin
+    receiver: string
+    amount: bigint
+    memo?: string
+    destinationTag?: number
+    feeSettings?: FeeSettings
+  }): Promise<SendFeeEstimate>
   getMaxSendAmount(params: {
     coin: AccountCoin
     receiver: string
