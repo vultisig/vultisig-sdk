@@ -839,6 +839,8 @@ export type {
   TransactionSimulationResult,
   TransactionValidationResult,
 } from './types'
+export type { BlockaidSupportedEvmChain } from '@vultisig/core-chain/security/blockaid/evmChains'
+export { blockaidEvmChain, blockaidSupportedEvmChains } from '@vultisig/core-chain/security/blockaid/evmChains'
 
 // ============================================================================
 // PUBLIC API - Cosmos Message Type Constants
