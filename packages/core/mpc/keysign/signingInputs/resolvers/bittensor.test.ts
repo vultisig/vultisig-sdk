@@ -27,8 +27,13 @@ const BLOCK_HASH = '0xaabbccddeeff00112233445566778899aabbccddeeff00112233445566
 
 const hex = (bytes: Uint8Array) => Buffer.from(bytes).toString('hex')
 
-const buildPayload = ({ address = FROM_ADDRESS, hexPublicKey }: { address?: string; hexPublicKey?: string } = {}) =>
+const buildPayload = ({
+  address = FROM_ADDRESS,
+  hexPublicKey,
+  memo,
+}: { address?: string; hexPublicKey?: string; memo?: string } = {}) =>
   create(KeysignPayloadSchema, {
+    ...(memo ? { memo } : {}),
     coin: create(CoinSchema, {
       chain: Chain.Bittensor,
       ticker: 'TAO',
@@ -229,6 +234,14 @@ describe('getBittensorSigningInputs — custom tx-input framing round-trips', ()
     expect(hex(decoded.callData)).toBe(hex(callData))
     expect(hex(decoded.signedExtra)).toBe(hex(signedExtra))
     expect(hex(decoded.payload)).toBe(hex(payload))
+  })
+
+  // The transfer_allow_death extrinsic encoded above has no field a memo could
+  // occupy, so accepting one would sign a transfer that silently omits it.
+  it('rejects a memo (the Bittensor transfer extrinsic has no remark field)', async () => {
+    expect(() =>
+      getBittensorSigningInputs({ keysignPayload: buildPayload({ memo: 'deposit-12345' }), walletCore })
+    ).toThrow('do not support a memo')
   })
 })
 
