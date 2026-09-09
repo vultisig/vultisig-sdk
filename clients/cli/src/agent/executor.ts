@@ -22,6 +22,7 @@ import {
   computeEip712Hash,
   getChainKind,
   getEvmRpcUrl,
+  isChainOfKind,
   knownTokensIndex,
   parseTxReadyEnvelope,
   pollTxStatusUntilFinal,
@@ -52,23 +53,6 @@ import {
   validateHlSigningPayload,
 } from './hlOrder'
 import type { RecentAction } from './types'
-
-// EVM chains that use nonce-based transaction ordering
-const EVM_CHAINS = new Set<string>([
-  'Ethereum',
-  'BSC',
-  'Polygon',
-  'Avalanche',
-  'Arbitrum',
-  'Optimism',
-  'Base',
-  'Blast',
-  'Zksync',
-  'Mantle',
-  'CronosChain',
-  'Hyperliquid',
-  'Sei',
-])
 
 const ERC20_TRANSFER_SELECTOR = '0xa9059cbb'
 const ERC20_TRANSFER_ABI = parseAbi(['function transfer(address to, uint256 value)'])
@@ -352,13 +336,11 @@ function discloseSwapTokenContracts(
   return `${sell}→${buy}${halves.provider}`
 }
 
-// `Set<string>.has()` returns a plain boolean, so it never narrows `Chain` down to
-// the `EvmChain` union that `getEvmRpcUrl` takes. This predicate keeps membership
-// byte-identical to the set above rather than delegating to `isChainOfKind(chain,
-// 'evm')`: the canonical chain-kind record also classifies Robinhood as EVM, and
-// switching would newly route it through nonce locking, nonce patching and gas
-// bumping. That is a money-path change and does not belong in a typing fix.
-const isEvmChain = (chain: Chain): chain is EvmChain => EVM_CHAINS.has(chain)
+// Every chain the shared chain-kind record classifies as EVM gets nonce locking,
+// nonce patching, gas bumping and the multi-leg sequencer. A hand-maintained
+// list used to sit here and had drifted from `EvmChain` (Robinhood was missing,
+// #2356); deriving the predicate keeps the executor in step with the SDK.
+const isEvmChain = (chain: Chain): chain is EvmChain => isChainOfKind(chain, 'evm')
 
 type AccountCoin = {
   chain: Chain
