@@ -117,6 +117,15 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(reactNativeEntry.buildYieldActionScanRequests).toBe(stakekit.buildYieldActionScanRequests)
   })
 
+  it('re-exports the StakeKit action validators by identity', async () => {
+    const stakekit = await import('../../../../src/tools/defi/stakekit')
+
+    expect(reactNativeEntry.validateStakekitActionAddress).toBe(stakekit.validateStakekitActionAddress)
+    expect(reactNativeEntry.validateStakekitActionInput).toBe(stakekit.validateStakekitActionInput)
+    expect(reactNativeEntry.validateStakekitActionInput(`0x${'a'.repeat(40)}`, '1')).toBeNull()
+    expect(reactNativeEntry.validateStakekitActionInput('0xdeadbeef', '1')).toMatch(/Invalid 0x-prefixed address/)
+  })
+
   it.each([
     'chunkStakekitBalanceQueries',
     'fetchAllStakekitBalances',

@@ -649,6 +649,8 @@ export {
   fetchAllStakekitBalances,
   fetchStakekitBalancesBatch,
   STAKEKIT_BALANCE_QUERIES_PER_REQUEST,
+  validateStakekitActionAddress,
+  validateStakekitActionInput,
 } from '../../tools/defi'
 export {
   buildGlifRedeemSticnt,

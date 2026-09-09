@@ -1254,6 +1254,8 @@ export {
   USDC_PAYMENT_CHAINS,
   USDC_PAYMENT_DECIMALS,
   utxoFeeRate,
+  validateStakekitActionAddress,
+  validateStakekitActionInput,
   VerifierClient,
   yieldNetworkToCanonicalChain,
 } from './tools'

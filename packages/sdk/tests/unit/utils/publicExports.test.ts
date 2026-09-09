@@ -5,6 +5,8 @@ import * as isValidTokenIdModule from '@vultisig/core-chain/utils/isValidTokenId
 import { describe, expect, expectTypeOf, it } from 'vitest'
 
 import * as sdk from '../../../src/index'
+import * as tools from '../../../src/tools'
+import * as stakekit from '../../../src/tools/defi/stakekit'
 import * as threeJane from '../../../src/tools/defi/threeJane'
 import * as dangerousAddresses from '../../../src/utils/dangerousAddresses'
 import {
@@ -26,6 +28,23 @@ const dangerousAddressCanonicalExports = [
 ] as const
 
 describe('@vultisig/sdk public exports', () => {
+  it('re-exports StakeKit action validators from root and tools by canonical identity', () => {
+    expect(sdk.validateStakekitActionAddress).toBe(stakekit.validateStakekitActionAddress)
+    expect(sdk.validateStakekitActionInput).toBe(stakekit.validateStakekitActionInput)
+    expect(tools.validateStakekitActionAddress).toBe(stakekit.validateStakekitActionAddress)
+    expect(tools.validateStakekitActionInput).toBe(stakekit.validateStakekitActionInput)
+
+    expect(sdk.validateStakekitActionAddress(`0x${'a'.repeat(40)}`)).toBeNull()
+    expect(sdk.validateStakekitActionAddress(`0x${'b'.repeat(64)}`)).toBeNull()
+    expect(sdk.validateStakekitActionAddress('cosmos1abc')).toBeNull()
+    expect(sdk.validateStakekitActionAddress('0xdeadbeef')).toMatch(/Invalid 0x-prefixed address/)
+    expect(sdk.validateStakekitActionInput(`0x${'a'.repeat(40)}`, '1.25')).toBeNull()
+
+    for (const amount of ['0', '-1', '1e3', ' 1 ']) {
+      expect(sdk.validateStakekitActionInput(`0x${'a'.repeat(40)}`, amount)).toMatch(/positive plain decimal/)
+    }
+  })
+
   it('re-exports Blockaid EVM chain canonicals by identity', () => {
     expect(sdk.blockaidEvmChain).toBe(blockaidChains.blockaidEvmChain)
     expect(sdk.blockaidSupportedEvmChains).toBe(blockaidChains.blockaidSupportedEvmChains)
