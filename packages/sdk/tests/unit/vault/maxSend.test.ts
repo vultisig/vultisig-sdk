@@ -1,10 +1,10 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { mockGetSendFeeEstimate, mockGetPublicKey, mockIsValidAddress } = vi.hoisted(() => ({
+const { mockGetSendFeeEstimate, mockGetPublicKey, mockIsValidRecipient } = vi.hoisted(() => ({
   mockGetSendFeeEstimate: vi.fn(),
   mockGetPublicKey: vi.fn(),
-  mockIsValidAddress: vi.fn(),
+  mockIsValidRecipient: vi.fn(),
 }))
 
 vi.mock('@vultisig/core-mpc/keysign/send/getSendFeeEstimate', () => ({
@@ -13,8 +13,8 @@ vi.mock('@vultisig/core-mpc/keysign/send/getSendFeeEstimate', () => ({
 vi.mock('@vultisig/core-chain/publicKey/getPublicKey', () => ({
   getPublicKey: mockGetPublicKey,
 }))
-vi.mock('@vultisig/core-chain/utils/isValidAddress', () => ({
-  isValidAddress: mockIsValidAddress,
+vi.mock('@vultisig/core-chain/utils/isValidRecipient', () => ({
+  isValidRecipient: mockIsValidRecipient,
 }))
 vi.mock('@vultisig/mpc-types', () => ({
   getMpcEngine: vi.fn(),
@@ -25,7 +25,7 @@ import { VaultBase } from '@/vault/VaultBase'
 describe('VaultBase.getMaxSendAmount', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockIsValidAddress.mockReturnValue(true)
+    mockIsValidRecipient.mockReturnValue(true)
     mockGetPublicKey.mockReturnValue({ __mock: 'publicKey' })
   })
 
@@ -67,5 +67,31 @@ describe('VaultBase.getMaxSendAmount', () => {
     expect(getBalance).toHaveBeenCalledWith(Chain.Ethereum, tokenId)
     expect(getBalance).toHaveBeenCalledWith(Chain.Ethereum)
     expect(result).toEqual({ balance: tokenBalance, fee, maxSendable: tokenBalance })
+  })
+
+  it('rejects an off-curve Solana recipient before fetching balances', async () => {
+    const getBalance = vi.fn()
+    mockIsValidRecipient.mockReturnValue(false)
+
+    const vault = Object.create(VaultBase.prototype) as VaultBase
+    Object.assign(vault as object, {
+      wasmProvider: { getWalletCore: vi.fn().mockResolvedValue({ __mock: 'walletCore' }) },
+      balanceService: { getBalance },
+    })
+
+    await expect(
+      vault.getMaxSendAmount({
+        coin: {
+          chain: Chain.Solana,
+          address: 'GmaDrppBC7P5ARKV8g3djiwP89vz1jLK23V2GBjuAEGB',
+          decimals: 9,
+          ticker: 'SOL',
+        },
+        receiver: 'BnJQssQwsYPcNb2RrW5SP1kVxijMqsA9VVQX1U1p4kkp',
+      })
+    ).rejects.toThrow(/Invalid receiver address for chain Solana/)
+
+    expect(getBalance).not.toHaveBeenCalled()
+    expect(mockGetSendFeeEstimate).not.toHaveBeenCalled()
   })
 })

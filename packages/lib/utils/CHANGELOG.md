@@ -1,5 +1,13 @@
 # @vultisig/lib-utils
 
+## 0.10.7
+
+### Patch Changes
+
+- [#2352](https://github.com/vultisig/vultisig-sdk/pull/2352) [`341df52`](https://github.com/vultisig/vultisig-sdk/commit/341df52d63858f41172be2f61bde7c4ca694ad71) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject missing and malformed amounts before constructing Tron TRC20, Solana, Polkadot, Bittensor and Ripple issued-currency signing inputs. Preserve explicit zero trust-line limits and encode Solana amounts as unsigned uint64 values without overflow.
+
+- [#2341](https://github.com/vultisig/vultisig-sdk/pull/2341) [`ea2e6b7`](https://github.com/vultisig/vultisig-sdk/commit/ea2e6b7f4fc005d93d0a31741f521d7539d3104e) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject negative amounts before hexadecimal encoding so EVM and Cardano transaction inputs cannot silently contain empty amount bytes. Preserve existing encodings for non-negative values, including unsigned Long quantities.
+
 ## 0.10.6
 
 ### Patch Changes

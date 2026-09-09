@@ -1,9 +1,11 @@
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
+import * as blockaidChains from '@vultisig/core-chain/security/blockaid/evmChains'
 import * as isValidTokenIdModule from '@vultisig/core-chain/utils/isValidTokenId'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, expectTypeOf, it } from 'vitest'
 
 import * as sdk from '../../../src/index'
+import * as threeJane from '../../../src/tools/defi/threeJane'
 import * as dangerousAddresses from '../../../src/utils/dangerousAddresses'
 import {
   buildSignAminoKeysignPayload as canonicalBuildSignAminoKeysignPayload,
@@ -24,6 +26,12 @@ const dangerousAddressCanonicalExports = [
 ] as const
 
 describe('@vultisig/sdk public exports', () => {
+  it('re-exports Blockaid EVM chain canonicals by identity', () => {
+    expect(sdk.blockaidEvmChain).toBe(blockaidChains.blockaidEvmChain)
+    expect(sdk.blockaidSupportedEvmChains).toBe(blockaidChains.blockaidSupportedEvmChains)
+    expectTypeOf<sdk.BlockaidSupportedEvmChain>().toEqualTypeOf<blockaidChains.BlockaidSupportedEvmChain>()
+  })
+
   it.each(dangerousAddressCanonicalExports)('re-exports dangerous-address canonical %s by identity', name => {
     expect(sdk[name]).toBe(dangerousAddresses[name])
   })
@@ -244,6 +252,15 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.getNoonDepositTxPlan).toBe('function')
     expect(typeof sdk.readNoonVaultState).toBe('function')
     expect(typeof sdk.fetchNoonUsdcVaultMetrics).toBe('function')
+  })
+
+  it('exports the ThreeJane USDC helper values (not just their types) from the root SDK entrypoint', () => {
+    expect(sdk.buildThreeJaneSupplyUsdc).toBe(threeJane.buildThreeJaneSupplyUsdc)
+    expect(sdk.THREE_JANE_ADDRESSES).toBe(threeJane.THREE_JANE_ADDRESSES)
+    // Aliased to avoid colliding with the CCTP bridge's own `parseUsdcAmount`
+    // export, which is also present at the root.
+    expect(sdk.parseThreeJaneUsdcAmount).toBe(threeJane.parseUsdcAmount)
+    expect(typeof sdk.parseUsdcAmount).toBe('function')
   })
 
   it('exports the sdk.decode namespace documented as the canonical bytes-oracle keystone', () => {

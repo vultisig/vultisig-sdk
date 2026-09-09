@@ -1,5 +1,63 @@
 # @vultisig/core-chain
 
+## 5.4.0
+
+### Minor Changes
+
+- [#2347](https://github.com/vultisig/vultisig-sdk/pull/2347) [`864dfcb`](https://github.com/vultisig/vultisig-sdk/commit/864dfcb375c474f5bcc6f79bf18aeb145489cc47) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Blockaid now covers Robinhood chain (4663) as `robinhood`. Transaction simulation and validation run for Robinhood dApp requests and swaps, so a Uniswap swap on Robinhood shows its balance changes on the verify screen instead of nothing. Because SwapKit's EVM source eligibility keys off Blockaid coverage, Robinhood also becomes a SwapKit source chain, with the returned router screened through the Blockaid address scan like every other covered EVM chain.
+
+- [#2343](https://github.com/vultisig/vultisig-sdk/pull/2343) [`80ba27f`](https://github.com/vultisig/vultisig-sdk/commit/80ba27f30afbeb104a8cc5738b5942467d977c9e) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Preserve requested affiliate rates and native recipient allocations on swap quotes, including explicit zero rates, without changing fees or transaction construction. The optional quote affiliate metadata is covered by the existing mutation fingerprint; older quotes retain an unknown rate.
+
+### Patch Changes
+
+- [#2341](https://github.com/vultisig/vultisig-sdk/pull/2341) [`ea2e6b7`](https://github.com/vultisig/vultisig-sdk/commit/ea2e6b7f4fc005d93d0a31741f521d7539d3104e) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject negative amounts before hexadecimal encoding so EVM and Cardano transaction inputs cannot silently contain empty amount bytes. Preserve existing encodings for non-negative values, including unsigned Long quantities.
+
+- [#2354](https://github.com/vultisig/vultisig-sdk/pull/2354) [`4fe2d97`](https://github.com/vultisig/vultisig-sdk/commit/4fe2d977cac34de6d0cf0cfefafdb6d484253a56) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject off-curve Solana wallet recipients before preparing sends or fee estimates.
+
+- [#2344](https://github.com/vultisig/vultisig-sdk/pull/2344) [`f5b79a4`](https://github.com/vultisig/vultisig-sdk/commit/f5b79a4b3ba943a1e80c4f8c01ecf1cd137a155d) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject Tron gateway errors, empty contract balance results, and JSON-RPC errors instead of treating them as zero balances or decoding error messages. Preserve legitimate zero balances and propagate read failures to maximum-send callers.
+
+- Updated dependencies [[`341df52`](https://github.com/vultisig/vultisig-sdk/commit/341df52d63858f41172be2f61bde7c4ca694ad71), [`ea2e6b7`](https://github.com/vultisig/vultisig-sdk/commit/ea2e6b7f4fc005d93d0a31741f521d7539d3104e)]:
+  - @vultisig/lib-utils@0.10.7
+
+## 5.3.0
+
+### Minor Changes
+
+- [#2325](https://github.com/vultisig/vultisig-sdk/pull/2325) [`7c95286`](https://github.com/vultisig/vultisig-sdk/commit/7c9528622702a1e6f10cd5ff72017779d25e509a) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - EVM fee quotes now size the gas reserve from the transaction itself instead of a flat 600k floor. An aggregator swap is signed with the larger of the route's own gas and 1.5x its simulation (1.5x the 600k default when it cannot be simulated, e.g. a token route quoted before its allowance exists); a THORChain or Maya swap deposit (any transaction carrying the native swap payload) takes a fixed 120k; a plain transfer, including a memo-carrying vault deposit that carries no swap payload, takes its simulation raised to a per-chain floor with no inflation (when it cannot be simulated, that floor plus the intrinsic cost of its memo calldata); a dApp or other contract call keeps 1.5x headroom over its simulation. Base-fee headroom drops from 50% to 20% (32% for swaps), legacy-priced chains (BSC) are priced from `eth_gasPrice` with no tip, and the tip is the highest recent 5th-percentile reward from `eth_feeHistory`, capped at the gas price, with per-chain floors (1 gwei on tip-auction chains, 30 gwei on Polygon, 20 wei on OP-stack rollups) and a zero tip on Arbitrum, Mantle and Robinhood.
+
+  `getEvmFeeQuote`'s `minimumGasLimit` now only raises the value that stands in for a failed simulation and never a successful estimate. `getEvmTransferGasLimit`, `getEvmContractCallGasLimit` and `evmRouterDepositGasLimit` are exported from `@vultisig/core-chain/tx/fee/evm/evmGasLimit`, and `getEvmGasPrice` from `@vultisig/core-chain/tx/fee/evm/gasPrice`.
+
+- [#2328](https://github.com/vultisig/vultisig-sdk/pull/2328) [`741272f`](https://github.com/vultisig/vultisig-sdk/commit/741272f8d3872afdf12d9487d2121dee04c2f363) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Move `slippage_bps` on a native swap quote from the top level into `fees`, where THORChain and MayaChain actually send it.
+
+  `NativeSwapQuote.slippage_bps` was never populated: THORChain's `QuoteSwapResponse` has no such property, and its `QuoteFees` schema declares `slippage_bps` as a required integer. MayaChain's spec agrees. Because the field was optional, every consumer reading it silently got `undefined` rather than a compile error — which is how the price-impact row went missing in the desktop app and extension.
+
+  `NativeSwapFees` now carries `slippage_bps?: number`, and the phantom top-level field is gone so the wrong read cannot compile. This is a type-only change; `getNativeSwapQuote` already spreads the response through verbatim, so no runtime behavior changes.
+
+  Note that `slippage_bps` is the price impact alone and is not interchangeable with the neighbouring `total_bps`, which is the total fee relative to the amount out.
+
+- [#2331](https://github.com/vultisig/vultisig-sdk/pull/2331) [`982d464`](https://github.com/vultisig/vultisig-sdk/commit/982d4645467272f32e33a2df20883c1a7171a7ee) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Publish the SwapKit swap-fee work to the core packages that hold it. [#2315](https://github.com/vultisig/vultisig-sdk/issues/2315) landed
+  `swap_fee` on `SwapKitSwapPayload`, the `getKeysignSwapFeeFields` reader, and the
+  `sub_provider` route tag in `@vultisig/core-mpc`, plus the transfer-route fee
+  resolution in `@vultisig/core-chain` — but its changeset named only
+  `@vultisig/sdk`, so neither core package was versioned and the release skipped
+  both. Clients that consume `@vultisig/core-mpc` directly, rather than through
+  `@vultisig/sdk`, cannot reach the new fee group or its reader until these are
+  republished.
+
+- [#2339](https://github.com/vultisig/vultisig-sdk/pull/2339) [`95cf397`](https://github.com/vultisig/vultisig-sdk/commit/95cf39722b8a4d3e197b26bcef9983ecef6c3703) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(solana): verified / unverified / scam classification for SPL tokens, and verified-only discovery
+
+  Solana discovery kept a mint when a price id could be found for it. That hid legitimate tokens that simply had no CoinGecko listing, and did nothing about the airdropped counterfeits and zero-decimal spam a Solana wallet accumulates — a priced impostor was auto-added, an unpriced real token was not, and neither carried a label.
+
+  `findSolanaCoins` now returns **verified mints only**, priced or not, mirroring TON. Zero-balance token accounts are skipped, Jupiter's search endpoint answers for a hundred mints per call instead of one call per token, CoinGecko ids come from its on-chain multi-token endpoint thirty mints per call, decimals come from the token account itself, and curated metadata wins for tokens we ship ourselves. When Jupiter cannot be reached, listed mints are still discovered from the registry's metadata; a failed price-id lookup, by contrast, fails the round instead of saving the token without a price id for good. Unverified and scam mints can still be added by hand, where the UI labels them.
+
+  Verification lives in `@vultisig/core-chain/chains/solana/spl/verification`. The registry of verified mints (`chains/solana/spl/verifiedRegistry`) merges our curated Solana tokens with Jupiter's verified list, fetched once an hour and degrading to the curated list alone when unreachable. `resolveSolanaTokenVerification` is pure: a listed mint — or one Jupiter itself flags verified — is `verified`; an unlisted mint is `scam` when its symbol or name collapses onto a verified token's, and `unverified` otherwise. `getSolanaTokenVerification({ id, ticker })` is the one-call form for token rows and approval cards; a listed mint is answered from the registry alone, any other mint is judged by what it claims on Jupiter, falling back to the local ticker offline. The tiers are the chain-agnostic `TokenVerification` type.
+
+  The symbol normaliser behind the counterfeit heuristic moves to `@vultisig/core-chain/coin/tokenSymbol` as `normalizeTokenSymbol`; `chains/ton/jetton/symbol` keeps exporting `normalizeJettonSymbol` as an alias. `coin/jupiter/api` gains `getJupiterTokens` (batched, keyed by mint, filtered to the mints asked for) and `getJupiterVerifiedTokens`, `SolanaJupiterToken` carries Jupiter's `isVerified` flag and `tags`, and `coin/coingecko/getCoingeckoId` gains the batched `getSolanaCoingeckoIds`. `getSolanaTokenMetadata` now fails with a clear error for a mint Jupiter does not index instead of a `TypeError`.
+
+### Patch Changes
+
+- [#2002](https://github.com/vultisig/vultisig-sdk/pull/2002) [`2e1ed70`](https://github.com/vultisig/vultisig-sdk/commit/2e1ed704ccd0a360eaf760f1258c7cd8a4401e22) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Net Solana Blockaid simulation diffs by resolved mint (native SOL and the WSOL mint share a bucket) before classifying the result as a `swap` or `transfer`. The wrap-then-spend case previously surfaced as a bogus "SOL to WSOL swap" whose destination amount was only the token account's rent-exempt residual, at up to ~29x smaller than the amount actually leaving. The reverse unwrap/close-account case now rejects the receive-only result instead of inventing a transfer. The parser now nets same-mint legs and only classifies as a swap when two distinct mints remain.
+
 ## 5.2.0
 
 ### Minor Changes

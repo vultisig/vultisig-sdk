@@ -34,7 +34,7 @@
  * distinguishing P2SH-wrapped vs native inputs) stays correct without
  * touching this file.
  *
- * Dust is intentionally NOT special-cased here: `buildUtxoSendTx`'s
+ * Change dust is intentionally NOT special-cased here: `buildUtxoSendTx`'s
  * `serializeOutputs` already folds a change output below the chain's
  * `dustLimit` into the fee (see `hasChange` there), so a selection that
  * lands with `0 < change <= dustLimit` still produces a valid,
@@ -101,7 +101,7 @@ export function selectUtxoInputs(opts: SelectUtxoInputsOptions): SelectUtxoInput
   if (opts.sendMax) {
     const inputs = [...opts.utxos]
     const total = inputs.reduce((sum, u) => sum + u.value, 0n)
-    const fee = estimateUtxoTxFee(opts.chain, inputs.length, opts.feeRate, opts.opReturnData)
+    const fee = estimateUtxoTxFee(opts.chain, inputs.length, opts.feeRate, opts.opReturnData, opts.amount)
     if (total < opts.amount + fee) throw insufficientFundsError(total, opts.amount, fee)
     return { inputs, fee, change: total - opts.amount - fee }
   }
@@ -113,12 +113,12 @@ export function selectUtxoInputs(opts: SelectUtxoInputsOptions): SelectUtxoInput
   for (const utxo of sorted) {
     selected.push(utxo)
     selectedTotal += utxo.value
-    const fee = estimateUtxoTxFee(opts.chain, selected.length, opts.feeRate, opts.opReturnData)
+    const fee = estimateUtxoTxFee(opts.chain, selected.length, opts.feeRate, opts.opReturnData, opts.amount)
     if (selectedTotal >= opts.amount + fee) {
       return { inputs: selected, fee, change: selectedTotal - opts.amount - fee }
     }
   }
 
-  const fee = estimateUtxoTxFee(opts.chain, selected.length, opts.feeRate, opts.opReturnData)
+  const fee = estimateUtxoTxFee(opts.chain, selected.length, opts.feeRate, opts.opReturnData, opts.amount)
   throw insufficientFundsError(selectedTotal, opts.amount, fee)
 }

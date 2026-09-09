@@ -663,6 +663,13 @@ export type {
   ThreeJaneTranche,
   ThreeJaneTxStep,
 } from '../../tools/defi/threeJane'
+// Aliased to avoid colliding with the CCTP bridge's `parseUsdcAmount` above —
+// both re-export the same underlying `./parse/usdcAmount` helper.
+export {
+  buildThreeJaneSupplyUsdc,
+  parseUsdcAmount as parseThreeJaneUsdcAmount,
+  THREE_JANE_ADDRESSES,
+} from '../../tools/defi/threeJane'
 
 // Cosmos staking + distribution module (LCD queries — read-only,
 // vault-free, generic over every ibcEnabled cosmos chain). Mirrors the
@@ -1085,6 +1092,10 @@ export {
   UTXO_DANGEROUS_ADDRESSES,
   XRP_DANGEROUS_ADDRESSES,
 } from '../../utils/dangerousAddresses'
+
+// Blockaid supported-chain metadata
+export type { BlockaidSupportedEvmChain } from '@vultisig/core-chain/security/blockaid/evmChains'
+export { blockaidEvmChain, blockaidSupportedEvmChains } from '@vultisig/core-chain/security/blockaid/evmChains'
 
 // Storage
 export { MemoryStorage } from '../../storage/MemoryStorage'

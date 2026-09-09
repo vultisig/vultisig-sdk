@@ -48,7 +48,7 @@ type UtxoScriptKind = 'p2pkh' | 'p2wpkh' | 'p2sh'
 
 type UtxoChainSpec = {
   scriptType: UtxoScriptKind
-  /** Minimum output value in base units; smaller outputs are dust */
+  /** Change-disposal threshold in base units; recipient minima also depend on the recipient script type. */
   dustLimit: bigint
   /** BIP44/84 slip44 coin type — matches vultisig address derivation */
   slip44: number
@@ -69,6 +69,41 @@ const UTXO_SPECS: Record<UtxoChainName, UtxoChainSpec> = {
 }
 
 export const getUtxoChainSpec = (chain: UtxoChainName): UtxoChainSpec => UTXO_SPECS[chain]
+
+// Default node dust policy for the recipient scripts this builder supports.
+// These are relay-policy minima, not consensus rules or a guarantee that a node
+// with custom policy will accept the transaction. Keep change disposal separate.
+// BTC/LTC: (output size + 148 legacy / 67 witness input bytes) * dust fee / 1000.
+// https://github.com/bitcoin/bitcoin/blob/v30.0/src/policy/policy.cpp#L22-L60 (3000 sat/kvB)
+// https://github.com/litecoin-project/litecoin/blob/v0.21.4/src/policy/policy.h#L44-L49 (30000 litoshi/kvB)
+// BCH/Dash: 546 P2PKH, 540 P2SH at their default dust rates.
+// https://github.com/bitcoin-cash-node/bitcoin-cash-node/blob/v29.0.0/src/policy/policy.cpp#L19-L40
+// https://github.com/dashpay/dash/blob/v23.1.8/src/policy/policy.cpp#L26-L46
+// DOGE: fixed hard floor; outputs below the soft floor also require a fee surcharge.
+// https://github.com/dogecoin/dogecoin/blob/v1.14.9/src/policy/policy.h#L65-L81
+// ZEC: 3 * floor(100 * (output size + 148) / 1000), hence 54 for both scripts.
+// https://github.com/zcash/zcash/blob/v6.20.0/src/primitives/transaction.cpp#L67-L80
+const UTXO_RECIPIENT_DUST_LIMITS: Record<UtxoChainName, Partial<Record<UtxoScriptKind, bigint>>> = {
+  Bitcoin: { p2pkh: 546n, p2sh: 540n, p2wpkh: 294n },
+  Litecoin: { p2pkh: 5_460n, p2sh: 5_400n, p2wpkh: 2_940n },
+  Dogecoin: { p2pkh: 100_000n, p2sh: 100_000n },
+  'Bitcoin-Cash': { p2pkh: 546n, p2sh: 540n },
+  Dash: { p2pkh: 546n, p2sh: 540n },
+  Zcash: { p2pkh: 54n, p2sh: 54n },
+}
+
+function getRecipientDustLimit(chain: UtxoChainName, scriptType: UtxoScriptKind): bigint {
+  const minimum = UTXO_RECIPIENT_DUST_LIMITS[chain][scriptType]
+  if (minimum === undefined) throw new Error(`unsupported ${chain} recipient script: ${scriptType}`)
+  return minimum
+}
+
+function getRecipientDustFee(chain: UtxoChainName, amount?: bigint): bigint {
+  // DOGE charges one soft-dust fee per spendable output below 0.01 DOGE.
+  // Change <= 0.01 DOGE is already suppressed, and OP_RETURN is exempt.
+  // https://github.com/dogecoin/dogecoin/blob/v1.14.9/src/dogecoin-fees.cpp#L67-L106
+  return chain === 'Dogecoin' && amount !== undefined && amount > 0n && amount < 1_000_000n ? 1_000_000n : 0n
+}
 
 /**
  * Per-chain minimum relay fee rate, in that chain's own base-unit per vByte
@@ -605,7 +640,8 @@ function buildOpReturnScript(data: Uint8Array): Uint8Array {
 /**
  * Estimate the network fee (base units) `buildUtxoSendTx` will charge for a
  * tx with `inputCount` inputs at `feeRate` sats/byte, optionally carrying an
- * OP_RETURN memo. Factored out of `buildUtxoSendTx` so a coin-selection
+ * OP_RETURN memo. Supply `recipientAmount` to include Dogecoin's soft-dust
+ * surcharge when sending less than 0.01 DOGE. Factored out of `buildUtxoSendTx` so a coin-selection
  * layer (see `select.ts`) can predict the SAME fee the builder will compute
  * for a given input count — selection and build must agree on the formula,
  * or "insufficient funds" / change-below-dust outcomes can diverge between
@@ -615,7 +651,8 @@ export function estimateUtxoTxFee(
   chain: UtxoChainName,
   inputCount: number,
   feeRate: number,
-  opReturnData?: string
+  opReturnData?: string,
+  recipientAmount?: bigint
 ): bigint {
   const spec = UTXO_SPECS[chain]
   if (!spec) throw new Error(`unsupported UTXO chain: ${chain as string}`)
@@ -629,7 +666,7 @@ export function estimateUtxoTxFee(
   // UTXO-03: raise to chain min-relay-fee floor (most acute on Dogecoin) so
   // selectUtxoInputs and buildUtxoSendTx agree on the same effective rate.
   const effectiveFeeRate = Math.max(feeRate, UTXO_MIN_FEE_RATE[chain])
-  const sizeFee = BigInt(Math.ceil(txSize * effectiveFeeRate))
+  const sizeFee = BigInt(Math.ceil(txSize * effectiveFeeRate)) + getRecipientDustFee(chain, recipientAmount)
   // UTXO-04: canonical ZIP-317 action-count formula with actual output sizes.
   const zip317OutputSizes = opReturnScript ? [34n, 34n, BigInt(opReturnBytes)] : [34n, 34n]
   const zip317Floor = chain === 'Zcash' ? getZcashConventionalFee({ inputCount, outputSizes: zip317OutputSizes }) : 0n
@@ -915,6 +952,13 @@ export function buildUtxoSendTx(opts: BuildUtxoSendOptions): UtxoTxBuilderResult
     )
   }
 
+  const recipientMinimum = getRecipientDustLimit(opts.chain, toDec.type)
+  if (opts.amount < recipientMinimum) {
+    throw new Error(
+      `amount ${opts.amount} is below the ${opts.chain} ${toDec.type} recipient minimum ${recipientMinimum}`
+    )
+  }
+
   // Build the OP_RETURN script up front (throws early on >80 bytes) so its size
   // feeds fee calc and its bytes feed serializeOutputs / the sighash digest.
   const opReturnScript =
@@ -929,7 +973,7 @@ export function buildUtxoSendTx(opts: BuildUtxoSendOptions): UtxoTxBuilderResult
   // silently produces a stuck/non-relayable tx (most acute on Dogecoin, whose
   // min relay fee is ~100x Bitcoin's). Raise — never lower — to the floor.
   const effectiveFeeRate = Math.max(opts.feeRate, UTXO_MIN_FEE_RATE[opts.chain])
-  const sizeFee = BigInt(Math.ceil(txSize * effectiveFeeRate))
+  const sizeFee = BigInt(Math.ceil(txSize * effectiveFeeRate)) + getRecipientDustFee(opts.chain, opts.amount)
   // UTXO-04: use the canonical ZIP-317 action-count formula (max of input vs
   // output actions) instead of a local input-only count, so a large memo or
   // extra outputs aren't under-counted. Output sizes mirror the same

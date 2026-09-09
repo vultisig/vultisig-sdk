@@ -21,6 +21,7 @@ const packedDependencyFields = ['dependencies', 'optionalDependencies']
 const coordinatedSdkPackageNames = new Set([
   '@vultisig/core-chain',
   '@vultisig/core-mpc',
+  '@vultisig/lib-utils',
   '@vultisig/mpc-types',
 ])
 
