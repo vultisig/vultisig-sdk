@@ -23,8 +23,9 @@ import { assetHubRpcUrl, polkadotRpcUrl } from '@vultisig/core-chain/chains/polk
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import bs58 from 'bs58'
 
-// 1 DOT = 1e10 Planck. Same on relay chain + Asset Hub.
-export const DOT_DECIMALS = 10
+import { formatDot } from './polkadotFormat'
+
+export { DOT_DECIMALS, formatDot } from './polkadotFormat'
 
 const polkadotSs58Prefix = 0
 const ss58AddressByteLength = 35
@@ -112,15 +113,6 @@ const decodePolkadotPublicKey = (address: string): Uint8Array => {
     throw new Error('Invalid SS58 checksum')
   }
   return payload.subarray(1)
-}
-
-/** Format a raw Planck u128 as a human DOT string, trimming trailing fractional zeros. */
-export const formatDot = (rawPlanck: bigint): string => {
-  const divisor = 10n ** BigInt(DOT_DECIMALS)
-  const whole = rawPlanck / divisor
-  const frac = rawPlanck % divisor
-  if (frac === 0n) return whole.toString()
-  return `${whole}.${frac.toString().padStart(DOT_DECIMALS, '0').replace(/0+$/, '')}`
 }
 
 /** Read a little-endian u128 (16 bytes) out of a hex string at a byte offset. */

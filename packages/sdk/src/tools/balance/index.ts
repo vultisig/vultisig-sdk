@@ -6,6 +6,10 @@
  * nothing here signs or broadcasts.
  */
 
+// EVM
+export type { EvmBalance, GetEvmBalancesParams } from '../evm'
+export { getEvmBalances } from '../evm'
+
 // XRP
 export type { XrpBalance } from './otherBalance'
 export { getXrpBalance } from './otherBalance'

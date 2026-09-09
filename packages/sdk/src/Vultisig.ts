@@ -34,6 +34,11 @@ import type { SdkConfigOptions, SdkContext } from './context/SdkContext'
 import { SdkContextBuilder, type SdkContextBuilderOptions } from './context/SdkContextBuilder'
 import { UniversalEventEmitter } from './events/EventEmitter'
 import type { SdkEvents } from './events/types'
+import {
+  getVultisigInstanceNamespaces,
+  type VultisigInstanceNamespaces,
+  type VultisigInstanceNamespaceShape,
+} from './instanceNamespaces'
 import { ChainDiscoveryService } from './seedphrase/ChainDiscoveryService'
 import { SeedphraseValidator } from './seedphrase/SeedphraseValidator'
 import type {
@@ -134,7 +139,9 @@ export type VultisigConfig = {
  * sdk.dispose()
  * ```
  */
-export class Vultisig extends UniversalEventEmitter<SdkEvents> {
+export class Vultisig<
+  TNamespaces extends VultisigInstanceNamespaceShape = VultisigInstanceNamespaces,
+> extends UniversalEventEmitter<SdkEvents> {
   private _initialized = false
   private _disposed = false
   private initializationPromise?: Promise<void>
@@ -168,6 +175,30 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     return this.context.pushNotificationService
   }
 
+  private get helperNamespaces(): TNamespaces {
+    return getVultisigInstanceNamespaces<TNamespaces>(this)
+  }
+
+  /** Read-only balance helpers (`sdk.balance.*`). */
+  public get balance(): TNamespaces['balance'] {
+    return this.helperNamespaces.balance
+  }
+
+  /** Unsigned bridge helpers (`sdk.bridge.*`). */
+  public get bridge(): TNamespaces['bridge'] {
+    return this.helperNamespaces.bridge
+  }
+
+  /** Cosmos helper groups (`sdk.cosmos.*`). */
+  public get cosmos(): TNamespaces['cosmos'] {
+    return this.helperNamespaces.cosmos
+  }
+
+  /** Canonical transaction decoders (`sdk.decode.*`). */
+  public get decode(): TNamespaces['decode'] {
+    return this.helperNamespaces.decode
+  }
+
   /**
    * DeFi protocol primitives (`sdk.defi.*`).
    *
@@ -175,6 +206,26 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    */
   get defi(): Defi {
     return defi
+  }
+
+  /** Gas and fee helpers (`sdk.gas.*`). */
+  public get gas(): TNamespaces['gas'] {
+    return this.helperNamespaces.gas
+  }
+
+  /** Unsigned transaction preparation helpers (`sdk.prep.*`). */
+  public get prep(): TNamespaces['prep'] {
+    return this.helperNamespaces.prep
+  }
+
+  /** Price helpers (`sdk.price.*`). */
+  public get price(): TNamespaces['price'] {
+    return this.helperNamespaces.price
+  }
+
+  /** Read-only and unsigned swap helpers (`sdk.swap.*`). */
+  public get swap(): TNamespaces['swap'] {
+    return this.helperNamespaces.swap
   }
 
   /**

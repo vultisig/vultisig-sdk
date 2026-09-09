@@ -48,11 +48,14 @@ import { NativeWalletCore } from '@vultisig/walletcore-native'
 import { configureDefaultStorage } from '../../context/defaultStorage'
 import { configureWasm } from '../../context/wasmRuntime'
 import { configureCrypto } from '../../crypto'
+import { configureVultisigInstanceNamespaces } from '../../instanceNamespaces'
 import * as cosmos from '../../tools/cosmos'
 import * as evm from '../../tools/evm'
 import type { prepareRawEvmTxFromKeys as PrepareRawEvmTxFromKeys } from '../../tools/prep/rawEvm'
 import * as token from '../../tools/token'
+import { Vultisig as BaseVultisig } from '../../Vultisig'
 import { ReactNativeCrypto } from './crypto'
+import { type ReactNativeVultisigInstanceNamespaces, reactNativeVultisigInstanceNamespaces } from './instanceNamespaces'
 import { ReactNativeStorage } from './storage'
 
 // Register native MPC engine
@@ -312,7 +315,9 @@ export { FastVault, hasServer, isServer } from '../../vault'
 export type { VaultImportConflictResolution, VaultImportOptions } from '../../VaultManager'
 export { VaultManager } from '../../VaultManager'
 export type { VultisigConfig } from '../../Vultisig'
-export { Vultisig } from '../../Vultisig'
+export class Vultisig extends BaseVultisig<ReactNativeVultisigInstanceNamespaces> {}
+
+configureVultisigInstanceNamespaces(Vultisig, reactNativeVultisigInstanceNamespaces)
 
 // RN-safe fetch-based RPC helpers (no Node net/tls/http/ws dependency)
 export type { JsonRpcCallOptions, JsonRpcParams, JsonRpcResponse, QueryUrlOptions } from './rpcFetch'

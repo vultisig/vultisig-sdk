@@ -1,6 +1,6 @@
 import { create } from '@bufbuild/protobuf'
 import type { WalletCore } from '@trustwallet/wallet-core'
-import { Chain, UtxoChain } from '@vultisig/core-chain/Chain'
+import { Chain } from '@vultisig/core-chain/Chain'
 import { utxoChainScriptType } from '@vultisig/core-chain/chains/utxo/tx/UtxoScriptType'
 import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
@@ -15,6 +15,9 @@ import { Buffer } from 'buffer'
 
 import { getWalletCore } from '../../context/wasmRuntime'
 import type { VaultIdentity } from './types'
+import { CONSOLIDATE_CHAINS, type ConsolidateChain } from './utxoConsolidateChains'
+
+export { CONSOLIDATE_CHAINS, type ConsolidateChain } from './utxoConsolidateChains'
 
 /**
  * Chains that support UTXO consolidation. Mirrors the mcp-ts
@@ -23,16 +26,6 @@ import type { VaultIdentity } from './types'
  * payload, so its consolidation path would diverge from the plain `utxoSpecific`
  * envelope built here.
  */
-export const CONSOLIDATE_CHAINS = [
-  UtxoChain.Bitcoin,
-  UtxoChain.Litecoin,
-  UtxoChain.Dogecoin,
-  UtxoChain.BitcoinCash,
-  UtxoChain.Dash,
-] as const
-
-export type ConsolidateChain = (typeof CONSOLIDATE_CHAINS)[number]
-
 const isConsolidateChain = (chain: Chain): chain is ConsolidateChain =>
   (CONSOLIDATE_CHAINS as readonly Chain[]).includes(chain)
 

@@ -210,6 +210,38 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.DEFAULT_CHAINS).toBe(rn.defaultChains)
   })
 
+  it('exposes stable platform-safe helper namespaces on Vultisig instances', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const sdk = new rn.Vultisig({ autoInit: false })
+
+    expect(sdk.initialized).toBe(false)
+    expect(sdk.balance).toBe(sdk.balance)
+    expect(sdk.bridge).toBe(sdk.bridge)
+    expect(sdk.cosmos).toBe(sdk.cosmos)
+    expect(sdk.decode).toBe(sdk.decode)
+    expect(sdk.gas).toBe(sdk.gas)
+    expect(sdk.prep).toBe(sdk.prep)
+    expect(sdk.price).toBe(sdk.price)
+    expect(sdk.swap).toBe(sdk.swap)
+
+    const [canonicalBalance, canonicalPrep] = await Promise.all([
+      import('../../../../src/tools/balance'),
+      import('../../../../src/tools/prep'),
+    ])
+    expect(Object.keys(sdk.balance).sort()).toEqual(Object.keys(canonicalBalance).sort())
+    expect(Object.keys(sdk.prep).sort()).toEqual(Object.keys(canonicalPrep).sort())
+
+    expect(sdk.balance.getEvmBalances).toBe(rn.getEvmBalances)
+    expect(sdk.bridge.buildCctpBridge).toBe(rn.buildCctpBridge)
+    expect(sdk.cosmos.gov.getCosmosGovernanceProposals).toBe(rn.getCosmosGovernanceProposals)
+    expect(sdk.decode.fromToolResult).toBe(rn.decodeFromToolResult)
+    expect(sdk.gas.compareCosts).toBe(rn.compareCosts)
+    expect(typeof sdk.prep.prepareSendTxFromKeys).toBe('function')
+    expect(sdk.prep.cosmosStaking).toBe(rn.cosmosStaking)
+    expect(sdk.price.getPrice).toBe(rn.getPrice)
+    expect(sdk.swap.findSwapQuote).toBe(rn.findSwapQuote)
+  })
+
   it('exports the ThreeJane USDC helper values (not just their types) on the RN entrypoint', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
     const threeJane = await import('../../../../src/tools/defi/threeJane')

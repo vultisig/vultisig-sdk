@@ -14,8 +14,30 @@
 // ============================================================================
 
 // Core SDK class
+import { configureVultisigInstanceNamespaces } from './instanceNamespaces'
+import * as balanceNamespace from './tools/balance'
+import * as bridgeNamespace from './tools/bridge'
+import * as cosmosNamespace from './tools/cosmos'
+import { decode as decodeNamespace } from './tools/decode'
+import * as gasNamespace from './tools/gas'
+import * as prepNamespace from './tools/prep'
+import * as priceNamespace from './tools/price'
+import * as swapNamespace from './tools/swap'
+import { Vultisig } from './Vultisig'
+
+configureVultisigInstanceNamespaces(Vultisig, {
+  balance: balanceNamespace,
+  bridge: bridgeNamespace,
+  cosmos: cosmosNamespace,
+  decode: decodeNamespace,
+  gas: gasNamespace,
+  prep: prepNamespace,
+  price: priceNamespace,
+  swap: swapNamespace,
+})
+
 export type { VaultImportConflictResolution, VaultImportOptions } from './VaultManager'
-export { Vultisig } from './Vultisig'
+export { Vultisig }
 
 // Vault management
 export type { VaultConfig, VaultSaveOptions } from './vault'
