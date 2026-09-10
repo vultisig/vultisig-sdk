@@ -66,6 +66,13 @@ export const robinhood = defineChain({
   blockExplorers: {
     default: { name: 'Blockscout', url: robinhoodBlockExplorerUrl },
   },
+  // The canonical Multicall3 is deployed on 4663 even though the public
+  // deployment registry does not list the chain: its runtime bytecode there is
+  // identical to the Ethereum and Base deployments (verified 2026-09-09). Without
+  // this entry balance discovery falls back to one eth_call per catalog token.
+  contracts: {
+    multicall3: { address: '0xca11bde05977b3631167028862be2a173976ca11' },
+  },
 })
 
 const evmChainRpcUrls: Record<EvmChain, string> = {

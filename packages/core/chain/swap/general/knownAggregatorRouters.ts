@@ -72,7 +72,10 @@ const ONE_INCH_V6_ROBINHOOD_ROUTER = '0x5a705de8982235a7fa45bb83dcacf03a211389c7
 
 // KyberSwap MetaAggregationRouterV2 — same address confirmed live 2026-07-08 on every
 // kyberSwapEnabledChains chain through aggregator-api.kyberswap.com's /routes
-// (Ethereum, BSC, Arbitrum, Optimism, Avalanche, Base, Polygon).
+// (Ethereum, BSC, Arbitrum, Optimism, Avalanche, Base, Polygon), and on Robinhood on
+// 2026-09-09: /robinhood/api/v1/routes and /route/build both returned it for USDG<->ETH
+// with buildable calldata, and eth_getCode on 4663 shows 13,724 bytes deployed there.
+// Unlike 1inch, Kyber kept its standard address on 4663, so the allowlist stays flat.
 const KYBER_STANDARD_ROUTER = '0x6131b5fae19ea4f9d964eac0408e4408b66337b5'
 
 // Official LI.FI Diamond deployment registry, read from
