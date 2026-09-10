@@ -28,6 +28,15 @@ export const solanaRebroadcastIntervalMs = 2_000
  */
 export const solanaBroadcastMaxDurationMs = 120_000
 
+/**
+ * Cap on any single RPC round trip the loop makes. The shared Solana client
+ * sets no request timeout, and a half-open socket can leave `fetch` pending
+ * for far longer than the whole broadcast budget; the deadline and wall-clock
+ * checks only run between awaits, so without this an unanswered request could
+ * hold the resolver open indefinitely. Matches the repo's default query timeout.
+ */
+export const solanaRpcTimeoutMs = 20_000
+
 const isTransientBlockhashError = (error: unknown) => isInError(error, 'Blockhash not found', 'BlockhashNotFound')
 
 // The node's bank is already past the blockhash's last valid height. A node
@@ -37,6 +46,26 @@ const isBlockHeightExceededError = (error: unknown) => isInError(error, 'block h
 const isAlreadyProcessedError = (error: unknown) => isInError(error, 'already been processed', 'AlreadyProcessed')
 
 const wait = (durationMs: number) => new Promise(resolve => setTimeout(resolve, durationMs))
+
+/**
+ * Stops waiting on an RPC call after `solanaRpcTimeoutMs`. The underlying
+ * request is not aborted (web3.js exposes no signal on these methods); the
+ * loop simply treats it as unanswered, which every caller here already handles
+ * as "no information". A late settlement is swallowed so it cannot surface as
+ * an unhandled rejection.
+ */
+const withRpcTimeout = <T>(request: Promise<T>, what: string): Promise<T> => {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`Solana ${what} timed out after ${solanaRpcTimeoutMs}ms`)),
+      solanaRpcTimeoutMs
+    )
+  })
+  request.catch(() => {})
+
+  return Promise.race([request, timeout]).finally(() => clearTimeout(timer))
+}
 
 /**
  * Hoists the on-chain rejection reason into a Solana send error's message.
@@ -76,7 +105,9 @@ const getSignatureSighting = async (
   signature: string,
   searchTransactionHistory = false
 ): Promise<SignatureSighting | undefined> => {
-  const { data } = await attempt(() => client.getSignatureStatuses([signature], { searchTransactionHistory }))
+  const { data } = await attempt(() =>
+    withRpcTimeout(client.getSignatureStatuses([signature], { searchTransactionHistory }), 'getSignatureStatuses')
+  )
   if (!data) return undefined
 
   const status = data.value[0]
@@ -100,7 +131,7 @@ const isBlockHeight = (value: number | undefined): value is number =>
 const resolveDeadline = async (client: SolanaClient, lastValidBlockHeight: number | undefined) => {
   if (isBlockHeight(lastValidBlockHeight)) return lastValidBlockHeight
 
-  const { data } = await attempt(() => client.getLatestBlockhash('confirmed'))
+  const { data } = await attempt(() => withRpcTimeout(client.getLatestBlockhash('confirmed'), 'getLatestBlockhash'))
 
   return data?.lastValidBlockHeight
 }
@@ -108,7 +139,9 @@ const resolveDeadline = async (client: SolanaClient, lastValidBlockHeight: numbe
 const isPastDeadline = async (client: SolanaClient, deadline: number | undefined) => {
   if (deadline === undefined) return false
 
-  const { data: blockHeight } = await attempt(() => client.getBlockHeight('confirmed'))
+  const { data: blockHeight } = await attempt(() =>
+    withRpcTimeout(client.getBlockHeight('confirmed'), 'getBlockHeight')
+  )
 
   return typeof blockHeight === 'number' && blockHeight > deadline
 }
@@ -190,16 +223,19 @@ export const broadcastSolanaTx: BroadcastTxResolver<OtherChain.Solana> = async (
 
   while (true) {
     const { data: acceptedSignature, error: sendError } = await attempt(() =>
-      client.sendRawTransaction(rawTransaction, {
-        // Preflight until the RPC has accepted the bytes once: it is how a
-        // real rejection (insufficient lamports, a failing program) surfaces.
-        // A resend skips it, so a node whose simulation bank lags cannot veto
-        // bytes a leader already holds.
-        skipPreflight: sent,
-        preflightCommitment: 'confirmed',
-        // The node's own resend loop would race this one.
-        maxRetries: 0,
-      })
+      withRpcTimeout(
+        client.sendRawTransaction(rawTransaction, {
+          // Preflight until the RPC has accepted the bytes once: it is how a
+          // real rejection (insufficient lamports, a failing program) surfaces.
+          // A resend skips it, so a node whose simulation bank lags cannot veto
+          // bytes a leader already holds.
+          skipPreflight: sent,
+          preflightCommitment: 'confirmed',
+          // The node's own resend loop would race this one.
+          maxRetries: 0,
+        }),
+        'sendTransaction'
+      )
     )
 
     if (acceptedSignature !== undefined) {

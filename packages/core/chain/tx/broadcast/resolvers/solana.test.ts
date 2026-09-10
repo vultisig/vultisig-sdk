@@ -30,7 +30,12 @@ vi.mock('../verifyBroadcastByHash', () => ({
 import { Chain } from '../../../Chain'
 import { BroadcastErrorCode } from '../resolver'
 import { SolanaBlockhashExpiredError } from '../solanaBlockhashExpired'
-import { broadcastSolanaTx, solanaBroadcastMaxDurationMs, solanaRebroadcastIntervalMs } from './solana'
+import {
+  broadcastSolanaTx,
+  solanaBroadcastMaxDurationMs,
+  solanaRebroadcastIntervalMs,
+  solanaRpcTimeoutMs,
+} from './solana'
 
 const signature = '2gB3ifNe2kSoJEYoVY7T4vw2z5ci9nL6WcQQuCC2ozCiURBwSfC9uGcCq9CS2pAzX7ed1xwyS4434BmSg2WhrZ7j'
 
@@ -155,6 +160,25 @@ describe('broadcastSolanaTx', () => {
     expect(result).toMatchObject({ status: 'accepted', txHash: signature })
     expect(result).not.toHaveProperty('cause')
     // It did try history before giving up on a verdict.
+    expect(mocks.getSignatureStatuses).toHaveBeenLastCalledWith([signature], { searchTransactionHistory: true })
+  })
+
+  // The shared client has no request timeout, and the deadline checks only run
+  // between awaits, so an RPC call that never answers must not hold the
+  // resolver open. This hangs both the in-loop lookup and the final history
+  // lookup: each times out, counts as "no information", and the loop moves on.
+  it('resolves at the deadline when the history lookup never settles', async () => {
+    const neverSettles = new Promise<never>(() => {})
+    mocks.getSignatureStatuses.mockResolvedValueOnce(unseen).mockReturnValue(neverSettles)
+    mocks.getBlockHeight.mockResolvedValueOnce(100).mockResolvedValue(151)
+
+    const promise = broadcast(150)
+    await vi.advanceTimersByTimeAsync(solanaRebroadcastIntervalMs)
+    // Iteration 2's lookup hangs, then the deadline is seen, then the final
+    // history lookup hangs. Two timeouts and the resolver must have answered.
+    await vi.advanceTimersByTimeAsync(solanaRpcTimeoutMs * 2)
+
+    await expect(promise).resolves.toMatchObject({ status: 'accepted', txHash: signature })
     expect(mocks.getSignatureStatuses).toHaveBeenLastCalledWith([signature], { searchTransactionHistory: true })
   })
 
