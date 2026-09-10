@@ -12,6 +12,7 @@ import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v
 import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
 
 import { getWalletCore } from '../../context/wasmRuntime'
+import { decodeEvmGeneralSwapCommitment } from './decodeEvmGeneralSwapCommitment'
 import type { VaultIdentity } from './types'
 
 export type PrepareSwapTxFromKeysParams = {
@@ -96,17 +97,18 @@ const assertCowQuoteNotExpired = (validTo: number): void => {
 }
 
 // Defense-in-depth for providers whose tx shape carries an exact source amount: the quote-level
-// requested amount must also match the gross value committed to the EIP-712 order or CosmWasm
-// funds. Native/evm/solana do not expose a separate committed-sell field here, so they
-// intentionally fail open after the quote-level amount binding above; `transfer.amount` may
-// legitimately differ (for example, 100_000n -> 99_999n) because providers subtract
-// deposit-channel fees.
+// requested amount must also match the gross value committed to the signable payload when we can
+// read one. CoW exposes sellAmount+feeAmount on the order. CosmWasm routes commit their source
+// funds directly. EVM-general quotes bury the sell amount and optional deadline in aggregator
+// calldata, so decode known exact-in shapes and compare; unknown selectors intentionally fail open
+// rather than bricking a valid route with a bad decode. `transfer.amount` may legitimately differ
+// (for example, 100_000n -> 99_999n) because providers subtract deposit-channel fees.
 const assertAmountMatchesCommittedSellAmount = (params: PrepareSwapTxFromKeysParams): void => {
   const { quote } = params.swapQuote
   if (!('general' in quote)) return
 
   const committed = matchRecordUnion(quote.general.tx, {
-    evm: () => undefined,
+    evm: tx => decodeEvmGeneralSwapCommitment(tx.data, tx.value)?.sellAmount,
     solana: () => undefined,
     transfer: () => undefined,
     cosmosWasm: ({ funds }) => {
@@ -122,8 +124,25 @@ const assertAmountMatchesCommittedSellAmount = (params: PrepareSwapTxFromKeysPar
 
   const requested = toChainAmount(params.amount, params.fromCoin.decimals)
   if (requested !== committed) {
+    const label = 'evm' in quote.general.tx
+      ? 'committed sell amount encoded in the EVM swap calldata'
+      : "route's committed source amount"
     throw new Error(
-      `prepareSwapTxFromKeys: requested amount (${requested} base units) does not match the route's committed source amount (${committed} base units) — the quote may be stale or for a different request`
+      `prepareSwapTxFromKeys: requested amount (${requested} base units) does not match the ${label} (${committed} base units) — the quote may be stale or for a different request`
+    )
+  }
+}
+
+const assertEvmGeneralDeadlineNotExpired = (params: PrepareSwapTxFromKeysParams): void => {
+  const { quote } = params.swapQuote
+  if (!('general' in quote) || !('evm' in quote.general.tx)) return
+
+  const decoded = decodeEvmGeneralSwapCommitment(quote.general.tx.evm.data, quote.general.tx.evm.value)
+  if (decoded?.deadlineSeconds === undefined) return
+  if (!Number.isFinite(decoded.deadlineSeconds)) return
+  if (decoded.deadlineSeconds <= Math.floor(Date.now() / 1000)) {
+    throw new SwapQuoteExpiredError(
+      'prepareSwapTxFromKeys: EVM swap calldata deadline has expired; refresh the quote before signing'
     )
   }
 }
@@ -167,6 +186,7 @@ export const prepareSwapTxFromKeys = async (
   if ('general' in quote && 'cowswap_order' in quote.general.tx) {
     assertCowQuoteNotExpired(quote.general.tx.cowswap_order.validTo)
   }
+  assertEvmGeneralDeadlineNotExpired(safeParams)
   assertAmountMatchesCommittedSellAmount(safeParams)
 
   const walletCore = walletCoreOverride ?? (await getWalletCore())
