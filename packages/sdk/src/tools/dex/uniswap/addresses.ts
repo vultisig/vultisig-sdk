@@ -21,6 +21,9 @@ export const UNI_V3_FACTORY: Partial<Record<EvmChain, `0x${string}`>> = {
   BSC: '0xdB1d10011AD0Ff90774D0C6Bb92e5C5c8b4461F7',
   Avalanche: '0x740b1c1de25031C31FF4fC9A62f554A55cdC1baD',
   Blast: '0x792edAdE80af5fC680d96a2eD80A44247D2Cf6Fd',
+  // Robinhood Chain (4663): published in @uniswap/sdk-core's CHAIN_TO_ADDRESSES_MAP
+  // and confirmed deployed on chain (eth_getCode returns 24,535 bytes), 2026-09-10.
+  Robinhood: '0x1f7d7550B1b028f7571E69A784071F0205FD2EfA',
 }
 
 const UNI_V3_WRAPPED_NATIVE: Partial<Record<EvmChain, `0x${string}`>> = {
@@ -32,6 +35,9 @@ const UNI_V3_WRAPPED_NATIVE: Partial<Record<EvmChain, `0x${string}`>> = {
   BSC: '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c',
   Avalanche: '0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7',
   Blast: '0x4300000000000000000000000000000000000004',
+  // Uniswap's WETH9 on Robinhood; the same address as the WETH entry in the
+  // core-chain Robinhood token catalog.
+  Robinhood: '0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73',
 }
 
 /** Chains where Uniswap V3 pool-info lookups are supported, sorted. */
