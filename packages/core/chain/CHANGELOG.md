@@ -1,5 +1,13 @@
 # @vultisig/core-chain
 
+## 5.4.1
+
+### Patch Changes
+
+- [#2362](https://github.com/vultisig/vultisig-sdk/pull/2362) [`e4d2594`](https://github.com/vultisig/vultisig-sdk/commit/e4d2594393043f89a99d1e38387cc139047f7af8) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Share Tron Base58Check validation across balance lookup, transaction building, and energy estimation, preserving the existing accepted address prefixes.
+
+- [#2361](https://github.com/vultisig/vultisig-sdk/pull/2361) [`1cb2615`](https://github.com/vultisig/vultisig-sdk/commit/1cb2615acefd7f6f1170ab3340bb1d23d63ee1ca) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Preserve case-sensitive non-EVM token identifiers in curated lookups, discovery, and token-transfer guards. EVM addresses remain case-insensitive. Consumers of knownTokensIndex must use canonical non-EVM keys without lowercasing them; the shared getKnownToken helper applies the chain-specific matching rule.
+
 ## 5.4.0
 
 ### Minor Changes
