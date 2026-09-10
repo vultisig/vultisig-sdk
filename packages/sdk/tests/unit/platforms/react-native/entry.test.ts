@@ -5,9 +5,20 @@ import { AuthInfo, SignDoc, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import { beforeAll, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
 import * as sdkRn from '../../../../src/platforms/react-native/index'
+import * as tokenRef from '../../../../src/vault/tokenRef'
 import { cosmosTxFeeGasParityCases } from '../../../fixtures/cosmosTxFeeGasParity'
 
 process.env.VULTISIG_STRICT_SINGLETON = '0'
+
+describe('RN entry exposes canonical token reference resolution', () => {
+  it('exports the same resolvers and a usable result type', () => {
+    expect(sdkRn.resolveTokenRef).toBe(tokenRef.resolveTokenRef)
+    expect(sdkRn.resolveTokenRefId).toBe(tokenRef.resolveTokenRefId)
+    const native: sdkRn.ResolvedTokenInfo = sdkRn.resolveTokenRef(sdkRn.Chain.Ethereum, undefined, [])
+    expect(native).toEqual({ ticker: 'ETH', decimals: 18 })
+    expect(sdkRn.resolveTokenRefId(sdkRn.Chain.Ethereum, 'ETH', [])).toBeUndefined()
+  })
+})
 
 vi.mock('expo-crypto', () => ({
   randomUUID: () => '00000000-0000-4000-8000-000000000000',
