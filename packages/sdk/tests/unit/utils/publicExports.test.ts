@@ -4,6 +4,7 @@ import * as blockaidChains from '@vultisig/core-chain/security/blockaid/evmChain
 import * as isValidTokenIdModule from '@vultisig/core-chain/utils/isValidTokenId'
 import { describe, expect, expectTypeOf, it } from 'vitest'
 
+import * as tronAbi from '../../../src/abi/tron'
 import * as sdk from '../../../src/index'
 import * as threeJane from '../../../src/tools/defi/threeJane'
 import * as dangerousAddresses from '../../../src/utils/dangerousAddresses'
@@ -34,6 +35,21 @@ describe('@vultisig/sdk public exports', () => {
 
   it.each(dangerousAddressCanonicalExports)('re-exports dangerous-address canonical %s by identity', name => {
     expect(sdk[name]).toBe(dangerousAddresses[name])
+  })
+
+  it('re-exports the canonical TRON ABI/address helpers from the root SDK entrypoint', () => {
+    expect(sdk.tronBase58ToEvmHex).toBe(tronAbi.tronBase58ToEvmHex)
+    expect(sdk.tronBase58ToHex).toBe(tronAbi.tronBase58ToHex)
+    expect(sdk.tronHexToBase58).toBe(tronAbi.tronHexToBase58)
+    expect(sdk.encodeTrc20TransferParam).toBe(tronAbi.encodeTrc20TransferParam)
+
+    const address = 'TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH'
+    expect(sdk.tronBase58ToHex(address)).toBe('41c8599111f29c1e1e061265b4af93ea1f274ad78a')
+    expect(sdk.tronHexToBase58('41c8599111f29c1e1e061265b4af93ea1f274ad78a')).toBe(address)
+    expect(sdk.tronBase58ToEvmHex(address)).toBe('c8599111f29c1e1e061265b4af93ea1f274ad78a')
+    expect(sdk.encodeTrc20TransferParam(address, '1000000')).toBe(
+      'c8599111f29c1e1e061265b4af93ea1f274ad78a'.padStart(64, '0') + 'f4240'.padStart(64, '0')
+    )
   })
 
   it('exports fiatToAmount, toChainAmount, and chain-reference normalization utilities', () => {

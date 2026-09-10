@@ -1326,7 +1326,14 @@ export type {
 } from './types/notifications'
 
 // ============================================================================
-// PUBLIC API - ABI Constants
+// PUBLIC API - ABI Constants and Helpers
 // ============================================================================
 
-export { ERC20_ABI, ERC1155_ABI } from './abi'
+export {
+  encodeTrc20TransferParam,
+  ERC20_ABI,
+  ERC1155_ABI,
+  tronBase58ToEvmHex,
+  tronBase58ToHex,
+  tronHexToBase58,
+} from './abi'

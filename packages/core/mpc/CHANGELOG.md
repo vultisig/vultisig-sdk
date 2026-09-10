@@ -1,5 +1,24 @@
 # @vultisig/core-mpc
 
+## 3.2.2
+
+### Patch Changes
+
+- Updated dependencies [[`e4d2594`](https://github.com/vultisig/vultisig-sdk/commit/e4d2594393043f89a99d1e38387cc139047f7af8), [`1cb2615`](https://github.com/vultisig/vultisig-sdk/commit/1cb2615acefd7f6f1170ab3340bb1d23d63ee1ca)]:
+  - @vultisig/core-chain@5.4.1
+
+## 3.2.1
+
+### Patch Changes
+
+- [#2352](https://github.com/vultisig/vultisig-sdk/pull/2352) [`341df52`](https://github.com/vultisig/vultisig-sdk/commit/341df52d63858f41172be2f61bde7c4ca694ad71) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject missing and malformed amounts before constructing Tron TRC20, Solana, Polkadot, Bittensor and Ripple issued-currency signing inputs. Preserve explicit zero trust-line limits and encode Solana amounts as unsigned uint64 values without overflow.
+
+- [#2341](https://github.com/vultisig/vultisig-sdk/pull/2341) [`ea2e6b7`](https://github.com/vultisig/vultisig-sdk/commit/ea2e6b7f4fc005d93d0a31741f521d7539d3104e) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject negative amounts before hexadecimal encoding so EVM and Cardano transaction inputs cannot silently contain empty amount bytes. Preserve existing encodings for non-negative values, including unsigned Long quantities.
+
+- Updated dependencies [[`864dfcb`](https://github.com/vultisig/vultisig-sdk/commit/864dfcb375c474f5bcc6f79bf18aeb145489cc47), [`80ba27f`](https://github.com/vultisig/vultisig-sdk/commit/80ba27f30afbeb104a8cc5738b5942467d977c9e), [`341df52`](https://github.com/vultisig/vultisig-sdk/commit/341df52d63858f41172be2f61bde7c4ca694ad71), [`ea2e6b7`](https://github.com/vultisig/vultisig-sdk/commit/ea2e6b7f4fc005d93d0a31741f521d7539d3104e), [`4fe2d97`](https://github.com/vultisig/vultisig-sdk/commit/4fe2d977cac34de6d0cf0cfefafdb6d484253a56), [`f5b79a4`](https://github.com/vultisig/vultisig-sdk/commit/f5b79a4b3ba943a1e80c4f8c01ecf1cd137a155d)]:
+  - @vultisig/core-chain@5.4.0
+  - @vultisig/lib-utils@0.10.7
+
 ## 3.2.0
 
 ### Minor Changes

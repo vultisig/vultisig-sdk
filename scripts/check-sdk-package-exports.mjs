@@ -21,6 +21,7 @@ const packedDependencyFields = ['dependencies', 'optionalDependencies']
 const coordinatedSdkPackageNames = new Set([
   '@vultisig/core-chain',
   '@vultisig/core-mpc',
+  '@vultisig/lib-utils',
   '@vultisig/mpc-types',
 ])
 
@@ -157,13 +158,20 @@ export function validatePackedExportTargets(manifest, packageRoot) {
   return targets
 }
 
-function validatePackedReactNativeCosmosPayloadExports(packageRoot) {
+function validatePackedReactNativePublicHelpers(packageRoot) {
   const runtimePath = path.join(packageRoot, 'dist/index.react-native.js')
   const declarationsPath = path.join(packageRoot, 'dist/index.react-native.d.ts')
   const runtimeSource = readFileSync(runtimePath, 'utf8')
   const declarationSource = readFileSync(declarationsPath, 'utf8')
 
-  for (const symbol of ['buildSignAminoKeysignPayload', 'buildSignDirectKeysignPayload']) {
+  for (const symbol of [
+    'buildSignAminoKeysignPayload',
+    'buildSignDirectKeysignPayload',
+    'tronBase58ToEvmHex',
+    'tronBase58ToHex',
+    'tronHexToBase58',
+    'encodeTrc20TransferParam',
+  ]) {
     assert.ok(runtimeSource.includes(symbol), `react-native bundle exports ${symbol}`)
     assert.ok(declarationSource.includes(symbol), `react-native types export ${symbol}`)
   }
@@ -343,6 +351,22 @@ assert.equal(typeof root?.fiatToAmount, 'function', 'root import exports fiatToA
 assert.equal(typeof root?.normalizeChain, 'function', 'root import exports normalizeChain')
 assert.equal(typeof root?.fromChainAmountExact, 'function', 'root import exports fromChainAmountExact')
 assert.equal(typeof root?.getBlockExplorerUrl, 'function', 'root import exports getBlockExplorerUrl')
+const tronAddress = 'TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH'
+const evmHex = 'c8599111f29c1e1e061265b4af93ea1f274ad78a'
+assert.equal(root.tronBase58ToEvmHex(tronAddress), evmHex)
+assert.equal(root.tronBase58ToHex(tronAddress), '41' + evmHex)
+assert.equal(root.tronHexToBase58(evmHex), tronAddress)
+assert.equal(root.tronHexToBase58('41' + evmHex), tronAddress)
+assert.equal(root.encodeTrc20TransferParam(tronAddress, '1000000'), evmHex.padStart(64, '0') + 'f4240'.padStart(64, '0'))
+assert.equal(root.encodeTrc20TransferParam(tronAddress, '0'), evmHex.padStart(64, '0') + '0'.repeat(64))
+assert.equal(root.encodeTrc20TransferParam(tronAddress, ((1n << 256n) - 1n).toString()), evmHex.padStart(64, '0') + 'f'.repeat(64))
+assert.throws(() => root.tronBase58ToEvmHex(tronAddress.slice(0, -1) + 'J'), /checksum/)
+assert.throws(() => root.tronBase58ToHex(tronAddress.slice(0, -1) + 'J'), /checksum/)
+assert.throws(() => root.encodeTrc20TransferParam(tronAddress.slice(0, -1) + 'J', '1'), /checksum/)
+assert.throws(() => root.encodeTrc20TransferParam(tronAddress, '-1'), /negative amount/)
+assert.throws(() => root.encodeTrc20TransferParam(tronAddress, (1n << 256n).toString()), /uint256/)
+console.log('Packed TRON helpers passed: address round-trip, exact calldata, checksum and uint256 boundaries')
+
 assert.equal(
   typeof root?.buildSignAminoKeysignPayload,
   'function',
@@ -419,6 +443,10 @@ void ${alias}Keys`
     `${typeImports}
 ${declarationAssertions}
 import {
+  encodeTrc20TransferParam,
+  tronBase58ToEvmHex,
+  tronBase58ToHex,
+  tronHexToBase58,
   Chain,
   buildSignAminoKeysignPayload,
   buildSignDirectKeysignPayload,
@@ -441,6 +469,10 @@ import type {
   ExtendedChainRegistry as ReactNativeExtendedChainRegistry,
 } from '@vultisig/sdk/react-native'
 import {
+  encodeTrc20TransferParam as encodeTrc20TransferParamReactNative,
+  tronBase58ToEvmHex as tronBase58ToEvmHexReactNative,
+  tronBase58ToHex as tronBase58ToHexReactNative,
+  tronHexToBase58 as tronHexToBase58ReactNative,
   buildSignAminoKeysignPayload as buildSignAminoKeysignPayloadReactNative,
   buildSignDirectKeysignPayload as buildSignDirectKeysignPayloadReactNative,
   type BuildSignAminoPayloadInput as BuildSignAminoPayloadInputReactNative,
@@ -448,6 +480,16 @@ import {
 } from '@vultisig/sdk/react-native'
 import type { Vultisig } from '@vultisig/sdk/node'
 import type { ElectronMainCrypto, Vultisig as ElectronMainVultisig } from '@vultisig/sdk/electron/main'
+
+const tronConverters: ((address: string) => string)[] = [
+  tronBase58ToEvmHex, tronBase58ToHex, tronHexToBase58,
+  tronBase58ToEvmHexReactNative, tronBase58ToHexReactNative, tronHexToBase58ReactNative,
+]
+const tronEncoders: ((address: string, amount: string) => string)[] = [
+  encodeTrc20TransferParam, encodeTrc20TransferParamReactNative,
+]
+void tronConverters
+void tronEncoders
 
 const descriptor: ChainDescriptor = chainRegistry[Chain.Ethereum]
 const registry: ChainDescriptorRegistry = chainRegistry
@@ -588,7 +630,7 @@ export async function checkSdkPackageExports({
     )
 
     const targets = validatePackedExportTargets(sourceManifest, packageRoot)
-    validatePackedReactNativeCosmosPayloadExports(packageRoot)
+    validatePackedReactNativePublicHelpers(packageRoot)
     const importCases = collectNodeRuntimeCases(sourceManifest, 'import')
     const requireCases = collectNodeRuntimeCases(sourceManifest, 'require')
     if (!importCases.length || !requireCases.length) {

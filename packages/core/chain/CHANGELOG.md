@@ -1,5 +1,32 @@
 # @vultisig/core-chain
 
+## 5.4.1
+
+### Patch Changes
+
+- [#2362](https://github.com/vultisig/vultisig-sdk/pull/2362) [`e4d2594`](https://github.com/vultisig/vultisig-sdk/commit/e4d2594393043f89a99d1e38387cc139047f7af8) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Share Tron Base58Check validation across balance lookup, transaction building, and energy estimation, preserving the existing accepted address prefixes.
+
+- [#2361](https://github.com/vultisig/vultisig-sdk/pull/2361) [`1cb2615`](https://github.com/vultisig/vultisig-sdk/commit/1cb2615acefd7f6f1170ab3340bb1d23d63ee1ca) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Preserve case-sensitive non-EVM token identifiers in curated lookups, discovery, and token-transfer guards. EVM addresses remain case-insensitive. Consumers of knownTokensIndex must use canonical non-EVM keys without lowercasing them; the shared getKnownToken helper applies the chain-specific matching rule.
+
+## 5.4.0
+
+### Minor Changes
+
+- [#2347](https://github.com/vultisig/vultisig-sdk/pull/2347) [`864dfcb`](https://github.com/vultisig/vultisig-sdk/commit/864dfcb375c474f5bcc6f79bf18aeb145489cc47) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Blockaid now covers Robinhood chain (4663) as `robinhood`. Transaction simulation and validation run for Robinhood dApp requests and swaps, so a Uniswap swap on Robinhood shows its balance changes on the verify screen instead of nothing. Because SwapKit's EVM source eligibility keys off Blockaid coverage, Robinhood also becomes a SwapKit source chain, with the returned router screened through the Blockaid address scan like every other covered EVM chain.
+
+- [#2343](https://github.com/vultisig/vultisig-sdk/pull/2343) [`80ba27f`](https://github.com/vultisig/vultisig-sdk/commit/80ba27f30afbeb104a8cc5738b5942467d977c9e) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Preserve requested affiliate rates and native recipient allocations on swap quotes, including explicit zero rates, without changing fees or transaction construction. The optional quote affiliate metadata is covered by the existing mutation fingerprint; older quotes retain an unknown rate.
+
+### Patch Changes
+
+- [#2341](https://github.com/vultisig/vultisig-sdk/pull/2341) [`ea2e6b7`](https://github.com/vultisig/vultisig-sdk/commit/ea2e6b7f4fc005d93d0a31741f521d7539d3104e) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject negative amounts before hexadecimal encoding so EVM and Cardano transaction inputs cannot silently contain empty amount bytes. Preserve existing encodings for non-negative values, including unsigned Long quantities.
+
+- [#2354](https://github.com/vultisig/vultisig-sdk/pull/2354) [`4fe2d97`](https://github.com/vultisig/vultisig-sdk/commit/4fe2d977cac34de6d0cf0cfefafdb6d484253a56) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject off-curve Solana wallet recipients before preparing sends or fee estimates.
+
+- [#2344](https://github.com/vultisig/vultisig-sdk/pull/2344) [`f5b79a4`](https://github.com/vultisig/vultisig-sdk/commit/f5b79a4b3ba943a1e80c4f8c01ecf1cd137a155d) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject Tron gateway errors, empty contract balance results, and JSON-RPC errors instead of treating them as zero balances or decoding error messages. Preserve legitimate zero balances and propagate read failures to maximum-send callers.
+
+- Updated dependencies [[`341df52`](https://github.com/vultisig/vultisig-sdk/commit/341df52d63858f41172be2f61bde7c4ca694ad71), [`ea2e6b7`](https://github.com/vultisig/vultisig-sdk/commit/ea2e6b7f4fc005d93d0a31741f521d7539d3104e)]:
+  - @vultisig/lib-utils@0.10.7
+
 ## 5.3.0
 
 ### Minor Changes
