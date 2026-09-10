@@ -136,6 +136,36 @@ describe('getCardanoSigningInputs — per-UTXO native tokens', () => {
     return TW.Cardano.Proto.SigningInput.encode(signingInput).finish()
   }
 
+  it.each(['-1', '-256'])('rejects negative outgoing token quantity %s', async amount => {
+    const payload = buildPayload({ withTokens: true })
+    shouldBePresent(payload.coin).contractAddress = `${sundae.policyId}.${sundae.assetNameHex}`
+    payload.toAmount = amount
+
+    await expect(txInputDataFor(payload)).rejects.toThrow(RangeError)
+  })
+
+  it.each(['-1', '-256'])('rejects negative per-UTXO token quantity %s', async amount => {
+    const payload = buildPayload({ withTokens: true })
+    payload.utxoInfo[0].cardanoTokens[0].amount = amount
+
+    await expect(txInputDataFor(payload)).rejects.toThrow(RangeError)
+  })
+
+  it.each([
+    ['0', '00'],
+    ['1', '01'],
+    ['256', '0100'],
+    ['4500000', '44aa20'],
+  ])('preserves outgoing token quantity %s bytes', async (amount, expected) => {
+    const payload = buildPayload({ withTokens: true })
+    shouldBePresent(payload.coin).contractAddress = `${sundae.policyId}.${sundae.assetNameHex}`
+    payload.toAmount = amount
+    const decoded = TW.Cardano.Proto.SigningInput.decode(await txInputDataFor(payload))
+
+    const token = shouldBePresent(decoded.transferMessage?.tokenAmount?.token?.[0])
+    expect(hex(shouldBePresent(token.amount))).toBe(expected)
+  })
+
   it('uses the fixture addresses the golden vector documents', () => {
     expect(
       deriveCardanoAddress({

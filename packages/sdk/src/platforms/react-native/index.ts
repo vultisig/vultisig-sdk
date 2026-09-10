@@ -1105,6 +1105,10 @@ export {
   XRP_DANGEROUS_ADDRESSES,
 } from '../../utils/dangerousAddresses'
 
+// Blockaid supported-chain metadata
+export type { BlockaidSupportedEvmChain } from '@vultisig/core-chain/security/blockaid/evmChains'
+export { blockaidEvmChain, blockaidSupportedEvmChains } from '@vultisig/core-chain/security/blockaid/evmChains'
+
 // Storage
 export { MemoryStorage } from '../../storage/MemoryStorage'
 

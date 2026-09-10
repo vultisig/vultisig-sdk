@@ -8,6 +8,18 @@ export type SolanaCoingeckoTokenResponse = {
   }
 }
 
+/** CoinGecko's on-chain multi-token lookup; a mint it does not index is simply missing from `data`. */
+export type SolanaCoingeckoTokensResponse = {
+  data?: {
+    id: string
+    type: 'token'
+    attributes?: {
+      address?: string
+      coingecko_coin_id?: string | null
+    }
+  }[]
+}
+
 export type SolanaFmTokenResponse = {
   tokenList?: {
     extensions?: {
