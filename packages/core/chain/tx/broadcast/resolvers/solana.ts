@@ -125,9 +125,15 @@ type ConcludeUnconfirmedInput = {
 /**
  * The loop's end without a confirmation. One last look through transaction
  * history first: the bytes may have landed in the final valid block, or a
- * co-signer's broadcast may have. Past the deadline an unseen signature is
- * dead and the caller must re-sign; at the wall-clock cap with no proof of
- * expiry, bytes the RPC accepted are left to the downstream status poll.
+ * co-signer's broadcast may have.
+ *
+ * Declaring expiry needs POSITIVE evidence of absence — a history lookup that
+ * succeeded and found nothing. A lookup that merely failed proves nothing: a
+ * transfer can land in its last valid block while the status RPC is
+ * unreachable, and `recovery: 'resign'` on top of that would invite the user
+ * to pay twice. On an unusable lookup, bytes the RPC accepted are left to the
+ * downstream status poll, which carries the same deadline and can settle it
+ * later from fresh information.
  */
 const concludeUnconfirmed = async ({
   client,
@@ -137,12 +143,13 @@ const concludeUnconfirmed = async ({
   sent,
   lastSendError,
 }: ConcludeUnconfirmedInput) => {
-  if (signature) {
-    const sighting = await getSignatureSighting(client, signature, true)
-    if (sighting === 'settled' || sighting === 'processed') return broadcastAccepted(signature)
-  }
+  // Undefined either way means "no proof of absence": the lookup failed, or
+  // there is no signature to look up.
+  const sighting = signature ? await getSignatureSighting(client, signature, true) : undefined
 
-  if (expired) {
+  if (sighting === 'settled' || sighting === 'processed') return broadcastAccepted(signature)
+
+  if (expired && sighting === 'unseen') {
     return broadcastFailed(new SolanaBlockhashExpiredError({ signature, lastValidBlockHeight: deadline }), false)
   }
 

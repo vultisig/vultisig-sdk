@@ -141,6 +141,40 @@ describe('broadcastSolanaTx', () => {
     expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
   })
 
+  // A transfer can land in its last valid block while the status RPC is down.
+  // Claiming a definitive expiry there would tell the user to sign again and
+  // risk paying twice, so an unusable lookup must preserve uncertainty.
+  it('does not declare expiry when the final history lookup fails on accepted bytes', async () => {
+    mocks.getSignatureStatuses.mockResolvedValueOnce(unseen).mockRejectedValue(new Error('status rpc unavailable'))
+    mocks.getBlockHeight.mockResolvedValueOnce(100).mockResolvedValue(151)
+
+    const promise = broadcast(150)
+    await vi.advanceTimersByTimeAsync(solanaRebroadcastIntervalMs)
+    const result = await promise
+
+    expect(result).toMatchObject({ status: 'accepted', txHash: signature })
+    expect(result).not.toHaveProperty('cause')
+    // It did try history before giving up on a verdict.
+    expect(mocks.getSignatureStatuses).toHaveBeenLastCalledWith([signature], { searchTransactionHistory: true })
+  })
+
+  it('reports a transport failure, not expiry, when history is unusable and the bytes were never accepted', async () => {
+    const transport = new Error('ECONNRESET')
+    mocks.sendRawTransaction.mockRejectedValue(transport)
+    mocks.getSignatureStatuses.mockRejectedValue(new Error('status rpc unavailable'))
+    mocks.getBlockHeight.mockResolvedValueOnce(100).mockResolvedValue(151)
+
+    const promise = broadcast(150)
+    await vi.advanceTimersByTimeAsync(solanaRebroadcastIntervalMs)
+
+    await expect(promise).resolves.toEqual({
+      status: 'failed',
+      code: BroadcastErrorCode.Transport,
+      retryable: true,
+      cause: transport,
+    })
+  })
+
   it('accepts a signature that turns up in the final history lookup at the deadline', async () => {
     mocks.getSignatureStatuses.mockResolvedValueOnce(unseen).mockResolvedValue(confirmed)
     mocks.getBlockHeight.mockResolvedValue(151)
