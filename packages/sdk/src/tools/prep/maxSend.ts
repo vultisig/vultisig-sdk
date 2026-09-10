@@ -7,7 +7,7 @@ import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
-import { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
+import { isValidRecipient } from '@vultisig/core-chain/utils/isValidRecipient'
 import type { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
 import { getSendFeeEstimate } from '@vultisig/core-mpc/keysign/send/getSendFeeEstimate'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
@@ -44,7 +44,7 @@ export const computeMaxSendFromBalance = async (
 ): Promise<MaxSendAmount> => {
   const walletCore = walletCoreOverride ?? (await getWalletCore())
 
-  const isValid = isValidAddress({
+  const isValid = isValidRecipient({
     chain: params.coin.chain,
     address: params.receiver,
     walletCore,

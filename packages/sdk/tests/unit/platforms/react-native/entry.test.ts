@@ -1,7 +1,8 @@
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
+import * as blockaidChains from '@vultisig/core-chain/security/blockaid/evmChains'
 import { AuthInfo, SignDoc, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
-import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { beforeAll, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
 import * as sdkRn from '../../../../src/platforms/react-native/index'
 import { cosmosTxFeeGasParityCases } from '../../../fixtures/cosmosTxFeeGasParity'
@@ -71,6 +72,12 @@ beforeAll(async () => {
 }, 120_000)
 
 describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
+  it('re-exports Blockaid EVM chain canonicals by identity', () => {
+    expect(reactNativeEntry.blockaidEvmChain).toBe(blockaidChains.blockaidEvmChain)
+    expect(reactNativeEntry.blockaidSupportedEvmChains).toBe(blockaidChains.blockaidSupportedEvmChains)
+    expectTypeOf<sdkRn.BlockaidSupportedEvmChain>().toEqualTypeOf<blockaidChains.BlockaidSupportedEvmChain>()
+  })
+
   it('exports canonical fast-vault detection helpers', async () => {
     const canonical = await import('@vultisig/core-mpc/devices/localPartyId')
 
@@ -594,6 +601,24 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
       rn.Chain.BitcoinCash,
       rn.Chain.Dash,
     ])
+  })
+
+  it('re-exports the canonical TRON ABI/address helpers on the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const tronAbi = await import('../../../../src/abi/tron')
+
+    expect(rn.tronBase58ToEvmHex).toBe(tronAbi.tronBase58ToEvmHex)
+    expect(rn.tronBase58ToHex).toBe(tronAbi.tronBase58ToHex)
+    expect(rn.tronHexToBase58).toBe(tronAbi.tronHexToBase58)
+    expect(rn.encodeTrc20TransferParam).toBe(tronAbi.encodeTrc20TransferParam)
+
+    const address = 'TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH'
+    expect(rn.tronBase58ToHex(address)).toBe('41c8599111f29c1e1e061265b4af93ea1f274ad78a')
+    expect(rn.tronHexToBase58('41c8599111f29c1e1e061265b4af93ea1f274ad78a')).toBe(address)
+    expect(rn.tronBase58ToEvmHex(address)).toBe('c8599111f29c1e1e061265b4af93ea1f274ad78a')
+    expect(rn.encodeTrc20TransferParam(address, '1000000')).toBe(
+      'c8599111f29c1e1e061265b4af93ea1f274ad78a'.padStart(64, '0') + 'f4240'.padStart(64, '0')
+    )
   })
 
   it('exports the RN vault-backup helpers and constants from the RN entry', async () => {

@@ -1,5 +1,6 @@
 import { EvmChain } from '@vultisig/core-chain/Chain'
-import { getEvmClient } from '@vultisig/core-chain/chains/evm/client'
+
+import { evmGasPrice } from '../evm/gasPrice'
 
 /**
  * Gas units consumed by the supported tx archetypes. A plain native/ERC-20
@@ -40,13 +41,13 @@ export type CompareCostsParams = {
 
 export type CompareCostsEntry = {
   chain: EvmChain
-  /** Current gas price in gwei (rounded to 4 dp). */
+  /** Display-only gas price in gwei (4 dp; positive prices have a 0.0001 minimum). */
   gasPriceGwei: number
   /** Native-token USD price if provided in `nativeUsdPrices`, else `null`. */
   nativeUsd: number | null
-  /** Estimated tx cost in the chain's native token (gwei × gasUnits × 1e-9). */
+  /** Estimated native-token cost from raw wei × gasUnits, independent of display rounding. */
   estTxCostNative: number
-  /** Estimated tx cost in USD when `nativeUsd` is known, else `null`. */
+  /** Estimated USD cost rounded to 6 dp for display when priced, else `null`. */
   estTxCostUsd: number | null
 }
 
@@ -68,8 +69,8 @@ export type CompareCostsResult = {
 
 /** Fetch the current gas price (gwei, 4 dp) for a single EVM chain. */
 export const getChainGasPriceGwei = async (chain: EvmChain): Promise<number> => {
-  const wei = await getEvmClient(chain).getGasPrice()
-  return parseFloat((Number(wei) / 1e9).toFixed(4))
+  const { gasPriceGwei } = await evmGasPrice(chain)
+  return gasPriceGwei
 }
 
 /**
@@ -91,7 +92,7 @@ export const compareCosts = async (params: CompareCostsParams = {}): Promise<Com
   const gasUnits = GAS_UNITS[txType]
   const prices = params.nativeUsdPrices ?? {}
 
-  const settlements = await Promise.allSettled(chains.map(chain => getChainGasPriceGwei(chain)))
+  const settlements = await Promise.allSettled(chains.map(chain => evmGasPrice(chain)))
 
   const results: CompareCostsEntry[] = []
   const skipped: CompareCostsSkipped[] = []
@@ -107,8 +108,8 @@ export const compareCosts = async (params: CompareCostsParams = {}): Promise<Com
       return
     }
 
-    const gasPriceGwei = settlement.value
-    const estTxCostNative = parseFloat((gasPriceGwei * 1e-9 * gasUnits).toFixed(12))
+    const { gasPriceWei, gasPriceGwei } = settlement.value
+    const estTxCostNative = Number(gasPriceWei * BigInt(gasUnits)) / 1e18
     const nativeUsd = prices[chain] ?? null
     const estTxCostUsd = nativeUsd !== null ? parseFloat((estTxCostNative * nativeUsd).toFixed(6)) : null
 
@@ -122,9 +123,12 @@ export const compareCosts = async (params: CompareCostsParams = {}): Promise<Com
   // USD-expensive chain as "cheapest" just because its native-token unit cost is
   // numerically small — so we never mix bases. With a partial price map we fall
   // back to native ordering wholesale (the documented gwei-only best-effort).
+  // Use unrounded USD costs for ranking: the display values can tie at zero.
   const allPriced = results.length > 0 && results.every(r => r.estTxCostUsd !== null)
   results.sort((a, b) =>
-    allPriced ? (a.estTxCostUsd as number) - (b.estTxCostUsd as number) : a.estTxCostNative - b.estTxCostNative
+    allPriced
+      ? a.estTxCostNative * (a.nativeUsd as number) - b.estTxCostNative * (b.nativeUsd as number)
+      : a.estTxCostNative - b.estTxCostNative
   )
 
   const cheapest =

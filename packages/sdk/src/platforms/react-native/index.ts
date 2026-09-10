@@ -299,6 +299,9 @@ export {
 export { DEFAULT_CHAINS } from '../../constants'
 export { defaultChains } from '@vultisig/core-chain/Chain'
 
+// Canonical TRON address and TRC-20 ABI helpers, shared with the root SDK entrypoint.
+export { encodeTrc20TransferParam, tronBase58ToEvmHex, tronBase58ToHex, tronHexToBase58 } from '../../abi/tron'
+
 // WalletCore provider access
 export { configureWasm, getWalletCore } from '../../context/wasmRuntime'
 
@@ -1091,6 +1094,10 @@ export {
   UTXO_DANGEROUS_ADDRESSES,
   XRP_DANGEROUS_ADDRESSES,
 } from '../../utils/dangerousAddresses'
+
+// Blockaid supported-chain metadata
+export type { BlockaidSupportedEvmChain } from '@vultisig/core-chain/security/blockaid/evmChains'
+export { blockaidEvmChain, blockaidSupportedEvmChains } from '@vultisig/core-chain/security/blockaid/evmChains'
 
 // Storage
 export { MemoryStorage } from '../../storage/MemoryStorage'
