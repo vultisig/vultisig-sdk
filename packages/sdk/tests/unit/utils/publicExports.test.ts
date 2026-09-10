@@ -12,6 +12,7 @@ import {
   buildSignAminoKeysignPayload as canonicalBuildSignAminoKeysignPayload,
   buildSignDirectKeysignPayload as canonicalBuildSignDirectKeysignPayload,
 } from '../../../src/vault/services/cosmos'
+import * as tokenRef from '../../../src/vault/tokenRef'
 import { cosmosTxFeeGasParityCases } from '../../fixtures/cosmosTxFeeGasParity'
 
 const dangerousAddressCanonicalExports = [
@@ -31,6 +32,14 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.blockaidEvmChain).toBe(blockaidChains.blockaidEvmChain)
     expect(sdk.blockaidSupportedEvmChains).toBe(blockaidChains.blockaidSupportedEvmChains)
     expectTypeOf<sdk.BlockaidSupportedEvmChain>().toEqualTypeOf<blockaidChains.BlockaidSupportedEvmChain>()
+  })
+
+  it('exports the canonical token reference resolvers and result type', () => {
+    expect(sdk.resolveTokenRef).toBe(tokenRef.resolveTokenRef)
+    expect(sdk.resolveTokenRefId).toBe(tokenRef.resolveTokenRefId)
+    const native: sdk.ResolvedTokenInfo = sdk.resolveTokenRef(sdk.Chain.Ethereum, undefined, [])
+    expect(native).toEqual({ ticker: 'ETH', decimals: 18 })
+    expect(sdk.resolveTokenRefId(sdk.Chain.Ethereum, 'ETH', [])).toBeUndefined()
   })
 
   it.each(dangerousAddressCanonicalExports)('re-exports dangerous-address canonical %s by identity', name => {
