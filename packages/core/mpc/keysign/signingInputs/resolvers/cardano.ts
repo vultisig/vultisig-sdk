@@ -12,6 +12,10 @@ import { SigningInputsResolver } from '../resolver'
 
 /** Encodes a token amount as big-endian bytes for WalletCore's Cardano proto. */
 const amountToBytes = (amount: bigint): Uint8Array => {
+  if (amount < 0n) {
+    throw new RangeError('Cardano token amount must be non-negative')
+  }
+
   const hex = amount.toString(16)
   const padded = hex.length % 2 === 0 ? hex : `0${hex}`
   return Uint8Array.from(Buffer.from(padded, 'hex'))

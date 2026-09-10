@@ -9,6 +9,11 @@ import { buildSplTransfer } from '@/tools/prep/splTransfer'
 const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
 const FROM = '7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU'
 const TO = '9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM'
+const OFF_CURVE_RECIPIENTS = [
+  ['program-derived address', 'BnJQssQwsYPcNb2RrW5SP1kVxijMqsA9VVQX1U1p4kkp'],
+  ['associated token account', 'C7ESXyVGDeyZSc7wxKSXpccbtv3My9M9ptQaJbqxJdXk'],
+  ['ATA derived from an ATA recipient', 'CHwY4qnqYsKPLBiuhLiEHJm4bBvEKzc3GMxau4K7oQhC'],
+] as const
 
 describe('buildSplTransfer (pure-crypto unsigned SPL transfer)', () => {
   it('builds an unsigned transferChecked with deterministically-derived ATAs', () => {
@@ -96,6 +101,13 @@ describe('buildSplTransfer (pure-crypto unsigned SPL transfer)', () => {
       ).toThrow(/invalid Solana `to`/)
       expect(() => buildSplTransfer({ mint: 'bogus', from: FROM, to: TO, amount: 1n, decimals: 6 })).toThrow(
         /invalid Solana `mint`/
+      )
+    })
+
+    it.each(OFF_CURVE_RECIPIENTS)('rejects an off-curve %s before deriving a destination ATA', (_label, to) => {
+      expect(PublicKey.isOnCurve(new PublicKey(to).toBytes())).toBe(false)
+      expect(() => buildSplTransfer({ mint: USDC_MINT, from: FROM, to, amount: 1n, decimals: 6 })).toThrow(
+        /on-curve wallet address/
       )
     })
 

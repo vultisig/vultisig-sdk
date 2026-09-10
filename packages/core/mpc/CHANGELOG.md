@@ -1,5 +1,56 @@
 # @vultisig/core-mpc
 
+## 3.2.2
+
+### Patch Changes
+
+- Updated dependencies [[`e4d2594`](https://github.com/vultisig/vultisig-sdk/commit/e4d2594393043f89a99d1e38387cc139047f7af8), [`1cb2615`](https://github.com/vultisig/vultisig-sdk/commit/1cb2615acefd7f6f1170ab3340bb1d23d63ee1ca)]:
+  - @vultisig/core-chain@5.4.1
+
+## 3.2.1
+
+### Patch Changes
+
+- [#2352](https://github.com/vultisig/vultisig-sdk/pull/2352) [`341df52`](https://github.com/vultisig/vultisig-sdk/commit/341df52d63858f41172be2f61bde7c4ca694ad71) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject missing and malformed amounts before constructing Tron TRC20, Solana, Polkadot, Bittensor and Ripple issued-currency signing inputs. Preserve explicit zero trust-line limits and encode Solana amounts as unsigned uint64 values without overflow.
+
+- [#2341](https://github.com/vultisig/vultisig-sdk/pull/2341) [`ea2e6b7`](https://github.com/vultisig/vultisig-sdk/commit/ea2e6b7f4fc005d93d0a31741f521d7539d3104e) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject negative amounts before hexadecimal encoding so EVM and Cardano transaction inputs cannot silently contain empty amount bytes. Preserve existing encodings for non-negative values, including unsigned Long quantities.
+
+- Updated dependencies [[`864dfcb`](https://github.com/vultisig/vultisig-sdk/commit/864dfcb375c474f5bcc6f79bf18aeb145489cc47), [`80ba27f`](https://github.com/vultisig/vultisig-sdk/commit/80ba27f30afbeb104a8cc5738b5942467d977c9e), [`341df52`](https://github.com/vultisig/vultisig-sdk/commit/341df52d63858f41172be2f61bde7c4ca694ad71), [`ea2e6b7`](https://github.com/vultisig/vultisig-sdk/commit/ea2e6b7f4fc005d93d0a31741f521d7539d3104e), [`4fe2d97`](https://github.com/vultisig/vultisig-sdk/commit/4fe2d977cac34de6d0cf0cfefafdb6d484253a56), [`f5b79a4`](https://github.com/vultisig/vultisig-sdk/commit/f5b79a4b3ba943a1e80c4f8c01ecf1cd137a155d)]:
+  - @vultisig/core-chain@5.4.0
+  - @vultisig/lib-utils@0.10.7
+
+## 3.2.0
+
+### Minor Changes
+
+- [#2328](https://github.com/vultisig/vultisig-sdk/pull/2328) [`741272f`](https://github.com/vultisig/vultisig-sdk/commit/741272f8d3872afdf12d9487d2121dee04c2f363) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Carry a native swap's price impact in the keysign payload, so a co-signer can show it.
+
+  A device joining a keysign renders its swap verify screen entirely from the `KeysignPayload` — it holds no quote. Price impact was never on the wire, so the initiator showed a `Price Impact` row and the joining device showed nothing, on the screen whose purpose is for both parties to confirm they are approving the same swap.
+
+  `THORChainSwapPayload` gains `optional uint32 slippage_bps = 14` (vultisig/commondata#104), and `nativeSwapQuoteToSwapPayload` populates it from `quote.fees.slippage_bps`. MayaChain shares the message, so one field covers both native swap chains.
+
+  The value is carried rather than re-derived on the joiner. A joining device has enough in the payload to rebuild the quote request, but pools move between initiating and joining, so a fresh quote returns a different figure — price impact would become the only term on that screen where the two devices legitimately disagree.
+
+  The field is optional and left unset when the provider reports no slippage. Payloads from senders that predate it round-trip unchanged, and receivers are expected to hide the row rather than read an absent figure as zero.
+
+- [#2325](https://github.com/vultisig/vultisig-sdk/pull/2325) [`7c95286`](https://github.com/vultisig/vultisig-sdk/commit/7c9528622702a1e6f10cd5ff72017779d25e509a) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - EVM fee quotes now size the gas reserve from the transaction itself instead of a flat 600k floor. An aggregator swap is signed with the larger of the route's own gas and 1.5x its simulation (1.5x the 600k default when it cannot be simulated, e.g. a token route quoted before its allowance exists); a THORChain or Maya swap deposit (any transaction carrying the native swap payload) takes a fixed 120k; a plain transfer, including a memo-carrying vault deposit that carries no swap payload, takes its simulation raised to a per-chain floor with no inflation (when it cannot be simulated, that floor plus the intrinsic cost of its memo calldata); a dApp or other contract call keeps 1.5x headroom over its simulation. Base-fee headroom drops from 50% to 20% (32% for swaps), legacy-priced chains (BSC) are priced from `eth_gasPrice` with no tip, and the tip is the highest recent 5th-percentile reward from `eth_feeHistory`, capped at the gas price, with per-chain floors (1 gwei on tip-auction chains, 30 gwei on Polygon, 20 wei on OP-stack rollups) and a zero tip on Arbitrum, Mantle and Robinhood.
+
+  `getEvmFeeQuote`'s `minimumGasLimit` now only raises the value that stands in for a failed simulation and never a successful estimate. `getEvmTransferGasLimit`, `getEvmContractCallGasLimit` and `evmRouterDepositGasLimit` are exported from `@vultisig/core-chain/tx/fee/evm/evmGasLimit`, and `getEvmGasPrice` from `@vultisig/core-chain/tx/fee/evm/gasPrice`.
+
+- [#2331](https://github.com/vultisig/vultisig-sdk/pull/2331) [`982d464`](https://github.com/vultisig/vultisig-sdk/commit/982d4645467272f32e33a2df20883c1a7171a7ee) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Publish the SwapKit swap-fee work to the core packages that hold it. [#2315](https://github.com/vultisig/vultisig-sdk/issues/2315) landed
+  `swap_fee` on `SwapKitSwapPayload`, the `getKeysignSwapFeeFields` reader, and the
+  `sub_provider` route tag in `@vultisig/core-mpc`, plus the transfer-route fee
+  resolution in `@vultisig/core-chain` — but its changeset named only
+  `@vultisig/sdk`, so neither core package was versioned and the release skipped
+  both. Clients that consume `@vultisig/core-mpc` directly, rather than through
+  `@vultisig/sdk`, cannot reach the new fee group or its reader until these are
+  republished.
+
+### Patch Changes
+
+- Updated dependencies [[`7c95286`](https://github.com/vultisig/vultisig-sdk/commit/7c9528622702a1e6f10cd5ff72017779d25e509a), [`2e1ed70`](https://github.com/vultisig/vultisig-sdk/commit/2e1ed704ccd0a360eaf760f1258c7cd8a4401e22), [`741272f`](https://github.com/vultisig/vultisig-sdk/commit/741272f8d3872afdf12d9487d2121dee04c2f363), [`982d464`](https://github.com/vultisig/vultisig-sdk/commit/982d4645467272f32e33a2df20883c1a7171a7ee), [`95cf397`](https://github.com/vultisig/vultisig-sdk/commit/95cf39722b8a4d3e197b26bcef9983ecef6c3703)]:
+  - @vultisig/core-chain@5.3.0
+
 ## 3.1.0
 
 ### Minor Changes

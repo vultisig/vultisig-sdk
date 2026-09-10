@@ -4,7 +4,7 @@ import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getCoinType } from '@vultisig/core-chain/coin/coinType'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
 import { getTwPublicKeyType } from '@vultisig/core-chain/publicKey/tw/getTwPublicKeyType'
-import { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
+import { isValidRecipient } from '@vultisig/core-chain/utils/isValidRecipient'
 import { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
 import { getSendFeeEstimate } from '@vultisig/core-mpc/keysign/send/getSendFeeEstimate'
 import { getEncodedSigningInputs } from '@vultisig/core-mpc/keysign/signingInputs'
@@ -144,7 +144,7 @@ export class TransactionBuilder {
     try {
       const walletCore = await this.wasmProvider.getWalletCore()
 
-      const isValid = isValidAddress({
+      const isValid = isValidRecipient({
         chain: params.coin.chain,
         address: params.receiver,
         walletCore,

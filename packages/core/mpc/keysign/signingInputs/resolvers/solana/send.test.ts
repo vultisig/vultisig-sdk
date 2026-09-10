@@ -148,3 +148,40 @@ describe('getSolanaSendSigningInput priority fee plumbing', () => {
     ).toThrow(/out of uint64 range/)
   })
 })
+
+describe.each([
+  ['native', {}],
+  [
+    'token transfer',
+    { contractAddress: USDC_MINT, fromTokenAssociatedAddress: FROM_ATA, toTokenAssociatedAddress: TO_ATA },
+  ],
+  ['create and transfer', { contractAddress: USDC_MINT, fromTokenAssociatedAddress: FROM_ATA }],
+] as const)('Solana %s amount validation', (_name, options) => {
+  let walletCore: WalletCore
+  beforeAll(async () => {
+    walletCore = await initWasm()
+  })
+
+  it.each(['', ' ', '\t\n', '0x10', '+1', '-1', '-0', '1.5', '1e3'])('rejects malformed amount %j', toAmount => {
+    const keysignPayload = buildPayload(options)
+    keysignPayload.toAmount = toAmount
+    expect(() => getSolanaSendSigningInput({ keysignPayload, walletCore })).toThrow(/decimal/)
+  })
+
+  it('preserves the full unsigned uint64 amount', () => {
+    const keysignPayload = buildPayload(options)
+    keysignPayload.toAmount = '18446744073709551615'
+    const input = getSolanaSendSigningInput({ keysignPayload, walletCore })
+    const amount =
+      input.transferTransaction?.value ??
+      input.tokenTransferTransaction?.amount ??
+      input.createAndTransferTokenTransaction?.amount
+    expect(amount?.toString()).toBe(keysignPayload.toAmount)
+  })
+
+  it('rejects uint64 overflow', () => {
+    const keysignPayload = buildPayload(options)
+    keysignPayload.toAmount = '18446744073709551616'
+    expect(() => getSolanaSendSigningInput({ keysignPayload, walletCore })).toThrow(/uint64/)
+  })
+})

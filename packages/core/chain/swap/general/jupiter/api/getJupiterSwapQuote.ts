@@ -181,6 +181,10 @@ export const getJupiterSwapQuote = async ({
   return {
     dstAmount: quoteResponse.outAmount,
     provider: 'jupiter',
+    affiliate: {
+      affiliateBps: requestsPlatformFee ? affiliateBps : 0,
+      request: requestsPlatformFee ? 'included' : 'omitted',
+    },
     tx: {
       solana: {
         data,
