@@ -1370,6 +1370,11 @@
       "import": "./dist/coin/knownTokens/cosmos.js",
       "default": "./dist/coin/knownTokens/cosmos.js"
     },
+    "./coin/knownTokens/getKnownTokenIndexId": {
+      "types": "./dist/coin/knownTokens/getKnownTokenIndexId.d.ts",
+      "import": "./dist/coin/knownTokens/getKnownTokenIndexId.js",
+      "default": "./dist/coin/knownTokens/getKnownTokenIndexId.js"
+    },
     "./coin/knownTokens/thorchain": {
       "types": "./dist/coin/knownTokens/thorchain.d.ts",
       "import": "./dist/coin/knownTokens/thorchain.js",
