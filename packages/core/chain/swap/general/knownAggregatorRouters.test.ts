@@ -100,6 +100,9 @@ describe('assertKnownAggregatorRouter — AGG-02 fund-safety allowlist', () => {
       Chain.Avalanche,
       Chain.Base,
       Chain.Polygon,
+      // Robinhood (4663) confirmed 2026-09-09 via /routes and /route/build; see
+      // KYBER_STANDARD_ROUTER's note for the evidence.
+      Chain.Robinhood,
     ]) {
       expect(() => assertKnownAggregatorRouter('kyber', KYBER_V2, chain)).not.toThrow()
     }
