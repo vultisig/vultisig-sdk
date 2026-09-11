@@ -242,6 +242,19 @@
       "require": "./dist/tx/index.cjs",
       "default": "./dist/tx/index.cjs"
     },
+    "./tools/swap": {
+      "types": "./dist/tools/swap/index.d.ts",
+      "browser": "./dist/tools/swap/index.browser.js",
+      "worker": "./dist/tools/swap/index.browser.js",
+      "react-native": "./dist/tools/swap/index.react-native.js",
+      "node": {
+        "import": "./dist/tools/swap/index.js",
+        "require": "./dist/tools/swap/index.cjs"
+      },
+      "import": "./dist/tools/swap/index.js",
+      "require": "./dist/tools/swap/index.cjs",
+      "default": "./dist/tools/swap/index.cjs"
+    },
     "./tools/gas": {
       "types": "./dist/tools/gas/index.d.ts",
       "browser": "./dist/tools/gas/index.js",
