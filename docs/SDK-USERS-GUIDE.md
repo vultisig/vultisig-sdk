@@ -1894,7 +1894,11 @@ for (const token of tokens) {
   console.log(`${token.ticker}: balance ${token.balance}`)
 }
 
-// Also works for Solana (SPL via Jupiter), Cosmos (IBC), Cardano, Ripple and TON
+// Also works for Solana (SPL via Jupiter), Cosmos (IBC), Cardano, Ripple and TON.
+// Solana returns verified mints only (curated list + Jupiter's verified list),
+// whether or not a price id is known for them: airdropped counterfeits and spam
+// are left out, though the address still holds them on chain. Classify any mint
+// with getSolanaTokenVerification from '@vultisig/core-chain/chains/solana/spl/verification'.
 const solTokens = await vault.discoverTokens(Chain.Solana)
 
 // TON returns verified jettons only (curated list + the ton-assets whitelist):

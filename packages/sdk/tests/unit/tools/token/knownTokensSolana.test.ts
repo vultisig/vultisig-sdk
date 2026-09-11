@@ -18,14 +18,14 @@ const SOLANA_USDT_MINT = 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB'
 
 describe('knownTokens — Solana SPL fast-path (Bug J)', () => {
   // knownTokens[chain] is a KnownCoin[] (array). knownTokensIndex[chain]
-  // is the lowercased-key map that consumers use for lookups (see e.g.
+  // is the chain-aware key map that consumers use for lookups (see e.g.
   // packages/core/chain/swap/native/utils/getNativeSwapDecimals.ts:23).
   // Both are derived from the same leanTokens source — checking either
   // proves the entries land. Tests below use both to pin the contract.
 
   describe('USDC', () => {
     it('is reachable via knownTokensIndex (the canonical lookup API)', () => {
-      const fromIndex = knownTokensIndex[Chain.Solana][SOLANA_USDC_MINT.toLowerCase()]
+      const fromIndex = knownTokensIndex[Chain.Solana][SOLANA_USDC_MINT]
       expect(fromIndex).toBeDefined()
       expect(fromIndex.ticker).toBe('USDC')
       expect(fromIndex.decimals).toBe(6)
@@ -41,7 +41,7 @@ describe('knownTokens — Solana SPL fast-path (Bug J)', () => {
 
   describe('USDT', () => {
     it('is reachable via knownTokensIndex (the canonical lookup API)', () => {
-      const fromIndex = knownTokensIndex[Chain.Solana][SOLANA_USDT_MINT.toLowerCase()]
+      const fromIndex = knownTokensIndex[Chain.Solana][SOLANA_USDT_MINT]
       expect(fromIndex).toBeDefined()
       expect(fromIndex.ticker).toBe('USDT')
       expect(fromIndex.decimals).toBe(6)
