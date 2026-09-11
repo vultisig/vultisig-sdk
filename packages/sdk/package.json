@@ -115,6 +115,32 @@
       "require": "./dist/tools/bridge/index.cjs",
       "default": "./dist/tools/bridge/index.cjs"
     },
+    "./tools/address": {
+      "types": "./dist/tools/address/index.d.ts",
+      "browser": "./dist/tools/address/index.js",
+      "worker": "./dist/tools/address/index.js",
+      "react-native": "./dist/tools/address/index.js",
+      "node": {
+        "import": "./dist/tools/address/index.js",
+        "require": "./dist/tools/address/index.cjs"
+      },
+      "import": "./dist/tools/address/index.js",
+      "require": "./dist/tools/address/index.cjs",
+      "default": "./dist/tools/address/index.cjs"
+    },
+    "./tools/validate": {
+      "types": "./dist/tools/validate/index.d.ts",
+      "browser": "./dist/tools/validate/index.js",
+      "worker": "./dist/tools/validate/index.js",
+      "react-native": "./dist/tools/validate/index.js",
+      "node": {
+        "import": "./dist/tools/validate/index.js",
+        "require": "./dist/tools/validate/index.cjs"
+      },
+      "import": "./dist/tools/validate/index.js",
+      "require": "./dist/tools/validate/index.cjs",
+      "default": "./dist/tools/validate/index.cjs"
+    },
     "./tools/balance": {
       "types": "./dist/tools/balance/index.d.ts",
       "browser": "./dist/tools/balance/index.js",

@@ -398,6 +398,14 @@ const configs = {
       distBase: 'tools/bridge',
     }),
     ...createSubpathConfigs({
+      input: './src/tools/address/index.ts',
+      distBase: 'tools/address',
+    }),
+    ...createSubpathConfigs({
+      input: './src/tools/validate/index.ts',
+      distBase: 'tools/validate',
+    }),
+    ...createSubpathConfigs({
       input: './src/tools/balance/index.ts',
       distBase: 'tools/balance',
     }),
