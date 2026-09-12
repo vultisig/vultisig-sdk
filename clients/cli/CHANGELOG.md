@@ -1,5 +1,19 @@
 # @vultisig/cli
 
+## 7.4.2
+
+### Patch Changes
+
+- [#2357](https://github.com/vultisig/vultisig-sdk/pull/2357) [`172d15b`](https://github.com/vultisig/vultisig-sdk/commit/172d15b9b58064f6a4e7181e091523b99fd18fe7) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - The agent executor now treats Robinhood as an EVM chain. Its EVM predicate is derived from the shared chain-kind record instead of a hand-maintained list that had left Robinhood out, so an approve-then-swap envelope on Robinhood is signed in order instead of being rejected as non-EVM, and Robinhood sends get the same nonce locking, stale-nonce repair, gas re-bumping and broadcast nonce journaling as every other EVM chain.
+
+- [#2363](https://github.com/vultisig/vultisig-sdk/pull/2363) [`75e33dc`](https://github.com/vultisig/vultisig-sdk/commit/75e33dce10203bcbd95cf334770b6cb893d80237) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Export the canonical TRON address conversion and TRC-20 ABI encoding helpers from the root and React Native SDK entrypoints.
+
+- [#2365](https://github.com/vultisig/vultisig-sdk/pull/2365) [`b3cebc6`](https://github.com/vultisig/vultisig-sdk/commit/b3cebc63b1222d8bc41ef9e8fae8e0e470042519) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Export the canonical token reference resolvers and their result type from the SDK root and React Native entry points.
+
+- Updated dependencies [[`75e33dc`](https://github.com/vultisig/vultisig-sdk/commit/75e33dce10203bcbd95cf334770b6cb893d80237), [`1ec5c2a`](https://github.com/vultisig/vultisig-sdk/commit/1ec5c2aec8499ef009c248bfd714720c07798315), [`b3cebc6`](https://github.com/vultisig/vultisig-sdk/commit/b3cebc63b1222d8bc41ef9e8fae8e0e470042519), [`663fddf`](https://github.com/vultisig/vultisig-sdk/commit/663fddfd336f3acf990a5b5d470a0962c7b9fade), [`42ef35c`](https://github.com/vultisig/vultisig-sdk/commit/42ef35c4542e1289b6a4e70437d31fe917f9bd22), [`257729d`](https://github.com/vultisig/vultisig-sdk/commit/257729dbc65abb142e543162f6f67eb6f1c68a11)]:
+  - @vultisig/sdk@7.4.2
+  - @vultisig/core-chain@5.4.2
+
 ## 7.4.0
 
 ### Patch Changes
