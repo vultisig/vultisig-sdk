@@ -50,7 +50,10 @@ console.log(JSON.stringify({prep:true,format:process.argv[2],order:process.argv[
   )
   for (const format of ['esm', 'cjs']) {
     for (const order of ['prep-first', 'root-first']) {
-      execFileSync(process.execPath, ['prep-runtime.mjs', format, order], { cwd: appRoot, stdio: 'inherit' })
+      execFileSync(process.execPath, ['prep-runtime.mjs', format, order], {
+        cwd: appRoot,
+        stdio: 'inherit',
+      })
     }
   }
   writeFileSync(
@@ -61,21 +64,23 @@ const delegate: (params: DelegateParams) => CosmosStakingMsgEnvelope = buildDele
 void delegate
 `
   )
-  execFileSync(
-    path.join(repoRoot, 'node_modules/.bin/tsc'),
-    [
-      '--module',
-      'Node16',
-      '--moduleResolution',
-      'Node16',
-      '--target',
-      'ES2022',
-      '--noEmit',
-      '--skipLibCheck',
-      'prep-types.cts',
-    ],
-    { cwd: appRoot, stdio: 'inherit' }
+  writeFileSync(
+    path.join(appRoot, 'prep-cjs-tsconfig.json'),
+    JSON.stringify({
+      compilerOptions: {
+        module: 'Node16',
+        moduleResolution: 'Node16',
+        target: 'ES2022',
+        noEmit: true,
+        skipLibCheck: true,
+      },
+      files: ['prep-types.cts'],
+    })
   )
+  execFileSync(path.join(repoRoot, 'node_modules/.bin/tsc'), ['-p', 'prep-cjs-tsconfig.json'], {
+    cwd: appRoot,
+    stdio: 'inherit',
+  })
   for (const native of [false, true]) {
     writeFileSync(
       path.join(appRoot, 'prep-types.ts'),
