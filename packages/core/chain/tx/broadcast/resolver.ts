@@ -98,6 +98,13 @@ export type BroadcastTxResolver<T extends Chain = Chain> = Resolver<
   {
     chain: T
     tx: SigningOutput<T>
+    /**
+     * Solana only: the block height past which the signed blockhash is dead,
+     * as recorded in the keysign payload. Bounds the resend loop exactly;
+     * without it the resolver falls back to a conservative bound. Other
+     * chains ignore it.
+     */
+    lastValidBlockHeight?: number
   },
   Promise<BroadcastTxResult>
 >

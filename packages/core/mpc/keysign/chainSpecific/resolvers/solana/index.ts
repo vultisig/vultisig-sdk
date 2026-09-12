@@ -21,10 +21,14 @@ export const getSolanaChainSpecific: GetChainSpecificResolver<'solanaSpecific'> 
   const receiver = keysignPayload.toAddress || undefined
   const client = getSolanaClient()
 
-  const recentBlockHash = (await client.getLatestBlockhash('confirmed')).blockhash
+  const { blockhash: recentBlockHash, lastValidBlockHeight } = await client.getLatestBlockhash('confirmed')
 
   const chainSpecific = create(SolanaSpecificSchema, {
     recentBlockHash,
+    // Carried with the blockhash so the broadcaster can bound its resend loop
+    // exactly and the status poll can prove an unseen signature dead, instead
+    // of both guessing from a fresh blockhash.
+    lastValidBlockHeight: BigInt(lastValidBlockHeight),
     computeLimit: solanaConfig.priorityFeeLimit.toString(),
   })
 

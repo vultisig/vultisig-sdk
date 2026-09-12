@@ -2253,6 +2253,11 @@
       "import": "./dist/tx/broadcast/resolvers/utxo.js",
       "default": "./dist/tx/broadcast/resolvers/utxo.js"
     },
+    "./tx/broadcast/solanaBlockhashExpired": {
+      "types": "./dist/tx/broadcast/solanaBlockhashExpired.d.ts",
+      "import": "./dist/tx/broadcast/solanaBlockhashExpired.js",
+      "default": "./dist/tx/broadcast/solanaBlockhashExpired.js"
+    },
     "./tx/broadcast/transientRetry": {
       "types": "./dist/tx/broadcast/transientRetry.d.ts",
       "import": "./dist/tx/broadcast/transientRetry.js",

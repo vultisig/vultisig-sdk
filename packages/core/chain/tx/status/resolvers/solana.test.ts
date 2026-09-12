@@ -35,14 +35,15 @@ describe('getSolanaTxStatus', () => {
     expect(mocks.getTransaction).not.toHaveBeenCalled()
   })
 
-  it('marks an unknown signature as not_found when its last valid block height has expired', async () => {
+  it('marks an unknown signature as expired once its last valid block height has passed', async () => {
     mocks.getSignatureStatuses.mockResolvedValue({ value: [null] })
     mocks.getBlockHeight.mockResolvedValue(101)
 
     await expect(getSolanaTxStatus({ chain: Chain.Solana, hash, lastValidBlockHeight: 100 })).resolves.toEqual({
-      status: 'not_found',
+      status: 'expired',
       isKnown: false,
     })
+    expect(mocks.getSignatureStatuses).toHaveBeenCalledWith([hash], { searchTransactionHistory: true })
     expect(mocks.getTransaction).not.toHaveBeenCalled()
   })
 

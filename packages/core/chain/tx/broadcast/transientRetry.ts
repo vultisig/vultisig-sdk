@@ -1,6 +1,7 @@
 import { HttpResponseError } from '@vultisig/lib-utils/fetch/HttpResponseError'
 
 import { CosmosSequenceMismatchError } from './cosmosSequenceMismatch'
+import { SolanaBlockhashExpiredError } from './solanaBlockhashExpired'
 
 /**
  * A transaction was included on-chain but its execution genuinely failed
@@ -109,7 +110,9 @@ export const isTransientBroadcastError = (error: unknown): boolean => {
       return current.recovery === 'wait'
     }
 
-    if (current instanceof DeliverTxFailedError) {
+    // Dead bytes: a stale blockhash never becomes valid again, and an
+    // on-chain execution failure is final. Neither is worth a resend.
+    if (current instanceof DeliverTxFailedError || current instanceof SolanaBlockhashExpiredError) {
       return false
     }
 
