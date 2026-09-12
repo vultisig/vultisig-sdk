@@ -134,6 +134,13 @@ describe('getCowSwapQuote', () => {
       affiliateBps: 0,
     })
 
+    expect(quote50.affiliate).toEqual({
+      affiliateBps: 50,
+      request: 'included',
+      allocations: [{ recipient: COWSWAP_FEE_RECIPIENT.toLowerCase(), bps: 50, role: 'affiliate' }],
+    })
+    expect(quote0.affiliate?.affiliateBps).toBe(0)
+    expect(quote0.affiliate?.request).toBe('included')
     expect('cowswap_order' in quote50.tx).toBe(true)
     expect('cowswap_order' in quote0.tx).toBe(true)
 

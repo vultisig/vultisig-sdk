@@ -4,13 +4,13 @@
  * Registers the native MPC engine, native WalletCore, RN crypto, and RN storage.
  * Exports RN-compatible SDK APIs.
  */
-
 // Buffer polyfill MUST happen before any SDK module graph import. Several
 // bundled deps read `globalThis.Buffer` at module-init (e.g. @solana/web3.js,
 // @noble/*, @polkadot/*). Consumers often polyfill Buffer in App.tsx, but
 // because ES module imports are hoisted, the SDK's module bodies can evaluate
 // before App.tsx's polyfill runs. Polyfilling here guarantees ordering.
 import { Buffer as _Buffer } from 'buffer'
+
 if (typeof globalThis !== 'undefined' && !(globalThis as { Buffer?: unknown }).Buffer) {
   ;(globalThis as { Buffer?: unknown }).Buffer = _Buffer
 }
@@ -48,9 +48,53 @@ import { NativeWalletCore } from '@vultisig/walletcore-native'
 import { configureDefaultStorage } from '../../context/defaultStorage'
 import { configureWasm } from '../../context/wasmRuntime'
 import { configureCrypto } from '../../crypto'
+import { assertBittensorAddress, decodeBittensorAddress } from '../../tools/balance/bittensor'
+import { cosmosBalanceChains, getCosmosBalance, isCosmosBalanceChain } from '../../tools/balance/cosmos'
+import { DOT_DECIMALS, formatDot } from '../../tools/balance/formatDot'
+import {
+  getCardanoBalance,
+  getSuiAllBalances,
+  getSuiBalance,
+  getSuiTokenBalance,
+  getTonBalance,
+  getTonJettonBalance,
+  getTrc20TokenBalance,
+  getTronAccountResources,
+  getTrxBalance,
+  getXrpBalance,
+} from '../../tools/balance/otherBalance'
+import { formatBalance } from '../../tools/balance/rpc'
+import { getSolBalance, getSplTokenBalance } from '../../tools/balance/solana'
+import { getTaoBalance } from '../../tools/balance/taoBalance'
+import { formatUtxoBalance, getUtxoBalance, supportedUtxoBalanceChains } from '../../tools/balance/utxoBalance'
 import * as cosmos from '../../tools/cosmos'
 import * as evm from '../../tools/evm'
+import {
+  buildDelegateMsg,
+  buildRedelegateMsg,
+  buildUndelegateMsg,
+  buildWithdrawRewardsMsg,
+  cosmosStaking,
+} from '../../tools/prep/cosmosStaking'
+import { buildCosmosWasmExecuteMsg } from '../../tools/prep/cosmosWasmExecute'
+import { buildCw20TransferMsg } from '../../tools/prep/cw20Transfer'
+import {
+  IBC_CHAIN_HRP,
+  IBC_CHAIN_REVISION,
+  IBC_CHANNEL_DEST,
+  IBC_MSG_TRANSFER_TYPE_URL,
+  normaliseIbcChainId,
+  prepareIbcTransfer,
+  resolveSourceChannelByDestChain,
+  supportedIbcDestinationsFrom,
+} from '../../tools/prep/ibcTransfer'
+import { POLKADOT_ASSET_HUB_KNOWN_ASSETS, preparePolkadotAssetSend } from '../../tools/prep/polkadotAssetSend'
 import type { prepareRawEvmTxFromKeys as PrepareRawEvmTxFromKeys } from '../../tools/prep/rawEvm'
+import { prepareSuiTokenTransferFromKeys, SUI_NATIVE_COIN_TYPE } from '../../tools/prep/suiTokenTransfer'
+import { SwapQuoteExpiredError } from '../../tools/prep/SwapQuoteExpiredError'
+import { TRC20_TRANSFER_SELECTOR } from '../../tools/prep/trc20'
+import { CONSOLIDATE_CHAINS } from '../../tools/prep/utxoConsolidate'
+import * as swap from '../../tools/swap'
 import * as token from '../../tools/token'
 import { ReactNativeCrypto } from './crypto'
 import { ReactNativeStorage } from './storage'
@@ -299,6 +343,9 @@ export {
 export { DEFAULT_CHAINS } from '../../constants'
 export { defaultChains } from '@vultisig/core-chain/Chain'
 
+// Canonical TRON address and TRC-20 ABI helpers, shared with the root SDK entrypoint.
+export { encodeTrc20TransferParam, tronBase58ToEvmHex, tronBase58ToHex, tronHexToBase58 } from '../../abi/tron'
+
 // WalletCore provider access
 export { configureWasm, getWalletCore } from '../../context/wasmRuntime'
 
@@ -309,6 +356,8 @@ export { configureMpc, ensureMpcEngine, getMpcEngine } from '@vultisig/mpc-types
 // Vault + fast vault lifecycle classes
 export { FastVaultFromSeedphraseService } from '../../services/FastVaultFromSeedphraseService'
 export { FastVault, hasServer, isServer } from '../../vault'
+export type { ResolvedTokenInfo } from '../../vault/tokenRef'
+export { resolveTokenRef, resolveTokenRefId } from '../../vault/tokenRef'
 export type { VaultImportConflictResolution, VaultImportOptions } from '../../VaultManager'
 export { VaultManager } from '../../VaultManager'
 export type { VultisigConfig } from '../../Vultisig'
@@ -662,6 +711,13 @@ export type {
   BuildThreeJaneSupplyUsdcResult,
   ThreeJaneTranche,
   ThreeJaneTxStep,
+} from '../../tools/defi/threeJane'
+// Aliased to avoid colliding with the CCTP bridge's `parseUsdcAmount` above —
+// both re-export the same underlying `./parse/usdcAmount` helper.
+export {
+  buildThreeJaneSupplyUsdc,
+  parseUsdcAmount as parseThreeJaneUsdcAmount,
+  THREE_JANE_ADDRESSES,
 } from '../../tools/defi/threeJane'
 
 // Cosmos staking + distribution module (LCD queries — read-only,
@@ -1085,6 +1141,10 @@ export {
   XRP_DANGEROUS_ADDRESSES,
 } from '../../utils/dangerousAddresses'
 
+// Blockaid supported-chain metadata
+export type { BlockaidSupportedEvmChain } from '@vultisig/core-chain/security/blockaid/evmChains'
+export { blockaidEvmChain, blockaidSupportedEvmChains } from '@vultisig/core-chain/security/blockaid/evmChains'
+
 // Storage
 export { MemoryStorage } from '../../storage/MemoryStorage'
 
@@ -1123,3 +1183,80 @@ export {
   RIVER_TROVE_STATUS_NAMES,
   riverStatusName,
 } from '../../tools/defi/river'
+
+async function prepareThorchainMsgDepositTxFromKeys(
+  ...args: Parameters<typeof import('../../tools/prep/thorchainMsgDeposit').prepareThorchainMsgDepositTxFromKeys>
+) {
+  const mod = await import('../../tools/prep/thorchainMsgDeposit')
+  return mod.prepareThorchainMsgDepositTxFromKeys(...args)
+}
+
+// Assemble RN groups from safe static helpers and this entry’s deferred wrappers.
+export const balance = {
+  getXrpBalance,
+  getTrc20TokenBalance,
+  getTronAccountResources,
+  getTrxBalance,
+  getTonBalance,
+  getTonJettonBalance,
+  getSuiAllBalances,
+  getSuiBalance,
+  getSuiTokenBalance,
+  getCardanoBalance,
+  getTaoBalance,
+  assertBittensorAddress,
+  decodeBittensorAddress,
+  cosmosBalanceChains,
+  getCosmosBalance,
+  isCosmosBalanceChain,
+  formatBalance,
+  getSolBalance,
+  getSplTokenBalance,
+  balancePolkadot,
+  DOT_DECIMALS,
+  formatDot,
+  getPolkadotAssetBalance,
+  getPolkadotNativeBalance,
+  formatUtxoBalance,
+  getUtxoBalance,
+  supportedUtxoBalanceChains,
+} as const
+
+export const prep = {
+  prepareContractCallTxFromKeys,
+  prepareSignAminoTxFromKeys,
+  prepareSignDirectTxFromKeys,
+  buildDelegateMsg,
+  buildRedelegateMsg,
+  buildUndelegateMsg,
+  buildWithdrawRewardsMsg,
+  cosmosStaking,
+  buildCosmosWasmExecuteMsg,
+  buildCw20TransferMsg,
+  IBC_CHAIN_HRP,
+  IBC_CHAIN_REVISION,
+  IBC_CHANNEL_DEST,
+  IBC_MSG_TRANSFER_TYPE_URL,
+  normaliseIbcChainId,
+  prepareIbcTransfer,
+  resolveSourceChannelByDestChain,
+  supportedIbcDestinationsFrom,
+  prepareJettonTransferTxFromKeys,
+  getMaxSendAmountFromKeys,
+  POLKADOT_ASSET_HUB_KNOWN_ASSETS,
+  preparePolkadotAssetSend,
+  prepareRawEvmTxFromKeys,
+  prepareSendTxFromKeys,
+  buildSplTransfer,
+  prepareSuiTokenTransferFromKeys,
+  SUI_NATIVE_COIN_TYPE,
+  prepareSwapTxFromKeys,
+  SwapQuoteExpiredError,
+  prepareThorchainMsgDepositTxFromKeys,
+  prepareTrc20TransferFromKeys,
+  TRC20_TRANSFER_SELECTOR,
+  CONSOLIDATE_CHAINS,
+  prepareUtxoConsolidateTxFromKeys,
+} as const
+
+export { swap }

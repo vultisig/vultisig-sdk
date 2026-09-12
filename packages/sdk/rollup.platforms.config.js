@@ -1,5 +1,6 @@
 import alias from '@rollup/plugin-alias'
 import commonjs from '@rollup/plugin-commonjs'
+import inject from '@rollup/plugin-inject'
 import json from '@rollup/plugin-json'
 import resolve from '@rollup/plugin-node-resolve'
 import replace from '@rollup/plugin-replace'
@@ -190,7 +191,7 @@ export const findRnOverrideTarget = id => {
   )
 }
 
-export const rnOverridePlugin = () => {
+export const rnOverridePlugin = (requiredTargets = rnOverrideTargets) => {
   const matchedTargets = new Set()
 
   return {
@@ -218,7 +219,7 @@ export const rnOverridePlugin = () => {
     },
     buildEnd(error) {
       if (error) return
-      const missingTargets = rnOverrideTargets.filter(target => !matchedTargets.has(target.name))
+      const missingTargets = requiredTargets.filter(target => !matchedTargets.has(target.name))
       if (missingTargets.length > 0) {
         this.error(
           `React Native build did not intercept required core-chain override target(s): ${missingTargets
@@ -231,7 +232,7 @@ export const rnOverridePlugin = () => {
 }
 
 const createPlugins = (platformOptions = {}) => {
-  const { preferBuiltins = false, browser = false, replaceOptions = {} } = platformOptions
+  const { preferBuiltins = false, browser = false, bufferPolyfill = false, replaceOptions = {} } = platformOptions
 
   return [
     alias({
@@ -291,6 +292,7 @@ const createPlugins = (platformOptions = {}) => {
     }),
     json(),
     commonjs({ include: [/node_modules/], transformMixedEsModules: true }),
+    ...(bufferPolyfill ? [inject({ Buffer: ['buffer', 'Buffer'] })] : []),
     terser({
       format: { comments: false },
       compress: { passes: 1, drop_debugger: true },
@@ -299,7 +301,7 @@ const createPlugins = (platformOptions = {}) => {
   ]
 }
 
-const createSubpathConfigs = ({ input, distBase }) => [
+const createSubpathConfigs = ({ input, distBase, browser = false }) => [
   {
     input,
     output: {
@@ -337,6 +339,28 @@ const createSubpathConfigs = ({ input, distBase }) => [
       },
     }),
   },
+  ...(browser
+    ? [
+        {
+          input,
+          output: {
+            file: `./dist/${distBase}/index.browser.js`,
+            format: 'es',
+            sourcemap: true,
+            inlineDynamicImports: true,
+            paths: wasmPathsResolver,
+          },
+          external,
+          plugins: createPlugins({
+            preferBuiltins: false,
+            browser: true,
+            bufferPolyfill: true,
+            replaceOptions: { 'process.env.VULTISIG_PLATFORM': JSON.stringify('browser') },
+          }),
+          onwarn,
+        },
+      ]
+    : []),
 ]
 
 // Get target from environment variable
@@ -388,6 +412,11 @@ const configs = {
     ...createSubpathConfigs({
       input: './src/tools/defi/index.ts',
       distBase: 'tools/defi',
+    }),
+    ...createSubpathConfigs({
+      input: './src/tools/swap/index.ts',
+      distBase: 'tools/swap',
+      browser: true,
     }),
     ...createSubpathConfigs({
       input: './src/tools/gas/index.ts',
@@ -461,7 +490,7 @@ const configs = {
     }),
     onwarn,
   },
-  'react-native': [
+  'react-native': () => [
     // RN preamble — tiny side-effect bundle that installs global polyfills
     // (Buffer + subarray repair) before the rest of the SDK evaluates.
     // Consumers are expected to `import '@vultisig/sdk/rn-preamble'` as their
@@ -770,6 +799,24 @@ const configs = {
     },
   ],
 }
+
+// Keep fresh platform plugin instances for the narrow RN surface, including the
+// same resolver overrides as the root entry. Only its reachable override targets
+// are mandatory; all registered overrides still apply when encountered.
+const [rnPreamble, rnRoot] = configs['react-native']()
+const [, rnSwap] = configs['react-native']()
+rnSwap.input = './src/tools/swap/index.ts'
+rnSwap.output.file = './dist/tools/swap/index.react-native.js'
+rnSwap.plugins = rnSwap.plugins.map(plugin =>
+  plugin.name === 'vultisig-rn-path-override'
+    ? rnOverridePlugin(
+        rnOverrideTargets.filter(target =>
+          ['Solana client', 'LI.FI enabled chains', 'LI.FI quote'].includes(target.name)
+        )
+      )
+    : plugin
+)
+configs['react-native'] = [rnPreamble, rnRoot, rnSwap]
 
 // Export based on target
 let exportConfig

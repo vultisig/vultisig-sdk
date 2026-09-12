@@ -1,4 +1,5 @@
 import { Chain } from '@vultisig/core-chain/Chain'
+import { knownTokens } from '@vultisig/core-chain/coin/knownTokens'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Only mock async/network-dependent core modules
@@ -320,5 +321,22 @@ describe('Vultisig static methods', () => {
         url: 'https://safe-site.com',
       })
     })
+  })
+})
+
+describe('case-sensitive public static token lookup', () => {
+  it.each(['toString', 'valueOf', 'constructor', '__proto__'])('returns null for unknown identifier %s', id => {
+    expect(Vultisig.getKnownToken(Chain.Solana, id)).toBeNull()
+  })
+
+  it('resolves canonical Solana and Ripple identifiers and rejects altered variants', () => {
+    for (const chain of [Chain.Solana, Chain.Ripple]) {
+      for (const coin of knownTokens[chain]) {
+        expect(Vultisig.getKnownToken(chain, coin.id!)?.tokenId).toBe(coin.id)
+        if (coin.id !== coin.id!.toLowerCase()) {
+          expect(Vultisig.getKnownToken(chain, coin.id!.toLowerCase())).toBeNull()
+        }
+      }
+    }
   })
 })
