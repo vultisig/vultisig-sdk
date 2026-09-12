@@ -44,7 +44,12 @@ const okMsgs = {
       cosmos_tx: {
         chain_id: 'osmosis-1',
         signer_address: baseArgs.fromAddress,
-        msgs: [{ msg: '{}', msg_type_url: '/ibc.applications.transfer.v1.MsgTransfer' }],
+        msgs: [
+          {
+            msg: '{}',
+            msg_type_url: '/ibc.applications.transfer.v1.MsgTransfer',
+          },
+        ],
         memo: '',
       },
     },
@@ -134,7 +139,9 @@ describe('buildSkipAffiliates', () => {
     }
     // And the built envelope carries that pinned receiver, not just a shape match.
     expect(buildSkipAffiliates('1', 50)).toEqual({
-      '1': { affiliates: [{ basis_points_fee: '50', address: STATION_EVM_FEE_RECEIVER }] },
+      '1': {
+        affiliates: [{ basis_points_fee: '50', address: STATION_EVM_FEE_RECEIVER }],
+      },
     })
   })
 })
@@ -204,7 +211,14 @@ describe('runSkipSwap fund-safety guards (mocked Skip)', () => {
   })
 
   it('rejects routes that custody funds on an unsupported chain', async () => {
-    mockFetchSequence([{ body: { ...okRoute, required_chain_addresses: ['osmosis-1', 'agoric-3', 'cosmoshub-4'] } }])
+    mockFetchSequence([
+      {
+        body: {
+          ...okRoute,
+          required_chain_addresses: ['osmosis-1', 'agoric-3', 'cosmoshub-4'],
+        },
+      },
+    ])
     const out = await runSkipSwap(baseArgs)
     expect(out.ok).toBe(false)
     if (!out.ok) {
@@ -245,11 +259,25 @@ describe('multi-tx memo-cap regression (SDK-vs-abts reconciliation, VA-86)', () 
     const overCapMemo = 'a'.repeat(300) // over columbus-5's 256-byte MaxMemoCharacters cap
     const chainIds = ['osmosis-1', 'columbus-5']
     mockFetchSequence([
-      { body: { ...okRoute, txs_required: 2, chain_ids: chainIds, required_chain_addresses: chainIds } },
+      {
+        body: {
+          ...okRoute,
+          txs_required: 2,
+          chain_ids: chainIds,
+          required_chain_addresses: chainIds,
+        },
+      },
       {
         body: {
           txs: [
-            { cosmos_tx: { chain_id: 'osmosis-1', signer_address: multiTxArgs.fromAddress, msgs: [], memo: '' } },
+            {
+              cosmos_tx: {
+                chain_id: 'osmosis-1',
+                signer_address: multiTxArgs.fromAddress,
+                msgs: [],
+                memo: '',
+              },
+            },
             {
               cosmos_tx: {
                 chain_id: 'columbus-5',
@@ -261,7 +289,12 @@ describe('multi-tx memo-cap regression (SDK-vs-abts reconciliation, VA-86)', () 
           ],
           msgs: [],
           min_amount_out: '118800',
-          route: { ...okRoute, txs_required: 2, chain_ids: chainIds, required_chain_addresses: chainIds },
+          route: {
+            ...okRoute,
+            txs_required: 2,
+            chain_ids: chainIds,
+            required_chain_addresses: chainIds,
+          },
         },
       },
     ])
@@ -280,11 +313,25 @@ describe('multi-tx memo-cap regression (SDK-vs-abts reconciliation, VA-86)', () 
   it('accepts a multi-tx route when every leg fits its own chain cap', async () => {
     const chainIds = ['osmosis-1', 'columbus-5']
     mockFetchSequence([
-      { body: { ...okRoute, txs_required: 2, chain_ids: chainIds, required_chain_addresses: chainIds } },
+      {
+        body: {
+          ...okRoute,
+          txs_required: 2,
+          chain_ids: chainIds,
+          required_chain_addresses: chainIds,
+        },
+      },
       {
         body: {
           txs: [
-            { cosmos_tx: { chain_id: 'osmosis-1', signer_address: multiTxArgs.fromAddress, msgs: [], memo: '' } },
+            {
+              cosmos_tx: {
+                chain_id: 'osmosis-1',
+                signer_address: multiTxArgs.fromAddress,
+                msgs: [],
+                memo: '',
+              },
+            },
             {
               cosmos_tx: {
                 chain_id: 'columbus-5',
@@ -296,7 +343,12 @@ describe('multi-tx memo-cap regression (SDK-vs-abts reconciliation, VA-86)', () 
           ],
           msgs: [],
           min_amount_out: '118800',
-          route: { ...okRoute, txs_required: 2, chain_ids: chainIds, required_chain_addresses: chainIds },
+          route: {
+            ...okRoute,
+            txs_required: 2,
+            chain_ids: chainIds,
+            required_chain_addresses: chainIds,
+          },
         },
       },
     ])
@@ -315,16 +367,35 @@ describe('multi-tx memo-cap regression (SDK-vs-abts reconciliation, VA-86)', () 
   it('does not crash on a malformed leg (cosmos_tx: null) and surfaces the existing malformed-envelope error', async () => {
     const chainIds = ['osmosis-1', 'columbus-5']
     mockFetchSequence([
-      { body: { ...okRoute, txs_required: 2, chain_ids: chainIds, required_chain_addresses: chainIds } },
+      {
+        body: {
+          ...okRoute,
+          txs_required: 2,
+          chain_ids: chainIds,
+          required_chain_addresses: chainIds,
+        },
+      },
       {
         body: {
           txs: [
-            { cosmos_tx: { chain_id: 'osmosis-1', signer_address: multiTxArgs.fromAddress, msgs: [], memo: '' } },
+            {
+              cosmos_tx: {
+                chain_id: 'osmosis-1',
+                signer_address: multiTxArgs.fromAddress,
+                msgs: [],
+                memo: '',
+              },
+            },
             { cosmos_tx: null },
           ],
           msgs: [],
           min_amount_out: '118800',
-          route: { ...okRoute, txs_required: 2, chain_ids: chainIds, required_chain_addresses: chainIds },
+          route: {
+            ...okRoute,
+            txs_required: 2,
+            chain_ids: chainIds,
+            required_chain_addresses: chainIds,
+          },
         },
       },
     ])
@@ -336,18 +407,206 @@ describe('multi-tx memo-cap regression (SDK-vs-abts reconciliation, VA-86)', () 
   })
 })
 
+describe('ICS-20 packet-memo cap (abts#2458)', () => {
+  // The SDK measured ONLY `cosmos_tx.memo` and its comment asserted the inner
+  // packet memo "is unbounded". Both halves were wrong, in opposite directions:
+  //
+  //   - columbus-5 DOES cap the packet memo, so an oversized one was admitted
+  //     and failed at broadcast (sdk code 12) AFTER signing.
+  //   - but that cap is ~1024 bytes, NOT the 256-byte outer-memo cap. 152 real
+  //     columbus-5 envelopes separate perfectly: 80 successes <= 1001B, 72
+  //     failures >= 1122B. Measuring the packet memo against the OUTER cap
+  //     would reject all 80 working USTC<->LUNC routes.
+  //
+  // So the two fields are checked against two different caps, and the tests
+  // below pin both edges - the over-cap rejection AND the healthy-route
+  // admission that a naive fix breaks.
+  const packetArgs: SkipSwapArgs = {
+    ...baseArgs,
+    toAddress: 'terra1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+    destChainId: 'columbus-5',
+    destAssetDenom: 'uluna',
+  }
+
+  /**
+   * A single-tx route whose only leg is on `args.destChainId`, with an EMPTY
+   * top-level memo - the shape every one of the 152 measured envelopes has.
+   * The leg chain has to be the route's own source/dest rather than an
+   * intermediate hop, otherwise `intermediate_addresses_required` fires first
+   * and the memo preflight never runs.
+   */
+  function packetMemoLeg(
+    msgs: Array<{ msg: string; msg_type_url: string }>,
+    args: SkipSwapArgs = packetArgs,
+    topLevelMemo = ''
+  ) {
+    const chainIds = [args.sourceChainId, args.destChainId]
+    const route = {
+      ...okRoute,
+      chain_ids: chainIds,
+      required_chain_addresses: chainIds,
+    }
+    return [
+      { body: route },
+      {
+        body: {
+          txs: [
+            {
+              cosmos_tx: {
+                chain_id: args.destChainId,
+                signer_address: args.fromAddress,
+                msgs,
+                memo: topLevelMemo,
+              },
+            },
+          ],
+          msgs: [],
+          min_amount_out: '118800',
+          route,
+        },
+      },
+    ]
+  }
+
+  const msgTransfer = (memo: string) => ({
+    msg: JSON.stringify({ receiver: packetArgs.toAddress, memo }),
+    msg_type_url: '/ibc.applications.transfer.v1.MsgTransfer',
+  })
+
+  it('rejects a columbus-5 packet memo over the packet cap, despite an empty top-level memo', async () => {
+    mockFetchSequence(packetMemoLeg([msgTransfer('a'.repeat(1500))]))
+
+    const out = await runSkipSwap(packetArgs)
+
+    expect(out.ok).toBe(false)
+    if (!out.ok) {
+      expect(out.envelope.error).toBe('skip_source_memo_too_long')
+      expect(out.envelope.source_chain_id).toBe('columbus-5')
+      expect(out.envelope.memo_bytes).toBe(1500)
+      // The PACKET cap, not the 256-byte outer one.
+      expect(out.envelope.memo_max_bytes).toBe(1024)
+      expect(out.envelope.memo_field).toBe('packet')
+    }
+  })
+
+  // THE regression guard. 698-1001 bytes is the measured range of working
+  // routes; every one of these would be rejected if the packet memo were
+  // measured against the outer 256-byte cap.
+  it.each([698, 850, 1001])('admits a %dB packet memo - the measured working-route range', async bytes => {
+    mockFetchSequence(packetMemoLeg([msgTransfer('a'.repeat(bytes))]))
+    const out = await runSkipSwap(packetArgs)
+    expect(out.ok).toBe(true)
+  })
+
+  it('admits a packet memo exactly at the cap and rejects one byte over', async () => {
+    mockFetchSequence(packetMemoLeg([msgTransfer('a'.repeat(1024))]))
+    expect((await runSkipSwap(packetArgs)).ok).toBe(true)
+
+    mockFetchSequence(packetMemoLeg([msgTransfer('a'.repeat(1025))]))
+    const over = await runSkipSwap(packetArgs)
+    expect(over.ok).toBe(false)
+    if (!over.ok) expect(over.envelope.memo_bytes).toBe(1025)
+  })
+
+  // Chains with no measured packet cap get the permissive ceiling. Keplr
+  // broadcasts ~1500B packet memos on cosmoshub-4 without error.
+  it('does not reject a large packet memo on a chain with no measured cap (cosmoshub-4)', async () => {
+    mockFetchSequence(packetMemoLeg([msgTransfer('a'.repeat(1500))], baseArgs))
+    const out = await runSkipSwap(baseArgs)
+    expect(out.ok).toBe(true)
+  })
+
+  // The outer-memo check is unchanged and still uses the outer cap. Skip's
+  // wasm-execute legs populate the top-level memo instead, and those overflow
+  // at 256 - a genuinely different failure mode from the packet one.
+  it('still applies the 256B outer cap to the top-level memo, reported as the outer field', async () => {
+    mockFetchSequence(packetMemoLeg([msgTransfer('a'.repeat(700))], packetArgs, 'b'.repeat(300)))
+
+    const out = await runSkipSwap(packetArgs)
+
+    expect(out.ok).toBe(false)
+    if (!out.ok) {
+      expect(out.envelope.memo_bytes).toBe(300)
+      expect(out.envelope.memo_max_bytes).toBe(256)
+      expect(out.envelope.memo_field).toBe('outer')
+    }
+  })
+
+  it('ignores a non-MsgTransfer message carrying a large memo field', async () => {
+    mockFetchSequence(
+      packetMemoLeg([
+        {
+          msg: JSON.stringify({ memo: 'a'.repeat(1500) }),
+          msg_type_url: '/cosmos.bank.v1beta1.MsgSend',
+        },
+      ])
+    )
+    const out = await runSkipSwap(packetArgs)
+    expect(out.ok).toBe(true)
+  })
+
+  it('rejects a MsgTransfer whose msg body is not valid JSON as a malformed envelope', async () => {
+    mockFetchSequence(packetMemoLeg([{ msg: '{not json', msg_type_url: msgTransfer('').msg_type_url }]))
+    const out = await runSkipSwap(packetArgs)
+    expect(out.ok).toBe(false)
+    if (!out.ok) expect(out.envelope.error).toBe('skip_msgs_tx_malformed')
+  })
+
+  it('rejects a MsgTransfer whose valid JSON body is null as a malformed envelope', async () => {
+    mockFetchSequence(packetMemoLeg([{ msg: 'null', msg_type_url: msgTransfer('').msg_type_url }]))
+    const out = await runSkipSwap(packetArgs)
+    expect(out.ok).toBe(false)
+    if (!out.ok) expect(out.envelope.error).toBe('skip_msgs_tx_malformed')
+  })
+
+  it('accepts an omitted default memo but rejects a present non-string memo', async () => {
+    mockFetchSequence(
+      packetMemoLeg([
+        { msg: JSON.stringify({ receiver: packetArgs.toAddress }), msg_type_url: msgTransfer('').msg_type_url },
+      ])
+    )
+    expect((await runSkipSwap(packetArgs)).ok).toBe(true)
+
+    mockFetchSequence(
+      packetMemoLeg([{ msg: JSON.stringify({ memo: null }), msg_type_url: msgTransfer('').msg_type_url }])
+    )
+    const out = await runSkipSwap(packetArgs)
+    expect(out.ok).toBe(false)
+    if (!out.ok) expect(out.envelope.error).toBe('skip_msgs_tx_malformed')
+  })
+
+  it('takes the largest packet memo when a leg carries several MsgTransfers', async () => {
+    mockFetchSequence(
+      packetMemoLeg([msgTransfer('a'.repeat(10)), msgTransfer('a'.repeat(1500)), msgTransfer('a'.repeat(5))])
+    )
+
+    const out = await runSkipSwap(packetArgs)
+
+    expect(out.ok).toBe(false)
+    if (!out.ok) expect(out.envelope.memo_bytes).toBe(1500)
+  })
+})
+
 // sdk#1363: Skip's /msgs_direct can return an `svm_tx` (Solana) wrapper
-// alongside evm_tx/cosmos_tx, which this integration doesn't parse — locks
+// alongside evm_tx/cosmos_tx, which this integration doesn't parse and locks
 // the fail-closed behavior as intentional rather than a silent gap. Not a
-// fund-safety issue (nothing gets mis-signed): the request is refused
-// before any tx reaches the signing layer.
+// fund-safety issue because the request is refused before any tx reaches the
+// signing layer.
 describe('svm_tx (Solana) legs are refused, not silently mis-parsed (sdk#1363)', () => {
   it('rejects a route whose only leg is an svm_tx wrapper', async () => {
     mockFetchSequence([
       { body: okRoute },
       {
         body: {
-          txs: [{ svm_tx: { chain_id: 'solana', signer_address: baseArgs.fromAddress, instructions: [] } }],
+          txs: [
+            {
+              svm_tx: {
+                chain_id: 'solana',
+                signer_address: baseArgs.fromAddress,
+                instructions: [],
+              },
+            },
+          ],
           msgs: [],
           min_amount_out: '118800',
           route: okRoute,
