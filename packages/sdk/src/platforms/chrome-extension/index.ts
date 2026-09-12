@@ -22,46 +22,19 @@
  * ```
  */
 
-import { initWasm as initWalletCore } from '@trustwallet/wallet-core'
-import initDkls from '@vultisig/lib-dkls/vs_wasm'
-import initMldsa from '@vultisig/lib-mldsa/vs_wasm'
-import initSchnorr from '@vultisig/lib-schnorr/vs_schnorr_wasm'
-import { memoizeAsync } from '@vultisig/lib-utils/memoizeAsync'
-import { configureMpc } from '@vultisig/mpc-types'
-import { WasmMpcEngine } from '@vultisig/mpc-wasm'
+import '../browser/initializePrep'
 
 import { configureDefaultStorage } from '../../context/defaultStorage'
-import { configureWasm } from '../../context/wasmRuntime'
 import { configureCrypto } from '../../crypto'
 import { ChromeExtensionCrypto } from './crypto'
 import { ChromeExtensionPolyfills } from './polyfills'
 import { ChromeExtensionStorage } from './storage'
-
-// Configure MPC engine
-configureMpc(new WasmMpcEngine())
 
 // Configure crypto
 configureCrypto(new ChromeExtensionCrypto())
 
 // Configure default storage for Chrome Extension
 configureDefaultStorage(() => new ChromeExtensionStorage())
-
-// Process-wide memoized WASM initialization
-let walletCoreInstance: any
-
-const initAllWasm = memoizeAsync(async () => {
-  // Extension: init() auto-fetches via import.meta.url (same as browser)
-  // Requires 'wasm-unsafe-eval' in manifest.json CSP
-  const [walletCore] = await Promise.all([initWalletCore(), initDkls(), initSchnorr(), initMldsa()])
-  walletCoreInstance = walletCore
-  return walletCore
-})
-
-// Configure WASM on module load
-configureWasm(async () => {
-  if (walletCoreInstance) return walletCoreInstance
-  return initAllWasm()
-})
 
 // Re-export entire public API
 export * from '../../index'

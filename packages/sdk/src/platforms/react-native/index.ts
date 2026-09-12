@@ -4,49 +4,12 @@
  * Registers the native MPC engine, native WalletCore, RN crypto, and RN storage.
  * Exports RN-compatible SDK APIs.
  */
-// Buffer polyfill MUST happen before any SDK module graph import. Several
-// bundled deps read `globalThis.Buffer` at module-init (e.g. @solana/web3.js,
-// @noble/*, @polkadot/*). Consumers often polyfill Buffer in App.tsx, but
-// because ES module imports are hoisted, the SDK's module bodies can evaluate
-// before App.tsx's polyfill runs. Polyfilling here guarantees ordering.
-import { Buffer as _Buffer } from 'buffer'
-
-if (typeof globalThis !== 'undefined' && !(globalThis as { Buffer?: unknown }).Buffer) {
-  ;(globalThis as { Buffer?: unknown }).Buffer = _Buffer
-}
-
-// Hermes polyfills — RN-only. These run for side effects at module load so
-// that any chain-lib module body that evaluates `new Intl.PluralRules(...)`
-// or `class X extends Event` can resolve those globals without crashing.
-//
-// - @mysten/sui/dist/client/utils.mjs evaluates `new Intl.PluralRules(...)`
-//   at module top-level. Hermes ships without Intl.PluralRules.
-// - @lifi/sdk's transitive `@wallet-standard/app` declares
-//   `class AppReadyEvent extends Event` at module top-level. Hermes ships
-//   without the `Event`/`EventTarget` DOM globals.
-//
-// Intl.PluralRules' own ResolveLocale reaches into Intl.Locale, and the
-// ordinal PluralRules constructor used by @mysten/sui also reaches into
-// Intl.NumberFormat — all four sub-APIs are absent on Hermes. Install the
-// full cascade in dependency order: getCanonicalLocales → Locale →
-// NumberFormat → PluralRules.
-//
-// Without these, even lazy `import('@mysten/sui/graphql')` /
-// `import('@lifi/sdk')` crashes the first time the module is evaluated.
-import '@formatjs/intl-getcanonicallocales/polyfill.js'
-import '@formatjs/intl-locale/polyfill.js'
-import '@formatjs/intl-numberformat/polyfill.js'
-import '@formatjs/intl-numberformat/locale-data/en.js'
-import '@formatjs/intl-pluralrules/polyfill.js'
-import '@formatjs/intl-pluralrules/locale-data/en.js'
-import 'event-target-polyfill'
+import './initializePrep'
 
 import { NativeMpcEngine } from '@vultisig/mpc-native'
 import { configureMpc } from '@vultisig/mpc-types'
-import { NativeWalletCore } from '@vultisig/walletcore-native'
 
 import { configureDefaultStorage } from '../../context/defaultStorage'
-import { configureWasm } from '../../context/wasmRuntime'
 import { configureCrypto } from '../../crypto'
 import { assertBittensorAddress, decodeBittensorAddress } from '../../tools/balance/bittensor'
 import { cosmosBalanceChains, getCosmosBalance, isCosmosBalanceChain } from '../../tools/balance/cosmos'
@@ -69,41 +32,49 @@ import { getTaoBalance } from '../../tools/balance/taoBalance'
 import { formatUtxoBalance, getUtxoBalance, supportedUtxoBalanceChains } from '../../tools/balance/utxoBalance'
 import * as cosmos from '../../tools/cosmos'
 import * as evm from '../../tools/evm'
+import * as swap from '../../tools/swap'
+import * as token from '../../tools/token'
+import { ReactNativeCrypto } from './crypto'
 import {
+  buildCosmosWasmExecuteMsg,
+  buildCw20TransferMsg,
   buildDelegateMsg,
   buildRedelegateMsg,
+  buildSplTransfer,
   buildUndelegateMsg,
   buildWithdrawRewardsMsg,
+  CONSOLIDATE_CHAINS,
   cosmosStaking,
-} from '../../tools/prep/cosmosStaking'
-import { buildCosmosWasmExecuteMsg } from '../../tools/prep/cosmosWasmExecute'
-import { buildCw20TransferMsg } from '../../tools/prep/cw20Transfer'
-import {
+  getMaxSendAmountFromKeys,
   IBC_CHAIN_HRP,
   IBC_CHAIN_REVISION,
   IBC_CHANNEL_DEST,
   IBC_MSG_TRANSFER_TYPE_URL,
   normaliseIbcChainId,
+  POLKADOT_ASSET_HUB_KNOWN_ASSETS,
+  prepareContractCallTxFromKeys,
   prepareIbcTransfer,
+  prepareJettonTransferTxFromKeys,
+  preparePolkadotAssetSend,
+  prepareRawEvmTxFromKeys,
+  prepareSendTxFromKeys,
+  prepareSignAminoTxFromKeys,
+  prepareSignDirectTxFromKeys,
+  prepareSuiTokenTransferFromKeys,
+  prepareSwapTxFromKeys,
+  prepareThorchainMsgDepositTxFromKeys,
+  prepareTrc20TransferFromKeys,
+  prepareUtxoConsolidateTxFromKeys,
   resolveSourceChannelByDestChain,
+  SUI_NATIVE_COIN_TYPE,
   supportedIbcDestinationsFrom,
-} from '../../tools/prep/ibcTransfer'
-import { POLKADOT_ASSET_HUB_KNOWN_ASSETS, preparePolkadotAssetSend } from '../../tools/prep/polkadotAssetSend'
-import type { prepareRawEvmTxFromKeys as PrepareRawEvmTxFromKeys } from '../../tools/prep/rawEvm'
-import { prepareSuiTokenTransferFromKeys, SUI_NATIVE_COIN_TYPE } from '../../tools/prep/suiTokenTransfer'
-import { SwapQuoteExpiredError } from '../../tools/prep/SwapQuoteExpiredError'
-import { TRC20_TRANSFER_SELECTOR } from '../../tools/prep/trc20'
-import { CONSOLIDATE_CHAINS } from '../../tools/prep/utxoConsolidate'
-import * as swap from '../../tools/swap'
-import * as token from '../../tools/token'
-import { ReactNativeCrypto } from './crypto'
+  SwapQuoteExpiredError,
+  TRC20_TRANSFER_SELECTOR,
+} from './prep'
 import { ReactNativeStorage } from './storage'
 
 // Register native MPC engine
 configureMpc(new NativeMpcEngine())
-
-// Register native WalletCore as the WalletCore provider
-configureWasm(async () => NativeWalletCore.getInstance())
 
 // Register RN crypto (validates globalThis.crypto polyfill on first use)
 configureCrypto(new ReactNativeCrypto())
@@ -448,142 +419,7 @@ export {
 // explicit module objects so Rollup preserves the nested `cosmos.gov` handle.
 export { cosmos, evm, token }
 
-// Vault-free prep helpers (KeysignPayload construction without an instantiated vault)
-export type {
-  BuildCw20TransferMsgParams,
-  BuildCw20TransferMsgResult,
-  BuildSplTransferParams,
-  ConsolidateChain,
-  ConsolidateUtxo,
-  EvmTxNumberish,
-  GetMaxSendAmountFromKeysParams,
-  PrepareIbcTransferParams,
-  PrepareIbcTransferResult,
-  PrepareJettonTransferTxFromKeysParams,
-  PreparePolkadotAssetSendParams,
-  PreparePolkadotAssetSendResult,
-  PrepareRawEvmTxFromKeysParams,
-  PrepareSendTxFromKeysParams,
-  PrepareSuiTokenTransferFromKeysParams,
-  PrepareSwapTxFromKeysParams,
-  PrepareTrc20TransferFromKeysParams,
-  PrepareUtxoConsolidateResult,
-  PrepareUtxoConsolidateTxFromKeysParams,
-  RawEvmTxEnvelope,
-  SplTransferResult,
-  UnsignedTrc20Transfer,
-  VaultIdentity,
-} from '../../tools/prep'
-
-// Pure cosmos staking msg-envelope builders. These depend only on bech32 +
-// buffer (RN-safe, no mpc/keysign), so unlike the other prep helpers they are
-// statically re-exported rather than lazy-imported. Omitting them here would
-// break the hand-curated RN export list for vultiagent-app consumers.
-export {
-  IBC_CHAIN_HRP,
-  IBC_CHAIN_REVISION,
-  IBC_CHANNEL_DEST,
-  IBC_MSG_TRANSFER_TYPE_URL,
-  normaliseIbcChainId,
-  prepareIbcTransfer,
-  prepareSuiTokenTransferFromKeys,
-  resolveSourceChannelByDestChain,
-  supportedIbcDestinationsFrom,
-} from '../../tools/prep'
-export type {
-  CosmosStakingMsgEnvelope,
-  DelegateParams,
-  RedelegateParams,
-  UndelegateParams,
-  WithdrawRewardsParams,
-} from '../../tools/prep/cosmosStaking'
-export {
-  buildDelegateMsg,
-  buildRedelegateMsg,
-  buildUndelegateMsg,
-  buildWithdrawRewardsMsg,
-  cosmosStaking,
-} from '../../tools/prep/cosmosStaking'
-// Pure CosmWasm Amino message builders (only depend on JSON/bech32 — no
-// WalletCore or native crypto, safe as static re-exports on the RN graph).
-// Keep this list aligned with the root entrypoint: package exports resolve
-// React Native consumers to this hand-curated module.
-export type { BuildCosmosWasmExecuteMsgParams, CosmWasmExecuteFund } from '../../tools/prep/cosmosWasmExecute'
-export { buildCosmosWasmExecuteMsg } from '../../tools/prep/cosmosWasmExecute'
-export { buildCw20TransferMsg } from '../../tools/prep/cw20Transfer'
-// `preparePolkadotAssetSend` is pure-crypto (@polkadot/util + @polkadot/util-crypto,
-// both RN-safe) with no MPC/wasm dependency, so it ships as a static re-export
-// rather than a lazy `await import(...)` wrapper. `POLKADOT_ASSET_HUB_KNOWN_ASSETS`
-// is a plain const map. Omitting these broke RN/vultiagent-app consumption of the
-// Asset Hub send builder (same hand-curated-allow-list gap as prior prep builders).
-export { POLKADOT_ASSET_HUB_KNOWN_ASSETS, preparePolkadotAssetSend } from '../../tools/prep/polkadotAssetSend'
-export { SUI_NATIVE_COIN_TYPE } from '../../tools/prep/suiTokenTransfer'
-export { TRC20_TRANSFER_SELECTOR } from '../../tools/prep/trc20'
-export { CONSOLIDATE_CHAINS } from '../../tools/prep/utxoConsolidate'
-
-export async function getMaxSendAmountFromKeys(...args: unknown[]) {
-  const mod = await import('../../tools/prep/maxSend')
-  return mod.getMaxSendAmountFromKeys(...(args as Parameters<typeof mod.getMaxSendAmountFromKeys>))
-}
-
-export async function prepareContractCallTxFromKeys(...args: unknown[]) {
-  const mod = await import('../../tools/prep/contractCall')
-  return mod.prepareContractCallTxFromKeys(...(args as Parameters<typeof mod.prepareContractCallTxFromKeys>))
-}
-
-export async function prepareRawEvmTxFromKeys(...args: Parameters<typeof PrepareRawEvmTxFromKeys>) {
-  const mod = await import('../../tools/prep/rawEvm')
-  return mod.prepareRawEvmTxFromKeys(...(args as Parameters<typeof mod.prepareRawEvmTxFromKeys>))
-}
-
-export async function prepareJettonTransferTxFromKeys(...args: unknown[]) {
-  const mod = await import('../../tools/prep/jettonTransfer')
-  return mod.prepareJettonTransferTxFromKeys(...(args as Parameters<typeof mod.prepareJettonTransferTxFromKeys>))
-}
-
-export async function prepareSendTxFromKeys(...args: unknown[]) {
-  const mod = await import('../../tools/prep/send')
-  return mod.prepareSendTxFromKeys(...(args as Parameters<typeof mod.prepareSendTxFromKeys>))
-}
-
-export async function prepareSignAminoTxFromKeys(...args: unknown[]) {
-  const mod = await import('../../tools/prep/cosmos')
-  return mod.prepareSignAminoTxFromKeys(...(args as Parameters<typeof mod.prepareSignAminoTxFromKeys>))
-}
-
-export async function prepareSignDirectTxFromKeys(...args: unknown[]) {
-  const mod = await import('../../tools/prep/cosmos')
-  return mod.prepareSignDirectTxFromKeys(...(args as Parameters<typeof mod.prepareSignDirectTxFromKeys>))
-}
-
-export async function prepareSwapTxFromKeys(...args: unknown[]) {
-  const mod = await import('../../tools/prep/swap')
-  return mod.prepareSwapTxFromKeys(...(args as Parameters<typeof mod.prepareSwapTxFromKeys>))
-}
-
-// TRON TRC-20 transfer calldata builder (pure crypto — @noble/hashes only,
-// no RPC, no signing). RN-safe; lazy-imported to match the prep helper pattern
-// above. Without this, RN consumers (Station / vultisig-windows) couldn't reach
-// the reviewed base58check + ABI encode and would have to re-port it.
-export async function prepareTrc20TransferFromKeys(...args: unknown[]) {
-  const mod = await import('../../tools/prep/trc20')
-  return mod.prepareTrc20TransferFromKeys(...(args as Parameters<typeof mod.prepareTrc20TransferFromKeys>))
-}
-
-// Lazy import: `splTransfer` statically pulls `@solana/web3.js`, which reads
-// `globalThis.Buffer` at module-init. Deferring the import inside the async
-// body keeps it out of the eager RN bundle graph (same rationale as the
-// getSplAccounts / getSplAssociatedAccount overrides). The underlying builder
-// is synchronous; this wrapper just defers module evaluation.
-export async function buildSplTransfer(...args: unknown[]) {
-  const mod = await import('../../tools/prep/splTransfer')
-  return mod.buildSplTransfer(...(args as Parameters<typeof mod.buildSplTransfer>))
-}
-
-export async function prepareUtxoConsolidateTxFromKeys(...args: unknown[]) {
-  const mod = await import('../../tools/prep/utxoConsolidate')
-  return mod.prepareUtxoConsolidateTxFromKeys(...(args as Parameters<typeof mod.prepareUtxoConsolidateTxFromKeys>))
-}
+export * from './prep'
 
 // Cosmos gas-fee primitives (pure crypto: gas limits + canonical fee label).
 // RN-safe — no network, no signing; just `cosmosGasRecord` + `chainFeeCoin`
@@ -1183,13 +1019,6 @@ export {
   RIVER_TROVE_STATUS_NAMES,
   riverStatusName,
 } from '../../tools/defi/river'
-
-async function prepareThorchainMsgDepositTxFromKeys(
-  ...args: Parameters<typeof import('../../tools/prep/thorchainMsgDeposit').prepareThorchainMsgDepositTxFromKeys>
-) {
-  const mod = await import('../../tools/prep/thorchainMsgDeposit')
-  return mod.prepareThorchainMsgDepositTxFromKeys(...args)
-}
 
 // Assemble RN groups from safe static helpers and this entry’s deferred wrappers.
 export const balance = {
