@@ -171,5 +171,11 @@ export function validateCoins(
   // set in ValidateBasic. `localeCompare` diverges from byte order across the
   // upper/lower-case boundary (e.g. "ibc/Z…" vs a lowercase denom), which could
   // emit an unsorted Coins that fails at broadcast — so sort by raw code unit.
-  return [...coins].sort((a, b) => (a.denom < b.denom ? -1 : a.denom > b.denom ? 1 : 0))
+  const sorted = [...coins].sort((a, b) => (a.denom < b.denom ? -1 : a.denom > b.denom ? 1 : 0))
+  for (let i = 1; i < sorted.length; i += 1) {
+    if (sorted[i - 1]?.denom === sorted[i]?.denom) {
+      throw new Error(`${field} contains duplicate denom entries for "${sorted[i].denom}"`)
+    }
+  }
+  return sorted
 }
