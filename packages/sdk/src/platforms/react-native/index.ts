@@ -1017,12 +1017,14 @@ export { decode, decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from '../..
 export { buildKeygenPairingQrPayload } from '../../services/buildKeygenPairingQrPayload'
 export { computeNotificationVaultId } from '../../utils/computeNotificationVaultId'
 export type {
+  Amount,
   AmountDirection,
   ConvertAmountParams,
   CryptoToFiatParams,
   FiatToCryptoParams,
 } from '../../utils/convertAmount'
 export {
+  amount,
   AmountConvertError,
   convertAmount,
   cryptoToFiat,

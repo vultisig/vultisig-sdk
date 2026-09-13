@@ -71,6 +71,7 @@ import type {
   FeeCoinInfo,
   TokenInfo,
 } from './types/tokens'
+import { type Amount, amount } from './utils/convertAmount'
 import { createVaultBackup } from './utils/export'
 import { parseKeygenQR } from './utils/parseKeygenQR'
 import { FastVault } from './vault/FastVault'
@@ -176,6 +177,11 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    */
   get defi(): Defi {
     return defi
+  }
+
+  /** Pure amount conversions (`sdk.amount.*`), available before initialization. */
+  get amount(): Amount {
+    return amount
   }
 
   /**

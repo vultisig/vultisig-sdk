@@ -10,6 +10,23 @@ import { cosmosTxFeeGasParityCases } from '../../../fixtures/cosmosTxFeeGasParit
 
 process.env.VULTISIG_STRICT_SINGLETON = '0'
 
+describe('RN amount helpers', () => {
+  it('exports the canonical group and exposes it before initialization', async () => {
+    const canonical = await import('../../../../src/utils/convertAmount')
+    expect(sdkRn.amount).toBe(canonical.amount)
+    expectTypeOf<sdkRn.Amount>().toEqualTypeOf<typeof canonical.amount>()
+    const sdk = new sdkRn.Vultisig({ autoInit: false, storage: new sdkRn.MemoryStorage() })
+    try {
+      expect(sdk.amount).toBe(sdkRn.amount)
+      expect(sdk.amount.convert({ amount: '1.5', decimals: 18, direction: 'to_base' })).toBe('1500000000000000000')
+      expect(sdk.amount.convert({ amount: '1500000000000000000', decimals: 18, direction: 'to_human' })).toBe('1.5')
+      expect(sdk.initialized).toBe(false)
+    } finally {
+      await sdk.dispose()
+    }
+  })
+})
+
 describe('RN entry exposes canonical token reference resolution', () => {
   it('exports the same resolvers and a usable result type', () => {
     expect(sdkRn.resolveTokenRef).toBe(tokenRef.resolveTokenRef)

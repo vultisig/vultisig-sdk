@@ -47,12 +47,14 @@ export { ValidationHelpers } from './utils/validation'
 // ============================================================================
 
 export type {
+  Amount,
   AmountDirection,
   ConvertAmountParams,
   CryptoToFiatParams,
   FiatToCryptoParams,
 } from './utils/convertAmount'
 export {
+  amount,
   AmountConvertError,
   convertAmount,
   cryptoToFiat,
