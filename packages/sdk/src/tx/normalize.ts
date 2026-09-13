@@ -33,19 +33,40 @@ export type NormalizedTx = JsonObject & {
   send_tx?: unknown
   chain?: string
   chain_id?: string
+  chainId?: string
   from_chain?: string
+  fromChain?: string
   to_chain?: string
+  toChain?: string
+  provider?: string
+  from_symbol?: string
+  fromSymbol?: string
+  to_symbol?: string
+  toSymbol?: string
+  from_address?: string
+  fromAddress?: string
+  to_address?: string
+  toAddress?: string
+  from_decimals?: number
+  fromDecimals?: number
+  to_decimals?: number
+  toDecimals?: number
 }
 
 /**
  * Chain-routing args from the originating `build_*` tool call. Mirrors the
- * `{from_chain, to_chain, chain}` probe in Go `enrichBuildResult`. All optional
- * — a flat single-chain `build_evm_tx` only carries `chain`.
+ * `{from_chain, to_chain, chain}` probe in Go `enrichBuildResult`, plus the
+ * camelCase metadata aliases some TS consumers already pass around.
+ * All optional — a flat single-chain `build_evm_tx` only carries `chain`.
  */
 export type NormalizeArgs = {
   from_chain?: string
+  fromChain?: string
   to_chain?: string
+  toChain?: string
   chain?: string
+  chain_id?: string
+  chainId?: string
 }
 
 /** Thrown when a build result can't be parsed into a tx envelope. */
@@ -91,14 +112,21 @@ const LEG_METADATA_KEYS = [
 
 const enrichRoutingMetadata = (txMap: JsonObject, args: NormalizeArgs): JsonObject => {
   const out: JsonObject = { ...txMap }
-  const { from_chain: argFrom, to_chain: argTo, chain: argChain } = args
+  const argFrom = args.from_chain ?? args.fromChain
+  const argTo = args.to_chain ?? args.toChain
+  const argChain = args.chain
+  const argChainId = args.chain_id ?? args.chainId
 
   if (!('from_chain' in out)) {
     if (argFrom) out['from_chain'] = argFrom
     else if (argChain) out['from_chain'] = argChain
   }
+  if (!('fromChain' in out) && argFrom) out['fromChain'] = argFrom
   if (!('chain' in out) && argChain) out['chain'] = argChain
+  if (!('chain_id' in out) && argChainId) out['chain_id'] = argChainId
+  if (!('chainId' in out) && argChainId) out['chainId'] = argChainId
   if (!('to_chain' in out) && argTo) out['to_chain'] = argTo
+  if (!('toChain' in out) && argTo) out['toChain'] = argTo
 
   return out
 }
