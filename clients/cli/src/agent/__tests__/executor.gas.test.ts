@@ -33,6 +33,11 @@ type EvmGasAccess = {
   patchEvmGas(chain: Chain, payload: ReturnType<typeof createEvmPayload>): Promise<void>
 }
 
+type EvmStateAccess = {
+  acquireEvmLockIfNeeded(chain: Chain): Promise<void>
+  recordEvmNonceFromPayload(chain: Chain, payload: ReturnType<typeof createEvmPayload>, numTxs: number): void
+}
+
 function createEvmPayload() {
   return {
     blockchainSpecific: {
@@ -739,6 +744,39 @@ describe('AgentExecutor EIP-1559 fee refresh', () => {
     expect(priorityFee).toBeGreaterThan(0n)
     expect(priorityFee).toBeGreaterThanOrEqual(25_000_000_000n)
     expect(priorityFee).toBeLessThanOrEqual(maxFee)
+  })
+
+  it('refreshes Robinhood gas from RPC and keeps its zero tip (#2356)', async () => {
+    const payload = createEvmPayload()
+    payload.blockchainSpecific.value.maxFeePerGasWei = '0'
+    payload.blockchainSpecific.value.priorityFee = '0'
+    const executor = new AgentExecutor(createSigningVault(payload))
+    const fetchMock = mockEvmFeeRpc(1_000_000_000n, 500_000_000n)
+
+    await (executor as unknown as EvmGasAccess).patchEvmGas(Chain.Robinhood, payload)
+
+    // Robinhood is a zero-tip sequencer chain, so the RPC suggestion is
+    // discarded, but the max fee still has to cover the live base fee with the
+    // 2.5x signing-window headroom. Before #2356 the refresh skipped Robinhood
+    // entirely and left the envelope at 0 / 0.
+    expect(payload.blockchainSpecific.value.priorityFee).toBe('0')
+    expect(payload.blockchainSpecific.value.maxFeePerGasWei).toBe('2500000000')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('locks and journals Robinhood nonces like every other EVM chain (#2356)', async () => {
+    const payload = createEvmPayload()
+    const executor = new AgentExecutor(createSigningVault(payload))
+    const access = withNonceState(executor, 0n)
+    const stateAccess = executor as unknown as EvmStateAccess
+
+    await stateAccess.acquireEvmLockIfNeeded(Chain.Robinhood)
+    stateAccess.recordEvmNonceFromPayload(Chain.Robinhood, payload, 2)
+
+    expect(access.stateStore.acquireChainLock).toHaveBeenCalledWith(Chain.Robinhood)
+    // Two message hashes from a base nonce of 1 mean the approve leg took 1 and
+    // the main leg took 2, so the journal must record the highest one.
+    expect(access.stateStore.recordEvmNonce).toHaveBeenCalledWith(Chain.Robinhood, 2n)
   })
 
   it('keeps a builder-supplied nonzero tip when it is above the hard chain floor', async () => {

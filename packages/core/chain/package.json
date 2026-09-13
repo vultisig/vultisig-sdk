@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "5.4.0",
+  "version": "5.4.2",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -1080,6 +1080,11 @@
       "import": "./dist/chains/ton/walletV5R1.js",
       "default": "./dist/chains/ton/walletV5R1.js"
     },
+    "./chains/tron/address": {
+      "types": "./dist/chains/tron/address.d.ts",
+      "import": "./dist/chains/tron/address.js",
+      "default": "./dist/chains/tron/address.js"
+    },
     "./chains/tron/config": {
       "types": "./dist/chains/tron/config.d.ts",
       "import": "./dist/chains/tron/config.js",
@@ -1364,6 +1369,11 @@
       "types": "./dist/coin/knownTokens/cosmos.d.ts",
       "import": "./dist/coin/knownTokens/cosmos.js",
       "default": "./dist/coin/knownTokens/cosmos.js"
+    },
+    "./coin/knownTokens/getKnownTokenIndexId": {
+      "types": "./dist/coin/knownTokens/getKnownTokenIndexId.d.ts",
+      "import": "./dist/coin/knownTokens/getKnownTokenIndexId.js",
+      "default": "./dist/coin/knownTokens/getKnownTokenIndexId.js"
     },
     "./coin/knownTokens/thorchain": {
       "types": "./dist/coin/knownTokens/thorchain.d.ts",
