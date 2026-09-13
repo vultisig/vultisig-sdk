@@ -158,4 +158,21 @@ describe('getUtxoBalance', () => {
       UtxoChain.Dash,
     ])
   })
+
+  // Regression for sdk#1343: this read previously called `AbortSignal.timeout`
+  // directly, which doesn't exist on older RN/Hermes runtimes. Deleting it
+  // from the global simulates that environment — the read must still succeed
+  // via the Hermes-safe AbortController + setTimeout fallback.
+  it('succeeds without AbortSignal.timeout available (Hermes simulation)', async () => {
+    const original = globalThis.AbortSignal.timeout
+    // @ts-expect-error — simulating a runtime that lacks this static method
+    delete globalThis.AbortSignal.timeout
+    try {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(blockchairResponse(12345) as unknown as Response)
+      const result = await getUtxoBalance(UtxoChain.Bitcoin, '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa')
+      expect(result.satoshis).toBe('12345')
+    } finally {
+      globalThis.AbortSignal.timeout = original
+    }
+  })
 })
