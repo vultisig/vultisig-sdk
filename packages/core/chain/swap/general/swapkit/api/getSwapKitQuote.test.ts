@@ -138,13 +138,30 @@ describe('getSwapKitQuote', () => {
     })
   })
 
-  it('rejects Robinhood as a source before any catalog or quote request', async () => {
+  it('quotes a Robinhood source and screens its router on the robinhood Blockaid chain', async () => {
+    const fetchMock = stubStaticEvmRoute()
+
+    const quote = await getSwapKitQuote({
+      from: { chain: Chain.Robinhood, address: '0xsender', ticker: 'ETH', decimals: 18 },
+      to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
+      amount: 1_000_000_000_000_000_000n,
+    })
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({
+      sellAsset: 'HOOD.ETH',
+      buyAsset: 'ETH.ETH',
+    })
+    expect(quote.provider).toBe('swapkit')
+    expect(mockScanAddressWithBlockaid).toHaveBeenCalledWith(EVM_TARGET_ADDRESS, 'robinhood')
+  })
+
+  it('rejects a source chain Blockaid does not cover before any catalog or quote request', async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(
       getSwapKitQuote({
-        from: { chain: Chain.Robinhood, address: '0xsender', ticker: 'ETH', decimals: 18 },
+        from: { chain: Chain.CronosChain, address: '0xsender', ticker: 'CRO', decimals: 18 },
         to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
         amount: 1_000_000_000_000_000_000n,
       })

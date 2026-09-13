@@ -80,7 +80,16 @@ test('packed consumers resolve the complete local SDK dependency graph without n
         },
       },
     ],
-    ['@vultisig/core-chain', { version: '4.1.1', dependencies: { '@vultisig/mpc-types': '0.3.0' } }],
+    [
+      '@vultisig/core-chain',
+      {
+        version: '4.1.1',
+        dependencies: {
+          '@vultisig/lib-utils': '0.10.7',
+          '@vultisig/mpc-types': '0.3.0',
+        },
+      },
+    ],
     [
       '@vultisig/core-mpc',
       {
@@ -91,6 +100,7 @@ test('packed consumers resolve the complete local SDK dependency graph without n
         },
       },
     ],
+    ['@vultisig/lib-utils', { version: '0.10.7', dependencies: {} }],
     ['@vultisig/mpc-types', { version: '0.3.0', dependencies: {} }],
     ['@vultisig/lib-dkls', { version: '0.9.0', dependencies: {} }],
   ])
@@ -98,6 +108,7 @@ test('packed consumers resolve the complete local SDK dependency graph without n
   assert.deepEqual(collectLocalWorkspaceDependencyNames('@vultisig/sdk', workspaceManifests), [
     '@vultisig/core-chain',
     '@vultisig/core-mpc',
+    '@vultisig/lib-utils',
     '@vultisig/mpc-types',
   ])
 
@@ -105,6 +116,7 @@ test('packed consumers resolve the complete local SDK dependency graph without n
     createPackedConsumerManifest({
       '@vultisig/core-chain': 'file:/tmp/vultisig-core-chain-4.1.1.tgz',
       '@vultisig/core-mpc': 'file:/tmp/vultisig-core-mpc-2.1.1.tgz',
+      '@vultisig/lib-utils': 'file:/tmp/vultisig-lib-utils-0.10.7.tgz',
       '@vultisig/mpc-types': 'file:/tmp/vultisig-mpc-types-0.3.0.tgz',
     }),
     {
@@ -115,6 +127,7 @@ test('packed consumers resolve the complete local SDK dependency graph without n
       resolutions: {
         '@vultisig/core-chain': 'file:/tmp/vultisig-core-chain-4.1.1.tgz',
         '@vultisig/core-mpc': 'file:/tmp/vultisig-core-mpc-2.1.1.tgz',
+        '@vultisig/lib-utils': 'file:/tmp/vultisig-lib-utils-0.10.7.tgz',
         '@vultisig/mpc-types': 'file:/tmp/vultisig-mpc-types-0.3.0.tgz',
       },
     }

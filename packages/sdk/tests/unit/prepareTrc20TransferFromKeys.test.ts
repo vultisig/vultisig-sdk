@@ -64,6 +64,60 @@ describe('encodeTrc20TransferParam', () => {
 })
 
 describe('prepareTrc20TransferFromKeys', () => {
+  it.each([
+    '0000000000000000000000000000000000000000',
+    '000000000000000000000000000000000000dead',
+    'dead000000000000000042069420694206942069',
+  ])('rejects the TRON wrapper of burn destination %s', hex => {
+    const to = tronHexToBase58(hex)
+    expect(() =>
+      prepareTrc20TransferFromKeys({ contractAddress: USDT_CONTRACT, from: FROM, to, amount: '1000000' })
+    ).toThrow(/Refusing to build transaction: destination.*(burn|dead)/)
+  })
+
+  it.each([USDT_CONTRACT, tronHexToBase58('1234567890abcdef1234567890abcdef12345678')])(
+    'rejects a token-own-contract destination without requiring registry membership: %s',
+    contractAddress => {
+      expect(() =>
+        prepareTrc20TransferFromKeys({ contractAddress, from: FROM, to: contractAddress, amount: '1000000' })
+      ).toThrow(/own contract address/)
+    }
+  )
+
+  it('allows a sender-self transfer to a safe address', () => {
+    const tx = prepareTrc20TransferFromKeys({
+      contractAddress: USDT_CONTRACT,
+      from: FROM,
+      to: FROM,
+      amount: '1000000',
+    })
+    expect(tx.toAddress).toBe(FROM)
+    expect(tx.parameter).toBe(encodeTrc20TransferParam(FROM, '1000000'))
+  })
+
+  it.each(['contractAddress', 'from', 'to'] as const)('rejects a non-TRON network prefix in %s', field => {
+    expect(() =>
+      prepareTrc20TransferFromKeys({
+        contractAddress: USDT_CONTRACT,
+        from: FROM,
+        to: TO,
+        amount: '1000000',
+        [field]: '1111111111111111111114oLvT2',
+      })
+    ).toThrow(/expected 0x41 prefix/)
+  })
+
+  it('rejects an overflowing transfer amount', () => {
+    expect(() =>
+      prepareTrc20TransferFromKeys({
+        contractAddress: USDT_CONTRACT,
+        from: FROM,
+        to: TO,
+        amount: (1n << 256n).toString(),
+      })
+    ).toThrow(/exceeds uint256/)
+  })
+
   it('builds an unsigned USDT transfer descriptor (pure crypto, no RPC)', () => {
     const tx = prepareTrc20TransferFromKeys({
       contractAddress: USDT_CONTRACT,

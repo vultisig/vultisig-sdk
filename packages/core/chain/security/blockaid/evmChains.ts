@@ -11,10 +11,11 @@ export const blockaidEvmChain = {
   [EvmChain.Mantle]: 'mantle',
   [EvmChain.Optimism]: 'optimism',
   [EvmChain.Polygon]: 'polygon',
+  [EvmChain.Robinhood]: 'robinhood',
   [EvmChain.Sei]: 'sei',
   [EvmChain.Zksync]: 'zksync',
-  // Robinhood (4663) deliberately absent: Blockaid does not list the chain
-  // yet (same posture as CronosChain). Recheck when Blockaid adds support.
+  // CronosChain deliberately absent: Blockaid rejects `cronos` as not
+  // supported in GA. Recheck against the live endpoint before adding it.
 } as const
 
 export type BlockaidSupportedEvmChain = keyof typeof blockaidEvmChain
