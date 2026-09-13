@@ -13,6 +13,7 @@ import {
   stakekitBalances,
   stakekitBuildEnter,
   stakekitBuildExit,
+  stakekitBuildManage,
   stakekitDetails,
   stakekitSearch,
   validateStakekitActionAddress,
@@ -555,6 +556,11 @@ describe('sdk.defi.stakekit', () => {
       const scanReq = r.scan_request as Record<string, unknown>
       expect(scanReq.kind).toBe('evm')
       expect(scanReq.chain).toBe('Base')
+      expect(result.scan_request).toEqual(buildYieldActionScanRequest(actionResp))
+      expect(result.scan_request).toMatchObject({
+        to: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+        data: '0xe8eda9df000000000000000000000000abc',
+      })
 
       const txs = r.transactions as Record<string, unknown>[]
       expect(txs).toHaveLength(2)
@@ -1297,11 +1303,17 @@ describe('scan-request coverage (architecture#1670)', () => {
     if (reqs[1].kind === 'evm') expect(reqs[1].to).toBe('0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0')
   })
 
-  it('buildYieldActionScanRequest (singular) stays backward-compatible: first non-unsupported step only', () => {
+  it.each(['SUPPLY', 'WITHDRAW'])('singular scan prefers %s over the preceding approval', type => {
     const resp = makeEvmActionResponse()
+    resp.transactions[1].type = type
     const single = buildYieldActionScanRequest(resp)
     const plural = buildYieldActionScanRequests(resp)
-    expect(single).toEqual(plural[0])
+    expect(single).toEqual(plural[1])
+    expect(single).toMatchObject({
+      to: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+      data: '0xe8eda9df000000000000000000000000abc',
+      value: '0x0',
+    })
   })
 
   it('withScanRequests keeps the singular fallback at no_compiled_txs when every step is unsupported', async () => {
@@ -1443,5 +1455,117 @@ describe('StakeKit network canonicalization — public exports', () => {
     expect(stakekit.normalizeNetwork).toBe(normalizeStakekitNetwork)
     expect(stakekit.networkToCanonicalChain).toBe(yieldNetworkToCanonicalChain)
     expect(stakekit.NETWORK_ALIASES).toBe(STAKEKIT_NETWORK_ALIASES)
+  })
+})
+
+describe('StakeKit primary action scan selection (sdk#1918)', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  const scenarios = [
+    { name: 'approval then supply', order: ['approval', 'action'], selected: 1 },
+    { name: 'unsupported action then supported action', order: ['approval', 'unsupported', 'action'], selected: 2 },
+    { name: 'multiple supported actions in original order', order: ['action', 'approval', 'later'], selected: 0 },
+    { name: 'only approvals supported', order: ['approval', 'unsupported', 'approval'], selected: 0 },
+    { name: 'all steps unsupported', order: ['unsupported'], selected: -1 },
+    { name: 'empty response', order: [], selected: -1 },
+  ]
+
+  function actionFor(order: string[], actionType: string): YieldActionResponse {
+    const original = makeEvmActionResponse()
+    return {
+      ...original,
+      transactions: order.map((kind, index) => {
+        const step = kind === 'approval' ? original.transactions[0] : original.transactions[1]
+        return {
+          ...step,
+          id: `step-${index}`,
+          type: kind === 'approval' ? 'APPROVAL' : actionType,
+          // Titles and native value deliberately do not identify the action.
+          title: 'Approve tokens',
+          network: kind === 'unsupported' ? 'cosmos-hub' : step.network,
+          unsignedTransaction:
+            kind === 'later'
+              ? JSON.stringify({ to: '0xcccccccccccccccccccccccccccccccccccccccc', value: '0x1', data: '0x1234' })
+              : step.unsignedTransaction,
+        }
+      }),
+    }
+  }
+
+  it.each(scenarios)('singular helper: $name', ({ order, selected }) => {
+    const response = actionFor(order, 'SUPPLY')
+    const scans = buildYieldActionScanRequests(response)
+    expect(scans).toEqual(response.transactions.map(tx => buildYieldStepScanRequest(tx)))
+    expect(buildYieldActionScanRequest(response)).toEqual(
+      selected < 0 ? { kind: 'unsupported', reason: 'no_compiled_txs' } : scans[selected]
+    )
+  })
+
+  describe.each(['enter', 'exit', 'manage'] as const)('%s envelope', builder => {
+    it.each(scenarios)('$name', async ({ order, selected }) => {
+      const response = actionFor(order, builder === 'enter' ? 'SUPPLY' : 'WITHDRAW')
+      const product = makeProduct({ metadata: { cooldownPeriod: { days: 7 } } })
+      // Route by endpoint: exit fetches cooldown metadata concurrently with the action.
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url: string, init?: RequestInit) => {
+          if (String(url).includes('mcp')) throw new Error('MCP unavailable')
+          return new Response(JSON.stringify(init?.method === 'POST' ? response : product), { status: 200 })
+        })
+      )
+      const params = {
+        apiKey: `scan-selection-${builder}-${order.join('-')}`,
+        yieldId: response.yieldId,
+        address: '0x1234567890123456789012345678901234567890',
+        amount: '100',
+      }
+      const result =
+        builder === 'enter'
+          ? await stakekitBuildEnter(params)
+          : builder === 'exit'
+            ? await stakekitBuildExit(params)
+            : await stakekitBuildManage({ ...params, action: 'WITHDRAW', passthrough: 'pending-action' })
+      const expected =
+        selected < 0
+          ? { kind: 'unsupported', reason: 'no_compiled_txs' }
+          : buildYieldStepScanRequest(response.transactions[selected])
+      expect(result.scan_request).toEqual(expected)
+      expect(result.scan_request).toEqual(buildYieldActionScanRequest(response, params.address))
+      expect(result.scan_requests).toEqual(buildYieldActionScanRequests(response, params.address))
+      expect(result.transactions).toHaveLength(order.length)
+      expect(result.provider).toBe('yield_xyz')
+      if (selected >= 0 && order[selected] === 'action') {
+        expect(result.scan_request).toMatchObject({
+          to: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+          data: '0xe8eda9df000000000000000000000000abc',
+        })
+      }
+      if (builder === 'exit') expect(result).toHaveProperty('cooldown_days', 7)
+    })
+
+    it('preserves Solana transaction bytes and account address', async () => {
+      const response = makeSolanaActionResponse()
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url: string, init?: RequestInit) => {
+          if (String(url).includes('mcp')) throw new Error('MCP unavailable')
+          return new Response(JSON.stringify(init?.method === 'POST' ? response : makeProduct()), { status: 200 })
+        })
+      )
+      const params = { yieldId: response.yieldId, address: 'SoLwaLLetAddr1111111111111111111111111111', amount: '1' }
+      const result =
+        builder === 'enter'
+          ? await stakekitBuildEnter(params)
+          : builder === 'exit'
+            ? await stakekitBuildExit(params)
+            : await stakekitBuildManage({ ...params, action: 'CLAIM_REWARDS', passthrough: 'pending-action' })
+      expect(result.scan_request).toEqual({
+        kind: 'solana',
+        chain: 'Solana',
+        accountAddress: params.address,
+        serializedTx: response.transactions[0].unsignedTransaction,
+      })
+      expect(result.scan_requests).toEqual([result.scan_request])
+    })
   })
 })
