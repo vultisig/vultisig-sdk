@@ -186,10 +186,45 @@ function validatePackedReactNativeRuntimeExports(packageRoot) {
   const exportedNames = ast.body
     .filter(statement => statement.type === 'ExportNamedDeclaration')
     .flatMap(statement => statement.specifiers.map(specifier => specifier.exported.name))
-  for (const name of ['resolveTokenRef', 'resolveTokenRefId', 'getTxStatus']) {
+  for (const name of ['resolveTokenRef', 'resolveTokenRefId', 'getTxStatus', 'amount']) {
     assert.ok(exportedNames.includes(name), `packed React Native runtime must export ${name}`)
   }
   console.log('SDK packed React Native runtime export bindings passed (artifact check, not device execution)')
+}
+
+// Exercise the installed public namespace and instance API without native initialization.
+async function verifyAmountConsumer(sdk) {
+  assert.deepEqual(sdk.amount, {
+    convert: sdk.convertAmount,
+    toBaseUnits: sdk.toBaseUnits,
+    toHumanUnits: sdk.toHumanUnits,
+    fiatToCrypto: sdk.fiatToCrypto,
+    cryptoToFiat: sdk.cryptoToFiat,
+  })
+  const instance = new sdk.Vultisig({ autoInit: false, storage: new sdk.MemoryStorage() })
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = () => {
+    throw new Error('Amount helpers must not fetch')
+  }
+  try {
+    assert.equal(instance.amount, sdk.amount)
+    assert.equal(instance.amount, instance.amount)
+    assert.equal(instance.amount.convert({ amount: '1.5', decimals: 18, direction: 'to_base' }), '1500000000000000000')
+    assert.equal(instance.amount.convert({ amount: '1500000000000000000', decimals: 18, direction: 'to_human' }), '1.5')
+    assert.equal(sdk.amount.toBaseUnits('9007199254740993.123456789', 9), '9007199254740993123456789')
+    assert.equal(sdk.amount.toHumanUnits('9007199254740993123456789', 9), '9007199254740993.123456789')
+    assert.equal(sdk.amount.toBaseUnits('1.239', 2), '123')
+    assert.equal(sdk.amount.fiatToCrypto({ fiatValue: '100', price: '2000', decimals: 18 }), '0.05')
+    assert.equal(sdk.amount.cryptoToFiat({ amount: '0.05', price: '2000' }), '100')
+    assert.throws(
+      () => sdk.amount.convert({ amount: 'invalid', decimals: 18, direction: 'to_base' }),
+      sdk.AmountConvertError
+    )
+    assert.equal(instance.initialized, false)
+  } finally {
+    globalThis.fetch = originalFetch
+    await instance.dispose()
+  }
 }
 
 // Run the same public API scenarios through both installed Node module formats.
@@ -383,6 +418,11 @@ for (const { specifier, target } of cases) {
   importedModules.set(specifier, imported)
 }
 
+${verifyAmountConsumer.toString()}
+for (const specifier of ['@vultisig/sdk', '@vultisig/sdk/node', '@vultisig/sdk/electron/main']) {
+  await verifyAmountConsumer(importedModules.get(specifier))
+}
+console.log('Packed amount ESM consumers passed: stable instance API, exact conversions, fiat estimates and errors')
 const root = importedModules.get('@vultisig/sdk')
 ${verifyTokenRefConsumer.toString()}
 verifyTokenRefConsumer(root)
@@ -453,6 +493,13 @@ for (const { specifier, target } of cases) {
 assert.equal(typeof requiredModules.get('@vultisig/sdk')?.Vultisig, 'function', 'root require exports Vultisig')
 ${verifyTokenRefConsumer.toString()}
 verifyTokenRefConsumer(requiredModules.get('@vultisig/sdk'))
+${verifyAmountConsumer.toString()}
+;(async () => {
+  for (const specifier of ['@vultisig/sdk', '@vultisig/sdk/electron/main']) {
+    await verifyAmountConsumer(requiredModules.get(specifier))
+  }
+  console.log('Packed amount CommonJS consumers passed')
+})().catch(error => { console.error(error); process.exitCode = 1 })
 assert.equal(
   typeof requiredModules.get('@vultisig/sdk/electron/main')?.ElectronMainCrypto,
   'function',
@@ -488,6 +535,26 @@ void ${alias}Keys`
     path.join(consumerRoot, 'verify-types.ts'),
     `${typeImports}
 ${declarationAssertions}
+import { amount, Vultisig as AmountVultisig, MemoryStorage, type Amount } from '@vultisig/sdk'
+import { amount as rnAmount, Vultisig as RnVultisig, type Amount as RnAmount } from '@vultisig/sdk/react-native'
+const amountGroup: Amount = amount
+const rnAmountGroup: RnAmount = rnAmount
+const instance = new AmountVultisig({ autoInit: false, storage: new MemoryStorage() })
+const rnInstance = new RnVultisig({ autoInit: false, storage: new MemoryStorage() })
+for (const group of [amountGroup, rnAmountGroup, instance.amount, rnInstance.amount]) {
+  const base: string = group.convert({ amount: '1.5', decimals: 18, direction: 'to_base' })
+  const human: string = group.toHumanUnits(base, 18)
+  const direct: string = group.toBaseUnits(human, 18)
+  const crypto: string = group.fiatToCrypto({ fiatValue: '100', price: '2000', decimals: 18 })
+  const fiat: string = group.cryptoToFiat({ amount: crypto, price: '2000' })
+  void [direct, fiat]
+  // @ts-expect-error amount members are readonly
+  group.convert = amount.convert
+}
+// @ts-expect-error the instance exposes a getter only
+instance.amount = amount
+// @ts-expect-error the React Native instance exposes a getter only
+rnInstance.amount = rnAmount
 import {
   encodeTrc20TransferParam,
   tronBase58ToEvmHex,
