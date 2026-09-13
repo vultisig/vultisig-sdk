@@ -9,6 +9,7 @@ import {
 import { attempt } from '@vultisig/lib-utils/attempt'
 import { assertBoundedInt } from '@vultisig/lib-utils/bigint/assertBoundedInt'
 import { assertField } from '@vultisig/lib-utils/record/assertField'
+import { parseNonNegativeBigInt } from '@vultisig/lib-utils/bigint/parseNonNegativeBigInt'
 import { TW } from '@trustwallet/wallet-core'
 import Long from 'long'
 
@@ -167,7 +168,9 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
           iou.issuer === issuer &&
           typeof iou.value === 'string' &&
           attempt(() => parseIssuedCurrencyValue(iou.value as string)).data ===
-            parseIssuedCurrencyValue(formatIssuedCurrencyValue(BigInt(keysignPayload.toAmount), coin.decimals))
+            parseIssuedCurrencyValue(
+              formatIssuedCurrencyValue(parseNonNegativeBigInt(keysignPayload.toAmount), coin.decimals)
+            )
         if (!matches) {
           throw amountMismatch
         }
@@ -224,7 +227,7 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
 
     const { currency, issuer } = parseRippleTokenId(coin.contractAddress)
 
-    const amount = BigInt(keysignPayload.toAmount)
+    const amount = parseNonNegativeBigInt(keysignPayload.toAmount)
     if (!isRippleTrustSet(keysignPayload) && amount === 0n) {
       throw new Error('XRP issued-currency Payment amount must be positive')
     }

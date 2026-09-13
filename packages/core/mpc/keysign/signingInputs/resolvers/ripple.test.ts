@@ -1221,3 +1221,43 @@ describe('getRippleSigningInputs -- TrustSet discriminator (RippleSpecific.trans
     expect(input.opTrustSet).toBeFalsy()
   })
 })
+
+describe.each(['TrustSet', 'Payment'] as const)('Ripple issued %s amount validation', operation => {
+  it.each(['', ' ', '\t\n', '0x10', '+1', '-1', '-0', '1.5', '1e3'])('rejects malformed amount %j', async toAmount => {
+    const keysignPayload = operation === 'TrustSet' ? buildTrustSetPayload(toAmount) : buildIssuedPaymentPayload()
+    keysignPayload.toAmount = toAmount
+    await expect(async () => getRippleSigningInputs({ keysignPayload, walletCore })).rejects.toThrow(/decimal/)
+  })
+})
+
+describe('Ripple raw issued Payment metadata validation', () => {
+  it.each(['', ' ', '\t\n', '0x10', '+1', '-1', '-0', '1.5', '1e3'])(
+    'rejects malformed reviewed amount %j',
+    async toAmount => {
+      const keysignPayload = buildIssuedPaymentPayload()
+      keysignPayload.toAmount = toAmount
+      keysignPayload.signData = {
+        case: 'signRipple',
+        value: {
+          $typeName: 'vultisig.keysign.v1.SignRipple',
+          rawJson: JSON.stringify({
+            TransactionType: 'Payment',
+            Account: ACCOUNT,
+            Destination: keysignPayload.toAddress,
+            Amount: { currency: toXrplCurrencyCode('RLUSD'), issuer: RLUSD_ISSUER, value: '0' },
+          }),
+        },
+      }
+      await expect(async () => getRippleSigningInputs({ keysignPayload, walletCore })).rejects.toThrow(/decimal/)
+    }
+  )
+
+  it('allows raw non-Payment operations with absent transfer metadata', async () => {
+    const keysignPayload = buildIssuedPaymentPayload()
+    keysignPayload.toAmount = ''
+    const rawJson = JSON.stringify({ TransactionType: 'OfferCancel', Account: ACCOUNT, OfferSequence: 1 })
+    keysignPayload.signData = { case: 'signRipple', value: { $typeName: 'vultisig.keysign.v1.SignRipple', rawJson } }
+    const [input] = await getRippleSigningInputs({ keysignPayload, walletCore })
+    expect(input.rawJson).toBe(rawJson)
+  })
+})

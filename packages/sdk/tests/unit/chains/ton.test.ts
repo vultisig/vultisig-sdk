@@ -17,6 +17,7 @@ import { beginCell, internal, SendMode, storeMessageRelaxed } from '@ton/core'
 import { describe, expect, it } from 'vitest'
 
 import {
+  assertTonSigningPayloadNoHostileDrain,
   buildTonSendTx,
   buildTonTxFromSigningPayload,
   deriveTonAddress,
@@ -298,5 +299,215 @@ describe('chains/ton / buildTonTxFromSigningPayload (prebuilt-payload signing)',
       signingPayloadBoc: Buffer.from(reference.unsignedBocHex, 'hex').toString('base64'),
     })
     expect(() => builder.finalize('aa'.repeat(32))).toThrow(/must be 64 bytes/)
+  })
+})
+
+describe('chains/ton / assertTonSigningPayloadNoHostileDrain (architecture#1994)', () => {
+  // Ported from vultiagent-app's local `assertTonPrebuiltNoHostileDrain`
+  // guard (src/services/tonTx.ts) — the app was the only first-party
+  // consumer refusing non-zero wallet ops and full-balance-drain send
+  // modes on a TON prebuilt signing payload; any other SDK consumer had
+  // to duplicate this decoder or sign blindly. Now lives next to the
+  // builder that produces the exact wire layout it decodes.
+  const VALID_UNTIL = 1_700_000_000
+
+  /**
+   * Hand-builds a wallet V4R2 signing-payload Cell (hex) using the exact
+   * schema `buildSigningPayloadCell` in this file writes, subWalletId(32)
+   * || validUntil(32) || seqno(32) || op(8) || sendMode(8) || ref(innerMsg).
+   */
+  function buildSigningPayloadHex(opts: { op?: number; sendMode?: number; amount?: bigint; seqno?: number }): string {
+    const innerMsg = beginCell()
+      .store(
+        storeMessageRelaxed(
+          internal({
+            to: RECIPIENT,
+            value: opts.amount ?? 1_000_000_000n,
+            bounce: false,
+          })
+        )
+      )
+      .endCell()
+
+    const cell = beginCell()
+      .storeUint(TON_V4R2_SUB_WALLET_ID, 32)
+      .storeUint(VALID_UNTIL, 32)
+      .storeUint(opts.seqno ?? 1, 32)
+      .storeUint(opts.op ?? 0, 8)
+      .storeUint(opts.sendMode ?? SendMode.PAY_GAS_SEPARATELY | SendMode.IGNORE_ERRORS, 8)
+      .storeRef(innerMsg)
+      .endCell()
+
+    return cell.toBoc({ idx: false }).toString('hex')
+  }
+
+  it('passes a legit simple-send payload (op=0, PAY_GAS_SEPARATELY|IGNORE_ERRORS)', () => {
+    const hex = buildSigningPayloadHex({})
+    expect(() => assertTonSigningPayloadNoHostileDrain(hex)).not.toThrow()
+  })
+
+  it('passes a legit simple-send payload with a different bounded amount/seqno', () => {
+    const hex = buildSigningPayloadHex({ amount: 42n, seqno: 99 })
+    expect(() => assertTonSigningPayloadNoHostileDrain(hex)).not.toThrow()
+  })
+
+  it('rejects a non-zero wallet op (plugin install/remove, wallet-control hijack)', () => {
+    const hex = buildSigningPayloadHex({ op: 2 })
+    expect(() => assertTonSigningPayloadNoHostileDrain(hex)).toThrow(/TON_PREBUILT_HOSTILE_OP/)
+  })
+
+  it('rejects SendMode.CARRY_ALL_REMAINING_BALANCE (128), full-wallet drain', () => {
+    const hex = buildSigningPayloadHex({ sendMode: SendMode.CARRY_ALL_REMAINING_BALANCE })
+    expect(() => assertTonSigningPayloadNoHostileDrain(hex)).toThrow(/TON_PREBUILT_HOSTILE_DRAIN_MODE/)
+  })
+
+  it('rejects SendMode.DESTROY_ACCOUNT_IF_ZERO (32), wallet self-destruct', () => {
+    const hex = buildSigningPayloadHex({ sendMode: SendMode.DESTROY_ACCOUNT_IF_ZERO })
+    expect(() => assertTonSigningPayloadNoHostileDrain(hex)).toThrow(/TON_PREBUILT_HOSTILE_DRAIN_MODE/)
+  })
+
+  it('rejects a drain mode even when combined with the normal gas-payment bits', () => {
+    const hex = buildSigningPayloadHex({
+      sendMode: SendMode.CARRY_ALL_REMAINING_BALANCE | SendMode.PAY_GAS_SEPARATELY | SendMode.IGNORE_ERRORS,
+    })
+    expect(() => assertTonSigningPayloadNoHostileDrain(hex)).toThrow(/TON_PREBUILT_HOSTILE_DRAIN_MODE/)
+  })
+
+  it('fails OPEN on a truncated/malformed BoC (never crash on unparseable bytes)', () => {
+    expect(() => assertTonSigningPayloadNoHostileDrain('deadbeef')).not.toThrow()
+  })
+
+  it('fails CLOSED on an absent/empty payload (nothing to inspect)', () => {
+    expect(() => assertTonSigningPayloadNoHostileDrain('')).toThrow(/TON_PREBUILT_PAYLOAD_UNREADABLE/)
+    expect(() => assertTonSigningPayloadNoHostileDrain(' \t\r\n ')).toThrow(/TON_PREBUILT_PAYLOAD_UNREADABLE/)
+    expect(() => assertTonSigningPayloadNoHostileDrain(undefined as unknown as string)).toThrow(
+      /TON_PREBUILT_PAYLOAD_UNREADABLE/
+    )
+  })
+
+  it('fails OPEN on a header too short to contain a full op byte', () => {
+    // Only 2 bytes, nowhere near the 104 bits (13 bytes) the header needs.
+    const shortCell = beginCell().storeUint(1, 16).endCell()
+    const hex = shortCell.toBoc({ idx: false }).toString('hex')
+    expect(() => assertTonSigningPayloadNoHostileDrain(hex)).not.toThrow()
+  })
+
+  it('fails OPEN on a non-drain send mode whose ref is not a well-formed relaxed message', () => {
+    // op=0 (claims simple send), benign mode, ref is garbage relative to
+    // CommonMessageInfoRelaxed's schema — nothing hostile was observed,
+    // so this must NOT throw.
+    const garbageRef = beginCell().storeUint(0xffffffff, 32).endCell()
+    const cell = beginCell()
+      .storeUint(TON_V4R2_SUB_WALLET_ID, 32)
+      .storeUint(VALID_UNTIL, 32)
+      .storeUint(1, 32)
+      .storeUint(0, 8)
+      .storeUint(SendMode.PAY_GAS_SEPARATELY, 8)
+      .storeRef(garbageRef)
+      .endCell()
+    const hex = cell.toBoc({ idx: false }).toString('hex')
+    expect(() => assertTonSigningPayloadNoHostileDrain(hex)).not.toThrow()
+  })
+
+  // The fail-open posture must be scoped to bytes the guard could not
+  // read — it must never retract a hostile fact read out of bytes it
+  // could.
+  it('rejects a real wallet-V4R2 op=1 (deploy-and-install-plugin) payload', () => {
+    // A genuine op!=0 body is `plugin_wc:int8 || plugin_balance:Grams ||
+    // ^state_init || ^body`, NOT `sendMode:8 || ^msg` — so a walk that
+    // parses the messages before judging `op` throws on the StateInit ref
+    // and fails open on exactly the wallet-hijack this guard names.
+    const stateInit = beginCell().storeUint(0, 2).storeBit(false).storeBit(false).storeBit(false).endCell()
+    const pluginBody = beginCell().storeUint(0, 32).endCell()
+    const cell = beginCell()
+      .storeUint(TON_V4R2_SUB_WALLET_ID, 32)
+      .storeUint(VALID_UNTIL, 32)
+      .storeUint(1, 32)
+      .storeUint(1, 8) // op = 1, deploy and install plugin
+      .storeInt(0, 8) // plugin_wc
+      .storeCoins(500_000_000n) // plugin_balance
+      .storeRef(stateInit)
+      .storeRef(pluginBody)
+      .endCell()
+    const hex = cell.toBoc({ idx: false }).toString('hex')
+    expect(() => assertTonSigningPayloadNoHostileDrain(hex)).toThrow(/TON_PREBUILT_HOSTILE_OP/)
+  })
+
+  it('rejects a drain mode on message #1 even when a later message is undecodable', () => {
+    const legitMsg = beginCell()
+      .store(storeMessageRelaxed(internal({ to: RECIPIENT, value: 1n, bounce: false })))
+      .endCell()
+    const garbageRef = beginCell().storeUint(0xffffffff, 32).endCell()
+    const cell = beginCell()
+      .storeUint(TON_V4R2_SUB_WALLET_ID, 32)
+      .storeUint(VALID_UNTIL, 32)
+      .storeUint(1, 32)
+      .storeUint(0, 8)
+      .storeUint(SendMode.CARRY_ALL_REMAINING_BALANCE, 8)
+      .storeRef(legitMsg)
+      .storeUint(SendMode.PAY_GAS_SEPARATELY, 8)
+      .storeRef(garbageRef)
+      .endCell()
+    const hex = cell.toBoc({ idx: false }).toString('hex')
+    expect(() => assertTonSigningPayloadNoHostileDrain(hex)).toThrow(/TON_PREBUILT_HOSTILE_DRAIN_MODE/)
+  })
+
+  it('rejects a drain mode on a later message hidden behind an undecodable first one', () => {
+    const garbageRef = beginCell().storeUint(0xffffffff, 32).endCell()
+    const legitMsg = beginCell()
+      .store(storeMessageRelaxed(internal({ to: RECIPIENT, value: 1n, bounce: false })))
+      .endCell()
+    const cell = beginCell()
+      .storeUint(TON_V4R2_SUB_WALLET_ID, 32)
+      .storeUint(VALID_UNTIL, 32)
+      .storeUint(1, 32)
+      .storeUint(0, 8)
+      .storeUint(SendMode.PAY_GAS_SEPARATELY, 8)
+      .storeRef(garbageRef)
+      .storeUint(SendMode.DESTROY_ACCOUNT_IF_ZERO, 8)
+      .storeRef(legitMsg)
+      .endCell()
+    const hex = cell.toBoc({ idx: false }).toString('hex')
+    expect(() => assertTonSigningPayloadNoHostileDrain(hex)).toThrow(/TON_PREBUILT_HOSTILE_DRAIN_MODE/)
+  })
+
+  it('does not false-reject a legit multi-message payload (4 bounded sends)', () => {
+    const legit = () =>
+      beginCell()
+        .store(storeMessageRelaxed(internal({ to: RECIPIENT, value: 7n, bounce: false })))
+        .endCell()
+    const b = beginCell()
+      .storeUint(TON_V4R2_SUB_WALLET_ID, 32)
+      .storeUint(VALID_UNTIL, 32)
+      .storeUint(1, 32)
+      .storeUint(0, 8)
+    for (let i = 0; i < 4; i += 1) {
+      b.storeUint(SendMode.PAY_GAS_SEPARATELY | SendMode.IGNORE_ERRORS, 8).storeRef(legit())
+    }
+    const hex = b.endCell().toBoc({ idx: false }).toString('hex')
+    expect(() => assertTonSigningPayloadNoHostileDrain(hex)).not.toThrow()
+  })
+
+  it('passes (no-op) a header claiming op=0 with zero outgoing messages', () => {
+    // No ref at all, decode succeeds (op=0), the loop over zero refs is a
+    // no-op, nothing to reject since nothing is being sent.
+    const cell = beginCell()
+      .storeUint(TON_V4R2_SUB_WALLET_ID, 32)
+      .storeUint(VALID_UNTIL, 32)
+      .storeUint(1, 32)
+      .storeUint(0, 8)
+      .endCell()
+    const hex = cell.toBoc({ idx: false }).toString('hex')
+    expect(() => assertTonSigningPayloadNoHostileDrain(hex)).not.toThrow()
+  })
+
+  it('accepts a base64-encoded payload, same as buildTonTxFromSigningPayload accepts', () => {
+    const hex = buildSigningPayloadHex({})
+    const base64 = Buffer.from(hex, 'hex').toString('base64')
+    expect(() => assertTonSigningPayloadNoHostileDrain(base64)).not.toThrow()
+    // And the base64 form of a hostile payload is still caught.
+    const hostileHex = buildSigningPayloadHex({ op: 5 })
+    const hostileBase64 = Buffer.from(hostileHex, 'hex').toString('base64')
+    expect(() => assertTonSigningPayloadNoHostileDrain(hostileBase64)).toThrow(/TON_PREBUILT_HOSTILE_OP/)
   })
 })

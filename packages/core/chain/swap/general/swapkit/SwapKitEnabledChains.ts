@@ -54,9 +54,9 @@ export type SwapKitEnabledChain = (typeof swapKitEnabledChains)[number]
  * Source-side eligibility is deliberately stricter than destination support.
  * Existing non-EVM transaction builders stay explicitly listed, while EVM
  * chains may be discovered from SwapKit's live catalog only when the SDK can
- * screen their returned router through Blockaid. This keeps Robinhood
- * destination-only until Blockaid adds chain 4663 without closing future safe
- * EVM corridors behind another SwapKit allowlist change.
+ * screen their returned router through Blockaid. Robinhood became
+ * source-eligible this way once Blockaid coverage for chain 4663 was confirmed
+ * live; CronosChain stays destination-less until Blockaid covers it.
  */
 export const isSwapKitSourceChain = (chain: Chain): chain is SwapKitSourceChain =>
   isOneOf(chain, swapKitSourceChains) || (isChainOfKind(chain, 'evm') && chain in blockaidEvmChain)

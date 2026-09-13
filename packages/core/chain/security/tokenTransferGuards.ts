@@ -17,7 +17,8 @@
  * `dangerousAddresses.ts`'s own placement rationale.
  */
 import { Chain } from '@vultisig/core-chain/Chain'
-import { knownTokensIndex } from '@vultisig/core-chain/coin/knownTokens'
+import { getKnownTokenIndexId } from '@vultisig/core-chain/coin/knownTokens/getKnownTokenIndexId'
+import { getKnownToken } from '@vultisig/core-chain/coin/knownTokens/utils'
 
 const EVM_ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/
 
@@ -40,9 +41,10 @@ export function assertSafeTokenTransferDestination(
   sendingTokenContract: string | undefined
 ): void {
   if (!sendingTokenContract) return
-  const hit = knownTokensIndex[chain as Chain]?.[recipient.toLowerCase()]
+  const hit = getKnownToken({ chain: chain as Chain, id: recipient })
   if (!hit) return
-  const isSameToken = recipient.toLowerCase() === sendingTokenContract.toLowerCase()
+  const isSameToken =
+    getKnownTokenIndexId(chain as Chain, recipient) === getKnownTokenIndexId(chain as Chain, sendingTokenContract)
   if (isSameToken) {
     throw new Error(
       `Refusing to build transaction: sending ${hit.ticker} to the ${hit.ticker} token contract ` +

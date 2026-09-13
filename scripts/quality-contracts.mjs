@@ -318,10 +318,17 @@ function validatePackedWorkspaceExports(workRoot, workspaceName) {
   return { packageRoot, tgzPath }
 }
 
-function packageGraphResolutions({ sdkTgzPath, coreChainTgzPath, coreMpcTgzPath, mpcTypesTgzPath }) {
+function packageGraphResolutions({
+  sdkTgzPath,
+  coreChainTgzPath,
+  coreMpcTgzPath,
+  libUtilsTgzPath,
+  mpcTypesTgzPath,
+}) {
   return {
     '@vultisig/core-chain': `file:${coreChainTgzPath}`,
     '@vultisig/core-mpc': `file:${coreMpcTgzPath}`,
+    '@vultisig/lib-utils': `file:${libUtilsTgzPath}`,
     '@vultisig/mpc-types': `file:${mpcTypesTgzPath}`,
     '@vultisig/sdk': `file:${sdkTgzPath}`,
   }
@@ -489,7 +496,13 @@ function packedCliBinSmoke(
     '@vultisig/core-config': `file:${coreConfigTgzPath}`,
     '@vultisig/lib-utils': `file:${libUtilsTgzPath}`,
     '@vultisig/rujira': `file:${rujiraTgzPath}`,
-    ...packageGraphResolutions({ sdkTgzPath, coreChainTgzPath, coreMpcTgzPath, mpcTypesTgzPath }),
+    ...packageGraphResolutions({
+      sdkTgzPath,
+      coreChainTgzPath,
+      coreMpcTgzPath,
+      libUtilsTgzPath,
+      mpcTypesTgzPath,
+    }),
   }
   const dependencies = {
     '@vultisig/cli': localDeps['@vultisig/cli'],
@@ -550,6 +563,7 @@ function packedMcpBinSmoke(
   clientSharedTgzPath,
   coreChainTgzPath,
   coreMpcTgzPath,
+  libUtilsTgzPath,
   mpcTypesTgzPath
 ) {
   const consumer = path.join(workRoot, 'mcp-consumer')
@@ -558,7 +572,13 @@ function packedMcpBinSmoke(
   const localDeps = {
     '@vultisig/client-shared': `file:${clientSharedTgzPath}`,
     '@vultisig/mcp': `file:${tgzPath}`,
-    ...packageGraphResolutions({ sdkTgzPath, coreChainTgzPath, coreMpcTgzPath, mpcTypesTgzPath }),
+    ...packageGraphResolutions({
+      sdkTgzPath,
+      coreChainTgzPath,
+      coreMpcTgzPath,
+      libUtilsTgzPath,
+      mpcTypesTgzPath,
+    }),
   }
 
   writeFileSync(
@@ -644,6 +664,7 @@ async function main() {
       sdkTgzPath: tgzPath,
       coreChainTgzPath,
       coreMpcTgzPath,
+      libUtilsTgzPath,
       mpcTypesTgzPath: packageContracts.get('@vultisig/mpc-types').tgzPath,
     })
 
@@ -676,6 +697,7 @@ async function main() {
       clientSharedTgzPath,
       coreChainTgzPath,
       coreMpcTgzPath,
+      libUtilsTgzPath,
       packageContracts.get('@vultisig/mpc-types').tgzPath
     )
 

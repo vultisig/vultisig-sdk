@@ -1,12 +1,12 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { mockGetCoinBalance, mockGetSendFeeEstimate, mockGetPublicKey, mockIsValidAddress, mockGetWalletCore } =
+const { mockGetCoinBalance, mockGetSendFeeEstimate, mockGetPublicKey, mockIsValidRecipient, mockGetWalletCore } =
   vi.hoisted(() => ({
     mockGetCoinBalance: vi.fn(),
     mockGetSendFeeEstimate: vi.fn(),
     mockGetPublicKey: vi.fn(),
-    mockIsValidAddress: vi.fn(),
+    mockIsValidRecipient: vi.fn(),
     mockGetWalletCore: vi.fn(),
   }))
 
@@ -19,8 +19,8 @@ vi.mock('@vultisig/core-mpc/keysign/send/getSendFeeEstimate', () => ({
 vi.mock('@vultisig/core-chain/publicKey/getPublicKey', () => ({
   getPublicKey: mockGetPublicKey,
 }))
-vi.mock('@vultisig/core-chain/utils/isValidAddress', () => ({
-  isValidAddress: mockIsValidAddress,
+vi.mock('@vultisig/core-chain/utils/isValidRecipient', () => ({
+  isValidRecipient: mockIsValidRecipient,
 }))
 vi.mock('@/context/wasmRuntime', () => ({
   getWalletCore: mockGetWalletCore,
@@ -42,12 +42,13 @@ const baseIdentity: VaultIdentity = {
 
 const mockWalletCore = { __mock: 'walletCore' }
 const mockPublicKey = { __mock: 'publicKey' }
+const solanaAtaOfAta = 'CHwY4qnqYsKPLBiuhLiEHJm4bBvEKzc3GMxau4K7oQhC'
 
 describe('getMaxSendAmountFromKeys', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetWalletCore.mockResolvedValue(mockWalletCore)
-    mockIsValidAddress.mockReturnValue(true)
+    mockIsValidRecipient.mockReturnValue(true)
     mockGetPublicKey.mockReturnValue(mockPublicKey)
   })
 
@@ -225,7 +226,7 @@ describe('getMaxSendAmountFromKeys', () => {
   })
 
   it('rejects when receiver address is invalid', async () => {
-    mockIsValidAddress.mockReturnValue(false)
+    mockIsValidRecipient.mockReturnValue(false)
     mockGetCoinBalance.mockResolvedValue(1_000n)
 
     await expect(
@@ -243,6 +244,26 @@ describe('getMaxSendAmountFromKeys', () => {
     // Validation happens inside computeMaxSendFromBalance (the canonical check),
     // which runs after getCoinBalance in the vault-free path. VaultBase.getMaxSendAmount
     // hoists the check above the balance fetch for the vault path.
+    expect(mockGetSendFeeEstimate).not.toHaveBeenCalled()
+  })
+
+  it('rejects an ATA-of-an-ATA recipient before estimating an SPL-token max send', async () => {
+    mockIsValidRecipient.mockReturnValue(false)
+    mockGetCoinBalance.mockResolvedValue(1_000n)
+
+    await expect(
+      getMaxSendAmountFromKeys(baseIdentity, {
+        coin: {
+          chain: Chain.Solana,
+          address: 'GmaDrppBC7P5ARKV8g3djiwP89vz1jLK23V2GBjuAEGB',
+          id: '7v54NWdBtkjuAFJrLGsS2SXnuk8nKam81mZJeeYxVFi9',
+          decimals: 6,
+          ticker: 'TOKEN',
+        } as any,
+        receiver: solanaAtaOfAta,
+      })
+    ).rejects.toThrow(`Invalid receiver address for chain Solana: ${solanaAtaOfAta}`)
+
     expect(mockGetSendFeeEstimate).not.toHaveBeenCalled()
   })
 
@@ -411,7 +432,7 @@ describe('computeMaxSendFromBalance', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetWalletCore.mockResolvedValue(mockWalletCore)
-    mockIsValidAddress.mockReturnValue(true)
+    mockIsValidRecipient.mockReturnValue(true)
     mockGetPublicKey.mockReturnValue(mockPublicKey)
   })
 
