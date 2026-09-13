@@ -296,6 +296,14 @@ vultisig delete "Test Vault" --yes
 - `--chains <chains>` - Specific chains to enable (comma-separated)
 - `--use-phantom-solana-path` - Use Phantom wallet derivation path for Solana
 
+**Join secure options:**
+
+- `--qr <payload>` / `--qr-file <path>` - Pairing QR payload from the initiator
+- `--mnemonic <words>` - Required for seedphrase-based (`KEYIMPORT`) sessions
+- `--devices <n>` - Total devices in the session (default: 2)
+- `--use-phantom-solana-path` - Match the initiator's Phantom Solana derivation setting
+- `--use-cosmos-path-terra` - Match the initiator's Terra / TerraClassic Cosmos coin-type path setting
+
 **Export options:**
 
 - `[path]` - Output file or directory (defaults to SDK-generated filename in current directory)

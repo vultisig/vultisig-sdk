@@ -560,9 +560,19 @@ joinCmd
   .option('--mnemonic <words>', 'Seedphrase (required for seedphrase-based sessions)')
   .option('--password <password>', 'Vault password (optional)')
   .option('--devices <n>', 'Total devices in session', '2')
+  .option('--use-phantom-solana-path', 'Use Phantom wallet derivation path for Solana')
+  .option('--use-cosmos-path-terra', 'Use Cosmos coin-type path for Terra / TerraClassic')
   .action(
     withExit(
-      async (options: { qr?: string; qrFile?: string; mnemonic?: string; password?: string; devices: string }) => {
+      async (options: {
+        qr?: string
+        qrFile?: string
+        mnemonic?: string
+        password?: string
+        devices: string
+        usePhantomSolanaPath?: boolean
+        useCosmosPathTerra?: boolean
+      }) => {
         const context = await init(program.opts().vault)
 
         // Get QR payload from flag, file, or prompt
@@ -592,6 +602,8 @@ joinCmd
           mnemonic,
           password: options.password,
           devices: parseInt(options.devices, 10),
+          usePhantomSolanaPath: options.usePhantomSolanaPath,
+          useCosmosPathTerra: options.useCosmosPathTerra,
         })
       }
     )
