@@ -75,6 +75,14 @@ vi.mock('@vultisig/core-chain/publicKey/getPublicKey', () => ({
   })),
 }))
 
+// Mock EVM gas-rate lookups used by extractSwapFees's EVM branch (sdk#1450)
+vi.mock('@vultisig/core-chain/tx/fee/evm/baseFee', () => ({
+  getEvmBaseFee: vi.fn().mockResolvedValue(10n),
+}))
+vi.mock('@vultisig/core-chain/tx/fee/evm/maxPriorityFeePerGas', () => ({
+  getEvmMaxPriorityFeePerGas: vi.fn().mockResolvedValue(2n),
+}))
+
 import type { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 
 import type { WasmProvider } from '../../../src/context/SdkContext'
@@ -794,7 +802,85 @@ describe('SwapService', () => {
         amount: 1,
       })
 
-      expect(result.fees).toEqual({ network: 5_000n, total: 30_000n })
+      expect(result.fees).toEqual({ network: 5_000n, affiliate: 25_000n, total: 30_000n })
+    })
+
+    it('should populate affiliate from tx.evm.affiliateFee when native-denominated (sdk#1450)', async () => {
+      const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
+
+      vi.mocked(findSwapQuote).mockResolvedValue({
+        quote: {
+          general: {
+            dstAmount: '50000000000000000',
+            provider: '1inch' as const,
+            tx: {
+              evm: {
+                from: '0x1234...',
+                to: '0x1111111254fb6c44bAC0beD2854e76F90643097d',
+                data: '0x...',
+                value: '0',
+                gasLimit: 300_000n,
+                affiliateFee: {
+                  amount: 1_000_000_000_000n,
+                  decimals: 18,
+                  chain: Chain.Ethereum,
+                },
+              },
+            },
+          },
+        },
+        discounts: [],
+      } as any)
+
+      const result = await service.getQuote({
+        fromCoin: { chain: Chain.Ethereum },
+        toCoin: { chain: Chain.Bitcoin },
+        amount: 1,
+      })
+
+      // networkFee = gasLimit * (baseFee + priorityFee) = 300_000n * (10n + 2n) = 3_600_000n
+      expect(result.fees).toEqual({
+        network: 3_600_000n,
+        affiliate: 1_000_000_000_000n,
+        total: 1_000_003_600_000n,
+      })
+    })
+
+    it('does not fold a foreign-denominated tx.evm.affiliateFee into the native total (sdk#1450)', async () => {
+      const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
+
+      vi.mocked(findSwapQuote).mockResolvedValue({
+        quote: {
+          general: {
+            dstAmount: '50000000000000000',
+            provider: '1inch' as const,
+            tx: {
+              evm: {
+                from: '0x1234...',
+                to: '0x1111111254fb6c44bAC0beD2854e76F90643097d',
+                data: '0x...',
+                value: '0',
+                gasLimit: 300_000n,
+                affiliateFee: {
+                  amount: 5_000_000n,
+                  decimals: 6,
+                  chain: Chain.Ethereum,
+                  id: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', // USDC — not native ETH
+                },
+              },
+            },
+          },
+        },
+        discounts: [],
+      } as any)
+
+      const result = await service.getQuote({
+        fromCoin: { chain: Chain.Ethereum },
+        toCoin: { chain: Chain.Bitcoin },
+        amount: 1,
+      })
+
+      expect(result.fees).toEqual({ network: 3_600_000n, total: 3_600_000n })
     })
 
     it('should handle quote errors gracefully', async () => {
