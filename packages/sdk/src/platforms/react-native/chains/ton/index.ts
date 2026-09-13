@@ -21,6 +21,7 @@ export type {
   TonWalletStatus,
 } from '../../../../chains/ton'
 export {
+  assertTonSigningPayloadNoHostileDrain,
   broadcastTonTx,
   buildTonJettonTransferTx,
   buildTonSendTx,

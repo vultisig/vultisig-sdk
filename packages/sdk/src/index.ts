@@ -18,12 +18,14 @@ export type { VaultImportConflictResolution, VaultImportOptions } from './VaultM
 export { Vultisig } from './Vultisig'
 
 // Vault management
-export type { VaultConfig, VaultSaveOptions } from './vault'
+export type { ResolvedTokenInfo, VaultConfig, VaultSaveOptions } from './vault'
 export {
   BroadcastPartialFailureError,
   FastVault,
   hasServer,
   isServer,
+  resolveTokenRef,
+  resolveTokenRefId,
   SecureVault,
   VaultBase,
   VaultConflictError,
@@ -1327,7 +1329,17 @@ export type {
 } from './types/notifications'
 
 // ============================================================================
-// PUBLIC API - ABI Constants
+// PUBLIC API - ABI Constants and Helpers
 // ============================================================================
 
-export { ERC20_ABI, ERC1155_ABI } from './abi'
+export {
+  encodeTrc20TransferParam,
+  ERC20_ABI,
+  ERC1155_ABI,
+  tronBase58ToEvmHex,
+  tronBase58ToHex,
+  tronHexToBase58,
+} from './abi'
+
+// Grouped helper families retain the canonical tools implementations.
+export { balance, prep, swap } from './tools'

@@ -7,6 +7,8 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
+import { parseAst } from 'rollup/parseAst'
+
 import { createDisposableYarnEnv } from './quality-contracts-cache.mjs'
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
@@ -158,16 +160,62 @@ export function validatePackedExportTargets(manifest, packageRoot) {
   return targets
 }
 
-function validatePackedReactNativeCosmosPayloadExports(packageRoot) {
+function validatePackedReactNativePublicHelpers(packageRoot) {
   const runtimePath = path.join(packageRoot, 'dist/index.react-native.js')
   const declarationsPath = path.join(packageRoot, 'dist/index.react-native.d.ts')
   const runtimeSource = readFileSync(runtimePath, 'utf8')
   const declarationSource = readFileSync(declarationsPath, 'utf8')
 
-  for (const symbol of ['buildSignAminoKeysignPayload', 'buildSignDirectKeysignPayload']) {
+  for (const symbol of [
+    'buildSignAminoKeysignPayload',
+    'buildSignDirectKeysignPayload',
+    'tronBase58ToEvmHex',
+    'tronBase58ToHex',
+    'tronHexToBase58',
+    'encodeTrc20TransferParam',
+  ]) {
     assert.ok(runtimeSource.includes(symbol), `react-native bundle exports ${symbol}`)
     assert.ok(declarationSource.includes(symbol), `react-native types export ${symbol}`)
   }
+}
+
+function validatePackedReactNativeTokenRefExports(packageRoot) {
+  const runtimePath = path.join(packageRoot, 'dist/index.react-native.js')
+  const ast = parseAst(readFileSync(runtimePath, 'utf8'))
+  const exportedNames = ast.body
+    .filter(statement => statement.type === 'ExportNamedDeclaration')
+    .flatMap(statement => statement.specifiers.map(specifier => specifier.exported.name))
+  for (const name of ['resolveTokenRef', 'resolveTokenRefId']) {
+    assert.ok(exportedNames.includes(name), `packed React Native runtime must export ${name}`)
+  }
+  console.log('SDK packed React Native token resolver export bindings passed (artifact check, not device execution)')
+}
+
+// Run the same public API scenarios through both installed Node module formats.
+function verifyTokenRefConsumer(sdk) {
+  const chain = sdk.Chain.Ethereum
+  const address = '0x1111111111111111111111111111111111111111'
+  const otherAddress = '0x2222222222222222222222222222222222222222'
+  const token = { id: address, chain, symbol: 'USDC', decimals: 6, contractAddress: address }
+  assert.equal(typeof sdk.resolveTokenRef, 'function')
+  assert.equal(typeof sdk.resolveTokenRefId, 'function')
+  assert.deepEqual(sdk.resolveTokenRef(chain, undefined, []), { ticker: 'ETH', decimals: 18 })
+  assert.equal(sdk.resolveTokenRefId(chain, 'ETH', []), undefined)
+  for (const ref of ['usdc', address]) {
+    assert.deepEqual(sdk.resolveTokenRef(chain, ref, [token]), {
+      ticker: 'USDC',
+      decimals: 6,
+      contractAddress: address,
+    })
+    assert.equal(sdk.resolveTokenRefId(chain, ref, [token]), address)
+  }
+  assert.equal(sdk.resolveTokenRefId(chain, 'USDC', []), '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48')
+  assert.throws(() => sdk.resolveTokenRef(chain, address, []), /not found/)
+  assert.equal(sdk.resolveTokenRefId(chain, address, []), address)
+  const ambiguous = [token, { ...token, id: otherAddress, contractAddress: otherAddress }]
+  assert.throws(() => sdk.resolveTokenRef(chain, 'USDC', ambiguous), /ambiguous/)
+  assert.throws(() => sdk.resolveTokenRefId(chain, 'USDC', ambiguous), /ambiguous/)
+  console.log('SDK token resolution passed: native, configured symbol/address, registry, unknown, ambiguity')
 }
 
 export function resolveConditionalTarget(value, activeConditions) {
@@ -335,6 +383,8 @@ for (const { specifier, target } of cases) {
 }
 
 const root = importedModules.get('@vultisig/sdk')
+${verifyTokenRefConsumer.toString()}
+verifyTokenRefConsumer(root)
 const node = importedModules.get('@vultisig/sdk/node')
 const vite = importedModules.get('@vultisig/sdk/vite')
 const electronMain = importedModules.get('@vultisig/sdk/electron/main')
@@ -344,6 +394,22 @@ assert.equal(typeof root?.fiatToAmount, 'function', 'root import exports fiatToA
 assert.equal(typeof root?.normalizeChain, 'function', 'root import exports normalizeChain')
 assert.equal(typeof root?.fromChainAmountExact, 'function', 'root import exports fromChainAmountExact')
 assert.equal(typeof root?.getBlockExplorerUrl, 'function', 'root import exports getBlockExplorerUrl')
+const tronAddress = 'TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH'
+const evmHex = 'c8599111f29c1e1e061265b4af93ea1f274ad78a'
+assert.equal(root.tronBase58ToEvmHex(tronAddress), evmHex)
+assert.equal(root.tronBase58ToHex(tronAddress), '41' + evmHex)
+assert.equal(root.tronHexToBase58(evmHex), tronAddress)
+assert.equal(root.tronHexToBase58('41' + evmHex), tronAddress)
+assert.equal(root.encodeTrc20TransferParam(tronAddress, '1000000'), evmHex.padStart(64, '0') + 'f4240'.padStart(64, '0'))
+assert.equal(root.encodeTrc20TransferParam(tronAddress, '0'), evmHex.padStart(64, '0') + '0'.repeat(64))
+assert.equal(root.encodeTrc20TransferParam(tronAddress, ((1n << 256n) - 1n).toString()), evmHex.padStart(64, '0') + 'f'.repeat(64))
+assert.throws(() => root.tronBase58ToEvmHex(tronAddress.slice(0, -1) + 'J'), /checksum/)
+assert.throws(() => root.tronBase58ToHex(tronAddress.slice(0, -1) + 'J'), /checksum/)
+assert.throws(() => root.encodeTrc20TransferParam(tronAddress.slice(0, -1) + 'J', '1'), /checksum/)
+assert.throws(() => root.encodeTrc20TransferParam(tronAddress, '-1'), /negative amount/)
+assert.throws(() => root.encodeTrc20TransferParam(tronAddress, (1n << 256n).toString()), /uint256/)
+console.log('Packed TRON helpers passed: address round-trip, exact calldata, checksum and uint256 boundaries')
+
 assert.equal(
   typeof root?.buildSignAminoKeysignPayload,
   'function',
@@ -384,6 +450,8 @@ for (const { specifier, target } of cases) {
 }
 
 assert.equal(typeof requiredModules.get('@vultisig/sdk')?.Vultisig, 'function', 'root require exports Vultisig')
+${verifyTokenRefConsumer.toString()}
+verifyTokenRefConsumer(requiredModules.get('@vultisig/sdk'))
 assert.equal(
   typeof requiredModules.get('@vultisig/sdk/electron/main')?.ElectronMainCrypto,
   'function',
@@ -420,12 +488,18 @@ void ${alias}Keys`
     `${typeImports}
 ${declarationAssertions}
 import {
+  encodeTrc20TransferParam,
+  tronBase58ToEvmHex,
+  tronBase58ToHex,
+  tronHexToBase58,
   Chain,
   buildSignAminoKeysignPayload,
   buildSignDirectKeysignPayload,
   chainRegistry,
   deriveFromChainRegistry,
   extendChainRegistry,
+  resolveTokenRef,
+  resolveTokenRefId,
 } from '@vultisig/sdk'
 import type {
   BuildSignAminoPayloadInput,
@@ -436,25 +510,47 @@ import type {
   ChainExtensionRecord,
   ChainKind,
   ExtendedChainRegistry,
+  ResolvedTokenInfo,
 } from '@vultisig/sdk'
 import type {
   ChainDescriptor as ReactNativeChainDescriptor,
   ExtendedChainRegistry as ReactNativeExtendedChainRegistry,
 } from '@vultisig/sdk/react-native'
 import {
+  encodeTrc20TransferParam as encodeTrc20TransferParamReactNative,
+  tronBase58ToEvmHex as tronBase58ToEvmHexReactNative,
+  tronBase58ToHex as tronBase58ToHexReactNative,
+  tronHexToBase58 as tronHexToBase58ReactNative,
   buildSignAminoKeysignPayload as buildSignAminoKeysignPayloadReactNative,
   buildSignDirectKeysignPayload as buildSignDirectKeysignPayloadReactNative,
   type BuildSignAminoPayloadInput as BuildSignAminoPayloadInputReactNative,
   type BuildSignDirectPayloadInput as BuildSignDirectPayloadInputReactNative,
+  resolveTokenRef as resolveTokenRefReactNative,
+  resolveTokenRefId as resolveTokenRefIdReactNative,
+  type ResolvedTokenInfo as ResolvedTokenInfoReactNative,
 } from '@vultisig/sdk/react-native'
 import type { Vultisig } from '@vultisig/sdk/node'
 import type { ElectronMainCrypto, Vultisig as ElectronMainVultisig } from '@vultisig/sdk/electron/main'
+
+const tronConverters: ((address: string) => string)[] = [
+  tronBase58ToEvmHex, tronBase58ToHex, tronHexToBase58,
+  tronBase58ToEvmHexReactNative, tronBase58ToHexReactNative, tronHexToBase58ReactNative,
+]
+const tronEncoders: ((address: string, amount: string) => string)[] = [
+  encodeTrc20TransferParam, encodeTrc20TransferParamReactNative,
+]
+void tronConverters
+void tronEncoders
 
 const descriptor: ChainDescriptor = chainRegistry[Chain.Ethereum]
 const registry: ChainDescriptorRegistry = chainRegistry
 const explorer: ChainExplorerDescriptor = descriptor.explorer
 const extension: ChainExtensionRecord = deriveFromChainRegistry(({ kind }) => ({ kind }))
 const extended: ExtendedChainRegistry<typeof extension> = extendChainRegistry(extension)
+export const resolvedToken: ResolvedTokenInfo = resolveTokenRef(Chain.Ethereum, undefined, [])
+export const resolvedTokenId: string | undefined = resolveTokenRefId(Chain.Ethereum, 'USDC', [])
+export const resolvedTokenReactNative: ResolvedTokenInfoReactNative = resolveTokenRefReactNative(Chain.Ethereum, undefined, [])
+export const resolvedTokenIdReactNative: string | undefined = resolveTokenRefIdReactNative(Chain.Ethereum, 'USDC', [])
 
 export type RootChain = Chain
 export type NodeClient = Vultisig
@@ -589,7 +685,8 @@ export async function checkSdkPackageExports({
     )
 
     const targets = validatePackedExportTargets(sourceManifest, packageRoot)
-    validatePackedReactNativeCosmosPayloadExports(packageRoot)
+    validatePackedReactNativePublicHelpers(packageRoot)
+    validatePackedReactNativeTokenRefExports(packageRoot)
     const importCases = collectNodeRuntimeCases(sourceManifest, 'import')
     const requireCases = collectNodeRuntimeCases(sourceManifest, 'require')
     if (!importCases.length || !requireCases.length) {
