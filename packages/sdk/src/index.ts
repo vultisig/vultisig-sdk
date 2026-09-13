@@ -1114,6 +1114,7 @@ export {
   encodeAgentRouterDepositWithMemo,
   encodeErc20Approve,
   encodeErc20Revoke,
+  ensureTransactionsBuilt,
   estimateCosmosSwapFeeLabel,
   evaluatePolicy,
   evm,

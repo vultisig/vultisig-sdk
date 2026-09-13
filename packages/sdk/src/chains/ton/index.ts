@@ -9,6 +9,7 @@ export type {
   TonWalletCoreBackedTxBuilderResult,
 } from './tx'
 export {
+  assertTonSigningPayloadNoHostileDrain,
   buildTonJettonTransferTx,
   buildTonSendTx,
   buildTonTxFromSigningPayload,
