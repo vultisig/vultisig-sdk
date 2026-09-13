@@ -4,12 +4,16 @@
  * These types define the swap functionality exposed through VaultBase.
  */
 
+import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import type { Chain } from '@vultisig/core-chain/Chain'
 import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import type { SwapAffiliateConfig, SwapQuoteProviderExcludeName } from '@vultisig/core-chain/swap/quote/findSwapQuote'
 import type { BoundSwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
 import type { FiatCurrency } from '@vultisig/core-config/FiatCurrency'
 import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import { formatUnits } from 'viem'
+
+import { VaultError, VaultErrorCode } from './VaultError'
 
 // Re-export core swap types for SDK consumers
 export type { GeneralSwapProvider } from '@vultisig/core-chain/swap/general/GeneralSwapProvider'
@@ -45,8 +49,19 @@ export type SwapQuoteParams = {
   fromCoin: CoinInput
   /** Destination coin to swap to */
   toCoin: CoinInput
-  /** Amount to swap in human-readable format (e.g., 1.5 for 1.5 ETH or "1.5") */
-  amount: string | number
+  /**
+   * Amount to swap in human-readable format (e.g., 1.5 for 1.5 ETH or "1.5").
+   * Mutually exclusive with `amountBaseUnits` — provide exactly one.
+   */
+  amount?: string | number
+  /**
+   * Amount to swap in the source coin's smallest units (wei, sats, uatom,
+   * ...). Use this when the caller already holds an authoritative base-unit
+   * amount (e.g. rehydrating a swap from a backend tx envelope) so it does
+   * not have to reconstruct a human-readable decimal string itself just to
+   * call into the SDK. Mutually exclusive with `amount` — provide exactly one.
+   */
+  amountBaseUnits?: bigint
   /** Optional referral address for affiliate fees */
   referral?: string
   /** Optional fiat currency for fee/output conversion (e.g., 'usd', 'eur') */
@@ -173,8 +188,18 @@ export type SwapTxParams = {
   fromCoin: CoinInput
   /** Destination coin to swap to */
   toCoin: CoinInput
-  /** Amount to swap in human-readable format */
-  amount: string | number
+  /**
+   * Amount to swap in human-readable format. Mutually exclusive with
+   * `amountBaseUnits` — provide exactly one, matching whichever the
+   * `swapQuote` above was fetched with.
+   */
+  amount?: string | number
+  /**
+   * Amount to swap in the source coin's smallest units. See
+   * `SwapQuoteParams.amountBaseUnits` — same semantics, mutually exclusive
+   * with `amount`.
+   */
+  amountBaseUnits?: bigint
   /** Quote obtained from getSwapQuote() */
   swapQuote: SwapQuoteResult
   /**
@@ -198,6 +223,48 @@ export type SwapPrepareResult = {
   approvalPayload?: KeysignPayload
   /** The quote used for this transaction */
   quote: SwapQuoteResult
+}
+
+/** Amount input shared by `SwapQuoteParams` and `SwapTxParams`: exactly one of `amount`/`amountBaseUnits`. */
+type SwapAmountInput = Pick<SwapQuoteParams, 'amount' | 'amountBaseUnits'>
+
+const assertExactlyOneAmountInput = (params: SwapAmountInput): void => {
+  const hasAmount = params.amount !== undefined
+  const hasBaseUnits = params.amountBaseUnits !== undefined
+  if (hasAmount === hasBaseUnits) {
+    throw new VaultError(
+      VaultErrorCode.InvalidConfig,
+      'Provide exactly one of `amount` (human-readable) or `amountBaseUnits` (source coin smallest units).'
+    )
+  }
+  if (hasBaseUnits && params.amountBaseUnits! <= 0n) {
+    throw new VaultError(VaultErrorCode.InvalidAmount, '`amountBaseUnits` must be greater than zero.')
+  }
+}
+
+/**
+ * Resolves a swap amount input to base units (bigint), for callers (quote
+ * fetching) that need the chain-precision amount directly. Skips the
+ * human-string round trip entirely when `amountBaseUnits` was provided.
+ */
+export function resolveSwapAmountBaseUnits(params: SwapAmountInput, decimals: number): bigint {
+  assertExactlyOneAmountInput(params)
+  return params.amountBaseUnits !== undefined ? params.amountBaseUnits : toChainAmount(params.amount!, decimals)
+}
+
+/**
+ * Resolves a swap amount input to a human-readable decimal string, for
+ * callers (tx preparation) that build on the existing string-based swap
+ * payload path. When `amountBaseUnits` was provided, `formatUnits` produces
+ * the exact decimal representation of that bigint — parsing it back via
+ * `toChainAmount` downstream recovers the identical base-unit value, so this
+ * round trip is lossless (unlike a caller pre-truncating to fewer digits).
+ */
+export function resolveSwapAmountHuman(params: SwapAmountInput, decimals: number): string {
+  assertExactlyOneAmountInput(params)
+  return params.amountBaseUnits !== undefined
+    ? formatUnits(params.amountBaseUnits, decimals)
+    : params.amount!.toString()
 }
 
 /**

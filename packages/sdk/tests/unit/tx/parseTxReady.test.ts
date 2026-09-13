@@ -137,7 +137,7 @@ describe('parseTxReadyEnvelope', () => {
       fromSymbol: 'RUNE',
       toChain: Chain.Bitcoin,
       toSymbol: 'BTC',
-      amount: '0.01',
+      amountBaseUnits: '1000000',
       recipient: 'bc1qrecipient',
     })
   })
