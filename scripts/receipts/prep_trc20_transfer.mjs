@@ -26,7 +26,6 @@ const INPUTS = {
   from: 'TJRabPrwbZy45sbavfcjinPJC18kjpRTv8',
   to: 'TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH',
   amount: '1000000', // 1.000000 USDT (6 decimals)
-  memo: 'SWAP:BTC.BTC:bc1qexampledestination:0',
 }
 
 const tx = prepareTrc20TransferFromKeys(INPUTS)
@@ -54,6 +53,19 @@ console.log(`  amount    (dec) : ${decodedAmount.toString()}  ${decodedAmount ==
 if (decodedRecipient !== INPUTS.to) throw new Error('recipient calldata does not round-trip')
 if (decodedAmount !== BigInt(INPUTS.amount)) throw new Error('amount calldata does not round-trip')
 if (tx.parameter.length !== 128) throw new Error('parameter is not 128 hex chars')
+
+try {
+  prepareTrc20TransferFromKeys({
+    ...INPUTS,
+    memo: 'SWAP:BTC.BTC:bc1qexampledestination:0',
+  })
+  throw new Error('memo rejection did not fire')
+} catch (err) {
+  if (!(err instanceof Error) || !/memo is not supported/.test(err.message)) {
+    throw err
+  }
+  console.log('\nmemo guard:', err.message)
+}
 
 console.log('\nNO signing material emitted (keys):', Object.keys(tx).join(', '))
 console.log('PASS — unsigned, deterministic, round-trips. Not signed, not broadcast.')
