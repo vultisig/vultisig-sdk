@@ -851,9 +851,9 @@ export function buildYieldStepScanRequest(tx: YieldTransaction, solanaAccountAdd
 /**
  * Build a scan_request for EVERY step in a yield action's transactions[],
  * 1:1 with the input array — including `unsupported` entries (architecture#1670).
- * Unlike {@link buildYieldActionScanRequest} (which surfaces only the first
- * scannable step, for backward compatibility with the historical single-slot
- * contract), this hands a caller ALL steps so a multi-step action (e.g.
+ * Unlike {@link buildYieldActionScanRequest} (which prefers a scannable
+ * non-approval step for the historical single-slot contract), this hands
+ * a caller ALL steps so a multi-step action (e.g.
  * approve→stake) can be scanned in full rather than just its first leg.
  */
 export function buildYieldActionScanRequests(resp: YieldActionResponse, solanaAccountAddress?: string): ScanRequest[] {
@@ -863,13 +863,16 @@ export function buildYieldActionScanRequests(resp: YieldActionResponse, solanaAc
 
 /**
  * Build the scan_request for a yield action's RESPONSE envelope.
- * Returns the first non-unsupported step scan_request; falls back to
- * `{kind: 'unsupported', reason: 'no_compiled_txs'}` when all steps are
- * unsupported. Kept for backward compatibility with the historical
+ * Prefers the first supported non-APPROVAL step, then the first supported
+ * approval. Returns `{kind: 'unsupported', reason: 'no_compiled_txs'}` when
+ * all steps are unsupported. Preserves the shape of the historical
  * single-slot contract — use {@link buildYieldActionScanRequests} (plural)
  * for full multi-step coverage.
  */
 export function buildYieldActionScanRequest(resp: YieldActionResponse, solanaAccountAddress?: string): ScanRequest {
   const requests = buildYieldActionScanRequests(resp, solanaAccountAddress)
-  return requests.find(req => req.kind !== 'unsupported') ?? { kind: 'unsupported', reason: 'no_compiled_txs' }
+  return (
+    requests.find((req, index) => req.kind !== 'unsupported' && resp.transactions[index].type !== 'APPROVAL') ??
+    requests.find(req => req.kind !== 'unsupported') ?? { kind: 'unsupported', reason: 'no_compiled_txs' }
+  )
 }
