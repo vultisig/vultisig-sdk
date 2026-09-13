@@ -1,3 +1,10 @@
+// Grouped public helper families, alongside the existing flat exports.
+import * as balance from './balance'
+import * as prep from './prep'
+import * as swap from './swap'
+
+export { balance, prep, swap }
+
 // Address derivation
 export { deriveAddressFromKeys } from './address'
 

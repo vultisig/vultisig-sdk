@@ -1,5 +1,19 @@
 # @vultisig/core-chain
 
+## 5.4.2
+
+### Patch Changes
+
+- [#2359](https://github.com/vultisig/vultisig-sdk/pull/2359) [`1ec5c2a`](https://github.com/vultisig/vultisig-sdk/commit/1ec5c2aec8499ef009c248bfd714720c07798315) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Robinhood (4663) now declares the canonical Multicall3 on its viem chain, so balance discovery batches the whole token catalog in one call instead of falling back to one `eth_call` per token against the public RPC. The contract is deployed there with bytecode identical to the Ethereum and Base deployments; only the public deployment registry had not listed the chain. Also records that KyberSwap's MetaAggregationRouterV2 keeps its standard address on Robinhood: `/routes` and `/route/build` on the `robinhood` API path both return `0x6131b5fae19ea4f9d964eac0408e4408b66337b5` with buildable calldata, so the flat Kyber allowlist was already correct.
+
+## 5.4.1
+
+### Patch Changes
+
+- [#2362](https://github.com/vultisig/vultisig-sdk/pull/2362) [`e4d2594`](https://github.com/vultisig/vultisig-sdk/commit/e4d2594393043f89a99d1e38387cc139047f7af8) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Share Tron Base58Check validation across balance lookup, transaction building, and energy estimation, preserving the existing accepted address prefixes.
+
+- [#2361](https://github.com/vultisig/vultisig-sdk/pull/2361) [`1cb2615`](https://github.com/vultisig/vultisig-sdk/commit/1cb2615acefd7f6f1170ab3340bb1d23d63ee1ca) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Preserve case-sensitive non-EVM token identifiers in curated lookups, discovery, and token-transfer guards. EVM addresses remain case-insensitive. Consumers of knownTokensIndex must use canonical non-EVM keys without lowercasing them; the shared getKnownToken helper applies the chain-specific matching rule.
+
 ## 5.4.0
 
 ### Minor Changes

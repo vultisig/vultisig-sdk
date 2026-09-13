@@ -1,3 +1,5 @@
+import { assertSafeEvmDestination } from '@vultisig/core-chain/security/dangerousAddresses'
+
 import { encodeTrc20TransferParam, tronBase58ToEvmHex } from '../../abi/tron'
 
 /**
@@ -89,9 +91,17 @@ export const prepareTrc20TransferFromKeys = (params: PrepareTrc20TransferFromKey
   // Validate every address as TRON base58check up-front (throws on bad
   // checksum / wrong prefix / wrong length). This is the fund-safety gate:
   // a typoed-but-decodable address must surface as an error, not a misroute.
-  tronBase58ToEvmHex(contractAddress)
+  const contractHex = tronBase58ToEvmHex(contractAddress)
   tronBase58ToEvmHex(from)
-  // encodeTrc20TransferParam re-validates `to` via tronBase58ToEvmHex.
+  const recipientHex = tronBase58ToEvmHex(to)
+
+  // Screen the decoded payload, since Base58 addresses are case-sensitive.
+  assertSafeEvmDestination(`0x${recipientHex}`)
+  if (recipientHex === contractHex) {
+    throw new Error(
+      'prepareTrc20TransferFromKeys: refusing to send tokens to their own contract address; funds may be unrecoverable'
+    )
+  }
 
   // Fund-safety / WYSIWYS: `amount` MUST be a plain non-negative decimal
   // integer string. `BigInt()` is far too permissive for a value-bearing

@@ -1,5 +1,37 @@
 # @vultisig/sdk
 
+## 7.4.2
+
+### Patch Changes
+
+- [#2363](https://github.com/vultisig/vultisig-sdk/pull/2363) [`75e33dc`](https://github.com/vultisig/vultisig-sdk/commit/75e33dce10203bcbd95cf334770b6cb893d80237) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Export the canonical TRON address conversion and TRC-20 ABI encoding helpers from the root and React Native SDK entrypoints.
+
+- [#2359](https://github.com/vultisig/vultisig-sdk/pull/2359) [`1ec5c2a`](https://github.com/vultisig/vultisig-sdk/commit/1ec5c2aec8499ef009c248bfd714720c07798315) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Robinhood (4663) now declares the canonical Multicall3 on its viem chain, so balance discovery batches the whole token catalog in one call instead of falling back to one `eth_call` per token against the public RPC. The contract is deployed there with bytecode identical to the Ethereum and Base deployments; only the public deployment registry had not listed the chain. Also records that KyberSwap's MetaAggregationRouterV2 keeps its standard address on Robinhood: `/routes` and `/route/build` on the `robinhood` API path both return `0x6131b5fae19ea4f9d964eac0408e4408b66337b5` with buildable calldata, so the flat Kyber allowlist was already correct.
+
+- [#2365](https://github.com/vultisig/vultisig-sdk/pull/2365) [`b3cebc6`](https://github.com/vultisig/vultisig-sdk/commit/b3cebc63b1222d8bc41ef9e8fae8e0e470042519) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Export the canonical token reference resolvers and their result type from the SDK root and React Native entry points.
+
+- [#2371](https://github.com/vultisig/vultisig-sdk/pull/2371) [`663fddf`](https://github.com/vultisig/vultisig-sdk/commit/663fddfd336f3acf990a5b5d470a0962c7b9fade) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Publish the existing swap helpers through the dedicated `@vultisig/sdk/tools/swap` entry with ESM, CommonJS, and TypeScript declarations.
+
+- [#2369](https://github.com/vultisig/vultisig-sdk/pull/2369) [`42ef35c`](https://github.com/vultisig/vultisig-sdk/commit/42ef35c4542e1289b6a4e70437d31fe917f9bd22) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Expose the balance, prep, and swap helper groups on the root and React Native SDK surfaces while preserving existing flat exports and React Native's deferred preparation and balance wrappers.
+
+- [#2370](https://github.com/vultisig/vultisig-sdk/pull/2370) [`257729d`](https://github.com/vultisig/vultisig-sdk/commit/257729dbc65abb142e543162f6f67eb6f1c68a11) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject known burn destinations and transfers to the token's own contract in the standalone TRC-20 transfer helper.
+
+- Updated dependencies [[`1ec5c2a`](https://github.com/vultisig/vultisig-sdk/commit/1ec5c2aec8499ef009c248bfd714720c07798315)]:
+  - @vultisig/core-chain@5.4.2
+  - @vultisig/core-mpc@3.2.3
+
+## 7.4.1
+
+### Patch Changes
+
+- [#2362](https://github.com/vultisig/vultisig-sdk/pull/2362) [`e4d2594`](https://github.com/vultisig/vultisig-sdk/commit/e4d2594393043f89a99d1e38387cc139047f7af8) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Share Tron Base58Check validation across balance lookup, transaction building, and energy estimation, preserving the existing accepted address prefixes.
+
+- [#2361](https://github.com/vultisig/vultisig-sdk/pull/2361) [`1cb2615`](https://github.com/vultisig/vultisig-sdk/commit/1cb2615acefd7f6f1170ab3340bb1d23d63ee1ca) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Preserve case-sensitive non-EVM token identifiers in curated lookups, discovery, and token-transfer guards. EVM addresses remain case-insensitive. Consumers of knownTokensIndex must use canonical non-EVM keys without lowercasing them; the shared getKnownToken helper applies the chain-specific matching rule.
+
+- Updated dependencies [[`e4d2594`](https://github.com/vultisig/vultisig-sdk/commit/e4d2594393043f89a99d1e38387cc139047f7af8), [`1cb2615`](https://github.com/vultisig/vultisig-sdk/commit/1cb2615acefd7f6f1170ab3340bb1d23d63ee1ca)]:
+  - @vultisig/core-chain@5.4.1
+  - @vultisig/core-mpc@3.2.2
+
 ## 7.4.0
 
 ### Minor Changes
