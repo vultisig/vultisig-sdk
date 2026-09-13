@@ -148,3 +148,16 @@ describe('RN getLifiSwapQuote override — slippage mirrors core (P1)', () => {
     expect(slippageOf()).toBe(0.001)
   })
 })
+
+describe('RN LI.FI requested affiliate metadata', () => {
+  it.each([0, 30, 50])(
+    'preserves explicitly requested %i bps even when the amount rounds to zero',
+    async affiliateBps => {
+      fixture.approvalAddress = undefined
+      fixture.getQuoteMock.mockResolvedValueOnce(quoteResponse())
+      const quote = await getLifiSwapQuote({ ...baseInput, affiliateBps } as never)
+      expect(fixture.getQuoteMock.mock.calls.at(-1)![1].fee).toBe(affiliateBps / 10000)
+      expect(quote.affiliate).toEqual({ affiliateBps, request: 'included' })
+    }
+  )
+})

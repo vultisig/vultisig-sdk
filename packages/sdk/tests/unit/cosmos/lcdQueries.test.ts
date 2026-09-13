@@ -75,9 +75,9 @@ describe('cosmos staking / URL builders', () => {
     )
   })
 
-  it('builds Kujira auth account URL (used for vesting account detection)', () => {
-    expect(getAuthAccountUrl('Kujira', 'kujira1abc')).toBe(
-      'https://kujira-api.polkachu.com/cosmos/auth/v1beta1/accounts/kujira1abc'
+  it('builds Osmosis auth account URL (used for vesting account detection)', () => {
+    expect(getAuthAccountUrl('Osmosis', 'osmo1abc')).toBe(
+      'https://osmosis-rest.publicnode.com/cosmos/auth/v1beta1/accounts/osmo1abc'
     )
   })
 })

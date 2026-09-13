@@ -111,4 +111,51 @@ describe('AddressService', () => {
     expect(out.Ethereum).toBe('0xderived')
     expect(out.Bitcoin).toBe('0xderived')
   })
+
+  // TON is the one chain with two wallet contracts per key. The vault acts on
+  // one selected account; a per-call version only previews the other.
+  describe('AddressService — TON wallet contract selection', () => {
+    const tonVersionOf = (call: number) => mockDeriveAddress.mock.calls[call]?.[0]?.tonWalletVersion
+
+    it('derives V4R2 by default, the account every existing vault uses', async () => {
+      const service = new AddressService(baseVault as never, cache, wasmProvider)
+
+      await service.getAddress(Chain.Ton)
+
+      expect(service.getTonWalletVersion()).toBe('v4r2')
+      expect(tonVersionOf(0)).toBe('v4r2')
+    })
+
+    it('moves every un-versioned lookup to W5 once selected, and caches each account separately', async () => {
+      mockDeriveAddress.mockImplementation(({ tonWalletVersion }) => `ton-${tonWalletVersion}`)
+      const service = new AddressService(baseVault as never, cache, wasmProvider)
+
+      await expect(service.getAddress(Chain.Ton)).resolves.toBe('ton-v4r2')
+      service.setTonWalletVersion('v5r1')
+      await expect(service.getAddress(Chain.Ton)).resolves.toBe('ton-v5r1')
+      service.setTonWalletVersion('v4r2')
+      await expect(service.getAddress(Chain.Ton)).resolves.toBe('ton-v4r2')
+
+      // Two derivations, one per contract; switching back served the cache.
+      expect(mockDeriveAddress).toHaveBeenCalledTimes(2)
+    })
+
+    it('lets a single lookup preview the other account without changing the selection', async () => {
+      mockDeriveAddress.mockImplementation(({ tonWalletVersion }) => `ton-${tonWalletVersion}`)
+      const service = new AddressService(baseVault as never, cache, wasmProvider)
+
+      await expect(service.getAddress(Chain.Ton, { tonWalletVersion: 'v5r1' })).resolves.toBe('ton-v5r1')
+      expect(service.getTonWalletVersion()).toBe('v4r2')
+      await expect(service.getAddress(Chain.Ton)).resolves.toBe('ton-v4r2')
+    })
+
+    it('never passes a TON wallet version for another chain', async () => {
+      const service = new AddressService(baseVault as never, cache, wasmProvider)
+      service.setTonWalletVersion('v5r1')
+
+      await service.getAddress(Chain.Ethereum)
+
+      expect(tonVersionOf(0)).toBeUndefined()
+    })
+  })
 })

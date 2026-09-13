@@ -11,6 +11,7 @@
 // Types
 export type {
   Bip39Language,
+  ChainDiscoveryAggregate,
   ChainDiscoveryPhase,
   ChainDiscoveryProgress,
   ChainDiscoveryResult,

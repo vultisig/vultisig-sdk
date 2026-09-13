@@ -1,3 +1,5 @@
+import { inspect } from 'node:util'
+
 import { sha256 } from '@noble/hashes/sha2.js'
 import { bytesToHex } from '@noble/hashes/utils.js'
 import { Chain, OtherChain } from '@vultisig/core-chain/Chain'
@@ -185,6 +187,23 @@ describe('RawBroadcastService', () => {
       code: VaultErrorCode.BroadcastFailed,
       message: expect.stringContaining('already been submitted'),
     })
+  })
+
+  it('sanitizes a bare-hex UTXO payload on the VaultError path while preserving its hash', async () => {
+    const signedRawTx = 'ab'.repeat(80)
+    const txHash = 'cd'.repeat(32)
+    mockQueryUrl.mockResolvedValue({
+      data: null,
+      context: { error: `txn-mempool-conflict hash=${txHash} raw=${signedRawTx}` },
+    })
+
+    const error = await service.broadcastRawTx({ chain: Chain.Bitcoin, rawTx: signedRawTx }).catch(value => value)
+    const inspected = inspect(error, { depth: 10 })
+
+    expect(error).toMatchObject({ code: VaultErrorCode.BroadcastFailed })
+    expect(inspected).not.toContain(signedRawTx)
+    expect(error.message).toContain('[signed transaction redacted]')
+    expect(error.message).toContain(txHash)
   })
 
   it('broadcasts Solana raw tx (base64 path)', async () => {

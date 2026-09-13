@@ -16,7 +16,7 @@ import {
 } from '../NativeSwapChain'
 import { NativeSwapQuote } from '../NativeSwapQuote'
 import { getNativeSwapDecimals } from '../utils/getNativeSwapDecimals'
-import { buildAffiliateParams, NativeSwapAffiliateConfig } from './affiliate'
+import { buildNativeAffiliateRequest, NativeSwapAffiliateConfig } from './affiliate'
 
 type GetNativeSwapQuoteInput = Record<TransferDirection, AccountCoin> & {
   swapChain: NativeSwapChain
@@ -70,6 +70,10 @@ const requestNativeSwapQuote = async ({
   referral?: string
   nativeAffiliateConfig?: NativeSwapAffiliateConfig
 }): Promise<NativeSwapQuoteResponse | NativeSwapQuoteErrorResponse> => {
+  const affiliateRequest =
+    affiliateBps !== undefined
+      ? buildNativeAffiliateRequest({ swapChain, referral, affiliateBps, config: nativeAffiliateConfig })
+      : undefined
   const params = new URLSearchParams({
     from_asset: fromAsset,
     to_asset: toAsset,
@@ -78,19 +82,14 @@ const requestNativeSwapQuote = async ({
     streaming_interval: String(streamingInterval),
     liquidity_tolerance_bps: String(slippageToleranceBps),
     ...(streamingQuantity !== undefined ? { streaming_quantity: String(streamingQuantity) } : {}),
-    ...(affiliateBps !== undefined
-      ? buildAffiliateParams({
-          swapChain,
-          referral,
-          affiliateBps,
-          config: nativeAffiliateConfig,
-        })
-      : {}),
+    ...affiliateRequest?.params,
   })
 
   const url = `${swapBaseUrl}?${params.toString()}`
 
-  return queryUrl<NativeSwapQuoteResponse | NativeSwapQuoteErrorResponse>(url)
+  const result = await queryUrl<NativeSwapQuoteResponse | NativeSwapQuoteErrorResponse>(url)
+  if ('error' in result) return result
+  return { ...result, affiliate: affiliateRequest?.affiliate ?? { affiliateBps: 0, request: 'omitted' } }
 }
 
 const assertOkQuote = (

@@ -1,4 +1,4 @@
-import { decodeFunctionData } from 'viem'
+import { decodeFunctionData, encodeAbiParameters, keccak256 } from 'viem'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -6,6 +6,7 @@ import {
   buildCctpClaim,
   cctpChains,
   cctpSupportedChains,
+  extractCctpMessageFromReceipt,
   formatUsdc,
   getCctpChain,
   normalizeHexBytes,
@@ -449,6 +450,48 @@ describe('buildCctpClaim', () => {
   it('rejects malformed hex', () => {
     expect(() => normalizeHexBytes('0xZZ', 'message')).toThrow(/not valid hex/)
     expect(() => normalizeHexBytes('0xabc', 'message')).toThrow(/odd hex length/)
+  })
+})
+
+describe('extractCctpMessageFromReceipt', () => {
+  // keccak256("MessageSent(bytes)") — CCTP's canonical event topic0.
+  const messageSentTopic = '0x8c5261668696ce22758910d05bab8f186d6eb247ceac2af2e82c7dc17669b036'
+  const message = ('0x' + '00'.repeat(8) + 'deadbeef'.repeat(4)) as `0x${string}`
+  const messageSentData = encodeAbiParameters([{ type: 'bytes' }], [message])
+
+  it('decodes message + messageHash from a MessageSent log in receipt.logs', () => {
+    const receipt = {
+      logs: [
+        { topics: ['0xnotamatch' as `0x${string}`], data: '0x00' as `0x${string}` },
+        { topics: [messageSentTopic as `0x${string}`], data: messageSentData },
+      ],
+    }
+
+    const result = extractCctpMessageFromReceipt(receipt)
+    expect(result.message).toBe(message)
+    expect(result.messageHash).toBe(keccak256(message))
+  })
+
+  it('accepts a bare logs array (not wrapped in a receipt)', () => {
+    const result = extractCctpMessageFromReceipt([
+      { topics: [messageSentTopic as `0x${string}`], data: messageSentData },
+    ])
+    expect(result.message).toBe(message)
+    expect(result.messageHash).toBe(keccak256(message))
+  })
+
+  it('matches the topic case-insensitively', () => {
+    const result = extractCctpMessageFromReceipt([
+      { topics: [messageSentTopic.toUpperCase().replace('0X', '0x') as `0x${string}`], data: messageSentData },
+    ])
+    expect(result.message).toBe(message)
+  })
+
+  it('throws when no MessageSent log is present', () => {
+    expect(() => extractCctpMessageFromReceipt({ logs: [] })).toThrow(/no MessageSent event found/)
+    expect(() =>
+      extractCctpMessageFromReceipt([{ topics: ['0xdeadbeef' as `0x${string}`], data: '0x00' as `0x${string}` }])
+    ).toThrow(/no MessageSent event found/)
   })
 })
 
