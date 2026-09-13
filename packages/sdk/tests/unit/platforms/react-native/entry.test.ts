@@ -83,6 +83,26 @@ beforeAll(async () => {
 }, 120_000)
 
 describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
+  it('exposes canonical StakeKit helpers and preserves existing namespace members', async () => {
+    const canonical = await import('../../../../src/tools/defi/stakekit')
+
+    expect(reactNativeEntry.defi.stakekit).toEqual({
+      parseActionDisplay: canonical.parseActionDisplay,
+      buildYieldActionScanRequest: canonical.buildYieldActionScanRequest,
+      validateStakekitActionAddress: canonical.validateStakekitActionAddress,
+      validateStakekitActionInput: canonical.validateStakekitActionInput,
+      normalizeNetwork: canonical.normalizeStakekitNetwork,
+      networkToCanonicalChain: canonical.yieldNetworkToCanonicalChain,
+      NETWORK_ALIASES: canonical.STAKEKIT_NETWORK_ALIASES,
+      search: canonical.stakekitSearch,
+      details: canonical.stakekitDetails,
+      balances: canonical.stakekitBalances,
+      buildEnter: canonical.stakekitBuildEnter,
+      buildExit: canonical.stakekitBuildExit,
+      buildManage: canonical.stakekitBuildManage,
+    })
+  })
+
   it('re-exports Blockaid EVM chain canonicals by identity', () => {
     expect(reactNativeEntry.blockaidEvmChain).toBe(blockaidChains.blockaidEvmChain)
     expect(reactNativeEntry.blockaidSupportedEvmChains).toBe(blockaidChains.blockaidSupportedEvmChains)

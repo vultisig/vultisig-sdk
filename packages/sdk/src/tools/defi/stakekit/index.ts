@@ -23,6 +23,7 @@ import type {
   YieldTransaction,
 } from './stakekitApi'
 import {
+  buildYieldActionScanRequest,
   buildYieldActionScanRequests,
   callYieldActionWithFallback,
   getBalances,
@@ -813,6 +814,10 @@ export async function stakekitBuildManage(params: {
 
 /** The sdk.defi.stakekit namespace surface. */
 export const stakekit = {
+  parseActionDisplay,
+  buildYieldActionScanRequest,
+  validateStakekitActionAddress,
+  validateStakekitActionInput,
   normalizeNetwork: normalizeStakekitNetwork,
   networkToCanonicalChain: yieldNetworkToCanonicalChain,
   NETWORK_ALIASES: STAKEKIT_NETWORK_ALIASES,
