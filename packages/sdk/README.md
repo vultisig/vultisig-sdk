@@ -68,6 +68,12 @@ const btcAddress = await vault.address('Bitcoin')
 const ethAddress = await vault.address('Ethereum')
 const solAddress = await vault.address('Solana')
 
+// TON has two wallet contracts. Every vault starts on V4R2; W5 (v5r1) is a
+// different address for the same key, with its own balance. Select it per vault
+// and send/balances/swaps all follow; pass a version to preview the other account.
+await vault.address('Ton', { tonWalletVersion: 'v5r1' }) // preview only
+vault.setTonWalletVersion('v5r1') // now vault.address('Ton') and vault.send({ chain: 'Ton', ... }) use W5
+
 console.log('BTC:', btcAddress) // bc1q...
 console.log('ETH:', ethAddress) // 0x...
 console.log('SOL:', solAddress) // 9WzD...
@@ -781,9 +787,19 @@ Join an existing SecureVault creation session. Auto-detects keygen vs seedphrase
 - `options.onProgress?: (step: VaultCreationStep) => void` - Progress callback
 - `options.onDeviceJoined?: (deviceId, total, required) => void` - Device join callback
 
-#### `vault.address(chain): Promise<string>`
+#### `vault.address(chain, options?): Promise<string>`
 
 Derive a blockchain address for the given chain (called on Vault instance).
+
+- `options.tonWalletVersion?: 'v4r2' | 'v5r1'` - TON only. Derives for that wallet contract for this one call without changing which account the vault acts on; use it to show the other account. Omitted, the vault's selected contract is used.
+
+#### `vault.tonWalletVersion: 'v4r2' | 'v5r1'`
+
+The TON wallet contract this vault acts on. `'v4r2'` unless `setTonWalletVersion` chose W5.
+
+#### `vault.setTonWalletVersion(version): Promise<void>`
+
+Select which of the key's two TON accounts the vault acts on. W5 (`'v5r1'`) is a different address with its own balance; after this call `address`, `send`, balances, swaps and fee estimation all resolve to the selected account, and balance caches are dropped. The selection lives on the vault instance — persist the user's choice and re-apply it after loading the vault.
 
 #### `importVault(vultContent, password?): Promise<VaultBase>`
 
@@ -944,7 +960,10 @@ Check the on-chain status of a previously broadcast transaction. Supports all ch
 **Returns:**
 
 - `status: 'pending' | 'success' | 'error'` - Current transaction status
-- `receipt?: TxReceiptInfo` - Fee details if available (`feeAmount`, `feeDecimals`, `feeTicker`)
+- `receipt?: TxReceiptInfo` - Fee details if available (`feeAmount`, `feeDecimals`, `feeTicker`). Successful XRPL
+  Payments can also include the authoritative metadata delivery: `deliveredAmount` with either
+  `deliveredCurrency` + `deliveredIssuer` for issued currencies, `deliveredMptIssuanceId` for MPTs, or
+  `deliveredCurrency: 'XRP'` for native XRP. These fields never fall back to the send-side `Amount`/`DeliverMax`.
 
 **Example:**
 
@@ -1238,7 +1257,7 @@ See the `/examples` directory for complete sample applications:
 
 ## Requirements
 
-- Node.js 20+
+- Node.js 20.19+
 - Modern browser with WebAssembly support
 - Electron 20+ (for desktop applications)
 - Network access for VultiServer communication (for Fast Vault features)
@@ -1256,7 +1275,7 @@ See the `/examples` directory for complete sample applications:
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 20.19+
 - Yarn 4.x
 
 ### Setup

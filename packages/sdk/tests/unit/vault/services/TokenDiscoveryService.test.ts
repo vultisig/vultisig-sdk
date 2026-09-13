@@ -64,6 +64,7 @@ describe('TokenDiscoveryService', () => {
           ticker: 'USDC',
           decimals: 6,
           logo: 'usdc.png',
+          priceProviderId: 'usd-coin',
           balance: 1000000n,
         },
         {
@@ -86,6 +87,7 @@ describe('TokenDiscoveryService', () => {
         ticker: 'USDC',
         decimals: 6,
         logo: 'usdc.png',
+        priceProviderId: 'usd-coin',
       })
     })
 

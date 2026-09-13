@@ -336,6 +336,32 @@ describe('multi-tx memo-cap regression (SDK-vs-abts reconciliation, VA-86)', () 
   })
 })
 
+// sdk#1363: Skip's /msgs_direct can return an `svm_tx` (Solana) wrapper
+// alongside evm_tx/cosmos_tx, which this integration doesn't parse — locks
+// the fail-closed behavior as intentional rather than a silent gap. Not a
+// fund-safety issue (nothing gets mis-signed): the request is refused
+// before any tx reaches the signing layer.
+describe('svm_tx (Solana) legs are refused, not silently mis-parsed (sdk#1363)', () => {
+  it('rejects a route whose only leg is an svm_tx wrapper', async () => {
+    mockFetchSequence([
+      { body: okRoute },
+      {
+        body: {
+          txs: [{ svm_tx: { chain_id: 'solana', signer_address: baseArgs.fromAddress, instructions: [] } }],
+          msgs: [],
+          min_amount_out: '118800',
+          route: okRoute,
+        },
+      },
+    ])
+
+    const out = await runSkipSwap(baseArgs)
+
+    expect(out.ok).toBe(false)
+    if (!out.ok) expect(out.envelope.error).toBe('skip_msgs_tx_malformed')
+  })
+})
+
 describe('quoteSkipRoute (quote-only path)', () => {
   it('returns the raw route on success', async () => {
     mockFetchSequence([{ body: okRoute }])

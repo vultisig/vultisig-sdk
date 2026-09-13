@@ -8,7 +8,7 @@ export type { ChainKind } from '@vultisig/core-chain/ChainKind'
 export type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 export type { Coin } from '@vultisig/core-chain/coin/Coin'
 export type { PublicKeys } from '@vultisig/core-chain/publicKey/PublicKeys'
-export type { TxReceiptInfo, TxStatusInput } from '@vultisig/core-chain/tx/status'
+export type { TxFailureInfo, TxReceiptInfo, TxStatusInput } from '@vultisig/core-chain/tx/status'
 export type { TxStatusResult } from '@vultisig/core-chain/tx/status/resolver'
 export type { FiatCurrency } from '@vultisig/core-config/FiatCurrency'
 export type { MpcServerType } from '@vultisig/core-mpc/MpcServerType'
@@ -77,6 +77,7 @@ export type ExportOptions = {
 }
 
 export type Balance = {
+  /** Spendable balance in base units — for chains with a locked reserve (XRP), the reserve is already subtracted */
   amount: string
   formattedAmount: string
   decimals: number
@@ -86,6 +87,10 @@ export type Balance = {
   value?: number
   fiatValue?: number
   fiatCurrency?: string
+  /** Total on-ledger balance in base units, reserve included (Ripple native only) */
+  totalAmount?: string
+  /** Locked reserve in base units that is not spendable (Ripple native only) */
+  reserveAmount?: string
 }
 
 export type MaxSendAmount = {

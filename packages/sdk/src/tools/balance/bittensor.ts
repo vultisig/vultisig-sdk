@@ -30,7 +30,6 @@ const BITTENSOR_RPC_TIMEOUT_MS = 4_000
 // 1 TAO = 1e9 RAO (9 decimals, not 10 like Polkadot).
 export const TAO_DECIMALS = 9
 
-export const BITTENSOR_BASE_FEE_RAO = '200000'
 export const BITTENSOR_BASE_FEE_HUMAN = '0.0002 TAO'
 
 // SS58 prefix for Bittensor (42). Addresses start with '5'.

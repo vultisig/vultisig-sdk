@@ -47,7 +47,7 @@
  */
 
 import { sha256 } from '@noble/hashes/sha2.js'
-import bs58check from 'bs58check'
+import { decodeTronAddress } from '@vultisig/core-chain/chains/tron/address'
 
 import { concatProtoBytes, fieldBytes, fieldInt64, fieldString, fieldVarint } from './proto'
 
@@ -185,23 +185,12 @@ function hexToBytes(hex: string): Uint8Array {
 
 /**
  * Decode a Tron base58check address to its raw 21-byte form
- * (prefix 0x41 + 20-byte keccak hash of the pubkey).
+ * (network prefix + 20-byte keccak hash of the pubkey).
  *
  * Tron's protobuf carries addresses as raw bytes, not the base58check string.
  */
 export function tronAddressToBytes(address: string): Uint8Array {
-  // `bs58check` v4 published both named and default exports; handle both.
-
-  const mod = bs58check as unknown as { decode?: (s: string) => Uint8Array } & {
-    default?: { decode: (s: string) => Uint8Array }
-  }
-  const decode = mod.decode ?? mod.default?.decode
-  if (!decode) throw new Error('bs58check.decode unavailable')
-  const bytes = decode(address)
-  if (bytes.length !== 21 || bytes[0] !== 0x41) {
-    throw new Error(`invalid Tron address: ${address} (length=${bytes.length})`)
-  }
-  return bytes
+  return decodeTronAddress(address)
 }
 
 // ---------------------------------------------------------------------------
@@ -226,7 +215,7 @@ export function buildTrc20CallData(to: string, amount: bigint): Uint8Array {
 
   // Param 1: recipient address, ABI-encoded as uint256 (left-padded 32 bytes).
   // Tron addresses are EVM-style in the low 20 bytes — decode the base58check
-  // form (21 bytes prefix-0x41 + 20-byte hash), drop the 0x41 prefix, then
+  // form (21 bytes: network prefix + 20-byte hash), drop the prefix, then
   // left-pad with 12 zero bytes.
   const toRaw = tronAddressToBytes(to)
   const addrParam = new Uint8Array(32)
@@ -255,7 +244,9 @@ function buildTriggerSmartContract(from: string, tokenAddress: string, callData:
   return concatProtoBytes(
     fieldBytes(1, tronAddressToBytes(from)),
     fieldBytes(2, tronAddressToBytes(tokenAddress)),
-    fieldInt64(3, 0n), // call_value — must be 0 for TRC-20 transfers
+    // call_value is a proto3 scalar. Zero is its default and WalletCore omits
+    // the field entirely; writing an explicit field-3 zero changes the raw
+    // bytes and signing hash even though the semantic value is unchanged.
     fieldBytes(4, callData)
   )
 }

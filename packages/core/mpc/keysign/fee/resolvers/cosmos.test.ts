@@ -3,6 +3,7 @@ import { Buffer } from 'buffer'
 import { create } from '@bufbuild/protobuf'
 import { Chain } from '@vultisig/core-chain/Chain'
 import {
+  CosmosIbcDenomTraceSchema,
   CosmosSpecificSchema,
   MAYAChainSpecificSchema,
   THORChainSpecificSchema,
@@ -123,7 +124,6 @@ describe('getCosmosFeeAmount', () => {
     const { initWasm } = await import('@trustwallet/wallet-core')
     const { CosmosIbcDenomTraceSchema } =
       await import('@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb')
-
     const walletCore = await initWasm()
     const privateKey = walletCore.PrivateKey.createWithData(new Uint8Array(32).fill(1))
     const publicKey = privateKey.getPublicKeySecp256k1(false)
@@ -221,5 +221,113 @@ describe('getCosmosFeeAmount', () => {
     await expect(getCosmosFeeAmount(buildVaultInput(Chain.MayaChain))).rejects.toThrow(
       'MayaChain Mimir NativeTransactionFee is not an integer'
     )
+  })
+
+  it('displays the single-denom TerraClassic USTC fee that signing emits', async () => {
+    const { getCosmosSigningInputs } = await import('../../signingInputs/resolvers/cosmos')
+    const { initWasm } = await import('@trustwallet/wallet-core')
+
+    const walletCore = await initWasm()
+    const privateKey = walletCore.PrivateKey.createWithData(new Uint8Array(32).fill(1))
+    const publicKey = privateKey.getPublicKeySecp256k1(true)
+    const sender = walletCore.AnyAddress.createWithPublicKey(publicKey, walletCore.CoinType.terra).description()
+
+    const keysignPayload = create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, {
+        chain: Chain.TerraClassic,
+        ticker: 'USTC',
+        address: sender,
+        contractAddress: 'uusd',
+        decimals: 6,
+        isNativeToken: false,
+        hexPublicKey: Buffer.from(publicKey.data()).toString('hex'),
+      }),
+      toAddress: sender,
+      toAmount: '10000000',
+      blockchainSpecific: {
+        case: 'cosmosSpecific',
+        value: create(CosmosSpecificSchema, {
+          accountNumber: 7n,
+          sequence: 3n,
+          // The initiator already combined the base fee and burn tax in uusd.
+          gas: 1_225_000n,
+          transactionType: TransactionType.UNSPECIFIED,
+        }),
+      },
+    })
+
+    const displayedFee = getCosmosFeeAmount({
+      keysignPayload,
+      walletCore: {} as never,
+      publicKey: {} as never,
+    })
+    const [signingInput] = await getCosmosSigningInputs({ keysignPayload, walletCore })
+
+    expect(displayedFee).toBe(1_225_000n)
+    expect(signingInput.fee?.amounts?.map(({ amount, denom }) => ({ amount, denom }))).toEqual([
+      { amount: displayedFee.toString(), denom: 'uusd' },
+    ])
+  })
+
+  it('keeps the native uluna fee denom for an IBC transfer of TerraClassic USTC (does not relabel to uusd)', async () => {
+    // Regression for #1519: the uusd relabeling is scoped to plain bank
+    // sends. An IBC MsgTransfer of USTC still prices `gas` in uluna
+    // (chain-specific pricing, not the burn-tax surcharge), so signing must
+    // not mislabel that uluna amount as uusd.
+    const { getCosmosSigningInputs } = await import('../../signingInputs/resolvers/cosmos')
+    const { initWasm } = await import('@trustwallet/wallet-core')
+
+    const walletCore = await initWasm()
+    const privateKey = walletCore.PrivateKey.createWithData(new Uint8Array(32).fill(1))
+    const publicKey = privateKey.getPublicKeySecp256k1(true)
+    const sender = walletCore.AnyAddress.createWithPublicKey(publicKey, walletCore.CoinType.terra).description()
+
+    const keysignPayload = create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, {
+        chain: Chain.TerraClassic,
+        ticker: 'USTC',
+        address: sender,
+        contractAddress: 'uusd',
+        decimals: 6,
+        isNativeToken: false,
+        hexPublicKey: Buffer.from(publicKey.data()).toString('hex'),
+      }),
+      toAddress: 'terra1recipient',
+      toAmount: '10000000',
+      memo: 'transfer:channel-1',
+      blockchainSpecific: {
+        case: 'cosmosSpecific',
+        value: create(CosmosSpecificSchema, {
+          accountNumber: 7n,
+          sequence: 3n,
+          // Chain-specific (uluna) pricing, not the uusd burn-tax surcharge.
+          gas: 16_995_000n,
+          transactionType: TransactionType.IBC_TRANSFER,
+          ibcDenomTraces: create(CosmosIbcDenomTraceSchema, {
+            path: 'transfer/channel-1',
+            baseDenom: 'uusd',
+            latestBlock: '12345_1751328000000000000',
+          }),
+        }),
+      },
+    })
+
+    const displayedFee = getCosmosFeeAmount({
+      keysignPayload,
+      walletCore: {} as never,
+      publicKey: {} as never,
+    })
+    const [signingInput] = await getCosmosSigningInputs({
+      keysignPayload,
+      walletCore,
+    })
+
+    expect(displayedFee).toBe(16_995_000n)
+    expect(
+      signingInput.fee?.amounts?.map(({ amount, denom }) => ({
+        amount,
+        denom,
+      }))
+    ).toEqual([{ amount: '16995000', denom: 'uluna' }])
   })
 })

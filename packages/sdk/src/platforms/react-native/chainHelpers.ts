@@ -8,11 +8,13 @@
  */
 import type { WalletCore } from '@trustwallet/wallet-core'
 import type { Chain } from '@vultisig/core-chain/Chain'
+import type { TonWalletVersion } from '@vultisig/core-chain/chains/ton/wallet'
 import { getCoinType as coreGetCoinType } from '@vultisig/core-chain/coin/coinType'
 import { deriveAddress as coreDeriveAddress } from '@vultisig/core-chain/publicKey/address/deriveAddress'
 import { getPublicKey as coreGetPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
 import type { PublicKeys } from '@vultisig/core-chain/publicKey/PublicKeys'
 import { isValidAddress as coreIsValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
+import { isValidTokenId as coreIsValidTokenId } from '@vultisig/core-chain/utils/isValidTokenId'
 import type { WalletCoreLike } from '@vultisig/walletcore-native'
 
 /**
@@ -38,6 +40,8 @@ type DeriveAddressInput = {
   chain: Chain
   publicKey: any
   walletCore: WalletCoreLike
+  /** TON only: wallet contract to derive for. Defaults to V4R2. */
+  tonWalletVersion?: TonWalletVersion
 }
 
 /** Derive the on-chain address. Accepts WalletCoreLike. */
@@ -53,6 +57,19 @@ type IsValidAddressInput = {
 /** Validate a chain address. Accepts WalletCoreLike. */
 export const isValidAddress = ({ walletCore, ...rest }: IsValidAddressInput) =>
   coreIsValidAddress({ ...rest, walletCore: toTwWalletCore(walletCore) })
+
+type IsValidTokenIdInput = {
+  chain: Chain
+  id: string
+  walletCore: WalletCoreLike
+}
+
+/**
+ * Validate a custom token id (Sui struct tag, XRPL currency.issuer, or a
+ * plain contract/mint address for every other chain). Accepts WalletCoreLike.
+ */
+export const isValidTokenId = ({ walletCore, ...rest }: IsValidTokenIdInput) =>
+  coreIsValidTokenId({ ...rest, walletCore: toTwWalletCore(walletCore) })
 
 type GetCoinTypeInput = {
   walletCore: WalletCoreLike

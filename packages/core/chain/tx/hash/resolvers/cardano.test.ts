@@ -1,7 +1,6 @@
-import { blake2b } from '@noble/hashes/blake2b'
-import { describe, expect, it } from 'vitest'
-
+import { blake2b } from '@noble/hashes/blake2.js'
 import { cardanoCborEncoder } from '@vultisig/core-chain/chains/cardano/cip30/cborEncoder'
+import { describe, expect, it } from 'vitest'
 
 import { getCardanoTxHash } from './cardano'
 

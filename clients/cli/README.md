@@ -367,6 +367,28 @@ Swap quotes and previews show your VULT discount tier when affiliate fees are ap
 | `sign`                       | Sign pre-hashed bytes for custom transactions |
 | `broadcast`                  | Broadcast a pre-signed raw transaction        |
 | `tx-status <chain> <txHash>` | Check transaction confirmation status         |
+| `prep <helper>`              | Build an unsigned SDK transaction payload     |
+
+#### Unsigned transaction preparation
+
+`vultisig prep` exposes the SDK's specialized transaction builders directly. These commands only build unsigned
+payloads: they never sign or broadcast. Identity-dependent helpers use the active vault's public identity by default;
+isolated tooling can pass the same non-secret fields with `--identity <json>`.
+
+```bash
+vultisig prep contract-call Ethereum <contractAddress> approve --sender <senderAddress> --abi '[{"type":"function","name":"approve","inputs":[{"type":"address","name":"spender"},{"type":"uint256","name":"amount"}]}]' --args '["<spenderAddress>","1000000"]'
+vultisig prep ibc-transfer Osmosis <sourceAddress> <receiverAddress> uosmo 1000000 --to-chain Cosmos
+vultisig prep spl-transfer <mint> <from> <to> 1000000 6
+vultisig prep trc20-transfer <contract> <from> <to> 1000000
+vultisig prep jetton-transfer <recipient> <senderJettonWallet> 1000000 5
+vultisig prep sui-token-transfer <coinType> <from> <to> 1000000 --decimals 6 --ticker USDC
+vultisig prep polkadot-asset-send 1984 <from> <to> 1000000
+vultisig prep cosmos-staking delegate <delegator> <validator> 5000000 uosmo
+vultisig prep cw20-transfer osmo <contract> <recipient> 1000000 <sender>
+```
+
+Run `vultisig prep <helper> --help` for the complete optional parameter set. JSON mode returns
+`{ helper, unsigned: true, result }` inside the standard versioned success envelope.
 
 #### Transaction Status
 

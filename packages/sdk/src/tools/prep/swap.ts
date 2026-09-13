@@ -12,6 +12,10 @@ import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v
 import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
 
 import { getWalletCore } from '../../context/wasmRuntime'
+import { SwapQuoteExpiredError } from './SwapQuoteExpiredError'
+
+export { SwapQuoteExpiredError } from './SwapQuoteExpiredError'
+
 import type { VaultIdentity } from './types'
 
 export type PrepareSwapTxFromKeysParams = {
@@ -20,16 +24,6 @@ export type PrepareSwapTxFromKeysParams = {
   amount: string | number
   /** Live bound quote returned by `findSwapQuote`; do not JSON round-trip it. */
   swapQuote: BoundSwapQuote
-}
-
-/** Catchable signal that the caller should fetch a fresh quote and retry. */
-export class SwapQuoteExpiredError extends Error {
-  readonly code = 'SWAP_QUOTE_EXPIRED'
-
-  constructor(message: string) {
-    super(message)
-    this.name = 'SwapQuoteExpiredError'
-  }
 }
 
 // Snapshot all amount/coin/quote inputs synchronously. Validation and payload construction must
@@ -65,6 +59,7 @@ const assertQuoteSafetyBinding = (params: PrepareSwapTxFromKeysParams, requested
   const expectedFingerprint = getSwapQuoteSafetyFingerprint({
     from: params.fromCoin,
     to: params.toCoin,
+    recipient: swapQuote.recipient,
     requestedAmount: boundAmount,
     expiresAt,
     quote: swapQuote.quote,
@@ -94,11 +89,12 @@ const assertCowQuoteNotExpired = (validTo: number): void => {
   }
 }
 
-// Defense-in-depth for CoW: the quote-level requested amount must also match the gross value
-// committed to the EIP-712 order. Native/evm/solana do not expose a separate committed-sell
-// field here, so they intentionally fail open after the quote-level amount binding above;
-// `transfer.amount` may legitimately differ (for example, 100_000n -> 99_999n) because providers
-// subtract deposit-channel fees.
+// Defense-in-depth for providers whose tx shape carries an exact source amount: the quote-level
+// requested amount must also match the gross value committed to the EIP-712 order or CosmWasm
+// funds. Native/evm/solana do not expose a separate committed-sell field here, so they
+// intentionally fail open after the quote-level amount binding above; `transfer.amount` may
+// legitimately differ (for example, 100_000n -> 99_999n) because providers subtract
+// deposit-channel fees.
 const assertAmountMatchesCommittedSellAmount = (params: PrepareSwapTxFromKeysParams): void => {
   const { quote } = params.swapQuote
   if (!('general' in quote)) return
@@ -107,6 +103,13 @@ const assertAmountMatchesCommittedSellAmount = (params: PrepareSwapTxFromKeysPar
     evm: () => undefined,
     solana: () => undefined,
     transfer: () => undefined,
+    cosmosWasm: ({ funds }) => {
+      if (funds.length !== 1 || !/^[1-9]\d*$/.test(funds[0].amount)) {
+        throw new Error('prepareSwapTxFromKeys: CosmWasm route must commit exactly one positive integer source fund')
+      }
+
+      return BigInt(funds[0].amount)
+    },
     cowswap_order: order => BigInt(order.sellAmount) + BigInt(order.feeAmount),
   })
   if (committed === undefined) return
@@ -114,7 +117,7 @@ const assertAmountMatchesCommittedSellAmount = (params: PrepareSwapTxFromKeysPar
   const requested = toChainAmount(params.amount, params.fromCoin.decimals)
   if (requested !== committed) {
     throw new Error(
-      `prepareSwapTxFromKeys: requested amount (${requested} base units) does not match the CoW order's committed gross sell amount (${committed} base units) — the quote may be stale or for a different request`
+      `prepareSwapTxFromKeys: requested amount (${requested} base units) does not match the route's committed source amount (${committed} base units) — the quote may be stale or for a different request`
     )
   }
 }
@@ -187,6 +190,7 @@ export const prepareSwapTxFromKeys = async (
   return buildSwapKeysignPayload({
     fromCoin: safeParams.fromCoin,
     toCoin: safeParams.toCoin,
+    recipient: safeParams.swapQuote.recipient ?? safeParams.toCoin.address,
     amount: safeParams.amount,
     swapQuote: safeParams.swapQuote,
     vaultId: identity.ecdsaPublicKey,

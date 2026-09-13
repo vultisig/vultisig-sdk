@@ -162,6 +162,11 @@ export async function getCowSwapQuote({
   return {
     dstAmount: quote.buyAmount,
     provider: 'cowswap',
+    affiliate: {
+      affiliateBps: bps,
+      request: 'included',
+      allocations: [{ recipient: COWSWAP_FEE_RECIPIENT.toLowerCase(), bps, role: 'affiliate' }],
+    },
     tx: {
       cowswap_order: {
         sellToken: quote.sellToken,

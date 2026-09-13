@@ -3,9 +3,9 @@
  * `@vultisig/lib-utils/encryption/vaultBackup/decryptVaultBackupWithPassword`.
  */
 import { gcm } from '@noble/ciphers/aes'
-import { pbkdf2 } from '@noble/hashes/pbkdf2'
-import { sha256 } from '@noble/hashes/sha2'
-import { utf8ToBytes } from '@noble/hashes/utils'
+import { pbkdf2 } from '@noble/hashes/pbkdf2.js'
+import { sha256 } from '@noble/hashes/sha2.js'
+import { utf8ToBytes } from '@noble/hashes/utils.js'
 import {
   DEFAULT_VAULT_BACKUP_PBKDF2_ITERATIONS,
   VAULT_BACKUP_BLOB_MAGIC,

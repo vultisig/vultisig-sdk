@@ -5,6 +5,7 @@ import { omit } from '@vultisig/lib-utils/record/omit'
 
 import { CoinKey, KnownCoin, KnownCoinMetadata, Token } from '../Coin'
 import { knownCosmosTokens } from './cosmos'
+import { getKnownTokenIndexId } from './getKnownTokenIndexId'
 
 type LeanChainTokensRecord = Record<Chain, Record<string, KnownCoinMetadata>>
 
@@ -176,6 +177,17 @@ const leanTokens: Partial<LeanChainTokensRecord> = {
       logo: 'tgt',
       decimals: 18,
       priceProviderId: 'thorwallet',
+    },
+    '0xa5f2211b9b8170f694421f2046281775e8468044': {
+      ticker: 'THOR',
+      logo: 'thor',
+      decimals: 18,
+      priceProviderId: 'thorswap',
+    },
+    '0x815c23eca83261b6ec689b60cc4a58b54bc24d8d': {
+      ticker: 'vTHOR',
+      logo: 'vthor',
+      decimals: 18,
     },
     '0xc770eefad204b5180df6a14ee197d99d808ee52d': {
       ticker: 'FOX',
@@ -1327,10 +1339,10 @@ export const knownTokens = makeRecord(Object.values(Chain), chain => {
 type KnownIndex = Record<Chain, Record<string, KnownCoin>>
 
 export const knownTokensIndex: KnownIndex = makeRecord(Object.values(Chain), chain => {
-  const byId: Record<string, KnownCoin> = {}
+  const byId: Record<string, KnownCoin> = Object.create(null)
   for (const coin of knownTokens[chain] ?? []) {
     if (!coin.id) continue
-    byId[coin.id.toLowerCase()] = coin
+    byId[getKnownTokenIndexId(chain, coin.id)] = coin
   }
   return byId
 })

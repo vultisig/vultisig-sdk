@@ -110,6 +110,7 @@ describe('findSwapQuotes ranked candidate set', () => {
       expect(quote.safetyFingerprint).toBe(
         getSwapQuoteSafetyFingerprint({
           ...evmSameChainCoins,
+          recipient: evmSameChainCoins.to.address,
           requestedAmount,
           expiresAt: quote.expiresAt,
           quote: quote.quote,

@@ -1,5 +1,5 @@
-import { blake2b } from '@noble/hashes/blake2b'
-import { bytesToHex } from '@noble/hashes/utils'
+import { blake2b } from '@noble/hashes/blake2.js'
+import { bytesToHex } from '@noble/hashes/utils.js'
 import { bittensorRpcUrl } from '@vultisig/core-chain/chains/bittensor/client'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import bs58 from 'bs58'

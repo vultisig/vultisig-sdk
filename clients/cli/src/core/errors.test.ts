@@ -469,6 +469,15 @@ describe('classifyError with VaultImportError', () => {
     const result = classifyError(err)
     expect(result).toBeInstanceOf(UsageError)
   })
+
+  it('gives duplicate imports a CLI-native replacement instruction', () => {
+    const err = new VaultImportError(VaultImportErrorCode.DUPLICATE_VAULT, 'pass a TypeScript option')
+    const result = classifyError(err)
+
+    expect(result).toBeInstanceOf(UsageError)
+    expect(result.message).toContain('--replace')
+    expect(result.message).not.toContain('TypeScript')
+  })
 })
 
 describe('anticipated CLI taxonomy regressions', () => {

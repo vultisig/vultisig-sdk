@@ -1,6 +1,6 @@
 import { toBase64 } from '@cosmjs/encoding'
-import { describe, expect, it } from 'vitest'
 import { sha256 } from 'viem'
+import { describe, expect, it } from 'vitest'
 
 import { getCosmosTxHash } from './cosmos'
 

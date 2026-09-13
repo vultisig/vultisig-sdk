@@ -36,6 +36,8 @@ export type DiscoveredToken = {
   ticker: string
   decimals: number
   logo?: string
+  /** Optional CoinGecko / pricing identifier from canonical token metadata. */
+  priceProviderId?: string
   balance?: string
   isHidden?: boolean
 }

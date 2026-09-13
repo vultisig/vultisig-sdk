@@ -6,7 +6,7 @@
  */
 
 import { Buffer } from 'buffer'
-import { sha256 } from '@noble/hashes/sha256'
+import { sha256 } from '@noble/hashes/sha2.js'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 
 import { concatBytes, protoBytes, protoString, protoVarint } from '@vultisig/core-chain/chains/cosmos/protoEncoding'

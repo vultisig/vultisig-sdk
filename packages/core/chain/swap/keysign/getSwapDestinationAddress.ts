@@ -20,6 +20,7 @@ export const getSwapDestinationAddress = ({ quote, fromCoin }: GetSwapDestinatio
         evm: ({ to }) => to,
         solana: () => '',
         transfer: ({ to }) => to,
+        cosmosWasm: ({ contract }) => contract,
         // CowSwap orders are settled by the solver network. The destination
         // address used for ERC-20 allowance checks (build.ts spender) must be
         // the GPv2VaultRelayer contract — NOT the settlement contract or empty

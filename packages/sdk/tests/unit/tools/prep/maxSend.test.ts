@@ -1,12 +1,12 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { mockGetCoinBalance, mockGetSendFeeEstimate, mockGetPublicKey, mockIsValidAddress, mockGetWalletCore } =
+const { mockGetCoinBalance, mockGetSendFeeEstimate, mockGetPublicKey, mockIsValidRecipient, mockGetWalletCore } =
   vi.hoisted(() => ({
     mockGetCoinBalance: vi.fn(),
     mockGetSendFeeEstimate: vi.fn(),
     mockGetPublicKey: vi.fn(),
-    mockIsValidAddress: vi.fn(),
+    mockIsValidRecipient: vi.fn(),
     mockGetWalletCore: vi.fn(),
   }))
 
@@ -19,8 +19,8 @@ vi.mock('@vultisig/core-mpc/keysign/send/getSendFeeEstimate', () => ({
 vi.mock('@vultisig/core-chain/publicKey/getPublicKey', () => ({
   getPublicKey: mockGetPublicKey,
 }))
-vi.mock('@vultisig/core-chain/utils/isValidAddress', () => ({
-  isValidAddress: mockIsValidAddress,
+vi.mock('@vultisig/core-chain/utils/isValidRecipient', () => ({
+  isValidRecipient: mockIsValidRecipient,
 }))
 vi.mock('@/context/wasmRuntime', () => ({
   getWalletCore: mockGetWalletCore,
@@ -42,12 +42,13 @@ const baseIdentity: VaultIdentity = {
 
 const mockWalletCore = { __mock: 'walletCore' }
 const mockPublicKey = { __mock: 'publicKey' }
+const solanaAtaOfAta = 'CHwY4qnqYsKPLBiuhLiEHJm4bBvEKzc3GMxau4K7oQhC'
 
 describe('getMaxSendAmountFromKeys', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetWalletCore.mockResolvedValue(mockWalletCore)
-    mockIsValidAddress.mockReturnValue(true)
+    mockIsValidRecipient.mockReturnValue(true)
     mockGetPublicKey.mockReturnValue(mockPublicKey)
   })
 
@@ -225,7 +226,7 @@ describe('getMaxSendAmountFromKeys', () => {
   })
 
   it('rejects when receiver address is invalid', async () => {
-    mockIsValidAddress.mockReturnValue(false)
+    mockIsValidRecipient.mockReturnValue(false)
     mockGetCoinBalance.mockResolvedValue(1_000n)
 
     await expect(
@@ -243,6 +244,26 @@ describe('getMaxSendAmountFromKeys', () => {
     // Validation happens inside computeMaxSendFromBalance (the canonical check),
     // which runs after getCoinBalance in the vault-free path. VaultBase.getMaxSendAmount
     // hoists the check above the balance fetch for the vault path.
+    expect(mockGetSendFeeEstimate).not.toHaveBeenCalled()
+  })
+
+  it('rejects an ATA-of-an-ATA recipient before estimating an SPL-token max send', async () => {
+    mockIsValidRecipient.mockReturnValue(false)
+    mockGetCoinBalance.mockResolvedValue(1_000n)
+
+    await expect(
+      getMaxSendAmountFromKeys(baseIdentity, {
+        coin: {
+          chain: Chain.Solana,
+          address: 'GmaDrppBC7P5ARKV8g3djiwP89vz1jLK23V2GBjuAEGB',
+          id: '7v54NWdBtkjuAFJrLGsS2SXnuk8nKam81mZJeeYxVFi9',
+          decimals: 6,
+          ticker: 'TOKEN',
+        } as any,
+        receiver: solanaAtaOfAta,
+      })
+    ).rejects.toThrow(`Invalid receiver address for chain Solana: ${solanaAtaOfAta}`)
+
     expect(mockGetSendFeeEstimate).not.toHaveBeenCalled()
   })
 
@@ -325,6 +346,59 @@ describe('getMaxSendAmountFromKeys', () => {
     expect(call.hexPublicKeyOverride).toBe('mldsa-pubkey-hex')
   })
 
+  it('subtracts the in-kind uusd fee for a full-balance TerraClassic USTC send (does not overdraft)', async () => {
+    // Regression for #1519: USTC (uusd) pays gas + burn tax in uusd itself,
+    // not in native uluna. A full-balance send must reserve the fee from the
+    // same uusd balance instead of returning the whole balance untouched.
+    const balance = 200_000_000n
+    const fee = 1_225_000n
+    mockGetCoinBalance.mockResolvedValue(balance)
+    mockGetSendFeeEstimate.mockResolvedValue(fee)
+
+    const coin = {
+      chain: Chain.TerraClassic,
+      address: 'terra1from',
+      id: 'uusd',
+      decimals: 6,
+      ticker: 'USTC',
+    } as any
+
+    const result = await getMaxSendAmountFromKeys(baseIdentity, {
+      coin,
+      receiver: 'terra1to',
+    })
+
+    expect(result).toEqual({
+      balance,
+      fee,
+      maxSendable: balance - fee,
+    })
+    // No separate native uluna balance lookup — the fee comes out of the
+    // same uusd balance, unlike an ordinary (non-fee) cosmos token.
+    expect(mockGetCoinBalance).toHaveBeenCalledTimes(1)
+    expect(mockGetCoinBalance).toHaveBeenCalledWith(coin)
+  })
+
+  it('returns maxSendable === 0n for TerraClassic USTC when the in-kind fee exceeds balance', async () => {
+    const balance = 1_000n
+    const fee = 1_225_000n
+    mockGetCoinBalance.mockResolvedValue(balance)
+    mockGetSendFeeEstimate.mockResolvedValue(fee)
+
+    const result = await getMaxSendAmountFromKeys(baseIdentity, {
+      coin: {
+        chain: Chain.TerraClassic,
+        address: 'terra1from',
+        id: 'uusd',
+        decimals: 6,
+        ticker: 'USTC',
+      } as any,
+      receiver: 'terra1to',
+    })
+
+    expect(result.maxSendable).toBe(0n)
+  })
+
   it('forwards chainPublicKeys to getPublicKey (seedphrase-imported vault)', async () => {
     mockGetCoinBalance.mockResolvedValue(1_000n)
     mockGetSendFeeEstimate.mockResolvedValue(100n)
@@ -358,7 +432,7 @@ describe('computeMaxSendFromBalance', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetWalletCore.mockResolvedValue(mockWalletCore)
-    mockIsValidAddress.mockReturnValue(true)
+    mockIsValidRecipient.mockReturnValue(true)
     mockGetPublicKey.mockReturnValue(mockPublicKey)
   })
 

@@ -26,6 +26,18 @@ function describeVaultImportFailure(error: unknown): string {
         return 'Vault data appears corrupted or incomplete.'
       case VaultImportErrorCode.UNSUPPORTED_FORMAT:
         return 'This vault format is not supported.'
+      case VaultImportErrorCode.DUPLICATE_VAULT:
+        return 'This vault is already imported; no local share was changed.'
+      case VaultImportErrorCode.STALE_SHARE:
+        return 'Import refused because this backup contains a stale or different local share.'
+      case VaultImportErrorCode.OTHER_DEVICE_SHARE:
+        return 'Import refused because this backup belongs to another device in the same vault.'
+      case VaultImportErrorCode.INCOMPATIBLE_VAULT:
+        return 'Import refused because this backup is incompatible with the stored vault.'
+      case VaultImportErrorCode.EXISTING_VAULT_PASSWORD_REQUIRED:
+        return 'Unlock the existing local vault before replacing its share.'
+      case VaultImportErrorCode.PERSISTENCE_FAILED:
+        return 'The vault could not be stored safely. No existing share was overwritten.'
       default:
         return error.message
     }
@@ -117,7 +129,7 @@ export default function VaultImporter({ onVaultImported }: VaultImporterProps) {
             password = passwordResult
           }
 
-          const importedVault = await sdk.importVault(content, password)
+          const importedVault = await sdk.importVault(content, password, { conflictResolution: 'replace' })
           importedVaults.push(importedVault)
         } catch (fileError) {
           console.error(`Failed to import ${file.name}:`, fileError)

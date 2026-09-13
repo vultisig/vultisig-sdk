@@ -64,11 +64,11 @@ const getMayaNativeTransactionFee = async (): Promise<bigint> => {
  * MayaChain is the intentional exception: its payload schema has no fee field,
  * so the display resolves the current native transaction fee from MayaNode.
  *
- * `CosmosSpecific.gas` is the fee AMOUNT (proto field 3) and is returned
- * verbatim — exactly what the signing-inputs resolver puts in the SignDoc, so
- * the Network Fee row can never drift from what gets signed. A relayed
+ * `CosmosSpecific.gas` is the complete fee AMOUNT (proto field 3) and is
+ * returned verbatim, exactly as the signing-input resolver emits it. A relayed
  * `gas_limit` (field 7) changes the signed gas limit, not the amount; the
- * initiator has already priced `gas` against it.
+ * initiator has already priced `gas` against it. For a plain TerraClassic USTC
+ * send, that amount already combines the `uusd` gas fee and burn tax.
  */
 export const getCosmosFeeAmount: FeeAmountResolver = ({ keysignPayload }) => {
   const chain = getKeysignChain<'cosmos'>(keysignPayload)

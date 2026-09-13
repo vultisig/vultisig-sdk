@@ -13,7 +13,14 @@ import { assertSafeDestination } from '../../utils/dangerousAddresses'
  */
 
 const ACROSS_API_BASE = 'https://app.across.to/api'
-const ETHEREUM_ORIGIN_CHAIN = 'Ethereum'
+/**
+ * The ONLY origin chain this factory slice supports today. Across itself
+ * bridges from many origins; this helper does not, and the runtime has always
+ * rejected anything else. Exported so callers can branch on it instead of
+ * hardcoding the string or discovering the limit by catching.
+ */
+export const ACROSS_ORIGIN_CHAIN = 'Ethereum'
+const ETHEREUM_ORIGIN_CHAIN = ACROSS_ORIGIN_CHAIN
 const DEFAULT_TIMEOUT_MS = 15_000
 
 /**
@@ -32,6 +39,17 @@ export const acrossSupportedChains = [
 ] as const
 
 export type AcrossChain = (typeof acrossSupportedChains)[number]
+
+/**
+ * Origin chains this factory slice accepts. Deliberately narrower than
+ * {@link AcrossChain}: the runtime rejects every non-Ethereum origin, so typing
+ * `sourceChain` as any supported chain advertised multi-origin support that
+ * does not exist and pushed the failure to runtime (sdk#1906).
+ *
+ * When genuine multi-origin support lands, widening this type is the change -
+ * and every caller that already passes `'Ethereum'` keeps compiling.
+ */
+export type AcrossOriginChain = typeof ACROSS_ORIGIN_CHAIN
 
 const acrossChainIds = {
   Ethereum: 1,
@@ -61,8 +79,11 @@ const acrossSpokePools = {
 } as const satisfies Record<AcrossChain, `0x${string}`>
 
 export type AcrossQuoteParams = {
-  /** Origin chain. Pinned to Ethereum for the current factory scope. */
-  sourceChain: AcrossChain
+  /**
+   * Origin chain. Ethereum-only in this factory slice - the type says so rather
+   * than accepting any supported chain and throwing at runtime.
+   */
+  sourceChain: AcrossOriginChain
   /** Destination EVM chain. Must differ from the origin. */
   destinationChain: AcrossChain
   /** Input token contract on the source chain. Use WETH for native ETH routes. */
@@ -213,9 +234,9 @@ function assertPinnedSpokePools(
  * @example
  * ```ts
  * const quote = await acrossQuote({
- *   sourceChain: 'Base',
+ *   sourceChain: 'Ethereum', // origin is Ethereum-only in this slice
  *   destinationChain: 'Arbitrum',
- *   inputToken: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // USDC on Base
+ *   inputToken: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', // USDC on Ethereum
  *   outputToken: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831', // USDC on Arbitrum
  *   amount: '1000000', // 1 USDC
  * })

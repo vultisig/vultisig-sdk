@@ -496,13 +496,15 @@ export class ShellSession {
   }
 
   private async importVault(args: string[]): Promise<void> {
-    if (args.length === 0) {
-      console.log(chalk.yellow('Usage: import <file>'))
+    const replace = args.includes('--replace')
+    const fileArgs = args.filter(arg => arg !== '--replace')
+    if (fileArgs.length === 0) {
+      console.log(chalk.yellow('Usage: import [--replace] <file>'))
       return
     }
 
-    const filePath = args.join(' ')
-    const vault = await executeImport(this.ctx, filePath)
+    const filePath = fileArgs.join(' ')
+    const vault = await executeImport(this.ctx, filePath, undefined, replace)
     this.ctx.addVault(vault)
     this.eventBuffer.setupVaultListeners(vault)
   }

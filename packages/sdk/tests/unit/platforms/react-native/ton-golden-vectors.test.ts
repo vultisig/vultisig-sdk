@@ -28,13 +28,37 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { Address, beginCell, Cell, internal, SendMode, storeMessageRelaxed } from '@ton/core'
-import { describe, expect, it } from 'vitest'
+import { initWasm, type WalletCore } from '@trustwallet/wallet-core'
+import { Chain } from '@vultisig/core-chain/Chain'
+import { getPreSigningHashes } from '@vultisig/core-mpc/tx/preSigningHashes'
+import { beforeAll, describe, expect, it } from 'vitest'
 
-import { buildTonJettonTransferTx, buildTonSendTx, deriveTonAddress } from '../../../../src/chains/ton/tx'
+import {
+  buildTonJettonTransferTx,
+  buildTonSendTx,
+  deriveTonAddress,
+  type TonWalletCoreBackedTxBuilderResult,
+} from '../../../../src/chains/ton/tx'
 import { prepareJettonTransferTxFromKeys } from '../../../../src/tools/prep/jettonTransfer'
 
 function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('')
+}
+
+let walletCore: WalletCore
+
+beforeAll(async () => {
+  walletCore = await initWasm()
+})
+
+const expectRealWalletCoreParity = (result: TonWalletCoreBackedTxBuilderResult) => {
+  const hashes = getPreSigningHashes({
+    walletCore,
+    chain: Chain.Ton,
+    txInputData: result.walletCoreTxInputData,
+  })
+  expect(hashes).toHaveLength(1)
+  expect(bytesToHex(hashes[0]!)).toBe(result.signingHashHex)
 }
 
 const FX = {
@@ -108,11 +132,56 @@ function packReferenceHeader(subWalletId: number, validUntil: number, seqno: num
   return buf
 }
 
+/**
+ * Assembles the reference signing payload from the independently packed header, so a
+ * regression in the SDK's own `storeUint()` sequence shows up as a hash mismatch.
+ */
 function buildReferenceSigningPayload(subWalletId: number, validUntil: number, seqno: number, innerMsg: Cell): Cell {
-  const sendMode = SendMode.PAY_GAS_SEPARATELY | SendMode.IGNORE_ERRORS
+  // No IGNORE_ERRORS: an action-phase failure must abort the transfer rather than
+  // silently consume the seqno while moving nothing.
+  const sendMode = SendMode.PAY_GAS_SEPARATELY
   const header = packReferenceHeader(subWalletId, validUntil, seqno, 0, sendMode)
   return beginCell().storeBuffer(Buffer.from(header)).storeRef(innerMsg).endCell()
 }
+
+describe('TON WalletCore-backed builder boundaries', () => {
+  const unsupportedBuilderCalls = [
+    {
+      name: 'native transfer',
+      build: (walletOptions: { subWalletId?: number; workchain?: number }) =>
+        buildTonSendTx({
+          publicKeyEd25519: 'not-hex',
+          to: FX.to,
+          amount: FX.amountNanotons,
+          bounceable: FX.bounceable,
+          seqno: FX.seqno,
+          ...walletOptions,
+        }),
+    },
+    {
+      name: 'Jetton transfer',
+      build: (walletOptions: { subWalletId?: number; workchain?: number }) =>
+        buildTonJettonTransferTx({
+          publicKeyEd25519: 'not-hex',
+          to: FX.to,
+          jettonWalletAddress: '0:' + 'cc'.repeat(32),
+          amount: 5_000_000n,
+          seqno: FX.seqno,
+          ...walletOptions,
+        }),
+    },
+  ]
+
+  it.each(unsupportedBuilderCalls)('rejects a custom sub-wallet before building the $name wallet', ({ build }) => {
+    expect(() => build({ subWalletId: 698983192 })).toThrow(
+      /WalletCore parity supports only V4R2 sub-wallet ID 698983191/
+    )
+  })
+
+  it.each(unsupportedBuilderCalls)('rejects a nonzero workchain before building the $name wallet', ({ build }) => {
+    expect(() => build({ workchain: -1 })).toThrow(/WalletCore parity supports only workchain 0/)
+  })
+})
 
 describe('TON / buildTonSendTx golden vectors', () => {
   it('matches WalletCore for the shared native-transfer fixture', () => {
@@ -129,6 +198,7 @@ describe('TON / buildTonSendTx golden vectors', () => {
     })
 
     expect(result.signingHashHex).toBe(fixture.expectedSigningHashHex)
+    expectRealWalletCoreParity(result)
   })
 
   it('signing payload matches an independently byte-packed V4R2 header + @ton/core inner message', () => {
@@ -255,6 +325,7 @@ describe('TON / buildTonJettonTransferTx golden vectors', () => {
 
     expect(result.signingHashHex).toBe(fixture.expectedSigningHashHex)
     expect(buildDispatchedJettonFixture(fixture).signingHashHex).toBe(fixture.expectedSigningHashHex)
+    expectRealWalletCoreParity(result)
   })
 
   it.each(['ton-jetton-transfer-inactive.json', 'ton-jetton-transfer-memo.json'])(
@@ -277,6 +348,7 @@ describe('TON / buildTonJettonTransferTx golden vectors', () => {
       expect(fixture.forwardAmountNanotons).toBe(fixture.isActiveDestination ? '1' : '0')
       expect(result.signingHashHex).toBe(fixture.expectedSigningHashHex)
       expect(buildDispatchedJettonFixture(fixture).signingHashHex).toBe(fixture.expectedSigningHashHex)
+      expectRealWalletCoreParity(result)
     }
   )
 

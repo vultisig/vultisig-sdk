@@ -17,6 +17,26 @@ export { addToken, discoverTokens, executeTokens, listTokens, removeToken } from
 // Transaction commands
 export { executeSend, sendTransaction } from './transaction'
 
+// Unsigned transaction-preparation commands
+export type {
+  PrepContractCallOptions,
+  PrepCosmosStakingOptions,
+  PrepIbcTransferOptions,
+  PrepJettonTransferOptions,
+  PrepSuiTokenTransferOptions,
+} from './prep'
+export {
+  executePrepContractCall,
+  executePrepCosmosStaking,
+  executePrepCw20Transfer,
+  executePrepIbcTransfer,
+  executePrepJettonTransfer,
+  executePrepPolkadotAssetSend,
+  executePrepSplTransfer,
+  executePrepSuiTokenTransfer,
+  executePrepTrc20Transfer,
+} from './prep'
+
 // Execute command (CosmWasm contracts)
 export type { ExecuteParams } from './execute'
 export { executeExecute } from './execute'

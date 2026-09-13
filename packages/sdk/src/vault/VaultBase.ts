@@ -1,19 +1,21 @@
 // Core functions (functional dispatch) - Direct imports from core
 import { fromBinary } from '@bufbuild/protobuf'
-import { sha256 } from '@noble/hashes/sha2'
+import { sha256 } from '@noble/hashes/sha2.js'
 import { getMaxValue } from '@vultisig/core-chain/amount/getMaxValue'
 import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import { banxaSupportedChains, getBanxaBuyUrl } from '@vultisig/core-chain/banxa'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getChainKind } from '@vultisig/core-chain/ChainKind'
+import type { TonWalletVersion } from '@vultisig/core-chain/chains/ton/wallet'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { getCoinValue } from '@vultisig/core-chain/coin/utils/getCoinValue'
 import { signatureAlgorithms } from '@vultisig/core-chain/signing/SignatureAlgorithm'
 import { getTxStatus as coreTxStatus } from '@vultisig/core-chain/tx/status'
 import type { TxStatusResult } from '@vultisig/core-chain/tx/status/resolver'
-import { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
+import { isValidRecipient } from '@vultisig/core-chain/utils/isValidRecipient'
 import { vaultConfig } from '@vultisig/core-config'
+import { hasServer } from '@vultisig/core-mpc/devices/localPartyId'
 import { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
 import { fromCommVault } from '@vultisig/core-mpc/types/utils/commVault'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
@@ -36,7 +38,9 @@ import type { Storage } from '../storage/types'
 // barrel pulls in cosmos.ts → buildCosmosPayload → @vultisig/core-chain THORChain
 // modules at module-load time, which breaks vitest setups that mock chainFeeCoin.
 import { computeMaxSendFromBalance } from '../tools/prep/maxSend'
+import type { PrepareRawEvmTxFromKeysParams } from '../tools/prep/rawEvm'
 import { vaultDataToIdentity } from '../tools/prep/types'
+import { pollTxStatusUntilFinal } from '../tx'
 // Types
 import {
   Balance,
@@ -65,7 +69,7 @@ import type { DiscoveredToken, TokenInfo } from '../types/tokens'
 import { computePersonalSignHash } from '../utils/eip191'
 import { createVaultBackup } from '../utils/export'
 // Vault services
-import { AddressService } from './services/AddressService'
+import { AddressService, type GetAddressOptions } from './services/AddressService'
 import { BalanceService } from './services/BalanceService'
 import { BroadcastService } from './services/BroadcastService'
 import { GasEstimationService } from './services/GasEstimationService'
@@ -78,6 +82,7 @@ import { TransactionBuilder } from './services/TransactionBuilder'
 // Swap types
 import type { SwapPrepareResult, SwapQuoteParams, SwapQuoteResult, SwapTxParams } from './swap-types'
 import { type ResolvedTokenInfo, resolveTokenRef, resolveTokenRefId } from './tokenRef'
+import { canonicalizeVaultData } from './utils/canonicalizeVaultData'
 import { VaultConflictError, VaultError, VaultErrorCode } from './VaultError'
 import { VaultConfig } from './VaultServices'
 
@@ -87,15 +92,6 @@ export type VaultSaveOptions = {
    * local and persisted edits touch different top-level mutable fields.
    */
   conflictStrategy?: 'reject' | 'merge-metadata'
-}
-
-/**
- * Determine vault type based on signer names
- * Fast vaults have one signer that starts with "Server-"
- * Secure vaults have only device signers (no "Server-" prefix)
- */
-function determineVaultType(signers: string[]): 'fast' | 'secure' {
-  return signers.some(signer => signer.startsWith('Server-')) ? 'fast' : 'secure'
 }
 
 // ===== Vault-name / export-filename safety policy (single source of truth) =====
@@ -191,6 +187,20 @@ async function withStorageWriteLock<T>(storage: Storage, key: string, operation:
 
   return result
 }
+
+const supportedChains = new Set<string>(Object.values(Chain))
+
+/**
+ * Narrows persisted `VaultData.chains` (an unvalidated `string[]`) to chains this
+ * build still supports, dropping any the SDK has since removed.
+ *
+ * Without this, a chain retired from {@link Chain} survives in storage and is cast
+ * straight back into `_userChains`, where every registry lookup keyed on it
+ * (`chainFeeCoin`, `cosmosRpcUrl`, `chainRegistry`, …) yields `undefined` and
+ * throws at the point of use rather than being ignored here.
+ */
+const toSupportedChains = (chains: readonly string[]): Chain[] =>
+  chains.filter((chain): chain is Chain => supportedChains.has(chain))
 
 /**
  * VaultBase - Abstract base class for all vault types
@@ -362,7 +372,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     }
 
     // Determine vault type
-    const vaultType = determineVaultType(this.coreVault.signers as string[])
+    const vaultType = hasServer(this.coreVault.signers) ? 'fast' : 'secure'
 
     // Build VaultData
     this.vaultData = {
@@ -405,7 +415,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     // Initialize runtime state
     this._userChains =
       this.vaultData.chains.length > 0
-        ? this.vaultData.chains.map(c => c as Chain)
+        ? toSupportedChains(this.vaultData.chains)
         : (this.config?.defaultChains ?? DEFAULT_CHAINS)
     this._currency = this.vaultData.currency
     this._tokens = this.vaultData.tokens
@@ -790,7 +800,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
       // Update runtime state
       this._currency = loadedVaultData.currency
-      this._userChains = loadedVaultData.chains.map(c => c as Chain)
+      this._userChains = toSupportedChains(loadedVaultData.chains)
       this._tokens = loadedVaultData.tokens
 
       // Sync CoreVault with VaultData
@@ -924,7 +934,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
     // Update runtime state
     this._currency = loadedVaultData.currency
-    this._userChains = loadedVaultData.chains.map(c => c as Chain)
+    this._userChains = toSupportedChains(loadedVaultData.chains)
     this._tokens = loadedVaultData.tokens
 
     // Sync CoreVault
@@ -949,10 +959,10 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
   /** @internal Replaces constructor defaults with a stored or pending snapshot. */
   protected restorePersistedVaultData(vaultData: VaultData, persisted = true): void {
-    const snapshot = cloneVaultData(vaultData)
-    getVaultRevision(snapshot)
-    this.vaultData = snapshot
-    this.persistedVaultData = cloneVaultData(snapshot)
+    const canonicalSnapshot = canonicalizeVaultData(cloneVaultData(vaultData))
+    getVaultRevision(canonicalSnapshot)
+    this.vaultData = canonicalSnapshot
+    this.persistedVaultData = cloneVaultData(canonicalSnapshot)
     this.hasPersistedRecord = persisted
   }
 
@@ -987,7 +997,20 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     nextData.revision = (actualRevision ?? 0) + 1
     nextData.lastModified = Date.now()
 
-    await this.storage.set(key, cloneVaultData(nextData))
+    const nextSnapshot = cloneVaultData(nextData)
+    if (this.storage.compareAndSet) {
+      const replaced = await this.storage.compareAndSet(key, currentData, nextSnapshot)
+      if (!replaced) {
+        const latestData = await this.storage.get<VaultData>(key)
+        const latestRevision = latestData ? getVaultRevision(latestData) : null
+        throw new VaultConflictError(this.vaultData.id, expectedRevision, latestRevision)
+      }
+    } else {
+      // Legacy custom adapters may omit compareAndSet, so ordinary saves retain
+      // the historical set fallback. Import is stricter and rejects such an
+      // adapter before writing because key-share replacement must be atomic.
+      await this.storage.set(key, nextSnapshot)
+    }
     this.restorePersistedVaultData(nextData)
     this.syncRuntimeFromVaultData()
     this.emit('saved', { vaultId: this.vaultData.id })
@@ -1042,7 +1065,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
   private syncRuntimeFromVaultData(): void {
     this._currency = this.vaultData.currency
-    this._userChains = this.vaultData.chains.map(chain => chain as Chain)
+    this._userChains = toSupportedChains(this.vaultData.chains)
     this._tokens = this.vaultData.tokens
     this.coreVault.publicKeys = this.vaultData.publicKeys
     this.coreVault.hexChainCode = this.vaultData.hexChainCode
@@ -1124,10 +1147,39 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   // ===== ADDRESS METHODS =====
 
   /**
-   * Get address for specified chain
+   * Get address for specified chain.
+   *
+   * For TON, `options.tonWalletVersion` previews one contract's address without
+   * changing which account the vault acts on; see {@link setTonWalletVersion}.
    */
-  async address(chain: Chain): Promise<string> {
-    return this.addressService.getAddress(chain)
+  async address(chain: Chain, options?: GetAddressOptions): Promise<string> {
+    return this.addressService.getAddress(chain, options)
+  }
+
+  /** The TON wallet contract this vault acts on. V4R2 unless {@link setTonWalletVersion} chose W5. */
+  get tonWalletVersion(): TonWalletVersion {
+    return this.addressService.getTonWalletVersion()
+  }
+
+  /**
+   * Select which of the key's two TON accounts this vault acts on.
+   *
+   * W5 (`'v5r1'`) is a different address from V4R2 with its own balance, so the
+   * choice has to be made once and honoured everywhere: after this call every
+   * un-versioned address lookup — `address`, `send`, balances, swaps, fee
+   * estimation, token discovery — resolves to the selected account. Balance
+   * caches are dropped because they belong to the previous account.
+   *
+   * The selection lives on this vault instance; persist the user's choice and
+   * re-apply it after loading the vault.
+   */
+  async setTonWalletVersion(tonWalletVersion: TonWalletVersion): Promise<void> {
+    if (tonWalletVersion === this.addressService.getTonWalletVersion()) {
+      return
+    }
+
+    this.addressService.setTonWalletVersion(tonWalletVersion)
+    await this.balanceService.onAccountChanged()
   }
 
   /**
@@ -1251,6 +1303,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     memo?: string
     destinationTag?: number
     feeSettings?: FeeSettings
+    sendMaxAmount?: boolean
   }): Promise<KeysignPayload> {
     return this.transactionBuilder.prepareSendTx(params)
   }
@@ -1282,6 +1335,14 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     return this.transactionBuilder.prepareContractCallTx({ ...params, senderAddress })
   }
 
+  /** Prepare an already-built raw EVM transaction without caller-side payload patching. */
+  async prepareRawEvmTx(
+    params: Omit<PrepareRawEvmTxFromKeysParams, 'senderAddress'> & { senderAddress?: string }
+  ): Promise<KeysignPayload> {
+    const senderAddress = params.senderAddress ?? (await this.address(params.chain))
+    return this.transactionBuilder.prepareRawEvmTx({ ...params, senderAddress })
+  }
+
   /**
    * Get the maximum sendable amount for a coin, accounting for network fees
    *
@@ -1301,7 +1362,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     // Validate receiver before fetching balance so bad input doesn't waste a
     // network round-trip. computeMaxSendFromBalance re-validates for the
     // vault-free path; two checks at different layers is acceptable.
-    if (!isValidAddress({ chain: params.coin.chain, address: params.receiver, walletCore })) {
+    if (!isValidRecipient({ chain: params.coin.chain, address: params.receiver, walletCore })) {
       throw new VaultError(
         VaultErrorCode.InvalidConfig,
         `Invalid receiver address for chain ${params.coin.chain}: ${params.receiver}`
@@ -1511,7 +1572,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
       if (result.status === 'success') {
         this.emit('transactionConfirmed', { chain, txHash, receipt: result.receipt })
-      } else if (result.status === 'error') {
+      } else if (result.status === 'error' || result.status === 'expired') {
         this.emit('transactionFailed', { chain, txHash })
       }
 
@@ -1955,7 +2016,16 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       amountBigInt = this.parseAmount(amount, tokenInfo.decimals)
     }
 
-    const keysignPayload = await this.prepareSendTx({ coin, receiver: to, amount: amountBigInt, memo, destinationTag })
+    const keysignPayload = await this.prepareSendTx({
+      coin,
+      receiver: to,
+      amount: amountBigInt,
+      memo,
+      destinationTag,
+      // This is the one place the SDK knows MAX was asked for rather than inferring
+      // it, so the payload records it here or nowhere.
+      sendMaxAmount: amount === 'max',
+    })
 
     if (dryRun) {
       const fee = await this.transactionBuilder.estimateSendFee({
@@ -2012,21 +2082,68 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     const toCoin = this.buildAccountCoin(toChain, toAddress, toToken)
 
     let resolvedAmount = amount
+    // Reusable when the fee-aware ceiling turns out to BE the whole balance -
+    // there is then nothing to re-quote and the probe is the final quote.
+    let maxProbeQuote: SwapQuoteResult | undefined
+
     if (amount === 'max') {
       const bal = await this.balanceService.getBalance(fromChain, fromToken.contractAddress)
-      resolvedAmount = this.formatUnits(BigInt(bal.amount), fromToken.decimals)
-      if (BigInt(bal.amount) <= 0n) throw new VaultError(VaultErrorCode.InvalidAmount, 'Zero balance — nothing to swap')
+      const balance = BigInt(bal.amount)
+      if (balance <= 0n) throw new VaultError(VaultErrorCode.InvalidAmount, 'Zero balance — nothing to swap')
+
+      // Quote at the full balance FIRST, purely to learn this route's
+      // `maxSwapable`. Committing the full balance directly (what this used to
+      // do) over-commits a native swap by exactly the network fee, so it fails
+      // at prepare/broadcast with insufficient funds - after the caller has
+      // already been told the swap was viable. `send({ amount: 'max' })` has
+      // always resolved its ceiling before building; this brings swap in line.
+      const fullAmount = this.validateHumanSwapAmount(this.formatUnits(balance, fromToken.decimals), fromToken.decimals)
+      const probe = await this.getSwapQuote({
+        fromCoin,
+        toCoin,
+        amount: fullAmount,
+        recipient: normalizedRecipient,
+        slippageTolerance,
+        excludeProviders,
+      })
+
+      // 0n means "not computable from this quote", NOT "nothing is swappable":
+      // deposit-channel (transfer) routes price the source-chain fee at
+      // broadcast time, so the quote cannot say what is safe. Fail closed with
+      // an actionable message rather than guess a fee on a fund path.
+      //
+      // The typeof check is deliberate belt-and-braces: `getSwapQuote` always
+      // populates `maxSwapable`, but an override or a partial quote must land
+      // in the fail-closed branch rather than fall through into an over-commit.
+      if (typeof probe.maxSwapable !== 'bigint' || probe.maxSwapable <= 0n) {
+        throw new VaultError(
+          VaultErrorCode.InvalidAmount,
+          `Cannot compute a fee-aware max for this ${fromToken.ticker} route: the source-chain fee is only known at ` +
+            `broadcast time. Estimate the fee separately and pass an explicit amount instead of "max".`
+        )
+      }
+
+      if (probe.maxSwapable >= balance) {
+        // Token route - gas is paid in the native asset, so the whole token
+        // balance is swappable and the probe already quotes the final amount.
+        resolvedAmount = fullAmount
+        maxProbeQuote = probe
+      } else {
+        resolvedAmount = this.formatUnits(probe.maxSwapable, fromToken.decimals)
+      }
     }
     const normalizedAmount = this.validateHumanSwapAmount(resolvedAmount, fromToken.decimals)
 
-    const quote = await this.getSwapQuote({
-      fromCoin,
-      toCoin,
-      amount: normalizedAmount,
-      recipient: normalizedRecipient,
-      slippageTolerance,
-      excludeProviders,
-    })
+    const quote =
+      maxProbeQuote ??
+      (await this.getSwapQuote({
+        fromCoin,
+        toCoin,
+        amount: normalizedAmount,
+        recipient: normalizedRecipient,
+        slippageTolerance,
+        excludeProviders,
+      }))
     if (dryRun) return { dryRun: true, quote }
 
     const { keysignPayload, approvalPayload } = await this.prepareSwapTx({
@@ -2235,19 +2352,23 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     timeoutMs = 60_000,
     intervalMs = 3_000
   ): Promise<void> {
-    const deadline = Date.now() + timeoutMs
-    while (Date.now() < deadline) {
-      try {
-        const result = await this.getTxStatus({ chain, txHash })
-        if (result.status === 'success') return
-        if (result.status === 'error')
-          throw new VaultError(VaultErrorCode.BroadcastFailed, `Approval tx failed: ${txHash}`)
-      } catch (e) {
-        if (e instanceof VaultError && e.code !== VaultErrorCode.NetworkError) throw e
-      }
-      await new Promise(resolve => setTimeout(resolve, intervalMs))
+    const outcome = await pollTxStatusUntilFinal({
+      chain,
+      txHash,
+      timeoutMs,
+      intervalMs,
+      getTxStatus: params => this.getTxStatus(params),
+      shouldRetryError: error => !(error instanceof VaultError) || error.code === VaultErrorCode.NetworkError,
+    })
+
+    if (outcome.result?.status !== 'success' && !outcome.timedOut) {
+      const status = outcome.result?.status ?? 'unknown'
+      const outcomeLabel = status === 'error' ? 'failed' : status
+      throw new VaultError(VaultErrorCode.BroadcastFailed, `Approval tx ${outcomeLabel}: ${txHash}`)
     }
-    throw new VaultError(VaultErrorCode.Timeout, `Approval tx not confirmed within ${timeoutMs / 1000}s: ${txHash}`)
+    if (outcome.timedOut) {
+      throw new VaultError(VaultErrorCode.Timeout, `Approval tx not confirmed within ${timeoutMs / 1000}s: ${txHash}`)
+    }
   }
 
   private formatUnits(value: bigint, decimals: number): string {

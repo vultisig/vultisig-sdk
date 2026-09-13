@@ -54,6 +54,25 @@ describe('BrowserStorage backend selection', () => {
   let local: LocalStorageDouble
 
   beforeEach(() => {
+    let mutationTail = Promise.resolve()
+    vi.stubGlobal('navigator', {
+      locks: {
+        request: async <T>(_name: string, operation: () => Promise<T> | T): Promise<T> => {
+          const previous = mutationTail
+          let release!: () => void
+          const current = new Promise<void>(resolve => {
+            release = resolve
+          })
+          mutationTail = previous.then(() => current)
+          await previous
+          try {
+            return await operation()
+          } finally {
+            release()
+          }
+        },
+      },
+    })
     local = new LocalStorageDouble()
     vi.stubGlobal('localStorage', local)
     vi.stubGlobal('indexedDB', new IDBFactory())
@@ -72,6 +91,19 @@ describe('BrowserStorage backend selection', () => {
 
     expect(open).toHaveBeenCalledTimes(1)
     expect(local.getItem('__vultisig_storage_backend__')).toBe('indexeddb')
+  })
+
+  it('conditionally writes one shared IndexedDB value atomically across adapter instances', async () => {
+    const first = new BrowserStorage()
+    const second = new BrowserStorage()
+
+    const results = await Promise.all([
+      first.compareAndSet('vault:shared', null, { owner: 'first' }),
+      second.compareAndSet('vault:shared', null, { owner: 'second' }),
+    ])
+
+    expect(results.filter(Boolean)).toHaveLength(1)
+    expect(await first.get('vault:shared')).toEqual(results[0] ? { owner: 'first' } : { owner: 'second' })
   })
 
   it('surfaces IndexedDB quota without switching to localStorage or hiding existing keys', async () => {
@@ -133,6 +165,18 @@ describe('BrowserStorage backend selection', () => {
     })
     expect(open).not.toHaveBeenCalled()
     expect(local.getItem('__vultisig_storage_backend__')).toBe('localstorage')
+  })
+
+  it('keeps ordinary localStorage writes available but hides CAS when Web Locks are unavailable', async () => {
+    vi.stubGlobal('indexedDB', undefined)
+    vi.stubGlobal('navigator', {})
+    const storage = new BrowserStorage()
+
+    await storage.set('vault:legacy-save', { name: 'before' })
+
+    expect(storage.compareAndSet).toBeUndefined()
+    await storage.set('vault:legacy-save', { name: 'after' })
+    await expect(storage.get('vault:legacy-save')).resolves.toEqual({ name: 'after' })
   })
 
   it('recovers an unmarked legacy localStorage vault set when IndexedDB is empty', async () => {

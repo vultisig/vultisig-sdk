@@ -1,4 +1,5 @@
 import { Chain } from '@vultisig/core-chain/Chain'
+import { hasServer } from '@vultisig/core-mpc/devices/localPartyId'
 import { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 
 import type { WasmProvider } from '../context/SdkContext'
@@ -160,7 +161,7 @@ export class FastSigningService {
    * @throws Error if vault doesn't have server signer
    */
   private validateFastVault(vault: CoreVault): void {
-    const hasFastVaultServer = vault.signers.some((signer: string) => signer.startsWith('Server-'))
+    const hasFastVaultServer = hasServer(vault.signers)
 
     if (!hasFastVaultServer) {
       throw new Error(

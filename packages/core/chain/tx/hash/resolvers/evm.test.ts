@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
 import { keccak256 } from 'viem'
+import { describe, expect, it } from 'vitest'
 
 import { getEvmTxHash } from './evm'
 

@@ -1,5 +1,7 @@
 import { solanaConfig } from '@vultisig/core-chain/chains/solana/solanaConfig'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import { assertBoundedInt } from '@vultisig/lib-utils/bigint/assertBoundedInt'
+import { parseNonNegativeBigInt } from '@vultisig/lib-utils/bigint/parseNonNegativeBigInt'
 import { maxBigInt } from '@vultisig/lib-utils/math/maxBigInt'
 import { TW, WalletCore } from '@trustwallet/wallet-core'
 import Long from 'long'
@@ -27,11 +29,17 @@ export const getSolanaSendSigningInput = ({
     priorityFee,
   } = getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'solanaSpecific')
 
+  // sdk#1200: bound before BigInt() rather than letting an out-of-range
+  // magnitude flow through unchecked into the uint64 priorityFeePrice proto
+  // field below (Long.fromString two's-complement-wraps out-of-range values).
   // Floor at the config minimum so co-signers all encode the same
   // `setComputeUnitPrice` instruction when the wire value is missing.
-  const priorityFeePrice = maxBigInt(priorityFee ? BigInt(priorityFee) : 0n, BigInt(solanaConfig.priorityFeePrice))
+  const priorityFeePrice = maxBigInt(
+    priorityFee ? BigInt(assertBoundedInt(priorityFee, 'uint64')) : 0n,
+    BigInt(solanaConfig.priorityFeePrice)
+  )
 
-  const amount = BigInt(keysignPayload.toAmount)
+  const amount = assertBoundedInt(parseNonNegativeBigInt(keysignPayload.toAmount).toString(), 'uint64')
   const sender = coin.address
   const recipient = keysignPayload.toAddress
 
@@ -40,7 +48,7 @@ export const getSolanaSendSigningInput = ({
       return {
         transferTransaction: TW.Solana.Proto.Transfer.create({
           recipient,
-          value: Long.fromString(amount.toString()),
+          value: Long.fromString(amount, true),
           memo: keysignPayload.memo,
         }),
       }
@@ -53,7 +61,7 @@ export const getSolanaSendSigningInput = ({
     const tokenTransferSharedFields = {
       tokenMintAddress: coin.id,
       senderTokenAddress: fromTokenAssociatedAddress,
-      amount: Long.fromString(amount.toString()),
+      amount: Long.fromString(amount, true),
       decimals: coin.decimals,
       tokenProgramId,
       memo: keysignPayload.memo,

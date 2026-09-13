@@ -1,3 +1,4 @@
+import type { VaultImportOptions } from '@vultisig/sdk'
 import { contextBridge, ipcRenderer } from 'electron'
 
 // Expose type-safe API to renderer
@@ -16,7 +17,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('vault:resendVerification', options),
   createSecureVault: (options: { name: string; password?: string; devices: number; threshold?: number }) =>
     ipcRenderer.invoke('vault:createSecure', options),
-  importVault: (content: string, password?: string) => ipcRenderer.invoke('vault:import', content, password),
+  importVault: (content: string, password?: string, options?: VaultImportOptions) =>
+    ipcRenderer.invoke('vault:import', content, password, options),
   isVaultEncrypted: (content: string) => ipcRenderer.invoke('vault:isEncrypted', content),
   deleteVault: (vaultId: string) => ipcRenderer.invoke('vault:delete', vaultId),
   setActiveVault: (vaultId: string | null) => ipcRenderer.invoke('vault:setActive', vaultId),

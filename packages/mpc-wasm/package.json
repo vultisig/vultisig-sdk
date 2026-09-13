@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/mpc-wasm",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "WASM-based MPC engine for Vultisig SDK (browser, Node.js, Electron)",
   "type": "module",
   "main": "dist/index.js",
@@ -16,6 +16,10 @@
   "license": "MIT",
   "dependencies": {
     "@vultisig/mpc-types": "workspace:*"
+  },
+  "devDependencies": {
+    "@noble/curves": "^2.2.0",
+    "@noble/hashes": "^2.2.0"
   },
   "publishConfig": {
     "access": "public"

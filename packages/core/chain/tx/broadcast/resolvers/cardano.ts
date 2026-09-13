@@ -6,7 +6,7 @@ import { getCardanoTxHash } from '@vultisig/core-chain/tx/hash/resolvers/cardano
 import { attempt } from '@vultisig/lib-utils/attempt'
 
 import { submitCardanoCbor } from '../../../chains/cardano/submit/submitCardanoCbor'
-import { BroadcastTxResolver } from '../resolver'
+import { broadcastAccepted, broadcastFailed, BroadcastTxResolver, isRetryableBroadcastCause } from '../resolver'
 import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
 import { selectEncodedBytes } from './utxo'
 
@@ -59,26 +59,33 @@ export const assertCardanoTtlFreshForBroadcast = async (encodedBytes: Uint8Array
 }
 
 export const broadcastCardanoTx: BroadcastTxResolver<OtherChain.Cardano> = async ({ chain, tx }) => {
-  const encodedBytes = selectEncodedBytes(chain, tx)
-  await assertCardanoTtlFreshForBroadcast(encodedBytes)
+  try {
+    const encodedBytes = selectEncodedBytes(chain, tx)
+    await assertCardanoTtlFreshForBroadcast(encodedBytes)
 
-  const cborHex = Buffer.from(encodedBytes).toString('hex')
+    const cborHex = Buffer.from(encodedBytes).toString('hex')
 
-  const { txHash, errorMessage, rpcErrorCode } = await submitCardanoCbor(cborHex)
+    const { txHash, errorMessage, rpcErrorCode } = await submitCardanoCbor(cborHex)
 
-  if (txHash) return txHash
+    if (txHash) return broadcastAccepted(txHash)
 
-  if (rpcErrorCode === alreadyCommittedCode) {
-    return (await getCardanoTxHash(tx)).replace(/^0x/i, '')
+    if (rpcErrorCode === alreadyCommittedCode) {
+      return broadcastAccepted((await getCardanoTxHash(tx)).replace(/^0x/i, ''))
+    }
+
+    const error = errorMessage ?? 'unknown broadcast failure'
+
+    // Any submit error past this point is ambiguous — it could be a benign MPC-race duplicate (another
+    // device already broadcast the same signed tx) OR a genuine failure (e.g. BadInputsUTxO: spent/invalid
+    // inputs). String-matching alone can't tell them apart, so verify against the real chain: the hash
+    // either resolves on-chain (the race case — success) or it doesn't (the real failure — returns it).
+    const broadcastError = new Error(`Failed to broadcast transaction: ${error}`)
+    try {
+      return broadcastAccepted(await verifyBroadcastByHash({ chain, tx, error: broadcastError }))
+    } catch (cause) {
+      return broadcastFailed(cause, isRetryableBroadcastCause(broadcastError))
+    }
+  } catch (cause) {
+    return broadcastFailed(cause, isRetryableBroadcastCause(cause))
   }
-
-  const error = errorMessage ?? 'unknown broadcast failure'
-
-  // Any submit error past this point is ambiguous — it could be a benign MPC-race duplicate (another
-  // device already broadcast the same signed tx) OR a genuine failure (e.g. BadInputsUTxO: spent/invalid
-  // inputs). String-matching alone can't tell them apart, so verify against the real chain: the hash
-  // either resolves on-chain (the race case — success) or it doesn't (the real failure — rethrows).
-  const broadcastError = new Error(`Failed to broadcast transaction: ${error}`)
-  await verifyBroadcastByHash({ chain, tx, error: broadcastError })
-  return null
 }

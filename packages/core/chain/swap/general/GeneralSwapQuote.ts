@@ -1,5 +1,6 @@
 import { SwapFee } from '@vultisig/core-chain/swap/SwapFee'
 
+import type { SwapQuoteAffiliate } from '../quote/SwapQuote'
 import { CowSwapTokenBalance } from './cowswap/sign/buildCowSwapOrder'
 import { CowSwapOrderKind } from './cowswap/types'
 import { GeneralSwapProvider } from './GeneralSwapProvider'
@@ -47,6 +48,16 @@ export type GeneralSwapTx =
         txPayload?: Uint8Array
         inboundAddress?: string
         swapId?: string
+        /**
+         * Provider fee for the route, when the response itemizes one. Absent
+         * rather than zero when no fee is itemized or its shape can't be
+         * resolved — the same convention `evm.affiliateFee` follows, since
+         * neither establishes an amount worth vouching for.
+         *
+         * Not part of the signed transfer. It travels so a cosigning peer,
+         * which holds no quote, can state what the swap costs.
+         */
+        swapFee?: SwapFee
       }
     }
   | {
@@ -72,9 +83,17 @@ export type GeneralSwapTx =
         permitRequired?: true
       }
     }
+  | {
+      cosmosWasm: {
+        sender: string
+        contract: string
+        executeMsg: string
+        funds: Array<{ denom: string; amount: string }>
+      }
+    }
 
 /**
- * Quote returned by an EVM/Solana general-purpose swap aggregator.
+ * Quote returned by a general-purpose swap provider.
  *
  * Consumers building a "View on Explorer" link should call
  * `getSwapExplorerUrl({ provider, txHash, fromChain })` from
@@ -84,9 +103,13 @@ export type GeneralSwapTx =
  * the source-chain explorer for `1inch` / `jupiter` / `kyber`.
  */
 export type GeneralSwapQuote = {
+  /** Request-bound affiliate metadata. Absent on legacy quotes; zero is a known requested rate. */
+  affiliate?: SwapQuoteAffiliate
   dstAmount: string
   provider: GeneralSwapProvider
   routeProvider?: string
+  /** Absolute provider quote expiry in milliseconds, when supplied. */
+  expiresAt?: number
   /**
    * Signed price impact of the route as a FRACTION, not a percent: `0.0133`
    * means 1.33% of output lost, and a negative value is a favorable trade.

@@ -15,12 +15,16 @@ describe('getSwapQuoteProviderName', () => {
   })
 
   it('maps each general swap provider to its display name', () => {
-    const cases: Array<{ provider: '1inch' | 'li.fi' | 'kyber' | 'swapkit' | 'jupiter'; label: string }> = [
+    const cases: Array<{
+      provider: '1inch' | 'li.fi' | 'kyber' | 'swapkit' | 'jupiter' | 'ruji'
+      label: string
+    }> = [
       { provider: '1inch', label: '1Inch' },
       { provider: 'li.fi', label: 'LI.FI' },
       { provider: 'kyber', label: 'KyberSwap' },
       { provider: 'swapkit', label: 'SwapKit' },
       { provider: 'jupiter', label: 'Jupiter' },
+      { provider: 'ruji', label: 'RUJI Trade' },
     ]
 
     for (const { provider, label } of cases) {

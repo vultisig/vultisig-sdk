@@ -6,7 +6,6 @@
  */
 
 import { create } from '@bufbuild/protobuf'
-import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
 import { CosmosChain, IbcEnabledCosmosChain } from '@vultisig/core-chain/Chain'
 import { getCosmosAccountInfo } from '@vultisig/core-chain/chains/cosmos/account/getCosmosAccountInfo'
 import { cosmosGasRecord, getCosmosFeeAmount } from '@vultisig/core-chain/chains/cosmos/gas'
@@ -31,12 +30,23 @@ import {
 import type { CosmosFeeInput, CosmosMsgInput, SignAminoInput, SignDirectInput } from '../../../types/cosmos'
 
 /**
+ * Minimal public-key contract the Cosmos payload builders need — just the raw
+ * key bytes, via `.data()`. Deliberately narrower than @trustwallet/wallet-core's
+ * `PublicKey` so it's structurally compatible with both that type and RN's
+ * `NativePublicKeyInstance` (@vultisig/walletcore-native), letting RN consumers
+ * pass their native public key without a cast.
+ */
+export type CosmosBuilderPublicKey = {
+  data(): Uint8Array
+}
+
+/**
  * Input parameters for building SignAmino keysign payload
  */
 export type BuildSignAminoPayloadInput = SignAminoInput & {
   vaultId: string
   localPartyId: string
-  publicKey: PublicKey
+  publicKey: CosmosBuilderPublicKey
   libType: KeysignLibType
   skipChainSpecificFetch?: boolean
 }
@@ -47,7 +57,7 @@ export type BuildSignAminoPayloadInput = SignAminoInput & {
 export type BuildSignDirectPayloadInput = SignDirectInput & {
   vaultId: string
   localPartyId: string
-  publicKey: PublicKey
+  publicKey: CosmosBuilderPublicKey
   libType: KeysignLibType
   skipChainSpecificFetch?: boolean
 }

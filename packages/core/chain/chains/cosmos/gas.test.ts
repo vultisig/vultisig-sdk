@@ -11,6 +11,7 @@ import {
   MAYA_SEND_FEE_BASE_UNITS,
   TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS,
   TERRA_CLASSIC_ULUNA_BASE_GAS,
+  TERRA_CLASSIC_UUSD_BASE_GAS,
 } from './gas'
 
 const jsonResponse = (body: unknown, status = 200) =>
@@ -361,5 +362,17 @@ describe('TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS', () => {
 
   it('exceeds the native-send fee constant, proving the send fee alone would under-price staking', () => {
     expect(TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS).toBeGreaterThan(TERRA_CLASSIC_ULUNA_BASE_GAS)
+  })
+})
+
+describe('TERRA_CLASSIC_UUSD_BASE_GAS', () => {
+  it('equals the TerraClassic static gas limit priced at 0.75 uusd/gas', () => {
+    const staticGasLimit = getCosmosGasLimit({ chain: Chain.TerraClassic, id: 'uusd' })
+
+    expect(TERRA_CLASSIC_UUSD_BASE_GAS).toBe((staticGasLimit * 75n) / 100n)
+  })
+
+  it('matches iOS uusdBaseGas / Android UUSD_BASE_GAS', () => {
+    expect(TERRA_CLASSIC_UUSD_BASE_GAS).toBe(225_000n)
   })
 })
