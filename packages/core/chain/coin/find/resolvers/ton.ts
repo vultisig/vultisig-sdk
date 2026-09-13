@@ -5,7 +5,7 @@ import { resolveTonJettonVerification } from '@vultisig/core-chain/chains/ton/je
 import { getTonVerifiedJettonRegistry } from '@vultisig/core-chain/chains/ton/jetton/verifiedRegistry'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { FindCoinsResolver } from '@vultisig/core-chain/coin/find/resolver'
-import { knownTokensIndex } from '@vultisig/core-chain/coin/knownTokens'
+import { getKnownToken } from '@vultisig/core-chain/coin/knownTokens/utils'
 import { without } from '@vultisig/lib-utils/array/without'
 
 const defaultJettonDecimals = 9
@@ -42,7 +42,7 @@ export const findTonCoins: FindCoinsResolver<OtherChain.Ton> = async ({ address,
 
     const id = tonAddressToBounceable(userFriendlyAddresses[jettonMasterAddress] ?? jettonMasterAddress)
 
-    const known = knownTokensIndex[chain][id.toLowerCase()]
+    const known = getKnownToken({ chain, id })
     if (known) {
       return { ...known, chain, id, address }
     }
