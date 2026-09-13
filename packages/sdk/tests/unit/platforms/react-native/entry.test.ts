@@ -867,3 +867,29 @@ describe('RN entry exposes canonical IBC + Sui prep helpers', () => {
     expect(rn.SUI_NATIVE_COIN_TYPE).toBe(suiTokenTransfer.SUI_NATIVE_COIN_TYPE)
   })
 })
+
+describe('RN grouped helper families', () => {
+  it('exposes every canonical member and preserves RN flat wrappers', async () => {
+    const canonicalBalance = await import('../../../../src/tools/balance')
+    const canonicalPrep = await import('../../../../src/tools/prep')
+    const canonicalSwap = await import('../../../../src/tools/swap')
+    for (const [group, canonical] of [
+      [sdkRn.balance, canonicalBalance],
+      [sdkRn.prep, canonicalPrep],
+      [sdkRn.swap, canonicalSwap],
+    ] as const) {
+      expect(Object.keys(group).sort()).toEqual(Object.keys(canonical).sort())
+      for (const [name, value] of Object.entries(group)) {
+        if (name in sdkRn) expect(value).toBe(sdkRn[name as keyof typeof sdkRn])
+      }
+    }
+    expect(sdkRn.prep.buildSplTransfer).toBe(sdkRn.buildSplTransfer)
+    expect(sdkRn.prep.buildSplTransfer).not.toBe(canonicalPrep.buildSplTransfer)
+    expect(sdkRn.balance.balancePolkadot).toBe(sdkRn.balancePolkadot)
+    expect(sdkRn.balance.balancePolkadot).not.toBe(canonicalBalance.balancePolkadot)
+    expect(sdkRn.prep.SwapQuoteExpiredError).toBe(canonicalPrep.SwapQuoteExpiredError)
+    expect(sdkRn.balance.formatDot).toBe(canonicalBalance.formatDot)
+    expect(sdkRn.balance.formatBalance(1500000n, 6)).toBe('1.5')
+    expect(sdkRn.swap.computeAstroportMinReceive('1000000', 0.01)).toBe('990000')
+  })
+})

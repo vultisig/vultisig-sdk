@@ -1100,6 +1100,7 @@ export {
   encodeAgentRouterDepositWithMemo,
   encodeErc20Approve,
   encodeErc20Revoke,
+  ensureTransactionsBuilt,
   estimateCosmosSwapFeeLabel,
   evaluatePolicy,
   evm,
@@ -1339,3 +1340,6 @@ export {
   tronBase58ToHex,
   tronHexToBase58,
 } from './abi'
+
+// Grouped helper families retain the canonical tools implementations.
+export { balance, prep, swap } from './tools'
