@@ -339,6 +339,7 @@ export {
   buildYieldStepScanRequest,
   chunkStakekitBalanceQueries,
   defi,
+  ensureTransactionsBuilt,
   fetchAllStakekitBalances,
   fetchStakekitBalancesBatch,
   GLIF_ICN_BASE_ADDRESSES,
