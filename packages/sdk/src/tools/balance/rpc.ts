@@ -12,6 +12,8 @@
  * ever signs or broadcasts.
  */
 
+import { withFetchTimeout } from '../../platforms/react-native/fetchWithTimeout'
+
 /** Vultisig proxy root. Mirrors mcp-ts `ROOT_API_URL`. */
 export const ROOT_API_URL = 'https://api.vultisig.com'
 
@@ -25,7 +27,12 @@ function delay(ms: number): Promise<void> {
 
 function isRetryable(error: unknown): boolean {
   // Network-level failures retry; deterministic timeouts do not (a retry just
-  // stacks more multi-second waits past the caller's budget). Mirrors mcp-ts.
+  // stacks more multi-second waits past the caller's budget — worst case
+  // MAX_RETRIES+1 full DEFAULT_TIMEOUT_MS waits before the caller sees
+  // anything). Mirrors mcp-ts. FetchTimeoutError (sdk#1344 review) is
+  // deliberately excluded for the same reason AbortSignal.timeout's
+  // TimeoutError was never retried here — it's the flaky-mobile path where a
+  // fail-fast timeout is the common, expected failure, not a one-off blip.
   if (error instanceof TypeError) return true
   if (error instanceof DOMException && error.name === 'AbortError') return true
   return false
@@ -36,30 +43,47 @@ function isRetryable(error: unknown): boolean {
  * GETs otherwise. Throws on 4xx (client error, no retry) and after exhausting
  * retries on 5xx / network failures.
  */
+type FetchJsonResult<T> = { ok: true; status: number; data: T } | { ok: false; status: number; text: string }
+
 export async function fetchJson<T>(url: string, body?: unknown, init?: RequestInit): Promise<T> {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const response = await fetch(url, {
-        method: body ? 'POST' : 'GET',
-        headers: body ? { 'Content-Type': 'application/json' } : undefined,
-        body: body ? JSON.stringify(body) : undefined,
-        signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
-        ...init,
-      })
+      // sdk#1344 review: withFetchTimeout clears its timer as soon as `consume`
+      // settles, which used to be at HEADERS-arrived time (`consume = async
+      // response => response`) — the body read below then ran with NO deadline
+      // at all. The body read now happens INSIDE `consume`, so a server that
+      // sends 200 + headers then stalls mid-body is still bounded by
+      // DEFAULT_TIMEOUT_MS.
+      const result = await withFetchTimeout<FetchJsonResult<T>>(
+        url,
+        {
+          method: body ? 'POST' : 'GET',
+          headers: body ? { 'Content-Type': 'application/json' } : undefined,
+          body: body ? JSON.stringify(body) : undefined,
+          ...init,
+        },
+        DEFAULT_TIMEOUT_MS,
+        async response => {
+          if (response.ok) {
+            return { ok: true, status: response.status, data: (await response.json()) as T }
+          }
+          return { ok: false, status: response.status, text: await response.text() }
+        }
+      )
 
-      if (response.ok) {
-        return response.json() as Promise<T>
+      if (result.ok) {
+        return result.data
       }
 
       // 429 — rate limited; back off and retry while attempts remain.
-      if (response.status === 429 && attempt < MAX_RETRIES) {
+      if (result.status === 429 && attempt < MAX_RETRIES) {
         await delay(BASE_DELAY_MS * 2 ** attempt)
         continue
       }
 
       // Other 4xx — client error, don't retry.
-      if (response.status >= 400 && response.status < 500) {
-        throw new Error(`HTTP ${response.status}: ${await response.text()}`)
+      if (result.status >= 400 && result.status < 500) {
+        throw new Error(`HTTP ${result.status}: ${result.text}`)
       }
 
       // 5xx — retry while attempts remain.
@@ -68,7 +92,7 @@ export async function fetchJson<T>(url: string, body?: unknown, init?: RequestIn
         continue
       }
 
-      throw new Error(`HTTP ${response.status} after ${MAX_RETRIES + 1} attempts`)
+      throw new Error(`HTTP ${result.status} after ${MAX_RETRIES + 1} attempts`)
     } catch (error) {
       if (isRetryable(error) && attempt < MAX_RETRIES) {
         await delay(BASE_DELAY_MS * 2 ** attempt)

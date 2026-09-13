@@ -136,6 +136,18 @@ describe('getUtxoBalance', () => {
     expect(calledUrl).toBe('https://proxy.example/blockchair/litecoin/dashboards/address/ltc1qexampleaddress')
   })
 
+  it('does not depend on AbortSignal.timeout at runtime', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(blockchairResponse(1) as unknown as Response)
+    const originalTimeout = AbortSignal.timeout
+    Object.defineProperty(AbortSignal, 'timeout', { value: undefined, configurable: true })
+    try {
+      const result = await getUtxoBalance(UtxoChain.Bitcoin, '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa')
+      expect(result.satoshis).toBe('1')
+    } finally {
+      Object.defineProperty(AbortSignal, 'timeout', { value: originalTimeout, configurable: true })
+    }
+  })
+
   it('rejects unsupported chains (e.g. Zcash, out of scope)', async () => {
     await expect(getUtxoBalance(UtxoChain.Zcash, 't1exampleaddr')).rejects.toThrow(/unsupported chain/i)
   })
