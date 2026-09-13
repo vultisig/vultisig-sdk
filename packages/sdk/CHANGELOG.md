@@ -1,5 +1,13 @@
 # @vultisig/sdk
 
+## 7.4.3
+
+### Patch Changes
+
+- [#2089](https://github.com/vultisig/vultisig-sdk/pull/2089) [`b9e0fb7`](https://github.com/vultisig/vultisig-sdk/commit/b9e0fb73249e79ec7402f23e910acd7d99bdc72b) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Exports `ensureTransactionsBuilt` from `@vultisig/sdk`, the StakeKit async transaction-materialization resolver (`CREATED` → `WAITING_FOR_SIGNATURE` PATCH loop for chains like Tron native staking whose payload builds in the background). Previously this was internal to `callYieldActionREST` only, so `agent-backend-ts` had to duplicate the same loop. Also fixes a real gap: the hosted-MCP path (`callYieldActionWithFallback`'s primary route for non-Tron yields) never applied this build step, so an async-build chain routed through MCP could return a success-shaped action response with `unsignedTransaction` still `null` — the same bug `agent-backend-ts` independently found and fixed (`ensureTransactionsBuilt` there, vultisig-ops-vecc). Both the SDK's REST and hosted-MCP paths now converge on the same fully-built response.
+
+- [#2086](https://github.com/vultisig/vultisig-sdk/pull/2086) [`c69827d`](https://github.com/vultisig/vultisig-sdk/commit/c69827dbc5b8aa6f3bcfa4a50b7bb24147168a42) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Adds `assertTonSigningPayloadNoHostileDrain` (exported from `@vultisig/sdk/chains/ton` and the React Native TON bridge), a pure inspector for TON wallet-V4R2 signing payloads that refuses two unambiguous drains before any MPC signing happens: a non-zero wallet `op` (plugin install/remove, which grants ongoing spend authority without a further signature) and `SendMode.CARRY_ALL_REMAINING_BALANCE`/`SendMode.DESTROY_ACCOUNT_IF_ZERO` on any outgoing message (a full-balance drain/self-destruct). Previously this guard lived only in `vultiagent-app`, so any other SDK consumer of `buildTonTxFromSigningPayload` (yield.xyz staking actions, WalletConnect/dApp signing) had to duplicate the decoder or sign blindly.
+
 ## 7.4.2
 
 ### Patch Changes
