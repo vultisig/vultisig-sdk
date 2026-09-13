@@ -1,3 +1,7 @@
+import { ClaimProofError, ClaimProofErrorCode } from './ClaimProofError'
+
+export { ClaimProofError, ClaimProofErrorCode } from './ClaimProofError'
+
 /** Base URL for the QBTC proof service. */
 export const defaultProofServiceUrl = 'https://proof.qbtc.network'
 
@@ -91,22 +95,34 @@ const isHexWithLength = (value: unknown, length: number): value is string =>
 /** Validates the proof service response matches expected field formats. */
 const assertValidClaimProofResponse = (data: GenerateClaimProofResponse): void => {
   if (typeof data.proof !== 'string' || data.proof.length === 0) {
-    throw new Error('Invalid proof service response: missing proof')
+    throw new ClaimProofError(ClaimProofErrorCode.MissingProof, 'Invalid proof service response: missing proof')
   }
   if (!isHexWithLength(data.message_hash, 64)) {
-    throw new Error('Invalid proof service response: invalid message_hash')
+    throw new ClaimProofError(
+      ClaimProofErrorCode.InvalidMessageHash,
+      'Invalid proof service response: invalid message_hash'
+    )
   }
   if (!isHexWithLength(data.address_hash, 40)) {
-    throw new Error('Invalid proof service response: invalid address_hash')
+    throw new ClaimProofError(
+      ClaimProofErrorCode.InvalidAddressHash,
+      'Invalid proof service response: invalid address_hash'
+    )
   }
   if (!isHexWithLength(data.qbtc_address_hash, 64)) {
-    throw new Error('Invalid proof service response: invalid qbtc_address_hash')
+    throw new ClaimProofError(
+      ClaimProofErrorCode.InvalidQbtcAddressHash,
+      'Invalid proof service response: invalid qbtc_address_hash'
+    )
   }
   if (!isHexWithLength(data.pub_key_hash_sha256, 64)) {
-    throw new Error('Invalid proof service response: invalid pub_key_hash_sha256')
+    throw new ClaimProofError(
+      ClaimProofErrorCode.InvalidPubKeyHashSha256,
+      'Invalid proof service response: invalid pub_key_hash_sha256'
+    )
   }
   if (data.tx_hash !== undefined && !isHexWithLength(data.tx_hash, 64)) {
-    throw new Error('Invalid proof service response: invalid tx_hash')
+    throw new ClaimProofError(ClaimProofErrorCode.InvalidTxHash, 'Invalid proof service response: invalid tx_hash')
   }
 }
 
