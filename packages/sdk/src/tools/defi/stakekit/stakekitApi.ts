@@ -148,7 +148,7 @@ export type YieldTransaction = {
   type: string // APPROVAL, SUPPLY, STAKE, UNSTAKE, etc.
   network: string
   status: string
-  unsignedTransaction: string // JSON string — needs JSON.parse
+  unsignedTransaction: string | null // JSON string — needs JSON.parse; null while yield.xyz is still building it
   gasEstimate: string // JSON string — needs JSON.parse
 }
 
@@ -216,12 +216,29 @@ export type EvmScanRequest = {
   data: string
 }
 
+/**
+ * A Solana yield step's pre-built transaction bytes (architecture#1670).
+ * yield.xyz compiles Solana transactions server-side and returns the
+ * serialised bytes directly as `unsignedTransaction` — hex, base64, or a
+ * `{serialized|tx}` string wrapper (mirrors `canonicalizeSolanaStep`'s
+ * candidate extraction in `../stakekit/index.ts`). `serializedTx` is
+ * passed through AS-IS (encoding not normalized here — the SDK's scan
+ * contract is a decode-only signal, not a wired Blockaid request body);
+ * callers that need base58/base64 do that normalization themselves.
+ */
+export type SolanaScanRequest = {
+  kind: 'solana'
+  chain: 'Solana'
+  accountAddress?: string
+  serializedTx: string
+}
+
 export type UnsupportedScanRequest = {
   kind: 'unsupported'
   reason: string
 }
 
-export type ScanRequest = EvmScanRequest | UnsupportedScanRequest
+export type ScanRequest = EvmScanRequest | SolanaScanRequest | UnsupportedScanRequest
 
 // --- API functions ---
 
@@ -582,26 +599,49 @@ export async function callYieldActionREST(
     throw new Error(`${prefix}: ${humanMsg}`)
   }
   const action_response = (await resp.json()) as YieldActionResponse
-  // Some chains return the action with status:"CREATED" and every
-  // transactions[].unsignedTransaction === null because yield.xyz hasn't
-  // built the payload yet. PATCH each null tx to advance it.
+  return ensureTransactionsBuilt(action_response, apiKey)
+}
+
+/**
+ * Some chains (Tron native staking, occasional Sui/TON) return the action
+ * with `status:"CREATED"` and every `transactions[].unsignedTransaction ===
+ * null` because yield.xyz hasn't built the payload yet — it's an async
+ * background job. The build only advances when each transaction is PATCH'd
+ * to `WAITING_FOR_SIGNATURE`. EVM and most Solana yields return the payload
+ * synchronously, so this loop is a no-op for them.
+ *
+ * Exported so every caller of a yield.xyz action response — REST
+ * (`callYieldActionREST`) and the hosted MCP path (`callYieldActionWithFallback`)
+ * alike — applies the SAME PATCH step, and so a consumer resolving an action
+ * from elsewhere (e.g. a backend that hit the hosted MCP directly) doesn't
+ * have to duplicate this loop.
+ */
+export async function ensureTransactionsBuilt(
+  action_response: YieldActionResponse,
+  apiKey?: string
+): Promise<YieldActionResponse> {
   if (Array.isArray(action_response.transactions) && action_response.transactions.length > 0) {
-    const needsBuild = action_response.transactions.some(
-      t => (t as { unsignedTransaction?: unknown }).unsignedTransaction == null
-    )
+    const needsBuild = action_response.transactions.some(t => t.status === 'CREATED' && t.unsignedTransaction == null)
     if (needsBuild) {
       const built = await Promise.all(
         action_response.transactions.map(async tx => {
-          const txRec = tx as { id?: string; unsignedTransaction?: unknown }
-          if (typeof txRec.id !== 'string' || txRec.unsignedTransaction != null) {
-            return tx as unknown
+          if (typeof tx.id !== 'string' || tx.status !== 'CREATED' || tx.unsignedTransaction != null) {
+            return tx
           }
-          return await buildYieldTransaction(txRec.id, tx, apiKey)
+          return (await buildYieldTransaction(tx.id, tx, apiKey)) as YieldTransaction
         })
       )
-      action_response.transactions = built as YieldActionResponse['transactions']
+      action_response.transactions = built
     }
   }
+
+  const unbuiltTransaction = Array.isArray(action_response.transactions)
+    ? action_response.transactions.find(tx => tx.status === 'CREATED' && tx.unsignedTransaction == null)
+    : undefined
+  if (unbuiltTransaction) {
+    throw new Error(`yield_xyz_transaction_build_failed: ${unbuiltTransaction.id}`)
+  }
+
   return action_response
 }
 
@@ -647,7 +687,24 @@ export async function callYieldActionWithFallback(args: {
     return JSON.stringify(json)
   }
   try {
-    return await callYieldMCP(args.mcpToolName, args.mcpArgs, args.apiKey)
+    const raw = await callYieldMCP(args.mcpToolName, args.mcpArgs, args.apiKey)
+    // The hosted MCP path returns the action response as-is — it never
+    // PATCH'd a still-building (`unsignedTransaction: null`) transaction,
+    // unlike callYieldActionREST above. Without this, an async-build chain
+    // (e.g. sui-sui-native-staking) that happens to route through MCP
+    // returns a success-shaped payload with an unbuilt transaction; apply
+    // the SAME build step here so both paths converge on a fully-built
+    // action response. A response that doesn't parse as YieldActionResponse
+    // is returned unchanged for downstream validation, but a parsed action
+    // must not continue while an eligible transaction is still unbuilt.
+    let parsed: YieldActionResponse
+    try {
+      parsed = JSON.parse(raw) as YieldActionResponse
+    } catch {
+      return raw
+    }
+    const built = await ensureTransactionsBuilt(parsed, args.apiKey)
+    return JSON.stringify(built)
   } catch (mcpErr) {
     const mcpMsg = mcpErr instanceof Error ? mcpErr.message : String(mcpErr)
     try {
@@ -702,7 +759,8 @@ type EvmUnsignedTx = {
   data?: string
 }
 
-function asEvmUnsignedTx(raw: string): EvmUnsignedTx | null {
+function asEvmUnsignedTx(raw: string | null): EvmUnsignedTx | null {
+  if (typeof raw !== 'string') return null
   try {
     const parsed = JSON.parse(raw) as unknown
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null
@@ -719,10 +777,56 @@ function asEvmUnsignedTx(raw: string): EvmUnsignedTx | null {
 }
 
 /**
- * Build a scan_request for ONE step in a yield action's transactions[].
- * Returns an unsupported sentinel when the network/envelope shape can't be decoded.
+ * Extract the raw Solana tx-bytes candidate from a step's `unsignedTransaction`
+ * (hex, base64, or a `{serialized|tx}` string wrapper). Byte-identical
+ * extraction logic to `canonicalizeSolanaStep` in `../stakekit/index.ts` —
+ * duplicated rather than imported because `index.ts` imports THIS module, and
+ * scan-request building needs to stay a level below the canonicalizer to avoid
+ * a circular import.
  */
-export function buildYieldStepScanRequest(tx: YieldTransaction): ScanRequest {
+function extractSolanaTxCandidate(unsignedTransaction: string | null): string | null {
+  if (typeof unsignedTransaction !== 'string') return null
+  try {
+    const maybeObj = JSON.parse(unsignedTransaction) as unknown
+    if (maybeObj && typeof maybeObj === 'object') {
+      const obj = maybeObj as { serialized?: unknown; tx?: unknown }
+      return (typeof obj.serialized === 'string' && obj.serialized) || (typeof obj.tx === 'string' && obj.tx) || null
+    }
+    return null
+  } catch {
+    const trimmed = unsignedTransaction.trimStart()
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) return null
+    return unsignedTransaction || null
+  }
+}
+
+/**
+ * Build a scan_request for ONE step in a yield action's transactions[].
+ * Returns an unsupported sentinel when the network/envelope shape can't be
+ * decoded, or when the chain has no first-party scan surface yet.
+ *
+ * `solanaAccountAddress` (architecture#1670): the signer's Solana base58
+ * wallet address, needed by downstream Blockaid-style scanners that require
+ * an `account_address` alongside the tx bytes. Absent it, a Solana step still
+ * yields a real `solana` scan_request (bytes present) rather than falling
+ * back to `unsupported` — the caller can attach the address itself if known.
+ */
+export function buildYieldStepScanRequest(tx: YieldTransaction, solanaAccountAddress?: string): ScanRequest {
+  if (tx.network === 'solana') {
+    const candidate = extractSolanaTxCandidate(tx.unsignedTransaction)
+    if (!candidate) {
+      const req: ScanRequest = { kind: 'unsupported', reason: 'no_compiled_txs' }
+      return req
+    }
+    const req: ScanRequest = {
+      kind: 'solana',
+      chain: 'Solana',
+      ...(solanaAccountAddress ? { accountAddress: solanaAccountAddress } : {}),
+      serializedTx: candidate,
+    }
+    return req
+  }
+
   const evmChain = yieldNetworkToEvmChain(tx.network)
   if (!evmChain) {
     const req: ScanRequest = { kind: 'unsupported', reason: 'chain_not_supported' }
@@ -745,17 +849,27 @@ export function buildYieldStepScanRequest(tx: YieldTransaction): ScanRequest {
 }
 
 /**
+ * Build a scan_request for EVERY step in a yield action's transactions[],
+ * 1:1 with the input array — including `unsupported` entries (architecture#1670).
+ * Unlike {@link buildYieldActionScanRequest} (which surfaces only the first
+ * scannable step, for backward compatibility with the historical single-slot
+ * contract), this hands a caller ALL steps so a multi-step action (e.g.
+ * approve→stake) can be scanned in full rather than just its first leg.
+ */
+export function buildYieldActionScanRequests(resp: YieldActionResponse, solanaAccountAddress?: string): ScanRequest[] {
+  if (!resp.transactions?.length) return []
+  return resp.transactions.map(step => buildYieldStepScanRequest(step, solanaAccountAddress))
+}
+
+/**
  * Build the scan_request for a yield action's RESPONSE envelope.
  * Returns the first non-unsupported step scan_request; falls back to
- * `{kind: 'unsupported', reason: 'no_compiled_txs'}` when all steps are unsupported.
+ * `{kind: 'unsupported', reason: 'no_compiled_txs'}` when all steps are
+ * unsupported. Kept for backward compatibility with the historical
+ * single-slot contract — use {@link buildYieldActionScanRequests} (plural)
+ * for full multi-step coverage.
  */
-export function buildYieldActionScanRequest(resp: YieldActionResponse): ScanRequest {
-  if (!resp.transactions?.length) {
-    return { kind: 'unsupported', reason: 'no_compiled_txs' }
-  }
-  for (const step of resp.transactions) {
-    const req = buildYieldStepScanRequest(step)
-    if (req.kind !== 'unsupported') return req
-  }
-  return { kind: 'unsupported', reason: 'no_compiled_txs' }
+export function buildYieldActionScanRequest(resp: YieldActionResponse, solanaAccountAddress?: string): ScanRequest {
+  const requests = buildYieldActionScanRequests(resp, solanaAccountAddress)
+  return requests.find(req => req.kind !== 'unsupported') ?? { kind: 'unsupported', reason: 'no_compiled_txs' }
 }

@@ -9,7 +9,7 @@ import {
   assertSwapKitDestinationMatchesTarget,
   logUnenforcedAggregatorDestination,
 } from './knownAggregatorRouters'
-import { swapKitSourceChains } from './swapkit/SwapKitEnabledChains'
+import { isSwapKitSourceChain } from './swapkit/SwapKitEnabledChains'
 
 const ONE_INCH_V6 = '0x111111125421ca6dc452d289314280a0f8842a65'
 const ONE_INCH_V5 = '0x1111111254eeb25477b68fb85ed929f73a960582'
@@ -100,6 +100,9 @@ describe('assertKnownAggregatorRouter — AGG-02 fund-safety allowlist', () => {
       Chain.Avalanche,
       Chain.Base,
       Chain.Polygon,
+      // Robinhood (4663) confirmed 2026-09-09 via /routes and /route/build; see
+      // KYBER_STANDARD_ROUTER's note for the evidence.
+      Chain.Robinhood,
     ]) {
       expect(() => assertKnownAggregatorRouter('kyber', KYBER_V2, chain)).not.toThrow()
     }
@@ -300,13 +303,15 @@ describe('logUnenforcedAggregatorDestination — dynamic/legacy signing payloads
 describe('SwapKit EVM source chains are fully covered by Blockaid — sdk#1458 review follow-up', () => {
   it('every EVM chain SwapKit can source from also has a blockaidEvmChain mapping', () => {
     // assertSwapKitAddressReputation throws "cannot be verified on unsupported Blockaid chain"
-    // for any EVM chain missing from blockaidEvmChain. Today that's fine — neither CronosChain
-    // nor Robinhood is a swapKitSourceChains entry — but adding either to swapKitSourceChains
-    // in the future would look like a harmless one-line change and would silently make every
-    // SwapKit swap FROM that chain a 100%, outage-independent refusal (not a Blockaid outage,
-    // not a flaky network call — a guaranteed throw on every single attempt). This test turns
-    // that into a loud, immediate failure here instead of a field report.
-    const evmSwapKitSourceChains = swapKitSourceChains.filter(chain => chain in EvmChain) as EvmChain[]
+    // for any EVM chain missing from blockaidEvmChain. Source eligibility comes from two places:
+    // the static swapKitSourceChains list, and the blockaidEvmChain map itself for catalog-driven
+    // EVM chains such as Blast and Robinhood (see isSwapKitSourceChain). Adding an EVM chain to
+    // the static list without a Blockaid mapping (CronosChain today) would look like a harmless
+    // one-line change and would silently make every SwapKit swap FROM that chain a 100%,
+    // outage-independent refusal (not a Blockaid outage, not a flaky network call — a guaranteed
+    // throw on every single attempt). This test turns that into a loud, immediate failure here
+    // instead of a field report, and walks the real predicate so both sources are exercised.
+    const evmSwapKitSourceChains = Object.values(EvmChain).filter(isSwapKitSourceChain)
 
     const uncoveredChains = evmSwapKitSourceChains.filter(chain => !(chain in blockaidEvmChain))
 

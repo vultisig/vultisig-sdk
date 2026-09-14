@@ -14,16 +14,40 @@
 // ============================================================================
 
 // Core SDK class
+import { configureVultisigInstanceNamespaces } from './instanceNamespaces'
+import * as balanceNamespace from './tools/balance'
+import * as bridgeNamespace from './tools/bridge'
+import * as cosmosNamespace from './tools/cosmos'
+import { decode as decodeNamespace } from './tools/decode'
+import * as gasNamespace from './tools/gas'
+import * as prepNamespace from './tools/prep'
+import * as priceNamespace from './tools/price'
+import * as swapNamespace from './tools/swap'
+import { Vultisig } from './Vultisig'
+
+configureVultisigInstanceNamespaces(Vultisig, {
+  balance: balanceNamespace,
+  bridge: bridgeNamespace,
+  cosmos: cosmosNamespace,
+  decode: decodeNamespace,
+  gas: gasNamespace,
+  prep: prepNamespace,
+  price: priceNamespace,
+  swap: swapNamespace,
+})
+
 export type { VaultImportConflictResolution, VaultImportOptions } from './VaultManager'
-export { Vultisig } from './Vultisig'
+export { Vultisig }
 
 // Vault management
-export type { VaultConfig, VaultSaveOptions } from './vault'
+export type { ResolvedTokenInfo, VaultConfig, VaultSaveOptions } from './vault'
 export {
   BroadcastPartialFailureError,
   FastVault,
   hasServer,
   isServer,
+  resolveTokenRef,
+  resolveTokenRefId,
   SecureVault,
   VaultBase,
   VaultConflictError,
@@ -65,6 +89,13 @@ export { fiatToAmount, FiatToAmountError } from './utils/fiatToAmount'
 export { normalizeChain, UnknownChainError } from './utils/normalizeChain'
 export { resolveChainReference } from './utils/resolveChainReference'
 export { ChainAmountParseError, toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
+export type { TonTxFailure, TonTxFailureReason, TonTxPhase } from '@vultisig/core-chain/chains/ton/failure'
+export {
+  getTonTxFailure,
+  parseTonBroadcastRejection,
+  TonBroadcastRejectedError,
+  tonTxFailureReasons,
+} from '@vultisig/core-chain/chains/ton/failure'
 export {
   CosmosSequenceMismatchError,
   toCosmosSequenceMismatchError,
@@ -124,6 +155,10 @@ export { parseThorSwapMemo } from './utils/thorSwapMemo'
 // maintaining local bech32 HRP / Base58Check version / CashAddr matrices.
 export type { UtxoChainName } from './chains/utxo/addressBrand'
 export { assertUtxoAddressBrand, isUtxoAddressBrandValid } from './chains/utxo/addressBrand'
+
+// Canonical Blockchair chain-scoped base URL (`${rootApiUrl}/blockchair/${chain}`).
+// Consumers should import this instead of reconstructing the path locally.
+export { getBlockchairBaseUrl } from '@vultisig/core-chain/chains/utxo/client/getBlockchairBaseUrl'
 
 // Custom TOKEN id validation (as opposed to the address validation above).
 // Most chains identify a token by its address (contract/mint), but Sui uses a
@@ -248,6 +283,12 @@ export { Chain, IbcEnabledCosmosChain, VaultBasedCosmosChain } from './types'
 export type { ChainKind } from '@vultisig/core-chain/ChainKind'
 export { getChainKind, isChainOfKind } from '@vultisig/core-chain/ChainKind'
 
+// Signing-algorithm classification — the canonical ECDSA/EdDSA/mldsa dispatch
+// key per chain. Exposed so consumers stop re-declaring EdDSA chain sets
+// locally (the same drift root cause as ChainKind above).
+export type { SignatureAlgorithm } from '@vultisig/core-chain/signing/SignatureAlgorithm'
+export { getSignatureAlgorithm, signatureAlgorithms } from '@vultisig/core-chain/signing/SignatureAlgorithm'
+
 // XRP Ledger issued-currency canonicals — surfaced so consumers stop re-creating
 // `<currency>.<issuer>` ids / 160-bit currency-code normalization outside the SDK.
 export {
@@ -307,6 +348,7 @@ export {
   MAYA_SEND_FEE_BASE_UNITS,
   TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS,
 } from '@vultisig/core-chain/chains/cosmos/gas'
+export { tendermintRpcUrl } from '@vultisig/core-chain/chains/cosmos/tendermintRpcUrl'
 
 // Cosmos x/auth.MaxMemoCharacters cap, per chain — single source of truth for
 // "will this memo fit before broadcast rejects it with sdk code 12 (memo too
@@ -397,6 +439,7 @@ export type {
   SwapQuoteResult,
   SwapTxParams,
   Token,
+  TxFailureInfo,
   TxReceiptInfo,
   TxStatusResult,
   UtxoGasInfo,
@@ -483,6 +526,21 @@ export {
   XRP_DANGEROUS_ADDRESSES,
 } from './utils/dangerousAddresses'
 
+// Token-transfer / ERC-20-calldata destination guards (architecture#1774).
+// A sibling to the burn-address guard above: rejects a transfer whose
+// RECIPIENT is itself a known token contract, plus the calldata decoders
+// needed to find that recipient when it's hidden inside an ERC-20
+// transfer/transferFrom call rather than a plain send. Exported so
+// first-party consumers stop hand-maintaining a private fork.
+export {
+  assertSafeTokenTransferDestination,
+  decodeErc20Approve,
+  decodeErc20Recipient,
+  decodeErc20RecipientFromSig,
+  ERC20_APPROVE_SELECTOR,
+  isErc20TransferCalldata,
+} from './utils/dangerousAddresses'
+
 // EVM chainId ↔ chain mapping plus the canonical priority-fee sanity clamp.
 // Single source of truth for the per-chain EVM chainId table and fee-ceiling
 // policy so consumers (app, agent-backend-ts) import it instead of
@@ -547,6 +605,7 @@ export {
 
 // Seedphrase validation and vault creation from seedphrase types
 export type {
+  ChainDiscoveryAggregate,
   ChainDiscoveryPhase,
   ChainDiscoveryProgress,
   ChainDiscoveryResult,
@@ -804,6 +863,8 @@ export type {
   TransactionSimulationResult,
   TransactionValidationResult,
 } from './types'
+export type { BlockaidSupportedEvmChain } from '@vultisig/core-chain/security/blockaid/evmChains'
+export { blockaidEvmChain, blockaidSupportedEvmChains } from '@vultisig/core-chain/security/blockaid/evmChains'
 
 // ============================================================================
 // PUBLIC API - Cosmos Message Type Constants
@@ -845,6 +906,8 @@ export type {
   CctpBurnMessage,
   CctpChainConfig,
   CctpClaimResult,
+  CctpReceiptLike,
+  CctpReceiptLog,
   CctpUnsignedTx,
   ChainFamily,
   Coin,
@@ -859,6 +922,9 @@ export type {
   CosmosBalanceChain,
   CosmosBalanceEntry,
   CosmosBalanceResult,
+  CosmosEnvelopeAction,
+  CosmosVoteOption,
+  DecodedAgentRouterDeposit,
   DecodeFromToolResultInput,
   Defi,
   Envelope,
@@ -866,6 +932,7 @@ export type {
   EvmBalance,
   EvmGasPrice,
   EvmScanRequest,
+  ExtractedCctpMessage,
   FieldDiff,
   FindSwapQuoteParams,
   FindSwapQuotesResult,
@@ -923,12 +990,17 @@ export type {
   SkipSwapOutcome,
   SkipSwapSuccess,
   SkipUnsignedMsg,
+  SolanaScanRequest,
   SolBalance,
   SplTokenBalance,
+  StakekitActionDisplay,
+  StakekitActionResult,
   StakekitBalanceEntry,
   StakekitBalanceItem,
   StakekitBalanceQuery,
   StakekitBalancesResult,
+  StakekitDetailsResult,
+  StakekitExitResult,
   SuiAllBalancesResult,
   SuiBalance,
   SuiCoinBalance,
@@ -947,6 +1019,8 @@ export type {
   TrxBalance,
   UnsignedTrc20Transfer,
   UnsupportedScanRequest,
+  UsdcPaymentChain,
+  UsdcPaymentChainConfig,
   UtxoBalance,
   UtxoBalanceChain,
   UtxoFeeRate,
@@ -981,6 +1055,8 @@ export {
   ACROSS_ORIGIN_CHAIN,
   acrossQuote,
   acrossSupportedChains,
+  AGENT_ROUTER_ADDRESS,
+  AGENT_ROUTER_DEPOSIT_WITH_MEMO_SELECTOR,
   AMOUNT_DRIFT_BLOCK_PCT,
   AMOUNT_DRIFT_WARN_PCT,
   amountDriftPct,
@@ -1004,9 +1080,11 @@ export {
   buildSellPt,
   buildSkipAffiliates,
   buildSplTransfer,
+  buildThreeJaneSupplyUsdc,
   buildUndelegateMsg,
   buildWithdrawRewardsMsg,
   buildYieldActionScanRequest,
+  buildYieldActionScanRequests,
   buildYieldStepScanRequest,
   cctpAttestationApiBase,
   cctpChains,
@@ -1015,6 +1093,7 @@ export {
   chainFeeCoin,
   chainsMatch,
   checkInvariants,
+  CHECKOUT_CHAIN_IDS,
   chunkStakekitBalanceQueries,
   claimInterpretations,
   classifyAstroportAsset,
@@ -1028,6 +1107,7 @@ export {
   cosmosBalanceChains,
   cosmosStaking,
   decode,
+  decodeAgentRouterDepositWithMemo,
   decodeBittensorAddress,
   decodeCctpBurnMessage,
   decodeCosmosTx,
@@ -1039,8 +1119,10 @@ export {
   deriveAddressFromKeys,
   dex,
   DOT_DECIMALS,
+  encodeAgentRouterDepositWithMemo,
   encodeErc20Approve,
   encodeErc20Revoke,
+  ensureTransactionsBuilt,
   estimateCosmosSwapFeeLabel,
   evaluatePolicy,
   evm,
@@ -1049,10 +1131,12 @@ export {
   evmGasPrice,
   evmTxInfo,
   type EvmTxNumberish,
+  extractCctpMessageFromReceipt,
   fetchAllStakekitBalances,
   fetchStakekitBalancesBatch,
   findSwapQuote,
   findSwapQuotes,
+  formatCheckoutUsdcDisplay,
   formatDot,
   formatUsdc,
   formatUtxoBalance,
@@ -1104,6 +1188,7 @@ export {
   isNullAddress,
   isPendleChain,
   isSelfSend,
+  isUsdcPaymentChain,
   isValidTxHash,
   isZeroAmount,
   JUPITER_AFFILIATE_FEE_ATAS,
@@ -1113,14 +1198,17 @@ export {
   JUPITER_PLATFORM_FEE_BPS,
   knownTokens,
   knownTokensIndex,
+  lookupUsdcPaymentChain,
   MAX_UINT256,
   MAYACHAIN_NODE_URL,
   NATIVE_COINGECKO_IDS,
   NATIVE_SWAP_MIN_OUTBOUND_FEE_MULTIPLIER,
   normaliseIbcChainId,
   normalizeHexBytes,
+  normalizeStakekitNetwork,
   parseActionDisplay,
   parseAmountBig,
+  parseThreeJaneUsdcAmount,
   parseUsdcAmount,
   pendle,
   PENDLE_ROUTER_V4,
@@ -1154,6 +1242,8 @@ export {
   resolveJupiterFeeAccount,
   resolveLuncFloorUsd,
   resolveSourceChannelByDestChain,
+  resolveUsdcPaymentChainId,
+  resolveUsdcPaymentContract,
   ResultKind,
   runSkipSwap,
   sanitizeAmount,
@@ -1165,6 +1255,7 @@ export {
   SOL_NATIVE_MINT,
   stakekit,
   STAKEKIT_BALANCE_QUERIES_PER_REQUEST,
+  STAKEKIT_NETWORK_ALIASES,
   stakekitBalances,
   stakekitBuildEnter,
   stakekitBuildExit,
@@ -1180,10 +1271,16 @@ export {
   TERRA_CHAIN_ID,
   TERRA_LCD,
   THORCHAIN_NODE_URL,
+  THREE_JANE_ADDRESSES,
   token,
   TRC20_TRANSFER_SELECTOR,
+  USDC_CONTRACTS,
+  USDC_PAYMENT_CHAIN_CONFIG,
+  USDC_PAYMENT_CHAINS,
+  USDC_PAYMENT_DECIMALS,
   utxoFeeRate,
   VerifierClient,
+  yieldNetworkToCanonicalChain,
 } from './tools'
 
 // The protobuf builder is environment-neutral despite its historical RN path.
@@ -1254,7 +1351,17 @@ export type {
 } from './types/notifications'
 
 // ============================================================================
-// PUBLIC API - ABI Constants
+// PUBLIC API - ABI Constants and Helpers
 // ============================================================================
 
-export { ERC20_ABI, ERC1155_ABI } from './abi'
+export {
+  encodeTrc20TransferParam,
+  ERC20_ABI,
+  ERC1155_ABI,
+  tronBase58ToEvmHex,
+  tronBase58ToHex,
+  tronHexToBase58,
+} from './abi'
+
+// Grouped helper families retain the canonical tools implementations.
+export { balance, prep, swap } from './tools'

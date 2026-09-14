@@ -1,5 +1,6 @@
 import { WalletCore } from '@trustwallet/wallet-core'
 import { Chain } from '@vultisig/core-chain/Chain'
+import { TonWalletVersion } from '@vultisig/core-chain/chains/ton/wallet'
 import { deriveAddress } from '@vultisig/core-chain/publicKey/address/deriveAddress'
 import { deriveQbtcAddress } from '@vultisig/core-chain/publicKey/address/deriveQbtcAddress'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
@@ -13,6 +14,8 @@ type GetChainAddressInput = {
   publicKeys: PublicKeys
   publicKeyMldsa?: string
   chainPublicKeys?: Partial<Record<Chain, string>>
+  /** TON only: wallet contract to derive for. Defaults to V4R2. */
+  tonWalletVersion?: TonWalletVersion
 }
 
 /** Derives the on-chain address for any chain, including MLDSA-based chains like QBTC. */
@@ -23,6 +26,7 @@ export const getChainAddress = ({
   publicKeys,
   publicKeyMldsa,
   chainPublicKeys,
+  tonWalletVersion,
 }: GetChainAddressInput): string => {
   if (chain === Chain.QBTC) {
     return deriveQbtcAddress(shouldBePresent(publicKeyMldsa, 'MLDSA public key'))
@@ -36,5 +40,5 @@ export const getChainAddress = ({
     chainPublicKeys,
   })
 
-  return deriveAddress({ chain, publicKey, walletCore })
+  return deriveAddress({ chain, publicKey, walletCore, tonWalletVersion })
 }

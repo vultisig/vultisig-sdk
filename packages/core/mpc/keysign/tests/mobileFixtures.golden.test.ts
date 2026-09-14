@@ -80,8 +80,8 @@ describe('mobile keysign pre-image hash golden fixtures', () => {
   })
 
   it(`loads the recovered Android/iOS fixture corpus (${cases.length} cases)`, () => {
-    expect(cases.length).toBe(93)
-    expect(new Set(cases.map(({ fixtureFile }) => fixtureFile)).size).toBe(31)
+    expect(cases.length).toBe(90)
+    expect(new Set(cases.map(({ fixtureFile }) => fixtureFile)).size).toBe(30)
   })
 
   it('uses the branch ID committed with the Zcash mobile vector', () => {

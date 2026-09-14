@@ -2,7 +2,7 @@
  * Transaction Status Command - Check if a transaction has confirmed
  *
  * By default, polls every 5 seconds until the transaction reaches a final state
- * (success or error) OR the total wait budget (`--timeout`, default 120s) is
+ * (success, error, or expired) OR the total wait budget (`--timeout`, default 120s) is
  * spent. Use --no-wait to return the current status immediately.
  *
  * The `--tx-hash` value is validated for its chain-kind BEFORE any RPC call, so a
@@ -48,12 +48,14 @@ export function resolveTxStatusParams(params: TxStatusParams): TxStatusParams {
 export const POLL_INTERVAL_MS = 5_000
 const DEFAULT_TIMEOUT_SEC = 120
 
-// Statuses that end the poll. Only the two on-chain outcomes are terminal.
+// Statuses that end the poll. The two on-chain outcomes and authoritative
+// transaction expiry are terminal.
 // `not_found` is deliberately NOT terminal for polling: a freshly-broadcast tx
 // can briefly read `not_found` before the mempool propagates, so we keep polling
 // (bounded by `--timeout`) and surface `TxNotFoundError` only once the budget is
 // spent. Use `--no-wait` for an immediate single-shot read of the current status.
-const isTerminal = (status: TxStatusResult['status']): boolean => status === 'success' || status === 'error'
+const isTerminal = (status: TxStatusResult['status']): boolean =>
+  status === 'success' || status === 'error' || status === 'expired'
 
 // Coerce the wait budget to a safe, finite millisecond value. A non-finite
 // `timeoutSec` (NaN/Infinity) or `undefined` falls back to the default; a
@@ -114,7 +116,7 @@ export async function executeTxStatus(
 
     if (result.status === 'success') {
       recordResolution(params.txHash, 'confirmed')
-    } else if (result.status === 'error') {
+    } else if (result.status === 'error' || result.status === 'expired') {
       recordResolution(params.txHash, 'failed')
     }
 
@@ -182,7 +184,7 @@ function displayResult(chain: Chain, txHash: string, result: TxStatusResult): vo
   }
 }
 
-type CliTxStatus = 'pending' | 'not_found' | 'confirmed' | 'failed'
+type CliTxStatus = 'pending' | 'not_found' | 'expired' | 'confirmed' | 'failed'
 
 function toCliStatus(status: TxStatusResult['status']): CliTxStatus {
   if (status === 'success') return 'confirmed'

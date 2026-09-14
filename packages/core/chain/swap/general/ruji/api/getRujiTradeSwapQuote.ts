@@ -201,6 +201,7 @@ export const getRujiTradeSwapQuote = async ({
   return {
     dstAmount: expectedOutput,
     provider: 'ruji',
+    affiliate: { affiliateBps: 0, request: 'omitted', allocations: [] },
     expiresAt: Date.now() + rujiTradeQuoteTtlMs,
     tx: {
       cosmosWasm: {

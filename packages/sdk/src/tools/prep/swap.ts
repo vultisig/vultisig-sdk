@@ -13,7 +13,10 @@ import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
 
 import { getWalletCore } from '../../context/wasmRuntime'
 import { decodeEvmGeneralSwapCommitment } from './decodeEvmGeneralSwapCommitment'
+import { SwapQuoteExpiredError } from './SwapQuoteExpiredError'
 import type { VaultIdentity } from './types'
+
+export { SwapQuoteExpiredError } from './SwapQuoteExpiredError'
 
 export type PrepareSwapTxFromKeysParams = {
   fromCoin: AccountCoin
@@ -21,16 +24,6 @@ export type PrepareSwapTxFromKeysParams = {
   amount: string | number
   /** Live bound quote returned by `findSwapQuote`; do not JSON round-trip it. */
   swapQuote: BoundSwapQuote
-}
-
-/** Catchable signal that the caller should fetch a fresh quote and retry. */
-export class SwapQuoteExpiredError extends Error {
-  readonly code = 'SWAP_QUOTE_EXPIRED'
-
-  constructor(message: string) {
-    super(message)
-    this.name = 'SwapQuoteExpiredError'
-  }
 }
 
 // Snapshot all amount/coin/quote inputs synchronously. Validation and payload construction must
@@ -124,9 +117,10 @@ const assertAmountMatchesCommittedSellAmount = (params: PrepareSwapTxFromKeysPar
 
   const requested = toChainAmount(params.amount, params.fromCoin.decimals)
   if (requested !== committed) {
-    const label = 'evm' in quote.general.tx
-      ? 'committed sell amount encoded in the EVM swap calldata'
-      : "route's committed source amount"
+    const label =
+      'evm' in quote.general.tx
+        ? 'committed sell amount encoded in the EVM swap calldata'
+        : "route's committed source amount"
     throw new Error(
       `prepareSwapTxFromKeys: requested amount (${requested} base units) does not match the ${label} (${committed} base units) — the quote may be stale or for a different request`
     )

@@ -875,3 +875,158 @@ describe('BalanceService', () => {
     })
   })
 })
+
+// Balance cache keys name a chain and an asset, not an account. A TON vault can
+// switch between its V4R2 and W5 accounts (`setTonWalletVersion`) while a fetch
+// for the old account is still in flight; that result must not be cached after
+// the switch, or the new account would read the old one's balance.
+describe('BalanceService — a fetch for a previous TON account never lands after a switch', () => {
+  const v4r2Address = 'UQCf6aQfV3vc8KLtPI_lROY64hUeR1oyNfdbwXB-gwDaKZmi'
+  const w5Address = 'UQCvaZohosTA0ak9ZFMs-cvL1JrXqogqJH8sI2uO6k8clJpn'
+
+  const makeService = () => {
+    const cache = new CacheService(new MemoryStorage(), 'vault-1', {})
+    let currentAddress = v4r2Address
+    const emitBalanceUpdated = vi.fn()
+    const service = new BalanceService(
+      cache,
+      emitBalanceUpdated,
+      vi.fn(),
+      async () => currentAddress,
+      () => [],
+      () => ({}),
+      () => {},
+      async () => {},
+      vi.fn(),
+      vi.fn()
+    )
+    // What `VaultBase.setTonWalletVersion` does: the account changes and the
+    // service is told, which drops the balance scope.
+    const switchTo = (address: string) => {
+      currentAddress = address
+      return service.onAccountChanged()
+    }
+
+    return { service, cache, emitBalanceUpdated, switchTo }
+  }
+
+  it('drops the late result instead of caching it, so the new account fetches its own balance', async () => {
+    const { service, cache, switchTo } = makeService()
+    let resolveOldFetch: (value: bigint) => void = () => {}
+    vi.mocked(getCoinBalance).mockImplementationOnce(
+      () =>
+        new Promise<bigint>(resolve => {
+          resolveOldFetch = resolve
+        })
+    )
+
+    const oldRequest = service.getBalance(Chain.Ton)
+    await flushMicrotasks()
+    await switchTo(w5Address)
+
+    resolveOldFetch(100n)
+    const oldBalance = await oldRequest
+
+    // The caller that asked for the old account still gets its answer …
+    expect(oldBalance.amount).toBe('100')
+    // … but nothing was written for the account the vault is on now.
+    expect(cache.getScoped('ton:native', CacheScope.BALANCE)).toBeNull()
+
+    vi.mocked(getCoinBalance).mockResolvedValueOnce(5n)
+    const newBalance = await service.getBalance(Chain.Ton)
+
+    expect(newBalance.amount).toBe('5')
+    expect(vi.mocked(getCoinBalance)).toHaveBeenLastCalledWith(expect.objectContaining({ address: w5Address }))
+    expect(cache.getScoped<{ amount: string }>('ton:native', CacheScope.BALANCE)?.amount).toBe('5')
+  })
+
+  // The narrowest window: the balance has already arrived, and the switch lands
+  // in the same tick — after any check that awaited something could have
+  // resolved, before the write. The generation is compared synchronously right
+  // before writing, so this cannot get through.
+  it('drops a result that arrived just before the switch, in the same tick', async () => {
+    const { service, cache, switchTo } = makeService()
+    let resolveOldFetch: (value: bigint) => void = () => {}
+    vi.mocked(getCoinBalance).mockImplementationOnce(
+      () =>
+        new Promise<bigint>(resolve => {
+          resolveOldFetch = resolve
+        })
+    )
+
+    const oldRequest = service.getBalance(Chain.Ton)
+    await flushMicrotasks()
+
+    resolveOldFetch(100n)
+    const switching = switchTo(w5Address)
+    await oldRequest
+    await switching
+
+    expect(cache.getScoped('ton:native', CacheScope.BALANCE)).toBeNull()
+  })
+
+  // The write is awaited, so a switch can land inside it — after the check that
+  // guards the write, before the announcement. `balanceUpdated` names a chain and an
+  // asset but no account, so an event fired here credits the old account's balance to
+  // the new one, and whichever of the write and the switch's scope-clear lands last
+  // decides whether the cache keeps it too.
+  it('neither announces nor keeps a balance when the switch lands during the cache write', async () => {
+    const { service, cache, emitBalanceUpdated, switchTo } = makeService()
+    vi.mocked(getCoinBalance).mockResolvedValueOnce(100n)
+
+    const setScoped = cache.setScoped.bind(cache)
+    vi.spyOn(cache, 'setScoped').mockImplementationOnce(async (key, scope, value) => {
+      await switchTo(w5Address)
+      return setScoped(key, scope, value)
+    })
+
+    const balance = await service.getBalance(Chain.Ton)
+
+    // The caller that asked for the old account still gets its answer …
+    expect(balance.amount).toBe('100')
+    // … and neither the vault nor the cache hears about it.
+    expect(emitBalanceUpdated).not.toHaveBeenCalled()
+    expect(cache.getScoped('ton:native', CacheScope.BALANCE)).toBeNull()
+  })
+
+  it('announces a balance normally when no switch interrupts the write', async () => {
+    const { service, emitBalanceUpdated } = makeService()
+    vi.mocked(getCoinBalance).mockResolvedValueOnce(100n)
+
+    await service.getBalance(Chain.Ton)
+
+    expect(emitBalanceUpdated).toHaveBeenCalledWith(
+      expect.objectContaining({ chain: Chain.Ton, balance: expect.objectContaining({ amount: '100' }) })
+    )
+  })
+
+  it('applies the same rule to a batched EVM fetch', async () => {
+    const { service, cache, switchTo } = makeService()
+    let resolveBatch: (value: Record<string, bigint>) => void = () => {}
+    vi.mocked(getEvmChainBalances).mockImplementationOnce(
+      () =>
+        new Promise<Record<string, bigint>>(resolve => {
+          resolveBatch = resolve
+        })
+    )
+
+    const request = service.getBalances({ chains: Chain.Ethereum, includeTokens: true })
+    await flushMicrotasks()
+
+    resolveBatch({ [accountCoinKeyToString({ chain: Chain.Ethereum, address: v4r2Address })]: 1n })
+    const switching = switchTo(w5Address)
+    await request
+    await switching
+
+    expect(cache.getScoped('ethereum:native', CacheScope.BALANCE)).toBeNull()
+  })
+
+  it('still caches a fetch whose account did not change underneath it', async () => {
+    const { service, cache } = makeService()
+    vi.mocked(getCoinBalance).mockResolvedValueOnce(7n)
+
+    await service.getBalance(Chain.Ton)
+
+    expect(cache.getScoped<{ amount: string }>('ton:native', CacheScope.BALANCE)?.amount).toBe('7')
+  })
+})

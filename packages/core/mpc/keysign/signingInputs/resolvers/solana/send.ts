@@ -1,6 +1,7 @@
 import { solanaConfig } from '@vultisig/core-chain/chains/solana/solanaConfig'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { assertBoundedInt } from '@vultisig/lib-utils/bigint/assertBoundedInt'
+import { parseNonNegativeBigInt } from '@vultisig/lib-utils/bigint/parseNonNegativeBigInt'
 import { maxBigInt } from '@vultisig/lib-utils/math/maxBigInt'
 import { TW, WalletCore } from '@trustwallet/wallet-core'
 import Long from 'long'
@@ -38,7 +39,7 @@ export const getSolanaSendSigningInput = ({
     BigInt(solanaConfig.priorityFeePrice)
   )
 
-  const amount = BigInt(keysignPayload.toAmount)
+  const amount = assertBoundedInt(parseNonNegativeBigInt(keysignPayload.toAmount).toString(), 'uint64')
   const sender = coin.address
   const recipient = keysignPayload.toAddress
 
@@ -47,7 +48,7 @@ export const getSolanaSendSigningInput = ({
       return {
         transferTransaction: TW.Solana.Proto.Transfer.create({
           recipient,
-          value: Long.fromString(amount.toString()),
+          value: Long.fromString(amount, true),
           memo: keysignPayload.memo,
         }),
       }
@@ -60,7 +61,7 @@ export const getSolanaSendSigningInput = ({
     const tokenTransferSharedFields = {
       tokenMintAddress: coin.id,
       senderTokenAddress: fromTokenAssociatedAddress,
-      amount: Long.fromString(amount.toString()),
+      amount: Long.fromString(amount, true),
       decimals: coin.decimals,
       tokenProgramId,
       memo: keysignPayload.memo,

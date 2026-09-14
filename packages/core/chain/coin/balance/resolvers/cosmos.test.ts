@@ -141,8 +141,8 @@ describe('getCosmosCoinBalance', () => {
     } as never)
 
     await getCosmosCoinBalance({
-      chain: CosmosChain.Kujira,
-      address: 'kujira1abc',
+      chain: CosmosChain.Osmosis,
+      address: 'osmo1abc',
       id: 'factory/x/y',
     })
 

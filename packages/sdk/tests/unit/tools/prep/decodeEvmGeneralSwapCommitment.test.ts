@@ -1,4 +1,4 @@
-import { encodeFunctionData, parseAbi, zeroAddress } from 'viem'
+import { encodeAbiParameters, encodeFunctionData, parseAbi, parseAbiParameters, zeroAddress } from 'viem'
 import { describe, expect, it } from 'vitest'
 
 import { decodeEvmGeneralSwapCommitment } from '@/tools/prep/decodeEvmGeneralSwapCommitment'
@@ -141,4 +141,40 @@ describe('decodeEvmGeneralSwapCommitment', () => {
       deadlineSeconds: Number(PAST),
     })
   })
+})
+
+describe('Universal Router exact-out commitment', () => {
+  const abi = parseAbi([
+    'function execute(bytes commands, bytes[] inputs, uint256 deadline)',
+    'function execute(bytes commands, bytes[] inputs)',
+  ])
+
+  for (const command of ['0x09', '0x01'] as const) {
+    const input =
+      command === '0x09'
+        ? encodeAbiParameters(parseAbiParameters('address,uint256,uint256,address[],bool'), [
+            RECIPIENT,
+            1_000_000n,
+            2_000_000n,
+            [USDC, WETH],
+            true,
+          ])
+        : encodeAbiParameters(parseAbiParameters('address,uint256,uint256,bytes,bool'), [
+            RECIPIENT,
+            1_000_000n,
+            2_000_000n,
+            `${WETH}000bb8${USDC.slice(2)}`,
+            true,
+          ])
+
+    it(`preserves deadline without binding maximum input for ${command}`, () => {
+      const data = encodeFunctionData({ abi, functionName: 'execute', args: [command, [input], PAST] })
+      expect(decodeEvmGeneralSwapCommitment(data)).toEqual({ deadlineSeconds: Number(PAST) })
+    })
+
+    it(`does not bind maximum input without a deadline for ${command}`, () => {
+      const data = encodeFunctionData({ abi, functionName: 'execute', args: [command, [input]] })
+      expect(decodeEvmGeneralSwapCommitment(data)).toBeNull()
+    })
+  }
 })

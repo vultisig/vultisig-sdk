@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url'
 
 const scriptPath = fileURLToPath(import.meta.url)
 const defaultRepoRoot = path.resolve(path.dirname(scriptPath), '..')
+const supportedDependencyOperations = new Set(['add', 'install', 'remove', 'up'])
 
 const readJson = file => JSON.parse(readFileSync(file, 'utf8'))
 
@@ -504,9 +505,173 @@ const runBuild = repoRoot => {
   if (build.status !== 0) throw new Error(`Shared package build failed with exit ${build.status ?? 1}`)
 }
 
+const normalizeBinEntries = bin => {
+  if (typeof bin === 'string') return [bin]
+  if (!bin || typeof bin !== 'object' || Array.isArray(bin)) return []
+  return Object.values(bin)
+}
+
+export const workspaceBinBuilds = repoRoot =>
+  readWorkspaces(repoRoot)
+    .flatMap(workspace => {
+      const manifest = readJson(path.join(workspace.dir, 'package.json'))
+      const targets = [...new Set(normalizeBinEntries(manifest.bin))]
+      if (targets.length === 0) return []
+      if (!manifest.scripts?.build) {
+        throw new Error(`${workspace.name} declares bin targets but has no build script`)
+      }
+
+      return [{ ...workspace, targets }]
+    })
+    .sort((left, right) => left.name.localeCompare(right.name))
+
+const verifyGeneratedBinTargets = builds => {
+  for (const build of builds) {
+    for (const target of build.targets) {
+      if (typeof target !== 'string' || target.length === 0 || path.isAbsolute(target)) {
+        throw new Error(`${build.name} declares an unsafe bin target: ${String(target)}`)
+      }
+      const resolved = path.resolve(build.dir, target)
+      const relative = path.relative(build.dir, resolved)
+      if (relative.startsWith('..') || path.isAbsolute(relative)) {
+        throw new Error(`${build.name} declares a bin target outside its workspace: ${target}`)
+      }
+      if (!existsSync(resolved) || !lstatSync(resolved).isFile()) {
+        throw new Error(`${build.name} build did not create bin target ${target}`)
+      }
+    }
+  }
+}
+
+export const parseDependencyOperationArgs = args => {
+  const operationArgs = args[0] === '--' ? args.slice(1) : [...args]
+  if (operationArgs.length === 0) {
+    throw new Error('Pass a Yarn dependency operation after --')
+  }
+  if (!supportedDependencyOperations.has(operationArgs[0])) {
+    throw new Error(`Unsupported Yarn operation ${operationArgs[0]}; expected add, install, remove, or up`)
+  }
+  if (operationArgs.some(arg => arg === '--cwd' || arg.startsWith('--cwd=') || arg === '-C' || arg.startsWith('-C'))) {
+    throw new Error('The guarded dependency operation cannot target a different checkout')
+  }
+  return operationArgs
+}
+
+const commandResult = (runCommand, args, repoRoot) => {
+  let result
+  try {
+    result = runCommand('yarn', args, {
+      cwd: repoRoot,
+      env: process.env,
+      stdio: 'inherit',
+    })
+  } catch (error) {
+    return { status: 1, message: error.message }
+  }
+  if (result?.error) {
+    return { status: 1, message: result.error.message }
+  }
+  return { status: Number.isInteger(result?.status) ? result.status : 1 }
+}
+
+export const runGuardedDependencyOperation = ({
+  repoRoot = defaultRepoRoot,
+  operationArgs,
+  runCommand = spawnSync,
+  restoreOverrides = setupWorkspaceOverrides,
+  verifyResolution = verifyWorktreeResolution,
+} = {}) => {
+  assertLinkedWorktree(repoRoot)
+  const normalizedOperation = parseDependencyOperationArgs(operationArgs ?? [])
+  const initialResolution = verifyResolution(repoRoot)
+  const binBuilds = workspaceBinBuilds(repoRoot)
+  let primaryFailure = null
+
+  for (const build of binBuilds) {
+    const result = commandResult(runCommand, ['workspace', build.name, 'build'], repoRoot)
+    if (result.status !== 0) {
+      primaryFailure = {
+        stage: `build ${build.name}`,
+        status: result.status,
+        message: result.message ?? `${build.name} build failed with exit ${result.status}`,
+      }
+      break
+    }
+  }
+
+  if (!primaryFailure) {
+    try {
+      verifyGeneratedBinTargets(binBuilds)
+    } catch (error) {
+      primaryFailure = { stage: 'verify generated bin targets', status: 1, message: error.message }
+    }
+  }
+
+  if (!primaryFailure) {
+    const result = commandResult(runCommand, normalizedOperation, repoRoot)
+    if (result.status !== 0) {
+      primaryFailure = {
+        stage: `yarn ${normalizedOperation[0]}`,
+        status: result.status,
+        message: result.message ?? `Yarn dependency operation failed with exit ${result.status}`,
+      }
+    }
+  }
+
+  let restoration = null
+  const recoveryFailures = []
+  try {
+    restoration = restoreOverrides(repoRoot)
+  } catch (error) {
+    recoveryFailures.push(`workspace override restoration failed: ${error.message}`)
+  }
+
+  let finalResolution = null
+  try {
+    finalResolution = verifyResolution(repoRoot)
+  } catch (error) {
+    recoveryFailures.push(`worktree resolution check failed: ${error.message}`)
+  }
+
+  return {
+    status: primaryFailure?.status ?? (recoveryFailures.length > 0 ? 1 : 0),
+    operation: normalizedOperation,
+    binWorkspaces: binBuilds.map(({ name }) => name),
+    initialResolution,
+    restoration,
+    finalResolution,
+    primaryFailure,
+    recoveryFailures,
+  }
+}
+
+const runDependencyOperation = operationArgs => {
+  const receipt = runGuardedDependencyOperation({ operationArgs })
+
+  if (receipt.primaryFailure) {
+    console.error(`[vultisig-worktree-deps] ${receipt.primaryFailure.message}`)
+  }
+  for (const failure of receipt.recoveryFailures) {
+    console.error(`[vultisig-worktree-deps] ${failure}`)
+  }
+
+  if (receipt.finalResolution) {
+    console.log(
+      `[vultisig-worktree-deps] resolution=${receipt.finalResolution.mode}; ` +
+        `verified=${receipt.finalResolution.overrides}; ` +
+        `restored=${receipt.restoration ? 'yes' : 'no'}.`
+    )
+  }
+  process.exitCode = receipt.status
+}
+
 const main = () => {
   let options
   try {
+    if (process.argv[2] === '--deps') {
+      runDependencyOperation(process.argv.slice(3))
+      return
+    }
     options = parseArgs(process.argv.slice(2))
     if (options.check) {
       const receipt = verifyWorktreeResolution(defaultRepoRoot)
@@ -536,7 +701,9 @@ const main = () => {
     console.error(`[vultisig-worktree] ${error.message}`)
     console.error(
       'Usage: node scripts/setup-worktree.mjs [--from /path/to/main/clone] [--skip-build]\n' +
-        '       node scripts/setup-worktree.mjs --check'
+        '       node scripts/setup-worktree.mjs --check\n' +
+        '       node scripts/setup-worktree.mjs --deps -- install [--immutable]\n' +
+        '       node scripts/setup-worktree.mjs --deps -- up <package>@<version>'
     )
     process.exitCode = 1
   }

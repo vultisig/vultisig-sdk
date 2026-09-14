@@ -162,7 +162,7 @@ export type VaultEvents = {
     receipt?: TxReceiptInfo
   }
 
-  /** Emitted when a transaction has failed on-chain (status: 'error') */
+  /** Emitted when a transaction has failed or expired (status: 'error' | 'expired') */
   transactionFailed: {
     /** The chain the transaction failed on */
     chain: Chain

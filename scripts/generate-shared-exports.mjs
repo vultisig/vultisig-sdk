@@ -177,9 +177,11 @@ export function getSharedExportDiffMessage(packageJsonPath, distDir, options) {
 }
 
 export function applySharedExports(packageJsonPath, distDir) {
-  const pkg = readPackageJson(packageJsonPath)
+  const previous = readFileSync(packageJsonPath, 'utf8')
+  const pkg = JSON.parse(previous)
   pkg.exports = generateSharedExports(distDir, {
     packageRoot: path.dirname(packageJsonPath),
   })
-  writeFileSync(packageJsonPath, `${JSON.stringify(pkg, null, 2)}\n`)
+  const next = `${JSON.stringify(pkg, null, 2)}\n`
+  if (next !== previous) writeFileSync(packageJsonPath, next)
 }

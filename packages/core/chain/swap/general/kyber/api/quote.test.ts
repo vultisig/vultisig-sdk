@@ -48,6 +48,11 @@ describe('getKyberSwapQuote', () => {
     })
 
     const [routeUrl, routeOptions] = vi.mocked(queryUrl).mock.calls[0]
+    expect(quote.affiliate).toEqual({
+      affiliateBps: 50,
+      request: 'included',
+      allocations: [{ recipient: kyberSwapAffiliateConfig.referral, bps: 50, role: 'affiliate' }],
+    })
     expect(routeUrl).toContain('feeAmount=50')
     expect(routeUrl).toContain('chargeFeeBy=currency_out')
     expect(routeUrl).toContain('isInBps=true')

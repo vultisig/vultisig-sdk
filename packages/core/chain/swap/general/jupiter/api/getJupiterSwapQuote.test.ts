@@ -162,6 +162,7 @@ describe('getJupiterSwapQuote', () => {
 
   it('omits the platform fee entirely when affiliateBps is 0', async () => {
     const quote = await getJupiterSwapQuote({ from: solNative, to: solUsdc, amount: 1_000_000_000n, affiliateBps: 0 })
+    expect(quote.affiliate).toEqual({ affiliateBps: 0, request: 'omitted' })
 
     const quoteCall = calls.find(c => c.url.includes('/swap/v1/quote'))!
     expect(quoteCall.url).not.toContain('platformFeeBps')
@@ -211,6 +212,7 @@ describe('getJupiterSwapQuote', () => {
     const quoteCall = calls.find(c => c.url.includes('/swap/v1/quote'))!
     expect(quoteCall.url).toContain('platformFeeBps=50')
 
+    expect(quote.affiliate).toEqual({ affiliateBps: 50, request: 'included' })
     // ...but with a zero quoted fee no fee account is derived, prepended, or sent.
     expect(deriveJupiterFeeAccount).not.toHaveBeenCalled()
     expect(prependJupiterFeeAta).not.toHaveBeenCalled()
@@ -275,6 +277,7 @@ describe('getJupiterSwapQuote', () => {
     )
 
     const quote = await getJupiterSwapQuote({ from: solNative, to: solUsdc, amount: 1_000_000_000n, affiliateBps: 0 })
+    expect(quote.affiliate).toEqual({ affiliateBps: 0, request: 'omitted' })
     expect('solana' in quote.tx && quote.tx.solana.data).toBe('raw-base64-tx')
   })
 
@@ -299,6 +302,7 @@ describe('getJupiterSwapQuote', () => {
     )
 
     const quote = await getJupiterSwapQuote({ from: solNative, to: solUsdc, amount: 1_000_000_000n, affiliateBps: 0 })
+    expect(quote.affiliate).toEqual({ affiliateBps: 0, request: 'omitted' })
     expect('solana' in quote.tx && quote.tx.solana.data).toBe('raw-base64-tx')
   })
 

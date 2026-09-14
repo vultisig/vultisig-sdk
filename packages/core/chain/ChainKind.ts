@@ -27,7 +27,6 @@ const chainKindRecord = {
   [CosmosChain.Osmosis]: 'cosmos',
   [CosmosChain.MayaChain]: 'cosmos',
   [CosmosChain.Dydx]: 'cosmos',
-  [CosmosChain.Kujira]: 'cosmos',
   [CosmosChain.Terra]: 'cosmos',
   [CosmosChain.TerraClassic]: 'cosmos',
   [CosmosChain.Noble]: 'cosmos',

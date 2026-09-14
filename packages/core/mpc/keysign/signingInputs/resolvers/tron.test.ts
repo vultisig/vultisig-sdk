@@ -7,6 +7,7 @@ import { TronSpecificSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1
 import { CoinSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/coin_pb'
 import { KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { TronTransferContractPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/tron_contract_payload_pb'
+import { THORChainSwapPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/thorchain_swap_payload_pb'
 import Long from 'long'
 import { describe, expect, it } from 'vitest'
 
@@ -294,4 +295,43 @@ describe('getTronSigningInputs -- bounded int64 fee/gas fields (sdk#1200)', () =
     expect(input.transaction?.feeLimit?.toString()).toBe('50000000')
     expect(input.transaction?.triggerSmartContract?.callValue?.toString()).toBe('1000000')
   })
+})
+
+const buildTrc20Payload = (toAmount: string, swap: boolean) => {
+  const payload = buildPayload('amount memo', toAmount)
+  payload.coin!.isNativeToken = false
+  payload.coin!.contractAddress = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t'
+  if (swap) {
+    payload.swapPayload = {
+      case: 'thorchainSwapPayload',
+      value: create(THORChainSwapPayloadSchema, { fromCoin: payload.coin, vaultAddress: OWNER }),
+    }
+  }
+  return payload
+}
+
+describe.each([false, true])('Tron TRC20 amount validation (swap=%s)', swap => {
+  it.each(['', ' ', '\t\n', '0x10', '+1', '-1', '-0', '1.5', '1e3'])('rejects malformed amount %j', async toAmount => {
+    await expect(async () =>
+      getTronSigningInputs({ keysignPayload: buildTrc20Payload(toAmount, swap), walletCore })
+    ).rejects.toThrow(/decimal/)
+  })
+
+  it('preserves an amount above uint64 and its memo', async () => {
+    const [input] = await getTronSigningInputs({
+      keysignPayload: buildTrc20Payload('18446744073709551616', swap),
+      walletCore,
+    })
+    expect(Buffer.from(input.transaction!.transferTrc20Contract!.amount!).toString('hex')).toBe('010000000000000000')
+    expect(input.transaction!.memo).toBe('amount memo')
+  })
+})
+
+// Confirmed successful USDT transfer; amount word obtained from TronGrid gettransactionbyid.
+// https://tronscan.org/transaction/675b58c8e36c73f2e22e0791e991cb819f8c8d355e6b42f8227a34e86f4c313f/overview
+// Full calldata: a9059cbb0000000000000000000000419c826361267bc0a68f5237ba435ddb0a471afb6e000000000000000000000000000000000000000000000000000000000092a310
+it.each([false, true])('matches the on-chain USDT amount word (swap=%s)', async swap => {
+  const [input] = await getTronSigningInputs({ keysignPayload: buildTrc20Payload('9610000', swap), walletCore })
+  const amount = Buffer.from(input.transaction!.transferTrc20Contract!.amount!).toString('hex')
+  expect(amount.padStart(64, '0')).toBe('000000000000000000000000000000000000000000000000000000000092a310')
 })

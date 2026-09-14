@@ -1,5 +1,5 @@
 import { decodeUniversalRouterExecute } from '@vultisig/core-chain/chains/evm/contract/universalRouter/decode'
-import { decodeFunctionData, parseAbi, type Hex } from 'viem'
+import { decodeFunctionData, type Hex, parseAbi } from 'viem'
 
 /**
  * Sell amount + optional deadline extracted from known EVM-general aggregator
@@ -7,7 +7,7 @@ import { decodeFunctionData, parseAbi, type Hex } from 'viem'
  * safely — callers MUST fail open rather than invent an amount.
  */
 export type EvmGeneralSwapCommitment = {
-  sellAmount: bigint
+  sellAmount?: bigint
   deadlineSeconds?: number
 }
 
@@ -52,10 +52,7 @@ function parseValue(value: string | undefined): bigint | null {
  * ABI we do not fully enumerate. A wrong decode would either brick valid
  * swaps or give false confidence. Known exact-in shapes only.
  */
-export function decodeEvmGeneralSwapCommitment(
-  data: string,
-  value?: string
-): EvmGeneralSwapCommitment | null {
+export function decodeEvmGeneralSwapCommitment(data: string, value?: string): EvmGeneralSwapCommitment | null {
   const hex = asHex(data)
   if (!hex) {
     const native = parseValue(value)
@@ -94,7 +91,10 @@ export function decodeEvmGeneralSwapCommitment(
         const deadline = decoded.args[2]
         const intent = decodeUniversalRouterExecute(hex)
         if (!intent) return null
-        return { sellAmount: intent.amountIn, deadlineSeconds: Number(deadline) }
+        return {
+          ...(intent.isExactOut ? {} : { sellAmount: intent.amountIn }),
+          deadlineSeconds: Number(deadline),
+        }
       }
       case 'swap': {
         return { sellAmount: decoded.args[1].amount }
@@ -106,7 +106,7 @@ export function decodeEvmGeneralSwapCommitment(
     // Two-arg Universal Router `execute(bytes,bytes[])` has no deadline in the
     // outer ABI; the existing decoder still recovers amountIn.
     const intent = decodeUniversalRouterExecute(hex)
-    if (intent) return { sellAmount: intent.amountIn }
+    if (intent && !intent.isExactOut) return { sellAmount: intent.amountIn }
     return null
   }
 }
