@@ -852,9 +852,10 @@ export class AgentExecutor {
     // summary so no envelope shape can route approve bytes to a label-driven
     // line. Malformed approve calldata fails closed like transfers.
     const swapContext = !!(labels.quote_summary || labels.to_token_symbol || labels.pending_swap_summary)
-    // The bridge's `action` is producer text. It now rides next to a
-    // calldata-derived approve line, so it must not be able to contradict it
-    // ("approve UNLIMITED … [limited to 5 USDC]"): accept only a short slug.
+    // The bridge's `action` is producer text. It never rides on a
+    // calldata-derived approve line (that line already says what the bytes do,
+    // and "[limited_to_5_usdc]" next to "approve UNLIMITED" would contradict
+    // it); on the remaining contract-call lines accept only a short slug.
     const actionTag =
       p?.__buildTx && typeof p?.action === 'string' && /^[a-z0-9_-]{1,32}$/i.test(p.action) ? ` [${p.action}]` : ''
     if (!p?.__multiLeg) {
@@ -874,7 +875,7 @@ export class AgentExecutor {
         // A swap-shaped envelope whose signable is an approve is the reset
         // turn: say explicitly that no swap is part of this signature.
         if (swapContext) parts.push('— approval only; no swap is signed in this transaction')
-        return `${parts.join(' ')}${actionTag}`
+        return parts.join(' ')
       }
     }
 

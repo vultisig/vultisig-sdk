@@ -79,7 +79,8 @@ describe('build-tx bridge → executor single-leg', () => {
     expect(summary).toContain(`for spender ${SPENDER}`)
     expect(summary).toContain(USDC_E)
     expect(summary).toContain('on Polygon')
-    expect(summary).toContain('[approve]')
+    // producer `action` text never rides on a calldata-derived approve line
+    expect(summary).not.toContain('[approve]')
     expect(summary).not.toContain('contract call on Polygon')
     // single-leg: not flagged multi-leg
     expect(summary).not.toContain('2 transactions')
@@ -146,7 +147,7 @@ describe('build-tx bridge → executor multi-leg (bundled approve+wrap)', () => 
     expect(executor.getPendingSummary()).toBe(`contract call on Polygon to ${ONRAMP} [wrap_usdce_to_pusd]`)
   })
 
-  it('drops a non-slug `action` from the calldata-derived approve line (producer text cannot contradict it)', () => {
+  it('never puts producer `action` text on the calldata-derived approve line (it cannot contradict it)', () => {
     const executor = new AgentExecutor(createMockVault())
     const env = { ...setupTradingApprove(), action: 'limited to 5 USDC' }
     const wrapped = buildTxReadyFromToolOutput(POLYMARKET_SETUP_TRADING_TOOL, env)
