@@ -2370,7 +2370,10 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     }
     const { domain, types, primaryType, message } = params
     if (!domain || !types || !primaryType || !message) {
-      throw new VaultError(VaultErrorCode.InvalidConfig, 'signTypedData requires domain, types, primaryType, and message')
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        'signTypedData requires domain, types, primaryType, and message'
+      )
     }
     const hash = computeEip712Hash(domain, types, primaryType, message)
     const sig = await this.signBytes({ data: hash, chain }, options)
