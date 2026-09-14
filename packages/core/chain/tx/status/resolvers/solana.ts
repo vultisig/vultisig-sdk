@@ -1,5 +1,6 @@
 import { Chain, OtherChain } from '@vultisig/core-chain/Chain'
 import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
+import { withSolanaRpcTimeout } from '@vultisig/core-chain/chains/solana/rpcTimeout'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { attempt } from '@vultisig/lib-utils/attempt'
 
@@ -7,9 +8,16 @@ import { TxStatusResolver } from '../resolver'
 
 type SolanaClient = ReturnType<typeof getSolanaClient>
 
+// Every RPC call here is bounded: a stalled request reads as unavailable
+// information and the transaction stays pending, the same way a failed one
+// does. Without that, one half-open socket could hold a status poll open for
+// good, and with it the confirmation wait of whatever is polling.
 const readSignatureStatus = (client: SolanaClient, hash: string) =>
   attempt(async () => {
-    const { value } = await client.getSignatureStatuses([hash], { searchTransactionHistory: true })
+    const { value } = await withSolanaRpcTimeout(
+      client.getSignatureStatuses([hash], { searchTransactionHistory: true }),
+      'getSignatureStatuses'
+    )
     return value[0]
   })
 
@@ -23,7 +31,9 @@ const isExpiredLastValidBlockHeight = async (
     return false
   }
 
-  const { data: currentBlockHeight, error } = await attempt(client.getBlockHeight())
+  const { data: currentBlockHeight, error } = await attempt(
+    withSolanaRpcTimeout(client.getBlockHeight(), 'getBlockHeight')
+  )
 
   return !error && typeof currentBlockHeight === 'number' && currentBlockHeight > height
 }
@@ -72,9 +82,7 @@ export const getSolanaTxStatus: TxStatusResolver<OtherChain.Solana> = async ({ h
   }
 
   const { data: tx, error } = await attempt(
-    client.getTransaction(hash, {
-      maxSupportedTransactionVersion: 0,
-    })
+    withSolanaRpcTimeout(client.getTransaction(hash, { maxSupportedTransactionVersion: 0 }), 'getTransaction')
   )
 
   if (error || !tx) {

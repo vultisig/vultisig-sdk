@@ -28,14 +28,10 @@ vi.mock('../verifyBroadcastByHash', () => ({
 }))
 
 import { Chain } from '../../../Chain'
+import { solanaRpcTimeoutMs } from '../../../chains/solana/rpcTimeout'
 import { BroadcastErrorCode } from '../resolver'
 import { SolanaBlockhashExpiredError } from '../solanaBlockhashExpired'
-import {
-  broadcastSolanaTx,
-  solanaBroadcastMaxDurationMs,
-  solanaRebroadcastIntervalMs,
-  solanaRpcTimeoutMs,
-} from './solana'
+import { broadcastSolanaTx, solanaBroadcastMaxDurationMs, solanaRebroadcastIntervalMs } from './solana'
 
 const signature = '2gB3ifNe2kSoJEYoVY7T4vw2z5ci9nL6WcQQuCC2ozCiURBwSfC9uGcCq9CS2pAzX7ed1xwyS4434BmSg2WhrZ7j'
 

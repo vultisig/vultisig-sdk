@@ -2,6 +2,7 @@ import { SendTransactionError } from '@solana/web3.js'
 import { OtherChain } from '@vultisig/core-chain/Chain'
 import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
 import { sendJitoTransaction } from '@vultisig/core-chain/chains/solana/jito'
+import { withSolanaRpcTimeout } from '@vultisig/core-chain/chains/solana/rpcTimeout'
 import { attempt } from '@vultisig/lib-utils/attempt'
 import { isInError } from '@vultisig/lib-utils/error/isInError'
 import base58 from 'bs58'
@@ -24,18 +25,13 @@ export const solanaRebroadcastIntervalMs = 2_000
 /**
  * Wall-clock cap on the resend loop, reached only when neither the payload nor
  * the RPC could supply a block-height deadline. A confirmed blockhash lives
- * about 150 blocks (60–90 s), so this outlasts any real deadline.
+ * about 150 blocks (60–90 s), so this outlasts any real deadline. Checked
+ * between iterations, so the loop can overrun it by at most one iteration's
+ * RPC round trips (each bounded by `solanaRpcTimeoutMs`); a fallback, not an
+ * SLA, and shrinking a send's timeout as the cap nears would only fail sends
+ * that could still have succeeded.
  */
 export const solanaBroadcastMaxDurationMs = 120_000
-
-/**
- * Cap on any single RPC round trip the loop makes. The shared Solana client
- * sets no request timeout, and a half-open socket can leave `fetch` pending
- * for far longer than the whole broadcast budget; the deadline and wall-clock
- * checks only run between awaits, so without this an unanswered request could
- * hold the resolver open indefinitely. Matches the repo's default query timeout.
- */
-export const solanaRpcTimeoutMs = 20_000
 
 const isTransientBlockhashError = (error: unknown) => isInError(error, 'Blockhash not found', 'BlockhashNotFound')
 
@@ -46,26 +42,6 @@ const isBlockHeightExceededError = (error: unknown) => isInError(error, 'block h
 const isAlreadyProcessedError = (error: unknown) => isInError(error, 'already been processed', 'AlreadyProcessed')
 
 const wait = (durationMs: number) => new Promise(resolve => setTimeout(resolve, durationMs))
-
-/**
- * Stops waiting on an RPC call after `solanaRpcTimeoutMs`. The underlying
- * request is not aborted (web3.js exposes no signal on these methods); the
- * loop simply treats it as unanswered, which every caller here already handles
- * as "no information". A late settlement is swallowed so it cannot surface as
- * an unhandled rejection.
- */
-const withRpcTimeout = <T>(request: Promise<T>, what: string): Promise<T> => {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(
-      () => reject(new Error(`Solana ${what} timed out after ${solanaRpcTimeoutMs}ms`)),
-      solanaRpcTimeoutMs
-    )
-  })
-  request.catch(() => {})
-
-  return Promise.race([request, timeout]).finally(() => clearTimeout(timer))
-}
 
 /**
  * Hoists the on-chain rejection reason into a Solana send error's message.
@@ -106,7 +82,7 @@ const getSignatureSighting = async (
   searchTransactionHistory = false
 ): Promise<SignatureSighting | undefined> => {
   const { data } = await attempt(() =>
-    withRpcTimeout(client.getSignatureStatuses([signature], { searchTransactionHistory }), 'getSignatureStatuses')
+    withSolanaRpcTimeout(client.getSignatureStatuses([signature], { searchTransactionHistory }), 'getSignatureStatuses')
   )
   if (!data) return undefined
 
@@ -131,7 +107,9 @@ const isBlockHeight = (value: number | undefined): value is number =>
 const resolveDeadline = async (client: SolanaClient, lastValidBlockHeight: number | undefined) => {
   if (isBlockHeight(lastValidBlockHeight)) return lastValidBlockHeight
 
-  const { data } = await attempt(() => withRpcTimeout(client.getLatestBlockhash('confirmed'), 'getLatestBlockhash'))
+  const { data } = await attempt(() =>
+    withSolanaRpcTimeout(client.getLatestBlockhash('confirmed'), 'getLatestBlockhash')
+  )
 
   return data?.lastValidBlockHeight
 }
@@ -140,7 +118,7 @@ const isPastDeadline = async (client: SolanaClient, deadline: number | undefined
   if (deadline === undefined) return false
 
   const { data: blockHeight } = await attempt(() =>
-    withRpcTimeout(client.getBlockHeight('confirmed'), 'getBlockHeight')
+    withSolanaRpcTimeout(client.getBlockHeight('confirmed'), 'getBlockHeight')
   )
 
   return typeof blockHeight === 'number' && blockHeight > deadline
@@ -223,7 +201,7 @@ export const broadcastSolanaTx: BroadcastTxResolver<OtherChain.Solana> = async (
 
   while (true) {
     const { data: acceptedSignature, error: sendError } = await attempt(() =>
-      withRpcTimeout(
+      withSolanaRpcTimeout(
         client.sendRawTransaction(rawTransaction, {
           // Preflight until the RPC has accepted the bytes once: it is how a
           // real rejection (insufficient lamports, a failing program) surfaces.
