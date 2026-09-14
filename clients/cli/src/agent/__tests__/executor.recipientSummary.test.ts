@@ -105,7 +105,8 @@ describe('AgentExecutor ERC-20 consent summary', () => {
         chain: 'Base',
         to: RECIPIENT_A,
         amount: '0',
-        tx: { to: TOKEN_CONTRACT, value: '0', data: `0x095ea7b3${'0'.repeat(120)}` },
+        // opaque (non-transfer, non-approve) selector: approves now render from calldata (T12)
+        tx: { to: TOKEN_CONTRACT, value: '0', data: `0xdeadbeef${'0'.repeat(128)}` },
       },
       resolved: { labels: { resolved_amount: '0 USDC', recipient_echo: RECIPIENT_A } },
     })

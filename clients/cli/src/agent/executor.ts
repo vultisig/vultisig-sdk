@@ -79,6 +79,30 @@ function decodeErc20Transfer(calldata: string): { recipient: Address; amount: bi
   }
 }
 
+const ERC20_APPROVE_SELECTOR = '0x095ea7b3'
+const ERC20_APPROVE_ABI = parseAbi(['function approve(address spender, uint256 value)'])
+
+/**
+ * Decode the spender and allowance that an ERC-20 approve will actually grant.
+ * Returns null when the calldata is not an approve; throws on a malformed
+ * approve (selector matches, arguments do not decode) so a garbled approval
+ * can never be summarised — or signed — as anything.
+ */
+export function decodeErc20Approve(calldata: string): { spender: Address; amount: bigint } | null {
+  if (calldata.slice(0, ERC20_APPROVE_SELECTOR.length).toLowerCase() !== ERC20_APPROVE_SELECTOR) return null
+
+  try {
+    const decoded = decodeFunctionData({
+      abi: ERC20_APPROVE_ABI,
+      data: calldata as Hex,
+    })
+    const [spender, amount] = decoded.args as readonly [Address, bigint]
+    return { spender, amount }
+  } catch {
+    throw new Error('Invalid ERC-20 approve calldata — refusing to sign')
+  }
+}
+
 type ResolvedTokenIdentity = {
   rawSymbol: string
   displaySymbol: string
@@ -832,6 +856,63 @@ export class AgentExecutor {
       return `contract call on ${stored.chain} to ${to}${valuePart}${action}`
     }
 
+    // WYSIWYS for ERC-20 approvals (consent integrity, dogfood T12). The
+    // producer's `quote_summary` describes the SWAP the user asked for, but the
+    // bytes being signed may be an `approve(spender, amount)`:
+    //   - a USDT-style allowance-reset turn ships `approve(spender, 0)` ALONE
+    //     as txArgs (no swap leg at all) while the swap labels ride along;
+    //   - a clean-allowance turn ships a 2-leg envelope whose approve leg was
+    //     previously disclosed only as an anonymous "(+ token approval)".
+    // Either way the consent line — the exact text `--yes` authorizes — must
+    // describe the approve from ITS calldata (spender + amount), never from
+    // the quote. Malformed approve calldata fails closed like transfers do.
+    const swapContext = !!(labels.quote_summary || labels.to_token_symbol || labels.pending_swap_summary)
+    if (!p?.__multiLeg) {
+      const signedTx = extractNestedTx(p)
+      const signedCalldata = typeof signedTx?.data === 'string' ? (signedTx.data as string) : ''
+      let approve: { spender: Address; amount: bigint } | null = null
+      try {
+        approve = decodeErc20Approve(signedCalldata)
+      } catch (error) {
+        this.clearPendingTransaction()
+        throw error
+      }
+      if (approve) {
+        const contractTo = typeof signedTx?.to === 'string' ? (signedTx.to as string) : '?'
+        const parts = [this.renderErc20ApproveSummary(approve, contractTo, stored.chain, true)]
+        // A swap-shaped envelope whose signable is an approve is the reset
+        // turn: say explicitly that no swap is part of this signature.
+        if (swapContext) parts.push('— approval only; no swap is signed in this transaction')
+        if (tokenLabel(labels.estimated_fee)) parts.push(`est. fee ${tokenLabel(labels.estimated_fee)}`)
+        return parts.join(' ')
+      }
+    }
+
+    // Multi-leg: the approve leg signs `approvalTxArgs.tx` (signMultiLeg
+    // re-parents it as txArgs and nils the sibling tx fields), so decode THAT
+    // calldata for the consent line. A multi-leg approval leg that is not an
+    // ERC-20 approve is a malformed envelope — refuse it rather than sign an
+    // unknown contract call under an "approval" label.
+    let approveLegLine = ''
+    if (p?.__multiLeg) {
+      const approvalArgs = p?.approvalTxArgs
+      const approvalTx = approvalArgs && typeof approvalArgs === 'object' ? approvalArgs.tx : undefined
+      const approvalCalldata = typeof approvalTx?.data === 'string' ? (approvalTx.data as string) : ''
+      let approve: { spender: Address; amount: bigint } | null = null
+      try {
+        approve = decodeErc20Approve(approvalCalldata)
+      } catch (error) {
+        this.clearPendingTransaction()
+        throw error
+      }
+      if (!approve) {
+        this.clearPendingTransaction()
+        throw new Error('Multi-leg approval leg is not an ERC-20 approve — refusing to sign')
+      }
+      const approvalTo = typeof approvalTx?.to === 'string' ? (approvalTx.to as string) : '?'
+      approveLegLine = this.renderErc20ApproveSummary(approve, approvalTo, stored.chain, false)
+    }
+
     const isSwap = !!(p?.approvalTxArgs || p?.swap_tx || labels.quote_summary || labels.to_token_symbol)
     if (isSwap) {
       // quote_summary already embeds the provider ("… via kyber"); only append
@@ -850,7 +931,7 @@ export class AgentExecutor {
       )
       const parts = [head, `on ${stored.chain}`]
       if (!usedQuoteSummary && tokenLabel(labels.provider)) parts.push(`via ${tokenLabel(labels.provider)}`)
-      if (p?.__multiLeg) parts.push('(+ token approval — 2 transactions)')
+      if (p?.__multiLeg) parts.push(`(+ first ${approveLegLine} — 2 transactions)`)
       if (tokenLabel(labels.estimated_fee)) parts.push(`est. fee ${tokenLabel(labels.estimated_fee)}`)
       return parts.join(' ')
     }
@@ -955,6 +1036,34 @@ export class AgentExecutor {
       return `send ${formatUnits(amount, known.decimals)} ${known.ticker} on ${chain} to ${to}${contractPart}`
     }
     return `send ${amount} base units of token ${contractTo} (decimals unverified) on ${chain} to ${to}`
+  }
+
+  /**
+   * Render the consent text for an ERC-20 approve from the SIGNED calldata
+   * (spender + allowance), never a producer label. Known tokens use trusted
+   * decimals/ticker from knownTokensIndex; unknown tokens fall back to raw base
+   * units with an explicit unverified marker. `approve(spender, 0)` is rendered
+   * as an allowance reset so a USDT-style reset turn reads as what it is.
+   */
+  private renderErc20ApproveSummary(
+    approve: { spender: Address; amount: bigint },
+    contractTo: string,
+    chain: Chain,
+    withChain: boolean
+  ): string {
+    const location = withChain ? ` on ${chain}` : ''
+    const known = knownTokensIndex[chain]?.[contractTo.toLowerCase()]
+    if (known) {
+      const contractPart = ` (token contract ${contractTo})`
+      if (approve.amount === 0n) {
+        return `reset ${known.ticker} allowance to 0${location} for spender ${approve.spender}${contractPart}`
+      }
+      return `approve ${formatUnits(approve.amount, known.decimals)} ${known.ticker}${location} for spender ${approve.spender}${contractPart}`
+    }
+    if (approve.amount === 0n) {
+      return `reset allowance of token ${contractTo} to 0${location} for spender ${approve.spender}`
+    }
+    return `approve ${approve.amount} base units of token ${contractTo} (decimals unverified)${location} for spender ${approve.spender}`
   }
 
   /**
