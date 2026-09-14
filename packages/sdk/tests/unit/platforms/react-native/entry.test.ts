@@ -1,6 +1,7 @@
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
 import * as blockaidChains from '@vultisig/core-chain/security/blockaid/evmChains'
+import { isValidTxHash } from '@vultisig/core-chain/tx/isValidTxHash'
 import { AuthInfo, SignDoc, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import { beforeAll, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
@@ -83,6 +84,18 @@ beforeAll(async () => {
 }, 120_000)
 
 describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
+  it('re-exports canonical transaction-hash validation with unchanged chain rules', () => {
+    expect(reactNativeEntry.isValidTxHash).toBe(isValidTxHash)
+    expectTypeOf(reactNativeEntry.isValidTxHash).toEqualTypeOf<(chain: sdkRn.Chain, hash: string) => boolean>()
+
+    const hash = 'a'.repeat(64)
+    expect(reactNativeEntry.isValidTxHash(sdkRn.Chain.Ethereum, `0x${hash}`)).toBe(true)
+    expect(reactNativeEntry.isValidTxHash(sdkRn.Chain.Ethereum, hash)).toBe(false)
+    expect(reactNativeEntry.isValidTxHash(sdkRn.Chain.Bitcoin, hash)).toBe(true)
+    expect(reactNativeEntry.isValidTxHash(sdkRn.Chain.Bitcoin, 'not-a-hash')).toBe(false)
+    expect(reactNativeEntry.isValidTxHash(sdkRn.Chain.Ethereum, ` \t0x${hash}\n`)).toBe(true)
+  })
+
   it('re-exports Blockaid EVM chain canonicals by identity', () => {
     expect(reactNativeEntry.blockaidEvmChain).toBe(blockaidChains.blockaidEvmChain)
     expect(reactNativeEntry.blockaidSupportedEvmChains).toBe(blockaidChains.blockaidSupportedEvmChains)
@@ -219,6 +232,38 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(storage).toBeDefined()
     expect(typeof storage.get).toBe('function')
     expect(rn.DEFAULT_CHAINS).toBe(rn.defaultChains)
+  })
+
+  it('exposes stable platform-safe helper namespaces on Vultisig instances', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const sdk = new rn.Vultisig({ autoInit: false })
+
+    expect(sdk.initialized).toBe(false)
+    expect(sdk.balance).toBe(sdk.balance)
+    expect(sdk.bridge).toBe(sdk.bridge)
+    expect(sdk.cosmos).toBe(sdk.cosmos)
+    expect(sdk.decode).toBe(sdk.decode)
+    expect(sdk.gas).toBe(sdk.gas)
+    expect(sdk.prep).toBe(sdk.prep)
+    expect(sdk.price).toBe(sdk.price)
+    expect(sdk.swap).toBe(sdk.swap)
+
+    const [canonicalBalance, canonicalPrep] = await Promise.all([
+      import('../../../../src/tools/balance'),
+      import('../../../../src/tools/prep'),
+    ])
+    expect(Object.keys(sdk.balance).sort()).toEqual(Object.keys(canonicalBalance).sort())
+    expect(Object.keys(sdk.prep).sort()).toEqual(Object.keys(canonicalPrep).sort())
+
+    expect(sdk.balance.getEvmBalances).toBe(rn.getEvmBalances)
+    expect(sdk.bridge.buildCctpBridge).toBe(rn.buildCctpBridge)
+    expect(sdk.cosmos.gov.getCosmosGovernanceProposals).toBe(rn.getCosmosGovernanceProposals)
+    expect(sdk.decode.fromToolResult).toBe(rn.decodeFromToolResult)
+    expect(sdk.gas.compareCosts).toBe(rn.compareCosts)
+    expect(typeof sdk.prep.prepareSendTxFromKeys).toBe('function')
+    expect(sdk.prep.cosmosStaking).toBe(rn.cosmosStaking)
+    expect(sdk.price.getPrice).toBe(rn.getPrice)
+    expect(sdk.swap.findSwapQuote).toBe(rn.findSwapQuote)
   })
 
   it('exports the ThreeJane USDC helper values (not just their types) on the RN entrypoint', async () => {
