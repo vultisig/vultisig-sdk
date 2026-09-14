@@ -48,6 +48,7 @@ import { NativeWalletCore } from '@vultisig/walletcore-native'
 import { configureDefaultStorage } from '../../context/defaultStorage'
 import { configureWasm } from '../../context/wasmRuntime'
 import { configureCrypto } from '../../crypto'
+import { configureVultisigInstanceNamespaces } from '../../instanceNamespaces'
 import { assertBittensorAddress, decodeBittensorAddress } from '../../tools/balance/bittensor'
 import { cosmosBalanceChains, getCosmosBalance, isCosmosBalanceChain } from '../../tools/balance/cosmos'
 import { DOT_DECIMALS, formatDot } from '../../tools/balance/formatDot'
@@ -69,6 +70,7 @@ import { getTaoBalance } from '../../tools/balance/taoBalance'
 import { formatUtxoBalance, getUtxoBalance, supportedUtxoBalanceChains } from '../../tools/balance/utxoBalance'
 import * as cosmos from '../../tools/cosmos'
 import * as evm from '../../tools/evm'
+import { getEvmBalances } from '../../tools/evm/balanceEvm'
 import {
   buildDelegateMsg,
   buildRedelegateMsg,
@@ -96,7 +98,9 @@ import { TRC20_TRANSFER_SELECTOR } from '../../tools/prep/trc20'
 import { CONSOLIDATE_CHAINS } from '../../tools/prep/utxoConsolidate'
 import * as swap from '../../tools/swap'
 import * as token from '../../tools/token'
+import { Vultisig as BaseVultisig } from '../../Vultisig'
 import { ReactNativeCrypto } from './crypto'
+import { type ReactNativeVultisigInstanceNamespaces, reactNativeVultisigInstanceNamespaces } from './instanceNamespaces'
 import { ReactNativeStorage } from './storage'
 
 // Register native MPC engine
@@ -361,7 +365,9 @@ export { resolveTokenRef, resolveTokenRefId } from '../../vault/tokenRef'
 export type { VaultImportConflictResolution, VaultImportOptions } from '../../VaultManager'
 export { VaultManager } from '../../VaultManager'
 export type { VultisigConfig } from '../../Vultisig'
-export { Vultisig } from '../../Vultisig'
+export class Vultisig extends BaseVultisig<ReactNativeVultisigInstanceNamespaces> {}
+
+configureVultisigInstanceNamespaces(Vultisig, reactNativeVultisigInstanceNamespaces)
 
 // RN-safe fetch-based RPC helpers (no Node net/tls/http/ws dependency)
 export type { JsonRpcCallOptions, JsonRpcParams, JsonRpcResponse, QueryUrlOptions } from './rpcFetch'
@@ -1009,6 +1015,7 @@ export type {
   EnvelopeKind,
 } from '../../tools/decode'
 export { decode, decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from '../../tools/decode'
+export { isValidTxHash } from '@vultisig/core-chain/tx/isValidTxHash'
 // Exact base-units -> human decimal-string conversion (pure bigint string
 // arithmetic, no float64 round-trip), pairing-QR payload generation, and the
 // notification-vault-id helper are all deterministic utilities with no live
@@ -1193,6 +1200,7 @@ async function prepareThorchainMsgDepositTxFromKeys(
 
 // Assemble RN groups from safe static helpers and this entry’s deferred wrappers.
 export const balance = {
+  getEvmBalances,
   getXrpBalance,
   getTrc20TokenBalance,
   getTronAccountResources,

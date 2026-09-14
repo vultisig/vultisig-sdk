@@ -13,10 +13,9 @@ import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
 
 import { getWalletCore } from '../../context/wasmRuntime'
 import { SwapQuoteExpiredError } from './SwapQuoteExpiredError'
+import type { VaultIdentity } from './types'
 
 export { SwapQuoteExpiredError } from './SwapQuoteExpiredError'
-
-import type { VaultIdentity } from './types'
 
 export type PrepareSwapTxFromKeysParams = {
   fromCoin: AccountCoin
