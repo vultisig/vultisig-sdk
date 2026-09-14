@@ -56,6 +56,18 @@ const syncTargets = [
   },
 ]
 
+function recordBrowserBuildPhase(phase) {
+  const result = spawnSync(
+    process.execPath,
+    [path.join(repoRoot, 'examples/browser/scripts/ensure-local-sdk-build.mjs'), phase, 'shared'],
+    { cwd: repoRoot, stdio: 'inherit' }
+  )
+  if (result.error) throw result.error
+  if (result.status !== 0) process.exit(result.status ?? 1)
+}
+
+if (!checkOnly) recordBrowserBuildPhase('--begin')
+
 rmSync(emitTempRoot, { recursive: true, force: true })
 
 const tscArgs = ['exec', 'tsc', '--project', '.config/tsconfig.shared-publish.json']
@@ -131,6 +143,8 @@ if (checkOnly) {
   if (staleExportWarnings.length > 0) {
     console.warn(staleExportWarnings.join('\n\n'))
   }
+
+  recordBrowserBuildPhase('--record')
 
   console.log('Shared packages synced to packages/*/dist')
 }

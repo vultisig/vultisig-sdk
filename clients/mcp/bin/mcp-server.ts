@@ -54,7 +54,7 @@ async function main() {
   if (vaultFile) {
     process.stderr.write(`[vultisig-mcp] Loading vault from file: ${vaultFile}\n`)
     const content = readFileSync(vaultFile, 'utf-8')
-    vault = await sdk.importVault(content)
+    vault = await sdk.importVault(content, undefined, { conflictResolution: 'replace' })
   } else {
     const vaults = await sdk.listVaults()
     if (vaultId) {

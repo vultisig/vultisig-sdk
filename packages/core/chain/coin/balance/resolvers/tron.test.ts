@@ -145,20 +145,35 @@ describe('getTronCoinBalance (TRC20 eth_call calldata)', () => {
     ).rejects.toThrow('network error')
   })
 
-  it('propagates errors from TRC20 RPC JSON-RPC error response path', async () => {
-    // Covers sendRPCRequest's error branch: `error.message` is passed into
-    // intRpcCall's decode fn which calls BigInt() on the string. A JSON-RPC
-    // error object with a human-readable message causes BigInt to throw a
-    // SyntaxError - must propagate, not be swallowed.
-    queryUrlMock.mockResolvedValue({ error: { message: 'Contract not found' } })
+  it.each(['Contract not found', '0x64', '100'])(
+    'rejects provider error messages without decoding: %s',
+    async message => {
+      queryUrlMock.mockResolvedValue({ error: { code: -32000, message }, result: '0x64' })
+      await expect(
+        getTronCoinBalance({ chain: Chain.Tron, address: WALLET_ADDRESS, id: USDT_CONTRACT })
+      ).rejects.toThrow(`Tron RPC eth_call failed (-32000): ${message}`)
+    }
+  )
 
-    await expect(
-      getTronCoinBalance({
-        chain: Chain.Tron,
-        address: WALLET_ADDRESS,
-        id: USDT_CONTRACT,
-      })
-    ).rejects.toThrow()
+  it.each(['0x', ''])('rejects an empty contract result: %s', async result => {
+    queryUrlMock.mockResolvedValue({ result })
+    await expect(getTronCoinBalance({ chain: Chain.Tron, address: WALLET_ADDRESS, id: USDT_CONTRACT })).rejects.toThrow(
+      'empty contract result'
+    )
+  })
+
+  it('keeps an explicit zero token balance distinct from an empty result', async () => {
+    queryUrlMock.mockResolvedValue({ result: `0x${'0'.repeat(64)}` })
+    await expect(getTronCoinBalance({ chain: Chain.Tron, address: WALLET_ADDRESS, id: USDT_CONTRACT })).resolves.toBe(
+      0n
+    )
+  })
+
+  it('rejects missing RPC results with an Error', async () => {
+    queryUrlMock.mockResolvedValue({})
+    await expect(getTronCoinBalance({ chain: Chain.Tron, address: WALLET_ADDRESS, id: USDT_CONTRACT })).rejects.toThrow(
+      'Tron RPC eth_call returned no result'
+    )
   })
 
   it('throws + logs on malformed RPC hex response', async () => {
@@ -189,6 +204,32 @@ describe('getTronCoinBalance (native TRX)', () => {
     })
 
     expect(balance).toBe(1_000_000n)
+  })
+
+  it.each([{}, { address: WALLET_ADDRESS }, { balance: 0 }, { result: {} }])(
+    'preserves legitimate native zero balances: %j',
+    async response => {
+      queryUrlMock.mockResolvedValue(response)
+      await expect(getTronCoinBalance({ chain: Chain.Tron, address: WALLET_ADDRESS })).resolves.toBe(0n)
+    }
+  )
+
+  it('preserves wrapped native balances', async () => {
+    queryUrlMock.mockResolvedValue({ result: { balance: '1000000' } })
+    await expect(getTronCoinBalance({ chain: Chain.Tron, address: WALLET_ADDRESS })).resolves.toBe(1_000_000n)
+  })
+
+  it.each([
+    { Error: 'gateway unavailable' },
+    { error: 'gateway unavailable' },
+    { Error: 'gateway unavailable', balance: '1000000' },
+    { error: 'gateway unavailable', result: { balance: '1000000' } },
+    { Error: '' },
+  ])('rejects gateway errors before defaulting or decoding balances: %j', async response => {
+    queryUrlMock.mockResolvedValue(response)
+    await expect(getTronCoinBalance({ chain: Chain.Tron, address: WALLET_ADDRESS })).rejects.toThrow(
+      'Tron RPC getaccount failed:'
+    )
   })
 
   it('propagates native TRX RPC transport errors (does not swallow to 0n)', async () => {

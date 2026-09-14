@@ -6,7 +6,7 @@ import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import { getChainKind } from '../../../ChainKind'
 import { getBlockchairBaseUrl } from '../../../chains/utxo/client/getBlockchairBaseUrl'
 import { SigningOutput } from '../../../tw/signingOutput'
-import { BroadcastTxResolver } from '../resolver'
+import { broadcastAccepted, broadcastFailed, BroadcastTxResolver, isRetryableBroadcastCause } from '../resolver'
 import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
 
 type UtxoBasedDecodedTx = SigningOutput<UtxoChain> | SigningOutput<OtherChain.Cardano>
@@ -25,28 +25,35 @@ type BlockchairBroadcastResponse =
     }
 
 export const broadcastUtxoTx: BroadcastTxResolver<UtxoBasedChain> = async ({ chain, tx }) => {
-  const url = `${getBlockchairBaseUrl(chain)}/push/transaction`
-  const encodedBytes = selectEncodedBytes(chain, tx as UtxoBasedDecodedTx)
+  try {
+    const url = `${getBlockchairBaseUrl(chain)}/push/transaction`
+    const encodedBytes = selectEncodedBytes(chain, tx as UtxoBasedDecodedTx)
 
-  const response = await queryUrl<BlockchairBroadcastResponse>(url, {
-    body: {
-      data: Buffer.from(encodedBytes).toString('hex'),
-    },
-  })
+    const response = await queryUrl<BlockchairBroadcastResponse>(url, {
+      body: {
+        data: Buffer.from(encodedBytes).toString('hex'),
+      },
+    })
 
-  if (response.data) {
-    return response.data.transaction_hash
+    if (response.data) {
+      return broadcastAccepted(response.data.transaction_hash)
+    }
+
+    const error = 'context' in response ? response.context.error : extractErrorMsg(response)
+
+    // Any submit error past this point is ambiguous — it could be a benign MPC-race duplicate (another
+    // device already broadcast the same signed tx) OR a genuine failure (e.g. BadInputsUTxO: spent/invalid
+    // inputs). String-matching alone can't tell them apart, so verify against the real chain: the hash
+    // either resolves on-chain (the race case — success) or it doesn't (the real failure — returns it).
+    const broadcastError = new Error(`Failed to broadcast transaction: ${extractErrorMsg(error)}`)
+    try {
+      return broadcastAccepted(await verifyBroadcastByHash({ chain, tx, error: broadcastError }))
+    } catch (cause) {
+      return broadcastFailed(cause, isRetryableBroadcastCause(broadcastError))
+    }
+  } catch (cause) {
+    return broadcastFailed(cause, isRetryableBroadcastCause(cause))
   }
-
-  const error = 'context' in response ? response.context.error : extractErrorMsg(response)
-
-  // Any submit error past this point is ambiguous — it could be a benign MPC-race duplicate (another
-  // device already broadcast the same signed tx) OR a genuine failure (e.g. BadInputsUTxO: spent/invalid
-  // inputs). String-matching alone can't tell them apart, so verify against the real chain: the hash
-  // either resolves on-chain (the race case — success) or it doesn't (the real failure — rethrows).
-  const broadcastError = new Error(`Failed to broadcast transaction: ${extractErrorMsg(error)}`)
-  await verifyBroadcastByHash({ chain, tx, error: broadcastError })
-  return null
 }
 
 const hasSigningResultV2 = (

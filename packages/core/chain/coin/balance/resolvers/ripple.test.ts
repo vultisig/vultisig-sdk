@@ -8,7 +8,7 @@ vi.mock('@vultisig/core-chain/chains/ripple/client', () => ({
   getRippleClient: async () => ({ request: requestMock }),
 }))
 
-import { getRippleCoinBalance } from './ripple'
+import { getRippleCoinBalance, getRippleNativeBalanceDetail } from './ripple'
 
 const ADDRESS = 'rMwNibdiFaEzsTaFCG1NnmAM3Rv3vHUy5L'
 const ISSUER = 'rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De'
@@ -84,6 +84,61 @@ describe('getRippleCoinBalance', () => {
       mockLedger({ balance: '500000', ownerCount: 0 })
 
       await expect(getRippleCoinBalance(nativeCoin)).resolves.toBe(0n)
+    })
+  })
+
+  describe('native XRP breakdown', () => {
+    it('exposes total, reserve and spendable, with spendable matching the resolver', async () => {
+      mockLedger({ balance: '25000000', ownerCount: 3 })
+
+      // reserve = 1 XRP base + 3 * 0.2 XRP owner = 1.6 XRP
+      await expect(getRippleNativeBalanceDetail(ADDRESS)).resolves.toEqual({
+        total: 25_000_000n,
+        reserve: 1_600_000n,
+        spendable: 23_400_000n,
+      })
+      await expect(getRippleCoinBalance(nativeCoin)).resolves.toBe(23_400_000n)
+    })
+
+    it('caps the locked reserve at the total when the requirement exceeds the balance', async () => {
+      mockLedger({ balance: '500000', ownerCount: 0 })
+
+      await expect(getRippleNativeBalanceDetail(ADDRESS)).resolves.toEqual({
+        total: 500_000n,
+        reserve: 500_000n,
+        spendable: 0n,
+      })
+    })
+
+    it('spendable equals total when the ledger reserve is zero', async () => {
+      requestMock.mockImplementation(async ({ command }: { command: string }) => {
+        if (command === 'account_info') return accountInfo('25000000', 0)
+        if (command === 'server_state')
+          return { result: { state: { validated_ledger: { reserve_base: 0, reserve_inc: 0 } } } }
+
+        throw new Error(`Unexpected command: ${command}`)
+      })
+
+      await expect(getRippleNativeBalanceDetail(ADDRESS)).resolves.toEqual({
+        total: 25_000_000n,
+        reserve: 0n,
+        spendable: 25_000_000n,
+      })
+    })
+
+    it('reports all zeros for an unfunded account', async () => {
+      requestMock.mockImplementation(async ({ command }: { command: string }) => {
+        if (command === 'account_info') throw new Error('Account not found.')
+        if (command === 'server_state') return serverState()
+
+        throw new Error(`Unexpected command: ${command}`)
+      })
+
+      await expect(getRippleNativeBalanceDetail(ADDRESS)).resolves.toEqual({
+        total: 0n,
+        reserve: 0n,
+        spendable: 0n,
+      })
     })
   })
 

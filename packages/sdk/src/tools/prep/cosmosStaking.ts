@@ -38,6 +38,7 @@ import { Buffer } from 'buffer'
 
 import { CosmosMsgType } from '../../types/cosmos-msg'
 import { concat, encodeCoin, encodeString, field } from '../../utils/cosmosProto'
+import { validatorRoleForHrp } from '../swap/skip/cosmosAddressGuard'
 
 // ---------------------------------------------------------------------------
 // Input validation (pure, no network). Ported from mcp-ts cosmos-staking.ts.
@@ -76,16 +77,6 @@ function validateDenom(value: string, fieldName = 'denom'): string {
  * does NOT pass an explicit `expectedPrefix` — the optional-prefix happy path.
  */
 type AddressRole = 'account' | 'validator'
-
-/**
- * Classify a decoded bech32 HRP. Mirrors mcp-ts `validatorRoleForHrp`
- * (src/lib/cosmos-address-guard.ts). An HRP ending in `valoper`/`valcons` is a
- * validator key, NOT a spendable account.
- */
-function hrpIsValidatorRole(hrp: string): boolean {
-  const lower = hrp.toLowerCase()
-  return lower.endsWith('valoper') || lower.endsWith('valcons')
-}
 
 /**
  * Validate a bech32 cosmos address with an optional expected human-readable
@@ -130,7 +121,7 @@ function validateBech32(value: string, fieldName: string, expectedPrefix?: strin
   // Role guard runs BEFORE the optional exact-prefix check so the explicit,
   // fund-safety-flavored message wins over a generic prefix mismatch.
   if (expectedRole !== undefined) {
-    const isValidator = hrpIsValidatorRole(decoded.prefix)
+    const isValidator = validatorRoleForHrp(decoded.prefix) !== null
     if (expectedRole === 'account' && isValidator) {
       throw new Error(
         `invalid ${fieldName}: "${decoded.prefix}1..." is a validator key, not a spendable account. ` +

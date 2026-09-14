@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { acrossQuote, acrossSupportedChains } from '@/tools/swap/acrossQuote'
+import {
+  ACROSS_ORIGIN_CHAIN,
+  type AcrossOriginChain,
+  acrossQuote,
+  acrossSupportedChains,
+} from '@/tools/swap/acrossQuote'
 
 // USDC Base → USDC Arbitrum is the canonical receipt route. The SDK pins the
 // origin to Ethereum for the current factory slice, so the deterministic happy
@@ -124,10 +129,15 @@ describe('acrossQuote', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('rejects a non-Ethereum origin (current factory slice)', async () => {
+  // sdk#1906: `sourceChain` is typed `AcrossOriginChain` ('Ethereum') now, so a
+  // TypeScript caller cannot reach this branch at all - which is the point of
+  // the fix. The cast deliberately simulates a JavaScript caller, or a typed one
+  // passing a value widened through `any`, because the runtime guard must stay
+  // fail-closed for them. Narrowing the type does not remove the need for it.
+  it('still rejects a non-Ethereum origin at runtime for untyped callers', async () => {
     await expect(
       acrossQuote({
-        sourceChain: 'Base',
+        sourceChain: 'Base' as unknown as AcrossOriginChain,
         destinationChain: 'Arbitrum',
         inputToken: BASE_USDC,
         outputToken: ETH_USDC,
@@ -135,6 +145,14 @@ describe('acrossQuote', () => {
       })
     ).rejects.toThrow(/must be Ethereum/)
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  // The other half of the contract: the type now says exactly what the runtime
+  // accepts, so the documented example compiles AND runs.
+  it('accepts the Ethereum origin the type advertises', () => {
+    const origin: AcrossOriginChain = ACROSS_ORIGIN_CHAIN
+    expect(origin).toBe('Ethereum')
+    expect(acrossSupportedChains).toContain(ACROSS_ORIGIN_CHAIN)
   })
 
   it('rejects identical source and destination chains', async () => {

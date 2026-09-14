@@ -162,6 +162,7 @@ export const getLifiSwapQuote = async ({
     return {
       dstAmount: estimate.toAmount,
       provider: 'li.fi',
+      affiliate: affiliateBps === undefined ? undefined : { affiliateBps, request: 'included' },
       tx: {
         solana: {
           data: patchedData,
@@ -188,6 +189,7 @@ export const getLifiSwapQuote = async ({
   return {
     dstAmount: estimate.toAmount,
     provider: 'li.fi',
+    affiliate: affiliateBps === undefined ? undefined : { affiliateBps, request: 'included' },
     tx: match<DeriveChainKind<LifiSwapEnabledChain>, GeneralSwapQuote['tx']>(chainKind, {
       solana: () => {
         const { gasCosts, feeCosts } = estimate

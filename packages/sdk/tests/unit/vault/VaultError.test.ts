@@ -198,6 +198,12 @@ describe('VaultImportError', () => {
         VaultImportErrorCode.INVALID_PASSWORD,
         VaultImportErrorCode.CORRUPTED_DATA,
         VaultImportErrorCode.UNSUPPORTED_FORMAT,
+        VaultImportErrorCode.DUPLICATE_VAULT,
+        VaultImportErrorCode.STALE_SHARE,
+        VaultImportErrorCode.OTHER_DEVICE_SHARE,
+        VaultImportErrorCode.INCOMPATIBLE_VAULT,
+        VaultImportErrorCode.EXISTING_VAULT_PASSWORD_REQUIRED,
+        VaultImportErrorCode.PERSISTENCE_FAILED,
       ]
 
       errorCodes.forEach(code => {

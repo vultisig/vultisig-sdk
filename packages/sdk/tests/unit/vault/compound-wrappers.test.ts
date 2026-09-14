@@ -331,7 +331,7 @@ describe('signMessage', () => {
   // by reproducing the hash computation and verifying the expected flow.
 
   it('should produce EIP-191 keccak256 hash for EVM chains', async () => {
-    const { keccak_256 } = await import('@noble/hashes/sha3')
+    const { keccak_256 } = await import('@noble/hashes/sha3.js')
 
     const message = 'Hello Vultisig'
     const prefix = `\x19Ethereum Signed Message:\n${message.length}`
@@ -341,13 +341,13 @@ describe('signMessage', () => {
     // Verify hash is 32 bytes (keccak256 output)
     expect(hash.length).toBe(32)
     // Verify it is not the same as raw SHA-256
-    const { sha256 } = await import('@noble/hashes/sha2')
+    const { sha256 } = await import('@noble/hashes/sha2.js')
     const sha256Hash = sha256(new TextEncoder().encode(message))
     expect(Buffer.from(hash).toString('hex')).not.toBe(Buffer.from(sha256Hash).toString('hex'))
   })
 
   it('should produce SHA-256 hash for non-EVM chains', async () => {
-    const { sha256 } = await import('@noble/hashes/sha2')
+    const { sha256 } = await import('@noble/hashes/sha2.js')
 
     const message = 'Hello Vultisig'
     const hash = sha256(new TextEncoder().encode(message))
@@ -749,7 +749,7 @@ describe('swap', () => {
 
 describe('signMessage EIP-191 hash correctness', () => {
   it('should match known EIP-191 hash for "hello"', async () => {
-    const { keccak_256 } = await import('@noble/hashes/sha3')
+    const { keccak_256 } = await import('@noble/hashes/sha3.js')
 
     const message = 'hello'
     const prefix = `\x19Ethereum Signed Message:\n${message.length}`

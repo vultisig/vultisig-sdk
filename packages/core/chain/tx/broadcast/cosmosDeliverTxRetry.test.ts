@@ -56,10 +56,10 @@ describe('broadcastTx cosmos DeliverTx-failure retry interlock', () => {
       })
       .mockRejectedValueOnce(new Error('tx already exists in cache'))
 
-    const rejection: unknown = await broadcastTx({ chain, tx }).catch(caught => caught)
+    const result = await broadcastTx({ chain, tx })
 
-    expect(rejection).toBeInstanceOf(DeliverTxFailedError)
-    expect((rejection as Error).message).toMatch(/DEF456/)
+    expect(result).toMatchObject({ status: 'failed', retryable: false, cause: expect.any(DeliverTxFailedError) })
+    expect(result).toHaveProperty('cause.message', expect.stringMatching(/DEF456/))
     expect(mocks.broadcastTx).toHaveBeenCalledTimes(1)
     expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
   })
@@ -78,7 +78,9 @@ describe('broadcastTx cosmos DeliverTx-failure retry interlock', () => {
       })
       .mockRejectedValueOnce(new Error('tx already exists in cache'))
 
-    await expect(broadcastTx({ chain, tx })).rejects.toThrow(/GHI789/)
+    const result = await broadcastTx({ chain, tx })
+    expect(result).toMatchObject({ status: 'failed', retryable: false, cause: expect.any(DeliverTxFailedError) })
+    expect(result).toHaveProperty('cause.message', expect.stringMatching(/GHI789/))
 
     expect(mocks.broadcastTx).toHaveBeenCalledTimes(1)
     expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
@@ -92,7 +94,9 @@ describe('broadcastTx cosmos DeliverTx-failure retry interlock', () => {
       rawLog: 'out of gas',
     })
 
-    await expect(broadcastTx({ chain, tx })).rejects.toThrow(/ABC123/)
+    const result = await broadcastTx({ chain, tx })
+    expect(result).toMatchObject({ status: 'failed', retryable: false, cause: expect.any(DeliverTxFailedError) })
+    expect(result).toHaveProperty('cause.message', expect.stringMatching(/ABC123/))
 
     expect(mocks.broadcastTx).toHaveBeenCalledTimes(1)
     expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
