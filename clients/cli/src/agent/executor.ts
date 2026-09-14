@@ -33,7 +33,7 @@ import {
   VaultErrorCode,
   Vultisig as VultisigSdk,
 } from '@vultisig/sdk'
-import { type Address, decodeFunctionData, formatUnits, type Hex, parseAbi, recoverAddress } from 'viem'
+import { type Address, decodeFunctionData, formatUnits, type Hex, maxUint256, parseAbi, recoverAddress } from 'viem'
 
 import { VaultStateStore } from '../core/VaultStateStore'
 import { normalizeAgentError } from './agentErrors'
@@ -837,36 +837,22 @@ export class AgentExecutor {
     // must not be able to hide behind a swap/contract-call head to skip the check.
     const transfer = this.assertConsistentTransfer(p)
 
-    // Design B: Polymarket flat-tx-builder bridge envelopes carry no swap/send
-    // token labels, so the generic summaries below degrade to "send ? to ?".
-    // Summarize the destination contract + value (and the bundled approval leg)
-    // so the confirm gate / `--yes` log always shows what is being signed. Keyed
-    // on the bridge's `__buildTx` marker so existing swap/send summaries are
-    // untouched. These are always contract calls (approve / wrap calldata).
-    if (p?.__buildTx) {
-      const action = typeof p?.action === 'string' && p.action ? ` [${p.action}]` : ''
-      if (p?.__multiLeg) {
-        const wrapTo = (p?.txArgs?.tx?.to as string) || '?'
-        return `contract call on ${stored.chain} to ${wrapTo} (+ token approval — 2 transactions)${action}`
-      }
-      const flat = (p?.tx ?? {}) as Record<string, unknown>
-      const to = typeof flat.to === 'string' ? flat.to : '?'
-      const valueRaw = typeof flat.value === 'string' ? flat.value : '0'
-      const valuePart = valueRaw && valueRaw !== '0' ? ` value ${valueRaw}` : ''
-      return `contract call on ${stored.chain} to ${to}${valuePart}${action}`
-    }
-
     // WYSIWYS for ERC-20 approvals (consent integrity, dogfood T12). The
     // producer's `quote_summary` describes the SWAP the user asked for, but the
     // bytes being signed may be an `approve(spender, amount)`:
     //   - a USDT-style allowance-reset turn ships `approve(spender, 0)` ALONE
     //     as txArgs (no swap leg at all) while the swap labels ride along;
     //   - a clean-allowance turn ships a 2-leg envelope whose approve leg was
-    //     previously disclosed only as an anonymous "(+ token approval)".
+    //     previously disclosed only as an anonymous "(+ token approval)";
+    //   - Polymarket / yield `__buildTx` bridge envelopes are approve or
+    //     approve+wrap calldata by construction.
     // Either way the consent line — the exact text `--yes` authorizes — must
     // describe the approve from ITS calldata (spender + amount), never from
-    // the quote. Malformed approve calldata fails closed like transfers do.
+    // the quote or the action label. This runs BEFORE every branch-specific
+    // summary so no envelope shape can route approve bytes to a label-driven
+    // line. Malformed approve calldata fails closed like transfers.
     const swapContext = !!(labels.quote_summary || labels.to_token_symbol || labels.pending_swap_summary)
+    const actionTag = p?.__buildTx && typeof p?.action === 'string' && p.action ? ` [${p.action}]` : ''
     if (!p?.__multiLeg) {
       const signedTx = extractNestedTx(p)
       const signedCalldata = typeof signedTx?.data === 'string' ? (signedTx.data as string) : ''
@@ -880,27 +866,35 @@ export class AgentExecutor {
       if (approve) {
         const contractTo = typeof signedTx?.to === 'string' ? (signedTx.to as string) : '?'
         const parts = [this.renderErc20ApproveSummary(approve, contractTo, stored.chain, true)]
+        if (tokenLabel(labels.estimated_fee)) parts.push(`est. fee ${tokenLabel(labels.estimated_fee)}`)
         // A swap-shaped envelope whose signable is an approve is the reset
         // turn: say explicitly that no swap is part of this signature.
         if (swapContext) parts.push('— approval only; no swap is signed in this transaction')
-        if (tokenLabel(labels.estimated_fee)) parts.push(`est. fee ${tokenLabel(labels.estimated_fee)}`)
-        return parts.join(' ')
+        return `${parts.join(' ')}${actionTag}`
       }
     }
 
-    // Multi-leg: the approve leg signs `approvalTxArgs.tx` (signMultiLeg
-    // re-parents it as txArgs and nils the sibling tx fields), so decode THAT
-    // calldata for the consent line. A multi-leg approval leg that is not an
-    // ERC-20 approve is a malformed envelope — refuse it rather than sign an
-    // unknown contract call under an "approval" label.
+    // Multi-leg: signMultiLeg signs `approvalTxArgs.tx` first (re-parented as
+    // txArgs with sibling tx fields nil'd) and then `txArgs.tx` the same way,
+    // so decode exactly those two calldatas. The approval leg MUST be an
+    // ERC-20 approve (that is what the head discloses it as) and the main leg
+    // MUST NOT be one — a second approve hidden behind a swap/contract-call
+    // head would grant an undisclosed spender an undisclosed allowance.
+    // Either violation, or malformed approve calldata in either leg, refuses
+    // the envelope rather than signing something the line never showed.
     let approveLegLine = ''
     if (p?.__multiLeg) {
       const approvalArgs = p?.approvalTxArgs
       const approvalTx = approvalArgs && typeof approvalArgs === 'object' ? approvalArgs.tx : undefined
       const approvalCalldata = typeof approvalTx?.data === 'string' ? (approvalTx.data as string) : ''
+      const mainArgs = p?.txArgs
+      const mainTx = mainArgs && typeof mainArgs === 'object' ? mainArgs.tx : undefined
+      const mainCalldata = typeof mainTx?.data === 'string' ? (mainTx.data as string) : ''
       let approve: { spender: Address; amount: bigint } | null = null
+      let mainApprove: { spender: Address; amount: bigint } | null = null
       try {
         approve = decodeErc20Approve(approvalCalldata)
+        mainApprove = decodeErc20Approve(mainCalldata)
       } catch (error) {
         this.clearPendingTransaction()
         throw error
@@ -909,8 +903,31 @@ export class AgentExecutor {
         this.clearPendingTransaction()
         throw new Error('Multi-leg approval leg is not an ERC-20 approve — refusing to sign')
       }
+      if (mainApprove) {
+        this.clearPendingTransaction()
+        throw new Error('Multi-leg main leg is an ERC-20 approve, not the declared swap/contract call — refusing to sign')
+      }
       const approvalTo = typeof approvalTx?.to === 'string' ? (approvalTx.to as string) : '?'
       approveLegLine = this.renderErc20ApproveSummary(approve, approvalTo, stored.chain, false)
+    }
+
+    // Design B: Polymarket flat-tx-builder bridge envelopes carry no swap/send
+    // token labels, so the generic summaries below degrade to "send ? to ?".
+    // Summarize the destination contract + value (and the decoded approval
+    // leg) so the confirm gate / `--yes` log always shows what is being
+    // signed. Keyed on the bridge's `__buildTx` marker so existing swap/send
+    // summaries are untouched. A single-leg approve envelope was already
+    // rendered from calldata above; what reaches here is a wrap/other call.
+    if (p?.__buildTx) {
+      if (p?.__multiLeg) {
+        const wrapTo = (p?.txArgs?.tx?.to as string) || '?'
+        return `contract call on ${stored.chain} to ${wrapTo} (+ first ${approveLegLine} — 2 transactions)${actionTag}`
+      }
+      const flat = (p?.tx ?? {}) as Record<string, unknown>
+      const to = typeof flat.to === 'string' ? flat.to : '?'
+      const valueRaw = typeof flat.value === 'string' ? flat.value : '0'
+      const valuePart = valueRaw && valueRaw !== '0' ? ` value ${valueRaw}` : ''
+      return `contract call on ${stored.chain} to ${to}${valuePart}${actionTag}`
     }
 
     const isSwap = !!(p?.approvalTxArgs || p?.swap_tx || labels.quote_summary || labels.to_token_symbol)
@@ -1052,16 +1069,23 @@ export class AgentExecutor {
     withChain: boolean
   ): string {
     const location = withChain ? ` on ${chain}` : ''
+    // `approve(spender, 2^256-1)` is the unlimited-allowance idiom; a 78-digit
+    // numeral is not something a user can weigh at the consent prompt.
+    const unlimited = approve.amount === maxUint256
     const known = knownTokensIndex[chain]?.[contractTo.toLowerCase()]
     if (known) {
       const contractPart = ` (token contract ${contractTo})`
       if (approve.amount === 0n) {
         return `reset ${known.ticker} allowance to 0${location} for spender ${approve.spender}${contractPart}`
       }
-      return `approve ${formatUnits(approve.amount, known.decimals)} ${known.ticker}${location} for spender ${approve.spender}${contractPart}`
+      const amount = unlimited ? 'UNLIMITED' : formatUnits(approve.amount, known.decimals)
+      return `approve ${amount} ${known.ticker}${location} for spender ${approve.spender}${contractPart}`
     }
     if (approve.amount === 0n) {
       return `reset allowance of token ${contractTo} to 0${location} for spender ${approve.spender}`
+    }
+    if (unlimited) {
+      return `approve UNLIMITED allowance of token ${contractTo}${location} for spender ${approve.spender}`
     }
     return `approve ${approve.amount} base units of token ${contractTo} (decimals unverified)${location} for spender ${approve.spender}`
   }

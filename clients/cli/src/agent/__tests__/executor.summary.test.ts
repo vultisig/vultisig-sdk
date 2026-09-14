@@ -8,7 +8,7 @@
  */
 import type { VaultBase } from '@vultisig/sdk'
 import { Chain } from '@vultisig/sdk'
-import { encodeFunctionData, erc20Abi, getAddress } from 'viem'
+import { encodeFunctionData, erc20Abi, getAddress, maxUint256 } from 'viem'
 import { describe, expect, it, vi } from 'vitest'
 
 import { AgentExecutor } from '../executor'
@@ -1446,7 +1446,7 @@ describe('AgentExecutor pending-state hygiene (decline path)', () => {
       const summary = executor.getPendingSummary()!
       expect(summary).toBe(
         `reset USDC allowance to 0 on Polygon for spender ${RESET_SPENDER} (token contract ${POLYGON_USDC_CONTRACT}) ` +
-          '— approval only; no swap is signed in this transaction est. fee ~0.2629 POL'
+          'est. fee ~0.2629 POL — approval only; no swap is signed in this transaction'
       )
       expect(summary).not.toContain('→')
       expect(summary).not.toContain('51.56')
@@ -1473,7 +1473,7 @@ describe('AgentExecutor pending-state hygiene (decline path)', () => {
       executor.storeServerTransaction(resetEnvelope(approveCalldata(RESET_SPENDER, 5_000_000n)))
       expect(executor.getPendingSummary()).toBe(
         `approve 5 USDC on Polygon for spender ${RESET_SPENDER} (token contract ${POLYGON_USDC_CONTRACT}) ` +
-          '— approval only; no swap is signed in this transaction est. fee ~0.2629 POL'
+          'est. fee ~0.2629 POL — approval only; no swap is signed in this transaction'
       )
     })
 
@@ -1568,6 +1568,62 @@ describe('AgentExecutor pending-state hygiene (decline path)', () => {
           { approvalTx: { ...APPROVE_TX, data: '0x095ea7b3' + '0'.repeat(120) } }
         )
       )
+      expect(() => executor.getPendingSummary()).toThrow(/Invalid ERC-20 approve calldata/)
+      expect(executor.getPendingSummary()).toBeNull()
+    })
+
+    it('renders an unlimited (2^256-1) allowance as UNLIMITED, known and unknown token', () => {
+      const executor = new AgentExecutor(createMockVault())
+      executor.storeServerTransaction(resetEnvelope(approveCalldata(RESET_SPENDER, maxUint256), {}))
+      expect(executor.getPendingSummary()).toBe(
+        `approve UNLIMITED USDC on Polygon for spender ${RESET_SPENDER} (token contract ${POLYGON_USDC_CONTRACT})`
+      )
+      const unknown = '0x4444444444444444444444444444444444444444'
+      const env = resetEnvelope(approveCalldata(RESET_SPENDER, maxUint256), {})
+      env.txArgs.tx.to = unknown
+      executor.storeServerTransaction(env)
+      expect(executor.getPendingSummary()).toBe(
+        `approve UNLIMITED allowance of token ${unknown} on Polygon for spender ${RESET_SPENDER}`
+      )
+    })
+
+    it('reset turn without a fee label omits the fee but keeps the approval-only clause', () => {
+      const executor = new AgentExecutor(createMockVault())
+      const noFee = Object.fromEntries(Object.entries(swapLabels).filter(([key]) => key !== 'estimated_fee'))
+      executor.storeServerTransaction(resetEnvelope(approveCalldata(RESET_SPENDER, 0n), noFee))
+      expect(executor.getPendingSummary()).toBe(
+        `reset USDC allowance to 0 on Polygon for spender ${RESET_SPENDER} (token contract ${POLYGON_USDC_CONTRACT}) ` +
+          '— approval only; no swap is signed in this transaction'
+      )
+    })
+
+    it('fails closed when the multi-leg MAIN leg is an ERC-20 approve hidden behind a swap head', () => {
+      const executor = new AgentExecutor(createMockVault())
+      const hiddenSpender = '0x5555555555555555555555555555555555555555'
+      const env = makeMultiLegEnvelope({
+        quote_summary: '2 USDC → ~0.001 ETH via swapkit',
+        from_token: `USDC (${USDC_CONTRACT} on Base, 6 dec, source: known)`,
+        from_token_symbol: 'USDC',
+        to_token: 'ETH (native on Base, 18 dec, source: native)',
+        to_token_symbol: 'ETH',
+      })
+      ;(env.txArgs as { tx: { data: string } }).tx.data = approveCalldata(hiddenSpender, maxUint256)
+      executor.storeServerTransaction(env)
+      expect(() => executor.getPendingSummary()).toThrow(/main leg is an ERC-20 approve/)
+      expect(executor.getPendingSummary()).toBeNull()
+    })
+
+    it('fails closed on malformed approve calldata in the multi-leg MAIN leg', () => {
+      const executor = new AgentExecutor(createMockVault())
+      const env = makeMultiLegEnvelope({
+        quote_summary: '2 USDC → ~0.001 ETH via swapkit',
+        from_token: `USDC (${USDC_CONTRACT} on Base, 6 dec, source: known)`,
+        from_token_symbol: 'USDC',
+        to_token: 'ETH (native on Base, 18 dec, source: native)',
+        to_token_symbol: 'ETH',
+      })
+      ;(env.txArgs as { tx: { data: string } }).tx.data = '0x095ea7b3' + '0'.repeat(40)
+      executor.storeServerTransaction(env)
       expect(() => executor.getPendingSummary()).toThrow(/Invalid ERC-20 approve calldata/)
       expect(executor.getPendingSummary()).toBeNull()
     })
