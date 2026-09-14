@@ -910,7 +910,9 @@ export class AgentExecutor {
       }
       if (mainApprove) {
         this.clearPendingTransaction()
-        throw new Error('Multi-leg main leg is an ERC-20 approve, not the declared swap/contract call — refusing to sign')
+        throw new Error(
+          'Multi-leg main leg is an ERC-20 approve, not the declared swap/contract call — refusing to sign'
+        )
       }
       const approvalTo = typeof approvalTx?.to === 'string' ? (approvalTx.to as string) : '?'
       approveLegLine = this.renderErc20ApproveSummary(approve, approvalTo, stored.chain, false)

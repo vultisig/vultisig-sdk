@@ -141,7 +141,14 @@ describe('build-tx bridge → executor multi-leg (bundled approve+wrap)', () => 
 
   it('wrap-only flat bridge envelope (no approve) still renders the contract-call line with its action tag', () => {
     const executor = new AgentExecutor(createMockVault())
-    const env = { chain: 'Polygon', chain_id: '137', to: ONRAMP, value: '0', data: WRAP_DATA, action: 'wrap_usdce_to_pusd' }
+    const env = {
+      chain: 'Polygon',
+      chain_id: '137',
+      to: ONRAMP,
+      value: '0',
+      data: WRAP_DATA,
+      action: 'wrap_usdce_to_pusd',
+    }
     const wrapped = buildTxReadyFromToolOutput(POLYMARKET_DEPOSIT_TOOL, env)
     expect(executor.storeServerTransaction(wrapped)).toBe(true)
     expect(executor.getPendingSummary()).toBe(`contract call on Polygon to ${ONRAMP} [wrap_usdce_to_pusd]`)
