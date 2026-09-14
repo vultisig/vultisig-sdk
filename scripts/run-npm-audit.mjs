@@ -30,6 +30,11 @@ for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
   const canRetry = attempt < maxAttempts && transientErrorPattern.test(output)
 
   if (!canRetry) {
+    process.stderr.write(
+      '\nquality:audit failed on this lockfile (absolute, not vs origin/main).\n' +
+        'If this advisory is already fixed on origin/main, merge main into your branch - that is the whole fix.\n' +
+        'This is not a lint or typecheck failure in your change.\n'
+    )
     process.exit(result.status ?? 1)
   }
 
