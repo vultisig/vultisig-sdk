@@ -85,6 +85,7 @@ export const JUPITER_API_BASE_URL = 'https://api.vultisig.com/jup'
 export const JUPITER_DEFAULT_SLIPPAGE_BPS = 50
 
 const JUPITER_TIMEOUT_MS = 15_000
+const JUPITER_RETRY_DELAYS_MS = [300, 600]
 
 /** @deprecated Jupiter fee accounts are derived and prepended per swap. */
 export const JUPITER_AFFILIATE_FEE_ATAS: Readonly<Record<string, string>> = {}
@@ -158,22 +159,35 @@ export type JupiterSwapResult = {
 }
 
 const fetchJupiter = async <T>(input: string, init?: RequestInit): Promise<T> => {
-  const response = await fetch(input, {
-    ...init,
-    signal: AbortSignal.timeout(JUPITER_TIMEOUT_MS),
-  })
+  for (let attempt = 0; ; attempt++) {
+    const response = await fetch(input, {
+      ...init,
+      signal: AbortSignal.timeout(JUPITER_TIMEOUT_MS),
+    })
 
-  const data = (await response.json().catch(() => undefined)) as unknown
+    const data = (await response.json().catch((error: unknown) => {
+      if (error instanceof SyntaxError) return undefined
+      throw error
+    })) as unknown
+    const retryDelay = JUPITER_RETRY_DELAYS_MS[attempt]
 
-  if (!response.ok) {
-    const msg =
-      typeof data === 'object' && data !== null && 'error' in data
-        ? (data as { error: string }).error
-        : response.statusText
-    throw new Error(`Jupiter API error (${response.status}): ${msg}`)
+    // Only retry explicit rate limits. Each unsigned HTTP operation gets its
+    // own retry budget and timeout; network errors and timeouts still fail fast.
+    if (response.status === 429 && retryDelay !== undefined) {
+      await new Promise(resolve => setTimeout(resolve, retryDelay))
+      continue
+    }
+
+    if (!response.ok) {
+      const msg =
+        typeof data === 'object' && data !== null && 'error' in data
+          ? (data as { error: string }).error
+          : response.statusText
+      throw new Error(`Jupiter API error (${response.status}): ${msg}`)
+    }
+
+    return data as T
   }
-
-  return data as T
 }
 
 /**

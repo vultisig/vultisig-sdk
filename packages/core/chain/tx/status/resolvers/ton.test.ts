@@ -41,12 +41,18 @@ describe('getTonTxStatus', () => {
     vi.clearAllMocks()
   })
 
-  it('queries the incoming message hash', async () => {
+  it.each([
+    ['standard base64', '5Ntg/ZmUbx80Fsc+OvEg0Ti+ZlT2JIaozUizscN0GHk='],
+    ['URL-safe base64', '5Ntg_ZmUbx80Fsc-OvEg0Ti-ZlT2JIaozUizscN0GHk'],
+    ['hexadecimal', 'e4db60fd99946f1f3416c73e3af120d138be6654f62486a8cd48b3b1c3741879'],
+  ])('preserves the incoming %s message hash in the query', async (_, messageHash) => {
     mocks.queryUrl.mockResolvedValue({ transactions: [] })
 
-    await getTonTxStatus({ chain: OtherChain.Ton, hash })
+    await getTonTxStatus({ chain: OtherChain.Ton, hash: messageHash })
 
-    expect(mocks.queryUrl).toHaveBeenCalledWith(expect.stringContaining(`msg_hash=${hash}`))
+    const url = new URL(mocks.queryUrl.mock.calls[0][0])
+    expect(url.pathname).toBe('/ton/v3/transactionsByMessage')
+    expect(Object.fromEntries(url.searchParams)).toEqual({ msg_hash: messageHash, direction: 'in', limit: '1' })
   })
 
   it('stays pending while the indexer has no record of the message', async () => {
