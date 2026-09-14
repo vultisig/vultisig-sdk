@@ -23,7 +23,6 @@ import { VaultSchema } from '@vultisig/core-mpc/types/vultisig/vault/v1/vault_pb
 import { vaultContainerFromString } from '@vultisig/core-mpc/vault/utils/vaultContainerFromString'
 import { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 import { fromBase64 } from '@vultisig/lib-utils/fromBase64'
-
 import { type Abi, decodeFunctionResult, encodeFunctionData, erc20Abi, getAddress } from 'viem'
 
 import { DEFAULT_CHAINS } from '../constants'
@@ -36,6 +35,8 @@ import { DiscountTierService } from '../services/DiscountTierService'
 import { FiatValueService } from '../services/FiatValueService'
 import type { PasswordCacheService } from '../services/PasswordCacheService'
 import type { Storage } from '../storage/types'
+import { MAX_UINT256 } from '../tools/evm/encodeErc20Approve'
+import { evmCall } from '../tools/evm/evmCall'
 // Import prep helpers from per-file paths, not the `tools/prep` barrel: the
 // barrel pulls in cosmos.ts → buildCosmosPayload → @vultisig/core-chain THORChain
 // modules at module-load time, which breaks vitest setups that mock chainFeeCoin.
@@ -55,7 +56,6 @@ import {
   MessageSignature,
   Portfolio,
   SendResult,
-  TypedDataSignature,
   SignAminoInput,
   Signature,
   SignBytesOptions,
@@ -63,14 +63,13 @@ import {
   SigningMode,
   SigningPayload,
   Token,
+  TypedDataSignature,
   Value,
   VaultData,
 } from '../types'
 import type { ContractCallTxParams } from '../types/contractCall'
 import type { TransactionSimulationResult, TransactionValidationResult } from '../types/security'
 import type { DiscoveredToken, TokenInfo } from '../types/tokens'
-import { evmCall } from '../tools/evm/evmCall'
-import { MAX_UINT256 } from '../tools/evm/encodeErc20Approve'
 import { computePersonalSignHash } from '../utils/eip191'
 import { computeEip712Hash, toCanonicalEvmSignature } from '../utils/eip712'
 import { createVaultBackup } from '../utils/export'
