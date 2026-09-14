@@ -5,8 +5,16 @@ import { attempt } from '@vultisig/lib-utils/attempt'
 
 import { TxStatusResolver } from '../resolver'
 
+type SolanaClient = ReturnType<typeof getSolanaClient>
+
+const readSignatureStatus = (client: SolanaClient, hash: string) =>
+  attempt(async () => {
+    const { value } = await client.getSignatureStatuses([hash], { searchTransactionHistory: true })
+    return value[0]
+  })
+
 const isExpiredLastValidBlockHeight = async (
-  client: ReturnType<typeof getSolanaClient>,
+  client: SolanaClient,
   lastValidBlockHeight: number | undefined
 ): Promise<boolean> => {
   const height = lastValidBlockHeight
@@ -23,27 +31,40 @@ const isExpiredLastValidBlockHeight = async (
 export const getSolanaTxStatus: TxStatusResolver<OtherChain.Solana> = async ({ hash, lastValidBlockHeight }) => {
   const client = getSolanaClient()
 
-  const { data: signatureStatuses, error: signatureStatusError } = await attempt(
-    client.getSignatureStatuses([hash], {
-      searchTransactionHistory: true,
-    })
-  )
-  const signatureStatus = signatureStatuses?.value[0]
+  const { data: firstSighting, error: firstLookupError } = await readSignatureStatus(client, hash)
 
-  if (signatureStatusError) {
+  if (firstLookupError) {
     return { status: 'pending', isKnown: false }
   }
 
+  let signatureStatus = firstSighting
+
   if (!signatureStatus) {
-    // Past its last valid block height an unseen signature can never land:
-    // that is the chain's own terminal verdict, and every consumer treats
-    // `expired` as final. `not_found` would read as "not propagated yet" and
-    // keep the transaction polling as pending for good.
-    if (await isExpiredLastValidBlockHeight(client, lastValidBlockHeight)) {
+    if (!(await isExpiredLastValidBlockHeight(client, lastValidBlockHeight))) {
+      return { status: 'pending', isKnown: false }
+    }
+
+    // That absence was observed BEFORE the height, and a transaction can land
+    // in its last valid block while the height request is in flight. Only an
+    // absence observed once the chain is already past the deadline is
+    // permanent, so read history again now. A failed re-read proves nothing
+    // and stays pending: `expired` is terminal, and its documented recovery
+    // is to sign again, which would pay twice for a transfer that did land.
+    const { data: recheckedSighting, error: recheckError } = await readSignatureStatus(client, hash)
+
+    if (recheckError) {
+      return { status: 'pending', isKnown: false }
+    }
+
+    if (!recheckedSighting) {
+      // Past its last valid block height an unseen signature can never land:
+      // that is the chain's own terminal verdict, and every consumer treats
+      // `expired` as final. `not_found` would read as "not propagated yet" and
+      // keep the transaction polling as pending for good.
       return { status: 'expired', isKnown: false }
     }
 
-    return { status: 'pending', isKnown: false }
+    signatureStatus = recheckedSighting
   }
 
   if (signatureStatus.err) {

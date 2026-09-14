@@ -43,7 +43,36 @@ describe('getSolanaTxStatus', () => {
       status: 'expired',
       isKnown: false,
     })
-    expect(mocks.getSignatureStatuses).toHaveBeenCalledWith([hash], { searchTransactionHistory: true })
+    // The verdict rests on an absence observed AFTER the height, not before it.
+    expect(mocks.getSignatureStatuses).toHaveBeenCalledTimes(2)
+    expect(mocks.getSignatureStatuses).toHaveBeenLastCalledWith([hash], { searchTransactionHistory: true })
+    expect(mocks.getTransaction).not.toHaveBeenCalled()
+  })
+
+  // A transfer can land in its last valid block while the height request is
+  // in flight. The first absence is then stale, and calling it `expired` would
+  // stop the poll and send the user to re-sign a payment that executed.
+  it('recovers a signature that lands while the block height is being read', async () => {
+    mocks.getSignatureStatuses
+      .mockResolvedValueOnce({ value: [null] })
+      .mockResolvedValue({ value: [{ err: null, confirmationStatus: 'confirmed' }] })
+    mocks.getBlockHeight.mockResolvedValue(101)
+    mocks.getTransaction.mockResolvedValue({ meta: { err: null, fee: 5000 } })
+
+    const result = await getSolanaTxStatus({ chain: Chain.Solana, hash, lastValidBlockHeight: 100 })
+
+    expect(result).toMatchObject({ status: 'success', receipt: { feeAmount: 5000n } })
+    expect(mocks.getSignatureStatuses).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps an unknown signature pending when the post-expiry re-read fails', async () => {
+    mocks.getSignatureStatuses.mockResolvedValueOnce({ value: [null] }).mockRejectedValue(new Error('rpc down'))
+    mocks.getBlockHeight.mockResolvedValue(101)
+
+    await expect(getSolanaTxStatus({ chain: Chain.Solana, hash, lastValidBlockHeight: 100 })).resolves.toEqual({
+      status: 'pending',
+      isKnown: false,
+    })
     expect(mocks.getTransaction).not.toHaveBeenCalled()
   })
 
