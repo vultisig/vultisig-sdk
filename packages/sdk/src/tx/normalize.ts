@@ -117,16 +117,19 @@ const enrichRoutingMetadata = (txMap: JsonObject, args: NormalizeArgs): JsonObje
   const argChain = args.chain
   const argChainId = args.chain_id ?? args.chainId
 
-  if (!('from_chain' in out)) {
-    if (argFrom) out['from_chain'] = argFrom
-    else if (argChain) out['from_chain'] = argChain
-  }
-  if (!('fromChain' in out) && argFrom) out['fromChain'] = argFrom
   if (!('chain' in out) && argChain) out['chain'] = argChain
-  if (!('chain_id' in out) && argChainId) out['chain_id'] = argChainId
-  if (!('chainId' in out) && argChainId) out['chainId'] = argChainId
-  if (!('to_chain' in out) && argTo) out['to_chain'] = argTo
-  if (!('toChain' in out) && argTo) out['toChain'] = argTo
+  for (const [snake, camel, fallback] of [
+    ['from_chain', 'fromChain', argFrom ?? argChain],
+    ['chain_id', 'chainId', argChainId],
+    ['to_chain', 'toChain', argTo],
+  ] as const) {
+    // Payload routing wins over caller defaults, regardless of spelling.
+    if (!(snake in out)) {
+      if (camel in out) out[snake] = out[camel]
+      else if (fallback) out[snake] = fallback
+    }
+    if (!(camel in out) && snake in out) out[camel] = out[snake]
+  }
 
   return out
 }

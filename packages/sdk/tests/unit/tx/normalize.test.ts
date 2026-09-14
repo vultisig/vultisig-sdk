@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { normalizeTx, splitMultiTx, TxNormalizeError, type NormalizeArgs, type NormalizedTx } from '../../../src/tx/normalize'
+import { type NormalizeArgs, type NormalizedTx, normalizeTx, splitMultiTx, TxNormalizeError } from '../../../src/tx/normalize'
 
 describe('normalizeTx', () => {
   it('wraps a flat build_* result under "tx" and lifts chain metadata', () => {
@@ -68,6 +68,35 @@ describe('normalizeTx', () => {
     )
     expect(out.chain).toBe('Bitcoin')
     expect(out.from_chain).toBe('Bitcoin')
+  })
+
+  it.each([
+    { chain_id: '1', from_chain: 'Ethereum', to_chain: 'Arbitrum' },
+    { chainId: '1', fromChain: 'Ethereum', toChain: 'Arbitrum' },
+  ])('uses payload routing for both aliases before caller defaults: %j', metadata => {
+    const out = normalizeTx(
+      { tx: { to: '0xrecipient' }, ...metadata },
+      { chainId: '8453', fromChain: 'Base', toChain: 'Polygon' }
+    )
+    expect(out).toMatchObject({
+      chain_id: '1',
+      chainId: '1',
+      from_chain: 'Ethereum',
+      fromChain: 'Ethereum',
+      to_chain: 'Arbitrum',
+      toChain: 'Arbitrum',
+    })
+  })
+
+  it('preserves payload routing aliases on every split leg despite conflicting defaults', () => {
+    const legs = splitMultiTx(
+      { transactions: [{ to: '0xapproval' }, { to: '0xswap' }], chain_id: '1', from_chain: 'Ethereum' },
+      { chainId: '8453', fromChain: 'Base' }
+    )
+    expect(legs).toHaveLength(2)
+    for (const leg of legs) {
+      expect(leg).toMatchObject({ chain_id: '1', chainId: '1', from_chain: 'Ethereum', fromChain: 'Ethereum' })
+    }
   })
 
   it('accepts a raw JSON string (the MCP tool result transport)', () => {
