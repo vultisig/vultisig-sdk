@@ -18,12 +18,14 @@ export type { VaultImportConflictResolution, VaultImportOptions } from './VaultM
 export { Vultisig } from './Vultisig'
 
 // Vault management
-export type { VaultConfig, VaultSaveOptions } from './vault'
+export type { ResolvedTokenInfo, VaultConfig, VaultSaveOptions } from './vault'
 export {
   BroadcastPartialFailureError,
   FastVault,
   hasServer,
   isServer,
+  resolveTokenRef,
+  resolveTokenRefId,
   SecureVault,
   VaultBase,
   VaultConflictError,
@@ -1103,6 +1105,7 @@ export {
   encodeAgentRouterDepositWithMemo,
   encodeErc20Approve,
   encodeErc20Revoke,
+  ensureTransactionsBuilt,
   estimateCosmosSwapFeeLabel,
   evaluatePolicy,
   evm,
@@ -1342,3 +1345,6 @@ export {
   tronBase58ToHex,
   tronHexToBase58,
 } from './abi'
+
+// Grouped helper families retain the canonical tools implementations.
+export { balance, prep, swap } from './tools'

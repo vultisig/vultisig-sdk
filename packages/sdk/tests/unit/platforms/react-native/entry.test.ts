@@ -1,13 +1,25 @@
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
 import * as blockaidChains from '@vultisig/core-chain/security/blockaid/evmChains'
+import { isValidTxHash } from '@vultisig/core-chain/tx/isValidTxHash'
 import { AuthInfo, SignDoc, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import { beforeAll, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
 import * as sdkRn from '../../../../src/platforms/react-native/index'
+import * as tokenRef from '../../../../src/vault/tokenRef'
 import { cosmosTxFeeGasParityCases } from '../../../fixtures/cosmosTxFeeGasParity'
 
 process.env.VULTISIG_STRICT_SINGLETON = '0'
+
+describe('RN entry exposes canonical token reference resolution', () => {
+  it('exports the same resolvers and a usable result type', () => {
+    expect(sdkRn.resolveTokenRef).toBe(tokenRef.resolveTokenRef)
+    expect(sdkRn.resolveTokenRefId).toBe(tokenRef.resolveTokenRefId)
+    const native: sdkRn.ResolvedTokenInfo = sdkRn.resolveTokenRef(sdkRn.Chain.Ethereum, undefined, [])
+    expect(native).toEqual({ ticker: 'ETH', decimals: 18 })
+    expect(sdkRn.resolveTokenRefId(sdkRn.Chain.Ethereum, 'ETH', [])).toBeUndefined()
+  })
+})
 
 vi.mock('expo-crypto', () => ({
   randomUUID: () => '00000000-0000-4000-8000-000000000000',
@@ -72,6 +84,18 @@ beforeAll(async () => {
 }, 120_000)
 
 describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
+  it('re-exports canonical transaction-hash validation with unchanged chain rules', () => {
+    expect(reactNativeEntry.isValidTxHash).toBe(isValidTxHash)
+    expectTypeOf(reactNativeEntry.isValidTxHash).toEqualTypeOf<(chain: sdkRn.Chain, hash: string) => boolean>()
+
+    const hash = 'a'.repeat(64)
+    expect(reactNativeEntry.isValidTxHash(sdkRn.Chain.Ethereum, `0x${hash}`)).toBe(true)
+    expect(reactNativeEntry.isValidTxHash(sdkRn.Chain.Ethereum, hash)).toBe(false)
+    expect(reactNativeEntry.isValidTxHash(sdkRn.Chain.Bitcoin, hash)).toBe(true)
+    expect(reactNativeEntry.isValidTxHash(sdkRn.Chain.Bitcoin, 'not-a-hash')).toBe(false)
+    expect(reactNativeEntry.isValidTxHash(sdkRn.Chain.Ethereum, ` \t0x${hash}\n`)).toBe(true)
+  })
+
   it('re-exports Blockaid EVM chain canonicals by identity', () => {
     expect(reactNativeEntry.blockaidEvmChain).toBe(blockaidChains.blockaidEvmChain)
     expect(reactNativeEntry.blockaidSupportedEvmChains).toBe(blockaidChains.blockaidSupportedEvmChains)
@@ -854,5 +878,31 @@ describe('RN entry exposes canonical IBC + Sui prep helpers', () => {
     expect(rn.prepareSuiTokenTransferFromKeys).toBe(prep.prepareSuiTokenTransferFromKeys)
     expect(rn.prepareSuiTokenTransferFromKeys).toBe(suiTokenTransfer.prepareSuiTokenTransferFromKeys)
     expect(rn.SUI_NATIVE_COIN_TYPE).toBe(suiTokenTransfer.SUI_NATIVE_COIN_TYPE)
+  })
+})
+
+describe('RN grouped helper families', () => {
+  it('exposes every canonical member and preserves RN flat wrappers', async () => {
+    const canonicalBalance = await import('../../../../src/tools/balance')
+    const canonicalPrep = await import('../../../../src/tools/prep')
+    const canonicalSwap = await import('../../../../src/tools/swap')
+    for (const [group, canonical] of [
+      [sdkRn.balance, canonicalBalance],
+      [sdkRn.prep, canonicalPrep],
+      [sdkRn.swap, canonicalSwap],
+    ] as const) {
+      expect(Object.keys(group).sort()).toEqual(Object.keys(canonical).sort())
+      for (const [name, value] of Object.entries(group)) {
+        if (name in sdkRn) expect(value).toBe(sdkRn[name as keyof typeof sdkRn])
+      }
+    }
+    expect(sdkRn.prep.buildSplTransfer).toBe(sdkRn.buildSplTransfer)
+    expect(sdkRn.prep.buildSplTransfer).not.toBe(canonicalPrep.buildSplTransfer)
+    expect(sdkRn.balance.balancePolkadot).toBe(sdkRn.balancePolkadot)
+    expect(sdkRn.balance.balancePolkadot).not.toBe(canonicalBalance.balancePolkadot)
+    expect(sdkRn.prep.SwapQuoteExpiredError).toBe(canonicalPrep.SwapQuoteExpiredError)
+    expect(sdkRn.balance.formatDot).toBe(canonicalBalance.formatDot)
+    expect(sdkRn.balance.formatBalance(1500000n, 6)).toBe('1.5')
+    expect(sdkRn.swap.computeAstroportMinReceive('1000000', 0.01)).toBe('990000')
   })
 })
