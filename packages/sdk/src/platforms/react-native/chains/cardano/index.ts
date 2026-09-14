@@ -4,6 +4,8 @@ export { buildCardanoWitnessSet } from '@vultisig/core-chain/chains/cardano/cip3
 export { cardanoTxBodyHash } from '@vultisig/core-chain/chains/cardano/cip30/cardanoTxBodyHash'
 export { getCardanoCurrentSlot } from '@vultisig/core-chain/chains/cardano/client/currentSlot'
 export { submitCardanoCbor } from '@vultisig/core-chain/chains/cardano/submit/submitCardanoCbor'
+export type { CardanoExtendedUtxo } from '@vultisig/core-chain/chains/cardano/utxo/getCardanoExtendedUtxos'
+export { getCardanoExtendedUtxos } from '@vultisig/core-chain/chains/cardano/utxo/getCardanoExtendedUtxos'
 export { getCardanoUtxos } from '@vultisig/core-chain/chains/cardano/utxo/getCardanoUtxos'
 export { deriveCardanoAddress } from '@vultisig/core-chain/publicKey/address/cardano'
 export { getCardanoPublicKeyData } from '@vultisig/core-chain/publicKey/cardano'
