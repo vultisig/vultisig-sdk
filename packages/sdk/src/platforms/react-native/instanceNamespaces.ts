@@ -1,5 +1,6 @@
 import { assertBittensorAddress, decodeBittensorAddress } from '../../tools/balance/bittensor'
 import { cosmosBalanceChains, getCosmosBalance, isCosmosBalanceChain } from '../../tools/balance/cosmos'
+import { DOT_DECIMALS, formatDot } from '../../tools/balance/formatDot'
 import {
   getCardanoBalance,
   getSuiAllBalances,
@@ -12,7 +13,6 @@ import {
   getTrxBalance,
   getXrpBalance,
 } from '../../tools/balance/otherBalance'
-import { DOT_DECIMALS, formatDot } from '../../tools/balance/formatDot'
 import { formatBalance } from '../../tools/balance/rpc'
 import { getSolBalance, getSplTokenBalance } from '../../tools/balance/solana'
 import { getTaoBalance } from '../../tools/balance/taoBalance'
