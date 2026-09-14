@@ -1,10 +1,10 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { mockBuildSendKeysignPayload, mockGetPublicKey, mockIsValidAddress, mockGetWalletCore } = vi.hoisted(() => ({
+const { mockBuildSendKeysignPayload, mockGetPublicKey, mockIsValidRecipient, mockGetWalletCore } = vi.hoisted(() => ({
   mockBuildSendKeysignPayload: vi.fn(),
   mockGetPublicKey: vi.fn(),
-  mockIsValidAddress: vi.fn(),
+  mockIsValidRecipient: vi.fn(),
   mockGetWalletCore: vi.fn(),
 }))
 
@@ -14,8 +14,8 @@ vi.mock('@vultisig/core-mpc/keysign/send/build', () => ({
 vi.mock('@vultisig/core-chain/publicKey/getPublicKey', () => ({
   getPublicKey: mockGetPublicKey,
 }))
-vi.mock('@vultisig/core-chain/utils/isValidAddress', () => ({
-  isValidAddress: mockIsValidAddress,
+vi.mock('@vultisig/core-chain/utils/isValidRecipient', () => ({
+  isValidRecipient: mockIsValidRecipient,
 }))
 vi.mock('@/context/wasmRuntime', () => ({
   getWalletCore: mockGetWalletCore,
@@ -35,12 +35,13 @@ const baseIdentity: VaultIdentity = {
 const mockWalletCore = { __mock: 'walletCore' }
 const mockPublicKey = { __mock: 'publicKey' }
 const mockPayload = { __mock: 'payload' }
+const solanaPda = 'BnJQssQwsYPcNb2RrW5SP1kVxijMqsA9VVQX1U1p4kkp'
 
 describe('prepareSendTxFromKeys', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetWalletCore.mockResolvedValue(mockWalletCore)
-    mockIsValidAddress.mockReturnValue(true)
+    mockIsValidRecipient.mockReturnValue(true)
     mockGetPublicKey.mockReturnValue(mockPublicKey)
     mockBuildSendKeysignPayload.mockResolvedValue(mockPayload)
   })
@@ -90,7 +91,7 @@ describe('prepareSendTxFromKeys', () => {
   })
 
   it('rejects when receiver address is invalid', async () => {
-    mockIsValidAddress.mockReturnValue(false)
+    mockIsValidRecipient.mockReturnValue(false)
 
     await expect(
       prepareSendTxFromKeys(baseIdentity, {
@@ -105,6 +106,34 @@ describe('prepareSendTxFromKeys', () => {
       })
     ).rejects.toThrow('Invalid receiver address for chain Ethereum: not-an-address')
 
+    expect(mockBuildSendKeysignPayload).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['native SOL', undefined],
+    ['SPL token', '7v54NWdBtkjuAFJrLGsS2SXnuk8nKam81mZJeeYxVFi9'],
+  ])('rejects an off-curve Solana recipient before building a %s payload', async (_label, id) => {
+    mockIsValidRecipient.mockReturnValue(false)
+
+    await expect(
+      prepareSendTxFromKeys(baseIdentity, {
+        coin: {
+          chain: Chain.Solana,
+          address: 'GmaDrppBC7P5ARKV8g3djiwP89vz1jLK23V2GBjuAEGB',
+          decimals: id === undefined ? 9 : 6,
+          ticker: id === undefined ? 'SOL' : 'TOKEN',
+          ...(id === undefined ? {} : { id }),
+        } as any,
+        receiver: solanaPda,
+        amount: 1n,
+      })
+    ).rejects.toThrow(`Invalid receiver address for chain Solana: ${solanaPda}`)
+
+    expect(mockIsValidRecipient).toHaveBeenCalledWith({
+      chain: Chain.Solana,
+      address: solanaPda,
+      walletCore: mockWalletCore,
+    })
     expect(mockBuildSendKeysignPayload).not.toHaveBeenCalled()
   })
 
@@ -284,6 +313,19 @@ describe('prepareSendTxFromKeys', () => {
     expect(mockBuildSendKeysignPayload).toHaveBeenCalledTimes(1)
   })
 
+  // MAX is recorded from the caller, never re-derived downstream, so it only reaches
+  // the payload if this layer passes it along.
+  it('forwards the MAX flag to the payload builder', async () => {
+    await prepareSendTxFromKeys(baseIdentity, {
+      coin: { chain: Chain.Ton, address: 'UQfrom', decimals: 9, ticker: 'TON' } as any,
+      receiver: 'UQto',
+      amount: 9_950_000_000n,
+      sendMaxAmount: true,
+    })
+
+    expect(mockBuildSendKeysignPayload).toHaveBeenCalledWith(expect.objectContaining({ sendMaxAmount: true }))
+  })
+
   it('allows ERC-20 send to a different address (not the token contract)', async () => {
     const usdcContract = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
     const recipient = '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045'
@@ -300,5 +342,25 @@ describe('prepareSendTxFromKeys', () => {
     })
 
     expect(mockBuildSendKeysignPayload).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects a USDC send whose recipient is a DIFFERENT known token contract (architecture#1774)', async () => {
+    const usdcContract = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+    const usdtContract = '0xdac17f958d2ee523a2206206994597c13d831ec7'
+    await expect(
+      prepareSendTxFromKeys(baseIdentity, {
+        coin: {
+          chain: Chain.Ethereum,
+          address: '0xfrom',
+          decimals: 6,
+          ticker: 'USDC',
+          id: usdcContract,
+        } as any,
+        receiver: usdtContract,
+        amount: 1_000_000n,
+      })
+    ).rejects.toThrow(/destination.*is the USDT token contract/)
+
+    expect(mockBuildSendKeysignPayload).not.toHaveBeenCalled()
   })
 })

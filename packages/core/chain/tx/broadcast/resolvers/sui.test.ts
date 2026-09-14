@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { OtherChain } from '../../../Chain'
-import { isTransientBroadcastError, withTransientBroadcastRetry } from '../transientRetry'
+import { DeliverTxFailedError, isTransientBroadcastError, withTransientBroadcastRetry } from '../transientRetry'
 
 const { mockExecute, mockVerify } = vi.hoisted(() => ({
   mockExecute: vi.fn(),
@@ -43,21 +43,25 @@ const succeeded = {
 describe('broadcastSuiTx — sdk#1398 MoveAbort false-success', () => {
   afterEach(() => vi.clearAllMocks())
 
-  it('requests effects and throws when the tx aborts on-chain (FailedTransaction arm)', async () => {
+  it('requests effects and returns failure when the tx aborts on-chain (FailedTransaction arm)', async () => {
     mockExecute.mockResolvedValueOnce(failed('MoveAbort'))
-    await expect(broadcastSuiTx({ chain: OtherChain.Sui, tx })).rejects.toThrow(/failed on-chain/i)
+    const result = await broadcastSuiTx({ chain: OtherChain.Sui, tx })
+    expect(result).toMatchObject({ status: 'failed', retryable: false, cause: expect.any(DeliverTxFailedError) })
+    expect(result).toHaveProperty('cause.message', expect.stringMatching(/failed on-chain/i))
     expect(mockExecute).toHaveBeenCalledWith(expect.objectContaining({ include: { effects: true } }))
     // A genuinely-failed Move is NOT fed back into verifyBroadcastByHash (it's on-chain, not un-broadcast).
     expect(mockVerify).not.toHaveBeenCalled()
   })
 
-  it('throws on a Transaction arm whose execution status says failure', async () => {
+  it('returns failure on a Transaction arm whose execution status says failure', async () => {
     // The union arm and the status must BOTH say success; a mismatched pair is not proven success.
     mockExecute.mockResolvedValueOnce({
       $kind: 'Transaction',
       Transaction: { digest: '0xabc', status: { success: false, error: { message: 'InsufficientGas' } } },
     })
-    await expect(broadcastSuiTx({ chain: OtherChain.Sui, tx })).rejects.toThrow(/InsufficientGas/)
+    const result = await broadcastSuiTx({ chain: OtherChain.Sui, tx })
+    expect(result).toMatchObject({ status: 'failed', retryable: false, cause: expect.any(DeliverTxFailedError) })
+    expect(result).toHaveProperty('cause.message', expect.stringMatching(/InsufficientGas/))
     expect(mockVerify).not.toHaveBeenCalled()
   })
 
@@ -65,7 +69,11 @@ describe('broadcastSuiTx — sdk#1398 MoveAbort false-success', () => {
     // With effects requested a real endpoint always returns a status; a response WITHOUT an
     // explicit success is not proven execution success and must NOT be reported as one.
     mockExecute.mockResolvedValueOnce({ $kind: 'Transaction', Transaction: { digest: '0xabc' } })
-    await expect(broadcastSuiTx({ chain: OtherChain.Sui, tx })).rejects.toThrow()
+    await expect(broadcastSuiTx({ chain: OtherChain.Sui, tx })).resolves.toMatchObject({
+      status: 'failed',
+      retryable: false,
+      cause: expect.any(DeliverTxFailedError),
+    })
     expect(mockVerify).not.toHaveBeenCalled()
   })
 
@@ -78,8 +86,9 @@ describe('broadcastSuiTx — sdk#1398 MoveAbort false-success', () => {
     // regex-matching: with a message that matches nothing, the assertion passes on a bare Error too
     // and the guard goes inert.
     mockExecute.mockResolvedValueOnce(failed(moveAbort))
-    const err = await broadcastSuiTx({ chain: OtherChain.Sui, tx }).catch((e: unknown) => e)
-    expect(isTransientBroadcastError(err)).toBe(false)
+    const result = await broadcastSuiTx({ chain: OtherChain.Sui, tx })
+    expect(result.status).toBe('failed')
+    expect(isTransientBroadcastError(result.status === 'failed' ? result.cause : undefined)).toBe(false)
     // Red-on-revert anchor: prove the fixture really does trip the message regex, so the assertion
     // above can only be passing because of the marker.
     expect(isTransientBroadcastError(new Error(`Sui transaction failed on-chain: ${moveAbort}`))).toBe(true)
@@ -93,17 +102,22 @@ describe('broadcastSuiTx — sdk#1398 MoveAbort false-success', () => {
     // this pass on a bare Error and prove nothing about the wrapper.
     mockExecute.mockResolvedValue(failed(moveAbort))
 
-    await expect(withTransientBroadcastRetry(() => broadcastSuiTx({ chain: OtherChain.Sui, tx }))).rejects.toThrow(
-      /failed on-chain/i
-    )
+    await expect(
+      withTransientBroadcastRetry(() => broadcastSuiTx({ chain: OtherChain.Sui, tx }))
+    ).resolves.toMatchObject({ status: 'failed', retryable: false, cause: expect.any(DeliverTxFailedError) })
     // Called exactly once = the wrapper did NOT retry the aborted tx (marker short-circuited).
     expect(mockExecute).toHaveBeenCalledTimes(1)
     expect(mockVerify).not.toHaveBeenCalled()
   })
 
-  it('returns the response when the tx executes successfully', async () => {
+  it('returns the canonical result when the tx executes successfully', async () => {
     mockExecute.mockResolvedValueOnce(succeeded)
-    await expect(broadcastSuiTx({ chain: OtherChain.Sui, tx })).resolves.toBe(succeeded)
+    await expect(broadcastSuiTx({ chain: OtherChain.Sui, tx })).resolves.toEqual({
+      status: 'accepted',
+      finality: 'pending',
+      txHash: '0xabc',
+      details: { provider: succeeded },
+    })
     expect(mockVerify).not.toHaveBeenCalled()
   })
 

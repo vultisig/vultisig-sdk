@@ -1,0 +1,200 @@
+import { describe, expect, it } from 'vitest'
+
+import {
+  getTonActionFailure,
+  getTonComputeFailure,
+  getTonTxFailure,
+  parseTonBroadcastRejection,
+  TonBroadcastRejectedError,
+} from './failure'
+
+describe('getTonComputeFailure', () => {
+  it('treats 0, 1 and an absent code as success', () => {
+    expect(getTonComputeFailure(undefined)).toBeUndefined()
+    expect(getTonComputeFailure(0)).toBeUndefined()
+    expect(getTonComputeFailure(1)).toBeUndefined()
+  })
+
+  it.each([
+    [33, 'seqno-mismatch'],
+    [133, 'seqno-mismatch'],
+    [34, 'wallet-id-mismatch'],
+    [134, 'wallet-id-mismatch'],
+    [35, 'invalid-signature'],
+    [135, 'invalid-signature'],
+    [36, 'expired'],
+    [136, 'expired'],
+    [13, 'out-of-gas'],
+    [-14, 'out-of-gas'],
+    [705, 'jetton-unauthorized'],
+    [706, 'not-enough-jettons'],
+  ] as const)('maps exit code %i to %s', (exitCode, reason) => {
+    expect(getTonComputeFailure(exitCode)).toMatchObject({ reason, phase: 'compute', exitCode })
+  })
+
+  it('tells the user to check the device clock for an expired transaction', () => {
+    expect(getTonComputeFailure(136)?.message).toMatch(/date and time/)
+  })
+
+  it('tells the user another transaction went first for a seqno mismatch', () => {
+    expect(getTonComputeFailure(133)?.message).toMatch(/processed first/)
+  })
+
+  it.each([707, 709])(
+    'leaves jetton-wallet code %i generic, because the reference contract reuses it for two unrelated checks',
+    exitCode => {
+      expect(getTonComputeFailure(exitCode)).toMatchObject({ reason: 'contract-rejected', exitCode })
+    }
+  )
+
+  it('reports an unknown code by number', () => {
+    expect(getTonComputeFailure(137)).toEqual({
+      reason: 'contract-rejected',
+      phase: 'compute',
+      exitCode: 137,
+      message: 'The contract rejected the transaction (exit code 137).',
+    })
+  })
+})
+
+describe('getTonActionFailure', () => {
+  it('reads action-phase 36 as an invalid destination, not as the wallet expiry code', () => {
+    expect(getTonActionFailure({ success: false, result_code: 36 })).toMatchObject({
+      reason: 'invalid-destination',
+      phase: 'action',
+      exitCode: 36,
+    })
+  })
+
+  it('reads result code 37 as insufficient funds on its own — it means exactly that', () => {
+    expect(getTonActionFailure({ result_code: 37 })).toMatchObject({ reason: 'insufficient-funds' })
+    expect(getTonActionFailure({ result_code: 37 })?.message).toMatch(/0\.05 TON/)
+  })
+
+  // 40 is "not enough funds, the message is too large, or its Merkle depth is too
+  // big". Reading every 40 as a funding failure would tell someone to top up when the
+  // payload is what has to shrink.
+  it('leaves result code 40 generic unless the node reports no funds', () => {
+    expect(getTonActionFailure({ success: false, result_code: 40, msgs_created: 0 })).toMatchObject({
+      reason: 'action-failed',
+      phase: 'action',
+      exitCode: 40,
+    })
+    expect(getTonActionFailure({ success: false, result_code: 40, msgs_created: 0 })?.message).not.toMatch(/0\.05 TON/)
+
+    expect(getTonActionFailure({ success: false, no_funds: true, result_code: 40 })).toMatchObject({
+      reason: 'insufficient-funds',
+      exitCode: 40,
+    })
+  })
+
+  it('does not send an oversized-message failure to top up its balance', () => {
+    expect(getTonActionFailure({ success: false, result_code: 40, msgs_created: 0 })?.message).not.toMatch(/balance/i)
+    expect(getTonActionFailure({ success: false, result_code: 40 })?.message).not.toMatch(/balance/i)
+  })
+
+  it('reads no_funds without a result code as insufficient funds', () => {
+    expect(getTonActionFailure({ success: false, no_funds: true, result_code: 0 })).toMatchObject({
+      reason: 'insufficient-funds',
+    })
+  })
+
+  // TON skips a failing action and sends the rest, so a skipped action in a batch
+  // does not mean the transaction moved nothing. Only the node's own count of
+  // outgoing messages settles it, and "nothing was sent, try again" aimed at a
+  // batch that already delivered part of itself is how a transfer goes out twice.
+  it('says nothing was sent only when the node reports no outgoing message', () => {
+    expect(getTonActionFailure({ success: false, skipped_actions: 1, msgs_created: 0 })).toMatchObject({
+      reason: 'action-failed',
+      phase: 'action',
+    })
+    expect(getTonActionFailure({ success: false, skipped_actions: 1, msgs_created: 0 })?.message).toMatch(
+      /nothing was sent/
+    )
+  })
+
+  it('stays neutral about a batch that skipped one transfer and delivered others', () => {
+    const partial = getTonActionFailure({ success: true, result_code: 0, skipped_actions: 1, msgs_created: 1 })
+
+    expect(partial).toMatchObject({ reason: 'action-partially-failed', phase: 'action' })
+    expect(partial?.message).not.toMatch(/nothing was sent/)
+    expect(partial?.message).toMatch(/history/)
+  })
+
+  it('does not claim nothing was sent when the node reports no message count at all', () => {
+    for (const action of [{ success: false }, { success: true, result_code: 0, skipped_actions: 1 }]) {
+      expect(getTonActionFailure(action)).toMatchObject({ reason: 'action-partially-failed' })
+      expect(getTonActionFailure(action)?.message).not.toMatch(/nothing was sent/)
+    }
+  })
+
+  it('applies the same rule to an unnamed result code', () => {
+    expect(getTonActionFailure({ success: false, result_code: 33, skipped_actions: 1, msgs_created: 2 })).toMatchObject(
+      {
+        reason: 'action-partially-failed',
+        exitCode: 33,
+      }
+    )
+    expect(getTonActionFailure({ success: false, result_code: 33, msgs_created: 0 })).toMatchObject({
+      reason: 'action-failed',
+      exitCode: 33,
+    })
+  })
+
+  it('is silent for a healthy action phase', () => {
+    expect(getTonActionFailure({ success: true, no_funds: false, result_code: 0, skipped_actions: 0 })).toBeUndefined()
+    expect(getTonActionFailure(undefined)).toBeUndefined()
+  })
+})
+
+describe('getTonTxFailure', () => {
+  it('prefers the compute phase, then the action phase, then the aborted flag', () => {
+    expect(
+      getTonTxFailure({ aborted: true, compute_ph: { exit_code: 133 }, action: { result_code: 37 } })
+    ).toMatchObject({ reason: 'seqno-mismatch' })
+    expect(
+      getTonTxFailure({ aborted: false, compute_ph: { exit_code: 0 }, action: { result_code: 37 } })
+    ).toMatchObject({
+      reason: 'insufficient-funds',
+    })
+    expect(getTonTxFailure({ aborted: true })).toMatchObject({ reason: 'aborted', phase: 'compute' })
+  })
+
+  it('returns nothing for a transaction that cleared both phases', () => {
+    expect(getTonTxFailure({ aborted: false, compute_ph: { exit_code: 0 }, action: { success: true } })).toBeUndefined()
+  })
+})
+
+describe('parseTonBroadcastRejection', () => {
+  const toncenterRejection =
+    'LITE_SERVER_UNKNOWN: cannot apply external message to current state : External message was not accepted\nCannot run message on account: inbound external message rejected by transaction 4C6FE61A4B7925532DEE47DEED8367FB9E918D4B32A9B9EC270BEF9D9C65CA13:\nexitcode=133, steps=49, gas_used=0\nVM Log (truncated):\n...execute THROWIFNOT 133\ndefault exception handler, terminating vm with exit code 133\n'
+
+  it('reads the exit code out of a real toncenter rejection', () => {
+    expect(parseTonBroadcastRejection(new Error(toncenterRejection))).toMatchObject({
+      reason: 'seqno-mismatch',
+      phase: 'compute',
+      exitCode: 133,
+    })
+    expect(
+      parseTonBroadcastRejection({ message: 'toncenter sendBocReturnHash failed: … exitcode=36, steps=13' })
+    ).toMatchObject({ reason: 'expired', exitCode: 36 })
+  })
+
+  it('ignores transport errors and rejections without an exit code', () => {
+    expect(parseTonBroadcastRejection(new Error('Failed to unpack Message'))).toBeUndefined()
+    expect(parseTonBroadcastRejection(new Error('fetch failed'))).toBeUndefined()
+    expect(parseTonBroadcastRejection(undefined)).toBeUndefined()
+  })
+})
+
+describe('TonBroadcastRejectedError', () => {
+  it('carries the human-readable message and keeps the original cause', () => {
+    const cause = new Error('exitcode=136')
+    const error = new TonBroadcastRejectedError(getTonComputeFailure(136)!, cause)
+
+    expect(error.name).toBe('TonBroadcastRejectedError')
+    expect(error.message).toMatch(/date and time/)
+    expect(error.failure.reason).toBe('expired')
+    expect(error.cause).toBe(cause)
+  })
+})

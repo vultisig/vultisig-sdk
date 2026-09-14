@@ -23,6 +23,7 @@ import type {
 import { normalizeToHex } from '../utils/bytes'
 import { computeNotificationVaultId } from '../utils/computeNotificationVaultId'
 import { createVaultBackup } from '../utils/export'
+import { canonicalizeVaultData } from './utils/canonicalizeVaultData'
 import { VaultBase } from './VaultBase'
 import { VaultError, VaultErrorCode } from './VaultError'
 
@@ -533,6 +534,8 @@ export class SecureVault extends VaultBase {
    * @param context - Vault context with dependencies
    */
   static fromStorage(vaultData: VaultData, context: VaultContext, persisted = true): SecureVault {
+    vaultData = canonicalizeVaultData(vaultData)
+
     // Validate vault type
     if (vaultData.type !== 'secure') {
       throw new VaultError(VaultErrorCode.InvalidVault, `Cannot create SecureVault from ${vaultData.type} vault data`)

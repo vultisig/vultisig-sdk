@@ -1,3 +1,5 @@
+import type { VaultImportOptions } from '@vultisig/sdk'
+
 import type {
   BalanceResult,
   BroadcastParams,
@@ -46,7 +48,7 @@ export type ISDKAdapter = {
 
   createSecureVault(options: CreateSecureVaultOptions): Promise<CreateSecureVaultResult>
 
-  importVault(content: string, password?: string): Promise<VaultInfo>
+  importVault(content: string, password?: string, options?: VaultImportOptions): Promise<VaultInfo>
 
   isVaultEncrypted(content: string): Promise<boolean>
 

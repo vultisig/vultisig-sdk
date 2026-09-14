@@ -7,7 +7,11 @@ import { initWasm, type WalletCore } from '@trustwallet/wallet-core'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import { getEncodedSigningInputs } from '../../keysign/signingInputs'
-import { RippleSpecificSchema, TonSpecificSchema } from '../../types/vultisig/keysign/v1/blockchain_specific_pb'
+import {
+  RippleSpecificSchema,
+  TonSpecificSchema,
+  TransactionType,
+} from '../../types/vultisig/keysign/v1/blockchain_specific_pb'
 import { CoinSchema } from '../../types/vultisig/keysign/v1/coin_pb'
 import { KeysignPayloadSchema } from '../../types/vultisig/keysign/v1/keysign_message_pb'
 import { getPreSigningHashes } from '.'
@@ -22,6 +26,27 @@ type RippleFixture = {
   feeDrops: string
   sequence: number
   lastLedgerSequence: number
+  flags?: number
+  memo?: string
+  expectedSigningHashHex: string
+}
+
+type RippleIssuedFixture = {
+  senderPrivateKeyHex: string
+  recipientPrivateKeyHex: string
+  senderAddress: string
+  recipientAddress: string
+  senderPublicKeyHex: string
+  issuerAddress: string
+  currencyCode: string
+  tokenTicker: string
+  decimals: number
+  amountBaseUnits: string
+  expectedValue: string
+  feeDrops: string
+  sequence: number
+  lastLedgerSequence: number
+  destinationTag: number
   flags?: number
   memo?: string
   expectedSigningHashHex: string
@@ -53,6 +78,8 @@ const loadFixture = <T>(name: string): T =>
 
 const ripple = loadFixture<RippleFixture>('ripple-payment.json')
 const rippleMemo = loadFixture<RippleFixture>('ripple-payment-memo.json')
+const rippleIssued = loadFixture<RippleIssuedFixture>('ripple-issued-payment.json')
+const rippleIssuedMemo = loadFixture<RippleIssuedFixture>('ripple-issued-payment-memo.json')
 const tonNative = loadFixture<TonNativeFixture>('ton-native-transfer.json')
 const tonJetton = loadFixture<TonJettonFixture>('ton-jetton-transfer.json')
 const tonJettonInactive = loadFixture<TonJettonFixture>('ton-jetton-transfer-inactive.json')
@@ -127,6 +154,50 @@ describe('WalletCore cross-encoder signing hashes', () => {
   it('matches the shared XRP Payment memo fixture consumed by the RN-JS builder suite', async () => {
     expect(rippleMemo.flags).toBeUndefined()
     await expectRippleFixture(rippleMemo)
+  })
+
+  // An issued-currency Payment is built by both encoders independently, and an
+  // XRPL token amount is serialized as a normalised mantissa/exponent rather
+  // than verbatim digits. Pin the two against each other so a rounding or
+  // field-set change on either side cannot silently split a mixed-platform
+  // committee's signing preimage.
+  const expectRippleIssuedFixture = async (fixture: RippleIssuedFixture) => {
+    const payload = create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, {
+        chain: Chain.Ripple,
+        ticker: fixture.tokenTicker,
+        address: fixture.senderAddress,
+        contractAddress: `${fixture.currencyCode}.${fixture.issuerAddress}`,
+        decimals: fixture.decimals,
+        isNativeToken: false,
+        hexPublicKey: fixture.senderPublicKeyHex,
+      }),
+      toAddress: fixture.recipientAddress,
+      toAmount: fixture.amountBaseUnits,
+      memo: fixture.memo,
+      blockchainSpecific: {
+        case: 'rippleSpecific',
+        value: create(RippleSpecificSchema, {
+          gas: BigInt(fixture.feeDrops),
+          sequence: BigInt(fixture.sequence),
+          lastLedgerSequence: BigInt(fixture.lastLedgerSequence),
+          destinationTag: fixture.destinationTag,
+          transactionType: TransactionType.RIPPLE_PAYMENT,
+        }),
+      },
+    })
+
+    await expect(getSigningHash(payload, Chain.Ripple)).resolves.toBe(fixture.expectedSigningHashHex)
+  }
+
+  it('matches the shared issued-currency Payment fixture consumed by the RN-JS builder suite', async () => {
+    expect(rippleIssued.flags).toBe(0)
+    await expectRippleIssuedFixture(rippleIssued)
+  })
+
+  it('matches the shared issued-currency Payment memo fixture consumed by the RN-JS builder suite', async () => {
+    expect(rippleIssuedMemo.flags).toBeUndefined()
+    await expectRippleIssuedFixture(rippleIssuedMemo)
   })
 
   it('matches the shared TON native-transfer fixture consumed by the RN-JS builder suite', async () => {

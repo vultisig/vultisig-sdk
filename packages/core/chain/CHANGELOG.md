@@ -1,5 +1,289 @@
 # @vultisig/core-chain
 
+## 5.4.2
+
+### Patch Changes
+
+- [#2359](https://github.com/vultisig/vultisig-sdk/pull/2359) [`1ec5c2a`](https://github.com/vultisig/vultisig-sdk/commit/1ec5c2aec8499ef009c248bfd714720c07798315) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Robinhood (4663) now declares the canonical Multicall3 on its viem chain, so balance discovery batches the whole token catalog in one call instead of falling back to one `eth_call` per token against the public RPC. The contract is deployed there with bytecode identical to the Ethereum and Base deployments; only the public deployment registry had not listed the chain. Also records that KyberSwap's MetaAggregationRouterV2 keeps its standard address on Robinhood: `/routes` and `/route/build` on the `robinhood` API path both return `0x6131b5fae19ea4f9d964eac0408e4408b66337b5` with buildable calldata, so the flat Kyber allowlist was already correct.
+
+## 5.4.1
+
+### Patch Changes
+
+- [#2362](https://github.com/vultisig/vultisig-sdk/pull/2362) [`e4d2594`](https://github.com/vultisig/vultisig-sdk/commit/e4d2594393043f89a99d1e38387cc139047f7af8) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Share Tron Base58Check validation across balance lookup, transaction building, and energy estimation, preserving the existing accepted address prefixes.
+
+- [#2361](https://github.com/vultisig/vultisig-sdk/pull/2361) [`1cb2615`](https://github.com/vultisig/vultisig-sdk/commit/1cb2615acefd7f6f1170ab3340bb1d23d63ee1ca) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Preserve case-sensitive non-EVM token identifiers in curated lookups, discovery, and token-transfer guards. EVM addresses remain case-insensitive. Consumers of knownTokensIndex must use canonical non-EVM keys without lowercasing them; the shared getKnownToken helper applies the chain-specific matching rule.
+
+## 5.4.0
+
+### Minor Changes
+
+- [#2347](https://github.com/vultisig/vultisig-sdk/pull/2347) [`864dfcb`](https://github.com/vultisig/vultisig-sdk/commit/864dfcb375c474f5bcc6f79bf18aeb145489cc47) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Blockaid now covers Robinhood chain (4663) as `robinhood`. Transaction simulation and validation run for Robinhood dApp requests and swaps, so a Uniswap swap on Robinhood shows its balance changes on the verify screen instead of nothing. Because SwapKit's EVM source eligibility keys off Blockaid coverage, Robinhood also becomes a SwapKit source chain, with the returned router screened through the Blockaid address scan like every other covered EVM chain.
+
+- [#2343](https://github.com/vultisig/vultisig-sdk/pull/2343) [`80ba27f`](https://github.com/vultisig/vultisig-sdk/commit/80ba27f30afbeb104a8cc5738b5942467d977c9e) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Preserve requested affiliate rates and native recipient allocations on swap quotes, including explicit zero rates, without changing fees or transaction construction. The optional quote affiliate metadata is covered by the existing mutation fingerprint; older quotes retain an unknown rate.
+
+### Patch Changes
+
+- [#2341](https://github.com/vultisig/vultisig-sdk/pull/2341) [`ea2e6b7`](https://github.com/vultisig/vultisig-sdk/commit/ea2e6b7f4fc005d93d0a31741f521d7539d3104e) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject negative amounts before hexadecimal encoding so EVM and Cardano transaction inputs cannot silently contain empty amount bytes. Preserve existing encodings for non-negative values, including unsigned Long quantities.
+
+- [#2354](https://github.com/vultisig/vultisig-sdk/pull/2354) [`4fe2d97`](https://github.com/vultisig/vultisig-sdk/commit/4fe2d977cac34de6d0cf0cfefafdb6d484253a56) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject off-curve Solana wallet recipients before preparing sends or fee estimates.
+
+- [#2344](https://github.com/vultisig/vultisig-sdk/pull/2344) [`f5b79a4`](https://github.com/vultisig/vultisig-sdk/commit/f5b79a4b3ba943a1e80c4f8c01ecf1cd137a155d) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject Tron gateway errors, empty contract balance results, and JSON-RPC errors instead of treating them as zero balances or decoding error messages. Preserve legitimate zero balances and propagate read failures to maximum-send callers.
+
+- Updated dependencies [[`341df52`](https://github.com/vultisig/vultisig-sdk/commit/341df52d63858f41172be2f61bde7c4ca694ad71), [`ea2e6b7`](https://github.com/vultisig/vultisig-sdk/commit/ea2e6b7f4fc005d93d0a31741f521d7539d3104e)]:
+  - @vultisig/lib-utils@0.10.7
+
+## 5.3.0
+
+### Minor Changes
+
+- [#2325](https://github.com/vultisig/vultisig-sdk/pull/2325) [`7c95286`](https://github.com/vultisig/vultisig-sdk/commit/7c9528622702a1e6f10cd5ff72017779d25e509a) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - EVM fee quotes now size the gas reserve from the transaction itself instead of a flat 600k floor. An aggregator swap is signed with the larger of the route's own gas and 1.5x its simulation (1.5x the 600k default when it cannot be simulated, e.g. a token route quoted before its allowance exists); a THORChain or Maya swap deposit (any transaction carrying the native swap payload) takes a fixed 120k; a plain transfer, including a memo-carrying vault deposit that carries no swap payload, takes its simulation raised to a per-chain floor with no inflation (when it cannot be simulated, that floor plus the intrinsic cost of its memo calldata); a dApp or other contract call keeps 1.5x headroom over its simulation. Base-fee headroom drops from 50% to 20% (32% for swaps), legacy-priced chains (BSC) are priced from `eth_gasPrice` with no tip, and the tip is the highest recent 5th-percentile reward from `eth_feeHistory`, capped at the gas price, with per-chain floors (1 gwei on tip-auction chains, 30 gwei on Polygon, 20 wei on OP-stack rollups) and a zero tip on Arbitrum, Mantle and Robinhood.
+
+  `getEvmFeeQuote`'s `minimumGasLimit` now only raises the value that stands in for a failed simulation and never a successful estimate. `getEvmTransferGasLimit`, `getEvmContractCallGasLimit` and `evmRouterDepositGasLimit` are exported from `@vultisig/core-chain/tx/fee/evm/evmGasLimit`, and `getEvmGasPrice` from `@vultisig/core-chain/tx/fee/evm/gasPrice`.
+
+- [#2328](https://github.com/vultisig/vultisig-sdk/pull/2328) [`741272f`](https://github.com/vultisig/vultisig-sdk/commit/741272f8d3872afdf12d9487d2121dee04c2f363) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Move `slippage_bps` on a native swap quote from the top level into `fees`, where THORChain and MayaChain actually send it.
+
+  `NativeSwapQuote.slippage_bps` was never populated: THORChain's `QuoteSwapResponse` has no such property, and its `QuoteFees` schema declares `slippage_bps` as a required integer. MayaChain's spec agrees. Because the field was optional, every consumer reading it silently got `undefined` rather than a compile error — which is how the price-impact row went missing in the desktop app and extension.
+
+  `NativeSwapFees` now carries `slippage_bps?: number`, and the phantom top-level field is gone so the wrong read cannot compile. This is a type-only change; `getNativeSwapQuote` already spreads the response through verbatim, so no runtime behavior changes.
+
+  Note that `slippage_bps` is the price impact alone and is not interchangeable with the neighbouring `total_bps`, which is the total fee relative to the amount out.
+
+- [#2331](https://github.com/vultisig/vultisig-sdk/pull/2331) [`982d464`](https://github.com/vultisig/vultisig-sdk/commit/982d4645467272f32e33a2df20883c1a7171a7ee) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Publish the SwapKit swap-fee work to the core packages that hold it. [#2315](https://github.com/vultisig/vultisig-sdk/issues/2315) landed
+  `swap_fee` on `SwapKitSwapPayload`, the `getKeysignSwapFeeFields` reader, and the
+  `sub_provider` route tag in `@vultisig/core-mpc`, plus the transfer-route fee
+  resolution in `@vultisig/core-chain` — but its changeset named only
+  `@vultisig/sdk`, so neither core package was versioned and the release skipped
+  both. Clients that consume `@vultisig/core-mpc` directly, rather than through
+  `@vultisig/sdk`, cannot reach the new fee group or its reader until these are
+  republished.
+
+- [#2339](https://github.com/vultisig/vultisig-sdk/pull/2339) [`95cf397`](https://github.com/vultisig/vultisig-sdk/commit/95cf39722b8a4d3e197b26bcef9983ecef6c3703) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(solana): verified / unverified / scam classification for SPL tokens, and verified-only discovery
+
+  Solana discovery kept a mint when a price id could be found for it. That hid legitimate tokens that simply had no CoinGecko listing, and did nothing about the airdropped counterfeits and zero-decimal spam a Solana wallet accumulates — a priced impostor was auto-added, an unpriced real token was not, and neither carried a label.
+
+  `findSolanaCoins` now returns **verified mints only**, priced or not, mirroring TON. Zero-balance token accounts are skipped, Jupiter's search endpoint answers for a hundred mints per call instead of one call per token, CoinGecko ids come from its on-chain multi-token endpoint thirty mints per call, decimals come from the token account itself, and curated metadata wins for tokens we ship ourselves. When Jupiter cannot be reached, listed mints are still discovered from the registry's metadata; a failed price-id lookup, by contrast, fails the round instead of saving the token without a price id for good. Unverified and scam mints can still be added by hand, where the UI labels them.
+
+  Verification lives in `@vultisig/core-chain/chains/solana/spl/verification`. The registry of verified mints (`chains/solana/spl/verifiedRegistry`) merges our curated Solana tokens with Jupiter's verified list, fetched once an hour and degrading to the curated list alone when unreachable. `resolveSolanaTokenVerification` is pure: a listed mint — or one Jupiter itself flags verified — is `verified`; an unlisted mint is `scam` when its symbol or name collapses onto a verified token's, and `unverified` otherwise. `getSolanaTokenVerification({ id, ticker })` is the one-call form for token rows and approval cards; a listed mint is answered from the registry alone, any other mint is judged by what it claims on Jupiter, falling back to the local ticker offline. The tiers are the chain-agnostic `TokenVerification` type.
+
+  The symbol normaliser behind the counterfeit heuristic moves to `@vultisig/core-chain/coin/tokenSymbol` as `normalizeTokenSymbol`; `chains/ton/jetton/symbol` keeps exporting `normalizeJettonSymbol` as an alias. `coin/jupiter/api` gains `getJupiterTokens` (batched, keyed by mint, filtered to the mints asked for) and `getJupiterVerifiedTokens`, `SolanaJupiterToken` carries Jupiter's `isVerified` flag and `tags`, and `coin/coingecko/getCoingeckoId` gains the batched `getSolanaCoingeckoIds`. `getSolanaTokenMetadata` now fails with a clear error for a mint Jupiter does not index instead of a `TypeError`.
+
+### Patch Changes
+
+- [#2002](https://github.com/vultisig/vultisig-sdk/pull/2002) [`2e1ed70`](https://github.com/vultisig/vultisig-sdk/commit/2e1ed704ccd0a360eaf760f1258c7cd8a4401e22) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Net Solana Blockaid simulation diffs by resolved mint (native SOL and the WSOL mint share a bucket) before classifying the result as a `swap` or `transfer`. The wrap-then-spend case previously surfaced as a bogus "SOL to WSOL swap" whose destination amount was only the token account's rent-exempt residual, at up to ~29x smaller than the amount actually leaving. The reverse unwrap/close-account case now rejects the receive-only result instead of inventing a transfer. The parser now nets same-mint legs and only classifies as a swap when two distinct mints remain.
+
+## 5.2.0
+
+### Minor Changes
+
+- [#2306](https://github.com/vultisig/vultisig-sdk/pull/2306) [`a5def09`](https://github.com/vultisig/vultisig-sdk/commit/a5def098e06cf7269174eb6840dc516d78ec55f9) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(ton): explain TON failures in plain language — seqno replay, expired deadline, fees, and the rest
+
+  A TON send that fails today comes back as an opaque `exitcode=133` in a toncenter rejection, or as a bare `error` status with nothing attached. Those two codes — 133 (W5) / 33 (v4) for a replayed seqno and 136 / 36 for an expired `valid_until`, which is almost always a device clock that drifted — dominate TON support load, and the fix is different for each.
+
+  `@vultisig/core-chain/chains/ton/failure` maps a failure to a `TonTxFailure`: a stable `reason` (`seqno-mismatch`, `expired`, `invalid-signature`, `wallet-id-mismatch`, `insufficient-funds`, `out-of-gas`, `invalid-destination`, `not-enough-jettons`, `jetton-unauthorized`, `action-failed`, `action-partially-failed`, `aborted`, `contract-rejected`), the phase it came from, the raw exit code, and an English `message` that says what happened and what to do ("make sure your device's date and time are set automatically, then send it again"; "keep about 0.05 TON spare for fees"). Compute-phase codes cover wallet v3/v4 and W5 alike, the TVM out-of-gas codes and the standard jetton wallet's 705/706 (707 and 709 stay generic: the reference contract reuses each for two unrelated checks); action-phase codes distinguish 36 (invalid destination) from the wallet's 36 (expired), and read 37 as not enough TON. Action code 40 stays generic on purpose: it reads "not enough funds, the message is too large, or its Merkle depth is too big", so it is a funding failure only when the node's own `no_funds` flag backs it, and any other unnamed code is treated the same way.
+
+  A generic action-phase failure only claims "nothing was sent" when the node reports `msgs_created: 0`. Every Vultisig TON send goes out with `IGNORE_ERRORS`, under which a failing action is skipped and the rest still leave, so a batch can lose one transfer and deliver the others — telling that user to retry is how a transfer goes out twice. Without that evidence the failure is `action-partially-failed`, whose message says at least one transfer did not happen, that others may have, and to check the transaction history before sending again.
+
+  `TxStatusResult` gains an optional `failure?: TxFailureInfo` (`reason`, `message`, `exitCode?`, `phase?`), which the TON status resolver now fills for every `error`. `broadcastTonTx` classifies a wallet-contract refusal at broadcast time: the failed result's `cause` is a `TonBroadcastRejectedError` carrying the same `failure`, its `message` is the human explanation, the original toncenter error stays in `cause`, and the refusal is marked non-retryable — resending the same bytes can only be refused again. A seqno refusal whose message is already on chain (a co-signer broadcast first) is still accepted through the existing hash verification. The types, `getTonTxFailure`, `parseTonBroadcastRejection` and `TonBroadcastRejectedError` are re-exported from `@vultisig/sdk`, including its React Native entry — RN broadcasts TON itself and its `broadcastTonTx` rejects with toncenter's raw `exitcode=<n>` text.
+
+- [#2299](https://github.com/vultisig/vultisig-sdk/pull/2299) [`bcca32c`](https://github.com/vultisig/vultisig-sdk/commit/bcca32c885066e2bf224aa37d6666c68a3684956) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(ton): W5 (wallet v5r1) support as an explicit per-account opt-in
+
+  Every Vultisig TON account has been hard-pinned to the V4R2 wallet contract. W5 is the default for new wallets in Tonkeeper and Telegram Wallet and is the gateway to what users now expect from TON — up to 255 messages per request instead of 4, lower fees, and relayer-paid ("gasless") transactions. WalletCore has supported it for a while; nothing here used it.
+
+  A W5 wallet is a _different address_ for the same key, with its own balance, so this is not a switch: V4R2 stays the default everywhere and W5 is selected per account.
+
+  - `@vultisig/core-chain/chains/ton/wallet` (new): `TonWalletVersion` (`'v4r2' | 'v5r1'`), `deriveTonAddress` for either contract, `resolveTonWalletVersion` to tell which contract an address is for a key, the W5 mainnet wallet id, and the per-contract message limits.
+  - `vault.setTonWalletVersion('v5r1')` selects which of the key's two TON accounts the vault acts on: `send`, balances, swaps, fee estimation and every other address lookup follow it, so one selected account is used consistently. `vault.address(chain, { tonWalletVersion })` — like `deriveAddress` / `getChainAddress` / `deriveAddressFromKeys` — names a contract for a single lookup without changing the selection, so a client can show both accounts side by side for a migration flow.
+  - Balance cache keys name a chain and an asset, not an account, so switching between the two accounts drops the balance scope and any fetch already in flight for the old account is neither cached nor announced: it still answers its own caller, but `balanceUpdated` carries no account identity, so emitting it after a switch would credit the old account's balance to the new one.
+  - The keysign signing-input resolver derives the contract from the sender address — the payload has no wallet-version field, and every co-signer reaches the same answer from the shared vault key — and refuses an address that is neither of the key's wallets rather than assuming V4R2. W5 requests carry `IGNORE_ACTION_PHASE_ERRORS`, which the W5 code requires of every external action (its replay protection) and WalletCore enforces; the TON status resolver's action-phase check covers the blindness that flag would otherwise cause. Message counts are capped per contract.
+  - The RN-safe builders (`buildTonSendTx`, `buildTonJettonTransferTx`, `buildTonTxFromSigningPayload`, `deriveTonAddress`, `prepareJettonTransferTxFromKeys`) take `walletVersion`; W5 uses the `signed_external` request layout with the signature appended, byte-identical to WalletCore. New `buildV5R1Wallet` / `TON_V5R1_WALLET_ID` alongside the V4R2 helpers.
+
+  Golden vectors (`testdata/cross-encoder-golden/ton-w5-*.json`) pin the W5 pre-images and are verified against real WalletCore, including the full signed external message. Client-side migration UI (show both accounts, move funds, reconnect dApps) is separate work per platform.
+
+## 5.1.0
+
+### Minor Changes
+
+- [#2305](https://github.com/vultisig/vultisig-sdk/pull/2305) [`20de22f`](https://github.com/vultisig/vultisig-sdk/commit/20de22f49c244ffc065011291754f89ef0d6e61a) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(ton): jetton auto-discovery with verified / unverified / scam classification
+
+  TON wallets get carpet-bombed with counterfeit jettons — fake USDT above all — and until now the SDK could neither find the jettons an address holds nor say which of them to trust: discovery covered EVM, Solana, Cosmos, Cardano and Ripple, and TON shipped nine curated jettons plus manual add. A wallet with no labels cannot protect a user from the most common TON scam.
+
+  `findCoins` now supports `Chain.Ton` (`coinFinderChainKinds` gains `'ton'`). `findTonCoins` lists every jetton with a non-zero balance through the Toncenter proxy in one paged call — the indexer's symbol, name, decimals and logo ride along, so there is no follow-up call per jetton — and returns only jettons that pass verification. Curated metadata wins for jettons we ship ourselves.
+
+  Verification lives in `@vultisig/core-chain/chains/ton/jetton/verification`. The registry of verified jettons (`chains/ton/jetton/verifiedRegistry`) merges our curated TON tokens with Tonkeeper's community-reviewed `ton-assets` whitelist, fetched once an hour and degrading to the curated list alone when unreachable. `resolveTonJettonVerification` is pure: a listed address is `verified`; an unlisted jetton is `scam` when the indexer flags it or when its symbol or name collapses onto a verified jetton's — `normalizeJettonSymbol` folds `USD₮`, Cyrillic `UЅDT`, `$USĐ₮` and full-width forms onto `USDT` — and `unverified` otherwise. `getTonJettonVerification({ id, ticker })` is the one-call form for token rows and approval cards; it judges the master by what it claims on chain, falling back to the local ticker offline. The tiers are the chain-agnostic `TokenVerification` type in `@vultisig/core-chain/coin/tokenVerification`.
+
+  `chains/ton/api` gains `getOwnerJettonWallets` (paged, owner-filtered, one entry per jetton, with embedded master metadata) and `getJettonMastersMetadata` (batched, lenient master lookup keyed by lower-cased raw address), and `chains/ton/address` gains `tonAddressToRawKey`. `vault.discoverTokens(Chain.Ton)` and `Vultisig.discoverTokens` work for TON through the same path.
+
+### Patch Changes
+
+- [#2323](https://github.com/vultisig/vultisig-sdk/pull/2323) [`8a50970`](https://github.com/vultisig/vultisig-sdk/commit/8a50970438de64cdbeb281cf73925026e3ce3cf7) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Refuse XRPL issued-currency Payments the ledger would reject — a destination holding no trust line for the token, and an issuer that charges a transfer fee the payload cannot yet cover with a SendMax — instead of burning the fee on-chain. Accept the lowercase standard currency codes XRPL permits, report bad amounts and unusable destinations as domain errors, and pin both encoders against a shared issued-currency signing vector.
+
+- [#2310](https://github.com/vultisig/vultisig-sdk/pull/2310) [`af6c643`](https://github.com/vultisig/vultisig-sdk/commit/af6c643e9afa39cb0b4432a01cec40e4de4d8ecc) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(ton): let a dApp deadline tighten the signed expiry
+
+  `getTonChainSpecific` always signed `expireAt = now + 600`, so the `valid_until` a TonConnect `sendTransaction` carries never reached the wallet message: a request with a 60-second window was signed with a ten-minute one, and a broadcast landing after the dApp's window could execute on chain while the dApp already treated it as expired and retried.
+
+  `GetChainSpecificInput` now takes an optional `validUntil` (unix seconds) for `tonSpecific`. The signed `expireAt` is `min(now + 600, validUntil)` — the wallet's own window remains the ceiling — and a deadline already in the past fails the build instead of signing a transaction the network would reject. Callers that pass nothing keep the previous behaviour; co-signers read `expireAt` from the payload, so only what the initiator writes changes.
+
+  The expiry is computed last, after the seqno, bounceability and jetton-metadata lookups: each is a network round trip, so a deadline still ahead when the build starts can be behind by the time it finishes, and the wallet's own ten-minute window now starts when the payload is finished rather than being partly spent on those lookups.
+
+- [#2296](https://github.com/vultisig/vultisig-sdk/pull/2296) [`34f0faa`](https://github.com/vultisig/vultisig-sdk/commit/34f0faa7208ad594b8d18a3a2806c0f7867f2c85) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(ton): cross-check SwapKit's `tx[]` transfer against the deposit address and amount it also returns
+
+  A SwapKit `/v3/swap` response states the deposit destination in up to three independent fields — `targetAddress`, `depositAddress`, and the `tx[]` transfer array — and its size in two (`depositAmount`, `tx[0].amount`). The transfer builder took the first field that was present and never looked at the rest, so a response whose halves diverged (provider bug, API change, tampered payload) signed whichever field happened to win the precedence order while the others named a different recipient or a different size. Nothing downstream could tell.
+
+  `buildTransferTx` now refuses a response that disagrees with itself, on either the destination or the amount, instead of resolving the ambiguity by precedence. It also rejects a multi-entry `tx[]` rather than silently signing only the first transfer and under-funding the swap.
+
+  Destinations are compared per chain: TON spells one account as `EQ…`, `UQ…` or raw `workchain:hex`, so the new `areEqualTonAddresses` helper compares parsed accounts there, while every other transfer chain stays byte-for-byte (base58 is case-sensitive — normalizing case away would let two different addresses pass as one).
+
+  The agreed TON destination is re-spelled in its bounceable (`EQ…`) form whichever field it came from. The agreement check treats `UQ…`, raw and `EQ…` spellings of one account as equal — correctly — but the signer reads the bounce flag off the spelling, so a route that won precedence with a `UQ…` or raw spelling would have sent the deposit non-bounceable, where a rejecting contract absorbs it instead of refunding. A destination that is not a TON address at all is refused.
+
+## 5.0.0
+
+### Major Changes
+
+- [#2237](https://github.com/vultisig/vultisig-sdk/pull/2237) [`7d4c116`](https://github.com/vultisig/vultisig-sdk/commit/7d4c116cc7a940e96abf075790c4a387edd03987) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Remove Kujira (KUJI) chain support. Kujira wound down in 2025 and every RPC/LCD endpoint the SDK shipped for it is now dead (the polkachu hosts no longer resolve; publicnode 404s), so balances, sends, swaps, staking and governance on Kujira cannot function.
+
+  `Chain.Kujira` / `CosmosChain.Kujira` are removed from the chain union, along with the Kujira entries in the chain registry, cosmos RPC/LCD/fee/gas/memo tables, SwapKit + Skip + native-swap routing, the Kujira token list, IBC chain-id mapping, governance config and address derivation.
+
+  The IBC tables in `tools/prep/ibcTransfer.ts` are keyed by raw chain-ID rather than the `Chain` enum, so they are cleared explicitly: `kaiyo-1` is dropped from `IBC_CHAIN_REVISION` and the `osmosis-1/channel-259` route from `IBC_CHANNEL_DEST`. `supportedIbcDestinationsFrom('osmosis-1')` no longer advertises `kaiyo-1`, and `resolveSourceChannelByDestChain('osmosis-1', 'kaiyo-1')` returns `null`.
+
+  `COSMOS_CHAIN_ID_HRP` keeps its `kaiyo-1` → `kujira` entry: it is a pure bech32-prefix lookup that makes nothing routable, and it is still needed to decode historic `kujira1…` addresses.
+
+  The `chains/cosmos/thor/kujira-merge` module is intentionally **kept**: it describes the six Kujira-origin tokens (KUJI, rKUJI, FUZN, NSTK, WINK, LVN) that migrated onto THORChain as `thor.*` secured assets, plus their IBC representations on Cosmos Hub and Osmosis. Those assets are unaffected and keep resolving.
+
+  Consumers holding a persisted `Chain.Kujira` value must drop it — the symbol no longer type-checks.
+
+### Minor Changes
+
+- [#2298](https://github.com/vultisig/vultisig-sdk/pull/2298) [`1716a79`](https://github.com/vultisig/vultisig-sdk/commit/1716a7946bf617ff16f8bb15f33b279efbb4a87d) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(ton): one correct comment validator, run before the user signs
+
+  TON comment length was checked against a fixed 123 bytes wherever it was checked at all. That number is right for a native transfer, where the comment is the message body's own cell, and wrong for a jetton transfer, where the comment rides inline in the transfer body's `forward_payload` and shares one 1023-bit cell with the opcode, query id, amount, both addresses and the forward amount. The real jetton cap is roughly 34–39 bytes and SHRINKS as the amount grows, because `VarUInteger 16` widens a byte at a time. Anything above it reached WalletCore, which refuses to pack the cell and fails the keysign with a bare "Internal error" — after the user had reviewed and approved the transaction. Memos are load-bearing on TON; an exchange deposit without the right one loses the funds.
+
+  New `@vultisig/core-chain/chains/ton/comment` owns the rule for both shapes: `tonNativeCommentMaxBytes`, `getTonJettonCommentMaxBytes({ amount, isActiveDestination })`, `getTonCommentMaxBytes` for a send form that wants to count down against the real limit, and `validateTonComment`. The amount-dependent widths are measured by encoding them, not predicted, and a test drives real WalletCore at each cap and one byte past it to prove the two agree.
+
+  `buildSendKeysignPayload` now validates the memo at the end of the build, where the final signed amount and `isActiveDestination` are both known, and raises a non-retryable `BuildKeysignPayloadError('ton-memo-too-long')`. That moves the failure from keysign to the point where the payload is assembled — the verify screen — for every consumer, with no client-side change. The signing-input resolvers still validate, so a payload built by another device or an older client cannot get an unpackable comment signed here either.
+
+  **Breaking:** `validateTonComment` is no longer exported from `@vultisig/core-mpc/keysign/signingInputs/resolvers/ton/native`, and takes `{ memo, jetton? }` instead of a bare string. Import it from `@vultisig/core-chain/chains/ton/comment`. `validateTonMemo` in the SDK's TON surface keeps its signature and gains an optional second argument for jetton context.
+
+- [#2318](https://github.com/vultisig/vultisig-sdk/pull/2318) [`26a83ed`](https://github.com/vultisig/vultisig-sdk/commit/26a83ed417c9543f9c92d28cbb1bd35f0f914817) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fix TRON transaction lifecycle safety across fee preparation, status polling, and broadcast. Native TRX bandwidth estimates now measure the WalletCore-serialized signed transaction including memo bytes, default transaction times use the fetched block timestamp, expired raw transactions terminate polling, and successful broadcasts must return the deterministic local transaction hash.
+
+- [#2316](https://github.com/vultisig/vultisig-sdk/pull/2316) [`b19c5d5`](https://github.com/vultisig/vultisig-sdk/commit/b19c5d56f4d00d92493f8da74ff80d92b1d87c68) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add exact XRP Ledger issued-currency Payments and authoritative delivered-amount receipts for XRP, issued currencies, and MPTs while preserving native XRP and explicit TrustSet behavior.
+
+### Patch Changes
+
+- [#2308](https://github.com/vultisig/vultisig-sdk/pull/2308) [`1b3fb49`](https://github.com/vultisig/vultisig-sdk/commit/1b3fb498ad3f78b84b92b9f09b41fe8956fc5e9a) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Open SwapKit routing for HyperEVM sources and destinations and Robinhood destinations, while keeping Robinhood source swaps disabled until Blockaid supports chain 4663. Future EVM corridors can now use an unambiguous live SwapKit catalog identity without another static eligibility-list change, and catalog failures remain isolated from other quote providers.
+
+- [#2319](https://github.com/vultisig/vultisig-sdk/pull/2319) [`7b65284`](https://github.com/vultisig/vultisig-sdk/commit/7b65284f7fe73f538283a201a416efdbbda0830c) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject checksum-invalid or wrong-network Dash, Zcash, Ripple, and Tron destinations when building or parsing THORChain limit-swap memos.
+
+- [#2282](https://github.com/vultisig/vultisig-sdk/pull/2282) [`a711b6c`](https://github.com/vultisig/vultisig-sdk/commit/a711b6ca8a8a7ae39d0efbb1c919b23b6538a1b8) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(ton): derive each dApp message's bounce flag from its own destination
+
+  A dApp `signTon` batch stamped every message with the single wallet-level `TonSpecific.bounceable`, which the chain-specific resolver computes from the first message's destination alone. The bounce bit a message declares lives in its own address tag — `EQ…`/`kQ…` bounceable, `UQ…`/`0Q…` not, a raw `workchain:hex` address none — so a batch with mixed destinations, or a first destination that is not yet deployed, signed the wrong bit on some of its messages, and a co-signer deriving the flag per address computed a different hash for the same payload.
+
+  Each dApp message now takes the flag from its own destination (`getTonMessageBounceable` in `@vultisig/core-chain/chains/ton/messageBounce`); a raw `workchain:hex` address carries no tag, so it defaults to bounceable — an already-deployed contract must refund a rejection — unless the message carries `stateInit`, the deployment case whose destination has no code yet to bounce from. Every raw spelling WalletCore signs counts as the same account here: leading zeros, an explicit sign and a `0x`-prefixed hash all name one address and compile to one pre-image, so `00:<hash>` cannot be signed non-bounceable while `0:<hash>` is signed bounceable. App-initiated single sends are unchanged and keep the wallet-level flag and the nominator-pool override.
+
+  The bounce bit is part of the signed body, so TON signing hashes move for dApp batches whose destinations do not all share the first message's flag. Co-signers must apply the same per-message rule.
+
+- [#2255](https://github.com/vultisig/vultisig-sdk/pull/2255) [`ef6a8bb`](https://github.com/vultisig/vultisig-sdk/commit/ef6a8bb0007c6576179e5a8cb10aa47820075b57) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(ton): send swap deposits bounceable so a rejected deposit is refunded
+
+  TON transfers were marked bounceable only when the destination string started with `E`. Swap providers hand back deposit addresses in the `UQ…` (non-bounceable) form, so every TON swap deposit went out non-bounceable — and a router or escrow contract that rejects a message (expired quote, paused pool, closed route) _absorbs_ a non-bounceable transfer instead of returning it. The funds were gone.
+
+  Swap deposits are now always sent bounceable. The prefix check is replaced by a real read of the address's bounce tag, so raw `0:hex` destinations — which declare no bounceability at all and which the prefix check silently treated as non-bounceable — default to bounceable, the safe side for anything that might be a contract. Sends to an undeployed account stay non-bounceable, since such an account cannot accept a bounceable message, and an explicit `UQ…` destination is still honoured.
+
+  Adds `getTonAddressBounceability` to `@vultisig/core-chain/chains/ton/address`.
+
+## 4.1.1
+
+### Patch Changes
+
+- [#2297](https://github.com/vultisig/vultisig-sdk/pull/2297) [`c0eafeb`](https://github.com/vultisig/vultisig-sdk/commit/c0eafeb12df42cffa70ef6951c081a74383e5fa2) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Make the SDK package graph explicit and acyclic. Shared Bitcoin signing protobuf schemas now live in `@vultisig/mpc-types`, `@vultisig/core-mpc` preserves its existing schema subpath as a compatibility export, and SDK builds resolve the declared core packages through their published export maps.
+
+- [#2252](https://github.com/vultisig/vultisig-sdk/pull/2252) [`ef252e4`](https://github.com/vultisig/vultisig-sdk/commit/ef252e40b590a6cad9f303f7aba743c617442f90) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(ton): stop hiding action-phase failures on sends and in status
+
+  Every TON send OR'd `IGNORE_ACTION_PHASE_ERRORS` into the wallet contract's send mode, which tells the contract to skip an outgoing transfer it cannot carry out instead of failing. The transaction then landed un-aborted with the seqno consumed and nothing moved, and the status resolver — which read only `aborted` and `compute_ph.exit_code` — reported it as confirmed. The user was told a transfer succeeded while the funds never left.
+
+  The flag is now dropped from native, MAX, dApp `signTon`, and Jetton sends (both the WalletCore and the React Native builders), and `getTonTxStatus` reads the action phase (`success`, `no_funds`, `result_code`, `skipped_actions`) alongside the compute phase. A transaction the indexer knows but has not yet described stays pending instead of counting as success.
+
+  Dropping the flag changes the signed body, so TON signing hashes move. Clients must upgrade together: a co-signer on an older build derives a different hash and the keysign fails. The mobile and cross-encoder golden corpora are re-recorded to the new values.
+
+- [#2093](https://github.com/vultisig/vultisig-sdk/pull/2093) [`bfe0292`](https://github.com/vultisig/vultisig-sdk/commit/bfe0292e3876fb7acc7044bac1b544c27aba8919) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Publishes token-transfer / ERC-20-calldata destination safety helpers alongside the existing burn-address guard (`assertSafeDestination`): `assertSafeTokenTransferDestination` (rejects a transfer whose recipient is itself a known token contract — not just its own, any registered token's), `isErc20TransferCalldata`, `decodeErc20Recipient`, `decodeErc20Approve`, and `decodeErc20RecipientFromSig`, all re-exported from `@vultisig/sdk`. Previously only `agent-backend-ts` had this guard family as a private fork; `packages/sdk/src/tools/prep/send.ts`'s inline own-token-contract check is now additionally backed by the registry-based guard (catching sends to a _different_ known token's contract, on top of the existing unconditional self-contract check).
+
+- [#2092](https://github.com/vultisig/vultisig-sdk/pull/2092) [`acd0b2e`](https://github.com/vultisig/vultisig-sdk/commit/acd0b2eaa882669a399fb378e51244ed4199ee47) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Consolidates four independently-maintained, overlapping Cosmos-family bech32 HRP tables — `tools/cosmos/gov.ts`'s `CHAIN_HRP`, `tools/prep/ibcTransfer.ts`'s `IBC_CHAIN_HRP`, `tools/swap/skip/skipSwap.ts`'s `COSMOS_CHAIN_HRPS`, and `tools/token/resolveContract.ts`'s `CW20_CHAIN_PREFIX` — into a single canonical registry, `COSMOS_CHAIN_ID_HRP`/`getCosmosChainHrp` (`@vultisig/core-chain/chains/cosmos/cosmosHrp`). All four consumers now derive their HRP checks from the same source instead of hand-maintained local copies that could drift from each other. As a side effect, Skip swap address validation now also HRP-checks four chain-ids (`axelar-dojo-1`, `juno-1`, `stargaze-1`, `akashnet-2`) it previously had no entry for and silently skipped — strictly safer, not a behavior change for any chain that was already validated. Deliberately does not touch `utils/addressFormat.ts`'s separate `cosmosHRPByChain`/`cosmosValoperByChain` tables, which are keyed by a different (lowercase chain-tag) space and ported 1:1 from a Go reference for cross-language parity.
+
+- Updated dependencies [[`c0eafeb`](https://github.com/vultisig/vultisig-sdk/commit/c0eafeb12df42cffa70ef6951c081a74383e5fa2)]:
+  - @vultisig/mpc-types@0.3.0
+
+## 4.1.0
+
+### Minor Changes
+
+- [#2234](https://github.com/vultisig/vultisig-sdk/pull/2234) [`0697060`](https://github.com/vultisig/vultisig-sdk/commit/0697060107c7fe1c8ec818d3e0eae01557d9d96f) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add RUJI Trade quoting and CosmWasm execution for native RUNE and bRUNE swaps through the SDK's normal swap flow.
+
+### Patch Changes
+
+- [#2235](https://github.com/vultisig/vultisig-sdk/pull/2235) [`3fff7cf`](https://github.com/vultisig/vultisig-sdk/commit/3fff7cfdfe23d2d5622f7caa87a6f1525329f07e) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(swap): stop reporting a native trading halt when an aggregator could still fill
+
+  `findSwapQuotes` collapsed a THORChain/MayaChain halt plus a transient aggregator failure into `TradingHalted` for the whole pair, so an ETH→SOL quote surfaced "trading halted" whenever LiFi/SwapKit happened to time out. A halt is scoped to the native protocol that raised it: those aggregators now get one automatic re-attempt, and when they are still unreachable the error reports the transient failure instead of a halt the user cannot retry out of. Halt-only pairs still throw `TradingHalted`.
+
+## 4.0.1
+
+### Patch Changes
+
+- [#2228](https://github.com/vultisig/vultisig-sdk/pull/2228) [`bbe43cb`](https://github.com/vultisig/vultisig-sdk/commit/bbe43cb91976138015ab4ad29c14a7b0e14f8cb4) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Export `getEvmNumericChainId` from the SDK root and React Native public entries. The accessor is derived from the canonical EVM chain registry, and the React Native transaction builder now consumes it instead of maintaining a duplicate numeric chain-id table.
+
+- [#2227](https://github.com/vultisig/vultisig-sdk/pull/2227) [`6d3c754`](https://github.com/vultisig/vultisig-sdk/commit/6d3c754ed1abe6153e648243ff0339ff0ba50bf1) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add TRON Stake 2.0 expired-unfreeze withdrawal signing with strict native-TRX payload validation and WalletCore 4.7.3 support.
+
+## 4.0.0
+
+### Major Changes
+
+- [#2218](https://github.com/vultisig/vultisig-sdk/pull/2218) [`d043dc4`](https://github.com/vultisig/vultisig-sdk/commit/d043dc43d9fe33a3160c2739150fd6294f0e7eff) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Unify the workspace on the coordinated Noble/Scure v2 stack and align related workspace peer dependency ranges.
+
+### Minor Changes
+
+- [#2024](https://github.com/vultisig/vultisig-sdk/pull/2024) [`821c8a7`](https://github.com/vultisig/vultisig-sdk/commit/821c8a73dd7d3aee55eaca59c22adc1ce8dae2f2) Thanks [@neavra](https://github.com/neavra)! - Label XRP spendable-vs-total balance. `getRippleNativeBalanceDetail` exposes the `{ total, spendable, reserve }` breakdown of a native XRP balance (the existing resolvers keep returning the spendable number, so no consumer changes meaning). SDK `Balance` gains optional `totalAmount`/`reserveAmount` fields, populated for native XRP. The CLI labels the spendable headline and prints the locked reserve for XRP balances; all other chains render unchanged.
+
+### Patch Changes
+
+- [#2164](https://github.com/vultisig/vultisig-sdk/pull/2164) [`6c535ae`](https://github.com/vultisig/vultisig-sdk/commit/6c535ae3aed1c376d2e1bbbeb100e8b5c21c8929) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Route the Kamino Earn API through the Vultisig proxy. Upstream answers the CORS preflight with a 404 and returns no `access-control-allow-origin` on the build endpoints, so a browser refuses the POST that deposits and withdrawals depend on — the flows hung on the review screen in any webview. Native clients never saw it, because CORS is enforced by the browser rather than the server.
+
+- [#2023](https://github.com/vultisig/vultisig-sdk/pull/2023) [`3203589`](https://github.com/vultisig/vultisig-sdk/commit/3203589af5da361dfc51695aad4fef77afa2d78e) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(encoding): bound TRON/Solana/Ripple fee-and-gas fields before `Long.fromString`
+
+  `Long.fromString` (and `BigInt()`) silently two's-complement-wraps an out-of-range magnitude instead of throwing (e.g. `2^64 -> 0`, `2^63 -> -2^63`). Six fee/gas sites fed by third-party gas estimation / swap-aggregator data routed raw values straight into it with no bound - a wrapped TRON `feeLimit`/`callValue`/`callTokenValue` could authorize an outsized fee burn, and a wrapped Solana priority fee or Ripple network fee misprices the transaction:
+
+  - `packages/core/mpc/keysign/signingInputs/resolvers/tron.ts` - `feeLimit` (4 sites, from `tronSpecific.gasEstimation`), `callValue`, `callTokenValue`
+  - `packages/core/mpc/keysign/signingInputs/resolvers/solana/send.ts` - `priorityFee`
+  - `packages/core/mpc/keysign/signingInputs/resolvers/ripple.ts` - `fee` (from `rippleSpecific.gas`)
+
+  New `assertBoundedInt(value, 'int64' | 'uint64')` in `@vultisig/lib-utils/bigint/assertBoundedInt` validates a decimal integer string against the proto field's declared 64-bit range and throws instead of letting the wrap happen, matching each field's real signedness (TRON's are `int64`, Solana's priority fee is `uint64`, Ripple's fee is `int64`). In-range values are unaffected - this is fail-closed only.
+
+- [#2209](https://github.com/vultisig/vultisig-sdk/pull/2209) [`4c30666`](https://github.com/vultisig/vultisig-sdk/commit/4c306668690f798ff4fb9094cf16dd26eaafa8e7) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Surface THOR and vTHOR on Ethereum discovery and price vTHOR by its redeemable THOR value, with LI.FI fallback pricing for curated EVM tokens CoinGecko does not list.
+
+- Updated dependencies [[`3203589`](https://github.com/vultisig/vultisig-sdk/commit/3203589af5da361dfc51695aad4fef77afa2d78e)]:
+  - @vultisig/lib-utils@0.10.6
+
+## 3.0.0
+
+### Major Changes
+
+- [#1891](https://github.com/vultisig/vultisig-sdk/pull/1891) [`7d6a014`](https://github.com/vultisig/vultisig-sdk/commit/7d6a01440fd0b855356cce81469b5b5a91665862) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Standardize signed-transaction broadcast adapters on one typed accepted-or-failed result contract.
+
+## 2.39.0
+
+### Minor Changes
+
+- [#1810](https://github.com/vultisig/vultisig-sdk/pull/1810) [`088b905`](https://github.com/vultisig/vultisig-sdk/commit/088b9058f47eff8dc84929e89fdf4ddfde7e42e6) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add provider-aware swap arrival status normalization for THORChain, MayaChain, Skip Go, and LI.FI.
+
+### Patch Changes
+
+- [#1810](https://github.com/vultisig/vultisig-sdk/pull/1810) [`088b905`](https://github.com/vultisig/vultisig-sdk/commit/088b9058f47eff8dc84929e89fdf4ddfde7e42e6) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fix three unsafe terminal-state gaps in `getSwapArrivalStatus`: LI.FI `DONE/PARTIAL` (user received a different token than requested) is now reported as a distinct `partial` status instead of being flattened into `success`; malformed or unknown Midgard action statuses now throw `SwapArrivalStatusRequestError` instead of being reported as a terminal `error`; and THOR/Maya node-only completion now reads THORNode's `planned_out_txs[].refund` flag to report `success`/`refunded` when available, instead of always forcing an artificial `pending` state.
+
+## 2.38.0
+
+### Minor Changes
+
+- [#2074](https://github.com/vultisig/vultisig-sdk/pull/2074) [`8929244`](https://github.com/vultisig/vultisig-sdk/commit/8929244cdb3b21059a46eabac6d4d9684e18a633) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Add the Kamino Earn data layer under `chains/solana/kamino`: a REST client for the kVaults API (vault state, metrics, user positions, PnL) with a typed error envelope that separates retryable statuses from permanent refusals; a curated vault registry pinning each launch vault's identity (mints, decimals, farm, curator, risk tier); distinct token- and share-denominated amount types over exact `bigint` base units, with exact-rate conversions that truncate toward zero so a sized withdraw can never over-request (the API rewrites an over-sized withdraw to `u64::MAX` — withdraw everything); vault-info hydration that refuses responses disagreeing with the pinned identity and derives the effective deposit/withdraw minimums the on-chain program actually accepts; and position parsing with a spendable-balance rule that stays strictly below the reported balance.
+
+- [#2124](https://github.com/vultisig/vultisig-sdk/pull/2124) [`514e31f`](https://github.com/vultisig/vultisig-sdk/commit/514e31f084c241792f3a9b2436074c324a909c0f) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Add the Kamino Earn transaction pipeline under `chains/solana/kamino/tx`: build the unsigned deposit/withdraw transactions (with the withdraw-everything sentinel refused before a request leaves the device); inject the attribution memo and the compute-budget pair into the built v0 transaction without disturbing address-lookup-table indexes; replace the recent blockhash immediately before keysign; a fail-closed validator that admits only allow-listed programs, matches the exact instruction sequence each operation produces (both withdraw discriminators, the farms unstake pair, exactly one memo carrying exactly the attribution tag), pins every account that decides where money goes against the registry and local ATA/PDA derivations, pins every spend amount, and refuses unexplained writable accounts; and an offline decoder that lets a co-signing device derive an independent claim about what the bytes do — vault identified through the signer's own share account, both withdraw shapes accepted, the farm release bounded by the withdraw itself.
+
 ## 2.37.0
 
 ### Minor Changes

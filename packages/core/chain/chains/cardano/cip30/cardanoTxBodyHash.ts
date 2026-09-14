@@ -6,7 +6,7 @@
  * re-encoding via cbor-x could change key ordering or integer widths,
  * producing a different hash than the one the dApp expects.
  */
-import { blake2b } from '@noble/hashes/blake2b'
+import { blake2b } from '@noble/hashes/blake2.js'
 import { decode } from 'cbor-x'
 
 import { cborSkip } from './cborSkip'

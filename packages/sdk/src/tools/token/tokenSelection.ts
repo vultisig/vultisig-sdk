@@ -125,10 +125,10 @@ export function findContractIdentity(
   results: readonly TokenSearchResultLike[] | readonly TokenSearchResult[],
   chain?: string
 ): ResolvedTokenIdentity | undefined {
-  const tokenKey = chain === 'Solana' ? token : token.toLowerCase()
   for (const candidate of results) {
     const deployment = candidate.deployments.find(d => {
       if (chain && d.chain !== chain) return false
+      const tokenKey = d.chain === 'Solana' ? token : token.toLowerCase()
       const contractKey = d.chain === 'Solana' ? d.contractAddress : d.contractAddress.toLowerCase()
       return contractKey === tokenKey
     })

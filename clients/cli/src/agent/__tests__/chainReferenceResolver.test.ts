@@ -17,6 +17,7 @@ describe('CLI chain reference resolution', () => {
     ['999', Chain.Hyperliquid],
     ['5000', Chain.Mantle],
     ['1329', Chain.Sei],
+    ['4663', Chain.Robinhood],
   ])('resolves ID reference %s through the SDK', (input, expected) => {
     expect(resolveChainId(input)).toBe(expected)
   })

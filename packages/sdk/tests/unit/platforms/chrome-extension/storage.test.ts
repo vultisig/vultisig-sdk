@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ChromeExtensionStorage } from '../../../../src/platforms/chrome-extension/storage'
 import { StorageError, StorageErrorCode } from '../../../../src/storage/types'
@@ -40,9 +40,33 @@ describe('ChromeExtensionStorage', () => {
   let storage: ChromeExtensionStorage
 
   beforeEach(() => {
+    let mutationTail = Promise.resolve()
+    vi.stubGlobal('navigator', {
+      locks: {
+        request: async <T>(_name: string, operation: () => Promise<T>): Promise<T> => {
+          const previous = mutationTail
+          let release!: () => void
+          const current = new Promise<void>(resolve => {
+            release = resolve
+          })
+          mutationTail = previous.then(() => current)
+          await previous
+          try {
+            return await operation()
+          } finally {
+            release()
+          }
+        },
+      },
+    })
+    vi.stubGlobal('location', { protocol: 'chrome-extension:' })
     mockStorage.clear()
     vi.clearAllMocks()
     storage = new ChromeExtensionStorage()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
   })
 
   describe('get', () => {
@@ -98,6 +122,44 @@ describe('ChromeExtensionStorage', () => {
         expect(error).toBeInstanceOf(StorageError)
         expect((error as StorageError).code).toBe(StorageErrorCode.QuotaExceeded)
       }
+    })
+
+    it('serializes conditional writes across adapter instances', async () => {
+      const other = new ChromeExtensionStorage()
+
+      const results = await Promise.all([
+        storage.compareAndSet('vault:shared', null, { owner: 'first' }),
+        other.compareAndSet('vault:shared', null, { owner: 'second' }),
+      ])
+
+      expect(results.filter(Boolean)).toHaveLength(1)
+      await expect(storage.get('vault:shared')).resolves.toEqual(results[0] ? { owner: 'first' } : { owner: 'second' })
+    })
+
+    it('fails closed for CAS in content-script origins whose Web Locks cannot cover extension storage', async () => {
+      vi.stubGlobal('location', { protocol: 'https:' })
+
+      await expect(storage.compareAndSet('vault:content-script', null, { owner: 'content' })).rejects.toMatchObject({
+        code: StorageErrorCode.StorageUnavailable,
+      })
+      await expect(storage.get('vault:content-script')).resolves.toBeNull()
+    })
+
+    it('fails all content-script mutations closed so they cannot race extension CAS', async () => {
+      mockStorage.set('vault:content-script', {
+        value: { owner: 'extension' },
+        metadata: { version: 1, createdAt: 1000, lastModified: 1000 },
+      })
+      vi.stubGlobal('location', { protocol: 'https:' })
+
+      await expect(storage.set('vault:content-script', { owner: 'content' })).rejects.toMatchObject({
+        code: StorageErrorCode.StorageUnavailable,
+      })
+      await expect(storage.remove('vault:content-script')).rejects.toMatchObject({
+        code: StorageErrorCode.StorageUnavailable,
+      })
+      await expect(storage.clear()).rejects.toMatchObject({ code: StorageErrorCode.StorageUnavailable })
+      await expect(storage.get('vault:content-script')).resolves.toEqual({ owner: 'extension' })
     })
   })
 

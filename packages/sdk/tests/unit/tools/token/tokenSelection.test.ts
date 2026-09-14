@@ -100,6 +100,11 @@ describe('findContractIdentity', () => {
       coingeckoId: 'pepe',
       decimals: 18,
     })
+    expect(findContractIdentity(ETH_PEPE.toUpperCase(), results)).toEqual(
+      findContractIdentity(ETH_PEPE, results, 'Ethereum')
+    )
+    expect(findContractIdentity(SOL_MINT.toLowerCase(), results)).toBeUndefined()
+    expect(findContractIdentity(SOL_MINT, results)).toEqual(findContractIdentity(SOL_MINT, results, 'Solana'))
     expect(findContractIdentity(SOL_MINT.toLowerCase(), results, 'Solana')).toBeUndefined()
     expect(findContractIdentity(SOL_MINT, results, 'Solana')).toEqual({
       symbol: 'TRUMP',

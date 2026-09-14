@@ -26,9 +26,9 @@ import { buildSignAminoKeysignPayload, buildSignDirectKeysignPayload } from '@/v
 
 const libType: KeysignLibType = 'DKLS'
 
-const fakePublicKey = {
+const fakePublicKey: import('@/vault/services/cosmos/buildCosmosPayload').CosmosBuilderPublicKey = {
   data: () => new Uint8Array([1, 2, 3]),
-} as import('@trustwallet/wallet-core/dist/src/wallet-core').PublicKey
+}
 
 const accountInfoFixture = {
   address: 'cosmos1testaddr',

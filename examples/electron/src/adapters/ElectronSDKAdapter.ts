@@ -28,6 +28,7 @@ import type {
   VaultInfo,
 } from '@vultisig/examples-shared'
 import { SDKAdapterEventSubscriptionBase } from '@vultisig/examples-shared/adapters'
+import type { VaultImportOptions } from '@vultisig/sdk'
 
 // Declare the window.electronAPI type
 declare global {
@@ -55,7 +56,7 @@ declare global {
         devices: number
         threshold?: number
       }): Promise<CreateSecureVaultResult>
-      importVault(content: string, password?: string): Promise<VaultInfo>
+      importVault(content: string, password?: string, options?: VaultImportOptions): Promise<VaultInfo>
       isVaultEncrypted(content: string): Promise<boolean>
       deleteVault(vaultId: string): Promise<void>
       setActiveVault(vaultId: string | null): Promise<void>
@@ -294,8 +295,8 @@ export class ElectronSDKAdapter extends SDKAdapterEventSubscriptionBase implemen
     )
   }
 
-  async importVault(content: string, password?: string): Promise<VaultInfo> {
-    return window.electronAPI.importVault(content, password)
+  async importVault(content: string, password?: string, options?: VaultImportOptions): Promise<VaultInfo> {
+    return window.electronAPI.importVault(content, password, options)
   }
 
   async isVaultEncrypted(content: string): Promise<boolean> {
