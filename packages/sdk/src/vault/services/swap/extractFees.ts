@@ -1,6 +1,7 @@
 import { Chain, EvmChain } from '@vultisig/core-chain/Chain'
-import { SwapFee } from '@vultisig/core-chain/swap/SwapFee'
+import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
+import { SwapFee } from '@vultisig/core-chain/swap/SwapFee'
 import { getEvmBaseFee } from '@vultisig/core-chain/tx/fee/evm/baseFee'
 import { getEvmMaxPriorityFeePerGas } from '@vultisig/core-chain/tx/fee/evm/maxPriorityFeePerGas'
 
@@ -64,22 +65,23 @@ export const extractSwapFees = async (
   }
 
   // EVM - estimate from gasLimit × gas price
-  if ('evm' in tx && tx.evm.gasLimit) {
-    try {
-      const evmChain = fromChain as EvmChain
-      const baseFee = await evmFeeRates.getBaseFee(evmChain)
-      const priorityFee = await evmFeeRates.getMaxPriorityFeePerGas(evmChain)
-      const networkFee = tx.evm.gasLimit * (baseFee + priorityFee)
-      const affiliateFee = tx.evm.affiliateFee
-      const nativeAffiliateFee =
-        affiliateFee && isNativeDenominated(affiliateFee, fromChain) ? affiliateFee.amount : 0n
-      return {
-        network: networkFee,
-        affiliate: nativeAffiliateFee > 0n ? nativeAffiliateFee : undefined,
-        total: networkFee + nativeAffiliateFee,
+  if ('evm' in tx) {
+    const affiliateFee = tx.evm.affiliateFee
+    const nativeAffiliateFee = affiliateFee && isNativeDenominated(affiliateFee, fromChain) ? affiliateFee.amount : 0n
+    let networkFee = 0n
+    if (tx.evm.gasLimit && isChainOfKind(fromChain, 'evm')) {
+      try {
+        const baseFee = await evmFeeRates.getBaseFee(fromChain)
+        const priorityFee = await evmFeeRates.getMaxPriorityFeePerGas(fromChain)
+        networkFee = tx.evm.gasLimit * (baseFee + priorityFee)
+      } catch {
+        // Keep the quote's known affiliate fee when network estimation fails.
       }
-    } catch {
-      // Fall through to default if gas price fetch fails
+    }
+    return {
+      network: networkFee,
+      affiliate: nativeAffiliateFee > 0n ? nativeAffiliateFee : undefined,
+      total: networkFee + nativeAffiliateFee,
     }
   }
 
