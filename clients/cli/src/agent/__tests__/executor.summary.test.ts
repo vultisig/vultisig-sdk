@@ -8,7 +8,7 @@
  */
 import type { VaultBase } from '@vultisig/sdk'
 import { Chain } from '@vultisig/sdk'
-import { getAddress } from 'viem'
+import { encodeFunctionData, erc20Abi, getAddress, maxUint256 } from 'viem'
 import { describe, expect, it, vi } from 'vitest'
 
 import { AgentExecutor } from '../executor'
@@ -24,14 +24,22 @@ function createMockVault(): VaultBase {
   } as unknown as VaultBase
 }
 
-const USDC_CONTRACT = '0x3c499c542cef5e3811e1192ce70d8cc03d5c3359'
+// Base USDC — a knownTokensIndex entry, so the calldata-derived approve line
+// renders a trusted ticker/decimals ("approve 2 USDC …").
+const USDC_CONTRACT = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913'
+const POLYGON_USDC_CONTRACT = '0x3c499c542cef5e3811e1192ce70d8cc03d5c3359'
+const SPENDER = '0x1111111254EEB25477B68fb85Ed929f73A960582'
+const approveCalldata = (spender: string, amount: bigint) =>
+  encodeFunctionData({ abi: erc20Abi, functionName: 'approve', args: [spender as `0x${string}`, amount] })
+/** The decoded approve leg every multi-leg summary must disclose (WYSIWYS). */
+const APPROVE_SUFFIX = `(+ first approve 2 USDC for spender ${SPENDER} (token contract ${USDC_CONTRACT}) — 2 transactions)`
 const WETH_CONTRACT = '0x4200000000000000000000000000000000000006'
 const ETH_USDC_CONTRACT = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
 const SPOOFED_CONTRACT = '0xdac17f958d2ee523a2206206994597c13d831ec7'
 const APPROVE_TX = {
   to: USDC_CONTRACT,
   value: '0',
-  data: '0x095ea7b3' + '0'.repeat(120),
+  data: approveCalldata(SPENDER, 2_000_000n),
   gas_limit: '60000',
 }
 const SWAP_TX = {
@@ -70,6 +78,13 @@ function makeMultiLegEnvelope(
   }
 }
 
+/**
+ * The swap head of a multi-leg summary — everything before the approve-leg
+ * disclosure. Label-driven fail-closed assertions target the head: the suffix
+ * legitimately names the signed approve target decoded from calldata.
+ */
+const swapHead = (summary: string) => summary.split(' (+ first ')[0]!
+
 describe('AgentExecutor.getPendingSummary', () => {
   it('returns null when nothing is buffered', () => {
     const executor = new AgentExecutor(createMockVault())
@@ -94,7 +109,7 @@ describe('AgentExecutor.getPendingSummary', () => {
     const summary = executor.getPendingSummary()!
     expect(summary).toContain(`0.01 USDC (${USDC_CONTRACT}) → ~0.000006 ETH via kyber`)
     expect(summary).toContain('on Base')
-    expect(summary).toContain('(+ token approval — 2 transactions)')
+    expect(summary).toContain(APPROVE_SUFFIX)
     expect(summary).toContain('est. fee ~0.0000038 ETH')
     // quote_summary already embeds the provider — must not append "via kyber" again
     expect(summary.match(/via kyber/g)).toHaveLength(1)
@@ -113,7 +128,7 @@ describe('AgentExecutor.getPendingSummary', () => {
     )
 
     expect(executor.getPendingSummary()).toBe(
-      `2 USDC (${USDC_CONTRACT}) → ~0.001 ETH via swapkit on Base (+ token approval — 2 transactions)`
+      `2 USDC (${USDC_CONTRACT}) → ~0.001 ETH via swapkit on Base ${APPROVE_SUFFIX}`
     )
   })
 
@@ -130,7 +145,7 @@ describe('AgentExecutor.getPendingSummary', () => {
     )
 
     expect(executor.getPendingSummary()).toBe(
-      `2 USDC (${USDC_CONTRACT}) → ~0.001 WETH (${WETH_CONTRACT}) via swapkit on Base (+ token approval — 2 transactions)`
+      `2 USDC (${USDC_CONTRACT}) → ~0.001 WETH (${WETH_CONTRACT}) via swapkit on Base ${APPROVE_SUFFIX}`
     )
   })
 
@@ -149,7 +164,9 @@ describe('AgentExecutor.getPendingSummary', () => {
 
     const summary = executor.getPendingSummary()!
     expect(summary).toContain('2 USDC (contract unavailable)')
-    expect(summary).not.toContain(USDC_CONTRACT)
+    // the label claim must not reach the sell half; the approve suffix names the SIGNED target from calldata
+    expect(swapHead(summary)).not.toContain(USDC_CONTRACT)
+    expect(summary).toContain(`(token contract ${USDC_CONTRACT}) — 2 transactions)`)
     expect(summary).not.toContain(mismatchingClaim)
   })
 
@@ -209,7 +226,7 @@ describe('AgentExecutor.getPendingSummary', () => {
 
     const summary = executor.getPendingSummary()!
     expect(summary).toBe(
-      `swap 2 USDC (${USDC_CONTRACT}) → WETH (${WETH_CONTRACT}) on Base via swapkit (+ token approval — 2 transactions)`
+      `swap 2 USDC (${USDC_CONTRACT}) → WETH (${WETH_CONTRACT}) on Base via swapkit ${APPROVE_SUFFIX}`
     )
     expect(summary).not.toContain('→ ETH →')
   })
@@ -371,7 +388,9 @@ describe('AgentExecutor.getPendingSummary', () => {
 
     const summary = executor.getPendingSummary()!
     expect(summary).toContain('2 WETH (contract unavailable) → ~0.001 ETH via swapkit')
-    expect(summary).not.toContain(USDC_CONTRACT)
+    // the label claim must not reach the sell half; the approve suffix names the SIGNED target from calldata
+    expect(swapHead(summary)).not.toContain(USDC_CONTRACT)
+    expect(summary).toContain(`(token contract ${USDC_CONTRACT}) — 2 transactions)`)
   })
 
   it('keeps an unresolved buy identity unavailable despite a matching free-form symbol', () => {
@@ -444,7 +463,7 @@ describe('AgentExecutor.getPendingSummary', () => {
     )
 
     expect(executor.getPendingSummary()).toBe(
-      `2 USDC (${USDC_CONTRACT}) → ~0.0003 BTC via THORChain on Base (+ token approval — 2 transactions)`
+      `2 USDC (${USDC_CONTRACT}) → ~0.0003 BTC via THORChain on Base ${APPROVE_SUFFIX}`
     )
   })
 
@@ -679,7 +698,7 @@ describe('AgentExecutor.getPendingSummary', () => {
     )
 
     expect(executor.getPendingSummary()).toBe(
-      `2 USDC (contract unavailable) → ~1.99 USDC (${ETH_USDC_CONTRACT}) via bridge on Base (+ token approval — 2 transactions)`
+      `2 USDC (contract unavailable) → ~1.99 USDC (${ETH_USDC_CONTRACT}) via bridge on Base ${APPROVE_SUFFIX}`
     )
   })
 
@@ -698,7 +717,9 @@ describe('AgentExecutor.getPendingSummary', () => {
 
     const summary = executor.getPendingSummary()!
     expect(summary).toContain('2 FAKE (contract unavailable) →')
-    expect(summary).not.toContain(USDC_CONTRACT)
+    // the label claim must not reach the sell half; the approve suffix names the SIGNED target from calldata
+    expect(swapHead(summary)).not.toContain(USDC_CONTRACT)
+    expect(summary).toContain(`(token contract ${USDC_CONTRACT}) — 2 transactions)`)
     expect(summary).not.toContain(SPOOFED_CONTRACT)
   })
 
@@ -718,7 +739,9 @@ describe('AgentExecutor.getPendingSummary', () => {
 
     const summary = executor.getPendingSummary()!
     expect(summary).toContain('2 FAKE (contract unavailable) →')
-    expect(summary).not.toContain(USDC_CONTRACT)
+    // the label claim must not reach the sell half; the approve suffix names the SIGNED target from calldata
+    expect(swapHead(summary)).not.toContain(USDC_CONTRACT)
+    expect(summary).toContain(`(token contract ${USDC_CONTRACT}) — 2 transactions)`)
     expect(summary).not.toContain(SPOOFED_CONTRACT)
   })
 
@@ -735,7 +758,7 @@ describe('AgentExecutor.getPendingSummary', () => {
     )
 
     expect(executor.getPendingSummary()).toBe(
-      `2 USDC (${USDC_CONTRACT}) → ~0.001 WETH (${WETH_CONTRACT}) via Skip Go on Base (+ token approval — 2 transactions)`
+      `2 USDC (${USDC_CONTRACT}) → ~0.001 WETH (${WETH_CONTRACT}) via Skip Go on Base ${APPROVE_SUFFIX}`
     )
   })
 
@@ -754,9 +777,11 @@ describe('AgentExecutor.getPendingSummary', () => {
 
     const summary = executor.getPendingSummary()!
     expect(summary).toBe(
-      `2 SCAM (contract unavailable) → ~0.001 WETH (${WETH_CONTRACT}) via swapkit on Base (+ token approval — 2 transactions)`
+      `2 SCAM (contract unavailable) → ~0.001 WETH (${WETH_CONTRACT}) via swapkit on Base ${APPROVE_SUFFIX}`
     )
-    expect(summary).not.toContain(USDC_CONTRACT)
+    // the label claim must not reach the sell half; the approve suffix names the SIGNED target from calldata
+    expect(swapHead(summary)).not.toContain(USDC_CONTRACT)
+    expect(summary).toContain(`(token contract ${USDC_CONTRACT}) — 2 transactions)`)
     expect(summary).not.toContain('\n')
     expect(summary).not.toContain('→ ETH')
   })
@@ -796,7 +821,7 @@ describe('AgentExecutor.getPendingSummary', () => {
     const summary = executor.getPendingSummary()!
     expect(summary).toContain(`swap 0.01 USDC (${USDC_CONTRACT}) → ETH`)
     expect(summary).toContain('via kyber')
-    expect(summary).toContain('(+ token approval — 2 transactions)')
+    expect(summary).toContain(APPROVE_SUFFIX)
   })
 
   it('swap without quote_summary still discloses token contracts', () => {
@@ -813,7 +838,7 @@ describe('AgentExecutor.getPendingSummary', () => {
     )
 
     expect(executor.getPendingSummary()).toBe(
-      `swap 0.01 USDC (${USDC_CONTRACT}) → WETH (${WETH_CONTRACT}) on Base via kyber (+ token approval — 2 transactions)`
+      `swap 0.01 USDC (${USDC_CONTRACT}) → WETH (${WETH_CONTRACT}) on Base via kyber ${APPROVE_SUFFIX}`
     )
   })
 
@@ -1051,7 +1076,7 @@ describe('AgentExecutor.getPendingSummary', () => {
           tx: {
             to: payloadContract,
             value: '0',
-            data: `0x095ea7b3${'0'.repeat(120)}`,
+            data: `0xdeadbeef${'0'.repeat(128)}`, // opaque contract call: approves now render from calldata (T12)
           },
         },
         resolved: {
@@ -1084,7 +1109,7 @@ describe('AgentExecutor.getPendingSummary', () => {
           tx: {
             to: payloadContract,
             value: '0',
-            data: `0x095ea7b3${'0'.repeat(120)}`,
+            data: `0xdeadbeef${'0'.repeat(128)}`, // opaque contract call: approves now render from calldata (T12)
           },
         },
         resolved: {
@@ -1100,10 +1125,10 @@ describe('AgentExecutor.getPendingSummary', () => {
     expect(summary.match(/0x2791\.\.\.4174/g) ?? []).toHaveLength(0)
   })
 
-  // Decoded ERC-20 transfers render from calldata and ignore labels entirely
-  // (WYSIWYS), so this label-preservation guarantee is pinned on the
-  // non-transfer contract-send path (approve calldata) where labels still
-  // drive the summary and only exact/truncated CONTRACT copies are stripped.
+  // Decoded ERC-20 transfers AND approves render from calldata and ignore
+  // labels entirely (WYSIWYS), so this label-preservation guarantee is pinned
+  // on the opaque contract-send path where labels still drive the summary and
+  // only exact/truncated CONTRACT copies are stripped.
   it('preserves a truncated non-contract address in rich token labels', () => {
     const executor = new AgentExecutor(createMockVault())
     const recipient = '0x58C4b38BfA5C2a84f9D3483D04B2C2e8906e5C35'
@@ -1119,7 +1144,7 @@ describe('AgentExecutor.getPendingSummary', () => {
           tx: {
             to: payloadContract,
             value: '0',
-            data: `0x095ea7b3${'0'.repeat(120)}`,
+            data: `0xdeadbeef${'0'.repeat(128)}`, // opaque contract call: approves now render from calldata (T12)
           },
         },
         resolved: {
@@ -1380,5 +1405,246 @@ describe('AgentExecutor pending-state hygiene (decline path)', () => {
       },
     })
     expect(((executor as any).pendingLegs as unknown[]).length).toBe(0)
+  })
+
+  // ---------------------------------------------------------------------------
+  // T12 — the consent line must describe the bytes being signed when those
+  // bytes are an ERC-20 approve, never the swap the labels describe.
+  // ---------------------------------------------------------------------------
+  describe('ERC-20 approve legs render from calldata (dogfood T12)', () => {
+    const RESET_SPENDER = getAddress('0x9025b8ff35ca44f7018c3a37fe0f69e63dbb0743')
+    const swapLabels = {
+      quote_summary: '5 USDC → ~51.56 POL via swapkit',
+      from_token: `USDC (${POLYGON_USDC_CONTRACT} on Polygon, 6 dec, source: known)`,
+      from_token_contract: POLYGON_USDC_CONTRACT,
+      from_token_chain: 'Polygon',
+      from_token_symbol: 'USDC',
+      to_token: 'POL (native on Polygon, 18 dec, source: native)',
+      to_token_symbol: 'POL',
+      to_chain: 'Polygon',
+      provider: 'swapkit',
+      estimated_fee: '~0.2629 POL',
+      amount_in: '5 USDC',
+    }
+    const resetEnvelope = (data: string, labels: Record<string, unknown> = swapLabels) => ({
+      chain: 'Polygon',
+      from_chain: 'Polygon',
+      txArgs: {
+        chain: 'Polygon',
+        tx_encoding: 'evm',
+        chain_id: '137',
+        from: '0xsender',
+        tx: { to: POLYGON_USDC_CONTRACT, value: '0', data, gas_limit: '60000' },
+      },
+      stepperConfig: { flow: 'swap', steps: [] },
+      resolved: { labels },
+    })
+
+    it('reset turn: single-leg approve(spender, 0) buffered with SWAP labels renders the allowance reset, not the swap', () => {
+      const executor = new AgentExecutor(createMockVault())
+      expect(executor.storeServerTransaction(resetEnvelope(approveCalldata(RESET_SPENDER, 0n)))).toBe(true)
+      const summary = executor.getPendingSummary()!
+      expect(summary).toBe(
+        `reset USDC allowance to 0 on Polygon for spender ${RESET_SPENDER} (token contract ${POLYGON_USDC_CONTRACT}) ` +
+          'est. fee ~0.2629 POL — approval only; no swap is signed in this transaction'
+      )
+      expect(summary).not.toContain('→')
+      expect(summary).not.toContain('51.56')
+      expect(summary).not.toContain('via swapkit')
+    })
+
+    it('reset turn ignores a producer approval_summary label and renders the spender from the bytes', () => {
+      const executor = new AgentExecutor(createMockVault())
+      const decoy = '0x2222222222222222222222222222222222222222'
+      executor.storeServerTransaction(
+        resetEnvelope(approveCalldata(RESET_SPENDER, 0n), {
+          ...swapLabels,
+          quote_summary: `Reset USDC allowance to 0 for ${decoy} on Polygon`,
+          approval_summary: `Reset USDC allowance to 0 for ${decoy} on Polygon`,
+        })
+      )
+      const summary = executor.getPendingSummary()!
+      expect(summary).toContain(`for spender ${RESET_SPENDER}`)
+      expect(summary).not.toContain(decoy)
+    })
+
+    it('single-leg approve(spender, N) on a known token renders the decoded allowance in token units', () => {
+      const executor = new AgentExecutor(createMockVault())
+      executor.storeServerTransaction(resetEnvelope(approveCalldata(RESET_SPENDER, 5_000_000n)))
+      expect(executor.getPendingSummary()).toBe(
+        `approve 5 USDC on Polygon for spender ${RESET_SPENDER} (token contract ${POLYGON_USDC_CONTRACT}) ` +
+          'est. fee ~0.2629 POL — approval only; no swap is signed in this transaction'
+      )
+    })
+
+    it('single-leg approve on an unknown token falls back to raw base units (decimals unverified)', () => {
+      const executor = new AgentExecutor(createMockVault())
+      const unknown = '0x4444444444444444444444444444444444444444'
+      const env = resetEnvelope(approveCalldata(RESET_SPENDER, 7n), {})
+      env.txArgs.tx.to = unknown
+      executor.storeServerTransaction(env)
+      expect(executor.getPendingSummary()).toBe(
+        `approve 7 base units of token ${unknown} (decimals unverified) on Polygon for spender ${RESET_SPENDER}`
+      )
+    })
+
+    it('multi-leg: the approve leg is disclosed from its calldata next to the swap head', () => {
+      const executor = new AgentExecutor(createMockVault())
+      executor.storeServerTransaction(
+        makeMultiLegEnvelope(
+          {
+            quote_summary: '2 USDC → ~0.001 ETH via swapkit',
+            from_token: `USDC (${USDC_CONTRACT} on Base, 6 dec, source: known)`,
+            from_token_symbol: 'USDC',
+            to_token: 'ETH (native on Base, 18 dec, source: native)',
+            to_token_symbol: 'ETH',
+            approval_summary: 'Approve 999 USDC for 0x2222222222222222222222222222222222222222 on Base',
+          },
+          { approvalTx: { ...APPROVE_TX, data: approveCalldata(SPENDER, 2_000_000n) } }
+        )
+      )
+      const summary = executor.getPendingSummary()!
+      expect(summary).toBe(`2 USDC (${USDC_CONTRACT}) → ~0.001 ETH via swapkit on Base ${APPROVE_SUFFIX}`)
+      // the producer's approval_summary label is never trusted for the amount/spender
+      expect(summary).not.toContain('999')
+      expect(summary).not.toContain('0x2222222222222222222222222222222222222222')
+    })
+
+    it('multi-leg: an approve(spender, 0) leg is disclosed as an allowance reset', () => {
+      const executor = new AgentExecutor(createMockVault())
+      executor.storeServerTransaction(
+        makeMultiLegEnvelope(
+          {
+            quote_summary: '2 USDC → ~0.001 ETH via swapkit',
+            from_token: `USDC (${USDC_CONTRACT} on Base, 6 dec, source: known)`,
+            from_token_symbol: 'USDC',
+            to_token: 'ETH (native on Base, 18 dec, source: native)',
+            to_token_symbol: 'ETH',
+          },
+          { approvalTx: { ...APPROVE_TX, data: approveCalldata(SPENDER, 0n) } }
+        )
+      )
+      expect(executor.getPendingSummary()).toContain(
+        `(+ first reset USDC allowance to 0 for spender ${SPENDER} (token contract ${USDC_CONTRACT}) — 2 transactions)`
+      )
+    })
+
+    it('fails closed on malformed approve calldata (selector matches, args truncated) and clears the buffer', () => {
+      const executor = new AgentExecutor(createMockVault())
+      executor.storeServerTransaction(resetEnvelope('0x095ea7b3' + '0'.repeat(40)))
+      expect(() => executor.getPendingSummary()).toThrow(/Invalid ERC-20 approve calldata/)
+      expect(executor.getPendingSummary()).toBeNull()
+    })
+
+    it('fails closed when a multi-leg approval leg is not an ERC-20 approve and clears the buffer', () => {
+      const executor = new AgentExecutor(createMockVault())
+      executor.storeServerTransaction(
+        makeMultiLegEnvelope(
+          {
+            quote_summary: '2 USDC → ~0.001 ETH via swapkit',
+            from_token: `USDC (${USDC_CONTRACT} on Base, 6 dec, source: known)`,
+            from_token_symbol: 'USDC',
+            to_token: 'ETH (native on Base, 18 dec, source: native)',
+            to_token_symbol: 'ETH',
+          },
+          { approvalTx: { ...APPROVE_TX, data: '0xdeadbeef' + '0'.repeat(128) } }
+        )
+      )
+      expect(() => executor.getPendingSummary()).toThrow(/not an ERC-20 approve/)
+      expect(executor.getPendingSummary()).toBeNull()
+    })
+
+    it('fails closed on malformed calldata in a multi-leg approval leg', () => {
+      const executor = new AgentExecutor(createMockVault())
+      executor.storeServerTransaction(
+        makeMultiLegEnvelope(
+          {
+            quote_summary: '2 USDC → ~0.001 ETH via swapkit',
+            from_token: `USDC (${USDC_CONTRACT} on Base, 6 dec, source: known)`,
+            from_token_symbol: 'USDC',
+            to_token: 'ETH (native on Base, 18 dec, source: native)',
+            to_token_symbol: 'ETH',
+          },
+          { approvalTx: { ...APPROVE_TX, data: '0x095ea7b3' + '0'.repeat(120) } }
+        )
+      )
+      expect(() => executor.getPendingSummary()).toThrow(/Invalid ERC-20 approve calldata/)
+      expect(executor.getPendingSummary()).toBeNull()
+    })
+
+    it('renders an unlimited (2^256-1) allowance as UNLIMITED, known and unknown token', () => {
+      const executor = new AgentExecutor(createMockVault())
+      executor.storeServerTransaction(resetEnvelope(approveCalldata(RESET_SPENDER, maxUint256), {}))
+      expect(executor.getPendingSummary()).toBe(
+        `approve UNLIMITED USDC on Polygon for spender ${RESET_SPENDER} (token contract ${POLYGON_USDC_CONTRACT})`
+      )
+      const unknown = '0x4444444444444444444444444444444444444444'
+      const env = resetEnvelope(approveCalldata(RESET_SPENDER, maxUint256), {})
+      env.txArgs.tx.to = unknown
+      executor.storeServerTransaction(env)
+      expect(executor.getPendingSummary()).toBe(
+        `approve UNLIMITED allowance of token ${unknown} on Polygon for spender ${RESET_SPENDER}`
+      )
+    })
+
+    it('reset turn without a fee label omits the fee but keeps the approval-only clause', () => {
+      const executor = new AgentExecutor(createMockVault())
+      const noFee = Object.fromEntries(Object.entries(swapLabels).filter(([key]) => key !== 'estimated_fee'))
+      executor.storeServerTransaction(resetEnvelope(approveCalldata(RESET_SPENDER, 0n), noFee))
+      expect(executor.getPendingSummary()).toBe(
+        `reset USDC allowance to 0 on Polygon for spender ${RESET_SPENDER} (token contract ${POLYGON_USDC_CONTRACT}) ` +
+          '— approval only; no swap is signed in this transaction'
+      )
+    })
+
+    it('fails closed when the multi-leg MAIN leg is an ERC-20 approve hidden behind a swap head', () => {
+      const executor = new AgentExecutor(createMockVault())
+      const hiddenSpender = '0x5555555555555555555555555555555555555555'
+      const env = makeMultiLegEnvelope({
+        quote_summary: '2 USDC → ~0.001 ETH via swapkit',
+        from_token: `USDC (${USDC_CONTRACT} on Base, 6 dec, source: known)`,
+        from_token_symbol: 'USDC',
+        to_token: 'ETH (native on Base, 18 dec, source: native)',
+        to_token_symbol: 'ETH',
+      })
+      ;(env.txArgs as { tx: { data: string } }).tx.data = approveCalldata(hiddenSpender, maxUint256)
+      executor.storeServerTransaction(env)
+      expect(() => executor.getPendingSummary()).toThrow(/main leg is an ERC-20 approve/)
+      expect(executor.getPendingSummary()).toBeNull()
+    })
+
+    it('fails closed on malformed approve calldata in the multi-leg MAIN leg', () => {
+      const executor = new AgentExecutor(createMockVault())
+      const env = makeMultiLegEnvelope({
+        quote_summary: '2 USDC → ~0.001 ETH via swapkit',
+        from_token: `USDC (${USDC_CONTRACT} on Base, 6 dec, source: known)`,
+        from_token_symbol: 'USDC',
+        to_token: 'ETH (native on Base, 18 dec, source: native)',
+        to_token_symbol: 'ETH',
+      })
+      ;(env.txArgs as { tx: { data: string } }).tx.data = '0x095ea7b3' + '0'.repeat(40)
+      executor.storeServerTransaction(env)
+      expect(() => executor.getPendingSummary()).toThrow(/Invalid ERC-20 approve calldata/)
+      expect(executor.getPendingSummary()).toBeNull()
+    })
+
+    it('single-leg swap without an approve (clean allowance) still renders the swap summary', () => {
+      const executor = new AgentExecutor(createMockVault())
+      executor.storeServerTransaction({
+        chain: 'Polygon',
+        from_chain: 'Polygon',
+        txArgs: {
+          chain: 'Polygon',
+          tx_encoding: 'evm',
+          chain_id: '137',
+          from: '0xsender',
+          tx: { to: RESET_SPENDER, value: '0', data: '0xdeadbeef', gas_limit: '250000' },
+        },
+        resolved: { labels: swapLabels },
+      })
+      expect(executor.getPendingSummary()).toBe(
+        `5 USDC (${POLYGON_USDC_CONTRACT}) → ~51.56 POL via swapkit on Polygon est. fee ~0.2629 POL`
+      )
+    })
   })
 })
