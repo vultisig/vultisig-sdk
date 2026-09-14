@@ -20,6 +20,10 @@ vi.mock('@vultisig/core-chain/utils/isValidAddress', () => ({
   isValidAddress: vi.fn().mockReturnValue(true),
 }))
 
+vi.mock('@vultisig/core-chain/utils/isValidRecipient', () => ({
+  isValidRecipient: vi.fn().mockReturnValue(true),
+}))
+
 vi.mock('@vultisig/core-chain/publicKey/tw/getTwPublicKeyType', () => ({
   getTwPublicKeyType: vi.fn(),
 }))
@@ -40,6 +44,7 @@ vi.mock('@vultisig/core-mpc/keysign/utils/getKeysignChain', () => ({
   getKeysignChain: vi.fn(),
 }))
 
+import { isValidRecipient } from '@vultisig/core-chain/utils/isValidRecipient'
 import { buildSendKeysignPayload } from '@vultisig/core-mpc/keysign/send/build'
 import type { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 
@@ -61,6 +66,7 @@ describe('TransactionBuilder', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(isValidRecipient).mockReturnValue(true)
 
     mockVaultData = {
       name: 'Test Vault',
@@ -100,6 +106,25 @@ describe('TransactionBuilder', () => {
           amount: 0n,
         })
       ).rejects.toMatchObject({ code: VaultErrorCode.InvalidAmount })
+
+      expect(buildSendKeysignPayload).not.toHaveBeenCalled()
+    })
+
+    it('rejects an off-curve Solana recipient before building a payload', async () => {
+      vi.mocked(isValidRecipient).mockReturnValue(false)
+
+      await expect(
+        builder.prepareSendTx({
+          coin: {
+            chain: Chain.Solana,
+            address: 'GmaDrppBC7P5ARKV8g3djiwP89vz1jLK23V2GBjuAEGB',
+            ticker: 'SOL',
+            decimals: 9,
+          },
+          receiver: 'BnJQssQwsYPcNb2RrW5SP1kVxijMqsA9VVQX1U1p4kkp',
+          amount: 1n,
+        })
+      ).rejects.toThrow(/Invalid receiver address for chain Solana/)
 
       expect(buildSendKeysignPayload).not.toHaveBeenCalled()
     })
@@ -175,6 +200,26 @@ describe('TransactionBuilder', () => {
           amount: 0n,
         })
       ).rejects.toMatchObject({ code: VaultErrorCode.InvalidAmount })
+
+      expect(getSendFeeEstimate).not.toHaveBeenCalled()
+    })
+
+    it('rejects an off-curve Solana recipient before estimating a fee', async () => {
+      const { getSendFeeEstimate } = await import('@vultisig/core-mpc/keysign/send/getSendFeeEstimate')
+      vi.mocked(isValidRecipient).mockReturnValue(false)
+
+      await expect(
+        builder.estimateSendFee({
+          coin: {
+            chain: Chain.Solana,
+            address: 'GmaDrppBC7P5ARKV8g3djiwP89vz1jLK23V2GBjuAEGB',
+            ticker: 'SOL',
+            decimals: 9,
+          },
+          receiver: 'BnJQssQwsYPcNb2RrW5SP1kVxijMqsA9VVQX1U1p4kkp',
+          amount: 1n,
+        })
+      ).rejects.toMatchObject({ code: VaultErrorCode.InvalidConfig })
 
       expect(getSendFeeEstimate).not.toHaveBeenCalled()
     })

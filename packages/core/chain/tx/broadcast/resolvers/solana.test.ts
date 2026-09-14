@@ -22,6 +22,7 @@ vi.mock('../verifyBroadcastByHash', () => ({
 }))
 
 import { Chain } from '../../../Chain'
+import { BroadcastErrorCode } from '../resolver'
 import { broadcastSolanaTx } from './solana'
 
 describe('broadcastSolanaTx', () => {
@@ -68,7 +69,7 @@ describe('broadcastSolanaTx', () => {
     vi.useFakeTimers()
     const rpcError = new Error('BlockhashNotFound')
     mocks.sendRawTransaction.mockRejectedValue(rpcError)
-    mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
+    mocks.verifyBroadcastByHash.mockResolvedValue('verified-hash')
 
     const promise = broadcastSolanaTx({ chain: Chain.Solana, tx })
 
@@ -95,7 +96,7 @@ describe('broadcastSolanaTx', () => {
   it('verifies by hash when standard RPC rejects after JITO acceptance', async () => {
     const rpcError = new Error('rpc rejected')
     mocks.sendRawTransaction.mockRejectedValue(rpcError)
-    mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
+    mocks.verifyBroadcastByHash.mockResolvedValue('verified-hash')
 
     await broadcastSolanaTx({ chain: Chain.Solana, tx })
 
@@ -118,7 +119,7 @@ describe('broadcastSolanaTx', () => {
       ],
     })
     mocks.sendRawTransaction.mockRejectedValue(sendError)
-    mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
+    mocks.verifyBroadcastByHash.mockResolvedValue('verified-hash')
 
     await broadcastSolanaTx({ chain: Chain.Solana, tx })
 
@@ -129,10 +130,53 @@ describe('broadcastSolanaTx', () => {
     expect(error.message).toContain('insufficient lamports')
   })
 
+  it('returns a definitive failure when standard RPC rejects and hash verification cannot confirm it', async () => {
+    const rejection = new Error('invalid signature')
+    mocks.sendRawTransaction.mockRejectedValue(rejection)
+    mocks.verifyBroadcastByHash.mockRejectedValue(rejection)
+
+    await expect(broadcastSolanaTx({ chain: Chain.Solana, tx })).resolves.toEqual({
+      status: 'failed',
+      code: BroadcastErrorCode.Rejected,
+      retryable: false,
+      cause: rejection,
+    })
+  })
+
+  it('returns a retryable failure after transient blockhash retries cannot be verified', async () => {
+    vi.useFakeTimers()
+    const transientError = new Error('Blockhash not found')
+    mocks.sendRawTransaction.mockRejectedValue(transientError)
+    mocks.verifyBroadcastByHash.mockRejectedValue(transientError)
+
+    const promise = broadcastSolanaTx({ chain: Chain.Solana, tx })
+    await vi.advanceTimersByTimeAsync(1_500)
+
+    await expect(promise).resolves.toEqual({
+      status: 'failed',
+      code: BroadcastErrorCode.Transport,
+      retryable: true,
+      cause: transientError,
+    })
+  })
+
+  it('returns a retryable failure when a transient network error cannot be verified', async () => {
+    const transientError = new Error('ECONNRESET')
+    mocks.sendRawTransaction.mockRejectedValue(transientError)
+    mocks.verifyBroadcastByHash.mockRejectedValue(transientError)
+
+    await expect(broadcastSolanaTx({ chain: Chain.Solana, tx })).resolves.toEqual({
+      status: 'failed',
+      code: BroadcastErrorCode.Transport,
+      retryable: true,
+      cause: transientError,
+    })
+  })
+
   it('treats a duplicate-signature rejection as an idempotent success', async () => {
     mocks.sendRawTransaction.mockRejectedValue(new Error('This transaction has already been processed'))
 
-    await expect(broadcastSolanaTx({ chain: Chain.Solana, tx })).resolves.toBeUndefined()
+    await expect(broadcastSolanaTx({ chain: Chain.Solana, tx })).resolves.toMatchObject({ status: 'accepted' })
 
     expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
   })
@@ -140,7 +184,7 @@ describe('broadcastSolanaTx', () => {
   it('treats an AlreadyProcessed transaction error as an idempotent success', async () => {
     mocks.sendRawTransaction.mockRejectedValue(new Error('Transaction error: AlreadyProcessed'))
 
-    await expect(broadcastSolanaTx({ chain: Chain.Solana, tx })).resolves.toBeUndefined()
+    await expect(broadcastSolanaTx({ chain: Chain.Solana, tx })).resolves.toMatchObject({ status: 'accepted' })
 
     expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
   })
@@ -156,7 +200,7 @@ describe('broadcastSolanaTx', () => {
   it('pins the AlreadyProcessed branch: idempotent success, no re-broadcast, no hash verification', async () => {
     mocks.sendRawTransaction.mockRejectedValue(new Error('This transaction has already been processed'))
 
-    await expect(broadcastSolanaTx({ chain: Chain.Solana, tx })).resolves.toBeUndefined()
+    await expect(broadcastSolanaTx({ chain: Chain.Solana, tx })).resolves.toMatchObject({ status: 'accepted' })
 
     // Single broadcast attempt — the duplicate signature is NOT re-sent.
     expect(mocks.sendRawTransaction).toHaveBeenCalledTimes(1)

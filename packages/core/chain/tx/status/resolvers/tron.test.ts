@@ -15,18 +15,19 @@ describe('getTronTxStatus', () => {
   const hash = 'abc123'
 
   beforeEach(() => {
+    vi.restoreAllMocks()
     vi.clearAllMocks()
   })
 
   it('returns pending when tx has no blockNumber (not yet mined)', async () => {
-    mocks.queryUrl.mockResolvedValue({ id: hash })
+    mocks.queryUrl.mockResolvedValueOnce({ id: hash }).mockResolvedValueOnce({ txID: hash })
 
     const result = await getTronTxStatus({ chain: OtherChain.Tron, hash })
     expect(result).toEqual({ status: 'pending', isKnown: true })
   })
 
   it('returns pending when blockNumber is 0', async () => {
-    mocks.queryUrl.mockResolvedValue({ id: hash, blockNumber: 0 })
+    mocks.queryUrl.mockResolvedValueOnce({ id: hash, blockNumber: 0 }).mockResolvedValueOnce({ txID: hash })
 
     const result = await getTronTxStatus({ chain: OtherChain.Tron, hash })
     expect(result).toEqual({ status: 'pending', isKnown: true })
@@ -160,9 +161,57 @@ describe('getTronTxStatus', () => {
   })
 
   it('returns not_found when Tron RPC returns an empty unknown-hash payload', async () => {
-    mocks.queryUrl.mockResolvedValue({})
+    mocks.queryUrl.mockResolvedValueOnce({}).mockResolvedValueOnce({})
 
     const result = await getTronTxStatus({ chain: OtherChain.Tron, hash })
     expect(result).toEqual({ status: 'not_found', isKnown: false })
+  })
+
+  it('returns expired only when the matching raw transaction is past its authoritative expiration', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_700_003_600_001)
+    mocks.queryUrl
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ txID: hash, raw_data: { expiration: 1_700_003_600_000 } })
+
+    await expect(getTronTxStatus({ chain: OtherChain.Tron, hash })).resolves.toEqual({
+      status: 'expired',
+      isKnown: true,
+    })
+  })
+
+  it('keeps a matching raw transaction pending before its expiration', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_700_003_599_999)
+    mocks.queryUrl
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ txID: hash, raw_data: { expiration: 1_700_003_600_000 } })
+
+    await expect(getTronTxStatus({ chain: OtherChain.Tron, hash })).resolves.toEqual({
+      status: 'pending',
+      isKnown: true,
+    })
+  })
+
+  it('does not trust expiration from a raw transaction whose ID does not match the requested hash', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_700_003_600_001)
+    mocks.queryUrl
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ txID: 'different', raw_data: { expiration: 1_700_003_600_000 } })
+
+    await expect(getTronTxStatus({ chain: OtherChain.Tron, hash })).resolves.toEqual({
+      status: 'not_found',
+      isKnown: false,
+    })
+  })
+
+  it('returns expired for a known but unconfirmed transaction after its raw expiration', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_700_003_600_001)
+    mocks.queryUrl
+      .mockResolvedValueOnce({ id: hash, blockNumber: 0 })
+      .mockResolvedValueOnce({ txID: hash, raw_data: { expiration: 1_700_003_600_000 } })
+
+    await expect(getTronTxStatus({ chain: OtherChain.Tron, hash })).resolves.toEqual({
+      status: 'expired',
+      isKnown: true,
+    })
   })
 })

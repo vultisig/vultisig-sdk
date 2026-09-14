@@ -8,12 +8,21 @@
 // Ported from mcp-ts/src/lib/yield-api.ts.
 // Builds UNSIGNED calldata only — never signs, never broadcasts.
 
+import { sha256 } from '@noble/hashes/sha2.js'
+import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 // --- Module constants (NOT process.env) ---
 
 const STAKEKIT_API_BASE = 'https://api.stakek.it/v1'
 const STAKEKIT_MCP_URL = 'https://mcp.yield.xyz/mcp'
+// The multi-network batched balances endpoint below is validated against
+// THIS host with the `{queries:[{network,address}]}` body shape — NOT
+// interchangeable with STAKEKIT_API_BASE, whose `/yields/balances` expects
+// the different `[{addresses:{address},integrationId}]` array shape (see
+// `getBalances` below). Both are yield.xyz/StakeKit; different hosts validate
+// different request contracts on the same path.
+const YIELD_XYZ_API_BASE = 'https://api.yield.xyz/v1'
 
 // --- Auth helper — apiKey is injectable ---
 
@@ -21,6 +30,30 @@ function authHeaders(apiKey?: string, extra: Record<string, string> = {}): Recor
   const headers: Record<string, string> = { ...extra }
   if (apiKey) headers['X-API-KEY'] = apiKey
   return headers
+}
+
+/**
+ * Cache-key fragment identifying WHICH credential a cached response was
+ * fetched with.
+ *
+ * Any cache whose upstream request carries an auth header has to key on that
+ * auth scope, because the response is a function of the credential. Without
+ * this, `/yields/enabled` - which returns only the products a given project's
+ * API key may deposit into - is cached under the query string alone, so the
+ * first caller's allowed set is served to every other caller for the next five
+ * minutes. That both leaks one project's enabled products to another and
+ * suppresses products the second project actually has.
+ *
+ * Truncated SHA-256, never the key itself: cache keys end up in debugging
+ * output, and a credential must not be reconstructible from one. 64 bits is
+ * ample when the only requirement is that distinct keys do not collide.
+ */
+function apiKeyScope(apiKey?: string): string {
+  const trimmed = apiKey?.trim()
+  // A request with no key is its own scope - it hits the same endpoint
+  // unauthenticated and gets a different answer than any keyed request.
+  if (!trimmed) return 'anon'
+  return bytesToHex(sha256(utf8ToBytes(trimmed))).slice(0, 16)
 }
 
 // --- Simple TTL cache (same pattern as defi-llama.ts) ---
@@ -115,7 +148,7 @@ export type YieldTransaction = {
   type: string // APPROVAL, SUPPLY, STAKE, UNSTAKE, etc.
   network: string
   status: string
-  unsignedTransaction: string // JSON string — needs JSON.parse
+  unsignedTransaction: string | null // JSON string — needs JSON.parse; null while yield.xyz is still building it
   gasEstimate: string // JSON string — needs JSON.parse
 }
 
@@ -183,12 +216,29 @@ export type EvmScanRequest = {
   data: string
 }
 
+/**
+ * A Solana yield step's pre-built transaction bytes (architecture#1670).
+ * yield.xyz compiles Solana transactions server-side and returns the
+ * serialised bytes directly as `unsignedTransaction` — hex, base64, or a
+ * `{serialized|tx}` string wrapper (mirrors `canonicalizeSolanaStep`'s
+ * candidate extraction in `../stakekit/index.ts`). `serializedTx` is
+ * passed through AS-IS (encoding not normalized here — the SDK's scan
+ * contract is a decode-only signal, not a wired Blockaid request body);
+ * callers that need base58/base64 do that normalization themselves.
+ */
+export type SolanaScanRequest = {
+  kind: 'solana'
+  chain: 'Solana'
+  accountAddress?: string
+  serializedTx: string
+}
+
 export type UnsupportedScanRequest = {
   kind: 'unsupported'
   reason: string
 }
 
-export type ScanRequest = EvmScanRequest | UnsupportedScanRequest
+export type ScanRequest = EvmScanRequest | SolanaScanRequest | UnsupportedScanRequest
 
 // --- API functions ---
 
@@ -207,7 +257,7 @@ export async function searchYields(params: {
   if (params.provider) query.set('provider', params.provider)
   if (params.limit) query.set('limit', String(params.limit))
 
-  const cacheKey = `yield:search:${query.toString()}`
+  const cacheKey = `yield:search:${apiKeyScope(params.apiKey)}:${query.toString()}`
   const cached = getCached<YieldProduct[]>(cacheKey)
   if (cached) return cached
 
@@ -227,7 +277,7 @@ export async function searchYields(params: {
 }
 
 export async function getYield(yieldId: string, apiKey?: string): Promise<YieldProduct> {
-  const cacheKey = `yield:detail:${yieldId}`
+  const cacheKey = `yield:detail:${apiKeyScope(apiKey)}:${yieldId}`
   const cached = getCached<YieldProduct>(cacheKey)
   if (cached) return cached
 
@@ -307,6 +357,189 @@ export async function getBalances(
   return out
 }
 
+// --- Batched multi-network balances (architecture#1765) ---
+//
+// Ported from vultiagent-app's `src/features/dashboard/lib/yieldXyzPositions.ts`
+// (the app's local positions client) — the SDK's `getBalances` above is
+// single-network only and requires an extra `searchYields` round trip per
+// network to enumerate yield IDs. This queries `{network, address}` pairs
+// DIRECTLY across any number of networks in one logical call, batched at the
+// yield.xyz-enforced cap of 25 queries per HTTP request. Uses `api.yield.xyz`
+// (not `STAKEKIT_API_BASE`/`api.stakek.it`) — see the `YIELD_XYZ_API_BASE`
+// comment above for why the two hosts are not interchangeable here.
+
+/** One (network, address) balances query. */
+export type StakekitBalanceQuery = {
+  network: string
+  address: string
+}
+
+export type StakekitBalanceEntry = {
+  address?: string
+  amount: string
+  amountRaw?: string
+  amountUsd?: string
+  type: string
+  isEarning?: boolean
+  token: {
+    symbol: string
+    name: string
+    decimals: number
+    network: string
+    logoURI?: string
+    coinGeckoId?: string
+    address?: string
+  }
+  pendingActions: Array<{ type: string; [k: string]: unknown }>
+}
+
+/** One yield product's aggregated balances for the queried address(es). */
+export type StakekitBalanceItem = {
+  yieldId: string
+  balances: StakekitBalanceEntry[]
+  rewardRate?: {
+    total: number
+    rateType: string
+    components?: Array<{
+      rate: number
+      rateType: string
+      yieldSource?: string
+      description?: string
+      token: { symbol: string; name: string; decimals: number; network: string }
+    }>
+  }
+}
+
+export type StakekitBalancesResult = {
+  items: StakekitBalanceItem[]
+  /** Per-query failures the server captured without 5xx-ing the whole request,
+   * OR per-chunk rejections synthesized client-side in `fetchAllStakekitBalances`
+   * when an entire batch's fetch rejects (see that function). */
+  errors: Array<{ query?: { network?: string; address?: string }; message?: string }>
+}
+
+/** Per-request cap enforced by the yield.xyz batched-balances endpoint. */
+export const STAKEKIT_BALANCE_QUERIES_PER_REQUEST = 25
+const STAKEKIT_BALANCE_REQUEST_TIMEOUT_MS = 15_000
+
+/**
+ * Split an arbitrary-length query list into `size`-sized chunks so a caller
+ * never exceeds the per-request cap. Pure function, safe for fixture tests.
+ */
+export function chunkStakekitBalanceQueries(
+  queries: StakekitBalanceQuery[],
+  size: number = STAKEKIT_BALANCE_QUERIES_PER_REQUEST
+): StakekitBalanceQuery[][] {
+  if (!Number.isInteger(size) || size <= 0) {
+    throw new Error(`chunkStakekitBalanceQueries: size must be a positive integer, got ${size}`)
+  }
+  if (queries.length === 0) return []
+  const chunks: StakekitBalanceQuery[][] = []
+  for (let i = 0; i < queries.length; i += size) {
+    chunks.push(queries.slice(i, i + size))
+  }
+  return chunks
+}
+
+/**
+ * Fetch yield positions for one batch of ≤25 `{network, address}` queries.
+ * Throws on non-200, request timeout, or invalid JSON. Callers needing an
+ * arbitrary-length query list should use `fetchAllStakekitBalances` instead,
+ * which chunks and merges.
+ */
+export async function fetchStakekitBalancesBatch(
+  queries: StakekitBalanceQuery[],
+  apiKey?: string
+): Promise<StakekitBalancesResult> {
+  if (queries.length === 0) {
+    return { items: [], errors: [] }
+  }
+  if (queries.length > STAKEKIT_BALANCE_QUERIES_PER_REQUEST) {
+    throw new Error(
+      `fetchStakekitBalancesBatch: batch size ${queries.length} exceeds cap ${STAKEKIT_BALANCE_QUERIES_PER_REQUEST}`
+    )
+  }
+
+  const url = `${YIELD_XYZ_API_BASE}/yields/balances`
+  // This helper is part of the React Native SDK surface. Older Hermes
+  // runtimes do not implement AbortSignal.timeout(), so use the portable
+  // AbortController pattern shared by the other RN-exported fetch helpers.
+  const controller = new AbortController()
+  const timeoutId = setTimeout(
+    () => controller.abort(new Error(`yield.xyz balances timeout after ${STAKEKIT_BALANCE_REQUEST_TIMEOUT_MS}ms`)),
+    STAKEKIT_BALANCE_REQUEST_TIMEOUT_MS
+  )
+  try {
+    const resp = await fetch(url, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: authHeaders(apiKey, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ queries }),
+    })
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => '')
+      throw new Error(`yield.xyz ${resp.status}: ${body.slice(0, 200)}`)
+    }
+    const json = (await resp.json()) as {
+      items?: StakekitBalanceItem[] | null
+      errors?: StakekitBalancesResult['errors'] | null
+    }
+    // yield.xyz has been observed to return `items: null` on edge errors.
+    return {
+      items: Array.isArray(json?.items) ? json.items : [],
+      errors: Array.isArray(json?.errors) ? json.errors : [],
+    }
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
+/**
+ * Fetch yield positions for ANY number of `{network, address}` queries by
+ * chunking into ≤25-query requests and merging results. A single failing
+ * batch does not abort the others — its failure lands in `errors[]` with
+ * enough context (first network + batch size) to be diagnosable, address
+ * elided (PII). Throws only when EVERY batch fails, so a caller can
+ * distinguish "partial data" (still useful) from "the whole fetch failed".
+ */
+export async function fetchAllStakekitBalances(
+  queries: StakekitBalanceQuery[],
+  apiKey?: string
+): Promise<StakekitBalancesResult> {
+  const chunks = chunkStakekitBalanceQueries(queries)
+  if (chunks.length === 0) return { items: [], errors: [] }
+
+  const results = await Promise.allSettled(chunks.map(chunk => fetchStakekitBalancesBatch(chunk, apiKey)))
+
+  const items: StakekitBalanceItem[] = []
+  const errors: StakekitBalancesResult['errors'] = []
+  let fulfilledCount = 0
+  results.forEach((r, idx) => {
+    const chunk = chunks[idx]
+    if (r.status === 'fulfilled') {
+      fulfilledCount += 1
+      items.push(...r.value.items)
+      errors.push(...r.value.errors)
+    } else {
+      const firstNetwork = chunk?.[0]?.network ?? '?'
+      errors.push({
+        message: r.reason instanceof Error ? r.reason.message : String(r.reason),
+        query: { network: `${firstNetwork} (batch of ${chunk?.length ?? 0})` },
+      })
+    }
+  })
+
+  if (fulfilledCount === 0 && results.length > 0) {
+    const firstErr = results.find((r): r is PromiseRejectedResult => r.status === 'rejected')
+    const reason = firstErr?.reason
+    throw reason instanceof Error
+      ? reason
+      : new Error(`fetchAllStakekitBalances: all ${results.length} batch(es) failed — ${String(reason ?? 'unknown')}`)
+  }
+
+  return { items, errors }
+}
+
 export async function callYieldMCP(toolName: string, args: Record<string, unknown>, apiKey?: string): Promise<string> {
   const resp = await fetch(STAKEKIT_MCP_URL, {
     method: 'POST',
@@ -366,26 +599,49 @@ export async function callYieldActionREST(
     throw new Error(`${prefix}: ${humanMsg}`)
   }
   const action_response = (await resp.json()) as YieldActionResponse
-  // Some chains return the action with status:"CREATED" and every
-  // transactions[].unsignedTransaction === null because yield.xyz hasn't
-  // built the payload yet. PATCH each null tx to advance it.
+  return ensureTransactionsBuilt(action_response, apiKey)
+}
+
+/**
+ * Some chains (Tron native staking, occasional Sui/TON) return the action
+ * with `status:"CREATED"` and every `transactions[].unsignedTransaction ===
+ * null` because yield.xyz hasn't built the payload yet — it's an async
+ * background job. The build only advances when each transaction is PATCH'd
+ * to `WAITING_FOR_SIGNATURE`. EVM and most Solana yields return the payload
+ * synchronously, so this loop is a no-op for them.
+ *
+ * Exported so every caller of a yield.xyz action response — REST
+ * (`callYieldActionREST`) and the hosted MCP path (`callYieldActionWithFallback`)
+ * alike — applies the SAME PATCH step, and so a consumer resolving an action
+ * from elsewhere (e.g. a backend that hit the hosted MCP directly) doesn't
+ * have to duplicate this loop.
+ */
+export async function ensureTransactionsBuilt(
+  action_response: YieldActionResponse,
+  apiKey?: string
+): Promise<YieldActionResponse> {
   if (Array.isArray(action_response.transactions) && action_response.transactions.length > 0) {
-    const needsBuild = action_response.transactions.some(
-      t => (t as { unsignedTransaction?: unknown }).unsignedTransaction == null
-    )
+    const needsBuild = action_response.transactions.some(t => t.status === 'CREATED' && t.unsignedTransaction == null)
     if (needsBuild) {
       const built = await Promise.all(
         action_response.transactions.map(async tx => {
-          const txRec = tx as { id?: string; unsignedTransaction?: unknown }
-          if (typeof txRec.id !== 'string' || txRec.unsignedTransaction != null) {
-            return tx as unknown
+          if (typeof tx.id !== 'string' || tx.status !== 'CREATED' || tx.unsignedTransaction != null) {
+            return tx
           }
-          return await buildYieldTransaction(txRec.id, tx, apiKey)
+          return (await buildYieldTransaction(tx.id, tx, apiKey)) as YieldTransaction
         })
       )
-      action_response.transactions = built as YieldActionResponse['transactions']
+      action_response.transactions = built
     }
   }
+
+  const unbuiltTransaction = Array.isArray(action_response.transactions)
+    ? action_response.transactions.find(tx => tx.status === 'CREATED' && tx.unsignedTransaction == null)
+    : undefined
+  if (unbuiltTransaction) {
+    throw new Error(`yield_xyz_transaction_build_failed: ${unbuiltTransaction.id}`)
+  }
+
   return action_response
 }
 
@@ -431,7 +687,24 @@ export async function callYieldActionWithFallback(args: {
     return JSON.stringify(json)
   }
   try {
-    return await callYieldMCP(args.mcpToolName, args.mcpArgs, args.apiKey)
+    const raw = await callYieldMCP(args.mcpToolName, args.mcpArgs, args.apiKey)
+    // The hosted MCP path returns the action response as-is — it never
+    // PATCH'd a still-building (`unsignedTransaction: null`) transaction,
+    // unlike callYieldActionREST above. Without this, an async-build chain
+    // (e.g. sui-sui-native-staking) that happens to route through MCP
+    // returns a success-shaped payload with an unbuilt transaction; apply
+    // the SAME build step here so both paths converge on a fully-built
+    // action response. A response that doesn't parse as YieldActionResponse
+    // is returned unchanged for downstream validation, but a parsed action
+    // must not continue while an eligible transaction is still unbuilt.
+    let parsed: YieldActionResponse
+    try {
+      parsed = JSON.parse(raw) as YieldActionResponse
+    } catch {
+      return raw
+    }
+    const built = await ensureTransactionsBuilt(parsed, args.apiKey)
+    return JSON.stringify(built)
   } catch (mcpErr) {
     const mcpMsg = mcpErr instanceof Error ? mcpErr.message : String(mcpErr)
     try {
@@ -486,7 +759,8 @@ type EvmUnsignedTx = {
   data?: string
 }
 
-function asEvmUnsignedTx(raw: string): EvmUnsignedTx | null {
+function asEvmUnsignedTx(raw: string | null): EvmUnsignedTx | null {
+  if (typeof raw !== 'string') return null
   try {
     const parsed = JSON.parse(raw) as unknown
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null
@@ -503,10 +777,56 @@ function asEvmUnsignedTx(raw: string): EvmUnsignedTx | null {
 }
 
 /**
- * Build a scan_request for ONE step in a yield action's transactions[].
- * Returns an unsupported sentinel when the network/envelope shape can't be decoded.
+ * Extract the raw Solana tx-bytes candidate from a step's `unsignedTransaction`
+ * (hex, base64, or a `{serialized|tx}` string wrapper). Byte-identical
+ * extraction logic to `canonicalizeSolanaStep` in `../stakekit/index.ts` —
+ * duplicated rather than imported because `index.ts` imports THIS module, and
+ * scan-request building needs to stay a level below the canonicalizer to avoid
+ * a circular import.
  */
-export function buildYieldStepScanRequest(tx: YieldTransaction): ScanRequest {
+function extractSolanaTxCandidate(unsignedTransaction: string | null): string | null {
+  if (typeof unsignedTransaction !== 'string') return null
+  try {
+    const maybeObj = JSON.parse(unsignedTransaction) as unknown
+    if (maybeObj && typeof maybeObj === 'object') {
+      const obj = maybeObj as { serialized?: unknown; tx?: unknown }
+      return (typeof obj.serialized === 'string' && obj.serialized) || (typeof obj.tx === 'string' && obj.tx) || null
+    }
+    return null
+  } catch {
+    const trimmed = unsignedTransaction.trimStart()
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) return null
+    return unsignedTransaction || null
+  }
+}
+
+/**
+ * Build a scan_request for ONE step in a yield action's transactions[].
+ * Returns an unsupported sentinel when the network/envelope shape can't be
+ * decoded, or when the chain has no first-party scan surface yet.
+ *
+ * `solanaAccountAddress` (architecture#1670): the signer's Solana base58
+ * wallet address, needed by downstream Blockaid-style scanners that require
+ * an `account_address` alongside the tx bytes. Absent it, a Solana step still
+ * yields a real `solana` scan_request (bytes present) rather than falling
+ * back to `unsupported` — the caller can attach the address itself if known.
+ */
+export function buildYieldStepScanRequest(tx: YieldTransaction, solanaAccountAddress?: string): ScanRequest {
+  if (tx.network === 'solana') {
+    const candidate = extractSolanaTxCandidate(tx.unsignedTransaction)
+    if (!candidate) {
+      const req: ScanRequest = { kind: 'unsupported', reason: 'no_compiled_txs' }
+      return req
+    }
+    const req: ScanRequest = {
+      kind: 'solana',
+      chain: 'Solana',
+      ...(solanaAccountAddress ? { accountAddress: solanaAccountAddress } : {}),
+      serializedTx: candidate,
+    }
+    return req
+  }
+
   const evmChain = yieldNetworkToEvmChain(tx.network)
   if (!evmChain) {
     const req: ScanRequest = { kind: 'unsupported', reason: 'chain_not_supported' }
@@ -529,17 +849,27 @@ export function buildYieldStepScanRequest(tx: YieldTransaction): ScanRequest {
 }
 
 /**
+ * Build a scan_request for EVERY step in a yield action's transactions[],
+ * 1:1 with the input array — including `unsupported` entries (architecture#1670).
+ * Unlike {@link buildYieldActionScanRequest} (which surfaces only the first
+ * scannable step, for backward compatibility with the historical single-slot
+ * contract), this hands a caller ALL steps so a multi-step action (e.g.
+ * approve→stake) can be scanned in full rather than just its first leg.
+ */
+export function buildYieldActionScanRequests(resp: YieldActionResponse, solanaAccountAddress?: string): ScanRequest[] {
+  if (!resp.transactions?.length) return []
+  return resp.transactions.map(step => buildYieldStepScanRequest(step, solanaAccountAddress))
+}
+
+/**
  * Build the scan_request for a yield action's RESPONSE envelope.
  * Returns the first non-unsupported step scan_request; falls back to
- * `{kind: 'unsupported', reason: 'no_compiled_txs'}` when all steps are unsupported.
+ * `{kind: 'unsupported', reason: 'no_compiled_txs'}` when all steps are
+ * unsupported. Kept for backward compatibility with the historical
+ * single-slot contract — use {@link buildYieldActionScanRequests} (plural)
+ * for full multi-step coverage.
  */
-export function buildYieldActionScanRequest(resp: YieldActionResponse): ScanRequest {
-  if (!resp.transactions?.length) {
-    return { kind: 'unsupported', reason: 'no_compiled_txs' }
-  }
-  for (const step of resp.transactions) {
-    const req = buildYieldStepScanRequest(step)
-    if (req.kind !== 'unsupported') return req
-  }
-  return { kind: 'unsupported', reason: 'no_compiled_txs' }
+export function buildYieldActionScanRequest(resp: YieldActionResponse, solanaAccountAddress?: string): ScanRequest {
+  const requests = buildYieldActionScanRequests(resp, solanaAccountAddress)
+  return requests.find(req => req.kind !== 'unsupported') ?? { kind: 'unsupported', reason: 'no_compiled_txs' }
 }

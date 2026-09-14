@@ -26,7 +26,7 @@ import type {
   VaultInfo,
 } from '@vultisig/examples-shared'
 import { SDKAdapterEventSubscriptionBase } from '@vultisig/examples-shared/adapters'
-import type { Chain, Token, VaultBase, Vultisig } from '@vultisig/sdk'
+import type { Chain, Token, VaultBase, VaultImportOptions, Vultisig } from '@vultisig/sdk'
 
 /**
  * Browser SDK Adapter - wraps direct SDK instance for browser environment
@@ -195,8 +195,8 @@ export class BrowserSDKAdapter extends SDKAdapterEventSubscriptionBase implement
     }
   }
 
-  async importVault(content: string, password?: string): Promise<VaultInfo> {
-    const vault = await this.sdk.importVault(content, password)
+  async importVault(content: string, password?: string, options?: VaultImportOptions): Promise<VaultInfo> {
+    const vault = await this.sdk.importVault(content, password, options)
     this.vaultCache.set(vault.id, vault)
     this.subscribeToVaultEvents(vault)
     return this.vaultToInfo(vault)

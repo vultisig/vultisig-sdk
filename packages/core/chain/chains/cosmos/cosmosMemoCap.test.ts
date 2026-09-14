@@ -18,7 +18,6 @@ describe('getCosmosMemoMaxBytes', () => {
     for (const chain of [
       CosmosChain.TerraClassic,
       CosmosChain.Osmosis,
-      CosmosChain.Kujira,
       CosmosChain.Noble,
       CosmosChain.Dydx,
       CosmosChain.Akash,

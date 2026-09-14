@@ -9,7 +9,13 @@ import { SecureVault } from './SecureVault'
 import { VaultBase } from './VaultBase'
 
 export { FastVault, SecureVault, VaultBase }
+export type { ResolvedTokenInfo } from './tokenRef'
+export { resolveTokenRef, resolveTokenRefId } from './tokenRef'
 export type { VaultSaveOptions } from './VaultBase'
+
+// Canonical Fast Vault / server-signer detection. This recognizes both current
+// Server-* party IDs and legacy VultiServer-* backups.
+export { hasServer, isServer } from '@vultisig/core-mpc/devices/localPartyId'
 
 // Export errors
 export { BroadcastPartialFailureError } from './services/BroadcastService'
