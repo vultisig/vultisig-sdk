@@ -63,6 +63,7 @@ describe('getRujiTradeSwapQuote', () => {
     })
 
     expect(quote.provider).toBe('ruji')
+    expect(quote.affiliate).toEqual({ affiliateBps: 0, request: 'omitted', allocations: [] })
     expect(quote.dstAmount).toBe('998124')
     expect(quote.tx).toEqual({
       cosmosWasm: {

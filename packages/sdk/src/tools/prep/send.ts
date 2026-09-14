@@ -4,7 +4,7 @@ import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
 import { assertSafeDestination } from '@vultisig/core-chain/security/dangerousAddresses'
 import { assertSafeTokenTransferDestination } from '@vultisig/core-chain/security/tokenTransferGuards'
-import { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
+import { isValidRecipient } from '@vultisig/core-chain/utils/isValidRecipient'
 import type { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
 import { buildSendKeysignPayload } from '@vultisig/core-mpc/keysign/send/build'
 import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
@@ -21,6 +21,12 @@ export type PrepareSendTxFromKeysParams = {
   /** XRPL DestinationTag, independent from the transaction memo. */
   destinationTag?: number
   feeSettings?: FeeSettings
+  /**
+   * Set when this came from a MAX button, so the payload records it instead of the
+   * SDK guessing from how close `amount` sits to the balance. `amount` is still the
+   * exact figure signed — pass the same `balance - fee` the UI displayed.
+   */
+  sendMaxAmount?: boolean
 }
 
 /**
@@ -53,7 +59,7 @@ export const prepareSendTxFromKeys = async (
 
   const walletCore = walletCoreOverride ?? (await getWalletCore())
 
-  const isValid = isValidAddress({
+  const isValid = isValidRecipient({
     chain: params.coin.chain,
     address: params.receiver,
     walletCore,
@@ -120,5 +126,6 @@ export const prepareSendTxFromKeys = async (
     walletCore,
     libType: identity.libType,
     feeSettings: params.feeSettings,
+    sendMaxAmount: params.sendMaxAmount,
   })
 }

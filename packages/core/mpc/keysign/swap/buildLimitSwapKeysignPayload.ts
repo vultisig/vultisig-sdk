@@ -114,11 +114,10 @@ export type BuildLimitSwapKeysignPayloadInput = {
  * - External sources must resolve a live, non-halted, non-paused inbound row,
  *   and the destination is taken from that same live view rather than a cache.
  *
- * Gas: unlike iOS, no EVM gas-limit override is applied. iOS pins a native-EVM
- * limit deposit to 120000 to match its own market path; here both paths put the
- * memo on `keysignPayload.memo` and neither sets a general swap payload, so both
- * already floor at `deriveEvmGasLimit`'s 600000 data-tx limit. Forcing 120000
- * would make the limit path diverge from the market path and risk under-gassing.
+ * Gas: no EVM gas-limit override is applied. A token source carries the same
+ * THORChain swap payload as the market path and is sized like it, at the fixed
+ * router-deposit limit; a fee-coin source is a memo-carrying transfer to the
+ * inbound vault and is sized from its own gas estimate, floored per chain.
  */
 export const buildLimitSwapKeysignPayload = async ({
   fromCoin,

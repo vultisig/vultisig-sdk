@@ -342,6 +342,25 @@ describe('AgentExecutor — multi-leg sequencer (Phase B)', () => {
     expect((executor as any).pendingLegs).toHaveLength(0)
   })
 
+  it('accepts a multi-leg envelope on Robinhood, the newest EVM source chain (#2356)', () => {
+    const executor = new AgentExecutor(createMockVault())
+    // Robinhood used to be missing from a hand-maintained EVM list, so an
+    // approve-then-swap envelope on 4663 was rejected as non-EVM even though
+    // it is an ordinary EIP-1559 chain. The predicate now comes from the SDK's
+    // chain-kind record, so it must enter the sequencer like BSC does.
+    const robinhoodMultiLeg = {
+      chain: 'Robinhood',
+      from_chain: 'Robinhood',
+      stepperConfig: { flow: 'swap', steps: [] },
+      approvalTxArgs: { chain: 'Robinhood', chain_id: '4663', from: '0xsender', tx: APPROVE_TX },
+      txArgs: { chain: 'Robinhood', chain_id: '4663', from: '0xsender', tx: SWAP_TX },
+    }
+    expect(executor.storeServerTransaction(robinhoodMultiLeg)).toBe(true)
+    const legs = (executor as any).pendingLegs as Array<{ kind: 'approve' | 'main' }>
+    expect(legs.map(leg => leg.kind)).toEqual(['approve', 'main'])
+    expect((executor as any).pendingPayloads.get('latest')?.chain).toBe(Chain.Robinhood)
+  })
+
   it('clears pendingLegs when signServerTx throws on the approve leg (H1)', async () => {
     const vault = createMockVault()
     const executor = new AgentExecutor(vault)

@@ -33,3 +33,17 @@ export type SwapQuote = {
  */
 export type BoundSwapQuote = SwapQuote &
   Required<Pick<SwapQuote, 'requestedAmount' | 'expiresAt' | 'safetyFingerprint'>>
+
+/** Affiliate rate requested for this provider quote, never a charged-amount estimate. */
+export type SwapQuoteAffiliate = {
+  /** Sum of all requested recipient rates, in basis points. Includes any referrer share. */
+  affiliateBps: number
+  /** Whether the provider request explicitly included affiliate parameters. */
+  request: 'included' | 'omitted'
+  /** Exact request allocation, when the provider request names recipients. */
+  allocations?: Array<{
+    recipient: string
+    bps: number
+    role: 'affiliate' | 'referrer'
+  }>
+}

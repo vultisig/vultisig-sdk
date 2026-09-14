@@ -1,3 +1,10 @@
+// Grouped public helper families, alongside the existing flat exports.
+import * as balance from './balance'
+import * as prep from './prep'
+import * as swap from './swap'
+
+export { balance, prep, swap }
+
 // Address derivation
 export { deriveAddressFromKeys } from './address'
 
@@ -64,7 +71,15 @@ export type { CosmosBalanceChain, CosmosBalanceEntry, CosmosBalanceResult } from
 export { cosmosBalanceChains, getCosmosBalance, isCosmosBalanceChain } from './balance'
 
 // Canonical bytes oracle (calldata -> chain-agnostic Envelope)
-export type { AssetRef, ChainFamily, DecodeFromToolResultInput, Envelope, EnvelopeKind } from './decode'
+export type {
+  AssetRef,
+  ChainFamily,
+  CosmosEnvelopeAction,
+  CosmosVoteOption,
+  DecodeFromToolResultInput,
+  Envelope,
+  EnvelopeKind,
+} from './decode'
 export { decode, decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from './decode'
 
 // DEX primitives (read-only / pure math + on-chain quotes — no signing, no broadcast)
@@ -235,7 +250,10 @@ export type {
   CctpBurnMessage,
   CctpChainConfig,
   CctpClaimResult,
+  CctpReceiptLike,
+  CctpReceiptLog,
   CctpUnsignedTx,
+  ExtractedCctpMessage,
 } from './bridge'
 export {
   buildCctpBridge,
@@ -244,6 +262,7 @@ export {
   cctpChains,
   cctpSupportedChains,
   decodeCctpBurnMessage,
+  extractCctpMessageFromReceipt,
   formatUsdc,
   getCctpChain,
   getCctpChainNameByDomain,
@@ -286,10 +305,14 @@ export type {
   PendleUnsignedTx,
   ScanRequest,
   SolanaScanRequest,
+  StakekitActionDisplay,
+  StakekitActionResult,
   StakekitBalanceEntry,
   StakekitBalanceItem,
   StakekitBalanceQuery,
   StakekitBalancesResult,
+  StakekitDetailsResult,
+  StakekitExitResult,
   UnsupportedScanRequest,
   Validator,
   YieldActionResponse,
@@ -316,12 +339,14 @@ export {
   buildYieldStepScanRequest,
   chunkStakekitBalanceQueries,
   defi,
+  ensureTransactionsBuilt,
   fetchAllStakekitBalances,
   fetchStakekitBalancesBatch,
   GLIF_ICN_BASE_ADDRESSES,
   GLIF_ICN_TOKEN_DECIMALS,
   glifPoolWriteAbi,
   isPendleChain,
+  normalizeStakekitNetwork,
   parseActionDisplay,
   pendle,
   PENDLE_ROUTER_V4,
@@ -331,6 +356,7 @@ export {
   pendleMarkets,
   stakekit,
   STAKEKIT_BALANCE_QUERIES_PER_REQUEST,
+  STAKEKIT_NETWORK_ALIASES,
   stakekitBalances,
   stakekitBuildEnter,
   stakekitBuildExit,
@@ -338,6 +364,7 @@ export {
   stakekitDetails,
   stakekitSearch,
   stripChainPrefix,
+  yieldNetworkToCanonicalChain,
 } from './defi'
 
 // Verifier client
@@ -346,6 +373,13 @@ export type {
   BuildThreeJaneSupplyUsdcResult,
   ThreeJaneTranche,
   ThreeJaneTxStep,
+} from './defi/threeJane'
+// Aliased to avoid colliding with the CCTP bridge's `parseUsdcAmount` above —
+// both re-export the same underlying `./parse/usdcAmount` helper.
+export {
+  buildThreeJaneSupplyUsdc,
+  parseUsdcAmount as parseThreeJaneUsdcAmount,
+  THREE_JANE_ADDRESSES,
 } from './defi/threeJane'
 export { VerifierClient } from './verifier'
 

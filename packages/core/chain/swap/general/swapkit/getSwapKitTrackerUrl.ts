@@ -18,6 +18,8 @@ export const swapKitTrackerChainIds = {
   [Chain.Optimism]: '10',
   [Chain.Blast]: '81457',
   [Chain.Zksync]: '324',
+  [Chain.Hyperliquid]: '999',
+  [Chain.Robinhood]: '4663',
   [Chain.Tron]: '728126428',
   [Chain.Cardano]: 'cardano',
   [Chain.Ton]: 'ton',
@@ -31,7 +33,6 @@ export const swapKitTrackerChainIds = {
   [Chain.Zcash]: 'zcash',
   [Chain.Sui]: 'sui',
   [Chain.Dogecoin]: 'dogecoin',
-  [Chain.Kujira]: 'kaiyo-1',
   [Chain.MayaChain]: 'mayachain-mainnet-v1',
   [Chain.THORChain]: 'thorchain-1',
 } as const satisfies Record<SwapKitEnabledChain, string> & Partial<Record<Chain, string>>

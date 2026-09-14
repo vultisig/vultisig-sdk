@@ -176,8 +176,8 @@ export function decodeFromToolResult(input: DecodeFromToolResultInput): Envelope
 
   // Fill-only enrichment from args: the asset symbol is not on the wire for
   // native EVM sends / some Cosmos denoms. NEVER touch a bytes-decoded
-  // recipient/amount.
-  if (env.decoded && env.asset.symbol === '') {
+  // recipient/amount. Governance votes have no asset to enrich.
+  if (env.decoded && env.kind !== 'vote' && env.asset.symbol === '') {
     const sym = firstString(args, ['token', 'token_symbol', 'asset', 'symbol', 'ticker'])
     if (sym && !looksLikeAddress(sym)) env.asset.symbol = sym.toUpperCase()
   }

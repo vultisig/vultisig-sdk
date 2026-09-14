@@ -264,3 +264,32 @@ describe('getOneInchSwapQuote — token-source tx.value guard (P3 hardening)', (
     expect('evm' in quote.tx ? quote.tx.evm.value : undefined).toBe('0')
   })
 })
+
+describe('1inch requested affiliate rate', () => {
+  it.each([0, 7, 29, 50])('retains %i bps exactly with its request recipient', async affiliateBps => {
+    vi.mocked(queryUrl).mockResolvedValueOnce({
+      dstAmount: '1000000',
+      tx: {
+        from: '0xsender',
+        to: '0x111111125421ca6dc452d289314280a0f8842a65',
+        data: '0xswap',
+        value: '0',
+      },
+    })
+    const quote = await getOneInchSwapQuote({
+      account,
+      fromCoinId: '0xsrc',
+      toCoinId: '0xdst',
+      amount: 1000000n,
+      affiliateBps,
+      oneInchConfig: { referrer: '0xcustom' },
+    })
+    expect(quote.affiliate).toEqual({
+      affiliateBps,
+      request: affiliateBps ? 'included' : 'omitted',
+      allocations: affiliateBps ? [{ recipient: '0xcustom', bps: affiliateBps, role: 'affiliate' }] : [],
+    })
+    const params = new URL(vi.mocked(queryUrl).mock.calls.at(-1)![0]).searchParams
+    expect(params.get('fee')).toBe(affiliateBps ? String(affiliateBps / 100) : null)
+  })
+})
