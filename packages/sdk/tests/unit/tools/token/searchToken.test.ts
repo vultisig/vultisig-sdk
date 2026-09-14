@@ -95,6 +95,46 @@ describe('searchToken', () => {
     expect(results[0].deployments[0].chain).toBe('Ethereum')
   })
 
+  // Regression for sdk#1219: XRPL issued currencies (curated in
+  // knownTokens[Chain.Ripple]) aren't modeled as CoinGecko platform
+  // deployments, so they were invisible on the public search surface even
+  // though the SDK already knows about them internally.
+  it('overlays the curated RLUSD deployment onto its matching CoinGecko coin', async () => {
+    mockQueryUrl.mockResolvedValueOnce({
+      coins: [{ id: 'ripple-usd', name: 'Ripple USD', symbol: 'rlusd', market_cap_rank: 42 }],
+    })
+    // CoinGecko's own detail response has no `ripple` platform entry for RLUSD.
+    mockQueryUrl.mockResolvedValueOnce({
+      id: 'ripple-usd',
+      detail_platforms: {
+        ethereum: { contract_address: '0x8292bb45bf1ee4d140127049757c2e0ff06317ed', decimal_place: 18 },
+      },
+    })
+
+    const results = await searchToken('RLUSD')
+
+    expect(results).toHaveLength(1)
+    const rippleDeploy = results[0].deployments.find(d => d.chain === 'Ripple')
+    expect(rippleDeploy).toBeDefined()
+    expect(rippleDeploy!.contractAddress).toBe(
+      '524C555344000000000000000000000000000000.rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De'
+    )
+    expect(rippleDeploy!.decimals).toBe(15)
+    // The Ethereum deployment from CoinGecko's own detail response is untouched.
+    expect(results[0].deployments).toHaveLength(2)
+  })
+
+  it('does not overlay a Ripple deployment for a CoinGecko coin unrelated to any curated XRPL token', async () => {
+    mockQueryUrl.mockResolvedValueOnce({
+      coins: [{ id: 'usd-coin', name: 'USD Coin', symbol: 'usdc', market_cap_rank: 6 }],
+    })
+    mockQueryUrl.mockResolvedValueOnce({ id: 'usd-coin', detail_platforms: {} })
+
+    const results = await searchToken('USDC')
+
+    expect(results[0].deployments.some(d => d.chain === 'Ripple')).toBe(false)
+  })
+
   it('respects limit parameter', async () => {
     mockQueryUrl.mockResolvedValueOnce({
       coins: [

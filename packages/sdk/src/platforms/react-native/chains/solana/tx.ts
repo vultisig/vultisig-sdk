@@ -29,6 +29,7 @@
  * Signing hash = message bytes verbatim (ed25519 signs the full message).
  */
 
+import { isValidSolanaRecipient } from '@vultisig/core-chain/utils/isValidSolanaRecipient'
 import bs58 from 'bs58'
 
 // ---------------------------------------------------------------------------
@@ -196,6 +197,9 @@ function bytesToBase64(bytes: Uint8Array): string {
 export function buildSolanaSendTx(opts: BuildSolanaSendOptions): SolanaTxBuilderResult {
   const fromBytes = decodeBase58Pubkey(opts.from, 'from')
   const toBytes = decodeBase58Pubkey(opts.to, 'to')
+  if (!isValidSolanaRecipient(opts.to)) {
+    throw new Error('Invalid Solana recipient: send to an on-curve wallet address, not a token account or PDA')
+  }
   const blockhashBytes = decodeBase58Pubkey(opts.recentBlockhash, 'recentBlockhash')
 
   // Detect self-transfer: Solana messages dedupe account keys. If from == to,

@@ -12,6 +12,7 @@ const sharedPackageDirs = [
   'packages/lib/dkls',
   'packages/lib/mldsa',
   'packages/lib/schnorr',
+  'packages/mpc-types',
 ]
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))

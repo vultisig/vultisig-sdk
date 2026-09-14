@@ -58,9 +58,9 @@ const SOLANA_SEND_MESSAGE_HEX =
 const SOLANA_SEND_RAW_BASE64 =
   'AQMKERgfJi00O0JJUFdeZWxzeoGIj5adpKuyucDHztXc4+rx+P8GDRQbIikwNz5FTFNaYWhvdn2Ei5KZoKeutbwBAAEDAQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyBlZmdoaWprbG1ub3BxcnN0dXZ3eHl6e3x9fn+AgYKDhAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAycjHxsXEw8LBwL++vby7urm4t7a1tLOysbCvrq2sq6oBAgIAAQwCAAAAFc1bBwAAAAA='
 const SOLANA_SELF_TRANSFER_MESSAGE_HEX =
-  '010001020102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f200000000000000000000000000000000000000000000000000000000000000000c9c8c7c6c5c4c3c2c1c0bfbebdbcbbbab9b8b7b6b5b4b3b2b1b0afaeadacabaa01010200000c0200000015cd5b0700000000'
+  '0100010265666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283840000000000000000000000000000000000000000000000000000000000000000c9c8c7c6c5c4c3c2c1c0bfbebdbcbbbab9b8b7b6b5b4b3b2b1b0afaeadacabaa01010200000c0200000015cd5b0700000000'
 const SOLANA_SELF_TRANSFER_RAW_BASE64 =
-  'AQMKERgfJi00O0JJUFdeZWxzeoGIj5adpKuyucDHztXc4+rx+P8GDRQbIikwNz5FTFNaYWhvdn2Ei5KZoKeutbwBAAECAQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMnIx8bFxMPCwcC/vr28u7q5uLe2tbSzsrGwr66trKuqAQECAAAMAgAAABXNWwcAAAAA'
+  'AQMKERgfJi00O0JJUFdeZWxzeoGIj5adpKuyucDHztXc4+rx+P8GDRQbIikwNz5FTFNaYWhvdn2Ei5KZoKeutbwBAAECZWZnaGlqa2xtbm9wcXJzdHV2d3h5ent8fX5/gIGCg4QAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMnIx8bFxMPCwcC/vr28u7q5uLe2tbSzsrGwr66trKuqAQECAAAMAgAAABXNWwcAAAAA'
 
 const EVM_SEND_UNSIGNED_HEX =
   '0x02f001078459682f008506fc23ac008252089422222222222222222222222222222222222222228801b69b4ba630f34e80c0'
@@ -186,6 +186,21 @@ describe('cross-encoder binding (must match packages/core compileTx.golden.test.
 
 describe('React Native transaction builder golden vectors', () => {
   describe('buildSolanaSendTx', () => {
+    it.each([
+      ['PDA', 'BnJQssQwsYPcNb2RrW5SP1kVxijMqsA9VVQX1U1p4kkp'],
+      ['ATA', 'C7ESXyVGDeyZSc7wxKSXpccbtv3My9M9ptQaJbqxJdXk'],
+      ['ATA-of-ATA', 'CHwY4qnqYsKPLBiuhLiEHJm4bBvEKzc3GMxau4K7oQhC'],
+    ])('rejects an off-curve %s recipient before constructing a message', (_kind, to) => {
+      expect(() =>
+        buildSolanaSendTx({
+          from: SOLANA_FROM,
+          to,
+          lamports: SOLANA_LAMPORTS,
+          recentBlockhash: SOLANA_BLOCKHASH,
+        })
+      ).toThrow(/on-curve wallet address/)
+    })
+
     it('matches @solana/web3.js legacy SystemProgram.transfer bytes', async () => {
       const expected = await buildWeb3SolanaTransferVector(SOLANA_FROM, SOLANA_TO)
       expect(expected.messageHex).toBe(SOLANA_SEND_MESSAGE_HEX)
@@ -208,13 +223,15 @@ describe('React Native transaction builder golden vectors', () => {
     })
 
     it('dedupes the sender account for self-transfers like @solana/web3.js', async () => {
-      const expected = await buildWeb3SolanaTransferVector(SOLANA_FROM, SOLANA_FROM)
+      // The arbitrary SOLANA_FROM bytes are off-curve; use the on-curve
+      // recipient fixture for a valid wallet self-transfer.
+      const expected = await buildWeb3SolanaTransferVector(SOLANA_TO, SOLANA_TO)
       expect(expected.messageHex).toBe(SOLANA_SELF_TRANSFER_MESSAGE_HEX)
       expect(expected.rawBase64).toBe(SOLANA_SELF_TRANSFER_RAW_BASE64)
 
       const tx = buildSolanaSendTx({
-        from: SOLANA_FROM,
-        to: SOLANA_FROM,
+        from: SOLANA_TO,
+        to: SOLANA_TO,
         lamports: SOLANA_LAMPORTS,
         recentBlockhash: SOLANA_BLOCKHASH,
       })

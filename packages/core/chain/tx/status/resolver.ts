@@ -7,18 +7,42 @@ import { Chain } from '../../Chain'
 // no final receipt yet". Keeping them distinct stops a typo'd or dropped hash from
 // being polled as `pending` forever. Resolvers that can't tell the two apart may
 // still return `pending` (with `isKnown: false`).
-type TxStatus = 'pending' | 'success' | 'error' | 'not_found'
+type TxStatus = 'pending' | 'success' | 'error' | 'expired' | 'not_found'
 
 export type TxReceiptInfo = {
   feeAmount: bigint
   feeDecimals: number
   feeTicker: string
+  /** XRPL Payment delivery from validated metadata: XRP drops, issued-currency units, or MPT base units. */
+  deliveredAmount?: string
+  /** Identifies a classic issued currency, or `XRP` for a native delivery. */
+  deliveredCurrency?: string
+  /** Present only for a classic issued-currency delivery. */
+  deliveredIssuer?: string
+  /** Present only for a multi-purpose-token delivery. */
+  deliveredMptIssuanceId?: string
+}
+
+/**
+ * Why a transaction ended in `error`, when the chain exposes a reason. `reason`
+ * is a stable, chain-specific identifier (see `TonTxFailureReason`) a UI can
+ * translate; `message` is the English explanation with the remedy for consumers
+ * that only print text; `exitCode` is the raw contract/VM code when there is
+ * one, and `phase` names the execution phase that produced it (TON: `compute`
+ * or `action` — the same number means different things in each).
+ */
+export type TxFailureInfo = {
+  reason: string
+  message: string
+  exitCode?: number
+  phase?: string
 }
 
 export type TxStatusResult = {
   status: TxStatus
   isKnown?: boolean
   receipt?: TxReceiptInfo
+  failure?: TxFailureInfo
 }
 
 export type TxStatusInput<T extends Chain = Chain> = {

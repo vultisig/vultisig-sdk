@@ -6,11 +6,71 @@ vi.mock('@vultisig/core-chain/chains/evm/client', () => ({
   getEvmClient: () => ({ getGasPrice: mockGetGasPrice }),
 }))
 
-import { compareCosts, GAS_UNITS } from '@/tools/gas/compareCosts'
+import { compareCosts, GAS_UNITS, getChainGasPriceGwei } from '@/tools/gas/compareCosts'
 
 describe('compareCosts', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    vi.resetAllMocks()
+  })
+
+  const boundaryPrices = [
+    { wei: 0n, gwei: 0, transfer: 0, swap: 0 },
+    { wei: 1n, gwei: 0.0001, transfer: 2.1e-14, swap: 1.5e-13 },
+    { wei: 49_999n, gwei: 0.0001, transfer: 1.049979e-9, swap: 7.49985e-9 },
+    { wei: 50_000n, gwei: 0.0001, transfer: 1.05e-9, swap: 7.5e-9 },
+    { wei: 100_000n, gwei: 0.0001, transfer: 2.1e-9, swap: 1.5e-8 },
+  ]
+
+  it.each(boundaryPrices)('displays $wei wei without making positive gas look free', async ({ wei, gwei }) => {
+    mockGetGasPrice.mockResolvedValue(wei)
+
+    expect(await getChainGasPriceGwei('Base')).toBe(gwei)
+    expect(mockGetGasPrice).toHaveBeenCalledTimes(1)
+  })
+
+  describe.each(['transfer', 'swap'] as const)('%s raw fee estimates', txType => {
+    it.each(boundaryPrices)('preserves the native cost at $wei wei', async boundary => {
+      mockGetGasPrice.mockResolvedValue(boundary.wei)
+
+      const res = await compareCosts({ chains: ['Base'], txType })
+
+      expect(res.results[0].gasPriceGwei).toBe(boundary.gwei)
+      expect(res.results[0].estTxCostNative).toBe(boundary[txType])
+      expect(res.cheapest?.estTxCostNative).toBe(boundary[txType])
+      expect(res.skipped).toEqual([])
+      expect(mockGetGasPrice).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('ranks distinct sub-display prices by raw native cost despite tied display values', async () => {
+    mockGetGasPrice.mockResolvedValueOnce(49_999n).mockResolvedValueOnce(1n)
+
+    const res = await compareCosts({ chains: ['Base', 'Arbitrum'] })
+
+    expect(res.results.map(r => r.gasPriceGwei)).toEqual([0.0001, 0.0001])
+    expect(res.results.map(r => r.chain)).toEqual(['Arbitrum', 'Base'])
+    expect(res.results.map(r => r.estTxCostNative)).toEqual([2.1e-14, 1.049979e-9])
+    expect(res.cheapest?.chain).toBe('Arbitrum')
+    expect(mockGetGasPrice).toHaveBeenCalledTimes(2)
+  })
+
+  it.each([false, true])('ranks unrounded USD costs when displayed costs tie (reverse: %s)', async reverse => {
+    const chains: ('Ethereum' | 'Base')[] = reverse ? ['Base', 'Ethereum'] : ['Ethereum', 'Base']
+    for (const chain of chains) {
+      mockGetGasPrice.mockResolvedValueOnce(chain === 'Ethereum' ? 1_000n : 2_000n)
+    }
+
+    const res = await compareCosts({
+      chains,
+      nativeUsdPrices: { Ethereum: 3000, Base: 1000 },
+    })
+
+    // Ethereum costs $6.3e-8; Base costs $4.2e-8. Both display as $0,
+    // and native ordering alone would incorrectly prefer Ethereum.
+    expect(res.results.map(r => r.estTxCostUsd)).toEqual([0, 0])
+    expect(res.results.map(r => r.chain)).toEqual(['Base', 'Ethereum'])
+    expect(res.cheapest?.chain).toBe('Base')
+    expect(mockGetGasPrice).toHaveBeenCalledTimes(2)
   })
 
   it('ranks chains cheapest-first by native tx cost', async () => {

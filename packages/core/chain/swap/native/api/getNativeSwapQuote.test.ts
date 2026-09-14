@@ -372,3 +372,60 @@ describe('getNativeSwapQuote', () => {
     expect(queryUrlMock).not.toHaveBeenCalled()
   })
 })
+
+describe('native request-bound affiliate metadata', () => {
+  it.each([50, 25, 0])('keeps the exact referral split at %i bps through streaming selection', async affiliateBps => {
+    queryUrlMock.mockReset()
+    queryUrlMock
+      .mockResolvedValueOnce({ ...baseOkBody, fees: { ...baseOkBody.fees, total_bps: 1000 } })
+      .mockResolvedValueOnce({ ...baseOkBody, expected_amount_out: '2000' })
+    const quote = await getNativeSwapQuote({
+      swapChain: Chain.THORChain,
+      destination: ethTo.address,
+      from: btcFrom,
+      to: ethTo,
+      amount: 1,
+      affiliateBps,
+      referral: 'referrer',
+      nativeAffiliateConfig: {
+        affiliateFeeAddress: 'tenant',
+        referralDiscountAffiliateFeeRateBps: 35,
+        referrerFeeRateBps: 10,
+      },
+    })
+    expect(quote.expected_amount_out).toBe('2000')
+    const productBps = Math.max(0, affiliateBps - 15)
+    expect(quote.affiliate).toEqual({
+      affiliateBps: 10 + productBps,
+      request: 'included',
+      allocations: [
+        { recipient: 'referrer', bps: 10, role: 'referrer' },
+        { recipient: 'tenant', bps: productBps, role: 'affiliate' },
+      ],
+    })
+    for (const [url] of queryUrlMock.mock.calls) {
+      const params = new URL(url).searchParams
+      expect(params.get('affiliate')).toBe('referrer/tenant')
+      expect(params.get('affiliate_bps')).toBe(`10/${productBps}`)
+    }
+    expect(quote.fees.affiliate).toBe('0') // requested rate is not a charged amount
+  })
+
+  it.each([undefined, 0, 25, 50])('distinguishes omitted parameters from an explicit %s rate', async affiliateBps => {
+    queryUrlMock.mockReset().mockResolvedValue({ ...baseOkBody, affiliate: { affiliateBps: 9999 } })
+    const quote = await getNativeSwapQuote({
+      swapChain: Chain.MayaChain,
+      destination: ethTo.address,
+      from: btcFrom,
+      to: ethTo,
+      amount: 1,
+      affiliateBps,
+      referral: 'ignored-on-maya',
+    })
+    const params = new URL(queryUrlMock.mock.calls[0][0]).searchParams
+    expect(params.get('affiliate_bps')).toBe(affiliateBps === undefined ? null : String(affiliateBps))
+    expect(quote.affiliate?.affiliateBps).toBe(affiliateBps ?? 0)
+    expect(quote.affiliate?.request).toBe(affiliateBps === undefined ? 'omitted' : 'included')
+    expect(quote.affiliate?.allocations?.some(part => part.role === 'referrer')).not.toBe(true)
+  })
+})

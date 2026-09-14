@@ -1209,9 +1209,9 @@ export class AgentSession {
       if (this.abortController?.signal?.aborted) return
       try {
         // TxStatusResult.status is the SDK's union
-        // `'pending' | 'success' | 'error' | 'not_found'`. Only the two terminal
-        // on-chain states resolve the poll; `'pending'` and `'not_found'` both keep
-        // polling until the budget is spent and we emit `timeout` below — a safe
+        // `'pending' | 'success' | 'error' | 'expired' | 'not_found'`. The two
+        // on-chain outcomes and authoritative expiry resolve the poll; `'pending'`
+        // and `'not_found'` both keep polling until the budget is spent and we emit `timeout` below — a safe
         // default since a not-yet-propagated tx may still confirm later.
         const result = await this.vault.getTxStatus({ chain, txHash })
         if (result.status === 'success') {
@@ -1225,6 +1225,11 @@ export class AgentSession {
           ui.onTxStatus(txHash, chainName ?? '', 'failed', explorerUrl)
           // A definitive on-chain failure is the ONE resolution that clears the
           // journal guard so an automatic retry of the same intent is allowed.
+          recordResolution(txHash, 'failed')
+          return
+        }
+        if (result.status === 'expired') {
+          ui.onTxStatus(txHash, chainName ?? '', 'failed', explorerUrl)
           recordResolution(txHash, 'failed')
           return
         }

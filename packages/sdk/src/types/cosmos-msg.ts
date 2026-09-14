@@ -21,6 +21,8 @@ export const CosmosMsgType = {
   MsgUndelegateUrl: '/cosmos.staking.v1beta1.MsgUndelegate',
   MsgBeginRedelegateUrl: '/cosmos.staking.v1beta1.MsgBeginRedelegate',
   MsgWithdrawDelegatorRewardUrl: '/cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward',
+  MsgVoteUrl: '/cosmos.gov.v1.MsgVote',
+  MsgVoteV1Beta1Url: '/cosmos.gov.v1beta1.MsgVote',
 } as const
 
 export type CosmosMsgType = (typeof CosmosMsgType)[keyof typeof CosmosMsgType]

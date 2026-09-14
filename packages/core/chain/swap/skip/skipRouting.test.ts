@@ -23,7 +23,6 @@ describe('isSkipRoutableChain', () => {
     for (const chain of [
       Chain.Cosmos,
       Chain.Osmosis,
-      Chain.Kujira,
       Chain.Terra,
       Chain.TerraClassic,
       Chain.Akash,
@@ -46,7 +45,7 @@ describe('isSkipRoutableChain', () => {
 describe('willRouteViaSkip', () => {
   it('routes both-sides-Skip-routable-cosmos pairs (ATOM<->OSMO)', () => {
     expect(willRouteViaSkip(Chain.Cosmos, Chain.Osmosis)).toBe(true)
-    expect(willRouteViaSkip(Chain.Osmosis, Chain.Kujira)).toBe(true)
+    expect(willRouteViaSkip(Chain.Osmosis, Chain.Terra)).toBe(true)
   })
 
   it('routes any pair touching Terra v2 or TerraClassic', () => {
@@ -66,7 +65,7 @@ describe('willRouteViaSkip', () => {
       Chain.BSC,
     ]) {
       expect(willRouteViaSkip(Chain.Cosmos, evmChain)).toBe(true)
-      expect(willRouteViaSkip(evmChain, Chain.Kujira)).toBe(true)
+      expect(willRouteViaSkip(evmChain, Chain.Osmosis)).toBe(true)
     }
   })
 
