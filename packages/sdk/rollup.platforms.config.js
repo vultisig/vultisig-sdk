@@ -46,7 +46,11 @@ const external = [
   '@cosmjs/stargate',
   '@cosmjs/amino',
   '@cosmjs/proto-signing',
-  '@bufbuild/protobuf',
+  // Subpaths too (`/wire`, `/codegenv2`, `/wkt`): a bare string only matches
+  // the bare specifier, and a bundled copy of `wire` registered its own
+  // text-encoding provider on the global protobuf-es shares with the
+  // consumer's copy, which broke keysign message encoding in consumers.
+  /^@bufbuild\/protobuf(\/|$)/,
   'ripple-binary-codec',
   // 7z-wasm uses Emscripten-style WASM loading - must stay external so it can find its .wasm file
   '7z-wasm',
