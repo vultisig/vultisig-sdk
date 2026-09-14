@@ -83,6 +83,8 @@ export type ParsedTxReadyThorSwapDeposit = {
   fromSymbol: 'RUNE' | 'CACAO'
   toChain: Chain
   toSymbol: string
+  /** Source-chain amount in decimal units, retained for existing consumers. */
+  amount: string
   /** Source-chain amount in authoritative base units. */
   amountBaseUnits: string
   recipient?: string
@@ -292,6 +294,7 @@ const parseThorDeposit = (
       fromSymbol: chain === Chain.THORChain ? 'RUNE' : 'CACAO',
       toChain: parsedMemo.toChain,
       toSymbol: parsedMemo.destAsset,
+      amount: toDecimalAmount(txArgs.amount, chain, 'tx_ready THOR swap deposit'),
       amountBaseUnits: assertAmount(txArgs.amount, chain, 'tx_ready THOR swap deposit'),
       ...(parsedMemo.destAddress && { recipient: parsedMemo.destAddress }),
       memo,
