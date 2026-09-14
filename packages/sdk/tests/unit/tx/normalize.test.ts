@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { type NormalizeArgs, type NormalizedTx, normalizeTx, splitMultiTx, TxNormalizeError } from '../../../src/tx/normalize'
+import {
+  type NormalizeArgs,
+  type NormalizedTx,
+  normalizeTx,
+  splitMultiTx,
+  TxNormalizeError,
+} from '../../../src/tx/normalize'
 
 describe('normalizeTx', () => {
   it('wraps a flat build_* result under "tx" and lifts chain metadata', () => {
