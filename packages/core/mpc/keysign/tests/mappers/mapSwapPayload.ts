@@ -72,6 +72,8 @@ export const mapSwapPayload = (spRaw: any): KeysignPayload['swapPayload'] | unde
         // fall back to '' - an unattributed provider must NOT be enforced as 1inch. The guard is a
         // pure gate, so this never changes any pinned pre-signing hash; it only stops the mislabel.
         provider: o.provider ?? o.Provider ?? '',
+        // Route tag (proto field 7), accepting either casing like the fields above.
+        subProvider: o.sub_provider ?? o.subProvider ?? '',
       },
     }
 
@@ -138,6 +140,17 @@ export const mapSwapPayload = (spRaw: any): KeysignPayload['swapPayload'] | unde
         memo: s.memo,
         subProvider: s.sub_provider ?? s.subProvider ?? '',
         swapId: s.swap_id ?? s.swapId ?? '',
+        // Provider fee and its coin context (proto fields 12-15), accepting
+        // either casing for the same reason the 1inch branch above does.
+        swapFee: String(s.swap_fee ?? s.swapFee ?? ''),
+        swapFeeChain: s.swap_fee_chain ?? s.swapFeeChain,
+        swapFeeTokenId: s.swap_fee_token_id ?? s.swapFeeTokenId,
+        swapFeeDecimals:
+          s.swap_fee_decimals != null
+            ? Number(s.swap_fee_decimals)
+            : s.swapFeeDecimals != null
+              ? Number(s.swapFeeDecimals)
+              : undefined,
       },
     }
 

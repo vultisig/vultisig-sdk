@@ -105,12 +105,21 @@ export const compileTx = ({
     })
 
     const signedTx = spliceSolanaSignature(txInputData, new Uint8Array(signature))
+    const encodedSignature = base58.encode(signature)
 
     return TW.Solana.Proto.SigningOutput.encode(
       TW.Solana.Proto.SigningOutput.create({
         // WalletCore's Solana SigningOutput.encoded is base58 — the broadcast
         // resolver (`broadcastSolanaTx`) and Blockaid inputs decode it as such.
         encoded: base58.encode(signedTx),
+        // getSolanaTxHash reads the fee-payer signature from this metadata.
+        // Keep it identical to the signature spliced into signer slot 0.
+        signatures: [
+          {
+            pubkey: base58.encode(publicKey.data()),
+            signature: encodedSignature,
+          },
+        ],
       })
     ).finish()
   }

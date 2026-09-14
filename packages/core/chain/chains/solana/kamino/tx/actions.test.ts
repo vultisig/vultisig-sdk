@@ -5,6 +5,7 @@ vi.mock('@vultisig/lib-utils/query/queryUrl', () => ({ queryUrl: vi.fn() }))
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { kaminoShareAmount, kaminoTokenAmount } from '../amount'
+import { kaminoConfig } from '../config'
 import { KaminoServiceError } from '../KaminoServiceError'
 import { kaminoVaultRegistry } from '../registry'
 import { buildKaminoDepositTransaction, buildKaminoWithdrawTransaction } from './actions'
@@ -30,7 +31,7 @@ describe('buildKaminoDepositTransaction', () => {
 
     expect(transaction).toBe('dHg=')
     const [url, options] = vi.mocked(queryUrl).mock.calls[0]!
-    expect(url).toBe('https://api.kamino.finance/ktx/kvault/deposit')
+    expect(url).toBe(`${kaminoConfig.apiBaseUrl}/ktx/kvault/deposit`)
     expect((options as { body: unknown }).body).toEqual({ wallet: owner, kvault: steakhouse.address, amount: '1.5' })
   })
 
@@ -60,7 +61,7 @@ describe('buildKaminoWithdrawTransaction', () => {
     })
 
     const [url, options] = vi.mocked(queryUrl).mock.calls[0]!
-    expect(url).toBe('https://api.kamino.finance/ktx/kvault/withdraw')
+    expect(url).toBe(`${kaminoConfig.apiBaseUrl}/ktx/kvault/withdraw`)
     expect((options as { body: unknown }).body).toEqual({
       wallet: owner,
       kvault: steakhouse.address,

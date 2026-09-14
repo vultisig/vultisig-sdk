@@ -45,6 +45,24 @@ describe('parseThorSwapMemo', () => {
     })
   })
 
+  describe('secured-asset notation (CHAIN-ASSET)', () => {
+    it('parses XRP-XRP secured asset', () => {
+      const parsed = parseThorSwapMemo('=:XRP-XRP:rf7SyXdM3aZqkz9bmgGgX6V3eC8oJ8wxYY::v0:50')
+      expect(parsed.destChainCode).toBe('XRP')
+      expect(parsed.destAsset).toBe('XRP')
+      expect(parsed.destAddress).toBe('rf7SyXdM3aZqkz9bmgGgX6V3eC8oJ8wxYY')
+      expect(parsed.toChain).toBe(Chain.Ripple)
+    })
+
+    it('parses ETH-USDC-0x... secured asset, stripping the contract suffix', () => {
+      const parsed = parseThorSwapMemo('=:ETH-USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48:0xabc::v0:50')
+      expect(parsed.destChainCode).toBe('ETH')
+      expect(parsed.destAsset).toBe('USDC')
+      expect(parsed.destAddress).toBe('0xabc')
+      expect(parsed.toChain).toBe(Chain.Ethereum)
+    })
+  })
+
   describe('shorthand notation', () => {
     it('expands x → XRP.XRP', () => {
       const parsed = parseThorSwapMemo('=:x:rf7SyXdM3aZqkz9bmgGgX6V3eC8oJ8wxYY::v0:50')

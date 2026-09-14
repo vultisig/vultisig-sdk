@@ -3,7 +3,7 @@ import { bittensorRpcUrl } from '@vultisig/core-chain/chains/bittensor/client'
 import { ensureHexPrefix } from '@vultisig/lib-utils/hex/ensureHexPrefix'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
-import { BroadcastTxResolver } from '../resolver'
+import { broadcastAccepted, broadcastFailed, BroadcastTxResolver, isRetryableBroadcastCause } from '../resolver'
 import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
 import { formatSubstrateRpcError, isIdempotentSubstrateBroadcastError, SubstrateRpcError } from './substrate'
 
@@ -14,6 +14,13 @@ type RpcResponse = {
 
 export const broadcastBittensorTx: BroadcastTxResolver<OtherChain.Bittensor> = async ({ chain, tx }) => {
   const hexWithPrefix = ensureHexPrefix(Buffer.from(tx.encoded).toString('hex'))
+  const verify = async (error: unknown, retryable = isRetryableBroadcastCause(error)) => {
+    try {
+      return broadcastAccepted(await verifyBroadcastByHash({ chain, tx, error }))
+    } catch (cause) {
+      return broadcastFailed(cause, retryable)
+    }
+  }
 
   try {
     const response = await queryUrl<RpcResponse>(bittensorRpcUrl, {
@@ -27,15 +34,18 @@ export const broadcastBittensorTx: BroadcastTxResolver<OtherChain.Bittensor> = a
 
     if (response.error) {
       if (isIdempotentSubstrateBroadcastError(response.error)) {
-        return
+        return broadcastAccepted()
       }
-      throw new Error(`Bittensor broadcast failed: ${formatSubstrateRpcError(response.error)}`)
+      const error = new Error(`Bittensor broadcast failed: ${formatSubstrateRpcError(response.error)}`)
+      return verify(error, false)
     }
 
-    if (!response.result) {
-      throw new Error('Bittensor broadcast failed: missing extrinsic hash in RPC response')
+    if (response.result) {
+      return broadcastAccepted(response.result)
     }
-  } catch (error) {
-    await verifyBroadcastByHash({ chain, tx, error })
+
+    return verify(new Error('Bittensor broadcast failed: missing extrinsic hash in RPC response'), false)
+  } catch (cause) {
+    return verify(cause)
   }
 }

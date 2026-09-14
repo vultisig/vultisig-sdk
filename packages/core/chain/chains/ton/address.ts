@@ -1,4 +1,5 @@
 import { Address } from '@ton/core'
+import { attempt } from '@vultisig/lib-utils/attempt'
 import { fromBase64 } from '@vultisig/lib-utils/fromBase64'
 
 /** Converts base64url encoding to standard base64 so `Buffer.from` can decode it. */
@@ -32,3 +33,60 @@ export const tonAddressToBounceable = (address: string): string => {
 
   return parsed.toString({ bounceable: true, testOnly: false, urlSafe: true })
 }
+
+/**
+ * What a TON destination address declares about bouncing. `unspecified` covers the
+ * raw `0:hex` spelling and anything unparseable — those carry no tag byte at all,
+ * which is exactly the case a leading-character check cannot express.
+ */
+export type TonAddressBounceability = 'bounceable' | 'nonBounceable' | 'unspecified'
+
+/**
+ * Reads the bounce tag out of a user-friendly TON address instead of inferring it
+ * from the leading `E`/`U`. The tag lives in the first byte of the base64 payload
+ * (`0x11` bounceable / `0x51` not, `| 0x80` on testnet) and is checksum-protected,
+ * so a raw or corrupted address reports `unspecified` rather than a flag it never
+ * declared — leaving the caller to pick the safe default for its own context.
+ */
+export const getTonAddressBounceability = (address: string): TonAddressBounceability => {
+  const parsed = attempt(() => Address.parseFriendly(address))
+
+  if ('error' in parsed) {
+    return 'unspecified'
+  }
+
+  return parsed.data.isBounceable ? 'bounceable' : 'nonBounceable'
+}
+
+const parseTonAddress = (address: string): Address | undefined => {
+  try {
+    return Address.parse(address.trim())
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Whether two TON addresses name the same account.
+ *
+ * One account has several textual spellings — raw `workchain:hex`, bounceable
+ * `EQ…`, non-bounceable `UQ…`, and the base64 / base64url variants of both —
+ * and only the flag byte and checksum differ between `EQ` and `UQ`. String
+ * equality therefore reports differences that do not exist, which matters
+ * wherever two independently sourced addresses are cross-checked before money
+ * moves. Input that does not parse as a TON address falls back to exact
+ * comparison rather than being reported as a match.
+ */
+export const areEqualTonAddresses = (left: string, right: string): boolean => {
+  const parsedLeft = parseTonAddress(left)
+  const parsedRight = parseTonAddress(right)
+
+  return parsedLeft && parsedRight ? parsedLeft.equals(parsedRight) : left.trim() === right.trim()
+}
+/**
+ * Lower-cased raw (`workchain:hex`) form of a raw or user-friendly TON address.
+ * Toncenter answers in upper-case hex and ton-assets lists lower-case hex, so
+ * every lookup keyed by a jetton master address must go through this first.
+ */
+export const tonAddressToRawKey = (address: string): string =>
+  (address.includes(':') ? address : tonAddressToRaw(address)).toLowerCase()

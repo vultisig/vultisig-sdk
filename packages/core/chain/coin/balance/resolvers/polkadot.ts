@@ -3,8 +3,8 @@
 // in browser/extension builds and crashes at module init with
 // "Cannot assign to read only property 'toString'" — same root cause as the
 // Bittensor revert that originally broke this resolver.
-import { blake2b } from '@noble/hashes/blake2b'
-import { bytesToHex } from '@noble/hashes/utils'
+import { blake2b } from '@noble/hashes/blake2.js'
+import { bytesToHex } from '@noble/hashes/utils.js'
 import { assetHubRpcUrl, polkadotRpcUrl } from '@vultisig/core-chain/chains/polkadot/client'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import bs58 from 'bs58'

@@ -6,6 +6,10 @@
 export enum VaultErrorCode {
   InvalidConfig = 'INVALID_CONFIG',
   SigningFailed = 'SIGNING_FAILED',
+  InvalidSigningHash = 'INVALID_SIGNING_HASH',
+  MissingSigningParityInput = 'MISSING_SIGNING_PARITY_INPUT',
+  InvalidSigningHashCount = 'INVALID_SIGNING_HASH_COUNT',
+  SigningHashParityMismatch = 'SIGNING_HASH_PARITY_MISMATCH',
   NotImplemented = 'NOT_IMPLEMENTED',
   AddressDerivationFailed = 'ADDRESS_DERIVATION_FAILED',
   WalletCoreNotInitialized = 'WALLET_CORE_NOT_INITIALIZED',

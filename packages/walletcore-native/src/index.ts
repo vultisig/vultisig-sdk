@@ -4,7 +4,7 @@
  * Native WalletCore bridge for React Native / Expo.
  * Provides a JS object matching the WalletCore API shape expected by the SDK.
  */
-import { keccak_256 } from '@noble/hashes/sha3'
+import { keccak_256 } from '@noble/hashes/sha3.js'
 
 import ExpoWalletCore from './ExpoWalletCoreModule'
 

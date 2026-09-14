@@ -1,11 +1,11 @@
 import { HttpResponseError } from '@vultisig/lib-utils/fetch/HttpResponseError'
+import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@vultisig/lib-utils/query/queryUrl', () => ({ queryUrl: vi.fn() }))
 
-import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
-
 import { fetchKaminoPnl, fetchKaminoUserPositions, fetchKaminoVaultState } from './api'
+import { kaminoConfig } from './config'
 import { KaminoServiceError } from './KaminoServiceError'
 
 const httpError = (status: number, body: unknown) =>
@@ -63,7 +63,7 @@ describe('kamino api error envelope', () => {
     await fetchKaminoUserPositions('ownerPubkey')
 
     expect(vi.mocked(queryUrl).mock.calls[0]?.[0]).toBe(
-      'https://api.kamino.finance/kvaults/users/ownerPubkey/positions'
+      `${kaminoConfig.apiBaseUrl}/kvaults/users/ownerPubkey/positions`
     )
   })
 
@@ -73,7 +73,17 @@ describe('kamino api error envelope', () => {
     await fetchKaminoUserPositions('../vaults/x?y=#z')
 
     expect(vi.mocked(queryUrl).mock.calls[0]?.[0]).toBe(
-      'https://api.kamino.finance/kvaults/users/..%2Fvaults%2Fx%3Fy%3D%23z/positions'
+      `${kaminoConfig.apiBaseUrl}/kvaults/users/..%2Fvaults%2Fx%3Fy%3D%23z/positions`
     )
+  })
+})
+
+describe('kamino api base url', () => {
+  it('goes through the Vultisig proxy, not Kamino directly', () => {
+    // Upstream 404s the CORS preflight and sets no allow-origin on the build
+    // endpoints, so a browser cannot POST to it. Pointing this back at Kamino
+    // would break deposits and withdrawals in every webview while every other
+    // test here still passed, which is why the host is pinned.
+    expect(kaminoConfig.apiBaseUrl).toBe('https://api.vultisig.com/kamino')
   })
 })

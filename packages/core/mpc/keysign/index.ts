@@ -17,6 +17,7 @@ import { withoutUndefinedFields } from '@vultisig/lib-utils/record/withoutUndefi
 import { Minutes } from '@vultisig/lib-utils/time'
 import { convertDuration } from '@vultisig/lib-utils/time/convertDuration'
 
+import { DklsMaliciousPartyError, getDklsAbortAndBanPartyCode } from './error'
 import { initializeMpcLib } from '../lib/initialize'
 import { makeSignSession, SignSession } from '../lib/signSession'
 import { deleteMpcRelayMessage } from '../message/relay/delete'
@@ -40,6 +41,32 @@ type KeysignInput = {
 
 const maxInboundWaitTime: Minutes = 3
 
+const rethrowKeysignError = (
+  error: unknown,
+  signatureAlgorithm: SignatureAlgorithm,
+  devices: string[],
+  isInitiatingDevice: boolean
+): never => {
+  if (signatureAlgorithm === 'ecdsa') {
+    const code = getDklsAbortAndBanPartyCode(error)
+    if (code !== undefined) {
+      const maliciousPartyError = new DklsMaliciousPartyError(code)
+      // Best-effort only: partyIndex is the banned party's keygen-time party_id
+      // (see DklsMaliciousPartyError), which this session's `devices` order matches
+      // only when it's identical to keygen's — always true for 2-of-2 FastVault, not
+      // guaranteed for N-of-M SecureVault. Also only the initiator's setup message
+      // defines this session's party order; a joiner's own [localPartyId, ...peers]
+      // generally differs, so resolving there would misattribute the banned party.
+      if (isInitiatingDevice) {
+        maliciousPartyError.partyId = devices[maliciousPartyError.partyIndex - 1]
+      }
+      throw maliciousPartyError
+    }
+  }
+
+  throw error
+}
+
 export const keysign = async ({
   keyShare,
   signatureAlgorithm,
@@ -55,13 +82,14 @@ export const keysign = async ({
   await initializeMpcLib(signatureAlgorithm)
 
   const messageId = getMessageHash(message)
+  const devices = [localPartyId, ...peers]
 
   const setupMessage = await ensureSetupMessage({
     keyShare,
     signatureAlgorithm,
     message,
     chainPath,
-    devices: [localPartyId, ...peers],
+    devices,
     serverUrl,
     sessionId,
     hexEncryptionKey,
@@ -162,7 +190,14 @@ export const keysign = async ({
         )
       }
 
-      const accepted = session.inputMessage(fromMpcServerMessage(msg.body, hexEncryptionKey))
+      const accepted = (() => {
+        try {
+          return session.inputMessage(fromMpcServerMessage(msg.body, hexEncryptionKey))
+        } catch (error) {
+          rethrowKeysignError(error, signatureAlgorithm, devices, isInitiatingDevice)
+        }
+      })()
+
       if (accepted) {
         processedMessages[cacheKey] = true
         return
@@ -194,7 +229,12 @@ export const keysign = async ({
     throw error
   }
 
-  const signature = await session.finish()
+  let signature: Uint8Array
+  try {
+    signature = await session.finish()
+  } catch (error) {
+    return rethrowKeysignError(error, signatureAlgorithm, devices, isInitiatingDevice)
+  }
 
   const result: KeysignSignature =
     signatureAlgorithm === 'mldsa'

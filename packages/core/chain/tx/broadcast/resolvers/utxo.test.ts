@@ -14,6 +14,7 @@ vi.mock('../verifyBroadcastByHash', () => ({
 }))
 
 import { UtxoChain } from '../../../Chain'
+import { BroadcastErrorCode } from '../resolver'
 import { broadcastUtxoTx } from './utxo'
 
 describe('broadcastUtxoTx', () => {
@@ -24,14 +25,29 @@ describe('broadcastUtxoTx', () => {
     vi.clearAllMocks()
   })
 
+  it('returns the canonical transaction hash when Blockchair accepts the transaction', async () => {
+    mocks.queryUrl.mockResolvedValue({ data: { transaction_hash: 'bitcoin-hash' } })
+
+    await expect(broadcastUtxoTx({ chain, tx })).resolves.toEqual({
+      status: 'accepted',
+      finality: 'pending',
+      txHash: 'bitcoin-hash',
+    })
+    expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
+  })
+
   it('routes timeout responses through verifyBroadcastByHash before swallowing', async () => {
     mocks.queryUrl.mockResolvedValue({
       data: null,
       context: { error: 'request timed out' },
     })
-    mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
+    mocks.verifyBroadcastByHash.mockResolvedValue('verified-hash')
 
-    await expect(broadcastUtxoTx({ chain, tx })).resolves.toBeNull()
+    await expect(broadcastUtxoTx({ chain, tx })).resolves.toMatchObject({
+      status: 'accepted',
+      finality: 'pending',
+      txHash: 'verified-hash',
+    })
 
     expect(mocks.verifyBroadcastByHash).toHaveBeenCalledTimes(1)
     expect(mocks.verifyBroadcastByHash).toHaveBeenCalledWith({
@@ -51,7 +67,12 @@ describe('broadcastUtxoTx', () => {
     })
     mocks.verifyBroadcastByHash.mockRejectedValue(verifyError)
 
-    await expect(broadcastUtxoTx({ chain, tx })).rejects.toBe(verifyError)
+    await expect(broadcastUtxoTx({ chain, tx })).resolves.toEqual({
+      status: 'failed',
+      code: BroadcastErrorCode.Transport,
+      retryable: true,
+      cause: verifyError,
+    })
   })
 
   it('routes an "already known" duplicate through hash verification instead of blanket-swallowing it (false-success fix)', async () => {
@@ -62,9 +83,9 @@ describe('broadcastUtxoTx', () => {
       data: null,
       context: { error: 'txn-mempool-conflict' },
     })
-    mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
+    mocks.verifyBroadcastByHash.mockResolvedValue('verified-hash')
 
-    await expect(broadcastUtxoTx({ chain, tx })).resolves.toBeNull()
+    await expect(broadcastUtxoTx({ chain, tx })).resolves.toMatchObject({ status: 'accepted', txHash: 'verified-hash' })
 
     expect(mocks.verifyBroadcastByHash).toHaveBeenCalledTimes(1)
   })
@@ -79,7 +100,12 @@ describe('broadcastUtxoTx', () => {
     // own contract in verifyBroadcastByHash.ts.
     mocks.verifyBroadcastByHash.mockRejectedValue(verifyError)
 
-    await expect(broadcastUtxoTx({ chain, tx })).rejects.toBe(verifyError)
+    await expect(broadcastUtxoTx({ chain, tx })).resolves.toEqual({
+      status: 'failed',
+      code: BroadcastErrorCode.Rejected,
+      retryable: false,
+      cause: verifyError,
+    })
   })
 
   it('still succeeds on a genuine MPC-race "already known" when hash verification confirms the tx IS on chain', async () => {
@@ -87,9 +113,9 @@ describe('broadcastUtxoTx', () => {
       data: null,
       context: { error: 'already known' },
     })
-    mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
+    mocks.verifyBroadcastByHash.mockResolvedValue('verified-hash')
 
-    await expect(broadcastUtxoTx({ chain, tx })).resolves.toBeNull()
+    await expect(broadcastUtxoTx({ chain, tx })).resolves.toMatchObject({ status: 'accepted', txHash: 'verified-hash' })
 
     expect(mocks.verifyBroadcastByHash).toHaveBeenCalledTimes(1)
   })

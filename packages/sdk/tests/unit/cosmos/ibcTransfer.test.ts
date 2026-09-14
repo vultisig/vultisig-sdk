@@ -13,6 +13,7 @@ import {
   IBC_MSG_TRANSFER_TYPE_URL,
   normaliseIbcChainId,
   prepareIbcTransfer,
+  resolveSourceChannelByDestChain,
   supportedIbcDestinationsFrom,
 } from '@/tools/prep/ibcTransfer'
 
@@ -80,6 +81,14 @@ describe('prepareIbcTransfer', () => {
     expect(r.sourceChannel).toBe('channel-0')
   })
 
+  it('has no route to Kujira — the chain is permanently offline', () => {
+    // Kujira's `Chain` enum member is gone, but these tables are keyed by raw
+    // chain-ID, so the enum removal alone left `kaiyo-1` advertised and
+    // routable. Both entries must stay out.
+    expect(supportedIbcDestinationsFrom('osmosis-1')).not.toContain('kaiyo-1')
+    expect(resolveSourceChannelByDestChain('osmosis-1', 'kaiyo-1')).toBeNull()
+  })
+
   it('normaliseIbcChainId maps every Vultisig canonical name to its IBC chain-ID (mcp-ts parity)', () => {
     // Mirror of mcp-ts build_ibc_transfer VULTISIG_NAME_TO_CHAIN_ID. THORChain /
     // MayaChain have no IBC_CHANNEL_DEST route, but the alias must still resolve
@@ -89,7 +98,6 @@ describe('prepareIbcTransfer', () => {
     expect(normaliseIbcChainId('Osmosis')).toBe('osmosis-1')
     expect(normaliseIbcChainId('Terra')).toBe('phoenix-1')
     expect(normaliseIbcChainId('TerraClassic')).toBe('columbus-5')
-    expect(normaliseIbcChainId('Kujira')).toBe('kaiyo-1')
     expect(normaliseIbcChainId('Akash')).toBe('akashnet-2')
     expect(normaliseIbcChainId('Noble')).toBe('noble-1')
     expect(normaliseIbcChainId('Dydx')).toBe('dydx-mainnet-1')
@@ -113,6 +121,12 @@ describe('prepareIbcTransfer', () => {
     })
     expect(r.destChain).toBe('osmosis-1')
     expect(r.sourceChannel).toBe('channel-1')
+  })
+
+  it('exports the reverse route lookup used by prepareIbcTransfer', () => {
+    expect(resolveSourceChannelByDestChain('osmosis-1', 'cosmoshub-4')).toBe('channel-0')
+    expect(resolveSourceChannelByDestChain('cosmoshub-4', 'noble-1')).toBe('channel-536')
+    expect(resolveSourceChannelByDestChain('cosmoshub-4', 'juno-1')).toBeNull()
   })
 
   it('cross-validates sourceChannel + toChainId and throws on a mismatched pair', () => {

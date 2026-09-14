@@ -123,6 +123,11 @@ export const getOneInchSwapQuote = async ({
   return {
     dstAmount,
     provider: '1inch',
+    affiliate: {
+      affiliateBps: params.fee !== undefined ? affiliateBps! : 0,
+      request: params.fee !== undefined ? 'included' : 'omitted',
+      allocations: params.referrer ? [{ recipient: params.referrer, bps: affiliateBps!, role: 'affiliate' }] : [],
+    },
     tx: {
       evm: {
         ...tx,

@@ -5,7 +5,6 @@ import { CoinKey } from '../../coin/Coin'
 const cosmosGasLimitRecord: Record<CosmosChain, bigint> = {
   [Chain.Cosmos]: 200000n,
   [Chain.Osmosis]: 300000n,
-  [Chain.Kujira]: 200000n,
   [Chain.Dydx]: 200000n,
   [Chain.Noble]: 200000n,
   [Chain.Akash]: 200000n,
@@ -53,7 +52,6 @@ export const getCosmosGasLimit = (coin: CoinKey<CosmosChain>): bigint => {
 const cosmosStakingGasLimitRecord: Record<IbcEnabledCosmosChain, bigint> = {
   [Chain.Cosmos]: 350_000n,
   [Chain.Osmosis]: 400_000n,
-  [Chain.Kujira]: 350_000n,
   [Chain.Dydx]: 350_000n,
   [Chain.Noble]: 350_000n,
   [Chain.Akash]: 350_000n,

@@ -2,14 +2,11 @@ import { create } from '@bufbuild/protobuf'
 import { Chain, IbcEnabledCosmosChain } from '@vultisig/core-chain/Chain'
 import { getCosmosAccountInfo } from '@vultisig/core-chain/chains/cosmos/account/getCosmosAccountInfo'
 import { getCosmosGasLimit } from '@vultisig/core-chain/chains/cosmos/cosmosGasLimitRecord'
-import { getCosmosFeeAmount } from '@vultisig/core-chain/chains/cosmos/gas'
+import { getCosmosFeeAmount, TERRA_CLASSIC_UUSD_BASE_GAS } from '@vultisig/core-chain/chains/cosmos/gas'
 import { IBC_GAS_MULTIPLIER, scaleCosmosFeeAmount } from '@vultisig/core-chain/chains/cosmos/resolveCosmosGasLimit'
 import {
   applyTerraClassicBurnTax,
-  applyTerraClassicTax,
   getTerraClassicBurnTaxRate,
-  getTerraClassicTaxCap,
-  getTerraClassicTaxRate,
 } from '@vultisig/core-chain/chains/cosmos/terraClassicTax'
 import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import {
@@ -21,29 +18,6 @@ import { getKeysignCoin } from '../../../utils/getKeysignCoin'
 import { GetChainSpecificResolver } from '../../resolver'
 import { estimateCosmosGasLimit } from './gasEstimation/estimateCosmosGasLimit'
 
-/**
- * Computes the Terra Classic stability-tax surcharge for a USTC (uusd) send.
- *
- * The result is encoded in `ibcDenomTraces.baseDenom` so the signing-inputs
- * resolver can use the dynamic value instead of a hard-coded 1 USTC.
- * `baseDenom` is an empty string for all non-IBC sends — the only
- * interpretation for TerraClassic USTC sends is "pre-computed burn-tax
- * amount in base uusd units".
- *
- * Returns '0' when the on-chain rate is zero (current governance state).
- * Throws when the LCD is unreachable — caller catches and falls back to '0'.
- */
-async function computeUstcBurnTaxAmount(toAmount: string): Promise<string> {
-  const rate = await getTerraClassicTaxRate()
-  if (rate === 0n) return '0'
-
-  const cap = await getTerraClassicTaxCap('uusd')
-  const tax = applyTerraClassicTax(BigInt(toAmount), 'uusd', rate, {
-    uusd: cap,
-  })
-  return tax.toString()
-}
-
 export const getCosmosChainSpecific: GetChainSpecificResolver<'cosmosSpecific'> = async ({
   keysignPayload,
   walletCore,
@@ -52,24 +26,6 @@ export const getCosmosChainSpecific: GetChainSpecificResolver<'cosmosSpecific'> 
 }) => {
   const coin = getKeysignCoin<IbcEnabledCosmosChain>(keysignPayload)
   const { accountNumber, sequenceBigInt, latestBlock } = await getCosmosAccountInfo(coin)
-
-  // For TerraClassic USTC (uusd) sends, pre-compute the burn-tax surcharge
-  // dynamically. Encoded in baseDenom so the sync signing-inputs resolver
-  // can use it without an async LCD call. Falls back to '0' when the tax
-  // rate is zero (current on-chain state post-UST-collapse governance).
-  const isUstcSend = coin.chain === Chain.TerraClassic && coin.id?.toLowerCase() === 'uusd'
-  let burnTaxBaseDenom = ''
-  if (isUstcSend) {
-    try {
-      burnTaxBaseDenom = await computeUstcBurnTaxAmount(keysignPayload.toAmount)
-    } catch {
-      // Fail-open on burn-tax LCD outage: fall back to '0' to avoid blocking
-      // the send. A $0.02 under-fee is better than a blocked tx when the
-      // rate is currently zero. When the rate is non-zero and the LCD is
-      // down, the tx will be rejected by the chain's ante handler.
-      burnTaxBaseDenom = '0'
-    }
-  }
 
   // Initiator-side dynamic gas: simulate a native send via
   // `/cosmos/tx/v1beta1/simulate` and relay the padded gas limit to co-signers
@@ -86,13 +42,14 @@ export const getCosmosChainSpecific: GetChainSpecificResolver<'cosmosSpecific'> 
   // than throw here.
   const hasRelayedSignData = keysignPayload.signData?.case !== undefined
 
-  const isNativeSend =
+  const isPlainSend =
     transactionType === TransactionType.UNSPECIFIED &&
     !hasRelayedSignData &&
-    isFeeCoin(coin) &&
     !!keysignPayload.toAddress &&
     /^[0-9]+$/.test(keysignPayload.toAmount) &&
     BigInt(keysignPayload.toAmount) > 0n
+  const isNativeSend = isPlainSend && isFeeCoin(coin)
+  const isTerraClassicUstcSend = isPlainSend && coin.chain === Chain.TerraClassic && coin.id?.toLowerCase() === 'uusd'
 
   const simulatedGasLimit = isNativeSend
     ? await estimateCosmosGasLimit({
@@ -133,7 +90,7 @@ export const getCosmosChainSpecific: GetChainSpecificResolver<'cosmosSpecific'> 
   // choice, not a validity one. Pre-paying is what iOS and Android do, and it
   // keeps "You're sending N LUNC" literally true.
   //
-  // Scoped to plain native-LUNC sends, deliberately:
+  // Scoped to plain LUNC and USTC sends, deliberately:
   //   - IBC `MsgTransfer` is taxable too, but every observed columbus-5 IBC
   //     transfer pays gas only and lets the chain deduct from the amount, as do
   //     iOS and Android. Pre-paying here would diverge from both for no
@@ -141,20 +98,20 @@ export const getCosmosChainSpecific: GetChainSpecificResolver<'cosmosSpecific'> 
   //   - Relayed `signDirect` / `signAmino` never reach this value: the signing
   //     resolver returns the dapp-supplied fee verbatim, so touching `gas`
   //     would move only the DISPLAYED fee and reintroduce shown != signed.
-  //   - Non-fee coins pay the fee in `uluna` while the tax accrues in the send
-  //     denom; folding them into one amount would mix denoms.
+  //   - USTC is the one non-native exception because the mobile signers price
+  //     both its base fee and tax in `uusd`. Other non-fee coins still pay in
+  //     `uluna`, so folding their tax into the fee would mix denoms.
   //
-  // USTC (`uusd`) is untouched here — its tax rides in `ibcDenomTraces.baseDenom`
-  // as a separate fee coin (see `computeUstcBurnTaxAmount`).
   const isTerraClassicLuncSend = coin.chain === Chain.TerraClassic && isNativeSend
+  const isTerraClassicTaxedSend = isTerraClassicLuncSend || isTerraClassicUstcSend
 
   // Independent lookups — run them concurrently rather than paying two
   // sequential LCD round-trips while the user waits on the Verify screen.
   // `getTerraClassicBurnTaxRate` fails closed rather than rejecting, so this
   // cannot turn an LCD blip into a failed payload build.
   const [staticFeeAmount, burnTaxRate] = await Promise.all([
-    getCosmosFeeAmount(coin),
-    isTerraClassicLuncSend ? getTerraClassicBurnTaxRate() : Promise.resolve(0n),
+    isTerraClassicUstcSend ? Promise.resolve(TERRA_CLASSIC_UUSD_BASE_GAS) : getCosmosFeeAmount(coin),
+    isTerraClassicTaxedSend ? getTerraClassicBurnTaxRate() : Promise.resolve(0n),
   ])
 
   const gasFeeAmount =
@@ -178,7 +135,7 @@ export const getCosmosChainSpecific: GetChainSpecificResolver<'cosmosSpecific'> 
     gasLimit,
     ibcDenomTraces: {
       latestBlock: timeoutTimestamp ? `${latestBlock.split('_')[0]}_${timeoutTimestamp}` : latestBlock,
-      baseDenom: burnTaxBaseDenom,
+      baseDenom: '',
       path: '',
     },
   })

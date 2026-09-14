@@ -3,11 +3,17 @@ import { Chain } from '@vultisig/core-chain/Chain'
 import { getThorchainSwapDestinationAssets } from '@vultisig/core-chain/chains/cosmos/thor/securedAssets'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { findCoins as coreFindCoins } from '@vultisig/core-chain/coin/find'
-import { knownTokens, knownTokensIndex } from '@vultisig/core-chain/coin/knownTokens'
+import { knownTokens } from '@vultisig/core-chain/coin/knownTokens'
+import { getKnownToken } from '@vultisig/core-chain/coin/knownTokens/utils'
 import { getCoinPrices as coreCoinPrices } from '@vultisig/core-chain/coin/price/getCoinPrices'
 import { getCoinPricesWithChange as coreCoinPricesWithChange } from '@vultisig/core-chain/coin/price/getCoinPricesWithChange'
 import { scanAddressWithBlockaid } from '@vultisig/core-chain/security/blockaid/address'
 import { scanSiteWithBlockaid } from '@vultisig/core-chain/security/blockaid/site'
+import {
+  getSwapArrivalStatus,
+  type GetSwapArrivalStatusInput,
+  type SwapArrivalStatusResult,
+} from '@vultisig/core-chain/swap/utils/getSwapArrivalStatus'
 import { getSwapExplorerUrl, type SwapExplorerProvider } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 import { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
 import { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
@@ -1244,6 +1250,11 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     return getSwapExplorerUrl({ provider, txHash, fromChain })
   }
 
+  /** Read and normalize one THORChain, MayaChain, Skip Go, or LI.FI swap status snapshot. */
+  static getSwapArrivalStatus(input: GetSwapArrivalStatusInput): Promise<SwapArrivalStatusResult> {
+    return getSwapArrivalStatus(input)
+  }
+
   /**
    * Type guard to check if a vault is a FastVault
    * @param vault - The vault to check
@@ -1266,7 +1277,8 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
 
   /**
    * Discover the tokens an address actually holds on a chain
-   * (1inch for EVM, Jupiter for Solana, LCD for Cosmos, …).
+   * (1inch for EVM, Jupiter for Solana — verified mints only, LCD for Cosmos,
+   * Toncenter plus the ton-assets whitelist for TON — verified jettons only, …).
    *
    * Vault-FREE: takes a raw `{ chain, address }` and returns
    * `DiscoveredToken[]`. The instance method `vault.discoverTokens()`
@@ -1294,6 +1306,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
         ticker: coin.ticker,
         decimals: coin.decimals,
         logo: coin.logo,
+        ...(coin.priceProviderId === undefined ? {} : { priceProviderId: coin.priceProviderId }),
         ...(coin.isHidden === undefined ? {} : { isHidden: coin.isHidden }),
       }
     })
@@ -1344,7 +1357,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * @returns Token metadata or null if not found
    */
   static getKnownToken(chain: Chain, tokenId: string): TokenInfo | null {
-    const coin = knownTokensIndex[chain]?.[tokenId.toLowerCase()]
+    const coin = getKnownToken({ chain, id: tokenId })
     if (!coin) return null
     return {
       chain,

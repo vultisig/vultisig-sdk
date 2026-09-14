@@ -1,3 +1,10 @@
+// Grouped public helper families, alongside the existing flat exports.
+import * as balance from './balance'
+import * as prep from './prep'
+import * as swap from './swap'
+
+export { balance, prep, swap }
+
 // Address derivation
 export { deriveAddressFromKeys } from './address'
 
@@ -19,21 +26,44 @@ export {
 import * as evm from './evm'
 
 export { evm }
-export type { EvmBalance, EvmGasPrice, GetEvmBalancesParams, GetTokenApprovalsResult, TokenApproval } from './evm'
+export type {
+  DecodedAgentRouterDeposit,
+  EvmBalance,
+  EvmGasPrice,
+  GetEvmBalancesParams,
+  GetTokenApprovalsResult,
+  TokenApproval,
+  UsdcPaymentChain,
+  UsdcPaymentChainConfig,
+} from './evm'
 export {
   abiDecode,
   abiEncode,
+  AGENT_ROUTER_ADDRESS,
+  AGENT_ROUTER_DEPOSIT_WITH_MEMO_SELECTOR,
+  CHECKOUT_CHAIN_IDS,
+  decodeAgentRouterDepositWithMemo,
+  encodeAgentRouterDepositWithMemo,
   encodeErc20Approve,
   encodeErc20Revoke,
   evmCall,
   evmCheckAllowance,
   evmGasPrice,
   evmTxInfo,
+  formatCheckoutUsdcDisplay,
   getEvmBalances,
   getTokenApprovals,
+  isUsdcPaymentChain,
+  lookupUsdcPaymentChain,
   MAX_UINT256,
   resolve4ByteSelector,
   resolveEns,
+  resolveUsdcPaymentChainId,
+  resolveUsdcPaymentContract,
+  USDC_CONTRACTS,
+  USDC_PAYMENT_CHAIN_CONFIG,
+  USDC_PAYMENT_CHAINS,
+  USDC_PAYMENT_DECIMALS,
 } from './evm'
 
 // Balance reads (pure decode + decimal-scale, no signing/broadcast)
@@ -41,8 +71,16 @@ export type { CosmosBalanceChain, CosmosBalanceEntry, CosmosBalanceResult } from
 export { cosmosBalanceChains, getCosmosBalance, isCosmosBalanceChain } from './balance'
 
 // Canonical bytes oracle (calldata -> chain-agnostic Envelope)
-export type { AssetRef, ChainFamily, DecodeFromToolResultInput, Envelope, EnvelopeKind } from './decode'
-export { decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from './decode'
+export type {
+  AssetRef,
+  ChainFamily,
+  CosmosEnvelopeAction,
+  CosmosVoteOption,
+  DecodeFromToolResultInput,
+  Envelope,
+  EnvelopeKind,
+} from './decode'
+export { decode, decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from './decode'
 
 // DEX primitives (read-only / pure math + on-chain quotes — no signing, no broadcast)
 export * as dex from './dex'
@@ -135,6 +173,8 @@ export type {
   GetCosmosGovernanceProposalsParams,
   GetGovernanceProposalsResult,
   GovChain,
+  GovChainId,
+  GovChainInput,
   GovernanceProposal,
   PrepareCosmosVoteParams,
   ProposalStatus,
@@ -146,6 +186,7 @@ export { getCosmosGovernanceProposals, prepareCosmosVote } from './cosmos'
 // Swap
 export type {
   AcrossChain,
+  AcrossOriginChain,
   AcrossQuote,
   AcrossQuoteParams,
   AstroportSwapResult,
@@ -167,6 +208,7 @@ export type {
   SwapQuoteCandidate,
 } from './swap'
 export {
+  ACROSS_ORIGIN_CHAIN,
   acrossQuote,
   acrossSupportedChains,
   assembleAstroportSwap,
@@ -208,7 +250,10 @@ export type {
   CctpBurnMessage,
   CctpChainConfig,
   CctpClaimResult,
+  CctpReceiptLike,
+  CctpReceiptLog,
   CctpUnsignedTx,
+  ExtractedCctpMessage,
 } from './bridge'
 export {
   buildCctpBridge,
@@ -217,6 +262,7 @@ export {
   cctpChains,
   cctpSupportedChains,
   decodeCctpBurnMessage,
+  extractCctpMessageFromReceipt,
   formatUsdc,
   getCctpChain,
   getCctpChainNameByDomain,
@@ -258,6 +304,15 @@ export type {
   PendlePtBuildResult,
   PendleUnsignedTx,
   ScanRequest,
+  SolanaScanRequest,
+  StakekitActionDisplay,
+  StakekitActionResult,
+  StakekitBalanceEntry,
+  StakekitBalanceItem,
+  StakekitBalanceQuery,
+  StakekitBalancesResult,
+  StakekitDetailsResult,
+  StakekitExitResult,
   UnsupportedScanRequest,
   Validator,
   YieldActionResponse,
@@ -280,12 +335,18 @@ export {
   buildRedeem,
   buildSellPt,
   buildYieldActionScanRequest,
+  buildYieldActionScanRequests,
   buildYieldStepScanRequest,
+  chunkStakekitBalanceQueries,
   defi,
+  ensureTransactionsBuilt,
+  fetchAllStakekitBalances,
+  fetchStakekitBalancesBatch,
   GLIF_ICN_BASE_ADDRESSES,
   GLIF_ICN_TOKEN_DECIMALS,
   glifPoolWriteAbi,
   isPendleChain,
+  normalizeStakekitNetwork,
   parseActionDisplay,
   pendle,
   PENDLE_ROUTER_V4,
@@ -294,6 +355,8 @@ export {
   pendleMarket,
   pendleMarkets,
   stakekit,
+  STAKEKIT_BALANCE_QUERIES_PER_REQUEST,
+  STAKEKIT_NETWORK_ALIASES,
   stakekitBalances,
   stakekitBuildEnter,
   stakekitBuildExit,
@@ -301,6 +364,7 @@ export {
   stakekitDetails,
   stakekitSearch,
   stripChainPrefix,
+  yieldNetworkToCanonicalChain,
 } from './defi'
 
 // Verifier client
@@ -309,6 +373,13 @@ export type {
   BuildThreeJaneSupplyUsdcResult,
   ThreeJaneTranche,
   ThreeJaneTxStep,
+} from './defi/threeJane'
+// Aliased to avoid colliding with the CCTP bridge's `parseUsdcAmount` above —
+// both re-export the same underlying `./parse/usdcAmount` helper.
+export {
+  buildThreeJaneSupplyUsdc,
+  parseUsdcAmount as parseThreeJaneUsdcAmount,
+  THREE_JANE_ADDRESSES,
 } from './defi/threeJane'
 export { VerifierClient } from './verifier'
 
@@ -364,6 +435,7 @@ export {
   type CosmosStakingMsgEnvelope,
   type CosmWasmExecuteFund,
   type DelegateParams,
+  type EvmTxNumberish,
   getMaxSendAmountFromKeys,
   type GetMaxSendAmountFromKeysParams,
   IBC_CHAIN_HRP,
@@ -383,6 +455,8 @@ export {
   preparePolkadotAssetSend,
   type PreparePolkadotAssetSendParams,
   type PreparePolkadotAssetSendResult,
+  prepareRawEvmTxFromKeys,
+  type PrepareRawEvmTxFromKeysParams,
   prepareSendTxFromKeys,
   type PrepareSendTxFromKeysParams,
   prepareSignAminoTxFromKeys,
@@ -398,7 +472,9 @@ export {
   type PrepareUtxoConsolidateResult,
   prepareUtxoConsolidateTxFromKeys,
   type PrepareUtxoConsolidateTxFromKeysParams,
+  type RawEvmTxEnvelope,
   type RedelegateParams,
+  resolveSourceChannelByDestChain,
   type SplTransferResult,
   SUI_NATIVE_COIN_TYPE,
   supportedIbcDestinationsFrom,

@@ -11,6 +11,8 @@ import {
 import { create } from '@bufbuild/protobuf'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getCoinType } from '@vultisig/core-chain/coin/coinType'
+import { getTxHash } from '@vultisig/core-chain/tx/hash'
+import { decodeSigningOutput } from '@vultisig/core-chain/tw/signingOutput'
 import { initWasm, TW, type WalletCore } from '@trustwallet/wallet-core'
 import type { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
 import base58 from 'bs58'
@@ -273,7 +275,7 @@ describe('signSolana pipeline e2e (encode → hash → sign → compile)', () =>
           keysignPayload,
         })
 
-        const output = TW.Solana.Proto.SigningOutput.decode(compiled)
+        const output = decodeSigningOutput(Chain.Solana, compiled)
         const signedTx = base58.decode(output.encoded)
 
         // The signed tx is the ORIGINAL bytes with our signature in slot 0.
@@ -288,6 +290,17 @@ describe('signSolana pipeline e2e (encode → hash → sign → compile)', () =>
 
         // The spliced signature verifies over the ORIGINAL message bytes.
         expect(publicKey.verify(new Uint8Array(spliced), Buffer.from(message))).toBe(true)
+
+        // The splice path must preserve WalletCore's SigningOutput contract:
+        // downstream hash resolution reads the Solana txid from this metadata.
+        const encodedSignature = base58.encode(spliced)
+        expect(output.signatures).toEqual([
+          {
+            pubkey: feePayer.toBase58(),
+            signature: encodedSignature,
+          },
+        ])
+        expect(getTxHash({ chain: Chain.Solana, tx: output })).toBe(encodedSignature)
 
         return new Uint8Array(signedTx)
       })

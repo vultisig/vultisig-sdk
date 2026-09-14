@@ -1,9 +1,18 @@
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
-import { describe, expect, it } from 'vitest'
+import * as blockaidChains from '@vultisig/core-chain/security/blockaid/evmChains'
+import * as isValidTokenIdModule from '@vultisig/core-chain/utils/isValidTokenId'
+import { describe, expect, expectTypeOf, it } from 'vitest'
 
+import * as tronAbi from '../../../src/abi/tron'
 import * as sdk from '../../../src/index'
+import * as threeJane from '../../../src/tools/defi/threeJane'
 import * as dangerousAddresses from '../../../src/utils/dangerousAddresses'
+import {
+  buildSignAminoKeysignPayload as canonicalBuildSignAminoKeysignPayload,
+  buildSignDirectKeysignPayload as canonicalBuildSignDirectKeysignPayload,
+} from '../../../src/vault/services/cosmos'
+import * as tokenRef from '../../../src/vault/tokenRef'
 import { cosmosTxFeeGasParityCases } from '../../fixtures/cosmosTxFeeGasParity'
 
 const dangerousAddressCanonicalExports = [
@@ -19,8 +28,37 @@ const dangerousAddressCanonicalExports = [
 ] as const
 
 describe('@vultisig/sdk public exports', () => {
+  it('re-exports Blockaid EVM chain canonicals by identity', () => {
+    expect(sdk.blockaidEvmChain).toBe(blockaidChains.blockaidEvmChain)
+    expect(sdk.blockaidSupportedEvmChains).toBe(blockaidChains.blockaidSupportedEvmChains)
+    expectTypeOf<sdk.BlockaidSupportedEvmChain>().toEqualTypeOf<blockaidChains.BlockaidSupportedEvmChain>()
+  })
+
+  it('exports the canonical token reference resolvers and result type', () => {
+    expect(sdk.resolveTokenRef).toBe(tokenRef.resolveTokenRef)
+    expect(sdk.resolveTokenRefId).toBe(tokenRef.resolveTokenRefId)
+    const native: sdk.ResolvedTokenInfo = sdk.resolveTokenRef(sdk.Chain.Ethereum, undefined, [])
+    expect(native).toEqual({ ticker: 'ETH', decimals: 18 })
+    expect(sdk.resolveTokenRefId(sdk.Chain.Ethereum, 'ETH', [])).toBeUndefined()
+  })
+
   it.each(dangerousAddressCanonicalExports)('re-exports dangerous-address canonical %s by identity', name => {
     expect(sdk[name]).toBe(dangerousAddresses[name])
+  })
+
+  it('re-exports the canonical TRON ABI/address helpers from the root SDK entrypoint', () => {
+    expect(sdk.tronBase58ToEvmHex).toBe(tronAbi.tronBase58ToEvmHex)
+    expect(sdk.tronBase58ToHex).toBe(tronAbi.tronBase58ToHex)
+    expect(sdk.tronHexToBase58).toBe(tronAbi.tronHexToBase58)
+    expect(sdk.encodeTrc20TransferParam).toBe(tronAbi.encodeTrc20TransferParam)
+
+    const address = 'TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH'
+    expect(sdk.tronBase58ToHex(address)).toBe('41c8599111f29c1e1e061265b4af93ea1f274ad78a')
+    expect(sdk.tronHexToBase58('41c8599111f29c1e1e061265b4af93ea1f274ad78a')).toBe(address)
+    expect(sdk.tronBase58ToEvmHex(address)).toBe('c8599111f29c1e1e061265b4af93ea1f274ad78a')
+    expect(sdk.encodeTrc20TransferParam(address, '1000000')).toBe(
+      'c8599111f29c1e1e061265b4af93ea1f274ad78a'.padStart(64, '0') + 'f4240'.padStart(64, '0')
+    )
   })
 
   it('exports fiatToAmount, toChainAmount, and chain-reference normalization utilities', () => {
@@ -61,10 +99,17 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.extendChainRegistry).toBe('function')
   })
 
-  it('exports tx-shape normalization primitives (normalizeTx, splitMultiTx)', () => {
+  it('exports tx-shape normalization and tx-ready parsing primitives', () => {
     expect(typeof sdk.normalizeTx).toBe('function')
     expect(typeof sdk.splitMultiTx).toBe('function')
     expect(typeof sdk.TxNormalizeError).toBe('function')
+    expect(typeof sdk.parseTxReadyEnvelope).toBe('function')
+    expect(typeof sdk.TxReadyParseError).toBe('function')
+  })
+
+  it('exports the raw EVM envelope keysign helper', () => {
+    expect(typeof sdk.prepareRawEvmTxFromKeys).toBe('function')
+    expect(typeof sdk.VaultBase.prototype.prepareRawEvmTx).toBe('function')
   })
 
   it('exports the knownContracts canonical registry + lookup helpers', () => {
@@ -80,6 +125,14 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.findSwapQuote).toBe('function')
     expect(typeof sdk.abiEncode).toBe('function')
     expect(typeof sdk.evmCheckAllowance).toBe('function')
+  })
+
+  it('exports provider-aware swap arrival status normalization', () => {
+    expect(typeof sdk.getSwapArrivalStatus).toBe('function')
+    expect(typeof sdk.Vultisig.getSwapArrivalStatus).toBe('function')
+    expect(typeof sdk.isSwapArrivalStatusTerminal).toBe('function')
+    expect(typeof sdk.SwapArrivalStatusRequestError).toBe('function')
+    expect(sdk.swapArrivalProviders).toEqual(['thorchain', 'mayachain', 'skip', 'li.fi'])
   })
 
   it('exports encodeErc20Approve, encodeErc20Revoke, MAX_UINT256 (ERC-20 approve/revoke calldata)', () => {
@@ -123,6 +176,21 @@ describe('@vultisig/sdk public exports', () => {
     })
   })
 
+  it('exports XRP destination/X-address normalization from the root SDK entrypoint', () => {
+    expect(typeof sdk.decodeRippleXAddress).toBe('function')
+    expect(typeof sdk.encodeRippleXAddress).toBe('function')
+    expect(typeof sdk.isValidRippleXAddress).toBe('function')
+    expect(typeof sdk.normalizeRippleDestination).toBe('function')
+
+    const classicAddress = 'raJ1Aqkhf19P7cyUc33MMVAzgvHPvtNFC'
+    expect(sdk.normalizeRippleDestination(classicAddress)).toEqual({ address: classicAddress })
+
+    const xAddress = sdk.encodeRippleXAddress(classicAddress, 42)
+    expect(sdk.isValidRippleXAddress(xAddress)).toBe(true)
+    expect(sdk.decodeRippleXAddress(xAddress)).toEqual({ address: classicAddress, destinationTag: 42 })
+    expect(sdk.normalizeRippleDestination(xAddress)).toEqual({ address: classicAddress, destinationTag: 42 })
+  })
+
   it('exports the custom-RPC registry + health-probe canonicals from the root SDK entrypoint', () => {
     expect(sdk.customRpcSupportedChains).toBe(customRpcSupportedChains.customRpcSupportedChains)
     expect(sdk.customRpcSupportedEvmChains).toBe(customRpcSupportedChains.customRpcSupportedEvmChains)
@@ -143,6 +211,18 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.getCustomRpcOverrides()).toEqual({ [sdk.Chain.Ethereum]: 'https://rpc.example' })
     sdk.clearCustomRpcOverride(sdk.Chain.Ethereum)
     expect(sdk.getCustomRpcOverride(sdk.Chain.Ethereum)).toBeUndefined()
+  })
+
+  it('exports isValidTokenId for non-address token families (Sui struct tags, XRPL currency.issuer)', () => {
+    expect(sdk.isValidTokenId).toBe(isValidTokenIdModule.isValidTokenId)
+
+    // Sui + a malformed Ripple id never reach the walletCore-dependent
+    // address-validation branch, so these are safe to exercise for real here.
+    expect(sdk.isValidTokenId({ chain: sdk.Chain.Sui, id: '0x2::sui::SUI', walletCore: {} as never })).toBe(true)
+    expect(sdk.isValidTokenId({ chain: sdk.Chain.Sui, id: 'not-a-struct-tag', walletCore: {} as never })).toBe(false)
+    expect(sdk.isValidTokenId({ chain: sdk.Chain.Ripple, id: 'not-a-composite-id', walletCore: {} as never })).toBe(
+      false
+    )
   })
 
   it('exports prepareTrc20TransferFromKeys (pure-crypto TRC-20 builder for mcp-ts/backend)', () => {
@@ -195,6 +275,25 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.fetchNoonUsdcVaultMetrics).toBe('function')
   })
 
+  it('exports the ThreeJane USDC helper values (not just their types) from the root SDK entrypoint', () => {
+    expect(sdk.buildThreeJaneSupplyUsdc).toBe(threeJane.buildThreeJaneSupplyUsdc)
+    expect(sdk.THREE_JANE_ADDRESSES).toBe(threeJane.THREE_JANE_ADDRESSES)
+    // Aliased to avoid colliding with the CCTP bridge's own `parseUsdcAmount`
+    // export, which is also present at the root.
+    expect(sdk.parseThreeJaneUsdcAmount).toBe(threeJane.parseUsdcAmount)
+    expect(typeof sdk.parseUsdcAmount).toBe('function')
+  })
+
+  it('exports the sdk.decode namespace documented as the canonical bytes-oracle keystone', () => {
+    // `packages/sdk/src/tools/policy/types.ts` documents the canonical
+    // decoder as `sdk.decode.fromToolResult` — pin that exact shape, aliased
+    // from (not duplicating) the flat sdk.decodeFromToolResult export.
+    expect(sdk.decode).toBeDefined()
+    expect(sdk.decode.fromToolResult).toBe(sdk.decodeFromToolResult)
+    expect(sdk.decode.decodeCosmosTx).toBe(sdk.decodeCosmosTx)
+    expect(sdk.decode.decodeEvmTx).toBe(sdk.decodeEvmTx)
+  })
+
   it('exports the sdk.defi namespace with the Arkis lender supply builder', () => {
     expect(sdk.defi).toBeDefined()
     expect(sdk.defi.arkis).toBeDefined()
@@ -244,6 +343,35 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.parseThorSwapMemo).toBe('function')
   })
 
+  it('exports the canonical signature-algorithm classification (ECDSA vs EdDSA) per chain', () => {
+    expect(typeof sdk.getSignatureAlgorithm).toBe('function')
+    expect(sdk.signatureAlgorithms).toBeDefined()
+
+    // Ripple / EVM / Cosmos / Terra / THOR / Tron -> ecdsa
+    for (const chain of [
+      sdk.Chain.Ripple,
+      sdk.Chain.Ethereum,
+      sdk.Chain.Cosmos,
+      sdk.Chain.TerraClassic,
+      sdk.Chain.THORChain,
+      sdk.Chain.Tron,
+    ]) {
+      expect(sdk.getSignatureAlgorithm(chain)).toBe('ecdsa')
+    }
+
+    // Solana / Sui / Polkadot / Bittensor / Ton / Cardano -> eddsa
+    for (const chain of [
+      sdk.Chain.Solana,
+      sdk.Chain.Sui,
+      sdk.Chain.Polkadot,
+      sdk.Chain.Bittensor,
+      sdk.Chain.Ton,
+      sdk.Chain.Cardano,
+    ]) {
+      expect(sdk.getSignatureAlgorithm(chain)).toBe('eddsa')
+    }
+  })
+
   it('exports the shared THORChain secured-asset catalog helpers', () => {
     expect(typeof sdk.getThorchainSecuredAssetCatalog).toBe('function')
     expect(typeof sdk.createThorchainSecuredAssetCatalog).toBe('function')
@@ -254,10 +382,12 @@ describe('@vultisig/sdk public exports', () => {
 
   it('exports canonical EVM chain-id, RPC, and priority-fee-clamp helpers from the root sdk surface', () => {
     expect(typeof sdk.getEvmChainId).toBe('function')
+    expect(typeof sdk.getEvmNumericChainId).toBe('function')
     expect(typeof sdk.getEvmChainByChainId).toBe('function')
     expect(typeof sdk.getEvmRpcUrl).toBe('function')
     expect(typeof sdk.clampEvmPriorityFee).toBe('function')
     expect(sdk.getEvmChainId(sdk.Chain.Mantle)).toBe('0x1388')
+    expect(sdk.getEvmNumericChainId(sdk.Chain.Mantle)).toBe(5000)
     expect(sdk.getEvmChainByChainId('0x3e7')).toBe(sdk.Chain.Hyperliquid)
     expect(sdk.getEvmRpcUrl(sdk.Chain.Ethereum)).toBe('https://api.vultisig.com/eth/')
     expect(sdk.getEvmRpcUrl(sdk.Chain.Hyperliquid)).toBe('https://api.vultisig.com/hyperevm/')
@@ -293,6 +423,11 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.MAYA_SEND_FEE_BASE_UNITS).toBe(2_000_000_000n)
   })
 
+  it('exports the canonical Cosmos Tendermint/Stargate RPC registry', () => {
+    expect(sdk.tendermintRpcUrl[sdk.Chain.Cosmos]).toBe('https://cosmos-rpc.publicnode.com:443')
+    expect(sdk.tendermintRpcUrl[sdk.Chain.THORChain]).toBe('https://gateway.liquify.com/chain/thorchain_rpc')
+  })
+
   it('exports the Cosmos staking gas limit helper, including TerraClassic redelegation headroom', () => {
     expect(typeof sdk.getCosmosStakingGasLimit).toBe('function')
     expect(sdk.getCosmosStakingGasLimit({ chain: sdk.Chain.Cosmos })).toBe(350_000n)
@@ -326,6 +461,11 @@ describe('@vultisig/sdk public exports', () => {
     const requiredFee = (gasLimit * 28_325n) / 1000n
     expect(sdk.TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS).toBeGreaterThanOrEqual(requiredFee)
     expect(msg.typeUrl).toBe('/cosmos.staking.v1beta1.MsgBeginRedelegate')
+  })
+
+  it('exports the canonical Cosmos custom-signing payload builders', () => {
+    expect(sdk.buildSignAminoKeysignPayload).toBe(canonicalBuildSignAminoKeysignPayload)
+    expect(sdk.buildSignDirectKeysignPayload).toBe(canonicalBuildSignDirectKeysignPayload)
   })
 
   it('exports seedphrase import chain support policy for consumers', () => {
@@ -381,5 +521,17 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof proto.prepareSendTx).toBe('function')
     expect(typeof proto.prepareSwapTx).toBe('function')
     expect(typeof proto.prepareContractCallTx).toBe('function')
+  })
+
+  it('exports the canonical THOR/Maya native-swap metadata (sdk#1988)', async () => {
+    const nativeSwapChain = await import('@vultisig/core-chain/swap/native/NativeSwapChain')
+
+    expect(sdk.nativeSwapChains).toBe(nativeSwapChain.nativeSwapChains)
+    expect(sdk.nativeSwapChainIds).toBe(nativeSwapChain.nativeSwapChainIds)
+    expect(sdk.nativeSwapEnabledChainsRecord).toBe(nativeSwapChain.nativeSwapEnabledChainsRecord)
+    expect(sdk.getNativeSwapChainId).toBe(nativeSwapChain.getNativeSwapChainId)
+    expect(sdk.getNativeSwapChainIdFromDenomPrefix).toBe(nativeSwapChain.getNativeSwapChainIdFromDenomPrefix)
+    expect(sdk.getNativeSwapChainId(sdk.Chain.THORChain)).toBe('THOR')
+    expect(sdk.getNativeSwapChainIdFromDenomPrefix('eth')).toBe('ETH')
   })
 })
