@@ -3,7 +3,8 @@ import { Chain } from '@vultisig/core-chain/Chain'
 import { getThorchainSwapDestinationAssets } from '@vultisig/core-chain/chains/cosmos/thor/securedAssets'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { findCoins as coreFindCoins } from '@vultisig/core-chain/coin/find'
-import { knownTokens, knownTokensIndex } from '@vultisig/core-chain/coin/knownTokens'
+import { knownTokens } from '@vultisig/core-chain/coin/knownTokens'
+import { getKnownToken } from '@vultisig/core-chain/coin/knownTokens/utils'
 import { getCoinPrices as coreCoinPrices } from '@vultisig/core-chain/coin/price/getCoinPrices'
 import { getCoinPricesWithChange as coreCoinPricesWithChange } from '@vultisig/core-chain/coin/price/getCoinPricesWithChange'
 import { scanAddressWithBlockaid } from '@vultisig/core-chain/security/blockaid/address'
@@ -1356,7 +1357,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * @returns Token metadata or null if not found
    */
   static getKnownToken(chain: Chain, tokenId: string): TokenInfo | null {
-    const coin = knownTokensIndex[chain]?.[tokenId.toLowerCase()]
+    const coin = getKnownToken({ chain, id: tokenId })
     if (!coin) return null
     return {
       chain,

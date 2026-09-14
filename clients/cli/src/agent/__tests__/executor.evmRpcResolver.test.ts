@@ -84,4 +84,23 @@ describe('AgentExecutor EVM RPC resolution', () => {
       expect.objectContaining({ method: 'POST' })
     )
   })
+
+  it('resolves a Robinhood nonce through the EVM path instead of returning null (#2356)', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({ result: '0x5' }),
+    }) as unknown as typeof fetch
+
+    const executor = new AgentExecutor(createMockVault())
+    const nonce = await (
+      executor as unknown as { fetchEvmPendingNonce: (chain: Chain) => Promise<bigint | null> }
+    ).fetchEvmPendingNonce(Chain.Robinhood)
+
+    expect(nonce).toBe(5n)
+    expect(vi.mocked(getEvmRpcUrl)).toHaveBeenCalledWith(Chain.Robinhood)
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'https://rpc.example/robinhood',
+      expect.objectContaining({ method: 'POST' })
+    )
+  })
 })
