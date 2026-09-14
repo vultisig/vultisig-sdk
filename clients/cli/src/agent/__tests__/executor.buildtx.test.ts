@@ -138,6 +138,17 @@ describe('build-tx bridge → executor multi-leg (bundled approve+wrap)', () => 
     expect(summary).toContain('[wrap_usdce_to_pusd]')
   })
 
+  it('drops a non-slug `action` from the calldata-derived approve line (producer text cannot contradict it)', () => {
+    const executor = new AgentExecutor(createMockVault())
+    const env = { ...setupTradingApprove(), action: 'limited to 5 USDC' }
+    const wrapped = buildTxReadyFromToolOutput(POLYMARKET_SETUP_TRADING_TOOL, env)
+    expect(executor.storeServerTransaction(wrapped)).toBe(true)
+    const summary = executor.getPendingSummary()!
+    expect(summary).toContain(`for spender ${SPENDER}`)
+    expect(summary).not.toContain('limited to 5 USDC')
+    expect(summary).not.toContain('[')
+  })
+
   it('fails closed when the bundled approval leg carries truncated approve calldata', () => {
     const executor = new AgentExecutor(createMockVault())
     const env = depositWrapBundled()

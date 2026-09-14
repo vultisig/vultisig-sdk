@@ -852,7 +852,11 @@ export class AgentExecutor {
     // summary so no envelope shape can route approve bytes to a label-driven
     // line. Malformed approve calldata fails closed like transfers.
     const swapContext = !!(labels.quote_summary || labels.to_token_symbol || labels.pending_swap_summary)
-    const actionTag = p?.__buildTx && typeof p?.action === 'string' && p.action ? ` [${p.action}]` : ''
+    // The bridge's `action` is producer text. It now rides next to a
+    // calldata-derived approve line, so it must not be able to contradict it
+    // ("approve UNLIMITED … [limited to 5 USDC]"): accept only a short slug.
+    const actionTag =
+      p?.__buildTx && typeof p?.action === 'string' && /^[a-z0-9_-]{1,32}$/i.test(p.action) ? ` [${p.action}]` : ''
     if (!p?.__multiLeg) {
       const signedTx = extractNestedTx(p)
       const signedCalldata = typeof signedTx?.data === 'string' ? (signedTx.data as string) : ''
@@ -923,7 +927,10 @@ export class AgentExecutor {
         const wrapTo = (p?.txArgs?.tx?.to as string) || '?'
         return `contract call on ${stored.chain} to ${wrapTo} (+ first ${approveLegLine} — 2 transactions)${actionTag}`
       }
-      const flat = (p?.tx ?? {}) as Record<string, unknown>
+      // Describe the tx the signer resolves (`extractNestedTx`), not `p.tx`
+      // alone, so a sibling `swap_tx`/`send_tx` cannot sign a different target
+      // than the line shows.
+      const flat = (extractNestedTx(p) ?? {}) as Record<string, unknown>
       const to = typeof flat.to === 'string' ? flat.to : '?'
       const valueRaw = typeof flat.value === 'string' ? flat.value : '0'
       const valuePart = valueRaw && valueRaw !== '0' ? ` value ${valueRaw}` : ''
