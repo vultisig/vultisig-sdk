@@ -25,6 +25,7 @@ import { getBlockchainSpecificValue } from '../chainSpecific/KeysignChainSpecifi
 import { BuildKeysignPayloadError } from '../error'
 import { getKeysignAmount } from '../utils/getKeysignAmount'
 import { validateDestinationTag } from '../utils/rippleDestinationTag'
+import { assertBittensorDestinationStaysAlive } from './assertBittensorDestinationStaysAlive'
 import { getCosmosWasmTokenTransferPayload } from './cosmosWasm'
 
 export type BuildSendKeysignPayloadInput = {
@@ -48,6 +49,13 @@ export type BuildSendKeysignPayloadInput = {
    * than changing it.
    */
   sendMaxAmount?: boolean
+  /**
+   * Empty the account with a Substrate `transfer_allow_death` (Polkadot,
+   * Bittensor): the chain reaps the sender once its balance drops below the
+   * existential deposit, and the amount is no longer clamped to keep it. Only
+   * for an explicit user choice, with the reap disclosed; ignored elsewhere.
+   */
+  allowDeath?: boolean
 }
 
 type AssertTonMemoFitsInput = {
@@ -102,6 +110,7 @@ export const buildSendKeysignPayload = async ({
   libType,
   feeSettings,
   sendMaxAmount,
+  allowDeath,
 }: BuildSendKeysignPayloadInput) => {
   const hexPublicKey = hexPublicKeyOverride ?? (publicKey ? Buffer.from(publicKey.data()).toString('hex') : undefined)
   if (!hexPublicKey) {
@@ -185,6 +194,7 @@ export const buildSendKeysignPayload = async ({
         transactionType: TransactionType.GENERIC_CONTRACT,
         destinationTag: effectiveDestinationTag,
         sendMaxAmount,
+        allowDeath,
       })
     : await getChainSpecific({
         keysignPayload,
@@ -192,6 +202,7 @@ export const buildSendKeysignPayload = async ({
         walletCore,
         destinationTag: effectiveDestinationTag,
         sendMaxAmount,
+        allowDeath,
         ...(coin.chain === Chain.Ripple ? { transactionType: TransactionType.RIPPLE_PAYMENT } : {}),
       })
 
@@ -215,6 +226,7 @@ export const buildSendKeysignPayload = async ({
   }
 
   assertTonMemoFits({ coin, keysignPayload })
+  await assertBittensorDestinationStaysAlive({ coin, keysignPayload })
 
   return keysignPayload
 }

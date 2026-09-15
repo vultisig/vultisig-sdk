@@ -13,6 +13,7 @@ export type SendParams = {
   tokenId?: string
   memo?: string
   destinationTag?: number
+  allowDeath?: boolean // Empty a Polkadot/Bittensor account: sign transfer_allow_death so the chain reaps it
   yes?: boolean // Skip confirmation prompt
   dryRun?: boolean // Preview transaction without signing/broadcasting
   force?: boolean // Bypass the broadcast-journal duplicate guard

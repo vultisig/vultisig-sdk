@@ -1,8 +1,10 @@
 import { create } from '@bufbuild/protobuf'
 import { Chain, EvmChain } from '@vultisig/core-chain/Chain'
+import { bittensorConfig } from '@vultisig/core-chain/chains/bittensor/config'
 import {
   CosmosSpecificSchema,
   EthereumSpecificSchema,
+  PolkadotSpecificSchema,
   TransactionType,
 } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
@@ -24,6 +26,7 @@ type PayloadInput = {
   amount: bigint
   contractAddress?: string
   transactionType?: TransactionType
+  allowDeath?: boolean
 }
 
 const buildPayload = ({
@@ -31,6 +34,7 @@ const buildPayload = ({
   amount,
   contractAddress,
   transactionType = TransactionType.UNSPECIFIED,
+  allowDeath = false,
 }: PayloadInput) =>
   create(KeysignPayloadSchema, {
     coin: {
@@ -52,15 +56,29 @@ const buildPayload = ({
               transactionType,
             }),
           }
-        : {
-            case: 'ethereumSpecific',
-            value: create(EthereumSpecificSchema, {
-              gasLimit: '40000',
-              maxFeePerGasWei: '1500000',
-              priorityFee: '0',
-              nonce: 0n,
-            }),
-          },
+        : chain === Chain.Bittensor
+          ? {
+              case: 'polkadotSpecific',
+              value: create(PolkadotSpecificSchema, {
+                recentBlockHash: '0x' + 'ab'.repeat(32),
+                nonce: 1n,
+                currentBlockNumber: '4000000',
+                specVersion: 458,
+                transactionVersion: 1,
+                genesisHash: '0x' + 'cd'.repeat(32),
+                gas: 200_000n,
+                allowDeath,
+              }),
+            }
+          : {
+              case: 'ethereumSpecific',
+              value: create(EthereumSpecificSchema, {
+                gasLimit: '40000',
+                maxFeePerGasWei: '1500000',
+                priorityFee: '0',
+                nonce: 0n,
+              }),
+            },
   })
 
 const refine = (keysignPayload: ReturnType<typeof buildPayload>, balance: bigint) =>
@@ -103,6 +121,46 @@ describe('refineKeysignAmount', () => {
     const refined = await refine(buildPayload({ amount: 1_000_000_000_000_000n }), 12_437_685_400_530_920n)
 
     expect(refined.toAmount).toBe('1000000000000000')
+  })
+
+  // A TAO MAX quoted as `balance - fee` would leave the sender at zero, which
+  // transfer_keep_alive refuses on-chain; the refine has to keep the 500 rao
+  // existential deposit back so the ceremony signs something the chain accepts.
+  it('keeps the existential deposit back on Bittensor so a MAX send cannot reap the sender', async () => {
+    const balance = 1_000_000_000n
+    const fee = 200_000n
+    mocks.getFeeAmount.mockResolvedValue(fee)
+
+    const refined = await refine(buildPayload({ chain: Chain.Bittensor, amount: balance - fee }), balance)
+
+    expect(BigInt(refined.toAmount)).toBe(balance - fee - bittensorConfig.existentialDeposit)
+    expect(balance - BigInt(refined.toAmount) - fee).toBeGreaterThanOrEqual(500n)
+  })
+
+  it('lets a Bittensor payload that allows death spend the deposit too', async () => {
+    const balance = 1_000_000_000n
+    const fee = 200_000n
+    mocks.getFeeAmount.mockResolvedValue(fee)
+
+    const refined = await refine(buildPayload({ chain: Chain.Bittensor, amount: balance, allowDeath: true }), balance)
+
+    expect(BigInt(refined.toAmount)).toBe(balance - fee)
+  })
+
+  it('leaves a Bittensor amount that already keeps the deposit exactly as entered', async () => {
+    mocks.getFeeAmount.mockResolvedValue(200_000n)
+
+    const refined = await refine(buildPayload({ chain: Chain.Bittensor, amount: 500_000_000n }), 1_000_000_000n)
+
+    expect(refined.toAmount).toBe('500000000')
+  })
+
+  it('refuses a Bittensor send whose balance only covers the fee and the deposit', async () => {
+    mocks.getFeeAmount.mockResolvedValue(200_000n)
+
+    await expect(refine(buildPayload({ chain: Chain.Bittensor, amount: 1n }), 200_500n)).rejects.toThrow(
+      BuildKeysignPayloadError
+    )
   })
 
   it('refuses before the ceremony when the fee swallows the balance', async () => {

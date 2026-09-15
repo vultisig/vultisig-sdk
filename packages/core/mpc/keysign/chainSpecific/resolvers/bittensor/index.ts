@@ -26,7 +26,10 @@ const rpc = async <T>(method: string, params: unknown[] = []) => {
   return response.result as T
 }
 
-export const getBittensorChainSpecific: GetChainSpecificResolver<'polkadotSpecific'> = async ({ keysignPayload }) => {
+export const getBittensorChainSpecific: GetChainSpecificResolver<'polkadotSpecific'> = async ({
+  keysignPayload,
+  allowDeath = false,
+}) => {
   const { address } = getKeysignCoin(keysignPayload)
 
   const [runtimeVersion, blockHash, nonce, header, genesisHash] = await Promise.all([
@@ -45,6 +48,7 @@ export const getBittensorChainSpecific: GetChainSpecificResolver<'polkadotSpecif
     transactionVersion: runtimeVersion.transactionVersion,
     genesisHash,
     gas: bittensorConfig.fee,
+    allowDeath,
   })
 
   return withFallback(

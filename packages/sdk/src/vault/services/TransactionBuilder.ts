@@ -69,6 +69,10 @@ export class TransactionBuilder {
    * @param params.sendMaxAmount - Set when the amount came from a MAX button. Recorded in
    *   the payload; `amount` is still exactly what gets signed, so pass the same
    *   `balance - fee` figure the UI displayed.
+   * @param params.allowDeath - Empty the account with a Substrate `transfer_allow_death`
+   *   (Polkadot, Bittensor): the chain reaps the sender once its balance drops below
+   *   the existential deposit. Only for an explicit user choice, with the reap
+   *   disclosed; ignored on other chains.
    *
    * @returns A KeysignPayload ready to be signed with the sign() method
    *
@@ -95,6 +99,7 @@ export class TransactionBuilder {
     destinationTag?: number
     feeSettings?: FeeSettings
     sendMaxAmount?: boolean
+    allowDeath?: boolean
   }): Promise<KeysignPayload> {
     if (params.amount <= 0n) {
       throw new VaultError(VaultErrorCode.InvalidAmount, 'Amount must be greater than zero')
@@ -140,6 +145,7 @@ export class TransactionBuilder {
     memo?: string
     destinationTag?: number
     feeSettings?: FeeSettings
+    allowDeath?: boolean
   }): Promise<bigint> {
     try {
       const walletCore = await this.wasmProvider.getWalletCore()
@@ -186,6 +192,7 @@ export class TransactionBuilder {
         walletCore,
         libType: toKeysignLibType(this.vaultData),
         feeSettings: params.feeSettings,
+        allowDeath: params.allowDeath,
       })
     } catch (error) {
       if (error instanceof VaultError) throw error
