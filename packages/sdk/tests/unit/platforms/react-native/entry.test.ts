@@ -114,6 +114,12 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expectTypeOf<sdkRn.BlockaidSupportedEvmChain>().toEqualTypeOf<blockaidChains.BlockaidSupportedEvmChain>()
   })
 
+  it('re-exports the canonical transaction status lookup by identity', async () => {
+    const canonical = await import('@vultisig/core-chain/tx/status')
+
+    expect(reactNativeEntry.getTxStatus).toBe(canonical.getTxStatus)
+  })
+
   it('exports canonical fast-vault detection helpers', async () => {
     const canonical = await import('@vultisig/core-mpc/devices/localPartyId')
 
