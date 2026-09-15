@@ -193,4 +193,21 @@ describe('getCosmosBalance', () => {
     expect(cosmosBalanceChains).toContain(Chain.Osmosis)
     expect(cosmosBalanceChains).not.toContain(Chain.THORChain)
   })
+
+  // Regression for sdk#1343: this read previously called `AbortSignal.timeout`
+  // directly, which doesn't exist on older RN/Hermes runtimes. Deleting it
+  // from the global simulates that environment — the read must still succeed
+  // via the Hermes-safe AbortController + setTimeout fallback.
+  it('succeeds without AbortSignal.timeout available (Hermes simulation)', async () => {
+    const original = globalThis.AbortSignal.timeout
+    // @ts-expect-error — simulating a runtime that lacks this static method
+    delete globalThis.AbortSignal.timeout
+    try {
+      mockBank([{ denom: 'uosmo', amount: '12500000' }])
+      const res = await getCosmosBalance(Chain.Osmosis, 'osmo1abc')
+      expect(res.nativeTicker).toBe('OSMO')
+    } finally {
+      globalThis.AbortSignal.timeout = original
+    }
+  })
 })
