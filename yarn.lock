@@ -7348,7 +7348,7 @@ __metadata:
     event-target-polyfill: "npm:^0.0.4"
     events: "npm:^3.3.0"
     fake-indexeddb: "npm:^6.2.5"
-    i18next: "npm:^26.3.1"
+    i18next: "npm:^26.4.2"
     i18next-http-backend: "npm:^4.0.1"
     isomorphic-fetch: "npm:^3.0.0"
     koffi: "npm:^3.1.4"
@@ -12560,15 +12560,15 @@ __metadata:
   languageName: node
   linkType: hard
 
-"i18next@npm:^26.3.1":
-  version: 26.3.1
-  resolution: "i18next@npm:26.3.1"
+"i18next@npm:^26.4.2":
+  version: 26.4.2
+  resolution: "i18next@npm:26.4.2"
   peerDependencies:
-    typescript: ^5 || ^6
+    typescript: ^5 || ^6 || ^7
   peerDependenciesMeta:
     typescript:
       optional: true
-  checksum: 10c0/8f26cb9a09b648edde395a58c2fe890dd996cb81a969d0a05da178b9cb4ce3dee009f9c677a480bb58b5a9d8bbf762fd226111626b015e9bbd66b96132dbba39
+  checksum: 10c0/f2c9613e03e09e56a84aee939d8fbe3442a58622915e11f97e47f9ab358dfa65be783230b37a21483152711f786fccfe697d7f5ea9269c54f16179dc59960e4b
   languageName: node
   linkType: hard
 
