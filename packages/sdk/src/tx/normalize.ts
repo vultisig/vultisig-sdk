@@ -11,7 +11,10 @@
  *   - Redis sequence storage / pop / peek / drained-marker lifecycle
  *   - sequence_id / sequence_index / sequence_total injection (per-turn,
  *     per-user, Redis-scoped — runtime concern, not a pure shape transform)
- *   - the produces_calldata dispatch gate + any agent-judgement
+ *
+ * Signability derivation (which tool outputs are signable, fail-closed chain
+ * guards, `to`/`to_address` + `data`/`calldata` extraction) lives next door
+ * in `toolOutputSigning.ts`.
  *
  * This module is PURE: it takes an already-built tool result (JSON) and
  * returns a canonical tx envelope (`normalizeTx`) or an ordered list of

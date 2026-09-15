@@ -46,7 +46,11 @@ const external = [
   '@cosmjs/stargate',
   '@cosmjs/amino',
   '@cosmjs/proto-signing',
-  '@bufbuild/protobuf',
+  // Subpaths too (`/wire`, `/codegenv2`, `/wkt`): a bare string only matches
+  // the bare specifier, and a bundled copy of `wire` registered its own
+  // text-encoding provider on the global protobuf-es shares with the
+  // consumer's copy, which broke keysign message encoding in consumers.
+  /^@bufbuild\/protobuf(\/|$)/,
   'ripple-binary-codec',
   // 7z-wasm uses Emscripten-style WASM loading - must stay external so it can find its .wasm file
   '7z-wasm',
@@ -405,6 +409,7 @@ const configs = {
         },
       }),
     },
+    ...createSubpathConfigs({ input: './src/platforms/node/prep.ts', distBase: 'tools/prep' }),
     ...createSubpathConfigs({
       input: './src/tools/parse/index.ts',
       distBase: 'tools/parse',
@@ -816,14 +821,31 @@ rnSwap.plugins = rnSwap.plugins.map(plugin =>
       )
     : plugin
 )
-configs['react-native'] = [rnPreamble, rnRoot, rnSwap]
+const [, rnPrep] = configs['react-native']()
+rnPrep.input = './src/platforms/react-native/prep.ts'
+rnPrep.output.file = './dist/tools/prep/index.react-native.js'
+rnPrep.plugins = rnPrep.plugins.map(plugin =>
+  plugin.name === 'vultisig-rn-path-override' ? rnOverridePlugin([]) : plugin
+)
+configs['react-native'] = [rnPreamble, rnRoot, rnSwap, rnPrep]
+const browserPrep = {
+  ...configs.browser,
+  input: './src/platforms/browser/prep.ts',
+  output: { ...configs.browser.output, file: './dist/tools/prep/index.browser.js' },
+  plugins: createPlugins({
+    browser: true,
+    bufferPolyfill: true,
+    replaceOptions: { 'process.env.VULTISIG_PLATFORM': JSON.stringify('browser') },
+  }),
+}
+configs.browser = [configs.browser, browserPrep]
 
 // Export based on target
 let exportConfig
 if (target === 'all') {
   exportConfig = [
     ...configs.node,
-    configs.browser,
+    ...configs.browser,
     ...configs['react-native'],
     configs.electron,
     configs['chrome-extension'],
