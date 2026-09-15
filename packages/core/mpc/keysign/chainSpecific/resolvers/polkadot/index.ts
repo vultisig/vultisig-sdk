@@ -11,6 +11,7 @@ import { refinePolkadotChainSpecific } from './refine'
 export const getPolkadotChainSpecific: GetChainSpecificResolver<'polkadotSpecific'> = async ({
   keysignPayload,
   walletCore,
+  allowDeath = false,
 }) => {
   const client = await getPolkadotClient()
 
@@ -41,6 +42,7 @@ export const getPolkadotChainSpecific: GetChainSpecificResolver<'polkadotSpecifi
     transactionVersion: transactionVersion.toNumber(),
     genesisHash: genesisHash.toHex(),
     gas: polkadotConfig.fee,
+    allowDeath,
   })
 
   return withFallback(

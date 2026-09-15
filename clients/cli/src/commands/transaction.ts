@@ -44,6 +44,11 @@ const getSendPreviewDetails = (
   return { memo, destinationTag }
 }
 
+// Shown wherever an --allow-death send is previewed: the whole point of the
+// flag is to let the chain reap the account, so the user must see it coming.
+const reapDisclosure =
+  'This send empties the account: it is signed as transfer_allow_death, the chain reaps it, and anything left below the existential deposit is destroyed'
+
 /**
  * Execute send command - send tokens to an address
  */
@@ -110,6 +115,9 @@ async function previewDryRun(
   const feeBalance = shouldCheckNativeFeeBalance ? await vault.balance(params.chain).catch(() => undefined) : undefined
 
   const warnings: string[] = []
+  if (params.allowDeath) {
+    warnings.push(reapDisclosure)
+  }
   if (hasInsufficientBalance) {
     warnings.push(`Insufficient balance: you have ${balance.formattedAmount} ${balance.symbol}`)
   }
@@ -216,6 +224,7 @@ export async function sendTransaction(
     symbol: params.tokenId,
     memo: params.memo,
     destinationTag,
+    allowDeath: params.allowDeath,
     dryRun: true,
   })
 
@@ -251,6 +260,9 @@ export async function sendTransaction(
       gas,
       dryResult.contractAddress
     )
+    if (params.allowDeath) {
+      warn(`\n${reapDisclosure}`)
+    }
   }
 
   // 3. Confirm (required in all output modes; the non-interactive case was
@@ -296,6 +308,7 @@ export async function sendTransaction(
         symbol: params.tokenId,
         memo: params.memo,
         destinationTag,
+        allowDeath: params.allowDeath,
       })
       if (result.dryRun) throw new Error('unreachable')
       return result as Extract<typeof result, { dryRun: false }>

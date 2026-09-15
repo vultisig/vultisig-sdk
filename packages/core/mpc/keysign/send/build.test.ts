@@ -331,7 +331,15 @@ describe('buildSendKeysignPayload Bittensor destination existential deposit', ()
   const emptyDestination = '5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy'
   const fee = 200_000n
 
-  const buildTaoPayload = ({ amount, balance }: { amount: bigint; balance: bigint }) => {
+  const buildTaoPayload = ({
+    amount,
+    balance,
+    allowDeath,
+  }: {
+    amount: bigint
+    balance: bigint
+    allowDeath?: boolean
+  }) => {
     getChainSpecificMock.mockResolvedValue({
       case: 'polkadotSpecific',
       value: create(PolkadotSpecificSchema, {
@@ -359,6 +367,7 @@ describe('buildSendKeysignPayload Bittensor destination existential deposit', ()
       hexPublicKeyOverride: 'ab'.repeat(32),
       libType: 'DKLS',
       walletCore: {} as never,
+      allowDeath,
     })
   }
 
@@ -376,6 +385,12 @@ describe('buildSendKeysignPayload Bittensor destination existential deposit', ()
       type: 'bittensor-destination-below-existential-deposit',
     })
     expect(getBittensorCoinBalanceMock).toHaveBeenCalledWith({ chain: Chain.Bittensor, address: emptyDestination })
+  })
+
+  it('forwards an explicit allow-death choice to the chain-specific resolver', async () => {
+    await buildTaoPayload({ amount: 1_000n, balance: fee + 500n + 600n, allowDeath: true })
+
+    expect(getChainSpecificMock).toHaveBeenCalledWith(expect.objectContaining({ allowDeath: true }))
   })
 
   it('lets a refined amount that still clears the deposit through without reading the destination', async () => {

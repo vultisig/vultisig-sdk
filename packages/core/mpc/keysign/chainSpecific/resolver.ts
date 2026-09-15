@@ -20,6 +20,14 @@ export type GetChainSpecificInput<C extends KeysignChainSpecificKey = KeysignCha
    * mislabels an ordinary send that happens to sit close to the balance.
    */
   sendMaxAmount?: boolean
+  /**
+   * Encode the Substrate transfer as `transfer_allow_death`, carried in
+   * PolkadotSpecific. Only for an explicit "empty the account" send: the chain
+   * reaps the sender once its balance drops below the existential deposit.
+   * Every co-signer derives the call index from the payload field, so this is
+   * the only place the intent can be stated.
+   */
+  allowDeath?: boolean
 } & (C extends 'ethereumSpecific'
   ? {
       feeSettings?: FeeSettings<'evm'>

@@ -32,6 +32,7 @@ export const refineBittensorChainSpecific = async ({
     genesisHash: chainSpecific.genesisHash,
     specVersion: chainSpecific.specVersion,
     transactionVersion: chainSpecific.transactionVersion,
+    allowDeath: chainSpecific.allowDeath,
   })
 
   // Assemble with dummy signer and zero signature for fee estimation
