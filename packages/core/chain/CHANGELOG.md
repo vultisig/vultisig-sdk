@@ -1,5 +1,11 @@
 # @vultisig/core-chain
 
+## 5.4.3
+
+### Patch Changes
+
+- [#2374](https://github.com/vultisig/vultisig-sdk/pull/2374) [`7936aae`](https://github.com/vultisig/vultisig-sdk/commit/7936aae684222cf5f4f5e0815b362490c7df1f47) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Preserve base64 TON message hashes when querying transaction status so hashes containing plus signs resolve correctly.
+
 ## 5.4.2
 
 ### Patch Changes
