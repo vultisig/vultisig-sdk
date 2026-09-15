@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/lib-utils",
-  "version": "0.10.5",
+  "version": "0.10.7",
   "description": "Shared utilities for Vultisig core packages",
   "license": "MIT",
   "repository": {
@@ -104,6 +104,11 @@
       "import": "./dist/base64Encode.js",
       "default": "./dist/base64Encode.js"
     },
+    "./bigint/assertBoundedInt": {
+      "types": "./dist/bigint/assertBoundedInt.d.ts",
+      "import": "./dist/bigint/assertBoundedInt.js",
+      "default": "./dist/bigint/assertBoundedInt.js"
+    },
     "./bigint/bigIntMax": {
       "types": "./dist/bigint/bigIntMax.d.ts",
       "import": "./dist/bigint/bigIntMax.js",
@@ -138,6 +143,11 @@
       "types": "./dist/bigint/decimalStringToBigInt.d.ts",
       "import": "./dist/bigint/decimalStringToBigInt.js",
       "default": "./dist/bigint/decimalStringToBigInt.js"
+    },
+    "./bigint/parseNonNegativeBigInt": {
+      "types": "./dist/bigint/parseNonNegativeBigInt.d.ts",
+      "import": "./dist/bigint/parseNonNegativeBigInt.js",
+      "default": "./dist/bigint/parseNonNegativeBigInt.js"
     },
     "./capitalizeFirstLetter": {
       "types": "./dist/capitalizeFirstLetter.d.ts",

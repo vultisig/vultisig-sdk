@@ -1,4 +1,5 @@
 import { Chain } from '@vultisig/core-chain/Chain'
+import type { TonWalletVersion } from '@vultisig/core-chain/chains/ton/wallet'
 import { deriveAddress } from '@vultisig/core-chain/publicKey/address/deriveAddress'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
 
@@ -21,6 +22,12 @@ type DeriveAddressFromKeysInput = {
    * non-hardened BIP32 fallback is used unchanged — existing callers are unaffected.
    */
   chainPublicKeys?: Partial<Record<Chain, string>>
+  /**
+   * TON only: which wallet contract to derive. Defaults to V4R2, the account every
+   * existing Vultisig vault uses; `'v5r1'` returns the same key's W5 address, which
+   * is a separate account with its own balance.
+   */
+  tonWalletVersion?: TonWalletVersion
 }
 
 type DeriveAddressFromKeysResult = {
@@ -121,6 +128,7 @@ export const deriveAddressFromKeys = async (
       chain: input.chain,
       publicKey,
       walletCore,
+      tonWalletVersion: input.tonWalletVersion,
     })
 
     return { chain: input.chain, address }

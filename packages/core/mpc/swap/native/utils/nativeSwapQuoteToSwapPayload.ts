@@ -93,6 +93,9 @@ export const nativeSwapQuoteToSwapPayload = ({ quote, fromCoin, amount, toCoin }
       }),
       isAffiliate,
       fee: quote.fees.total,
+      // Left unset when the provider reports no slippage, so a co-signer hides
+      // the price-impact row rather than reading an absent figure as zero.
+      slippageBps: quote.fees.slippage_bps,
     }),
   }
 }

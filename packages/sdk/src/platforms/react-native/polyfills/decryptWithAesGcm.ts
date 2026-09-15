@@ -3,7 +3,7 @@
  * Uses @noble/ciphers instead of Node.js crypto
  */
 import { gcm } from '@noble/ciphers/aes'
-import { sha256 } from '@noble/hashes/sha2'
+import { sha256 } from '@noble/hashes/sha2.js'
 import { AesGcmInput } from '@vultisig/lib-utils/encryption/aesGcm/AesGcmInput'
 
 export const decryptWithAesGcm = ({ key, value }: AesGcmInput): Buffer => {

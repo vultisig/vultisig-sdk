@@ -75,7 +75,6 @@ describe('parseChain — consumer-observed input forms (backward-compat receipt)
     ['TerraClassic', Chain.TerraClassic],
     ['Noble', Chain.Noble],
     ['Akash', Chain.Akash],
-    ['Kujira', Chain.Kujira],
     ['Dydx', Chain.Dydx],
     ['Sui', Chain.Sui],
     ['Polkadot', Chain.Polkadot],

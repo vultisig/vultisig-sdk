@@ -1,5 +1,6 @@
 import { Buffer } from 'buffer'
 import { create } from '@bufbuild/protobuf'
+import { fromBech32 } from '@cosmjs/encoding'
 import { buildSignBitcoinFromPsbt } from '@vultisig/core-chain/chains/utxo/tx/buildSignBitcoinFromPsbt'
 import { fromChainAmountDisplay } from '@vultisig/core-chain/amount/fromChainAmountExact'
 import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
@@ -12,9 +13,11 @@ import { areEqualCoins } from '@vultisig/core-chain/coin/Coin'
 import { COW_VAULT_RELAYER_ADDRESS } from '@vultisig/core-chain/swap/general/cowswap/config'
 import { encodeCowSwapKeysignData } from '@vultisig/core-chain/swap/general/cowswap/keysign/cowSwapKeysignData'
 import { GeneralSwapTx } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
+import { rujiTradeRuneBruneMarketContract } from '@vultisig/core-chain/swap/general/ruji/config'
 import { getSwapDestinationAddress } from '@vultisig/core-chain/swap/keysign/getSwapDestinationAddress'
 import { nativeSwapQuoteToSwapPayload } from '@vultisig/core-mpc/swap/native/utils/nativeSwapQuoteToSwapPayload'
 import { SwapQuote, SwapQuoteResult } from '@vultisig/core-chain/swap/quote/SwapQuote'
+import { SwapFee } from '@vultisig/core-chain/swap/SwapFee'
 import { getChainSpecific } from '@vultisig/core-mpc/keysign/chainSpecific'
 import { getBlockchainSpecificValue } from '@vultisig/core-mpc/keysign/chainSpecific/KeysignChainSpecific'
 import { refineKeysignUtxo } from '@vultisig/core-mpc/keysign/refine/utxo'
@@ -32,7 +35,11 @@ import {
 import { Erc20ApprovePayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/erc20_approve_payload_pb'
 import { KeysignPayload, KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { SwapKitSwapPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/swapkit_swap_payload_pb'
-import { SignSuiSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/wasm_execute_contract_payload_pb'
+import { TransactionType } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
+import {
+  SignSuiSchema,
+  WasmExecuteContractPayloadSchema,
+} from '@vultisig/core-mpc/types/vultisig/keysign/v1/wasm_execute_contract_payload_pb'
 import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
 import { WalletCore } from '@trustwallet/wallet-core'
 import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
@@ -41,6 +48,8 @@ import { Psbt } from 'bitcoinjs-lib'
 export type BuildSwapKeysignPayloadInput = {
   fromCoin: AccountCoin
   toCoin: AccountCoin
+  /** Effective output recipient. Defaults to `toCoin.address` for legacy callers. */
+  recipient?: string
   amount: string | number
   swapQuote: SwapQuote
   vaultId: string
@@ -58,6 +67,72 @@ export type BuildSwapKeysignPayloadInput = {
 }
 
 type TransferSwapTx = Extract<GeneralSwapTx, { transfer: unknown }>['transfer']
+type CosmosWasmSwapTx = Extract<GeneralSwapTx, { cosmosWasm: unknown }>['cosmosWasm']
+
+const getThorAddressIdentity = (address: string): string | undefined => {
+  try {
+    const decoded = fromBech32(address.trim())
+    if (decoded.prefix.toLowerCase() !== 'thor' || (decoded.data.length !== 20 && decoded.data.length !== 32)) {
+      return undefined
+    }
+
+    return Buffer.from(decoded.data).toString('hex')
+  } catch {
+    return undefined
+  }
+}
+
+const areEqualThorAddresses = (left: string, right: string): boolean => {
+  const leftIdentity = getThorAddressIdentity(left)
+  return leftIdentity !== undefined && leftIdentity === getThorAddressIdentity(right)
+}
+
+const getRujiTradeFundAmount = (tx: CosmosWasmSwapTx, fromCoin: AccountCoin, effectiveRecipient: string): bigint => {
+  const expectedDenom =
+    fromCoin.chain === Chain.THORChain && fromCoin.id === undefined && fromCoin.ticker.toUpperCase() === 'RUNE'
+      ? 'rune'
+      : fromCoin.chain === Chain.THORChain && fromCoin.id?.toLowerCase() === 'x/brune'
+        ? 'x/brune'
+        : undefined
+
+  if (!expectedDenom) {
+    throw new Error('RUJI Trade CosmWasm swaps require a THORChain RUNE or bRUNE source coin.')
+  }
+  if (!areEqualThorAddresses(tx.sender, fromCoin.address)) {
+    throw new Error('RUJI Trade CosmWasm sender does not match the source account.')
+  }
+  if (!tx.contract.trim() || !tx.executeMsg.trim()) {
+    throw new Error('RUJI Trade CosmWasm route is missing its contract or execute message.')
+  }
+  if (!areEqualThorAddresses(tx.contract, rujiTradeRuneBruneMarketContract)) {
+    throw new Error('RUJI Trade CosmWasm route targets an untrusted RUNE ↔ bRUNE FIN contract.')
+  }
+  if (tx.funds.length !== 1 || tx.funds[0].denom.toLowerCase() !== expectedDenom) {
+    throw new Error(`RUJI Trade CosmWasm route must attach exactly one ${expectedDenom} fund.`)
+  }
+  if (!/^\d+$/.test(tx.funds[0].amount) || BigInt(tx.funds[0].amount) <= 0n) {
+    throw new Error('RUJI Trade CosmWasm route contains an invalid fund amount.')
+  }
+
+  let executeMsg: unknown
+  try {
+    executeMsg = JSON.parse(tx.executeMsg)
+  } catch {
+    throw new Error('RUJI Trade CosmWasm route contains an invalid execute message.')
+  }
+  const min = (executeMsg as { swap?: { min?: { min_return?: unknown; to?: unknown } } })?.swap?.min
+  if (
+    typeof min?.min_return !== 'string' ||
+    !/^\d+$/.test(min.min_return) ||
+    BigInt(min.min_return) <= 0n ||
+    typeof min.to !== 'string' ||
+    !areEqualThorAddresses(min.to, effectiveRecipient)
+  ) {
+    throw new Error('RUJI Trade CosmWasm route must contain a guarded FIN swap execute message.')
+  }
+
+  return BigInt(tx.funds[0].amount)
+}
 
 const isSwapKitBitcoinPsbt = (fromCoin: AccountCoin, transfer: TransferSwapTx) =>
   fromCoin.chain === Chain.Bitcoin && transfer.txType?.toUpperCase() === 'PSBT'
@@ -144,9 +219,29 @@ const getSwapKitSignData = (fromCoin: AccountCoin, transfer: TransferSwapTx): Ke
  * UTXO signing (via `getUtxoSigningInputs`) relies on this invariant — it reads
  * `keysignPayload.toAddress` directly for the `general` swap arm.
  */
+/**
+ * The `swap_fee` group of a swap payload — amount plus the coin context that
+ * makes it priceable — for a fee that may not exist.
+ *
+ * An absent fee yields an empty amount and no coin context, which is how a
+ * receiver tells "no fee" from a fee it can't price. Never emit a zero amount
+ * with a coin: that reads as a swap that costs nothing.
+ */
+const toCommSwapFee = (swapFee: SwapFee | undefined) => ({
+  swapFee: swapFee ? swapFee.amount.toString() : '',
+  ...(swapFee
+    ? {
+        swapFeeChain: swapFee.chain,
+        swapFeeTokenId: swapFee.id,
+        swapFeeDecimals: swapFee.decimals,
+      }
+    : {}),
+})
+
 export const buildSwapKeysignPayload = async ({
   fromCoin,
   toCoin,
+  recipient,
   amount,
   swapQuote,
   vaultId,
@@ -164,10 +259,36 @@ export const buildSwapKeysignPayload = async ({
         evm: () => undefined,
         solana: () => undefined,
         transfer: tx => tx,
+        cosmosWasm: () => undefined,
         cowswap_order: () => undefined,
       }),
   })
-  const chainAmount = transferTx?.amount ?? toChainAmount(amount, fromCoin.decimals)
+  const cosmosWasmTx = matchRecordUnion<SwapQuoteResult, CosmosWasmSwapTx | undefined>(swapQuote.quote, {
+    native: () => undefined,
+    general: ({ provider, tx }) => {
+      const result = matchRecordUnion<GeneralSwapTx, CosmosWasmSwapTx | undefined>(tx, {
+        evm: () => undefined,
+        solana: () => undefined,
+        transfer: () => undefined,
+        cosmosWasm: tx => tx,
+        cowswap_order: () => undefined,
+      })
+
+      if ((provider === 'ruji') !== !!result) {
+        throw new Error('RUJI Trade quotes must use the CosmWasm transaction route.')
+      }
+
+      return result
+    },
+  })
+  const cosmosWasmAmount = cosmosWasmTx
+    ? getRujiTradeFundAmount(cosmosWasmTx, fromCoin, recipient ?? toCoin.address)
+    : undefined
+  const requestedChainAmount = toChainAmount(amount, fromCoin.decimals)
+  if (cosmosWasmAmount !== undefined && cosmosWasmAmount !== requestedChainAmount) {
+    throw new Error('RUJI Trade CosmWasm fund amount does not match the requested swap amount.')
+  }
+  const chainAmount = transferTx?.amount ?? cosmosWasmAmount ?? requestedChainAmount
 
   const fromCoinHexPublicKey = Buffer.from(fromPublicKey.data()).toString('hex')
   const toCoinHexPublicKey = Buffer.from(toPublicKey.data()).toString('hex')
@@ -179,6 +300,7 @@ export const buildSwapKeysignPayload = async ({
         evm: ({ gasLimit }) => gasLimit,
         solana: () => undefined,
         transfer: () => undefined,
+        cosmosWasm: () => undefined,
         cowswap_order: () => undefined,
       }),
   })
@@ -207,9 +329,21 @@ export const buildSwapKeysignPayload = async ({
           evm: () => undefined,
           solana: () => undefined,
           transfer: ({ memo }) => memo,
+          cosmosWasm: () => undefined,
           cowswap_order: () => undefined,
         }),
     }),
+    contractPayload: cosmosWasmTx
+      ? {
+          case: 'wasmExecuteContractPayload',
+          value: create(WasmExecuteContractPayloadSchema, {
+            senderAddress: cosmosWasmTx.sender,
+            contractAddress: cosmosWasmTx.contract,
+            executeMsg: cosmosWasmTx.executeMsg,
+            coins: cosmosWasmTx.funds,
+          }),
+        }
+      : undefined,
   })
 
   keysignPayload.swapPayload = matchRecordUnion<SwapQuoteResult, KeysignPayload['swapPayload']>(swapQuote.quote, {
@@ -218,6 +352,7 @@ export const buildSwapKeysignPayload = async ({
         evm: () => undefined,
         solana: () => undefined,
         transfer: tx => tx,
+        cosmosWasm: () => undefined,
         cowswap_order: () => undefined,
       })
 
@@ -244,6 +379,7 @@ export const buildSwapKeysignPayload = async ({
             ...(transfer.memo ? { memo: transfer.memo } : {}),
             subProvider: quote.routeProvider ?? '',
             swapId: transfer.swapId ?? '',
+            ...toCommSwapFee(transfer.swapFee),
           }),
         }
       }
@@ -257,14 +393,7 @@ export const buildSwapKeysignPayload = async ({
             value,
             gasPrice: '',
             gas: 0n,
-            swapFee: affiliateFee ? affiliateFee.amount.toString() : '',
-            ...(affiliateFee
-              ? {
-                  swapFeeChain: affiliateFee.chain,
-                  swapFeeTokenId: affiliateFee.id,
-                  swapFeeDecimals: affiliateFee.decimals,
-                }
-              : {}),
+            ...toCommSwapFee(affiliateFee),
           }
         },
         solana: ({ data, swapFee }) => ({
@@ -281,11 +410,20 @@ export const buildSwapKeysignPayload = async ({
         }),
         // Non-SwapKit transfer routes can still use the existing general display shape.
         // SwapKit transfer routes return above with the dedicated commondata payload.
-        transfer: ({ to }) => ({
+        transfer: ({ to, swapFee }) => ({
           from: fromCoin.address,
           to,
           data: '',
           value: '',
+          gasPrice: '',
+          gas: 0n,
+          ...toCommSwapFee(swapFee),
+        }),
+        cosmosWasm: ({ sender, contract, executeMsg, funds }) => ({
+          from: sender,
+          to: contract,
+          data: executeMsg,
+          value: funds[0]?.amount ?? '',
           gasPrice: '',
           gas: 0n,
           swapFee: '',
@@ -349,6 +487,7 @@ export const buildSwapKeysignPayload = async ({
             tx,
           }),
           provider: quote.provider,
+          subProvider: quote.routeProvider ?? '',
         }),
       }
 
@@ -374,6 +513,7 @@ export const buildSwapKeysignPayload = async ({
     keysignPayload,
     walletCore,
     thirdPartyGasLimitEstimation,
+    transactionType: cosmosWasmTx ? TransactionType.GENERIC_CONTRACT : undefined,
     isDeposit: matchRecordUnion<SwapQuoteResult, boolean>(swapQuote.quote, {
       native: ({ swapChain }) => areEqualCoins(fromCoin, chainFeeCoin[swapChain]),
       general: () => false,

@@ -1,5 +1,34 @@
 # @vultisig/rujira
 
+## 71.0.0
+
+### Major Changes
+
+- [#2237](https://github.com/vultisig/vultisig-sdk/pull/2237) [`7d4c116`](https://github.com/vultisig/vultisig-sdk/commit/7d4c116cc7a940e96abf075790c4a387edd03987) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Remove Kujira (KUJI) chain support. Kujira wound down in 2025 and every RPC/LCD endpoint the SDK shipped for it is now dead (the polkachu hosts no longer resolve; publicnode 404s), so balances, sends, swaps, staking and governance on Kujira cannot function.
+
+  `Chain.Kujira` / `CosmosChain.Kujira` are removed from the chain union, along with the Kujira entries in the chain registry, cosmos RPC/LCD/fee/gas/memo tables, SwapKit + Skip + native-swap routing, the Kujira token list, IBC chain-id mapping, governance config and address derivation.
+
+  The IBC tables in `tools/prep/ibcTransfer.ts` are keyed by raw chain-ID rather than the `Chain` enum, so they are cleared explicitly: `kaiyo-1` is dropped from `IBC_CHAIN_REVISION` and the `osmosis-1/channel-259` route from `IBC_CHANNEL_DEST`. `supportedIbcDestinationsFrom('osmosis-1')` no longer advertises `kaiyo-1`, and `resolveSourceChannelByDestChain('osmosis-1', 'kaiyo-1')` returns `null`.
+
+  `COSMOS_CHAIN_ID_HRP` keeps its `kaiyo-1` → `kujira` entry: it is a pure bech32-prefix lookup that makes nothing routable, and it is still needed to decode historic `kujira1…` addresses.
+
+  The `chains/cosmos/thor/kujira-merge` module is intentionally **kept**: it describes the six Kujira-origin tokens (KUJI, rKUJI, FUZN, NSTK, WINK, LVN) that migrated onto THORChain as `thor.*` secured assets, plus their IBC representations on Cosmos Hub and Osmosis. Those assets are unaffected and keep resolving.
+
+  Consumers holding a persisted `Chain.Kujira` value must drop it — the symbol no longer type-checks.
+
+## 70.0.0
+
+### Major Changes
+
+- [#2218](https://github.com/vultisig/vultisig-sdk/pull/2218) [`d043dc4`](https://github.com/vultisig/vultisig-sdk/commit/d043dc43d9fe33a3160c2739150fd6294f0e7eff) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Unify the workspace on the coordinated Noble/Scure v2 stack and align related workspace peer dependency ranges.
+
+## 69.0.0
+
+### Patch Changes
+
+- Updated dependencies [[`397c2b6`](https://github.com/vultisig/vultisig-sdk/commit/397c2b6629fdc7002d55bd95bb8585dce78de416), [`df144e9`](https://github.com/vultisig/vultisig-sdk/commit/df144e9e21c2fb64e73efcf12ac35c958dbf1c7b), [`7d6a014`](https://github.com/vultisig/vultisig-sdk/commit/7d6a01440fd0b855356cce81469b5b5a91665862)]:
+  - @vultisig/sdk@5.2.0
+
 ## 68.0.0
 
 ### Patch Changes

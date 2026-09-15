@@ -118,6 +118,17 @@ describe('verifyBroadcastByHash', () => {
     expect(sleepMock).not.toHaveBeenCalled()
   })
 
+  it("rethrows original error immediately when status is 'expired'", async () => {
+    const originalError = new Error('broadcast boom')
+    getTxHashMock.mockResolvedValue('0xabc')
+    getTxStatusMock.mockResolvedValue({ status: 'expired' })
+
+    await expect(verifyBroadcastByHash({ chain, tx, error: originalError })).rejects.toBe(originalError)
+
+    expect(getTxStatusMock).toHaveBeenCalledTimes(1)
+    expect(sleepMock).not.toHaveBeenCalled()
+  })
+
   it('retries getTxStatus failures before rethrowing the original error', async () => {
     const originalError = new Error('broadcast failed')
     getTxHashMock.mockResolvedValue('0xabc')

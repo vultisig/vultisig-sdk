@@ -1,6 +1,6 @@
 import { ChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
 
-import { TxReceiptInfo, TxStatusInput, TxStatusResolver } from './resolver'
+import { TxFailureInfo, TxReceiptInfo, TxStatusInput, TxStatusResolver } from './resolver'
 import { getBittensorTxStatus } from './resolvers/bittensor'
 import { getCardanoTxStatus } from './resolvers/cardano'
 import { getCosmosTxStatus } from './resolvers/cosmos'
@@ -38,4 +38,4 @@ export const getTxStatus = (input: TxStatusInput) => {
   return handler(input)
 }
 
-export type { TxReceiptInfo, TxStatusInput }
+export type { TxFailureInfo, TxReceiptInfo, TxStatusInput }

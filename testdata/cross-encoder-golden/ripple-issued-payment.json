@@ -1,0 +1,20 @@
+{
+  "_description": "Shared WalletCore/WASM (packages/core) and RN-JS/ripple-binary-codec (packages/sdk) golden vector for an XRPL issued-currency Payment. Both suites read this file and independently derive the same signing hash. The amount carries the full 16 significant digits an XRPL token mantissa allows, so a rounding change in either encoder breaks this. Flags is explicitly zero because WalletCore serializes that optional field on its protobuf Payment path; omitting it is network-equivalent but changes the preimage and breaks mixed-platform MPC.",
+  "senderPrivateKeyHex": "0101010101010101010101010101010101010101010101010101010101010101",
+  "recipientPrivateKeyHex": "0202020202020202020202020202020202020202020202020202020202020202",
+  "senderAddress": "rUaRcsApnVHudsdLD2mut2qCKWq6iLRT2D",
+  "recipientAddress": "r4VYvnjmi9JREsu1PZJQmJEJ6bQ6iPNSTP",
+  "senderPublicKeyHex": "031b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f",
+  "issuerAddress": "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De",
+  "currencyCode": "524C555344000000000000000000000000000000",
+  "tokenTicker": "RLUSD",
+  "decimals": 15,
+  "amountBaseUnits": "1234567890123456",
+  "expectedValue": "1.234567890123456",
+  "feeDrops": "12",
+  "sequence": 5,
+  "lastLedgerSequence": 32000000,
+  "destinationTag": 998877,
+  "flags": 0,
+  "expectedSigningHashHex": "5a98864c297e0066ca21410e955a578d4969c2a7edf738300f429feb6e73382b"
+}

@@ -24,7 +24,7 @@
  */
 import { ed25519 } from '@noble/curves/ed25519.js'
 import { secp256k1 } from '@noble/curves/secp256k1.js'
-import { sha256 } from '@noble/hashes/sha256.js'
+import { sha256 } from '@noble/hashes/sha2.js'
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js'
 import type { SignatureAlgorithm } from '@vultisig/core-chain/signing/SignatureAlgorithm'
 import type { KeysignSignature } from '@vultisig/core-mpc/keysign/KeysignSignature'
@@ -34,21 +34,25 @@ import { formatSignature } from '../../../src/adapters/formatSignature'
 
 describe('signing round trip (synthetic, non-vault-gated) — SDK-TEST-02/03', () => {
   it('ECDSA: ephemeral secp256k1 keypair signs, SDK adapter formats, signature verifies', () => {
-    const privateKey = secp256k1.utils.randomPrivateKey()
+    const privateKey = secp256k1.utils.randomSecretKey()
     const publicKey = secp256k1.getPublicKey(privateKey)
 
     const message = new TextEncoder().encode(`vultisig-sdk-synthetic-ecdsa:${Date.now()}`)
     const msgHash = sha256(message)
     const msgHashHex = `0x${bytesToHex(msgHash)}`
 
-    const sig = secp256k1.sign(msgHash, privateKey)
+    const recoveredSig = secp256k1.sign(msgHash, privateKey, {
+      format: 'recovered',
+      prehash: false,
+    })
+    const sig = secp256k1.Signature.fromBytes(recoveredSig, 'recovered')
 
     const signatureResults: Record<string, KeysignSignature> = {
       [msgHashHex]: {
         msg: msgHashHex,
         r: `0x${sig.r.toString(16)}`,
         s: `0x${sig.s.toString(16)}`,
-        der_signature: `0x${sig.toDERHex()}`,
+        der_signature: `0x${sig.toHex('der')}`,
         recovery_id: String(sig.recovery),
       },
     }
@@ -61,7 +65,12 @@ describe('signing round trip (synthetic, non-vault-gated) — SDK-TEST-02/03', (
 
     // Real cryptographic verification of the adapter's own output — not a shape check.
     const derBytes = hexToBytes(formatted.signature.replace(/^0x/, ''))
-    expect(secp256k1.verify(derBytes, msgHash, publicKey)).toBe(true)
+    expect(
+      secp256k1.verify(derBytes, msgHash, publicKey, {
+        format: 'der',
+        prehash: false,
+      })
+    ).toBe(true)
 
     // Pin the DER *format* explicitly. formatSignature() is responsible for
     // SELECTING DER (not raw r||s) for ECDSA, but secp256k1.verify() accepts
@@ -70,13 +79,13 @@ describe('signing round trip (synthetic, non-vault-gated) — SDK-TEST-02/03', (
     // DER (throws on a compact signature) makes this test actually catch that
     // format-selection regression, matching this file's "adapter logic
     // regresses -> red" claim (SDK-TEST-02/03).
-    const parsedDer = secp256k1.Signature.fromDER(formatted.signature.replace(/^0x/, ''))
+    const parsedDer = secp256k1.Signature.fromHex(formatted.signature.replace(/^0x/, ''), 'der')
     expect(parsedDer.r).toBe(sig.r)
     expect(parsedDer.s).toBe(sig.s)
   })
 
   it('EdDSA: ephemeral ed25519 keypair signs, SDK adapter formats, signature verifies', () => {
-    const privateKey = ed25519.utils.randomPrivateKey()
+    const privateKey = ed25519.utils.randomSecretKey()
     const publicKey = ed25519.getPublicKey(privateKey)
 
     const message = new TextEncoder().encode(`vultisig-sdk-synthetic-eddsa:${Date.now()}`)
@@ -109,14 +118,25 @@ describe('signing round trip (synthetic, non-vault-gated) — SDK-TEST-02/03', (
   })
 
   it('sanity check: a tampered signature fails verification (proves the verify path is not a no-op)', () => {
-    const privateKey = secp256k1.utils.randomPrivateKey()
+    const privateKey = secp256k1.utils.randomSecretKey()
     const publicKey = secp256k1.getPublicKey(privateKey)
     const msgHash = sha256(new TextEncoder().encode('tamper-check'))
-    const sig = secp256k1.sign(msgHash, privateKey)
+    const sig = secp256k1.Signature.fromBytes(
+      secp256k1.sign(msgHash, privateKey, {
+        format: 'recovered',
+        prehash: false,
+      }),
+      'recovered'
+    )
 
-    const tamperedDer = hexToBytes(sig.toDERHex())
+    const tamperedDer = sig.toBytes('der')
     tamperedDer[tamperedDer.length - 1] ^= 0xff
 
-    expect(secp256k1.verify(tamperedDer, msgHash, publicKey)).toBe(false)
+    expect(
+      secp256k1.verify(tamperedDer, msgHash, publicKey, {
+        format: 'der',
+        prehash: false,
+      })
+    ).toBe(false)
   })
 })

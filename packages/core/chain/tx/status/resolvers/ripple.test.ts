@@ -25,7 +25,7 @@ describe('getRippleTxStatus', () => {
       result: {
         validated: true,
         meta: { TransactionResult: 'tesSUCCESS' },
-        tx_json: { Fee: '20' },
+        tx_json: { Fee: '20', TransactionType: 'Payment' },
       },
     })
 
@@ -38,17 +38,254 @@ describe('getRippleTxStatus', () => {
     })
   })
 
+  it('reports the authoritative issued-currency delivered_amount', async () => {
+    mocks.request.mockResolvedValue({
+      result: {
+        validated: true,
+        meta: {
+          TransactionResult: 'tesSUCCESS',
+          delivered_amount: {
+            currency: '524C555344000000000000000000000000000000',
+            issuer: 'rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De',
+            value: '1.25',
+          },
+        },
+        tx_json: { Fee: '20', TransactionType: 'Payment' },
+      },
+    })
+
+    const result = await getRippleTxStatus({ chain: OtherChain.Ripple, hash })
+    expect(result.receipt).toMatchObject({
+      deliveredAmount: '1.25',
+      deliveredCurrency: '524C555344000000000000000000000000000000',
+      deliveredIssuer: 'rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De',
+    })
+  })
+
+  it('reports native XRP delivered_amount in drops', async () => {
+    mocks.request.mockResolvedValue({
+      result: {
+        validated: true,
+        meta: { TransactionResult: 'tesSUCCESS', delivered_amount: '1250000' },
+        tx_json: { Fee: '20', TransactionType: 'Payment' },
+      },
+    })
+
+    const result = await getRippleTxStatus({ chain: OtherChain.Ripple, hash })
+    expect(result.receipt).toMatchObject({
+      deliveredAmount: '1250000',
+      deliveredCurrency: 'XRP',
+    })
+  })
+
+  it('accepts the maximum native XRP supply in drops', async () => {
+    mocks.request.mockResolvedValue({
+      result: {
+        validated: true,
+        meta: { TransactionResult: 'tesSUCCESS', delivered_amount: '100000000000000000' },
+        tx_json: { Fee: '20', TransactionType: 'Payment' },
+      },
+    })
+
+    const result = await getRippleTxStatus({ chain: OtherChain.Ripple, hash })
+    expect(result.receipt).toMatchObject({
+      deliveredAmount: '100000000000000000',
+      deliveredCurrency: 'XRP',
+    })
+  })
+
+  it.each(['1e95', '1e-81', '12345678901234560'])('accepts issued-currency value boundary %s', async value => {
+    mocks.request.mockResolvedValue({
+      result: {
+        validated: true,
+        meta: {
+          TransactionResult: 'tesSUCCESS',
+          delivered_amount: {
+            currency: 'USD',
+            issuer: 'rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B',
+            value,
+          },
+        },
+        tx_json: { Fee: '20', TransactionType: 'Payment' },
+      },
+    })
+
+    const result = await getRippleTxStatus({ chain: OtherChain.Ripple, hash })
+    expect(result.receipt).toMatchObject({ deliveredAmount: value })
+  })
+
+  it('reports an MPT delivered_amount without treating it as issued currency', async () => {
+    const mptIssuanceId = '000004C463C52827307480341125DA0577DEFC38405B0E3E'
+    mocks.request.mockResolvedValue({
+      result: {
+        validated: true,
+        meta: {
+          TransactionResult: 'tesSUCCESS',
+          delivered_amount: { mpt_issuance_id: mptIssuanceId, value: '42' },
+        },
+        tx_json: { Fee: '20', TransactionType: 'Payment' },
+      },
+    })
+
+    const result = await getRippleTxStatus({ chain: OtherChain.Ripple, hash })
+    expect(result.receipt).toMatchObject({
+      deliveredAmount: '42',
+      deliveredMptIssuanceId: mptIssuanceId,
+    })
+    expect(result.receipt).not.toHaveProperty('deliveredCurrency')
+    expect(result.receipt).not.toHaveProperty('deliveredIssuer')
+  })
+
+  it('reads the deprecated serialized DeliveredAmount fallback when delivered_amount is absent', async () => {
+    mocks.request.mockResolvedValue({
+      result: {
+        validated: true,
+        meta: {
+          TransactionResult: 'tesSUCCESS',
+          DeliveredAmount: {
+            currency: 'USD',
+            issuer: 'rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B',
+            value: '8.5',
+          },
+        },
+        tx_json: { Fee: '20', TransactionType: 'Payment' },
+      },
+    })
+
+    const result = await getRippleTxStatus({ chain: OtherChain.Ripple, hash })
+    expect(result.receipt).toMatchObject({
+      deliveredAmount: '8.5',
+      deliveredCurrency: 'USD',
+      deliveredIssuer: 'rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B',
+    })
+  })
+
+  it('does not fall back to DeliveredAmount when delivered_amount is present but malformed', async () => {
+    mocks.request.mockResolvedValue({
+      result: {
+        validated: true,
+        meta: {
+          TransactionResult: 'tesSUCCESS',
+          delivered_amount: 'unavailable',
+          DeliveredAmount: '1250000',
+        },
+        tx_json: { Fee: '20', TransactionType: 'Payment' },
+      },
+    })
+
+    const result = await getRippleTxStatus({ chain: OtherChain.Ripple, hash })
+    expect(result.receipt).not.toHaveProperty('deliveredAmount')
+  })
+
+  it('never falls back to send-side Amount or DeliverMax', async () => {
+    mocks.request.mockResolvedValue({
+      result: {
+        validated: true,
+        meta: { TransactionResult: 'tesSUCCESS', Amount: '999999999' },
+        tx_json: { Fee: '20', TransactionType: 'Payment', Amount: '999999999', DeliverMax: '999999999' },
+      },
+    })
+
+    const result = await getRippleTxStatus({ chain: OtherChain.Ripple, hash })
+    expect(result.receipt).not.toHaveProperty('deliveredAmount')
+  })
+
+  it('does not expose the historical delivered_amount unavailable sentinel as a value', async () => {
+    mocks.request.mockResolvedValue({
+      result: {
+        validated: true,
+        meta: {
+          TransactionResult: 'tesSUCCESS',
+          delivered_amount: 'unavailable',
+        },
+        tx_json: { Fee: '20', TransactionType: 'Payment' },
+      },
+    })
+
+    const result = await getRippleTxStatus({ chain: OtherChain.Ripple, hash })
+    expect(result.receipt).not.toHaveProperty('deliveredAmount')
+  })
+
   it('returns status:error when tx is validated but TransactionResult is not tesSUCCESS', async () => {
     mocks.request.mockResolvedValue({
       result: {
         validated: true,
         meta: { TransactionResult: 'tecUNFUNDED_PAYMENT' },
-        tx_json: { Fee: '20' },
+        tx_json: { Fee: '20', TransactionType: 'Payment' },
       },
     })
 
     const result = await getRippleTxStatus({ chain: OtherChain.Ripple, hash })
     expect(result.status).toBe('error')
+  })
+
+  it.each([
+    'unavailable',
+    'NaN',
+    '-1',
+    '100000000000000001',
+    {},
+    { value: '1' },
+    { value: 'NaN', currency: 'USD', issuer: 'rIssuer' },
+    { value: '1', currency: 'XRP', issuer: 'rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B' },
+    { value: '1', currency: 'US', issuer: 'rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B' },
+    { value: '1', currency: 'USD', issuer: 'rInvalid' },
+    { value: '1e96', currency: 'USD', issuer: 'rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B' },
+    { value: '1e-82', currency: 'USD', issuer: 'rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B' },
+    {
+      value: '12345678901234567',
+      currency: 'USD',
+      issuer: 'rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B',
+    },
+    { value: '1', mpt_issuance_id: 'NOT_AN_MPT_ID' },
+    {
+      value: '1',
+      mpt_issuance_id: '000004C463C52827307480341125DA0577DEFC38405B0E3E',
+      currency: 'USD',
+      issuer: 'rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B',
+    },
+    { value: '9223372036854775808', mpt_issuance_id: '000004C463C52827307480341125DA0577DEFC38405B0E3E' },
+    {
+      value: '999999999999999999999999999999999999999999999999999999999999',
+      mpt_issuance_id: '000004C463C52827307480341125DA0577DEFC38405B0E3E',
+    },
+  ])('omits malformed delivered amounts: %j', async delivered_amount => {
+    mocks.request.mockResolvedValue({
+      result: {
+        validated: true,
+        meta: { TransactionResult: 'tesSUCCESS', delivered_amount },
+        tx_json: { Fee: '20', TransactionType: 'Payment' },
+      },
+    })
+    const result = await getRippleTxStatus({ chain: OtherChain.Ripple, hash })
+    expect(result.receipt).not.toHaveProperty('deliveredAmount')
+    expect(result.receipt).not.toHaveProperty('deliveredCurrency')
+    expect(result.receipt).not.toHaveProperty('deliveredIssuer')
+  })
+
+  it('does not report delivery on a failed transaction', async () => {
+    mocks.request.mockResolvedValue({
+      result: {
+        validated: true,
+        meta: { TransactionResult: 'tecPATH_DRY', delivered_amount: '100' },
+        tx_json: { Fee: '20', TransactionType: 'Payment' },
+      },
+    })
+    const result = await getRippleTxStatus({ chain: OtherChain.Ripple, hash })
+    expect(result.receipt).not.toHaveProperty('deliveredAmount')
+  })
+
+  it('does not interpret non-Payment DeliveredAmount metadata as a Payment delivery', async () => {
+    mocks.request.mockResolvedValue({
+      result: {
+        validated: true,
+        meta: { TransactionResult: 'tesSUCCESS', DeliveredAmount: '1250000' },
+        tx_json: { Fee: '20', TransactionType: 'AccountDelete' },
+      },
+    })
+
+    const result = await getRippleTxStatus({ chain: OtherChain.Ripple, hash })
+    expect(result.receipt).not.toHaveProperty('deliveredAmount')
   })
 
   it('returns isKnown:false for txnNotFound — verify-by-hash MUST NOT swallow broadcast errors for unknown hashes', async () => {
