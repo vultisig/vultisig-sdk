@@ -46,7 +46,8 @@ type TonTransactionsResponse = {
  * fix it.
  */
 export const getTonTxStatus: TxStatusResolver<OtherChain.Ton> = async ({ hash }) => {
-  const url = `${rootApiUrl}/ton/v3/transactionsByMessage?msg_hash=${hash}&direction=in&limit=1`
+  const params = new URLSearchParams({ msg_hash: hash, direction: 'in', limit: '1' })
+  const url = `${rootApiUrl}/ton/v3/transactionsByMessage?${params}`
 
   const { data: response, error } = await attempt(queryUrl<TonTransactionsResponse>(url))
 
