@@ -59,7 +59,11 @@ describe('AgentExecutor EVM RPC resolution', () => {
       'https://rpc.example/base',
       expect.objectContaining({ method: 'POST' })
     )
-    expect(payload.blockchainSpecific.value.maxFeePerGasWei).toBe('27')
+    // The fixture's 2 wei tip sits below Base's nominal 20 wei floor, so the
+    // clamp raises it; the max fee is then the 10 wei base fee with the
+    // patcher's 2.5x headroom (25) plus that tip.
+    expect(payload.blockchainSpecific.value.priorityFee).toBe('20')
+    expect(payload.blockchainSpecific.value.maxFeePerGasWei).toBe('45')
   })
 
   it('uses the shared sdk getEvmRpcUrl resolver when checking the pending nonce', async () => {
@@ -77,6 +81,25 @@ describe('AgentExecutor EVM RPC resolution', () => {
     expect(vi.mocked(getEvmRpcUrl)).toHaveBeenCalledWith(Chain.Ethereum)
     expect(globalThis.fetch).toHaveBeenCalledWith(
       'https://rpc.example/ethereum',
+      expect.objectContaining({ method: 'POST' })
+    )
+  })
+
+  it('resolves a Robinhood nonce through the EVM path instead of returning null (#2356)', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({ result: '0x5' }),
+    }) as unknown as typeof fetch
+
+    const executor = new AgentExecutor(createMockVault())
+    const nonce = await (
+      executor as unknown as { fetchEvmPendingNonce: (chain: Chain) => Promise<bigint | null> }
+    ).fetchEvmPendingNonce(Chain.Robinhood)
+
+    expect(nonce).toBe(5n)
+    expect(vi.mocked(getEvmRpcUrl)).toHaveBeenCalledWith(Chain.Robinhood)
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'https://rpc.example/robinhood',
       expect.objectContaining({ method: 'POST' })
     )
   })

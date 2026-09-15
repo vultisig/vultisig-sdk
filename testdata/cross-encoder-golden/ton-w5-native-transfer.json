@@ -1,0 +1,15 @@
+{
+  "_description": "Shared WalletCore/WASM (packages/core) and RN-JS/@ton/core (packages/sdk) golden vector for a TON wallet V5R1 (W5) native transfer. The request is W5's signed_external: opcode 0x7369676e, wallet id, valid-until, seqno, then the out_list carrying one action_send_msg whose mode includes IGNORE_ACTION_PHASE_ERRORS (the W5 code requires it of every external action); the signature is appended after the request, not prefixed as in V4R2. expectedSigningHashHexSeqno0 covers the first send, where the external message also carries the StateInit.",
+  "walletVersion": "v5r1",
+  "publicKeyEd25519Hex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "senderAddress": "UQCvaZohosTA0ak9ZFMs-cvL1JrXqogqJH8sI2uO6k8clJpn",
+  "recipientAddress": "0:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "amountNanotons": "1500000000",
+  "bounceable": true,
+  "sequenceNumber": 7,
+  "expireAt": 1800000000,
+  "workchain": 0,
+  "walletId": 2147483409,
+  "expectedSigningHashHex": "abf94fba832a80f102ce54157614a39904f6616741584b6d9808f439963d9bfc",
+  "expectedSigningHashHexSeqno0": "24ca4679d5c2ee8d3a6c44be341e0d6f2e8d1cc39639e552e4687e9671b905de"
+}

@@ -1,9 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { buildTonSendTx, buildTonTxFromSigningPayload } from '../../../../src/chains/ton'
+import { buildSolanaSendTx } from '../../../../src/platforms/react-native/chains/solana/tx'
+import { VaultErrorCode } from '../../../../src/vault/VaultError'
+
 // Mock the MPC keysign + the relay-session helpers so the test never hits the
 // network. The assertions focus on fastVaultSign's signature-assembly logic.
 vi.mock('@vultisig/core-mpc/keysign', () => ({
   keysign: vi.fn(),
+}))
+vi.mock('@vultisig/core-mpc/tx/preSigningHashes', () => ({
+  getPreSigningHashes: vi.fn(),
+}))
+vi.mock('../../../../src/context/wasmRuntime', () => ({
+  getWalletCore: vi.fn(async () => ({ source: 'walletcore' })),
 }))
 vi.mock('../../../../src/platforms/react-native/mpc/relay', () => ({
   joinRelaySession: vi.fn(async () => {}),
@@ -12,6 +22,8 @@ vi.mock('../../../../src/platforms/react-native/mpc/relay', () => ({
 }))
 
 const { keysign } = await import('@vultisig/core-mpc/keysign')
+const { getPreSigningHashes } = await import('@vultisig/core-mpc/tx/preSigningHashes')
+const { getWalletCore } = await import('../../../../src/context/wasmRuntime')
 const { joinRelaySession, startRelaySession, waitForParties } =
   await import('../../../../src/platforms/react-native/mpc/relay')
 const { fastVaultSign, schnorrSign, INTERNAL_FOR_TESTING } =
@@ -25,10 +37,218 @@ const BASE_OPTS = {
   localPartyId: 'local',
   vaultPassword: 'pw',
   publicKeyEcdsa: 'aa'.repeat(33),
+  chain: 'Ethereum',
   vultiServerUrl: 'https://api.vultisig.com/vault',
   relayUrl: 'https://api.vultisig.com/router',
   maxAttempts: 1,
 }
+
+describe('fastVaultSign — pre-dispatch encoder parity', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+    vi.mocked(keysign).mockReset()
+    vi.mocked(joinRelaySession).mockClear()
+    vi.mocked(waitForParties).mockClear()
+    vi.mocked(startRelaySession).mockClear()
+    vi.mocked(getWalletCore).mockClear()
+    vi.mocked(getPreSigningHashes).mockReset()
+  })
+
+  it('fails closed before network dispatch when chain-bound parity policy is missing', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const withoutChain: Partial<typeof BASE_OPTS> = { ...BASE_OPTS }
+    delete withoutChain.chain
+
+    await expect(fastVaultSign(withoutChain as typeof BASE_OPTS)).rejects.toMatchObject({
+      code: VaultErrorCode.InvalidConfig,
+      message: expect.stringMatching(/chain is required/),
+    })
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(joinRelaySession).not.toHaveBeenCalled()
+    expect(keysign).not.toHaveBeenCalled()
+  })
+
+  it('fails closed before network dispatch when a prebuilt TON payload has no WalletCore parity input', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const walletCoreBacked = buildTonSendTx({
+      publicKeyEd25519: '01'.repeat(32),
+      to: 'UQDy_zN0Mel7MItGcTQr0kxEJxa7dg_-OGv7_XToTMTKT1Cz',
+      amount: 123n,
+      bounceable: false,
+      seqno: 7,
+      validUntil: 1_700_000_000,
+    })
+    const prebuilt = buildTonTxFromSigningPayload({
+      publicKeyEd25519: '01'.repeat(32),
+      signingPayloadBoc: walletCoreBacked.unsignedBocHex,
+    })
+
+    expect(prebuilt.walletCoreTxInputData).toBeUndefined()
+    await expect(
+      schnorrSign({
+        ...BASE_OPTS,
+        chain: 'Ton',
+        derivePath: BASE_OPTS.serverDerivePath,
+        messageHashHex: prebuilt.signingHashHex,
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.MissingSigningParityInput,
+      message: expect.stringMatching(/walletCoreTxInputData is required for TON/),
+    })
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(joinRelaySession).not.toHaveBeenCalled()
+    expect(keysign).not.toHaveBeenCalled()
+  })
+
+  it('fails closed before network dispatch when a TON sign omits WalletCore parity input entirely', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      fastVaultSign({
+        ...BASE_OPTS,
+        chain: 'Ton',
+        isEcdsa: false,
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.MissingSigningParityInput,
+      message: expect.stringMatching(/walletCoreTxInputData is required for TON/),
+    })
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(getWalletCore).not.toHaveBeenCalled()
+    expect(joinRelaySession).not.toHaveBeenCalled()
+    expect(keysign).not.toHaveBeenCalled()
+  })
+
+  it('fails closed before network dispatch when an explicitly supplied TON parity input is empty', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      fastVaultSign({
+        ...BASE_OPTS,
+        chain: 'Ton',
+        isEcdsa: false,
+        walletCoreTxInputData: new Uint8Array(),
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.MissingSigningParityInput,
+      message: expect.stringMatching(/must be a non-empty Uint8Array/),
+    })
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(getWalletCore).not.toHaveBeenCalled()
+    expect(joinRelaySession).not.toHaveBeenCalled()
+    expect(keysign).not.toHaveBeenCalled()
+  })
+
+  it('fails closed before network dispatch when the RN-JS and WalletCore hashes differ', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    vi.mocked(getPreSigningHashes).mockReturnValueOnce([new Uint8Array(32).fill(0x11)])
+
+    await expect(
+      fastVaultSign({
+        ...BASE_OPTS,
+        chain: 'TON',
+        isEcdsa: false,
+        walletCoreTxInputData: new Uint8Array([0x01]),
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.SigningHashParityMismatch,
+      message: expect.stringMatching(/encoder parity check failed/),
+    })
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(getWalletCore).toHaveBeenCalledTimes(1)
+    expect(getPreSigningHashes).toHaveBeenCalledWith({
+      walletCore: { source: 'walletcore' },
+      chain: 'Ton',
+      txInputData: new Uint8Array([0x01]),
+    })
+    expect(joinRelaySession).not.toHaveBeenCalled()
+    expect(keysign).not.toHaveBeenCalled()
+  })
+
+  it('exposes a stable code for malformed message hashes', async () => {
+    await expect(
+      fastVaultSign({
+        ...BASE_OPTS,
+        chain: 'Ton',
+        messageHashHex: 'not-a-hash',
+        walletCoreTxInputData: new Uint8Array([0x04]),
+      })
+    ).rejects.toMatchObject({ code: VaultErrorCode.InvalidSigningHash })
+  })
+
+  it('dispatches a Solana builder message without applying the TON-only 32-byte hash requirement', async () => {
+    const fetchMock = vi.fn(async () => new Response('', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    vi.mocked(keysign).mockResolvedValueOnce({ r: 'aa'.repeat(32), s: 'bb'.repeat(32) } as never)
+    const tx = buildSolanaSendTx({
+      from: '4wBqpZM9xaSheZzJSMawUKKwhdpChKbZ5eu5ky4Vigw',
+      to: '7ppk9w8NHnH6ehajvJyU31VcMafwZ3ybRtJWumSyD2wd',
+      lamports: 123_456_789n,
+      recentBlockhash: 'EagX51WiJHRKUdxXouY1qMamNNrqr9N3KLyeh25xRaTs',
+    })
+
+    expect(tx.signingHashHex).toHaveLength(300)
+    await expect(
+      fastVaultSign({
+        ...BASE_OPTS,
+        chain: 'Solana',
+        isEcdsa: false,
+        messageHashHex: tx.signingHashHex,
+      })
+    ).resolves.toBe('aa'.repeat(32) + 'bb'.repeat(32))
+
+    expect(getWalletCore).not.toHaveBeenCalled()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(keysign).toHaveBeenCalledWith(expect.objectContaining({ message: tx.signingHashHex }))
+  })
+
+  it('exposes a stable code when WalletCore returns an invalid hash count', async () => {
+    vi.mocked(getPreSigningHashes).mockReturnValueOnce([])
+
+    await expect(
+      fastVaultSign({
+        ...BASE_OPTS,
+        chain: 'Ton',
+        isEcdsa: false,
+        walletCoreTxInputData: new Uint8Array([0x03]),
+      })
+    ).rejects.toMatchObject({ code: VaultErrorCode.InvalidSigningHashCount })
+  })
+
+  it('dispatches TON only after the WalletCore hash matches', async () => {
+    const fetchMock = vi.fn(async () => new Response('', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    vi.mocked(getPreSigningHashes).mockReturnValueOnce([new Uint8Array(32)])
+    vi.mocked(keysign).mockResolvedValueOnce({
+      r: 'aa'.repeat(32),
+      s: 'bb'.repeat(32),
+    } as never)
+
+    await expect(
+      fastVaultSign({
+        ...BASE_OPTS,
+        chain: 'ton',
+        isEcdsa: false,
+        walletCoreTxInputData: new Uint8Array([0x02]),
+      })
+    ).resolves.toBe('aa'.repeat(32) + 'bb'.repeat(32))
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(joinRelaySession).toHaveBeenCalledTimes(1)
+    expect(keysign).toHaveBeenCalledTimes(1)
+  })
+})
 
 describe('fastVaultSign — cancellation', () => {
   afterEach(() => {

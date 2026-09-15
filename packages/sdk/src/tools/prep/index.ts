@@ -29,6 +29,7 @@ export {
   prepareIbcTransfer,
   type PrepareIbcTransferParams,
   type PrepareIbcTransferResult,
+  resolveSourceChannelByDestChain,
   supportedIbcDestinationsFrom,
 } from './ibcTransfer'
 export { prepareJettonTransferTxFromKeys, type PrepareJettonTransferTxFromKeysParams } from './jettonTransfer'
@@ -39,6 +40,12 @@ export {
   type PreparePolkadotAssetSendParams,
   type PreparePolkadotAssetSendResult,
 } from './polkadotAssetSend'
+export {
+  type EvmTxNumberish,
+  prepareRawEvmTxFromKeys,
+  type PrepareRawEvmTxFromKeysParams,
+  type RawEvmTxEnvelope,
+} from './rawEvm'
 export { prepareSendTxFromKeys, type PrepareSendTxFromKeysParams } from './send'
 export { buildSplTransfer, type BuildSplTransferParams, type SplTransferResult } from './splTransfer'
 export {
@@ -46,7 +53,8 @@ export {
   type PrepareSuiTokenTransferFromKeysParams,
   SUI_NATIVE_COIN_TYPE,
 } from './suiTokenTransfer'
-export { prepareSwapTxFromKeys, type PrepareSwapTxFromKeysParams, SwapQuoteExpiredError } from './swap'
+export { prepareSwapTxFromKeys, type PrepareSwapTxFromKeysParams } from './swap'
+export { SwapQuoteExpiredError } from './SwapQuoteExpiredError'
 export {
   prepareThorchainMsgDepositTxFromKeys,
   type PrepareThorchainMsgDepositTxFromKeysParams,
@@ -59,10 +67,9 @@ export {
 } from './trc20'
 export type { VaultIdentity } from './types'
 export {
-  CONSOLIDATE_CHAINS,
-  type ConsolidateChain,
   type ConsolidateUtxo,
   type PrepareUtxoConsolidateResult,
   prepareUtxoConsolidateTxFromKeys,
   type PrepareUtxoConsolidateTxFromKeysParams,
 } from './utxoConsolidate'
+export { CONSOLIDATE_CHAINS, type ConsolidateChain } from './utxoConsolidateChains'

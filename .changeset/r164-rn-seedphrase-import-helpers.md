@@ -3,4 +3,4 @@
 '@vultisig/cli': patch
 ---
 
-Export the seedphrase import support policy and prelude helpers from `@vultisig/sdk/react-native` so mobile consumers can use the SDK-owned import flow without deep imports or local copies.
+Export the seedphrase import prelude and its input, progress-label, and result types from the React Native entrypoint. Existing import-policy exports remain unchanged.

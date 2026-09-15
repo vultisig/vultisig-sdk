@@ -72,14 +72,6 @@ const COSMOS_CONFIG: Record<CosmosBalanceChain, CosmosChainConfig | undefined> =
     polkachuChainKey: 'osmosis-1',
     bech32Prefix: 'osmo',
   },
-  [CosmosChain.Kujira]: {
-    denom: 'ukuji',
-    ticker: 'KUJI',
-    decimals: 6,
-    restUrl: 'https://rest.cosmos.directory/kujira',
-    polkachuChainKey: 'kaiyo-1',
-    bech32Prefix: 'kujira',
-  },
   [CosmosChain.Terra]: {
     denom: 'uluna',
     ticker: 'LUNA',
@@ -133,7 +125,6 @@ const COSMOS_CONFIG: Record<CosmosBalanceChain, CosmosChainConfig | undefined> =
 const POLKACHU_LCD_FALLBACKS: Record<string, string> = {
   'cosmoshub-4': 'https://cosmos-api.polkachu.com',
   'osmosis-1': 'https://osmosis-api.polkachu.com',
-  'kaiyo-1': 'https://kujira-api.polkachu.com',
   'phoenix-1': 'https://terra-api.polkachu.com',
   'columbus-5': 'https://lcd.terra-classic.hexxagon.io',
   'noble-1': 'https://noble-api.polkachu.com',

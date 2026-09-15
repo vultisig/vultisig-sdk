@@ -238,7 +238,7 @@ export const buildCctpClaim = (params: BuildCctpClaimParams): CctpClaimResult =>
   })
 
   return {
-    chain: dstChainName,
+    chain: dstCctp.chain,
     chainId: dstCctp.evmChainId,
     tx: {
       to: getAddress(dstCctp.messageTransmitter),

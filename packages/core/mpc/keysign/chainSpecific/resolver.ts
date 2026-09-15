@@ -14,6 +14,12 @@ export type GetChainSpecificInput<C extends KeysignChainSpecificKey = KeysignCha
   walletCore: WalletCore
   /** XRPL DestinationTag, carried in RippleSpecific for Ripple payments. */
   destinationTag?: number
+  /**
+   * Whether the caller's UI offered this as a MAX send, carried in TonSpecific.
+   * Must come from the flow that drew the button — inferring it from the amount
+   * mislabels an ordinary send that happens to sit close to the balance.
+   */
+  sendMaxAmount?: boolean
 } & (C extends 'ethereumSpecific'
   ? {
       feeSettings?: FeeSettings<'evm'>
@@ -44,7 +50,21 @@ export type GetChainSpecificInput<C extends KeysignChainSpecificKey = KeysignCha
                 refBlockHashHex?: string
                 thirdPartyGasLimitEstimation?: bigint
               }
-            : {})
+            : C extends 'rippleSpecific'
+              ? {
+                  /** Explicit send intent overrides the legacy issuer-address TrustSet inference. */
+                  transactionType?: TransactionType.RIPPLE_PAYMENT | TransactionType.RIPPLE_TRUST_SET
+                }
+              : C extends 'tonSpecific'
+                ? {
+                    /**
+                     * Deadline (unix seconds) a dApp attached to the request — a TonConnect
+                     * `sendTransaction` `valid_until`. Caps the wallet's own expiry; a deadline
+                     * already in the past fails the build instead of signing a dead transaction.
+                     */
+                    validUntil?: number
+                  }
+                : {})
 
 export type GetChainSpecificResolver<C extends KeysignChainSpecificKey = KeysignChainSpecificKey> = Resolver<
   GetChainSpecificInput<C>,

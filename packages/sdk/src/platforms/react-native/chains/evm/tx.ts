@@ -33,34 +33,10 @@
  */
 
 import { EvmChain } from '@vultisig/core-chain/Chain'
+import { getEvmNumericChainId } from '@vultisig/core-chain/chains/evm/chainInfo'
 import { encodeFunctionData, erc20Abi, keccak256, serializeTransaction } from 'viem'
 
-// ---------------------------------------------------------------------------
-// Tx fee format — mirrors packages/core/chain/chains/evm/tx/fee/index.ts
-// ---------------------------------------------------------------------------
-
-const evmChainIds: Record<EvmChain, number> = {
-  Ethereum: 1,
-  Avalanche: 43114,
-  BSC: 56,
-  Polygon: 137,
-  Arbitrum: 42161,
-  Optimism: 10,
-  Base: 8453,
-  Blast: 81457,
-  Zksync: 324,
-  Mantle: 5000,
-  Hyperliquid: 999,
-  Sei: 1329,
-  CronosChain: 25,
-  Robinhood: 4663,
-}
-
-/**
- * Returns the numeric EVM chainId (e.g. 1 for Ethereum). For the hex-string
- * form, use `@vultisig/core-chain/chains/evm/chainInfo#getEvmChainId`.
- */
-export const getEvmNumericChainId = (chain: EvmChain): number => evmChainIds[chain]
+export { getEvmNumericChainId }
 
 // ---------------------------------------------------------------------------
 // Types

@@ -10,7 +10,7 @@ type NativeSwapPayload = Omit<THORChainSwapPayload, '$typeName'> & {
   chain: VaultBasedCosmosChain
 }
 
-type GeneralSwapPayload =
+export type GeneralSwapPayload =
   | Omit<OneInchSwapPayload, '$typeName'>
   | (Omit<SwapKitSwapPayload, '$typeName'> & { provider: 'swapkit'; quote?: undefined })
 

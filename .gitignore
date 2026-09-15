@@ -115,3 +115,5 @@ packages/expo-mpc/
 .cursor/
 .codex/
 .agents/
+__pycache__/
+*.pyc

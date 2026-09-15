@@ -1,5 +1,6 @@
 import { Chain } from '../../../Chain'
 import { baseAffiliateBps } from '../../affiliate/config'
+import type { SwapQuoteAffiliate } from '../../quote/SwapQuote'
 import { nativeSwapAffiliateConfig } from '../nativeSwapAffiliateConfig'
 import { NativeSwapChain } from '../NativeSwapChain'
 
@@ -17,32 +18,45 @@ type AffiliateParams = {
   affiliate_bps: string
 }
 
-export const buildAffiliateParams = ({
+export const buildNativeAffiliateRequest = ({
   swapChain,
   referral,
   affiliateBps,
   config = nativeSwapAffiliateConfig,
-}: BuildAffiliateParamsInput): AffiliateParams => {
-  const affiliateParams: Array<{ affiliate: string; bps: number }> = []
+}: BuildAffiliateParamsInput): { params: AffiliateParams; affiliate: SwapQuoteAffiliate } => {
+  const affiliateParams: NonNullable<SwapQuoteAffiliate['allocations']> = []
 
   if (swapChain === Chain.THORChain && referral) {
     affiliateParams.push({
-      affiliate: referral,
+      recipient: referral,
+      role: 'referrer',
       bps: config.referrerFeeRateBps,
     })
     affiliateParams.push({
-      affiliate: config.affiliateFeeAddress,
+      recipient: config.affiliateFeeAddress,
+      role: 'affiliate',
       bps: Math.max(0, affiliateBps - (baseAffiliateBps - config.referralDiscountAffiliateFeeRateBps)),
     })
   } else {
     affiliateParams.push({
-      affiliate: config.affiliateFeeAddress,
+      recipient: config.affiliateFeeAddress,
+      role: 'affiliate',
       bps: affiliateBps,
     })
   }
 
   return {
-    affiliate: affiliateParams.map(param => param.affiliate).join('/'),
-    affiliate_bps: affiliateParams.map(param => param.bps).join('/'),
+    params: {
+      affiliate: affiliateParams.map(param => param.recipient).join('/'),
+      affiliate_bps: affiliateParams.map(param => param.bps).join('/'),
+    },
+    affiliate: {
+      affiliateBps: affiliateParams.reduce((sum, param) => sum + param.bps, 0),
+      request: 'included',
+      allocations: affiliateParams,
+    },
   }
 }
+
+export const buildAffiliateParams = (input: BuildAffiliateParamsInput): AffiliateParams =>
+  buildNativeAffiliateRequest(input).params
