@@ -189,29 +189,73 @@ describe('buildJupiterSwapTx', () => {
     expect(assertSafeSolanaSwapTransactionBase64).toHaveBeenCalledWith(fakeSwap.swapTransaction, expect.any(PublicKey))
   })
 
-  it('defaults the native mint when no contract addresses are provided', async () => {
-    await buildJupiterSwapTx({
-      userPublicKey: USER,
-      toContractAddress: USDC_MINT,
-      amountBaseUnits: 1n,
+  it.each([
+    [undefined, USDC_MINT, SOL_NATIVE_MINT, USDC_MINT],
+    [USDC_MINT, undefined, USDC_MINT, SOL_NATIVE_MINT],
+    [SOL_NATIVE_MINT, USDC_MINT, SOL_NATIVE_MINT, USDC_MINT],
+    [USDC_MINT, SOL_NATIVE_MINT, USDC_MINT, SOL_NATIVE_MINT],
+    [` \t${SOL_NATIVE_MINT}\n`, `\n${USDC_MINT} `, SOL_NATIVE_MINT, USDC_MINT],
+    [` ${USDC_MINT}\t`, `\n${SOL_NATIVE_MINT} `, USDC_MINT, SOL_NATIVE_MINT],
+  ])(
+    'normalizes %j → %j to the intended mints',
+    async (fromContractAddress, toContractAddress, inputMint, outputMint) => {
+      const res = await buildJupiterSwapTx({
+        userPublicKey: USER,
+        fromContractAddress,
+        toContractAddress,
+        amountBaseUnits: 1n,
+      })
+      const quoteUrl = new URL(String(fetchSpy.mock.calls.find(([u]) => String(u).includes('/quote'))?.[0]))
+      expect(quoteUrl.searchParams.get('inputMint')).toBe(inputMint)
+      expect(quoteUrl.searchParams.get('outputMint')).toBe(outputMint)
+      expect(res.inputMint).toBe(inputMint)
+      expect(res.outputMint).toBe(outputMint)
+    }
+  )
+
+  describe.each(['fromContractAddress', 'toContractAddress'] as const)('blank %s', parameter => {
+    it.each(['', ' ', '\t', '\n', ' \t\r\n '])('rejects %j before fees or network access', async blank => {
+      const opposite = parameter === 'fromContractAddress' ? 'toContractAddress' : 'fromContractAddress'
+      for (const otherMint of [USDC_MINT, undefined]) {
+        await expect(
+          buildJupiterSwapTx({
+            userPublicKey: USER,
+            [parameter]: blank,
+            [opposite]: otherMint,
+            amountBaseUnits: 1n,
+          })
+        ).rejects.toThrow(`Jupiter swap ${parameter} must not be blank; omit it for native SOL`)
+        expect(deriveJupiterFeeAccountMock).not.toHaveBeenCalled()
+        expect(fetchSpy).not.toHaveBeenCalled()
+      }
     })
-    const quoteUrl = String(fetchSpy.mock.calls.find(([u]) => String(u).includes('/quote'))?.[0])
-    expect(quoteUrl).toContain(`inputMint=${SOL_NATIVE_MINT}`)
   })
 
-  it('rejects a non-positive amount', async () => {
+  it.each([0n, -1n])('rejects a non-positive amount %s', async amountBaseUnits => {
     await expect(
       buildJupiterSwapTx({
         userPublicKey: USER,
         toContractAddress: USDC_MINT,
-        amountBaseUnits: 0n,
+        amountBaseUnits,
       })
     ).rejects.toThrow(/greater than zero/)
     expect(fetchSpy).not.toHaveBeenCalled()
   })
 
-  it('rejects identical input/output mints', async () => {
-    await expect(buildJupiterSwapTx({ userPublicKey: USER, amountBaseUnits: 1n })).rejects.toThrow(/must differ/)
+  it.each([
+    [undefined, undefined],
+    [undefined, SOL_NATIVE_MINT],
+    [` ${USDC_MINT}\t`, USDC_MINT],
+  ])('rejects identical normalized mints %j → %j', async (fromContractAddress, toContractAddress) => {
+    await expect(
+      buildJupiterSwapTx({
+        userPublicKey: USER,
+        fromContractAddress,
+        toContractAddress,
+        amountBaseUnits: 1n,
+      })
+    ).rejects.toThrow(/must differ/)
+    expect(deriveJupiterFeeAccountMock).not.toHaveBeenCalled()
     expect(fetchSpy).not.toHaveBeenCalled()
   })
 

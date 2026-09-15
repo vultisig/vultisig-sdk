@@ -5,7 +5,15 @@ import { isValidTxHash } from '@vultisig/core-chain/tx/isValidTxHash'
 import { AuthInfo, SignDoc, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import { beforeAll, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
+import type {
+  PollTxStatusUntilFinalParams as PollTxStatusUntilFinalParamsFromReactNative,
+  PollTxStatusUntilFinalResult as PollTxStatusUntilFinalResultFromReactNative,
+} from '../../../../src/platforms/react-native/index'
 import * as sdkRn from '../../../../src/platforms/react-native/index'
+import type {
+  PollTxStatusUntilFinalParams as PollTxStatusUntilFinalParamsFromTx,
+  PollTxStatusUntilFinalResult as PollTxStatusUntilFinalResultFromTx,
+} from '../../../../src/tx'
 import * as tokenRef from '../../../../src/vault/tokenRef'
 import { cosmosTxFeeGasParityCases } from '../../../fixtures/cosmosTxFeeGasParity'
 
@@ -76,6 +84,10 @@ vi.mock('@vultisig/walletcore-native', () => ({
 let reactNativeEntry: Awaited<typeof import('../../../../src/platforms/react-native/index')>
 let dangerousAddresses: Awaited<typeof import('../../../../src/utils/dangerousAddresses')>
 
+function assertAssignable<A, B>(_check: (a: A, b: B) => void): true {
+  return true
+}
+
 beforeAll(async () => {
   ;[reactNativeEntry, dangerousAddresses] = await Promise.all([
     import('../../../../src/platforms/react-native/index'),
@@ -100,6 +112,12 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(reactNativeEntry.blockaidEvmChain).toBe(blockaidChains.blockaidEvmChain)
     expect(reactNativeEntry.blockaidSupportedEvmChains).toBe(blockaidChains.blockaidSupportedEvmChains)
     expectTypeOf<sdkRn.BlockaidSupportedEvmChain>().toEqualTypeOf<blockaidChains.BlockaidSupportedEvmChain>()
+  })
+
+  it('re-exports the canonical transaction status lookup by identity', async () => {
+    const canonical = await import('@vultisig/core-chain/tx/status')
+
+    expect(reactNativeEntry.getTxStatus).toBe(canonical.getTxStatus)
   })
 
   it('exports canonical fast-vault detection helpers', async () => {
@@ -740,6 +758,10 @@ describe('RN entry exposes pure chain helpers and registry', () => {
     expect(rn.normalizeTx).toBe(tx.normalizeTx)
     expect(rn.splitMultiTx).toBe(tx.splitMultiTx)
     expect(rn.TxNormalizeError).toBe(tx.TxNormalizeError)
+    expect(rn.deriveToolOutputCandidate).toBe(tx.deriveToolOutputCandidate)
+    expect(rn.buildTxReadyFromToolOutput).toBe(tx.buildTxReadyFromToolOutput)
+    expect(rn.payloadLooksSignable).toBe(tx.payloadLooksSignable)
+    expect(rn.CLI_SIGNABLE_FLAT_TOOLS).toBe(tx.CLI_SIGNABLE_FLAT_TOOLS)
     expect(rn.parseTxReadyEnvelope).toBe(tx.parseTxReadyEnvelope)
     expect(rn.TxReadyParseError).toBe(tx.TxReadyParseError)
     expect(rn.decodeFromToolResult).toBe(decode.decodeFromToolResult)
@@ -750,6 +772,22 @@ describe('RN entry exposes pure chain helpers and registry', () => {
     expect(rn.decode.decodeCosmosTx).toBe(decode.decodeCosmosTx)
     expect(rn.decode.decodeEvmTx).toBe(decode.decodeEvmTx)
     expect(rn.buildKeygenPairingQrPayload).toBe(pairing.buildKeygenPairingQrPayload)
+  })
+
+  it('re-exports the transaction-status poller and its public types from the RN entrypoint', async () => {
+    const tx = await import('../../../../src/tx')
+
+    expect(reactNativeEntry.pollTxStatusUntilFinal).toBe(tx.pollTxStatusUntilFinal)
+    assertAssignable<PollTxStatusUntilFinalParamsFromReactNative, PollTxStatusUntilFinalParamsFromTx>((rn, tx) => {
+      tx = rn
+      rn = tx
+    })
+    assertAssignable<PollTxStatusUntilFinalResultFromReactNative, PollTxStatusUntilFinalResultFromTx>((rn, tx) => {
+      tx = rn
+      rn = tx
+    })
+
+    expect(true).toBe(true)
   })
 
   it('re-exports canonical swap tracker URL helpers from the RN entrypoint', async () => {
