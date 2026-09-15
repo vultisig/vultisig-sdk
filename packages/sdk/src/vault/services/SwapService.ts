@@ -450,7 +450,6 @@ export class SwapService {
     return result
   }
 
-
   /**
    * Wrap errors in VaultError with appropriate messages
    */
