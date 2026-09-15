@@ -2,6 +2,7 @@ import { create, fromBinary, toBinary } from '@bufbuild/protobuf'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { rippleKnownIssuedTokens } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
 import {
+  PolkadotSpecificSchema,
   RippleSpecificSchema,
   TonSpecificSchema,
   TransactionType,
@@ -10,11 +11,14 @@ import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v
 import { KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { getChainSpecificMock, getCoinBalanceMock, getKeysignUtxoInfoMock } = vi.hoisted(() => ({
-  getChainSpecificMock: vi.fn(),
-  getCoinBalanceMock: vi.fn(),
-  getKeysignUtxoInfoMock: vi.fn(),
-}))
+const { getChainSpecificMock, getCoinBalanceMock, getKeysignUtxoInfoMock, getBittensorCoinBalanceMock } = vi.hoisted(
+  () => ({
+    getChainSpecificMock: vi.fn(),
+    getCoinBalanceMock: vi.fn(),
+    getKeysignUtxoInfoMock: vi.fn(),
+    getBittensorCoinBalanceMock: vi.fn(),
+  })
+)
 
 vi.mock('@vultisig/core-mpc/keysign/chainSpecific', () => ({
   getChainSpecific: getChainSpecificMock,
@@ -24,6 +28,9 @@ vi.mock('@vultisig/core-chain/coin/balance', () => ({
 }))
 vi.mock('@vultisig/core-mpc/keysign/utxo/getKeysignUtxoInfo', () => ({
   getKeysignUtxoInfo: getKeysignUtxoInfoMock,
+}))
+vi.mock('@vultisig/core-chain/coin/balance/resolvers/bittensor', () => ({
+  getBittensorCoinBalance: getBittensorCoinBalanceMock,
 }))
 
 import { buildSendKeysignPayload } from './build'
@@ -316,5 +323,65 @@ describe('buildSendKeysignPayload TON memo capacity', () => {
       name: 'BuildKeysignPayloadError',
       type: 'ton-memo-too-long',
     })
+  })
+})
+
+describe('buildSendKeysignPayload Bittensor destination existential deposit', () => {
+  const sender = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty'
+  const emptyDestination = '5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy'
+  const fee = 200_000n
+
+  const buildTaoPayload = ({ amount, balance }: { amount: bigint; balance: bigint }) => {
+    getChainSpecificMock.mockResolvedValue({
+      case: 'polkadotSpecific',
+      value: create(PolkadotSpecificSchema, {
+        recentBlockHash: '0x' + 'ab'.repeat(32),
+        nonce: 1n,
+        currentBlockNumber: '4000000',
+        specVersion: 458,
+        transactionVersion: 1,
+        genesisHash: '0x' + 'cd'.repeat(32),
+        gas: fee,
+      }),
+    })
+    getCoinBalanceMock.mockResolvedValue(balance)
+    getBittensorCoinBalanceMock.mockResolvedValue(0n)
+
+    return buildSendKeysignPayload({
+      coin: { chain: Chain.Bittensor, ticker: 'TAO', address: sender, decimals: 9 },
+      receiver: emptyDestination,
+      amount,
+      vaultId: 'vault-public-key',
+      localPartyId: 'party-1',
+      // Any public key turns the amount refinement on; Bittensor's fee comes
+      // from the payload's gas, so nothing reads the key itself.
+      publicKey: {} as never,
+      hexPublicKeyOverride: 'ab'.repeat(32),
+      libType: 'DKLS',
+      walletCore: {} as never,
+    })
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getKeysignUtxoInfoMock.mockResolvedValue(undefined)
+  })
+
+  // The requested amount clears the 500 rao deposit, but the balance only
+  // covers fee + sender deposit + 400 rao, so refinement signs 400 — which an
+  // empty destination cannot receive. The guard has to judge the signed amount.
+  it('judges the refined amount, not the requested one', async () => {
+    await expect(buildTaoPayload({ amount: 1_000n, balance: fee + 500n + 400n })).rejects.toMatchObject({
+      name: 'BuildKeysignPayloadError',
+      type: 'bittensor-destination-below-existential-deposit',
+    })
+    expect(getBittensorCoinBalanceMock).toHaveBeenCalledWith({ chain: Chain.Bittensor, address: emptyDestination })
+  })
+
+  it('lets a refined amount that still clears the deposit through without reading the destination', async () => {
+    const payload = await buildTaoPayload({ amount: 1_000n, balance: fee + 500n + 600n })
+
+    expect(payload.toAmount).toBe('600')
+    expect(getBittensorCoinBalanceMock).not.toHaveBeenCalled()
   })
 })
