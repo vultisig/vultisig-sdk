@@ -194,14 +194,22 @@ const fetchJupiter = async <T>(input: string, init?: RequestInit): Promise<T> =>
  * Build the input/output mint addresses from token info. Falls back to the
  * SOL native mint when no SPL contract is provided.
  */
-const toMint = (contractAddress: string | undefined): string => contractAddress?.trim() || SOL_NATIVE_MINT
+const toMint = (contractAddress: string | undefined, parameter: string): string => {
+  if (contractAddress === undefined) return SOL_NATIVE_MINT
+
+  const mint = contractAddress.trim()
+  if (!mint) {
+    throw new Error(`Jupiter swap ${parameter} must not be blank; omit it for native SOL`)
+  }
+  return mint
+}
 
 export type JupiterSwapParams = {
   /** The signer's Solana base58 public key (owner of the swap). */
   userPublicKey: string
-  /** Input token SPL mint. Omit / empty for native SOL. */
+  /** Input token SPL mint. Omit or use SOL_NATIVE_MINT for native SOL; blank strings are rejected. */
   fromContractAddress?: string
-  /** Output token SPL mint. Omit / empty for native SOL. */
+  /** Output token SPL mint. Omit or use SOL_NATIVE_MINT for native SOL; blank strings are rejected. */
   toContractAddress?: string
   /** Exact input amount in lamports / token base units. */
   amountBaseUnits: bigint
@@ -252,8 +260,8 @@ export const buildJupiterSwapTx = async ({
     throw new Error('Jupiter swap amount must be greater than zero')
   }
 
-  const inputMint = toMint(fromContractAddress)
-  const outputMint = toMint(toContractAddress)
+  const inputMint = toMint(fromContractAddress, 'fromContractAddress')
+  const outputMint = toMint(toContractAddress, 'toContractAddress')
 
   if (inputMint === outputMint) {
     throw new Error('Jupiter swap input and output mint must differ')

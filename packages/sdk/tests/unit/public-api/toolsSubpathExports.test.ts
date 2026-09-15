@@ -10,6 +10,22 @@ const platformRollupConfig = readFileSync(path.join(sdkRoot, 'rollup.platforms.c
 const typesRollupConfig = readFileSync(path.join(sdkRoot, 'rollup.types.config.js'), 'utf8')
 
 describe('public API subpath exports', () => {
+  it('publishes prep with distinct native runtime and asynchronous declarations', () => {
+    const entry = sdkPackageJson.exports['./tools/prep']
+    expect(entry.types).toEqual({
+      'react-native': './dist/tools/prep/index.react-native.d.ts',
+      require: './dist/tools/prep/index.d.cts',
+      default: './dist/tools/prep/index.d.ts',
+    })
+    expect(entry.browser).toBe('./dist/tools/prep/index.browser.js')
+    expect(entry.worker).toBe(entry.browser)
+    expect(entry['react-native']).toBe('./dist/tools/prep/index.react-native.js')
+    expect(entry.node).toEqual({
+      import: './dist/tools/prep/index.js',
+      require: './dist/tools/prep/index.cjs',
+    })
+  })
+
   it('publishes dedicated export-map entries for every narrow public surface', () => {
     const parseExport = sdkPackageJson.exports['./tools/parse']
     const defiExport = sdkPackageJson.exports['./tools/defi']
