@@ -138,7 +138,26 @@ describe('parseTxReadyEnvelope', () => {
       toChain: Chain.Bitcoin,
       toSymbol: 'BTC',
       amount: '0.01',
+      amountBaseUnits: '1000000',
       recipient: 'bc1qrecipient',
+    })
+  })
+
+  it('preserves exact decimal and base-unit amounts for a large MayaChain swap', () => {
+    const parsed = parseTxReadyEnvelope({
+      chain: 'MayaChain',
+      txArgs: {
+        chain: 'MayaChain',
+        tx_encoding: 'cosmos-msg',
+        msg_type: 'deposit',
+        amount: '90071992547409931234',
+        memo: '=:BTC.BTC:bc1qrecipient::v0:50',
+      },
+    })
+    expect(parsed).toMatchObject({
+      kind: 'thor-swap-deposit',
+      amount: '9007199254.7409931234',
+      amountBaseUnits: '90071992547409931234',
     })
   })
 
