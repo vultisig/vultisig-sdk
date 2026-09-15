@@ -1,5 +1,13 @@
 # @vultisig/sdk
 
+## 7.5.1
+
+### Patch Changes
+
+- [#2381](https://github.com/vultisig/vultisig-sdk/pull/2381) [`b8e3e9d`](https://github.com/vultisig/vultisig-sdk/commit/b8e3e9d236710e4ca9c8a4e9c27f98a9f5dec0d2) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject empty and whitespace-only `fromContractAddress` and `toContractAddress` in `buildJupiterSwapTx` before resolving fees or requesting a quote. Callers that used blank strings for native SOL must now omit the parameter or pass `SOL_NATIVE_MINT`. Nonblank mint addresses continue to be trimmed.
+
+- [#2382](https://github.com/vultisig/vultisig-sdk/pull/2382) [`5fc8468`](https://github.com/vultisig/vultisig-sdk/commit/5fc8468f3e64cc688981c836740a3b73541ec89e) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Export the canonical getTxStatus helper from the React Native entrypoint.
+
 ## 7.5.0
 
 ### Minor Changes
