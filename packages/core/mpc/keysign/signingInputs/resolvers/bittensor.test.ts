@@ -97,25 +97,43 @@ describe('encodeMortalEra — cross-checked against @polkadot/types (the real SC
 })
 
 // Live-verified against the REAL Bittensor (finney) mainnet runtime metadata
-// (state_getMetadata via entrypoint-finney.opentensor.ai, 2026-07-08) — NOT assumed
-// from the source comment. Confirms buildExtrinsic.ts's hardcoded balancesPallet=5 /
-// transferAllowDeath=0 constants match the chain's actual pallet/call indices; a
-// runtime upgrade that renumbers either would silently mis-route the extrinsic
-// (e.g. onto a different pallet's call) with no error until broadcast rejects it.
-describe('Bittensor Balances.transfer_allow_death call indices (live-verified against mainnet metadata)', () => {
-  it('encodes moduleIndex 5 (pallet_balances) + methodIndex 0 (transfer_allow_death)', () => {
-    const { callData } = buildBittensorSigningPayload({
-      toAddress: TO_ADDRESS,
-      amount: 1000000000n,
-      nonce: 5,
-      blockNumber: 4000000,
-      blockHash: BLOCK_HASH,
-      genesisHash: GENESIS_HASH,
-      specVersion: 225,
-      transactionVersion: 1,
-    })
+// (state_getMetadata via entrypoint-finney.opentensor.ai, specVersion 458,
+// 2026-09-15) — NOT assumed from the source comment. Confirms buildExtrinsic.ts's
+// hardcoded balancesPallet=5 / transferKeepAlive=3 / transferAllowDeath=0 constants
+// match the chain's actual pallet/call indices; a runtime upgrade that renumbers
+// any of them would silently mis-route the extrinsic (e.g. onto a different
+// pallet's call) with no error until broadcast rejects it.
+describe('Bittensor Balances call indices (live-verified against mainnet metadata)', () => {
+  const params = {
+    toAddress: TO_ADDRESS,
+    amount: 1000000000n,
+    nonce: 5,
+    blockNumber: 4000000,
+    blockHash: BLOCK_HASH,
+    genesisHash: GENESIS_HASH,
+    specVersion: 225,
+    transactionVersion: 1,
+  }
+
+  // A normal send must never reap the sender: transfer_keep_alive fails on-chain
+  // (Expendability) rather than take the free balance below the existential
+  // deposit, whereas transfer_allow_death destroys the leftover dust.
+  it('encodes moduleIndex 5 (pallet_balances) + methodIndex 3 (transfer_keep_alive) by default', () => {
+    const { callData } = buildBittensorSigningPayload(params)
     expect(callData[0]).toBe(5) // Balances pallet index
+    expect(callData[1]).toBe(3) // transfer_keep_alive call index
+  })
+
+  it('encodes methodIndex 0 (transfer_allow_death) only when the sender explicitly empties the account', () => {
+    const { callData } = buildBittensorSigningPayload({ ...params, allowDeath: true })
+    expect(callData[0]).toBe(5)
     expect(callData[1]).toBe(0) // transfer_allow_death call index
+  })
+
+  it('leaves the rest of the call data identical between the two calls', () => {
+    const keepAlive = buildBittensorSigningPayload(params).callData
+    const allowDeath = buildBittensorSigningPayload({ ...params, allowDeath: true }).callData
+    expect(hex(keepAlive.slice(2))).toBe(hex(allowDeath.slice(2)))
   })
 })
 
@@ -135,7 +153,7 @@ describe('buildBittensorSigningPayload — golden vector (full byte-for-byte pin
     const { callData } = buildBittensorSigningPayload(params)
     const destPubkey = decodeAddress(TO_ADDRESS)
     const expected = Buffer.concat([
-      Buffer.from([5, 0]), // Balances.transfer_allow_death
+      Buffer.from([5, 3]), // Balances.transfer_keep_alive
       Buffer.from([0x00]), // MultiAddress::Id tag
       Buffer.from(destPubkey),
       Buffer.from(compactToU8a(params.amount)),
@@ -217,6 +235,15 @@ describe('getBittensorSigningInputs — custom tx-input framing round-trips', ()
     walletCore = await initWasm()
   })
 
+  // The KeysignPayload carries no "empty the account" intent, so every
+  // co-signer must derive the same keep-alive call from it — a device that
+  // picked allow_death would hash a different payload and stall the ceremony.
+  it('always encodes transfer_keep_alive from a keysign payload', async () => {
+    const [txInputData] = getBittensorSigningInputs({ keysignPayload: buildPayload(), walletCore })
+    const { callData } = decodeBittensorTxInput(txInputData)
+    expect(Array.from(callData.slice(0, 2))).toEqual([5, 3])
+  })
+
   it('round-trips callData/signedExtra/payload through encode -> decode unchanged', async () => {
     const [txInputData] = getBittensorSigningInputs({ keysignPayload: buildPayload(), walletCore })
     const { callData, signedExtra, payload } = buildBittensorSigningPayload({
@@ -236,7 +263,7 @@ describe('getBittensorSigningInputs — custom tx-input framing round-trips', ()
     expect(hex(decoded.payload)).toBe(hex(payload))
   })
 
-  // The transfer_allow_death extrinsic encoded above has no field a memo could
+  // The transfer_keep_alive extrinsic encoded above has no field a memo could
   // occupy, so accepting one would sign a transfer that silently omits it.
   it('rejects a memo (the Bittensor transfer extrinsic has no remark field)', async () => {
     expect(() =>
