@@ -2,11 +2,15 @@ import { describe, expect, it } from 'vitest'
 
 import {
   balance,
+  bridge,
   buildCw20TransferMsg,
   computeAstroportMinReceive,
   cosmos,
   encodeErc20Approve,
   evm,
+  gas,
+  getCctpChain,
+  getCosmosGasLimit,
   getCosmosGovernanceProposals,
   getSolBalance,
   prep,
@@ -15,7 +19,13 @@ import {
   swap,
   token,
 } from '@/index'
-import { cosmos as cosmosFromTools, evm as evmFromTools, token as tokenFromTools } from '@/tools'
+import {
+  bridge as bridgeFromTools,
+  cosmos as cosmosFromTools,
+  evm as evmFromTools,
+  gas as gasFromTools,
+  token as tokenFromTools,
+} from '@/tools'
 
 describe('SDK root tool namespaces', () => {
   it('exposes the complete balance, prep and swap families alongside flat exports', async () => {
@@ -46,9 +56,19 @@ describe('SDK root tool namespaces', () => {
     expect(token.resolveContract).toBe(resolveContract)
   })
 
+  it('exposes the bridge helper family without removing flat exports', () => {
+    expect(bridge).toBe(bridgeFromTools)
+    expect(bridge.getCctpChain).toBe(getCctpChain)
+  })
+
   it('exposes Cosmos governance under sdk.cosmos.gov without removing flat exports', () => {
     expect(cosmos).toBe(cosmosFromTools)
     expect(cosmos.gov.getCosmosGovernanceProposals).toBe(getCosmosGovernanceProposals)
     expect(cosmos.gov.prepareCosmosVote).toBe(prepareCosmosVote)
+  })
+
+  it('exposes gas helpers under sdk.gas.cosmos without removing flat exports', () => {
+    expect(gas).toBe(gasFromTools)
+    expect(gas.cosmos.getCosmosGasLimit).toBe(getCosmosGasLimit)
   })
 })

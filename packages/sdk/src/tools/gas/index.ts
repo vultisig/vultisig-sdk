@@ -1,3 +1,5 @@
+import * as cosmos from './cosmos'
+
 export type {
   CompareCostsEntry,
   CompareCostsParams,
@@ -19,3 +21,7 @@ export {
   getCosmosGasLimit,
   getCosmosSwapGasLimit,
 } from './cosmos'
+
+// Namespace handle so callers can use the documented `sdk.gas.cosmos.*`
+// family alongside the flat named exports.
+export { cosmos }

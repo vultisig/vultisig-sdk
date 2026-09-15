@@ -1064,6 +1064,7 @@ export {
   assertBittensorAddress,
   ASTROPORT_ROUTER,
   balancePolkadot,
+  bridge,
   buildAstroportSwap,
   buildBalancerV3SwapCalldata,
   buildBuyPt,
