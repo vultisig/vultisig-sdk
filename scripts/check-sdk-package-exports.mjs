@@ -497,6 +497,7 @@ import {
   buildSignAminoKeysignPayload,
   buildSignDirectKeysignPayload,
   chainRegistry,
+  getTxStatus,
   deriveFromChainRegistry,
   extendChainRegistry,
   resolveTokenRef,
@@ -528,6 +529,7 @@ import {
   type BuildSignDirectPayloadInput as BuildSignDirectPayloadInputReactNative,
   resolveTokenRef as resolveTokenRefReactNative,
   resolveTokenRefId as resolveTokenRefIdReactNative,
+  getTxStatus as getTxStatusReactNative,
   type ResolvedTokenInfo as ResolvedTokenInfoReactNative,
 } from '@vultisig/sdk/react-native'
 import type { Vultisig } from '@vultisig/sdk/node'
@@ -572,6 +574,8 @@ export type CosmosAminoBuilder = typeof buildSignAminoKeysignPayload
 export type CosmosDirectBuilder = typeof buildSignDirectKeysignPayload
 export type CosmosAminoBuilderReactNative = typeof buildSignAminoKeysignPayloadReactNative
 export type CosmosDirectBuilderReactNative = typeof buildSignDirectKeysignPayloadReactNative
+export type TransactionStatusLookup = typeof getTxStatus
+export type TransactionStatusLookupReactNative = typeof getTxStatusReactNative
 `
   )
 
