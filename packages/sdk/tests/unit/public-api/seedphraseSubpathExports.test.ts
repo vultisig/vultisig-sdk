@@ -2,8 +2,13 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, expectTypeOf, it } from 'vitest'
 
+import type { ChainDiscoveryAggregate as RootChainDiscoveryAggregate } from '../../../src/index'
+import type {
+  ChainDiscoveryAggregate as SeedphraseChainDiscoveryAggregate,
+  ChainDiscoveryResult,
+} from '../../../src/seedphrase'
 import * as seedphrase from '../../../src/seedphrase'
 
 const sdkRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
@@ -69,5 +74,14 @@ describe('@vultisig/sdk/seedphrase public surface', () => {
         'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'
       )
     ).toBe('english')
+  })
+
+  it('exports the chain-discovery aggregate type from both the seedphrase subpath and root sdk surface', () => {
+    expectTypeOf<SeedphraseChainDiscoveryAggregate>().toEqualTypeOf<{
+      results: ChainDiscoveryResult[]
+      usePhantomSolanaPath: boolean
+      useCosmosPathTerra: boolean
+    }>()
+    expectTypeOf<RootChainDiscoveryAggregate>().toEqualTypeOf<SeedphraseChainDiscoveryAggregate>()
   })
 })

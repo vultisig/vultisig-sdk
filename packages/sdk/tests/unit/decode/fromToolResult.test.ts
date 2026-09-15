@@ -1,11 +1,12 @@
 import { MsgSend } from 'cosmjs-types/cosmos/bank/v1beta1/tx'
-import { MsgDelegate, MsgUndelegate } from 'cosmjs-types/cosmos/staking/v1beta1/tx'
+import { MsgBeginRedelegate, MsgDelegate, MsgUndelegate } from 'cosmjs-types/cosmos/staking/v1beta1/tx'
 import { TxBody, TxRaw } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import { Any } from 'cosmjs-types/google/protobuf/any'
 import { type Address, encodeFunctionData, getAddress, type Hex, parseAbi, serializeTransaction } from 'viem'
 import { describe, expect, it } from 'vitest'
 
 import { decodeFromToolResult } from '@/tools/decode'
+import { buildRedelegateMsg, buildWithdrawRewardsMsg } from '@/tools/prep/cosmosStaking'
 
 /**
  * The keystone bytes-oracle: `decodeFromToolResult` is the ONE decoder shared by
@@ -481,6 +482,91 @@ describe('decodeFromToolResult — cosmos undelegate kind (audit)', () => {
     expect(env.kind).toBe('undelegate')
     expect(env.recipient).toBe('cosmosvaloper1abc')
     expect(env.amount).toBe('500000')
+  })
+})
+
+describe('decodeFromToolResult — cosmos redelegate + withdraw-reward kinds', () => {
+  const FROM = 'cosmos1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmmk8rs6'
+  const SRC_VALIDATOR = 'cosmosvaloper14w46h2at4w46h2at4w46h2at4w46h2ate6wqaw'
+  const OTHER_SRC_VALIDATOR = 'cosmosvaloper1zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3x6w7nk'
+  const DST_VALIDATOR = 'cosmosvaloper1ehxumnwdehxumnwdehxumnwdehxumnwd5t3zwj'
+
+  it('decodes a MsgBeginRedelegate: dst validator recipient + amount', () => {
+    const any = Any.fromPartial({
+      typeUrl: '/cosmos.staking.v1beta1.MsgBeginRedelegate',
+      value: MsgBeginRedelegate.encode(
+        MsgBeginRedelegate.fromPartial({
+          delegatorAddress: FROM,
+          validatorSrcAddress: SRC_VALIDATOR,
+          validatorDstAddress: DST_VALIDATOR,
+          amount: { denom: 'uatom', amount: '2500000' },
+        })
+      ).finish(),
+    })
+    const env = decodeFromToolResult({ family: 'cosmos', chain: 'cosmoshub-4', payload: buildCosmosTx([any]) })
+    expect(env.decoded).toBe(true)
+    expect(env.kind).toBe('redelegate')
+    // The recipient is the DESTINATION validator, not the source.
+    expect(env.recipient).toBe(DST_VALIDATOR)
+    expect(env.recipient).not.toBe(SRC_VALIDATOR)
+    expect(env.validatorSrcAddress).toBe(SRC_VALIDATOR)
+    expect(env.amount).toBe('2500000')
+    expect(env.asset.symbol).toBe('ATOM')
+
+    const mutatedSource = Any.fromPartial({
+      typeUrl: '/cosmos.staking.v1beta1.MsgBeginRedelegate',
+      value: MsgBeginRedelegate.encode(
+        MsgBeginRedelegate.fromPartial({
+          delegatorAddress: FROM,
+          validatorSrcAddress: OTHER_SRC_VALIDATOR,
+          validatorDstAddress: DST_VALIDATOR,
+          amount: { denom: 'uatom', amount: '2500000' },
+        })
+      ).finish(),
+    })
+    const mutatedEnv = decodeFromToolResult({
+      family: 'cosmos',
+      chain: 'cosmoshub-4',
+      payload: buildCosmosTx([mutatedSource]),
+    })
+    expect(mutatedEnv).toMatchObject({
+      decoded: true,
+      kind: 'redelegate',
+      recipient: DST_VALIDATOR,
+      validatorSrcAddress: OTHER_SRC_VALIDATOR,
+      amount: '2500000',
+    })
+    expect(mutatedEnv).not.toEqual(env)
+  })
+
+  it('round-trips the production redelegate builder through protobuf bytes', () => {
+    const built = buildRedelegateMsg({
+      delegatorAddress: FROM,
+      validatorSrcAddress: SRC_VALIDATOR,
+      validatorDstAddress: DST_VALIDATOR,
+      amount: '1000000',
+      denom: 'uatom',
+    })
+    const any = Any.fromPartial({ typeUrl: built.typeUrl, value: Buffer.from(built.valueBase64, 'base64') })
+    const env = decodeFromToolResult({ family: 'cosmos', chain: 'cosmoshub-4', payload: buildCosmosTx([any]) })
+    expect(env).toMatchObject({
+      decoded: true,
+      kind: 'redelegate',
+      recipient: DST_VALIDATOR,
+      validatorSrcAddress: SRC_VALIDATOR,
+      amount: '1000000',
+    })
+  })
+
+  it('decodes a MsgWithdrawDelegatorReward: validator recipient, amount unknown', () => {
+    const built = buildWithdrawRewardsMsg({ delegatorAddress: FROM, validatorAddress: SRC_VALIDATOR })
+    const any = Any.fromPartial({ typeUrl: built.typeUrl, value: Buffer.from(built.valueBase64, 'base64') })
+    const env = decodeFromToolResult({ family: 'cosmos', chain: 'cosmoshub-4', payload: buildCosmosTx([any]) })
+    expect(env.decoded).toBe(true)
+    expect(env.kind).toBe('withdrawReward')
+    expect(env.recipient).toBe(SRC_VALIDATOR)
+    // Reward amount is computed on-chain, never on the wire.
+    expect(env.amount).toBe('')
   })
 })
 

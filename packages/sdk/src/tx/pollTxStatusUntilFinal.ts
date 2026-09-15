@@ -25,7 +25,8 @@ export type PollTxStatusUntilFinalResult = {
 const DEFAULT_TIMEOUT_MS = 60_000
 const DEFAULT_INTERVAL_MS = 3_000
 
-const defaultIsTerminal = (result: TxStatusResult): boolean => result.status === 'success' || result.status === 'error'
+const defaultIsTerminal = (result: TxStatusResult): boolean =>
+  result.status === 'success' || result.status === 'error' || result.status === 'expired'
 const defaultSleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms))
 
 export async function pollTxStatusUntilFinal(

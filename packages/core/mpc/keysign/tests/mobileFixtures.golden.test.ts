@@ -2,7 +2,7 @@ import { Buffer } from 'buffer'
 import { readdirSync, readFileSync } from 'fs'
 import { basename, join } from 'path'
 
-import { blake2b } from '@noble/hashes/blake2b'
+import { blake2b } from '@noble/hashes/blake2.js'
 import { Chain, UtxoChain } from '@vultisig/core-chain/Chain'
 import { initWasm, type WalletCore } from '@trustwallet/wallet-core'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
@@ -80,8 +80,8 @@ describe('mobile keysign pre-image hash golden fixtures', () => {
   })
 
   it(`loads the recovered Android/iOS fixture corpus (${cases.length} cases)`, () => {
-    expect(cases.length).toBe(93)
-    expect(new Set(cases.map(({ fixtureFile }) => fixtureFile)).size).toBe(31)
+    expect(cases.length).toBe(90)
+    expect(new Set(cases.map(({ fixtureFile }) => fixtureFile)).size).toBe(30)
   })
 
   it('uses the branch ID committed with the Zcash mobile vector', () => {

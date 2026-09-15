@@ -1,4 +1,4 @@
-import { CosmWasmClient, ExecuteResult, SigningCosmWasmClient } from '@cosmjs/cosmwasm-stargate'
+import { CosmWasmClient, ExecuteResult, SigningCosmWasmClient } from '@cosmjs/cosmwasm'
 import { Coin } from '@cosmjs/proto-signing'
 import { GasPrice, StargateClient } from '@cosmjs/stargate'
 
@@ -114,18 +114,8 @@ export class RujiraClient {
       })
 
       if (this.signer) {
-        // `GasPrice` imported above resolves to the root `@cosmjs/stargate@0.39`,
-        // while `SigningCosmWasmClient.connectWithSigner` still expects a
-        // GasPrice type through `@cosmjs/cosmwasm`'s nested CosmJS graph. TS
-        // treats the nominal Decimal fields as distinct even though the runtime
-        // shape matches. Keep the cast until CosmJS publishes a fully aligned
-        // cosmwasm/stargate/math dependency set.
         this.signingClient = await SigningCosmWasmClient.connectWithSigner(this.config.rpcEndpoint, this.signer, {
-          gasPrice: GasPrice.fromString(this.config.gasPrice) as unknown as Parameters<
-            typeof SigningCosmWasmClient.connectWithSigner
-          >[2] extends { gasPrice?: infer T } | undefined
-            ? NonNullable<T>
-            : never,
+          gasPrice: GasPrice.fromString(this.config.gasPrice),
         })
         this.log('Signing client connected')
       }

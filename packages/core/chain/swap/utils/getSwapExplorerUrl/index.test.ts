@@ -185,11 +185,21 @@ describe('getSwapExplorerUrl', () => {
         })
       ).toBe(`https://solscan.io/tx/${SOL_TX_HASH}`)
     })
+
+    it('RUJI Trade falls back to the THORChain block explorer', () => {
+      expect(
+        getSwapExplorerUrl({
+          provider: 'ruji',
+          txHash: THOR_TX_HASH_NO_PREFIX,
+          fromChain: Chain.THORChain,
+        })
+      ).toBe(`https://runescan.io/tx/${THOR_TX_HASH_NO_PREFIX}`)
+    })
   })
 
   it('exposes every provider via swapExplorerProviders', () => {
     expect([...swapExplorerProviders].sort()).toEqual(
-      ['1inch', 'kyber', 'li.fi', 'mayachain', 'swapkit', 'cowswap', 'jupiter', 'thorchain'].sort()
+      ['1inch', 'kyber', 'li.fi', 'mayachain', 'swapkit', 'cowswap', 'jupiter', 'ruji', 'thorchain'].sort()
     )
   })
 })

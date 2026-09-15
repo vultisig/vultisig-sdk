@@ -40,7 +40,7 @@ import { readFileSync } from 'fs'
 import { join } from 'path'
 
 import { create, toBinary } from '@bufbuild/protobuf'
-import { blake2b } from '@noble/hashes/blake2b'
+import { blake2b } from '@noble/hashes/blake2.js'
 import { deriveCardanoAddress } from '@vultisig/core-chain/publicKey/address/cardano'
 import { initWasm, TW, type WalletCore } from '@trustwallet/wallet-core'
 import type { PrivateKey, PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'

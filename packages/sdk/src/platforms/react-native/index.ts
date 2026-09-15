@@ -4,61 +4,81 @@
  * Registers the native MPC engine, native WalletCore, RN crypto, and RN storage.
  * Exports RN-compatible SDK APIs.
  */
-
-// Buffer polyfill MUST happen before any SDK module graph import. Several
-// bundled deps read `globalThis.Buffer` at module-init (e.g. @solana/web3.js,
-// @noble/*, @polkadot/*). Consumers often polyfill Buffer in App.tsx, but
-// because ES module imports are hoisted, the SDK's module bodies can evaluate
-// before App.tsx's polyfill runs. Polyfilling here guarantees ordering.
-import { Buffer as _Buffer } from 'buffer'
-if (typeof globalThis !== 'undefined' && !(globalThis as { Buffer?: unknown }).Buffer) {
-  ;(globalThis as { Buffer?: unknown }).Buffer = _Buffer
-}
-
-// Hermes polyfills — RN-only. These run for side effects at module load so
-// that any chain-lib module body that evaluates `new Intl.PluralRules(...)`
-// or `class X extends Event` can resolve those globals without crashing.
-//
-// - @mysten/sui/dist/client/utils.mjs evaluates `new Intl.PluralRules(...)`
-//   at module top-level. Hermes ships without Intl.PluralRules.
-// - @lifi/sdk's transitive `@wallet-standard/app` declares
-//   `class AppReadyEvent extends Event` at module top-level. Hermes ships
-//   without the `Event`/`EventTarget` DOM globals.
-//
-// Intl.PluralRules' own ResolveLocale reaches into Intl.Locale, and the
-// ordinal PluralRules constructor used by @mysten/sui also reaches into
-// Intl.NumberFormat — all four sub-APIs are absent on Hermes. Install the
-// full cascade in dependency order: getCanonicalLocales → Locale →
-// NumberFormat → PluralRules.
-//
-// Without these, even lazy `import('@mysten/sui/graphql')` /
-// `import('@lifi/sdk')` crashes the first time the module is evaluated.
-import '@formatjs/intl-getcanonicallocales/polyfill.js'
-import '@formatjs/intl-locale/polyfill.js'
-import '@formatjs/intl-numberformat/polyfill.js'
-import '@formatjs/intl-numberformat/locale-data/en.js'
-import '@formatjs/intl-pluralrules/polyfill.js'
-import '@formatjs/intl-pluralrules/locale-data/en.js'
-import 'event-target-polyfill'
+import './initializePrep'
 
 import { NativeMpcEngine } from '@vultisig/mpc-native'
 import { configureMpc } from '@vultisig/mpc-types'
-import { NativeWalletCore } from '@vultisig/walletcore-native'
 
 import { configureDefaultStorage } from '../../context/defaultStorage'
-import { configureWasm } from '../../context/wasmRuntime'
 import { configureCrypto } from '../../crypto'
+import { configureVultisigInstanceNamespaces } from '../../instanceNamespaces'
+import { assertBittensorAddress, decodeBittensorAddress } from '../../tools/balance/bittensor'
+import { cosmosBalanceChains, getCosmosBalance, isCosmosBalanceChain } from '../../tools/balance/cosmos'
+import { DOT_DECIMALS, formatDot } from '../../tools/balance/formatDot'
+import {
+  getCardanoBalance,
+  getSuiAllBalances,
+  getSuiBalance,
+  getSuiTokenBalance,
+  getTonBalance,
+  getTonJettonBalance,
+  getTrc20TokenBalance,
+  getTronAccountResources,
+  getTrxBalance,
+  getXrpBalance,
+} from '../../tools/balance/otherBalance'
+import { formatBalance } from '../../tools/balance/rpc'
+import { getSolBalance, getSplTokenBalance } from '../../tools/balance/solana'
+import { getTaoBalance } from '../../tools/balance/taoBalance'
+import { formatUtxoBalance, getUtxoBalance, supportedUtxoBalanceChains } from '../../tools/balance/utxoBalance'
 import * as cosmos from '../../tools/cosmos'
 import * as evm from '../../tools/evm'
+import { getEvmBalances } from '../../tools/evm/balanceEvm'
+import * as swap from '../../tools/swap'
 import * as token from '../../tools/token'
+import { Vultisig as BaseVultisig } from '../../Vultisig'
 import { ReactNativeCrypto } from './crypto'
+import { type ReactNativeVultisigInstanceNamespaces, reactNativeVultisigInstanceNamespaces } from './instanceNamespaces'
+import {
+  buildCosmosWasmExecuteMsg,
+  buildCw20TransferMsg,
+  buildDelegateMsg,
+  buildRedelegateMsg,
+  buildSplTransfer,
+  buildUndelegateMsg,
+  buildWithdrawRewardsMsg,
+  CONSOLIDATE_CHAINS,
+  cosmosStaking,
+  getMaxSendAmountFromKeys,
+  IBC_CHAIN_HRP,
+  IBC_CHAIN_REVISION,
+  IBC_CHANNEL_DEST,
+  IBC_MSG_TRANSFER_TYPE_URL,
+  normaliseIbcChainId,
+  POLKADOT_ASSET_HUB_KNOWN_ASSETS,
+  prepareContractCallTxFromKeys,
+  prepareIbcTransfer,
+  prepareJettonTransferTxFromKeys,
+  preparePolkadotAssetSend,
+  prepareRawEvmTxFromKeys,
+  prepareSendTxFromKeys,
+  prepareSignAminoTxFromKeys,
+  prepareSignDirectTxFromKeys,
+  prepareSuiTokenTransferFromKeys,
+  prepareSwapTxFromKeys,
+  prepareThorchainMsgDepositTxFromKeys,
+  prepareTrc20TransferFromKeys,
+  prepareUtxoConsolidateTxFromKeys,
+  resolveSourceChannelByDestChain,
+  SUI_NATIVE_COIN_TYPE,
+  supportedIbcDestinationsFrom,
+  SwapQuoteExpiredError,
+  TRC20_TRANSFER_SELECTOR,
+} from './prep'
 import { ReactNativeStorage } from './storage'
 
 // Register native MPC engine
 configureMpc(new NativeMpcEngine())
-
-// Register native WalletCore as the WalletCore provider
-configureWasm(async () => NativeWalletCore.getInstance())
 
 // Register RN crypto (validates globalThis.crypto polyfill on first use)
 configureCrypto(new ReactNativeCrypto())
@@ -80,11 +100,81 @@ export {
   MAYA_SEND_FEE_BASE_UNITS,
   TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS,
 } from '@vultisig/core-chain/chains/cosmos/gas'
+export { tendermintRpcUrl } from '@vultisig/core-chain/chains/cosmos/tendermintRpcUrl'
 
 // Cosmos x/auth.MaxMemoCharacters cap, per chain — single source of truth for
 // "will this memo fit before broadcast rejects it with sdk code 12 (memo too
 // long) after the user has already signed?" Kept in parity with the root SDK
 // entrypoint (sdk#1538) so RN consumers don't hand-roll their own memo-cap table.
+// Cardano transaction-validity policy. Exported so app / CLI / backend build
+// the same TTL the keysign resolver and the broadcast freshness guard judge it
+// by, instead of each hardcoding its own slot offset (vultiagent-app#2538).
+export {
+  cardanoBroadcastTtlSafetyMargin,
+  cardanoSlotOffset,
+  getCardanoSendTtl,
+} from '@vultisig/core-chain/chains/cardano/config'
+
+// Pure-crypto chain-math normalizers + pure address-format validation.
+// Vault-free, network-free and platform-neutral, so RN gets the same canonicals
+// as the root entry (sdk#1772). Without them a mobile consumer has to
+// deep-import or keep an app-local mirror - the duplicated-not-imported drift
+// these helpers exist to remove. `entry.test.ts` asserts the WHOLE surface of
+// each source module is re-exported here, so a helper added to one of them and
+// wired only into the root entry fails loudly.
+export {
+  canonicalChainTag,
+  classifyAddress,
+  isAddressValidForChain,
+  isSolanaAddress,
+  supportedChainTags,
+} from '../../utils/addressFormat'
+export type { AddressFamily, AddressRole, ChainPrefixResult } from '../../utils/addressValidation'
+export { address, validate } from '../../utils/addressValidation'
+export { checkChainPrefix } from '../../utils/chainPrefix'
+
+// Pure intent<->envelope policy diff (vault-free, no signing/broadcast).
+// Root already exports the full flat surface; RN did not (sdk#1408).
+export type {
+  AmountUnits,
+  FieldDiff,
+  IntentClaim,
+  InvariantInput,
+  InvariantViolation,
+  AssetRef as PolicyAssetRef,
+  Envelope as PolicyEnvelope,
+  Verdict,
+} from '../../tools/policy'
+export {
+  AMOUNT_DRIFT_BLOCK_PCT,
+  AMOUNT_DRIFT_WARN_PCT,
+  amountDriftPct,
+  chainAliasMap,
+  chainsMatch,
+  checkInvariants,
+  claimInterpretations,
+  evaluatePolicy,
+  Invariant,
+  isZeroAmount,
+  parseAmountBig,
+  PLAUSIBLE_TOKEN_DECIMALS,
+  policy,
+  ResultKind,
+  sanitizeAmount,
+  scaleDecimalClaimToAtomic,
+} from '../../tools/policy'
+export {
+  amountMatches,
+  computeEvmFee,
+  decimalsFor,
+  feeMatches,
+  isValidTokenSymbolFormat,
+  normalizeTokenSymbol,
+  scaleHumanToRaw,
+  scaleRawToHuman,
+  tokenDecimals,
+  ValidateNormalizerError,
+} from '../../utils/validateNormalizers'
 export {
   COSMOS_MEMO_DEFAULT_MAX_BYTES,
   getCosmosMemoMaxBytes,
@@ -128,6 +218,15 @@ export {
   rippleTokenId,
   toXrplCurrencyCode,
 } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
+// XRP destination/X-address normalization — same RN-safety rationale as the
+// issued-currency canonicals above.
+export type { RippleDestination } from '@vultisig/core-chain/chains/ripple/address'
+export {
+  decodeRippleXAddress,
+  encodeRippleXAddress,
+  isValidRippleXAddress,
+  normalizeRippleDestination,
+} from '@vultisig/core-chain/chains/ripple/address'
 
 // Custom-RPC canonicals — pure helpers/registry state that stay safe on the RN
 // graph and must remain in parity with the root SDK entrypoint.
@@ -219,6 +318,9 @@ export {
 export { DEFAULT_CHAINS } from '../../constants'
 export { defaultChains } from '@vultisig/core-chain/Chain'
 
+// Canonical TRON address and TRC-20 ABI helpers, shared with the root SDK entrypoint.
+export { encodeTrc20TransferParam, tronBase58ToEvmHex, tronBase58ToHex, tronHexToBase58 } from '../../abi/tron'
+
 // WalletCore provider access
 export { configureWasm, getWalletCore } from '../../context/wasmRuntime'
 
@@ -229,10 +331,14 @@ export { configureMpc, ensureMpcEngine, getMpcEngine } from '@vultisig/mpc-types
 // Vault + fast vault lifecycle classes
 export { FastVaultFromSeedphraseService } from '../../services/FastVaultFromSeedphraseService'
 export { FastVault, hasServer, isServer } from '../../vault'
+export type { ResolvedTokenInfo } from '../../vault/tokenRef'
+export { resolveTokenRef, resolveTokenRefId } from '../../vault/tokenRef'
 export type { VaultImportConflictResolution, VaultImportOptions } from '../../VaultManager'
 export { VaultManager } from '../../VaultManager'
 export type { VultisigConfig } from '../../Vultisig'
-export { Vultisig } from '../../Vultisig'
+export class Vultisig extends BaseVultisig<ReactNativeVultisigInstanceNamespaces> {}
+
+configureVultisigInstanceNamespaces(Vultisig, reactNativeVultisigInstanceNamespaces)
 
 // RN-safe fetch-based RPC helpers (no Node net/tls/http/ws dependency)
 export type { JsonRpcCallOptions, JsonRpcParams, JsonRpcResponse, QueryUrlOptions } from './rpcFetch'
@@ -289,6 +395,19 @@ export type {
   TonWalletStatus,
 } from './chains/ton'
 
+// TON failure taxonomy. `chains.ton.broadcastTonTx` rejects with toncenter's own
+// text, which carries the wallet contract's `exitcode=<n>` and nothing else, so an
+// RN consumer needs these to turn a refusal into a reason and a remedy — a replayed
+// seqno and an expired deadline both read as "the network rejected it" and have
+// opposite fixes.
+export type { TonTxFailure, TonTxFailureReason, TonTxPhase } from '@vultisig/core-chain/chains/ton/failure'
+export {
+  getTonTxFailure,
+  parseTonBroadcastRejection,
+  TonBroadcastRejectedError,
+  tonTxFailureReasons,
+} from '@vultisig/core-chain/chains/ton/failure'
+
 // ============================================================================
 // Chain tools — RN-safe surface re-exported for consumers
 // ============================================================================
@@ -306,120 +425,7 @@ export type {
 // explicit module objects so Rollup preserves the nested `cosmos.gov` handle.
 export { cosmos, evm, token }
 
-// Vault-free prep helpers (KeysignPayload construction without an instantiated vault)
-export type {
-  BuildCw20TransferMsgParams,
-  BuildCw20TransferMsgResult,
-  BuildSplTransferParams,
-  ConsolidateChain,
-  ConsolidateUtxo,
-  GetMaxSendAmountFromKeysParams,
-  PrepareJettonTransferTxFromKeysParams,
-  PreparePolkadotAssetSendParams,
-  PreparePolkadotAssetSendResult,
-  PrepareSendTxFromKeysParams,
-  PrepareSwapTxFromKeysParams,
-  PrepareTrc20TransferFromKeysParams,
-  PrepareUtxoConsolidateResult,
-  PrepareUtxoConsolidateTxFromKeysParams,
-  SplTransferResult,
-  UnsignedTrc20Transfer,
-  VaultIdentity,
-} from '../../tools/prep'
-
-// Pure cosmos staking msg-envelope builders. These depend only on bech32 +
-// buffer (RN-safe, no mpc/keysign), so unlike the other prep helpers they are
-// statically re-exported rather than lazy-imported. Omitting them here would
-// break the hand-curated RN export list for vultiagent-app consumers.
-export type {
-  CosmosStakingMsgEnvelope,
-  DelegateParams,
-  RedelegateParams,
-  UndelegateParams,
-  WithdrawRewardsParams,
-} from '../../tools/prep/cosmosStaking'
-export {
-  buildDelegateMsg,
-  buildRedelegateMsg,
-  buildUndelegateMsg,
-  buildWithdrawRewardsMsg,
-  cosmosStaking,
-} from '../../tools/prep/cosmosStaking'
-// Pure CosmWasm Amino message builders (only depend on JSON/bech32 — no
-// WalletCore or native crypto, safe as static re-exports on the RN graph).
-// Keep this list aligned with the root entrypoint: package exports resolve
-// React Native consumers to this hand-curated module.
-export type { BuildCosmosWasmExecuteMsgParams, CosmWasmExecuteFund } from '../../tools/prep/cosmosWasmExecute'
-export { buildCosmosWasmExecuteMsg } from '../../tools/prep/cosmosWasmExecute'
-export { buildCw20TransferMsg } from '../../tools/prep/cw20Transfer'
-// `preparePolkadotAssetSend` is pure-crypto (@polkadot/util + @polkadot/util-crypto,
-// both RN-safe) with no MPC/wasm dependency, so it ships as a static re-export
-// rather than a lazy `await import(...)` wrapper. `POLKADOT_ASSET_HUB_KNOWN_ASSETS`
-// is a plain const map. Omitting these broke RN/vultiagent-app consumption of the
-// Asset Hub send builder (same hand-curated-allow-list gap as prior prep builders).
-export { POLKADOT_ASSET_HUB_KNOWN_ASSETS, preparePolkadotAssetSend } from '../../tools/prep/polkadotAssetSend'
-export { SUI_NATIVE_COIN_TYPE } from '../../tools/prep/suiTokenTransfer'
-export { TRC20_TRANSFER_SELECTOR } from '../../tools/prep/trc20'
-export { CONSOLIDATE_CHAINS } from '../../tools/prep/utxoConsolidate'
-
-export async function getMaxSendAmountFromKeys(...args: unknown[]) {
-  const mod = await import('../../tools/prep/maxSend')
-  return mod.getMaxSendAmountFromKeys(...(args as Parameters<typeof mod.getMaxSendAmountFromKeys>))
-}
-
-export async function prepareContractCallTxFromKeys(...args: unknown[]) {
-  const mod = await import('../../tools/prep/contractCall')
-  return mod.prepareContractCallTxFromKeys(...(args as Parameters<typeof mod.prepareContractCallTxFromKeys>))
-}
-
-export async function prepareJettonTransferTxFromKeys(...args: unknown[]) {
-  const mod = await import('../../tools/prep/jettonTransfer')
-  return mod.prepareJettonTransferTxFromKeys(...(args as Parameters<typeof mod.prepareJettonTransferTxFromKeys>))
-}
-
-export async function prepareSendTxFromKeys(...args: unknown[]) {
-  const mod = await import('../../tools/prep/send')
-  return mod.prepareSendTxFromKeys(...(args as Parameters<typeof mod.prepareSendTxFromKeys>))
-}
-
-export async function prepareSignAminoTxFromKeys(...args: unknown[]) {
-  const mod = await import('../../tools/prep/cosmos')
-  return mod.prepareSignAminoTxFromKeys(...(args as Parameters<typeof mod.prepareSignAminoTxFromKeys>))
-}
-
-export async function prepareSignDirectTxFromKeys(...args: unknown[]) {
-  const mod = await import('../../tools/prep/cosmos')
-  return mod.prepareSignDirectTxFromKeys(...(args as Parameters<typeof mod.prepareSignDirectTxFromKeys>))
-}
-
-export async function prepareSwapTxFromKeys(...args: unknown[]) {
-  const mod = await import('../../tools/prep/swap')
-  return mod.prepareSwapTxFromKeys(...(args as Parameters<typeof mod.prepareSwapTxFromKeys>))
-}
-
-// TRON TRC-20 transfer calldata builder (pure crypto — @noble/hashes only,
-// no RPC, no signing). RN-safe; lazy-imported to match the prep helper pattern
-// above. Without this, RN consumers (Station / vultisig-windows) couldn't reach
-// the reviewed base58check + ABI encode and would have to re-port it.
-export async function prepareTrc20TransferFromKeys(...args: unknown[]) {
-  const mod = await import('../../tools/prep/trc20')
-  return mod.prepareTrc20TransferFromKeys(...(args as Parameters<typeof mod.prepareTrc20TransferFromKeys>))
-}
-
-// Lazy import: `splTransfer` statically pulls `@solana/web3.js`, which reads
-// `globalThis.Buffer` at module-init. Deferring the import inside the async
-// body keeps it out of the eager RN bundle graph (same rationale as the
-// getSplAccounts / getSplAssociatedAccount overrides). The underlying builder
-// is synchronous; this wrapper just defers module evaluation.
-export async function buildSplTransfer(...args: unknown[]) {
-  const mod = await import('../../tools/prep/splTransfer')
-  return mod.buildSplTransfer(...(args as Parameters<typeof mod.buildSplTransfer>))
-}
-
-export async function prepareUtxoConsolidateTxFromKeys(...args: unknown[]) {
-  const mod = await import('../../tools/prep/utxoConsolidate')
-  return mod.prepareUtxoConsolidateTxFromKeys(...(args as Parameters<typeof mod.prepareUtxoConsolidateTxFromKeys>))
-}
+export * from './prep'
 
 // Cosmos gas-fee primitives (pure crypto: gas limits + canonical fee label).
 // RN-safe — no network, no signing; just `cosmosGasRecord` + `chainFeeCoin`
@@ -472,14 +478,15 @@ export {
   resolveEns,
 } from '../../tools/evm'
 
-// EVM chainId ↔ chain mapping plus the canonical priority-fee sanity clamp.
+// EVM chainId ↔ chain mapping plus the canonical numeric accessor and
+// priority-fee sanity clamp.
 // Same single source of truth exported from the generic entry (src/index.ts)
 // — the RN allow-list omitted these so RN consumers (Station) had to
 // hand-maintain their own chainId table and fee sanity policy, risking both
 // the Hyperliquid 998/999 client↔server chainId drift class and EVM fee-policy
 // forks. Pure lookup/policy helpers, no chain-client deps, so safe as static
 // re-exports.
-export { getEvmChainByChainId, getEvmChainId } from '@vultisig/core-chain/chains/evm/chainInfo'
+export { getEvmChainByChainId, getEvmChainId, getEvmNumericChainId } from '@vultisig/core-chain/chains/evm/chainInfo'
 export { clampEvmPriorityFee } from '@vultisig/core-chain/tx/fee/evm/clampEvmPriorityFee'
 
 // Gas / fee primitives (read-only — uses global `fetch` + type-only imports,
@@ -519,8 +526,21 @@ export type {
   BuildGlifStakeResult,
   Defi,
   GlifUnsignedTx,
+  SolanaScanRequest,
+  StakekitBalanceEntry,
+  StakekitBalanceItem,
+  StakekitBalanceQuery,
+  StakekitBalancesResult,
 } from '../../tools/defi'
-export { buildBalancerV3SwapCalldata, defi } from '../../tools/defi'
+export {
+  buildBalancerV3SwapCalldata,
+  buildYieldActionScanRequests,
+  chunkStakekitBalanceQueries,
+  defi,
+  fetchAllStakekitBalances,
+  fetchStakekitBalancesBatch,
+  STAKEKIT_BALANCE_QUERIES_PER_REQUEST,
+} from '../../tools/defi'
 export {
   buildGlifRedeemSticnt,
   buildGlifStakeIcnt,
@@ -533,6 +553,13 @@ export type {
   BuildThreeJaneSupplyUsdcResult,
   ThreeJaneTranche,
   ThreeJaneTxStep,
+} from '../../tools/defi/threeJane'
+// Aliased to avoid colliding with the CCTP bridge's `parseUsdcAmount` above —
+// both re-export the same underlying `./parse/usdcAmount` helper.
+export {
+  buildThreeJaneSupplyUsdc,
+  parseUsdcAmount as parseThreeJaneUsdcAmount,
+  THREE_JANE_ADDRESSES,
 } from '../../tools/defi/threeJane'
 
 // Cosmos staking + distribution module (LCD queries — read-only,
@@ -627,7 +654,10 @@ export type {
   CctpBridgeResult,
   CctpChainConfig,
   CctpClaimResult,
+  CctpReceiptLike,
+  CctpReceiptLog,
   CctpUnsignedTx,
+  ExtractedCctpMessage,
 } from '../../tools/bridge'
 export {
   buildCctpBridge,
@@ -635,6 +665,7 @@ export {
   cctpAttestationApiBase,
   cctpChains,
   cctpSupportedChains,
+  extractCctpMessageFromReceipt,
   formatUsdc,
   getCctpChain,
   normalizeHexBytes,
@@ -810,8 +841,17 @@ export type { SolBalance, SplTokenBalance } from '../../tools/balance/solana'
 export { getSolBalance, getSplTokenBalance } from '../../tools/balance/solana'
 
 // Pure helpers — no chain client deps
-export type { AssetRef, ChainFamily, DecodeFromToolResultInput, Envelope, EnvelopeKind } from '../../tools/decode'
+export type {
+  AssetRef,
+  ChainFamily,
+  CosmosEnvelopeAction,
+  CosmosVoteOption,
+  DecodeFromToolResultInput,
+  Envelope,
+  EnvelopeKind,
+} from '../../tools/decode'
 export { decode, decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from '../../tools/decode'
+export { isValidTxHash } from '@vultisig/core-chain/tx/isValidTxHash'
 // Exact base-units -> human decimal-string conversion (pure bigint string
 // arithmetic, no float64 round-trip), pairing-QR payload generation, and the
 // notification-vault-id helper are all deterministic utilities with no live
@@ -851,6 +891,17 @@ export { getThorchainInboundAddress } from '@vultisig/core-chain/chains/cosmos/t
 export * from '@vultisig/core-chain/chains/cosmos/thor/lp'
 export type { GetSwapExplorerUrlInput, SwapExplorerProvider } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 export { getSwapExplorerUrl, swapExplorerProviders } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
+// THOR/Maya native-swap metadata — surfaced so RN consumers stop re-declaring
+// which chains route through THORChain/MayaChain and their asset-notation
+// chain IDs (parity with the root SDK entry).
+export type { NativeSwapChain, NativeSwapChainId } from '@vultisig/core-chain/swap/native/NativeSwapChain'
+export {
+  getNativeSwapChainId,
+  getNativeSwapChainIdFromDenomPrefix,
+  nativeSwapChainIds,
+  nativeSwapChains,
+  nativeSwapEnabledChainsRecord,
+} from '@vultisig/core-chain/swap/native/NativeSwapChain'
 export { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
 export async function fiatToAmount(...args: unknown[]) {
   const mod = await import('../../utils/fiatToAmount')
@@ -931,6 +982,7 @@ export * from '../../signable-transaction'
 // with the generic entry so the app can remove its local brand matrix.
 export type { UtxoChainName } from '../../chains/utxo/addressBrand'
 export { assertUtxoAddressBrand, isUtxoAddressBrandValid } from '../../chains/utxo/addressBrand'
+export { getBlockchairBaseUrl } from '@vultisig/core-chain/chains/utxo/client/getBlockchairBaseUrl'
 
 // Dangerous/burn-address guard. Single source of truth for "is this destination
 // a burn/black-hole address that no key controls?" across EVM, Solana, UTXO and
@@ -941,14 +993,24 @@ export { assertUtxoAddressBrand, isUtxoAddressBrandValid } from '../../chains/ut
 export {
   assertSafeDestination,
   assertSafeEvmDestination,
+  assertSafeTokenTransferDestination,
+  decodeErc20Approve,
+  decodeErc20Recipient,
+  decodeErc20RecipientFromSig,
+  ERC20_APPROVE_SELECTOR,
   EVM_DANGEROUS_ADDRESSES,
   getChainDangerousReason,
   getEvmDangerousReason,
+  isErc20TransferCalldata,
   isEvmBurnAddress,
   SOLANA_DANGEROUS_ADDRESSES,
   UTXO_DANGEROUS_ADDRESSES,
   XRP_DANGEROUS_ADDRESSES,
 } from '../../utils/dangerousAddresses'
+
+// Blockaid supported-chain metadata
+export type { BlockaidSupportedEvmChain } from '@vultisig/core-chain/security/blockaid/evmChains'
+export { blockaidEvmChain, blockaidSupportedEvmChains } from '@vultisig/core-chain/security/blockaid/evmChains'
 
 // Storage
 export { MemoryStorage } from '../../storage/MemoryStorage'
@@ -988,3 +1050,74 @@ export {
   RIVER_TROVE_STATUS_NAMES,
   riverStatusName,
 } from '../../tools/defi/river'
+
+// Assemble RN groups from safe static helpers and this entry’s deferred wrappers.
+export const balance = {
+  getEvmBalances,
+  getXrpBalance,
+  getTrc20TokenBalance,
+  getTronAccountResources,
+  getTrxBalance,
+  getTonBalance,
+  getTonJettonBalance,
+  getSuiAllBalances,
+  getSuiBalance,
+  getSuiTokenBalance,
+  getCardanoBalance,
+  getTaoBalance,
+  assertBittensorAddress,
+  decodeBittensorAddress,
+  cosmosBalanceChains,
+  getCosmosBalance,
+  isCosmosBalanceChain,
+  formatBalance,
+  getSolBalance,
+  getSplTokenBalance,
+  balancePolkadot,
+  DOT_DECIMALS,
+  formatDot,
+  getPolkadotAssetBalance,
+  getPolkadotNativeBalance,
+  formatUtxoBalance,
+  getUtxoBalance,
+  supportedUtxoBalanceChains,
+} as const
+
+export const prep = {
+  prepareContractCallTxFromKeys,
+  prepareSignAminoTxFromKeys,
+  prepareSignDirectTxFromKeys,
+  buildDelegateMsg,
+  buildRedelegateMsg,
+  buildUndelegateMsg,
+  buildWithdrawRewardsMsg,
+  cosmosStaking,
+  buildCosmosWasmExecuteMsg,
+  buildCw20TransferMsg,
+  IBC_CHAIN_HRP,
+  IBC_CHAIN_REVISION,
+  IBC_CHANNEL_DEST,
+  IBC_MSG_TRANSFER_TYPE_URL,
+  normaliseIbcChainId,
+  prepareIbcTransfer,
+  resolveSourceChannelByDestChain,
+  supportedIbcDestinationsFrom,
+  prepareJettonTransferTxFromKeys,
+  getMaxSendAmountFromKeys,
+  POLKADOT_ASSET_HUB_KNOWN_ASSETS,
+  preparePolkadotAssetSend,
+  prepareRawEvmTxFromKeys,
+  prepareSendTxFromKeys,
+  buildSplTransfer,
+  prepareSuiTokenTransferFromKeys,
+  SUI_NATIVE_COIN_TYPE,
+  prepareSwapTxFromKeys,
+  SwapQuoteExpiredError,
+  prepareThorchainMsgDepositTxFromKeys,
+  prepareTrc20TransferFromKeys,
+  TRC20_TRANSFER_SELECTOR,
+  CONSOLIDATE_CHAINS,
+  prepareUtxoConsolidateTxFromKeys,
+} as const
+
+export { swap }

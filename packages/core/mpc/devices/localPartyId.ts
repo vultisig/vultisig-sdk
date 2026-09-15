@@ -1,4 +1,4 @@
-import { bytesToHex, randomBytes } from '@noble/hashes/utils'
+import { bytesToHex, randomBytes } from '@noble/hashes/utils.js'
 import { capitalizeFirstLetter } from '@vultisig/lib-utils/capitalizeFirstLetter'
 
 import { MpcDevice, mpcDeviceFromDeviceName } from './MpcDevice'

@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 
 import { ed25519 } from '@noble/curves/ed25519.js'
 import { secp256k1 } from '@noble/curves/secp256k1.js'
-import { sha256 } from '@noble/hashes/sha256.js'
+import { sha256 } from '@noble/hashes/sha2.js'
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js'
 import { initWasm } from '@trustwallet/wallet-core'
 import type { MpcKeyshare, MpcPerAlgorithmEngineBase, MpcSession } from '@vultisig/mpc-types'
@@ -104,10 +104,10 @@ const cases: AlgorithmCase[] = [
       const recoverableSignature = new Uint8Array(65)
       recoverableSignature[0] = signature[64]!
       recoverableSignature.set(signature.subarray(0, 64), 1)
-      const recoveredPublicKey = secp256k1.recoverPublicKey(recoverableSignature, message)
+      const recoveredPublicKey = secp256k1.recoverPublicKey(recoverableSignature, message, { prehash: false })
 
       return (
-        secp256k1.verify(signature.subarray(0, 64), message, publicKey) &&
+        secp256k1.verify(signature.subarray(0, 64), message, publicKey, { lowS: false, prehash: false }) &&
         Buffer.from(recoveredPublicKey).equals(Buffer.from(publicKey))
       )
     },

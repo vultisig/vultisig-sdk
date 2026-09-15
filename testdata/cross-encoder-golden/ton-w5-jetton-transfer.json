@@ -1,0 +1,20 @@
+{
+  "_description": "Shared WalletCore/WASM and RN-JS golden vector for a TON Jetton transfer sent from a wallet V5R1 (W5) account, with a UTF-8 forward comment to an initialized destination. Same Jetton body as the V4R2 fixture; the outer request is W5's signed_external and the response_destination is the sender's W5 address.",
+  "walletVersion": "v5r1",
+  "publicKeyEd25519Hex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "senderAddress": "UQCvaZohosTA0ak9ZFMs-cvL1JrXqogqJH8sI2uO6k8clJpn",
+  "recipientAddress": "0:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "jettonWalletAddress": "0:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "jettonMasterAddress": "0:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "amountMinimalUnits": "5000000",
+  "gasAmountNanotons": "80000000",
+  "forwardAmountNanotons": "1",
+  "memo": "hello",
+  "bounceable": true,
+  "isActiveDestination": true,
+  "sequenceNumber": 7,
+  "expireAt": 1800000000,
+  "workchain": 0,
+  "walletId": 2147483409,
+  "expectedSigningHashHex": "033e82120d7bd67901b7df3ef3134b0f931d95a551b99cbce383ed67652e699b"
+}

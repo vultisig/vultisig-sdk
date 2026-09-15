@@ -1,7 +1,9 @@
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
+import * as blockaidChains from '@vultisig/core-chain/security/blockaid/evmChains'
+import { isValidTxHash } from '@vultisig/core-chain/tx/isValidTxHash'
 import { AuthInfo, SignDoc, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
-import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { beforeAll, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
 import type {
   PollTxStatusUntilFinalParams as PollTxStatusUntilFinalParamsFromReactNative,
@@ -12,9 +14,20 @@ import type {
   PollTxStatusUntilFinalParams as PollTxStatusUntilFinalParamsFromTx,
   PollTxStatusUntilFinalResult as PollTxStatusUntilFinalResultFromTx,
 } from '../../../../src/tx'
+import * as tokenRef from '../../../../src/vault/tokenRef'
 import { cosmosTxFeeGasParityCases } from '../../../fixtures/cosmosTxFeeGasParity'
 
 process.env.VULTISIG_STRICT_SINGLETON = '0'
+
+describe('RN entry exposes canonical token reference resolution', () => {
+  it('exports the same resolvers and a usable result type', () => {
+    expect(sdkRn.resolveTokenRef).toBe(tokenRef.resolveTokenRef)
+    expect(sdkRn.resolveTokenRefId).toBe(tokenRef.resolveTokenRefId)
+    const native: sdkRn.ResolvedTokenInfo = sdkRn.resolveTokenRef(sdkRn.Chain.Ethereum, undefined, [])
+    expect(native).toEqual({ ticker: 'ETH', decimals: 18 })
+    expect(sdkRn.resolveTokenRefId(sdkRn.Chain.Ethereum, 'ETH', [])).toBeUndefined()
+  })
+})
 
 vi.mock('expo-crypto', () => ({
   randomUUID: () => '00000000-0000-4000-8000-000000000000',
@@ -83,6 +96,24 @@ beforeAll(async () => {
 }, 120_000)
 
 describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
+  it('re-exports canonical transaction-hash validation with unchanged chain rules', () => {
+    expect(reactNativeEntry.isValidTxHash).toBe(isValidTxHash)
+    expectTypeOf(reactNativeEntry.isValidTxHash).toEqualTypeOf<(chain: sdkRn.Chain, hash: string) => boolean>()
+
+    const hash = 'a'.repeat(64)
+    expect(reactNativeEntry.isValidTxHash(sdkRn.Chain.Ethereum, `0x${hash}`)).toBe(true)
+    expect(reactNativeEntry.isValidTxHash(sdkRn.Chain.Ethereum, hash)).toBe(false)
+    expect(reactNativeEntry.isValidTxHash(sdkRn.Chain.Bitcoin, hash)).toBe(true)
+    expect(reactNativeEntry.isValidTxHash(sdkRn.Chain.Bitcoin, 'not-a-hash')).toBe(false)
+    expect(reactNativeEntry.isValidTxHash(sdkRn.Chain.Ethereum, ` \t0x${hash}\n`)).toBe(true)
+  })
+
+  it('re-exports Blockaid EVM chain canonicals by identity', () => {
+    expect(reactNativeEntry.blockaidEvmChain).toBe(blockaidChains.blockaidEvmChain)
+    expect(reactNativeEntry.blockaidSupportedEvmChains).toBe(blockaidChains.blockaidSupportedEvmChains)
+    expectTypeOf<sdkRn.BlockaidSupportedEvmChain>().toEqualTypeOf<blockaidChains.BlockaidSupportedEvmChain>()
+  })
+
   it('exports canonical fast-vault detection helpers', async () => {
     const canonical = await import('@vultisig/core-mpc/devices/localPartyId')
 
@@ -101,8 +132,106 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     'getChainDangerousReason',
     'assertSafeEvmDestination',
     'assertSafeDestination',
+    'assertSafeTokenTransferDestination',
+    'decodeErc20Approve',
+    'decodeErc20Recipient',
+    'decodeErc20RecipientFromSig',
+    'ERC20_APPROVE_SELECTOR',
+    'isErc20TransferCalldata',
   ] as const)('re-exports dangerous-address canonical %s by identity', async name => {
     expect(reactNativeEntry[name]).toBe(dangerousAddresses[name])
+  })
+
+  it('re-exports the canonical Blockchair base URL helper by identity', async () => {
+    const canonical = await import('@vultisig/core-chain/chains/utxo/client/getBlockchairBaseUrl')
+
+    expect(reactNativeEntry.getBlockchairBaseUrl).toBe(canonical.getBlockchairBaseUrl)
+  })
+
+  it('re-exports the plural StakeKit scan-request builder by identity', async () => {
+    const stakekit = await import('../../../../src/tools/defi/stakekit')
+    expect(reactNativeEntry.buildYieldActionScanRequests).toBe(stakekit.buildYieldActionScanRequests)
+  })
+
+  it.each([
+    'chunkStakekitBalanceQueries',
+    'fetchAllStakekitBalances',
+    'fetchStakekitBalancesBatch',
+    'STAKEKIT_BALANCE_QUERIES_PER_REQUEST',
+  ] as const)('re-exports StakeKit batched-balances canonical %s by identity', async name => {
+    const stakekit = await import('../../../../src/tools/defi/stakekit')
+    expect(reactNativeEntry[name]).toBe(stakekit[name])
+  })
+
+  // sdk#1772: the RN entry omitted the whole validation / address-format
+  // canonical family, so mobile consumers had to deep-import or keep an
+  // app-local mirror - the exact duplicated-not-imported drift these helpers
+  // were added to remove.
+  //
+  // This asserts the ENTIRE runtime surface of each canonical module is
+  // re-exported, rather than a hand-listed set of names. A hand-listed set only
+  // catches what someone remembered to list; walking the module catches a
+  // helper ADDED to it later and wired only into the root entry, which is how
+  // the gap opened in the first place.
+  it.each([
+    ['utils/validateNormalizers', () => import('../../../../src/utils/validateNormalizers')],
+    ['utils/addressFormat', () => import('../../../../src/utils/addressFormat')],
+    ['utils/addressValidation', () => import('../../../../src/utils/addressValidation')],
+    ['utils/chainPrefix', () => import('../../../../src/utils/chainPrefix')],
+    ['tools/policy', () => import('../../../../src/tools/policy')],
+  ] as const)('re-exports every runtime export of %s on the RN entry, by identity', async (_name, load) => {
+    const rn = (await import('../../../../src/platforms/react-native/index')) as Record<string, unknown>
+    const mod = (await load()) as Record<string, unknown>
+
+    const expected = Object.keys(mod).filter(k => k !== 'default')
+    expect(expected.length).toBeGreaterThan(0)
+
+    const missing = expected.filter(k => !(k in rn))
+    expect(missing).toEqual([])
+
+    // Identity, not just presence: a re-export that shadows the canonical with
+    // a local reimplementation would satisfy `in rn` while still drifting.
+    for (const key of expected) {
+      expect(rn[key]).toBe(mod[key])
+    }
+  })
+
+  // Root parity for the same family. The RN entry may legitimately omit
+  // node-only surfaces, so this is deliberately scoped to these modules rather
+  // than the whole root surface - a blanket root-vs-RN diff is 186 names today
+  // and would be noise, not signal.
+  it('matches the root entry for the validation / address-format family', async () => {
+    const rn = (await import('../../../../src/platforms/react-native/index')) as Record<string, unknown>
+    const root = (await import('../../../../src/index')) as Record<string, unknown>
+
+    const family = [
+      'amountMatches',
+      'computeEvmFee',
+      'decimalsFor',
+      'feeMatches',
+      'isValidTokenSymbolFormat',
+      'normalizeTokenSymbol',
+      'scaleHumanToRaw',
+      'scaleRawToHuman',
+      'tokenDecimals',
+      'ValidateNormalizerError',
+      'canonicalChainTag',
+      'classifyAddress',
+      'isAddressValidForChain',
+      'isSolanaAddress',
+      'supportedChainTags',
+      'address',
+      'validate',
+      'checkChainPrefix',
+      'policy',
+      'checkInvariants',
+      'evaluatePolicy',
+    ]
+
+    for (const key of family) {
+      expect(root[key], `root entry lost ${key}`).toBeDefined()
+      expect(rn[key], `RN entry is missing ${key}`).toBe(root[key])
+    }
   })
 
   it('registers crypto + storage on module load so Vultisig({}) does not throw', async () => {
@@ -117,6 +246,50 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.DEFAULT_CHAINS).toBe(rn.defaultChains)
   })
 
+  it('exposes stable platform-safe helper namespaces on Vultisig instances', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const sdk = new rn.Vultisig({ autoInit: false })
+
+    expect(sdk.initialized).toBe(false)
+    expect(sdk.balance).toBe(sdk.balance)
+    expect(sdk.bridge).toBe(sdk.bridge)
+    expect(sdk.cosmos).toBe(sdk.cosmos)
+    expect(sdk.decode).toBe(sdk.decode)
+    expect(sdk.gas).toBe(sdk.gas)
+    expect(sdk.prep).toBe(sdk.prep)
+    expect(sdk.price).toBe(sdk.price)
+    expect(sdk.swap).toBe(sdk.swap)
+
+    const [canonicalBalance, canonicalPrep] = await Promise.all([
+      import('../../../../src/tools/balance'),
+      import('../../../../src/tools/prep'),
+    ])
+    expect(Object.keys(sdk.balance).sort()).toEqual(Object.keys(canonicalBalance).sort())
+    expect(Object.keys(sdk.prep).sort()).toEqual(Object.keys(canonicalPrep).sort())
+
+    expect(sdk.balance.getEvmBalances).toBe(rn.getEvmBalances)
+    expect(sdk.bridge.buildCctpBridge).toBe(rn.buildCctpBridge)
+    expect(sdk.cosmos.gov.getCosmosGovernanceProposals).toBe(rn.getCosmosGovernanceProposals)
+    expect(sdk.decode.fromToolResult).toBe(rn.decodeFromToolResult)
+    expect(sdk.gas.compareCosts).toBe(rn.compareCosts)
+    expect(typeof sdk.prep.prepareSendTxFromKeys).toBe('function')
+    expect(sdk.prep.cosmosStaking).toBe(rn.cosmosStaking)
+    expect(sdk.price.getPrice).toBe(rn.getPrice)
+    expect(sdk.swap.findSwapQuote).toBe(rn.findSwapQuote)
+  })
+
+  it('exports the ThreeJane USDC helper values (not just their types) on the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const threeJane = await import('../../../../src/tools/defi/threeJane')
+
+    expect(rn.buildThreeJaneSupplyUsdc).toBe(threeJane.buildThreeJaneSupplyUsdc)
+    expect(rn.THREE_JANE_ADDRESSES).toBe(threeJane.THREE_JANE_ADDRESSES)
+    // Aliased to avoid colliding with the CCTP bridge's own `parseUsdcAmount`
+    // export, which is also present on this entrypoint.
+    expect(rn.parseThreeJaneUsdcAmount).toBe(threeJane.parseUsdcAmount)
+    expect(typeof rn.parseUsdcAmount).toBe('function')
+  })
+
   it('re-exports root swap helpers needed by React Native consumers', () => {
     expect(typeof sdkRn.acrossQuote).toBe('function')
     expect(Array.isArray(sdkRn.acrossSupportedChains)).toBe(true)
@@ -127,6 +300,32 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(typeof sdkRn.findSwapQuote).toBe('function')
     expect(sdkRn.SOL_NATIVE_MINT).toBe('So11111111111111111111111111111111111111112')
     expect(sdkRn.JUPITER_PLATFORM_FEE_BPS).toBe(50)
+  })
+
+  // RN maps both its runtime and its types to this entry, so anything the root
+  // advertises but this file omits is an import error for RN consumers — and TON is
+  // one of the chains RN broadcasts itself.
+  it('re-exports the TON failure taxonomy by identity, so an RN consumer can read a broadcast refusal', async () => {
+    const failure = await import('@vultisig/core-chain/chains/ton/failure')
+
+    expect(sdkRn.getTonTxFailure).toBe(failure.getTonTxFailure)
+    expect(sdkRn.parseTonBroadcastRejection).toBe(failure.parseTonBroadcastRejection)
+    expect(sdkRn.TonBroadcastRejectedError).toBe(failure.TonBroadcastRejectedError)
+    expect(sdkRn.tonTxFailureReasons).toBe(failure.tonTxFailureReasons)
+  })
+
+  it('explains the error the RN TON broadcast helper actually throws', () => {
+    // The exact shape `chains.ton.broadcastTonTx` raises on a refused external message.
+    const rejection = new Error(
+      'toncenter sendBocReturnHash failed: LITE_SERVER_UNKNOWN: cannot apply external message to current state : ' +
+        'External message was not accepted\nCannot run message on account: inbound external message rejected by ' +
+        'transaction 4C6FE61A4B7925532DEE47DEED8367FB9E918D4B32A9B9EC270BEF9D9C65CA13:\nexitcode=136, steps=13, gas_used=0\n'
+    )
+
+    const failure = sdkRn.parseTonBroadcastRejection(rejection)
+
+    expect(failure).toMatchObject({ reason: 'expired', phase: 'compute', exitCode: 136 })
+    expect(failure?.message).toMatch(/date and time/)
   })
 
   it('exports default chain canonicals on the RN entrypoint', async () => {
@@ -190,6 +389,13 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.IbcEnabledCosmosChain.TerraClassic).toBe('TerraClassic')
     expect(rn.VaultBasedCosmosChain.THORChain).toBe('THORChain')
     expect(Object.values(rn.IbcEnabledCosmosChain)).not.toContain(rn.Chain.THORChain)
+  })
+
+  it('exports the canonical Cosmos Tendermint/Stargate RPC registry from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(rn.tendermintRpcUrl[rn.Chain.Cosmos]).toBe('https://cosmos-rpc.publicnode.com:443')
+    expect(rn.tendermintRpcUrl[rn.Chain.THORChain]).toBe('https://gateway.liquify.com/chain/thorchain_rpc')
   })
 
   it.each(cosmosTxFeeGasParityCases)(
@@ -410,6 +616,23 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.toXrplCurrencyCode('RLUSD')).toBe('524C555344000000000000000000000000000000')
   })
 
+  it('re-exports XRP destination/X-address normalization on the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(typeof rn.decodeRippleXAddress).toBe('function')
+    expect(typeof rn.encodeRippleXAddress).toBe('function')
+    expect(typeof rn.isValidRippleXAddress).toBe('function')
+    expect(typeof rn.normalizeRippleDestination).toBe('function')
+
+    const classicAddress = 'raJ1Aqkhf19P7cyUc33MMVAzgvHPvtNFC'
+    expect(rn.normalizeRippleDestination(classicAddress)).toEqual({ address: classicAddress })
+
+    const xAddress = rn.encodeRippleXAddress(classicAddress, 42)
+    expect(rn.isValidRippleXAddress(xAddress)).toBe(true)
+    expect(rn.decodeRippleXAddress(xAddress)).toEqual({ address: classicAddress, destinationTag: 42 })
+    expect(rn.normalizeRippleDestination(xAddress)).toEqual({ address: classicAddress, destinationTag: 42 })
+  })
+
   it('re-exports the custom-RPC canonicals on the RN entrypoint', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
@@ -446,6 +669,24 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
       rn.Chain.BitcoinCash,
       rn.Chain.Dash,
     ])
+  })
+
+  it('re-exports the canonical TRON ABI/address helpers on the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const tronAbi = await import('../../../../src/abi/tron')
+
+    expect(rn.tronBase58ToEvmHex).toBe(tronAbi.tronBase58ToEvmHex)
+    expect(rn.tronBase58ToHex).toBe(tronAbi.tronBase58ToHex)
+    expect(rn.tronHexToBase58).toBe(tronAbi.tronHexToBase58)
+    expect(rn.encodeTrc20TransferParam).toBe(tronAbi.encodeTrc20TransferParam)
+
+    const address = 'TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH'
+    expect(rn.tronBase58ToHex(address)).toBe('41c8599111f29c1e1e061265b4af93ea1f274ad78a')
+    expect(rn.tronHexToBase58('41c8599111f29c1e1e061265b4af93ea1f274ad78a')).toBe(address)
+    expect(rn.tronBase58ToEvmHex(address)).toBe('c8599111f29c1e1e061265b4af93ea1f274ad78a')
+    expect(rn.encodeTrc20TransferParam(address, '1000000')).toBe(
+      'c8599111f29c1e1e061265b4af93ea1f274ad78a'.padStart(64, '0') + 'f4240'.padStart(64, '0')
+    )
   })
 
   it('exports the RN vault-backup helpers and constants from the RN entry', async () => {
@@ -584,9 +825,11 @@ describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
     expect(typeof rn.getEvmChainId).toBe('function')
+    expect(typeof rn.getEvmNumericChainId).toBe('function')
     expect(typeof rn.getEvmChainByChainId).toBe('function')
     expect(typeof rn.clampEvmPriorityFee).toBe('function')
     expect(rn.getEvmChainId(rn.Chain.Ethereum)).toBe('0x1')
+    expect(rn.getEvmNumericChainId(rn.Chain.Ethereum)).toBe(1)
     expect(rn.getEvmChainByChainId('0x1')).toBe(rn.Chain.Ethereum)
     expect(
       rn.clampEvmPriorityFee(rn.Chain.Base as Parameters<typeof rn.clampEvmPriorityFee>[0], 75n * 1_000_000_000n)
@@ -637,6 +880,17 @@ describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
     )
   })
 
+  it('exports the canonical THOR/Maya native-swap metadata from the RN entry (sdk#1988)', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const nativeSwapChain = await import('@vultisig/core-chain/swap/native/NativeSwapChain')
+
+    expect(rn.nativeSwapChains).toBe(nativeSwapChain.nativeSwapChains)
+    expect(rn.nativeSwapChainIds).toBe(nativeSwapChain.nativeSwapChainIds)
+    expect(rn.nativeSwapEnabledChainsRecord).toBe(nativeSwapChain.nativeSwapEnabledChainsRecord)
+    expect(rn.getNativeSwapChainId).toBe(nativeSwapChain.getNativeSwapChainId)
+    expect(rn.getNativeSwapChainIdFromDenomPrefix).toBe(nativeSwapChain.getNativeSwapChainIdFromDenomPrefix)
+  })
+
   it('exports the THORChain LP v2 helper family from the RN entry', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
     const thorLp = await import('@vultisig/core-chain/chains/cosmos/thor/lp')
@@ -663,5 +917,56 @@ describe('RN entry exposes canonical EIP-712 helpers', () => {
     expect(rn.coerceEip712ChainId).toBe(eip712.coerceEip712ChainId)
     expect(rn.computeEip712Hash).toBe(eip712.computeEip712Hash)
     expect(rn.toCanonicalEvmSignature).toBe(eip712.toCanonicalEvmSignature)
+  })
+})
+
+describe('RN entry exposes canonical IBC + Sui prep helpers', () => {
+  it('re-exports the canonical IBC + Sui prep helpers from the RN root surface', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const prep = await import('../../../../src/tools/prep')
+    const ibcTransfer = await import('../../../../src/tools/prep/ibcTransfer')
+    const suiTokenTransfer = await import('../../../../src/tools/prep/suiTokenTransfer')
+
+    expect(rn.prepareIbcTransfer).toBe(prep.prepareIbcTransfer)
+    expect(rn.prepareIbcTransfer).toBe(ibcTransfer.prepareIbcTransfer)
+    expect(rn.resolveSourceChannelByDestChain).toBe(prep.resolveSourceChannelByDestChain)
+    expect(rn.resolveSourceChannelByDestChain).toBe(ibcTransfer.resolveSourceChannelByDestChain)
+    expect(rn.resolveSourceChannelByDestChain('cosmoshub-4', 'noble-1')).toBe('channel-536')
+    expect(rn.supportedIbcDestinationsFrom).toBe(prep.supportedIbcDestinationsFrom)
+    expect(rn.normaliseIbcChainId).toBe(ibcTransfer.normaliseIbcChainId)
+    expect(rn.IBC_MSG_TRANSFER_TYPE_URL).toBe(ibcTransfer.IBC_MSG_TRANSFER_TYPE_URL)
+    expect(rn.IBC_CHAIN_HRP).toBe(ibcTransfer.IBC_CHAIN_HRP)
+    expect(rn.IBC_CHAIN_REVISION).toBe(ibcTransfer.IBC_CHAIN_REVISION)
+    expect(rn.IBC_CHANNEL_DEST).toBe(ibcTransfer.IBC_CHANNEL_DEST)
+
+    expect(rn.prepareSuiTokenTransferFromKeys).toBe(prep.prepareSuiTokenTransferFromKeys)
+    expect(rn.prepareSuiTokenTransferFromKeys).toBe(suiTokenTransfer.prepareSuiTokenTransferFromKeys)
+    expect(rn.SUI_NATIVE_COIN_TYPE).toBe(suiTokenTransfer.SUI_NATIVE_COIN_TYPE)
+  })
+})
+
+describe('RN grouped helper families', () => {
+  it('exposes every canonical member and preserves RN flat wrappers', async () => {
+    const canonicalBalance = await import('../../../../src/tools/balance')
+    const canonicalPrep = await import('../../../../src/tools/prep')
+    const canonicalSwap = await import('../../../../src/tools/swap')
+    for (const [group, canonical] of [
+      [sdkRn.balance, canonicalBalance],
+      [sdkRn.prep, canonicalPrep],
+      [sdkRn.swap, canonicalSwap],
+    ] as const) {
+      expect(Object.keys(group).sort()).toEqual(Object.keys(canonical).sort())
+      for (const [name, value] of Object.entries(group)) {
+        if (name in sdkRn) expect(value).toBe(sdkRn[name as keyof typeof sdkRn])
+      }
+    }
+    expect(sdkRn.prep.buildSplTransfer).toBe(sdkRn.buildSplTransfer)
+    expect(sdkRn.prep.buildSplTransfer).not.toBe(canonicalPrep.buildSplTransfer)
+    expect(sdkRn.balance.balancePolkadot).toBe(sdkRn.balancePolkadot)
+    expect(sdkRn.balance.balancePolkadot).not.toBe(canonicalBalance.balancePolkadot)
+    expect(sdkRn.prep.SwapQuoteExpiredError).toBe(canonicalPrep.SwapQuoteExpiredError)
+    expect(sdkRn.balance.formatDot).toBe(canonicalBalance.formatDot)
+    expect(sdkRn.balance.formatBalance(1500000n, 6)).toBe('1.5')
+    expect(sdkRn.swap.computeAstroportMinReceive('1000000', 0.01)).toBe('990000')
   })
 })

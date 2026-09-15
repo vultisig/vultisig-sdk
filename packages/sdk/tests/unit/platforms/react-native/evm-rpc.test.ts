@@ -119,12 +119,21 @@ describe('React Native getEvmSuggestedFees floor policy', () => {
     expect(fees.maxPriorityFeePerGas).toBe(30n * GWEI)
   })
 
-  it('does not floor an L2 with no configured floor (Arbitrum) — 10% of base fee stands', async () => {
+  it('signs a zero tip on an L2 whose sequencer ignores it (Arbitrum), whatever 10% of base fee is', async () => {
     mocks.getBlock.mockResolvedValue({ baseFeePerGas: 100n * GWEI })
 
     const fees = await getEvmSuggestedFees(RPC_URL, EvmChain.Arbitrum)
 
-    expect(fees.maxPriorityFeePerGas).toBe(10n * GWEI)
+    expect(fees.maxPriorityFeePerGas).toBe(0n)
+    expect(fees.maxFeePerGas).toBe(200n * GWEI)
+  })
+
+  it('floors a near-zero tip on an OP-stack rollup (Base) to a nominal 20 wei', async () => {
+    mocks.getBlock.mockResolvedValue({ baseFeePerGas: 10n })
+
+    const fees = await getEvmSuggestedFees(RPC_URL, EvmChain.Base)
+
+    expect(fees.maxPriorityFeePerGas).toBe(20n)
   })
 
   it('clamps a wildly inflated RPC-reported priority fee to the sanity ceiling', async () => {
