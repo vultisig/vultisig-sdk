@@ -865,6 +865,11 @@
       "import": "./dist/chains/solana/kamino/vaultInfo.js",
       "default": "./dist/chains/solana/kamino/vaultInfo.js"
     },
+    "./chains/solana/rpcTimeout": {
+      "types": "./dist/chains/solana/rpcTimeout.d.ts",
+      "import": "./dist/chains/solana/rpcTimeout.js",
+      "default": "./dist/chains/solana/rpcTimeout.js"
+    },
     "./chains/solana/solanaConfig": {
       "types": "./dist/chains/solana/solanaConfig.d.ts",
       "import": "./dist/chains/solana/solanaConfig.js",
@@ -2252,6 +2257,11 @@
       "types": "./dist/tx/broadcast/resolvers/utxo.d.ts",
       "import": "./dist/tx/broadcast/resolvers/utxo.js",
       "default": "./dist/tx/broadcast/resolvers/utxo.js"
+    },
+    "./tx/broadcast/solanaBlockhashExpired": {
+      "types": "./dist/tx/broadcast/solanaBlockhashExpired.d.ts",
+      "import": "./dist/tx/broadcast/solanaBlockhashExpired.js",
+      "default": "./dist/tx/broadcast/solanaBlockhashExpired.js"
     },
     "./tx/broadcast/transientRetry": {
       "types": "./dist/tx/broadcast/transientRetry.d.ts",

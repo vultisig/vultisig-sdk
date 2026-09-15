@@ -671,6 +671,11 @@
       "import": "./dist/keysign/utils/getKeysignCoin.js",
       "default": "./dist/keysign/utils/getKeysignCoin.js"
     },
+    "./keysign/utils/getKeysignLastValidBlockHeight": {
+      "types": "./dist/keysign/utils/getKeysignLastValidBlockHeight.d.ts",
+      "import": "./dist/keysign/utils/getKeysignLastValidBlockHeight.js",
+      "default": "./dist/keysign/utils/getKeysignLastValidBlockHeight.js"
+    },
     "./keysign/utils/isRippleTrustSet": {
       "types": "./dist/keysign/utils/isRippleTrustSet.d.ts",
       "import": "./dist/keysign/utils/isRippleTrustSet.js",
