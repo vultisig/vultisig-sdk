@@ -280,6 +280,24 @@
       "import": "./dist/server/index.js",
       "require": "./dist/server/index.cjs",
       "default": "./dist/server/index.cjs"
+    },
+    "./tools/prep": {
+      "types": {
+        "react-native": "./dist/tools/prep/index.react-native.d.ts",
+        "require": "./dist/tools/prep/index.d.cts",
+        "default": "./dist/tools/prep/index.d.ts"
+      },
+      "chrome-extension": "./dist/tools/prep/index.browser.js",
+      "browser": "./dist/tools/prep/index.browser.js",
+      "worker": "./dist/tools/prep/index.browser.js",
+      "react-native": "./dist/tools/prep/index.react-native.js",
+      "node": {
+        "import": "./dist/tools/prep/index.js",
+        "require": "./dist/tools/prep/index.cjs"
+      },
+      "import": "./dist/tools/prep/index.js",
+      "require": "./dist/tools/prep/index.cjs",
+      "default": "./dist/tools/prep/index.cjs"
     }
   },
   "scripts": {
