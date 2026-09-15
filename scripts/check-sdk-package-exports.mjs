@@ -167,6 +167,7 @@ function validatePackedReactNativePublicHelpers(packageRoot) {
   const declarationSource = readFileSync(declarationsPath, 'utf8')
 
   for (const symbol of [
+    'getTxStatus',
     'buildSignAminoKeysignPayload',
     'buildSignDirectKeysignPayload',
     'tronBase58ToEvmHex',
@@ -179,16 +180,16 @@ function validatePackedReactNativePublicHelpers(packageRoot) {
   }
 }
 
-function validatePackedReactNativeTokenRefExports(packageRoot) {
+function validatePackedReactNativeRuntimeExports(packageRoot) {
   const runtimePath = path.join(packageRoot, 'dist/index.react-native.js')
   const ast = parseAst(readFileSync(runtimePath, 'utf8'))
   const exportedNames = ast.body
     .filter(statement => statement.type === 'ExportNamedDeclaration')
     .flatMap(statement => statement.specifiers.map(specifier => specifier.exported.name))
-  for (const name of ['resolveTokenRef', 'resolveTokenRefId']) {
+  for (const name of ['resolveTokenRef', 'resolveTokenRefId', 'getTxStatus']) {
     assert.ok(exportedNames.includes(name), `packed React Native runtime must export ${name}`)
   }
-  console.log('SDK packed React Native token resolver export bindings passed (artifact check, not device execution)')
+  console.log('SDK packed React Native runtime export bindings passed (artifact check, not device execution)')
 }
 
 // Run the same public API scenarios through both installed Node module formats.
@@ -686,7 +687,7 @@ export async function checkSdkPackageExports({
 
     const targets = validatePackedExportTargets(sourceManifest, packageRoot)
     validatePackedReactNativePublicHelpers(packageRoot)
-    validatePackedReactNativeTokenRefExports(packageRoot)
+    validatePackedReactNativeRuntimeExports(packageRoot)
     const importCases = collectNodeRuntimeCases(sourceManifest, 'import')
     const requireCases = collectNodeRuntimeCases(sourceManifest, 'require')
     if (!importCases.length || !requireCases.length) {
