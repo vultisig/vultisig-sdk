@@ -14,6 +14,7 @@ describe('public API subpath exports', () => {
     const parseExport = sdkPackageJson.exports['./tools/parse']
     const defiExport = sdkPackageJson.exports['./tools/defi']
     const bridgeExport = sdkPackageJson.exports['./tools/bridge']
+    const swapExport = sdkPackageJson.exports['./tools/swap']
     const gasExport = sdkPackageJson.exports['./tools/gas']
     const balanceExport = sdkPackageJson.exports['./tools/balance']
     const tronExport = sdkPackageJson.exports['./chains/tron']
@@ -42,6 +43,16 @@ describe('public API subpath exports', () => {
       import: './dist/tools/bridge/index.js',
       require: './dist/tools/bridge/index.cjs',
       default: './dist/tools/bridge/index.cjs',
+    })
+    expect(swapExport).toEqual({
+      types: './dist/tools/swap/index.d.ts',
+      browser: './dist/tools/swap/index.browser.js',
+      worker: './dist/tools/swap/index.browser.js',
+      'react-native': './dist/tools/swap/index.react-native.js',
+      node: { import: './dist/tools/swap/index.js', require: './dist/tools/swap/index.cjs' },
+      import: './dist/tools/swap/index.js',
+      require: './dist/tools/swap/index.cjs',
+      default: './dist/tools/swap/index.cjs',
     })
     expect(gasExport).toMatchObject({
       types: './dist/tools/gas/index.d.ts',
@@ -126,6 +137,8 @@ describe('public API subpath exports', () => {
     expect(platformRollupConfig).toContain("distBase: 'tools/defi'")
     expect(platformRollupConfig).toContain("input: './src/tools/bridge/index.ts'")
     expect(platformRollupConfig).toContain("distBase: 'tools/bridge'")
+    expect(platformRollupConfig).toContain("input: './src/tools/swap/index.ts'")
+    expect(platformRollupConfig).toContain("distBase: 'tools/swap'")
     expect(platformRollupConfig).toContain("input: './src/tools/gas/index.ts'")
     expect(platformRollupConfig).toContain("distBase: 'tools/gas'")
     expect(platformRollupConfig).toContain("input: './src/tools/balance/index.ts'")
@@ -155,6 +168,9 @@ describe('public API subpath exports', () => {
     )
     expect(typesRollupConfig).toContain(
       "createSubpathTypesConfig('src/tools/bridge/index.ts', 'dist/tools/bridge/index.d.ts')"
+    )
+    expect(typesRollupConfig).toContain(
+      "createSubpathTypesConfig('src/tools/swap/index.ts', 'dist/tools/swap/index.d.ts')"
     )
     expect(typesRollupConfig).toContain(
       "createSubpathTypesConfig('src/tools/gas/index.ts', 'dist/tools/gas/index.d.ts')"

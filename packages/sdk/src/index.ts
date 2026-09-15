@@ -14,16 +14,40 @@
 // ============================================================================
 
 // Core SDK class
+import { configureVultisigInstanceNamespaces } from './instanceNamespaces'
+import * as balanceNamespace from './tools/balance'
+import * as bridgeNamespace from './tools/bridge'
+import * as cosmosNamespace from './tools/cosmos'
+import { decode as decodeNamespace } from './tools/decode'
+import * as gasNamespace from './tools/gas'
+import * as prepNamespace from './tools/prep'
+import * as priceNamespace from './tools/price'
+import * as swapNamespace from './tools/swap'
+import { Vultisig } from './Vultisig'
+
+configureVultisigInstanceNamespaces(Vultisig, {
+  balance: balanceNamespace,
+  bridge: bridgeNamespace,
+  cosmos: cosmosNamespace,
+  decode: decodeNamespace,
+  gas: gasNamespace,
+  prep: prepNamespace,
+  price: priceNamespace,
+  swap: swapNamespace,
+})
+
 export type { VaultImportConflictResolution, VaultImportOptions } from './VaultManager'
-export { Vultisig } from './Vultisig'
+export { Vultisig }
 
 // Vault management
-export type { VaultConfig, VaultSaveOptions } from './vault'
+export type { ResolvedTokenInfo, VaultConfig, VaultSaveOptions } from './vault'
 export {
   BroadcastPartialFailureError,
   FastVault,
   hasServer,
   isServer,
+  resolveTokenRef,
+  resolveTokenRefId,
   SecureVault,
   VaultBase,
   VaultConflictError,
@@ -1098,6 +1122,7 @@ export {
   encodeAgentRouterDepositWithMemo,
   encodeErc20Approve,
   encodeErc20Revoke,
+  ensureTransactionsBuilt,
   estimateCosmosSwapFeeLabel,
   evaluatePolicy,
   evm,
@@ -1326,7 +1351,17 @@ export type {
 } from './types/notifications'
 
 // ============================================================================
-// PUBLIC API - ABI Constants
+// PUBLIC API - ABI Constants and Helpers
 // ============================================================================
 
-export { ERC20_ABI, ERC1155_ABI } from './abi'
+export {
+  encodeTrc20TransferParam,
+  ERC20_ABI,
+  ERC1155_ABI,
+  tronBase58ToEvmHex,
+  tronBase58ToHex,
+  tronHexToBase58,
+} from './abi'
+
+// Grouped helper families retain the canonical tools implementations.
+export { balance, prep, swap } from './tools'

@@ -10,7 +10,7 @@
  * rate-limit configuration.
  */
 
-import bs58check from 'bs58check'
+import { decodeTronAddress } from '@vultisig/core-chain/chains/tron/address'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -266,24 +266,16 @@ export async function estimateTrc20Energy(
   signal?: AbortSignal
 ): Promise<number> {
   // Build parameter hex without proto encoding — TronGrid's endpoint expects
-  // raw ABI-encoded `transfer(address,uint256)` args (64 hex chars),
+  // raw ABI-encoded `transfer(address,uint256)` args (128 hex chars),
   // WITHOUT the 4-byte selector because `function_selector` conveys it.
   //
   // Format: [32-byte address left-padded][32-byte amount big-endian].
   //
-  // We accept `to` as a Tron base58 address and strip the 0x41 prefix here.
+  // We accept `to` as a Tron base58 address and strip the network prefix here.
   // The endpoint accepts both `Txxx` and `41xxx` styles as owner/contract
   // but the parameter payload must be 32-byte left-padded.
 
-  const bs58checkMod = bs58check as unknown as { decode?: (s: string) => Uint8Array } & {
-    default?: { decode: (s: string) => Uint8Array }
-  }
-  const decode = bs58checkMod.decode ?? bs58checkMod.default?.decode
-  if (!decode) throw new Error('bs58check.decode unavailable')
-  const raw = decode(opts.to)
-  if (raw.length !== 21 || raw[0] !== 0x41) {
-    throw new Error(`invalid tron address: ${opts.to}`)
-  }
+  const raw = decodeTronAddress(opts.to)
   const addrHex = Array.from(raw.subarray(1))
     .map(b => b.toString(16).padStart(2, '0'))
     .join('')
