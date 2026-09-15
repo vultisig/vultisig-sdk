@@ -1,5 +1,37 @@
 # @vultisig/sdk
 
+## 7.5.0
+
+### Minor Changes
+
+- [#2116](https://github.com/vultisig/vultisig-sdk/pull/2116) [`7282cde`](https://github.com/vultisig/vultisig-sdk/commit/7282cdeffde92a3180a6e95556d783774be33a1a) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Hoist tool-output → signable-candidate derivation into `@vultisig/sdk` (`deriveToolOutputCandidate` and the fail-closed allowlists). CLI keeps the same import path as a thin re-export so consumers no longer have to copy CLI-local chain/field-name guards.
+
+### Patch Changes
+
+- [#2379](https://github.com/vultisig/vultisig-sdk/pull/2379) [`44d39da`](https://github.com/vultisig/vultisig-sdk/commit/44d39da6755d391ec1ca5aca47efc484377d17ca) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Keep every `@bufbuild/protobuf` entry point external in the platform bundles, not just the bare specifier. `@bufbuild/protobuf/wire` (and `codegenv2`, `wkt`) were being inlined, so the bundle carried its own copy of protobuf-es that registered a text-encoding provider — without `encodeUtf8Into` — on the global symbol protobuf-es shares with the consumer's copy. When SDK code ran first (as in a swap, where quotes precede signing) the consumer's newer `BinaryWriter` then failed with `this.encodeUtf8Into is not a function` while encoding the keysign message, and the keysign QR could not be generated.
+
+- [#2004](https://github.com/vultisig/vultisig-sdk/pull/2004) [`d176e7a`](https://github.com/vultisig/vultisig-sdk/commit/d176e7a789a02aca0e01e4647dcf97dd59ca9746) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Normalize `fromChain` in `supportedIbcDestinationsFrom()` through the same `normaliseIbcChainId()` alias resolution `prepareIbcTransfer()` already applies. Route keys are built from IBC chain-IDs (`osmosis-1`, `cosmoshub-4`, ...), so calling `supportedIbcDestinationsFrom('Osmosis')` with a canonical Vultisig chain name returned an empty list even though `prepareIbcTransfer({ fromChain: 'Osmosis', ... })` accepted the exact same name — route discovery and route building disagreed on which names work.
+
+- [#2380](https://github.com/vultisig/vultisig-sdk/pull/2380) [`dfa4f2c`](https://github.com/vultisig/vultisig-sdk/commit/dfa4f2c5f9dee0bb0b19ee778f44fb905ccacc89) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Publish the transaction preparation subpath with platform-specific bundles, shared WalletCore initialization, and typed deferred React Native helpers.
+
+- [#2376](https://github.com/vultisig/vultisig-sdk/pull/2376) [`bddb19f`](https://github.com/vultisig/vultisig-sdk/commit/bddb19f060de790dc62cc3cc7cf2dfa14bd98a3b) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Export the canonical transaction-hash validator from the React Native SDK entrypoint.
+
+- [#2375](https://github.com/vultisig/vultisig-sdk/pull/2375) [`9294e92`](https://github.com/vultisig/vultisig-sdk/commit/9294e920f33aa34ca2821e98fb0f0367bb72e9e6) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Retry temporary HTTP 429 responses when fetching Jupiter quotes or building unsigned swap transactions, with at most two retries after 300 ms and 600 ms. Other failures still surface immediately. Each attempt retains its own 15-second timeout.
+
+- [#2374](https://github.com/vultisig/vultisig-sdk/pull/2374) [`7936aae`](https://github.com/vultisig/vultisig-sdk/commit/7936aae684222cf5f4f5e0815b362490c7df1f47) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Preserve base64 TON message hashes when querying transaction status so hashes containing plus signs resolve correctly.
+
+- [#2368](https://github.com/vultisig/vultisig-sdk/pull/2368) [`d967120`](https://github.com/vultisig/vultisig-sdk/commit/d9671201970620ec6a0b60101307beb42155b37d) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - The Uniswap V3 tool tables now include Robinhood (4663) with the factory Uniswap publishes for the chain and its WETH9, which matches the WETH entry in the Robinhood token catalog. `supportedUniV3Chains()` lists Robinhood, `resolveNativeToken('native', 'Robinhood')` returns WETH9, and `uniswapV3PoolInfo` no longer reports Uniswap as undeployed there.
+
+- [#2377](https://github.com/vultisig/vultisig-sdk/pull/2377) [`4b83d5b`](https://github.com/vultisig/vultisig-sdk/commit/4b83d5b41f25df005f869b90836d2e99d5dc230e) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Expose the balance, bridge, cosmos, decode, gas, prep, price, and swap helper groups on Vultisig instances.
+
+- [#2089](https://github.com/vultisig/vultisig-sdk/pull/2089) [`b9e0fb7`](https://github.com/vultisig/vultisig-sdk/commit/b9e0fb73249e79ec7402f23e910acd7d99bdc72b) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Exports `ensureTransactionsBuilt` from `@vultisig/sdk`, the StakeKit async transaction-materialization resolver (`CREATED` → `WAITING_FOR_SIGNATURE` PATCH loop for chains like Tron native staking whose payload builds in the background). Previously this was internal to `callYieldActionREST` only, so `agent-backend-ts` had to duplicate the same loop. Also fixes a real gap: the hosted-MCP path (`callYieldActionWithFallback`'s primary route for non-Tron yields) never applied this build step, so an async-build chain routed through MCP could return a success-shaped action response with `unsignedTransaction` still `null` — the same bug `agent-backend-ts` independently found and fixed (`ensureTransactionsBuilt` there, vultisig-ops-vecc). Both the SDK's REST and hosted-MCP paths now converge on the same fully-built response.
+
+- [#2086](https://github.com/vultisig/vultisig-sdk/pull/2086) [`c69827d`](https://github.com/vultisig/vultisig-sdk/commit/c69827dbc5b8aa6f3bcfa4a50b7bb24147168a42) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Adds `assertTonSigningPayloadNoHostileDrain` (exported from `@vultisig/sdk/chains/ton` and the React Native TON bridge), a pure inspector for TON wallet-V4R2 signing payloads that refuses two unambiguous drains before any MPC signing happens: a non-zero wallet `op` (plugin install/remove, which grants ongoing spend authority without a further signature) and `SendMode.CARRY_ALL_REMAINING_BALANCE`/`SendMode.DESTROY_ACCOUNT_IF_ZERO` on any outgoing message (a full-balance drain/self-destruct). Previously this guard lived only in `vultiagent-app`, so any other SDK consumer of `buildTonTxFromSigningPayload` (yield.xyz staking actions, WalletConnect/dApp signing) had to duplicate the decoder or sign blindly.
+
+- Updated dependencies [[`7936aae`](https://github.com/vultisig/vultisig-sdk/commit/7936aae684222cf5f4f5e0815b362490c7df1f47)]:
+  - @vultisig/core-chain@5.4.3
+  - @vultisig/core-mpc@3.2.4
+
 ## 7.4.2
 
 ### Patch Changes
