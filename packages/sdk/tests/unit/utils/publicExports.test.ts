@@ -107,6 +107,17 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.TxReadyParseError).toBe('function')
   })
 
+  it('exports the tool-output → signable-candidate contract', () => {
+    expect(typeof sdk.deriveToolOutputCandidate).toBe('function')
+    expect(typeof sdk.buildTxReadyFromToolOutput).toBe('function')
+    expect(typeof sdk.buildTxReadyFromYieldOutput).toBe('function')
+    expect(typeof sdk.payloadLooksSignable).toBe('function')
+    expect(typeof sdk.asRecord).toBe('function')
+    expect(sdk.CLI_SIGNABLE_FLAT_TOOLS).toBeInstanceOf(Set)
+    expect(sdk.CLI_SIGNABLE_PREP_TOOLS).toBeInstanceOf(Set)
+    expect(sdk.CLI_SIGNABLE_YIELD_TOOLS).toBeInstanceOf(Set)
+  })
+
   it('exports the raw EVM envelope keysign helper', () => {
     expect(typeof sdk.prepareRawEvmTxFromKeys).toBe('function')
     expect(typeof sdk.VaultBase.prototype.prepareRawEvmTx).toBe('function')
