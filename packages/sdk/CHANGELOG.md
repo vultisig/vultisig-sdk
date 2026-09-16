@@ -1,5 +1,97 @@
 # @vultisig/sdk
 
+## 7.5.0
+
+### Minor Changes
+
+- [#2116](https://github.com/vultisig/vultisig-sdk/pull/2116) [`7282cde`](https://github.com/vultisig/vultisig-sdk/commit/7282cdeffde92a3180a6e95556d783774be33a1a) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Hoist tool-output → signable-candidate derivation into `@vultisig/sdk` (`deriveToolOutputCandidate` and the fail-closed allowlists). CLI keeps the same import path as a thin re-export so consumers no longer have to copy CLI-local chain/field-name guards.
+
+### Patch Changes
+
+- [#2379](https://github.com/vultisig/vultisig-sdk/pull/2379) [`44d39da`](https://github.com/vultisig/vultisig-sdk/commit/44d39da6755d391ec1ca5aca47efc484377d17ca) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Keep every `@bufbuild/protobuf` entry point external in the platform bundles, not just the bare specifier. `@bufbuild/protobuf/wire` (and `codegenv2`, `wkt`) were being inlined, so the bundle carried its own copy of protobuf-es that registered a text-encoding provider — without `encodeUtf8Into` — on the global symbol protobuf-es shares with the consumer's copy. When SDK code ran first (as in a swap, where quotes precede signing) the consumer's newer `BinaryWriter` then failed with `this.encodeUtf8Into is not a function` while encoding the keysign message, and the keysign QR could not be generated.
+
+- [#2004](https://github.com/vultisig/vultisig-sdk/pull/2004) [`d176e7a`](https://github.com/vultisig/vultisig-sdk/commit/d176e7a789a02aca0e01e4647dcf97dd59ca9746) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Normalize `fromChain` in `supportedIbcDestinationsFrom()` through the same `normaliseIbcChainId()` alias resolution `prepareIbcTransfer()` already applies. Route keys are built from IBC chain-IDs (`osmosis-1`, `cosmoshub-4`, ...), so calling `supportedIbcDestinationsFrom('Osmosis')` with a canonical Vultisig chain name returned an empty list even though `prepareIbcTransfer({ fromChain: 'Osmosis', ... })` accepted the exact same name — route discovery and route building disagreed on which names work.
+
+- [#2380](https://github.com/vultisig/vultisig-sdk/pull/2380) [`dfa4f2c`](https://github.com/vultisig/vultisig-sdk/commit/dfa4f2c5f9dee0bb0b19ee778f44fb905ccacc89) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Publish the transaction preparation subpath with platform-specific bundles, shared WalletCore initialization, and typed deferred React Native helpers.
+
+- [#2376](https://github.com/vultisig/vultisig-sdk/pull/2376) [`bddb19f`](https://github.com/vultisig/vultisig-sdk/commit/bddb19f060de790dc62cc3cc7cf2dfa14bd98a3b) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Export the canonical transaction-hash validator from the React Native SDK entrypoint.
+
+- [#2375](https://github.com/vultisig/vultisig-sdk/pull/2375) [`9294e92`](https://github.com/vultisig/vultisig-sdk/commit/9294e920f33aa34ca2821e98fb0f0367bb72e9e6) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Retry temporary HTTP 429 responses when fetching Jupiter quotes or building unsigned swap transactions, with at most two retries after 300 ms and 600 ms. Other failures still surface immediately. Each attempt retains its own 15-second timeout.
+
+- [#2374](https://github.com/vultisig/vultisig-sdk/pull/2374) [`7936aae`](https://github.com/vultisig/vultisig-sdk/commit/7936aae684222cf5f4f5e0815b362490c7df1f47) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Preserve base64 TON message hashes when querying transaction status so hashes containing plus signs resolve correctly.
+
+- [#2368](https://github.com/vultisig/vultisig-sdk/pull/2368) [`d967120`](https://github.com/vultisig/vultisig-sdk/commit/d9671201970620ec6a0b60101307beb42155b37d) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - The Uniswap V3 tool tables now include Robinhood (4663) with the factory Uniswap publishes for the chain and its WETH9, which matches the WETH entry in the Robinhood token catalog. `supportedUniV3Chains()` lists Robinhood, `resolveNativeToken('native', 'Robinhood')` returns WETH9, and `uniswapV3PoolInfo` no longer reports Uniswap as undeployed there.
+
+- [#2377](https://github.com/vultisig/vultisig-sdk/pull/2377) [`4b83d5b`](https://github.com/vultisig/vultisig-sdk/commit/4b83d5b41f25df005f869b90836d2e99d5dc230e) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Expose the balance, bridge, cosmos, decode, gas, prep, price, and swap helper groups on Vultisig instances.
+
+- [#2089](https://github.com/vultisig/vultisig-sdk/pull/2089) [`b9e0fb7`](https://github.com/vultisig/vultisig-sdk/commit/b9e0fb73249e79ec7402f23e910acd7d99bdc72b) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Exports `ensureTransactionsBuilt` from `@vultisig/sdk`, the StakeKit async transaction-materialization resolver (`CREATED` → `WAITING_FOR_SIGNATURE` PATCH loop for chains like Tron native staking whose payload builds in the background). Previously this was internal to `callYieldActionREST` only, so `agent-backend-ts` had to duplicate the same loop. Also fixes a real gap: the hosted-MCP path (`callYieldActionWithFallback`'s primary route for non-Tron yields) never applied this build step, so an async-build chain routed through MCP could return a success-shaped action response with `unsignedTransaction` still `null` — the same bug `agent-backend-ts` independently found and fixed (`ensureTransactionsBuilt` there, vultisig-ops-vecc). Both the SDK's REST and hosted-MCP paths now converge on the same fully-built response.
+
+- [#2086](https://github.com/vultisig/vultisig-sdk/pull/2086) [`c69827d`](https://github.com/vultisig/vultisig-sdk/commit/c69827dbc5b8aa6f3bcfa4a50b7bb24147168a42) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Adds `assertTonSigningPayloadNoHostileDrain` (exported from `@vultisig/sdk/chains/ton` and the React Native TON bridge), a pure inspector for TON wallet-V4R2 signing payloads that refuses two unambiguous drains before any MPC signing happens: a non-zero wallet `op` (plugin install/remove, which grants ongoing spend authority without a further signature) and `SendMode.CARRY_ALL_REMAINING_BALANCE`/`SendMode.DESTROY_ACCOUNT_IF_ZERO` on any outgoing message (a full-balance drain/self-destruct). Previously this guard lived only in `vultiagent-app`, so any other SDK consumer of `buildTonTxFromSigningPayload` (yield.xyz staking actions, WalletConnect/dApp signing) had to duplicate the decoder or sign blindly.
+
+- Updated dependencies [[`7936aae`](https://github.com/vultisig/vultisig-sdk/commit/7936aae684222cf5f4f5e0815b362490c7df1f47)]:
+  - @vultisig/core-chain@5.4.3
+  - @vultisig/core-mpc@3.2.4
+
+## 7.4.2
+
+### Patch Changes
+
+- [#2363](https://github.com/vultisig/vultisig-sdk/pull/2363) [`75e33dc`](https://github.com/vultisig/vultisig-sdk/commit/75e33dce10203bcbd95cf334770b6cb893d80237) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Export the canonical TRON address conversion and TRC-20 ABI encoding helpers from the root and React Native SDK entrypoints.
+
+- [#2359](https://github.com/vultisig/vultisig-sdk/pull/2359) [`1ec5c2a`](https://github.com/vultisig/vultisig-sdk/commit/1ec5c2aec8499ef009c248bfd714720c07798315) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Robinhood (4663) now declares the canonical Multicall3 on its viem chain, so balance discovery batches the whole token catalog in one call instead of falling back to one `eth_call` per token against the public RPC. The contract is deployed there with bytecode identical to the Ethereum and Base deployments; only the public deployment registry had not listed the chain. Also records that KyberSwap's MetaAggregationRouterV2 keeps its standard address on Robinhood: `/routes` and `/route/build` on the `robinhood` API path both return `0x6131b5fae19ea4f9d964eac0408e4408b66337b5` with buildable calldata, so the flat Kyber allowlist was already correct.
+
+- [#2365](https://github.com/vultisig/vultisig-sdk/pull/2365) [`b3cebc6`](https://github.com/vultisig/vultisig-sdk/commit/b3cebc63b1222d8bc41ef9e8fae8e0e470042519) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Export the canonical token reference resolvers and their result type from the SDK root and React Native entry points.
+
+- [#2371](https://github.com/vultisig/vultisig-sdk/pull/2371) [`663fddf`](https://github.com/vultisig/vultisig-sdk/commit/663fddfd336f3acf990a5b5d470a0962c7b9fade) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Publish the existing swap helpers through the dedicated `@vultisig/sdk/tools/swap` entry with ESM, CommonJS, and TypeScript declarations.
+
+- [#2369](https://github.com/vultisig/vultisig-sdk/pull/2369) [`42ef35c`](https://github.com/vultisig/vultisig-sdk/commit/42ef35c4542e1289b6a4e70437d31fe917f9bd22) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Expose the balance, prep, and swap helper groups on the root and React Native SDK surfaces while preserving existing flat exports and React Native's deferred preparation and balance wrappers.
+
+- [#2370](https://github.com/vultisig/vultisig-sdk/pull/2370) [`257729d`](https://github.com/vultisig/vultisig-sdk/commit/257729dbc65abb142e543162f6f67eb6f1c68a11) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject known burn destinations and transfers to the token's own contract in the standalone TRC-20 transfer helper.
+
+- Updated dependencies [[`1ec5c2a`](https://github.com/vultisig/vultisig-sdk/commit/1ec5c2aec8499ef009c248bfd714720c07798315)]:
+  - @vultisig/core-chain@5.4.2
+  - @vultisig/core-mpc@3.2.3
+
+## 7.4.1
+
+### Patch Changes
+
+- [#2362](https://github.com/vultisig/vultisig-sdk/pull/2362) [`e4d2594`](https://github.com/vultisig/vultisig-sdk/commit/e4d2594393043f89a99d1e38387cc139047f7af8) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Share Tron Base58Check validation across balance lookup, transaction building, and energy estimation, preserving the existing accepted address prefixes.
+
+- [#2361](https://github.com/vultisig/vultisig-sdk/pull/2361) [`1cb2615`](https://github.com/vultisig/vultisig-sdk/commit/1cb2615acefd7f6f1170ab3340bb1d23d63ee1ca) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Preserve case-sensitive non-EVM token identifiers in curated lookups, discovery, and token-transfer guards. EVM addresses remain case-insensitive. Consumers of knownTokensIndex must use canonical non-EVM keys without lowercasing them; the shared getKnownToken helper applies the chain-specific matching rule.
+
+- Updated dependencies [[`e4d2594`](https://github.com/vultisig/vultisig-sdk/commit/e4d2594393043f89a99d1e38387cc139047f7af8), [`1cb2615`](https://github.com/vultisig/vultisig-sdk/commit/1cb2615acefd7f6f1170ab3340bb1d23d63ee1ca)]:
+  - @vultisig/core-chain@5.4.1
+  - @vultisig/core-mpc@3.2.2
+
+## 7.4.0
+
+### Minor Changes
+
+- [#2347](https://github.com/vultisig/vultisig-sdk/pull/2347) [`864dfcb`](https://github.com/vultisig/vultisig-sdk/commit/864dfcb375c474f5bcc6f79bf18aeb145489cc47) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Blockaid now covers Robinhood chain (4663) as `robinhood`. Transaction simulation and validation run for Robinhood dApp requests and swaps, so a Uniswap swap on Robinhood shows its balance changes on the verify screen instead of nothing. Because SwapKit's EVM source eligibility keys off Blockaid coverage, Robinhood also becomes a SwapKit source chain, with the returned router screened through the Blockaid address scan like every other covered EVM chain.
+
+- [#2343](https://github.com/vultisig/vultisig-sdk/pull/2343) [`80ba27f`](https://github.com/vultisig/vultisig-sdk/commit/80ba27f30afbeb104a8cc5738b5942467d977c9e) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Preserve requested affiliate rates and native recipient allocations on swap quotes, including explicit zero rates, without changing fees or transaction construction. The optional quote affiliate metadata is covered by the existing mutation fingerprint; older quotes retain an unknown rate.
+
+### Patch Changes
+
+- [#2351](https://github.com/vultisig/vultisig-sdk/pull/2351) [`e5ab020`](https://github.com/vultisig/vultisig-sdk/commit/e5ab020bca842fd92ddd8994946e1d0ea991c73d) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Export the canonical Blockaid EVM chain map, supported-chain list, and type from the SDK, including its React Native entry.
+
+- [#2352](https://github.com/vultisig/vultisig-sdk/pull/2352) [`341df52`](https://github.com/vultisig/vultisig-sdk/commit/341df52d63858f41172be2f61bde7c4ca694ad71) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject missing and malformed amounts before constructing Tron TRC20, Solana, Polkadot, Bittensor and Ripple issued-currency signing inputs. Preserve explicit zero trust-line limits and encode Solana amounts as unsigned uint64 values without overflow.
+
+- [#2341](https://github.com/vultisig/vultisig-sdk/pull/2341) [`ea2e6b7`](https://github.com/vultisig/vultisig-sdk/commit/ea2e6b7f4fc005d93d0a31741f521d7539d3104e) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject negative amounts before hexadecimal encoding so EVM and Cardano transaction inputs cannot silently contain empty amount bytes. Preserve existing encodings for non-negative values, including unsigned Long quantities.
+
+- [#2354](https://github.com/vultisig/vultisig-sdk/pull/2354) [`4fe2d97`](https://github.com/vultisig/vultisig-sdk/commit/4fe2d977cac34de6d0cf0cfefafdb6d484253a56) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject off-curve Solana wallet recipients before preparing sends or fee estimates.
+
+- [#2345](https://github.com/vultisig/vultisig-sdk/pull/2345) [`235282a`](https://github.com/vultisig/vultisig-sdk/commit/235282ad5e2e71eeefb6fa27bc4f84a05d99dd92) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Keep tiny positive EVM gas prices visible in gas comparisons and calculate native fee estimates from raw wei so display rounding cannot erase or inflate them. Rank fully priced comparisons by unrounded USD costs so fees that display as zero still select the cheapest chain.
+
+- [#2344](https://github.com/vultisig/vultisig-sdk/pull/2344) [`f5b79a4`](https://github.com/vultisig/vultisig-sdk/commit/f5b79a4b3ba943a1e80c4f8c01ecf1cd137a155d) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject Tron gateway errors, empty contract balance results, and JSON-RPC errors instead of treating them as zero balances or decoding error messages. Preserve legitimate zero balances and propagate read failures to maximum-send callers.
+
+- [#2342](https://github.com/vultisig/vultisig-sdk/pull/2342) [`598f32b`](https://github.com/vultisig/vultisig-sdk/commit/598f32beed52463606ab5a891bdbd285468f046b) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject UTXO recipient amounts below the chain and recipient script's default dust threshold before preparing signing data. Preserve address-validation precedence and include Dogecoin's required fee surcharge for recipients below 0.01 DOGE in transaction building and coin selection. Fee estimation accepts an optional recipient amount for that surcharge.
+
+- Updated dependencies [[`864dfcb`](https://github.com/vultisig/vultisig-sdk/commit/864dfcb375c474f5bcc6f79bf18aeb145489cc47), [`80ba27f`](https://github.com/vultisig/vultisig-sdk/commit/80ba27f30afbeb104a8cc5738b5942467d977c9e), [`341df52`](https://github.com/vultisig/vultisig-sdk/commit/341df52d63858f41172be2f61bde7c4ca694ad71), [`ea2e6b7`](https://github.com/vultisig/vultisig-sdk/commit/ea2e6b7f4fc005d93d0a31741f521d7539d3104e), [`4fe2d97`](https://github.com/vultisig/vultisig-sdk/commit/4fe2d977cac34de6d0cf0cfefafdb6d484253a56), [`f5b79a4`](https://github.com/vultisig/vultisig-sdk/commit/f5b79a4b3ba943a1e80c4f8c01ecf1cd137a155d)]:
+  - @vultisig/core-chain@5.4.0
+  - @vultisig/core-mpc@3.2.1
+
 ## 7.3.0
 
 ### Minor Changes

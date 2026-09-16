@@ -6,7 +6,7 @@ import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getSolanaCoingeckoIds } from '@vultisig/core-chain/coin/coingecko/getCoingeckoId'
 import { FindCoinsResolver } from '@vultisig/core-chain/coin/find/resolver'
 import { getJupiterTokens } from '@vultisig/core-chain/coin/jupiter/api'
-import { knownTokensIndex } from '@vultisig/core-chain/coin/knownTokens'
+import { getKnownToken } from '@vultisig/core-chain/coin/knownTokens/utils'
 import { without } from '@vultisig/lib-utils/array/without'
 import { attempt } from '@vultisig/lib-utils/attempt'
 
@@ -73,7 +73,7 @@ export const findSolanaCoins: FindCoinsResolver<OtherChain.Solana> = async ({ ad
     return verification === 'verified'
   })
 
-  const getKnown = (mint: string) => knownTokensIndex[chain][mint.toLowerCase()]
+  const getKnown = (mint: string) => getKnownToken({ chain, id: mint })
 
   const priceProviderIds = await getSolanaCoingeckoIds(
     verified.filter(({ mint }) => !getKnown(mint)).map(({ mint }) => mint)

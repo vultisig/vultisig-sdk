@@ -12,7 +12,10 @@ import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v
 import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
 
 import { getWalletCore } from '../../context/wasmRuntime'
+import { SwapQuoteExpiredError } from './SwapQuoteExpiredError'
 import type { VaultIdentity } from './types'
+
+export { SwapQuoteExpiredError } from './SwapQuoteExpiredError'
 
 export type PrepareSwapTxFromKeysParams = {
   fromCoin: AccountCoin
@@ -20,16 +23,6 @@ export type PrepareSwapTxFromKeysParams = {
   amount: string | number
   /** Live bound quote returned by `findSwapQuote`; do not JSON round-trip it. */
   swapQuote: BoundSwapQuote
-}
-
-/** Catchable signal that the caller should fetch a fresh quote and retry. */
-export class SwapQuoteExpiredError extends Error {
-  readonly code = 'SWAP_QUOTE_EXPIRED'
-
-  constructor(message: string) {
-    super(message)
-    this.name = 'SwapQuoteExpiredError'
-  }
 }
 
 // Snapshot all amount/coin/quote inputs synchronously. Validation and payload construction must

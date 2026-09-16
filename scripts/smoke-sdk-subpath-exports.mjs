@@ -4,6 +4,8 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { smokePrepConsumers } from './smoke-sdk-prep-consumers.mjs'
+
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const tempRoot = mkdtempSync(path.join(os.tmpdir(), 'vultisig-sdk-subpaths-'))
 const appRoot = path.join(tempRoot, 'app')
@@ -61,6 +63,22 @@ try {
       "const policyPath = require.resolve('@vultisig/sdk/tools/policy')",
       "const priceModuleCjs = require('@vultisig/sdk/tools/price')",
       "const pricePath = require.resolve('@vultisig/sdk/tools/price')",
+      "const swapPath = require.resolve('@vultisig/sdk/tools/swap')",
+      "const swapEsmPath = import.meta.resolve('@vultisig/sdk/tools/swap')",
+      'assert.ok(swapPath.endsWith("/dist/tools/swap/index.cjs"))',
+      'assert.ok(swapEsmPath.endsWith("/dist/tools/swap/index.js"))',
+      "const swapEsm = await import('@vultisig/sdk/tools/swap')",
+      "const swapCjs = require('@vultisig/sdk/tools/swap')",
+      'for (const swap of [swapEsm, swapCjs]) {',
+      '  for (const name of ["findSwapQuote", "findSwapQuotes", "acrossQuote", "buildJupiterSwapTx", "getNativeSwapMinAmountIn", "getNativeSwapDecimals", "buildAstroportSwap", "quoteSkipRoute", "runSkipSwap"]) {',
+      '    assert.equal(typeof swap[name], "function", name)',
+      '  }',
+      '  assert.equal(swap.MAX_PRICE_IMPACT_PCT, 10)',
+      '  const error = new swap.PriceImpactTooHighError(12)',
+      '  assert.ok(error instanceof Error)',
+      '  assert.equal(error.name, "PriceImpactTooHighError")',
+      '  assert.equal(error.impactPercent, 12)',
+      '}',
       "const txPath = require.resolve('@vultisig/sdk/tx')",
       'assert.match(parsePath, /dist\\/tools\\/parse\\/index\\.cjs$/)',
       'assert.match(defiPath, /dist\\/tools\\/defi\\/index\\.cjs$/)',
@@ -123,7 +141,7 @@ try {
       "assert.equal(typeof priceModuleCjs.coinGeckoIdToSymbol, 'object')",
       "assert.equal(typeof txModule.normalizeTx, 'function')",
       "assert.equal(txModule.normalizeTx({ to: '0x1', chain: 'Ethereum' }).chain, 'Ethereum')",
-      'console.log(JSON.stringify({ parsePath, defiPath, bridgePath, gasPath, balancePath, tronPath, utxoPath, decodePath, policyPath, pricePath, txPath, parseOk: true, defiOk: true, bridgeOk: true, gasOk: true, balanceOk: true, tronOk: true, utxoOk: true, decodeOk: true, policyOk: true, priceOk: true, txOk: true }))',
+      'console.log(JSON.stringify({ swapPath, swapEsmPath, swapOk: true, parsePath, defiPath, bridgePath, gasPath, balancePath, tronPath, utxoPath, decodePath, policyPath, pricePath, txPath, parseOk: true, defiOk: true, bridgeOk: true, gasOk: true, balanceOk: true, tronOk: true, utxoOk: true, decodeOk: true, policyOk: true, priceOk: true, txOk: true }))',
       '',
     ].join('\n')
   )
@@ -141,6 +159,11 @@ try {
       "import { decodeFromToolResult, type Envelope } from '@vultisig/sdk/tools/decode'",
       "import { policy, type Verdict } from '@vultisig/sdk/tools/policy'",
       "import { getPrice, type PriceQuote } from '@vultisig/sdk/tools/price'",
+      "import { findSwapQuote, getNativeSwapMinAmountIn, PriceImpactTooHighError, type FindSwapQuoteParams, type NativeSwapMinAmountIn } from '@vultisig/sdk/tools/swap'",
+      'const findQuote: (params: FindSwapQuoteParams) => ReturnType<typeof findSwapQuote> = findSwapQuote',
+      'const minimum: Awaited<ReturnType<typeof getNativeSwapMinAmountIn>> = null as unknown as NativeSwapMinAmountIn',
+      'const impact: number = new PriceImpactTooHighError(12).impactPercent',
+      'void [findQuote, minimum, impact]',
       "import { normalizeTx, type NormalizedTx } from '@vultisig/sdk/tx'",
       '',
       "const chainResult: ParseChainResult = parseChain('Ethereum')",
@@ -189,6 +212,7 @@ try {
   )
 
   run('npm', ['install', '--no-package-lock', tarballPath], appRoot)
+  await smokePrepConsumers({ appRoot, repoRoot })
   run('node', ['smoke-runtime.mjs'], appRoot)
   run('yarn', ['exec', 'tsc', '--project', path.join(appRoot, 'tsconfig.json')], repoRoot)
 } finally {

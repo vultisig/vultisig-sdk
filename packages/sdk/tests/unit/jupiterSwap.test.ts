@@ -189,29 +189,73 @@ describe('buildJupiterSwapTx', () => {
     expect(assertSafeSolanaSwapTransactionBase64).toHaveBeenCalledWith(fakeSwap.swapTransaction, expect.any(PublicKey))
   })
 
-  it('defaults the native mint when no contract addresses are provided', async () => {
-    await buildJupiterSwapTx({
-      userPublicKey: USER,
-      toContractAddress: USDC_MINT,
-      amountBaseUnits: 1n,
+  it.each([
+    [undefined, USDC_MINT, SOL_NATIVE_MINT, USDC_MINT],
+    [USDC_MINT, undefined, USDC_MINT, SOL_NATIVE_MINT],
+    [SOL_NATIVE_MINT, USDC_MINT, SOL_NATIVE_MINT, USDC_MINT],
+    [USDC_MINT, SOL_NATIVE_MINT, USDC_MINT, SOL_NATIVE_MINT],
+    [` \t${SOL_NATIVE_MINT}\n`, `\n${USDC_MINT} `, SOL_NATIVE_MINT, USDC_MINT],
+    [` ${USDC_MINT}\t`, `\n${SOL_NATIVE_MINT} `, USDC_MINT, SOL_NATIVE_MINT],
+  ])(
+    'normalizes %j → %j to the intended mints',
+    async (fromContractAddress, toContractAddress, inputMint, outputMint) => {
+      const res = await buildJupiterSwapTx({
+        userPublicKey: USER,
+        fromContractAddress,
+        toContractAddress,
+        amountBaseUnits: 1n,
+      })
+      const quoteUrl = new URL(String(fetchSpy.mock.calls.find(([u]) => String(u).includes('/quote'))?.[0]))
+      expect(quoteUrl.searchParams.get('inputMint')).toBe(inputMint)
+      expect(quoteUrl.searchParams.get('outputMint')).toBe(outputMint)
+      expect(res.inputMint).toBe(inputMint)
+      expect(res.outputMint).toBe(outputMint)
+    }
+  )
+
+  describe.each(['fromContractAddress', 'toContractAddress'] as const)('blank %s', parameter => {
+    it.each(['', ' ', '\t', '\n', ' \t\r\n '])('rejects %j before fees or network access', async blank => {
+      const opposite = parameter === 'fromContractAddress' ? 'toContractAddress' : 'fromContractAddress'
+      for (const otherMint of [USDC_MINT, undefined]) {
+        await expect(
+          buildJupiterSwapTx({
+            userPublicKey: USER,
+            [parameter]: blank,
+            [opposite]: otherMint,
+            amountBaseUnits: 1n,
+          })
+        ).rejects.toThrow(`Jupiter swap ${parameter} must not be blank; omit it for native SOL`)
+        expect(deriveJupiterFeeAccountMock).not.toHaveBeenCalled()
+        expect(fetchSpy).not.toHaveBeenCalled()
+      }
     })
-    const quoteUrl = String(fetchSpy.mock.calls.find(([u]) => String(u).includes('/quote'))?.[0])
-    expect(quoteUrl).toContain(`inputMint=${SOL_NATIVE_MINT}`)
   })
 
-  it('rejects a non-positive amount', async () => {
+  it.each([0n, -1n])('rejects a non-positive amount %s', async amountBaseUnits => {
     await expect(
       buildJupiterSwapTx({
         userPublicKey: USER,
         toContractAddress: USDC_MINT,
-        amountBaseUnits: 0n,
+        amountBaseUnits,
       })
     ).rejects.toThrow(/greater than zero/)
     expect(fetchSpy).not.toHaveBeenCalled()
   })
 
-  it('rejects identical input/output mints', async () => {
-    await expect(buildJupiterSwapTx({ userPublicKey: USER, amountBaseUnits: 1n })).rejects.toThrow(/must differ/)
+  it.each([
+    [undefined, undefined],
+    [undefined, SOL_NATIVE_MINT],
+    [` ${USDC_MINT}\t`, USDC_MINT],
+  ])('rejects identical normalized mints %j → %j', async (fromContractAddress, toContractAddress) => {
+    await expect(
+      buildJupiterSwapTx({
+        userPublicKey: USER,
+        fromContractAddress,
+        toContractAddress,
+        amountBaseUnits: 1n,
+      })
+    ).rejects.toThrow(/must differ/)
+    expect(deriveJupiterFeeAccountMock).not.toHaveBeenCalled()
     expect(fetchSpy).not.toHaveBeenCalled()
   })
 
@@ -513,5 +557,170 @@ describe('buildJupiterSwapTx — affiliate ON (injected treasury ATA)', () => {
     const swapCall = fetchSpy.mock.calls.find(([u]) => String(u).includes('/swap/v1/swap'))
     const swapBody = JSON.parse((swapCall?.[1] as RequestInit).body as string)
     expect(swapBody).not.toHaveProperty('feeAccount')
+  })
+})
+
+describe('buildJupiterSwapTx — bounded rate-limit retries', () => {
+  const params = { userPublicKey: USER, toContractAddress: USDC_MINT, amountBaseUnits: 100_000_000n }
+  let fetchSpy: ReturnType<typeof vi.fn>
+  let counts: { quote: number; swap: number }
+
+  const respond = (quoteFailures: number, swapFailures: number, status = 429, body = '{"error":"Rate limited"}') => {
+    fetchSpy.mockImplementation(async (input: string) => {
+      const endpoint = input.includes('/quote?') ? 'quote' : 'swap'
+      counts[endpoint]++
+      const failures = endpoint === 'quote' ? quoteFailures : swapFailures
+      return counts[endpoint] <= failures
+        ? new Response(body, { status, statusText: 'Too Many Requests' })
+        : new Response(JSON.stringify(endpoint === 'quote' ? fakeQuote : fakeSwap))
+    })
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    counts = { quote: 0, swap: 0 }
+    fetchSpy = vi.fn()
+    vi.stubGlobal('fetch', fetchSpy)
+    deriveJupiterFeeAccountMock.mockReset().mockResolvedValue(fakeFeeAccountInfo)
+    prependJupiterFeeAtaMock.mockReset().mockResolvedValue('PREPENDED_UNSIGNED_TX==')
+    vi.mocked(assertSafeSolanaSwapTransactionBase64).mockReset().mockResolvedValue(undefined)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it.each([
+    ['quote', 1],
+    ['quote', 2],
+    ['swap', 1],
+    ['swap', 2],
+  ] as const)('recovers %s after %i rate limits at the exact retry boundaries', async (endpoint, failures) => {
+    respond(endpoint === 'quote' ? failures : 0, endpoint === 'swap' ? failures : 0)
+    const timeoutSpy = vi.spyOn(AbortSignal, 'timeout')
+    const result = buildJupiterSwapTx(params)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(counts[endpoint]).toBe(1)
+    await vi.advanceTimersByTimeAsync(299)
+    expect(counts[endpoint]).toBe(1)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(counts[endpoint]).toBe(2)
+    if (failures === 2) {
+      await vi.advanceTimersByTimeAsync(599)
+      expect(counts[endpoint]).toBe(2)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(counts[endpoint]).toBe(3)
+    }
+    await expect(result).resolves.toMatchObject({ affiliateFeeApplied: true, outAmount: fakeQuote.outAmount })
+    expect(counts).toEqual({
+      quote: endpoint === 'quote' ? failures + 1 : 1,
+      swap: endpoint === 'swap' ? failures + 1 : 1,
+    })
+    const calls = fetchSpy.mock.calls.filter(([url]) => String(url).includes(`/swap/v1/${endpoint}`))
+    const requests = calls.map(([url, init]) => ({ url, ...init, signal: undefined }))
+    expect(requests.every(request => JSON.stringify(request) === JSON.stringify(requests[0]))).toBe(true)
+    expect(new Set(calls.map(([, init]) => init.signal)).size).toBe(failures + 1)
+    expect(timeoutSpy).toHaveBeenCalledTimes(failures + 2)
+    expect(timeoutSpy.mock.calls.every(([timeout]) => timeout === 15_000)).toBe(true)
+    const swapInit = fetchSpy.mock.calls.find(([url]) => String(url).includes('/swap/v1/swap'))![1]
+    expect(swapInit).toMatchObject({ method: 'POST', headers: { 'Content-Type': 'application/json' } })
+    expect(JSON.parse(swapInit.body)).toMatchObject({ feeAccount: FAKE_ATA, quoteResponse: fakeQuote })
+    expect(prependJupiterFeeAtaMock).toHaveBeenCalledTimes(1)
+    expect(assertSafeSolanaSwapTransactionBase64).toHaveBeenCalledWith('PREPENDED_UNSIGNED_TX==', expect.any(PublicKey))
+  })
+
+  it('keeps independent budgets when both operations are rate-limited', async () => {
+    respond(2, 2)
+    const result = buildJupiterSwapTx(params)
+    await vi.advanceTimersByTimeAsync(1800)
+    await expect(result).resolves.toMatchObject({ outAmount: fakeQuote.outAmount })
+    expect(counts).toEqual({ quote: 3, swap: 3 })
+  })
+
+  it.each(['quote', 'swap'] as const)('surfaces the final %s error after exactly three attempts', async endpoint => {
+    respond(endpoint === 'quote' ? 3 : 0, endpoint === 'swap' ? 3 : 0)
+    const rejection = expect(buildJupiterSwapTx(params)).rejects.toThrow('Jupiter API error (429): Rate limited')
+    await vi.advanceTimersByTimeAsync(900)
+    await rejection
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(counts).toEqual({ quote: endpoint === 'quote' ? 3 : 1, swap: endpoint === 'swap' ? 3 : 0 })
+    expect(assertSafeSolanaSwapTransactionBase64).not.toHaveBeenCalled()
+  })
+
+  it('retries non-JSON 429s and preserves the final status-text error', async () => {
+    respond(3, 0, 429, 'rate limited')
+    const rejection = expect(buildJupiterSwapTx(params)).rejects.toThrow('Jupiter API error (429): Too Many Requests')
+    await vi.advanceTimersByTimeAsync(900)
+    await rejection
+    expect(counts).toEqual({ quote: 3, swap: 0 })
+  })
+
+  it('adds no delay to healthy requests', async () => {
+    respond(0, 0)
+    await expect(buildJupiterSwapTx(params)).resolves.toMatchObject({ outAmount: fakeQuote.outAmount })
+    expect(counts).toEqual({ quote: 1, swap: 1 })
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it.each([400, 422, 500, 503])('does not retry HTTP %i on either endpoint', async status => {
+    for (const endpoint of ['quote', 'swap']) {
+      counts = { quote: 0, swap: 0 }
+      respond(endpoint === 'quote' ? 3 : 0, endpoint === 'swap' ? 3 : 0, status)
+      await expect(buildJupiterSwapTx(params)).rejects.toThrow(`Jupiter API error (${status})`)
+      expect(counts).toEqual({ quote: 1, swap: endpoint === 'swap' ? 1 : 0 })
+      expect(vi.getTimerCount()).toBe(0)
+    }
+  })
+
+  it.each([new TypeError('fetch failed'), new DOMException('timed out', 'TimeoutError')])(
+    'does not retry rejected fetches: %s',
+    async error => {
+      for (const endpoint of ['quote', 'swap']) {
+        fetchSpy.mockReset()
+        if (endpoint === 'swap') fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify(fakeQuote)))
+        fetchSpy.mockRejectedValueOnce(error)
+        await expect(buildJupiterSwapTx(params)).rejects.toBe(error)
+        expect(fetchSpy).toHaveBeenCalledTimes(endpoint === 'swap' ? 2 : 1)
+        expect(vi.getTimerCount()).toBe(0)
+      }
+    }
+  )
+
+  it.each([new TypeError('body download failed'), new DOMException('body timed out', 'TimeoutError')])(
+    'does not retry response-body failures: %s',
+    async error => {
+      for (const endpoint of ['quote', 'swap']) {
+        fetchSpy.mockReset()
+        if (endpoint === 'swap') fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify(fakeQuote)))
+        const response = new Response(new ReadableStream({ start: controller => controller.error(error) }), {
+          status: 429,
+        })
+        fetchSpy.mockResolvedValueOnce(response)
+        await expect(buildJupiterSwapTx(params)).rejects.toBe(error)
+        expect(fetchSpy).toHaveBeenCalledTimes(endpoint === 'swap' ? 2 : 1)
+        expect(vi.getTimerCount()).toBe(0)
+      }
+    }
+  )
+
+  it('still rejects excessive price impact after a recovered quote', async () => {
+    fetchSpy.mockResolvedValueOnce(new Response('{}', { status: 429 }))
+    fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify({ ...fakeQuote, priceImpactPct: '0.5' })))
+    const rejection = expect(buildJupiterSwapTx(params)).rejects.toBeInstanceOf(PriceImpactTooHighError)
+    await vi.advanceTimersByTimeAsync(300)
+    await rejection
+    expect(fetchSpy).toHaveBeenCalledTimes(2)
+    expect(prependJupiterFeeAtaMock).not.toHaveBeenCalled()
+  })
+
+  it('still rejects unsafe instructions after a recovered swap build', async () => {
+    respond(0, 1)
+    vi.mocked(assertSafeSolanaSwapTransactionBase64).mockRejectedValueOnce(new Error('unsafe instruction'))
+    const rejection = expect(buildJupiterSwapTx(params)).rejects.toThrow('unsafe instruction')
+    await vi.advanceTimersByTimeAsync(300)
+    await rejection
+    expect(counts).toEqual({ quote: 1, swap: 2 })
   })
 })
