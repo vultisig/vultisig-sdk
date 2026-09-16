@@ -635,6 +635,11 @@
       "import": "./dist/chains/evm/erc20/getErc20Balance.js",
       "default": "./dist/chains/evm/erc20/getErc20Balance.js"
     },
+    "./chains/evm/erc20/isErc20AllowanceResetRequired": {
+      "types": "./dist/chains/evm/erc20/isErc20AllowanceResetRequired.d.ts",
+      "import": "./dist/chains/evm/erc20/isErc20AllowanceResetRequired.js",
+      "default": "./dist/chains/evm/erc20/isErc20AllowanceResetRequired.js"
+    },
     "./chains/evm/erc721/getErc721Balance": {
       "types": "./dist/chains/evm/erc721/getErc721Balance.d.ts",
       "import": "./dist/chains/evm/erc721/getErc721Balance.js",
