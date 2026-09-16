@@ -985,6 +985,14 @@ export type { UtxoChainName } from '../../chains/utxo/addressBrand'
 export { assertUtxoAddressBrand, isUtxoAddressBrandValid } from '../../chains/utxo/addressBrand'
 export { getBlockchairBaseUrl } from '@vultisig/core-chain/chains/utxo/client/getBlockchairBaseUrl'
 
+// Canonical recipient format, burn-address and self-send checks.
+export type {
+  RecipientSanityFlag,
+  RecipientSanityInput,
+  RecipientSanityResult,
+} from '../../tools/validate/recipientSanity'
+export { isMalformedEvmAddress, isNullAddress, isSelfSend, recipientSanity } from '../../tools/validate/recipientSanity'
+
 // Dangerous/burn-address guard. Single source of truth for "is this destination
 // a burn/black-hole address that no key controls?" across EVM, Solana, UTXO and
 // XRP. Pure address-string matching (no chain-client deps), so RN-safe as a
