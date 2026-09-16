@@ -1,5 +1,15 @@
 # @vultisig/cli
 
+## 7.6.0
+
+### Patch Changes
+
+- [#2389](https://github.com/vultisig/vultisig-sdk/pull/2389) [`a7b4efa`](https://github.com/vultisig/vultisig-sdk/commit/a7b4efa3ffc11889c50593483ea240f414d94bdc) Thanks [@aminsato](https://github.com/aminsato)! - `buildSendKeysignPayload` now refuses known burn / program destinations (`assertSafeDestination`) on every chain, so a wallet send to the Solana System Program, the EVM zero address, a Bitcoin eater address or an XRPL black-hole account is rejected before the ceremony — the same guard the SDK's vault-free agent prep helpers already applied. The rejection surfaces as `BuildKeysignPayloadError('dangerous-destination')`; fee estimation through `getSendFeeEstimate` rejects the same destinations.
+
+- Updated dependencies [[`b06ffc7`](https://github.com/vultisig/vultisig-sdk/commit/b06ffc7ad86d5c1f5d1d149748005a3b9a42c5d6), [`4e7e0d7`](https://github.com/vultisig/vultisig-sdk/commit/4e7e0d79f516e49f68ee3ff4acc6f3d65c43e23e), [`b8e3e9d`](https://github.com/vultisig/vultisig-sdk/commit/b8e3e9d236710e4ca9c8a4e9c27f98a9f5dec0d2), [`bdb9634`](https://github.com/vultisig/vultisig-sdk/commit/bdb96345b9f8914f508a10dca2952bf223aa3db2), [`5fc8468`](https://github.com/vultisig/vultisig-sdk/commit/5fc8468f3e64cc688981c836740a3b73541ec89e), [`a7b4efa`](https://github.com/vultisig/vultisig-sdk/commit/a7b4efa3ffc11889c50593483ea240f414d94bdc), [`38bc8d4`](https://github.com/vultisig/vultisig-sdk/commit/38bc8d4bbae344cff8c6d5fd6b56bbf760831792), [`735299d`](https://github.com/vultisig/vultisig-sdk/commit/735299d1ad4206853b0442c17f7a5c90770d71be)]:
+  - @vultisig/sdk@7.6.0
+  - @vultisig/core-chain@5.5.0
+
 ## 7.5.0
 
 ### Patch Changes
