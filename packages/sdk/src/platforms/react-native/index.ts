@@ -966,7 +966,7 @@ export {
   knownContracts,
 } from '../../utils/knownContracts'
 export { normalizeChain, UnknownChainError } from '../../utils/normalizeChain'
-export { resolveChainReference } from '../../utils/resolveChainReference'
+export { resolveChainIdReference, resolveChainReference } from '../../utils/resolveChainReference'
 export type { ParsedThorSwapMemo } from '../../utils/thorSwapMemo'
 export { parseThorSwapMemo } from '../../utils/thorSwapMemo'
 export async function parseKeygenQR(...args: unknown[]) {

@@ -15,6 +15,7 @@ import type {
   PollTxStatusUntilFinalParams as PollTxStatusUntilFinalParamsFromTx,
   PollTxStatusUntilFinalResult as PollTxStatusUntilFinalResultFromTx,
 } from '../../../../src/tx'
+import { resolveChainIdReference } from '../../../../src/utils/resolveChainReference'
 import * as tokenRef from '../../../../src/vault/tokenRef'
 import { cosmosTxFeeGasParityCases } from '../../../fixtures/cosmosTxFeeGasParity'
 
@@ -126,6 +127,14 @@ beforeAll(async () => {
 }, 120_000)
 
 describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
+  it('exports the strict chain-ID resolver by identity with its string-only signature', () => {
+    expect(reactNativeEntry.resolveChainIdReference).toBe(resolveChainIdReference)
+    expectTypeOf(sdkRn.resolveChainIdReference).toEqualTypeOf<(chainId: string) => sdkRn.Chain | undefined>()
+    expect(reactNativeEntry.resolveChainIdReference('phoenix-1')).toBe(sdkRn.Chain.Terra)
+    expect(reactNativeEntry.resolveChainIdReference(' 8453 ')).toBeUndefined()
+    expect(reactNativeEntry.resolveChainReference(' 8453 ')).toBe(sdkRn.Chain.Base)
+  })
+
   it('re-exports canonical transaction-hash validation with unchanged chain rules', () => {
     expect(reactNativeEntry.isValidTxHash).toBe(isValidTxHash)
     expectTypeOf(reactNativeEntry.isValidTxHash).toEqualTypeOf<(chain: sdkRn.Chain, hash: string) => boolean>()

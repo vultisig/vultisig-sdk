@@ -1,10 +1,47 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import { describe, expect, it } from 'vitest'
 
-import { resolveChainReference } from '../../../src/utils/resolveChainReference'
+import { resolveChainIdReference, resolveChainReference } from '../../../src/utils/resolveChainReference'
+
+describe('resolveChainIdReference', () => {
+  it.each([
+    ['1', Chain.Ethereum],
+    ['8453', Chain.Base],
+    ['phoenix-1', Chain.Terra],
+    ['columbus-5', Chain.TerraClassic],
+  ])('resolves exact chain ID %s', (input, expected) => {
+    expect(resolveChainIdReference(input)).toBe(expected)
+  })
+
+  it.each([
+    'Ethereum',
+    'eth',
+    'Terra Classic',
+    ' 8453 ',
+    ' phoenix-1 ',
+    'PHOENIX-1',
+    '0x2105',
+    '08453',
+    '+8453',
+    '8453.0',
+    '8.453e3',
+    '9007199254740993',
+    '-1',
+    '0',
+    '',
+    'unknown-chain',
+    '123456789',
+  ])('rejects noncanonical or unknown chain ID %s', input => {
+    expect(resolveChainIdReference(input)).toBeUndefined()
+  })
+})
 
 describe('resolveChainReference', () => {
   it.each([
+    ['Ethereum', Chain.Ethereum],
+    ['eth', Chain.Ethereum],
+    [' 8453 ', Chain.Base],
+    [' phoenix-1 ', Chain.Terra],
     ['Terra Classic', Chain.TerraClassic],
     ['Bitcoin Cash', Chain.BitcoinCash],
     ['THOR Chain', Chain.THORChain],
