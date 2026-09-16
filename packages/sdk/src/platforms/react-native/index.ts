@@ -34,6 +34,7 @@ import { formatUtxoBalance, getUtxoBalance, supportedUtxoBalanceChains } from '.
 import * as cosmos from '../../tools/cosmos'
 import * as evm from '../../tools/evm'
 import { getEvmBalances } from '../../tools/evm/balanceEvm'
+import * as price from '../../tools/price'
 import * as swap from '../../tools/swap'
 import * as token from '../../tools/token'
 import { Vultisig as BaseVultisig } from '../../Vultisig'
@@ -424,7 +425,7 @@ export {
 
 // Public namespace handles documented by the SDK changelog. Keep these as
 // explicit module objects so Rollup preserves the nested `cosmos.gov` handle.
-export { cosmos, evm, token }
+export { cosmos, evm, price, token }
 
 export * from './prep'
 

@@ -1247,6 +1247,7 @@ export {
   prepareThorchainMsgDepositTxFromKeys,
   prepareTrc20TransferFromKeys,
   prepareUtxoConsolidateTxFromKeys,
+  price,
   quoteSkipRoute,
   type RawEvmTxEnvelope,
   recipientSanity,
