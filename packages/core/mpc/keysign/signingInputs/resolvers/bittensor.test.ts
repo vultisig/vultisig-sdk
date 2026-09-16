@@ -31,7 +31,8 @@ const buildPayload = ({
   address = FROM_ADDRESS,
   hexPublicKey,
   memo,
-}: { address?: string; hexPublicKey?: string; memo?: string } = {}) =>
+  allowDeath,
+}: { address?: string; hexPublicKey?: string; memo?: string; allowDeath?: boolean } = {}) =>
   create(KeysignPayloadSchema, {
     ...(memo ? { memo } : {}),
     coin: create(CoinSchema, {
@@ -53,6 +54,7 @@ const buildPayload = ({
         specVersion: 225,
         transactionVersion: 1,
         genesisHash: GENESIS_HASH,
+        ...(allowDeath === undefined ? {} : { allowDeath }),
       }),
     },
   })
@@ -235,13 +237,20 @@ describe('getBittensorSigningInputs — custom tx-input framing round-trips', ()
     walletCore = await initWasm()
   })
 
-  // The KeysignPayload carries no "empty the account" intent, so every
-  // co-signer must derive the same keep-alive call from it — a device that
-  // picked allow_death would hash a different payload and stall the ceremony.
-  it('always encodes transfer_keep_alive from a keysign payload', async () => {
-    const [txInputData] = getBittensorSigningInputs({ keysignPayload: buildPayload(), walletCore })
-    const { callData } = decodeBittensorTxInput(txInputData)
-    expect(Array.from(callData.slice(0, 2))).toEqual([5, 3])
+  // Every co-signer derives the call index from PolkadotSpecific.allowDeath, so
+  // a payload that predates the field, or leaves it unset, must land on
+  // keep-alive and only an explicit true may reap the sender.
+  it('encodes transfer_keep_alive unless the payload explicitly allows death', async () => {
+    const keepAlive = decodeBittensorTxInput(
+      getBittensorSigningInputs({ keysignPayload: buildPayload(), walletCore })[0]
+    ).callData
+    expect(Array.from(keepAlive.slice(0, 2))).toEqual([5, 3])
+
+    const allowDeath = decodeBittensorTxInput(
+      getBittensorSigningInputs({ keysignPayload: buildPayload({ allowDeath: true }), walletCore })[0]
+    ).callData
+    expect(Array.from(allowDeath.slice(0, 2))).toEqual([5, 0])
+    expect(hex(allowDeath.slice(2))).toBe(hex(keepAlive.slice(2)))
   })
 
   it('round-trips callData/signedExtra/payload through encode -> decode unchanged', async () => {
