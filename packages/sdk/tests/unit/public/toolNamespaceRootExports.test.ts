@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import * as sdk from '@/index'
 import {
   balance,
   buildCw20TransferMsg,
@@ -15,7 +16,13 @@ import {
   swap,
   token,
 } from '@/index'
-import { cosmos as cosmosFromTools, evm as evmFromTools, token as tokenFromTools } from '@/tools'
+import {
+  cosmos as cosmosFromTools,
+  evm as evmFromTools,
+  price as priceFromTools,
+  token as tokenFromTools,
+} from '@/tools'
+import * as priceHelpers from '@/tools/price'
 
 describe('SDK root tool namespaces', () => {
   it('exposes the complete balance, prep and swap families alongside flat exports', async () => {
@@ -34,6 +41,15 @@ describe('SDK root tool namespaces', () => {
     expect(swap.computeAstroportMinReceive).toBe(computeAstroportMinReceive)
     expect(balance.formatBalance(1500000n, 6)).toBe('1.5')
     expect(swap.computeAstroportMinReceive('1000000', 0.01)).toBe('990000')
+  })
+
+  it('exposes the complete price family through the same tools namespace and preserves flat exports', () => {
+    expect(sdk.price).toBe(priceFromTools)
+    expect(Object.keys(sdk.price).sort()).toEqual(Object.keys(priceHelpers).sort())
+    for (const name of Object.keys(priceHelpers) as (keyof typeof priceHelpers)[]) {
+      expect(sdk.price[name]).toBe(priceHelpers[name])
+      expect(sdk.price[name]).toBe(sdk[name])
+    }
   })
 
   it('exposes the EVM helper family without removing flat exports', () => {

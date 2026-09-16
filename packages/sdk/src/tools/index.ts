@@ -154,6 +154,9 @@ export {
 } from './balance'
 
 // Price / fiat (token USD price via CoinGecko proxy)
+import * as price from './price'
+
+export { price }
 export type { PriceBatchResult, PriceQuery, PriceQuote } from './price'
 export {
   coinGeckoIdToSymbol,
