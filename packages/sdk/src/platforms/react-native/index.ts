@@ -34,6 +34,7 @@ import { formatUtxoBalance, getUtxoBalance, supportedUtxoBalanceChains } from '.
 import * as cosmos from '../../tools/cosmos'
 import * as evm from '../../tools/evm'
 import { getEvmBalances } from '../../tools/evm/balanceEvm'
+import * as price from '../../tools/price'
 import * as swap from '../../tools/swap'
 import * as token from '../../tools/token'
 import { Vultisig as BaseVultisig } from '../../Vultisig'
@@ -424,7 +425,7 @@ export {
 
 // Public namespace handles documented by the SDK changelog. Keep these as
 // explicit module objects so Rollup preserves the nested `cosmos.gov` handle.
-export { cosmos, evm, token }
+export { cosmos, evm, price, token }
 
 export * from './prep'
 
@@ -965,7 +966,7 @@ export {
   knownContracts,
 } from '../../utils/knownContracts'
 export { normalizeChain, UnknownChainError } from '../../utils/normalizeChain'
-export { resolveChainReference } from '../../utils/resolveChainReference'
+export { resolveChainIdReference, resolveChainReference } from '../../utils/resolveChainReference'
 export type { ParsedThorSwapMemo } from '../../utils/thorSwapMemo'
 export { parseThorSwapMemo } from '../../utils/thorSwapMemo'
 export async function parseKeygenQR(...args: unknown[]) {
@@ -984,6 +985,14 @@ export * from '../../signable-transaction'
 export type { UtxoChainName } from '../../chains/utxo/addressBrand'
 export { assertUtxoAddressBrand, isUtxoAddressBrandValid } from '../../chains/utxo/addressBrand'
 export { getBlockchairBaseUrl } from '@vultisig/core-chain/chains/utxo/client/getBlockchairBaseUrl'
+
+// Canonical recipient format, burn-address and self-send checks.
+export type {
+  RecipientSanityFlag,
+  RecipientSanityInput,
+  RecipientSanityResult,
+} from '../../tools/validate/recipientSanity'
+export { isMalformedEvmAddress, isNullAddress, isSelfSend, recipientSanity } from '../../tools/validate/recipientSanity'
 
 // Dangerous/burn-address guard. Single source of truth for "is this destination
 // a burn/black-hole address that no key controls?" across EVM, Solana, UTXO and

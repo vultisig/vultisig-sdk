@@ -1,5 +1,6 @@
 import { create, fromBinary, toBinary } from '@bufbuild/protobuf'
 import { Chain } from '@vultisig/core-chain/Chain'
+import { encodeRippleXAddress } from '@vultisig/core-chain/chains/ripple/address'
 import { rippleKnownIssuedTokens } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
 import {
   PolkadotSpecificSchema,
@@ -383,5 +384,92 @@ describe('buildSendKeysignPayload Bittensor destination existential deposit', ()
 
     expect(payload.toAmount).toBe('600')
     expect(getBittensorCoinBalanceMock).not.toHaveBeenCalled()
+  })
+})
+
+// The burn / program address list was enforced only by the SDK's vault-free
+// agent prep helpers. Wallet apps build sends through this function directly,
+// so a human clicking Send on the Solana System Program had no guard at all.
+describe('buildSendKeysignPayload burn-address guard', () => {
+  const solanaCoin = {
+    chain: Chain.Solana,
+    ticker: 'SOL',
+    address: 'Bxp8yhH9zNwxyE4UqxP7a7hgJ5xTZfxNNft7YJJ2VRjT',
+    decimals: 9,
+  }
+  const ethereumCoin = {
+    chain: Chain.Ethereum,
+    ticker: 'ETH',
+    address: '0x1111111111111111111111111111111111111111',
+    decimals: 18,
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getCoinBalanceMock.mockResolvedValue(10_000_000_000n)
+    getKeysignUtxoInfoMock.mockResolvedValue(undefined)
+    getChainSpecificMock.mockResolvedValue({
+      case: 'rippleSpecific',
+      value: create(RippleSpecificSchema, {
+        sequence: 1n,
+        gas: 15n,
+        lastLedgerSequence: 2n,
+      }),
+    })
+  })
+
+  it('refuses a Solana send to the System Program before building anything', async () => {
+    await expect(
+      buildPayload({
+        coin: solanaCoin,
+        receiver: '11111111111111111111111111111111',
+        omitDestinationTag: true,
+      })
+    ).rejects.toMatchObject({
+      name: 'BuildKeysignPayloadError',
+      type: 'dangerous-destination',
+      message: expect.stringContaining('Solana System Program'),
+    })
+
+    expect(getChainSpecificMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses an EVM send to the zero address', async () => {
+    await expect(
+      buildPayload({
+        coin: ethereumCoin,
+        receiver: '0x0000000000000000000000000000000000000000',
+        omitDestinationTag: true,
+      })
+    ).rejects.toMatchObject({ type: 'dangerous-destination' })
+  })
+
+  it('does not let a Solana program id block an unrelated chain', async () => {
+    await expect(
+      buildPayload({
+        coin: ethereumCoin,
+        receiver: '11111111111111111111111111111111',
+        omitDestinationTag: true,
+      })
+    ).resolves.toBeDefined()
+  })
+
+  it('catches an XRP black-hole account even when wrapped in an X-address', async () => {
+    const blackHoleXAddress = encodeRippleXAddress('rrrrrrrrrrrrrrrrrrrrrhoLvTp', 7)
+
+    await expect(buildPayload({ receiver: blackHoleXAddress, omitDestinationTag: true })).rejects.toMatchObject({
+      type: 'dangerous-destination',
+      message: expect.stringContaining('black-hole'),
+    })
+  })
+
+  it('still builds a send to an ordinary recipient', async () => {
+    const payload = await buildPayload({
+      coin: solanaCoin,
+      receiver: 'HN7cABqLq46Es1jh92dQQisAq662SmxELLLsHHe4YWrH',
+      omitDestinationTag: true,
+    })
+
+    expect(payload.toAddress).toBe('HN7cABqLq46Es1jh92dQQisAq662SmxELLLsHHe4YWrH')
   })
 })

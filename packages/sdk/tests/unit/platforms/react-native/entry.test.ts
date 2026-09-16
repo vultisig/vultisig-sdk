@@ -10,10 +10,12 @@ import type {
   PollTxStatusUntilFinalResult as PollTxStatusUntilFinalResultFromReactNative,
 } from '../../../../src/platforms/react-native/index'
 import * as sdkRn from '../../../../src/platforms/react-native/index'
+import * as recipientChecks from '../../../../src/tools/validate/recipientSanity'
 import type {
   PollTxStatusUntilFinalParams as PollTxStatusUntilFinalParamsFromTx,
   PollTxStatusUntilFinalResult as PollTxStatusUntilFinalResultFromTx,
 } from '../../../../src/tx'
+import { resolveChainIdReference } from '../../../../src/utils/resolveChainReference'
 import * as tokenRef from '../../../../src/vault/tokenRef'
 import { cosmosTxFeeGasParityCases } from '../../../fixtures/cosmosTxFeeGasParity'
 
@@ -26,6 +28,35 @@ describe('RN entry exposes canonical token reference resolution', () => {
     const native: sdkRn.ResolvedTokenInfo = sdkRn.resolveTokenRef(sdkRn.Chain.Ethereum, undefined, [])
     expect(native).toEqual({ ticker: 'ETH', decimals: 18 })
     expect(sdkRn.resolveTokenRefId(sdkRn.Chain.Ethereum, 'ETH', [])).toBeUndefined()
+  })
+})
+
+describe('RN recipient sanity checks', () => {
+  it('exports the canonical implementations', () => {
+    expect(sdkRn.recipientSanity).toBe(recipientChecks.recipientSanity)
+    expect(sdkRn.isNullAddress).toBe(recipientChecks.isNullAddress)
+    expect(sdkRn.isSelfSend).toBe(recipientChecks.isSelfSend)
+    expect(sdkRn.isMalformedEvmAddress).toBe(recipientChecks.isMalformedEvmAddress)
+  })
+
+  it.each([
+    { recipient: '0x0000000000000000000000000000000000000000', flags: ['null'] },
+    {
+      recipient: '0xabcdef0123456789abcdef0123456789abcdef01',
+      from: '0xABCDEF0123456789ABCDEF0123456789ABCDEF01',
+      flags: ['selfSend'],
+    },
+    { recipient: '0xdeadbeef', flags: ['malformedEvm'] },
+    { recipient: '0xabcdef0123456789abcdef0123456789abcdef01', flags: [] },
+  ])('checks $recipient through the RN entry', ({ recipient, from, flags }) => {
+    expect(sdkRn.recipientSanity({ recipient, from })).toEqual({
+      recipient,
+      flags,
+      flagged: flags.length > 0,
+      isNull: flags.includes('null'),
+      isSelfSend: flags.includes('selfSend'),
+      isMalformedEvm: flags.includes('malformedEvm'),
+    })
   })
 })
 
@@ -96,6 +127,14 @@ beforeAll(async () => {
 }, 120_000)
 
 describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
+  it('exports the strict chain-ID resolver by identity with its string-only signature', () => {
+    expect(reactNativeEntry.resolveChainIdReference).toBe(resolveChainIdReference)
+    expectTypeOf(sdkRn.resolveChainIdReference).toEqualTypeOf<(chainId: string) => sdkRn.Chain | undefined>()
+    expect(reactNativeEntry.resolveChainIdReference('phoenix-1')).toBe(sdkRn.Chain.Terra)
+    expect(reactNativeEntry.resolveChainIdReference(' 8453 ')).toBeUndefined()
+    expect(reactNativeEntry.resolveChainReference(' 8453 ')).toBe(sdkRn.Chain.Base)
+  })
+
   it('re-exports canonical transaction-hash validation with unchanged chain rules', () => {
     expect(reactNativeEntry.isValidTxHash).toBe(isValidTxHash)
     expectTypeOf(reactNativeEntry.isValidTxHash).toEqualTypeOf<(chain: sdkRn.Chain, hash: string) => boolean>()
@@ -106,6 +145,14 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(reactNativeEntry.isValidTxHash(sdkRn.Chain.Bitcoin, hash)).toBe(true)
     expect(reactNativeEntry.isValidTxHash(sdkRn.Chain.Bitcoin, 'not-a-hash')).toBe(false)
     expect(reactNativeEntry.isValidTxHash(sdkRn.Chain.Ethereum, ` \t0x${hash}\n`)).toBe(true)
+  })
+
+  it('exposes the complete price namespace and preserves flat exports', async () => {
+    const priceHelpers = await import('../../../../src/tools/price')
+    expect(sdkRn.price).toBe(priceHelpers)
+    for (const name of Object.keys(priceHelpers) as (keyof typeof priceHelpers)[]) {
+      expect(sdkRn.price[name]).toBe(sdkRn[name])
+    }
   })
 
   it('re-exports Blockaid EVM chain canonicals by identity', () => {
