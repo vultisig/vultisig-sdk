@@ -5,6 +5,7 @@ import { decodeSigningOutput } from '@vultisig/core-chain/tw/signingOutput'
 import { broadcastTx as coreBroadcastTx } from '@vultisig/core-chain/tx/broadcast'
 import { getTxHash } from '@vultisig/core-chain/tx/hash'
 import { getTxStatus } from '@vultisig/core-chain/tx/status'
+import { getErc20ApproveAmounts } from '@vultisig/core-mpc/keysign/erc20/getErc20ApproveAmounts'
 import { getEncodedSigningInputs } from '@vultisig/core-mpc/keysign/signingInputs'
 import { assertNativeSwapReadyForBroadcast } from '@vultisig/core-mpc/keysign/swap/assertNativeSwapReadyForBroadcast'
 import { getKeysignTwPublicKey } from '@vultisig/core-mpc/keysign/tw/getKeysignTwPublicKey'
@@ -161,7 +162,12 @@ export class BroadcastService {
       // Broadcast all transaction inputs (e.g., approve + swap for EVM token flows).
       // Returns the hash of the last transaction, which is typically the primary one.
       let txHash = ''
-      const shouldConfirmApprovalFirst = !!keysignPayload.erc20ApprovePayload && txInputsArray.length > 1
+      // Every approval leg (an approve(0) reset when the payload asks for one, then
+      // approve(amount)) is confirmed before the transaction that depends on it goes out.
+      const approvalTxCount = keysignPayload.erc20ApprovePayload
+        ? getErc20ApproveAmounts(keysignPayload.erc20ApprovePayload).length
+        : 0
+      const shouldConfirmApprovalFirst = approvalTxCount > 0 && txInputsArray.length > approvalTxCount
       const broadcastedTxHashes: string[] = []
       let submittedTxCount = 0
       for (const [index, txInputData] of txInputsArray.entries()) {
@@ -197,7 +203,7 @@ export class BroadcastService {
           broadcastedTxHashes.push(inputTxHash)
           txHash = inputTxHash
 
-          if (shouldConfirmApprovalFirst && index === 0) {
+          if (shouldConfirmApprovalFirst && index < approvalTxCount) {
             await this.waitForConfirmation(chain, txHash)
           }
         } catch (error) {
