@@ -659,6 +659,10 @@ program
   .option('--token <tokenId>', 'Token to send (default: native)')
   .option('--memo <memo>', 'Transaction memo')
   .option('--destination-tag <tag>', 'XRP DestinationTag (0 to 4294967295)')
+  .option(
+    '--allow-death',
+    'Empty a Polkadot or Bittensor account with --max: the chain reaps it and destroys any remainder below the existential deposit'
+  )
   .option('--dry-run', 'Preview transaction without signing or broadcasting')
   .option('--confirm', 'Confirm and broadcast (required to execute non-interactively; use --dry-run to preview)')
   .option('-y, --yes', 'Alias for --confirm')
@@ -689,6 +693,7 @@ See also: balance, tx-status`
           token?: string
           memo?: string
           destinationTag?: string
+          allowDeath?: boolean
           dryRun?: boolean
           yes?: boolean
           confirm?: boolean
@@ -701,6 +706,14 @@ See also: balance, tx-status`
         const chain = resolveChainOrThrow(chainStr)
         if (options.destinationTag !== undefined && chain !== Chain.Ripple) {
           throw new Error('--destination-tag is only supported for XRP')
+        }
+        if (options.allowDeath) {
+          if (chain !== Chain.Polkadot && chain !== Chain.Bittensor) {
+            throw new Error('--allow-death is only supported for Polkadot and Bittensor')
+          }
+          if (!options.max || options.token) {
+            throw new Error('--allow-death empties the native account, so it requires --max and no --token')
+          }
         }
         const destinationTag = options.destinationTag === undefined ? undefined : Number(options.destinationTag)
         if (
@@ -722,6 +735,7 @@ See also: balance, tx-status`
           tokenId: options.token,
           memo: options.memo,
           destinationTag,
+          allowDeath: options.allowDeath,
           dryRun: options.dryRun,
           yes: options.yes || options.confirm,
           force: options.force,
