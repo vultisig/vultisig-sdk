@@ -532,6 +532,44 @@ import {
   getTxStatus as getTxStatusReactNative,
   type ResolvedTokenInfo as ResolvedTokenInfoReactNative,
 } from '@vultisig/sdk/react-native'
+import {
+  recipientSanity as recipientSanityRoot,
+  isNullAddress as isNullAddressRoot,
+  isSelfSend as isSelfSendRoot,
+  isMalformedEvmAddress as isMalformedEvmAddressRoot,
+  type RecipientSanityFlag as RecipientSanityFlagRoot,
+  type RecipientSanityInput as RecipientSanityInputRoot,
+  type RecipientSanityResult as RecipientSanityResultRoot,
+} from '@vultisig/sdk'
+const recipientInputRoot: RecipientSanityInputRoot = { recipient: '0xdeadbeef' }
+const recipientResultRoot: RecipientSanityResultRoot = recipientSanityRoot(recipientInputRoot)
+const recipientFlagsRoot: RecipientSanityFlagRoot[] = recipientResultRoot.flags
+const recipientChecksRoot: boolean[] = [
+  isNullAddressRoot(recipientInputRoot.recipient),
+  isSelfSendRoot('', recipientInputRoot.recipient),
+  isMalformedEvmAddressRoot(recipientInputRoot.recipient),
+]
+void recipientFlagsRoot
+void recipientChecksRoot
+import {
+  recipientSanity as recipientSanityReactNative,
+  isNullAddress as isNullAddressReactNative,
+  isSelfSend as isSelfSendReactNative,
+  isMalformedEvmAddress as isMalformedEvmAddressReactNative,
+  type RecipientSanityFlag as RecipientSanityFlagReactNative,
+  type RecipientSanityInput as RecipientSanityInputReactNative,
+  type RecipientSanityResult as RecipientSanityResultReactNative,
+} from '@vultisig/sdk/react-native'
+const recipientInputReactNative: RecipientSanityInputReactNative = { recipient: '0xdeadbeef' }
+const recipientResultReactNative: RecipientSanityResultReactNative = recipientSanityReactNative(recipientInputReactNative)
+const recipientFlagsReactNative: RecipientSanityFlagReactNative[] = recipientResultReactNative.flags
+const recipientChecksReactNative: boolean[] = [
+  isNullAddressReactNative(recipientInputReactNative.recipient),
+  isSelfSendReactNative('', recipientInputReactNative.recipient),
+  isMalformedEvmAddressReactNative(recipientInputReactNative.recipient),
+]
+void recipientFlagsReactNative
+void recipientChecksReactNative
 import type { Vultisig } from '@vultisig/sdk/node'
 import type { ElectronMainCrypto, Vultisig as ElectronMainVultisig } from '@vultisig/sdk/electron/main'
 
