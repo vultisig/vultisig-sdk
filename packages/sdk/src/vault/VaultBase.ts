@@ -1322,6 +1322,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     sendMaxAmount?: boolean
     /** TON only: pay the fee in the jetton being sent through the gasless relay. */
     tonGasless?: boolean
+    allowDeath?: boolean
   }): Promise<KeysignPayload> {
     return this.transactionBuilder.prepareSendTx(params)
   }
@@ -1406,6 +1407,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     feeSettings?: FeeSettings
     /** TON only: the relay commission is deducted from the jetton balance being sent. */
     tonGasless?: boolean
+    allowDeath?: boolean
   }): Promise<MaxSendAmount> {
     const walletCore = await this.wasmProvider.getWalletCore()
     // Validate receiver before fetching balance so bad input doesn't waste a
@@ -2044,6 +2046,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   /**
    * Send tokens. Use amount "max" for the native balance minus fees, or the full token balance when native gas is covered. Set dryRun for fee estimates without signing.
    * `gasless` (TON jettons on a W5 account) pays the fee in the jetton itself through the relay, so no TON is needed.
+   * `allowDeath` empties a Polkadot or Bittensor account with `transfer_allow_death` — the chain reaps it below the existential deposit — so only pass it for an explicit user choice with the reap disclosed.
    */
   async send(params: {
     chain: Chain
@@ -2052,17 +2055,18 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     symbol?: string
     memo?: string
     destinationTag?: number
+    allowDeath?: boolean
     dryRun?: boolean
     gasless?: boolean
   }): Promise<SendResult> {
-    const { chain, to, amount, symbol, memo, destinationTag, dryRun, gasless } = params
+    const { chain, to, amount, symbol, memo, destinationTag, allowDeath, dryRun, gasless } = params
     const tokenInfo = this.resolveTokenInfo(chain, symbol)
     const coin = this.buildAccountCoin(chain, await this.address(chain), tokenInfo)
     const tonGasless = chain === Chain.Ton && Boolean(tokenInfo.contractAddress) && gasless === true
 
     let amountBigInt: bigint
     if (amount === 'max') {
-      const maxInfo = await this.getMaxSendAmount({ coin, receiver: to, memo, destinationTag, tonGasless })
+      const maxInfo = await this.getMaxSendAmount({ coin, receiver: to, memo, destinationTag, tonGasless, allowDeath })
       if (maxInfo.maxSendable <= 0n)
         throw new VaultError(VaultErrorCode.InvalidAmount, 'Insufficient balance to cover network fees')
       amountBigInt = maxInfo.maxSendable
@@ -2080,6 +2084,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       // it, so the payload records it here or nowhere.
       sendMaxAmount: amount === 'max',
       tonGasless,
+      allowDeath,
     })
 
     if (dryRun) {
@@ -2090,6 +2095,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
         memo,
         destinationTag,
         tonGasless,
+        allowDeath,
       })
       // The network fee is paid in the chain's native asset, never in the token
       // being sent — except for a relayed TON send, whose commission is charged
