@@ -3,11 +3,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { configureDefaultStorage } from '../../src/context/defaultStorage'
 import { configureWasm } from '../../src/context/wasmRuntime'
+import { Vultisig } from '../../src/index'
 import { MemoryStorage } from '../../src/storage/MemoryStorage'
 import type { Storage } from '../../src/storage/types'
+import * as balance from '../../src/tools/balance'
+import * as bridge from '../../src/tools/bridge'
+import * as cosmos from '../../src/tools/cosmos'
+import { decode } from '../../src/tools/decode'
+import * as gas from '../../src/tools/gas'
+import * as prep from '../../src/tools/prep'
+import * as price from '../../src/tools/price'
+import * as swap from '../../src/tools/swap'
 import { ValidationHelpers } from '../../src/utils/validation'
 import { VaultBase } from '../../src/vault/VaultBase'
-import { SUPPORTED_CHAINS, Vultisig } from '../../src/Vultisig'
+import { SUPPORTED_CHAINS } from '../../src/Vultisig'
 
 // Mock WASM getter for tests
 const mockWalletCore = {}
@@ -109,6 +118,40 @@ describe('Vultisig', () => {
   describe('vault management', () => {
     it('should check if has active vault', async () => {
       expect(await sdk.hasActiveVault()).toBe(false)
+    })
+  })
+
+  describe('public namespace handles', () => {
+    it('exposes stable canonical helper groups without initialization', () => {
+      expect(sdk.initialized).toBe(false)
+
+      expect(sdk.balance).toBe(sdk.balance)
+      expect(sdk.bridge).toBe(sdk.bridge)
+      expect(sdk.cosmos).toBe(sdk.cosmos)
+      expect(sdk.decode).toBe(sdk.decode)
+      expect(sdk.gas).toBe(sdk.gas)
+      expect(sdk.prep).toBe(sdk.prep)
+      expect(sdk.price).toBe(sdk.price)
+      expect(sdk.swap).toBe(sdk.swap)
+
+      expect(sdk.balance).toBe(balance)
+      expect(sdk.bridge).toBe(bridge)
+      expect(sdk.cosmos).toBe(cosmos)
+      expect(sdk.decode).toBe(decode)
+      expect(sdk.gas).toBe(gas)
+      expect(sdk.prep).toBe(prep)
+      expect(sdk.price).toBe(price)
+      expect(sdk.swap).toBe(swap)
+
+      expect(sdk.balance.getEvmBalances).toBe(balance.getEvmBalances)
+      expect(sdk.bridge.buildCctpBridge).toBe(bridge.buildCctpBridge)
+      expect(sdk.cosmos.gov.getCosmosGovernanceProposals).toBe(cosmos.gov.getCosmosGovernanceProposals)
+      expect(sdk.decode.fromToolResult).toBe(decode.fromToolResult)
+      expect(sdk.gas.compareCosts).toBe(gas.compareCosts)
+      expect(sdk.prep.prepareSendTxFromKeys).toBe(prep.prepareSendTxFromKeys)
+      expect(sdk.prep.cosmosStaking).toBe(prep.cosmosStaking)
+      expect(sdk.price.getPrice).toBe(price.getPrice)
+      expect(sdk.swap.findSwapQuote).toBe(swap.findSwapQuote)
     })
   })
 

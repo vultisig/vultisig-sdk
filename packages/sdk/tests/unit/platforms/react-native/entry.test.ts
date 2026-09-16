@@ -1,10 +1,21 @@
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
 import * as blockaidChains from '@vultisig/core-chain/security/blockaid/evmChains'
+import { isValidTxHash } from '@vultisig/core-chain/tx/isValidTxHash'
 import { AuthInfo, SignDoc, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import { beforeAll, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
+import type {
+  PollTxStatusUntilFinalParams as PollTxStatusUntilFinalParamsFromReactNative,
+  PollTxStatusUntilFinalResult as PollTxStatusUntilFinalResultFromReactNative,
+} from '../../../../src/platforms/react-native/index'
 import * as sdkRn from '../../../../src/platforms/react-native/index'
+import * as recipientChecks from '../../../../src/tools/validate/recipientSanity'
+import type {
+  PollTxStatusUntilFinalParams as PollTxStatusUntilFinalParamsFromTx,
+  PollTxStatusUntilFinalResult as PollTxStatusUntilFinalResultFromTx,
+} from '../../../../src/tx'
+import { resolveChainIdReference } from '../../../../src/utils/resolveChainReference'
 import * as tokenRef from '../../../../src/vault/tokenRef'
 import { cosmosTxFeeGasParityCases } from '../../../fixtures/cosmosTxFeeGasParity'
 
@@ -17,6 +28,35 @@ describe('RN entry exposes canonical token reference resolution', () => {
     const native: sdkRn.ResolvedTokenInfo = sdkRn.resolveTokenRef(sdkRn.Chain.Ethereum, undefined, [])
     expect(native).toEqual({ ticker: 'ETH', decimals: 18 })
     expect(sdkRn.resolveTokenRefId(sdkRn.Chain.Ethereum, 'ETH', [])).toBeUndefined()
+  })
+})
+
+describe('RN recipient sanity checks', () => {
+  it('exports the canonical implementations', () => {
+    expect(sdkRn.recipientSanity).toBe(recipientChecks.recipientSanity)
+    expect(sdkRn.isNullAddress).toBe(recipientChecks.isNullAddress)
+    expect(sdkRn.isSelfSend).toBe(recipientChecks.isSelfSend)
+    expect(sdkRn.isMalformedEvmAddress).toBe(recipientChecks.isMalformedEvmAddress)
+  })
+
+  it.each([
+    { recipient: '0x0000000000000000000000000000000000000000', flags: ['null'] },
+    {
+      recipient: '0xabcdef0123456789abcdef0123456789abcdef01',
+      from: '0xABCDEF0123456789ABCDEF0123456789ABCDEF01',
+      flags: ['selfSend'],
+    },
+    { recipient: '0xdeadbeef', flags: ['malformedEvm'] },
+    { recipient: '0xabcdef0123456789abcdef0123456789abcdef01', flags: [] },
+  ])('checks $recipient through the RN entry', ({ recipient, from, flags }) => {
+    expect(sdkRn.recipientSanity({ recipient, from })).toEqual({
+      recipient,
+      flags,
+      flagged: flags.length > 0,
+      isNull: flags.includes('null'),
+      isSelfSend: flags.includes('selfSend'),
+      isMalformedEvm: flags.includes('malformedEvm'),
+    })
   })
 })
 
@@ -75,6 +115,10 @@ vi.mock('@vultisig/walletcore-native', () => ({
 let reactNativeEntry: Awaited<typeof import('../../../../src/platforms/react-native/index')>
 let dangerousAddresses: Awaited<typeof import('../../../../src/utils/dangerousAddresses')>
 
+function assertAssignable<A, B>(_check: (a: A, b: B) => void): true {
+  return true
+}
+
 beforeAll(async () => {
   ;[reactNativeEntry, dangerousAddresses] = await Promise.all([
     import('../../../../src/platforms/react-native/index'),
@@ -83,10 +127,44 @@ beforeAll(async () => {
 }, 120_000)
 
 describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
+  it('exports the strict chain-ID resolver by identity with its string-only signature', () => {
+    expect(reactNativeEntry.resolveChainIdReference).toBe(resolveChainIdReference)
+    expectTypeOf(sdkRn.resolveChainIdReference).toEqualTypeOf<(chainId: string) => sdkRn.Chain | undefined>()
+    expect(reactNativeEntry.resolveChainIdReference('phoenix-1')).toBe(sdkRn.Chain.Terra)
+    expect(reactNativeEntry.resolveChainIdReference(' 8453 ')).toBeUndefined()
+    expect(reactNativeEntry.resolveChainReference(' 8453 ')).toBe(sdkRn.Chain.Base)
+  })
+
+  it('re-exports canonical transaction-hash validation with unchanged chain rules', () => {
+    expect(reactNativeEntry.isValidTxHash).toBe(isValidTxHash)
+    expectTypeOf(reactNativeEntry.isValidTxHash).toEqualTypeOf<(chain: sdkRn.Chain, hash: string) => boolean>()
+
+    const hash = 'a'.repeat(64)
+    expect(reactNativeEntry.isValidTxHash(sdkRn.Chain.Ethereum, `0x${hash}`)).toBe(true)
+    expect(reactNativeEntry.isValidTxHash(sdkRn.Chain.Ethereum, hash)).toBe(false)
+    expect(reactNativeEntry.isValidTxHash(sdkRn.Chain.Bitcoin, hash)).toBe(true)
+    expect(reactNativeEntry.isValidTxHash(sdkRn.Chain.Bitcoin, 'not-a-hash')).toBe(false)
+    expect(reactNativeEntry.isValidTxHash(sdkRn.Chain.Ethereum, ` \t0x${hash}\n`)).toBe(true)
+  })
+
+  it('exposes the complete price namespace and preserves flat exports', async () => {
+    const priceHelpers = await import('../../../../src/tools/price')
+    expect(sdkRn.price).toBe(priceHelpers)
+    for (const name of Object.keys(priceHelpers) as (keyof typeof priceHelpers)[]) {
+      expect(sdkRn.price[name]).toBe(sdkRn[name])
+    }
+  })
+
   it('re-exports Blockaid EVM chain canonicals by identity', () => {
     expect(reactNativeEntry.blockaidEvmChain).toBe(blockaidChains.blockaidEvmChain)
     expect(reactNativeEntry.blockaidSupportedEvmChains).toBe(blockaidChains.blockaidSupportedEvmChains)
     expectTypeOf<sdkRn.BlockaidSupportedEvmChain>().toEqualTypeOf<blockaidChains.BlockaidSupportedEvmChain>()
+  })
+
+  it('re-exports the canonical transaction status lookup by identity', async () => {
+    const canonical = await import('@vultisig/core-chain/tx/status')
+
+    expect(reactNativeEntry.getTxStatus).toBe(canonical.getTxStatus)
   })
 
   it('exports canonical fast-vault detection helpers', async () => {
@@ -219,6 +297,38 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(storage).toBeDefined()
     expect(typeof storage.get).toBe('function')
     expect(rn.DEFAULT_CHAINS).toBe(rn.defaultChains)
+  })
+
+  it('exposes stable platform-safe helper namespaces on Vultisig instances', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const sdk = new rn.Vultisig({ autoInit: false })
+
+    expect(sdk.initialized).toBe(false)
+    expect(sdk.balance).toBe(sdk.balance)
+    expect(sdk.bridge).toBe(sdk.bridge)
+    expect(sdk.cosmos).toBe(sdk.cosmos)
+    expect(sdk.decode).toBe(sdk.decode)
+    expect(sdk.gas).toBe(sdk.gas)
+    expect(sdk.prep).toBe(sdk.prep)
+    expect(sdk.price).toBe(sdk.price)
+    expect(sdk.swap).toBe(sdk.swap)
+
+    const [canonicalBalance, canonicalPrep] = await Promise.all([
+      import('../../../../src/tools/balance'),
+      import('../../../../src/tools/prep'),
+    ])
+    expect(Object.keys(sdk.balance).sort()).toEqual(Object.keys(canonicalBalance).sort())
+    expect(Object.keys(sdk.prep).sort()).toEqual(Object.keys(canonicalPrep).sort())
+
+    expect(sdk.balance.getEvmBalances).toBe(rn.getEvmBalances)
+    expect(sdk.bridge.buildCctpBridge).toBe(rn.buildCctpBridge)
+    expect(sdk.cosmos.gov.getCosmosGovernanceProposals).toBe(rn.getCosmosGovernanceProposals)
+    expect(sdk.decode.fromToolResult).toBe(rn.decodeFromToolResult)
+    expect(sdk.gas.compareCosts).toBe(rn.compareCosts)
+    expect(typeof sdk.prep.prepareSendTxFromKeys).toBe('function')
+    expect(sdk.prep.cosmosStaking).toBe(rn.cosmosStaking)
+    expect(sdk.price.getPrice).toBe(rn.getPrice)
+    expect(sdk.swap.findSwapQuote).toBe(rn.findSwapQuote)
   })
 
   it('exports the ThreeJane USDC helper values (not just their types) on the RN entrypoint', async () => {
@@ -691,6 +801,10 @@ describe('RN entry exposes pure chain helpers and registry', () => {
     expect(rn.normalizeTx).toBe(tx.normalizeTx)
     expect(rn.splitMultiTx).toBe(tx.splitMultiTx)
     expect(rn.TxNormalizeError).toBe(tx.TxNormalizeError)
+    expect(rn.deriveToolOutputCandidate).toBe(tx.deriveToolOutputCandidate)
+    expect(rn.buildTxReadyFromToolOutput).toBe(tx.buildTxReadyFromToolOutput)
+    expect(rn.payloadLooksSignable).toBe(tx.payloadLooksSignable)
+    expect(rn.CLI_SIGNABLE_FLAT_TOOLS).toBe(tx.CLI_SIGNABLE_FLAT_TOOLS)
     expect(rn.parseTxReadyEnvelope).toBe(tx.parseTxReadyEnvelope)
     expect(rn.TxReadyParseError).toBe(tx.TxReadyParseError)
     expect(rn.decodeFromToolResult).toBe(decode.decodeFromToolResult)
@@ -701,6 +815,22 @@ describe('RN entry exposes pure chain helpers and registry', () => {
     expect(rn.decode.decodeCosmosTx).toBe(decode.decodeCosmosTx)
     expect(rn.decode.decodeEvmTx).toBe(decode.decodeEvmTx)
     expect(rn.buildKeygenPairingQrPayload).toBe(pairing.buildKeygenPairingQrPayload)
+  })
+
+  it('re-exports the transaction-status poller and its public types from the RN entrypoint', async () => {
+    const tx = await import('../../../../src/tx')
+
+    expect(reactNativeEntry.pollTxStatusUntilFinal).toBe(tx.pollTxStatusUntilFinal)
+    assertAssignable<PollTxStatusUntilFinalParamsFromReactNative, PollTxStatusUntilFinalParamsFromTx>((rn, tx) => {
+      tx = rn
+      rn = tx
+    })
+    assertAssignable<PollTxStatusUntilFinalResultFromReactNative, PollTxStatusUntilFinalResultFromTx>((rn, tx) => {
+      tx = rn
+      rn = tx
+    })
+
+    expect(true).toBe(true)
   })
 
   it('re-exports canonical swap tracker URL helpers from the RN entrypoint', async () => {

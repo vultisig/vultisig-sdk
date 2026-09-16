@@ -8,6 +8,7 @@ import { getTxStatus } from '@vultisig/core-chain/tx/status'
 import { getEncodedSigningInputs } from '@vultisig/core-mpc/keysign/signingInputs'
 import { assertNativeSwapReadyForBroadcast } from '@vultisig/core-mpc/keysign/swap/assertNativeSwapReadyForBroadcast'
 import { getKeysignTwPublicKey } from '@vultisig/core-mpc/keysign/tw/getKeysignTwPublicKey'
+import { getKeysignLastValidBlockHeight } from '@vultisig/core-mpc/keysign/utils/getKeysignLastValidBlockHeight'
 import { compileTx } from '@vultisig/core-mpc/tx/compile/compileTx'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 
@@ -158,6 +159,11 @@ export class BroadcastService {
         throw new Error('No transaction inputs found in keysign payload')
       }
 
+      // Solana only: the payload's blockhash deadline bounds the broadcast
+      // resend loop and lets a confirmation poll call an unseen signature
+      // expired. Undefined everywhere else.
+      const lastValidBlockHeight = getKeysignLastValidBlockHeight(keysignPayload)
+
       // Broadcast all transaction inputs (e.g., approve + swap for EVM token flows).
       // Returns the hash of the last transaction, which is typically the primary one.
       let txHash = ''
@@ -183,6 +189,7 @@ export class BroadcastService {
           const broadcastResult = await this.broadcastTransaction({
             chain,
             tx: signingOutput,
+            lastValidBlockHeight,
           })
 
           if (broadcastResult.status === 'failed') {
@@ -198,7 +205,7 @@ export class BroadcastService {
           txHash = inputTxHash
 
           if (shouldConfirmApprovalFirst && index === 0) {
-            await this.waitForConfirmation(chain, txHash)
+            await this.waitForConfirmation(chain, txHash, lastValidBlockHeight)
           }
         } catch (error) {
           if (error instanceof BroadcastPartialFailureError) {
@@ -232,15 +239,17 @@ export class BroadcastService {
     }
   }
 
-  private async waitForConfirmation(chain: Chain, txHash: string): Promise<void> {
+  private async waitForConfirmation(chain: Chain, txHash: string, lastValidBlockHeight?: number): Promise<void> {
     const timeoutMs = this.confirmationOptions.approvalConfirmationTimeoutMs ?? 60_000
     const intervalMs = this.confirmationOptions.approvalConfirmationIntervalMs ?? 3_000
     const outcome = await pollTxStatusUntilFinal({
       chain,
       txHash,
+      lastValidBlockHeight,
       timeoutMs,
       intervalMs,
-      getTxStatus: ({ chain, txHash }) => getTxStatus({ chain, hash: txHash }),
+      getTxStatus: ({ chain, txHash, lastValidBlockHeight }) =>
+        getTxStatus({ chain, hash: txHash, lastValidBlockHeight }),
       shouldRetryError: () => true,
     })
 

@@ -15,6 +15,7 @@ vi.mock('../verifyBroadcastByHash', () => ({
 
 import { OtherChain } from '@vultisig/core-chain/Chain'
 import { TonBroadcastRejectedError } from '@vultisig/core-chain/chains/ton/failure'
+import { getTonTxStatus } from '@vultisig/core-chain/tx/status/resolvers/ton'
 
 import { BroadcastErrorCode } from '../resolver'
 import { broadcastTonTx } from './ton'
@@ -41,6 +42,19 @@ describe('broadcastTonTx', () => {
       txHash: 'msg-hash',
     })
     expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
+  })
+
+  it('preserves a provider-returned base64 hash when checking status', async () => {
+    const hash = '5Ntg/ZmUbx80Fsc+OvEg0Ti+ZlT2JIaozUizscN0GHk='
+    mocks.queryUrl.mockResolvedValueOnce({ result: { hash } }).mockResolvedValueOnce({ transactions: [] })
+
+    const result = await broadcastTonTx({ chain, tx })
+    if (result.status !== 'accepted' || !result.txHash) throw new Error('expected an accepted broadcast with a hash')
+
+    await getTonTxStatus({ chain, hash: result.txHash })
+
+    const url = new URL(mocks.queryUrl.mock.calls[1][0])
+    expect(url.searchParams.get('msg_hash')).toBe(hash)
   })
 
   it('treats a seqno refusal as success when the same message is already on chain (a co-signer broadcast first)', async () => {

@@ -116,8 +116,13 @@ export function resolveSourceChannelByDestChain(fromChain: string, toChainId: st
 
 /** Supported destination chain-IDs reachable FROM the given source chain. */
 export function supportedIbcDestinationsFrom(fromChain: string): string[] {
+  // Route keys are built from chain-IDs (osmosis-1, cosmoshub-4, ...), so a
+  // canonical Vultisig name (Osmosis, Cosmos, ...) must go through the same
+  // normalization prepareIbcTransfer() already applies — otherwise route
+  // discovery and route building silently disagree on which names work.
+  const normalizedFromChain = normaliseIbcChainId(fromChain.trim())
   return Array.from(IBC_CHANNEL_BY_ROUTE.keys())
-    .filter(routeKey => routeKey.startsWith(`${fromChain}→`))
+    .filter(routeKey => routeKey.startsWith(`${normalizedFromChain}→`))
     .map(routeKey => routeKey.split('→')[1]!)
     .sort()
 }
@@ -136,6 +141,11 @@ const VULTISIG_NAME_TO_CHAIN_ID: Record<string, string> = {
   MayaChain: 'mayachain-mainnet-v1',
   THORChain: 'thorchain-1',
   Stride: 'stride-1',
+  Celestia: 'celestia',
+  Juno: 'juno-1',
+  Axelar: 'axelar-dojo-1',
+  Neutron: 'neutron-1',
+  Injective: 'injective-1',
 }
 
 /**

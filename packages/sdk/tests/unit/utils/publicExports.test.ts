@@ -8,6 +8,7 @@ import * as tronAbi from '../../../src/abi/tron'
 import * as sdk from '../../../src/index'
 import * as threeJane from '../../../src/tools/defi/threeJane'
 import * as dangerousAddresses from '../../../src/utils/dangerousAddresses'
+import { resolveChainIdReference } from '../../../src/utils/resolveChainReference'
 import {
   buildSignAminoKeysignPayload as canonicalBuildSignAminoKeysignPayload,
   buildSignDirectKeysignPayload as canonicalBuildSignDirectKeysignPayload,
@@ -28,6 +29,13 @@ const dangerousAddressCanonicalExports = [
 ] as const
 
 describe('@vultisig/sdk public exports', () => {
+  it('exports the strict chain-ID resolver by identity with its string-only signature', () => {
+    expect(sdk.resolveChainIdReference).toBe(resolveChainIdReference)
+    expectTypeOf(sdk.resolveChainIdReference).toEqualTypeOf<(chainId: string) => sdk.Chain | undefined>()
+    expect(sdk.resolveChainIdReference('8453')).toBe(sdk.Chain.Base)
+    expect(sdk.resolveChainIdReference('Ethereum')).toBeUndefined()
+  })
+
   it('re-exports Blockaid EVM chain canonicals by identity', () => {
     expect(sdk.blockaidEvmChain).toBe(blockaidChains.blockaidEvmChain)
     expect(sdk.blockaidSupportedEvmChains).toBe(blockaidChains.blockaidSupportedEvmChains)
@@ -105,6 +113,17 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.TxNormalizeError).toBe('function')
     expect(typeof sdk.parseTxReadyEnvelope).toBe('function')
     expect(typeof sdk.TxReadyParseError).toBe('function')
+  })
+
+  it('exports the tool-output → signable-candidate contract', () => {
+    expect(typeof sdk.deriveToolOutputCandidate).toBe('function')
+    expect(typeof sdk.buildTxReadyFromToolOutput).toBe('function')
+    expect(typeof sdk.buildTxReadyFromYieldOutput).toBe('function')
+    expect(typeof sdk.payloadLooksSignable).toBe('function')
+    expect(typeof sdk.asRecord).toBe('function')
+    expect(sdk.CLI_SIGNABLE_FLAT_TOOLS).toBeInstanceOf(Set)
+    expect(sdk.CLI_SIGNABLE_PREP_TOOLS).toBeInstanceOf(Set)
+    expect(sdk.CLI_SIGNABLE_YIELD_TOOLS).toBeInstanceOf(Set)
   })
 
   it('exports the raw EVM envelope keysign helper', () => {

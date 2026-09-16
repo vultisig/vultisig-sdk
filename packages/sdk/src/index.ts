@@ -14,8 +14,30 @@
 // ============================================================================
 
 // Core SDK class
+import { configureVultisigInstanceNamespaces } from './instanceNamespaces'
+import * as balanceNamespace from './tools/balance'
+import * as bridgeNamespace from './tools/bridge'
+import * as cosmosNamespace from './tools/cosmos'
+import { decode as decodeNamespace } from './tools/decode'
+import * as gasNamespace from './tools/gas'
+import * as prepNamespace from './tools/prep'
+import * as priceNamespace from './tools/price'
+import * as swapNamespace from './tools/swap'
+import { Vultisig } from './Vultisig'
+
+configureVultisigInstanceNamespaces(Vultisig, {
+  balance: balanceNamespace,
+  bridge: bridgeNamespace,
+  cosmos: cosmosNamespace,
+  decode: decodeNamespace,
+  gas: gasNamespace,
+  prep: prepNamespace,
+  price: priceNamespace,
+  swap: swapNamespace,
+})
+
 export type { VaultImportConflictResolution, VaultImportOptions } from './VaultManager'
-export { Vultisig } from './Vultisig'
+export { Vultisig }
 
 // Vault management
 export type { ResolvedTokenInfo, VaultConfig, VaultSaveOptions } from './vault'
@@ -65,7 +87,7 @@ export { coerceEip712ChainId, computeEip712Hash, toCanonicalEvmSignature } from 
 export type { FiatToAmountParams } from './utils/fiatToAmount'
 export { fiatToAmount, FiatToAmountError } from './utils/fiatToAmount'
 export { normalizeChain, UnknownChainError } from './utils/normalizeChain'
-export { resolveChainReference } from './utils/resolveChainReference'
+export { resolveChainIdReference, resolveChainReference } from './utils/resolveChainReference'
 export { ChainAmountParseError, toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 export type { TonTxFailure, TonTxFailureReason, TonTxPhase } from '@vultisig/core-chain/chains/ton/failure'
 export {
@@ -78,6 +100,11 @@ export {
   CosmosSequenceMismatchError,
   toCosmosSequenceMismatchError,
 } from '@vultisig/core-chain/tx/broadcast/cosmosSequenceMismatch'
+export type { SolanaBlockhashExpiredDetails } from '@vultisig/core-chain/tx/broadcast/solanaBlockhashExpired'
+export {
+  SolanaBlockhashExpiredError,
+  toSolanaBlockhashExpiredError,
+} from '@vultisig/core-chain/tx/broadcast/solanaBlockhashExpired'
 
 // Pure-bigint exact base-units -> human decimal-string conversion (no float64
 // round-trip, so it's safe for high-decimal assets). Exported at the root so
@@ -163,16 +190,30 @@ export type {
   ParseTxReadyOptions,
   PollTxStatusUntilFinalParams,
   PollTxStatusUntilFinalResult,
+  SignableTxCandidatePayload,
+  ToolOutputCandidate,
   TxReadyEnvelope,
   TxReadyEvmLeg,
   TxReadyObject,
   TxReadyParseErrorCode,
+  TxReadyPayload,
   TxReadyTxArgs,
 } from './tx'
 export {
+  asRecord,
+  buildTxReadyFromToolOutput,
+  buildTxReadyFromYieldOutput,
+  CLI_SIGNABLE_FLAT_TOOLS,
+  CLI_SIGNABLE_PREP_TOOLS,
+  CLI_SIGNABLE_YIELD_TOOLS,
+  deriveToolOutputCandidate,
+  DIVERGENT_FIELD_TOOLS,
   normalizeTx,
   parseTxReadyEnvelope,
+  payloadLooksSignable,
   pollTxStatusUntilFinal,
+  POLYMARKET_DEPOSIT_TOOL,
+  POLYMARKET_SETUP_TRADING_TOOL,
   splitMultiTx,
   TxNormalizeError,
   TxReadyParseError,
@@ -1211,6 +1252,7 @@ export {
   prepareThorchainMsgDepositTxFromKeys,
   prepareTrc20TransferFromKeys,
   prepareUtxoConsolidateTxFromKeys,
+  price,
   quoteSkipRoute,
   type RawEvmTxEnvelope,
   recipientSanity,
