@@ -1,5 +1,37 @@
 # @vultisig/sdk
 
+## 7.6.0
+
+### Minor Changes
+
+- [#2349](https://github.com/vultisig/vultisig-sdk/pull/2349) [`38bc8d4`](https://github.com/vultisig/vultisig-sdk/commit/38bc8d4bbae344cff8c6d5fd6b56bbf760831792) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Rebroadcast Solana transactions until they confirm or their blockhash expires, and report an expired transaction as `expired` instead of polling it as pending forever.
+
+  `SolanaSpecific` gains `optional uint64 last_valid_block_height = 7` (vultisig/commondata), recorded by the chain-specific resolver next to the blockhash. `getKeysignLastValidBlockHeight` reads it back off a payload.
+
+  The Solana broadcast resolver now resends the same signed bytes every 2 s while the signature is unseen, stopping at a confirmed sighting or once the chain's block height passes the payload's deadline (bounded by the newest blockhash's deadline when a payload predates the field). A miss fails with `SolanaBlockhashExpiredError` (`recovery: 'resign'`), exported from the SDK root with `toSolanaBlockhashExpiredError`, so a wallet can ask for a fresh signing ceremony rather than retrying dead bytes. That verdict requires a successful history lookup proving the signature never landed; when the lookup itself fails, accepted bytes stay pending for the status poll instead, so a transfer that landed while the status RPC was down is never reported as safe to re-sign. Broadcast resolvers accept an optional `lastValidBlockHeight`, which `BroadcastService` passes from the payload.
+
+  The Solana status resolver returns `expired` (not `not_found`) for an unseen signature past `lastValidBlockHeight`; `pollTxStatusUntilFinal` and `verifyBroadcastByHash` forward the deadline.
+
+### Patch Changes
+
+- [#2385](https://github.com/vultisig/vultisig-sdk/pull/2385) [`b06ffc7`](https://github.com/vultisig/vultisig-sdk/commit/b06ffc7ad86d5c1f5d1d149748005a3b9a42c5d6) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Accept Celestia, Juno, Axelar, Neutron, and Injective destination names when preparing transfers over existing IBC routes.
+
+- [#2387](https://github.com/vultisig/vultisig-sdk/pull/2387) [`4e7e0d7`](https://github.com/vultisig/vultisig-sdk/commit/4e7e0d79f516e49f68ee3ff4acc6f3d65c43e23e) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Expose the existing price helpers as a grouped price namespace from the SDK root, including React Native, while preserving all flat exports.
+
+- [#2381](https://github.com/vultisig/vultisig-sdk/pull/2381) [`b8e3e9d`](https://github.com/vultisig/vultisig-sdk/commit/b8e3e9d236710e4ca9c8a4e9c27f98a9f5dec0d2) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject empty and whitespace-only `fromContractAddress` and `toContractAddress` in `buildJupiterSwapTx` before resolving fees or requesting a quote. Callers that used blank strings for native SOL must now omit the parameter or pass `SOL_NATIVE_MINT`. Nonblank mint addresses continue to be trimmed.
+
+- [#2388](https://github.com/vultisig/vultisig-sdk/pull/2388) [`bdb9634`](https://github.com/vultisig/vultisig-sdk/commit/bdb96345b9f8914f508a10dca2952bf223aa3db2) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Expose the canonical recipient sanity checks and their types through the React Native entry point.
+
+- [#2382](https://github.com/vultisig/vultisig-sdk/pull/2382) [`5fc8468`](https://github.com/vultisig/vultisig-sdk/commit/5fc8468f3e64cc688981c836740a3b73541ec89e) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Export the canonical getTxStatus helper from the React Native entrypoint.
+
+- [#2389](https://github.com/vultisig/vultisig-sdk/pull/2389) [`a7b4efa`](https://github.com/vultisig/vultisig-sdk/commit/a7b4efa3ffc11889c50593483ea240f414d94bdc) Thanks [@aminsato](https://github.com/aminsato)! - `buildSendKeysignPayload` now refuses known burn / program destinations (`assertSafeDestination`) on every chain, so a wallet send to the Solana System Program, the EVM zero address, a Bitcoin eater address or an XRPL black-hole account is rejected before the ceremony — the same guard the SDK's vault-free agent prep helpers already applied. The rejection surfaces as `BuildKeysignPayloadError('dangerous-destination')`; fee estimation through `getSendFeeEstimate` rejects the same destinations.
+
+- [#2386](https://github.com/vultisig/vultisig-sdk/pull/2386) [`735299d`](https://github.com/vultisig/vultisig-sdk/commit/735299d1ad4206853b0442c17f7a5c90770d71be) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Export `resolveChainIdReference` from the public SDK, including React Native, for exact decimal EVM and Cosmos chain-ID lookup without accepting chain names or aliases.
+
+- Updated dependencies [[`a7b4efa`](https://github.com/vultisig/vultisig-sdk/commit/a7b4efa3ffc11889c50593483ea240f414d94bdc), [`38bc8d4`](https://github.com/vultisig/vultisig-sdk/commit/38bc8d4bbae344cff8c6d5fd6b56bbf760831792)]:
+  - @vultisig/core-mpc@3.3.0
+  - @vultisig/core-chain@5.5.0
+
 ## 7.5.0
 
 ### Minor Changes
