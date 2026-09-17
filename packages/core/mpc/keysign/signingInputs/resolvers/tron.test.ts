@@ -65,6 +65,7 @@ const buildWithdrawExpireUnfreezePayload = ({
   memo = WITHDRAW_EXPIRE_UNFREEZE_MEMO,
   withContractPayload = false,
   withSwapPayload = false,
+  gasEstimation = 999n,
 }: {
   chain?: Chain
   ticker?: string
@@ -75,6 +76,7 @@ const buildWithdrawExpireUnfreezePayload = ({
   memo?: string
   withContractPayload?: boolean
   withSwapPayload?: boolean
+  gasEstimation?: bigint
 } = {}) =>
   create(KeysignPayloadSchema, {
     coin: create(CoinSchema, {
@@ -90,7 +92,7 @@ const buildWithdrawExpireUnfreezePayload = ({
     memo,
     blockchainSpecific: {
       case: 'tronSpecific',
-      value: makeTronSpecific(999n),
+      value: makeTronSpecific(gasEstimation),
     },
     contractPayload: withContractPayload
       ? {
@@ -251,6 +253,29 @@ describe('getTronSigningInputs -- FREEZE: / UNFREEZE: feeLimit agreement (sdk#22
     })
 
     expect(() => getTronSigningInputs({ keysignPayload: payload, walletCore })).toThrow(/out of int64 range/)
+  })
+
+  it('branches that never serialize feeLimit still accept a uint64 gasEstimation beyond int64', async () => {
+    const gasEstimation = 1n << 63n
+    const claim = buildWithdrawExpireUnfreezePayload({ gasEstimation })
+    const nativeSend = create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, {
+        chain: Chain.Tron,
+        ticker: 'TRX',
+        address: OWNER,
+        decimals: 6,
+        isNativeToken: true,
+      }),
+      toAddress: OWNER,
+      toAmount: '1000000',
+      blockchainSpecific: { case: 'tronSpecific', value: makeTronSpecific(gasEstimation) },
+    })
+
+    const [claimInput] = await getTronSigningInputs({ keysignPayload: claim, walletCore })
+    expect(claimInput.transaction?.feeLimit?.equals(Long.ZERO)).toBe(true)
+
+    const [sendInput] = await getTronSigningInputs({ keysignPayload: nativeSend, walletCore })
+    expect(sendInput.transaction?.transfer?.amount?.toString()).toBe('1000000')
   })
 })
 

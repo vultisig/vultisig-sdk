@@ -52,8 +52,10 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
   // ignores fee_limit for system contracts, so agreement is the only thing that
   // matters. Do not hardcode 0 here: it desyncs desktop/extension co-signers
   // from a mobile initiator in the same ceremony. The display fee stays
-  // independent of this value (see fee/resolvers/tron.ts).
-  const stakingFeeLimit = toBoundedTronLong(tronSpecific.gasEstimation.toString())
+  // independent of this value (see fee/resolvers/tron.ts). Resolved lazily so
+  // branches that never serialize fee_limit (native transfer, expired-unfreeze
+  // claim) keep accepting any uint64 gasEstimation.
+  const getStakingFeeLimit = () => toBoundedTronLong(tronSpecific.gasEstimation.toString())
 
   // WithdrawExpireUnfreezeContract (Stake 2.0) claims every matured
   // unfreezing entry for the owner. The contract has no destination, amount,
@@ -115,7 +117,7 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
         }),
         timestamp: Long.fromString(tronSpecific.timestamp.toString()),
         expiration: Long.fromString(tronSpecific.expiration.toString()),
-        feeLimit: stakingFeeLimit,
+        feeLimit: getStakingFeeLimit(),
         blockHeader: createTronBlockHeader(tronSpecific),
       }),
     })
@@ -144,7 +146,7 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
         }),
         timestamp: Long.fromString(tronSpecific.timestamp.toString()),
         expiration: Long.fromString(tronSpecific.expiration.toString()),
-        feeLimit: stakingFeeLimit,
+        feeLimit: getStakingFeeLimit(),
         blockHeader: createTronBlockHeader(tronSpecific),
       }),
     })
