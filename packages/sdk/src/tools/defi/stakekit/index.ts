@@ -23,6 +23,7 @@ import type {
   YieldTransaction,
 } from './stakekitApi'
 import {
+  buildYieldActionScanRequest,
   buildYieldActionScanRequests,
   callYieldActionWithFallback,
   getBalances,
@@ -69,20 +70,21 @@ export {
 // (mcp-ts's withScanRequest isn't available in the SDK — inline it here)
 //
 // `scan_request` (singular) is kept for backward compatibility with the
-// historical single-slot contract (first scannable step). `scan_requests`
+// historical single-slot shape, preferring a scannable non-approval step. `scan_requests`
 // (plural, architecture#1670) is additive: ALL steps 1:1 with
 // `transactions[]`, so a multi-step action (e.g. approve→stake) or a
 // non-EVM step can be handed to a downstream scanner in full instead of
 // losing coverage past the first leg.
 function withScanRequests<T extends object>(
-  scanRequests: ScanRequest[],
-  rest: T
+  actionData: YieldActionResponse,
+  rest: T,
+  accountAddress: string
 ): { scan_request: ScanRequest; scan_requests: ScanRequest[] } & T {
-  const primary = scanRequests.find(req => req.kind !== 'unsupported') ?? {
-    kind: 'unsupported' as const,
-    reason: 'no_compiled_txs',
+  return {
+    scan_request: buildYieldActionScanRequest(actionData, accountAddress),
+    scan_requests: buildYieldActionScanRequests(actionData, accountAddress),
+    ...rest,
   }
-  return { scan_request: primary, scan_requests: scanRequests, ...rest }
 }
 
 // --- Network mappings ---
@@ -685,8 +687,7 @@ export async function stakekitBuildEnter(params: {
   if (!actionData.transactions) throw new Error('yield.xyz returned no transactions')
 
   const display = parseActionDisplay(actionData)
-  const scanRequests = buildYieldActionScanRequests(actionData, params.address)
-  return withScanRequests(scanRequests, display)
+  return withScanRequests(actionData, display, params.address)
 }
 
 /**
@@ -752,10 +753,9 @@ export async function stakekitBuildExit(params: {
   if (!actionData.transactions) throw new Error('yield.xyz returned no transactions')
 
   const display = parseActionDisplay(actionData)
-  const scanRequests = buildYieldActionScanRequests(actionData, params.address)
   const cooldownDays = yieldMeta?.metadata?.cooldownPeriod?.days ?? null
   return {
-    ...withScanRequests(scanRequests, display),
+    ...withScanRequests(actionData, display, params.address),
     ...(cooldownDays !== null ? { cooldown_days: cooldownDays } : {}),
   }
 }
@@ -807,8 +807,7 @@ export async function stakekitBuildManage(params: {
   if (!actionData.transactions) throw new Error('yield.xyz returned no transactions')
 
   const display = parseActionDisplay(actionData)
-  const scanRequests = buildYieldActionScanRequests(actionData, params.address)
-  return withScanRequests(scanRequests, display)
+  return withScanRequests(actionData, display, params.address)
 }
 
 /** The sdk.defi.stakekit namespace surface. */
