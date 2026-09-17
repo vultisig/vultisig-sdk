@@ -70,3 +70,28 @@ export const buildTonV5R1StateInit = ({
 /** The W5R1 wallet address (workchain 0) for a key: the hash of its StateInit. */
 export const getTonV5R1Address = (input: BuildTonV5R1StateInitInput): Address =>
   contractAddress(baseWorkchain, buildTonV5R1StateInit(input))
+
+/** Whether a deployed account runs the published W5R1 code, given its code cell as a base64 BOC. */
+export const isTonV5R1Code = (codeBase64: string): boolean => {
+  const [cell] = Cell.fromBoc(Buffer.from(codeBase64, 'base64'))
+
+  return cell !== undefined && cell.hash().equals(getWalletV5R1CodeCell().hash())
+}
+
+/**
+ * The seqno stored in a deployed W5R1 wallet's data cell, given as a base64
+ * BOC: `is_signature_allowed(1) || seqno(32) || …`. Only meaningful for an
+ * account whose code is W5R1 (see `isTonV5R1Code`); the layout of any other
+ * contract's data differs.
+ */
+export const readTonV5R1Seqno = (dataBase64: string): number => {
+  const [cell] = Cell.fromBoc(Buffer.from(dataBase64, 'base64'))
+  if (!cell) {
+    throw new Error('TON W5 data cell failed to parse')
+  }
+
+  const slice = cell.beginParse()
+  slice.loadBit()
+
+  return slice.loadUint(32)
+}

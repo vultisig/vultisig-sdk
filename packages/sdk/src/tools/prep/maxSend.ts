@@ -22,12 +22,18 @@ export type GetMaxSendAmountFromKeysParams = {
   memo?: string
   destinationTag?: number
   feeSettings?: FeeSettings
+  /** TON only: the relay commission comes out of the jetton balance being sent, so MAX is `balance - fee`. */
+  tonGasless?: boolean
 }
 
 export type ComputeMaxSendFromBalanceParams = GetMaxSendAmountFromKeysParams & {
   balance: bigint
   nativeBalance?: bigint
 }
+
+/** A TON jetton send that pays the relay in the jetton itself needs no TON at all. */
+const paysTonGaslessFee = ({ coin, tonGasless }: Pick<GetMaxSendAmountFromKeysParams, 'coin' | 'tonGasless'>) =>
+  coin.chain === Chain.Ton && !isFeeCoin(coin) && tonGasless === true
 
 /**
  * Compute max-send given a pre-fetched balance. Used by `VaultBase.getMaxSendAmount`
@@ -85,13 +91,16 @@ export const computeMaxSendFromBalance = async (
     walletCore,
     libType: identity.libType,
     feeSettings: params.feeSettings,
+    tonGasless: params.tonGasless,
   })
 
   // TerraClassic USTC pays its fee (base gas + burn tax) in `uusd` — the same
   // denom/balance being sent — unlike every other non-fee-coin token, which
   // pays gas from a separate native balance. Treat it like a native send: no
-  // native-balance gas check, and the fee comes out of the same balance.
-  const paysFeeInOwnBalance = isFeeCoin(params.coin) || isTerraClassicUstcCoin(params.coin)
+  // native-balance gas check, and the fee comes out of the same balance. A
+  // gasless TON send is the same shape: the relay's commission is charged in
+  // the jetton being sent.
+  const paysFeeInOwnBalance = isFeeCoin(params.coin) || isTerraClassicUstcCoin(params.coin) || paysTonGaslessFee(params)
   const isTokenSend = !paysFeeInOwnBalance
   if (isTokenSend) {
     const native = chainFeeCoin[params.coin.chain]
@@ -132,7 +141,7 @@ export const getMaxSendAmountFromKeys = async (
   // for all callers) — don't duplicate it here.
   const balance = await getCoinBalance(params.coin)
   const nativeBalance =
-    isFeeCoin(params.coin) || isTerraClassicUstcCoin(params.coin)
+    isFeeCoin(params.coin) || isTerraClassicUstcCoin(params.coin) || paysTonGaslessFee(params)
       ? undefined
       : await getCoinBalance({ ...chainFeeCoin[params.coin.chain], address: params.coin.address })
   return computeMaxSendFromBalance(identity, { ...params, balance, nativeBalance }, walletCore)

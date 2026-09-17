@@ -18,6 +18,7 @@ import { getBlockchainSpecificValue } from '../../keysign/chainSpecific/KeysignC
 import { KeysignSignature } from '../../keysign/KeysignSignature'
 import { decodeBittensorTxInput } from '../../keysign/signingInputs/resolvers/bittensor'
 import { spliceSolanaSignature } from '../../keysign/signingInputs/resolvers/solana/rawTx'
+import { compileTonGaslessTx, getKeysignTonGasless } from '../../keysign/ton/gasless'
 import { KeysignPayload, KeysignPayloadSchema } from '../../types/vultisig/keysign/v1/keysign_message_pb'
 import { getPreSigningHashes } from '../preSigningHashes'
 import { generateSignature } from '../signature/generateSignature'
@@ -70,6 +71,17 @@ export const compileTx = ({
 
   if (!publicKey) {
     throw new Error(`publicKey is required for ${chain} transaction compilation`)
+  }
+
+  // Relayed (gasless) TON: the signed W5 `internal_signed` body is assembled
+  // from the payload and wrapped for the relay, not by TransactionCompiler.
+  if (chain === Chain.Ton && keysignPayload && getKeysignTonGasless(keysignPayload)) {
+    return compileTonGaslessTx({
+      keysignPayload: fromBinary(KeysignPayloadSchema, txInputData),
+      walletCore,
+      publicKey,
+      signatures: keysignSignatures,
+    })
   }
 
   const hashes = getPreSigningHashes({

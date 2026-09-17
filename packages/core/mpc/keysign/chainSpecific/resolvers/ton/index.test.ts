@@ -14,7 +14,8 @@ const {
   mockGetTonWalletState: vi.fn(),
 }))
 
-vi.mock('@vultisig/core-chain/chains/ton/account/getTonAccountInfo', () => ({
+vi.mock('@vultisig/core-chain/chains/ton/account/getTonAccountInfo', async importOriginal => ({
+  ...(await importOriginal<typeof import('@vultisig/core-chain/chains/ton/account/getTonAccountInfo')>()),
   getTonAccountInfo: mockGetTonAccountInfo,
 }))
 vi.mock('@vultisig/core-chain/chains/ton/api', () => ({
@@ -31,6 +32,10 @@ vi.mock('../../../utils/getKeysignCoin', () => ({
 vi.mock('../../../utils/getKeysignAmount', () => ({
   getKeysignAmount: () => 0n,
 }))
+
+import { beginCell } from '@ton/core'
+import { buildTonV5R1StateInit } from '@vultisig/core-chain/chains/ton/walletV5R1'
+import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 
 import { getTonChainSpecific } from './index'
 
@@ -69,6 +74,28 @@ describe('getTonChainSpecific — seqno on an uninitialized wallet', () => {
     })
     const res = await resolve(buildPayload({ toAddress: bounceableAddress }))
     expect(res.sequenceNumber).toBe(7n)
+  })
+
+  // Toncenter returns a deployed W5 wallet as raw code and data with no seqno
+  // field; reading that as 0 signed a replay the contract rejected.
+  it('reads a deployed W5 wallet seqno out of its raw data cell', async () => {
+    const w5 = buildTonV5R1StateInit({ publicKey: new Uint8Array(32).fill(0xaa) })
+    const data = beginCell()
+      .storeBit(true)
+      .storeUint(3, 32)
+      .storeSlice(shouldBePresent(w5.data).beginParse().skip(33))
+      .endCell()
+    mockGetTonAccountInfo.mockResolvedValueOnce({
+      account_state: {
+        '@type': 'raw.accountState',
+        code: shouldBePresent(w5.code).toBoc().toString('base64'),
+        data: data.toBoc().toString('base64'),
+      },
+    })
+
+    const res = await resolve(buildPayload({ toAddress: bounceableAddress }))
+
+    expect(res.sequenceNumber).toBe(3n)
   })
 })
 

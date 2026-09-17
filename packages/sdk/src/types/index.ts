@@ -98,7 +98,7 @@ export type MaxSendAmount = {
   balance: bigint
   /** Estimated network fee in base units */
   fee: bigint
-  /** Maximum sendable amount (full token balance, or native balance minus fee) */
+  /** Maximum sendable amount (full token balance, or balance minus fee when the fee is paid in the sent asset) */
   maxSendable: bigint
 }
 
@@ -630,14 +630,18 @@ export type SendResult =
       dryRun: true
       /** Resolved token contract address / chain-specific asset id. Omitted for native sends. */
       contractAddress?: string
-      /** Network fee, denominated in the chain's native asset (`feeSymbol`). */
+      /** Network fee, denominated in `feeSymbol`. */
       fee: string
-      /** Ticker of the asset the fee is paid in — always the chain's native asset. */
+      /**
+       * Ticker of the asset the fee is paid in: the chain's native asset, or the
+       * jetton itself for a gasless TON send (the relay's commission).
+       */
       feeSymbol: string
       /**
        * What the send costs in the asset being sent, comparable against that
        * asset's balance: `amount` for a token send (the fee is paid separately
-       * in the native asset), `amount + fee` for a native send.
+       * in the native asset), `amount + fee` for a native send or a gasless TON
+       * send, whose fee comes out of the jetton balance.
        */
       total: string
       keysignPayload: KeysignPayload

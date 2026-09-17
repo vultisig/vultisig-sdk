@@ -183,6 +183,29 @@ type TonTransactionOutcome = {
   action?: TonActionPhaseOutcome
 }
 
+type TonRelayedRequestOutcome = {
+  /** Whether the transaction was triggered by an internal message, i.e. delivered by a relay. */
+  isRelayed: boolean
+  /** How many actions the wallet queued, when the node reports it. */
+  totalActions?: number
+}
+
+/**
+ * A relayed W5 request the wallet ignored. Delivered as an internal message,
+ * W5 checks the signature before anything else and, unlike for an external
+ * message, does not throw on a mismatch: it simply returns, keeps the relay's
+ * TON and queues no action. The transaction then looks successful to every
+ * phase check — compute exit 0, action phase fine — with nothing sent, so a
+ * relayed request that produced no action at all is the signature having been
+ * refused. A direct send never reaches this: an external message with a bad
+ * signature is rejected before it becomes a transaction.
+ */
+export const getTonRelayedRequestFailure = ({
+  isRelayed,
+  totalActions,
+}: TonRelayedRequestOutcome): TonTxFailure | undefined =>
+  isRelayed && totalActions === 0 ? makeFailure('invalid-signature', 'compute') : undefined
+
 /**
  * Explains why an indexed TON transaction failed, or `undefined` when it did
  * not. The compute phase is consulted first because it carries the specific

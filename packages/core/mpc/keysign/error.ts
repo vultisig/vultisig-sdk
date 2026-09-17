@@ -8,6 +8,8 @@ export type BuildKeysignPayloadErrorType =
   | 'ripple-issued-currency-amount-invalid'
   | 'ripple-issuer-transfer-fee-unsupported'
   | 'ripple-trust-line-issuer-not-activated'
+  | 'ton-gasless-quote-invalid'
+  | 'ton-gasless-unsupported'
   | 'ton-memo-too-long'
 
 export class BuildKeysignPayloadError extends Error {

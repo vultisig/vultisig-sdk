@@ -17,6 +17,7 @@ import { isValidRecipient } from '@vultisig/core-chain/utils/isValidRecipient'
 import { vaultConfig } from '@vultisig/core-config'
 import { hasServer } from '@vultisig/core-mpc/devices/localPartyId'
 import { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
+import { getKeysignFeeCoin } from '@vultisig/core-mpc/keysign/fee/getKeysignFeeCoin'
 import { fromCommVault } from '@vultisig/core-mpc/types/utils/commVault'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { VaultSchema } from '@vultisig/core-mpc/types/vultisig/vault/v1/vault_pb'
@@ -1304,6 +1305,8 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     destinationTag?: number
     feeSettings?: FeeSettings
     sendMaxAmount?: boolean
+    /** TON only: pay the fee in the jetton being sent through the gasless relay. */
+    tonGasless?: boolean
   }): Promise<KeysignPayload> {
     return this.transactionBuilder.prepareSendTx(params)
   }
@@ -1357,6 +1360,8 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     memo?: string
     destinationTag?: number
     feeSettings?: FeeSettings
+    /** TON only: the relay commission is deducted from the jetton balance being sent. */
+    tonGasless?: boolean
   }): Promise<MaxSendAmount> {
     const walletCore = await this.wasmProvider.getWalletCore()
     // Validate receiver before fetching balance so bad input doesn't waste a
@@ -1992,7 +1997,10 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     return { balances, totalValue: total.toFixed(2), currency }
   }
 
-  /** Send tokens. Use amount "max" for the native balance minus fees, or the full token balance when native gas is covered. Set dryRun for fee estimates without signing. */
+  /**
+   * Send tokens. Use amount "max" for the native balance minus fees, or the full token balance when native gas is covered. Set dryRun for fee estimates without signing.
+   * `gasless` (TON jettons on a W5 account) pays the fee in the jetton itself through the relay, so no TON is needed.
+   */
   async send(params: {
     chain: Chain
     to: string
@@ -2001,14 +2009,16 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     memo?: string
     destinationTag?: number
     dryRun?: boolean
+    gasless?: boolean
   }): Promise<SendResult> {
-    const { chain, to, amount, symbol, memo, destinationTag, dryRun } = params
+    const { chain, to, amount, symbol, memo, destinationTag, dryRun, gasless } = params
     const tokenInfo = this.resolveTokenInfo(chain, symbol)
     const coin = this.buildAccountCoin(chain, await this.address(chain), tokenInfo)
+    const tonGasless = chain === Chain.Ton && Boolean(tokenInfo.contractAddress) && gasless === true
 
     let amountBigInt: bigint
     if (amount === 'max') {
-      const maxInfo = await this.getMaxSendAmount({ coin, receiver: to, memo, destinationTag })
+      const maxInfo = await this.getMaxSendAmount({ coin, receiver: to, memo, destinationTag, tonGasless })
       if (maxInfo.maxSendable <= 0n)
         throw new VaultError(VaultErrorCode.InvalidAmount, 'Insufficient balance to cover network fees')
       amountBigInt = maxInfo.maxSendable
@@ -2025,6 +2035,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       // This is the one place the SDK knows MAX was asked for rather than inferring
       // it, so the payload records it here or nowhere.
       sendMaxAmount: amount === 'max',
+      tonGasless,
     })
 
     if (dryRun) {
@@ -2034,22 +2045,26 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
         amount: amountBigInt,
         memo,
         destinationTag,
+        tonGasless,
       })
-      // The network fee is always paid in the chain's native asset, never in the
-      // token being sent. Formatting it with the token's decimals (and adding it
-      // to the token amount) produced a nonsense quote for every token send —
-      // USDC's 6 decimals applied to a wei-denominated gas fee reads as hundreds
-      // of millions of USDC, and `total` then failed any balance comparison.
-      const native = chainFeeCoin[chain]
-      const isTokenSend = Boolean(tokenInfo.contractAddress)
+      // The network fee is paid in the chain's native asset, never in the token
+      // being sent — except for a relayed TON send, whose commission is charged
+      // in the jetton itself. Formatting a native fee with the token's decimals
+      // (and adding it to the token amount) produced a nonsense quote for every
+      // token send — USDC's 6 decimals applied to a wei-denominated gas fee
+      // reads as hundreds of millions of USDC, and `total` then failed any
+      // balance comparison — so the fee coin comes from the payload.
+      const feeCoin = getKeysignFeeCoin(keysignPayload)
+      const feePaidInSentAsset = !tokenInfo.contractAddress || tonGasless
       return {
         dryRun: true,
         ...(tokenInfo.contractAddress ? { contractAddress: tokenInfo.contractAddress } : {}),
-        fee: this.formatUnits(fee, isTokenSend ? native.decimals : tokenInfo.decimals),
-        feeSymbol: native.ticker,
+        fee: this.formatUnits(fee, feeCoin.decimals),
+        feeSymbol: feeCoin.ticker,
         // Denominated in the asset being sent, so it is directly comparable to
-        // that asset's balance. Only a native send debits the fee from it.
-        total: this.formatUnits(isTokenSend ? amountBigInt : amountBigInt + fee, tokenInfo.decimals),
+        // that asset's balance. Only a send whose fee is charged in that same
+        // asset debits the fee from it.
+        total: this.formatUnits(feePaidInSentAsset ? amountBigInt + fee : amountBigInt, tokenInfo.decimals),
         keysignPayload,
       }
     }

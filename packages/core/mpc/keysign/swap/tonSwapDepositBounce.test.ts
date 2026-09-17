@@ -20,7 +20,8 @@ import { getTonChainSpecific } from '../chainSpecific/resolvers/ton'
 import { getTonSigningInputs } from '../signingInputs/resolvers/ton'
 
 vi.mock('@vultisig/core-chain/security/blockaid/address', () => ({ scanAddressWithBlockaid: vi.fn() }))
-vi.mock('@vultisig/core-chain/chains/ton/account/getTonAccountInfo', () => ({
+vi.mock('@vultisig/core-chain/chains/ton/account/getTonAccountInfo', async importOriginal => ({
+  ...(await importOriginal<typeof import('@vultisig/core-chain/chains/ton/account/getTonAccountInfo')>()),
   getTonAccountInfo: vi.fn(async () => ({ account_state: { wallet_id: 'w', seqno: 4 } })),
 }))
 vi.mock('@vultisig/core-chain/chains/ton/api', () => ({

@@ -49,6 +49,12 @@ export type BuildSendKeysignPayloadInput = {
    * than changing it.
    */
   sendMaxAmount?: boolean
+  /**
+   * TON only: pay the network fee in the jetton being sent through the gasless
+   * relay instead of holding TON. Needs a W5 account and a jetton the relay
+   * accepts; `getFeeAmount` then returns the commission in that jetton's units.
+   */
+  tonGasless?: boolean
 }
 
 type AssertTonMemoFitsInput = {
@@ -103,6 +109,7 @@ export const buildSendKeysignPayload = async ({
   libType,
   feeSettings,
   sendMaxAmount,
+  tonGasless,
 }: BuildSendKeysignPayloadInput) => {
   const hexPublicKey = hexPublicKeyOverride ?? (publicKey ? Buffer.from(publicKey.data()).toString('hex') : undefined)
   if (!hexPublicKey) {
@@ -205,6 +212,7 @@ export const buildSendKeysignPayload = async ({
         destinationTag: effectiveDestinationTag,
         sendMaxAmount,
         ...(coin.chain === Chain.Ripple ? { transactionType: TransactionType.RIPPLE_PAYMENT } : {}),
+        ...(coin.chain === Chain.Ton && tonGasless ? { gasless: true } : {}),
       })
 
   const balance = await getCoinBalance(coin)
