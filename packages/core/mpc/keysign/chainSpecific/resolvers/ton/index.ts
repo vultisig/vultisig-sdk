@@ -9,7 +9,15 @@ import { getKeysignSwapPayload } from '../../../swap/getKeysignSwapPayload'
 import { getKeysignCoin } from '../../../utils/getKeysignCoin'
 import { GetChainSpecificResolver } from '../../resolver'
 
-const tonWalletStateUninitialized = 'uninit'
+/**
+ * The indexer's states for an account that holds no code: `uninit` when nothing has
+ * ever reached it, `nonexist` once a message has arrived without deploying it (a
+ * bounced transfer leaves it there). Neither can accept a bounceable message.
+ */
+const tonUndeployedWalletStates: readonly string[] = ['uninit', 'nonexist']
+
+const isTonWalletUndeployed = (walletState: string | undefined): boolean =>
+  walletState !== undefined && tonUndeployedWalletStates.includes(walletState)
 
 /** How long a wallet message stays valid when the caller sets no tighter deadline. */
 const tonWalletExpirySeconds = 600
@@ -77,18 +85,20 @@ export const getTonChainSpecific: GetChainSpecificResolver<'tonSpecific'> = asyn
       return false
     }
 
-    // A swap deposit lands on a router or escrow contract, and there are ordinary
-    // reasons for such a contract to reject: an expired quote, a paused pool, a
-    // route that closed between quote and broadcast. Those have to come back.
-    if (getKeysignSwapPayload(keysignPayload)) {
-      return true
+    // An undeployed account has no code to reject anything, so a bounceable message
+    // is simply returned and the transfer never lands. Those must go non-bounceable,
+    // swap deposits included: a provider that hands out a fresh deposit address per
+    // swap expects the funds to land on an account nothing has deployed yet.
+    const { data: walletState } = await attempt(getTonWalletState(receiver))
+    if (isTonWalletUndeployed(walletState)) {
+      return false
     }
 
-    // An undeployed account has no code to reject anything, so a bounceable message
-    // is simply returned and the transfer never lands. Those must go non-bounceable.
-    const { data: walletState } = await attempt(getTonWalletState(receiver))
-    if (walletState === tonWalletStateUninitialized) {
-      return false
+    // A swap deposit on a deployed router or escrow contract has ordinary reasons to
+    // be rejected: an expired quote, a paused pool, a route that closed between quote
+    // and broadcast. Those have to come back, whatever the address tag declares.
+    if (getKeysignSwapPayload(keysignPayload)) {
+      return true
     }
 
     // A raw `0:hex` destination declares no intent, so it defaults to bounceable —
@@ -131,7 +141,7 @@ export const getTonChainSpecific: GetChainSpecificResolver<'tonSpecific'> = asyn
 
     return {
       jettonAddress: jettonWallet.data,
-      isActiveDestination: destWalletState !== tonWalletStateUninitialized,
+      isActiveDestination: !isTonWalletUndeployed(destWalletState),
     }
   }
 
