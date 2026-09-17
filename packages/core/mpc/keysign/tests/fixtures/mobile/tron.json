@@ -190,7 +190,7 @@
       "memo": "FREEZE:BANDWIDTH"
     },
     "expected_image_hash": [
-      "7021763c032de668dc1e2103255e215b0786ab9aa1c972418e94b82959573307"
+      "d8f224b0cedbd8a18f20458643a177061a1595b1a7b291c91a348f94c021f0f5"
     ]
   },
   {
@@ -228,7 +228,7 @@
       "memo": "FREEZE:ENERGY"
     },
     "expected_image_hash": [
-      "31ee92bf0c8cbe3492b7d72d7cd82e7ab2237bc61f8d1984f3c5e7392ea6b57f"
+      "a548ab8c56cce753be822ba94172b21bf79c7800fd50c50dbf959569c2e21b31"
     ]
   },
   {
@@ -266,7 +266,7 @@
       "memo": "UNFREEZE:BANDWIDTH"
     },
     "expected_image_hash": [
-      "a00d8369b63746bfc3045ce1a9b02110a1bcc7a883cb56d075c5cf03ebb1a5b2"
+      "65d4fb7a812793214504b2204790d5afe49a150c2837e3c66b54d44114bae5d2"
     ]
   },
   {
@@ -304,7 +304,7 @@
       "memo": "UNFREEZE:ENERGY"
     },
     "expected_image_hash": [
-      "2a53121ba1e45593e67c0e7bf13c3eb6640942903461679afe9c5a7851ec264b"
+      "88fd89c01072c818692276266cbfbbd3c43a0abdb8238f16d87c8437fb536a53"
     ]
   },
   {

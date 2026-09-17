@@ -18,8 +18,9 @@ import { getTronSigningInputs } from './tron'
 // bare cast to satisfy the resolver type constraint is fine here.
 const walletCore = {} as unknown as WalletCore
 
-// Minimal TronSpecific with a nonzero gasEstimation so we can assert
-// it is NOT forwarded to feeLimit in system-contract branches.
+// Minimal TronSpecific with a nonzero gasEstimation so we can assert which
+// branches forward it to feeLimit (staking ops do, the expired-unfreeze claim
+// does not).
 const makeTronSpecific = (gasEstimation = 100_000_000n) =>
   create(TronSpecificSchema, {
     timestamp: 1_700_000_000_000n,
@@ -198,33 +199,24 @@ describe('getTronSigningInputs -- WithdrawExpireUnfreezeContract', () => {
   })
 })
 
-describe('getTronSigningInputs -- FREEZE: / UNFREEZE: feeLimit semantics (BUG-7)', () => {
-  it('FREEZE:BANDWIDTH sets feeLimit to 0 regardless of gasEstimation', async () => {
-    const [input] = await getTronSigningInputs({ keysignPayload: buildPayload('FREEZE:BANDWIDTH'), walletCore })
-    // FreezeBalanceV2 is a bandwidth op; energy feeLimit is semantically irrelevant.
-    expect(input.transaction?.feeLimit?.toNumber()).toBe(0)
-  })
+describe('getTronSigningInputs -- FREEZE: / UNFREEZE: feeLimit agreement (sdk#2269)', () => {
+  // fee_limit is a raw_data field. Android (TronHelper.buildStakingTransaction)
+  // and iOS (Tron.swift) sign the payload's gasEstimation for FreezeBalanceV2 /
+  // UnfreezeBalanceV2, so the SDK must serialize the same value or a
+  // desktop/extension co-signer hashes a different preimage than the mobile
+  // initiator in the same ceremony. The value itself is irrelevant to the node.
+  const GAS_ESTIMATION = 100_000_000n
 
-  it('FREEZE:ENERGY sets feeLimit to 0 regardless of gasEstimation', async () => {
-    const [input] = await getTronSigningInputs({ keysignPayload: buildPayload('FREEZE:ENERGY'), walletCore })
-    expect(input.transaction?.feeLimit?.toNumber()).toBe(0)
-  })
+  it.each(['FREEZE:BANDWIDTH', 'FREEZE:ENERGY', 'UNFREEZE:BANDWIDTH', 'UNFREEZE:ENERGY'])(
+    '%s signs feeLimit = tronSpecific.gasEstimation',
+    async memo => {
+      const [input] = await getTronSigningInputs({ keysignPayload: buildPayload(memo), walletCore })
+      expect(input.transaction?.feeLimit?.toString()).toBe(GAS_ESTIMATION.toString())
+      expect(input.transaction?.feeLimit?.equals(Long.ZERO)).toBe(false)
+    }
+  )
 
-  it('UNFREEZE:BANDWIDTH sets feeLimit to 0 regardless of gasEstimation', async () => {
-    const [input] = await getTronSigningInputs({ keysignPayload: buildPayload('UNFREEZE:BANDWIDTH'), walletCore })
-    expect(input.transaction?.feeLimit?.toNumber()).toBe(0)
-  })
-
-  it('UNFREEZE:ENERGY sets feeLimit to 0 regardless of gasEstimation', async () => {
-    const [input] = await getTronSigningInputs({ keysignPayload: buildPayload('UNFREEZE:ENERGY'), walletCore })
-    expect(input.transaction?.feeLimit?.toNumber()).toBe(0)
-  })
-
-  it('gasEstimation value does not leak into FREEZE feeLimit', async () => {
-    // Pre-fix behaviour: feeLimit would have been Long.fromString('100000000').
-    // Post-fix: always 0. This assertion pins the regression explicitly.
-    const GAS_ESTIMATION = 100_000_000n
-    const specific = makeTronSpecific(GAS_ESTIMATION)
+  it('FREEZE feeLimit tracks the payload value rather than a constant', async () => {
     const payload = create(KeysignPayloadSchema, {
       coin: create(CoinSchema, {
         chain: Chain.Tron,
@@ -236,14 +228,29 @@ describe('getTronSigningInputs -- FREEZE: / UNFREEZE: feeLimit semantics (BUG-7)
       toAddress: OWNER,
       toAmount: '1000000000',
       memo: 'FREEZE:ENERGY',
-      blockchainSpecific: { case: 'tronSpecific', value: specific },
+      blockchainSpecific: { case: 'tronSpecific', value: makeTronSpecific(800_000n) },
     })
 
     const [input] = await getTronSigningInputs({ keysignPayload: payload, walletCore })
-    // Anti-regression: prior to fix, feeLimit was passed gasEstimation
-    // (a non-zero energy estimate that's semantically meaningless for
-    // system contracts and only served to confuse the UI fee display).
-    expect(input.transaction?.feeLimit?.equals(Long.ZERO)).toBe(true)
+    expect(input.transaction?.feeLimit?.toString()).toBe('800000')
+  })
+
+  it('FREEZE / UNFREEZE feeLimit throws instead of silently wrapping an out-of-int64-range gasEstimation', () => {
+    const payload = create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, {
+        chain: Chain.Tron,
+        ticker: 'TRX',
+        address: OWNER,
+        decimals: 6,
+        isNativeToken: true,
+      }),
+      toAddress: OWNER,
+      toAmount: '1000000000',
+      memo: 'UNFREEZE:BANDWIDTH',
+      blockchainSpecific: { case: 'tronSpecific', value: makeTronSpecific(1n << 63n) },
+    })
+
+    expect(() => getTronSigningInputs({ keysignPayload: payload, walletCore })).toThrow(/out of int64 range/)
   })
 })
 
