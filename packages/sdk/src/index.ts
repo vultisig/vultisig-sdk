@@ -442,6 +442,7 @@ export type {
   Portfolio,
   ReshareOptions,
   SDKConfig,
+  SendFeeEstimate,
   SendResult,
   ServerStatus,
   SignAminoInput,

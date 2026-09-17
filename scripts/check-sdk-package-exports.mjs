@@ -617,6 +617,22 @@ export type TransactionStatusLookupReactNative = typeof getTxStatusReactNative
 `
   )
 
+  // The default public entry exports the complete vault class hierarchy. Keep a
+  // consumer-shaped assertion separate from the curated React Native entry,
+  // which intentionally exposes FastVault without exporting VaultBase itself.
+  writeFileSync(
+    path.join(consumerRoot, 'verify-public-vault-types.ts'),
+    `import type { SendFeeEstimate, VaultBase } from '@vultisig/sdk'
+
+export async function estimatePublicSendFee(
+  vault: VaultBase,
+  params: Parameters<VaultBase['estimateSendFee']>[0]
+): Promise<SendFeeEstimate> {
+  return vault.estimateSendFee(params)
+}
+`
+  )
+
   const typeConditionSets = [[], ...collectTypeCustomConditionSets(manifest)]
   const typeProjects = typeConditionSets.map((customConditions, index) => {
     const label = customConditions.length ? customConditions.join('+') : 'default'
@@ -634,7 +650,7 @@ export type TransactionStatusLookupReactNative = typeof getTxStatusReactNative
             noUncheckedSideEffectImports: true,
             ...(customConditions.length ? { customConditions } : {}),
           },
-          include: ['verify-types.ts'],
+          include: index === 0 ? ['verify-types.ts', 'verify-public-vault-types.ts'] : ['verify-types.ts'],
         },
         null,
         2

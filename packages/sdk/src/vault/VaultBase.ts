@@ -53,6 +53,7 @@ import {
   MaxSendAmount,
   MessageSignature,
   Portfolio,
+  SendFeeEstimate,
   SendResult,
   SignAminoInput,
   Signature,
@@ -1309,6 +1310,31 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     tonGasless?: boolean
   }): Promise<KeysignPayload> {
     return this.transactionBuilder.prepareSendTx(params)
+  }
+
+  /**
+   * Estimate a send transaction's network fee without signing or broadcasting.
+   *
+   * Network fees are denominated in the chain's native fee asset, including
+   * when `coin` is a token. Use {@link getMaxSendAmount} when the desired result
+   * is a balance-aware maximum rather than the fee for one specified send.
+   */
+  async estimateSendFee(params: {
+    coin: AccountCoin
+    receiver: string
+    amount: bigint
+    memo?: string
+    destinationTag?: number
+    feeSettings?: FeeSettings
+  }): Promise<SendFeeEstimate> {
+    const feeAmountBase = await this.transactionBuilder.estimateSendFee(params)
+    const feeCoin = chainFeeCoin[params.coin.chain]
+
+    return {
+      feeAmountBase,
+      feeDecimals: feeCoin.decimals,
+      feeSymbol: feeCoin.ticker,
+    }
   }
 
   /**
