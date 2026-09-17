@@ -68,18 +68,22 @@ export async function getTonAccountInfo(address: string): Promise<TonAccountInfo
   return response.result
 }
 
+const uninitializedAccountState = 'uninited.accountState'
+
 /**
  * The wallet's current seqno — the nonce every outgoing request must carry.
  *
  * Toncenter only decodes a seqno for the wallet contracts it knows; a W5
  * account arrives as raw code and data, and the seqno is read out of the data
- * cell after checking the code really is W5. An account with no state has
- * never sent, so its seqno is 0 (the first request then deploys it). A deployed
- * contract this cannot read is refused rather than assumed fresh: signing
- * seqno 0 for a wallet that has moved on is rejected on chain as a replay.
+ * cell after checking the code really is W5. An account with no state, or an
+ * explicitly uninitialized one, has never sent, so its seqno is 0 (the first
+ * request then deploys it). Any other state this cannot read — an unknown
+ * contract, a frozen account, a raw state missing its cells — is refused
+ * rather than assumed fresh: signing seqno 0 for a wallet that has moved on is
+ * rejected on chain as a replay.
  */
 export const getTonAccountSeqno = ({ account_state }: Pick<TonAccountInfo, 'account_state'>): number => {
-  if (!account_state) {
+  if (!account_state || account_state['@type'] === uninitializedAccountState) {
     return 0
   }
   if (account_state.seqno !== undefined) {
@@ -93,5 +97,5 @@ export const getTonAccountSeqno = ({ account_state }: Pick<TonAccountInfo, 'acco
     return readTonV5R1Seqno(account_state.data)
   }
 
-  return 0
+  throw new Error(`Cannot read the seqno of a TON account in state ${account_state['@type'] ?? 'unknown'}`)
 }

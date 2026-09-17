@@ -80,6 +80,16 @@ describe('getTonAccountSeqno', () => {
     ).toBe(4321)
   })
 
+  it('refuses to guess for a state it cannot read: frozen, or raw without its cells', () => {
+    expect(() => getTonAccountSeqno({ account_state: { '@type': 'frozen.accountState', frozen_hash: 'h' } })).toThrow(
+      /frozen\.accountState/
+    )
+    expect(() => getTonAccountSeqno({ account_state: { '@type': 'raw.accountState', code: w5Code } })).toThrow(
+      /raw\.accountState/
+    )
+    expect(() => getTonAccountSeqno({ account_state: {} })).toThrow(/unknown/)
+  })
+
   it('refuses to guess for a deployed contract that is neither decoded nor W5', () => {
     const otherCode = beginCell().storeUint(1, 8).endCell().toBoc().toString('base64')
 

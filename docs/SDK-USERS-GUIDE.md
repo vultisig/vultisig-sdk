@@ -2778,6 +2778,8 @@ class VaultBase {
     amount: string
     symbol?: string
     memo?: string
+    destinationTag?: number
+    gasless?: boolean // TON jettons on a W5 account: pay the fee in the jetton through the relay
     dryRun?: boolean
   }): Promise<SendResult>
   swap(params: {
@@ -2804,7 +2806,9 @@ class VaultBase {
     coin: AccountCoin
     receiver: string
     memo?: string
+    destinationTag?: number
     feeSettings?: FeeSettings
+    tonGasless?: boolean
   }): Promise<MaxSendAmount>
   extractMessageHashes(keysignPayload: KeysignPayload): Promise<string[]>
   sign(payload: SigningPayload, options?: SigningOptions): Promise<Signature>

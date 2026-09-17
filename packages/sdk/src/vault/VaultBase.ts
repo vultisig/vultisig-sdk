@@ -9,7 +9,9 @@ import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import type { TonWalletVersion } from '@vultisig/core-chain/chains/ton/wallet'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
+import { Coin } from '@vultisig/core-chain/coin/Coin'
 import { getCoinValue } from '@vultisig/core-chain/coin/utils/getCoinValue'
+import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import { signatureAlgorithms } from '@vultisig/core-chain/signing/SignatureAlgorithm'
 import { getTxStatus as coreTxStatus } from '@vultisig/core-chain/tx/status'
 import type { TxStatusResult } from '@vultisig/core-chain/tx/status/resolver'
@@ -17,7 +19,6 @@ import { isValidRecipient } from '@vultisig/core-chain/utils/isValidRecipient'
 import { vaultConfig } from '@vultisig/core-config'
 import { hasServer } from '@vultisig/core-mpc/devices/localPartyId'
 import { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
-import { getKeysignFeeCoin } from '@vultisig/core-mpc/keysign/fee/getKeysignFeeCoin'
 import { fromCommVault } from '@vultisig/core-mpc/types/utils/commVault'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { VaultSchema } from '@vultisig/core-mpc/types/vultisig/vault/v1/vault_pb'
@@ -221,6 +222,19 @@ const toSupportedChains = (chains: readonly string[]): Chain[] =>
  * - threshold - Signing threshold for this vault type
  * - ensureKeySharesLoaded() - Key loading logic (encryption handling)
  */
+type GetSendFeeCoinInput = {
+  coin: AccountCoin
+  tonGasless?: boolean
+}
+
+/**
+ * The coin a send's fee is charged in: the chain's native fee coin, or the
+ * jetton itself for a gasless TON jetton send, whose fee is the relay's
+ * commission.
+ */
+const getSendFeeCoin = ({ coin, tonGasless }: GetSendFeeCoinInput): Coin =>
+  coin.chain === Chain.Ton && !isFeeCoin(coin) && tonGasless === true ? coin : chainFeeCoin[coin.chain]
+
 export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   // Essential services
   protected cacheService: CacheService
@@ -1316,8 +1330,10 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    * Estimate a send transaction's network fee without signing or broadcasting.
    *
    * Network fees are denominated in the chain's native fee asset, including
-   * when `coin` is a token. Use {@link getMaxSendAmount} when the desired result
-   * is a balance-aware maximum rather than the fee for one specified send.
+   * when `coin` is a token — except for a gasless TON jetton send
+   * (`tonGasless`), whose relay commission is charged in the jetton itself.
+   * Use {@link getMaxSendAmount} when the desired result is a balance-aware
+   * maximum rather than the fee for one specified send.
    */
   async estimateSendFee(params: {
     coin: AccountCoin
@@ -1326,9 +1342,11 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     memo?: string
     destinationTag?: number
     feeSettings?: FeeSettings
+    /** TON only: pay the fee in the jetton being sent through the gasless relay. */
+    tonGasless?: boolean
   }): Promise<SendFeeEstimate> {
     const feeAmountBase = await this.transactionBuilder.estimateSendFee(params)
-    const feeCoin = chainFeeCoin[params.coin.chain]
+    const feeCoin = getSendFeeCoin(params)
 
     return {
       feeAmountBase,
@@ -2079,8 +2097,8 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       // (and adding it to the token amount) produced a nonsense quote for every
       // token send — USDC's 6 decimals applied to a wei-denominated gas fee
       // reads as hundreds of millions of USDC, and `total` then failed any
-      // balance comparison — so the fee coin comes from the payload.
-      const feeCoin = getKeysignFeeCoin(keysignPayload)
+      // balance comparison.
+      const feeCoin = getSendFeeCoin({ coin, tonGasless })
       const feePaidInSentAsset = !tokenInfo.contractAddress || tonGasless
       return {
         dryRun: true,

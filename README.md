@@ -200,7 +200,7 @@ const preview = await vault.send({ chain: Chain.Ethereum, to: "0x...", amount: "
 
 type SendResult =
   | { dryRun: false; txHash: string; chain: Chain }
-  | { dryRun: true; fee: string; total: string; keysignPayload: KeysignPayload }
+  | { dryRun: true; fee: string; feeSymbol: string; total: string; keysignPayload: KeysignPayload }
 ```
 
 **Full send params:** `{ chain, to, amount, symbol?, memo?, destinationTag?, gasless?, dryRun? }`

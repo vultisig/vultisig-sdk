@@ -54,6 +54,30 @@ describe('VaultBase.estimateSendFee', () => {
     })
   })
 
+  it('reports the jetton as the fee asset for a gasless TON send, and TON otherwise', async () => {
+    const estimateSendFee = vi.fn().mockResolvedValue(7_000n)
+    const usdt = {
+      chain: Chain.Ton,
+      address: 'UQsender',
+      id: 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs',
+      decimals: 6,
+      ticker: 'USDT',
+    }
+
+    await expect(
+      callPublicEstimate(
+        { estimateSendFee },
+        { coin: usdt, receiver: 'UQreceiver', amount: 25_000_000n, tonGasless: true }
+      )
+    ).resolves.toEqual({ feeAmountBase: 7_000n, feeDecimals: 6, feeSymbol: 'USDT' })
+    expect(estimateSendFee).toHaveBeenLastCalledWith(expect.objectContaining({ tonGasless: true }))
+
+    estimateSendFee.mockResolvedValue(90_000_000n)
+    await expect(
+      callPublicEstimate({ estimateSendFee }, { coin: usdt, receiver: 'UQreceiver', amount: 25_000_000n })
+    ).resolves.toMatchObject({ feeAmountBase: 90_000_000n, feeDecimals: 9 })
+  })
+
   it('preserves estimator failures', async () => {
     const error = new Error('fee provider unavailable')
     const estimateSendFee = vi.fn().mockRejectedValue(error)

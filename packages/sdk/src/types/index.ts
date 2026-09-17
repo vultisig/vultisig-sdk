@@ -102,13 +102,17 @@ export type MaxSendAmount = {
   maxSendable: bigint
 }
 
-/** Public network-fee metadata returned by VaultBase.estimateSendFee(). */
+/**
+ * Public network-fee metadata returned by VaultBase.estimateSendFee(). The fee
+ * asset is the chain's native coin, except for a gasless TON jetton send, whose
+ * relay commission is charged in the jetton itself.
+ */
 export type SendFeeEstimate = {
-  /** Estimated network fee in the native fee asset's base units. */
+  /** Estimated network fee in the fee asset's base units. */
   feeAmountBase: bigint
-  /** Decimal places used by the native fee asset. */
+  /** Decimal places used by the fee asset. */
   feeDecimals: number
-  /** Ticker of the native fee asset. */
+  /** Ticker of the fee asset. */
   feeSymbol: string
 }
 
