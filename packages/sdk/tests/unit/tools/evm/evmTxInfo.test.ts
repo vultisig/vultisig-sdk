@@ -67,4 +67,49 @@ describe('evmTxInfo', () => {
 
     expect(result.baseFeePerGas).toBe(0n)
   })
+
+  it('prefers the pending block tag so an external wallet in-flight tx is counted', async () => {
+    // sdk#144: 'latest' alone only reflects confirmed txs, so a not-yet-mined
+    // tx from e.g. MetaMask can hand out an already-used nonce.
+    mockGetTransactionCount.mockResolvedValueOnce(43)
+    const result = await evmTxInfo('Ethereum', { address: '0x000000000000000000000000000000000000dEaD' })
+
+    expect(result.nonce).toBe(43)
+    expect(mockGetTransactionCount).toHaveBeenCalledWith({
+      address: '0x000000000000000000000000000000000000dEaD',
+      blockTag: 'pending',
+    })
+    expect(mockGetTransactionCount).not.toHaveBeenCalledWith(expect.objectContaining({ blockTag: 'latest' }))
+  })
+
+  it('falls back to the latest block tag on chains that reject the pending tag', async () => {
+    mockGetTransactionCount.mockRejectedValueOnce(new Error('pending tag unsupported')).mockResolvedValueOnce(7)
+
+    const result = await evmTxInfo('Ethereum', { address: '0x000000000000000000000000000000000000dEaD' })
+
+    expect(result.nonce).toBe(7)
+    expect(mockGetTransactionCount).toHaveBeenNthCalledWith(1, {
+      address: '0x000000000000000000000000000000000000dEaD',
+      blockTag: 'pending',
+    })
+    expect(mockGetTransactionCount).toHaveBeenNthCalledWith(2, {
+      address: '0x000000000000000000000000000000000000dEaD',
+      blockTag: 'latest',
+    })
+  })
+  it.each(['request timed out', 'rate limit exceeded', 'internal server error'])('propagates %s without a confirmed-nonce fallback', async message => {
+    const error = new Error(message)
+    mockGetTransactionCount.mockRejectedValueOnce(error)
+    await expect(evmTxInfo('Ethereum', {address:'0x000000000000000000000000000000000000dEaD'})).rejects.toBe(error)
+    expect(mockGetTransactionCount).toHaveBeenCalledTimes(1)
+  })
+
+  it('recognizes explicit pending-tag rejection in a wrapped RPC cause', async () => {
+    const error = new Error('RPC request failed', {cause:new Error('unsupported block tag: pending')})
+    mockGetTransactionCount.mockRejectedValueOnce(error).mockResolvedValueOnce(7)
+    const result=await evmTxInfo('Ethereum',{address:'0x000000000000000000000000000000000000dEaD'})
+    expect(result.nonce).toBe(7)
+    expect(mockGetTransactionCount).toHaveBeenCalledTimes(2)
+  })
+
 })
