@@ -1,22 +1,33 @@
-import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { tronRpcUrl } from './config'
 
-type TronBlockHeader = {
-  raw_data?: {
-    timestamp?: number
-    number?: number
-    version?: number
-    txTrieRoot?: string
-    parentHash?: string
-    witness_address?: string
-  }
+type TronBlockHeaderRawData = {
+  timestamp: number
+  number: number
+  version: number
+  txTrieRoot: string
+  parentHash: string
+  witness_address: string
 }
 
 type TronBlock = {
-  block_header?: TronBlockHeader
   blockID: string
+  block_header: {
+    raw_data: TronBlockHeaderRawData
+  }
+}
+
+// Gateways answer some failures with HTTP 200 and a bare error envelope
+// (capital-`E` `Error` from TronGrid/java-tron, lowercase from mirror
+// gateways) instead of a block. Mirrors `getTronBlockRefs` in the SDK.
+type RawTronBlockResponse = {
+  blockID?: string
+  block_header?: {
+    raw_data?: Partial<TronBlockHeaderRawData>
+  }
+  Error?: string
+  error?: string
 }
 
 type BlockChainSpecificTron = {
@@ -43,10 +54,55 @@ type GetTronBlockInfoInput = {
   refBlockHashHex?: string
 }
 
-const getBlockByNum = async (num: number) => {
-  return await queryUrl<TronBlock>(`${tronRpcUrl}/wallet/getblockbynum`, {
+const requiredRawDataFields = [
+  'timestamp',
+  'number',
+  'version',
+  'txTrieRoot',
+  'parentHash',
+  'witness_address',
+] as const satisfies readonly (keyof TronBlockHeaderRawData)[]
+
+/**
+ * WalletCore derives `ref_block_bytes` / `ref_block_hash` from the header
+ * fields returned here, so a missing field must never be defaulted: a zeroed
+ * header still signs (spending the full MPC ceremony, including a Fast-Vault
+ * server co-sign) and can only fail on broadcast with TAPOS_ERROR.
+ */
+const assertCompleteTronBlock = (response: RawTronBlockResponse, endpoint: string): TronBlock => {
+  const tronError = response.Error ?? response.error
+  if (tronError) {
+    throw new Error(`${endpoint} failed: ${tronError}`)
+  }
+
+  const rawData = response.block_header?.raw_data
+  if (!rawData || typeof response.blockID !== 'string') {
+    throw new Error(`${endpoint}: response missing block_header.raw_data: ${JSON.stringify(response).slice(0, 200)}`)
+  }
+
+  const missing = requiredRawDataFields.filter(field => rawData[field] === undefined || rawData[field] === null)
+  if (missing.length > 0) {
+    throw new Error(`${endpoint}: block_header.raw_data missing ${missing.join(', ')}`)
+  }
+
+  return {
+    blockID: response.blockID,
+    block_header: { raw_data: rawData as TronBlockHeaderRawData },
+  }
+}
+
+const getNowBlock = async (): Promise<TronBlock> => {
+  const response = await queryUrl<RawTronBlockResponse>(`${tronRpcUrl}/wallet/getnowblock`, {
+    body: {},
+  })
+  return assertCompleteTronBlock(response, 'getnowblock')
+}
+
+const getBlockByNum = async (num: number): Promise<TronBlock> => {
+  const response = await queryUrl<RawTronBlockResponse>(`${tronRpcUrl}/wallet/getblockbynum`, {
     body: { num },
   })
+  return assertCompleteTronBlock(response, 'getblockbynum')
 }
 
 const deriveRefBlockHashFromBlockID = (blockID: string): string => {
@@ -78,19 +134,16 @@ export async function getTronBlockInfo({
   refBlockBytesHex,
   refBlockHashHex,
 }: GetTronBlockInfoInput): Promise<BlockChainSpecificTron> {
-  const url = `${tronRpcUrl}/wallet/getnowblock`
-
-  let currentBlock = await queryUrl<TronBlock>(url, {
-    body: {},
-  })
+  let currentBlock = await getNowBlock()
   if (refBlockBytesHex && refBlockHashHex) {
     currentBlock = await resolveRefBlock({
-      nowNum: shouldBePresent(currentBlock.block_header?.raw_data?.number),
+      nowNum: currentBlock.block_header.raw_data.number,
       refBlockBytesHex,
       refBlockHashHex,
     })
   }
-  const blockHeaderTimestamp = shouldBePresent(currentBlock.block_header?.raw_data?.timestamp)
+  const { raw_data: rawData } = currentBlock.block_header
+  const blockHeaderTimestamp = rawData.timestamp
   const oneHourMillis = 60 * 60 * 1000
   expiration = expiration ?? blockHeaderTimestamp + oneHourMillis
 
@@ -98,10 +151,10 @@ export async function getTronBlockInfo({
     timestamp: timestamp ?? blockHeaderTimestamp,
     expiration,
     blockHeaderTimestamp,
-    blockHeaderNumber: currentBlock.block_header?.raw_data?.number ?? 0,
-    blockHeaderVersion: currentBlock.block_header?.raw_data?.version ?? 0,
-    blockHeaderTxTrieRoot: currentBlock.block_header?.raw_data?.txTrieRoot ?? '',
-    blockHeaderParentHash: currentBlock.block_header?.raw_data?.parentHash ?? '',
-    blockHeaderWitnessAddress: currentBlock.block_header?.raw_data?.witness_address ?? '',
+    blockHeaderNumber: rawData.number,
+    blockHeaderVersion: rawData.version,
+    blockHeaderTxTrieRoot: rawData.txTrieRoot,
+    blockHeaderParentHash: rawData.parentHash,
+    blockHeaderWitnessAddress: rawData.witness_address,
   }
 }
