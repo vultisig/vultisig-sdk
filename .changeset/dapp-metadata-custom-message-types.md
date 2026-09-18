@@ -9,6 +9,6 @@ Regenerate the keysign protobuf types so a custom-message signing request can ca
 
 **Source-breaking import move for TypeScript consumers.** Both payload kinds now share the type, so upstream moved `message DAppMetadata` into its own `dapp_metadata.proto`. `DAppMetadata` and `DAppMetadataSchema` are no longer exported from `@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb`; import them from `@vultisig/core-mpc/types/vultisig/keysign/v1/dapp_metadata_pb` instead. The old import fails at compile time rather than silently.
 
-The wire format is unchanged — same full message name and field numbers, `KeysignPayload.dapp_metadata = 50` included — so existing payloads decode as before, and devices on older versions ignore the new field.
+Wire compatibility is preserved. `DAppMetadata` keeps its full message name and field numbers, and `KeysignPayload.dapp_metadata` stays at field 50, so existing payloads decode as before. The new `CustomMessagePayload` field is additive: devices on older versions skip it.
 
 `@vultisig/sdk` does not expose these types; it is bumped so its bundled copy of the generated code stays in step.
