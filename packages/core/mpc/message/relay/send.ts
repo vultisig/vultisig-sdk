@@ -1,8 +1,12 @@
+import { base64Encode } from '@vultisig/lib-utils/base64Encode'
 import { HttpResponseError } from '@vultisig/lib-utils/fetch/HttpResponseError'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import { withoutUndefinedFields } from '@vultisig/lib-utils/record/withoutUndefinedFields'
+import type { MpcMessage } from '@vultisig/mpc-types'
 
 import { MpcRelayMessage } from '.'
+import { getMessageHash } from '../../getMessageHash'
+import { toMpcServerMessage } from '../server'
 import { withMpcRelayRequestSignal } from './get'
 
 type SendMpcRelayMessageInput = {
@@ -22,6 +26,12 @@ type SendMpcRelayMessagesInput = Omit<SendMpcRelayMessageInput, 'message'> & {
 type RunMpcRelayProcessingInput = {
   processOutbound: (signal: AbortSignal) => Promise<unknown>
   processInbound: (signal: AbortSignal) => Promise<boolean>
+}
+
+type SendMpcRelaySessionMessageInput = Omit<SendMpcRelayMessagesInput, 'receivers' | 'message'> & {
+  localPartyId: string
+  hexEncryptionKey: string
+  message: MpcMessage
 }
 
 export const mpcRelaySendTimeoutMs = 8_000
@@ -175,6 +185,23 @@ export const sendMpcRelayMessages = async ({
     input.signal?.removeEventListener('abort', abort)
   }
 }
+
+export const sendMpcRelaySessionMessage = ({
+  localPartyId,
+  hexEncryptionKey,
+  message,
+  ...input
+}: SendMpcRelaySessionMessageInput): Promise<number> =>
+  sendMpcRelayMessages({
+    ...input,
+    receivers: message.receivers,
+    message: {
+      session_id: input.sessionId,
+      from: localPartyId,
+      body: toMpcServerMessage(message.body, hexEncryptionKey),
+      hash: getMessageHash(base64Encode(message.body)),
+    },
+  })
 
 export const runMpcRelayProcessing = async ({
   processOutbound,

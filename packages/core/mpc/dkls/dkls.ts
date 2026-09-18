@@ -3,13 +3,12 @@ import { ensureMpcEngine, type MpcKeyshare, type MpcSession } from '@vultisig/mp
 import { base64Encode } from '@vultisig/lib-utils/base64Encode'
 
 import { getKeygenThreshold } from '../getKeygenThreshold'
-import { getMessageHash } from '../getMessageHash'
 import { KeygenOperation } from '../keygen/KeygenOperation'
 import { initializeMpcLib } from '../lib/initialize'
 import { mpcDebugLog } from '../mpcDebugLog'
 import { deleteMpcRelayMessage } from '../message/relay/delete'
 import { getMpcRelayMessages } from '../message/relay/get'
-import { runMpcRelayProcessing, sendMpcRelayMessages } from '../message/relay/send'
+import { runMpcRelayProcessing, sendMpcRelaySessionMessage } from '../message/relay/send'
 import { fromMpcServerMessage, toMpcServerMessage } from '../message/server'
 import { waitForSetupMessage, waitForSetupMessageInAny } from '../message/setup/get'
 import { uploadMpcSetupMessage } from '../message/setup/upload'
@@ -94,20 +93,14 @@ export class DKLS {
     }
 
     mpcDebugLog('outbound message:', message)
-    const body = toMpcServerMessage(message.body, this.hexEncryptionKey)
-
-    this.sequenceNo = await sendMpcRelayMessages({
+    this.sequenceNo = await sendMpcRelaySessionMessage({
       serverUrl: this.serverURL,
       sessionId: this.sessionId,
       messageId,
-      receivers: message.receivers,
+      localPartyId: this.localPartyId,
+      hexEncryptionKey: this.hexEncryptionKey,
       sequenceNo: this.sequenceNo,
-      message: {
-        session_id: this.sessionId,
-        from: this.localPartyId,
-        body,
-        hash: getMessageHash(base64Encode(message.body)),
-      },
+      message,
       signal,
     })
 
