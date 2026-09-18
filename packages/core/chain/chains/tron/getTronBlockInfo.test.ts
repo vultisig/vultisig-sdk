@@ -107,7 +107,7 @@ describe('getTronBlockInfo', () => {
       })
 
       await expect(getTronBlockInfo({})).rejects.toThrow(
-        'getnowblock: block_header.raw_data missing number, version, txTrieRoot, parentHash, witness_address'
+        'getnowblock: block_header.raw_data missing or invalid number, version, txTrieRoot, parentHash, witness_address'
       )
     })
 
@@ -119,7 +119,55 @@ describe('getTronBlockInfo', () => {
         },
       })
 
-      await expect(getTronBlockInfo({})).rejects.toThrow('getnowblock: block_header.raw_data missing txTrieRoot')
+      await expect(getTronBlockInfo({})).rejects.toThrow(
+        'getnowblock: block_header.raw_data missing or invalid txTrieRoot'
+      )
+    })
+
+    it.each([
+      ['null', null],
+      ['a string', 'ok'],
+      ['a number', 200],
+    ])('rejects a %s body instead of dereferencing it', async (_label, body) => {
+      mocks.queryUrl.mockResolvedValue(body)
+
+      await expect(getTronBlockInfo({})).rejects.toThrow('getnowblock: response is not an object')
+    })
+
+    it('rejects an empty blockID', async () => {
+      mocks.queryUrl.mockResolvedValue({ ...block, blockID: '' })
+
+      await expect(getTronBlockInfo({})).rejects.toThrow('getnowblock: response missing block_header.raw_data')
+    })
+
+    it.each([
+      ['a string timestamp', { timestamp: String(blockTimestamp) }, 'timestamp'],
+      ['a NaN block number', { number: Number.NaN }, 'number'],
+      ['an Infinity version', { version: Number.POSITIVE_INFINITY }, 'version'],
+      ['an empty txTrieRoot', { txTrieRoot: '' }, 'txTrieRoot'],
+      ['an empty parentHash', { parentHash: '' }, 'parentHash'],
+      ['a numeric witness_address', { witness_address: 42 }, 'witness_address'],
+    ])('rejects %s', async (_label, override, field) => {
+      mocks.queryUrl.mockResolvedValue({
+        ...block,
+        block_header: { raw_data: { ...block.block_header.raw_data, ...override } },
+      })
+
+      await expect(getTronBlockInfo({})).rejects.toThrow(
+        `getnowblock: block_header.raw_data missing or invalid ${field}`
+      )
+    })
+
+    it('does not treat an empty error field as a failure', async () => {
+      mocks.queryUrl.mockResolvedValue({ ...block, Error: '' })
+
+      await expect(getTronBlockInfo({})).resolves.toMatchObject({ blockHeaderNumber: 99_000_000 })
+    })
+
+    it('serialises a non-string error envelope', async () => {
+      mocks.queryUrl.mockResolvedValue({ error: { code: 503, message: 'busy' } })
+
+      await expect(getTronBlockInfo({})).rejects.toThrow('getnowblock failed: {"code":503,"message":"busy"}')
     })
   })
 
@@ -162,7 +210,7 @@ describe('getTronBlockInfo', () => {
       )
 
       await expect(getTronBlockInfo({ refBlockBytesHex, refBlockHashHex })).rejects.toThrow(
-        'getblockbynum: block_header.raw_data missing number, version, txTrieRoot, parentHash, witness_address'
+        'getblockbynum: block_header.raw_data missing or invalid number, version, txTrieRoot, parentHash, witness_address'
       )
     })
 

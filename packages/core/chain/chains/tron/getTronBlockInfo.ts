@@ -22,12 +22,12 @@ type TronBlock = {
 // (capital-`E` `Error` from TronGrid/java-tron, lowercase from mirror
 // gateways) instead of a block. Mirrors `getTronBlockRefs` in the SDK.
 type RawTronBlockResponse = {
-  blockID?: string
+  blockID?: unknown
   block_header?: {
-    raw_data?: Partial<TronBlockHeaderRawData>
+    raw_data?: Partial<Record<keyof TronBlockHeaderRawData, unknown>>
   }
-  Error?: string
-  error?: string
+  Error?: unknown
+  error?: unknown
 }
 
 type BlockChainSpecificTron = {
@@ -54,35 +54,54 @@ type GetTronBlockInfoInput = {
   refBlockHashHex?: string
 }
 
-const requiredRawDataFields = [
-  'timestamp',
-  'number',
-  'version',
-  'txTrieRoot',
-  'parentHash',
-  'witness_address',
-] as const satisfies readonly (keyof TronBlockHeaderRawData)[]
+const isNonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.length > 0
+
+const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value)
+
+// Numeric fields must be finite numbers (a string `timestamp` would turn the
+// default `expiration` into string concatenation) and identifier fields must
+// be non-empty strings (an empty `txTrieRoot` / `parentHash` still signs).
+const rawDataFieldValidators: { [K in keyof TronBlockHeaderRawData]: (value: unknown) => boolean } = {
+  timestamp: isFiniteNumber,
+  number: isFiniteNumber,
+  version: isFiniteNumber,
+  txTrieRoot: isNonEmptyString,
+  parentHash: isNonEmptyString,
+  witness_address: isNonEmptyString,
+}
+
+const requiredRawDataFields = Object.keys(rawDataFieldValidators) as (keyof TronBlockHeaderRawData)[]
+
+const describeResponse = (response: unknown) => JSON.stringify(response)?.slice(0, 200) ?? String(response)
 
 /**
  * WalletCore derives `ref_block_bytes` / `ref_block_hash` from the header
  * fields returned here, so a missing field must never be defaulted: a zeroed
  * header still signs (spending the full MPC ceremony, including a Fast-Vault
  * server co-sign) and can only fail on broadcast with TAPOS_ERROR.
+ *
+ * `queryUrl` only asserts the HTTP status, so `response` is treated as
+ * untrusted JSON here: it may be `null`, a primitive, or carry wrong-typed
+ * fields, and every one of those must surface as a controlled error.
  */
-const assertCompleteTronBlock = (response: RawTronBlockResponse, endpoint: string): TronBlock => {
+const assertCompleteTronBlock = (response: RawTronBlockResponse | null | undefined, endpoint: string): TronBlock => {
+  if (typeof response !== 'object' || response === null) {
+    throw new Error(`${endpoint}: response is not an object: ${describeResponse(response)}`)
+  }
+
   const tronError = response.Error ?? response.error
-  if (tronError) {
-    throw new Error(`${endpoint} failed: ${tronError}`)
+  if (tronError !== undefined && tronError !== null && tronError !== '') {
+    throw new Error(`${endpoint} failed: ${typeof tronError === 'string' ? tronError : describeResponse(tronError)}`)
   }
 
   const rawData = response.block_header?.raw_data
-  if (!rawData || typeof response.blockID !== 'string') {
-    throw new Error(`${endpoint}: response missing block_header.raw_data: ${JSON.stringify(response).slice(0, 200)}`)
+  if (typeof rawData !== 'object' || rawData === null || !isNonEmptyString(response.blockID)) {
+    throw new Error(`${endpoint}: response missing block_header.raw_data: ${describeResponse(response)}`)
   }
 
-  const missing = requiredRawDataFields.filter(field => rawData[field] === undefined || rawData[field] === null)
-  if (missing.length > 0) {
-    throw new Error(`${endpoint}: block_header.raw_data missing ${missing.join(', ')}`)
+  const invalid = requiredRawDataFields.filter(field => !rawDataFieldValidators[field](rawData[field]))
+  if (invalid.length > 0) {
+    throw new Error(`${endpoint}: block_header.raw_data missing or invalid ${invalid.join(', ')}`)
   }
 
   return {
