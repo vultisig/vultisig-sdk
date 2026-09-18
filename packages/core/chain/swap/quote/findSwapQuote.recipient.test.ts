@@ -31,6 +31,9 @@ vi.mock('@vultisig/core-chain/swap/native/api/getNativeSwapQuote', () => ({
 vi.mock('@vultisig/core-chain/swap/native/minimum/getNativeSwapMinAmountIn', () => ({
   getNativeSwapMinAmountIn: vi.fn().mockResolvedValue(null),
 }))
+vi.mock('@vultisig/core-chain/swap/native/halts/getNativeSwapTradingHalt', () => ({
+  getNativeSwapTradingHalt: vi.fn().mockResolvedValue(null),
+}))
 
 // A valid 40-hex EVM address (checksummed form is also accepted by the regex)
 const recipient = '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045'
