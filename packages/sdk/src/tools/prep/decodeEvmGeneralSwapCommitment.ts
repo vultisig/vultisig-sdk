@@ -75,10 +75,7 @@ export function decodeEvmGeneralSwapCommitment(data: string, value?: string): Ev
         if (native === null) return null
         return { sellAmount: native, deadlineSeconds: Number(deadline) }
       }
-      case 'exactInputSingle': {
-        const params = decoded.args[0]
-        return { sellAmount: params.amountIn, deadlineSeconds: Number(params.deadline) }
-      }
+      case 'exactInputSingle':
       case 'exactInput': {
         const params = decoded.args[0]
         return { sellAmount: params.amountIn, deadlineSeconds: Number(params.deadline) }

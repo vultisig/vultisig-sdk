@@ -18,6 +18,7 @@ const v2Abi = parseAbi([
 
 const v3Abi = parseAbi([
   'function exactInputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96) params)',
+  'function exactInput((bytes path, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum) params)',
 ])
 
 const oneInchAbi = parseAbi([
@@ -102,6 +103,26 @@ describe('decodeEvmGeneralSwapCommitment', () => {
     })
     expect(decodeEvmGeneralSwapCommitment(data, '0')).toEqual({
       sellAmount: 42_000_000n,
+      deadlineSeconds: Number(FUTURE),
+    })
+  })
+
+  it('decodes Uniswap V3 exactInput amountIn + deadline', () => {
+    const data = encodeFunctionData({
+      abi: v3Abi,
+      functionName: 'exactInput',
+      args: [
+        {
+          path: `${WETH}000bb8${USDC.slice(2)}`,
+          recipient: RECIPIENT,
+          deadline: FUTURE,
+          amountIn: 43_000_000n,
+          amountOutMinimum: 1n,
+        },
+      ],
+    })
+    expect(decodeEvmGeneralSwapCommitment(data, '0')).toEqual({
+      sellAmount: 43_000_000n,
       deadlineSeconds: Number(FUTURE),
     })
   })
