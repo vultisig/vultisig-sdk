@@ -658,10 +658,9 @@ export class RawBroadcastService {
   private async broadcastTronRawTx(rawTx: string): Promise<string> {
     // Parse JSON if string
     const txJson = JSON.parse(rawTx)
+    const localHash = deriveTronRawTxHash(txJson)
 
-    const { data: response, error } = await attempt(
-      broadcastTronTransaction(txJson, deriveTronRawTxHash(txJson) ?? undefined)
-    )
+    const { data: response, error } = await attempt(broadcastTronTransaction(txJson, localHash ?? undefined))
 
     if (error) {
       throw error
@@ -677,7 +676,6 @@ export class RawBroadcastService {
       const decodedMessage = response.message ? Buffer.from(response.message, 'hex').toString('utf8') : ''
       const errorMsg = decodedMessage || response.code || 'Unknown error'
       if (response.code && isInError(response.code, 'DUPLICATE_TRANSACTION', 'DUP_TRANSACTION_ERROR')) {
-        const localHash = deriveTronRawTxHash(txJson)
         if (localHash) {
           return verifyKnownRawTx(OtherChain.Tron, localHash, 'Tron')
         }
@@ -688,6 +686,14 @@ export class RawBroadcastService {
 
     if (!response.txid) {
       throw new Error('Tron broadcast did not return transaction ID')
+    }
+
+    if (localHash) {
+      const responseHash = response.txid.replace(/^0x/i, '').toLowerCase()
+      if (responseHash !== localHash) {
+        throw new Error('Tron broadcast returned a transaction ID that does not match the locally derived hash')
+      }
+      return localHash
     }
 
     return response.txid

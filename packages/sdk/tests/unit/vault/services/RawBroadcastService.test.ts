@@ -827,6 +827,30 @@ describe('RawBroadcastService', () => {
     expect(mockQueryUrl).toHaveBeenCalledWith(`${tronRpcUrl}/wallet/broadcasttransaction`, expect.any(Object))
   })
 
+  it('returns the locally derived Tron hash after validating the provider response', async () => {
+    const rawDataHex = '010203'
+    const expectedHash = bytesToHex(sha256(Buffer.from(rawDataHex, 'hex')))
+    mockQueryUrl.mockResolvedValue({ txid: `0x${expectedHash.toUpperCase()}`, result: true })
+
+    const hash = await service.broadcastRawTx({
+      chain: Chain.Tron,
+      rawTx: JSON.stringify({ raw_data_hex: rawDataHex }),
+    })
+
+    expect(hash).toBe(expectedHash)
+  })
+
+  it('rejects a successful Tron response with a mismatched transaction ID', async () => {
+    mockQueryUrl.mockResolvedValue({ txid: '00'.repeat(32), result: true })
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Tron,
+        rawTx: JSON.stringify({ raw_data_hex: '010203' }),
+      })
+    ).rejects.toThrow(/does not match the locally derived hash/)
+  })
+
   it('maps Tron duplicate transaction to BroadcastFailed', async () => {
     mockQueryUrl.mockResolvedValue({
       code: 'DUP_TRANSACTION_ERROR',
