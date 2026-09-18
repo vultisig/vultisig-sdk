@@ -851,6 +851,18 @@ describe('RawBroadcastService', () => {
     ).rejects.toThrow(/does not match the locally derived hash/)
   })
 
+  it('rejects a successful Tron response when the input txID mismatches the raw data', async () => {
+    const mismatchedHash = '00'.repeat(32)
+    mockQueryUrl.mockResolvedValue({ txid: mismatchedHash, result: true })
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Tron,
+        rawTx: JSON.stringify({ raw_data_hex: '010203', txID: mismatchedHash }),
+      })
+    ).rejects.toThrow(/transaction ID does not match the locally derived hash/)
+  })
+
   it('maps Tron duplicate transaction to BroadcastFailed', async () => {
     mockQueryUrl.mockResolvedValue({
       code: 'DUP_TRANSACTION_ERROR',

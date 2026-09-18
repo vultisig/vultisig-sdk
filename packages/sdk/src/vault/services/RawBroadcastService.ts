@@ -62,7 +62,7 @@ const deriveCosmosRawTxHash = (rawTx: string): string => bytesToHex(sha256(getCo
 const deriveRippleRawTxHash = (rawTx: string): string =>
   xrplHashes.hashSignedTx(rawTx.startsWith('0x') ? rawTx.slice(2) : rawTx)
 
-const deriveTronRawTxHash = (txJson: { raw_data_hex?: unknown; txID?: unknown }): string | null => {
+const deriveTronRawDataHash = (txJson: { raw_data_hex?: unknown }): string | null => {
   if (
     typeof txJson.raw_data_hex !== 'string' ||
     txJson.raw_data_hex.length === 0 ||
@@ -72,7 +72,13 @@ const deriveTronRawTxHash = (txJson: { raw_data_hex?: unknown; txID?: unknown })
     return null
   }
 
-  const derivedHash = bytesToHex(sha256(Buffer.from(txJson.raw_data_hex, 'hex')))
+  return bytesToHex(sha256(Buffer.from(txJson.raw_data_hex, 'hex')))
+}
+
+const deriveTronRawTxHash = (txJson: { raw_data_hex?: unknown; txID?: unknown }): string | null => {
+  const derivedHash = deriveTronRawDataHash(txJson)
+  if (!derivedHash) return null
+
   if (txJson.txID !== undefined && (typeof txJson.txID !== 'string' || txJson.txID.toLowerCase() !== derivedHash)) {
     return null
   }
@@ -658,6 +664,7 @@ export class RawBroadcastService {
   private async broadcastTronRawTx(rawTx: string): Promise<string> {
     // Parse JSON if string
     const txJson = JSON.parse(rawTx)
+    const rawDataHash = deriveTronRawDataHash(txJson)
     const localHash = deriveTronRawTxHash(txJson)
 
     const { data: response, error } = await attempt(broadcastTronTransaction(txJson, localHash ?? undefined))
@@ -688,12 +695,15 @@ export class RawBroadcastService {
       throw new Error('Tron broadcast did not return transaction ID')
     }
 
-    if (localHash) {
+    if (rawDataHash) {
+      if (!localHash) {
+        throw new Error('Tron transaction ID does not match the locally derived hash')
+      }
       const responseHash = response.txid.replace(/^0x/i, '').toLowerCase()
-      if (responseHash !== localHash) {
+      if (responseHash !== rawDataHash) {
         throw new Error('Tron broadcast returned a transaction ID that does not match the locally derived hash')
       }
-      return localHash
+      return rawDataHash
     }
 
     return response.txid
