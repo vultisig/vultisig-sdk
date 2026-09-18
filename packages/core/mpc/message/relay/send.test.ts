@@ -242,4 +242,48 @@ describe('runMpcRelayProcessing', () => {
       })
     ).resolves.toBe(true)
   })
+
+  it('aborts and settles outbound processing before returning an inbound failure', async () => {
+    let outboundSettled = false
+    const result = runMpcRelayProcessing({
+      processOutbound: signal =>
+        new Promise<void>((_, reject) => {
+          signal.addEventListener('abort', () => {
+            queueMicrotask(() => {
+              outboundSettled = true
+              reject(signal.reason)
+            })
+          })
+        }),
+      processInbound: async () => false,
+    })
+
+    await expect(result).resolves.toBe(false)
+    expect(outboundSettled).toBe(true)
+  })
+
+  it('keeps final outbound deliveries running after inbound success', async () => {
+    let resolveOutbound!: () => void
+    let outboundSignal!: AbortSignal
+    let settled = false
+    const result = runMpcRelayProcessing({
+      processOutbound: signal => {
+        outboundSignal = signal
+        return new Promise<void>(resolve => {
+          resolveOutbound = resolve
+        })
+      },
+      processInbound: async () => true,
+    }).then(value => {
+      settled = true
+      return value
+    })
+
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    expect(outboundSignal.aborted).toBe(false)
+    resolveOutbound()
+    await expect(result).resolves.toBe(true)
+  })
 })

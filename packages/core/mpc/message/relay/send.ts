@@ -19,9 +19,9 @@ type SendMpcRelayMessagesInput = Omit<SendMpcRelayMessageInput, 'message'> & {
   sequenceNo: number
 }
 
-type RunMpcRelayProcessingInput<T> = {
+type RunMpcRelayProcessingInput = {
   processOutbound: (signal: AbortSignal) => Promise<unknown>
-  processInbound: (signal: AbortSignal) => Promise<T>
+  processInbound: (signal: AbortSignal) => Promise<boolean>
 }
 
 export const mpcRelaySendTimeoutMs = 8_000
@@ -176,13 +176,19 @@ export const sendMpcRelayMessages = async ({
   }
 }
 
-export const runMpcRelayProcessing = async <T>({
+export const runMpcRelayProcessing = async ({
   processOutbound,
   processInbound,
-}: RunMpcRelayProcessingInput<T>): Promise<T> => {
+}: RunMpcRelayProcessingInput): Promise<boolean> => {
   const controller = new AbortController()
+  const inboundIncomplete = new Error('MPC relay inbound processing failed')
   const outbound = processOutbound(controller.signal)
-  const inbound = processInbound(controller.signal)
+  const inbound = processInbound(controller.signal).then(result => {
+    if (result === false) {
+      throw inboundIncomplete
+    }
+    return result
+  })
 
   try {
     const [, inboundResult] = await Promise.all([outbound, inbound])
@@ -190,6 +196,9 @@ export const runMpcRelayProcessing = async <T>({
   } catch (error) {
     controller.abort()
     await Promise.allSettled([outbound, inbound])
+    if (error === inboundIncomplete) {
+      return false
+    }
     throw error
   } finally {
     controller.abort()
