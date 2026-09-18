@@ -1357,3 +1357,35 @@ MIT License - see [LICENSE](./LICENSE) file for details.
 ---
 
 **Built with ❤️ by the Vultisig team**
+## Transaction preparation imports
+
+`@vultisig/sdk/tools/prep` exposes the canonical vault-free transaction builders
+without importing the full SDK root:
+
+```ts
+import { buildDelegateMsg, prepareSignAminoTxFromKeys } from '@vultisig/sdk/tools/prep'
+```
+
+Node supports ESM and CommonJS. Browser, worker, extension, and React Native
+package conditions select their platform bundles. Browser builds use the same
+WASM dependencies and bundler setup as the SDK root (`@vultisig/sdk/vite`).
+React Native applications must load `@vultisig/sdk/rn-preamble` first and install
+the SDK's documented native peers and Metro configuration.
+
+Pure message builders run immediately. WalletCore-dependent preparation lazily
+initializes the platform runtime; importing the root first is unnecessary.
+`getWalletCore()` is also available from this subpath for explicit warmup.
+Root and prep imports retain the same registered WalletCore provider in either
+order. Preparation can fetch network state where required by the builder; it
+does not sign or broadcast a transaction.
+
+React Native retains deferred asynchronous wrappers for `buildSplTransfer`,
+`getMaxSendAmountFromKeys`, `prepareContractCallTxFromKeys`,
+`prepareRawEvmTxFromKeys`, `prepareJettonTransferTxFromKeys`,
+`prepareSendTxFromKeys`, `prepareSignAminoTxFromKeys`,
+`prepareSignDirectTxFromKeys`, `prepareSwapTxFromKeys`,
+`prepareTrc20TransferFromKeys`, `prepareUtxoConsolidateTxFromKeys`, and
+`prepareThorchainMsgDepositTxFromKeys`. Await these calls. React Native
+declarations describe these Promise returns and preserve the canonical inputs;
+use TypeScript's `customConditions: ["react-native"]` with NodeNext or bundler
+module resolution. Pure staking and CosmWasm message builders remain synchronous.

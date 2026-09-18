@@ -1,12 +1,28 @@
 import { Chain, OtherChain } from '@vultisig/core-chain/Chain'
 import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
+import { withSolanaRpcTimeout } from '@vultisig/core-chain/chains/solana/rpcTimeout'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { attempt } from '@vultisig/lib-utils/attempt'
 
 import { TxStatusResolver } from '../resolver'
 
+type SolanaClient = ReturnType<typeof getSolanaClient>
+
+// Every RPC call here is bounded: a stalled request reads as unavailable
+// information and the transaction stays pending, the same way a failed one
+// does. Without that, one half-open socket could hold a status poll open for
+// good, and with it the confirmation wait of whatever is polling.
+const readSignatureStatus = (client: SolanaClient, hash: string) =>
+  attempt(async () => {
+    const { value } = await withSolanaRpcTimeout(
+      client.getSignatureStatuses([hash], { searchTransactionHistory: true }),
+      'getSignatureStatuses'
+    )
+    return value[0]
+  })
+
 const isExpiredLastValidBlockHeight = async (
-  client: ReturnType<typeof getSolanaClient>,
+  client: SolanaClient,
   lastValidBlockHeight: number | undefined
 ): Promise<boolean> => {
   const height = lastValidBlockHeight
@@ -15,7 +31,9 @@ const isExpiredLastValidBlockHeight = async (
     return false
   }
 
-  const { data: currentBlockHeight, error } = await attempt(client.getBlockHeight())
+  const { data: currentBlockHeight, error } = await attempt(
+    withSolanaRpcTimeout(client.getBlockHeight(), 'getBlockHeight')
+  )
 
   return !error && typeof currentBlockHeight === 'number' && currentBlockHeight > height
 }
@@ -23,23 +41,40 @@ const isExpiredLastValidBlockHeight = async (
 export const getSolanaTxStatus: TxStatusResolver<OtherChain.Solana> = async ({ hash, lastValidBlockHeight }) => {
   const client = getSolanaClient()
 
-  const { data: signatureStatuses, error: signatureStatusError } = await attempt(
-    client.getSignatureStatuses([hash], {
-      searchTransactionHistory: true,
-    })
-  )
-  const signatureStatus = signatureStatuses?.value[0]
+  const { data: firstSighting, error: firstLookupError } = await readSignatureStatus(client, hash)
 
-  if (signatureStatusError) {
+  if (firstLookupError) {
     return { status: 'pending', isKnown: false }
   }
 
+  let signatureStatus = firstSighting
+
   if (!signatureStatus) {
-    if (await isExpiredLastValidBlockHeight(client, lastValidBlockHeight)) {
-      return { status: 'not_found', isKnown: false }
+    if (!(await isExpiredLastValidBlockHeight(client, lastValidBlockHeight))) {
+      return { status: 'pending', isKnown: false }
     }
 
-    return { status: 'pending', isKnown: false }
+    // That absence was observed BEFORE the height, and a transaction can land
+    // in its last valid block while the height request is in flight. Only an
+    // absence observed once the chain is already past the deadline is
+    // permanent, so read history again now. A failed re-read proves nothing
+    // and stays pending: `expired` is terminal, and its documented recovery
+    // is to sign again, which would pay twice for a transfer that did land.
+    const { data: recheckedSighting, error: recheckError } = await readSignatureStatus(client, hash)
+
+    if (recheckError) {
+      return { status: 'pending', isKnown: false }
+    }
+
+    if (!recheckedSighting) {
+      // Past its last valid block height an unseen signature can never land:
+      // that is the chain's own terminal verdict, and every consumer treats
+      // `expired` as final. `not_found` would read as "not propagated yet" and
+      // keep the transaction polling as pending for good.
+      return { status: 'expired', isKnown: false }
+    }
+
+    signatureStatus = recheckedSighting
   }
 
   if (signatureStatus.err) {
@@ -47,9 +82,7 @@ export const getSolanaTxStatus: TxStatusResolver<OtherChain.Solana> = async ({ h
   }
 
   const { data: tx, error } = await attempt(
-    client.getTransaction(hash, {
-      maxSupportedTransactionVersion: 0,
-    })
+    withSolanaRpcTimeout(client.getTransaction(hash, { maxSupportedTransactionVersion: 0 }), 'getTransaction')
   )
 
   if (error || !tx) {

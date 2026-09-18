@@ -1,4 +1,5 @@
 export type BuildKeysignPayloadErrorType =
+  | 'dangerous-destination'
   | 'not-enough-funds'
   | 'ripple-destination-not-activated'
   | 'ripple-destination-tag-invalid'

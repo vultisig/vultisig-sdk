@@ -167,6 +167,7 @@ function validatePackedReactNativePublicHelpers(packageRoot) {
   const declarationSource = readFileSync(declarationsPath, 'utf8')
 
   for (const symbol of [
+    'getTxStatus',
     'buildSignAminoKeysignPayload',
     'buildSignDirectKeysignPayload',
     'tronBase58ToEvmHex',
@@ -179,16 +180,16 @@ function validatePackedReactNativePublicHelpers(packageRoot) {
   }
 }
 
-function validatePackedReactNativeTokenRefExports(packageRoot) {
+function validatePackedReactNativeRuntimeExports(packageRoot) {
   const runtimePath = path.join(packageRoot, 'dist/index.react-native.js')
   const ast = parseAst(readFileSync(runtimePath, 'utf8'))
   const exportedNames = ast.body
     .filter(statement => statement.type === 'ExportNamedDeclaration')
     .flatMap(statement => statement.specifiers.map(specifier => specifier.exported.name))
-  for (const name of ['resolveTokenRef', 'resolveTokenRefId']) {
+  for (const name of ['resolveTokenRef', 'resolveTokenRefId', 'getTxStatus']) {
     assert.ok(exportedNames.includes(name), `packed React Native runtime must export ${name}`)
   }
-  console.log('SDK packed React Native token resolver export bindings passed (artifact check, not device execution)')
+  console.log('SDK packed React Native runtime export bindings passed (artifact check, not device execution)')
 }
 
 // Run the same public API scenarios through both installed Node module formats.
@@ -496,6 +497,7 @@ import {
   buildSignAminoKeysignPayload,
   buildSignDirectKeysignPayload,
   chainRegistry,
+  getTxStatus,
   deriveFromChainRegistry,
   extendChainRegistry,
   resolveTokenRef,
@@ -527,8 +529,47 @@ import {
   type BuildSignDirectPayloadInput as BuildSignDirectPayloadInputReactNative,
   resolveTokenRef as resolveTokenRefReactNative,
   resolveTokenRefId as resolveTokenRefIdReactNative,
+  getTxStatus as getTxStatusReactNative,
   type ResolvedTokenInfo as ResolvedTokenInfoReactNative,
 } from '@vultisig/sdk/react-native'
+import {
+  recipientSanity as recipientSanityRoot,
+  isNullAddress as isNullAddressRoot,
+  isSelfSend as isSelfSendRoot,
+  isMalformedEvmAddress as isMalformedEvmAddressRoot,
+  type RecipientSanityFlag as RecipientSanityFlagRoot,
+  type RecipientSanityInput as RecipientSanityInputRoot,
+  type RecipientSanityResult as RecipientSanityResultRoot,
+} from '@vultisig/sdk'
+const recipientInputRoot: RecipientSanityInputRoot = { recipient: '0xdeadbeef' }
+const recipientResultRoot: RecipientSanityResultRoot = recipientSanityRoot(recipientInputRoot)
+const recipientFlagsRoot: RecipientSanityFlagRoot[] = recipientResultRoot.flags
+const recipientChecksRoot: boolean[] = [
+  isNullAddressRoot(recipientInputRoot.recipient),
+  isSelfSendRoot('', recipientInputRoot.recipient),
+  isMalformedEvmAddressRoot(recipientInputRoot.recipient),
+]
+void recipientFlagsRoot
+void recipientChecksRoot
+import {
+  recipientSanity as recipientSanityReactNative,
+  isNullAddress as isNullAddressReactNative,
+  isSelfSend as isSelfSendReactNative,
+  isMalformedEvmAddress as isMalformedEvmAddressReactNative,
+  type RecipientSanityFlag as RecipientSanityFlagReactNative,
+  type RecipientSanityInput as RecipientSanityInputReactNative,
+  type RecipientSanityResult as RecipientSanityResultReactNative,
+} from '@vultisig/sdk/react-native'
+const recipientInputReactNative: RecipientSanityInputReactNative = { recipient: '0xdeadbeef' }
+const recipientResultReactNative: RecipientSanityResultReactNative = recipientSanityReactNative(recipientInputReactNative)
+const recipientFlagsReactNative: RecipientSanityFlagReactNative[] = recipientResultReactNative.flags
+const recipientChecksReactNative: boolean[] = [
+  isNullAddressReactNative(recipientInputReactNative.recipient),
+  isSelfSendReactNative('', recipientInputReactNative.recipient),
+  isMalformedEvmAddressReactNative(recipientInputReactNative.recipient),
+]
+void recipientFlagsReactNative
+void recipientChecksReactNative
 import type { Vultisig } from '@vultisig/sdk/node'
 import type { ElectronMainCrypto, Vultisig as ElectronMainVultisig } from '@vultisig/sdk/electron/main'
 
@@ -571,6 +612,24 @@ export type CosmosAminoBuilder = typeof buildSignAminoKeysignPayload
 export type CosmosDirectBuilder = typeof buildSignDirectKeysignPayload
 export type CosmosAminoBuilderReactNative = typeof buildSignAminoKeysignPayloadReactNative
 export type CosmosDirectBuilderReactNative = typeof buildSignDirectKeysignPayloadReactNative
+export type TransactionStatusLookup = typeof getTxStatus
+export type TransactionStatusLookupReactNative = typeof getTxStatusReactNative
+`
+  )
+
+  // The default public entry exports the complete vault class hierarchy. Keep a
+  // consumer-shaped assertion separate from the curated React Native entry,
+  // which intentionally exposes FastVault without exporting VaultBase itself.
+  writeFileSync(
+    path.join(consumerRoot, 'verify-public-vault-types.ts'),
+    `import type { SendFeeEstimate, VaultBase } from '@vultisig/sdk'
+
+export async function estimatePublicSendFee(
+  vault: VaultBase,
+  params: Parameters<VaultBase['estimateSendFee']>[0]
+): Promise<SendFeeEstimate> {
+  return vault.estimateSendFee(params)
+}
 `
   )
 
@@ -591,7 +650,7 @@ export type CosmosDirectBuilderReactNative = typeof buildSignDirectKeysignPayloa
             noUncheckedSideEffectImports: true,
             ...(customConditions.length ? { customConditions } : {}),
           },
-          include: ['verify-types.ts'],
+          include: index === 0 ? ['verify-types.ts', 'verify-public-vault-types.ts'] : ['verify-types.ts'],
         },
         null,
         2
@@ -686,7 +745,7 @@ export async function checkSdkPackageExports({
 
     const targets = validatePackedExportTargets(sourceManifest, packageRoot)
     validatePackedReactNativePublicHelpers(packageRoot)
-    validatePackedReactNativeTokenRefExports(packageRoot)
+    validatePackedReactNativeRuntimeExports(packageRoot)
     const importCases = collectNodeRuntimeCases(sourceManifest, 'import')
     const requireCases = collectNodeRuntimeCases(sourceManifest, 'require')
     if (!importCases.length || !requireCases.length) {
