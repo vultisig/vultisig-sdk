@@ -1035,10 +1035,25 @@
       "import": "./dist/chains/ton/failure.js",
       "default": "./dist/chains/ton/failure.js"
     },
+    "./chains/ton/gasless/api": {
+      "types": "./dist/chains/ton/gasless/api.d.ts",
+      "import": "./dist/chains/ton/gasless/api.js",
+      "default": "./dist/chains/ton/gasless/api.js"
+    },
+    "./chains/ton/gasless/request": {
+      "types": "./dist/chains/ton/gasless/request.d.ts",
+      "import": "./dist/chains/ton/gasless/request.js",
+      "default": "./dist/chains/ton/gasless/request.js"
+    },
     "./chains/ton/jetton/symbol": {
       "types": "./dist/chains/ton/jetton/symbol.d.ts",
       "import": "./dist/chains/ton/jetton/symbol.js",
       "default": "./dist/chains/ton/jetton/symbol.js"
+    },
+    "./chains/ton/jetton/transferBody": {
+      "types": "./dist/chains/ton/jetton/transferBody.d.ts",
+      "import": "./dist/chains/ton/jetton/transferBody.js",
+      "default": "./dist/chains/ton/jetton/transferBody.js"
     },
     "./chains/ton/jetton/verification": {
       "types": "./dist/chains/ton/jetton/verification.d.ts",
@@ -1079,6 +1094,11 @@
       "types": "./dist/chains/ton/staking.d.ts",
       "import": "./dist/chains/ton/staking.js",
       "default": "./dist/chains/ton/staking.js"
+    },
+    "./chains/ton/tonApi": {
+      "types": "./dist/chains/ton/tonApi.d.ts",
+      "import": "./dist/chains/ton/tonApi.js",
+      "default": "./dist/chains/ton/tonApi.js"
     },
     "./chains/ton/wallet": {
       "types": "./dist/chains/ton/wallet.d.ts",

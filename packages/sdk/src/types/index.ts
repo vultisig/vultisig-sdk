@@ -98,17 +98,21 @@ export type MaxSendAmount = {
   balance: bigint
   /** Estimated network fee in base units */
   fee: bigint
-  /** Maximum sendable amount (full token balance, or native balance minus fee and any balance the chain requires the sender to keep) */
+  /** Maximum sendable amount (full token balance, or balance minus fee when the fee is paid in the sent asset, and minus any balance the chain requires the sender to keep) */
   maxSendable: bigint
 }
 
-/** Public network-fee metadata returned by VaultBase.estimateSendFee(). */
+/**
+ * Public network-fee metadata returned by VaultBase.estimateSendFee(). The fee
+ * asset is the chain's native coin, except for a gasless TON jetton send, whose
+ * relay commission is charged in the jetton itself.
+ */
 export type SendFeeEstimate = {
-  /** Estimated network fee in the native fee asset's base units. */
+  /** Estimated network fee in the fee asset's base units. */
   feeAmountBase: bigint
-  /** Decimal places used by the native fee asset. */
+  /** Decimal places used by the fee asset. */
   feeDecimals: number
-  /** Ticker of the native fee asset. */
+  /** Ticker of the fee asset. */
   feeSymbol: string
 }
 
@@ -640,14 +644,18 @@ export type SendResult =
       dryRun: true
       /** Resolved token contract address / chain-specific asset id. Omitted for native sends. */
       contractAddress?: string
-      /** Network fee, denominated in the chain's native asset (`feeSymbol`). */
+      /** Network fee, denominated in `feeSymbol`. */
       fee: string
-      /** Ticker of the asset the fee is paid in — always the chain's native asset. */
+      /**
+       * Ticker of the asset the fee is paid in: the chain's native asset, or the
+       * jetton itself for a gasless TON send (the relay's commission).
+       */
       feeSymbol: string
       /**
        * What the send costs in the asset being sent, comparable against that
        * asset's balance: `amount` for a token send (the fee is paid separately
-       * in the native asset), `amount + fee` for a native send.
+       * in the native asset), `amount + fee` for a native send or a gasless TON
+       * send, whose fee comes out of the jetton balance.
        */
       total: string
       keysignPayload: KeysignPayload

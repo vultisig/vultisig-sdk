@@ -291,6 +291,11 @@
       "import": "./dist/keysign/chainSpecific/resolvers/ton/index.js",
       "default": "./dist/keysign/chainSpecific/resolvers/ton/index.js"
     },
+    "./keysign/chainSpecific/resolvers/ton/gasless": {
+      "types": "./dist/keysign/chainSpecific/resolvers/ton/gasless.d.ts",
+      "import": "./dist/keysign/chainSpecific/resolvers/ton/gasless.js",
+      "default": "./dist/keysign/chainSpecific/resolvers/ton/gasless.js"
+    },
     "./keysign/chainSpecific/resolvers/tron": {
       "types": "./dist/keysign/chainSpecific/resolvers/tron/index.d.ts",
       "import": "./dist/keysign/chainSpecific/resolvers/tron/index.js",
@@ -330,6 +335,11 @@
       "types": "./dist/keysign/fee/index.d.ts",
       "import": "./dist/keysign/fee/index.js",
       "default": "./dist/keysign/fee/index.js"
+    },
+    "./keysign/fee/getKeysignFeeCoin": {
+      "types": "./dist/keysign/fee/getKeysignFeeCoin.d.ts",
+      "import": "./dist/keysign/fee/getKeysignFeeCoin.js",
+      "default": "./dist/keysign/fee/getKeysignFeeCoin.js"
     },
     "./keysign/fee/resolver": {
       "types": "./dist/keysign/fee/resolver.d.ts",
@@ -640,6 +650,11 @@
       "types": "./dist/keysign/swap/KeysignSwapPayload.d.ts",
       "import": "./dist/keysign/swap/KeysignSwapPayload.js",
       "default": "./dist/keysign/swap/KeysignSwapPayload.js"
+    },
+    "./keysign/ton/gasless": {
+      "types": "./dist/keysign/ton/gasless.d.ts",
+      "import": "./dist/keysign/ton/gasless.js",
+      "default": "./dist/keysign/ton/gasless.js"
     },
     "./keysign/tw/getKeysignTwPublicKey": {
       "types": "./dist/keysign/tw/getKeysignTwPublicKey.d.ts",
