@@ -282,6 +282,12 @@ export {
 } from '../../seedphrase/languageDetection'
 export type { ChainPrivateKey, DeriveChainPrivateKeysOptions, DerivedChainKey } from '../../seedphrase/MasterKeyDeriver'
 export { cosmosPathTerra, MasterKeyDeriver } from '../../seedphrase/MasterKeyDeriver'
+export type {
+  SeedphraseImportPreludeInput,
+  SeedphraseImportPreludeProgressLabels,
+  SeedphraseImportPreludeResult,
+} from '../../seedphrase/prepareSeedphraseImportPrelude'
+export { prepareSeedphraseImportPrelude } from '../../seedphrase/prepareSeedphraseImportPrelude'
 export { cleanMnemonic, SeedphraseValidator, validateSeedphrase } from '../../seedphrase/SeedphraseValidator'
 export type {
   Bip39Language,

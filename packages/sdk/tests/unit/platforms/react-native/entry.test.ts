@@ -422,6 +422,9 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     const validator = await import('../../../../src/seedphrase/SeedphraseValidator')
     const deriver = await import('../../../../src/seedphrase/MasterKeyDeriver')
     const constants = await import('../../../../src/constants')
+    const prelude = await import('../../../../src/seedphrase/prepareSeedphraseImportPrelude')
+
+    expect(rn.prepareSeedphraseImportPrelude).toBe(prelude.prepareSeedphraseImportPrelude)
 
     expect(rn.BIP39_LANGUAGES).toBe(types.BIP39_LANGUAGES)
     expect(rn.SEEDPHRASE_WORD_COUNTS).toBe(types.SEEDPHRASE_WORD_COUNTS)
