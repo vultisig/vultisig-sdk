@@ -2473,6 +2473,11 @@
       "import": "./dist/utils/assertSignature.js",
       "default": "./dist/utils/assertSignature.js"
     },
+    "./utils/decodeBech32": {
+      "types": "./dist/utils/decodeBech32.d.ts",
+      "import": "./dist/utils/decodeBech32.js",
+      "default": "./dist/utils/decodeBech32.js"
+    },
     "./utils/getBlockExplorerUrl": {
       "types": "./dist/utils/getBlockExplorerUrl/index.d.ts",
       "import": "./dist/utils/getBlockExplorerUrl/index.js",

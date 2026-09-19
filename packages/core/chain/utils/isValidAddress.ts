@@ -1,9 +1,9 @@
-import { fromBech32 } from '@cosmjs/encoding'
 import { WalletCore } from '@trustwallet/wallet-core'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getCoinType } from '@vultisig/core-chain/coin/coinType'
 
 import { isValidRippleXAddress } from '../chains/ripple/address'
+import { decodeBech32 } from './decodeBech32'
 
 type Input = {
   chain: Chain
@@ -23,7 +23,7 @@ export const isValidAddress = ({ chain, address, walletCore }: Input) => {
 
   if (chain === Chain.QBTC) {
     try {
-      const { prefix } = fromBech32(address.trim())
+      const { prefix } = decodeBech32(address.trim())
       return prefix === 'qbtc'
     } catch {
       return false
