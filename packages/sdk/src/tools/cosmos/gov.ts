@@ -17,11 +17,12 @@
  * in core-chain. Address validation uses `@cosmjs/encoding` (already a
  * core-chain dependency) rather than a hand-rolled bech32 decoder.
  */
-import { fromBech32, toBech32 } from '@cosmjs/encoding'
+import { toBech32 } from '@cosmjs/encoding'
 import { IbcEnabledCosmosChain } from '@vultisig/core-chain/Chain'
 import { getCosmosChainId } from '@vultisig/core-chain/chains/cosmos/chainInfo'
 import { getCosmosChainHrp } from '@vultisig/core-chain/chains/cosmos/cosmosHrp'
 import { cosmosRpcUrl } from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
+import { decodeBech32 } from '@vultisig/core-chain/utils/decodeBech32'
 
 // ── chain support ──────────────────────────────────────────────────────────
 
@@ -461,9 +462,9 @@ export async function prepareCosmosVote(params: PrepareCosmosVoteParams): Promis
 
   // Validate voter bech32 address + chain HRP, then normalize (re-encode).
   const expectedHrp = GOV_CHAIN_CONFIG[chain].hrp
-  let decoded: ReturnType<typeof fromBech32>
+  let decoded: ReturnType<typeof decodeBech32>
   try {
-    decoded = fromBech32(rawVoter.trim())
+    decoded = decodeBech32(rawVoter.trim())
   } catch (e) {
     throw new Error(`invalid voter address: malformed bech32 (${e instanceof Error ? e.message : String(e)})`)
   }
@@ -476,7 +477,7 @@ export async function prepareCosmosVote(params: PrepareCosmosVoteParams): Promis
     throw new Error(`invalid voter address: expected 20- or 32-byte payload, got ${decoded.data.length}`)
   }
   // Normalize (re-encode) to canonical lowercase bech32 so an ALL-UPPERCASE
-  // address (which `fromBech32` validates fine) ships in the envelope as the
+  // address (which `decodeBech32` validates fine) ships in the envelope as the
   // canonical form the app's signAndBroadcast path + chain expect. Mirrors
   // mcp-ts `normalizeBech32Address`. Re-encodes from the already-decoded
   // prefix/data — no second decode.
