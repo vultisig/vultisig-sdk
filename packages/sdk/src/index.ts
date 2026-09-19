@@ -488,6 +488,10 @@ export * from './signable-transaction'
 // Swap explorer URL helper (parity with iOS ExplorerLinkBuilder /
 // Android ExplorerLinkRepository.getSwapProgressLink). Use this instead of
 // chain-only explorer URLs when rendering swap tx history.
+export {
+  getSwapKitTrackerUrl,
+  swapKitTrackerChainIds,
+} from '@vultisig/core-chain/swap/general/swapkit/getSwapKitTrackerUrl'
 export type { GetSwapExplorerUrlInput, SwapExplorerProvider } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 export { getSwapExplorerUrl, swapExplorerProviders } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 

@@ -900,6 +900,10 @@ export { getSwapExplorerUrl, swapExplorerProviders } from '@vultisig/core-chain/
 // THOR/Maya native-swap metadata — surfaced so RN consumers stop re-declaring
 // which chains route through THORChain/MayaChain and their asset-notation
 // chain IDs (parity with the root SDK entry).
+export {
+  getSwapKitTrackerUrl,
+  swapKitTrackerChainIds,
+} from '@vultisig/core-chain/swap/general/swapkit/getSwapKitTrackerUrl'
 export type { NativeSwapChain, NativeSwapChainId } from '@vultisig/core-chain/swap/native/NativeSwapChain'
 export {
   getNativeSwapChainId,
