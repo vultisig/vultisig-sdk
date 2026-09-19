@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
-  queryUrl: vi.fn(),
+  queryTron: vi.fn(),
 }))
 
-vi.mock('@vultisig/lib-utils/query/queryUrl', () => ({
-  queryUrl: mocks.queryUrl,
+vi.mock('@vultisig/core-chain/chains/tron/queryTron', () => ({
+  queryTron: mocks.queryTron,
 }))
 
 import { getTronBlockInfo } from './getTronBlockInfo'
@@ -29,7 +29,7 @@ describe('getTronBlockInfo', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
     vi.clearAllMocks()
-    mocks.queryUrl.mockResolvedValue(block)
+    mocks.queryTron.mockResolvedValue(block)
   })
 
   it('derives default timestamp and expiration from the fetched block header', async () => {
