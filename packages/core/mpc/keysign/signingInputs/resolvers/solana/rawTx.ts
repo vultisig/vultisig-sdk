@@ -17,7 +17,19 @@
  * vultisig-android#5223. Wire format of a serialized Solana transaction:
  *
  *   [shortvec(numSignatures)][numSignatures x 64-byte signature][message]
+ *
+ * and of the message itself (legacy, or v0 behind a `0x80 | version` byte):
+ *
+ *   [header: 3 bytes][shortvec(numKeys)][numKeys x 32-byte key][blockhash]...
+ *
+ * Signature slot `i` belongs to static account key `i`, and the first
+ * `header.numRequiredSignatures` keys are the signers.
  */
+
+const signatureLength = 64
+const publicKeyLength = 32
+const messageHeaderLength = 3
+const versionPrefixMask = 0x80
 
 export type ParsedSolanaRawTx = {
   /** Byte offset of the first (fee payer, signer index 0) signature slot. */
@@ -28,31 +40,46 @@ export type ParsedSolanaRawTx = {
   message: Uint8Array
 }
 
+type ShortVec = {
+  value: number
+  /** Offset of the first byte after the encoded length. */
+  end: number
+}
+
+// Solana compact-u16 (shortvec) decode: 7 bits per byte, high bit = continuation.
+const decodeShortVec = (bytes: Uint8Array, offset: number, label: string): ShortVec => {
+  let value = 0
+  let shift = 0
+  let cursor = offset
+  while (cursor < bytes.length) {
+    const byte = bytes[cursor]
+    value |= (byte & 0x7f) << shift
+    cursor += 1
+    if ((byte & 0x80) === 0) {
+      return { value, end: cursor }
+    }
+    shift += 7
+    if (shift > 14) {
+      throw new Error(`Invalid shortvec for ${label}`)
+    }
+  }
+  throw new Error(`Transaction too short to read ${label}`)
+}
+
+const bytesEqual = (a: Uint8Array, b: Uint8Array): boolean =>
+  a.length === b.length && a.every((byte, index) => byte === b[index])
+
 /**
  * Strip the `[shortvec(numSigs)][numSigs x 64-byte sig]` envelope and return
  * the underlying Solana message bytes plus the offset of the first signature
  * slot (for later splice-in).
  */
 export function extractSolanaMessageBytes(txData: Uint8Array): ParsedSolanaRawTx {
-  let offset = 0
-  let numSigs = 0
-  let shift = 0
-  // Solana compact-u16 (shortvec) decode: 7 bits per byte, high bit = continuation.
-  while (offset < txData.length) {
-    const byte = txData[offset]
-    numSigs |= (byte & 0x7f) << shift
-    offset += 1
-    if ((byte & 0x80) === 0) break
-    shift += 7
-    if (shift > 14) {
-      throw new Error('Invalid shortvec for signature count')
-    }
-  }
+  const { value: numSigs, end: firstSignatureOffset } = decodeShortVec(txData, 0, 'signature count')
   if (numSigs < 1) {
     throw new Error('Transaction declares no signatures')
   }
-  const firstSignatureOffset = offset
-  const messageOffset = offset + numSigs * 64
+  const messageOffset = firstSignatureOffset + numSigs * signatureLength
   if (messageOffset >= txData.length) {
     throw new Error(`Transaction too short for declared signature count (${numSigs})`)
   }
@@ -63,31 +90,88 @@ export function extractSolanaMessageBytes(txData: Uint8Array): ParsedSolanaRawTx
   }
 }
 
+type GetSolanaSignerIndexInput = {
+  /** The wire-format message (legacy or v0), as returned by `extractSolanaMessageBytes`. */
+  message: Uint8Array
+  /** The 32-byte ed25519 public key whose slot is being resolved. */
+  publicKey: Uint8Array
+}
+
 /**
- * Splice the 64-byte signature into the original transaction at signer
- * index 0 (the dApp builds the tx with the user as fee payer == first
- * signer; any other signature slots stay as the dApp-provided placeholders).
- * Returns a new array — the input is not mutated.
- *
- * Assumes the vault is signer index 0. Byte-for-byte parity with
- * vultisig-ios#4419, which makes the same assumption. A sponsored
- * transaction (a relayer pays and is signer 0, the vault signs at index
- * >= 1) would land the vault's signature in the wrong slot — not
- * fund-unsafe (the signature still binds the exact message it was
- * computed over, so a misplaced signature just fails Solana's runtime
- * signature check), but the tx would be rejected on broadcast rather
- * than land. No sponsored-tx path exists today; if one is added, this
- * splice needs the vault's actual signer index, not a hardcoded 0.
+ * Resolves the signature slot a public key owns: its position among the
+ * message's static account keys, which must fall within the header's
+ * `numRequiredSignatures`. Throws when the key is not a required signer, so a
+ * caller can never write a signature into somebody else's slot.
  */
-export function spliceSolanaSignature(txData: Uint8Array, signature: Uint8Array): Uint8Array {
-  if (signature.length !== 64) {
-    throw new Error(`Solana signature must be 64 bytes, got ${signature.length}`)
+export function getSolanaSignerIndex({ message, publicKey }: GetSolanaSignerIndexInput): number {
+  if (publicKey.length !== publicKeyLength) {
+    throw new Error(`Solana public key must be ${publicKeyLength} bytes, got ${publicKey.length}`)
   }
-  const { firstSignatureOffset } = extractSolanaMessageBytes(txData)
-  if (firstSignatureOffset + 64 > txData.length) {
-    throw new Error('Transaction too short to place signature')
+  if (message.length === 0) {
+    throw new Error('Solana message is empty')
+  }
+
+  let headerOffset = 0
+  if ((message[0] & versionPrefixMask) !== 0) {
+    const version = message[0] & 0x7f
+    if (version !== 0) {
+      throw new Error(`Unsupported Solana message version ${version}`)
+    }
+    headerOffset = 1
+  }
+  if (message.length < headerOffset + messageHeaderLength) {
+    throw new Error('Solana message too short for header')
+  }
+
+  const numRequiredSignatures = message[headerOffset]
+  const { value: numKeys, end: keysOffset } = decodeShortVec(
+    message,
+    headerOffset + messageHeaderLength,
+    'account key count'
+  )
+  if (numKeys < numRequiredSignatures) {
+    throw new Error(`Solana message requires ${numRequiredSignatures} signatures but lists ${numKeys} account keys`)
+  }
+  if (keysOffset + numKeys * publicKeyLength > message.length) {
+    throw new Error(`Solana message too short for declared account key count (${numKeys})`)
+  }
+
+  for (let index = 0; index < numRequiredSignatures; index++) {
+    const start = keysOffset + index * publicKeyLength
+    if (bytesEqual(message.subarray(start, start + publicKeyLength), publicKey)) {
+      return index
+    }
+  }
+
+  throw new Error('Public key is not a required signer of the Solana transaction')
+}
+
+type SpliceSolanaSignatureInput = {
+  txData: Uint8Array
+  signature: Uint8Array
+  /** The 32-byte ed25519 public key the signature was produced with. */
+  publicKey: Uint8Array
+}
+
+/**
+ * Splice the 64-byte signature into the original transaction at the slot the
+ * public key owns. The vault is usually the fee payer (slot 0), but a
+ * sponsored or multi-signer transaction can put it at any signer index, and
+ * the runtime verifies slot `i` against account `i`, so the slot is resolved
+ * from the message rather than assumed. Every other slot stays exactly as the
+ * dApp provided it, including co-signers' existing signatures. Returns a new
+ * array — the input is not mutated.
+ */
+export function spliceSolanaSignature({ txData, signature, publicKey }: SpliceSolanaSignatureInput): Uint8Array {
+  if (signature.length !== signatureLength) {
+    throw new Error(`Solana signature must be ${signatureLength} bytes, got ${signature.length}`)
+  }
+  const { firstSignatureOffset, numSignatures, message } = extractSolanaMessageBytes(txData)
+  const signerIndex = getSolanaSignerIndex({ message, publicKey })
+  if (signerIndex >= numSignatures) {
+    throw new Error(`Transaction declares ${numSignatures} signature slot(s) but the signer is at index ${signerIndex}`)
   }
   const signedTx = new Uint8Array(txData)
-  signedTx.set(signature, firstSignatureOffset)
+  signedTx.set(signature, firstSignatureOffset + signerIndex * signatureLength)
   return signedTx
 }
