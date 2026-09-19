@@ -69,12 +69,14 @@ export { ValidationHelpers } from './utils/validation'
 // ============================================================================
 
 export type {
+  Amount,
   AmountDirection,
   ConvertAmountParams,
   CryptoToFiatParams,
   FiatToCryptoParams,
 } from './utils/convertAmount'
 export {
+  amount,
   AmountConvertError,
   convertAmount,
   cryptoToFiat,
@@ -1300,6 +1302,8 @@ export {
   USDC_PAYMENT_CHAINS,
   USDC_PAYMENT_DECIMALS,
   utxoFeeRate,
+  validateStakekitActionAddress,
+  validateStakekitActionInput,
   VerifierClient,
   yieldNetworkToCanonicalChain,
 } from './tools'

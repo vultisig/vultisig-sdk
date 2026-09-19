@@ -3,14 +3,12 @@ import { ensureMpcEngine, type MpcKeyshare, type MpcSession } from '@vultisig/mp
 import { base64Encode } from '@vultisig/lib-utils/base64Encode'
 
 import { getKeygenThreshold } from '../getKeygenThreshold'
-import { getMessageHash } from '../getMessageHash'
 import { KeygenOperation } from '../keygen/KeygenOperation'
 import { initializeMpcLib } from '../lib/initialize'
 import { mpcDebugLog } from '../mpcDebugLog'
-import { MpcRelayMessage } from '../message/relay'
 import { deleteMpcRelayMessage } from '../message/relay/delete'
 import { getMpcRelayMessages } from '../message/relay/get'
-import { sendMpcRelayMessage } from '../message/relay/send'
+import { runMpcRelayProcessing, sendMpcRelaySessionMessage } from '../message/relay/send'
 import { fromMpcServerMessage, toMpcServerMessage } from '../message/server'
 import { waitForSetupMessage, waitForSetupMessageInAny } from '../message/setup/get'
 import { uploadMpcSetupMessage } from '../message/setup/upload'
@@ -74,53 +72,51 @@ export class DKLS {
     this.onInboundSequenceNoChange = options?.onInboundSequenceNoChange
   }
 
-  private async processOutbound(session: MpcSession<unknown>, messageId?: string): Promise<boolean> {
-    try {
-      const message = session.outputMessage()
-      if (message === undefined) {
-        if (this.isKeygenComplete) {
-          mpcDebugLog('stop processOutbound')
-          return true
-        } else {
-          await sleep(100)
-          return await this.processOutbound(session, messageId)
-        }
-      }
-      mpcDebugLog('outbound message:', message)
-      const body = toMpcServerMessage(message.body, this.hexEncryptionKey)
+  private async processOutbound(
+    session: MpcSession<unknown>,
+    signal: AbortSignal,
+    messageId?: string
+  ): Promise<boolean> {
+    if (signal.aborted) {
+      return true
+    }
 
-      message?.receivers.forEach(receiver => {
-        const relayMessage: MpcRelayMessage = {
-          session_id: this.sessionId,
-          from: this.localPartyId,
-          to: [receiver],
-          body: body,
-          hash: getMessageHash(base64Encode(message.body)),
-          sequence_no: this.sequenceNo,
-        }
-        // send message to receiver
-        sendMpcRelayMessage({
-          serverUrl: this.serverURL,
-          message: relayMessage,
-          sessionId: this.sessionId,
-          messageId,
-        })
-        this.sequenceNo++
-      })
-      await sleep(100)
-      return await this.processOutbound(session, messageId)
-    } catch (error) {
-      console.error('processOutbound error:', error)
+    const message = session.outputMessage()
+    if (message === undefined) {
       if (this.isKeygenComplete) {
         mpcDebugLog('stop processOutbound')
         return true
       }
+
       await sleep(100)
-      return await this.processOutbound(session, messageId)
+      return this.processOutbound(session, signal, messageId)
     }
+
+    mpcDebugLog('outbound message:', message)
+    this.sequenceNo = await sendMpcRelaySessionMessage({
+      serverUrl: this.serverURL,
+      sessionId: this.sessionId,
+      messageId,
+      localPartyId: this.localPartyId,
+      hexEncryptionKey: this.hexEncryptionKey,
+      sequenceNo: this.sequenceNo,
+      message,
+      signal,
+    })
+
+    await sleep(100)
+    return this.processOutbound(session, signal, messageId)
   }
 
-  private async processInbound(session: MpcSession<unknown>, messageId?: string): Promise<boolean> {
+  private async processInbound(
+    session: MpcSession<unknown>,
+    signal: AbortSignal,
+    messageId?: string
+  ): Promise<boolean> {
+    if (signal.aborted) {
+      return false
+    }
+
     // Guard empty relay polls and error retries: without this, `parsedMessages.length === 0`
     // recurses indefinitely while HTTP stays "healthy" but no MPC messages arrive.
     // Uses last inbound activity — slow ceremonies keep receiving traffic and reset the clock.
@@ -135,14 +131,22 @@ export class DKLS {
         localPartyId: this.localPartyId,
         sessionId: this.sessionId,
         messageId,
+        signal,
       })
+      if (signal.aborted) {
+        return false
+      }
       if (parsedMessages.length === 0) {
         // no message to download, backoff for 100ms
         await sleep(100)
-        return await this.processInbound(session, messageId)
+        return this.processInbound(session, signal, messageId)
       }
       this.lastRelayProgressAt = Date.now()
       for (const msg of parsedMessages) {
+        if (signal.aborted) {
+          return false
+        }
+
         const cacheKey = `${msg.session_id}-${msg.from}-${msg.hash}`
         if (this.cache[cacheKey]) {
           continue
@@ -165,14 +169,18 @@ export class DKLS {
           sessionId: this.sessionId,
           messageHash: msg.hash,
           messageId,
+          signal,
         })
       }
       await sleep(100)
-      return await this.processInbound(session, messageId)
+      return this.processInbound(session, signal, messageId)
     } catch (error) {
+      if (signal.aborted) {
+        return false
+      }
       console.error('processInbound error:', error)
       await sleep(100)
-      return await this.processInbound(session, messageId)
+      return this.processInbound(session, signal, messageId)
     }
   }
 
@@ -264,9 +272,10 @@ export class DKLS {
       }
       try {
         this.lastRelayProgressAt = Date.now()
-        const outbound = this.processOutbound(session, messageId)
-        const inbound = this.processInbound(session, messageId)
-        const [, inboundResult] = await Promise.all([outbound, inbound])
+        const inboundResult = await runMpcRelayProcessing({
+          processOutbound: signal => this.processOutbound(session, signal, messageId),
+          processInbound: signal => this.processInbound(session, signal, messageId),
+        })
         if (inboundResult) {
           const keyShare = await session.finish()
           return {
@@ -363,9 +372,10 @@ export class DKLS {
 
       try {
         this.lastRelayProgressAt = Date.now()
-        const outbound = this.processOutbound(session, messageId)
-        const inbound = this.processInbound(session, messageId)
-        const [, inboundResult] = await Promise.all([outbound, inbound])
+        const inboundResult = await runMpcRelayProcessing({
+          processOutbound: signal => this.processOutbound(session, signal, messageId),
+          processInbound: signal => this.processInbound(session, signal, messageId),
+        })
         if (inboundResult) {
           const keyShare = await session.finish()
           if (keyShare === undefined) {
@@ -503,9 +513,10 @@ export class DKLS {
       try {
         const exchangeMessageId = protocolMessageId
         this.lastRelayProgressAt = Date.now()
-        const outbound = this.processOutbound(session, exchangeMessageId)
-        const inbound = this.processInbound(session, exchangeMessageId)
-        const [, inboundResult] = await Promise.all([outbound, inbound])
+        const inboundResult = await runMpcRelayProcessing({
+          processOutbound: signal => this.processOutbound(session, signal, exchangeMessageId),
+          processInbound: signal => this.processInbound(session, signal, exchangeMessageId),
+        })
         if (inboundResult) {
           const keyShare = await session.finish()
           return {

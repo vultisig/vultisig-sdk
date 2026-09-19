@@ -15,12 +15,33 @@ const reference = fixtures[0].keysign_payload
 const block = reference.BlockchainSpecific.TronSpecific
 const ownerAddress = reference.coin.address
 
+// fee_limit mirrors the native signers (Android TronHelper.buildStakingTransaction,
+// iOS Tron.swift): FreezeBalanceV2 / UnfreezeBalanceV2 sign the payload's
+// gas_estimation, WithdrawExpireUnfreeze signs 0 (sdk#2269).
+const stakingFeeLimit = String(block.gas_estimation)
+
 const contracts = [
-  ['FREEZE:BANDWIDTH', { freezeBalanceV2: { ownerAddress, frozenBalance: '1000000', resource: 'BANDWIDTH' } }],
-  ['FREEZE:ENERGY', { freezeBalanceV2: { ownerAddress, frozenBalance: '1000000', resource: 'ENERGY' } }],
-  ['UNFREEZE:BANDWIDTH', { unfreezeBalanceV2: { ownerAddress, unfreezeBalance: '1000000', resource: 'BANDWIDTH' } }],
-  ['UNFREEZE:ENERGY', { unfreezeBalanceV2: { ownerAddress, unfreezeBalance: '1000000', resource: 'ENERGY' } }],
-  ['WITHDRAW_EXPIRE_UNFREEZE', { withdrawExpireUnfreeze: { ownerAddress } }],
+  [
+    'FREEZE:BANDWIDTH',
+    { freezeBalanceV2: { ownerAddress, frozenBalance: '1000000', resource: 'BANDWIDTH' } },
+    stakingFeeLimit,
+  ],
+  [
+    'FREEZE:ENERGY',
+    { freezeBalanceV2: { ownerAddress, frozenBalance: '1000000', resource: 'ENERGY' } },
+    stakingFeeLimit,
+  ],
+  [
+    'UNFREEZE:BANDWIDTH',
+    { unfreezeBalanceV2: { ownerAddress, unfreezeBalance: '1000000', resource: 'BANDWIDTH' } },
+    stakingFeeLimit,
+  ],
+  [
+    'UNFREEZE:ENERGY',
+    { unfreezeBalanceV2: { ownerAddress, unfreezeBalance: '1000000', resource: 'ENERGY' } },
+    stakingFeeLimit,
+  ],
+  ['WITHDRAW_EXPIRE_UNFREEZE', { withdrawExpireUnfreeze: { ownerAddress } }, '0'],
 ] as const
 
 describe('Tron Stake 2.0 independent WalletCore fixture provenance', () => {
@@ -29,7 +50,7 @@ describe('Tron Stake 2.0 independent WalletCore fixture provenance', () => {
     walletCore = await initWasm()
   })
 
-  it.each(contracts)('reproduces the committed %s hash without SDK transaction mapping', (memo, contract) => {
+  it.each(contracts)('reproduces the committed %s hash without SDK transaction mapping', (memo, contract, feeLimit) => {
     const fixture = fixtures.find(({ name }) => name === `Tron Stake 2.0 ${memo}`)
     expect(fixture).toBeDefined()
     expect(fixture?.keysign_payload).toEqual({ ...reference, memo, to_address: ownerAddress })
@@ -39,7 +60,7 @@ describe('Tron Stake 2.0 independent WalletCore fixture provenance', () => {
         ...contract,
         timestamp: String(block.timestamp),
         expiration: String(block.expiration),
-        feeLimit: '0',
+        feeLimit,
         blockHeader: {
           timestamp: String(block.block_header_timestamp),
           number: String(block.block_header_number),
