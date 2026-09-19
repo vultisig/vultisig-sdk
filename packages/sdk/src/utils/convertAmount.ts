@@ -268,3 +268,15 @@ export const cryptoToFiat = ({ amount, price, fiatDecimals = 2 }: CryptoToFiatPa
   const unitPrice = parsePositiveNumber(price, 'price')
   return formatDecimalString(value * unitPrice, fiatDecimals)
 }
+
+/** Pure amount helpers. Fiat conversions use caller-supplied prices and are display estimates. */
+export const amount = {
+  convert: convertAmount,
+  toBaseUnits,
+  toHumanUnits,
+  fiatToCrypto,
+  cryptoToFiat,
+} as const
+
+/** The readonly public amount helper group. */
+export type Amount = typeof amount

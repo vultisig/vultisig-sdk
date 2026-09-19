@@ -32,23 +32,28 @@ const STRANGER_WALLET = {
 }
 
 const capturedUrls: string[] = []
-let mockWallets: Array<typeof OWNER_WALLET> = []
+let mockResponse: unknown = { jetton_wallets: [] }
 
 vi.mock('@vultisig/lib-utils/query/queryUrl', () => ({
   queryUrl: (url: string) => {
     capturedUrls.push(url)
-    return Promise.resolve({
-      jetton_wallets: mockWallets,
-      address_book: { '0:abc123': { user_friendly: 'EQAbc123' } },
-    })
+    return Promise.resolve(mockResponse)
   },
 }))
 
 const { getJettonBalance, getJettonWalletAddress } = await import('./api')
 
-const reset = (wallets: Array<typeof OWNER_WALLET>) => {
+const reset = (wallets: Array<Record<string, unknown>>) => {
   capturedUrls.length = 0
-  mockWallets = wallets
+  mockResponse = {
+    jetton_wallets: wallets,
+    address_book: { '0:abc123': { user_friendly: 'EQAbc123' } },
+  }
+}
+
+const resetRaw = (response: unknown) => {
+  capturedUrls.length = 0
+  mockResponse = response
 }
 
 describe('getJettonWalletAddress', () => {
@@ -129,5 +134,37 @@ describe('getJettonBalance', () => {
     const balance = await getJettonBalance({ ownerAddress: OWNER, jettonMasterAddress: MASTER })
 
     expect(balance).toBe(5000000000n)
+  })
+
+  it('returns a genuine 0 for a wallet that reports a zero balance', async () => {
+    reset([{ ...OWNER_WALLET, balance: '0' }])
+
+    const balance = await getJettonBalance({ ownerAddress: OWNER, jettonMasterAddress: MASTER })
+
+    expect(balance).toBe(0n)
+  })
+
+  it('throws instead of reporting 0 when the response has no jetton_wallets list', async () => {
+    resetRaw({ error: 'upstream unavailable' })
+
+    await expect(getJettonBalance({ ownerAddress: OWNER, jettonMasterAddress: MASTER })).rejects.toThrow(
+      'Malformed jetton wallets response'
+    )
+  })
+
+  it('throws instead of reporting 0 when the owner wallet has no balance field', async () => {
+    reset([{ ...OWNER_WALLET, balance: undefined }])
+
+    await expect(getJettonBalance({ ownerAddress: OWNER, jettonMasterAddress: MASTER })).rejects.toThrow(
+      'Malformed jetton wallet balance'
+    )
+  })
+
+  it('throws instead of reporting 0 when the owner wallet balance is not numeric', async () => {
+    reset([{ ...OWNER_WALLET, balance: '' }])
+
+    await expect(getJettonBalance({ ownerAddress: OWNER, jettonMasterAddress: MASTER })).rejects.toThrow(
+      'Malformed jetton wallet balance'
+    )
   })
 })
