@@ -27,6 +27,13 @@ export type PrepareSendTxFromKeysParams = {
    * exact figure signed — pass the same `balance - fee` the UI displayed.
    */
   sendMaxAmount?: boolean
+  /**
+   * Empty the account with a Substrate `transfer_allow_death` (Polkadot,
+   * Bittensor): the chain reaps the sender once its balance drops below the
+   * existential deposit. Only for an explicit user choice, with the reap
+   * disclosed; ignored on other chains.
+   */
+  allowDeath?: boolean
 }
 
 /**
@@ -127,5 +134,6 @@ export const prepareSendTxFromKeys = async (
     libType: identity.libType,
     feeSettings: params.feeSettings,
     sendMaxAmount: params.sendMaxAmount,
+    allowDeath: params.allowDeath,
   })
 }

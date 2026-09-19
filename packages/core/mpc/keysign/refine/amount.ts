@@ -57,10 +57,14 @@ export const refineKeysignAmount = async (input: RefineKeysignAmountInput) => {
 
   // Clamps to what the sender may actually part with: the balance less the fee
   // and, on chains that reap emptied accounts, the existential deposit — so a
-  // MAX send quoted as `balance - fee` cannot fail a keep-alive transfer.
+  // MAX send quoted as `balance - fee` cannot fail a keep-alive transfer. A
+  // payload that explicitly allows death is meant to empty the account and
+  // keeps nothing back.
+  const { blockchainSpecific } = input.keysignPayload
+  const allowDeath = blockchainSpecific.case === 'polkadotSpecific' && blockchainSpecific.value.allowDeath
   const refinedAmount = minBigInt(
     BigInt(input.keysignPayload.toAmount),
-    getMaxSendableAmount({ chain: coin.chain, balance: input.balance, fee })
+    getMaxSendableAmount({ chain: coin.chain, balance: input.balance, fee, allowDeath })
   )
 
   if (refinedAmount <= 0n) {

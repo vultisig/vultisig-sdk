@@ -22,6 +22,12 @@ export type GetMaxSendAmountFromKeysParams = {
   memo?: string
   destinationTag?: number
   feeSettings?: FeeSettings
+  /**
+   * The MAX is for a send that empties the account (a Substrate
+   * `transfer_allow_death`), so the existential deposit is not kept back.
+   * Ignored on other chains.
+   */
+  allowDeath?: boolean
 }
 
 export type ComputeMaxSendFromBalanceParams = GetMaxSendAmountFromKeysParams & {
@@ -85,6 +91,7 @@ export const computeMaxSendFromBalance = async (
     walletCore,
     libType: identity.libType,
     feeSettings: params.feeSettings,
+    allowDeath: params.allowDeath,
   })
 
   // TerraClassic USTC pays its fee (base gas + burn tax) in `uusd` — the same
@@ -105,7 +112,7 @@ export const computeMaxSendFromBalance = async (
 
   const maxSendable = isTokenSend
     ? params.balance
-    : getMaxSendableAmount({ chain: params.coin.chain, balance: params.balance, fee })
+    : getMaxSendableAmount({ chain: params.coin.chain, balance: params.balance, fee, allowDeath: params.allowDeath })
 
   return { balance: params.balance, fee, maxSendable }
 }
@@ -117,9 +124,9 @@ export const computeMaxSendFromBalance = async (
  *
  * Fetches the on-chain balance and estimates the send fee at full balance.
  * Native sends return `balance - fee`, less the existential deposit on chains
- * that reap an emptied account (`0n` if those exceed the balance). Token sends
- * return the full token balance after verifying the native balance can cover
- * the fee.
+ * that reap an emptied account unless `allowDeath` says the send is meant to
+ * empty it (`0n` if those exceed the balance). Token sends return the full
+ * token balance after verifying the native balance can cover the fee.
  *
  * `walletCore` is optional; when omitted, falls back to the SDK's globally-configured
  * `getWalletCore()` (used by MCP / vault-free callers). Wrappers with an injected

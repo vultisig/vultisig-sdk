@@ -136,6 +136,29 @@ describe('getMaxSendAmountFromKeys', () => {
     expect(balance - result.maxSendable - fee).toBeGreaterThanOrEqual(500n)
   })
 
+  it('spends the deposit too for a TAO max-send that is allowed to reap the account, and prices that call', async () => {
+    const balance = 1_000_000_000n
+    const fee = 200_000n
+    mockGetCoinBalance.mockResolvedValue(balance)
+    mockGetSendFeeEstimate.mockResolvedValue(fee)
+
+    const coin = {
+      chain: Chain.Bittensor,
+      address: '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty',
+      decimals: 9,
+      ticker: 'TAO',
+    } as any
+
+    const result = await getMaxSendAmountFromKeys(baseIdentity, {
+      coin,
+      receiver: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY',
+      allowDeath: true,
+    })
+
+    expect(result.maxSendable).toBe(balance - fee)
+    expect(mockGetSendFeeEstimate).toHaveBeenCalledWith(expect.objectContaining({ allowDeath: true }))
+  })
+
   it('returns the full 6-decimal ERC-20 balance and checks the native gas balance', async () => {
     const balance = 16_140_000n
     const fee = 20_000_000_000_000_000n

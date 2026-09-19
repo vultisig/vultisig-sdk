@@ -17,6 +17,11 @@ type GetMaxSendableAmountInput = {
   chain: Chain
   balance: bigint
   fee: bigint
+  /**
+   * The send is meant to empty the account (a Substrate `transfer_allow_death`),
+   * so nothing is kept back for the existential deposit.
+   */
+  allowDeath?: boolean
 }
 
 /**
@@ -24,5 +29,5 @@ type GetMaxSendableAmountInput = {
  * whatever the chain requires the sender to keep. Zero when the balance does
  * not cover even those.
  */
-export const getMaxSendableAmount = ({ chain, balance, fee }: GetMaxSendableAmountInput): bigint =>
-  getMaxValue(balance, fee + (retainedBalance[chain] ?? 0n))
+export const getMaxSendableAmount = ({ chain, balance, fee, allowDeath = false }: GetMaxSendableAmountInput): bigint =>
+  getMaxValue(balance, fee + (allowDeath ? 0n : (retainedBalance[chain] ?? 0n)))

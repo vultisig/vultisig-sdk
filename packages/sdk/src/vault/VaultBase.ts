@@ -1305,6 +1305,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     destinationTag?: number
     feeSettings?: FeeSettings
     sendMaxAmount?: boolean
+    allowDeath?: boolean
   }): Promise<KeysignPayload> {
     return this.transactionBuilder.prepareSendTx(params)
   }
@@ -1383,6 +1384,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     memo?: string
     destinationTag?: number
     feeSettings?: FeeSettings
+    allowDeath?: boolean
   }): Promise<MaxSendAmount> {
     const walletCore = await this.wasmProvider.getWalletCore()
     // Validate receiver before fetching balance so bad input doesn't waste a
@@ -2018,7 +2020,10 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     return { balances, totalValue: total.toFixed(2), currency }
   }
 
-  /** Send tokens. Use amount "max" for the native balance minus fees, or the full token balance when native gas is covered. Set dryRun for fee estimates without signing. */
+  /**
+   * Send tokens. Use amount "max" for the native balance minus fees, or the full token balance when native gas is covered. Set dryRun for fee estimates without signing.
+   * `allowDeath` empties a Polkadot or Bittensor account with `transfer_allow_death` — the chain reaps it below the existential deposit — so only pass it for an explicit user choice with the reap disclosed.
+   */
   async send(params: {
     chain: Chain
     to: string
@@ -2026,15 +2031,16 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     symbol?: string
     memo?: string
     destinationTag?: number
+    allowDeath?: boolean
     dryRun?: boolean
   }): Promise<SendResult> {
-    const { chain, to, amount, symbol, memo, destinationTag, dryRun } = params
+    const { chain, to, amount, symbol, memo, destinationTag, allowDeath, dryRun } = params
     const tokenInfo = this.resolveTokenInfo(chain, symbol)
     const coin = this.buildAccountCoin(chain, await this.address(chain), tokenInfo)
 
     let amountBigInt: bigint
     if (amount === 'max') {
-      const maxInfo = await this.getMaxSendAmount({ coin, receiver: to, memo, destinationTag })
+      const maxInfo = await this.getMaxSendAmount({ coin, receiver: to, memo, destinationTag, allowDeath })
       if (maxInfo.maxSendable <= 0n)
         throw new VaultError(VaultErrorCode.InvalidAmount, 'Insufficient balance to cover network fees')
       amountBigInt = maxInfo.maxSendable
@@ -2051,6 +2057,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       // This is the one place the SDK knows MAX was asked for rather than inferring
       // it, so the payload records it here or nowhere.
       sendMaxAmount: amount === 'max',
+      allowDeath,
     })
 
     if (dryRun) {
@@ -2060,6 +2067,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
         amount: amountBigInt,
         memo,
         destinationTag,
+        allowDeath,
       })
       // The network fee is always paid in the chain's native asset, never in the
       // token being sent. Formatting it with the token's decimals (and adding it
