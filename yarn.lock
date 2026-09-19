@@ -2527,17 +2527,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@formatjs/bigdecimal@npm:0.2.6":
-  version: 0.2.6
-  resolution: "@formatjs/bigdecimal@npm:0.2.6"
-  checksum: 10c0/8e39a52ffd77bb6ed877e044d16a8dc4282ab940b0d10caeaf94ba7db9a0b56e7440fc56caee369915d5614cff2116cb6ad46a199a53f2caa1b3b1735f808307
-  languageName: node
-  linkType: hard
-
-"@formatjs/fast-memoize@npm:3.1.6":
-  version: 3.1.6
-  resolution: "@formatjs/fast-memoize@npm:3.1.6"
-  checksum: 10c0/6cac8413b09aa4771edd98a52d46a9adc2f02e8bce8756a2abbd1eea2cf977757ffbb4bc1b33b6c17092739cd0c33351dffa0ea58b22e431b9754a34e46fe093
+"@formatjs/bigdecimal@npm:0.2.7":
+  version: 0.2.7
+  resolution: "@formatjs/bigdecimal@npm:0.2.7"
+  checksum: 10c0/9583a4d615553d1353284d0f66d30b6d7ab54b8d57c50f14d42db5fa48029b01c26ac7705b493c4bde716fcffbaee4d2f3cfcb6550d6c111e3a33bcc61cc719a
   languageName: node
   linkType: hard
 
@@ -2548,58 +2541,58 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@formatjs/intl-getcanonicallocales@npm:3.2.11, @formatjs/intl-getcanonicallocales@npm:^3.2.11":
-  version: 3.2.11
-  resolution: "@formatjs/intl-getcanonicallocales@npm:3.2.11"
-  checksum: 10c0/8083c055fc4c86e307a70266f06489745e1e17f44539a5742023a5224ed6672b513905d2f1acab4b13f586e70a9416f8eb53cb4ac9eafb149a5e6055a2f96db2
+"@formatjs/intl-getcanonicallocales@npm:3.2.12, @formatjs/intl-getcanonicallocales@npm:^3.2.12":
+  version: 3.2.12
+  resolution: "@formatjs/intl-getcanonicallocales@npm:3.2.12"
+  checksum: 10c0/355adbf5830e62e8d2f36d59cbd227480680458d2da7e5795dc047da4afc81fa7b76389e9645b5561f3a3481a7f8921c5f95c13c372d47e2ea00080cf6c3c93d
   languageName: node
   linkType: hard
 
-"@formatjs/intl-locale@npm:^5.3.10":
-  version: 5.3.10
-  resolution: "@formatjs/intl-locale@npm:5.3.10"
+"@formatjs/intl-locale@npm:^5.3.11":
+  version: 5.3.11
+  resolution: "@formatjs/intl-locale@npm:5.3.11"
   dependencies:
-    "@formatjs/intl-getcanonicallocales": "npm:3.2.11"
-    "@formatjs/intl-supportedvaluesof": "npm:2.3.9"
-  checksum: 10c0/b2de54b5ff032b968b427ac65d45e6a0aca8aadb291819a61d4a12596c8782922d279a49eacd3d1c8c07b446127948f122f9420eb41741aee3076ca553514a6c
+    "@formatjs/intl-getcanonicallocales": "npm:3.2.12"
+    "@formatjs/intl-supportedvaluesof": "npm:2.3.10"
+  checksum: 10c0/111072e4b80ab84d59a64de1e7b536c60aa8ada3e424f08d46c86e41af1cf246e8014990fcb04138bdc6b1a8725124df95baf7ce4d7eabdf9845d8897f7450b4
   languageName: node
   linkType: hard
 
-"@formatjs/intl-localematcher@npm:0.8.10":
-  version: 0.8.10
-  resolution: "@formatjs/intl-localematcher@npm:0.8.10"
-  dependencies:
-    "@formatjs/fast-memoize": "npm:3.1.6"
-  checksum: 10c0/49a38b45d618de0ce857d62208e41af4c043a90d739a10828cb0a1e57c88c1ad28c27905ce57246ae5aa1c66834276a42665320d8294b01607d0e46b229d4a71
-  languageName: node
-  linkType: hard
-
-"@formatjs/intl-numberformat@npm:^9.3.11":
-  version: 9.3.11
-  resolution: "@formatjs/intl-numberformat@npm:9.3.11"
-  dependencies:
-    "@formatjs/bigdecimal": "npm:0.2.6"
-    "@formatjs/intl-localematcher": "npm:0.8.10"
-  checksum: 10c0/645864cff17f650488e69c68c1206889f09fde52c57445c5d9d049a5737d420a99d2e827f002e1f65c856694d9e945f61c92840444f0c6486b55cbd6980a59b5
-  languageName: node
-  linkType: hard
-
-"@formatjs/intl-pluralrules@npm:^6.3.10":
-  version: 6.3.10
-  resolution: "@formatjs/intl-pluralrules@npm:6.3.10"
-  dependencies:
-    "@formatjs/bigdecimal": "npm:0.2.6"
-    "@formatjs/intl-localematcher": "npm:0.8.10"
-  checksum: 10c0/136d1af6531ab30f6acbe548abe995b841bbf3eb331a83e09f22aebb9f0654fbbb94b3cd872a412e796cba278a8c45efe501a3cdd3303bc7fde5e535ffc8614a
-  languageName: node
-  linkType: hard
-
-"@formatjs/intl-supportedvaluesof@npm:2.3.9":
-  version: 2.3.9
-  resolution: "@formatjs/intl-supportedvaluesof@npm:2.3.9"
+"@formatjs/intl-localematcher@npm:0.9.0":
+  version: 0.9.0
+  resolution: "@formatjs/intl-localematcher@npm:0.9.0"
   dependencies:
     "@formatjs/fast-memoize": "npm:3.1.7"
-  checksum: 10c0/7b3d8fe5c16e9c7d93ee34161cda4a91facad7c9dc33d0e8cf22c3acd6a09b405d98ea838473c290bc8fcc2053e3358b0874a5e9f88336c2c3c50b9e4e7f4cdc
+  checksum: 10c0/02020d68e9295ac4fdde953f34b1496c030ac8e8a712779c1112257a3b90d0cd2dd44de0cba6719884133a64ff1bcb23cce71086473f2fb4778d8a690be0f343
+  languageName: node
+  linkType: hard
+
+"@formatjs/intl-numberformat@npm:^9.4.3":
+  version: 9.4.3
+  resolution: "@formatjs/intl-numberformat@npm:9.4.3"
+  dependencies:
+    "@formatjs/bigdecimal": "npm:0.2.7"
+    "@formatjs/intl-localematcher": "npm:0.9.0"
+  checksum: 10c0/6301b6d15c3ec254eb5636f4715932eb6593ba536204aab5a33d83c439ecee6ae8185f0326e4fc2eb86225e5199c0f2e70c7d36472c7898eca82a68db542dfba
+  languageName: node
+  linkType: hard
+
+"@formatjs/intl-pluralrules@npm:^6.3.15":
+  version: 6.3.15
+  resolution: "@formatjs/intl-pluralrules@npm:6.3.15"
+  dependencies:
+    "@formatjs/bigdecimal": "npm:0.2.7"
+    "@formatjs/intl-localematcher": "npm:0.9.0"
+  checksum: 10c0/84490a4701225ba9dd230dbab498067af65a40ef71387991a5c333683fbb86d8f958ccc1ef2354bebe2ee8b446efa9ad28a5655b75a03ad5e610f9394ba9ce43
+  languageName: node
+  linkType: hard
+
+"@formatjs/intl-supportedvaluesof@npm:2.3.10":
+  version: 2.3.10
+  resolution: "@formatjs/intl-supportedvaluesof@npm:2.3.10"
+  dependencies:
+    "@formatjs/fast-memoize": "npm:3.1.7"
+  checksum: 10c0/1dba6ced35f67af05308edfc173232b10538bb1d48176d82baa9789b915fc1e8d5751ad58391bd5f04f9d88fd7bfe556b8f44bcd4aa2ec7ca9523bc681f5a40d
   languageName: node
   linkType: hard
 
@@ -7296,10 +7289,10 @@ __metadata:
     "@coral-xyz/anchor": "npm:^0.32.1"
     "@cosmjs/encoding": "npm:^0.39.0"
     "@cosmjs/stargate": "npm:^0.39.0"
-    "@formatjs/intl-getcanonicallocales": "npm:^3.2.11"
-    "@formatjs/intl-locale": "npm:^5.3.10"
-    "@formatjs/intl-numberformat": "npm:^9.3.11"
-    "@formatjs/intl-pluralrules": "npm:^6.3.10"
+    "@formatjs/intl-getcanonicallocales": "npm:^3.2.12"
+    "@formatjs/intl-locale": "npm:^5.3.11"
+    "@formatjs/intl-numberformat": "npm:^9.4.3"
+    "@formatjs/intl-pluralrules": "npm:^6.3.15"
     "@lifi/sdk": "npm:^4.1.0"
     "@mysten/sui": "npm:^2.22.1"
     "@noble/hashes": "npm:^2.2.0"
