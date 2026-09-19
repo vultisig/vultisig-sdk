@@ -147,6 +147,18 @@ describe('getTronBlockInfo', () => {
       ['an empty txTrieRoot', { txTrieRoot: '' }, 'txTrieRoot'],
       ['an empty parentHash', { parentHash: '' }, 'parentHash'],
       ['a numeric witness_address', { witness_address: 42 }, 'witness_address'],
+      // `Buffer.from('zz', 'hex')` is empty and a trailing odd nibble is
+      // dropped, so these would otherwise reach signing as a malformed header.
+      ['a non-hex txTrieRoot', { txTrieRoot: 'zz'.repeat(32) }, 'txTrieRoot'],
+      ['a txTrieRoot with a non-hex tail', { txTrieRoot: '01'.repeat(31) + 'zz' }, 'txTrieRoot'],
+      ['a short txTrieRoot', { txTrieRoot: '01'.repeat(31) }, 'txTrieRoot'],
+      ['an odd-length txTrieRoot', { txTrieRoot: '01'.repeat(32) + '1' }, 'txTrieRoot'],
+      ['a 0x-prefixed txTrieRoot', { txTrieRoot: '0x' + '01'.repeat(31) }, 'txTrieRoot'],
+      ['a long parentHash', { parentHash: '02'.repeat(33) }, 'parentHash'],
+      ['a short parentHash', { parentHash: '02'.repeat(16) }, 'parentHash'],
+      ['a non-hex witness_address', { witness_address: 'g'.repeat(42) }, 'witness_address'],
+      ['a 20-byte witness_address', { witness_address: '03'.repeat(20) }, 'witness_address'],
+      ['a base58 witness_address', { witness_address: 'TJRabPrwbZy45sbavfcjinPJC18kjpRTv8' }, 'witness_address'],
     ])('rejects %s', async (_label, override, field) => {
       mocks.queryUrl.mockResolvedValue({
         ...block,
@@ -156,6 +168,26 @@ describe('getTronBlockInfo', () => {
       await expect(getTronBlockInfo({})).rejects.toThrow(
         `getnowblock: block_header.raw_data missing or invalid ${field}`
       )
+    })
+
+    it('accepts upper-case hex header fields', async () => {
+      mocks.queryUrl.mockResolvedValue({
+        ...block,
+        block_header: {
+          raw_data: {
+            ...block.block_header.raw_data,
+            txTrieRoot: 'AB'.repeat(32),
+            parentHash: 'CD'.repeat(32),
+            witness_address: '41' + 'EF'.repeat(20),
+          },
+        },
+      })
+
+      await expect(getTronBlockInfo({})).resolves.toMatchObject({
+        blockHeaderTxTrieRoot: 'AB'.repeat(32),
+        blockHeaderParentHash: 'CD'.repeat(32),
+        blockHeaderWitnessAddress: '41' + 'EF'.repeat(20),
+      })
     })
 
     it('does not treat an empty error field as a failure', async () => {

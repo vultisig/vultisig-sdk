@@ -58,16 +58,30 @@ const isNonEmptyString = (value: unknown): value is string => typeof value === '
 
 const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value)
 
+// Signing converts these with `Buffer.from(value, 'hex')`, which silently
+// yields an empty buffer for non-hex input and truncates at the first invalid
+// or odd trailing character, so a string that is merely non-empty can still
+// reach the ceremony as a malformed TAPOS header. Require bare hex of the
+// exact byte length the protocol serialises.
+const isHexOfByteLength =
+  (byteLength: number) =>
+  (value: unknown): value is string =>
+    typeof value === 'string' && value.length === byteLength * 2 && /^[0-9a-fA-F]+$/.test(value)
+
+const sha256ByteLength = 32
+// 0x41 prefix byte + 20-byte address
+const tronAddressByteLength = 21
+
 // Numeric fields must be finite numbers (a string `timestamp` would turn the
 // default `expiration` into string concatenation) and identifier fields must
-// be non-empty strings (an empty `txTrieRoot` / `parentHash` still signs).
+// be well-formed hex (an empty `txTrieRoot` / `parentHash` still signs).
 const rawDataFieldValidators: { [K in keyof TronBlockHeaderRawData]: (value: unknown) => boolean } = {
   timestamp: isFiniteNumber,
   number: isFiniteNumber,
   version: isFiniteNumber,
-  txTrieRoot: isNonEmptyString,
-  parentHash: isNonEmptyString,
-  witness_address: isNonEmptyString,
+  txTrieRoot: isHexOfByteLength(sha256ByteLength),
+  parentHash: isHexOfByteLength(sha256ByteLength),
+  witness_address: isHexOfByteLength(tronAddressByteLength),
 }
 
 const requiredRawDataFields = Object.keys(rawDataFieldValidators) as (keyof TronBlockHeaderRawData)[]
