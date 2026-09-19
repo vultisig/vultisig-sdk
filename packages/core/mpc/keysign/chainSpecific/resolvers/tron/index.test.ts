@@ -30,7 +30,9 @@ vi.mock('@vultisig/core-chain/chains/tron/getTronBlockInfo', () => ({
   getTronBlockInfo: vi.fn().mockResolvedValue(blockInfo),
 }))
 
-vi.mock('@vultisig/lib-utils/query/queryUrl', () => ({ queryUrl: vi.fn() }))
+vi.mock('@vultisig/core-chain/chains/tron/queryTron', () => ({
+  queryTron: vi.fn(),
+}))
 
 vi.mock('@vultisig/core-chain/chains/tron/resources/getTronAccountResources', () => ({
   getTronAccountResources: vi.fn(),
@@ -41,7 +43,7 @@ vi.mock('@vultisig/core-chain/coin/utils/isFeeCoin', () => ({
   isFeeCoin: vi.fn((coin: any) => !coin.id),
 }))
 
-import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
+import { queryTron } from '@vultisig/core-chain/chains/tron/queryTron'
 import { getTronAccountResources } from '@vultisig/core-chain/chains/tron/resources/getTronAccountResources'
 import { getNativeTronBandwidthBytes, getTronChainSpecific } from './index.js'
 
@@ -90,7 +92,7 @@ describe('getTronChainSpecific — native TRX bandwidth fee check', () => {
 
   beforeEach(() => {
     vi.mocked(getTronAccountResources).mockReset()
-    vi.mocked(queryUrl).mockReset().mockResolvedValue({ address: RECIPIENT })
+    vi.mocked(queryTron).mockReset().mockResolvedValue({ address: RECIPIENT })
   })
 
   const resolve = (memo = '') =>
@@ -157,7 +159,9 @@ describe('getTronChainSpecific — native TRX bandwidth fee check', () => {
       })
       vi.mocked(getTronAccountResources).mockResolvedValue(makeBandwidthResources(requiredBandwidth - 1))
 
-      await expect(resolve(memo)).resolves.toMatchObject({ gasEstimation: 800_000n })
+      await expect(resolve(memo)).resolves.toMatchObject({
+        gasEstimation: 800_000n,
+      })
     }
   )
 
@@ -188,17 +192,19 @@ describe('getTronChainSpecific — native TRX bandwidth fee check', () => {
   })
 
   it.each([0, 1500])('reserves activation and its bandwidth burn with %i sender bandwidth', async available => {
-    vi.mocked(queryUrl).mockResolvedValue({})
+    vi.mocked(queryTron).mockResolvedValue({})
     vi.mocked(getTronAccountResources).mockResolvedValue(makeBandwidthResources(available))
 
-    await expect(resolve()).resolves.toMatchObject({ gasEstimation: 1_100_000n })
-    expect(queryUrl).toHaveBeenCalledWith(expect.stringMatching(/\/wallet\/getaccount$/), {
+    await expect(resolve()).resolves.toMatchObject({
+      gasEstimation: 1_100_000n,
+    })
+    expect(queryTron).toHaveBeenCalledWith(expect.stringMatching(/\/wallet\/getaccount$/), {
       body: { address: RECIPIENT, visible: true },
     })
   })
 
   it('does not mistake an activated zero-balance recipient for a new account', async () => {
-    vi.mocked(queryUrl).mockResolvedValue({ address: RECIPIENT, balance: 0 })
+    vi.mocked(queryTron).mockResolvedValue({ address: RECIPIENT, balance: 0 })
     vi.mocked(getTronAccountResources).mockResolvedValue(makeBandwidthResources(1500))
     await expect(resolve()).resolves.toMatchObject({ gasEstimation: 0n })
   })
@@ -206,13 +212,13 @@ describe('getTronChainSpecific — native TRX bandwidth fee check', () => {
   it.each([null, [], 'bad response', { Error: 'rate limited' }, { balance: 0 }, { address: OWNER }])(
     'rejects malformed or mismatched recipient response %j',
     async response => {
-      vi.mocked(queryUrl).mockResolvedValue(response)
+      vi.mocked(queryTron).mockResolvedValue(response)
       await expect(resolve()).rejects.toThrow('invalid recipient account response')
     }
   )
 
   it('propagates recipient RPC failure instead of returning an under-reserved fee', async () => {
-    vi.mocked(queryUrl).mockRejectedValue(new Error('503 Service Unavailable'))
+    vi.mocked(queryTron).mockRejectedValue(new Error('503 Service Unavailable'))
     await expect(resolve()).rejects.toThrow('503 Service Unavailable')
   })
 

@@ -31,6 +31,9 @@ vi.mock('@vultisig/core-chain/swap/native/api/getNativeSwapQuote', () => ({
 vi.mock('@vultisig/core-chain/swap/native/minimum/getNativeSwapMinAmountIn', () => ({
   getNativeSwapMinAmountIn: vi.fn().mockResolvedValue(null),
 }))
+vi.mock('@vultisig/core-chain/swap/native/halts/getNativeSwapTradingHalt', () => ({
+  getNativeSwapTradingHalt: vi.fn().mockResolvedValue(null),
+}))
 
 // A valid 40-hex EVM address (checksummed form is also accepted by the regex)
 const recipient = '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045'
@@ -196,6 +199,48 @@ describe('findSwapQuote external recipient', () => {
       }
     )
     expect(getNativeSwapQuote).not.toHaveBeenCalled()
+  })
+
+  it.each(['T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb', '  T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb  '])(
+    'rejects Tron zero recipient %s before any provider',
+    async burn => {
+      await expect(
+        findSwapQuote({
+          from: erc20A,
+          to: { chain: Chain.Tron, address: 'TJRabPrwbZy45sbavfcjinPJC18kjpRTv8', decimals: 6, ticker: 'TRX' },
+          amount: 1_000_000n,
+          recipient: burn,
+        })
+      ).rejects.toMatchObject({
+        code: SwapErrorCode.InvalidConfig,
+        message: expect.stringContaining('Tron zero address'),
+      })
+      for (const provider of [
+        getCowSwapQuote,
+        getNativeSwapQuote,
+        getKyberSwapQuote,
+        getOneInchSwapQuote,
+        getLifiSwapQuote,
+        getSwapKitQuote,
+      ]) {
+        expect(provider).not.toHaveBeenCalled()
+      }
+    }
+  )
+
+  it('forwards a valid Tron recipient to the existing native route', async () => {
+    const destination = 'TJRabPrwbZy45sbavfcjinPJC18kjpRTv8'
+    vi.mocked(getNativeSwapQuote).mockResolvedValue({
+      expected_amount_out: '10000000',
+      swapChain: Chain.THORChain,
+    } as never)
+    await findSwapQuote({
+      from: { chain: Chain.Bitcoin, address: 'bc1qsender', decimals: 8, ticker: 'BTC' },
+      to: { chain: Chain.Tron, address: destination, decimals: 6, ticker: 'TRX' },
+      amount: 1_000_000n,
+      recipient: `  ${destination}  `,
+    })
+    expect(getNativeSwapQuote).toHaveBeenCalledWith(expect.objectContaining({ destination }))
   })
 
   it('rejects a 0X-prefixed (uppercase-X) burn recipient on a cross-chain native route', async () => {

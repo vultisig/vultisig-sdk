@@ -1,10 +1,11 @@
-import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
+import { queryTron } from '@vultisig/core-chain/chains/tron/queryTron'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { tronRpcUrl } from '../config'
 import { getTronAccountResources } from './getTronAccountResources'
 
-vi.mock('@vultisig/lib-utils/query/queryUrl', () => ({ queryUrl: vi.fn() }))
+vi.mock('@vultisig/core-chain/chains/tron/queryTron', () => ({
+  queryTron: vi.fn(),
+}))
 
 const address = 'T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb'
 
@@ -12,7 +13,7 @@ describe('getTronAccountResources', () => {
   beforeEach(() => vi.resetAllMocks())
 
   it('aggregates free and staked bandwidth, energy, frozen balances and ordered withdrawals', async () => {
-    vi.mocked(queryUrl)
+    vi.mocked(queryTron)
       .mockResolvedValueOnce({
         frozenV2: [
           { amount: 1_000_000 },
@@ -54,14 +55,16 @@ describe('getTronAccountResources', () => {
         { unfreezeAmountSun: 9_000_000n, expireTimeMs: 3000 },
       ],
     })
-    expect(queryUrl).toHaveBeenCalledTimes(2)
+    expect(queryTron).toHaveBeenCalledTimes(2)
     for (const endpoint of ['getaccount', 'getaccountresource']) {
-      expect(queryUrl).toHaveBeenCalledWith(`${tronRpcUrl}/wallet/${endpoint}`, { body: { address, visible: true } })
+      expect(queryTron).toHaveBeenCalledWith(`/wallet/${endpoint}`, {
+        body: { address, visible: true },
+      })
     }
   })
 
   it('defaults omitted account and resource fields to zero', async () => {
-    vi.mocked(queryUrl).mockResolvedValue({})
+    vi.mocked(queryTron).mockResolvedValue({})
     await expect(getTronAccountResources(address)).resolves.toEqual({
       bandwidth: { available: 0, total: 0, used: 0 },
       energy: { available: 0, total: 0, used: 0 },
@@ -72,7 +75,7 @@ describe('getTronAccountResources', () => {
   })
 
   it('clamps overused resources to zero availability while preserving usage', async () => {
-    vi.mocked(queryUrl).mockResolvedValueOnce({}).mockResolvedValueOnce({
+    vi.mocked(queryTron).mockResolvedValueOnce({}).mockResolvedValueOnce({
       freeNetLimit: 600,
       freeNetUsed: 700,
       NetLimit: 100,
@@ -87,8 +90,8 @@ describe('getTronAccountResources', () => {
 
   it.each([0, 1])('propagates failure from query %i', async failingQuery => {
     const error = new Error('provider unavailable')
-    vi.mocked(queryUrl).mockImplementation(async url => {
-      if (url === `${tronRpcUrl}/wallet/${failingQuery === 0 ? 'getaccount' : 'getaccountresource'}`) throw error
+    vi.mocked(queryTron).mockImplementation(async url => {
+      if (url === `/wallet/${failingQuery === 0 ? 'getaccount' : 'getaccountresource'}`) throw error
       return {}
     })
     await expect(getTronAccountResources(address)).rejects.toBe(error)

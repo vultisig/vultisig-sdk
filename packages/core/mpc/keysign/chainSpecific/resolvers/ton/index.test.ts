@@ -155,14 +155,38 @@ describe('getTonChainSpecific — bounceable', () => {
     value: { targetAddress: nonBounceableAddress },
   }
 
-  it('sends a swap deposit bounceable even though the provider hands back a UQ address', async () => {
+  it('sends a swap deposit to a deployed contract bounceable even though the provider hands back a UQ address', async () => {
     const res = await resolve(buildPayload({ toAddress: nonBounceableAddress, swapPayload }))
 
     expect(res.bounceable).toBe(true)
   })
 
-  it('sends a swap deposit bounceable without consulting the destination wallet state', async () => {
+  // A provider that hands out a fresh deposit address per swap has nothing deployed
+  // there. A bounceable deposit to it is returned by the network before it lands, so
+  // the swap never starts and the sender only sees a refund minus gas.
+  it.each([
+    ['never touched', 'uninit'],
+    ['touched but never deployed', 'nonexist'],
+  ])('sends a swap deposit non-bounceable to a %s deposit address', async (_, walletState) => {
+    mockGetTonWalletState.mockResolvedValue(walletState)
+
+    const res = await resolve(buildPayload({ toAddress: bounceableAddress, swapPayload }))
+
+    expect(res.bounceable).toBe(false)
+  })
+
+  it('consults the destination wallet state before the swap rule', async () => {
     mockGetTonWalletState.mockResolvedValue('uninit')
+
+    await resolve(buildPayload({ toAddress: bounceableAddress, swapPayload }))
+
+    expect(mockGetTonWalletState).toHaveBeenCalledWith(bounceableAddress)
+  })
+
+  // With the destination state unknown, bounceable is the side that returns the funds
+  // whichever kind of account turns out to be there.
+  it('keeps a swap deposit bounceable when the wallet state lookup fails', async () => {
+    mockGetTonWalletState.mockRejectedValue(new Error('indexer down'))
 
     const res = await resolve(buildPayload({ toAddress: nonBounceableAddress, swapPayload }))
 
@@ -195,8 +219,11 @@ describe('getTonChainSpecific — bounceable', () => {
     expect(res.bounceable).toBe(true)
   })
 
-  it('sends non-bounceable to an undeployed destination, which could not accept a bounce', async () => {
-    mockGetTonWalletState.mockResolvedValue('uninit')
+  it.each([
+    ['never touched', 'uninit'],
+    ['touched but never deployed', 'nonexist'],
+  ])('sends non-bounceable to a %s destination, which could not accept a bounce', async (_, walletState) => {
+    mockGetTonWalletState.mockResolvedValue(walletState)
 
     const res = await resolve(buildPayload({ toAddress: bounceableAddress }))
 
@@ -252,6 +279,23 @@ describe('getTonChainSpecific — jetton wallet resolution', () => {
     await expect(resolve(buildPayload({ toAddress: bounceableAddress }))).rejects.toThrow(
       /Unable to resolve the USDT jetton wallet/
     )
+  })
+
+  it.each([
+    ['never touched', 'uninit'],
+    ['touched but never deployed', 'nonexist'],
+  ])('reports a %s destination as inactive', async (_, walletState) => {
+    mockGetTonWalletState.mockResolvedValue(walletState)
+
+    const res = await resolve(buildPayload({ toAddress: bounceableAddress }))
+
+    expect(res.isActiveDestination).toBe(false)
+  })
+
+  it('reports a deployed destination as active', async () => {
+    const res = await resolve(buildPayload({ toAddress: bounceableAddress }))
+
+    expect(res.isActiveDestination).toBe(true)
   })
 
   it('never consults the jetton lookup for a native TON send', async () => {
