@@ -4,7 +4,10 @@
  * any form and the fields are checked for agreement by account, so the
  * spelling that wins precedence must not decide the bounce flag: the signer
  * reads the flag off the address it is given, and a non-bounceable deposit a
- * contract rejects is absorbed rather than refunded.
+ * contract rejects is absorbed rather than refunded. What is deployed at the
+ * deposit address decides first, though: an account with no code cannot take
+ * a bounceable message at all, so a deposit to a fresh per-swap address has
+ * to go out non-bounceable or it comes straight back.
  */
 import { create } from '@bufbuild/protobuf'
 import { Chain } from '@vultisig/core-chain/Chain'
@@ -23,9 +26,12 @@ vi.mock('@vultisig/core-chain/security/blockaid/address', () => ({ scanAddressWi
 vi.mock('@vultisig/core-chain/chains/ton/account/getTonAccountInfo', () => ({
   getTonAccountInfo: vi.fn(async () => ({ account_state: { wallet_id: 'w', seqno: 4 } })),
 }))
+const { mockGetTonWalletState } = vi.hoisted(() => ({
+  mockGetTonWalletState: vi.fn(async () => 'active'),
+}))
 vi.mock('@vultisig/core-chain/chains/ton/api', () => ({
   getJettonWalletAddress: vi.fn(),
-  getTonWalletState: vi.fn(async () => 'active'),
+  getTonWalletState: mockGetTonWalletState,
 }))
 vi.mock('@vultisig/core-chain/coin/balance', () => ({ getCoinBalance: vi.fn(async () => 0n) }))
 vi.mock('../fee/resolvers/ton', () => ({ getTonFeeAmount: () => 0n }))
@@ -63,50 +69,62 @@ beforeAll(async () => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  mockGetTonWalletState.mockReset()
+  mockGetTonWalletState.mockResolvedValue('active')
 })
+
+const stubSwapKitDepositRoute = () => {
+  vi.stubGlobal(
+    'fetch',
+    vi
+      .fn()
+      .mockResolvedValueOnce(
+        response({ routes: [{ routeId: 'ton-route', providers: ['NEAR'], expectedBuyAmount: '0.01' }] })
+      )
+      .mockResolvedValueOnce(
+        response({
+          expectedBuyAmount: '0.009',
+          providers: ['NEAR'],
+          targetAddress: DEPOSIT_NON_BOUNCEABLE,
+          tx: [{ address: DEPOSIT_BOUNCEABLE, amount: '0.001' }],
+        })
+      )
+  )
+  configureSwapKit({ apiKey: undefined })
+}
+
+const buildDepositKeysignPayload = async () => {
+  const general = await getSwapKitQuote({
+    from: fromCoin,
+    to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
+    amount: 1_000_000n,
+  })
+
+  const toAddress = getSwapDestinationAddress({ quote: { quote: { general }, discounts: [] }, fromCoin })
+
+  const keysignPayload: KeysignPayload = create(KeysignPayloadSchema, {
+    coin: {
+      chain: Chain.Ton,
+      ticker: 'TON',
+      address: SENDER,
+      decimals: 9,
+      isNativeToken: true,
+      hexPublicKey: '6c756400bac0b153b421df6e199302537d12f7d4a53447004485700a958e7571',
+    },
+    toAddress,
+    toAmount: '1000000',
+    memo: '',
+  })
+
+  return { toAddress, keysignPayload }
+}
 
 describe('SwapKit TON deposit — bounce flag through the final signing input', () => {
   it('signs bounceable when the route spelled the winning field non-bounceable and only tx[] bounceable', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi
-        .fn()
-        .mockResolvedValueOnce(
-          response({ routes: [{ routeId: 'ton-route', providers: ['NEAR'], expectedBuyAmount: '0.01' }] })
-        )
-        .mockResolvedValueOnce(
-          response({
-            expectedBuyAmount: '0.009',
-            providers: ['NEAR'],
-            targetAddress: DEPOSIT_NON_BOUNCEABLE,
-            tx: [{ address: DEPOSIT_BOUNCEABLE, amount: '0.001' }],
-          })
-        )
-    )
-    configureSwapKit({ apiKey: undefined })
+    stubSwapKitDepositRoute()
 
-    const general = await getSwapKitQuote({
-      from: fromCoin,
-      to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
-      amount: 1_000_000n,
-    })
-
-    const toAddress = getSwapDestinationAddress({ quote: { quote: { general }, discounts: [] }, fromCoin })
+    const { toAddress, keysignPayload } = await buildDepositKeysignPayload()
     expect(toAddress).toBe(DEPOSIT_BOUNCEABLE)
-
-    const keysignPayload: KeysignPayload = create(KeysignPayloadSchema, {
-      coin: {
-        chain: Chain.Ton,
-        ticker: 'TON',
-        address: SENDER,
-        decimals: 9,
-        isNativeToken: true,
-        hexPublicKey: '6c756400bac0b153b421df6e199302537d12f7d4a53447004485700a958e7571',
-      },
-      toAddress,
-      toAmount: '1000000',
-      memo: '',
-    })
 
     const tonSpecific = await getTonChainSpecific({ keysignPayload, walletCore })
     expect(tonSpecific.bounceable).toBe(true)
@@ -117,5 +135,26 @@ describe('SwapKit TON deposit — bounce flag through the final signing input', 
 
     expect(shouldBePresent(message, 'TON transfer').dest).toBe(DEPOSIT_BOUNCEABLE)
     expect(message.bounceable).toBe(true)
+  })
+
+  // The deposit address a provider mints for one swap has never been deployed. The
+  // canonical `EQ…` spelling still names it, but the message must go out
+  // non-bounceable, or the network returns it and the swap never starts.
+  it('signs non-bounceable when nothing is deployed at the deposit address', async () => {
+    stubSwapKitDepositRoute()
+    mockGetTonWalletState.mockResolvedValue('uninit')
+
+    const { toAddress, keysignPayload } = await buildDepositKeysignPayload()
+    expect(toAddress).toBe(DEPOSIT_BOUNCEABLE)
+
+    const tonSpecific = await getTonChainSpecific({ keysignPayload, walletCore })
+    expect(tonSpecific.bounceable).toBe(false)
+
+    keysignPayload.blockchainSpecific = { case: 'tonSpecific', value: tonSpecific }
+    const [input] = await getTonSigningInputs({ keysignPayload, walletCore })
+    const [message] = input.messages
+
+    expect(shouldBePresent(message, 'TON transfer').dest).toBe(DEPOSIT_BOUNCEABLE)
+    expect(message.bounceable).toBe(false)
   })
 })
