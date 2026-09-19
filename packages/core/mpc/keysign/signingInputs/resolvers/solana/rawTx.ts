@@ -46,22 +46,30 @@ type ShortVec = {
   end: number
 }
 
-// Solana compact-u16 (shortvec) decode: 7 bits per byte, high bit = continuation.
+// Solana compact-u16 (shortvec) decode: 7 bits per byte, high bit =
+// continuation, at most 3 bytes. Mirrors the runtime's strict decoder: a
+// non-canonical (zero-padded) encoding and a third byte carrying more than
+// the two bits a u16 has left are both rejected, so the offsets read here can
+// never disagree with the ones the runtime will read.
 const decodeShortVec = (bytes: Uint8Array, offset: number, label: string): ShortVec => {
   let value = 0
   let shift = 0
   let cursor = offset
   while (cursor < bytes.length) {
     const byte = bytes[cursor]
-    value |= (byte & 0x7f) << shift
+    const payload = byte & 0x7f
+    if (shift === 14 && byte > 0x03) {
+      throw new Error(`Invalid shortvec for ${label}`)
+    }
+    if (shift > 0 && byte === 0) {
+      throw new Error(`Invalid shortvec for ${label}`)
+    }
+    value |= payload << shift
     cursor += 1
     if ((byte & 0x80) === 0) {
       return { value, end: cursor }
     }
     shift += 7
-    if (shift > 14) {
-      throw new Error(`Invalid shortvec for ${label}`)
-    }
   }
   throw new Error(`Transaction too short to read ${label}`)
 }
@@ -90,23 +98,11 @@ export function extractSolanaMessageBytes(txData: Uint8Array): ParsedSolanaRawTx
   }
 }
 
-type GetSolanaSignerIndexInput = {
-  /** The wire-format message (legacy or v0), as returned by `extractSolanaMessageBytes`. */
-  message: Uint8Array
-  /** The 32-byte ed25519 public key whose slot is being resolved. */
-  publicKey: Uint8Array
-}
-
 /**
- * Resolves the signature slot a public key owns: its position among the
- * message's static account keys, which must fall within the header's
- * `numRequiredSignatures`. Throws when the key is not a required signer, so a
- * caller can never write a signature into somebody else's slot.
+ * Reads the required signers of a legacy or v0 Solana message: the first
+ * `header.numRequiredSignatures` static account keys, in slot order.
  */
-export function getSolanaSignerIndex({ message, publicKey }: GetSolanaSignerIndexInput): number {
-  if (publicKey.length !== publicKeyLength) {
-    throw new Error(`Solana public key must be ${publicKeyLength} bytes, got ${publicKey.length}`)
-  }
+export function getSolanaMessageSigners(message: Uint8Array): Uint8Array[] {
   if (message.length === 0) {
     throw new Error('Solana message is empty')
   }
@@ -136,14 +132,37 @@ export function getSolanaSignerIndex({ message, publicKey }: GetSolanaSignerInde
     throw new Error(`Solana message too short for declared account key count (${numKeys})`)
   }
 
-  for (let index = 0; index < numRequiredSignatures; index++) {
+  return Array.from({ length: numRequiredSignatures }, (_, index) => {
     const start = keysOffset + index * publicKeyLength
-    if (bytesEqual(message.subarray(start, start + publicKeyLength), publicKey)) {
-      return index
-    }
-  }
+    return message.subarray(start, start + publicKeyLength)
+  })
+}
 
-  throw new Error('Public key is not a required signer of the Solana transaction')
+const findSignerIndex = (signers: Uint8Array[], publicKey: Uint8Array): number => {
+  if (publicKey.length !== publicKeyLength) {
+    throw new Error(`Solana public key must be ${publicKeyLength} bytes, got ${publicKey.length}`)
+  }
+  const index = signers.findIndex(signer => bytesEqual(signer, publicKey))
+  if (index < 0) {
+    throw new Error('Public key is not a required signer of the Solana transaction')
+  }
+  return index
+}
+
+type GetSolanaSignerIndexInput = {
+  /** The wire-format message (legacy or v0), as returned by `extractSolanaMessageBytes`. */
+  message: Uint8Array
+  /** The 32-byte ed25519 public key whose slot is being resolved. */
+  publicKey: Uint8Array
+}
+
+/**
+ * Resolves the signature slot a public key owns: its position among the
+ * message's required signers. Throws when the key is not a required signer,
+ * so a caller can never write a signature into somebody else's slot.
+ */
+export function getSolanaSignerIndex({ message, publicKey }: GetSolanaSignerIndexInput): number {
+  return findSignerIndex(getSolanaMessageSigners(message), publicKey)
 }
 
 type SpliceSolanaSignatureInput = {
@@ -158,19 +177,23 @@ type SpliceSolanaSignatureInput = {
  * public key owns. The vault is usually the fee payer (slot 0), but a
  * sponsored or multi-signer transaction can put it at any signer index, and
  * the runtime verifies slot `i` against account `i`, so the slot is resolved
- * from the message rather than assumed. Every other slot stays exactly as the
- * dApp provided it, including co-signers' existing signatures. Returns a new
- * array — the input is not mutated.
+ * from the message rather than assumed. The envelope must carry exactly one
+ * slot per required signer, as the runtime demands. Every other slot stays
+ * exactly as the dApp provided it, including co-signers' existing signatures.
+ * Returns a new array — the input is not mutated.
  */
 export function spliceSolanaSignature({ txData, signature, publicKey }: SpliceSolanaSignatureInput): Uint8Array {
   if (signature.length !== signatureLength) {
     throw new Error(`Solana signature must be ${signatureLength} bytes, got ${signature.length}`)
   }
   const { firstSignatureOffset, numSignatures, message } = extractSolanaMessageBytes(txData)
-  const signerIndex = getSolanaSignerIndex({ message, publicKey })
-  if (signerIndex >= numSignatures) {
-    throw new Error(`Transaction declares ${numSignatures} signature slot(s) but the signer is at index ${signerIndex}`)
+  const signers = getSolanaMessageSigners(message)
+  if (numSignatures !== signers.length) {
+    throw new Error(
+      `Transaction declares ${numSignatures} signature slot(s) but the message requires ${signers.length}`
+    )
   }
+  const signerIndex = findSignerIndex(signers, publicKey)
   const signedTx = new Uint8Array(txData)
   signedTx.set(signature, firstSignatureOffset + signerIndex * signatureLength)
   return signedTx

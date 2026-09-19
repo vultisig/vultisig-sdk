@@ -24,7 +24,12 @@ import { SignSolanaSchema } from '../../../../types/vultisig/keysign/v1/wasm_exe
 import { compileTx } from '../../../../tx/compile/compileTx'
 import { getPreSigningHashes } from '../../../../tx/preSigningHashes'
 import { getEncodedSigningInputs } from '../../index'
-import { extractSolanaMessageBytes, getSolanaSignerIndex, spliceSolanaSignature } from './rawTx'
+import {
+  extractSolanaMessageBytes,
+  getSolanaMessageSigners,
+  getSolanaSignerIndex,
+  spliceSolanaSignature,
+} from './rawTx'
 
 const hex = (bytes: Uint8Array) => Buffer.from(bytes).toString('hex')
 
@@ -222,6 +227,47 @@ describe('extractSolanaMessageBytes', () => {
   it('rejects an over-long shortvec', () => {
     expect(() => extractSolanaMessageBytes(new Uint8Array([0x80, 0x80, 0x80, 0x01]))).toThrow(/Invalid shortvec/)
   })
+
+  it('decodes a three-byte shortvec count', () => {
+    // shortvec 0x80 0x80 0x01 = 16384 signatures
+    const numSigs = 16384
+    const message = new Uint8Array([0x01])
+    const tx = new Uint8Array([0x80, 0x80, 0x01, ...new Uint8Array(numSigs * 64), ...message])
+    const parsed = extractSolanaMessageBytes(tx)
+    expect(parsed.numSignatures).toBe(numSigs)
+    expect(parsed.firstSignatureOffset).toBe(3)
+    expect(hex(parsed.message)).toBe(hex(message))
+  })
+
+  it('rejects a non-canonical zero-padded shortvec', () => {
+    // 0x81 0x00 would decode to 1 with a lenient reader; the runtime rejects it.
+    const tx = new Uint8Array([0x81, 0x00, ...new Uint8Array(64), 1])
+    expect(() => extractSolanaMessageBytes(tx)).toThrow(/Invalid shortvec/)
+  })
+
+  it('rejects a third shortvec byte outside the u16 range', () => {
+    const tx = new Uint8Array([0x80, 0x80, 0x04, ...new Uint8Array(64), 1])
+    expect(() => extractSolanaMessageBytes(tx)).toThrow(/Invalid shortvec/)
+  })
+})
+
+describe('getSolanaMessageSigners', () => {
+  it('lists the single signer of a legacy message', () => {
+    const { message } = extractSolanaMessageBytes(buildLegacyTx())
+    const signers = getSolanaMessageSigners(message)
+    expect(signers.map(hex)).toEqual([hex(new Uint8Array(publicKey.data()))])
+  })
+
+  it('lists the required signers of a v0 message in slot order', () => {
+    const { txBytes, relayer, cosigner } = buildSponsoredV0Tx()
+    const { message } = extractSolanaMessageBytes(txBytes)
+    const signers = getSolanaMessageSigners(message)
+    expect(signers.map(hex)).toEqual([
+      hex(new Uint8Array(relayer.publicKey.data())),
+      hex(new Uint8Array(publicKey.data())),
+      hex(new Uint8Array(cosigner.publicKey.data())),
+    ])
+  })
 })
 
 describe('getSolanaSignerIndex', () => {
@@ -355,18 +401,36 @@ describe('spliceSolanaSignature', () => {
     ).toThrow(/not a required signer/)
   })
 
-  it('rejects an envelope with fewer slots than the signer index', () => {
-    // Message says 2 required signers (vault second), envelope declares only 1 slot.
-    const { txBytes } = buildSponsoredV0Tx()
+  it('rejects an envelope whose slot count differs from the required signers', () => {
+    // Message requires 3 signers; the envelope declares 1 slot.
+    const { txBytes, relayer } = buildSponsoredV0Tx()
     const { firstSignatureOffset, message } = extractSolanaMessageBytes(txBytes)
     const oneSlot = new Uint8Array([1, ...txBytes.slice(firstSignatureOffset, firstSignatureOffset + 64), ...message])
+    // ...whether the signer's own index would fit the envelope or not.
+    for (const signer of [publicKey, relayer.publicKey]) {
+      expect(() =>
+        spliceSolanaSignature({
+          txData: oneSlot,
+          signature: new Uint8Array(64),
+          publicKey: new Uint8Array(signer.data()),
+        })
+      ).toThrow(/declares 1 signature slot\(s\) but the message requires 3/)
+    }
+
+    // Too many slots is just as malformed.
+    const fourSlots = new Uint8Array([
+      4,
+      ...txBytes.slice(firstSignatureOffset, firstSignatureOffset + 3 * 64),
+      ...new Uint8Array(64),
+      ...message,
+    ])
     expect(() =>
       spliceSolanaSignature({
-        txData: oneSlot,
+        txData: fourSlots,
         signature: new Uint8Array(64),
         publicKey: new Uint8Array(publicKey.data()),
       })
-    ).toThrow(/declares 1 signature slot/)
+    ).toThrow(/declares 4 signature slot\(s\) but the message requires 3/)
   })
 })
 
