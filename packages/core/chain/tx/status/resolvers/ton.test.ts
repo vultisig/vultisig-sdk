@@ -290,6 +290,88 @@ describe('getTonTxStatus', () => {
     expect(Object.fromEntries(third.searchParams)).toEqual({ trace_id: hash })
   })
 
+  // The relay reports the hash of its own external message, which the indexer
+  // matches to the RELAY's transaction: successful, fee paid, and saying nothing
+  // about what the wallet then did. The signed request it emitted leads to the
+  // wallet's transaction, which is the one to judge.
+  const relayTx = {
+    hash: 'relay-tx',
+    total_fees: '1010869',
+    in_msg: { source: null, opcode: '0x077ddc9e' },
+    out_msgs: [{ hash: 'signed-request-msg', opcode: '0x73696e74' }],
+    description: { type: 'ord', aborted: false, compute_ph: okComputePhase, action: okActionPhase },
+  }
+
+  it('follows a matched relay transaction to the wallet transaction it delivered the request to', async () => {
+    mocks.queryUrl.mockResolvedValueOnce({ transactions: [relayTx] }).mockResolvedValueOnce({
+      transactions: [
+        relayedWalletTx({ aborted: false, compute_ph: okComputePhase, action: { ...okActionPhase, tot_actions: 2 } }),
+      ],
+    })
+
+    await expect(getTonTxStatus({ chain: OtherChain.Ton, hash })).resolves.toEqual({
+      status: 'success',
+      receipt: undefined,
+    })
+
+    expect(mocks.queryUrl).toHaveBeenCalledTimes(2)
+    const second = new URL(mocks.queryUrl.mock.calls[1][0])
+    expect(second.pathname).toBe('/ton/v3/transactionsByMessage')
+    expect(Object.fromEntries(second.searchParams)).toEqual({
+      msg_hash: 'signed-request-msg',
+      direction: 'in',
+      limit: '1',
+    })
+  })
+
+  it('stays pending, and known, while the relay has emitted the request but the wallet transaction has not landed', async () => {
+    mocks.queryUrl.mockResolvedValueOnce({ transactions: [relayTx] }).mockResolvedValueOnce({ transactions: [] })
+
+    await expect(getTonTxStatus({ chain: OtherChain.Ton, hash })).resolves.toEqual({ status: 'pending', isKnown: true })
+  })
+
+  it('reports the wallet rejecting the delivered request, not the relay succeeding', async () => {
+    mocks.queryUrl.mockResolvedValueOnce({ transactions: [relayTx] }).mockResolvedValueOnce({
+      transactions: [relayedWalletTx({ aborted: true, compute_ph: { exit_code: 133 } })],
+    })
+
+    await expect(getTonTxStatus({ chain: OtherChain.Ton, hash })).resolves.toMatchObject({
+      status: 'error',
+      receipt: undefined,
+      failure: { reason: 'seqno-mismatch', exitCode: 133 },
+    })
+  })
+
+  it('reports the wallet silently ignoring the delivered request as a signature rejection', async () => {
+    mocks.queryUrl.mockResolvedValueOnce({ transactions: [relayTx] }).mockResolvedValueOnce({
+      transactions: [
+        relayedWalletTx({ aborted: false, compute_ph: okComputePhase, action: { ...okActionPhase, tot_actions: 0 } }),
+      ],
+    })
+
+    await expect(getTonTxStatus({ chain: OtherChain.Ton, hash })).resolves.toMatchObject({
+      status: 'error',
+      failure: { reason: 'invalid-signature' },
+    })
+  })
+
+  it('does not follow a direct send whose wallet emits ordinary transfers', async () => {
+    mocks.queryUrl.mockResolvedValue({
+      transactions: [
+        {
+          hash,
+          total_fees: '1000000',
+          in_msg: { source: null, opcode: '0x7369676e' },
+          out_msgs: [{ hash: 'jetton-transfer', opcode: '0x0f8a7ea5' }],
+          description: { aborted: false, compute_ph: okComputePhase, action: okActionPhase },
+        },
+      ],
+    })
+
+    await expect(getTonTxStatus({ chain: OtherChain.Ton, hash })).resolves.toEqual({ status: 'success', receipt })
+    expect(mocks.queryUrl).toHaveBeenCalledTimes(1)
+  })
+
   it('also finds the trace by the hash of the message the relay broadcast', async () => {
     const trace = {
       trace_id: 'other',

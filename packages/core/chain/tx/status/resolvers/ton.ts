@@ -33,10 +33,16 @@ type TonInboundMessage = {
   opcode?: string | null
 }
 
+type TonOutboundMessage = {
+  hash: string
+  opcode?: string | null
+}
+
 type TonTransaction = {
   hash: string
   total_fees: string
   in_msg?: TonInboundMessage | null
+  out_msgs?: TonOutboundMessage[]
   description?: TonTransactionDescription
 }
 
@@ -64,8 +70,11 @@ const findTonTransaction = async (lookup: TonMessageLookup, hash: string): Promi
   return response?.transactions?.[0]
 }
 
-/** The W5 `internal_signed` opcode as toncenter spells an inbound message's opcode. */
+/** The W5 `internal_signed` opcode as toncenter spells a message's opcode. */
 const tonRelayedRequestOpcode = '0x73696e74'
+
+const isTonRelayedRequest = (message: TonInboundMessage | TonOutboundMessage | null | undefined): boolean =>
+  message?.opcode === tonRelayedRequestOpcode
 
 /** Which trace field the trace is looked up by: its id, or the hash of any message in it. */
 type TonTraceLookup = 'trace_id' | 'msg_hash'
@@ -79,20 +88,40 @@ const findTonTrace = async (lookup: TonTraceLookup, hash: string): Promise<TonTr
   return response?.traces?.[0]
 }
 
-type TonRelayedWalletTransaction = {
-  /** Whether the indexer has the trace at all. */
+type TonResolvedTransaction = {
+  /** Whether the indexer has the send at all — the transaction itself, or the relay's part of it. */
   isKnown: boolean
-  /** The wallet's own transaction inside it, once it has landed. */
+  /** The transaction to judge: the wallet's own, once it has landed. */
   tx?: TonTransaction
 }
 
 /**
- * The wallet's transaction inside a relayed send's trace. The relay identifies
- * the send by the external message it broadcast — the id of the trace, or the
- * hash of a message in it — and the wallet's transaction is the one in that
- * trace that received the signed request as an internal message.
+ * The wallet's transaction behind a transaction the message hash matched.
+ *
+ * A direct send's external message lands on the wallet, so the match is the
+ * wallet's transaction. A relayed send's identifier is the relay's own
+ * external message, so the match is the relay's transaction — the one that
+ * emitted the signed request to the wallet as an internal message. Judging
+ * that would report the relay's success and its fee whatever the wallet then
+ * did, so the request is followed to the wallet's transaction, which is
+ * pending until it lands.
  */
-const findTonRelayedWalletTransaction = async (hash: string): Promise<TonRelayedWalletTransaction> => {
+const followTonRelayDelivery = async (tx: TonTransaction): Promise<TonResolvedTransaction> => {
+  const delivered = tx.in_msg?.source ? undefined : tx.out_msgs?.find(isTonRelayedRequest)
+  if (!delivered) {
+    return { isKnown: true, tx }
+  }
+
+  return { isKnown: true, tx: await findTonTransaction('msg_hash', delivered.hash) }
+}
+
+/**
+ * The wallet's transaction inside a relayed send's trace, for an identifier
+ * that matches no message directly: the id of the trace, or the hash of a
+ * message in it. The wallet's transaction is the one that received the signed
+ * request as an internal message.
+ */
+const findTonRelayedWalletTransaction = async (hash: string): Promise<TonResolvedTransaction> => {
   const trace = (await findTonTrace('trace_id', hash)) ?? (await findTonTrace('msg_hash', hash))
   if (!trace) {
     return { isKnown: false }
@@ -100,7 +129,7 @@ const findTonRelayedWalletTransaction = async (hash: string): Promise<TonRelayed
 
   return {
     isKnown: true,
-    tx: Object.values(trace.transactions).find(tx => tx.in_msg?.opcode === tonRelayedRequestOpcode),
+    tx: Object.values(trace.transactions).find(tx => isTonRelayedRequest(tx.in_msg)),
   }
 }
 
@@ -108,12 +137,14 @@ const findTonRelayedWalletTransaction = async (hash: string): Promise<TonRelayed
  * Resolves a TON transaction by the hash of the message that carried it.
  *
  * A direct send is identified by the hash of its external message, which the
- * broadcast returned. A relayed (gasless) send is identified by the id of the
- * trace the relay broadcast it under — the hash of the relay's own external
- * message, which explorers resolve — and the wallet's transaction is found
- * inside that trace. A relayed send whose relay reported no such id falls back
- * to the hash of the signed request body, fixed at signing time. The indexer is
- * asked for the message hash first and for the others only when nothing matched.
+ * broadcast returned. A relayed (gasless) send is identified by the external
+ * message the relay broadcast — explorers resolve it — and the transaction to
+ * judge is the wallet's, reached through the signed request the relay's
+ * transaction emitted, or through the trace when the identifier is the trace
+ * id rather than a message hash. A relayed send whose relay reported no
+ * identifier falls back to the hash of the signed request body, fixed at
+ * signing time. The indexer is asked for the message hash first and for the
+ * others only when nothing matched.
  *
  * Success requires the transaction to be un-aborted *and* to have cleared both
  * the compute and the action phase; a transaction the indexer knows but hasn't
@@ -124,14 +155,14 @@ const findTonRelayedWalletTransaction = async (hash: string): Promise<TonRelayed
  * and how to fix it.
  */
 export const getTonTxStatus: TxStatusResolver<OtherChain.Ton> = async ({ hash }) => {
-  const direct = (await findTonTransaction('msg_hash', hash)) ?? (await findTonTransaction('body_hash', hash))
-  const relayed = direct ? undefined : await findTonRelayedWalletTransaction(hash)
-  const tx = direct ?? relayed?.tx
+  const matched = (await findTonTransaction('msg_hash', hash)) ?? (await findTonTransaction('body_hash', hash))
+  const resolved = matched ? await followTonRelayDelivery(matched) : await findTonRelayedWalletTransaction(hash)
+  const { tx } = resolved
 
   if (!tx) {
-    // A trace the indexer already has, without the wallet's transaction in it
-    // yet, is a relayed send still on its way through the relay.
-    return { status: 'pending', isKnown: relayed?.isKnown ?? false }
+    // The relay's part is indexed but the wallet's transaction is not yet: the
+    // request is still on its way through the relay.
+    return { status: 'pending', isKnown: resolved.isKnown }
   }
 
   const { description } = tx
