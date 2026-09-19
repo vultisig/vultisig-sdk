@@ -67,7 +67,7 @@ export const getBittensorSigningInputs = ({
     walletCore,
   })
 
-  const { recentBlockHash, nonce, currentBlockNumber, specVersion, transactionVersion, genesisHash } =
+  const { recentBlockHash, nonce, currentBlockNumber, specVersion, transactionVersion, genesisHash, allowDeath } =
     getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'polkadotSpecific')
 
   const params: BittensorSigningParams = {
@@ -79,6 +79,7 @@ export const getBittensorSigningInputs = ({
     genesisHash,
     specVersion,
     transactionVersion,
+    allowDeath,
   }
 
   const { callData, signedExtra, payload } = buildBittensorSigningPayload(params)
