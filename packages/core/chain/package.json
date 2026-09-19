@@ -25,6 +25,11 @@
       "import": "./dist/amount/fromChainAmountExact.js",
       "default": "./dist/amount/fromChainAmountExact.js"
     },
+    "./amount/getMaxSendableAmount": {
+      "types": "./dist/amount/getMaxSendableAmount.d.ts",
+      "import": "./dist/amount/getMaxSendableAmount.js",
+      "default": "./dist/amount/getMaxSendableAmount.js"
+    },
     "./amount/getMaxValue": {
       "types": "./dist/amount/getMaxValue.d.ts",
       "import": "./dist/amount/getMaxValue.js",

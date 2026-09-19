@@ -98,7 +98,7 @@ export type MaxSendAmount = {
   balance: bigint
   /** Estimated network fee in base units */
   fee: bigint
-  /** Maximum sendable amount (full token balance, or balance minus fee when the fee is paid in the sent asset) */
+  /** Maximum sendable amount (full token balance, or balance minus fee when the fee is paid in the sent asset, and minus any balance the chain requires the sender to keep) */
   maxSendable: bigint
 }
 

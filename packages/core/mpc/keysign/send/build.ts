@@ -26,6 +26,7 @@ import { getBlockchainSpecificValue } from '../chainSpecific/KeysignChainSpecifi
 import { BuildKeysignPayloadError } from '../error'
 import { getKeysignAmount } from '../utils/getKeysignAmount'
 import { validateDestinationTag } from '../utils/rippleDestinationTag'
+import { assertBittensorDestinationStaysAlive } from './assertBittensorDestinationStaysAlive'
 import { getCosmosWasmTokenTransferPayload } from './cosmosWasm'
 
 export type BuildSendKeysignPayloadInput = {
@@ -235,6 +236,7 @@ export const buildSendKeysignPayload = async ({
   }
 
   assertTonMemoFits({ coin, keysignPayload })
+  await assertBittensorDestinationStaysAlive({ coin, keysignPayload })
 
   return keysignPayload
 }

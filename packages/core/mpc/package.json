@@ -446,6 +446,11 @@
       "import": "./dist/keysign/refine/utxo.js",
       "default": "./dist/keysign/refine/utxo.js"
     },
+    "./keysign/send/assertBittensorDestinationStaysAlive": {
+      "types": "./dist/keysign/send/assertBittensorDestinationStaysAlive.d.ts",
+      "import": "./dist/keysign/send/assertBittensorDestinationStaysAlive.js",
+      "default": "./dist/keysign/send/assertBittensorDestinationStaysAlive.js"
+    },
     "./keysign/send/build": {
       "types": "./dist/keysign/send/build.d.ts",
       "import": "./dist/keysign/send/build.js",
