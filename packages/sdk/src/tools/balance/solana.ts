@@ -1,4 +1,4 @@
-import { solanaRpcUrl } from '@vultisig/core-chain/chains/solana/client'
+import { solanaRpcUrl } from '@vultisig/core-chain/chains/solana/config'
 
 const LAMPORTS_PER_SOL = 1_000_000_000n
 const MAX_SAFE_LAMPORTS = BigInt(Number.MAX_SAFE_INTEGER)

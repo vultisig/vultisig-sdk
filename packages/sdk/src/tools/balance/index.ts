@@ -7,8 +7,8 @@
  */
 
 // EVM
-export type { EvmBalance, GetEvmBalancesParams } from '../evm'
-export { getEvmBalances } from '../evm'
+export type { EvmBalance, GetEvmBalancesParams } from '../evm/balanceEvm'
+export { getEvmBalances } from '../evm/balanceEvm'
 
 // XRP
 export type { XrpBalance } from './otherBalance'

@@ -4,15 +4,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // Mock the token-metadata resolver so the IBC denom-trace path is deterministic
 // (no live RPC in unit tests). The decimals are still pinned from the SDK's
 // IBC_SAFE_DECIMALS table, so the resolver only supplies the symbol.
-vi.mock('@vultisig/core-chain/coin/token/metadata', () => ({
-  getTokenMetadata: vi.fn(),
+vi.mock('@vultisig/core-chain/coin/token/metadata/resolvers/cosmos', () => ({
+  getCosmosTokenMetadata: vi.fn(),
 }))
 
-import { getTokenMetadata } from '@vultisig/core-chain/coin/token/metadata'
+import { getCosmosTokenMetadata } from '@vultisig/core-chain/coin/token/metadata/resolvers/cosmos'
 
 import { cosmosBalanceChains, getCosmosBalance, isCosmosBalanceChain } from '../../../src/tools/balance/cosmos'
 
-const mockedGetTokenMetadata = vi.mocked(getTokenMetadata)
+const mockedGetTokenMetadata = vi.mocked(getCosmosTokenMetadata)
 
 function mockBank(balances: { denom: string; amount: string }[]) {
   vi.stubGlobal(
@@ -72,7 +72,7 @@ describe('getCosmosBalance', () => {
     expect(mockedGetTokenMetadata).not.toHaveBeenCalled()
   })
 
-  it('resolves an unknown IBC denom via getTokenMetadata, pinning decimals', async () => {
+  it('resolves an unknown IBC denom via getCosmosTokenMetadata, pinning decimals', async () => {
     mockedGetTokenMetadata.mockResolvedValue({ ticker: 'usdc', decimals: 999 } as never)
     mockBank([
       { denom: 'uosmo', amount: '1000000' },

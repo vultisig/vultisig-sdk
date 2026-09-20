@@ -1,3 +1,5 @@
+import { delayWithSignal, throwIfSignalAborted, withFetchTimeout } from '../../platforms/react-native/fetchWithTimeout'
+
 /**
  * Minimal JSON fetch helper for the non-EVM balance reads in this folder.
  *
@@ -19,15 +21,11 @@ const MAX_RETRIES = 3
 const BASE_DELAY_MS = 1000
 const DEFAULT_TIMEOUT_MS = 15_000
 
-function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
-}
-
 function isRetryable(error: unknown): boolean {
   // Network-level failures retry; deterministic timeouts do not (a retry just
   // stacks more multi-second waits past the caller's budget). Mirrors mcp-ts.
   if (error instanceof TypeError) return true
-  if (error instanceof DOMException && error.name === 'AbortError') return true
+  if (error instanceof Error && error.name === 'AbortError') return true
   return false
 }
 
@@ -39,39 +37,49 @@ function isRetryable(error: unknown): boolean {
 export async function fetchJson<T>(url: string, body?: unknown, init?: RequestInit): Promise<T> {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const response = await fetch(url, {
-        method: body ? 'POST' : 'GET',
-        headers: body ? { 'Content-Type': 'application/json' } : undefined,
-        body: body ? JSON.stringify(body) : undefined,
-        signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
-        ...init,
-      })
-
-      if (response.ok) {
-        return response.json() as Promise<T>
-      }
+      const response = await withFetchTimeout(
+        url,
+        {
+          method: body ? 'POST' : 'GET',
+          headers: body ? { 'Content-Type': 'application/json' } : undefined,
+          body: body ? JSON.stringify(body) : undefined,
+          ...init,
+        },
+        DEFAULT_TIMEOUT_MS,
+        async response => {
+          if (response.ok) return { ok: true as const, data: (await response.json()) as T }
+          // Retryable statuses need no body; a stalled error body must not
+          // prevent retrying a 429/5xx response.
+          if (response.status === 429 && attempt < MAX_RETRIES) {
+            void response.body?.cancel().catch(() => {})
+            return { ok: false as const, status: response.status }
+          }
+          if (response.status >= 400 && response.status < 500) {
+            throw new Error(`HTTP ${response.status}: ${await response.text()}`)
+          }
+          void response.body?.cancel().catch(() => {})
+          return { ok: false as const, status: response.status }
+        }
+      )
+      if (response.ok) return response.data
 
       // 429 — rate limited; back off and retry while attempts remain.
       if (response.status === 429 && attempt < MAX_RETRIES) {
-        await delay(BASE_DELAY_MS * 2 ** attempt)
+        await delayWithSignal(BASE_DELAY_MS * 2 ** attempt, init?.signal ?? undefined)
         continue
-      }
-
-      // Other 4xx — client error, don't retry.
-      if (response.status >= 400 && response.status < 500) {
-        throw new Error(`HTTP ${response.status}: ${await response.text()}`)
       }
 
       // 5xx — retry while attempts remain.
       if (attempt < MAX_RETRIES) {
-        await delay(BASE_DELAY_MS * 2 ** attempt)
+        await delayWithSignal(BASE_DELAY_MS * 2 ** attempt, init?.signal ?? undefined)
         continue
       }
 
       throw new Error(`HTTP ${response.status} after ${MAX_RETRIES + 1} attempts`)
     } catch (error) {
+      throwIfSignalAborted(init?.signal ?? undefined)
       if (isRetryable(error) && attempt < MAX_RETRIES) {
-        await delay(BASE_DELAY_MS * 2 ** attempt)
+        await delayWithSignal(BASE_DELAY_MS * 2 ** attempt, init?.signal ?? undefined)
         continue
       }
       throw error

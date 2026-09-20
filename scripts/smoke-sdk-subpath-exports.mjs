@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { smokePortableConsumers } from './smoke-sdk-portable-consumers.mjs'
 import { smokePrepConsumers } from './smoke-sdk-prep-consumers.mjs'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -212,6 +213,7 @@ try {
   )
 
   run('npm', ['install', '--no-package-lock', tarballPath], appRoot)
+  await smokePortableConsumers({ appRoot })
   await smokePrepConsumers({ appRoot, repoRoot })
   run('node', ['smoke-runtime.mjs'], appRoot)
   run('yarn', ['exec', 'tsc', '--project', path.join(appRoot, 'tsconfig.json')], repoRoot)

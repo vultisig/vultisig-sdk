@@ -12,6 +12,8 @@ import { sha256 } from '@noble/hashes/sha2.js'
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
+import { withFetchTimeout } from '../../../platforms/react-native/fetchWithTimeout'
+
 // --- Module constants (NOT process.env) ---
 
 const STAKEKIT_API_BASE = 'https://api.stakek.it/v1'
@@ -327,23 +329,30 @@ export async function getBalances(
     }))
     const url = `${STAKEKIT_API_BASE}/yields/balances`
     try {
-      const resp = await fetch(url, {
-        method: 'POST',
-        signal: AbortSignal.timeout(15_000),
-        headers: { ...authHeaders(apiKey), 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      if (resp.status === 403) {
-        return null
-      }
-      if (!resp.ok) {
-        const errBody = await resp.text().catch(() => '')
-        throw new Error(`yield.xyz API HTTP ${resp.status}: ${errBody.slice(0, 200)}`)
-      }
-      const rows = (await resp.json()) as Array<{
-        integrationId: string
-        balances?: YieldBalance[]
-      }>
+      const rows = await withFetchTimeout(
+        url,
+        {
+          method: 'POST',
+          headers: { ...authHeaders(apiKey), 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        },
+        15_000,
+        async resp => {
+          if (resp.status === 403) {
+            void resp.body?.cancel().catch(() => {})
+            return null
+          }
+          if (!resp.ok) {
+            const errBody = await resp.text().catch(() => '')
+            throw new Error(`yield.xyz API HTTP ${resp.status}: ${errBody.slice(0, 200)}`)
+          }
+          return (await resp.json()) as Array<{
+            integrationId: string
+            balances?: YieldBalance[]
+          }>
+        }
+      )
+      if (rows === null) return null
       for (const row of rows) {
         for (const b of row.balances ?? []) out.push(b)
       }
@@ -541,30 +550,35 @@ export async function fetchAllStakekitBalances(
 }
 
 export async function callYieldMCP(toolName: string, args: Record<string, unknown>, apiKey?: string): Promise<string> {
-  const resp = await fetch(STAKEKIT_MCP_URL, {
-    method: 'POST',
-    headers: authHeaders(apiKey, {
-      'Content-Type': 'application/json',
-      Accept: 'application/json, text/event-stream',
-    }),
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'tools/call',
-      params: { name: toolName, arguments: args },
-    }),
-    signal: AbortSignal.timeout(30_000),
-  })
-  if (!resp.ok) {
-    const body = await resp.text().catch(() => '')
-    throw new Error(`yield.xyz MCP HTTP ${resp.status}: ${body.slice(0, 200)}`)
-  }
-  const data = (await resp.json()) as {
-    result?: { content?: { text: string }[] }
-    error?: { message: string }
-  }
-  if (data.error) throw new Error(`yield.xyz MCP: ${data.error.message}`)
-  return data.result?.content?.[0]?.text ?? ''
+  return withFetchTimeout(
+    STAKEKIT_MCP_URL,
+    {
+      method: 'POST',
+      headers: authHeaders(apiKey, {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+      }),
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name: toolName, arguments: args },
+      }),
+    },
+    30_000,
+    async resp => {
+      if (!resp.ok) {
+        const body = await resp.text().catch(() => '')
+        throw new Error(`yield.xyz MCP HTTP ${resp.status}: ${body.slice(0, 200)}`)
+      }
+      const data = (await resp.json()) as {
+        result?: { content?: { text: string }[] }
+        error?: { message: string }
+      }
+      if (data.error) throw new Error(`yield.xyz MCP: ${data.error.message}`)
+      return data.result?.content?.[0]?.text ?? ''
+    }
+  )
 }
 
 export async function callYieldActionREST(
@@ -577,28 +591,33 @@ export async function callYieldActionREST(
   // with `integrationId` in the body alongside `addresses` and `args`.
   const url = `${STAKEKIT_API_BASE}/actions/${encodeURIComponent(action)}`
   const fullBody = { integrationId: yieldId, ...body }
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: authHeaders(apiKey, { 'Content-Type': 'application/json' }),
-    body: JSON.stringify(fullBody),
-    signal: AbortSignal.timeout(30_000),
-  })
-  if (!resp.ok) {
-    const respBody = await resp.text().catch(() => '')
-    let humanMsg = respBody.slice(0, 200)
-    try {
-      const parsed = JSON.parse(respBody) as { message?: unknown }
-      if (typeof parsed.message === 'string' && parsed.message.length > 0) {
-        humanMsg = parsed.message
+  const action_response = await withFetchTimeout(
+    url,
+    {
+      method: 'POST',
+      headers: authHeaders(apiKey, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify(fullBody),
+    },
+    30_000,
+    async resp => {
+      if (!resp.ok) {
+        const respBody = await resp.text().catch(() => '')
+        let humanMsg = respBody.slice(0, 200)
+        try {
+          const parsed = JSON.parse(respBody) as { message?: unknown }
+          if (typeof parsed.message === 'string' && parsed.message.length > 0) {
+            humanMsg = parsed.message
+          }
+        } catch {
+          // not JSON — keep the raw slice
+        }
+        const enabledMatch = /not enabled for this project/i.test(humanMsg)
+        const prefix = enabledMatch ? 'yield_not_enabled' : `yield_xyz_${resp.status}`
+        throw new Error(`${prefix}: ${humanMsg}`)
       }
-    } catch {
-      // not JSON — keep the raw slice
+      return (await resp.json()) as YieldActionResponse
     }
-    const enabledMatch = /not enabled for this project/i.test(humanMsg)
-    const prefix = enabledMatch ? 'yield_not_enabled' : `yield_xyz_${resp.status}`
-    throw new Error(`${prefix}: ${humanMsg}`)
-  }
-  const action_response = (await resp.json()) as YieldActionResponse
+  )
   return ensureTransactionsBuilt(action_response, apiKey)
 }
 
@@ -652,18 +671,26 @@ export async function ensureTransactionsBuilt(
 async function buildYieldTransaction(txId: string, fallback: unknown, apiKey?: string): Promise<unknown> {
   try {
     const url = `${STAKEKIT_API_BASE}/transactions/${encodeURIComponent(txId)}`
-    const resp = await fetch(url, {
-      method: 'PATCH',
-      headers: authHeaders(apiKey, { 'Content-Type': 'application/json' }),
-      body: '{}',
-      signal: AbortSignal.timeout(30_000),
-    })
-    if (!resp.ok) return fallback
-    const updated = (await resp.json()) as { unsignedTransaction?: unknown }
-    if (updated && updated.unsignedTransaction != null) {
-      return updated
-    }
-    return fallback
+    return await withFetchTimeout(
+      url,
+      {
+        method: 'PATCH',
+        headers: authHeaders(apiKey, { 'Content-Type': 'application/json' }),
+        body: '{}',
+      },
+      30_000,
+      async resp => {
+        if (!resp.ok) {
+          void resp.body?.cancel().catch(() => {})
+          return fallback
+        }
+        const updated = (await resp.json()) as { unsignedTransaction?: unknown }
+        if (updated && updated.unsignedTransaction != null) {
+          return updated
+        }
+        return fallback
+      }
+    )
   } catch {
     return fallback
   }

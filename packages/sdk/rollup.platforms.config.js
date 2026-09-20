@@ -417,6 +417,7 @@ const configs = {
     ...createSubpathConfigs({
       input: './src/tools/defi/index.ts',
       distBase: 'tools/defi',
+      browser: true,
     }),
     ...createSubpathConfigs({
       input: './src/tools/swap/index.ts',
@@ -434,6 +435,7 @@ const configs = {
     ...createSubpathConfigs({
       input: './src/tools/balance/index.ts',
       distBase: 'tools/balance',
+      browser: true,
     }),
     ...createSubpathConfigs({
       input: './src/chains/tron/index.ts',
@@ -827,7 +829,31 @@ rnPrep.output.file = './dist/tools/prep/index.react-native.js'
 rnPrep.plugins = rnPrep.plugins.map(plugin =>
   plugin.name === 'vultisig-rn-path-override' ? rnOverridePlugin([]) : plugin
 )
-configs['react-native'] = [rnPreamble, rnRoot, rnSwap, rnPrep]
+// These read/build-only graphs do not reach the root's chain-client overrides.
+// Inline their dependencies so Buffer injection also covers transitive modules;
+// consumers can import either surface without initializing the root SDK.
+const rnPortableTools = ['balance', 'defi'].map(name => {
+  const [, config] = configs['react-native']()
+  config.input = `./src/tools/${name}/index.ts`
+  // Viem/ox initializes TextDecoder at import time. Bundle it here so native
+  // encoding injection runs before that initialization, without global shims.
+  config.external = external.filter(dependency => dependency !== 'viem')
+  config.output.file = `./dist/tools/${name}/index.react-native.js`
+  config.plugins = config.plugins.map(plugin =>
+    plugin.name === 'vultisig-rn-path-override' ? rnOverridePlugin([]) : plugin
+  )
+  config.plugins.splice(
+    -1,
+    0,
+    inject({
+      Buffer: ['buffer', 'Buffer'],
+      TextEncoder: ['text-encoding-utf-8', 'TextEncoder'],
+      TextDecoder: ['text-encoding-utf-8', 'TextDecoder'],
+    })
+  )
+  return config
+})
+configs['react-native'] = [rnPreamble, rnRoot, rnSwap, rnPrep, ...rnPortableTools]
 const browserPrep = {
   ...configs.browser,
   input: './src/platforms/browser/prep.ts',

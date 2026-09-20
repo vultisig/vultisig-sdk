@@ -10,6 +10,15 @@ const platformRollupConfig = readFileSync(path.join(sdkRoot, 'rollup.platforms.c
 const typesRollupConfig = readFileSync(path.join(sdkRoot, 'rollup.types.config.js'), 'utf8')
 
 describe('public API subpath exports', () => {
+  it.each(['balance', 'defi'])('publishes dedicated browser, worker and native %s artifacts', name => {
+    const entry = sdkPackageJson.exports[`./tools/${name}`]
+    expect(entry.browser).toBe(`./dist/tools/${name}/index.browser.js`)
+    expect(entry.worker).toBe(entry.browser)
+    expect(entry['react-native']).toBe(`./dist/tools/${name}/index.react-native.js`)
+    expect(entry.node).toEqual({ import: `./dist/tools/${name}/index.js`, require: `./dist/tools/${name}/index.cjs` })
+    expect(entry.types).toBe(`./dist/tools/${name}/index.d.ts`)
+  })
+
   it('publishes prep with distinct native runtime and asynchronous declarations', () => {
     const entry = sdkPackageJson.exports['./tools/prep']
     expect(entry.types).toEqual({

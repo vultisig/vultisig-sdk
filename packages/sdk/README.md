@@ -1357,6 +1357,7 @@ MIT License - see [LICENSE](./LICENSE) file for details.
 ---
 
 **Built with ❤️ by the Vultisig team**
+
 ## Transaction preparation imports
 
 `@vultisig/sdk/tools/prep` exposes the canonical vault-free transaction builders
@@ -1389,3 +1390,29 @@ React Native retains deferred asynchronous wrappers for `buildSplTransfer`,
 declarations describe these Promise returns and preserve the canonical inputs;
 use TypeScript's `customConditions: ["react-native"]` with NodeNext or bundler
 module resolution. Pure staking and CosmWasm message builders remain synchronous.
+
+### Portable balance and DeFi imports
+
+`@vultisig/sdk/tools/balance` and `@vultisig/sdk/tools/defi` provide dedicated
+browser/worker and React Native bundles, alongside Node ESM/CommonJS and TypeScript
+exports. Import either subpath directly; these two surfaces do not require the root
+SDK, `rn-preamble`, or a consumer-installed global `Buffer`.
+
+```ts
+import { getTrc20TokenBalance, formatBalance } from '@vultisig/sdk/tools/balance'
+import { defi } from '@vultisig/sdk/tools/defi'
+```
+
+Use a bundler that honors the environment's `browser`, `worker`, or `react-native`
+export condition. The runtime must provide `fetch`, `AbortController`, timers, and
+BigInt. Balance and StakeKit request deadlines use portable cancellation and cover
+response bodies; they do not require `AbortSignal.timeout`. DeFi builders continue
+to return unsigned data and never sign or broadcast.
+
+For package-consumer verification, install a freshly built SDK tarball into an
+isolated application, then run `scripts/smoke-sdk-portable-consumers.mjs` with the
+application directory (with Playwright, `@babel/core` and `@react-native/babel-preset`
+installed), an installed Playwright module path, and a Hermes executable
+path. This checks conditional resolution, direct imports and deterministic helpers
+in Hermes, plus browser and worker reads against an owned HTTP fixture. Fixture
+responses test runtime compatibility, not third-party provider availability.

@@ -9,6 +9,7 @@ import { queryTron } from '@vultisig/core-chain/chains/tron/queryTron'
  * public RPC / API endpoints (and the Vultisig proxy) directly via `fetchJson`.
  */
 import bs58check from 'bs58check'
+import { Buffer } from 'buffer'
 
 import { fetchJson, formatBalance, ROOT_API_URL } from './rpc'
 

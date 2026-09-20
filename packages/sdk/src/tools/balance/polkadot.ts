@@ -19,7 +19,7 @@
 
 import { blake2b } from '@noble/hashes/blake2.js'
 import { bytesToHex } from '@noble/hashes/utils.js'
-import { assetHubRpcUrl, polkadotRpcUrl } from '@vultisig/core-chain/chains/polkadot/client'
+import { assetHubRpcUrl, polkadotRpcUrl } from '@vultisig/core-chain/chains/polkadot/config'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import bs58 from 'bs58'
 

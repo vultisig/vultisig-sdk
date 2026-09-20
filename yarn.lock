@@ -6541,6 +6541,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@types/text-encoding-utf-8@npm:^1":
+  version: 1.0.5
+  resolution: "@types/text-encoding-utf-8@npm:1.0.5"
+  checksum: 10c0/d217e3b06fd49846bc3843b33d68858e8925940d0b8bfbf2cef875debc5efab9a03a6b38a90d16c61508fd21958408a90178268e939c7f82efe8dd03afcb0d10
+  languageName: node
+  linkType: hard
+
 "@types/through@npm:*":
   version: 0.0.33
   resolution: "@types/through@npm:0.0.33"
@@ -7323,6 +7330,7 @@ __metadata:
     "@types/events": "npm:^3"
     "@types/node": "npm:^26.1.1"
     "@types/path-browserify": "npm:^1"
+    "@types/text-encoding-utf-8": "npm:^1"
     "@vitest/coverage-v8": "npm:4.1.9"
     "@vultisig/core-chain": "workspace:*"
     "@vultisig/core-mpc": "workspace:*"
@@ -7363,6 +7371,7 @@ __metadata:
     rollup-plugin-dts: "npm:^6.4.1"
     rollup-plugin-esbuild: "npm:^6.2.1"
     stream-browserify: "npm:^3.0.0"
+    text-encoding-utf-8: "npm:^1.0.2"
     tiny-secp256k1: "npm:^2.2.4"
     tsx: "npm:^4.22.4"
     typescript: "npm:^6.0.3"

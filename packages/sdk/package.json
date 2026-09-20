@@ -91,9 +91,9 @@
     },
     "./tools/defi": {
       "types": "./dist/tools/defi/index.d.ts",
-      "browser": "./dist/tools/defi/index.js",
-      "worker": "./dist/tools/defi/index.js",
-      "react-native": "./dist/tools/defi/index.js",
+      "browser": "./dist/tools/defi/index.browser.js",
+      "worker": "./dist/tools/defi/index.browser.js",
+      "react-native": "./dist/tools/defi/index.react-native.js",
       "node": {
         "import": "./dist/tools/defi/index.js",
         "require": "./dist/tools/defi/index.cjs"
@@ -117,9 +117,9 @@
     },
     "./tools/balance": {
       "types": "./dist/tools/balance/index.d.ts",
-      "browser": "./dist/tools/balance/index.js",
-      "worker": "./dist/tools/balance/index.js",
-      "react-native": "./dist/tools/balance/index.js",
+      "browser": "./dist/tools/balance/index.browser.js",
+      "worker": "./dist/tools/balance/index.browser.js",
+      "react-native": "./dist/tools/balance/index.react-native.js",
       "node": {
         "import": "./dist/tools/balance/index.js",
         "require": "./dist/tools/balance/index.cjs"
@@ -450,6 +450,7 @@
     "ripple-address-codec": "^5.0.1",
     "ripple-binary-codec": "^2.8.0",
     "stream-browserify": "^3.0.0",
+    "text-encoding-utf-8": "^1.0.2",
     "tiny-secp256k1": "^2.2.4",
     "util": "^0.12.5",
     "uuid": "^14.0.1",
@@ -473,6 +474,7 @@
     "@types/events": "^3",
     "@types/node": "^26.1.1",
     "@types/path-browserify": "^1",
+    "@types/text-encoding-utf-8": "^1",
     "@vitest/coverage-v8": "4.1.9",
     "concurrently": "^10.0.3",
     "dotenv": "^17.4.2",

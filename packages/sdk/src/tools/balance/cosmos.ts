@@ -1,6 +1,7 @@
 import { Chain, CosmosChain } from '@vultisig/core-chain/Chain'
+import { getCosmosTokenMetadata } from '@vultisig/core-chain/coin/token/metadata/resolvers/cosmos'
 
-import { getTokenMetadata } from '../token'
+import { FetchTimeoutError, withFetchTimeout } from '../../platforms/react-native/fetchWithTimeout'
 
 /**
  * Pure-read Cosmos bank-denom balance primitive.
@@ -203,17 +204,22 @@ const DEFAULT_TIMEOUT_MS = 15_000
 
 const delay = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms))
 
-const isTimeout = (error: unknown): boolean => error instanceof DOMException && error.name === 'TimeoutError'
+const isTimeout = (error: unknown): boolean =>
+  error instanceof FetchTimeoutError || (error instanceof Error && error.name === 'TimeoutError')
 
 /** Bounded-retry JSON GET with timeout. 4xx fails fast; 5xx/network retried. */
 async function fetchJson<T>(url: string): Promise<T> {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const response = await fetch(url, { signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS) })
-      if (response.ok) return (await response.json()) as T
-      if (response.status >= 400 && response.status < 500) {
-        throw new Error(`HTTP ${response.status}: ${await response.text()}`)
-      }
+      const response = await withFetchTimeout(url, {}, DEFAULT_TIMEOUT_MS, async response => {
+        if (response.ok) return { ok: true as const, data: (await response.json()) as T }
+        if (response.status >= 400 && response.status < 500) {
+          throw new Error(`HTTP ${response.status}: ${await response.text()}`)
+        }
+        void response.body?.cancel().catch(() => {})
+        return { ok: false as const, status: response.status }
+      })
+      if (response.ok) return response.data
       if (attempt < MAX_RETRIES) {
         await delay(BASE_DELAY_MS * 2 ** attempt)
         continue
@@ -316,8 +322,8 @@ async function resolveIbcDenoms(
   await Promise.all(
     denoms.map(async id => {
       try {
-        const meta = await getTokenMetadata({
-          chain: chain as Parameters<typeof getTokenMetadata>[0]['chain'],
+        const meta = await getCosmosTokenMetadata({
+          chain,
           id,
         })
         const symbol = meta?.ticker?.toUpperCase()

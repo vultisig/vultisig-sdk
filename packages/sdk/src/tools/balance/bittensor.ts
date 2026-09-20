@@ -14,6 +14,7 @@ import { blake2b } from '@noble/hashes/blake2.js'
 import { bytesToHex } from '@noble/hashes/utils.js'
 import bs58 from 'bs58'
 
+import { FetchTimeoutError } from '../../platforms/react-native/fetchWithTimeout'
 import { fetchJson } from './rpc'
 
 // Finney mainnet RPCs, tried in order on transport failure. A single hard-coded
@@ -126,16 +127,18 @@ function shouldFallbackJsonRpcError(error: { code: number; message: string }): b
   return error.code === -32603 || (error.code <= -32000 && error.code >= -32099)
 }
 
-async function withEndpointTimeout<T>(url: string, request: Promise<T>): Promise<T> {
+async function withEndpointTimeout<T>(request: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const controller = new AbortController()
   let timeout: ReturnType<typeof setTimeout> | undefined
   try {
     return await Promise.race([
-      request,
+      request(controller.signal),
       new Promise<never>((_, reject) => {
-        timeout = setTimeout(
-          () => reject(new Error(`Bittensor RPC endpoint timed out after ${BITTENSOR_RPC_TIMEOUT_MS}ms: ${url}`)),
-          BITTENSOR_RPC_TIMEOUT_MS
-        )
+        timeout = setTimeout(() => {
+          const error = new FetchTimeoutError(BITTENSOR_RPC_TIMEOUT_MS)
+          controller.abort(error)
+          reject(error)
+        }, BITTENSOR_RPC_TIMEOUT_MS)
       }),
     ])
   } finally {
@@ -149,13 +152,8 @@ async function bittensorFetch<T>(method: string, params: unknown[]): Promise<Rpc
   let lastErr: unknown
   for (const url of BITTENSOR_RPCS) {
     try {
-      const response = await withEndpointTimeout(
-        url,
-        fetchJson<RpcResponse<T>>(
-          url,
-          { jsonrpc: '2.0', method, params, id: 1 },
-          { signal: AbortSignal.timeout(BITTENSOR_RPC_TIMEOUT_MS) }
-        )
+      const response = await withEndpointTimeout(signal =>
+        fetchJson<RpcResponse<T>>(url, { jsonrpc: '2.0', method, params, id: 1 }, { signal })
       )
       if (response.error && shouldFallbackJsonRpcError(response.error)) {
         lastErr = new Error(`JSON-RPC ${response.error.code}: ${response.error.message}`)

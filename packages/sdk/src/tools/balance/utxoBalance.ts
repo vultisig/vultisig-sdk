@@ -1,5 +1,7 @@
 import { UtxoChain } from '@vultisig/core-chain/Chain'
 
+import { withFetchTimeout } from '../../platforms/react-native/fetchWithTimeout'
+
 /**
  * UTXO chains supported by {@link getUtxoBalance}.
  *
@@ -128,15 +130,15 @@ export const getUtxoBalance = async (
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
   const url = `${base.replace(/\/+$/, '')}/${blockchairPath(chain)}/dashboards/address/${encodeURIComponent(address)}`
 
-  const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) })
-  if (!response.ok) {
-    throw new Error(`getUtxoBalance: Blockchair returned ${response.status} for ${chain} address ${address}.`)
-  }
-
-  // Read the raw body so we can pull the balance integer at full precision
-  // (see extractBalanceSatoshis); `response.json()` numberifies and would
-  // truncate large UTXO balances past Number.MAX_SAFE_INTEGER.
-  const rawBody = await response.text()
+  // Keep the deadline active through the raw body read. JSON number parsing
+  // would lose precision for balances above Number.MAX_SAFE_INTEGER.
+  const rawBody = await withFetchTimeout(url, {}, timeoutMs, async response => {
+    if (!response.ok) {
+      void response.body?.cancel().catch(() => {})
+      throw new Error(`getUtxoBalance: Blockchair returned ${response.status} for ${chain} address ${address}.`)
+    }
+    return response.text()
+  })
   let json: BlockchairDashboardResponse
   try {
     json = JSON.parse(rawBody) as BlockchairDashboardResponse
