@@ -534,6 +534,28 @@ export type {
   StakekitBalanceQuery,
   StakekitBalancesResult,
 } from '../../tools/defi'
+export type {
+  EvmScanRequest,
+  PendingAction,
+  ScanRequest,
+  StakekitActionDisplay,
+  StakekitActionResult,
+  StakekitDetailsResult,
+  StakekitExitResult,
+  UnsupportedScanRequest,
+  Validator,
+  YieldActionResponse,
+  YieldArgs,
+  YieldBalance,
+  YieldDiscoverMetadata,
+  YieldDiscoverOpportunity,
+  YieldDiscoverToken,
+  YieldListResponse,
+  YieldMetadata,
+  YieldProduct,
+  YieldToken,
+  YieldTransaction,
+} from '../../tools/defi/stakekit'
 export {
   buildBalancerV3SwapCalldata,
   buildYieldActionScanRequests,
