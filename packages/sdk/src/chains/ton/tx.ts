@@ -113,7 +113,11 @@ export type BuildTonSendOptions = {
   memo?: string
   /** Seqno from `getTonWalletInfo(from).seqno`. First tx = 0. */
   seqno: number
-  /** Unix seconds after which the message is invalid. Default = now + 600. */
+  /**
+   * Requested expiry in Unix seconds; defaults to now + 600 for nonzero seqno.
+   * For seqno 0, V4R2 and W5 encode 0xffffffff (4294967295) instead, matching
+   * WalletCore. A signed first send must not be assumed to expire at this deadline.
+   */
   validUntil?: number
   /**
    * Sub-wallet ID. WalletCore 4.7.0 supports one id per contract — 698983191 for
@@ -270,9 +274,11 @@ function encodeWalletCoreTonSigningInput(args: {
 /**
  * The expiry WalletCore stamps on a wallet's first request (seqno 0), for both
  * contracts: `SigningRequestBuilder` replaces the caller's `expire_at` with
- * `u32::MAX` whenever `sequence_number == 0`. The deploying message must not be
- * time-boxed the way a routine send is, and since the value is part of the
- * pre-image, any other choice hashes differently from every co-signer.
+ * `u32::MAX` whenever `sequence_number == 0`. This is observed WalletCore
+ * compatibility behavior, not a requirement that deploying messages cannot expire.
+ * The value is part of the pre-image; changing it here would break signing-hash
+ * parity with co-signers using WalletCore. It is a far-future Unix timestamp,
+ * so a signed-but-unbroadcast first send can outlive the requested deadline.
  */
 const STATE_INIT_EXPIRE_AT = 0xffffffff
 
@@ -500,6 +506,11 @@ export type BuildTonJettonTransferOptions = {
   /** Optional UTF-8 comment; must fit WalletCore's inline Jetton forward_payload. The cap shrinks as `amount` grows (larger VarUInteger encoding leaves fewer bits) — at most ~34 ASCII bytes for large amounts, ~39 for small ones. Throws if it doesn't fit. */
   memo?: string
   seqno: number
+  /**
+   * Requested expiry in Unix seconds; defaults to now + 600 for nonzero seqno.
+   * For seqno 0, V4R2 and W5 encode 0xffffffff (4294967295) instead, matching
+   * WalletCore. A signed first send must not be assumed to expire at this deadline.
+   */
   validUntil?: number
   /** WalletCore 4.7.0 supports one id per contract: 698983191 for V4R2, 2147483409 for W5. */
   subWalletId?: number

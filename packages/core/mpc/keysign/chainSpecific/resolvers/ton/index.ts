@@ -19,7 +19,7 @@ const tonUndeployedWalletStates: readonly string[] = ['uninit', 'nonexist']
 const isTonWalletUndeployed = (walletState: string | undefined): boolean =>
   walletState !== undefined && tonUndeployedWalletStates.includes(walletState)
 
-/** How long a wallet message stays valid when the caller sets no tighter deadline. */
+/** Requested wallet deadline window when the caller sets no tighter deadline. */
 const tonWalletExpirySeconds = 600
 
 type ResolveTonExpireAtInput = {
@@ -28,10 +28,11 @@ type ResolveTonExpireAtInput = {
 }
 
 /**
- * The `expireAt` to sign. The wallet's own 10-minute window is the ceiling; a dApp
- * deadline (`valid_until`) can only tighten it, never extend it. A deadline that has
- * already passed by build time fails here rather than producing a transaction the
- * network will reject.
+ * The requested `expireAt` passed to WalletCore. The wallet's 10-minute window
+ * is the ceiling; a dApp deadline (`valid_until`) can only tighten it. An already
+ * expired deadline is rejected even on a first send. For seqno 0, WalletCore
+ * replaces this requested expiry with 0xffffffff in the signed V4R2/W5 message;
+ * neither the wallet window nor a tighter dApp deadline bounds that signed output.
  */
 const resolveTonExpireAt = ({ now, validUntil }: ResolveTonExpireAtInput): number => {
   const walletDeadline = now + tonWalletExpirySeconds
@@ -50,7 +51,7 @@ const resolveTonExpireAt = ({ now, validUntil }: ResolveTonExpireAtInput): numbe
 }
 
 /**
- * Resolves the TON-specific keysign fields: the sender's seqno, an expiry, whether the
+ * Resolves the TON-specific keysign fields: the sender's seqno, a requested expiry, whether the
  * transfer bounces on rejection, and — for Jettons — the sender's Jetton wallet and
  * whether the destination is deployed. `sendMaxAmount` is recorded from the caller
  * rather than inferred, so an ordinary send that happens to sit close to the balance is
@@ -150,9 +151,9 @@ export const getTonChainSpecific: GetChainSpecificResolver<'tonSpecific'> = asyn
 
   // Read the clock last. Every lookup above is a network round trip, and a deadline
   // that was still ahead when the build started can be behind by the time it
-  // finishes — computing the expiry up front would sign that dead deadline instead
-  // of refusing it, and would also spend part of the wallet's own ten-minute window
-  // on the lookups.
+  // finishes. Validate the requested expiry after lookups even on seqno 0, where
+  // WalletCore later substitutes 0xffffffff. On later sends this also preserves
+  // the full requested wallet window after the lookups.
   const expireAt = BigInt(resolveTonExpireAt({ now: Math.floor(Date.now() / 1000), validUntil }))
 
   return create(TonSpecificSchema, {

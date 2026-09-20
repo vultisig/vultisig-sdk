@@ -12,7 +12,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { Cell } from '@ton/core'
+import { Cell, loadMessage } from '@ton/core'
 import { initWasm, TW, type WalletCore } from '@trustwallet/wallet-core'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { tonV5R1WalletId } from '@vultisig/core-chain/chains/ton/wallet'
@@ -107,6 +107,7 @@ const expectByteIdenticalSignedMessage = (result: TonWalletCoreBackedTxBuilderRe
   if (input.sequenceNumber !== 0) {
     expect(ours).toBe(theirs.encoded)
   }
+  return { ours: ourCell!, theirs: theirCell! }
 }
 
 const throwawayPublicKeyHex = () =>
@@ -330,35 +331,48 @@ describe('W5 prebuilt signing payload', () => {
 // for both contracts. The value is in the pre-image, so a builder that kept the
 // caller's expiry there would hash differently from every co-signer — and for
 // V4R2 it did, until this was pinned.
-describe('first-send expiry', () => {
-  const build = (walletVersion: 'v4r2' | 'v5r1', seqno: number) =>
-    buildTonSendTx({
+describe.each(['v4r2', 'v5r1'] as const)('%s first-send expiry', walletVersion => {
+  it.each([
+    ['native', 0],
+    ['native', 7],
+    ['jetton', 0],
+    ['jetton', 7],
+  ] as const)('%s seqno %i: decodes the actual signed expiry', (transfer, seqno) => {
+    const options = {
       walletVersion,
       publicKeyEd25519: throwawayPublicKeyHex(),
       to: native.recipientAddress,
-      amount: BigInt(native.amountNanotons),
-      bounceable: native.bounceable,
+      amount: 1_000_000n,
       seqno,
       validUntil: native.expireAt,
-    })
-
-  const expiryOf = (unsignedBocHex: string, walletVersion: 'v4r2' | 'v5r1') => {
-    const slice = Cell.fromBoc(Buffer.from(unsignedBocHex, 'hex'))[0]!.beginParse()
-    // V4R2: subWalletId(32) || validUntil(32); W5: opcode(32) || walletId(32) || validUntil(32)
-    slice.skip(walletVersion === 'v5r1' ? 64 : 32)
-    return slice.loadUint(32)
-  }
-
-  it.each(['v4r2', 'v5r1'] as const)(
-    '%s: stamps u32::MAX on seqno 0 and matches WalletCore byte for byte',
-    walletVersion => {
-      const first = build(walletVersion, 0)
-      const later = build(walletVersion, 7)
-
-      expect(expiryOf(first.unsignedBocHex, walletVersion)).toBe(0xffffffff)
-      expect(expiryOf(later.unsignedBocHex, walletVersion)).toBe(native.expireAt)
-      expectByteIdenticalSignedMessage(first)
-      expectByteIdenticalSignedMessage(later)
     }
-  )
+    const result =
+      transfer === 'native'
+        ? buildTonSendTx({ ...options, bounceable: true })
+        : buildTonJettonTransferTx({ ...options, jettonWalletAddress: jetton.jettonWalletAddress })
+    const expectedExpiry = seqno === 0 ? 0xffffffff : options.validUntil
+    // The standalone builders normalize the WalletCore input too; the shared
+    // resolver keeps the requested expiry until WalletCore builds its pre-image.
+    const input = TW.TheOpenNetwork.Proto.SigningInput.decode(result.walletCoreTxInputData)
+    expect(input.expireAt).toBe(expectedExpiry)
+    const unsigned = Cell.fromBoc(Buffer.from(result.unsignedBocHex, 'hex'))[0]!.beginParse()
+    unsigned.skip(walletVersion === 'v5r1' ? 64 : 32)
+    expect(unsigned.loadUint(32)).toBe(expectedExpiry)
+    expect(unsigned.loadUint(32)).toBe(seqno)
+    expectWalletCoreParity(result)
+
+    const signed = expectByteIdenticalSignedMessage(result)
+    for (const cell of [signed.ours, signed.theirs]) {
+      const message = loadMessage(cell.beginParse())
+      expect(message.info.type).toBe('external-in')
+      expect(!!message.init).toBe(seqno === 0)
+      const body = message.body.beginParse()
+      // V4R2 has a 512-bit signature prefix; W5 has a signature suffix.
+      if (walletVersion === 'v4r2') body.skip(512)
+      else expect(body.loadUint(32)).toBe(0x7369676e)
+      body.skip(32) // wallet ID
+      expect(body.loadUint(32)).toBe(expectedExpiry)
+      expect(body.loadUint(32)).toBe(seqno)
+    }
+  })
 })

@@ -1317,6 +1317,22 @@ const txHash = await vault.broadcastRawTx({
 | Sui                                       | JSON `{unsignedTx, signature}`           |
 | Tron                                      | JSON tx object                           |
 
+**TON first-send expiry:** For V4R2 and V5R1 (W5) wallets, a first send (`seqno = 0`)
+encodes `0xffffffff` (`4294967295` Unix seconds, in 2106) as its signed expiry,
+matching WalletCore. This applies to native TON and Jetton transfers. The requested
+`validUntil`/`expireAt`, including the wallet's ten-minute window or a tighter dApp
+`valid_until`, does not bound that signed first message. Later sends use the
+requested expiry; the shared deadline resolver still rejects expired requests
+before signing, including first sends.
+
+If signing succeeds but broadcast fails or is abandoned, do not assume the first
+signed message expires after ten minutes. Local cancellation or deleting your
+copy does not invalidate other copies. A message for seqno 0 becomes stale once
+the wallet's on-chain sequence number advances; local cancellation is not evidence
+of that advance. Check the wallet's on-chain state before deciding how to handle
+an abandoned first send. This documents the existing limitation, not a cancellation
+or invalidation mechanism.
+
 **Error Handling:**
 
 The method throws `VaultError` with these codes:

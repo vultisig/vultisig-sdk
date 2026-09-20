@@ -75,6 +75,10 @@ export const getTonSigningInputs: SigningInputsResolver<'ton'> = ({ keysignPaylo
     )
   }
 
+  // `expireAt` remains the requested deadline in this input. WalletCore encodes
+  // 0xffffffff in the signed message when sequenceNumber is 0 for both V4R2 and
+  // W5, including requests with a tighter dApp deadline. Input alone cannot prove
+  // the expiry of the final signed transaction.
   const input = TW.TheOpenNetwork.Proto.SigningInput.create({
     walletVersion: match(walletVersion, {
       v4r2: () => TW.TheOpenNetwork.Proto.WalletVersion.WALLET_V4_R2,
