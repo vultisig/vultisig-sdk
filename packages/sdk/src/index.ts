@@ -189,6 +189,10 @@ export { assertUtxoAddressBrand, isUtxoAddressBrandValid } from './chains/utxo/a
 // Consumers should import this instead of reconstructing the path locally.
 export { getBlockchairBaseUrl } from '@vultisig/core-chain/chains/utxo/client/getBlockchairBaseUrl'
 
+// Pure QBTC address derivation from an ML-DSA public key. Exported so consumers
+// do not need to deep-import the canonical core-chain implementation.
+export { deriveQbtcAddress } from '@vultisig/core-chain/publicKey/address/deriveQbtcAddress'
+
 // Custom TOKEN id validation (as opposed to the address validation above).
 // Most chains identify a token by its address (contract/mint), but Sui uses a
 // Move struct tag and XRPL uses a composite currency.issuer id — this covers
