@@ -1,7 +1,7 @@
 import { EvmChain } from '@vultisig/core-chain/Chain'
 import { getEvmClient } from '@vultisig/core-chain/chains/evm/client'
 import { attempt } from '@vultisig/lib-utils/attempt'
-import { erc20Abi } from 'viem'
+import { encodeFunctionData, erc20Abi } from 'viem'
 
 import { AccountCoinKey } from '../../../coin/AccountCoin'
 import { Token } from '../../../coin/Coin'
@@ -29,13 +29,18 @@ export const isErc20AllowanceResetRequired = async ({
 }: IsErc20AllowanceResetRequiredInput) => {
   const publicClient = getEvmClient(chain)
 
+  // A raw eth_call rather than simulateContract: only revert vs. success
+  // matters here, and USDT-style `approve` returns no data, which decoding
+  // against the standard ERC-20 ABI would misreport as a failed call.
   const simulation = await attempt(() =>
-    publicClient.simulateContract({
-      address: id as `0x${string}`,
-      abi: erc20Abi,
-      functionName: 'approve',
-      args: [spender as `0x${string}`, amount],
+    publicClient.call({
       account: address as `0x${string}`,
+      to: id as `0x${string}`,
+      data: encodeFunctionData({
+        abi: erc20Abi,
+        functionName: 'approve',
+        args: [spender as `0x${string}`, amount],
+      }),
     })
   )
 
