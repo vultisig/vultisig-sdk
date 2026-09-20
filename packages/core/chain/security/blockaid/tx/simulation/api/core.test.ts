@@ -400,7 +400,7 @@ describe('parseBlockaidSolanaSimulation', () => {
     })
   })
 
-  it('drops the native SOL fee leg from a 3-diff simulation before netting', async () => {
+  it('includes fee-bearing native SOL movements in the complete net amount', async () => {
     const result = await parseBlockaidSolanaSimulation(
       buildSolanaSimulation([
         solDiff({ asset: nativeSolAsset, out: solSide('5000') }), // network fee
@@ -410,8 +410,96 @@ describe('parseBlockaidSolanaSimulation', () => {
     )
 
     expect(result).toMatchObject({
-      swap: { fromMint: WSOL_MINT, toMint: USDC_MINT, fromAmount: 1000000000n, toAmount: 150000000n },
+      swap: { fromMint: WSOL_MINT, toMint: USDC_MINT, fromAmount: 1000005000n, toAmount: 150000000n },
     })
+  })
+
+  const permutations = ([a, b, c]: [SolanaAssetDiff, SolanaAssetDiff, SolanaAssetDiff]) => [
+    [a, b, c],
+    [a, c, b],
+    [b, a, c],
+    [b, c, a],
+    [c, a, b],
+    [c, b, a],
+  ]
+
+  for (const nativeTag of ['asset', 'diff'] as const) {
+    for (const direction of ['receive', 'send'] as const) {
+      const receiving = direction === 'receive'
+      const principal = solDiff({
+        asset: nativeTag === 'asset' ? nativeSolAsset : { ...nativeSolAsset, type: 'TOKEN' },
+        asset_type: 'SOL',
+        in: receiving ? solSide('1000000000') : null,
+        out: receiving ? null : solSide('1000000000'),
+      })
+      const residual = solDiff({
+        asset: wsolAsset,
+        in: receiving ? null : solSide('2039280'),
+        out: receiving ? solSide('2039280') : null,
+      })
+      const sameDirectionToken = solDiff({
+        asset: usdcAsset,
+        in: receiving ? solSide('1000000') : null,
+        out: receiving ? null : solSide('1000000'),
+      })
+      it.each(permutations([principal, residual, sameDirectionToken]).map(diffs => [diffs]))(
+        `declines the reversed-${direction} counterexample with ${nativeTag}-level SOL metadata in every order (%#)`,
+        async diffs => {
+          await expect(parseBlockaidSolanaSimulation(buildSolanaSimulation(diffs))).rejects.toThrow(
+            'Invalid simulation data'
+          )
+        }
+      )
+      const oppositeToken = { ...sameDirectionToken, in: sameDirectionToken.out, out: sameDirectionToken.in }
+      it.each(permutations([principal, residual, oppositeToken]).map(diffs => [diffs]))(
+        `preserves the principal ${direction} for withdrawal/deposit with ${nativeTag}-level SOL metadata in every order (%#)`,
+        async diffs => {
+          const result = await parseBlockaidSolanaSimulation(buildSolanaSimulation(diffs))
+          expect(result).toEqual({
+            swap: {
+              fromMint: receiving ? USDC_MINT : WSOL_MINT,
+              toMint: receiving ? WSOL_MINT : USDC_MINT,
+              fromAmount: receiving ? 1000000n : 997960720n,
+              toAmount: receiving ? 997960720n : 1000000n,
+              toAssetDecimal: receiving ? 9 : 6,
+            },
+          })
+        }
+      )
+    }
+  }
+
+  it.each(['1', '5000', '100000', '10000000'])(
+    'does not discard a small native principal of %s lamports from a token swap',
+    async raw => {
+      for (const diffs of permutations([
+        solDiff({ asset: nativeSolAsset, out: solSide(raw) }),
+        solDiff({ asset: usdcAsset, out: solSide('1000000') }),
+        solDiff({ asset: { ...usdcAsset, address: 'AnotherMint' }, in: solSide('2000000') }),
+      ])) {
+        await expect(parseBlockaidSolanaSimulation(buildSolanaSimulation(diffs))).rejects.toThrow(
+          'Invalid simulation data'
+        )
+      }
+    }
+  )
+
+  it('retains same-mint fee-sized movements regardless of which native leg appears first', async () => {
+    for (const diffs of permutations([
+      solDiff({ asset: nativeSolAsset, out: solSide('5000') }),
+      solDiff({ asset: nativeSolAsset, out: solSide('1000000000') }),
+      solDiff({ asset: usdcAsset, in: solSide('150000000') }),
+    ])) {
+      expect(await parseBlockaidSolanaSimulation(buildSolanaSimulation(diffs))).toEqual({
+        swap: {
+          fromMint: WSOL_MINT,
+          toMint: USDC_MINT,
+          fromAmount: 1000005000n,
+          toAmount: 150000000n,
+          toAssetDecimal: 6,
+        },
+      })
+    }
   })
 
   it('emits a plain transfer for a single-mint send', async () => {
@@ -424,8 +512,8 @@ describe('parseBlockaidSolanaSimulation', () => {
 
   it('resolves native SOL to the WSOL mint via the diff-level asset_type even when asset.type disagrees (inconsistent Blockaid metadata)', async () => {
     // Some Blockaid responses carry asset_type: 'SOL' at the diff level while
-    // asset.type says 'TOKEN' with no address — mirrors the native-SOL-fee
-    // filter's own dual check a few lines above in the source.
+    // asset.type says 'TOKEN' with no address; the diff-level native tag
+    // still identifies the canonical SOL/WSOL group.
     const inconsistentNativeSol: SolanaAssetDiff['asset'] = {
       type: 'TOKEN',
       symbol: 'SOL',
