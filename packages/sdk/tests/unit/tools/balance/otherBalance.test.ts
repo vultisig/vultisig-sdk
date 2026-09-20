@@ -11,6 +11,10 @@ vi.mock('@/tools/balance/rpc', async () => {
   }
 })
 
+vi.mock('@vultisig/core-chain/chains/tron/queryTron', () => ({
+  queryTron: (path: string, options: { body: unknown }) => mockFetchJson(path, options.body),
+}))
+
 import {
   formatBalance,
   getCardanoBalance,

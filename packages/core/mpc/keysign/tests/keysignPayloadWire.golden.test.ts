@@ -66,18 +66,18 @@ const stakeRujiWireHex =
 // to serializer-path code (e.g. normalizeKeysignPayloadFromJson,
 // mapSwapPayload) that alters wire bytes for ANY fixture - not just the one
 // rich fixture pinned below - will fail here.
-const expectedCorpusDigest = '3588e2cb94a9a7c869dddcd09beabb7992aae5f8c7fc851eacdbb8fbd6260eec'
+const expectedCorpusDigest = '199ece7f7902e9cda2c78fbad707d96b8d2e4ac88a827417aad7ff4d6f9276cb'
 
 const expectedPerFileDigests: Record<string, string> = {
   'arb.json': 'b11f8989372fd8a51909c37b5da0d79138a647359685b916a2e905973d585e1f',
-  'bittensor.json': '5ea72af2b407caf4edc58daaf37fb414853aee1c38b99c7d8ddbc1c65ec73c74',
+  'bittensor.json': '9b999548eb83ed8aecdd831560e8bc7991f72c3f6b74e9069db769d66ad6b73b',
   'bsc.json': '123820d49abf4400c28d42789d9f5aee1191bd06ec5010cc800c360d53efbfb9',
   'cardano.json': '9b6946664b8c02fe093bddfe12b8755eb5d17af14c50279bb7856aafa3adf1f6',
   'cosmos-chain-matrix.json': 'dfab960ec87c6ef0f5d2524519ac66ef5921d2953de2844b17a8f470d4df34dc',
   'cosmos-sdk-sign-amino.json': '18b4811f7b03e6026c409445f1a37fc63a107842e15091de5af4f55e4c0c1a84',
   'cosmos-sdk-sign-direct.json': '658ce08b15e5f3d9fb0688ea44a93819064bcf1d3f7a996f435e1f73b607bd25',
   'cosmos.json': 'ec8f609e3ef9534f51fb03c3646787ca7df758ba1e0932d81c290c121f415f28',
-  'dot.json': 'af6442b0a6125d1681bd4aae90e660b602670da67f16af18108ce4640fb8d824',
+  'dot.json': '20741180c45be83ceda128c63045a18a1577553eb6ca157f9b50338abe81ae47',
   'evm-chain-matrix.json': '4e2619390c7ca2f8bf584b02c2880e4e42d21aaa855726d5c60e33d319e8b1d8',
   'evm.json': '3b61ed0c368f8afbae14536f45c18c24af8bcd726a3b0b048f2ca257025da216',
   'lifiswap.json': 'ed5b2c7c2626d70d31055996e756fedc45a654c3f3455f1e78ef35c406abc546',
@@ -105,7 +105,7 @@ describe('KeysignPayload protobuf wire contract', () => {
   it('serializes the complete mobile fixture corpus', () => {
     const serialized = fixtureCases.map(serializeFixture)
 
-    expect(serialized).toHaveLength(95)
+    expect(serialized).toHaveLength(97)
     expect(serialized.every(bytes => bytes.length > 0)).toBe(true)
   })
 

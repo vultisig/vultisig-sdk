@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
-  queryUrl: vi.fn(),
+  queryTron: vi.fn(),
 }))
 
-vi.mock('@vultisig/lib-utils/query/queryUrl', () => ({
-  queryUrl: mocks.queryUrl,
+vi.mock('@vultisig/core-chain/chains/tron/queryTron', () => ({
+  queryTron: mocks.queryTron,
 }))
 
 import { getTronBlockInfo } from './getTronBlockInfo'
@@ -25,14 +25,14 @@ const block = {
   },
 }
 
-const nowBlockUrl = expect.stringContaining('/wallet/getnowblock')
-const blockByNumUrl = expect.stringContaining('/wallet/getblockbynum')
+const nowBlockPath = '/wallet/getnowblock'
+const blockByNumPath = '/wallet/getblockbynum'
 
 describe('getTronBlockInfo', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
     vi.clearAllMocks()
-    mocks.queryUrl.mockResolvedValue(block)
+    mocks.queryTron.mockResolvedValue(block)
   })
 
   it('derives default timestamp and expiration from the fetched block header', async () => {
@@ -73,7 +73,7 @@ describe('getTronBlockInfo', () => {
 
   describe('incomplete getnowblock responses (#2270)', () => {
     it('surfaces the gateway message from a capital-E `Error` envelope on HTTP 200', async () => {
-      mocks.queryUrl.mockResolvedValue({
+      mocks.queryTron.mockResolvedValue({
         Error: 'class org.tron.core.exception.JsonRpcInvalidRequestException',
       })
 
@@ -83,25 +83,25 @@ describe('getTronBlockInfo', () => {
     })
 
     it('surfaces the gateway message from a lowercase `error` envelope', async () => {
-      mocks.queryUrl.mockResolvedValue({ error: 'upstream unavailable' })
+      mocks.queryTron.mockResolvedValue({ error: 'upstream unavailable' })
 
       await expect(getTronBlockInfo({})).rejects.toThrow('getnowblock failed: upstream unavailable')
     })
 
     it('rejects a response without block_header.raw_data', async () => {
-      mocks.queryUrl.mockResolvedValue({ blockID: '00'.repeat(32) })
+      mocks.queryTron.mockResolvedValue({ blockID: '00'.repeat(32) })
 
       await expect(getTronBlockInfo({})).rejects.toThrow('getnowblock: response missing block_header.raw_data')
     })
 
     it('rejects a response without blockID', async () => {
-      mocks.queryUrl.mockResolvedValue({ block_header: block.block_header })
+      mocks.queryTron.mockResolvedValue({ block_header: block.block_header })
 
       await expect(getTronBlockInfo({})).rejects.toThrow('getnowblock: response missing block_header.raw_data')
     })
 
     it('rejects a partial raw_data instead of zeroing the TAPOS header', async () => {
-      mocks.queryUrl.mockResolvedValue({
+      mocks.queryTron.mockResolvedValue({
         blockID: '00'.repeat(32),
         block_header: { raw_data: { timestamp: blockTimestamp } },
       })
@@ -112,7 +112,7 @@ describe('getTronBlockInfo', () => {
     })
 
     it('rejects when a single header field is null', async () => {
-      mocks.queryUrl.mockResolvedValue({
+      mocks.queryTron.mockResolvedValue({
         ...block,
         block_header: {
           raw_data: { ...block.block_header.raw_data, txTrieRoot: null },
@@ -129,13 +129,13 @@ describe('getTronBlockInfo', () => {
       ['a string', 'ok'],
       ['a number', 200],
     ])('rejects a %s body instead of dereferencing it', async (_label, body) => {
-      mocks.queryUrl.mockResolvedValue(body)
+      mocks.queryTron.mockResolvedValue(body)
 
       await expect(getTronBlockInfo({})).rejects.toThrow('getnowblock: response is not an object')
     })
 
     it('rejects an empty blockID', async () => {
-      mocks.queryUrl.mockResolvedValue({ ...block, blockID: '' })
+      mocks.queryTron.mockResolvedValue({ ...block, blockID: '' })
 
       await expect(getTronBlockInfo({})).rejects.toThrow('getnowblock: response missing block_header.raw_data')
     })
@@ -160,9 +160,11 @@ describe('getTronBlockInfo', () => {
       ['a 20-byte witness_address', { witness_address: '03'.repeat(20) }, 'witness_address'],
       ['a base58 witness_address', { witness_address: 'TJRabPrwbZy45sbavfcjinPJC18kjpRTv8' }, 'witness_address'],
     ])('rejects %s', async (_label, override, field) => {
-      mocks.queryUrl.mockResolvedValue({
+      mocks.queryTron.mockResolvedValue({
         ...block,
-        block_header: { raw_data: { ...block.block_header.raw_data, ...override } },
+        block_header: {
+          raw_data: { ...block.block_header.raw_data, ...override },
+        },
       })
 
       await expect(getTronBlockInfo({})).rejects.toThrow(
@@ -171,7 +173,7 @@ describe('getTronBlockInfo', () => {
     })
 
     it('accepts upper-case hex header fields', async () => {
-      mocks.queryUrl.mockResolvedValue({
+      mocks.queryTron.mockResolvedValue({
         ...block,
         block_header: {
           raw_data: {
@@ -191,13 +193,17 @@ describe('getTronBlockInfo', () => {
     })
 
     it('does not treat an empty error field as a failure', async () => {
-      mocks.queryUrl.mockResolvedValue({ ...block, Error: '' })
+      mocks.queryTron.mockResolvedValue({ ...block, Error: '' })
 
-      await expect(getTronBlockInfo({})).resolves.toMatchObject({ blockHeaderNumber: 99_000_000 })
+      await expect(getTronBlockInfo({})).resolves.toMatchObject({
+        blockHeaderNumber: 99_000_000,
+      })
     })
 
     it('serialises a non-string error envelope', async () => {
-      mocks.queryUrl.mockResolvedValue({ error: { code: 503, message: 'busy' } })
+      mocks.queryTron.mockResolvedValue({
+        error: { code: 503, message: 'busy' },
+      })
 
       await expect(getTronBlockInfo({})).rejects.toThrow('getnowblock failed: {"code":503,"message":"busy"}')
     })
@@ -221,18 +227,21 @@ describe('getTronBlockInfo', () => {
     }
 
     it('returns the resolved ref block header', async () => {
-      mocks.queryUrl.mockImplementation(async (url: string) => (url.includes('getblockbynum') ? refBlock : block))
+      mocks.queryTron.mockImplementation(async (url: string) => (url.includes('getblockbynum') ? refBlock : block))
 
       await expect(getTronBlockInfo({ refBlockBytesHex, refBlockHashHex })).resolves.toMatchObject({
         blockHeaderNumber: 98_975_552,
         blockHeaderTimestamp: blockTimestamp - 1,
       })
-      expect(mocks.queryUrl).toHaveBeenCalledWith(nowBlockUrl, expect.anything())
-      expect(mocks.queryUrl).toHaveBeenCalledWith(blockByNumUrl, expect.objectContaining({ body: { num: 98_975_552 } }))
+      expect(mocks.queryTron).toHaveBeenCalledWith(nowBlockPath, expect.anything())
+      expect(mocks.queryTron).toHaveBeenCalledWith(
+        blockByNumPath,
+        expect.objectContaining({ body: { num: 98_975_552 } })
+      )
     })
 
     it('rejects a partial getblockbynum response instead of zeroing the header', async () => {
-      mocks.queryUrl.mockImplementation(async (url: string) =>
+      mocks.queryTron.mockImplementation(async (url: string) =>
         url.includes('getblockbynum')
           ? {
               blockID: refBlock.blockID,
@@ -247,7 +256,7 @@ describe('getTronBlockInfo', () => {
     })
 
     it('surfaces a gateway error envelope from getblockbynum', async () => {
-      mocks.queryUrl.mockImplementation(async (url: string) =>
+      mocks.queryTron.mockImplementation(async (url: string) =>
         url.includes('getblockbynum') ? { Error: 'block not found' } : block
       )
 

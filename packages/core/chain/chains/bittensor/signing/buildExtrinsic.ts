@@ -12,8 +12,15 @@ import { decodeAddress } from '@polkadot/util-crypto'
 
 import { compactEncode, concatBytes, encodeMortalEra, hexToBytes } from './scale'
 
-/** Bittensor Balances.transfer_allow_death call indices (allows full balance send) */
+/**
+ * Bittensor pallet_balances call indices (live-verified against finney
+ * metadata, specVersion 458). `transfer_keep_alive` refuses to take the
+ * sender's free balance below the existential deposit, so a normal send can
+ * never reap the account; `transfer_allow_death` is only for a deliberate
+ * emptying of the account and destroys whatever dust it leaves behind.
+ */
 const balancesPallet = 5
+const transferKeepAlive = 3
 const transferAllowDeath = 0
 
 const multiAddressId = 0x00
@@ -30,15 +37,22 @@ export type BittensorSigningParams = {
   specVersion: number
   transactionVersion: number
   eraPeriod?: number
+  /**
+   * Encode `transfer_allow_death` instead of the default `transfer_keep_alive`.
+   * Only for an explicit "empty the account" send: the chain then reaps the
+   * sender once its balance drops below the existential deposit.
+   */
+  allowDeath?: boolean
 }
 
 /**
- * Build the call data for balances.transfer_allow_death(dest, value)
+ * Build the call data for balances.transfer_keep_alive(dest, value), or
+ * balances.transfer_allow_death(dest, value) when the sender opted into reaping.
  */
-const buildCallData = (toAddress: string, amount: bigint): Uint8Array => {
+const buildCallData = (toAddress: string, amount: bigint, allowDeath: boolean): Uint8Array => {
   const destPubkey = decodeAddress(toAddress)
   return concatBytes(
-    new Uint8Array([balancesPallet, transferAllowDeath]),
+    new Uint8Array([balancesPallet, allowDeath ? transferAllowDeath : transferKeepAlive]),
     new Uint8Array([multiAddressId]),
     destPubkey,
     compactEncode(amount)
@@ -91,7 +105,7 @@ const buildAdditionalSigned = (params: BittensorSigningParams): Uint8Array => {
 export const buildBittensorSigningPayload = (
   params: BittensorSigningParams
 ): { callData: Uint8Array; signedExtra: Uint8Array; payload: Uint8Array } => {
-  const callData = buildCallData(params.toAddress, params.amount)
+  const callData = buildCallData(params.toAddress, params.amount, params.allowDeath ?? false)
   const signedExtra = buildSignedExtra(params.nonce, params.blockNumber, params.eraPeriod ?? 64)
   const additionalSigned = buildAdditionalSigned(params)
 

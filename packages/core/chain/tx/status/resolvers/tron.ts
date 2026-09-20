@@ -1,9 +1,7 @@
 import { Chain, OtherChain } from '@vultisig/core-chain/Chain'
+import { queryTron } from '@vultisig/core-chain/chains/tron/queryTron'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
-import { attempt } from '@vultisig/lib-utils/attempt'
-import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
-import { tronRpcUrl } from '../../../chains/tron/config'
 import { TxStatusResolver } from '../resolver'
 
 // Terminal failure codes for ResourceReceipt.result (core/Tron.proto field 7, contractResult enum).
@@ -63,11 +61,9 @@ type TronRawTxResponse = {
 }
 
 const getUnconfirmedTronStatus = async ({ hash, infoIsKnown }: { hash: string; infoIsKnown: boolean }) => {
-  const { data: rawTx } = await attempt(
-    queryUrl<TronRawTxResponse>(`${tronRpcUrl}/wallet/gettransactionbyid`, {
-      body: { value: hash },
-    })
-  )
+  const rawTx = await queryTron<TronRawTxResponse>('/wallet/gettransactionbyid', {
+    body: { value: hash },
+  })
 
   const rawTxMatchesHash = rawTx?.txID?.toLowerCase() === hash.toLowerCase()
   if (!rawTxMatchesHash) {
@@ -85,17 +81,11 @@ const getUnconfirmedTronStatus = async ({ hash, infoIsKnown }: { hash: string; i
 }
 
 export const getTronTxStatus: TxStatusResolver<OtherChain.Tron> = async ({ hash }) => {
-  const url = `${tronRpcUrl}/wallet/gettransactioninfobyid`
+  const url = '/wallet/gettransactioninfobyid'
 
-  const { data: tx, error } = await attempt(
-    queryUrl<TronTxInfoResponse>(url, {
-      body: { value: hash },
-    })
-  )
-
-  if (error || !tx) {
-    return { status: 'pending', isKnown: false }
-  }
+  const tx = await queryTron<TronTxInfoResponse>(url, {
+    body: { value: hash },
+  })
 
   if (!tx.id) {
     return getUnconfirmedTronStatus({ hash, infoIsKnown: false })

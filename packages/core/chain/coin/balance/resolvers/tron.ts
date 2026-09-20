@@ -1,19 +1,18 @@
 import { decodeTronAddress } from '@vultisig/core-chain/chains/tron/address'
-import { tronRpcUrl } from '@vultisig/core-chain/chains/tron/config'
+import { queryTron } from '@vultisig/core-chain/chains/tron/queryTron'
 import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
-import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { CoinBalanceResolver } from '../resolver'
 
 export const getTronCoinBalance: CoinBalanceResolver = async input => {
   if (isFeeCoin(input)) {
-    const data = await queryUrl<{
+    const data = await queryTron<{
       result?: { balance?: string }
       balance?: string
       Error?: string
       error?: string
-    }>(`${tronRpcUrl}/wallet/getaccount`, {
+    }>('/wallet/getaccount', {
       body: {
         address: input.address,
         visible: true,
@@ -99,9 +98,9 @@ async function intRpcCall(method: string, params: any[]): Promise<bigint> {
 }
 
 async function sendRPCRequest<T>(method: string, params: any[], decode: (result: any) => T): Promise<T> {
-  const rpcEndpoint = 'https://api.trongrid.io/jsonrpc'
+  const rpcEndpoint = '/jsonrpc'
 
-  const { error, result } = await queryUrl<{
+  const { error, result } = await queryTron<{
     error?: { code?: number; message?: string }
     result?: any
   }>(rpcEndpoint, {

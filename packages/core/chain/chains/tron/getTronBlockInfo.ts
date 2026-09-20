@@ -1,6 +1,4 @@
-import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
-
-import { tronRpcUrl } from './config'
+import { queryTron } from '@vultisig/core-chain/chains/tron/queryTron'
 
 type TronBlockHeaderRawData = {
   timestamp: number
@@ -75,7 +73,9 @@ const tronAddressByteLength = 21
 // Numeric fields must be finite numbers (a string `timestamp` would turn the
 // default `expiration` into string concatenation) and identifier fields must
 // be well-formed hex (an empty `txTrieRoot` / `parentHash` still signs).
-const rawDataFieldValidators: { [K in keyof TronBlockHeaderRawData]: (value: unknown) => boolean } = {
+const rawDataFieldValidators: {
+  [K in keyof TronBlockHeaderRawData]: (value: unknown) => boolean
+} = {
   timestamp: isFiniteNumber,
   number: isFiniteNumber,
   version: isFiniteNumber,
@@ -94,9 +94,10 @@ const describeResponse = (response: unknown) => JSON.stringify(response)?.slice(
  * header still signs (spending the full MPC ceremony, including a Fast-Vault
  * server co-sign) and can only fail on broadcast with TAPOS_ERROR.
  *
- * `queryUrl` only asserts the HTTP status, so `response` is treated as
- * untrusted JSON here: it may be `null`, a primitive, or carry wrong-typed
- * fields, and every one of those must surface as a controlled error.
+ * `queryTron` rejects non-object bodies, error envelopes and a missing
+ * `block_header`, but not wrong-typed or malformed header fields, so
+ * `response` is still treated as untrusted JSON here and every defect must
+ * surface as a controlled error.
  */
 const assertCompleteTronBlock = (response: RawTronBlockResponse | null | undefined, endpoint: string): TronBlock => {
   if (typeof response !== 'object' || response === null) {
@@ -125,14 +126,14 @@ const assertCompleteTronBlock = (response: RawTronBlockResponse | null | undefin
 }
 
 const getNowBlock = async (): Promise<TronBlock> => {
-  const response = await queryUrl<RawTronBlockResponse>(`${tronRpcUrl}/wallet/getnowblock`, {
+  const response = await queryTron<RawTronBlockResponse>('/wallet/getnowblock', {
     body: {},
   })
   return assertCompleteTronBlock(response, 'getnowblock')
 }
 
 const getBlockByNum = async (num: number): Promise<TronBlock> => {
-  const response = await queryUrl<RawTronBlockResponse>(`${tronRpcUrl}/wallet/getblockbynum`, {
+  const response = await queryTron<RawTronBlockResponse>('/wallet/getblockbynum', {
     body: { num },
   })
   return assertCompleteTronBlock(response, 'getblockbynum')
