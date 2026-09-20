@@ -82,7 +82,7 @@ export const getBittensorSigningInputs = ({
     allowDeath,
   }
 
-  const { callData, signedExtra, payload } = buildBittensorSigningPayload(params)
+  const { callData, signedExtra, payload } = buildBittensorSigningPayload(params, walletCore)
 
   return [encodeBittensorTxInput(callData, signedExtra, payload)]
 }
