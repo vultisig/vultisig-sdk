@@ -7,6 +7,7 @@ import { describe, expect, expectTypeOf, it } from 'vitest'
 import * as tronAbi from '../../../src/abi/tron'
 import * as sdk from '../../../src/index'
 import * as tools from '../../../src/tools'
+import * as bridge from '../../../src/tools/bridge'
 import * as stakekit from '../../../src/tools/defi/stakekit'
 import * as threeJane from '../../../src/tools/defi/threeJane'
 import * as dangerousAddresses from '../../../src/utils/dangerousAddresses'
@@ -103,6 +104,12 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.computeEip712Hash).toBe('function')
     expect(typeof sdk.toCanonicalEvmSignature).toBe('function')
     expect(sdk.coerceEip712ChainId('0x89')).toBe(137)
+  })
+
+  it('exports the canonical CCTP burn-identity helpers and result type', () => {
+    expect(sdk.decodeCctpBurnMessage).toBe(bridge.decodeCctpBurnMessage)
+    expect(sdk.getCctpChainNameByDomain).toBe(bridge.getCctpChainNameByDomain)
+    expectTypeOf<sdk.CctpBurnMessage>().toEqualTypeOf<bridge.CctpBurnMessage>()
   })
 
   it('exports the hardened toChainAmount helper and error class with scientific-notation support', () => {

@@ -174,10 +174,13 @@ function validatePackedReactNativePublicHelpers(packageRoot) {
     'tronBase58ToHex',
     'tronHexToBase58',
     'encodeTrc20TransferParam',
+    'decodeCctpBurnMessage',
+    'getCctpChainNameByDomain',
   ]) {
     assert.ok(runtimeSource.includes(symbol), `react-native bundle exports ${symbol}`)
     assert.ok(declarationSource.includes(symbol), `react-native types export ${symbol}`)
   }
+  assert.ok(declarationSource.includes('CctpBurnMessage'), 'react-native types export CctpBurnMessage')
 }
 
 function validatePackedReactNativeRuntimeExports(packageRoot) {
@@ -186,7 +189,14 @@ function validatePackedReactNativeRuntimeExports(packageRoot) {
   const exportedNames = ast.body
     .filter(statement => statement.type === 'ExportNamedDeclaration')
     .flatMap(statement => statement.specifiers.map(specifier => specifier.exported.name))
-  for (const name of ['resolveTokenRef', 'resolveTokenRefId', 'getTxStatus', 'amount']) {
+  for (const name of [
+    'resolveTokenRef',
+    'resolveTokenRefId',
+    'getTxStatus',
+    'amount',
+    'decodeCctpBurnMessage',
+    'getCctpChainNameByDomain',
+  ]) {
     assert.ok(exportedNames.includes(name), `packed React Native runtime must export ${name}`)
   }
   console.log('SDK packed React Native runtime export bindings passed (artifact check, not device execution)')
@@ -556,6 +566,8 @@ instance.amount = amount
 // @ts-expect-error the React Native instance exposes a getter only
 rnInstance.amount = rnAmount
 import {
+  decodeCctpBurnMessage,
+  getCctpChainNameByDomain,
   encodeTrc20TransferParam,
   tronBase58ToEvmHex,
   tronBase58ToHex,
@@ -579,6 +591,7 @@ import type {
   ChainExtensionRecord,
   ChainKind,
   ExtendedChainRegistry,
+  CctpBurnMessage,
   ResolvedTokenInfo,
 } from '@vultisig/sdk'
 import type {
@@ -587,6 +600,8 @@ import type {
 } from '@vultisig/sdk/react-native'
 import {
   encodeTrc20TransferParam as encodeTrc20TransferParamReactNative,
+  decodeCctpBurnMessage as decodeCctpBurnMessageReactNative,
+  getCctpChainNameByDomain as getCctpChainNameByDomainReactNative,
   tronBase58ToEvmHex as tronBase58ToEvmHexReactNative,
   tronBase58ToHex as tronBase58ToHexReactNative,
   tronHexToBase58 as tronHexToBase58ReactNative,
@@ -594,6 +609,7 @@ import {
   buildSignDirectKeysignPayload as buildSignDirectKeysignPayloadReactNative,
   type BuildSignAminoPayloadInput as BuildSignAminoPayloadInputReactNative,
   type BuildSignDirectPayloadInput as BuildSignDirectPayloadInputReactNative,
+  type CctpBurnMessage as CctpBurnMessageReactNative,
   resolveTokenRef as resolveTokenRefReactNative,
   resolveTokenRefId as resolveTokenRefIdReactNative,
   getTxStatus as getTxStatusReactNative,
@@ -649,6 +665,18 @@ const tronEncoders: ((address: string, amount: string) => string)[] = [
 ]
 void tronConverters
 void tronEncoders
+
+const cctpMessage = ('0x' + '00'.repeat(248)) as \`0x\${string}\`
+const cctpDecoders: ((message: \`0x\${string}\`) => CctpBurnMessage)[] = [
+  decodeCctpBurnMessage,
+  decodeCctpBurnMessageReactNative,
+]
+const cctpDomainLookups: ((domain: number) => string | undefined)[] = [
+  getCctpChainNameByDomain,
+  getCctpChainNameByDomainReactNative,
+]
+const cctpReactNativeMessage: CctpBurnMessageReactNative = cctpDecoders[0](cctpMessage)
+void [cctpDomainLookups, cctpReactNativeMessage]
 
 const descriptor: ChainDescriptor = chainRegistry[Chain.Ethereum]
 const registry: ChainDescriptorRegistry = chainRegistry

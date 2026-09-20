@@ -10,6 +10,7 @@ import type {
   PollTxStatusUntilFinalResult as PollTxStatusUntilFinalResultFromReactNative,
 } from '../../../../src/platforms/react-native/index'
 import * as sdkRn from '../../../../src/platforms/react-native/index'
+import * as bridge from '../../../../src/tools/bridge'
 import * as recipientChecks from '../../../../src/tools/validate/recipientSanity'
 import type {
   PollTxStatusUntilFinalParams as PollTxStatusUntilFinalParamsFromTx,
@@ -144,6 +145,12 @@ beforeAll(async () => {
 }, 120_000)
 
 describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
+  it('exports the canonical CCTP burn-identity helpers and result type', () => {
+    expect(reactNativeEntry.decodeCctpBurnMessage).toBe(bridge.decodeCctpBurnMessage)
+    expect(reactNativeEntry.getCctpChainNameByDomain).toBe(bridge.getCctpChainNameByDomain)
+    expectTypeOf<sdkRn.CctpBurnMessage>().toEqualTypeOf<bridge.CctpBurnMessage>()
+  })
+
   it('exports the strict chain-ID resolver by identity with its string-only signature', () => {
     expect(reactNativeEntry.resolveChainIdReference).toBe(resolveChainIdReference)
     expectTypeOf(sdkRn.resolveChainIdReference).toEqualTypeOf<(chainId: string) => sdkRn.Chain | undefined>()

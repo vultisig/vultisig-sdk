@@ -6,9 +6,11 @@ import {
   buildCctpClaim,
   cctpChains,
   cctpSupportedChains,
+  decodeCctpBurnMessage,
   extractCctpMessageFromReceipt,
   formatUsdc,
   getCctpChain,
+  getCctpChainNameByDomain,
   normalizeHexBytes,
   parseUsdcAmount,
 } from '../../src/tools/bridge'
@@ -297,6 +299,39 @@ function validBurnMessage(overrides: Partial<Parameters<typeof buildCctpMessage>
     ...overrides,
   })
 }
+
+describe('decodeCctpBurnMessage', () => {
+  it('decodes the complete V1 burn identity and reverse-resolves its domains', () => {
+    const message = validBurnMessage({ nonce: 42n, amount: 12_500_000n })
+    const burn = decodeCctpBurnMessage(message)
+
+    expect(burn).toEqual({
+      version: 0,
+      sourceDomain: cctpChains.Ethereum!.domain,
+      destinationDomain: cctpChains.Base!.domain,
+      nonce: 42n,
+      sender: cctpChains.Ethereum!.tokenMessenger.toLowerCase(),
+      recipient: cctpChains.Base!.tokenMessenger.toLowerCase(),
+      destinationCaller: CCTP_ZERO_ADDRESS,
+      bodyVersion: 0,
+      burnToken: cctpChains.Ethereum!.usdc.toLowerCase(),
+      mintRecipient: CCTP_RECIPIENT.toLowerCase(),
+      amount: 12_500_000n,
+      messageSender: cctpChains.Ethereum!.tokenMessenger.toLowerCase(),
+    })
+    expect(getCctpChainNameByDomain(burn.sourceDomain)).toBe('Ethereum')
+    expect(getCctpChainNameByDomain(burn.destinationDomain)).toBe('Base')
+    expect(getCctpChainNameByDomain(999_999)).toBeUndefined()
+  })
+
+  it('rejects malformed length and unsupported envelope or body versions', () => {
+    expect(() => decodeCctpBurnMessage('0x00')).toThrow(/expected exactly 248 bytes/)
+    expect(() => decodeCctpBurnMessage(validBurnMessage({ version: 1 }))).toThrow(/unsupported CCTP message version 1/)
+    expect(() => decodeCctpBurnMessage(validBurnMessage({ bodyVersion: 1 }))).toThrow(
+      /unsupported CCTP burn-message body version 1/
+    )
+  })
+})
 
 describe('buildCctpClaim', () => {
   it('accepts a genuinely matching message and surfaces the decoded burn identity', () => {
