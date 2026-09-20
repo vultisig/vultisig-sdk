@@ -7,6 +7,7 @@ import { describe, expect, expectTypeOf, it } from 'vitest'
 import * as tronAbi from '../../../src/abi/tron'
 import * as sdk from '../../../src/index'
 import * as tools from '../../../src/tools'
+import { parseAuthAccount as canonicalParseAuthAccount } from '../../../src/tools/cosmos/account'
 import * as stakekit from '../../../src/tools/defi/stakekit'
 import * as threeJane from '../../../src/tools/defi/threeJane'
 import * as dangerousAddresses from '../../../src/utils/dangerousAddresses'
@@ -31,6 +32,19 @@ const dangerousAddressCanonicalExports = [
 ] as const
 
 describe('@vultisig/sdk public exports', () => {
+  it('exports the canonical Cosmos auth-account parser from flat and namespace surfaces', () => {
+    expectTypeOf(sdk.parseAuthAccount).toEqualTypeOf<
+      (response: sdk.AuthAccountResponse) => sdk.ParsedAuthAccount | null
+    >()
+    expect(sdk.parseAuthAccount).toBe(canonicalParseAuthAccount)
+    expect(tools.parseAuthAccount).toBe(canonicalParseAuthAccount)
+    expect(sdk.cosmos.parseAuthAccount).toBe(canonicalParseAuthAccount)
+    expect(sdk.parseAuthAccount({ account: { account_number: '12', sequence: '3' } })).toEqual({
+      accountNumber: '12',
+      sequence: '3',
+    })
+  })
+
   it('exports the strict chain-ID resolver by identity with its string-only signature', () => {
     expect(sdk.resolveChainIdReference).toBe(resolveChainIdReference)
     expectTypeOf(sdk.resolveChainIdReference).toEqualTypeOf<(chainId: string) => sdk.Chain | undefined>()

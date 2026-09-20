@@ -1357,6 +1357,7 @@ MIT License - see [LICENSE](./LICENSE) file for details.
 ---
 
 **Built with ❤️ by the Vultisig team**
+
 ## Transaction preparation imports
 
 `@vultisig/sdk/tools/prep` exposes the canonical vault-free transaction builders
@@ -1389,3 +1390,27 @@ React Native retains deferred asynchronous wrappers for `buildSplTransfer`,
 declarations describe these Promise returns and preserve the canonical inputs;
 use TypeScript's `customConditions: ["react-native"]` with NodeNext or bundler
 module resolution. Pure staking and CosmWasm message builders remain synchronous.
+
+## Cosmos auth-account parsing
+
+`parseAuthAccount` reads the account number and transaction sequence from the
+BaseAccount, `base_account` wrapper, and vesting-account shapes returned by the
+Cosmos auth LCD endpoint. It is available as both a named export and through the
+Cosmos namespace in the root and React Native builds:
+
+```ts
+import { cosmos, parseAuthAccount, type AuthAccountResponse } from '@vultisig/sdk'
+
+const response: AuthAccountResponse = await fetch(`${lcdRoot}/cosmos/auth/v1beta1/accounts/${address}`).then(result =>
+  result.json()
+)
+
+const state = parseAuthAccount(response)
+const sameState = cosmos.parseAuthAccount(response)
+```
+
+The helper preserves decimal strings exactly, converts numeric fields to strings,
+and returns `null` for incomplete or unsupported account shapes. It does not
+validate uint64 ranges or default missing values to zero; callers should decide
+how to handle a missing account separately from a populated shape that cannot be
+parsed.

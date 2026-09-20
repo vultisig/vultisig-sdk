@@ -167,11 +167,13 @@ export {
   symbolFromCoinGeckoId,
 } from './price'
 
-// Cosmos governance (read proposals + build unsigned MsgVote envelope)
+// Cosmos account parsing and governance (read proposals + build unsigned MsgVote envelope)
 import * as cosmos from './cosmos'
 
 export { cosmos }
 export type {
+  AuthAccountFields,
+  AuthAccountResponse,
   CosmosVoteEnvelope,
   GetCosmosGovernanceProposalsParams,
   GetGovernanceProposalsResult,
@@ -179,12 +181,13 @@ export type {
   GovChainId,
   GovChainInput,
   GovernanceProposal,
+  ParsedAuthAccount,
   PrepareCosmosVoteParams,
   ProposalStatus,
   VoteOption,
   VoteTally,
 } from './cosmos'
-export { getCosmosGovernanceProposals, prepareCosmosVote } from './cosmos'
+export { getCosmosGovernanceProposals, parseAuthAccount, prepareCosmosVote } from './cosmos'
 
 // Swap
 export type {

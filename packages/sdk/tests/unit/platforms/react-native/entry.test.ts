@@ -348,6 +348,10 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
 
     expect(sdk.balance.getEvmBalances).toBe(rn.getEvmBalances)
     expect(sdk.bridge.buildCctpBridge).toBe(rn.buildCctpBridge)
+    expectTypeOf(rn.parseAuthAccount).toEqualTypeOf<
+      (response: sdkRn.AuthAccountResponse) => sdkRn.ParsedAuthAccount | null
+    >()
+    expect(sdk.cosmos.parseAuthAccount).toBe(rn.parseAuthAccount)
     expect(sdk.cosmos.gov.getCosmosGovernanceProposals).toBe(rn.getCosmosGovernanceProposals)
     expect(sdk.decode.fromToolResult).toBe(rn.decodeFromToolResult)
     expect(sdk.gas.compareCosts).toBe(rn.compareCosts)

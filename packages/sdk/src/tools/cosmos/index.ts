@@ -2,6 +2,8 @@
 import * as gov from './gov'
 
 export { gov }
+export type { AuthAccountFields, AuthAccountResponse, ParsedAuthAccount } from './account'
+export { parseAuthAccount } from './account'
 export type {
   CosmosVoteEnvelope,
   GetCosmosGovernanceProposalsParams,

@@ -24,6 +24,8 @@ import { getCosmosChainHrp } from '@vultisig/core-chain/chains/cosmos/cosmosHrp'
 import { cosmosRpcUrl } from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
 import { decodeBech32 } from '@vultisig/core-chain/utils/decodeBech32'
 
+import { type AuthAccountResponse, parseAuthAccount } from './account'
+
 // ── chain support ──────────────────────────────────────────────────────────
 
 type GovernanceOnlyChain = 'Celestia' | 'Injective' | 'Neutron' | 'Sei' | 'Stride'
@@ -243,18 +245,6 @@ type GovV1Beta1Response = {
   }>
 }
 
-type AuthAccountResponse = {
-  account?: {
-    account_number?: string | number
-    sequence?: string | number
-    base_account?: { account_number?: string | number; sequence?: string | number }
-    base_vesting_account?: {
-      base_account?: { account_number?: string | number; sequence?: string | number }
-    }
-    [key: string]: unknown
-  }
-}
-
 // ── fetch helper (raw fetch — works in RN + Node + browser) ──────────────────
 
 type FetchOpts = { fetchImpl?: typeof fetch; signal?: AbortSignal }
@@ -327,38 +317,6 @@ async function fetchProposalsV1Beta1(
 
 const isNotImplemented = (msg: string): boolean =>
   msg.includes('404') || msg.includes('501') || msg.includes('Not Found') || msg.includes('Not Implemented')
-
-// ── auth account parser ──────────────────────────────────────────────────────
-
-/**
- * Walk the three known account nesting shapes (vesting → module → base) and
- * return account_number/sequence. Returns null on unknown/incomplete shape so
- * the caller can fail closed rather than ship a vote with sequence=0 against a
- * funded account (which the chain rejects with code 32 "sequence mismatch").
- */
-function parseAuthAccount(resp: AuthAccountResponse): { accountNumber: string; sequence: string } | null {
-  const acct = resp.account
-  if (!acct) return null
-
-  const vesting = acct.base_vesting_account?.base_account
-  if (vesting?.account_number != null) {
-    if (vesting.sequence == null) return null
-    return { accountNumber: String(vesting.account_number), sequence: String(vesting.sequence) }
-  }
-
-  const moduleBase = acct.base_account
-  if (moduleBase?.account_number != null) {
-    if (moduleBase.sequence == null) return null
-    return { accountNumber: String(moduleBase.account_number), sequence: String(moduleBase.sequence) }
-  }
-
-  if (acct.account_number != null) {
-    if (acct.sequence == null) return null
-    return { accountNumber: String(acct.account_number), sequence: String(acct.sequence) }
-  }
-
-  return null
-}
 
 // ── public: read proposals ───────────────────────────────────────────────────
 
