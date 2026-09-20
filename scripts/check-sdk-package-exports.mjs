@@ -167,6 +167,8 @@ function validatePackedReactNativePublicHelpers(packageRoot) {
   const declarationSource = readFileSync(declarationsPath, 'utf8')
 
   for (const symbol of [
+    'CosmosSequenceMismatchError',
+    'toCosmosSequenceMismatchError',
     'getTxStatus',
     'buildSignAminoKeysignPayload',
     'buildSignDirectKeysignPayload',
@@ -186,7 +188,14 @@ function validatePackedReactNativeRuntimeExports(packageRoot) {
   const exportedNames = ast.body
     .filter(statement => statement.type === 'ExportNamedDeclaration')
     .flatMap(statement => statement.specifiers.map(specifier => specifier.exported.name))
-  for (const name of ['resolveTokenRef', 'resolveTokenRefId', 'getTxStatus', 'amount']) {
+  for (const name of [
+    'CosmosSequenceMismatchError',
+    'toCosmosSequenceMismatchError',
+    'resolveTokenRef',
+    'resolveTokenRefId',
+    'getTxStatus',
+    'amount',
+  ]) {
     assert.ok(exportedNames.includes(name), `packed React Native runtime must export ${name}`)
   }
   console.log('SDK packed React Native runtime export bindings passed (artifact check, not device execution)')
@@ -586,6 +595,8 @@ import type {
   ExtendedChainRegistry as ReactNativeExtendedChainRegistry,
 } from '@vultisig/sdk/react-native'
 import {
+  CosmosSequenceMismatchError as CosmosSequenceMismatchErrorReactNative,
+  toCosmosSequenceMismatchError as toCosmosSequenceMismatchErrorReactNative,
   encodeTrc20TransferParam as encodeTrc20TransferParamReactNative,
   tronBase58ToEvmHex as tronBase58ToEvmHexReactNative,
   tronBase58ToHex as tronBase58ToHexReactNative,
@@ -659,6 +670,16 @@ export const resolvedToken: ResolvedTokenInfo = resolveTokenRef(Chain.Ethereum, 
 export const resolvedTokenId: string | undefined = resolveTokenRefId(Chain.Ethereum, 'USDC', [])
 export const resolvedTokenReactNative: ResolvedTokenInfoReactNative = resolveTokenRefReactNative(Chain.Ethereum, undefined, [])
 export const resolvedTokenIdReactNative: string | undefined = resolveTokenRefIdReactNative(Chain.Ethereum, 'USDC', [])
+const sequenceErrorReactNative = toCosmosSequenceMismatchErrorReactNative(
+  'Broadcasting transaction failed with code 32 (codespace: sdk). Log: account sequence mismatch, expected 255, got 254: incorrect account sequence'
+)
+if (sequenceErrorReactNative) {
+  const expectedSequence: bigint = sequenceErrorReactNative.expectedSequence
+  const signedSequence: bigint = sequenceErrorReactNative.signedSequence
+  const recovery: 'resign' | 'wait' = sequenceErrorReactNative.recovery
+  const typed: boolean = sequenceErrorReactNative instanceof CosmosSequenceMismatchErrorReactNative
+  void [expectedSequence, signedSequence, recovery, typed]
+}
 
 export type RootChain = Chain
 export type NodeClient = Vultisig

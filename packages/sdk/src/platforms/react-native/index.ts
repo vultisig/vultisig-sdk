@@ -102,6 +102,10 @@ export {
   TERRA_CLASSIC_STAKING_ULUNA_FEE_BASE_UNITS,
 } from '@vultisig/core-chain/chains/cosmos/gas'
 export { tendermintRpcUrl } from '@vultisig/core-chain/chains/cosmos/tendermintRpcUrl'
+export {
+  CosmosSequenceMismatchError,
+  toCosmosSequenceMismatchError,
+} from '@vultisig/core-chain/tx/broadcast/cosmosSequenceMismatch'
 export { getTxStatus } from '@vultisig/core-chain/tx/status'
 
 // Cosmos x/auth.MaxMemoCharacters cap, per chain — single source of truth for

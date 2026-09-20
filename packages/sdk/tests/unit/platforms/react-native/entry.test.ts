@@ -1,6 +1,7 @@
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
 import * as blockaidChains from '@vultisig/core-chain/security/blockaid/evmChains'
+import * as cosmosSequenceMismatch from '@vultisig/core-chain/tx/broadcast/cosmosSequenceMismatch'
 import { isValidTxHash } from '@vultisig/core-chain/tx/isValidTxHash'
 import { AuthInfo, SignDoc, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import { beforeAll, describe, expect, expectTypeOf, it, vi } from 'vitest'
@@ -182,6 +183,43 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     const canonical = await import('@vultisig/core-chain/tx/status')
 
     expect(reactNativeEntry.getTxStatus).toBe(canonical.getTxStatus)
+  })
+
+  it('re-exports canonical Cosmos sequence errors with their recovery semantics', () => {
+    expect(reactNativeEntry.CosmosSequenceMismatchError).toBe(cosmosSequenceMismatch.CosmosSequenceMismatchError)
+    expect(reactNativeEntry.toCosmosSequenceMismatchError).toBe(cosmosSequenceMismatch.toCosmosSequenceMismatchError)
+
+    const stale = reactNativeEntry.toCosmosSequenceMismatchError(
+      'Broadcasting transaction failed with code 32 (codespace: sdk). Log: account sequence mismatch, expected 255, got 254: incorrect account sequence'
+    )
+    expect(stale).toBeInstanceOf(reactNativeEntry.CosmosSequenceMismatchError)
+    expect(stale).toMatchObject({
+      expectedSequence: 255n,
+      signedSequence: 254n,
+      recovery: 'resign',
+    })
+
+    const future = reactNativeEntry.toCosmosSequenceMismatchError(
+      'Broadcasting transaction failed with code 32 (codespace: sdk). Log: account sequence mismatch, expected 254, got 255: incorrect account sequence'
+    )
+    expect(future).toBeInstanceOf(reactNativeEntry.CosmosSequenceMismatchError)
+    expect(future).toMatchObject({
+      expectedSequence: 254n,
+      signedSequence: 255n,
+      recovery: 'wait',
+    })
+
+    const wrapped = {
+      originalError: new Error(
+        'Broadcasting transaction failed with code 32 (codespace: sdk). Log: account sequence mismatch, expected 7, got 6: incorrect account sequence'
+      ),
+    }
+    expect(reactNativeEntry.toCosmosSequenceMismatchError(wrapped)).toMatchObject({
+      expectedSequence: 7n,
+      signedSequence: 6n,
+      recovery: 'resign',
+    })
+    expect(reactNativeEntry.toCosmosSequenceMismatchError(new Error('unrelated failure'))).toBeUndefined()
   })
 
   it('exports canonical fast-vault detection helpers', async () => {
