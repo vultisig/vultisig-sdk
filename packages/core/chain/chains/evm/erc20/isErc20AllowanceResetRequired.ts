@@ -1,7 +1,7 @@
 import { EvmChain } from '@vultisig/core-chain/Chain'
 import { getEvmClient } from '@vultisig/core-chain/chains/evm/client'
 import { attempt } from '@vultisig/lib-utils/attempt'
-import { encodeFunctionData, erc20Abi } from 'viem'
+import { BaseError, encodeFunctionData, erc20Abi, ExecutionRevertedError } from 'viem'
 
 import { AccountCoinKey } from '../../../coin/AccountCoin'
 import { Token } from '../../../coin/Coin'
@@ -11,14 +11,20 @@ type IsErc20AllowanceResetRequiredInput = Token<AccountCoinKey<EvmChain>> & {
   amount: bigint
 }
 
+// viem folds every node's "execution reverted" report, whatever JSON-RPC code
+// or message shape the RPC uses, into an ExecutionRevertedError on the cause chain.
+const isExecutionReverted = (error: unknown) =>
+  error instanceof BaseError && Boolean(error.walk(cause => cause instanceof ExecutionRevertedError))
+
 /**
  * Whether `approve(spender, amount)` must be preceded by `approve(spender, 0)`.
  * USDT-style tokens revert on a non-zero -> non-zero approve while a stale
  * allowance remains, so the approve is simulated from the owner's address and
  * a revert means the reset leg is needed. Only meaningful when the current
- * allowance is already non-zero; callers gate on that. A failed simulation for
- * any other reason also answers `true`: an extra `approve(0)` is always safe,
- * a reverted approve is not.
+ * allowance is already non-zero; callers gate on that. A simulation that fails
+ * for any other reason (transport, rate limit, node error) is no answer either
+ * way and propagates, like the allowance read before it, rather than adding a
+ * reset leg on a guess.
  */
 export const isErc20AllowanceResetRequired = async ({
   chain,
@@ -44,5 +50,13 @@ export const isErc20AllowanceResetRequired = async ({
     })
   )
 
-  return 'error' in simulation
+  if ('data' in simulation) {
+    return false
+  }
+
+  if (isExecutionReverted(simulation.error)) {
+    return true
+  }
+
+  throw simulation.error
 }

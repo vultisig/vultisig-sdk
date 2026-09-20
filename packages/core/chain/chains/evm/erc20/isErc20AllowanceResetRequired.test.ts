@@ -31,14 +31,15 @@ const approveCalldata = encodeFunctionData({
   args: [SPENDER, 5_000_000n],
 })
 
-// USDT's approve reverts without a reason string, which nodes report as a bare RPC error.
-const executionReverted = () => Object.assign(new Error('execution reverted'), { code: 3 })
+// USDT's approve reverts without a reason string, and nodes report that under
+// more than one JSON-RPC code, so both common shapes are covered below.
+const rpcError = (code: number, message: string) => Object.assign(new Error(message), { code })
 
 describe('isErc20AllowanceResetRequired', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     // A real viem client over a stub transport, so the test exercises how the
-    // eth_call result is read rather than a stand-in for it.
+    // eth_call result and errors are read rather than a stand-in for them.
     mocks.getEvmClient.mockReturnValue(
       createPublicClient({ transport: custom({ request: mocks.request }, { retryCount: 0 }) })
     )
@@ -70,15 +71,27 @@ describe('isErc20AllowanceResetRequired', () => {
     await expect(isErc20AllowanceResetRequired(input)).resolves.toBe(false)
   })
 
-  it('answers true when the direct approve reverts, as USDT does on a non-zero -> non-zero approve', async () => {
-    mocks.request.mockRejectedValue(executionReverted())
+  it('answers true when the approve reverts with the standard revert code', async () => {
+    mocks.request.mockRejectedValue(rpcError(3, 'execution reverted'))
 
     await expect(isErc20AllowanceResetRequired(input)).resolves.toBe(true)
   })
 
-  it('answers true when the node rejects the call for any other reason', async () => {
-    mocks.request.mockRejectedValue(Object.assign(new Error('insufficient funds'), { code: -32000 }))
+  it('answers true when the node reports the revert under a generic invalid-input code', async () => {
+    mocks.request.mockRejectedValue(rpcError(-32000, 'execution reverted'))
 
     await expect(isErc20AllowanceResetRequired(input)).resolves.toBe(true)
+  })
+
+  it('propagates a transport failure instead of guessing', async () => {
+    mocks.request.mockRejectedValue(new Error('fetch failed'))
+
+    await expect(isErc20AllowanceResetRequired(input)).rejects.toThrow(/fetch failed/)
+  })
+
+  it('propagates a node error that is not a revert', async () => {
+    mocks.request.mockRejectedValue(rpcError(-32005, 'rate limited'))
+
+    await expect(isErc20AllowanceResetRequired(input)).rejects.toThrow(/rate limited/)
   })
 })
