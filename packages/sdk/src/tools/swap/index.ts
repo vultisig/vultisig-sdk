@@ -7,7 +7,7 @@ export type {
   SwapQuote,
   SwapQuoteCandidate,
 } from './findSwapQuote'
-export { findSwapQuote, findSwapQuotes } from './findSwapQuote'
+export { findSwapQuote, findSwapQuotes, isTransientSwapQuoteError } from './findSwapQuote'
 export type { JupiterQuoteResponse, JupiterSwapParams, JupiterSwapResult } from './jupiter'
 export {
   buildJupiterSwapTx,

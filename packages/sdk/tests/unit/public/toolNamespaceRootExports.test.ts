@@ -10,6 +10,7 @@ import {
   evm,
   getCosmosGovernanceProposals,
   getSolBalance,
+  isTransientSwapQuoteError,
   prep,
   prepareCosmosVote,
   resolveContract,
@@ -39,8 +40,11 @@ describe('SDK root tool namespaces', () => {
     expect(balance.getSolBalance).toBe(getSolBalance)
     expect(prep.buildCw20TransferMsg).toBe(buildCw20TransferMsg)
     expect(swap.computeAstroportMinReceive).toBe(computeAstroportMinReceive)
+    expect(swap.isTransientSwapQuoteError).toBe(isTransientSwapQuoteError)
     expect(balance.formatBalance(1500000n, 6)).toBe('1.5')
     expect(swap.computeAstroportMinReceive('1000000', 0.01)).toBe('990000')
+    expect(swap.isTransientSwapQuoteError(new Error('request timed out'))).toBe(true)
+    expect(swap.isTransientSwapQuoteError('no swap route found after timeout')).toBe(false)
   })
 
   it('exposes the complete price family through the same tools namespace and preserves flat exports', () => {

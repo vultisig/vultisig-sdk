@@ -226,6 +226,7 @@ export {
   findSwapQuotes,
   getNativeSwapDecimals,
   getNativeSwapMinAmountIn,
+  isTransientSwapQuoteError,
   JUPITER_AFFILIATE_FEE_ATAS,
   JUPITER_AFFILIATE_FEE_OWNER,
   JUPITER_API_BASE_URL,

@@ -1210,6 +1210,7 @@ export {
   isNullAddress,
   isPendleChain,
   isSelfSend,
+  isTransientSwapQuoteError,
   isUsdcPaymentChain,
   isValidTxHash,
   isZeroAmount,

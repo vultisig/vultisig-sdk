@@ -331,19 +331,15 @@ const isTradingHaltedMsg = (msg: string) => {
   )
 }
 
-// A provider's raw rejection is a transient infra failure (network/timeout/5xx),
-// not a genuine structural decline. Bails to false on the same "no route" /
-// dust-threshold / halted substrings checked above so a provider that positively
-// answered is never misclassified as transient. Mirrors (deliberately duplicated,
-// not imported — separate repo/package) agent-backend-ts's execute_swap.ts
-// `isTransientQuoteError`, which classifies the SAME kind of raw single-provider
-// error for the native asyncFallbackChain path. Used below to detect the case
-// where EVERY provider failed transiently, so the generic `AllProvidersFailed`
-// fallback doesn't collapse a genuine outage into a "no route" hard-negative that
-// downstream classifiers (and `isTransientQuoteError` itself) cannot un-collapse.
-// Hoisted to module scope (rather than nested in findSwapQuote) since it closes
-// over no local state — only the module-level regex and the two helpers above.
-const isTransientProviderFailure = (reason: unknown): boolean => {
+/**
+ * Classifies a raw swap quote-provider failure as transient.
+ *
+ * Structural responses such as no-route, below-minimum, dust and trading-halt
+ * failures always return `false`, even when their text or HTTP status also looks
+ * transient. This helper does not unwrap application error envelopes and does
+ * not, by itself, authorize retrying a quote or transaction.
+ */
+export const isTransientSwapQuoteError = (reason: unknown): boolean => {
   const msg = reason instanceof Error ? reason.message : String(reason)
   const lower = msg.toLowerCase()
   if (
@@ -359,9 +355,8 @@ const isTransientProviderFailure = (reason: unknown): boolean => {
   ) {
     return false
   }
-  // Structured status takes precedence over message-sniffing where available
-  // (HttpResponseError.status) — a 429/5xx is unambiguously a transient
-  // infra signal regardless of how the provider worded the body.
+  // For non-structural failures, prefer a structured status over message
+  // sniffing where available.
   if (reason instanceof HttpResponseError && (reason.status === 429 || reason.status >= 500)) {
     return true
   }
@@ -413,7 +408,7 @@ const getTransientAggregatorIndexes = (
   settled.flatMap((result, index) =>
     result.status === 'rejected' &&
     !nativeSwapProviderNames.has(fetchers[index].providerName) &&
-    isTransientProviderFailure(result.reason)
+    isTransientSwapQuoteError(result.reason)
       ? [index]
       : []
   )
@@ -431,9 +426,7 @@ const getUnreachableProviderNames = (
   fetchers: SwapQuoteFetcher[]
 ): SwapQuoteProviderName[] =>
   settled.flatMap((result, index) =>
-    result.status === 'rejected' &&
-    !isTradingHaltedRejection(result.reason) &&
-    isTransientProviderFailure(result.reason)
+    result.status === 'rejected' && !isTradingHaltedRejection(result.reason) && isTransientSwapQuoteError(result.reason)
       ? [fetchers[index].providerName]
       : []
   )
@@ -536,7 +529,7 @@ const getHaltAllFailError = ({
   }
 
   // Worded to stay classifiable downstream: it names the transient category
-  // (which `isTransientProviderFailure` and agent-backend-ts's
+  // (which `isTransientSwapQuoteError` and agent-backend-ts's
   // `isTransientQuoteError` both key off) and deliberately avoids the halt
   // wordings, so a consumer re-classifying this message does not read it back as
   // a hard halt.
@@ -1374,7 +1367,7 @@ export const findSwapQuotes = async (input: FindSwapQuoteInput): Promise<FindSwa
   const rejectedReasons = settled
     .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
     .map(result => result.reason)
-  const allProvidersTransient = rejectedReasons.length > 0 && rejectedReasons.every(isTransientProviderFailure)
+  const allProvidersTransient = rejectedReasons.length > 0 && rejectedReasons.every(isTransientSwapQuoteError)
 
   if (allProvidersTransient) {
     throw new SwapError(

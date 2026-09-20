@@ -174,6 +174,7 @@ function validatePackedReactNativePublicHelpers(packageRoot) {
     'tronBase58ToHex',
     'tronHexToBase58',
     'encodeTrc20TransferParam',
+    'isTransientSwapQuoteError',
   ]) {
     assert.ok(runtimeSource.includes(symbol), `react-native bundle exports ${symbol}`)
     assert.ok(declarationSource.includes(symbol), `react-native types export ${symbol}`)
@@ -186,7 +187,7 @@ function validatePackedReactNativeRuntimeExports(packageRoot) {
   const exportedNames = ast.body
     .filter(statement => statement.type === 'ExportNamedDeclaration')
     .flatMap(statement => statement.specifiers.map(specifier => specifier.exported.name))
-  for (const name of ['resolveTokenRef', 'resolveTokenRefId', 'getTxStatus', 'amount']) {
+  for (const name of ['resolveTokenRef', 'resolveTokenRefId', 'getTxStatus', 'amount', 'isTransientSwapQuoteError']) {
     assert.ok(exportedNames.includes(name), `packed React Native runtime must export ${name}`)
   }
   console.log('SDK packed React Native runtime export bindings passed (artifact check, not device execution)')
@@ -252,6 +253,19 @@ function verifyTokenRefConsumer(sdk) {
   assert.throws(() => sdk.resolveTokenRef(chain, 'USDC', ambiguous), /ambiguous/)
   assert.throws(() => sdk.resolveTokenRefId(chain, 'USDC', ambiguous), /ambiguous/)
   console.log('SDK token resolution passed: native, configured symbol/address, registry, unknown, ambiguity')
+}
+
+function verifySwapQuoteFailureClassifier(root, swap) {
+  assert.equal(typeof root.isTransientSwapQuoteError, 'function')
+  assert.equal(root.isTransientSwapQuoteError, root.swap.isTransientSwapQuoteError)
+  assert.equal(typeof swap.isTransientSwapQuoteError, 'function')
+
+  for (const classify of [root.isTransientSwapQuoteError, swap.isTransientSwapQuoteError]) {
+    assert.equal(classify(new Error('request timed out')), true)
+    assert.equal(classify(new Error('ECONNRESET')), true)
+    assert.equal(classify('no swap route found'), false)
+    assert.equal(classify('no swap route found after HTTP 503 timeout'), false)
+  }
 }
 
 export function resolveConditionalTarget(value, activeConditions) {
@@ -426,6 +440,8 @@ console.log('Packed amount ESM consumers passed: stable instance API, exact conv
 const root = importedModules.get('@vultisig/sdk')
 ${verifyTokenRefConsumer.toString()}
 verifyTokenRefConsumer(root)
+${verifySwapQuoteFailureClassifier.toString()}
+verifySwapQuoteFailureClassifier(root, importedModules.get('@vultisig/sdk/tools/swap'))
 const node = importedModules.get('@vultisig/sdk/node')
 const vite = importedModules.get('@vultisig/sdk/vite')
 const electronMain = importedModules.get('@vultisig/sdk/electron/main')
@@ -493,6 +509,11 @@ for (const { specifier, target } of cases) {
 assert.equal(typeof requiredModules.get('@vultisig/sdk')?.Vultisig, 'function', 'root require exports Vultisig')
 ${verifyTokenRefConsumer.toString()}
 verifyTokenRefConsumer(requiredModules.get('@vultisig/sdk'))
+${verifySwapQuoteFailureClassifier.toString()}
+verifySwapQuoteFailureClassifier(
+  requiredModules.get('@vultisig/sdk'),
+  requiredModules.get('@vultisig/sdk/tools/swap')
+)
 ${verifyAmountConsumer.toString()}
 ;(async () => {
   for (const specifier of ['@vultisig/sdk', '@vultisig/sdk/electron/main']) {
@@ -569,6 +590,7 @@ import {
   extendChainRegistry,
   resolveTokenRef,
   resolveTokenRefId,
+  isTransientSwapQuoteError,
 } from '@vultisig/sdk'
 import type {
   BuildSignAminoPayloadInput,
@@ -596,9 +618,17 @@ import {
   type BuildSignDirectPayloadInput as BuildSignDirectPayloadInputReactNative,
   resolveTokenRef as resolveTokenRefReactNative,
   resolveTokenRefId as resolveTokenRefIdReactNative,
+  isTransientSwapQuoteError as isTransientSwapQuoteErrorReactNative,
   getTxStatus as getTxStatusReactNative,
   type ResolvedTokenInfo as ResolvedTokenInfoReactNative,
 } from '@vultisig/sdk/react-native'
+import { isTransientSwapQuoteError as isTransientSwapQuoteErrorFromTools } from '@vultisig/sdk/tools/swap'
+const transientQuoteFailureChecks: boolean[] = [
+  isTransientSwapQuoteError(new Error('timeout')),
+  isTransientSwapQuoteErrorReactNative(new Error('ECONNRESET')),
+  isTransientSwapQuoteErrorFromTools('no swap route found'),
+]
+void transientQuoteFailureChecks
 import {
   recipientSanity as recipientSanityRoot,
   isNullAddress as isNullAddressRoot,

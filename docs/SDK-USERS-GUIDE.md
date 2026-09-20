@@ -1836,6 +1836,26 @@ try {
 }
 ```
 
+For raw quote-provider failures, use the SDK's canonical transient classifier
+instead of duplicating message and status rules:
+
+```typescript
+import { isTransientSwapQuoteError } from '@vultisig/sdk'
+// Also available from '@vultisig/sdk/tools/swap'.
+
+function shouldRetryRawProviderQuote(error: unknown) {
+  return isTransientSwapQuoteError(error)
+}
+```
+
+Call the helper at the boundary where your application receives a raw provider
+error. High-level APIs such as `vault.getSwapQuote()` may normalize or wrap that
+error first, so the helper cannot recover transient details that the wrapper no
+longer exposes. It also does not unwrap arbitrary application error envelopes
+or authorize retrying a quote or transaction. Structural failures such as
+no-route, below-minimum, dust and trading-halt responses remain non-transient
+even if they also contain timeout or HTTP 5xx text.
+
 ### VULT Discount Tiers
 
 The SDK automatically applies affiliate fee discounts based on your VULT token and Thorguard NFT holdings on Ethereum. No configuration is needed - discounts are applied automatically to all swap quotes.

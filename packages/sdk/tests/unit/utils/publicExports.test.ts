@@ -161,6 +161,7 @@ describe('@vultisig/sdk public exports', () => {
 
   it('exports findSwapQuote, abiEncode, evmCheckAllowance (already consumed by mcp-ts)', () => {
     expect(typeof sdk.findSwapQuote).toBe('function')
+    expect(typeof sdk.isTransientSwapQuoteError).toBe('function')
     expect(typeof sdk.abiEncode).toBe('function')
     expect(typeof sdk.evmCheckAllowance).toBe('function')
   })

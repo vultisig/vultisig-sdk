@@ -13,6 +13,7 @@ import {
 import type { BoundSwapQuote, SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
 
 export type { FindSwapQuotesResult, SwapAffiliateConfig, SwapQuoteCandidate, SwapQuoteProviderExcludeName }
+export { isTransientSwapQuoteError } from '@vultisig/core-chain/swap/quote/findSwapQuote'
 
 export type FindSwapQuoteParams = {
   fromChain: Chain
