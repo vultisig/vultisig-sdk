@@ -1,7 +1,9 @@
 import { create, fromBinary, toBinary } from '@bufbuild/protobuf'
 import { Chain } from '@vultisig/core-chain/Chain'
+import { encodeRippleXAddress } from '@vultisig/core-chain/chains/ripple/address'
 import { rippleKnownIssuedTokens } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
 import {
+  PolkadotSpecificSchema,
   RippleSpecificSchema,
   TonSpecificSchema,
   TransactionType,
@@ -10,11 +12,14 @@ import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v
 import { KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { getChainSpecificMock, getCoinBalanceMock, getKeysignUtxoInfoMock } = vi.hoisted(() => ({
-  getChainSpecificMock: vi.fn(),
-  getCoinBalanceMock: vi.fn(),
-  getKeysignUtxoInfoMock: vi.fn(),
-}))
+const { getChainSpecificMock, getCoinBalanceMock, getKeysignUtxoInfoMock, getBittensorCoinBalanceMock } = vi.hoisted(
+  () => ({
+    getChainSpecificMock: vi.fn(),
+    getCoinBalanceMock: vi.fn(),
+    getKeysignUtxoInfoMock: vi.fn(),
+    getBittensorCoinBalanceMock: vi.fn(),
+  })
+)
 
 vi.mock('@vultisig/core-mpc/keysign/chainSpecific', () => ({
   getChainSpecific: getChainSpecificMock,
@@ -24,6 +29,9 @@ vi.mock('@vultisig/core-chain/coin/balance', () => ({
 }))
 vi.mock('@vultisig/core-mpc/keysign/utxo/getKeysignUtxoInfo', () => ({
   getKeysignUtxoInfo: getKeysignUtxoInfoMock,
+}))
+vi.mock('@vultisig/core-chain/coin/balance/resolvers/bittensor', () => ({
+  getBittensorCoinBalance: getBittensorCoinBalanceMock,
 }))
 
 import { buildSendKeysignPayload } from './build'
@@ -316,5 +324,152 @@ describe('buildSendKeysignPayload TON memo capacity', () => {
       name: 'BuildKeysignPayloadError',
       type: 'ton-memo-too-long',
     })
+  })
+})
+
+describe('buildSendKeysignPayload Bittensor destination existential deposit', () => {
+  const sender = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty'
+  const emptyDestination = '5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy'
+  const fee = 200_000n
+
+  const buildTaoPayload = ({ amount, balance }: { amount: bigint; balance: bigint }) => {
+    getChainSpecificMock.mockResolvedValue({
+      case: 'polkadotSpecific',
+      value: create(PolkadotSpecificSchema, {
+        recentBlockHash: '0x' + 'ab'.repeat(32),
+        nonce: 1n,
+        currentBlockNumber: '4000000',
+        specVersion: 458,
+        transactionVersion: 1,
+        genesisHash: '0x' + 'cd'.repeat(32),
+        gas: fee,
+      }),
+    })
+    getCoinBalanceMock.mockResolvedValue(balance)
+    getBittensorCoinBalanceMock.mockResolvedValue(0n)
+
+    return buildSendKeysignPayload({
+      coin: { chain: Chain.Bittensor, ticker: 'TAO', address: sender, decimals: 9 },
+      receiver: emptyDestination,
+      amount,
+      vaultId: 'vault-public-key',
+      localPartyId: 'party-1',
+      // Any public key turns the amount refinement on; Bittensor's fee comes
+      // from the payload's gas, so nothing reads the key itself.
+      publicKey: {} as never,
+      hexPublicKeyOverride: 'ab'.repeat(32),
+      libType: 'DKLS',
+      walletCore: {} as never,
+    })
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getKeysignUtxoInfoMock.mockResolvedValue(undefined)
+  })
+
+  // The requested amount clears the 500 rao deposit, but the balance only
+  // covers fee + sender deposit + 400 rao, so refinement signs 400 — which an
+  // empty destination cannot receive. The guard has to judge the signed amount.
+  it('judges the refined amount, not the requested one', async () => {
+    await expect(buildTaoPayload({ amount: 1_000n, balance: fee + 500n + 400n })).rejects.toMatchObject({
+      name: 'BuildKeysignPayloadError',
+      type: 'bittensor-destination-below-existential-deposit',
+    })
+    expect(getBittensorCoinBalanceMock).toHaveBeenCalledWith({ chain: Chain.Bittensor, address: emptyDestination })
+  })
+
+  it('lets a refined amount that still clears the deposit through without reading the destination', async () => {
+    const payload = await buildTaoPayload({ amount: 1_000n, balance: fee + 500n + 600n })
+
+    expect(payload.toAmount).toBe('600')
+    expect(getBittensorCoinBalanceMock).not.toHaveBeenCalled()
+  })
+})
+
+// The burn / program address list was enforced only by the SDK's vault-free
+// agent prep helpers. Wallet apps build sends through this function directly,
+// so a human clicking Send on the Solana System Program had no guard at all.
+describe('buildSendKeysignPayload burn-address guard', () => {
+  const solanaCoin = {
+    chain: Chain.Solana,
+    ticker: 'SOL',
+    address: 'Bxp8yhH9zNwxyE4UqxP7a7hgJ5xTZfxNNft7YJJ2VRjT',
+    decimals: 9,
+  }
+  const ethereumCoin = {
+    chain: Chain.Ethereum,
+    ticker: 'ETH',
+    address: '0x1111111111111111111111111111111111111111',
+    decimals: 18,
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getCoinBalanceMock.mockResolvedValue(10_000_000_000n)
+    getKeysignUtxoInfoMock.mockResolvedValue(undefined)
+    getChainSpecificMock.mockResolvedValue({
+      case: 'rippleSpecific',
+      value: create(RippleSpecificSchema, {
+        sequence: 1n,
+        gas: 15n,
+        lastLedgerSequence: 2n,
+      }),
+    })
+  })
+
+  it('refuses a Solana send to the System Program before building anything', async () => {
+    await expect(
+      buildPayload({
+        coin: solanaCoin,
+        receiver: '11111111111111111111111111111111',
+        omitDestinationTag: true,
+      })
+    ).rejects.toMatchObject({
+      name: 'BuildKeysignPayloadError',
+      type: 'dangerous-destination',
+      message: expect.stringContaining('Solana System Program'),
+    })
+
+    expect(getChainSpecificMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses an EVM send to the zero address', async () => {
+    await expect(
+      buildPayload({
+        coin: ethereumCoin,
+        receiver: '0x0000000000000000000000000000000000000000',
+        omitDestinationTag: true,
+      })
+    ).rejects.toMatchObject({ type: 'dangerous-destination' })
+  })
+
+  it('does not let a Solana program id block an unrelated chain', async () => {
+    await expect(
+      buildPayload({
+        coin: ethereumCoin,
+        receiver: '11111111111111111111111111111111',
+        omitDestinationTag: true,
+      })
+    ).resolves.toBeDefined()
+  })
+
+  it('catches an XRP black-hole account even when wrapped in an X-address', async () => {
+    const blackHoleXAddress = encodeRippleXAddress('rrrrrrrrrrrrrrrrrrrrrhoLvTp', 7)
+
+    await expect(buildPayload({ receiver: blackHoleXAddress, omitDestinationTag: true })).rejects.toMatchObject({
+      type: 'dangerous-destination',
+      message: expect.stringContaining('black-hole'),
+    })
+  })
+
+  it('still builds a send to an ordinary recipient', async () => {
+    const payload = await buildPayload({
+      coin: solanaCoin,
+      receiver: 'HN7cABqLq46Es1jh92dQQisAq662SmxELLLsHHe4YWrH',
+      omitDestinationTag: true,
+    })
+
+    expect(payload.toAddress).toBe('HN7cABqLq46Es1jh92dQQisAq662SmxELLLsHHe4YWrH')
   })
 })

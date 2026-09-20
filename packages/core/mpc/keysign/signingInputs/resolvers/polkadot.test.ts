@@ -27,7 +27,11 @@ const CALL_INDICES_OFFSET = 107
 
 const hex = (bytes: Uint8Array) => Buffer.from(bytes).toString('hex')
 
-const buildPayload = ({ address = FROM_ADDRESS, hexPublicKey }: { address?: string; hexPublicKey?: string } = {}) =>
+const buildPayload = ({
+  address = FROM_ADDRESS,
+  hexPublicKey,
+  allowDeath,
+}: { address?: string; hexPublicKey?: string; allowDeath?: boolean } = {}) =>
   create(KeysignPayloadSchema, {
     coin: create(CoinSchema, {
       chain: Chain.Polkadot,
@@ -48,6 +52,7 @@ const buildPayload = ({ address = FROM_ADDRESS, hexPublicKey }: { address?: stri
         specVersion: 1003004,
         transactionVersion: 26,
         genesisHash: GENESIS_HASH,
+        ...(allowDeath === undefined ? {} : { allowDeath }),
       }),
     },
   })
@@ -65,6 +70,14 @@ describe('getPolkadotSigningInputs', () => {
     const callIndices = input.balanceCall?.assetTransfer?.callIndices?.custom
     expect(callIndices).toBeDefined()
     expect(callIndices?.methodIndex).toBe(3)
+  })
+
+  // The payload field is the only thing every co-signer can agree on, so it is
+  // the only thing that may select the reaping call.
+  it('uses methodIndex 0 (transfer_allow_death) only when the payload explicitly allows death', async () => {
+    const [input] = await getPolkadotSigningInputs({ keysignPayload: buildPayload({ allowDeath: true }), walletCore })
+
+    expect(input.balanceCall?.assetTransfer?.callIndices?.custom?.methodIndex).toBe(0)
   })
 
   it('keeps moduleIndex 10 (pallet_balances on Asset Hub)', async () => {

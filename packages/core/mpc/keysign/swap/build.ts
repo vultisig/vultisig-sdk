@@ -1,6 +1,5 @@
 import { Buffer } from 'buffer'
 import { create } from '@bufbuild/protobuf'
-import { fromBech32 } from '@cosmjs/encoding'
 import { buildSignBitcoinFromPsbt } from '@vultisig/core-chain/chains/utxo/tx/buildSignBitcoinFromPsbt'
 import { fromChainAmountDisplay } from '@vultisig/core-chain/amount/fromChainAmountExact'
 import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
@@ -17,6 +16,7 @@ import { getSwapDestinationAddress } from '@vultisig/core-chain/swap/keysign/get
 import { nativeSwapQuoteToSwapPayload } from '@vultisig/core-mpc/swap/native/utils/nativeSwapQuoteToSwapPayload'
 import { SwapQuote, SwapQuoteResult } from '@vultisig/core-chain/swap/quote/SwapQuote'
 import { SwapFee } from '@vultisig/core-chain/swap/SwapFee'
+import { decodeBech32 } from '@vultisig/core-chain/utils/decodeBech32'
 import { getChainSpecific } from '@vultisig/core-mpc/keysign/chainSpecific'
 import { getBlockchainSpecificValue } from '@vultisig/core-mpc/keysign/chainSpecific/KeysignChainSpecific'
 import { refineKeysignUtxo } from '@vultisig/core-mpc/keysign/refine/utxo'
@@ -70,7 +70,7 @@ type CosmosWasmSwapTx = Extract<GeneralSwapTx, { cosmosWasm: unknown }>['cosmosW
 
 const getThorAddressIdentity = (address: string): string | undefined => {
   try {
-    const decoded = fromBech32(address.trim())
+    const decoded = decodeBech32(address.trim())
     if (decoded.prefix.toLowerCase() !== 'thor' || (decoded.data.length !== 20 && decoded.data.length !== 32)) {
       return undefined
     }

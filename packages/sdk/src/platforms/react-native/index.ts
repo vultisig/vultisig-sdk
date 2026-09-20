@@ -542,6 +542,8 @@ export {
   fetchAllStakekitBalances,
   fetchStakekitBalancesBatch,
   STAKEKIT_BALANCE_QUERIES_PER_REQUEST,
+  validateStakekitActionAddress,
+  validateStakekitActionInput,
 } from '../../tools/defi'
 export {
   buildGlifRedeemSticnt,
@@ -862,12 +864,14 @@ export { isValidTxHash } from '@vultisig/core-chain/tx/isValidTxHash'
 export { buildKeygenPairingQrPayload } from '../../services/buildKeygenPairingQrPayload'
 export { computeNotificationVaultId } from '../../utils/computeNotificationVaultId'
 export type {
+  Amount,
   AmountDirection,
   ConvertAmountParams,
   CryptoToFiatParams,
   FiatToCryptoParams,
 } from '../../utils/convertAmount'
 export {
+  amount,
   AmountConvertError,
   convertAmount,
   cryptoToFiat,
@@ -966,7 +970,7 @@ export {
   knownContracts,
 } from '../../utils/knownContracts'
 export { normalizeChain, UnknownChainError } from '../../utils/normalizeChain'
-export { resolveChainReference } from '../../utils/resolveChainReference'
+export { resolveChainIdReference, resolveChainReference } from '../../utils/resolveChainReference'
 export type { ParsedThorSwapMemo } from '../../utils/thorSwapMemo'
 export { parseThorSwapMemo } from '../../utils/thorSwapMemo'
 export async function parseKeygenQR(...args: unknown[]) {

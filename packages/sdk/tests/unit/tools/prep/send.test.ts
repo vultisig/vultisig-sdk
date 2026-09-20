@@ -226,6 +226,39 @@ describe('prepareSendTxFromKeys', () => {
     )
   })
 
+  it.each([undefined, 'TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj'])(
+    'rejects a Tron zero-address send before payload construction (token %s)',
+    async id => {
+      await expect(
+        prepareSendTxFromKeys(baseIdentity, {
+          coin: {
+            chain: Chain.Tron,
+            address: 'TJRabPrwbZy45sbavfcjinPJC18kjpRTv8',
+            decimals: 6,
+            ticker: id ? 'USDT' : 'TRX',
+            id,
+          },
+          receiver: 'T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb',
+          amount: 1n,
+        })
+      ).rejects.toThrow(/Tron zero address.*unrecoverable/)
+      expect(mockGetPublicKey).not.toHaveBeenCalled()
+      expect(mockBuildSendKeysignPayload).not.toHaveBeenCalled()
+    }
+  )
+
+  it('allows a normal Tron recipient through to the payload builder', async () => {
+    const receiver = 'TJRabPrwbZy45sbavfcjinPJC18kjpRTv8'
+    await expect(
+      prepareSendTxFromKeys(baseIdentity, {
+        coin: { chain: Chain.Tron, address: receiver, decimals: 6, ticker: 'TRX' },
+        receiver,
+        amount: 1n,
+      })
+    ).resolves.toBe(mockPayload)
+    expect(mockBuildSendKeysignPayload).toHaveBeenCalledWith(expect.objectContaining({ receiver }))
+  })
+
   // -- Destination-guard tests (2urb + i9qum) --
 
   it('rejects the EVM zero address before building the payload', async () => {

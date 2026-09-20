@@ -5,6 +5,7 @@ import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { normalizeRippleDestination } from '@vultisig/core-chain/chains/ripple/address'
 import { getSignableIssuedCurrencyAmount, parseRippleTokenId } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
 import { validateTonComment } from '@vultisig/core-chain/chains/ton/comment'
+import { assertSafeDestination } from '@vultisig/core-chain/security/dangerousAddresses'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 import { attempt } from '@vultisig/lib-utils/attempt'
@@ -25,6 +26,7 @@ import { getBlockchainSpecificValue } from '../chainSpecific/KeysignChainSpecifi
 import { BuildKeysignPayloadError } from '../error'
 import { getKeysignAmount } from '../utils/getKeysignAmount'
 import { validateDestinationTag } from '../utils/rippleDestinationTag'
+import { assertBittensorDestinationStaysAlive } from './assertBittensorDestinationStaysAlive'
 import { getCosmosWasmTokenTransferPayload } from './cosmosWasm'
 
 export type BuildSendKeysignPayloadInput = {
@@ -124,6 +126,17 @@ export const buildSendKeysignPayload = async ({
   const effectiveDestinationTag = destinationTag ?? embeddedDestinationTag
   if (effectiveDestinationTag !== undefined) validateDestinationTag(effectiveDestinationTag)
 
+  // Fund-safety: refuse known burn / program destinations here, on the path
+  // every wallet send goes through, not only in the SDK's agent prep helpers.
+  // Runs on the normalized receiver so an XRP X-address wrapping a black-hole
+  // account is caught too. Raised as a [BuildKeysignPayloadError] because it
+  // is bad input, not a transient failure: callers stop retrying and show it.
+  try {
+    assertSafeDestination(coin.chain, normalizedReceiver)
+  } catch (error) {
+    throw new BuildKeysignPayloadError('dangerous-destination', error instanceof Error ? error.message : String(error))
+  }
+
   // Reject an amount the ledger cannot carry exactly while the payload is still
   // being built, so the user sees why instead of a WalletCore error after
   // review. Raised as a [BuildKeysignPayloadError] because it is bad input, not
@@ -215,6 +228,7 @@ export const buildSendKeysignPayload = async ({
   }
 
   assertTonMemoFits({ coin, keysignPayload })
+  await assertBittensorDestinationStaysAlive({ coin, keysignPayload })
 
   return keysignPayload
 }

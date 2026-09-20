@@ -15,10 +15,28 @@ import type {
   PollTxStatusUntilFinalParams as PollTxStatusUntilFinalParamsFromTx,
   PollTxStatusUntilFinalResult as PollTxStatusUntilFinalResultFromTx,
 } from '../../../../src/tx'
+import { resolveChainIdReference } from '../../../../src/utils/resolveChainReference'
 import * as tokenRef from '../../../../src/vault/tokenRef'
 import { cosmosTxFeeGasParityCases } from '../../../fixtures/cosmosTxFeeGasParity'
 
 process.env.VULTISIG_STRICT_SINGLETON = '0'
+
+describe('RN amount helpers', () => {
+  it('exports the canonical group and exposes it before initialization', async () => {
+    const canonical = await import('../../../../src/utils/convertAmount')
+    expect(sdkRn.amount).toBe(canonical.amount)
+    expectTypeOf<sdkRn.Amount>().toEqualTypeOf<typeof canonical.amount>()
+    const sdk = new sdkRn.Vultisig({ autoInit: false, storage: new sdkRn.MemoryStorage() })
+    try {
+      expect(sdk.amount).toBe(sdkRn.amount)
+      expect(sdk.amount.convert({ amount: '1.5', decimals: 18, direction: 'to_base' })).toBe('1500000000000000000')
+      expect(sdk.amount.convert({ amount: '1500000000000000000', decimals: 18, direction: 'to_human' })).toBe('1.5')
+      expect(sdk.initialized).toBe(false)
+    } finally {
+      await sdk.dispose()
+    }
+  })
+})
 
 describe('RN entry exposes canonical token reference resolution', () => {
   it('exports the same resolvers and a usable result type', () => {
@@ -126,6 +144,14 @@ beforeAll(async () => {
 }, 120_000)
 
 describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
+  it('exports the strict chain-ID resolver by identity with its string-only signature', () => {
+    expect(reactNativeEntry.resolveChainIdReference).toBe(resolveChainIdReference)
+    expectTypeOf(sdkRn.resolveChainIdReference).toEqualTypeOf<(chainId: string) => sdkRn.Chain | undefined>()
+    expect(reactNativeEntry.resolveChainIdReference('phoenix-1')).toBe(sdkRn.Chain.Terra)
+    expect(reactNativeEntry.resolveChainIdReference(' 8453 ')).toBeUndefined()
+    expect(reactNativeEntry.resolveChainReference(' 8453 ')).toBe(sdkRn.Chain.Base)
+  })
+
   it('re-exports canonical transaction-hash validation with unchanged chain rules', () => {
     expect(reactNativeEntry.isValidTxHash).toBe(isValidTxHash)
     expectTypeOf(reactNativeEntry.isValidTxHash).toEqualTypeOf<(chain: sdkRn.Chain, hash: string) => boolean>()
@@ -195,6 +221,15 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
   it('re-exports the plural StakeKit scan-request builder by identity', async () => {
     const stakekit = await import('../../../../src/tools/defi/stakekit')
     expect(reactNativeEntry.buildYieldActionScanRequests).toBe(stakekit.buildYieldActionScanRequests)
+  })
+
+  it('re-exports the StakeKit action validators by identity', async () => {
+    const stakekit = await import('../../../../src/tools/defi/stakekit')
+
+    expect(reactNativeEntry.validateStakekitActionAddress).toBe(stakekit.validateStakekitActionAddress)
+    expect(reactNativeEntry.validateStakekitActionInput).toBe(stakekit.validateStakekitActionInput)
+    expect(reactNativeEntry.validateStakekitActionInput(`0x${'a'.repeat(40)}`, '1')).toBeNull()
+    expect(reactNativeEntry.validateStakekitActionInput('0xdeadbeef', '1')).toMatch(/Invalid 0x-prefixed address/)
   })
 
   it.each([

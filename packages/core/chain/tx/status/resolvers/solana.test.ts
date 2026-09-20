@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   getBlockHeight: vi.fn(),
@@ -15,6 +15,7 @@ vi.mock('@vultisig/core-chain/chains/solana/client', () => ({
 }))
 
 import { Chain } from '../../../Chain'
+import { solanaRpcTimeoutMs } from '../../../chains/solana/rpcTimeout'
 import { getSolanaTxStatus } from './solana'
 
 describe('getSolanaTxStatus', () => {
@@ -35,12 +36,42 @@ describe('getSolanaTxStatus', () => {
     expect(mocks.getTransaction).not.toHaveBeenCalled()
   })
 
-  it('marks an unknown signature as not_found when its last valid block height has expired', async () => {
+  it('marks an unknown signature as expired once its last valid block height has passed', async () => {
     mocks.getSignatureStatuses.mockResolvedValue({ value: [null] })
     mocks.getBlockHeight.mockResolvedValue(101)
 
     await expect(getSolanaTxStatus({ chain: Chain.Solana, hash, lastValidBlockHeight: 100 })).resolves.toEqual({
-      status: 'not_found',
+      status: 'expired',
+      isKnown: false,
+    })
+    // The verdict rests on an absence observed AFTER the height, not before it.
+    expect(mocks.getSignatureStatuses).toHaveBeenCalledTimes(2)
+    expect(mocks.getSignatureStatuses).toHaveBeenLastCalledWith([hash], { searchTransactionHistory: true })
+    expect(mocks.getTransaction).not.toHaveBeenCalled()
+  })
+
+  // A transfer can land in its last valid block while the height request is
+  // in flight. The first absence is then stale, and calling it `expired` would
+  // stop the poll and send the user to re-sign a payment that executed.
+  it('recovers a signature that lands while the block height is being read', async () => {
+    mocks.getSignatureStatuses
+      .mockResolvedValueOnce({ value: [null] })
+      .mockResolvedValue({ value: [{ err: null, confirmationStatus: 'confirmed' }] })
+    mocks.getBlockHeight.mockResolvedValue(101)
+    mocks.getTransaction.mockResolvedValue({ meta: { err: null, fee: 5000 } })
+
+    const result = await getSolanaTxStatus({ chain: Chain.Solana, hash, lastValidBlockHeight: 100 })
+
+    expect(result).toMatchObject({ status: 'success', receipt: { feeAmount: 5000n } })
+    expect(mocks.getSignatureStatuses).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps an unknown signature pending when the post-expiry re-read fails', async () => {
+    mocks.getSignatureStatuses.mockResolvedValueOnce({ value: [null] }).mockRejectedValue(new Error('rpc down'))
+    mocks.getBlockHeight.mockResolvedValue(101)
+
+    await expect(getSolanaTxStatus({ chain: Chain.Solana, hash, lastValidBlockHeight: 100 })).resolves.toEqual({
+      status: 'pending',
       isKnown: false,
     })
     expect(mocks.getTransaction).not.toHaveBeenCalled()
@@ -109,5 +140,52 @@ describe('getSolanaTxStatus', () => {
     })
     // The error is decided from the signature status alone — no tx fetch needed.
     expect(mocks.getTransaction).not.toHaveBeenCalled()
+  })
+
+  // The shared client has no request timeout. A request that never answers
+  // must read as unavailable information, not hold the poll open for good.
+  describe('when an RPC request never settles', () => {
+    const neverSettles = new Promise<never>(() => {})
+    const pending = { status: 'pending', isKnown: false }
+
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('keeps the transaction pending when the signature lookup never settles', async () => {
+      mocks.getSignatureStatuses.mockReturnValue(neverSettles)
+
+      const promise = getSolanaTxStatus({ chain: Chain.Solana, hash, lastValidBlockHeight: 100 })
+      await vi.advanceTimersByTimeAsync(solanaRpcTimeoutMs)
+
+      await expect(promise).resolves.toEqual(pending)
+      expect(mocks.getBlockHeight).not.toHaveBeenCalled()
+    })
+
+    it('keeps an unknown signature pending when the block-height request never settles', async () => {
+      mocks.getSignatureStatuses.mockResolvedValue({ value: [null] })
+      mocks.getBlockHeight.mockReturnValue(neverSettles)
+
+      const promise = getSolanaTxStatus({ chain: Chain.Solana, hash, lastValidBlockHeight: 100 })
+      await vi.advanceTimersByTimeAsync(solanaRpcTimeoutMs)
+
+      await expect(promise).resolves.toEqual(pending)
+      // No expiry verdict without a height, so no second history read either.
+      expect(mocks.getSignatureStatuses).toHaveBeenCalledTimes(1)
+    })
+
+    it('keeps a known signature pending when the transaction fetch never settles', async () => {
+      mocks.getSignatureStatuses.mockResolvedValue({ value: [{ err: null, confirmationStatus: 'confirmed' }] })
+      mocks.getTransaction.mockReturnValue(neverSettles)
+
+      const promise = getSolanaTxStatus({ chain: Chain.Solana, hash })
+      await vi.advanceTimersByTimeAsync(solanaRpcTimeoutMs)
+
+      await expect(promise).resolves.toEqual({ status: 'pending', isKnown: true })
+    })
   })
 })

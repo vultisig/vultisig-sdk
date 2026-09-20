@@ -69,12 +69,14 @@ export { ValidationHelpers } from './utils/validation'
 // ============================================================================
 
 export type {
+  Amount,
   AmountDirection,
   ConvertAmountParams,
   CryptoToFiatParams,
   FiatToCryptoParams,
 } from './utils/convertAmount'
 export {
+  amount,
   AmountConvertError,
   convertAmount,
   cryptoToFiat,
@@ -87,7 +89,7 @@ export { coerceEip712ChainId, computeEip712Hash, toCanonicalEvmSignature } from 
 export type { FiatToAmountParams } from './utils/fiatToAmount'
 export { fiatToAmount, FiatToAmountError } from './utils/fiatToAmount'
 export { normalizeChain, UnknownChainError } from './utils/normalizeChain'
-export { resolveChainReference } from './utils/resolveChainReference'
+export { resolveChainIdReference, resolveChainReference } from './utils/resolveChainReference'
 export { ChainAmountParseError, toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 export type { TonTxFailure, TonTxFailureReason, TonTxPhase } from '@vultisig/core-chain/chains/ton/failure'
 export {
@@ -100,6 +102,11 @@ export {
   CosmosSequenceMismatchError,
   toCosmosSequenceMismatchError,
 } from '@vultisig/core-chain/tx/broadcast/cosmosSequenceMismatch'
+export type { SolanaBlockhashExpiredDetails } from '@vultisig/core-chain/tx/broadcast/solanaBlockhashExpired'
+export {
+  SolanaBlockhashExpiredError,
+  toSolanaBlockhashExpiredError,
+} from '@vultisig/core-chain/tx/broadcast/solanaBlockhashExpired'
 
 // Pure-bigint exact base-units -> human decimal-string conversion (no float64
 // round-trip, so it's safe for high-decimal assets). Exported at the root so
@@ -434,6 +441,7 @@ export type {
   Portfolio,
   ReshareOptions,
   SDKConfig,
+  SendFeeEstimate,
   SendResult,
   ServerStatus,
   SignAminoInput,
@@ -1294,6 +1302,8 @@ export {
   USDC_PAYMENT_CHAINS,
   USDC_PAYMENT_DECIMALS,
   utxoFeeRate,
+  validateStakekitActionAddress,
+  validateStakekitActionInput,
   VerifierClient,
   yieldNetworkToCanonicalChain,
 } from './tools'

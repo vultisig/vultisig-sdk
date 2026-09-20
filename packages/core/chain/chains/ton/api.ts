@@ -78,13 +78,20 @@ const queryOwnerJettonWallet = async ({
   const rawMaster = tonAddressToRawKey(jettonMasterAddress)
 
   const url = `${tonApiUrl}/v3/jetton/wallets?owner_address=${rawOwner}&jetton_address=${rawMaster}`
-  const response = await queryUrl<JettonWalletResponse>(url)
+  const response = await queryUrl<Partial<JettonWalletResponse>>(url)
+
+  // A 2xx with no `jetton_wallets` list is an error body from the proxy or
+  // indexer, not an empty result. Treating it as "no wallet" would read as a
+  // zero balance, which the caller cannot tell apart from actually holding 0.
+  if (!Array.isArray(response.jetton_wallets)) {
+    throw new Error('Malformed jetton wallets response')
+  }
 
   const wallet = response.jetton_wallets.find(
     ({ owner, jetton }) => matchesRawAddress(owner, rawOwner) && matchesRawAddress(jetton, rawMaster)
   )
 
-  return { wallet, addressBook: response.address_book }
+  return { wallet, addressBook: response.address_book ?? {} }
 }
 
 /** Resolves the user-friendly jetton wallet address for a given owner and jetton master. */
@@ -97,11 +104,26 @@ export const getJettonWalletAddress = async (input: GetJettonWalletInput): Promi
   return addressBook[wallet.address]?.user_friendly || wallet.address
 }
 
-/** Fetches the balance of a specific jetton for a given owner address. */
+/**
+ * Fetches the balance of a specific jetton for a given owner address.
+ *
+ * A jetton wallet contract only exists once the owner has received that
+ * jetton, so an owner with no matching wallet genuinely holds 0. A matching
+ * wallet without a readable balance is a broken read and throws instead, so
+ * the caller keeps its last known value rather than showing a false zero.
+ */
 export const getJettonBalance = async (input: GetJettonWalletInput): Promise<bigint> => {
   const { wallet } = await queryOwnerJettonWallet(input)
 
-  return BigInt(wallet?.balance || '0')
+  if (!wallet) {
+    return BigInt(0)
+  }
+
+  if (typeof wallet.balance !== 'string' || !/^\d+$/.test(wallet.balance)) {
+    throw new Error('Malformed jetton wallet balance')
+  }
+
+  return BigInt(wallet.balance)
 }
 
 type AddressInformationResponse = {

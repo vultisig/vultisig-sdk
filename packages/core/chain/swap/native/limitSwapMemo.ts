@@ -1,10 +1,10 @@
-import { fromBech32 } from '@cosmjs/encoding'
 import { PublicKey } from '@solana/web3.js'
 import bs58check from 'bs58check'
 import { isValidClassicAddress } from 'ripple-address-codec'
 
 import { Chain } from '../../Chain'
 import { getChainKind } from '../../ChainKind'
+import { decodeBech32 } from '../../utils/decodeBech32'
 import { baseAffiliateBps } from '../affiliate/config'
 import { nativeSwapAffiliateConfig } from './nativeSwapAffiliateConfig'
 import { getThorchainMemoAssetChain, thorchainAssetPrefixToChain } from './thorchainMemoAsset'
@@ -250,7 +250,7 @@ const base58AddressChars = '1-9A-HJ-NP-Za-km-z'
 
 const isBech32Address = (address: string, prefix: string): boolean => {
   try {
-    const decoded = fromBech32(address)
+    const decoded = decodeBech32(address)
     return decoded.prefix === prefix && decoded.data.length > 0
   } catch {
     return false

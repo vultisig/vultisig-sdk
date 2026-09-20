@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "5.4.3",
+  "version": "5.5.0",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -24,6 +24,11 @@
       "types": "./dist/amount/fromChainAmountExact.d.ts",
       "import": "./dist/amount/fromChainAmountExact.js",
       "default": "./dist/amount/fromChainAmountExact.js"
+    },
+    "./amount/getMaxSendableAmount": {
+      "types": "./dist/amount/getMaxSendableAmount.d.ts",
+      "import": "./dist/amount/getMaxSendableAmount.js",
+      "default": "./dist/amount/getMaxSendableAmount.js"
     },
     "./amount/getMaxValue": {
       "types": "./dist/amount/getMaxValue.d.ts",
@@ -870,6 +875,11 @@
       "import": "./dist/chains/solana/kamino/vaultInfo.js",
       "default": "./dist/chains/solana/kamino/vaultInfo.js"
     },
+    "./chains/solana/rpcTimeout": {
+      "types": "./dist/chains/solana/rpcTimeout.d.ts",
+      "import": "./dist/chains/solana/rpcTimeout.js",
+      "default": "./dist/chains/solana/rpcTimeout.js"
+    },
     "./chains/solana/solanaConfig": {
       "types": "./dist/chains/solana/solanaConfig.d.ts",
       "import": "./dist/chains/solana/solanaConfig.js",
@@ -1099,6 +1109,11 @@
       "types": "./dist/chains/tron/getTronBlockInfo.d.ts",
       "import": "./dist/chains/tron/getTronBlockInfo.js",
       "default": "./dist/chains/tron/getTronBlockInfo.js"
+    },
+    "./chains/tron/queryTron": {
+      "types": "./dist/chains/tron/queryTron.d.ts",
+      "import": "./dist/chains/tron/queryTron.js",
+      "default": "./dist/chains/tron/queryTron.js"
     },
     "./chains/tron/resources": {
       "types": "./dist/chains/tron/resources/index.d.ts",
@@ -2258,6 +2273,11 @@
       "import": "./dist/tx/broadcast/resolvers/utxo.js",
       "default": "./dist/tx/broadcast/resolvers/utxo.js"
     },
+    "./tx/broadcast/solanaBlockhashExpired": {
+      "types": "./dist/tx/broadcast/solanaBlockhashExpired.d.ts",
+      "import": "./dist/tx/broadcast/solanaBlockhashExpired.js",
+      "default": "./dist/tx/broadcast/solanaBlockhashExpired.js"
+    },
     "./tx/broadcast/transientRetry": {
       "types": "./dist/tx/broadcast/transientRetry.d.ts",
       "import": "./dist/tx/broadcast/transientRetry.js",
@@ -2457,6 +2477,11 @@
       "types": "./dist/utils/assertSignature.d.ts",
       "import": "./dist/utils/assertSignature.js",
       "default": "./dist/utils/assertSignature.js"
+    },
+    "./utils/decodeBech32": {
+      "types": "./dist/utils/decodeBech32.d.ts",
+      "import": "./dist/utils/decodeBech32.js",
+      "default": "./dist/utils/decodeBech32.js"
     },
     "./utils/getBlockExplorerUrl": {
       "types": "./dist/utils/getBlockExplorerUrl/index.d.ts",

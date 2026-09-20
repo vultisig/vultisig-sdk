@@ -64,12 +64,19 @@ export const getCompiledTxsForBlockaidInput = async ({ payload, walletCore }: In
     // dApp-supplied raw Solana transaction (sdk#1204): txInputData is the
     // ORIGINAL serialized transaction, not a TW SigningInput — WalletCore's
     // TransactionCompiler can't consume it. The zero-signature scan preview
-    // is the original bytes with a zeroed fee-payer signature slot, wrapped
-    // in the same SigningOutput shape (base58 encoded) the consumers decode.
+    // is the original bytes with the vault's own signature slot zeroed,
+    // wrapped in the same SigningOutput shape (base58 encoded) the consumers
+    // decode.
     if (chainKind === 'solana' && payload.signData.case === 'signSolana') {
-      const zeroSigned = spliceSolanaSignature(txInputData, new Uint8Array(64))
+      const zeroSigned = spliceSolanaSignature({
+        txData: txInputData,
+        signature: new Uint8Array(64),
+        publicKey: new Uint8Array(publicKey.data()),
+      })
       return TW.Solana.Proto.SigningOutput.encode(
-        TW.Solana.Proto.SigningOutput.create({ encoded: base58.encode(zeroSigned) })
+        TW.Solana.Proto.SigningOutput.create({
+          encoded: base58.encode(zeroSigned),
+        })
       ).finish()
     }
 
