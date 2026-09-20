@@ -54,7 +54,15 @@ type GetTronBlockInfoInput = {
 
 const isNonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.length > 0
 
-const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value)
+// The protocol serialises `timestamp` / `number` as int64 and `version` as
+// int32. The keysign resolver converts them with `BigInt(...)`, which throws
+// on fractions, and `Long.fromNumber(...)`, which silently loses precision
+// above `MAX_SAFE_INTEGER`, so only non-negative safe integers may pass.
+const isNonNegativeSafeInteger = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+
+const int32Max = 0x7fffffff
+const isNonNegativeInt32 = (value: unknown): value is number => isNonNegativeSafeInteger(value) && value <= int32Max
 
 // Signing converts these with `Buffer.from(value, 'hex')`, which silently
 // yields an empty buffer for non-hex input and truncates at the first invalid
@@ -67,21 +75,29 @@ const isHexOfByteLength =
     typeof value === 'string' && value.length === byteLength * 2 && /^[0-9a-fA-F]+$/.test(value)
 
 const sha256ByteLength = 32
-// 0x41 prefix byte + 20-byte address
-const tronAddressByteLength = 21
 
-// Numeric fields must be finite numbers (a string `timestamp` would turn the
+// Tron hex addresses are the mainnet prefix byte 0x41 followed by the 20-byte
+// account id; a 21-byte string with any other leading byte is not a Tron
+// address even though `Buffer.from(value, 'hex')` accepts it.
+const tronAddressPrefixHex = '41'
+const tronAddressBodyByteLength = 20
+const isTronHexAddress = (value: unknown): value is string =>
+  typeof value === 'string' &&
+  value.slice(0, 2) === tronAddressPrefixHex &&
+  isHexOfByteLength(tronAddressBodyByteLength)(value.slice(2))
+
+// Numeric fields must be integers (a string `timestamp` would turn the
 // default `expiration` into string concatenation) and identifier fields must
 // be well-formed hex (an empty `txTrieRoot` / `parentHash` still signs).
 const rawDataFieldValidators: {
   [K in keyof TronBlockHeaderRawData]: (value: unknown) => boolean
 } = {
-  timestamp: isFiniteNumber,
-  number: isFiniteNumber,
-  version: isFiniteNumber,
+  timestamp: isNonNegativeSafeInteger,
+  number: isNonNegativeSafeInteger,
+  version: isNonNegativeInt32,
   txTrieRoot: isHexOfByteLength(sha256ByteLength),
   parentHash: isHexOfByteLength(sha256ByteLength),
-  witness_address: isHexOfByteLength(tronAddressByteLength),
+  witness_address: isTronHexAddress,
 }
 
 const requiredRawDataFields = Object.keys(rawDataFieldValidators) as (keyof TronBlockHeaderRawData)[]

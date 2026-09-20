@@ -20,7 +20,7 @@ const block = {
       version: 30,
       txTrieRoot: '01'.repeat(32),
       parentHash: '02'.repeat(32),
-      witness_address: '03'.repeat(21),
+      witness_address: '41' + '03'.repeat(20),
     },
   },
 }
@@ -67,7 +67,7 @@ describe('getTronBlockInfo', () => {
       blockHeaderVersion: 30,
       blockHeaderTxTrieRoot: '01'.repeat(32),
       blockHeaderParentHash: '02'.repeat(32),
-      blockHeaderWitnessAddress: '03'.repeat(21),
+      blockHeaderWitnessAddress: '41' + '03'.repeat(20),
     })
   })
 
@@ -144,6 +144,17 @@ describe('getTronBlockInfo', () => {
       ['a string timestamp', { timestamp: String(blockTimestamp) }, 'timestamp'],
       ['a NaN block number', { number: Number.NaN }, 'number'],
       ['an Infinity version', { version: Number.POSITIVE_INFINITY }, 'version'],
+      // `BigInt(1.5)` throws in the keysign resolver and `Long.fromNumber`
+      // silently truncates above MAX_SAFE_INTEGER, so only integers may pass.
+      ['a fractional timestamp', { timestamp: blockTimestamp + 0.5 }, 'timestamp'],
+      ['a negative timestamp', { timestamp: -1 }, 'timestamp'],
+      ['an unsafe-integer timestamp', { timestamp: Number.MAX_SAFE_INTEGER + 2 }, 'timestamp'],
+      ['a fractional block number', { number: 99_000_000.25 }, 'number'],
+      ['a negative block number', { number: -99_000_000 }, 'number'],
+      ['an unsafe-integer block number', { number: 2 ** 53 }, 'number'],
+      ['a fractional version', { version: 30.5 }, 'version'],
+      ['a negative version', { version: -1 }, 'version'],
+      ['a version above int32', { version: 0x7fffffff + 1 }, 'version'],
       ['an empty txTrieRoot', { txTrieRoot: '' }, 'txTrieRoot'],
       ['an empty parentHash', { parentHash: '' }, 'parentHash'],
       ['a numeric witness_address', { witness_address: 42 }, 'witness_address'],
@@ -158,6 +169,8 @@ describe('getTronBlockInfo', () => {
       ['a short parentHash', { parentHash: '02'.repeat(16) }, 'parentHash'],
       ['a non-hex witness_address', { witness_address: 'g'.repeat(42) }, 'witness_address'],
       ['a 20-byte witness_address', { witness_address: '03'.repeat(20) }, 'witness_address'],
+      ['a 21-byte witness_address without the 41 prefix', { witness_address: '03'.repeat(21) }, 'witness_address'],
+      ['a 22-byte witness_address', { witness_address: '41' + '03'.repeat(21) }, 'witness_address'],
       ['a base58 witness_address', { witness_address: 'TJRabPrwbZy45sbavfcjinPJC18kjpRTv8' }, 'witness_address'],
     ])('rejects %s', async (_label, override, field) => {
       mocks.queryTron.mockResolvedValue({
