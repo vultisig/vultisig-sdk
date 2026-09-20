@@ -874,6 +874,33 @@ describe('RN entry exposes pure chain helpers and registry', () => {
     ).toBe('https://scan.li.fi/tx/0xabc')
   })
 
+  it('re-exports the canonical swap-arrival family from the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const swapArrival = await import('@vultisig/core-chain/swap/utils/getSwapArrivalStatus')
+
+    expect(rn.defaultSwapArrivalStatusHosts).toBe(swapArrival.defaultSwapArrivalStatusHosts)
+    expect(rn.getSwapArrivalStatus).toBe(swapArrival.getSwapArrivalStatus)
+    expect(rn.isSwapArrivalStatusTerminal).toBe(swapArrival.isSwapArrivalStatusTerminal)
+    expect(rn.swapArrivalProviders).toBe(swapArrival.swapArrivalProviders)
+    expect(rn.SwapArrivalStatusRequestError).toBe(swapArrival.SwapArrivalStatusRequestError)
+
+    const provider: sdkRn.SwapArrivalProvider = 'thorchain'
+    const pendingStage: sdkRn.SwapArrivalPendingStage = 'inbound'
+    const hosts: sdkRn.SwapArrivalStatusHosts = rn.defaultSwapArrivalStatusHosts
+    const input: sdkRn.GetSwapArrivalStatusInput = { provider, txHash: 'SOURCE-TX', hosts }
+    const result: sdkRn.SwapArrivalStatusResult = {
+      provider: input.provider,
+      txHash: input.txHash,
+      status: 'pending',
+      stage: pendingStage,
+    }
+
+    expect(rn.isSwapArrivalStatusTerminal(result)).toBe(false)
+    expect(new rn.SwapArrivalStatusRequestError(provider, [new Error('unavailable')])).toBeInstanceOf(
+      swapArrival.SwapArrivalStatusRequestError
+    )
+  })
+
   it('re-exports Noon vault helpers from the RN entrypoint', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
     const noon = await import('@vultisig/core-chain/chains/evm/noon')

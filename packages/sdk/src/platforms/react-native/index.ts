@@ -104,6 +104,24 @@ export {
 export { tendermintRpcUrl } from '@vultisig/core-chain/chains/cosmos/tendermintRpcUrl'
 export { getTxStatus } from '@vultisig/core-chain/tx/status'
 
+// Provider-aware swap arrival normalization. Keep the curated RN surface in
+// parity with the root SDK entry so mobile consumers do not deep-import core or
+// duplicate provider/status handling.
+export type {
+  GetSwapArrivalStatusInput,
+  SwapArrivalPendingStage,
+  SwapArrivalProvider,
+  SwapArrivalStatusHosts,
+  SwapArrivalStatusResult,
+} from '@vultisig/core-chain/swap/utils/getSwapArrivalStatus'
+export {
+  defaultSwapArrivalStatusHosts,
+  getSwapArrivalStatus,
+  isSwapArrivalStatusTerminal,
+  swapArrivalProviders,
+  SwapArrivalStatusRequestError,
+} from '@vultisig/core-chain/swap/utils/getSwapArrivalStatus'
+
 // Cosmos x/auth.MaxMemoCharacters cap, per chain — single source of truth for
 // "will this memo fit before broadcast rejects it with sdk code 12 (memo too
 // long) after the user has already signed?" Kept in parity with the root SDK
