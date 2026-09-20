@@ -5,6 +5,7 @@ import { isValidTxHash } from '@vultisig/core-chain/tx/isValidTxHash'
 import { AuthInfo, SignDoc, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import { beforeAll, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
+import { clampThenUniformScalar as canonicalClampThenUniformScalar } from '../../../../src/crypto/ed25519ScalarClamp'
 import type {
   PollTxStatusUntilFinalParams as PollTxStatusUntilFinalParamsFromReactNative,
   PollTxStatusUntilFinalResult as PollTxStatusUntilFinalResultFromReactNative,
@@ -45,6 +46,23 @@ describe('RN entry exposes canonical token reference resolution', () => {
     const native: sdkRn.ResolvedTokenInfo = sdkRn.resolveTokenRef(sdkRn.Chain.Ethereum, undefined, [])
     expect(native).toEqual({ ticker: 'ETH', decimals: 18 })
     expect(sdkRn.resolveTokenRefId(sdkRn.Chain.Ethereum, 'ETH', [])).toBeUndefined()
+  })
+})
+
+describe('RN entry exposes canonical Ed25519 scalar clamping', () => {
+  it('preserves the canonical identity, signature, output, input, and validation', () => {
+    const seed = new Uint8Array(32).fill(0x42)
+    const original = seed.slice()
+
+    expect(sdkRn.clampThenUniformScalar).toBe(canonicalClampThenUniformScalar)
+    expectTypeOf(sdkRn.clampThenUniformScalar).toEqualTypeOf<(seed: Uint8Array) => Uint8Array>()
+    expect(Array.from(sdkRn.clampThenUniformScalar(seed))).toEqual([
+      2, 240, 150, 49, 42, 76, 228, 236, 247, 47, 28, 245, 108, 98, 58, 94, 246, 4, 112, 37, 238, 4, 98, 210, 209, 114,
+      232, 182, 162, 132, 29, 14,
+    ])
+    expect(seed).toEqual(original)
+    expect(() => sdkRn.clampThenUniformScalar(new Uint8Array(31))).toThrow('Seed must be 32 bytes')
+    expect(() => sdkRn.clampThenUniformScalar(new Uint8Array(33))).toThrow('Seed must be 32 bytes')
   })
 })
 

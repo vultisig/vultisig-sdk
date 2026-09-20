@@ -330,6 +330,9 @@ export { configureWasm, getWalletCore } from '../../context/wasmRuntime'
 export type { MpcEngine, MpcKeyshare, MpcMessage, MpcSession } from '@vultisig/mpc-types'
 export { configureMpc, ensureMpcEngine, getMpcEngine } from '@vultisig/mpc-types'
 
+// Canonical Ed25519 seed-to-scalar conversion used by key import flows.
+export { clampThenUniformScalar } from '../../crypto/ed25519ScalarClamp'
+
 // Vault + fast vault lifecycle classes
 export { FastVaultFromSeedphraseService } from '../../services/FastVaultFromSeedphraseService'
 export { FastVault, hasServer, isServer } from '../../vault'

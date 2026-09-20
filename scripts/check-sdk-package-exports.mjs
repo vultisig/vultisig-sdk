@@ -167,6 +167,7 @@ function validatePackedReactNativePublicHelpers(packageRoot) {
   const declarationSource = readFileSync(declarationsPath, 'utf8')
 
   for (const symbol of [
+    'clampThenUniformScalar',
     'getTxStatus',
     'buildSignAminoKeysignPayload',
     'buildSignDirectKeysignPayload',
@@ -186,7 +187,7 @@ function validatePackedReactNativeRuntimeExports(packageRoot) {
   const exportedNames = ast.body
     .filter(statement => statement.type === 'ExportNamedDeclaration')
     .flatMap(statement => statement.specifiers.map(specifier => specifier.exported.name))
-  for (const name of ['resolveTokenRef', 'resolveTokenRefId', 'getTxStatus', 'amount']) {
+  for (const name of ['resolveTokenRef', 'resolveTokenRefId', 'getTxStatus', 'amount', 'clampThenUniformScalar']) {
     assert.ok(exportedNames.includes(name), `packed React Native runtime must export ${name}`)
   }
   console.log('SDK packed React Native runtime export bindings passed (artifact check, not device execution)')
@@ -225,6 +226,22 @@ async function verifyAmountConsumer(sdk) {
     globalThis.fetch = originalFetch
     await instance.dispose()
   }
+}
+
+function verifyScalarConsumer(sdk) {
+  assert.equal(typeof sdk.clampThenUniformScalar, 'function', 'root exports clampThenUniformScalar')
+  const seed = new Uint8Array(32)
+  const original = seed.slice()
+  assert.deepEqual(
+    Array.from(sdk.clampThenUniformScalar(seed)),
+    [
+      175, 34, 224, 240, 87, 185, 220, 205, 75, 27, 229, 206, 119, 226, 231, 213, 87, 181, 121, 112, 181, 38, 122, 144,
+      245, 121, 96, 146, 74, 135, 241, 6,
+    ]
+  )
+  assert.deepEqual(seed, original, 'clampThenUniformScalar preserves its input')
+  assert.throws(() => sdk.clampThenUniformScalar(new Uint8Array(31)), /Seed must be 32 bytes/)
+  assert.throws(() => sdk.clampThenUniformScalar(new Uint8Array(33)), /Seed must be 32 bytes/)
 }
 
 // Run the same public API scenarios through both installed Node module formats.
@@ -426,6 +443,8 @@ console.log('Packed amount ESM consumers passed: stable instance API, exact conv
 const root = importedModules.get('@vultisig/sdk')
 ${verifyTokenRefConsumer.toString()}
 verifyTokenRefConsumer(root)
+${verifyScalarConsumer.toString()}
+verifyScalarConsumer(root)
 const node = importedModules.get('@vultisig/sdk/node')
 const vite = importedModules.get('@vultisig/sdk/vite')
 const electronMain = importedModules.get('@vultisig/sdk/electron/main')
@@ -493,6 +512,8 @@ for (const { specifier, target } of cases) {
 assert.equal(typeof requiredModules.get('@vultisig/sdk')?.Vultisig, 'function', 'root require exports Vultisig')
 ${verifyTokenRefConsumer.toString()}
 verifyTokenRefConsumer(requiredModules.get('@vultisig/sdk'))
+${verifyScalarConsumer.toString()}
+verifyScalarConsumer(requiredModules.get('@vultisig/sdk'))
 ${verifyAmountConsumer.toString()}
 ;(async () => {
   for (const specifier of ['@vultisig/sdk', '@vultisig/sdk/electron/main']) {
@@ -556,6 +577,7 @@ instance.amount = amount
 // @ts-expect-error the React Native instance exposes a getter only
 rnInstance.amount = rnAmount
 import {
+  clampThenUniformScalar,
   encodeTrc20TransferParam,
   tronBase58ToEvmHex,
   tronBase58ToHex,
@@ -586,6 +608,7 @@ import type {
   ExtendedChainRegistry as ReactNativeExtendedChainRegistry,
 } from '@vultisig/sdk/react-native'
 import {
+  clampThenUniformScalar as clampThenUniformScalarReactNative,
   encodeTrc20TransferParam as encodeTrc20TransferParamReactNative,
   tronBase58ToEvmHex as tronBase58ToEvmHexReactNative,
   tronBase58ToHex as tronBase58ToHexReactNative,
@@ -647,8 +670,12 @@ const tronConverters: ((address: string) => string)[] = [
 const tronEncoders: ((address: string, amount: string) => string)[] = [
   encodeTrc20TransferParam, encodeTrc20TransferParamReactNative,
 ]
+const scalarHelpers: ((seed: Uint8Array) => Uint8Array)[] = [
+  clampThenUniformScalar, clampThenUniformScalarReactNative,
+]
 void tronConverters
 void tronEncoders
+void scalarHelpers
 
 const descriptor: ChainDescriptor = chainRegistry[Chain.Ethereum]
 const registry: ChainDescriptorRegistry = chainRegistry

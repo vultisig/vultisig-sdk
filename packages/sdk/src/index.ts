@@ -64,6 +64,9 @@ export {
 // Validation helpers
 export { ValidationHelpers } from './utils/validation'
 
+// Canonical Ed25519 seed-to-scalar conversion used by key import flows.
+export { clampThenUniformScalar } from './crypto/ed25519ScalarClamp'
+
 // ============================================================================
 // PUBLIC API - Transaction Preparation / Normalization Utilities (vault-free)
 // ============================================================================
