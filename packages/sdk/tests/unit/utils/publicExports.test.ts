@@ -2,6 +2,7 @@ import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/custo
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
 import * as blockaidChains from '@vultisig/core-chain/security/blockaid/evmChains'
 import * as isValidTokenIdModule from '@vultisig/core-chain/utils/isValidTokenId'
+import * as rippleDestinationTag from '@vultisig/core-mpc/keysign/utils/rippleDestinationTag'
 import { describe, expect, expectTypeOf, it } from 'vitest'
 
 import * as tronAbi from '../../../src/abi/tron'
@@ -227,6 +228,35 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.isValidRippleXAddress(xAddress)).toBe(true)
     expect(sdk.decodeRippleXAddress(xAddress)).toEqual({ address: classicAddress, destinationTag: 42 })
     expect(sdk.normalizeRippleDestination(xAddress)).toEqual({ address: classicAddress, destinationTag: 42 })
+  })
+
+  it('re-exports XRP destination-tag canonicals by identity', () => {
+    expect(sdk.maxRippleDestinationTag).toBe(rippleDestinationTag.maxRippleDestinationTag)
+    expect(sdk.validateDestinationTag).toBe(rippleDestinationTag.validateDestinationTag)
+    expect(sdk.getLegacyDestinationTag).toBe(rippleDestinationTag.getLegacyDestinationTag)
+    expect(sdk.resolveDestinationTag).toBe(rippleDestinationTag.resolveDestinationTag)
+    expectTypeOf(sdk.validateDestinationTag).toEqualTypeOf<(destinationTag: number) => number>()
+    expectTypeOf(sdk.getLegacyDestinationTag).toEqualTypeOf<(memo: string | undefined) => number | undefined>()
+    expectTypeOf(sdk.resolveDestinationTag).toEqualTypeOf<
+      (input: { destinationTag?: number; memo?: string }) => number | undefined
+    >()
+
+    expect(sdk.resolveDestinationTag({ destinationTag: 0, memo: '42' })).toBe(0)
+    expect(sdk.resolveDestinationTag({ memo: sdk.maxRippleDestinationTag.toString() })).toBe(
+      sdk.maxRippleDestinationTag
+    )
+
+    let error: unknown
+    try {
+      sdk.validateDestinationTag(-1)
+    } catch (caught) {
+      error = caught
+    }
+    expect(error).toMatchObject({
+      name: 'BuildKeysignPayloadError',
+      type: 'ripple-destination-tag-invalid',
+      message: `Invalid XRP destination tag: expected an integer between 0 and ${sdk.maxRippleDestinationTag}`,
+    })
   })
 
   it('exports the custom-RPC registry + health-probe canonicals from the root SDK entrypoint', () => {

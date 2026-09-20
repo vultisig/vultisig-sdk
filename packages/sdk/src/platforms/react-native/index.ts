@@ -229,6 +229,12 @@ export {
   isValidRippleXAddress,
   normalizeRippleDestination,
 } from '@vultisig/core-chain/chains/ripple/address'
+export {
+  getLegacyDestinationTag,
+  maxRippleDestinationTag,
+  resolveDestinationTag,
+  validateDestinationTag,
+} from '@vultisig/core-mpc/keysign/utils/rippleDestinationTag'
 
 // Custom-RPC canonicals — pure helpers/registry state that stay safe on the RN
 // graph and must remain in parity with the root SDK entrypoint.

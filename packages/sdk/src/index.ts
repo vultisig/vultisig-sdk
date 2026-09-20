@@ -334,6 +334,12 @@ export {
   isValidRippleXAddress,
   normalizeRippleDestination,
 } from '@vultisig/core-chain/chains/ripple/address'
+export {
+  getLegacyDestinationTag,
+  maxRippleDestinationTag,
+  resolveDestinationTag,
+  validateDestinationTag,
+} from '@vultisig/core-mpc/keysign/utils/rippleDestinationTag'
 
 // Custom-RPC canonicals — surfaced so consumers can use the SDK-owned per-chain
 // override registry + health probe instead of deep-importing core internals or

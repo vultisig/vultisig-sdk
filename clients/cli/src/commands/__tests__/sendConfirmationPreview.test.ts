@@ -44,12 +44,28 @@ type PreviewCase = {
 
 const cases: PreviewCase[] = [
   {
+    name: 'zero numeric legacy memo',
+    params: { chain: Chain.Ripple, to: CLASSIC_ADDRESS, amount: '1.0', memo: '0' },
+    payloadMemo: '0',
+    payloadDestinationTag: 0,
+    expectedTo: CLASSIC_ADDRESS,
+    expectedDestinationTag: 0,
+  },
+  {
     name: 'numeric legacy memo',
     params: { chain: Chain.Ripple, to: CLASSIC_ADDRESS, amount: '1.0', memo: '12345' },
     payloadMemo: '12345',
     payloadDestinationTag: 12345,
     expectedTo: CLASSIC_ADDRESS,
     expectedDestinationTag: 12345,
+  },
+  {
+    name: 'maximum numeric legacy memo',
+    params: { chain: Chain.Ripple, to: CLASSIC_ADDRESS, amount: '1.0', memo: '4294967295' },
+    payloadMemo: '4294967295',
+    payloadDestinationTag: 4294967295,
+    expectedTo: CLASSIC_ADDRESS,
+    expectedDestinationTag: 4294967295,
   },
   {
     name: 'explicit destination tag only',
@@ -157,7 +173,7 @@ async function expectSignablePayloadPreview(testCase: PreviewCase): Promise<void
 }
 
 describe('send confirmation preview', () => {
-  it('reports all four Ripple memo and destination-tag forms from the signable payload', async () => {
+  it('reports Ripple memo and destination-tag forms from the signable payload', async () => {
     for (const testCase of cases.filter(({ params }) => params.chain === Chain.Ripple)) {
       await expectSignablePayloadPreview(testCase)
     }

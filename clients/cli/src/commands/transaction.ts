@@ -1,9 +1,14 @@
 /**
  * Transaction Commands - thin wrapper around vault.send()
  */
-import { getLegacyDestinationTag, resolveDestinationTag } from '@vultisig/core-mpc/keysign/utils/rippleDestinationTag'
 import type { KeysignPayload, VaultBase } from '@vultisig/sdk'
-import { Chain, normalizeRippleDestination, Vultisig } from '@vultisig/sdk'
+import {
+  Chain,
+  getLegacyDestinationTag,
+  normalizeRippleDestination,
+  resolveDestinationTag,
+  Vultisig,
+} from '@vultisig/sdk'
 
 import type { CommandContext, SendDryRunResult, SendParams, TransactionResult } from '../core'
 import { buildSendBroadcastIntent, ensureVaultUnlocked, guardedBroadcast } from '../core'

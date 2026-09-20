@@ -5,9 +5,9 @@
  * single build+sign+broadcast helper into pure primitives so the SDK
  * consumer can drive MPC signing and broadcasting themselves.
  *
- * Imports only `ripple-binary-codec` and `ripple-address-codec` — NOT the
- * `xrpl` barrel, which transitively pulls the `Client` class and `ws` (TLS
- * transport) that Hermes cannot load.
+ * Imports only RN-safe chain/keysign helpers plus `ripple-binary-codec` and
+ * `ripple-address-codec` — NOT the `xrpl` barrel, which transitively pulls the
+ * `Client` class and `ws` (TLS transport) that Hermes cannot load.
  *
  * Exposed:
  *   - `deriveXrpAddress(compressedPubKeyHex, hexChainCode?)` — classic
@@ -31,6 +31,8 @@ import { ripemd160 } from '@noble/hashes/legacy.js'
 import { sha256, sha512 } from '@noble/hashes/sha2.js'
 import { normalizeRippleDestination } from '@vultisig/core-chain/chains/ripple/address'
 import { getSignableIssuedCurrencyAmount } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
+import { BuildKeysignPayloadError } from '@vultisig/core-mpc/keysign/error'
+import { getLegacyDestinationTag, resolveDestinationTag } from '@vultisig/core-mpc/keysign/utils/rippleDestinationTag'
 import { encodeAccountID } from 'ripple-address-codec'
 import { encode as xrplEncode, encodeForSigning } from 'ripple-binary-codec'
 
@@ -214,13 +216,6 @@ export type BuildXrpSendResult = {
   }
 }
 
-const getLegacyDestinationTag = (memo: string | undefined): number | undefined => {
-  if (!memo || !/^(0|[1-9]\d*)$/.test(memo)) return undefined
-
-  const destinationTag = Number(memo)
-  return Number.isSafeInteger(destinationTag) && destinationTag <= 0xffffffff ? destinationTag : undefined
-}
-
 /**
  * Build an XRP Payment transaction with signing hash + finalize callback.
  *
@@ -244,12 +239,14 @@ export function buildXrpSendTx(opts: BuildXrpSendOptions): BuildXrpSendResult {
   }
   const explicitDestinationTag = opts.destinationTag ?? embeddedDestinationTag
   const legacyMemoDestinationTag = explicitDestinationTag === undefined ? getLegacyDestinationTag(opts.memo) : undefined
-  const destinationTag = explicitDestinationTag ?? legacyMemoDestinationTag
-  if (
-    destinationTag !== undefined &&
-    (!Number.isInteger(destinationTag) || destinationTag < 0 || destinationTag > 0xffffffff)
-  ) {
-    throw new Error('Invalid XRP DestinationTag: expected an integer from 0 to 4294967295')
+  let destinationTag: number | undefined
+  try {
+    destinationTag = resolveDestinationTag({ destinationTag: explicitDestinationTag, memo: opts.memo })
+  } catch (error) {
+    if (error instanceof BuildKeysignPayloadError && error.type === 'ripple-destination-tag-invalid') {
+      throw new Error('Invalid XRP DestinationTag: expected an integer from 0 to 4294967295')
+    }
+    throw error
   }
 
   const memoIsLegacyCarrier =

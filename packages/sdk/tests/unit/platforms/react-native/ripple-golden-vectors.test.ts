@@ -308,6 +308,57 @@ describe('Ripple / buildXrpSendTx golden vectors', () => {
     expect(result.encodedForSigningHex).toBe(xrplEncodeForSigning(result.tx))
   })
 
+  it.each([0, 0xffffffff])('accepts the explicit DestinationTag boundary %s', destinationTag => {
+    const result = buildXrpSendTx({
+      account: FX.account,
+      destination: FX.destination,
+      amount: FX.amount,
+      fee: FX.fee,
+      sequence: FX.sequence,
+      lastLedgerSequence: FX.lastLedgerSequence,
+      signingPubKey: FX.signingPubKey,
+      destinationTag,
+    })
+
+    expect(result.tx.DestinationTag).toBe(destinationTag)
+    expect(result.encodedForSigningHex).toBe(xrplEncodeForSigning(result.tx))
+  })
+
+  it.each([-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 0x100000000])(
+    'preserves the RN invalid-DestinationTag error contract for %s',
+    destinationTag => {
+      expect(() =>
+        buildXrpSendTx({
+          account: FX.account,
+          destination: FX.destination,
+          amount: FX.amount,
+          fee: FX.fee,
+          sequence: FX.sequence,
+          lastLedgerSequence: FX.lastLedgerSequence,
+          signingPubKey: FX.signingPubKey,
+          destinationTag,
+        })
+      ).toThrow(new Error('Invalid XRP DestinationTag: expected an integer from 0 to 4294967295'))
+    }
+  )
+
+  it.each(['01', '4294967296'])('preserves the non-canonical or out-of-range numeric memo %s as a memo', memo => {
+    const result = buildXrpSendTx({
+      account: FX.account,
+      destination: FX.destination,
+      amount: FX.amount,
+      fee: FX.fee,
+      sequence: FX.sequence,
+      lastLedgerSequence: FX.lastLedgerSequence,
+      signingPubKey: FX.signingPubKey,
+      memo,
+    })
+
+    expect(result.tx.DestinationTag).toBeUndefined()
+    expect(result.tx.Memos?.[0].Memo.MemoData).toBe(Buffer.from(memo, 'utf8').toString('hex').toUpperCase())
+    expect(result.encodedForSigningHex).toBe(xrplEncodeForSigning(result.tx))
+  })
+
   it('preserves a distinct numeric memo alongside a DestinationTag', () => {
     const result = buildXrpSendTx({
       account: FX.account,

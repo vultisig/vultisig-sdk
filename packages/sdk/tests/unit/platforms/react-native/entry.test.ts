@@ -2,6 +2,7 @@ import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/custo
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
 import * as blockaidChains from '@vultisig/core-chain/security/blockaid/evmChains'
 import { isValidTxHash } from '@vultisig/core-chain/tx/isValidTxHash'
+import * as rippleDestinationTag from '@vultisig/core-mpc/keysign/utils/rippleDestinationTag'
 import { AuthInfo, SignDoc, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import { beforeAll, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
@@ -710,6 +711,23 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.isValidRippleXAddress(xAddress)).toBe(true)
     expect(rn.decodeRippleXAddress(xAddress)).toEqual({ address: classicAddress, destinationTag: 42 })
     expect(rn.normalizeRippleDestination(xAddress)).toEqual({ address: classicAddress, destinationTag: 42 })
+  })
+
+  it('re-exports XRP destination-tag canonicals by identity on the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(rn.maxRippleDestinationTag).toBe(rippleDestinationTag.maxRippleDestinationTag)
+    expect(rn.validateDestinationTag).toBe(rippleDestinationTag.validateDestinationTag)
+    expect(rn.getLegacyDestinationTag).toBe(rippleDestinationTag.getLegacyDestinationTag)
+    expect(rn.resolveDestinationTag).toBe(rippleDestinationTag.resolveDestinationTag)
+    expectTypeOf(rn.validateDestinationTag).toEqualTypeOf<(destinationTag: number) => number>()
+    expectTypeOf(rn.getLegacyDestinationTag).toEqualTypeOf<(memo: string | undefined) => number | undefined>()
+    expectTypeOf(rn.resolveDestinationTag).toEqualTypeOf<
+      (input: { destinationTag?: number; memo?: string }) => number | undefined
+    >()
+
+    expect(rn.resolveDestinationTag({ destinationTag: 0, memo: '42' })).toBe(0)
+    expect(rn.resolveDestinationTag({ memo: rn.maxRippleDestinationTag.toString() })).toBe(rn.maxRippleDestinationTag)
   })
 
   it('re-exports the custom-RPC canonicals on the RN entrypoint', async () => {
