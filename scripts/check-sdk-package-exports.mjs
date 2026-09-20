@@ -535,12 +535,30 @@ void ${alias}Keys`
     path.join(consumerRoot, 'verify-types.ts'),
     `${typeImports}
 ${declarationAssertions}
-import { amount, Vultisig as AmountVultisig, MemoryStorage, type Amount } from '@vultisig/sdk'
-import { amount as rnAmount, Vultisig as RnVultisig, type Amount as RnAmount } from '@vultisig/sdk/react-native'
+import {
+  amount,
+  Vultisig as AmountVultisig,
+  MemoryStorage,
+  type Amount,
+  type DiscoveredToken as RootDiscoveredToken,
+} from '@vultisig/sdk'
+import {
+  amount as rnAmount,
+  Vultisig as RnVultisig,
+  type Amount as RnAmount,
+  type DiscoveredToken as ReactNativeDiscoveredToken,
+} from '@vultisig/sdk/react-native'
 const amountGroup: Amount = amount
 const rnAmountGroup: RnAmount = rnAmount
 const instance = new AmountVultisig({ autoInit: false, storage: new MemoryStorage() })
 const rnInstance = new RnVultisig({ autoInit: false, storage: new MemoryStorage() })
+declare const rootDiscoveredToken: RootDiscoveredToken
+declare const reactNativeDiscoveredToken: ReactNativeDiscoveredToken
+const rootTokenFromReactNative: RootDiscoveredToken = reactNativeDiscoveredToken
+const reactNativeTokenFromRoot: ReactNativeDiscoveredToken = rootDiscoveredToken
+const rootDiscoveryResult: Awaited<ReturnType<typeof AmountVultisig.discoverTokens>>[number] = rootDiscoveredToken
+const reactNativeDiscoveryResult: Awaited<ReturnType<typeof RnVultisig.discoverTokens>>[number] = reactNativeDiscoveredToken
+void [rootTokenFromReactNative, reactNativeTokenFromRoot, rootDiscoveryResult, reactNativeDiscoveryResult]
 for (const group of [amountGroup, rnAmountGroup, instance.amount, rnInstance.amount]) {
   const base: string = group.convert({ amount: '1.5', decimals: 18, direction: 'to_base' })
   const human: string = group.toHumanUnits(base, 18)

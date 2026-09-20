@@ -88,6 +88,7 @@ configureCrypto(new ReactNativeCrypto())
 configureDefaultStorage(() => new ReactNativeStorage())
 
 // Chain enum and types
+export type { DiscoveredToken } from '../../types/tokens'
 export { Chain, IbcEnabledCosmosChain, VaultBasedCosmosChain } from '@vultisig/core-chain/Chain'
 export { cosmosFeeCoinDenom } from '@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom'
 export {
