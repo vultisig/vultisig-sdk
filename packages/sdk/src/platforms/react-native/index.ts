@@ -534,6 +534,32 @@ export type {
   StakekitBalanceQuery,
   StakekitBalancesResult,
 } from '../../tools/defi'
+export {
+  buildBalancerV3SwapCalldata,
+  buildYieldActionScanRequest,
+  buildYieldActionScanRequests,
+  chunkStakekitBalanceQueries,
+  defi,
+  fetchAllStakekitBalances,
+  fetchStakekitBalancesBatch,
+  parseActionDisplay,
+  STAKEKIT_BALANCE_QUERIES_PER_REQUEST,
+  stakekitBalances,
+  stakekitBuildEnter,
+  stakekitBuildExit,
+  stakekitBuildManage,
+  stakekitDetails,
+  stakekitSearch,
+  validateStakekitActionAddress,
+  validateStakekitActionInput,
+} from '../../tools/defi'
+export {
+  buildGlifRedeemSticnt,
+  buildGlifStakeIcnt,
+  GLIF_ICN_BASE_ADDRESSES,
+  GLIF_ICN_TOKEN_DECIMALS,
+  glifPoolWriteAbi,
+} from '../../tools/defi/glif'
 export type {
   EvmScanRequest,
   PendingAction,
@@ -556,24 +582,6 @@ export type {
   YieldToken,
   YieldTransaction,
 } from '../../tools/defi/stakekit'
-export {
-  buildBalancerV3SwapCalldata,
-  buildYieldActionScanRequests,
-  chunkStakekitBalanceQueries,
-  defi,
-  fetchAllStakekitBalances,
-  fetchStakekitBalancesBatch,
-  STAKEKIT_BALANCE_QUERIES_PER_REQUEST,
-  validateStakekitActionAddress,
-  validateStakekitActionInput,
-} from '../../tools/defi'
-export {
-  buildGlifRedeemSticnt,
-  buildGlifStakeIcnt,
-  GLIF_ICN_BASE_ADDRESSES,
-  GLIF_ICN_TOKEN_DECIMALS,
-  glifPoolWriteAbi,
-} from '../../tools/defi/glif'
 export type {
   BuildThreeJaneSupplyUsdcParams,
   BuildThreeJaneSupplyUsdcResult,

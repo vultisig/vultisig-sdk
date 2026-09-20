@@ -250,6 +250,20 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(reactNativeEntry.buildYieldActionScanRequests).toBe(stakekit.buildYieldActionScanRequests)
   })
 
+  it.each([
+    'buildYieldActionScanRequest',
+    'parseActionDisplay',
+    'stakekitBalances',
+    'stakekitBuildEnter',
+    'stakekitBuildExit',
+    'stakekitBuildManage',
+    'stakekitDetails',
+    'stakekitSearch',
+  ] as const)('re-exports canonical StakeKit runtime helper %s by identity', async name => {
+    const stakekit = await import('../../../../src/tools/defi/stakekit')
+    expect(reactNativeEntry[name]).toBe(stakekit[name])
+  })
+
   it('re-exports the StakeKit action validators by identity', async () => {
     const stakekit = await import('../../../../src/tools/defi/stakekit')
 
