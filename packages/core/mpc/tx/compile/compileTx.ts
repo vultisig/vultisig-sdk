@@ -97,8 +97,8 @@ export const compileTx = ({
   // dApp-supplied raw Solana transaction (sdk#1204): txInputData is the
   // ORIGINAL serialized transaction and hashes[0] is its wire-format message
   // (see getPreSigningHashes). Splice the 64-byte signature into the original
-  // bytes at signer index 0 instead of letting TransactionCompiler assemble
-  // from a WalletCore re-encode that may not match what was signed
+  // bytes at the vault's own signer slot instead of letting TransactionCompiler
+  // assemble from a WalletCore re-encode that may not match what was signed
   // (ios#4419 / android#5223 parity).
   if (chainKind === 'solana' && keysignPayload?.signData.case === 'signSolana') {
     const message = hashes[0]
@@ -116,7 +116,11 @@ export const compileTx = ({
       signatureFormat,
     })
 
-    const signedTx = spliceSolanaSignature(txInputData, new Uint8Array(signature))
+    const signedTx = spliceSolanaSignature({
+      txData: txInputData,
+      signature: new Uint8Array(signature),
+      publicKey: new Uint8Array(publicKey.data()),
+    })
     const encodedSignature = base58.encode(signature)
 
     return TW.Solana.Proto.SigningOutput.encode(
@@ -124,8 +128,8 @@ export const compileTx = ({
         // WalletCore's Solana SigningOutput.encoded is base58 — the broadcast
         // resolver (`broadcastSolanaTx`) and Blockaid inputs decode it as such.
         encoded: base58.encode(signedTx),
-        // getSolanaTxHash reads the fee-payer signature from this metadata.
-        // Keep it identical to the signature spliced into signer slot 0.
+        // getSolanaTxHash reads the vault's signature from this metadata.
+        // Keep it identical to the signature spliced into the vault's slot.
         signatures: [
           {
             pubkey: base58.encode(publicKey.data()),

@@ -47,10 +47,24 @@ const CARDANO = {
   garbage: 'not-a-cardano-address',
 }
 
+const QBTC = {
+  // Two distinct vault addresses, both rejected by the Send form before the
+  // explicit bech32 limit was passed (vultisig/vultisig-sdk#2417).
+  vaultA: 'qbtc10hmrwslfvxtaaag8rrk3vqr5f5uj7z80z9p9nd',
+  vaultB: 'qbtc12tkhjqjqz3uz0r3tm7cmlvdulk4psputeucxhj',
+  // vaultA's 20-byte payload re-encoded with other prefixes: valid bech32 that
+  // must be rejected on prefix alone.
+  cosmosPrefix: 'cosmos10hmrwslfvxtaaag8rrk3vqr5f5uj7z80lzqque',
+  thorPrefix: 'thor10hmrwslfvxtaaag8rrk3vqr5f5uj7z80e9emfx',
+  // vaultA with its last character changed: bech32 checksum no longer matches.
+  badChecksum: 'qbtc10hmrwslfvxtaaag8rrk3vqr5f5uj7z80z9p9nc',
+  garbage: 'not-a-qbtc-address',
+}
+
 // Wallet-core integration tests (require real WalletCore WASM init).
 // These pin the exact addresses that must validate so a future wallet-core version
 // bump that breaks tron/ton/cardano validation is caught by CI immediately.
-describe('isValidAddress — Tron / TON / Cardano (real walletCore)', () => {
+describe('isValidAddress — Tron / TON / Cardano / QBTC (real walletCore)', () => {
   let walletCore: WalletCore
 
   beforeAll(async () => {
@@ -119,6 +133,41 @@ describe('isValidAddress — Tron / TON / Cardano (real walletCore)', () => {
 
     it('rejects garbage input for Cardano', () => {
       expect(isValidAddress({ chain: Chain.Cardano, address: CARDANO.garbage, walletCore })).toBe(false)
+    })
+  })
+
+  // ── QBTC ──────────────────────────────────────────────────────────────────
+  // QBTC is validated by decoding bech32 directly (no WalletCore coin type).
+  // These pin that a real address passes whichever @scure/base the consumer's
+  // lockfile resolves — the decode used to throw under >= 2.3 and every
+  // address was rejected.
+  describe('QBTC', () => {
+    it('accepts a real vault address', () => {
+      expect(isValidAddress({ chain: Chain.QBTC, address: QBTC.vaultA, walletCore })).toBe(true)
+    })
+
+    it('accepts a second real vault address', () => {
+      expect(isValidAddress({ chain: Chain.QBTC, address: QBTC.vaultB, walletCore })).toBe(true)
+    })
+
+    it('accepts an address with surrounding whitespace', () => {
+      expect(isValidAddress({ chain: Chain.QBTC, address: `  ${QBTC.vaultA}\n`, walletCore })).toBe(true)
+    })
+
+    it('rejects a cosmos-prefixed bech32 address', () => {
+      expect(isValidAddress({ chain: Chain.QBTC, address: QBTC.cosmosPrefix, walletCore })).toBe(false)
+    })
+
+    it('rejects a thor-prefixed bech32 address', () => {
+      expect(isValidAddress({ chain: Chain.QBTC, address: QBTC.thorPrefix, walletCore })).toBe(false)
+    })
+
+    it('rejects a qbtc address with a bad bech32 checksum', () => {
+      expect(isValidAddress({ chain: Chain.QBTC, address: QBTC.badChecksum, walletCore })).toBe(false)
+    })
+
+    it('rejects garbage input for QBTC', () => {
+      expect(isValidAddress({ chain: Chain.QBTC, address: QBTC.garbage, walletCore })).toBe(false)
     })
   })
 })
