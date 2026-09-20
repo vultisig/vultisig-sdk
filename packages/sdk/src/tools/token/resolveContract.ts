@@ -6,6 +6,7 @@ import { getEvmClient } from '@vultisig/core-chain/chains/evm/client'
 import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import bs58 from 'bs58'
+import { Buffer } from 'buffer'
 import { erc20Abi } from 'viem'
 
 /**

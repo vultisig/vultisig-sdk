@@ -123,6 +123,7 @@ export default defineConfig([
   createSubpathTypesConfig('src/platforms/node/prep.ts', 'dist/tools/prep/index.d.cts'),
   createSubpathTypesConfig('src/platforms/react-native/prep.ts', 'dist/tools/prep/index.react-native.d.ts'),
   createSubpathTypesConfig('src/tools/parse/index.ts', 'dist/tools/parse/index.d.ts'),
+  createSubpathTypesConfig('src/tools/token/index.ts', 'dist/tools/token/index.d.ts'),
   createSubpathTypesConfig('src/tools/defi/index.ts', 'dist/tools/defi/index.d.ts'),
   createSubpathTypesConfig('src/tools/swap/index.ts', 'dist/tools/swap/index.d.ts'),
   createSubpathTypesConfig('src/tools/gas/index.ts', 'dist/tools/gas/index.d.ts'),

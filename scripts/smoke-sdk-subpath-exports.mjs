@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -53,6 +53,7 @@ try {
       '',
       'const require = createRequire(import.meta.url)',
       "const parsePath = require.resolve('@vultisig/sdk/tools/parse')",
+      "const tokenPath = require.resolve('@vultisig/sdk/tools/token')",
       "const defiPath = require.resolve('@vultisig/sdk/tools/defi')",
       "const bridgePath = require.resolve('@vultisig/sdk/tools/bridge')",
       "const gasPath = require.resolve('@vultisig/sdk/tools/gas')",
@@ -81,6 +82,7 @@ try {
       '}',
       "const txPath = require.resolve('@vultisig/sdk/tx')",
       'assert.match(parsePath, /dist\\/tools\\/parse\\/index\\.cjs$/)',
+      'assert.match(tokenPath, /dist\\/tools\\/token\\/index\\.cjs$/)',
       'assert.match(defiPath, /dist\\/tools\\/defi\\/index\\.cjs$/)',
       'assert.match(bridgePath, /dist\\/tools\\/bridge\\/index\\.cjs$/)',
       'assert.match(gasPath, /dist\\/tools\\/gas\\/index\\.cjs$/)',
@@ -92,6 +94,8 @@ try {
       'assert.match(pricePath, /dist\\/tools\\/price\\/index\\.cjs$/)',
       'assert.match(txPath, /dist\\/tx\\/index\\.cjs$/)',
       "const parse = await import('@vultisig/sdk/tools/parse')",
+      "const tokenModule = await import('@vultisig/sdk/tools/token')",
+      "const tokenCjs = require('@vultisig/sdk/tools/token')",
       "const defiModule = await import('@vultisig/sdk/tools/defi')",
       "const bridgeModule = await import('@vultisig/sdk/tools/bridge')",
       "const gasModule = await import('@vultisig/sdk/tools/gas')",
@@ -105,6 +109,17 @@ try {
       "const txModule = await import('@vultisig/sdk/tx')",
       "assert.equal(parse.parseChain('Ethereum').success, true)",
       "assert.equal(typeof parse.parseTicker, 'function')",
+      'for (const token of [tokenModule, tokenCjs]) {',
+      '  for (const name of ["resolveContract", "searchToken", "getTokenMetadata"]) {',
+      '    assert.equal(typeof token[name], "function", name)',
+      '  }',
+      '  for (const name of ["chainFeeCoin", "knownTokens", "knownTokensIndex"]) {',
+      '    assert.equal(typeof token[name], "object", name)',
+      '  }',
+      "  assert.equal(token.chainFeeCoin.Ethereum.ticker, 'ETH')",
+      '  assert.ok(Array.isArray(token.knownTokens.Ethereum))',
+      "  assert.equal(typeof token.knownTokensIndex.Ethereum, 'object')",
+      '}',
       "assert.equal(typeof defiModule.defi, 'object')",
       "assert.equal(typeof defiModule.osmosis.buildSwapExactAmountIn, 'function')",
       "assert.equal(typeof bridgeModule.buildCctpBridge, 'function')",
@@ -141,7 +156,7 @@ try {
       "assert.equal(typeof priceModuleCjs.coinGeckoIdToSymbol, 'object')",
       "assert.equal(typeof txModule.normalizeTx, 'function')",
       "assert.equal(txModule.normalizeTx({ to: '0x1', chain: 'Ethereum' }).chain, 'Ethereum')",
-      'console.log(JSON.stringify({ swapPath, swapEsmPath, swapOk: true, parsePath, defiPath, bridgePath, gasPath, balancePath, tronPath, utxoPath, decodePath, policyPath, pricePath, txPath, parseOk: true, defiOk: true, bridgeOk: true, gasOk: true, balanceOk: true, tronOk: true, utxoOk: true, decodeOk: true, policyOk: true, priceOk: true, txOk: true }))',
+      'console.log(JSON.stringify({ swapPath, swapEsmPath, swapOk: true, parsePath, tokenPath, defiPath, bridgePath, gasPath, balancePath, tronPath, utxoPath, decodePath, policyPath, pricePath, txPath, parseOk: true, tokenOk: true, defiOk: true, bridgeOk: true, gasOk: true, balanceOk: true, tronOk: true, utxoOk: true, decodeOk: true, policyOk: true, priceOk: true, txOk: true }))',
       '',
     ].join('\n')
   )
@@ -149,6 +164,7 @@ try {
     path.join(appRoot, 'smoke-types.ts'),
     [
       "import { parseChain, type ParseChainResult } from '@vultisig/sdk/tools/parse'",
+      "import { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, resolveContract, searchToken, type Coin, type CoinKey, type CoinMetadata, type KnownCoin, type KnownCoinMetadata, type ResolveContractResult, type TokenMetadataResolver, type TokenStandard } from '@vultisig/sdk/tools/token'",
       "import { defi, type Defi } from '@vultisig/sdk/tools/defi'",
       "import { UtxoChain } from '@vultisig/sdk'",
       "import { buildCctpBridge, type CctpChainConfig } from '@vultisig/sdk/tools/bridge'",
@@ -168,6 +184,17 @@ try {
       '',
       "const chainResult: ParseChainResult = parseChain('Ethereum')",
       'void chainResult',
+      'const contractResolver: typeof resolveContract = resolveContract',
+      'const tokenSearcher: typeof searchToken = searchToken',
+      'const metadataResolver: TokenMetadataResolver = getTokenMetadata',
+      'const coin = null as unknown as Coin',
+      'const coinKey = null as unknown as CoinKey',
+      'const coinMetadata = null as unknown as CoinMetadata',
+      'const knownCoin = null as unknown as KnownCoin',
+      'const knownCoinMetadata = null as unknown as KnownCoinMetadata',
+      'const contractResult = null as unknown as ResolveContractResult',
+      'const tokenStandard = null as unknown as TokenStandard',
+      'void [contractResolver, tokenSearcher, metadataResolver, chainFeeCoin, knownTokens, knownTokensIndex, coin, coinKey, coinMetadata, knownCoin, knownCoinMetadata, contractResult, tokenStandard]',
       'const tools: Defi = defi',
       'void tools',
       'const builder: typeof buildCctpBridge = buildCctpBridge',
@@ -210,10 +237,71 @@ try {
       '',
     ].join('\n')
   )
+  writeFileSync(
+    path.join(appRoot, 'smoke-token-condition.mjs'),
+    [
+      "import assert from 'node:assert/strict'",
+      '',
+      "const tokenPath = import.meta.resolve('@vultisig/sdk/tools/token')",
+      'assert.match(tokenPath, /dist\\/tools\\/token\\/index\\.js$/)',
+      "const token = await import('@vultisig/sdk/tools/token')",
+      'for (const name of ["resolveContract", "searchToken", "getTokenMetadata"]) {',
+      '  assert.equal(typeof token[name], "function", name)',
+      '}',
+      'for (const name of ["chainFeeCoin", "knownTokens", "knownTokensIndex"]) {',
+      '  assert.equal(typeof token[name], "object", name)',
+      '}',
+      'console.log(JSON.stringify({ condition: process.argv[2], tokenPath, tokenOk: true }))',
+      '',
+    ].join('\n')
+  )
+  writeFileSync(
+    path.join(appRoot, 'token-browser-consumer.mjs'),
+    [
+      "import { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, resolveContract, searchToken } from '@vultisig/sdk/tools/token'",
+      '',
+      'globalThis.__VULTISIG_TOKEN_SUBPATH__ = {',
+      '  chainFeeCoin,',
+      '  getTokenMetadata,',
+      '  knownTokens,',
+      '  knownTokensIndex,',
+      '  resolveContract,',
+      '  searchToken,',
+      '}',
+      '',
+    ].join('\n')
+  )
+  writeFileSync(
+    path.join(appRoot, 'vite.config.mjs'),
+    [
+      'export default {',
+      "  resolve: { conditions: ['browser'] },",
+      '  build: {',
+      '    lib: {',
+      "      entry: 'token-browser-consumer.mjs',",
+      "      formats: ['es'],",
+      "      fileName: 'token-browser-consumer',",
+      '    },',
+      "    outDir: 'browser-dist',",
+      '    emptyOutDir: true,',
+      '    minify: false,',
+      '    sourcemap: false,',
+      '  },',
+      '}',
+      '',
+    ].join('\n')
+  )
 
   run('npm', ['install', '--no-package-lock', tarballPath], appRoot)
+  run('node', [path.join(repoRoot, 'node_modules/vite/bin/vite.js'), 'build', '--config', 'vite.config.mjs'], appRoot)
+  if (statSync(path.join(appRoot, 'browser-dist/token-browser-consumer.js')).size === 0) {
+    throw new Error('browser token consumer bundle is empty')
+  }
   await smokePrepConsumers({ appRoot, repoRoot })
   run('node', ['smoke-runtime.mjs'], appRoot)
+  for (const condition of ['browser', 'worker', 'react-native']) {
+    run('node', [`--conditions=${condition}`, 'smoke-token-condition.mjs', condition], appRoot)
+  }
   run('yarn', ['exec', 'tsc', '--project', path.join(appRoot, 'tsconfig.json')], repoRoot)
 } finally {
   rmSync(tempRoot, { recursive: true, force: true })

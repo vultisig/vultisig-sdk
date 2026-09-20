@@ -415,6 +415,10 @@ const configs = {
       distBase: 'tools/parse',
     }),
     ...createSubpathConfigs({
+      input: './src/tools/token/index.ts',
+      distBase: 'tools/token',
+    }),
+    ...createSubpathConfigs({
       input: './src/tools/defi/index.ts',
       distBase: 'tools/defi',
     }),
