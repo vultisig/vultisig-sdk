@@ -116,6 +116,46 @@ async function sendJson(vault: never, options: never = params) {
 }
 
 describe('send --dry-run preview', () => {
+  // A gasless TON jetton send pays the relay in the jetton: the SDK already
+  // folds that fee into `total`, so the preview must judge the jetton balance
+  // alone and never demand TON for gas.
+  it('does not require a native balance for a gasless TON jetton send', async () => {
+    const vault = {
+      send: vi.fn(async () => ({
+        dryRun: true,
+        fee: '0.15',
+        feeSymbol: 'USDT',
+        total: '25.15',
+        contractAddress: 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs',
+        keysignPayload: { coin: { decimals: 6 }, toAmount: '25000000' },
+      })),
+      balance: vi.fn(async (_chain: unknown, tokenId?: string) =>
+        tokenId
+          ? { formattedAmount: '100', symbol: 'USDT', amount: '0', decimals: 6, chainId: 'ton', tokenId }
+          : { formattedAmount: '0', symbol: 'TON', amount: '0', decimals: 9, chainId: 'ton' }
+      ),
+      gas: vi.fn(async () => ({})),
+      address: vi.fn(async () => 'UQfrom'),
+    } as never
+    const gaslessParams = {
+      chain: Chain.Ton,
+      to: 'UQdest',
+      amount: '25',
+      tokenId: 'USDT',
+      gasless: true,
+      dryRun: true,
+    } as never
+
+    const data = await sendJson(vault, gaslessParams)
+
+    expect(data).toMatchObject({ fee: '0.15', feeSymbol: 'USDT', total: '25.15' })
+    expect(data).not.toHaveProperty('warning')
+    const { send, balance } = vault as unknown as { send: ReturnType<typeof vi.fn>; balance: ReturnType<typeof vi.fn> }
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({ gasless: true, symbol: 'USDT' }))
+    expect(balance).toHaveBeenCalledTimes(1)
+    expect(balance).toHaveBeenCalledWith(Chain.Ton, 'USDT')
+  })
+
   it('discloses the exact token contract in JSON and the human preview', async () => {
     const contractAddress = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'
     const vault = makeTokenVault({

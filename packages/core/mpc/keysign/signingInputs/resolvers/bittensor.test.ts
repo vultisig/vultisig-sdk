@@ -1,7 +1,7 @@
 import { Buffer } from 'buffer'
 
 import { compactToU8a } from '@polkadot/util'
-import { decodeAddress } from '@polkadot/util-crypto'
+import { decodeAddress, encodeAddress } from '@polkadot/util-crypto'
 import { GenericExtrinsicEra, TypeRegistry } from '@polkadot/types'
 import { create } from '@bufbuild/protobuf'
 import { initWasm, type WalletCore } from '@trustwallet/wallet-core'
@@ -26,6 +26,19 @@ const FROM_ADDRESS = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty'
 const BLOCK_HASH = '0xaabbccddeeff00112233445566778899aabbccddeeff00112233445566778899'
 
 const hex = (bytes: Uint8Array) => Buffer.from(bytes).toString('hex')
+
+const invalidDestinations = [
+  { name: 'prefix 0', address: encodeAddress(decodeAddress(TO_ADDRESS), 0) },
+  { name: 'two-byte prefix', address: encodeAddress(decodeAddress(TO_ADDRESS), 1000) },
+  { name: 'hexadecimal account', address: `0x${hex(decodeAddress(TO_ADDRESS))}` },
+  { name: 'invalid checksum', address: `${TO_ADDRESS.slice(0, -1)}Z` },
+  { name: 'empty address', address: '' },
+  { name: 'whitespace', address: ` ${TO_ADDRESS}` },
+  ...[1, 2, 4, 8, 33].map(length => ({
+    name: `${length}-byte account`,
+    address: encodeAddress(new Uint8Array(length).fill(1), 42),
+  })),
+]
 
 const buildPayload = ({
   address = FROM_ADDRESS,
@@ -151,6 +164,12 @@ describe('buildBittensorSigningPayload — golden vector (full byte-for-byte pin
     transactionVersion: 1,
   }
 
+  it.each(invalidDestinations)('rejects $name before building bytes for either transfer mode', ({ address }) => {
+    for (const allowDeath of [false, true]) {
+      expect(() => buildBittensorSigningPayload({ ...params, toAddress: address, allowDeath })).toThrow()
+    }
+  })
+
   it('produces the expected callData bytes (pallet + method + MultiAddress::Id + dest pubkey + compact amount)', () => {
     const { callData } = buildBittensorSigningPayload(params)
     const destPubkey = decodeAddress(TO_ADDRESS)
@@ -235,6 +254,15 @@ describe('getBittensorSigningInputs — custom tx-input framing round-trips', ()
 
   beforeAll(async () => {
     walletCore = await initWasm()
+  })
+
+  it.each(invalidDestinations)('rejects $name with real WalletCore without substituting the sender', ({ address }) => {
+    const keysignPayload = buildPayload()
+    keysignPayload.toAddress = address
+    expect(() => getBittensorSigningInputs({ keysignPayload, walletCore })).toThrow(
+      'Invalid Bittensor destination address; refusing to fall back to the sender'
+    )
+    expect(keysignPayload.toAddress).toBe(address)
   })
 
   // Every co-signer derives the call index from PolkadotSpecific.allowDeath, so

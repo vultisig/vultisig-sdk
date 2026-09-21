@@ -200,11 +200,12 @@ const preview = await vault.send({ chain: Chain.Ethereum, to: "0x...", amount: "
 
 type SendResult =
   | { dryRun: false; txHash: string; chain: Chain }
-  | { dryRun: true; fee: string; total: string; keysignPayload: KeysignPayload }
+  | { dryRun: true; fee: string; feeSymbol: string; total: string; keysignPayload: KeysignPayload }
 ```
 
-**Full send params:** `{ chain, to, amount, symbol?, memo?, dryRun? }`
+**Full send params:** `{ chain, to, amount, symbol?, memo?, destinationTag?, gasless?, dryRun? }`
 - Omit `symbol` for native token (ETH, BTC). Set it for ERC-20s (e.g., `"USDC"`).
+- `gasless: true` (TON jettons on a W5 account) pays the network fee in the jetton itself through the TonAPI relay, so the account needs no TON. A dry run then reports `fee` in that jetton (`feeSymbol`).
 
 ### Swap
 

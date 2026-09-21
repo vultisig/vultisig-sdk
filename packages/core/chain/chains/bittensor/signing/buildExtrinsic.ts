@@ -50,7 +50,17 @@ export type BittensorSigningParams = {
  * balances.transfer_allow_death(dest, value) when the sender opted into reaping.
  */
 const buildCallData = (toAddress: string, amount: bigint, allowDeath: boolean): Uint8Array => {
-  const destPubkey = decodeAddress(toAddress)
+  // decodeAddress also accepts raw hex/bytes, bypassing its SS58 prefix and
+  // checksum checks. Only accept the displayed SS58 destination here.
+  if (typeof toAddress !== 'string' || !/^[1-9A-HJ-NP-Za-km-z]+$/.test(toAddress)) {
+    throw new Error('Invalid Bittensor destination address: expected a checksummed SS58-42 address')
+  }
+  const destPubkey = decodeAddress(toAddress, false, 42)
+  // SS58 can encode short account indices and 33-byte keys, but MultiAddress::Id
+  // on Bittensor requires AccountId32.
+  if (destPubkey.length !== 32) {
+    throw new Error('Invalid Bittensor destination address: expected a 32-byte account')
+  }
   return concatBytes(
     new Uint8Array([balancesPallet, allowDeath ? transferAllowDeath : transferKeepAlive]),
     new Uint8Array([multiAddressId]),
