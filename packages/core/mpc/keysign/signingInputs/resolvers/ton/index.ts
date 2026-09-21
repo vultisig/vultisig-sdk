@@ -6,6 +6,7 @@ import { match } from '@vultisig/lib-utils/match'
 import { TW } from '@trustwallet/wallet-core'
 
 import { getBlockchainSpecificValue } from '../../../chainSpecific/KeysignChainSpecific'
+import { getKeysignTonGasless } from '../../../ton/gasless'
 import { getKeysignTwPublicKey } from '../../../tw/getKeysignTwPublicKey'
 import { getKeysignCoin } from '../../../utils/getKeysignCoin'
 import { SigningInputsResolver } from '../../resolver'
@@ -13,6 +14,13 @@ import { buildJettonTransfer } from './jetton'
 import { buildNativeTonTransfer, buildNativeTonTransferFromMessage } from './native'
 
 export const getTonSigningInputs: SigningInputsResolver<'ton'> = ({ keysignPayload, walletCore }) => {
+  // A relayed request is signed as a W5 `internal_signed` body, which
+  // WalletCore has no input for; building an external request from the same
+  // payload would sign a transfer the relay never quoted.
+  if (getKeysignTonGasless(keysignPayload)) {
+    throw new Error('A gasless TON request is not a WalletCore signing input; see keysign/ton/gasless')
+  }
+
   const coin = getKeysignCoin(keysignPayload)
   const publicKeyBytes = getKeysignTwPublicKey(keysignPayload)
 
