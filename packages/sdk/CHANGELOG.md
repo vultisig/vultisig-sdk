@@ -1,5 +1,15 @@
 # @vultisig/sdk
 
+## 7.8.1
+
+### Patch Changes
+
+- [#2421](https://github.com/vultisig/vultisig-sdk/pull/2421) [`fa04ed0`](https://github.com/vultisig/vultisig-sdk/commit/fa04ed0d91f90bdaad101b326b47be1d73a152ce) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Preserve all native SOL movements before SOL/WSOL netting so transaction approval summaries cannot reverse direction by dropping a principal leg. Decline unsupported multi-asset shapes instead of assuming small native movements are fees.
+
+- Updated dependencies [[`fa04ed0`](https://github.com/vultisig/vultisig-sdk/commit/fa04ed0d91f90bdaad101b326b47be1d73a152ce)]:
+  - @vultisig/core-chain@5.6.1
+  - @vultisig/core-mpc@3.4.1
+
 ## 7.8.0
 
 ### Minor Changes
