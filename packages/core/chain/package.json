@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "5.5.0",
+  "version": "5.5.1",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -24,6 +24,11 @@
       "types": "./dist/amount/fromChainAmountExact.d.ts",
       "import": "./dist/amount/fromChainAmountExact.js",
       "default": "./dist/amount/fromChainAmountExact.js"
+    },
+    "./amount/getMaxSendableAmount": {
+      "types": "./dist/amount/getMaxSendableAmount.d.ts",
+      "import": "./dist/amount/getMaxSendableAmount.js",
+      "default": "./dist/amount/getMaxSendableAmount.js"
     },
     "./amount/getMaxValue": {
       "types": "./dist/amount/getMaxValue.d.ts",
@@ -1099,6 +1104,11 @@
       "types": "./dist/chains/tron/getTronBlockInfo.d.ts",
       "import": "./dist/chains/tron/getTronBlockInfo.js",
       "default": "./dist/chains/tron/getTronBlockInfo.js"
+    },
+    "./chains/tron/queryTron": {
+      "types": "./dist/chains/tron/queryTron.d.ts",
+      "import": "./dist/chains/tron/queryTron.js",
+      "default": "./dist/chains/tron/queryTron.js"
     },
     "./chains/tron/resources": {
       "types": "./dist/chains/tron/resources/index.d.ts",
@@ -2462,6 +2472,11 @@
       "types": "./dist/utils/assertSignature.d.ts",
       "import": "./dist/utils/assertSignature.js",
       "default": "./dist/utils/assertSignature.js"
+    },
+    "./utils/decodeBech32": {
+      "types": "./dist/utils/decodeBech32.d.ts",
+      "import": "./dist/utils/decodeBech32.js",
+      "default": "./dist/utils/decodeBech32.js"
     },
     "./utils/getBlockExplorerUrl": {
       "types": "./dist/utils/getBlockExplorerUrl/index.d.ts",

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import * as sdk from '../../../src'
 import {
   assertSafeDestination,
+  getChainDangerousReason,
   SOLANA_DANGEROUS_ADDRESSES,
   UTXO_DANGEROUS_ADDRESSES,
   XRP_DANGEROUS_ADDRESSES,
@@ -109,4 +110,32 @@ describe('assertSafeDestination', () => {
   it('rejects XRP black-hole address when chain is passed as lowercase alias "xrp"', () => {
     expect(() => assertSafeDestination('xrp', 'rrrrrrrrrrrrrrrrrrrrrhoLvTp')).toThrow(/Refusing to build transaction/)
   })
+})
+
+describe('Tron dangerous destinations', () => {
+  const zero = 'T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb'
+  const valid = 'TJRabPrwbZy45sbavfcjinPJC18kjpRTv8'
+
+  it.each(['Tron', 'tron', 'TRON', ' TrOn '])('normalizes chain %s and surrounding address whitespace', chain => {
+    expect(getChainDangerousReason(chain, `  ${zero}  `)).toMatch(/Tron zero address.*unrecoverable/)
+    expect(() => assertSafeDestination(chain, zero)).toThrow(/Refusing to build transaction.*unrecoverable/)
+  })
+
+  it('accepts a normal Tron recipient through the public SDK guard', () => {
+    expect(getChainDangerousReason('Tron', valid)).toBeUndefined()
+    expect(() => sdk.assertSafeDestination('Tron', valid)).not.toThrow()
+    expect(() => sdk.assertSafeDestination('Tron', zero)).toThrow(/Tron zero address/)
+  })
+
+  it.each(['Ethereum', 'Solana', 'Bitcoin', 'Ripple', 'unknown'])('keeps the sentinel scoped away from %s', chain => {
+    expect(getChainDangerousReason(chain, zero)).toBeUndefined()
+    expect(() => assertSafeDestination(chain, zero)).not.toThrow()
+  })
+
+  it.each(['toString', 'constructor', '__proto__', zero.toLowerCase()])(
+    'keeps prototype-safe and case-sensitive lookup for %s',
+    address => {
+      expect(getChainDangerousReason('Tron', address)).toBeUndefined()
+    }
+  )
 })

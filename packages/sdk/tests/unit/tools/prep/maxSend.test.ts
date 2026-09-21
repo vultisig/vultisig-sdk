@@ -108,6 +108,34 @@ describe('getMaxSendAmountFromKeys', () => {
     expect(mockGetCoinBalance).toHaveBeenCalledWith(coin)
   })
 
+  // transfer_keep_alive refuses to leave the sender under Bittensor's 500 rao
+  // existential deposit, so the MAX the SDK quotes has to keep it back too.
+  it('keeps the existential deposit back for a native TAO max-send', async () => {
+    const balance = 1_000_000_000n
+    const fee = 200_000n
+    mockGetCoinBalance.mockResolvedValue(balance)
+    mockGetSendFeeEstimate.mockResolvedValue(fee)
+
+    const coin = {
+      chain: Chain.Bittensor,
+      address: '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty',
+      decimals: 9,
+      ticker: 'TAO',
+    } as any
+
+    const result = await getMaxSendAmountFromKeys(baseIdentity, {
+      coin,
+      receiver: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY',
+    })
+
+    expect(result).toEqual({
+      balance,
+      fee,
+      maxSendable: balance - fee - 500n,
+    })
+    expect(balance - result.maxSendable - fee).toBeGreaterThanOrEqual(500n)
+  })
+
   it('returns the full 6-decimal ERC-20 balance and checks the native gas balance', async () => {
     const balance = 16_140_000n
     const fee = 20_000_000_000_000_000n

@@ -1,3 +1,4 @@
+import { getMaxSendableAmount } from '@vultisig/core-chain/amount/getMaxSendableAmount'
 import { Chain, CosmosChain, UtxoBasedChain } from '@vultisig/core-chain/Chain'
 import { isTerraClassicUstcCoin } from '@vultisig/core-chain/chains/cosmos/terraClassicTax'
 import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
@@ -54,7 +55,13 @@ export const refineKeysignAmount = async (input: RefineKeysignAmountInput) => {
 
   const fee = await getFeeAmount(input)
 
-  const refinedAmount = minBigInt(BigInt(input.keysignPayload.toAmount), input.balance - fee)
+  // Clamps to what the sender may actually part with: the balance less the fee
+  // and, on chains that reap emptied accounts, the existential deposit — so a
+  // MAX send quoted as `balance - fee` cannot fail a keep-alive transfer.
+  const refinedAmount = minBigInt(
+    BigInt(input.keysignPayload.toAmount),
+    getMaxSendableAmount({ chain: coin.chain, balance: input.balance, fee })
+  )
 
   if (refinedAmount <= 0n) {
     throw new BuildKeysignPayloadError('not-enough-funds')

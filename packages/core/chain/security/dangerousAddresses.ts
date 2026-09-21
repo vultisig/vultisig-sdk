@@ -48,6 +48,11 @@ export const SOLANA_DANGEROUS_ADDRESSES: Record<string, string> = {
     'Solana Incinerator burn address: funds sent here are permanently destroyed',
 }
 
+/** Tron zero-address burn destination. Keys are case-sensitive base58check. */
+const TRON_DANGEROUS_ADDRESSES: Record<string, string> = {
+  T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb: 'Tron zero address: funds are unrecoverable',
+}
+
 /** UTXO (Bitcoin family) burn destinations. Keys are case-sensitive base58. */
 export const UTXO_DANGEROUS_ADDRESSES: Record<string, string> = {
   '1111111111111111111114oLvT2': 'Bitcoin burn address: funds are unrecoverable',
@@ -112,6 +117,9 @@ export const getChainDangerousReason = (chain: string, address: string): string 
 
   if (normalizedChain === 'solana') {
     return safeGet(SOLANA_DANGEROUS_ADDRESSES, destination)
+  }
+  if (normalizedChain === 'tron') {
+    return safeGet(TRON_DANGEROUS_ADDRESSES, destination)
   }
   if (UTXO_CHAINS.has(normalizedChain)) {
     return safeGet(UTXO_DANGEROUS_ADDRESSES, destination)
