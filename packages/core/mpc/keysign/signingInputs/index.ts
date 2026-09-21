@@ -1,9 +1,11 @@
 import { Buffer } from 'buffer'
+import { toBinary } from '@bufbuild/protobuf'
 import { ChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
-import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import { KeysignPayload, KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { WalletCore } from '@trustwallet/wallet-core'
 import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
 
+import { getKeysignTonGasless } from '../ton/gasless'
 import { getKeysignChain } from '../utils/getKeysignChain'
 import { signingInputClasses } from './core'
 import { SigningInputsResolver } from './resolver'
@@ -58,6 +60,13 @@ export const getEncodedSigningInputs = async (input: Input): Promise<Uint8Array[
     return input.keysignPayload.signData.value.rawTransactions.map(
       transaction => new Uint8Array(Buffer.from(transaction, 'base64'))
     )
+  }
+
+  // A relayed (gasless) TON request is a W5 `internal_signed` body WalletCore
+  // cannot build, so — like QBTC — the payload itself is the signing input:
+  // getPreSigningHashes and compileTx hash and assemble it from the payload.
+  if (chainKind === 'ton' && getKeysignTonGasless(input.keysignPayload)) {
+    return [toBinary(KeysignPayloadSchema, input.keysignPayload)]
   }
 
   const signingInputs = await signingInputResolversByChainKind[chainKind](input as any)

@@ -7,6 +7,8 @@
  * proxy, etc.).
  */
 
+import { getTonAccountSeqno } from '@vultisig/core-chain/chains/ton/account/getTonAccountInfo'
+
 export type TonWalletStatus = 'active' | 'uninit' | 'frozen' | string
 
 export type TonWalletInfo = {
@@ -21,7 +23,7 @@ export type TonWalletInfo = {
 type ToncenterExtendedInfo = {
   ok?: boolean
   result?: {
-    account_state?: { seqno?: number }
+    account_state?: { seqno?: number; code?: string; data?: string }
     balance?: string | number
   }
   error?: string
@@ -100,7 +102,9 @@ export async function getTonWalletInfo(address: string, gatewayUrl: string): Pro
   if (ext.ok === false || !ext.result) {
     throw new Error('toncenter getExtendedAddressInformation returned no result')
   }
-  const seqno = ext.result?.account_state?.seqno ?? 0
+  // Toncenter decodes a V4 seqno itself; a W5 wallet comes back raw and its
+  // seqno is read from the data cell.
+  const seqno = getTonAccountSeqno({ account_state: ext.result?.account_state })
   let balance = ext.result?.balance !== undefined ? toBigInt(ext.result.balance) : 0n
 
   if (!v3Res.ok) {

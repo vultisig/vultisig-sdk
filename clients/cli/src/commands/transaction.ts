@@ -105,8 +105,10 @@ async function previewDryRun(
   const isTokenSend = balance.tokenId !== undefined
   // Max token sends are already gated by the SDK's native-balance check while
   // calculating the max amount. Keep this preview check for explicit token
-  // amounts, but do not repeat the same balance read for max sends.
-  const shouldCheckNativeFeeBalance = isTokenSend && params.amount !== 'max'
+  // amounts, but do not repeat the same balance read for max sends. A gasless
+  // TON send needs no native balance at all: its fee is the relay's commission
+  // in the jetton, which `total` already includes.
+  const shouldCheckNativeFeeBalance = isTokenSend && params.amount !== 'max' && !params.gasless
   const feeBalance = shouldCheckNativeFeeBalance ? await vault.balance(params.chain).catch(() => undefined) : undefined
 
   const warnings: string[] = []
@@ -216,6 +218,7 @@ export async function sendTransaction(
     symbol: params.tokenId,
     memo: params.memo,
     destinationTag,
+    gasless: params.gasless,
     dryRun: true,
   })
 
@@ -296,6 +299,7 @@ export async function sendTransaction(
         symbol: params.tokenId,
         memo: params.memo,
         destinationTag,
+        gasless: params.gasless,
       })
       if (result.dryRun) throw new Error('unreachable')
       return result as Extract<typeof result, { dryRun: false }>
