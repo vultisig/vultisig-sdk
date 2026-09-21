@@ -1,5 +1,12 @@
 # @vultisig/examples-shared
 
+## 0.1.165
+
+### Patch Changes
+
+- Updated dependencies [[`fa04ed0`](https://github.com/vultisig/vultisig-sdk/commit/fa04ed0d91f90bdaad101b326b47be1d73a152ce)]:
+  - @vultisig/sdk@7.8.1
+
 ## 0.1.164
 
 ### Patch Changes
