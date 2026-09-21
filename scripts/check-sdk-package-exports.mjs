@@ -7,6 +7,8 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
+import { parseAst } from 'rollup/parseAst'
+
 import { createDisposableYarnEnv } from './quality-contracts-cache.mjs'
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
@@ -17,6 +19,13 @@ const yarnCli = path.join(repoRoot, '.yarn/releases/yarn-4.16.0.cjs')
 const platformTargetPattern = /(?:^|[./-])(browser|chrome-extension|react-native|rn-preamble)(?:[./-]|$)/
 const runtimeUnsafePlatformPattern = /(?:^|[./-])(react-native|rn-preamble)(?:[./-]|$)/
 const builtInTypeConditions = new Set(['types', 'import', 'require', 'node', 'node-addons', 'default'])
+const packedDependencyFields = ['dependencies', 'optionalDependencies']
+const coordinatedSdkPackageNames = new Set([
+  '@vultisig/core-chain',
+  '@vultisig/core-mpc',
+  '@vultisig/lib-utils',
+  '@vultisig/mpc-types',
+])
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -40,6 +49,57 @@ function runYarn(args, options = {}) {
     return run(process.execPath, [yarnCli, ...args], options)
   }
   return run('yarn', args, options)
+}
+
+export function collectLocalWorkspaceDependencyNames(
+  rootPackageName,
+  packedManifests,
+  localPackageNames = coordinatedSdkPackageNames
+) {
+  const pending = [rootPackageName]
+  const visited = new Set()
+  const dependencies = new Set()
+
+  while (pending.length) {
+    const packageName = pending.pop()
+    if (visited.has(packageName)) continue
+    visited.add(packageName)
+
+    const manifest = packedManifests.get(packageName)
+    if (!manifest) continue
+
+    for (const field of packedDependencyFields) {
+      for (const [dependencyName, selector] of Object.entries(manifest[field] ?? {})) {
+        if (dependencyName === rootPackageName || !localPackageNames.has(dependencyName)) continue
+        const dependencyManifest = packedManifests.get(dependencyName)
+        if (!dependencyManifest) {
+          throw new Error(`Missing packed manifest for coordinated SDK dependency ${dependencyName}`)
+        }
+        if (selector !== dependencyManifest.version) {
+          throw new Error(
+            `${packageName} requires ${dependencyName}@${selector}, but the coordinated local archive is ` +
+              `${dependencyName}@${dependencyManifest.version}`
+          )
+        }
+        if (!dependencies.has(dependencyName)) {
+          dependencies.add(dependencyName)
+          pending.push(dependencyName)
+        }
+      }
+    }
+  }
+
+  return [...dependencies].sort()
+}
+
+export function createPackedConsumerManifest(localPackages = {}) {
+  return {
+    name: 'vultisig-sdk-package-export-consumer',
+    private: true,
+    type: 'module',
+    packageManager: 'yarn@4.16.0',
+    ...(Object.keys(localPackages).length ? { resolutions: localPackages } : {}),
+  }
 }
 
 export function collectExportTargets(exportsField) {
@@ -100,16 +160,98 @@ export function validatePackedExportTargets(manifest, packageRoot) {
   return targets
 }
 
-function validatePackedReactNativeCosmosPayloadExports(packageRoot) {
+function validatePackedReactNativePublicHelpers(packageRoot) {
   const runtimePath = path.join(packageRoot, 'dist/index.react-native.js')
   const declarationsPath = path.join(packageRoot, 'dist/index.react-native.d.ts')
   const runtimeSource = readFileSync(runtimePath, 'utf8')
   const declarationSource = readFileSync(declarationsPath, 'utf8')
 
-  for (const symbol of ['buildSignAminoKeysignPayload', 'buildSignDirectKeysignPayload']) {
+  for (const symbol of [
+    'getTxStatus',
+    'buildSignAminoKeysignPayload',
+    'buildSignDirectKeysignPayload',
+    'tronBase58ToEvmHex',
+    'tronBase58ToHex',
+    'tronHexToBase58',
+    'encodeTrc20TransferParam',
+  ]) {
     assert.ok(runtimeSource.includes(symbol), `react-native bundle exports ${symbol}`)
     assert.ok(declarationSource.includes(symbol), `react-native types export ${symbol}`)
   }
+}
+
+function validatePackedReactNativeRuntimeExports(packageRoot) {
+  const runtimePath = path.join(packageRoot, 'dist/index.react-native.js')
+  const ast = parseAst(readFileSync(runtimePath, 'utf8'))
+  const exportedNames = ast.body
+    .filter(statement => statement.type === 'ExportNamedDeclaration')
+    .flatMap(statement => statement.specifiers.map(specifier => specifier.exported.name))
+  for (const name of ['resolveTokenRef', 'resolveTokenRefId', 'getTxStatus', 'amount']) {
+    assert.ok(exportedNames.includes(name), `packed React Native runtime must export ${name}`)
+  }
+  console.log('SDK packed React Native runtime export bindings passed (artifact check, not device execution)')
+}
+
+// Exercise the installed public namespace and instance API without native initialization.
+async function verifyAmountConsumer(sdk) {
+  assert.deepEqual(sdk.amount, {
+    convert: sdk.convertAmount,
+    toBaseUnits: sdk.toBaseUnits,
+    toHumanUnits: sdk.toHumanUnits,
+    fiatToCrypto: sdk.fiatToCrypto,
+    cryptoToFiat: sdk.cryptoToFiat,
+  })
+  const instance = new sdk.Vultisig({ autoInit: false, storage: new sdk.MemoryStorage() })
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = () => {
+    throw new Error('Amount helpers must not fetch')
+  }
+  try {
+    assert.equal(instance.amount, sdk.amount)
+    assert.equal(instance.amount, instance.amount)
+    assert.equal(instance.amount.convert({ amount: '1.5', decimals: 18, direction: 'to_base' }), '1500000000000000000')
+    assert.equal(instance.amount.convert({ amount: '1500000000000000000', decimals: 18, direction: 'to_human' }), '1.5')
+    assert.equal(sdk.amount.toBaseUnits('9007199254740993.123456789', 9), '9007199254740993123456789')
+    assert.equal(sdk.amount.toHumanUnits('9007199254740993123456789', 9), '9007199254740993.123456789')
+    assert.equal(sdk.amount.toBaseUnits('1.239', 2), '123')
+    assert.equal(sdk.amount.fiatToCrypto({ fiatValue: '100', price: '2000', decimals: 18 }), '0.05')
+    assert.equal(sdk.amount.cryptoToFiat({ amount: '0.05', price: '2000' }), '100')
+    assert.throws(
+      () => sdk.amount.convert({ amount: 'invalid', decimals: 18, direction: 'to_base' }),
+      sdk.AmountConvertError
+    )
+    assert.equal(instance.initialized, false)
+  } finally {
+    globalThis.fetch = originalFetch
+    await instance.dispose()
+  }
+}
+
+// Run the same public API scenarios through both installed Node module formats.
+function verifyTokenRefConsumer(sdk) {
+  const chain = sdk.Chain.Ethereum
+  const address = '0x1111111111111111111111111111111111111111'
+  const otherAddress = '0x2222222222222222222222222222222222222222'
+  const token = { id: address, chain, symbol: 'USDC', decimals: 6, contractAddress: address }
+  assert.equal(typeof sdk.resolveTokenRef, 'function')
+  assert.equal(typeof sdk.resolveTokenRefId, 'function')
+  assert.deepEqual(sdk.resolveTokenRef(chain, undefined, []), { ticker: 'ETH', decimals: 18 })
+  assert.equal(sdk.resolveTokenRefId(chain, 'ETH', []), undefined)
+  for (const ref of ['usdc', address]) {
+    assert.deepEqual(sdk.resolveTokenRef(chain, ref, [token]), {
+      ticker: 'USDC',
+      decimals: 6,
+      contractAddress: address,
+    })
+    assert.equal(sdk.resolveTokenRefId(chain, ref, [token]), address)
+  }
+  assert.equal(sdk.resolveTokenRefId(chain, 'USDC', []), '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48')
+  assert.throws(() => sdk.resolveTokenRef(chain, address, []), /not found/)
+  assert.equal(sdk.resolveTokenRefId(chain, address, []), address)
+  const ambiguous = [token, { ...token, id: otherAddress, contractAddress: otherAddress }]
+  assert.throws(() => sdk.resolveTokenRef(chain, 'USDC', ambiguous), /ambiguous/)
+  assert.throws(() => sdk.resolveTokenRefId(chain, 'USDC', ambiguous), /ambiguous/)
+  console.log('SDK token resolution passed: native, configured symbol/address, registry, unknown, ambiguity')
 }
 
 export function resolveConditionalTarget(value, activeConditions) {
@@ -252,19 +394,10 @@ export function collectTypeCustomConditionSets(manifest) {
   return [...conditionSets.values()]
 }
 
-function writeConsumerRuntimeFiles(consumerRoot, importCases, requireCases) {
+function writeConsumerRuntimeFiles(consumerRoot, importCases, requireCases, localPackages) {
   writeFileSync(
     path.join(consumerRoot, 'package.json'),
-    `${JSON.stringify(
-      {
-        name: 'vultisig-sdk-package-export-consumer',
-        private: true,
-        type: 'module',
-        packageManager: 'yarn@4.16.0',
-      },
-      null,
-      2
-    )}\n`
+    `${JSON.stringify(createPackedConsumerManifest(localPackages), null, 2)}\n`
   )
   writeFileSync(path.join(consumerRoot, '.yarnrc.yml'), 'nodeLinker: node-modules\n')
 
@@ -285,7 +418,14 @@ for (const { specifier, target } of cases) {
   importedModules.set(specifier, imported)
 }
 
+${verifyAmountConsumer.toString()}
+for (const specifier of ['@vultisig/sdk', '@vultisig/sdk/node', '@vultisig/sdk/electron/main']) {
+  await verifyAmountConsumer(importedModules.get(specifier))
+}
+console.log('Packed amount ESM consumers passed: stable instance API, exact conversions, fiat estimates and errors')
 const root = importedModules.get('@vultisig/sdk')
+${verifyTokenRefConsumer.toString()}
+verifyTokenRefConsumer(root)
 const node = importedModules.get('@vultisig/sdk/node')
 const vite = importedModules.get('@vultisig/sdk/vite')
 const electronMain = importedModules.get('@vultisig/sdk/electron/main')
@@ -295,6 +435,22 @@ assert.equal(typeof root?.fiatToAmount, 'function', 'root import exports fiatToA
 assert.equal(typeof root?.normalizeChain, 'function', 'root import exports normalizeChain')
 assert.equal(typeof root?.fromChainAmountExact, 'function', 'root import exports fromChainAmountExact')
 assert.equal(typeof root?.getBlockExplorerUrl, 'function', 'root import exports getBlockExplorerUrl')
+const tronAddress = 'TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH'
+const evmHex = 'c8599111f29c1e1e061265b4af93ea1f274ad78a'
+assert.equal(root.tronBase58ToEvmHex(tronAddress), evmHex)
+assert.equal(root.tronBase58ToHex(tronAddress), '41' + evmHex)
+assert.equal(root.tronHexToBase58(evmHex), tronAddress)
+assert.equal(root.tronHexToBase58('41' + evmHex), tronAddress)
+assert.equal(root.encodeTrc20TransferParam(tronAddress, '1000000'), evmHex.padStart(64, '0') + 'f4240'.padStart(64, '0'))
+assert.equal(root.encodeTrc20TransferParam(tronAddress, '0'), evmHex.padStart(64, '0') + '0'.repeat(64))
+assert.equal(root.encodeTrc20TransferParam(tronAddress, ((1n << 256n) - 1n).toString()), evmHex.padStart(64, '0') + 'f'.repeat(64))
+assert.throws(() => root.tronBase58ToEvmHex(tronAddress.slice(0, -1) + 'J'), /checksum/)
+assert.throws(() => root.tronBase58ToHex(tronAddress.slice(0, -1) + 'J'), /checksum/)
+assert.throws(() => root.encodeTrc20TransferParam(tronAddress.slice(0, -1) + 'J', '1'), /checksum/)
+assert.throws(() => root.encodeTrc20TransferParam(tronAddress, '-1'), /negative amount/)
+assert.throws(() => root.encodeTrc20TransferParam(tronAddress, (1n << 256n).toString()), /uint256/)
+console.log('Packed TRON helpers passed: address round-trip, exact calldata, checksum and uint256 boundaries')
+
 assert.equal(
   typeof root?.buildSignAminoKeysignPayload,
   'function',
@@ -335,6 +491,15 @@ for (const { specifier, target } of cases) {
 }
 
 assert.equal(typeof requiredModules.get('@vultisig/sdk')?.Vultisig, 'function', 'root require exports Vultisig')
+${verifyTokenRefConsumer.toString()}
+verifyTokenRefConsumer(requiredModules.get('@vultisig/sdk'))
+${verifyAmountConsumer.toString()}
+;(async () => {
+  for (const specifier of ['@vultisig/sdk', '@vultisig/sdk/electron/main']) {
+    await verifyAmountConsumer(requiredModules.get(specifier))
+  }
+  console.log('Packed amount CommonJS consumers passed')
+})().catch(error => { console.error(error); process.exitCode = 1 })
 assert.equal(
   typeof requiredModules.get('@vultisig/sdk/electron/main')?.ElectronMainCrypto,
   'function',
@@ -370,13 +535,40 @@ void ${alias}Keys`
     path.join(consumerRoot, 'verify-types.ts'),
     `${typeImports}
 ${declarationAssertions}
+import { amount, Vultisig as AmountVultisig, MemoryStorage, type Amount } from '@vultisig/sdk'
+import { amount as rnAmount, Vultisig as RnVultisig, type Amount as RnAmount } from '@vultisig/sdk/react-native'
+const amountGroup: Amount = amount
+const rnAmountGroup: RnAmount = rnAmount
+const instance = new AmountVultisig({ autoInit: false, storage: new MemoryStorage() })
+const rnInstance = new RnVultisig({ autoInit: false, storage: new MemoryStorage() })
+for (const group of [amountGroup, rnAmountGroup, instance.amount, rnInstance.amount]) {
+  const base: string = group.convert({ amount: '1.5', decimals: 18, direction: 'to_base' })
+  const human: string = group.toHumanUnits(base, 18)
+  const direct: string = group.toBaseUnits(human, 18)
+  const crypto: string = group.fiatToCrypto({ fiatValue: '100', price: '2000', decimals: 18 })
+  const fiat: string = group.cryptoToFiat({ amount: crypto, price: '2000' })
+  void [direct, fiat]
+  // @ts-expect-error amount members are readonly
+  group.convert = amount.convert
+}
+// @ts-expect-error the instance exposes a getter only
+instance.amount = amount
+// @ts-expect-error the React Native instance exposes a getter only
+rnInstance.amount = rnAmount
 import {
+  encodeTrc20TransferParam,
+  tronBase58ToEvmHex,
+  tronBase58ToHex,
+  tronHexToBase58,
   Chain,
   buildSignAminoKeysignPayload,
   buildSignDirectKeysignPayload,
   chainRegistry,
+  getTxStatus,
   deriveFromChainRegistry,
   extendChainRegistry,
+  resolveTokenRef,
+  resolveTokenRefId,
 } from '@vultisig/sdk'
 import type {
   BuildSignAminoPayloadInput,
@@ -387,25 +579,86 @@ import type {
   ChainExtensionRecord,
   ChainKind,
   ExtendedChainRegistry,
+  ResolvedTokenInfo,
 } from '@vultisig/sdk'
 import type {
   ChainDescriptor as ReactNativeChainDescriptor,
   ExtendedChainRegistry as ReactNativeExtendedChainRegistry,
 } from '@vultisig/sdk/react-native'
 import {
+  encodeTrc20TransferParam as encodeTrc20TransferParamReactNative,
+  tronBase58ToEvmHex as tronBase58ToEvmHexReactNative,
+  tronBase58ToHex as tronBase58ToHexReactNative,
+  tronHexToBase58 as tronHexToBase58ReactNative,
   buildSignAminoKeysignPayload as buildSignAminoKeysignPayloadReactNative,
   buildSignDirectKeysignPayload as buildSignDirectKeysignPayloadReactNative,
   type BuildSignAminoPayloadInput as BuildSignAminoPayloadInputReactNative,
   type BuildSignDirectPayloadInput as BuildSignDirectPayloadInputReactNative,
+  resolveTokenRef as resolveTokenRefReactNative,
+  resolveTokenRefId as resolveTokenRefIdReactNative,
+  getTxStatus as getTxStatusReactNative,
+  type ResolvedTokenInfo as ResolvedTokenInfoReactNative,
 } from '@vultisig/sdk/react-native'
+import {
+  recipientSanity as recipientSanityRoot,
+  isNullAddress as isNullAddressRoot,
+  isSelfSend as isSelfSendRoot,
+  isMalformedEvmAddress as isMalformedEvmAddressRoot,
+  type RecipientSanityFlag as RecipientSanityFlagRoot,
+  type RecipientSanityInput as RecipientSanityInputRoot,
+  type RecipientSanityResult as RecipientSanityResultRoot,
+} from '@vultisig/sdk'
+const recipientInputRoot: RecipientSanityInputRoot = { recipient: '0xdeadbeef' }
+const recipientResultRoot: RecipientSanityResultRoot = recipientSanityRoot(recipientInputRoot)
+const recipientFlagsRoot: RecipientSanityFlagRoot[] = recipientResultRoot.flags
+const recipientChecksRoot: boolean[] = [
+  isNullAddressRoot(recipientInputRoot.recipient),
+  isSelfSendRoot('', recipientInputRoot.recipient),
+  isMalformedEvmAddressRoot(recipientInputRoot.recipient),
+]
+void recipientFlagsRoot
+void recipientChecksRoot
+import {
+  recipientSanity as recipientSanityReactNative,
+  isNullAddress as isNullAddressReactNative,
+  isSelfSend as isSelfSendReactNative,
+  isMalformedEvmAddress as isMalformedEvmAddressReactNative,
+  type RecipientSanityFlag as RecipientSanityFlagReactNative,
+  type RecipientSanityInput as RecipientSanityInputReactNative,
+  type RecipientSanityResult as RecipientSanityResultReactNative,
+} from '@vultisig/sdk/react-native'
+const recipientInputReactNative: RecipientSanityInputReactNative = { recipient: '0xdeadbeef' }
+const recipientResultReactNative: RecipientSanityResultReactNative = recipientSanityReactNative(recipientInputReactNative)
+const recipientFlagsReactNative: RecipientSanityFlagReactNative[] = recipientResultReactNative.flags
+const recipientChecksReactNative: boolean[] = [
+  isNullAddressReactNative(recipientInputReactNative.recipient),
+  isSelfSendReactNative('', recipientInputReactNative.recipient),
+  isMalformedEvmAddressReactNative(recipientInputReactNative.recipient),
+]
+void recipientFlagsReactNative
+void recipientChecksReactNative
 import type { Vultisig } from '@vultisig/sdk/node'
 import type { ElectronMainCrypto, Vultisig as ElectronMainVultisig } from '@vultisig/sdk/electron/main'
+
+const tronConverters: ((address: string) => string)[] = [
+  tronBase58ToEvmHex, tronBase58ToHex, tronHexToBase58,
+  tronBase58ToEvmHexReactNative, tronBase58ToHexReactNative, tronHexToBase58ReactNative,
+]
+const tronEncoders: ((address: string, amount: string) => string)[] = [
+  encodeTrc20TransferParam, encodeTrc20TransferParamReactNative,
+]
+void tronConverters
+void tronEncoders
 
 const descriptor: ChainDescriptor = chainRegistry[Chain.Ethereum]
 const registry: ChainDescriptorRegistry = chainRegistry
 const explorer: ChainExplorerDescriptor = descriptor.explorer
 const extension: ChainExtensionRecord = deriveFromChainRegistry(({ kind }) => ({ kind }))
 const extended: ExtendedChainRegistry<typeof extension> = extendChainRegistry(extension)
+export const resolvedToken: ResolvedTokenInfo = resolveTokenRef(Chain.Ethereum, undefined, [])
+export const resolvedTokenId: string | undefined = resolveTokenRefId(Chain.Ethereum, 'USDC', [])
+export const resolvedTokenReactNative: ResolvedTokenInfoReactNative = resolveTokenRefReactNative(Chain.Ethereum, undefined, [])
+export const resolvedTokenIdReactNative: string | undefined = resolveTokenRefIdReactNative(Chain.Ethereum, 'USDC', [])
 
 export type RootChain = Chain
 export type NodeClient = Vultisig
@@ -426,6 +679,24 @@ export type CosmosAminoBuilder = typeof buildSignAminoKeysignPayload
 export type CosmosDirectBuilder = typeof buildSignDirectKeysignPayload
 export type CosmosAminoBuilderReactNative = typeof buildSignAminoKeysignPayloadReactNative
 export type CosmosDirectBuilderReactNative = typeof buildSignDirectKeysignPayloadReactNative
+export type TransactionStatusLookup = typeof getTxStatus
+export type TransactionStatusLookupReactNative = typeof getTxStatusReactNative
+`
+  )
+
+  // The default public entry exports the complete vault class hierarchy. Keep a
+  // consumer-shaped assertion separate from the curated React Native entry,
+  // which intentionally exposes FastVault without exporting VaultBase itself.
+  writeFileSync(
+    path.join(consumerRoot, 'verify-public-vault-types.ts'),
+    `import type { SendFeeEstimate, VaultBase } from '@vultisig/sdk'
+
+export async function estimatePublicSendFee(
+  vault: VaultBase,
+  params: Parameters<VaultBase['estimateSendFee']>[0]
+): Promise<SendFeeEstimate> {
+  return vault.estimateSendFee(params)
+}
 `
   )
 
@@ -446,7 +717,7 @@ export type CosmosDirectBuilderReactNative = typeof buildSignDirectKeysignPayloa
             noUncheckedSideEffectImports: true,
             ...(customConditions.length ? { customConditions } : {}),
           },
-          include: ['verify-types.ts'],
+          include: index === 0 ? ['verify-types.ts', 'verify-public-vault-types.ts'] : ['verify-types.ts'],
         },
         null,
         2
@@ -476,6 +747,37 @@ function packSdk(tarballPath) {
     cwd: repoRoot,
     stdio: 'inherit',
   })
+}
+
+function packLocalSdkDependencies(workRoot, packedSdkManifest) {
+  const dependencyRoot = path.join(workRoot, 'sdk-dependencies')
+  mkdirSync(dependencyRoot, { recursive: true })
+  const packedManifests = new Map([[packedSdkManifest.name, packedSdkManifest]])
+  const tarballs = new Map()
+
+  for (const packageName of coordinatedSdkPackageNames) {
+    const archiveName = `${packageName.replace(/^@/, '').replaceAll(/[^a-z0-9]+/gi, '-')}.tgz`
+    const tarballPath = path.join(dependencyRoot, archiveName)
+    runYarn(['workspace', packageName, 'pack', '--out', tarballPath], {
+      cwd: repoRoot,
+      stdio: 'inherit',
+    })
+    const extractRoot = path.join(dependencyRoot, `${archiveName}.extract`)
+    mkdirSync(extractRoot, { recursive: true })
+    run('tar', ['-xzf', tarballPath, '-C', extractRoot])
+    packedManifests.set(
+      packageName,
+      JSON.parse(readFileSync(path.join(extractRoot, 'package', 'package.json'), 'utf8'))
+    )
+    tarballs.set(packageName, tarballPath)
+  }
+
+  return Object.fromEntries(
+    collectLocalWorkspaceDependencyNames(packedSdkManifest.name, packedManifests).map(packageName => [
+      packageName,
+      `file:${tarballs.get(packageName)}`,
+    ])
+  )
 }
 
 export async function checkSdkPackageExports({
@@ -509,7 +811,8 @@ export async function checkSdkPackageExports({
     )
 
     const targets = validatePackedExportTargets(sourceManifest, packageRoot)
-    validatePackedReactNativeCosmosPayloadExports(packageRoot)
+    validatePackedReactNativePublicHelpers(packageRoot)
+    validatePackedReactNativeRuntimeExports(packageRoot)
     const importCases = collectNodeRuntimeCases(sourceManifest, 'import')
     const requireCases = collectNodeRuntimeCases(sourceManifest, 'require')
     if (!importCases.length || !requireCases.length) {
@@ -518,7 +821,8 @@ export async function checkSdkPackageExports({
 
     const consumerRoot = path.join(workRoot, 'consumer')
     mkdirSync(consumerRoot, { recursive: true })
-    writeConsumerRuntimeFiles(consumerRoot, importCases, requireCases)
+    const localPackages = packLocalSdkDependencies(workRoot, packedManifest)
+    writeConsumerRuntimeFiles(consumerRoot, importCases, requireCases, localPackages)
     const env = installPackedSdk(consumerRoot, tarballPath)
 
     run(process.execPath, ['verify-imports.mjs'], { cwd: consumerRoot, env, stdio: 'inherit' })

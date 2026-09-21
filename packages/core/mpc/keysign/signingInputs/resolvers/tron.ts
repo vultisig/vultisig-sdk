@@ -6,6 +6,7 @@ import { bigIntToHex } from '@vultisig/lib-utils/bigint/bigIntToHex'
 import { stripHexPrefix } from '@vultisig/lib-utils/hex/stripHexPrefix'
 import { matchDiscriminatedUnion } from '@vultisig/lib-utils/matchDiscriminatedUnion'
 import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
+import { parseNonNegativeBigInt } from '@vultisig/lib-utils/bigint/parseNonNegativeBigInt'
 import { TW } from '@trustwallet/wallet-core'
 import Long from 'long'
 
@@ -43,6 +44,18 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
   const tronSpecific = getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'tronSpecific')
 
   const memo = keysignPayload.memo ?? ''
+
+  // sdk#2269: fee_limit is part of raw_data, so every co-signer must serialize
+  // the same value or the MPC parties hash different preimages. Android
+  // (TronHelper.buildStakingTransaction) and iOS (Tron.swift) both sign the
+  // payload's gasEstimation for FreezeBalanceV2 / UnfreezeBalanceV2 — the node
+  // ignores fee_limit for system contracts, so agreement is the only thing that
+  // matters. Do not hardcode 0 here: it desyncs desktop/extension co-signers
+  // from a mobile initiator in the same ceremony. The display fee stays
+  // independent of this value (see fee/resolvers/tron.ts). Resolved lazily so
+  // branches that never serialize fee_limit (native transfer, expired-unfreeze
+  // claim) keep accepting any uint64 gasEstimation.
+  const getStakingFeeLimit = () => toBoundedTronLong(tronSpecific.gasEstimation.toString())
 
   // WithdrawExpireUnfreezeContract (Stake 2.0) claims every matured
   // unfreezing entry for the owner. The contract has no destination, amount,
@@ -104,11 +117,7 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
         }),
         timestamp: Long.fromString(tronSpecific.timestamp.toString()),
         expiration: Long.fromString(tronSpecific.expiration.toString()),
-        // FreezeBalanceV2 is a system (bandwidth) op, not a smart-contract call.
-        // feeLimit caps energy for TriggerSmartContract only; the node ignores it
-        // for native staking ops. Set to 0 so the UI does not inherit the energy
-        // estimate and mislead users about the actual cost of the operation.
-        feeLimit: Long.ZERO,
+        feeLimit: getStakingFeeLimit(),
         blockHeader: createTronBlockHeader(tronSpecific),
       }),
     })
@@ -137,11 +146,7 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
         }),
         timestamp: Long.fromString(tronSpecific.timestamp.toString()),
         expiration: Long.fromString(tronSpecific.expiration.toString()),
-        // UnfreezeBalanceV2 is a system (bandwidth) op, not a smart-contract call.
-        // feeLimit caps energy for TriggerSmartContract only; the node ignores it
-        // for native staking ops. Set to 0 so the UI does not inherit the energy
-        // estimate and mislead users about the actual cost of the operation.
-        feeLimit: Long.ZERO,
+        feeLimit: getStakingFeeLimit(),
         blockHeader: createTronBlockHeader(tronSpecific),
       }),
     })
@@ -257,7 +262,10 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
           return [input]
         }
 
-        const amountHex = Buffer.from(stripHexPrefix(bigIntToHex(BigInt(keysignPayload.toAmount))), 'hex')
+        const amountHex = Buffer.from(
+          stripHexPrefix(bigIntToHex(parseNonNegativeBigInt(keysignPayload.toAmount))),
+          'hex'
+        )
 
         const contract = TW.Tron.Proto.TransferTRC20Contract.create({
           ownerAddress: shouldBePresent(keysignPayload?.coin?.address),
@@ -320,7 +328,7 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
     return [input]
   }
 
-  const amountHex = Buffer.from(stripHexPrefix(bigIntToHex(BigInt(keysignPayload.toAmount))), 'hex')
+  const amountHex = Buffer.from(stripHexPrefix(bigIntToHex(parseNonNegativeBigInt(keysignPayload.toAmount))), 'hex')
 
   const contract = TW.Tron.Proto.TransferTRC20Contract.create({
     ownerAddress: shouldBePresent(keysignPayload?.coin?.address),

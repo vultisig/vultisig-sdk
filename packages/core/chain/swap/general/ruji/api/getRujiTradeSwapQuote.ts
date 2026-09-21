@@ -1,4 +1,3 @@
-import { fromBech32 } from '@cosmjs/encoding'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getCosmosWasmSmartQueryUrl } from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
 import { rujiraGraphQlEndpoint } from '@vultisig/core-chain/chains/cosmos/thor/rujira/config'
@@ -10,6 +9,7 @@ import {
   rujiTradeQuoteTtlMs,
   rujiTradeRuneBruneMarketContract,
 } from '@vultisig/core-chain/swap/general/ruji/config'
+import { decodeBech32 } from '@vultisig/core-chain/utils/decodeBech32'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 type FinMarket = {
@@ -71,7 +71,7 @@ const assertThorAddress = (address: string, label: string): string => {
   const normalized = address.trim()
 
   try {
-    const decoded = fromBech32(normalized)
+    const decoded = decodeBech32(normalized)
     if (decoded.prefix !== 'thor' || (decoded.data.length !== 20 && decoded.data.length !== 32)) {
       throw new Error('wrong prefix')
     }
@@ -201,6 +201,7 @@ export const getRujiTradeSwapQuote = async ({
   return {
     dstAmount: expectedOutput,
     provider: 'ruji',
+    affiliate: { affiliateBps: 0, request: 'omitted', allocations: [] },
     expiresAt: Date.now() + rujiTradeQuoteTtlMs,
     tx: {
       cosmosWasm: {

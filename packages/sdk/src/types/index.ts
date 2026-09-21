@@ -8,7 +8,7 @@ export type { ChainKind } from '@vultisig/core-chain/ChainKind'
 export type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 export type { Coin } from '@vultisig/core-chain/coin/Coin'
 export type { PublicKeys } from '@vultisig/core-chain/publicKey/PublicKeys'
-export type { TxReceiptInfo, TxStatusInput } from '@vultisig/core-chain/tx/status'
+export type { TxFailureInfo, TxReceiptInfo, TxStatusInput } from '@vultisig/core-chain/tx/status'
 export type { TxStatusResult } from '@vultisig/core-chain/tx/status/resolver'
 export type { FiatCurrency } from '@vultisig/core-config/FiatCurrency'
 export type { MpcServerType } from '@vultisig/core-mpc/MpcServerType'
@@ -98,8 +98,18 @@ export type MaxSendAmount = {
   balance: bigint
   /** Estimated network fee in base units */
   fee: bigint
-  /** Maximum sendable amount (full token balance, or native balance minus fee) */
+  /** Maximum sendable amount (full token balance, or native balance minus fee and any balance the chain requires the sender to keep) */
   maxSendable: bigint
+}
+
+/** Public network-fee metadata returned by VaultBase.estimateSendFee(). */
+export type SendFeeEstimate = {
+  /** Estimated network fee in the native fee asset's base units. */
+  feeAmountBase: bigint
+  /** Decimal places used by the native fee asset. */
+  feeDecimals: number
+  /** Ticker of the native fee asset. */
+  feeSymbol: string
 }
 
 export type CachedBalance = {

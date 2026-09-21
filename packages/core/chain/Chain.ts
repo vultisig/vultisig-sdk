@@ -38,7 +38,6 @@ export const cosmosChainsByKind = {
     Cosmos: 'Cosmos',
     Osmosis: 'Osmosis',
     Dydx: 'Dydx',
-    Kujira: 'Kujira',
     Terra: 'Terra',
     TerraClassic: 'TerraClassic',
     Noble: 'Noble',

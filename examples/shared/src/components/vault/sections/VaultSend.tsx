@@ -603,7 +603,7 @@ function pollTxStatus(sdk: ISDKAdapter, vaultId: string, chain: string, txHash: 
           setResult(prev => (prev?.txHash === txHash ? { ...prev, status: 'success', fee } : prev))
           return
         }
-        if (status.status === 'error') {
+        if (status.status === 'error' || status.status === 'expired') {
           setResult(prev => (prev?.txHash === txHash ? { ...prev, status: 'error' } : prev))
           return
         }

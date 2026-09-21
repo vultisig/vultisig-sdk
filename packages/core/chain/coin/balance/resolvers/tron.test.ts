@@ -1,10 +1,10 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const queryUrlMock = vi.hoisted(() => vi.fn())
+const queryTronMock = vi.hoisted(() => vi.fn())
 
-vi.mock('@vultisig/lib-utils/query/queryUrl', () => ({
-  queryUrl: queryUrlMock,
+vi.mock('@vultisig/core-chain/chains/tron/queryTron', () => ({
+  queryTron: queryTronMock,
 }))
 
 import { base58CheckTronDecode, getTronCoinBalance } from './tron'
@@ -80,12 +80,14 @@ describe('base58CheckTronDecode', () => {
 
 describe('getTronCoinBalance (TRC20 eth_call calldata)', () => {
   beforeEach(() => {
-    queryUrlMock.mockReset()
+    queryTronMock.mockReset()
   })
 
   it('builds a well-formed eth_call with correct from address and 64-char ABI param', async () => {
     // Return a fake balance so the RPC decode path completes cleanly.
-    queryUrlMock.mockResolvedValue({ result: '0x0000000000000000000000000000000000000000000000000000000000000064' })
+    queryTronMock.mockResolvedValue({
+      result: '0x0000000000000000000000000000000000000000000000000000000000000064',
+    })
 
     await getTronCoinBalance({
       chain: Chain.Tron,
@@ -93,10 +95,10 @@ describe('getTronCoinBalance (TRC20 eth_call calldata)', () => {
       id: USDT_CONTRACT,
     })
 
-    expect(queryUrlMock).toHaveBeenCalledTimes(1)
+    expect(queryTronMock).toHaveBeenCalledTimes(1)
 
     // Extract the eth_call params from the call body.
-    const body = queryUrlMock.mock.calls[0][1].body
+    const body = queryTronMock.mock.calls[0][1].body
     expect(body.method).toBe('eth_call')
 
     const callObj = body.params[0]
@@ -122,7 +124,9 @@ describe('getTronCoinBalance (TRC20 eth_call calldata)', () => {
 
   it('decodes the eth_call result into the correct bigint balance', async () => {
     // 100 * 1e6 = 100 USDT (6 decimals), hex = 0x5F5E100
-    queryUrlMock.mockResolvedValue({ result: '0x0000000000000000000000000000000000000000000000000000000005F5E100' })
+    queryTronMock.mockResolvedValue({
+      result: '0x0000000000000000000000000000000000000000000000000000000005F5E100',
+    })
 
     const balance = await getTronCoinBalance({
       chain: Chain.Tron,
@@ -134,7 +138,7 @@ describe('getTronCoinBalance (TRC20 eth_call calldata)', () => {
   })
 
   it('propagates RPC errors instead of swallowing them', async () => {
-    queryUrlMock.mockRejectedValue(new Error('network error'))
+    queryTronMock.mockRejectedValue(new Error('network error'))
 
     await expect(
       getTronCoinBalance({
@@ -145,25 +149,59 @@ describe('getTronCoinBalance (TRC20 eth_call calldata)', () => {
     ).rejects.toThrow('network error')
   })
 
-  it('propagates errors from TRC20 RPC JSON-RPC error response path', async () => {
-    // Covers sendRPCRequest's error branch: `error.message` is passed into
-    // intRpcCall's decode fn which calls BigInt() on the string. A JSON-RPC
-    // error object with a human-readable message causes BigInt to throw a
-    // SyntaxError - must propagate, not be swallowed.
-    queryUrlMock.mockResolvedValue({ error: { message: 'Contract not found' } })
+  it.each(['Contract not found', '0x64', '100'])(
+    'rejects provider error messages without decoding: %s',
+    async message => {
+      queryTronMock.mockResolvedValue({
+        error: { code: -32000, message },
+        result: '0x64',
+      })
+      await expect(
+        getTronCoinBalance({
+          chain: Chain.Tron,
+          address: WALLET_ADDRESS,
+          id: USDT_CONTRACT,
+        })
+      ).rejects.toThrow(`Tron RPC eth_call failed (-32000): ${message}`)
+    }
+  )
 
+  it.each(['0x', ''])('rejects an empty contract result: %s', async result => {
+    queryTronMock.mockResolvedValue({ result })
     await expect(
       getTronCoinBalance({
         chain: Chain.Tron,
         address: WALLET_ADDRESS,
         id: USDT_CONTRACT,
       })
-    ).rejects.toThrow()
+    ).rejects.toThrow('empty contract result')
+  })
+
+  it('keeps an explicit zero token balance distinct from an empty result', async () => {
+    queryTronMock.mockResolvedValue({ result: `0x${'0'.repeat(64)}` })
+    await expect(
+      getTronCoinBalance({
+        chain: Chain.Tron,
+        address: WALLET_ADDRESS,
+        id: USDT_CONTRACT,
+      })
+    ).resolves.toBe(0n)
+  })
+
+  it('rejects missing RPC results with an Error', async () => {
+    queryTronMock.mockResolvedValue({})
+    await expect(
+      getTronCoinBalance({
+        chain: Chain.Tron,
+        address: WALLET_ADDRESS,
+        id: USDT_CONTRACT,
+      })
+    ).rejects.toThrow('Tron RPC eth_call returned no result')
   })
 
   it('throws + logs on malformed RPC hex response', async () => {
     // should-fix: BigInt('0xZZZ') throws - intRpcCall must log + re-throw with context.
-    queryUrlMock.mockResolvedValue({ result: '0xZZZ' })
+    queryTronMock.mockResolvedValue({ result: '0xZZZ' })
 
     await expect(
       getTronCoinBalance({
@@ -177,11 +215,11 @@ describe('getTronCoinBalance (TRC20 eth_call calldata)', () => {
 
 describe('getTronCoinBalance (native TRX)', () => {
   beforeEach(() => {
-    queryUrlMock.mockReset()
+    queryTronMock.mockReset()
   })
 
   it('returns the native TRX balance as bigint', async () => {
-    queryUrlMock.mockResolvedValue({ balance: '1000000' })
+    queryTronMock.mockResolvedValue({ balance: '1000000' })
 
     const balance = await getTronCoinBalance({
       chain: Chain.Tron,
@@ -191,9 +229,35 @@ describe('getTronCoinBalance (native TRX)', () => {
     expect(balance).toBe(1_000_000n)
   })
 
+  it.each([{}, { address: WALLET_ADDRESS }, { balance: 0 }, { result: {} }])(
+    'preserves legitimate native zero balances: %j',
+    async response => {
+      queryTronMock.mockResolvedValue(response)
+      await expect(getTronCoinBalance({ chain: Chain.Tron, address: WALLET_ADDRESS })).resolves.toBe(0n)
+    }
+  )
+
+  it('preserves wrapped native balances', async () => {
+    queryTronMock.mockResolvedValue({ result: { balance: '1000000' } })
+    await expect(getTronCoinBalance({ chain: Chain.Tron, address: WALLET_ADDRESS })).resolves.toBe(1_000_000n)
+  })
+
+  it.each([
+    { Error: 'gateway unavailable' },
+    { error: 'gateway unavailable' },
+    { Error: 'gateway unavailable', balance: '1000000' },
+    { error: 'gateway unavailable', result: { balance: '1000000' } },
+    { Error: '' },
+  ])('rejects gateway errors before defaulting or decoding balances: %j', async response => {
+    queryTronMock.mockResolvedValue(response)
+    await expect(getTronCoinBalance({ chain: Chain.Tron, address: WALLET_ADDRESS })).rejects.toThrow(
+      'Tron RPC getaccount failed:'
+    )
+  })
+
   it('propagates native TRX RPC transport errors (does not swallow to 0n)', async () => {
     // BLOCKER 1: same contract — native TRX path must propagate, not catch.
-    queryUrlMock.mockRejectedValue(new Error('timeout'))
+    queryTronMock.mockRejectedValue(new Error('timeout'))
 
     await expect(
       getTronCoinBalance({
@@ -205,7 +269,7 @@ describe('getTronCoinBalance (native TRX)', () => {
 
   it('throws + logs on malformed TRX balance value from RPC', async () => {
     // should-fix: BigInt('not-a-number') throws - must log + re-throw.
-    queryUrlMock.mockResolvedValue({ balance: 'not-a-number' })
+    queryTronMock.mockResolvedValue({ balance: 'not-a-number' })
 
     await expect(
       getTronCoinBalance({

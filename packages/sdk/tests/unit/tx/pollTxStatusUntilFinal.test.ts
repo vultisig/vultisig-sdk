@@ -19,6 +19,46 @@ describe('pollTxStatusUntilFinal', () => {
     expect(getTxStatus).toHaveBeenCalledTimes(1)
   })
 
+  it('forwards the Solana blockhash deadline to every status lookup', async () => {
+    const getTxStatus = vi.fn().mockResolvedValue({ status: 'expired', isKnown: false } satisfies TxStatusResult)
+
+    await pollTxStatusUntilFinal({
+      chain: Chain.Solana,
+      txHash: 'sig',
+      lastValidBlockHeight: 312_456_789,
+      getTxStatus,
+    })
+
+    expect(getTxStatus).toHaveBeenCalledWith({ chain: Chain.Solana, txHash: 'sig', lastValidBlockHeight: 312_456_789 })
+  })
+
+  it('treats expired as a terminal status', async () => {
+    const getTxStatus = vi.fn().mockResolvedValue({ status: 'expired', isKnown: true } satisfies TxStatusResult)
+
+    const outcome = await pollTxStatusUntilFinal({
+      chain: Chain.Tron,
+      txHash: 'abc',
+      getTxStatus,
+    })
+
+    expect(outcome).toMatchObject({ timedOut: false, attempts: 1, result: { status: 'expired' } })
+    expect(getTxStatus).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns an initial expired result without polling', async () => {
+    const getTxStatus = vi.fn()
+
+    const outcome = await pollTxStatusUntilFinal({
+      chain: Chain.Tron,
+      txHash: 'abc',
+      initialResult: { status: 'expired', isKnown: true },
+      getTxStatus,
+    })
+
+    expect(outcome).toMatchObject({ timedOut: false, attempts: 0, result: { status: 'expired' } })
+    expect(getTxStatus).not.toHaveBeenCalled()
+  })
+
   it('polls until a later attempt becomes terminal', async () => {
     let now = 0
     const getTxStatus = vi

@@ -26,7 +26,7 @@ import { getSolanaChainSpecific } from '.'
 describe('getSolanaChainSpecific', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.getLatestBlockhash.mockResolvedValue({ blockhash: 'confirmed-blockhash' })
+    mocks.getLatestBlockhash.mockResolvedValue({ blockhash: 'confirmed-blockhash', lastValidBlockHeight: 312_456_789 })
     mocks.getDynamicPriorityFeePrice.mockResolvedValue(123n)
     mocks.getKeysignCoin.mockReturnValue({
       address: '7Zb1h3Z4vYtHk1qSQ9HAtpNQJ4T4r1CqWn2zPnyjF4Lt',
@@ -43,5 +43,15 @@ describe('getSolanaChainSpecific', () => {
 
     expect(mocks.getLatestBlockhash).toHaveBeenCalledWith('confirmed')
     expect(result.recentBlockHash).toBe('confirmed-blockhash')
+  })
+
+  it('records the blockhash deadline alongside the blockhash', async () => {
+    const result = await getSolanaChainSpecific({
+      keysignPayload: {
+        toAddress: '',
+      },
+    } as any)
+
+    expect(result.lastValidBlockHeight).toBe(312_456_789n)
   })
 })

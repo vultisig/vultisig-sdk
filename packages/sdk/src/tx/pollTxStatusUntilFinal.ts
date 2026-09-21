@@ -4,7 +4,9 @@ import type { TxStatusResult } from '@vultisig/core-chain/tx/status/resolver'
 export type PollTxStatusUntilFinalParams = {
   chain: Chain
   txHash: string
-  getTxStatus: (params: { chain: Chain; txHash: string }) => Promise<TxStatusResult>
+  /** Solana: lets the status lookup report an unseen signature as expired. */
+  lastValidBlockHeight?: number
+  getTxStatus: (params: { chain: Chain; txHash: string; lastValidBlockHeight?: number }) => Promise<TxStatusResult>
   initialResult?: TxStatusResult
   timeoutMs?: number
   intervalMs?: number
@@ -25,7 +27,8 @@ export type PollTxStatusUntilFinalResult = {
 const DEFAULT_TIMEOUT_MS = 60_000
 const DEFAULT_INTERVAL_MS = 3_000
 
-const defaultIsTerminal = (result: TxStatusResult): boolean => result.status === 'success' || result.status === 'error'
+const defaultIsTerminal = (result: TxStatusResult): boolean =>
+  result.status === 'success' || result.status === 'error' || result.status === 'expired'
 const defaultSleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms))
 
 export async function pollTxStatusUntilFinal(
@@ -70,7 +73,11 @@ export async function pollTxStatusUntilFinal(
     let requestTimeout: ReturnType<typeof setTimeout> | undefined
     try {
       const result = await Promise.race([
-        params.getTxStatus({ chain: params.chain, txHash: params.txHash }),
+        params.getTxStatus({
+          chain: params.chain,
+          txHash: params.txHash,
+          lastValidBlockHeight: params.lastValidBlockHeight,
+        }),
         new Promise<TxStatusResult>((_resolve, reject) => {
           requestTimeout = setTimeout(() => reject(new Error('Timed out waiting for tx status response')), remainingMs)
         }),

@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-mpc",
-  "version": "2.1.0",
+  "version": "3.3.1",
   "description": "MPC, keysign, and vault types shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -436,6 +436,11 @@
       "import": "./dist/keysign/refine/utxo.js",
       "default": "./dist/keysign/refine/utxo.js"
     },
+    "./keysign/send/assertBittensorDestinationStaysAlive": {
+      "types": "./dist/keysign/send/assertBittensorDestinationStaysAlive.d.ts",
+      "import": "./dist/keysign/send/assertBittensorDestinationStaysAlive.js",
+      "default": "./dist/keysign/send/assertBittensorDestinationStaysAlive.js"
+    },
     "./keysign/send/build": {
       "types": "./dist/keysign/send/build.d.ts",
       "import": "./dist/keysign/send/build.js",
@@ -616,6 +621,11 @@
       "import": "./dist/keysign/swap/getKeysignLimitSwapOrder.js",
       "default": "./dist/keysign/swap/getKeysignLimitSwapOrder.js"
     },
+    "./keysign/swap/getKeysignSwapFeeFields": {
+      "types": "./dist/keysign/swap/getKeysignSwapFeeFields.d.ts",
+      "import": "./dist/keysign/swap/getKeysignSwapFeeFields.js",
+      "default": "./dist/keysign/swap/getKeysignSwapFeeFields.js"
+    },
     "./keysign/swap/getKeysignSwapPayload": {
       "types": "./dist/keysign/swap/getKeysignSwapPayload.d.ts",
       "import": "./dist/keysign/swap/getKeysignSwapPayload.js",
@@ -665,6 +675,11 @@
       "types": "./dist/keysign/utils/getKeysignCoin.d.ts",
       "import": "./dist/keysign/utils/getKeysignCoin.js",
       "default": "./dist/keysign/utils/getKeysignCoin.js"
+    },
+    "./keysign/utils/getKeysignLastValidBlockHeight": {
+      "types": "./dist/keysign/utils/getKeysignLastValidBlockHeight.d.ts",
+      "import": "./dist/keysign/utils/getKeysignLastValidBlockHeight.js",
+      "default": "./dist/keysign/utils/getKeysignLastValidBlockHeight.js"
     },
     "./keysign/utils/isRippleTrustSet": {
       "types": "./dist/keysign/utils/isRippleTrustSet.d.ts",
@@ -1094,13 +1109,13 @@
     "@noble/hashes": "^2.2.0",
     "@solana/web3.js": "^1.98.4",
     "@trustwallet/wallet-core": "^4.7.3",
-    "@vultisig/core-chain": "4.1.0",
+    "@vultisig/core-chain": "5.5.1",
     "@vultisig/core-config": "0.9.1",
     "@vultisig/lib-dkls": "0.9.0",
     "@vultisig/lib-mldsa": "0.9.0",
     "@vultisig/lib-schnorr": "0.9.0",
-    "@vultisig/lib-utils": "0.10.6",
-    "@vultisig/mpc-types": "0.2.3",
+    "@vultisig/lib-utils": "0.10.7",
+    "@vultisig/mpc-types": "workspace:*",
     "bitcoinjs-lib": "^7.0.1",
     "bs58": "^6.0.0",
     "buffer": "^6.0.3",

@@ -1,9 +1,7 @@
 import { Chain, OtherChain } from '@vultisig/core-chain/Chain'
+import { queryTron } from '@vultisig/core-chain/chains/tron/queryTron'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
-import { attempt } from '@vultisig/lib-utils/attempt'
-import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
-import { tronRpcUrl } from '../../../chains/tron/config'
 import { TxStatusResolver } from '../resolver'
 
 // Terminal failure codes for ResourceReceipt.result (core/Tron.proto field 7, contractResult enum).
@@ -55,25 +53,46 @@ type TronTxInfoResponse = {
   }
 }
 
-export const getTronTxStatus: TxStatusResolver<OtherChain.Tron> = async ({ hash }) => {
-  const url = `${tronRpcUrl}/wallet/gettransactioninfobyid`
+type TronRawTxResponse = {
+  txID?: string
+  raw_data?: {
+    expiration?: number
+  }
+}
 
-  const { data: tx, error } = await attempt(
-    queryUrl<TronTxInfoResponse>(url, {
-      body: { value: hash },
-    })
-  )
+const getUnconfirmedTronStatus = async ({ hash, infoIsKnown }: { hash: string; infoIsKnown: boolean }) => {
+  const rawTx = await queryTron<TronRawTxResponse>('/wallet/gettransactionbyid', {
+    body: { value: hash },
+  })
 
-  if (error || !tx) {
-    return { status: 'pending', isKnown: false }
+  const rawTxMatchesHash = rawTx?.txID?.toLowerCase() === hash.toLowerCase()
+  if (!rawTxMatchesHash) {
+    return infoIsKnown
+      ? { status: 'pending' as const, isKnown: true }
+      : { status: 'not_found' as const, isKnown: false }
   }
 
+  const expiration = rawTx.raw_data?.expiration
+  if (expiration !== undefined && Date.now() > expiration) {
+    return { status: 'expired' as const, isKnown: true }
+  }
+
+  return { status: 'pending' as const, isKnown: true }
+}
+
+export const getTronTxStatus: TxStatusResolver<OtherChain.Tron> = async ({ hash }) => {
+  const url = '/wallet/gettransactioninfobyid'
+
+  const tx = await queryTron<TronTxInfoResponse>(url, {
+    body: { value: hash },
+  })
+
   if (!tx.id) {
-    return { status: 'not_found', isKnown: false }
+    return getUnconfirmedTronStatus({ hash, infoIsKnown: false })
   }
 
   if (tx.blockNumber === undefined || tx.blockNumber === 0) {
-    return { status: 'pending', isKnown: true }
+    return getUnconfirmedTronStatus({ hash, infoIsKnown: true })
   }
 
   // 1. top-level result === "FAILED" → error

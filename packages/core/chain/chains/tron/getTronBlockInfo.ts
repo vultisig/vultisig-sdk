@@ -1,7 +1,5 @@
+import { queryTron } from '@vultisig/core-chain/chains/tron/queryTron'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
-import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
-
-import { tronRpcUrl } from './config'
 
 type TronBlockHeader = {
   raw_data?: {
@@ -44,7 +42,7 @@ type GetTronBlockInfoInput = {
 }
 
 const getBlockByNum = async (num: number) => {
-  return await queryUrl<TronBlock>(`${tronRpcUrl}/wallet/getblockbynum`, {
+  return await queryTron<TronBlock>('/wallet/getblockbynum', {
     body: { num },
   })
 }
@@ -78,9 +76,9 @@ export async function getTronBlockInfo({
   refBlockBytesHex,
   refBlockHashHex,
 }: GetTronBlockInfoInput): Promise<BlockChainSpecificTron> {
-  const url = `${tronRpcUrl}/wallet/getnowblock`
+  const url = '/wallet/getnowblock'
 
-  let currentBlock = await queryUrl<TronBlock>(url, {
+  let currentBlock = await queryTron<TronBlock>(url, {
     body: {},
   })
   if (refBlockBytesHex && refBlockHashHex) {
@@ -90,15 +88,14 @@ export async function getTronBlockInfo({
       refBlockHashHex,
     })
   }
-  const currentTimestampMillis = Math.floor(Date.now())
-  const nowMillis = Math.floor(Date.now())
+  const blockHeaderTimestamp = shouldBePresent(currentBlock.block_header?.raw_data?.timestamp)
   const oneHourMillis = 60 * 60 * 1000
-  expiration = expiration ?? nowMillis + oneHourMillis
+  expiration = expiration ?? blockHeaderTimestamp + oneHourMillis
 
   return {
-    timestamp: timestamp ?? currentTimestampMillis,
+    timestamp: timestamp ?? blockHeaderTimestamp,
     expiration,
-    blockHeaderTimestamp: currentBlock.block_header?.raw_data?.timestamp ?? 0,
+    blockHeaderTimestamp,
     blockHeaderNumber: currentBlock.block_header?.raw_data?.number ?? 0,
     blockHeaderVersion: currentBlock.block_header?.raw_data?.version ?? 0,
     blockHeaderTxTrieRoot: currentBlock.block_header?.raw_data?.txTrieRoot ?? '',

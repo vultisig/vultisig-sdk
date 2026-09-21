@@ -3,7 +3,8 @@ import { Chain } from '@vultisig/core-chain/Chain'
 import { getThorchainSwapDestinationAssets } from '@vultisig/core-chain/chains/cosmos/thor/securedAssets'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { findCoins as coreFindCoins } from '@vultisig/core-chain/coin/find'
-import { knownTokens, knownTokensIndex } from '@vultisig/core-chain/coin/knownTokens'
+import { knownTokens } from '@vultisig/core-chain/coin/knownTokens'
+import { getKnownToken } from '@vultisig/core-chain/coin/knownTokens/utils'
 import { getCoinPrices as coreCoinPrices } from '@vultisig/core-chain/coin/price/getCoinPrices'
 import { getCoinPricesWithChange as coreCoinPricesWithChange } from '@vultisig/core-chain/coin/price/getCoinPricesWithChange'
 import { scanAddressWithBlockaid } from '@vultisig/core-chain/security/blockaid/address'
@@ -34,6 +35,11 @@ import type { SdkConfigOptions, SdkContext } from './context/SdkContext'
 import { SdkContextBuilder, type SdkContextBuilderOptions } from './context/SdkContextBuilder'
 import { UniversalEventEmitter } from './events/EventEmitter'
 import type { SdkEvents } from './events/types'
+import {
+  getVultisigInstanceNamespaces,
+  type VultisigInstanceNamespaces,
+  type VultisigInstanceNamespaceShape,
+} from './instanceNamespaces'
 import { ChainDiscoveryService } from './seedphrase/ChainDiscoveryService'
 import { SeedphraseValidator } from './seedphrase/SeedphraseValidator'
 import type {
@@ -70,6 +76,7 @@ import type {
   FeeCoinInfo,
   TokenInfo,
 } from './types/tokens'
+import { type Amount, amount } from './utils/convertAmount'
 import { createVaultBackup } from './utils/export'
 import { parseKeygenQR } from './utils/parseKeygenQR'
 import { FastVault } from './vault/FastVault'
@@ -134,7 +141,9 @@ export type VultisigConfig = {
  * sdk.dispose()
  * ```
  */
-export class Vultisig extends UniversalEventEmitter<SdkEvents> {
+export class Vultisig<
+  TNamespaces extends VultisigInstanceNamespaceShape = VultisigInstanceNamespaces,
+> extends UniversalEventEmitter<SdkEvents> {
   private _initialized = false
   private _disposed = false
   private initializationPromise?: Promise<void>
@@ -168,6 +177,30 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     return this.context.pushNotificationService
   }
 
+  private get helperNamespaces(): TNamespaces {
+    return getVultisigInstanceNamespaces<TNamespaces>(this)
+  }
+
+  /** Read-only balance helpers (`sdk.balance.*`). */
+  public get balance(): TNamespaces['balance'] {
+    return this.helperNamespaces.balance
+  }
+
+  /** Unsigned bridge helpers (`sdk.bridge.*`). */
+  public get bridge(): TNamespaces['bridge'] {
+    return this.helperNamespaces.bridge
+  }
+
+  /** Cosmos helper groups (`sdk.cosmos.*`). */
+  public get cosmos(): TNamespaces['cosmos'] {
+    return this.helperNamespaces.cosmos
+  }
+
+  /** Canonical transaction decoders (`sdk.decode.*`). */
+  public get decode(): TNamespaces['decode'] {
+    return this.helperNamespaces.decode
+  }
+
   /**
    * DeFi protocol primitives (`sdk.defi.*`).
    *
@@ -175,6 +208,31 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    */
   get defi(): Defi {
     return defi
+  }
+
+  /** Gas and fee helpers (`sdk.gas.*`). */
+  public get gas(): TNamespaces['gas'] {
+    return this.helperNamespaces.gas
+  }
+
+  /** Unsigned transaction preparation helpers (`sdk.prep.*`). */
+  public get prep(): TNamespaces['prep'] {
+    return this.helperNamespaces.prep
+  }
+
+  /** Price helpers (`sdk.price.*`). */
+  public get price(): TNamespaces['price'] {
+    return this.helperNamespaces.price
+  }
+
+  /** Read-only and unsigned swap helpers (`sdk.swap.*`). */
+  public get swap(): TNamespaces['swap'] {
+    return this.helperNamespaces.swap
+  }
+
+  /** Pure amount conversions (`sdk.amount.*`), available before initialization. */
+  get amount(): Amount {
+    return amount
   }
 
   /**
@@ -1276,7 +1334,8 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
 
   /**
    * Discover the tokens an address actually holds on a chain
-   * (1inch for EVM, Jupiter for Solana, LCD for Cosmos, …).
+   * (1inch for EVM, Jupiter for Solana — verified mints only, LCD for Cosmos,
+   * Toncenter plus the ton-assets whitelist for TON — verified jettons only, …).
    *
    * Vault-FREE: takes a raw `{ chain, address }` and returns
    * `DiscoveredToken[]`. The instance method `vault.discoverTokens()`
@@ -1355,7 +1414,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * @returns Token metadata or null if not found
    */
   static getKnownToken(chain: Chain, tokenId: string): TokenInfo | null {
-    const coin = knownTokensIndex[chain]?.[tokenId.toLowerCase()]
+    const coin = getKnownToken({ chain, id: tokenId })
     if (!coin) return null
     return {
       chain,

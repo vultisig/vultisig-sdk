@@ -1,5 +1,5 @@
 import type { WalletCore } from '@trustwallet/wallet-core'
-import { getMaxValue } from '@vultisig/core-chain/amount/getMaxValue'
+import { getMaxSendableAmount } from '@vultisig/core-chain/amount/getMaxSendableAmount'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { isTerraClassicUstcCoin } from '@vultisig/core-chain/chains/cosmos/terraClassicTax'
 import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
@@ -7,7 +7,7 @@ import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
-import { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
+import { isValidRecipient } from '@vultisig/core-chain/utils/isValidRecipient'
 import type { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
 import { getSendFeeEstimate } from '@vultisig/core-mpc/keysign/send/getSendFeeEstimate'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
@@ -44,7 +44,7 @@ export const computeMaxSendFromBalance = async (
 ): Promise<MaxSendAmount> => {
   const walletCore = walletCoreOverride ?? (await getWalletCore())
 
-  const isValid = isValidAddress({
+  const isValid = isValidRecipient({
     chain: params.coin.chain,
     address: params.receiver,
     walletCore,
@@ -103,7 +103,9 @@ export const computeMaxSendFromBalance = async (
     }
   }
 
-  const maxSendable = isTokenSend ? params.balance : getMaxValue(params.balance, fee)
+  const maxSendable = isTokenSend
+    ? params.balance
+    : getMaxSendableAmount({ chain: params.coin.chain, balance: params.balance, fee })
 
   return { balance: params.balance, fee, maxSendable }
 }
@@ -114,9 +116,10 @@ export const computeMaxSendFromBalance = async (
  * `vault.getMaxSendAmount()`.
  *
  * Fetches the on-chain balance and estimates the send fee at full balance.
- * Native sends return `balance - fee` (or `0n` if fee exceeds balance). Token
- * sends return the full token balance after verifying the native balance can
- * cover the fee.
+ * Native sends return `balance - fee`, less the existential deposit on chains
+ * that reap an emptied account (`0n` if those exceed the balance). Token sends
+ * return the full token balance after verifying the native balance can cover
+ * the fee.
  *
  * `walletCore` is optional; when omitted, falls back to the SDK's globally-configured
  * `getWalletCore()` (used by MCP / vault-free callers). Wrappers with an injected

@@ -8,6 +8,7 @@ import { getTxStatus } from '@vultisig/core-chain/tx/status'
 import { getEncodedSigningInputs } from '@vultisig/core-mpc/keysign/signingInputs'
 import { assertNativeSwapReadyForBroadcast } from '@vultisig/core-mpc/keysign/swap/assertNativeSwapReadyForBroadcast'
 import { getKeysignTwPublicKey } from '@vultisig/core-mpc/keysign/tw/getKeysignTwPublicKey'
+import { getKeysignLastValidBlockHeight } from '@vultisig/core-mpc/keysign/utils/getKeysignLastValidBlockHeight'
 import { compileTx } from '@vultisig/core-mpc/tx/compile/compileTx'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 
@@ -16,10 +17,12 @@ import { pollTxStatusUntilFinal } from '../../tx'
 import type { Signature } from '../../types'
 import { convertToKeysignSignatures } from '../utils/convertSignature'
 import { VaultError, VaultErrorCode } from '../VaultError'
+import { formatBroadcastFailureReason, toSafeBroadcastError } from './broadcastError'
 
 type BroadcastPartialFailureInput = {
   chain: Chain
   broadcastedTxHashes: string[]
+  submittedTxCount?: number
   failedInputIndex: number
   cause: unknown
 }
@@ -31,22 +34,30 @@ type ApprovalConfirmationOptions = {
 
 export class BroadcastPartialFailureError extends Error {
   readonly broadcastedTxHashes: string[]
+  readonly submittedTxCount: number
   readonly failedInputIndex: number
   readonly originalError?: Error
 
-  constructor({ chain, broadcastedTxHashes, failedInputIndex, cause }: BroadcastPartialFailureInput) {
-    const errorMessage = cause instanceof Error ? cause.message : String(cause)
+  constructor({
+    chain,
+    broadcastedTxHashes,
+    submittedTxCount = broadcastedTxHashes.length,
+    failedInputIndex,
+    cause,
+  }: BroadcastPartialFailureInput) {
+    const errorMessage = formatBroadcastFailureReason(cause)
     super(
-      `Broadcast failed on ${chain} input ${failedInputIndex + 1} after ${
-        broadcastedTxHashes.length
-      } transaction(s) were submitted: ${errorMessage}. Broadcasted transaction hashes: ${broadcastedTxHashes.join(
+      `Broadcast failed on ${chain} input ${
+        failedInputIndex + 1
+      } after ${submittedTxCount} transaction(s) were submitted: ${errorMessage}. Broadcasted transaction hashes: ${broadcastedTxHashes.join(
         ', '
       )}`
     )
     this.name = 'BroadcastPartialFailureError'
     this.broadcastedTxHashes = broadcastedTxHashes
+    this.submittedTxCount = submittedTxCount
     this.failedInputIndex = failedInputIndex
-    this.originalError = cause instanceof Error ? cause : new Error(String(cause))
+    this.originalError = toSafeBroadcastError(cause)
   }
 }
 
@@ -94,7 +105,8 @@ export class BroadcastService {
    *
    * @returns Transaction hash (string) on success
    *
-   * @throws {VaultError} With code BroadcastFailed if broadcast fails
+   * @throws {BroadcastPartialFailureError} When the operation fails after one or more transactions were broadcast
+   * @throws {VaultError} With code BroadcastFailed if broadcast fails before any transaction was broadcast
    *
    * @example
    * ```typescript
@@ -147,107 +159,104 @@ export class BroadcastService {
         throw new Error('No transaction inputs found in keysign payload')
       }
 
+      // Solana only: the payload's blockhash deadline bounds the broadcast
+      // resend loop and lets a confirmation poll call an unseen signature
+      // expired. Undefined everywhere else.
+      const lastValidBlockHeight = getKeysignLastValidBlockHeight(keysignPayload)
+
       // Broadcast all transaction inputs (e.g., approve + swap for EVM token flows).
       // Returns the hash of the last transaction, which is typically the primary one.
       let txHash = ''
       const shouldConfirmApprovalFirst = !!keysignPayload.erc20ApprovePayload && txInputsArray.length > 1
       const broadcastedTxHashes: string[] = []
+      let submittedTxCount = 0
       for (const [index, txInputData] of txInputsArray.entries()) {
-        const compiledTx = compileTx({
-          publicKey,
-          txInputData,
-          signatures: keysignSignatures,
-          chain,
-          walletCore,
-          // Required for payload-keyed compile branches (signSolana raw
-          // transactions splice the signature into the original bytes,
-          // sdk#1204 — matches the keysignPayload extractMessageHashes
-          // already passes to getPreSigningHashes).
-          keysignPayload,
-        })
-
-        const signingOutput = decodeSigningOutput(chain, compiledTx)
-        let broadcastResult: Awaited<ReturnType<typeof coreBroadcastTx>>
         try {
-          broadcastResult = await this.broadcastTransaction({
+          const compiledTx = compileTx({
+            publicKey,
+            txInputData,
+            signatures: keysignSignatures,
+            chain,
+            walletCore,
+            // Required for payload-keyed compile branches (signSolana raw
+            // transactions splice the signature into the original bytes,
+            // sdk#1204 — matches the keysignPayload extractMessageHashes
+            // already passes to getPreSigningHashes).
+            keysignPayload,
+          })
+
+          const signingOutput = decodeSigningOutput(chain, compiledTx)
+          const broadcastResult = await this.broadcastTransaction({
             chain,
             tx: signingOutput,
+            lastValidBlockHeight,
           })
-        } catch (error) {
-          if (broadcastedTxHashes.length > 0) {
-            throw new BroadcastPartialFailureError({
-              chain,
-              broadcastedTxHashes,
-              failedInputIndex: index,
-              cause: error,
-            })
-          }
-          throw error
-        }
 
-        if (broadcastResult.status === 'failed') {
-          const cause =
-            broadcastResult.cause instanceof Error ? broadcastResult.cause : new Error(String(broadcastResult.cause))
-          const error = new Error(
-            `${broadcastResult.code} (retryable=${broadcastResult.retryable}): ${cause.message}`,
-            {
+          if (broadcastResult.status === 'failed') {
+            const cause = toSafeBroadcastError(broadcastResult.cause)
+            throw new Error(`${broadcastResult.code} (retryable=${broadcastResult.retryable}): ${cause.message}`, {
               cause,
-            }
-          )
-          if (broadcastedTxHashes.length > 0) {
+            })
+          }
+
+          submittedTxCount += 1
+          const inputTxHash = broadcastResult.txHash ?? (await getTxHash({ chain, tx: signingOutput }))
+          broadcastedTxHashes.push(inputTxHash)
+          txHash = inputTxHash
+
+          if (shouldConfirmApprovalFirst && index === 0) {
+            await this.waitForConfirmation(chain, txHash, lastValidBlockHeight)
+          }
+        } catch (error) {
+          if (error instanceof BroadcastPartialFailureError) {
+            throw error
+          }
+          if (submittedTxCount > 0) {
             throw new BroadcastPartialFailureError({
               chain,
               broadcastedTxHashes,
+              submittedTxCount,
               failedInputIndex: index,
               cause: error,
             })
           }
           throw error
-        }
-
-        const inputTxHash = broadcastResult.txHash ?? (await getTxHash({ chain, tx: signingOutput }))
-        broadcastedTxHashes.push(inputTxHash)
-        txHash = inputTxHash
-
-        if (shouldConfirmApprovalFirst && index === 0) {
-          try {
-            await this.waitForConfirmation(chain, txHash)
-          } catch (error) {
-            throw new BroadcastPartialFailureError({
-              chain,
-              broadcastedTxHashes,
-              failedInputIndex: index,
-              cause: error,
-            })
-          }
         }
       }
 
       return txHash
     } catch (error) {
+      if (error instanceof BroadcastPartialFailureError) {
+        throw error
+      }
+
+      const safeError = toSafeBroadcastError(error)
       throw new VaultError(
         VaultErrorCode.BroadcastFailed,
-        `Failed to broadcast transaction on ${chain}: ${error instanceof Error ? error.message : String(error)}`,
-        error instanceof Error ? error : new Error(String(error))
+        `Failed to broadcast transaction on ${chain}: ${safeError.message}`,
+        safeError
       )
     }
   }
 
-  private async waitForConfirmation(chain: Chain, txHash: string): Promise<void> {
+  private async waitForConfirmation(chain: Chain, txHash: string, lastValidBlockHeight?: number): Promise<void> {
     const timeoutMs = this.confirmationOptions.approvalConfirmationTimeoutMs ?? 60_000
     const intervalMs = this.confirmationOptions.approvalConfirmationIntervalMs ?? 3_000
     const outcome = await pollTxStatusUntilFinal({
       chain,
       txHash,
+      lastValidBlockHeight,
       timeoutMs,
       intervalMs,
-      getTxStatus: ({ chain, txHash }) => getTxStatus({ chain, hash: txHash }),
+      getTxStatus: ({ chain, txHash, lastValidBlockHeight }) =>
+        getTxStatus({ chain, hash: txHash, lastValidBlockHeight }),
       shouldRetryError: () => true,
     })
 
     if (outcome.result?.status === 'success') return
-    if (outcome.result?.status === 'error') {
-      throw new Error(`Approval tx failed: ${txHash}`)
+    if (outcome.result?.status === 'error' || outcome.result?.status === 'expired') {
+      const outcomeLabel = outcome.result.status === 'error' ? 'failed' : 'expired'
+      throw new Error(`Approval tx ${outcomeLabel}: ${txHash}`)
     }
 
     const suffix = outcome.lastError instanceof Error ? ` Last status error: ${outcome.lastError.message}` : ''

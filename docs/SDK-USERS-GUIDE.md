@@ -1144,6 +1144,24 @@ const keysignPayload = await vault.prepareSendTx({
 })
 ```
 
+### Send Fee Estimation
+
+Estimate the network fee for a specific send without signing or broadcasting. The result is always denominated in the chain's native fee asset, including when the asset being sent is a token:
+
+```typescript
+const fee = await vault.estimateSendFee({
+  coin,
+  receiver: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0',
+  amount: 1000000n,
+})
+
+console.log('Fee in base units:', fee.feeAmountBase)
+console.log('Fee asset:', fee.feeSymbol)
+console.log('Fee decimals:', fee.feeDecimals)
+```
+
+For example, sending an ERC-20 token on Ethereum still reports `ETH` and `18` for the fee metadata. Fee estimates depend on the transaction inputs and current network conditions. Use `getMaxSendAmount()` when you need the SDK to fetch the balance and calculate a fee-aware maximum.
+
 ### Signing Arbitrary Bytes
 
 The `signBytes()` method allows you to sign pre-hashed data directly, giving you full control over transaction construction. This is useful when you need to:
@@ -1341,6 +1359,9 @@ const checkStatus = async () => {
     case 'pending':
       console.log('Still pending...')
       return false
+    case 'expired':
+      console.log('The transaction can no longer be included; rebuild and re-sign it')
+      return true
     case 'not_found':
       console.log('The node does not currently know this transaction hash')
       return false
@@ -1348,17 +1369,32 @@ const checkStatus = async () => {
 }
 ```
 
+**Parameters:**
+
+- `chain: Chain` - The chain the transaction was broadcast on
+- `txHash: string` - The transaction hash to look up
+- `lastValidBlockHeight?: number` - Solana only: the block height past which the transaction's blockhash is dead, from the keysign payload (`getKeysignLastValidBlockHeight(keysignPayload)`). With it, an unseen signature past that height is reported `expired`; without it the lookup cannot tell an expired transaction from one that has not propagated yet and keeps reporting `pending`. Ignored by other chains.
+
 **Supported chains:** All chain families (EVM, UTXO, Cosmos, Solana, Sui, Polkadot, Ripple, Tron, Cardano, TON).
 
 **Return type (`TxStatusResult`):**
 
-- `status: 'pending' | 'success' | 'error' | 'not_found'` - Current on-chain status. `not_found` means the node has no record of the hash; it can be transient immediately after broadcast.
+- `status: 'pending' | 'success' | 'error' | 'expired' | 'not_found'` - Current on-chain status. `expired` means the chain itself can no longer include the transaction (a Tron expiration or a Solana blockhash deadline has passed) and is terminal. `not_found` means the node has no record of the hash; it can be transient immediately after broadcast.
 - `receipt?: TxReceiptInfo` - Fee details when available:
   - `feeAmount: bigint` - Fee paid in base units
   - `feeDecimals: number` - Decimal places for the fee token
   - `feeTicker: string` - Fee token symbol (e.g., "ETH", "BTC")
+- `failure?: TxFailureInfo` - Why an `error` status happened, when the chain exposes a reason:
+  - `reason: string` - Stable, chain-specific identifier a UI can translate (TON: `seqno-mismatch`, `expired`, `insufficient-funds`, … — see `TonTxFailureReason`)
+  - `message: string` - Plain-language explanation with the remedy, e.g. an expired TON transaction says to check the device clock
+  - `exitCode?: number` - Raw contract/VM code when there is one (TON: 33/133 seqno, 36/136 expired, …)
+  - `phase?: string` - Execution phase that produced the code (TON: `compute` or `action`; action-phase 36 is an invalid destination, compute-phase 36 is the wallet's expiry)
+
+On TON the same explanations cover a broadcast the wallet contract refuses: the failed broadcast's `cause` is a `TonBroadcastRejectedError` whose `failure` carries the reason and whose `message` is the remedy, so "another transaction went first" and "your device clock is off" never surface as an opaque `exitcode=133` / `exitcode=136`.
 
 EVM RPCs can explicitly distinguish a missing receipt from an unknown hash and return `not_found`. Some non-EVM providers do not distinguish an absent transaction from a failed lookup; those resolvers conservatively return `pending` with `isKnown: false`.
+
+On Solana, pass the payload's `lastValidBlockHeight` (`getKeysignLastValidBlockHeight(keysignPayload)`, recorded at build time next to the blockhash) as `vault.getTxStatus({ chain, txHash, lastValidBlockHeight })`. Once the chain's block height passes it, an unseen signature is reported `expired` instead of polling as `pending` indefinitely. Broadcasting itself resends the signed bytes every 2 s until the signature is confirmed or that deadline passes; a deadline miss fails with a `SolanaBlockhashExpiredError` (`recovery: 'resign'`, found through wrappers with `toSolanaBlockhashExpiredError`), meaning the transaction must be rebuilt with a fresh blockhash and signed again. That verdict is only issued when a transaction-history lookup succeeds and confirms the signature never landed; if the lookup itself fails, accepted bytes are reported as pending and left to `getTxStatus`, so a transaction that landed while the RPC was unreachable is never mistaken for one to re-sign.
 
 **Error handling:**
 
@@ -1887,8 +1923,18 @@ for (const token of tokens) {
   console.log(`${token.ticker}: balance ${token.balance}`)
 }
 
-// Also works for Solana (SPL via Jupiter) and Cosmos (IBC)
+// Also works for Solana (SPL via Jupiter), Cosmos (IBC), Cardano, Ripple and TON.
+// Solana returns verified mints only (curated list + Jupiter's verified list),
+// whether or not a price id is known for them: airdropped counterfeits and spam
+// are left out, though the address still holds them on chain. Classify any mint
+// with getSolanaTokenVerification from '@vultisig/core-chain/chains/solana/spl/verification'.
 const solTokens = await vault.discoverTokens(Chain.Solana)
+
+// TON returns verified jettons only (curated list + the ton-assets whitelist):
+// unverified and counterfeit jettons — fake USDT above all — are left out of the
+// discovery results, though the address still holds them on chain. Classify any
+// jetton with getTonJettonVerification from '@vultisig/core-chain/chains/ton/jetton/verification'.
+const jettons = await vault.discoverTokens(Chain.Ton)
 ```
 
 ### Resolving Token Metadata
@@ -2742,6 +2788,14 @@ class VaultBase {
 
   // Low-level transactions
   prepareSendTx(params: SendTxParams): Promise<KeysignPayload>
+  estimateSendFee(params: {
+    coin: AccountCoin
+    receiver: string
+    amount: bigint
+    memo?: string
+    destinationTag?: number
+    feeSettings?: FeeSettings
+  }): Promise<SendFeeEstimate>
   getMaxSendAmount(params: {
     coin: AccountCoin
     receiver: string

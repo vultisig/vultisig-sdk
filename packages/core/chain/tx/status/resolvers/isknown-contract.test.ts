@@ -79,22 +79,22 @@ describe('status resolver isKnown contract', () => {
     })
   })
 
-  it('marks Tron lookup failures and unknown hashes as not known', async () => {
-    mocks.queryUrl.mockRejectedValueOnce(new Error('api down'))
-    await expect(getTronTxStatus({ chain: OtherChain.Tron, hash })).resolves.toEqual({
-      status: 'pending',
-      isKnown: false,
-    })
+  it('propagates Tron lookup failures and marks only absent hashes as not known', async () => {
+    const error = new Error('api down')
+    mocks.queryUrl.mockRejectedValueOnce(error)
+    await expect(getTronTxStatus({ chain: OtherChain.Tron, hash })).rejects.toBe(error)
+    expect(mocks.queryUrl).toHaveBeenCalledOnce()
 
-    mocks.queryUrl.mockResolvedValueOnce({})
+    mocks.queryUrl.mockResolvedValueOnce({}).mockResolvedValueOnce({})
     await expect(getTronTxStatus({ chain: OtherChain.Tron, hash })).resolves.toEqual({
       status: 'not_found',
       isKnown: false,
     })
+    expect(mocks.queryUrl).toHaveBeenCalledTimes(3)
   })
 
   it('marks indexed Tron responses without a terminal receipt as known pending', async () => {
-    mocks.queryUrl.mockResolvedValueOnce({ id: hash, blockNumber: 0 })
+    mocks.queryUrl.mockResolvedValueOnce({ id: hash, blockNumber: 0 }).mockResolvedValueOnce({})
     await expect(getTronTxStatus({ chain: OtherChain.Tron, hash })).resolves.toEqual({
       status: 'pending',
       isKnown: true,

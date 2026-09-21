@@ -7,6 +7,7 @@ import { TronSpecificSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1
 import { CoinSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/coin_pb'
 import { KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { TronTransferContractPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/tron_contract_payload_pb'
+import { THORChainSwapPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/thorchain_swap_payload_pb'
 import Long from 'long'
 import { describe, expect, it } from 'vitest'
 
@@ -17,8 +18,9 @@ import { getTronSigningInputs } from './tron'
 // bare cast to satisfy the resolver type constraint is fine here.
 const walletCore = {} as unknown as WalletCore
 
-// Minimal TronSpecific with a nonzero gasEstimation so we can assert
-// it is NOT forwarded to feeLimit in system-contract branches.
+// Minimal TronSpecific with a nonzero gasEstimation so we can assert which
+// branches forward it to feeLimit (staking ops do, the expired-unfreeze claim
+// does not).
 const makeTronSpecific = (gasEstimation = 100_000_000n) =>
   create(TronSpecificSchema, {
     timestamp: 1_700_000_000_000n,
@@ -63,6 +65,7 @@ const buildWithdrawExpireUnfreezePayload = ({
   memo = WITHDRAW_EXPIRE_UNFREEZE_MEMO,
   withContractPayload = false,
   withSwapPayload = false,
+  gasEstimation = 999n,
 }: {
   chain?: Chain
   ticker?: string
@@ -73,6 +76,7 @@ const buildWithdrawExpireUnfreezePayload = ({
   memo?: string
   withContractPayload?: boolean
   withSwapPayload?: boolean
+  gasEstimation?: bigint
 } = {}) =>
   create(KeysignPayloadSchema, {
     coin: create(CoinSchema, {
@@ -88,7 +92,7 @@ const buildWithdrawExpireUnfreezePayload = ({
     memo,
     blockchainSpecific: {
       case: 'tronSpecific',
-      value: makeTronSpecific(999n),
+      value: makeTronSpecific(gasEstimation),
     },
     contractPayload: withContractPayload
       ? {
@@ -197,33 +201,24 @@ describe('getTronSigningInputs -- WithdrawExpireUnfreezeContract', () => {
   })
 })
 
-describe('getTronSigningInputs -- FREEZE: / UNFREEZE: feeLimit semantics (BUG-7)', () => {
-  it('FREEZE:BANDWIDTH sets feeLimit to 0 regardless of gasEstimation', async () => {
-    const [input] = await getTronSigningInputs({ keysignPayload: buildPayload('FREEZE:BANDWIDTH'), walletCore })
-    // FreezeBalanceV2 is a bandwidth op; energy feeLimit is semantically irrelevant.
-    expect(input.transaction?.feeLimit?.toNumber()).toBe(0)
-  })
+describe('getTronSigningInputs -- FREEZE: / UNFREEZE: feeLimit agreement (sdk#2269)', () => {
+  // fee_limit is a raw_data field. Android (TronHelper.buildStakingTransaction)
+  // and iOS (Tron.swift) sign the payload's gasEstimation for FreezeBalanceV2 /
+  // UnfreezeBalanceV2, so the SDK must serialize the same value or a
+  // desktop/extension co-signer hashes a different preimage than the mobile
+  // initiator in the same ceremony. The value itself is irrelevant to the node.
+  const GAS_ESTIMATION = 100_000_000n
 
-  it('FREEZE:ENERGY sets feeLimit to 0 regardless of gasEstimation', async () => {
-    const [input] = await getTronSigningInputs({ keysignPayload: buildPayload('FREEZE:ENERGY'), walletCore })
-    expect(input.transaction?.feeLimit?.toNumber()).toBe(0)
-  })
+  it.each(['FREEZE:BANDWIDTH', 'FREEZE:ENERGY', 'UNFREEZE:BANDWIDTH', 'UNFREEZE:ENERGY'])(
+    '%s signs feeLimit = tronSpecific.gasEstimation',
+    async memo => {
+      const [input] = await getTronSigningInputs({ keysignPayload: buildPayload(memo), walletCore })
+      expect(input.transaction?.feeLimit?.toString()).toBe(GAS_ESTIMATION.toString())
+      expect(input.transaction?.feeLimit?.equals(Long.ZERO)).toBe(false)
+    }
+  )
 
-  it('UNFREEZE:BANDWIDTH sets feeLimit to 0 regardless of gasEstimation', async () => {
-    const [input] = await getTronSigningInputs({ keysignPayload: buildPayload('UNFREEZE:BANDWIDTH'), walletCore })
-    expect(input.transaction?.feeLimit?.toNumber()).toBe(0)
-  })
-
-  it('UNFREEZE:ENERGY sets feeLimit to 0 regardless of gasEstimation', async () => {
-    const [input] = await getTronSigningInputs({ keysignPayload: buildPayload('UNFREEZE:ENERGY'), walletCore })
-    expect(input.transaction?.feeLimit?.toNumber()).toBe(0)
-  })
-
-  it('gasEstimation value does not leak into FREEZE feeLimit', async () => {
-    // Pre-fix behaviour: feeLimit would have been Long.fromString('100000000').
-    // Post-fix: always 0. This assertion pins the regression explicitly.
-    const GAS_ESTIMATION = 100_000_000n
-    const specific = makeTronSpecific(GAS_ESTIMATION)
+  it('FREEZE feeLimit tracks the payload value rather than a constant', async () => {
     const payload = create(KeysignPayloadSchema, {
       coin: create(CoinSchema, {
         chain: Chain.Tron,
@@ -235,14 +230,52 @@ describe('getTronSigningInputs -- FREEZE: / UNFREEZE: feeLimit semantics (BUG-7)
       toAddress: OWNER,
       toAmount: '1000000000',
       memo: 'FREEZE:ENERGY',
-      blockchainSpecific: { case: 'tronSpecific', value: specific },
+      blockchainSpecific: { case: 'tronSpecific', value: makeTronSpecific(800_000n) },
     })
 
     const [input] = await getTronSigningInputs({ keysignPayload: payload, walletCore })
-    // Anti-regression: prior to fix, feeLimit was passed gasEstimation
-    // (a non-zero energy estimate that's semantically meaningless for
-    // system contracts and only served to confuse the UI fee display).
-    expect(input.transaction?.feeLimit?.equals(Long.ZERO)).toBe(true)
+    expect(input.transaction?.feeLimit?.toString()).toBe('800000')
+  })
+
+  it('FREEZE / UNFREEZE feeLimit throws instead of silently wrapping an out-of-int64-range gasEstimation', () => {
+    const payload = create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, {
+        chain: Chain.Tron,
+        ticker: 'TRX',
+        address: OWNER,
+        decimals: 6,
+        isNativeToken: true,
+      }),
+      toAddress: OWNER,
+      toAmount: '1000000000',
+      memo: 'UNFREEZE:BANDWIDTH',
+      blockchainSpecific: { case: 'tronSpecific', value: makeTronSpecific(1n << 63n) },
+    })
+
+    expect(() => getTronSigningInputs({ keysignPayload: payload, walletCore })).toThrow(/out of int64 range/)
+  })
+
+  it('branches that never serialize feeLimit still accept a uint64 gasEstimation beyond int64', async () => {
+    const gasEstimation = 1n << 63n
+    const claim = buildWithdrawExpireUnfreezePayload({ gasEstimation })
+    const nativeSend = create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, {
+        chain: Chain.Tron,
+        ticker: 'TRX',
+        address: OWNER,
+        decimals: 6,
+        isNativeToken: true,
+      }),
+      toAddress: OWNER,
+      toAmount: '1000000',
+      blockchainSpecific: { case: 'tronSpecific', value: makeTronSpecific(gasEstimation) },
+    })
+
+    const [claimInput] = await getTronSigningInputs({ keysignPayload: claim, walletCore })
+    expect(claimInput.transaction?.feeLimit?.equals(Long.ZERO)).toBe(true)
+
+    const [sendInput] = await getTronSigningInputs({ keysignPayload: nativeSend, walletCore })
+    expect(sendInput.transaction?.transfer?.amount?.toString()).toBe('1000000')
   })
 })
 
@@ -294,4 +327,43 @@ describe('getTronSigningInputs -- bounded int64 fee/gas fields (sdk#1200)', () =
     expect(input.transaction?.feeLimit?.toString()).toBe('50000000')
     expect(input.transaction?.triggerSmartContract?.callValue?.toString()).toBe('1000000')
   })
+})
+
+const buildTrc20Payload = (toAmount: string, swap: boolean) => {
+  const payload = buildPayload('amount memo', toAmount)
+  payload.coin!.isNativeToken = false
+  payload.coin!.contractAddress = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t'
+  if (swap) {
+    payload.swapPayload = {
+      case: 'thorchainSwapPayload',
+      value: create(THORChainSwapPayloadSchema, { fromCoin: payload.coin, vaultAddress: OWNER }),
+    }
+  }
+  return payload
+}
+
+describe.each([false, true])('Tron TRC20 amount validation (swap=%s)', swap => {
+  it.each(['', ' ', '\t\n', '0x10', '+1', '-1', '-0', '1.5', '1e3'])('rejects malformed amount %j', async toAmount => {
+    await expect(async () =>
+      getTronSigningInputs({ keysignPayload: buildTrc20Payload(toAmount, swap), walletCore })
+    ).rejects.toThrow(/decimal/)
+  })
+
+  it('preserves an amount above uint64 and its memo', async () => {
+    const [input] = await getTronSigningInputs({
+      keysignPayload: buildTrc20Payload('18446744073709551616', swap),
+      walletCore,
+    })
+    expect(Buffer.from(input.transaction!.transferTrc20Contract!.amount!).toString('hex')).toBe('010000000000000000')
+    expect(input.transaction!.memo).toBe('amount memo')
+  })
+})
+
+// Confirmed successful USDT transfer; amount word obtained from TronGrid gettransactionbyid.
+// https://tronscan.org/transaction/675b58c8e36c73f2e22e0791e991cb819f8c8d355e6b42f8227a34e86f4c313f/overview
+// Full calldata: a9059cbb0000000000000000000000419c826361267bc0a68f5237ba435ddb0a471afb6e000000000000000000000000000000000000000000000000000000000092a310
+it.each([false, true])('matches the on-chain USDT amount word (swap=%s)', async swap => {
+  const [input] = await getTronSigningInputs({ keysignPayload: buildTrc20Payload('9610000', swap), walletCore })
+  const amount = Buffer.from(input.transaction!.transferTrc20Contract!.amount!).toString('hex')
+  expect(amount.padStart(64, '0')).toBe('000000000000000000000000000000000000000000000000000000000092a310')
 })

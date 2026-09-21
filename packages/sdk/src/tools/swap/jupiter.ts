@@ -85,6 +85,7 @@ export const JUPITER_API_BASE_URL = 'https://api.vultisig.com/jup'
 export const JUPITER_DEFAULT_SLIPPAGE_BPS = 50
 
 const JUPITER_TIMEOUT_MS = 15_000
+const JUPITER_RETRY_DELAYS_MS = [300, 600]
 
 /** @deprecated Jupiter fee accounts are derived and prepended per swap. */
 export const JUPITER_AFFILIATE_FEE_ATAS: Readonly<Record<string, string>> = {}
@@ -158,36 +159,57 @@ export type JupiterSwapResult = {
 }
 
 const fetchJupiter = async <T>(input: string, init?: RequestInit): Promise<T> => {
-  const response = await fetch(input, {
-    ...init,
-    signal: AbortSignal.timeout(JUPITER_TIMEOUT_MS),
-  })
+  for (let attempt = 0; ; attempt++) {
+    const response = await fetch(input, {
+      ...init,
+      signal: AbortSignal.timeout(JUPITER_TIMEOUT_MS),
+    })
 
-  const data = (await response.json().catch(() => undefined)) as unknown
+    const data = (await response.json().catch((error: unknown) => {
+      if (error instanceof SyntaxError) return undefined
+      throw error
+    })) as unknown
+    const retryDelay = JUPITER_RETRY_DELAYS_MS[attempt]
 
-  if (!response.ok) {
-    const msg =
-      typeof data === 'object' && data !== null && 'error' in data
-        ? (data as { error: string }).error
-        : response.statusText
-    throw new Error(`Jupiter API error (${response.status}): ${msg}`)
+    // Only retry explicit rate limits. Each unsigned HTTP operation gets its
+    // own retry budget and timeout; network errors and timeouts still fail fast.
+    if (response.status === 429 && retryDelay !== undefined) {
+      await new Promise(resolve => setTimeout(resolve, retryDelay))
+      continue
+    }
+
+    if (!response.ok) {
+      const msg =
+        typeof data === 'object' && data !== null && 'error' in data
+          ? (data as { error: string }).error
+          : response.statusText
+      throw new Error(`Jupiter API error (${response.status}): ${msg}`)
+    }
+
+    return data as T
   }
-
-  return data as T
 }
 
 /**
  * Build the input/output mint addresses from token info. Falls back to the
  * SOL native mint when no SPL contract is provided.
  */
-const toMint = (contractAddress: string | undefined): string => contractAddress?.trim() || SOL_NATIVE_MINT
+const toMint = (contractAddress: string | undefined, parameter: string): string => {
+  if (contractAddress === undefined) return SOL_NATIVE_MINT
+
+  const mint = contractAddress.trim()
+  if (!mint) {
+    throw new Error(`Jupiter swap ${parameter} must not be blank; omit it for native SOL`)
+  }
+  return mint
+}
 
 export type JupiterSwapParams = {
   /** The signer's Solana base58 public key (owner of the swap). */
   userPublicKey: string
-  /** Input token SPL mint. Omit / empty for native SOL. */
+  /** Input token SPL mint. Omit or use SOL_NATIVE_MINT for native SOL; blank strings are rejected. */
   fromContractAddress?: string
-  /** Output token SPL mint. Omit / empty for native SOL. */
+  /** Output token SPL mint. Omit or use SOL_NATIVE_MINT for native SOL; blank strings are rejected. */
   toContractAddress?: string
   /** Exact input amount in lamports / token base units. */
   amountBaseUnits: bigint
@@ -238,8 +260,8 @@ export const buildJupiterSwapTx = async ({
     throw new Error('Jupiter swap amount must be greater than zero')
   }
 
-  const inputMint = toMint(fromContractAddress)
-  const outputMint = toMint(toContractAddress)
+  const inputMint = toMint(fromContractAddress, 'fromContractAddress')
+  const outputMint = toMint(toContractAddress, 'toContractAddress')
 
   if (inputMint === outputMint) {
     throw new Error('Jupiter swap input and output mint must differ')

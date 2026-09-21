@@ -66,21 +66,20 @@ const stakeRujiWireHex =
 // to serializer-path code (e.g. normalizeKeysignPayloadFromJson,
 // mapSwapPayload) that alters wire bytes for ANY fixture - not just the one
 // rich fixture pinned below - will fail here.
-const expectedCorpusDigest = 'a8bf882652ebbc39353697c6cf53fccf7aa99a7a8b0875716619652f427d0d9d'
+const expectedCorpusDigest = '199ece7f7902e9cda2c78fbad707d96b8d2e4ac88a827417aad7ff4d6f9276cb'
 
 const expectedPerFileDigests: Record<string, string> = {
   'arb.json': 'b11f8989372fd8a51909c37b5da0d79138a647359685b916a2e905973d585e1f',
-  'bittensor.json': '5ea72af2b407caf4edc58daaf37fb414853aee1c38b99c7d8ddbc1c65ec73c74',
+  'bittensor.json': '9b999548eb83ed8aecdd831560e8bc7991f72c3f6b74e9069db769d66ad6b73b',
   'bsc.json': '123820d49abf4400c28d42789d9f5aee1191bd06ec5010cc800c360d53efbfb9',
   'cardano.json': '9b6946664b8c02fe093bddfe12b8755eb5d17af14c50279bb7856aafa3adf1f6',
   'cosmos-chain-matrix.json': 'dfab960ec87c6ef0f5d2524519ac66ef5921d2953de2844b17a8f470d4df34dc',
   'cosmos-sdk-sign-amino.json': '18b4811f7b03e6026c409445f1a37fc63a107842e15091de5af4f55e4c0c1a84',
   'cosmos-sdk-sign-direct.json': '658ce08b15e5f3d9fb0688ea44a93819064bcf1d3f7a996f435e1f73b607bd25',
   'cosmos.json': 'ec8f609e3ef9534f51fb03c3646787ca7df758ba1e0932d81c290c121f415f28',
-  'dot.json': 'af6442b0a6125d1681bd4aae90e660b602670da67f16af18108ce4640fb8d824',
+  'dot.json': '20741180c45be83ceda128c63045a18a1577553eb6ca157f9b50338abe81ae47',
   'evm-chain-matrix.json': '4e2619390c7ca2f8bf584b02c2880e4e42d21aaa855726d5c60e33d319e8b1d8',
   'evm.json': '3b61ed0c368f8afbae14536f45c18c24af8bcd726a3b0b048f2ca257025da216',
-  'kujira.json': '8e56c34d73c66520d6f7961b12773555201490b06d5e177a4aa8073dd70b5506',
   'lifiswap.json': 'ed5b2c7c2626d70d31055996e756fedc45a654c3f3455f1e78ef35c406abc546',
   'maya.json': 'c7ee0a247cec74133b02b055f2a0702bacb59fc1726c2da236ff5b3f2ae0637a',
   'mayaswap.json': 'f9599bc5efca0d9c41432dc634554de4a72d7748d9322448803d5cc730c3390f',
@@ -96,7 +95,7 @@ const expectedPerFileDigests: Record<string, string> = {
   'thorchainswap-limit-order.json': 'af3cc397c771205997adf0a22428b9622c796dc55d27aca0f5cf3ff3d1319b9f',
   'thorchainswap.json': '01b8c4ec266f5e4f5ad542c2f417bcf11279a5dae011cc7f186b7ffd73db80dd',
   'ton.json': 'ea54f2cfa7107549ee9ee4f26d2bcf11d41bfecbd1c0186ec441047cf63c901d',
-  'tron.json': '0e3417c4f955b4205123b5543f14a69887b35fec7113bdba0581fe5367467494',
+  'tron.json': 'a66ab40f34d02515fb93a0c368cad8d126f662ae74a2e9742306ea719f072832',
   'utxo-dash-zcash.json': 'da41de2fed8d6ea3da57752a47fc311ff560d671e7661565c0b6e94238a60e17',
   'utxo.json': 'b819fb70f391c42578cfc506dd008510af5d8f882809ac35415ff18fd624fa9a',
   'xrp.json': 'ccf00ff50c5cecf5a9b5d333757539b2e3462c4b11b5e63660e942f8f1b6fc93',
@@ -106,7 +105,7 @@ describe('KeysignPayload protobuf wire contract', () => {
   it('serializes the complete mobile fixture corpus', () => {
     const serialized = fixtureCases.map(serializeFixture)
 
-    expect(serialized).toHaveLength(93)
+    expect(serialized).toHaveLength(97)
     expect(serialized.every(bytes => bytes.length > 0)).toBe(true)
   })
 

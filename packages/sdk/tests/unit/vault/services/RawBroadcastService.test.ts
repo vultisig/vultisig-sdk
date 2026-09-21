@@ -1,3 +1,5 @@
+import { inspect } from 'node:util'
+
 import { sha256 } from '@noble/hashes/sha2.js'
 import { bytesToHex } from '@noble/hashes/utils.js'
 import { Chain, OtherChain } from '@vultisig/core-chain/Chain'
@@ -185,6 +187,23 @@ describe('RawBroadcastService', () => {
       code: VaultErrorCode.BroadcastFailed,
       message: expect.stringContaining('already been submitted'),
     })
+  })
+
+  it('sanitizes a bare-hex UTXO payload on the VaultError path while preserving its hash', async () => {
+    const signedRawTx = 'ab'.repeat(80)
+    const txHash = 'cd'.repeat(32)
+    mockQueryUrl.mockResolvedValue({
+      data: null,
+      context: { error: `txn-mempool-conflict hash=${txHash} raw=${signedRawTx}` },
+    })
+
+    const error = await service.broadcastRawTx({ chain: Chain.Bitcoin, rawTx: signedRawTx }).catch(value => value)
+    const inspected = inspect(error, { depth: 10 })
+
+    expect(error).toMatchObject({ code: VaultErrorCode.BroadcastFailed })
+    expect(inspected).not.toContain(signedRawTx)
+    expect(error.message).toContain('[signed transaction redacted]')
+    expect(error.message).toContain(txHash)
   })
 
   it('broadcasts Solana raw tx (base64 path)', async () => {
@@ -808,6 +827,42 @@ describe('RawBroadcastService', () => {
     expect(mockQueryUrl).toHaveBeenCalledWith(`${tronRpcUrl}/wallet/broadcasttransaction`, expect.any(Object))
   })
 
+  it('returns the locally derived Tron hash after validating the provider response', async () => {
+    const rawDataHex = '010203'
+    const expectedHash = bytesToHex(sha256(Buffer.from(rawDataHex, 'hex')))
+    mockQueryUrl.mockResolvedValue({ txid: `0x${expectedHash.toUpperCase()}`, result: true })
+
+    const hash = await service.broadcastRawTx({
+      chain: Chain.Tron,
+      rawTx: JSON.stringify({ raw_data_hex: rawDataHex }),
+    })
+
+    expect(hash).toBe(expectedHash)
+  })
+
+  it('rejects a successful Tron response with a mismatched transaction ID', async () => {
+    mockQueryUrl.mockResolvedValue({ txid: '00'.repeat(32), result: true })
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Tron,
+        rawTx: JSON.stringify({ raw_data_hex: '010203' }),
+      })
+    ).rejects.toThrow(/does not match the locally derived hash/)
+  })
+
+  it('rejects a successful Tron response when the input txID mismatches the raw data', async () => {
+    const mismatchedHash = '00'.repeat(32)
+    mockQueryUrl.mockResolvedValue({ txid: mismatchedHash, result: true })
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Tron,
+        rawTx: JSON.stringify({ raw_data_hex: '010203', txID: mismatchedHash }),
+      })
+    ).rejects.toThrow(/transaction ID does not match the locally derived hash/)
+  })
+
   it('maps Tron duplicate transaction to BroadcastFailed', async () => {
     mockQueryUrl.mockResolvedValue({
       code: 'DUP_TRANSACTION_ERROR',
@@ -936,6 +991,23 @@ describe('RawBroadcastService', () => {
       code: VaultErrorCode.BroadcastFailed,
       message: expect.stringContaining('failed on-chain'),
     })
+  })
+
+  it.each(['REVERT', 'expired'])('preserves %s after an ambiguous Tron broadcast finds its hash', async outcome => {
+    const rawDataHex = '010203'
+    const hash = bytesToHex(sha256(Buffer.from(rawDataHex, 'hex')))
+    mockQueryUrl.mockReset()
+    mockQueryUrl
+      .mockRejectedValueOnce(new TypeError('lost response'))
+      .mockResolvedValueOnce({ txID: hash })
+      .mockResolvedValueOnce(
+        outcome === 'REVERT' ? { id: hash, blockNumber: 12345, receipt: { result: 'REVERT' } } : {}
+      )
+    if (outcome === 'expired') mockQueryUrl.mockResolvedValueOnce({ txID: hash, raw_data: { expiration: 1 } })
+    await expect(
+      service.broadcastRawTx({ chain: Chain.Tron, rawTx: JSON.stringify({ raw_data_hex: rawDataHex, txID: hash }) })
+    ).rejects.toMatchObject({ code: VaultErrorCode.BroadcastFailed })
+    expect(mockQueryUrl.mock.calls.filter(([url]) => String(url).endsWith('/broadcasttransaction'))).toHaveLength(1)
   })
 
   it('broadcasts Ripple tx blob', async () => {

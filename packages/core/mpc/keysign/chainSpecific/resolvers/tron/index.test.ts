@@ -8,23 +8,30 @@
  *
  * Logic mirrors iOS TronService.swift lines 160-175.
  */
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { initWasm, type WalletCore } from '@trustwallet/wallet-core'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // ---------------------------------------------------------------------------
 // Mocks — must be at top level for vi.mock hoisting
 // ---------------------------------------------------------------------------
 
+const blockInfo = vi.hoisted(() => ({
+  timestamp: 1_716_000_000_000,
+  expiration: 1_716_003_600_000,
+  blockHeaderTimestamp: 1_716_000_000_000,
+  blockHeaderNumber: 99_000_000,
+  blockHeaderVersion: 30,
+  blockHeaderTxTrieRoot: '01'.repeat(32),
+  blockHeaderParentHash: '02'.repeat(32),
+  blockHeaderWitnessAddress: '03'.repeat(21),
+}))
+
 vi.mock('@vultisig/core-chain/chains/tron/getTronBlockInfo', () => ({
-  getTronBlockInfo: vi.fn().mockResolvedValue({
-    timestamp: 1_716_000_000_000,
-    expiration: 1_716_000_060_000,
-    blockHeaderTimestamp: 1_716_000_000_000,
-    blockHeaderNumber: 99_000_000,
-    blockHeaderVersion: 30,
-    blockHeaderTxTrieRoot: new Uint8Array(32),
-    blockHeaderParentHash: new Uint8Array(32),
-    blockHeaderWitnessAddress: new Uint8Array(21),
-  }),
+  getTronBlockInfo: vi.fn().mockResolvedValue(blockInfo),
+}))
+
+vi.mock('@vultisig/core-chain/chains/tron/queryTron', () => ({
+  queryTron: vi.fn(),
 }))
 
 vi.mock('@vultisig/core-chain/chains/tron/resources/getTronAccountResources', () => ({
@@ -36,17 +43,22 @@ vi.mock('@vultisig/core-chain/coin/utils/isFeeCoin', () => ({
   isFeeCoin: vi.fn((coin: any) => !coin.id),
 }))
 
+import { queryTron } from '@vultisig/core-chain/chains/tron/queryTron'
 import { getTronAccountResources } from '@vultisig/core-chain/chains/tron/resources/getTronAccountResources'
-import { getTronChainSpecific } from './index.js'
+import { getNativeTronBandwidthBytes, getTronChainSpecific } from './index.js'
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeTrxPayload(fromAddress = 'TFromAddress123') {
+const OWNER = 'TCNkawTmcQgYSU8nP8cHswT1QPjharxJr7'
+const RECIPIENT = 'THHsfg2eNiv6MSXC4y5d4t5wkvRVADRKiF'
+
+function makeTrxPayload(memo = '', fromAddress = OWNER) {
   return {
     toAmount: '1000000',
-    toAddress: 'TToAddress456',
+    toAddress: RECIPIENT,
+    memo,
     coin: {
       chain: 'tron' as any,
       address: fromAddress,
@@ -72,23 +84,33 @@ function makeBandwidthResources(available: number) {
 // ---------------------------------------------------------------------------
 
 describe('getTronChainSpecific — native TRX bandwidth fee check', () => {
-  beforeEach(() => {
-    vi.mocked(getTronAccountResources).mockReset()
+  let walletCore: WalletCore
+
+  beforeAll(async () => {
+    walletCore = await initWasm()
   })
 
-  it('returns 0n fee when sender has ample free bandwidth (happy path)', async () => {
-    // Fresh account: 1500 free bandwidth, none used
-    vi.mocked(getTronAccountResources).mockResolvedValue(makeBandwidthResources(1500))
+  beforeEach(() => {
+    vi.mocked(getTronAccountResources).mockReset()
+    vi.mocked(queryTron).mockReset().mockResolvedValue({ address: RECIPIENT })
+  })
 
-    const result = await getTronChainSpecific({
-      keysignPayload: makeTrxPayload(),
-      walletCore: {} as any,
+  const resolve = (memo = '') =>
+    getTronChainSpecific({
+      keysignPayload: makeTrxPayload(memo),
+      walletCore,
       thirdPartyGasLimitEstimation: undefined,
       expiration: undefined,
       timestamp: undefined,
       refBlockBytesHex: undefined,
       refBlockHashHex: undefined,
     })
+
+  it('returns 0n fee when sender has ample free bandwidth (happy path)', async () => {
+    // Fresh account: 1500 free bandwidth, none used
+    vi.mocked(getTronAccountResources).mockResolvedValue(makeBandwidthResources(1500))
+
+    const result = await resolve()
 
     expect(result.gasEstimation).toBe(0n)
   })
@@ -97,68 +119,107 @@ describe('getTronChainSpecific — native TRX bandwidth fee check', () => {
     // 1500/1500 used, 0 staked => available = 0
     vi.mocked(getTronAccountResources).mockResolvedValue(makeBandwidthResources(0))
 
-    const result = await getTronChainSpecific({
-      keysignPayload: makeTrxPayload(),
-      walletCore: {} as any,
-      thirdPartyGasLimitEstimation: undefined,
-      expiration: undefined,
-      timestamp: undefined,
-      refBlockBytesHex: undefined,
-      refBlockHashHex: undefined,
-    })
+    const result = await resolve()
 
     expect(result.gasEstimation).toBe(800_000n)
   })
 
-  it('returns 800_000n when available bandwidth is below 300-byte threshold', async () => {
-    // 200 bytes available — not enough for a ~300 byte native transfer
-    vi.mocked(getTronAccountResources).mockResolvedValue(makeBandwidthResources(200))
+  it('uses TRON protocol bandwidth consumption, including signed bytes, result allowance, and UTF-8 memo framing', () => {
+    const required = (memo: string) =>
+      getNativeTronBandwidthBytes({
+        walletCore,
+        fromAddress: OWNER,
+        toAddress: RECIPIENT,
+        amount: 1_000_000n,
+        memo,
+        blockInfo,
+      })
 
-    const result = await getTronChainSpecific({
-      keysignPayload: makeTrxPayload(),
-      walletCore: {} as any,
-      thirdPartyGasLimitEstimation: undefined,
-      expiration: undefined,
-      timestamp: undefined,
-      refBlockBytesHex: undefined,
-      refBlockHashHex: undefined,
-    })
+    const withoutMemo = required('')
+    const asciiMemo = required('memo')
+    const multibyteMemo = required('memo💸')
 
-    expect(result.gasEstimation).toBe(800_000n)
+    expect(withoutMemo).toBe(267)
+    expect(asciiMemo).toBe(273)
+    expect(multibyteMemo).toBe(277)
+    expect(asciiMemo - withoutMemo).toBe(2 + Buffer.byteLength('memo'))
+    expect(multibyteMemo - withoutMemo).toBe(2 + Buffer.byteLength('memo💸'))
   })
+
+  it.each(['', 'memo', 'memo💸'])(
+    'charges when available bandwidth is one byte below the %s transaction size',
+    async memo => {
+      const requiredBandwidth = getNativeTronBandwidthBytes({
+        walletCore,
+        fromAddress: OWNER,
+        toAddress: RECIPIENT,
+        amount: 1_000_000n,
+        memo,
+        blockInfo,
+      })
+      vi.mocked(getTronAccountResources).mockResolvedValue(makeBandwidthResources(requiredBandwidth - 1))
+
+      await expect(resolve(memo)).resolves.toMatchObject({
+        gasEstimation: 800_000n,
+      })
+    }
+  )
 
   it('falls back to 800_000n gracefully when resource RPC throws', async () => {
     vi.mocked(getTronAccountResources).mockRejectedValue(new Error('503 Service Unavailable'))
 
-    const result = await getTronChainSpecific({
-      keysignPayload: makeTrxPayload(),
-      walletCore: {} as any,
-      thirdPartyGasLimitEstimation: undefined,
-      expiration: undefined,
-      timestamp: undefined,
-      refBlockBytesHex: undefined,
-      refBlockHashHex: undefined,
-    })
+    const result = await resolve()
 
     // Graceful degradation: don't block the send, use worst-case fee
     expect(result.gasEstimation).toBe(800_000n)
   })
 
-  it('returns 0n fee when available bandwidth exactly equals the threshold (boundary: available === 300)', async () => {
-    // The check is `>= BYTES_PER_NATIVE_TRX_TX`, so exactly 300 must be free.
-    vi.mocked(getTronAccountResources).mockResolvedValue(makeBandwidthResources(300))
-
-    const result = await getTronChainSpecific({
-      keysignPayload: makeTrxPayload(),
-      walletCore: {} as any,
-      thirdPartyGasLimitEstimation: undefined,
-      expiration: undefined,
-      timestamp: undefined,
-      refBlockBytesHex: undefined,
-      refBlockHashHex: undefined,
+  it('returns 0n when available bandwidth exactly equals the memo-bearing signed size', async () => {
+    const memo = 'memo💸'
+    const requiredBandwidth = getNativeTronBandwidthBytes({
+      walletCore,
+      fromAddress: OWNER,
+      toAddress: RECIPIENT,
+      amount: 1_000_000n,
+      memo,
+      blockInfo,
     })
+    vi.mocked(getTronAccountResources).mockResolvedValue(makeBandwidthResources(requiredBandwidth))
+
+    const result = await resolve(memo)
 
     expect(result.gasEstimation).toBe(0n)
+  })
+
+  it.each([0, 1500])('reserves activation and its bandwidth burn with %i sender bandwidth', async available => {
+    vi.mocked(queryTron).mockResolvedValue({})
+    vi.mocked(getTronAccountResources).mockResolvedValue(makeBandwidthResources(available))
+
+    await expect(resolve()).resolves.toMatchObject({
+      gasEstimation: 1_100_000n,
+    })
+    expect(queryTron).toHaveBeenCalledWith(expect.stringMatching(/\/wallet\/getaccount$/), {
+      body: { address: RECIPIENT, visible: true },
+    })
+  })
+
+  it('does not mistake an activated zero-balance recipient for a new account', async () => {
+    vi.mocked(queryTron).mockResolvedValue({ address: RECIPIENT, balance: 0 })
+    vi.mocked(getTronAccountResources).mockResolvedValue(makeBandwidthResources(1500))
+    await expect(resolve()).resolves.toMatchObject({ gasEstimation: 0n })
+  })
+
+  it.each([null, [], 'bad response', { Error: 'rate limited' }, { balance: 0 }, { address: OWNER }])(
+    'rejects malformed or mismatched recipient response %j',
+    async response => {
+      vi.mocked(queryTron).mockResolvedValue(response)
+      await expect(resolve()).rejects.toThrow('invalid recipient account response')
+    }
+  )
+
+  it('propagates recipient RPC failure instead of returning an under-reserved fee', async () => {
+    vi.mocked(queryTron).mockRejectedValue(new Error('503 Service Unavailable'))
+    await expect(resolve()).rejects.toThrow('503 Service Unavailable')
   })
 
   it('honours thirdPartyGasLimitEstimation when provided, skipping bandwidth check', async () => {
@@ -166,7 +227,7 @@ describe('getTronChainSpecific — native TRX bandwidth fee check', () => {
 
     const result = await getTronChainSpecific({
       keysignPayload: makeTrxPayload(),
-      walletCore: {} as any,
+      walletCore,
       thirdPartyGasLimitEstimation: 1_234_567n,
       expiration: undefined,
       timestamp: undefined,
