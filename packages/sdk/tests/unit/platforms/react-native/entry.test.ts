@@ -1,5 +1,6 @@
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
+import * as coinFinderKinds from '@vultisig/core-chain/coin/find/CoinFinderChainKind'
 import * as blockaidChains from '@vultisig/core-chain/security/blockaid/evmChains'
 import { isValidTxHash } from '@vultisig/core-chain/tx/isValidTxHash'
 import { AuthInfo, SignDoc, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
@@ -978,6 +979,14 @@ describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
     expect(rn.isChainOfKind).toBe(chainKind.isChainOfKind)
     expect(rn.getChainKind(rn.Chain.Ethereum)).toBe('evm')
     expect(rn.isChainOfKind(rn.Chain.Solana, 'solana')).toBe(true)
+  })
+
+  it('exports the canonical token-discovery families and their type from the RN entry', () => {
+    expect(sdkRn.coinFinderChainKinds).toBe(coinFinderKinds.coinFinderChainKinds)
+    expect(sdkRn.coinFinderChainKinds).toContain('ton')
+    expectTypeOf<typeof sdkRn.coinFinderChainKinds>().toEqualTypeOf<typeof coinFinderKinds.coinFinderChainKinds>()
+    expectTypeOf<sdkRn.CoinFinderChainKind>().toEqualTypeOf<coinFinderKinds.CoinFinderChainKind>()
+    expectTypeOf<sdkRn.CoinFinderChainKind>().toEqualTypeOf<(typeof coinFinderKinds.coinFinderChainKinds)[number]>()
   })
 
   it('re-exports root-public pure helpers needed by React Native consumers', async () => {

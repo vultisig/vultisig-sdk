@@ -307,6 +307,8 @@ export { Chain, IbcEnabledCosmosChain, VaultBasedCosmosChain } from './types'
 // re-inventing per-chain classification tables (the cross-repo drift root cause).
 export type { ChainKind } from '@vultisig/core-chain/ChainKind'
 export { getChainKind, isChainOfKind } from '@vultisig/core-chain/ChainKind'
+export type { CoinFinderChainKind } from '@vultisig/core-chain/coin/find/CoinFinderChainKind'
+export { coinFinderChainKinds } from '@vultisig/core-chain/coin/find/CoinFinderChainKind'
 
 // Signing-algorithm classification — the canonical ECDSA/EdDSA/mldsa dispatch
 // key per chain. Exposed so consumers stop re-declaring EdDSA chain sets

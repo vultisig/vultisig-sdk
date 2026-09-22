@@ -1,5 +1,6 @@
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
+import * as coinFinderKinds from '@vultisig/core-chain/coin/find/CoinFinderChainKind'
 import * as blockaidChains from '@vultisig/core-chain/security/blockaid/evmChains'
 import * as isValidTokenIdModule from '@vultisig/core-chain/utils/isValidTokenId'
 import { describe, expect, expectTypeOf, it } from 'vitest'
@@ -379,6 +380,14 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.getChainKind).toBe('function')
     expect(sdk.getChainKind(sdk.Chain.Ethereum)).toBe('evm')
     expect(sdk.chainFeeCoin[sdk.Chain.Ethereum]?.ticker).toBe('ETH')
+  })
+
+  it('exports the canonical token-discovery families and their type', () => {
+    expect(sdk.coinFinderChainKinds).toBe(coinFinderKinds.coinFinderChainKinds)
+    expect(sdk.coinFinderChainKinds).toContain('ton')
+    expectTypeOf<typeof sdk.coinFinderChainKinds>().toEqualTypeOf<typeof coinFinderKinds.coinFinderChainKinds>()
+    expectTypeOf<sdk.CoinFinderChainKind>().toEqualTypeOf<coinFinderKinds.CoinFinderChainKind>()
+    expectTypeOf<sdk.CoinFinderChainKind>().toEqualTypeOf<(typeof coinFinderKinds.coinFinderChainKinds)[number]>()
   })
 
   it('exports the THOR/Maya swap-memo parser for downstream consumers', () => {
