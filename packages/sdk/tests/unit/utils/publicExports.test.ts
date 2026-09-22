@@ -7,6 +7,8 @@ import { describe, expect, expectTypeOf, it } from 'vitest'
 import * as tronAbi from '../../../src/abi/tron'
 import * as sdk from '../../../src/index'
 import * as tools from '../../../src/tools'
+import * as defi from '../../../src/tools/defi'
+import * as arkis from '../../../src/tools/defi/arkis'
 import * as stakekit from '../../../src/tools/defi/stakekit'
 import * as threeJane from '../../../src/tools/defi/threeJane'
 import * as dangerousAddresses from '../../../src/utils/dangerousAddresses'
@@ -31,6 +33,35 @@ const dangerousAddressCanonicalExports = [
 ] as const
 
 describe('@vultisig/sdk public exports', () => {
+  it('re-exports the Arkis canonicals from root and DeFi while preserving namespace access', () => {
+    const values = [
+      'ARKIS_BOOK_URLS',
+      'ARKIS_OFFICIAL_ADDRESSES',
+      'buildArkisSupplyTx',
+      'parseArkisTokenAmount',
+      'resolveArkisPoolKind',
+    ] as const
+
+    for (const name of values) {
+      expect(sdk[name]).toBe(arkis[name])
+      expect(defi[name]).toBe(arkis[name])
+      expect(tools[name]).toBe(arkis[name])
+      expect(defi.arkis[name]).toBe(arkis[name])
+      expect(sdk.defi.arkis[name]).toBe(arkis[name])
+    }
+
+    expectTypeOf<sdk.ArkisPoolKind>().toEqualTypeOf<arkis.ArkisPoolKind>()
+    expectTypeOf<sdk.ArkisUnsignedTx>().toEqualTypeOf<arkis.ArkisUnsignedTx>()
+    expectTypeOf<sdk.BuildArkisSupplyParams>().toEqualTypeOf<arkis.BuildArkisSupplyParams>()
+    expectTypeOf<sdk.BuildArkisSupplyResult>().toEqualTypeOf<arkis.BuildArkisSupplyResult>()
+    expectTypeOf<sdk.ResolveArkisPoolKindResult>().toEqualTypeOf<arkis.ResolveArkisPoolKindResult>()
+    expectTypeOf<defi.ArkisPoolKind>().toEqualTypeOf<arkis.ArkisPoolKind>()
+    expectTypeOf<defi.ArkisUnsignedTx>().toEqualTypeOf<arkis.ArkisUnsignedTx>()
+    expectTypeOf<defi.BuildArkisSupplyParams>().toEqualTypeOf<arkis.BuildArkisSupplyParams>()
+    expectTypeOf<defi.BuildArkisSupplyResult>().toEqualTypeOf<arkis.BuildArkisSupplyResult>()
+    expectTypeOf<defi.ResolveArkisPoolKindResult>().toEqualTypeOf<arkis.ResolveArkisPoolKindResult>()
+  })
+
   it('exports the strict chain-ID resolver by identity with its string-only signature', () => {
     expect(sdk.resolveChainIdReference).toBe(resolveChainIdReference)
     expectTypeOf(sdk.resolveChainIdReference).toEqualTypeOf<(chainId: string) => sdk.Chain | undefined>()

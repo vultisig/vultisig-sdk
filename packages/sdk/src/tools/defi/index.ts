@@ -17,6 +17,7 @@ import * as stakekitModule from './stakekit'
 import * as threeJane from './threeJane'
 
 export { arkis }
+export * from './arkis'
 export * from './balancer'
 export * from './glif'
 export * as glif from './glif'

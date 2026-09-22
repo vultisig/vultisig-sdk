@@ -1333,6 +1333,13 @@ export { broadcastRawTx } from './vault/services/RawBroadcastService'
 // ============================================================================
 
 export type {
+  ArkisPoolKind,
+  ArkisUnsignedTx,
+  BuildArkisSupplyParams,
+  BuildArkisSupplyResult,
+  ResolveArkisPoolKindResult,
+} from './tools/defi'
+export type {
   BuildRiverCloseTroveParams,
   BuildRiverDelegateApprovalParams,
   BuildRiverOpenTroveParams,
@@ -1345,6 +1352,13 @@ export type {
   RiverOpenTroveMeta,
   RiverTxBuild,
   RiverUnsignedTx,
+} from './tools/defi'
+export {
+  ARKIS_BOOK_URLS,
+  ARKIS_OFFICIAL_ADDRESSES,
+  buildArkisSupplyTx,
+  parseArkisTokenAmount,
+  resolveArkisPoolKind,
 } from './tools/defi'
 export {
   buildRiverCloseTrove,
