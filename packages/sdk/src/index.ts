@@ -115,7 +115,8 @@ export { getKeysignFeeCoin } from '@vultisig/core-mpc/keysign/fee/getKeysignFeeC
 // round-trip, so it's safe for high-decimal assets). Exported at the root so
 // downstream consumers (CLI, app) can share this instead of hand-rolling
 // their own `BigInt(10 ** decimals)` divisor, which drifts past decimals=22.
-export { fromChainAmountExact } from '@vultisig/core-chain/amount/fromChainAmountExact'
+export { fromChainAmount } from '@vultisig/core-chain/amount/fromChainAmount'
+export { fromChainAmountDisplay, fromChainAmountExact } from '@vultisig/core-chain/amount/fromChainAmountExact'
 
 // Public-boundary argument validation (AUDIT-R3 TASK-020).
 // Zod schemas + safe-parse helpers for chain and ticker strings.
