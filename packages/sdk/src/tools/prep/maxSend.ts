@@ -3,13 +3,12 @@ import { getMaxSendableAmount } from '@vultisig/core-chain/amount/getMaxSendable
 import { Chain } from '@vultisig/core-chain/Chain'
 import { isTerraClassicUstcCoin } from '@vultisig/core-chain/chains/cosmos/terraClassicTax'
 import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
-import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
 import { isValidRecipient } from '@vultisig/core-chain/utils/isValidRecipient'
 import type { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
-import { getSendFeeEstimate } from '@vultisig/core-mpc/keysign/send/getSendFeeEstimate'
+import type { getSendFeeEstimate } from '@vultisig/core-mpc/keysign/send/getSendFeeEstimate'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 
 import { getWalletCore } from '../../context/wasmRuntime'
@@ -78,8 +77,8 @@ export const computeMaxSendFromBalance = async (
     ? shouldBePresent(identity.publicKeyMldsa, 'Vault MLDSA public key required for QBTC fee estimate')
     : undefined
 
-  const fee = await getSendFeeEstimate({
-    coin: params.coin,
+  const buildInput: Parameters<typeof getSendFeeEstimate>[0] = {
+    coin: { ...params.coin },
     receiver: params.receiver,
     amount: params.balance,
     memo: params.memo,
@@ -92,7 +91,9 @@ export const computeMaxSendFromBalance = async (
     libType: identity.libType,
     feeSettings: params.feeSettings,
     tonGasless: params.tonGasless,
-  })
+  }
+
+  const fee = await (await import('@vultisig/core-mpc/keysign/send/getSendFeeEstimate')).getSendFeeEstimate(buildInput)
 
   // TerraClassic USTC pays its fee (base gas + burn tax) in `uusd` — the same
   // denom/balance being sent — unlike every other non-fee-coin token, which
@@ -142,7 +143,9 @@ export const getMaxSendAmountFromKeys = async (
   const walletCore = walletCoreOverride ?? (await getWalletCore())
   // Receiver validation lives in computeMaxSendFromBalance (the canonical check
   // for all callers) — don't duplicate it here.
-  const balance = await getCoinBalance(params.coin)
+  const coin = { ...params.coin }
+  const { getCoinBalance } = await import('@vultisig/core-chain/coin/balance')
+  const balance = await getCoinBalance(coin)
   const nativeBalance =
     isFeeCoin(params.coin) || isTerraClassicUstcCoin(params.coin) || paysTonGaslessFee(params)
       ? undefined

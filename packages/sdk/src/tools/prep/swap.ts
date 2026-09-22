@@ -7,7 +7,7 @@ import {
   getSwapQuoteSafetyFingerprint,
 } from '@vultisig/core-chain/swap/quote/getSwapQuoteSafetyFingerprint'
 import type { BoundSwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
-import { buildSwapKeysignPayload } from '@vultisig/core-mpc/keysign/swap/build'
+import type { buildSwapKeysignPayload } from '@vultisig/core-mpc/keysign/swap/build'
 import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
 
@@ -186,7 +186,7 @@ export const prepareSwapTxFromKeys = async (
     chainPublicKeys: identity.chainPublicKeys,
   })
 
-  return buildSwapKeysignPayload({
+  const buildInput: Parameters<typeof buildSwapKeysignPayload>[0] = {
     fromCoin: safeParams.fromCoin,
     toCoin: safeParams.toCoin,
     recipient: safeParams.swapQuote.recipient ?? safeParams.toCoin.address,
@@ -198,5 +198,7 @@ export const prepareSwapTxFromKeys = async (
     toPublicKey,
     libType: identity.libType,
     walletCore,
-  })
+  }
+
+  return (await import('@vultisig/core-mpc/keysign/swap/build')).buildSwapKeysignPayload(buildInput)
 }

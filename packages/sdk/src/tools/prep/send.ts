@@ -6,7 +6,7 @@ import { assertSafeDestination } from '@vultisig/core-chain/security/dangerousAd
 import { assertSafeTokenTransferDestination } from '@vultisig/core-chain/security/tokenTransferGuards'
 import { isValidRecipient } from '@vultisig/core-chain/utils/isValidRecipient'
 import type { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
-import { buildSendKeysignPayload } from '@vultisig/core-mpc/keysign/send/build'
+import type { buildSendKeysignPayload } from '@vultisig/core-mpc/keysign/send/build'
 import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 
@@ -120,8 +120,8 @@ export const prepareSendTxFromKeys = async (
     ? shouldBePresent(identity.publicKeyMldsa, 'Vault MLDSA public key required for QBTC send')
     : undefined
 
-  return buildSendKeysignPayload({
-    coin: params.coin,
+  const buildInput: Parameters<typeof buildSendKeysignPayload>[0] = {
+    coin: { ...params.coin },
     receiver: params.receiver,
     amount: params.amount,
     memo: params.memo,
@@ -135,5 +135,7 @@ export const prepareSendTxFromKeys = async (
     feeSettings: params.feeSettings,
     sendMaxAmount: params.sendMaxAmount,
     tonGasless: params.tonGasless,
-  })
+  }
+
+  return (await import('@vultisig/core-mpc/keysign/send/build')).buildSendKeysignPayload(buildInput)
 }

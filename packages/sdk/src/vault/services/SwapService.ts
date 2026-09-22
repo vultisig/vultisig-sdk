@@ -33,10 +33,7 @@ import type { WasmProvider } from '../../context/SdkContext'
 import { VaultEvents } from '../../events/types'
 import type { DiscountTierService } from '../../services/DiscountTierService'
 import type { FiatValueService } from '../../services/FiatValueService'
-// Import prep helpers from per-file paths, not the `tools/prep` barrel: the
-// barrel pulls in cosmos.ts → buildCosmosPayload → @vultisig/core-chain THORChain
-// modules at module-load time, which breaks vitest setups that mock chainFeeCoin.
-import { prepareSwapTxFromKeys } from '../../tools/prep/swap'
+import { prepareSwapTxFromKeys } from '../../tools/prep'
 import { vaultDataToIdentity } from '../../tools/prep/types'
 import {
   CoinInput,

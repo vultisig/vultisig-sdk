@@ -6,7 +6,7 @@ import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v
 
 import { getWalletCore } from '../../context/wasmRuntime'
 import type { CosmosSigningOptions, SignAminoInput, SignDirectInput } from '../../types/cosmos'
-import {
+import type {
   buildSignAminoKeysignPayload,
   buildSignDirectKeysignPayload,
 } from '../../vault/services/cosmos/buildCosmosPayload'
@@ -69,14 +69,21 @@ export const prepareSignAminoTxFromKeys = async (
     chainPublicKeys: identity.chainPublicKeys,
   })
 
-  return buildSignAminoKeysignPayload({
+  // The builder used to serialize these values before its first await.
+  // Own the same snapshot before loading it asynchronously.
+  const buildInput: Parameters<typeof buildSignAminoKeysignPayload>[0] = {
     ...input,
+    msgs: input.msgs.map(msg => ({ ...msg })),
+    fee: { ...input.fee, amount: input.fee.amount.map(amount => ({ ...amount })) },
+    coin: { ...input.coin },
     vaultId: identity.ecdsaPublicKey,
     localPartyId: identity.localPartyId,
     publicKey,
     libType: identity.libType,
     skipChainSpecificFetch: options?.skipChainSpecificFetch,
-  })
+  }
+
+  return (await import('../../vault/services/cosmos/buildCosmosPayload')).buildSignAminoKeysignPayload(buildInput)
 }
 
 /**
@@ -129,12 +136,15 @@ export const prepareSignDirectTxFromKeys = async (
     chainPublicKeys: identity.chainPublicKeys,
   })
 
-  return buildSignDirectKeysignPayload({
+  const buildInput: Parameters<typeof buildSignDirectKeysignPayload>[0] = {
     ...input,
+    coin: { ...input.coin },
     vaultId: identity.ecdsaPublicKey,
     localPartyId: identity.localPartyId,
     publicKey,
     libType: identity.libType,
     skipChainSpecificFetch: options?.skipChainSpecificFetch,
-  })
+  }
+
+  return (await import('../../vault/services/cosmos/buildCosmosPayload')).buildSignDirectKeysignPayload(buildInput)
 }

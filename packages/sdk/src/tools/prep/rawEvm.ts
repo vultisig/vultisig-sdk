@@ -5,7 +5,7 @@ import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
 import { assertSafeDestination } from '@vultisig/core-chain/security/dangerousAddresses'
 import { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
 import { getBlockchainSpecificValue } from '@vultisig/core-mpc/keysign/chainSpecific/KeysignChainSpecific'
-import { buildSendKeysignPayload } from '@vultisig/core-mpc/keysign/send/build'
+import type { buildSendKeysignPayload } from '@vultisig/core-mpc/keysign/send/build'
 import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 
 import { getWalletCore } from '../../context/wasmRuntime'
@@ -96,7 +96,7 @@ export const prepareRawEvmTxFromKeys = async (
     chainPublicKeys: identity.chainPublicKeys,
   })
 
-  const payload = await buildSendKeysignPayload({
+  const buildInput: Parameters<typeof buildSendKeysignPayload>[0] = {
     coin: {
       chain,
       address: senderAddress,
@@ -111,7 +111,9 @@ export const prepareRawEvmTxFromKeys = async (
     publicKey,
     walletCore,
     libType: identity.libType,
-  })
+  }
+
+  const payload = await (await import('@vultisig/core-mpc/keysign/send/build')).buildSendKeysignPayload(buildInput)
 
   // `buildSendKeysignPayload` applies send-style amount refinement for native-fee
   // coins. A caller-supplied raw envelope must preserve its explicit `tx.value`

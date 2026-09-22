@@ -46,6 +46,25 @@ describe('prepareSendTxFromKeys', () => {
     mockBuildSendKeysignPayload.mockResolvedValue(mockPayload)
   })
 
+  it('captures the validated coin before loading the builder', async () => {
+    const coin = { chain: Chain.Ethereum as Chain, address: '0xfrom', decimals: 18, ticker: 'ETH' }
+    const expectedCoin = { ...coin }
+    const params = { coin, receiver: '0x1111111111111111111111111111111111111111', amount: 100n }
+    const pending = prepareSendTxFromKeys(baseIdentity, params, mockWalletCore as any)
+    coin.chain = Chain.Bitcoin
+    coin.address = 'changed'
+    params.amount = 999n
+    params.receiver = 'changed'
+    await pending
+    expect(mockBuildSendKeysignPayload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        coin: expectedCoin,
+        amount: 100n,
+        receiver: '0x1111111111111111111111111111111111111111',
+      })
+    )
+  })
+
   it('passes publicKey: null and hexPublicKeyOverride for QBTC (MLDSA chain)', async () => {
     const identity: VaultIdentity = {
       ...baseIdentity,

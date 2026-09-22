@@ -52,6 +52,34 @@ describe('getMaxSendAmountFromKeys', () => {
     mockGetPublicKey.mockReturnValue(mockPublicKey)
   })
 
+  it('captures the balance lookup coin before the import yields', async () => {
+    mockGetCoinBalance.mockResolvedValue(100n)
+    mockGetSendFeeEstimate.mockResolvedValue(5n)
+    const coin = { chain: Chain.Ethereum, address: 'original', decimals: 18, ticker: 'ETH' }
+    const pending = getMaxSendAmountFromKeys(baseIdentity, { coin, receiver: '0xto' }, mockWalletCore as any)
+    coin.address = 'changed'
+    await pending
+    expect(mockGetCoinBalance).toHaveBeenCalledWith(expect.objectContaining({ address: 'original' }))
+  })
+
+  it('captures the fee estimate coin before the import yields', async () => {
+    mockGetSendFeeEstimate.mockResolvedValue(5n)
+    const coin = { chain: Chain.Ethereum, address: 'original', decimals: 18, ticker: 'ETH' }
+    const pending = computeMaxSendFromBalance(
+      baseIdentity,
+      { coin, receiver: '0xto', balance: 100n },
+      mockWalletCore as any
+    )
+    coin.address = 'changed'
+    await pending
+    expect(mockGetSendFeeEstimate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        coin: expect.objectContaining({ address: 'original' }),
+        amount: 100n,
+      })
+    )
+  })
+
   it('returns balance, fee, and maxSendable for native ETH', async () => {
     const balance = 1_000_000_000_000_000_000n
     const fee = 21_000n * 30_000_000_000n

@@ -4,7 +4,7 @@ import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
 import { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
-import { buildSendKeysignPayload } from '@vultisig/core-mpc/keysign/send/build'
+import type { buildSendKeysignPayload } from '@vultisig/core-mpc/keysign/send/build'
 import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { type Abi, encodeFunctionData } from 'viem'
 
@@ -75,7 +75,7 @@ export const prepareContractCallTxFromKeys = async (
     chainPublicKeys: identity.chainPublicKeys,
   })
 
-  return buildSendKeysignPayload({
+  const buildInput: Parameters<typeof buildSendKeysignPayload>[0] = {
     coin,
     receiver: contractAddress,
     amount: value,
@@ -86,5 +86,7 @@ export const prepareContractCallTxFromKeys = async (
     walletCore,
     libType: identity.libType,
     feeSettings,
-  })
+  }
+
+  return (await import('@vultisig/core-mpc/keysign/send/build')).buildSendKeysignPayload(buildInput)
 }
