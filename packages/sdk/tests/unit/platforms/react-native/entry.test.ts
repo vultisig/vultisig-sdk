@@ -84,8 +84,12 @@ describe('RN entry exposes canonical token price-ID resolution', () => {
     >()
     expect(sdkRn.resolveTokenPriceId(sdkRn.Chain.Ethereum)).toBe('ethereum')
     expect(sdkRn.resolveTokenPriceId(sdkRn.Chain.TerraClassic, 'uluna')).toBe('terra-luna')
-    expect(sdkRn.resolveTokenPriceId(sdkRn.Chain.Solana, 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')).toBe('usd-coin')
-    expect(sdkRn.resolveTokenPriceId(sdkRn.Chain.Solana, 'epjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')).toBeUndefined()
+    expect(sdkRn.resolveTokenPriceId(sdkRn.Chain.Solana, 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')).toBe(
+      'usd-coin'
+    )
+    expect(
+      sdkRn.resolveTokenPriceId(sdkRn.Chain.Solana, 'epjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')
+    ).toBeUndefined()
     expect(sdkRn.resolveTokenPriceId(sdkRn.Chain.Base, ' 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 ')).toBe('usd-coin')
     expect(sdkRn.resolveTokenPriceId(sdkRn.Chain.Ethereum, '  ')).toBe('ethereum')
     expect(sdkRn.resolveTokenPriceId(sdkRn.Chain.Solana, 'not-a-known-token')).toBeUndefined()

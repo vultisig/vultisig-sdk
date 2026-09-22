@@ -34,7 +34,9 @@ const dangerousAddressCanonicalExports = [
 describe('@vultisig/sdk public exports', () => {
   it('exports the canonical token price-ID resolver with its existing signature and lookup behavior', () => {
     expect(sdk.resolveTokenPriceId).toBe(canonicalResolveTokenPriceId)
-    expectTypeOf(sdk.resolveTokenPriceId).toEqualTypeOf<(chain: sdk.Chain, denomOrAddress?: string) => string | undefined>()
+    expectTypeOf(sdk.resolveTokenPriceId).toEqualTypeOf<
+      (chain: sdk.Chain, denomOrAddress?: string) => string | undefined
+    >()
     expect(sdk.resolveTokenPriceId(sdk.Chain.Ethereum)).toBe('ethereum')
     expect(sdk.resolveTokenPriceId(sdk.Chain.TerraClassic, 'uluna')).toBe('terra-luna')
     expect(sdk.resolveTokenPriceId(sdk.Chain.Solana, 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')).toBe('usd-coin')
