@@ -1,3 +1,4 @@
+import { assertSafeDestination } from '@vultisig/core-chain/security/dangerousAddresses'
 import { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { WalletCore } from '@trustwallet/wallet-core'
@@ -33,6 +34,8 @@ export const resolvePolkadotToAddress = ({ keysignPayload, walletCore }: Resolve
   if (!isValid) {
     throw new Error(`Invalid ${chain} destination address; refusing to fall back to the sender's own address`)
   }
+
+  assertSafeDestination(chain, toAddress)
 
   return toAddress
 }

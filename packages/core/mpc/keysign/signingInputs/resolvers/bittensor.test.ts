@@ -34,8 +34,14 @@ const hex = (bytes: Uint8Array) => Buffer.from(bytes).toString('hex')
 
 const invalidDestinations = [
   { name: 'prefix 0', address: encodeAddress(decodeAddress(TO_ADDRESS), 0) },
-  { name: 'two-byte prefix', address: encodeAddress(decodeAddress(TO_ADDRESS), 1000) },
-  { name: 'hexadecimal account', address: `0x${hex(decodeAddress(TO_ADDRESS))}` },
+  {
+    name: 'two-byte prefix',
+    address: encodeAddress(decodeAddress(TO_ADDRESS), 1000),
+  },
+  {
+    name: 'hexadecimal account',
+    address: `0x${hex(decodeAddress(TO_ADDRESS))}`,
+  },
   { name: 'invalid checksum', address: `${TO_ADDRESS.slice(0, -1)}Z` },
   { name: 'empty address', address: '' },
   { name: 'whitespace', address: ` ${TO_ADDRESS}` },
@@ -50,7 +56,12 @@ const buildPayload = ({
   hexPublicKey,
   memo,
   allowDeath,
-}: { address?: string; hexPublicKey?: string; memo?: string; allowDeath?: boolean } = {}) =>
+}: {
+  address?: string
+  hexPublicKey?: string
+  memo?: string
+  allowDeath?: boolean
+} = {}) =>
   create(KeysignPayloadSchema, {
     ...(memo ? { memo } : {}),
     coin: create(CoinSchema, {
@@ -111,7 +122,10 @@ describe('encodeMortalEra — cross-checked against @polkadot/types (the real SC
     { blockNumber: 0, period: 64 },
     { blockNumber: 4000000, period: 128 },
   ])('matches GenericExtrinsicEra for block=$blockNumber period=$period', ({ blockNumber, period }) => {
-    const real = new GenericExtrinsicEra(registry, { current: blockNumber, period })
+    const real = new GenericExtrinsicEra(registry, {
+      current: blockNumber,
+      period,
+    })
     expect(hex(encodeMortalEra(blockNumber, period))).toBe(hex(real.toU8a()))
   })
 })
@@ -174,6 +188,29 @@ describe('buildBittensorSigningPayload — golden vector (full byte-for-byte pin
       expect(() => buildBittensorSigningPayload({ ...params, toAddress: address, allowDeath }, walletCore)).toThrow(
         /Invalid Bittensor destination/
       )
+    }
+  })
+
+  it.each(['5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM'])(
+    'rejects a decoded zero account %s in both transfer modes',
+    toAddress => {
+      expect(decodeAddress(toAddress, false, 42)).toEqual(new Uint8Array(32))
+      for (const allowDeath of [false, true]) {
+        expect(() => buildBittensorSigningPayload({ ...params, toAddress, allowDeath }, walletCore)).toThrow(
+          /Refusing to build transaction: destination .*Bittensor zero account/
+        )
+      }
+    }
+  )
+
+  it.each([
+    '111111111111111111111111111111111HC1',
+    encodeAddress(new Uint8Array(32), 2),
+    `0x${'00'.repeat(32)}`,
+    'Zp19SpDEQsqP7kWaM771zhV9PBCK7kKwrZrf6ikdKh5UiVAsv',
+  ])('preserves format refusal for zero destination %s', toAddress => {
+    for (const allowDeath of [false, true]) {
+      expect(() => buildBittensorSigningPayload({ ...params, toAddress, allowDeath }, walletCore)).toThrow()
     }
   })
 
@@ -275,17 +312,35 @@ describe('getBittensorSigningInputs — custom tx-input framing round-trips', ()
     expect(keysignPayload.toAddress).toBe(address)
   })
 
+  it.each([false, true])('refuses a valid zero-account address before signing (allowDeath=%s)', allowDeath => {
+    const keysignPayload = buildPayload({ allowDeath })
+    keysignPayload.toAddress = '5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM'
+    expect(walletCore.AnyAddress.isValidSS58(keysignPayload.toAddress, walletCore.CoinType.polkadot, 42)).toBe(true)
+    expect(() => getBittensorSigningInputs({ keysignPayload, walletCore })).toThrow(/Bittensor zero account/)
+  })
+
+  it('preserves legitimate self-sends', () => {
+    const keysignPayload = buildPayload({ address: TO_ADDRESS })
+    expect(getBittensorSigningInputs({ keysignPayload, walletCore })).toHaveLength(1)
+  })
+
   // Every co-signer derives the call index from PolkadotSpecific.allowDeath, so
   // a payload that predates the field, or leaves it unset, must land on
   // keep-alive and only an explicit true may reap the sender.
   it('encodes transfer_keep_alive unless the payload explicitly allows death', async () => {
     const keepAlive = decodeBittensorTxInput(
-      getBittensorSigningInputs({ keysignPayload: buildPayload(), walletCore })[0]
+      getBittensorSigningInputs({
+        keysignPayload: buildPayload(),
+        walletCore,
+      })[0]
     ).callData
     expect(Array.from(keepAlive.slice(0, 2))).toEqual([5, 3])
 
     const allowDeath = decodeBittensorTxInput(
-      getBittensorSigningInputs({ keysignPayload: buildPayload({ allowDeath: true }), walletCore })[0]
+      getBittensorSigningInputs({
+        keysignPayload: buildPayload({ allowDeath: true }),
+        walletCore,
+      })[0]
     ).callData
     expect(Array.from(allowDeath.slice(0, 2))).toEqual([5, 0])
     expect(hex(allowDeath.slice(2))).toBe(hex(keepAlive.slice(2)))
@@ -317,7 +372,10 @@ describe('getBittensorSigningInputs — custom tx-input framing round-trips', ()
   // occupy, so accepting one would sign a transfer that silently omits it.
   it('rejects a memo (the Bittensor transfer extrinsic has no remark field)', async () => {
     expect(() =>
-      getBittensorSigningInputs({ keysignPayload: buildPayload({ memo: 'deposit-12345' }), walletCore })
+      getBittensorSigningInputs({
+        keysignPayload: buildPayload({ memo: 'deposit-12345' }),
+        walletCore,
+      })
     ).toThrow('do not support a memo')
   })
 })

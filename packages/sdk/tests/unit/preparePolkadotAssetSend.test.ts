@@ -20,6 +20,28 @@ const BOB_SUBSTRATE_42 = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty'
 const ALICE_ACCOUNT_HEX = '0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d'
 
 describe('preparePolkadotAssetSend', () => {
+  it.each([
+    '111111111111111111111111111111111HC1',
+    // The decoder also accepts format 0 in a two-byte SS58 prefix [0x40, 0x00].
+    'VBo4N1TrfonTPvj9QVzL9hEH9vuviDhQmXZYAyVv16dA1zjSN',
+  ])('rejects the zero account %s before returning callHex', to => {
+    expect(decodeAddress(to, false, 0)).toEqual(new Uint8Array(32))
+    expect(() =>
+      preparePolkadotAssetSend({
+        assetId: 1984,
+        from: BOB,
+        to,
+        amount: 1n,
+      })
+    ).toThrow(/Refusing to build transaction: destination .*Polkadot zero account/)
+  })
+
+  it('preserves legitimate self-sends', () => {
+    expect(preparePolkadotAssetSend({ assetId: 1984, from: ALICE, to: ALICE, amount: 1n }).toAccountId).toBe(
+      ALICE_ACCOUNT_HEX
+    )
+  })
+
   it('encodes a USDT (assetId=1984) transferKeepAlive call body deterministically', () => {
     const result = preparePolkadotAssetSend({
       assetId: 1984,
