@@ -100,6 +100,7 @@ export {
 } from '@vultisig/core-chain/chains/ton/failure'
 export type { TonGaslessConfig } from '@vultisig/core-chain/chains/ton/gasless/api'
 export { getTonGaslessConfig, isTonGasJetton } from '@vultisig/core-chain/chains/ton/gasless/api'
+export { resolveTokenPriceId } from '@vultisig/core-chain/coin/price/resolveTokenPriceId'
 export {
   CosmosSequenceMismatchError,
   toCosmosSequenceMismatchError,

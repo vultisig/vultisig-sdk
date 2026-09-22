@@ -1,5 +1,6 @@
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
+import { resolveTokenPriceId as canonicalResolveTokenPriceId } from '@vultisig/core-chain/coin/price/resolveTokenPriceId'
 import * as blockaidChains from '@vultisig/core-chain/security/blockaid/evmChains'
 import { isValidTxHash } from '@vultisig/core-chain/tx/isValidTxHash'
 import { AuthInfo, SignDoc, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
@@ -72,6 +73,26 @@ describe('RN entry exposes canonical token reference resolution', () => {
     const native: sdkRn.ResolvedTokenInfo = sdkRn.resolveTokenRef(sdkRn.Chain.Ethereum, undefined, [])
     expect(native).toEqual({ ticker: 'ETH', decimals: 18 })
     expect(sdkRn.resolveTokenRefId(sdkRn.Chain.Ethereum, 'ETH', [])).toBeUndefined()
+  })
+})
+
+describe('RN entry exposes canonical token price-ID resolution', () => {
+  it('exports the existing resolver and preserves its lookup contract', () => {
+    expect(sdkRn.resolveTokenPriceId).toBe(canonicalResolveTokenPriceId)
+    expectTypeOf(sdkRn.resolveTokenPriceId).toEqualTypeOf<
+      (chain: sdkRn.Chain, denomOrAddress?: string) => string | undefined
+    >()
+    expect(sdkRn.resolveTokenPriceId(sdkRn.Chain.Ethereum)).toBe('ethereum')
+    expect(sdkRn.resolveTokenPriceId(sdkRn.Chain.TerraClassic, 'uluna')).toBe('terra-luna')
+    expect(sdkRn.resolveTokenPriceId(sdkRn.Chain.Solana, 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')).toBe(
+      'usd-coin'
+    )
+    expect(
+      sdkRn.resolveTokenPriceId(sdkRn.Chain.Solana, 'epjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')
+    ).toBeUndefined()
+    expect(sdkRn.resolveTokenPriceId(sdkRn.Chain.Base, ' 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 ')).toBe('usd-coin')
+    expect(sdkRn.resolveTokenPriceId(sdkRn.Chain.Ethereum, '  ')).toBe('ethereum')
+    expect(sdkRn.resolveTokenPriceId(sdkRn.Chain.Solana, 'not-a-known-token')).toBeUndefined()
   })
 })
 
