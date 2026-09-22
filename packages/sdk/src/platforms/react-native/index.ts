@@ -954,6 +954,7 @@ export {
   TxNormalizeError,
   TxReadyParseError,
 } from '../../tx'
+export type { SignTypedDataParams, TypedDataSignature } from '../../types'
 export { computePersonalSignHash, formatEcdsaSignature65 } from '../../utils/eip191'
 export { coerceEip712ChainId, computeEip712Hash, toCanonicalEvmSignature } from '../../utils/eip712'
 export {
