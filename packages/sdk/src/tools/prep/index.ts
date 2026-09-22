@@ -19,6 +19,8 @@ export {
 } from './cosmosWasmExecute'
 export { buildCw20TransferMsg, type BuildCw20TransferMsgParams, type BuildCw20TransferMsgResult } from './cw20Transfer'
 export {
+  getIbcCounterpartyChannel,
+  getIbcDestinationChainId,
   IBC_CHAIN_HRP,
   IBC_CHAIN_REVISION,
   IBC_CHANNEL_DEST,

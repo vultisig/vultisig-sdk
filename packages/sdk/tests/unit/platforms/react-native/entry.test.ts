@@ -1051,6 +1051,16 @@ describe('RN entry exposes canonical IBC + Sui prep helpers', () => {
     const ibcTransfer = await import('../../../../src/tools/prep/ibcTransfer')
     const suiTokenTransfer = await import('../../../../src/tools/prep/suiTokenTransfer')
 
+    const rnPrep = await import('../../../../src/platforms/react-native/prep')
+    for (const name of ['getIbcDestinationChainId', 'getIbcCounterpartyChannel'] as const) {
+      expect(rn[name]).toBe(ibcTransfer[name])
+      expect(rnPrep[name]).toBe(ibcTransfer[name])
+      expect(rn.prep[name]).toBe(ibcTransfer[name])
+    }
+    expect(rn.getIbcDestinationChainId('Cosmos', 'channel-536')).toBe('noble-1')
+    expect(rn.getIbcCounterpartyChannel(' Cosmos ', ' channel-536 ')).toBe('channel-4')
+    expect(rn.getIbcCounterpartyChannel('osmosis-1', 'channel-259')).toBeNull()
+
     expect(rn.prepareIbcTransfer).toBe(prep.prepareIbcTransfer)
     expect(rn.prepareIbcTransfer).toBe(ibcTransfer.prepareIbcTransfer)
     expect(rn.resolveSourceChannelByDestChain).toBe(prep.resolveSourceChannelByDestChain)

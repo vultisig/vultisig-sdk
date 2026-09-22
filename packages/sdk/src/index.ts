@@ -1176,6 +1176,8 @@ export {
   getCosmosBalance,
   getCosmosSwapGasLimit,
   getEvmBalances,
+  getIbcCounterpartyChannel,
+  getIbcDestinationChainId,
   getMaxSendAmountFromKeys,
   getNativeSwapDecimals,
   getNativeSwapMinAmountIn,

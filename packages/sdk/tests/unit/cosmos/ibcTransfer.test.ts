@@ -10,6 +10,8 @@ import { bech32 } from '@scure/base'
 import { describe, expect, it } from 'vitest'
 
 import {
+  getIbcCounterpartyChannel,
+  getIbcDestinationChainId,
   IBC_CHANNEL_DEST,
   IBC_MSG_TRANSFER_TYPE_URL,
   normaliseIbcChainId,
@@ -48,6 +50,94 @@ const CANONICAL_DESTINATION_NAMES = [
   'Stride',
   ...ADDED_DESTINATIONS.map(({ name }) => name),
 ]
+
+// Expected counterparty channels from live source LCD channel/client_state
+// responses (2026-09-22), independently checked against cosmos/chain-registry.
+const VERIFIED_IBC_ROUTES = [
+  ['phoenix-1', 'channel-0', 'cosmoshub-4', 'channel-339'],
+  ['phoenix-1', 'channel-1', 'osmosis-1', 'channel-251'],
+  ['phoenix-1', 'channel-2', 'juno-1', 'channel-86'],
+  ['phoenix-1', 'channel-6', 'axelar-dojo-1', 'channel-11'],
+  ['phoenix-1', 'channel-229', 'neutron-1', 'channel-25'],
+  ['columbus-5', 'channel-1', 'osmosis-1', 'channel-72'],
+  ['osmosis-1', 'channel-0', 'cosmoshub-4', 'channel-141'],
+  ['osmosis-1', 'channel-42', 'juno-1', 'channel-0'],
+  ['osmosis-1', 'channel-750', 'noble-1', 'channel-1'],
+  ['osmosis-1', 'channel-341', 'phoenix-1', 'channel-26'],
+  ['osmosis-1', 'channel-1', 'akashnet-2', 'channel-9'],
+  ['osmosis-1', 'channel-6787', 'dydx-mainnet-1', 'channel-3'],
+  ['osmosis-1', 'channel-208', 'axelar-dojo-1', 'channel-3'],
+  ['osmosis-1', 'channel-874', 'neutron-1', 'channel-10'],
+  ['osmosis-1', 'channel-122', 'injective-1', 'channel-8'],
+  ['osmosis-1', 'channel-326', 'stride-1', 'channel-5'],
+  ['osmosis-1', 'channel-6994', 'celestia', 'channel-2'],
+  ['cosmoshub-4', 'channel-141', 'osmosis-1', 'channel-0'],
+  ['cosmoshub-4', 'channel-536', 'noble-1', 'channel-4'],
+] as const
+
+describe('IBC route lookups', () => {
+  it('covers the existing destination registry without adding or removing routes', () => {
+    expect(VERIFIED_IBC_ROUTES.map(([chain, channel]) => `${chain}/${channel}`).sort()).toEqual(
+      Object.keys(IBC_CHANNEL_DEST).sort()
+    )
+  })
+
+  it.each(VERIFIED_IBC_ROUTES)(
+    'resolves %s/%s from verified channel metadata',
+    (chain, channel, dest, counterparty) => {
+      expect(getIbcDestinationChainId(chain, channel)).toBe(dest)
+      expect(getIbcCounterpartyChannel(chain, channel)).toBe(counterparty)
+    }
+  )
+
+  it.each([
+    [' Cosmos ', ' channel-536 ', 'noble-1', 'channel-4'],
+    ['Osmosis', 'channel-750', 'noble-1', 'channel-1'],
+    ['Terra', 'channel-1', 'osmosis-1', 'channel-251'],
+    ['TerraClassic', 'channel-1', 'osmosis-1', 'channel-72'],
+    [' cosmoshub-4 ', '\tchannel-536\n', 'noble-1', 'channel-4'],
+  ])('normalizes source %s and channel %s consistently', (chain, channel, dest, counterparty) => {
+    expect(getIbcDestinationChainId(chain, channel)).toBe(dest)
+    expect(getIbcCounterpartyChannel(chain, channel)).toBe(counterparty)
+  })
+
+  it.each([
+    ['', 'channel-0'],
+    ['  ', 'channel-0'],
+    ['unknown-chain', 'channel-1'],
+    ['cosmos', 'channel-536'],
+    ['COSMOSHUB-4', 'channel-536'],
+    ['cosmoshub-4', ''],
+    ['cosmoshub-4', 'CHANNEL-536'],
+    ['cosmoshub-4', 'channel-0536'],
+    ['cosmoshub-4', 'channel-536/extra'],
+    ['cosmoshub-4', 'channel--1'],
+    ['cosmoshub-4', 'channel-999999'],
+    ['osmosis-1', 'channel-259'], // Removed route must not be resurrected.
+    ['noble-1', 'channel-4'], // A known counterparty is not necessarily a supported outbound route.
+    ['__proto__', 'constructor'],
+    ['constructor', '__proto__'],
+  ])('returns null for unsupported or malformed route %s/%s', (chain, channel) => {
+    expect(getIbcDestinationChainId(chain, channel)).toBeNull()
+    expect(getIbcCounterpartyChannel(chain, channel)).toBeNull()
+  })
+
+  it('agrees with unsigned transfer preparation for the Cosmos-to-Noble route', () => {
+    const transfer = prepareIbcTransfer({
+      fromChain: 'Cosmos',
+      fromAddress: COSMOS,
+      toAddress: addr('noble'),
+      toChainId: 'Noble',
+      denom: 'uatom',
+      amount: '1',
+      nowMs: FIXED_NOW,
+    })
+    expect(getIbcDestinationChainId('Cosmos', transfer.sourceChannel)).toBe(transfer.destChain)
+    expect(getIbcCounterpartyChannel('Cosmos', transfer.sourceChannel)).toBe('channel-4')
+    expect(transfer.msgTransfer.source_port).toBe('transfer')
+    expect(transfer.msgTransfer.source_channel).toBe('channel-536')
+  })
+})
 
 describe('prepareIbcTransfer', () => {
   it('covers every registered route destination with a canonical name', () => {

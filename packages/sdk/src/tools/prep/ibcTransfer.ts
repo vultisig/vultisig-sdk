@@ -91,6 +91,61 @@ export const IBC_CHANNEL_DEST: Record<ChannelKey, string> = {
 }
 
 /**
+ * Destination-side channels for the supported source routes. Verified against
+ * each source chain's live LCD channel and client_state responses on 2026-09-22:
+ * /ibc/core/channel/v1/channels/{sourceChannel}/ports/transfer[\/client_state]
+ * on cosmos-rest, osmosis-rest, terra-lcd and terra-classic-lcd.publicnode.com.
+ * Channel numbers are local to a chain; reverse-route lookup is not sufficient.
+ */
+const IBC_COUNTERPARTY_CHANNEL: Record<ChannelKey, string> = {
+  'phoenix-1/channel-0': 'channel-339',
+  'phoenix-1/channel-1': 'channel-251',
+  'phoenix-1/channel-2': 'channel-86',
+  'phoenix-1/channel-6': 'channel-11',
+  'phoenix-1/channel-229': 'channel-25',
+  'columbus-5/channel-1': 'channel-72',
+  'osmosis-1/channel-0': 'channel-141',
+  'osmosis-1/channel-42': 'channel-0',
+  'osmosis-1/channel-750': 'channel-1',
+  'osmosis-1/channel-341': 'channel-26',
+  'osmosis-1/channel-1': 'channel-9',
+  'osmosis-1/channel-6787': 'channel-3',
+  'osmosis-1/channel-208': 'channel-3',
+  'osmosis-1/channel-874': 'channel-10',
+  'osmosis-1/channel-122': 'channel-8',
+  'osmosis-1/channel-326': 'channel-5',
+  'osmosis-1/channel-6994': 'channel-2',
+  'cosmoshub-4/channel-141': 'channel-0',
+  'cosmoshub-4/channel-536': 'channel-4',
+}
+
+/**
+ * Destination chain-ID for a supported source chain/channel, or null.
+ * Accepts canonical Vultisig names (e.g. "Cosmos") or IBC chain-IDs. Both
+ * arguments are trimmed; names and channel identifiers remain case-sensitive.
+ * Unknown or malformed routes return null. Performs no network requests.
+ */
+export function getIbcDestinationChainId(fromChainId: string, sourceChannel: string): string | null {
+  const key: ChannelKey = `${normaliseIbcChainId(fromChainId.trim())}/${sourceChannel.trim()}`
+  return IBC_CHANNEL_DEST[key] ?? null
+}
+
+/**
+ * Destination-side channel for a supported source chain/channel, or null.
+ * Uses the same normalization as getIbcDestinationChainId; performs no network
+ * requests. This is channel metadata, not proof of packet acknowledgement.
+ *
+ * ACK queries also require the destination port from packet events or channel
+ * metadata. Do not assume it is "transfer": osmosis-1/channel-341 maps to
+ * phoenix-1/channel-26 on port
+ * wasm.terra1e0mrzy8077druuu42vs0hu7ugguade0cj65dgtauyaw4gsl4kv0qtdf2au.
+ */
+export function getIbcCounterpartyChannel(fromChainId: string, sourceChannel: string): string | null {
+  const key: ChannelKey = `${normaliseIbcChainId(fromChainId.trim())}/${sourceChannel.trim()}`
+  return IBC_COUNTERPARTY_CHANNEL[key] ?? null
+}
+
+/**
  * Reverse index: (from_chain → to_chain_id) → source_channel. Built once from
  * IBC_CHANNEL_DEST so a caller can request a transfer by naming the destination
  * chain without knowing the channel number. Every pair is unique in the current

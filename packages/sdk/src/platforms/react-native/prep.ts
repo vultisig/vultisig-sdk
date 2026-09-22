@@ -10,6 +10,8 @@ export type * from '../../tools/prep'
 // statically re-exported rather than lazy-imported. Omitting them here would
 // break the hand-curated RN export list for vultiagent-app consumers.
 export {
+  getIbcCounterpartyChannel,
+  getIbcDestinationChainId,
   IBC_CHAIN_HRP,
   IBC_CHAIN_REVISION,
   IBC_CHANNEL_DEST,

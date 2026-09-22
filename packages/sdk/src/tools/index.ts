@@ -439,6 +439,8 @@ export {
   type CosmWasmExecuteFund,
   type DelegateParams,
   type EvmTxNumberish,
+  getIbcCounterpartyChannel,
+  getIbcDestinationChainId,
   getMaxSendAmountFromKeys,
   type GetMaxSendAmountFromKeysParams,
   IBC_CHAIN_HRP,
