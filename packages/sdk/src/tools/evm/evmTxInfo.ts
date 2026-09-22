@@ -30,10 +30,19 @@ const rejectsPendingTag = (error: unknown): boolean => {
   let current = error
   while (typeof current === 'object' && current !== null && !seen.has(current)) {
     seen.add(current)
-    const record = current as { message?: unknown; details?: unknown; cause?: unknown }
+    const record = current as {
+      message?: unknown
+      details?: unknown
+      cause?: unknown
+    }
     for (const value of [record.message, record.details]) {
       if (typeof value !== 'string') continue
-      if (/(?:pending.{0,40}(?:unsupported|not supported|not implemented|invalid)|(?:unsupported|not supported|not implemented|invalid).{0,40}pending)/i.test(value)) return true
+      if (
+        /(?:pending.{0,40}(?:unsupported|not supported|not implemented|invalid)|(?:unsupported|not supported|not implemented|invalid).{0,40}pending)/i.test(
+          value
+        )
+      )
+        return true
     }
     current = record.cause
   }
