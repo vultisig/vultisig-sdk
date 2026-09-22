@@ -1,5 +1,21 @@
 # Migration Guide
 
+## TAO builders: explicit WalletCore runtime
+
+The next major versions of `@vultisig/core-chain` and `@vultisig/core-mpc` require the caller’s initialized WalletCore for direct TAO payload construction and fee refinement. This enforces SS58 network prefix 42 consistently with address validation and native runtimes.
+
+```ts
+// Before
+buildBittensorSigningPayload(params)
+refineBittensorChainSpecific({ keysignPayload, chainSpecific })
+
+// After: reuse the WalletCore instance initialized by your application
+buildBittensorSigningPayload(params, walletCore)
+refineBittensorChainSpecific({ keysignPayload, chainSpecific, walletCore })
+```
+
+High-level SDK callers need no changes. React Native applications must upgrade `@vultisig/walletcore-native` and rebuild their native app to include the new SS58 constructors; a JavaScript-only update cannot add native methods. Valid TAO addresses and payload bytes are unchanged. Prefix-0 addresses and raw hexadecimal destinations now fail in the direct TAO builder.
+
 ## `@vultisig/sdk` v→next major: Station affiliate constants removed
 
 **Removed exports:** `stationKyberSwapAffiliateConfig`, `stationNativeSwapAffiliateConfig`, `stationOneInchAffiliateConfig`

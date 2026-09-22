@@ -1,6 +1,4 @@
-apply plugin: 'com.android.library'
-apply plugin: 'kotlin-android'
-apply plugin: 'maven-publish'
+apply plugin: 'expo-module-gradle-plugin'
 
 group = 'expo.modules.walletcore'
 version = '0.1.0'
@@ -13,12 +11,7 @@ android {
     defaultConfig {
         minSdkVersion safeExtGet("minSdkVersion", 23)
         targetSdkVersion safeExtGet("targetSdkVersion", 34)
-    }
-
-    publishing {
-        singleVariant("release") {
-            withSourcesJar()
-        }
+        versionName project.version.toString()
     }
 
     lint {

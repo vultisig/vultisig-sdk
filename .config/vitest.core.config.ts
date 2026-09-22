@@ -26,7 +26,12 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['packages/core/**/*.test.ts', 'packages/lib/**/*.test.ts', 'packages/mpc-wasm/**/*.test.ts'],
+    include: [
+      'packages/core/**/*.test.ts',
+      'packages/lib/**/*.test.ts',
+      'packages/mpc-wasm/**/*.test.ts',
+      'packages/walletcore-native/src/**/*.test.ts',
+    ],
     exclude: ['**/node_modules/**', '**/dist/**'],
     pool: 'forks',
     server: {
