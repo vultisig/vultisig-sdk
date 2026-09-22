@@ -535,10 +535,14 @@ export {
 // Pure builders, RN-safe. Statically re-exported so RN consumers can reach
 // the full defi namespace (arkis + balancer + glif + pendle + 3jane).
 export type {
+  ArkisPoolKind,
+  ArkisUnsignedTx,
   BalancerTokenApi,
   BalancerV3SwapCalldata,
   BalancerV3SwapKind,
   BalancerV3SwapPath,
+  BuildArkisSupplyParams,
+  BuildArkisSupplyResult,
   BuildBalancerV3SwapCalldataParams,
   BuildGlifRedeemParams,
   BuildGlifRedeemResult,
@@ -546,6 +550,7 @@ export type {
   BuildGlifStakeResult,
   Defi,
   GlifUnsignedTx,
+  ResolveArkisPoolKindResult,
   SolanaScanRequest,
   StakekitBalanceEntry,
   StakekitBalanceItem,
@@ -553,6 +558,9 @@ export type {
   StakekitBalancesResult,
 } from '../../tools/defi'
 export {
+  ARKIS_BOOK_URLS,
+  ARKIS_OFFICIAL_ADDRESSES,
+  buildArkisSupplyTx,
   buildBalancerV3SwapCalldata,
   buildYieldActionScanRequest,
   buildYieldActionScanRequests,
@@ -562,6 +570,8 @@ export {
   fetchStakekitBalancesBatch,
   finalizeStakekitAction,
   parseActionDisplay,
+  parseArkisTokenAmount,
+  resolveArkisPoolKind,
   STAKEKIT_BALANCE_QUERIES_PER_REQUEST,
   StakekitActionRefusal,
   stakekitBalances,
