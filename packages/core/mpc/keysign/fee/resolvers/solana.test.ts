@@ -1,3 +1,4 @@
+import { getSolanaSendSigningInput } from '../../signingInputs/resolvers/solana/send'
 import { create } from '@bufbuild/protobuf'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { CoinSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/coin_pb'
@@ -90,5 +91,22 @@ describe('getSolanaFeeAmount', () => {
         })
       )
     ).toBe(105_000n)
+  })
+  it.each([
+    ['1000001', '100000', 105001n],
+    ['1', '100000', 105000n],
+    ['', '', 105000n],
+    ['1000001', '123456', 128457n],
+    ['1000001', '0', 5000n],
+  ])('matches the encoded budget for price %s and limit %s', (priorityFee, computeLimit, fee) => {
+    const input = buildInput({ priorityFee })
+    if (input.keysignPayload.blockchainSpecific.case === 'solanaSpecific') {
+      input.keysignPayload.blockchainSpecific.value.computeLimit = computeLimit
+    }
+    const signingInput = getSolanaSendSigningInput(input)
+    const encodedPrice = BigInt(signingInput.priorityFeePrice!.price!.toString())
+    const encodedLimit = BigInt(signingInput.priorityFeeLimit!.limit!)
+    expect(getSolanaFeeAmount(input)).toBe(fee)
+    expect(fee).toBe(5000n + (encodedPrice * encodedLimit + 999999n) / 1000000n)
   })
 })

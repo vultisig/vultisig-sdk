@@ -1,3 +1,7 @@
+const { mockRent } = vi.hoisted(() => ({ mockRent: vi.fn() }))
+vi.mock('@vultisig/core-chain/chains/solana/client', () => ({
+  getSolanaClient: () => ({ getMinimumBalanceForRentExemption: mockRent }),
+}))
 import { Chain } from '@vultisig/core-chain/Chain'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -25,6 +29,7 @@ import { VaultBase } from '@/vault/VaultBase'
 describe('VaultBase.getMaxSendAmount', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockRent.mockReset().mockResolvedValue(650240)
     mockIsValidRecipient.mockReturnValue(true)
     mockGetPublicKey.mockReturnValue({ __mock: 'publicKey' })
   })
@@ -93,5 +98,27 @@ describe('VaultBase.getMaxSendAmount', () => {
 
     expect(getBalance).not.toHaveBeenCalled()
     expect(mockGetSendFeeEstimate).not.toHaveBeenCalled()
+  })
+  it('retains the live wallet reserve through the vault entrypoint', async () => {
+    mockGetSendFeeEstimate.mockResolvedValue(105001n)
+    const vault = Object.create(VaultBase.prototype) as VaultBase
+    Object.assign(vault, {
+      wasmProvider: { getWalletCore: vi.fn().mockResolvedValue({}) },
+      balanceService: { getBalance: vi.fn().mockResolvedValue({ amount: '10000000' }) },
+      coreVault: {
+        publicKeys: { ecdsa: '02ecdsa-public-key', eddsa: 'eddsa-public-key' },
+        hexChainCode: 'deadbeef',
+        localPartyId: 'iPhone-A1B2',
+        libType: 'DKLS',
+      },
+    })
+    const params = { coin: { chain: Chain.Solana, address: 'from', decimals: 9, ticker: 'SOL' }, receiver: 'to' }
+    await expect(vault.getMaxSendAmount(params)).resolves.toEqual({
+      balance: 10000000n,
+      fee: 105001n,
+      maxSendable: 9244759n,
+    })
+    mockRent.mockResolvedValueOnce(0)
+    await expect(vault.getMaxSendAmount(params)).rejects.toThrow('rent-exempt reserve')
   })
 })

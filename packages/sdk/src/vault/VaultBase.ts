@@ -1391,10 +1391,11 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   }
 
   /**
-   * Get the maximum sendable amount for a coin, accounting for network fees
+   * Get the maximum sendable amount for a coin, accounting for network fees and chain reserves
    *
    * Fetches the current balance, estimates the send fee, and calculates the
-   * maximum amount that can be sent in a single call.
+   * maximum amount that can be sent, retaining the live rent minimum for native SOL.
+   * This quote does not lock the balance or fees used by a later preparation call.
    *
    * @returns Balance, fee, and max sendable amount (all in base units)
    */

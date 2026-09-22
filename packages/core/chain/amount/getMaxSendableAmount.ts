@@ -17,6 +17,8 @@ type GetMaxSendableAmountInput = {
   chain: Chain
   balance: bigint
   fee: bigint
+  /** Live chain reserve, when supplied; otherwise use the chain's default. */
+  reserve?: bigint
 }
 
 /**
@@ -24,5 +26,5 @@ type GetMaxSendableAmountInput = {
  * whatever the chain requires the sender to keep. Zero when the balance does
  * not cover even those.
  */
-export const getMaxSendableAmount = ({ chain, balance, fee }: GetMaxSendableAmountInput): bigint =>
-  getMaxValue(balance, fee + (retainedBalance[chain] ?? 0n))
+export const getMaxSendableAmount = ({ chain, balance, fee, reserve }: GetMaxSendableAmountInput): bigint =>
+  getMaxValue(balance, fee + (reserve ?? retainedBalance[chain] ?? 0n))

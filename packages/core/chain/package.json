@@ -775,6 +775,11 @@
       "import": "./dist/chains/solana/getDynamicPriorityFeePrice.js",
       "default": "./dist/chains/solana/getDynamicPriorityFeePrice.js"
     },
+    "./chains/solana/getSolanaWalletReserve": {
+      "types": "./dist/chains/solana/getSolanaWalletReserve.d.ts",
+      "import": "./dist/chains/solana/getSolanaWalletReserve.js",
+      "default": "./dist/chains/solana/getSolanaWalletReserve.js"
+    },
     "./chains/solana/jito": {
       "types": "./dist/chains/solana/jito.d.ts",
       "import": "./dist/chains/solana/jito.js",

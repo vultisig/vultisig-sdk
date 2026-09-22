@@ -25,4 +25,13 @@ describe('getMaxSendableAmount', () => {
   it('is zero when the balance does not cover the fee and the retained deposit', () => {
     expect(getMaxSendableAmount({ chain: Chain.Bittensor, balance: 200_400n, fee: 200_000n })).toBe(0n)
   })
+  it.each([
+    [10_000_000n, 9_244_759n],
+    [755_241n, 0n],
+    [755_240n, 0n],
+    [0n, 0n],
+    [10n ** 20n, 10n ** 20n - 755_241n],
+  ])('retains a supplied SOL reserve at balance %s', (balance, expected) => {
+    expect(getMaxSendableAmount({ chain: Chain.Solana, balance, fee: 105_001n, reserve: 650_240n })).toBe(expected)
+  })
 })

@@ -1,3 +1,7 @@
+const { mockRent } = vi.hoisted(() => ({ mockRent: vi.fn() }))
+vi.mock('@vultisig/core-chain/chains/solana/client', () => ({
+  getSolanaClient: () => ({ getMinimumBalanceForRentExemption: mockRent }),
+}))
 import { Chain } from '@vultisig/core-chain/Chain'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -47,6 +51,7 @@ const solanaAtaOfAta = 'CHwY4qnqYsKPLBiuhLiEHJm4bBvEKzc3GMxau4K7oQhC'
 describe('getMaxSendAmountFromKeys', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockRent.mockReset().mockResolvedValue(650240)
     mockGetWalletCore.mockResolvedValue(mockWalletCore)
     mockIsValidRecipient.mockReturnValue(true)
     mockGetPublicKey.mockReturnValue(mockPublicKey)
@@ -459,6 +464,7 @@ describe('getMaxSendAmountFromKeys', () => {
 describe('computeMaxSendFromBalance', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockRent.mockReset().mockResolvedValue(650240)
     mockGetWalletCore.mockResolvedValue(mockWalletCore)
     mockIsValidRecipient.mockReturnValue(true)
     mockGetPublicKey.mockReturnValue(mockPublicKey)
@@ -483,5 +489,54 @@ describe('computeMaxSendFromBalance', () => {
     expect(mockGetSendFeeEstimate.mock.calls[0][0].amount).toBe(providedBalance)
     expect(result.balance).toBe(providedBalance)
     expect(result.maxSendable).toBe(providedBalance - 1_000_000n)
+  })
+})
+
+describe('native SOL MAX reserve', () => {
+  const coin = { chain: Chain.Solana, address: 'from', ticker: 'SOL', decimals: 9 }
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockRent.mockReset().mockResolvedValue(650240)
+    mockIsValidRecipient.mockReturnValue(true)
+    mockGetWalletCore.mockResolvedValue(mockWalletCore)
+    mockGetSendFeeEstimate.mockResolvedValue(105001n)
+  })
+  it.each([10_000_000n, 755_241n, 755_240n, 10n ** 20n])('reserves rent at balance %s', async balance => {
+    mockGetCoinBalance.mockResolvedValue(balance)
+    const result = await getMaxSendAmountFromKeys(baseIdentity, { coin, receiver: 'to' })
+    expect(result).toEqual({ balance, fee: 105001n, maxSendable: balance > 755241n ? balance - 755241n : 0n })
+    expect(mockRent).toHaveBeenCalledWith(0)
+  })
+  it('uses a changed RPC reserve without adding it to the network fee', async () => {
+    mockRent.mockResolvedValueOnce(890880)
+    expect(await computeMaxSendFromBalance(baseIdentity, { coin, receiver: 'to', balance: 10000000n })).toEqual({
+      balance: 10000000n,
+      fee: 105001n,
+      maxSendable: 9004119n,
+    })
+  })
+  it('rejects the RPC zero sentinel rather than quoting unreserved MAX', async () => {
+    mockRent.mockResolvedValueOnce(0)
+    mockGetCoinBalance.mockResolvedValue(10000000n)
+    await expect(getMaxSendAmountFromKeys(baseIdentity, { coin, receiver: 'to' })).rejects.toThrow(
+      'rent-exempt reserve'
+    )
+  })
+  it('propagates an unavailable reserve', async () => {
+    mockRent.mockRejectedValueOnce(new Error('RPC unavailable'))
+    await expect(computeMaxSendFromBalance(baseIdentity, { coin, receiver: 'to', balance: 10000000n })).rejects.toThrow(
+      'RPC unavailable'
+    )
+  })
+  it('keeps full SPL token quantities and does not request a SOL reserve', async () => {
+    const balance = 1234567n
+    const result = await computeMaxSendFromBalance(baseIdentity, {
+      coin: { ...coin, id: 'mint', decimals: 6 },
+      receiver: 'to',
+      balance,
+      nativeBalance: 105001n,
+    })
+    expect(result.maxSendable).toBe(balance)
+    expect(mockRent).not.toHaveBeenCalled()
   })
 })

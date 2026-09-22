@@ -2,6 +2,7 @@ import type { WalletCore } from '@trustwallet/wallet-core'
 import { getMaxSendableAmount } from '@vultisig/core-chain/amount/getMaxSendableAmount'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { isTerraClassicUstcCoin } from '@vultisig/core-chain/chains/cosmos/terraClassicTax'
+import { getSolanaWalletReserve } from '@vultisig/core-chain/chains/solana/getSolanaWalletReserve'
 import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
@@ -112,9 +113,11 @@ export const computeMaxSendFromBalance = async (
     }
   }
 
+  const reserve =
+    params.coin.chain === Chain.Solana && isFeeCoin(params.coin) ? await getSolanaWalletReserve() : undefined
   const maxSendable = isTokenSend
     ? params.balance
-    : getMaxSendableAmount({ chain: params.coin.chain, balance: params.balance, fee })
+    : getMaxSendableAmount({ chain: params.coin.chain, balance: params.balance, fee, reserve })
 
   return { balance: params.balance, fee, maxSendable }
 }
@@ -124,11 +127,12 @@ export const computeMaxSendFromBalance = async (
  * without requiring an instantiated vault. Vault-free equivalent of
  * `vault.getMaxSendAmount()`.
  *
- * Fetches the on-chain balance and estimates the send fee at full balance.
- * Native sends return `balance - fee`, less the existential deposit on chains
- * that reap an emptied account (`0n` if those exceed the balance). Token sends
+ * Fetches the on-chain balance and estimates the send fee.
+ * Native sends return `balance - fee`, less any retained chain reserve (including
+ * Solana's live wallet rent minimum; `0n` if those exceed the balance). Token sends
  * return the full token balance after verifying the native balance can cover
  * the fee.
+ * This is a quote: recheck it if the balance, rent minimum, or fees change before sending.
  *
  * `walletCore` is optional; when omitted, falls back to the SDK's globally-configured
  * `getWalletCore()` (used by MCP / vault-free callers). Wrappers with an injected
