@@ -92,7 +92,7 @@ const toBigInt = (raw: number | string): bigint | null => {
  * Parse a Blockaid Sui simulation into the user's net balance changes,
  * mirroring how Solana classifies into a `swap` or `transfer` headline.
  *
- * Only emits a headline when the relevant diff set is unambiguous:
+ * Only emits a headline when the complete diff set is unambiguous:
  *   - exactly one out-only diff → `transfer`
  *   - exactly two diffs, one out-only + one in-only on different assets
  *     → `swap`
@@ -108,19 +108,11 @@ export const parseBlockaidSuiSimulation = async (
   const assetDiffs = simulation.account_summary?.account_assets_diffs ?? simulation.account_summary?.account_assets_diff
   if (!assetDiffs || assetDiffs.length === 0) return null
 
-  // When we have 3 items and one is native SUI, filter it out and use the
-  // other two tokens — the native SUI is likely the gas charge, not part of
-  // the swap itself. Same heuristic as Solana.
-  let relevantDiffs = assetDiffs
-  if (assetDiffs.length === 3) {
-    const nativeIdx = assetDiffs.findIndex(diff => isNativeSui(diff.asset))
-    if (nativeIdx !== -1) {
-      relevantDiffs = assetDiffs.filter((_, i) => i !== nativeIdx)
-    }
-  }
+  // These diffs do not identify fees. Preserve every movement, including
+  // small native SUI amounts, rather than hide principal in a partial headline.
 
-  if (relevantDiffs.length === 1) {
-    const [diff] = relevantDiffs
+  if (assetDiffs.length === 1) {
+    const [diff] = assetDiffs
     // A single diff with an `in` side but no `out` would be a pure receive;
     // we don't surface that as a "you're sending" headline.
     if (!diff.out || diff.in) return null
@@ -138,11 +130,11 @@ export const parseBlockaidSuiSimulation = async (
 
   // Strict two-diff swap: one diff is out-only, the other is in-only, and
   // they're on different assets. Anything else (mixed in+out on one side,
-  // three+ relevant diffs, same-asset refund pair) returns `null` rather
+  // three+ diffs, same-asset refund pair) returns `null` rather
   // than risk a misleading partial headline.
-  if (relevantDiffs.length !== 2) return null
+  if (assetDiffs.length !== 2) return null
 
-  const [a, b] = relevantDiffs
+  const [a, b] = assetDiffs
   const outDiff = !a.in && a.out ? a : !b.in && b.out ? b : null
   const inDiff = !a.out && a.in ? a : !b.out && b.in ? b : null
   if (!outDiff || !inDiff || outDiff === inDiff) return null

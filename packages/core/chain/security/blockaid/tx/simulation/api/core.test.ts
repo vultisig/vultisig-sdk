@@ -4,8 +4,10 @@ import { describe, expect, it } from 'vitest'
 import {
   BlockaidEVMSimulation,
   BlockaidSolanaSimulation,
+  BlockaidSuiSimulation,
   parseBlockaidEvmSimulation,
   parseBlockaidSolanaSimulation,
+  parseBlockaidSuiSimulation,
 } from './core'
 
 type AssetDiff = BlockaidEVMSimulation['account_summary']['assets_diffs'][number]
@@ -555,5 +557,128 @@ describe('parseBlockaidSolanaSimulation', () => {
         ])
       )
     ).rejects.toThrow('Invalid simulation data')
+  })
+})
+
+describe('parseBlockaidSuiSimulation', () => {
+  type SuiSummary = NonNullable<BlockaidSuiSimulation['account_summary']>
+  type SuiDiff = NonNullable<SuiSummary['account_assets_diffs']>[number]
+  const native: SuiDiff['asset'] = { type: 'NATIVE', symbol: 'SUI', decimals: 9 }
+  const tokenA: SuiDiff['asset'] = { type: 'COIN', id: '0xa::coin::A', symbol: 'A', decimals: 6 }
+  const tokenB: SuiDiff['asset'] = { type: 'COIN', id: '0xb::coin::B', symbol: 'B', decimals: 9 }
+  const movement = (asset: SuiDiff['asset'], direction: 'in' | 'out', raw: number | string): SuiDiff => ({
+    asset,
+    in: null,
+    out: null,
+    [direction]: { raw_value: raw },
+  })
+  const permutations = ([a, b, c]: [SuiDiff, SuiDiff, SuiDiff]) => [
+    [a, b, c],
+    [a, c, b],
+    [b, a, c],
+    [b, c, a],
+    [c, a, b],
+    [c, b, a],
+  ]
+
+  describe.each(['account_assets_diffs', 'account_assets_diff'] as const)('%s', key => {
+    const simulation = (diffs: SuiDiff[]): BlockaidSuiSimulation => ({ account_summary: { [key]: diffs } })
+
+    for (const direction of ['in', 'out'] as const) {
+      it.each([1, 5000, 1000000000])(
+        `preserves native principal ${direction} of %i MIST alongside two token legs in every order`,
+        async amount => {
+          for (const diffs of permutations([
+            movement(native, direction, amount),
+            movement(tokenA, 'out', '1000000'),
+            movement(tokenB, 'in', '2000000000'),
+          ])) {
+            await expect(parseBlockaidSuiSimulation(simulation(diffs))).resolves.toBeNull()
+          }
+        }
+      )
+    }
+
+    it('declines a token swap with a separate native gas-sized outflow without fee identity', async () => {
+      for (const diffs of permutations([
+        movement(native, 'out', '1000000'),
+        movement(tokenA, 'out', '1000000'),
+        movement(tokenB, 'in', '2000000000'),
+      ])) {
+        await expect(parseBlockaidSuiSimulation(simulation(diffs))).resolves.toBeNull()
+      }
+    })
+
+    it('declines multiple native entries without selecting either by position', async () => {
+      for (const diffs of permutations([
+        movement(native, 'out', '1000000000'),
+        movement(native, 'in', '5000'),
+        movement(tokenA, 'in', '1000000'),
+      ])) {
+        await expect(parseBlockaidSuiSimulation(simulation(diffs))).resolves.toBeNull()
+      }
+    })
+
+    it.each([native, tokenA])('keeps an ordinary outgoing $symbol transfer', async asset => {
+      await expect(parseBlockaidSuiSimulation(simulation([movement(asset, 'out', 1000)]))).resolves.toEqual({
+        transfer: {
+          from: { coinType: asset.id ?? '0x2::sui::SUI', symbol: asset.symbol, decimals: asset.decimals },
+          fromAmount: 1000n,
+        },
+      })
+    })
+
+    it.each([
+      [native, tokenA],
+      [tokenA, native],
+      [tokenA, tokenB],
+    ])('keeps an ordinary $symbol swap independent of ordering', async (from, to) => {
+      const diffs = [movement(from, 'out', '1000'), movement(to, 'in', 2000)]
+      const expected = {
+        swap: {
+          from: { coinType: from.id ?? '0x2::sui::SUI', symbol: from.symbol, decimals: from.decimals },
+          to: { coinType: to.id ?? '0x2::sui::SUI', symbol: to.symbol, decimals: to.decimals },
+          fromAmount: 1000n,
+          toAmount: 2000n,
+        },
+      }
+      await expect(parseBlockaidSuiSimulation(simulation(diffs))).resolves.toEqual(expected)
+      await expect(parseBlockaidSuiSimulation(simulation([...diffs].reverse()))).resolves.toEqual(expected)
+    })
+
+    it.each(
+      [
+        [],
+        [movement(native, 'in', 1)],
+        [movement(tokenA, 'out', 1000), movement(native, 'out', 5000)],
+        [movement(native, 'out', 1000), movement(native, 'in', 500)],
+        [{ ...movement(tokenA, 'out', 1000), in: { raw_value: 500 } }],
+        [movement(tokenA, 'out', 1000), movement(tokenB, 'in', 500), movement(native, 'in', 1)],
+      ].map(diffs => [diffs])
+    )('declines unsupported complete movement shapes %#', async diffs => {
+      await expect(parseBlockaidSuiSimulation(simulation(diffs))).resolves.toBeNull()
+    })
+
+    it.each([Number.MAX_SAFE_INTEGER + 1, NaN, Infinity, 1.5, '1.5', '1e3', ''])(
+      'declines unsafe amount %s for transfers and either swap side',
+      async raw => {
+        await expect(parseBlockaidSuiSimulation(simulation([movement(native, 'out', raw)]))).resolves.toBeNull()
+        for (const diffs of [
+          [movement(native, 'out', raw), movement(tokenA, 'in', 1)],
+          [movement(native, 'out', 1), movement(tokenA, 'in', raw)],
+        ]) {
+          await expect(parseBlockaidSuiSimulation(simulation(diffs))).resolves.toBeNull()
+        }
+      }
+    )
+
+    it('preserves integer strings above the safe JS number range', async () => {
+      const result = await parseBlockaidSuiSimulation(simulation([movement(native, 'out', '9007199254740993')]))
+      expect(result).toMatchObject({ transfer: { fromAmount: 9007199254740993n } })
+    })
+  })
+
+  it('declines missing account summaries', async () => {
+    await expect(parseBlockaidSuiSimulation({})).resolves.toBeNull()
   })
 })
