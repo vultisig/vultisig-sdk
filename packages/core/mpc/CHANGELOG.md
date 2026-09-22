@@ -1,5 +1,52 @@
 # @vultisig/core-mpc
 
+## 3.4.1
+
+### Patch Changes
+
+- Updated dependencies [[`fa04ed0`](https://github.com/vultisig/vultisig-sdk/commit/fa04ed0d91f90bdaad101b326b47be1d73a152ce)]:
+  - @vultisig/core-chain@5.6.1
+
+## 3.4.0
+
+### Minor Changes
+
+- [#2406](https://github.com/vultisig/vultisig-sdk/pull/2406) [`abecd22`](https://github.com/vultisig/vultisig-sdk/commit/abecd22fcb409bcdbf50bbe1c068e531a19b08d1) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Add gasless TON jetton sends through the TonAPI relay for W5 accounts. `prepareSendTx`, `send`, `getMaxSendAmount` and the vault-free prep helpers take `tonGasless`/`gasless`; the relay's quote is recorded in `TonSpecific.gasless` (new `TonGasless` message), validated by every signer against the approved transfer before hashing, signed as a W5 `internal_signed` request, and handed to the relay at broadcast. The fee of such a send is the relay commission in the jetton itself — `getKeysignFeeCoin` tells which coin a payload's fee is denominated in — and the status resolver finds the relayed transaction by the signed body's hash. The CLI's `send` command gains `--gasless`. Also fixes the seqno of a deployed W5 wallet: toncenter returns W5 accounts raw, so the seqno is now read from the data cell instead of defaulting to 0, which had every W5 send after the first rejected as a replay.
+
+### Patch Changes
+
+- Updated dependencies [[`493da34`](https://github.com/vultisig/vultisig-sdk/commit/493da34ca8baad592b34f97947550415d74b3abf), [`abecd22`](https://github.com/vultisig/vultisig-sdk/commit/abecd22fcb409bcdbf50bbe1c068e531a19b08d1)]:
+  - @vultisig/core-chain@5.6.0
+
+## 3.3.1
+
+### Patch Changes
+
+- [#2418](https://github.com/vultisig/vultisig-sdk/pull/2418) [`c76da49`](https://github.com/vultisig/vultisig-sdk/commit/c76da49a67abbbf9fa18fd6f667187b3f24ef4ee) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Pass an explicit length limit to every bech32 decode. `fromBech32` defaults the limit to `Infinity`, which `@scure/base` >= 2.3 rejects, so in apps whose lockfile resolves that version every decode threw and QBTC address validation rejected all addresses (including the vault's own). THORChain address checks in RUJI trade quotes, limit-swap memos, swap keysign builds, Cosmos governance voting, and Rujira destination validation were affected the same way.
+
+- [#2407](https://github.com/vultisig/vultisig-sdk/pull/2407) [`5672b46`](https://github.com/vultisig/vultisig-sdk/commit/5672b46e9f84a76dbae07dd0c616ca9d0d45da42) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Await MPC relay deliveries and retry transient send failures with a bounded request deadline and backoff.
+
+- [#2416](https://github.com/vultisig/vultisig-sdk/pull/2416) [`92596c8`](https://github.com/vultisig/vultisig-sdk/commit/92596c8f64fb162028f7d980bca7222d114f0a2a) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Splice a dApp raw Solana transaction's signature into the vault's own signer slot instead of always slot 0, so sponsored and multi-signer transactions where the vault is not the fee payer assemble correctly.
+
+- [#2384](https://github.com/vultisig/vultisig-sdk/pull/2384) [`c5021d3`](https://github.com/vultisig/vultisig-sdk/commit/c5021d389795ab1c617f04d779b9f2216584717d) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Bittensor sends now encode `Balances.transfer_keep_alive` (pallet 5, call 3) instead of `transfer_allow_death`, so a normal TAO transfer can no longer reap the sender — matching the extrinsic iOS and Android already sign, which restores mixed-vault co-signing. `getMaxSendableAmount` (new in `@vultisig/core-chain/amount`) keeps the 500 rao existential deposit back on top of the fee, and both `getMaxSendAmount`/`getMaxSendAmountFromKeys` and the keysign amount refinement use it, so a MAX quoted as `balance - fee` is clamped to what a keep-alive transfer accepts. A dust send that would leave the destination below the existential deposit is rejected before the ceremony with `BuildKeysignPayloadError('bittensor-destination-below-existential-deposit')`. `buildBittensorSigningPayload` takes an explicit `allowDeath` opt-in for a future empty-the-account flow.
+
+  The SDK is now a compatible co-signer for an explicit "empty the account" send: `PolkadotSpecific.allowDeath` (commondata) carries that intent from the initiator, and the Polkadot and Bittensor signing resolvers encode `transfer_allow_death` only when the payload says so, so the SDK signs the same bytes as an initiator that set it. Payloads that predate the field decode as keep-alive. The SDK does not offer the option to initiators yet; that waits until every platform's signer reads the field.
+
+- [#2405](https://github.com/vultisig/vultisig-sdk/pull/2405) [`dec0385`](https://github.com/vultisig/vultisig-sdk/commit/dec0385a8e3bf3a5a82e29853322bc84b834b5ff) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(ton): send a swap deposit non-bounceable when nothing is deployed at the deposit address
+
+  A swap deposit was always sent bounceable so that a router or escrow contract that rejects it refunds it. A provider that hands out a fresh deposit address per swap has no contract there yet, and TON cannot deliver a bounceable message to an undeployed account: it returns the funds minus gas, so every such swap came straight back to the sender and never started.
+
+  The deployment check now runs before the swap rule. An undeployed destination goes out non-bounceable; a deployed one keeps bouncing on rejection, whatever the address tag declares. An account the indexer reports as `nonexist` (reached by a message, never deployed) counts as undeployed alongside `uninit`, for both the bounce flag and a Jetton transfer's destination-activity flag.
+
+- [#2411](https://github.com/vultisig/vultisig-sdk/pull/2411) [`7d6428d`](https://github.com/vultisig/vultisig-sdk/commit/7d6428d05b04fc5f4e9e911127a93d8dff0b7161) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Route default Tron reads and broadcasts through Vultisig infrastructure with endpoint-compatible public fallback. Preserve transaction rejection and duplicate-status verification, and report unavailable status and energy-price data as errors.
+
+- [#2400](https://github.com/vultisig/vultisig-sdk/pull/2400) [`fde308a`](https://github.com/vultisig/vultisig-sdk/commit/fde308a19566fe9daeebae3b458c8677a9627528) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reserve recipient account activation and its bandwidth charge when estimating native TRX fees and MAX sends. Reject invalid recipient lookups instead of returning an under-reserved estimate.
+
+- [#2403](https://github.com/vultisig/vultisig-sdk/pull/2403) [`ac8b001`](https://github.com/vultisig/vultisig-sdk/commit/ac8b00134d01790217f38f316058b5f025f6508a) Thanks [@aminsato](https://github.com/aminsato)! - Sign TRON FreezeBalanceV2 / UnfreezeBalanceV2 with `fee_limit` set to the payload's `gasEstimation`, matching the iOS and Android signers, so desktop/extension co-signers hash the same pre-image as a mobile initiator in the same keysign ceremony (previously hardcoded to 0, producing divergent MPC preimages).
+
+- Updated dependencies [[`c76da49`](https://github.com/vultisig/vultisig-sdk/commit/c76da49a67abbbf9fa18fd6f667187b3f24ef4ee), [`c5021d3`](https://github.com/vultisig/vultisig-sdk/commit/c5021d389795ab1c617f04d779b9f2216584717d), [`5c934c5`](https://github.com/vultisig/vultisig-sdk/commit/5c934c5c2d4a063729ef79f7d32d3af31f0232f5), [`7d6428d`](https://github.com/vultisig/vultisig-sdk/commit/7d6428d05b04fc5f4e9e911127a93d8dff0b7161), [`6063180`](https://github.com/vultisig/vultisig-sdk/commit/60631809016b0a3d8e304af424887e18ab10dafe)]:
+  - @vultisig/core-chain@5.5.1
+
 ## 3.3.0
 
 ### Minor Changes

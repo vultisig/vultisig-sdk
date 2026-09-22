@@ -69,12 +69,14 @@ export { ValidationHelpers } from './utils/validation'
 // ============================================================================
 
 export type {
+  Amount,
   AmountDirection,
   ConvertAmountParams,
   CryptoToFiatParams,
   FiatToCryptoParams,
 } from './utils/convertAmount'
 export {
+  amount,
   AmountConvertError,
   convertAmount,
   cryptoToFiat,
@@ -96,6 +98,8 @@ export {
   TonBroadcastRejectedError,
   tonTxFailureReasons,
 } from '@vultisig/core-chain/chains/ton/failure'
+export type { TonGaslessConfig } from '@vultisig/core-chain/chains/ton/gasless/api'
+export { getTonGaslessConfig, isTonGasJetton } from '@vultisig/core-chain/chains/ton/gasless/api'
 export {
   CosmosSequenceMismatchError,
   toCosmosSequenceMismatchError,
@@ -105,6 +109,7 @@ export {
   SolanaBlockhashExpiredError,
   toSolanaBlockhashExpiredError,
 } from '@vultisig/core-chain/tx/broadcast/solanaBlockhashExpired'
+export { getKeysignFeeCoin } from '@vultisig/core-mpc/keysign/fee/getKeysignFeeCoin'
 
 // Pure-bigint exact base-units -> human decimal-string conversion (no float64
 // round-trip, so it's safe for high-decimal assets). Exported at the root so
@@ -1300,6 +1305,8 @@ export {
   USDC_PAYMENT_CHAINS,
   USDC_PAYMENT_DECIMALS,
   utxoFeeRate,
+  validateStakekitActionAddress,
+  validateStakekitActionInput,
   VerifierClient,
   yieldNetworkToCanonicalChain,
 } from './tools'

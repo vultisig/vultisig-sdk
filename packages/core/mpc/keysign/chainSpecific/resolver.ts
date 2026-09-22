@@ -63,6 +63,12 @@ export type GetChainSpecificInput<C extends KeysignChainSpecificKey = KeysignCha
                      * already in the past fails the build instead of signing a dead transaction.
                      */
                     validUntil?: number
+                    /**
+                     * Pay the network fee in the jetton being sent through the gasless relay
+                     * instead of in TON. W5 accounts and relay-accepted jettons only; the
+                     * relay's quote is recorded in `TonSpecific.gasless`.
+                     */
+                    gasless?: boolean
                   }
                 : {})
 

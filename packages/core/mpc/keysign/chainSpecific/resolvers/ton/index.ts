@@ -1,5 +1,5 @@
 import { create } from '@bufbuild/protobuf'
-import { getTonAccountInfo } from '@vultisig/core-chain/chains/ton/account/getTonAccountInfo'
+import { getTonAccountInfo, getTonAccountSeqno } from '@vultisig/core-chain/chains/ton/account/getTonAccountInfo'
 import { getTonAddressBounceability } from '@vultisig/core-chain/chains/ton/address'
 import { getJettonWalletAddress, getTonWalletState } from '@vultisig/core-chain/chains/ton/api'
 import { TonSpecificSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
@@ -8,8 +8,17 @@ import { attempt } from '@vultisig/lib-utils/attempt'
 import { getKeysignSwapPayload } from '../../../swap/getKeysignSwapPayload'
 import { getKeysignCoin } from '../../../utils/getKeysignCoin'
 import { GetChainSpecificResolver } from '../../resolver'
+import { getTonGaslessQuote } from './gasless'
 
-const tonWalletStateUninitialized = 'uninit'
+/**
+ * The indexer's states for an account that holds no code: `uninit` when nothing has
+ * ever reached it, `nonexist` once a message has arrived without deploying it (a
+ * bounced transfer leaves it there). Neither can accept a bounceable message.
+ */
+const tonUndeployedWalletStates: readonly string[] = ['uninit', 'nonexist']
+
+const isTonWalletUndeployed = (walletState: string | undefined): boolean =>
+  walletState !== undefined && tonUndeployedWalletStates.includes(walletState)
 
 /** How long a wallet message stays valid when the caller sets no tighter deadline. */
 const tonWalletExpirySeconds = 600
@@ -17,6 +26,13 @@ const tonWalletExpirySeconds = 600
 type ResolveTonExpireAtInput = {
   now: number
   validUntil?: number
+}
+
+/** The tighter of two optional deadlines, or `undefined` when neither is set. */
+const earliestDeadline = (...deadlines: (number | undefined)[]): number | undefined => {
+  const defined = deadlines.filter((deadline): deadline is number => deadline !== undefined)
+
+  return defined.length > 0 ? Math.min(...defined) : undefined
 }
 
 /**
@@ -46,28 +62,27 @@ const resolveTonExpireAt = ({ now, validUntil }: ResolveTonExpireAtInput): numbe
  * transfer bounces on rejection, and — for Jettons — the sender's Jetton wallet and
  * whether the destination is deployed. `sendMaxAmount` is recorded from the caller
  * rather than inferred, so an ordinary send that happens to sit close to the balance is
- * not relabelled a MAX send.
+ * not relabelled a MAX send. A `gasless` send additionally carries the relay's quote,
+ * and its expiry is capped by the relay's own deadline.
  */
 export const getTonChainSpecific: GetChainSpecificResolver<'tonSpecific'> = async ({
   keysignPayload,
+  walletCore,
   sendMaxAmount = false,
   validUntil,
+  gasless: isGasless = false,
 }) => {
   const coin = getKeysignCoin(keysignPayload)
   const { address } = coin
   const receiver = keysignPayload.toAddress
 
-  // Read seqno defensively. A TON wallet that has RECEIVED funds but never SENT
-  // is still UNINITIALIZED (its contract deploys on the first outgoing tx via
-  // StateInit); getExtendedAddressInformation returns an `uninited.accountState`
-  // result with NO `seqno` field, so `account_state.seqno` on the raw result is
-  // undefined — optional-chain to seqno 0 (the signing path then correctly
-  // attaches StateInit for seqno === 0), matching the abts side's
-  // `?.account_state?.seqno ?? 0`. A genuine RPC failure (`{ ok:false }`) is now
-  // caught inside `getTonAccountInfo`, which throws a descriptive error rather
-  // than returning null and crashing this destructure.
-  const { account_state } = await getTonAccountInfo(address)
-  const sequenceNumber = BigInt(account_state?.seqno ?? 0)
+  // A wallet that has RECEIVED funds but never SENT is still UNINITIALIZED (its
+  // contract deploys on the first outgoing tx via StateInit) and reads as seqno
+  // 0, which the signing path honours by attaching the StateInit. Toncenter
+  // decodes the seqno of a V4 wallet itself; a W5 wallet comes back raw and its
+  // seqno is read out of the data cell. A genuine RPC failure (`{ ok:false }`)
+  // is caught inside `getTonAccountInfo`, which throws a descriptive error.
+  const sequenceNumber = BigInt(getTonAccountSeqno(await getTonAccountInfo(address)))
 
   // Whether the transfer goes out bounceable, which decides what happens to the funds
   // when the destination rejects the message: a bounceable transfer is refunded, a
@@ -77,18 +92,20 @@ export const getTonChainSpecific: GetChainSpecificResolver<'tonSpecific'> = asyn
       return false
     }
 
-    // A swap deposit lands on a router or escrow contract, and there are ordinary
-    // reasons for such a contract to reject: an expired quote, a paused pool, a
-    // route that closed between quote and broadcast. Those have to come back.
-    if (getKeysignSwapPayload(keysignPayload)) {
-      return true
+    // An undeployed account has no code to reject anything, so a bounceable message
+    // is simply returned and the transfer never lands. Those must go non-bounceable,
+    // swap deposits included: a provider that hands out a fresh deposit address per
+    // swap expects the funds to land on an account nothing has deployed yet.
+    const { data: walletState } = await attempt(getTonWalletState(receiver))
+    if (isTonWalletUndeployed(walletState)) {
+      return false
     }
 
-    // An undeployed account has no code to reject anything, so a bounceable message
-    // is simply returned and the transfer never lands. Those must go non-bounceable.
-    const { data: walletState } = await attempt(getTonWalletState(receiver))
-    if (walletState === tonWalletStateUninitialized) {
-      return false
+    // A swap deposit on a deployed router or escrow contract has ordinary reasons to
+    // be rejected: an expired quote, a paused pool, a route that closed between quote
+    // and broadcast. Those have to come back, whatever the address tag declares.
+    if (getKeysignSwapPayload(keysignPayload)) {
+      return true
     }
 
     // A raw `0:hex` destination declares no intent, so it defaults to bounceable —
@@ -131,19 +148,33 @@ export const getTonChainSpecific: GetChainSpecificResolver<'tonSpecific'> = asyn
 
     return {
       jettonAddress: jettonWallet.data,
-      isActiveDestination: destWalletState !== tonWalletStateUninitialized,
+      isActiveDestination: !isTonWalletUndeployed(destWalletState),
     }
   }
 
   const bounceable = await getIsBounceable()
   const { jettonAddress, isActiveDestination } = await getJettonFields()
 
+  const gaslessQuote = isGasless
+    ? await getTonGaslessQuote({
+        keysignPayload,
+        walletCore,
+        jettonAddress,
+        isActiveDestination,
+      })
+    : undefined
+
   // Read the clock last. Every lookup above is a network round trip, and a deadline
   // that was still ahead when the build started can be behind by the time it
   // finishes — computing the expiry up front would sign that dead deadline instead
   // of refusing it, and would also spend part of the wallet's own ten-minute window
   // on the lookups.
-  const expireAt = BigInt(resolveTonExpireAt({ now: Math.floor(Date.now() / 1000), validUntil }))
+  const expireAt = BigInt(
+    resolveTonExpireAt({
+      now: Math.floor(Date.now() / 1000),
+      validUntil: earliestDeadline(validUntil, gaslessQuote?.validUntil),
+    })
+  )
 
   return create(TonSpecificSchema, {
     sequenceNumber,
@@ -152,5 +183,6 @@ export const getTonChainSpecific: GetChainSpecificResolver<'tonSpecific'> = asyn
     sendMaxAmount,
     jettonAddress,
     isActiveDestination,
+    gasless: gaslessQuote?.gasless,
   })
 }

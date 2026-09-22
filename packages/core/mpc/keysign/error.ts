@@ -1,4 +1,5 @@
 export type BuildKeysignPayloadErrorType =
+  | 'bittensor-destination-below-existential-deposit'
   | 'dangerous-destination'
   | 'not-enough-funds'
   | 'ripple-destination-not-activated'
@@ -8,6 +9,8 @@ export type BuildKeysignPayloadErrorType =
   | 'ripple-issued-currency-amount-invalid'
   | 'ripple-issuer-transfer-fee-unsupported'
   | 'ripple-trust-line-issuer-not-activated'
+  | 'ton-gasless-quote-invalid'
+  | 'ton-gasless-unsupported'
   | 'ton-memo-too-long'
 
 export class BuildKeysignPayloadError extends Error {

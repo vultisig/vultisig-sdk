@@ -136,7 +136,7 @@ const cases: Record<string, ContractCase> = {
         code: 'SIGERROR',
         message: Buffer.from('invalid signature').toString('hex'),
       }),
-    failTransient: () => mocks.queryUrl.mockRejectedValue(new Error('ECONNRESET')),
+    failTransient: () => mocks.queryUrl.mockRejectedValue(new TypeError('ECONNRESET')),
   },
 }
 

@@ -155,6 +155,7 @@ export const mapBlockchainSpecific = (bsRaw: any) => {
         specVersion: numberOrUndefined(p.spec_version),
         transactionVersion: numberOrUndefined(p.transaction_version),
         genesisHash: p.genesis_hash,
+        allowDeath: booleanOrUndefined(p.allow_death ?? p.allowDeath),
       },
     }
   }

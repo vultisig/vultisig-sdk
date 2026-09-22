@@ -542,6 +542,8 @@ export {
   fetchAllStakekitBalances,
   fetchStakekitBalancesBatch,
   STAKEKIT_BALANCE_QUERIES_PER_REQUEST,
+  validateStakekitActionAddress,
+  validateStakekitActionInput,
 } from '../../tools/defi'
 export {
   buildGlifRedeemSticnt,
@@ -862,12 +864,14 @@ export { isValidTxHash } from '@vultisig/core-chain/tx/isValidTxHash'
 export { buildKeygenPairingQrPayload } from '../../services/buildKeygenPairingQrPayload'
 export { computeNotificationVaultId } from '../../utils/computeNotificationVaultId'
 export type {
+  Amount,
   AmountDirection,
   ConvertAmountParams,
   CryptoToFiatParams,
   FiatToCryptoParams,
 } from '../../utils/convertAmount'
 export {
+  amount,
   AmountConvertError,
   convertAmount,
   cryptoToFiat,

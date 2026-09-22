@@ -13,6 +13,7 @@ export type SendParams = {
   tokenId?: string
   memo?: string
   destinationTag?: number
+  gasless?: boolean // TON jettons on a W5 account: pay the fee in the jetton through the relay
   yes?: boolean // Skip confirmation prompt
   dryRun?: boolean // Preview transaction without signing/broadcasting
   force?: boolean // Bypass the broadcast-journal duplicate guard
