@@ -69,6 +69,16 @@ interface ExpoWalletCoreModuleType {
   /** Check if an SS58 address is valid. */
   anyAddressIsValidSS58(address: string, coinType: number, ss58Prefix: number): boolean
 
+  /** Create an SS58 address with an explicit prefix, returning its description and base64 data. */
+  anyAddressCreateSS58(address: string, coinType: number, ss58Prefix: number): { description: string; data: string }
+
+  /** Derive an SS58 address with an explicit prefix, returning its description and base64 data. */
+  anyAddressCreateSS58WithPublicKey(
+    publicKeyHandle: number,
+    coinType: number,
+    ss58Prefix: number
+  ): { description: string; data: string }
+
   /** Create an AnyAddress from a string. Returns the description (formatted address). */
   anyAddressCreateWithString(address: string, coinType: number): string
 

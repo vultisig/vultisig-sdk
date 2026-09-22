@@ -200,6 +200,30 @@ public class ExpoWalletCoreModule: Module {
             return AnyAddress.isValidSS58(string: address, coin: ct, ss58Prefix: UInt32(ss58Prefix))
         }
 
+        Function("anyAddressCreateSS58") { (address: String, coinType: Int, ss58Prefix: Int) -> [String: String] in
+            let ct = try coinTypeFromValue(coinType)
+            guard let prefix = UInt32(exactly: ss58Prefix),
+                  let addr = AnyAddress(string: address, coin: ct, ss58Prefix: prefix) else {
+                throw NSError(domain: "ExpoWalletCore", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid SS58 address or prefix"])
+            }
+            return ["description": addr.description, "data": addr.data.base64EncodedString()]
+        }
+
+        Function("anyAddressCreateSS58WithPublicKey") { (publicKeyHandle: Int, coinType: Int, ss58Prefix: Int) -> [String: String] in
+            guard let pk = publicKeys[publicKeyHandle] else {
+                throw NSError(domain: "ExpoWalletCore", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid PublicKey handle"])
+            }
+            let ct = try coinTypeFromValue(coinType)
+            guard let prefix = UInt32(exactly: ss58Prefix) else {
+                throw NSError(domain: "ExpoWalletCore", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid SS58 prefix"])
+            }
+            let addr = AnyAddress(publicKey: pk, coin: ct, ss58Prefix: prefix)
+            guard !addr.description.isEmpty else {
+                throw NSError(domain: "ExpoWalletCore", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to derive SS58 address"])
+            }
+            return ["description": addr.description, "data": addr.data.base64EncodedString()]
+        }
+
         Function("anyAddressCreateWithString") { (address: String, coinType: Int) -> String in
             let ct = try coinTypeFromValue(coinType)
             guard let addr = AnyAddress(string: address, coin: ct) else {
