@@ -135,7 +135,10 @@ describe('VaultBase.signTypedData', () => {
     const { vault, signTypedData } = vaultFixture()
     vault.isEncrypted = isEncrypted
     const result = await signTypedData(payload, undefined, 'password')
-    expect(vault.signBytes).toHaveBeenCalledWith({ chain: Chain.Ethereum, data: result.hash, password: 'password' }, undefined)
+    expect(vault.signBytes).toHaveBeenCalledWith(
+      { chain: Chain.Ethereum, data: result.hash, password: 'password' },
+      undefined
+    )
     expect(vault.unlock).not.toHaveBeenCalled()
     expect(vault.passwordCache.set).not.toHaveBeenCalled()
   })
@@ -190,29 +193,52 @@ describe('VaultBase.signTypedData', () => {
   })
 })
 
-
 describe('FastVault typed-data credentials with caching disabled', () => {
   it.each([true, false])('decrypts and authenticates with explicit credentials (encrypted=%s)', async encrypted => {
     const coreVault = {
-      name: 'credential-test', publicKeys: { ecdsa: 'abcd', eddsa: 'dcba' },
-      signers: ['local', 'Server-1'], localPartyId: 'local', hexChainCode: 'ab'.repeat(32),
+      name: 'credential-test',
+      publicKeys: { ecdsa: 'abcd', eddsa: 'dcba' },
+      signers: ['local', 'Server-1'],
+      localPartyId: 'local',
+      hexChainCode: 'ab'.repeat(32),
       keyShares: { ecdsa: 'ecdsa-share', eddsa: 'eddsa-share' },
-      libType: 'DKLS' as const, isBackedUp: true, order: 0,
+      libType: 'DKLS' as const,
+      isBackedUp: true,
+      order: 0,
     }
     const content = await createVaultBackup(coreVault, encrypted ? 'explicit-password' : undefined)
     const cache = new PasswordCacheService({ defaultTTL: 0 })
     const callback = vi.fn().mockRejectedValue(new Error('Callback must not replace explicit password'))
-    const server = { signBytesWithServer: vi.fn(async (loaded, payload, password) => {
-      expect(password).toBe('explicit-password')
-      expect(loaded.keyShares).toEqual({ ecdsa: 'ecdsa-share', eddsa: 'eddsa-share' })
-      const sig = await sign({ hash: ('0x' + payload.messageHashes[0].replace(/^0x/, '')) as `0x${string}`, privateKey: key })
-      return { signature: sig.r.slice(2) + sig.s.slice(2), recovery: sig.yParity, format: 'ECDSA' }
-    }) }
-    const vault = FastVault.fromImport('credential-test', content, { ...coreVault, keyShares: { ecdsa: '', eddsa: '' } }, server as never, {
-      storage: {}, config: { onPasswordRequired: callback }, passwordCache: cache, wasmProvider: {}, serverManager: {},
-    } as never)
+    const server = {
+      signBytesWithServer: vi.fn(async (loaded, payload, password) => {
+        expect(password).toBe('explicit-password')
+        expect(loaded.keyShares).toEqual({ ecdsa: 'ecdsa-share', eddsa: 'eddsa-share' })
+        const sig = await sign({
+          hash: ('0x' + payload.messageHashes[0].replace(/^0x/, '')) as `0x${string}`,
+          privateKey: key,
+        })
+        return { signature: sig.r.slice(2) + sig.s.slice(2), recovery: sig.yParity, format: 'ECDSA' }
+      }),
+    }
+    const vault = FastVault.fromImport(
+      'credential-test',
+      content,
+      { ...coreVault, keyShares: { ecdsa: '', eddsa: '' } },
+      server as never,
+      {
+        storage: {},
+        config: { onPasswordRequired: callback },
+        passwordCache: cache,
+        wasmProvider: {},
+        serverManager: {},
+      } as never
+    )
     vi.spyOn(vault, 'address').mockResolvedValue(address)
-    const result = await vault.signTypedData({ chain: Chain.Ethereum, typedData: payload, password: 'explicit-password' })
+    const result = await vault.signTypedData({
+      chain: Chain.Ethereum,
+      typedData: payload,
+      password: 'explicit-password',
+    })
     expect(result.signature).toMatch(/^0x[0-9a-f]{130}$/)
     expect(server.signBytesWithServer).toHaveBeenCalledOnce()
     expect(callback).not.toHaveBeenCalled()

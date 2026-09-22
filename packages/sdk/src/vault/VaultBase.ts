@@ -64,8 +64,8 @@ import {
   SigningMode,
   SigningPayload,
   SignTypedDataParams,
-  TypedDataSignature,
   Token,
+  TypedDataSignature,
   Value,
   VaultData,
 } from '../types'
