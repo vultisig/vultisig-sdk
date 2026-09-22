@@ -68,6 +68,7 @@ export interface NativeDataVectorInstance {
 }
 
 export interface NativeAnyAddressInstance {
+  delete(): void
   description(): string
   data(): Uint8Array
 }
@@ -95,6 +96,12 @@ export interface WalletCoreLike {
     isValid(address: string, coinType: number): boolean
     isValidBech32(address: string, coinType: number, hrp: string): boolean
     isValidSS58(address: string, coinType: number, ss58Prefix: number): boolean
+    createSS58(address: string, coinType: number, ss58Prefix: number): NativeAnyAddressInstance
+    createSS58WithPublicKey(
+      publicKey: NativePublicKeyInstance,
+      coinType: number,
+      ss58Prefix: number
+    ): NativeAnyAddressInstance
     createWithString(address: string, coinType: number): NativeAnyAddressInstance
     createBech32WithPublicKey(
       publicKey: NativePublicKeyInstance,
@@ -434,6 +441,9 @@ class NativeDataVector implements NativeDataVectorInstance {
 // ---------------------------------------------------------------------------
 
 class NativeAnyAddress implements NativeAnyAddressInstance {
+  delete(): void {
+    // Results are copied from native objects; no native handle is retained.
+  }
   private readonly _description: string
   private readonly _data: string | null
 
@@ -784,6 +794,14 @@ export class NativeWalletCore {
         },
         isValidSS58(address: string, coinType: number, ss58Prefix: number): boolean {
           return ExpoWalletCore.anyAddressIsValidSS58(address, coinType, ss58Prefix)
+        },
+        createSS58(address: string, coinType: number, ss58Prefix: number): NativeAnyAddress {
+          const result = ExpoWalletCore.anyAddressCreateSS58(address, coinType, ss58Prefix)
+          return new NativeAnyAddress(result.description, result.data)
+        },
+        createSS58WithPublicKey(publicKey: NativePublicKey, coinType: number, ss58Prefix: number): NativeAnyAddress {
+          const result = ExpoWalletCore.anyAddressCreateSS58WithPublicKey(publicKey._handle, coinType, ss58Prefix)
+          return new NativeAnyAddress(result.description, result.data)
         },
         createWithString(address: string, coinType: number): NativeAnyAddress {
           const desc = ExpoWalletCore.anyAddressCreateWithString(address, coinType)

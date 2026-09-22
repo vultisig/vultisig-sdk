@@ -536,12 +536,20 @@ export type {
 } from '../../tools/defi'
 export {
   buildBalancerV3SwapCalldata,
+  buildYieldActionScanRequest,
   buildYieldActionScanRequests,
   chunkStakekitBalanceQueries,
   defi,
   fetchAllStakekitBalances,
   fetchStakekitBalancesBatch,
+  parseActionDisplay,
   STAKEKIT_BALANCE_QUERIES_PER_REQUEST,
+  stakekitBalances,
+  stakekitBuildEnter,
+  stakekitBuildExit,
+  stakekitBuildManage,
+  stakekitDetails,
+  stakekitSearch,
   validateStakekitActionAddress,
   validateStakekitActionInput,
 } from '../../tools/defi'
@@ -552,6 +560,28 @@ export {
   GLIF_ICN_TOKEN_DECIMALS,
   glifPoolWriteAbi,
 } from '../../tools/defi/glif'
+export type {
+  EvmScanRequest,
+  PendingAction,
+  ScanRequest,
+  StakekitActionDisplay,
+  StakekitActionResult,
+  StakekitDetailsResult,
+  StakekitExitResult,
+  UnsupportedScanRequest,
+  Validator,
+  YieldActionResponse,
+  YieldArgs,
+  YieldBalance,
+  YieldDiscoverMetadata,
+  YieldDiscoverOpportunity,
+  YieldDiscoverToken,
+  YieldListResponse,
+  YieldMetadata,
+  YieldProduct,
+  YieldToken,
+  YieldTransaction,
+} from '../../tools/defi/stakekit'
 export type {
   BuildThreeJaneSupplyUsdcParams,
   BuildThreeJaneSupplyUsdcResult,
@@ -880,7 +910,8 @@ export {
   toHumanUnits,
 } from '../../utils/convertAmount'
 export { FiatToAmountError } from '../../utils/fiatToAmount'
-export { fromChainAmountExact } from '@vultisig/core-chain/amount/fromChainAmountExact'
+export { fromChainAmount } from '@vultisig/core-chain/amount/fromChainAmount'
+export { fromChainAmountDisplay, fromChainAmountExact } from '@vultisig/core-chain/amount/fromChainAmountExact'
 export { ChainAmountParseError, toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 export type { ChainKind } from '@vultisig/core-chain/ChainKind'
 export { getChainKind, isChainOfKind } from '@vultisig/core-chain/ChainKind'
