@@ -154,10 +154,10 @@ export class FastVault extends VaultBase {
       const messageHash = normalizeToHex(options.data)
 
       // Ensure keyShares are loaded from vault file (lazy loading)
-      await this.ensureKeySharesLoaded()
+      await this.ensureKeySharesLoaded(options.password)
 
       // Resolve password for server authentication
-      const password = await this.resolvePassword()
+      const password = options.password ?? (await this.resolvePassword())
 
       // Sign with server coordination
       const signature = await this.fastSigningService.signBytesWithServer(
@@ -206,7 +206,7 @@ export class FastVault extends VaultBase {
    * 1. Parses vault file directly
    * 2. Loads keyShares into coreVault
    */
-  protected async ensureKeySharesLoaded(): Promise<void> {
+  protected async ensureKeySharesLoaded(explicitPassword?: string): Promise<void> {
     // Check if keyShares are already loaded
     if (
       this.coreVault.keyShares.ecdsa &&
@@ -231,7 +231,7 @@ export class FastVault extends VaultBase {
     let vaultBase64: string
     if (container.isEncrypted) {
       // Resolve password (will throw if not available)
-      const password = await this.resolvePassword()
+      const password = explicitPassword ?? (await this.resolvePassword())
 
       // Decrypt vault
       const encryptedData = fromBase64(container.vault)

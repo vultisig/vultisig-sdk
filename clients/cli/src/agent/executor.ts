@@ -19,7 +19,6 @@ import type {
 import {
   Chain,
   clampEvmPriorityFee,
-  computeEip712Hash,
   getChainKind,
   getEvmRpcUrl,
   isChainOfKind,
@@ -2181,7 +2180,7 @@ export class AgentExecutor {
   // ============================================================================
 
   /**
-   * Sign EIP-712 typed data. Computes the EIP-712 hash and signs with vault.signBytes().
+   * Sign EIP-712 typed data through the verified vault.signTypedData() surface.
    * Supports two formats:
    * - Flat: { domain, types, message, primaryType } — single typed data
    * - Payloads array: { payloads: [{id, domain, types, message, primaryType, chain}, ...] }
@@ -2253,9 +2252,6 @@ export class AgentExecutor {
 
     if (this.verbose) process.stderr.write(`[sign_typed_data] primaryType=${primaryType} domain.name=${domain.name}\n`)
 
-    const eip712Hash = computeEip712Hash(domain, types, primaryType, message)
-    if (this.verbose) process.stderr.write(`[sign_typed_data] hash=${eip712Hash}\n`)
-
     // Resolve chain from domain chainId or explicit chain param
     const chainName = params.chain as string | undefined
     const chainId = domain.chainId as number | string | undefined
@@ -2266,63 +2262,15 @@ export class AgentExecutor {
       chain = resolveChainId(chainId) || Chain.Ethereum
     }
 
-    const sigResult = await this.vault.signBytes({
-      data: eip712Hash,
+    const { signature, r, s, v, recovery, hash } = await this.vault.signTypedData({
       chain,
+      typedData: { domain, types, primaryType, message },
     })
-
-    if (this.verbose)
-      process.stderr.write(`[sign_typed_data] signed, format=${sigResult.format}, recovery=${sigResult.recovery}\n`)
-
-    // Canonicalize to low-S (EIP-2) — a high-S signature is malleable and
-    // rejected by OpenZeppelin's ECDSA library (which Polymarket's CLOB and
-    // most EVM verifiers use). The recovery parity flips with the fold.
-    const { r, s, recovery } = toCanonicalEvmSignature(sigResult.signature, sigResult.recovery ?? 0)
-    const v = recovery + 27
-
-    // 65-byte Ethereum signature: r (32 bytes) + s (32 bytes) + v (1 byte)
-    const ethSignature = '0x' + r + s + v.toString(16).padStart(2, '0')
-
-    // Recover-verify gate: confirm the assembled signature recovers to this
-    // vault's own EVM address before returning success. Catches a wrong
-    // recovery id, a botched low-S fold, or a digest/keyshare mismatch right
-    // here instead of leaving it to surface as an opaque on-chain/CLOB
-    // rejection. The EVM address is identical across every EVM chain (same
-    // secp256k1 keyshare), so the chain resolved from domain.chainId is fine.
-    const expectedAddress = await this.vault.address(chain)
-    const recoveredAddress = await recoverAddress({
-      hash: eip712Hash as `0x${string}`,
-      signature: ethSignature as `0x${string}`,
-    })
-    if (recoveredAddress.toLowerCase() !== expectedAddress.toLowerCase()) {
-      // Deterministic vault-context error, not a transient signing failure:
-      // the keyshare that produced this signature does not belong to the
-      // vault address the executor expected to sign for (e.g. the wrong vault
-      // is loaded into this executor's context). Retrying signs with the same
-      // keyshare and fails identically, so the message says so explicitly and
-      // names the loaded vault (name + id) rather than leaving a blank failure,
-      // so the operator can tell which vault is in context. The
-      // SIGNATURE_RECOVERY_MISMATCH prefix stays stable for callers that key off it.
-      throw new Error(
-        `SIGNATURE_RECOVERY_MISMATCH: wrong vault context for EIP-712 signing — ` +
-          `the loaded vault "${this.vault.name}" (id ${this.vault.id}) reports EVM address ` +
-          `${expectedAddress} for ${chain}, but the signature recovered to ${recoveredAddress}. ` +
-          `The signing keyshare does not belong to the expected vault address. This is a deterministic ` +
-          `vault-context error, not a transient signing failure — retrying will not help. ` +
-          `Verify the correct vault/keyshare is loaded into the executor context before signing again.`
-      )
+    if (this.verbose) {
+      process.stderr.write(`[sign_typed_data] hash=${hash}\n`)
+      process.stderr.write(`[sign_typed_data] r=${r.slice(2, 18)}... s=${s.slice(2, 18)}... v=${v}\n`)
     }
-
-    if (this.verbose) process.stderr.write(`[sign_typed_data] r=${r.slice(0, 16)}... s=${s.slice(0, 16)}... v=${v}\n`)
-
-    return {
-      signature: ethSignature,
-      r: '0x' + r,
-      s: '0x' + s,
-      v,
-      recovery,
-      hash: eip712Hash,
-    }
+    return { signature, r, s, v, recovery, hash }
   }
 
   // ============================================================================

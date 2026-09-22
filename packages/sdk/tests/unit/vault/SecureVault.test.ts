@@ -1,3 +1,5 @@
+import { Chain } from '@vultisig/core-chain/Chain'
+import { privateKeyToAddress, sign } from 'viem/accounts'
 import { describe, expect, it, vi } from 'vitest'
 
 import { RelaySigningService } from '../../../src/services/RelaySigningService'
@@ -531,6 +533,47 @@ describe('SecureVault signing', () => {
       })
 
       expect(RelaySigningService).toHaveBeenCalledWith(customRelayUrl)
+    })
+  })
+
+  describe('signTypedData relay delegation', () => {
+    it('preserves device/signing events and forwards cancellation through the real SecureVault method', async () => {
+      const key = '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d'
+      const vault = makeSecureVault()
+      vi.spyOn(vault, 'address').mockResolvedValue(privateKeyToAddress(key))
+      const controller = new AbortController()
+      const events: string[] = []
+      vault.on('deviceJoined', () => events.push('device'))
+      vault.on('signingProgress', () => events.push('progress'))
+      vault.on('transactionSigned', () => events.push('signed'))
+      vi.mocked(RelaySigningService).mockImplementationOnce(function (this: object) {
+        Object.assign(this, {
+          signBytesWithRelay: vi.fn(async (_vault, payload, _walletCore, options) => {
+            expect(options.signal).toBe(controller.signal)
+            options.onDeviceJoined('other-device', 2, 2)
+            options.onProgress({ message: 'Signing' })
+            const sig = await sign({
+              hash: ('0x' + payload.messageHashes[0].replace(/^0x/, '')) as `0x${string}`,
+              privateKey: key,
+            })
+            return { signature: sig.r.slice(2) + sig.s.slice(2), recovery: sig.yParity, format: 'ECDSA' }
+          }),
+        })
+      } as any)
+      const result = await vault.signTypedData(
+        {
+          chain: Chain.Ethereum,
+          typedData: {
+            domain: {},
+            types: { Note: [{ name: 'text', type: 'string' }] },
+            primaryType: 'Note',
+            message: { text: 'Harmless test' },
+          },
+        },
+        { signal: controller.signal }
+      )
+      expect(result.signature).toMatch(/^0x[0-9a-f]{130}$/)
+      expect(events).toEqual(['device', 'progress', 'signed'])
     })
   })
 

@@ -25,6 +25,7 @@ import { VaultSchema } from '@vultisig/core-mpc/types/vultisig/vault/v1/vault_pb
 import { vaultContainerFromString } from '@vultisig/core-mpc/vault/utils/vaultContainerFromString'
 import { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 import { fromBase64 } from '@vultisig/lib-utils/fromBase64'
+import { recoverAddress } from 'viem'
 
 import { DEFAULT_CHAINS } from '../constants'
 // SDK utilities
@@ -62,6 +63,8 @@ import {
   SignDirectInput,
   SigningMode,
   SigningPayload,
+  SignTypedDataParams,
+  TypedDataSignature,
   Token,
   Value,
   VaultData,
@@ -70,6 +73,7 @@ import type { ContractCallTxParams } from '../types/contractCall'
 import type { TransactionSimulationResult, TransactionValidationResult } from '../types/security'
 import type { DiscoveredToken, TokenInfo } from '../types/tokens'
 import { computePersonalSignHash } from '../utils/eip191'
+import { computeEip712Hash, toCanonicalEvmSignature } from '../utils/eip712'
 import { createVaultBackup } from '../utils/export'
 // Vault services
 import { AddressService, type GetAddressOptions } from './services/AddressService'
@@ -558,7 +562,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    * - Fast vaults: Always encrypted, always decrypt
    * - Secure vaults: Check isEncrypted, decrypt if needed
    */
-  protected abstract ensureKeySharesLoaded(): Promise<void>
+  protected abstract ensureKeySharesLoaded(password?: string): Promise<void>
 
   // ===== PRIVATE METHODS =====
 
@@ -2026,6 +2030,74 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
     const sig = await this.signBytes({ data: hash, chain }, options)
     return { signature: sig.signature.startsWith('0x') ? sig.signature : '0x' + sig.signature, chain, algorithm }
+  }
+
+  /**
+   * Sign EIP-712 data and verify the canonical signature against this vault.
+   * `chain` selects an EVM signing key; domain.chainId is hashed as supplied.
+   * An explicit password supplies decryption and Fast Vault server
+   * authentication for this operation without relying on password caching.
+   * Without it, signBytes uses the existing cache/password callback.
+   * Cancellation and signing events follow signBytes; no transaction is sent.
+   */
+  async signTypedData(params: SignTypedDataParams, options?: { signal?: AbortSignal }): Promise<TypedDataSignature> {
+    options?.signal?.throwIfAborted()
+    const { chain, typedData, password } = params
+    if (getChainKind(chain) !== 'evm') {
+      throw new VaultError(VaultErrorCode.InvalidConfig, 'signTypedData requires an EVM chain')
+    }
+    const isRecord = (value: unknown): value is Record<string, unknown> =>
+      typeof value === 'object' && value !== null && !Array.isArray(value)
+    if (
+      !isRecord(typedData) ||
+      !isRecord(typedData.domain) ||
+      !isRecord(typedData.types) ||
+      !isRecord(typedData.message) ||
+      typeof typedData.primaryType !== 'string' ||
+      !typedData.primaryType
+    ) {
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        'signTypedData requires typedData.domain, typedData.types, typedData.message, and typedData.primaryType'
+      )
+    }
+    // Hash/validate before asking for credentials or starting an MPC session.
+    const hash = computeEip712Hash(
+      typedData.domain,
+      typedData.types as Record<string, Array<{ name: string; type: string }>>,
+      typedData.primaryType,
+      typedData.message
+    )
+    if (password !== undefined && !password) {
+      throw new VaultError(VaultErrorCode.InvalidConfig, 'Password cannot be empty')
+    }
+    options?.signal?.throwIfAborted()
+    const expectedAddress = await this.address(chain)
+    options?.signal?.throwIfAborted()
+    const sig = await this.signBytes({ data: hash, chain, ...(password !== undefined ? { password } : {}) }, options)
+    options?.signal?.throwIfAborted()
+    const { r, s, recovery } = toCanonicalEvmSignature(sig.signature, sig.recovery ?? 0)
+    if (recovery !== 0 && recovery !== 1) {
+      throw new VaultError(VaultErrorCode.SigningFailed, 'Invalid EIP-712 signature recovery parity')
+    }
+    const v = recovery + 27
+    const signature = `0x${r}${s}${v.toString(16).padStart(2, '0')}`
+    const recoveredAddress = await recoverAddress({
+      hash: hash as `0x${string}`,
+      signature: signature as `0x${string}`,
+    })
+    if (recoveredAddress.toLowerCase() !== expectedAddress.toLowerCase()) {
+      throw new Error(
+        `SIGNATURE_RECOVERY_MISMATCH: wrong vault context for EIP-712 signing — ` +
+          `the loaded vault "${this.name}" (id ${this.id}) reports EVM address ` +
+          `${expectedAddress} for ${chain}, but the signature recovered to ${recoveredAddress}. ` +
+          `The signing keyshare does not belong to the expected vault address. This is a deterministic ` +
+          `vault-context error, not a transient signing failure — retrying will not help. ` +
+          `Verify the correct vault/keyshare is loaded into the executor context before signing again.`
+      )
+    }
+    options?.signal?.throwIfAborted()
+    return { hash, signature, chain, r: `0x${r}`, s: `0x${s}`, v, recovery }
   }
 
   /** All balances across configured chains as a flat array. */

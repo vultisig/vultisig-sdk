@@ -874,6 +874,47 @@ Broadcast a pre-built raw transaction directly. Encoding depends on the chain:
 - `params.chain: string` - Chain to broadcast on
 - `params.rawTx: string` - Raw transaction in the chain-appropriate encoding
 
+#### `vault.signTypedData(params, options?): Promise<TypedDataSignature>`
+
+Sign EIP-712 data with a Fast or Secure Vault. The SDK hashes the payload,
+canonicalizes the signature to low-S, and verifies that it recovers to the
+selected vault address before returning success. Nothing is broadcast.
+
+```typescript
+import { Chain, type SignTypedDataParams, type TypedDataSignature } from '@vultisig/sdk'
+
+const params: SignTypedDataParams = {
+  chain: Chain.Ethereum,
+  typedData: {
+    domain: { name: 'Example note', version: '1', chainId: 1 },
+    types: { Note: [{ name: 'text', type: 'string' }] },
+    primaryType: 'Note',
+    message: { text: 'Hello from my vault' },
+  },
+}
+const signed: TypedDataSignature = await vault.signTypedData(params, {
+  signal: new AbortController().signal,
+})
+console.log(signed.hash, signed.signature)
+```
+
+- `chain` is required and must be an EVM chain. It selects the signing key and
+  address; it does not replace or infer `domain.chainId`.
+- `typedData` requires `domain`, `types`, `primaryType` and `message`. Empty domains
+  are supported. Decimal and hexadecimal string chain IDs retain their precision.
+- Optional `password` supplies decryption and Fast Vault server authentication for
+  this operation. It works with password caching disabled and does not populate
+  the cache. If omitted, signing uses the existing password cache or
+  `onPasswordRequired` callback.
+- `options.signal` cancels the operation using the existing `signBytes` flow.
+  Secure Vault device coordination and signing events are unchanged. Underlying
+  signing events occur before the wrapper's final recovery check; await the method
+  for verified success.
+- The result includes `hash`, `chain`, `0x`-prefixed `r` and low-S `s`, `v` (27/28),
+  `recovery` (0/1), and the 65-byte `signature`.
+- Invalid input, non-EVM chains and signing failures reject. A wrong signer rejects
+  with `SIGNATURE_RECOVERY_MISMATCH` and the loaded vault's name, ID and address.
+
 #### `vault.signBytes(options, signingOptions?): Promise<SigningResult>`
 
 Sign arbitrary bytes (not a blockchain transaction).

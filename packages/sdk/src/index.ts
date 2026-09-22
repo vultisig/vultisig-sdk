@@ -454,6 +454,8 @@ export type {
   SigningMode,
   SigningPayload,
   SigningStep,
+  SignTypedDataParams,
+  TypedDataSignature,
   SimpleCoinInput,
   SwapApprovalInfo,
   SwapFees,

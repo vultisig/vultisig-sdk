@@ -166,6 +166,9 @@ export type SignBytesOptions = {
    * - Derivation path (chain-specific BIP-44 path)
    */
   chain: Chain
+
+  /** Optional per-operation decryption/server password; does not depend on password caching. */
+  password?: string
 }
 
 /**
@@ -327,9 +330,29 @@ export type SignMessageParams = {
 }
 
 export type SignTypedDataParams = {
+  /** EVM chain used for key derivation and signer verification; never inferred from the domain. */
   chain: Chain
+  /** EIP-712 domain, types, primaryType and message. An empty domain is valid. */
   typedData: Record<string, unknown>
+  /** Per-operation decryption/server password. Does not require or populate the password cache. */
   password?: string
+}
+
+export type TypedDataSignature = {
+  /** Canonical EIP-712 digest, prefixed with 0x. */
+  hash: string
+  /** 65-byte Ethereum signature: 0x + r + s + v. */
+  signature: string
+  /** Explicit EVM chain used to sign and verify. */
+  chain: Chain
+  /** 0x-prefixed 32-byte r component. */
+  r: string
+  /** 0x-prefixed 32-byte low-S component. */
+  s: string
+  /** Ethereum recovery byte (27 or 28). */
+  v: number
+  /** Recovery parity (0 or 1). */
+  recovery: number
 }
 
 export type GetBalanceParams = {

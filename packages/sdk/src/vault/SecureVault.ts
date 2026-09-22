@@ -233,7 +233,7 @@ export class SecureVault extends VaultBase {
       const messageHash = normalizeToHex(options.data)
 
       // Ensure keyShares are loaded (will decrypt if encrypted)
-      await this.ensureKeySharesLoaded()
+      await this.ensureKeySharesLoaded(options.password)
 
       // Get WalletCore for chain utilities
       const walletCore = await this.wasmProvider.getWalletCore()
@@ -304,7 +304,7 @@ export class SecureVault extends VaultBase {
    * - If encrypted: Decrypt with password
    * - If unencrypted: Load directly
    */
-  protected async ensureKeySharesLoaded(): Promise<void> {
+  protected async ensureKeySharesLoaded(explicitPassword?: string): Promise<void> {
     // Check if keyShares are already loaded
     if (
       this.coreVault.keyShares.ecdsa &&
@@ -328,7 +328,7 @@ export class SecureVault extends VaultBase {
     // Check encryption status at call site
     if (this.vaultData.isEncrypted) {
       // Get password and decrypt
-      const password = await this.resolvePassword()
+      const password = explicitPassword ?? (await this.resolvePassword())
 
       const encryptedData = fromBase64(container.vault)
       const decryptedBuffer = decryptVaultBackupWithPassword(password, encryptedData)

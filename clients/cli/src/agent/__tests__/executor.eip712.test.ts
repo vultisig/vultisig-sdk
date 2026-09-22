@@ -15,7 +15,7 @@
 //     flips the recovery parity;
 //   - `signSingleTypedData` recover-verifies the assembled signature against
 //     the vault's EVM address and throws SIGNATURE_RECOVERY_MISMATCH otherwise.
-import { toCanonicalEvmSignature, type VaultBase } from '@vultisig/sdk'
+import { toCanonicalEvmSignature, VaultBase } from '@vultisig/sdk'
 import { TypedDataEncoder } from 'ethers'
 import { hashTypedData, recoverAddress } from 'viem'
 import { privateKeyToAddress, sign } from 'viem/accounts'
@@ -42,6 +42,7 @@ async function mockSign(hash: string): Promise<{ signature: string; format: stri
 
 function createSigningMockVault(): VaultBase {
   return {
+    signTypedData: VaultBase.prototype.signTypedData,
     name: 'mock-vault',
     id: 'vault-mock-eip712',
     type: 'fast',
@@ -580,6 +581,7 @@ describe('signSingleTypedData — recover-verify gate', () => {
     // signBytes returns a valid r/s but the WRONG recovery parity, so the
     // assembled v recovers to a different address than the vault's.
     const vault = {
+      signTypedData: VaultBase.prototype.signTypedData,
       name: 'mock-vault',
       id: 'vault-mock-eip712-bad',
       type: 'fast',
@@ -611,6 +613,7 @@ describe('signSingleTypedData — recover-verify gate', () => {
     // read as deterministic, not retryable — per the PR #852 review follow-up.
     const WRONG_VAULT_ADDRESS = '0x000000000000000000000000000000000000dEaD'
     const vault = {
+      signTypedData: VaultBase.prototype.signTypedData,
       name: 'mock-vault',
       id: 'vault-mock-eip712-wrongctx',
       type: 'fast',
