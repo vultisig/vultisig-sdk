@@ -20,6 +20,7 @@ export const chains = { cardano, cosmos, evm, ripple, solana, sui, ton, tron, ut
 // the `chains` barrel without knowing which sub-module they live in. Sui
 // module currently exposes only functions; add type re-exports here when
 // sui/tx.ts declares them.
+export type { CardanoExtendedUtxo } from './cardano'
 export type {
   BuildCosmosSendOptions,
   BuildCosmosStakingOptions,

@@ -1,3 +1,4 @@
+import type { CardanoExtendedUtxo as CanonicalCardanoExtendedUtxo } from '@vultisig/core-chain/chains/cardano/utxo/getCardanoExtendedUtxos'
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
 import * as blockaidChains from '@vultisig/core-chain/security/blockaid/evmChains'
@@ -21,6 +22,19 @@ import * as tokenRef from '../../../../src/vault/tokenRef'
 import { cosmosTxFeeGasParityCases } from '../../../fixtures/cosmosTxFeeGasParity'
 
 process.env.VULTISIG_STRICT_SINGLETON = '0'
+
+describe('RN Cardano UTXO surface', () => {
+  it('exposes the canonical asset-aware helper and result type', async () => {
+    const canonical = await import('@vultisig/core-chain/chains/cardano/utxo/getCardanoExtendedUtxos')
+
+    expect(sdkRn.chains.cardano.getCardanoExtendedUtxos).toBe(canonical.getCardanoExtendedUtxos)
+    expectTypeOf<sdkRn.CardanoExtendedUtxo>().toEqualTypeOf<CanonicalCardanoExtendedUtxo>()
+    expectTypeOf<Awaited<ReturnType<typeof sdkRn.chains.cardano.getCardanoExtendedUtxos>>>().toEqualTypeOf<
+      sdkRn.CardanoExtendedUtxo[]
+    >()
+    expect(typeof sdkRn.chains.cardano.getCardanoUtxos).toBe('function')
+  })
+})
 
 describe('RN StakeKit companion types', () => {
   it('matches the canonical StakeKit public contracts', () => {

@@ -366,6 +366,7 @@ export { fastVaultSign, joinRelaySession, schnorrSign, startRelaySession, waitFo
 // Sui (address derivation, intent-hashing, signature serialization)
 // EVM (viem-backed tx builders + RPC helpers for all 13 EVM chains)
 // TON (wallet V4R2 BOC cell encoding, toncenter RPC helpers)
+export type { CardanoExtendedUtxo } from './chains'
 export { chains } from './chains'
 
 // EVM bridge type surface — consumers can import these directly from the RN

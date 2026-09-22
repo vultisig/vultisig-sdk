@@ -7,13 +7,64 @@
  * RN bridge re-exports.
  */
 import { blake2b } from '@noble/hashes/blake2.js'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   buildCardanoWitnessSet,
   buildSignedCardanoTx,
   cardanoTxBodyHash,
+  getCardanoExtendedUtxos,
+  getCardanoUtxos,
 } from '../../../src/platforms/react-native/chains/cardano'
+
+afterEach(() => vi.unstubAllGlobals())
+
+describe('cardano / asset-aware UTXOs', () => {
+  it('requests extended outputs and preserves assets, precision, null normalization and ordering', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [
+        { tx_hash: 'b', tx_index: 1, value: '9007199254740993', asset_list: null },
+        {
+          tx_hash: 'a',
+          tx_index: 2,
+          value: '42',
+          asset_list: [
+            { policy_id: 'policy', asset_name: null, decimals: 0, quantity: '123', fingerprint: 'fingerprint' },
+          ],
+        },
+        { tx_hash: 'a', tx_index: 0, value: '7', asset_list: [] },
+      ],
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    expect(await getCardanoExtendedUtxos('addr_test')).toEqual([
+      { hash: 'a', index: 0, amount: 7n, assets: [] },
+      {
+        hash: 'a',
+        index: 2,
+        amount: 42n,
+        assets: [{ policy_id: 'policy', asset_name: '', decimals: 0, quantity: '123', fingerprint: 'fingerprint' }],
+      },
+      { hash: 'b', index: 1, amount: 9007199254740993n, assets: [] },
+    ])
+    expect(JSON.parse(fetchMock.mock.calls[0]![1].body)).toEqual({ _addresses: ['addr_test'], _extended: true })
+  })
+
+  it('keeps the basic fetch request unchanged and propagates extended request failures', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => [{ tx_hash: 'a', tx_index: 0, value: '3' }],
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    expect(await getCardanoUtxos('addr_test')).toEqual([{ hash: 'a', index: 0, amount: 3n }])
+    expect(JSON.parse(fetchMock.mock.calls[0]![1].body)).toEqual({ _addresses: ['addr_test'] })
+
+    const failure = new Error('Koios unavailable')
+    fetchMock.mockRejectedValueOnce(failure)
+    await expect(getCardanoExtendedUtxos('addr_test')).rejects.toBe(failure)
+  })
+})
 
 const bytesToHex = (b: Uint8Array): string => {
   let s = ''
