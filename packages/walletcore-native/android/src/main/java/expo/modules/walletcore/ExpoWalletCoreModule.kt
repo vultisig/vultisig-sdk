@@ -149,6 +149,22 @@ class ExpoWalletCoreModule : Module() {
             AnyAddress.isValidSS58(address, CoinType.createFromValue(coinType), ss58Prefix)
         }
 
+        Function("anyAddressCreateSS58") { address: String, coinType: Int, ss58Prefix: Int ->
+            require(ss58Prefix >= 0) { "Invalid SS58 prefix" }
+            val coin = CoinType.createFromValue(coinType)
+            require(AnyAddress.isValidSS58(address, coin, ss58Prefix)) { "Invalid SS58 address" }
+            val addr = AnyAddress(address, coin, ss58Prefix)
+            mapOf("description" to addr.description(), "data" to android.util.Base64.encodeToString(addr.data(), android.util.Base64.NO_WRAP))
+        }
+
+        Function("anyAddressCreateSS58WithPublicKey") { publicKeyHandle: Int, coinType: Int, ss58Prefix: Int ->
+            val pk = publicKeys[publicKeyHandle] ?: throw Exception("Invalid PublicKey handle")
+            require(ss58Prefix >= 0) { "Invalid SS58 prefix" }
+            val addr = AnyAddress(pk, CoinType.createFromValue(coinType), ss58Prefix)
+            require(addr.description().isNotEmpty()) { "Failed to derive SS58 address" }
+            mapOf("description" to addr.description(), "data" to android.util.Base64.encodeToString(addr.data(), android.util.Base64.NO_WRAP))
+        }
+
         Function("anyAddressCreateWithString") { address: String, coinType: Int ->
             AnyAddress(address, CoinType.createFromValue(coinType)).description()
         }

@@ -11,6 +11,7 @@ import { blake2AsU8a } from '@polkadot/util-crypto'
 import { WalletCore } from '@trustwallet/wallet-core'
 import { getBlockchainSpecificValue } from '../../keysign/chainSpecific/KeysignChainSpecific'
 import { getPreSigningOutput } from '../../keysign/preSigningOutput'
+import { getKeysignTonGasless, getTonGaslessPreSigningHashes } from '../../keysign/ton/gasless'
 import { KeysignPayload, KeysignPayloadSchema } from '../../types/vultisig/keysign/v1/keysign_message_pb'
 import { getSwapKitSignBitcoin } from '../swapkitSignBitcoin'
 
@@ -38,6 +39,16 @@ export const getPreSigningHashes = ({ walletCore, txInputData, chain, keysignPay
     const qbtcPayload = fromBinary(KeysignPayloadSchema, txInputData)
     const cosmosSpecific = getBlockchainSpecificValue(qbtcPayload.blockchainSpecific, 'cosmosSpecific')
     return getQBTCPreSignedImageHash({ keysignPayload: qbtcPayload, cosmosSpecific })
+  }
+
+  // Relayed (gasless) TON: txInputData is the serialized payload (see
+  // getEncodedSigningInputs); the pre-image is the W5 `internal_signed` cell
+  // rebuilt — and re-validated — from it.
+  if (chain === Chain.Ton && keysignPayload && getKeysignTonGasless(keysignPayload)) {
+    return getTonGaslessPreSigningHashes({
+      keysignPayload: fromBinary(KeysignPayloadSchema, txInputData),
+      walletCore,
+    })
   }
 
   if (chain === Chain.Bittensor) {

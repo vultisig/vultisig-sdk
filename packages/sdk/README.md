@@ -74,6 +74,10 @@ const solAddress = await vault.address('Solana')
 await vault.address('Ton', { tonWalletVersion: 'v5r1' }) // preview only
 vault.setTonWalletVersion('v5r1') // now vault.address('Ton') and vault.send({ chain: 'Ton', ... }) use W5
 
+// On W5, a jetton send can pay its fee in the jetton through the TonAPI relay —
+// no TON needed. The fee becomes the relay's commission in that jetton.
+await vault.send({ chain: 'Ton', to: 'UQ...', amount: '25', symbol: 'USDT', gasless: true })
+
 console.log('BTC:', btcAddress) // bc1q...
 console.log('ETH:', ethAddress) // 0x...
 console.log('SOL:', solAddress) // 9WzD...
@@ -1357,6 +1361,7 @@ MIT License - see [LICENSE](./LICENSE) file for details.
 ---
 
 **Built with ❤️ by the Vultisig team**
+
 ## Transaction preparation imports
 
 `@vultisig/sdk/tools/prep` exposes the canonical vault-free transaction builders

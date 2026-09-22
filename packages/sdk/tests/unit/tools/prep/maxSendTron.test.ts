@@ -31,14 +31,26 @@ describe('Tron max-send balance failure propagation', () => {
   afterEach(() => vi.unstubAllGlobals())
 
   it.each([
-    { coin: nativeCoin, responses: [{ Error: 'gateway unavailable' }], message: 'getaccount failed' },
-    { coin: nativeCoin, responses: [{ error: 'gateway unavailable' }], message: 'getaccount failed' },
+    {
+      coin: nativeCoin,
+      responses: [{ Error: 'gateway unavailable' }],
+      message: 'Tron /wallet/getaccount rejected request: "gateway unavailable"',
+    },
+    {
+      coin: nativeCoin,
+      responses: [{ error: 'gateway unavailable' }],
+      message: 'Tron /wallet/getaccount rejected request: "gateway unavailable"',
+    },
     { coin: tokenCoin, responses: [{ result: '0x' }], message: 'empty contract result' },
-    { coin: tokenCoin, responses: [{ error: { code: -32000, message: '0x64' } }], message: 'eth_call failed' },
+    {
+      coin: tokenCoin,
+      responses: [{ error: { code: -32000, message: '0x64' } }],
+      message: 'Tron /jsonrpc rejected request: {"code":-32000,"message":"0x64"}',
+    },
     {
       coin: tokenCoin,
       responses: [{ result: '0x64' }, { Error: 'gateway unavailable' }],
-      message: 'getaccount failed',
+      message: 'Tron /wallet/getaccount rejected request: "gateway unavailable"',
     },
   ])('aborts before fee calculation: $message / $responses', async ({ coin, responses, message }) => {
     for (const response of responses) {

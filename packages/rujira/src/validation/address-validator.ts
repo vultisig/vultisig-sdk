@@ -9,6 +9,13 @@ import { RujiraError, RujiraErrorCode } from '../errors.js'
 
 const evmValidator = (addr: string) => /^0x[a-fA-F0-9]{40}$/.test(addr)
 
+/**
+ * BIP-173 cap; THORChain addresses are well under it. `fromBech32` must be
+ * given an explicit limit because its `Infinity` default is rejected by
+ * `@scure/base` >= 2.3, which makes every decode throw.
+ */
+const bech32MaxLength = 90
+
 const L1_ADDRESS_VALIDATORS: Record<string, (addr: string) => boolean> = {
   BTC: addr => /^(1|3)[a-km-zA-HJ-NP-Z1-9]{25,34}$/.test(addr) || /^bc1[a-z0-9]{39,87}$/.test(addr),
   ETH: evmValidator,
@@ -74,7 +81,7 @@ export function validateThorAddress(address: string): void {
   }
 
   try {
-    const decoded = fromBech32(trimmed)
+    const decoded = fromBech32(trimmed, bech32MaxLength)
 
     if (decoded.prefix !== 'thor') {
       throw new RujiraError(

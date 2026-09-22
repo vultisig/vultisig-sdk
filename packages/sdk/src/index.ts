@@ -98,6 +98,8 @@ export {
   TonBroadcastRejectedError,
   tonTxFailureReasons,
 } from '@vultisig/core-chain/chains/ton/failure'
+export type { TonGaslessConfig } from '@vultisig/core-chain/chains/ton/gasless/api'
+export { getTonGaslessConfig, isTonGasJetton } from '@vultisig/core-chain/chains/ton/gasless/api'
 export {
   CosmosSequenceMismatchError,
   toCosmosSequenceMismatchError,
@@ -107,12 +109,14 @@ export {
   SolanaBlockhashExpiredError,
   toSolanaBlockhashExpiredError,
 } from '@vultisig/core-chain/tx/broadcast/solanaBlockhashExpired'
+export { getKeysignFeeCoin } from '@vultisig/core-mpc/keysign/fee/getKeysignFeeCoin'
 
 // Pure-bigint exact base-units -> human decimal-string conversion (no float64
 // round-trip, so it's safe for high-decimal assets). Exported at the root so
 // downstream consumers (CLI, app) can share this instead of hand-rolling
 // their own `BigInt(10 ** decimals)` divisor, which drifts past decimals=22.
-export { fromChainAmountExact } from '@vultisig/core-chain/amount/fromChainAmountExact'
+export { fromChainAmount } from '@vultisig/core-chain/amount/fromChainAmount'
+export { fromChainAmountDisplay, fromChainAmountExact } from '@vultisig/core-chain/amount/fromChainAmountExact'
 
 // Public-boundary argument validation (AUDIT-R3 TASK-020).
 // Zod schemas + safe-parse helpers for chain and ticker strings.

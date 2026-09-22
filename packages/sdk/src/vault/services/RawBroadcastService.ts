@@ -13,7 +13,7 @@ import { getRippleClient } from '@vultisig/core-chain/chains/ripple/client'
 import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
 import { getSuiClient } from '@vultisig/core-chain/chains/sui/client'
 import { getSuiResultTransaction } from '@vultisig/core-chain/chains/sui/transactionResult'
-import { tronRpcUrl } from '@vultisig/core-chain/chains/tron/config'
+import { broadcastTronTransaction } from '@vultisig/core-chain/chains/tron/queryTron'
 import { getBlockchairBaseUrl } from '@vultisig/core-chain/chains/utxo/client/getBlockchairBaseUrl'
 import { isRippleInFlightEngineResult } from '@vultisig/core-chain/tx/broadcast/resolvers/ripple'
 import { assertSuiTxSucceeded } from '@vultisig/core-chain/tx/broadcast/resolvers/sui'
@@ -62,7 +62,7 @@ const deriveCosmosRawTxHash = (rawTx: string): string => bytesToHex(sha256(getCo
 const deriveRippleRawTxHash = (rawTx: string): string =>
   xrplHashes.hashSignedTx(rawTx.startsWith('0x') ? rawTx.slice(2) : rawTx)
 
-const deriveTronRawTxHash = (txJson: { raw_data_hex?: unknown; txID?: unknown }): string | null => {
+const deriveTronRawDataHash = (txJson: { raw_data_hex?: unknown }): string | null => {
   if (
     typeof txJson.raw_data_hex !== 'string' ||
     txJson.raw_data_hex.length === 0 ||
@@ -72,7 +72,13 @@ const deriveTronRawTxHash = (txJson: { raw_data_hex?: unknown; txID?: unknown })
     return null
   }
 
-  const derivedHash = bytesToHex(sha256(Buffer.from(txJson.raw_data_hex, 'hex')))
+  return bytesToHex(sha256(Buffer.from(txJson.raw_data_hex, 'hex')))
+}
+
+const deriveTronRawTxHash = (txJson: { raw_data_hex?: unknown; txID?: unknown }): string | null => {
+  const derivedHash = deriveTronRawDataHash(txJson)
+  if (!derivedHash) return null
+
   if (txJson.txID !== undefined && (typeof txJson.txID !== 'string' || txJson.txID.toLowerCase() !== derivedHash)) {
     return null
   }
@@ -658,13 +664,10 @@ export class RawBroadcastService {
   private async broadcastTronRawTx(rawTx: string): Promise<string> {
     // Parse JSON if string
     const txJson = JSON.parse(rawTx)
+    const rawDataHash = deriveTronRawDataHash(txJson)
+    const localHash = deriveTronRawTxHash(txJson)
 
-    const { data: response, error } = await attempt(
-      queryUrl<{ txid?: string; result?: boolean; code?: string; message?: string }>(
-        `${tronRpcUrl}/wallet/broadcasttransaction`,
-        { body: txJson }
-      )
-    )
+    const { data: response, error } = await attempt(broadcastTronTransaction(txJson, localHash ?? undefined))
 
     if (error) {
       throw error
@@ -680,7 +683,6 @@ export class RawBroadcastService {
       const decodedMessage = response.message ? Buffer.from(response.message, 'hex').toString('utf8') : ''
       const errorMsg = decodedMessage || response.code || 'Unknown error'
       if (response.code && isInError(response.code, 'DUPLICATE_TRANSACTION', 'DUP_TRANSACTION_ERROR')) {
-        const localHash = deriveTronRawTxHash(txJson)
         if (localHash) {
           return verifyKnownRawTx(OtherChain.Tron, localHash, 'Tron')
         }
@@ -691,6 +693,17 @@ export class RawBroadcastService {
 
     if (!response.txid) {
       throw new Error('Tron broadcast did not return transaction ID')
+    }
+
+    if (rawDataHash) {
+      if (!localHash) {
+        throw new Error('Tron transaction ID does not match the locally derived hash')
+      }
+      const responseHash = response.txid.replace(/^0x/i, '').toLowerCase()
+      if (responseHash !== rawDataHash) {
+        throw new Error('Tron broadcast returned a transaction ID that does not match the locally derived hash')
+      }
+      return rawDataHash
     }
 
     return response.txid

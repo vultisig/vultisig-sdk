@@ -1,5 +1,11 @@
 # @vultisig/rujira
 
+## 71.0.1
+
+### Patch Changes
+
+- [#2418](https://github.com/vultisig/vultisig-sdk/pull/2418) [`c76da49`](https://github.com/vultisig/vultisig-sdk/commit/c76da49a67abbbf9fa18fd6f667187b3f24ef4ee) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Pass an explicit length limit to every bech32 decode. `fromBech32` defaults the limit to `Infinity`, which `@scure/base` >= 2.3 rejects, so in apps whose lockfile resolves that version every decode threw and QBTC address validation rejected all addresses (including the vault's own). THORChain address checks in RUJI trade quotes, limit-swap memos, swap keysign builds, Cosmos governance voting, and Rujira destination validation were affected the same way.
+
 ## 71.0.0
 
 ### Major Changes

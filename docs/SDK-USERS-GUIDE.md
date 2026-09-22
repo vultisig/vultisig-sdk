@@ -1031,6 +1031,10 @@ await vault.send({ chain: Chain.Ethereum, to: '0x742d...', amount: '100', symbol
 const preview = await vault.send({ chain: Chain.Ethereum, to: '0x742d...', amount: '0.1', dryRun: true })
 console.log(preview.fee, preview.total) // "0.0021", "0.1021"
 
+// Gasless TON: pay the fee in the jetton itself through the relay (W5 accounts only,
+// see `setTonWalletVersion`). No TON needed; the fee is the relay's USDT commission.
+await vault.send({ chain: Chain.Ton, to: 'UQ...', amount: '25', symbol: 'USDT', gasless: true })
+
 // Sign messages (EIP-191 for EVM chains, SHA-256 for others)
 const { signature, algorithm } = await vault.signMessage('Login to MyDapp')
 const { signature: solSig } = await vault.signMessage('verify me', Chain.Solana)
@@ -2774,6 +2778,8 @@ class VaultBase {
     amount: string
     symbol?: string
     memo?: string
+    destinationTag?: number
+    gasless?: boolean // TON jettons on a W5 account: pay the fee in the jetton through the relay
     dryRun?: boolean
   }): Promise<SendResult>
   swap(params: {
@@ -2800,7 +2806,9 @@ class VaultBase {
     coin: AccountCoin
     receiver: string
     memo?: string
+    destinationTag?: number
     feeSettings?: FeeSettings
+    tonGasless?: boolean
   }): Promise<MaxSendAmount>
   extractMessageHashes(keysignPayload: KeysignPayload): Promise<string[]>
   sign(payload: SigningPayload, options?: SigningOptions): Promise<Signature>

@@ -27,7 +27,11 @@ const CALL_INDICES_OFFSET = 107
 
 const hex = (bytes: Uint8Array) => Buffer.from(bytes).toString('hex')
 
-const buildPayload = ({ address = FROM_ADDRESS, hexPublicKey }: { address?: string; hexPublicKey?: string } = {}) =>
+const buildPayload = ({
+  address = FROM_ADDRESS,
+  hexPublicKey,
+  allowDeath,
+}: { address?: string; hexPublicKey?: string; allowDeath?: boolean } = {}) =>
   create(KeysignPayloadSchema, {
     coin: create(CoinSchema, {
       chain: Chain.Polkadot,
@@ -48,6 +52,7 @@ const buildPayload = ({ address = FROM_ADDRESS, hexPublicKey }: { address?: stri
         specVersion: 1003004,
         transactionVersion: 26,
         genesisHash: GENESIS_HASH,
+        ...(allowDeath === undefined ? {} : { allowDeath }),
       }),
     },
   })
@@ -59,12 +64,35 @@ describe('getPolkadotSigningInputs', () => {
     walletCore = await initWasm()
   })
 
+  it.each([false, true])('refuses a valid zero-account address before signing (allowDeath=%s)', async allowDeath => {
+    const keysignPayload = buildPayload({ allowDeath })
+    keysignPayload.toAddress = '111111111111111111111111111111111HC1'
+    expect(walletCore.AnyAddress.isValid(keysignPayload.toAddress, walletCore.CoinType.polkadot)).toBe(true)
+    await expect(async () => getPolkadotSigningInputs({ keysignPayload, walletCore })).rejects.toThrow(
+      /Polkadot zero account/
+    )
+  })
+
+  it('preserves legitimate self-sends', async () => {
+    const keysignPayload = buildPayload({ address: TO_ADDRESS })
+    const [input] = await getPolkadotSigningInputs({ keysignPayload, walletCore })
+    expect(input.balanceCall?.assetTransfer?.toAddress).toBe(TO_ADDRESS)
+  })
+
   it('uses methodIndex 3 (transfer_keep_alive) not 0 (transfer_allow_death)', async () => {
     const [input] = await getPolkadotSigningInputs({ keysignPayload: buildPayload(), walletCore })
 
     const callIndices = input.balanceCall?.assetTransfer?.callIndices?.custom
     expect(callIndices).toBeDefined()
     expect(callIndices?.methodIndex).toBe(3)
+  })
+
+  // The payload field is the only thing every co-signer can agree on, so it is
+  // the only thing that may select the reaping call.
+  it('uses methodIndex 0 (transfer_allow_death) only when the payload explicitly allows death', async () => {
+    const [input] = await getPolkadotSigningInputs({ keysignPayload: buildPayload({ allowDeath: true }), walletCore })
+
+    expect(input.balanceCall?.assetTransfer?.callIndices?.custom?.methodIndex).toBe(0)
   })
 
   it('keeps moduleIndex 10 (pallet_balances on Asset Hub)', async () => {
