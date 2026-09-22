@@ -2041,7 +2041,10 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    * Cancellation and signing events follow signBytes; no transaction is sent.
    */
   async signTypedData(params: SignTypedDataParams, options?: { signal?: AbortSignal }): Promise<TypedDataSignature> {
-    options?.signal?.throwIfAborted()
+    const checkAborted = () => {
+      if (options?.signal?.aborted) throw options.signal.reason ?? new Error('Typed-data signing aborted')
+    }
+    checkAborted()
     const { chain, typedData, password } = params
     if (getChainKind(chain) !== 'evm') {
       throw new VaultError(VaultErrorCode.InvalidConfig, 'signTypedData requires an EVM chain')
@@ -2071,11 +2074,11 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     if (password !== undefined && !password) {
       throw new VaultError(VaultErrorCode.InvalidConfig, 'Password cannot be empty')
     }
-    options?.signal?.throwIfAborted()
+    checkAborted()
     const expectedAddress = await this.address(chain)
-    options?.signal?.throwIfAborted()
+    checkAborted()
     const sig = await this.signBytes({ data: hash, chain, ...(password !== undefined ? { password } : {}) }, options)
-    options?.signal?.throwIfAborted()
+    checkAborted()
     const { r, s, recovery } = toCanonicalEvmSignature(sig.signature, sig.recovery ?? 0)
     if (recovery !== 0 && recovery !== 1) {
       throw new VaultError(VaultErrorCode.SigningFailed, 'Invalid EIP-712 signature recovery parity')
@@ -2096,7 +2099,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
           `Verify the correct vault/keyshare is loaded into the executor context before signing again.`
       )
     }
-    options?.signal?.throwIfAborted()
+    checkAborted()
     return { hash, signature, chain, r: `0x${r}`, s: `0x${s}`, v, recovery }
   }
 

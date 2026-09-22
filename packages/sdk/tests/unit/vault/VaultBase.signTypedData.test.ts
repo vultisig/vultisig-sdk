@@ -174,6 +174,23 @@ describe('VaultBase.signTypedData', () => {
     expect(vault.signBytes).not.toHaveBeenCalled()
   })
 
+  it('supports cancellation signals without throwIfAborted or reason', async () => {
+    const { vault, signTypedData } = vaultFixture()
+    const signal = { aborted: false } as AbortSignal
+    await signTypedData(payload, { signal })
+    expect(vault.signBytes).toHaveBeenCalled()
+    vault.signBytes.mockClear()
+    Object.assign(signal, { aborted: true })
+    await expect(signTypedData(payload, { signal })).rejects.toThrow('Typed-data signing aborted')
+    expect(vault.signBytes).not.toHaveBeenCalled()
+  })
+
+  it('preserves an explicit cancellation reason', async () => {
+    const { signTypedData } = vaultFixture()
+    const reason = new Error('caller cancelled signing')
+    await expect(signTypedData(payload, { signal: { aborted: true, reason } as AbortSignal })).rejects.toBe(reason)
+  })
+
   it('does not enter signing if cancelled during address lookup', async () => {
     const { vault, signTypedData } = vaultFixture()
     const controller = new AbortController()
