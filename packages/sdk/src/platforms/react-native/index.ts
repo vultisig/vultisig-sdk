@@ -926,6 +926,7 @@ export type {
 export { chainRegistry, deriveFromChainRegistry, extendChainRegistry } from '@vultisig/core-chain/chainRegistry'
 export { getThorchainInboundAddress } from '@vultisig/core-chain/chains/cosmos/thor/getThorchainInboundAddress'
 export * from '@vultisig/core-chain/chains/cosmos/thor/lp'
+export { resolveTokenPriceId } from '@vultisig/core-chain/coin/price/resolveTokenPriceId'
 export type { GetSwapExplorerUrlInput, SwapExplorerProvider } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 export { getSwapExplorerUrl, swapExplorerProviders } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 // THOR/Maya native-swap metadata — surfaced so RN consumers stop re-declaring
