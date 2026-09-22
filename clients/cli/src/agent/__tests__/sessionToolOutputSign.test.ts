@@ -195,3 +195,19 @@ describe('processMessageLoop — tool-output is the sole sign source', () => {
     expect(h.signTxFromBuffer).not.toHaveBeenCalled()
   })
 })
+
+describe('session shared multi-leg rejection', () => {
+  it.each(['Solana', 'Base'])('never buffers or signs an invalid %s pair', async chain => {
+    const payload = {
+      chain,
+      approvalTxArgs: { chain, tx: { to: USDC_E, data: APPROVE_A, value: '0' } },
+      txArgs: { chain, tx_encoding: 'evm', tx: { to: SPENDER, data: APPROVE_B, value: '0', chainId: 1 } },
+    }
+    const { run, storeServerTransaction, signTxFromBuffer } = makeHarness([
+      { payload, toolName: 'execute_swap', source: 'prep' },
+    ])
+    await run()
+    expect(storeServerTransaction).not.toHaveBeenCalled()
+    expect(signTxFromBuffer).not.toHaveBeenCalled()
+  })
+})

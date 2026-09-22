@@ -393,15 +393,20 @@ const parseRawEvm = (envelope: TxReadyEnvelope, chain: Chain): ParsedTxReadyRawE
  */
 export const parseTxReadyEnvelope = (value: unknown, options: ParseTxReadyOptions = {}): ParsedTxReadyEnvelope => {
   const envelope = asEnvelope(value)
+  const hasMultiLeg = envelope.approvalTxArgs != null
+  if (hasMultiLeg && (!isObject(envelope.approvalTxArgs) || !isObject(envelope.txArgs))) {
+    throw new TxReadyParseError('INVALID_ENVELOPE', 'tx_ready multi-leg envelope requires both leg objects')
+  }
   const chain = resolveEnvelopeChain(envelope, options.defaultChain)
   const txArgs = isObject(envelope.txArgs) ? (envelope.txArgs as TxReadyTxArgs) : undefined
+
+  if (hasMultiLeg) return parseRawEvm(envelope, chain)
 
   if (txArgs?.msg_type === 'deposit' && (chain === Chain.THORChain || chain === Chain.MayaChain)) {
     return parseThorDeposit(envelope, chain, txArgs)
   }
 
-  const hasMultiLeg = isObject(envelope.approvalTxArgs) && isObject(envelope.txArgs)
-  if (hasMultiLeg || extractRawTx(envelope)) {
+  if (extractRawTx(envelope)) {
     return parseRawEvm(envelope, chain)
   }
 

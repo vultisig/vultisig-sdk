@@ -21,6 +21,7 @@ import {
   buildTxReadyFromYieldOutput,
   CLI_SIGNABLE_FLAT_TOOLS,
   deriveToolOutputCandidate,
+  payloadLooksSignable,
   POLYMARKET_DEPOSIT_TOOL,
   POLYMARKET_SETUP_TRADING_TOOL,
 } from '../../../src/tx/toolOutputSigning'
@@ -720,5 +721,116 @@ describe('deriveToolOutputCandidate — yield tools (bead vultisig-6rg2, the reg
 
   it('CONTROL: a yield tool with no signable tx → null (nothing signs)', () => {
     expect(deriveToolOutputCandidate('yield_enter', { chain: 'Polygon', transactions: [] })).toBeNull()
+  })
+})
+
+describe('shared multi-leg candidate validation', () => {
+  function prep() {
+    return {
+      chain: 'Base',
+      chain_id: '8453',
+      approvalTxArgs: {
+        chain: 'Base',
+        tx_encoding: 'evm',
+        tx: { to: USDC_E, data: APPROVE_DATA, value: '0' },
+      },
+      txArgs: {
+        chain: 'Base',
+        tx_encoding: 'evm',
+        tx: { to: ONRAMP, data: WRAP_DATA, value: '17' },
+      },
+      stepperConfig: { flow: 'swap', steps: ['approve', 'swap'] },
+      resolved: { labels: { token_resolved: 'USDC' } },
+      sequence: 7,
+    }
+  }
+
+  it.each([
+    [
+      'non-EVM pair',
+      (env: any) => {
+        delete env.chain_id
+        env.chain = env.approvalTxArgs.chain = env.txArgs.chain = 'Solana'
+      },
+    ],
+    [
+      'approval transaction chain drift',
+      (env: any) => {
+        env.approvalTxArgs.tx.chainId = 1
+      },
+    ],
+    [
+      'main transaction chain drift',
+      (env: any) => {
+        env.txArgs.tx.chainId = 1
+      },
+    ],
+    [
+      'unknown nested chain',
+      (env: any) => {
+        env.txArgs.tx.chainId = 99999999
+      },
+    ],
+    [
+      'missing approval tx',
+      (env: any) => {
+        delete env.approvalTxArgs.tx
+      },
+    ],
+    [
+      'missing main recipient',
+      (env: any) => {
+        delete env.txArgs.tx.to
+      },
+    ],
+    [
+      'approval error',
+      (env: any) => {
+        env.approvalTxArgs.tx.error = 'failed'
+      },
+    ],
+    [
+      'array approval',
+      (env: any) => {
+        env.approvalTxArgs = []
+      },
+    ],
+    [
+      'string approval',
+      (env: any) => {
+        env.approvalTxArgs = JSON.stringify(env.approvalTxArgs)
+      },
+    ],
+  ] as const)('rejects %s during derivation and signability probing', (_name, mutate) => {
+    const env = prep()
+    mutate(env)
+    expect(deriveToolOutputCandidate('execute_swap', env)).toBeNull()
+    expect(payloadLooksSignable(env)).toBe(false)
+  })
+
+  it('preserves the prep envelope and metadata by reference', () => {
+    const env = prep()
+    expect(deriveToolOutputCandidate('execute_swap', env)?.payload).toBe(env)
+    expect(payloadLooksSignable(env)).toBe(true)
+  })
+
+  it('accepts equivalent chain references in both legs', () => {
+    const env = prep()
+    env.approvalTxArgs.chain = '8453'
+    expect(deriveToolOutputCandidate('execute_swap', env)?.payload).toBe(env)
+    expect(payloadLooksSignable(env)).toBe(true)
+  })
+
+  it('keeps single Solana sends on their existing path', () => {
+    const env = {
+      txArgs: {
+        chain: 'Solana',
+        tx_encoding: 'solana',
+        to: 'solana-recipient',
+        amount: '1000000000',
+      },
+    }
+    expect(deriveToolOutputCandidate('execute_send', env)?.payload).toBe(env)
+    expect(payloadLooksSignable(env)).toBe(true)
   })
 })

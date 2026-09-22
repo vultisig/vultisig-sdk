@@ -261,3 +261,41 @@ describe('parseTxReadyEnvelope', () => {
     expect(parsed.chain).toBe(Chain.Ethereum)
   })
 })
+
+describe('parseTxReadyEnvelope — malformed pairs cannot become single sends', () => {
+  it.each([false, '', 'approval', [], 1].map(value => [value]))('rejects malformed approval %j', approvalTxArgs => {
+    expect(() =>
+      parseTxReadyEnvelope({
+        chain: 'Base',
+        approvalTxArgs,
+        txArgs: { chain: 'Base', tx: EVM_TX },
+      })
+    ).toThrow(TxReadyParseError)
+  })
+
+  it('rejects an approval without a main leg even when a top-level tx exists', () => {
+    expect(() =>
+      parseTxReadyEnvelope({
+        chain: 'Base',
+        approvalTxArgs: { chain: 'Base', tx: EVM_TX },
+        tx: EVM_TX,
+      })
+    ).toThrow(TxReadyParseError)
+  })
+
+  it('rejects a non-EVM pair before THOR deposit dispatch', () => {
+    expect(() =>
+      parseTxReadyEnvelope({
+        chain: 'THORChain',
+        approvalTxArgs: { chain: 'THORChain', tx: EVM_TX },
+        txArgs: {
+          chain: 'THORChain',
+          msg_type: 'deposit',
+          memo: '+:BTC.BTC',
+          amount: '100',
+          tx: EVM_TX,
+        },
+      })
+    ).toThrow(/non-EVM/)
+  })
+})

@@ -605,51 +605,22 @@ export class AgentExecutor {
     // the approve leg, waits for the receipt, then signs+broadcasts the main
     // leg. Mirrors vultiagent's useTransactionFlow (Pattern 3 — see task
     // 080526-sdk-cli-multileg-sequencer.md).
-    if (txReadyData?.approvalTxArgs && txReadyData?.txArgs) {
-      // Validate both legs resolve to the same chain before buffering. A
-      // malformed envelope where approvalTxArgs.chain ≠ txArgs.chain (or
-      // either disagrees with the parent) would otherwise be silently
-      // coerced to whichever chain signServerTx picks first via its
-      // `chain || from_chain || txArgs.chain` precedence — the approve
-      // leg would broadcast against the wrong allowance state. Fail
-      // closed: reject upfront, never half-broadcast across chains.
-      const approvalChain = resolveChainFromTxReady(txReadyData.approvalTxArgs)
-      const mainChain = resolveChainFromTxReady(txReadyData.txArgs)
-      const parentChain = resolveChainFromTxReady(txReadyData)
-      if (
-        !approvalChain ||
-        !mainChain ||
-        approvalChain !== mainChain ||
-        (parentChain && parentChain !== approvalChain)
-      ) {
-        if (this.verbose)
-          process.stderr.write(
-            `[executor] rejecting multi-leg envelope with inconsistent chain metadata: parent=${parentChain ?? 'unresolved'} approval=${approvalChain ?? 'unresolved'} main=${mainChain ?? 'unresolved'}\n`
-          )
+    if (txReadyData?.approvalTxArgs != null) {
+      let parsed: ReturnType<typeof parseTxReadyEnvelope>
+      try {
+        parsed = parseTxReadyEnvelope(txReadyData)
+      } catch (error) {
+        if (!(error instanceof TxReadyParseError)) throw error
+        if (this.verbose) process.stderr.write(`[executor] rejecting multi-leg envelope: ${error.message}\n`)
         return false
       }
-      const chain = approvalChain
-      // M3: enforce the "Phase B is EVM-only" comment in code. signMultiLeg
-      // assumes EIP-1559 broadcast + receipt semantics via signServerTx +
-      // waitForEvmReceipt; non-EVM 2-leg flows are not a real shape on mcp-ts
-      // today and would silently misbehave if forced through this path.
-      // Reject loudly rather than fall through to the single-leg branch
-      // (which would extract main-leg txArgs and silently drop the approve).
-      if (!isEvmChain(chain)) {
-        if (this.verbose)
-          process.stderr.write(
-            `[executor] rejecting multi-leg envelope on non-EVM chain ${chain}: signMultiLeg is EVM-only\n`
-          )
-        return false
-      }
-      this.pendingLegs = [
-        {
-          txArgs: txReadyData.approvalTxArgs,
-          parent: txReadyData,
-          kind: 'approve',
-        },
-        { txArgs: txReadyData.txArgs, parent: txReadyData, kind: 'main' },
-      ]
+      if (parsed.kind !== 'raw-evm' || parsed.legs.length !== 2) return false
+      const { chain } = parsed
+      this.pendingLegs = parsed.legs.map(leg => ({
+        txArgs: leg.txArgs,
+        parent: parsed.envelope,
+        kind: leg.role === 'approval' ? 'approve' : 'main',
+      }))
       this.pendingPayloads.clear()
       this.pendingPayloads.set('latest', {
         payload: { __serverTx: true, __multiLeg: true, ...txReadyData },

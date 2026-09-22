@@ -15,7 +15,7 @@
  * 080526-sdk-cli-multileg-sequencer.md.
  */
 import type { VaultBase } from '@vultisig/sdk'
-import { Chain } from '@vultisig/sdk'
+import { Chain, deriveToolOutputCandidate } from '@vultisig/sdk'
 import { describe, expect, it, vi } from 'vitest'
 
 import { AgentExecutor } from '../executor'
@@ -657,5 +657,80 @@ describe('AgentExecutor — signThorMsgDepositSwap dispatch', () => {
     expect(recent.success).toBe(false)
     expect((recent.data as any).error).toMatch(/exceeds 26-digit safety bound/)
     expect((vault as any).swap).not.toHaveBeenCalled()
+  })
+})
+
+describe('AgentExecutor — shared parser intake', () => {
+  it.each([
+    [
+      'approval nested chain drift',
+      (env: any) => {
+        env.approvalTxArgs.tx = { ...APPROVE_TX, chainId: 1 }
+      },
+    ],
+    [
+      'main nested chain drift',
+      (env: any) => {
+        env.txArgs.tx = { ...SWAP_TX, chainId: 1 }
+      },
+    ],
+    [
+      'self-conflicting parent',
+      (env: any) => {
+        env.chain_id = '1'
+      },
+    ],
+    [
+      'unknown parent',
+      (env: any) => {
+        env.chain = 'unknown'
+      },
+    ],
+    [
+      'malformed approval',
+      (env: any) => {
+        env.approvalTxArgs = []
+      },
+    ],
+    [
+      'missing main',
+      (env: any) => {
+        delete env.txArgs
+      },
+    ],
+    [
+      'missing approval tx',
+      (env: any) => {
+        delete env.approvalTxArgs.tx
+      },
+    ],
+    [
+      'main error',
+      (env: any) => {
+        env.txArgs.tx = { ...SWAP_TX, status: 'error' }
+      },
+    ],
+  ] as const)('rejects %s before either intake can buffer', (_name, mutate) => {
+    const envelope = makeMultiLegEnvelope()
+    Object.assign(envelope.txArgs, { tx_encoding: 'evm' })
+    mutate(envelope)
+    const executor = new AgentExecutor(createMockVault())
+    expect(deriveToolOutputCandidate('execute_swap', envelope)).toBeNull()
+    expect(executor.storeServerTransaction(envelope)).toBe(false)
+    expect(executor.hasPendingTransaction()).toBe(false)
+    expect((executor as any).pendingLegs).toEqual([])
+  })
+
+  it('uses parsed chain aliases and retains parent metadata and leg order', () => {
+    const envelope = makeMultiLegEnvelope()
+    envelope.approvalTxArgs.chain = '56'
+    const executor = new AgentExecutor(createMockVault())
+    expect(executor.storeServerTransaction(envelope)).toBe(true)
+    const legs = (executor as any).pendingLegs
+    expect(legs.map((leg: any) => leg.kind)).toEqual(['approve', 'main'])
+    expect(legs[0].txArgs).toBe(envelope.approvalTxArgs)
+    expect(legs[1].txArgs).toBe(envelope.txArgs)
+    expect(legs.every((leg: any) => leg.parent === envelope)).toBe(true)
+    expect((executor as any).pendingPayloads.get('latest').chain).toBe(Chain.BSC)
   })
 })

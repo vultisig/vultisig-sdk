@@ -19,6 +19,7 @@ import { Chain } from '@vultisig/core-chain/Chain'
 import { getChainKind } from '@vultisig/core-chain/ChainKind'
 
 import { resolveChainReference } from '../utils/resolveChainReference'
+import { parseTxReadyEnvelope, TxReadyParseError } from './parseTxReady'
 
 function resolveChain(name: string): Chain | null {
   return resolveChainReference(name) ?? null
@@ -454,6 +455,26 @@ export type ToolOutputCandidate = {
   toolName: string
 }
 
+/** Validate pairs through the same contract used by transaction consumers. */
+function isValidMultiLegPayload(payload: unknown): boolean {
+  try {
+    const parsed = parseTxReadyEnvelope(payload)
+    return parsed.kind === 'raw-evm' && parsed.legs.length === 2
+  } catch (error) {
+    if (error instanceof TxReadyParseError) return false
+    throw error
+  }
+}
+
+function candidateFromPayload(
+  payload: TxReadyPayload | null,
+  source: ToolOutputCandidate['source'],
+  toolName: string
+): ToolOutputCandidate | null {
+  if (!payload || (payload.approvalTxArgs != null && !isValidMultiLegPayload(payload))) return null
+  return { payload, source, toolName }
+}
+
 /**
  * Derive a client-side signable candidate from a signable tool's raw output, or
  * null when the tool is not signable / the output carries no signable tx.
@@ -467,11 +488,11 @@ export type ToolOutputCandidate = {
 export function deriveToolOutputCandidate(toolName: string, output: unknown): ToolOutputCandidate | null {
   if (CLI_SIGNABLE_FLAT_TOOLS.has(toolName)) {
     const payload = buildTxReadyFromToolOutput(toolName, output)
-    return payload ? { payload, source: 'flat', toolName } : null
+    return candidateFromPayload(payload, 'flat', toolName)
   }
   if (CLI_SIGNABLE_YIELD_TOOLS.has(toolName)) {
     const payload = buildTxReadyFromYieldOutput(toolName, output)
-    return payload ? { payload, source: 'yield', toolName } : null
+    return candidateFromPayload(payload, 'yield', toolName)
   }
   if (CLI_SIGNABLE_PREP_TOOLS.has(toolName)) {
     const env = asRecord(output)
@@ -484,12 +505,12 @@ export function deriveToolOutputCandidate(toolName: string, output: unknown): To
     // candidate for it — this is the load-bearing fail-closed gate for prep signing
     // (a phantom card yields no candidate → nothing signs).
     if (typeof txArgs.tx_encoding !== 'string' || txArgs.tx_encoding === '') return null
+    if (env.approvalTxArgs != null) return candidateFromPayload(env as TxReadyPayload, 'prep', toolName)
     // Fail-closed chain guard (parity with the flat path's resolveStrictEvmChain):
     // reject a prep envelope with no resolvable chain (would default to Ethereum at
     // sign time) or a disagreeing chain⇄chain_id (would silently sign on the name's
-    // chain). For a multi-leg envelope `env.txArgs` is the MAIN leg; the executor
-    // separately enforces approval⇄main⇄parent chain agreement. For a single-leg
-    // prep envelope, guard the parent metadata too: the executor resolves top-level
+    // chain). For a single-leg prep envelope, guard the parent metadata too:
+    // the executor resolves top-level
     // `chain` / `from_chain` / `chain_id` BEFORE `txArgs`, so a conflicting parent
     // would otherwise sign the child tx on the wrong chain.
     const prepChain = resolvePrepChain(txArgs)
@@ -501,17 +522,6 @@ export function deriveToolOutputCandidate(toolName: string, output: unknown): To
     if (hasParentChainMetadata) {
       const parentChain = resolvePrepParentChain(env)
       if (!parentChain || parentChain !== prepChain) return null
-    }
-    // Multi-leg guard: a prep envelope's approval leg (`approvalTxArgs`) carries its
-    // own chain metadata. The executor resolves that leg's `chain` BEFORE `chain_id`,
-    // so a self-conflicting approval leg (e.g. `chain: Base, chain_id: 1`) resolves to
-    // Base and can pass the approval⇄main comparison while its own metadata disagrees
-    // — signing the APPROVAL on the wrong chain. Run the same fail-closed
-    // self-consistency check and require the approval leg to match the main prep chain.
-    const approvalTxArgs = asRecord(env.approvalTxArgs)
-    if (approvalTxArgs) {
-      const approvalChain = resolvePrepChain(approvalTxArgs)
-      if (!approvalChain || approvalChain !== prepChain) return null
     }
     return { payload: env as TxReadyPayload, source: 'prep', toolName }
   }
@@ -531,27 +541,14 @@ export function deriveToolOutputCandidate(toolName: string, output: unknown): To
  * structurally-present-but-unsignable payload (e.g. a `build_custom_*` shape the
  * enricher couldn't normalize) is never routed to the signer.
  */
-/** A non-empty string, or a finite number stringified; else undefined. */
-function str(value: unknown): string | undefined {
-  if (typeof value === 'string' && value !== '') return value
-  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
-  return undefined
-}
-
 export function payloadLooksSignable(payload: unknown): boolean {
   const env = asRecord(payload)
   if (!env) return false
-  const approval = asRecord(env.approvalTxArgs)
-  const main = asRecord(env.txArgs)
-  if (approval && main) {
-    if (!legSignable(approval) || !legSignable(main)) return false
-    // Mirror storeServerTransaction's multi-leg guard: both legs must resolve to
-    // the SAME chain (it rejects a cross-chain 2-leg envelope). If they disagree,
-    // the executor would reject at store time, so it does not "look signable" here.
-    const aChain = str(approval.chain)
-    const mChain = str(main.chain)
-    if (aChain && mChain && aChain !== mChain) return false
-    return true
+  if (env.approvalTxArgs != null) {
+    if (!isValidMultiLegPayload(env)) return false
+    return (
+      legSignable(env.approvalTxArgs as Record<string, unknown>) && legSignable(env.txArgs as Record<string, unknown>)
+    )
   }
   return legSignable(env)
 }
