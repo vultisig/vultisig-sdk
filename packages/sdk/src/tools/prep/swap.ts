@@ -12,6 +12,7 @@ import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v
 import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
 
 import { getWalletCore } from '../../context/wasmRuntime'
+import { assertEvmSwapSourceToken, decodeEvmSwapCommitment } from './evmSwapCommitment'
 import { SwapQuoteExpiredError } from './SwapQuoteExpiredError'
 import type { VaultIdentity } from './types'
 
@@ -90,7 +91,7 @@ const assertCowQuoteNotExpired = (validTo: number): void => {
 
 // Defense-in-depth for providers whose tx shape carries an exact source amount: the quote-level
 // requested amount must also match the gross value committed to the EIP-712 order or CosmWasm
-// funds. Native/evm/solana do not expose a separate committed-sell field here, so they
+// funds, or a verified EVM router call. Unsupported EVM formats and native/solana routes
 // intentionally fail open after the quote-level amount binding above; `transfer.amount` may
 // legitimately differ (for example, 100_000n -> 99_999n) because providers subtract
 // deposit-channel fees.
@@ -99,7 +100,20 @@ const assertAmountMatchesCommittedSellAmount = (params: PrepareSwapTxFromKeysPar
   if (!('general' in quote)) return
 
   const committed = matchRecordUnion(quote.general.tx, {
-    evm: () => undefined,
+    evm: tx => {
+      const commitment = decodeEvmSwapCommitment({ chain: params.fromCoin.chain, tx })
+      if (commitment.deadline) {
+        const now = BigInt(Math.floor(Date.now() / 1000))
+        const { seconds, inclusive } = commitment.deadline
+        if (inclusive ? now > seconds : now >= seconds) {
+          throw new SwapQuoteExpiredError(
+            'prepareSwapTxFromKeys: encoded EVM swap deadline has expired; refresh the quote before signing'
+          )
+        }
+      }
+      assertEvmSwapSourceToken(params.fromCoin.id, commitment)
+      return commitment.sellAmount
+    },
     solana: () => undefined,
     transfer: () => undefined,
     cosmosWasm: ({ funds }) => {
