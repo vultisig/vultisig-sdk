@@ -82,6 +82,11 @@ export type {
 } from './decode'
 export { decode, decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from './decode'
 
+// Bridge helpers
+import * as bridge from './bridge'
+
+export { bridge }
+
 // DEX primitives (read-only / pure math + on-chain quotes — no signing, no broadcast)
 export * as dex from './dex'
 

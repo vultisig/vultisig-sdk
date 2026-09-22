@@ -31,9 +31,11 @@ import { formatBalance } from '../../tools/balance/rpc'
 import { getSolBalance, getSplTokenBalance } from '../../tools/balance/solana'
 import { getTaoBalance } from '../../tools/balance/taoBalance'
 import { formatUtxoBalance, getUtxoBalance, supportedUtxoBalanceChains } from '../../tools/balance/utxoBalance'
+import * as bridge from '../../tools/bridge'
 import * as cosmos from '../../tools/cosmos'
 import * as evm from '../../tools/evm'
 import { getEvmBalances } from '../../tools/evm/balanceEvm'
+import * as gas from '../../tools/gas'
 import * as price from '../../tools/price'
 import * as swap from '../../tools/swap'
 import * as token from '../../tools/token'
@@ -425,7 +427,7 @@ export {
 
 // Public namespace handles documented by the SDK changelog. Keep these as
 // explicit module objects so Rollup preserves the nested `cosmos.gov` handle.
-export { cosmos, evm, price, token }
+export { bridge, cosmos, evm, gas, price, token }
 
 export * from './prep'
 

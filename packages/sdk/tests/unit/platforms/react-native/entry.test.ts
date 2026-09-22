@@ -199,6 +199,28 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     }
   })
 
+  it('exposes canonical bridge and gas namespaces with their flat helpers', async () => {
+    const bridgeHelpers = await import('../../../../src/tools/bridge')
+    const gasHelpers = await import('../../../../src/tools/gas')
+    const cosmosGasHelpers = await import('../../../../src/tools/gas/cosmos')
+
+    expect(sdkRn.bridge).toBe(bridgeHelpers)
+    expect(Object.keys(sdkRn.bridge).sort()).toEqual(Object.keys(bridgeHelpers).sort())
+    for (const name of Object.keys(bridgeHelpers) as (keyof typeof bridgeHelpers)[]) {
+      expect(sdkRn.bridge[name]).toBe(bridgeHelpers[name])
+    }
+    expect(sdkRn.bridge.getCctpChain).toBe(sdkRn.getCctpChain)
+    expect(sdkRn.bridge.buildCctpBridge).toBe(sdkRn.buildCctpBridge)
+    expect(sdkRn.bridge.getCctpChain('Base')?.evmChainId).toBe(8453)
+
+    expect(sdkRn.gas).toBe(gasHelpers)
+    expect(Object.keys(sdkRn.gas).sort()).toEqual(Object.keys(gasHelpers).sort())
+    expect(sdkRn.gas.cosmos).toBe(cosmosGasHelpers)
+    expect(Object.keys(sdkRn.gas.cosmos).sort()).toEqual(Object.keys(cosmosGasHelpers).sort())
+    expect(sdkRn.gas.cosmos.getCosmosGasLimit).toBe(sdkRn.getCosmosGasLimit)
+    expect(sdkRn.gas.cosmos.estimateCosmosSwapFeeLabel).toBe(sdkRn.estimateCosmosSwapFeeLabel)
+  })
+
   it('re-exports Blockaid EVM chain canonicals by identity', () => {
     expect(reactNativeEntry.blockaidEvmChain).toBe(blockaidChains.blockaidEvmChain)
     expect(reactNativeEntry.blockaidSupportedEvmChains).toBe(blockaidChains.blockaidSupportedEvmChains)
@@ -389,9 +411,11 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
 
     expect(sdk.balance.getEvmBalances).toBe(rn.getEvmBalances)
     expect(sdk.bridge.buildCctpBridge).toBe(rn.buildCctpBridge)
+    expect(sdk.bridge.buildCctpBridge).toBe(rn.bridge.buildCctpBridge)
     expect(sdk.cosmos.gov.getCosmosGovernanceProposals).toBe(rn.getCosmosGovernanceProposals)
     expect(sdk.decode.fromToolResult).toBe(rn.decodeFromToolResult)
     expect(sdk.gas.compareCosts).toBe(rn.compareCosts)
+    expect(sdk.gas.cosmos.getCosmosGasLimit).toBe(rn.gas.cosmos.getCosmosGasLimit)
     expect(typeof sdk.prep.prepareSendTxFromKeys).toBe('function')
     expect(sdk.prep.cosmosStaking).toBe(rn.cosmosStaking)
     expect(sdk.price.getPrice).toBe(rn.getPrice)

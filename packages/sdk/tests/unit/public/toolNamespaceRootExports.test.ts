@@ -3,11 +3,17 @@ import { describe, expect, it } from 'vitest'
 import * as sdk from '@/index'
 import {
   balance,
+  bridge,
+  buildCctpBridge,
   buildCw20TransferMsg,
   computeAstroportMinReceive,
   cosmos,
   encodeErc20Approve,
+  estimateCosmosSwapFeeLabel,
   evm,
+  gas,
+  getCctpChain,
+  getCosmosGasLimit,
   getCosmosGovernanceProposals,
   getSolBalance,
   prep,
@@ -17,11 +23,16 @@ import {
   token,
 } from '@/index'
 import {
+  bridge as bridgeFromTools,
   cosmos as cosmosFromTools,
   evm as evmFromTools,
+  gas as gasFromTools,
   price as priceFromTools,
   token as tokenFromTools,
 } from '@/tools'
+import * as bridgeHelpers from '@/tools/bridge'
+import * as gasHelpers from '@/tools/gas'
+import * as cosmosGasHelpers from '@/tools/gas/cosmos'
 import * as priceHelpers from '@/tools/price'
 
 describe('SDK root tool namespaces', () => {
@@ -50,6 +61,38 @@ describe('SDK root tool namespaces', () => {
       expect(sdk.price[name]).toBe(priceHelpers[name])
       expect(sdk.price[name]).toBe(sdk[name])
     }
+  })
+
+  it('exposes the canonical bridge family alongside flat helpers', () => {
+    expect(bridge).toBe(bridgeFromTools)
+    expect(Object.keys(bridge).sort()).toEqual(Object.keys(bridgeHelpers).sort())
+    for (const name of Object.keys(bridgeHelpers) as (keyof typeof bridgeHelpers)[]) {
+      expect(bridge[name]).toBe(bridgeHelpers[name])
+    }
+    expect(bridge.getCctpChain).toBe(getCctpChain)
+    expect(bridge.buildCctpBridge).toBe(buildCctpBridge)
+    expect(bridge.getCctpChain('Base')?.evmChainId).toBe(8453)
+    expect(
+      bridge.buildCctpBridge({
+        sourceChain: 'Base',
+        destinationChain: 'Arbitrum',
+        amount: '10',
+        from: '0x1111111111111111111111111111111111111111',
+      }).transactions
+    ).toHaveLength(2)
+  })
+
+  it('exposes canonical Cosmos gas helpers under gas while preserving flat helpers', () => {
+    expect(gas).toBe(gasFromTools)
+    expect(Object.keys(gas).sort()).toEqual(Object.keys(gasHelpers).sort())
+    expect(gas.cosmos).toBe(gasHelpers.cosmos)
+    expect(Object.keys(gas.cosmos).sort()).toEqual(Object.keys(cosmosGasHelpers).sort())
+    for (const name of Object.keys(cosmosGasHelpers) as (keyof typeof cosmosGasHelpers)[]) {
+      expect(gas.cosmos[name]).toBe(cosmosGasHelpers[name])
+    }
+    expect(gas.cosmos.getCosmosGasLimit).toBe(getCosmosGasLimit)
+    expect(gas.cosmos.estimateCosmosSwapFeeLabel).toBe(estimateCosmosSwapFeeLabel)
+    expect(gas.cosmos.estimateCosmosSwapFeeLabel('Cosmos')).toBe(estimateCosmosSwapFeeLabel('Cosmos'))
   })
 
   it('exposes the EVM helper family without removing flat exports', () => {
