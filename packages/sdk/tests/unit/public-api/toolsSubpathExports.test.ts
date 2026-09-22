@@ -106,8 +106,15 @@ describe('public API subpath exports', () => {
       require: './dist/abi/index.cjs',
       default: './dist/abi/index.cjs',
     })
-    expect(decodeExport).toMatchObject({
+    expect(decodeExport).toEqual({
       types: './dist/tools/decode/index.d.ts',
+      browser: './dist/tools/decode/index.browser.js',
+      worker: './dist/tools/decode/index.browser.js',
+      'react-native': './dist/tools/decode/index.react-native.js',
+      node: {
+        import: './dist/tools/decode/index.js',
+        require: './dist/tools/decode/index.cjs',
+      },
       import: './dist/tools/decode/index.js',
       require: './dist/tools/decode/index.cjs',
       default: './dist/tools/decode/index.cjs',

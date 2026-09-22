@@ -192,9 +192,9 @@
     },
     "./tools/decode": {
       "types": "./dist/tools/decode/index.d.ts",
-      "browser": "./dist/tools/decode/index.js",
-      "worker": "./dist/tools/decode/index.js",
-      "react-native": "./dist/tools/decode/index.js",
+      "browser": "./dist/tools/decode/index.browser.js",
+      "worker": "./dist/tools/decode/index.browser.js",
+      "react-native": "./dist/tools/decode/index.react-native.js",
       "node": {
         "import": "./dist/tools/decode/index.js",
         "require": "./dist/tools/decode/index.cjs"

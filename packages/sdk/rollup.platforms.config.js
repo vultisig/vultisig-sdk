@@ -458,6 +458,7 @@ const configs = {
     ...createSubpathConfigs({
       input: './src/tools/decode/index.ts',
       distBase: 'tools/decode',
+      browser: true,
     }),
     ...createSubpathConfigs({
       input: './src/tools/policy/index.ts',
@@ -827,7 +828,26 @@ rnPrep.output.file = './dist/tools/prep/index.react-native.js'
 rnPrep.plugins = rnPrep.plugins.map(plugin =>
   plugin.name === 'vultisig-rn-path-override' ? rnOverridePlugin([]) : plugin
 )
-configs['react-native'] = [rnPreamble, rnRoot, rnSwap, rnPrep]
+// The decode subpath is imported independently of the root RN entry. Inline
+// viem so its ox initialization receives the same scoped text-encoding
+// injection as the decoder's Buffer calls, without consumer global setup.
+const [, rnDecode] = configs['react-native']()
+rnDecode.input = './src/tools/decode/index.ts'
+rnDecode.output.file = './dist/tools/decode/index.react-native.js'
+rnDecode.external = rnDecode.external.filter(dependency => dependency !== 'viem')
+rnDecode.plugins = rnDecode.plugins.map(plugin =>
+  plugin.name === 'vultisig-rn-path-override' ? rnOverridePlugin([]) : plugin
+)
+rnDecode.plugins.splice(
+  rnDecode.plugins.findIndex(plugin => plugin.name === 'commonjs') + 1,
+  0,
+  inject({
+    Buffer: ['buffer', 'Buffer'],
+    TextEncoder: ['text-encoding-utf-8', 'TextEncoder'],
+    TextDecoder: ['text-encoding-utf-8', 'TextDecoder'],
+  })
+)
+configs['react-native'] = [rnPreamble, rnRoot, rnSwap, rnPrep, rnDecode]
 const browserPrep = {
   ...configs.browser,
   input: './src/platforms/browser/prep.ts',

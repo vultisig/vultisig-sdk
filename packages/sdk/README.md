@@ -1394,3 +1394,21 @@ React Native retains deferred asynchronous wrappers for `buildSplTransfer`,
 declarations describe these Promise returns and preserve the canonical inputs;
 use TypeScript's `customConditions: ["react-native"]` with NodeNext or bundler
 module resolution. Pure staking and CosmWasm message builders remain synchronous.
+
+## Transaction decoding imports
+
+`@vultisig/sdk/tools/decode` can be imported directly in Node (ESM or
+CommonJS), browser pages, workers, and React Native. Browser and worker
+conditions select a browser bundle; React Native selects a native bundle.
+The subpath supplies its own encoding dependencies, so decoding does not
+require importing the SDK root or installing a global `Buffer` first.
+
+```ts
+import { decodeFromToolResult, decode } from '@vultisig/sdk/tools/decode'
+
+const envelope = decodeFromToolResult({ chain: 'ethereum', payload: unsignedTxHex })
+// decode.fromToolResult is the same function.
+```
+
+The decoder inspects serialized transaction bytes only. It does not sign,
+broadcast, or validate a transaction against a user's intended action.
