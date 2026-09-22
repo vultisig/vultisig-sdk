@@ -1333,6 +1333,8 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    * Network fees are denominated in the chain's native fee asset, including
    * when `coin` is a token — except for a gasless TON jetton send
    * (`tonGasless`), whose relay commission is charged in the jetton itself.
+   * Pass `allowDeath` to price the `transfer_allow_death` call an explicit
+   * account-emptying Polkadot or Bittensor send signs.
    * Use {@link getMaxSendAmount} when the desired result is a balance-aware
    * maximum rather than the fee for one specified send.
    */
@@ -1345,6 +1347,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     feeSettings?: FeeSettings
     /** TON only: pay the fee in the jetton being sent through the gasless relay. */
     tonGasless?: boolean
+    allowDeath?: boolean
   }): Promise<SendFeeEstimate> {
     const feeAmountBase = await this.transactionBuilder.estimateSendFee(params)
     const feeCoin = getSendFeeCoin(params)

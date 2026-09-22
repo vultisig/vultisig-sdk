@@ -78,6 +78,20 @@ describe('VaultBase.estimateSendFee', () => {
     ).resolves.toMatchObject({ feeAmountBase: 90_000_000n, feeDecimals: 9 })
   })
 
+  it('forwards allowDeath so the estimate prices the transfer_allow_death call', async () => {
+    const estimateSendFee = vi.fn().mockResolvedValue(1_560_000_000n)
+    const dot = { chain: Chain.Polkadot, address: '1sender', decimals: 10, ticker: 'DOT' }
+
+    await expect(
+      callPublicEstimate(
+        { estimateSendFee },
+        { coin: dot, receiver: '1receiver', amount: 5_000_000_000n, allowDeath: true }
+      )
+    ).resolves.toEqual({ feeAmountBase: 1_560_000_000n, feeDecimals: 10, feeSymbol: 'DOT' })
+    expect(estimateSendFee).toHaveBeenCalledOnce()
+    expect(estimateSendFee).toHaveBeenCalledWith(expect.objectContaining({ allowDeath: true }))
+  })
+
   it('preserves estimator failures', async () => {
     const error = new Error('fee provider unavailable')
     const estimateSendFee = vi.fn().mockRejectedValue(error)
