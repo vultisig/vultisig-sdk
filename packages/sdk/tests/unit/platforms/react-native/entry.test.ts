@@ -10,6 +10,7 @@ import type {
   PollTxStatusUntilFinalResult as PollTxStatusUntilFinalResultFromReactNative,
 } from '../../../../src/platforms/react-native/index'
 import * as sdkRn from '../../../../src/platforms/react-native/index'
+import type * as stakekitTypes from '../../../../src/tools/defi/stakekit'
 import * as recipientChecks from '../../../../src/tools/validate/recipientSanity'
 import type {
   PollTxStatusUntilFinalParams as PollTxStatusUntilFinalParamsFromTx,
@@ -20,6 +21,32 @@ import * as tokenRef from '../../../../src/vault/tokenRef'
 import { cosmosTxFeeGasParityCases } from '../../../fixtures/cosmosTxFeeGasParity'
 
 process.env.VULTISIG_STRICT_SINGLETON = '0'
+
+describe('RN StakeKit companion types', () => {
+  it('matches the canonical StakeKit public contracts', () => {
+    expectTypeOf<sdkRn.EvmScanRequest>().toEqualTypeOf<stakekitTypes.EvmScanRequest>()
+    expectTypeOf<sdkRn.PendingAction>().toEqualTypeOf<stakekitTypes.PendingAction>()
+    expectTypeOf<sdkRn.ScanRequest>().toEqualTypeOf<stakekitTypes.ScanRequest>()
+    expectTypeOf<sdkRn.SolanaScanRequest>().toEqualTypeOf<stakekitTypes.SolanaScanRequest>()
+    expectTypeOf<sdkRn.StakekitActionDisplay>().toEqualTypeOf<stakekitTypes.StakekitActionDisplay>()
+    expectTypeOf<sdkRn.StakekitActionResult>().toEqualTypeOf<stakekitTypes.StakekitActionResult>()
+    expectTypeOf<sdkRn.StakekitDetailsResult>().toEqualTypeOf<stakekitTypes.StakekitDetailsResult>()
+    expectTypeOf<sdkRn.StakekitExitResult>().toEqualTypeOf<stakekitTypes.StakekitExitResult>()
+    expectTypeOf<sdkRn.UnsupportedScanRequest>().toEqualTypeOf<stakekitTypes.UnsupportedScanRequest>()
+    expectTypeOf<sdkRn.Validator>().toEqualTypeOf<stakekitTypes.Validator>()
+    expectTypeOf<sdkRn.YieldActionResponse>().toEqualTypeOf<stakekitTypes.YieldActionResponse>()
+    expectTypeOf<sdkRn.YieldArgs>().toEqualTypeOf<stakekitTypes.YieldArgs>()
+    expectTypeOf<sdkRn.YieldBalance>().toEqualTypeOf<stakekitTypes.YieldBalance>()
+    expectTypeOf<sdkRn.YieldDiscoverMetadata>().toEqualTypeOf<stakekitTypes.YieldDiscoverMetadata>()
+    expectTypeOf<sdkRn.YieldDiscoverOpportunity>().toEqualTypeOf<stakekitTypes.YieldDiscoverOpportunity>()
+    expectTypeOf<sdkRn.YieldDiscoverToken>().toEqualTypeOf<stakekitTypes.YieldDiscoverToken>()
+    expectTypeOf<sdkRn.YieldListResponse>().toEqualTypeOf<stakekitTypes.YieldListResponse>()
+    expectTypeOf<sdkRn.YieldMetadata>().toEqualTypeOf<stakekitTypes.YieldMetadata>()
+    expectTypeOf<sdkRn.YieldProduct>().toEqualTypeOf<stakekitTypes.YieldProduct>()
+    expectTypeOf<sdkRn.YieldToken>().toEqualTypeOf<stakekitTypes.YieldToken>()
+    expectTypeOf<sdkRn.YieldTransaction>().toEqualTypeOf<stakekitTypes.YieldTransaction>()
+  })
+})
 
 describe('RN amount helpers', () => {
   it('exports the canonical group and exposes it before initialization', async () => {
@@ -221,6 +248,20 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
   it('re-exports the plural StakeKit scan-request builder by identity', async () => {
     const stakekit = await import('../../../../src/tools/defi/stakekit')
     expect(reactNativeEntry.buildYieldActionScanRequests).toBe(stakekit.buildYieldActionScanRequests)
+  })
+
+  it.each([
+    'buildYieldActionScanRequest',
+    'parseActionDisplay',
+    'stakekitBalances',
+    'stakekitBuildEnter',
+    'stakekitBuildExit',
+    'stakekitBuildManage',
+    'stakekitDetails',
+    'stakekitSearch',
+  ] as const)('re-exports canonical StakeKit runtime helper %s by identity', async name => {
+    const stakekit = await import('../../../../src/tools/defi/stakekit')
+    expect(reactNativeEntry[name]).toBe(stakekit[name])
   })
 
   it('re-exports the StakeKit action validators by identity', async () => {
