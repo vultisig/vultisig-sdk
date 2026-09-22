@@ -61,3 +61,27 @@ describe('join secure with a KEYIMPORT QR in a non-TTY session', () => {
     expect(res.stderr).toMatch(/--mnemonic/)
   }, 130_000)
 })
+
+// Exercise actual Commander parsing through the built SDK's public join API.
+// All cases fail before relay participation, using a deliberately invalid mnemonic.
+describe('join secure derivation flags through the public CLI', () => {
+  it.each([
+    { flags: [], metadata: '1', error: 'Invalid mnemonic' },
+    { flags: ['--use-phantom-solana-path', '--use-cosmos-path-terra'], metadata: '1', error: 'Invalid mnemonic' },
+    { flags: ['--no-use-phantom-solana-path', '--no-use-cosmos-path-terra'], metadata: '0', error: 'Invalid mnemonic' },
+    { flags: ['--use-phantom-solana-path'], metadata: '0', error: 'usePhantomSolanaPath conflicts' },
+    { flags: ['--no-use-phantom-solana-path'], metadata: '1', error: 'usePhantomSolanaPath conflicts' },
+    { flags: ['--use-cosmos-path-terra'], metadata: '0', error: 'useCosmosPathTerra conflicts' },
+    { flags: ['--no-use-cosmos-path-terra'], metadata: '1', error: 'useCosmosPathTerra conflicts' },
+  ])(
+    'preserves metadata=$metadata with flags=$flags',
+    ({ flags, metadata, error }) => {
+      const qr = `${KEYIMPORT_QR}&usePhantomSolanaPath=${metadata}&useCosmosPathTerra=${metadata}`
+      const res = runPiped(['join', 'secure', '--qr', qr, '--mnemonic', 'invalid', ...flags, '-o', 'json'])
+      expect(res.status).not.toBe(0)
+      expect(res.stdout + res.stderr).toContain(error)
+      expect(res.stdout + res.stderr).not.toContain('Joining session...')
+    },
+    130_000
+  )
+})

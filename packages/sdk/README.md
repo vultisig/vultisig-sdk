@@ -791,6 +791,20 @@ Join an existing SecureVault creation session. Auto-detects keygen vs seedphrase
 - `options.onProgress?: (step: VaultCreationStep) => void` - Progress callback
 - `options.onDeviceJoined?: (deviceId, total, required) => void` - Device join callback
 
+Seedphrase imports automatically consume `usePhantomSolanaPath` and
+`useCosmosPathTerra` from SDK pairing metadata. Omitted join options preserve the
+initiator's settings, including explicit false. For legacy QR payloads, supply
+these boolean options explicitly to match the initiator; both default to false
+when absent everywhere. Contradictory explicit options and malformed or duplicate
+metadata are rejected before relay participation.
+
+Automatic propagation requires SDK peers containing this fix. The additive
+KEYIMPORT URL parameters encode booleans as `0` or `1` and are not shared protobuf
+fields. Older SDKs also ignored explicit join derivation options: upgrade SDK joiners
+before importing alternate paths. Mobile clients may ignore this metadata;
+automatic mobile interoperability is not established. Independently select and
+verify identical paths on any mobile peer before importing.
+
 #### `vault.address(chain, options?): Promise<string>`
 
 Derive a blockchain address for the given chain (called on Vault instance).

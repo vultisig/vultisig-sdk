@@ -21,12 +21,14 @@ import { attempt } from '@vultisig/lib-utils/attempt'
 
 import type { SdkContext } from '../context/SdkContext'
 import { MasterKeyDeriver } from '../seedphrase/MasterKeyDeriver'
+import { resolveJoinDerivationOptions } from '../seedphrase/resolveJoinDerivationOptions'
 import { SeedphraseValidator } from '../seedphrase/SeedphraseValidator'
 import type { JoinSecureVaultOptions } from '../seedphrase/types'
 import type { VaultCreationStep } from '../types'
 import type { ParsedKeygenQR } from '../utils/parseKeygenQR'
 import { getChainBatchMessageIds, TSS_BATCH_MESSAGE_IDS } from '../utils/tssBatching'
 import { VaultError, VaultErrorCode } from '../vault/VaultError'
+import { getKeyImportCommittee } from './getKeyImportCommittee'
 import { waitForRelayPeerCommittee } from './waitForRelayPeerCommittee'
 
 /**
@@ -320,6 +322,7 @@ export class JoinSecureVaultService {
     options: JoinSecureVaultOptions
   ): Promise<{ vault: CoreVault; vaultId: string }> {
     const { mnemonic, signal, onProgress, onDeviceJoined } = options
+    const derivationOptions = resolveJoinDerivationOptions(qrParams, options)
     const tssBatching = qrParams.tssBatching ?? false
     const requiredDevices = shouldBePresent(
       options.devices,
@@ -383,7 +386,7 @@ export class JoinSecureVaultService {
       message: `Waiting for ${requiredDevices} devices to join...`,
     })
 
-    const allDevices = await this.waitForPeers(
+    const joinedDevices = await this.waitForPeers(
       qrParams.sessionId,
       requiredDevices,
       signal,
@@ -396,6 +399,8 @@ export class JoinSecureVaultService {
         })
       }
     )
+
+    const allDevices = getKeyImportCommittee(joinedDevices, qrParams.initiatorPartyId)
 
     // Key import: only the initiator calls startMpcSession (same as mobile); joiners go straight to DKLS.
 
@@ -435,7 +440,7 @@ export class JoinSecureVaultService {
       )
       const chainPrivateKeys =
         qrParams.chains && qrParams.chains.length > 0
-          ? await this.keyDeriver.deriveChainPrivateKeys(mnemonic!, qrParams.chains as Chain[])
+          ? await this.keyDeriver.deriveChainPrivateKeys(mnemonic!, qrParams.chains as Chain[], derivationOptions)
           : []
 
       const chainImportPromises = chainPrivateKeys.map(async ({ chain, privateKeyHex, isEddsa }) => {
@@ -546,7 +551,11 @@ export class JoinSecureVaultService {
           message: 'Importing chain-specific keys...',
         })
 
-        const chainPrivateKeys = await this.keyDeriver.deriveChainPrivateKeys(mnemonic!, qrParams.chains as Chain[])
+        const chainPrivateKeys = await this.keyDeriver.deriveChainPrivateKeys(
+          mnemonic!,
+          qrParams.chains as Chain[],
+          derivationOptions
+        )
 
         for (let i = 0; i < chainPrivateKeys.length; i++) {
           if (signal?.aborted) {

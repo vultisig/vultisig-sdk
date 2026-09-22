@@ -1186,6 +1186,8 @@ export type JoinSecureOptions = {
   mnemonic?: string
   password?: string
   devices?: number
+  usePhantomSolanaPath?: boolean
+  useCosmosPathTerra?: boolean
   signal?: AbortSignal
 }
 
@@ -1205,6 +1207,8 @@ export async function executeJoinSecure(ctx: CommandContext, options: JoinSecure
     const result = await withAbortSignal(
       ctx.sdk.joinSecureVault(qrPayload, {
         mnemonic,
+        usePhantomSolanaPath: options.usePhantomSolanaPath,
+        useCosmosPathTerra: options.useCosmosPathTerra,
         password,
         devices,
         onProgress: step => {

@@ -35,6 +35,7 @@ import type { VaultCreationStep } from '../types'
 import { getChainBatchMessageIds, resolveTssBatching, TSS_BATCH_MESSAGE_IDS } from '../utils/tssBatching'
 import { VaultError, VaultErrorCode } from '../vault/VaultError'
 import { buildKeygenPairingQrPayload } from './buildKeygenPairingQrPayload'
+import { getKeyImportCommittee } from './getKeyImportCommittee'
 import { waitForRelayPeerCommittee } from './waitForRelayPeerCommittee'
 
 /**
@@ -164,6 +165,8 @@ export class SecureVaultFromSeedphraseService {
       libType: LibType.KEYIMPORT,
       chains: chainsToImport,
       tssBatching,
+      usePhantomSolanaPath,
+      useCosmosPathTerra,
     })
 
     // Notify QR is ready
@@ -191,7 +194,7 @@ export class SecureVaultFromSeedphraseService {
       message: `Waiting for ${devices} devices to join...`,
     })
 
-    const allDevices = await waitForRelayPeerCommittee({
+    const joinedDevices = await waitForRelayPeerCommittee({
       relayUrl: this.relayUrl,
       sessionId,
       requiredDevices: devices,
@@ -212,6 +215,8 @@ export class SecureVaultFromSeedphraseService {
           `Timeout waiting for devices. Got ${lastJoinedCount}/${requiredDevices} devices.`
         ),
     })
+
+    const allDevices = getKeyImportCommittee(joinedDevices, localPartyId)
 
     // Step 8: Start MPC session
     reportProgress({

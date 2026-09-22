@@ -35,6 +35,9 @@ export type ParsedKeygenQR = {
   useVultisigRelay: boolean
   /** Whether the initiator enabled batched TSS ceremonies. */
   tssBatching?: boolean
+  /** SDK KEYIMPORT metadata; absent on legacy and unsupported peer payloads. */
+  usePhantomSolanaPath?: boolean
+  useCosmosPathTerra?: boolean
 }
 
 /**
@@ -143,6 +146,13 @@ export async function parseKeygenQR(qrPayload: string): Promise<ParsedKeygenQR> 
 
   // Parse protobuf
   const keygenMessage = fromBinary(KeygenMessageSchema, binaryData)
+  const derivationOptions =
+    keygenMessage.libType === LibType.KEYIMPORT
+      ? {
+          usePhantomSolanaPath: parseDerivationFlag(params, 'usePhantomSolanaPath'),
+          useCosmosPathTerra: parseDerivationFlag(params, 'useCosmosPathTerra'),
+        }
+      : {}
 
   // Validate and filter chains to only include recognized Chain values
   const validatedChains = keygenMessage.chains.filter(isValidChain)
@@ -161,5 +171,15 @@ export async function parseKeygenQR(qrPayload: string): Promise<ParsedKeygenQR> 
     libType: libTypeToString(keygenMessage.libType),
     useVultisigRelay: keygenMessage.useVultisigRelay,
     tssBatching,
+    ...derivationOptions,
   }
+}
+
+function parseDerivationFlag(params: URLSearchParams, key: string): boolean | undefined {
+  const values = params.getAll(key)
+  if (values.length === 0) return undefined
+  if (values.length !== 1 || (values[0] !== '0' && values[0] !== '1')) {
+    throw new Error(`Invalid QR payload: ${key} must be a single 0 or 1`)
+  }
+  return values[0] === '1'
 }

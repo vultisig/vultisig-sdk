@@ -210,9 +210,9 @@ export type JoinSecureVaultOptions = {
   onProgress?: (step: VaultCreationStep) => void
   /** Callback when a device joins the session */
   onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
-  /** Use Phantom wallet derivation path for Solana (must match initiator's setting) */
+  /** Legacy QR override. Defaults to pairing metadata, then false. Conflicts with metadata are rejected. */
   usePhantomSolanaPath?: boolean
-  /** Use Cosmos coin-type path (m/44'/118'/0'/0/0) for Terra/TerraClassic (must match initiator's setting) */
+  /** Legacy QR override for Terra/TerraClassic Cosmos path. Conflicts with pairing metadata are rejected. */
   useCosmosPathTerra?: boolean
   /** Enable batched MPC ceremonies for this join flow. */
   tssBatching?: boolean

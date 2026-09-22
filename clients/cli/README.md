@@ -1371,3 +1371,29 @@ npm update -g @vultisig/cli
 ## License
 
 MIT
+
+### Seedphrase import pairing settings
+
+`join secure` automatically uses the initiating SDK's Solana and Terra/TerraClassic
+derivation settings when they are included in the QR payload. Leave the flags
+omitted for automatic selection. Explicit settings that contradict the QR are
+rejected before joining the relay.
+
+For legacy QR payloads, pass the same settings used by the initiator:
+
+```bash
+vultisig join secure --qr-file pairing.txt --devices 3 --use-phantom-solana-path --use-cosmos-path-terra
+```
+
+The corresponding `--no-use-phantom-solana-path` and `--no-use-cosmos-path-terra`
+flags explicitly select the default paths. With neither metadata nor an explicit
+flag, both settings default to false.
+
+Automatic propagation requires all peers to use an SDK version containing this
+fix. The optional KEYIMPORT URL parameters `usePhantomSolanaPath` and
+`useCosmosPathTerra` encode false as `0` and true as `1`; malformed or duplicate
+values are rejected. These are SDK metadata, not shared protobuf fields. Older
+SDKs also ignored explicit join derivation options: upgrade SDK joiners before
+importing alternate paths. Mobile clients may ignore this metadata, and automatic
+mobile compatibility is not established. Independently configure and verify
+identical paths on any mobile peer before importing.
