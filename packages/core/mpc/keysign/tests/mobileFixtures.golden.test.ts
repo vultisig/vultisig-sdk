@@ -4,7 +4,8 @@ import { basename, join } from 'path'
 
 import { blake2b } from '@noble/hashes/blake2.js'
 import { Chain, UtxoChain } from '@vultisig/core-chain/Chain'
-import { initWasm, type WalletCore } from '@trustwallet/wallet-core'
+import { initWasm, TW, type WalletCore } from '@trustwallet/wallet-core'
+import { keccak256, serializeTransaction } from 'viem'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { getEncodedSigningInputs } from '../signingInputs'
@@ -33,6 +34,7 @@ type LoadedFixtureCase = MobileFixtureCase & {
 const fixturesDir = join(__dirname, 'fixtures/mobile')
 
 const toHex = (bytes: Uint8Array) => Buffer.from(bytes).toString('hex')
+const toBigInt = (bytes: Uint8Array) => BigInt(`0x${toHex(bytes) || '0'}`)
 
 const getCardanoEnterpriseAddress = ({
   spendingKeyHex,
@@ -80,7 +82,7 @@ describe('mobile keysign pre-image hash golden fixtures', () => {
   })
 
   it(`loads the mobile and supplemental fixture corpus (${cases.length} cases)`, () => {
-    expect(cases.length).toBe(97)
+    expect(cases.length).toBe(98)
     expect(new Set(cases.map(({ fixtureFile }) => fixtureFile)).size).toBe(30)
   })
 
@@ -125,6 +127,7 @@ describe('mobile keysign pre-image hash golden fixtures', () => {
         Chain.Hyperliquid,
         Chain.Mantle,
         Chain.Optimism,
+        Chain.Robinhood,
         Chain.Sei,
         Chain.Zksync,
       ].sort()
@@ -145,6 +148,43 @@ describe('mobile keysign pre-image hash golden fixtures', () => {
     )
 
     expect(new Set(hashes).size).toBe(hashes.length)
+  })
+
+  it('matches Robinhood native ETH signing bytes against an independent EIP-1559 encoder', async () => {
+    const testCase = cases.find(
+      ({ fixtureFile, name }) => fixtureFile === 'evm-chain-matrix.json' && name === 'Send Robinhood ETH'
+    )
+    expect(testCase).toBeDefined()
+
+    const payload = normalizeKeysignPayloadFromJson(testCase!.keysign_payload)
+    const signingInputs = await getEncodedSigningInputs({ keysignPayload: payload, walletCore })
+    expect(signingInputs).toHaveLength(1)
+
+    const input = TW.Ethereum.Proto.SigningInput.decode(signingInputs[0])
+    const transfer = input.transaction?.transfer
+    if (!transfer?.amount) throw new Error('Robinhood fixture must encode a native transfer amount')
+    expect(input.txMode).toBe(TW.Ethereum.Proto.TransactionMode.Enveloped)
+    expect(toBigInt(input.chainId)).toBe(4663n)
+    expect(toBigInt(input.nonce)).toBe(1n)
+    expect(toBigInt(input.gasLimit)).toBe(21_000n)
+    expect(toBigInt(input.maxFeePerGas)).toBe(1_000_000_000n)
+    expect(toBigInt(input.maxInclusionFeePerGas)).toBe(0n)
+    expect(input.toAddress.toLowerCase()).toBe('0xe5f238c95142be312852e864b830daadb9b7d290')
+    expect(toBigInt(transfer.amount)).toBe(100_000_000_000_000_000n)
+    expect(transfer.data).toHaveLength(0)
+
+    const unsignedTx = serializeTransaction({
+      type: 'eip1559',
+      chainId: Number(toBigInt(input.chainId)),
+      nonce: Number(toBigInt(input.nonce)),
+      gas: toBigInt(input.gasLimit),
+      maxFeePerGas: toBigInt(input.maxFeePerGas),
+      maxPriorityFeePerGas: toBigInt(input.maxInclusionFeePerGas),
+      to: input.toAddress as `0x${string}`,
+      value: toBigInt(transfer.amount),
+      data: '0x',
+    })
+    expect(keccak256(unsignedTx).slice(2)).toBe(testCase!.expected_image_hash[0])
   })
 
   for (const testCase of cases) {

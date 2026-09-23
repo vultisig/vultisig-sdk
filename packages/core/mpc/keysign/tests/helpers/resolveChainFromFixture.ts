@@ -9,6 +9,7 @@ const aliases: Record<string, Chain> = {
   base: Chain.Base,
   avalanche: Chain.Avalanche,
   blast: Chain.Blast,
+  robinhood: Chain.Robinhood,
   cronoschain: Chain.CronosChain,
   zksync: Chain.Zksync,
   mantle: Chain.Mantle,
