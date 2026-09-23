@@ -1,4 +1,4 @@
-import type { Chain } from '@vultisig/sdk'
+import { type Chain, chainFeeCoin } from '@vultisig/sdk'
 
 /**
  * Shorten an address for display
@@ -55,6 +55,25 @@ export function parseAmount(amount: string, decimals: number): bigint {
   const combined = integerPart + paddedFractional
 
   return BigInt(combined)
+}
+
+/**
+ * Native token ticker for a chain, read from the SDK's canonical
+ * `chainFeeCoin` registry instead of a hand-rolled local map. Falls back to
+ * the chain name itself for chains `chainFeeCoin` doesn't (yet) cover.
+ */
+export function getChainNativeTicker(chain: string): string {
+  return chainFeeCoin[chain as Chain]?.ticker ?? chain
+}
+
+/**
+ * Native token decimals for a chain, read from the SDK's canonical
+ * `chainFeeCoin` registry instead of a hand-rolled local map. Falls back to
+ * 18 (the most common EVM decimals) for chains `chainFeeCoin` doesn't (yet)
+ * cover.
+ */
+export function getChainNativeDecimals(chain: string): number {
+  return chainFeeCoin[chain as Chain]?.decimals ?? 18
 }
 
 /**
