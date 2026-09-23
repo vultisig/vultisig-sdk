@@ -536,12 +536,20 @@ export type {
 } from '../../tools/defi'
 export {
   buildBalancerV3SwapCalldata,
+  buildYieldActionScanRequest,
   buildYieldActionScanRequests,
   chunkStakekitBalanceQueries,
   defi,
   fetchAllStakekitBalances,
   fetchStakekitBalancesBatch,
+  parseActionDisplay,
   STAKEKIT_BALANCE_QUERIES_PER_REQUEST,
+  stakekitBalances,
+  stakekitBuildEnter,
+  stakekitBuildExit,
+  stakekitBuildManage,
+  stakekitDetails,
+  stakekitSearch,
   validateStakekitActionAddress,
   validateStakekitActionInput,
 } from '../../tools/defi'
@@ -552,6 +560,28 @@ export {
   GLIF_ICN_TOKEN_DECIMALS,
   glifPoolWriteAbi,
 } from '../../tools/defi/glif'
+export type {
+  EvmScanRequest,
+  PendingAction,
+  ScanRequest,
+  StakekitActionDisplay,
+  StakekitActionResult,
+  StakekitDetailsResult,
+  StakekitExitResult,
+  UnsupportedScanRequest,
+  Validator,
+  YieldActionResponse,
+  YieldArgs,
+  YieldBalance,
+  YieldDiscoverMetadata,
+  YieldDiscoverOpportunity,
+  YieldDiscoverToken,
+  YieldListResponse,
+  YieldMetadata,
+  YieldProduct,
+  YieldToken,
+  YieldTransaction,
+} from '../../tools/defi/stakekit'
 export type {
   BuildThreeJaneSupplyUsdcParams,
   BuildThreeJaneSupplyUsdcResult,
@@ -822,17 +852,29 @@ export {
 // import to call time matches the proven RN polkadot-resolver pattern in
 // ./getCoinBalance and keeps the eager bundle free of @polkadot/api.
 export type { PolkadotAssetBalance, PolkadotNativeBalance } from '../../tools/balance'
-export async function balancePolkadot(...args: unknown[]) {
+type BalancePolkadot = typeof import('../../tools/balance').balancePolkadot
+
+const lazyBalancePolkadot = async (params: { address: string; assetId?: string }) => {
   const mod = await import('../../tools/balance')
-  return mod.balancePolkadot(...(args as Parameters<typeof mod.balancePolkadot>))
+
+  return params.assetId === undefined
+    ? mod.balancePolkadot({ address: params.address })
+    : mod.balancePolkadot({ address: params.address, assetId: params.assetId })
 }
-export async function getPolkadotNativeBalance(...args: unknown[]) {
+
+export const balancePolkadot = lazyBalancePolkadot as BalancePolkadot
+
+export async function getPolkadotNativeBalance(
+  ...args: Parameters<typeof import('../../tools/balance').getPolkadotNativeBalance>
+) {
   const mod = await import('../../tools/balance')
-  return mod.getPolkadotNativeBalance(...(args as Parameters<typeof mod.getPolkadotNativeBalance>))
+  return mod.getPolkadotNativeBalance(...args)
 }
-export async function getPolkadotAssetBalance(...args: unknown[]) {
+export async function getPolkadotAssetBalance(
+  ...args: Parameters<typeof import('../../tools/balance').getPolkadotAssetBalance>
+) {
   const mod = await import('../../tools/balance')
-  return mod.getPolkadotAssetBalance(...(args as Parameters<typeof mod.getPolkadotAssetBalance>))
+  return mod.getPolkadotAssetBalance(...args)
 }
 
 // Solana balance reads (native SOL + SPL/Token-2022). Safe to re-export
@@ -880,7 +922,8 @@ export {
   toHumanUnits,
 } from '../../utils/convertAmount'
 export { FiatToAmountError } from '../../utils/fiatToAmount'
-export { fromChainAmountExact } from '@vultisig/core-chain/amount/fromChainAmountExact'
+export { fromChainAmount } from '@vultisig/core-chain/amount/fromChainAmount'
+export { fromChainAmountDisplay, fromChainAmountExact } from '@vultisig/core-chain/amount/fromChainAmountExact'
 export { ChainAmountParseError, toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 export type { ChainKind } from '@vultisig/core-chain/ChainKind'
 export { getChainKind, isChainOfKind } from '@vultisig/core-chain/ChainKind'
@@ -895,6 +938,7 @@ export type {
 export { chainRegistry, deriveFromChainRegistry, extendChainRegistry } from '@vultisig/core-chain/chainRegistry'
 export { getThorchainInboundAddress } from '@vultisig/core-chain/chains/cosmos/thor/getThorchainInboundAddress'
 export * from '@vultisig/core-chain/chains/cosmos/thor/lp'
+export { resolveTokenPriceId } from '@vultisig/core-chain/coin/price/resolveTokenPriceId'
 export type { GetSwapExplorerUrlInput, SwapExplorerProvider } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 export { getSwapExplorerUrl, swapExplorerProviders } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 // THOR/Maya native-swap metadata — surfaced so RN consumers stop re-declaring
@@ -909,9 +953,9 @@ export {
   nativeSwapEnabledChainsRecord,
 } from '@vultisig/core-chain/swap/native/NativeSwapChain'
 export { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
-export async function fiatToAmount(...args: unknown[]) {
+export async function fiatToAmount(...args: Parameters<typeof import('../../utils/fiatToAmount').fiatToAmount>) {
   const mod = await import('../../utils/fiatToAmount')
-  return mod.fiatToAmount(...(args as Parameters<typeof mod.fiatToAmount>))
+  return mod.fiatToAmount(...args)
 }
 export type { ParseChainResult, ParseTickerResult } from '../../tools/parse'
 export { chainSchema, parseChain, parseTicker, tickerSchema } from '../../tools/parse'
@@ -973,9 +1017,9 @@ export { normalizeChain, UnknownChainError } from '../../utils/normalizeChain'
 export { resolveChainIdReference, resolveChainReference } from '../../utils/resolveChainReference'
 export type { ParsedThorSwapMemo } from '../../utils/thorSwapMemo'
 export { parseThorSwapMemo } from '../../utils/thorSwapMemo'
-export async function parseKeygenQR(...args: unknown[]) {
+export async function parseKeygenQR(...args: Parameters<typeof import('../../utils/parseKeygenQR').parseKeygenQR>) {
   const mod = await import('../../utils/parseKeygenQR')
-  return mod.parseKeygenQR(...(args as Parameters<typeof mod.parseKeygenQR>))
+  return mod.parseKeygenQR(...args)
 }
 export { ValidationHelpers } from '../../utils/validation'
 

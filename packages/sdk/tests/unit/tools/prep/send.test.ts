@@ -46,6 +46,21 @@ describe('prepareSendTxFromKeys', () => {
     mockBuildSendKeysignPayload.mockResolvedValue(mockPayload)
   })
 
+  it.each([
+    [Chain.Bittensor, '5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM'],
+    [Chain.Polkadot, '111111111111111111111111111111111HC1'],
+  ])('rejects the %s zero account before resolving keys or building a payload', async (chain, receiver) => {
+    await expect(
+      prepareSendTxFromKeys(baseIdentity, {
+        coin: { chain, address: 'sender', decimals: 9, ticker: 'TEST' },
+        receiver,
+        amount: 1n,
+      })
+    ).rejects.toThrow(/zero account/)
+    expect(mockGetPublicKey).not.toHaveBeenCalled()
+    expect(mockBuildSendKeysignPayload).not.toHaveBeenCalled()
+  })
+
   it('passes publicKey: null and hexPublicKeyOverride for QBTC (MLDSA chain)', async () => {
     const identity: VaultIdentity = {
       ...baseIdentity,

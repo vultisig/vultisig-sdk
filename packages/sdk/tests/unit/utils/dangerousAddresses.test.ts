@@ -139,3 +139,17 @@ describe('Tron dangerous destinations', () => {
     }
   )
 })
+
+describe('Substrate zero-account destinations', () => {
+  it.each([
+    ['Bittensor', '5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM'],
+    ['Polkadot', '111111111111111111111111111111111HC1'],
+  ])('rejects canonical %s zero accounts with normalization and chain isolation', (chain, destination) => {
+    expect(() => assertSafeDestination(chain, destination)).toThrow(/zero account/)
+    expect(() => assertSafeDestination(` ${chain.toUpperCase()} `, ` \t${destination}\n`)).toThrow(/zero account/)
+    expect(() => assertSafeDestination('Cosmos', destination)).not.toThrow()
+    for (const key of ['__proto__', 'constructor', 'toString']) {
+      expect(() => assertSafeDestination(chain, key)).not.toThrow()
+    }
+  })
+})

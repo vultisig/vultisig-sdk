@@ -1,5 +1,6 @@
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
+import { resolveTokenPriceId as canonicalResolveTokenPriceId } from '@vultisig/core-chain/coin/price/resolveTokenPriceId'
 import * as blockaidChains from '@vultisig/core-chain/security/blockaid/evmChains'
 import * as isValidTokenIdModule from '@vultisig/core-chain/utils/isValidTokenId'
 import { describe, expect, expectTypeOf, it } from 'vitest'
@@ -31,6 +32,20 @@ const dangerousAddressCanonicalExports = [
 ] as const
 
 describe('@vultisig/sdk public exports', () => {
+  it('exports the canonical token price-ID resolver with its existing signature and lookup behavior', () => {
+    expect(sdk.resolveTokenPriceId).toBe(canonicalResolveTokenPriceId)
+    expectTypeOf(sdk.resolveTokenPriceId).toEqualTypeOf<
+      (chain: sdk.Chain, denomOrAddress?: string) => string | undefined
+    >()
+    expect(sdk.resolveTokenPriceId(sdk.Chain.Ethereum)).toBe('ethereum')
+    expect(sdk.resolveTokenPriceId(sdk.Chain.TerraClassic, 'uluna')).toBe('terra-luna')
+    expect(sdk.resolveTokenPriceId(sdk.Chain.Solana, 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')).toBe('usd-coin')
+    expect(sdk.resolveTokenPriceId(sdk.Chain.Solana, 'epjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')).toBeUndefined()
+    expect(sdk.resolveTokenPriceId(sdk.Chain.Base, ' 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 ')).toBe('usd-coin')
+    expect(sdk.resolveTokenPriceId(sdk.Chain.Ethereum, '  ')).toBe('ethereum')
+    expect(sdk.resolveTokenPriceId(sdk.Chain.Solana, 'not-a-known-token')).toBeUndefined()
+  })
+
   it('exports the strict chain-ID resolver by identity with its string-only signature', () => {
     expect(sdk.resolveChainIdReference).toBe(resolveChainIdReference)
     expectTypeOf(sdk.resolveChainIdReference).toEqualTypeOf<(chainId: string) => sdk.Chain | undefined>()
@@ -53,6 +68,26 @@ describe('@vultisig/sdk public exports', () => {
     for (const amount of ['0', '-1', '1e3', ' 1 ']) {
       expect(sdk.validateStakekitActionInput(`0x${'a'.repeat(40)}`, amount)).toMatch(/positive plain decimal/)
     }
+  })
+
+  it('exposes canonical StakeKit helpers and preserves existing namespace members', async () => {
+    const canonical = await import('../../../src/tools/defi/stakekit')
+
+    expect(sdk.defi.stakekit).toEqual({
+      parseActionDisplay: canonical.parseActionDisplay,
+      buildYieldActionScanRequest: canonical.buildYieldActionScanRequest,
+      validateStakekitActionAddress: canonical.validateStakekitActionAddress,
+      validateStakekitActionInput: canonical.validateStakekitActionInput,
+      normalizeNetwork: canonical.normalizeStakekitNetwork,
+      networkToCanonicalChain: canonical.yieldNetworkToCanonicalChain,
+      NETWORK_ALIASES: canonical.STAKEKIT_NETWORK_ALIASES,
+      search: canonical.stakekitSearch,
+      details: canonical.stakekitDetails,
+      balances: canonical.stakekitBalances,
+      buildEnter: canonical.stakekitBuildEnter,
+      buildExit: canonical.stakekitBuildExit,
+      buildManage: canonical.stakekitBuildManage,
+    })
   })
 
   it('re-exports Blockaid EVM chain canonicals by identity', () => {
@@ -115,6 +150,10 @@ describe('@vultisig/sdk public exports', () => {
   it('exports fromChainAmountExact, getBlockExplorerUrl, and the chain registry', () => {
     expect(typeof sdk.fromChainAmountExact).toBe('function')
     expect(sdk.fromChainAmountExact(123456789012345678901n, 18)).toBe('123.456789012345678901')
+    expect(typeof sdk.fromChainAmount).toBe('function')
+    expect(typeof sdk.fromChainAmountDisplay).toBe('function')
+    expect(sdk.fromChainAmount(1_000_000n, 6)).toBe(1)
+    expect(sdk.fromChainAmountDisplay('999999999999999999999999', 18)).toBe('999999.999999999999999999')
 
     expect(typeof sdk.getBlockExplorerUrl).toBe('function')
     expect(sdk.getBlockExplorerUrl({ chain: sdk.Chain.Ethereum, entity: 'address', value: '0xabc' })).toBe(
