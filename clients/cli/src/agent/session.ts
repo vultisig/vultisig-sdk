@@ -27,6 +27,7 @@ import {
   parseYieldOpportunitiesEnvelope,
 } from './cards'
 import { AgentClient, createTurnIdempotencyKey, type SSEStreamResult } from './client'
+import { SIGN_TX_SUMMARY_MAX_CHARS } from './consentLimits'
 import { buildMessageContext, buildMinimalContext } from './context'
 import { AgentExecutor, resolveChain } from './executor'
 import { formatHlConfirmation } from './hlOrder'
@@ -127,14 +128,9 @@ const MAX_MESSAGE_LOOP_DEPTH = 16
 // one line; for sign_typed_data the gate falls back to JSON.stringify(input), which is an
 // arbitrarily large typed-data blob. Keep every emitted audit record bounded.
 const PROPOSED_SUMMARY_MAX_CHARS = 500
-// sign_tx lines are producer-bounded (labels ≤512 chars, contracts 42 chars) but a multi-leg swap
-// line carries two token-contract disclosures PLUS the decoded approve leg ("(+ first approve … for
-// spender 0x… (token contract 0x…) — 2 transactions)") in its TAIL — truncating that at 500 would
-// drop the spender the user is authorizing. Give sign_tx a wider bound (worst observed ≈ 600).
-const PROPOSED_SIGN_TX_SUMMARY_MAX_CHARS = 1000
-
-function capSigningSummary(summary: string, toolName?: string): string {
-  const max = toolName === 'sign_tx' ? PROPOSED_SIGN_TX_SUMMARY_MAX_CHARS : PROPOSED_SUMMARY_MAX_CHARS
+// Multi-leg swap renderers reserve room inside this limit for the decoded approve disclosure.
+export function capSigningSummary(summary: string, toolName?: string): string {
+  const max = toolName === 'sign_tx' ? SIGN_TX_SUMMARY_MAX_CHARS : PROPOSED_SUMMARY_MAX_CHARS
   return summary.length > max ? `${summary.slice(0, max)}…` : summary
 }
 

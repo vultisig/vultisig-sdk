@@ -45,6 +45,7 @@ import {
   recordBroadcast,
   reserveBroadcast,
 } from './broadcastJournal'
+import { SIGN_TX_SUMMARY_MAX_CHARS } from './consentLimits'
 import {
   type HlOrderSigningPayload,
   type HlOrderTransport,
@@ -117,6 +118,18 @@ const tokenLabel = (value: unknown): string => (typeof value === 'string' ? valu
 // descriptor regexes below, which backtrack superlinearly on long inputs.
 const MAX_TOKEN_SYMBOL_LENGTH = 32
 const MAX_TOKEN_LABEL_LENGTH = 512
+const APPROVE_DISCLOSURE_MARGIN = 16
+
+const boundedTokenLabel = (value: unknown): string => {
+  const label = tokenLabel(value)
+  return label.length <= MAX_TOKEN_LABEL_LENGTH ? label : ''
+}
+
+const truncateWithEllipsis = (value: string, maxLength: number): string => {
+  if (value.length <= maxLength) return value
+  if (maxLength <= 1) return '…'.slice(0, maxLength)
+  return `${value.slice(0, maxLength - 1)}…`
+}
 
 /** Keep descriptor-shaped, attacker-controlled symbol text out of the consent line. */
 function safeTokenSymbol(symbol: string): {
@@ -917,7 +930,8 @@ export class AgentExecutor {
     if (!approve) return null
     const contractTo = typeof signedTx?.to === 'string' ? (signedTx.to as string) : '?'
     const parts = [this.renderErc20ApproveSummary(approve, contractTo, chain, true)]
-    if (tokenLabel(labels.estimated_fee)) parts.push(`est. fee ${tokenLabel(labels.estimated_fee)}`)
+    const estimatedFee = boundedTokenLabel(labels.estimated_fee)
+    if (estimatedFee) parts.push(`est. fee ${estimatedFee}`)
     const swapContext = !!(labels.quote_summary || labels.to_token_symbol || labels.pending_swap_summary)
     if (swapContext) parts.push('— approval only; no swap is signed in this transaction')
     return parts.join(' ')
@@ -984,22 +998,35 @@ export class AgentExecutor {
   private renderSwapSummary(p: any, labels: Record<string, string>, chain: Chain, approveLegLine: string): string {
     // quote_summary already embeds the provider ("… via kyber"); only append
     // the provider when we fall back to building the head ourselves.
-    const rawQuoteSummary = tokenLabel(labels.quote_summary)
+    const rawQuoteSummary = boundedTokenLabel(labels.quote_summary)
     const quoteSummary = hasSingleSwapDelimiter(rawQuoteSummary, labels) ? rawQuoteSummary : ''
     const usedQuoteSummary = !!quoteSummary
-    const amountIn = tokenLabel(labels.amount_in) || tokenLabel(p?.txArgs?.amount) || '?'
-    const fromSymbol = tokenLabel(labels.from_token_symbol)
+    const amountIn = boundedTokenLabel(labels.amount_in) || boundedTokenLabel(p?.txArgs?.amount) || '?'
+    const fromSymbol = boundedTokenLabel(labels.from_token_symbol)
     const sellHead = fromSymbol && !amountIn.endsWith(` ${fromSymbol}`) ? `${amountIn} ${fromSymbol}` : amountIn
-    const head = discloseSwapTokenContracts(
-      quoteSummary || `swap ${sellHead} → ${tokenLabel(labels.to_token_symbol) || '?'}`,
+    const disclosedHead = discloseSwapTokenContracts(
+      quoteSummary || `swap ${sellHead} → ${boundedTokenLabel(labels.to_token_symbol) || '?'}`,
       labels,
       p,
       chain
     )
-    const parts = [head, `on ${chain}`]
-    if (!usedQuoteSummary && tokenLabel(labels.provider)) parts.push(`via ${tokenLabel(labels.provider)}`)
-    if (p?.__multiLeg) parts.push(`(+ first ${approveLegLine} — 2 transactions)`)
-    if (tokenLabel(labels.estimated_fee)) parts.push(`est. fee ${tokenLabel(labels.estimated_fee)}`)
+    const provider = !usedQuoteSummary ? boundedTokenLabel(labels.provider) : ''
+    const approvePart = p?.__multiLeg ? `(+ first ${approveLegLine} — 2 transactions)` : ''
+    const protectedTailParts = [
+      `on ${chain}`,
+      ...(provider ? [`via ${provider}`] : []),
+      ...(approvePart ? [approvePart] : []),
+    ]
+    const protectedTailLength = protectedTailParts.reduce((length, part) => length + 1 + part.length, 0)
+    const head = approvePart
+      ? truncateWithEllipsis(
+          disclosedHead,
+          Math.max(1, SIGN_TX_SUMMARY_MAX_CHARS - APPROVE_DISCLOSURE_MARGIN - protectedTailLength)
+        )
+      : disclosedHead
+    const parts = [head, ...protectedTailParts]
+    const estimatedFee = boundedTokenLabel(labels.estimated_fee)
+    if (estimatedFee) parts.push(`est. fee ${estimatedFee}`)
     return parts.join(' ')
   }
 

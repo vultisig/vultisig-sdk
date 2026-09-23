@@ -12,6 +12,7 @@ import { encodeFunctionData, erc20Abi, getAddress, maxUint256 } from 'viem'
 import { describe, expect, it, vi } from 'vitest'
 
 import { AgentExecutor } from '../executor'
+import { capSigningSummary } from '../session'
 
 function createMockVault(): VaultBase {
   return {
@@ -113,6 +114,47 @@ describe('AgentExecutor.getPendingSummary', () => {
     expect(summary).toContain('est. fee ~0.0000038 ETH')
     // quote_summary already embeds the provider — must not append "via kyber" again
     expect(summary.match(/via kyber/g)).toHaveLength(1)
+  })
+
+  it('keeps the approve disclosure inside the sign_tx cap when quote_summary is over-long', () => {
+    const executor = new AgentExecutor(createMockVault())
+    executor.storeServerTransaction(
+      makeMultiLegEnvelope({
+        quote_summary: `2 USDC ${'x'.repeat(1200)} → ~0.001 ETH via hostile`,
+        amount_in: '2 USDC',
+        from_token: `USDC (${USDC_CONTRACT} on Base, 6 dec, source: known)`,
+        from_token_symbol: 'USDC',
+        to_token: 'ETH (native on Base, 18 dec, source: native)',
+        to_token_symbol: 'ETH',
+      })
+    )
+
+    const summary = executor.getPendingSummary()!
+    expect(summary).toContain(`approve 2 USDC for spender ${SPENDER}`)
+    expect(summary).toContain(`token contract ${USDC_CONTRACT}`)
+    expect(summary).toContain('2 transactions')
+    expect(summary.indexOf('for spender')).toBeLessThan(1000)
+    expect(capSigningSummary(summary, 'sign_tx')).toContain(APPROVE_SUFFIX)
+  })
+
+  it('keeps the approve disclosure inside the sign_tx cap when amount_in is over-long', () => {
+    const executor = new AgentExecutor(createMockVault())
+    executor.storeServerTransaction(
+      makeMultiLegEnvelope({
+        amount_in: '9'.repeat(1200),
+        from_token: `USDC (${USDC_CONTRACT} on Base, 6 dec, source: known)`,
+        from_token_symbol: 'USDC',
+        to_token: 'ETH (native on Base, 18 dec, source: native)',
+        to_token_symbol: 'ETH',
+      })
+    )
+
+    const summary = executor.getPendingSummary()!
+    expect(summary).toContain(`approve 2 USDC for spender ${SPENDER}`)
+    expect(summary).toContain(`token contract ${USDC_CONTRACT}`)
+    expect(summary).toContain('2 transactions')
+    expect(summary.indexOf('for spender')).toBeLessThan(1000)
+    expect(capSigningSummary(summary, 'sign_tx')).toContain(APPROVE_SUFFIX)
   })
 
   it('token-to-native swap discloses the sell token contract only', () => {
