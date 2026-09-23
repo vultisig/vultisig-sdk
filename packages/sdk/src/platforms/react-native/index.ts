@@ -515,7 +515,7 @@ export {
 
 // DeFi protocol primitives (unsigned calldata builders) — sdk.defi.*
 // Pure builders, RN-safe. Statically re-exported so RN consumers can reach
-// the full defi namespace (arkis + balancer + glif + pendle + 3jane).
+// the full defi namespace, including the curated Kamino Earn helpers.
 export type {
   BalancerTokenApi,
   BalancerV3SwapCalldata,
@@ -534,6 +534,7 @@ export type {
   StakekitBalanceQuery,
   StakekitBalancesResult,
 } from '../../tools/defi'
+export { kamino } from '../../tools/defi'
 export {
   buildBalancerV3SwapCalldata,
   buildYieldActionScanRequest,
@@ -560,6 +561,23 @@ export {
   GLIF_ICN_TOKEN_DECIMALS,
   glifPoolWriteAbi,
 } from '../../tools/defi/glif'
+export type {
+  KaminoAmount,
+  KaminoOperationIntent,
+  KaminoPriorityFee,
+  KaminoRate,
+  KaminoRiskTier,
+  KaminoServiceErrorReason,
+  KaminoShareAmount,
+  KaminoSharePosition,
+  KaminoTokenAmount,
+  KaminoTransactionIntent,
+  KaminoUserPositionResponse,
+  KaminoValidationFinding,
+  KaminoVaultDescriptor,
+  KaminoVaultInfo,
+  KaminoWithdrawRequest,
+} from '../../tools/defi/kamino'
 export type {
   EvmScanRequest,
   PendingAction,

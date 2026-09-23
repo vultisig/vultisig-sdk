@@ -1,5 +1,9 @@
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
+import * as kaminoAmount from '@vultisig/core-chain/chains/solana/kamino/amount'
+import * as kaminoRegistry from '@vultisig/core-chain/chains/solana/kamino/registry'
+import * as kaminoActions from '@vultisig/core-chain/chains/solana/kamino/tx/actions'
+import * as kaminoValidation from '@vultisig/core-chain/chains/solana/kamino/tx/validate'
 import { resolveTokenPriceId as canonicalResolveTokenPriceId } from '@vultisig/core-chain/coin/price/resolveTokenPriceId'
 import * as blockaidChains from '@vultisig/core-chain/security/blockaid/evmChains'
 import * as isValidTokenIdModule from '@vultisig/core-chain/utils/isValidTokenId'
@@ -8,6 +12,7 @@ import { describe, expect, expectTypeOf, it } from 'vitest'
 import * as tronAbi from '../../../src/abi/tron'
 import * as sdk from '../../../src/index'
 import * as tools from '../../../src/tools'
+import * as defiTools from '../../../src/tools/defi'
 import * as stakekit from '../../../src/tools/defi/stakekit'
 import * as threeJane from '../../../src/tools/defi/threeJane'
 import * as dangerousAddresses from '../../../src/utils/dangerousAddresses'
@@ -32,6 +37,76 @@ const dangerousAddressCanonicalExports = [
 ] as const
 
 describe('@vultisig/sdk public exports', () => {
+  it('exposes the canonical Kamino family through root, DeFi subpath and vault instance', async () => {
+    const canonical = await import('../../../src/tools/defi/kamino')
+    expect(sdk.kamino).toBe(defiTools.kamino)
+    expect(sdk.defi.kamino).toBe(defiTools.kamino)
+    expect(sdk.kamino.kaminoVaultRegistry).toBe(kaminoRegistry.kaminoVaultRegistry)
+    expect(sdk.kamino.getKaminoVaultDescriptor).toBe(kaminoRegistry.getKaminoVaultDescriptor)
+    expect(sdk.kamino.buildKaminoDepositTransaction).toBe(kaminoActions.buildKaminoDepositTransaction)
+    expect(sdk.kamino.buildKaminoWithdrawTransaction).toBe(kaminoActions.buildKaminoWithdrawTransaction)
+    expect(sdk.kamino.validateKaminoTransaction).toBe(kaminoValidation.validateKaminoTransaction)
+    expect(sdk.kamino.validateKaminoTransactionOnline).toBe(kaminoValidation.validateKaminoTransactionOnline)
+    expect(sdk.kamino.fetchKaminoVaultInfo).toBe(canonical.fetchKaminoVaultInfo)
+    expect(sdk.kamino.fetchKaminoUserPositions).toBe(canonical.fetchKaminoUserPositions)
+    expect(sdk.kamino.parseKaminoSharePosition).toBe(canonical.parseKaminoSharePosition)
+    const instance = new sdk.Vultisig({ autoInit: false, storage: new sdk.MemoryStorage() })
+    try {
+      expect(instance.defi.kamino).toBe(sdk.kamino)
+    } finally {
+      await instance.dispose()
+    }
+  })
+
+  it('preserves Kamino token/share units and strict spendable shares at the public boundary', () => {
+    const solVault = sdk.kamino.kaminoVaultRegistry.find(vault => vault.tokenDecimals === 9)
+    expect(solVault?.sharesDecimals).toBe(6)
+    expect(sdk.kamino.getKaminoVaultDescriptor('unknown')).toBeUndefined()
+    expect(sdk.kamino.kaminoTokenAmount).toBe(kaminoAmount.kaminoTokenAmount)
+    expect(sdk.kamino.kaminoShareAmount).toBe(kaminoAmount.kaminoShareAmount)
+    expectTypeOf<sdk.KaminoTokenAmount>().not.toMatchTypeOf<sdk.KaminoShareAmount>()
+    expectTypeOf<sdk.KaminoShareAmount>().not.toMatchTypeOf<sdk.KaminoTokenAmount>()
+
+    const position = (totalShares: string) =>
+      sdk.kamino.parseKaminoSharePosition({
+        position: {
+          vaultAddress: solVault!.address,
+          stakedShares: totalShares,
+          unstakedShares: '0',
+          totalShares,
+        },
+        shareDecimals: solVault!.sharesDecimals,
+      })
+    expect(position('1.000000')?.spendable.baseUnits).toBe(999_999n)
+    expect(position('1.0000001')?.spendable.baseUnits).toBe(1_000_000n)
+  })
+
+  it('retains Kamino builder rejection before any network request', async () => {
+    const descriptor = sdk.kamino.kaminoVaultRegistry[0]
+    const owner = '11111111111111111111111111111111'
+    await expect(
+      sdk.kamino.buildKaminoDepositTransaction({
+        owner,
+        vaultAddress: 'unknown',
+        amount: sdk.kamino.kaminoTokenAmount(1n, descriptor.tokenDecimals),
+      })
+    ).rejects.toMatchObject({ reason: { vaultNotInRegistry: 'unknown' } })
+    await expect(
+      sdk.kamino.buildKaminoDepositTransaction({
+        owner,
+        vaultAddress: descriptor.address,
+        amount: sdk.kamino.kaminoTokenAmount(0n, descriptor.tokenDecimals),
+      })
+    ).rejects.toMatchObject({ reason: { invalidAmount: expect.any(String) } })
+    await expect(
+      sdk.kamino.buildKaminoWithdrawTransaction({
+        owner,
+        vaultAddress: descriptor.address,
+        shares: sdk.kamino.kaminoShareAmount(2n ** 64n - 1n, descriptor.sharesDecimals),
+      })
+    ).rejects.toMatchObject({ reason: { invalidAmount: expect.stringContaining('sentinel') } })
+  })
+
   it('exports the canonical token price-ID resolver with its existing signature and lookup behavior', () => {
     expect(sdk.resolveTokenPriceId).toBe(canonicalResolveTokenPriceId)
     expectTypeOf(sdk.resolveTokenPriceId).toEqualTypeOf<

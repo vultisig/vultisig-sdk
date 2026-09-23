@@ -689,6 +689,75 @@ For Node.js and Electron, WASM and native libs are loaded from the package tree 
 
 ## API Reference
 
+### Kamino Earn (Solana)
+
+`kamino` is available from `@vultisig/sdk`, `@vultisig/sdk/react-native`,
+`@vultisig/sdk/tools/defi`, and `sdk.defi.kamino`. It exposes the same curated
+vault registry, live vault hydration, position parser, amount helpers, unsigned
+builders, and transaction validators on each surface.
+Use one imported `kamino` namespace from hydration through validation. The
+published entrypoints are separate bundles, and the validator deliberately
+requires a descriptor from its own curated registry; a vault hydrated through
+another entrypoint fails that identity check.
+
+```typescript
+import { kamino } from '@vultisig/sdk'
+
+const owner = 'YOUR_SOLANA_WALLET_ADDRESS'
+const descriptor = kamino.kaminoVaultRegistry[0]
+const vault = await kamino.fetchKaminoVaultInfo(descriptor.address)
+// vault.descriptor is the original curated registry object, not API-supplied identity.
+
+const deposit = kamino.kaminoTokenAmountFromDecimalString('1.25', descriptor.tokenDecimals)
+if (!deposit || deposit.baseUnits < vault.minDeposit.baseUnits) throw new Error('Deposit below vault minimum')
+const depositBase64 = await kamino.buildKaminoDepositTransaction({
+  owner,
+  vaultAddress: descriptor.address,
+  amount: deposit, // underlying tokens, never shares
+})
+const depositTx = kamino.parseKaminoWireTransaction(depositBase64)
+if (!depositTx) throw new Error('Unreadable Kamino transaction')
+await kamino.validateKaminoTransactionOnline({
+  transaction: depositTx,
+  intent: { owner, vault, operation: { deposit }, carriesAttributionMemo: false },
+})
+
+const reported = (await kamino.fetchKaminoUserPositions(owner)).find(
+  position => position.vaultAddress === descriptor.address
+)
+if (!reported) throw new Error('No position in selected vault')
+const position = kamino.parseKaminoSharePosition({ position: reported, shareDecimals: descriptor.sharesDecimals })
+if (!position || !position.isPlausible || !position.accountsForItsTotal) throw new Error('Unusable position')
+const shares = position.spendable // strictly below the reported balance
+if (shares.baseUnits < vault.minWithdraw.baseUnits) throw new Error('Withdraw below vault minimum')
+const withdrawBase64 = await kamino.buildKaminoWithdrawTransaction({
+  owner,
+  vaultAddress: descriptor.address,
+  shares, // share tokens, never underlying tokens
+})
+const withdrawTx = kamino.parseKaminoWireTransaction(withdrawBase64)
+if (!withdrawTx) throw new Error('Unreadable Kamino transaction')
+await kamino.validateKaminoTransactionOnline({
+  transaction: withdrawTx,
+  intent: {
+    owner,
+    vault,
+    operation: { withdraw: { shares, unstakedShares: position.unstaked } },
+    carriesAttributionMemo: false,
+  },
+})
+```
+
+The builders make network requests and return unsigned transaction bytes. They
+reject unknown vaults, invalid amounts, and the explicit withdraw-all sentinel,
+but they do not enforce the hydrated minimum or compare a withdrawal with the
+owner's position. Check both before building. The remote builder's response is
+untrusted until the canonical validator accepts its exact transaction against
+the requested operation, owner, curated descriptor, and resolved lookup tables.
+Validation does not sign, broadcast, or guarantee on-chain execution. If the
+caller adds a memo, compute budget, or refreshes the blockhash, validate the
+final bytes with a matching intent before signing.
+
 ### Core Methods
 
 #### `initialize(): Promise<void>`

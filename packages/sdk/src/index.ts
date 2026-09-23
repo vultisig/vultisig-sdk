@@ -1347,6 +1347,7 @@ export type {
   RiverTxBuild,
   RiverUnsignedTx,
 } from './tools/defi'
+export { kamino } from './tools/defi'
 export {
   buildRiverCloseTrove,
   buildRiverDelegateApproval,
@@ -1362,6 +1363,23 @@ export {
   RIVER_TROVE_STATUS_NAMES,
   riverStatusName,
 } from './tools/defi'
+export type {
+  KaminoAmount,
+  KaminoOperationIntent,
+  KaminoPriorityFee,
+  KaminoRate,
+  KaminoRiskTier,
+  KaminoServiceErrorReason,
+  KaminoShareAmount,
+  KaminoSharePosition,
+  KaminoTokenAmount,
+  KaminoTransactionIntent,
+  KaminoUserPositionResponse,
+  KaminoValidationFinding,
+  KaminoVaultDescriptor,
+  KaminoVaultInfo,
+  KaminoWithdrawRequest,
+} from './tools/defi/kamino'
 
 // ============================================================================
 // PUBLIC API - Push Notifications

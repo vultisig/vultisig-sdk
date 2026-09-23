@@ -11,6 +11,7 @@ import type {
   PollTxStatusUntilFinalResult as PollTxStatusUntilFinalResultFromReactNative,
 } from '../../../../src/platforms/react-native/index'
 import * as sdkRn from '../../../../src/platforms/react-native/index'
+import * as kamino from '../../../../src/tools/defi/kamino'
 import type * as stakekitTypes from '../../../../src/tools/defi/stakekit'
 import * as recipientChecks from '../../../../src/tools/validate/recipientSanity'
 import type {
@@ -46,6 +47,26 @@ describe('RN StakeKit companion types', () => {
     expectTypeOf<sdkRn.YieldProduct>().toEqualTypeOf<stakekitTypes.YieldProduct>()
     expectTypeOf<sdkRn.YieldToken>().toEqualTypeOf<stakekitTypes.YieldToken>()
     expectTypeOf<sdkRn.YieldTransaction>().toEqualTypeOf<stakekitTypes.YieldTransaction>()
+  })
+})
+
+describe('RN Kamino Earn public surface', () => {
+  it('exposes the shared curated namespace and branded amounts', async () => {
+    expect(sdkRn.kamino).toBe(sdkRn.defi.kamino)
+    expect(sdkRn.kamino.kaminoVaultRegistry).toBe(kamino.kaminoVaultRegistry)
+    expect(sdkRn.kamino.fetchKaminoVaultInfo).toBe(kamino.fetchKaminoVaultInfo)
+    expect(sdkRn.kamino.buildKaminoDepositTransaction).toBe(kamino.buildKaminoDepositTransaction)
+    expect(sdkRn.kamino.buildKaminoWithdrawTransaction).toBe(kamino.buildKaminoWithdrawTransaction)
+    expect(sdkRn.kamino.validateKaminoTransactionOnline).toBe(kamino.validateKaminoTransactionOnline)
+    expectTypeOf<sdkRn.KaminoTokenAmount>().toEqualTypeOf<kamino.KaminoTokenAmount>()
+    expectTypeOf<sdkRn.KaminoShareAmount>().toEqualTypeOf<kamino.KaminoShareAmount>()
+    expectTypeOf<sdkRn.KaminoTokenAmount>().not.toMatchTypeOf<sdkRn.KaminoShareAmount>()
+    const instance = new sdkRn.Vultisig({ autoInit: false, storage: new sdkRn.MemoryStorage() })
+    try {
+      expect(instance.defi.kamino).toBe(sdkRn.kamino)
+    } finally {
+      await instance.dispose()
+    }
   })
 })
 

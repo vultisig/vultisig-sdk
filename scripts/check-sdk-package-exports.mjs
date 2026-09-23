@@ -168,6 +168,7 @@ function validatePackedReactNativePublicHelpers(packageRoot) {
 
   for (const symbol of [
     'getTxStatus',
+    'kamino',
     'buildSignAminoKeysignPayload',
     'buildSignDirectKeysignPayload',
     'tronBase58ToEvmHex',
@@ -186,7 +187,7 @@ function validatePackedReactNativeRuntimeExports(packageRoot) {
   const exportedNames = ast.body
     .filter(statement => statement.type === 'ExportNamedDeclaration')
     .flatMap(statement => statement.specifiers.map(specifier => specifier.exported.name))
-  for (const name of ['resolveTokenRef', 'resolveTokenRefId', 'getTxStatus', 'amount']) {
+  for (const name of ['resolveTokenRef', 'resolveTokenRefId', 'getTxStatus', 'amount', 'kamino']) {
     assert.ok(exportedNames.includes(name), `packed React Native runtime must export ${name}`)
   }
   console.log('SDK packed React Native runtime export bindings passed (artifact check, not device execution)')
@@ -252,6 +253,24 @@ function verifyTokenRefConsumer(sdk) {
   assert.throws(() => sdk.resolveTokenRef(chain, 'USDC', ambiguous), /ambiguous/)
   assert.throws(() => sdk.resolveTokenRefId(chain, 'USDC', ambiguous), /ambiguous/)
   console.log('SDK token resolution passed: native, configured symbol/address, registry, unknown, ambiguity')
+}
+
+function verifyKaminoConsumer(sdk, defi) {
+  assert.ok(sdk.kamino)
+  assert.equal(sdk.defi.kamino.kaminoVaultRegistry, sdk.kamino.kaminoVaultRegistry)
+  assert.equal(defi.kamino.kaminoVaultRegistry.length, 3)
+  assert.equal(sdk.kamino.kaminoVaultRegistry.length, defi.kamino.kaminoVaultRegistry.length)
+  const solVault = defi.kamino.kaminoVaultRegistry.find(vault => vault.tokenDecimals === 9)
+  assert.equal(solVault?.sharesDecimals, 6)
+  assert.equal(typeof sdk.kamino.fetchKaminoVaultInfo, 'function')
+  assert.equal(typeof sdk.kamino.buildKaminoDepositTransaction, 'function')
+  assert.equal(typeof sdk.kamino.buildKaminoWithdrawTransaction, 'function')
+  assert.equal(typeof sdk.kamino.validateKaminoTransactionOnline, 'function')
+  const position = sdk.kamino.parseKaminoSharePosition({
+    position: { vaultAddress: solVault.address, stakedShares: '1', unstakedShares: '0', totalShares: '1' },
+    shareDecimals: solVault.sharesDecimals,
+  })
+  assert.equal(position.spendable.baseUnits, 999999n)
 }
 
 export function resolveConditionalTarget(value, activeConditions) {
@@ -426,6 +445,9 @@ console.log('Packed amount ESM consumers passed: stable instance API, exact conv
 const root = importedModules.get('@vultisig/sdk')
 ${verifyTokenRefConsumer.toString()}
 verifyTokenRefConsumer(root)
+${verifyKaminoConsumer.toString()}
+verifyKaminoConsumer(root, importedModules.get('@vultisig/sdk/tools/defi'))
+console.log('Packed Kamino ESM consumer passed: root, DeFi subpath, branded position and validators')
 const node = importedModules.get('@vultisig/sdk/node')
 const vite = importedModules.get('@vultisig/sdk/vite')
 const electronMain = importedModules.get('@vultisig/sdk/electron/main')
@@ -493,6 +515,9 @@ for (const { specifier, target } of cases) {
 assert.equal(typeof requiredModules.get('@vultisig/sdk')?.Vultisig, 'function', 'root require exports Vultisig')
 ${verifyTokenRefConsumer.toString()}
 verifyTokenRefConsumer(requiredModules.get('@vultisig/sdk'))
+${verifyKaminoConsumer.toString()}
+verifyKaminoConsumer(requiredModules.get('@vultisig/sdk'), requiredModules.get('@vultisig/sdk/tools/defi'))
+console.log('Packed Kamino CommonJS consumer passed')
 ${verifyAmountConsumer.toString()}
 ;(async () => {
   for (const specifier of ['@vultisig/sdk', '@vultisig/sdk/electron/main']) {
@@ -537,6 +562,17 @@ void ${alias}Keys`
 ${declarationAssertions}
 import { amount, Vultisig as AmountVultisig, MemoryStorage, type Amount } from '@vultisig/sdk'
 import { amount as rnAmount, Vultisig as RnVultisig, type Amount as RnAmount } from '@vultisig/sdk/react-native'
+import { kamino as rootKamino, type KaminoShareAmount, type KaminoTokenAmount } from '@vultisig/sdk'
+import { kamino as rnKamino, type KaminoShareAmount as RnShareAmount } from '@vultisig/sdk/react-native'
+import { kamino as defiKamino } from '@vultisig/sdk/tools/defi'
+const tokenAmount: KaminoTokenAmount = rootKamino.kaminoTokenAmount(1n, 9)
+const shareAmount: KaminoShareAmount = defiKamino.kaminoShareAmount(1n, 6)
+const rnShareAmount: RnShareAmount = rnKamino.kaminoShareAmount(1n, 6)
+// @ts-expect-error token and share amounts have different units
+const invalidDeposit: KaminoTokenAmount = shareAmount
+// @ts-expect-error token and share amounts have different units
+const invalidWithdraw: KaminoShareAmount = tokenAmount
+void [rnShareAmount, invalidDeposit, invalidWithdraw]
 const amountGroup: Amount = amount
 const rnAmountGroup: RnAmount = rnAmount
 const instance = new AmountVultisig({ autoInit: false, storage: new MemoryStorage() })
