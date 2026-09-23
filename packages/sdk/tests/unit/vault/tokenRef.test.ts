@@ -120,7 +120,7 @@ describe('resolveTokenRef', () => {
     })
   })
 
-  it('prefers a symbol match over an address match, and user tokens over the registry', () => {
+  it('prefers an address identity over a poisoned symbol, and user tokens over the registry', () => {
     const decoy: Token = {
       id: '0x00000000000000000000000000000000000000aa',
       symbol: USDC_LOWER,
@@ -130,13 +130,101 @@ describe('resolveTokenRef', () => {
       chainId: Chain.Ethereum,
       isNative: false,
     }
-    expect(resolveTokenRef(Chain.Ethereum, USDC_LOWER, [decoy, storedUsdc])).toMatchObject({ ticker: USDC_LOWER })
+    expect(resolveTokenRef(Chain.Ethereum, USDC_LOWER, [decoy, storedUsdc])).toMatchObject({
+      ticker: 'USDC',
+      decimals: 6,
+      contractAddress: USDC_LOWER,
+    })
+    expect(resolveTokenRef(Chain.Ethereum, USDC_CHECKSUM, [decoy, storedUsdc]).contractAddress).toBe(USDC_LOWER)
+    expect(resolveTokenRef(Chain.Ethereum, USDC_LOWER, [decoy]).contractAddress).toBe(USDC_CHECKSUM)
 
     const custom: Token = { ...storedUsdc, contractAddress: '0x00000000000000000000000000000000000000bb', decimals: 8 }
     expect(resolveTokenRef(Chain.Ethereum, 'USDC', [custom])).toMatchObject({
       decimals: 8,
       contractAddress: '0x00000000000000000000000000000000000000bb',
     })
+  })
+
+  it('never resolves an unknown address through a same-text symbol', () => {
+    const unknown = '0x00000000000000000000000000000000000000ab'
+    const decoy = { ...impostorUsdc, symbol: unknown }
+    expect(() => resolveTokenRef(Chain.Ethereum, unknown, [decoy])).toThrow(/not found/)
+    expect(resolveTokenRefId(Chain.Ethereum, unknown, [decoy])).toBe(unknown)
+  })
+
+  it('prefers short stored and registry IDs over poisoned symbols', () => {
+    const decoy = { ...storedUsdc, id: '9999', contractAddress: '9999', symbol: '1984', chainId: Chain.Polkadot }
+    const genuine = { ...decoy, id: '1984', contractAddress: '1984', symbol: 'USDT', decimals: 6 }
+
+    expect(resolveTokenRef(Chain.Polkadot, '1984', [decoy, genuine])).toMatchObject({
+      ticker: 'USDT',
+      contractAddress: '1984',
+    })
+    expect(resolveTokenRef(Chain.Polkadot, '1984', [decoy])).toMatchObject({
+      ticker: 'USDT',
+      contractAddress: '1984',
+    })
+    expect(() => resolveTokenRef(Chain.Polkadot, '9998', [{ ...decoy, symbol: '9998' }])).toThrow(/not found/)
+    expect(resolveTokenRef(Chain.Polkadot, `${Chain.Polkadot}-1984`, [decoy, genuine]).contractAddress).toBe('1984')
+  })
+
+  it('resolves a non-EVM stored ID ahead of a same-text symbol', () => {
+    const mint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+    const decoy = {
+      ...storedUsdc,
+      chainId: Chain.Solana,
+      id: 'AnotherMintId',
+      contractAddress: 'AnotherMintId',
+      symbol: mint,
+    }
+    const genuine = { ...decoy, id: mint, contractAddress: mint, symbol: 'USDC' }
+
+    expect(resolveTokenRef(Chain.Solana, mint, [decoy, genuine]).contractAddress).toBe(mint)
+    expect(resolveTokenRef(Chain.Solana, mint, [decoy]).contractAddress).toBe(mint)
+    const unknownMint = 'ePjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+    expect(() => resolveTokenRef(Chain.Solana, unknownMint, [{ ...decoy, symbol: unknownMint }])).toThrow(/not found/)
+  })
+
+  it('keeps slash-bearing THORChain tickers while rejecting unmatched denom-shaped refs', () => {
+    const ticker = 'ATOM/USDC.ETH'
+    const poolId = 'x/bow-xyk-gaia-atom-eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+    const pool = { ...storedUsdc, chainId: Chain.THORChain, id: poolId, contractAddress: poolId, symbol: ticker }
+    expect(resolveTokenRef(Chain.THORChain, ticker, [pool]).contractAddress).toBe(poolId)
+
+    const poisoned = { ...storedUsdc, chainId: Chain.THORChain, symbol: 'x/staking/missing' }
+    expect(() => resolveTokenRef(Chain.THORChain, 'x/staking/missing', [poisoned])).toThrow(/not found/)
+    expect(() => resolveTokenRef(Chain.THORChain, 'thor.evil', [{ ...poisoned, symbol: 'thor.evil' }])).toThrow(
+      /not found/
+    )
+    for (const ref of ['btc-btc', 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48']) {
+      expect(() => resolveTokenRef(Chain.THORChain, ref, [{ ...poisoned, symbol: ref }])).toThrow(/not found/)
+    }
+  })
+
+  it.each(['ABCDEFGHIJKLMNOPQRSTU', 'ABCDEFGHIJKLMNOPQRSTU2', 'LONG-TOKEN-SYMBOL-123'])(
+    'resolves long ordinary symbol %s without token-ID syntax',
+    longSymbol => {
+      expect(resolveTokenRef(Chain.Ethereum, longSymbol, [{ ...storedUsdc, symbol: longSymbol }])).toMatchObject({
+        ticker: longSymbol,
+        contractAddress: USDC_LOWER,
+      })
+    }
+  )
+
+  it.each([
+    [Chain.Ton, `EQ${'A'.repeat(46)}`],
+    [Chain.Ton, `0:${'a'.repeat(64)}`],
+    [Chain.Cosmos, 'factory/osmo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq/ufoo'],
+    [Chain.Cardano, `${'a'.repeat(56)}.4d494c4b`],
+  ])('does not resolve an absent %s identity via a same-text symbol', (chain, ref) => {
+    const poisoned = {
+      ...storedUsdc,
+      chainId: chain,
+      id: 'another-token',
+      contractAddress: 'another-token',
+      symbol: ref,
+    }
+    expect(() => resolveTokenRef(chain, ref, [poisoned])).toThrow(/not found/)
   })
 
   it('throws a VaultError naming the ref when nothing matches', () => {
@@ -189,8 +277,9 @@ const addressFor: Partial<Record<Chain, string>> = {
   [Chain.Solana]: '5QXePTiaWgmqSCHh9YDWAiVvEeKWaM5cUN62K4SXwUSB',
 }
 
-async function sendCoinFor(ref: string, tokens: Token[], chain: Chain = Chain.Ethereum) {
+async function sendPreparationFor(ref: string, tokens: Token[], chain: Chain = Chain.Ethereum) {
   let coin: { ticker: string; decimals: number; id?: string } | undefined
+  let amount: bigint | undefined
   const address = addressFor[chain]
   const vault = {
     _tokens: { [chain]: tokens },
@@ -200,8 +289,9 @@ async function sendCoinFor(ref: string, tokens: Token[], chain: Chain = Chain.Et
     parseAmount: proto.parseAmount,
     formatUnits: proto.formatUnits,
     address: async () => address,
-    prepareSendTx: async (params: { coin: typeof coin }) => {
+    prepareSendTx: async (params: { coin: typeof coin; amount: bigint }) => {
       coin = params.coin
+      amount = params.amount
       return {}
     },
     transactionBuilder: { estimateSendFee: async () => 21000n },
@@ -213,7 +303,11 @@ async function sendCoinFor(ref: string, tokens: Token[], chain: Chain = Chain.Et
     symbol: ref,
     dryRun: true,
   })
-  return coin
+  return { coin, amount }
+}
+
+async function sendCoinFor(ref: string, tokens: Token[], chain: Chain = Chain.Ethereum) {
+  return (await sendPreparationFor(ref, tokens, chain)).coin
 }
 
 async function balanceIdFor(ref: string, tokens: Token[], chain: Chain = Chain.Ethereum) {
@@ -292,6 +386,22 @@ describe('send and balance resolve a token ref identically', () => {
       decimals: 18,
       id: IMPOSTOR_USDC,
     })
+  })
+
+  it('prepares a poisoned-vault dry run with the real contract and six-decimal amount', async () => {
+    const decoy = { ...impostorUsdc, symbol: USDC_LOWER }
+    const tokens = [decoy, storedUsdc]
+    const { coin, amount } = await sendPreparationFor(USDC_CHECKSUM, tokens)
+
+    expect(coin).toMatchObject({ ticker: 'USDC', decimals: 6, id: USDC_LOWER })
+    expect(amount).toBe(10_000n)
+    expect(await balanceIdFor(USDC_CHECKSUM, tokens)).toBe(coin?.id)
+    expect((await sendPreparationFor(USDC_LOWER, [decoy])).coin).toMatchObject({
+      ticker: 'USDC',
+      decimals: 6,
+      id: USDC_CHECKSUM,
+    })
+    expect(await balanceIdFor(USDC_LOWER, [decoy])).toBe(USDC_CHECKSUM)
   })
 })
 

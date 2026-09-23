@@ -9,7 +9,13 @@ import type { Address } from 'viem'
 import { formatBalance } from '../../adapters/formatBalance'
 import { CacheScope, type CacheService } from '../../services/CacheService'
 import type { Balance, Token } from '../../types'
-import { normalizedTokenIdentity, resolveTokenRef, stripLegacyTokenIdPrefix, tokenIdsMatch } from '../tokenRef'
+import {
+  normalizedTokenIdentity,
+  resolveTokenRef,
+  stripLegacyTokenIdPrefix,
+  tokenIdsMatch,
+  tokenRefIdsMatch,
+} from '../tokenRef'
 import { VaultError, VaultErrorCode } from '../VaultError'
 
 type PublishBalanceInput = {
@@ -453,35 +459,30 @@ export class BalanceService {
       // `send`/`swap` would pick for the same reference.
       let resolved
       try {
-        resolved = resolveTokenRef(chain, id, tokens)
+        resolved = resolveTokenRef(chain, tokenId, tokens)
       } catch {
         return false
       }
 
       if (!resolved.contractAddress) return false
 
-      // Select the record the RESOLVER selected, by mirroring its own user-token
-      // lookup order (tokenRef.ts): symbol first, then contract address or stored
-      // id. Reconstructing the choice from the resolved asset id instead is not
-      // equivalent — a vault can hold two records for one contract under
-      // different symbols, or a ticker-keyed id (`id: 'usdc'`) alongside the
-      // address-keyed record, and then "which record" and "which asset" are
-      // different questions. Removal must mean the same record every other
-      // surface means for that reference.
+      // Mirror the resolver's identity-before-symbol order so removal cannot
+      // select a poisoned same-text symbol when send/balance select an asset ID.
+      // Select the record rather than just the asset: duplicate records for one
+      // contract can have different symbols.
       const upper = tokenId.toUpperCase()
-      tokenIndex = tokens.findIndex(token => token.symbol?.toUpperCase() === upper)
-      if (tokenIndex === -1) {
-        tokenIndex = tokens.findIndex(token => token.contractAddress === tokenId || token.id === tokenId)
-      }
+      tokenIndex = tokens.findIndex(token => token.id === tokenId)
+      if (tokenIndex === -1) tokenIndex = tokens.findIndex(token => token.contractAddress === tokenId)
       if (tokenIndex === -1) {
         tokenIndex = tokens.findIndex(
-          token => tokenIdsMatch(chain, token.contractAddress, id) || tokenIdsMatch(chain, token.id, id)
+          token => tokenRefIdsMatch(chain, token.contractAddress, tokenId) || tokenRefIdsMatch(chain, token.id, tokenId)
         )
       }
-      if (tokenIndex === -1 && getChainKind(chain) === 'evm') {
-        const lower = id.toLowerCase()
+      if (tokenIndex === -1) {
         tokenIndex = tokens.findIndex(
-          token => token.contractAddress?.toLowerCase() === lower || token.id?.toLowerCase() === lower
+          token =>
+            token.symbol?.toUpperCase() === upper &&
+            tokenIdsMatch(chain, token.contractAddress || token.id, resolved.contractAddress!)
         )
       }
       if (tokenIndex === -1) {

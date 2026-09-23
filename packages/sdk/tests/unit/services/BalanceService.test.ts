@@ -518,6 +518,22 @@ describe('BalanceService', () => {
     expect(getTokens(Chain.Ethereum)).toEqual([bridged, canonical])
   })
 
+  it('removes the addressed token rather than a poisoned same-text symbol', async () => {
+    const poisoned: Token = { ...collisionTokenB, symbol: COLLISION_ASSET_A }
+    const { service, getTokens } = makeMutableService([poisoned, collisionTokenA])
+
+    await expect(service.removeToken(Chain.Ethereum, COLLISION_ASSET_A)).resolves.toBe(true)
+    expect(getTokens(Chain.Ethereum)).toEqual([poisoned])
+  })
+
+  it('does not remove a poisoned symbol when the addressed token is absent', async () => {
+    const poisoned: Token = { ...collisionTokenB, symbol: USDC }
+    const { service, getTokens } = makeMutableService([poisoned])
+
+    await expect(service.removeToken(Chain.Ethereum, USDC)).resolves.toBe(false)
+    expect(getTokens(Chain.Ethereum)).toEqual([poisoned])
+  })
+
   it('removes the record carrying the named symbol when one asset is tracked twice', async () => {
     // Discovery stores the contract under its on-chain symbol; `tokens --add
     // --symbol USDCoin` can store a second record for the SAME contract under a

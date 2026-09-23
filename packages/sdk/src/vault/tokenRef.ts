@@ -8,10 +8,9 @@
  * `vault.balance(chain, tokenId)` all route through here, so a single ref cannot
  * mean one asset to the send path and something else to the balance path.
  *
- * Lookup order is deliberate and additive: symbol/ticker is tried BEFORE
- * contract address, and the user's own tokens before the well-known registry.
- * Every ref that resolved before this module existed resolves to exactly the
- * same token — the only change is that refs which used to throw now resolve.
+ * Exact token identities take precedence over symbols, including short asset
+ * ids. Address/id-shaped refs never fall back to attacker-controlled symbols.
+ * Ordinary tickers still prefer the user's tokens over the known registry.
  */
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getChainKind } from '@vultisig/core-chain/ChainKind'
@@ -64,6 +63,38 @@ function tokenAssetId(chain: Chain, token: Token): string {
   return normalizedTokenIdentity(chain, token.contractAddress || token.id)
 }
 
+/** An unmatched asset identifier must not be interpreted as a token symbol. */
+function isIdentityShapedRef(chain: Chain, ref: string): boolean {
+  const kind = getChainKind(chain)
+  return (
+    /^\d+$/u.test(ref) ||
+    ref.toLowerCase().startsWith(`${chain}-`.toLowerCase()) ||
+    /^0x[0-9a-f]{40}(?:[0-9a-f]{24})?$/iu.test(ref) ||
+    (kind === 'solana' && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/u.test(ref)) ||
+    (kind === 'tron' && /^T[1-9A-HJ-NP-Za-km-z]{33}$/u.test(ref)) ||
+    (kind === 'cosmos' && /^(?:x\/|ibc\/|factory\/)/u.test(ref)) ||
+    (chain === Chain.THORChain && ref.toLowerCase().startsWith('thor.')) ||
+    (chain === Chain.THORChain &&
+      /^(?:avax|base|bch|bsc|btc|doge|eth|gaia|ltc|xrp)-[a-z0-9]+(?:-[a-z0-9]+)*$/iu.test(ref)) ||
+    (kind === 'cosmos' && /^[a-z0-9]{2,}1[023456789acdefghjklmnpqrstuvwxyz]{20,}$/u.test(ref)) ||
+    (kind === 'sui' && /^0x[0-9a-f]+::/iu.test(ref)) ||
+    (kind === 'ripple' && /\.r[1-9A-HJ-NP-Za-km-z]{25,35}$/u.test(ref)) ||
+    (kind === 'ton' && /^(?:EQ|UQ)[A-Za-z0-9_-]{46}$/u.test(ref)) ||
+    (kind === 'ton' && /^(?:0|-1):[0-9a-f]{64}$/iu.test(ref)) ||
+    (kind === 'cardano' && /^[0-9a-f]{56}\.[0-9a-f]*$/iu.test(ref))
+  )
+}
+
+/** Match a caller's explicit stored/registry ID without treating a ticker case variant as an ID. */
+export function tokenRefIdsMatch(chain: Chain, storedId: string | undefined, ref: string): boolean {
+  if (storedId === undefined) return false
+  if (stripLegacyTokenIdPrefix(chain, storedId) === stripLegacyTokenIdPrefix(chain, ref)) return true
+  return (
+    isIdentityShapedRef(chain, ref) &&
+    (tokenIdsMatch(chain, storedId, ref) || caseInsensitiveTokenIdsMatch(chain, storedId, ref))
+  )
+}
+
 class AmbiguousTokenRefError extends VaultError {}
 
 /**
@@ -81,6 +112,29 @@ export function resolveTokenRef(chain: Chain, ref: string | undefined, userToken
     return { ticker: native.ticker, decimals: native.decimals }
   }
 
+  const known = knownTokens[chain] ?? []
+  // Stored identities win at any length, including short numeric asset IDs.
+  const userById = userTokens.find(
+    t => tokenRefIdsMatch(chain, t.contractAddress, ref) || tokenRefIdsMatch(chain, t.id, ref)
+  )
+  if (userById) {
+    return {
+      ticker: userById.symbol ?? userById.contractAddress ?? userById.id,
+      decimals: userById.decimals,
+      contractAddress: stripLegacyTokenIdPrefix(chain, userById.contractAddress || userById.id),
+    }
+  }
+
+  const knownById = known.find(t => tokenRefIdsMatch(chain, t.id, ref))
+  if (knownById) return { ticker: knownById.ticker, decimals: knownById.decimals, contractAddress: knownById.id }
+
+  if (isIdentityShapedRef(chain, ref)) {
+    throw new VaultError(
+      VaultErrorCode.InvalidConfig,
+      `Token "${ref}" not found on ${chain}. Pass a known token id or add it with vault.addToken().`
+    )
+  }
+
   const upper = ref.toUpperCase()
   const symbolMatches = userTokens.filter(t => t.symbol?.toUpperCase() === upper)
   const baseSymbolMatches = userTokens.filter(t => tokenSymbolBase(t.symbol)?.toUpperCase() === upper)
@@ -94,15 +148,8 @@ export function resolveTokenRef(chain: Chain, ref: string | undefined, userToken
     )
   }
 
-  // 1. The user's configured tokens — by symbol first, then by contract address
-  //    or stored id. Legacy `<Chain>-<address>` ids and canonical bare ids are
-  //    treated as the same storage identity.
-  const token =
-    symbolMatches[0] ??
-    userTokens.find(t => tokenIdsMatch(chain, t.contractAddress, ref) || tokenIdsMatch(chain, t.id, ref)) ??
-    userTokens.find(
-      t => caseInsensitiveTokenIdsMatch(chain, t.contractAddress, ref) || caseInsensitiveTokenIdsMatch(chain, t.id, ref)
-    )
+  // Ordinary ticker lookup still prefers configured tokens over the registry.
+  const token = symbolMatches[0]
   if (token) {
     return {
       ticker: token.symbol ?? token.contractAddress ?? token.id,
@@ -111,12 +158,8 @@ export function resolveTokenRef(chain: Chain, ref: string | undefined, userToken
     }
   }
 
-  // 2. Well-known token registry (no network call) — ticker first, then id.
-  const known = knownTokens[chain] ?? []
-  const match =
-    known.find(t => t.ticker.toUpperCase() === upper) ??
-    known.find(t => tokenIdsMatch(chain, t.id, ref)) ??
-    known.find(t => caseInsensitiveTokenIdsMatch(chain, t.id, ref))
+  // Well-known token registry (no network call) — ticker only; ids were checked above.
+  const match = known.find(t => t.ticker.toUpperCase() === upper)
   if (match) return { ticker: match.ticker, decimals: match.decimals, contractAddress: match.id }
 
   throw new VaultError(
