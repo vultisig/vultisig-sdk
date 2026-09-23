@@ -1,3 +1,4 @@
+import * as cosmosStaking from '@vultisig/core-chain/chains/cosmos/staking/lcdQueries'
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
 import { resolveTokenPriceId as canonicalResolveTokenPriceId } from '@vultisig/core-chain/coin/price/resolveTokenPriceId'
@@ -32,6 +33,34 @@ const dangerousAddressCanonicalExports = [
 ] as const
 
 describe('@vultisig/sdk public exports', () => {
+  it('exports canonical Cosmos validator helpers and types', () => {
+    expect(sdk.getValidatorsUrl).toBe(cosmosStaking.getValidatorsUrl)
+    expect(sdk.getValidatorUrl).toBe(cosmosStaking.getValidatorUrl)
+    expect(sdk.getCosmosValidators).toBe(cosmosStaking.getCosmosValidators)
+    expect(sdk.getCosmosValidator).toBe(cosmosStaking.getCosmosValidator)
+    expectTypeOf<sdk.StakingChain>().toEqualTypeOf<cosmosStaking.StakingChain>()
+    expectTypeOf<sdk.ValidatorStatus>().toEqualTypeOf<cosmosStaking.ValidatorStatus>()
+    expectTypeOf<sdk.ValidatorDescription>().toEqualTypeOf<cosmosStaking.ValidatorDescription>()
+    expectTypeOf<sdk.ValidatorCommission>().toEqualTypeOf<cosmosStaking.ValidatorCommission>()
+    expectTypeOf<sdk.CosmosStakingValidator>().toEqualTypeOf<cosmosStaking.Validator>()
+
+    const url = new URL(
+      sdk.getValidatorsUrl(sdk.Chain.Terra, {
+        status: 'BOND_STATUS_BONDED',
+        limit: 25,
+        paginationKey: 'cursor+/=',
+      })
+    )
+    expect(url.pathname).toBe('/cosmos/staking/v1beta1/validators')
+    expect(url.searchParams.get('status')).toBe('BOND_STATUS_BONDED')
+    expect(url.searchParams.get('pagination.limit')).toBe('25')
+    expect(url.searchParams.get('pagination.key')).toBe('cursor+/=')
+    expect(url.search).toContain('pagination.key=cursor%2B%2F%3D')
+    expect(sdk.getValidatorUrl(sdk.Chain.Terra, 'terravaloper1abc')).toBe(
+      `${url.origin}/cosmos/staking/v1beta1/validators/terravaloper1abc`
+    )
+  })
+
   it('exports the canonical token price-ID resolver with its existing signature and lookup behavior', () => {
     expect(sdk.resolveTokenPriceId).toBe(canonicalResolveTokenPriceId)
     expectTypeOf(sdk.resolveTokenPriceId).toEqualTypeOf<
