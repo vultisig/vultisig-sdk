@@ -4,8 +4,8 @@ import {
   type Abi,
   decodeAbiParameters,
   decodeFunctionData,
-  type Hex,
   hexToBytes,
+  isHex,
   parseAbi,
   parseAbiParameters,
   toFunctionSelector,
@@ -14,6 +14,10 @@ import {
 // See docs/evm-swap-commitments.md for verified contracts, semantics and residual coverage.
 const nativeToken = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
 const zeroAddress = '0x0000000000000000000000000000000000000000'
+const ethereumThorRouter = '0xd37bbe5744d730a1d98d8dc97c42f0ca46ad7146'
+const ethereumUniversalRouter = '0x3fc91a3afd70395cd496c647d5a6cc9d4b2b7fad'
+const ethereumWrappedEther = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'
+const universalRouterAddressThis = '0x0000000000000000000000000000000000000002'
 const contractBalance = 1n << 255n
 const addressMask = (1n << 160n) - 1n
 
@@ -75,9 +79,9 @@ const malformed = (): never => {
 const decodeKnown = <T extends Abi>(abi: T, data: string) => {
   const selector = data.slice(0, 10).toLowerCase()
   if (!abi.some(item => item.type === 'function' && toFunctionSelector(item) === selector)) return undefined
-  if (!/^0x(?:[\da-fA-F]{2})+$/.test(data)) return malformed()
+  if (!isHex(data) || !/^0x(?:[\da-fA-F]{2})+$/.test(data)) return malformed()
   try {
-    return decodeFunctionData({ abi, data: data as Hex })
+    return decodeFunctionData({ abi, data })
   } catch {
     return malformed()
   }
@@ -86,6 +90,15 @@ const decodeKnown = <T extends Abi>(abi: T, data: string) => {
 const parseValue = (value: string): bigint => {
   if (!/^(?:\d+|0x[\da-fA-F]+)$/.test(value)) return malformed()
   return BigInt(value)
+}
+
+const assertTransactionValue = (value: string, expected: bigint): void => {
+  const actual = parseValue(value)
+  if (actual !== expected) {
+    throw new Error(
+      `prepareSwapTxFromKeys: encoded EVM swap transaction value mismatch; expected ${expected}, received ${actual}; refresh the quote before signing`
+    )
+  }
 }
 
 const isKnownRouter = (provider: '1inch' | 'kyber', input: Input): boolean => {
@@ -113,20 +126,32 @@ const decodeOneInch = (input: Input): EvmSwapCommitment => {
     // equate their transaction value with the source amount or invent a tolerance.
     if (desc.flags & 2n) return {}
     const native = [nativeToken, zeroAddress].includes(desc.srcToken.toLowerCase())
-    if (parseValue(tx.value) !== (native ? desc.amount : 0n)) return malformed()
+    assertTransactionValue(tx.value, native ? desc.amount : 0n)
     return sourceCommitment(native ? zeroAddress : desc.srcToken, desc.amount)
   }
-  if (decoded.functionName.startsWith('ethUnoswap')) {
-    return sourceCommitment(zeroAddress, parseValue(tx.value))
+  let token: bigint
+  let amount: bigint
+  let firstPool: bigint
+  switch (decoded.functionName) {
+    case 'unoswap':
+    case 'unoswap2':
+    case 'unoswap3':
+      ;[token, amount, , firstPool] = decoded.args
+      break
+    case 'unoswapTo':
+    case 'unoswapTo2':
+    case 'unoswapTo3':
+      ;[, token, amount, , firstPool] = decoded.args
+      break
+    default:
+      return sourceCommitment(zeroAddress, parseValue(tx.value))
   }
-  const offset = decoded.functionName.startsWith('unoswapTo') ? 1 : 0
-  const args = decoded.args as readonly bigint[]
   // V6 ignores `token` when the first pool is V3: the callback obtains the
   // debit asset from the pool instead. Without independently reading that pool,
   // the argument cannot establish the units of `amount` (and may legitimately be 0).
-  if (args[offset + 3] >> 253n === 1n) return {}
-  if (parseValue(tx.value) !== 0n) return malformed()
-  return sourceCommitment(`0x${(args[offset] & addressMask).toString(16).padStart(40, '0')}`, args[offset + 1])
+  if (firstPool >> 253n === 1n) return {}
+  assertTransactionValue(tx.value, 0n)
+  return sourceCommitment(`0x${(token & addressMask).toString(16).padStart(40, '0')}`, amount)
 }
 
 const decodeKyber = (input: Input): EvmSwapCommitment => {
@@ -163,7 +188,7 @@ const decodeKyber = (input: Input): EvmSwapCommitment => {
   // amount, srcAmounts sum, or output-token affiliate fees to the user's input.
   if (desc.flags & 2n) return { deadline }
   const native = desc.srcToken.toLowerCase() === nativeToken
-  if (parseValue(input.tx.value) !== (native ? desc.amount : 0n)) return malformed()
+  assertTransactionValue(input.tx.value, native ? desc.amount : 0n)
   return { ...sourceCommitment(native ? zeroAddress : desc.srcToken, desc.amount), deadline }
 }
 
@@ -172,7 +197,7 @@ const decodeThor = (input: Input): EvmSwapCommitment => {
   if (!decoded) return {}
   const [, asset, amount, , expiration] = decoded.args
   const native = asset.toLowerCase() === zeroAddress
-  if (!native && parseValue(input.tx.value) !== 0n) return malformed()
+  if (!native) assertTransactionValue(input.tx.value, 0n)
   return {
     ...sourceCommitment(asset, native ? parseValue(input.tx.value) : amount),
     deadline: { seconds: expiration, inclusive: false },
@@ -208,8 +233,8 @@ const decodeUniversal = (input: Input): EvmSwapCommitment => {
       // user's input; the native funds leaving the wallet are exactly tx.value.
       if (
         payerIsUser ||
-        ![input.tx.to.toLowerCase(), '0x0000000000000000000000000000000000000002'].includes(recipient.toLowerCase()) ||
-        source.toLowerCase() !== '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'
+        ![input.tx.to.toLowerCase(), universalRouterAddressThis].includes(recipient.toLowerCase()) ||
+        source.toLowerCase() !== ethereumWrappedEther
       )
         return partial
       return { ...sourceCommitment(zeroAddress, parseValue(input.tx.value)), deadline }
@@ -235,8 +260,8 @@ export const decodeEvmSwapCommitment = (input: Input): EvmSwapCommitment => {
   if (isKnownRouter('kyber', input)) return decodeKyber(input)
   if (input.chain === Chain.Ethereum) {
     const router = input.tx.to.toLowerCase()
-    if (router === '0xd37bbe5744d730a1d98d8dc97c42f0ca46ad7146') return decodeThor(input)
-    if (router === '0x3fc91a3afd70395cd496c647d5a6cc9d4b2b7fad') return decodeUniversal(input)
+    if (router === ethereumThorRouter) return decodeThor(input)
+    if (router === ethereumUniversalRouter) return decodeUniversal(input)
   }
   return {}
 }

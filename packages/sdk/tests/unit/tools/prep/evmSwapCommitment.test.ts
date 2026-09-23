@@ -68,7 +68,9 @@ describe('verified EVM swap commitments', () => {
       sourceToken: token,
     })
     expect(decode(legacy ? v5 : oneinch, inch(100n, native, 0n, legacy), 100n).sellAmount).toBe(100n)
-    expect(() => decode(legacy ? v5 : oneinch, inch(100n, native, 0n, legacy), 101n)).toThrow('malformed')
+    expect(() => decode(legacy ? v5 : oneinch, inch(100n, native, 0n, legacy), 101n)).toThrow(
+      'transaction value mismatch; expected 100, received 101'
+    )
   })
   it.each(['unoswap', 'unoswap2', 'unoswap3', 'unoswapTo', 'unoswapTo2', 'unoswapTo3'])(
     'uses real V6 uint256 token/to ABI for %s',
@@ -132,7 +134,9 @@ describe('verified EVM swap commitments', () => {
   })
   it('binds native Kyber value and amount together', () => {
     expect(decode(kyber, kyberCall('swap', 100n, native), 100n).sellAmount).toBe(100n)
-    expect(() => decode(kyber, kyberCall('swap', 100n, native), 101n)).toThrow('malformed')
+    expect(() => decode(kyber, kyberCall('swap', 100n, native), 101n)).toThrow(
+      'transaction value mismatch; expected 100, received 101'
+    )
   })
   it('uses native THOR value even when the encoded amount differs', () => {
     expect(decode(thor, deposit(zero, 999n), 100n)).toEqual({
