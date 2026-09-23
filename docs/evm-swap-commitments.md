@@ -54,7 +54,11 @@ Authoritative sources inspected for these layouts:
   amount-unchecked. Their known outer deadline is always retained. The numeric
   `CONTRACT_BALANCE` and `ALREADY_PAID` sentinels are never compared as literal
   wallet input amounts. For supported wrapped native calls, the wallet debit is
-  `tx.value`, not the router's pre-existing balance.
+  `tx.value`, not the router's pre-existing balance. This binds the gross native
+  debit; it does not prove that every unit is wrapped or consumed by the swap,
+  or that no balance remains in the router. Recognized single unwrapped token
+  legs require zero native value, including router-funded and sentinel legs
+  whose token amount remains unknown.
 - Direct Uniswap V2/V3 routers, newer Universal Router deployments, 1inch Clipper,
   limit-order/permit wrappers, LI.FI and other SwapKit wrappers remain outside
   this decoder. Existing router/reputation, quote-binding and expiry safeguards

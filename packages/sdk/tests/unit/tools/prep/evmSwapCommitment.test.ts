@@ -174,6 +174,13 @@ describe('verified EVM swap commitments', () => {
       'malformed recognized EVM swap calldata'
     )
   })
+  it.each([false, true])('rejects native value on unwrapped router-funded and sentinel legs, V3=%s', v3 => {
+    for (const input of [leg(100n, false, v3), leg(balance, true, v3), leg(0n, true, v3)]) {
+      const data = execute(v3 ? '0x00' : '0x08', [input], 200n)
+      expect(() => decode(ur, data, 1n)).toThrow('transaction value mismatch; expected 0, received 1')
+      expect(decode(ur, data)).toEqual({ deadline: { seconds: 200n, inclusive: true } })
+    }
+  })
   it('retains deadlines for undecodable inner swaps, mixed routes, sentinels, and router-funded legs', () => {
     for (const data of [
       execute('0x08', ['0x'], 200n),
@@ -260,12 +267,17 @@ describe('preparation semantic checks after valid fingerprint binding', () => {
     )
     expect(mocks.wallet).not.toHaveBeenCalled()
   })
-  it('rejects extra native value on a Universal Router token swap before wallet, key or payload work', async () => {
-    await expect(prepare(tx(ur, execute('0x08', [leg(100n)]), 1n))).rejects.toThrow('transaction value mismatch')
-    expect(mocks.wallet).not.toHaveBeenCalled()
-    expect(mocks.key).not.toHaveBeenCalled()
-    expect(mocks.build).not.toHaveBeenCalled()
-  })
+  it.each([true, false])(
+    'rejects extra native value before wallet, key or payload work, payer-funded=%s',
+    async payer => {
+      await expect(prepare(tx(ur, execute('0x08', [leg(100n, payer)]), 1n))).rejects.toThrow(
+        'transaction value mismatch'
+      )
+      expect(mocks.wallet).not.toHaveBeenCalled()
+      expect(mocks.key).not.toHaveBeenCalled()
+      expect(mocks.build).not.toHaveBeenCalled()
+    }
+  )
   it('rejects a different encoded source asset', async () => {
     await expect(prepare(tx(oneinch, inch(100n, weth)))).rejects.toThrow('source token')
     expect(mocks.build).not.toHaveBeenCalled()

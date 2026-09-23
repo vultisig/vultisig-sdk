@@ -247,10 +247,10 @@ const decodeUniversal = (input: Input): EvmSwapCommitment => {
       return partial
     return { ...sourceCommitment(zeroAddress, parseValue(input.tx.value)), deadline }
   }
+  assertTransactionValue(input.tx.value, 0n)
   // V2 zero means ALREADY_PAID; V3's high bit means router balance. Neither
   // is a literal amount the wallet authorizes. Keep the independently known deadline.
   if (!payerIsUser || amount === 0n || amount === contractBalance) return partial
-  assertTransactionValue(input.tx.value, 0n)
   return { ...sourceCommitment(source, amount), deadline }
 }
 
