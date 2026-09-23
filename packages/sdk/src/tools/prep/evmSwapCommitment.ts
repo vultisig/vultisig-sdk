@@ -220,34 +220,38 @@ const decodeUniversal = (input: Input): EvmSwapCommitment => {
   const index = wrapped ? 1 : 0
   const op = ops[index]
   if (op !== 0x00 && op !== 0x08) return partial
+  let decodedLeg
+  let recipient: string | undefined
   try {
-    const [, amount, , path, payerIsUser] =
+    decodedLeg =
       op === 0x08
         ? decodeAbiParameters(parseAbiParameters('address,uint256,uint256,address[],bool'), inputs[index])
         : decodeAbiParameters(parseAbiParameters('address,uint256,uint256,bytes,bool'), inputs[index])
-    const source = typeof path === 'string' ? path.slice(0, 42) : path[0]
-    if (!source || (typeof path === 'string' ? path.length < 88 : path.length < 2)) return partial
-    if (wrapped) {
-      const [recipient] = decodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], inputs[0])
-      // WRAP_ETH may use CONTRACT_BALANCE. Its numeric sentinel is never the
-      // user's input; the native funds leaving the wallet are exactly tx.value.
-      if (
-        payerIsUser ||
-        ![input.tx.to.toLowerCase(), universalRouterAddressThis].includes(recipient.toLowerCase()) ||
-        source.toLowerCase() !== ethereumWrappedEther
-      )
-        return partial
-      return { ...sourceCommitment(zeroAddress, parseValue(input.tx.value)), deadline }
-    }
-    // V2 zero means ALREADY_PAID; V3's high bit means router balance. Neither
-    // is a literal amount the wallet authorizes. Keep the independently known deadline.
-    if (!payerIsUser || amount === 0n || amount === contractBalance) return partial
-    if (parseValue(input.tx.value) !== 0n) return partial
-    return { ...sourceCommitment(source, amount), deadline }
+    if (wrapped) [recipient] = decodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], inputs[0])
   } catch {
     // The outer deadline is still authoritative even if the inner format is unknown.
     return partial
   }
+  const [, amount, , path, payerIsUser] = decodedLeg
+  const source = typeof path === 'string' ? path.slice(0, 42) : path[0]
+  if (!source || (typeof path === 'string' ? path.length < 88 : path.length < 2)) return partial
+  if (wrapped) {
+    // WRAP_ETH may use CONTRACT_BALANCE. Its numeric sentinel is never the
+    // user's input; the native funds leaving the wallet are exactly tx.value.
+    if (
+      payerIsUser ||
+      !recipient ||
+      ![input.tx.to.toLowerCase(), universalRouterAddressThis].includes(recipient.toLowerCase()) ||
+      source.toLowerCase() !== ethereumWrappedEther
+    )
+      return partial
+    return { ...sourceCommitment(zeroAddress, parseValue(input.tx.value)), deadline }
+  }
+  // V2 zero means ALREADY_PAID; V3's high bit means router balance. Neither
+  // is a literal amount the wallet authorizes. Keep the independently known deadline.
+  if (!payerIsUser || amount === 0n || amount === contractBalance) return partial
+  assertTransactionValue(input.tx.value, 0n)
+  return { ...sourceCommitment(source, amount), deadline }
 }
 
 /**

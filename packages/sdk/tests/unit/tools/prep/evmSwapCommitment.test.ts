@@ -160,6 +160,20 @@ describe('verified EVM swap commitments', () => {
       expect(decode(ur, execute(command, ['0x'], 200n))).toEqual({ deadline: { seconds: 200n, inclusive: true } })
     }
   )
+  it.each([false, true])('rejects native value on a payer-funded token leg, V3=%s', v3 => {
+    expect(() => decode(ur, execute(v3 ? '0x00' : '0x08', [leg(100n, true, v3)], 200n), 1n)).toThrow(
+      'transaction value mismatch; expected 0, received 1'
+    )
+  })
+  it.each([false, true])('rejects malformed value after supported inner decoding, wrapped=%s', wrapped => {
+    const wrap = abiCoder.encode(['address', 'uint256'], ['0x0000000000000000000000000000000000000002', balance])
+    const data = wrapped
+      ? execute('0x0b00', [wrap, leg(balance, false, true, weth)], 200n)
+      : execute('0x08', [leg(100n)], 200n)
+    expect(() => decodeEvmSwapCommitment({ chain: Chain.Ethereum, tx: { ...tx(ur, data), value: 'invalid' } })).toThrow(
+      'malformed recognized EVM swap calldata'
+    )
+  })
   it('retains deadlines for undecodable inner swaps, mixed routes, sentinels, and router-funded legs', () => {
     for (const data of [
       execute('0x08', ['0x'], 200n),
@@ -167,6 +181,7 @@ describe('verified EVM swap commitments', () => {
       execute('0x08', [leg(balance)], 200n),
       execute('0x08', [leg(0n)], 200n),
       execute('0x08', [leg(100n, false)], 200n),
+      execute('0x0b08', ['0x', leg(100n, false, false, weth)], 200n),
     ]) {
       expect(decode(ur, data)).toEqual({ deadline: { seconds: 200n, inclusive: true } })
     }
@@ -244,6 +259,12 @@ describe('preparation semantic checks after valid fingerprint binding', () => {
       'committed source amount'
     )
     expect(mocks.wallet).not.toHaveBeenCalled()
+  })
+  it('rejects extra native value on a Universal Router token swap before wallet, key or payload work', async () => {
+    await expect(prepare(tx(ur, execute('0x08', [leg(100n)]), 1n))).rejects.toThrow('transaction value mismatch')
+    expect(mocks.wallet).not.toHaveBeenCalled()
+    expect(mocks.key).not.toHaveBeenCalled()
+    expect(mocks.build).not.toHaveBeenCalled()
   })
   it('rejects a different encoded source asset', async () => {
     await expect(prepare(tx(oneinch, inch(100n, weth)))).rejects.toThrow('source token')
