@@ -852,17 +852,29 @@ export {
 // import to call time matches the proven RN polkadot-resolver pattern in
 // ./getCoinBalance and keeps the eager bundle free of @polkadot/api.
 export type { PolkadotAssetBalance, PolkadotNativeBalance } from '../../tools/balance'
-export async function balancePolkadot(...args: unknown[]) {
+type BalancePolkadot = typeof import('../../tools/balance').balancePolkadot
+
+const lazyBalancePolkadot = async (params: { address: string; assetId?: string }) => {
   const mod = await import('../../tools/balance')
-  return mod.balancePolkadot(...(args as Parameters<typeof mod.balancePolkadot>))
+
+  return params.assetId === undefined
+    ? mod.balancePolkadot({ address: params.address })
+    : mod.balancePolkadot({ address: params.address, assetId: params.assetId })
 }
-export async function getPolkadotNativeBalance(...args: unknown[]) {
+
+export const balancePolkadot = lazyBalancePolkadot as BalancePolkadot
+
+export async function getPolkadotNativeBalance(
+  ...args: Parameters<typeof import('../../tools/balance').getPolkadotNativeBalance>
+) {
   const mod = await import('../../tools/balance')
-  return mod.getPolkadotNativeBalance(...(args as Parameters<typeof mod.getPolkadotNativeBalance>))
+  return mod.getPolkadotNativeBalance(...args)
 }
-export async function getPolkadotAssetBalance(...args: unknown[]) {
+export async function getPolkadotAssetBalance(
+  ...args: Parameters<typeof import('../../tools/balance').getPolkadotAssetBalance>
+) {
   const mod = await import('../../tools/balance')
-  return mod.getPolkadotAssetBalance(...(args as Parameters<typeof mod.getPolkadotAssetBalance>))
+  return mod.getPolkadotAssetBalance(...args)
 }
 
 // Solana balance reads (native SOL + SPL/Token-2022). Safe to re-export
@@ -941,9 +953,9 @@ export {
   nativeSwapEnabledChainsRecord,
 } from '@vultisig/core-chain/swap/native/NativeSwapChain'
 export { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
-export async function fiatToAmount(...args: unknown[]) {
+export async function fiatToAmount(...args: Parameters<typeof import('../../utils/fiatToAmount').fiatToAmount>) {
   const mod = await import('../../utils/fiatToAmount')
-  return mod.fiatToAmount(...(args as Parameters<typeof mod.fiatToAmount>))
+  return mod.fiatToAmount(...args)
 }
 export type { ParseChainResult, ParseTickerResult } from '../../tools/parse'
 export { chainSchema, parseChain, parseTicker, tickerSchema } from '../../tools/parse'
@@ -1005,9 +1017,9 @@ export { normalizeChain, UnknownChainError } from '../../utils/normalizeChain'
 export { resolveChainIdReference, resolveChainReference } from '../../utils/resolveChainReference'
 export type { ParsedThorSwapMemo } from '../../utils/thorSwapMemo'
 export { parseThorSwapMemo } from '../../utils/thorSwapMemo'
-export async function parseKeygenQR(...args: unknown[]) {
+export async function parseKeygenQR(...args: Parameters<typeof import('../../utils/parseKeygenQR').parseKeygenQR>) {
   const mod = await import('../../utils/parseKeygenQR')
-  return mod.parseKeygenQR(...(args as Parameters<typeof mod.parseKeygenQR>))
+  return mod.parseKeygenQR(...args)
 }
 export { ValidationHelpers } from '../../utils/validation'
 

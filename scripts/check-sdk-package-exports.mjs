@@ -564,7 +564,13 @@ import {
   buildSignAminoKeysignPayload,
   buildSignDirectKeysignPayload,
   chainRegistry,
+  balancePolkadot,
+  fiatToAmount,
+  getPolkadotAssetBalance,
+  getPolkadotNativeBalance,
   getTxStatus,
+  parseKeygenQR,
+  prepareTrc20TransferFromKeys,
   deriveFromChainRegistry,
   extendChainRegistry,
   resolveTokenRef,
@@ -592,6 +598,12 @@ import {
   tronHexToBase58 as tronHexToBase58ReactNative,
   buildSignAminoKeysignPayload as buildSignAminoKeysignPayloadReactNative,
   buildSignDirectKeysignPayload as buildSignDirectKeysignPayloadReactNative,
+  balancePolkadot as balancePolkadotReactNative,
+  fiatToAmount as fiatToAmountReactNative,
+  getPolkadotAssetBalance as getPolkadotAssetBalanceReactNative,
+  getPolkadotNativeBalance as getPolkadotNativeBalanceReactNative,
+  parseKeygenQR as parseKeygenQRReactNative,
+  prepareTrc20TransferFromKeys as prepareTrc20TransferFromKeysReactNative,
   type BuildSignAminoPayloadInput as BuildSignAminoPayloadInputReactNative,
   type BuildSignDirectPayloadInput as BuildSignDirectPayloadInputReactNative,
   resolveTokenRef as resolveTokenRefReactNative,
@@ -599,6 +611,46 @@ import {
   getTxStatus as getTxStatusReactNative,
   type ResolvedTokenInfo as ResolvedTokenInfoReactNative,
 } from '@vultisig/sdk/react-native'
+
+const trc20Params = {
+  contractAddress: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+  from: 'TJRabPrwbZy45sbavfcjinPJC18kjpRTv8',
+  to: 'TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH',
+  amount: '1000000',
+}
+const trc20Descriptors = [
+  prepareTrc20TransferFromKeys(trc20Params),
+  prepareTrc20TransferFromKeysReactNative(trc20Params),
+]
+const polkadotBalances = [
+  balancePolkadot({ address: '15abc' }),
+  balancePolkadot({ address: '15abc', assetId: '1984' }),
+  balancePolkadotReactNative({ address: '15abc' }),
+  balancePolkadotReactNative({ address: '15abc', assetId: '1984' }),
+  getPolkadotNativeBalance('15abc'),
+  getPolkadotNativeBalanceReactNative('15abc'),
+  getPolkadotAssetBalance('15abc', '1984'),
+  getPolkadotAssetBalanceReactNative('15abc', '1984'),
+]
+const fiatAmounts = [
+  fiatToAmount({ fiatValue: 100, chain: Chain.Ethereum, decimals: 18 }),
+  fiatToAmountReactNative({ fiatValue: 100, chain: Chain.Ethereum, decimals: 18 }),
+]
+const parsedKeygenQrs = [parseKeygenQR('vultisig://?jsonData=data'), parseKeygenQRReactNative('vultisig://?jsonData=data')]
+void [trc20Descriptors, polkadotBalances, fiatAmounts, parsedKeygenQrs]
+
+// @ts-expect-error amount is required by the root declaration selected under every condition
+prepareTrc20TransferFromKeys({ contractAddress: trc20Params.contractAddress, from: trc20Params.from, to: trc20Params.to })
+// @ts-expect-error amount is required by the explicit React Native subpath declaration
+prepareTrc20TransferFromKeysReactNative({ contractAddress: trc20Params.contractAddress, from: trc20Params.from, to: trc20Params.to })
+// @ts-expect-error QR payloads must be strings through the root declaration
+parseKeygenQR(123)
+// @ts-expect-error QR payloads must be strings through the explicit React Native declaration
+parseKeygenQRReactNative(123)
+// @ts-expect-error excess arguments are rejected through the root declaration
+parseKeygenQR('vultisig://?jsonData=data', 'excess')
+// @ts-expect-error excess arguments are rejected through the explicit React Native declaration
+parseKeygenQRReactNative('vultisig://?jsonData=data', 'excess')
 import {
   recipientSanity as recipientSanityRoot,
   isNullAddress as isNullAddressRoot,
