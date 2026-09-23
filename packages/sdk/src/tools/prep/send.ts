@@ -4,6 +4,7 @@ import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
 import { assertSafeDestination } from '@vultisig/core-chain/security/dangerousAddresses'
 import { assertSafeTokenTransferDestination } from '@vultisig/core-chain/security/tokenTransferGuards'
+import { withEvmChecksumHint } from '@vultisig/core-chain/utils/getEvmChecksumMismatchHint'
 import { isValidRecipient } from '@vultisig/core-chain/utils/isValidRecipient'
 import type { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
 import { buildSendKeysignPayload } from '@vultisig/core-mpc/keysign/send/build'
@@ -72,7 +73,12 @@ export const prepareSendTxFromKeys = async (
     walletCore,
   })
   if (!isValid) {
-    throw new Error(`Invalid receiver address for chain ${params.coin.chain}: ${params.receiver}`)
+    throw new Error(
+      withEvmChecksumHint(
+        `Invalid receiver address for chain ${params.coin.chain}: ${params.receiver}`,
+        params.receiver
+      )
+    )
   }
 
   // Fund-safety: reject known burn/dead/dangerous addresses before building

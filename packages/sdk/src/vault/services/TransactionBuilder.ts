@@ -4,6 +4,7 @@ import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getCoinType } from '@vultisig/core-chain/coin/coinType'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
 import { getTwPublicKeyType } from '@vultisig/core-chain/publicKey/tw/getTwPublicKeyType'
+import { withEvmChecksumHint } from '@vultisig/core-chain/utils/getEvmChecksumMismatchHint'
 import { isValidRecipient } from '@vultisig/core-chain/utils/isValidRecipient'
 import { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
 import { getSendFeeEstimate } from '@vultisig/core-mpc/keysign/send/getSendFeeEstimate'
@@ -156,7 +157,10 @@ export class TransactionBuilder {
       if (!isValid) {
         throw new VaultError(
           VaultErrorCode.InvalidConfig,
-          `Invalid receiver address format for chain ${params.coin.chain}: ${params.receiver}`
+          withEvmChecksumHint(
+            `Invalid receiver address format for chain ${params.coin.chain}: ${params.receiver}`,
+            params.receiver
+          )
         )
       }
 
