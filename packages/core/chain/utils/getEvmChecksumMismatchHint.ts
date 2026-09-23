@@ -3,7 +3,7 @@ import { isAddress } from 'viem'
 const evmHexAddressPattern = /^0x[0-9a-fA-F]{40}$/u
 
 const evmChecksumMismatchHint =
-  'EIP-55 checksum mismatch: the mixed-case address does not match its checksum. Check for a typo, or paste it in all-lowercase.'
+  'EIP-55 checksum mismatch: this mixed-case address does not match its checksum, so it is probably mistyped. Re-copy it from a trusted source and try again.'
 
 export const isEvmHexAddress = (address: string): boolean => evmHexAddressPattern.test(address)
 

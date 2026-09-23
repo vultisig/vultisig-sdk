@@ -32,7 +32,7 @@ describe('getEvmChecksumMismatchHint', () => {
 describe('withEvmChecksumHint', () => {
   it('appends the hint in parentheses when it applies', () => {
     expect(withEvmChecksumHint('Invalid receiver address', digitTypo)).toBe(
-      'Invalid receiver address (EIP-55 checksum mismatch: the mixed-case address does not match its checksum. Check for a typo, or paste it in all-lowercase.)'
+      'Invalid receiver address (EIP-55 checksum mismatch: this mixed-case address does not match its checksum, so it is probably mistyped. Re-copy it from a trusted source and try again.)'
     )
   })
 
