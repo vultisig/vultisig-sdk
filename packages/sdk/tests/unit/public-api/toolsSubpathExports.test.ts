@@ -27,6 +27,35 @@ describe('public API subpath exports', () => {
     )
   })
 
+  it('publishes DEX helpers through dedicated runtime and declaration bundles', () => {
+    const entry = sdkPackageJson.exports['./tools/dex']
+    expect(entry).toEqual({
+      types: {
+        require: './dist/tools/dex/index.d.cts',
+        default: './dist/tools/dex/index.d.ts',
+      },
+      browser: './dist/tools/dex/index.browser.js',
+      worker: './dist/tools/dex/index.browser.js',
+      'react-native': './dist/tools/dex/index.browser.js',
+      node: {
+        import: './dist/tools/dex/index.js',
+        require: './dist/tools/dex/index.cjs',
+      },
+      import: './dist/tools/dex/index.js',
+      require: './dist/tools/dex/index.cjs',
+      default: './dist/tools/dex/index.cjs',
+    })
+    expect(JSON.stringify(entry)).not.toContain('dist/index.node')
+    expect(platformRollupConfig).toContain("input: './src/tools/dex/index.ts'")
+    expect(platformRollupConfig).toContain("distBase: 'tools/dex'")
+    expect(typesRollupConfig).toContain(
+      "createSubpathTypesConfig('src/tools/dex/index.ts', 'dist/tools/dex/index.d.ts')"
+    )
+    expect(typesRollupConfig).toContain(
+      "createSubpathTypesConfig('src/tools/dex/index.ts', 'dist/tools/dex/index.d.cts')"
+    )
+  })
+
   it('publishes prep with distinct native runtime and asynchronous declarations', () => {
     const entry = sdkPackageJson.exports['./tools/prep']
     expect(entry.types).toEqual({

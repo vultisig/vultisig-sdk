@@ -102,6 +102,22 @@
       "require": "./dist/tools/defi/index.cjs",
       "default": "./dist/tools/defi/index.cjs"
     },
+    "./tools/dex": {
+      "types": {
+        "require": "./dist/tools/dex/index.d.cts",
+        "default": "./dist/tools/dex/index.d.ts"
+      },
+      "browser": "./dist/tools/dex/index.browser.js",
+      "worker": "./dist/tools/dex/index.browser.js",
+      "react-native": "./dist/tools/dex/index.browser.js",
+      "node": {
+        "import": "./dist/tools/dex/index.js",
+        "require": "./dist/tools/dex/index.cjs"
+      },
+      "import": "./dist/tools/dex/index.js",
+      "require": "./dist/tools/dex/index.cjs",
+      "default": "./dist/tools/dex/index.cjs"
+    },
     "./tools/bridge": {
       "types": "./dist/tools/bridge/index.d.ts",
       "browser": "./dist/tools/bridge/index.js",

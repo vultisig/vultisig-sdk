@@ -39,7 +39,7 @@ try {
           noEmit: true,
           skipLibCheck: true,
         },
-        include: ['smoke-types.ts'],
+        include: ['smoke-types.ts', 'smoke-dex.cts'],
       },
       null,
       2
@@ -168,6 +168,45 @@ try {
     ].join('\n')
   )
   writeFileSync(
+    path.join(appRoot, 'smoke-dex.mjs'),
+    [
+      "import assert from 'node:assert/strict'",
+      "import { getAmountOut, uniswapV2Quote, balancerQuote, uniswap } from '@vultisig/sdk/tools/dex'",
+      "assert.ok(import.meta.resolve('@vultisig/sdk/tools/dex').endsWith('/dist/tools/dex/index.js'))",
+      'assert.equal(getAmountOut(1000n, 10000n, 20000n), 1813n)',
+      "assert.equal(typeof uniswapV2Quote, 'function')",
+      "assert.equal(typeof balancerQuote, 'function')",
+      "assert.equal(typeof uniswap, 'object')",
+      "console.log('DEX ESM import and math: PASS')",
+      '',
+    ].join('\n')
+  )
+  writeFileSync(
+    path.join(appRoot, 'smoke-dex.cjs'),
+    [
+      "const assert = require('node:assert/strict')",
+      "const { getAmountOut, uniswapV2Quote, balancerQuote, uniswap } = require('@vultisig/sdk/tools/dex')",
+      "assert.ok(require.resolve('@vultisig/sdk/tools/dex').endsWith('/dist/tools/dex/index.cjs'))",
+      'assert.equal(getAmountOut(1000n, 10000n, 20000n), 1813n)',
+      "assert.equal(typeof uniswapV2Quote, 'function')",
+      "assert.equal(typeof balancerQuote, 'function')",
+      "assert.equal(typeof uniswap, 'object')",
+      "console.log('DEX CJS import and math: PASS')",
+      '',
+    ].join('\n')
+  )
+  writeFileSync(
+    path.join(appRoot, 'smoke-dex.cts'),
+    [
+      "import { getAmountOut, type UniswapV2QuoteParams, type BalancerQuoteParams } from '@vultisig/sdk/tools/dex'",
+      'const amount: bigint = getAmountOut(1000n, 10000n, 20000n)',
+      'const uniParams = null as unknown as UniswapV2QuoteParams',
+      'const balancerParams = null as unknown as BalancerQuoteParams',
+      'void [amount, uniParams, balancerParams]',
+      '',
+    ].join('\n')
+  )
+  writeFileSync(
     path.join(appRoot, 'smoke-types.ts'),
     [
       "import { parseChain, type ParseChainResult } from '@vultisig/sdk/tools/parse'",
@@ -192,6 +231,11 @@ try {
       'const canonical: string = canonicalizeSignableTransactionValue(signableValue)',
       'void [evmEncoder, evmBalance, cosmosVote, cosmosParams, canonical]',
       "import { findSwapQuote, getNativeSwapMinAmountIn, PriceImpactTooHighError, type FindSwapQuoteParams, type NativeSwapMinAmountIn } from '@vultisig/sdk/tools/swap'",
+      "import { getAmountOut, type UniswapV2QuoteParams, type BalancerQuoteParams } from '@vultisig/sdk/tools/dex'",
+      'const dexAmount: bigint = getAmountOut(1000n, 10000n, 20000n)',
+      'const uniV2Params = null as unknown as UniswapV2QuoteParams',
+      'const balancerQuoteParams = null as unknown as BalancerQuoteParams',
+      'void [dexAmount, uniV2Params, balancerQuoteParams]',
       'const findQuote: (params: FindSwapQuoteParams) => ReturnType<typeof findSwapQuote> = findSwapQuote',
       'const minimum: Awaited<ReturnType<typeof getNativeSwapMinAmountIn>> = null as unknown as NativeSwapMinAmountIn',
       'const impact: number = new PriceImpactTooHighError(12).impactPercent',
@@ -245,6 +289,8 @@ try {
 
   run('npm', ['install', '--no-package-lock', tarballPath], appRoot)
   await smokePrepConsumers({ appRoot, repoRoot })
+  run('node', ['smoke-dex.mjs'], appRoot)
+  run('node', ['smoke-dex.cjs'], appRoot)
   run('node', ['smoke-runtime.mjs'], appRoot)
   run('yarn', ['exec', 'tsc', '--project', path.join(appRoot, 'tsconfig.json')], repoRoot)
 } finally {
