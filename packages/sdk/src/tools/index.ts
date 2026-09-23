@@ -119,7 +119,18 @@ export type {
   TokenMetadataResolver,
   TokenStandard,
 } from './token'
-export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, resolveContract, searchToken } from './token'
+export {
+  chainFeeCoin,
+  getNativeDisplaySymbol,
+  getTokenMetadata,
+  isNativeTickerForChain,
+  knownTokens,
+  knownTokensIndex,
+  nativeChainForTicker,
+  resolveContract,
+  searchToken,
+  unambiguousNativeChainForTicker,
+} from './token'
 
 // Balance reads for non-EVM, non-Cosmos chains (sui/ton/tron/xrp/cardano/tao)
 export type {

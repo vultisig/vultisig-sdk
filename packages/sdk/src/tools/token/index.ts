@@ -1,3 +1,9 @@
+export {
+  getNativeDisplaySymbol,
+  isNativeTickerForChain,
+  nativeChainForTicker,
+  unambiguousNativeChainForTicker,
+} from './nativeSymbols'
 export type { ResolveContractResult, TokenStandard } from './resolveContract'
 export { resolveContract } from './resolveContract'
 export { searchToken } from './searchToken'

@@ -9,12 +9,16 @@ import {
   encodeErc20Approve,
   evm,
   getCosmosGovernanceProposals,
+  getNativeDisplaySymbol,
   getSolBalance,
+  isNativeTickerForChain,
+  nativeChainForTicker,
   prep,
   prepareCosmosVote,
   resolveContract,
   swap,
   token,
+  unambiguousNativeChainForTicker,
 } from '@/index'
 import {
   cosmos as cosmosFromTools,
@@ -60,6 +64,10 @@ describe('SDK root tool namespaces', () => {
   it('exposes the token helper family without removing flat exports', () => {
     expect(token).toBe(tokenFromTools)
     expect(token.resolveContract).toBe(resolveContract)
+    expect(token.getNativeDisplaySymbol).toBe(getNativeDisplaySymbol)
+    expect(token.isNativeTickerForChain).toBe(isNativeTickerForChain)
+    expect(token.nativeChainForTicker).toBe(nativeChainForTicker)
+    expect(token.unambiguousNativeChainForTicker).toBe(unambiguousNativeChainForTicker)
   })
 
   it('exposes Cosmos governance under sdk.cosmos.gov without removing flat exports', () => {

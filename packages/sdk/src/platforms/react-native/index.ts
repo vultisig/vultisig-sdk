@@ -659,11 +659,15 @@ export type {
 } from '../../tools/token'
 export {
   chainFeeCoin,
+  getNativeDisplaySymbol,
   getTokenMetadata,
+  isNativeTickerForChain,
   knownTokens,
   knownTokensIndex,
+  nativeChainForTicker,
   resolveContract,
   searchToken,
+  unambiguousNativeChainForTicker,
 } from '../../tools/token'
 
 // Balance reads (per-chain, vault-free). UTXO reader is a pure fetch helper
