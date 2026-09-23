@@ -5,6 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { smokePrepConsumers } from './smoke-sdk-prep-consumers.mjs'
+import { smokeToolsBrowser } from './smoke-sdk-tools-browser.mjs'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const tempRoot = mkdtempSync(path.join(os.tmpdir(), 'vultisig-sdk-subpaths-'))
@@ -213,6 +214,8 @@ try {
 
   run('npm', ['install', '--no-package-lock', tarballPath], appRoot)
   await smokePrepConsumers({ appRoot, repoRoot })
+  await smokePrepConsumers({ appRoot, repoRoot, subpath: '/tools' })
+  await smokeToolsBrowser({ appRoot, repoRoot })
   run('node', ['smoke-runtime.mjs'], appRoot)
   run('yarn', ['exec', 'tsc', '--project', path.join(appRoot, 'tsconfig.json')], repoRoot)
 } finally {

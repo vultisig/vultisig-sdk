@@ -10,6 +10,42 @@ const platformRollupConfig = readFileSync(path.join(sdkRoot, 'rollup.platforms.c
 const typesRollupConfig = readFileSync(path.join(sdkRoot, 'rollup.types.config.js'), 'utf8')
 
 describe('public API subpath exports', () => {
+  it('publishes platform-specific tools bundles without advertising the Node bundle to React Native', () => {
+    const entry = sdkPackageJson.exports['./tools']
+    expect(entry.types).toEqual({
+      'react-native': null,
+      'chrome-extension': null,
+      worker: null,
+      browser: './dist/tools/index.browser.d.ts',
+      require: './dist/tools/index.d.cts',
+      default: './dist/tools/index.d.ts',
+    })
+    expect(entry['react-native']).toBeNull()
+    expect(entry.browser).toBe('./dist/tools/index.browser.js')
+    expect(entry.worker).toBeNull()
+    expect(entry['chrome-extension']).toBeNull()
+    expect(Object.keys(entry).indexOf('worker')).toBeLessThan(Object.keys(entry).indexOf('browser'))
+    expect(Object.keys(entry.types).indexOf('worker')).toBeLessThan(Object.keys(entry.types).indexOf('browser'))
+    expect(entry.node).toEqual({
+      import: './dist/tools/index.js',
+      require: './dist/tools/index.cjs',
+    })
+    expect(JSON.stringify(entry)).not.toContain('dist/index.node')
+    expect(platformRollupConfig).toContain("input: './src/platforms/node/tools.ts'")
+    expect(platformRollupConfig).toContain("distBase: 'tools'")
+    expect(platformRollupConfig).toContain("input: './src/platforms/browser/tools.ts'")
+    expect(platformRollupConfig).toContain("file: './dist/tools/index.browser.js'")
+    expect(typesRollupConfig).toContain(
+      "createSubpathTypesConfig('src/platforms/node/tools.ts', 'dist/tools/index.d.ts')"
+    )
+    expect(typesRollupConfig).toContain(
+      "createSubpathTypesConfig('src/platforms/node/tools.ts', 'dist/tools/index.d.cts')"
+    )
+    expect(typesRollupConfig).toContain(
+      "createSubpathTypesConfig('src/platforms/browser/tools.ts', 'dist/tools/index.browser.d.ts')"
+    )
+  })
+
   it('publishes prep with distinct native runtime and asynchronous declarations', () => {
     const entry = sdkPackageJson.exports['./tools/prep']
     expect(entry.types).toEqual({
@@ -65,7 +101,10 @@ describe('public API subpath exports', () => {
       browser: './dist/tools/swap/index.browser.js',
       worker: './dist/tools/swap/index.browser.js',
       'react-native': './dist/tools/swap/index.react-native.js',
-      node: { import: './dist/tools/swap/index.js', require: './dist/tools/swap/index.cjs' },
+      node: {
+        import: './dist/tools/swap/index.js',
+        require: './dist/tools/swap/index.cjs',
+      },
       import: './dist/tools/swap/index.js',
       require: './dist/tools/swap/index.cjs',
       default: './dist/tools/swap/index.cjs',

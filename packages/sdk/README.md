@@ -76,7 +76,13 @@ vault.setTonWalletVersion('v5r1') // now vault.address('Ton') and vault.send({ c
 
 // On W5, a jetton send can pay its fee in the jetton through the TonAPI relay —
 // no TON needed. The fee becomes the relay's commission in that jetton.
-await vault.send({ chain: 'Ton', to: 'UQ...', amount: '25', symbol: 'USDT', gasless: true })
+await vault.send({
+  chain: 'Ton',
+  to: 'UQ...',
+  amount: '25',
+  symbol: 'USDT',
+  gasless: true,
+})
 
 console.log('BTC:', btcAddress) // bc1q...
 console.log('ETH:', ethAddress) // 0x...
@@ -1363,6 +1369,20 @@ MIT License - see [LICENSE](./LICENSE) file for details.
 **Built with ❤️ by the Vultisig team**
 
 ## Transaction preparation imports
+
+`@vultisig/sdk/tools` groups the existing public helpers for Node and browser
+consumers. It provides flat names and namespaces without importing the SDK root:
+
+```typescript
+import { decodeFromToolResult, findSwapQuote, gas, prep, token } from '@vultisig/sdk/tools'
+
+const matches = await token.searchToken('USDC')
+// Prep helpers are also available as flat named exports.
+```
+
+React Native, worker, and extension consumers should use the supported narrow entries such as
+`@vultisig/sdk/tools/prep` and `@vultisig/sdk/tools/swap`; the umbrella entry
+is deliberately unavailable under the `react-native` package condition.
 
 `@vultisig/sdk/tools/prep` exposes the canonical vault-free transaction builders
 without importing the full SDK root:

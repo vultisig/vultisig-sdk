@@ -4,7 +4,7 @@ import path from 'node:path'
 
 // Invoked after installing the tarball. All SDK imports resolve through the
 // consumer's package manager, never through workspace aliases or source files.
-export async function smokePrepConsumers({ appRoot, repoRoot }) {
+export async function smokePrepConsumers({ appRoot, repoRoot, subpath = '/tools/prep' }) {
   writeFileSync(
     path.join(appRoot, 'prep-runtime.mjs'),
     `
@@ -17,8 +17,16 @@ const load = name => process.argv[2] === 'cjs' ? require(name) : import(name)
 let root
 if (process.argv[3] === 'root-first') root = await load('@vultisig/sdk')
 const before = runtimeStore().walletCore
-const prep = await load('@vultisig/sdk/tools/prep')
+const prep = await load('@vultisig/sdk${subpath}')
 if (before) assert.equal(runtimeStore().walletCore, before)
+if ('${subpath}' === '/tools') {
+  assert.equal(typeof prep.findSwapQuote, 'function')
+  assert.equal(typeof prep.decodeFromToolResult, 'function')
+  assert.equal(typeof prep.token, 'object')
+  assert.equal(typeof prep.gas, 'object')
+  assert.equal(prep.parseChain('Ethereum').success, true)
+  assert.equal(typeof prep.prep.buildDelegateMsg, 'function')
+}
 const address = bech32.encode('cosmos', bech32.toWords(new Uint8Array(20).fill(1)))
 const validator = bech32.encode('cosmosvaloper', bech32.toWords(new Uint8Array(20).fill(2)))
 const msg = prep.buildDelegateMsg({delegatorAddress: address, validatorAddress: validator, amount: '123', denom: 'uatom'})
@@ -59,7 +67,7 @@ console.log(JSON.stringify({prep:true,format:process.argv[2],order:process.argv[
   writeFileSync(
     path.join(appRoot, 'prep-types.cts'),
     `
-import { buildDelegateMsg, type DelegateParams, type CosmosStakingMsgEnvelope } from '@vultisig/sdk/tools/prep'
+import { buildDelegateMsg, type DelegateParams, type CosmosStakingMsgEnvelope } from '@vultisig/sdk${subpath}'
 const delegate: (params: DelegateParams) => CosmosStakingMsgEnvelope = buildDelegateMsg
 void delegate
 `
@@ -81,11 +89,11 @@ void delegate
     cwd: appRoot,
     stdio: 'inherit',
   })
-  for (const native of [false, true]) {
+  for (const native of subpath === '/tools' ? [false] : [false, true]) {
     writeFileSync(
       path.join(appRoot, 'prep-types.ts'),
       `
-import * as prep from '@vultisig/sdk/tools/prep'
+import * as prep from '@vultisig/sdk${subpath}'
 type Expected = ${native ? 'Promise<prep.SplTransferResult>' : 'prep.SplTransferResult'}
 const spl: (...args: Parameters<typeof prep.buildSplTransfer>) => Expected = prep.buildSplTransfer
 const delegate: (params: prep.DelegateParams) => prep.CosmosStakingMsgEnvelope = prep.buildDelegateMsg

@@ -359,7 +359,9 @@ const createSubpathConfigs = ({ input, distBase, browser = false }) => [
             preferBuiltins: false,
             browser: true,
             bufferPolyfill: true,
-            replaceOptions: { 'process.env.VULTISIG_PLATFORM': JSON.stringify('browser') },
+            replaceOptions: {
+              'process.env.VULTISIG_PLATFORM': JSON.stringify('browser'),
+            },
           }),
           onwarn,
         },
@@ -409,7 +411,14 @@ const configs = {
         },
       }),
     },
-    ...createSubpathConfigs({ input: './src/platforms/node/prep.ts', distBase: 'tools/prep' }),
+    ...createSubpathConfigs({
+      input: './src/platforms/node/tools.ts',
+      distBase: 'tools',
+    }),
+    ...createSubpathConfigs({
+      input: './src/platforms/node/prep.ts',
+      distBase: 'tools/prep',
+    }),
     ...createSubpathConfigs({
       input: './src/tools/parse/index.ts',
       distBase: 'tools/parse',
@@ -831,14 +840,31 @@ configs['react-native'] = [rnPreamble, rnRoot, rnSwap, rnPrep]
 const browserPrep = {
   ...configs.browser,
   input: './src/platforms/browser/prep.ts',
-  output: { ...configs.browser.output, file: './dist/tools/prep/index.browser.js' },
+  output: {
+    ...configs.browser.output,
+    file: './dist/tools/prep/index.browser.js',
+  },
   plugins: createPlugins({
     browser: true,
     bufferPolyfill: true,
-    replaceOptions: { 'process.env.VULTISIG_PLATFORM': JSON.stringify('browser') },
+    replaceOptions: {
+      'process.env.VULTISIG_PLATFORM': JSON.stringify('browser'),
+    },
   }),
 }
-configs.browser = [configs.browser, browserPrep]
+const browserTools = {
+  ...configs.browser,
+  input: './src/platforms/browser/tools.ts',
+  output: { ...configs.browser.output, file: './dist/tools/index.browser.js' },
+  plugins: createPlugins({
+    browser: true,
+    bufferPolyfill: true,
+    replaceOptions: {
+      'process.env.VULTISIG_PLATFORM': JSON.stringify('browser'),
+    },
+  }),
+}
+configs.browser = [configs.browser, browserPrep, browserTools]
 
 // Export based on target
 let exportConfig

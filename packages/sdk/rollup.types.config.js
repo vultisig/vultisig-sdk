@@ -29,7 +29,7 @@ const createSubpathTypesConfig = (input, file) => ({
   plugins: [dts(dtsPluginOptions)],
 })
 
-export default defineConfig([
+const typeBundles = [
   // Main types (platform-agnostic)
   {
     input: 'src/index.ts',
@@ -119,6 +119,9 @@ export default defineConfig([
   // Dedicated public subpath types — keep these as first-class bundles so
   // package-name imports resolve to narrow declarations instead of the root
   // index type graph.
+  createSubpathTypesConfig('src/platforms/node/tools.ts', 'dist/tools/index.d.ts'),
+  createSubpathTypesConfig('src/platforms/node/tools.ts', 'dist/tools/index.d.cts'),
+  createSubpathTypesConfig('src/platforms/browser/tools.ts', 'dist/tools/index.browser.d.ts'),
   createSubpathTypesConfig('src/platforms/node/prep.ts', 'dist/tools/prep/index.d.ts'),
   createSubpathTypesConfig('src/platforms/node/prep.ts', 'dist/tools/prep/index.d.cts'),
   createSubpathTypesConfig('src/platforms/react-native/prep.ts', 'dist/tools/prep/index.react-native.d.ts'),
@@ -142,4 +145,16 @@ export default defineConfig([
   createSubpathTypesConfig('src/tools/price/index.ts', 'dist/tools/price/index.d.ts'),
   createSubpathTypesConfig('src/tx/index.ts', 'dist/tx/index.d.ts'),
   createSubpathTypesConfig('src/server/index.ts', 'dist/server/index.d.ts'),
-])
+]
+
+// Rollup retains declaration graphs across entries. Reset its heap between
+// batches so adding a broad public surface does not exhaust the build process.
+const halfway = Math.ceil(typeBundles.length / 2)
+const selectedBundles =
+  process.env.SDK_TYPES_BATCH === 'first'
+    ? typeBundles.slice(0, halfway)
+    : process.env.SDK_TYPES_BATCH === 'second'
+      ? typeBundles.slice(halfway)
+      : typeBundles
+
+export default defineConfig(selectedBundles)

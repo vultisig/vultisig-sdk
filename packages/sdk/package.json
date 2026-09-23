@@ -76,6 +76,27 @@
       "require": "./dist/vite/index.cjs",
       "default": "./dist/vite/index.js"
     },
+    "./tools": {
+      "types": {
+        "react-native": null,
+        "chrome-extension": null,
+        "worker": null,
+        "browser": "./dist/tools/index.browser.d.ts",
+        "require": "./dist/tools/index.d.cts",
+        "default": "./dist/tools/index.d.ts"
+      },
+      "react-native": null,
+      "chrome-extension": null,
+      "worker": null,
+      "browser": "./dist/tools/index.browser.js",
+      "node": {
+        "import": "./dist/tools/index.js",
+        "require": "./dist/tools/index.cjs"
+      },
+      "import": "./dist/tools/index.js",
+      "require": "./dist/tools/index.cjs",
+      "default": "./dist/tools/index.cjs"
+    },
     "./tools/parse": {
       "types": "./dist/tools/parse/index.d.ts",
       "browser": "./dist/tools/parse/index.js",
@@ -305,7 +326,7 @@
     "clean": "rm -rf dist",
     "build": "node ../../examples/browser/scripts/ensure-local-sdk-build.mjs --begin sdk && yarn clean && yarn build:platforms && yarn build:types && node ../../examples/browser/scripts/ensure-local-sdk-build.mjs --record sdk",
     "build:js": "yarn build:platforms",
-    "build:types": "NODE_OPTIONS=--max-old-space-size=8192 rollup -c rollup.types.config.js",
+    "build:types": "SDK_TYPES_BATCH=first NODE_OPTIONS=--max-old-space-size=8192 rollup -c rollup.types.config.js && SDK_TYPES_BATCH=second NODE_OPTIONS=--max-old-space-size=8192 rollup -c rollup.types.config.js",
     "dev": "BUILD_TARGET=node rollup -c rollup.platforms.config.js -w",
     "_____PLATFORM_BUILDS_____": "",
     "build:platforms": "node ../../scripts/build-sdk-platforms.mjs \"yarn build:platform:node\" \"yarn build:platform:browser\" \"yarn build:platform:electron\" \"yarn build:platform:chrome-extension\" \"yarn build:platform:react-native\" \"yarn build:platform:vite\"",
@@ -522,7 +543,10 @@
     "./dist/index.chrome-extension.js",
     "./dist/index.react-native.js",
     "./dist/index.rn-preamble.js",
-    "./dist/index.electron-main.cjs"
+    "./dist/index.electron-main.cjs",
+    "./dist/tools/index.js",
+    "./dist/tools/index.cjs",
+    "./dist/tools/index.browser.js"
   ],
   "publishConfig": {
     "access": "public",
