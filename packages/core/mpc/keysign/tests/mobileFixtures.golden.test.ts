@@ -80,7 +80,7 @@ describe('mobile keysign pre-image hash golden fixtures', () => {
   })
 
   it(`loads the mobile and supplemental fixture corpus (${cases.length} cases)`, () => {
-    expect(cases.length).toBe(97)
+    expect(cases.length).toBe(98)
     expect(new Set(cases.map(({ fixtureFile }) => fixtureFile)).size).toBe(30)
   })
 
