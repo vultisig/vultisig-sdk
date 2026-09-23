@@ -157,6 +157,33 @@ describe('AgentExecutor.getPendingSummary', () => {
     expect(capSigningSummary(summary, 'sign_tx')).toContain(APPROVE_SUFFIX)
   })
 
+  it('truncates an in-bounds swap head while preserving the provider and approve disclosure', () => {
+    const executor = new AgentExecutor(createMockVault())
+    const provider = 'p'.repeat(480)
+    executor.storeServerTransaction(
+      makeMultiLegEnvelope({
+        amount_in: '9'.repeat(480),
+        from_token: `USDC (${USDC_CONTRACT} on Base, 6 dec, source: known)`,
+        from_token_symbol: 'USDC',
+        to_token: 'ETH (native on Base, 18 dec, source: native)',
+        to_token_symbol: 'ETH',
+        provider,
+      })
+    )
+
+    const summary = executor.getPendingSummary()!
+    expect(summary).toContain('…')
+    expect(summary).toContain(`approve 2 USDC for spender ${SPENDER}`)
+    expect(summary).toContain(`token contract ${USDC_CONTRACT}`)
+    expect(summary).toContain('2 transactions')
+    expect(summary).toContain(`via ${provider}`)
+    expect(summary.indexOf('for spender')).toBeLessThan(1000)
+    expect(capSigningSummary(summary, 'sign_tx')).toContain(APPROVE_SUFFIX)
+
+    const approveEnd = summary.indexOf('2 transactions)') + '2 transactions)'.length
+    expect(summary.slice(0, approveEnd).length).toBeLessThanOrEqual(1000)
+  })
+
   it('token-to-native swap discloses the sell token contract only', () => {
     const executor = new AgentExecutor(createMockVault())
     executor.storeServerTransaction(
