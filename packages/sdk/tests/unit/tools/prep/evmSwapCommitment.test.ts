@@ -2,7 +2,7 @@ import { Chain } from '@vultisig/core-chain/Chain'
 import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getSwapQuoteSafetyFingerprint } from '@vultisig/core-chain/swap/quote/getSwapQuoteSafetyFingerprint'
 import { AbiCoder, Interface } from 'ethers'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ wallet: vi.fn(), key: vi.fn(), build: vi.fn() }))
 vi.mock('@/context/wasmRuntime', () => ({ getWalletCore: mocks.wallet }))
@@ -221,6 +221,9 @@ describe('preparation semantic checks after valid fingerprint binding', () => {
     mocks.wallet.mockResolvedValue({})
     mocks.build.mockResolvedValue({ ok: true })
   })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
   it.each([
     ['1inch', oneinch, inch(101n)],
     ['Kyber', kyber, kyberCall('swap', 101n)],
@@ -242,7 +245,17 @@ describe('preparation semantic checks after valid fingerprint binding', () => {
     await expect(prepare(tx(oneinch, inch(100n, weth)))).rejects.toThrow('source token')
     expect(mocks.build).not.toHaveBeenCalled()
   })
+  it.each([undefined, ''])('accepts native source coin ID %s and still checks the committed value', async id => {
+    const nativeCoin = { ...coin, id }
+    await expect(prepare(tx(thor, deposit(zero, 100n), 100n), nativeCoin)).resolves.toEqual({ ok: true })
+    mocks.wallet.mockClear()
+    await expect(prepare(tx(thor, deposit(zero, 100n), 101n), nativeCoin)).rejects.toThrow('committed source amount')
+    expect(mocks.wallet).not.toHaveBeenCalled()
+    await expect(prepare(tx(oneinch, inch()), nativeCoin)).rejects.toThrow('source token')
+  })
   it('retains deadline enforcement without an amount and respects exact contract boundaries', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-01-01T00:00:00.500Z'))
     const now = BigInt(Math.floor(Date.now() / 1000))
     await expect(prepare(tx(ur, execute('0x10', ['0x'], now - 1n)))).rejects.toBeInstanceOf(SwapQuoteExpiredError)
     await expect(prepare(tx(thor, deposit(token, 100n, now)))).rejects.toBeInstanceOf(SwapQuoteExpiredError)

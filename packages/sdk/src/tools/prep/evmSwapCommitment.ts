@@ -243,7 +243,8 @@ export const decodeEvmSwapCommitment = (input: Input): EvmSwapCommitment => {
 
 /** Verify source-asset identity before comparing quantities with different units. */
 export const assertEvmSwapSourceToken = (fromToken: string | undefined, commitment: EvmSwapCommitment): void => {
-  if (commitment.sourceToken !== undefined && commitment.sourceToken !== (fromToken?.toLowerCase() ?? zeroAddress)) {
+  const expected = fromToken ? fromToken.toLowerCase() : zeroAddress
+  if (commitment.sourceToken !== undefined && commitment.sourceToken !== expected) {
     throw new Error('prepareSwapTxFromKeys: encoded EVM swap source token does not match the requested source asset')
   }
 }
