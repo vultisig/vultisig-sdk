@@ -144,15 +144,21 @@ describe('token-symbol FORMAT validation', () => {
     }
   })
 
-  // Drift fix: mirror the Go `symbolCandidateRe` shape EXACTLY —
-  // `[A-Z][A-Z0-9]{2,9}` base/pair (3-10 chars, uppercase-only, letter-led).
-  // The previous SDK regex was `[A-Za-z][A-Za-z0-9]{1,9}` which accepted
-  // 2-char + lowercase tickers the backend extractor rejects.
-  it('rejects 2-char tickers (min length 3, matching Go)', () => {
-    // Go `[A-Z][A-Z0-9]{2,9}` requires >= 3 chars, so OP / ZK never match
-    // symbolCandidateRe upstream — the SDK must agree.
-    for (const s of ['OP', 'ZK', 'op', 'zk', 'A1']) {
+  it('accepts registered two-character tickers after trimming and case normalization', () => {
+    for (const s of ['OP', 'ZK', 'op', 'zk', '  Op  ']) {
+      expect(isValidTokenSymbolFormat(s)).toBe(true)
+    }
+  })
+
+  it('rejects unregistered two-character tickers', () => {
+    for (const s of ['A1', 'ZZ', 'xy', 'O.']) {
       expect(isValidTokenSymbolFormat(s)).toBe(false)
+    }
+  })
+
+  it('keeps registered two-character ticker validation in sync with the registry', () => {
+    for (const ticker of Object.keys(tokenDecimals).filter(key => /^[A-Z][A-Z0-9]$/.test(key))) {
+      expect(isValidTokenSymbolFormat(ticker)).toBe(true)
     }
   })
 
@@ -168,19 +174,33 @@ describe('token-symbol FORMAT validation', () => {
     expect(isValidTokenSymbolFormat('ABCDEFGHIJK')).toBe(false) // 11
   })
 
-  it('rejects a 2-char leg inside a slash-pair', () => {
-    // Each leg must independently satisfy the 3-char minimum.
-    expect(isValidTokenSymbolFormat('RUNE/OP')).toBe(false)
-    expect(isValidTokenSymbolFormat('OP/RUNE')).toBe(false)
+  it('validates each slash-pair leg independently', () => {
+    for (const s of ['RUNE/OP', 'OP/RUNE', 'RUNE/ZK', 'op/rune']) {
+      expect(isValidTokenSymbolFormat(s)).toBe(true)
+    }
+    for (const s of ['RUNE/A1', 'ZZ/RUNE', 'OP/ZZ', 'OP//RUNE', '/OP', 'OP/', 'OP/RUNE/ZK']) {
+      expect(isValidTokenSymbolFormat(s)).toBe(false)
+    }
   })
 
-  it('throws when normalizing a now-too-short ticker', () => {
-    expect(() => normalizeTokenSymbol('op')).toThrow(ValidateNormalizerError)
+  it('normalizes registered short tickers and pairs', () => {
+    expect(normalizeTokenSymbol('op')).toEqual({ symbol: 'OP', parts: ['OP'] })
+    expect(normalizeTokenSymbol(' rune/zk ')).toEqual({
+      symbol: 'RUNE/ZK',
+      parts: ['RUNE', 'ZK'],
+    })
+    expect(() => normalizeTokenSymbol('ZZ')).toThrow(ValidateNormalizerError)
   })
 
   it('normalizes to uppercase and splits pairs', () => {
-    expect(normalizeTokenSymbol('usdc.e')).toEqual({ symbol: 'USDC.E', parts: ['USDC.E'] })
-    expect(normalizeTokenSymbol('ruji/rune')).toEqual({ symbol: 'RUJI/RUNE', parts: ['RUJI', 'RUNE'] })
+    expect(normalizeTokenSymbol('usdc.e')).toEqual({
+      symbol: 'USDC.E',
+      parts: ['USDC.E'],
+    })
+    expect(normalizeTokenSymbol('ruji/rune')).toEqual({
+      symbol: 'RUJI/RUNE',
+      parts: ['RUJI', 'RUNE'],
+    })
   })
 
   it('throws on invalid symbol normalization', () => {
