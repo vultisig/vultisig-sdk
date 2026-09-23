@@ -1,5 +1,6 @@
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
+import { resolveTokenPriceId as canonicalResolveTokenPriceId } from '@vultisig/core-chain/coin/price/resolveTokenPriceId'
 import * as blockaidChains from '@vultisig/core-chain/security/blockaid/evmChains'
 import { isValidTxHash } from '@vultisig/core-chain/tx/isValidTxHash'
 import { AuthInfo, SignDoc, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
@@ -72,6 +73,26 @@ describe('RN entry exposes canonical token reference resolution', () => {
     const native: sdkRn.ResolvedTokenInfo = sdkRn.resolveTokenRef(sdkRn.Chain.Ethereum, undefined, [])
     expect(native).toEqual({ ticker: 'ETH', decimals: 18 })
     expect(sdkRn.resolveTokenRefId(sdkRn.Chain.Ethereum, 'ETH', [])).toBeUndefined()
+  })
+})
+
+describe('RN entry exposes canonical token price-ID resolution', () => {
+  it('exports the existing resolver and preserves its lookup contract', () => {
+    expect(sdkRn.resolveTokenPriceId).toBe(canonicalResolveTokenPriceId)
+    expectTypeOf(sdkRn.resolveTokenPriceId).toEqualTypeOf<
+      (chain: sdkRn.Chain, denomOrAddress?: string) => string | undefined
+    >()
+    expect(sdkRn.resolveTokenPriceId(sdkRn.Chain.Ethereum)).toBe('ethereum')
+    expect(sdkRn.resolveTokenPriceId(sdkRn.Chain.TerraClassic, 'uluna')).toBe('terra-luna')
+    expect(sdkRn.resolveTokenPriceId(sdkRn.Chain.Solana, 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')).toBe(
+      'usd-coin'
+    )
+    expect(
+      sdkRn.resolveTokenPriceId(sdkRn.Chain.Solana, 'epjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')
+    ).toBeUndefined()
+    expect(sdkRn.resolveTokenPriceId(sdkRn.Chain.Base, ' 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 ')).toBe('usd-coin')
+    expect(sdkRn.resolveTokenPriceId(sdkRn.Chain.Ethereum, '  ')).toBe('ethereum')
+    expect(sdkRn.resolveTokenPriceId(sdkRn.Chain.Solana, 'not-a-known-token')).toBeUndefined()
   })
 })
 
@@ -169,6 +190,119 @@ beforeAll(async () => {
     import('../../../../src/utils/dangerousAddresses'),
   ])
 }, 120_000)
+
+describe('RN lazy helper contracts', () => {
+  it('preserves canonical parameter tuples and Promise result contracts', () => {
+    expectTypeOf<Parameters<typeof sdkRn.getMaxSendAmountFromKeys>>().toEqualTypeOf<
+      Parameters<typeof import('../../../../src/tools/prep/maxSend').getMaxSendAmountFromKeys>
+    >()
+    expectTypeOf<ReturnType<typeof sdkRn.getMaxSendAmountFromKeys>>().toEqualTypeOf<
+      Promise<Awaited<ReturnType<typeof import('../../../../src/tools/prep/maxSend').getMaxSendAmountFromKeys>>>
+    >()
+    expectTypeOf<Parameters<typeof sdkRn.prepareContractCallTxFromKeys>>().toEqualTypeOf<
+      Parameters<typeof import('../../../../src/tools/prep/contractCall').prepareContractCallTxFromKeys>
+    >()
+    expectTypeOf<ReturnType<typeof sdkRn.prepareContractCallTxFromKeys>>().toEqualTypeOf<
+      Promise<
+        Awaited<ReturnType<typeof import('../../../../src/tools/prep/contractCall').prepareContractCallTxFromKeys>>
+      >
+    >()
+    expectTypeOf<Parameters<typeof sdkRn.prepareJettonTransferTxFromKeys>>().toEqualTypeOf<
+      Parameters<typeof import('../../../../src/tools/prep/jettonTransfer').prepareJettonTransferTxFromKeys>
+    >()
+    expectTypeOf<ReturnType<typeof sdkRn.prepareJettonTransferTxFromKeys>>().toEqualTypeOf<
+      Promise<
+        Awaited<ReturnType<typeof import('../../../../src/tools/prep/jettonTransfer').prepareJettonTransferTxFromKeys>>
+      >
+    >()
+    expectTypeOf<Parameters<typeof sdkRn.prepareSendTxFromKeys>>().toEqualTypeOf<
+      Parameters<typeof import('../../../../src/tools/prep/send').prepareSendTxFromKeys>
+    >()
+    expectTypeOf<ReturnType<typeof sdkRn.prepareSendTxFromKeys>>().toEqualTypeOf<
+      Promise<Awaited<ReturnType<typeof import('../../../../src/tools/prep/send').prepareSendTxFromKeys>>>
+    >()
+    expectTypeOf<Parameters<typeof sdkRn.prepareSignAminoTxFromKeys>>().toEqualTypeOf<
+      Parameters<typeof import('../../../../src/tools/prep/cosmos').prepareSignAminoTxFromKeys>
+    >()
+    expectTypeOf<ReturnType<typeof sdkRn.prepareSignAminoTxFromKeys>>().toEqualTypeOf<
+      Promise<Awaited<ReturnType<typeof import('../../../../src/tools/prep/cosmos').prepareSignAminoTxFromKeys>>>
+    >()
+    expectTypeOf<Parameters<typeof sdkRn.prepareSignDirectTxFromKeys>>().toEqualTypeOf<
+      Parameters<typeof import('../../../../src/tools/prep/cosmos').prepareSignDirectTxFromKeys>
+    >()
+    expectTypeOf<ReturnType<typeof sdkRn.prepareSignDirectTxFromKeys>>().toEqualTypeOf<
+      Promise<Awaited<ReturnType<typeof import('../../../../src/tools/prep/cosmos').prepareSignDirectTxFromKeys>>>
+    >()
+    expectTypeOf<Parameters<typeof sdkRn.prepareSwapTxFromKeys>>().toEqualTypeOf<
+      Parameters<typeof import('../../../../src/tools/prep/swap').prepareSwapTxFromKeys>
+    >()
+    expectTypeOf<ReturnType<typeof sdkRn.prepareSwapTxFromKeys>>().toEqualTypeOf<
+      Promise<Awaited<ReturnType<typeof import('../../../../src/tools/prep/swap').prepareSwapTxFromKeys>>>
+    >()
+    expectTypeOf<Parameters<typeof sdkRn.prepareTrc20TransferFromKeys>>().toEqualTypeOf<
+      Parameters<typeof import('../../../../src/tools/prep/trc20').prepareTrc20TransferFromKeys>
+    >()
+    expectTypeOf<ReturnType<typeof sdkRn.prepareTrc20TransferFromKeys>>().toEqualTypeOf<
+      Promise<Awaited<ReturnType<typeof import('../../../../src/tools/prep/trc20').prepareTrc20TransferFromKeys>>>
+    >()
+    expectTypeOf<Parameters<typeof sdkRn.buildSplTransfer>>().toEqualTypeOf<
+      Parameters<typeof import('../../../../src/tools/prep/splTransfer').buildSplTransfer>
+    >()
+    expectTypeOf<ReturnType<typeof sdkRn.buildSplTransfer>>().toEqualTypeOf<
+      Promise<Awaited<ReturnType<typeof import('../../../../src/tools/prep/splTransfer').buildSplTransfer>>>
+    >()
+    expectTypeOf<Parameters<typeof sdkRn.prepareUtxoConsolidateTxFromKeys>>().toEqualTypeOf<
+      Parameters<typeof import('../../../../src/tools/prep/utxoConsolidate').prepareUtxoConsolidateTxFromKeys>
+    >()
+    expectTypeOf<ReturnType<typeof sdkRn.prepareUtxoConsolidateTxFromKeys>>().toEqualTypeOf<
+      Promise<
+        Awaited<
+          ReturnType<typeof import('../../../../src/tools/prep/utxoConsolidate').prepareUtxoConsolidateTxFromKeys>
+        >
+      >
+    >()
+    expectTypeOf(sdkRn.balancePolkadot).toEqualTypeOf<typeof import('../../../../src/tools/balance').balancePolkadot>()
+    expectTypeOf<Parameters<typeof sdkRn.getPolkadotNativeBalance>>().toEqualTypeOf<
+      Parameters<typeof import('../../../../src/tools/balance').getPolkadotNativeBalance>
+    >()
+    expectTypeOf<ReturnType<typeof sdkRn.getPolkadotNativeBalance>>().toEqualTypeOf<
+      Promise<Awaited<ReturnType<typeof import('../../../../src/tools/balance').getPolkadotNativeBalance>>>
+    >()
+    expectTypeOf<Parameters<typeof sdkRn.getPolkadotAssetBalance>>().toEqualTypeOf<
+      Parameters<typeof import('../../../../src/tools/balance').getPolkadotAssetBalance>
+    >()
+    expectTypeOf<ReturnType<typeof sdkRn.getPolkadotAssetBalance>>().toEqualTypeOf<
+      Promise<Awaited<ReturnType<typeof import('../../../../src/tools/balance').getPolkadotAssetBalance>>>
+    >()
+    expectTypeOf<Parameters<typeof sdkRn.fiatToAmount>>().toEqualTypeOf<
+      Parameters<typeof import('../../../../src/utils/fiatToAmount').fiatToAmount>
+    >()
+    expectTypeOf<ReturnType<typeof sdkRn.fiatToAmount>>().toEqualTypeOf<
+      Promise<Awaited<ReturnType<typeof import('../../../../src/utils/fiatToAmount').fiatToAmount>>>
+    >()
+    expectTypeOf<Parameters<typeof sdkRn.parseKeygenQR>>().toEqualTypeOf<
+      Parameters<typeof import('../../../../src/utils/parseKeygenQR').parseKeygenQR>
+    >()
+    expectTypeOf<ReturnType<typeof sdkRn.parseKeygenQR>>().toEqualTypeOf<
+      Promise<Awaited<ReturnType<typeof import('../../../../src/utils/parseKeygenQR').parseKeygenQR>>>
+    >()
+  })
+
+  it('forwards a deterministic TRC-20 request to the canonical builder', async () => {
+    const canonical = await import('../../../../src/tools/prep/trc20')
+    const params = {
+      contractAddress: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+      from: 'TJRabPrwbZy45sbavfcjinPJC18kjpRTv8',
+      to: 'TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH',
+      amount: '1000000',
+      memo: 'invoice-1935',
+    }
+
+    await expect(sdkRn.prepareTrc20TransferFromKeys(params)).resolves.toEqual(
+      canonical.prepareTrc20TransferFromKeys(params)
+    )
+  })
+})
 
 describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
   it('exports the strict chain-ID resolver by identity with its string-only signature', () => {

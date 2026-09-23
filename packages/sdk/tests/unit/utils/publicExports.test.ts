@@ -1,5 +1,6 @@
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
+import { resolveTokenPriceId as canonicalResolveTokenPriceId } from '@vultisig/core-chain/coin/price/resolveTokenPriceId'
 import * as blockaidChains from '@vultisig/core-chain/security/blockaid/evmChains'
 import * as isValidTokenIdModule from '@vultisig/core-chain/utils/isValidTokenId'
 import { describe, expect, expectTypeOf, it } from 'vitest'
@@ -31,6 +32,20 @@ const dangerousAddressCanonicalExports = [
 ] as const
 
 describe('@vultisig/sdk public exports', () => {
+  it('exports the canonical token price-ID resolver with its existing signature and lookup behavior', () => {
+    expect(sdk.resolveTokenPriceId).toBe(canonicalResolveTokenPriceId)
+    expectTypeOf(sdk.resolveTokenPriceId).toEqualTypeOf<
+      (chain: sdk.Chain, denomOrAddress?: string) => string | undefined
+    >()
+    expect(sdk.resolveTokenPriceId(sdk.Chain.Ethereum)).toBe('ethereum')
+    expect(sdk.resolveTokenPriceId(sdk.Chain.TerraClassic, 'uluna')).toBe('terra-luna')
+    expect(sdk.resolveTokenPriceId(sdk.Chain.Solana, 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')).toBe('usd-coin')
+    expect(sdk.resolveTokenPriceId(sdk.Chain.Solana, 'epjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')).toBeUndefined()
+    expect(sdk.resolveTokenPriceId(sdk.Chain.Base, ' 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 ')).toBe('usd-coin')
+    expect(sdk.resolveTokenPriceId(sdk.Chain.Ethereum, '  ')).toBe('ethereum')
+    expect(sdk.resolveTokenPriceId(sdk.Chain.Solana, 'not-a-known-token')).toBeUndefined()
+  })
+
   it('exports the strict chain-ID resolver by identity with its string-only signature', () => {
     expect(sdk.resolveChainIdReference).toBe(resolveChainIdReference)
     expectTypeOf(sdk.resolveChainIdReference).toEqualTypeOf<(chainId: string) => sdk.Chain | undefined>()

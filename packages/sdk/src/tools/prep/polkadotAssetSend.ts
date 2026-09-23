@@ -1,5 +1,6 @@
 import { compactToU8a, u8aConcat, u8aToHex } from '@polkadot/util'
-import { decodeAddress } from '@polkadot/util-crypto'
+import { decodeAddress, encodeAddress } from '@polkadot/util-crypto'
+import { assertSafeDestination } from '@vultisig/core-chain/security/dangerousAddresses'
 
 /**
  * Polkadot Asset Hub asset IDs for the well-known USD stablecoins. Not an
@@ -199,6 +200,7 @@ export const preparePolkadotAssetSend = (params: PreparePolkadotAssetSendParams)
   // wrong-chain-paste guard: a Kusama/Bittensor SS58 or a 32-byte EVM-hex `to`
   // is rejected here instead of being silently SCALE-encoded as the recipient.
   const toAccountId = decodePolkadotAccountId(to, 'destination')
+  assertSafeDestination('Polkadot', encodeAddress(toAccountId, POLKADOT_SS58_PREFIX))
 
   const knownAsset = POLKADOT_ASSET_HUB_KNOWN_ASSETS[assetId]
   const decimals = params.decimals ?? knownAsset?.decimals
