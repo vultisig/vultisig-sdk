@@ -1,8 +1,5 @@
 import { EvmChain } from '@vultisig/core-chain/Chain'
-import {
-  hasUniformEvmAddressCase,
-  isEvmHexAddress,
-} from '@vultisig/core-chain/utils/getEvmChecksumMismatchHint'
+import { hasUniformEvmAddressCase, isEvmHexAddress } from '@vultisig/core-chain/utils/getEvmChecksumMismatchHint'
 import { isAddress } from 'viem'
 import { describe, expect, it } from 'vitest'
 
