@@ -220,7 +220,7 @@ describe('isValidAddress for EVM chains (EIP-55)', () => {
     // Invalid: last letter's case flipped — the checksum no longer matches.
     caseFlipped: '0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAeD',
     // Invalid: last hex digit changed with the casing kept (a typo in a
-    // checksummed address — the dogfood S8 shape). WalletCore accepts this.
+    // checksummed address, the exact shape a checksum exists to catch). WalletCore accepts this.
     digitTypo: '0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAee',
     short: '0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAe',
   }
