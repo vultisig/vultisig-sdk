@@ -33,3 +33,14 @@ describe('resolvePolkadotToAddress', () => {
     expect(() => call('0xdeadbeef')).toThrow(/refusing to fall back/)
   })
 })
+
+describe('zero-account destination policy', () => {
+  it.each([
+    ['Bittensor', '5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM'],
+    ['Polkadot', '111111111111111111111111111111111HC1'],
+  ])('rejects valid %s zero destinations', (chain, toAddress) => {
+    mockGetKeysignCoin.mockReturnValue({ chain })
+    mockIsValidAddress.mockReturnValue(true)
+    expect(() => call(toAddress)).toThrow(/zero account/)
+  })
+})

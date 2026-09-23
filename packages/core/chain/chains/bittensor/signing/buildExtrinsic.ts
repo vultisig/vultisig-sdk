@@ -9,6 +9,7 @@
  */
 
 import { WalletCore } from '@trustwallet/wallet-core'
+import { assertSafeDestination } from '@vultisig/core-chain/security/dangerousAddresses'
 
 import { compactEncode, concatBytes, encodeMortalEra, hexToBytes } from './scale'
 
@@ -61,6 +62,7 @@ const buildCallData = (toAddress: string, amount: bigint, allowDeath: boolean, w
     if (destPubkey.length !== 32) {
       throw new Error('Invalid Bittensor destination: expected a 32-byte account')
     }
+    assertSafeDestination('Bittensor', address.description())
   } finally {
     address.delete()
   }

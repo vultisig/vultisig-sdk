@@ -64,6 +64,21 @@ describe('getPolkadotSigningInputs', () => {
     walletCore = await initWasm()
   })
 
+  it.each([false, true])('refuses a valid zero-account address before signing (allowDeath=%s)', async allowDeath => {
+    const keysignPayload = buildPayload({ allowDeath })
+    keysignPayload.toAddress = '111111111111111111111111111111111HC1'
+    expect(walletCore.AnyAddress.isValid(keysignPayload.toAddress, walletCore.CoinType.polkadot)).toBe(true)
+    await expect(async () => getPolkadotSigningInputs({ keysignPayload, walletCore })).rejects.toThrow(
+      /Polkadot zero account/
+    )
+  })
+
+  it('preserves legitimate self-sends', async () => {
+    const keysignPayload = buildPayload({ address: TO_ADDRESS })
+    const [input] = await getPolkadotSigningInputs({ keysignPayload, walletCore })
+    expect(input.balanceCall?.assetTransfer?.toAddress).toBe(TO_ADDRESS)
+  })
+
   it('uses methodIndex 3 (transfer_keep_alive) not 0 (transfer_allow_death)', async () => {
     const [input] = await getPolkadotSigningInputs({ keysignPayload: buildPayload(), walletCore })
 
