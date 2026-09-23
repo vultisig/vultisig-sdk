@@ -419,6 +419,11 @@ const configs = {
       distBase: 'tools/defi',
     }),
     ...createSubpathConfigs({
+      input: './src/tools/dex/index.ts',
+      distBase: 'tools/dex',
+      browser: true,
+    }),
+    ...createSubpathConfigs({
       input: './src/tools/swap/index.ts',
       distBase: 'tools/swap',
       browser: true,
