@@ -1099,16 +1099,19 @@ describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
     expect(() => rn.toChainAmount('   ', 8)).toThrow(rn.ChainAmountParseError)
   })
 
-  it('exports the EVM chainId helpers and priority-fee sanity clamp from the RN entry', async () => {
+  it('exports the canonical EVM chain and RPC helpers and priority-fee sanity clamp from the RN entry', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
+    const chainInfo = await import('@vultisig/core-chain/chains/evm/chainInfo')
 
     expect(typeof rn.getEvmChainId).toBe('function')
     expect(typeof rn.getEvmNumericChainId).toBe('function')
     expect(typeof rn.getEvmChainByChainId).toBe('function')
+    expect(rn.getEvmRpcUrl).toBe(chainInfo.getEvmRpcUrl)
     expect(typeof rn.clampEvmPriorityFee).toBe('function')
     expect(rn.getEvmChainId(rn.Chain.Ethereum)).toBe('0x1')
     expect(rn.getEvmNumericChainId(rn.Chain.Ethereum)).toBe(1)
     expect(rn.getEvmChainByChainId('0x1')).toBe(rn.Chain.Ethereum)
+    expect(rn.getEvmRpcUrl(rn.Chain.CronosChain)).toBe('https://cronos-evm-rpc.publicnode.com')
     expect(
       rn.clampEvmPriorityFee(rn.Chain.Base as Parameters<typeof rn.clampEvmPriorityFee>[0], 75n * 1_000_000_000n)
     ).toBe(50n * 1_000_000_000n)
