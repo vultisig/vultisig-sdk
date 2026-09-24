@@ -3,6 +3,7 @@ import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const getNativeSwapMinAmountIn = vi.hoisted(() => vi.fn().mockResolvedValue(null))
+const getEvmRouterDepositFee = vi.hoisted(() => vi.fn())
 const findSwapQuote = vi.hoisted(() => vi.fn())
 const providerPreferenceOrder = vi.hoisted(
   () => ['CowSwap', 'RUJI Trade', 'THORChain', 'MayaChain', 'Jupiter', 'SwapKit', 'KyberSwap', '1inch', 'LiFi'] as const
@@ -11,6 +12,9 @@ const providerPreferenceOrder = vi.hoisted(
 vi.mock('@vultisig/mpc-types', () => ({ getMpcEngine: vi.fn() }))
 vi.mock('@vultisig/core-chain/swap/native/minimum/getNativeSwapMinAmountIn', () => ({
   getNativeSwapMinAmountIn,
+}))
+vi.mock('@vultisig/core-chain/tx/fee/evm/getEvmRouterDepositFee', () => ({
+  getEvmRouterDepositFee,
 }))
 vi.mock('@vultisig/core-chain/swap/quote/findSwapQuote', () => ({
   findSwapQuote,
@@ -221,6 +225,7 @@ describe('VaultBase.getSwapQuote fee-aware maximums', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     getNativeSwapMinAmountIn.mockResolvedValue(null)
+    getEvmRouterDepositFee.mockResolvedValue({ fee: 10_000n })
   })
 
   it('carries a raw THORChain quote through SwapService and surfaces the estimated BTC fee', async () => {
@@ -319,15 +324,17 @@ describe('VaultBase.getSwapQuote fee-aware maximums', () => {
     })
   })
 
-  it('reserves the estimated Ethereum fee instead of the BTC-denominated native outbound fee', async () => {
+  it('reserves the router-deposit fee when it exceeds the Ethereum send estimate', async () => {
     const balance = 1_000_000_000_000_000_000n
+    const routerDepositFee = 120_000_000_000_000n
+    getEvmRouterDepositFee.mockResolvedValue({ fee: routerDepositFee })
     const quote = nativeQuote({
       from: eth,
       to: btc,
       outbound: '9022',
       recommendedMinimum: '0',
     })
-    const { vault } = makeVault({ quote, balance, fee: 21_000_000_000_000n })
+    const { vault } = makeVault({ quote, balance, fee: 25_000_000_000_000n })
 
     const result = await vault.getSwapQuote({
       fromCoin: eth,
@@ -335,8 +342,27 @@ describe('VaultBase.getSwapQuote fee-aware maximums', () => {
       amount: '1',
     })
 
-    expect(result.maxSwapable).toBe(999_979_000_000_000_000n)
+    expect(result.maxSwapable).toBe(balance - routerDepositFee)
+    expect(result.fees.network).toBe(routerDepositFee)
+    expect(result.fees.total).toBe(routerDepositFee)
     expect(result.maxSwapable).not.toBe(balance - 9_022n)
+  })
+
+  it('reserves the send estimate when it exceeds the EVM router-deposit fee', async () => {
+    const balance = 1_000_000n
+    const sendEstimate = 200_000n
+    getEvmRouterDepositFee.mockResolvedValue({ fee: 120_000n })
+    const quote = nativeQuote({ from: eth, to: btc, recommendedMinimum: '0' })
+    const { vault } = makeVault({ quote, balance, fee: sendEstimate })
+
+    const result = await vault.getSwapQuote({
+      fromCoin: eth,
+      toCoin: btc,
+      amount: '0.000000000001',
+    })
+
+    expect(result.maxSwapable).toBe(balance - sendEstimate)
+    expect(result.fees.network).toBe(sendEstimate)
   })
 
   it('fails closed when the source-chain fee estimator throws', async () => {
@@ -443,6 +469,32 @@ describe('VaultBase.getSwapQuote fee-aware maximums', () => {
     expect(result.warnings[0]).toContain('0.00006316 BTC')
   })
 
+  it.each([undefined, ''])('uses the native minimum helper when recommended_min_amount_in is %s', async value => {
+    getNativeSwapMinAmountIn.mockResolvedValue({
+      swapChain: Chain.THORChain,
+      minAmountInBaseUnits: 6_316n,
+      minAmountInHuman: '0.00006316',
+      outboundFeeBaseUnit: '9022',
+      binding: 'outbound',
+    })
+    const quote = nativeQuote({ from: btc, to: eth })
+    quote.quote.quote.native.recommended_min_amount_in = value as string
+    const { vault } = makeVault({ quote, balance: 12_621n, fee: 500n })
+
+    const result = await vault.getSwapQuote({
+      fromCoin: btc,
+      toCoin: eth,
+      amount: '0.00003599',
+    })
+
+    expect(getNativeSwapMinAmountIn).toHaveBeenCalledWith({
+      from: btc,
+      to: eth,
+      swapChain: Chain.THORChain,
+    })
+    expect(result.warnings[0]).toContain('0.00006316 BTC')
+  })
+
   it('keeps deposit-channel transfer route maximums at zero without calling the estimator', async () => {
     const quote = transferQuote({ from: btc, to: eth })
     const { vault, estimateSendFee } = makeVault({
@@ -498,23 +550,68 @@ describe('VaultBase.getSwapQuote fee-aware maximums', () => {
     expect(estimateSendFee).not.toHaveBeenCalled()
   })
 
-  it('leaves the full token balance swappable without estimating a source fee', async () => {
+  it('reports the EVM token router-deposit fee while leaving the full token balance swappable', async () => {
     const balance = 25_000_000n
+    const routerDepositFee = 120_000_000_000_000n
+    getEvmRouterDepositFee.mockResolvedValue({ fee: routerDepositFee })
     const quote = nativeQuote({ from: usdc, to: btc, recommendedMinimum: '0' })
     const { vault, estimateSendFee } = makeVault({
       quote,
       balance,
       fee: 21_000_000_000_000n,
     })
+    const getFeesFiat = vi.fn().mockResolvedValue({
+      network: 0.36,
+      affiliate: undefined,
+      total: 0.36,
+      currency: 'usd',
+    })
+    Object.assign(vault as object, {
+      swapService: {
+        getQuote: vi.fn().mockResolvedValue(quote),
+        getFeesFiat,
+      },
+    })
 
     const result = await vault.getSwapQuote({
       fromCoin: usdc,
       toCoin: btc,
       amount: '25',
+      fiatCurrency: 'usd',
     })
 
     expect(result.maxSwapable).toBe(balance)
+    expect(result.fees).toEqual({
+      network: routerDepositFee,
+      total: routerDepositFee,
+    })
+    expect(getFeesFiat).toHaveBeenCalledWith(
+      { network: routerDepositFee, total: routerDepositFee },
+      Chain.Ethereum,
+      'usd'
+    )
+    expect(result.feesFiat).toEqual({
+      network: 0.36,
+      affiliate: undefined,
+      total: 0.36,
+      currency: 'usd',
+    })
     expect(estimateSendFee).not.toHaveBeenCalled()
+  })
+
+  it('keeps non-EVM native fee estimation unchanged without pricing a router deposit', async () => {
+    const quote = nativeQuote({ from: btc, to: eth })
+    const { vault } = makeVault({ quote, balance: 12_621n, fee: 500n })
+
+    const result = await vault.getSwapQuote({
+      fromCoin: btc,
+      toCoin: eth,
+      amount: '0.00012621',
+    })
+
+    expect(result.fees.network).toBe(500n)
+    expect(result.maxSwapable).toBe(12_121n)
+    expect(getEvmRouterDepositFee).not.toHaveBeenCalled()
   })
 
   it('still evaluates the native route minimum for token sources without estimating a fee', async () => {

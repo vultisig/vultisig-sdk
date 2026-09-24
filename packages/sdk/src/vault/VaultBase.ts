@@ -4,7 +4,7 @@ import { sha256 } from '@noble/hashes/sha2.js'
 import { getMaxValue } from '@vultisig/core-chain/amount/getMaxValue'
 import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import { banxaSupportedChains, getBanxaBuyUrl } from '@vultisig/core-chain/banxa'
-import { Chain } from '@vultisig/core-chain/Chain'
+import { Chain, EvmChain } from '@vultisig/core-chain/Chain'
 import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import type { TonWalletVersion } from '@vultisig/core-chain/chains/ton/wallet'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
@@ -18,6 +18,7 @@ import { getNativeSwapMinAmountIn } from '@vultisig/core-chain/swap/native/minim
 import { getNativeSwapDecimals } from '@vultisig/core-chain/swap/native/utils/getNativeSwapDecimals'
 import { nativeSwapAmountToCoinBaseUnit } from '@vultisig/core-chain/swap/native/utils/nativeSwapAmountToCoinBaseUnit'
 import { getSwapQuoteProviderExcludeName, providerPreferenceOrder } from '@vultisig/core-chain/swap/quote/findSwapQuote'
+import { getEvmRouterDepositFee } from '@vultisig/core-chain/tx/fee/evm/getEvmRouterDepositFee'
 import { getTxStatus as coreTxStatus } from '@vultisig/core-chain/tx/status'
 import type { TxStatusResult } from '@vultisig/core-chain/tx/status/resolver'
 import { withEvmChecksumHint } from '@vultisig/core-chain/utils/getEvmChecksumMismatchHint'
@@ -30,6 +31,7 @@ import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/key
 import { VaultSchema } from '@vultisig/core-mpc/types/vultisig/vault/v1/vault_pb'
 import { vaultContainerFromString } from '@vultisig/core-mpc/vault/utils/vaultContainerFromString'
 import { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
+import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
 import { fromBase64 } from '@vultisig/lib-utils/fromBase64'
 
 import { DEFAULT_CHAINS } from '../constants'
@@ -2466,14 +2468,24 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     fromCoin: AccountCoin
     balance: bigint
   }): Promise<{ maxSwapable: bigint; estimatedNetworkFee?: bigint }> {
-    if (fromCoin.id) return { maxSwapable: balance }
+    const { quote } = quoteResult.quote
+    let routerDepositFee: bigint | undefined
+    if ('native' in quote && isOneOf(fromCoin.chain, Object.values(EvmChain))) {
+      routerDepositFee = (await getEvmRouterDepositFee(fromCoin.chain)).fee
+    }
+
+    if (fromCoin.id) {
+      return {
+        maxSwapable: balance,
+        ...(routerDepositFee === undefined ? {} : { estimatedNetworkFee: routerDepositFee }),
+      }
+    }
 
     let fee = quoteResult.fees.network
     if (fee === 0n) {
-      const { quote } = quoteResult.quote
       if (!('native' in quote)) return { maxSwapable: 0n }
 
-      fee = await this.transactionBuilder.estimateSendFee({
+      const sendFee = await this.transactionBuilder.estimateSendFee({
         coin: fromCoin,
         receiver: getSwapDestinationAddress({
           quote: quoteResult.quote,
@@ -2482,6 +2494,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
         amount: balance,
         memo: quote.native.memo,
       })
+      fee = routerDepositFee === undefined || sendFee > routerDepositFee ? sendFee : routerDepositFee
       if (fee <= 0n) return { maxSwapable: 0n }
 
       return {
@@ -2506,7 +2519,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     if (!('native' in quote)) return undefined
 
     try {
-      const recommended = BigInt(quote.native.recommended_min_amount_in)
+      const recommended = BigInt(quote.native.recommended_min_amount_in || '0')
       if (recommended > 0n) {
         const converted = nativeSwapAmountToCoinBaseUnit(recommended, fromCoin)
         const nativeDecimals = getNativeSwapDecimals(fromCoin)
