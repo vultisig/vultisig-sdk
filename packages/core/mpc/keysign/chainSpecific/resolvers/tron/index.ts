@@ -1,13 +1,12 @@
 import { Buffer } from 'buffer'
 
 import { create } from '@bufbuild/protobuf'
-import { tronRpcUrl } from '@vultisig/core-chain/chains/tron/config'
 import { getTronBlockInfo } from '@vultisig/core-chain/chains/tron/getTronBlockInfo'
+import { queryTron } from '@vultisig/core-chain/chains/tron/queryTron'
 import { getTronAccountResources } from '@vultisig/core-chain/chains/tron/resources/getTronAccountResources'
 import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import { TronSpecificSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
-import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import { TW, type WalletCore } from '@trustwallet/wallet-core'
 import Long from 'long'
 
@@ -107,7 +106,7 @@ export const getNativeTronBandwidthBytes = ({
 }
 
 const getNativeTronSendFee = async (input: NativeTronBandwidthInput): Promise<bigint> => {
-  const recipient = await queryUrl<Record<string, unknown>>(`${tronRpcUrl}/wallet/getaccount`, {
+  const recipient = await queryTron<Record<string, unknown>>('/wallet/getaccount', {
     body: { address: input.toAddress, visible: true },
   })
   if (!recipient || typeof recipient !== 'object' || Array.isArray(recipient)) {

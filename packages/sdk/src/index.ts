@@ -39,6 +39,23 @@ configureVultisigInstanceNamespaces(Vultisig, {
 export type { VaultImportConflictResolution, VaultImportOptions } from './VaultManager'
 export { Vultisig }
 
+// Server-assisted Fast Vault public helpers.
+export type { ServerEndpoints, VaultFromServerResponse } from './server'
+export {
+  checkVaultExistsOnServer,
+  createVaultWithServer,
+  getVaultFromServer,
+  keyImportWithServer,
+  migrateWithServer,
+  mldsaWithServer,
+  resendVaultShare,
+  reshareWithServer,
+  sequentialKeyImportWithServer,
+  setupVaultWithServer,
+  signWithServer,
+  verifyVaultEmailCode,
+} from './server'
+
 // Vault management
 export type { ResolvedTokenInfo, VaultConfig, VaultSaveOptions } from './vault'
 export {
@@ -98,6 +115,9 @@ export {
   TonBroadcastRejectedError,
   tonTxFailureReasons,
 } from '@vultisig/core-chain/chains/ton/failure'
+export type { TonGaslessConfig } from '@vultisig/core-chain/chains/ton/gasless/api'
+export { getTonGaslessConfig, isTonGasJetton } from '@vultisig/core-chain/chains/ton/gasless/api'
+export { resolveTokenPriceId } from '@vultisig/core-chain/coin/price/resolveTokenPriceId'
 export {
   CosmosSequenceMismatchError,
   toCosmosSequenceMismatchError,
@@ -107,12 +127,14 @@ export {
   SolanaBlockhashExpiredError,
   toSolanaBlockhashExpiredError,
 } from '@vultisig/core-chain/tx/broadcast/solanaBlockhashExpired'
+export { getKeysignFeeCoin } from '@vultisig/core-mpc/keysign/fee/getKeysignFeeCoin'
 
 // Pure-bigint exact base-units -> human decimal-string conversion (no float64
 // round-trip, so it's safe for high-decimal assets). Exported at the root so
 // downstream consumers (CLI, app) can share this instead of hand-rolling
 // their own `BigInt(10 ** decimals)` divisor, which drifts past decimals=22.
-export { fromChainAmountExact } from '@vultisig/core-chain/amount/fromChainAmountExact'
+export { fromChainAmount } from '@vultisig/core-chain/amount/fromChainAmount'
+export { fromChainAmountDisplay, fromChainAmountExact } from '@vultisig/core-chain/amount/fromChainAmountExact'
 
 // Public-boundary argument validation (AUDIT-R3 TASK-020).
 // Zod schemas + safe-parse helpers for chain and ticker strings.
@@ -823,13 +845,18 @@ export {
 export type {
   ContinuousVestingAccount,
   Coin as CosmosStakingCoin,
+  Validator as CosmosStakingValidator,
   DelayedVestingAccount,
   Delegation,
   DelegatorReward,
   DelegatorRewardsResponse,
   PeriodicVestingAccount,
+  StakingChain,
   UnbondingDelegation,
   UnbondingEntry,
+  ValidatorCommission,
+  ValidatorDescription,
+  ValidatorStatus,
   VestingAccount,
 } from '@vultisig/core-chain/chains/cosmos/staking/lcdQueries'
 export {
@@ -837,10 +864,14 @@ export {
   getCosmosDelegations,
   getCosmosDelegatorRewards,
   getCosmosUnbondingDelegations,
+  getCosmosValidator,
+  getCosmosValidators,
   getCosmosVestingAccount,
   getDelegationsUrl,
   getDelegatorRewardsUrl,
   getUnbondingDelegationsUrl,
+  getValidatorsUrl,
+  getValidatorUrl,
 } from '@vultisig/core-chain/chains/cosmos/staking/lcdQueries'
 
 // Cosmos governance (read proposals + build unsigned MsgVote envelope —

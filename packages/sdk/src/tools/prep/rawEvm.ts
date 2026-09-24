@@ -3,6 +3,7 @@ import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
 import { assertSafeDestination } from '@vultisig/core-chain/security/dangerousAddresses'
+import { withEvmChecksumHint } from '@vultisig/core-chain/utils/getEvmChecksumMismatchHint'
 import { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
 import { getBlockchainSpecificValue } from '@vultisig/core-mpc/keysign/chainSpecific/KeysignChainSpecific'
 import { buildSendKeysignPayload } from '@vultisig/core-mpc/keysign/send/build'
@@ -77,10 +78,10 @@ export const prepareRawEvmTxFromKeys = async (
 
   const walletCore = walletCoreOverride ?? (await getWalletCore())
   if (!isValidAddress({ chain, address: tx.to, walletCore })) {
-    throw new Error(`Invalid transaction destination for chain ${chain}: ${tx.to}`)
+    throw new Error(withEvmChecksumHint(`Invalid transaction destination for chain ${chain}: ${tx.to}`, tx.to))
   }
   if (!isValidAddress({ chain, address: senderAddress, walletCore })) {
-    throw new Error(`Invalid sender address for chain ${chain}: ${senderAddress}`)
+    throw new Error(withEvmChecksumHint(`Invalid sender address for chain ${chain}: ${senderAddress}`, senderAddress))
   }
   assertSafeDestination(chain, tx.to)
 

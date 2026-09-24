@@ -659,6 +659,10 @@ program
   .option('--token <tokenId>', 'Token to send (default: native)')
   .option('--memo <memo>', 'Transaction memo')
   .option('--destination-tag <tag>', 'XRP DestinationTag (0 to 4294967295)')
+  .option(
+    '--gasless',
+    'TON jettons on a W5 account: pay the network fee in the jetton through the relay, no TON needed'
+  )
   .option('--dry-run', 'Preview transaction without signing or broadcasting')
   .option('--confirm', 'Confirm and broadcast (required to execute non-interactively; use --dry-run to preview)')
   .option('-y, --yes', 'Alias for --confirm')
@@ -671,6 +675,7 @@ Examples:
   vultisig send Ethereum 0x1234...abcd 0.1
   vultisig send Bitcoin bc1q... --max --confirm
   vultisig send Ethereum 0x... 0.5 --dry-run --output json
+  vultisig send Ton UQ... 25 --token USDT --gasless --dry-run
 
 Environment variables:
   VAULT_PASSWORD    Vault password (bypasses prompt)
@@ -689,6 +694,7 @@ See also: balance, tx-status`
           token?: string
           memo?: string
           destinationTag?: string
+          gasless?: boolean
           dryRun?: boolean
           yes?: boolean
           confirm?: boolean
@@ -701,6 +707,9 @@ See also: balance, tx-status`
         const chain = resolveChainOrThrow(chainStr)
         if (options.destinationTag !== undefined && chain !== Chain.Ripple) {
           throw new Error('--destination-tag is only supported for XRP')
+        }
+        if (options.gasless && (chain !== Chain.Ton || !options.token)) {
+          throw new Error('--gasless is only supported for TON jetton sends (pass --token)')
         }
         const destinationTag = options.destinationTag === undefined ? undefined : Number(options.destinationTag)
         if (
@@ -722,6 +731,7 @@ See also: balance, tx-status`
           tokenId: options.token,
           memo: options.memo,
           destinationTag,
+          gasless: options.gasless,
           dryRun: options.dryRun,
           yes: options.yes || options.confirm,
           force: options.force,

@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-mpc",
-  "version": "3.3.0",
+  "version": "3.4.1",
   "description": "MPC, keysign, and vault types shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -291,6 +291,11 @@
       "import": "./dist/keysign/chainSpecific/resolvers/ton/index.js",
       "default": "./dist/keysign/chainSpecific/resolvers/ton/index.js"
     },
+    "./keysign/chainSpecific/resolvers/ton/gasless": {
+      "types": "./dist/keysign/chainSpecific/resolvers/ton/gasless.d.ts",
+      "import": "./dist/keysign/chainSpecific/resolvers/ton/gasless.js",
+      "default": "./dist/keysign/chainSpecific/resolvers/ton/gasless.js"
+    },
     "./keysign/chainSpecific/resolvers/tron": {
       "types": "./dist/keysign/chainSpecific/resolvers/tron/index.d.ts",
       "import": "./dist/keysign/chainSpecific/resolvers/tron/index.js",
@@ -330,6 +335,11 @@
       "types": "./dist/keysign/fee/index.d.ts",
       "import": "./dist/keysign/fee/index.js",
       "default": "./dist/keysign/fee/index.js"
+    },
+    "./keysign/fee/getKeysignFeeCoin": {
+      "types": "./dist/keysign/fee/getKeysignFeeCoin.d.ts",
+      "import": "./dist/keysign/fee/getKeysignFeeCoin.js",
+      "default": "./dist/keysign/fee/getKeysignFeeCoin.js"
     },
     "./keysign/fee/resolver": {
       "types": "./dist/keysign/fee/resolver.d.ts",
@@ -435,6 +445,11 @@
       "types": "./dist/keysign/refine/utxo.d.ts",
       "import": "./dist/keysign/refine/utxo.js",
       "default": "./dist/keysign/refine/utxo.js"
+    },
+    "./keysign/send/assertBittensorDestinationStaysAlive": {
+      "types": "./dist/keysign/send/assertBittensorDestinationStaysAlive.d.ts",
+      "import": "./dist/keysign/send/assertBittensorDestinationStaysAlive.js",
+      "default": "./dist/keysign/send/assertBittensorDestinationStaysAlive.js"
     },
     "./keysign/send/build": {
       "types": "./dist/keysign/send/build.d.ts",
@@ -635,6 +650,11 @@
       "types": "./dist/keysign/swap/KeysignSwapPayload.d.ts",
       "import": "./dist/keysign/swap/KeysignSwapPayload.js",
       "default": "./dist/keysign/swap/KeysignSwapPayload.js"
+    },
+    "./keysign/ton/gasless": {
+      "types": "./dist/keysign/ton/gasless.d.ts",
+      "import": "./dist/keysign/ton/gasless.js",
+      "default": "./dist/keysign/ton/gasless.js"
     },
     "./keysign/tw/getKeysignTwPublicKey": {
       "types": "./dist/keysign/tw/getKeysignTwPublicKey.d.ts",
@@ -1109,7 +1129,7 @@
     "@noble/hashes": "^2.2.0",
     "@solana/web3.js": "^1.98.4",
     "@trustwallet/wallet-core": "^4.7.3",
-    "@vultisig/core-chain": "5.5.0",
+    "@vultisig/core-chain": "5.6.1",
     "@vultisig/core-config": "0.9.1",
     "@vultisig/lib-dkls": "0.9.0",
     "@vultisig/lib-mldsa": "0.9.0",

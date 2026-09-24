@@ -62,6 +62,7 @@ const wethDepositAbi = [
 const senderAddress = '0x000000000000000000000000000000000000abcd'
 const contractAddress = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
 const spenderAddress = '0xC5d563A36AE78145C45a50134d48A1215220f80a'
+const digitTypoAddress = '0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAee'
 
 describe('prepareContractCallTxFromKeys', () => {
   beforeEach(() => {
@@ -208,6 +209,23 @@ describe('prepareContractCallTxFromKeys', () => {
 
     expect(mockBuildSendKeysignPayload).not.toHaveBeenCalled()
     expect(mockGetPublicKey).not.toHaveBeenCalled()
+  })
+
+  it('includes the EIP-55 hint when a mixed-case contract address fails validation', async () => {
+    mockIsValidAddress.mockImplementation(({ address }: { address: string }) => address !== digitTypoAddress)
+
+    await expect(
+      prepareContractCallTxFromKeys(baseIdentity, {
+        chain: Chain.Ethereum,
+        contractAddress: digitTypoAddress,
+        abi: erc20ApproveAbi,
+        functionName: 'approve',
+        args: [spenderAddress, 1n],
+        senderAddress,
+      })
+    ).rejects.toThrow(/Invalid contract address.*EIP-55 checksum mismatch/u)
+
+    expect(mockBuildSendKeysignPayload).not.toHaveBeenCalled()
   })
 
   it('rejects when senderAddress is invalid before building payload', async () => {

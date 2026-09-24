@@ -1,9 +1,12 @@
-import { fromBech32 } from '@cosmjs/encoding'
 import { WalletCore } from '@trustwallet/wallet-core'
 import { Chain } from '@vultisig/core-chain/Chain'
+import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import { getCoinType } from '@vultisig/core-chain/coin/coinType'
+import { isAddress } from 'viem'
 
 import { isValidRippleXAddress } from '../chains/ripple/address'
+import { decodeBech32 } from './decodeBech32'
+import { hasUniformEvmAddressCase, isEvmHexAddress } from './getEvmChecksumMismatchHint'
 
 type Input = {
   chain: Chain
@@ -12,6 +15,18 @@ type Input = {
 }
 
 export const isValidAddress = ({ chain, address, walletCore }: Input) => {
+  if (getChainKind(chain) === 'evm') {
+    // WalletCore accepts any 0x + 40 hex regardless of letter case, so a
+    // one-character typo in a checksummed address used to pass. Uniform-case
+    // input carries no checksum and remains valid; mixed-case input must match
+    // its EIP-55 checksum.
+    if (!isEvmHexAddress(address)) {
+      return false
+    }
+
+    return hasUniformEvmAddressCase(address) || isAddress(address, { strict: true })
+  }
+
   const coinType = getCoinType({
     walletCore,
     chain,
@@ -23,7 +38,7 @@ export const isValidAddress = ({ chain, address, walletCore }: Input) => {
 
   if (chain === Chain.QBTC) {
     try {
-      const { prefix } = fromBech32(address.trim())
+      const { prefix } = decodeBech32(address.trim())
       return prefix === 'qbtc'
     } catch {
       return false

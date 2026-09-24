@@ -1,7 +1,7 @@
 import { Buffer } from 'buffer'
 
 import { compactToU8a } from '@polkadot/util'
-import { decodeAddress } from '@polkadot/util-crypto'
+import { decodeAddress, encodeAddress } from '@polkadot/util-crypto'
 import { GenericExtrinsicEra, TypeRegistry } from '@polkadot/types'
 import { create } from '@bufbuild/protobuf'
 import { initWasm, type WalletCore } from '@trustwallet/wallet-core'
@@ -18,6 +18,11 @@ import {
 import { compactEncode, encodeMortalEra } from '@vultisig/core-chain/chains/bittensor/signing/scale'
 import { decodeBittensorTxInput, getBittensorSigningInputs } from './bittensor'
 
+let walletCore: WalletCore
+beforeAll(async () => {
+  walletCore = await initWasm()
+})
+
 // Bittensor (finney) genesis hash
 const GENESIS_HASH = '0x2f0555cc76fc2840a25a6ea3b9637146806f1f44b090c175ffde2a7e5ab36c03'
 // Arbitrary valid SS58-42 (Bittensor/generic Substrate) address
@@ -27,11 +32,36 @@ const BLOCK_HASH = '0xaabbccddeeff00112233445566778899aabbccddeeff00112233445566
 
 const hex = (bytes: Uint8Array) => Buffer.from(bytes).toString('hex')
 
+const invalidDestinations = [
+  { name: 'prefix 0', address: encodeAddress(decodeAddress(TO_ADDRESS), 0) },
+  {
+    name: 'two-byte prefix',
+    address: encodeAddress(decodeAddress(TO_ADDRESS), 1000),
+  },
+  {
+    name: 'hexadecimal account',
+    address: `0x${hex(decodeAddress(TO_ADDRESS))}`,
+  },
+  { name: 'invalid checksum', address: `${TO_ADDRESS.slice(0, -1)}Z` },
+  { name: 'empty address', address: '' },
+  { name: 'whitespace', address: ` ${TO_ADDRESS}` },
+  ...[1, 2, 4, 8, 33].map(length => ({
+    name: `${length}-byte account`,
+    address: encodeAddress(new Uint8Array(length).fill(1), 42),
+  })),
+]
+
 const buildPayload = ({
   address = FROM_ADDRESS,
   hexPublicKey,
   memo,
-}: { address?: string; hexPublicKey?: string; memo?: string } = {}) =>
+  allowDeath,
+}: {
+  address?: string
+  hexPublicKey?: string
+  memo?: string
+  allowDeath?: boolean
+} = {}) =>
   create(KeysignPayloadSchema, {
     ...(memo ? { memo } : {}),
     coin: create(CoinSchema, {
@@ -53,6 +83,7 @@ const buildPayload = ({
         specVersion: 225,
         transactionVersion: 1,
         genesisHash: GENESIS_HASH,
+        ...(allowDeath === undefined ? {} : { allowDeath }),
       }),
     },
   })
@@ -91,31 +122,52 @@ describe('encodeMortalEra — cross-checked against @polkadot/types (the real SC
     { blockNumber: 0, period: 64 },
     { blockNumber: 4000000, period: 128 },
   ])('matches GenericExtrinsicEra for block=$blockNumber period=$period', ({ blockNumber, period }) => {
-    const real = new GenericExtrinsicEra(registry, { current: blockNumber, period })
+    const real = new GenericExtrinsicEra(registry, {
+      current: blockNumber,
+      period,
+    })
     expect(hex(encodeMortalEra(blockNumber, period))).toBe(hex(real.toU8a()))
   })
 })
 
 // Live-verified against the REAL Bittensor (finney) mainnet runtime metadata
-// (state_getMetadata via entrypoint-finney.opentensor.ai, 2026-07-08) — NOT assumed
-// from the source comment. Confirms buildExtrinsic.ts's hardcoded balancesPallet=5 /
-// transferAllowDeath=0 constants match the chain's actual pallet/call indices; a
-// runtime upgrade that renumbers either would silently mis-route the extrinsic
-// (e.g. onto a different pallet's call) with no error until broadcast rejects it.
-describe('Bittensor Balances.transfer_allow_death call indices (live-verified against mainnet metadata)', () => {
-  it('encodes moduleIndex 5 (pallet_balances) + methodIndex 0 (transfer_allow_death)', () => {
-    const { callData } = buildBittensorSigningPayload({
-      toAddress: TO_ADDRESS,
-      amount: 1000000000n,
-      nonce: 5,
-      blockNumber: 4000000,
-      blockHash: BLOCK_HASH,
-      genesisHash: GENESIS_HASH,
-      specVersion: 225,
-      transactionVersion: 1,
-    })
+// (state_getMetadata via entrypoint-finney.opentensor.ai, specVersion 458,
+// 2026-09-15) — NOT assumed from the source comment. Confirms buildExtrinsic.ts's
+// hardcoded balancesPallet=5 / transferKeepAlive=3 / transferAllowDeath=0 constants
+// match the chain's actual pallet/call indices; a runtime upgrade that renumbers
+// any of them would silently mis-route the extrinsic (e.g. onto a different
+// pallet's call) with no error until broadcast rejects it.
+describe('Bittensor Balances call indices (live-verified against mainnet metadata)', () => {
+  const params = {
+    toAddress: TO_ADDRESS,
+    amount: 1000000000n,
+    nonce: 5,
+    blockNumber: 4000000,
+    blockHash: BLOCK_HASH,
+    genesisHash: GENESIS_HASH,
+    specVersion: 225,
+    transactionVersion: 1,
+  }
+
+  // A normal send must never reap the sender: transfer_keep_alive fails on-chain
+  // (Expendability) rather than take the free balance below the existential
+  // deposit, whereas transfer_allow_death destroys the leftover dust.
+  it('encodes moduleIndex 5 (pallet_balances) + methodIndex 3 (transfer_keep_alive) by default', () => {
+    const { callData } = buildBittensorSigningPayload(params, walletCore)
     expect(callData[0]).toBe(5) // Balances pallet index
+    expect(callData[1]).toBe(3) // transfer_keep_alive call index
+  })
+
+  it('encodes methodIndex 0 (transfer_allow_death) only when the sender explicitly empties the account', () => {
+    const { callData } = buildBittensorSigningPayload({ ...params, allowDeath: true }, walletCore)
+    expect(callData[0]).toBe(5)
     expect(callData[1]).toBe(0) // transfer_allow_death call index
+  })
+
+  it('leaves the rest of the call data identical between the two calls', () => {
+    const keepAlive = buildBittensorSigningPayload(params, walletCore).callData
+    const allowDeath = buildBittensorSigningPayload({ ...params, allowDeath: true }, walletCore).callData
+    expect(hex(keepAlive.slice(2))).toBe(hex(allowDeath.slice(2)))
   })
 })
 
@@ -131,11 +183,42 @@ describe('buildBittensorSigningPayload — golden vector (full byte-for-byte pin
     transactionVersion: 1,
   }
 
+  it.each(invalidDestinations)('rejects $name before building bytes for either transfer mode', ({ address }) => {
+    for (const allowDeath of [false, true]) {
+      expect(() => buildBittensorSigningPayload({ ...params, toAddress: address, allowDeath }, walletCore)).toThrow(
+        /Invalid Bittensor destination/
+      )
+    }
+  })
+
+  it.each(['5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM'])(
+    'rejects a decoded zero account %s in both transfer modes',
+    toAddress => {
+      expect(decodeAddress(toAddress, false, 42)).toEqual(new Uint8Array(32))
+      for (const allowDeath of [false, true]) {
+        expect(() => buildBittensorSigningPayload({ ...params, toAddress, allowDeath }, walletCore)).toThrow(
+          /Refusing to build transaction: destination .*Bittensor zero account/
+        )
+      }
+    }
+  )
+
+  it.each([
+    '111111111111111111111111111111111HC1',
+    encodeAddress(new Uint8Array(32), 2),
+    `0x${'00'.repeat(32)}`,
+    'Zp19SpDEQsqP7kWaM771zhV9PBCK7kKwrZrf6ikdKh5UiVAsv',
+  ])('preserves format refusal for zero destination %s', toAddress => {
+    for (const allowDeath of [false, true]) {
+      expect(() => buildBittensorSigningPayload({ ...params, toAddress, allowDeath }, walletCore)).toThrow()
+    }
+  })
+
   it('produces the expected callData bytes (pallet + method + MultiAddress::Id + dest pubkey + compact amount)', () => {
-    const { callData } = buildBittensorSigningPayload(params)
+    const { callData } = buildBittensorSigningPayload(params, walletCore)
     const destPubkey = decodeAddress(TO_ADDRESS)
     const expected = Buffer.concat([
-      Buffer.from([5, 0]), // Balances.transfer_allow_death
+      Buffer.from([5, 3]), // Balances.transfer_keep_alive
       Buffer.from([0x00]), // MultiAddress::Id tag
       Buffer.from(destPubkey),
       Buffer.from(compactToU8a(params.amount)),
@@ -144,7 +227,7 @@ describe('buildBittensorSigningPayload — golden vector (full byte-for-byte pin
   })
 
   it('produces the expected signedExtra bytes (mortal era + compact nonce + compact tip=0 + metadataHash mode=0)', () => {
-    const { signedExtra } = buildBittensorSigningPayload(params)
+    const { signedExtra } = buildBittensorSigningPayload(params, walletCore)
     const era = new GenericExtrinsicEra(new TypeRegistry(), { current: params.blockNumber, period: 64 })
     const expected = Buffer.concat([
       Buffer.from(era.toU8a()),
@@ -156,7 +239,7 @@ describe('buildBittensorSigningPayload — golden vector (full byte-for-byte pin
   })
 
   it('produces the expected full signing payload (callData ++ signedExtra ++ additionalSigned)', () => {
-    const { callData, signedExtra, payload } = buildBittensorSigningPayload(params)
+    const { callData, signedExtra, payload } = buildBittensorSigningPayload(params, walletCore)
     // additionalSigned = specVersion(u32 LE) ++ txVersion(u32 LE) ++ genesisHash(32B) ++ blockHash(32B) ++ metadataHash(None=0x00)
     const specVersionBytes = Buffer.alloc(4)
     specVersionBytes.writeUInt32LE(params.specVersion, 0)
@@ -176,16 +259,19 @@ describe('buildBittensorSigningPayload — golden vector (full byte-for-byte pin
 
 describe('assembleBittensorExtrinsic — golden vector (final signed extrinsic structure)', () => {
   it('assembles signed-v4 prefix + MultiAddress::Id(signer) + MultiSignature::Ed25519(sig) + signedExtra + callData, length-prefixed', () => {
-    const { callData, signedExtra } = buildBittensorSigningPayload({
-      toAddress: TO_ADDRESS,
-      amount: 1000000000n,
-      nonce: 5,
-      blockNumber: 4000000,
-      blockHash: BLOCK_HASH,
-      genesisHash: GENESIS_HASH,
-      specVersion: 225,
-      transactionVersion: 1,
-    })
+    const { callData, signedExtra } = buildBittensorSigningPayload(
+      {
+        toAddress: TO_ADDRESS,
+        amount: 1000000000n,
+        nonce: 5,
+        blockNumber: 4000000,
+        blockHash: BLOCK_HASH,
+        genesisHash: GENESIS_HASH,
+        specVersion: 225,
+        transactionVersion: 1,
+      },
+      walletCore
+    )
     const signerPubkey = decodeAddress(FROM_ADDRESS)
     const signature = new Uint8Array(64).fill(0xab)
 
@@ -217,18 +303,64 @@ describe('getBittensorSigningInputs — custom tx-input framing round-trips', ()
     walletCore = await initWasm()
   })
 
+  it.each(invalidDestinations)('rejects $name with real WalletCore without substituting the sender', ({ address }) => {
+    const keysignPayload = buildPayload()
+    keysignPayload.toAddress = address
+    expect(() => getBittensorSigningInputs({ keysignPayload, walletCore })).toThrow(
+      'Invalid Bittensor destination address; refusing to fall back to the sender'
+    )
+    expect(keysignPayload.toAddress).toBe(address)
+  })
+
+  it.each([false, true])('refuses a valid zero-account address before signing (allowDeath=%s)', allowDeath => {
+    const keysignPayload = buildPayload({ allowDeath })
+    keysignPayload.toAddress = '5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM'
+    expect(walletCore.AnyAddress.isValidSS58(keysignPayload.toAddress, walletCore.CoinType.polkadot, 42)).toBe(true)
+    expect(() => getBittensorSigningInputs({ keysignPayload, walletCore })).toThrow(/Bittensor zero account/)
+  })
+
+  it('preserves legitimate self-sends', () => {
+    const keysignPayload = buildPayload({ address: TO_ADDRESS })
+    expect(getBittensorSigningInputs({ keysignPayload, walletCore })).toHaveLength(1)
+  })
+
+  // Every co-signer derives the call index from PolkadotSpecific.allowDeath, so
+  // a payload that predates the field, or leaves it unset, must land on
+  // keep-alive and only an explicit true may reap the sender.
+  it('encodes transfer_keep_alive unless the payload explicitly allows death', async () => {
+    const keepAlive = decodeBittensorTxInput(
+      getBittensorSigningInputs({
+        keysignPayload: buildPayload(),
+        walletCore,
+      })[0]
+    ).callData
+    expect(Array.from(keepAlive.slice(0, 2))).toEqual([5, 3])
+
+    const allowDeath = decodeBittensorTxInput(
+      getBittensorSigningInputs({
+        keysignPayload: buildPayload({ allowDeath: true }),
+        walletCore,
+      })[0]
+    ).callData
+    expect(Array.from(allowDeath.slice(0, 2))).toEqual([5, 0])
+    expect(hex(allowDeath.slice(2))).toBe(hex(keepAlive.slice(2)))
+  })
+
   it('round-trips callData/signedExtra/payload through encode -> decode unchanged', async () => {
     const [txInputData] = getBittensorSigningInputs({ keysignPayload: buildPayload(), walletCore })
-    const { callData, signedExtra, payload } = buildBittensorSigningPayload({
-      toAddress: TO_ADDRESS,
-      amount: 1000000000n,
-      nonce: 5,
-      blockNumber: 4000000,
-      blockHash: BLOCK_HASH,
-      genesisHash: GENESIS_HASH,
-      specVersion: 225,
-      transactionVersion: 1,
-    })
+    const { callData, signedExtra, payload } = buildBittensorSigningPayload(
+      {
+        toAddress: TO_ADDRESS,
+        amount: 1000000000n,
+        nonce: 5,
+        blockNumber: 4000000,
+        blockHash: BLOCK_HASH,
+        genesisHash: GENESIS_HASH,
+        specVersion: 225,
+        transactionVersion: 1,
+      },
+      walletCore
+    )
 
     const decoded = decodeBittensorTxInput(txInputData)
     expect(hex(decoded.callData)).toBe(hex(callData))
@@ -236,11 +368,14 @@ describe('getBittensorSigningInputs — custom tx-input framing round-trips', ()
     expect(hex(decoded.payload)).toBe(hex(payload))
   })
 
-  // The transfer_allow_death extrinsic encoded above has no field a memo could
+  // The transfer_keep_alive extrinsic encoded above has no field a memo could
   // occupy, so accepting one would sign a transfer that silently omits it.
   it('rejects a memo (the Bittensor transfer extrinsic has no remark field)', async () => {
     expect(() =>
-      getBittensorSigningInputs({ keysignPayload: buildPayload({ memo: 'deposit-12345' }), walletCore })
+      getBittensorSigningInputs({
+        keysignPayload: buildPayload({ memo: 'deposit-12345' }),
+        walletCore,
+      })
     ).toThrow('do not support a memo')
   })
 })
@@ -255,5 +390,31 @@ describe('Bittensor amount validation', () => {
     const keysignPayload = buildPayload()
     keysignPayload.toAmount = toAmount
     await expect(async () => getBittensorSigningInputs({ keysignPayload, walletCore })).rejects.toThrow(/decimal/)
+  })
+})
+
+describe('Bittensor destination network validation', () => {
+  const params = {
+    toAddress: TO_ADDRESS,
+    amount: 1000000000n,
+    nonce: 5,
+    blockNumber: 4000000,
+    blockHash: BLOCK_HASH,
+    genesisHash: GENESIS_HASH,
+    specVersion: 225,
+    transactionVersion: 1,
+  }
+
+  it.each([
+    ['Polkadot prefix 0', encodeAddress(decodeAddress(TO_ADDRESS), 0)],
+    ['hex account', '0x' + hex(decodeAddress(TO_ADDRESS))],
+    ['bad checksum', TO_ADDRESS.slice(0, -1) + 'Z'],
+    ['empty address', ''],
+    ['AccountIndex', encodeAddress(new Uint8Array([1]), 42)],
+  ])('rejects %s in the direct builder and signing resolver', (_label, toAddress) => {
+    expect(() => buildBittensorSigningPayload({ ...params, toAddress }, walletCore)).toThrow(/Bittensor|Invalid/)
+    const keysignPayload = buildPayload()
+    keysignPayload.toAddress = toAddress
+    expect(() => getBittensorSigningInputs({ keysignPayload, walletCore })).toThrow()
   })
 })

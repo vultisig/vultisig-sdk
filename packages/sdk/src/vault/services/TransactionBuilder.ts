@@ -4,6 +4,7 @@ import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getCoinType } from '@vultisig/core-chain/coin/coinType'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
 import { getTwPublicKeyType } from '@vultisig/core-chain/publicKey/tw/getTwPublicKeyType'
+import { withEvmChecksumHint } from '@vultisig/core-chain/utils/getEvmChecksumMismatchHint'
 import { isValidRecipient } from '@vultisig/core-chain/utils/isValidRecipient'
 import { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
 import { getSendFeeEstimate } from '@vultisig/core-mpc/keysign/send/getSendFeeEstimate'
@@ -69,6 +70,8 @@ export class TransactionBuilder {
    * @param params.sendMaxAmount - Set when the amount came from a MAX button. Recorded in
    *   the payload; `amount` is still exactly what gets signed, so pass the same
    *   `balance - fee` figure the UI displayed.
+   * @param params.tonGasless - TON only: pay the fee in the jetton being sent through the
+   *   gasless relay (W5 accounts, relay-accepted jettons). The relay's commission is the fee.
    *
    * @returns A KeysignPayload ready to be signed with the sign() method
    *
@@ -95,6 +98,7 @@ export class TransactionBuilder {
     destinationTag?: number
     feeSettings?: FeeSettings
     sendMaxAmount?: boolean
+    tonGasless?: boolean
   }): Promise<KeysignPayload> {
     if (params.amount <= 0n) {
       throw new VaultError(VaultErrorCode.InvalidAmount, 'Amount must be greater than zero')
@@ -140,6 +144,7 @@ export class TransactionBuilder {
     memo?: string
     destinationTag?: number
     feeSettings?: FeeSettings
+    tonGasless?: boolean
   }): Promise<bigint> {
     try {
       const walletCore = await this.wasmProvider.getWalletCore()
@@ -152,7 +157,10 @@ export class TransactionBuilder {
       if (!isValid) {
         throw new VaultError(
           VaultErrorCode.InvalidConfig,
-          `Invalid receiver address format for chain ${params.coin.chain}: ${params.receiver}`
+          withEvmChecksumHint(
+            `Invalid receiver address format for chain ${params.coin.chain}: ${params.receiver}`,
+            params.receiver
+          )
         )
       }
 
@@ -186,6 +194,7 @@ export class TransactionBuilder {
         walletCore,
         libType: toKeysignLibType(this.vaultData),
         feeSettings: params.feeSettings,
+        tonGasless: params.tonGasless,
       })
     } catch (error) {
       if (error instanceof VaultError) throw error

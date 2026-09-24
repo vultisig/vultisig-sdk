@@ -4,6 +4,7 @@ import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
 import { assertSafeDestination } from '@vultisig/core-chain/security/dangerousAddresses'
 import { assertSafeTokenTransferDestination } from '@vultisig/core-chain/security/tokenTransferGuards'
+import { withEvmChecksumHint } from '@vultisig/core-chain/utils/getEvmChecksumMismatchHint'
 import { isValidRecipient } from '@vultisig/core-chain/utils/isValidRecipient'
 import type { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
 import { buildSendKeysignPayload } from '@vultisig/core-mpc/keysign/send/build'
@@ -27,6 +28,13 @@ export type PrepareSendTxFromKeysParams = {
    * exact figure signed — pass the same `balance - fee` the UI displayed.
    */
   sendMaxAmount?: boolean
+  /**
+   * TON only: pay the network fee in the jetton being sent through the gasless
+   * relay instead of holding TON. Needs the key's W5 account and a jetton the
+   * relay accepts (USDT and other majors); the relay's commission becomes the
+   * fee, in the jetton's units.
+   */
+  tonGasless?: boolean
 }
 
 /**
@@ -65,7 +73,12 @@ export const prepareSendTxFromKeys = async (
     walletCore,
   })
   if (!isValid) {
-    throw new Error(`Invalid receiver address for chain ${params.coin.chain}: ${params.receiver}`)
+    throw new Error(
+      withEvmChecksumHint(
+        `Invalid receiver address for chain ${params.coin.chain}: ${params.receiver}`,
+        params.receiver
+      )
+    )
   }
 
   // Fund-safety: reject known burn/dead/dangerous addresses before building
@@ -127,5 +140,6 @@ export const prepareSendTxFromKeys = async (
     libType: identity.libType,
     feeSettings: params.feeSettings,
     sendMaxAmount: params.sendMaxAmount,
+    tonGasless: params.tonGasless,
   })
 }

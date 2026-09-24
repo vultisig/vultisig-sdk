@@ -4,6 +4,8 @@
 
 import type { GenEnum, GenFile, GenMessage } from '@bufbuild/protobuf/codegenv2'
 import { enumDesc, fileDesc, messageDesc } from '@bufbuild/protobuf/codegenv2'
+import type { TonMessage } from './wasm_execute_contract_payload_pb'
+import { file_vultisig_keysign_v1_wasm_execute_contract_payload } from './wasm_execute_contract_payload_pb'
 import type { Message } from '@bufbuild/protobuf'
 
 /**
@@ -12,7 +14,8 @@ import type { Message } from '@bufbuild/protobuf'
 export const file_vultisig_keysign_v1_blockchain_specific: GenFile =
   /*@__PURE__*/
   fileDesc(
-    'Ci12dWx0aXNpZy9rZXlzaWduL3YxL2Jsb2NrY2hhaW5fc3BlY2lmaWMucHJvdG8SE3Z1bHRpc2lnLmtleXNpZ24udjEiOQoMVVRYT1NwZWNpZmljEhAKCGJ5dGVfZmVlGAEgASgJEhcKD3NlbmRfbWF4X2Ftb3VudBgCIAEoCCJOChRDYXJkYW5vQ2hhaW5TcGVjaWZpYxIQCghieXRlX2ZlZRgBIAEoAxIXCg9zZW5kX21heF9hbW91bnQYAiABKAgSCwoDdHRsGAMgASgEImcKEEV0aGVyZXVtU3BlY2lmaWMSGwoTbWF4X2ZlZV9wZXJfZ2FzX3dlaRgBIAEoCRIUCgxwcmlvcml0eV9mZWUYAiABKAkSDQoFbm9uY2UYAyABKAMSEQoJZ2FzX2xpbWl0GAQgASgJIp4BChFUSE9SQ2hhaW5TcGVjaWZpYxIWCg5hY2NvdW50X251bWJlchgBIAEoBBIQCghzZXF1ZW5jZRgCIAEoBBILCgNmZWUYAyABKAQSEgoKaXNfZGVwb3NpdBgEIAEoCBI+ChB0cmFuc2FjdGlvbl90eXBlGAUgASgOMiQudnVsdGlzaWcua2V5c2lnbi52MS5UcmFuc2FjdGlvblR5cGUiUQoRTUFZQUNoYWluU3BlY2lmaWMSFgoOYWNjb3VudF9udW1iZXIYASABKAQSEAoIc2VxdWVuY2UYAiABKAQSEgoKaXNfZGVwb3NpdBgDIAEoCCLTAgoOQ29zbW9zU3BlY2lmaWMSFgoOYWNjb3VudF9udW1iZXIYASABKAQSEAoIc2VxdWVuY2UYAiABKAQSCwoDZ2FzGAMgASgEEj4KEHRyYW5zYWN0aW9uX3R5cGUYBCABKA4yJC52dWx0aXNpZy5rZXlzaWduLnYxLlRyYW5zYWN0aW9uVHlwZRJHChBpYmNfZGVub21fdHJhY2VzGAUgASgLMigudnVsdGlzaWcua2V5c2lnbi52MS5Db3Ntb3NJYmNEZW5vbVRyYWNlSACIAQESOQoIaWJjX2luZm8YBiABKAsyIi52dWx0aXNpZy5rZXlzaWduLnYxLkNvc21vc0liY0luZm9IAYgBARIWCglnYXNfbGltaXQYByABKARIAogBAUITChFfaWJjX2Rlbm9tX3RyYWNlc0ILCglfaWJjX2luZm9CDAoKX2dhc19saW1pdCJNChNDb3Ntb3NJYmNEZW5vbVRyYWNlEgwKBHBhdGgYASABKAkSEgoKYmFzZV9kZW5vbRgCIAEoCRIUCgxsYXRlc3RfYmxvY2sYAyABKAkibgoNQ29zbW9zSWJjSW5mbxITCgtzb3VyY2VfcG9ydBgBIAEoCRIWCg5zb3VyY2VfY2hhbm5lbBgCIAEoCRIXCg9yZXZpc2lvbl9udW1iZXIYAyABKAQSFwoPcmV2aXNpb25faGVpZ2h0GAQgASgEIvECCg5Tb2xhbmFTcGVjaWZpYxIZChFyZWNlbnRfYmxvY2tfaGFzaBgBIAEoCRIUCgxwcmlvcml0eV9mZWUYAiABKAkSKgodZnJvbV90b2tlbl9hc3NvY2lhdGVkX2FkZHJlc3MYAyABKAlIAIgBARIoCht0b190b2tlbl9hc3NvY2lhdGVkX2FkZHJlc3MYBCABKAlIAYgBARIXCgpwcm9ncmFtX2lkGAUgASgISAKIAQESGgoNY29tcHV0ZV9saW1pdBgGIAEoCUgDiAEBEiQKF2xhc3RfdmFsaWRfYmxvY2tfaGVpZ2h0GAcgASgESASIAQFCIAoeX2Zyb21fdG9rZW5fYXNzb2NpYXRlZF9hZGRyZXNzQh4KHF90b190b2tlbl9hc3NvY2lhdGVkX2FkZHJlc3NCDQoLX3Byb2dyYW1faWRCEAoOX2NvbXB1dGVfbGltaXRCGgoYX2xhc3RfdmFsaWRfYmxvY2tfaGVpZ2h0IrABChBQb2xrYWRvdFNwZWNpZmljEhkKEXJlY2VudF9ibG9ja19oYXNoGAEgASgJEg0KBW5vbmNlGAIgASgEEhwKFGN1cnJlbnRfYmxvY2tfbnVtYmVyGAMgASgJEhQKDHNwZWNfdmVyc2lvbhgEIAEoDRIbChN0cmFuc2FjdGlvbl92ZXJzaW9uGAUgASgNEhQKDGdlbmVzaXNfaGFzaBgGIAEoCRILCgNnYXMYByABKAQihAEKB1N1aUNvaW4SEQoJY29pbl90eXBlGAEgASgJEhYKDmNvaW5fb2JqZWN0X2lkGAIgASgJEg8KB3ZlcnNpb24YAyABKAkSDgoGZGlnZXN0GAQgASgJEg8KB2JhbGFuY2UYBSABKAkSHAoUcHJldmlvdXNfdHJhbnNhY3Rpb24YBiABKAkiawoLU3VpU3BlY2lmaWMSGwoTcmVmZXJlbmNlX2dhc19wcmljZRgBIAEoCRIrCgVjb2lucxgCIAMoCzIcLnZ1bHRpc2lnLmtleXNpZ24udjEuU3VpQ29pbhISCgpnYXNfYnVkZ2V0GAMgASgJIp0BCgtUb25TcGVjaWZpYxIXCg9zZXF1ZW5jZV9udW1iZXIYASABKAQSEQoJZXhwaXJlX2F0GAIgASgEEhIKCmJvdW5jZWFibGUYAyABKAgSFwoPc2VuZF9tYXhfYW1vdW50GAQgASgIEhYKDmpldHRvbl9hZGRyZXNzGAUgASgJEh0KFWlzX2FjdGl2ZV9kZXN0aW5hdGlvbhgGIAEoCCK/AQoOUmlwcGxlU3BlY2lmaWMSEAoIc2VxdWVuY2UYASABKAQSCwoDZ2FzGAIgASgEEhwKFGxhc3RfbGVkZ2VyX3NlcXVlbmNlGAMgASgEEhwKD2Rlc3RpbmF0aW9uX3RhZxgEIAEoDUgAiAEBEj4KEHRyYW5zYWN0aW9uX3R5cGUYBSABKA4yJC52dWx0aXNpZy5rZXlzaWduLnYxLlRyYW5zYWN0aW9uVHlwZUISChBfZGVzdGluYXRpb25fdGFnIpMCCgxUcm9uU3BlY2lmaWMSEQoJdGltZXN0YW1wGAEgASgEEhIKCmV4cGlyYXRpb24YAiABKAQSHgoWYmxvY2tfaGVhZGVyX3RpbWVzdGFtcBgDIAEoBBIbChNibG9ja19oZWFkZXJfbnVtYmVyGAQgASgEEhwKFGJsb2NrX2hlYWRlcl92ZXJzaW9uGAUgASgEEiEKGWJsb2NrX2hlYWRlcl90eF90cmllX3Jvb3QYBiABKAkSIAoYYmxvY2tfaGVhZGVyX3BhcmVudF9oYXNoGAcgASgJEiQKHGJsb2NrX2hlYWRlcl93aXRuZXNzX2FkZHJlc3MYCCABKAkSFgoOZ2FzX2VzdGltYXRpb24YCSABKAQquAMKD1RyYW5zYWN0aW9uVHlwZRIgChxUUkFOU0FDVElPTl9UWVBFX1VOU1BFQ0lGSUVEEAASGQoVVFJBTlNBQ1RJT05fVFlQRV9WT1RFEAESHQoZVFJBTlNBQ1RJT05fVFlQRV9QUk9QT1NBTBACEiEKHVRSQU5TQUNUSU9OX1RZUEVfSUJDX1RSQU5TRkVSEAMSHwobVFJBTlNBQ1RJT05fVFlQRV9USE9SX01FUkdFEAQSIQodVFJBTlNBQ1RJT05fVFlQRV9USE9SX1VOTUVSR0UQBRIgChxUUkFOU0FDVElPTl9UWVBFX1RPTl9ERVBPU0lUEAYSIQodVFJBTlNBQ1RJT05fVFlQRV9UT05fV0lUSERSQVcQBxIlCiFUUkFOU0FDVElPTl9UWVBFX0dFTkVSSUNfQ09OVFJBQ1QQCBIqCiZUUkFOU0FDVElPTl9UWVBFX1FCVENfQ0xBSU1fV0lUSF9QUk9PRhAJEiUKIVRSQU5TQUNUSU9OX1RZUEVfUklQUExFX1RSVVNUX1NFVBAKEiMKH1RSQU5TQUNUSU9OX1RZUEVfUklQUExFX1BBWU1FTlQQC0JUChN2dWx0aXNpZy5rZXlzaWduLnYxWjhnaXRodWIuY29tL3Z1bHRpc2lnL2NvbW1vbmRhdGEvZ28vdnVsdGlzaWcva2V5c2lnbi92MTt2MboCAlZTYgZwcm90bzM'
+    'Ci12dWx0aXNpZy9rZXlzaWduL3YxL2Jsb2NrY2hhaW5fc3BlY2lmaWMucHJvdG8SE3Z1bHRpc2lnLmtleXNpZ24udjEiOQoMVVRYT1NwZWNpZmljEhAKCGJ5dGVfZmVlGAEgASgJEhcKD3NlbmRfbWF4X2Ftb3VudBgCIAEoCCJOChRDYXJkYW5vQ2hhaW5TcGVjaWZpYxIQCghieXRlX2ZlZRgBIAEoAxIXCg9zZW5kX21heF9hbW91bnQYAiABKAgSCwoDdHRsGAMgASgEImcKEEV0aGVyZXVtU3BlY2lmaWMSGwoTbWF4X2ZlZV9wZXJfZ2FzX3dlaRgBIAEoCRIUCgxwcmlvcml0eV9mZWUYAiABKAkSDQoFbm9uY2UYAyABKAMSEQoJZ2FzX2xpbWl0GAQgASgJIp4BChFUSE9SQ2hhaW5TcGVjaWZpYxIWCg5hY2NvdW50X251bWJlchgBIAEoBBIQCghzZXF1ZW5jZRgCIAEoBBILCgNmZWUYAyABKAQSEgoKaXNfZGVwb3NpdBgEIAEoCBI+ChB0cmFuc2FjdGlvbl90eXBlGAUgASgOMiQudnVsdGlzaWcua2V5c2lnbi52MS5UcmFuc2FjdGlvblR5cGUiUQoRTUFZQUNoYWluU3BlY2lmaWMSFgoOYWNjb3VudF9udW1iZXIYASABKAQSEAoIc2VxdWVuY2UYAiABKAQSEgoKaXNfZGVwb3NpdBgDIAEoCCLTAgoOQ29zbW9zU3BlY2lmaWMSFgoOYWNjb3VudF9udW1iZXIYASABKAQSEAoIc2VxdWVuY2UYAiABKAQSCwoDZ2FzGAMgASgEEj4KEHRyYW5zYWN0aW9uX3R5cGUYBCABKA4yJC52dWx0aXNpZy5rZXlzaWduLnYxLlRyYW5zYWN0aW9uVHlwZRJHChBpYmNfZGVub21fdHJhY2VzGAUgASgLMigudnVsdGlzaWcua2V5c2lnbi52MS5Db3Ntb3NJYmNEZW5vbVRyYWNlSACIAQESOQoIaWJjX2luZm8YBiABKAsyIi52dWx0aXNpZy5rZXlzaWduLnYxLkNvc21vc0liY0luZm9IAYgBARIWCglnYXNfbGltaXQYByABKARIAogBAUITChFfaWJjX2Rlbm9tX3RyYWNlc0ILCglfaWJjX2luZm9CDAoKX2dhc19saW1pdCJNChNDb3Ntb3NJYmNEZW5vbVRyYWNlEgwKBHBhdGgYASABKAkSEgoKYmFzZV9kZW5vbRgCIAEoCRIUCgxsYXRlc3RfYmxvY2sYAyABKAkibgoNQ29zbW9zSWJjSW5mbxITCgtzb3VyY2VfcG9ydBgBIAEoCRIWCg5zb3VyY2VfY2hhbm5lbBgCIAEoCRIXCg9yZXZpc2lvbl9udW1iZXIYAyABKAQSFwoPcmV2aXNpb25faGVpZ2h0GAQgASgEIvECCg5Tb2xhbmFTcGVjaWZpYxIZChFyZWNlbnRfYmxvY2tfaGFzaBgBIAEoCRIUCgxwcmlvcml0eV9mZWUYAiABKAkSKgodZnJvbV90b2tlbl9hc3NvY2lhdGVkX2FkZHJlc3MYAyABKAlIAIgBARIoCht0b190b2tlbl9hc3NvY2lhdGVkX2FkZHJlc3MYBCABKAlIAYgBARIXCgpwcm9ncmFtX2lkGAUgASgISAKIAQESGgoNY29tcHV0ZV9saW1pdBgGIAEoCUgDiAEBEiQKF2xhc3RfdmFsaWRfYmxvY2tfaGVpZ2h0GAcgASgESASIAQFCIAoeX2Zyb21fdG9rZW5fYXNzb2NpYXRlZF9hZGRyZXNzQh4KHF90b190b2tlbl9hc3NvY2lhdGVkX2FkZHJlc3NCDQoLX3Byb2dyYW1faWRCEAoOX2NvbXB1dGVfbGltaXRCGgoYX2xhc3RfdmFsaWRfYmxvY2tfaGVpZ2h0IsUBChBQb2xrYWRvdFNwZWNpZmljEhkKEXJlY2VudF9ibG9ja19oYXNoGAEgASgJEg0KBW5vbmNlGAIgASgEEhwKFGN1cnJlbnRfYmxvY2tfbnVtYmVyGAMgASgJEhQKDHNwZWNfdmVyc2lvbhgEIAEoDRIbChN0cmFuc2FjdGlvbl92ZXJzaW9uGAUgASgNEhQKDGdlbmVzaXNfaGFzaBgGIAEoCRILCgNnYXMYByABKAQSEwoLYWxsb3dfZGVhdGgYCCABKAgihAEKB1N1aUNvaW4SEQoJY29pbl90eXBlGAEgASgJEhYKDmNvaW5fb2JqZWN0X2lkGAIgASgJEg8KB3ZlcnNpb24YAyABKAkSDgoGZGlnZXN0GAQgASgJEg8KB2JhbGFuY2UYBSABKAkSHAoUcHJldmlvdXNfdHJhbnNhY3Rpb24YBiABKAkiawoLU3VpU3BlY2lmaWMSGwoTcmVmZXJlbmNlX2dhc19wcmljZRgBIAEoCRIrCgVjb2lucxgCIAMoCzIcLnZ1bHRpc2lnLmtleXNpZ24udjEuU3VpQ29pbhISCgpnYXNfYnVkZ2V0GAMgASgJIs8BCgtUb25TcGVjaWZpYxIXCg9zZXF1ZW5jZV9udW1iZXIYASABKAQSEQoJZXhwaXJlX2F0GAIgASgEEhIKCmJvdW5jZWFibGUYAyABKAgSFwoPc2VuZF9tYXhfYW1vdW50GAQgASgIEhYKDmpldHRvbl9hZGRyZXNzGAUgASgJEh0KFWlzX2FjdGl2ZV9kZXN0aW5hdGlvbhgGIAEoCBIwCgdnYXNsZXNzGAcgASgLMh8udnVsdGlzaWcua2V5c2lnbi52MS5Ub25HYXNsZXNzIoUBCgpUb25HYXNsZXNzEhUKDXJlbGF5X2FkZHJlc3MYASABKAkSGQoRZ2FzX2pldHRvbl9tYXN0ZXIYAiABKAkSEgoKY29tbWlzc2lvbhgDIAEoCRIxCghtZXNzYWdlcxgEIAMoCzIfLnZ1bHRpc2lnLmtleXNpZ24udjEuVG9uTWVzc2FnZSK/AQoOUmlwcGxlU3BlY2lmaWMSEAoIc2VxdWVuY2UYASABKAQSCwoDZ2FzGAIgASgEEhwKFGxhc3RfbGVkZ2VyX3NlcXVlbmNlGAMgASgEEhwKD2Rlc3RpbmF0aW9uX3RhZxgEIAEoDUgAiAEBEj4KEHRyYW5zYWN0aW9uX3R5cGUYBSABKA4yJC52dWx0aXNpZy5rZXlzaWduLnYxLlRyYW5zYWN0aW9uVHlwZUISChBfZGVzdGluYXRpb25fdGFnIpMCCgxUcm9uU3BlY2lmaWMSEQoJdGltZXN0YW1wGAEgASgEEhIKCmV4cGlyYXRpb24YAiABKAQSHgoWYmxvY2tfaGVhZGVyX3RpbWVzdGFtcBgDIAEoBBIbChNibG9ja19oZWFkZXJfbnVtYmVyGAQgASgEEhwKFGJsb2NrX2hlYWRlcl92ZXJzaW9uGAUgASgEEiEKGWJsb2NrX2hlYWRlcl90eF90cmllX3Jvb3QYBiABKAkSIAoYYmxvY2tfaGVhZGVyX3BhcmVudF9oYXNoGAcgASgJEiQKHGJsb2NrX2hlYWRlcl93aXRuZXNzX2FkZHJlc3MYCCABKAkSFgoOZ2FzX2VzdGltYXRpb24YCSABKAQquAMKD1RyYW5zYWN0aW9uVHlwZRIgChxUUkFOU0FDVElPTl9UWVBFX1VOU1BFQ0lGSUVEEAASGQoVVFJBTlNBQ1RJT05fVFlQRV9WT1RFEAESHQoZVFJBTlNBQ1RJT05fVFlQRV9QUk9QT1NBTBACEiEKHVRSQU5TQUNUSU9OX1RZUEVfSUJDX1RSQU5TRkVSEAMSHwobVFJBTlNBQ1RJT05fVFlQRV9USE9SX01FUkdFEAQSIQodVFJBTlNBQ1RJT05fVFlQRV9USE9SX1VOTUVSR0UQBRIgChxUUkFOU0FDVElPTl9UWVBFX1RPTl9ERVBPU0lUEAYSIQodVFJBTlNBQ1RJT05fVFlQRV9UT05fV0lUSERSQVcQBxIlCiFUUkFOU0FDVElPTl9UWVBFX0dFTkVSSUNfQ09OVFJBQ1QQCBIqCiZUUkFOU0FDVElPTl9UWVBFX1FCVENfQ0xBSU1fV0lUSF9QUk9PRhAJEiUKIVRSQU5TQUNUSU9OX1RZUEVfUklQUExFX1RSVVNUX1NFVBAKEiMKH1RSQU5TQUNUSU9OX1RZUEVfUklQUExFX1BBWU1FTlQQC0JUChN2dWx0aXNpZy5rZXlzaWduLnYxWjhnaXRodWIuY29tL3Z1bHRpc2lnL2NvbW1vbmRhdGEvZ28vdnVsdGlzaWcva2V5c2lnbi92MTt2MboCAlZTYgZwcm90bzM',
+    [file_vultisig_keysign_v1_wasm_execute_contract_payload]
   )
 
 /**
@@ -368,6 +371,11 @@ export type PolkadotSpecific = Message<'vultisig.keysign.v1.PolkadotSpecific'> &
    * @generated from field: uint64 gas = 7;
    */
   gas: bigint
+
+  /**
+   * @generated from field: bool allow_death = 8;
+   */
+  allowDeath: boolean
 }
 
 /**
@@ -482,6 +490,15 @@ export type TonSpecific = Message<'vultisig.keysign.v1.TonSpecific'> & {
    * @generated from field: bool is_active_destination = 6;
    */
   isActiveDestination: boolean
+
+  /**
+   * Set when the request is relayed: the sender pays the network fee in a
+   * jetton and a relay broadcasts the signed W5 request as an internal
+   * message, paying the TON gas itself. Absent for an ordinary send.
+   *
+   * @generated from field: vultisig.keysign.v1.TonGasless gasless = 7;
+   */
+  gasless?: TonGasless
 }
 
 /**
@@ -491,6 +508,53 @@ export type TonSpecific = Message<'vultisig.keysign.v1.TonSpecific'> & {
 export const TonSpecificSchema: GenMessage<TonSpecific> =
   /*@__PURE__*/
   messageDesc(file_vultisig_keysign_v1_blockchain_specific, 12)
+
+/**
+ * A relay-assisted ("gasless") W5 request. The wallet signs `messages`
+ * verbatim as a W5 `internal_signed` request; the relay wraps it in an
+ * internal message it pays for and keeps `commission` in the gas jetton.
+ *
+ * @generated from message vultisig.keysign.v1.TonGasless
+ */
+export type TonGasless = Message<'vultisig.keysign.v1.TonGasless'> & {
+  /**
+   * The relay that broadcasts the request and receives the commission.
+   *
+   * @generated from field: string relay_address = 1;
+   */
+  relayAddress: string
+
+  /**
+   * Jetton master the commission is paid in.
+   *
+   * @generated from field: string gas_jetton_master = 2;
+   */
+  gasJettonMaster: string
+
+  /**
+   * Commission in the gas jetton's minimal units.
+   *
+   * @generated from field: string commission = 3;
+   */
+  commission: string
+
+  /**
+   * The internal messages the relay quoted for this transfer, in signing
+   * order: the sender's own transfer plus the commission transfer to the
+   * relay. Every co-signer validates them against the payload before signing.
+   *
+   * @generated from field: repeated vultisig.keysign.v1.TonMessage messages = 4;
+   */
+  messages: TonMessage[]
+}
+
+/**
+ * Describes the message vultisig.keysign.v1.TonGasless.
+ * Use `create(TonGaslessSchema)` to create a new message.
+ */
+export const TonGaslessSchema: GenMessage<TonGasless> =
+  /*@__PURE__*/
+  messageDesc(file_vultisig_keysign_v1_blockchain_specific, 13)
 
 /**
  * @generated from message vultisig.keysign.v1.RippleSpecific
@@ -533,10 +597,12 @@ export type RippleSpecific = Message<'vultisig.keysign.v1.RippleSpecific'> & {
    * CurrencyAmount, where it is a transfer amount). Signers must not have to
    * guess — the two produce different signed bytes.
    *
-   * TRANSACTION_TYPE_RIPPLE_TRUST_SET selects the TrustSet. Unset (the proto3
-   * default TRANSACTION_TYPE_UNSPECIFIED, absent from the wire) keeps existing
-   * behaviour byte-identical: a native XRP Payment in drops, or — once every
-   * platform reads this field — an issued-currency Payment for a token coin.
+   * TRANSACTION_TYPE_RIPPLE_TRUST_SET selects the TrustSet and
+   * TRANSACTION_TYPE_RIPPLE_PAYMENT the Payment; new originators state one of
+   * the two for every non-native coin. Unset (the proto3 default
+   * TRANSACTION_TYPE_UNSPECIFIED, absent from the wire) keeps existing
+   * behaviour byte-identical: a native XRP Payment in drops, or — for a
+   * non-native coin — the TrustSet that signers predating this field infer.
    *
    * Transitional note: a signer that predates this field infers TrustSet from a
    * non-native coin, so a TrustSet stays byte-identical across mixed-version
@@ -554,7 +620,7 @@ export type RippleSpecific = Message<'vultisig.keysign.v1.RippleSpecific'> & {
  */
 export const RippleSpecificSchema: GenMessage<RippleSpecific> =
   /*@__PURE__*/
-  messageDesc(file_vultisig_keysign_v1_blockchain_specific, 13)
+  messageDesc(file_vultisig_keysign_v1_blockchain_specific, 14)
 
 /**
  * @generated from message vultisig.keysign.v1.TronSpecific
@@ -612,7 +678,7 @@ export type TronSpecific = Message<'vultisig.keysign.v1.TronSpecific'> & {
  */
 export const TronSpecificSchema: GenMessage<TronSpecific> =
   /*@__PURE__*/
-  messageDesc(file_vultisig_keysign_v1_blockchain_specific, 14)
+  messageDesc(file_vultisig_keysign_v1_blockchain_specific, 15)
 
 /**
  * @generated from enum vultisig.keysign.v1.TransactionType
@@ -679,9 +745,10 @@ export enum TransactionType {
   RIPPLE_TRUST_SET = 10,
 
   /**
-   * XRPL Payment: transfer native XRP or an issued currency. This explicit
-   * value distinguishes a new issued-currency Payment from a legacy TrustSet
-   * payload whose absent enum field decodes as UNSPECIFIED.
+   * XRPL Payment: transfer native XRP or an issued currency. Stated explicitly
+   * so an issued-currency Payment is distinguishable from a legacy TrustSet
+   * payload, whose absent enum field decodes as UNSPECIFIED and is still
+   * inferred as a TrustSet from its non-native coin — see RippleSpecific.
    *
    * @generated from enum value: TRANSACTION_TYPE_RIPPLE_PAYMENT = 11;
    */
