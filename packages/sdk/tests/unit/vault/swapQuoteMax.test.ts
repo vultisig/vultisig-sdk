@@ -4,6 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const getNativeSwapMinAmountIn = vi.hoisted(() => vi.fn().mockResolvedValue(null))
 const findSwapQuote = vi.hoisted(() => vi.fn())
+const providerPreferenceOrder = vi.hoisted(
+  () => ['CowSwap', 'RUJI Trade', 'THORChain', 'MayaChain', 'Jupiter', 'SwapKit', 'KyberSwap', '1inch', 'LiFi'] as const
+)
 
 vi.mock('@vultisig/mpc-types', () => ({ getMpcEngine: vi.fn() }))
 vi.mock('@vultisig/core-chain/swap/native/minimum/getNativeSwapMinAmountIn', () => ({
@@ -11,11 +14,15 @@ vi.mock('@vultisig/core-chain/swap/native/minimum/getNativeSwapMinAmountIn', () 
 }))
 vi.mock('@vultisig/core-chain/swap/quote/findSwapQuote', () => ({
   findSwapQuote,
+  getSwapQuoteProviderName: vi.fn(quote =>
+    'native' in quote ? (quote.native.swapChain as (typeof providerPreferenceOrder)[number]) : 'SwapKit'
+  ),
+  providerPreferenceOrder,
 }))
 
+import { SwapService } from '@/vault/services/SwapService'
 import { VaultBase } from '@/vault/VaultBase'
 import { VaultErrorCode } from '@/vault/VaultError'
-import { SwapService } from '@/vault/services/SwapService'
 
 const btc: AccountCoin = {
   chain: Chain.Bitcoin,
@@ -165,10 +172,21 @@ const generalEvmQuote = ({ fee }: { fee: bigint }) => ({
   toCoin: { chain: btc.chain, ticker: btc.ticker, decimals: btc.decimals },
 })
 
-function makeVault({ quote, balance, fee }: { quote: unknown; balance: bigint; fee: bigint | Error | bigint[] }) {
+function makeVault({
+  quote,
+  balance,
+  fee,
+}: {
+  quote: unknown
+  balance: bigint
+  fee: bigint | Error | (bigint | Error)[]
+}) {
   const estimateSendFee = vi.fn()
   if (Array.isArray(fee)) {
-    fee.forEach(value => estimateSendFee.mockResolvedValueOnce(value))
+    fee.forEach(value => {
+      if (value instanceof Error) estimateSendFee.mockRejectedValueOnce(value)
+      else estimateSendFee.mockResolvedValueOnce(value)
+    })
   } else if (fee instanceof Error) {
     estimateSendFee.mockRejectedValue(fee)
   } else {
@@ -586,9 +604,65 @@ describe('VaultBase.swap max safeguards', () => {
     expect(result.quote.warnings[0]).toContain('0.00003599 BTC')
   })
 
-  it('refuses max when the source-chain fee rises between the probe and requote', async () => {
+  it('pins max requotes to the provider selected by the probe', async () => {
     const quote = nativeQuote({ from: btc, to: eth })
-    const { vault } = makeVault({ quote, balance: 12_621n, fee: [500n, 600n] })
+    const { vault } = makeVault({ quote, balance: 12_621n, fee: [500n, 500n] })
+    configureCompoundSwap(vault)
+
+    await vault.swap({
+      fromChain: Chain.Bitcoin,
+      fromSymbol: 'BTC',
+      toChain: Chain.Ethereum,
+      toSymbol: 'ETH',
+      amount: 'max',
+      excludeProviders: ['LiFi'],
+      dryRun: true,
+    })
+
+    expect((vault as any).swapService.getQuote).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        excludeProviders: ['LiFi', ...providerPreferenceOrder.filter(name => name !== 'THORChain')],
+      })
+    )
+  })
+
+  it('clamps once when the source-chain fee rises between the probe and requote', async () => {
+    const quote = nativeQuote({ from: btc, to: eth })
+    const { vault } = makeVault({
+      quote,
+      balance: 12_621n,
+      fee: [500n, 505n, 505n],
+    })
+    configureCompoundSwap(vault)
+
+    const result = await vault.swap({
+      fromChain: Chain.Bitcoin,
+      fromSymbol: 'BTC',
+      toChain: Chain.Ethereum,
+      toSymbol: 'ETH',
+      amount: 'max',
+      dryRun: true,
+    })
+
+    expect((vault as any).swapService.getQuote).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ amount: '0.00012121' })
+    )
+    expect((vault as any).swapService.getQuote).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({ amount: '0.00012116' })
+    )
+    expect(result).toMatchObject({ dryRun: true, amount: '0.00012116' })
+  })
+
+  it('throws when a single clamp cannot converge on the source-chain fee', async () => {
+    const quote = nativeQuote({ from: btc, to: eth })
+    const { vault } = makeVault({
+      quote,
+      balance: 12_621n,
+      fee: [500n, 505n, 511n],
+    })
     configureCompoundSwap(vault)
 
     await expect(
@@ -601,9 +675,59 @@ describe('VaultBase.swap max safeguards', () => {
         dryRun: true,
       })
     ).rejects.toThrow('The source-chain fee changed between quotes; retry the swap.')
+    expect((vault as any).swapService.getQuote).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({ amount: '0.00012116' })
+    )
   })
 
-  it('allows max when the source-chain fee is unchanged between quotes', async () => {
+  it('refuses when the clamped max falls below the provider recommended minimum', async () => {
+    const quote = nativeQuote({
+      from: btc,
+      to: eth,
+      recommendedMinimum: '12118',
+    })
+    const { vault } = makeVault({
+      quote,
+      balance: 12_621n,
+      fee: [500n, 505n, 505n],
+    })
+    configureCompoundSwap(vault)
+
+    await expect(
+      vault.swap({
+        fromChain: Chain.Bitcoin,
+        fromSymbol: 'BTC',
+        toChain: Chain.Ethereum,
+        toSymbol: 'ETH',
+        amount: 'max',
+        dryRun: true,
+      })
+    ).rejects.toThrow("Max swappable 0.00012116 BTC is below THORChain's recommended minimum of 0.00012118 BTC")
+  })
+
+  it('fails closed when the pinned native-source requote cannot compute a max', async () => {
+    const quote = nativeQuote({ from: btc, to: eth })
+    const { vault } = makeVault({
+      quote,
+      balance: 12_621n,
+      fee: [500n, new Error('fee unavailable')],
+    })
+    configureCompoundSwap(vault)
+
+    await expect(
+      vault.swap({
+        fromChain: Chain.Bitcoin,
+        fromSymbol: 'BTC',
+        toChain: Chain.Ethereum,
+        toSymbol: 'ETH',
+        amount: 'max',
+        dryRun: true,
+      })
+    ).rejects.toThrow(/Cannot compute a fee-aware max/)
+  })
+
+  it('allows max with one requote when the source-chain fee is unchanged', async () => {
     const quote = nativeQuote({ from: btc, to: eth })
     const { vault } = makeVault({ quote, balance: 12_621n, fee: [500n, 500n] })
     configureCompoundSwap(vault)
@@ -617,7 +741,35 @@ describe('VaultBase.swap max safeguards', () => {
       dryRun: true,
     })
 
-    expect(result.dryRun).toBe(true)
+    expect((vault as any).swapService.getQuote).toHaveBeenCalledTimes(2)
+    expect(result).toMatchObject({ dryRun: true, amount: '0.00012121' })
     expect(result.quote.maxSwapable).toBe(12_121n)
+  })
+
+  it('returns the committed amount on an executed swap', async () => {
+    const quote = nativeQuote({ from: btc, to: eth })
+    const { vault } = makeVault({ quote, balance: 12_621n, fee: [500n, 500n] })
+    configureCompoundSwap(vault)
+    Object.assign(vault as object, {
+      prepareSwapTx: vi.fn().mockResolvedValue({ keysignPayload: {} }),
+      extractMessageHashes: vi.fn().mockResolvedValue([]),
+      sign: vi.fn().mockResolvedValue({}),
+      broadcastTx: vi.fn().mockResolvedValue('tx-hash'),
+    })
+
+    const result = await vault.swap({
+      fromChain: Chain.Bitcoin,
+      fromSymbol: 'BTC',
+      toChain: Chain.Ethereum,
+      toSymbol: 'ETH',
+      amount: 'max',
+    })
+
+    expect(result).toMatchObject({
+      dryRun: false,
+      amount: '0.00012121',
+      txHash: 'tx-hash',
+    })
+    expect((vault as any).prepareSwapTx).toHaveBeenCalledWith(expect.objectContaining({ amount: '0.00012121' }))
   })
 })

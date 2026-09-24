@@ -17,6 +17,7 @@ import { getSwapDestinationAddress } from '@vultisig/core-chain/swap/keysign/get
 import { getNativeSwapMinAmountIn } from '@vultisig/core-chain/swap/native/minimum/getNativeSwapMinAmountIn'
 import { getNativeSwapDecimals } from '@vultisig/core-chain/swap/native/utils/getNativeSwapDecimals'
 import { nativeSwapAmountToCoinBaseUnit } from '@vultisig/core-chain/swap/native/utils/nativeSwapAmountToCoinBaseUnit'
+import { getSwapQuoteProviderName, providerPreferenceOrder } from '@vultisig/core-chain/swap/quote/findSwapQuote'
 import { getTxStatus as coreTxStatus } from '@vultisig/core-chain/tx/status'
 import type { TxStatusResult } from '@vultisig/core-chain/tx/status/resolver'
 import { withEvmChecksumHint } from '@vultisig/core-chain/utils/getEvmChecksumMismatchHint'
@@ -2183,6 +2184,14 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     // Reusable when the fee-aware ceiling turns out to BE the whole balance -
     // there is then nothing to re-quote and the probe is the final quote.
     let maxProbeQuote: SwapQuoteResult | undefined
+    let maxRequoteExcludeProviders: SwapQuoteParams['excludeProviders']
+
+    const feeAwareMaxError = () =>
+      new VaultError(
+        VaultErrorCode.InvalidAmount,
+        `Cannot compute a fee-aware max for this ${fromToken.ticker} route: the source-chain fee is only known at ` +
+          `broadcast time. Estimate the fee separately and pass an explicit amount instead of "max".`
+      )
 
     if (amount === 'max') {
       const bal = await this.balanceService.getBalance(fromChain, fromToken.contractAddress)
@@ -2214,25 +2223,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       // populates `maxSwapable`, but an override or a partial quote must land
       // in the fail-closed branch rather than fall through into an over-commit.
       if (typeof probe.maxSwapable !== 'bigint' || probe.maxSwapable <= 0n) {
-        throw new VaultError(
-          VaultErrorCode.InvalidAmount,
-          `Cannot compute a fee-aware max for this ${fromToken.ticker} route: the source-chain fee is only known at ` +
-            `broadcast time. Estimate the fee separately and pass an explicit amount instead of "max".`
-        )
-      }
-
-      if (probe.quote?.quote && 'native' in probe.quote.quote) {
-        const minimum = await this.getRecommendedMinimumInSourceBaseUnits({
-          quoteResult: probe,
-          fromCoin,
-          toCoin,
-        })
-        if (minimum !== undefined && probe.maxSwapable < minimum) {
-          throw new VaultError(
-            VaultErrorCode.InvalidAmount,
-            `Max swappable ${this.formatUnits(probe.maxSwapable, fromToken.decimals)} ${fromToken.ticker} is below ${probe.quote.quote.native.swapChain}'s recommended minimum of ${this.formatUnits(minimum, fromToken.decimals)} ${fromToken.ticker}; the swap would likely fail or be refunded net of fees. Increase the balance or choose another route.`
-          )
-        }
+        throw feeAwareMaxError()
       }
 
       if (probe.maxSwapable >= balance) {
@@ -2241,12 +2232,22 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
         resolvedAmount = fullAmount
         maxProbeQuote = probe
       } else {
+        const fallbackProvider =
+          probe.provider ?? (probe as unknown as { bestQuote?: { provider?: string } }).bestQuote?.provider
+        const probeProvider = probe.quote?.quote
+          ? getSwapQuoteProviderName(probe.quote.quote)
+          : providerPreferenceOrder.find(providerName => providerName.toLowerCase() === fallbackProvider?.toLowerCase())
+        if (!probeProvider) throw feeAwareMaxError()
+        maxRequoteExcludeProviders = [
+          ...(excludeProviders ?? []),
+          ...providerPreferenceOrder.filter(providerName => providerName !== probeProvider),
+        ]
         resolvedAmount = this.formatUnits(probe.maxSwapable, fromToken.decimals)
       }
     }
-    const normalizedAmount = this.validateHumanSwapAmount(resolvedAmount, fromToken.decimals)
+    let normalizedAmount = this.validateHumanSwapAmount(resolvedAmount, fromToken.decimals)
 
-    const quote =
+    let quote =
       maxProbeQuote ??
       (await this.getSwapQuote({
         fromCoin,
@@ -2254,18 +2255,51 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
         amount: normalizedAmount,
         recipient: normalizedRecipient,
         slippageTolerance,
-        excludeProviders,
+        excludeProviders: maxRequoteExcludeProviders ?? excludeProviders,
       }))
     if (amount === 'max' && !fromCoin.id) {
+      if (quote.maxSwapable <= 0n) throw feeAwareMaxError()
+
+      let committedAmountBaseUnits = toChainAmount(normalizedAmount, fromToken.decimals)
+      if (committedAmountBaseUnits > quote.maxSwapable) {
+        committedAmountBaseUnits = quote.maxSwapable
+        normalizedAmount = this.validateHumanSwapAmount(
+          this.formatUnits(committedAmountBaseUnits, fromToken.decimals),
+          fromToken.decimals
+        )
+        quote = await this.getSwapQuote({
+          fromCoin,
+          toCoin,
+          amount: normalizedAmount,
+          recipient: normalizedRecipient,
+          slippageTolerance,
+          excludeProviders: maxRequoteExcludeProviders,
+        })
+
+        if (quote.maxSwapable <= 0n) throw feeAwareMaxError()
+        if (quote.maxSwapable < committedAmountBaseUnits) {
+          throw new VaultError(
+            VaultErrorCode.InvalidAmount,
+            'The source-chain fee changed between quotes; retry the swap.'
+          )
+        }
+      }
+    }
+    if (amount === 'max' && quote.quote?.quote && 'native' in quote.quote.quote) {
       const committedAmountBaseUnits = toChainAmount(normalizedAmount, fromToken.decimals)
-      if (quote.maxSwapable > 0n && committedAmountBaseUnits > quote.maxSwapable) {
+      const minimum = await this.getRecommendedMinimumInSourceBaseUnits({
+        quoteResult: quote,
+        fromCoin,
+        toCoin,
+      })
+      if (minimum !== undefined && committedAmountBaseUnits < minimum) {
         throw new VaultError(
           VaultErrorCode.InvalidAmount,
-          'The source-chain fee changed between quotes; retry the swap.'
+          `Max swappable ${normalizedAmount} ${fromToken.ticker} is below ${quote.quote.quote.native.swapChain}'s recommended minimum of ${this.formatUnits(minimum, fromToken.decimals)} ${fromToken.ticker}; the swap would likely fail or be refunded net of fees. Increase the balance or choose another route.`
         )
       }
     }
-    if (dryRun) return { dryRun: true, quote }
+    if (dryRun) return { dryRun: true, quote, amount: normalizedAmount }
 
     const { keysignPayload, approvalPayload } = await this.prepareSwapTx({
       fromCoin,
@@ -2295,6 +2329,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       txHash: await this.broadcastTx({ chain: fromChain, keysignPayload, signature }),
       chain: fromChain,
       quote,
+      amount: normalizedAmount,
     }
   }
 
