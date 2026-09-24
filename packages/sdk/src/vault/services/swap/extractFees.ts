@@ -1,5 +1,6 @@
 import { Chain, EvmChain } from '@vultisig/core-chain/Chain'
 import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
+import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
 import { SwapFee } from '@vultisig/core-chain/swap/SwapFee'
 import { getEvmBaseFee } from '@vultisig/core-chain/tx/fee/evm/baseFee'
@@ -13,7 +14,8 @@ import { SwapFees } from '../../swap-types'
  * in some other asset (e.g. an ERC-20) can't be summed with a wei amount
  * without a unit conversion this SDK doesn't have at fee-extraction time.
  */
-const isNativeDenominated = (fee: SwapFee, chain: Chain) => fee.chain === chain && fee.id === undefined
+const isNativeDenominated = (fee: SwapFee, chain: Chain) =>
+  fee.chain === chain && fee.id === undefined && fee.decimals === chainFeeCoin[chain].decimals
 
 type EvmFeeRates = {
   getBaseFee: (chain: EvmChain) => Promise<bigint>

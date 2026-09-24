@@ -51,6 +51,7 @@ describe('EVM swap fee extraction', () => {
   it.each([
     { ...affiliate, id: '0xToken' },
     { ...affiliate, chain: Chain.Arbitrum },
+    { ...affiliate, decimals: 6 },
   ])('does not sum a fee in another denomination', async fee => {
     expect(await extractSwapFees(quote(undefined, fee), Chain.Ethereum, rates())).toEqual({
       network: 0n,

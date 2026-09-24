@@ -6,6 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const fixture = vi.hoisted(() => ({
   approvalAddress: undefined as string | undefined,
+  feeTokenAddress: 'USDT',
+  feeTokenDecimals: 6,
+  feeTokenChainId: 1,
   scanAddressWithBlockaid: vi.fn(),
 }))
 
@@ -28,7 +31,17 @@ vi.mock('@lifi/sdk', () => ({
       estimate: {
         toAmount: '999000',
         gasCosts: [{ amount: '0' }],
-        feeCosts: [{ name: 'LIFI Fixed Fee', amount: '0', token: { decimals: 6, address: 'USDT', chainId: 1 } }],
+        feeCosts: [
+          {
+            name: 'LIFI Fixed Fee',
+            amount: '0',
+            token: {
+              decimals: fixture.feeTokenDecimals,
+              address: fixture.feeTokenAddress,
+              chainId: fixture.feeTokenChainId,
+            },
+          },
+        ],
         ...(fixture.approvalAddress !== undefined ? { approvalAddress: fixture.approvalAddress } : {}),
       },
     }),
@@ -99,6 +112,9 @@ describe('getLifiSwapQuote — evm.approvalAddress exposure (#895)', () => {
   afterEach(() => {
     infoSpy.mockRestore()
     fixture.approvalAddress = undefined
+    fixture.feeTokenAddress = 'USDT'
+    fixture.feeTokenDecimals = 6
+    fixture.feeTokenChainId = 1
   })
 
   it('threads the verified LI.FI Diamond approvalAddress onto evm.approvalAddress', async () => {
@@ -142,5 +158,27 @@ describe('getLifiSwapQuote — evm.approvalAddress exposure (#895)', () => {
     const evm = await getEvmTx()
     expect(evm).toBeDefined()
     expect(evm.approvalAddress).toBeUndefined()
+  })
+
+  it('preserves the identity of an unmatched 18-decimal fee token', async () => {
+    fixture.feeTokenAddress = '0x1234567890abcdef1234567890abcdef12345678'
+    fixture.feeTokenDecimals = 18
+    const evm = await getEvmTx()
+    expect((evm.affiliateFee as { id: string }).id).toBe(fixture.feeTokenAddress)
+  })
+
+  it('recognizes the LI.FI native-token sentinel without a token ID', async () => {
+    fixture.feeTokenAddress = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
+    fixture.feeTokenDecimals = 18
+    const evm = await getEvmTx()
+    expect((evm.affiliateFee as { id?: string }).id).toBeUndefined()
+  })
+
+  it('keeps a foreign-chain native sentinel distinct from the source native fee', async () => {
+    fixture.feeTokenAddress = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
+    fixture.feeTokenDecimals = 18
+    fixture.feeTokenChainId = 999999
+    const evm = await getEvmTx()
+    expect((evm.affiliateFee as { id: string }).id).toBe(fixture.feeTokenAddress)
   })
 })

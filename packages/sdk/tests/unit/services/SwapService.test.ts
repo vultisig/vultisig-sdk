@@ -83,14 +83,6 @@ vi.mock('@vultisig/core-chain/publicKey/getPublicKey', () => ({
   })),
 }))
 
-// Mock EVM gas-rate lookups used by extractSwapFees's EVM branch (sdk#1450)
-vi.mock('@vultisig/core-chain/tx/fee/evm/baseFee', () => ({
-  getEvmBaseFee: vi.fn().mockResolvedValue(10n),
-}))
-vi.mock('@vultisig/core-chain/tx/fee/evm/maxPriorityFeePerGas', () => ({
-  getEvmMaxPriorityFeePerGas: vi.fn().mockResolvedValue(2n),
-}))
-
 import type { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 
 import type { WasmProvider } from '../../../src/context/SdkContext'
@@ -847,11 +839,11 @@ describe('SwapService', () => {
         amount: 1,
       })
 
-      // networkFee = gasLimit * (baseFee + priorityFee) = 300_000n * (10n + 2n) = 3_600_000n
+      // networkFee = 300_000 gas * (20 gwei base + 2 gwei priority)
       expect(result.fees).toEqual({
-        network: 3_600_000n,
+        network: 6_600_000_000_000_000n,
         affiliate: 1_000_000_000_000n,
-        total: 1_000_003_600_000n,
+        total: 6_601_000_000_000_000n,
       })
     })
 
@@ -889,7 +881,11 @@ describe('SwapService', () => {
         amount: 1,
       })
 
-      expect(result.fees).toEqual({ network: 3_600_000n, total: 3_600_000n })
+      expect(result.fees).toEqual({
+        network: 6_600_000_000_000_000n,
+        affiliate: undefined,
+        total: 6_600_000_000_000_000n,
+      })
     })
 
     it('should handle quote errors gracefully', async () => {
