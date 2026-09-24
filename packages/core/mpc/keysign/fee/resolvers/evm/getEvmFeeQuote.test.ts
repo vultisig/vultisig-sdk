@@ -236,6 +236,29 @@ describe('getEvmFeeQuote', () => {
   })
 
   describe('transfer', () => {
+    it('uses the live Mantle native estimate when it exceeds the transfer floor', async () => {
+      mocks.getKeysignCoin.mockReturnValue(makeCoin(EvmChain.Mantle))
+      mocks.client.estimateGas.mockResolvedValue(30_000n)
+
+      const quote = await getEvmFeeQuote({ keysignPayload: transferPayload })
+
+      expect(quote.gasLimit).toBe(30_000n)
+      expect(quote.maxPriorityFeePerGas).toBe(0n)
+      expect(mocks.client.estimateGas).toHaveBeenCalledWith(
+        expect.objectContaining({ to: router, value: 1n, data: undefined })
+      )
+    })
+
+    it('uses the Mantle native transfer floor when its live estimate fails', async () => {
+      mocks.getKeysignCoin.mockReturnValue(makeCoin(EvmChain.Mantle))
+      mocks.client.estimateGas.mockRejectedValueOnce(new Error('upstream timeout'))
+
+      const quote = await getEvmFeeQuote({ keysignPayload: transferPayload })
+
+      expect(quote.gasLimit).toBe(23_000n)
+      expect(quote.maxPriorityFeePerGas).toBe(0n)
+    })
+
     it('signs the simulated cost when it exceeds the chain floor', async () => {
       mocks.client.estimateGas.mockResolvedValue(30_000n)
 
