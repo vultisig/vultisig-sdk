@@ -14,6 +14,8 @@
 //   - Non-EVM steps: HAVE tx_encoding field (solana-tx, sui-tx, tron-tx, ton-tx)
 //   - All-or-nothing: if any step fails to canonicalize, decoded[] used for ALL steps
 
+import { Buffer } from 'buffer'
+
 import type {
   ScanRequest,
   Validator,
@@ -46,6 +48,7 @@ export type {
   YieldActionResponse,
   YieldArgs,
   YieldBalance,
+  YieldBuildFailure,
   YieldDiscoverMetadata,
   YieldDiscoverOpportunity,
   YieldDiscoverToken,
@@ -399,6 +402,260 @@ export type StakekitExitResult = StakekitActionResult & {
   cooldown_days?: number
 }
 
+// --- finalizeStakekitAction (architecture#1904) ---
+//
+// The builder surface above returns a raw YieldActionResponse; a consumer
+// handing it to a wallet for signing still needs to decide whether it's
+// actually SAFE to sign. Ported from agent-backend-ts's `finalizeYieldAction`
+// guard family (`yieldActionBuildPermanentlyFailed`,
+// `yieldActionHasUnsignableSui`, `yieldActionHasUncanonicalizableNetwork`,
+// `yieldActionBuildIncomplete`) so every consumer of the SDK's stakekit
+// builders shares one canonical acceptance/refusal gate instead of
+// hand-maintaining local refusal logic.
+//
+// Deliberately does NOT perform Sui JSON-intent -> real-BCS resolution
+// (agent-backend-ts's `resolveSuiYieldSteps`, a stateful routine that calls
+// out to Sui RPC to rebuild the transaction) — that's a network-calling
+// REPAIR step, not a pure classification decision, and out of scope for a
+// deterministic SDK-owned gate. `unsignable_sui` tells the caller the Sui
+// step needs that resolution before it can be signable; a caller with its
+// own resolver re-runs `finalizeStakekitAction` on the resolved response.
+
+/** Non-EVM networks with a real end-to-end signable envelope (`parseActionDisplay`'s
+ * per-chain branches). Any other non-EVM network has no signer for whatever
+ * shape yield.xyz just returned. */
+const CANONICAL_NON_EVM_NETWORKS = new Set(['solana', 'sui', 'tron', 'ton'])
+
+const STAKEKIT_BUILD_INCOMPLETE_MSG =
+  "Couldn't finish building that yield transaction just now — the provider returned the action without its signing data. Please try again in a moment."
+const STAKEKIT_UNSUPPORTED_CHAIN_MSG =
+  "This yield transaction isn't signable yet on this chain — coming soon. You can still stake on other supported chains."
+const STAKEKIT_SUI_UNSIGNABLE_MSG =
+  "Sui yield deposits aren't signable yet in this raw form — the provider returned a JSON-intent payload, not a signable transaction. You can still stake on other supported chains."
+
+// Only Sui's `request_add_stake` MoveAbort code 10 is CONFIRMED (live, agent-backend-ts) to mean
+// "below the minimum stake amount" — no other chain/function/code combination has been observed,
+// so this stays a single, narrow entry. Every other permanent rejection (unmapped code, different
+// function, different chain) falls to the generic honest message below instead of guessing.
+const SUI_REQUEST_ADD_STAKE_FN = 'request_add_stake'
+const SUI_REQUEST_ADD_STAKE_BELOW_MIN_CODE = 10
+const SUI_NATIVE_STAKING_MIN_SUI = 1
+
+/**
+ * Strip a provider rejection reason down to its human-legible PREFIX only —
+ * never forward the raw on-chain struct dump (MoveLocation internals,
+ * addresses, byte offsets) to a user.
+ */
+export function sanitizeStakekitRejectionReason(reason: string): string {
+  // Provider text may include addresses, stack traces and raw transaction data.
+  // Only a recognized short prefix is safe to present to a wallet user.
+  if (/^Dry run failed[:\s]*$/i.test(reason.split(/MoveAbort|MoveLocation/i)[0].trim())) {
+    return 'the transaction failed simulation'
+  }
+  return 'the transaction was rejected during simulation'
+}
+
+/**
+ * Map a permanently-failed build step to an honest, specific (when
+ * recognized) or honest, generic (when not) user-facing message.
+ * `resolvedAmount` is the action's own resolved stake amount
+ * (`YieldActionResponse.amount`) when available, so a mapped message can
+ * cite the user's actual requested amount alongside the known minimum.
+ */
+export function honestStakekitBuildFailureMessage(tx: YieldTransaction, resolvedAmount?: string): string {
+  const err = tx.buildError
+  if (!err) return STAKEKIT_BUILD_INCOMPLETE_MSG
+  if (
+    tx.network === 'sui' &&
+    err.moveAbortFunctionName === SUI_REQUEST_ADD_STAKE_FN &&
+    err.moveAbortCode === SUI_REQUEST_ADD_STAKE_BELOW_MIN_CODE
+  ) {
+    const safeAmount =
+      resolvedAmount && /^(?:\d+(?:\.\d+)?|\.\d+)$/.test(resolvedAmount) && resolvedAmount.length <= 40
+        ? resolvedAmount
+        : undefined
+    return (
+      `SUI native staking requires at least ${SUI_NATIVE_STAKING_MIN_SUI} SUI` +
+      (safeAmount ? `; this request was for ~${safeAmount} SUI.` : '.')
+    )
+  }
+  return `The provider rejected this stake: ${sanitizeStakekitRejectionReason(err.reason)}.`
+}
+
+/** Detect a PERMANENT provider build rejection anywhere in the action's steps. */
+function stakekitActionBuildPermanentlyFailed(
+  data: YieldActionResponse
+): { failed: false } | { failed: true; message: string } {
+  const steps = data.transactions
+  if (!Array.isArray(steps)) return { failed: false }
+  const failedStep = steps.find(tx => tx.buildError?.permanent)
+  if (!failedStep) return { failed: false }
+  return { failed: true, message: honestStakekitBuildFailureMessage(failedStep, data.amount) }
+}
+
+// yield.xyz's Sui `unsignedTransaction` for yield deposits/withdrawals can
+// arrive as base64-of-JSON — a `@mysten/sui` `TransactionData` BUILDER
+// object with unresolved gas (`gasData:{budget:null,payment:null}`) and
+// `UnresolvedObject` inputs — NOT raw BCS bytes. Feeding this JSON-intent
+// blob to a raw-BCS Sui signer produces a WRONG signing hash. Detect by
+// base64-decoding the candidate and checking whether it parses as a JSON
+// object; real BCS bytes are binary and must never be replaced by JSON text.
+function isSuiYieldJsonIntent(candidate: string): boolean {
+  let decoded: string
+  try {
+    decoded = Buffer.from(candidate, 'base64').toString('utf8')
+  } catch {
+    return false
+  }
+  const trimmed = decoded.trim()
+  if (!trimmed.startsWith('{')) return false
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(trimmed)
+  } catch {
+    return false
+  }
+  if (!parsed || typeof parsed !== 'object') return false
+  // Raw Sui BCS transaction bytes are binary. A base64-encoded JSON object,
+  // even one with an unfamiliar intent schema, must not be sent to that signer.
+  return !Array.isArray(parsed)
+}
+
+/** Scan a yield action's Sui steps for the unsignable JSON-intent shape.
+ * Only inspects `network === 'sui'` steps. */
+function stakekitActionHasUnsignableSui(data: YieldActionResponse): boolean {
+  const steps = data.transactions
+  if (!Array.isArray(steps) || steps.length === 0) return false
+  return steps.some(tx => {
+    if (tx.network !== 'sui') return false
+    if (typeof tx.unsignedTransaction !== 'string' || tx.unsignedTransaction.length === 0) return false
+    let candidate = tx.unsignedTransaction
+    try {
+      const wrapper = JSON.parse(candidate) as { serialized?: unknown; tx?: unknown }
+      if (wrapper && typeof wrapper === 'object') {
+        if (typeof wrapper.serialized === 'string' && wrapper.serialized) candidate = wrapper.serialized
+        else if (typeof wrapper.tx === 'string' && wrapper.tx) candidate = wrapper.tx
+      }
+    } catch {
+      // Raw base64 bytes are not a JSON wrapper.
+    }
+    return isSuiYieldJsonIntent(candidate)
+  })
+}
+
+/** Any non-EVM step whose network isn't one this SDK can actually sign
+ * (`parseActionDisplay`'s canonicalSteps returns null for it). Detected
+ * generically rather than by network name, so a new unsupported chain
+ * yield.xyz adds needs no allowlist update to keep declining honestly. */
+function stakekitActionHasUncanonicalizableNetwork(data: YieldActionResponse): boolean {
+  const steps = data.transactions
+  if (!Array.isArray(steps) || steps.length === 0) return false
+  return steps.some(tx => {
+    const network = typeof tx.network === 'string' ? tx.network : null
+    if (!network) return false
+    if (EVM_NETWORKS.has(network)) return false
+    if (CANONICAL_NON_EVM_NETWORKS.has(network)) return false
+    // Only decline once there's actually a build to ship — an empty/null
+    // unsignedTransaction is the stakekitActionBuildIncomplete case.
+    return typeof tx.unsignedTransaction === 'string' && tx.unsignedTransaction.length > 0
+  })
+}
+
+/** Detect a step whose `unsignedTransaction` never actually got built —
+ * either missing entirely, or (EVM only) present but structurally
+ * incomplete (`to`/`data` missing). Each step is checked against its own
+ * network; non-EVM steps only check for a missing payload here since the
+ * shape checks are EVM-calldata-specific. */
+function stakekitActionBuildIncomplete(data: YieldActionResponse): boolean {
+  const steps = data.transactions
+  if (!Array.isArray(steps) || steps.length === 0) return true
+  return steps.some(tx => {
+    if (tx.status === 'FAILED') return true
+    if (typeof tx.unsignedTransaction !== 'string' || tx.unsignedTransaction.length === 0) return true
+    if (typeof tx.network !== 'string' || !EVM_NETWORKS.has(tx.network)) return false
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(tx.unsignedTransaction)
+    } catch {
+      return true // unparseable EVM step => not buildable
+    }
+    if (!parsed || typeof parsed !== 'object') return true
+    const evm = parsed as { to?: unknown; data?: unknown }
+    return typeof evm.to !== 'string' || evm.to.length === 0 || typeof evm.data !== 'string' || evm.data.length === 0
+  })
+}
+
+/** Discriminated final acceptance/refusal outcome for a `YieldActionResponse`. */
+export type StakekitFinalizeResult =
+  | { status: 'signable'; display: ReturnType<typeof parseActionDisplay> }
+  | { status: 'provider_error'; message: string }
+  | { status: 'unsignable_sui'; message: string }
+  | { status: 'unsupported_chain'; message: string }
+  | { status: 'incomplete'; message: string }
+
+/**
+ * Canonical final "is this action actually safe to hand to a wallet for
+ * signing" gate for a `YieldActionResponse` produced by the SDK's stakekit
+ * builders. Runs the SAME guard sequence agent-backend-ts's
+ * `finalizeYieldAction` used, in the same order (a permanent build
+ * rejection is checked FIRST — the most specific, authoritative signal —
+ * so it's never masked by the less-specific `incomplete` outcome):
+ *
+ *   1. `provider_error`     — a build step was permanently rejected on-chain.
+ *   2. `unsignable_sui`     — a Sui step is a JSON-intent, not real BCS (needs
+ *                             out-of-band resolution the caller must perform).
+ *   3. `unsupported_chain`  — a step targets a network this SDK can't sign.
+ *   4. `incomplete`         — a step's payload never finished building.
+ *   5. `signable`           — every step canonicalizes; safe to sign.
+ */
+export function finalizeStakekitAction(data: YieldActionResponse): StakekitFinalizeResult {
+  if (!Array.isArray(data.transactions) || data.transactions.length === 0) {
+    return { status: 'incomplete', message: STAKEKIT_BUILD_INCOMPLETE_MSG }
+  }
+  const permanentFailure = stakekitActionBuildPermanentlyFailed(data)
+  if (permanentFailure.failed) {
+    return { status: 'provider_error', message: permanentFailure.message }
+  }
+  if (stakekitActionHasUnsignableSui(data)) {
+    return { status: 'unsignable_sui', message: STAKEKIT_SUI_UNSIGNABLE_MSG }
+  }
+  if (stakekitActionHasUncanonicalizableNetwork(data)) {
+    return { status: 'unsupported_chain', message: STAKEKIT_UNSUPPORTED_CHAIN_MSG }
+  }
+  if (stakekitActionBuildIncomplete(data)) {
+    return { status: 'incomplete', message: STAKEKIT_BUILD_INCOMPLETE_MSG }
+  }
+  const display = parseActionDisplay(data)
+  if (
+    display.transactions.some((step, index) => {
+      const network = data.transactions[index].network
+      return EVM_NETWORKS.has(network) ? !('to' in step && 'data' in step) : !('tx_encoding' in step && 'data' in step)
+    })
+  ) {
+    return { status: 'incomplete', message: STAKEKIT_BUILD_INCOMPLETE_MSG }
+  }
+  return { status: 'signable', display }
+}
+
+export type StakekitRefusalStatus = Exclude<StakekitFinalizeResult['status'], 'signable'>
+
+/** Thrown by public builders when the provider action cannot be signed. */
+export class StakekitActionRefusal extends Error {
+  constructor(
+    public readonly status: StakekitRefusalStatus,
+    message: string
+  ) {
+    super(message)
+    this.name = 'StakekitActionRefusal'
+  }
+}
+
+function finalizedDisplay(action: YieldActionResponse): StakekitActionDisplay {
+  const result = finalizeStakekitAction(action)
+  if (result.status !== 'signable') throw new StakekitActionRefusal(result.status, result.message)
+  return result.display
+}
+
 // --- Validator picker ---
 
 function pickValidators(validators: Validator[]): string[] {
@@ -684,9 +941,7 @@ export async function stakekitBuildEnter(params: {
   } catch {
     throw new Error(raw || 'yield.xyz returned an invalid response')
   }
-  if (!actionData.transactions) throw new Error('yield.xyz returned no transactions')
-
-  const display = parseActionDisplay(actionData)
+  const display = finalizedDisplay(actionData)
   return withScanRequests(actionData, display, params.address)
 }
 
@@ -750,9 +1005,7 @@ export async function stakekitBuildExit(params: {
   } catch {
     throw new Error(raw || 'yield.xyz returned an invalid response')
   }
-  if (!actionData.transactions) throw new Error('yield.xyz returned no transactions')
-
-  const display = parseActionDisplay(actionData)
+  const display = finalizedDisplay(actionData)
   const cooldownDays = yieldMeta?.metadata?.cooldownPeriod?.days ?? null
   return {
     ...withScanRequests(actionData, display, params.address),
@@ -804,15 +1057,14 @@ export async function stakekitBuildManage(params: {
   } catch {
     throw new Error(raw || 'yield.xyz returned an invalid response')
   }
-  if (!actionData.transactions) throw new Error('yield.xyz returned no transactions')
-
-  const display = parseActionDisplay(actionData)
+  const display = finalizedDisplay(actionData)
   return withScanRequests(actionData, display, params.address)
 }
 
 /** The sdk.defi.stakekit namespace surface. */
 export const stakekit = {
   parseActionDisplay,
+  finalizeStakekitAction,
   buildYieldActionScanRequest,
   validateStakekitActionAddress,
   validateStakekitActionInput,

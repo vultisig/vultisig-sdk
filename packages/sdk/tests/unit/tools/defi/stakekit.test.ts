@@ -6,10 +6,12 @@ import {
   buildYieldActionScanRequests,
   buildYieldStepScanRequest,
   ensureTransactionsBuilt,
+  finalizeStakekitAction,
   normalizeStakekitNetwork,
   parseActionDisplay,
   stakekit,
   STAKEKIT_NETWORK_ALIASES,
+  StakekitActionRefusal,
   stakekitBalances,
   stakekitBuildEnter,
   stakekitBuildExit,
@@ -867,11 +869,9 @@ describe('sdk.defi.stakekit', () => {
           address: '0x1234567890123456789012345678901234567890',
           amount: '100',
         })
-      ).rejects.toThrow(
-        'yield.xyz action failed on BOTH hosted MCP and REST fallback — MCP: yield_xyz_transaction_build_failed: tx-unbuilt; REST: yield_xyz_transaction_build_failed: tx-unbuilt'
-      )
+      ).rejects.toMatchObject({ status: 'incomplete' })
 
-      expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('/transactions/tx-unbuilt'))).toHaveLength(2)
+      expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('/transactions/tx-unbuilt'))).toHaveLength(1)
     })
   })
 
@@ -1316,7 +1316,7 @@ describe('scan-request coverage (architecture#1670)', () => {
     })
   })
 
-  it('withScanRequests keeps the singular fallback at no_compiled_txs when every step is unsupported', async () => {
+  it('the public builder refuses an action when every step is unsupported', async () => {
     const product = makeProduct({
       id: 'cosmos-atom-some-staking',
       token: { symbol: 'ATOM', name: 'Cosmos', network: 'cosmos-hub', decimals: 6 },
@@ -1349,14 +1349,13 @@ describe('scan-request coverage (architecture#1670)', () => {
           }),
       } as Response)
 
-    const result = await stakekitBuildEnter({
-      yieldId: 'cosmos-atom-some-staking',
-      address: 'cosmos1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqnrql8a',
-      amount: '1',
-    })
-
-    expect(result.scan_requests).toEqual([{ kind: 'unsupported', reason: 'chain_not_supported' }])
-    expect(result.scan_request).toEqual({ kind: 'unsupported', reason: 'no_compiled_txs' })
+    await expect(
+      stakekitBuildEnter({
+        yieldId: 'cosmos-atom-some-staking',
+        address: 'cosmos1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqnrql8a',
+        amount: '1',
+      })
+    ).rejects.toMatchObject({ status: 'unsupported_chain' })
   })
 
   it('a Solana step gets a real `solana` scan_request, not chain_not_supported (was the bug)', () => {
@@ -1519,12 +1518,19 @@ describe('StakeKit primary action scan selection (sdk#1918)', () => {
         address: '0x1234567890123456789012345678901234567890',
         amount: '100',
       }
-      const result =
+      const build = () =>
         builder === 'enter'
-          ? await stakekitBuildEnter(params)
+          ? stakekitBuildEnter(params)
           : builder === 'exit'
-            ? await stakekitBuildExit(params)
-            : await stakekitBuildManage({ ...params, action: 'WITHDRAW', passthrough: 'pending-action' })
+            ? stakekitBuildExit(params)
+            : stakekitBuildManage({ ...params, action: 'WITHDRAW', passthrough: 'pending-action' })
+      if (order.length === 0 || order.includes('unsupported')) {
+        await expect(build()).rejects.toMatchObject({
+          status: order.length === 0 ? 'incomplete' : 'unsupported_chain',
+        })
+        return
+      }
+      const result = await build()
       const expected =
         selected < 0
           ? { kind: 'unsupported', reason: 'no_compiled_txs' }
@@ -1568,4 +1574,136 @@ describe('StakeKit primary action scan selection (sdk#1918)', () => {
       expect(result.scan_requests).toEqual([result.scan_request])
     })
   })
+})
+
+describe('StakeKit signability gate (sdk#1904)', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  const actionWith = (changes: Partial<YieldTransaction>): YieldActionResponse => {
+    const action = makeEvmActionResponse()
+    return { ...action, transactions: [{ ...action.transactions[0], ...changes }] }
+  }
+
+  it('refuses empty, missing, incomplete and unsupported steps', () => {
+    expect(finalizeStakekitAction(makeEvmActionResponse({ transactions: [] })).status).toBe('incomplete')
+    expect(
+      finalizeStakekitAction({ ...makeEvmActionResponse(), transactions: undefined } as unknown as YieldActionResponse)
+        .status
+    ).toBe('incomplete')
+    expect(finalizeStakekitAction(actionWith({ unsignedTransaction: null, status: 'FAILED' })).status).toBe(
+      'incomplete'
+    )
+    expect(finalizeStakekitAction(actionWith({ status: 'FAILED' })).status).toBe('incomplete')
+    expect(finalizeStakekitAction(actionWith({ network: 'cosmos-hub' })).status).toBe('unsupported_chain')
+    expect(finalizeStakekitAction(actionWith({ unsignedTransaction: '{}' })).status).toBe('incomplete')
+    expect(
+      finalizeStakekitAction(actionWith({ unsignedTransaction: JSON.stringify({ to: '', data: '' }) })).status
+    ).toBe('incomplete')
+  })
+
+  it('keeps permanent rejection ahead of an incomplete sibling and sanitizes its message', () => {
+    const action = makeEvmActionResponse()
+    action.transactions[0] = {
+      ...action.transactions[0],
+      status: 'FAILED',
+      unsignedTransaction: null,
+      buildError: { permanent: true, reason: 'Dry run failed: MoveAbort at 0xprivate_secret' },
+    }
+    action.transactions[1] = { ...action.transactions[1], unsignedTransaction: null }
+    const result = finalizeStakekitAction(action)
+    expect(result.status).toBe('provider_error')
+    if (result.status === 'provider_error') {
+      expect(result.message).not.toMatch(/0xprivate_secret|MoveAbort/)
+    }
+  })
+
+  it('preserves a confirmed permanent PATCH refusal for builder classification', async () => {
+    const pending = actionWith({ network: 'sui', status: 'CREATED', unsignedTransaction: null })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (String(url).includes('/yields/')) return new Response(JSON.stringify(makeProduct()), { status: 200 })
+        if (String(url).includes('/mcp')) {
+          return new Response(JSON.stringify({ result: { content: [{ text: JSON.stringify(pending) }] } }), {
+            status: 200,
+          })
+        }
+        if (String(url).includes('/transactions/')) {
+          return new Response(JSON.stringify({ details: { reason: 'Dry run failed: MoveAbort at 0xprivate' } }), {
+            status: 400,
+          })
+        }
+        throw new Error(`Unexpected endpoint: ${url}`)
+      })
+    )
+    const refusal = await stakekitBuildEnter({
+      yieldId: pending.yieldId,
+      address: '0x' + 'a'.repeat(64),
+      amount: '0.1',
+    }).catch(error => error)
+    expect(refusal).toBeInstanceOf(StakekitActionRefusal)
+    expect(refusal.status).toBe('provider_error')
+    expect(refusal.message).not.toContain('0xprivate')
+  })
+
+  it('refuses Sui JSON intent while accepting real bytes and a mixed multi-step action', () => {
+    const sui = actionWith({
+      network: 'sui',
+      unsignedTransaction: Buffer.from(JSON.stringify({ gasData: { budget: null }, commands: [] })).toString('base64'),
+    })
+    expect(finalizeStakekitAction(sui).status).toBe('unsignable_sui')
+    sui.transactions[0].unsignedTransaction = JSON.stringify({ serialized: sui.transactions[0].unsignedTransaction })
+    expect(finalizeStakekitAction(sui).status).toBe('unsignable_sui')
+    sui.transactions[0].unsignedTransaction = JSON.stringify({
+      serialized: '',
+      tx: JSON.parse(sui.transactions[0].unsignedTransaction).serialized,
+    })
+    expect(finalizeStakekitAction(sui).status).toBe('unsignable_sui')
+    sui.transactions[0].unsignedTransaction = 'AQAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+    expect(finalizeStakekitAction(sui).status).toBe('signable')
+    const mixed = makeEvmActionResponse()
+    mixed.transactions.push(sui.transactions[0])
+    expect(finalizeStakekitAction(mixed).status).toBe('signable')
+    mixed.transactions[1].unsignedTransaction = '{}'
+    expect(finalizeStakekitAction(mixed).status).toBe('incomplete')
+  })
+
+  it.each(['enter', 'exit', 'manage'] as const)(
+    '%s rejects empty and permanent provider output through the public builder',
+    async builder => {
+      const params = {
+        yieldId: 'base-usdc-aave-v3-lending',
+        address: '0x1234567890123456789012345678901234567890',
+        amount: '1',
+      }
+      const build = () =>
+        builder === 'enter'
+          ? stakekitBuildEnter(params)
+          : builder === 'exit'
+            ? stakekitBuildExit(params)
+            : stakekitBuildManage({ ...params, action: 'WITHDRAW', passthrough: 'pending-action' })
+      for (const [response, status] of [
+        [makeEvmActionResponse({ transactions: [] }), 'incomplete'],
+        [
+          actionWith({
+            status: 'FAILED',
+            unsignedTransaction: null,
+            buildError: { permanent: true, reason: 'Dry run failed' },
+          }),
+          'provider_error',
+        ],
+      ] as const) {
+        vi.stubGlobal(
+          'fetch',
+          vi.fn(async (url: string, init?: RequestInit) => {
+            if (String(url).includes('mcp')) throw new Error('MCP unavailable')
+            return new Response(JSON.stringify(init?.method === 'POST' ? response : makeProduct()), { status: 200 })
+          })
+        )
+        const refusal = await build().catch(error => error)
+        expect(refusal).toBeInstanceOf(StakekitActionRefusal)
+        expect(refusal.status).toBe(status)
+      }
+    }
+  )
 })
