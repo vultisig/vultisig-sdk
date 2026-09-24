@@ -39,6 +39,23 @@ configureVultisigInstanceNamespaces(Vultisig, {
 export type { VaultImportConflictResolution, VaultImportOptions } from './VaultManager'
 export { Vultisig }
 
+// Server-assisted Fast Vault public helpers.
+export type { ServerEndpoints, VaultFromServerResponse } from './server'
+export {
+  checkVaultExistsOnServer,
+  createVaultWithServer,
+  getVaultFromServer,
+  keyImportWithServer,
+  migrateWithServer,
+  mldsaWithServer,
+  resendVaultShare,
+  reshareWithServer,
+  sequentialKeyImportWithServer,
+  setupVaultWithServer,
+  signWithServer,
+  verifyVaultEmailCode,
+} from './server'
+
 // Vault management
 export type { ResolvedTokenInfo, VaultConfig, VaultSaveOptions } from './vault'
 export {
