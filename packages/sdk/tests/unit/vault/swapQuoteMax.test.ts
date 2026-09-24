@@ -14,7 +14,7 @@ vi.mock('@vultisig/core-chain/swap/native/minimum/getNativeSwapMinAmountIn', () 
 }))
 vi.mock('@vultisig/core-chain/swap/quote/findSwapQuote', () => ({
   findSwapQuote,
-  getSwapQuoteProviderName: vi.fn(quote =>
+  getSwapQuoteProviderExcludeName: vi.fn(quote =>
     'native' in quote ? (quote.native.swapChain as (typeof providerPreferenceOrder)[number]) : 'SwapKit'
   ),
   providerPreferenceOrder,

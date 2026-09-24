@@ -17,7 +17,7 @@ import { getSwapDestinationAddress } from '@vultisig/core-chain/swap/keysign/get
 import { getNativeSwapMinAmountIn } from '@vultisig/core-chain/swap/native/minimum/getNativeSwapMinAmountIn'
 import { getNativeSwapDecimals } from '@vultisig/core-chain/swap/native/utils/getNativeSwapDecimals'
 import { nativeSwapAmountToCoinBaseUnit } from '@vultisig/core-chain/swap/native/utils/nativeSwapAmountToCoinBaseUnit'
-import { getSwapQuoteProviderName, providerPreferenceOrder } from '@vultisig/core-chain/swap/quote/findSwapQuote'
+import { getSwapQuoteProviderExcludeName, providerPreferenceOrder } from '@vultisig/core-chain/swap/quote/findSwapQuote'
 import { getTxStatus as coreTxStatus } from '@vultisig/core-chain/tx/status'
 import type { TxStatusResult } from '@vultisig/core-chain/tx/status/resolver'
 import { withEvmChecksumHint } from '@vultisig/core-chain/utils/getEvmChecksumMismatchHint'
@@ -2232,12 +2232,8 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
         resolvedAmount = fullAmount
         maxProbeQuote = probe
       } else {
-        const fallbackProvider =
-          probe.provider ?? (probe as unknown as { bestQuote?: { provider?: string } }).bestQuote?.provider
-        const probeProvider = probe.quote?.quote
-          ? getSwapQuoteProviderName(probe.quote.quote)
-          : providerPreferenceOrder.find(providerName => providerName.toLowerCase() === fallbackProvider?.toLowerCase())
-        if (!probeProvider) throw feeAwareMaxError()
+        if (!probe.quote?.quote) throw feeAwareMaxError()
+        const probeProvider = getSwapQuoteProviderExcludeName(probe.quote.quote)
         maxRequoteExcludeProviders = [
           ...(excludeProviders ?? []),
           ...providerPreferenceOrder.filter(providerName => providerName !== probeProvider),

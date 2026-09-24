@@ -256,8 +256,11 @@ const swapQuoteProviderExcludeAlias: Record<GeneralSwapProvider, SwapQuoteProvid
   ruji: 'RUJI Trade',
 }
 
-/** Returns a quote's provider in the canonical exclusion-name vocabulary. */
-export const getSwapQuoteProviderName = (quote: SwapQuote['quote']): SwapQuoteProviderName =>
+/**
+ * Returns a quote's provider in the `excludeProviders` vocabulary, distinct
+ * from the display label returned by the quote-level provider-name helper.
+ */
+export const getSwapQuoteProviderExcludeName = (quote: SwapQuote['quote']): SwapQuoteProviderName =>
   'native' in quote
     ? quote.native.swapChain === Chain.THORChain
       ? 'THORChain'
