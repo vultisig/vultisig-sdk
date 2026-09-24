@@ -72,21 +72,24 @@ const packageNameFromDescriptor = (descriptor) => {
 };
 
 const packageNameFromResolutionSelector = (selector) => {
-  const descriptorName = packageNameFromDescriptor(selector);
-  if (descriptorName.includes("/")) {
-    const parts = selector.split("/");
-    const lastScopedIndex = parts.findLastIndex((part) => part.startsWith("@"));
-    if (lastScopedIndex !== -1 && parts[lastScopedIndex + 1]) {
-      return `${parts[lastScopedIndex]}/${parts[lastScopedIndex + 1].split("@")[0]}`;
-    }
-  }
-  return descriptorName;
+  const parts = selector.split("/");
+  const target = parts.at(-1);
+  const scope = parts.at(-2);
+  return packageNameFromDescriptor(
+    scope?.startsWith("@") ? `${scope}/${target}` : target,
+  );
 };
 
-const parseNpmResolution = (resolution) => {
+const parseNpmResolution = (resolution, version) => {
   const match = resolution.match(/^(@[^/]+\/[^@]+|[^@]+)@npm:(.+)$/);
-  if (!match) return undefined;
-  return { name: match[1], version: match[2] };
+  if (match) return { name: match[1], version: match[2] };
+
+  const patch = resolution.match(/^(@[^/]+\/[^@]+|[^@]+)@patch:([^#]+)#/);
+  if (!patch || !version) return undefined;
+  const source = parseNpmResolution(decodeURIComponent(patch[2]));
+  return source?.name === patch[1]
+    ? { name: source.name, version }
+    : undefined;
 };
 
 const workspaceManifestPaths = (rootPackage) => {
@@ -181,7 +184,7 @@ const parseYarnLock = () => {
   return entries
     .map((entry) => {
       const resolved = entry.resolution
-        ? parseNpmResolution(entry.resolution)
+        ? parseNpmResolution(entry.resolution, entry.version)
         : undefined;
       if (!resolved) return undefined;
       return {
@@ -246,6 +249,10 @@ const main = async () => {
     }
 
     const publishedDate = new Date(publishedAt);
+    if (Number.isNaN(publishedDate.getTime())) {
+      missingTimes.push(entry);
+      continue;
+    }
     const ageDays = (now.getTime() - publishedDate.getTime()) / dayMs;
     if (ageDays < minimumAgeDays) {
       tooYoung.push({ ...entry, publishedAt, ageDays });
@@ -268,7 +275,7 @@ const main = async () => {
     if (missingTimes.length) {
       process.stderr.write(
         [
-          "Could not find npm publish times for resolved direct dependencies:",
+          "Could not find valid npm publish times for resolved direct dependencies:",
           ...missingTimes.map((entry) => `- ${entry.name}@${entry.version}`),
         ].join("\n") + "\n",
       );
