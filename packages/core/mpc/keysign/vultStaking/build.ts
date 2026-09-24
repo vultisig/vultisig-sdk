@@ -1,13 +1,12 @@
 import { Buffer } from 'buffer'
 import { create } from '@bufbuild/protobuf'
 import { Chain, EvmChain } from '@vultisig/core-chain/Chain'
-import { getErc20Allowance } from '@vultisig/core-chain/chains/evm/erc20/getErc20Allowance'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { Coin } from '@vultisig/core-chain/coin/Coin'
 import { getChainSpecific } from '@vultisig/core-mpc/keysign/chainSpecific'
 import { KeysignLibType } from '@vultisig/core-mpc/mpcLib'
 import { toCommCoin } from '@vultisig/core-mpc/types/utils/commCoin'
-import { Erc20ApprovePayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/erc20_approve_payload_pb'
+import { getErc20ApprovePayload } from '@vultisig/core-mpc/keysign/erc20/getErc20ApprovePayload'
 import { KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { WalletCore } from '@trustwallet/wallet-core'
@@ -135,19 +134,13 @@ export const buildVultStakeKeysignPayload = async ({
     libType,
   })
 
-  const allowance = await getErc20Allowance({
+  keysignPayload.erc20ApprovePayload = await getErc20ApprovePayload({
     chain: EvmChain.Ethereum,
     id: tokenId,
     address: vaultAddress,
     spender: stakingContractAddress,
+    amount,
   })
-
-  if (allowance < amount) {
-    keysignPayload.erc20ApprovePayload = create(Erc20ApprovePayloadSchema, {
-      amount: amount.toString(),
-      spender: stakingContractAddress,
-    })
-  }
 
   keysignPayload.blockchainSpecific = await getChainSpecific({
     keysignPayload,
