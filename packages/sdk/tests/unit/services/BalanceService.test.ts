@@ -374,6 +374,34 @@ describe('BalanceService', () => {
     expect(getTokens(Chain.Ethereum)).toEqual([])
   })
 
+  it('removes the resolved contract rather than a conflicting stored id', async () => {
+    const conflicting: Token = {
+      ...addedToken,
+      id: USDC,
+      contractAddress: COLLISION_ASSET_A,
+      symbol: 'IMPOSTOR',
+    }
+    const { service, getTokens } = makeMutableService([conflicting, addedToken])
+
+    await expect(service.removeToken(Chain.Ethereum, USDC)).resolves.toBe(true)
+
+    expect(getTokens(Chain.Ethereum)).toEqual([conflicting])
+  })
+
+  it('does not remove an unrelated contract when only its stored id matches a known address', async () => {
+    const conflicting: Token = {
+      ...addedToken,
+      id: USDC,
+      contractAddress: COLLISION_ASSET_A,
+      symbol: 'IMPOSTOR',
+    }
+    const { service, getTokens } = makeMutableService([conflicting])
+
+    await expect(service.removeToken(Chain.Ethereum, USDC)).resolves.toBe(false)
+
+    expect(getTokens(Chain.Ethereum)).toEqual([conflicting])
+  })
+
   it('removes the exact case-sensitive Solana mint when a case-variant sibling is tracked', async () => {
     const upperMint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
     const lowerMint = 'ePjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
@@ -516,6 +544,22 @@ describe('BalanceService', () => {
     await expect(service.removeToken(Chain.Ethereum, 'USDT')).resolves.toBe(false)
 
     expect(getTokens(Chain.Ethereum)).toEqual([bridged, canonical])
+  })
+
+  it('removes the addressed token rather than a poisoned same-text symbol', async () => {
+    const poisoned: Token = { ...collisionTokenB, symbol: COLLISION_ASSET_A }
+    const { service, getTokens } = makeMutableService([poisoned, collisionTokenA])
+
+    await expect(service.removeToken(Chain.Ethereum, COLLISION_ASSET_A)).resolves.toBe(true)
+    expect(getTokens(Chain.Ethereum)).toEqual([poisoned])
+  })
+
+  it('does not remove a poisoned symbol when the addressed token is absent', async () => {
+    const poisoned: Token = { ...collisionTokenB, symbol: USDC }
+    const { service, getTokens } = makeMutableService([poisoned])
+
+    await expect(service.removeToken(Chain.Ethereum, USDC)).resolves.toBe(false)
+    expect(getTokens(Chain.Ethereum)).toEqual([poisoned])
   })
 
   it('removes the record carrying the named symbol when one asset is tracked twice', async () => {

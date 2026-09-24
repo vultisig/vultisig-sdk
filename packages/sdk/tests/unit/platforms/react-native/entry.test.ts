@@ -12,6 +12,8 @@ import type {
   PollTxStatusUntilFinalResult as PollTxStatusUntilFinalResultFromReactNative,
 } from '../../../../src/platforms/react-native/index'
 import * as sdkRn from '../../../../src/platforms/react-native/index'
+import * as server from '../../../../src/server'
+import type { ServerEndpoints as CanonicalServerEndpoints } from '../../../../src/server/ServerManager'
 import type * as stakekitTypes from '../../../../src/tools/defi/stakekit'
 import * as recipientChecks from '../../../../src/tools/validate/recipientSanity'
 import type {
@@ -23,6 +25,31 @@ import * as tokenRef from '../../../../src/vault/tokenRef'
 import { cosmosTxFeeGasParityCases } from '../../../fixtures/cosmosTxFeeGasParity'
 
 process.env.VULTISIG_STRICT_SINGLETON = '0'
+
+describe('RN Fast Vault public exports', () => {
+  it('exposes the canonical helpers and endpoint type', () => {
+    const helpers = [
+      'checkVaultExistsOnServer',
+      'createVaultWithServer',
+      'getVaultFromServer',
+      'keyImportWithServer',
+      'migrateWithServer',
+      'mldsaWithServer',
+      'resendVaultShare',
+      'reshareWithServer',
+      'sequentialKeyImportWithServer',
+      'setupVaultWithServer',
+      'signWithServer',
+      'verifyVaultEmailCode',
+    ] as const
+
+    for (const helper of helpers) {
+      expect(sdkRn[helper], helper).toBe(server[helper])
+    }
+    expectTypeOf<sdkRn.ServerEndpoints>().toEqualTypeOf<CanonicalServerEndpoints>()
+    expectTypeOf<sdkRn.VaultFromServerResponse>().toEqualTypeOf<server.VaultFromServerResponse>()
+  })
+})
 
 describe('RN StakeKit companion types', () => {
   it('matches the canonical StakeKit public contracts', () => {

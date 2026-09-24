@@ -7,7 +7,10 @@ import * as isValidTokenIdModule from '@vultisig/core-chain/utils/isValidTokenId
 import { describe, expect, expectTypeOf, it } from 'vitest'
 
 import * as tronAbi from '../../../src/abi/tron'
+import type { ServerEndpoints as BuilderServerEndpoints } from '../../../src/context/SdkContextBuilder'
 import * as sdk from '../../../src/index'
+import * as server from '../../../src/server'
+import type { ServerEndpoints as CanonicalServerEndpoints } from '../../../src/server/ServerManager'
 import * as tools from '../../../src/tools'
 import * as stakekit from '../../../src/tools/defi/stakekit'
 import * as threeJane from '../../../src/tools/defi/threeJane'
@@ -59,6 +62,31 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.getValidatorUrl(sdk.Chain.Terra, 'terravaloper1abc')).toBe(
       `${url.origin}/cosmos/staking/v1beta1/validators/terravaloper1abc`
     )
+  })
+
+  it('exposes the canonical Fast Vault helpers and endpoint type through root and server entries', () => {
+    const helpers = [
+      'checkVaultExistsOnServer',
+      'createVaultWithServer',
+      'getVaultFromServer',
+      'keyImportWithServer',
+      'migrateWithServer',
+      'mldsaWithServer',
+      'resendVaultShare',
+      'reshareWithServer',
+      'sequentialKeyImportWithServer',
+      'setupVaultWithServer',
+      'signWithServer',
+      'verifyVaultEmailCode',
+    ] as const
+
+    for (const helper of helpers) {
+      expect(sdk[helper], helper).toBe(server[helper])
+    }
+    expectTypeOf<sdk.ServerEndpoints>().toEqualTypeOf<CanonicalServerEndpoints>()
+    expectTypeOf<server.ServerEndpoints>().toEqualTypeOf<CanonicalServerEndpoints>()
+    expectTypeOf<BuilderServerEndpoints>().toEqualTypeOf<CanonicalServerEndpoints>()
+    expectTypeOf<sdk.VaultFromServerResponse>().toEqualTypeOf<server.VaultFromServerResponse>()
   })
 
   it('exports the canonical token price-ID resolver with its existing signature and lookup behavior', () => {
