@@ -115,7 +115,10 @@ export function resolveTokenRef(chain: Chain, ref: string | undefined, userToken
   const known = knownTokens[chain] ?? []
   // Stored identities win at any length, including short numeric asset IDs.
   const userById = userTokens.find(
-    t => tokenRefIdsMatch(chain, t.contractAddress, ref) || tokenRefIdsMatch(chain, t.id, ref)
+    t =>
+      tokenRefIdsMatch(chain, t.contractAddress, ref) ||
+      (tokenRefIdsMatch(chain, t.id, ref) &&
+        (!isIdentityShapedRef(chain, ref) || tokenRefIdsMatch(chain, t.contractAddress || t.id, ref)))
   )
   if (userById) {
     return {

@@ -145,6 +145,19 @@ describe('resolveTokenRef', () => {
     })
   })
 
+  it('does not resolve an address through a stored id for a different contract', () => {
+    const conflicting = { ...impostorUsdc, id: USDC_LOWER, symbol: 'IMPOSTOR' }
+
+    expect(resolveTokenRef(Chain.Ethereum, USDC_LOWER, [conflicting, storedUsdc])).toMatchObject({
+      ticker: 'USDC',
+      contractAddress: USDC_LOWER,
+    })
+    expect(resolveTokenRef(Chain.Ethereum, USDC_LOWER, [conflicting])).toMatchObject({
+      ticker: 'USDC',
+      contractAddress: USDC_CHECKSUM,
+    })
+  })
+
   it('never resolves an unknown address through a same-text symbol', () => {
     const unknown = '0x00000000000000000000000000000000000000ab'
     const decoy = { ...impostorUsdc, symbol: unknown }

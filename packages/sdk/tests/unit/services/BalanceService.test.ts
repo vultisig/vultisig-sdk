@@ -374,6 +374,34 @@ describe('BalanceService', () => {
     expect(getTokens(Chain.Ethereum)).toEqual([])
   })
 
+  it('removes the resolved contract rather than a conflicting stored id', async () => {
+    const conflicting: Token = {
+      ...addedToken,
+      id: USDC,
+      contractAddress: COLLISION_ASSET_A,
+      symbol: 'IMPOSTOR',
+    }
+    const { service, getTokens } = makeMutableService([conflicting, addedToken])
+
+    await expect(service.removeToken(Chain.Ethereum, USDC)).resolves.toBe(true)
+
+    expect(getTokens(Chain.Ethereum)).toEqual([conflicting])
+  })
+
+  it('does not remove an unrelated contract when only its stored id matches a known address', async () => {
+    const conflicting: Token = {
+      ...addedToken,
+      id: USDC,
+      contractAddress: COLLISION_ASSET_A,
+      symbol: 'IMPOSTOR',
+    }
+    const { service, getTokens } = makeMutableService([conflicting])
+
+    await expect(service.removeToken(Chain.Ethereum, USDC)).resolves.toBe(false)
+
+    expect(getTokens(Chain.Ethereum)).toEqual([conflicting])
+  })
+
   it('removes the exact case-sensitive Solana mint when a case-variant sibling is tracked', async () => {
     const upperMint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
     const lowerMint = 'ePjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'

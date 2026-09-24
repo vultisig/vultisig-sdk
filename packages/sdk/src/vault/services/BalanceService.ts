@@ -471,11 +471,21 @@ export class BalanceService {
       // Select the record rather than just the asset: duplicate records for one
       // contract can have different symbols.
       const upper = tokenId.toUpperCase()
-      tokenIndex = tokens.findIndex(token => token.id === tokenId)
-      if (tokenIndex === -1) tokenIndex = tokens.findIndex(token => token.contractAddress === tokenId)
+      tokenIndex = tokens.findIndex(
+        token => token.id === tokenId && tokenIdsMatch(chain, token.contractAddress || token.id, resolved.contractAddress!)
+      )
       if (tokenIndex === -1) {
         tokenIndex = tokens.findIndex(
-          token => tokenRefIdsMatch(chain, token.contractAddress, tokenId) || tokenRefIdsMatch(chain, token.id, tokenId)
+          token =>
+            token.contractAddress === tokenId &&
+            tokenIdsMatch(chain, token.contractAddress || token.id, resolved.contractAddress!)
+        )
+      }
+      if (tokenIndex === -1) {
+        tokenIndex = tokens.findIndex(
+          token =>
+            tokenIdsMatch(chain, token.contractAddress || token.id, resolved.contractAddress!) &&
+            (tokenRefIdsMatch(chain, token.contractAddress, tokenId) || tokenRefIdsMatch(chain, token.id, tokenId))
         )
       }
       if (tokenIndex === -1) {
