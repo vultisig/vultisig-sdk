@@ -74,12 +74,13 @@ describe('buildSwapKeysignPayload — EVM approval spender and signed destinatio
       quote: {
         general: {
           provider: '1inch',
+          maxSlippageBps: 50,
           dstAmount: '1000000',
           tx: {
             evm: {
               from: '0xsender',
               to: ONE_INCH_V6_ROUTER,
-              data: '0xabc',
+              data: '0xdeadbeef',
               value: '0',
             },
           },
@@ -162,13 +163,14 @@ describe('buildSwapKeysignPayload — EVM approval spender and signed destinatio
       quote: {
         general: {
           provider: 'li.fi',
+          maxSlippageBps: 100,
           dstAmount: '1000000',
           tx: {
             evm: {
               from: SENDER,
               to: LIFI_ROUTER,
               approvalAddress: LIFI_APPROVAL_SPENDER,
-              data: '0xabc',
+              data: '0xdeadbeef',
               value: '0',
             },
           },

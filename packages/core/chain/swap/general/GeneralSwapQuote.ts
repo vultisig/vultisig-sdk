@@ -107,6 +107,8 @@ export type GeneralSwapQuote = {
   affiliate?: SwapQuoteAffiliate
   dstAmount: string
   provider: GeneralSwapProvider
+  /** Exact request slippage in integer basis points for protected EVM aggregator routes. */
+  maxSlippageBps?: number
   routeProvider?: string
   /** Absolute provider quote expiry in milliseconds, when supplied. */
   expiresAt?: number

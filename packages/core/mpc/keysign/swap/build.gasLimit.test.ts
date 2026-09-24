@@ -3,6 +3,7 @@ import { Chain } from '@vultisig/core-chain/Chain'
 import { SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
 import { getBlockchainSpecificValue } from '@vultisig/core-mpc/keysign/chainSpecific/KeysignChainSpecific'
 import { EthereumSpecificSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
+import { encodeFunctionData, parseAbi } from 'viem'
 import { describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -38,8 +39,9 @@ const swapQuote: SwapQuote = {
   quote: {
     general: {
       provider: '1inch',
+      maxSlippageBps: 50,
       dstAmount: '1000000',
-      tx: { evm: { from: '0xsender', to: '0xrouter', data: '0xabc', value: '0' } },
+      tx: { evm: { from: '0xsender', to: '0xrouter', data: '0xdeadbeef', value: '0' } },
     },
   },
   discounts: [],
@@ -79,5 +81,31 @@ describe('buildSwapKeysignPayload gas limit override', () => {
     const payload = await buildSwapKeysignPayload({ ...buildInput, gasLimitOverride: 0n })
 
     expect(getBlockchainSpecificValue(payload.blockchainSpecific, 'ethereumSpecific').gasLimit).toBe('50000')
+  })
+})
+
+describe('buildSwapKeysignPayload minimum output boundary', () => {
+  const abi = parseAbi(['function ethUnoswap(uint256 minReturn, uint256 dex) payable returns (uint256 returnAmount)'])
+  const data = (minimum: bigint) => encodeFunctionData({ abi, functionName: 'ethUnoswap', args: [minimum, 1n] })
+
+  it('builds honest known calldata and stops one-wei calldata before a keysign payload exists', async () => {
+    const quote = (minimum: bigint): SwapQuote =>
+      ({
+        ...swapQuote,
+        quote: {
+          general: {
+            provider: '1inch',
+            dstAmount: '1000000',
+            maxSlippageBps: 50,
+            tx: { evm: { from: '0xsender', to: '0xrouter', value: '0', data: data(minimum) } },
+          },
+        },
+      }) as SwapQuote
+
+    const honest = await buildSwapKeysignPayload({ ...buildInput, swapQuote: quote(995_000n) })
+    expect(honest.swapPayload?.case).toBe('oneinchSwapPayload')
+    await expect(buildSwapKeysignPayload({ ...buildInput, swapQuote: quote(1n) })).rejects.toThrow(
+      /below the quote-bound floor/
+    )
   })
 })

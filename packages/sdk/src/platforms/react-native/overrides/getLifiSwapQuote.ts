@@ -24,6 +24,7 @@ import { DeriveChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
 import { solanaConfig } from '@vultisig/core-chain/chains/solana/solanaConfig'
 import { AccountCoinKey } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
+import { toMaxSlippageBps } from '@vultisig/core-chain/swap/general/calldataMinOutput'
 import { GeneralSwapQuote } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
 import {
   assertKnownAggregatorRouter,
@@ -93,6 +94,7 @@ export const getLifiSwapQuote = async ({
   // wider floor than web on stable pairs and silently ignored an explicit tight-tolerance request.
   const slippage = resolveLifiSlippage({ slippageOverride, from: transfer.from, to: transfer.to })
 
+  const maxSlippageBps = getChainKind(transfer.from.chain) === 'evm' ? toMaxSlippageBps(slippage, 10000) : undefined
   const combinedCostBps = (affiliateBps ?? 0) + slippage * 10000
   if (combinedCostBps > MAX_COMBINED_COST_BPS) {
     console.warn(
@@ -189,6 +191,7 @@ export const getLifiSwapQuote = async ({
   return {
     dstAmount: estimate.toAmount,
     provider: 'li.fi',
+    ...(chainKind === 'evm' ? { maxSlippageBps } : {}),
     affiliate: affiliateBps === undefined ? undefined : { affiliateBps, request: 'included' },
     tx: match<DeriveChainKind<LifiSwapEnabledChain>, GeneralSwapQuote['tx']>(chainKind, {
       solana: () => {

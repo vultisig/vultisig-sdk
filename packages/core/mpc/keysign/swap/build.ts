@@ -10,6 +10,7 @@ import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { areEqualCoins } from '@vultisig/core-chain/coin/Coin'
 import { COW_VAULT_RELAYER_ADDRESS } from '@vultisig/core-chain/swap/general/cowswap/config'
 import { encodeCowSwapKeysignData } from '@vultisig/core-chain/swap/general/cowswap/keysign/cowSwapKeysignData'
+import { assertAggregatorCalldataMinOutputBound } from '@vultisig/core-chain/swap/general/calldataMinOutput'
 import { GeneralSwapTx } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
 import { rujiTradeRuneBruneMarketContract } from '@vultisig/core-chain/swap/general/ruji/config'
 import { getSwapDestinationAddress } from '@vultisig/core-chain/swap/keysign/getSwapDestinationAddress'
@@ -385,6 +386,12 @@ export const buildSwapKeysignPayload = async ({
 
       const txMsg = matchRecordUnion<GeneralSwapTx, Omit<OneInchTransaction, '$typeName'>>(quote.tx, {
         evm: ({ from, to, data, value, affiliateFee }) => {
+          assertAggregatorCalldataMinOutputBound({
+            provider: quote.provider,
+            data,
+            quotedOutputAmount: quote.dstAmount,
+            maxSlippageBps: quote.maxSlippageBps,
+          })
           return {
             from,
             to,
