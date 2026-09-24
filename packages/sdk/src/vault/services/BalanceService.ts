@@ -472,7 +472,8 @@ export class BalanceService {
       // contract can have different symbols.
       const upper = tokenId.toUpperCase()
       tokenIndex = tokens.findIndex(
-        token => token.id === tokenId && tokenIdsMatch(chain, token.contractAddress || token.id, resolved.contractAddress!)
+        token =>
+          token.id === tokenId && tokenIdsMatch(chain, token.contractAddress || token.id, resolved.contractAddress!)
       )
       if (tokenIndex === -1) {
         tokenIndex = tokens.findIndex(
