@@ -201,15 +201,12 @@ export const getLifiSwapQuote = async ({
         }
       },
       evm: () => {
-        // Mirror the Solana branch's fee extraction so EVM routes
-        // (including cross-chain EVM → Solana/Cosmos via Stargate, Across,
-        // etc.) surface the affiliate fee. LI.FI's `feeCosts` is the same
-        // for both kinds; the EVM branch was previously dropping it on the
-        // floor which left the swap-fee row blank for every LI.FI EVM
-        // route. Keep `affiliateFee` optional: not every route has one
-        // (affiliateBps may be 0 and no LIFI Fixed Fee charged).
+        // Only the integrator's share is our affiliate fee. LI.FI's feeCosts
+        // also includes platform and execution fees, and an entry's total
+        // amount can include more than the integrator's share.
         const fees = estimate.feeCosts ?? []
-        const swapFee = fees.find(fee => fee.name === 'LIFI Fixed Fee') || fees[0]
+        const swapFee = fees.find(fee => fee.feeSplit?.integratorFee && BigInt(fee.feeSplit.integratorFee) > 0n)
+        const affiliateFeeAmount = swapFee?.feeSplit?.integratorFee
         // Keep LI.FI's fee-token identity even when it differs from both route
         // endpoints. Only its native-token sentinels may become a native fee.
         const swapFeeAddress = swapFee?.token.address
@@ -242,10 +239,10 @@ export const getLifiSwapQuote = async ({
             ...(approvalAddr && approvalAddr !== '0x0000000000000000000000000000000000000000'
               ? { approvalAddress: approvalAddr }
               : {}),
-            ...(swapFee
+            ...(swapFee && affiliateFeeAmount
               ? {
                   affiliateFee: {
-                    amount: BigInt(swapFee.amount),
+                    amount: BigInt(affiliateFeeAmount),
                     decimals: swapFee.token.decimals,
                     chain: resolveSwapFeeChain(swapFee.token.chainId, transfer.from.chain),
                     id: swapFeeAssetId,

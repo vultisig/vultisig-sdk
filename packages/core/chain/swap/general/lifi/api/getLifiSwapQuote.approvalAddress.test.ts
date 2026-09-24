@@ -9,6 +9,9 @@ const fixture = vi.hoisted(() => ({
   feeTokenAddress: 'USDT',
   feeTokenDecimals: 6,
   feeTokenChainId: 1,
+  feeName: 'LIFI Fixed Fee',
+  integratorFee: '30' as string | undefined,
+  leadingNonAffiliateFee: false,
   scanAddressWithBlockaid: vi.fn(),
 }))
 
@@ -32,9 +35,15 @@ vi.mock('@lifi/sdk', () => ({
         toAmount: '999000',
         gasCosts: [{ amount: '0' }],
         feeCosts: [
+          ...(fixture.leadingNonAffiliateFee
+            ? [{ name: 'Bridge Fee', amount: '600', token: { decimals: 18, address: 'ETH', chainId: 1 } }]
+            : []),
           {
-            name: 'LIFI Fixed Fee',
-            amount: '0',
+            name: fixture.feeName,
+            amount: '100',
+            ...(fixture.integratorFee === undefined
+              ? {}
+              : { feeSplit: { lifiFee: '70', integratorFee: fixture.integratorFee } }),
             token: {
               decimals: fixture.feeTokenDecimals,
               address: fixture.feeTokenAddress,
@@ -115,6 +124,9 @@ describe('getLifiSwapQuote — evm.approvalAddress exposure (#895)', () => {
     fixture.feeTokenAddress = 'USDT'
     fixture.feeTokenDecimals = 6
     fixture.feeTokenChainId = 1
+    fixture.feeName = 'LIFI Fixed Fee'
+    fixture.integratorFee = '30'
+    fixture.leadingNonAffiliateFee = false
   })
 
   it('threads the verified LI.FI Diamond approvalAddress onto evm.approvalAddress', async () => {
@@ -165,6 +177,20 @@ describe('getLifiSwapQuote — evm.approvalAddress exposure (#895)', () => {
     fixture.feeTokenDecimals = 18
     const evm = await getEvmTx()
     expect((evm.affiliateFee as { id: string }).id).toBe(fixture.feeTokenAddress)
+  })
+
+  it('reports only the positive integrator split, independent of fee name and entry order', async () => {
+    fixture.leadingNonAffiliateFee = true
+    fixture.feeName = 'Router Fee'
+    const evm = await getEvmTx()
+    expect((evm.affiliateFee as { amount: bigint }).amount).toBe(30n)
+  })
+
+  it.each([undefined, '0'])('omits affiliateFee without a positive integrator split (%s)', async integratorFee => {
+    fixture.leadingNonAffiliateFee = true
+    fixture.integratorFee = integratorFee
+    const evm = await getEvmTx()
+    expect(evm.affiliateFee).toBeUndefined()
   })
 
   it('recognizes the LI.FI native-token sentinel without a token ID', async () => {
