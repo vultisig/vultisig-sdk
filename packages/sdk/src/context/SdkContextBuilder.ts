@@ -8,13 +8,14 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 
 import { DEFAULT_CHAINS } from '../constants'
-import { ServerManager } from '../server/ServerManager'
+import { type ServerEndpoints, ServerManager } from '../server/ServerManager'
 import { PasswordCacheService } from '../services/PasswordCacheService'
 import { PushNotificationService } from '../services/PushNotificationService'
 import type { Storage } from '../storage/types'
 import type { SdkConfigOptions, SdkContext } from './SdkContext'
 
 // Re-export SdkContext type for consumers
+export type { ServerEndpoints } from '../server/ServerManager'
 export type { SdkContext } from './SdkContext'
 import { getWalletCore } from './wasmRuntime'
 
@@ -22,15 +23,6 @@ import { getWalletCore } from './wasmRuntime'
  * Default fiat currency
  */
 const DEFAULT_CURRENCY = 'USD'
-
-/**
- * Server endpoint configuration
- */
-export type ServerEndpoints = {
-  fastVault?: string
-  messageRelay?: string
-  notification?: string
-}
 
 /**
  * Password cache configuration
