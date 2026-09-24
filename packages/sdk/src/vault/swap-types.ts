@@ -157,10 +157,8 @@ export type SwapQuoteResult = SwapQuoteBase & {
   /**
    * Maximum swappable amount in base units.
    * - ERC-20 / non-native: full balance (no source-chain fee deduction needed)
-   * - Native EVM/Cosmos: balance minus network fee from the quote
-   * - Native UTXO deposit-channel (transfer) routes: **0n** — source-chain fees are
-   *   only known at broadcast time. Consumers must call `estimateSendFee()` to compute
-   *   the real max for these routes.
+   * - Native sources: balance minus an estimated source-chain send fee
+   * - **0n** when the source-chain fee cannot be estimated safely
    */
   maxSwapable: bigint
 }

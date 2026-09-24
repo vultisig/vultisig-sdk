@@ -192,6 +192,12 @@ describe('SwapService', () => {
       expect(result.estimatedOutput).toBeDefined()
       expect(result.requiresApproval).toBe(false)
       expect(result.quote).toEqual(mockQuote)
+      expect(result.fees.network).toBe(0n)
+      expect(result.fees.total).toBe(0n)
+      if (!('native' in result.quote.quote)) {
+        throw new Error('Expected a native swap quote')
+      }
+      expect(result.quote.quote.native.fees.outbound).toBe('100000')
 
       // Should emit swapQuoteReceived event
       expect(mockEmitEvent).toHaveBeenCalledWith('swapQuoteReceived', {

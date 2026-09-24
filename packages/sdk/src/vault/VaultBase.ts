@@ -13,6 +13,9 @@ import { Coin } from '@vultisig/core-chain/coin/Coin'
 import { getCoinValue } from '@vultisig/core-chain/coin/utils/getCoinValue'
 import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import { signatureAlgorithms } from '@vultisig/core-chain/signing/SignatureAlgorithm'
+import { getSwapDestinationAddress } from '@vultisig/core-chain/swap/keysign/getSwapDestinationAddress'
+import { getNativeSwapMinAmountIn } from '@vultisig/core-chain/swap/native/minimum/getNativeSwapMinAmountIn'
+import { nativeSwapAmountToCoinBaseUnit } from '@vultisig/core-chain/swap/native/utils/nativeSwapAmountToCoinBaseUnit'
 import { getTxStatus as coreTxStatus } from '@vultisig/core-chain/tx/status'
 import type { TxStatusResult } from '@vultisig/core-chain/tx/status/resolver'
 import { withEvmChecksumHint } from '@vultisig/core-chain/utils/getEvmChecksumMismatchHint'
@@ -84,7 +87,7 @@ import { SwapService } from './services/SwapService'
 import { TokenDiscoveryService } from './services/TokenDiscoveryService'
 import { TransactionBuilder } from './services/TransactionBuilder'
 // Swap types
-import type { SwapPrepareResult, SwapQuoteParams, SwapQuoteResult, SwapTxParams } from './swap-types'
+import type { SwapPrepareResult, SwapQuoteBase, SwapQuoteParams, SwapQuoteResult, SwapTxParams } from './swap-types'
 import { type ResolvedTokenInfo, resolveTokenRef, resolveTokenRefId } from './tokenRef'
 import { canonicalizeVaultData } from './utils/canonicalizeVaultData'
 import { VaultConflictError, VaultError, VaultErrorCode } from './VaultError'
@@ -1678,31 +1681,53 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     // Enrich with balance + max swappable amount (best-effort)
     let balance = 0n
     let maxSwapable = 0n
+    let resolvedFromCoin: AccountCoin | undefined
     try {
-      const resolvedFromCoin = quoteResult.fromCoin
-      const balanceResult = await this.balanceService.getBalance(resolvedFromCoin.chain, resolvedFromCoin.tokenId)
+      resolvedFromCoin = await this.resolveSwapQuoteCoin(params.fromCoin, quoteResult.fromCoin)
+      const balanceResult = await this.balanceService.getBalance(resolvedFromCoin.chain, resolvedFromCoin.id)
       balance = BigInt(balanceResult.amount)
-      const isNative = !resolvedFromCoin.tokenId
-
-      // For deposit-channel (transfer) routes, fees.network is 0n because source-chain
-      // fees are estimated at broadcast time, not in the SwapKit quote. Using 0n here
-      // would give maxSwapable = balance, which overstates what is safely swappable
-      // (real UTXO fees are ~500 sat for BTC). Leave maxSwapable = 0n to signal
-      // "not computable from this quote". Consumers needing the real max must call
-      // estimateSendFee() separately.
-      const isTransferRoute = 'general' in quoteResult.quote.quote && 'transfer' in quoteResult.quote.quote.general.tx
-
-      if (!isNative) {
-        maxSwapable = balance
-      } else if (!isTransferRoute) {
-        maxSwapable = getMaxValue(balance, quoteResult.fees.network)
-      }
-      // else: transfer route native — maxSwapable stays 0n (unknown until broadcast-time fee estimate)
+      maxSwapable = await this.getFeeAwareMaxSwapable({
+        quoteResult,
+        fromCoin: resolvedFromCoin,
+        balance,
+      })
     } catch {
       // Balance enrichment is best-effort — quote is still valid without it
     }
 
-    return { ...quoteResult, balance, maxSwapable }
+    const warnings = [...quoteResult.warnings]
+    if ('native' in quoteResult.quote.quote) {
+      try {
+        resolvedFromCoin ??= await this.resolveSwapQuoteCoin(params.fromCoin, quoteResult.fromCoin)
+        const resolvedToCoin = await this.resolveSwapQuoteCoin(params.toCoin, quoteResult.toCoin)
+        const nativeQuote = quoteResult.quote.quote.native
+        const quotedAmount = toChainAmount(params.amount, resolvedFromCoin.decimals)
+        const providerMinimum = nativeSwapAmountToCoinBaseUnit(
+          BigInt(nativeQuote.recommended_min_amount_in),
+          resolvedFromCoin
+        )
+        const minimum =
+          providerMinimum > 0n
+            ? providerMinimum
+            : (
+                await getNativeSwapMinAmountIn({
+                  from: resolvedFromCoin,
+                  to: resolvedToCoin,
+                  swapChain: nativeQuote.swapChain,
+                })
+              )?.minAmountInBaseUnits
+
+        if (minimum !== undefined && quotedAmount < minimum) {
+          warnings.push(
+            `Amount ${this.formatUnits(quotedAmount, resolvedFromCoin.decimals)} ${resolvedFromCoin.ticker} is below ${nativeQuote.swapChain}'s recommended minimum of ${this.formatUnits(minimum, resolvedFromCoin.decimals)} ${resolvedFromCoin.ticker}; the swap may fail or be refunded net of fees.`
+          )
+        }
+      } catch {
+        // A quote remains usable when its optional minimum recommendation cannot be normalized.
+      }
+    }
+
+    return { ...quoteResult, warnings, balance, maxSwapable }
   }
 
   /**
@@ -2359,6 +2384,55 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   }
 
   // ===== PRIVATE HELPERS =====
+
+  private async resolveSwapQuoteCoin(
+    input: SwapQuoteParams['fromCoin'],
+    resolved: SwapQuoteResult['fromCoin']
+  ): Promise<AccountCoin> {
+    const address = 'address' in input ? input.address : await this.address(resolved.chain)
+    return {
+      chain: resolved.chain,
+      address,
+      ticker: resolved.ticker,
+      decimals: resolved.decimals,
+      ...(resolved.tokenId ? { id: resolved.tokenId } : {}),
+    }
+  }
+
+  private async getFeeAwareMaxSwapable({
+    quoteResult,
+    fromCoin,
+    balance,
+  }: {
+    quoteResult: SwapQuoteBase
+    fromCoin: AccountCoin
+    balance: bigint
+  }): Promise<bigint> {
+    if (fromCoin.id) return balance
+
+    let fee = quoteResult.fees.network
+    if (fee === 0n) {
+      const { quote } = quoteResult.quote
+      const memo =
+        'native' in quote
+          ? quote.native.memo
+          : 'transfer' in quote.general.tx
+            ? quote.general.tx.transfer.memo
+            : undefined
+      fee = await this.transactionBuilder.estimateSendFee({
+        coin: fromCoin,
+        receiver: getSwapDestinationAddress({
+          quote: quoteResult.quote,
+          fromCoin,
+        }),
+        amount: balance,
+        memo,
+      })
+      if (fee <= 0n) return 0n
+    }
+
+    return getMaxValue(balance, fee)
+  }
 
   private buildAccountCoin(
     chain: Chain,
