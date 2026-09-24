@@ -1,7 +1,7 @@
 import { initWasm, type WalletCore } from '@trustwallet/wallet-core'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getCoinType } from '@vultisig/core-chain/coin/coinType'
-import { beforeAll, describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { deriveAddressFromMnemonic } from './deriveAddressFromMnemonic'
 
@@ -65,6 +65,49 @@ describe('deriveAddressFromMnemonic', () => {
       if (chainsWithCustomAddressFormat.has(chain)) continue
 
       expect(deriveAddressFromMnemonic({ chain, mnemonic, walletCore }), chain).toBe(getWalletCoreAddress(chain))
+    }
+  })
+
+  it('derives the TON address for the requested wallet version', () => {
+    const v4r2 = deriveAddressFromMnemonic({ chain: Chain.Ton, mnemonic, walletCore })
+    const v5r1 = deriveAddressFromMnemonic({ chain: Chain.Ton, mnemonic, walletCore, tonWalletVersion: 'v5r1' })
+
+    expect(v4r2).toBe(getWalletCoreAddress(Chain.Ton))
+    expect(v5r1).not.toBe(v4r2)
+  })
+
+  it('rejects MLDSA chains', () => {
+    expect(() => deriveAddressFromMnemonic({ chain: Chain.QBTC, mnemonic, walletCore })).toThrow(/MLDSA/)
+  })
+
+  it('only calls PrivateKey methods the React Native WalletCore bridge implements', () => {
+    const nativePrivateKeyMethods = ['data', 'getPublicKeySecp256k1', 'getPublicKeyEd25519', 'delete']
+    const createWithMnemonic = walletCore.HDWallet.createWithMnemonic.bind(walletCore.HDWallet)
+    const spy = vi.spyOn(walletCore.HDWallet, 'createWithMnemonic').mockImplementation((phrase, passphrase) => {
+      const hdWallet = createWithMnemonic(phrase, passphrase)
+      const getKeyForCoin = hdWallet.getKeyForCoin.bind(hdWallet)
+      hdWallet.getKeyForCoin = coinType =>
+        new Proxy(getKeyForCoin(coinType), {
+          get: (target, property) => {
+            const value = Reflect.get(target, property)
+            if (typeof value !== 'function') return value
+            if (typeof property === 'string' && !nativePrivateKeyMethods.includes(property)) {
+              throw new Error(`PrivateKey.${property} is not available on React Native`)
+            }
+            return value.bind(target)
+          },
+        })
+      return hdWallet
+    })
+
+    try {
+      for (const chain of Object.values(Chain)) {
+        if (chain === Chain.Cardano || chain === Chain.QBTC) continue
+
+        expect(() => deriveAddressFromMnemonic({ chain, mnemonic, walletCore }), chain).not.toThrow()
+      }
+    } finally {
+      spy.mockRestore()
     }
   })
 })
