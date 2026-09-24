@@ -2508,6 +2508,11 @@
       "import": "./dist/utils/getBlockExplorerUrl/index.js",
       "default": "./dist/utils/getBlockExplorerUrl/index.js"
     },
+    "./utils/getEvmChecksumMismatchHint": {
+      "types": "./dist/utils/getEvmChecksumMismatchHint.d.ts",
+      "import": "./dist/utils/getEvmChecksumMismatchHint.js",
+      "default": "./dist/utils/getEvmChecksumMismatchHint.js"
+    },
     "./utils/isValidAddress": {
       "types": "./dist/utils/isValidAddress.d.ts",
       "import": "./dist/utils/isValidAddress.js",

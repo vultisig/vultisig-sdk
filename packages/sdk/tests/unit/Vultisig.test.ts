@@ -205,6 +205,44 @@ describe('Vultisig', () => {
     })
   })
 
+  describe('address book', () => {
+    const checksummedAddress = '0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed'
+    const digitTypoAddress = '0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAee'
+
+    it('rejects a checksum-mismatched Ethereum entry with the EIP-55 hint', async () => {
+      await expect(
+        sdk.addAddressBookEntry([
+          {
+            chain: Chain.Ethereum,
+            address: digitTypoAddress,
+            name: 'Mistyped recipient',
+            source: 'saved',
+            dateAdded: 0,
+          },
+        ])
+      ).rejects.toThrow(/Invalid address for Ethereum.*EIP-55 checksum mismatch/u)
+    })
+
+    it('accepts a canonical checksummed Ethereum entry', async () => {
+      await sdk.addAddressBookEntry([
+        {
+          chain: Chain.Ethereum,
+          address: checksummedAddress,
+          name: 'Canonical recipient',
+          source: 'saved',
+          dateAdded: 0,
+        },
+      ])
+
+      expect((await sdk.getAddressBook(Chain.Ethereum)).saved).toEqual([
+        expect.objectContaining({
+          address: checksummedAddress,
+          name: 'Canonical recipient',
+        }),
+      ])
+    })
+  })
+
   describe('validation helpers', () => {
     describe('validateEmail', () => {
       it('should validate correct email formats', () => {

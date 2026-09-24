@@ -39,6 +39,23 @@ configureVultisigInstanceNamespaces(Vultisig, {
 export type { VaultImportConflictResolution, VaultImportOptions } from './VaultManager'
 export { Vultisig }
 
+// Server-assisted Fast Vault public helpers.
+export type { ServerEndpoints, VaultFromServerResponse } from './server'
+export {
+  checkVaultExistsOnServer,
+  createVaultWithServer,
+  getVaultFromServer,
+  keyImportWithServer,
+  migrateWithServer,
+  mldsaWithServer,
+  resendVaultShare,
+  reshareWithServer,
+  sequentialKeyImportWithServer,
+  setupVaultWithServer,
+  signWithServer,
+  verifyVaultEmailCode,
+} from './server'
+
 // Vault management
 export type { ResolvedTokenInfo, VaultConfig, VaultSaveOptions } from './vault'
 export {
@@ -100,6 +117,7 @@ export {
 } from '@vultisig/core-chain/chains/ton/failure'
 export type { TonGaslessConfig } from '@vultisig/core-chain/chains/ton/gasless/api'
 export { getTonGaslessConfig, isTonGasJetton } from '@vultisig/core-chain/chains/ton/gasless/api'
+export { resolveTokenPriceId } from '@vultisig/core-chain/coin/price/resolveTokenPriceId'
 export {
   CosmosSequenceMismatchError,
   toCosmosSequenceMismatchError,
@@ -827,13 +845,18 @@ export {
 export type {
   ContinuousVestingAccount,
   Coin as CosmosStakingCoin,
+  Validator as CosmosStakingValidator,
   DelayedVestingAccount,
   Delegation,
   DelegatorReward,
   DelegatorRewardsResponse,
   PeriodicVestingAccount,
+  StakingChain,
   UnbondingDelegation,
   UnbondingEntry,
+  ValidatorCommission,
+  ValidatorDescription,
+  ValidatorStatus,
   VestingAccount,
 } from '@vultisig/core-chain/chains/cosmos/staking/lcdQueries'
 export {
@@ -841,10 +864,14 @@ export {
   getCosmosDelegations,
   getCosmosDelegatorRewards,
   getCosmosUnbondingDelegations,
+  getCosmosValidator,
+  getCosmosValidators,
   getCosmosVestingAccount,
   getDelegationsUrl,
   getDelegatorRewardsUrl,
   getUnbondingDelegationsUrl,
+  getValidatorsUrl,
+  getValidatorUrl,
 } from '@vultisig/core-chain/chains/cosmos/staking/lcdQueries'
 
 // Cosmos governance (read proposals + build unsigned MsgVote envelope —
