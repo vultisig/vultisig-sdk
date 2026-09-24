@@ -3,6 +3,7 @@ import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
+import { withEvmChecksumHint } from '@vultisig/core-chain/utils/getEvmChecksumMismatchHint'
 import { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
 import { buildSendKeysignPayload } from '@vultisig/core-mpc/keysign/send/build'
 import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
@@ -44,10 +45,12 @@ export const prepareContractCallTxFromKeys = async (
   const walletCore = walletCoreOverride ?? (await getWalletCore())
 
   if (!isValidAddress({ chain, address: contractAddress, walletCore })) {
-    throw new Error(`Invalid contract address for chain ${chain}: ${contractAddress}`)
+    throw new Error(
+      withEvmChecksumHint(`Invalid contract address for chain ${chain}: ${contractAddress}`, contractAddress)
+    )
   }
   if (!isValidAddress({ chain, address: senderAddress, walletCore })) {
-    throw new Error(`Invalid sender address for chain ${chain}: ${senderAddress}`)
+    throw new Error(withEvmChecksumHint(`Invalid sender address for chain ${chain}: ${senderAddress}`, senderAddress))
   }
 
   const calldata = encodeFunctionData({

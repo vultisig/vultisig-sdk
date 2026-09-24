@@ -15,6 +15,7 @@ import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import { signatureAlgorithms } from '@vultisig/core-chain/signing/SignatureAlgorithm'
 import { getTxStatus as coreTxStatus } from '@vultisig/core-chain/tx/status'
 import type { TxStatusResult } from '@vultisig/core-chain/tx/status/resolver'
+import { withEvmChecksumHint } from '@vultisig/core-chain/utils/getEvmChecksumMismatchHint'
 import { isValidRecipient } from '@vultisig/core-chain/utils/isValidRecipient'
 import { vaultConfig } from '@vultisig/core-config'
 import { hasServer } from '@vultisig/core-mpc/devices/localPartyId'
@@ -1411,10 +1412,19 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     // Validate receiver before fetching balance so bad input doesn't waste a
     // network round-trip. computeMaxSendFromBalance re-validates for the
     // vault-free path; two checks at different layers is acceptable.
-    if (!isValidRecipient({ chain: params.coin.chain, address: params.receiver, walletCore })) {
+    if (
+      !isValidRecipient({
+        chain: params.coin.chain,
+        address: params.receiver,
+        walletCore,
+      })
+    ) {
       throw new VaultError(
         VaultErrorCode.InvalidConfig,
-        `Invalid receiver address for chain ${params.coin.chain}: ${params.receiver}`
+        withEvmChecksumHint(
+          `Invalid receiver address for chain ${params.coin.chain}: ${params.receiver}`,
+          params.receiver
+        )
       )
     }
     // Fetch balance via BalanceService so cache / balanceUpdated event / VaultError
