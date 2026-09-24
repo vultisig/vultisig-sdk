@@ -80,6 +80,60 @@ describe('deriveAddressFromMnemonic', () => {
     expect(() => deriveAddressFromMnemonic({ chain: Chain.QBTC, mnemonic, walletCore })).toThrow(/MLDSA/)
   })
 
+  it('deletes the HD wallet when key derivation throws', () => {
+    const createWithMnemonic = walletCore.HDWallet.createWithMnemonic.bind(walletCore.HDWallet)
+    const deleteHdWallet = vi.fn()
+    const spy = vi.spyOn(walletCore.HDWallet, 'createWithMnemonic').mockImplementation((phrase, passphrase) => {
+      const hdWallet = createWithMnemonic(phrase, passphrase)
+      const deleteOriginal = hdWallet.delete.bind(hdWallet)
+      hdWallet.getKeyForCoin = () => {
+        throw new Error('derivation failed')
+      }
+      hdWallet.delete = () => {
+        deleteHdWallet()
+        deleteOriginal()
+      }
+      return hdWallet
+    })
+
+    try {
+      expect(() => deriveAddressFromMnemonic({ chain: Chain.Bitcoin, mnemonic, walletCore })).toThrow(
+        'derivation failed'
+      )
+      expect(deleteHdWallet).toHaveBeenCalledOnce()
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('deletes every public key it builds to derive the address', () => {
+    const createWithData = walletCore.PublicKey.createWithData.bind(walletCore.PublicKey)
+    const created: unknown[] = []
+    const deleted = new Set<unknown>()
+    const spy = vi.spyOn(walletCore.PublicKey, 'createWithData').mockImplementation((data, type) => {
+      const publicKey = createWithData(data, type)
+      const deleteOriginal = publicKey.delete.bind(publicKey)
+      publicKey.delete = () => {
+        deleted.add(publicKey)
+        deleteOriginal()
+      }
+      created.push(publicKey)
+      return publicKey
+    })
+
+    try {
+      // Tron converts to an uncompressed key, leaving an intermediate one to release.
+      for (const chain of [Chain.Tron, Chain.MayaChain, Chain.Solana]) {
+        deriveAddressFromMnemonic({ chain, mnemonic, walletCore })
+      }
+
+      expect(created).toHaveLength(3)
+      expect(created.every(publicKey => deleted.has(publicKey))).toBe(true)
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
   it('only calls PrivateKey methods the React Native WalletCore bridge implements', () => {
     const nativePrivateKeyMethods = ['data', 'getPublicKeySecp256k1', 'getPublicKeyEd25519', 'delete']
     const createWithMnemonic = walletCore.HDWallet.createWithMnemonic.bind(walletCore.HDWallet)
