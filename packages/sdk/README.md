@@ -1362,6 +1362,19 @@ MIT License - see [LICENSE](./LICENSE) file for details.
 
 **Built with ❤️ by the Vultisig team**
 
+## DEX quote helpers
+
+Import read-only DEX helpers directly without loading the SDK root:
+
+```ts
+import { getAmountOut, uniswapV2Quote, type UniswapV2QuoteParams } from '@vultisig/sdk/tools/dex'
+
+const amountOut = getAmountOut(1000n, 10000n, 20000n) // 1813n
+```
+
+The subpath also exports `balancerQuote`, its quote types, and the `uniswap`
+namespace. Quote helpers do not sign or broadcast transactions.
+
 ## Transaction preparation imports
 
 `@vultisig/sdk/tools/prep` exposes the canonical vault-free transaction builders
