@@ -157,8 +157,9 @@ export type SwapQuoteResult = SwapQuoteBase & {
   /**
    * Maximum swappable amount in base units.
    * - ERC-20 / non-native: full balance (no source-chain fee deduction needed)
-   * - Native sources: balance minus an estimated source-chain send fee
-   * - **0n** when the source-chain fee cannot be estimated safely
+   * - Native THORChain/Maya sources: balance minus an estimated source-chain fee
+   * - Deposit-channel transfer routes: **0n** because their provider-built transaction fee is not known safely
+   * - Other native sources: balance minus the quote's network fee
    */
   maxSwapable: bigint
 }

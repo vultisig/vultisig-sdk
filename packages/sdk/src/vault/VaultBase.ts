@@ -15,6 +15,7 @@ import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import { signatureAlgorithms } from '@vultisig/core-chain/signing/SignatureAlgorithm'
 import { getSwapDestinationAddress } from '@vultisig/core-chain/swap/keysign/getSwapDestinationAddress'
 import { getNativeSwapMinAmountIn } from '@vultisig/core-chain/swap/native/minimum/getNativeSwapMinAmountIn'
+import { getNativeSwapDecimals } from '@vultisig/core-chain/swap/native/utils/getNativeSwapDecimals'
 import { nativeSwapAmountToCoinBaseUnit } from '@vultisig/core-chain/swap/native/utils/nativeSwapAmountToCoinBaseUnit'
 import { getTxStatus as coreTxStatus } from '@vultisig/core-chain/tx/status'
 import type { TxStatusResult } from '@vultisig/core-chain/tx/status/resolver'
@@ -1681,16 +1682,19 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     // Enrich with balance + max swappable amount (best-effort)
     let balance = 0n
     let maxSwapable = 0n
+    let estimatedNetworkFee: bigint | undefined
     let resolvedFromCoin: AccountCoin | undefined
     try {
       resolvedFromCoin = await this.resolveSwapQuoteCoin(params.fromCoin, quoteResult.fromCoin)
       const balanceResult = await this.balanceService.getBalance(resolvedFromCoin.chain, resolvedFromCoin.id)
       balance = BigInt(balanceResult.amount)
-      maxSwapable = await this.getFeeAwareMaxSwapable({
+      const feeAwareMaximum = await this.getFeeAwareMaxSwapable({
         quoteResult,
         fromCoin: resolvedFromCoin,
         balance,
       })
+      maxSwapable = feeAwareMaximum.maxSwapable
+      estimatedNetworkFee = feeAwareMaximum.estimatedNetworkFee
     } catch {
       // Balance enrichment is best-effort — quote is still valid without it
     }
@@ -1700,26 +1704,17 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       try {
         resolvedFromCoin ??= await this.resolveSwapQuoteCoin(params.fromCoin, quoteResult.fromCoin)
         const resolvedToCoin = await this.resolveSwapQuoteCoin(params.toCoin, quoteResult.toCoin)
-        const nativeQuote = quoteResult.quote.quote.native
         const quotedAmount = toChainAmount(params.amount, resolvedFromCoin.decimals)
-        const providerMinimum = nativeSwapAmountToCoinBaseUnit(
-          BigInt(nativeQuote.recommended_min_amount_in),
-          resolvedFromCoin
-        )
-        const minimum =
-          providerMinimum > 0n
-            ? providerMinimum
-            : (
-                await getNativeSwapMinAmountIn({
-                  from: resolvedFromCoin,
-                  to: resolvedToCoin,
-                  swapChain: nativeQuote.swapChain,
-                })
-              )?.minAmountInBaseUnits
+        const minimum = await this.getRecommendedMinimumInSourceBaseUnits({
+          quoteResult,
+          fromCoin: resolvedFromCoin,
+          toCoin: resolvedToCoin,
+        })
 
         if (minimum !== undefined && quotedAmount < minimum) {
+          const { swapChain } = quoteResult.quote.quote.native
           warnings.push(
-            `Amount ${this.formatUnits(quotedAmount, resolvedFromCoin.decimals)} ${resolvedFromCoin.ticker} is below ${nativeQuote.swapChain}'s recommended minimum of ${this.formatUnits(minimum, resolvedFromCoin.decimals)} ${resolvedFromCoin.ticker}; the swap may fail or be refunded net of fees.`
+            `Amount ${this.formatUnits(quotedAmount, resolvedFromCoin.decimals)} ${resolvedFromCoin.ticker} is below ${swapChain}'s recommended minimum of ${this.formatUnits(minimum, resolvedFromCoin.decimals)} ${resolvedFromCoin.ticker}; the swap may fail or be refunded net of fees.`
           )
         }
       } catch {
@@ -1727,7 +1722,16 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       }
     }
 
-    return { ...quoteResult, warnings, balance, maxSwapable }
+    const fees =
+      estimatedNetworkFee !== undefined
+        ? { network: estimatedNetworkFee, total: estimatedNetworkFee }
+        : quoteResult.fees
+    const feesFiat =
+      estimatedNetworkFee !== undefined
+        ? await this.swapService.getFeesFiat(fees, resolvedFromCoin!.chain, params.fiatCurrency)
+        : quoteResult.feesFiat
+
+    return { ...quoteResult, fees, feesFiat, warnings, balance, maxSwapable }
   }
 
   /**
@@ -2217,6 +2221,20 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
         )
       }
 
+      if (probe.quote?.quote && 'native' in probe.quote.quote) {
+        const minimum = await this.getRecommendedMinimumInSourceBaseUnits({
+          quoteResult: probe,
+          fromCoin,
+          toCoin,
+        })
+        if (minimum !== undefined && probe.maxSwapable < minimum) {
+          throw new VaultError(
+            VaultErrorCode.InvalidAmount,
+            `Max swappable ${this.formatUnits(probe.maxSwapable, fromToken.decimals)} ${fromToken.ticker} is below ${probe.quote.quote.native.swapChain}'s recommended minimum of ${this.formatUnits(minimum, fromToken.decimals)} ${fromToken.ticker}; the swap would likely fail or be refunded net of fees. Increase the balance or choose another route.`
+          )
+        }
+      }
+
       if (probe.maxSwapable >= balance) {
         // Token route - gas is paid in the native asset, so the whole token
         // balance is swappable and the probe already quotes the final amount.
@@ -2238,6 +2256,15 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
         slippageTolerance,
         excludeProviders,
       }))
+    if (amount === 'max' && !fromCoin.id) {
+      const committedAmountBaseUnits = toChainAmount(normalizedAmount, fromToken.decimals)
+      if (quote.maxSwapable > 0n && committedAmountBaseUnits > quote.maxSwapable) {
+        throw new VaultError(
+          VaultErrorCode.InvalidAmount,
+          'The source-chain fee changed between quotes; retry the swap.'
+        )
+      }
+    }
     if (dryRun) return { dryRun: true, quote }
 
     const { keysignPayload, approvalPayload } = await this.prepareSwapTx({
@@ -2407,18 +2434,14 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     quoteResult: SwapQuoteBase
     fromCoin: AccountCoin
     balance: bigint
-  }): Promise<bigint> {
-    if (fromCoin.id) return balance
+  }): Promise<{ maxSwapable: bigint; estimatedNetworkFee?: bigint }> {
+    if (fromCoin.id) return { maxSwapable: balance }
 
     let fee = quoteResult.fees.network
     if (fee === 0n) {
       const { quote } = quoteResult.quote
-      const memo =
-        'native' in quote
-          ? quote.native.memo
-          : 'transfer' in quote.general.tx
-            ? quote.general.tx.transfer.memo
-            : undefined
+      if (!('native' in quote)) return { maxSwapable: 0n }
+
       fee = await this.transactionBuilder.estimateSendFee({
         coin: fromCoin,
         receiver: getSwapDestinationAddress({
@@ -2426,12 +2449,52 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
           fromCoin,
         }),
         amount: balance,
-        memo,
+        memo: quote.native.memo,
       })
-      if (fee <= 0n) return 0n
+      if (fee <= 0n) return { maxSwapable: 0n }
+
+      return {
+        maxSwapable: getMaxValue(balance, fee),
+        estimatedNetworkFee: fee,
+      }
     }
 
-    return getMaxValue(balance, fee)
+    return { maxSwapable: getMaxValue(balance, fee) }
+  }
+
+  private async getRecommendedMinimumInSourceBaseUnits({
+    quoteResult,
+    fromCoin,
+    toCoin,
+  }: {
+    quoteResult: SwapQuoteBase
+    fromCoin: AccountCoin
+    toCoin: AccountCoin
+  }): Promise<bigint | undefined> {
+    const { quote } = quoteResult.quote
+    if (!('native' in quote)) return undefined
+
+    try {
+      const recommended = BigInt(quote.native.recommended_min_amount_in)
+      if (recommended > 0n) {
+        const converted = nativeSwapAmountToCoinBaseUnit(recommended, fromCoin)
+        const nativeDecimals = getNativeSwapDecimals(fromCoin)
+        if (fromCoin.decimals >= nativeDecimals) return converted
+
+        const divisor = 10n ** BigInt(nativeDecimals - fromCoin.decimals)
+        return recommended % divisor === 0n ? converted : converted + 1n
+      }
+
+      return (
+        await getNativeSwapMinAmountIn({
+          from: fromCoin,
+          to: toCoin,
+          swapChain: quote.native.swapChain,
+        })
+      )?.minAmountInBaseUnits
+    } catch {
+      return undefined
+    }
   }
 
   private buildAccountCoin(

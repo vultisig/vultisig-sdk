@@ -871,6 +871,33 @@ describe('SwapService', () => {
     })
   })
 
+  describe('getFeesFiat', () => {
+    it('prices source-native network and total fees through the shared quote pricing path', async () => {
+      const getPrice = vi.fn().mockResolvedValue(50_000)
+      const serviceWithFiat = new SwapService(mockVaultData, mockGetAddress, mockEmitEvent, mockWasmProvider, {
+        getPrice,
+      } as any)
+
+      await expect(serviceWithFiat.getFeesFiat({ network: 500n, total: 500n }, Chain.Bitcoin, 'usd')).resolves.toEqual({
+        network: 0.25,
+        affiliate: undefined,
+        total: 0.25,
+        currency: 'usd',
+      })
+      expect(getPrice).toHaveBeenCalledWith(Chain.Bitcoin, undefined, 'usd')
+    })
+
+    it('returns undefined when source-native fee pricing fails', async () => {
+      const serviceWithFiat = new SwapService(mockVaultData, mockGetAddress, mockEmitEvent, mockWasmProvider, {
+        getPrice: vi.fn().mockRejectedValue(new Error('price unavailable')),
+      } as any)
+
+      await expect(
+        serviceWithFiat.getFeesFiat({ network: 500n, total: 500n }, Chain.Bitcoin, 'usd')
+      ).resolves.toBeUndefined()
+    })
+  })
+
   describe('prepareSwapTx', () => {
     it('should prepare swap transaction', async () => {
       const { buildSwapKeysignPayload } = await import('@vultisig/core-mpc/keysign/swap/build')
