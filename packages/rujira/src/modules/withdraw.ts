@@ -2,11 +2,9 @@ import type { Coin } from '@cosmjs/proto-signing'
 
 import { findAssetByFormat } from '../assets/index.js'
 import type { RujiraClient } from '../client.js'
-import { CHAIN_PROCESSING_TIMES } from '../config.js'
-import { DEFAULT_THORCHAIN_FEE } from '../config/constants.js'
+import { CHAIN_PROCESSING_TIMES, THORCHAIN_TO_SDK_CHAIN } from '../config.js'
 import { RujiraError, RujiraErrorCode } from '../errors.js'
 import { estimateWithdrawFee } from '../services/fee-estimator.js'
-import { buildWithdrawalKeysignPayload } from '../signer/keysign-builder.js'
 import type { VultisigVault } from '../signer/types.js'
 import { isWithdrawCapable } from '../signer/types.js'
 import { parseAsset as sharedParseAsset } from '../utils/denom-conversion.js'
@@ -42,26 +40,15 @@ export type WithdrawResult = {
   status: 'pending' | 'success' | 'failed'
 }
 
-function hasVaultAccess(signer: unknown): signer is { getVault(): VultisigVault } {
+function hasVaultAccess(signer: unknown): signer is { getVault(): VultisigVault; getChainId(): string } {
   return (
     signer !== null &&
     typeof signer === 'object' &&
     'getVault' in signer &&
-    typeof (signer as { getVault?: unknown }).getVault === 'function'
+    typeof (signer as { getVault?: unknown }).getVault === 'function' &&
+    'getChainId' in signer &&
+    typeof (signer as { getChainId?: unknown }).getChainId === 'function'
   )
-}
-
-type AccountInfo = {
-  result?: {
-    value?: {
-      account_number?: string
-      sequence?: string
-    }
-  }
-  account?: {
-    account_number?: string
-    sequence?: string
-  }
 }
 
 export class RujiraWithdraw {
@@ -123,7 +110,7 @@ export class RujiraWithdraw {
     if (!hasVaultAccess(signer)) {
       throw new RujiraError(
         RujiraErrorCode.MISSING_SIGNER,
-        'Withdrawal requires a VultisigRujiraProvider signer with vault access. ' +
+        'Withdrawal requires a VultisigRujiraProvider signer with vault access and a chain ID. ' +
           'Standard Cosmos signers are not supported for MsgDeposit operations.'
       )
     }
@@ -135,20 +122,36 @@ export class RujiraWithdraw {
         throw new RujiraError(
           RujiraErrorCode.SIGNING_FAILED,
           'Vault does not support withdrawal operations. ' +
-            'Required methods: extractMessageHashes, sign, broadcastTx.'
+            'Required methods: prepareThorchainMsgDepositTx, extractMessageHashes, sign, broadcastTx.'
         )
       }
 
-      const senderAddress = await vault.address('THORChain')
+      // The SDK and WalletCore currently sign THORChain MsgDeposit using the
+      // mainnet chain ID. Reject a differently configured provider before MPC.
+      if (signer.getChainId() !== 'thorchain-1') {
+        throw new RujiraError(RujiraErrorCode.SIGNING_FAILED, 'Secured withdrawals require thorchain-1')
+      }
 
-      const [accountInfo, fee] = await Promise.all([this.getAccountInfo(senderAddress), this.getNetworkFee()])
+      const { chain, symbol } = parseAsset(prepared.asset)
+      const l1Chain = THORCHAIN_TO_SDK_CHAIN[chain]
+      if (!l1Chain || !symbol) {
+        throw new RujiraError(RujiraErrorCode.INVALID_ASSET, `Unsupported withdrawal asset: ${prepared.asset}`)
+      }
+      const [ticker, contractAddress] = symbol.split('-')
+      if (!ticker) {
+        throw new RujiraError(RujiraErrorCode.INVALID_ASSET, `Unsupported withdrawal asset: ${prepared.asset}`)
+      }
 
-      const keysignPayload = await buildWithdrawalKeysignPayload({
-        vault,
-        senderAddress,
-        prepared,
-        accountInfo,
-        fee,
+      const keysignPayload = await vault.prepareThorchainMsgDepositTx({
+        chain: 'THORChain',
+        amountBaseUnits: BigInt(prepared.amount),
+        memo: prepared.memo,
+        securedWithdrawal: {
+          l1Chain,
+          ticker,
+          ...(contractAddress ? { contractAddress } : {}),
+          destination: prepared.destination,
+        },
       })
 
       const messageHashes = await vault.extractMessageHashes(keysignPayload)
@@ -184,50 +187,6 @@ export class RujiraWithdraw {
         { originalError: errorMsg, prepared }
       )
     }
-  }
-
-  private async getAccountInfo(address: string): Promise<{ accountNumber: string; sequence: string }> {
-    try {
-      const response = await thornodeRateLimiter.fetch(`${this.thornodeUrl}/auth/accounts/${address}`)
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
-
-      const data = (await response.json()) as AccountInfo
-      const accountData = data.result?.value || data.account
-
-      if (!accountData) {
-        throw new Error('Invalid account response structure')
-      }
-
-      return {
-        accountNumber: accountData.account_number || '0',
-        sequence: accountData.sequence || '0',
-      }
-    } catch (error) {
-      throw new RujiraError(
-        RujiraErrorCode.NETWORK_ERROR,
-        `Failed to fetch account info for ${address}: ${error instanceof Error ? error.message : String(error)}`
-      )
-    }
-  }
-
-  private async getNetworkFee(): Promise<bigint> {
-    try {
-      const response = await thornodeRateLimiter.fetch(`${this.thornodeUrl}/thorchain/network`)
-
-      if (response.ok) {
-        const data = (await response.json()) as { native_tx_fee_rune?: string }
-        if (data.native_tx_fee_rune) {
-          return BigInt(data.native_tx_fee_rune)
-        }
-      }
-    } catch {
-      // fall back below
-    }
-
-    return DEFAULT_THORCHAIN_FEE
   }
 
   buildWithdrawMemo(l1Address: string): string {

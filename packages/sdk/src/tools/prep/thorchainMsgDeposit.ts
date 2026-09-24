@@ -3,6 +3,7 @@ import type { WalletCore } from '@trustwallet/wallet-core'
 import { Chain } from '@vultisig/core-chain/Chain'
 import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
+import { getNativeSwapChainId } from '@vultisig/core-chain/swap/native/NativeSwapChain'
 import { assertValidThorchainDepositMemo } from '@vultisig/core-chain/swap/native/thorchainDepositMemo'
 // Import THOR/Maya resolvers directly rather than going through the
 // `keysign/chainSpecific` barrel — the barrel imports every chain's
@@ -15,7 +16,9 @@ import { assertValidThorchainDepositMemo } from '@vultisig/core-chain/swap/nativ
 import { getMayaChainSpecific } from '@vultisig/core-mpc/keysign/chainSpecific/resolvers/maya'
 import { getThorchainChainSpecific } from '@vultisig/core-mpc/keysign/chainSpecific/resolvers/thor'
 import { toCommCoin } from '@vultisig/core-mpc/types/utils/commCoin'
+import { CoinSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/coin_pb'
 import { KeysignPayload, KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import { THORChainSwapPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/thorchain_swap_payload_pb'
 import { Buffer } from 'buffer'
 
 import { getWalletCore } from '../../context/wasmRuntime'
@@ -28,6 +31,13 @@ export type PrepareThorchainMsgDepositTxFromKeysParams = {
   amountBaseUnits: bigint
   /** Pre-built memo (`+:POOL[:PAIRED]`, `-:POOL:BPS[:ASSET]`, etc.). */
   memo: string
+  /** Secured L1 asset withdrawn from THORChain. Omit for native THOR/Maya deposits. */
+  securedWithdrawal?: {
+    l1Chain: string
+    ticker: string
+    contractAddress?: string
+    destination: string
+  }
 }
 
 /**
@@ -52,7 +62,7 @@ export const prepareThorchainMsgDepositTxFromKeys = async (
   params: PrepareThorchainMsgDepositTxFromKeysParams,
   walletCoreOverride?: WalletCore
 ): Promise<KeysignPayload> => {
-  const { coin, amountBaseUnits, memo } = params
+  const { coin, amountBaseUnits, memo, securedWithdrawal } = params
 
   if (coin.chain !== Chain.THORChain && coin.chain !== Chain.MayaChain) {
     throw new Error(
@@ -66,6 +76,21 @@ export const prepareThorchainMsgDepositTxFromKeys = async (
     throw new Error('prepareThorchainMsgDepositTxFromKeys: memo is required')
   }
   assertValidThorchainDepositMemo(memo)
+  if (securedWithdrawal) {
+    if (coin.chain !== Chain.THORChain) {
+      throw new Error('prepareThorchainMsgDepositTxFromKeys: secured withdrawals require THORChain')
+    }
+    const { l1Chain, ticker, contractAddress, destination } = securedWithdrawal
+    if (!getNativeSwapChainId(l1Chain as Chain) || l1Chain === Chain.THORChain || l1Chain === Chain.MayaChain) {
+      throw new Error('prepareThorchainMsgDepositTxFromKeys: unsupported secured withdrawal L1 chain')
+    }
+    if (!/^[A-Z0-9]+$/i.test(ticker) || (contractAddress !== undefined && !/^[A-Z0-9]+$/i.test(contractAddress))) {
+      throw new Error('prepareThorchainMsgDepositTxFromKeys: invalid secured withdrawal asset')
+    }
+    if (!destination || memo !== `secure-:${destination}`) {
+      throw new Error('prepareThorchainMsgDepositTxFromKeys: secure- memo must match the destination')
+    }
+  }
 
   const walletCore = walletCoreOverride ?? (await getWalletCore())
 
@@ -91,6 +116,35 @@ export const prepareThorchainMsgDepositTxFromKeys = async (
     vaultPublicKeyEcdsa: identity.ecdsaPublicKey,
     libType: identity.libType,
   })
+
+  if (securedWithdrawal) {
+    const { l1Chain, ticker, contractAddress = '', destination } = securedWithdrawal
+    const assetCoin = create(CoinSchema, {
+      chain: l1Chain,
+      ticker,
+      contractAddress,
+      decimals: 8,
+      isNativeToken: !contractAddress,
+    })
+    keysignPayload.swapPayload = {
+      case: 'thorchainSwapPayload',
+      value: create(THORChainSwapPayloadSchema, {
+        fromAddress: coin.address,
+        fromCoin: assetCoin,
+        toCoin: create(CoinSchema, { ...assetCoin, address: destination, isNativeToken: false }),
+        fromAmount: amountBaseUnits.toString(),
+        toAmountDecimal: '0',
+        toAmountLimit: '0',
+        streamingInterval: '0',
+        streamingQuantity: '0',
+        vaultAddress: '',
+        routerAddress: '',
+        expirationTime: 0n,
+        isAffiliate: false,
+        fee: '0',
+      }),
+    }
+  }
 
   // Dispatch directly to the per-chain resolver so we don't pull the
   // full `getChainSpecific` barrel (see import comment). Branched (rather

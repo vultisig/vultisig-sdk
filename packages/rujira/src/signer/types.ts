@@ -46,6 +46,12 @@ export type VultisigVault = {
     readonly eddsa: string
   }
   prepareSignDirectTx(input: SignDirectInput, options?: { skipChainSpecificFetch?: boolean }): Promise<KeysignPayload>
+  prepareThorchainMsgDepositTx?(params: {
+    chain: 'THORChain'
+    amountBaseUnits: bigint
+    memo: string
+    securedWithdrawal: { l1Chain: string; ticker: string; contractAddress?: string; destination: string }
+  }): Promise<KeysignPayload>
   extractMessageHashes(keysignPayload: KeysignPayload): Promise<string[]>
   sign(payload: SigningPayload, options?: { signal?: AbortSignal }): Promise<VultisigSignature>
   broadcastTx(params: {
@@ -60,6 +66,12 @@ export type VultisigVault = {
  * Used by RujiraWithdraw to execute MsgDeposit-based withdrawals.
  */
 export type WithdrawCapableVault = {
+  prepareThorchainMsgDepositTx(params: {
+    chain: 'THORChain'
+    amountBaseUnits: bigint
+    memo: string
+    securedWithdrawal: { l1Chain: string; ticker: string; contractAddress?: string; destination: string }
+  }): Promise<KeysignPayload>
   extractMessageHashes(keysignPayload: KeysignPayload): Promise<string[]>
   sign(payload: SigningPayload, options?: { signal?: AbortSignal }): Promise<VultisigSignature>
   broadcastTx(params: {
@@ -75,6 +87,7 @@ export type WithdrawCapableVault = {
 export function isWithdrawCapable(vault: VultisigVault): vault is WithdrawCapableVault {
   return (
     typeof vault.extractMessageHashes === 'function' &&
+    typeof vault.prepareThorchainMsgDepositTx === 'function' &&
     typeof vault.sign === 'function' &&
     typeof vault.broadcastTx === 'function'
   )

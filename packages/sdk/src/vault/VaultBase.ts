@@ -42,6 +42,7 @@ import type { Storage } from '../storage/types'
 // modules at module-load time, which breaks vitest setups that mock chainFeeCoin.
 import { computeMaxSendFromBalance } from '../tools/prep/maxSend'
 import type { PrepareRawEvmTxFromKeysParams } from '../tools/prep/rawEvm'
+import type { PrepareThorchainMsgDepositTxFromKeysParams } from '../tools/prep/thorchainMsgDeposit'
 import { vaultDataToIdentity } from '../tools/prep/types'
 import { pollTxStatusUntilFinal } from '../tx'
 // Types
@@ -2244,6 +2245,21 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       chain: fromChain,
       quote,
     }
+  }
+
+  /** Prepare a MsgDeposit payload, including a secured-asset withdrawal, without signing it. */
+  async prepareThorchainMsgDepositTx(params: {
+    chain: Chain
+    amountBaseUnits: bigint
+    memo: string
+    securedWithdrawal?: PrepareThorchainMsgDepositTxFromKeysParams['securedWithdrawal']
+  }): Promise<KeysignPayload> {
+    const { chain, amountBaseUnits, memo, securedWithdrawal } = params
+    if (chain !== Chain.THORChain && chain !== Chain.MayaChain) {
+      throw new VaultError(VaultErrorCode.UnsupportedChain, `prepareThorchainMsgDepositTx: unsupported chain ${chain}`)
+    }
+    const coin = this.buildAccountCoin(chain, await this.address(chain), this.resolveTokenInfo(chain))
+    return this.transactionBuilder.prepareThorchainMsgDepositTx({ coin, amountBaseUnits, memo, securedWithdrawal })
   }
 
   /**

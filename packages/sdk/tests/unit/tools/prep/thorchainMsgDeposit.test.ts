@@ -1,4 +1,5 @@
 import { Chain } from '@vultisig/core-chain/Chain'
+import { getKeysignSwapPayload, isSecuredAssetWithdrawal } from '@vultisig/core-mpc/keysign/swap/getKeysignSwapPayload'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { mockGetPublicKey, mockGetWalletCore, mockGetThorchainChainSpecific, mockGetMayaChainSpecific } = vi.hoisted(
@@ -95,6 +96,92 @@ describe('prepareThorchainMsgDepositTxFromKeys', () => {
       })
     )
     expect(mockGetMayaChainSpecific).not.toHaveBeenCalled()
+  })
+
+  it('builds a secured BTC withdrawal with the L1 asset, destination, and deposit amount', async () => {
+    const destination = 'bc1qzmsk98gqtfvxhfrye8p7xkxlj6g9q6a2yj3yj2'
+    const result = await prepareThorchainMsgDepositTxFromKeys(baseIdentity, {
+      coin: thorCoin,
+      amountBaseUnits: 123456n,
+      memo: `secure-:${destination}`,
+      securedWithdrawal: { l1Chain: Chain.Bitcoin, ticker: 'BTC', destination },
+    })
+
+    expect(result.toAddress).toBe('')
+    expect(result.toAmount).toBe('123456')
+    expect(result.memo).toBe(`secure-:${destination}`)
+    expect(result.blockchainSpecific).toMatchObject({ case: 'thorchainSpecific', value: { isDeposit: true } })
+    expect(result.swapPayload).toMatchObject({
+      case: 'thorchainSwapPayload',
+      value: {
+        fromAddress: thorCoin.address,
+        fromAmount: '123456',
+        toAmountDecimal: '0',
+        toAmountLimit: '0',
+        streamingInterval: '0',
+        streamingQuantity: '0',
+        fee: '0',
+        vaultAddress: '',
+        routerAddress: '',
+        expirationTime: 0n,
+        fromCoin: { chain: Chain.Bitcoin, ticker: 'BTC', contractAddress: '' },
+        toCoin: { chain: Chain.Bitcoin, ticker: 'BTC', address: destination },
+      },
+    })
+    const swapPayload = getKeysignSwapPayload(result)
+    expect(swapPayload && 'native' in swapPayload).toBe(true)
+    const native = swapPayload && 'native' in swapPayload ? swapPayload.native : undefined
+    expect(isSecuredAssetWithdrawal({ chain: Chain.THORChain, keysignPayload: result, native })).toBe(true)
+  })
+
+  it('keeps a secured token contract in both sides of the withdrawal payload', async () => {
+    const destination = '0x742d35Cc6634C0532925a3b844Bc9e7595f12345'
+    const contractAddress = '0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48'
+    const result = await prepareThorchainMsgDepositTxFromKeys(baseIdentity, {
+      coin: thorCoin,
+      amountBaseUnits: 8000000n,
+      memo: `secure-:${destination}`,
+      securedWithdrawal: { l1Chain: Chain.Ethereum, ticker: 'USDC', contractAddress, destination },
+    })
+
+    expect(result.swapPayload).toMatchObject({
+      case: 'thorchainSwapPayload',
+      value: {
+        fromCoin: { chain: Chain.Ethereum, ticker: 'USDC', contractAddress },
+        toCoin: { chain: Chain.Ethereum, ticker: 'USDC', contractAddress, address: destination },
+      },
+    })
+  })
+
+  it('rejects a secured withdrawal whose memo and destination differ', async () => {
+    await expect(
+      prepareThorchainMsgDepositTxFromKeys(baseIdentity, {
+        coin: thorCoin,
+        amountBaseUnits: 1n,
+        memo: 'secure-:bc1other',
+        securedWithdrawal: { l1Chain: Chain.Bitcoin, ticker: 'BTC', destination: 'bc1actual' },
+      })
+    ).rejects.toThrow(/memo must match the destination/)
+    expect(mockGetThorchainChainSpecific).not.toHaveBeenCalled()
+  })
+
+  it('rejects secured withdrawals on MayaChain or with an unsupported L1 asset', async () => {
+    await expect(
+      prepareThorchainMsgDepositTxFromKeys(baseIdentity, {
+        coin: mayaCoin,
+        amountBaseUnits: 1n,
+        memo: 'secure-:destination',
+        securedWithdrawal: { l1Chain: Chain.Bitcoin, ticker: 'BTC', destination: 'destination' },
+      })
+    ).rejects.toThrow(/require THORChain/)
+    await expect(
+      prepareThorchainMsgDepositTxFromKeys(baseIdentity, {
+        coin: thorCoin,
+        amountBaseUnits: 1n,
+        memo: 'secure-:destination',
+        securedWithdrawal: { l1Chain: 'unknown', ticker: 'BTC', destination: 'destination' },
+      })
+    ).rejects.toThrow(/unsupported secured withdrawal L1 chain/)
   })
 
   it('preserves LP add memo with paired_address verbatim', async () => {

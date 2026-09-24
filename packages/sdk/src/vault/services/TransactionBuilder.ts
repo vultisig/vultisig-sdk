@@ -25,7 +25,10 @@ import { prepareContractCallTxFromKeys } from '../../tools/prep/contractCall'
 import { prepareSignAminoTxFromKeys, prepareSignDirectTxFromKeys } from '../../tools/prep/cosmos'
 import { prepareRawEvmTxFromKeys, type PrepareRawEvmTxFromKeysParams } from '../../tools/prep/rawEvm'
 import { prepareSendTxFromKeys } from '../../tools/prep/send'
-import { prepareThorchainMsgDepositTxFromKeys } from '../../tools/prep/thorchainMsgDeposit'
+import {
+  prepareThorchainMsgDepositTxFromKeys,
+  type PrepareThorchainMsgDepositTxFromKeysParams,
+} from '../../tools/prep/thorchainMsgDeposit'
 import { vaultDataToIdentity } from '../../tools/prep/types'
 import type { ContractCallTxParams } from '../../types/contractCall'
 import type { CosmosSigningOptions, SignAminoInput, SignDirectInput } from '../../types/cosmos'
@@ -117,11 +120,7 @@ export class TransactionBuilder {
    * routing. The cosmos signing-input resolver branches on `isDeposit: true`
    * to emit a `THORChainDeposit` proto message rather than the default send.
    */
-  async prepareThorchainMsgDepositTx(params: {
-    coin: AccountCoin
-    amountBaseUnits: bigint
-    memo: string
-  }): Promise<KeysignPayload> {
+  async prepareThorchainMsgDepositTx(params: PrepareThorchainMsgDepositTxFromKeysParams): Promise<KeysignPayload> {
     const walletCore = await this.wasmProvider.getWalletCore()
     return this.wrapAsVaultError('thorchain MsgDeposit transaction', () =>
       prepareThorchainMsgDepositTxFromKeys(vaultDataToIdentity(this.vaultData), params, walletCore)
