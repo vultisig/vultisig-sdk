@@ -1,3 +1,4 @@
+import * as cosmosStaking from '@vultisig/core-chain/chains/cosmos/staking/lcdQueries'
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
 import { resolveTokenPriceId as canonicalResolveTokenPriceId } from '@vultisig/core-chain/coin/price/resolveTokenPriceId'
@@ -73,6 +74,36 @@ describe('RN StakeKit companion types', () => {
     expectTypeOf<sdkRn.YieldProduct>().toEqualTypeOf<stakekitTypes.YieldProduct>()
     expectTypeOf<sdkRn.YieldToken>().toEqualTypeOf<stakekitTypes.YieldToken>()
     expectTypeOf<sdkRn.YieldTransaction>().toEqualTypeOf<stakekitTypes.YieldTransaction>()
+  })
+})
+
+describe('RN Cosmos validator exports', () => {
+  it('exposes canonical helpers and shared staking types', () => {
+    expect(sdkRn.getValidatorsUrl).toBe(cosmosStaking.getValidatorsUrl)
+    expect(sdkRn.getValidatorUrl).toBe(cosmosStaking.getValidatorUrl)
+    expect(sdkRn.getCosmosValidators).toBe(cosmosStaking.getCosmosValidators)
+    expect(sdkRn.getCosmosValidator).toBe(cosmosStaking.getCosmosValidator)
+    expectTypeOf<sdkRn.StakingChain>().toEqualTypeOf<cosmosStaking.StakingChain>()
+    expectTypeOf<sdkRn.ValidatorStatus>().toEqualTypeOf<cosmosStaking.ValidatorStatus>()
+    expectTypeOf<sdkRn.ValidatorDescription>().toEqualTypeOf<cosmosStaking.ValidatorDescription>()
+    expectTypeOf<sdkRn.ValidatorCommission>().toEqualTypeOf<cosmosStaking.ValidatorCommission>()
+    expectTypeOf<sdkRn.CosmosStakingValidator>().toEqualTypeOf<cosmosStaking.Validator>()
+
+    const url = new URL(
+      sdkRn.getValidatorsUrl(sdkRn.Chain.Terra, {
+        status: 'BOND_STATUS_BONDED',
+        limit: 25,
+        paginationKey: 'cursor+/=',
+      })
+    )
+    expect(url.pathname).toBe('/cosmos/staking/v1beta1/validators')
+    expect(url.searchParams.get('status')).toBe('BOND_STATUS_BONDED')
+    expect(url.searchParams.get('pagination.limit')).toBe('25')
+    expect(url.searchParams.get('pagination.key')).toBe('cursor+/=')
+    expect(url.search).toContain('pagination.key=cursor%2B%2F%3D')
+    expect(sdkRn.getValidatorUrl(sdkRn.Chain.Terra, 'terravaloper1abc')).toBe(
+      `${url.origin}/cosmos/staking/v1beta1/validators/terravaloper1abc`
+    )
   })
 })
 
