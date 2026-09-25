@@ -1,15 +1,21 @@
-import { SolanaJSONRPCError } from '@solana/web3.js'
 import { Chain, OtherChain } from '@vultisig/core-chain/Chain'
 import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
 import { withSolanaRpcTimeout } from '@vultisig/core-chain/chains/solana/rpcTimeout'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { attempt } from '@vultisig/lib-utils/attempt'
+import base58 from 'bs58'
 
 import { TxStatusResolver } from '../resolver'
 
 type SolanaClient = ReturnType<typeof getSolanaClient>
 
-const isInvalidParamsError = (error: unknown): boolean => error instanceof SolanaJSONRPCError && error.code === -32602
+const isSolanaSignature = (hash: string): boolean => {
+  try {
+    return base58.decode(hash).length === 64
+  } catch {
+    return false
+  }
+}
 
 // Every RPC call here is bounded: a stalled request reads as unavailable
 // information and the transaction stays pending, the same way a failed one
@@ -42,16 +48,17 @@ const isExpiredLastValidBlockHeight = async (
 }
 
 export const getSolanaTxStatus: TxStatusResolver<OtherChain.Solana> = async ({ hash, lastValidBlockHeight }) => {
+  // A string that is not a 64-byte base58 signature can never have an on-chain record;
+  // deciding this locally avoids trusting a provider's generic invalid-params error for a live transaction.
+  if (!isSolanaSignature(hash)) {
+    return { status: 'not_found', isKnown: false }
+  }
+
   const client = getSolanaClient()
 
   const { data: firstSighting, error: firstLookupError } = await readSignatureStatus(client, hash)
 
   if (firstLookupError) {
-    // An unparseable signature can never have an on-chain record. Other RPC
-    // failures prove nothing and remain retryable.
-    if (isInvalidParamsError(firstLookupError)) {
-      return { status: 'not_found', isKnown: false }
-    }
     return { status: 'pending', isKnown: false }
   }
 

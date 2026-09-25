@@ -111,15 +111,48 @@ describe('getSolanaTxStatus', () => {
     expect(mocks.getTransaction).not.toHaveBeenCalled()
   })
 
-  it('reports signatures rejected as invalid RPC params as not_found', async () => {
-    mocks.getSignatureStatuses.mockRejectedValue(
-      new SolanaJSONRPCError({ code: -32602, message: 'Invalid param: WrongSize' })
-    )
-
-    await expect(getSolanaTxStatus({ chain: Chain.Solana, hash })).resolves.toEqual({
+  it('rejects an 88-character zero-byte base58 signature locally', async () => {
+    await expect(getSolanaTxStatus({ chain: Chain.Solana, hash: '1'.repeat(88) })).resolves.toEqual({
       status: 'not_found',
       isKnown: false,
     })
+    expect(mocks.getSignatureStatuses).not.toHaveBeenCalled()
+    expect(mocks.getBlockHeight).not.toHaveBeenCalled()
+    expect(mocks.getTransaction).not.toHaveBeenCalled()
+  })
+
+  it('rejects a base58 value that decodes to 32 bytes locally', async () => {
+    await expect(getSolanaTxStatus({ chain: Chain.Solana, hash: '1'.repeat(32) })).resolves.toEqual({
+      status: 'not_found',
+      isKnown: false,
+    })
+    expect(mocks.getSignatureStatuses).not.toHaveBeenCalled()
+    expect(mocks.getBlockHeight).not.toHaveBeenCalled()
+    expect(mocks.getTransaction).not.toHaveBeenCalled()
+  })
+
+  it('rejects non-base58 signature characters locally', async () => {
+    await expect(getSolanaTxStatus({ chain: Chain.Solana, hash: '0OIl' })).resolves.toEqual({
+      status: 'not_found',
+      isKnown: false,
+    })
+    expect(mocks.getSignatureStatuses).not.toHaveBeenCalled()
+    expect(mocks.getBlockHeight).not.toHaveBeenCalled()
+    expect(mocks.getTransaction).not.toHaveBeenCalled()
+  })
+
+  it('keeps Solana JSON-RPC errors pending regardless of their code', async () => {
+    for (const code of [-32602, -32013]) {
+      mocks.getSignatureStatuses.mockRejectedValue(
+        new SolanaJSONRPCError({ code, message: 'RPC rejected signature status lookup' })
+      )
+
+      await expect(getSolanaTxStatus({ chain: Chain.Solana, hash })).resolves.toEqual({
+        status: 'pending',
+        isKnown: false,
+      })
+    }
+    expect(mocks.getSignatureStatuses).toHaveBeenCalledTimes(2)
     expect(mocks.getBlockHeight).not.toHaveBeenCalled()
     expect(mocks.getTransaction).not.toHaveBeenCalled()
   })
