@@ -1,6 +1,13 @@
 import { spawnSync } from 'node:child_process'
 
-const auditArgs = ['npm', 'audit', '--recursive', '--all', '--severity', 'high']
+// Metro 0.84 uses image-size 1.x only while processing local build assets.
+// image-size 2.x removes the callable default export Metro requires. Keep these
+// two parser DoS advisories scoped to that build tool until Metro supports 2.x;
+// all other high-severity advisories still fail the audit.
+const auditArgs = [
+  'npm', 'audit', '--recursive', '--all', '--severity', 'high',
+  '--ignore', '1239765', '--ignore', '1239766',
+]
 const maxAttempts = 3
 const retryDelaysMs = [5_000, 15_000]
 const transientErrorPattern =
