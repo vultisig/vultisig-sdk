@@ -1,0 +1,1 @@
+export const SIGN_TX_SUMMARY_MAX_CHARS = 1000
