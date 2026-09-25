@@ -8,8 +8,12 @@ import type { ChainDiscoveryAggregate as RootChainDiscoveryAggregate } from '../
 import type {
   ChainDiscoveryAggregate as SeedphraseChainDiscoveryAggregate,
   ChainDiscoveryResult,
+  SeedphraseImportPreludeInput,
+  SeedphraseImportPreludeProgressLabels,
+  SeedphraseImportPreludeResult,
 } from '../../../src/seedphrase'
 import * as seedphrase from '../../../src/seedphrase'
+import { prepareSeedphraseImportPrelude } from '../../../src/seedphrase/prepareSeedphraseImportPrelude'
 
 const sdkRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 const sdkPackageJson = JSON.parse(readFileSync(path.join(sdkRoot, 'package.json'), 'utf8'))
@@ -65,6 +69,7 @@ describe('@vultisig/sdk/seedphrase public surface', () => {
         'getWordlist',
         'isSeedphraseImportSupportedChain',
         'normalizeMnemonic',
+        'prepareSeedphraseImportPrelude',
         'validateSeedphrase',
       ].sort()
     )
@@ -74,6 +79,13 @@ describe('@vultisig/sdk/seedphrase public surface', () => {
         'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'
       )
     ).toBe('english')
+    expect(seedphrase.prepareSeedphraseImportPrelude).toBe(prepareSeedphraseImportPrelude)
+  })
+
+  it('exports the preflight input, progress, and result types', () => {
+    expectTypeOf<SeedphraseImportPreludeInput>().toHaveProperty('mnemonic')
+    expectTypeOf<SeedphraseImportPreludeProgressLabels>().toHaveProperty('validating')
+    expectTypeOf<SeedphraseImportPreludeResult>().toHaveProperty('chainsToImport')
   })
 
   it('exports the chain-discovery aggregate type from both the seedphrase subpath and root sdk surface', () => {

@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-mpc",
-  "version": "3.3.1",
+  "version": "4.0.0",
   "description": "MPC, keysign, and vault types shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -291,6 +291,11 @@
       "import": "./dist/keysign/chainSpecific/resolvers/ton/index.js",
       "default": "./dist/keysign/chainSpecific/resolvers/ton/index.js"
     },
+    "./keysign/chainSpecific/resolvers/ton/gasless": {
+      "types": "./dist/keysign/chainSpecific/resolvers/ton/gasless.d.ts",
+      "import": "./dist/keysign/chainSpecific/resolvers/ton/gasless.js",
+      "default": "./dist/keysign/chainSpecific/resolvers/ton/gasless.js"
+    },
     "./keysign/chainSpecific/resolvers/tron": {
       "types": "./dist/keysign/chainSpecific/resolvers/tron/index.d.ts",
       "import": "./dist/keysign/chainSpecific/resolvers/tron/index.js",
@@ -321,6 +326,16 @@
       "import": "./dist/keysign/cosigner.js",
       "default": "./dist/keysign/cosigner.js"
     },
+    "./keysign/erc20/getErc20ApproveAmounts": {
+      "types": "./dist/keysign/erc20/getErc20ApproveAmounts.d.ts",
+      "import": "./dist/keysign/erc20/getErc20ApproveAmounts.js",
+      "default": "./dist/keysign/erc20/getErc20ApproveAmounts.js"
+    },
+    "./keysign/erc20/getErc20ApprovePayload": {
+      "types": "./dist/keysign/erc20/getErc20ApprovePayload.d.ts",
+      "import": "./dist/keysign/erc20/getErc20ApprovePayload.js",
+      "default": "./dist/keysign/erc20/getErc20ApprovePayload.js"
+    },
     "./keysign/error": {
       "types": "./dist/keysign/error.d.ts",
       "import": "./dist/keysign/error.js",
@@ -330,6 +345,11 @@
       "types": "./dist/keysign/fee/index.d.ts",
       "import": "./dist/keysign/fee/index.js",
       "default": "./dist/keysign/fee/index.js"
+    },
+    "./keysign/fee/getKeysignFeeCoin": {
+      "types": "./dist/keysign/fee/getKeysignFeeCoin.d.ts",
+      "import": "./dist/keysign/fee/getKeysignFeeCoin.js",
+      "default": "./dist/keysign/fee/getKeysignFeeCoin.js"
     },
     "./keysign/fee/resolver": {
       "types": "./dist/keysign/fee/resolver.d.ts",
@@ -611,6 +631,11 @@
       "import": "./dist/keysign/swap/cowswap/buildCowSwapApprovalSigningInput.js",
       "default": "./dist/keysign/swap/cowswap/buildCowSwapApprovalSigningInput.js"
     },
+    "./keysign/swap/cowswap/buildCowSwapApprovalSigningInputs": {
+      "types": "./dist/keysign/swap/cowswap/buildCowSwapApprovalSigningInputs.d.ts",
+      "import": "./dist/keysign/swap/cowswap/buildCowSwapApprovalSigningInputs.js",
+      "default": "./dist/keysign/swap/cowswap/buildCowSwapApprovalSigningInputs.js"
+    },
     "./keysign/swap/getKeysignLimitSwapCancel": {
       "types": "./dist/keysign/swap/getKeysignLimitSwapCancel.d.ts",
       "import": "./dist/keysign/swap/getKeysignLimitSwapCancel.js",
@@ -640,6 +665,11 @@
       "types": "./dist/keysign/swap/KeysignSwapPayload.d.ts",
       "import": "./dist/keysign/swap/KeysignSwapPayload.js",
       "default": "./dist/keysign/swap/KeysignSwapPayload.js"
+    },
+    "./keysign/ton/gasless": {
+      "types": "./dist/keysign/ton/gasless.d.ts",
+      "import": "./dist/keysign/ton/gasless.js",
+      "default": "./dist/keysign/ton/gasless.js"
     },
     "./keysign/tw/getKeysignTwPublicKey": {
       "types": "./dist/keysign/tw/getKeysignTwPublicKey.d.ts",
@@ -1109,7 +1139,7 @@
     "@noble/hashes": "^2.2.0",
     "@solana/web3.js": "^1.98.4",
     "@trustwallet/wallet-core": "^4.7.3",
-    "@vultisig/core-chain": "5.5.1",
+    "@vultisig/core-chain": "6.0.0",
     "@vultisig/core-config": "0.9.1",
     "@vultisig/lib-dkls": "0.9.0",
     "@vultisig/lib-mldsa": "0.9.0",

@@ -1,4 +1,3 @@
-import { queryTron } from '@vultisig/core-chain/chains/tron/queryTron'
 /**
  * Native + token balance reads for non-EVM, non-Cosmos chains:
  * XRP / TRON / TON / Sui / Cardano. Ported from mcp-ts `balance/other-balance.ts`
@@ -8,6 +7,8 @@ import { queryTron } from '@vultisig/core-chain/chains/tron/queryTron'
  * Each chain is not wired through the EVM `getEvmClient` rail, so these talk to
  * public RPC / API endpoints (and the Vultisig proxy) directly via `fetchJson`.
  */
+import { getTonAccountSeqno } from '@vultisig/core-chain/chains/ton/account/getTonAccountInfo'
+import { queryTron } from '@vultisig/core-chain/chains/tron/queryTron'
 import bs58check from 'bs58check'
 
 import { fetchJson, formatBalance, ROOT_API_URL } from './rpc'
@@ -295,11 +296,13 @@ export type TonBalance = {
  */
 export async function getTonBalance(address: string): Promise<TonBalance> {
   const extResp = await fetchJson<{
-    result: { balance?: string; account_state?: { seqno?: number; '@type'?: string } }
+    result: { balance?: string; account_state?: { seqno?: number; '@type'?: string; code?: string; data?: string } }
   }>(`${ROOT_API_URL}/ton/v2/getExtendedAddressInformation?address=${encodeURIComponent(address)}`)
 
   const nanotons = extResp.result?.balance ?? '0'
-  const seqno = extResp.result?.account_state?.seqno ?? 0
+  // Toncenter decodes a V4 seqno itself; a W5 wallet comes back raw and its
+  // seqno is read from the data cell.
+  const seqno = getTonAccountSeqno({ account_state: extResp.result?.account_state })
 
   const STATE_MAP: Record<string, string> = {
     'uninited.accountState': 'uninit',

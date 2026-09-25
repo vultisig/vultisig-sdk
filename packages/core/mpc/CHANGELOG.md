@@ -1,5 +1,42 @@
 # @vultisig/core-mpc
 
+## 4.0.0
+
+### Major Changes
+
+- [#2427](https://github.com/vultisig/vultisig-sdk/pull/2427) [`b38628f`](https://github.com/vultisig/vultisig-sdk/commit/b38628f1ad09fa9dac3e23b2056b24c0040500fe) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Use prefix-aware WalletCore SS58 constructors for Bittensor address derivation and transaction destinations, including native iOS and Android bridges. Reject destinations with a different network prefix or invalid account data.
+
+  Apply the Expo module Gradle plugin so Expo 56's required Kotlin compiler transformations run before Android module registration.
+
+  Direct callers of `buildBittensorSigningPayload` must pass their initialized WalletCore as the second argument. Direct callers of `refineBittensorChainSpecific` must provide `walletCore` in the input. High-level SDK signing and fee estimation pass the existing runtime automatically.
+
+### Patch Changes
+
+- [#1990](https://github.com/vultisig/vultisig-sdk/pull/1990) [`42bb615`](https://github.com/vultisig/vultisig-sdk/commit/42bb615809a91fd6e8c304c7dba58b3c3c0f80c5) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Fund a Cardano native-token (CNT) recipient output with a min-UTxO-satisfying lovelace floor instead of reusing the token quantity as the ADA amount. `keysignPayload.toAmount` for a CNT send is the token's own base-unit quantity, not lovelace; passing it straight through to `transferMessage.amount` produced outputs like 0.665 ADA for a 0.665 USDM send — below Cardano's min-UTxO requirement, so the network rejected the tx post-keysign (Ogmios 3125 "insufficiently funded outputs") after both co-signers had already converged on signing the doomed body.
+
+- [#2426](https://github.com/vultisig/vultisig-sdk/pull/2426) [`c368202`](https://github.com/vultisig/vultisig-sdk/commit/c36820249569823bb3d3e24b06bcb66a34144f2a) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject all-zero Bittensor and Polkadot transfer destinations before producing signing inputs or unsigned transfer bytes, including alternate zero-account encodings accepted by the direct Bittensor builder.
+
+- Updated dependencies [[`b38628f`](https://github.com/vultisig/vultisig-sdk/commit/b38628f1ad09fa9dac3e23b2056b24c0040500fe), [`2b91950`](https://github.com/vultisig/vultisig-sdk/commit/2b91950ffd1aa86b8afd710ab7c6d30f919ba9af), [`30dd259`](https://github.com/vultisig/vultisig-sdk/commit/30dd259d7d495df27d4e59bb27fdf40a6879831d), [`c368202`](https://github.com/vultisig/vultisig-sdk/commit/c36820249569823bb3d3e24b06bcb66a34144f2a)]:
+  - @vultisig/core-chain@6.0.0
+
+## 3.4.1
+
+### Patch Changes
+
+- Updated dependencies [[`fa04ed0`](https://github.com/vultisig/vultisig-sdk/commit/fa04ed0d91f90bdaad101b326b47be1d73a152ce)]:
+  - @vultisig/core-chain@5.6.1
+
+## 3.4.0
+
+### Minor Changes
+
+- [#2406](https://github.com/vultisig/vultisig-sdk/pull/2406) [`abecd22`](https://github.com/vultisig/vultisig-sdk/commit/abecd22fcb409bcdbf50bbe1c068e531a19b08d1) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Add gasless TON jetton sends through the TonAPI relay for W5 accounts. `prepareSendTx`, `send`, `getMaxSendAmount` and the vault-free prep helpers take `tonGasless`/`gasless`; the relay's quote is recorded in `TonSpecific.gasless` (new `TonGasless` message), validated by every signer against the approved transfer before hashing, signed as a W5 `internal_signed` request, and handed to the relay at broadcast. The fee of such a send is the relay commission in the jetton itself — `getKeysignFeeCoin` tells which coin a payload's fee is denominated in — and the status resolver finds the relayed transaction by the signed body's hash. The CLI's `send` command gains `--gasless`. Also fixes the seqno of a deployed W5 wallet: toncenter returns W5 accounts raw, so the seqno is now read from the data cell instead of defaulting to 0, which had every W5 send after the first rejected as a replay.
+
+### Patch Changes
+
+- Updated dependencies [[`493da34`](https://github.com/vultisig/vultisig-sdk/commit/493da34ca8baad592b34f97947550415d74b3abf), [`abecd22`](https://github.com/vultisig/vultisig-sdk/commit/abecd22fcb409bcdbf50bbe1c068e531a19b08d1)]:
+  - @vultisig/core-chain@5.6.0
+
 ## 3.3.1
 
 ### Patch Changes

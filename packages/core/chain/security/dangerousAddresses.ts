@@ -53,6 +53,14 @@ const TRON_DANGEROUS_ADDRESSES: Record<string, string> = {
   T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb: 'Tron zero address: funds are unrecoverable',
 }
 
+/** Canonical SS58 encodings of the all-zero AccountId32. */
+const BITTENSOR_DANGEROUS_ADDRESSES: Record<string, string> = {
+  '5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM': 'Bittensor zero account: funds are unrecoverable',
+}
+const POLKADOT_DANGEROUS_ADDRESSES: Record<string, string> = {
+  '111111111111111111111111111111111HC1': 'Polkadot zero account: funds are unrecoverable',
+}
+
 /** UTXO (Bitcoin family) burn destinations. Keys are case-sensitive base58. */
 export const UTXO_DANGEROUS_ADDRESSES: Record<string, string> = {
   '1111111111111111111114oLvT2': 'Bitcoin burn address: funds are unrecoverable',
@@ -120,6 +128,12 @@ export const getChainDangerousReason = (chain: string, address: string): string 
   }
   if (normalizedChain === 'tron') {
     return safeGet(TRON_DANGEROUS_ADDRESSES, destination)
+  }
+  if (normalizedChain === 'bittensor') {
+    return safeGet(BITTENSOR_DANGEROUS_ADDRESSES, destination)
+  }
+  if (normalizedChain === 'polkadot') {
+    return safeGet(POLKADOT_DANGEROUS_ADDRESSES, destination)
   }
   if (UTXO_CHAINS.has(normalizedChain)) {
     return safeGet(UTXO_DANGEROUS_ADDRESSES, destination)

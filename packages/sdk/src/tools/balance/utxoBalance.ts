@@ -67,11 +67,125 @@ export type GetUtxoBalanceOptions = {
 const blockchairPath = (chain: UtxoBalanceChain): string => chain.toLowerCase()
 
 type BlockchairDashboardResponse = {
+  context?: {
+    code?: unknown
+    error?: unknown
+  }
   data: Record<string, { address: { balance: number | null } }>
 }
 
 const isSupportedUtxoChain = (chain: UtxoChain): chain is UtxoBalanceChain =>
   (supportedUtxoBalanceChains as readonly UtxoChain[]).includes(chain)
+
+const isJsonObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const hasOwn = (value: object, key: string): boolean => Object.prototype.hasOwnProperty.call(value, key)
+
+const skipWhitespace = (rawBody: string, start: number): number => {
+  let position = start
+  while (/\s/.test(rawBody[position] ?? '')) position += 1
+  return position
+}
+
+const skipJsonString = (rawBody: string, start: number): number => {
+  let position = start + 1
+  while (position < rawBody.length) {
+    if (rawBody[position] === '\\') {
+      position += 2
+      continue
+    }
+    if (rawBody[position] === '"') return position + 1
+    position += 1
+  }
+  return position
+}
+
+const skipJsonValue = (rawBody: string, start: number): number => {
+  let position = skipWhitespace(rawBody, start)
+  const first = rawBody[position]
+
+  if (first === '"') return skipJsonString(rawBody, position)
+
+  if (first === '[') {
+    position = skipWhitespace(rawBody, position + 1)
+    while (rawBody[position] !== ']') {
+      position = skipWhitespace(rawBody, skipJsonValue(rawBody, position))
+      if (rawBody[position] === ',') position = skipWhitespace(rawBody, position + 1)
+    }
+    return position + 1
+  }
+
+  if (first === '{') {
+    position = skipWhitespace(rawBody, position + 1)
+    const seenKeys = new Set<string>()
+    while (rawBody[position] !== '}') {
+      const keyStart = position
+      const keyEnd = skipJsonString(rawBody, keyStart)
+      const key = JSON.parse(rawBody.slice(keyStart, keyEnd)) as string
+      if (seenKeys.has(key)) throw new Error(`duplicate JSON property "${key}"`)
+      seenKeys.add(key)
+      position = skipWhitespace(rawBody, keyEnd)
+      position = skipWhitespace(rawBody, position + 1)
+      position = skipWhitespace(rawBody, skipJsonValue(rawBody, position))
+      if (rawBody[position] === ',') position = skipWhitespace(rawBody, position + 1)
+    }
+    return position + 1
+  }
+
+  while (position < rawBody.length && !/[\s,\]}]/.test(rawBody[position])) position += 1
+  return position
+}
+
+type JsonPathResult = {
+  end: number
+  token?: string
+}
+
+const findRawJsonValueAtPath = (
+  rawBody: string,
+  start: number,
+  path: readonly string[],
+  pathIndex: number
+): JsonPathResult => {
+  let position = skipWhitespace(rawBody, start)
+  if (rawBody[position] !== '{') {
+    return { end: skipJsonValue(rawBody, position) }
+  }
+
+  position = skipWhitespace(rawBody, position + 1)
+  const seenKeys = new Set<string>()
+  let token: string | undefined
+
+  while (rawBody[position] !== '}') {
+    const keyStart = position
+    const keyEnd = skipJsonString(rawBody, keyStart)
+    const key = JSON.parse(rawBody.slice(keyStart, keyEnd)) as string
+    if (seenKeys.has(key)) throw new Error(`duplicate JSON property "${key}"`)
+    seenKeys.add(key)
+    position = skipWhitespace(rawBody, keyEnd)
+    position = skipWhitespace(rawBody, position + 1)
+
+    if (key === path[pathIndex]) {
+      const valueStart = position
+      if (pathIndex === path.length - 1) {
+        position = skipJsonValue(rawBody, valueStart)
+        token = rawBody.slice(valueStart, position).trim()
+      } else {
+        const nested = findRawJsonValueAtPath(rawBody, valueStart, path, pathIndex + 1)
+        position = nested.end
+        token = nested.token
+      }
+    } else {
+      position = skipJsonValue(rawBody, position)
+    }
+
+    position = skipWhitespace(rawBody, position)
+    if (rawBody[position] === ',') position = skipWhitespace(rawBody, position + 1)
+  }
+
+  return { end: position + 1, token }
+}
 
 /**
  * Extract the native `balance` integer from a Blockchair dashboard body as a
@@ -85,16 +199,13 @@ const isSupportedUtxoChain = (chain: UtxoChain): chain is UtxoBalanceChain =>
  * already-lossy `number` into `BigInt()` would publish a wrong satoshi figure.
  * We therefore read the integer off the raw text before any numberification.
  *
- * Scoped to the first `"address":{ … "balance":<int> … }` block, which is the
- * native balance of the (single) requested address in a dashboards/address
- * response.
+ * The traversal follows decoded JSON property names to the exact requested
+ * address. This keeps unrelated/nested balances and escaped keys from
+ * redirecting extraction, and rejects duplicate keys instead of relying on
+ * JSON.parse's last-key-wins behavior.
  */
-const extractBalanceSatoshis = (rawBody: string): bigint => {
-  // Match the balance integer that lives inside the `address` object, not the
-  // `balance_usd` float and not any per-utxo value.
-  const match = rawBody.match(/"address"\s*:\s*\{[^}]*?"balance"\s*:\s*(-?\d+)/)
-  return match ? BigInt(match[1]) : 0n
-}
+const extractBalanceToken = (rawBody: string, address: string): string | undefined =>
+  findRawJsonValueAtPath(rawBody, 0, ['data', address, 'address', 'balance'], 0).token
 
 /**
  * Read the native balance of a UTXO-based chain address via the public
@@ -134,18 +245,58 @@ export const getUtxoBalance = async (
   }
 
   // Read the raw body so we can pull the balance integer at full precision
-  // (see extractBalanceSatoshis); `response.json()` numberifies and would
+  // (see extractBalanceToken); `response.json()` numberifies and would
   // truncate large UTXO balances past Number.MAX_SAFE_INTEGER.
   const rawBody = await response.text()
-  let json: BlockchairDashboardResponse
+  let parsed: unknown
   try {
-    json = JSON.parse(rawBody) as BlockchairDashboardResponse
+    parsed = JSON.parse(rawBody) as unknown
   } catch {
     throw new Error(`getUtxoBalance: Blockchair returned non-JSON for ${chain} address ${address}.`)
   }
-  const addrData = Object.values(json.data ?? {})[0]
-  // null balance (unseen address) → 0; otherwise extract the exact integer.
-  const satoshis = addrData?.address?.balance == null ? 0n : extractBalanceSatoshis(rawBody)
+
+  const invalidResponse = (reason: string): never => {
+    throw new Error(`getUtxoBalance: invalid Blockchair response for ${chain} address ${address}: ${reason}.`)
+  }
+
+  if (!isJsonObject(parsed)) invalidResponse('expected an object')
+  const json = parsed as BlockchairDashboardResponse
+  if (hasOwn(json, 'context')) {
+    const context = json.context
+    if (!isJsonObject(context)) invalidResponse('malformed provider context')
+    const providerContext = context as Record<string, unknown>
+    const providerCode = providerContext.code
+    const providerError = providerContext.error
+    if ((providerCode !== undefined && providerCode !== 200) || (providerError != null && providerError !== '')) {
+      invalidResponse(`provider error${providerCode === undefined ? '' : ` (code ${String(providerCode)})`}`)
+    }
+  }
+  if (!isJsonObject(json.data)) invalidResponse('missing data')
+
+  const addrData = json.data[address]
+  if (!isJsonObject(addrData)) invalidResponse('missing requested address data')
+  if (!isJsonObject(addrData.address)) invalidResponse('missing requested address record')
+  if (!hasOwn(addrData.address, 'balance')) invalidResponse('missing balance')
+
+  let balanceToken: string | undefined
+  try {
+    balanceToken = extractBalanceToken(rawBody, address)
+  } catch (error) {
+    invalidResponse(error instanceof Error ? error.message : 'ambiguous JSON structure')
+  }
+  const exactBalanceToken = balanceToken ?? invalidResponse('missing balance token')
+
+  const parsedBalance = addrData.address.balance
+  let satoshis: bigint
+  if (parsedBalance === null) {
+    if (exactBalanceToken !== 'null') invalidResponse('invalid null balance')
+    satoshis = 0n
+  } else {
+    if (typeof parsedBalance !== 'number' || !/^(?:0|[1-9]\d*)$/.test(exactBalanceToken)) {
+      invalidResponse('balance must be a plain nonnegative integer or null')
+    }
+    satoshis = BigInt(exactBalanceToken)
+  }
 
   return {
     chain,

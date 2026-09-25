@@ -256,9 +256,8 @@ type SolanaAssetDiff = BlockaidSolanaSimulation['account_summary']['account_asse
 // account) produces an `out` leg on one and an `in` leg on the other for a
 // single economic movement, not a swap between two assets.
 //
-// Checks BOTH `asset.type` and the diff-level `asset_type` (matching the
-// native-SOL-fee filter a few lines below) — Blockaid responses aren't
-// always internally consistent, and a diff carrying `asset_type: 'SOL'`
+// Checks BOTH `asset.type` and the diff-level `asset_type` because Blockaid
+// responses aren't always internally consistent. A diff carrying `asset_type: 'SOL'`
 // with `asset.type: 'TOKEN'` would otherwise fall through to
 // `shouldBePresent(asset.address)` and throw instead of resolving to the
 // WSOL mint bucket.
@@ -287,18 +286,10 @@ export const parseBlockaidSolanaSimulation = async (
 ): Promise<BlockaidSolanaSimulationInfo> => {
   const assetDiffs = simulation.account_summary.account_assets_diff
 
-  // When we have 3 items and one is native SOL, filter it out and use the other two tokens.
-  // The native SOL is likely the transaction fee, not part of the swap itself.
-  let relevantDiffs = assetDiffs
-  if (assetDiffs.length === 3) {
-    const nativeSolIndex = assetDiffs.findIndex(diff => diff.asset.type === 'SOL' || diff.asset_type === 'SOL')
-    if (nativeSolIndex !== -1) {
-      relevantDiffs = assetDiffs.filter((_, index) => index !== nativeSolIndex)
-    }
-  }
-
+  // Neither position, diff count nor amount identifies a fee. Preserve every
+  // movement before netting SOL/WSOL so a principal leg cannot be discarded.
   const groups = new Map<string, { mint: string; decimals: number; netRaw: bigint }>()
-  for (const diff of relevantDiffs) {
+  for (const diff of assetDiffs) {
     const mint = solanaMintForAsset(diff)
     const outRaw = diff.out ? BigInt(diff.out.raw_value) : 0n
     const inRaw = diff.in ? BigInt(diff.in.raw_value) : 0n

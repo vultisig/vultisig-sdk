@@ -8,7 +8,8 @@
  * 3. assembleBittensorExtrinsic() → wraps call + signature + extensions into final extrinsic
  */
 
-import { decodeAddress } from '@polkadot/util-crypto'
+import { WalletCore } from '@trustwallet/wallet-core'
+import { assertSafeDestination } from '@vultisig/core-chain/security/dangerousAddresses'
 
 import { compactEncode, concatBytes, encodeMortalEra, hexToBytes } from './scale'
 
@@ -49,8 +50,22 @@ export type BittensorSigningParams = {
  * Build the call data for balances.transfer_keep_alive(dest, value), or
  * balances.transfer_allow_death(dest, value) when the sender opted into reaping.
  */
-const buildCallData = (toAddress: string, amount: bigint, allowDeath: boolean): Uint8Array => {
-  const destPubkey = decodeAddress(toAddress)
+const buildCallData = (toAddress: string, amount: bigint, allowDeath: boolean, walletCore: WalletCore): Uint8Array => {
+  const coinType = walletCore.CoinType.polkadot
+  if (!walletCore.AnyAddress.isValidSS58(toAddress, coinType, 42)) {
+    throw new Error('Invalid Bittensor destination: expected an SS58-42 AccountId32 address')
+  }
+  const address = walletCore.AnyAddress.createSS58(toAddress, coinType, 42)
+  let destPubkey: Uint8Array
+  try {
+    destPubkey = new Uint8Array(address.data())
+    if (destPubkey.length !== 32) {
+      throw new Error('Invalid Bittensor destination: expected a 32-byte account')
+    }
+    assertSafeDestination('Bittensor', address.description())
+  } finally {
+    address.delete()
+  }
   return concatBytes(
     new Uint8Array([balancesPallet, allowDeath ? transferAllowDeath : transferKeepAlive]),
     new Uint8Array([multiAddressId]),
@@ -103,9 +118,10 @@ const buildAdditionalSigned = (params: BittensorSigningParams): Uint8Array => {
  * Otherwise, it's signed directly.
  */
 export const buildBittensorSigningPayload = (
-  params: BittensorSigningParams
+  params: BittensorSigningParams,
+  walletCore: WalletCore
 ): { callData: Uint8Array; signedExtra: Uint8Array; payload: Uint8Array } => {
-  const callData = buildCallData(params.toAddress, params.amount, params.allowDeath ?? false)
+  const callData = buildCallData(params.toAddress, params.amount, params.allowDeath ?? false, walletCore)
   const signedExtra = buildSignedExtra(params.nonce, params.blockNumber, params.eraPeriod ?? 64)
   const additionalSigned = buildAdditionalSigned(params)
 

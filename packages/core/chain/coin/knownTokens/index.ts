@@ -396,7 +396,7 @@ const leanTokens: Partial<LeanChainTokensRecord> = {
       decimals: 18,
       priceProviderId: 'dai',
     },
-    '0x820C137fa70C8691f0e44dC420a5e53c168921Dc': {
+    '0x820C137fa70C8691f0e44Dc420a5e53c168921Dc': {
       ticker: 'USDS',
       logo: 'usds',
       decimals: 18,
@@ -709,7 +709,7 @@ const leanTokens: Partial<LeanChainTokensRecord> = {
       decimals: 6,
       priceProviderId: 'usd-coin',
     },
-    '0x5A7d6A42eA5632bD2A2e8D5eAEb7bA7e7Eaf3E': {
+    '0x5A7d6b2F92C77FAD6CCaBd7EE0624E64907Eaf3E': {
       ticker: 'ZK',
       logo: 'zk',
       decimals: 18,

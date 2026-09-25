@@ -1,5 +1,7 @@
+import * as cosmosStaking from '@vultisig/core-chain/chains/cosmos/staking/lcdQueries'
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
+import { resolveTokenPriceId as canonicalResolveTokenPriceId } from '@vultisig/core-chain/coin/price/resolveTokenPriceId'
 import * as blockaidChains from '@vultisig/core-chain/security/blockaid/evmChains'
 import { isValidTxHash } from '@vultisig/core-chain/tx/isValidTxHash'
 import { AuthInfo, SignDoc, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
@@ -10,6 +12,9 @@ import type {
   PollTxStatusUntilFinalResult as PollTxStatusUntilFinalResultFromReactNative,
 } from '../../../../src/platforms/react-native/index'
 import * as sdkRn from '../../../../src/platforms/react-native/index'
+import * as server from '../../../../src/server'
+import type { ServerEndpoints as CanonicalServerEndpoints } from '../../../../src/server/ServerManager'
+import type * as stakekitTypes from '../../../../src/tools/defi/stakekit'
 import * as recipientChecks from '../../../../src/tools/validate/recipientSanity'
 import type {
   PollTxStatusUntilFinalParams as PollTxStatusUntilFinalParamsFromTx,
@@ -20,6 +25,87 @@ import * as tokenRef from '../../../../src/vault/tokenRef'
 import { cosmosTxFeeGasParityCases } from '../../../fixtures/cosmosTxFeeGasParity'
 
 process.env.VULTISIG_STRICT_SINGLETON = '0'
+
+describe('RN Fast Vault public exports', () => {
+  it('exposes the canonical helpers and endpoint type', () => {
+    const helpers = [
+      'checkVaultExistsOnServer',
+      'createVaultWithServer',
+      'getVaultFromServer',
+      'keyImportWithServer',
+      'migrateWithServer',
+      'mldsaWithServer',
+      'resendVaultShare',
+      'reshareWithServer',
+      'sequentialKeyImportWithServer',
+      'setupVaultWithServer',
+      'signWithServer',
+      'verifyVaultEmailCode',
+    ] as const
+
+    for (const helper of helpers) {
+      expect(sdkRn[helper], helper).toBe(server[helper])
+    }
+    expectTypeOf<sdkRn.ServerEndpoints>().toEqualTypeOf<CanonicalServerEndpoints>()
+    expectTypeOf<sdkRn.VaultFromServerResponse>().toEqualTypeOf<server.VaultFromServerResponse>()
+  })
+})
+
+describe('RN StakeKit companion types', () => {
+  it('matches the canonical StakeKit public contracts', () => {
+    expectTypeOf<sdkRn.EvmScanRequest>().toEqualTypeOf<stakekitTypes.EvmScanRequest>()
+    expectTypeOf<sdkRn.PendingAction>().toEqualTypeOf<stakekitTypes.PendingAction>()
+    expectTypeOf<sdkRn.ScanRequest>().toEqualTypeOf<stakekitTypes.ScanRequest>()
+    expectTypeOf<sdkRn.SolanaScanRequest>().toEqualTypeOf<stakekitTypes.SolanaScanRequest>()
+    expectTypeOf<sdkRn.StakekitActionDisplay>().toEqualTypeOf<stakekitTypes.StakekitActionDisplay>()
+    expectTypeOf<sdkRn.StakekitActionResult>().toEqualTypeOf<stakekitTypes.StakekitActionResult>()
+    expectTypeOf<sdkRn.StakekitDetailsResult>().toEqualTypeOf<stakekitTypes.StakekitDetailsResult>()
+    expectTypeOf<sdkRn.StakekitExitResult>().toEqualTypeOf<stakekitTypes.StakekitExitResult>()
+    expectTypeOf<sdkRn.UnsupportedScanRequest>().toEqualTypeOf<stakekitTypes.UnsupportedScanRequest>()
+    expectTypeOf<sdkRn.Validator>().toEqualTypeOf<stakekitTypes.Validator>()
+    expectTypeOf<sdkRn.YieldActionResponse>().toEqualTypeOf<stakekitTypes.YieldActionResponse>()
+    expectTypeOf<sdkRn.YieldArgs>().toEqualTypeOf<stakekitTypes.YieldArgs>()
+    expectTypeOf<sdkRn.YieldBalance>().toEqualTypeOf<stakekitTypes.YieldBalance>()
+    expectTypeOf<sdkRn.YieldDiscoverMetadata>().toEqualTypeOf<stakekitTypes.YieldDiscoverMetadata>()
+    expectTypeOf<sdkRn.YieldDiscoverOpportunity>().toEqualTypeOf<stakekitTypes.YieldDiscoverOpportunity>()
+    expectTypeOf<sdkRn.YieldDiscoverToken>().toEqualTypeOf<stakekitTypes.YieldDiscoverToken>()
+    expectTypeOf<sdkRn.YieldListResponse>().toEqualTypeOf<stakekitTypes.YieldListResponse>()
+    expectTypeOf<sdkRn.YieldMetadata>().toEqualTypeOf<stakekitTypes.YieldMetadata>()
+    expectTypeOf<sdkRn.YieldProduct>().toEqualTypeOf<stakekitTypes.YieldProduct>()
+    expectTypeOf<sdkRn.YieldToken>().toEqualTypeOf<stakekitTypes.YieldToken>()
+    expectTypeOf<sdkRn.YieldTransaction>().toEqualTypeOf<stakekitTypes.YieldTransaction>()
+  })
+})
+
+describe('RN Cosmos validator exports', () => {
+  it('exposes canonical helpers and shared staking types', () => {
+    expect(sdkRn.getValidatorsUrl).toBe(cosmosStaking.getValidatorsUrl)
+    expect(sdkRn.getValidatorUrl).toBe(cosmosStaking.getValidatorUrl)
+    expect(sdkRn.getCosmosValidators).toBe(cosmosStaking.getCosmosValidators)
+    expect(sdkRn.getCosmosValidator).toBe(cosmosStaking.getCosmosValidator)
+    expectTypeOf<sdkRn.StakingChain>().toEqualTypeOf<cosmosStaking.StakingChain>()
+    expectTypeOf<sdkRn.ValidatorStatus>().toEqualTypeOf<cosmosStaking.ValidatorStatus>()
+    expectTypeOf<sdkRn.ValidatorDescription>().toEqualTypeOf<cosmosStaking.ValidatorDescription>()
+    expectTypeOf<sdkRn.ValidatorCommission>().toEqualTypeOf<cosmosStaking.ValidatorCommission>()
+    expectTypeOf<sdkRn.CosmosStakingValidator>().toEqualTypeOf<cosmosStaking.Validator>()
+
+    const url = new URL(
+      sdkRn.getValidatorsUrl(sdkRn.Chain.Terra, {
+        status: 'BOND_STATUS_BONDED',
+        limit: 25,
+        paginationKey: 'cursor+/=',
+      })
+    )
+    expect(url.pathname).toBe('/cosmos/staking/v1beta1/validators')
+    expect(url.searchParams.get('status')).toBe('BOND_STATUS_BONDED')
+    expect(url.searchParams.get('pagination.limit')).toBe('25')
+    expect(url.searchParams.get('pagination.key')).toBe('cursor+/=')
+    expect(url.search).toContain('pagination.key=cursor%2B%2F%3D')
+    expect(sdkRn.getValidatorUrl(sdkRn.Chain.Terra, 'terravaloper1abc')).toBe(
+      `${url.origin}/cosmos/staking/v1beta1/validators/terravaloper1abc`
+    )
+  })
+})
 
 describe('RN amount helpers', () => {
   it('exports the canonical group and exposes it before initialization', async () => {
@@ -45,6 +131,26 @@ describe('RN entry exposes canonical token reference resolution', () => {
     const native: sdkRn.ResolvedTokenInfo = sdkRn.resolveTokenRef(sdkRn.Chain.Ethereum, undefined, [])
     expect(native).toEqual({ ticker: 'ETH', decimals: 18 })
     expect(sdkRn.resolveTokenRefId(sdkRn.Chain.Ethereum, 'ETH', [])).toBeUndefined()
+  })
+})
+
+describe('RN entry exposes canonical token price-ID resolution', () => {
+  it('exports the existing resolver and preserves its lookup contract', () => {
+    expect(sdkRn.resolveTokenPriceId).toBe(canonicalResolveTokenPriceId)
+    expectTypeOf(sdkRn.resolveTokenPriceId).toEqualTypeOf<
+      (chain: sdkRn.Chain, denomOrAddress?: string) => string | undefined
+    >()
+    expect(sdkRn.resolveTokenPriceId(sdkRn.Chain.Ethereum)).toBe('ethereum')
+    expect(sdkRn.resolveTokenPriceId(sdkRn.Chain.TerraClassic, 'uluna')).toBe('terra-luna')
+    expect(sdkRn.resolveTokenPriceId(sdkRn.Chain.Solana, 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')).toBe(
+      'usd-coin'
+    )
+    expect(
+      sdkRn.resolveTokenPriceId(sdkRn.Chain.Solana, 'epjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')
+    ).toBeUndefined()
+    expect(sdkRn.resolveTokenPriceId(sdkRn.Chain.Base, ' 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 ')).toBe('usd-coin')
+    expect(sdkRn.resolveTokenPriceId(sdkRn.Chain.Ethereum, '  ')).toBe('ethereum')
+    expect(sdkRn.resolveTokenPriceId(sdkRn.Chain.Solana, 'not-a-known-token')).toBeUndefined()
   })
 })
 
@@ -143,6 +249,119 @@ beforeAll(async () => {
   ])
 }, 120_000)
 
+describe('RN lazy helper contracts', () => {
+  it('preserves canonical parameter tuples and Promise result contracts', () => {
+    expectTypeOf<Parameters<typeof sdkRn.getMaxSendAmountFromKeys>>().toEqualTypeOf<
+      Parameters<typeof import('../../../../src/tools/prep/maxSend').getMaxSendAmountFromKeys>
+    >()
+    expectTypeOf<ReturnType<typeof sdkRn.getMaxSendAmountFromKeys>>().toEqualTypeOf<
+      Promise<Awaited<ReturnType<typeof import('../../../../src/tools/prep/maxSend').getMaxSendAmountFromKeys>>>
+    >()
+    expectTypeOf<Parameters<typeof sdkRn.prepareContractCallTxFromKeys>>().toEqualTypeOf<
+      Parameters<typeof import('../../../../src/tools/prep/contractCall').prepareContractCallTxFromKeys>
+    >()
+    expectTypeOf<ReturnType<typeof sdkRn.prepareContractCallTxFromKeys>>().toEqualTypeOf<
+      Promise<
+        Awaited<ReturnType<typeof import('../../../../src/tools/prep/contractCall').prepareContractCallTxFromKeys>>
+      >
+    >()
+    expectTypeOf<Parameters<typeof sdkRn.prepareJettonTransferTxFromKeys>>().toEqualTypeOf<
+      Parameters<typeof import('../../../../src/tools/prep/jettonTransfer').prepareJettonTransferTxFromKeys>
+    >()
+    expectTypeOf<ReturnType<typeof sdkRn.prepareJettonTransferTxFromKeys>>().toEqualTypeOf<
+      Promise<
+        Awaited<ReturnType<typeof import('../../../../src/tools/prep/jettonTransfer').prepareJettonTransferTxFromKeys>>
+      >
+    >()
+    expectTypeOf<Parameters<typeof sdkRn.prepareSendTxFromKeys>>().toEqualTypeOf<
+      Parameters<typeof import('../../../../src/tools/prep/send').prepareSendTxFromKeys>
+    >()
+    expectTypeOf<ReturnType<typeof sdkRn.prepareSendTxFromKeys>>().toEqualTypeOf<
+      Promise<Awaited<ReturnType<typeof import('../../../../src/tools/prep/send').prepareSendTxFromKeys>>>
+    >()
+    expectTypeOf<Parameters<typeof sdkRn.prepareSignAminoTxFromKeys>>().toEqualTypeOf<
+      Parameters<typeof import('../../../../src/tools/prep/cosmos').prepareSignAminoTxFromKeys>
+    >()
+    expectTypeOf<ReturnType<typeof sdkRn.prepareSignAminoTxFromKeys>>().toEqualTypeOf<
+      Promise<Awaited<ReturnType<typeof import('../../../../src/tools/prep/cosmos').prepareSignAminoTxFromKeys>>>
+    >()
+    expectTypeOf<Parameters<typeof sdkRn.prepareSignDirectTxFromKeys>>().toEqualTypeOf<
+      Parameters<typeof import('../../../../src/tools/prep/cosmos').prepareSignDirectTxFromKeys>
+    >()
+    expectTypeOf<ReturnType<typeof sdkRn.prepareSignDirectTxFromKeys>>().toEqualTypeOf<
+      Promise<Awaited<ReturnType<typeof import('../../../../src/tools/prep/cosmos').prepareSignDirectTxFromKeys>>>
+    >()
+    expectTypeOf<Parameters<typeof sdkRn.prepareSwapTxFromKeys>>().toEqualTypeOf<
+      Parameters<typeof import('../../../../src/tools/prep/swap').prepareSwapTxFromKeys>
+    >()
+    expectTypeOf<ReturnType<typeof sdkRn.prepareSwapTxFromKeys>>().toEqualTypeOf<
+      Promise<Awaited<ReturnType<typeof import('../../../../src/tools/prep/swap').prepareSwapTxFromKeys>>>
+    >()
+    expectTypeOf<Parameters<typeof sdkRn.prepareTrc20TransferFromKeys>>().toEqualTypeOf<
+      Parameters<typeof import('../../../../src/tools/prep/trc20').prepareTrc20TransferFromKeys>
+    >()
+    expectTypeOf<ReturnType<typeof sdkRn.prepareTrc20TransferFromKeys>>().toEqualTypeOf<
+      Promise<Awaited<ReturnType<typeof import('../../../../src/tools/prep/trc20').prepareTrc20TransferFromKeys>>>
+    >()
+    expectTypeOf<Parameters<typeof sdkRn.buildSplTransfer>>().toEqualTypeOf<
+      Parameters<typeof import('../../../../src/tools/prep/splTransfer').buildSplTransfer>
+    >()
+    expectTypeOf<ReturnType<typeof sdkRn.buildSplTransfer>>().toEqualTypeOf<
+      Promise<Awaited<ReturnType<typeof import('../../../../src/tools/prep/splTransfer').buildSplTransfer>>>
+    >()
+    expectTypeOf<Parameters<typeof sdkRn.prepareUtxoConsolidateTxFromKeys>>().toEqualTypeOf<
+      Parameters<typeof import('../../../../src/tools/prep/utxoConsolidate').prepareUtxoConsolidateTxFromKeys>
+    >()
+    expectTypeOf<ReturnType<typeof sdkRn.prepareUtxoConsolidateTxFromKeys>>().toEqualTypeOf<
+      Promise<
+        Awaited<
+          ReturnType<typeof import('../../../../src/tools/prep/utxoConsolidate').prepareUtxoConsolidateTxFromKeys>
+        >
+      >
+    >()
+    expectTypeOf(sdkRn.balancePolkadot).toEqualTypeOf<typeof import('../../../../src/tools/balance').balancePolkadot>()
+    expectTypeOf<Parameters<typeof sdkRn.getPolkadotNativeBalance>>().toEqualTypeOf<
+      Parameters<typeof import('../../../../src/tools/balance').getPolkadotNativeBalance>
+    >()
+    expectTypeOf<ReturnType<typeof sdkRn.getPolkadotNativeBalance>>().toEqualTypeOf<
+      Promise<Awaited<ReturnType<typeof import('../../../../src/tools/balance').getPolkadotNativeBalance>>>
+    >()
+    expectTypeOf<Parameters<typeof sdkRn.getPolkadotAssetBalance>>().toEqualTypeOf<
+      Parameters<typeof import('../../../../src/tools/balance').getPolkadotAssetBalance>
+    >()
+    expectTypeOf<ReturnType<typeof sdkRn.getPolkadotAssetBalance>>().toEqualTypeOf<
+      Promise<Awaited<ReturnType<typeof import('../../../../src/tools/balance').getPolkadotAssetBalance>>>
+    >()
+    expectTypeOf<Parameters<typeof sdkRn.fiatToAmount>>().toEqualTypeOf<
+      Parameters<typeof import('../../../../src/utils/fiatToAmount').fiatToAmount>
+    >()
+    expectTypeOf<ReturnType<typeof sdkRn.fiatToAmount>>().toEqualTypeOf<
+      Promise<Awaited<ReturnType<typeof import('../../../../src/utils/fiatToAmount').fiatToAmount>>>
+    >()
+    expectTypeOf<Parameters<typeof sdkRn.parseKeygenQR>>().toEqualTypeOf<
+      Parameters<typeof import('../../../../src/utils/parseKeygenQR').parseKeygenQR>
+    >()
+    expectTypeOf<ReturnType<typeof sdkRn.parseKeygenQR>>().toEqualTypeOf<
+      Promise<Awaited<ReturnType<typeof import('../../../../src/utils/parseKeygenQR').parseKeygenQR>>>
+    >()
+  })
+
+  it('forwards a deterministic TRC-20 request to the canonical builder', async () => {
+    const canonical = await import('../../../../src/tools/prep/trc20')
+    const params = {
+      contractAddress: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+      from: 'TJRabPrwbZy45sbavfcjinPJC18kjpRTv8',
+      to: 'TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH',
+      amount: '1000000',
+      memo: 'invoice-1935',
+    }
+
+    await expect(sdkRn.prepareTrc20TransferFromKeys(params)).resolves.toEqual(
+      canonical.prepareTrc20TransferFromKeys(params)
+    )
+  })
+})
+
 describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
   it('exports the strict chain-ID resolver by identity with its string-only signature', () => {
     expect(reactNativeEntry.resolveChainIdReference).toBe(resolveChainIdReference)
@@ -170,6 +389,26 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     for (const name of Object.keys(priceHelpers) as (keyof typeof priceHelpers)[]) {
       expect(sdkRn.price[name]).toBe(sdkRn[name])
     }
+  })
+
+  it('exposes canonical StakeKit helpers and preserves existing namespace members', async () => {
+    const canonical = await import('../../../../src/tools/defi/stakekit')
+
+    expect(reactNativeEntry.defi.stakekit).toEqual({
+      parseActionDisplay: canonical.parseActionDisplay,
+      buildYieldActionScanRequest: canonical.buildYieldActionScanRequest,
+      validateStakekitActionAddress: canonical.validateStakekitActionAddress,
+      validateStakekitActionInput: canonical.validateStakekitActionInput,
+      normalizeNetwork: canonical.normalizeStakekitNetwork,
+      networkToCanonicalChain: canonical.yieldNetworkToCanonicalChain,
+      NETWORK_ALIASES: canonical.STAKEKIT_NETWORK_ALIASES,
+      search: canonical.stakekitSearch,
+      details: canonical.stakekitDetails,
+      balances: canonical.stakekitBalances,
+      buildEnter: canonical.stakekitBuildEnter,
+      buildExit: canonical.stakekitBuildExit,
+      buildManage: canonical.stakekitBuildManage,
+    })
   })
 
   it('re-exports Blockaid EVM chain canonicals by identity', () => {
@@ -221,6 +460,20 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
   it('re-exports the plural StakeKit scan-request builder by identity', async () => {
     const stakekit = await import('../../../../src/tools/defi/stakekit')
     expect(reactNativeEntry.buildYieldActionScanRequests).toBe(stakekit.buildYieldActionScanRequests)
+  })
+
+  it.each([
+    'buildYieldActionScanRequest',
+    'parseActionDisplay',
+    'stakekitBalances',
+    'stakekitBuildEnter',
+    'stakekitBuildExit',
+    'stakekitBuildManage',
+    'stakekitDetails',
+    'stakekitSearch',
+  ] as const)('re-exports canonical StakeKit runtime helper %s by identity', async name => {
+    const stakekit = await import('../../../../src/tools/defi/stakekit')
+    expect(reactNativeEntry[name]).toBe(stakekit[name])
   })
 
   it('re-exports the StakeKit action validators by identity', async () => {
@@ -801,6 +1054,10 @@ describe('RN entry exposes pure chain helpers and registry', () => {
 
     expect(typeof rn.fromChainAmountExact).toBe('function')
     expect(rn.fromChainAmountExact(123456789012345678901n, 18)).toBe('123.456789012345678901')
+    expect(typeof rn.fromChainAmount).toBe('function')
+    expect(typeof rn.fromChainAmountDisplay).toBe('function')
+    expect(rn.fromChainAmount(1_000_000n, 6)).toBe(1)
+    expect(rn.fromChainAmountDisplay('999999999999999999999999', 18)).toBe('999999.999999999999999999')
 
     expect(typeof rn.getBlockExplorerUrl).toBe('function')
     expect(rn.getBlockExplorerUrl({ chain: rn.Chain.Ethereum, entity: 'address', value: '0xabc' })).toBe(

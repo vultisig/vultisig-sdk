@@ -1,14 +1,7 @@
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { tonAddressToBounceable } from './address'
-
-/**
- * Public TonAPI host. The staking endpoints (`/v2/staking/*`) are served
- * exclusively by `tonapi.io` — the Vultisig `/ton` proxy fronts toncenter v3,
- * which has no staking routes — so we hit tonapi.io directly. The extension's
- * wildcard https host permission covers it.
- */
-const tonApiPublicUrl = 'https://tonapi.io'
+import { tonApiPublicUrl } from './tonApi'
 
 /**
  * tonapi `implementation` values that are genuine **nominator pools** — the
