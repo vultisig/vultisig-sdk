@@ -7,6 +7,7 @@ import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 import { AccountCoin } from '../../../../coin/AccountCoin'
 import { isFeeCoin } from '../../../../coin/utils/isFeeCoin'
 import { SwapFee } from '../../../SwapFee'
+import { toMaxSlippageBps } from '../../calldataMinOutput'
 import { GeneralSwapQuote } from '../../GeneralSwapQuote'
 import { assertKnownAggregatorRouter } from '../../knownAggregatorRouters'
 import { KyberSwapEnabledChain } from '../chains'
@@ -78,6 +79,7 @@ export const getKyberSwapTx = async ({
   kyberConfig = kyberSwapAffiliateConfig,
   slippageTolerance = kyberSwapSlippageTolerance,
 }: GetKyberSwapTxInput): Promise<GeneralSwapQuote> => {
+  const maxSlippageBps = toMaxSlippageBps(slippageTolerance, 1)
   const affiliateParams = getKyberSwapAffiliateParams(affiliateBps, kyberConfig)
   const buildPayload = {
     routeSummary,
@@ -139,6 +141,7 @@ export const getKyberSwapTx = async ({
   return {
     dstAmount: amountOut,
     provider: 'kyber',
+    maxSlippageBps,
     affiliate: {
       affiliateBps: affiliateParams.feeAmount ?? 0,
       request: affiliateParams.feeAmount !== undefined ? 'included' : 'omitted',

@@ -55,6 +55,7 @@ describe('getOneInchSwapQuote — AGG-02 router allowlist', () => {
     })
 
     expect('evm' in quote.tx ? quote.tx.evm.to : undefined).toBe('0x111111125421ca6dc452d289314280a0f8842a65')
+    expect(quote.maxSlippageBps).toBe(50)
   })
 
   // codex review (PR #1079): 1inch's router differs on zkSync Era — confirmed live. The
