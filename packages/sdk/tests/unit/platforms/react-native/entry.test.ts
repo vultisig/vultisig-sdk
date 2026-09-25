@@ -403,6 +403,7 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
 
     expect(reactNativeEntry.defi.stakekit).toEqual({
       parseActionDisplay: canonical.parseActionDisplay,
+      finalizeStakekitAction: canonical.finalizeStakekitAction,
       buildYieldActionScanRequest: canonical.buildYieldActionScanRequest,
       validateStakekitActionAddress: canonical.validateStakekitActionAddress,
       validateStakekitActionInput: canonical.validateStakekitActionInput,

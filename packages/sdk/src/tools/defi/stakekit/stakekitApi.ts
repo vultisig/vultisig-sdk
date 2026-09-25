@@ -150,6 +150,15 @@ export type YieldTransaction = {
   status: string
   unsignedTransaction: string | null // JSON string — needs JSON.parse; null while yield.xyz is still building it
   gasEstimate: string // JSON string — needs JSON.parse
+  /** Structured permanent rejection from a transaction-build PATCH. */
+  buildError?: YieldBuildFailure
+}
+
+export type YieldBuildFailure = {
+  permanent: true
+  reason: string
+  moveAbortFunctionName?: string
+  moveAbortCode?: number
 }
 
 export type YieldActionResponse = {
@@ -599,7 +608,7 @@ export async function callYieldActionREST(
     throw new Error(`${prefix}: ${humanMsg}`)
   }
   const action_response = (await resp.json()) as YieldActionResponse
-  return ensureTransactionsBuilt(action_response, apiKey)
+  return buildTransactionsForFinalization(action_response, apiKey, true)
 }
 
 /**
@@ -620,6 +629,14 @@ export async function ensureTransactionsBuilt(
   action_response: YieldActionResponse,
   apiKey?: string
 ): Promise<YieldActionResponse> {
+  return buildTransactionsForFinalization(action_response, apiKey, false)
+}
+
+async function buildTransactionsForFinalization(
+  action_response: YieldActionResponse,
+  apiKey: string | undefined,
+  allowUnbuilt: boolean
+): Promise<YieldActionResponse> {
   if (Array.isArray(action_response.transactions) && action_response.transactions.length > 0) {
     const needsBuild = action_response.transactions.some(t => t.status === 'CREATED' && t.unsignedTransaction == null)
     if (needsBuild) {
@@ -628,7 +645,8 @@ export async function ensureTransactionsBuilt(
           if (typeof tx.id !== 'string' || tx.status !== 'CREATED' || tx.unsignedTransaction != null) {
             return tx
           }
-          return (await buildYieldTransaction(tx.id, tx, apiKey)) as YieldTransaction
+          const updated = (await buildYieldTransaction(tx.id, tx, apiKey)) as Partial<YieldTransaction>
+          return { ...tx, ...updated }
         })
       )
       action_response.transactions = built
@@ -638,11 +656,31 @@ export async function ensureTransactionsBuilt(
   const unbuiltTransaction = Array.isArray(action_response.transactions)
     ? action_response.transactions.find(tx => tx.status === 'CREATED' && tx.unsignedTransaction == null)
     : undefined
-  if (unbuiltTransaction) {
+  if (unbuiltTransaction && !allowUnbuilt) {
     throw new Error(`yield_xyz_transaction_build_failed: ${unbuiltTransaction.id}`)
   }
 
   return action_response
+}
+
+/** Only a confirmed on-chain simulation refusal is classified as permanent. */
+function classifyYieldBuildFailure(body: string): YieldBuildFailure | null {
+  let parsed: { details?: { reason?: unknown } }
+  try {
+    parsed = JSON.parse(body)
+  } catch {
+    return null
+  }
+  const reason = parsed?.details?.reason
+  if (typeof reason !== 'string' || !/\bMoveAbort\b|\bDry run failed\b/i.test(reason)) return null
+  const fn = /function_name:\s*Some\("([^"]+)"\)/.exec(reason)
+  const code = /,\s*(\d+)\)\s*in command\s*\d+/.exec(reason)
+  return {
+    permanent: true,
+    reason,
+    ...(fn ? { moveAbortFunctionName: fn[1] } : {}),
+    ...(code ? { moveAbortCode: Number(code[1]) } : {}),
+  }
 }
 
 /**
@@ -658,7 +696,12 @@ async function buildYieldTransaction(txId: string, fallback: unknown, apiKey?: s
       body: '{}',
       signal: AbortSignal.timeout(30_000),
     })
-    if (!resp.ok) return fallback
+    if (!resp.ok) {
+      const failure = classifyYieldBuildFailure(await resp.text().catch(() => ''))
+      return failure && resp.status >= 400 && resp.status < 500 && resp.status !== 429
+        ? { ...(fallback as YieldTransaction), buildError: failure }
+        : fallback
+    }
     const updated = (await resp.json()) as { unsignedTransaction?: unknown }
     if (updated && updated.unsignedTransaction != null) {
       return updated
@@ -703,7 +746,7 @@ export async function callYieldActionWithFallback(args: {
     } catch {
       return raw
     }
-    const built = await ensureTransactionsBuilt(parsed, args.apiKey)
+    const built = await buildTransactionsForFinalization(parsed, args.apiKey, true)
     return JSON.stringify(built)
   } catch (mcpErr) {
     const mcpMsg = mcpErr instanceof Error ? mcpErr.message : String(mcpErr)

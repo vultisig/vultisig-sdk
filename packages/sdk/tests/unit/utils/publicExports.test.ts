@@ -141,6 +141,7 @@ describe('@vultisig/sdk public exports', () => {
 
     expect(sdk.defi.stakekit).toEqual({
       parseActionDisplay: canonical.parseActionDisplay,
+      finalizeStakekitAction: canonical.finalizeStakekitAction,
       buildYieldActionScanRequest: canonical.buildYieldActionScanRequest,
       validateStakekitActionAddress: canonical.validateStakekitActionAddress,
       validateStakekitActionInput: canonical.validateStakekitActionInput,
