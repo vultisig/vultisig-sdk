@@ -1,5 +1,32 @@
 # @vultisig/core-mpc
 
+## 5.0.0
+
+### Major Changes
+
+- [#2414](https://github.com/vultisig/vultisig-sdk/pull/2414) [`2ad15b2`](https://github.com/vultisig/vultisig-sdk/commit/2ad15b2f87a74298a7d6baff8f45a42b8b627d25) Thanks [@gastonm5](https://github.com/gastonm5)! - Regenerate the keysign protobuf types so a custom-message signing request can carry the dApp that asked for it.
+
+  `CustomMessagePayload` gains `dappMetadata?: DAppMetadata` (`optional DAppMetadata dapp_metadata = 6` in vultisig/commondata). Until now dApp identity travelled only on `KeysignPayload`, so message signing — `personal_sign`, EIP-712 typed data, Cosmos `signArbitrary`, and the hash-only Cardano `signTx` / `ton_proof` requests — reached co-signing devices with no indication of which dApp asked. The field is optional: leave it unset when there is no dApp, and such a payload encodes to the same bytes as before. All three values are declared by the initiating device and covered by no signature, so treat them as display-only.
+
+  **Source-breaking import move for TypeScript consumers.** Both payload kinds now share the type, so upstream moved `message DAppMetadata` into its own `dapp_metadata.proto`. `DAppMetadata` and `DAppMetadataSchema` are no longer exported from `@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb`; import them from `@vultisig/core-mpc/types/vultisig/keysign/v1/dapp_metadata_pb` instead. The old import fails at compile time rather than silently.
+
+  Wire compatibility is preserved. `DAppMetadata` keeps its full message name and field numbers, and `KeysignPayload.dapp_metadata` stays at field 50, so existing payloads decode as before. The new `CustomMessagePayload` field is additive: devices on older versions skip it.
+
+  `@vultisig/sdk` does not expose these types; it is bumped so its bundled copy of the generated code stays in step.
+
+### Minor Changes
+
+- [#2390](https://github.com/vultisig/vultisig-sdk/pull/2390) [`b11c68e`](https://github.com/vultisig/vultisig-sdk/commit/b11c68e9876e86277fdca907fca6b6bbda40ea27) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Send an `approve(0)` reset before the approve when a USDT-style token would reject a non-zero to non-zero approve over a stale partial allowance. The need for the reset is stated on the wire (`Erc20ApprovePayload.reset_allowance_first`, commondata#111) so every co-signer builds the same extra leg. `buildCowSwapApprovalSigningInputs` (new) returns every approve leg in nonce order; `buildCowSwapApprovalSigningInput` stays exported as a deprecated single-leg form for existing consumers and throws, rather than dropping a leg, when the payload asks for the reset.
+
+### Patch Changes
+
+- [#2451](https://github.com/vultisig/vultisig-sdk/pull/2451) [`8c58622`](https://github.com/vultisig/vultisig-sdk/commit/8c5862298a65712a05a6fc284ffaab9dc9381839) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Check the router minimum, final output asset, and receiver against the quoted swap immediately before EVM keysign payload construction for 1inch, Kyber, and same-chain LI.FI selectors that expose those fields. Reject 1inch and Kyber partial-fill calldata because its proportional floor does not guarantee the quoted absolute output. Packed-pool 1inch selectors retain a minimum and recipient check, but their hidden final asset remains unverified. Unsupported selectors and LI.FI bridge routes remain available and retain the aggregator trust boundary.
+
+- [#2443](https://github.com/vultisig/vultisig-sdk/pull/2443) [`36b9013`](https://github.com/vultisig/vultisig-sdk/commit/36b901334b14177c7ddf4c1791fed96e249a05a1) Thanks [@neavra](https://github.com/neavra)! - Max swaps on THORChain and Maya routes now reserve the estimated source-chain network fee instead of subtracting the destination-asset outbound fee, size EVM native reserves and token fee summaries with the router deposit that is actually signed, fall back to the native minimum helper when a provider omits its recommendation, pin fee-aware requotes to the selected provider, clamp once when memo-dependent fees drift, expose the committed amount to callers, report the source-chain fee as the quote's network fee, and refuse a max swap that would fall below it.
+
+- Updated dependencies [[`8c58622`](https://github.com/vultisig/vultisig-sdk/commit/8c5862298a65712a05a6fc284ffaab9dc9381839), [`d7810e5`](https://github.com/vultisig/vultisig-sdk/commit/d7810e59cdc7f42681f1dd4e30e1d50e7dcde0f4), [`36b9013`](https://github.com/vultisig/vultisig-sdk/commit/36b901334b14177c7ddf4c1791fed96e249a05a1), [`b11c68e`](https://github.com/vultisig/vultisig-sdk/commit/b11c68e9876e86277fdca907fca6b6bbda40ea27)]:
+  - @vultisig/core-chain@6.1.0
+
 ## 4.0.0
 
 ### Major Changes

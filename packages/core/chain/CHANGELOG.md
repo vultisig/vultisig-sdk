@@ -1,5 +1,19 @@
 # @vultisig/core-chain
 
+## 6.1.0
+
+### Minor Changes
+
+- [#2451](https://github.com/vultisig/vultisig-sdk/pull/2451) [`8c58622`](https://github.com/vultisig/vultisig-sdk/commit/8c5862298a65712a05a6fc284ffaab9dc9381839) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Check the router minimum, final output asset, and receiver against the quoted swap immediately before EVM keysign payload construction for 1inch, Kyber, and same-chain LI.FI selectors that expose those fields. Reject 1inch and Kyber partial-fill calldata because its proportional floor does not guarantee the quoted absolute output. Packed-pool 1inch selectors retain a minimum and recipient check, but their hidden final asset remains unverified. Unsupported selectors and LI.FI bridge routes remain available and retain the aggregator trust boundary.
+
+- [#2390](https://github.com/vultisig/vultisig-sdk/pull/2390) [`b11c68e`](https://github.com/vultisig/vultisig-sdk/commit/b11c68e9876e86277fdca907fca6b6bbda40ea27) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Send an `approve(0)` reset before the approve when a USDT-style token would reject a non-zero to non-zero approve over a stale partial allowance. The need for the reset is stated on the wire (`Erc20ApprovePayload.reset_allowance_first`, commondata#111) so every co-signer builds the same extra leg. `buildCowSwapApprovalSigningInputs` (new) returns every approve leg in nonce order; `buildCowSwapApprovalSigningInput` stays exported as a deprecated single-leg form for existing consumers and throws, rather than dropping a leg, when the payload asks for the reset.
+
+### Patch Changes
+
+- [#2104](https://github.com/vultisig/vultisig-sdk/pull/2104) [`d7810e5`](https://github.com/vultisig/vultisig-sdk/commit/d7810e59cdc7f42681f1dd4e30e1d50e7dcde0f4) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add unit test coverage for the 10 previously-untested `tx/hash/resolvers` (evm/utxo/cosmos/solana/ton/tron/ripple/cardano/bittensor/polkadot) and the CoW swap order-status API. Fix the UTXO resolver to fall back to `transactionId` when WalletCore returns an empty V2 `txid`.
+
+- [#2443](https://github.com/vultisig/vultisig-sdk/pull/2443) [`36b9013`](https://github.com/vultisig/vultisig-sdk/commit/36b901334b14177c7ddf4c1791fed96e249a05a1) Thanks [@neavra](https://github.com/neavra)! - Max swaps on THORChain and Maya routes now reserve the estimated source-chain network fee instead of subtracting the destination-asset outbound fee, size EVM native reserves and token fee summaries with the router deposit that is actually signed, fall back to the native minimum helper when a provider omits its recommendation, pin fee-aware requotes to the selected provider, clamp once when memo-dependent fees drift, expose the committed amount to callers, report the source-chain fee as the quote's network fee, and refuse a max swap that would fall below it.
+
 ## 6.0.0
 
 ### Major Changes
