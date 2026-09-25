@@ -1858,10 +1858,17 @@ describe('StakeKit signability gate (sdk#1904)', () => {
     expect(
       finalizeStakekitAction(actionWith({ network: 'tron', unsignedTransaction: rawData.slice(0, -2) })).status
     ).toBe('incomplete')
+    expect(
+      finalizeStakekitAction(actionWith({ network: 'tron', unsignedTransaction: rawData + '0a01ff' })).status
+    ).toBe('incomplete')
   })
 
   it('accepts a TON BoC in the base64 and hex forms supported by its signer', () => {
-    for (const unsignedTransaction of ['te6cckEBAQEAAwAAAgHQ5Lez', 'b5ee9c7241010101000300000201d0e4b7b3']) {
+    for (const unsignedTransaction of [
+      'te6cckEBAQEAAwAAAgHQ5Lez',
+      'b5ee9c7241010101000300000201d0e4b7b3',
+      'b5ee9c72070100000000000001000000000000010000000000000002000000000000000000',
+    ]) {
       expect(finalizeStakekitAction(actionWith({ network: 'ton', unsignedTransaction })).status).toBe('signable')
     }
   })

@@ -641,31 +641,39 @@ function readWireFields(bytes: Buffer): Map<number, WireField[]> | null {
   return fields
 }
 
-function wireValues(fields: Map<number, WireField[]>, field: number, wireType: number): (bigint | Buffer)[] {
-  return (fields.get(field) ?? []).filter(entry => entry.wireType === wireType).map(entry => entry.value)
+function singleWireValue(fields: Map<number, WireField[]>, field: number, wireType: number): bigint | Buffer | null {
+  const entries = fields.get(field)
+  return entries?.length === 1 && entries[0].wireType === wireType ? entries[0].value : null
 }
 
 /** Require the fields the Tron signer and broadcaster need, not just hex syntax. */
 function isTronRawData(bytes: Buffer): boolean {
   const raw = readWireFields(bytes)
   if (!raw) return false
-  if (!wireValues(raw, 1, 2).some(value => Buffer.isBuffer(value) && value.length === 2)) return false
-  if (!wireValues(raw, 4, 2).some(value => Buffer.isBuffer(value) && value.length === 8)) return false
-  if (wireValues(raw, 8, 0).length === 0 || wireValues(raw, 14, 0).length === 0) return false
-  return wireValues(raw, 11, 2).some(value => {
-    if (!Buffer.isBuffer(value)) return false
-    const contract = readWireFields(value)
-    if (!contract || wireValues(contract, 1, 0).length === 0) return false
-    return wireValues(contract, 2, 2).some(parameter => {
+  const refBlockBytes = singleWireValue(raw, 1, 2)
+  const refBlockHash = singleWireValue(raw, 4, 2)
+  if (!Buffer.isBuffer(refBlockBytes) || refBlockBytes.length !== 2) return false
+  if (!Buffer.isBuffer(refBlockHash) || refBlockHash.length !== 8) return false
+  if (singleWireValue(raw, 8, 0) === null || singleWireValue(raw, 14, 0) === null) return false
+  const contracts = raw.get(11)
+  return (
+    !!contracts?.length &&
+    contracts.every(({ wireType, value }) => {
+      if (wireType !== 2) return false
+      if (!Buffer.isBuffer(value)) return false
+      const contract = readWireFields(value)
+      if (!contract || singleWireValue(contract, 1, 0) === null) return false
+      const parameter = singleWireValue(contract, 2, 2)
       if (!Buffer.isBuffer(parameter)) return false
       const any = readWireFields(parameter)
+      if (!any) return false
+      const typeUrl = singleWireValue(any, 1, 2)
+      const contractValue = singleWireValue(any, 2, 2)
       return (
-        !!any &&
-        wireValues(any, 1, 2).some(typeUrl => Buffer.isBuffer(typeUrl) && typeUrl.length > 0) &&
-        wireValues(any, 2, 2).some(contractValue => Buffer.isBuffer(contractValue) && contractValue.length > 0)
+        Buffer.isBuffer(typeUrl) && typeUrl.length > 0 && Buffer.isBuffer(contractValue) && contractValue.length > 0
       )
     })
-  })
+  )
 }
 
 /** TON's BoC parser accepts trailing bytes, so verify its declared frame length. */
@@ -677,12 +685,15 @@ function isExactTonBoc(bytes: Buffer): boolean {
   if (!standard && !lean) return false
   const size = standard ? bytes[4] & 7 : bytes[4]
   const offsetSize = bytes[5]
-  if (size < 1 || size > 6 || offsetSize < 1 || offsetSize > 6) return false
+  if (size < 1 || size > 8 || offsetSize < 1 || offsetSize > 8) return false
   let cursor = 6
   const read = (width: number): number | null => {
     if (cursor + width > bytes.length) return null
-    const value = bytes.readUIntBE(cursor, width)
-    cursor += width
+    let value = 0
+    for (let index = 0; index < width; index++) {
+      value = value * 256 + bytes[cursor++]
+      if (value > bytes.length) return null
+    }
     return value
   }
   const cells = read(size)
