@@ -25,7 +25,7 @@ vi.mock('../getUsdToFiatRate', () => ({
   getUsdToFiatRate: mockGetUsdToFiatRate,
 }))
 
-import { getErc20Prices } from './getErc20Prices'
+import { contractPriceBatchSize, getErc20Prices } from './getErc20Prices'
 
 const usdcAddr = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
 const vthorAddr = '0x815c23eca83261b6ec689b60cc4a58b54bc24d8d'
@@ -134,6 +134,37 @@ describe('getErc20Prices', () => {
     })
 
     expect(prices[vthorAddr]).toBe(0.29)
+  })
+
+  it('keeps a later batch when an earlier contract-price batch fails', async () => {
+    const filler = Array.from({ length: contractPriceBatchSize }, (_, index) =>
+      `0x${(index + 1).toString(16).padStart(40, '0')}`,
+    )
+    mockQueryCoingeickoPrices
+      .mockRejectedValueOnce(new Error('batch failed'))
+      .mockRejectedValueOnce(new Error('batch failed'))
+      .mockResolvedValueOnce({ [usdcAddr.toLowerCase()]: 1 })
+
+    const prices = await getErc20Prices({
+      ids: [...filler, usdcAddr],
+      chain: EvmChain.Ethereum,
+    })
+
+    expect(prices[usdcAddr.toLowerCase()]).toBe(1)
+    expect(mockQueryCoingeickoPrices).toHaveBeenCalledTimes(3)
+    expect(mockGetLifiTokenPrices).toHaveBeenCalled()
+  })
+
+  it('throws when every contract-price batch fails', async () => {
+    mockQueryCoingeickoPrices.mockRejectedValue(new Error('down'))
+
+    await expect(
+      getErc20Prices({
+        ids: [usdcAddr],
+        chain: EvmChain.Ethereum,
+      }),
+    ).rejects.toThrow('down')
+    expect(mockQueryCoingeickoPrices).toHaveBeenCalledTimes(2)
   })
 
   it('keeps CoinGecko prices when the LiFi fallback fails', async () => {
