@@ -1,3 +1,4 @@
+import { EvmChain } from '@vultisig/core-chain/Chain'
 import { getEvmClient } from '@vultisig/core-chain/chains/evm/client'
 import { attempt, withFallback } from '@vultisig/lib-utils/attempt'
 import { bigIntMax } from '@vultisig/lib-utils/bigint/bigIntMax'
@@ -28,6 +29,13 @@ const gasPriceOracleAbi = [
     inputs: [{ name: '_gasUsed', type: 'uint256' }],
     outputs: [{ name: '', type: 'uint256' }],
   },
+  {
+    name: 'tokenRatio',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
 ] as const
 
 // Serialized size, in bytes, that the L1-fee probe stands in for on top of the
@@ -52,11 +60,16 @@ type GetOpStackFeeSurchargeInput = {
  * `value + gasLimit * maxFeePerGas + l1Cost + operatorCost` to be covered, so an
  * amount that leaves only the gas term behind is rejected by exactly this much.
  *
- * Both terms fail open independently. A pre-Isthmus oracle reverts on
+ * Outside Mantle, both terms fail open independently. A pre-Isthmus oracle reverts on
  * `getOperatorFee`, and letting that failure take the L1 data fee down with it
  * would leave the chain reserving nothing at all — a fee that cannot be read
  * must never block a send that worked before. A negative answer is nonsense from
  * a fee oracle and is floored rather than passed on to widen a max amount.
+ * Mantle's node multiplies the oracle's L1 answer by `tokenRatio` during its
+ * balance check and includes the operator fee. All three reads must succeed
+ * there; a missing term would produce a max amount that the sequencer rejects
+ * after signing. Give the dynamic L1 term the same 20% headroom as the EVM
+ * base fee during signing.
  */
 export const getOpStackFeeSurcharge = async ({
   chain,
@@ -65,34 +78,39 @@ export const getOpStackFeeSurcharge = async ({
 }: GetOpStackFeeSurchargeInput): Promise<bigint> => {
   const client = getEvmClient(chain)
 
-  const l1DataFee = withFallback(
-    attempt(
-      client.readContract({
-        address: gasPriceOracleAddress,
-        abi: gasPriceOracleAbi,
-        functionName: 'getL1Fee',
-        args: [l1FeeProbeData(unsignedTxEnvelopeSize + callDataSize)],
-      })
-    ),
-    0n
-  )
+  const l1DataFeeRead = client.readContract({
+    address: gasPriceOracleAddress,
+    abi: gasPriceOracleAbi,
+    functionName: 'getL1Fee',
+    args: [l1FeeProbeData(unsignedTxEnvelopeSize + callDataSize)],
+  })
+  const l1DataFee = chain === EvmChain.Mantle ? l1DataFeeRead : withFallback(attempt(l1DataFeeRead), 0n)
 
-  const operatorFee =
+  const l1FeeMultiplier =
+    chain === EvmChain.Mantle
+      ? client.readContract({
+          address: gasPriceOracleAddress,
+          abi: gasPriceOracleAbi,
+          functionName: 'tokenRatio',
+        })
+      : Promise.resolve(1n)
+
+  const operatorFeeRead =
     gasLimit > 0n
-      ? withFallback(
-          attempt(
-            client.readContract({
-              address: gasPriceOracleAddress,
-              abi: gasPriceOracleAbi,
-              functionName: 'getOperatorFee',
-              args: [gasLimit],
-            })
-          ),
-          0n
-        )
+      ? client.readContract({
+          address: gasPriceOracleAddress,
+          abi: gasPriceOracleAbi,
+          functionName: 'getOperatorFee',
+          args: [gasLimit],
+        })
       : Promise.resolve(0n)
+  const operatorFee = chain === EvmChain.Mantle ? operatorFeeRead : withFallback(attempt(operatorFeeRead), 0n)
 
-  const terms = await Promise.all([l1DataFee, operatorFee])
+  const [unscaledL1Fee, ratio, operatorCost] = await Promise.all([l1DataFee, l1FeeMultiplier, operatorFee])
+  if (ratio <= 0n) throw new Error('Invalid Mantle token ratio')
 
-  return terms.reduce((total, term) => total + bigIntMax(0n, term), 0n)
+  const l1Fee = bigIntMax(0n, unscaledL1Fee) * ratio
+  const l1FeeWithHeadroom = chain === EvmChain.Mantle ? (l1Fee * 120n + 99n) / 100n : l1Fee
+
+  return l1FeeWithHeadroom + bigIntMax(0n, operatorCost)
 }
