@@ -4,13 +4,15 @@
 
 import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import { fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
+import type { DAppMetadata } from "./dapp_metadata_pb";
+import { file_vultisig_keysign_v1_dapp_metadata } from "./dapp_metadata_pb";
 import type { Message } from "@bufbuild/protobuf";
 
 /**
  * Describes the file vultisig/keysign/v1/custom_message_payload.proto.
  */
 export const file_vultisig_keysign_v1_custom_message_payload: GenFile = /*@__PURE__*/
-  fileDesc("CjB2dWx0aXNpZy9rZXlzaWduL3YxL2N1c3RvbV9tZXNzYWdlX3BheWxvYWQucHJvdG8SE3Z1bHRpc2lnLmtleXNpZ24udjEikwEKFEN1c3RvbU1lc3NhZ2VQYXlsb2FkEg4KBm1ldGhvZBgBIAEoCRIPCgdtZXNzYWdlGAIgASgJEh4KFnZhdWx0X3B1YmxpY19rZXlfZWNkc2EYAyABKAkSHAoUdmF1bHRfbG9jYWxfcGFydHlfaWQYBCABKAkSEgoFY2hhaW4YBSABKAlIAIgBAUIICgZfY2hhaW5CVAoTdnVsdGlzaWcua2V5c2lnbi52MVo4Z2l0aHViLmNvbS92dWx0aXNpZy9jb21tb25kYXRhL2dvL3Z1bHRpc2lnL2tleXNpZ24vdjE7djG6AgJWU2IGcHJvdG8z");
+  fileDesc("CjB2dWx0aXNpZy9rZXlzaWduL3YxL2N1c3RvbV9tZXNzYWdlX3BheWxvYWQucHJvdG8SE3Z1bHRpc2lnLmtleXNpZ24udjEi5AEKFEN1c3RvbU1lc3NhZ2VQYXlsb2FkEg4KBm1ldGhvZBgBIAEoCRIPCgdtZXNzYWdlGAIgASgJEh4KFnZhdWx0X3B1YmxpY19rZXlfZWNkc2EYAyABKAkSHAoUdmF1bHRfbG9jYWxfcGFydHlfaWQYBCABKAkSEgoFY2hhaW4YBSABKAlIAIgBARI9Cg1kYXBwX21ldGFkYXRhGAYgASgLMiEudnVsdGlzaWcua2V5c2lnbi52MS5EQXBwTWV0YWRhdGFIAYgBAUIICgZfY2hhaW5CEAoOX2RhcHBfbWV0YWRhdGFCVAoTdnVsdGlzaWcua2V5c2lnbi52MVo4Z2l0aHViLmNvbS92dWx0aXNpZy9jb21tb25kYXRhL2dvL3Z1bHRpc2lnL2tleXNpZ24vdjE7djG6AgJWU2IGcHJvdG8z", [file_vultisig_keysign_v1_dapp_metadata]);
 
 /**
  * @generated from message vultisig.keysign.v1.CustomMessagePayload
@@ -40,6 +42,14 @@ export type CustomMessagePayload = Message<"vultisig.keysign.v1.CustomMessagePay
    * @generated from field: optional string chain = 5;
    */
   chain?: string;
+
+  /**
+   * The dApp that requested this signature. Unset when the message did not
+   * come from a dApp (e.g. typed in by the user).
+   *
+   * @generated from field: optional vultisig.keysign.v1.DAppMetadata dapp_metadata = 6;
+   */
+  dappMetadata?: DAppMetadata;
 };
 
 /**
