@@ -137,8 +137,9 @@ describe('getErc20Prices', () => {
   })
 
   it('keeps a later batch when an earlier contract-price batch fails', async () => {
-    const filler = Array.from({ length: contractPriceBatchSize }, (_, index) =>
-      `0x${(index + 1).toString(16).padStart(40, '0')}`,
+    const filler = Array.from(
+      { length: contractPriceBatchSize },
+      (_, index) => `0x${(index + 1).toString(16).padStart(40, '0')}`
     )
     mockQueryCoingeickoPrices
       .mockRejectedValueOnce(new Error('batch failed'))
@@ -162,7 +163,7 @@ describe('getErc20Prices', () => {
       getErc20Prices({
         ids: [usdcAddr],
         chain: EvmChain.Ethereum,
-      }),
+      })
     ).rejects.toThrow('down')
     expect(mockQueryCoingeickoPrices).toHaveBeenCalledTimes(2)
   })

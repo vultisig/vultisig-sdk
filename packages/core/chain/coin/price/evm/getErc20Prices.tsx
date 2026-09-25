@@ -44,11 +44,7 @@ const coinGeckoNetwork: Record<EvmChain, string> = {
 const lowercasePrices = (prices: Record<string, number>) =>
   Object.fromEntries(Object.entries(prices).map(([key, value]) => [key.toLowerCase(), value]))
 
-const fetchContractPriceBatch = async (
-  batch: string[],
-  chain: EvmChain,
-  fiatCurrency: FiatCurrency,
-) => {
+const fetchContractPriceBatch = async (batch: string[], chain: EvmChain, fiatCurrency: FiatCurrency) => {
   const url = addQueryParams(`${baseUrl}/${coinGeckoNetwork[chain]}`, {
     contract_addresses: batch.join(','),
     vs_currencies: fiatCurrency,
@@ -58,11 +54,7 @@ const fetchContractPriceBatch = async (
 }
 
 /** A dropped batch is tried once more. If every batch fails, throw so the caller keeps its last prices. */
-const fetchCoinGeckoContractPrices = async (
-  ids: string[],
-  chain: EvmChain,
-  fiatCurrency: FiatCurrency,
-) => {
+const fetchCoinGeckoContractPrices = async (ids: string[], chain: EvmChain, fiatCurrency: FiatCurrency) => {
   const batches = toBatches(ids, contractPriceBatchSize)
   const merged: Record<string, number> = {}
   const failures: unknown[] = []
@@ -74,7 +66,7 @@ const fetchCoinGeckoContractPrices = async (
         await retry({
           func: () => fetchContractPriceBatch(batch, chain, fiatCurrency),
           attempts: 1,
-        }),
+        })
       )
     } catch (error) {
       failures.push(error)
