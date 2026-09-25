@@ -192,6 +192,12 @@ describe('SwapService', () => {
       expect(result.estimatedOutput).toBeDefined()
       expect(result.requiresApproval).toBe(false)
       expect(result.quote).toEqual(mockQuote)
+      expect(result.fees.network).toBe(0n)
+      expect(result.fees.total).toBe(0n)
+      if (!('native' in result.quote.quote)) {
+        throw new Error('Expected a native swap quote')
+      }
+      expect(result.quote.quote.native.fees.outbound).toBe('100000')
 
       // Should emit swapQuoteReceived event
       expect(mockEmitEvent).toHaveBeenCalledWith('swapQuoteReceived', {
@@ -944,6 +950,33 @@ describe('SwapService', () => {
       } else {
         expect(error.message).toContain(expectedMessage)
       }
+    })
+  })
+
+  describe('getFeesFiat', () => {
+    it('prices source-native network and total fees through the shared quote pricing path', async () => {
+      const getPrice = vi.fn().mockResolvedValue(50_000)
+      const serviceWithFiat = new SwapService(mockVaultData, mockGetAddress, mockEmitEvent, mockWasmProvider, {
+        getPrice,
+      } as any)
+
+      await expect(serviceWithFiat.getFeesFiat({ network: 500n, total: 500n }, Chain.Bitcoin, 'usd')).resolves.toEqual({
+        network: 0.25,
+        affiliate: undefined,
+        total: 0.25,
+        currency: 'usd',
+      })
+      expect(getPrice).toHaveBeenCalledWith(Chain.Bitcoin, undefined, 'usd')
+    })
+
+    it('returns undefined when source-native fee pricing fails', async () => {
+      const serviceWithFiat = new SwapService(mockVaultData, mockGetAddress, mockEmitEvent, mockWasmProvider, {
+        getPrice: vi.fn().mockRejectedValue(new Error('price unavailable')),
+      } as any)
+
+      await expect(
+        serviceWithFiat.getFeesFiat({ network: 500n, total: 500n }, Chain.Bitcoin, 'usd')
+      ).resolves.toBeUndefined()
     })
   })
 

@@ -40,6 +40,8 @@ import {
   CoinInput,
   isAccountCoin,
   SwapApprovalInfo,
+  SwapFees,
+  SwapFeesFiat,
   SwapPrepareResult,
   SwapQuoteBase,
   SwapQuoteParams,
@@ -408,35 +410,16 @@ export class SwapService {
     }
 
     // Calculate fiat values if fiatValueService is available and fiatCurrency requested
-    if (fiatCurrency && this.fiatValueService) {
+    if (fiatCurrency) {
+      result.feesFiat = await this.getFeesFiat(fees, fromCoin.chain, fiatCurrency)
+
+      // Preserve the existing all-or-nothing fee-price dependency: if the
+      // source fee cannot be priced, skip the output conversion as well.
+      if (!result.feesFiat) return result
+
       try {
-        // Get price for fee token (native token of from chain)
-        const feeTokenDecimals = chainFeeCoin[fromCoin.chain].decimals
-        const feePrice = await this.fiatValueService.getPrice(fromCoin.chain, undefined, fiatCurrency)
-
-        result.feesFiat = {
-          network: getCoinValue({
-            amount: fees.network,
-            decimals: feeTokenDecimals,
-            price: feePrice,
-          }),
-          affiliate: fees.affiliate
-            ? getCoinValue({
-                amount: fees.affiliate,
-                decimals: feeTokenDecimals,
-                price: feePrice,
-              })
-            : undefined,
-          total: getCoinValue({
-            amount: fees.total,
-            decimals: feeTokenDecimals,
-            price: feePrice,
-          }),
-          currency: fiatCurrency,
-        }
-
         // Get price for output token
-        const toPrice = await this.fiatValueService.getPrice(toCoin.chain, toCoin.id, fiatCurrency)
+        const toPrice = await this.fiatValueService!.getPrice(toCoin.chain, toCoin.id, fiatCurrency)
         result.estimatedOutputFiat = getCoinValue({
           amount: estimatedOutput,
           decimals: toCoin.decimals,
@@ -448,6 +431,39 @@ export class SwapService {
     }
 
     return result
+  }
+
+  /** Convert source-native swap fees to fiat through the quote pricing service. */
+  async getFeesFiat(fees: SwapFees, fromChain: Chain, fiatCurrency?: FiatCurrency): Promise<SwapFeesFiat | undefined> {
+    if (!fiatCurrency || !this.fiatValueService) return undefined
+
+    try {
+      const feeTokenDecimals = chainFeeCoin[fromChain].decimals
+      const feePrice = await this.fiatValueService.getPrice(fromChain, undefined, fiatCurrency)
+
+      return {
+        network: getCoinValue({
+          amount: fees.network,
+          decimals: feeTokenDecimals,
+          price: feePrice,
+        }),
+        affiliate: fees.affiliate
+          ? getCoinValue({
+              amount: fees.affiliate,
+              decimals: feeTokenDecimals,
+              price: feePrice,
+            })
+          : undefined,
+        total: getCoinValue({
+          amount: fees.total,
+          decimals: feeTokenDecimals,
+          price: feePrice,
+        }),
+        currency: fiatCurrency,
+      }
+    } catch {
+      return undefined
+    }
   }
 
   /**

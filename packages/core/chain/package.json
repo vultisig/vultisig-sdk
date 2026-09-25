@@ -2328,6 +2328,11 @@
       "import": "./dist/tx/fee/evm/gasPrice.js",
       "default": "./dist/tx/fee/evm/gasPrice.js"
     },
+    "./tx/fee/evm/getEvmRouterDepositFee": {
+      "types": "./dist/tx/fee/evm/getEvmRouterDepositFee.d.ts",
+      "import": "./dist/tx/fee/evm/getEvmRouterDepositFee.js",
+      "default": "./dist/tx/fee/evm/getEvmRouterDepositFee.js"
+    },
     "./tx/fee/evm/gwei": {
       "types": "./dist/tx/fee/evm/gwei.d.ts",
       "import": "./dist/tx/fee/evm/gwei.js",
