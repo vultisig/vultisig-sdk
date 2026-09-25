@@ -1778,6 +1778,7 @@ describe('StakeKit signability gate (sdk#1904)', () => {
     expect(refusal).toBeInstanceOf(StakekitActionRefusal)
     expect(refusal.status).toBe('provider_error')
     expect(refusal.message).not.toContain('0xprivate')
+    expect(refusal.action).toBeUndefined()
   })
 
   it('refuses Sui JSON intent while accepting real bytes and a mixed multi-step action', () => {
@@ -1803,6 +1804,41 @@ describe('StakeKit signability gate (sdk#1904)', () => {
     mixed.transactions[1].unsignedTransaction = '{}'
     expect(finalizeStakekitAction(mixed).status).toBe('incomplete')
   })
+
+  it.each(['enter', 'exit', 'manage'] as const)(
+    '%s retains a refused Sui intent for explicit repair without serializing it',
+    async builder => {
+      const action = actionWith({
+        network: 'sui',
+        unsignedTransaction: Buffer.from(JSON.stringify({ gasData: { budget: null }, commands: [] })).toString(
+          'base64'
+        ),
+      })
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url: string, init?: RequestInit) => {
+          if (String(url).includes('mcp')) throw new Error('MCP unavailable')
+          return new Response(JSON.stringify(init?.method === 'POST' ? action : makeProduct()), { status: 200 })
+        })
+      )
+      const params = { yieldId: action.yieldId, address: '0x' + 'a'.repeat(64), amount: '1' }
+      const refusal = await (builder === 'enter'
+        ? stakekitBuildEnter(params)
+        : builder === 'exit'
+          ? stakekitBuildExit(params)
+          : stakekitBuildManage({ ...params, action: 'WITHDRAW', passthrough: 'pending-action' })
+      ).catch(error => error)
+      expect(refusal).toBeInstanceOf(StakekitActionRefusal)
+      expect(refusal.status).toBe('unsignable_sui')
+      expect(refusal.action).toEqual(action)
+      expect(JSON.stringify(refusal)).not.toContain(action.id)
+      const resolved = {
+        ...refusal.action,
+        transactions: [{ ...refusal.action.transactions[0], unsignedTransaction: SUI_BCS }],
+      } as YieldActionResponse
+      expect(finalizeStakekitAction(resolved).status).toBe('signable')
+    }
+  )
 
   it.each([
     ['sui', 'not-base64'],

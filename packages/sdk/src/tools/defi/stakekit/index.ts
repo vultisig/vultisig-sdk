@@ -814,18 +814,29 @@ export type StakekitRefusalStatus = Exclude<StakekitFinalizeResult['status'], 's
 
 /** Thrown by public builders when the provider action cannot be signed. */
 export class StakekitActionRefusal extends Error {
+  /** Raw provider action for explicit Sui intent repair; never include it in a user-facing message. */
+  readonly action?: YieldActionResponse
+
   constructor(
     public readonly status: StakekitRefusalStatus,
-    message: string
+    message: string,
+    action?: YieldActionResponse
   ) {
     super(message)
     this.name = 'StakekitActionRefusal'
+    if (action) Object.defineProperty(this, 'action', { value: action, enumerable: false })
   }
 }
 
 function finalizedDisplay(action: YieldActionResponse): StakekitActionDisplay {
   const result = finalizeStakekitAction(action)
-  if (result.status !== 'signable') throw new StakekitActionRefusal(result.status, result.message)
+  if (result.status !== 'signable') {
+    throw new StakekitActionRefusal(
+      result.status,
+      result.message,
+      result.status === 'unsignable_sui' ? action : undefined
+    )
+  }
   return result.display
 }
 
