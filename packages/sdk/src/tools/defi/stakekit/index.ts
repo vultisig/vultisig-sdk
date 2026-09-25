@@ -670,7 +670,11 @@ function isTronRawData(bytes: Buffer): boolean {
       const typeUrl = singleWireValue(any, 1, 2)
       const contractValue = singleWireValue(any, 2, 2)
       return (
-        Buffer.isBuffer(typeUrl) && typeUrl.length > 0 && Buffer.isBuffer(contractValue) && contractValue.length > 0
+        Buffer.isBuffer(typeUrl) &&
+        typeUrl.length > 0 &&
+        Buffer.isBuffer(contractValue) &&
+        contractValue.length > 0 &&
+        readWireFields(contractValue) !== null
       )
     })
   )

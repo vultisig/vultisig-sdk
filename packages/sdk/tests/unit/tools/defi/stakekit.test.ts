@@ -1861,6 +1861,10 @@ describe('StakeKit signability gate (sdk#1904)', () => {
     expect(
       finalizeStakekitAction(actionWith({ network: 'tron', unsignedTransaction: rawData + '0a01ff' })).status
     ).toBe('incomplete')
+    const invalidNestedContract = '0a0240df2208e4b17a2d6f5a63bf40015a0a080112060a01611201007001'
+    expect(
+      finalizeStakekitAction(actionWith({ network: 'tron', unsignedTransaction: invalidNestedContract })).status
+    ).toBe('incomplete')
   })
 
   it('accepts a TON BoC in the base64 and hex forms supported by its signer', () => {
