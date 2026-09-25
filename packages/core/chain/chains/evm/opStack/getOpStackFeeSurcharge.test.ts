@@ -131,6 +131,12 @@ describe('getOpStackFeeSurcharge', () => {
     await expect(getOpStackFeeSurcharge({ ...input, chain: EvmChain.Mantle })).rejects.toThrow('RPC unavailable')
   })
 
+  it('does not quote a Mantle max reserve without its operator fee', async () => {
+    answerWith({ getL1Fee: 409_822_826_468n, tokenRatio: 3_890n, getOperatorFee: new Error('RPC unavailable') })
+
+    await expect(getOpStackFeeSurcharge({ ...input, chain: EvmChain.Mantle })).rejects.toThrow('RPC unavailable')
+  })
+
   it('grows the priced payload with the transaction calldata', async () => {
     answerWith({})
 

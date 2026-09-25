@@ -66,9 +66,10 @@ type GetOpStackFeeSurchargeInput = {
  * must never block a send that worked before. A negative answer is nonsense from
  * a fee oracle and is floored rather than passed on to widen a max amount.
  * Mantle's node multiplies the oracle's L1 answer by `tokenRatio` during its
- * balance check. Both reads must succeed there; an unscaled fallback would
- * produce a max amount that the sequencer rejects after signing. Give that
- * dynamic L1 term the same 20% headroom as the EVM base fee during signing.
+ * balance check and includes the operator fee. All three reads must succeed
+ * there; a missing term would produce a max amount that the sequencer rejects
+ * after signing. Give the dynamic L1 term the same 20% headroom as the EVM
+ * base fee during signing.
  */
 export const getOpStackFeeSurcharge = async ({
   chain,
@@ -94,20 +95,16 @@ export const getOpStackFeeSurcharge = async ({
         })
       : Promise.resolve(1n)
 
-  const operatorFee =
+  const operatorFeeRead =
     gasLimit > 0n
-      ? withFallback(
-          attempt(
-            client.readContract({
-              address: gasPriceOracleAddress,
-              abi: gasPriceOracleAbi,
-              functionName: 'getOperatorFee',
-              args: [gasLimit],
-            })
-          ),
-          0n
-        )
+      ? client.readContract({
+          address: gasPriceOracleAddress,
+          abi: gasPriceOracleAbi,
+          functionName: 'getOperatorFee',
+          args: [gasLimit],
+        })
       : Promise.resolve(0n)
+  const operatorFee = chain === EvmChain.Mantle ? operatorFeeRead : withFallback(attempt(operatorFeeRead), 0n)
 
   const [unscaledL1Fee, ratio, operatorCost] = await Promise.all([l1DataFee, l1FeeMultiplier, operatorFee])
   if (ratio <= 0n) throw new Error('Invalid Mantle token ratio')
