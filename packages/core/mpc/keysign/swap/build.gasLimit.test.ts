@@ -85,11 +85,33 @@ describe('buildSwapKeysignPayload gas limit override', () => {
 })
 
 describe('buildSwapKeysignPayload minimum output boundary', () => {
-  const abi = parseAbi(['function ethUnoswap(uint256 minReturn, uint256 dex) payable returns (uint256 returnAmount)'])
-  const data = (minimum: bigint) => encodeFunctionData({ abi, functionName: 'ethUnoswap', args: [minimum, 1n] })
+  const sender = '0x0000000000000000000000000000000000000001'
+  const asset = '0x0000000000000000000000000000000000000002'
+  const attacker = '0x0000000000000000000000000000000000000003'
+  const abi = parseAbi([
+    'function swap(address executor, (address srcToken, address dstToken, address srcReceiver, address dstReceiver, uint256 amount, uint256 minReturnAmount, uint256 flags) desc, bytes data) payable returns (uint256 returnAmount, uint256 spentAmount)',
+  ])
+  const data = (minimum: bigint, dstToken = asset, dstReceiver = sender) =>
+    encodeFunctionData({
+      abi,
+      functionName: 'swap',
+      args: [
+        sender,
+        {
+          srcToken: sender,
+          dstToken: dstToken as `0x${string}`,
+          srcReceiver: sender,
+          dstReceiver: dstReceiver as `0x${string}`,
+          amount: 1_000_000n,
+          minReturnAmount: minimum,
+          flags: 0n,
+        },
+        '0x',
+      ],
+    })
 
   it('builds honest known calldata and stops one-wei calldata before a keysign payload exists', async () => {
-    const quote = (minimum: bigint): SwapQuote =>
+    const quote = (minimum: bigint, dstToken = asset, dstReceiver = sender): SwapQuote =>
       ({
         ...swapQuote,
         quote: {
@@ -97,15 +119,26 @@ describe('buildSwapKeysignPayload minimum output boundary', () => {
             provider: '1inch',
             dstAmount: '1000000',
             maxSlippageBps: 50,
-            tx: { evm: { from: '0xsender', to: '0xrouter', value: '0', data: data(minimum) } },
+            tx: { evm: { from: sender, to: '0xrouter', value: '0', data: data(minimum, dstToken, dstReceiver) } },
           },
         },
       }) as SwapQuote
 
-    const honest = await buildSwapKeysignPayload({ ...buildInput, swapQuote: quote(995_000n) })
+    const input = {
+      ...buildInput,
+      fromCoin: { ...buildInput.fromCoin, address: sender },
+      toCoin: { ...buildInput.toCoin, address: sender, id: asset },
+    }
+    const honest = await buildSwapKeysignPayload({ ...input, swapQuote: quote(995_000n) })
     expect(honest.swapPayload?.case).toBe('oneinchSwapPayload')
-    await expect(buildSwapKeysignPayload({ ...buildInput, swapQuote: quote(1n) })).rejects.toThrow(
+    await expect(buildSwapKeysignPayload({ ...input, swapQuote: quote(1n) })).rejects.toThrow(
       /below the quote-bound floor/
+    )
+    await expect(buildSwapKeysignPayload({ ...input, swapQuote: quote(995_000n, attacker) })).rejects.toThrow(
+      /destination asset/
+    )
+    await expect(buildSwapKeysignPayload({ ...input, swapQuote: quote(995_000n, asset, attacker) })).rejects.toThrow(
+      /output receiver/
     )
   })
 })

@@ -391,6 +391,9 @@ export const buildSwapKeysignPayload = async ({
             data,
             quotedOutputAmount: quote.dstAmount,
             maxSlippageBps: quote.maxSlippageBps,
+            destinationAsset: toCoin.id,
+            intendedRecipient: recipient ?? toCoin.address,
+            senderAddress: fromCoin.address,
           })
           return {
             from,

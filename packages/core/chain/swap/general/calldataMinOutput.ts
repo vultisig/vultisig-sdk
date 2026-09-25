@@ -1,5 +1,6 @@
 import { decodeFunctionData, parseAbi, toFunctionSelector } from 'viem'
 
+import { evmNativeCoinAddress } from '../../chains/evm/config'
 import { GeneralSwapProvider } from './GeneralSwapProvider'
 
 type MinOutputProtectedProvider = Extract<GeneralSwapProvider, '1inch' | 'kyber' | 'li.fi'>
@@ -77,38 +78,136 @@ const asBigInt = (value: unknown): bigint => {
 const getNamedBigInt = (value: unknown, key: string): bigint =>
   asBigInt((value as Record<string, unknown> | undefined)?.[key])
 
-const decodeOneInchMinOutput = (data: `0x${string}`): bigint => {
+type DecodedOutput =
+  | {
+      kind: 'asset-bound'
+      minimum: bigint
+      asset: string
+      receiver: string | undefined
+      zeroReceiverIsSender?: boolean
+    }
+  | { kind: 'recipient-bound'; minimum: bigint; receiver: string | undefined }
+
+const getNamedAddress = (value: unknown, key: string): string => {
+  const address = (value as Record<string, unknown> | undefined)?.[key]
+  if (typeof address !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(address)) {
+    throw new Error(`decoded ${key} is not an EVM address`)
+  }
+  return address
+}
+
+const getPackedOrAddressRecipient = (value: unknown): string => {
+  if (typeof value === 'string') return getNamedAddress({ recipient: value }, 'recipient')
+  // 1inch's uint256 `to` puts the beneficiary in the low 160 bits.
+  if (typeof value === 'bigint') return `0x${(value & ((1n << 160n) - 1n)).toString(16).padStart(40, '0')}`
+  throw new Error('decoded recipient is not an EVM address')
+}
+
+const rejectPartialFill = (description: unknown): void => {
+  // With bit 0 set, the router checks minReturnAmount pro rata against the
+  // input actually spent, not as an absolute floor for the quoted output.
+  if ((getNamedBigInt(description, 'flags') & 1n) !== 0n) {
+    throw new Error('partial-fill calldata has no absolute minimum output; refusing to sign')
+  }
+}
+
+const decodeOneInchMinOutput = (data: `0x${string}`): DecodedOutput => {
   const decoded = decodeFunctionData({ abi: oneInchRouterAbi, data })
   const args = asArgs(decoded.args)
 
-  if (decoded.functionName === 'swap') return getNamedBigInt(args[1], 'minReturnAmount')
-  if (/^unoswap(?:2|3)?$/.test(decoded.functionName)) return asBigInt(args[2])
-  if (/^unoswapTo(?:2|3)?$/.test(decoded.functionName)) return asBigInt(args[3])
-  if (/^ethUnoswap(?:2|3)?$/.test(decoded.functionName)) return asBigInt(args[0])
-  if (/^ethUnoswapTo(?:2|3)?$/.test(decoded.functionName)) return asBigInt(args[1])
-  if (decoded.functionName === 'clipperSwap') return asBigInt(args[4])
+  if (decoded.functionName === 'swap') {
+    rejectPartialFill(args[1])
+    return {
+      kind: 'asset-bound',
+      minimum: getNamedBigInt(args[1], 'minReturnAmount'),
+      asset: getNamedAddress(args[1], 'dstToken'),
+      receiver: getNamedAddress(args[1], 'dstReceiver'),
+      // AggregationRouter swap resolves a zero dstReceiver to msg.sender.
+      zeroReceiverIsSender: true,
+    }
+  }
+  if (decoded.functionName === 'clipperSwap') {
+    return {
+      kind: 'asset-bound',
+      minimum: asBigInt(args[4]),
+      asset: getNamedAddress({ dstToken: args[2] }, 'dstToken'),
+      receiver: undefined,
+    }
+  }
   if (decoded.functionName === 'clipperSwapTo' || decoded.functionName === 'clipperSwapToWithPermit') {
-    return asBigInt(args[5])
+    return {
+      kind: 'asset-bound',
+      minimum: asBigInt(args[5]),
+      asset: getNamedAddress({ dstToken: args[3] }, 'dstToken'),
+      receiver: getNamedAddress({ recipient: args[1] }, 'recipient'),
+    }
   }
-  if (decoded.functionName === 'uniswapV3Swap') return asBigInt(args[1])
+  // Packed pool data conceals the final asset. Bind an exposed `to` beneficiary
+  // while keeping the destination asset explicitly unverified.
+  if (/^unoswap(?:2|3)?$/.test(decoded.functionName))
+    return { kind: 'recipient-bound', minimum: asBigInt(args[2]), receiver: undefined }
+  if (/^unoswapTo(?:2|3)?$/.test(decoded.functionName)) {
+    return {
+      kind: 'recipient-bound',
+      minimum: asBigInt(args[3]),
+      receiver: getPackedOrAddressRecipient(args[0]),
+    }
+  }
+  if (/^ethUnoswap(?:2|3)?$/.test(decoded.functionName))
+    return { kind: 'recipient-bound', minimum: asBigInt(args[0]), receiver: undefined }
+  if (/^ethUnoswapTo(?:2|3)?$/.test(decoded.functionName)) {
+    return {
+      kind: 'recipient-bound',
+      minimum: asBigInt(args[1]),
+      receiver: getPackedOrAddressRecipient(args[0]),
+    }
+  }
+  if (decoded.functionName === 'uniswapV3Swap')
+    return { kind: 'recipient-bound', minimum: asBigInt(args[1]), receiver: undefined }
   if (decoded.functionName === 'uniswapV3SwapTo' || decoded.functionName === 'uniswapV3SwapToWithPermit') {
-    return asBigInt(args[decoded.functionName === 'uniswapV3SwapTo' ? 2 : 3])
+    return {
+      kind: 'recipient-bound',
+      minimum: asBigInt(args[decoded.functionName === 'uniswapV3SwapTo' ? 2 : 3]),
+      receiver: getPackedOrAddressRecipient(args[0]),
+    }
   }
-  if (decoded.functionName === 'unoswapToWithPermit') return asBigInt(args[3])
-
+  if (decoded.functionName === 'unoswapToWithPermit') {
+    return {
+      kind: 'recipient-bound',
+      minimum: asBigInt(args[3]),
+      receiver: getPackedOrAddressRecipient(args[0]),
+    }
+  }
   throw new Error(`unsupported 1inch function ${decoded.functionName}`)
 }
 
-const decodeKyberMinOutput = (data: `0x${string}`): bigint => {
+const decodeKyberMinOutput = (data: `0x${string}`): DecodedOutput => {
   const decoded = decodeFunctionData({ abi: kyberRouterAbi, data })
   const args = asArgs(decoded.args)
   const description = decoded.functionName === 'swapSimpleMode' ? args[1] : (args[0] as { desc?: unknown })?.desc
-  return getNamedBigInt(description, 'minReturnAmount')
+  rejectPartialFill(description)
+  return {
+    kind: 'asset-bound',
+    minimum: getNamedBigInt(description, 'minReturnAmount'),
+    asset: getNamedAddress(description, 'dstToken'),
+    receiver: getNamedAddress(description, 'dstReceiver'),
+    // MetaAggregationRouterV2 resolves a zero dstReceiver to msg.sender.
+    zeroReceiverIsSender: true,
+  }
 }
 
-const decodeLifiMinOutput = (data: `0x${string}`): bigint => {
+const decodeLifiMinOutput = (data: `0x${string}`): DecodedOutput => {
   const decoded = decodeFunctionData({ abi: lifiGenericSwapAbi, data })
-  return asBigInt(asArgs(decoded.args)[4])
+  const args = asArgs(decoded.args)
+  const swapData = args[5]
+  const finalSwap = Array.isArray(swapData) ? swapData.at(-1) : swapData
+  if (!finalSwap) throw new Error('LI.FI same-chain swap has no final output asset')
+  return {
+    kind: 'asset-bound',
+    minimum: asBigInt(args[4]),
+    asset: getNamedAddress(finalSwap, 'receivingAssetId'),
+    receiver: getNamedAddress({ receiver: args[3] }, 'receiver'),
+  }
 }
 
 const knownSelectors = {
@@ -120,13 +219,13 @@ const knownSelectors = {
 /** Returns undefined when the selector has no comparable final-output floor.
  * These routes remain available and retain the aggregator as their trust boundary.
  */
-export const decodeAggregatorCalldataMinOutput = ({
+const decodeAggregatorCalldataOutput = ({
   provider,
   data,
 }: {
   provider: MinOutputProtectedProvider
   data: string
-}): bigint | undefined => {
+}): DecodedOutput | undefined => {
   if (!/^0x[0-9a-fA-F]{8,}$/.test(data) || data.length % 2 !== 0) {
     throw new Error(`${provider} returned malformed EVM swap calldata`)
   }
@@ -145,6 +244,13 @@ export const decodeAggregatorCalldataMinOutput = ({
   }
 }
 
+/** A decoded numeric minimum does not by itself prove output-asset or receiver
+ * binding; the sign-time assertion checks every exposed field. */
+export const decodeAggregatorCalldataMinOutput = (input: {
+  provider: MinOutputProtectedProvider
+  data: string
+}): bigint | undefined => decodeAggregatorCalldataOutput(input)?.minimum
+
 /**
  * Binds the router-enforced minimum output to the quote amount and the exact
  * slippage tolerance used to request it. This runs immediately before the
@@ -155,11 +261,17 @@ export const assertAggregatorCalldataMinOutputBound = ({
   data,
   quotedOutputAmount,
   maxSlippageBps,
+  destinationAsset,
+  intendedRecipient,
+  senderAddress,
 }: {
   provider: GeneralSwapProvider
   data: string
   quotedOutputAmount: string
   maxSlippageBps: number | undefined
+  destinationAsset?: string
+  intendedRecipient?: string
+  senderAddress?: string
 }): void => {
   if (!protectedProviders.has(provider)) return
 
@@ -182,17 +294,43 @@ export const assertAggregatorCalldataMinOutputBound = ({
     throw new Error(`${provider} swap quote destination amount must be positive`)
   }
 
-  const minimumOutput = decodeAggregatorCalldataMinOutput({
+  const decodedOutput = decodeAggregatorCalldataOutput({
     provider: provider as MinOutputProtectedProvider,
     data,
   })
-  if (minimumOutput === undefined) return
+  if (decodedOutput === undefined) return
 
+  const minimumOutput = decodedOutput.minimum
   const requiredMinimum = (expectedOutput * (10_000n - BigInt(maxSlippageBps))) / 10_000n
-
   if (minimumOutput <= 0n || minimumOutput < requiredMinimum) {
     throw new Error(
       `${provider} calldata minimum output (${minimumOutput}) is below the quote-bound floor (${requiredMinimum}) for expected output ${expectedOutput} and ${maxSlippageBps} bps slippage; refusing to sign`
     )
+  }
+  if (decodedOutput.kind === 'asset-bound') {
+    const expectedAsset = destinationAsset ?? evmNativeCoinAddress
+    const isNative = (address: string) =>
+      address.toLowerCase() === evmNativeCoinAddress ||
+      address.toLowerCase() === '0x0000000000000000000000000000000000000000'
+    const assetMatches =
+      (isNative(expectedAsset) && isNative(decodedOutput.asset)) ||
+      decodedOutput.asset.toLowerCase() === expectedAsset.toLowerCase()
+    if (!/^0x[0-9a-fA-F]{40}$/.test(expectedAsset) || !assetMatches) {
+      throw new Error(`${provider} calldata destination asset does not match the quoted output asset; refusing to sign`)
+    }
+  }
+  const receiver =
+    decodedOutput.kind === 'asset-bound' &&
+    decodedOutput.receiver === '0x0000000000000000000000000000000000000000' &&
+    decodedOutput.zeroReceiverIsSender
+      ? senderAddress
+      : (decodedOutput.receiver ?? senderAddress)
+  if (
+    !receiver ||
+    !intendedRecipient ||
+    !/^0x[0-9a-fA-F]{40}$/.test(intendedRecipient) ||
+    receiver.toLowerCase() !== intendedRecipient.toLowerCase()
+  ) {
+    throw new Error(`${provider} calldata output receiver does not match the intended recipient; refusing to sign`)
   }
 }
