@@ -1822,11 +1822,12 @@ describe('StakeKit signability gate (sdk#1904)', () => {
         })
       )
       const params = { yieldId: action.yieldId, address: '0x' + 'a'.repeat(64), amount: '1' }
-      const refusal = await (builder === 'enter'
-        ? stakekitBuildEnter(params)
-        : builder === 'exit'
-          ? stakekitBuildExit(params)
-          : stakekitBuildManage({ ...params, action: 'WITHDRAW', passthrough: 'pending-action' })
+      const refusal = await (
+        builder === 'enter'
+          ? stakekitBuildEnter(params)
+          : builder === 'exit'
+            ? stakekitBuildExit(params)
+            : stakekitBuildManage({ ...params, action: 'WITHDRAW', passthrough: 'pending-action' })
       ).catch(error => error)
       expect(refusal).toBeInstanceOf(StakekitActionRefusal)
       expect(refusal.status).toBe('unsignable_sui')
