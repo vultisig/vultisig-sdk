@@ -21,7 +21,7 @@ async function runFixture(t, mode) {
 const countPath = process.env.AUDIT_TEST_COUNT;
 const count = fs.existsSync(countPath) ? Number(fs.readFileSync(countPath, 'utf8')) + 1 : 1;
 fs.writeFileSync(countPath, String(count));
-if (JSON.stringify(process.argv.slice(2)) !== JSON.stringify(['npm', 'audit', '--recursive', '--all', '--severity', 'high', '--ignore', '1239765', '--ignore', '1239766'])) process.exit(99);
+if (JSON.stringify(process.argv.slice(2)) !== JSON.stringify(['npm', 'audit', '--recursive', '--all', '--severity', 'high'])) process.exit(99);
 if (process.env.AUDIT_TEST_MODE === 'retry' && count === 1) {
   console.error('ECONNRESET'); process.exit(1);
 }
