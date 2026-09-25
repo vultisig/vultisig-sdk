@@ -42,9 +42,9 @@ export const extractSwapFees = async (
 ): Promise<SwapFees> => {
   if ('native' in quoteData) {
     return {
-      network: BigInt(quoteData.native.fees.outbound),
-      affiliate: quoteData.native.fees.affiliate ? BigInt(quoteData.native.fees.affiliate) : undefined,
-      total: BigInt(quoteData.native.fees.total),
+      // Native quote fees are destination-denominated, so none belong in this source-native fee summary.
+      network: 0n,
+      total: 0n,
     }
   }
 
@@ -91,8 +91,8 @@ export const extractSwapFees = async (
   // not from the SwapKit quote. Return 0n — real source-chain fees are estimated
   // at broadcast time by TransactionBuilder.estimateSendFee() (which wraps
   // getSendFeeEstimate() from @vultisig/core-mpc). This is the same estimator
-  // used for regular UTXO sends. VaultBase.getSwapQuote detects this 0n and
-  // keeps maxSwapable=0n rather than overstating it as the full balance.
+  // used for regular UTXO sends. Leave maxSwapable at 0n because a plain-send
+  // estimate cannot model the provider-built deposit transaction safely.
   if ('transfer' in tx) {
     return {
       network: 0n,

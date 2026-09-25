@@ -64,7 +64,7 @@ export async function executeSwapQuote(ctx: CommandContext, options: SwapQuoteOp
 
   const quote = result.quote
   const semanticAmount = isMax
-    ? formatBigintAmount(quote.maxSwapable, quote.fromCoin.decimals)
+    ? (result.amount ?? formatBigintAmount(quote.maxSwapable, quote.fromCoin.decimals))
     : normalizeSwapAmount(amount, quote.fromCoin.decimals)
   const fromAmountDisplay = isMax ? `${semanticAmount} (max)` : semanticAmount
 
@@ -230,7 +230,9 @@ export async function executeSwap(
   const quote = dryResult.quote
   const semanticAmount = options.amount === 'max' ? amountStr : normalizeSwapAmount(amountStr, quote.fromCoin.decimals)
   const fromAmountRaw =
-    options.amount === 'max' ? formatBigintAmount(quote.maxSwapable, quote.fromCoin.decimals) : semanticAmount
+    options.amount === 'max'
+      ? (dryResult.amount ?? formatBigintAmount(quote.maxSwapable, quote.fromCoin.decimals))
+      : semanticAmount
   const fromAmountDisplay = options.amount === 'max' ? `${fromAmountRaw} (max)` : fromAmountRaw
 
   // If user asked for dry-run only, return preview
