@@ -1,3 +1,4 @@
+import { SolanaJSONRPCError } from '@solana/web3.js'
 import { Chain, OtherChain } from '@vultisig/core-chain/Chain'
 import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
 import { withSolanaRpcTimeout } from '@vultisig/core-chain/chains/solana/rpcTimeout'
@@ -7,6 +8,8 @@ import { attempt } from '@vultisig/lib-utils/attempt'
 import { TxStatusResolver } from '../resolver'
 
 type SolanaClient = ReturnType<typeof getSolanaClient>
+
+const isInvalidParamsError = (error: unknown): boolean => error instanceof SolanaJSONRPCError && error.code === -32602
 
 // Every RPC call here is bounded: a stalled request reads as unavailable
 // information and the transaction stays pending, the same way a failed one
@@ -44,12 +47,23 @@ export const getSolanaTxStatus: TxStatusResolver<OtherChain.Solana> = async ({ h
   const { data: firstSighting, error: firstLookupError } = await readSignatureStatus(client, hash)
 
   if (firstLookupError) {
+    // An unparseable signature can never have an on-chain record. Other RPC
+    // failures prove nothing and remain retryable.
+    if (isInvalidParamsError(firstLookupError)) {
+      return { status: 'not_found', isKnown: false }
+    }
     return { status: 'pending', isKnown: false }
   }
 
   let signatureStatus = firstSighting
 
   if (!signatureStatus) {
+    // A history search with no broadcast expiry context is the node's
+    // authoritative answer that it has no record of this signature.
+    if (lastValidBlockHeight == null) {
+      return { status: 'not_found', isKnown: false }
+    }
+
     if (!(await isExpiredLastValidBlockHeight(client, lastValidBlockHeight))) {
       return { status: 'pending', isKnown: false }
     }

@@ -17,9 +17,12 @@ export const getCosmosTxStatus: TxStatusResolver<CosmosChain> = async ({ chain, 
 
   const { data: tx, error } = await attempt(client.getTx(hash))
 
-  if (error || !tx) {
+  if (error) {
     return { status: 'pending', isKnown: false }
   }
+
+  // A successful query with no result means the node has no record of this hash.
+  if (!tx) return { status: 'not_found', isKnown: false }
 
   const status = tx.code === 0 ? 'success' : 'error'
 

@@ -1,3 +1,4 @@
+import { SolanaJSONRPCError } from '@solana/web3.js'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -25,11 +26,11 @@ describe('getSolanaTxStatus', () => {
     vi.clearAllMocks()
   })
 
-  it('marks missing signatures as unknown pending', async () => {
+  it('reports missing signatures as not_found when no last valid block height is supplied', async () => {
     mocks.getSignatureStatuses.mockResolvedValue({ value: [null] })
 
     await expect(getSolanaTxStatus({ chain: Chain.Solana, hash })).resolves.toEqual({
-      status: 'pending',
+      status: 'not_found',
       isKnown: false,
     })
     expect(mocks.getBlockHeight).not.toHaveBeenCalled()
@@ -104,6 +105,19 @@ describe('getSolanaTxStatus', () => {
 
     await expect(getSolanaTxStatus({ chain: Chain.Solana, hash, lastValidBlockHeight: 100 })).resolves.toEqual({
       status: 'pending',
+      isKnown: false,
+    })
+    expect(mocks.getBlockHeight).not.toHaveBeenCalled()
+    expect(mocks.getTransaction).not.toHaveBeenCalled()
+  })
+
+  it('reports signatures rejected as invalid RPC params as not_found', async () => {
+    mocks.getSignatureStatuses.mockRejectedValue(
+      new SolanaJSONRPCError({ code: -32602, message: 'Invalid param: WrongSize' })
+    )
+
+    await expect(getSolanaTxStatus({ chain: Chain.Solana, hash })).resolves.toEqual({
+      status: 'not_found',
       isKnown: false,
     })
     expect(mocks.getBlockHeight).not.toHaveBeenCalled()
