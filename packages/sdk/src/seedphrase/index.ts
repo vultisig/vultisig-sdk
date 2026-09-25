@@ -39,6 +39,14 @@ export {
 // Validator
 export { cleanMnemonic, SeedphraseValidator, validateSeedphrase } from './SeedphraseValidator'
 
+// Seedphrase import preflight
+export {
+  prepareSeedphraseImportPrelude,
+  type SeedphraseImportPreludeInput,
+  type SeedphraseImportPreludeProgressLabels,
+  type SeedphraseImportPreludeResult,
+} from './prepareSeedphraseImportPrelude'
+
 // Key Deriver
 export { type DerivedChainKey, MasterKeyDeriver } from './MasterKeyDeriver'
 

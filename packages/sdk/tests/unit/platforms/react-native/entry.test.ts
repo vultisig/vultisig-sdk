@@ -2,6 +2,7 @@ import * as cosmosStaking from '@vultisig/core-chain/chains/cosmos/staking/lcdQu
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
 import { resolveTokenPriceId as canonicalResolveTokenPriceId } from '@vultisig/core-chain/coin/price/resolveTokenPriceId'
+import { deriveQbtcAddress as canonicalDeriveQbtcAddress } from '@vultisig/core-chain/publicKey/address/deriveQbtcAddress'
 import * as blockaidChains from '@vultisig/core-chain/security/blockaid/evmChains'
 import { isValidTxHash } from '@vultisig/core-chain/tx/isValidTxHash'
 import { AuthInfo, SignDoc, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
@@ -363,6 +364,12 @@ describe('RN lazy helper contracts', () => {
 })
 
 describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
+  it('re-exports canonical QBTC address derivation with its synchronous signature', () => {
+    const publicKey = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+    expect(reactNativeEntry.deriveQbtcAddress).toBe(canonicalDeriveQbtcAddress)
+    expectTypeOf(reactNativeEntry.deriveQbtcAddress).toEqualTypeOf<(mldsaPublicKeyHex: string) => string>()
+    expect(reactNativeEntry.deriveQbtcAddress(publicKey)).toBe('qbtc1p3xsn0hgurfgfygl4wc9qslemjuujqg2x9fdnp')
+  })
   it('exports the strict chain-ID resolver by identity with its string-only signature', () => {
     expect(reactNativeEntry.resolveChainIdReference).toBe(resolveChainIdReference)
     expectTypeOf(sdkRn.resolveChainIdReference).toEqualTypeOf<(chainId: string) => sdkRn.Chain | undefined>()

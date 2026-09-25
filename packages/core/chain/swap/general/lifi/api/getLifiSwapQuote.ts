@@ -1,5 +1,6 @@
 import { getQuote } from '@lifi/sdk'
 import { DeriveChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
+import { evmNativeCoinAddress } from '@vultisig/core-chain/chains/evm/config'
 import { solanaConfig } from '@vultisig/core-chain/chains/solana/solanaConfig'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import {
@@ -200,24 +201,24 @@ export const getLifiSwapQuote = async ({
         }
       },
       evm: () => {
-        // Mirror the Solana branch's fee extraction so EVM routes
-        // (including cross-chain EVM → Solana/Cosmos via Stargate, Across,
-        // etc.) surface the affiliate fee. LI.FI's `feeCosts` is the same
-        // for both kinds; the EVM branch was previously dropping it on the
-        // floor which left the swap-fee row blank for every LI.FI EVM
-        // route. Keep `affiliateFee` optional: not every route has one
-        // (affiliateBps may be 0 and no LIFI Fixed Fee charged).
+        // Only the integrator's share is our affiliate fee. LI.FI's feeCosts
+        // also includes platform and execution fees, and an entry's total
+        // amount can include more than the integrator's share.
         const fees = estimate.feeCosts ?? []
-        const swapFee = fees.find(fee => fee.name === 'LIFI Fixed Fee') || fees[0]
-        // EVM addresses can come back from LiFi in either lowercase or
-        // EIP-55 checksum form; normalize both sides to lowercase so a
-        // checksum mismatch doesn't silently fall back to the native
-        // fee coin and misattribute the affiliate fee.
-        const swapFeeAddress = swapFee?.token.address.toLowerCase()
-        const swapFeeAssetId =
-          swapFee &&
-          ([fromToken, toToken].find(token => token.toLowerCase() === swapFeeAddress) ||
-            chainFeeCoin[transfer.from.chain].id)
+        const swapFee = fees.find(fee => fee.feeSplit?.integratorFee && BigInt(fee.feeSplit.integratorFee) > 0n)
+        const affiliateFeeAmount = swapFee?.feeSplit?.integratorFee
+        // Keep LI.FI's fee-token identity even when it differs from both route
+        // endpoints. Only its native-token sentinels may become a native fee.
+        const swapFeeAddress = swapFee?.token.address
+        const normalizedFeeAddress = swapFeeAddress?.toLowerCase()
+        const swapFeeChain = swapFee && resolveSwapFeeChain(swapFee.token.chainId, transfer.from.chain)
+        const isNativeFee =
+          swapFeeChain &&
+          swapFee?.token.chainId === lifiSwapChainId[transfer.from.chain] &&
+          (normalizedFeeAddress === evmNativeCoinAddress ||
+            normalizedFeeAddress === '0x0000000000000000000000000000000000000000' ||
+            normalizedFeeAddress === chainFeeCoin[swapFeeChain].ticker.toLowerCase())
+        const swapFeeAssetId = isNativeFee ? undefined : swapFeeAddress
         // LI.FI `estimate.approvalAddress` is the spender that will pull the
         // user's input ERC-20. LI.FI documents it as route-dependent, so it can
         // differ from the Diamond destination. Treat it as independently
@@ -238,10 +239,10 @@ export const getLifiSwapQuote = async ({
             ...(approvalAddr && approvalAddr !== '0x0000000000000000000000000000000000000000'
               ? { approvalAddress: approvalAddr }
               : {}),
-            ...(swapFee
+            ...(swapFee && affiliateFeeAmount
               ? {
                   affiliateFee: {
-                    amount: BigInt(swapFee.amount),
+                    amount: BigInt(affiliateFeeAmount),
                     decimals: swapFee.token.decimals,
                     chain: resolveSwapFeeChain(swapFee.token.chainId, transfer.from.chain),
                     id: swapFeeAssetId,

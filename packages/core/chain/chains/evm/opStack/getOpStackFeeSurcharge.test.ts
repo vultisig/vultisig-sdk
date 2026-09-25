@@ -16,11 +16,12 @@ import { getOpStackFeeSurcharge } from './getOpStackFeeSurcharge'
 type OracleAnswers = {
   getL1Fee?: bigint | Error
   getOperatorFee?: bigint | Error
+  tokenRatio?: bigint | Error
 }
 
-const answerWith = ({ getL1Fee = 0n, getOperatorFee = 0n }: OracleAnswers) => {
+const answerWith = ({ getL1Fee = 0n, getOperatorFee = 0n, tokenRatio = 1n }: OracleAnswers) => {
   mocks.readContract.mockImplementation(async ({ functionName }: { functionName: keyof OracleAnswers }) => {
-    const answer = { getL1Fee, getOperatorFee }[functionName]
+    const answer = { getL1Fee, getOperatorFee, tokenRatio }[functionName]
     if (answer instanceof Error) throw answer
     return answer
   })
@@ -39,25 +40,37 @@ describe('getOpStackFeeSurcharge', () => {
   })
 
   it('sums the L1 data fee and the operator fee op-geth adds to its balance check', async () => {
-    answerWith({ getL1Fee: 2_168_340_514n, getOperatorFee: 400_000_000_000_000n })
+    answerWith({
+      getL1Fee: 2_168_340_514n,
+      getOperatorFee: 400_000_000_000_000n,
+    })
 
     expect(await getOpStackFeeSurcharge(input)).toBe(2_168_340_514n + 400_000_000_000_000n)
   })
 
   it('still reserves the L1 data fee when the oracle predates getOperatorFee', async () => {
-    answerWith({ getL1Fee: 389_535_913n, getOperatorFee: new Error('execution reverted') })
+    answerWith({
+      getL1Fee: 389_535_913n,
+      getOperatorFee: new Error('execution reverted'),
+    })
 
     expect(await getOpStackFeeSurcharge(input)).toBe(389_535_913n)
   })
 
   it('still reserves the operator fee when the L1 lookup fails', async () => {
-    answerWith({ getL1Fee: new Error('network down'), getOperatorFee: 900_000_000_000_000_000n })
+    answerWith({
+      getL1Fee: new Error('network down'),
+      getOperatorFee: 900_000_000_000_000_000n,
+    })
 
     expect(await getOpStackFeeSurcharge(input)).toBe(900_000_000_000_000_000n)
   })
 
   it('reserves nothing when the oracle is unreachable, leaving the send exactly as it behaved before', async () => {
-    answerWith({ getL1Fee: new Error('network down'), getOperatorFee: new Error('network down') })
+    answerWith({
+      getL1Fee: new Error('network down'),
+      getOperatorFee: new Error('network down'),
+    })
 
     expect(await getOpStackFeeSurcharge(input)).toBe(0n)
   })
@@ -79,10 +92,49 @@ describe('getOpStackFeeSurcharge', () => {
   it('prices the operator fee against the gas limit the node will hold, not the gas a transfer uses', async () => {
     answerWith({})
 
-    await getOpStackFeeSurcharge({ ...input, chain: EvmChain.Mantle, gasLimit: 90_000_000n })
+    await getOpStackFeeSurcharge({
+      ...input,
+      chain: EvmChain.Mantle,
+      gasLimit: 90_000_000n,
+    })
 
     const operatorCall = mocks.readContract.mock.calls.find(([{ functionName }]) => functionName === 'getOperatorFee')
     expect(operatorCall?.[0].args).toEqual([90_000_000n])
+  })
+
+  it('converts Mantle L1 cost into MNT before reserving a native max send', async () => {
+    answerWith({
+      getL1Fee: 409_822_826_468n,
+      tokenRatio: 3_890n,
+      getOperatorFee: 230_000_000_000_000n,
+    })
+
+    const l1FeeInMnt = 409_822_826_468n * 3_890n
+    expect(await getOpStackFeeSurcharge({ ...input, chain: EvmChain.Mantle })).toBe(
+      (l1FeeInMnt * 120n + 99n) / 100n + 230_000_000_000_000n
+    )
+    expect(mocks.readContract.mock.calls.map(([{ functionName }]) => functionName)).toContain('tokenRatio')
+  })
+
+  it('does not quote an unscaled Mantle max reserve when the token ratio is unavailable', async () => {
+    answerWith({
+      getL1Fee: 409_822_826_468n,
+      tokenRatio: new Error('RPC unavailable'),
+    })
+
+    await expect(getOpStackFeeSurcharge({ ...input, chain: EvmChain.Mantle })).rejects.toThrow('RPC unavailable')
+  })
+
+  it('does not quote a Mantle max reserve without its L1 fee', async () => {
+    answerWith({ getL1Fee: new Error('RPC unavailable'), tokenRatio: 3_890n })
+
+    await expect(getOpStackFeeSurcharge({ ...input, chain: EvmChain.Mantle })).rejects.toThrow('RPC unavailable')
+  })
+
+  it('does not quote a Mantle max reserve without its operator fee', async () => {
+    answerWith({ getL1Fee: 409_822_826_468n, tokenRatio: 3_890n, getOperatorFee: new Error('RPC unavailable') })
+
+    await expect(getOpStackFeeSurcharge({ ...input, chain: EvmChain.Mantle })).rejects.toThrow('RPC unavailable')
   })
 
   it('grows the priced payload with the transaction calldata', async () => {
