@@ -14,6 +14,9 @@
 //   - Non-EVM steps: HAVE tx_encoding field (solana-tx, sui-tx, tron-tx, ton-tx)
 //   - All-or-nothing: if any step fails to canonicalize, decoded[] used for ALL steps
 
+import { bcs } from '@mysten/sui/bcs'
+import { VersionedTransaction } from '@solana/web3.js'
+import { Cell } from '@ton/core'
 import { Buffer } from 'buffer'
 
 import type {
@@ -490,7 +493,10 @@ function stakekitActionBuildPermanentlyFailed(
   if (!Array.isArray(steps)) return { failed: false }
   const failedStep = steps.find(tx => tx.buildError?.permanent)
   if (!failedStep) return { failed: false }
-  return { failed: true, message: honestStakekitBuildFailureMessage(failedStep, data.amount) }
+  return {
+    failed: true,
+    message: honestStakekitBuildFailureMessage(failedStep, data.amount),
+  }
 }
 
 // yield.xyz's Sui `unsignedTransaction` for yield deposits/withdrawals can
@@ -531,7 +537,10 @@ function stakekitActionHasUnsignableSui(data: YieldActionResponse): boolean {
     if (typeof tx.unsignedTransaction !== 'string' || tx.unsignedTransaction.length === 0) return false
     let candidate = tx.unsignedTransaction
     try {
-      const wrapper = JSON.parse(candidate) as { serialized?: unknown; tx?: unknown }
+      const wrapper = JSON.parse(candidate) as {
+        serialized?: unknown
+        tx?: unknown
+      }
       if (wrapper && typeof wrapper === 'object') {
         if (typeof wrapper.serialized === 'string' && wrapper.serialized) candidate = wrapper.serialized
         else if (typeof wrapper.tx === 'string' && wrapper.tx) candidate = wrapper.tx
@@ -585,6 +594,150 @@ function stakekitActionBuildIncomplete(data: YieldActionResponse): boolean {
   })
 }
 
+function readWireVarint(bytes: Buffer, start: number): { value: bigint; end: number } | null {
+  let value = 0n
+  for (let index = 0; index < 10 && start + index < bytes.length; index++) {
+    const byte = bytes[start + index]
+    if (index === 9 && byte > 1) return null
+    value |= BigInt(byte & 0x7f) << BigInt(index * 7)
+    if ((byte & 0x80) === 0) return { value, end: start + index + 1 }
+  }
+  return null
+}
+
+type WireField = { wireType: number; value: bigint | Buffer }
+
+/** Parse the full protobuf frame, including nested Tron contract envelopes. */
+function readWireFields(bytes: Buffer): Map<number, WireField[]> | null {
+  let offset = 0
+  const fields = new Map<number, WireField[]>()
+  while (offset < bytes.length) {
+    const tag = readWireVarint(bytes, offset)
+    if (!tag || tag.value < 8n || tag.value >> 3n > BigInt(Number.MAX_SAFE_INTEGER)) return null
+    offset = tag.end
+    const field = Number(tag.value >> 3n)
+    const wireType = Number(tag.value & 7n)
+    let value: bigint | Buffer
+    if (wireType === 0) {
+      const parsed = readWireVarint(bytes, offset)
+      if (!parsed) return null
+      offset = parsed.end
+      value = parsed.value
+    } else if (wireType === 1 || wireType === 5) {
+      const end = offset + (wireType === 1 ? 8 : 4)
+      if (end > bytes.length) return null
+      value = bytes.subarray(offset, end)
+      offset = end
+    } else if (wireType === 2) {
+      const length = readWireVarint(bytes, offset)
+      if (!length || length.value > BigInt(bytes.length - length.end)) return null
+      offset = length.end + Number(length.value)
+      value = bytes.subarray(length.end, offset)
+    } else {
+      return null
+    }
+    fields.set(field, [...(fields.get(field) ?? []), { wireType, value }])
+  }
+  return fields
+}
+
+function wireValues(fields: Map<number, WireField[]>, field: number, wireType: number): (bigint | Buffer)[] {
+  return (fields.get(field) ?? []).filter(entry => entry.wireType === wireType).map(entry => entry.value)
+}
+
+/** Require the fields the Tron signer and broadcaster need, not just hex syntax. */
+function isTronRawData(bytes: Buffer): boolean {
+  const raw = readWireFields(bytes)
+  if (!raw) return false
+  if (!wireValues(raw, 1, 2).some(value => Buffer.isBuffer(value) && value.length === 2)) return false
+  if (!wireValues(raw, 4, 2).some(value => Buffer.isBuffer(value) && value.length === 8)) return false
+  if (wireValues(raw, 8, 0).length === 0 || wireValues(raw, 14, 0).length === 0) return false
+  return wireValues(raw, 11, 2).some(value => {
+    if (!Buffer.isBuffer(value)) return false
+    const contract = readWireFields(value)
+    if (!contract || wireValues(contract, 1, 0).length === 0) return false
+    return wireValues(contract, 2, 2).some(parameter => {
+      if (!Buffer.isBuffer(parameter)) return false
+      const any = readWireFields(parameter)
+      return (
+        !!any &&
+        wireValues(any, 1, 2).some(typeUrl => Buffer.isBuffer(typeUrl) && typeUrl.length > 0) &&
+        wireValues(any, 2, 2).some(contractValue => Buffer.isBuffer(contractValue) && contractValue.length > 0)
+      )
+    })
+  })
+}
+
+/** TON's BoC parser accepts trailing bytes, so verify its declared frame length. */
+function isExactTonBoc(bytes: Buffer): boolean {
+  if (bytes.length < 6) return false
+  const magic = bytes.readUInt32BE(0)
+  const standard = magic === 0xb5ee9c72
+  const lean = magic === 0x68ff65f3 || magic === 0xacc3a728
+  if (!standard && !lean) return false
+  const size = standard ? bytes[4] & 7 : bytes[4]
+  const offsetSize = bytes[5]
+  if (size < 1 || size > 6 || offsetSize < 1 || offsetSize > 6) return false
+  let cursor = 6
+  const read = (width: number): number | null => {
+    if (cursor + width > bytes.length) return null
+    const value = bytes.readUIntBE(cursor, width)
+    cursor += width
+    return value
+  }
+  const cells = read(size)
+  const roots = read(size)
+  const absent = read(size)
+  const cellBytes = read(offsetSize)
+  if (cells === null || roots !== 1 || absent === null || cellBytes === null || cells > bytes.length) return false
+  const hasIndex = lean || (bytes[4] & 0x80) !== 0
+  const hasCrc = magic === 0xacc3a728 || (standard && (bytes[4] & 0x40) !== 0)
+  const frameLength =
+    cursor + (standard ? roots * size : 0) + (hasIndex ? cells * offsetSize : 0) + cellBytes + (hasCrc ? 4 : 0)
+  return frameLength === bytes.length
+}
+
+/** A nonempty envelope is insufficient: wallet signers need valid wire bytes. */
+function stakekitStepHasValidWireData(step: Record<string, unknown>): boolean {
+  const encoding = step.tx_encoding
+  const data = step.data
+  if (typeof data !== 'string' || data.length === 0) return false
+  if (encoding === 'tron-tx') {
+    const hex = /^0x/i.test(data) ? data.slice(2) : data
+    return (
+      hex.length > 0 && hex.length % 2 === 0 && /^[0-9a-fA-F]+$/.test(hex) && isTronRawData(Buffer.from(hex, 'hex'))
+    )
+  }
+  if (!['solana-tx', 'sui-tx', 'ton-tx'].includes(String(encoding))) return false
+  if (encoding === 'ton-tx' && /^(?:0x|b5ee9c72)/i.test(data)) {
+    const hex = /^0x/i.test(data) ? data.slice(2) : data
+    if (hex.length === 0 || hex.length % 2 !== 0 || !/^[0-9a-fA-F]+$/.test(hex)) return false
+    try {
+      const bytes = Buffer.from(hex, 'hex')
+      return isExactTonBoc(bytes) && Cell.fromBoc(bytes).length > 0
+    } catch {
+      return false
+    }
+  }
+  // Buffer's base64 decoder silently ignores invalid characters and truncates
+  // malformed input, so check the alphabet and round-trip before parsing.
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(data)) return false
+  const bytes = Buffer.from(data, 'base64')
+  if (bytes.length === 0 || bytes.toString('base64').replace(/=+$/, '') !== data.replace(/=+$/, '')) return false
+  try {
+    if (encoding === 'solana-tx') {
+      return Buffer.from(VersionedTransaction.deserialize(bytes).serialize()).equals(bytes)
+    }
+    if (encoding === 'sui-tx') {
+      return Buffer.from(bcs.TransactionData.serialize(bcs.TransactionData.parse(bytes)).toBytes()).equals(bytes)
+    }
+    if (!isExactTonBoc(bytes) || Cell.fromBoc(bytes).length === 0) return false
+    return true
+  } catch {
+    return false
+  }
+}
+
 /** Discriminated final acceptance/refusal outcome for a `YieldActionResponse`. */
 export type StakekitFinalizeResult =
   | { status: 'signable'; display: ReturnType<typeof parseActionDisplay> }
@@ -620,7 +773,10 @@ export function finalizeStakekitAction(data: YieldActionResponse): StakekitFinal
     return { status: 'unsignable_sui', message: STAKEKIT_SUI_UNSIGNABLE_MSG }
   }
   if (stakekitActionHasUncanonicalizableNetwork(data)) {
-    return { status: 'unsupported_chain', message: STAKEKIT_UNSUPPORTED_CHAIN_MSG }
+    return {
+      status: 'unsupported_chain',
+      message: STAKEKIT_UNSUPPORTED_CHAIN_MSG,
+    }
   }
   if (stakekitActionBuildIncomplete(data)) {
     return { status: 'incomplete', message: STAKEKIT_BUILD_INCOMPLETE_MSG }
@@ -629,7 +785,9 @@ export function finalizeStakekitAction(data: YieldActionResponse): StakekitFinal
   if (
     display.transactions.some((step, index) => {
       const network = data.transactions[index].network
-      return EVM_NETWORKS.has(network) ? !('to' in step && 'data' in step) : !('tx_encoding' in step && 'data' in step)
+      return EVM_NETWORKS.has(network)
+        ? !('to' in step && 'data' in step)
+        : !('tx_encoding' in step && stakekitStepHasValidWireData(step))
     })
   ) {
     return { status: 'incomplete', message: STAKEKIT_BUILD_INCOMPLETE_MSG }

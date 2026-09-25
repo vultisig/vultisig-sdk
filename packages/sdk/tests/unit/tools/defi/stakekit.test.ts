@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { buildTronSendTx } from '@/chains/tron/tx'
+
+// Structurally valid unsigned TransactionData and VersionedTransaction bytes.
+const SUI_BCS =
+  'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAABAAAAAAAAAAA='
+const SOLANA_TX =
+  'AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAQAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=='
+
 import type { YieldActionResponse, YieldDiscoverOpportunity, YieldTransaction } from '@/tools/defi/stakekit'
 import {
   buildYieldActionScanRequest,
@@ -53,7 +61,10 @@ const makeProduct = (overrides: Record<string, unknown> = {}) => ({
     },
     cooldownPeriod: undefined,
   },
-  args: { enter: { addresses: {}, args: {} }, exit: { addresses: {}, args: {} } },
+  args: {
+    enter: { addresses: {}, args: {} },
+    exit: { addresses: {}, args: {} },
+  },
   validators: [],
   status: { enter: true, exit: true },
   ...overrides,
@@ -119,8 +130,7 @@ const makeSolanaActionResponse = (): YieldActionResponse => ({
       type: 'STAKE',
       network: 'solana',
       status: 'CREATED',
-      unsignedTransaction:
-        'AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQABAQL',
+      unsignedTransaction: SOLANA_TX,
       gasEstimate: '{}',
     },
   ],
@@ -182,7 +192,12 @@ describe('sdk.defi.stakekit', () => {
       const eth = makeProduct({ id: 'ethereum-eth-lido-staking' })
       const usdc = makeProduct({
         id: 'ethereum-usdc-aave-v3-lending',
-        token: { symbol: 'USDC', name: 'USD Coin', network: 'ethereum', decimals: 6 },
+        token: {
+          symbol: 'USDC',
+          name: 'USD Coin',
+          network: 'ethereum',
+          decimals: 6,
+        },
       })
       globalThis.fetch = vi.fn().mockResolvedValueOnce({
         ok: true,
@@ -258,7 +273,11 @@ describe('sdk.defi.stakekit', () => {
       const fetchMock = vi.fn().mockResolvedValue(okOnce([product]))
       globalThis.fetch = fetchMock
 
-      const q = { network: 'ethereum', type: 'iso-same-key', apiKey: 'project-key-AAA' }
+      const q = {
+        network: 'ethereum',
+        type: 'iso-same-key',
+        apiKey: 'project-key-AAA',
+      }
       await stakekitSearch(q)
       await stakekitSearch(q)
 
@@ -358,7 +377,11 @@ describe('sdk.defi.stakekit', () => {
             type: 'APPROVAL',
             network: 'base',
             status: 'CREATED',
-            unsignedTransaction: JSON.stringify({ to: '0xabc123', data: '0xdeadbeef', value: '0x0' }),
+            unsignedTransaction: JSON.stringify({
+              to: '0xabc123',
+              data: '0xdeadbeef',
+              value: '0x0',
+            }),
             gasEstimate: '{}',
           },
           {
@@ -368,7 +391,10 @@ describe('sdk.defi.stakekit', () => {
             network: 'base',
             status: 'CREATED',
             // Missing `to` field — will fail EVM canonicalization
-            unsignedTransaction: JSON.stringify({ value: '0x0', data: '0xdeadbeef' }),
+            unsignedTransaction: JSON.stringify({
+              value: '0x0',
+              data: '0xdeadbeef',
+            }),
             gasEstimate: '{}',
           },
         ],
@@ -397,7 +423,11 @@ describe('sdk.defi.stakekit', () => {
             type: 'APPROVAL',
             network: 'base',
             status: 'CREATED',
-            unsignedTransaction: JSON.stringify({ to: '0xabc123', data: '0xdeadbeef', value: '0x0' }),
+            unsignedTransaction: JSON.stringify({
+              to: '0xabc123',
+              data: '0xdeadbeef',
+              value: '0x0',
+            }),
             gasEstimate: '{}',
           },
           {
@@ -575,7 +605,12 @@ describe('sdk.defi.stakekit', () => {
     it('threads the action address into Solana scan_requests for downstream scanners', async () => {
       const product = makeProduct({
         id: 'solana-sol-marinade-staking',
-        token: { symbol: 'SOL', name: 'Solana', network: 'solana', decimals: 9 },
+        token: {
+          symbol: 'SOL',
+          name: 'Solana',
+          network: 'solana',
+          decimals: 9,
+        },
         tokens: [{ symbol: 'SOL', name: 'Solana', network: 'solana', decimals: 9 }],
       })
       const actionResp = makeSolanaActionResponse()
@@ -725,7 +760,10 @@ describe('sdk.defi.stakekit', () => {
         gasEstimate: '{}',
       }
 
-      pendingActionResp.transactions.push({ ...pendingActionResp.transactions[0], id: 'tx-async-second' })
+      pendingActionResp.transactions.push({
+        ...pendingActionResp.transactions[0],
+        id: 'tx-async-second',
+      })
 
       globalThis.fetch = vi.fn().mockImplementation((url: unknown, opts: unknown) => {
         const u = String(url)
@@ -744,7 +782,9 @@ describe('sdk.defi.stakekit', () => {
             ok: true,
             status: 200,
             json: async () => ({
-              result: { content: [{ text: JSON.stringify(pendingActionResp) }] },
+              result: {
+                content: [{ text: JSON.stringify(pendingActionResp) }],
+              },
             }),
             text: async () => '',
           } as Response)
@@ -754,7 +794,10 @@ describe('sdk.defi.stakekit', () => {
           return Promise.resolve({
             ok: true,
             status: 200,
-            json: async () => ({ ...builtTx, id: u.endsWith('tx-async-second') ? 'tx-async-second' : 'tx-async' }),
+            json: async () => ({
+              ...builtTx,
+              id: u.endsWith('tx-async-second') ? 'tx-async-second' : 'tx-async',
+            }),
             text: async () => JSON.stringify(builtTx),
           } as Response)
         }
@@ -774,7 +817,10 @@ describe('sdk.defi.stakekit', () => {
       expect(txs[0].to).toBe('0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48')
       expect(result.scan_requests).toHaveLength(2)
       expect(result.scan_requests).toEqual([
-        expect.objectContaining({ kind: 'evm', to: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' }),
+        expect.objectContaining({
+          kind: 'evm',
+          to: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+        }),
         expect.objectContaining({ kind: 'evm', to: txs[1].to }),
       ])
       expect(result.scan_request).toEqual(result.scan_requests[0])
@@ -1105,7 +1151,9 @@ describe('sdk.defi.stakekit', () => {
         text: async () => JSON.stringify(product),
       } as Response)
 
-      const result = await stakekitDetails({ yieldId: 'ethereum-eth-lido-staking-details-test' })
+      const result = await stakekitDetails({
+        yieldId: 'ethereum-eth-lido-staking-details-test',
+      })
 
       expect(result).toEqual({
         id: 'ethereum-eth-lido-staking-details-test',
@@ -1179,7 +1227,10 @@ describe('sdk.defi.stakekit', () => {
       } as Response)
       globalThis.fetch = fetchMock
 
-      await stakekitBalances({ address: '0x1234567890123456789012345678901234567890', network: 'CronosChain' })
+      await stakekitBalances({
+        address: '0x1234567890123456789012345678901234567890',
+        network: 'CronosChain',
+      })
 
       const networks = fetchMock.mock.calls
         .map(c => String(c[0]))
@@ -1252,7 +1303,11 @@ describe('action-input validation (ported from mcp-ts validateActionInput, Apo #
   it('stakekitBuildEnter throws on a malformed 0x address BEFORE any network call', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch')
     await expect(
-      stakekitBuildEnter({ yieldId: 'ethereum-eth-lido-staking', address: '0x' + 'c'.repeat(42), amount: '1' })
+      stakekitBuildEnter({
+        yieldId: 'ethereum-eth-lido-staking',
+        address: '0x' + 'c'.repeat(42),
+        amount: '1',
+      })
     ).rejects.toThrow(/EVM \(40 hex chars\) or Sui \(64 hex chars\)/)
     expect(fetchSpy).not.toHaveBeenCalled()
     fetchSpy.mockRestore()
@@ -1261,7 +1316,11 @@ describe('action-input validation (ported from mcp-ts validateActionInput, Apo #
   it('stakekitBuildEnter throws on a non-positive amount BEFORE any network call', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch')
     await expect(
-      stakekitBuildEnter({ yieldId: 'ethereum-eth-lido-staking', address: '0x' + 'a'.repeat(40), amount: '0' })
+      stakekitBuildEnter({
+        yieldId: 'ethereum-eth-lido-staking',
+        address: '0x' + 'a'.repeat(40),
+        amount: '0',
+      })
     ).rejects.toThrow(/plain decimal string/)
     expect(fetchSpy).not.toHaveBeenCalled()
     fetchSpy.mockRestore()
@@ -1270,7 +1329,11 @@ describe('action-input validation (ported from mcp-ts validateActionInput, Apo #
   it('stakekitBuildExit throws on a malformed 0x address BEFORE any network call', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch')
     await expect(
-      stakekitBuildExit({ yieldId: 'ethereum-eth-lido-staking', address: '0xdeadbeef', amount: '1' })
+      stakekitBuildExit({
+        yieldId: 'ethereum-eth-lido-staking',
+        address: '0xdeadbeef',
+        amount: '1',
+      })
     ).rejects.toThrow(/Invalid 0x-prefixed address/)
     expect(fetchSpy).not.toHaveBeenCalled()
     fetchSpy.mockRestore()
@@ -1319,7 +1382,12 @@ describe('scan-request coverage (architecture#1670)', () => {
   it('the public builder refuses an action when every step is unsupported', async () => {
     const product = makeProduct({
       id: 'cosmos-atom-some-staking',
-      token: { symbol: 'ATOM', name: 'Cosmos', network: 'cosmos-hub', decimals: 6 },
+      token: {
+        symbol: 'ATOM',
+        name: 'Cosmos',
+        network: 'cosmos-hub',
+        decimals: 6,
+      },
       tokens: [{ symbol: 'ATOM', name: 'Cosmos', network: 'cosmos-hub', decimals: 6 }],
     })
     const actionResp = makeSolanaActionResponse()
@@ -1339,7 +1407,10 @@ describe('scan-request coverage (architecture#1670)', () => {
         json: async () => ({
           ...actionResp,
           yieldId: 'cosmos-atom-some-staking',
-          transactions: actionResp.transactions.map((tx: YieldTransaction) => ({ ...tx, network: 'cosmos-hub' })),
+          transactions: actionResp.transactions.map((tx: YieldTransaction) => ({
+            ...tx,
+            network: 'cosmos-hub',
+          })),
         }),
         text: async () =>
           JSON.stringify({
@@ -1461,10 +1532,26 @@ describe('StakeKit primary action scan selection (sdk#1918)', () => {
   afterEach(() => vi.unstubAllGlobals())
 
   const scenarios = [
-    { name: 'approval then supply', order: ['approval', 'action'], selected: 1 },
-    { name: 'unsupported action then supported action', order: ['approval', 'unsupported', 'action'], selected: 2 },
-    { name: 'multiple supported actions in original order', order: ['action', 'approval', 'later'], selected: 0 },
-    { name: 'only approvals supported', order: ['approval', 'unsupported', 'approval'], selected: 0 },
+    {
+      name: 'approval then supply',
+      order: ['approval', 'action'],
+      selected: 1,
+    },
+    {
+      name: 'unsupported action then supported action',
+      order: ['approval', 'unsupported', 'action'],
+      selected: 2,
+    },
+    {
+      name: 'multiple supported actions in original order',
+      order: ['action', 'approval', 'later'],
+      selected: 0,
+    },
+    {
+      name: 'only approvals supported',
+      order: ['approval', 'unsupported', 'approval'],
+      selected: 0,
+    },
     { name: 'all steps unsupported', order: ['unsupported'], selected: -1 },
     { name: 'empty response', order: [], selected: -1 },
   ]
@@ -1484,7 +1571,11 @@ describe('StakeKit primary action scan selection (sdk#1918)', () => {
           network: kind === 'unsupported' ? 'cosmos-hub' : step.network,
           unsignedTransaction:
             kind === 'later'
-              ? JSON.stringify({ to: '0xcccccccccccccccccccccccccccccccccccccccc', value: '0x1', data: '0x1234' })
+              ? JSON.stringify({
+                  to: '0xcccccccccccccccccccccccccccccccccccccccc',
+                  value: '0x1',
+                  data: '0x1234',
+                })
               : step.unsignedTransaction,
         }
       }),
@@ -1503,7 +1594,9 @@ describe('StakeKit primary action scan selection (sdk#1918)', () => {
   describe.each(['enter', 'exit', 'manage'] as const)('%s envelope', builder => {
     it.each(scenarios)('$name', async ({ order, selected }) => {
       const response = actionFor(order, builder === 'enter' ? 'SUPPLY' : 'WITHDRAW')
-      const product = makeProduct({ metadata: { cooldownPeriod: { days: 7 } } })
+      const product = makeProduct({
+        metadata: { cooldownPeriod: { days: 7 } },
+      })
       // Route by endpoint: exit fetches cooldown metadata concurrently with the action.
       vi.stubGlobal(
         'fetch',
@@ -1523,7 +1616,11 @@ describe('StakeKit primary action scan selection (sdk#1918)', () => {
           ? stakekitBuildEnter(params)
           : builder === 'exit'
             ? stakekitBuildExit(params)
-            : stakekitBuildManage({ ...params, action: 'WITHDRAW', passthrough: 'pending-action' })
+            : stakekitBuildManage({
+                ...params,
+                action: 'WITHDRAW',
+                passthrough: 'pending-action',
+              })
       if (order.length === 0 || order.includes('unsupported')) {
         await expect(build()).rejects.toMatchObject({
           status: order.length === 0 ? 'incomplete' : 'unsupported_chain',
@@ -1558,13 +1655,21 @@ describe('StakeKit primary action scan selection (sdk#1918)', () => {
           return new Response(JSON.stringify(init?.method === 'POST' ? response : makeProduct()), { status: 200 })
         })
       )
-      const params = { yieldId: response.yieldId, address: 'SoLwaLLetAddr1111111111111111111111111111', amount: '1' }
+      const params = {
+        yieldId: response.yieldId,
+        address: 'SoLwaLLetAddr1111111111111111111111111111',
+        amount: '1',
+      }
       const result =
         builder === 'enter'
           ? await stakekitBuildEnter(params)
           : builder === 'exit'
             ? await stakekitBuildExit(params)
-            : await stakekitBuildManage({ ...params, action: 'CLAIM_REWARDS', passthrough: 'pending-action' })
+            : await stakekitBuildManage({
+                ...params,
+                action: 'CLAIM_REWARDS',
+                passthrough: 'pending-action',
+              })
       expect(result.scan_request).toEqual({
         kind: 'solana',
         chain: 'Solana',
@@ -1581,14 +1686,19 @@ describe('StakeKit signability gate (sdk#1904)', () => {
 
   const actionWith = (changes: Partial<YieldTransaction>): YieldActionResponse => {
     const action = makeEvmActionResponse()
-    return { ...action, transactions: [{ ...action.transactions[0], ...changes }] }
+    return {
+      ...action,
+      transactions: [{ ...action.transactions[0], ...changes }],
+    }
   }
 
   it('refuses empty, missing, incomplete and unsupported steps', () => {
     expect(finalizeStakekitAction(makeEvmActionResponse({ transactions: [] })).status).toBe('incomplete')
     expect(
-      finalizeStakekitAction({ ...makeEvmActionResponse(), transactions: undefined } as unknown as YieldActionResponse)
-        .status
+      finalizeStakekitAction({
+        ...makeEvmActionResponse(),
+        transactions: undefined,
+      } as unknown as YieldActionResponse).status
     ).toBe('incomplete')
     expect(finalizeStakekitAction(actionWith({ unsignedTransaction: null, status: 'FAILED' })).status).toBe(
       'incomplete'
@@ -1597,7 +1707,11 @@ describe('StakeKit signability gate (sdk#1904)', () => {
     expect(finalizeStakekitAction(actionWith({ network: 'cosmos-hub' })).status).toBe('unsupported_chain')
     expect(finalizeStakekitAction(actionWith({ unsignedTransaction: '{}' })).status).toBe('incomplete')
     expect(
-      finalizeStakekitAction(actionWith({ unsignedTransaction: JSON.stringify({ to: '', data: '' }) })).status
+      finalizeStakekitAction(
+        actionWith({
+          unsignedTransaction: JSON.stringify({ to: '', data: '' }),
+        })
+      ).status
     ).toBe('incomplete')
   })
 
@@ -1607,9 +1721,15 @@ describe('StakeKit signability gate (sdk#1904)', () => {
       ...action.transactions[0],
       status: 'FAILED',
       unsignedTransaction: null,
-      buildError: { permanent: true, reason: 'Dry run failed: MoveAbort at 0xprivate_secret' },
+      buildError: {
+        permanent: true,
+        reason: 'Dry run failed: MoveAbort at 0xprivate_secret',
+      },
     }
-    action.transactions[1] = { ...action.transactions[1], unsignedTransaction: null }
+    action.transactions[1] = {
+      ...action.transactions[1],
+      unsignedTransaction: null,
+    }
     const result = finalizeStakekitAction(action)
     expect(result.status).toBe('provider_error')
     if (result.status === 'provider_error') {
@@ -1618,20 +1738,34 @@ describe('StakeKit signability gate (sdk#1904)', () => {
   })
 
   it('preserves a confirmed permanent PATCH refusal for builder classification', async () => {
-    const pending = actionWith({ network: 'sui', status: 'CREATED', unsignedTransaction: null })
+    const pending = actionWith({
+      network: 'sui',
+      status: 'CREATED',
+      unsignedTransaction: null,
+    })
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string) => {
         if (String(url).includes('/yields/')) return new Response(JSON.stringify(makeProduct()), { status: 200 })
         if (String(url).includes('/mcp')) {
-          return new Response(JSON.stringify({ result: { content: [{ text: JSON.stringify(pending) }] } }), {
-            status: 200,
-          })
+          return new Response(
+            JSON.stringify({
+              result: { content: [{ text: JSON.stringify(pending) }] },
+            }),
+            {
+              status: 200,
+            }
+          )
         }
         if (String(url).includes('/transactions/')) {
-          return new Response(JSON.stringify({ details: { reason: 'Dry run failed: MoveAbort at 0xprivate' } }), {
-            status: 400,
-          })
+          return new Response(
+            JSON.stringify({
+              details: { reason: 'Dry run failed: MoveAbort at 0xprivate' },
+            }),
+            {
+              status: 400,
+            }
+          )
         }
         throw new Error(`Unexpected endpoint: ${url}`)
       })
@@ -1652,20 +1786,84 @@ describe('StakeKit signability gate (sdk#1904)', () => {
       unsignedTransaction: Buffer.from(JSON.stringify({ gasData: { budget: null }, commands: [] })).toString('base64'),
     })
     expect(finalizeStakekitAction(sui).status).toBe('unsignable_sui')
-    sui.transactions[0].unsignedTransaction = JSON.stringify({ serialized: sui.transactions[0].unsignedTransaction })
+    sui.transactions[0].unsignedTransaction = JSON.stringify({
+      serialized: sui.transactions[0].unsignedTransaction,
+    })
     expect(finalizeStakekitAction(sui).status).toBe('unsignable_sui')
     sui.transactions[0].unsignedTransaction = JSON.stringify({
       serialized: '',
       tx: JSON.parse(sui.transactions[0].unsignedTransaction).serialized,
     })
     expect(finalizeStakekitAction(sui).status).toBe('unsignable_sui')
-    sui.transactions[0].unsignedTransaction = 'AQAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+    sui.transactions[0].unsignedTransaction = SUI_BCS
     expect(finalizeStakekitAction(sui).status).toBe('signable')
     const mixed = makeEvmActionResponse()
     mixed.transactions.push(sui.transactions[0])
     expect(finalizeStakekitAction(mixed).status).toBe('signable')
     mixed.transactions[1].unsignedTransaction = '{}'
     expect(finalizeStakekitAction(mixed).status).toBe('incomplete')
+  })
+
+  it.each([
+    ['sui', 'not-base64'],
+    ['sui', Buffer.from([1, 2, 3]).toString('base64')],
+    ['solana', 'not-base64'],
+    ['solana', Buffer.from([1, 2, 3]).toString('base64')],
+    ['tron', 'not-hex'],
+    ['tron', 'abc'],
+    ['tron', '00'],
+    ['tron', 'deadbeef'],
+    ['ton', 'not-base64'],
+    ['ton', Buffer.from([1, 2, 3]).toString('base64')],
+  ])('refuses malformed %s signing bytes', (network, unsignedTransaction) => {
+    expect(finalizeStakekitAction(actionWith({ network, unsignedTransaction })).status).toBe('incomplete')
+  })
+
+  it('accepts a structurally valid Solana transaction', () => {
+    expect(finalizeStakekitAction(actionWith({ network: 'solana', unsignedTransaction: SOLANA_TX })).status).toBe(
+      'signable'
+    )
+  })
+
+  it('refuses trailing bytes after valid Sui, Solana and TON envelopes', () => {
+    for (const [network, unsignedTransaction] of [
+      ['sui', SUI_BCS],
+      ['solana', SOLANA_TX],
+      ['ton', 'te6ccgEBAQEAAwAAAgE='],
+    ]) {
+      const withTrailingBytes = Buffer.concat([
+        Buffer.from(unsignedTransaction, 'base64'),
+        Buffer.from('deadbeef', 'hex'),
+      ])
+      expect(
+        finalizeStakekitAction(actionWith({ network, unsignedTransaction: withTrailingBytes.toString('base64') }))
+          .status
+      ).toBe('incomplete')
+    }
+  })
+
+  it('accepts builder-produced Tron raw_data and refuses truncated protobuf', () => {
+    const rawData = buildTronSendTx({
+      from: 'T9yED5xMV5ARV98BexN97aLZ1UUq7eKSxm',
+      to: 'TQcYkNR861VZVLMDfr2RG8CG9bTyDF7jhN',
+      amount: 1_500_000n,
+      refBlockBytes: new Uint8Array([0x40, 0xdf]),
+      refBlockHash: new Uint8Array([0xe4, 0xb1, 0x7a, 0x2d, 0x6f, 0x5a, 0x63, 0xbf]),
+      expiration: 1_700_000_000_000n,
+      timestamp: 1_699_999_940_000n,
+    }).unsignedRawHex
+    expect(finalizeStakekitAction(actionWith({ network: 'tron', unsignedTransaction: rawData })).status).toBe(
+      'signable'
+    )
+    expect(
+      finalizeStakekitAction(actionWith({ network: 'tron', unsignedTransaction: rawData.slice(0, -2) })).status
+    ).toBe('incomplete')
+  })
+
+  it('accepts a TON BoC in the base64 and hex forms supported by its signer', () => {
+    for (const unsignedTransaction of ['te6cckEBAQEAAwAAAgHQ5Lez', 'b5ee9c7241010101000300000201d0e4b7b3']) {
+      expect(finalizeStakekitAction(actionWith({ network: 'ton', unsignedTransaction })).status).toBe('signable')
+    }
   })
 
   it.each(['enter', 'exit', 'manage'] as const)(
@@ -1681,7 +1879,11 @@ describe('StakeKit signability gate (sdk#1904)', () => {
           ? stakekitBuildEnter(params)
           : builder === 'exit'
             ? stakekitBuildExit(params)
-            : stakekitBuildManage({ ...params, action: 'WITHDRAW', passthrough: 'pending-action' })
+            : stakekitBuildManage({
+                ...params,
+                action: 'WITHDRAW',
+                passthrough: 'pending-action',
+              })
       for (const [response, status] of [
         [makeEvmActionResponse({ transactions: [] }), 'incomplete'],
         [
