@@ -1,7 +1,6 @@
 import { Buffer } from 'buffer'
 import { create } from '@bufbuild/protobuf'
 import { getEvmTwFeeFields, GetEvmTwFeeFieldsInput } from '@vultisig/core-chain/chains/evm/tx/fee/tw/getEvmTwFeeFields'
-import { incrementKeysignPayloadNonce } from './incrementKeysignPayloadNonce'
 import { getEvmTwChainId } from '@vultisig/core-chain/chains/evm/tx/tw/getEvmTwChainId'
 import { getEvmTwNonce } from '@vultisig/core-chain/chains/evm/tx/tw/getEvmTwNonce'
 import { toEvmTwAmount } from '@vultisig/core-chain/chains/evm/tx/tw/toEvmTwAmount'
@@ -27,7 +26,7 @@ import { toTwAddress } from '../../../tw/toTwAddress'
 import { getIsGenericContractCall } from '../../../utils/getIsGenericContractCall'
 import { getKeysignChain } from '../../../utils/getKeysignChain'
 import { SigningInputsResolver } from '../../resolver'
-import { getErc20ApproveSigningInput } from './erc20'
+import { getErc20ApproveSigningInputs } from './erc20'
 
 const memoToTxData = (memo: string) => (memo.startsWith('0x') ? toEvmTxData(memo) : Buffer.from(memo, 'utf8'))
 
@@ -61,14 +60,20 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
       }
     }
 
-    const approveSigningInput = getErc20ApproveSigningInput({ keysignPayload, walletCore })
-
-    const restOfSigningInputs = await getEvmSigningInputs({
-      keysignPayload: incrementKeysignPayloadNonce(create(KeysignPayloadSchema, restOfKeysignPayload)),
+    const { signingInputs: approveSigningInputs, nextKeysignPayload } = getErc20ApproveSigningInputs({
+      keysignPayload,
       walletCore,
     })
 
-    return [approveSigningInput, ...restOfSigningInputs]
+    const restOfSigningInputs = await getEvmSigningInputs({
+      keysignPayload: create(KeysignPayloadSchema, {
+        ...restOfKeysignPayload,
+        blockchainSpecific: nextKeysignPayload.blockchainSpecific,
+      }),
+      walletCore,
+    })
+
+    return [...approveSigningInputs, ...restOfSigningInputs]
   }
 
   const evmSpecific = getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'ethereumSpecific')

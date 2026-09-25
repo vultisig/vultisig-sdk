@@ -89,7 +89,11 @@ export const getPublicKey = ({ chain, walletCore, hexChainCode, publicKeys, chai
   const pubkey = walletCore.PublicKey.createWithData(publicKeyData, publicKeyType)
 
   if (coinType == walletCore.CoinType.tron) {
-    return pubkey.uncompressed()
+    try {
+      return pubkey.uncompressed()
+    } finally {
+      pubkey.delete()
+    }
   }
 
   return pubkey
