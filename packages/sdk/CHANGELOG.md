@@ -1,5 +1,19 @@
 # @vultisig/sdk
 
+## 8.1.0
+
+### Minor Changes
+
+- [#2452](https://github.com/vultisig/vultisig-sdk/pull/2452) [`f77d12b`](https://github.com/vultisig/vultisig-sdk/commit/f77d12b2fa33ef8a79f59b6870513e1acdbc3b1c) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject StakeKit actions that lack complete signable transactions in all public builders, and export a typed finalization result and refusal error.
+
+### Patch Changes
+
+- [#2393](https://github.com/vultisig/vultisig-sdk/pull/2393) [`f4ad1b2`](https://github.com/vultisig/vultisig-sdk/commit/f4ad1b28b7fa50f484b7bad0a328b2aa45560647) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - An explicit "empty the account" send can now be initiated: `prepareSendTx`, `prepareSendTxFromKeys`, `send`, `estimateSendFee` and `getMaxSendAmount` accept `allowDeath`, both chain-specific resolvers record it in `PolkadotSpecific.allowDeath` and price that call, and the MAX/refinement keep nothing back for the existential deposit. The CLI gains `send <Polkadot|Bittensor> <to> --max --allow-death`, which discloses the reap before confirmation. Only set it for an explicit user choice; every co-signer must read the field.
+
+- Updated dependencies [[`f4ad1b2`](https://github.com/vultisig/vultisig-sdk/commit/f4ad1b28b7fa50f484b7bad0a328b2aa45560647)]:
+  - @vultisig/core-chain@6.1.1
+  - @vultisig/core-mpc@5.0.1
+
 ## 8.0.1
 
 ### Patch Changes
