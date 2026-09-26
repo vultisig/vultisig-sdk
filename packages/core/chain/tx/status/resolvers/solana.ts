@@ -3,10 +3,19 @@ import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
 import { withSolanaRpcTimeout } from '@vultisig/core-chain/chains/solana/rpcTimeout'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { attempt } from '@vultisig/lib-utils/attempt'
+import base58 from 'bs58'
 
 import { TxStatusResolver } from '../resolver'
 
 type SolanaClient = ReturnType<typeof getSolanaClient>
+
+const isSolanaSignature = (hash: string): boolean => {
+  try {
+    return base58.decode(hash).length === 64
+  } catch {
+    return false
+  }
+}
 
 // Every RPC call here is bounded: a stalled request reads as unavailable
 // information and the transaction stays pending, the same way a failed one
@@ -39,6 +48,12 @@ const isExpiredLastValidBlockHeight = async (
 }
 
 export const getSolanaTxStatus: TxStatusResolver<OtherChain.Solana> = async ({ hash, lastValidBlockHeight }) => {
+  // A string that is not a 64-byte base58 signature can never have an on-chain record;
+  // deciding this locally avoids trusting a provider's generic invalid-params error for a live transaction.
+  if (!isSolanaSignature(hash)) {
+    return { status: 'not_found', isKnown: false }
+  }
+
   const client = getSolanaClient()
 
   const { data: firstSighting, error: firstLookupError } = await readSignatureStatus(client, hash)
@@ -50,6 +65,12 @@ export const getSolanaTxStatus: TxStatusResolver<OtherChain.Solana> = async ({ h
   let signatureStatus = firstSighting
 
   if (!signatureStatus) {
+    // A history search with no broadcast expiry context is the node's
+    // authoritative answer that it has no record of this signature.
+    if (lastValidBlockHeight == null) {
+      return { status: 'not_found', isKnown: false }
+    }
+
     if (!(await isExpiredLastValidBlockHeight(client, lastValidBlockHeight))) {
       return { status: 'pending', isKnown: false }
     }
