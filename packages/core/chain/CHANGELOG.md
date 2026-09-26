@@ -1,5 +1,11 @@
 # @vultisig/core-chain
 
+## 6.1.1
+
+### Patch Changes
+
+- [#2393](https://github.com/vultisig/vultisig-sdk/pull/2393) [`f4ad1b2`](https://github.com/vultisig/vultisig-sdk/commit/f4ad1b28b7fa50f484b7bad0a328b2aa45560647) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - An explicit "empty the account" send can now be initiated: `prepareSendTx`, `prepareSendTxFromKeys`, `send`, `estimateSendFee` and `getMaxSendAmount` accept `allowDeath`, both chain-specific resolvers record it in `PolkadotSpecific.allowDeath` and price that call, and the MAX/refinement keep nothing back for the existential deposit. The CLI gains `send <Polkadot|Bittensor> <to> --max --allow-death`, which discloses the reap before confirmation. Only set it for an explicit user choice; every co-signer must read the field.
+
 ## 6.1.0
 
 ### Minor Changes
