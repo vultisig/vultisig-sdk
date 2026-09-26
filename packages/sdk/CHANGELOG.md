@@ -1,5 +1,94 @@
 # @vultisig/sdk
 
+## 8.0.1
+
+### Patch Changes
+
+- [#2414](https://github.com/vultisig/vultisig-sdk/pull/2414) [`2ad15b2`](https://github.com/vultisig/vultisig-sdk/commit/2ad15b2f87a74298a7d6baff8f45a42b8b627d25) Thanks [@gastonm5](https://github.com/gastonm5)! - Regenerate the keysign protobuf types so a custom-message signing request can carry the dApp that asked for it.
+
+  `CustomMessagePayload` gains `dappMetadata?: DAppMetadata` (`optional DAppMetadata dapp_metadata = 6` in vultisig/commondata). Until now dApp identity travelled only on `KeysignPayload`, so message signing — `personal_sign`, EIP-712 typed data, Cosmos `signArbitrary`, and the hash-only Cardano `signTx` / `ton_proof` requests — reached co-signing devices with no indication of which dApp asked. The field is optional: leave it unset when there is no dApp, and such a payload encodes to the same bytes as before. All three values are declared by the initiating device and covered by no signature, so treat them as display-only.
+
+  **Source-breaking import move for TypeScript consumers.** Both payload kinds now share the type, so upstream moved `message DAppMetadata` into its own `dapp_metadata.proto`. `DAppMetadata` and `DAppMetadataSchema` are no longer exported from `@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb`; import them from `@vultisig/core-mpc/types/vultisig/keysign/v1/dapp_metadata_pb` instead. The old import fails at compile time rather than silently.
+
+  Wire compatibility is preserved. `DAppMetadata` keeps its full message name and field numbers, and `KeysignPayload.dapp_metadata` stays at field 50, so existing payloads decode as before. The new `CustomMessagePayload` field is additive: devices on older versions skip it.
+
+  `@vultisig/sdk` does not expose these types; it is bumped so its bundled copy of the generated code stays in step.
+
+- [#2453](https://github.com/vultisig/vultisig-sdk/pull/2453) [`c3735f7`](https://github.com/vultisig/vultisig-sdk/commit/c3735f7418faba0549d070a4dfd3b48af3c1bd1f) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Export the canonical QBTC address derivation helper from the root and React Native SDK entrypoints.
+
+- [#2455](https://github.com/vultisig/vultisig-sdk/pull/2455) [`e5e5958`](https://github.com/vultisig/vultisig-sdk/commit/e5e5958176e539363bef3686004c7ada5ac6ba5f) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reserve Mantle L1 and operator fees correctly for native max sends.
+
+- [#2451](https://github.com/vultisig/vultisig-sdk/pull/2451) [`8c58622`](https://github.com/vultisig/vultisig-sdk/commit/8c5862298a65712a05a6fc284ffaab9dc9381839) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Check the router minimum, final output asset, and receiver against the quoted swap immediately before EVM keysign payload construction for 1inch, Kyber, and same-chain LI.FI selectors that expose those fields. Reject 1inch and Kyber partial-fill calldata because its proportional floor does not guarantee the quoted absolute output. Packed-pool 1inch selectors retain a minimum and recipient check, but their hidden final asset remains unverified. Unsupported selectors and LI.FI bridge routes remain available and retain the aggregator trust boundary.
+
+- [#2104](https://github.com/vultisig/vultisig-sdk/pull/2104) [`d7810e5`](https://github.com/vultisig/vultisig-sdk/commit/d7810e59cdc7f42681f1dd4e30e1d50e7dcde0f4) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add unit test coverage for the 10 previously-untested `tx/hash/resolvers` (evm/utxo/cosmos/solana/ton/tron/ripple/cardano/bittensor/polkadot) and the CoW swap order-status API. Fix the UTXO resolver to fall back to `transactionId` when WalletCore returns an empty V2 `txid`.
+
+- [#2450](https://github.com/vultisig/vultisig-sdk/pull/2450) [`4110f68`](https://github.com/vultisig/vultisig-sdk/commit/4110f6846f8dcb8f3984e1f78ae00c3f26cf06d8) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Export the seedphrase import preflight helper and its types from `@vultisig/sdk/seedphrase`.
+
+- [#2443](https://github.com/vultisig/vultisig-sdk/pull/2443) [`36b9013`](https://github.com/vultisig/vultisig-sdk/commit/36b901334b14177c7ddf4c1791fed96e249a05a1) Thanks [@neavra](https://github.com/neavra)! - Max swaps on THORChain and Maya routes now reserve the estimated source-chain network fee instead of subtracting the destination-asset outbound fee, size EVM native reserves and token fee summaries with the router deposit that is actually signed, fall back to the native minimum helper when a provider omits its recommendation, pin fee-aware requotes to the selected provider, clamp once when memo-dependent fees drift, expose the committed amount to callers, report the source-chain fee as the quote's network fee, and refuse a max swap that would fall below it.
+
+- [#2390](https://github.com/vultisig/vultisig-sdk/pull/2390) [`b11c68e`](https://github.com/vultisig/vultisig-sdk/commit/b11c68e9876e86277fdca907fca6b6bbda40ea27) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Send an `approve(0)` reset before the approve when a USDT-style token would reject a non-zero to non-zero approve over a stale partial allowance. The need for the reset is stated on the wire (`Erc20ApprovePayload.reset_allowance_first`, commondata#111) so every co-signer builds the same extra leg. `buildCowSwapApprovalSigningInputs` (new) returns every approve leg in nonce order; `buildCowSwapApprovalSigningInput` stays exported as a deprecated single-leg form for existing consumers and throws, rather than dropping a leg, when the payload asks for the reset.
+
+- [#2083](https://github.com/vultisig/vultisig-sdk/pull/2083) [`e2dd959`](https://github.com/vultisig/vultisig-sdk/commit/e2dd95998304b0678d1cd8ecdaa65de8fd9e32e2) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Fix `SwapService.extractFees` silently dropping the Vultisig affiliate fee for EVM aggregator routes (it never read `tx.evm.affiliateFee` at all) and for Solana routes (it folded the swap fee into `total` but never surfaced it as `affiliate`), so `SwapQuoteBase.fees.affiliate` is now populated whenever the aggregator returns a fee priced in the source chain's native token. Non-native-denominated affiliate/swap fees are left off both fields rather than being unsafely summed into a native-unit total. Extracted the fee-derivation logic into a standalone, unit-tested `extractSwapFees` helper.
+
+- Updated dependencies [[`2ad15b2`](https://github.com/vultisig/vultisig-sdk/commit/2ad15b2f87a74298a7d6baff8f45a42b8b627d25), [`8c58622`](https://github.com/vultisig/vultisig-sdk/commit/8c5862298a65712a05a6fc284ffaab9dc9381839), [`d7810e5`](https://github.com/vultisig/vultisig-sdk/commit/d7810e59cdc7f42681f1dd4e30e1d50e7dcde0f4), [`36b9013`](https://github.com/vultisig/vultisig-sdk/commit/36b901334b14177c7ddf4c1791fed96e249a05a1), [`b11c68e`](https://github.com/vultisig/vultisig-sdk/commit/b11c68e9876e86277fdca907fca6b6bbda40ea27)]:
+  - @vultisig/core-mpc@5.0.0
+  - @vultisig/core-chain@6.1.0
+
+## 8.0.0
+
+### Minor Changes
+
+- [#2440](https://github.com/vultisig/vultisig-sdk/pull/2440) [`23177e5`](https://github.com/vultisig/vultisig-sdk/commit/23177e5ec12fe0d3e23ffd8ad0a1b5fffbfe9e20) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Expose the canonical Cosmos validator helpers and types from the SDK root and React Native entries.
+
+- [#2441](https://github.com/vultisig/vultisig-sdk/pull/2441) [`8a690b5`](https://github.com/vultisig/vultisig-sdk/commit/8a690b5ae7ce5a249eab0ba0d0be1c63d7c10a85) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Publish dedicated EVM, Cosmos, and signable transaction package imports with runtime and declaration bundles.
+
+### Patch Changes
+
+- [#2427](https://github.com/vultisig/vultisig-sdk/pull/2427) [`b38628f`](https://github.com/vultisig/vultisig-sdk/commit/b38628f1ad09fa9dac3e23b2056b24c0040500fe) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Use prefix-aware WalletCore SS58 constructors for Bittensor address derivation and transaction destinations, including native iOS and Android bridges. Reject destinations with a different network prefix or invalid account data.
+
+  Apply the Expo module Gradle plugin so Expo 56's required Kotlin compiler transformations run before Android module registration.
+
+  Direct callers of `buildBittensorSigningPayload` must pass their initialized WalletCore as the second argument. Direct callers of `refineBittensorChainSpecific` must provide `walletCore` in the input. High-level SDK signing and fee estimation pass the existing runtime automatically.
+
+- [#2435](https://github.com/vultisig/vultisig-sdk/pull/2435) [`2b91950`](https://github.com/vultisig/vultisig-sdk/commit/2b91950ffd1aa86b8afd710ab7c6d30f919ba9af) Thanks [@neavra](https://github.com/neavra)! - Reject mixed-case EVM recipient addresses whose EIP-55 checksum does not match. WalletCore accepted any `0x` + 40 hex regardless of letter case, so a one-character typo in a checksummed address passed `send`, max-send, fee estimation and `address-book --add`. All-lowercase and all-uppercase addresses are still accepted; the invalid-address error now names the checksum mismatch so it does not read as a formatting problem. `isValidTokenId` for EVM chains is now checksum-strict for mixed-case ids as well; the built-in token registry was corrected accordingly.
+
+- [#2432](https://github.com/vultisig/vultisig-sdk/pull/2432) [`2620db4`](https://github.com/vultisig/vultisig-sdk/commit/2620db498bba40fbced5b5e256a260dccb12ad33) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject independently decoded EVM swap source-amount/asset mismatches and expired router deadlines during both vault-free and vault-wrapped preparation. Cover verified 1inch and Kyber layouts plus named Ethereum THORChain and Universal Router deployments. Native THOR deposits use transaction value, and known deadlines remain enforced when inner amounts or balance sentinels cannot be interpreted. Unknown layouts retain the existing quote binding and expiry safeguards; see `docs/evm-swap-commitments.md` for the coverage and residuals.
+
+- [#2431](https://github.com/vultisig/vultisig-sdk/pull/2431) [`77b78da`](https://github.com/vultisig/vultisig-sdk/commit/77b78da36fc0d6032fb596bd3fbfd6dd84fb1d18) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Export the canonical token price-ID resolver from the root and React Native SDK entry points.
+
+- [#1990](https://github.com/vultisig/vultisig-sdk/pull/1990) [`42bb615`](https://github.com/vultisig/vultisig-sdk/commit/42bb615809a91fd6e8c304c7dba58b3c3c0f80c5) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Fund a Cardano native-token (CNT) recipient output with a min-UTxO-satisfying lovelace floor instead of reusing the token quantity as the ADA amount. `keysignPayload.toAmount` for a CNT send is the token's own base-unit quantity, not lovelace; passing it straight through to `transferMessage.amount` produced outputs like 0.665 ADA for a 0.665 USDM send — below Cardano's min-UTxO requirement, so the network rejected the tx post-keysign (Ogmios 3125 "insufficiently funded outputs") after both co-signers had already converged on signing the doomed body.
+
+- [#2444](https://github.com/vultisig/vultisig-sdk/pull/2444) [`30dd259`](https://github.com/vultisig/vultisig-sdk/commit/30dd259d7d495df27d4e59bb27fdf40a6879831d) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Derive seedphrase-scan addresses the same way the vault does. `deriveAddressFromMnemonic` used WalletCore's `getAddressForCoin`, so MayaChain came out as a `thor1…` address (Maya shares THORChain's coin type), Bittensor came out as a Polkadot address, and Bitcoin Cash kept the `bitcoincash:` prefix. The Maya balance lookup failed with "invalid Bech32 prefix; expected maya, got thor", which blocked chain discovery during seedphrase import. It now runs the key that key import stores through `getChainAddress`, like every vault address, and takes an optional `tonWalletVersion`.
+
+  `MasterKeyDeriver.deriveAddress` (used by `ChainDiscoveryService`) and `deriveChainKey().address` now go through the same derivation. They had the same Bittensor and Bitcoin Cash problems, and built the Maya address from the uncompressed key, which pointed discovery at a different account.
+
+  `getChainAddress` now deletes the WalletCore public key it builds, and `getPublicKey` deletes the intermediate compressed key it converts from for Tron. Both used to leak one WalletCore object per call.
+
+- [#2439](https://github.com/vultisig/vultisig-sdk/pull/2439) [`ade50d1`](https://github.com/vultisig/vultisig-sdk/commit/ade50d15fa87b3379d24aaed793b1a76b05c863c) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Resolve token addresses and stored asset IDs by identity before symbols, including short IDs, so poisoned token symbols cannot redirect sends or balance lookups.
+
+- [#2429](https://github.com/vultisig/vultisig-sdk/pull/2429) [`a58d6fb`](https://github.com/vultisig/vultisig-sdk/commit/a58d6fbb40fd05bc357fde4b60b8f5cb41639302) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject malformed UTXO balance responses, provider error envelopes, mismatched addresses, and unsupported numeric encodings instead of reporting a zero or truncated balance. Preserve exact large integer balances and explicit null/zero responses.
+
+- [#2138](https://github.com/vultisig/vultisig-sdk/pull/2138) [`601ff4f`](https://github.com/vultisig/vultisig-sdk/commit/601ff4f1d1449d452b8e7025df392c1e2f4c5ca7) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Widen the public tx-normalization types to include camelCase routing metadata and accept camelCase normalization args, matching the metadata `splitMultiTx` already preserves at runtime.
+
+- [#2426](https://github.com/vultisig/vultisig-sdk/pull/2426) [`c368202`](https://github.com/vultisig/vultisig-sdk/commit/c36820249569823bb3d3e24b06bcb66a34144f2a) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject all-zero Bittensor and Polkadot transfer destinations before producing signing inputs or unsigned transfer bytes, including alternate zero-account encodings accepted by the direct Bittensor builder.
+
+- [#2279](https://github.com/vultisig/vultisig-sdk/pull/2279) [`4f73cf4`](https://github.com/vultisig/vultisig-sdk/commit/4f73cf425e63f8e0a9cd44e50920cb3f5f7561ad) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Reject duplicate denom entries in Osmosis coin lists before building join-pool, exit-pool, and concentrated-liquidity messages.
+
+- [#2433](https://github.com/vultisig/vultisig-sdk/pull/2433) [`d190033`](https://github.com/vultisig/vultisig-sdk/commit/d190033bf7116466fc138197319c38d5e98e1c64) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Restore concrete argument types for lazy React Native SDK helpers.
+
+- [#2428](https://github.com/vultisig/vultisig-sdk/pull/2428) [`4a79633`](https://github.com/vultisig/vultisig-sdk/commit/4a796338d0d15821cc39d8efc07cbd6e9a32e892) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Expose the canonical StakeKit runtime helpers and companion types from the React Native SDK entrypoint.
+
+- [#2101](https://github.com/vultisig/vultisig-sdk/pull/2101) [`371f012`](https://github.com/vultisig/vultisig-sdk/commit/371f0127f9e213f1f1779cdbc8e85ccaa2ec0caf) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Re-export `fromChainAmount` and `fromChainAmountDisplay` from the root and React Native SDK entrypoints. No amount-math behavior change — visibility only.
+
+- [#2434](https://github.com/vultisig/vultisig-sdk/pull/2434) [`5f18a09`](https://github.com/vultisig/vultisig-sdk/commit/5f18a090def42d1cd910b708fd2dada848e1fe46) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Expose the canonical StakeKit display parser, singular scan-request builder, and action validators through `defi.stakekit`.
+
+- [#2057](https://github.com/vultisig/vultisig-sdk/pull/2057) [`9da4962`](https://github.com/vultisig/vultisig-sdk/commit/9da49628203c6b0a774d0f758e1b2935c2628fa5) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Fix `evmTxInfo` handing out a nonce that can collide with an external wallet's (e.g. MetaMask) not-yet-confirmed transaction. It fetched the nonce via `eth_getTransactionCount` with the default `'latest'` block tag, which only reflects confirmed transactions, so a pending external transaction from the same address could be assigned the same nonce and get stuck/dropped. It now prefers the `'pending'` block tag (which counts mempool-visible transactions too), falling back to `'latest'` for chains that don't support `'pending'` cleanly (zkSync Era, Hyperliquid, some alt-EVMs) — mirroring the RN `getEvmNonce` helper's existing convention.
+
+- Updated dependencies [[`b38628f`](https://github.com/vultisig/vultisig-sdk/commit/b38628f1ad09fa9dac3e23b2056b24c0040500fe), [`2b91950`](https://github.com/vultisig/vultisig-sdk/commit/2b91950ffd1aa86b8afd710ab7c6d30f919ba9af), [`42bb615`](https://github.com/vultisig/vultisig-sdk/commit/42bb615809a91fd6e8c304c7dba58b3c3c0f80c5), [`30dd259`](https://github.com/vultisig/vultisig-sdk/commit/30dd259d7d495df27d4e59bb27fdf40a6879831d), [`c368202`](https://github.com/vultisig/vultisig-sdk/commit/c36820249569823bb3d3e24b06bcb66a34144f2a)]:
+  - @vultisig/core-chain@6.0.0
+  - @vultisig/core-mpc@4.0.0
+  - @vultisig/walletcore-native@1.1.0
+
 ## 7.8.1
 
 ### Patch Changes

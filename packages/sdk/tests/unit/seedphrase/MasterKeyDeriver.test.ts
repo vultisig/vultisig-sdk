@@ -11,6 +11,15 @@ import { describe, expect, it, vi } from 'vitest'
 import type { WasmProvider } from '../../../src/context/SdkContext'
 import { MasterKeyDeriver } from '../../../src/seedphrase/MasterKeyDeriver'
 
+// Address derivation runs through real WalletCore in the integration tests.
+const { mockDeriveAddressFromMnemonic } = vi.hoisted(() => ({
+  mockDeriveAddressFromMnemonic: vi.fn(() => 'vault-address'),
+}))
+
+vi.mock('@vultisig/core-chain/publicKey/address/deriveAddressFromMnemonic', () => ({
+  deriveAddressFromMnemonic: mockDeriveAddressFromMnemonic,
+}))
+
 // Track which public key method was called
 type PublicKeyCall = 'secp256k1' | 'ed25519' | 'ed25519Cardano'
 
@@ -262,6 +271,22 @@ describe('MasterKeyDeriver', () => {
 
       await expect(deriver.deriveAddress(testMnemonic, Chain.Cardano)).rejects.toThrow(/Cardano/)
       expect(provider.getWalletCore).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('deriveAddress', () => {
+    it('derives the vault address from the cleaned mnemonic', async () => {
+      const mock = createMockWalletCore()
+      const deriver = new MasterKeyDeriver(createMockWasmProvider(mock))
+
+      const address = await deriver.deriveAddress(`  ${testMnemonic.replaceAll(' ', '   ')}  `, Chain.MayaChain)
+
+      expect(address).toBe('vault-address')
+      expect(mockDeriveAddressFromMnemonic).toHaveBeenCalledWith({
+        chain: Chain.MayaChain,
+        mnemonic: testMnemonic,
+        walletCore: mock.walletCore,
+      })
     })
   })
 

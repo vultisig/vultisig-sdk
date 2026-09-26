@@ -39,6 +39,23 @@ configureVultisigInstanceNamespaces(Vultisig, {
 export type { VaultImportConflictResolution, VaultImportOptions } from './VaultManager'
 export { Vultisig }
 
+// Server-assisted Fast Vault public helpers.
+export type { ServerEndpoints, VaultFromServerResponse } from './server'
+export {
+  checkVaultExistsOnServer,
+  createVaultWithServer,
+  getVaultFromServer,
+  keyImportWithServer,
+  migrateWithServer,
+  mldsaWithServer,
+  resendVaultShare,
+  reshareWithServer,
+  sequentialKeyImportWithServer,
+  setupVaultWithServer,
+  signWithServer,
+  verifyVaultEmailCode,
+} from './server'
+
 // Vault management
 export type { ResolvedTokenInfo, VaultConfig, VaultSaveOptions } from './vault'
 export {
@@ -171,6 +188,10 @@ export { assertUtxoAddressBrand, isUtxoAddressBrandValid } from './chains/utxo/a
 // Canonical Blockchair chain-scoped base URL (`${rootApiUrl}/blockchair/${chain}`).
 // Consumers should import this instead of reconstructing the path locally.
 export { getBlockchairBaseUrl } from '@vultisig/core-chain/chains/utxo/client/getBlockchairBaseUrl'
+
+// Pure QBTC address derivation from an ML-DSA public key. Exported so consumers
+// do not need to deep-import the canonical core-chain implementation.
+export { deriveQbtcAddress } from '@vultisig/core-chain/publicKey/address/deriveQbtcAddress'
 
 // Custom TOKEN id validation (as opposed to the address validation above).
 // Most chains identify a token by its address (contract/mint), but Sui uses a
@@ -828,13 +849,18 @@ export {
 export type {
   ContinuousVestingAccount,
   Coin as CosmosStakingCoin,
+  Validator as CosmosStakingValidator,
   DelayedVestingAccount,
   Delegation,
   DelegatorReward,
   DelegatorRewardsResponse,
   PeriodicVestingAccount,
+  StakingChain,
   UnbondingDelegation,
   UnbondingEntry,
+  ValidatorCommission,
+  ValidatorDescription,
+  ValidatorStatus,
   VestingAccount,
 } from '@vultisig/core-chain/chains/cosmos/staking/lcdQueries'
 export {
@@ -842,10 +868,14 @@ export {
   getCosmosDelegations,
   getCosmosDelegatorRewards,
   getCosmosUnbondingDelegations,
+  getCosmosValidator,
+  getCosmosValidators,
   getCosmosVestingAccount,
   getDelegationsUrl,
   getDelegatorRewardsUrl,
   getUnbondingDelegationsUrl,
+  getValidatorsUrl,
+  getValidatorUrl,
 } from '@vultisig/core-chain/chains/cosmos/staking/lcdQueries'
 
 // Cosmos governance (read proposals + build unsigned MsgVote envelope —
@@ -1028,6 +1058,8 @@ export type {
   StakekitBalancesResult,
   StakekitDetailsResult,
   StakekitExitResult,
+  StakekitFinalizeResult,
+  StakekitRefusalStatus,
   SuiAllBalancesResult,
   SuiBalance,
   SuiCoinBalance,
@@ -1058,6 +1090,7 @@ export type {
   YieldActionResponse,
   YieldArgs,
   YieldBalance,
+  YieldBuildFailure,
   YieldDiscoverMetadata,
   YieldDiscoverOpportunity,
   YieldDiscoverToken,
@@ -1161,6 +1194,7 @@ export {
   extractCctpMessageFromReceipt,
   fetchAllStakekitBalances,
   fetchStakekitBalancesBatch,
+  finalizeStakekitAction,
   findSwapQuote,
   findSwapQuotes,
   formatCheckoutUsdcDisplay,
@@ -1284,6 +1318,7 @@ export {
   stakekit,
   STAKEKIT_BALANCE_QUERIES_PER_REQUEST,
   STAKEKIT_NETWORK_ALIASES,
+  StakekitActionRefusal,
   stakekitBalances,
   stakekitBuildEnter,
   stakekitBuildExit,

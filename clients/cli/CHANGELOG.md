@@ -1,5 +1,32 @@
 # @vultisig/cli
 
+## 8.0.1
+
+### Patch Changes
+
+- [#2443](https://github.com/vultisig/vultisig-sdk/pull/2443) [`36b9013`](https://github.com/vultisig/vultisig-sdk/commit/36b901334b14177c7ddf4c1791fed96e249a05a1) Thanks [@neavra](https://github.com/neavra)! - Max swaps on THORChain and Maya routes now reserve the estimated source-chain network fee instead of subtracting the destination-asset outbound fee, size EVM native reserves and token fee summaries with the router deposit that is actually signed, fall back to the native minimum helper when a provider omits its recommendation, pin fee-aware requotes to the selected provider, clamp once when memo-dependent fees drift, expose the committed amount to callers, report the source-chain fee as the quote's network fee, and refuse a max swap when its committed amount is below the route's recommended minimum.
+
+- Updated dependencies [[`2ad15b2`](https://github.com/vultisig/vultisig-sdk/commit/2ad15b2f87a74298a7d6baff8f45a42b8b627d25), [`c3735f7`](https://github.com/vultisig/vultisig-sdk/commit/c3735f7418faba0549d070a4dfd3b48af3c1bd1f), [`e5e5958`](https://github.com/vultisig/vultisig-sdk/commit/e5e5958176e539363bef3686004c7ada5ac6ba5f), [`8c58622`](https://github.com/vultisig/vultisig-sdk/commit/8c5862298a65712a05a6fc284ffaab9dc9381839), [`d7810e5`](https://github.com/vultisig/vultisig-sdk/commit/d7810e59cdc7f42681f1dd4e30e1d50e7dcde0f4), [`4110f68`](https://github.com/vultisig/vultisig-sdk/commit/4110f6846f8dcb8f3984e1f78ae00c3f26cf06d8), [`36b9013`](https://github.com/vultisig/vultisig-sdk/commit/36b901334b14177c7ddf4c1791fed96e249a05a1), [`b11c68e`](https://github.com/vultisig/vultisig-sdk/commit/b11c68e9876e86277fdca907fca6b6bbda40ea27), [`e2dd959`](https://github.com/vultisig/vultisig-sdk/commit/e2dd95998304b0678d1cd8ecdaa65de8fd9e32e2)]:
+  - @vultisig/sdk@8.0.1
+  - @vultisig/core-chain@6.1.0
+
+## 8.0.0
+
+### Patch Changes
+
+- [#2435](https://github.com/vultisig/vultisig-sdk/pull/2435) [`2b91950`](https://github.com/vultisig/vultisig-sdk/commit/2b91950ffd1aa86b8afd710ab7c6d30f919ba9af) Thanks [@neavra](https://github.com/neavra)! - Reject mixed-case EVM recipient addresses whose EIP-55 checksum does not match. WalletCore accepted any `0x` + 40 hex regardless of letter case, so a one-character typo in a checksummed address passed `send`, max-send, fee estimation and `address-book --add`. All-lowercase and all-uppercase addresses are still accepted; the invalid-address error now names the checksum mismatch so it does not read as a formatting problem. `isValidTokenId` for EVM chains is now checksum-strict for mixed-case ids as well; the built-in token registry was corrected accordingly.
+
+- [#2431](https://github.com/vultisig/vultisig-sdk/pull/2431) [`77b78da`](https://github.com/vultisig/vultisig-sdk/commit/77b78da36fc0d6032fb596bd3fbfd6dd84fb1d18) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Export the canonical token price-ID resolver from the root and React Native SDK entry points.
+
+- [#2138](https://github.com/vultisig/vultisig-sdk/pull/2138) [`601ff4f`](https://github.com/vultisig/vultisig-sdk/commit/601ff4f1d1449d452b8e7025df392c1e2f4c5ca7) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Widen the public tx-normalization types to include camelCase routing metadata and accept camelCase normalization args, matching the metadata `splitMultiTx` already preserves at runtime.
+
+- [#2426](https://github.com/vultisig/vultisig-sdk/pull/2426) [`c368202`](https://github.com/vultisig/vultisig-sdk/commit/c36820249569823bb3d3e24b06bcb66a34144f2a) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject all-zero Bittensor and Polkadot transfer destinations before producing signing inputs or unsigned transfer bytes, including alternate zero-account encodings accepted by the direct Bittensor builder.
+
+- Updated dependencies [[`b38628f`](https://github.com/vultisig/vultisig-sdk/commit/b38628f1ad09fa9dac3e23b2056b24c0040500fe), [`23177e5`](https://github.com/vultisig/vultisig-sdk/commit/23177e5ec12fe0d3e23ffd8ad0a1b5fffbfe9e20), [`2b91950`](https://github.com/vultisig/vultisig-sdk/commit/2b91950ffd1aa86b8afd710ab7c6d30f919ba9af), [`2620db4`](https://github.com/vultisig/vultisig-sdk/commit/2620db498bba40fbced5b5e256a260dccb12ad33), [`77b78da`](https://github.com/vultisig/vultisig-sdk/commit/77b78da36fc0d6032fb596bd3fbfd6dd84fb1d18), [`42bb615`](https://github.com/vultisig/vultisig-sdk/commit/42bb615809a91fd6e8c304c7dba58b3c3c0f80c5), [`30dd259`](https://github.com/vultisig/vultisig-sdk/commit/30dd259d7d495df27d4e59bb27fdf40a6879831d), [`ade50d1`](https://github.com/vultisig/vultisig-sdk/commit/ade50d15fa87b3379d24aaed793b1a76b05c863c), [`a58d6fb`](https://github.com/vultisig/vultisig-sdk/commit/a58d6fbb40fd05bc357fde4b60b8f5cb41639302), [`601ff4f`](https://github.com/vultisig/vultisig-sdk/commit/601ff4f1d1449d452b8e7025df392c1e2f4c5ca7), [`c368202`](https://github.com/vultisig/vultisig-sdk/commit/c36820249569823bb3d3e24b06bcb66a34144f2a), [`4f73cf4`](https://github.com/vultisig/vultisig-sdk/commit/4f73cf425e63f8e0a9cd44e50920cb3f5f7561ad), [`d190033`](https://github.com/vultisig/vultisig-sdk/commit/d190033bf7116466fc138197319c38d5e98e1c64), [`4a79633`](https://github.com/vultisig/vultisig-sdk/commit/4a796338d0d15821cc39d8efc07cbd6e9a32e892), [`8a690b5`](https://github.com/vultisig/vultisig-sdk/commit/8a690b5ae7ce5a249eab0ba0d0be1c63d7c10a85), [`371f012`](https://github.com/vultisig/vultisig-sdk/commit/371f0127f9e213f1f1779cdbc8e85ccaa2ec0caf), [`5f18a09`](https://github.com/vultisig/vultisig-sdk/commit/5f18a090def42d1cd910b708fd2dada848e1fe46), [`9da4962`](https://github.com/vultisig/vultisig-sdk/commit/9da49628203c6b0a774d0f758e1b2935c2628fa5)]:
+  - @vultisig/core-chain@6.0.0
+  - @vultisig/sdk@8.0.0
+  - @vultisig/client-shared@0.3.7
+
 ## 7.8.0
 
 ### Minor Changes

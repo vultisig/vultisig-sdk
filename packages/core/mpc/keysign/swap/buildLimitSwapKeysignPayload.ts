@@ -4,7 +4,6 @@ import { fromChainAmountDisplay } from '@vultisig/core-chain/amount/fromChainAmo
 import { Chain } from '@vultisig/core-chain/Chain'
 import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { getThorchainInboundAddress } from '@vultisig/core-chain/chains/cosmos/thor/getThorchainInboundAddress'
-import { getErc20Allowance } from '@vultisig/core-chain/chains/evm/erc20/getErc20Allowance'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import { getAdvancedSwapQueueEnabled } from '@vultisig/core-chain/swap/native/limitSwapAvailability'
@@ -23,7 +22,7 @@ import { refineKeysignUtxo } from '../refine/utxo'
 import { getKeysignUtxoInfo } from '../utxo/getKeysignUtxoInfo'
 import { KeysignLibType } from '../../mpcLib'
 import { toCommCoin } from '../../types/utils/commCoin'
-import { Erc20ApprovePayloadSchema } from '../../types/vultisig/keysign/v1/erc20_approve_payload_pb'
+import { getErc20ApprovePayload } from '../erc20/getErc20ApprovePayload'
 import { KeysignPayloadSchema } from '../../types/vultisig/keysign/v1/keysign_message_pb'
 import { THORChainSwapPayloadSchema } from '../../types/vultisig/keysign/v1/thorchain_swap_payload_pb'
 
@@ -238,19 +237,13 @@ export const buildLimitSwapKeysignPayload = async ({
   })
 
   if (approveSpender && isChainOfKind(fromCoin.chain, 'evm') && fromCoin.id) {
-    const allowance = await getErc20Allowance({
+    keysignPayload.erc20ApprovePayload = await getErc20ApprovePayload({
       chain: fromCoin.chain,
       id: fromCoin.id,
       address: fromCoin.address,
       spender: approveSpender,
+      amount,
     })
-
-    if (allowance < amount) {
-      keysignPayload.erc20ApprovePayload = create(Erc20ApprovePayloadSchema, {
-        amount: amount.toString(),
-        spender: approveSpender,
-      })
-    }
   }
 
   if (isChainOfKind(fromCoin.chain, 'utxo')) {

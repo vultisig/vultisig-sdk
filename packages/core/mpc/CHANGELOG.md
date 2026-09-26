@@ -1,5 +1,51 @@
 # @vultisig/core-mpc
 
+## 5.0.0
+
+### Major Changes
+
+- [#2414](https://github.com/vultisig/vultisig-sdk/pull/2414) [`2ad15b2`](https://github.com/vultisig/vultisig-sdk/commit/2ad15b2f87a74298a7d6baff8f45a42b8b627d25) Thanks [@gastonm5](https://github.com/gastonm5)! - Regenerate the keysign protobuf types so a custom-message signing request can carry the dApp that asked for it.
+
+  `CustomMessagePayload` gains `dappMetadata?: DAppMetadata` (`optional DAppMetadata dapp_metadata = 6` in vultisig/commondata). Until now dApp identity travelled only on `KeysignPayload`, so message signing — `personal_sign`, EIP-712 typed data, Cosmos `signArbitrary`, and the hash-only Cardano `signTx` / `ton_proof` requests — reached co-signing devices with no indication of which dApp asked. The field is optional: leave it unset when there is no dApp, and such a payload encodes to the same bytes as before. All three values are declared by the initiating device and covered by no signature, so treat them as display-only.
+
+  **Source-breaking import move for TypeScript consumers.** Both payload kinds now share the type, so upstream moved `message DAppMetadata` into its own `dapp_metadata.proto`. `DAppMetadata` and `DAppMetadataSchema` are no longer exported from `@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb`; import them from `@vultisig/core-mpc/types/vultisig/keysign/v1/dapp_metadata_pb` instead. The old import fails at compile time rather than silently.
+
+  Wire compatibility is preserved. `DAppMetadata` keeps its full message name and field numbers, and `KeysignPayload.dapp_metadata` stays at field 50, so existing payloads decode as before. The new `CustomMessagePayload` field is additive: devices on older versions skip it.
+
+  `@vultisig/sdk` does not expose these types; it is bumped so its bundled copy of the generated code stays in step.
+
+### Minor Changes
+
+- [#2390](https://github.com/vultisig/vultisig-sdk/pull/2390) [`b11c68e`](https://github.com/vultisig/vultisig-sdk/commit/b11c68e9876e86277fdca907fca6b6bbda40ea27) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Send an `approve(0)` reset before the approve when a USDT-style token would reject a non-zero to non-zero approve over a stale partial allowance. The need for the reset is stated on the wire (`Erc20ApprovePayload.reset_allowance_first`, commondata#111) so every co-signer builds the same extra leg. `buildCowSwapApprovalSigningInputs` (new) returns every approve leg in nonce order; `buildCowSwapApprovalSigningInput` stays exported as a deprecated single-leg form for existing consumers and throws, rather than dropping a leg, when the payload asks for the reset.
+
+### Patch Changes
+
+- [#2451](https://github.com/vultisig/vultisig-sdk/pull/2451) [`8c58622`](https://github.com/vultisig/vultisig-sdk/commit/8c5862298a65712a05a6fc284ffaab9dc9381839) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Check the router minimum, final output asset, and receiver against the quoted swap immediately before EVM keysign payload construction for 1inch, Kyber, and same-chain LI.FI selectors that expose those fields. Reject 1inch and Kyber partial-fill calldata because its proportional floor does not guarantee the quoted absolute output. Packed-pool 1inch selectors retain a minimum and recipient check, but their hidden final asset remains unverified. Unsupported selectors and LI.FI bridge routes remain available and retain the aggregator trust boundary.
+
+- [#2443](https://github.com/vultisig/vultisig-sdk/pull/2443) [`36b9013`](https://github.com/vultisig/vultisig-sdk/commit/36b901334b14177c7ddf4c1791fed96e249a05a1) Thanks [@neavra](https://github.com/neavra)! - Max swaps on THORChain and Maya routes now reserve the estimated source-chain network fee instead of subtracting the destination-asset outbound fee, size EVM native reserves and token fee summaries with the router deposit that is actually signed, fall back to the native minimum helper when a provider omits its recommendation, pin fee-aware requotes to the selected provider, clamp once when memo-dependent fees drift, expose the committed amount to callers, report the source-chain fee as the quote's network fee, and refuse a max swap that would fall below it.
+
+- Updated dependencies [[`8c58622`](https://github.com/vultisig/vultisig-sdk/commit/8c5862298a65712a05a6fc284ffaab9dc9381839), [`d7810e5`](https://github.com/vultisig/vultisig-sdk/commit/d7810e59cdc7f42681f1dd4e30e1d50e7dcde0f4), [`36b9013`](https://github.com/vultisig/vultisig-sdk/commit/36b901334b14177c7ddf4c1791fed96e249a05a1), [`b11c68e`](https://github.com/vultisig/vultisig-sdk/commit/b11c68e9876e86277fdca907fca6b6bbda40ea27)]:
+  - @vultisig/core-chain@6.1.0
+
+## 4.0.0
+
+### Major Changes
+
+- [#2427](https://github.com/vultisig/vultisig-sdk/pull/2427) [`b38628f`](https://github.com/vultisig/vultisig-sdk/commit/b38628f1ad09fa9dac3e23b2056b24c0040500fe) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Use prefix-aware WalletCore SS58 constructors for Bittensor address derivation and transaction destinations, including native iOS and Android bridges. Reject destinations with a different network prefix or invalid account data.
+
+  Apply the Expo module Gradle plugin so Expo 56's required Kotlin compiler transformations run before Android module registration.
+
+  Direct callers of `buildBittensorSigningPayload` must pass their initialized WalletCore as the second argument. Direct callers of `refineBittensorChainSpecific` must provide `walletCore` in the input. High-level SDK signing and fee estimation pass the existing runtime automatically.
+
+### Patch Changes
+
+- [#1990](https://github.com/vultisig/vultisig-sdk/pull/1990) [`42bb615`](https://github.com/vultisig/vultisig-sdk/commit/42bb615809a91fd6e8c304c7dba58b3c3c0f80c5) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Fund a Cardano native-token (CNT) recipient output with a min-UTxO-satisfying lovelace floor instead of reusing the token quantity as the ADA amount. `keysignPayload.toAmount` for a CNT send is the token's own base-unit quantity, not lovelace; passing it straight through to `transferMessage.amount` produced outputs like 0.665 ADA for a 0.665 USDM send — below Cardano's min-UTxO requirement, so the network rejected the tx post-keysign (Ogmios 3125 "insufficiently funded outputs") after both co-signers had already converged on signing the doomed body.
+
+- [#2426](https://github.com/vultisig/vultisig-sdk/pull/2426) [`c368202`](https://github.com/vultisig/vultisig-sdk/commit/c36820249569823bb3d3e24b06bcb66a34144f2a) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject all-zero Bittensor and Polkadot transfer destinations before producing signing inputs or unsigned transfer bytes, including alternate zero-account encodings accepted by the direct Bittensor builder.
+
+- Updated dependencies [[`b38628f`](https://github.com/vultisig/vultisig-sdk/commit/b38628f1ad09fa9dac3e23b2056b24c0040500fe), [`2b91950`](https://github.com/vultisig/vultisig-sdk/commit/2b91950ffd1aa86b8afd710ab7c6d30f919ba9af), [`30dd259`](https://github.com/vultisig/vultisig-sdk/commit/30dd259d7d495df27d4e59bb27fdf40a6879831d), [`c368202`](https://github.com/vultisig/vultisig-sdk/commit/c36820249569823bb3d3e24b06bcb66a34144f2a)]:
+  - @vultisig/core-chain@6.0.0
+
 ## 3.4.1
 
 ### Patch Changes

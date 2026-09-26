@@ -1,5 +1,41 @@
 # @vultisig/core-chain
 
+## 6.1.0
+
+### Minor Changes
+
+- [#2451](https://github.com/vultisig/vultisig-sdk/pull/2451) [`8c58622`](https://github.com/vultisig/vultisig-sdk/commit/8c5862298a65712a05a6fc284ffaab9dc9381839) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Check the router minimum, final output asset, and receiver against the quoted swap immediately before EVM keysign payload construction for 1inch, Kyber, and same-chain LI.FI selectors that expose those fields. Reject 1inch and Kyber partial-fill calldata because its proportional floor does not guarantee the quoted absolute output. Packed-pool 1inch selectors retain a minimum and recipient check, but their hidden final asset remains unverified. Unsupported selectors and LI.FI bridge routes remain available and retain the aggregator trust boundary.
+
+- [#2390](https://github.com/vultisig/vultisig-sdk/pull/2390) [`b11c68e`](https://github.com/vultisig/vultisig-sdk/commit/b11c68e9876e86277fdca907fca6b6bbda40ea27) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Send an `approve(0)` reset before the approve when a USDT-style token would reject a non-zero to non-zero approve over a stale partial allowance. The need for the reset is stated on the wire (`Erc20ApprovePayload.reset_allowance_first`, commondata#111) so every co-signer builds the same extra leg. `buildCowSwapApprovalSigningInputs` (new) returns every approve leg in nonce order; `buildCowSwapApprovalSigningInput` stays exported as a deprecated single-leg form for existing consumers and throws, rather than dropping a leg, when the payload asks for the reset.
+
+### Patch Changes
+
+- [#2104](https://github.com/vultisig/vultisig-sdk/pull/2104) [`d7810e5`](https://github.com/vultisig/vultisig-sdk/commit/d7810e59cdc7f42681f1dd4e30e1d50e7dcde0f4) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add unit test coverage for the 10 previously-untested `tx/hash/resolvers` (evm/utxo/cosmos/solana/ton/tron/ripple/cardano/bittensor/polkadot) and the CoW swap order-status API. Fix the UTXO resolver to fall back to `transactionId` when WalletCore returns an empty V2 `txid`.
+
+- [#2443](https://github.com/vultisig/vultisig-sdk/pull/2443) [`36b9013`](https://github.com/vultisig/vultisig-sdk/commit/36b901334b14177c7ddf4c1791fed96e249a05a1) Thanks [@neavra](https://github.com/neavra)! - Max swaps on THORChain and Maya routes now reserve the estimated source-chain network fee instead of subtracting the destination-asset outbound fee, size EVM native reserves and token fee summaries with the router deposit that is actually signed, fall back to the native minimum helper when a provider omits its recommendation, pin fee-aware requotes to the selected provider, clamp once when memo-dependent fees drift, expose the committed amount to callers, report the source-chain fee as the quote's network fee, and refuse a max swap that would fall below it.
+
+## 6.0.0
+
+### Major Changes
+
+- [#2427](https://github.com/vultisig/vultisig-sdk/pull/2427) [`b38628f`](https://github.com/vultisig/vultisig-sdk/commit/b38628f1ad09fa9dac3e23b2056b24c0040500fe) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Use prefix-aware WalletCore SS58 constructors for Bittensor address derivation and transaction destinations, including native iOS and Android bridges. Reject destinations with a different network prefix or invalid account data.
+
+  Apply the Expo module Gradle plugin so Expo 56's required Kotlin compiler transformations run before Android module registration.
+
+  Direct callers of `buildBittensorSigningPayload` must pass their initialized WalletCore as the second argument. Direct callers of `refineBittensorChainSpecific` must provide `walletCore` in the input. High-level SDK signing and fee estimation pass the existing runtime automatically.
+
+### Patch Changes
+
+- [#2435](https://github.com/vultisig/vultisig-sdk/pull/2435) [`2b91950`](https://github.com/vultisig/vultisig-sdk/commit/2b91950ffd1aa86b8afd710ab7c6d30f919ba9af) Thanks [@neavra](https://github.com/neavra)! - Reject mixed-case EVM recipient addresses whose EIP-55 checksum does not match. WalletCore accepted any `0x` + 40 hex regardless of letter case, so a one-character typo in a checksummed address passed `send`, max-send, fee estimation and `address-book --add`. All-lowercase and all-uppercase addresses are still accepted; the invalid-address error now names the checksum mismatch so it does not read as a formatting problem. `isValidTokenId` for EVM chains is now checksum-strict for mixed-case ids as well; the built-in token registry was corrected accordingly.
+
+- [#2444](https://github.com/vultisig/vultisig-sdk/pull/2444) [`30dd259`](https://github.com/vultisig/vultisig-sdk/commit/30dd259d7d495df27d4e59bb27fdf40a6879831d) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Derive seedphrase-scan addresses the same way the vault does. `deriveAddressFromMnemonic` used WalletCore's `getAddressForCoin`, so MayaChain came out as a `thor1…` address (Maya shares THORChain's coin type), Bittensor came out as a Polkadot address, and Bitcoin Cash kept the `bitcoincash:` prefix. The Maya balance lookup failed with "invalid Bech32 prefix; expected maya, got thor", which blocked chain discovery during seedphrase import. It now runs the key that key import stores through `getChainAddress`, like every vault address, and takes an optional `tonWalletVersion`.
+
+  `MasterKeyDeriver.deriveAddress` (used by `ChainDiscoveryService`) and `deriveChainKey().address` now go through the same derivation. They had the same Bittensor and Bitcoin Cash problems, and built the Maya address from the uncompressed key, which pointed discovery at a different account.
+
+  `getChainAddress` now deletes the WalletCore public key it builds, and `getPublicKey` deletes the intermediate compressed key it converts from for Tron. Both used to leak one WalletCore object per call.
+
+- [#2426](https://github.com/vultisig/vultisig-sdk/pull/2426) [`c368202`](https://github.com/vultisig/vultisig-sdk/commit/c36820249569823bb3d3e24b06bcb66a34144f2a) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject all-zero Bittensor and Polkadot transfer destinations before producing signing inputs or unsigned transfer bytes, including alternate zero-account encodings accepted by the direct Bittensor builder.
+
 ## 5.6.1
 
 ### Patch Changes

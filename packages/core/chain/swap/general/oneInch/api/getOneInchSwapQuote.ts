@@ -3,6 +3,7 @@ import { ChainAccount } from '@vultisig/core-chain/ChainAccount'
 import { getEvmChainId } from '@vultisig/core-chain/chains/evm/chainInfo'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
+import { toMaxSlippageBps } from '@vultisig/core-chain/swap/general/calldataMinOutput'
 import { GeneralSwapQuote } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
 import { assertKnownAggregatorRouter } from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
 import { OneInchSwapQuoteResponse } from '@vultisig/core-chain/swap/general/oneInch/api/OneInchSwapQuoteResponse'
@@ -84,6 +85,8 @@ export const getOneInchSwapQuote = async ({
   const chain = account.chain as EvmChain
   const chainId = hexToNumber(getEvmChainId(chain))
 
+  const maxSlippageBps = toMaxSlippageBps(slippage, 100)
+
   const params = {
     src: resolveOneInchCoinAddress(fromCoinId, chain),
     dst: resolveOneInchCoinAddress(toCoinId, chain),
@@ -123,6 +126,7 @@ export const getOneInchSwapQuote = async ({
   return {
     dstAmount,
     provider: '1inch',
+    maxSlippageBps,
     affiliate: {
       affiliateBps: params.fee !== undefined ? affiliateBps! : 0,
       request: params.fee !== undefined ? 'included' : 'omitted',

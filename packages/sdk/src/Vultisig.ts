@@ -16,6 +16,7 @@ import {
 } from '@vultisig/core-chain/swap/utils/getSwapArrivalStatus'
 import { getSwapExplorerUrl, type SwapExplorerProvider } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 import { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
+import { withEvmChecksumHint } from '@vultisig/core-chain/utils/getEvmChecksumMismatchHint'
 import { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
 import { vaultContainerFromString } from '@vultisig/core-mpc/vault/utils/vaultContainerFromString'
 
@@ -1226,7 +1227,7 @@ export class Vultisig<
       })
 
       if (!isValid) {
-        throw new Error(`Invalid address for ${entry.chain}: ${entry.address}`)
+        throw new Error(withEvmChecksumHint(`Invalid address for ${entry.chain}: ${entry.address}`, entry.address))
       }
     }
 

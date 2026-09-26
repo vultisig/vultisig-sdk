@@ -7,6 +7,7 @@ import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
+import { withEvmChecksumHint } from '@vultisig/core-chain/utils/getEvmChecksumMismatchHint'
 import { isValidRecipient } from '@vultisig/core-chain/utils/isValidRecipient'
 import type { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
 import { getSendFeeEstimate } from '@vultisig/core-mpc/keysign/send/getSendFeeEstimate'
@@ -62,7 +63,12 @@ export const computeMaxSendFromBalance = async (
     walletCore,
   })
   if (!isValid) {
-    throw new Error(`Invalid receiver address for chain ${params.coin.chain}: ${params.receiver}`)
+    throw new Error(
+      withEvmChecksumHint(
+        `Invalid receiver address for chain ${params.coin.chain}: ${params.receiver}`,
+        params.receiver
+      )
+    )
   }
 
   const isQbtc = params.coin.chain === Chain.QBTC

@@ -5,12 +5,12 @@ import { fromChainAmountDisplay } from '@vultisig/core-chain/amount/fromChainAmo
 import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
-import { getErc20Allowance } from '@vultisig/core-chain/chains/evm/erc20/getErc20Allowance'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { areEqualCoins } from '@vultisig/core-chain/coin/Coin'
 import { COW_VAULT_RELAYER_ADDRESS } from '@vultisig/core-chain/swap/general/cowswap/config'
 import { encodeCowSwapKeysignData } from '@vultisig/core-chain/swap/general/cowswap/keysign/cowSwapKeysignData'
+import { assertAggregatorCalldataMinOutputBound } from '@vultisig/core-chain/swap/general/calldataMinOutput'
 import { GeneralSwapTx } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
 import { rujiTradeRuneBruneMarketContract } from '@vultisig/core-chain/swap/general/ruji/config'
 import { getSwapDestinationAddress } from '@vultisig/core-chain/swap/keysign/getSwapDestinationAddress'
@@ -32,7 +32,7 @@ import {
   OneInchTransaction,
   OneInchTransactionSchema,
 } from '@vultisig/core-mpc/types/vultisig/keysign/v1/1inch_swap_payload_pb'
-import { Erc20ApprovePayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/erc20_approve_payload_pb'
+import { getErc20ApprovePayload } from '@vultisig/core-mpc/keysign/erc20/getErc20ApprovePayload'
 import { KeysignPayload, KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { SwapKitSwapPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/swapkit_swap_payload_pb'
 import { TransactionType } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
@@ -386,6 +386,15 @@ export const buildSwapKeysignPayload = async ({
 
       const txMsg = matchRecordUnion<GeneralSwapTx, Omit<OneInchTransaction, '$typeName'>>(quote.tx, {
         evm: ({ from, to, data, value, affiliateFee }) => {
+          assertAggregatorCalldataMinOutputBound({
+            provider: quote.provider,
+            data,
+            quotedOutputAmount: quote.dstAmount,
+            maxSlippageBps: quote.maxSlippageBps,
+            destinationAsset: toCoin.id,
+            intendedRecipient: recipient ?? toCoin.address,
+            senderAddress: fromCoin.address,
+          })
           return {
             from,
             to,
@@ -552,19 +561,13 @@ export const buildSwapKeysignPayload = async ({
       general: ({ tx }) => ('evm' in tx ? tx.evm.approvalAddress : undefined),
     })
     const spender = approvalAddress ?? keysignPayload.toAddress
-    const allowance = await getErc20Allowance({
+    keysignPayload.erc20ApprovePayload = await getErc20ApprovePayload({
       chain,
       id: fromCoin.id,
       address: fromCoin.address,
       spender,
+      amount: chainAmount,
     })
-
-    if (allowance < chainAmount) {
-      keysignPayload.erc20ApprovePayload = create(Erc20ApprovePayloadSchema, {
-        amount: chainAmount.toString(),
-        spender,
-      })
-    }
   }
 
   if (isChainOfKind(fromCoin.chain, 'utxo')) {

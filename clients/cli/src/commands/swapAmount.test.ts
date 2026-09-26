@@ -29,9 +29,14 @@ import { executeSwap, executeSwapQuote, normalizeSwapAmount } from './swap'
 
 const exactAmount = '0.123456789123456789'
 
-function makeContext({ fromDecimals = 18, maxSwapable = 0n } = {}) {
+function makeContext({
+  fromDecimals = 18,
+  maxSwapable = 0n,
+  amount,
+}: { fromDecimals?: number; maxSwapable?: bigint; amount?: string } = {}) {
   const swap = vi.fn().mockResolvedValue({
     dryRun: true,
+    amount,
     quote: {
       fromCoin: { decimals: fromDecimals, ticker: 'ETH' },
       toCoin: { decimals: 8, ticker: 'BTC' },
@@ -65,7 +70,11 @@ describe('CLI swap amount precision', () => {
   })
 
   it('serializes the resolved amount and max flag for a max swap quote', async () => {
-    const { ctx } = makeContext({ fromDecimals: 6, maxSwapable: 1500000n })
+    const { ctx } = makeContext({
+      fromDecimals: 6,
+      maxSwapable: 1500000n,
+      amount: '1.499995',
+    })
 
     await executeSwapQuote(ctx, {
       fromChain: Chain.Ethereum,
@@ -73,7 +82,28 @@ describe('CLI swap amount precision', () => {
       amount: 'max',
     })
 
-    expect(outputJson).toHaveBeenCalledWith(expect.objectContaining({ amount: '1.5', isMax: true }))
+    expect(outputJson).toHaveBeenCalledWith(expect.objectContaining({ amount: '1.499995', isMax: true }))
+  })
+
+  it('uses the resolved committed amount in max swap dry-run output', async () => {
+    const { ctx } = makeContext({
+      fromDecimals: 6,
+      maxSwapable: 1500000n,
+      amount: '1.499995',
+    })
+
+    const result = await executeSwap(ctx, {
+      fromChain: Chain.Ethereum,
+      toChain: Chain.Bitcoin,
+      amount: 'max',
+      dryRun: true,
+    })
+
+    expect(result).toMatchObject({
+      dryRun: true,
+      inputAmount: '1.499995',
+      isMax: true,
+    })
   })
 
   it('leaves a non-max swap quote amount unchanged and clears the max flag', async () => {

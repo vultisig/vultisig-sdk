@@ -40,5 +40,9 @@ export const getChainAddress = ({
     chainPublicKeys,
   })
 
-  return deriveAddress({ chain, publicKey, walletCore, tonWalletVersion })
+  try {
+    return deriveAddress({ chain, publicKey, walletCore, tonWalletVersion })
+  } finally {
+    publicKey.delete()
+  }
 }

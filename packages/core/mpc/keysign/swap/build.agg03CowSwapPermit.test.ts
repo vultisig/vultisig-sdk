@@ -134,8 +134,9 @@ describe('buildSwapKeysignPayload — AGG-03: CowSwap permitRequired keeps the a
       quote: {
         general: {
           provider: '1inch',
+          maxSlippageBps: 50,
           dstAmount: '1000000',
-          tx: { evm: { from: '0xsender', to: ONE_INCH_V6_ROUTER, data: '0xabc', value: '0' } },
+          tx: { evm: { from: '0xsender', to: ONE_INCH_V6_ROUTER, data: '0xdeadbeef', value: '0' } },
         },
       },
       discounts: [],
