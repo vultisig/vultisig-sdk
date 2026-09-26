@@ -35,6 +35,13 @@ export type PrepareSendTxFromKeysParams = {
    * fee, in the jetton's units.
    */
   tonGasless?: boolean
+  /**
+   * Empty the account with a Substrate `transfer_allow_death` (Polkadot,
+   * Bittensor): the chain reaps the sender once its balance drops below the
+   * existential deposit. Only for an explicit user choice, with the reap
+   * disclosed; ignored on other chains.
+   */
+  allowDeath?: boolean
 }
 
 /**
@@ -141,5 +148,6 @@ export const prepareSendTxFromKeys = async (
     feeSettings: params.feeSettings,
     sendMaxAmount: params.sendMaxAmount,
     tonGasless: params.tonGasless,
+    allowDeath: params.allowDeath,
   })
 }

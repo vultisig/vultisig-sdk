@@ -72,6 +72,10 @@ export class TransactionBuilder {
    *   `balance - fee` figure the UI displayed.
    * @param params.tonGasless - TON only: pay the fee in the jetton being sent through the
    *   gasless relay (W5 accounts, relay-accepted jettons). The relay's commission is the fee.
+   * @param params.allowDeath - Empty the account with a Substrate `transfer_allow_death`
+   *   (Polkadot, Bittensor): the chain reaps the sender once its balance drops below
+   *   the existential deposit. Only for an explicit user choice, with the reap
+   *   disclosed; ignored on other chains.
    *
    * @returns A KeysignPayload ready to be signed with the sign() method
    *
@@ -99,6 +103,7 @@ export class TransactionBuilder {
     feeSettings?: FeeSettings
     sendMaxAmount?: boolean
     tonGasless?: boolean
+    allowDeath?: boolean
   }): Promise<KeysignPayload> {
     if (params.amount <= 0n) {
       throw new VaultError(VaultErrorCode.InvalidAmount, 'Amount must be greater than zero')
@@ -145,6 +150,7 @@ export class TransactionBuilder {
     destinationTag?: number
     feeSettings?: FeeSettings
     tonGasless?: boolean
+    allowDeath?: boolean
   }): Promise<bigint> {
     try {
       const walletCore = await this.wasmProvider.getWalletCore()
@@ -195,6 +201,7 @@ export class TransactionBuilder {
         libType: toKeysignLibType(this.vaultData),
         feeSettings: params.feeSettings,
         tonGasless: params.tonGasless,
+        allowDeath: params.allowDeath,
       })
     } catch (error) {
       if (error instanceof VaultError) throw error
