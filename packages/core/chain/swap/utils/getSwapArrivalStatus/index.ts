@@ -1,6 +1,7 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import { cosmosRpcUrl } from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
 import { thorchainMidgardBaseUrl } from '@vultisig/core-chain/chains/cosmos/thor/lp/pools'
+import { stripHexPrefix } from '@vultisig/lib-utils/hex/stripHexPrefix'
 
 export const swapArrivalProviders = ['thorchain', 'mayachain', 'skip', 'li.fi'] as const
 
@@ -139,6 +140,25 @@ const resultBase = (provider: SwapArrivalProvider, txHash: string): SwapArrivalS
 const maxDestinationTxSearchDepth = 12
 
 /**
+ * Folds the spellings one hash takes across providers — with or without `0x`,
+ * hex in either case — so the source hash is recognized however a payload
+ * repeats it.
+ */
+const toComparableTxHash = (txHash: string): string => stripHexPrefix(txHash).toLowerCase()
+
+/**
+ * THORNode and Midgard key a transaction by the id THORChain observed it
+ * under: hex with no `0x` prefix, uppercased. An EVM-sourced swap's hash
+ * carries the prefix, and asked with it both answer as if the deposit had
+ * never been seen, so the swap would read `not_found` for good. Only hex is
+ * uppercased: a base58 Solana signature is case-sensitive and passes as-is.
+ */
+const toThorMayaTxId = (txHash: string): string => {
+  const unprefixed = stripHexPrefix(txHash)
+  return /^[0-9a-f]+$/i.test(unprefixed) ? unprefixed.toUpperCase() : unprefixed
+}
+
+/**
  * Provider route payloads list hops and outbound transactions in execution
  * order, so the last distinct transaction hash is the destination transaction.
  * The depth cap keeps malformed or unexpectedly recursive payloads bounded.
@@ -146,7 +166,7 @@ const maxDestinationTxSearchDepth = 12
  * collection so unrelated provider object IDs cannot be mistaken for tx hashes.
  */
 const findDestinationTxHash = (value: unknown, sourceTxHash: string): string | undefined => {
-  const source = sourceTxHash.toLowerCase()
+  const source = toComparableTxHash(sourceTxHash)
   const found: string[] = []
 
   const visit = (candidate: unknown, depth: number): void => {
@@ -160,7 +180,7 @@ const findDestinationTxHash = (value: unknown, sourceTxHash: string): string | u
     for (const [key, child] of Object.entries(candidate)) {
       if ((key === 'txID' || key === 'txHash' || key === 'tx_hash') && typeof child === 'string') {
         const trimmed = child.trim()
-        if (trimmed && trimmed.toLowerCase() !== source) found.push(trimmed)
+        if (trimmed && toComparableTxHash(trimmed) !== source) found.push(trimmed)
       } else {
         visit(child, depth + 1)
       }
@@ -174,10 +194,10 @@ const findDestinationTxHash = (value: unknown, sourceTxHash: string): string | u
 const findThorMayaNodeDestinationTxHash = (data: unknown, sourceTxHash: string): string | undefined => {
   if (!isRecord(data) || !Array.isArray(data.out_txs)) return findDestinationTxHash(data, sourceTxHash)
 
-  const source = sourceTxHash.toLowerCase()
+  const source = toComparableTxHash(sourceTxHash)
   const outboundTxHashes = data.out_txs.flatMap(outboundTx => {
     const id = getString(outboundTx, 'id')?.trim()
-    return id && id.toLowerCase() !== source ? [id] : []
+    return id && toComparableTxHash(id) !== source ? [id] : []
   })
 
   return outboundTxHashes.at(-1) ?? findDestinationTxHash(data, sourceTxHash)
@@ -319,12 +339,13 @@ const getThorMayaStatus = async ({
   const isThorchain = provider === 'thorchain'
   const nodeBase = isThorchain ? hosts.thorchainNode : hosts.mayachainNode
   const midgardBase = isThorchain ? hosts.thorchainMidgard : hosts.mayachainMidgard
+  const txId = encodeURIComponent(toThorMayaTxId(txHash))
   const [node, midgard] = await Promise.all([
-    requestJson(fetchImpl, `${trimTrailingSlash(nodeBase)}/tx/status/${encodeURIComponent(txHash)}`, {
+    requestJson(fetchImpl, `${trimTrailingSlash(nodeBase)}/tx/status/${txId}`, {
       headers,
       signal,
     }),
-    requestJson(fetchImpl, `${trimTrailingSlash(midgardBase)}/v2/actions?txid=${encodeURIComponent(txHash)}`, {
+    requestJson(fetchImpl, `${trimTrailingSlash(midgardBase)}/v2/actions?txid=${txId}`, {
       headers,
       signal,
     }),

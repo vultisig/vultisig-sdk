@@ -193,6 +193,86 @@ describe('getSwapArrivalStatus', () => {
         'unknown actions response'
       )
     })
+
+    describe('an EVM-sourced swap', () => {
+      const evmTxHash = '0x503e9f604863b32e1bf96cda76ef922bcb2c97e986a95d3d1233139f17c6f219'
+      const thorTxId = '503E9F604863B32E1BF96CDA76EF922BCB2C97E986A95D3D1233139F17C6F219'
+
+      type MidgardActionInput = {
+        type: 'swap' | 'refund'
+        status: 'pending' | 'success'
+        out: { txID: string }[]
+      }
+
+      const midgardAction = ({ type, status, out }: MidgardActionInput) => ({
+        count: '1',
+        actions: [{ status, type, in: [{ txID: thorTxId }], out, metadata: { [type]: {} } }],
+      })
+
+      it('asks THORNode and Midgard by the id THORChain keys it under, and echoes the hash it was given', async () => {
+        const fetchImpl = vi.fn(async (input: RequestInfo | URL) =>
+          String(input).includes('/v2/actions')
+            ? jsonResponse(midgardAction({ type: 'swap', status: 'success', out: [{ txID: 'BTC-DESTINATION' }] }))
+            : jsonResponse({}, 404)
+        ) as typeof fetch
+
+        await expect(
+          getSwapArrivalStatus({
+            provider: 'thorchain',
+            txHash: evmTxHash,
+            hosts: {
+              thorchainNode: 'https://node.example/thorchain',
+              thorchainMidgard: 'https://midgard.example',
+            },
+            fetchImpl,
+          })
+        ).resolves.toEqual({
+          provider: 'thorchain',
+          txHash: evmTxHash,
+          status: 'success',
+          stage: 'complete',
+          destinationTxHash: 'BTC-DESTINATION',
+        })
+
+        expect(fetchImpl).toHaveBeenCalledWith(
+          `https://node.example/thorchain/tx/status/${thorTxId}`,
+          expect.any(Object)
+        )
+        expect(fetchImpl).toHaveBeenCalledWith(
+          `https://midgard.example/v2/actions?txid=${thorTxId}`,
+          expect.any(Object)
+        )
+      })
+
+      it('does not report the deposit itself as the destination while the refund is unsent', async () => {
+        const fetchImpl = vi.fn(async (input: RequestInfo | URL) =>
+          String(input).includes('/v2/actions')
+            ? jsonResponse(midgardAction({ type: 'refund', status: 'pending', out: [] }))
+            : jsonResponse({}, 404)
+        ) as typeof fetch
+
+        const result = await getSwapArrivalStatus({ provider: 'mayachain', txHash: evmTxHash, fetchImpl })
+
+        expect(result).toMatchObject({ status: 'pending', stage: 'refunding' })
+        expect(result.destinationTxHash).toBeUndefined()
+      })
+    })
+
+    it('passes a non-hex source hash through verbatim, since base58 is case-sensitive', async () => {
+      const signature = '5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW'
+      const fetchImpl = vi.fn(async () => jsonResponse({ count: '0', actions: [] })) as typeof fetch
+
+      await getSwapArrivalStatus({ provider: 'thorchain', txHash: signature, fetchImpl })
+
+      expect(fetchImpl).toHaveBeenCalledWith(
+        expect.stringMatching(new RegExp(`/tx/status/${signature}$`)),
+        expect.any(Object)
+      )
+      expect(fetchImpl).toHaveBeenCalledWith(
+        expect.stringMatching(new RegExp(`txid=${signature}$`)),
+        expect.any(Object)
+      )
+    })
   })
 
   describe('Skip', () => {
