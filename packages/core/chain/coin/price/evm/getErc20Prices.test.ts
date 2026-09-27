@@ -214,7 +214,7 @@ describe('getErc20Prices', () => {
         (_, index) => `0x${(index + 1).toString(16).padStart(40, '0')}`
       )
       const stalled = Array.from(
-        { length: contractPriceBatchSize },
+        { length: contractPriceBatchSize + 1 },
         (_, index) => `0x${(index + 1 + contractPriceBatchSize).toString(16).padStart(40, '0')}`
       )
       let calls = 0
