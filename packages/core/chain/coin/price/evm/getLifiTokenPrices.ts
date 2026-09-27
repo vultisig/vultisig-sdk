@@ -17,13 +17,14 @@ type GetLifiTokenPricesInput = {
   chain: EvmChain
 }
 
-export type LifiTokenPrices = {
+/** LI.FI prices in USD, keyed by lowercase contract. A 4xx other than 429 means unlisted. Other failures are reported. */
+export const getLifiTokenPrices = async ({
+  ids,
+  chain,
+}: GetLifiTokenPricesInput): Promise<{
   prices: Record<string, number>
   failedIds: string[]
-}
-
-/** LI.FI prices in USD, keyed by lowercase contract. A 4xx other than 429 means unlisted. Other failures are reported. */
-export const getLifiTokenPrices = async ({ ids, chain }: GetLifiTokenPricesInput): Promise<LifiTokenPrices> => {
+}> => {
   const chainId = hexToNumber(getEvmChainId(chain))
   const prices: Record<string, number> = {}
   const failedIds: string[] = []
