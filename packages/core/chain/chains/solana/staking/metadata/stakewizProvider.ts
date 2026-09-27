@@ -14,7 +14,8 @@ import { ValidatorMetadataProvider } from './ValidatorMetadataProvider'
  * Field mapping (Stakewiz → ValidatorMetadata):
  *   name          → name
  *   image         → logoUrl
- *   apy_estimate  → apyEstimate  (percent on the wire, stored as a fraction)
+ *   total_apy     → apyEstimate  (percent on the wire, stored as a fraction;
+ *                   staking + Jito MEV. `apy_estimate` overstates realized yield)
  *   wiz_score     → score
  *
  * Port of iOS `StakewizValidatorMetadataProvider`.
@@ -33,7 +34,7 @@ const asFiniteNumber = (value: unknown): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined
 
 /**
- * Stakewiz reports `apy_estimate` as a percentage (e.g. 5.72) — store as a
+ * Stakewiz reports `total_apy` as a percentage (e.g. 5.72) — store as a
  * fraction. A genuine `0` is preserved (0% APY ≠ "no APY"); only missing /
  * non-finite / negative values collapse to `undefined`.
  */
@@ -47,7 +48,7 @@ const toMetadata = (row: StakewizValidatorRow): ValidatorMetadata => {
   return {
     name: asTrimmedString(row.name),
     logoUrl: asTrimmedString(row.image),
-    apyEstimate: apyFraction(row.apy_estimate),
+    apyEstimate: apyFraction(row.total_apy),
     score: wizScore === undefined ? undefined : Math.round(wizScore),
   }
 }
