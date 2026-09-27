@@ -29,7 +29,7 @@ const createSubpathTypesConfig = (input, file) => ({
   plugins: [dts(dtsPluginOptions)],
 })
 
-export default defineConfig([
+const entries = [
   // Main types (platform-agnostic)
   {
     input: 'src/index.ts',
@@ -145,4 +145,25 @@ export default defineConfig([
   createSubpathTypesConfig('src/signable-transaction/index.ts', 'dist/signable-transaction/index.d.ts'),
   createSubpathTypesConfig('src/tx/index.ts', 'dist/tx/index.d.ts'),
   createSubpathTypesConfig('src/server/index.ts', 'dist/server/index.d.ts'),
+]
+
+// One declaration graph retains platform-only types and public filenames without
+// copying the full SDK declarations into every platform and subpath entry.
+// CJS declarations stay separate so NodeNext resolves their module kind correctly.
+const esmEntries = entries.filter(entry => !entry.output.file.endsWith('.d.cts'))
+export default defineConfig([
+  {
+    input: Object.fromEntries(
+      esmEntries.map(entry => [entry.output.file.replace('dist/', '').replace(/\.d\.ts$/, ''), entry.input])
+    ),
+    output: {
+      dir: 'dist',
+      format: 'es',
+      entryFileNames: '[name].d.ts',
+      chunkFileNames: 'chunks/types/[name]-[hash].d.ts',
+    },
+    external: ['vite'],
+    plugins: [dts(dtsPluginOptions)],
+  },
+  ...entries.filter(entry => entry.output.file.endsWith('.d.cts')),
 ])
