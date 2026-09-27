@@ -39,14 +39,20 @@ const restResponseFields: Record<string, readonly string[]> = {
   '/wallet/gettransactioninfobyid': ['id'],
 }
 
-async function request<T>(endpoint: string, path: string, options: Options): Promise<T> {
+async function requestWithText<T>(
+  endpoint: string,
+  path: string,
+  options: Options
+): Promise<{ data: T; text: string }> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 15_000)
   try {
-    const data = await queryUrl<Record<string, unknown>>(`${endpoint.replace(/\/$/, '')}${path}`, {
+    const text = await queryUrl(`${endpoint.replace(/\/$/, '')}${path}`, {
       ...options,
       signal: controller.signal,
+      responseType: 'text',
     })
+    const data = JSON.parse(text) as Record<string, unknown>
     if (!data || typeof data !== 'object' || Array.isArray(data)) {
       throw new TronAvailabilityError(`Tron ${path} returned a malformed response`)
     }
@@ -84,7 +90,7 @@ async function request<T>(endpoint: string, path: string, options: Options): Pro
     if (path === '/wallet/triggerconstantcontract' && !data.result && !data.constant_result) {
       throw new TronAvailabilityError('Tron contract response is malformed')
     }
-    return data as T
+    return { data: data as T, text }
   } catch (error) {
     if (controller.signal.aborted) throw new TronAvailabilityError(`Tron ${path} request timed out`)
     throw error
@@ -93,17 +99,30 @@ async function request<T>(endpoint: string, path: string, options: Options): Pro
   }
 }
 
+async function request<T>(endpoint: string, path: string, options: Options): Promise<T> {
+  return (await requestWithText<T>(endpoint, path, options)).data
+}
+
 /** Default read routing. An explicit primary is used alone unless a fallback is also supplied. */
 export async function queryTron<T>(path: string, options: Options = {}, route: Route = {}): Promise<T> {
+  return (await queryTronWithText<T>(path, options, route)).data
+}
+
+/** Validated response plus original JSON text for precision-sensitive readers. */
+export async function queryTronWithText<T>(
+  path: string,
+  options: Options = {},
+  route: Route = {}
+): Promise<{ data: T; text: string }> {
   // Submission must go through the hash-verifying broadcaster below.
   if (path === '/wallet/broadcasttransaction') throw new Error('Use broadcastTronTransaction for submissions')
   const primary = route.primaryUrl ?? tronRpcUrl
   const fallback = route.fallbackUrl ?? (route.primaryUrl ? undefined : fallbackFor(path))
   try {
-    return await request<T>(primary, path, options)
+    return await requestWithText<T>(primary, path, options)
   } catch (error) {
     if (!fallback || !isRetryableTronError(error)) throw error
-    return request<T>(fallback, path, options)
+    return requestWithText<T>(fallback, path, options)
   }
 }
 
