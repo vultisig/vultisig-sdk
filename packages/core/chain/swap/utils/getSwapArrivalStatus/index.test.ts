@@ -273,6 +273,23 @@ describe('getSwapArrivalStatus', () => {
         expect.any(Object)
       )
     })
+
+    it('tells a base58 destination from the source even when they differ only in case', async () => {
+      const signature = '5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW'
+      const destination = signature.toLowerCase()
+      const fetchImpl = vi.fn(async (input: RequestInfo | URL) =>
+        String(input).includes('/v2/actions')
+          ? jsonResponse({
+              count: '1',
+              actions: [{ status: 'success', type: 'swap', in: [{ txID: signature }], out: [{ txID: destination }] }],
+            })
+          : jsonResponse({}, 404)
+      ) as typeof fetch
+
+      await expect(
+        getSwapArrivalStatus({ provider: 'thorchain', txHash: signature, fetchImpl })
+      ).resolves.toMatchObject({ status: 'success', destinationTxHash: destination })
+    })
   })
 
   describe('Skip', () => {

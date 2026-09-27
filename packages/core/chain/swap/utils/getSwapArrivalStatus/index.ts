@@ -139,12 +139,18 @@ const resultBase = (provider: SwapArrivalProvider, txHash: string): SwapArrivalS
 
 const maxDestinationTxSearchDepth = 12
 
+const isHex = (value: string): boolean => /^[0-9a-f]+$/i.test(value)
+
 /**
  * Folds the spellings one hash takes across providers — with or without `0x`,
  * hex in either case — so the source hash is recognized however a payload
- * repeats it.
+ * repeats it. Only hex is case-folded: a base58 Solana signature is
+ * case-sensitive and compares exactly.
  */
-const toComparableTxHash = (txHash: string): string => stripHexPrefix(txHash).toLowerCase()
+const toComparableTxHash = (txHash: string): string => {
+  const unprefixed = stripHexPrefix(txHash)
+  return isHex(unprefixed) ? unprefixed.toLowerCase() : unprefixed
+}
 
 /**
  * THORNode and Midgard key a transaction by the id THORChain observed it
@@ -155,7 +161,7 @@ const toComparableTxHash = (txHash: string): string => stripHexPrefix(txHash).to
  */
 const toThorMayaTxId = (txHash: string): string => {
   const unprefixed = stripHexPrefix(txHash)
-  return /^[0-9a-f]+$/i.test(unprefixed) ? unprefixed.toUpperCase() : unprefixed
+  return isHex(unprefixed) ? unprefixed.toUpperCase() : unprefixed
 }
 
 /**
