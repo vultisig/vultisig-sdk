@@ -1,7 +1,10 @@
 import { create } from '@bufbuild/protobuf'
+import { fromChainAmount } from '@vultisig/core-chain/amount/fromChainAmount'
 import { getUtxoMinSendAmountError } from '@vultisig/core-chain/chains/utxo/send/validateUtxoRequirements'
+import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { bigIntSum } from '@vultisig/lib-utils/bigint/bigIntSum'
+import { formatAmount } from '@vultisig/lib-utils/formatAmount'
 import { WalletCore } from '@trustwallet/wallet-core'
 import { TW } from '@trustwallet/wallet-core'
 import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
@@ -55,25 +58,29 @@ export const refineKeysignUtxo = async (input: RefineKeysignUtxoInput): Promise<
   const planUtxos = plan.utxos
 
   const amount = getKeysignAmount(input.keysignPayload)
+  // WalletCore's proto3 enum defaults to OK even though the generated
+  // TypeScript interface still permits nullish values.
+  const planError = plan.error as TW.Common.Proto.SigningError
+  const errorName = TW.Common.Proto.SigningError[planError] ?? `Unknown(${planError})`
 
-  if (!planUtxos || planUtxos.length === 0) {
-    const planError = plan.error
-    const errorName =
-      planError == null
-        ? `Unknown(${String(planError)})`
-        : (TW.Common.Proto.SigningError[planError] ?? `Unknown(${planError})`)
-
+  if (planError !== TW.Common.Proto.SigningError.OK) {
     if (planError === TW.Common.Proto.SigningError.Error_dust_amount_requested) {
+      const chain = getKeysignChain<'utxo'>(input.keysignPayload)
       const minSendAmountError = amount
         ? getUtxoMinSendAmountError({
             amount,
-            chain: getKeysignChain<'utxo'>(input.keysignPayload),
+            chain,
           })
         : undefined
+      const { decimals, ticker } = chainFeeCoin[chain]
+      const formattedAmount = formatAmount(fromChainAmount(amount, decimals), {
+        ticker,
+      })
 
       throw new BuildKeysignPayloadError(
         'utxo-dust-amount-requested',
-        minSendAmountError ?? `Failed to build transaction: ${errorName}`
+        minSendAmountError ??
+          `Amount ${formattedAmount} is below the network dust threshold at the current fee rate; increase the amount and try again.`
       )
     }
 
@@ -88,10 +95,14 @@ export const refineKeysignUtxo = async (input: RefineKeysignUtxoInput): Promise<
       )
     }
 
-    // WalletCore reports failed plans through `plan.error`. An empty plan is
-    // therefore never evidence that retrying the caller's amount as max is
-    // safe; only the successful-plan dust-change check below may select max.
     throw new Error(`Failed to build transaction: ${errorName}`)
+  }
+
+  if (!planUtxos || planUtxos.length === 0) {
+    // A successful planner result still needs inputs. An empty plan is never
+    // evidence that retrying the caller's amount as max is safe; only the
+    // successful-plan dust-change check below may select max.
+    throw new Error('Failed to build transaction: planner returned no inputs')
   }
 
   const actualFee = BigInt(shouldBePresent(plan.fee, 'UTXO signing input plan fee').toString())

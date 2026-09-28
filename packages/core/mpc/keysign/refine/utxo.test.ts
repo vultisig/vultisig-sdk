@@ -38,9 +38,11 @@ const buildPayload = (amount = 100n) =>
     utxoInfo: [{ hash: '00'.repeat(32), amount: 1_000n, index: 0 }],
   })
 
+const hexEncode = vi.fn(() => '00'.repeat(32))
+
 const walletCore = {
   HexCoding: {
-    encode: vi.fn(() => '00'.repeat(32)),
+    encode: hexEncode,
   },
 } as never
 
@@ -99,6 +101,53 @@ describe('refineKeysignUtxo', () => {
     expect(mocks.getUtxoSigningInputs.mock.calls[0]?.[0].keysignPayload.blockchainSpecific.value.sendMaxAmount).toBe(
       false
     )
+  })
+
+  it('treats a planner error as authoritative even when the plan selected UTXOs', async () => {
+    mocks.getUtxoSigningInputs.mockResolvedValue([
+      planWith(TW.Common.Proto.SigningError.Error_not_enough_utxos, [selectedUtxo]),
+    ])
+
+    await expect(
+      refineKeysignUtxo({
+        keysignPayload: buildPayload(),
+        walletCore,
+        publicKey: {} as never,
+      })
+    ).rejects.toMatchObject({
+      name: 'BuildKeysignPayloadError',
+      type: 'not-enough-funds',
+    } satisfies Partial<BuildKeysignPayloadError>)
+    expect(hexEncode).not.toHaveBeenCalled()
+  })
+
+  it('reports a fee-rate dust threshold when the amount is above the static floor', async () => {
+    mocks.getUtxoSigningInputs.mockResolvedValue([planWith(TW.Common.Proto.SigningError.Error_dust_amount_requested)])
+
+    await expect(
+      refineKeysignUtxo({
+        keysignPayload: buildPayload(1_019n),
+        walletCore,
+        publicKey: {} as never,
+      })
+    ).rejects.toMatchObject({
+      name: 'BuildKeysignPayloadError',
+      type: 'utxo-dust-amount-requested',
+      message:
+        'Amount 0.00001019 BTC is below the network dust threshold at the current fee rate; increase the amount and try again.',
+    } satisfies Partial<BuildKeysignPayloadError>)
+  })
+
+  it('rejects a successful planner result that contains no inputs', async () => {
+    mocks.getUtxoSigningInputs.mockResolvedValue([planWith(TW.Common.Proto.SigningError.OK)])
+
+    await expect(
+      refineKeysignUtxo({
+        keysignPayload: buildPayload(),
+        walletCore,
+        publicKey: {} as never,
+      })
+    ).rejects.toThrow('Failed to build transaction: planner returned no inputs')
   })
 
   it('retries as send-max when a successful plan would leave dust change', async () => {

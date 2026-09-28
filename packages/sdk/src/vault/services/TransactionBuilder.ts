@@ -7,6 +7,7 @@ import { getTwPublicKeyType } from '@vultisig/core-chain/publicKey/tw/getTwPubli
 import { withEvmChecksumHint } from '@vultisig/core-chain/utils/getEvmChecksumMismatchHint'
 import { isValidRecipient } from '@vultisig/core-chain/utils/isValidRecipient'
 import { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
+import { BuildKeysignPayloadError } from '@vultisig/core-mpc/keysign/error'
 import { getSendFeeEstimate } from '@vultisig/core-mpc/keysign/send/getSendFeeEstimate'
 import { getEncodedSigningInputs } from '@vultisig/core-mpc/keysign/signingInputs'
 import { getKeysignTwPublicKey } from '@vultisig/core-mpc/keysign/tw/getKeysignTwPublicKey'
@@ -50,6 +51,12 @@ export class TransactionBuilder {
       if (error instanceof VaultError) throw error
       const message = error instanceof Error ? error.message : String(error)
       const cause = error instanceof Error ? error : new Error(message)
+      if (
+        error instanceof BuildKeysignPayloadError &&
+        (error.type === 'utxo-dust-amount-requested' || error.type === 'not-enough-funds')
+      ) {
+        throw new VaultError(VaultErrorCode.InvalidAmount, message, cause)
+      }
       throw new VaultError(VaultErrorCode.InvalidConfig, `Failed to prepare ${opName}: ${message}`, cause)
     }
   }

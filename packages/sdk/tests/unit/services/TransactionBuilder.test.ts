@@ -45,6 +45,7 @@ vi.mock('@vultisig/core-mpc/keysign/utils/getKeysignChain', () => ({
 }))
 
 import { isValidRecipient } from '@vultisig/core-chain/utils/isValidRecipient'
+import { BuildKeysignPayloadError } from '@vultisig/core-mpc/keysign/error'
 import { buildSendKeysignPayload } from '@vultisig/core-mpc/keysign/send/build'
 import type { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 
@@ -127,6 +128,26 @@ describe('TransactionBuilder', () => {
       ).rejects.toThrow(/Invalid receiver address for chain Solana/)
 
       expect(buildSendKeysignPayload).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      ['utxo-dust-amount-requested', 'Amount 0.00001019 BTC is below the network dust threshold'],
+      ['not-enough-funds', 'Failed to build transaction: insufficient balance'],
+    ] as const)('surfaces %s as InvalidAmount and preserves the planner error', async (type, message) => {
+      const plannerError = new BuildKeysignPayloadError(type, message)
+      vi.mocked(buildSendKeysignPayload).mockRejectedValueOnce(plannerError)
+
+      await expect(
+        builder.prepareSendTx({
+          coin: mockCoin,
+          receiver: '0xabcdef1234567890abcdef1234567890abcdef12',
+          amount: 1n,
+        })
+      ).rejects.toMatchObject({
+        code: VaultErrorCode.InvalidAmount,
+        message,
+        originalError: plannerError,
+      })
     })
   })
 
