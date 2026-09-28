@@ -272,6 +272,7 @@ export type { WalletCoreLike } from '@vultisig/walletcore-native'
 // RN wrappers accept WalletCoreLike from @vultisig/walletcore-native
 // so consumers don't need to cast to @trustwallet/wallet-core's WalletCore.
 export { deriveAddress, getCoinType, getPublicKey, isValidAddress, isValidTokenId } from './chainHelpers'
+export { deriveQbtcAddress } from '@vultisig/core-chain/publicKey/address/deriveQbtcAddress'
 
 // MPC keysign (uses MpcEngine — no direct WASM imports)
 export { keysign } from '@vultisig/core-mpc/keysign'
@@ -559,8 +560,10 @@ export {
   defi,
   fetchAllStakekitBalances,
   fetchStakekitBalancesBatch,
+  finalizeStakekitAction,
   parseActionDisplay,
   STAKEKIT_BALANCE_QUERIES_PER_REQUEST,
+  StakekitActionRefusal,
   stakekitBalances,
   stakekitBuildEnter,
   stakekitBuildExit,
@@ -585,11 +588,14 @@ export type {
   StakekitActionResult,
   StakekitDetailsResult,
   StakekitExitResult,
+  StakekitFinalizeResult,
+  StakekitRefusalStatus,
   UnsupportedScanRequest,
   Validator,
   YieldActionResponse,
   YieldArgs,
   YieldBalance,
+  YieldBuildFailure,
   YieldDiscoverMetadata,
   YieldDiscoverOpportunity,
   YieldDiscoverToken,

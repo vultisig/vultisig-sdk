@@ -16,6 +16,7 @@ import { memoize } from '@vultisig/lib-utils/memoize'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 
 import { AccountCoinKey } from '../../../../coin/AccountCoin'
+import { toMaxSlippageBps } from '../../calldataMinOutput'
 import { GeneralSwapQuote } from '../../GeneralSwapQuote'
 import { assertKnownAggregatorRouter, assertLifiApprovalAddress } from '../../knownAggregatorRouters'
 import { injectSolanaAtaIfMissing } from './injectSolanaAtaIfMissing'
@@ -65,6 +66,8 @@ export const getLifiSwapQuote = async ({
   const [fromAddress, toAddress] = [transfer.from, transfer.to].map(({ address }) => address)
 
   const slippage = resolveLifiSlippage({ slippageOverride, from: transfer.from, to: transfer.to })
+
+  const maxSlippageBps = getChainKind(transfer.from.chain) === 'evm' ? toMaxSlippageBps(slippage, 10000) : undefined
 
   // Defensive: log when affiliate + slippage combined cost crosses the
   // 3% ceiling. Today affiliateBps is typically 0 and slippage is 1%,
@@ -174,6 +177,7 @@ export const getLifiSwapQuote = async ({
   return {
     dstAmount: estimate.toAmount,
     provider: 'li.fi',
+    ...(chainKind === 'evm' ? { maxSlippageBps } : {}),
     affiliate: affiliateBps === undefined ? undefined : { affiliateBps, request: 'included' },
     tx: match<DeriveChainKind<LifiSwapEnabledChain>, GeneralSwapQuote['tx']>(chainKind, {
       solana: () => {

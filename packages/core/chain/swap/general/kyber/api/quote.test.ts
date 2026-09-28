@@ -140,6 +140,7 @@ describe('getKyberSwapQuote', () => {
 
     // No decimals bug: our code relays Kyber's own amountOut unmodified.
     expect(quote.dstAmount).toBe(rawAmountOut)
+    expect(quote.maxSlippageBps).toBe(100)
 
     // The implied rate is NOT ~1:1 for a stablecoin pair — the premium is
     // real and comes from Kyber's own quote, not from anything this repo

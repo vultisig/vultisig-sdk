@@ -26,6 +26,7 @@ type PayloadInput = {
   amount: bigint
   contractAddress?: string
   transactionType?: TransactionType
+  allowDeath?: boolean
 }
 
 const buildPayload = ({
@@ -33,6 +34,7 @@ const buildPayload = ({
   amount,
   contractAddress,
   transactionType = TransactionType.UNSPECIFIED,
+  allowDeath = false,
 }: PayloadInput) =>
   create(KeysignPayloadSchema, {
     coin: {
@@ -65,6 +67,7 @@ const buildPayload = ({
                 transactionVersion: 1,
                 genesisHash: '0x' + 'cd'.repeat(32),
                 gas: 200_000n,
+                allowDeath,
               }),
             }
           : {
@@ -132,6 +135,16 @@ describe('refineKeysignAmount', () => {
 
     expect(BigInt(refined.toAmount)).toBe(balance - fee - bittensorConfig.existentialDeposit)
     expect(balance - BigInt(refined.toAmount) - fee).toBeGreaterThanOrEqual(500n)
+  })
+
+  it('lets a Bittensor payload that allows death spend the deposit too', async () => {
+    const balance = 1_000_000_000n
+    const fee = 200_000n
+    mocks.getFeeAmount.mockResolvedValue(fee)
+
+    const refined = await refine(buildPayload({ chain: Chain.Bittensor, amount: balance, allowDeath: true }), balance)
+
+    expect(BigInt(refined.toAmount)).toBe(balance - fee)
   })
 
   it('leaves a Bittensor amount that already keeps the deposit exactly as entered', async () => {

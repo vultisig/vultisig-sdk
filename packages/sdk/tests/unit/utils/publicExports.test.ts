@@ -2,6 +2,7 @@ import * as cosmosStaking from '@vultisig/core-chain/chains/cosmos/staking/lcdQu
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
 import { resolveTokenPriceId as canonicalResolveTokenPriceId } from '@vultisig/core-chain/coin/price/resolveTokenPriceId'
+import { deriveQbtcAddress as canonicalDeriveQbtcAddress } from '@vultisig/core-chain/publicKey/address/deriveQbtcAddress'
 import * as blockaidChains from '@vultisig/core-chain/security/blockaid/evmChains'
 import * as isValidTokenIdModule from '@vultisig/core-chain/utils/isValidTokenId'
 import { describe, expect, expectTypeOf, it } from 'vitest'
@@ -35,6 +36,8 @@ const dangerousAddressCanonicalExports = [
   'assertSafeDestination',
 ] as const
 
+const qbtcPublicKey = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+const qbtcAddress = 'qbtc1p3xsn0hgurfgfygl4wc9qslemjuujqg2x9fdnp'
 describe('@vultisig/sdk public exports', () => {
   it('exports canonical Cosmos validator helpers and types', () => {
     expect(sdk.getValidatorsUrl).toBe(cosmosStaking.getValidatorsUrl)
@@ -103,6 +106,12 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.resolveTokenPriceId(sdk.Chain.Solana, 'not-a-known-token')).toBeUndefined()
   })
 
+  it('re-exports canonical QBTC address derivation with its synchronous signature', () => {
+    expect(sdk.deriveQbtcAddress).toBe(canonicalDeriveQbtcAddress)
+    expectTypeOf(sdk.deriveQbtcAddress).toEqualTypeOf<(mldsaPublicKeyHex: string) => string>()
+    expect(sdk.deriveQbtcAddress(qbtcPublicKey)).toBe(qbtcAddress)
+  })
+
   it('exports the strict chain-ID resolver by identity with its string-only signature', () => {
     expect(sdk.resolveChainIdReference).toBe(resolveChainIdReference)
     expectTypeOf(sdk.resolveChainIdReference).toEqualTypeOf<(chainId: string) => sdk.Chain | undefined>()
@@ -132,6 +141,7 @@ describe('@vultisig/sdk public exports', () => {
 
     expect(sdk.defi.stakekit).toEqual({
       parseActionDisplay: canonical.parseActionDisplay,
+      finalizeStakekitAction: canonical.finalizeStakekitAction,
       buildYieldActionScanRequest: canonical.buildYieldActionScanRequest,
       validateStakekitActionAddress: canonical.validateStakekitActionAddress,
       validateStakekitActionInput: canonical.validateStakekitActionInput,
