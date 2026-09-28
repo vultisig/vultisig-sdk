@@ -27,7 +27,7 @@ export function validateNoEmbeddedSourceMaps(packageRoot, files) {
   for (const file of files) {
     if (!/\.(?:js|cjs|mjs|css)$/.test(file.path)) continue
     const source = readFileSync(path.join(packageRoot, file.path), 'utf8')
-    if (/sourceMappingURL=data:/.test(source)) {
+    if (/sourceMappingURL\s*=\s*data:/i.test(source)) {
       throw new Error(`SDK must not embed source maps in ${file.path}`)
     }
     if (source.includes('sourcesContent')) {

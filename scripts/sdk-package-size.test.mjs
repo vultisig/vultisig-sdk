@@ -93,6 +93,11 @@ test('rejects inline source maps and source content in packed CSS and JavaScript
       () => validateNoEmbeddedSourceMaps(root, inventoryExtractedPackage(root)[0].files),
       /source maps in dist\/style\.css/
     )
+    writeFileSync(css, 'body{}\n/*# sourceMappingURL = DATA:application/json;base64,eyJzb3VyY2VzQ29udGVudCI6WyJ4Il19 */')
+    assert.throws(
+      () => validateNoEmbeddedSourceMaps(root, inventoryExtractedPackage(root)[0].files),
+      /source maps in dist\/style\.css/
+    )
     writeFileSync(css, 'body{}\n/* sourcesContent */')
     assert.throws(
       () => validateNoEmbeddedSourceMaps(root, inventoryExtractedPackage(root)[0].files),
