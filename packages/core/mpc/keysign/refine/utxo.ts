@@ -1,4 +1,5 @@
 import { create } from '@bufbuild/protobuf'
+import { getUtxoMinSendAmountError } from '@vultisig/core-chain/chains/utxo/send/validateUtxoRequirements'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { bigIntSum } from '@vultisig/lib-utils/bigint/bigIntSum'
 import { WalletCore } from '@trustwallet/wallet-core'
@@ -9,8 +10,10 @@ import { UTXOSpecificSchema } from '../../types/vultisig/keysign/v1/blockchain_s
 import { KeysignPayload } from '../../types/vultisig/keysign/v1/keysign_message_pb'
 import { UtxoInfoSchema } from '../../types/vultisig/keysign/v1/utxo_info_pb'
 import { getBlockchainSpecificValue } from '../chainSpecific/KeysignChainSpecific'
+import { BuildKeysignPayloadError } from '../error'
 import { getUtxoSigningInputs } from '../signingInputs/resolvers/utxo'
 import { getKeysignAmount } from '../utils/getKeysignAmount'
+import { getKeysignChain } from '../utils/getKeysignChain'
 
 type RefineKeysignUtxoInput = {
   keysignPayload: KeysignPayload
@@ -54,27 +57,41 @@ export const refineKeysignUtxo = async (input: RefineKeysignUtxoInput): Promise<
   const amount = getKeysignAmount(input.keysignPayload)
 
   if (!planUtxos || planUtxos.length === 0) {
-    if (utxoSpecific.sendMaxAmount) {
-      throw new Error('Failed to build transaction: insufficient balance or invalid UTXO selection')
+    const planError = plan.error
+    const errorName =
+      planError == null
+        ? `Unknown(${String(planError)})`
+        : (TW.Common.Proto.SigningError[planError] ?? `Unknown(${planError})`)
+
+    if (planError === TW.Common.Proto.SigningError.Error_dust_amount_requested) {
+      const minSendAmountError = amount
+        ? getUtxoMinSendAmountError({
+            amount,
+            chain: getKeysignChain<'utxo'>(input.keysignPayload),
+          })
+        : undefined
+
+      throw new BuildKeysignPayloadError(
+        'utxo-dust-amount-requested',
+        minSendAmountError ?? `Failed to build transaction: ${errorName}`
+      )
     }
 
-    if (amount) {
-      return refineKeysignUtxo({
-        ...input,
-        keysignPayload: {
-          ...input.keysignPayload,
-          blockchainSpecific: {
-            case: 'utxoSpecific',
-            value: create(UTXOSpecificSchema, {
-              ...utxoSpecific,
-              sendMaxAmount: true,
-            }),
-          },
-        },
-      })
+    if (
+      planError === TW.Common.Proto.SigningError.Error_low_balance ||
+      planError === TW.Common.Proto.SigningError.Error_missing_input_utxos ||
+      planError === TW.Common.Proto.SigningError.Error_not_enough_utxos
+    ) {
+      throw new BuildKeysignPayloadError(
+        'not-enough-funds',
+        `Failed to build transaction: insufficient balance (${errorName})`
+      )
     }
 
-    return input.keysignPayload
+    // WalletCore reports failed plans through `plan.error`. An empty plan is
+    // therefore never evidence that retrying the caller's amount as max is
+    // safe; only the successful-plan dust-change check below may select max.
+    throw new Error(`Failed to build transaction: ${errorName}`)
   }
 
   const actualFee = BigInt(shouldBePresent(plan.fee, 'UTXO signing input plan fee').toString())
