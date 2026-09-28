@@ -1,5 +1,21 @@
 # @vultisig/sdk
 
+## 8.1.1
+
+### Patch Changes
+
+- [#2464](https://github.com/vultisig/vultisig-sdk/pull/2464) [`a55fda9`](https://github.com/vultisig/vultisig-sdk/commit/a55fda9325d071aa7717bf59c9ad328a0edd556b) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Expose the Arkis helper family as named imports from the SDK root and DeFi entrypoint.
+
+- [#2462](https://github.com/vultisig/vultisig-sdk/pull/2462) [`25aafc6`](https://github.com/vultisig/vultisig-sdk/commit/25aafc62cb9f37488bdce24b02aff4ad2e77169c) Thanks [@realpaaao](https://github.com/realpaaao)! - fix(solana): read Stakewiz `total_apy` for validator APY — `apy_estimate` overstated realized staking yield by ~60% (8.1% vs ~5.1%)
+
+- [#2459](https://github.com/vultisig/vultisig-sdk/pull/2459) [`ed67a44`](https://github.com/vultisig/vultisig-sdk/commit/ed67a4430ee97069eb07f505ab797a433a40d267) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - `getSwapArrivalStatus` now finds a THORChain or MayaChain swap that started on an EVM chain. THORNode and Midgard key a deposit by its hash without the `0x` prefix, so the prefixed hash an EVM chain returns read as `not_found` for as long as it was polled. The lookup now strips the prefix (and uppercases hex, leaving base58 signatures untouched), and the result still echoes the hash the caller passed. The deposit's own hash is also no longer mistaken for the destination while the outbound is unsent.
+
+- [#2454](https://github.com/vultisig/vultisig-sdk/pull/2454) [`21eb4cf`](https://github.com/vultisig/vultisig-sdk/commit/21eb4cfdec42b2a01ac37fc61d47758c79c152aa) Thanks [@neavra](https://github.com/neavra)! - Transaction status lookups on Solana and Cosmos-family chains (THORChain, Maya, Cosmos Hub, …) now report `not_found` when the node has no record of the hash, matching EVM, instead of an indefinite `pending`. On Solana, a transient RPC failure and an unseen signature whose `lastValidBlockHeight` has not expired still report `pending`.
+
+- Updated dependencies [[`25aafc6`](https://github.com/vultisig/vultisig-sdk/commit/25aafc62cb9f37488bdce24b02aff4ad2e77169c), [`ed67a44`](https://github.com/vultisig/vultisig-sdk/commit/ed67a4430ee97069eb07f505ab797a433a40d267), [`21eb4cf`](https://github.com/vultisig/vultisig-sdk/commit/21eb4cfdec42b2a01ac37fc61d47758c79c152aa)]:
+  - @vultisig/core-chain@6.1.2
+  - @vultisig/core-mpc@5.0.2
+
 ## 8.1.0
 
 ### Minor Changes
