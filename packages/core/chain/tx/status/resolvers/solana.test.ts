@@ -1,3 +1,4 @@
+import { SolanaJSONRPCError } from '@solana/web3.js'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -25,11 +26,11 @@ describe('getSolanaTxStatus', () => {
     vi.clearAllMocks()
   })
 
-  it('marks missing signatures as unknown pending', async () => {
+  it('reports missing signatures as not_found when no last valid block height is supplied', async () => {
     mocks.getSignatureStatuses.mockResolvedValue({ value: [null] })
 
     await expect(getSolanaTxStatus({ chain: Chain.Solana, hash })).resolves.toEqual({
-      status: 'pending',
+      status: 'not_found',
       isKnown: false,
     })
     expect(mocks.getBlockHeight).not.toHaveBeenCalled()
@@ -106,6 +107,52 @@ describe('getSolanaTxStatus', () => {
       status: 'pending',
       isKnown: false,
     })
+    expect(mocks.getBlockHeight).not.toHaveBeenCalled()
+    expect(mocks.getTransaction).not.toHaveBeenCalled()
+  })
+
+  it('rejects an 88-character zero-byte base58 signature locally', async () => {
+    await expect(getSolanaTxStatus({ chain: Chain.Solana, hash: '1'.repeat(88) })).resolves.toEqual({
+      status: 'not_found',
+      isKnown: false,
+    })
+    expect(mocks.getSignatureStatuses).not.toHaveBeenCalled()
+    expect(mocks.getBlockHeight).not.toHaveBeenCalled()
+    expect(mocks.getTransaction).not.toHaveBeenCalled()
+  })
+
+  it('rejects a base58 value that decodes to 32 bytes locally', async () => {
+    await expect(getSolanaTxStatus({ chain: Chain.Solana, hash: '1'.repeat(32) })).resolves.toEqual({
+      status: 'not_found',
+      isKnown: false,
+    })
+    expect(mocks.getSignatureStatuses).not.toHaveBeenCalled()
+    expect(mocks.getBlockHeight).not.toHaveBeenCalled()
+    expect(mocks.getTransaction).not.toHaveBeenCalled()
+  })
+
+  it('rejects non-base58 signature characters locally', async () => {
+    await expect(getSolanaTxStatus({ chain: Chain.Solana, hash: '0OIl' })).resolves.toEqual({
+      status: 'not_found',
+      isKnown: false,
+    })
+    expect(mocks.getSignatureStatuses).not.toHaveBeenCalled()
+    expect(mocks.getBlockHeight).not.toHaveBeenCalled()
+    expect(mocks.getTransaction).not.toHaveBeenCalled()
+  })
+
+  it('keeps Solana JSON-RPC errors pending regardless of their code', async () => {
+    for (const code of [-32602, -32013]) {
+      mocks.getSignatureStatuses.mockRejectedValue(
+        new SolanaJSONRPCError({ code, message: 'RPC rejected signature status lookup' })
+      )
+
+      await expect(getSolanaTxStatus({ chain: Chain.Solana, hash })).resolves.toEqual({
+        status: 'pending',
+        isKnown: false,
+      })
+    }
+    expect(mocks.getSignatureStatuses).toHaveBeenCalledTimes(2)
     expect(mocks.getBlockHeight).not.toHaveBeenCalled()
     expect(mocks.getTransaction).not.toHaveBeenCalled()
   })
