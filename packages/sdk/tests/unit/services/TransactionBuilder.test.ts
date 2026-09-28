@@ -166,12 +166,14 @@ describe('TransactionBuilder', () => {
         amount: 500n,
         memo: 'test memo',
         feeSettings: { gasPrice: '50000000000' } as any,
+        sendMaxAmount: true,
       })
 
       expect(getSendFeeEstimate).toHaveBeenCalledWith(
         expect.objectContaining({
           memo: 'test memo',
           feeSettings: { gasPrice: '50000000000' },
+          sendMaxAmount: true,
         })
       )
     })

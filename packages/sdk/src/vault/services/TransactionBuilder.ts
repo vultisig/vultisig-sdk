@@ -149,6 +149,7 @@ export class TransactionBuilder {
     memo?: string
     destinationTag?: number
     feeSettings?: FeeSettings
+    sendMaxAmount?: boolean
     tonGasless?: boolean
     allowDeath?: boolean
   }): Promise<bigint> {
@@ -200,6 +201,7 @@ export class TransactionBuilder {
         walletCore,
         libType: toKeysignLibType(this.vaultData),
         feeSettings: params.feeSettings,
+        sendMaxAmount: params.sendMaxAmount,
         tonGasless: params.tonGasless,
         allowDeath: params.allowDeath,
       })
