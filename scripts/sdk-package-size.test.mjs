@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import test from 'node:test'
 
-import { validateSdkPackSize } from './sdk-package-size.mjs'
+import { inventoryExtractedPackage, validateSdkPackSize } from './sdk-package-size.mjs'
 
 const pack = unpackedSize => [{ unpackedSize, files: [{ path: 'dist/index.js', size: unpackedSize }] }]
 const limits = { baselineBytes: 100, hardCapBytes: 200, growthPercent: 10 }
@@ -45,4 +48,35 @@ test('rejects maps even when the size passes', () => {
   const output = pack(100)
   output[0].files.push({ path: 'dist/chunks/module.js.map', size: 0 })
   assert.throws(() => validateSdkPackSize(output, limits), /source maps/)
+})
+
+test('measures every extracted file, including nested node_modules', () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'sdk-package-size-'))
+  try {
+    mkdirSync(path.join(root, 'dist'), { recursive: true })
+    mkdirSync(path.join(root, 'node_modules', 'hidden'), { recursive: true })
+    writeFileSync(path.join(root, 'dist', 'index.js'), 'ok')
+    writeFileSync(path.join(root, 'node_modules', 'hidden', 'extra.js.map'), 'map')
+    const inventory = inventoryExtractedPackage(root)
+    assert.equal(inventory[0].unpackedSize, 5)
+    assert.deepEqual(
+      inventory[0].files.map(file => file.path).sort(),
+      ['dist/index.js', 'node_modules/hidden/extra.js.map']
+    )
+    assert.throws(() => validateSdkPackSize(inventory, limits), /source maps/)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('counts nested node_modules bytes against the size budget', () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'sdk-package-size-'))
+  try {
+    mkdirSync(path.join(root, 'node_modules', 'hidden'), { recursive: true })
+    writeFileSync(path.join(root, 'index.js'), 'ok')
+    writeFileSync(path.join(root, 'node_modules', 'hidden', 'extra.bin'), Buffer.alloc(109))
+    assert.throws(() => validateSdkPackSize(inventoryExtractedPackage(root), limits), /exceeds budget/)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })

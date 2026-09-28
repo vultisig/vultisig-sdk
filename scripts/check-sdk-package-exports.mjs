@@ -10,7 +10,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parseAst } from 'rollup/parseAst'
 
 import { createDisposableYarnEnv } from './quality-contracts-cache.mjs'
-import { validateSdkPackSize } from './sdk-package-size.mjs'
+import { inventoryExtractedPackage, validateSdkPackSize } from './sdk-package-size.mjs'
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(scriptDir, '..')
@@ -882,10 +882,10 @@ export async function checkSdkPackageExports({
       'packed SDK exports must match packages/sdk/package.json'
     )
 
-    // Measure the extracted archive itself, including caller-provided tarballs.
-    const packOutput = run('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], { cwd: packageRoot }).stdout
-    const unpackedSize = validateSdkPackSize(packOutput)
-    for (const file of JSON.parse(packOutput)[0].files) {
+    // Measure every extracted file, including files npm would omit on repack.
+    const extractedPackage = inventoryExtractedPackage(packageRoot)
+    const unpackedSize = validateSdkPackSize(extractedPackage)
+    for (const file of extractedPackage[0].files) {
       if (/\.(?:js|cjs|mjs)$/.test(file.path)) {
         const source = readFileSync(path.join(packageRoot, file.path), 'utf8')
         assert.ok(!/sourceMappingURL=data:/.test(source), `SDK must not embed source maps in ${file.path}`)
