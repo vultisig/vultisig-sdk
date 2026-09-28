@@ -150,10 +150,8 @@ describe('refineKeysignUtxo', () => {
     ).rejects.toThrow('Failed to build transaction: planner returned no inputs')
   })
 
-  it('retries as send-max when a successful plan would leave dust change', async () => {
-    mocks.getUtxoSigningInputs
-      .mockResolvedValueOnce([planWith(TW.Common.Proto.SigningError.OK, [selectedUtxo])])
-      .mockResolvedValueOnce([planWith(TW.Common.Proto.SigningError.OK, [selectedUtxo])])
+  it('keeps the requested amount when a successful non-max plan would leave dust change', async () => {
+    mocks.getUtxoSigningInputs.mockResolvedValue([planWith(TW.Common.Proto.SigningError.OK, [selectedUtxo])])
 
     const refined = await refineKeysignUtxo({
       keysignPayload: buildPayload(400n),
@@ -161,10 +159,11 @@ describe('refineKeysignUtxo', () => {
       publicKey: {} as never,
     })
 
-    expect(mocks.getUtxoSigningInputs).toHaveBeenCalledTimes(2)
+    expect(mocks.getUtxoSigningInputs).toHaveBeenCalledTimes(1)
     if (refined.blockchainSpecific.case !== 'utxoSpecific') throw new Error('Expected UTXO-specific payload')
-    expect(refined.blockchainSpecific.value.sendMaxAmount).toBe(true)
-    expect(refined.utxoInfo).toHaveLength(1)
+    expect(refined.blockchainSpecific.value.sendMaxAmount).toBe(false)
+    expect(refined.toAmount).toBe('400')
+    expect(refined.utxoInfo).toMatchObject([{ hash: '00'.repeat(32), amount: 1_000n, index: 0 }])
   })
 
   it('rejects an over-balance request even when the planner returns a successful clamped plan', async () => {
@@ -187,10 +186,8 @@ describe('refineKeysignUtxo', () => {
     )
   })
 
-  it('retries as send-max when a successful plan would leave exactly zero change', async () => {
-    mocks.getUtxoSigningInputs
-      .mockResolvedValueOnce([planWith(TW.Common.Proto.SigningError.OK, [selectedUtxo])])
-      .mockResolvedValueOnce([planWith(TW.Common.Proto.SigningError.OK, [selectedUtxo])])
+  it('keeps the requested amount when a successful non-max plan would leave exactly zero change', async () => {
+    mocks.getUtxoSigningInputs.mockResolvedValue([planWith(TW.Common.Proto.SigningError.OK, [selectedUtxo])])
 
     const refined = await refineKeysignUtxo({
       keysignPayload: buildPayload(1_000n),
@@ -198,8 +195,26 @@ describe('refineKeysignUtxo', () => {
       publicKey: {} as never,
     })
 
-    expect(mocks.getUtxoSigningInputs).toHaveBeenCalledTimes(2)
+    expect(mocks.getUtxoSigningInputs).toHaveBeenCalledTimes(1)
     if (refined.blockchainSpecific.case !== 'utxoSpecific') throw new Error('Expected UTXO-specific payload')
-    expect(refined.blockchainSpecific.value.sendMaxAmount).toBe(true)
+    expect(refined.blockchainSpecific.value.sendMaxAmount).toBe(false)
+    expect(refined.toAmount).toBe('1000')
+    expect(refined.utxoInfo).toMatchObject([{ hash: '00'.repeat(32), amount: 1_000n, index: 0 }])
+  })
+
+  it('keeps a non-max request when the remainder equals the actual fee plus 600', async () => {
+    mocks.getUtxoSigningInputs.mockResolvedValue([planWith(TW.Common.Proto.SigningError.OK, [selectedUtxo])])
+
+    const refined = await refineKeysignUtxo({
+      keysignPayload: buildPayload(300n),
+      walletCore,
+      publicKey: {} as never,
+    })
+
+    expect(mocks.getUtxoSigningInputs).toHaveBeenCalledTimes(1)
+    if (refined.blockchainSpecific.case !== 'utxoSpecific') throw new Error('Expected UTXO-specific payload')
+    expect(refined.blockchainSpecific.value.sendMaxAmount).toBe(false)
+    expect(refined.toAmount).toBe('300')
+    expect(refined.utxoInfo).toMatchObject([{ hash: '00'.repeat(32), amount: 1_000n, index: 0 }])
   })
 })

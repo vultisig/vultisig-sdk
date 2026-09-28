@@ -9,7 +9,6 @@ import { WalletCore } from '@trustwallet/wallet-core'
 import { TW } from '@trustwallet/wallet-core'
 import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
 
-import { UTXOSpecificSchema } from '../../types/vultisig/keysign/v1/blockchain_specific_pb'
 import { KeysignPayload } from '../../types/vultisig/keysign/v1/keysign_message_pb'
 import { UtxoInfoSchema } from '../../types/vultisig/keysign/v1/utxo_info_pb'
 import { getBlockchainSpecificValue } from '../chainSpecific/KeysignChainSpecific'
@@ -23,8 +22,6 @@ type RefineKeysignUtxoInput = {
   walletCore: WalletCore
   publicKey: PublicKey
 }
-
-const dustStats = 600n
 
 type ConvertPlanUtxosToUtxoInfoInput = {
   utxos: Array<TW.Bitcoin.Proto.IUnspentTransaction>
@@ -100,12 +97,9 @@ export const refineKeysignUtxo = async (input: RefineKeysignUtxoInput): Promise<
 
   if (!planUtxos || planUtxos.length === 0) {
     // A successful planner result still needs inputs. An empty plan is never
-    // evidence that retrying the caller's amount as max is safe; only the
-    // successful-plan dust-change check below may select max.
+    // evidence that retrying the caller's amount as max is safe.
     throw new Error('Failed to build transaction: planner returned no inputs')
   }
-
-  const actualFee = BigInt(shouldBePresent(plan.fee, 'UTXO signing input plan fee').toString())
 
   if (amount && !utxoSpecific.sendMaxAmount) {
     const balance = bigIntSum(input.keysignPayload.utxoInfo.map(({ amount }) => amount))
@@ -113,7 +107,9 @@ export const refineKeysignUtxo = async (input: RefineKeysignUtxoInput): Promise<
 
     // WalletCore can clamp an over-balance non-max request to a successful
     // plan, so the planner error and empty-input checks above do not catch it.
-    // A negative remainder is insufficient balance, never dust change.
+    // A negative remainder is insufficient balance. For a non-negative
+    // remainder, WalletCore handles dust change according to fixedDustThreshold.
+    // A non-max request is never converted to max here; only the caller decides MAX.
     if (remainingBalance < 0n) {
       const chain = getKeysignChain<'utxo'>(input.keysignPayload)
       const { decimals, ticker } = chainFeeCoin[chain]
@@ -126,22 +122,6 @@ export const refineKeysignUtxo = async (input: RefineKeysignUtxoInput): Promise<
         'not-enough-funds',
         `Failed to build transaction: insufficient balance (requested ${requestedAmount}, available ${availableBalance})`
       )
-    }
-
-    if (remainingBalance <= actualFee + dustStats) {
-      return refineKeysignUtxo({
-        ...input,
-        keysignPayload: {
-          ...input.keysignPayload,
-          blockchainSpecific: {
-            case: 'utxoSpecific',
-            value: create(UTXOSpecificSchema, {
-              ...utxoSpecific,
-              sendMaxAmount: true,
-            }),
-          },
-        },
-      })
     }
   }
 
