@@ -22,6 +22,15 @@ describe('getMaxSendableAmount', () => {
     expect(balance - max - fee).toBeGreaterThanOrEqual(500n)
   })
 
+  // An explicit empty-the-account send is signed as transfer_allow_death, so
+  // the deposit the chain would otherwise refuse to release is spendable.
+  it('keeps nothing back on Bittensor when the send is allowed to reap the account', () => {
+    const balance = 1_000_000_000n
+    const fee = 200_000n
+
+    expect(getMaxSendableAmount({ chain: Chain.Bittensor, balance, fee, allowDeath: true })).toBe(balance - fee)
+  })
+
   it('is zero when the balance does not cover the fee and the retained deposit', () => {
     expect(getMaxSendableAmount({ chain: Chain.Bittensor, balance: 200_400n, fee: 200_000n })).toBe(0n)
   })

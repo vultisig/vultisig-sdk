@@ -204,3 +204,116 @@ describe('isValidAddress for Ripple', () => {
     expect(walletCore.AnyAddress.isValid).not.toHaveBeenCalled()
   })
 })
+
+describe('isValidAddress for EVM chains (EIP-55)', () => {
+  // EIP-55 reference vectors (checksummed forms from the EIP itself).
+  const EVM = {
+    checksummed: [
+      '0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed',
+      '0xfB6916095ca1df60bB79Ce92cE3Ea74c37c5d359',
+      '0xdbF03B407c01E7cD3CBea99509d93f8DDDC8C6FB',
+      '0xD1220A0cf47c7B9Be7A2E6BA89F429762e7b9aDb',
+    ],
+    // Uniform case carries no checksum and must stay accepted.
+    lowercase: '0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed',
+    uppercase: '0x5AAEB6053F3E94C9B9A09F33669435E7EF1BEAED',
+    // Invalid: last letter's case flipped — the checksum no longer matches.
+    caseFlipped: '0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAeD',
+    // Invalid: last hex digit changed with the casing kept (a typo in a
+    // checksummed address, the exact shape a checksum exists to catch). WalletCore accepts this.
+    digitTypo: '0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAee',
+    short: '0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAe',
+  }
+
+  // WalletCore must not be consulted for EVM: its `isValid` ignores checksums.
+  const permissiveWalletCore = () => ({
+    CoinType: { ethereum: 60 },
+    AnyAddress: { isValid: vi.fn(() => true) },
+  })
+
+  it('accepts correctly checksummed addresses', () => {
+    const walletCore = permissiveWalletCore()
+    for (const address of EVM.checksummed) {
+      expect(
+        isValidAddress({
+          chain: Chain.Ethereum,
+          address,
+          walletCore: walletCore as never,
+        })
+      ).toBe(true)
+    }
+  })
+
+  it('accepts all-lowercase and all-uppercase addresses', () => {
+    const walletCore = permissiveWalletCore()
+    expect(
+      isValidAddress({
+        chain: Chain.Ethereum,
+        address: EVM.lowercase,
+        walletCore: walletCore as never,
+      })
+    ).toBe(true)
+    expect(
+      isValidAddress({
+        chain: Chain.Ethereum,
+        address: EVM.uppercase,
+        walletCore: walletCore as never,
+      })
+    ).toBe(true)
+  })
+
+  it('rejects a mixed-case address whose checksum does not match, without falling back to WalletCore', () => {
+    const walletCore = permissiveWalletCore()
+    expect(
+      isValidAddress({
+        chain: Chain.Ethereum,
+        address: EVM.caseFlipped,
+        walletCore: walletCore as never,
+      })
+    ).toBe(false)
+    expect(
+      isValidAddress({
+        chain: Chain.Ethereum,
+        address: EVM.digitTypo,
+        walletCore: walletCore as never,
+      })
+    ).toBe(false)
+    expect(walletCore.AnyAddress.isValid).not.toHaveBeenCalled()
+  })
+
+  it('rejects malformed input', () => {
+    const walletCore = permissiveWalletCore()
+    expect(
+      isValidAddress({
+        chain: Chain.Ethereum,
+        address: EVM.short,
+        walletCore: walletCore as never,
+      })
+    ).toBe(false)
+    expect(
+      isValidAddress({
+        chain: Chain.Ethereum,
+        address: '',
+        walletCore: walletCore as never,
+      })
+    ).toBe(false)
+  })
+
+  it('applies to every EVM chain, not just Ethereum', () => {
+    const walletCore = permissiveWalletCore()
+    expect(
+      isValidAddress({
+        chain: Chain.Base,
+        address: EVM.digitTypo,
+        walletCore: walletCore as never,
+      })
+    ).toBe(false)
+    expect(
+      isValidAddress({
+        chain: Chain.Arbitrum,
+        address: EVM.checksummed[0],
+        walletCore: walletCore as never,
+      })
+    ).toBe(true)
+  })
+})

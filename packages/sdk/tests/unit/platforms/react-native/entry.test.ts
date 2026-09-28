@@ -1,6 +1,8 @@
+import * as cosmosStaking from '@vultisig/core-chain/chains/cosmos/staking/lcdQueries'
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
 import { resolveTokenPriceId as canonicalResolveTokenPriceId } from '@vultisig/core-chain/coin/price/resolveTokenPriceId'
+import { deriveQbtcAddress as canonicalDeriveQbtcAddress } from '@vultisig/core-chain/publicKey/address/deriveQbtcAddress'
 import * as blockaidChains from '@vultisig/core-chain/security/blockaid/evmChains'
 import { isValidTxHash } from '@vultisig/core-chain/tx/isValidTxHash'
 import { AuthInfo, SignDoc, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
@@ -11,6 +13,8 @@ import type {
   PollTxStatusUntilFinalResult as PollTxStatusUntilFinalResultFromReactNative,
 } from '../../../../src/platforms/react-native/index'
 import * as sdkRn from '../../../../src/platforms/react-native/index'
+import * as server from '../../../../src/server'
+import type { ServerEndpoints as CanonicalServerEndpoints } from '../../../../src/server/ServerManager'
 import type * as stakekitTypes from '../../../../src/tools/defi/stakekit'
 import * as recipientChecks from '../../../../src/tools/validate/recipientSanity'
 import type {
@@ -22,6 +26,31 @@ import * as tokenRef from '../../../../src/vault/tokenRef'
 import { cosmosTxFeeGasParityCases } from '../../../fixtures/cosmosTxFeeGasParity'
 
 process.env.VULTISIG_STRICT_SINGLETON = '0'
+
+describe('RN Fast Vault public exports', () => {
+  it('exposes the canonical helpers and endpoint type', () => {
+    const helpers = [
+      'checkVaultExistsOnServer',
+      'createVaultWithServer',
+      'getVaultFromServer',
+      'keyImportWithServer',
+      'migrateWithServer',
+      'mldsaWithServer',
+      'resendVaultShare',
+      'reshareWithServer',
+      'sequentialKeyImportWithServer',
+      'setupVaultWithServer',
+      'signWithServer',
+      'verifyVaultEmailCode',
+    ] as const
+
+    for (const helper of helpers) {
+      expect(sdkRn[helper], helper).toBe(server[helper])
+    }
+    expectTypeOf<sdkRn.ServerEndpoints>().toEqualTypeOf<CanonicalServerEndpoints>()
+    expectTypeOf<sdkRn.VaultFromServerResponse>().toEqualTypeOf<server.VaultFromServerResponse>()
+  })
+})
 
 describe('RN StakeKit companion types', () => {
   it('matches the canonical StakeKit public contracts', () => {
@@ -46,6 +75,36 @@ describe('RN StakeKit companion types', () => {
     expectTypeOf<sdkRn.YieldProduct>().toEqualTypeOf<stakekitTypes.YieldProduct>()
     expectTypeOf<sdkRn.YieldToken>().toEqualTypeOf<stakekitTypes.YieldToken>()
     expectTypeOf<sdkRn.YieldTransaction>().toEqualTypeOf<stakekitTypes.YieldTransaction>()
+  })
+})
+
+describe('RN Cosmos validator exports', () => {
+  it('exposes canonical helpers and shared staking types', () => {
+    expect(sdkRn.getValidatorsUrl).toBe(cosmosStaking.getValidatorsUrl)
+    expect(sdkRn.getValidatorUrl).toBe(cosmosStaking.getValidatorUrl)
+    expect(sdkRn.getCosmosValidators).toBe(cosmosStaking.getCosmosValidators)
+    expect(sdkRn.getCosmosValidator).toBe(cosmosStaking.getCosmosValidator)
+    expectTypeOf<sdkRn.StakingChain>().toEqualTypeOf<cosmosStaking.StakingChain>()
+    expectTypeOf<sdkRn.ValidatorStatus>().toEqualTypeOf<cosmosStaking.ValidatorStatus>()
+    expectTypeOf<sdkRn.ValidatorDescription>().toEqualTypeOf<cosmosStaking.ValidatorDescription>()
+    expectTypeOf<sdkRn.ValidatorCommission>().toEqualTypeOf<cosmosStaking.ValidatorCommission>()
+    expectTypeOf<sdkRn.CosmosStakingValidator>().toEqualTypeOf<cosmosStaking.Validator>()
+
+    const url = new URL(
+      sdkRn.getValidatorsUrl(sdkRn.Chain.Terra, {
+        status: 'BOND_STATUS_BONDED',
+        limit: 25,
+        paginationKey: 'cursor+/=',
+      })
+    )
+    expect(url.pathname).toBe('/cosmos/staking/v1beta1/validators')
+    expect(url.searchParams.get('status')).toBe('BOND_STATUS_BONDED')
+    expect(url.searchParams.get('pagination.limit')).toBe('25')
+    expect(url.searchParams.get('pagination.key')).toBe('cursor+/=')
+    expect(url.search).toContain('pagination.key=cursor%2B%2F%3D')
+    expect(sdkRn.getValidatorUrl(sdkRn.Chain.Terra, 'terravaloper1abc')).toBe(
+      `${url.origin}/cosmos/staking/v1beta1/validators/terravaloper1abc`
+    )
   })
 })
 
@@ -305,6 +364,12 @@ describe('RN lazy helper contracts', () => {
 })
 
 describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
+  it('re-exports canonical QBTC address derivation with its synchronous signature', () => {
+    const publicKey = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+    expect(reactNativeEntry.deriveQbtcAddress).toBe(canonicalDeriveQbtcAddress)
+    expectTypeOf(reactNativeEntry.deriveQbtcAddress).toEqualTypeOf<(mldsaPublicKeyHex: string) => string>()
+    expect(reactNativeEntry.deriveQbtcAddress(publicKey)).toBe('qbtc1p3xsn0hgurfgfygl4wc9qslemjuujqg2x9fdnp')
+  })
   it('exports the strict chain-ID resolver by identity with its string-only signature', () => {
     expect(reactNativeEntry.resolveChainIdReference).toBe(resolveChainIdReference)
     expectTypeOf(sdkRn.resolveChainIdReference).toEqualTypeOf<(chainId: string) => sdkRn.Chain | undefined>()
@@ -338,6 +403,7 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
 
     expect(reactNativeEntry.defi.stakekit).toEqual({
       parseActionDisplay: canonical.parseActionDisplay,
+      finalizeStakekitAction: canonical.finalizeStakekitAction,
       buildYieldActionScanRequest: canonical.buildYieldActionScanRequest,
       validateStakekitActionAddress: canonical.validateStakekitActionAddress,
       validateStakekitActionInput: canonical.validateStakekitActionInput,

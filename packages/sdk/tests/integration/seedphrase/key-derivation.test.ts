@@ -163,6 +163,17 @@ describe('Master Key Derivation (Real WASM)', () => {
       expect(address).toMatch(/^cosmos1[a-z0-9]{38,}$/)
     })
 
+    // Addresses a vault imported from TEST_MNEMONIC holds. Maya shares
+    // THORChain's coin type and Bittensor Polkadot's, so WalletCore's own
+    // per-coin address is wrong for both.
+    it.each([
+      [Chain.MayaChain, 'maya1gm00vwsfcp48enm4uv9e5dhm37jtd0ye2fs0sl'],
+      [Chain.Bittensor, '5FHrJZLfgv3Ej8rrPbZpwjQJyV9kPwHSCUv7UhjBTv3BCHcc'],
+      [Chain.BitcoinCash, 'qqyx49mu0kkn9ftfj6hje6g2wfer34yfnq5tahq3q6'],
+    ])('should derive the vault address on %s', async (chain, expected) => {
+      await expect(deriver.deriveAddress(TEST_MNEMONIC, chain)).resolves.toBe(expected)
+    })
+
     it('should derive deterministic addresses', async () => {
       const address1 = await deriver.deriveAddress(TEST_MNEMONIC, Chain.Bitcoin)
       const address2 = await deriver.deriveAddress(TEST_MNEMONIC, Chain.Bitcoin)

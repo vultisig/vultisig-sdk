@@ -1,12 +1,17 @@
+import * as cosmosStaking from '@vultisig/core-chain/chains/cosmos/staking/lcdQueries'
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
 import { resolveTokenPriceId as canonicalResolveTokenPriceId } from '@vultisig/core-chain/coin/price/resolveTokenPriceId'
+import { deriveQbtcAddress as canonicalDeriveQbtcAddress } from '@vultisig/core-chain/publicKey/address/deriveQbtcAddress'
 import * as blockaidChains from '@vultisig/core-chain/security/blockaid/evmChains'
 import * as isValidTokenIdModule from '@vultisig/core-chain/utils/isValidTokenId'
 import { describe, expect, expectTypeOf, it } from 'vitest'
 
 import * as tronAbi from '../../../src/abi/tron'
+import type { ServerEndpoints as BuilderServerEndpoints } from '../../../src/context/SdkContextBuilder'
 import * as sdk from '../../../src/index'
+import * as server from '../../../src/server'
+import type { ServerEndpoints as CanonicalServerEndpoints } from '../../../src/server/ServerManager'
 import * as tools from '../../../src/tools'
 import * as stakekit from '../../../src/tools/defi/stakekit'
 import * as threeJane from '../../../src/tools/defi/threeJane'
@@ -31,7 +36,62 @@ const dangerousAddressCanonicalExports = [
   'assertSafeDestination',
 ] as const
 
+const qbtcPublicKey = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+const qbtcAddress = 'qbtc1p3xsn0hgurfgfygl4wc9qslemjuujqg2x9fdnp'
 describe('@vultisig/sdk public exports', () => {
+  it('exports canonical Cosmos validator helpers and types', () => {
+    expect(sdk.getValidatorsUrl).toBe(cosmosStaking.getValidatorsUrl)
+    expect(sdk.getValidatorUrl).toBe(cosmosStaking.getValidatorUrl)
+    expect(sdk.getCosmosValidators).toBe(cosmosStaking.getCosmosValidators)
+    expect(sdk.getCosmosValidator).toBe(cosmosStaking.getCosmosValidator)
+    expectTypeOf<sdk.StakingChain>().toEqualTypeOf<cosmosStaking.StakingChain>()
+    expectTypeOf<sdk.ValidatorStatus>().toEqualTypeOf<cosmosStaking.ValidatorStatus>()
+    expectTypeOf<sdk.ValidatorDescription>().toEqualTypeOf<cosmosStaking.ValidatorDescription>()
+    expectTypeOf<sdk.ValidatorCommission>().toEqualTypeOf<cosmosStaking.ValidatorCommission>()
+    expectTypeOf<sdk.CosmosStakingValidator>().toEqualTypeOf<cosmosStaking.Validator>()
+
+    const url = new URL(
+      sdk.getValidatorsUrl(sdk.Chain.Terra, {
+        status: 'BOND_STATUS_BONDED',
+        limit: 25,
+        paginationKey: 'cursor+/=',
+      })
+    )
+    expect(url.pathname).toBe('/cosmos/staking/v1beta1/validators')
+    expect(url.searchParams.get('status')).toBe('BOND_STATUS_BONDED')
+    expect(url.searchParams.get('pagination.limit')).toBe('25')
+    expect(url.searchParams.get('pagination.key')).toBe('cursor+/=')
+    expect(url.search).toContain('pagination.key=cursor%2B%2F%3D')
+    expect(sdk.getValidatorUrl(sdk.Chain.Terra, 'terravaloper1abc')).toBe(
+      `${url.origin}/cosmos/staking/v1beta1/validators/terravaloper1abc`
+    )
+  })
+
+  it('exposes the canonical Fast Vault helpers and endpoint type through root and server entries', () => {
+    const helpers = [
+      'checkVaultExistsOnServer',
+      'createVaultWithServer',
+      'getVaultFromServer',
+      'keyImportWithServer',
+      'migrateWithServer',
+      'mldsaWithServer',
+      'resendVaultShare',
+      'reshareWithServer',
+      'sequentialKeyImportWithServer',
+      'setupVaultWithServer',
+      'signWithServer',
+      'verifyVaultEmailCode',
+    ] as const
+
+    for (const helper of helpers) {
+      expect(sdk[helper], helper).toBe(server[helper])
+    }
+    expectTypeOf<sdk.ServerEndpoints>().toEqualTypeOf<CanonicalServerEndpoints>()
+    expectTypeOf<server.ServerEndpoints>().toEqualTypeOf<CanonicalServerEndpoints>()
+    expectTypeOf<BuilderServerEndpoints>().toEqualTypeOf<CanonicalServerEndpoints>()
+    expectTypeOf<sdk.VaultFromServerResponse>().toEqualTypeOf<server.VaultFromServerResponse>()
+  })
+
   it('exports the canonical token price-ID resolver with its existing signature and lookup behavior', () => {
     expect(sdk.resolveTokenPriceId).toBe(canonicalResolveTokenPriceId)
     expectTypeOf(sdk.resolveTokenPriceId).toEqualTypeOf<
@@ -44,6 +104,12 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.resolveTokenPriceId(sdk.Chain.Base, ' 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 ')).toBe('usd-coin')
     expect(sdk.resolveTokenPriceId(sdk.Chain.Ethereum, '  ')).toBe('ethereum')
     expect(sdk.resolveTokenPriceId(sdk.Chain.Solana, 'not-a-known-token')).toBeUndefined()
+  })
+
+  it('re-exports canonical QBTC address derivation with its synchronous signature', () => {
+    expect(sdk.deriveQbtcAddress).toBe(canonicalDeriveQbtcAddress)
+    expectTypeOf(sdk.deriveQbtcAddress).toEqualTypeOf<(mldsaPublicKeyHex: string) => string>()
+    expect(sdk.deriveQbtcAddress(qbtcPublicKey)).toBe(qbtcAddress)
   })
 
   it('exports the strict chain-ID resolver by identity with its string-only signature', () => {
@@ -75,6 +141,7 @@ describe('@vultisig/sdk public exports', () => {
 
     expect(sdk.defi.stakekit).toEqual({
       parseActionDisplay: canonical.parseActionDisplay,
+      finalizeStakekitAction: canonical.finalizeStakekitAction,
       buildYieldActionScanRequest: canonical.buildYieldActionScanRequest,
       validateStakekitActionAddress: canonical.validateStakekitActionAddress,
       validateStakekitActionInput: canonical.validateStakekitActionInput,

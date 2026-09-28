@@ -34,6 +34,7 @@ const identity: VaultIdentity = {
 
 const senderAddress = '0x000000000000000000000000000000000000abcd'
 const contractAddress = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+const digitTypoAddress = '0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAee'
 
 const makePayload = (toAmount = '0') => ({
   toAmount,
@@ -152,5 +153,17 @@ describe('prepareRawEvmTxFromKeys', () => {
         tx: { to: contractAddress, maxFeePerGas: 1n, maxPriorityFeePerGas: 2n },
       })
     ).rejects.toThrow('maxFeePerGas cannot be lower than maxPriorityFeePerGas')
+  })
+
+  it('includes the EIP-55 hint when a mixed-case transaction destination fails validation', async () => {
+    mockIsValidAddress.mockImplementation(({ address }: { address: string }) => address !== digitTypoAddress)
+
+    await expect(
+      prepareRawEvmTxFromKeys(identity, {
+        chain: Chain.Ethereum,
+        senderAddress,
+        tx: { to: digitTypoAddress },
+      })
+    ).rejects.toThrow(/Invalid transaction destination.*EIP-55 checksum mismatch/u)
   })
 })

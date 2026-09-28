@@ -467,6 +467,12 @@ const configs = {
       input: './src/tools/price/index.ts',
       distBase: 'tools/price',
     }),
+    ...createSubpathConfigs({ input: './src/tools/evm/index.ts', distBase: 'tools/evm' }),
+    ...createSubpathConfigs({ input: './src/tools/cosmos/index.ts', distBase: 'tools/cosmos' }),
+    ...createSubpathConfigs({
+      input: './src/signable-transaction/index.ts',
+      distBase: 'signable-transaction',
+    }),
     ...createSubpathConfigs({
       input: './src/tx/index.ts',
       distBase: 'tx',

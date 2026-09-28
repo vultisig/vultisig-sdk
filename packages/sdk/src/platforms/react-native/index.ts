@@ -78,6 +78,23 @@ import {
 } from './prep'
 import { ReactNativeStorage } from './storage'
 
+// Server-assisted Fast Vault public helpers.
+export type { ServerEndpoints, VaultFromServerResponse } from '../../server'
+export {
+  checkVaultExistsOnServer,
+  createVaultWithServer,
+  getVaultFromServer,
+  keyImportWithServer,
+  migrateWithServer,
+  mldsaWithServer,
+  resendVaultShare,
+  reshareWithServer,
+  sequentialKeyImportWithServer,
+  setupVaultWithServer,
+  signWithServer,
+  verifyVaultEmailCode,
+} from '../../server'
+
 // Register native MPC engine
 configureMpc(new NativeMpcEngine())
 
@@ -255,6 +272,7 @@ export type { WalletCoreLike } from '@vultisig/walletcore-native'
 // RN wrappers accept WalletCoreLike from @vultisig/walletcore-native
 // so consumers don't need to cast to @trustwallet/wallet-core's WalletCore.
 export { deriveAddress, getCoinType, getPublicKey, isValidAddress, isValidTokenId } from './chainHelpers'
+export { deriveQbtcAddress } from '@vultisig/core-chain/publicKey/address/deriveQbtcAddress'
 
 // MPC keysign (uses MpcEngine — no direct WASM imports)
 export { keysign } from '@vultisig/core-mpc/keysign'
@@ -542,8 +560,10 @@ export {
   defi,
   fetchAllStakekitBalances,
   fetchStakekitBalancesBatch,
+  finalizeStakekitAction,
   parseActionDisplay,
   STAKEKIT_BALANCE_QUERIES_PER_REQUEST,
+  StakekitActionRefusal,
   stakekitBalances,
   stakekitBuildEnter,
   stakekitBuildExit,
@@ -568,11 +588,14 @@ export type {
   StakekitActionResult,
   StakekitDetailsResult,
   StakekitExitResult,
+  StakekitFinalizeResult,
+  StakekitRefusalStatus,
   UnsupportedScanRequest,
   Validator,
   YieldActionResponse,
   YieldArgs,
   YieldBalance,
+  YieldBuildFailure,
   YieldDiscoverMetadata,
   YieldDiscoverOpportunity,
   YieldDiscoverToken,
@@ -605,13 +628,18 @@ export {
 export type {
   ContinuousVestingAccount,
   Coin as CosmosStakingCoin,
+  Validator as CosmosStakingValidator,
   DelayedVestingAccount,
   Delegation,
   DelegatorReward,
   DelegatorRewardsResponse,
   PeriodicVestingAccount,
+  StakingChain,
   UnbondingDelegation,
   UnbondingEntry,
+  ValidatorCommission,
+  ValidatorDescription,
+  ValidatorStatus,
   VestingAccount,
 } from '@vultisig/core-chain/chains/cosmos/staking/lcdQueries'
 export {
@@ -619,10 +647,14 @@ export {
   getCosmosDelegations,
   getCosmosDelegatorRewards,
   getCosmosUnbondingDelegations,
+  getCosmosValidator,
+  getCosmosValidators,
   getCosmosVestingAccount,
   getDelegationsUrl,
   getDelegatorRewardsUrl,
   getUnbondingDelegationsUrl,
+  getValidatorsUrl,
+  getValidatorUrl,
 } from '@vultisig/core-chain/chains/cosmos/staking/lcdQueries'
 
 // Cosmos governance — read proposals + build unsigned MsgVote envelope.

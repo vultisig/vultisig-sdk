@@ -59,12 +59,12 @@ describe('pollTxStatusUntilFinal', () => {
     expect(getTxStatus).not.toHaveBeenCalled()
   })
 
-  it('polls until a later attempt becomes terminal', async () => {
+  it('polls through not_found until a later attempt succeeds', async () => {
     let now = 0
     const getTxStatus = vi
       .fn()
-      .mockResolvedValueOnce({ status: 'pending', isKnown: true } satisfies TxStatusResult)
-      .mockResolvedValueOnce({ status: 'pending', isKnown: true } satisfies TxStatusResult)
+      .mockResolvedValueOnce({ status: 'not_found', isKnown: false } satisfies TxStatusResult)
+      .mockResolvedValueOnce({ status: 'not_found', isKnown: false } satisfies TxStatusResult)
       .mockResolvedValueOnce({ status: 'success' } satisfies TxStatusResult)
 
     const outcome = await pollTxStatusUntilFinal({

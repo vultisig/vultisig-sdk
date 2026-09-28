@@ -6,6 +6,7 @@
  */
 import type { Chain } from '@vultisig/core-chain/Chain'
 import { getChainKind } from '@vultisig/core-chain/ChainKind'
+import { deriveAddressFromMnemonic } from '@vultisig/core-chain/publicKey/address/deriveAddressFromMnemonic'
 import { phantomSolanaPath } from '@vultisig/core-chain/publicKey/address/deriveSolanaAddressFromMnemonic'
 import { signatureAlgorithms } from '@vultisig/core-chain/signing/SignatureAlgorithm'
 
@@ -165,7 +166,7 @@ export class MasterKeyDeriver {
           : chainKey.getPublicKeyEd25519()
         : chainKey.getPublicKeySecp256k1(true) // compressed
       const publicKeyHex = Buffer.from(publicKey.data()).toString('hex')
-      const address = hdWallet.getAddressForCoin(coinType)
+      const address = deriveAddressFromMnemonic({ chain, mnemonic: cleaned, walletCore })
 
       return {
         chain,
@@ -250,7 +251,9 @@ export class MasterKeyDeriver {
   }
 
   /**
-   * Derive address for a chain without exposing the private key
+   * Derive the address the imported vault will have on a chain, without
+   * exposing the private key. Goes through the same derivation as vault
+   * addresses, so chain discovery checks the account the vault will use.
    *
    * @param mnemonic - BIP39 mnemonic phrase
    * @param chain - Target blockchain
@@ -260,31 +263,8 @@ export class MasterKeyDeriver {
     assertSeedphraseImportSupportsChains([chain])
 
     const walletCore = await this.wasmProvider.getWalletCore()
-    const cleaned = cleanMnemonic(mnemonic)
 
-    const hdWallet = walletCore.HDWallet.createWithMnemonic(cleaned, '')
-
-    try {
-      const coinType = this.getCoinType(chain, walletCore)
-
-      // Special handling for MayaChain: derive with 'maya' prefix
-      if (chain === 'MayaChain') {
-        const publicKey = hdWallet.getKeyForCoin(coinType).getPublicKeySecp256k1(false)
-        return walletCore.AnyAddress.createBech32WithPublicKey(publicKey, coinType, 'maya').description()
-      }
-
-      // Special handling for Sei: use Ethereum address for EVM RPC
-      if (chain === 'Sei') {
-        const ethCoinType = walletCore.CoinType.ethereum
-        return hdWallet.getAddressForCoin(ethCoinType)
-      }
-
-      return hdWallet.getAddressForCoin(coinType)
-    } finally {
-      if (hdWallet.delete) {
-        hdWallet.delete()
-      }
-    }
+    return deriveAddressFromMnemonic({ chain, mnemonic: cleanMnemonic(mnemonic), walletCore })
   }
 
   /**
