@@ -23,6 +23,19 @@ export function inventoryExtractedPackage(packageRoot) {
   return [{ unpackedSize: files.reduce((total, file) => total + file.size, 0), files }]
 }
 
+export function validateNoEmbeddedSourceMaps(packageRoot, files) {
+  for (const file of files) {
+    if (!/\.(?:js|cjs|mjs|css)$/.test(file.path)) continue
+    const source = readFileSync(path.join(packageRoot, file.path), 'utf8')
+    if (/sourceMappingURL=data:/.test(source)) {
+      throw new Error(`SDK must not embed source maps in ${file.path}`)
+    }
+    if (source.includes('sourcesContent')) {
+      throw new Error(`SDK must not embed source content in ${file.path}`)
+    }
+  }
+}
+
 export function validateSdkPackSize(packOutput, limits = budget) {
   const packs = typeof packOutput === 'string' ? JSON.parse(packOutput) : packOutput
   if (!Array.isArray(packs) || packs.length !== 1) throw new Error('Expected one npm pack result')

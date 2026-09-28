@@ -10,7 +10,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parseAst } from 'rollup/parseAst'
 
 import { createDisposableYarnEnv } from './quality-contracts-cache.mjs'
-import { inventoryExtractedPackage, validateSdkPackSize } from './sdk-package-size.mjs'
+import { inventoryExtractedPackage, validateNoEmbeddedSourceMaps, validateSdkPackSize } from './sdk-package-size.mjs'
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(scriptDir, '..')
@@ -885,13 +885,7 @@ export async function checkSdkPackageExports({
     // Measure every extracted file, including files npm would omit on repack.
     const extractedPackage = inventoryExtractedPackage(packageRoot)
     const unpackedSize = validateSdkPackSize(extractedPackage)
-    for (const file of extractedPackage[0].files) {
-      if (/\.(?:js|cjs|mjs)$/.test(file.path)) {
-        const source = readFileSync(path.join(packageRoot, file.path), 'utf8')
-        assert.ok(!/sourceMappingURL=data:/.test(source), `SDK must not embed source maps in ${file.path}`)
-        assert.ok(!source.includes('sourcesContent'), `SDK must not embed source content in ${file.path}`)
-      }
-    }
+    validateNoEmbeddedSourceMaps(packageRoot, extractedPackage[0].files)
     console.log(`SDK package size OK: ${unpackedSize} unpacked bytes; no source maps`)
     const targets = validatePackedExportTargets(sourceManifest, packageRoot)
     validatePackedReactNativePublicHelpers(packageRoot)

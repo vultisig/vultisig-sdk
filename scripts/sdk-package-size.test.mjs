@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 
-import { inventoryExtractedPackage, validateSdkPackSize } from './sdk-package-size.mjs'
+import { inventoryExtractedPackage, validateNoEmbeddedSourceMaps, validateSdkPackSize } from './sdk-package-size.mjs'
 
 const pack = unpackedSize => [{ unpackedSize, files: [{ path: 'dist/index.js', size: unpackedSize }] }]
 const limits = { baselineBytes: 100, hardCapBytes: 200, growthPercent: 10 }
@@ -76,6 +76,36 @@ test('counts nested node_modules bytes against the size budget', () => {
     writeFileSync(path.join(root, 'index.js'), 'ok')
     writeFileSync(path.join(root, 'node_modules', 'hidden', 'extra.bin'), Buffer.alloc(109))
     assert.throws(() => validateSdkPackSize(inventoryExtractedPackage(root), limits), /exceeds budget/)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('rejects inline source maps and source content in packed CSS and JavaScript', () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'sdk-package-size-'))
+  try {
+    mkdirSync(path.join(root, 'dist'), { recursive: true })
+    const css = path.join(root, 'dist', 'style.css')
+    const js = path.join(root, 'dist', 'index.js')
+    writeFileSync(css, 'body{}\n/*# sourceMappingURL=data:application/json;base64,e30= */')
+    writeFileSync(js, 'export {}')
+    assert.throws(
+      () => validateNoEmbeddedSourceMaps(root, inventoryExtractedPackage(root)[0].files),
+      /source maps in dist\/style\.css/
+    )
+    writeFileSync(css, 'body{}\n/* sourcesContent */')
+    assert.throws(
+      () => validateNoEmbeddedSourceMaps(root, inventoryExtractedPackage(root)[0].files),
+      /source content in dist\/style\.css/
+    )
+    writeFileSync(css, 'body{}')
+    writeFileSync(js, '//# sourceMappingURL=data:application/json;base64,e30=')
+    assert.throws(
+      () => validateNoEmbeddedSourceMaps(root, inventoryExtractedPackage(root)[0].files),
+      /source maps in dist\/index\.js/
+    )
+    writeFileSync(js, 'export {}')
+    assert.doesNotThrow(() => validateNoEmbeddedSourceMaps(root, inventoryExtractedPackage(root)[0].files))
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
