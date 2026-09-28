@@ -247,6 +247,29 @@ describe('runPasswordGatedTool — confirmation gate', () => {
     expect(clearPendingTransaction).not.toHaveBeenCalled()
   })
 
+  it('keeps a long sign_tx consent line intact — the decoded approve leg in its TAIL is never truncated', async () => {
+    // A multi-leg swap line carries two token-contract disclosures plus the calldata-derived
+    // approve leg at the END. The typed-data 500-char cap would cut the spender the user is
+    // authorizing; sign_tx lines get the wider bound (session.ts PROPOSED_SIGN_TX_SUMMARY_MAX_CHARS).
+    const spender = '0x1111111254EEB25477B68fb85Ed929f73A960582'
+    const head = `${'2 USDC → ~0.001 ETH via a very long provider label '.repeat(12)} on Base`
+    const line = `${head} (+ first approve 2 USDC for spender ${spender} (token contract 0x833589fcd6edb6e08f4c7c32d4f71b54bda02913) — 2 transactions)`
+    expect(line.length).toBeGreaterThan(500)
+    const ui = makeUi(false)
+    const { result } = callGate({
+      toolName: 'sign_tx',
+      ui,
+      body: vi.fn(async () => ({ tool: 'sign_tx', success: true, data: {} }) as RecentAction),
+      pendingSummary: line,
+    })
+    const res = await result
+    const proposed = res.data?.proposed as string
+    expect(proposed).toBe(line)
+    expect(proposed).toContain(`for spender ${spender}`)
+    expect(proposed.endsWith('…')).toBe(false)
+    expect(ui.onProposedTransaction.mock.calls[0][0].summary).toBe(line)
+  })
+
   it('caps oversized typed-data audit summaries consistently on declined and approved paths', async () => {
     // The sign_typed_data fallback summary is JSON.stringify(input), an arbitrarily large blob that
     // reaches stdout and the JSON envelope. Capping only one of the two representations would ship
