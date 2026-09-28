@@ -1,5 +1,17 @@
 # @vultisig/cli
 
+## 8.1.1
+
+### Patch Changes
+
+- [#2436](https://github.com/vultisig/vultisig-sdk/pull/2436) [`df53bee`](https://github.com/vultisig/vultisig-sdk/commit/df53bee0f6543eebd18a6c35e505a45b21715f6e) Thanks [@neavra](https://github.com/neavra)! - The CLI's pre-sign consent line now renders ERC-20 approve legs from the signed calldata (spender and allowance), never from producer labels. Single-leg approves say so explicitly, multi-leg envelopes name the approve leg, unlimited allowances render as UNLIMITED, and an approval leg whose calldata is not an ERC-20 approve fails closed.
+
+  Over-long provider summary text can no longer push the approve-leg spender and allowance out of the capped proposal and signing records.
+
+- Updated dependencies [[`a55fda9`](https://github.com/vultisig/vultisig-sdk/commit/a55fda9325d071aa7717bf59c9ad328a0edd556b), [`25aafc6`](https://github.com/vultisig/vultisig-sdk/commit/25aafc62cb9f37488bdce24b02aff4ad2e77169c), [`ed67a44`](https://github.com/vultisig/vultisig-sdk/commit/ed67a4430ee97069eb07f505ab797a433a40d267), [`21eb4cf`](https://github.com/vultisig/vultisig-sdk/commit/21eb4cfdec42b2a01ac37fc61d47758c79c152aa)]:
+  - @vultisig/sdk@8.1.1
+  - @vultisig/core-chain@6.1.2
+
 ## 8.1.0
 
 ### Patch Changes
