@@ -111,6 +111,23 @@ export const refineKeysignUtxo = async (input: RefineKeysignUtxoInput): Promise<
     const balance = bigIntSum(input.keysignPayload.utxoInfo.map(({ amount }) => amount))
     const remainingBalance = balance - amount
 
+    // WalletCore can clamp an over-balance non-max request to a successful
+    // plan, so the planner error and empty-input checks above do not catch it.
+    // A negative remainder is insufficient balance, never dust change.
+    if (remainingBalance < 0n) {
+      const chain = getKeysignChain<'utxo'>(input.keysignPayload)
+      const { decimals, ticker } = chainFeeCoin[chain]
+      const requestedAmount = formatAmount(fromChainAmount(amount, decimals), {
+        ticker,
+      })
+      const availableBalance = formatAmount(fromChainAmount(balance, decimals), { ticker })
+
+      throw new BuildKeysignPayloadError(
+        'not-enough-funds',
+        `Failed to build transaction: insufficient balance (requested ${requestedAmount}, available ${availableBalance})`
+      )
+    }
+
     if (remainingBalance <= actualFee + dustStats) {
       return refineKeysignUtxo({
         ...input,
