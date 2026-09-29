@@ -5,6 +5,8 @@ import { Chain } from '@vultisig/core-chain/Chain'
 import { buildSignBitcoinFromPsbt } from '@vultisig/core-chain/chains/utxo/tx/buildSignBitcoinFromPsbt'
 import { p2pkhScriptForAddress } from '@vultisig/core-chain/chains/utxo/tx/p2pkhScriptForAddress'
 import { TW } from '@trustwallet/wallet-core'
+import { selectEncodedBytes } from '@vultisig/core-chain/tx/broadcast/resolvers/utxo'
+import { getUtxoTxHash } from '@vultisig/core-chain/tx/hash/resolvers/utxo'
 import { crypto, Psbt, script, Transaction } from 'bitcoinjs-lib'
 import bs58check from 'bs58check'
 import { describe, expect, it } from 'vitest'
@@ -144,6 +146,8 @@ describe.each([Chain.Dogecoin, Chain.BitcoinCash] as const)('SwapKit %s PSBT', c
       )
     )
     const signed = Transaction.fromBuffer(Buffer.from(output.encoded))
+    expect(Buffer.from(selectEncodedBytes(chain, output))).toEqual(Buffer.from(output.encoded))
+    expect(getUtxoTxHash(output)).toBe(signed.getId())
     expect(signed.version).toBe(2)
     expect(signed.locktime).toBe(345)
     expect(signed.ins[0].sequence).toBe(0xfffffffe)

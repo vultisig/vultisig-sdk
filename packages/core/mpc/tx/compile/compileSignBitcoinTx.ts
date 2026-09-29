@@ -121,7 +121,10 @@ export const compileSignBitcoinTx = (
   // signingResultV2 is a proper field on SigningOutput (see TW.BitcoinV2.Proto.ISigningOutput)
   const output = TW.Bitcoin.Proto.SigningOutput.create({
     encoded: serialized,
+    transactionId: tx.getId(),
     signingResultV2: {
+      encoded: serialized,
+      txid: tx.getHash(),
       bitcoin: { inputs: inputResults },
     },
   })
