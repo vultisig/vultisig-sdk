@@ -85,9 +85,13 @@ const parseUnsignedSapling = (bytes: Buffer) => {
   }
   const inputCount = cursor.compactSize()
   if (inputCount === 0 || inputCount > 128) throw new Error('Invalid SwapKit Zcash PSBT input count')
+  const outpoints = new Set<string>()
   const inputs = Array.from({ length: inputCount }, () => {
     const hash = cursor.take(32)
     const index = cursor.uint32()
+    const outpoint = `${hash.toString('hex')}:${index}`
+    if (outpoints.has(outpoint)) throw new Error('SwapKit Zcash PSBT contains a duplicate outpoint')
+    outpoints.add(outpoint)
     if (cursor.variable(10_000).length) throw new Error('SwapKit Zcash unsigned transaction has a scriptSig')
     const sequence = cursor.uint32()
     return { hash, index, sequence }

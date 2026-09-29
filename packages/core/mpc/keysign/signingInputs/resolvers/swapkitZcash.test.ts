@@ -126,6 +126,32 @@ describe('SwapKit Zcash frozen Sapling signing input', () => {
     await expect(buildSwapKitZcashSigningInput(wrong, walletCore)).rejects.toThrow('disagrees')
   })
 
+  it('rejects zero-valued change that WalletCore would omit from the signed transaction', async () => {
+    const psbt = Buffer.from(fixture.tx, 'base64')
+    const change = tx.outputs[1]
+    const serializedChange = Buffer.concat([
+      u64(change.amount),
+      Buffer.from([change.scriptPubKey.length]),
+      change.scriptPubKey,
+    ])
+    const offset = psbt.indexOf(serializedChange)
+    expect(offset).toBeGreaterThan(0)
+    psbt.writeBigUInt64LE(0n, offset)
+    expect(parseSwapKitZcashPsbt(psbt).outputs[1].amount).toBe(0n)
+    if (payload.swapPayload.case !== 'swapkitSwapPayload') throw new Error('Expected SwapKit fixture')
+    const altered = create(KeysignPayloadSchema, {
+      ...payload,
+      swapPayload: {
+        case: 'swapkitSwapPayload',
+        value: create(SwapKitSwapPayloadSchema, {
+          ...payload.swapPayload.value,
+          txPayload: psbt,
+        }),
+      },
+    })
+    await expect(buildSwapKitZcashSigningInput(altered, walletCore)).rejects.toThrow('change')
+  })
+
   it('compiles the frozen Sapling plan with the provider output order', async () => {
     const input = await buildSwapKitZcashSigningInput(payload, walletCore)
     const encoded = TW.Bitcoin.Proto.SigningInput.encode(input).finish()

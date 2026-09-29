@@ -47,7 +47,7 @@ export const buildSwapKitZcashSigningInput = async (
     !tx.outputs[0].scriptPubKey.equals(targetScript) ||
     tx.outputs[0].amount <= 0n ||
     tx.outputs[0].amount > quotedAmount ||
-    (tx.outputs.length === 2 && !tx.outputs[1].scriptPubKey.equals(senderScript))
+    (tx.outputs.length === 2 && (tx.outputs[1].amount <= 0n || !tx.outputs[1].scriptPubKey.equals(senderScript)))
   ) {
     throw new Error('SwapKit Zcash PSBT destination, change, or deposit amount is invalid')
   }

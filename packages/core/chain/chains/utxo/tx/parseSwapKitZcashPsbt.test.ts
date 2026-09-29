@@ -37,6 +37,39 @@ describe('SwapKit Zcash Sapling PSBT parser', () => {
     expect(() => parseSwapKitZcashPsbt(altered)).toThrow('transparent Sapling v4')
   })
 
+  it('rejects duplicate outpoints before previous-transaction lookups or signing', () => {
+    const tx = parseSwapKitZcashPsbt(bytes)
+    expect(tx.inputs).toHaveLength(1)
+    // This fixture has a one-byte global value length and a 41-byte unsigned input.
+    expect(bytes.subarray(5, 7).toString('hex')).toBe('0100')
+    expect(bytes[7]).toBeLessThan(0xfd)
+    const unsigned = bytes.subarray(8, 8 + bytes[7])
+    expect(unsigned[8]).toBe(1)
+    const duplicate = Buffer.concat([
+      unsigned.subarray(0, 8),
+      Buffer.from([2]),
+      unsigned.subarray(9, 50),
+      unsigned.subarray(9, 50),
+      unsigned.subarray(50),
+    ])
+    expect(duplicate.length).toBeLessThan(0xfd)
+    const input = tx.inputs[0]
+    const amount = Buffer.alloc(8)
+    amount.writeBigUInt64LE(input.amount)
+    const witness = Buffer.concat([amount, Buffer.from([input.scriptPubKey.length]), input.scriptPubKey])
+    const inputMap = Buffer.concat([Buffer.from([1, 1, witness.length]), witness, Buffer.from([0])])
+    const altered = Buffer.concat([
+      bytes.subarray(0, 7),
+      Buffer.from([duplicate.length]),
+      duplicate,
+      Buffer.from([0]),
+      inputMap,
+      inputMap,
+      Buffer.alloc(tx.outputs.length),
+    ])
+    expect(() => parseSwapKitZcashPsbt(altered)).toThrow('duplicate outpoint')
+  })
+
   it('rejects a witness UTXO amount that differs from the full previous transaction', async () => {
     const tx = parseSwapKitZcashPsbt(bytes)
     const input = tx.inputs[0]
