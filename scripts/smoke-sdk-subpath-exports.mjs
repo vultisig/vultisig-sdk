@@ -29,7 +29,7 @@ import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 const require = createRequire(import.meta.url)
-const expected = ['.', './node', './browser', './react-native', './rn-preamble', './electron', './electron/main', './chrome-extension', './vite', './tools/defi']
+const expected = ['.', './node', './browser', './react-native', './rn-preamble', './electron', './electron/main', './chrome-extension', './vite']
 const manifest = JSON.parse(readFileSync(path.join(path.dirname(require.resolve('@vultisig/sdk')), '..', 'package.json'), 'utf8'))
 assert.deepEqual(Object.keys(manifest.exports), expected)
 for (const root of [await import('@vultisig/sdk'), require('@vultisig/sdk')]) {
@@ -64,8 +64,8 @@ for (const subpath of ${JSON.stringify(['tools/prep', 'seedphrase', 'tools/balan
   assert.throws(() => require.resolve(specifier), { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' })
   await assert.rejects(import(specifier), { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' })
 }
-assert.equal(typeof (await import('@vultisig/sdk/tools/defi')).defi, 'object')
-assert.equal(typeof require('@vultisig/sdk/tools/defi').defi, 'object')
+assert.throws(() => require.resolve('@vultisig/sdk/tools/defi'), { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' })
+await assert.rejects(import('@vultisig/sdk/tools/defi'), { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' })
 console.log('SDK packed root replacements and removed path rejection: PASS')
 `
   )

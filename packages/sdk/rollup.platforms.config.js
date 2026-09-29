@@ -411,10 +411,6 @@ const configs = {
         },
       }),
     },
-    ...createSubpathConfigs({
-      input: './src/tools/defi/index.ts',
-      distBase: 'tools/defi',
-    }),
   ],
   browser: {
     input: './src/platforms/browser/index.ts',

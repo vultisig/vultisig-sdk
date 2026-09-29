@@ -116,8 +116,6 @@ const entries = [
     external: ['vite'],
     plugins: [dts(dtsPluginOptions)],
   },
-  // DeFi remains a dedicated public package entry.
-  createSubpathTypesConfig('src/tools/defi/index.ts', 'dist/tools/defi/index.d.ts'),
 ]
 
 // Retain one declaration graph so the remaining platform entries share types.
