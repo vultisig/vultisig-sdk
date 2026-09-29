@@ -6,8 +6,8 @@
  * agent path on 2026-05-10 (see task 100526-sdk-cli-non-evm-signing.md).
  *
  * Critical invariants locked here:
- * - `txArgs.amount` is a base-unit integer string; parser converts via
- *   native or resolved token decimals before vault.send.
+ * - `txArgs.amount` is a base-unit integer string; native amounts convert
+ *   exactly before vault.send, while symbol-only token sends fail closed.
  * - For native sends, `symbol` is undefined (vault.send defaults to
  *   native chain coin).
  * - Memo passes through unchanged when present, undefined when empty.
@@ -100,7 +100,7 @@ describe('parseNonEvmEnvelope', () => {
       expect(args.symbol).toBeUndefined()
     })
 
-    it('converts known SPL token base units with token decimals', () => {
+    it('refuses known SPL token symbols without an envelope-bound token identity', () => {
       const tokenEnvelope = {
         ...solEnvelope,
         resolved: {
@@ -112,29 +112,56 @@ describe('parseNonEvmEnvelope', () => {
         },
       }
 
-      const args = parseNonEvmEnvelope(tokenEnvelope, Chain.Solana)
-      expect(args.amount).toBe('1')
-      expect(args.symbol).toBe('USDC')
+      try {
+        parseNonEvmEnvelope(tokenEnvelope, Chain.Solana)
+        expect.fail('expected a token send to be refused')
+      } catch (error) {
+        expect(error).toBeInstanceOf(VaultError)
+        expect((error as VaultError).code).toBe(VaultErrorCode.NotImplemented)
+      }
     })
 
-    it('forwards vault-configured token metadata to the canonical parser', () => {
+    it('refuses vault-configured token symbols even when local decimals exist', () => {
       const customEnvelope = {
         ...solEnvelope,
         resolved: { labels: { token_resolved: 'CUSTOM' } },
         txArgs: { ...solEnvelope.txArgs, amount: '123456' },
       }
-      const args = parseNonEvmEnvelope(customEnvelope, Chain.Solana, [
-        {
-          id: 'custom-mint',
-          symbol: 'CUSTOM',
-          name: 'Custom',
-          decimals: 5,
-          chainId: Chain.Solana,
-        },
-      ])
+      expect(() =>
+        parseNonEvmEnvelope(customEnvelope, Chain.Solana, [
+          {
+            id: 'custom-mint',
+            symbol: 'CUSTOM',
+            name: 'Custom',
+            decimals: 5,
+            chainId: Chain.Solana,
+          },
+        ])
+      ).toThrow(/envelope-bound token identity/)
+    })
 
-      expect(args.amount).toBe('1.23456')
-      expect(args.symbol).toBe('CUSTOM')
+    it('refuses an unknown resolved token with NotImplemented', () => {
+      const unknownEnvelope = { ...solEnvelope, resolved: { labels: { token_resolved: 'UNKNOWN' } } }
+      try {
+        parseNonEvmEnvelope(unknownEnvelope, Chain.Solana)
+        expect.fail('expected an unknown token send to be refused')
+      } catch (error) {
+        expect(error).toBeInstanceOf(VaultError)
+        expect((error as VaultError).code).toBe(VaultErrorCode.NotImplemented)
+      }
+    })
+
+    it('refuses alternate token hints that the shared parser would treat as native', () => {
+      const cases = [
+        { resolved: { labels: { token_symbol: 'USDC' } } },
+        { txArgs: { ...solEnvelope.txArgs, token_id: 'custom-mint' } },
+        { txArgs: { ...solEnvelope.txArgs, token_id: 'custom-mint', token_symbol: 'SOL' } },
+      ]
+      for (const variant of cases) {
+        expect(() => parseNonEvmEnvelope({ ...solEnvelope, resolved: undefined, ...variant }, Chain.Solana)).toThrow(
+          /envelope-bound token identity/
+        )
+      }
     })
   })
 

@@ -7,6 +7,7 @@
  * to be flushed into the next outbound `context.recent_actions`.
  */
 import { evmChainTxFeeFormat } from '@vultisig/core-chain/chains/evm/tx/fee'
+import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import type {
   EvmChain,
   ParsedTxReadyEnvelope,
@@ -20,6 +21,7 @@ import {
   Chain,
   clampEvmPriorityFee,
   computeEip712Hash,
+  cosmosFeeCoinDenom,
   getChainKind,
   getEvmRpcUrl,
   isChainOfKind,
@@ -2710,7 +2712,61 @@ function parseTxReadyForCli(
   tokens: ReturnType<VaultBase['getTokens']> = []
 ): ParsedTxReadyEnvelope {
   try {
-    return parseTxReadyEnvelope(serverTxData, { defaultChain, tokens })
+    // Refuse a non-native resolved symbol before the shared parser consults
+    // local token metadata. An unknown symbol must fail with the same
+    // NotImplemented code as a known or vault-configured one.
+    const raw = serverTxData as {
+      txArgs?: { msg_type?: unknown }
+      resolved?: { labels?: { token_resolved?: unknown } }
+    } | null
+    const resolvedSymbol = raw?.resolved?.labels?.token_resolved
+    if (
+      getChainKind(defaultChain) !== 'evm' &&
+      raw?.txArgs?.msg_type !== 'deposit' &&
+      typeof resolvedSymbol === 'string' &&
+      resolvedSymbol.trim().toUpperCase() !== chainFeeCoin[defaultChain].ticker.toUpperCase()
+    ) {
+      throw new VaultError(
+        VaultErrorCode.NotImplemented,
+        `non-native ${defaultChain} token sends require an envelope-bound token identity`
+      )
+    }
+    const parsed = parseTxReadyEnvelope(serverTxData, { defaultChain, tokens })
+    if (parsed.kind === 'send' && getChainKind(parsed.chain) !== 'evm') {
+      // The shared parser can resolve a ticker against this vault, but the
+      // envelope has not bound that ticker to the asset the producer intended.
+      // Keep this restriction at the CLI signing boundary until it does.
+      const nativeTicker = chainFeeCoin[parsed.chain].ticker.toUpperCase()
+      const labels = parsed.envelope.resolved?.labels
+      const sendArgs = parsed.envelope.txArgs ?? parsed.envelope
+      const symbolHints = [
+        parsed.symbol,
+        labels?.token_resolved,
+        labels?.token_symbol,
+        sendArgs.token_symbol,
+        sendArgs.symbol,
+        sendArgs.ticker,
+      ]
+      const hasNonNativeSymbol = symbolHints.some(
+        symbol => symbol !== undefined && (typeof symbol !== 'string' || symbol.trim().toUpperCase() !== nativeTicker)
+      )
+      const hasTokenId = ['token_id', 'contract_address', 'mint', 'jetton_master'].some(
+        key => sendArgs[key] !== undefined && sendArgs[key] !== null && sendArgs[key] !== ''
+      )
+      const denom = sendArgs.denom
+      const hasNonNativeDenom =
+        denom !== undefined &&
+        (!isChainOfKind(parsed.chain, 'cosmos') ||
+          typeof denom !== 'string' ||
+          denom !== cosmosFeeCoinDenom[parsed.chain])
+      if (hasNonNativeSymbol || hasTokenId || hasNonNativeDenom) {
+        throw new VaultError(
+          VaultErrorCode.NotImplemented,
+          `non-native ${parsed.chain} token sends require an envelope-bound token identity`
+        )
+      }
+    }
+    return parsed
   } catch (error) {
     if (!(error instanceof TxReadyParseError)) throw error
     const code =
