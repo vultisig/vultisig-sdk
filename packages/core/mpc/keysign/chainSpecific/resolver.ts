@@ -15,7 +15,8 @@ export type GetChainSpecificInput<C extends KeysignChainSpecificKey = KeysignCha
   /** XRPL DestinationTag, carried in RippleSpecific for Ripple payments. */
   destinationTag?: number
   /**
-   * Whether the caller's UI offered this as a MAX send, carried in TonSpecific.
+   * Whether the caller's UI offered this as a MAX send, carried in the
+   * chain-specific payloads whose signing path needs or records that intent.
    * Must come from the flow that drew the button — inferring it from the amount
    * mislabels an ordinary send that happens to sit close to the balance.
    */

@@ -375,6 +375,18 @@ describe('classifyError with VaultError', () => {
     expect(result.exitCode).toBe(ExitCode.INVALID_INPUT)
   })
 
+  it.each([
+    'Amount 0.00001019 BTC is below the network dust threshold at the current fee rate; increase the amount and try again.',
+    'Failed to build transaction: insufficient balance (Error_not_enough_utxos)',
+  ])('maps a UTXO planner input failure to INVALID_INPUT/4: %s', message => {
+    const result = classifyError(new VaultError(VaultErrorCode.InvalidAmount, message))
+
+    expect(result).toBeInstanceOf(InvalidInputError)
+    expect(result.exitCode).toBe(ExitCode.INVALID_INPUT)
+    expect(result.retryable).toBe(false)
+    expect(result.message).toBe(message)
+  })
+
   it('maps InvalidConfig to UsageError', () => {
     const err = new VaultError(VaultErrorCode.InvalidConfig, 'bad config')
     const result = classifyError(err)
@@ -675,7 +687,9 @@ describe('anticipated CLI taxonomy regressions', () => {
     ])('decodes the percent-encoded grpc-message trailer (%s)', (_label, encoded) => {
       // A regex with literal spaces never matches the raw wire text — without decoding,
       // every permanent Sui rejection would be misread as retryable and re-broadcast.
-      const rpcError = Object.assign(new Error(encoded), { code: 'INVALID_ARGUMENT' })
+      const rpcError = Object.assign(new Error(encoded), {
+        code: 'INVALID_ARGUMENT',
+      })
       expectPermanent(
         new VaultError(VaultErrorCode.BroadcastFailed, `Failed to broadcast transaction on Sui: ${encoded}`, rpcError)
       )
@@ -704,7 +718,9 @@ describe('anticipated CLI taxonomy regressions', () => {
     })
 
     it('keeps a Sui server-busy failure retryable', () => {
-      const rpcError = Object.assign(new Error('Server busy'), { code: 'UNAVAILABLE' })
+      const rpcError = Object.assign(new Error('Server busy'), {
+        code: 'UNAVAILABLE',
+      })
       expectTransient(
         new VaultError(
           VaultErrorCode.BroadcastFailed,
