@@ -795,13 +795,10 @@ export {
   getXrpBalance,
 } from '../../tools/balance'
 
-// Pure-crypto balance reads (Polkadot DOT + Assets-pallet). Exported via a lazy
-// dynamic import (NOT a static re-export) because the underlying module imports
-// `@vultisig/core-chain/chains/polkadot/client`, whose top-level
-// `import { ApiPromise, HttpProvider } from '@polkadot/api'` would pull the BN.js
-// double-bundle into the eager RN bundle and crash at module init. Deferring the
-// import to call time matches the proven RN polkadot-resolver pattern in
-// ./getCoinBalance and keeps the eager bundle free of @polkadot/api.
+// Pure-crypto balance reads (Polkadot DOT + Assets-pallet). Keep the balance
+// barrel behind a dynamic import so React Native does not evaluate its other
+// platform-sensitive dependencies at startup. The underlying Polkadot client
+// also loads @polkadot/api only when a Polkadot request is made.
 export type { PolkadotAssetBalance, PolkadotNativeBalance } from '../../tools/balance'
 type BalancePolkadot = typeof import('../../tools/balance').balancePolkadot
 
