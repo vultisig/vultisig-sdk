@@ -50,6 +50,32 @@ const getOutputScript = (scriptPubKey: string, index: number): Buffer => {
   return Buffer.from(scriptPubKey, 'hex')
 }
 
+/**
+ * Refuses a SwapKit PSBT carrying an input this vault cannot sign.
+ *
+ * A SwapKit swap funds a deposit address from the vault's own UTXOs, so every
+ * input is expected to be signable here. `compileSignBitcoinTx` gives an input
+ * it cannot sign an empty witness and still returns a complete-looking
+ * transaction, which this route broadcasts and the network then rejects — after
+ * the signing ceremony has run and the user has approved. Refusing up front
+ * turns that into an error the user sees before any of it happens.
+ *
+ * Deliberately not applied to the dApp `signPsbt` route, whose PSBTs may
+ * legitimately include inputs owned by someone else and are returned partially
+ * signed rather than broadcast.
+ */
+export const verifySwapKitBitcoinPsbtInputs = (signBitcoin: SignBitcoin) => {
+  const unsignable = signBitcoin.inputs.map((input, index) => ({ input, index })).filter(({ input }) => !input.isOurs)
+
+  if (unsignable.length > 0) {
+    const indices = unsignable.map(({ index }) => `#${index}`).join(', ')
+    throw new Error(
+      `SwapKit Bitcoin PSBT must spend only this vault's own inputs, ` +
+        `but input ${indices} cannot be signed by this vault.`
+    )
+  }
+}
+
 export const verifySwapKitBitcoinPsbtOutputs = ({
   signBitcoin,
   senderAddress,
@@ -137,6 +163,7 @@ export const getSwapKitSignBitcoin = (keysignPayload: KeysignPayload): SignBitco
   }
 
   if (swapKitBitcoinPsbtPayload) {
+    verifySwapKitBitcoinPsbtInputs(signBitcoin)
     verifySwapKitBitcoinPsbtOutputs({
       signBitcoin,
       senderAddress: keysignPayload.coin?.address ?? '',

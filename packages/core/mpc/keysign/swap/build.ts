@@ -24,7 +24,10 @@ import { refineKeysignUtxo } from '@vultisig/core-mpc/keysign/refine/utxo'
 import { CommKeysignSwapPayload } from '@vultisig/core-mpc/keysign/swap/KeysignSwapPayload'
 import { getKeysignUtxoInfo } from '@vultisig/core-mpc/keysign/utxo/getKeysignUtxoInfo'
 import { KeysignLibType } from '@vultisig/core-mpc/mpcLib'
-import { verifySwapKitBitcoinPsbtOutputs } from '@vultisig/core-mpc/tx/swapkitSignBitcoin'
+import {
+  verifySwapKitBitcoinPsbtInputs,
+  verifySwapKitBitcoinPsbtOutputs,
+} from '@vultisig/core-mpc/tx/swapkitSignBitcoin'
 import { toCommCoin } from '@vultisig/core-mpc/types/utils/commCoin'
 import {
   OneInchQuoteSchema,
@@ -150,6 +153,8 @@ const getSwapKitBitcoinSignData = (fromCoin: AccountCoin, transfer: TransferSwap
     psbt: Psbt.fromBuffer(Buffer.from(transfer.txPayload)),
     senderAddress: fromCoin.address,
   })
+
+  verifySwapKitBitcoinPsbtInputs(signBitcoin)
 
   verifySwapKitBitcoinPsbtOutputs({
     signBitcoin,
