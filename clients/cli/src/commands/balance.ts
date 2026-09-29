@@ -114,13 +114,15 @@ export type PortfolioOptions = {
 export async function executePortfolio(ctx: CommandContext, options: PortfolioOptions = {}): Promise<void> {
   const vault = await ctx.ensureActiveVault()
 
-  const displayCurrency = (options.currency ?? vault.currency ?? 'usd') as FiatCurrency
-
-  if (!fiatCurrencies.includes(displayCurrency)) {
-    error(`x Invalid currency: ${displayCurrency}`)
+  const explicitCurrency = options.currency?.toLowerCase() as FiatCurrency | undefined
+  if (explicitCurrency !== undefined && !fiatCurrencies.includes(explicitCurrency)) {
+    error(`x Invalid currency: ${options.currency}`)
     warn(`Supported currencies: ${fiatCurrencies.join(', ')}`)
     throw new Error('Invalid currency')
   }
+
+  const storedCurrency = String(vault.currency ?? '').toLowerCase() as FiatCurrency
+  const displayCurrency = explicitCurrency ?? (fiatCurrencies.includes(storedCurrency) ? storedCurrency : 'usd')
 
   const currencyName = fiatCurrencyNameRecord[displayCurrency]
   const spinner = createSpinner(`Loading portfolio in ${currencyName}...`)

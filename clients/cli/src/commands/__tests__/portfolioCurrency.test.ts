@@ -17,7 +17,7 @@ function makeBalance(): Balance {
   }
 }
 
-function makePortfolioCtx(currency: FiatCurrency) {
+function makePortfolioCtx(currency: string) {
   const setCurrency = vi.fn(async () => {})
   const getValues = vi.fn(async (_chain: Chain, displayCurrency: FiatCurrency) => ({
     native: {
@@ -87,6 +87,32 @@ describe('portfolio display currency', () => {
     expect(envelope.data.portfolio.totalValue.currency).toBe('eur')
   })
 
+  it('normalises an uppercase stored preference', async () => {
+    const { ctx, getValues, setCurrency } = makePortfolioCtx('EUR')
+    const stdout = captureStdout()
+
+    await executePortfolio(ctx)
+
+    const envelope = JSON.parse(stdout.output())
+    stdout.restore()
+    expect(setCurrency).not.toHaveBeenCalled()
+    expect(getValues).toHaveBeenCalledWith(ChainName.Ethereum, 'eur')
+    expect(envelope.data.portfolio.totalValue.currency).toBe('eur')
+  })
+
+  it('silently falls back to USD for an unsupported stored preference', async () => {
+    const { ctx, getValues, setCurrency } = makePortfolioCtx('xyz')
+    const stdout = captureStdout()
+
+    await expect(executePortfolio(ctx)).resolves.toBeUndefined()
+
+    const envelope = JSON.parse(stdout.output())
+    stdout.restore()
+    expect(setCurrency).not.toHaveBeenCalled()
+    expect(getValues).toHaveBeenCalledWith(ChainName.Ethereum, 'usd')
+    expect(envelope.data.portfolio.totalValue.currency).toBe('usd')
+  })
+
   it('rejects an invalid display currency with the existing error', async () => {
     const { ctx, getValues, setCurrency } = makePortfolioCtx('eur')
 
@@ -104,9 +130,9 @@ describe('currency preference output', () => {
     vi.restoreAllMocks()
   })
 
-  it('emits the current preference envelope in JSON mode', async () => {
+  it('normalises the stored preference in the current preference JSON envelope', async () => {
     const ctx = {
-      ensureActiveVault: async () => ({ currency: 'eur' as FiatCurrency }),
+      ensureActiveVault: async () => ({ currency: 'EUR' }),
     } as unknown as CommandContext
     const stdout = captureStdout()
 
@@ -117,7 +143,7 @@ describe('currency preference output', () => {
     expect(envelope).toMatchObject({
       success: true,
       v: 1,
-      data: { currency: 'eur', name: 'Euro' },
+      data: { currency: 'eur', name: 'Euro', updated: false },
     })
   })
 })
