@@ -28,6 +28,7 @@ describe('VaultBase.estimateSendFee', () => {
       memo: 'public API fee preview',
       destinationTag: 7,
       feeSettings: { maxPriorityFeePerGas: 1_000_000_000n, gasLimit: 21_000n },
+      sendMaxAmount: true,
     }
 
     await expect(callPublicEstimate({ estimateSendFee }, params)).resolves.toEqual({

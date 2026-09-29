@@ -321,6 +321,7 @@ describe('VaultBase.getSwapQuote fee-aware maximums', () => {
       receiver: 'bc1qinbound',
       amount: balance,
       memo: quote.quote.quote.native.memo,
+      sendMaxAmount: true,
     })
   })
 
