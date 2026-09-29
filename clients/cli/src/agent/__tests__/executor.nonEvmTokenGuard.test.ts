@@ -80,6 +80,21 @@ describe('AgentExecutor non-EVM token send guard', () => {
     ],
     ['alternate symbol label', Chain.Solana, { resolved: { labels: { token_symbol: 'USDC' } } }],
     [
+      'unknown token with an ignored deposit hint',
+      Chain.Solana,
+      {
+        resolved: { labels: { token_resolved: 'UNKNOWN' } },
+        txArgs: { ...envelope(Chain.Solana, '1000000').txArgs, msg_type: 'deposit' },
+      },
+    ],
+    ['asset alias', Chain.Solana, { txArgs: { ...envelope(Chain.Solana, '1000000', 'SOL').txArgs, asset: 'USDC' } }],
+    ['coin alias', Chain.Solana, { txArgs: { ...envelope(Chain.Solana, '1000000', 'SOL').txArgs, coin: 'USDC' } }],
+    [
+      'structured asset hint',
+      Chain.Solana,
+      { txArgs: { ...envelope(Chain.Solana, '1000000', 'SOL').txArgs, asset: { symbol: 'SOL', id: 'foreign-mint' } } },
+    ],
+    [
       'non-native Cosmos denom',
       Chain.THORChain,
       { txArgs: { ...envelope(Chain.THORChain, '1000000', 'RUNE').txArgs, denom: 'x/usdc' } },
@@ -128,6 +143,26 @@ describe('AgentExecutor non-EVM token send guard', () => {
       chain: Chain.Bitcoin,
       to: destination,
       amount: '0.00001',
+      symbol: undefined,
+      memo: 'test-memo',
+    })
+  })
+
+  it.each(['asset', 'coin'])('keeps an explicit native %s alias', async alias => {
+    const testVault = vault()
+    const executor = new AgentExecutor(testVault)
+    const nativeEnvelope = envelope(Chain.Solana, '1000000', 'SOL')
+    expect(
+      executor.storeServerTransaction({ ...nativeEnvelope, txArgs: { ...nativeEnvelope.txArgs, [alias]: 'sol' } })
+    ).toBe(true)
+
+    const result = await executor.signTxFromBuffer(`native-${alias}`)
+    expect(result.success).toBe(true)
+    expect(testVault.send).toHaveBeenCalledOnce()
+    expect(testVault.send).toHaveBeenCalledWith({
+      chain: Chain.Solana,
+      to: destination,
+      amount: '0.001',
       symbol: undefined,
       memo: 'test-memo',
     })

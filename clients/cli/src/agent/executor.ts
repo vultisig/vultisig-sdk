@@ -2720,9 +2720,11 @@ function parseTxReadyForCli(
       resolved?: { labels?: { token_resolved?: unknown } }
     } | null
     const resolvedSymbol = raw?.resolved?.labels?.token_resolved
+    const isDeposit =
+      raw?.txArgs?.msg_type === 'deposit' && (defaultChain === Chain.THORChain || defaultChain === Chain.MayaChain)
     if (
       getChainKind(defaultChain) !== 'evm' &&
-      raw?.txArgs?.msg_type !== 'deposit' &&
+      !isDeposit &&
       typeof resolvedSymbol === 'string' &&
       resolvedSymbol.trim().toUpperCase() !== chainFeeCoin[defaultChain].ticker.toUpperCase()
     ) {
@@ -2746,6 +2748,8 @@ function parseTxReadyForCli(
         sendArgs.token_symbol,
         sendArgs.symbol,
         sendArgs.ticker,
+        sendArgs.asset,
+        sendArgs.coin,
       ]
       const hasNonNativeSymbol = symbolHints.some(
         symbol => symbol !== undefined && (typeof symbol !== 'string' || symbol.trim().toUpperCase() !== nativeTicker)
