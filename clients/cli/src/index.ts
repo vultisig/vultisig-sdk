@@ -1016,7 +1016,7 @@ Examples:
 program
   .command('portfolio')
   .description(descriptions.portfolio.description)
-  .option('-c, --currency <currency>', 'Fiat currency (usd, eur, gbp, etc.)', 'usd')
+  .option('-c, --currency <currency>', 'Fiat currency (usd, eur, gbp, etc.)')
   .option('--raw', 'Show raw values (wei/satoshis) for programmatic use')
   .addHelpText(
     'after',
@@ -1026,10 +1026,10 @@ Examples:
   vultisig portfolio --currency eur --output json`
   )
   .action(
-    withExit(async (options: { currency: string; raw?: boolean }) => {
+    withExit(async (options: { currency?: string; raw?: boolean }) => {
       const context = await init(program.opts().vault)
       await executePortfolio(context, {
-        currency: options.currency.toLowerCase() as FiatCurrency,
+        currency: options.currency?.toLowerCase() as FiatCurrency | undefined,
         raw: options.raw,
       })
     })

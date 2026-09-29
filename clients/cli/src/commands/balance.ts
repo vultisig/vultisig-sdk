@@ -114,19 +114,15 @@ export type PortfolioOptions = {
 export async function executePortfolio(ctx: CommandContext, options: PortfolioOptions = {}): Promise<void> {
   const vault = await ctx.ensureActiveVault()
 
-  const currency = options.currency || 'usd'
+  const displayCurrency = (options.currency ?? vault.currency ?? 'usd') as FiatCurrency
 
-  if (!fiatCurrencies.includes(currency)) {
-    error(`x Invalid currency: ${currency}`)
+  if (!fiatCurrencies.includes(displayCurrency)) {
+    error(`x Invalid currency: ${displayCurrency}`)
     warn(`Supported currencies: ${fiatCurrencies.join(', ')}`)
     throw new Error('Invalid currency')
   }
 
-  if (vault.currency !== currency) {
-    await vault.setCurrency(currency)
-  }
-
-  const currencyName = fiatCurrencyNameRecord[currency]
+  const currencyName = fiatCurrencyNameRecord[displayCurrency]
   const spinner = createSpinner(`Loading portfolio in ${currencyName}...`)
 
   const chains = vault.chains
@@ -159,7 +155,7 @@ export async function executePortfolio(ctx: CommandContext, options: PortfolioOp
 
       let values: Record<string, Value>
       try {
-        values = await vault.getValues(chain, currency)
+        values = await vault.getValues(chain, displayCurrency)
       } catch (err) {
         // Balance succeeded but the fiat value did not — keep the balance and
         // flag the missing value rather than swallowing it as "no value".
@@ -172,7 +168,7 @@ export async function executePortfolio(ctx: CommandContext, options: PortfolioOp
         // Ask again for just the native value so the failure we report carries
         // the real error instead of a generic "unavailable".
         try {
-          const retried = await vault.getValue(chain, undefined, currency)
+          const retried = await vault.getValue(chain, undefined, displayCurrency)
           return { entry: { chain, balance, value: retried, tokens: await withAmounts(tokenValues) } }
         } catch (err) {
           return {
@@ -228,7 +224,7 @@ export async function executePortfolio(ctx: CommandContext, options: PortfolioOp
       (entry.tokens ?? []).reduce((tokenSum, token) => tokenSum + parseFloat(token.value.amount), 0),
     0
   )
-  const totalValue: Value = { amount: total.toFixed(2), currency, lastUpdated: Date.now() }
+  const totalValue: Value = { amount: total.toFixed(2), currency: displayCurrency, lastUpdated: Date.now() }
 
   const portfolio: PortfolioSummary = { totalValue, chainBalances }
 
@@ -242,10 +238,10 @@ export async function executePortfolio(ctx: CommandContext, options: PortfolioOp
     // `failures` is always present (empty array when none) so machine consumers
     // can branch on `data.failures.length` without probing for the field.
     // `scopeHint` is omitted when every supported chain is enabled.
-    outputJson({ portfolio, currency, failures, scopeHint })
+    outputJson({ portfolio, currency: displayCurrency, failures, scopeHint })
     return
   }
-  displayPortfolio(portfolio, currency, options.raw ?? false)
+  displayPortfolio(portfolio, displayCurrency, options.raw ?? false)
   if (scopeHint) info(`\n${scopeHint}`)
   if (failures.length > 0) {
     warn(`\nWarning: ${failures.length} chain(s) failed to load fully:`)
