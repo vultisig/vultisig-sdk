@@ -154,7 +154,10 @@ const getSwapKitBitcoinSignData = (fromCoin: AccountCoin, transfer: TransferSwap
     senderAddress: fromCoin.address,
   })
 
-  verifySwapKitBitcoinPsbtInputs(signBitcoin)
+  verifySwapKitBitcoinPsbtInputs({
+    signBitcoin,
+    senderAddress: fromCoin.address,
+  })
 
   verifySwapKitBitcoinPsbtOutputs({
     signBitcoin,

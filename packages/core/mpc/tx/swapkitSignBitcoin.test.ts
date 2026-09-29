@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { networks, payments, Psbt } from 'bitcoinjs-lib'
 
 import { Chain } from '@vultisig/core-chain/Chain'
+import { buildSignBitcoinFromPsbt } from '@vultisig/core-chain/chains/utxo/tx/buildSignBitcoinFromPsbt'
 
 import { CoinSchema } from '../types/vultisig/keysign/v1/coin_pb'
 import { KeysignPayloadSchema } from '../types/vultisig/keysign/v1/keysign_message_pb'
@@ -24,6 +25,9 @@ const bip32Derivation = [
     path: "m/84'/0'/0'/0/0",
   },
 ]
+
+/** The decomposition the guard runs on, before the guard — to show what `isOurs` alone reports. */
+const getSwapKitSignBitcoinUnchecked = (psbt: Psbt) => buildSignBitcoinFromPsbt({ psbt, senderAddress: ours.address! })
 
 const toKeysignPayload = (psbt: Psbt) =>
   create(KeysignPayloadSchema, {
@@ -60,10 +64,10 @@ describe('getSwapKitSignBitcoin', () => {
     expect(signBitcoin?.inputs.every(input => input.isOurs)).toBe(true)
   })
 
-  // compileSignBitcoinTx gives an input it cannot sign an empty witness and
+  // compileSignBitcoinTx gives an input marked not-ours an empty witness and
   // still returns a complete-looking transaction, which this route broadcasts
   // and the network rejects — after the ceremony has already run.
-  it('refuses a PSBT carrying an input this vault cannot sign', () => {
+  it('refuses a foreign input that BIP-32 derivation data marks as not ours', () => {
     const psbt = new Psbt({ network: networks.bitcoin })
     psbt.addInput({
       hash: 'aa'.repeat(32),
@@ -78,6 +82,30 @@ describe('getSwapKitSignBitcoin', () => {
     })
     psbt.addOutput({ address: RECIPIENT_ADDRESS, value: 90000n })
 
-    expect(() => getSwapKitSignBitcoin(toKeysignPayload(psbt))).toThrow(/input #1 cannot be signed by this vault/)
+    expect(() => getSwapKitSignBitcoin(toKeysignPayload(psbt))).toThrow(/input #1 does not pay to this vault's address/)
+  })
+
+  // With no BIP-32 derivation anywhere, buildSignBitcoinFromPsbt falls back to
+  // marking every input ours, so `isOurs` alone would let this through and the
+  // foreign input would be signed with this vault's key against a script that
+  // key does not unlock.
+  it('refuses a foreign input in a PSBT that carries no derivation data at all', () => {
+    const psbt = new Psbt({ network: networks.bitcoin })
+    psbt.addInput({
+      hash: 'aa'.repeat(32),
+      index: 0,
+      witnessUtxo: { script: Buffer.from(ours.output!), value: 60000n },
+    })
+    psbt.addInput({
+      hash: 'bb'.repeat(32),
+      index: 0,
+      witnessUtxo: { script: Buffer.from(foreign.output!), value: 40000n },
+    })
+    psbt.addOutput({ address: RECIPIENT_ADDRESS, value: 90000n })
+
+    const signBitcoin = getSwapKitSignBitcoinUnchecked(psbt)
+    expect(signBitcoin.inputs.every(input => input.isOurs)).toBe(true)
+
+    expect(() => getSwapKitSignBitcoin(toKeysignPayload(psbt))).toThrow(/input #1 does not pay to this vault's address/)
   })
 })
