@@ -78,6 +78,23 @@ import {
 } from './prep'
 import { ReactNativeStorage } from './storage'
 
+// Server-assisted Fast Vault public helpers.
+export type { ServerEndpoints, VaultFromServerResponse } from '../../server'
+export {
+  checkVaultExistsOnServer,
+  createVaultWithServer,
+  getVaultFromServer,
+  keyImportWithServer,
+  migrateWithServer,
+  mldsaWithServer,
+  resendVaultShare,
+  reshareWithServer,
+  sequentialKeyImportWithServer,
+  setupVaultWithServer,
+  signWithServer,
+  verifyVaultEmailCode,
+} from '../../server'
+
 // Register native MPC engine
 configureMpc(new NativeMpcEngine())
 
@@ -255,6 +272,7 @@ export type { WalletCoreLike } from '@vultisig/walletcore-native'
 // RN wrappers accept WalletCoreLike from @vultisig/walletcore-native
 // so consumers don't need to cast to @trustwallet/wallet-core's WalletCore.
 export { deriveAddress, getCoinType, getPublicKey, isValidAddress, isValidTokenId } from './chainHelpers'
+export { deriveQbtcAddress } from '@vultisig/core-chain/publicKey/address/deriveQbtcAddress'
 
 // MPC keysign (uses MpcEngine — no direct WASM imports)
 export { keysign } from '@vultisig/core-mpc/keysign'
@@ -517,10 +535,14 @@ export {
 // Pure builders, RN-safe. Statically re-exported so RN consumers can reach
 // the full defi namespace (arkis + balancer + glif + pendle + 3jane).
 export type {
+  ArkisPoolKind,
+  ArkisUnsignedTx,
   BalancerTokenApi,
   BalancerV3SwapCalldata,
   BalancerV3SwapKind,
   BalancerV3SwapPath,
+  BuildArkisSupplyParams,
+  BuildArkisSupplyResult,
   BuildBalancerV3SwapCalldataParams,
   BuildGlifRedeemParams,
   BuildGlifRedeemResult,
@@ -528,6 +550,7 @@ export type {
   BuildGlifStakeResult,
   Defi,
   GlifUnsignedTx,
+  ResolveArkisPoolKindResult,
   SolanaScanRequest,
   StakekitBalanceEntry,
   StakekitBalanceItem,
@@ -535,6 +558,9 @@ export type {
   StakekitBalancesResult,
 } from '../../tools/defi'
 export {
+  ARKIS_BOOK_URLS,
+  ARKIS_OFFICIAL_ADDRESSES,
+  buildArkisSupplyTx,
   buildBalancerV3SwapCalldata,
   buildYieldActionScanRequest,
   buildYieldActionScanRequests,
@@ -542,8 +568,12 @@ export {
   defi,
   fetchAllStakekitBalances,
   fetchStakekitBalancesBatch,
+  finalizeStakekitAction,
   parseActionDisplay,
+  parseArkisTokenAmount,
+  resolveArkisPoolKind,
   STAKEKIT_BALANCE_QUERIES_PER_REQUEST,
+  StakekitActionRefusal,
   stakekitBalances,
   stakekitBuildEnter,
   stakekitBuildExit,
@@ -568,11 +598,14 @@ export type {
   StakekitActionResult,
   StakekitDetailsResult,
   StakekitExitResult,
+  StakekitFinalizeResult,
+  StakekitRefusalStatus,
   UnsupportedScanRequest,
   Validator,
   YieldActionResponse,
   YieldArgs,
   YieldBalance,
+  YieldBuildFailure,
   YieldDiscoverMetadata,
   YieldDiscoverOpportunity,
   YieldDiscoverToken,
@@ -605,13 +638,18 @@ export {
 export type {
   ContinuousVestingAccount,
   Coin as CosmosStakingCoin,
+  Validator as CosmosStakingValidator,
   DelayedVestingAccount,
   Delegation,
   DelegatorReward,
   DelegatorRewardsResponse,
   PeriodicVestingAccount,
+  StakingChain,
   UnbondingDelegation,
   UnbondingEntry,
+  ValidatorCommission,
+  ValidatorDescription,
+  ValidatorStatus,
   VestingAccount,
 } from '@vultisig/core-chain/chains/cosmos/staking/lcdQueries'
 export {
@@ -619,10 +657,14 @@ export {
   getCosmosDelegations,
   getCosmosDelegatorRewards,
   getCosmosUnbondingDelegations,
+  getCosmosValidator,
+  getCosmosValidators,
   getCosmosVestingAccount,
   getDelegationsUrl,
   getDelegatorRewardsUrl,
   getUnbondingDelegationsUrl,
+  getValidatorsUrl,
+  getValidatorUrl,
 } from '@vultisig/core-chain/chains/cosmos/staking/lcdQueries'
 
 // Cosmos governance — read proposals + build unsigned MsgVote envelope.

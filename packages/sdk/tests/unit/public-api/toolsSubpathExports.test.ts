@@ -10,6 +10,23 @@ const platformRollupConfig = readFileSync(path.join(sdkRoot, 'rollup.platforms.c
 const typesRollupConfig = readFileSync(path.join(sdkRoot, 'rollup.types.config.js'), 'utf8')
 
 describe('public API subpath exports', () => {
+  it.each(['evm', 'cosmos'])('publishes the dedicated tools/%s runtime and declaration bundles', tool => {
+    const subpath = `tools/${tool}`
+    const dist = `./dist/${subpath}/index`
+    expect(sdkPackageJson.exports[`./${subpath}`]).toEqual({
+      types: `${dist}.d.ts`,
+      node: { import: `${dist}.js`, require: `${dist}.cjs` },
+      import: `${dist}.js`,
+      require: `${dist}.cjs`,
+      default: `${dist}.cjs`,
+    })
+    expect(platformRollupConfig).toContain(`input: './src/${subpath}/index.ts'`)
+    expect(platformRollupConfig).toContain(`distBase: '${subpath}'`)
+    expect(typesRollupConfig).toContain(
+      `createSubpathTypesConfig('src/${subpath}/index.ts', 'dist/${subpath}/index.d.ts')`
+    )
+  })
+
   it('publishes prep with distinct native runtime and asynchronous declarations', () => {
     const entry = sdkPackageJson.exports['./tools/prep']
     expect(entry.types).toEqual({

@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/mcp",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "MCP server for Vultisig SDK - Model Context Protocol wrapper over wallet operations",
   "type": "module",
   "bin": {

@@ -662,8 +662,8 @@ export type SendResult =
     }
 
 export type CompoundSwapResult =
-  | { dryRun: false; txHash: string; chain: Chain; quote: SwapQuoteResult }
-  | { dryRun: true; quote: SwapQuoteResult }
+  | { dryRun: false; txHash: string; chain: Chain; quote: SwapQuoteResult; amount?: string }
+  | { dryRun: true; quote: SwapQuoteResult; amount?: string }
 
 // Solana-specific types (now handled by core)
 // Removed - using core types directly instead of SDK wrappers

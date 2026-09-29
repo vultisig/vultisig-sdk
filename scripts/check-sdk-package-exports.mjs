@@ -10,6 +10,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parseAst } from 'rollup/parseAst'
 
 import { createDisposableYarnEnv } from './quality-contracts-cache.mjs'
+import { inventoryExtractedPackage, validateNoEmbeddedSourceMaps, validateSdkPackSize } from './sdk-package-size.mjs'
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(scriptDir, '..')
@@ -174,6 +175,7 @@ function validatePackedReactNativePublicHelpers(packageRoot) {
     'tronBase58ToHex',
     'tronHexToBase58',
     'encodeTrc20TransferParam',
+    'deriveQbtcAddress',
   ]) {
     assert.ok(runtimeSource.includes(symbol), `react-native bundle exports ${symbol}`)
     assert.ok(declarationSource.includes(symbol), `react-native types export ${symbol}`)
@@ -186,7 +188,7 @@ function validatePackedReactNativeRuntimeExports(packageRoot) {
   const exportedNames = ast.body
     .filter(statement => statement.type === 'ExportNamedDeclaration')
     .flatMap(statement => statement.specifiers.map(specifier => specifier.exported.name))
-  for (const name of ['resolveTokenRef', 'resolveTokenRefId', 'getTxStatus', 'amount']) {
+  for (const name of ['resolveTokenRef', 'resolveTokenRefId', 'getTxStatus', 'amount', 'deriveQbtcAddress']) {
     assert.ok(exportedNames.includes(name), `packed React Native runtime must export ${name}`)
   }
   console.log('SDK packed React Native runtime export bindings passed (artifact check, not device execution)')
@@ -435,6 +437,10 @@ assert.equal(typeof root?.fiatToAmount, 'function', 'root import exports fiatToA
 assert.equal(typeof root?.normalizeChain, 'function', 'root import exports normalizeChain')
 assert.equal(typeof root?.fromChainAmountExact, 'function', 'root import exports fromChainAmountExact')
 assert.equal(typeof root?.getBlockExplorerUrl, 'function', 'root import exports getBlockExplorerUrl')
+const qbtcPublicKey = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+const qbtcAddress = 'qbtc1p3xsn0hgurfgfygl4wc9qslemjuujqg2x9fdnp'
+assert.equal(typeof root?.deriveQbtcAddress, 'function', 'root import exports deriveQbtcAddress')
+assert.equal(root.deriveQbtcAddress(qbtcPublicKey), qbtcAddress)
 const tronAddress = 'TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH'
 const evmHex = 'c8599111f29c1e1e061265b4af93ea1f274ad78a'
 assert.equal(root.tronBase58ToEvmHex(tronAddress), evmHex)
@@ -491,6 +497,13 @@ for (const { specifier, target } of cases) {
 }
 
 assert.equal(typeof requiredModules.get('@vultisig/sdk')?.Vultisig, 'function', 'root require exports Vultisig')
+const qbtcPublicKey = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+const qbtcAddress = 'qbtc1p3xsn0hgurfgfygl4wc9qslemjuujqg2x9fdnp'
+assert.equal(
+  requiredModules.get('@vultisig/sdk')?.deriveQbtcAddress(qbtcPublicKey),
+  qbtcAddress,
+  'root require invokes deriveQbtcAddress synchronously'
+)
 ${verifyTokenRefConsumer.toString()}
 verifyTokenRefConsumer(requiredModules.get('@vultisig/sdk'))
 ${verifyAmountConsumer.toString()}
@@ -575,6 +588,7 @@ import {
   extendChainRegistry,
   resolveTokenRef,
   resolveTokenRefId,
+  deriveQbtcAddress,
 } from '@vultisig/sdk'
 import type {
   BuildSignAminoPayloadInput,
@@ -609,6 +623,7 @@ import {
   resolveTokenRef as resolveTokenRefReactNative,
   resolveTokenRefId as resolveTokenRefIdReactNative,
   getTxStatus as getTxStatusReactNative,
+  deriveQbtcAddress as deriveQbtcAddressReactNative,
   type ResolvedTokenInfo as ResolvedTokenInfoReactNative,
 } from '@vultisig/sdk/react-native'
 
@@ -702,6 +717,11 @@ const tronEncoders: ((address: string, amount: string) => string)[] = [
 void tronConverters
 void tronEncoders
 
+const qbtcDerivers: ((mldsaPublicKeyHex: string) => string)[] = [deriveQbtcAddress, deriveQbtcAddressReactNative]
+const qbtcDerivedAddresses: string[] = qbtcDerivers.map(derive =>
+  derive('0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef')
+)
+void qbtcDerivedAddresses
 const descriptor: ChainDescriptor = chainRegistry[Chain.Ethereum]
 const registry: ChainDescriptorRegistry = chainRegistry
 const explorer: ChainExplorerDescriptor = descriptor.explorer
@@ -862,6 +882,11 @@ export async function checkSdkPackageExports({
       'packed SDK exports must match packages/sdk/package.json'
     )
 
+    // Measure every extracted file, including files npm would omit on repack.
+    const extractedPackage = inventoryExtractedPackage(packageRoot)
+    const unpackedSize = validateSdkPackSize(extractedPackage)
+    validateNoEmbeddedSourceMaps(packageRoot, extractedPackage[0].files)
+    console.log(`SDK package size OK: ${unpackedSize} unpacked bytes; no source maps`)
     const targets = validatePackedExportTargets(sourceManifest, packageRoot)
     validatePackedReactNativePublicHelpers(packageRoot)
     validatePackedReactNativeRuntimeExports(packageRoot)

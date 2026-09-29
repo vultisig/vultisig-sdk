@@ -32,7 +32,9 @@ import { KeygenProgressUpdate, ReshareOptions, ServerStatus, Signature, SigningP
 import { TSS_BATCH_MESSAGE_IDS } from '../utils/tssBatching'
 
 /**
- * Server endpoint configuration
+ * Server endpoint configuration for SDK-managed server operations.
+ * Standalone helpers exported from the server module do not inherit these
+ * settings; pass vaultBaseUrl to a helper when its input supports it.
  */
 export type ServerEndpoints = {
   fastVault?: string

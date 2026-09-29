@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file vultisig/keysign/v1/erc20_approve_payload.proto.
  */
 export const file_vultisig_keysign_v1_erc20_approve_payload: GenFile = /*@__PURE__*/
-  fileDesc("Ci92dWx0aXNpZy9rZXlzaWduL3YxL2VyYzIwX2FwcHJvdmVfcGF5bG9hZC5wcm90bxITdnVsdGlzaWcua2V5c2lnbi52MSI2ChNFcmMyMEFwcHJvdmVQYXlsb2FkEg4KBmFtb3VudBgBIAEoCRIPCgdzcGVuZGVyGAIgASgJQlQKE3Z1bHRpc2lnLmtleXNpZ24udjFaOGdpdGh1Yi5jb20vdnVsdGlzaWcvY29tbW9uZGF0YS9nby92dWx0aXNpZy9rZXlzaWduL3YxO3YxugICVlNiBnByb3RvMw");
+  fileDesc("Ci92dWx0aXNpZy9rZXlzaWduL3YxL2VyYzIwX2FwcHJvdmVfcGF5bG9hZC5wcm90bxITdnVsdGlzaWcua2V5c2lnbi52MSJVChNFcmMyMEFwcHJvdmVQYXlsb2FkEg4KBmFtb3VudBgBIAEoCRIPCgdzcGVuZGVyGAIgASgJEh0KFXJlc2V0X2FsbG93YW5jZV9maXJzdBgDIAEoCEJUChN2dWx0aXNpZy5rZXlzaWduLnYxWjhnaXRodWIuY29tL3Z1bHRpc2lnL2NvbW1vbmRhdGEvZ28vdnVsdGlzaWcva2V5c2lnbi92MTt2MboCAlZTYgZwcm90bzM");
 
 /**
  * @generated from message vultisig.keysign.v1.Erc20ApprovePayload
@@ -25,6 +25,18 @@ export type Erc20ApprovePayload = Message<"vultisig.keysign.v1.Erc20ApprovePaylo
    * @generated from field: string spender = 2;
    */
   spender: string;
+
+  /**
+   * When true, every signer emits approve(spender, 0) at the payload nonce
+   * before approve(spender, amount) at nonce + 1, and the main transaction
+   * moves to nonce + 2. Set by the initiator only for tokens such as USDT
+   * that revert on a non-zero -> non-zero approve while a stale allowance
+   * remains. Defaults to false so payloads from older senders keep the
+   * two-message shape.
+   *
+   * @generated from field: bool reset_allowance_first = 3;
+   */
+  resetAllowanceFirst: boolean;
 };
 
 /**

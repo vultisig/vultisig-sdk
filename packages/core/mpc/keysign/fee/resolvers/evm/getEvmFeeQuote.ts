@@ -11,6 +11,7 @@ import {
   getEvmTransferGasLimit,
 } from '@vultisig/core-chain/tx/fee/evm/evmGasLimit'
 import { getEvmGasPrice } from '@vultisig/core-chain/tx/fee/evm/gasPrice'
+import { getEvmRouterDepositFee } from '@vultisig/core-chain/tx/fee/evm/getEvmRouterDepositFee'
 import { getEvmMaxPriorityFeePerGas } from '@vultisig/core-chain/tx/fee/evm/maxPriorityFeePerGas'
 import { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
 import { getKeysignSwapPayload } from '@vultisig/core-mpc/keysign/swap/getKeysignSwapPayload'
@@ -212,6 +213,15 @@ export const getEvmFeeQuote = async ({
         gasLimit: feeSettings.gasLimit,
         baseFeePerGas: await getBaseFeePerGas(),
         maxPriorityFeePerGas: feeSettings.maxPriorityFeePerGas,
+      }
+    }
+
+    if (kind === 'routerDeposit') {
+      const { gasLimit, baseFeePerGas, maxPriorityFeePerGas } = await getEvmRouterDepositFee(chain)
+      return {
+        gasLimit: resolveGasLimit(gasLimit),
+        baseFeePerGas,
+        maxPriorityFeePerGas,
       }
     }
 

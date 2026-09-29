@@ -199,6 +199,42 @@ describe('BroadcastService', () => {
     expect(mockGetTxHash).toHaveBeenCalledOnce()
   })
 
+  it('confirms the approve(0) reset and the approve before broadcasting the swap (sdk#695)', async () => {
+    mockGetEncodedSigningInputs.mockResolvedValue(['reset-input', 'approve-input', 'swap-input'])
+    mockCoreBroadcastTx
+      .mockResolvedValueOnce(broadcastAccepted('reset-hash'))
+      .mockResolvedValueOnce(broadcastAccepted('approve-hash'))
+      .mockResolvedValueOnce(broadcastAccepted('swap-hash'))
+
+    const hash = await service.broadcastTx({
+      chain: Chain.Ethereum,
+      keysignPayload: {
+        erc20ApprovePayload: { amount: '5000000', spender: '0xspender', resetAllowanceFirst: true },
+      } as KeysignPayload,
+      signature,
+    })
+
+    expect(hash).toBe('swap-hash')
+    expect(mockGetTxStatus.mock.calls.map(([{ hash }]) => hash)).toEqual(['reset-hash', 'approve-hash'])
+  })
+
+  it('confirms only the single approve when the payload does not ask for a reset', async () => {
+    mockGetEncodedSigningInputs.mockResolvedValue(['approve-input', 'swap-input'])
+    mockCoreBroadcastTx
+      .mockResolvedValueOnce(broadcastAccepted('approve-hash'))
+      .mockResolvedValueOnce(broadcastAccepted('swap-hash'))
+
+    await service.broadcastTx({
+      chain: Chain.Ethereum,
+      keysignPayload: {
+        erc20ApprovePayload: { amount: '5000000', spender: '0xspender', resetAllowanceFirst: false },
+      } as KeysignPayload,
+      signature,
+    })
+
+    expect(mockGetTxStatus.mock.calls.map(([{ hash }]) => hash)).toEqual(['approve-hash'])
+  })
+
   it('uses an injected broadcaster without calling the network broadcaster', async () => {
     mockGetEncodedSigningInputs.mockResolvedValue(['approve-input', 'swap-input'])
     mockGetTxHash.mockResolvedValueOnce('approve-local-hash').mockResolvedValueOnce('swap-local-hash')

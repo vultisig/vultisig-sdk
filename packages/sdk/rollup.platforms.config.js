@@ -311,7 +311,7 @@ const createSubpathConfigs = ({ input, distBase, browser = false }) => [
     output: {
       file: `./dist/${distBase}/index.js`,
       format: 'es',
-      sourcemap: true,
+      sourcemap: false,
       inlineDynamicImports: true,
       paths: wasmPathsResolver,
     },
@@ -329,7 +329,7 @@ const createSubpathConfigs = ({ input, distBase, browser = false }) => [
     output: {
       file: `./dist/${distBase}/index.cjs`,
       format: 'cjs',
-      sourcemap: true,
+      sourcemap: false,
       exports: 'named',
       interop: 'auto',
       inlineDynamicImports: true,
@@ -350,7 +350,7 @@ const createSubpathConfigs = ({ input, distBase, browser = false }) => [
           output: {
             file: `./dist/${distBase}/index.browser.js`,
             format: 'es',
-            sourcemap: true,
+            sourcemap: false,
             inlineDynamicImports: true,
             paths: wasmPathsResolver,
           },
@@ -359,7 +359,9 @@ const createSubpathConfigs = ({ input, distBase, browser = false }) => [
             preferBuiltins: false,
             browser: true,
             bufferPolyfill: true,
-            replaceOptions: { 'process.env.VULTISIG_PLATFORM': JSON.stringify('browser') },
+            replaceOptions: {
+              'process.env.VULTISIG_PLATFORM': JSON.stringify('browser'),
+            },
           }),
           onwarn,
         },
@@ -377,7 +379,7 @@ const configs = {
       output: {
         file: './dist/index.node.esm.js',
         format: 'es',
-        sourcemap: true,
+        sourcemap: false,
         inlineDynamicImports: true,
         paths: wasmPathsResolver,
       },
@@ -395,7 +397,7 @@ const configs = {
       output: {
         file: './dist/index.node.cjs',
         format: 'cjs',
-        sourcemap: true,
+        sourcemap: false,
         exports: 'named',
         interop: 'auto',
         inlineDynamicImports: true,
@@ -409,7 +411,10 @@ const configs = {
         },
       }),
     },
-    ...createSubpathConfigs({ input: './src/platforms/node/prep.ts', distBase: 'tools/prep' }),
+    ...createSubpathConfigs({
+      input: './src/platforms/node/prep.ts',
+      distBase: 'tools/prep',
+    }),
     ...createSubpathConfigs({
       input: './src/tools/parse/index.ts',
       distBase: 'tools/parse',
@@ -468,6 +473,18 @@ const configs = {
       distBase: 'tools/price',
     }),
     ...createSubpathConfigs({
+      input: './src/tools/evm/index.ts',
+      distBase: 'tools/evm',
+    }),
+    ...createSubpathConfigs({
+      input: './src/tools/cosmos/index.ts',
+      distBase: 'tools/cosmos',
+    }),
+    ...createSubpathConfigs({
+      input: './src/signable-transaction/index.ts',
+      distBase: 'signable-transaction',
+    }),
+    ...createSubpathConfigs({
       input: './src/tx/index.ts',
       distBase: 'tx',
     }),
@@ -481,7 +498,7 @@ const configs = {
     output: {
       file: './dist/index.browser.js',
       format: 'es',
-      sourcemap: true,
+      sourcemap: false,
       inlineDynamicImports: true,
       paths: wasmPathsResolver,
     },
@@ -505,7 +522,7 @@ const configs = {
       output: {
         file: './dist/index.rn-preamble.js',
         format: 'es',
-        sourcemap: true,
+        sourcemap: false,
       },
       external: ['buffer'],
       plugins: [
@@ -524,7 +541,7 @@ const configs = {
       output: {
         file: './dist/index.react-native.js',
         format: 'es',
-        sourcemap: true,
+        sourcemap: false,
         inlineDynamicImports: true,
       },
       // RN externals: native modules, Node builtins, and deps that can't run on RN.
@@ -724,7 +741,7 @@ const configs = {
     output: {
       file: './dist/index.electron-main.cjs',
       format: 'cjs',
-      sourcemap: true,
+      sourcemap: false,
       exports: 'named',
       interop: 'auto',
       inlineDynamicImports: true,
@@ -744,7 +761,7 @@ const configs = {
     output: {
       file: './dist/index.chrome-extension.js',
       format: 'es',
-      sourcemap: true,
+      sourcemap: false,
       inlineDynamicImports: true,
       paths: wasmPathsResolver,
     },
@@ -767,7 +784,7 @@ const configs = {
       output: {
         file: './dist/vite/index.js',
         format: 'es',
-        sourcemap: true,
+        sourcemap: false,
       },
       // `vite` is a type-only import (declared as an optional peer dep), so it
       // disappears at runtime. Mark it external so Rollup doesn't try to
@@ -788,7 +805,7 @@ const configs = {
       output: {
         file: './dist/vite/index.cjs',
         format: 'cjs',
-        sourcemap: true,
+        sourcemap: false,
         exports: 'auto',
       },
       external: ['vite'],
@@ -831,26 +848,64 @@ configs['react-native'] = [rnPreamble, rnRoot, rnSwap, rnPrep]
 const browserPrep = {
   ...configs.browser,
   input: './src/platforms/browser/prep.ts',
-  output: { ...configs.browser.output, file: './dist/tools/prep/index.browser.js' },
+  output: {
+    ...configs.browser.output,
+    file: './dist/tools/prep/index.browser.js',
+  },
   plugins: createPlugins({
     browser: true,
     bufferPolyfill: true,
-    replaceOptions: { 'process.env.VULTISIG_PLATFORM': JSON.stringify('browser') },
+    replaceOptions: {
+      'process.env.VULTISIG_PLATFORM': JSON.stringify('browser'),
+    },
   }),
 }
 configs.browser = [configs.browser, browserPrep]
 
+// Multi-entry builds preserve public filenames while emitting each shared module
+// once per runtime/format. Keep platform initialization in the original entries:
+// importing a subpath must not evaluate a different platform's root adapter.
+const shareEntries = (entries, namespace, plugins = entries[0].plugins) => {
+  const first = entries[0]
+  const output = { ...first.output }
+  delete output.file
+  delete output.inlineDynamicImports
+  return {
+    ...first,
+    input: Object.fromEntries(entries.map(entry => [entry.output.file.replace('./dist/', ''), entry.input])),
+    output: {
+      ...output,
+      dir: './dist',
+      entryFileNames: '[name]',
+      chunkFileNames: `chunks/${namespace}/[name]-[hash].${output.format === 'cjs' ? 'cjs' : 'js'}`,
+    },
+    plugins,
+  }
+}
+
+const nodeEsm = configs.node.filter(
+  config => config.output.file.endsWith('/index.js') || config.output.file === './dist/index.node.esm.js'
+)
+const nodeCjs = configs.node.filter(config => config.output.format === 'cjs')
+const browserSubpaths = configs.node.filter(config => config.output.file.endsWith('/index.browser.js'))
+const sharedNode = [shareEntries(nodeEsm, 'node-esm'), shareEntries([...nodeCjs, configs.electron], 'node-cjs')]
+const sharedBrowser = shareEntries(
+  [...configs.browser, configs['chrome-extension'], ...browserSubpaths],
+  'browser',
+  browserPrep.plugins
+)
+const sharedRn = shareEntries([rnRoot, rnSwap, rnPrep], 'react-native')
+
+configs.node = sharedNode
+configs.electron = sharedNode[1]
+configs.browser = [sharedBrowser]
+configs['chrome-extension'] = sharedBrowser
+configs['react-native'] = [rnPreamble, sharedRn]
+
 // Export based on target
 let exportConfig
 if (target === 'all') {
-  exportConfig = [
-    ...configs.node,
-    ...configs.browser,
-    ...configs['react-native'],
-    configs.electron,
-    configs['chrome-extension'],
-    ...configs.vite,
-  ]
+  exportConfig = [...configs.node, ...configs.browser, ...configs['react-native'], ...configs.vite]
 } else if (configs[target]) {
   const config = configs[target]
   exportConfig = Array.isArray(config) ? config : [config]

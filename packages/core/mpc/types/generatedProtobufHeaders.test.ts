@@ -73,7 +73,7 @@ describe('generated protobuf headers (*_pb.ts)', () => {
 
     expect(Object.fromEntries([...byVersion.entries()].sort())).toEqual({
       'v2.10.2': 6,
-      'v2.11.0': 19,
+      'v2.11.0': 20,
     })
   })
 })

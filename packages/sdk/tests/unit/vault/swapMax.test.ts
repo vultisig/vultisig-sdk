@@ -33,7 +33,12 @@ function makeVault(opts: {
   const getSwapQuote = vi.fn(async ({ amount }: { amount: string }) => {
     quoteCalls.push({ amount })
     const maxSwapable = typeof opts.maxSwapable === 'function' ? opts.maxSwapable(amount) : opts.maxSwapable
-    return { bestQuote: { provider: 'thorchain' }, balance: opts.balance, maxSwapable, warnings: [] }
+    return {
+      quote: { quote: { native: { swapChain: Chain.THORChain } } },
+      balance: opts.balance,
+      maxSwapable,
+      warnings: [],
+    }
   })
 
   const prepareSwapTx = vi.fn(async ({ amount }: { amount: string }) => {

@@ -79,6 +79,37 @@ describe('isValidTokenId - Ripple issued currencies', () => {
   })
 })
 
+describe('isValidTokenId - EVM contract addresses', () => {
+  let walletCore: WalletCore
+
+  beforeAll(async () => {
+    walletCore = await initWasm()
+  })
+
+  it('accepts canonical, uniform-case, and corrected registry ids while rejecting a checksum case flip', () => {
+    const usdc = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+    const caseFlippedUsdc = '0xa0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+    const usdsBase = '0x820C137fa70C8691f0e44Dc420a5e53c168921Dc'
+
+    expect(isValidTokenId({ chain: Chain.Ethereum, id: usdc, walletCore })).toBe(true)
+    expect(
+      isValidTokenId({
+        chain: Chain.Ethereum,
+        id: usdc.toLowerCase(),
+        walletCore,
+      })
+    ).toBe(true)
+    expect(
+      isValidTokenId({
+        chain: Chain.Ethereum,
+        id: caseFlippedUsdc,
+        walletCore,
+      })
+    ).toBe(false)
+    expect(isValidTokenId({ chain: Chain.Base, id: usdsBase, walletCore })).toBe(true)
+  })
+})
+
 describe('normalizeTokenId - Ripple issued currencies', () => {
   it('canonicalises a human ticker to its on-ledger (40-hex) currency code', () => {
     expect(normalizeTokenId({ chain: Chain.Ripple, id: `SOLO.${SOLO_ISSUER}` })).toBe(

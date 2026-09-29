@@ -663,6 +663,10 @@ program
     '--gasless',
     'TON jettons on a W5 account: pay the network fee in the jetton through the relay, no TON needed'
   )
+  .option(
+    '--allow-death',
+    'Empty a Polkadot or Bittensor account with --max: the chain reaps it and destroys any remainder below the existential deposit'
+  )
   .option('--dry-run', 'Preview transaction without signing or broadcasting')
   .option('--confirm', 'Confirm and broadcast (required to execute non-interactively; use --dry-run to preview)')
   .option('-y, --yes', 'Alias for --confirm')
@@ -695,6 +699,7 @@ See also: balance, tx-status`
           memo?: string
           destinationTag?: string
           gasless?: boolean
+          allowDeath?: boolean
           dryRun?: boolean
           yes?: boolean
           confirm?: boolean
@@ -710,6 +715,14 @@ See also: balance, tx-status`
         }
         if (options.gasless && (chain !== Chain.Ton || !options.token)) {
           throw new Error('--gasless is only supported for TON jetton sends (pass --token)')
+        }
+        if (options.allowDeath) {
+          if (chain !== Chain.Polkadot && chain !== Chain.Bittensor) {
+            throw new Error('--allow-death is only supported for Polkadot and Bittensor')
+          }
+          if (!options.max || options.token) {
+            throw new Error('--allow-death empties the native account, so it requires --max and no --token')
+          }
         }
         const destinationTag = options.destinationTag === undefined ? undefined : Number(options.destinationTag)
         if (
@@ -732,6 +745,7 @@ See also: balance, tx-status`
           memo: options.memo,
           destinationTag,
           gasless: options.gasless,
+          allowDeath: options.allowDeath,
           dryRun: options.dryRun,
           yes: options.yes || options.confirm,
           force: options.force,

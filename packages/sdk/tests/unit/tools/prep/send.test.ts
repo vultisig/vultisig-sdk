@@ -36,6 +36,8 @@ const mockWalletCore = { __mock: 'walletCore' }
 const mockPublicKey = { __mock: 'publicKey' }
 const mockPayload = { __mock: 'payload' }
 const solanaPda = 'BnJQssQwsYPcNb2RrW5SP1kVxijMqsA9VVQX1U1p4kkp'
+const checksummedEvmAddress = '0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed'
+const digitTypoEvmAddress = '0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAee'
 
 describe('prepareSendTxFromKeys', () => {
   beforeEach(() => {
@@ -122,6 +124,42 @@ describe('prepareSendTxFromKeys', () => {
     ).rejects.toThrow('Invalid receiver address for chain Ethereum: not-an-address')
 
     expect(mockBuildSendKeysignPayload).not.toHaveBeenCalled()
+  })
+
+  it('includes the EIP-55 hint when a mixed-case Ethereum receiver fails validation', async () => {
+    mockIsValidRecipient.mockReturnValue(false)
+
+    await expect(
+      prepareSendTxFromKeys(baseIdentity, {
+        coin: {
+          chain: Chain.Ethereum,
+          address: checksummedEvmAddress,
+          decimals: 18,
+          ticker: 'ETH',
+        },
+        receiver: digitTypoEvmAddress,
+        amount: 1n,
+      })
+    ).rejects.toThrow(/EIP-55 checksum mismatch/u)
+
+    expect(mockBuildSendKeysignPayload).not.toHaveBeenCalled()
+  })
+
+  it('does not reject a lowercase Ethereum receiver during validation', async () => {
+    const receiver = checksummedEvmAddress.toLowerCase()
+
+    await expect(
+      prepareSendTxFromKeys(baseIdentity, {
+        coin: {
+          chain: Chain.Ethereum,
+          address: receiver,
+          decimals: 18,
+          ticker: 'ETH',
+        },
+        receiver,
+        amount: 1n,
+      })
+    ).resolves.toBe(mockPayload)
   })
 
   it.each([

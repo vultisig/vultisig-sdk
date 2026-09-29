@@ -27,6 +27,7 @@ import {
   parseYieldOpportunitiesEnvelope,
 } from './cards'
 import { AgentClient, createTurnIdempotencyKey, type SSEStreamResult } from './client'
+import { SIGN_TX_SUMMARY_MAX_CHARS } from './consentLimits'
 import { buildMessageContext, buildMinimalContext } from './context'
 import { AgentExecutor, resolveChain } from './executor'
 import { formatHlConfirmation } from './hlOrder'
@@ -127,9 +128,10 @@ const MAX_MESSAGE_LOOP_DEPTH = 16
 // one line; for sign_typed_data the gate falls back to JSON.stringify(input), which is an
 // arbitrarily large typed-data blob. Keep every emitted audit record bounded.
 const PROPOSED_SUMMARY_MAX_CHARS = 500
-
-function capSigningSummary(summary: string): string {
-  return summary.length > PROPOSED_SUMMARY_MAX_CHARS ? `${summary.slice(0, PROPOSED_SUMMARY_MAX_CHARS)}…` : summary
+// Multi-leg swap renderers reserve room inside this limit for the decoded approve disclosure.
+export function capSigningSummary(summary: string, toolName?: string): string {
+  const max = toolName === 'sign_tx' ? SIGN_TX_SUMMARY_MAX_CHARS : PROPOSED_SUMMARY_MAX_CHARS
+  return summary.length > max ? `${summary.slice(0, max)}…` : summary
 }
 
 function applyAgentMode(request: any, config: AgentConfig): void {
@@ -201,7 +203,7 @@ function reportDeclinedSigning(
   // conflicting representations of it. Nothing is lost — this is a display summary of a
   // transaction that was NOT authorized; the authoritative payload is the request the caller
   // re-issues with `--yes`.
-  const proposed = capSigningSummary(summary)
+  const proposed = capSigningSummary(summary, toolName)
   const declined: RecentAction = {
     tool: toolName,
     success: false,
@@ -1397,7 +1399,7 @@ export class AgentSession {
       // emitting here would fabricate a "signed" record for a body that failed
       // before signing anything (e.g. a DUPLICATE_BROADCAST refusal).
       const chain = ui.onSigningRecord && toolName === 'sign_tx' ? this.executor.getPendingChain() : null
-      signingRecord = { tool: toolName, summary: capSigningSummary(summary), ...(chain ? { chain } : {}) }
+      signingRecord = { tool: toolName, summary: capSigningSummary(summary, toolName), ...(chain ? { chain } : {}) }
     }
 
     // Gate signing on whether a password is actually NEEDED, not on the

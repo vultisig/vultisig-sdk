@@ -1,5 +1,15 @@
 # @vultisig/mcp
 
+## 1.0.2
+
+### Patch Changes
+
+- [#2109](https://github.com/vultisig/vultisig-sdk/pull/2109) [`c590079`](https://github.com/vultisig/vultisig-sdk/commit/c590079733dfbbfd492e8f4a3c9569d31616073e) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Pin the transitive Hono HTTP layer used by `@vultisig/mcp` through `@modelcontextprotocol/sdk` to the patched, cooldown-eligible 4.13.7 release instead of vulnerable 4.12.25.
+
+- Updated dependencies [[`b38628f`](https://github.com/vultisig/vultisig-sdk/commit/b38628f1ad09fa9dac3e23b2056b24c0040500fe), [`23177e5`](https://github.com/vultisig/vultisig-sdk/commit/23177e5ec12fe0d3e23ffd8ad0a1b5fffbfe9e20), [`2b91950`](https://github.com/vultisig/vultisig-sdk/commit/2b91950ffd1aa86b8afd710ab7c6d30f919ba9af), [`2620db4`](https://github.com/vultisig/vultisig-sdk/commit/2620db498bba40fbced5b5e256a260dccb12ad33), [`77b78da`](https://github.com/vultisig/vultisig-sdk/commit/77b78da36fc0d6032fb596bd3fbfd6dd84fb1d18), [`42bb615`](https://github.com/vultisig/vultisig-sdk/commit/42bb615809a91fd6e8c304c7dba58b3c3c0f80c5), [`30dd259`](https://github.com/vultisig/vultisig-sdk/commit/30dd259d7d495df27d4e59bb27fdf40a6879831d), [`ade50d1`](https://github.com/vultisig/vultisig-sdk/commit/ade50d15fa87b3379d24aaed793b1a76b05c863c), [`a58d6fb`](https://github.com/vultisig/vultisig-sdk/commit/a58d6fbb40fd05bc357fde4b60b8f5cb41639302), [`601ff4f`](https://github.com/vultisig/vultisig-sdk/commit/601ff4f1d1449d452b8e7025df392c1e2f4c5ca7), [`c368202`](https://github.com/vultisig/vultisig-sdk/commit/c36820249569823bb3d3e24b06bcb66a34144f2a), [`4f73cf4`](https://github.com/vultisig/vultisig-sdk/commit/4f73cf425e63f8e0a9cd44e50920cb3f5f7561ad), [`d190033`](https://github.com/vultisig/vultisig-sdk/commit/d190033bf7116466fc138197319c38d5e98e1c64), [`4a79633`](https://github.com/vultisig/vultisig-sdk/commit/4a796338d0d15821cc39d8efc07cbd6e9a32e892), [`8a690b5`](https://github.com/vultisig/vultisig-sdk/commit/8a690b5ae7ce5a249eab0ba0d0be1c63d7c10a85), [`371f012`](https://github.com/vultisig/vultisig-sdk/commit/371f0127f9e213f1f1779cdbc8e85ccaa2ec0caf), [`5f18a09`](https://github.com/vultisig/vultisig-sdk/commit/5f18a090def42d1cd910b708fd2dada848e1fe46), [`9da4962`](https://github.com/vultisig/vultisig-sdk/commit/9da49628203c6b0a774d0f758e1b2935c2628fa5)]:
+  - @vultisig/sdk@8.0.0
+  - @vultisig/client-shared@0.3.7
+
 ## 1.0.1
 
 ### Patch Changes

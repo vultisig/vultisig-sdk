@@ -36,11 +36,11 @@ describe('getCosmosTxStatus', () => {
     expect(result).toEqual({ status: 'pending', isKnown: false })
   })
 
-  it('returns isKnown:false when the hash is not indexed yet', async () => {
+  it('reports not_found when the node has no record of the hash', async () => {
     mocks.getTx.mockResolvedValue(null)
 
     const result = await getCosmosTxStatus({ chain: Chain.Cosmos, hash })
-    expect(result).toEqual({ status: 'pending', isKnown: false })
+    expect(result).toEqual({ status: 'not_found', isKnown: false })
   })
 
   it('returns success when the indexed tx succeeded', async () => {
