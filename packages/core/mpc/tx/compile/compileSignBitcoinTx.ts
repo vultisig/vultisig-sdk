@@ -109,9 +109,15 @@ export const compileSignBitcoinTx = (
   // Wrap in TW.Bitcoin.Proto.SigningOutput with signingResultV2
   // so the extension can extract per-input sigs for PSBT reconstruction.
   // signingResultV2 is a proper field on SigningOutput (see TW.BitcoinV2.Proto.ISigningOutput)
+  // and, like WalletCore's own V2 output, it also carries the signed tx and
+  // txid: the UTXO broadcast and hash resolvers read those before the legacy fields.
   const output = TW.Bitcoin.Proto.SigningOutput.create({
     encoded: serialized,
+    transactionId: tx.getId(),
     signingResultV2: {
+      encoded: serialized,
+      // Internal byte order, as WalletCore emits it; getUtxoTxHash reverses it for display.
+      txid: tx.getHash(),
       bitcoin: { inputs: inputResults },
     },
   })
