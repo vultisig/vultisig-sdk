@@ -736,7 +736,7 @@ Validate a BIP39 mnemonic phrase.
 **Returns:**
 
 - `valid: boolean` - Whether the mnemonic is valid
-- `wordCount: number` - Number of words (12 or 24)
+- `wordCount: number` - Number of words (12, 15, 18, 21 or 24 when valid)
 - `invalidWords?: string[]` - Words not in BIP39 wordlist
 - `error?: string` - Error message if invalid
 
@@ -756,7 +756,7 @@ Create a FastVault from a BIP39 seedphrase. Returns vaultId for email verificati
 
 **Parameters:**
 
-- `options.mnemonic: string` - BIP39 mnemonic (12 or 24 words)
+- `options.mnemonic: string` - BIP39 mnemonic (12, 15, 18, 21 or 24 words)
 - `options.name: string` - Vault name
 - `options.email: string` - Email for verification
 - `options.password: string` - Vault encryption password
@@ -770,7 +770,7 @@ Create a SecureVault from a BIP39 seedphrase with multi-device MPC.
 
 **Parameters:**
 
-- `options.mnemonic: string` - BIP39 mnemonic (12 or 24 words)
+- `options.mnemonic: string` - BIP39 mnemonic (12, 15, 18, 21 or 24 words)
 - `options.name: string` - Vault name
 - `options.devices: number` - Number of participating devices
 - `options.threshold?: number` - Signing threshold

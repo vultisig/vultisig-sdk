@@ -85,7 +85,7 @@ export class MasterKeyDeriver {
   /**
    * Derive master keys from a mnemonic
    *
-   * @param mnemonic - BIP39 mnemonic phrase (12 or 24 words)
+   * @param mnemonic - BIP39 mnemonic phrase (12, 15, 18, 21 or 24 words)
    * @returns Master keys for ECDSA and EdDSA, plus chain code
    */
   async deriveMasterKeys(mnemonic: string): Promise<DerivedMasterKeys> {
