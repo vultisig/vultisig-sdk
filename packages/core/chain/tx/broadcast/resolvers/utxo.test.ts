@@ -13,9 +13,32 @@ vi.mock('../verifyBroadcastByHash', () => ({
   verifyBroadcastByHash: mocks.verifyBroadcastByHash,
 }))
 
+import { TW } from '@trustwallet/wallet-core'
+
 import { UtxoChain } from '../../../Chain'
 import { BroadcastErrorCode } from '../resolver'
-import { broadcastUtxoTx } from './utxo'
+import { broadcastUtxoTx, selectEncodedBytes } from './utxo'
+
+const decodeBitcoinOutput = (output: TW.Bitcoin.Proto.ISigningOutput) =>
+  TW.Bitcoin.Proto.SigningOutput.decode(TW.Bitcoin.Proto.SigningOutput.encode(output).finish())
+
+describe('selectEncodedBytes', () => {
+  const raw = Buffer.from([0x01, 0x02, 0x03])
+
+  it('prefers signingResultV2.encoded when WalletCore populated it', () => {
+    const tx = decodeBitcoinOutput({ signingResultV2: { encoded: raw } })
+
+    expect(selectEncodedBytes(UtxoChain.Bitcoin, tx)).toEqual(raw)
+  })
+
+  it('falls back to encoded when signingResultV2 carries no encoded bytes', () => {
+    // A decoded, unset bytes field is an empty (and truthy) Uint8Array, not
+    // undefined; picking it broadcast `{"data":""}` (vultisig-windows#5035).
+    const tx = decodeBitcoinOutput({ encoded: raw, signingResultV2: { bitcoin: { inputs: [] } } })
+
+    expect(selectEncodedBytes(UtxoChain.Bitcoin, tx)).toEqual(raw)
+  })
+})
 
 describe('broadcastUtxoTx', () => {
   const chain = UtxoChain.Bitcoin

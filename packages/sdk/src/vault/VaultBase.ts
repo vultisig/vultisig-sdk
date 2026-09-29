@@ -1353,6 +1353,8 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     memo?: string
     destinationTag?: number
     feeSettings?: FeeSettings
+    /** Price a send that spends the full available balance. */
+    sendMaxAmount?: boolean
     /** TON only: pay the fee in the jetton being sent through the gasless relay. */
     tonGasless?: boolean
     allowDeath?: boolean
@@ -2139,6 +2141,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
         amount: amountBigInt,
         memo,
         destinationTag,
+        sendMaxAmount: amount === 'max',
         tonGasless,
         allowDeath,
       })
@@ -2502,6 +2505,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
         }),
         amount: balance,
         memo: quote.native.memo,
+        sendMaxAmount: true,
       })
       fee = routerDepositFee === undefined || sendFee > routerDepositFee ? sendFee : routerDepositFee
       if (fee <= 0n) return { maxSwapable: 0n }

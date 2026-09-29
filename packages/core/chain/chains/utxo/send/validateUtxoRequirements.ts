@@ -20,12 +20,22 @@ type Input = {
   skipDustCheck?: boolean
 }
 
-export const validateUtxoRequirements = ({ amount, balance, chain, fee, skipDustCheck }: Input): string | undefined => {
-  const { decimals, ticker } = chainFeeCoin[chain]
+export type UtxoMinSendAmountInput = Pick<Input, 'amount' | 'chain'>
 
-  if (amount < minUtxo[chain]) {
-    const formattedAmount = formatAmount(fromChainAmount(minUtxo[chain], decimals), { ticker })
-    return `Minimum send amount is ${formattedAmount}. ${chain} requires this to prevent spam.`
+export const getUtxoMinSendAmountError = ({ amount, chain }: UtxoMinSendAmountInput): string | undefined => {
+  if (amount >= minUtxo[chain]) {
+    return
+  }
+
+  const { decimals, ticker } = chainFeeCoin[chain]
+  const formattedAmount = formatAmount(fromChainAmount(minUtxo[chain], decimals), { ticker })
+  return `Minimum send amount is ${formattedAmount}. ${chain} requires this to prevent spam.`
+}
+
+export const validateUtxoRequirements = ({ amount, balance, chain, fee, skipDustCheck }: Input): string | undefined => {
+  const minSendAmountError = getUtxoMinSendAmountError({ amount, chain })
+  if (minSendAmountError) {
+    return minSendAmountError
   }
 
   if (skipDustCheck) {
