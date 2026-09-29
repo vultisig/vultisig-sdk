@@ -28,14 +28,21 @@ const coreVault: CoreVault = {
 }
 
 const vultFileContent = await createVaultBackup(coreVault, correctPassword)
+const unencryptedVultFileContent = await createVaultBackup(coreVault)
 
 type VaultClass = typeof FastVault | typeof SecureVault
 
-const makeVault = ({ VaultClass, sharesLoaded }: { VaultClass: VaultClass; sharesLoaded: boolean }) => {
+type MakeVaultInput = {
+  VaultClass: VaultClass
+  sharesLoaded: boolean
+  fileContent?: string
+}
+
+const makeVault = ({ VaultClass, sharesLoaded, fileContent = vultFileContent }: MakeVaultInput) => {
   const passwordCache = new PasswordCacheService()
   const vault = Object.assign(Object.create(VaultClass.prototype), {
     passwordCache,
-    vaultData: { id: vaultId, name: 'TestVault', isEncrypted: true, vultFileContent },
+    vaultData: { id: vaultId, name: 'TestVault', isEncrypted: true, vultFileContent: fileContent },
     coreVault: {
       ...coreVault,
       keyShares: sharesLoaded ? coreVault.keyShares : { ecdsa: '', eddsa: '' },
@@ -67,6 +74,25 @@ describe.each([
       passwordCache.set(vaultId, correctPassword)
       await expect(vault.unlock(wrongPassword)).rejects.toBeInstanceOf(VaultError)
       expect(passwordCache.get(vaultId)).toBe(correctPassword)
+    })
+  })
+
+  describe('with key shares loaded and vault data marked encrypted', () => {
+    it('refuses to unlock when there is no vault file to verify against, keeping the cache', async () => {
+      const { vault, passwordCache } = makeVault({ VaultClass, sharesLoaded: true, fileContent: '' })
+      passwordCache.set(vaultId, correctPassword)
+      await expect(vault.unlock(correctPassword)).rejects.toBeInstanceOf(VaultError)
+      expect(passwordCache.get(vaultId)).toBe(correctPassword)
+    })
+
+    it('accepts any password when the stored vault file is unencrypted, as key share loading does', async () => {
+      const { vault, passwordCache } = makeVault({
+        VaultClass,
+        sharesLoaded: true,
+        fileContent: unencryptedVultFileContent,
+      })
+      await vault.unlock(wrongPassword)
+      expect(passwordCache.get(vaultId)).toBe(wrongPassword)
     })
   })
 })
