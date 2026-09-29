@@ -1,11 +1,13 @@
 import { Buffer } from 'buffer'
-import { Transaction } from 'bitcoinjs-lib'
+import { Chain } from '@vultisig/core-chain/Chain'
+import { script, Transaction } from 'bitcoinjs-lib'
 import { TW } from '@trustwallet/wallet-core'
 import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
 
 import { KeysignSignature } from '../../keysign/KeysignSignature'
 import { computePreSigningHashes } from '../../keysign/signingInputs/resolvers/bitcoin/sighash'
 import { SignBitcoin } from '../../types/vultisig/keysign/v1/wasm_execute_contract_payload_pb'
+import { assertLegacySwapKitSigningKey } from '../swapkitSignBitcoin'
 
 /**
  * Build a raw signed Bitcoin transaction from SignBitcoin fields + MPC signatures.
@@ -25,10 +27,14 @@ import { SignBitcoin } from '../../types/vultisig/keysign/v1/wasm_execute_contra
 export const compileSignBitcoinTx = (
   signBitcoin: SignBitcoin,
   signatures: Record<string, KeysignSignature>,
-  publicKey: PublicKey
+  publicKey: PublicKey,
+  chain: Chain = Chain.Bitcoin
 ): Uint8Array => {
-  const hashes = computePreSigningHashes(signBitcoin)
+  const hashes = computePreSigningHashes(signBitcoin, chain)
   const pubKeyBytes = Buffer.from(publicKey.data())
+  if (chain === Chain.Dogecoin || chain === Chain.BitcoinCash) {
+    assertLegacySwapKitSigningKey(signBitcoin, pubKeyBytes)
+  }
 
   // Build the transaction using bitcoinjs-lib's Transaction class
   // which handles varint encoding, segwit markers, and witness serialization.
@@ -78,8 +84,12 @@ export const compileSignBitcoinTx = (
     const sighashByte = input.sighashType ?? 1
     const sigWithHashType = Buffer.concat([derSig, Buffer.from([sighashByte])])
 
-    // P2WPKH witness: [signature+hashtype, pubkey]
-    tx.setWitness(i, [sigWithHashType, pubKeyBytes])
+    if (chain === Chain.Dogecoin || chain === Chain.BitcoinCash) {
+      tx.setInputScript(i, script.compile([sigWithHashType, pubKeyBytes]))
+    } else {
+      // P2WPKH witness: [signature+hashtype, pubkey]
+      tx.setWitness(i, [sigWithHashType, pubKeyBytes])
+    }
   }
 
   const serialized = tx.toBuffer()

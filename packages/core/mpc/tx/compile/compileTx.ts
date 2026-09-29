@@ -49,7 +49,7 @@ export const compileTx = ({
     if (!publicKey) {
       throw new Error('publicKey is required for SignBitcoin compilation')
     }
-    return compileSignBitcoinTx(signBitcoin, keysignSignatures, publicKey)
+    return compileSignBitcoinTx(signBitcoin, keysignSignatures, publicKey, chain)
   }
 
   if (chain === Chain.QBTC) {

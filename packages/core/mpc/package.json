@@ -576,6 +576,11 @@
       "import": "./dist/keysign/signingInputs/resolvers/sui.js",
       "default": "./dist/keysign/signingInputs/resolvers/sui.js"
     },
+    "./keysign/signingInputs/resolvers/swapkitZcash": {
+      "types": "./dist/keysign/signingInputs/resolvers/swapkitZcash.d.ts",
+      "import": "./dist/keysign/signingInputs/resolvers/swapkitZcash.js",
+      "default": "./dist/keysign/signingInputs/resolvers/swapkitZcash.js"
+    },
     "./keysign/signingInputs/resolvers/ton": {
       "types": "./dist/keysign/signingInputs/resolvers/ton/index.d.ts",
       "import": "./dist/keysign/signingInputs/resolvers/ton/index.js",

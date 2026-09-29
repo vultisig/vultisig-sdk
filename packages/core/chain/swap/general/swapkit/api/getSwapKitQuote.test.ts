@@ -1,5 +1,8 @@
+import { readFileSync } from 'node:fs'
+
 import { Chain } from '@vultisig/core-chain/Chain'
 import { tonAddressToRaw } from '@vultisig/core-chain/chains/ton/address'
+import { parseSwapKitZcashPsbt } from '@vultisig/core-chain/chains/utxo/tx/parseSwapKitZcashPsbt'
 import { scanAddressWithBlockaid } from '@vultisig/core-chain/security/blockaid/address'
 import { configureSwapKit, getSwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
 import type { SwapKitSourceChain } from '@vultisig/core-chain/swap/general/swapkit/SwapKitEnabledChains'
@@ -9,6 +12,7 @@ import {
 } from '@vultisig/core-chain/swap/general/swapkit/SwapKitErrors'
 import { resetSwapKitProvidersCache } from '@vultisig/core-chain/swap/general/swapkit/SwapKitProviders'
 import { networks, payments, Psbt } from 'bitcoinjs-lib'
+import bs58check from 'bs58check'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getSwapKitQuote } from './getSwapKitQuote'
@@ -32,6 +36,16 @@ const textEncoder = new TextEncoder()
 const TEST_PUBKEY = Buffer.from('0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798', 'hex')
 const BTC_RECIPIENT_ADDRESS = 'bc1q0ht9tyks4vh7p5p904t340cr9nvahy7u3re7zg'
 const EVM_TARGET_ADDRESS = '0x111111125421ca6dc452d289314280a0f8842a65'
+const zecFixture = JSON.parse(
+  readFileSync(new URL('../../../../chains/utxo/tx/swapkit-zec-sapling.fixture.json', import.meta.url), 'utf8')
+) as {
+  sourceAddress: string
+  tx: string
+}
+const zecPsbt = parseSwapKitZcashPsbt(Buffer.from(zecFixture.tx, 'base64'))
+const zecTargetAddress = bs58check.encode(
+  Buffer.concat([Buffer.from([0x1c, 0xb8]), zecPsbt.outputs[0].scriptPubKey.subarray(3, 23)])
+)
 
 const makeBitcoinPsbtPayload = (outputValue: bigint) => {
   const p2wpkh = payments.p2wpkh({ pubkey: TEST_PUBKEY, network: networks.bitcoin })
@@ -51,13 +65,25 @@ type TransferSourceFixture = readonly [string, SwapKitSourceChain, string, numbe
 
 const transferSourceFixtures: TransferSourceFixture[] = [
   ['Litecoin', Chain.Litecoin, 'LTC', 8, 'ltc1qsource', 'Ldeposit'],
-  ['Dogecoin', Chain.Dogecoin, 'DOGE', 8, 'Dsource', 'Ddeposit'],
-  ['Bitcoin Cash', Chain.BitcoinCash, 'BCH', 8, 'bitcoincash:qsource', 'bitcoincash:qdeposit'],
   ['Ripple', Chain.Ripple, 'XRP', 6, 'rSource', 'rDeposit'],
-  ['Zcash', Chain.Zcash, 'ZEC', 8, 't1Source', 't1Deposit'],
   ['Tron', Chain.Tron, 'TRX', 6, 'TSource', 'TDeposit'],
   ['TON', Chain.Ton, 'TON', 9, 'UQSource', 'EQCIcjES4cQET0z6nRixZ0MdvTB4u3_8triztLSrIIrDkpgJ'],
 ]
+
+const makeLegacyPsbt = (chain: typeof Chain.Dogecoin | typeof Chain.BitcoinCash) => {
+  const prefix = chain === Chain.Dogecoin ? 0x1e : 0x00
+  const sourceAddress = bs58check.encode(Buffer.concat([Buffer.from([prefix]), Buffer.alloc(20, 0x11)]))
+  const targetAddress = bs58check.encode(Buffer.concat([Buffer.from([prefix]), Buffer.alloc(20, 0x22)]))
+  const psbt = new Psbt()
+  psbt.addInput({
+    hash: 'aa'.repeat(32),
+    index: 0,
+    witnessUtxo: { script: Buffer.from('76a914' + '11'.repeat(20) + '88ac', 'hex'), value: 200_000n },
+  })
+  psbt.addOutput({ script: Buffer.from('76a914' + '22'.repeat(20) + '88ac', 'hex'), value: 90_000n })
+  psbt.addOutput({ script: Buffer.from('76a914' + '11'.repeat(20) + '88ac', 'hex'), value: 100_000n })
+  return { sourceAddress, targetAddress, tx: psbt.toBase64() }
+}
 
 describe('getSwapKitQuote', () => {
   beforeEach(() => {
@@ -279,6 +305,67 @@ describe('getSwapKitQuote', () => {
     }
   )
 
+  it.each([
+    [Chain.Dogecoin, 'DOGE', 'PSBT_DOGE'],
+    [Chain.BitcoinCash, 'BCH', 'PSBT'],
+  ] as const)('requests and decodes a %s provider PSBT', async (chain, ticker, txType) => {
+    const fixture = makeLegacyPsbt(chain)
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        response({ routes: [{ routeId: 'legacy-route', providers: ['NEAR'], expectedBuyAmount: '0.01' }] })
+      )
+      .mockResolvedValueOnce(
+        response({ providers: ['NEAR'], targetAddress: fixture.targetAddress, meta: { txType }, tx: fixture.tx })
+      )
+    vi.stubGlobal('fetch', fetchMock)
+    configureSwapKit({ apiKey: 'test-key', baseUrl: 'https://swapkit.example' })
+
+    const quote = await getSwapKitQuote({
+      from: { chain, address: fixture.sourceAddress, ticker, decimals: 8 },
+      to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
+      amount: 100_000n,
+    })
+
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).disableBuildTx).toBeUndefined()
+    expect(quote.tx).toEqual({
+      transfer: {
+        to: fixture.targetAddress,
+        amount: 90_000n,
+        txType: chain === Chain.Dogecoin ? 'PSBT_DOGE' : 'PSBT_BCH',
+        txPayload: new Uint8Array(Buffer.from(fixture.tx, 'base64')),
+      },
+    })
+  })
+
+  it('requests and decodes a transparent Zcash provider PSBT', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        response({ routes: [{ routeId: 'zec-route', providers: ['NEAR'], expectedBuyAmount: '0.01' }] })
+      )
+      .mockResolvedValueOnce(
+        response({ providers: ['NEAR'], targetAddress: zecTargetAddress, meta: { txType: 'PSBT' }, tx: zecFixture.tx })
+      )
+    vi.stubGlobal('fetch', fetchMock)
+    configureSwapKit({ baseUrl: 'https://swapkit.example' })
+
+    const quote = await getSwapKitQuote({
+      from: { chain: Chain.Zcash, address: zecFixture.sourceAddress, ticker: 'ZEC', decimals: 8 },
+      to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
+      amount: zecPsbt.outputs[0].amount + 1n,
+    })
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).disableBuildTx).toBeUndefined()
+    expect(quote.tx).toEqual({
+      transfer: {
+        to: zecTargetAddress,
+        amount: zecPsbt.outputs[0].amount,
+        txType: 'PSBT_ZEC',
+        txPayload: new Uint8Array(Buffer.from(zecFixture.tx, 'base64')),
+      },
+    })
+  })
+
   const stubEvmRoute = ({ route, fees }: { route?: Record<string, unknown>; fees?: unknown[] } = {}) => {
     const fetchMock = vi
       .fn()
@@ -362,7 +449,9 @@ describe('getSwapKitQuote', () => {
         response({
           expectedBuyAmount: '144.49',
           providers: ['NEAR'],
-          targetAddress: 't1Deposit',
+          targetAddress: zecTargetAddress,
+          meta: { txType: 'PSBT' },
+          tx: zecFixture.tx,
           ...(fees ? { fees } : {}),
         })
       )
@@ -370,9 +459,9 @@ describe('getSwapKitQuote', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     return getSwapKitQuote({
-      from: { chain: Chain.Zcash, address: 't1Source', ticker: 'ZEC', decimals: 8 },
+      from: { chain: Chain.Zcash, address: zecFixture.sourceAddress, ticker: 'ZEC', decimals: 8 },
       to: { chain: Chain.Tron, address: 'TDestination', ticker: 'TRX', decimals: 6 },
-      amount: 9_332_136n,
+      amount: zecPsbt.outputs[0].amount + 1n,
     })
   }
 
@@ -403,7 +492,7 @@ describe('getSwapKitQuote', () => {
       fees: [{ type: 'affiliate', amount: '0.04', asset: 'ETH.ETH', chain: 'ETH' }],
     })
 
-    expect('transfer' in quote.tx && quote.tx.transfer.to).toBe('t1Deposit')
+    expect('transfer' in quote.tx && quote.tx.transfer.to).toBe(zecTargetAddress)
     expect('transfer' in quote.tx && quote.tx.transfer.swapFee).toBeUndefined()
   })
 
@@ -418,7 +507,7 @@ describe('getSwapKitQuote', () => {
       fees: [{ type: 'affiliate', amount, asset: 'ZEC.ZEC', chain: 'ZEC' }],
     })
 
-    expect('transfer' in quote.tx && quote.tx.transfer.to).toBe('t1Deposit')
+    expect('transfer' in quote.tx && quote.tx.transfer.to).toBe(zecTargetAddress)
     expect('transfer' in quote.tx && quote.tx.transfer.swapFee).toBeUndefined()
   })
 

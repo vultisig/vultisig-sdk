@@ -1220,6 +1220,16 @@
       "import": "./dist/chains/utxo/tx/getUtxos.js",
       "default": "./dist/chains/utxo/tx/getUtxos.js"
     },
+    "./chains/utxo/tx/p2pkhScriptForAddress": {
+      "types": "./dist/chains/utxo/tx/p2pkhScriptForAddress.d.ts",
+      "import": "./dist/chains/utxo/tx/p2pkhScriptForAddress.js",
+      "default": "./dist/chains/utxo/tx/p2pkhScriptForAddress.js"
+    },
+    "./chains/utxo/tx/parseSwapKitZcashPsbt": {
+      "types": "./dist/chains/utxo/tx/parseSwapKitZcashPsbt.d.ts",
+      "import": "./dist/chains/utxo/tx/parseSwapKitZcashPsbt.js",
+      "default": "./dist/chains/utxo/tx/parseSwapKitZcashPsbt.js"
+    },
     "./chains/utxo/tx/UtxoScriptType": {
       "types": "./dist/chains/utxo/tx/UtxoScriptType.d.ts",
       "import": "./dist/chains/utxo/tx/UtxoScriptType.js",

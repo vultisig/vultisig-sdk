@@ -51,7 +51,7 @@ export const getCompiledTxsForBlockaidInput = async ({ payload, walletCore }: In
       return result
     }, {})
 
-    return [compileSignBitcoinTx(payload.signData.value, signatures, publicKey)]
+    return [compileSignBitcoinTx(payload.signData.value, signatures, publicKey, chain)]
   }
 
   const inputs = await getEncodedSigningInputs({

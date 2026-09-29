@@ -135,11 +135,13 @@ const getRujiTradeFundAmount = (tx: CosmosWasmSwapTx, fromCoin: AccountCoin, eff
 }
 
 const isSwapKitBitcoinPsbt = (fromCoin: AccountCoin, transfer: TransferSwapTx) =>
-  fromCoin.chain === Chain.Bitcoin && transfer.txType?.toUpperCase() === 'PSBT'
+  (fromCoin.chain === Chain.Bitcoin && transfer.txType?.toUpperCase() === 'PSBT') ||
+  (fromCoin.chain === Chain.Dogecoin && ['PSBT', 'PSBT_DOGE'].includes(transfer.txType?.toUpperCase() ?? '')) ||
+  (fromCoin.chain === Chain.BitcoinCash && ['PSBT', 'PSBT_BCH'].includes(transfer.txType?.toUpperCase() ?? ''))
 
 const getSwapKitBitcoinSignData = (fromCoin: AccountCoin, transfer: TransferSwapTx): KeysignPayload['signData'] => {
   if (!isSwapKitBitcoinPsbt(fromCoin, transfer)) {
-    throw new Error('SwapKit Bitcoin transfer routes must include PSBT txType and txPayload.')
+    throw new Error(`SwapKit ${fromCoin.chain} transfer routes must include PSBT txType and txPayload.`)
   }
 
   if (!transfer.txPayload?.length) {
@@ -149,10 +151,12 @@ const getSwapKitBitcoinSignData = (fromCoin: AccountCoin, transfer: TransferSwap
   const signBitcoin = buildSignBitcoinFromPsbt({
     psbt: Psbt.fromBuffer(Buffer.from(transfer.txPayload)),
     senderAddress: fromCoin.address,
+    ...(fromCoin.chain === Chain.Dogecoin || fromCoin.chain === Chain.BitcoinCash ? { chain: fromCoin.chain } : {}),
   })
 
   verifySwapKitBitcoinPsbtOutputs({
     signBitcoin,
+    chain: fromCoin.chain,
     senderAddress: fromCoin.address,
     expectedToAddress: transfer.to,
     expectedToAmount: transfer.amount,
@@ -197,7 +201,7 @@ const getSwapKitSuiSignData = (transfer: TransferSwapTx): KeysignPayload['signDa
  * normal per-chain builder, so they get an empty `signData`.
  */
 const getSwapKitSignData = (fromCoin: AccountCoin, transfer: TransferSwapTx): KeysignPayload['signData'] => {
-  if (fromCoin.chain === Chain.Bitcoin) {
+  if (fromCoin.chain === Chain.Bitcoin || fromCoin.chain === Chain.Dogecoin || fromCoin.chain === Chain.BitcoinCash) {
     return getSwapKitBitcoinSignData(fromCoin, transfer)
   }
 

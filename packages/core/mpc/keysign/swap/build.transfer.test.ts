@@ -1,9 +1,12 @@
 import { Buffer } from 'buffer'
+import { readFileSync } from 'node:fs'
 import { create, fromBinary, toBinary } from '@bufbuild/protobuf'
 import { Chain } from '@vultisig/core-chain/Chain'
+import { parseSwapKitZcashPsbt } from '@vultisig/core-chain/chains/utxo/tx/parseSwapKitZcashPsbt'
 import { SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
 import { KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { networks, payments, Psbt } from 'bitcoinjs-lib'
+import bs58check from 'bs58check'
 import { describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -89,6 +92,45 @@ const makeBitcoinPsbtFixture = ({
 }
 
 describe('buildSwapKeysignPayload transfer routes', () => {
+  it('preserves a provider Zcash PSBT for the signing-input resolver', async () => {
+    const fixture = JSON.parse(
+      readFileSync(new URL('../../../chain/chains/utxo/tx/swapkit-zec-sapling.fixture.json', import.meta.url), 'utf8')
+    ) as {
+      sourceAddress: string
+      tx: string
+    }
+    const txPayload = Buffer.from(fixture.tx, 'base64')
+    const tx = parseSwapKitZcashPsbt(txPayload)
+    const to = bs58check.encode(Buffer.concat([Buffer.from([0x1c, 0xb8]), tx.outputs[0].scriptPubKey.subarray(3, 23)]))
+    const payload = await buildSwapKeysignPayload({
+      fromCoin: { chain: Chain.Zcash, address: fixture.sourceAddress, ticker: 'ZEC', decimals: 8 },
+      toCoin: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
+      amount: 1,
+      swapQuote: {
+        discounts: [],
+        quote: {
+          general: {
+            provider: 'swapkit',
+            dstAmount: '1',
+            routeProvider: 'NEAR',
+            tx: { transfer: { to, amount: tx.outputs[0].amount, txType: 'PSBT_ZEC', txPayload } },
+          },
+        },
+      },
+      vaultId: 'test-vault',
+      localPartyId: 'test-party',
+      fromPublicKey: publicKey,
+      toPublicKey: publicKey,
+      libType: 'DKLS',
+      walletCore: {} as never,
+    })
+    expect(payload.swapPayload.case).toBe('swapkitSwapPayload')
+    if (payload.swapPayload.case !== 'swapkitSwapPayload') return
+    expect(payload.swapPayload.value.txType).toBe('PSBT_ZEC')
+    expect(Buffer.from(payload.swapPayload.value.txPayload)).toEqual(txPayload)
+    expect(payload.signData.case).toBeUndefined()
+  })
+
   it('rejects Bitcoin SwapKit transfer routes without PSBT data', async () => {
     mocks.getChainSpecific.mockResolvedValueOnce({
       case: 'utxoSpecific',

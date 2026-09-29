@@ -1,5 +1,7 @@
 import { Buffer } from 'buffer'
+import { Chain } from '@vultisig/core-chain/Chain'
 import { sha256 } from '@noble/hashes/sha2.js'
+import { Transaction } from 'bitcoinjs-lib'
 
 import { SignBitcoin } from '../../../../types/vultisig/keysign/v1/wasm_execute_contract_payload_pb'
 
@@ -82,7 +84,7 @@ const serializeOutput = (amount: bigint, scriptPubKey: Buffer): Buffer =>
  *
  * @see https://github.com/bitcoin/bips/blob/master/bip-0143.mediawiki
  */
-export const computePreSigningHashes = (signBitcoin: SignBitcoin): Uint8Array[] => {
+export const computePreSigningHashes = (signBitcoin: SignBitcoin, chain: Chain = Chain.Bitcoin): Uint8Array[] => {
   const { version, locktime, inputs, outputs } = signBitcoin
 
   if (inputs.length === 0) {
@@ -92,6 +94,34 @@ export const computePreSigningHashes = (signBitcoin: SignBitcoin): Uint8Array[] 
   const oursCount = inputs.filter(i => i.isOurs).length
   if (oursCount === 0) {
     throw new Error('No signable inputs (all isOurs === false)')
+  }
+
+  if (chain === Chain.Dogecoin || chain === Chain.BitcoinCash) {
+    if (oursCount !== inputs.length) throw new Error('Legacy SwapKit PSBT contains an unsigned foreign input')
+    const tx = new Transaction()
+    tx.version = version
+    tx.locktime = locktime
+    inputs.forEach(input =>
+      tx.addInput(Buffer.from(input.hash, 'hex').reverse(), input.index, input.sequence ?? 0xffffffff)
+    )
+    outputs.forEach(output => tx.addOutput(Buffer.from(output.scriptPubKey, 'hex'), output.amount))
+    return inputs.map((input, index) => {
+      const expectedType = chain === Chain.BitcoinCash ? 0x41 : 1
+      if (input.sighashType !== expectedType || input.scriptType !== 'p2pkh') {
+        throw new Error(`Unsupported ${chain} legacy input sighash or script type`)
+      }
+      const script = Buffer.from(input.scriptPubKey, 'hex')
+      if (
+        script.length !== 25 ||
+        script.subarray(0, 3).toString('hex') !== '76a914' ||
+        script.subarray(23).toString('hex') !== '88ac'
+      ) {
+        throw new Error(`Invalid ${chain} P2PKH script`)
+      }
+      return chain === Chain.BitcoinCash
+        ? tx.hashForWitnessV0(index, script, input.amount, expectedType)
+        : tx.hashForSignature(index, script, expectedType)
+    })
   }
 
   // hashPrevouts = double_SHA256(all outpoints serialized)

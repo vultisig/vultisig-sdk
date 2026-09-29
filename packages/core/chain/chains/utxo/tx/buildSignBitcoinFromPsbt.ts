@@ -1,4 +1,5 @@
 import { create } from '@bufbuild/protobuf'
+import { Chain } from '@vultisig/core-chain/Chain'
 import {
   BitcoinInputSchema,
   BitcoinOutputSchema,
@@ -6,6 +7,8 @@ import {
   SignBitcoinSchema,
 } from '@vultisig/mpc-types/types/vultisig/keysign/v1/wasm_execute_contract_payload_pb'
 import { address as btcAddress, Network, networks, opcodes, Psbt, script as bscript, Transaction } from 'bitcoinjs-lib'
+
+import { p2pkhScriptForAddress } from './p2pkhScriptForAddress'
 
 /** Supported script types for PSBT decomposition. */
 type ScriptType = 'p2wpkh' | 'p2sh-p2wpkh' | 'p2pkh' | 'p2tr' | 'p2wsh' | 'unknown'
@@ -73,6 +76,8 @@ const getOpReturnHex = (script: Buffer): string | undefined => {
 type BuildSignBitcoinFromPsbtInput = {
   psbt: Psbt
   senderAddress: string
+  /** Omitted for the existing Bitcoin witness path. */
+  chain?: Chain
   /** Bitcoin network for address decoding. Defaults to mainnet. */
   network?: Network
 }
@@ -90,8 +95,16 @@ type BuildSignBitcoinFromPsbtInput = {
 export const buildSignBitcoinFromPsbt = ({
   psbt,
   senderAddress,
+  chain,
   network = networks.bitcoin,
 }: BuildSignBitcoinFromPsbtInput): SignBitcoin => {
+  if (chain && chain !== Chain.Dogecoin && chain !== Chain.BitcoinCash) {
+    throw new Error(`Unsupported legacy SwapKit PSBT source chain: ${chain}`)
+  }
+  if (chain && psbt.version !== 1 && psbt.version !== 2) {
+    throw new Error(`Unsupported legacy SwapKit PSBT version: ${psbt.version}`)
+  }
+  const senderScript = chain ? p2pkhScriptForAddress(chain, senderAddress) : undefined
   // Compute anyInputHasBip32 once (not per-input) for O(n) ownership detection
   const anyInputHasBip32 = psbt.data.inputs.some(
     inp =>
@@ -101,6 +114,21 @@ export const buildSignBitcoinFromPsbt = ({
 
   const inputs = psbt.txInputs.map((txInput, i) => {
     const inputData = psbt.data.inputs[i]
+
+    if (
+      chain &&
+      (inputData.redeemScript ||
+        inputData.witnessScript ||
+        inputData.finalScriptSig ||
+        inputData.finalScriptWitness ||
+        inputData.partialSig?.length)
+    ) {
+      throw new Error(`Input #${i}: unsupported pre-signed or non-P2PKH SwapKit PSBT input`)
+    }
+
+    if (chain && !inputData.nonWitnessUtxo) {
+      throw new Error(`Input #${i}: legacy SwapKit PSBT requires nonWitnessUtxo`)
+    }
 
     // Prefer witnessUtxo; fall back to nonWitnessUtxo (full prev tx)
     let scriptPubKey: Buffer
@@ -125,15 +153,17 @@ export const buildSignBitcoinFromPsbt = ({
           )
         }
         const prevOutput = prevTx.outs[txInput.index]
-        if (prevOutput && BigInt(prevOutput.value) !== inputValue) {
-          throw new Error(
-            `Input #${i}: witnessUtxo value (${inputValue}) does not match ` +
-              `nonWitnessUtxo value (${prevOutput.value}) - possible fee snipe`
-          )
+        if (!prevOutput) throw new Error(`Input #${i}: nonWitnessUtxo has no output at index ${txInput.index}`)
+        if (BigInt(prevOutput.value) !== inputValue || !Buffer.from(prevOutput.script).equals(scriptPubKey)) {
+          throw new Error(`Input #${i}: witnessUtxo does not match nonWitnessUtxo prevout - possible fee snipe`)
         }
       }
     } else if (inputData.nonWitnessUtxo) {
       const prevTx = Transaction.fromBuffer(Buffer.from(inputData.nonWitnessUtxo))
+      const expectedTxId = Buffer.from(txInput.hash).reverse().toString('hex')
+      if (prevTx.getId() !== expectedTxId) {
+        throw new Error(`Input #${i}: nonWitnessUtxo txid does not match input prevout`)
+      }
       const prevOutput = prevTx.outs[txInput.index]
       if (!prevOutput) {
         throw new Error(`Input #${i}: nonWitnessUtxo has no output at index ${txInput.index}`)
@@ -149,15 +179,18 @@ export const buildSignBitcoinFromPsbt = ({
     }
 
     const scriptType = detectScriptType(scriptPubKey, inputData.redeemScript)
+    if (chain && (scriptType !== 'p2pkh' || !senderScript || !scriptPubKey.equals(senderScript))) {
+      throw new Error(`Input #${i}: legacy SwapKit PSBT input is not the vault's P2PKH script`)
+    }
 
     // Fail early for unsupported script types rather than at sighash time.
     // This gives a clearer error at decomposition time.
     const hasBip32 =
       (inputData.bip32Derivation && inputData.bip32Derivation.length > 0) ||
       (inputData.tapBip32Derivation && inputData.tapBip32Derivation.length > 0)
-    const isOurs = anyInputHasBip32 ? !!hasBip32 : true
+    const isOurs = chain ? true : anyInputHasBip32 ? !!hasBip32 : true
 
-    if (isOurs && !SUPPORTED_SCRIPT_TYPES.has(scriptType)) {
+    if (isOurs && !chain && !SUPPORTED_SCRIPT_TYPES.has(scriptType)) {
       const hints: Record<string, string> = {
         p2tr: 'P2TR (Taproot) requires BIP-341 sighash. See https://github.com/bitcoin/bips/blob/master/bip-0341.mediawiki',
         p2pkh: 'P2PKH (legacy) requires legacy sighash, not BIP-143.',
@@ -167,7 +200,10 @@ export const buildSignBitcoinFromPsbt = ({
       throw new Error(`Input #${i}: unsupported script type '${scriptType}' for signing. ${hints[scriptType] ?? ''}`)
     }
 
-    const sighashType = inputData.sighashType ?? 1 // SIGHASH_ALL
+    const sighashType = inputData.sighashType ?? (chain === Chain.BitcoinCash ? 0x41 : 1)
+    if (chain && sighashType !== (chain === Chain.BitcoinCash ? 0x41 : 1)) {
+      throw new Error(`Input #${i}: unsupported legacy SwapKit sighash type 0x${sighashType.toString(16)}`)
+    }
 
     const redeemScript = inputData.redeemScript ? Buffer.from(inputData.redeemScript).toString('hex') : undefined
 
@@ -207,7 +243,7 @@ export const buildSignBitcoinFromPsbt = ({
       address: outputAddress,
       opReturnData: opReturn ? getOpReturnHex(script) : undefined,
       scriptPubKey: script.toString('hex'),
-      isChange: outputAddress !== '' && outputAddress === senderAddress,
+      isChange: senderScript ? script.equals(senderScript) : outputAddress !== '' && outputAddress === senderAddress,
     })
   })
 

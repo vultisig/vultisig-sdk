@@ -1,12 +1,19 @@
 import { Buffer } from 'buffer'
 import { toBinary } from '@bufbuild/protobuf'
+import { Chain } from '@vultisig/core-chain/Chain'
 import { ChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
+import {
+  parseSwapKitZcashPsbt,
+  verifySwapKitZcashPrevouts,
+} from '@vultisig/core-chain/chains/utxo/tx/parseSwapKitZcashPsbt'
 import { KeysignPayload, KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
-import { WalletCore } from '@trustwallet/wallet-core'
+import { TW, WalletCore } from '@trustwallet/wallet-core'
+import { crypto } from 'bitcoinjs-lib'
 import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
 
 import { getKeysignTonGasless } from '../ton/gasless'
 import { getKeysignChain } from '../utils/getKeysignChain'
+import { assertLegacySwapKitSigningKey, getSwapKitSignBitcoin } from '../../tx/swapkitSignBitcoin'
 import { signingInputClasses } from './core'
 import { SigningInputsResolver } from './resolver'
 import { getBittensorSigningInputs } from './resolvers/bittensor'
@@ -21,6 +28,7 @@ import { getSuiSigningInputs } from './resolvers/sui'
 import { getTonSigningInputs } from './resolvers/ton'
 import { getTronSigningInputs } from './resolvers/tron'
 import { getUtxoSigningInputs } from './resolvers/utxo'
+import { buildSwapKitZcashSigningInput, isSwapKitZcashPsbt } from './resolvers/swapkitZcash'
 
 type Input = {
   keysignPayload: KeysignPayload
@@ -47,6 +55,38 @@ export const signingInputResolversByChainKind: Record<ChainKind, SigningInputsRe
 export const getEncodedSigningInputs = async (input: Input): Promise<Uint8Array[]> => {
   const chain = getKeysignChain(input.keysignPayload)
   const chainKind = getChainKind(chain)
+
+  const signBitcoin = getSwapKitSignBitcoin(input.keysignPayload)
+  if (signBitcoin) {
+    if (chain === Chain.Dogecoin || chain === Chain.BitcoinCash) {
+      if (!input.publicKey) throw new Error('SwapKit legacy PSBT requires the vault signing public key.')
+      assertLegacySwapKitSigningKey(signBitcoin, input.publicKey.data())
+    }
+    return [toBinary(KeysignPayloadSchema, input.keysignPayload)]
+  }
+
+  if (
+    chain === Chain.Zcash &&
+    input.keysignPayload.swapPayload.case === 'swapkitSwapPayload' &&
+    input.keysignPayload.swapPayload.value.txPayload.length > 0 &&
+    !isSwapKitZcashPsbt(input.keysignPayload)
+  ) {
+    throw new Error('Unsupported SwapKit Zcash transaction type.')
+  }
+
+  if (isSwapKitZcashPsbt(input.keysignPayload)) {
+    if (!input.publicKey || input.keysignPayload.swapPayload.case !== 'swapkitSwapPayload') {
+      throw new Error('SwapKit Zcash PSBT requires the vault signing public key and payload.')
+    }
+    const tx = parseSwapKitZcashPsbt(input.keysignPayload.swapPayload.value.txPayload)
+    const keyHash = Buffer.from(crypto.hash160(Buffer.from(input.publicKey.data())))
+    if (tx.inputs.some(prevout => !prevout.scriptPubKey.subarray(3, 23).equals(keyHash))) {
+      throw new Error('SwapKit Zcash PSBT input does not belong to the vault signing public key.')
+    }
+    await verifySwapKitZcashPrevouts(tx)
+    const signingInput = await buildSwapKitZcashSigningInput(input.keysignPayload, input.walletCore)
+    return [TW.Bitcoin.Proto.SigningInput.encode(signingInput).finish()]
+  }
 
   // dApp-supplied raw Solana transactions bypass TW SigningInput entirely
   // (sdk#1204): the txInputData IS the original serialized transaction, and

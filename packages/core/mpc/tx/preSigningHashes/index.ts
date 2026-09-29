@@ -32,7 +32,7 @@ export const getPreSigningHashes = ({ walletCore, txInputData, chain, keysignPay
   // Sort the public ceremony hashes for deterministic cross-platform order;
   // final PSBT assembly still maps signatures by hash and preserves input order.
   if (signBitcoin) {
-    return sortHashes(computePreSigningHashes(signBitcoin))
+    return sortHashes(computePreSigningHashes(signBitcoin, chain))
   }
 
   if (chain === Chain.QBTC) {

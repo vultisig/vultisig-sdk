@@ -2,6 +2,8 @@ import { base64Decode } from '@bufbuild/protobuf/wire'
 import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { areEqualTonAddresses, tonAddressToBounceable } from '@vultisig/core-chain/chains/ton/address'
+import { p2pkhScriptForAddress } from '@vultisig/core-chain/chains/utxo/tx/p2pkhScriptForAddress'
+import { parseSwapKitZcashPsbt } from '@vultisig/core-chain/chains/utxo/tx/parseSwapKitZcashPsbt'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { usdc } from '@vultisig/core-chain/coin/knownTokens'
@@ -708,7 +710,13 @@ const shouldUseTransferTx = (chain: SwapKitSourceChain): chain is (typeof swapKi
 // remaining transfer chains are deposit-only (TON/XRP/ADA style) — they need
 // nothing but an address, so skipping the build saves a pointless server-side
 // construction that can fail on balance checks.
-const swapKitPrebuiltTxSourceChains: ReadonlySet<SwapKitSourceChain> = new Set([Chain.Bitcoin, Chain.Sui])
+const swapKitPrebuiltTxSourceChains: ReadonlySet<SwapKitSourceChain> = new Set([
+  Chain.Bitcoin,
+  Chain.Dogecoin,
+  Chain.BitcoinCash,
+  Chain.Zcash,
+  Chain.Sui,
+])
 
 const textEncoder = new TextEncoder()
 
@@ -739,7 +747,7 @@ const encodeSwapKitTxPayload = (tx: unknown, txType?: string): Uint8Array => {
   }
 
   if (typeof tx === 'string') {
-    if (normalizedTxType === 'PSBT' || normalizedTxType === 'SUI') {
+    if (normalizedTxType === 'PSBT' || normalizedTxType?.startsWith('PSBT_') || normalizedTxType === 'SUI') {
       return base64Decode(tx)
     }
 
@@ -751,17 +759,25 @@ const encodeSwapKitTxPayload = (tx: unknown, txType?: string): Uint8Array => {
 
 const getBitcoinPsbtDestinationAmount = ({
   txPayload,
+  chain,
   senderAddress,
   targetAddress,
 }: {
   txPayload: Uint8Array
+  chain: Chain
   senderAddress: string
   targetAddress: string
 }): bigint | undefined => {
   try {
     const psbt = Psbt.fromBuffer(Buffer.from(txPayload))
-    const senderScript = Buffer.from(btcAddress.toOutputScript(senderAddress, networks.bitcoin))
-    const targetScript = Buffer.from(btcAddress.toOutputScript(targetAddress, networks.bitcoin))
+    const senderScript =
+      chain === Chain.Bitcoin
+        ? Buffer.from(btcAddress.toOutputScript(senderAddress, networks.bitcoin))
+        : p2pkhScriptForAddress(chain, senderAddress)
+    const targetScript =
+      chain === Chain.Bitcoin
+        ? Buffer.from(btcAddress.toOutputScript(targetAddress, networks.bitcoin))
+        : p2pkhScriptForAddress(chain, targetAddress)
     const destinationOutputs = psbt.txOutputs.filter(({ script }) => {
       const outputScript = Buffer.from(script)
 
@@ -769,6 +785,28 @@ const getBitcoinPsbtDestinationAmount = ({
     })
 
     return destinationOutputs.length === 1 ? BigInt(destinationOutputs[0].value) : undefined
+  } catch {
+    return undefined
+  }
+}
+
+const getZcashPsbtDestinationAmount = (
+  txPayload: Uint8Array,
+  senderAddress: string,
+  targetAddress: string
+): bigint | undefined => {
+  try {
+    const tx = parseSwapKitZcashPsbt(txPayload)
+    const senderScript = p2pkhScriptForAddress(Chain.Zcash, senderAddress)
+    const targetScript = p2pkhScriptForAddress(Chain.Zcash, targetAddress)
+    if (
+      tx.outputs.length > 2 ||
+      tx.outputs[0].amount <= 0n ||
+      !tx.outputs[0].scriptPubKey.equals(targetScript) ||
+      (tx.outputs.length === 2 && !tx.outputs[1].scriptPubKey.equals(senderScript))
+    )
+      return undefined
+    return tx.outputs[0].amount
   } catch {
     return undefined
   }
@@ -811,17 +849,46 @@ const buildTransferTx = ({
   // `SwapKitSwapPayload.txType` byte-identical to what iOS stamps
   // (`buildSwapKitSuiPayload` hardcodes `"SUI"`) — cosigning peers must agree.
   const wireTxType = response.meta?.txType
-  const txType = from.chain === Chain.Sui ? 'SUI' : wireTxType
+  const txType =
+    from.chain === Chain.Sui
+      ? 'SUI'
+      : from.chain === Chain.Dogecoin
+        ? 'PSBT_DOGE'
+        : from.chain === Chain.BitcoinCash
+          ? 'PSBT_BCH'
+          : from.chain === Chain.Zcash
+            ? 'PSBT_ZEC'
+            : wireTxType
 
   if (from.chain === Chain.Sui && response.tx !== undefined && typeof response.tx !== 'string') {
     throw new Error('SwapKit Sui route did not return a base64 programmable transaction block.')
   }
 
   const txPayload = response.tx ? encodeSwapKitTxPayload(response.tx, txType) : undefined
+  const expectsPsbt = from.chain === Chain.Dogecoin || from.chain === Chain.BitcoinCash || from.chain === Chain.Zcash
+  const expectedTxTypes: Record<string, string[]> = {
+    [Chain.Bitcoin]: ['PSBT'],
+    [Chain.Dogecoin]: ['PSBT', 'PSBT_DOGE'],
+    [Chain.BitcoinCash]: ['PSBT', 'PSBT_BCH'],
+    [Chain.Zcash]: ['PSBT', 'PSBT_ZEC'],
+  }
+  if (expectsPsbt && (!expectedTxTypes[from.chain]?.includes(wireTxType?.toUpperCase() ?? '') || !txPayload?.length)) {
+    throw new Error(`SwapKit ${from.chain} route did not return a PSBT transaction.`)
+  }
   const psbtDestinationAmount =
-    from.chain === Chain.Bitcoin && txType?.toUpperCase() === 'PSBT' && txPayload?.length
-      ? getBitcoinPsbtDestinationAmount({ txPayload, senderAddress: from.address, targetAddress: to })
-      : undefined
+    from.chain === Chain.Zcash && txPayload?.length
+      ? getZcashPsbtDestinationAmount(txPayload, from.address, to)
+      : (expectsPsbt || (from.chain === Chain.Bitcoin && txType?.toUpperCase() === 'PSBT')) && txPayload?.length
+        ? getBitcoinPsbtDestinationAmount({
+            txPayload,
+            chain: from.chain,
+            senderAddress: from.address,
+            targetAddress: to,
+          })
+        : undefined
+  if (expectsPsbt && (psbtDestinationAmount === undefined || psbtDestinationAmount > amount)) {
+    throw new Error(`SwapKit ${from.chain} PSBT destination amount is missing or exceeds the quoted source amount.`)
+  }
 
   // Same fee the EVM branch surfaces, and absent on the same terms: a zero or
   // unresolved amount is reported as no fee rather than as a fee of nothing.
