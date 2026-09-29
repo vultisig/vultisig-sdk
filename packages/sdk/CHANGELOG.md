@@ -1,5 +1,11 @@
 # @vultisig/sdk
 
+## 8.1.2
+
+### Patch Changes
+
+- [#2469](https://github.com/vultisig/vultisig-sdk/pull/2469) [`04b519b`](https://github.com/vultisig/vultisig-sdk/commit/04b519b60b11f515bff02f6caa47d5d5cf4df832) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reduce the SDK install size by sharing generated runtime and declaration chunks and omitting source maps from the npm package. Public import paths and APIs remain unchanged.
+
 ## 8.1.1
 
 ### Patch Changes

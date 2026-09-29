@@ -10,6 +10,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parseAst } from 'rollup/parseAst'
 
 import { createDisposableYarnEnv } from './quality-contracts-cache.mjs'
+import { inventoryExtractedPackage, validateNoEmbeddedSourceMaps, validateSdkPackSize } from './sdk-package-size.mjs'
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(scriptDir, '..')
@@ -881,6 +882,11 @@ export async function checkSdkPackageExports({
       'packed SDK exports must match packages/sdk/package.json'
     )
 
+    // Measure every extracted file, including files npm would omit on repack.
+    const extractedPackage = inventoryExtractedPackage(packageRoot)
+    const unpackedSize = validateSdkPackSize(extractedPackage)
+    validateNoEmbeddedSourceMaps(packageRoot, extractedPackage[0].files)
+    console.log(`SDK package size OK: ${unpackedSize} unpacked bytes; no source maps`)
     const targets = validatePackedExportTargets(sourceManifest, packageRoot)
     validatePackedReactNativePublicHelpers(packageRoot)
     validatePackedReactNativeRuntimeExports(packageRoot)
