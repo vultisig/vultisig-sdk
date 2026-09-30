@@ -5,7 +5,7 @@ import { promises as fs } from 'node:fs'
 
 import { descriptions } from '@vultisig/client-shared'
 import type { FiatCurrency, VaultBase } from '@vultisig/sdk'
-import { Chain, parseKeygenQR, Vultisig } from '@vultisig/sdk'
+import { Chain, parseKeygenQR, SEEDPHRASE_WORD_COUNTS, Vultisig } from '@vultisig/sdk'
 import chalk from 'chalk'
 import { InvalidArgumentError, program } from 'commander'
 
@@ -382,7 +382,7 @@ const createFromSeedphraseCmd = program
  */
 async function promptSeedphrase(): Promise<string> {
   requireInteractive('Use --mnemonic flag to provide seedphrase non-interactively.')
-  info('\nEnter your 12 or 24-word recovery phrase.')
+  info('\nEnter your 12, 15, 18, 21 or 24-word recovery phrase.')
   info('Words will be hidden as you type.\n')
 
   const answer = await prompt([
@@ -393,8 +393,8 @@ async function promptSeedphrase(): Promise<string> {
       mask: '*',
       validate: (input: string) => {
         const words = input.trim().split(/\s+/)
-        if (words.length !== 12 && words.length !== 24) {
-          return `Expected 12 or 24 words, got ${words.length}`
+        if (!SEEDPHRASE_WORD_COUNTS.some(count => count === words.length)) {
+          return `Expected 12, 15, 18, 21 or 24 words, got ${words.length}`
         }
         return true
       },
@@ -437,7 +437,7 @@ createFromSeedphraseCmd
   .requiredOption('--name <name>', 'Vault name')
   .requiredOption('--password <password>', 'Vault password')
   .requiredOption('--email <email>', 'Email for verification')
-  .option('--mnemonic <words>', 'Seedphrase (12 or 24 words, space-separated)')
+  .option('--mnemonic <words>', 'Seedphrase (12, 15, 18, 21 or 24 words, space-separated)')
   .option('--discover-chains', 'Scan chains for existing balances')
   .option('--chains <chains>', 'Specific chains to enable (comma-separated)')
   .option('--use-phantom-solana-path', 'Use Phantom wallet derivation path for Solana')
@@ -496,7 +496,7 @@ createFromSeedphraseCmd
   .option('--password <password>', 'Vault password (optional)')
   .option('--threshold <m>', 'Signing threshold', '2')
   .option('--shares <n>', 'Total shares', '3')
-  .option('--mnemonic <words>', 'Seedphrase (12 or 24 words)')
+  .option('--mnemonic <words>', 'Seedphrase (12, 15, 18, 21 or 24 words)')
   .option('--discover-chains', 'Scan chains for existing balances')
   .option('--chains <chains>', 'Specific chains to enable (comma-separated)')
   .option('--use-phantom-solana-path', 'Use Phantom wallet derivation path for Solana')
@@ -1016,7 +1016,7 @@ Examples:
 program
   .command('portfolio')
   .description(descriptions.portfolio.description)
-  .option('-c, --currency <currency>', 'Fiat currency (usd, eur, gbp, etc.)', 'usd')
+  .option('-c, --currency <currency>', 'Fiat currency (usd, eur, gbp, etc.)')
   .option('--raw', 'Show raw values (wei/satoshis) for programmatic use')
   .addHelpText(
     'after',
@@ -1026,10 +1026,10 @@ Examples:
   vultisig portfolio --currency eur --output json`
   )
   .action(
-    withExit(async (options: { currency: string; raw?: boolean }) => {
+    withExit(async (options: { currency?: string; raw?: boolean }) => {
       const context = await init(program.opts().vault)
       await executePortfolio(context, {
-        currency: options.currency.toLowerCase() as FiatCurrency,
+        currency: options.currency?.toLowerCase() as FiatCurrency | undefined,
         raw: options.raw,
       })
     })

@@ -1,5 +1,22 @@
 # @vultisig/core-mpc
 
+## 5.0.3
+
+### Patch Changes
+
+- [#2467](https://github.com/vultisig/vultisig-sdk/pull/2467) [`d83a5b0`](https://github.com/vultisig/vultisig-sdk/commit/d83a5b0c31f5d8f5ca8ecd6e586e16424596bed3) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Bitcoin PSBT keysigns (SwapKit BTC swaps and `signBitcoin` payloads) now broadcast the signed transaction and report its txid. The compiled output left `signingResultV2.encoded` and `txid` unset, and the UTXO broadcast resolver took the resulting empty bytes over the real transaction, posting `{"data":""}` to Blockchair and resolving an empty hash.
+
+- [#2471](https://github.com/vultisig/vultisig-sdk/pull/2471) [`f49cbb0`](https://github.com/vultisig/vultisig-sdk/commit/f49cbb05cd20c6aa3411aa84ba8a09fc89284f07) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - A SwapKit Bitcoin PSBT carrying an input this vault cannot sign is now refused before the keysign ceremony, on the initiator and on every co-signer. `compileSignBitcoinTx` gives such an input an empty witness and still returns a complete-looking transaction, so the route signed it, broadcast it and let the network reject it after the user had already approved. Every input is checked against the vault's own address rather than the PSBT's `isOurs` flag, which `buildSignBitcoinFromPsbt` derives from BIP-32 data and defaults to true for every input when a PSBT carries none. The dApp `signPsbt` route is unaffected: its PSBTs may legitimately hold inputs owned by someone else and are returned partially signed rather than broadcast.
+
+- [#2465](https://github.com/vultisig/vultisig-sdk/pull/2465) [`faffc26`](https://github.com/vultisig/vultisig-sdk/commit/faffc266efae199d638ae6bf8d45009896fcbee3) Thanks [@neavra](https://github.com/neavra)! - UTXO sends (Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash, Zcash) whose recipient amount is below the chain's static dust floor are now refused before signing with the minimum named in the error; fee-rate-dependent dust rejections above that floor instead explain that the current network dust threshold requires a larger amount. Additionally, a UTXO transaction plan that fails (dust, insufficient funds, or any other planner error) now fails authoritatively with that error instead of being retried as a send-max transaction, and deterministic dust or balance failures surface to CLI consumers as invalid input. Max-send and max-swap fee estimates now request a max spend explicitly instead of relying on the removed retry.
+
+  An amount above the available balance now fails with an insufficient-balance error instead of being planned as a max spend.
+
+  A non-max UTXO request is never converted to a max spend; a small remainder is left to WalletCore's dust handling.
+
+- Updated dependencies [[`341f5ec`](https://github.com/vultisig/vultisig-sdk/commit/341f5ec2793e5b91ba69410bf35d82833f104632), [`d83a5b0`](https://github.com/vultisig/vultisig-sdk/commit/d83a5b0c31f5d8f5ca8ecd6e586e16424596bed3), [`16b5a78`](https://github.com/vultisig/vultisig-sdk/commit/16b5a7860dce8a5bacf4759ff0260073c8cfb3e7), [`faffc26`](https://github.com/vultisig/vultisig-sdk/commit/faffc266efae199d638ae6bf8d45009896fcbee3)]:
+  - @vultisig/core-chain@6.1.3
+
 ## 5.0.2
 
 ### Patch Changes

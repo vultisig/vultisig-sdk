@@ -987,27 +987,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@balancer-labs/balancer-maths@npm:0.0.40":
-  version: 0.0.40
-  resolution: "@balancer-labs/balancer-maths@npm:0.0.40"
-  checksum: 10c0/93825190a2d071651570fb64af7a77c7117f8c741bac847fbac0cfbcd46ea489e68d423be674f3cd680a3304ccf0a3921a4ab01777f3de4f540811f365f2af44
-  languageName: node
-  linkType: hard
-
 "@balancer-labs/balancer-maths@npm:^0.0.41":
   version: 0.0.41
   resolution: "@balancer-labs/balancer-maths@npm:0.0.41"
   checksum: 10c0/16047da9886aec33ab5f3998f82c9d82baa115dcc95d0a6a5163b1188d2e65655d020905630e6454d9521879109f2087542c194ad8c5304d92dd9edbb89e2946
-  languageName: node
-  linkType: hard
-
-"@balancer/sdk@npm:6.1.1":
-  version: 6.1.1
-  resolution: "@balancer/sdk@npm:6.1.1"
-  dependencies:
-    "@balancer-labs/balancer-maths": "npm:0.0.40"
-    viem: "npm:2.51.3"
-  checksum: 10c0/2c1fd7048231642226285526356b7fc06bf5012c95a65e8b8f3da683345f495301f7963d712bd8881c67d337913d0da9b22a3ec84f19c945e37b612cc69688e4
   languageName: node
   linkType: hard
 
@@ -2527,17 +2510,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@formatjs/bigdecimal@npm:0.2.6":
-  version: 0.2.6
-  resolution: "@formatjs/bigdecimal@npm:0.2.6"
-  checksum: 10c0/8e39a52ffd77bb6ed877e044d16a8dc4282ab940b0d10caeaf94ba7db9a0b56e7440fc56caee369915d5614cff2116cb6ad46a199a53f2caa1b3b1735f808307
-  languageName: node
-  linkType: hard
-
-"@formatjs/fast-memoize@npm:3.1.6":
-  version: 3.1.6
-  resolution: "@formatjs/fast-memoize@npm:3.1.6"
-  checksum: 10c0/6cac8413b09aa4771edd98a52d46a9adc2f02e8bce8756a2abbd1eea2cf977757ffbb4bc1b33b6c17092739cd0c33351dffa0ea58b22e431b9754a34e46fe093
+"@formatjs/bigdecimal@npm:0.2.7":
+  version: 0.2.7
+  resolution: "@formatjs/bigdecimal@npm:0.2.7"
+  checksum: 10c0/9583a4d615553d1353284d0f66d30b6d7ab54b8d57c50f14d42db5fa48029b01c26ac7705b493c4bde716fcffbaee4d2f3cfcb6550d6c111e3a33bcc61cc719a
   languageName: node
   linkType: hard
 
@@ -2548,58 +2524,58 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@formatjs/intl-getcanonicallocales@npm:3.2.11, @formatjs/intl-getcanonicallocales@npm:^3.2.11":
-  version: 3.2.11
-  resolution: "@formatjs/intl-getcanonicallocales@npm:3.2.11"
-  checksum: 10c0/8083c055fc4c86e307a70266f06489745e1e17f44539a5742023a5224ed6672b513905d2f1acab4b13f586e70a9416f8eb53cb4ac9eafb149a5e6055a2f96db2
+"@formatjs/intl-getcanonicallocales@npm:3.2.12, @formatjs/intl-getcanonicallocales@npm:^3.2.12":
+  version: 3.2.12
+  resolution: "@formatjs/intl-getcanonicallocales@npm:3.2.12"
+  checksum: 10c0/355adbf5830e62e8d2f36d59cbd227480680458d2da7e5795dc047da4afc81fa7b76389e9645b5561f3a3481a7f8921c5f95c13c372d47e2ea00080cf6c3c93d
   languageName: node
   linkType: hard
 
-"@formatjs/intl-locale@npm:^5.3.10":
-  version: 5.3.10
-  resolution: "@formatjs/intl-locale@npm:5.3.10"
+"@formatjs/intl-locale@npm:5.3.11":
+  version: 5.3.11
+  resolution: "@formatjs/intl-locale@npm:5.3.11"
   dependencies:
-    "@formatjs/intl-getcanonicallocales": "npm:3.2.11"
-    "@formatjs/intl-supportedvaluesof": "npm:2.3.9"
-  checksum: 10c0/b2de54b5ff032b968b427ac65d45e6a0aca8aadb291819a61d4a12596c8782922d279a49eacd3d1c8c07b446127948f122f9420eb41741aee3076ca553514a6c
+    "@formatjs/intl-getcanonicallocales": "npm:3.2.12"
+    "@formatjs/intl-supportedvaluesof": "npm:2.3.10"
+  checksum: 10c0/111072e4b80ab84d59a64de1e7b536c60aa8ada3e424f08d46c86e41af1cf246e8014990fcb04138bdc6b1a8725124df95baf7ce4d7eabdf9845d8897f7450b4
   languageName: node
   linkType: hard
 
-"@formatjs/intl-localematcher@npm:0.8.10":
-  version: 0.8.10
-  resolution: "@formatjs/intl-localematcher@npm:0.8.10"
-  dependencies:
-    "@formatjs/fast-memoize": "npm:3.1.6"
-  checksum: 10c0/49a38b45d618de0ce857d62208e41af4c043a90d739a10828cb0a1e57c88c1ad28c27905ce57246ae5aa1c66834276a42665320d8294b01607d0e46b229d4a71
-  languageName: node
-  linkType: hard
-
-"@formatjs/intl-numberformat@npm:^9.3.11":
-  version: 9.3.11
-  resolution: "@formatjs/intl-numberformat@npm:9.3.11"
-  dependencies:
-    "@formatjs/bigdecimal": "npm:0.2.6"
-    "@formatjs/intl-localematcher": "npm:0.8.10"
-  checksum: 10c0/645864cff17f650488e69c68c1206889f09fde52c57445c5d9d049a5737d420a99d2e827f002e1f65c856694d9e945f61c92840444f0c6486b55cbd6980a59b5
-  languageName: node
-  linkType: hard
-
-"@formatjs/intl-pluralrules@npm:^6.3.10":
-  version: 6.3.10
-  resolution: "@formatjs/intl-pluralrules@npm:6.3.10"
-  dependencies:
-    "@formatjs/bigdecimal": "npm:0.2.6"
-    "@formatjs/intl-localematcher": "npm:0.8.10"
-  checksum: 10c0/136d1af6531ab30f6acbe548abe995b841bbf3eb331a83e09f22aebb9f0654fbbb94b3cd872a412e796cba278a8c45efe501a3cdd3303bc7fde5e535ffc8614a
-  languageName: node
-  linkType: hard
-
-"@formatjs/intl-supportedvaluesof@npm:2.3.9":
-  version: 2.3.9
-  resolution: "@formatjs/intl-supportedvaluesof@npm:2.3.9"
+"@formatjs/intl-localematcher@npm:0.9.0":
+  version: 0.9.0
+  resolution: "@formatjs/intl-localematcher@npm:0.9.0"
   dependencies:
     "@formatjs/fast-memoize": "npm:3.1.7"
-  checksum: 10c0/7b3d8fe5c16e9c7d93ee34161cda4a91facad7c9dc33d0e8cf22c3acd6a09b405d98ea838473c290bc8fcc2053e3358b0874a5e9f88336c2c3c50b9e4e7f4cdc
+  checksum: 10c0/02020d68e9295ac4fdde953f34b1496c030ac8e8a712779c1112257a3b90d0cd2dd44de0cba6719884133a64ff1bcb23cce71086473f2fb4778d8a690be0f343
+  languageName: node
+  linkType: hard
+
+"@formatjs/intl-numberformat@npm:^9.4.3":
+  version: 9.4.3
+  resolution: "@formatjs/intl-numberformat@npm:9.4.3"
+  dependencies:
+    "@formatjs/bigdecimal": "npm:0.2.7"
+    "@formatjs/intl-localematcher": "npm:0.9.0"
+  checksum: 10c0/6301b6d15c3ec254eb5636f4715932eb6593ba536204aab5a33d83c439ecee6ae8185f0326e4fc2eb86225e5199c0f2e70c7d36472c7898eca82a68db542dfba
+  languageName: node
+  linkType: hard
+
+"@formatjs/intl-pluralrules@npm:^6.3.15":
+  version: 6.3.15
+  resolution: "@formatjs/intl-pluralrules@npm:6.3.15"
+  dependencies:
+    "@formatjs/bigdecimal": "npm:0.2.7"
+    "@formatjs/intl-localematcher": "npm:0.9.0"
+  checksum: 10c0/84490a4701225ba9dd230dbab498067af65a40ef71387991a5c333683fbb86d8f958ccc1ef2354bebe2ee8b446efa9ad28a5655b75a03ad5e610f9394ba9ce43
+  languageName: node
+  linkType: hard
+
+"@formatjs/intl-supportedvaluesof@npm:2.3.10":
+  version: 2.3.10
+  resolution: "@formatjs/intl-supportedvaluesof@npm:2.3.10"
+  dependencies:
+    "@formatjs/fast-memoize": "npm:3.1.7"
+  checksum: 10c0/1dba6ced35f67af05308edfc173232b10538bb1d48176d82baa9789b915fc1e8d5751ad58391bd5f04f9d88fd7bfe556b8f44bcd4aa2ec7ca9523bc681f5a40d
   languageName: node
   linkType: hard
 
@@ -7037,7 +7013,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@vultisig/core-chain@npm:6.1.2, @vultisig/core-chain@workspace:*, @vultisig/core-chain@workspace:^, @vultisig/core-chain@workspace:packages/core/chain":
+"@vultisig/core-chain@npm:6.1.3, @vultisig/core-chain@workspace:*, @vultisig/core-chain@workspace:^, @vultisig/core-chain@workspace:packages/core/chain":
   version: 0.0.0-use.local
   resolution: "@vultisig/core-chain@workspace:packages/core/chain"
   dependencies:
@@ -7094,7 +7070,7 @@ __metadata:
     "@noble/hashes": "npm:^2.2.0"
     "@solana/web3.js": "npm:^1.98.4"
     "@trustwallet/wallet-core": "npm:^4.7.3"
-    "@vultisig/core-chain": "npm:6.1.2"
+    "@vultisig/core-chain": "npm:6.1.3"
     "@vultisig/core-config": "npm:0.9.1"
     "@vultisig/lib-dkls": "npm:0.9.0"
     "@vultisig/lib-mldsa": "npm:0.9.0"
@@ -7151,7 +7127,7 @@ __metadata:
     "@vultisig/sdk": "workspace:*"
     autoprefixer: "npm:^10.5.2"
     concurrently: "npm:^10.0.3"
-    electron: "npm:^42.4.1"
+    electron: "npm:42.10.0"
     electron-builder: "npm:^26.15.2"
     postcss: "npm:^8.5.15"
     qrcode.react: "npm:^4.2.0"
@@ -7291,17 +7267,17 @@ __metadata:
   dependencies:
     7z-wasm: "npm:^1.2.0"
     "@balancer-labs/balancer-maths": "npm:^0.0.41"
-    "@balancer/sdk": "npm:6.1.1"
     "@bufbuild/protobuf": "npm:^2.13.0"
     "@coral-xyz/anchor": "npm:^0.32.1"
     "@cosmjs/encoding": "npm:^0.39.0"
     "@cosmjs/stargate": "npm:^0.39.0"
-    "@formatjs/intl-getcanonicallocales": "npm:^3.2.11"
-    "@formatjs/intl-locale": "npm:^5.3.10"
-    "@formatjs/intl-numberformat": "npm:^9.3.11"
-    "@formatjs/intl-pluralrules": "npm:^6.3.10"
+    "@formatjs/intl-getcanonicallocales": "npm:^3.2.12"
+    "@formatjs/intl-locale": "npm:5.3.11"
+    "@formatjs/intl-numberformat": "npm:^9.4.3"
+    "@formatjs/intl-pluralrules": "npm:^6.3.15"
     "@lifi/sdk": "npm:^4.1.0"
     "@mysten/sui": "npm:^2.22.1"
+    "@noble/ciphers": "npm:^1.3.0"
     "@noble/hashes": "npm:^2.2.0"
     "@polkadot/api": "npm:^16.5.6"
     "@rollup/plugin-alias": "npm:^6.0.0"
@@ -7343,7 +7319,7 @@ __metadata:
     crypto-browserify: "npm:^3.12.1"
     date-fns: "npm:^4.4.0"
     dotenv: "npm:^17.4.2"
-    electron: "npm:^42.4.1"
+    electron: "npm:42.10.0"
     ethers: "npm:^6.17.0"
     event-target-polyfill: "npm:^0.0.4"
     events: "npm:^3.3.0"
@@ -8485,31 +8461,31 @@ __metadata:
   languageName: node
   linkType: hard
 
-"brace-expansion@npm:1.1.18":
-  version: 1.1.18
-  resolution: "brace-expansion@npm:1.1.18"
+"brace-expansion@npm:1.1.20":
+  version: 1.1.20
+  resolution: "brace-expansion@npm:1.1.20"
   dependencies:
     balanced-match: "npm:^1.0.0"
     concat-map: "npm:0.0.1"
-  checksum: 10c0/3432c18a9e2ebf94162d4effb62198bd0adea06a9f332b2c0188df5d5e30b1e51ea3c848b6608e47d0b857ebe1ea5b3888ed3326dd3c4f6f9645c94153cf9c14
+  checksum: 10c0/f344d9e3c00233f24f0595f606afc5f410565fe84a1a0a57e126e1b3166a724aea4ad68d705879a602d29d3deff15dd2ea6e0675959062888c2ba6b3d2cda0ee
   languageName: node
   linkType: hard
 
-"brace-expansion@npm:2.1.4":
-  version: 2.1.4
-  resolution: "brace-expansion@npm:2.1.4"
+"brace-expansion@npm:2.1.6":
+  version: 2.1.6
+  resolution: "brace-expansion@npm:2.1.6"
   dependencies:
     balanced-match: "npm:^1.0.0"
-  checksum: 10c0/6c0a0e2573eac1dc565b52b1e1bfbeba39bf1830d106ebbc61ff1eaefcf610e9111cd3baa091addd18e33292135c99e019d3184d966389d85dc958fdcdc1449f
+  checksum: 10c0/c1d4234f14f00d254e51bcdffb30941fbaac42187f3d8c08f7a14c48f379eb89324346521e6a3079de326ef28a5a3744909043ca1a86871a08e67d658d81c3d4
   languageName: node
   linkType: hard
 
-"brace-expansion@npm:5.0.9":
-  version: 5.0.9
-  resolution: "brace-expansion@npm:5.0.9"
+"brace-expansion@npm:5.0.11":
+  version: 5.0.11
+  resolution: "brace-expansion@npm:5.0.11"
   dependencies:
     balanced-match: "npm:^4.0.2"
-  checksum: 10c0/3dea38884a1c3c8b1c9c44a7402a0c76fca460f70cffb3127242b0b4cbf4472019e022ade021eec44838ff19f1dac2625dfd11dd459d7e1e055b0698a8d52fec
+  checksum: 10c0/ab88e750453420992cfef21c390246e52cba2d6293d8025d83fd99ca9ab93fef6e0cf41c86e39d33beb745faa79c8849835518ab8926cff565a79ca14156fffe
   languageName: node
   linkType: hard
 
@@ -10168,9 +10144,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"electron@npm:^42.4.1":
-  version: 42.4.1
-  resolution: "electron@npm:42.4.1"
+"electron@npm:42.10.0":
+  version: 42.10.0
+  resolution: "electron@npm:42.10.0"
   dependencies:
     "@electron-internal/extract-zip": "npm:^1.0.1"
     "@electron/get": "npm:^5.0.0"
@@ -10178,7 +10154,7 @@ __metadata:
   bin:
     electron: cli.js
     install-electron: install.js
-  checksum: 10c0/e897739a1fc020ff502183c42e3f90fcb7a3205eb0324cb8aa7ebdbe54e85c34cc364d1f676a39e63e923bd002d1bca19c7004bd7127a6c0ef496c130026b450
+  checksum: 10c0/b4d409556855f79b217541d0b348357f5f9bfce20c872aea382b537056882fb83553a6a66050ddcfa47ddd75469614f0a76033acc14e6d1d9e99c955458e2569
   languageName: node
   linkType: hard
 
@@ -13433,9 +13409,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"joi@npm:^18.2.1":
-  version: 18.2.1
-  resolution: "joi@npm:18.2.1"
+"joi@npm:18.2.6":
+  version: 18.2.6
+  resolution: "joi@npm:18.2.6"
   dependencies:
     "@hapi/address": "npm:^5.1.1"
     "@hapi/formula": "npm:^3.0.2"
@@ -13444,7 +13420,7 @@ __metadata:
     "@hapi/tlds": "npm:^1.1.1"
     "@hapi/topo": "npm:^6.0.2"
     "@standard-schema/spec": "npm:^1.1.0"
-  checksum: 10c0/d74f8b382de107f8bcc376ed3a2206971760176e167c7b69ff5b1dfe47a0de01e4a171f07bf4783f9bd240fb1e75f7b2d514eed175f3326e681c3572c0990ecc
+  checksum: 10c0/133221727a8eeb1a3503a8c12a644c5a5a38628e2f22208391c9a32269d1c826280202d456f42933a89d59bc78325ea5664e5138dac983454438c3308b22a356
   languageName: node
   linkType: hard
 
@@ -15835,27 +15811,6 @@ __metadata:
     object-keys: "npm:^1.1.1"
     safe-push-apply: "npm:^1.0.0"
   checksum: 10c0/6dfeb3455bff92ec3f16a982d4e3e65676345f6902d9f5ded1d8265a6318d0200ce461956d6d1c70053c7fe9f9fe65e552faac03f8140d37ef0fdd108e67013a
-  languageName: node
-  linkType: hard
-
-"ox@npm:0.14.25":
-  version: 0.14.25
-  resolution: "ox@npm:0.14.25"
-  dependencies:
-    "@adraffy/ens-normalize": "npm:^1.11.0"
-    "@noble/ciphers": "npm:^1.3.0"
-    "@noble/curves": "npm:1.9.1"
-    "@noble/hashes": "npm:^1.8.0"
-    "@scure/bip32": "npm:^1.7.0"
-    "@scure/bip39": "npm:^1.6.0"
-    abitype: "npm:^1.2.3"
-    eventemitter3: "npm:5.0.1"
-  peerDependencies:
-    typescript: ">=5.4.0"
-  peerDependenciesMeta:
-    typescript:
-      optional: true
-  checksum: 10c0/9e00a0528333915ac20bce2300eff77b3c782d67c93e533e4a075e0c4b2bbfea1851938240eeca518cb0eeca153575c593cd31aca83ced07b69ca25dba72953f
   languageName: node
   linkType: hard
 
@@ -19491,10 +19446,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"undici@npm:^7.29.0":
-  version: 7.29.0
-  resolution: "undici@npm:7.29.0"
-  checksum: 10c0/85ea96e91e7f3de24de678cbbc54230fdd641a3b0643005f2aef044af1f1a2db8fbecb88b28e6fa78bb41ffeafda4479b57075b6b6ab92beac4b7b5ab53f9b10
+"undici@npm:7.29.1":
+  version: 7.29.1
+  resolution: "undici@npm:7.29.1"
+  checksum: 10c0/5a419b1364531071ebdfd93748f7f2392d4eb6d68dd99814e1020f8fc6a517e3298129004c871516ee204bac68aba93541f587200b04a7449b8d45683a7d86f6
   languageName: node
   linkType: hard
 
@@ -19777,27 +19732,6 @@ __metadata:
   version: 4.15.0
   resolution: "version-range@npm:4.15.0"
   checksum: 10c0/ab40c6f1399e0ad5b5de7f295bb93f79f80a7cda919324d4682e388d937f1e50d6127d8cd6aa46c38bb185f4905e53bdad4cdc36ec5c14ec730e5954422f06ab
-  languageName: node
-  linkType: hard
-
-"viem@npm:2.51.3":
-  version: 2.51.3
-  resolution: "viem@npm:2.51.3"
-  dependencies:
-    "@noble/curves": "npm:1.9.1"
-    "@noble/hashes": "npm:1.8.0"
-    "@scure/bip32": "npm:1.7.0"
-    "@scure/bip39": "npm:1.6.0"
-    abitype: "npm:1.2.3"
-    isows: "npm:1.0.7"
-    ox: "npm:0.14.25"
-    ws: "npm:8.20.1"
-  peerDependencies:
-    typescript: ">=5.0.4"
-  peerDependenciesMeta:
-    typescript:
-      optional: true
-  checksum: 10c0/df7947adf57fe812a8937e420f6ba799f1ed09eccf6a3595c7139f4376bb91f5863d358e9d0252503158a08fd420e0ea1cc61fd9bf66e5a03909ac1bea43de05
   languageName: node
   linkType: hard
 

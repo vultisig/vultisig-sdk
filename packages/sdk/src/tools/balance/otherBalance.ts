@@ -8,9 +8,10 @@
  * public RPC / API endpoints (and the Vultisig proxy) directly via `fetchJson`.
  */
 import { getTonAccountSeqno } from '@vultisig/core-chain/chains/ton/account/getTonAccountInfo'
-import { queryTron } from '@vultisig/core-chain/chains/tron/queryTron'
+import { queryTron, queryTronWithText } from '@vultisig/core-chain/chains/tron/queryTron'
 import bs58check from 'bs58check'
 
+import { extractTronBalanceSun } from './extractTronBalanceSun'
 import { fetchJson, formatBalance, ROOT_API_URL } from './rpc'
 
 // bs58check ships as ESM with a CJS-compat default export depending on the
@@ -151,7 +152,10 @@ export async function getXrpBalance(address: string): Promise<XrpBalance> {
 
 export type TrxBalance = {
   address: string
+  /** Best-effort numeric mirror; may round above MAX_SAFE_INTEGER SUN (~9.007 billion TRX). */
   balanceSun: number
+  /** Exact decimal SUN balance. Use this field for precision-sensitive calculations. */
+  balanceSunRaw: string
   balanceTrx: string
   asOf: string
 }
@@ -160,12 +164,13 @@ export type TrxBalance = {
 export async function getTrxBalance(address: string): Promise<TrxBalance> {
   if (!address) throw new Error('No TRON address provided.')
   assertTronAddress(address)
-  const response = await queryTron<{ balance?: number }>('/wallet/getaccount', { body: { address, visible: true } })
-  const sun = response.balance ?? 0
+  const { text } = await queryTronWithText('/wallet/getaccount', { body: { address, visible: true } })
+  const sunRaw = extractTronBalanceSun(text)
   return {
     address,
-    balanceSun: sun,
-    balanceTrx: formatBalance(BigInt(sun), 6),
+    balanceSun: Number(sunRaw),
+    balanceSunRaw: sunRaw,
+    balanceTrx: formatBalance(BigInt(sunRaw), 6),
     asOf: new Date().toISOString(),
   }
 }

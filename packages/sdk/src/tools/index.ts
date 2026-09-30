@@ -8,9 +8,6 @@ export { balance, prep, swap }
 // Address derivation
 export { deriveAddressFromKeys } from './address'
 
-// DeFi protocol primitives (sdk.defi.*) — unsigned-tx builders only
-export * from './defi'
-
 // Pure-crypto balance reads (Polkadot DOT + Assets-pallet)
 export {
   balancePolkadot,
@@ -282,113 +279,7 @@ export {
   getCosmosSwapGasLimit,
 } from './gas'
 
-// DeFi protocol primitives (sdk.defi.*) — build UNSIGNED calldata/msgs only
-export type {
-  BalancerTokenApi,
-  BalancerV3SwapCalldata,
-  BalancerV3SwapKind,
-  BalancerV3SwapPath,
-  BuildBalancerV3SwapCalldataParams,
-  BuildBuyPtParams,
-  BuildGlifRedeemParams,
-  BuildGlifRedeemResult,
-  BuildGlifStakeParams,
-  BuildGlifStakeResult,
-  BuildRedeemParams,
-  BuildSellPtParams,
-  Defi,
-  EvmScanRequest,
-  GlifUnsignedTx,
-  PendleActiveMarket,
-  PendleChain,
-  PendleMarketParams,
-  PendleMarketsParams,
-  PendleMarketSummary,
-  PendlePtBuildResult,
-  PendleUnsignedTx,
-  ScanRequest,
-  SolanaScanRequest,
-  StakekitActionDisplay,
-  StakekitActionResult,
-  StakekitBalanceEntry,
-  StakekitBalanceItem,
-  StakekitBalanceQuery,
-  StakekitBalancesResult,
-  StakekitDetailsResult,
-  StakekitExitResult,
-  StakekitFinalizeResult,
-  StakekitRefusalStatus,
-  UnsupportedScanRequest,
-  Validator,
-  YieldActionResponse,
-  YieldArgs,
-  YieldBalance,
-  YieldBuildFailure,
-  YieldDiscoverMetadata,
-  YieldDiscoverOpportunity,
-  YieldDiscoverToken,
-  YieldListResponse,
-  YieldMetadata,
-  YieldProduct,
-  YieldToken,
-  YieldTransaction,
-} from './defi'
-export {
-  buildBalancerV3SwapCalldata,
-  buildBuyPt,
-  buildGlifRedeemSticnt,
-  buildGlifStakeIcnt,
-  buildRedeem,
-  buildSellPt,
-  buildYieldActionScanRequest,
-  buildYieldActionScanRequests,
-  buildYieldStepScanRequest,
-  chunkStakekitBalanceQueries,
-  defi,
-  ensureTransactionsBuilt,
-  fetchAllStakekitBalances,
-  fetchStakekitBalancesBatch,
-  finalizeStakekitAction,
-  GLIF_ICN_BASE_ADDRESSES,
-  GLIF_ICN_TOKEN_DECIMALS,
-  glifPoolWriteAbi,
-  isPendleChain,
-  normalizeStakekitNetwork,
-  parseActionDisplay,
-  pendle,
-  PENDLE_ROUTER_V4,
-  PENDLE_SUPPORTED_CHAINS,
-  PendleBuildError,
-  pendleMarket,
-  pendleMarkets,
-  stakekit,
-  STAKEKIT_BALANCE_QUERIES_PER_REQUEST,
-  STAKEKIT_NETWORK_ALIASES,
-  StakekitActionRefusal,
-  stakekitBalances,
-  stakekitBuildEnter,
-  stakekitBuildExit,
-  stakekitBuildManage,
-  stakekitDetails,
-  stakekitSearch,
-  stripChainPrefix,
-  yieldNetworkToCanonicalChain,
-} from './defi'
-
 // Verifier client
-export type {
-  BuildThreeJaneSupplyUsdcParams,
-  BuildThreeJaneSupplyUsdcResult,
-  ThreeJaneTranche,
-  ThreeJaneTxStep,
-} from './defi/threeJane'
-// Aliased to avoid colliding with the CCTP bridge's `parseUsdcAmount` above —
-// both re-export the same underlying `./parse/usdcAmount` helper.
-export {
-  buildThreeJaneSupplyUsdc,
-  parseUsdcAmount as parseThreeJaneUsdcAmount,
-  THREE_JANE_ADDRESSES,
-} from './defi/threeJane'
 export { VerifierClient } from './verifier'
 
 // Pure intent↔envelope policy diff (vault-free comparison, no signing/broadcast)
@@ -502,7 +393,6 @@ export { getTxStatus } from '@vultisig/core-chain/tx/status'
 
 // Public-boundary argument validation (AUDIT-R3 TASK-020)
 // Zod schemas + safe-parse helpers for chain and ticker strings at the entry point.
-// Import from '@vultisig/sdk/tools/parse' for the narrow surface, or
-// pick individual names from here for mixed usage alongside other tool exports.
+// Import these names from the SDK root alongside other tool exports.
 export type { ParseChainResult, ParseTickerResult } from './parse'
 export { chainSchema, parseChain, parseTicker, tickerSchema } from './parse'

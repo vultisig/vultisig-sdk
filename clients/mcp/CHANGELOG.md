@@ -1,5 +1,13 @@
 # @vultisig/mcp
 
+## 1.0.3
+
+### Patch Changes
+
+- Updated dependencies [[`0a09912`](https://github.com/vultisig/vultisig-sdk/commit/0a09912f54b2a7186a7299ce657d85dc31e5f5ed), [`658aa00`](https://github.com/vultisig/vultisig-sdk/commit/658aa00a115c329808432014164980f543edf09b), [`5acb3d2`](https://github.com/vultisig/vultisig-sdk/commit/5acb3d27f15f081d518155c937295d208defdd84), [`341f5ec`](https://github.com/vultisig/vultisig-sdk/commit/341f5ec2793e5b91ba69410bf35d82833f104632), [`d83a5b0`](https://github.com/vultisig/vultisig-sdk/commit/d83a5b0c31f5d8f5ca8ecd6e586e16424596bed3), [`f49cbb0`](https://github.com/vultisig/vultisig-sdk/commit/f49cbb05cd20c6aa3411aa84ba8a09fc89284f07), [`16b5a78`](https://github.com/vultisig/vultisig-sdk/commit/16b5a7860dce8a5bacf4759ff0260073c8cfb3e7), [`faffc26`](https://github.com/vultisig/vultisig-sdk/commit/faffc266efae199d638ae6bf8d45009896fcbee3)]:
+  - @vultisig/sdk@9.0.0
+  - @vultisig/client-shared@0.3.8
+
 ## 1.0.2
 
 ### Patch Changes

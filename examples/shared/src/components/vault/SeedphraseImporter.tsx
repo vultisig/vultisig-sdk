@@ -1,3 +1,4 @@
+import { SEEDPHRASE_WORD_COUNTS } from '@vultisig/sdk'
 import { useState } from 'react'
 
 import { useSDKAdapter } from '../../adapters'
@@ -59,11 +60,14 @@ export default function SeedphraseImporter({ onVaultCreated }: SeedphraseImporte
 
   // Calculate word count
   const wordCount = mnemonic.trim() ? mnemonic.trim().split(/\s+/).length : 0
-  const isValidWordCount = wordCount === 12 || wordCount === 24
+  const isValidWordCount = SEEDPHRASE_WORD_COUNTS.some(count => count === wordCount)
+  const targetWordCount =
+    SEEDPHRASE_WORD_COUNTS.find(count => count >= wordCount) ??
+    SEEDPHRASE_WORD_COUNTS[SEEDPHRASE_WORD_COUNTS.length - 1]
 
   const handleValidateSeedphrase = async () => {
     if (!isValidWordCount) {
-      setError('Seedphrase must be 12 or 24 words')
+      setError('Seedphrase must be 12, 15, 18, 21 or 24 words')
       return
     }
 
@@ -313,17 +317,17 @@ export default function SeedphraseImporter({ onVaultCreated }: SeedphraseImporte
             setValidation(null)
             setError(null)
           }}
-          placeholder="Enter your 12 or 24-word recovery phrase..."
+          placeholder="Enter your 12, 15, 18, 21 or 24-word recovery phrase..."
         />
         <div className="flex justify-between mt-1">
           <span className={`text-sm ${isValidWordCount ? 'text-green-600' : 'text-gray-500'}`}>
-            Words: {wordCount}/{wordCount <= 12 ? 12 : 24}
+            Words: {wordCount}/{targetWordCount}
             {isValidWordCount && validation?.valid && ' ✓'}
           </span>
         </div>
         {wordCount > 0 && !isValidWordCount && (
           <div className="text-error text-sm bg-red-50 p-3 rounded mt-2">
-            Recovery phrase must be exactly 12 or 24 words.
+            Recovery phrase must be exactly 12, 15, 18, 21 or 24 words.
           </div>
         )}
       </div>
