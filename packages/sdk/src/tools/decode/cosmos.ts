@@ -8,6 +8,7 @@ import { MsgVote as MsgVoteV1Beta1 } from 'cosmjs-types/cosmos/gov/v1beta1/tx'
 import { MsgBeginRedelegate, MsgDelegate, MsgUndelegate } from 'cosmjs-types/cosmos/staking/v1beta1/tx'
 import { TxBody, TxRaw } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import { MsgExecuteContract } from 'cosmjs-types/cosmwasm/wasm/v1/tx'
+import { MsgTransfer } from 'cosmjs-types/ibc/applications/transfer/v1/tx'
 
 import { CosmosMsgType } from '../../types/cosmos-msg'
 import type { CosmosVoteOption, Envelope } from './types'
@@ -153,6 +154,44 @@ export function decodeCosmosTx(bytes: Uint8Array, chainHint: string): Envelope {
   const any = messages[0]
   try {
     switch (any.typeUrl) {
+      case CosmosMsgType.MsgTransferUrl: {
+        const msg = MsgTransfer.decode(any.value)
+        // Packet memos can forward funds or execute on the destination chain.
+        // The transfer envelope cannot represent those effects, so never lift
+        // them as a simple transfer to the intermediate receiver.
+        if (msg.memo !== '') return fail('MsgTransfer packet memo is not supported by envelope decode')
+        if (msg.encoding !== '') return fail('MsgTransfer packet encoding is not supported')
+        // Newer IBC schemas may carry forwarding outside the memo. This codec
+        // skips unknown fields; lift only its canonical SDK-built wire shape,
+        // so a dropped routing extension or ambiguous duplicate cannot hide.
+        const canonical = MsgTransfer.encode(msg).finish()
+        const matchesWire = (encoded: Uint8Array): boolean =>
+          encoded.length === any.value.length && encoded.every((byte, index) => byte === any.value[index])
+        // The SDK's QBTC encoder omits zero timeoutHeight, while this codec
+        // initializes it even when absent. Accept that exact known variant.
+        // Its TypeScript type requires Height, but encode supports undefined.
+        const omittedHeight =
+          msg.timeoutHeight?.revisionNumber === 0n && msg.timeoutHeight.revisionHeight === 0n
+            ? MsgTransfer.encode({
+                ...msg,
+                timeoutHeight: undefined as unknown as MsgTransfer['timeoutHeight'],
+              }).finish()
+            : undefined
+        if (!matchesWire(canonical) && !(omittedHeight && matchesWire(omittedHeight))) {
+          return fail('MsgTransfer carries unsupported or non-canonical fields')
+        }
+        if (msg.sourcePort !== 'transfer') return fail('MsgTransfer source port is not supported')
+        const coin = msg.token
+        if (!msg.receiver.trim() || !coin?.denom.trim() || !/^\d+$/.test(coin.amount) || BigInt(coin.amount) <= 0n) {
+          return fail('MsgTransfer requires a receiver and a positive token amount with denomination')
+        }
+        env.kind = 'transfer'
+        env.recipient = msg.receiver
+        env.amount = coin.amount
+        env.asset.contract = coin.denom
+        env.asset.symbol = denomToSymbol(coin.denom)
+        return env
+      }
       case CosmosMsgType.MsgSendUrl: {
         const msg = MsgSend.decode(any.value)
         if (msg.amount.length > 1) {

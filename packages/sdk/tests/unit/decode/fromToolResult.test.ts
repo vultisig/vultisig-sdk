@@ -2,11 +2,13 @@ import { MsgSend } from 'cosmjs-types/cosmos/bank/v1beta1/tx'
 import { MsgBeginRedelegate, MsgDelegate, MsgUndelegate } from 'cosmjs-types/cosmos/staking/v1beta1/tx'
 import { TxBody, TxRaw } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import { Any } from 'cosmjs-types/google/protobuf/any'
+import { MsgTransfer } from 'cosmjs-types/ibc/applications/transfer/v1/tx'
 import { type Address, encodeFunctionData, getAddress, type Hex, parseAbi, serializeTransaction } from 'viem'
 import { describe, expect, it } from 'vitest'
 
 import { decodeFromToolResult } from '@/tools/decode'
 import { buildRedelegateMsg, buildWithdrawRewardsMsg } from '@/tools/prep/cosmosStaking'
+import { CosmosMsgType } from '@/types/cosmos-msg'
 
 /**
  * The keystone bytes-oracle: `decodeFromToolResult` is the ONE decoder shared by
@@ -236,6 +238,164 @@ describe('decodeFromToolResult — Cosmos half (cosmjs-types proto3)', () => {
     })
     const env = decodeFromToolResult({ family: 'cosmos', chain: 'osmosis-1', payload: buildCosmosTx([any]) })
     expect(env.recipient).toBe(TO)
+  })
+
+  const ibcMessage = (overrides: Partial<MsgTransfer> = {}): Any =>
+    Any.fromPartial({
+      typeUrl: CosmosMsgType.MsgTransferUrl,
+      value: MsgTransfer.encode(
+        MsgTransfer.fromPartial({
+          sourcePort: 'transfer',
+          sourceChannel: 'channel-141',
+          sender: FROM,
+          receiver: TO,
+          token: { denom: 'ibc/ABC123', amount: '1234567' },
+          timeoutHeight: { revisionNumber: 1n, revisionHeight: 12345n },
+          timeoutTimestamp: 1900000000000000000n,
+          ...overrides,
+        })
+      ).finish(),
+    })
+
+  it.each([
+    ['ibc/ABC123', ''],
+    ['uatom', 'ATOM'],
+    ['uosmo', 'OSMO'],
+  ])('decodes a direct IBC MsgTransfer with denomination %s', (denom, symbol) => {
+    const env = decodeFromToolResult({
+      family: 'cosmos',
+      chain: 'osmosis-1',
+      payload: buildCosmosTx([ibcMessage({ token: { denom, amount: '1234567' } })]),
+    })
+    expect(env).toMatchObject({
+      decoded: true,
+      decodeError: '',
+      family: 'cosmos',
+      kind: 'transfer',
+      recipient: TO,
+      amount: '1234567',
+      asset: { contract: denom, symbol, decimals: 0 },
+      chain: 'osmosis-1',
+    })
+  })
+
+  it.each([
+    JSON.stringify({ forward: { receiver: 'osmo1finalreceiver', port: 'transfer', channel: 'channel-0' } }),
+    'destination-hook',
+    ' ',
+  ])('fails closed on a non-empty IBC packet memo: %s', memo => {
+    const env = decodeFromToolResult({
+      family: 'cosmos',
+      chain: 'osmosis-1',
+      payload: buildCosmosTx([ibcMessage({ memo })]),
+    })
+    expect(env).toMatchObject({
+      decoded: false,
+      kind: 'unknown',
+      recipient: '',
+      amount: '',
+      asset: { contract: '' },
+      chain: 'osmosis-1',
+    })
+    expect(env.decodeError).toContain('packet memo')
+  })
+
+  it.each([
+    { token: undefined },
+    { receiver: '' },
+    { token: { denom: '', amount: '1' } },
+    { token: { denom: 'uatom', amount: '0' } },
+    { token: { denom: 'uatom', amount: '-1' } },
+    { token: { denom: 'uatom', amount: '1.5' } },
+    { sourcePort: 'custom-port' },
+  ])('fails closed on incomplete or unsupported IBC transfer fields: %j', overrides => {
+    const env = decodeFromToolResult({
+      family: 'cosmos',
+      chain: 'osmosis-1',
+      payload: buildCosmosTx([ibcMessage(overrides)]),
+    })
+    expect(env.decoded).toBe(false)
+    expect(env.kind).toBe('unknown')
+    expect(env.recipient).toBe('')
+    expect(env.amount).toBe('')
+  })
+
+  it('fails closed on malformed MsgTransfer wire bytes without throwing', () => {
+    const any = Any.fromPartial({ typeUrl: CosmosMsgType.MsgTransferUrl, value: Uint8Array.of(0x0a, 0xff) })
+    const env = decodeFromToolResult({ family: 'cosmos', chain: 'osmosis-1', payload: buildCosmosTx([any]) })
+    expect(env.decoded).toBe(false)
+    expect(env.decodeError).toContain('decode message')
+  })
+
+  it('fails closed on forwarding hops outside the memo that the codec would discard', () => {
+    const direct = ibcMessage()
+    // ibc-go v9 field 10: Forwarding { hops: [{ port_id, channel_id }] }.
+    // This is a valid protobuf extension, not malformed bytes; the installed
+    // codec silently skips it, so memo-only validation would miss the route.
+    const forwarding = Buffer.from('521712150a087472616e7366657212096368616e6e656c2d30', 'hex')
+    const any = { ...direct, value: Buffer.concat([direct.value, forwarding]) }
+    const env = decodeFromToolResult({ family: 'cosmos', chain: 'osmosis-1', payload: buildCosmosTx([any]) })
+    expect(env).toMatchObject({ decoded: false, kind: 'unknown', recipient: '', amount: '' })
+    expect(env.decodeError).toContain('unsupported or non-canonical fields')
+  })
+
+  it('decodes the SDK QBTC wire shape with zero timeout height omitted', () => {
+    const message = MsgTransfer.decode(ibcMessage({ timeoutHeight: { revisionNumber: 0n, revisionHeight: 0n } }).value)
+    const direct = {
+      typeUrl: CosmosMsgType.MsgTransferUrl,
+      value: MsgTransfer.encode({
+        ...message,
+        timeoutHeight: undefined as unknown as MsgTransfer['timeoutHeight'],
+      }).finish(),
+    }
+    const env = decodeFromToolResult({ family: 'cosmos', chain: 'qbtc', payload: buildCosmosTx([direct]) })
+    expect(env).toMatchObject({
+      decoded: true,
+      kind: 'transfer',
+      recipient: TO,
+      amount: '1234567',
+      asset: { contract: 'ibc/ABC123' },
+      chain: 'qbtc',
+    })
+    const forwarding = Buffer.from('521712150a087472616e7366657212096368616e6e656c2d30', 'hex')
+    const routed = { ...direct, value: Buffer.concat([direct.value, forwarding]) }
+    const rejected = decodeFromToolResult({ family: 'cosmos', chain: 'qbtc', payload: buildCosmosTx([routed]) })
+    expect(rejected.decoded).toBe(false)
+    expect(rejected.decodeError).toContain('unsupported or non-canonical fields')
+  })
+
+  it('fails closed on duplicate memo fields even if the last value is empty', () => {
+    const routed = ibcMessage({ memo: 'destination-hook' })
+    const any = { ...routed, value: Buffer.concat([routed.value, Uint8Array.of(0x42, 0x00)]) }
+    const env = decodeFromToolResult({ family: 'cosmos', chain: 'osmosis-1', payload: buildCosmosTx([any]) })
+    expect(env.decoded).toBe(false)
+    expect(env.decodeError).toContain('unsupported or non-canonical fields')
+  })
+
+  it('fails closed on an alternate packet encoding outside the SDK-built shape', () => {
+    const env = decodeFromToolResult({
+      family: 'cosmos',
+      chain: 'osmosis-1',
+      payload: buildCosmosTx([ibcMessage({ encoding: 'application/protobuf' })]),
+    })
+    expect(env.decoded).toBe(false)
+    expect(env.decodeError).toContain('packet encoding')
+  })
+
+  it('retains multi-message rejection for IBC transfers', () => {
+    const env = decodeFromToolResult({
+      family: 'cosmos',
+      chain: 'osmosis-1',
+      payload: buildCosmosTx([ibcMessage(), ibcMessage()]),
+    })
+    expect(env.decoded).toBe(false)
+    expect(env.decodeError).toContain('multi-message')
+  })
+
+  it('retains unknown-message behavior for unsupported Cosmos messages', () => {
+    const any = Any.fromPartial({ typeUrl: '/unsupported.Msg', value: Uint8Array.of(0x08, 0x01) })
+    const env = decodeFromToolResult({ family: 'cosmos', chain: 'osmosis-1', payload: buildCosmosTx([any]) })
+    expect(env).toMatchObject({ decoded: true, kind: 'unknown', recipient: '', amount: '' })
   })
 
   it('decodes a MsgDelegate: validator recipient + amount', () => {
