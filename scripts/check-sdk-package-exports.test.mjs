@@ -93,6 +93,13 @@ Intl.PluralRules.__addLocaleData({ locale: 'en' })
         "import '../../chunks/react-native/intl.js'"
       )
       assert.doesNotThrow(() => validatePackedReactNativeIntl(root))
+      writeFileSync(
+        chunk,
+        `export const marker = ${JSON.stringify(marker)};
+Intl.NumberFormat.__addLocaleData({ 'locale': 'en' })
+Intl.PluralRules.__addLocaleData({ 'locale': 'en' })`
+      )
+      assert.doesNotThrow(() => validatePackedReactNativeIntl(root))
       writeFileSync(path.join(root, 'dist/index.react-native.js'), 'export const sdk = true')
       assert.throws(
         () => validatePackedReactNativeIntl(root),

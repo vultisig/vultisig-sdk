@@ -155,7 +155,9 @@ function collectEnglishIntlRegistrations(ast, registrations) {
       node.callee.object?.type === 'MemberExpression' &&
       node.callee.object.object?.name === 'Intl'
     ) {
-      const locale = node.arguments?.[0]?.properties?.find(property => property.key?.name === 'locale')?.value?.value
+      const locale = node.arguments?.[0]?.properties?.find(
+        property => (property.key?.name ?? property.key?.value) === 'locale'
+      )?.value?.value
       if (locale === 'en') registrations.add(node.callee.object.property?.name)
     }
     for (const value of Object.values(node)) {
