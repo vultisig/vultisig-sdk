@@ -2088,14 +2088,20 @@ const unsupported = await vault.getBuyUrl(Chain.Cosmos)
 
 Coordinate multi-party signing sessions by sending push notifications to vault members. The SDK handles server communication; consumers are responsible for platform-specific push token acquisition and incoming push wiring.
 
+The notification service identifies a vault by the lowercase SHA-256 hash of the UTF-8 string `publicKeys.ecdsa + hexChainCode`. Derive this notification-specific ID with the named export `computeNotificationVaultId`; use the same ID for registration, member notifications, WebSocket connections, and registration checks.
+
 ### Register a Device
 
 ```typescript
+import { computeNotificationVaultId } from '@vultisig/sdk'
+
+const vaultId = await computeNotificationVaultId(vault.publicKeys.ecdsa, vault.hexChainCode)
+
 // Obtain a push token from your platform (APNs, FCM, Web Push)
 const token = await getMyPlatformPushToken()
 
 await sdk.notifications.registerDevice({
-  vaultId: vault.publicKeys.ecdsa,
+  vaultId,
   partyName: vault.localPartyId,
   token,
   deviceType: 'ios', // 'ios' | 'android' | 'web'
@@ -2107,8 +2113,12 @@ await sdk.notifications.registerDevice({
 When initiating a signing session, notify other members so they can join:
 
 ```typescript
+import { computeNotificationVaultId } from '@vultisig/sdk'
+
+const vaultId = await computeNotificationVaultId(vault.publicKeys.ecdsa, vault.hexChainCode)
+
 await sdk.notifications.notifyVaultMembers({
-  vaultId: vault.publicKeys.ecdsa,
+  vaultId,
   vaultName: vault.name,
   localPartyId: vault.localPartyId,
   qrCodeData: keysignQrPayload, // session data for joining
@@ -2150,9 +2160,13 @@ unsubscribe()
 For environments where platform push isn't available (browser extensions, Electron, Node.js), the SDK provides a built-in WebSocket transport. Messages are delivered through the same `onSigningRequest()` callbacks — no platform push handler wiring needed.
 
 ```typescript
+import { computeNotificationVaultId } from '@vultisig/sdk'
+
+const vaultId = await computeNotificationVaultId(vault.publicKeys.ecdsa, vault.hexChainCode)
+
 // Step 1: Register device (same as platform push)
 await sdk.notifications.registerDevice({
-  vaultId: vault.publicKeys.ecdsa,
+  vaultId,
   partyName: vault.localPartyId,
   token: myDeviceToken, // Any stable unique identifier
   deviceType: 'web',
@@ -2160,7 +2174,7 @@ await sdk.notifications.registerDevice({
 
 // Step 2: Connect WebSocket
 sdk.notifications.connect({
-  vaultId: vault.publicKeys.ecdsa,
+  vaultId,
   partyName: vault.localPartyId,
   token: myDeviceToken, // Same token used for registerDevice()
 })
@@ -2194,6 +2208,10 @@ unsubState()
 For web platforms using the Web Push API with service workers, fetch the VAPID public key from the server to subscribe:
 
 ```typescript
+import { computeNotificationVaultId } from '@vultisig/sdk'
+
+const vaultId = await computeNotificationVaultId(vault.publicKeys.ecdsa, vault.hexChainCode)
+
 const vapidKey = await sdk.notifications.fetchVapidPublicKey()
 const subscription = await registration.pushManager.subscribe({
   userVisibleOnly: true,
@@ -2201,7 +2219,7 @@ const subscription = await registration.pushManager.subscribe({
 })
 
 await sdk.notifications.registerDevice({
-  vaultId: vault.publicKeys.ecdsa,
+  vaultId,
   partyName: vault.localPartyId,
   token: JSON.stringify(subscription.toJSON()),
   deviceType: 'web',
@@ -2213,6 +2231,10 @@ await sdk.notifications.registerDevice({
 ### Utility Methods
 
 ```typescript
+import { computeNotificationVaultId } from '@vultisig/sdk'
+
+const vaultId = await computeNotificationVaultId(vault.publicKeys.ecdsa, vault.hexChainCode)
+
 // Check if a vault has local registration
 const registered = await sdk.notifications.isVaultRegistered(vaultId)
 
