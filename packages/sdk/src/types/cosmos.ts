@@ -135,7 +135,13 @@ export type CosmosSigningOptions = {
   /**
    * Skip automatic chain-specific data fetching.
    * When true, uses only provided values without querying the chain.
-   * Useful for offline signing or when you have pre-fetched data.
+   * SignAmino requires accountNumber and sequence in these options.
+   * SignDirect requires sequence here and accountNumber in SignDirectInput.
+   * Missing or invalid unsigned decimal uint64 metadata throws VaultError.
    */
   skipChainSpecificFetch?: boolean
+  /** Pre-fetched account number for skipped-fetch SignAmino, as a decimal uint64 string. */
+  accountNumber?: string
+  /** Pre-fetched sequence for either skipped-fetch signing mode, as a decimal uint64 string. */
+  sequence?: string
 }

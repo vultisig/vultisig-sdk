@@ -818,6 +818,8 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
       publicKey: nativePublicKey,
       libType: 'DKLS',
       skipChainSpecificFetch: true,
+      accountNumber: '7',
+      sequence: '41',
     })
 
     expect(payload.coin?.hexPublicKey).toBe('010203')

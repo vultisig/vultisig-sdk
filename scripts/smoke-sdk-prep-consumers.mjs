@@ -32,21 +32,59 @@ const publicKey = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f
 const identity = {ecdsaPublicKey: publicKey, eddsaPublicKey: '00'.repeat(32), hexChainCode: '00'.repeat(32),
   chainPublicKeys: {Cosmos: publicKey}, localPartyId: 'package-consumer', libType: 'DKLS'}
 const wallet = await prep.getWalletCore()
-const payload = await prep.prepareSignAminoTxFromKeys(identity, {
+let networkRequests = 0
+const originalFetch = globalThis.fetch
+globalThis.fetch = async () => { networkRequests++; throw new Error('Offline preparation attempted a network request') }
+const aminoInput = {
   chain: 'Cosmos', coin: {chain:'Cosmos', address, decimals:6, ticker:'ATOM'},
   msgs: [{type:'cosmos-sdk/MsgDelegate', value: JSON.stringify({delegator_address:address,validator_address:validator,amount:{denom:'uatom',amount:'123'}})}],
   fee: {amount:[{denom:'uatom',amount:'5000'}],gas:'200000'},
-}, {skipChainSpecificFetch:true})
+}
+const payload = await prep.prepareSignAminoTxFromKeys(identity, aminoInput,
+  {skipChainSpecificFetch:true,accountNumber:'7',sequence:'41'})
 assert.equal(payload.coin.hexPublicKey, publicKey)
 assert.equal(payload.vaultLocalPartyId, 'package-consumer')
 assert.equal(payload.blockchainSpecific.case, 'cosmosSpecific')
+assert.equal(payload.blockchainSpecific.value.accountNumber, 7n)
+assert.equal(payload.blockchainSpecific.value.sequence, 41n)
 assert.equal(payload.signData.value.fee.gas, '200000')
+const directInput = {chain: 'Cosmos', coin: aminoInput.coin, bodyBytes: 'Ym9keQ==',
+  authInfoBytes: 'YXV0aA==', chainId: 'cosmoshub-4', accountNumber: '7'}
+const direct = await prep.prepareSignDirectTxFromKeys(identity, directInput,
+  {skipChainSpecificFetch:true, accountNumber:'99', sequence:'41'})
+assert.equal(direct.blockchainSpecific.value.accountNumber, 7n)
+assert.equal(direct.blockchainSpecific.value.sequence, 41n)
+assert.equal(direct.signData.value.accountNumber, '7')
+for (const value of ['0', '9007199254740993', '18446744073709551615']) {
+  const amino = await prep.prepareSignAminoTxFromKeys(identity, aminoInput,
+    {skipChainSpecificFetch:true,accountNumber:value,sequence:value})
+  const direct = await prep.prepareSignDirectTxFromKeys(identity, {...directInput, accountNumber:value},
+    {skipChainSpecificFetch:true,sequence:value})
+  for (const result of [amino, direct]) {
+    assert.equal(result.blockchainSpecific.value.accountNumber, BigInt(value))
+    assert.equal(result.blockchainSpecific.value.sequence, BigInt(value))
+  }
+}
+for (const value of [undefined, '', '-1', '1.5', '18446744073709551616']) {
+  for (const field of ['accountNumber', 'sequence']) {
+    await assert.rejects(prep.prepareSignAminoTxFromKeys(identity, aminoInput,
+      {skipChainSpecificFetch:true,accountNumber:'7',sequence:'41',[field]:value}),
+      error => error.code === 'INVALID_CONFIG' && error.message.includes(field))
+    await assert.rejects(prep.prepareSignDirectTxFromKeys(identity,
+      {...directInput, ...(field === 'accountNumber' ? {accountNumber:value} : {})},
+      {skipChainSpecificFetch:true,sequence:field === 'sequence' ? value : '41'}),
+      error => error.code === 'INVALID_CONFIG' && error.message.includes(field))
+  }
+}
+assert.equal(networkRequests, 0)
+globalThis.fetch = originalFetch
+
 const getter = runtimeStore().walletCore
 root ??= await load('@vultisig/sdk')
 assert.equal(runtimeStore().walletCore, getter)
 assert.equal(await prep.getWalletCore(), wallet)
 assert.deepEqual(root.buildDelegateMsg({delegatorAddress:address,validatorAddress:validator,amount:'123',denom:'uatom'}),msg)
-console.log(JSON.stringify({prep:true,format:process.argv[2],order:process.argv[3],walletCore:true,sharedInitialization:true}))
+console.log(JSON.stringify({prep:true,format:process.argv[2],order:process.argv[3],walletCore:true,sharedInitialization:true,cosmosMetadata:'7/41',uint64Exact:true,invalidMetadata:'INVALID_CONFIG',networkRequests}))
 `
   )
   for (const format of ['esm', 'cjs']) {

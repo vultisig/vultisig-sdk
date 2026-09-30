@@ -72,6 +72,8 @@ describe('prepareSignAminoTxFromKeys', () => {
 
     const result = await prepareSignAminoTxFromKeys(baseIdentity, input, {
       skipChainSpecificFetch: true,
+      accountNumber: '7',
+      sequence: '41',
     })
 
     expect(result).toBe(mockPayload)
@@ -100,6 +102,8 @@ describe('prepareSignAminoTxFromKeys', () => {
       libType: baseIdentity.libType,
       publicKey: mockPublicKey,
       skipChainSpecificFetch: true,
+      accountNumber: '7',
+      sequence: '41',
     })
   })
 
@@ -160,6 +164,7 @@ describe('prepareSignDirectTxFromKeys', () => {
 
     const result = await prepareSignDirectTxFromKeys(baseIdentity, input, {
       skipChainSpecificFetch: true,
+      sequence: '41',
     })
 
     expect(result).toBe(mockPayload)
@@ -190,6 +195,7 @@ describe('prepareSignDirectTxFromKeys', () => {
       libType: baseIdentity.libType,
       publicKey: mockPublicKey,
       skipChainSpecificFetch: true,
+      sequence: '41',
     })
   })
 

@@ -23,6 +23,7 @@ vi.mock('@vultisig/core-chain/chains/cosmos/gas', async importOriginal => {
 })
 
 import { buildSignAminoKeysignPayload, buildSignDirectKeysignPayload } from '@/vault/services/cosmos/buildCosmosPayload'
+import { VaultErrorCode } from '@/vault/VaultError'
 
 const libType: KeysignLibType = 'DKLS'
 
@@ -67,6 +68,8 @@ describe('buildCosmosPayload', () => {
           publicKey: fakePublicKey,
           libType,
           skipChainSpecificFetch: true,
+          accountNumber: '7',
+          sequence: '41',
         })
 
         expect(mockGetCosmosAccountInfo).not.toHaveBeenCalled()
@@ -76,8 +79,8 @@ describe('buildCosmosPayload', () => {
           sequence: bigint
           fee: bigint
         }
-        expect(thor.accountNumber).toBe(0n)
-        expect(thor.sequence).toBe(0n)
+        expect(thor.accountNumber).toBe(7n)
+        expect(thor.sequence).toBe(41n)
         expect(thor.fee).toBe(2_000_000n)
       })
 
@@ -101,6 +104,8 @@ describe('buildCosmosPayload', () => {
             publicKey: fakePublicKey,
             libType,
             skipChainSpecificFetch: true,
+            accountNumber: '7',
+            sequence: '41',
           })
         ).rejects.toThrow('THORChain fee.amount[0].amount is required when fee is provided')
       })
@@ -124,6 +129,8 @@ describe('buildCosmosPayload', () => {
           publicKey: fakePublicKey,
           libType,
           skipChainSpecificFetch: true,
+          accountNumber: '7',
+          sequence: '41',
         })
 
         expect(mockGetCosmosAccountInfo).not.toHaveBeenCalled()
@@ -132,8 +139,8 @@ describe('buildCosmosPayload', () => {
           accountNumber: bigint
           sequence: bigint
         }
-        expect(maya.accountNumber).toBe(0n)
-        expect(maya.sequence).toBe(0n)
+        expect(maya.accountNumber).toBe(7n)
+        expect(maya.sequence).toBe(41n)
       })
 
       it('uses cosmosSpecific with gas from record for Osmosis (IBC)', async () => {
@@ -164,6 +171,8 @@ describe('buildCosmosPayload', () => {
           publicKey: fakePublicKey,
           libType,
           skipChainSpecificFetch: true,
+          accountNumber: '7',
+          sequence: '41',
         })
 
         expect(mockGetCosmosAccountInfo).not.toHaveBeenCalled()
@@ -175,8 +184,8 @@ describe('buildCosmosPayload', () => {
         }
         expect(osmo.gas).toBe(cosmosGasRecord.Osmosis)
         expect(getCosmosFeeAmount).not.toHaveBeenCalled()
-        expect(osmo.accountNumber).toBe(0n)
-        expect(osmo.sequence).toBe(0n)
+        expect(osmo.accountNumber).toBe(7n)
+        expect(osmo.sequence).toBe(41n)
       })
     })
 
@@ -285,11 +294,12 @@ describe('buildCosmosPayload', () => {
       libType,
     } as const
 
-    it('does not call getCosmosAccountInfo when skipChainSpecificFetch is true; sequence stays default', async () => {
+    it('does not call getCosmosAccountInfo when skipChainSpecificFetch is true; uses pre-fetched sequence', async () => {
       const payload = await buildSignDirectKeysignPayload({
         ...directBase,
         chain: Chain.Cosmos,
         skipChainSpecificFetch: true,
+        sequence: '41',
       })
 
       expect(mockGetCosmosAccountInfo).not.toHaveBeenCalled()
@@ -299,7 +309,7 @@ describe('buildCosmosPayload', () => {
         sequence: bigint
       }
       expect(directSkip.accountNumber).toBe(42n)
-      expect(directSkip.sequence).toBe(0n)
+      expect(directSkip.sequence).toBe(41n)
       expect(getCosmosFeeAmount).not.toHaveBeenCalled()
     })
 
@@ -341,6 +351,73 @@ describe('buildCosmosPayload', () => {
 
       expect(payload.blockchainSpecific?.case).toBe('cosmosSpecific')
       expect((payload.blockchainSpecific?.value as { sequence: bigint }).sequence).toBe(sequence)
+    })
+  })
+  describe('offline metadata validation', () => {
+    const base = {
+      chain: Chain.Cosmos,
+      coin: { chain: Chain.Cosmos, address: 'cosmos1testaddr', decimals: 6, ticker: 'ATOM' },
+      vaultId: 'vault-ecdsa',
+      localPartyId: 'device-1',
+      publicKey: fakePublicKey,
+      libType,
+      skipChainSpecificFetch: true,
+      accountNumber: '7',
+      sequence: '41',
+    } as const
+    const amino = { ...base, msgs: [], fee: { amount: [{ denom: 'uatom', amount: '5000' }], gas: '200000' } }
+    const direct = { ...base, bodyBytes: 'Ym9keQ==', authInfoBytes: 'YXV0aA==', chainId: 'cosmoshub-4' }
+
+    it.each([undefined, '', '-1', '1.5', '1e3', ' 1', '0x10', '18446744073709551616', null, 7])(
+      'rejects invalid metadata %s with a coded field error before fetching',
+      async value => {
+        for (const field of ['accountNumber', 'sequence'] as const) {
+          for (const [builder, input] of [
+            [buildSignAminoKeysignPayload, amino],
+            [buildSignDirectKeysignPayload, direct],
+          ] as const) {
+            await expect(builder({ ...input, [field]: value } as any)).rejects.toMatchObject({
+              code: VaultErrorCode.InvalidConfig,
+              message: expect.stringContaining(field),
+            })
+          }
+        }
+        expect(mockGetCosmosAccountInfo).not.toHaveBeenCalled()
+        expect(getCosmosFeeAmount).not.toHaveBeenCalled()
+      }
+    )
+
+    it.each(['0', '9007199254740993', '18446744073709551615'])('preserves exact uint64 metadata %s', async value => {
+      for (const [builder, input] of [
+        [buildSignAminoKeysignPayload, amino],
+        [buildSignDirectKeysignPayload, direct],
+      ] as const) {
+        const payload = await builder({ ...input, accountNumber: value, sequence: value } as any)
+        expect(payload.blockchainSpecific.value).toMatchObject({
+          accountNumber: BigInt(value),
+          sequence: BigInt(value),
+        })
+        if (payload.signData.case === 'signDirect') expect(payload.signData.value.accountNumber).toBe(value)
+      }
+      expect(mockGetCosmosAccountInfo).not.toHaveBeenCalled()
+    })
+
+    it.each([undefined, false])('uses fetched values when skipping is %s, ignoring offline options', async skip => {
+      const payload = await buildSignAminoKeysignPayload({
+        ...amino,
+        skipChainSpecificFetch: skip,
+        accountNumber: '99',
+        sequence: '99',
+      })
+      expect(payload.blockchainSpecific.value).toMatchObject({ accountNumber: 7n, sequence: 3n })
+      const directPayload = await buildSignDirectKeysignPayload({
+        ...direct,
+        skipChainSpecificFetch: skip,
+        sequence: '99',
+      })
+      expect(directPayload.blockchainSpecific.value).toMatchObject({ accountNumber: 7n, sequence: 3n })
+      expect(mockGetCosmosAccountInfo).toHaveBeenCalledTimes(2)
+      expect(getCosmosFeeAmount).toHaveBeenCalledTimes(2)
     })
   })
 })

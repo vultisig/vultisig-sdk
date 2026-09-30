@@ -45,7 +45,10 @@ export type VultisigVault = {
     readonly ecdsa: string
     readonly eddsa: string
   }
-  prepareSignDirectTx(input: SignDirectInput, options?: { skipChainSpecificFetch?: boolean }): Promise<KeysignPayload>
+  prepareSignDirectTx(
+    input: SignDirectInput,
+    options?: { skipChainSpecificFetch?: boolean; sequence?: string }
+  ): Promise<KeysignPayload>
   extractMessageHashes(keysignPayload: KeysignPayload): Promise<string[]>
   sign(payload: SigningPayload, options?: { signal?: AbortSignal }): Promise<VultisigSignature>
   broadcastTx(params: {

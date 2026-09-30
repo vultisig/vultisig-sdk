@@ -47,7 +47,7 @@ export async function buildWithdrawalKeysignPayload(params: KeysignBuildParams):
       accountNumber: accountInfo.accountNumber,
       memo: prepared.memo,
     },
-    { skipChainSpecificFetch: true }
+    { skipChainSpecificFetch: true, sequence: accountInfo.sequence }
   )
 
   const derivedPublicKey = basePayload.coin?.hexPublicKey || vault.publicKeys.ecdsa

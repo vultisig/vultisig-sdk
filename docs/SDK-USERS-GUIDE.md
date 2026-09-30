@@ -3035,8 +3035,34 @@ interface CosmosCoinAmount {
 // Options for Cosmos signing
 interface CosmosSigningOptions {
   skipChainSpecificFetch?: boolean // Skip account/sequence fetch
+  accountNumber?: string // Required for offline SignAmino
+  sequence?: string // Required for either offline signing mode
 }
 ```
+
+Offline Cosmos signing requires real pre-fetched account metadata. When
+`skipChainSpecificFetch` is true, SignAmino requires `accountNumber` and
+`sequence` in the options; SignDirect requires `sequence` in the options and
+uses `accountNumber` from its input. Both values must be unsigned decimal uint64
+strings (including explicit zero). Missing or invalid metadata throws
+`VaultError` with code `INVALID_CONFIG` before a payload is returned. Keep
+large values as strings to avoid JavaScript number rounding.
+
+```typescript
+const aminoPayload = await vault.prepareSignAminoTx(aminoInput, {
+  skipChainSpecificFetch: true,
+  accountNumber: '7',
+  sequence: '41',
+})
+const directPayload = await vault.prepareSignDirectTx(
+  { ...directInput, accountNumber: '7' },
+  { skipChainSpecificFetch: true, sequence: '41' }
+)
+```
+
+Supply metadata from a trusted pre-fetch and keep it current for the transaction
+being signed. With fetching enabled (the default), offline options do not
+override fetched metadata; SignDirect continues to use its input account number.
 
 ### Seedphrase & Vault Creation Types
 

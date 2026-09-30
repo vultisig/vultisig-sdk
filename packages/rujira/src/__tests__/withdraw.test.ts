@@ -274,6 +274,11 @@ describe('RujiraWithdraw', () => {
       expect(result.destination).toBe('bc1q...')
       expect(result.status).toBe('pending')
 
+      expect(mockVault.prepareSignDirectTx).toHaveBeenCalledWith(expect.objectContaining({ accountNumber: '12345' }), {
+        skipChainSpecificFetch: true,
+        sequence: '5',
+      })
+
       // Verify vault methods were called
       expect(mockVault.extractMessageHashes).toHaveBeenCalled()
       expect(mockVault.sign).toHaveBeenCalled()
@@ -286,6 +291,8 @@ describe('RujiraWithdraw', () => {
             case: 'thorchainSpecific',
             value: expect.objectContaining({
               isDeposit: true,
+              accountNumber: 12345n,
+              sequence: 5n,
             }),
           }),
           swapPayload: expect.objectContaining({

@@ -299,9 +299,13 @@ describe('Cosmos Signing Types', () => {
     it('should accept skipChainSpecificFetch option', () => {
       const options: CosmosSigningOptions = {
         skipChainSpecificFetch: true,
+        accountNumber: '7',
+        sequence: '41',
       }
 
       expect(options.skipChainSpecificFetch).toBe(true)
+      expect(options.accountNumber).toBe('7')
+      expect(options.sequence).toBe('41')
     })
   })
 })

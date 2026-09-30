@@ -76,6 +76,8 @@ export const prepareSignAminoTxFromKeys = async (
     publicKey,
     libType: identity.libType,
     skipChainSpecificFetch: options?.skipChainSpecificFetch,
+    accountNumber: options?.accountNumber,
+    sequence: options?.sequence,
   })
 }
 
@@ -136,5 +138,6 @@ export const prepareSignDirectTxFromKeys = async (
     publicKey,
     libType: identity.libType,
     skipChainSpecificFetch: options?.skipChainSpecificFetch,
+    sequence: options?.sequence,
   })
 }

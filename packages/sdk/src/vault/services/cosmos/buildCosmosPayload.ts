@@ -27,7 +27,14 @@ import {
   SignDirectSchema,
 } from '@vultisig/core-mpc/types/vultisig/keysign/v1/wasm_execute_contract_payload_pb'
 
-import type { CosmosFeeInput, CosmosMsgInput, SignAminoInput, SignDirectInput } from '../../../types/cosmos'
+import type {
+  CosmosFeeInput,
+  CosmosMsgInput,
+  CosmosSigningOptions,
+  SignAminoInput,
+  SignDirectInput,
+} from '../../../types/cosmos'
+import { VaultError, VaultErrorCode } from '../../VaultError'
 
 /**
  * Minimal public-key contract the Cosmos payload builders need — just the raw
@@ -43,23 +50,40 @@ export type CosmosBuilderPublicKey = {
 /**
  * Input parameters for building SignAmino keysign payload
  */
-export type BuildSignAminoPayloadInput = SignAminoInput & {
-  vaultId: string
-  localPartyId: string
-  publicKey: CosmosBuilderPublicKey
-  libType: KeysignLibType
-  skipChainSpecificFetch?: boolean
-}
+export type BuildSignAminoPayloadInput = SignAminoInput &
+  CosmosSigningOptions & {
+    vaultId: string
+    localPartyId: string
+    publicKey: CosmosBuilderPublicKey
+    libType: KeysignLibType
+  }
 
 /**
  * Input parameters for building SignDirect keysign payload
  */
-export type BuildSignDirectPayloadInput = SignDirectInput & {
-  vaultId: string
-  localPartyId: string
-  publicKey: CosmosBuilderPublicKey
-  libType: KeysignLibType
-  skipChainSpecificFetch?: boolean
+export type BuildSignDirectPayloadInput = SignDirectInput &
+  Pick<CosmosSigningOptions, 'skipChainSpecificFetch' | 'sequence'> & {
+    vaultId: string
+    localPartyId: string
+    publicKey: CosmosBuilderPublicKey
+    libType: KeysignLibType
+  }
+
+/** Require exact unsigned decimal uint64 metadata for offline payloads. */
+function requirePrefetched(value: string | undefined, field: string, builder: string): string {
+  if (value === undefined) {
+    throw new VaultError(
+      VaultErrorCode.InvalidConfig,
+      `${builder}: ${field} is required when skipChainSpecificFetch is true. Pass the pre-fetched account metadata.`
+    )
+  }
+  if (typeof value !== 'string' || !/^[0-9]+$/.test(value) || BigInt(value) > 18_446_744_073_709_551_615n) {
+    throw new VaultError(
+      VaultErrorCode.InvalidConfig,
+      `${builder}: ${field} must be an unsigned decimal uint64 string.`
+    )
+  }
+  return value
 }
 
 /**
@@ -171,10 +195,13 @@ export async function buildSignAminoKeysignPayload(input: BuildSignAminoPayloadI
   const { chain, coin, msgs, fee, memo, vaultId, localPartyId, publicKey, libType, skipChainSpecificFetch } = input
 
   // Get account info from chain unless skipped
-  let accountNumber = '0'
-  let sequence = '0'
+  let accountNumber: string
+  let sequence: string
 
-  if (!skipChainSpecificFetch) {
+  if (skipChainSpecificFetch) {
+    accountNumber = requirePrefetched(input.accountNumber, 'accountNumber', 'buildSignAminoKeysignPayload')
+    sequence = requirePrefetched(input.sequence, 'sequence', 'buildSignAminoKeysignPayload')
+  } else {
     const accountInfo = await getCosmosAccountInfo({
       chain,
       address: coin.address,
@@ -239,9 +266,12 @@ export async function buildSignDirectKeysignPayload(input: BuildSignDirectPayloa
   } = input
 
   // Get sequence from chain unless skipped
-  let sequence = '0'
+  let sequence: string
 
-  if (!skipChainSpecificFetch) {
+  if (skipChainSpecificFetch) {
+    requirePrefetched(accountNumber, 'accountNumber', 'buildSignDirectKeysignPayload')
+    sequence = requirePrefetched(input.sequence, 'sequence', 'buildSignDirectKeysignPayload')
+  } else {
     const accountInfo = await getCosmosAccountInfo({
       chain,
       address: coin.address,
