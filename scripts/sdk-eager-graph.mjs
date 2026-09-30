@@ -5,7 +5,7 @@ const emittedChunks = bundle =>
       .map(chunk => [chunk.fileName, chunk])
   )
 
-export function measureRollupEagerGraph(bundle) {
+function measureRollupEagerGraph(bundle) {
   const chunks = emittedChunks(bundle)
   const results = []
 
