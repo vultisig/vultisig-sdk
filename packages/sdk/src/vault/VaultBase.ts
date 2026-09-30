@@ -1291,7 +1291,10 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
           result[key] = { ...balance, value: price, fiatValue, fiatCurrency: currency }
         } catch (error) {
-          const { value: _value, fiatValue: _fiatValue, fiatCurrency: _fiatCurrency, ...unpricedBalance } = balance
+          const unpricedBalance = { ...balance }
+          delete unpricedBalance.value
+          delete unpricedBalance.fiatValue
+          delete unpricedBalance.fiatCurrency
           result[key] = unpricedBalance
           failures.push({
             chain,
