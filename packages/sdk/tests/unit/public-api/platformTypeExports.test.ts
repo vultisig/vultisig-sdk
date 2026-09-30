@@ -15,6 +15,7 @@ describe('browser-family declaration exports', () => {
       browser: './dist/index.browser.d.ts',
       worker: './dist/index.browser.d.ts',
       'react-native': './dist/index.react-native.d.ts',
+      require: './dist/index.d.cts',
       default: './dist/index.d.ts',
     })
     expect(sdkPackageJson.exports['./browser'].types).toBe('./dist/index.browser.d.ts')

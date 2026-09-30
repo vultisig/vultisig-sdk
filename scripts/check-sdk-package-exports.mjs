@@ -167,7 +167,7 @@ function collectEnglishIntlRegistrations(ast, registrations) {
 }
 
 export function validatePackedReactNativeIntl(packageRoot) {
-  for (const entry of ['dist/index.react-native.js', 'dist/tools/prep/index.react-native.js']) {
+  for (const entry of ['dist/index.react-native.js']) {
     const pending = [entry]
     const visited = new Set()
     let bundledSource = ''

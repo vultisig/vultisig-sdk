@@ -78,7 +78,7 @@ test('FormatJS provenance rejects SDK runtime ancestry but permits independent c
 
 test('packed React Native entrypoints retain bundled Intl data without FormatJS imports', () => {
   withArtifact(
-    ['dist/index.react-native.js', 'dist/tools/prep/index.react-native.js', 'dist/chunks/react-native/intl.js'],
+    ['dist/index.react-native.js', 'dist/chunks/react-native/intl.js'],
     root => {
       const chunk = path.join(root, 'dist/chunks/react-native/intl.js')
       const marker = 'getCanonicalLocales Locale NumberFormat PluralRules __addLocaleData'
@@ -88,10 +88,6 @@ Intl.PluralRules.__addLocaleData({ locale: 'en' })
 `
       writeFileSync(chunk, `export const marker = ${JSON.stringify(marker)}; ${registrations}`)
       writeFileSync(path.join(root, 'dist/index.react-native.js'), "import './chunks/react-native/intl.js'")
-      writeFileSync(
-        path.join(root, 'dist/tools/prep/index.react-native.js'),
-        "import '../../chunks/react-native/intl.js'"
-      )
       assert.doesNotThrow(() => validatePackedReactNativeIntl(root))
       writeFileSync(
         chunk,
@@ -363,7 +359,7 @@ test('derives every custom TypeScript declaration condition from the manifest', 
   ])
 })
 
-test('introspectable runtime cases include browser/chrome-extension and seedphrase but exclude react-native/rn-preamble/root', () => {
+test('introspectable runtime cases include browser/chrome-extension and DeFi but exclude react-native/rn-preamble/root', () => {
   const manifest = {
     name: '@vultisig/sdk',
     exports: {
@@ -388,18 +384,18 @@ test('introspectable runtime cases include browser/chrome-extension and seedphra
         import: './dist/index.rn-preamble.js',
         default: './dist/index.rn-preamble.js',
       },
-      './seedphrase': {
-        types: './dist/seedphrase/index.d.ts',
-        node: { import: './dist/seedphrase/index.js', require: './dist/seedphrase/index.cjs' },
-        import: './dist/seedphrase/index.js',
-        require: './dist/seedphrase/index.cjs',
+      './tools/defi': {
+        types: './dist/tools/defi/index.d.ts',
+        node: { import: './dist/tools/defi/index.js', require: './dist/tools/defi/index.cjs' },
+        import: './dist/tools/defi/index.js',
+        require: './dist/tools/defi/index.cjs',
       },
     },
   }
 
   assert.deepEqual(
     collectIntrospectableRuntimeCases(manifest).map(({ specifier }) => specifier),
-    ['@vultisig/sdk/browser', '@vultisig/sdk/seedphrase']
+    ['@vultisig/sdk/browser', '@vultisig/sdk/tools/defi']
   )
 })
 
@@ -409,17 +405,17 @@ test('runtime export keys are collected from the packed module and empty modules
     mkdirSync(path.join(root, 'dist'), { recursive: true })
     writeFileSync(
       path.join(root, 'dist/with-exports.mjs'),
-      'export const normalizeMnemonic = (value) => value.trim()\nexport class SeedphraseValidator {}\n'
+      'export const buildSwap = (value) => value.trim()\nexport class DefiClient {}\n'
     )
     writeFileSync(path.join(root, 'dist/empty.mjs'), 'export {}\n')
 
     const keys = collectRuntimeExportKeys(root, [
-      { specifier: '@vultisig/sdk/seedphrase', target: './dist/with-exports.mjs' },
+      { specifier: '@vultisig/sdk/tools/defi', target: './dist/with-exports.mjs' },
       { specifier: '@vultisig/sdk/empty', target: './dist/empty.mjs' },
     ])
 
     assert.deepEqual(keys, {
-      '@vultisig/sdk/seedphrase': ['SeedphraseValidator', 'normalizeMnemonic'],
+      '@vultisig/sdk/tools/defi': ['DefiClient', 'buildSwap'],
     })
   } finally {
     rmSync(root, { recursive: true, force: true })

@@ -347,7 +347,14 @@ export { DEFAULT_CHAINS } from '../../constants'
 export { defaultChains } from '@vultisig/core-chain/Chain'
 
 // Canonical TRON address and TRC-20 ABI helpers, shared with the root SDK entrypoint.
-export { encodeTrc20TransferParam, tronBase58ToEvmHex, tronBase58ToHex, tronHexToBase58 } from '../../abi/tron'
+export {
+  encodeTrc20TransferParam,
+  ERC20_ABI,
+  ERC1155_ABI,
+  tronBase58ToEvmHex,
+  tronBase58ToHex,
+  tronHexToBase58,
+} from '../../abi'
 
 // WalletCore provider access
 export { configureWasm, getWalletCore } from '../../context/wasmRuntime'
@@ -1229,3 +1236,13 @@ export const prep = {
 } as const
 
 export { swap }
+
+// Complete former subpath surfaces under the native root condition.
+export * as chainTon from '../../chains/ton'
+export * as chainTron from '../../chains/tron'
+export * as chainUtxo from '../../chains/utxo'
+export * as seedphrase from '../../seedphrase'
+export * as server from '../../server'
+export { getCctpChainNameByDomain } from '../../tools/bridge/cctp'
+export type { CctpBurnMessage } from '../../tools/bridge/decodeCctpBurnMessage'
+export { decodeCctpBurnMessage } from '../../tools/bridge/decodeCctpBurnMessage'
