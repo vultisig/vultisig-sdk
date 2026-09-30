@@ -17,10 +17,7 @@ const isMissingSuiTransaction = (error: unknown): boolean => {
     // Keep the original message when it is not URI encoded.
   }
 
-  return (
-    (code === 'NOT_FOUND' && /^Transaction \S+ not found$/i.test(message)) ||
-    /Could not find the referenced transaction/i.test(message)
-  )
+  return message === 'Missing response data' || (code === 'NOT_FOUND' && /^Transaction \S+ not found$/i.test(message))
 }
 
 export const getSuiTxStatus: TxStatusResolver<OtherChain.Sui> = async ({ hash }) => {
@@ -36,8 +33,10 @@ export const getSuiTxStatus: TxStatusResolver<OtherChain.Sui> = async ({ hash })
     })
   )
 
-  // The Sui clients reject an unknown digest with a specific not-found error.
-  // Other failures and malformed successful responses prove nothing and remain retryable.
+  // The gRPC client returns a transaction-specific NOT_FOUND error. The React
+  // Native GraphQL client throws "Missing response data" after a null
+  // transaction result (GraphQL-level errors are thrown earlier). Other
+  // failures and malformed successful responses prove nothing and remain retryable.
   if (isMissingSuiTransaction(error)) {
     return { status: 'not_found', isKnown: false }
   }

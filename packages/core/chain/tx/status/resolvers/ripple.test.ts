@@ -83,7 +83,10 @@ describe('getRippleTxStatus', () => {
     mocks.request.mockResolvedValue({
       result: {
         validated: true,
-        meta: { TransactionResult: 'tesSUCCESS', delivered_amount: '100000000000000000' },
+        meta: {
+          TransactionResult: 'tesSUCCESS',
+          delivered_amount: '100000000000000000',
+        },
         tx_json: { Fee: '20', TransactionType: 'Payment' },
       },
     })
@@ -111,7 +114,10 @@ describe('getRippleTxStatus', () => {
       },
     })
 
-    const result = await getRippleTxStatus({ chain: OtherChain.Ripple, hash })
+    const result = await getRippleTxStatus({
+      chain: OtherChain.Ripple,
+      hash,
+    })
     expect(result.receipt).toMatchObject({ deliveredAmount: value })
   })
 
@@ -183,7 +189,12 @@ describe('getRippleTxStatus', () => {
       result: {
         validated: true,
         meta: { TransactionResult: 'tesSUCCESS', Amount: '999999999' },
-        tx_json: { Fee: '20', TransactionType: 'Payment', Amount: '999999999', DeliverMax: '999999999' },
+        tx_json: {
+          Fee: '20',
+          TransactionType: 'Payment',
+          Amount: '999999999',
+          DeliverMax: '999999999',
+        },
       },
     })
 
@@ -228,11 +239,23 @@ describe('getRippleTxStatus', () => {
     {},
     { value: '1' },
     { value: 'NaN', currency: 'USD', issuer: 'rIssuer' },
-    { value: '1', currency: 'XRP', issuer: 'rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B' },
+    {
+      value: '1',
+      currency: 'XRP',
+      issuer: 'rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B',
+    },
     { value: '1', currency: 'US', issuer: 'rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B' },
     { value: '1', currency: 'USD', issuer: 'rInvalid' },
-    { value: '1e96', currency: 'USD', issuer: 'rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B' },
-    { value: '1e-82', currency: 'USD', issuer: 'rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B' },
+    {
+      value: '1e96',
+      currency: 'USD',
+      issuer: 'rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B',
+    },
+    {
+      value: '1e-82',
+      currency: 'USD',
+      issuer: 'rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B',
+    },
     {
       value: '12345678901234567',
       currency: 'USD',
@@ -245,7 +268,10 @@ describe('getRippleTxStatus', () => {
       currency: 'USD',
       issuer: 'rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B',
     },
-    { value: '9223372036854775808', mpt_issuance_id: '000004C463C52827307480341125DA0577DEFC38405B0E3E' },
+    {
+      value: '9223372036854775808',
+      mpt_issuance_id: '000004C463C52827307480341125DA0577DEFC38405B0E3E',
+    },
     {
       value: '999999999999999999999999999999999999999999999999999999999999',
       mpt_issuance_id: '000004C463C52827307480341125DA0577DEFC38405B0E3E',
@@ -289,7 +315,11 @@ describe('getRippleTxStatus', () => {
     expect(result.receipt).not.toHaveProperty('deliveredAmount')
   })
 
-  it('reports not_found for rippled txnNotFound errors', async () => {
+  it.each([
+    ['false', false, { status: 'pending', isKnown: false }],
+    ['omitted', undefined, { status: 'not_found', isKnown: false }],
+    ['true', true, { status: 'not_found', isKnown: false }],
+  ] as const)('classifies thrown txnNotFound with searched_all %s', async (_, searchedAll, expected) => {
     // Regression for the silent-broadcast bug: the broadcast resolver
     // catches engine-level rejections (temREDUNDANT, tecXXX, etc.) and
     // routes specifically the peer-race codes (tefALREADY/tefPAST_SEQ)
@@ -306,11 +336,34 @@ describe('getRippleTxStatus', () => {
         error_message: 'Transaction not found.',
         status: 'error',
         type: 'response',
+        ...(searchedAll === undefined ? {} : { searched_all: searchedAll }),
       })
     )
 
-    const result = await getRippleTxStatus({ chain: OtherChain.Ripple, hash })
-    expect(result).toEqual({ status: 'not_found', isKnown: false })
+    const result = await getRippleTxStatus({
+      chain: OtherChain.Ripple,
+      hash,
+    })
+    expect(result).toEqual(expected)
+  })
+
+  it.each([
+    ['false', false, { status: 'pending', isKnown: false }],
+    ['omitted', undefined, { status: 'not_found', isKnown: false }],
+    ['true', true, { status: 'not_found', isKnown: false }],
+  ] as const)('classifies resolved txnNotFound with searched_all %s', async (_, searchedAll, expected) => {
+    mocks.request.mockResolvedValue({
+      result: {
+        error: 'txnNotFound',
+        ...(searchedAll === undefined ? {} : { searched_all: searchedAll }),
+      },
+    })
+
+    const result = await getRippleTxStatus({
+      chain: OtherChain.Ripple,
+      hash,
+    })
+    expect(result).toEqual(expected)
   })
 
   it('keeps unrelated XRPL request failures pending', async () => {

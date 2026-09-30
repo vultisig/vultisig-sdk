@@ -31,6 +31,38 @@ describe('getQbtcTxStatus', () => {
     })
   })
 
+  it('reports not_found for a Cosmos SDK RPC-prefixed tx-not-found response', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchResponse(404, {
+        code: 5,
+        message: `rpc error: code = NotFound desc = tx not found: ${hash}`,
+        details: [],
+      })
+    )
+
+    await expect(getQbtcTxStatus({ chain: Chain.QBTC, hash })).resolves.toEqual({
+      status: 'not_found',
+      isKnown: false,
+    })
+  })
+
+  it('keeps an unrelated HTTP 404/code 5 response pending', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchResponse(404, {
+        code: 5,
+        message: 'account not found',
+        details: [],
+      })
+    )
+
+    await expect(getQbtcTxStatus({ chain: Chain.QBTC, hash })).resolves.toEqual({
+      status: 'pending',
+      isKnown: false,
+    })
+  })
+
   it('keeps a non-not-found HTTP failure pending', async () => {
     vi.stubGlobal(
       'fetch',

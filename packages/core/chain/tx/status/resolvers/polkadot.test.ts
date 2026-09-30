@@ -28,23 +28,60 @@ describe('getPolkadotTxStatus', () => {
     // and a real broadcast failure was reported as success — UI showed
     // a "done" screen with a locally computed hash that had no
     // on-chain counterpart. Mirrors ripple.ts:25 / solana.ts:19.
-    mocks.queryUrl.mockResolvedValue({ code: 10001, message: 'Record Not Found', data: null })
+    mocks.queryUrl.mockResolvedValue({
+      code: 10001,
+      message: 'Record Not Found',
+      data: null,
+    })
 
-    const result = await getPolkadotTxStatus({ chain: OtherChain.Polkadot, hash })
+    const result = await getPolkadotTxStatus({
+      chain: OtherChain.Polkadot,
+      hash,
+    })
     expect(result).toEqual({ status: 'pending', isKnown: false })
   })
 
   it('returns isKnown:false on network/API error', async () => {
     mocks.queryUrl.mockRejectedValue(new Error('network failure'))
 
-    const result = await getPolkadotTxStatus({ chain: OtherChain.Polkadot, hash })
+    const result = await getPolkadotTxStatus({
+      chain: OtherChain.Polkadot,
+      hash,
+    })
+    expect(result).toEqual({ status: 'pending', isKnown: false })
+  })
+
+  it('returns pending when queryUrl rejects an HTTP 400 response', async () => {
+    mocks.queryUrl.mockRejectedValue(
+      Object.assign(new Error('HTTP 400'), {
+        response: {
+          status: 400,
+          data: {
+            code: 403,
+            message: 'Subscan API strictly requires an API key.',
+          },
+        },
+      })
+    )
+
+    const result = await getPolkadotTxStatus({
+      chain: OtherChain.Polkadot,
+      hash,
+    })
     expect(result).toEqual({ status: 'pending', isKnown: false })
   })
 
   it('reports not_found when a successful Subscan response has null data', async () => {
-    mocks.queryUrl.mockResolvedValue({ code: 0, message: 'Success', data: null })
+    mocks.queryUrl.mockResolvedValue({
+      code: 0,
+      message: 'Success',
+      data: null,
+    })
 
-    const result = await getPolkadotTxStatus({ chain: OtherChain.Polkadot, hash })
+    const result = await getPolkadotTxStatus({
+      chain: OtherChain.Polkadot,
+      hash,
+    })
     expect(result).toEqual({ status: 'not_found', isKnown: false })
   })
 
@@ -58,7 +95,10 @@ describe('getPolkadotTxStatus', () => {
       data: { hash, success: false, finalized: false },
     })
 
-    const result = await getPolkadotTxStatus({ chain: OtherChain.Polkadot, hash })
+    const result = await getPolkadotTxStatus({
+      chain: OtherChain.Polkadot,
+      hash,
+    })
     expect(result).toEqual({ status: 'pending', isKnown: true })
   })
 
@@ -69,7 +109,10 @@ describe('getPolkadotTxStatus', () => {
       data: { hash, success: true, finalized: true, fee_used: '125000000' },
     })
 
-    const result = await getPolkadotTxStatus({ chain: OtherChain.Polkadot, hash })
+    const result = await getPolkadotTxStatus({
+      chain: OtherChain.Polkadot,
+      hash,
+    })
     expect(result.status).toBe('success')
     expect(result.receipt).toMatchObject({
       feeAmount: BigInt(125000000),
@@ -84,7 +127,10 @@ describe('getPolkadotTxStatus', () => {
       data: { hash, success: true, finalized: true, fee: '200000000' },
     })
 
-    const result = await getPolkadotTxStatus({ chain: OtherChain.Polkadot, hash })
+    const result = await getPolkadotTxStatus({
+      chain: OtherChain.Polkadot,
+      hash,
+    })
     expect(result.receipt).toMatchObject({ feeAmount: BigInt(200000000) })
   })
 
@@ -95,7 +141,10 @@ describe('getPolkadotTxStatus', () => {
       data: { hash, success: false, finalized: true, fee_used: '125000000' },
     })
 
-    const result = await getPolkadotTxStatus({ chain: OtherChain.Polkadot, hash })
+    const result = await getPolkadotTxStatus({
+      chain: OtherChain.Polkadot,
+      hash,
+    })
     expect(result.status).toBe('error')
   })
 
@@ -106,7 +155,10 @@ describe('getPolkadotTxStatus', () => {
       data: { hash, success: true, finalized: true },
     })
 
-    const result = await getPolkadotTxStatus({ chain: OtherChain.Polkadot, hash })
+    const result = await getPolkadotTxStatus({
+      chain: OtherChain.Polkadot,
+      hash,
+    })
     expect(result.status).toBe('success')
     expect(result.receipt).toBeUndefined()
   })

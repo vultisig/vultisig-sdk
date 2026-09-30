@@ -23,11 +23,11 @@ type TxResponse = {
 
 type QbtcLookup = { kind: 'found'; response: TxResponse } | { kind: 'not_found' }
 
-const isQbtcNotFoundResponse = (status: number, body: unknown, hash: string): boolean => {
+const isQbtcNotFoundResponse = (status: number, body: unknown): boolean => {
   if (status !== 404 || !body || typeof body !== 'object') return false
 
   const { code, message } = body as { code?: unknown; message?: unknown }
-  return code === 5 && typeof message === 'string' && message === `tx not found: ${hash}`
+  return code === 5 && typeof message === 'string' && message.includes('tx not found')
 }
 
 export const getQbtcTxStatus: TxStatusResolver<typeof Chain.QBTC> = async ({ hash }) => {
@@ -35,7 +35,7 @@ export const getQbtcTxStatus: TxStatusResolver<typeof Chain.QBTC> = async ({ has
   const { data: lookup, error } = await attempt(async (): Promise<QbtcLookup> => {
     const resp = await fetch(url)
     const body: unknown = await resp.json()
-    if (isQbtcNotFoundResponse(resp.status, body, hash)) return { kind: 'not_found' }
+    if (isQbtcNotFoundResponse(resp.status, body)) return { kind: 'not_found' }
     if (!resp.ok) throw new Error(`${resp.status}`)
     return { kind: 'found', response: body as TxResponse }
   })

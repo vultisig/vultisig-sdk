@@ -87,6 +87,24 @@ describe('getTonTxStatus', () => {
     })
   })
 
+  it.each([
+    ['msg_hash', 0],
+    ['body_hash', 1],
+    ['trace_id', 2],
+    ['trace msg_hash', 3],
+  ] as const)('stays pending when only the %s lookup is unknown', async (_, unknownIndex) => {
+    const emptyResponses = [{ transactions: [] }, { transactions: [] }, { traces: [] }, { traces: [] }]
+
+    emptyResponses.forEach((response, index) => {
+      mocks.queryUrl.mockResolvedValueOnce(index === unknownIndex ? {} : response)
+    })
+
+    await expect(getTonTxStatus({ chain: OtherChain.Ton, hash })).resolves.toEqual({
+      status: 'pending',
+      isKnown: false,
+    })
+  })
+
   it('stays pending when the transaction is indexed without execution details', async () => {
     respondWith(undefined)
 
@@ -232,7 +250,12 @@ describe('getTonTxStatus', () => {
   it('falls back to a body-hash lookup for a relayed request the message hash does not find', async () => {
     mocks.queryUrl.mockResolvedValueOnce({ transactions: [] }).mockResolvedValueOnce({
       transactions: [
-        relayedWalletTx({ type: 'ord', aborted: false, compute_ph: okComputePhase, action: okActionPhase }),
+        relayedWalletTx({
+          type: 'ord',
+          aborted: false,
+          compute_ph: okComputePhase,
+          action: okActionPhase,
+        }),
       ],
     })
 
@@ -299,13 +322,22 @@ describe('getTonTxStatus', () => {
     total_fees: '1010869',
     in_msg: { source: null, opcode: '0x077ddc9e' },
     out_msgs: [{ hash: 'signed-request-msg', opcode: '0x73696e74' }],
-    description: { type: 'ord', aborted: false, compute_ph: okComputePhase, action: okActionPhase },
+    description: {
+      type: 'ord',
+      aborted: false,
+      compute_ph: okComputePhase,
+      action: okActionPhase,
+    },
   }
 
   it('follows a matched relay transaction to the wallet transaction it delivered the request to', async () => {
     mocks.queryUrl.mockResolvedValueOnce({ transactions: [relayTx] }).mockResolvedValueOnce({
       transactions: [
-        relayedWalletTx({ aborted: false, compute_ph: okComputePhase, action: { ...okActionPhase, tot_actions: 2 } }),
+        relayedWalletTx({
+          aborted: false,
+          compute_ph: okComputePhase,
+          action: { ...okActionPhase, tot_actions: 2 },
+        }),
       ],
     })
 
@@ -345,7 +377,11 @@ describe('getTonTxStatus', () => {
   it('reports the wallet silently ignoring the delivered request as a signature rejection', async () => {
     mocks.queryUrl.mockResolvedValueOnce({ transactions: [relayTx] }).mockResolvedValueOnce({
       transactions: [
-        relayedWalletTx({ aborted: false, compute_ph: okComputePhase, action: { ...okActionPhase, tot_actions: 0 } }),
+        relayedWalletTx({
+          aborted: false,
+          compute_ph: okComputePhase,
+          action: { ...okActionPhase, tot_actions: 0 },
+        }),
       ],
     })
 
@@ -363,7 +399,11 @@ describe('getTonTxStatus', () => {
           total_fees: '1000000',
           in_msg: { source: null, opcode: '0x7369676e' },
           out_msgs: [{ hash: 'jetton-transfer', opcode: '0x0f8a7ea5' }],
-          description: { aborted: false, compute_ph: okComputePhase, action: okActionPhase },
+          description: {
+            aborted: false,
+            compute_ph: okComputePhase,
+            action: okActionPhase,
+          },
         },
       ],
     })
@@ -375,7 +415,12 @@ describe('getTonTxStatus', () => {
   it('also finds the trace by the hash of the message the relay broadcast', async () => {
     const trace = {
       trace_id: 'other',
-      transactions: { wallet: relayedWalletTx({ aborted: true, compute_ph: { exit_code: 133 } }) },
+      transactions: {
+        wallet: relayedWalletTx({
+          aborted: true,
+          compute_ph: { exit_code: 133 },
+        }),
+      },
     }
     mocks.queryUrl
       .mockResolvedValueOnce({ transactions: [] })
@@ -400,7 +445,14 @@ describe('getTonTxStatus', () => {
         traces: [
           {
             trace_id: hash,
-            transactions: { relay: { hash: 'r', total_fees: '1', in_msg: { source: null }, description: {} } },
+            transactions: {
+              relay: {
+                hash: 'r',
+                total_fees: '1',
+                in_msg: { source: null },
+                description: {},
+              },
+            },
           },
         ],
       })

@@ -5,6 +5,10 @@ import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { TxStatusResolver } from '../resolver'
 
+// Subscan requires an API key, which the SDK does not send. Unauthenticated
+// calls return `{ code: 403 }` and therefore resolve to unknown `pending`.
+// A configurable key or node-RPC lookup is required before this resolver can
+// report any production lookup as something other than `pending`.
 const subscanExtrinsicUrl = 'https://assethub-polkadot.api.subscan.io/api/scan/extrinsic'
 
 type SubscanExtrinsicResponse = {

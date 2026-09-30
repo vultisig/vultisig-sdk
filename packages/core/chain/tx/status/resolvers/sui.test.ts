@@ -40,6 +40,24 @@ describe('getSuiTxStatus — unified client result union', () => {
     })
   })
 
+  it('reports not_found when the React Native GraphQL client returns a null transaction', async () => {
+    mocks.getTransaction.mockRejectedValueOnce(new Error('Missing response data'))
+
+    await expect(getSuiTxStatus({ chain: OtherChain.Sui, hash })).resolves.toEqual({
+      status: 'not_found',
+      isKnown: false,
+    })
+  })
+
+  it('keeps unrelated GraphQL client errors pending', async () => {
+    mocks.getTransaction.mockRejectedValueOnce(new Error('GraphQL request failed: rate limit exceeded'))
+
+    await expect(getSuiTxStatus({ chain: OtherChain.Sui, hash })).resolves.toEqual({
+      status: 'pending',
+      isKnown: false,
+    })
+  })
+
   it('keeps unrelated client failures pending', async () => {
     mocks.getTransaction.mockRejectedValueOnce(
       Object.assign(new Error('upstream unavailable'), { code: 'UNAVAILABLE' })
