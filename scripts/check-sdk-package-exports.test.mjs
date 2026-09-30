@@ -12,7 +12,11 @@ import {
   collectRuntimeExportKeys,
   collectTypeCustomConditionSets,
   createPackedConsumerManifest,
+  hasSdkDependencyAncestry,
+  validateNoInstalledReactNativeFormatJs,
   validatePackedExportTargets,
+  validatePackedReactNativeIntl,
+  validateReactNativeFormatJsDependencies,
 } from './check-sdk-package-exports.mjs'
 
 function withArtifact(files, run) {
@@ -28,6 +32,92 @@ function withArtifact(files, run) {
     rmSync(root, { recursive: true, force: true })
   }
 }
+
+test('React Native FormatJS packages are build inputs, not consumer dependencies', () => {
+  const names = [
+    '@formatjs/intl-getcanonicallocales',
+    '@formatjs/intl-locale',
+    '@formatjs/intl-numberformat',
+    '@formatjs/intl-pluralrules',
+  ]
+  const manifest = { devDependencies: Object.fromEntries(names.map(name => [name, '^1.0.0'])) }
+  assert.doesNotThrow(() => validateReactNativeFormatJsDependencies(manifest))
+  for (const field of ['dependencies', 'optionalDependencies', 'peerDependencies']) {
+    assert.throws(
+      () => validateReactNativeFormatJsDependencies({ ...manifest, [field]: { [names[0]]: '^1.0.0' } }),
+      new RegExp(`must not be an SDK ${field} entry`)
+    )
+  }
+  assert.throws(
+    () => validateReactNativeFormatJsDependencies({ devDependencies: {} }),
+    /must remain an SDK build dependency/
+  )
+})
+
+test('clean packed consumers do not contain React Native FormatJS packages', () => {
+  withArtifact([], root => {
+    assert.doesNotThrow(() => validateNoInstalledReactNativeFormatJs(root))
+    const installedPackage = path.join(root, 'node_modules/@formatjs/intl-numberformat')
+    mkdirSync(installedPackage, { recursive: true })
+    assert.throws(() => validateNoInstalledReactNativeFormatJs(root), /Command failed: npm explain/)
+  })
+})
+
+test('FormatJS provenance rejects SDK runtime ancestry but permits independent consumers', () => {
+  const sdk = { name: '@vultisig/sdk' }
+  const sdkChild = { name: '@vultisig/core-chain', dependents: [{ from: sdk }] }
+  const unrelated = { name: 'unrelated-consumer', dependents: [{ from: { name: 'test-consumer' } }] }
+  assert.equal(hasSdkDependencyAncestry(sdk), true)
+  assert.equal(hasSdkDependencyAncestry(sdkChild), true)
+  assert.equal(hasSdkDependencyAncestry(unrelated), false)
+  assert.equal(
+    hasSdkDependencyAncestry({ name: 'shared', dependents: [{ from: unrelated }, { from: sdkChild }] }),
+    true
+  )
+})
+
+test('packed React Native entrypoints retain bundled Intl data without FormatJS imports', () => {
+  withArtifact(
+    ['dist/index.react-native.js', 'dist/tools/prep/index.react-native.js', 'dist/chunks/react-native/intl.js'],
+    root => {
+      const chunk = path.join(root, 'dist/chunks/react-native/intl.js')
+      const marker = 'getCanonicalLocales Locale NumberFormat PluralRules __addLocaleData'
+      const registrations = `
+Intl.NumberFormat.__addLocaleData({ locale: 'en' })
+Intl.PluralRules.__addLocaleData({ locale: 'en' })
+`
+      writeFileSync(chunk, `export const marker = ${JSON.stringify(marker)}; ${registrations}`)
+      writeFileSync(path.join(root, 'dist/index.react-native.js'), "import './chunks/react-native/intl.js'")
+      writeFileSync(
+        path.join(root, 'dist/tools/prep/index.react-native.js'),
+        "import '../../chunks/react-native/intl.js'"
+      )
+      assert.doesNotThrow(() => validatePackedReactNativeIntl(root))
+      writeFileSync(
+        chunk,
+        `export const marker = ${JSON.stringify(marker)};
+Intl.NumberFormat.__addLocaleData({ 'locale': 'en' })
+Intl.PluralRules.__addLocaleData({ 'locale': 'en' })`
+      )
+      assert.doesNotThrow(() => validatePackedReactNativeIntl(root))
+      writeFileSync(path.join(root, 'dist/index.react-native.js'), 'export const sdk = true')
+      assert.throws(
+        () => validatePackedReactNativeIntl(root),
+        /index.react-native.js must embed Intl getCanonicalLocales/
+      )
+      writeFileSync(path.join(root, 'dist/index.react-native.js'), "import './chunks/react-native/intl.js'")
+      writeFileSync(chunk, "import '@formatjs/intl-numberformat/polyfill.js'")
+      assert.throws(() => validatePackedReactNativeIntl(root), /must bundle FormatJS instead of referencing it/)
+      writeFileSync(
+        chunk,
+        `export const marker = ${JSON.stringify(marker)}; Intl.NumberFormat.__addLocaleData({ locale: 'en' })`
+      )
+      assert.throws(() => validatePackedReactNativeIntl(root), /must register English PluralRules locale data/)
+      writeFileSync(chunk, 'export const marker = "PluralRules"')
+      assert.throws(() => validatePackedReactNativeIntl(root), /must embed Intl getCanonicalLocales/)
+    }
+  )
+})
 
 test('walks every conditional target without a subpath allow-list', () => {
   const exports = {
@@ -136,14 +226,8 @@ test('packed consumers resolve the complete local SDK dependency graph without n
 
 test('packed consumers reject an incompatible coordinated dependency selector', () => {
   const packedManifests = new Map([
-    [
-      '@vultisig/sdk',
-      { version: '6.3.0', dependencies: { '@vultisig/core-mpc': '2.1.1' } },
-    ],
-    [
-      '@vultisig/core-mpc',
-      { version: '2.1.1', dependencies: { '@vultisig/core-chain': '4.1.0' } },
-    ],
+    ['@vultisig/sdk', { version: '6.3.0', dependencies: { '@vultisig/core-mpc': '2.1.1' } }],
+    ['@vultisig/core-mpc', { version: '2.1.1', dependencies: { '@vultisig/core-chain': '4.1.0' } }],
     ['@vultisig/core-chain', { version: '4.1.1', dependencies: {} }],
     ['@vultisig/mpc-types', { version: '0.3.0', dependencies: {} }],
   ])
