@@ -325,7 +325,7 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
         destination: keysignPayload.toAddress,
         ...(issuedCurrencyAmount
           ? { currencyAmount: issuedCurrencyAmount }
-          : { amount: Long.fromString(keysignPayload.toAmount) }),
+          : { amount: Long.fromString(assertBoundedInt(keysignPayload.toAmount, 'int64')) }),
         ...(destinationTag === undefined ? {} : { destinationTag: Long.fromNumber(destinationTag) as any }),
       }),
     }

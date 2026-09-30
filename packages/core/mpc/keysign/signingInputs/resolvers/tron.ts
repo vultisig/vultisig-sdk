@@ -14,8 +14,8 @@ import { getBlockchainSpecificValue } from '../../chainSpecific/KeysignChainSpec
 import { getKeysignSwapPayload } from '../../swap/getKeysignSwapPayload'
 import { SigningInputsResolver } from '../resolver'
 
-// sdk#1200: callValue / callTokenValue / feeLimit are all TRON int64 proto
-// fields fed by third-party gas estimation / swap-aggregator data — bound
+// Transfer/staking amounts and callValue / callTokenValue / feeLimit are TRON
+// int64 proto fields fed by caller or third-party data — bound
 // them before Long.fromString rather than letting an out-of-range magnitude
 // silently two's-complement-wrap (e.g. a wrapped feeLimit authorizing an
 // outsized fee burn).
@@ -103,7 +103,7 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
       throw new Error(`Invalid TRON resource type: ${resource}`)
     }
 
-    const frozenBalance = Long.fromString(shouldBePresent(keysignPayload?.toAmount))
+    const frozenBalance = toBoundedTronLong(shouldBePresent(keysignPayload?.toAmount))
     if (frozenBalance.lessThanOrEqual(Long.ZERO)) {
       throw new Error('Frozen balance must be strictly positive')
     }
@@ -132,7 +132,7 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
       throw new Error(`Invalid TRON resource type: ${resource}`)
     }
 
-    const unfreezeBalance = Long.fromString(shouldBePresent(keysignPayload?.toAmount))
+    const unfreezeBalance = toBoundedTronLong(shouldBePresent(keysignPayload?.toAmount))
     if (unfreezeBalance.lessThanOrEqual(Long.ZERO)) {
       throw new Error('Unfreeze balance must be strictly positive')
     }
@@ -176,7 +176,7 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
             transfer: TW.Tron.Proto.TransferContract.create({
               ownerAddress: value.ownerAddress,
               toAddress: value.toAddress,
-              amount: Long.fromString(value.amount),
+              amount: toBoundedTronLong(value.amount),
             }),
           }
         },
@@ -198,7 +198,7 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
             transferAsset: TW.Tron.Proto.TransferAssetContract.create({
               ownerAddress: value.ownerAddress,
               toAddress: value.toAddress,
-              amount: Long.fromString(value.amount),
+              amount: toBoundedTronLong(value.amount),
               assetName: value.assetName,
             }),
             feeLimit: toBoundedTronLong(tronSpecific.gasEstimation.toString()),
@@ -239,7 +239,7 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
           const contract = TW.Tron.Proto.TransferContract.create({
             ownerAddress: shouldBePresent(keysignPayload?.coin?.address),
             toAddress: shouldBePresent(vaultAddress),
-            amount: Long.fromString(shouldBePresent(keysignPayload?.toAmount)),
+            amount: toBoundedTronLong(shouldBePresent(keysignPayload?.toAmount)),
           })
 
           const input = TW.Tron.Proto.SigningInput.create({
@@ -305,7 +305,7 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
     const contract = TW.Tron.Proto.TransferContract.create({
       ownerAddress: shouldBePresent(keysignPayload?.coin?.address),
       toAddress: shouldBePresent(keysignPayload?.toAddress),
-      amount: Long.fromString(shouldBePresent(keysignPayload?.toAmount)),
+      amount: toBoundedTronLong(shouldBePresent(keysignPayload?.toAmount)),
     })
 
     const input = TW.Tron.Proto.SigningInput.create({

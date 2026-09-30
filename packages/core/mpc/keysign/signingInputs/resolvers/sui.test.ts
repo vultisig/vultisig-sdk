@@ -6,6 +6,7 @@ import { getSuiTransactionDataDigest } from '@vultisig/core-chain/chains/sui/sig
 import { getCoinType } from '@vultisig/core-chain/coin/coinType'
 import { initWasm, TW, type WalletCore } from '@trustwallet/wallet-core'
 import type { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
+import Long from 'long'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import { getSuiChainSpecific } from '../../chainSpecific/resolvers/sui'
@@ -60,6 +61,52 @@ const suiCoin = (id: string, balance: string, coinType = SUI_TYPE) =>
     digest: `digest-${id}`,
     balance,
   })
+
+describe.each(['native', 'token'] as const)('Sui %s transfer amount bounds', kind => {
+  const buildPayload = (toAmount: string) =>
+    create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, {
+        chain: Chain.Sui,
+        address: signer,
+        contractAddress: kind === 'token' ? TOKEN_TYPE : '',
+        isNativeToken: kind === 'native',
+      }),
+      toAddress: signer,
+      toAmount,
+      blockchainSpecific: {
+        case: 'suicheSpecific',
+        value: create(SuiSpecificSchema, {
+          referenceGasPrice: '1000',
+          gasBudget: '1',
+          coins: [suiCoin('gas', (1n << 64n).toString()), suiCoin('token', ((1n << 64n) - 1n).toString(), TOKEN_TYPE)],
+        }),
+      },
+    })
+
+  it.each(['0', '1000000', '9223372036854775808', '18446744073709551615'])(
+    'preserves uint64 amount %s and legacy wire bytes',
+    async amount => {
+      const [input] = await getSuiSigningInputs({ keysignPayload: buildPayload(amount), walletCore })
+      const payment = (kind === 'native' ? input.paySui : input.pay)!
+      expect(payment.amounts?.[0].toString()).toBe(amount)
+      expect((payment.amounts?.[0] as Long).unsigned).toBe(true)
+      const encoded = TW.Sui.Proto.SigningInput.encode(input).finish()
+      const decoded = TW.Sui.Proto.SigningInput.decode(encoded)
+      expect((kind === 'native' ? decoded.paySui : decoded.pay)?.amounts?.[0].toString()).toBe(amount)
+      payment.amounts = [Long.fromString(amount)]
+      expect(TW.Sui.Proto.SigningInput.encode(input).finish()).toEqual(encoded)
+    }
+  )
+
+  it.each(['18446744073709551616', '99999999999999999999999', '-1', '', '0x10', ' 5 ', '+5', '1.5', '5\n'])(
+    'rejects invalid amount %j before building an input',
+    amount => {
+      expect(() => getSuiSigningInputs({ keysignPayload: buildPayload(amount), walletCore })).toThrow(
+        /assertBoundedInt/
+      )
+    }
+  )
+})
 
 beforeAll(async () => {
   walletCore = await initWasm()

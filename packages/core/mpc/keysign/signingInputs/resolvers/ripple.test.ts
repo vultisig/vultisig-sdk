@@ -114,6 +114,28 @@ const buildPaymentPayload = ({
     },
   })
 
+describe.each([{}, { destinationTag: 42 }, { destinationTag: 42, memo: '42' }])(
+  'Ripple native proto amount bounds (%j)',
+  options => {
+    it.each(['1000000', '9223372036854775807'])('round-trips exact int64 amount %s', async amount => {
+      const payload = buildPaymentPayload(options)
+      payload.toAmount = amount
+      const [input] = await getRippleSigningInputs({ keysignPayload: payload, walletCore })
+      const decoded = TW.Ripple.Proto.SigningInput.decode(TW.Ripple.Proto.SigningInput.encode(input).finish())
+      expect(decoded.opPayment?.amount?.toString()).toBe(amount)
+    })
+
+    it.each(['9223372036854775808', '18446744073709551616', '-9223372036854775809', '', '0x10', ' 5 ', '1.5', '5\n'])(
+      'rejects invalid amount %j',
+      amount => {
+        const payload = buildPaymentPayload(options)
+        payload.toAmount = amount
+        expect(() => getRippleSigningInputs({ keysignPayload: payload, walletCore })).toThrow(/assertBoundedInt/)
+      }
+    )
+  }
+)
+
 describe('getRippleSigningInputs -- TrustSet build path (issued currency)', () => {
   it('builds an OperationTrustSet with the on-ledger currency code, issuer and value', async () => {
     // 1.5 RLUSD at 15 decimals.

@@ -6,7 +6,10 @@ import { OneInchSwapPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keys
 import { TronSpecificSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { CoinSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/coin_pb'
 import { KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
-import { TronTransferContractPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/tron_contract_payload_pb'
+import {
+  TronTransferAssetContractPayloadSchema,
+  TronTransferContractPayloadSchema,
+} from '@vultisig/core-mpc/types/vultisig/keysign/v1/tron_contract_payload_pb'
 import { THORChainSwapPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/thorchain_swap_payload_pb'
 import Long from 'long'
 import { describe, expect, it } from 'vitest'
@@ -54,6 +57,73 @@ const buildPayload = (memo: string, toAmount = '1000000000') =>
       value: makeTronSpecific(100_000_000n),
     },
   })
+
+describe.each(['freeze', 'unfreeze', 'contract', 'asset', 'swap', 'send'] as const)(
+  'Tron %s transfer amount bounds',
+  kind => {
+    const payloadFor = (amount: string) => {
+      const payload = buildPayload(
+        kind === 'freeze' ? 'FREEZE:ENERGY' : kind === 'unfreeze' ? 'UNFREEZE:BANDWIDTH' : '',
+        amount
+      )
+      if (kind === 'contract') {
+        payload.contractPayload = {
+          case: 'tronTransferContractPayload',
+          value: create(TronTransferContractPayloadSchema, { ownerAddress: OWNER, toAddress: OWNER, amount }),
+        }
+      } else if (kind === 'asset') {
+        payload.contractPayload = {
+          case: 'tronTransferAssetContractPayload',
+          value: create(TronTransferAssetContractPayloadSchema, {
+            ownerAddress: OWNER,
+            toAddress: OWNER,
+            amount,
+            assetName: '1000001',
+          }),
+        }
+      } else if (kind === 'swap') {
+        payload.swapPayload = {
+          case: 'thorchainSwapPayload',
+          value: create(THORChainSwapPayloadSchema, { fromCoin: payload.coin, vaultAddress: OWNER }),
+        }
+      }
+      return payload
+    }
+
+    const amountFor = (input: TW.Tron.Proto.ISigningInput) => {
+      const tx = input.transaction!
+      return (
+        tx.freezeBalanceV2?.frozenBalance ??
+        tx.unfreezeBalanceV2?.unfreezeBalance ??
+        tx.transferAsset?.amount ??
+        tx.transfer?.amount
+      )
+    }
+
+    it.each(['1000000', '9223372036854775807'])('round-trips exact int64 amount %s', async amount => {
+      const [input] = await getTronSigningInputs({ keysignPayload: payloadFor(amount), walletCore })
+      const encoded = TW.Tron.Proto.SigningInput.encode(input).finish()
+      expect(amountFor(input)?.toString()).toBe(amount)
+      expect(amountFor(TW.Tron.Proto.SigningInput.decode(encoded))?.toString()).toBe(amount)
+    })
+
+    it.each(['9223372036854775808', '18446744073709551616', '-9223372036854775809', '', '0x10', ' 5 ', '1.5', '5\n'])(
+      'rejects invalid amount %j',
+      amount =>
+        expect(() => getTronSigningInputs({ keysignPayload: payloadFor(amount), walletCore })).toThrow(
+          /assertBoundedInt/
+        )
+    )
+
+    if (kind === 'freeze' || kind === 'unfreeze') {
+      it.each(['0', '-1'])('retains strictly-positive staking validation for %s', amount => {
+        expect(() => getTronSigningInputs({ keysignPayload: payloadFor(amount), walletCore })).toThrow(
+          /strictly positive/
+        )
+      })
+    }
+  }
+)
 
 const buildWithdrawExpireUnfreezePayload = ({
   chain = Chain.Tron,

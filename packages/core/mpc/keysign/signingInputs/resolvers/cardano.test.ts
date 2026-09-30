@@ -24,6 +24,7 @@ import { CoinSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/coin_pb
 import { KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { UtxoInfoSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/utxo_info_pb'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
+import Long from 'long'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import { getPreSigningOutput } from '../../preSigningOutput'
@@ -84,6 +85,64 @@ const EXPECTED_TOKEN_AWARE_PRE_IMAGE_HASH = '839ae494ce1af23729a8e918c2d63febb68
 // What the pre-fix (token-blind) SDK derived from the same payload — pinned to
 // document the exact divergence that made iOS↔SDK keysign fail to converge.
 const TOKEN_BLIND_PRE_IMAGE_HASH = 'db6bde29ccda113233a4ac6bc668fd14ad114ca013698948cfe0d7aa818b7903'
+
+describe('Cardano transfer amount bounds', () => {
+  let walletCore: WalletCore
+  beforeAll(async () => {
+    walletCore = await initWasm()
+  })
+
+  const payloadFor = (amount: string, sendMaxAmount = false) => {
+    const byteFee = 200_000n
+    const total = sendMaxAmount ? BigInt(amount) + byteFee : 5_000_000n
+    return create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, { chain: Chain.Cardano, address: SENDER_ADDRESS, isNativeToken: true }),
+      toAddress: RECIPIENT_ADDRESS,
+      toAmount: sendMaxAmount ? '' : amount,
+      blockchainSpecific: {
+        case: 'cardano',
+        value: create(CardanoChainSpecificSchema, { byteFee, ttl: 500_000n, sendMaxAmount }),
+      },
+      utxoInfo: [
+        create(UtxoInfoSchema, { hash: '11'.repeat(32), amount: total / 2n, index: 0 }),
+        create(UtxoInfoSchema, { hash: '22'.repeat(32), amount: total - total / 2n, index: 0 }),
+      ],
+    })
+  }
+
+  describe.each([false, true])('send-max=%s', sendMax => {
+    it.each(['0', '1000000', '9223372036854775808', '18446744073709551615'])(
+      'preserves uint64 amount %s and legacy bytes',
+      async amount => {
+        const [input] = await getCardanoSigningInputs({ keysignPayload: payloadFor(amount, sendMax), walletCore })
+        const encoded = TW.Cardano.Proto.SigningInput.encode(input).finish()
+        const decoded = TW.Cardano.Proto.SigningInput.decode(encoded)
+        expect(input.transferMessage?.amount?.toString()).toBe(amount)
+        expect(decoded.transferMessage?.amount?.toString()).toBe(amount)
+        expect(decoded.transferMessage?.useMaxAmount).toBe(false)
+        expect(decoded.transferMessage?.forceFee?.toString()).toBe('200000')
+        input.transferMessage!.amount = Long.fromString(amount)
+        expect(TW.Cardano.Proto.SigningInput.encode(input).finish()).toEqual(encoded)
+      }
+    )
+
+    it.each(['-1', '18446744073709551616', '99999999999999999999999'])(
+      'rejects out-of-uint64 derived transfer %s',
+      amount =>
+        expect(() => getCardanoSigningInputs({ keysignPayload: payloadFor(amount, sendMax), walletCore })).toThrow(
+          /out of uint64 range/
+        )
+    )
+  })
+
+  it.each(['', '0x10', ' 5 ', '+5', '1.5', '5\n'])(
+    'rejects malformed native amount %j before BigInt coercion',
+    amount =>
+      expect(() => getCardanoSigningInputs({ keysignPayload: payloadFor(amount), walletCore })).toThrow(
+        /assertBoundedInt/
+      )
+  )
+})
 
 describe('getCardanoSigningInputs — per-UTXO native tokens', () => {
   let walletCore: WalletCore

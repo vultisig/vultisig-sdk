@@ -1,6 +1,7 @@
 import { Buffer } from 'buffer'
 import { fromCardanoAssetId } from '@vultisig/core-chain/chains/cardano/asset/cardanoAssetId'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
+import { assertBoundedInt } from '@vultisig/lib-utils/bigint/assertBoundedInt'
 import { bigIntSum } from '@vultisig/lib-utils/bigint/bigIntSum'
 import { stripHexPrefix } from '@vultisig/lib-utils/hex/stripHexPrefix'
 import { TW } from '@trustwallet/wallet-core'
@@ -58,7 +59,8 @@ export const getCardanoSigningInputs: SigningInputsResolver<'cardano'> = ({ keys
     ? bigIntSum(keysignPayload.utxoInfo.map(({ amount }) => amount)) - byteFee
     : isTokenSend
       ? CARDANO_CNT_MIN_UTXO_LOVELACE
-      : BigInt(keysignPayload.toAmount)
+      : BigInt(assertBoundedInt(keysignPayload.toAmount, 'uint64'))
+  const transferAmount = Long.fromString(assertBoundedInt(sendAmount.toString(), 'uint64'), true)
 
   // CIP-20 memo: hand the already-CBOR-encoded auxiliary data to WalletCore,
   // which commits its Blake2b-256 hash into the tx body (key 7) and embeds the
@@ -85,7 +87,7 @@ export const getCardanoSigningInputs: SigningInputsResolver<'cardano'> = ({ keys
     transferMessage: TW.Cardano.Proto.Transfer.create({
       toAddress: keysignPayload.toAddress,
       changeAddress: coin.address,
-      amount: Long.fromString(sendAmount.toString()),
+      amount: transferAmount,
       useMaxAmount: false,
       tokenAmount: tokenBundle,
       forceFee: Long.fromString(byteFee.toString()),

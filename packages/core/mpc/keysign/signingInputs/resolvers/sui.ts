@@ -1,5 +1,6 @@
 import { suiGasBudget } from '@vultisig/core-chain/chains/sui/config'
 import { SuiCoin } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
+import { assertBoundedInt } from '@vultisig/lib-utils/bigint/assertBoundedInt'
 import { TW } from '@trustwallet/wallet-core'
 import Long from 'long'
 
@@ -62,7 +63,9 @@ export const getSuiSigningInputs: SigningInputsResolver<'sui'> = ({ keysignPaylo
     gasBudget: Long.fromString(gasBudgetAmount.toString()),
   }
 
-  const amount = BigInt(keysignPayload.toAmount || '0')
+  const amountString = assertBoundedInt(keysignPayload.toAmount, 'uint64')
+  const amount = BigInt(amountString)
+  const transferAmount = Long.fromString(amountString, true)
 
   if (coin.id) {
     const tokenCoins = coins.filter(c => isSameSuiCoinType(c.coinType, coinType))
@@ -79,7 +82,7 @@ export const getSuiSigningInputs: SigningInputsResolver<'sui'> = ({ keysignPaylo
           gas: createObjectRef(gasObject),
           inputCoins: inputCoins,
           recipients: [keysignPayload.toAddress],
-          amounts: [Long.fromString(keysignPayload.toAmount)],
+          amounts: [transferAmount],
         }),
       }),
     ]
@@ -93,7 +96,7 @@ export const getSuiSigningInputs: SigningInputsResolver<'sui'> = ({ keysignPaylo
       paySui: TW.Sui.Proto.PaySui.create({
         inputCoins: inputCoins,
         recipients: [keysignPayload.toAddress],
-        amounts: [Long.fromString(keysignPayload.toAmount)],
+        amounts: [transferAmount],
       }),
     }),
   ]
