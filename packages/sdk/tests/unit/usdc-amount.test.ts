@@ -42,12 +42,15 @@ describe('shared parseUsdcAmount', () => {
     expect(parseCctpUsdcAmount).toBe(parseThreeJaneUsdcAmount)
   })
 
-  it.each(['+1', '-1', '1e3', '1_000', '1a'])('rejects signed or non-digit input %s through both callers', value => {
-    expect(() => parseCctpUsdcAmount(value)).toThrow()
-    expect(() => parseThreeJaneUsdcAmount(value)).toThrow()
-    expect(() =>
-      buildCctpBridge({ sourceChain: 'Base', destinationChain: 'Arbitrum', amount: value, from: SENDER })
-    ).toThrow()
-    expect(() => buildThreeJaneSupplyUsdc({ from: SENDER, amount: value })).toThrow()
-  })
+  it.each(['+1', '-1', '1e3', '1_000', '1a'])(
+    'rejects signed or non-digit input %s through both callers',
+    async value => {
+      expect(() => parseCctpUsdcAmount(value)).toThrow()
+      expect(() => parseThreeJaneUsdcAmount(value)).toThrow()
+      await expect(
+        buildCctpBridge({ sourceChain: 'Base', destinationChain: 'Arbitrum', amount: value, from: SENDER })
+      ).rejects.toThrow()
+      expect(() => buildThreeJaneSupplyUsdc({ from: SENDER, amount: value })).toThrow()
+    }
+  )
 })

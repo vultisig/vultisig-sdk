@@ -2,8 +2,8 @@
  * buildCctpBridge — build the source-chain unsigned transaction sequence
  * for bridging USDC cross-chain via Circle CCTP.
  *
- * Ported from mcp-ts `build_cctp_bridge_usdc`. Pure crypto: encodes the
- * two source-chain calls and returns them as an unsigned 2-tx envelope.
+ * Verifies deployed destination MessageTransmitter code via RPC, then encodes
+ * the two source-chain calls as an unsigned 2-tx envelope.
  * NEVER signs or broadcasts.
  *
  *   1. ERC-20 approve: USDC → TokenMessenger (allows the burn)
@@ -19,7 +19,8 @@ import { encodeFunctionData, getAddress, isAddress } from 'viem'
 
 import { assertSafeEvmDestination } from '../../utils/dangerousAddresses'
 import { formatUsdc, parseUsdcAmount } from '../parse/usdcAmount'
-import { type CctpChainConfig, cctpSupportedChains, getCctpChain } from './cctp'
+import { cctpSupportedChains, getCctpChain } from './cctp'
+import { type CctpBridgeSession, validateCctpMintSide } from './cctpBridgeSession'
 
 // Re-exported so the root SDK bridge surface keeps exposing both helpers;
 // the definitions live together in tools/parse/usdcAmount.ts (sdk#1931).
@@ -74,6 +75,8 @@ export type BuildCctpBridgeParams = {
    * when only one is provided (the common "bridge to my own address").
    */
   from?: string
+  /** Optional quote/wallet session for reusing successful destination checks. */
+  session?: CctpBridgeSession
 }
 
 /** A single unsigned EVM transaction within a CCTP bridge sequence. */
@@ -133,11 +136,13 @@ const addressToBytes32 = (addr: `0x${string}`): `0x${string}` => {
  * before the burn).
  *
  * @throws on unsupported chains, identical source/destination, invalid
- * amount, missing/invalid recipient, or a burn-address mintRecipient.
+ * amount, missing/invalid recipient, or a burn-address mintRecipient. Rejects
+ * with CctpRouteUnavailableError when mint-side code is absent, RPC fails, or
+ * validation exceeds 20 seconds. Returns no transactions until validation passes.
  *
  * @example
  * ```ts
- * const env = buildCctpBridge({
+ * const env = await buildCctpBridge({
  *   sourceChain: 'Base',
  *   destinationChain: 'Arbitrum',
  *   amount: '10',
@@ -147,7 +152,7 @@ const addressToBytes32 = (addr: `0x${string}`): `0x${string}` => {
  * // env.transactions[1].action === 'burn'
  * ```
  */
-export const buildCctpBridge = (params: BuildCctpBridgeParams): CctpBridgeResult => {
+export const buildCctpBridge = async (params: BuildCctpBridgeParams): Promise<CctpBridgeResult> => {
   const srcInput = params.sourceChain.trim()
   const dstInput = params.destinationChain.trim()
 
@@ -155,18 +160,23 @@ export const buildCctpBridge = (params: BuildCctpBridgeParams): CctpBridgeResult
   // `('base', 'Base')` through as two different chains and then build a bridge
   // from a chain to itself, which is exactly the failure alias tolerance would
   // otherwise introduce.
-  const srcCctp: CctpChainConfig | undefined = getCctpChain(srcInput)
-  if (!srcCctp) {
+  const source = getCctpChain(srcInput)
+  if (!source) {
     throw new Error(
       `source chain ${JSON.stringify(srcInput)} is not supported by CCTP. Supported: ${cctpSupportedChains.join(', ')}`
     )
   }
-  const dstCctp: CctpChainConfig | undefined = getCctpChain(dstInput)
-  if (!dstCctp) {
+  const destination = getCctpChain(dstInput)
+  if (!destination) {
     throw new Error(
       `destination chain ${JSON.stringify(dstInput)} is not supported by CCTP. Supported: ${cctpSupportedChains.join(', ')}`
     )
   }
+
+  // Snapshot the registry before the asynchronous boundary so checked and
+  // emitted route identities cannot diverge if callers update the registry.
+  const srcCctp = { ...source }
+  const dstCctp = { ...destination }
 
   // Canonical names from here on, so the emitted envelope always carries
   // `"Base"` regardless of whether the caller wrote `base`, `BASE` or an alias.
@@ -203,6 +213,8 @@ export const buildCctpBridge = (params: BuildCctpBridgeParams): CctpBridgeResult
   // EVM burn-list (all 3 addresses incl. `0xdead…942069`) so the set can't
   // drift per call-site again.
   assertSafeEvmDestination(recipient)
+
+  await validateCctpMintSide(dstCctp, params.session)
 
   const approveData = encodeFunctionData({
     abi: erc20ApproveAbi,

@@ -609,6 +609,8 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
 
     expect(sdk.balance.getEvmBalances).toBe(rn.getEvmBalances)
     expect(sdk.bridge.buildCctpBridge).toBe(rn.buildCctpBridge)
+    expect(sdk.bridge.createCctpBridgeSession).toBe(rn.createCctpBridgeSession)
+    expect(sdk.bridge.CctpRouteUnavailableError).toBe(rn.CctpRouteUnavailableError)
     expect(sdk.cosmos.gov.getCosmosGovernanceProposals).toBe(rn.getCosmosGovernanceProposals)
     expect(sdk.decode.fromToolResult).toBe(rn.decodeFromToolResult)
     expect(sdk.gas.compareCosts).toBe(rn.compareCosts)

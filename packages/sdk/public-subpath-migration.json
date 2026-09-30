@@ -10026,6 +10026,21 @@
             "replacement": "getCctpChainNameByDomain"
           },
           {
+            "name": "CctpBridgeSession",
+            "kind": 2,
+            "replacement": "CctpBridgeSession"
+          },
+          {
+            "name": "CctpRouteUnavailableError",
+            "kind": 3,
+            "replacement": "CctpRouteUnavailableError"
+          },
+          {
+            "name": "createCctpBridgeSession",
+            "kind": 1,
+            "replacement": "createCctpBridgeSession"
+          },
+          {
             "name": "CctpBurnMessage",
             "kind": 2,
             "replacement": "CctpBurnMessage"
@@ -10144,6 +10159,21 @@
             "name": "getCctpChainNameByDomain",
             "kind": 1,
             "replacement": "getCctpChainNameByDomain"
+          },
+          {
+            "name": "CctpBridgeSession",
+            "kind": 2,
+            "replacement": "CctpBridgeSession"
+          },
+          {
+            "name": "CctpRouteUnavailableError",
+            "kind": 3,
+            "replacement": "CctpRouteUnavailableError"
+          },
+          {
+            "name": "createCctpBridgeSession",
+            "kind": 1,
+            "replacement": "createCctpBridgeSession"
           },
           {
             "name": "CctpBurnMessage",
@@ -10266,6 +10296,21 @@
             "replacement": "getCctpChainNameByDomain"
           },
           {
+            "name": "CctpBridgeSession",
+            "kind": 2,
+            "replacement": "CctpBridgeSession"
+          },
+          {
+            "name": "CctpRouteUnavailableError",
+            "kind": 3,
+            "replacement": "CctpRouteUnavailableError"
+          },
+          {
+            "name": "createCctpBridgeSession",
+            "kind": 1,
+            "replacement": "createCctpBridgeSession"
+          },
+          {
             "name": "CctpBurnMessage",
             "kind": 2,
             "replacement": "CctpBurnMessage"
@@ -10386,6 +10431,21 @@
             "replacement": "getCctpChainNameByDomain"
           },
           {
+            "name": "CctpBridgeSession",
+            "kind": 2,
+            "replacement": "CctpBridgeSession"
+          },
+          {
+            "name": "CctpRouteUnavailableError",
+            "kind": 3,
+            "replacement": "CctpRouteUnavailableError"
+          },
+          {
+            "name": "createCctpBridgeSession",
+            "kind": 1,
+            "replacement": "createCctpBridgeSession"
+          },
+          {
             "name": "CctpBurnMessage",
             "kind": 2,
             "replacement": "CctpBurnMessage"
@@ -10504,6 +10564,21 @@
             "name": "getCctpChainNameByDomain",
             "kind": 1,
             "replacement": "getCctpChainNameByDomain"
+          },
+          {
+            "name": "CctpBridgeSession",
+            "kind": 2,
+            "replacement": "CctpBridgeSession"
+          },
+          {
+            "name": "CctpRouteUnavailableError",
+            "kind": 3,
+            "replacement": "CctpRouteUnavailableError"
+          },
+          {
+            "name": "createCctpBridgeSession",
+            "kind": 1,
+            "replacement": "createCctpBridgeSession"
           },
           {
             "name": "CctpBurnMessage",

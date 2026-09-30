@@ -1,5 +1,5 @@
 import { decodeFunctionData, encodeAbiParameters, keccak256 } from 'viem'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   buildCctpBridge,
@@ -13,6 +13,10 @@ import {
   parseUsdcAmount,
 } from '../../src/tools/bridge'
 import { assertSafeEvmDestination, EVM_DANGEROUS_ADDRESSES, isEvmBurnAddress } from '../../src/utils/dangerousAddresses'
+
+const { getCode } = vi.hoisted(() => ({ getCode: vi.fn() }))
+vi.mock('@vultisig/core-chain/chains/evm/client', () => ({ getEvmClient: () => ({ getCode }) }))
+beforeEach(() => getCode.mockReset().mockResolvedValue('0x6000'))
 
 // Reference ABIs for decoding/asserting the encoded selectors + args.
 const tokenMessengerAbi = [
@@ -77,9 +81,9 @@ describe('parseUsdcAmount', () => {
   })
 })
 
-describe('buildCctpBridge', () => {
-  it('builds a 2-tx approve+burn sequence (base -> arbitrum)', () => {
-    const res = buildCctpBridge({
+describe('buildCctpBridge', async () => {
+  it('builds a 2-tx approve+burn sequence (base -> arbitrum)', async () => {
+    const res = await buildCctpBridge({
       sourceChain: 'Base',
       destinationChain: 'Arbitrum',
       amount: '10',
@@ -121,12 +125,12 @@ describe('buildCctpBridge', () => {
   // CCTP was an exact-match object index, so callers had to pre-normalize for
   // this one family and any alias added to the canonicals later would work
   // everywhere except here.
-  describe('accepts the chain spellings the rest of the SDK accepts (sdk#1911)', () => {
+  describe('accepts the chain spellings the rest of the SDK accepts (sdk#1911)', async () => {
     it.each(['base', 'BASE', 'Base', ' base '])('resolves %j to the canonical Base config', input => {
       expect(getCctpChain(input)).toBe(cctpChains.Base)
     })
 
-    it('still returns undefined for a chain that normalizes but is not CCTP-supported', () => {
+    it('still returns undefined for a chain that normalizes but is not CCTP-supported', async () => {
       // Solana is a real chain the normalizer resolves; it just has no CCTP V1
       // config here. It must answer the same as an unresolvable string.
       expect(getCctpChain('Solana')).toBeUndefined()
@@ -135,14 +139,14 @@ describe('buildCctpBridge', () => {
       expect(getCctpChain('')).toBeUndefined()
     })
 
-    it('builds the same envelope from a lowercase spelling as from the canonical one', () => {
-      const canonical = buildCctpBridge({
+    it('builds the same envelope from a lowercase spelling as from the canonical one', async () => {
+      const canonical = await buildCctpBridge({
         sourceChain: 'Base',
         destinationChain: 'Arbitrum',
         amount: '10',
         from: SENDER,
       })
-      const lowercased = buildCctpBridge({
+      const lowercased = await buildCctpBridge({
         sourceChain: 'base',
         destinationChain: 'arbitrum',
         amount: '10',
@@ -158,72 +162,72 @@ describe('buildCctpBridge', () => {
     // The trap alias tolerance introduces: comparing the RAW strings would see
     // 'base' !== 'Base' as two different chains and happily build a bridge from
     // a chain to itself. The guard has to run on canonical names.
-    it('still rejects a same-chain bridge written with two different spellings', () => {
-      expect(() =>
+    it('still rejects a same-chain bridge written with two different spellings', async () => {
+      await expect(
         buildCctpBridge({ sourceChain: 'base', destinationChain: 'Base', amount: '1', from: SENDER })
-      ).toThrow(/must be different/)
-      expect(() =>
+      ).rejects.toThrow(/must be different/)
+      await expect(
         buildCctpBridge({ sourceChain: 'BASE', destinationChain: ' base ', amount: '1', from: SENDER })
-      ).toThrow(/must be different/)
+      ).rejects.toThrow(/must be different/)
     })
 
-    it("reports the caller's own spelling in the unsupported-chain error", () => {
-      expect(() =>
+    it("reports the caller's own spelling in the unsupported-chain error", async () => {
+      await expect(
         buildCctpBridge({ sourceChain: 'nonsense-chain', destinationChain: 'Base', amount: '1', from: SENDER })
-      ).toThrow(/"nonsense-chain"/)
+      ).rejects.toThrow(/"nonsense-chain"/)
     })
   })
 
-  it('rejects identical source/destination chains', () => {
-    expect(() => buildCctpBridge({ sourceChain: 'Base', destinationChain: 'Base', amount: '1', from: SENDER })).toThrow(
-      /must be different/
-    )
+  it('rejects identical source/destination chains', async () => {
+    await expect(
+      buildCctpBridge({ sourceChain: 'Base', destinationChain: 'Base', amount: '1', from: SENDER })
+    ).rejects.toThrow(/must be different/)
   })
 
-  it('rejects unsupported chains', () => {
-    expect(() =>
+  it('rejects unsupported chains', async () => {
+    await expect(
       buildCctpBridge({ sourceChain: 'Solana', destinationChain: 'Base', amount: '1', from: SENDER })
-    ).toThrow(/not supported by CCTP/)
+    ).rejects.toThrow(/not supported by CCTP/)
   })
 
-  it('refuses a burn-address mintRecipient (fund-safety) — all 3 canonical variants', () => {
+  it('refuses a burn-address mintRecipient (fund-safety) — all 3 canonical variants', async () => {
     // dead (case-insensitive checksum)
-    expect(() =>
+    await expect(
       buildCctpBridge({
         sourceChain: 'Base',
         destinationChain: 'Arbitrum',
         amount: '1',
         to: '0x000000000000000000000000000000000000dEaD',
       })
-    ).toThrow(/dead address/)
+    ).rejects.toThrow(/dead address/)
 
     // zero
-    expect(() =>
+    await expect(
       buildCctpBridge({
         sourceChain: 'Base',
         destinationChain: 'Arbitrum',
         amount: '1',
         to: '0x0000000000000000000000000000000000000000',
       })
-    ).toThrow(/zero address/)
+    ).rejects.toThrow(/zero address/)
 
     // dead variant — the post-#415 `0xdead…942069` address the inlined
     // 2-address Set dropped (audit P1). Bridging to it minted USDC to a
     // permanently unspendable account.
-    expect(() =>
+    await expect(
       buildCctpBridge({
         sourceChain: 'Base',
         destinationChain: 'Arbitrum',
         amount: '1',
         to: '0xdead000000000000000042069420694206942069',
       })
-    ).toThrow(/dead address variant/)
+    ).rejects.toThrow(/dead address variant/)
   })
 
-  it('covers every CCTP-supported chain as a source', () => {
+  it('covers every CCTP-supported chain as a source', async () => {
     for (const src of cctpSupportedChains) {
       const dst = cctpSupportedChains.find(c => c !== src)!
-      const res = buildCctpBridge({ sourceChain: src, destinationChain: dst, amount: '1', from: SENDER })
+      const res = await buildCctpBridge({ sourceChain: src, destinationChain: dst, amount: '1', from: SENDER })
       expect(res.transactions).toHaveLength(2)
     }
   })
