@@ -2548,13 +2548,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@formatjs/intl-locale@npm:^5.3.12":
-  version: 5.3.12
-  resolution: "@formatjs/intl-locale@npm:5.3.12"
+"@formatjs/intl-locale@npm:5.3.11":
+  version: 5.3.11
+  resolution: "@formatjs/intl-locale@npm:5.3.11"
   dependencies:
     "@formatjs/intl-getcanonicallocales": "npm:3.2.12"
-    "@formatjs/intl-supportedvaluesof": "npm:2.3.11"
-  checksum: 10c0/09e34f62f4f3ebb8d9cbaf593190ea2cfcf6e507e073b9ca90007b5da2c36aff4d1d09efcdd0b9818d8f8efc66b5b544a4cc75d3e3f445ffc42eb792287251f3
+    "@formatjs/intl-supportedvaluesof": "npm:2.3.10"
+  checksum: 10c0/111072e4b80ab84d59a64de1e7b536c60aa8ada3e424f08d46c86e41af1cf246e8014990fcb04138bdc6b1a8725124df95baf7ce4d7eabdf9845d8897f7450b4
   languageName: node
   linkType: hard
 
@@ -2587,12 +2587,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@formatjs/intl-supportedvaluesof@npm:2.3.11":
-  version: 2.3.11
-  resolution: "@formatjs/intl-supportedvaluesof@npm:2.3.11"
+"@formatjs/intl-supportedvaluesof@npm:2.3.10":
+  version: 2.3.10
+  resolution: "@formatjs/intl-supportedvaluesof@npm:2.3.10"
   dependencies:
     "@formatjs/fast-memoize": "npm:3.1.7"
-  checksum: 10c0/0b8ad5da1f84b429ebe78e8f5a6cc882cd98870545da4b894d8cfff1bdf00044ccd6e02a180f8169d2f35152837a0adeb330df8bc3cd393b2f4d39451cc362f6
+  checksum: 10c0/1dba6ced35f67af05308edfc173232b10538bb1d48176d82baa9789b915fc1e8d5751ad58391bd5f04f9d88fd7bfe556b8f44bcd4aa2ec7ca9523bc681f5a40d
   languageName: node
   linkType: hard
 
@@ -7290,7 +7290,7 @@ __metadata:
     "@cosmjs/encoding": "npm:^0.39.0"
     "@cosmjs/stargate": "npm:^0.39.0"
     "@formatjs/intl-getcanonicallocales": "npm:^3.2.12"
-    "@formatjs/intl-locale": "npm:^5.3.12"
+    "@formatjs/intl-locale": "npm:5.3.11"
     "@formatjs/intl-numberformat": "npm:^9.4.3"
     "@formatjs/intl-pluralrules": "npm:^6.3.15"
     "@lifi/sdk": "npm:^4.1.0"

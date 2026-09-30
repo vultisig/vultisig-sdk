@@ -488,7 +488,7 @@
   },
   "devDependencies": {
     "@formatjs/intl-getcanonicallocales": "^3.2.12",
-    "@formatjs/intl-locale": "^5.3.12",
+    "@formatjs/intl-locale": "5.3.11",
     "@formatjs/intl-numberformat": "^9.4.3",
     "@formatjs/intl-pluralrules": "^6.3.15",
     "@rollup/plugin-alias": "^6.0.0",
