@@ -6,7 +6,7 @@ import { resolveTokenPriceId } from '@vultisig/core-chain/coin/price/resolveToke
 import { getCoinValue } from '@vultisig/core-chain/coin/utils/getCoinValue'
 import type { FiatCurrency } from '@vultisig/core-config/FiatCurrency'
 
-import type { Balance, Token } from '../types'
+import type { Balance, FiatValuesResult, Token, Value } from '../types'
 import { CacheScope, type CacheService } from './CacheService'
 
 // Max chains fetched at once when totalling portfolio value — bounds the RPC fan-out on many-chain vaults.
@@ -310,12 +310,17 @@ export class FiatValueService {
    * console.log('USDC:', values['0xA0b86991...'].amount)
    * ```
    */
-  async getValues(
-    chain: Chain,
-    fiatCurrency?: FiatCurrency
-  ): Promise<Record<string, { amount: string; currency: FiatCurrency; lastUpdated: number }>> {
-    const values: Record<string, { amount: string; currency: FiatCurrency; lastUpdated: number }> = {}
+  async getValues(chain: Chain, fiatCurrency?: FiatCurrency): Promise<Record<string, Value>> {
+    return (await this.getValuesDetailed(chain, fiatCurrency)).values
+  }
 
+  /**
+   * Get fiat values and per-asset failures for all assets on a chain.
+   * Assets whose value cannot be resolved are omitted from `values` and
+   * represented in `failures`; a missing tokenId identifies the native asset.
+   */
+  async getValuesDetailed(chain: Chain, fiatCurrency?: FiatCurrency): Promise<FiatValuesResult> {
+    const values: Record<string, Value> = {}
     // Get all token values
     const allTokens = this.getTokens()
     const tokens = (allTokens[chain] || []).filter((token): token is Token & { contractAddress: string } =>
@@ -331,33 +336,43 @@ export class FiatValueService {
       currency
     )
 
-    const [nativeValue, tokenValues] = await Promise.all([
-      this.getValue(chain, undefined, fiatCurrency).catch(error => {
-        console.warn(`Failed to get native value for ${chain}:`, error)
-        return undefined
-      }),
+    const [nativeResult, tokenResults] = await Promise.all([
+      this.getValue(chain, undefined, fiatCurrency)
+        .then(value => ({ value }))
+        .catch(error => {
+          console.warn(`Failed to get native value for ${chain}:`, error)
+          return { error: error instanceof Error ? error.message : String(error) }
+        }),
       Promise.all(
         tokens.map(token =>
           this.getValue(chain, token.contractAddress, fiatCurrency)
-            .then(value => [token.contractAddress, value] as const)
+            .then(value => ({ tokenId: token.contractAddress, value }))
             .catch(error => {
               console.warn(`Failed to get value for token ${token.contractAddress}:`, error)
-              return undefined
+              return {
+                tokenId: token.contractAddress,
+                error: error instanceof Error ? error.message : String(error),
+              }
             })
         )
       ),
     ])
 
-    if (nativeValue) {
-      values.native = nativeValue
+    const failures: FiatValuesResult['failures'] = []
+    if ('value' in nativeResult) {
+      values.native = nativeResult.value
+    } else {
+      failures.push({ error: nativeResult.error })
     }
-    for (const entry of tokenValues) {
-      if (entry) {
-        values[entry[0]] = entry[1]
+    for (const result of tokenResults) {
+      if ('value' in result) {
+        values[result.tokenId] = result.value
+      } else {
+        failures.push({ tokenId: result.tokenId, error: result.error })
       }
     }
 
-    return values
+    return { values, failures }
   }
 
   /**
@@ -538,7 +553,9 @@ export class FiatValueService {
   private async fetchTokenPrice(chain: Chain, tokenAddress: string, currency: FiatCurrency): Promise<number> {
     if (!this.isEvmChain(chain)) {
       const priceProviderId = resolveTokenPriceId(chain, tokenAddress)
-      if (!priceProviderId) return 0
+      if (!priceProviderId) {
+        throw new Error(`No price source for token ${tokenAddress} on ${chain}`)
+      }
 
       const prices = await getCoinPrices({
         ids: [priceProviderId],

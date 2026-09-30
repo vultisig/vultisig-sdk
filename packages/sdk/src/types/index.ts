@@ -135,6 +135,11 @@ export type Value = {
   lastUpdated: number
 }
 
+export type FiatValuesResult = {
+  values: Record<string, Value>
+  failures: Array<{ tokenId?: string; error: string }>
+}
+
 export type SigningMode = 'fast' | 'relay' | 'local'
 
 export type SigningPayload = {

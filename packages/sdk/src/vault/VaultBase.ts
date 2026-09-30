@@ -58,6 +58,7 @@ import {
   ContractCallResult,
   CosmosSigningOptions,
   FiatCurrency,
+  FiatValuesResult,
   GasInfoForChain,
   MaxSendAmount,
   MessageSignature,
@@ -1950,6 +1951,15 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    */
   async getValues(chain: Chain, fiatCurrency?: FiatCurrency): Promise<Record<string, Value>> {
     return this.fiatValueService.getValues(chain, fiatCurrency)
+  }
+
+  /**
+   * Get fiat values and per-asset failures for all assets on a chain.
+   * @param chain - The blockchain chain
+   * @param fiatCurrency - Optional currency override
+   */
+  async getValuesDetailed(chain: Chain, fiatCurrency?: FiatCurrency): Promise<FiatValuesResult> {
+    return this.fiatValueService.getValuesDetailed(chain, fiatCurrency)
   }
 
   /**

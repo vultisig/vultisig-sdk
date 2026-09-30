@@ -291,6 +291,146 @@ describe('FiatValueService', () => {
       expect(values[usdc]).toBeDefined()
       expect(values[dai]).toBeDefined()
     })
+
+    it('rejects a non-EVM token with no price source', async () => {
+      const { resolveTokenPriceId } = await import('@vultisig/core-chain/coin/price/resolveTokenPriceId')
+      const tokenId = '7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs'
+      vi.mocked(resolveTokenPriceId).mockReturnValue(undefined)
+      getBalance = vi.fn(async () => ({
+        amount: '210330',
+        formattedAmount: '0.00021033',
+        decimals: 9,
+        symbol: 'ETH',
+        chainId: Chain.Solana,
+        tokenId,
+      }))
+      service = new FiatValueService(cache, getCurrency, getTokens, getChains, getBalance)
+
+      await expect(service.getValue(Chain.Solana, tokenId)).rejects.toThrow(
+        `No price source for token ${tokenId} on ${Chain.Solana}`
+      )
+    })
+
+    it('reports an unpriced token from getValuesDetailed and omits it from values', async () => {
+      const { getCoinPrices } = await import('@vultisig/core-chain/coin/price/getCoinPrices')
+      const { resolveTokenPriceId } = await import('@vultisig/core-chain/coin/price/resolveTokenPriceId')
+      const { getCoinValue } = await import('@vultisig/core-chain/coin/utils/getCoinValue')
+      const tokenId = '7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs'
+      getTokens = vi.fn(() => ({
+        [Chain.Solana]: [
+          {
+            id: tokenId,
+            symbol: 'ETH',
+            name: 'Wrapped Ether',
+            decimals: 8,
+            chainId: Chain.Solana,
+            contractAddress: tokenId,
+          },
+        ],
+      }))
+      getBalance = vi.fn(async (_chain: Chain, requestedTokenId?: string) => ({
+        amount: requestedTokenId ? '21033' : '1000000000',
+        formattedAmount: requestedTokenId ? '0.00021033' : '1',
+        decimals: requestedTokenId ? 8 : 9,
+        symbol: requestedTokenId ? 'ETH' : 'SOL',
+        chainId: Chain.Solana,
+        tokenId: requestedTokenId,
+      }))
+      vi.mocked(resolveTokenPriceId).mockReturnValue(undefined)
+      vi.mocked(getCoinPrices).mockResolvedValue({ solana: 150 })
+      vi.mocked(getCoinValue).mockReturnValue(150)
+      service = new FiatValueService(cache, getCurrency, getTokens, getChains, getBalance)
+
+      const result = await service.getValuesDetailed(Chain.Solana)
+
+      expect(result.values.native).toBeDefined()
+      expect(result.values[tokenId]).toBeUndefined()
+      expect(result.failures).toEqual([
+        {
+          tokenId,
+          error: `Failed to get value for ${Chain.Solana}:${tokenId}: No price source for token ${tokenId} on ${Chain.Solana}`,
+        },
+      ])
+    })
+
+    it('reports an EVM token price miss from getValuesDetailed', async () => {
+      const { getCoinPrices } = await import('@vultisig/core-chain/coin/price/getCoinPrices')
+      const { getErc20Prices } = await import('@vultisig/core-chain/coin/price/evm/getErc20Prices')
+      const { getCoinValue } = await import('@vultisig/core-chain/coin/utils/getCoinValue')
+      const tokenId = '0x0000000000000000000000000000000000000001'
+      getTokens = vi.fn(() => ({
+        [Chain.Ethereum]: [
+          {
+            id: tokenId,
+            symbol: 'MISS',
+            name: 'Missing',
+            decimals: 18,
+            chainId: Chain.Ethereum,
+            contractAddress: tokenId,
+          },
+        ],
+      }))
+      getBalance = vi.fn(async (_chain: Chain, requestedTokenId?: string) => ({
+        amount: '1000000000000000000',
+        formattedAmount: '1',
+        decimals: 18,
+        symbol: requestedTokenId ? 'MISS' : 'ETH',
+        chainId: Chain.Ethereum,
+        tokenId: requestedTokenId,
+      }))
+      vi.mocked(getCoinPrices).mockResolvedValue({ ethereum: 3000 })
+      vi.mocked(getErc20Prices).mockResolvedValue({})
+      vi.mocked(getCoinValue).mockReturnValue(3000)
+      service = new FiatValueService(cache, getCurrency, getTokens, getChains, getBalance)
+
+      const result = await service.getValuesDetailed(Chain.Ethereum)
+
+      expect(result.values[tokenId]).toBeUndefined()
+      expect(result.failures).toEqual([
+        {
+          tokenId,
+          error: `Failed to get value for ${Chain.Ethereum}:${tokenId}: Price not found for token ${tokenId} on ${Chain.Ethereum}`,
+        },
+      ])
+    })
+
+    it('returns a priced token from getValuesDetailed', async () => {
+      const { getCoinPrices } = await import('@vultisig/core-chain/coin/price/getCoinPrices')
+      const { getErc20Prices } = await import('@vultisig/core-chain/coin/price/evm/getErc20Prices')
+      const { getCoinValue } = await import('@vultisig/core-chain/coin/utils/getCoinValue')
+      const tokenId = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+      getTokens = vi.fn(() => ({
+        [Chain.Ethereum]: [
+          {
+            id: tokenId,
+            symbol: 'USDC',
+            name: 'USD Coin',
+            decimals: 6,
+            chainId: Chain.Ethereum,
+            contractAddress: tokenId,
+          },
+        ],
+      }))
+      getBalance = vi.fn(async (_chain: Chain, requestedTokenId?: string) => ({
+        amount: requestedTokenId ? '6250000' : '1000000000000000000',
+        formattedAmount: requestedTokenId ? '6.25' : '1',
+        decimals: requestedTokenId ? 6 : 18,
+        symbol: requestedTokenId ? 'USDC' : 'ETH',
+        chainId: Chain.Ethereum,
+        tokenId: requestedTokenId,
+      }))
+      vi.mocked(getCoinPrices).mockResolvedValue({ ethereum: 3000 })
+      vi.mocked(getErc20Prices).mockResolvedValue({
+        [tokenId.toLowerCase()]: 1,
+      })
+      vi.mocked(getCoinValue).mockImplementation(({ decimals }) => (decimals === 6 ? 6.25 : 3000))
+      service = new FiatValueService(cache, getCurrency, getTokens, getChains, getBalance)
+
+      const result = await service.getValuesDetailed(Chain.Ethereum)
+
+      expect(result.values[tokenId]?.amount).toBe('6.25')
+      expect(result.failures).toEqual([])
+    })
   })
 
   describe('getBalanceValue', () => {
@@ -529,10 +669,12 @@ describe('FiatValueService', () => {
       expect(getCoinPrices).toHaveBeenCalledWith({ ids: ['terra-luna'], fiatCurrency: 'usd' })
     })
 
-    it('should preserve zero pricing for unknown non-EVM token identifiers', async () => {
+    it('should reject unknown non-EVM token identifiers', async () => {
       const { resolveTokenPriceId } = await import('@vultisig/core-chain/coin/price/resolveTokenPriceId')
       vi.mocked(resolveTokenPriceId).mockReturnValue(undefined)
-      await expect(service.getPrice(Chain.Bitcoin, 'not-a-known-token')).resolves.toBe(0)
+      await expect(service.getPrice(Chain.Bitcoin, 'not-a-known-token')).rejects.toThrow(
+        'No price source for token not-a-known-token on Bitcoin'
+      )
     })
   })
 

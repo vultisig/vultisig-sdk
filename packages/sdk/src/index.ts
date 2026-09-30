@@ -452,6 +452,7 @@ export type {
   CosmosSigningOptions,
   EvmGasInfo,
   ExportOptions,
+  FiatValuesResult,
   GasEstimate,
   GasInfo,
   GasInfoForChain,
