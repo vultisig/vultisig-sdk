@@ -9,6 +9,14 @@ import { TxReceiptInfo, TxStatusResolver } from '../resolver'
 
 const maxXrpDrops = 100_000_000_000_000_000n
 
+const getRippleErrorCode = (value: unknown): string | undefined => {
+  if (!value || typeof value !== 'object') return undefined
+
+  const record = value as Record<string, unknown>
+  if (typeof record.error === 'string') return record.error
+  return getRippleErrorCode(record.data)
+}
+
 const isValidIssuedCurrencyValue = (value: string): boolean => {
   const match = /^(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/.exec(value)
   if (!match) return false
@@ -89,13 +97,14 @@ export const getRippleTxStatus: TxStatusResolver<OtherChain.Ripple> = async ({ h
     })
   )
 
+  // xrpl.js rejects rippled's authoritative txnNotFound response as a RippledError
+  // whose data.error carries the server code. Other errors remain retryable.
+  if (getRippleErrorCode(error) === 'txnNotFound' || getRippleErrorCode(response?.result) === 'txnNotFound') {
+    return { status: 'not_found', isKnown: false }
+  }
+
   if (error || !response || typeof response.result !== 'object' || response.result === null) {
-    // The chain says it doesn't know this hash, OR the response is
-    // shaped unexpectedly (e.g. malformed payload `{}` without `result`).
-    // Either case: mark `isKnown: false` so the verify-by-hash safety
-    // net does NOT swallow broadcast errors. Mirrors `solana.ts:19`.
-    // Status itself stays `'pending'` so status-polling UI can re-query
-    // later.
+    // A transport failure or malformed payload cannot establish absence.
     return { status: 'pending', isKnown: false }
   }
 

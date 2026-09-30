@@ -41,11 +41,11 @@ describe('getPolkadotTxStatus', () => {
     expect(result).toEqual({ status: 'pending', isKnown: false })
   })
 
-  it('returns isKnown:false when response.data is null', async () => {
+  it('reports not_found when a successful Subscan response has null data', async () => {
     mocks.queryUrl.mockResolvedValue({ code: 0, message: 'Success', data: null })
 
     const result = await getPolkadotTxStatus({ chain: OtherChain.Polkadot, hash })
-    expect(result).toEqual({ status: 'pending', isKnown: false })
+    expect(result).toEqual({ status: 'not_found', isKnown: false })
   })
 
   it('returns isKnown:true when Subscan has indexed the extrinsic but it is not finalized', async () => {

@@ -23,7 +23,13 @@ export const getCardanoTxStatus: TxStatusResolver<OtherChain.Cardano> = async ({
 
   const transaction = response.find(item => item?.tx_hash === hash)
 
-  const confirmations = transaction?.num_confirmations
+  // Koios answered successfully but omitted the hash, or returned its explicit
+  // null confirmation marker: either form means it has no record of the tx.
+  if (!transaction || transaction.num_confirmations === null) {
+    return { status: 'not_found', isKnown: false }
+  }
+
+  const confirmations = transaction.num_confirmations
 
   if (typeof confirmations !== 'number' || !Number.isInteger(confirmations) || confirmations < 0) {
     return { status: 'pending', isKnown: false }

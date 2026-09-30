@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { RippledError } from 'xrpl'
 
 const mocks = vi.hoisted(() => ({
   request: vi.fn(),
@@ -288,7 +289,7 @@ describe('getRippleTxStatus', () => {
     expect(result.receipt).not.toHaveProperty('deliveredAmount')
   })
 
-  it('returns isKnown:false for txnNotFound — verify-by-hash MUST NOT swallow broadcast errors for unknown hashes', async () => {
+  it('reports not_found for rippled txnNotFound errors', async () => {
     // Regression for the silent-broadcast bug: the broadcast resolver
     // catches engine-level rejections (temREDUNDANT, tecXXX, etc.) and
     // routes specifically the peer-race codes (tefALREADY/tefPAST_SEQ)
@@ -298,7 +299,22 @@ describe('getRippleTxStatus', () => {
     // says it doesn't know the hash, we MUST mark `isKnown: false` so
     // verify-by-hash rethrows the original error rather than reporting
     // a fake success. Mirrors solana.ts:19.
-    mocks.request.mockRejectedValue(new Error('txnNotFound'))
+    mocks.request.mockRejectedValue(
+      new RippledError('Transaction not found.', {
+        error: 'txnNotFound',
+        error_code: 29,
+        error_message: 'Transaction not found.',
+        status: 'error',
+        type: 'response',
+      })
+    )
+
+    const result = await getRippleTxStatus({ chain: OtherChain.Ripple, hash })
+    expect(result).toEqual({ status: 'not_found', isKnown: false })
+  })
+
+  it('keeps unrelated XRPL request failures pending', async () => {
+    mocks.request.mockRejectedValue(new Error('socket closed'))
 
     const result = await getRippleTxStatus({ chain: OtherChain.Ripple, hash })
     expect(result).toEqual({ status: 'pending', isKnown: false })

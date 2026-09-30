@@ -56,7 +56,7 @@ describe('getTonTxStatus', () => {
     ['URL-safe base64', '5Ntg_ZmUbx80Fsc-OvEg0Ti-ZlT2JIaozUizscN0GHk'],
     ['hexadecimal', 'e4db60fd99946f1f3416c73e3af120d138be6654f62486a8cd48b3b1c3741879'],
   ])('preserves the incoming %s message hash in the query', async (_, messageHash) => {
-    mocks.queryUrl.mockResolvedValue({ transactions: [] })
+    mocks.queryUrl.mockResolvedValue({ transactions: [], traces: [] })
 
     await getTonTxStatus({ chain: OtherChain.Ton, hash: messageHash })
 
@@ -69,11 +69,11 @@ describe('getTonTxStatus', () => {
     })
   })
 
-  it('stays pending while the indexer has no record of the message', async () => {
-    mocks.queryUrl.mockResolvedValue({ transactions: [] })
+  it('reports not_found when every successful indexer lookup has no record', async () => {
+    mocks.queryUrl.mockResolvedValue({ transactions: [], traces: [] })
 
     await expect(getTonTxStatus({ chain: OtherChain.Ton, hash })).resolves.toEqual({
-      status: 'pending',
+      status: 'not_found',
       isKnown: false,
     })
   })
@@ -408,11 +408,11 @@ describe('getTonTxStatus', () => {
     await expect(getTonTxStatus({ chain: OtherChain.Ton, hash })).resolves.toEqual({ status: 'pending', isKnown: true })
   })
 
-  it('stays pending and unknown when neither a transaction nor a trace matches', async () => {
+  it('reports not_found when neither a transaction nor a trace matches', async () => {
     mocks.queryUrl.mockResolvedValue({ transactions: [], traces: [] })
 
     await expect(getTonTxStatus({ chain: OtherChain.Ton, hash })).resolves.toEqual({
-      status: 'pending',
+      status: 'not_found',
       isKnown: false,
     })
     expect(mocks.queryUrl).toHaveBeenCalledTimes(4)
