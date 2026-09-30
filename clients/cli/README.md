@@ -108,7 +108,7 @@ All devices joined. Running keygen...
 
 ### Import from Seedphrase
 
-Import an existing wallet from a BIP39 recovery phrase (12 or 24 words):
+Import an existing wallet from a BIP39 recovery phrase (12, 15, 18, 21 or 24 words):
 
 ```bash
 # FastVault import (server-assisted 2-of-2)
@@ -134,7 +134,7 @@ When `--mnemonic` is not provided, you'll be prompted to enter it securely (mask
 ```bash
 $ vultisig create-from-seedphrase fast --name "My Wallet" --email user@example.com --password "mypassword" --discover-chains
 
-Enter your 12 or 24-word recovery phrase.
+Enter your 12, 15, 18, 21 or 24-word recovery phrase.
 Words will be hidden as you type.
 
 Seedphrase: ************************
