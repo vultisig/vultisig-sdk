@@ -1,5 +1,6 @@
 # Node dependencies
-node_modules/
+# No trailing slash: also ignore symlinks whose targets do not exist.
+node_modules
 npm-debug.log
 yarn-error.log
 
