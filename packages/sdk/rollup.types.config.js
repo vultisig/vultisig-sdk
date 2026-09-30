@@ -20,15 +20,6 @@ const dtsPluginOptions = {
   },
 }
 
-const createSubpathTypesConfig = (input, file) => ({
-  input,
-  output: {
-    file,
-    format: 'es',
-  },
-  plugins: [dts(dtsPluginOptions)],
-})
-
 const entries = [
   // Main types (platform-agnostic)
   {
@@ -116,8 +107,6 @@ const entries = [
     external: ['vite'],
     plugins: [dts(dtsPluginOptions)],
   },
-  // DeFi remains a dedicated public package entry.
-  createSubpathTypesConfig('src/tools/defi/index.ts', 'dist/tools/defi/index.d.ts'),
 ]
 
 // Retain one declaration graph so the remaining platform entries share types.

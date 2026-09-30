@@ -538,104 +538,6 @@ export {
   utxoFeeRate,
 } from '../../tools/gas'
 
-// DeFi protocol primitives (unsigned calldata builders) — sdk.defi.*
-// Pure builders, RN-safe. Statically re-exported so RN consumers can reach
-// the full defi namespace (arkis + balancer + glif + pendle + 3jane).
-export type {
-  ArkisPoolKind,
-  ArkisUnsignedTx,
-  BalancerTokenApi,
-  BalancerV3SwapCalldata,
-  BalancerV3SwapKind,
-  BalancerV3SwapPath,
-  BuildArkisSupplyParams,
-  BuildArkisSupplyResult,
-  BuildBalancerV3SwapCalldataParams,
-  BuildGlifRedeemParams,
-  BuildGlifRedeemResult,
-  BuildGlifStakeParams,
-  BuildGlifStakeResult,
-  Defi,
-  GlifUnsignedTx,
-  ResolveArkisPoolKindResult,
-  SolanaScanRequest,
-  StakekitBalanceEntry,
-  StakekitBalanceItem,
-  StakekitBalanceQuery,
-  StakekitBalancesResult,
-} from '../../tools/defi'
-export {
-  ARKIS_BOOK_URLS,
-  ARKIS_OFFICIAL_ADDRESSES,
-  buildArkisSupplyTx,
-  buildBalancerV3SwapCalldata,
-  buildYieldActionScanRequest,
-  buildYieldActionScanRequests,
-  chunkStakekitBalanceQueries,
-  defi,
-  fetchAllStakekitBalances,
-  fetchStakekitBalancesBatch,
-  finalizeStakekitAction,
-  parseActionDisplay,
-  parseArkisTokenAmount,
-  resolveArkisPoolKind,
-  STAKEKIT_BALANCE_QUERIES_PER_REQUEST,
-  StakekitActionRefusal,
-  stakekitBalances,
-  stakekitBuildEnter,
-  stakekitBuildExit,
-  stakekitBuildManage,
-  stakekitDetails,
-  stakekitSearch,
-  validateStakekitActionAddress,
-  validateStakekitActionInput,
-} from '../../tools/defi'
-export {
-  buildGlifRedeemSticnt,
-  buildGlifStakeIcnt,
-  GLIF_ICN_BASE_ADDRESSES,
-  GLIF_ICN_TOKEN_DECIMALS,
-  glifPoolWriteAbi,
-} from '../../tools/defi/glif'
-export type {
-  EvmScanRequest,
-  PendingAction,
-  ScanRequest,
-  StakekitActionDisplay,
-  StakekitActionResult,
-  StakekitDetailsResult,
-  StakekitExitResult,
-  StakekitFinalizeResult,
-  StakekitRefusalStatus,
-  UnsupportedScanRequest,
-  Validator,
-  YieldActionResponse,
-  YieldArgs,
-  YieldBalance,
-  YieldBuildFailure,
-  YieldDiscoverMetadata,
-  YieldDiscoverOpportunity,
-  YieldDiscoverToken,
-  YieldListResponse,
-  YieldMetadata,
-  YieldProduct,
-  YieldToken,
-  YieldTransaction,
-} from '../../tools/defi/stakekit'
-export type {
-  BuildThreeJaneSupplyUsdcParams,
-  BuildThreeJaneSupplyUsdcResult,
-  ThreeJaneTranche,
-  ThreeJaneTxStep,
-} from '../../tools/defi/threeJane'
-// Aliased to avoid colliding with the CCTP bridge's `parseUsdcAmount` above —
-// both re-export the same underlying `./parse/usdcAmount` helper.
-export {
-  buildThreeJaneSupplyUsdc,
-  parseUsdcAmount as parseThreeJaneUsdcAmount,
-  THREE_JANE_ADDRESSES,
-} from '../../tools/defi/threeJane'
-
 // Cosmos staking + distribution module (LCD queries — read-only,
 // vault-free, generic over every ibcEnabled cosmos chain). Mirrors the
 // generic entry (src/index.ts); the React Native allow-list omitted
@@ -893,13 +795,10 @@ export {
   getXrpBalance,
 } from '../../tools/balance'
 
-// Pure-crypto balance reads (Polkadot DOT + Assets-pallet). Exported via a lazy
-// dynamic import (NOT a static re-export) because the underlying module imports
-// `@vultisig/core-chain/chains/polkadot/client`, whose top-level
-// `import { ApiPromise, HttpProvider } from '@polkadot/api'` would pull the BN.js
-// double-bundle into the eager RN bundle and crash at module init. Deferring the
-// import to call time matches the proven RN polkadot-resolver pattern in
-// ./getCoinBalance and keeps the eager bundle free of @polkadot/api.
+// Pure-crypto balance reads (Polkadot DOT + Assets-pallet). Keep the balance
+// barrel behind a dynamic import so React Native does not evaluate its other
+// platform-sensitive dependencies at startup. The underlying Polkadot client
+// also loads @polkadot/api only when a Polkadot request is made.
 export type { PolkadotAssetBalance, PolkadotNativeBalance } from '../../tools/balance'
 type BalancePolkadot = typeof import('../../tools/balance').balancePolkadot
 
@@ -1124,39 +1023,6 @@ export { MemoryStorage } from '../../storage/MemoryStorage'
 
 // Event emitter
 export { UniversalEventEmitter } from '../../events/EventEmitter'
-
-// DeFi — River Omni-CDP (pure viem encodeFunctionData, no RPC, RN-safe)
-// Open trove resolves hints on-chain (EVM RPC), but delegate approval and
-// close trove are fully offline. All builders return unsigned calldata only.
-export type {
-  BuildRiverCloseTroveParams,
-  BuildRiverDelegateApprovalParams,
-  BuildRiverOpenTroveParams,
-  RiverAffiliateConfig,
-  RiverChain,
-  RiverChainConfig,
-  RiverCloseTroveMeta,
-  RiverDelegateApprovalMeta,
-  RiverMarket,
-  RiverOpenTroveMeta,
-  RiverTxBuild,
-  RiverUnsignedTx,
-} from '../../tools/defi/river'
-export {
-  buildRiverCloseTrove,
-  buildRiverDelegateApproval,
-  buildRiverOpenTrove,
-  describeRiverMarket,
-  findRiverInsertHints,
-  formatRiverPercentWad,
-  isRiverChain,
-  river,
-  RIVER_CHAIN_CONFIG,
-  RIVER_DEFAULT_MAX_FEE_BPS,
-  RIVER_SUPPORTED_CHAINS,
-  RIVER_TROVE_STATUS_NAMES,
-  riverStatusName,
-} from '../../tools/defi/river'
 
 // Assemble RN groups from safe static helpers and this entry’s deferred wrappers.
 export const balance = {

@@ -190,7 +190,6 @@ assert.deepEqual(Object.keys(manifest.exports), [
   './electron/main',
   './chrome-extension',
   './vite',
-  './tools/defi',
 ])
 const runtimeConfig = fs.readFileSync('packages/sdk/rollup.platforms.config.js', 'utf8')
 const typesConfig = fs.readFileSync('packages/sdk/rollup.types.config.js', 'utf8')

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+
 import alias from '@rollup/plugin-alias'
 import commonjs from '@rollup/plugin-commonjs'
 import inject from '@rollup/plugin-inject'
@@ -10,7 +12,29 @@ import { defineConfig } from 'rollup'
 import esbuild from 'rollup-plugin-esbuild'
 import { fileURLToPath } from 'url'
 
+import { validateEagerGraphBytes, validateRollupEagerGraph } from '../../scripts/sdk-eager-graph.mjs'
+
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
+const { eagerGraphCapBytes } = JSON.parse(readFileSync(path.join(currentDir, 'package-size-budget.json'), 'utf8'))
+let reactNativePreambleBytes
+
+const eagerGraphBudget = () => ({
+  name: 'vultisig-sdk-eager-graph-budget',
+  generateBundle(_outputOptions, bundle) {
+    for (const { entry, bytes, files } of validateRollupEagerGraph(bundle, eagerGraphCapBytes)) {
+      console.log(`SDK ${entry} eager graph: ${bytes} bytes across ${files} file${files === 1 ? '' : 's'}`)
+      if (entry === 'index.rn-preamble.js') reactNativePreambleBytes = bytes
+      if (entry === 'index.react-native.js') {
+        if (reactNativePreambleBytes === undefined) {
+          throw new Error('SDK React Native preamble must be built before the root entry')
+        }
+        const startupBytes = reactNativePreambleBytes + bytes
+        validateEagerGraphBytes('React Native with preamble', startupBytes, eagerGraphCapBytes)
+        console.log(`SDK React Native with preamble eager graph: ${startupBytes} bytes`)
+      }
+    }
+  },
+})
 
 const external = [
   'axios',
@@ -305,70 +329,6 @@ const createPlugins = (platformOptions = {}) => {
   ]
 }
 
-const createSubpathConfigs = ({ input, distBase, browser = false }) => [
-  {
-    input,
-    output: {
-      file: `./dist/${distBase}/index.js`,
-      format: 'es',
-      sourcemap: false,
-      inlineDynamicImports: true,
-      paths: wasmPathsResolver,
-    },
-    external,
-    plugins: createPlugins({
-      preferBuiltins: true,
-      replaceOptions: {
-        'process.env.VULTISIG_PLATFORM': JSON.stringify('node'),
-      },
-    }),
-    onwarn,
-  },
-  {
-    input,
-    output: {
-      file: `./dist/${distBase}/index.cjs`,
-      format: 'cjs',
-      sourcemap: false,
-      exports: 'named',
-      interop: 'auto',
-      inlineDynamicImports: true,
-      paths: wasmPathsResolver,
-    },
-    external,
-    plugins: createPlugins({
-      preferBuiltins: true,
-      replaceOptions: {
-        'process.env.VULTISIG_PLATFORM': JSON.stringify('node'),
-      },
-    }),
-  },
-  ...(browser
-    ? [
-        {
-          input,
-          output: {
-            file: `./dist/${distBase}/index.browser.js`,
-            format: 'es',
-            sourcemap: false,
-            inlineDynamicImports: true,
-            paths: wasmPathsResolver,
-          },
-          external,
-          plugins: createPlugins({
-            preferBuiltins: false,
-            browser: true,
-            bufferPolyfill: true,
-            replaceOptions: {
-              'process.env.VULTISIG_PLATFORM': JSON.stringify('browser'),
-            },
-          }),
-          onwarn,
-        },
-      ]
-    : []),
-]
-
 // Get target from environment variable
 const target = process.env.BUILD_TARGET || 'all'
 
@@ -411,10 +371,6 @@ const configs = {
         },
       }),
     },
-    ...createSubpathConfigs({
-      input: './src/tools/defi/index.ts',
-      distBase: 'tools/defi',
-    }),
   ],
   browser: {
     input: './src/platforms/browser/index.ts',
@@ -796,4 +752,9 @@ if (target === 'all') {
   )
 }
 
-export default defineConfig(exportConfig)
+export default defineConfig(
+  exportConfig.map(config => ({
+    ...config,
+    plugins: [...(config.plugins ?? []), eagerGraphBudget()],
+  }))
+)

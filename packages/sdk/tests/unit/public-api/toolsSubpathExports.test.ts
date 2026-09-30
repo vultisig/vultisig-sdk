@@ -20,20 +20,21 @@ const retained = [
   './electron/main',
   './chrome-extension',
   './vite',
-  './tools/defi',
 ]
 
 describe('SDK public package entries', () => {
-  it('publishes exactly the platform entries and DeFi', () => {
+  it('publishes exactly the platform entries', () => {
     expect(Object.keys(manifest.exports)).toEqual(retained)
     expect(inventory).toHaveLength(19)
     for (const { subpath } of inventory) expect(Object.hasOwn(manifest.exports, subpath)).toBe(false)
   })
 
-  it('keeps the DeFi runtime and declaration output', () => {
-    expect(manifest.exports['./tools/defi'].types).toBe('./dist/tools/defi/index.d.ts')
-    expect(runtimeConfig).toContain("distBase: 'tools/defi'")
-    expect(typesConfig).toContain("createSubpathTypesConfig('src/tools/defi/index.ts', 'dist/tools/defi/index.d.ts')")
+  it('does not publish or build the removed agent DeFi API', () => {
+    expect(manifest.exports).not.toHaveProperty('./tools/defi')
+    expect(manifest.dependencies).not.toHaveProperty('@balancer/sdk')
+    expect(manifest.dependencies).toHaveProperty('@noble/ciphers')
+    expect(runtimeConfig).not.toContain("distBase: 'tools/defi'")
+    expect(typesConfig).not.toContain('src/tools/defi/index.ts')
   })
 
   it('does not build a removed path as a separate runtime or declaration entry', () => {
