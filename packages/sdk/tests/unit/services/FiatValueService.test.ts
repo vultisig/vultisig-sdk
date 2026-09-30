@@ -348,7 +348,7 @@ describe('FiatValueService', () => {
       expect(result.failures).toEqual([
         {
           tokenId,
-          error: `Failed to get value for ${Chain.Solana}:${tokenId}: No price source for token ${tokenId} on ${Chain.Solana}`,
+          error: `No price source for token ${tokenId} on ${Chain.Solana}`,
         },
       ])
     })
@@ -389,7 +389,7 @@ describe('FiatValueService', () => {
       expect(result.failures).toEqual([
         {
           tokenId,
-          error: `Failed to get value for ${Chain.Ethereum}:${tokenId}: Price not found for token ${tokenId} on ${Chain.Ethereum}`,
+          error: `Price not found for token ${tokenId} on ${Chain.Ethereum}`,
         },
       ])
     })
@@ -608,9 +608,76 @@ describe('FiatValueService', () => {
       expect(total).toBe(3000) // Only ETH value, BTC failed
     })
 
+    it('reports an unpriced balance while excluding it from the detailed total', async () => {
+      vi.spyOn(service, 'getBalanceValue').mockImplementation(async balance => {
+        if (balance.symbol === 'MISS') throw new Error('No price source')
+        return 3000
+      })
+      const tokenId = 'unpriced-token'
+      const balances: Balance[] = [
+        {
+          amount: '1000000000000000000',
+          formattedAmount: '1',
+          decimals: 18,
+          symbol: 'ETH',
+          chainId: Chain.Ethereum,
+        },
+        {
+          amount: '1',
+          formattedAmount: '1',
+          decimals: 0,
+          symbol: 'MISS',
+          chainId: Chain.Solana,
+          tokenId,
+        },
+      ]
+
+      await expect(service.getPortfolioValue(balances)).resolves.toBe(3000)
+      await expect(service.getPortfolioValueDetailed(balances)).resolves.toEqual({
+        total: 3000,
+        failures: [{ chain: Chain.Solana, tokenId, error: 'No price source' }],
+      })
+    })
+
     it('should return zero for empty balances', async () => {
       const total = await service.getPortfolioValue([])
       expect(total).toBe(0)
+    })
+  })
+
+  describe('getTotalValueDetailed', () => {
+    it('sums priced assets and reports an unpriced token', async () => {
+      const tokenId = 'unpriced-token'
+      getChains = vi.fn(() => [Chain.Ethereum, Chain.Solana])
+      service = new FiatValueService(cache, getCurrency, getTokens, getChains, getBalance)
+      vi.spyOn(service, 'getValuesDetailed').mockImplementation(async chain =>
+        chain === Chain.Ethereum
+          ? {
+              values: {
+                native: {
+                  amount: '3000.00',
+                  currency: 'usd',
+                  lastUpdated: 1,
+                },
+              },
+              failures: [],
+            }
+          : {
+              values: {
+                native: { amount: '150.00', currency: 'usd', lastUpdated: 1 },
+              },
+              failures: [{ tokenId, error: 'No price source' }],
+            }
+      )
+
+      await expect(service.getTotalValueDetailed('usd')).resolves.toEqual({
+        total: '3150.00',
+        failures: [{ chain: Chain.Solana, tokenId, error: 'No price source' }],
+      })
+      await expect(service.getTotalValue('usd')).resolves.toMatchObject({
+        amount: '3150.00',
+        currency: 'usd',
+      })
     })
   })
 

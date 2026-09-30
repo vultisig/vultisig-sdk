@@ -251,7 +251,9 @@ export async function executePortfolio(ctx: CommandContext, options: PortfolioOp
   displayPortfolio(portfolio, displayCurrency, options.raw ?? false)
   if (scopeHint) info(`\n${scopeHint}`)
   if (failures.length > 0) {
-    warn(`\nWarning: ${failures.length} chain(s) failed to load fully:`)
+    const chainFailures = failures.filter(failure => failure.tokenId === undefined).length
+    const tokenFailures = failures.length - chainFailures
+    warn(`\nWarning: ${chainFailures} chain(s) and ${tokenFailures} token(s) could not be priced/loaded:`)
     for (const f of failures) {
       warn(`  - ${f.chain}${f.tokenId ? `:${f.tokenId}` : ''} (${f.stage}): ${f.error}`)
     }

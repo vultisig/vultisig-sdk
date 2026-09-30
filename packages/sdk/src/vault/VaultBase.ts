@@ -54,6 +54,7 @@ import { pollTxStatusUntilFinal } from '../tx'
 // Types
 import {
   Balance,
+  BalancesWithPricesResult,
   CompoundSwapResult,
   ContractCallResult,
   CosmosSigningOptions,
@@ -72,6 +73,7 @@ import {
   SigningMode,
   SigningPayload,
   Token,
+  TotalValueDetailedResult,
   Value,
   VaultData,
 } from '../types'
@@ -1247,6 +1249,15 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     includeTokens = false,
     fiatCurrency?: FiatCurrency
   ): Promise<Record<string, Balance>> {
+    return (await this.balancesWithPricesDetailed(chains, includeTokens, fiatCurrency)).balances
+  }
+
+  /** Get priced balances while retaining per-asset price failures. */
+  async balancesWithPricesDetailed(
+    chains?: Chain[],
+    includeTokens = false,
+    fiatCurrency?: FiatCurrency
+  ): Promise<BalancesWithPricesResult> {
     const balances = await this.balances(chains, includeTokens)
     const currency = (fiatCurrency ?? this._currency ?? 'usd') as FiatCurrency
 
@@ -1258,7 +1269,9 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
           .map(balance => balance.chainId as Chain)
       ),
     ]
-    const nativePrices = nativeChains.length > 0 ? await this.fiatValueService.getPrices(nativeChains, currency) : {}
+    const nativePrices =
+      nativeChains.length > 0 ? await this.fiatValueService.getPrices(nativeChains, currency).catch(() => ({})) : {}
+    const failures: BalancesWithPricesResult['failures'] = []
 
     await Promise.all(
       Object.entries(balances).map(async ([key, balance]) => {
@@ -1270,26 +1283,26 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
             ? trackedToken.contractAddress || trackedToken.id
             : resolveTokenRefId(chain, balance.tokenId, tokens)
           : undefined
-        const price = balance.tokenId
-          ? await this.fiatValueService.getPrice(chain, tokenId, currency)
-          : (nativePrices[chain] ?? (await this.fiatValueService.getPrice(chain, undefined, currency)))
+        try {
+          const price = balance.tokenId
+            ? await this.fiatValueService.getPrice(chain, tokenId, currency)
+            : (nativePrices[chain] ?? (await this.fiatValueService.getPrice(chain, undefined, currency)))
+          const fiatValue = getCoinValue({ amount: BigInt(balance.amount), decimals: balance.decimals, price })
 
-        const fiatValue = getCoinValue({
-          amount: BigInt(balance.amount),
-          decimals: balance.decimals,
-          price,
-        })
-
-        result[key] = {
-          ...balance,
-          value: price,
-          fiatValue,
-          fiatCurrency: currency,
+          result[key] = { ...balance, value: price, fiatValue, fiatCurrency: currency }
+        } catch (error) {
+          const { value: _value, fiatValue: _fiatValue, fiatCurrency: _fiatCurrency, ...unpricedBalance } = balance
+          result[key] = unpricedBalance
+          failures.push({
+            chain,
+            ...(tokenId === undefined ? {} : { tokenId }),
+            error: error instanceof Error ? error.message : String(error),
+          })
         }
       })
     )
 
-    return result
+    return { balances: result, failures }
   }
 
   /**
@@ -1967,9 +1980,9 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    * @param chain - Chain to update, or 'all' for all chains
    */
   async updateValues(chain: Chain | 'all'): Promise<void> {
-    await this.fiatValueService.updateValues(chain)
+    const failures = await this.fiatValueService.updateValuesDetailed(chain)
     // Emit event
-    this.emit('valuesUpdated', { chain })
+    this.emit('valuesUpdated', { chain, failures })
   }
 
   /**
@@ -1979,6 +1992,11 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    */
   async getTotalValue(fiatCurrency?: FiatCurrency): Promise<Value> {
     return this.fiatValueService.getTotalValue(fiatCurrency)
+  }
+
+  /** Get the total for priced assets and report every asset omitted from it. */
+  async getTotalValueDetailed(fiatCurrency?: FiatCurrency): Promise<TotalValueDetailedResult> {
+    return this.fiatValueService.getTotalValueDetailed(fiatCurrency)
   }
 
   /**
@@ -2095,9 +2113,10 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   /** Portfolio overview: balances with fiat values + total. */
   async portfolio(fiatCurrency?: FiatCurrency): Promise<Portfolio> {
     const currency = (fiatCurrency ?? this._currency ?? 'usd') as FiatCurrency
-    const balances = Object.values(await this.balancesWithPrices(this._userChains, true, currency))
+    const result = await this.balancesWithPricesDetailed(this._userChains, true, currency)
+    const balances = Object.values(result.balances)
     const total = balances.reduce((sum, b) => sum + (b.fiatValue ?? 0), 0)
-    return { balances, totalValue: total.toFixed(2), currency }
+    return { balances, totalValue: total.toFixed(2), currency, failures: result.failures }
   }
 
   /**

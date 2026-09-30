@@ -538,7 +538,7 @@ describe('executePortfolio partial-failure reporting', () => {
     tableSpy.mockRestore()
 
     const joined = logs.join('\n')
-    expect(joined).toContain('failed to load fully')
+    expect(joined).toContain('1 chain(s) and 0 token(s) could not be priced/loaded')
     expect(joined).toContain('Bitcoin')
     expect(joined).toContain('btc unreachable')
   })
