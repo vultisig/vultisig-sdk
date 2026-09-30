@@ -1392,3 +1392,30 @@ React Native retains deferred asynchronous wrappers for `buildSplTransfer`,
 declarations describe these Promise returns and preserve the canonical inputs;
 use TypeScript's `customConditions: ["react-native"]` with NodeNext or bundler
 module resolution. Pure staking and CosmWasm message builders remain synchronous.
+
+### Resolve an SPL sender account
+
+Resolve the sender's existing associated token account before building a transfer
+for an unknown mint. The result identifies the token program used for both ATA
+derivation and the unsigned transfer instruction:
+
+```ts
+import { buildSplTransfer, getSplAssociatedAccount } from '@vultisig/sdk'
+
+const senderAccount = await getSplAssociatedAccount({ account: senderAddress, token: mintAddress })
+const transfer = await buildSplTransfer({
+  mint: mintAddress,
+  from: senderAddress,
+  to: recipientAddress,
+  amount: 1_000_000n,
+  decimals: 6,
+  isToken2022: senderAccount.isToken2022,
+})
+// transfer.fromTokenAccount === senderAccount.address
+```
+
+Use the same sender and mint for both calls. The resolver ignores non-associated
+token accounts, regardless of RPC order, and throws
+`No associated token account found` when the ATA is absent. It does not create
+accounts. React Native exports the same asynchronous resolver through its
+deferred Solana import override; await `buildSplTransfer` there as shown above.

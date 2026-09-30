@@ -516,6 +516,9 @@ export {
 export { getEvmChainByChainId, getEvmChainId, getEvmNumericChainId } from '@vultisig/core-chain/chains/evm/chainInfo'
 export { clampEvmPriorityFee } from '@vultisig/core-chain/tx/fee/evm/clampEvmPriorityFee'
 
+// Resolve the existing deterministic ATA and token program before building an SPL transfer.
+export { getSplAssociatedAccount } from '@vultisig/core-chain/chains/solana/spl/getSplAssociatedAccount'
+
 // Gas / fee primitives (read-only — uses global `fetch` + type-only imports,
 // no heavy chain client at module init). The RN allow-list omitted these so RN
 // consumers (vultiagent-app) couldn't resolve current UTXO sat/vB rates OR the

@@ -534,6 +534,9 @@ export {
   SwapArrivalStatusRequestError,
 } from '@vultisig/core-chain/swap/utils/getSwapArrivalStatus'
 
+// Resolve the existing deterministic ATA and token program before building an SPL transfer.
+export { getSplAssociatedAccount } from '@vultisig/core-chain/chains/solana/spl/getSplAssociatedAccount'
+
 // Chain-native block explorer URL builder (address/tx) for the non-swap case.
 export { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
 

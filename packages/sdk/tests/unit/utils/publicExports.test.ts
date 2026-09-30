@@ -1,6 +1,7 @@
 import * as cosmosStaking from '@vultisig/core-chain/chains/cosmos/staking/lcdQueries'
 import * as customRpcOverrides from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import * as customRpcSupportedChains from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
+import { getSplAssociatedAccount as canonicalSplResolver } from '@vultisig/core-chain/chains/solana/spl/getSplAssociatedAccount'
 import { resolveTokenPriceId as canonicalResolveTokenPriceId } from '@vultisig/core-chain/coin/price/resolveTokenPriceId'
 import { deriveQbtcAddress as canonicalDeriveQbtcAddress } from '@vultisig/core-chain/publicKey/address/deriveQbtcAddress'
 import * as blockaidChains from '@vultisig/core-chain/security/blockaid/evmChains'
@@ -708,5 +709,14 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.getNativeSwapChainIdFromDenomPrefix).toBe(nativeSwapChain.getNativeSwapChainIdFromDenomPrefix)
     expect(sdk.getNativeSwapChainId(sdk.Chain.THORChain)).toBe('THOR')
     expect(sdk.getNativeSwapChainIdFromDenomPrefix('eth')).toBe('ETH')
+  })
+})
+
+describe('SPL associated-account public API', () => {
+  it('exports the canonical resolver with the supported signature', () => {
+    expect(sdk.getSplAssociatedAccount).toBe(canonicalSplResolver)
+    expectTypeOf(sdk.getSplAssociatedAccount).toEqualTypeOf<
+      (input: { account: string; token: string }) => Promise<{ address: string; isToken2022: boolean }>
+    >()
   })
 })
