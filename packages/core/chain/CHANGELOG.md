@@ -1,5 +1,23 @@
 # @vultisig/core-chain
 
+## 6.1.3
+
+### Patch Changes
+
+- [#2485](https://github.com/vultisig/vultisig-sdk/pull/2485) [`341f5ec`](https://github.com/vultisig/vultisig-sdk/commit/341f5ec2793e5b91ba69410bf35d82833f104632) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Preserve every digit in TRX balances with the new exact `balanceSunRaw` string and format `balanceTrx` from it. Keep `balanceSun` as a best-effort number for compatibility; it may round above `Number.MAX_SAFE_INTEGER` SUN (approximately 9.007 billion TRX). Reject invalid or duplicate account balance tokens while preserving existing TRON routing.
+
+- [#2467](https://github.com/vultisig/vultisig-sdk/pull/2467) [`d83a5b0`](https://github.com/vultisig/vultisig-sdk/commit/d83a5b0c31f5d8f5ca8ecd6e586e16424596bed3) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Bitcoin PSBT keysigns (SwapKit BTC swaps and `signBitcoin` payloads) now broadcast the signed transaction and report its txid. The compiled output left `signingResultV2.encoded` and `txid` unset, and the UTXO broadcast resolver took the resulting empty bytes over the real transaction, posting `{"data":""}` to Blockchair and resolving an empty hash.
+
+- [#2412](https://github.com/vultisig/vultisig-sdk/pull/2412) [`16b5a78`](https://github.com/vultisig/vultisig-sdk/commit/16b5a7860dce8a5bacf4759ff0260073c8cfb3e7) Thanks [@aminsato](https://github.com/aminsato)! - fix(tron): reject incomplete `getnowblock` / `getblockbynum` responses instead of zeroing the TAPOS header
+
+  `getTronBlockInfo` defaulted every missing `block_header.raw_data` field to `0` / `''`, so a partial gateway response (or an `{Error}`-on-200 envelope) produced an all-zero header. WalletCore derived `ref_block_bytes` / `ref_block_hash` from it, the full MPC ceremony ran (including a Fast-Vault server co-sign), and the transaction could only fail on broadcast with `TAPOS_ERROR`. Both fetches now surface the gateway error message and reject any response missing `blockID` or a complete `raw_data`, before any signing starts. Header identifier fields (`txTrieRoot`, `parentHash`, `witness_address`) must also be hex of the exact protocol byte length, since `Buffer.from(value, 'hex')` would otherwise silently truncate malformed strings into the same broken header.
+
+- [#2465](https://github.com/vultisig/vultisig-sdk/pull/2465) [`faffc26`](https://github.com/vultisig/vultisig-sdk/commit/faffc266efae199d638ae6bf8d45009896fcbee3) Thanks [@neavra](https://github.com/neavra)! - UTXO sends (Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash, Zcash) whose recipient amount is below the chain's static dust floor are now refused before signing with the minimum named in the error; fee-rate-dependent dust rejections above that floor instead explain that the current network dust threshold requires a larger amount. Additionally, a UTXO transaction plan that fails (dust, insufficient funds, or any other planner error) now fails authoritatively with that error instead of being retried as a send-max transaction, and deterministic dust or balance failures surface to CLI consumers as invalid input. Max-send and max-swap fee estimates now request a max spend explicitly instead of relying on the removed retry.
+
+  An amount above the available balance now fails with an insufficient-balance error instead of being planned as a max spend.
+
+  A non-max UTXO request is never converted to a max spend; a small remainder is left to WalletCore's dust handling.
+
 ## 6.1.2
 
 ### Patch Changes

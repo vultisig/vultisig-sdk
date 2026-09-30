@@ -1,5 +1,39 @@
 # @vultisig/sdk
 
+## 9.0.0
+
+### Major Changes
+
+- [#2487](https://github.com/vultisig/vultisig-sdk/pull/2487) [`5acb3d2`](https://github.com/vultisig/vultisig-sdk/commit/5acb3d27f15f081d518155c937295d208defdd84) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Remove 19 redundant package subpaths. Their functions and types remain available from the root or corresponding platform entry, with chain, seedphrase, and relay helpers grouped under `chainTron`, `chainUtxo`, `chainTon`, `seedphrase`, and `server`. `@vultisig/sdk/tools/defi` and all platform paths remain published. See `MIGRATING.md` for every path mapping.
+
+### Minor Changes
+
+- [#2472](https://github.com/vultisig/vultisig-sdk/pull/2472) [`0a09912`](https://github.com/vultisig/vultisig-sdk/commit/0a09912f54b2a7186a7299ce657d85dc31e5f5ed) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(seedphrase): accept every BIP39 mnemonic length (12, 15, 18, 21 and 24 words) in seedphrase validation, import and the CLI prompt. `SEEDPHRASE_WORD_COUNTS` is now `[12, 15, 18, 21, 24]`, which widens `SeedphraseWordCount`.
+
+### Patch Changes
+
+- [#2486](https://github.com/vultisig/vultisig-sdk/pull/2486) [`658aa00`](https://github.com/vultisig/vultisig-sdk/commit/658aa00a115c329808432014164980f543edf09b) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Move React Native FormatJS polyfills to build-only dependencies so ordinary SDK installs no longer download their locale data. The polyfills remain embedded in the React Native bundle; React Native consumers do not need to add packages.
+
+- [#2485](https://github.com/vultisig/vultisig-sdk/pull/2485) [`341f5ec`](https://github.com/vultisig/vultisig-sdk/commit/341f5ec2793e5b91ba69410bf35d82833f104632) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Preserve every digit in TRX balances with the new exact `balanceSunRaw` string and format `balanceTrx` from it. Keep `balanceSun` as a best-effort number for compatibility; it may round above `Number.MAX_SAFE_INTEGER` SUN (approximately 9.007 billion TRX). Reject invalid or duplicate account balance tokens while preserving existing TRON routing.
+
+- [#2467](https://github.com/vultisig/vultisig-sdk/pull/2467) [`d83a5b0`](https://github.com/vultisig/vultisig-sdk/commit/d83a5b0c31f5d8f5ca8ecd6e586e16424596bed3) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Bitcoin PSBT keysigns (SwapKit BTC swaps and `signBitcoin` payloads) now broadcast the signed transaction and report its txid. The compiled output left `signingResultV2.encoded` and `txid` unset, and the UTXO broadcast resolver took the resulting empty bytes over the real transaction, posting `{"data":""}` to Blockchair and resolving an empty hash.
+
+- [#2471](https://github.com/vultisig/vultisig-sdk/pull/2471) [`f49cbb0`](https://github.com/vultisig/vultisig-sdk/commit/f49cbb05cd20c6aa3411aa84ba8a09fc89284f07) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - A SwapKit Bitcoin PSBT carrying an input this vault cannot sign is now refused before the keysign ceremony, on the initiator and on every co-signer. `compileSignBitcoinTx` gives such an input an empty witness and still returns a complete-looking transaction, so the route signed it, broadcast it and let the network reject it after the user had already approved. Every input is checked against the vault's own address rather than the PSBT's `isOurs` flag, which `buildSignBitcoinFromPsbt` derives from BIP-32 data and defaults to true for every input when a PSBT carries none. The dApp `signPsbt` route is unaffected: its PSBTs may legitimately hold inputs owned by someone else and are returned partially signed rather than broadcast.
+
+- [#2412](https://github.com/vultisig/vultisig-sdk/pull/2412) [`16b5a78`](https://github.com/vultisig/vultisig-sdk/commit/16b5a7860dce8a5bacf4759ff0260073c8cfb3e7) Thanks [@aminsato](https://github.com/aminsato)! - fix(tron): reject incomplete `getnowblock` / `getblockbynum` responses instead of zeroing the TAPOS header
+
+  `getTronBlockInfo` defaulted every missing `block_header.raw_data` field to `0` / `''`, so a partial gateway response (or an `{Error}`-on-200 envelope) produced an all-zero header. WalletCore derived `ref_block_bytes` / `ref_block_hash` from it, the full MPC ceremony ran (including a Fast-Vault server co-sign), and the transaction could only fail on broadcast with `TAPOS_ERROR`. Both fetches now surface the gateway error message and reject any response missing `blockID` or a complete `raw_data`, before any signing starts. Header identifier fields (`txTrieRoot`, `parentHash`, `witness_address`) must also be hex of the exact protocol byte length, since `Buffer.from(value, 'hex')` would otherwise silently truncate malformed strings into the same broken header.
+
+- [#2465](https://github.com/vultisig/vultisig-sdk/pull/2465) [`faffc26`](https://github.com/vultisig/vultisig-sdk/commit/faffc266efae199d638ae6bf8d45009896fcbee3) Thanks [@neavra](https://github.com/neavra)! - UTXO sends (Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash, Zcash) whose recipient amount is below the chain's static dust floor are now refused before signing with the minimum named in the error; fee-rate-dependent dust rejections above that floor instead explain that the current network dust threshold requires a larger amount. Additionally, a UTXO transaction plan that fails (dust, insufficient funds, or any other planner error) now fails authoritatively with that error instead of being retried as a send-max transaction, and deterministic dust or balance failures surface to CLI consumers as invalid input. Max-send and max-swap fee estimates now request a max spend explicitly instead of relying on the removed retry.
+
+  An amount above the available balance now fails with an insufficient-balance error instead of being planned as a max spend.
+
+  A non-max UTXO request is never converted to a max spend; a small remainder is left to WalletCore's dust handling.
+
+- Updated dependencies [[`341f5ec`](https://github.com/vultisig/vultisig-sdk/commit/341f5ec2793e5b91ba69410bf35d82833f104632), [`d83a5b0`](https://github.com/vultisig/vultisig-sdk/commit/d83a5b0c31f5d8f5ca8ecd6e586e16424596bed3), [`f49cbb0`](https://github.com/vultisig/vultisig-sdk/commit/f49cbb05cd20c6aa3411aa84ba8a09fc89284f07), [`16b5a78`](https://github.com/vultisig/vultisig-sdk/commit/16b5a7860dce8a5bacf4759ff0260073c8cfb3e7), [`faffc26`](https://github.com/vultisig/vultisig-sdk/commit/faffc266efae199d638ae6bf8d45009896fcbee3)]:
+  - @vultisig/core-chain@6.1.3
+  - @vultisig/core-mpc@5.0.3
+
 ## 8.1.2
 
 ### Patch Changes
