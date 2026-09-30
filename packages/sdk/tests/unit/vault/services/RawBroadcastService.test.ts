@@ -1,5 +1,6 @@
 import { inspect } from 'node:util'
 
+import { BroadcastTxError, TimeoutError } from '@cosmjs/stargate'
 import { sha256 } from '@noble/hashes/sha2.js'
 import { bytesToHex } from '@noble/hashes/utils.js'
 import { Chain, OtherChain } from '@vultisig/core-chain/Chain'
@@ -9,7 +10,7 @@ import { tronRpcUrl } from '@vultisig/core-chain/chains/tron/config'
 import base58 from 'bs58'
 import { encode as xrplEncode } from 'ripple-binary-codec'
 import { keccak256 } from 'viem'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { hashes as xrplHashes } from 'xrpl'
 
 import { broadcastRawTx, RawBroadcastService } from '@/vault/services/RawBroadcastService'
@@ -393,6 +394,127 @@ describe('RawBroadcastService', () => {
     ).rejects.toMatchObject({
       code: VaultErrorCode.BroadcastFailed,
       message: expect.stringContaining('could not be verified'),
+    })
+  })
+
+  describe('Cosmos lost-response recovery', () => {
+    const txBytes = Buffer.from([1, 2, 3])
+    const rawTx = txBytes.toString('base64')
+    const hash = bytesToHex(sha256(txBytes)).toUpperCase()
+    const success = { hash, code: 0 }
+
+    beforeEach(() => vi.useFakeTimers())
+    afterEach(() => vi.useRealTimers())
+
+    it.each(['base64', 'json'])('recovers delayed success from the exact signed %s bytes', async format => {
+      mockCosmosBroadcastTx.mockRejectedValue(new TimeoutError('submitted but not found', hash))
+      mockCosmosGetTx.mockResolvedValueOnce(null).mockResolvedValueOnce(success)
+      const result = broadcastRawTx({
+        chain: Chain.Cosmos,
+        rawTx: format === 'json' ? JSON.stringify({ tx_bytes: rawTx }) : rawTx,
+      })
+      await vi.advanceTimersByTimeAsync(250)
+      await expect(result).resolves.toBe(hash)
+      expect(mockCosmosBroadcastTx).toHaveBeenCalledExactlyOnceWith(txBytes)
+      expect(mockCosmosGetTx.mock.calls).toEqual([[hash], [hash]])
+    })
+
+    it.each([
+      new TypeError('fetch failed'),
+      new TypeError('Failed to fetch'),
+      new Error('socket hang up'),
+      new Error('Bad status on response: 502'),
+      new Error(JSON.stringify({ code: -32603, message: 'Internal error' })),
+      new Error(JSON.stringify({ code: -32000, message: 'Server error' })),
+      new DOMException('aborted', 'AbortError'),
+      new SyntaxError('Unexpected end of JSON input'),
+    ])('recovers identified transport/RPC failure: %s', async error => {
+      mockCosmosBroadcastTx.mockRejectedValue(error)
+      mockCosmosGetTx.mockResolvedValue(success)
+      await expect(service.broadcastRawTx({ chain: Chain.Cosmos, rawTx })).resolves.toBe(hash)
+      expect(mockCosmosGetTx).toHaveBeenCalledExactlyOnceWith(hash)
+    })
+
+    it('fails closed on recovered on-chain execution failure', async () => {
+      mockCosmosBroadcastTx.mockRejectedValue(new TypeError('fetch failed'))
+      mockCosmosGetTx.mockResolvedValue({ hash, code: 5, rawLog: 'out of gas' })
+      await expect(service.broadcastRawTx({ chain: Chain.Cosmos, rawTx })).rejects.toMatchObject({
+        code: VaultErrorCode.BroadcastFailed,
+        message: expect.stringContaining(`Cosmos transaction ${hash} was included but execution failed`),
+      })
+      expect(mockCosmosGetTx).toHaveBeenCalledTimes(1)
+    })
+
+    it.each(['fetch failed', 'tx already exists in cache'])('bounds unavailable lookup after %s', async message => {
+      mockCosmosBroadcastTx.mockRejectedValue(new Error(message))
+      const result = service.broadcastRawTx({ chain: Chain.Cosmos, rawTx })
+      const assertion = expect(result).rejects.toMatchObject({
+        code: VaultErrorCode.BroadcastFailed,
+        message: expect.stringContaining(`${hash}. Verify this hash on-chain before retrying`),
+      })
+      await vi.advanceTimersByTimeAsync(1_250)
+      await assertion
+      expect(mockCosmosGetTx).toHaveBeenCalledTimes(6)
+      expect(vi.getTimerCount()).toBe(0)
+    })
+
+    it('retries lookup errors before recovering', async () => {
+      mockCosmosBroadcastTx.mockRejectedValue(new TypeError('fetch failed'))
+      mockCosmosGetTx.mockRejectedValueOnce(new Error('temporary lookup failure')).mockResolvedValueOnce(success)
+      const result = service.broadcastRawTx({ chain: Chain.Cosmos, rawTx })
+      await vi.advanceTimersByTimeAsync(250)
+      await expect(result).resolves.toBe(hash)
+      expect(mockCosmosGetTx).toHaveBeenCalledTimes(2)
+    })
+
+    it('retains hash and guidance when every lookup fails', async () => {
+      mockCosmosBroadcastTx.mockRejectedValue(new TypeError('fetch failed'))
+      mockCosmosGetTx.mockRejectedValue(new Error('lookup unavailable'))
+      const assertion = expect(service.broadcastRawTx({ chain: Chain.Cosmos, rawTx })).rejects.toMatchObject({
+        code: VaultErrorCode.BroadcastFailed,
+        message: expect.stringContaining(`${hash}. Verify this hash on-chain before retrying. lookup unavailable`),
+      })
+      await vi.advanceTimersByTimeAsync(1_250)
+      await assertion
+      expect(mockCosmosGetTx).toHaveBeenCalledTimes(6)
+    })
+
+    it('bounds a lookup that never settles', async () => {
+      mockCosmosBroadcastTx.mockRejectedValue(new TypeError('fetch failed'))
+      mockCosmosGetTx.mockReturnValue(new Promise(() => {}))
+      const assertion = expect(service.broadcastRawTx({ chain: Chain.Cosmos, rawTx })).rejects.toMatchObject({
+        code: VaultErrorCode.BroadcastFailed,
+        message: expect.stringContaining(`${hash}. Verify this hash on-chain before retrying`),
+      })
+      await vi.advanceTimersByTimeAsync(5_000)
+      await assertion
+      expect(mockCosmosGetTx).toHaveBeenCalledTimes(1)
+      expect(vi.getTimerCount()).toBe(0)
+    })
+
+    it.each([
+      new BroadcastTxError(32, 'sdk', 'account sequence mismatch: timed out'),
+      new BroadcastTxError(19, 'sdk', 'tx already exists in cache'),
+      new Error('account sequence mismatch'),
+      new Error('insufficient funds: timeout'),
+      new Error('Bad status on response: 400'),
+      new Error(JSON.stringify({ code: -32602, message: 'Invalid params' })),
+      new Error(
+        JSON.stringify({ code: -32603, message: 'Internal error', data: 'Tx too large. Max: 1024, Actual: 2048' })
+      ),
+      new Error(
+        JSON.stringify({ code: -32603, message: 'Internal error', data: 'tx size is too big: 2048, max: 1024' })
+      ),
+      new Error(JSON.stringify({ code: -32603, message: 'Internal error', data: 'mempool is full' })),
+      new Error(JSON.stringify({ code: '-32000', message: 'unrecognized string code' })),
+      new Error('unexpected local error'),
+    ])('preserves definite/unknown rejection without lookup: %s', async error => {
+      await mockCosmosBroadcastTx.mockRejectedValue(error)
+      await expect(service.broadcastRawTx({ chain: Chain.Cosmos, rawTx })).rejects.toMatchObject({
+        code: VaultErrorCode.BroadcastFailed,
+        originalError: error,
+      })
+      expect(mockCosmosGetTx).not.toHaveBeenCalled()
     })
   })
 

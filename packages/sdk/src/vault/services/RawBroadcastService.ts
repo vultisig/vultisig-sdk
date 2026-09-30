@@ -1,4 +1,4 @@
-import { assertIsDeliverTxSuccess } from '@cosmjs/stargate'
+import { assertIsDeliverTxSuccess, BroadcastTxError, StargateClient, TimeoutError } from '@cosmjs/stargate'
 import { fromBase64 } from '@mysten/sui/utils'
 import { sha256 } from '@noble/hashes/sha2.js'
 import { bytesToHex } from '@noble/hashes/utils.js'
@@ -57,7 +57,38 @@ const getCosmosRawTxBytes = (rawTx: string): Uint8Array => {
   }
 }
 
-const deriveCosmosRawTxHash = (rawTx: string): string => bytesToHex(sha256(getCosmosRawTxBytes(rawTx))).toUpperCase()
+// CosmJS serializes JSON-RPC errors into Error.message. Unknown/programming and
+// definite transaction errors must keep their original failure path.
+const isAmbiguousCosmosBroadcastError = (error: unknown): boolean => {
+  if (error instanceof BroadcastTxError) return false
+  if (error instanceof TimeoutError) return true
+  if (!(error instanceof Error)) return false
+  if (
+    /account sequence mismatch|insufficient (?:fees?|funds)|invalid signature|out of gas|tx too large|tx size is too big|mempool is full/i.test(
+      error.message
+    )
+  ) {
+    return false
+  }
+  if (error.name === 'AbortError' || error.name === 'TimeoutError') return true
+  if (
+    /fetch failed|failed to fetch|network error|network request failed|socket hang up|ECONNRESET|ECONNREFUSED|ETIMEDOUT|timed out|timeout|Bad status on response: (?:408|429|5\d\d)\b/i.test(
+      error.message
+    )
+  ) {
+    return true
+  }
+  if (error instanceof SyntaxError && /JSON/i.test(error.message)) return true
+  try {
+    const rpcError = JSON.parse(error.message)
+    return (
+      typeof rpcError.code === 'number' &&
+      (rpcError.code === -32603 || (rpcError.code >= -32099 && rpcError.code <= -32000))
+    )
+  } catch {
+    return false
+  }
+}
 
 const deriveRippleRawTxHash = (rawTx: string): string =>
   xrplHashes.hashSignedTx(rawTx.startsWith('0x') ? rawTx.slice(2) : rawTx)
@@ -361,31 +392,11 @@ export class RawBroadcastService {
     const { data: result, error } = await attempt(client.broadcastTx(txBytes))
 
     if (error) {
-      if (isInError(error, 'tx already exists in cache')) {
-        const hash = deriveCosmosRawTxHash(rawTx)
-        const { data: existingTx, error: lookupError } = await attempt(client.getTx(hash))
-
-        if (!existingTx) {
-          const lookupMessage = lookupError instanceof Error ? lookupError.message : String(lookupError ?? 'not found')
-          throw new VaultError(
-            VaultErrorCode.BroadcastFailed,
-            `Cosmos transaction may already exist, but its execution result could not be verified: ${lookupMessage}`,
-            lookupError instanceof Error ? lookupError : new Error(lookupMessage)
-          )
-        }
-
-        try {
-          assertIsDeliverTxSuccess({ ...existingTx, transactionHash: existingTx.hash })
-        } catch (deliverTxError) {
-          const message = deliverTxError instanceof Error ? deliverTxError.message : String(deliverTxError)
-          throw new VaultError(
-            VaultErrorCode.BroadcastFailed,
-            `Cosmos transaction was included but execution failed: ${message}`,
-            deliverTxError instanceof Error ? deliverTxError : new Error(message)
-          )
-        }
-
-        return hash
+      if (!(error instanceof BroadcastTxError) && isInError(error, 'tx already exists in cache')) {
+        return this.recoverCosmosBroadcast(client, txBytes, error, true)
+      }
+      if (isAmbiguousCosmosBroadcastError(error)) {
+        return this.recoverCosmosBroadcast(client, txBytes, error, false)
       }
       throw error
     }
@@ -410,6 +421,52 @@ export class RawBroadcastService {
     }
 
     return result.transactionHash
+  }
+
+  private async recoverCosmosBroadcast(
+    client: StargateClient,
+    txBytes: Uint8Array,
+    broadcastError: unknown,
+    duplicate: boolean
+  ): Promise<string> {
+    const hash = bytesToHex(sha256(txBytes)).toUpperCase()
+    // Bound both retries and wall time, including an RPC lookup that never settles.
+    const deadline = Date.now() + 5_000
+    let lookupError: unknown
+    for (let attemptIndex = 0; attemptIndex < 6 && Date.now() < deadline; attemptIndex++) {
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const lookup = await attempt(
+        Promise.race([
+          client.getTx(hash),
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new Error('transaction lookup timed out')), deadline - Date.now())
+          }),
+        ]).finally(() => clearTimeout(timer))
+      )
+      lookupError = lookup.error
+      if (lookup.data) {
+        try {
+          assertIsDeliverTxSuccess({ ...lookup.data, transactionHash: lookup.data.hash })
+        } catch (deliverTxError) {
+          throw new VaultError(
+            VaultErrorCode.BroadcastFailed,
+            `Cosmos transaction ${hash} was included but execution failed: ${formatBroadcastFailureReason(deliverTxError)}`,
+            toSafeBroadcastError(deliverTxError)
+          )
+        }
+        return hash
+      }
+      if (attemptIndex < 5 && Date.now() < deadline) {
+        await new Promise(resolve => setTimeout(resolve, Math.min(250, deadline - Date.now())))
+      }
+    }
+
+    const context = duplicate ? 'may already exist' : 'may have been submitted'
+    throw new VaultError(
+      VaultErrorCode.BroadcastFailed,
+      `Cosmos transaction ${context}, but its execution result could not be verified: ${hash}. Verify this hash on-chain before retrying. ${formatBroadcastFailureReason(lookupError ?? broadcastError)}`,
+      toSafeBroadcastError(lookupError ?? broadcastError)
+    )
   }
 
   /**
