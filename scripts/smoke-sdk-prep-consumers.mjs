@@ -17,7 +17,8 @@ const load = name => process.argv[2] === 'cjs' ? require(name) : import(name)
 let root
 if (process.argv[3] === 'root-first') root = await load('@vultisig/sdk')
 const before = runtimeStore().walletCore
-const prep = await load('@vultisig/sdk/tools/prep')
+root ??= await load('@vultisig/sdk')
+const prep = {...root.prep, getWalletCore: root.getWalletCore}
 if (before) assert.equal(runtimeStore().walletCore, before)
 const address = bech32.encode('cosmos', bech32.toWords(new Uint8Array(20).fill(1)))
 const validator = bech32.encode('cosmosvaloper', bech32.toWords(new Uint8Array(20).fill(2)))
@@ -59,7 +60,7 @@ console.log(JSON.stringify({prep:true,format:process.argv[2],order:process.argv[
   writeFileSync(
     path.join(appRoot, 'prep-types.cts'),
     `
-import { buildDelegateMsg, type DelegateParams, type CosmosStakingMsgEnvelope } from '@vultisig/sdk/tools/prep'
+import { buildDelegateMsg, type DelegateParams, type CosmosStakingMsgEnvelope } from '@vultisig/sdk'
 const delegate: (params: DelegateParams) => CosmosStakingMsgEnvelope = buildDelegateMsg
 void delegate
 `
@@ -85,10 +86,10 @@ void delegate
     writeFileSync(
       path.join(appRoot, 'prep-types.ts'),
       `
-import * as prep from '@vultisig/sdk/tools/prep'
-type Expected = ${native ? 'Promise<prep.SplTransferResult>' : 'prep.SplTransferResult'}
+import { prep, type SplTransferResult, type DelegateParams, type CosmosStakingMsgEnvelope } from '@vultisig/sdk'
+type Expected = ${native ? 'Promise<SplTransferResult>' : 'SplTransferResult'}
 const spl: (...args: Parameters<typeof prep.buildSplTransfer>) => Expected = prep.buildSplTransfer
-const delegate: (params: prep.DelegateParams) => prep.CosmosStakingMsgEnvelope = prep.buildDelegateMsg
+const delegate: (params: DelegateParams) => CosmosStakingMsgEnvelope = prep.buildDelegateMsg
 const thor: typeof prep.prepareThorchainMsgDepositTxFromKeys = prep.prepareThorchainMsgDepositTxFromKeys
 // @ts-expect-error deferred wrappers must retain required canonical arguments
 prep.prepareSendTxFromKeys()

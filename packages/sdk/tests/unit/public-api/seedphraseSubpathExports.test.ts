@@ -20,32 +20,14 @@ const sdkPackageJson = JSON.parse(readFileSync(path.join(sdkRoot, 'package.json'
 const platformRollupConfig = readFileSync(path.join(sdkRoot, 'rollup.platforms.config.js'), 'utf8')
 const typesRollupConfig = readFileSync(path.join(sdkRoot, 'rollup.types.config.js'), 'utf8')
 
-describe('@vultisig/sdk/seedphrase public surface', () => {
-  it('publishes a dedicated conditional export instead of a root-bundle alias', () => {
-    const seedphraseExport = sdkPackageJson.exports['./seedphrase']
-
-    expect(seedphraseExport).toMatchObject({
-      types: './dist/seedphrase/index.d.ts',
-      node: {
-        import: './dist/seedphrase/index.js',
-        require: './dist/seedphrase/index.cjs',
-      },
-      import: './dist/seedphrase/index.js',
-      require: './dist/seedphrase/index.cjs',
-      default: './dist/seedphrase/index.cjs',
-    })
-    expect(JSON.stringify(seedphraseExport)).not.toContain('dist/index.node')
-    expect(seedphraseExport).not.toHaveProperty('browser')
-    expect(seedphraseExport).not.toHaveProperty('worker')
-    expect(seedphraseExport).not.toHaveProperty('react-native')
-  })
-
-  it('keeps dedicated runtime and declaration bundle generation wired', () => {
-    expect(platformRollupConfig).toContain("input: './src/seedphrase/index.ts'")
-    expect(platformRollupConfig).toContain("distBase: 'seedphrase'")
-    expect(typesRollupConfig).toContain(
-      "createSubpathTypesConfig('src/seedphrase/index.ts', 'dist/seedphrase/index.d.ts')"
+describe('seedphrase root migration surface', () => {
+  it('maps the former package subpath to the complete root namespace', () => {
+    expect(Object.hasOwn(sdkPackageJson.exports, './seedphrase')).toBe(false)
+    expect(readFileSync(path.join(sdkRoot, 'src/index.ts'), 'utf8')).toContain(
+      "export * as seedphrase from './seedphrase'"
     )
+    expect(platformRollupConfig).not.toContain("distBase: 'seedphrase'")
+    expect(typesRollupConfig).not.toContain('dist/seedphrase/index.d.ts')
   })
 
   it('exposes the canonical runtime helper and import/discovery family', () => {
@@ -88,7 +70,7 @@ describe('@vultisig/sdk/seedphrase public surface', () => {
     expectTypeOf<SeedphraseImportPreludeResult>().toHaveProperty('chainsToImport')
   })
 
-  it('exports the chain-discovery aggregate type from both the seedphrase subpath and root sdk surface', () => {
+  it('exports the chain-discovery aggregate type from the source module and root sdk surface', () => {
     expectTypeOf<SeedphraseChainDiscoveryAggregate>().toEqualTypeOf<{
       results: ChainDiscoveryResult[]
       usePhantomSolanaPath: boolean

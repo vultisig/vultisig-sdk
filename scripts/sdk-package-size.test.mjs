@@ -115,3 +115,9 @@ test('rejects inline source maps and source content in packed CSS and JavaScript
     rmSync(root, { recursive: true, force: true })
   }
 })
+
+test('rejects TypeScript build state even when the size passes', () => {
+  const output = pack(100)
+  output[0].files.push({ path: 'dist/.tsbuildinfo', size: 0 })
+  assert.throws(() => validateSdkPackSize(output, limits), /TypeScript build state/)
+})

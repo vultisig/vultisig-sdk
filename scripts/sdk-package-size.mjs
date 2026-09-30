@@ -72,5 +72,10 @@ export function validateSdkPackSize(packOutput, limits = budget) {
   const maps = pack.files.filter(file => file.path.endsWith('.map'))
   if (maps.length)
     throw new Error(`SDK package must not publish source maps: ${maps.map(file => file.path).join(', ')}`)
+  const buildInfo = pack.files.filter(file => file.path.endsWith('.tsbuildinfo'))
+  if (buildInfo.length)
+    throw new Error(
+      `SDK package must not publish TypeScript build state: ${buildInfo.map(file => file.path).join(', ')}`
+    )
   return pack.unpackedSize
 }

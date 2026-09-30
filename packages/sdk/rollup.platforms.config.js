@@ -412,85 +412,8 @@ const configs = {
       }),
     },
     ...createSubpathConfigs({
-      input: './src/platforms/node/prep.ts',
-      distBase: 'tools/prep',
-    }),
-    ...createSubpathConfigs({
-      input: './src/tools/parse/index.ts',
-      distBase: 'tools/parse',
-    }),
-    ...createSubpathConfigs({
       input: './src/tools/defi/index.ts',
       distBase: 'tools/defi',
-    }),
-    ...createSubpathConfigs({
-      input: './src/tools/swap/index.ts',
-      distBase: 'tools/swap',
-      browser: true,
-    }),
-    ...createSubpathConfigs({
-      input: './src/tools/gas/index.ts',
-      distBase: 'tools/gas',
-    }),
-    ...createSubpathConfigs({
-      input: './src/tools/bridge/index.ts',
-      distBase: 'tools/bridge',
-    }),
-    ...createSubpathConfigs({
-      input: './src/tools/balance/index.ts',
-      distBase: 'tools/balance',
-    }),
-    ...createSubpathConfigs({
-      input: './src/chains/tron/index.ts',
-      distBase: 'chains/tron',
-    }),
-    ...createSubpathConfigs({
-      input: './src/chains/utxo/index.ts',
-      distBase: 'chains/utxo',
-    }),
-    ...createSubpathConfigs({
-      input: './src/chains/ton/index.ts',
-      distBase: 'chains/ton',
-    }),
-    ...createSubpathConfigs({
-      input: './src/abi/index.ts',
-      distBase: 'abi',
-    }),
-    ...createSubpathConfigs({
-      input: './src/seedphrase/index.ts',
-      distBase: 'seedphrase',
-    }),
-    ...createSubpathConfigs({
-      input: './src/tools/decode/index.ts',
-      distBase: 'tools/decode',
-    }),
-    ...createSubpathConfigs({
-      input: './src/tools/policy/index.ts',
-      distBase: 'tools/policy',
-    }),
-    ...createSubpathConfigs({
-      input: './src/tools/price/index.ts',
-      distBase: 'tools/price',
-    }),
-    ...createSubpathConfigs({
-      input: './src/tools/evm/index.ts',
-      distBase: 'tools/evm',
-    }),
-    ...createSubpathConfigs({
-      input: './src/tools/cosmos/index.ts',
-      distBase: 'tools/cosmos',
-    }),
-    ...createSubpathConfigs({
-      input: './src/signable-transaction/index.ts',
-      distBase: 'signable-transaction',
-    }),
-    ...createSubpathConfigs({
-      input: './src/tx/index.ts',
-      distBase: 'tx',
-    }),
-    ...createSubpathConfigs({
-      input: './src/server/index.ts',
-      distBase: 'server',
     }),
   ],
   browser: {
@@ -826,42 +749,6 @@ const configs = {
 // same resolver overrides as the root entry. Only its reachable override targets
 // are mandatory; all registered overrides still apply when encountered.
 const [rnPreamble, rnRoot] = configs['react-native']()
-const [, rnSwap] = configs['react-native']()
-rnSwap.input = './src/tools/swap/index.ts'
-rnSwap.output.file = './dist/tools/swap/index.react-native.js'
-rnSwap.plugins = rnSwap.plugins.map(plugin =>
-  plugin.name === 'vultisig-rn-path-override'
-    ? rnOverridePlugin(
-        rnOverrideTargets.filter(target =>
-          ['Solana client', 'LI.FI enabled chains', 'LI.FI quote'].includes(target.name)
-        )
-      )
-    : plugin
-)
-const [, rnPrep] = configs['react-native']()
-rnPrep.input = './src/platforms/react-native/prep.ts'
-rnPrep.output.file = './dist/tools/prep/index.react-native.js'
-rnPrep.plugins = rnPrep.plugins.map(plugin =>
-  plugin.name === 'vultisig-rn-path-override' ? rnOverridePlugin([]) : plugin
-)
-configs['react-native'] = [rnPreamble, rnRoot, rnSwap, rnPrep]
-const browserPrep = {
-  ...configs.browser,
-  input: './src/platforms/browser/prep.ts',
-  output: {
-    ...configs.browser.output,
-    file: './dist/tools/prep/index.browser.js',
-  },
-  plugins: createPlugins({
-    browser: true,
-    bufferPolyfill: true,
-    replaceOptions: {
-      'process.env.VULTISIG_PLATFORM': JSON.stringify('browser'),
-    },
-  }),
-}
-configs.browser = [configs.browser, browserPrep]
-
 // Multi-entry builds preserve public filenames while emitting each shared module
 // once per runtime/format. Keep platform initialization in the original entries:
 // importing a subpath must not evaluate a different platform's root adapter.
@@ -887,20 +774,14 @@ const nodeEsm = configs.node.filter(
   config => config.output.file.endsWith('/index.js') || config.output.file === './dist/index.node.esm.js'
 )
 const nodeCjs = configs.node.filter(config => config.output.format === 'cjs')
-const browserSubpaths = configs.node.filter(config => config.output.file.endsWith('/index.browser.js'))
 const sharedNode = [shareEntries(nodeEsm, 'node-esm'), shareEntries([...nodeCjs, configs.electron], 'node-cjs')]
-const sharedBrowser = shareEntries(
-  [...configs.browser, configs['chrome-extension'], ...browserSubpaths],
-  'browser',
-  browserPrep.plugins
-)
-const sharedRn = shareEntries([rnRoot, rnSwap, rnPrep], 'react-native')
+const sharedBrowser = shareEntries([configs.browser, configs['chrome-extension']], 'browser', configs.browser.plugins)
 
 configs.node = sharedNode
 configs.electron = sharedNode[1]
 configs.browser = [sharedBrowser]
 configs['chrome-extension'] = sharedBrowser
-configs['react-native'] = [rnPreamble, sharedRn]
+configs['react-native'] = [rnPreamble, rnRoot]
 
 // Export based on target
 let exportConfig

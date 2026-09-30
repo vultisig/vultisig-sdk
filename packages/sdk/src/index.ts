@@ -1444,3 +1444,13 @@ export {
 
 // Grouped helper families retain the canonical tools implementations.
 export { balance, prep, swap } from './tools'
+
+// Stable replacements for the former narrow chain, seedphrase, and server
+// package entries. Keep their complete public barrels reachable without
+// introducing conflicting flat names into the root API.
+export * as chainTon from './chains/ton'
+export * as chainTron from './chains/tron'
+export * as chainUtxo from './chains/utxo'
+export { getWalletCore } from './context/wasmRuntime'
+export * as seedphrase from './seedphrase'
+export * as server from './server'
