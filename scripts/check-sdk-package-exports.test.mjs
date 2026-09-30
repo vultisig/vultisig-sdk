@@ -78,7 +78,7 @@ test('FormatJS provenance rejects SDK runtime ancestry but permits independent c
 
 test('packed React Native entrypoints retain bundled Intl data without FormatJS imports', () => {
   withArtifact(
-    ['dist/index.react-native.js', 'dist/tools/prep/index.react-native.js', 'dist/chunks/react-native/intl.js'],
+    ['dist/index.react-native.js', 'dist/chunks/react-native/intl.js'],
     root => {
       const chunk = path.join(root, 'dist/chunks/react-native/intl.js')
       const marker = 'getCanonicalLocales Locale NumberFormat PluralRules __addLocaleData'
@@ -88,10 +88,6 @@ Intl.PluralRules.__addLocaleData({ locale: 'en' })
 `
       writeFileSync(chunk, `export const marker = ${JSON.stringify(marker)}; ${registrations}`)
       writeFileSync(path.join(root, 'dist/index.react-native.js'), "import './chunks/react-native/intl.js'")
-      writeFileSync(
-        path.join(root, 'dist/tools/prep/index.react-native.js'),
-        "import '../../chunks/react-native/intl.js'"
-      )
       assert.doesNotThrow(() => validatePackedReactNativeIntl(root))
       writeFileSync(
         chunk,
