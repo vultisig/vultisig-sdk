@@ -106,9 +106,9 @@ const parseLcdAccount = (resp: LcdAccountResponse): ParsedAccount => {
 // Polkachu mirrors per cosmos chain. Hexxagon for columbus-5 since polkachu
 // has no Terra Classic endpoint (verified 2026-05-28 — see
 // vultiagent-app#1017 + mcp-ts#266). Keys are the chain id used by
-// cosmos-sdk; chains not in this map have no fallback (degrade fail-closed
-// behaviour preserved).
-const COSMOS_LCD_FALLBACK_URLS: Partial<Record<CosmosChain, string>> = {
+// cosmos-sdk; undefined explicitly selects no fallback (degrade fail-closed
+// behaviour preserved). Every chain must have a mirror/no-mirror decision.
+const COSMOS_LCD_FALLBACK_URLS: Record<CosmosChain, string | undefined> = {
   [Chain.Cosmos]: 'https://cosmos-api.polkachu.com',
   [Chain.Osmosis]: 'https://osmosis-api.polkachu.com',
   [Chain.Terra]: 'https://terra-api.polkachu.com',
@@ -117,6 +117,7 @@ const COSMOS_LCD_FALLBACK_URLS: Partial<Record<CosmosChain, string>> = {
   [Chain.Noble]: 'https://noble-api.polkachu.com',
   [Chain.Dydx]: 'https://dydx-api.polkachu.com',
   [Chain.Akash]: 'https://akash-api.polkachu.com',
+  [Chain.MayaChain]: undefined,
 }
 
 type LcdAttempt =

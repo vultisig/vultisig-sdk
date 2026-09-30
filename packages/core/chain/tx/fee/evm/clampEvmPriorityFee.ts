@@ -52,10 +52,11 @@ const priorityFeeCeilingWeiByChain: Record<EvmChain, bigint> = {
  * sits in the mempool until evicted and shows up as "pending then disappeared"
  * on explorers. Tip-auction chains take 1 gwei, Polygon 30 gwei (its
  * validators enforce a ~25 gwei minimum), and OP-stack rollups a nominal
- * 20 wei so the signed field is never literally zero. Chains absent here
- * (Avalanche, Zksync) sign whatever the RPC suggests.
+ * 20 wei so the signed field is never literally zero. Undefined explicitly
+ * selects no floor; Avalanche and Zksync sign whatever the RPC suggests,
+ * while the zero-tip chains short-circuit below.
  */
-const priorityFeeFloorWeiByChain: Partial<Record<EvmChain, bigint>> = {
+const priorityFeeFloorWeiByChain: Record<EvmChain, bigint | undefined> = {
   [EvmChain.Ethereum]: 1n * GWEI,
   [EvmChain.BSC]: 1n * GWEI,
   [EvmChain.CronosChain]: 1n * GWEI,
@@ -65,6 +66,11 @@ const priorityFeeFloorWeiByChain: Partial<Record<EvmChain, bigint>> = {
   [EvmChain.Base]: 20n,
   [EvmChain.Blast]: 20n,
   [EvmChain.Optimism]: 20n,
+  [EvmChain.Avalanche]: undefined,
+  [EvmChain.Zksync]: undefined,
+  [EvmChain.Arbitrum]: undefined,
+  [EvmChain.Mantle]: undefined,
+  [EvmChain.Robinhood]: undefined,
 }
 
 /**

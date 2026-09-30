@@ -491,8 +491,8 @@ describe('getCosmosAccountInfo — LCD fallback URL on primary failure', () => {
   })
 
   it('fails closed on an unavailable LCD when the chain has no registered mirror', async () => {
-    // MayaChain is in cosmosRpcUrl but NOT in the fallback map (no public
-    // mirror exists). Primary failure should NOT thrash a second call.
+    // MayaChain explicitly has no fallback mirror. Primary failure should
+    // NOT thrash a second call.
     const client = makeClient(null)
     vi.mocked(getCosmosClient).mockResolvedValue(client as never)
     vi.mocked(queryUrl).mockRejectedValueOnce(new Error('HTTP 503 from primary'))

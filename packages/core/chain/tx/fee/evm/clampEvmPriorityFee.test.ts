@@ -94,6 +94,7 @@ describe('clampEvmPriorityFee', () => {
   ])('passes a near-zero %s tip through unchanged', (_label, chain) => {
     const nearZero = 398_220n
 
+    expect(clampEvmPriorityFee(chain, 0n)).toBe(0n)
     expect(clampEvmPriorityFee(chain, nearZero)).toBe(nearZero)
   })
 
@@ -102,6 +103,7 @@ describe('clampEvmPriorityFee', () => {
     ['Mantle', EvmChain.Mantle],
     ['Robinhood', EvmChain.Robinhood],
   ])('signs a zero %s tip whatever the RPC suggests (sequencer ignores tips)', (_label, chain) => {
+    expect(clampEvmPriorityFee(chain, 0n)).toBe(0n)
     expect(clampEvmPriorityFee(chain, gwei(1))).toBe(0n)
     expect(clampEvmPriorityFee(chain, gwei(5_000))).toBe(0n)
     expect(isZeroPriorityFeeChain(chain)).toBe(true)
