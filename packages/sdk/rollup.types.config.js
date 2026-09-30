@@ -20,15 +20,6 @@ const dtsPluginOptions = {
   },
 }
 
-const createSubpathTypesConfig = (input, file) => ({
-  input,
-  output: {
-    file,
-    format: 'es',
-  },
-  plugins: [dts(dtsPluginOptions)],
-})
-
 const entries = [
   // Main types (platform-agnostic)
   {
