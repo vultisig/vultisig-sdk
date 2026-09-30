@@ -1,6 +1,10 @@
+import { Address } from '@ton/core'
+import { Chain, EvmChain } from '@vultisig/core-chain/Chain'
+import { areEqualTonAddresses } from '@vultisig/core-chain/chains/ton/address'
 import { rootApiUrl } from '@vultisig/core-config'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
+import { coinGeckoPlatformForChain } from '../coingecko/platforms'
 import { isKnownNativePriceSymbol, NATIVE_COINGECKO_IDS, symbolFromCoinGeckoId } from './coinGeckoIds'
 
 /**
@@ -9,7 +13,7 @@ import { isKnownNativePriceSymbol, NATIVE_COINGECKO_IDS, symbolFromCoinGeckoId }
  * Ported from mcp-ts `price-oracle.ts` (`fetchPriceQuote`) as part of the
  * mcp-ts/backend → SDK code-as-action consolidation. PURE CRYPTO: resolves a
  * USD price for a token from one of four read-only routes (CoinGecko coin ID,
- * EVM contract, Solana mint, or native ticker). It never throws a fake price —
+ * EVM/TON contract, Solana mint, or native ticker). It never throws a fake price —
  * a lookup failure surfaces as a thrown error so callers never build a tx off
  * a guessed amount.
  *
@@ -23,26 +27,17 @@ const coinGeckoApiUrl = `${rootApiUrl}/coingeicko/api/v3`
 const evmAddressRE = /^0x[0-9a-fA-F]{40}$/
 const solanaAddressRE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/
 
-/**
- * CoinGecko asset-platform IDs keyed by Vultisig chain display name. Used when
- * pricing a token by its contract address.
- */
-const chainToPlatform: Readonly<Record<string, string>> = {
-  Ethereum: 'ethereum',
-  BSC: 'binance-smart-chain',
-  Polygon: 'polygon-pos',
-  Arbitrum: 'arbitrum-one',
-  Optimism: 'optimistic-ethereum',
-  Avalanche: 'avalanche',
-  Base: 'base',
-  Solana: 'solana',
-  Mantle: 'mantle',
-  Blast: 'blast',
-  Zksync: 'zksync',
-  CronosChain: 'cronos',
-  Hyperliquid: 'hyperliquid',
-  Sei: 'sei-network',
-  Robinhood: 'robinhood',
+const evmChains = new Set<string>(Object.values(EvmChain))
+
+const isTonContractAddress = (address: string): boolean => {
+  // Address.parseRaw uses parseInt and ignores extra colon-separated fields.
+  // Check the complete raw spelling before delegating checksum/account parsing.
+  if (address.includes(':') && !/^-?\d+:[0-9a-fA-F]{64}$/.test(address)) return false
+  try {
+    return Number.isSafeInteger(Address.parse(address).workChain)
+  } catch {
+    return false
+  }
 }
 
 /** Parameters describing the token to price. Provide at least one identity. */
@@ -99,18 +94,23 @@ type ContractMetadata = {
  * happy path is a single matching key — but we never blindly take
  * `Object.values(data)[0]`: a proxy/upstream quirk that returns a DIFFERENT
  * contract's entry (or merges an unrelated address in) would otherwise hand the
- * caller a wrong-token price under a correct-looking symbol/contract label. We
- * match the requested key case-insensitively (EVM addresses are checksum-cased;
- * Solana mints are base58 and case-sensitive, but a case-insensitive compare is
- * still safe since base58 has no case collisions for a fixed mint).
+ * caller a wrong-token price under a correct-looking symbol/contract label.
+ * EVM response keys ignore checksum casing. TON addresses compare by account
+ * identity; Solana mint identifiers compare exactly because base58 is case-sensitive.
  */
 const priceForRequestedContract = (
   data: Record<string, CoinGeckoSimplePrice>,
-  requestedContract: string
+  requestedContract: string,
+  chain: string
 ): CoinGeckoSimplePrice | undefined => {
-  const wanted = requestedContract.toLowerCase()
   for (const [key, value] of Object.entries(data)) {
-    if (key.toLowerCase() === wanted) {
+    if (
+      chain === Chain.Ton
+        ? isTonContractAddress(key) && areEqualTonAddresses(key, requestedContract)
+        : evmChains.has(chain)
+          ? key.toLowerCase() === requestedContract.toLowerCase()
+          : key === requestedContract
+    ) {
       return value
     }
   }
@@ -137,7 +137,7 @@ const fetchContractMetadata = async (
  * Resolution routes, in order:
  *  0. `coingeckoId` (no contract) → `/simple/price?ids=`
  *  1. EVM contract + chain        → `/simple/token_price/<platform>`
- *  2. Solana mint                 → `/simple/token_price/solana`
+ *  2. Solana mint / TON jetton    → `/simple/token_price/<platform>`
  *  3. Native ticker (symbol)      → coin-ID map → `/simple/price?ids=`
  *
  * Throws on lookup failure — never returns a fabricated price.
@@ -170,19 +170,24 @@ export const getPrice = async (query: PriceQuery): Promise<PriceQuote> => {
     }
   }
 
+  // Validate TON explicitly before any address-shape or native ticker route.
+  if (tokenContract && chain === Chain.Ton && !isTonContractAddress(tokenContract)) {
+    throw new Error(`invalid TON token contract address "${tokenContract}"`)
+  }
+
   // Route 1: EVM contract + chain.
   if (tokenContract && evmAddressRE.test(tokenContract)) {
     if (!chain) {
       throw new Error('chain is required when looking up a token by contract address')
     }
-    const platform = chainToPlatform[chain]
+    const platform = evmChains.has(chain) ? coinGeckoPlatformForChain(chain) : undefined
     if (!platform) {
       throw new Error(`unsupported chain "${chain}" for token price lookup`)
     }
     const data = await fetchJson<Record<string, CoinGeckoSimplePrice>>(
       `${coinGeckoApiUrl}/simple/token_price/${platform}?contract_addresses=${tokenContract.toLowerCase()}&vs_currencies=usd&include_24hr_change=true&include_market_cap=true`
     )
-    const priceData = priceForRequestedContract(data, tokenContract)
+    const priceData = priceForRequestedContract(data, tokenContract, chain)
     if (!priceData || typeof priceData.usd !== 'number') {
       throw new Error(`token price lookup failed for ${tokenContract}`)
     }
@@ -200,24 +205,29 @@ export const getPrice = async (query: PriceQuery): Promise<PriceQuote> => {
     }
   }
 
-  // Route 2: Solana mint.
-  if (tokenContract && chain === 'Solana' && solanaAddressRE.test(tokenContract)) {
-    const data = await fetchJson<Record<string, CoinGeckoSimplePrice>>(
-      `${coinGeckoApiUrl}/simple/token_price/solana?contract_addresses=${tokenContract}&vs_currencies=usd&include_24hr_change=true&include_market_cap=true`
-    )
-    const priceData = priceForRequestedContract(data, tokenContract)
-    if (!priceData || typeof priceData.usd !== 'number') {
-      throw new Error(`solana token price lookup failed for ${tokenContract}`)
+  // Route 2: validated Solana mint or TON jetton master.
+  if (tokenContract && ((chain === Chain.Solana && solanaAddressRE.test(tokenContract)) || chain === Chain.Ton)) {
+    const platform = coinGeckoPlatformForChain(chain)
+    if (!platform) {
+      throw new Error(`unsupported chain "${chain}" for token price lookup`)
     }
-    const metadata = symbol && name && coingeckoId ? undefined : await fetchContractMetadata('solana', tokenContract)
+    const encodedContract = encodeURIComponent(tokenContract)
+    const data = await fetchJson<Record<string, CoinGeckoSimplePrice>>(
+      `${coinGeckoApiUrl}/simple/token_price/${platform}?contract_addresses=${encodedContract}&vs_currencies=usd&include_24hr_change=true&include_market_cap=true`
+    )
+    const priceData = priceForRequestedContract(data, tokenContract, chain)
+    if (!priceData || typeof priceData.usd !== 'number') {
+      throw new Error(`${chain === Chain.Solana ? 'solana' : 'TON'} token price lookup failed for ${tokenContract}`)
+    }
+    const metadata = symbol && name && coingeckoId ? undefined : await fetchContractMetadata(platform, encodedContract)
     return {
       usd: priceData.usd,
       usd24hChange: priceData.usd_24h_change ?? 0,
       usdMarketCap: priceData.usd_market_cap ?? 0,
       resolvedSymbol: symbol ?? metadata?.symbol?.toUpperCase() ?? `${tokenContract.slice(0, 8)}...`,
-      resolvedName: name ?? metadata?.name ?? 'Token on Solana',
+      resolvedName: name ?? metadata?.name ?? `Token on ${chain}`,
       coingeckoId: coingeckoId ?? metadata?.id,
-      chain: 'Solana',
+      chain,
       contractAddress: tokenContract,
     }
   }

@@ -50,6 +50,34 @@ describe('searchToken', () => {
     expect(solDeploy).toBeDefined()
   })
 
+  it('decodes canonical platform IDs while ignoring unknown deployments', async () => {
+    mockQueryUrl.mockResolvedValueOnce({
+      coins: [{ id: 'test-token', name: 'Test', symbol: 'TEST', market_cap_rank: null }],
+    })
+    mockQueryUrl.mockResolvedValueOnce({
+      id: 'test-token',
+      detail_platforms: {
+        avalanche: { contract_address: '0xavax', decimal_place: 18 },
+        zksync: { contract_address: '0xzk', decimal_place: 18 },
+        'sei-v2': { contract_address: '0xsei', decimal_place: 18 },
+        'the-open-network': { contract_address: 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs', decimal_place: 6 },
+        robinhood: { contract_address: '0xhood', decimal_place: 18 },
+        hyperliquid: { contract_address: '0xhype', decimal_place: 18 },
+        'unknown-platform': { contract_address: 'unknown', decimal_place: 18 },
+        toString: { contract_address: 'unknown', decimal_place: 18 },
+      },
+    })
+    const results = await searchToken('TEST')
+    expect(results[0].deployments).toEqual([
+      { chain: 'Avalanche', contractAddress: '0xavax', decimals: 18 },
+      { chain: 'Zksync', contractAddress: '0xzk', decimals: 18 },
+      { chain: 'Sei', contractAddress: '0xsei', decimals: 18 },
+      { chain: 'Ton', contractAddress: 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs', decimals: 6 },
+      { chain: 'Robinhood', contractAddress: '0xhood', decimals: 18 },
+      { chain: 'Hyperliquid', contractAddress: '0xhype', decimals: 18 },
+    ])
+  })
+
   it('returns empty array on API failure', async () => {
     mockQueryUrl.mockResolvedValue(null)
 

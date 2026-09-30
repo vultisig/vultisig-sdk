@@ -1,3 +1,4 @@
+import { Address } from '@ton/core'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockQueryUrl = vi.fn()
@@ -106,6 +107,131 @@ describe('getPrice', () => {
     expect(mockQueryUrl).toHaveBeenCalledWith(
       expect.stringContaining('/simple/token_price/ethereum?contract_addresses=' + contract.toLowerCase())
     )
+  })
+
+  it.each([
+    ['Avalanche', 'avalanche'],
+    ['Zksync', 'zksync'],
+    ['Sei', 'sei-v2'],
+    ['Robinhood', 'robinhood'],
+    ['Hyperliquid', 'hyperliquid'],
+  ])('prices %s contracts through the live %s platform', async (chain, platform) => {
+    const contract = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+    mockQueryUrl.mockResolvedValueOnce({ [contract.toLowerCase()]: simplePrice(1) })
+    const quote = await getPrice({
+      tokenContract: contract,
+      chain,
+      symbol: 'USDC',
+      name: 'USD Coin',
+      coingeckoId: 'usd-coin',
+    })
+    expect(quote.chain).toBe(chain)
+    expect(quote.usd).toBe(1)
+    expect(mockQueryUrl).toHaveBeenCalledWith(
+      expect.stringContaining(`/simple/token_price/${platform}?contract_addresses=${contract.toLowerCase()}`)
+    )
+  })
+
+  it('prices a TON jetton without lowercasing its identifier', async () => {
+    const contract = 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs'
+    mockQueryUrl.mockResolvedValueOnce({ [contract]: simplePrice(1) })
+    mockQueryUrl.mockResolvedValueOnce({ id: 'tether', symbol: 'usdt', name: 'Tether' })
+    const quote = await getPrice({ tokenContract: contract, chain: 'Ton' })
+    expect(quote).toMatchObject({
+      usd: 1,
+      chain: 'Ton',
+      contractAddress: contract,
+      resolvedSymbol: 'USDT',
+      coingeckoId: 'tether',
+    })
+    expect(mockQueryUrl).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining(`/simple/token_price/the-open-network?contract_addresses=${contract}`)
+    )
+    expect(mockQueryUrl).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining(`/coins/the-open-network/contract/${contract}`)
+    )
+  })
+
+  it.each(['raw', 'non-bounceable', 'base64'])('matches equivalent TON %s response addresses', async form => {
+    const contract = 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs'
+    const parsed = Address.parse(contract)
+    const key =
+      form === 'raw'
+        ? parsed.toRawString()
+        : parsed.toString({ bounceable: form !== 'non-bounceable', urlSafe: form !== 'base64' })
+    mockQueryUrl.mockResolvedValueOnce({ [key]: simplePrice(1) })
+    const quote = await getPrice({
+      tokenContract: contract,
+      chain: 'Ton',
+      symbol: 'USDT',
+      name: 'Tether',
+      coingeckoId: 'tether',
+    })
+    expect(quote.usd).toBe(1)
+    expect(mockQueryUrl).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects malformed raw TON response keys even when their parsed prefix matches', async () => {
+    const contract = 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs'
+    const key = `${Address.parse(contract).toRawString()}:extra`
+    mockQueryUrl.mockResolvedValueOnce({ [key]: simplePrice(99999) })
+    await expect(getPrice({ tokenContract: contract, chain: 'Ton' })).rejects.toThrow(/TON token price lookup failed/)
+  })
+
+  it('encodes a raw TON contract in price and metadata URLs', async () => {
+    const contract = Address.parse('EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs').toRawString()
+    mockQueryUrl.mockResolvedValueOnce({ [contract]: simplePrice(1) })
+    mockQueryUrl.mockResolvedValueOnce({ id: 'tether', symbol: 'usdt', name: 'Tether' })
+    await getPrice({ tokenContract: contract, chain: 'Ton' })
+    expect(mockQueryUrl).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining(`contract_addresses=${encodeURIComponent(contract)}`)
+    )
+    expect(mockQueryUrl).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining(`/contract/${encodeURIComponent(contract)}`)
+    )
+  })
+
+  it.each([
+    'invalid-address',
+    `0:${'1'.repeat(64)}:extra`,
+    `0garbage:${'1'.repeat(64)}`,
+    `0x:${'1'.repeat(64)}`,
+    `99999999999999999999999:${'1'.repeat(64)}`,
+    'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDA',
+    '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+  ])('rejects invalid TON contract %s without falling back to a native ticker', async tokenContract => {
+    await expect(getPrice({ tokenContract, chain: 'Ton', symbol: 'TON' })).rejects.toThrow(/invalid TON/)
+    expect(mockQueryUrl).not.toHaveBeenCalled()
+  })
+
+  it.each(['wrong-account', 'changed-case'])('rejects a TON price for %s', async kind => {
+    const contract = 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs'
+    const key = kind === 'changed-case' ? contract.toLowerCase() : `0:${'1'.repeat(64)}`
+    mockQueryUrl.mockResolvedValueOnce({ [key]: simplePrice(99999) })
+    await expect(getPrice({ tokenContract: contract, chain: 'Ton' })).rejects.toThrow(/TON token price lookup failed/)
+    expect(mockQueryUrl).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects a case-altered Solana response key', async () => {
+    const mint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+    mockQueryUrl.mockResolvedValueOnce({ [mint.toLowerCase()]: simplePrice(99999) })
+    await expect(getPrice({ tokenContract: mint, chain: 'Solana' })).rejects.toThrow(/solana token price lookup failed/)
+  })
+
+  it('does not infer an unsupported non-EVM route from the shared map', async () => {
+    await expect(
+      getPrice({ tokenContract: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', chain: 'Cosmos' })
+    ).rejects.toThrow(/unsupported chain/)
+    expect(mockQueryUrl).not.toHaveBeenCalled()
+  })
+
+  it('rejects unsupported address shapes', async () => {
+    await expect(getPrice({ tokenContract: 'unsupported', chain: 'Ethereum' })).rejects.toThrow()
+    expect(mockQueryUrl).not.toHaveBeenCalled()
   })
 
   it('Route 1: skips the metadata fetch when symbol+name+id provided', async () => {
