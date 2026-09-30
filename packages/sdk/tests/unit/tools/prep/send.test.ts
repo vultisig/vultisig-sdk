@@ -23,6 +23,8 @@ vi.mock('@/context/wasmRuntime', () => ({
 
 import { prepareSendTxFromKeys } from '@/tools/prep/send'
 import type { VaultIdentity } from '@/tools/prep/types'
+import { VaultBase } from '@/vault/VaultBase'
+import { VaultErrorCode } from '@/vault/VaultError'
 
 const baseIdentity: VaultIdentity = {
   ecdsaPublicKey: '02ecdsa-public-key',
@@ -103,6 +105,107 @@ describe('prepareSendTxFromKeys', () => {
         amount: 0n,
       })
     ).rejects.toThrow('Amount must be greater than zero')
+
+    expect(mockBuildSendKeysignPayload).not.toHaveBeenCalled()
+  })
+
+  it('rejects a Bitcoin recipient amount below the chain dust floor', async () => {
+    await expect(
+      prepareSendTxFromKeys(baseIdentity, {
+        coin: { chain: Chain.Bitcoin, address: 'bc1qsender', decimals: 8, ticker: 'BTC' },
+        receiver: 'bc1qrecipient',
+        amount: 545n,
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.InvalidAmount,
+      message: 'Minimum send amount is 0.00000546 BTC. Bitcoin requires this to prevent spam.',
+    })
+
+    expect(mockBuildSendKeysignPayload).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [Chain.Bitcoin, 'BTC', 8, 546n],
+    [Chain.Litecoin, 'LTC', 8, 2_940n],
+    [Chain.Dogecoin, 'DOGE', 8, 1_000_000n],
+  ])('builds a %s send whose recipient amount equals the chain dust floor', async (chain, ticker, decimals, amount) => {
+    await expect(
+      prepareSendTxFromKeys(baseIdentity, {
+        coin: { chain, address: 'sender', decimals, ticker },
+        receiver: 'recipient',
+        amount,
+      })
+    ).resolves.toBe(mockPayload)
+  })
+
+  it.each([
+    [Chain.Litecoin, 'LTC', 2_939n, '0.0000294 LTC'],
+    [Chain.Dogecoin, 'DOGE', 999_999n, '0.01 DOGE'],
+  ])('rejects a %s recipient amount one unit below its chain dust floor', async (chain, ticker, amount, floor) => {
+    await expect(
+      prepareSendTxFromKeys(baseIdentity, {
+        coin: { chain, address: 'sender', decimals: 8, ticker },
+        receiver: 'recipient',
+        amount,
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.InvalidAmount,
+      message: `Minimum send amount is ${floor}. ${chain} requires this to prevent spam.`,
+    })
+
+    expect(mockBuildSendKeysignPayload).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['legacy P2PKH', '1BoatSLRHtKNngkdXEeobR76b53LETtpyT'],
+    ['P2SH', '3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy'],
+  ])('uses the per-chain floor for a Bitcoin %s recipient', async (_scriptType, receiver) => {
+    await expect(
+      prepareSendTxFromKeys(baseIdentity, {
+        coin: { chain: Chain.Bitcoin, address: 'bc1qsender', decimals: 8, ticker: 'BTC' },
+        receiver,
+        amount: 100n,
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.InvalidAmount,
+      message: 'Minimum send amount is 0.00000546 BTC. Bitcoin requires this to prevent spam.',
+    })
+  })
+
+  it('does not apply the UTXO dust floor to a one-wei EVM send', async () => {
+    await expect(
+      prepareSendTxFromKeys(baseIdentity, {
+        coin: { chain: Chain.Ethereum, address: '0xfrom', decimals: 18, ticker: 'ETH' } as any,
+        receiver: '0xto',
+        amount: 1n,
+      })
+    ).resolves.toBe(mockPayload)
+  })
+
+  it('rejects a resolved Bitcoin MAX amount below the chain dust floor', async () => {
+    const coin = { chain: Chain.Bitcoin, address: 'bc1qsender', decimals: 8, ticker: 'BTC' }
+    const stub = {
+      resolveTokenInfo: () => ({ decimals: 8, ticker: 'BTC', contractAddress: undefined }),
+      buildAccountCoin: () => coin,
+      address: async () => coin.address,
+      getMaxSendAmount: async () => ({ balance: 1_000n, fee: 455n, maxSendable: 545n }),
+      prepareSendTx: (params: Parameters<typeof prepareSendTxFromKeys>[1]) =>
+        prepareSendTxFromKeys(baseIdentity, params),
+      transactionBuilder: { estimateSendFee: async () => 455n },
+      formatUnits: (value: bigint) => value.toString(),
+    }
+
+    await expect(
+      VaultBase.prototype.send.call(stub as never, {
+        chain: Chain.Bitcoin,
+        to: 'bc1qrecipient',
+        amount: 'max',
+        dryRun: true,
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.InvalidAmount,
+      message: 'Minimum send amount is 0.00000546 BTC. Bitcoin requires this to prevent spam.',
+    })
 
     expect(mockBuildSendKeysignPayload).not.toHaveBeenCalled()
   })

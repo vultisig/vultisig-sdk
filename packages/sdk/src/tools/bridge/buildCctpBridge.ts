@@ -21,9 +21,8 @@ import { assertSafeEvmDestination } from '../../utils/dangerousAddresses'
 import { formatUsdc, parseUsdcAmount } from '../parse/usdcAmount'
 import { type CctpChainConfig, cctpSupportedChains, getCctpChain } from './cctp'
 
-// Re-exported so `@vultisig/sdk/tools/bridge` keeps exposing both helpers at
-// the path consumers already import them from; the definitions live next to
-// each other in tools/parse/usdcAmount.ts (sdk#1931).
+// Re-exported so the root SDK bridge surface keeps exposing both helpers;
+// the definitions live together in tools/parse/usdcAmount.ts (sdk#1931).
 export { formatUsdc, parseUsdcAmount } from '../parse/usdcAmount'
 
 /** uint256 max — defense-in-depth overflow clamp. */

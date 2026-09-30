@@ -45,9 +45,9 @@ export type BuildSendKeysignPayloadInput = {
   walletCore: WalletCore
   feeSettings?: FeeSettings
   /**
-   * Whether the caller's UI offered this as a MAX send. Recorded in TonSpecific;
-   * the amount signed is `amount` either way, so this describes the send rather
-   * than changing it.
+   * Whether the caller's UI offered this as a MAX send. UTXO signers use it to
+   * sweep the selected inputs; other chain families either record it as
+   * descriptive metadata or sign the explicit `amount` unchanged.
    */
   sendMaxAmount?: boolean
   /**

@@ -708,7 +708,7 @@ export class ShellSession {
   }
 
   private async runPortfolio(args: string[]): Promise<void> {
-    let currency: FiatCurrency = 'usd'
+    let currency: FiatCurrency | undefined
 
     for (let i = 0; i < args.length; i++) {
       if ((args[i] === '-c' || args[i] === '--currency') && i + 1 < args.length) {
@@ -717,7 +717,7 @@ export class ShellSession {
       }
     }
 
-    if (!fiatCurrencies.includes(currency)) {
+    if (currency !== undefined && !fiatCurrencies.includes(currency)) {
       console.log(chalk.red(`Invalid currency: ${currency}`))
       console.log(chalk.yellow(`Supported currencies: ${fiatCurrencies.join(', ')}`))
       return

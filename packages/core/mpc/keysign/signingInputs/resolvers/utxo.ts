@@ -145,9 +145,8 @@ type PlanZcashConventionalFeeInput = {
  * WalletCore honours `byteFee` — and bump `byteFee` until the fee clears.
  * Plain (no-memo) sends already meet the fee and keep the `zip_0317` plan.
  *
- * An empty plan (no selected UTXOs) is returned untouched: it means the
- * coin selection produced nothing yet (insufficient funds, or before
- * `refineKeysignUtxo` flips `sendMaxAmount`), and that flow owns the outcome.
+ * An empty plan (no selected UTXOs) is returned untouched so refinement can
+ * report the planner failure. Only the caller decides whether a request is MAX.
  */
 const planZcashConventionalFee = ({
   input,

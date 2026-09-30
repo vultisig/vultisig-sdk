@@ -7,30 +7,94 @@ import { fileURLToPath } from 'node:url'
 import { smokePrepConsumers } from './smoke-sdk-prep-consumers.mjs'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const tempRoot = mkdtempSync(path.join(os.tmpdir(), 'vultisig-sdk-subpaths-'))
+const tempRoot = mkdtempSync(path.join(os.tmpdir(), 'vultisig-sdk-subpath-migration-'))
 const appRoot = path.join(tempRoot, 'app')
 const tarballPath = path.join(tempRoot, 'vultisig-sdk.tgz')
-
-const run = (command, args, cwd = repoRoot) => {
-  execFileSync(command, args, {
-    cwd,
-    stdio: 'inherit',
-    env: process.env,
-  })
-}
+const run = (command, args, cwd = repoRoot) => execFileSync(command, args, { cwd, stdio: 'inherit', env: process.env })
 
 try {
   run('yarn', ['workspace', '@vultisig/sdk', 'pack', '--out', tarballPath])
-
   mkdirSync(appRoot, { recursive: true })
   writeFileSync(
     path.join(appRoot, 'package.json'),
-    JSON.stringify({ name: 'sdk-subpath-smoke', private: true, type: 'module' }, null, 2) + '\n'
+    JSON.stringify({ name: 'sdk-subpath-migration-smoke', private: true, type: 'module' }) + '\n'
   )
+  run('npm', ['install', '--no-package-lock', tarballPath], appRoot)
+
   writeFileSync(
-    path.join(appRoot, 'tsconfig.json'),
-    JSON.stringify(
-      {
+    path.join(appRoot, 'smoke-runtime.mjs'),
+    `
+import assert from 'node:assert/strict'
+import { createRequire } from 'node:module'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
+const require = createRequire(import.meta.url)
+const expected = ['.', './node', './browser', './react-native', './rn-preamble', './electron', './electron/main', './chrome-extension', './vite', './tools/defi']
+const manifest = JSON.parse(readFileSync(path.join(path.dirname(require.resolve('@vultisig/sdk')), '..', 'package.json'), 'utf8'))
+assert.deepEqual(Object.keys(manifest.exports), expected)
+for (const root of [await import('@vultisig/sdk'), require('@vultisig/sdk')]) {
+  assert.equal(typeof root.parseChain, 'function')
+  assert.equal(typeof root.getWalletCore, 'function')
+  assert.equal(typeof root.chainTron.buildTronSendTx, 'function')
+  assert.equal(typeof root.chainTron.getTronBlockRefs, 'function')
+  assert.equal(typeof root.chainUtxo.buildUtxoSendTx, 'function')
+  assert.equal(typeof root.chainUtxo.getSighashLegacy, 'function')
+  assert.equal(typeof root.chainTon.buildTonSendTx, 'function')
+  assert.equal(root.seedphrase.normalizeMnemonic('  ABANDON\\nABANDON  '), 'abandon abandon')
+  assert.equal(typeof root.seedphrase.ChainDiscoveryService, 'function')
+  assert.equal(typeof root.server.sendMpcRelayMessage, 'function')
+  assert.equal(typeof root.balance.formatBalance, 'function')
+  assert.equal(root.swap.MAX_PRICE_IMPACT_PCT, 10)
+  const impactError = new root.swap.PriceImpactTooHighError(12)
+  assert.equal(impactError.name, 'PriceImpactTooHighError')
+  assert.equal(impactError.impactPercent, 12)
+  assert.equal(typeof root.cosmos.gov.prepareCosmosVote, 'function')
+  assert.equal(root.canonicalizeSignableTransactionValue({ z: 2, a: [1, 'x'] }), '{"a":[1,"x"],"z":2}')
+  assert.equal(typeof root.buildCctpBridge, 'function')
+  assert.equal(root.encodeErc20Approve('0x1111111111111111111111111111111111111111', 1n), '0x095ea7b3' + '0'.repeat(24) + '1'.repeat(40) + '0'.repeat(63) + '1')
+  const policyClaim = { chain: 'base', recipient: '0xAAA', asset: 'USDC', amount: '1', amountUnits: 'human' }
+  const policyEnvelope = { decoded: true, chainId: 'base', recipient: '0xBBB', asset: { symbol: 'USDC', decimals: 6 }, amount: 1000000n }
+  const policyVerdict = root.policy.evaluate(policyClaim, policyEnvelope)
+  assert.equal(policyVerdict.result, 'BLOCK')
+  assert.equal(policyVerdict.diff[0].field, 'recipient')
+  assert.equal(root.policy.checkInvariants({ claim: policyClaim, envelope: policyEnvelope })[0].invariant, 'I1_recipient_matches_intent')
+}
+for (const subpath of ${JSON.stringify(['tools/prep', 'seedphrase', 'tools/balance', 'tools/swap', 'tools/decode', 'tx', 'chains/tron', 'chains/utxo', 'chains/ton', 'abi', 'tools/parse', 'tools/policy', 'tools/price', 'tools/gas', 'tools/bridge', 'tools/evm', 'tools/cosmos', 'signable-transaction', 'server'])}) {
+  const specifier = '@vultisig/sdk/' + subpath
+  assert.throws(() => require.resolve(specifier), { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' })
+  await assert.rejects(import(specifier), { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' })
+}
+assert.equal(typeof (await import('@vultisig/sdk/tools/defi')).defi, 'object')
+assert.equal(typeof require('@vultisig/sdk/tools/defi').defi, 'object')
+console.log('SDK packed root replacements and removed path rejection: PASS')
+`
+  )
+  run('node', ['smoke-runtime.mjs'], appRoot)
+  await smokePrepConsumers({ appRoot, repoRoot })
+
+  writeFileSync(
+    path.join(appRoot, 'smoke-types.ts'),
+    `
+import { balance, chainTon, chainTron, chainUtxo, cosmos, getWalletCore, seedphrase, server, swap } from '@vultisig/sdk'
+import type { CosmosVoteEnvelope } from '@vultisig/sdk'
+const tronBuilder: typeof chainTron.buildTronSendTx = chainTron.buildTronSendTx
+const utxoBuilder: typeof chainUtxo.buildUtxoSendTx = chainUtxo.buildUtxoSendTx
+const tonBuilder: typeof chainTon.buildTonSendTx = chainTon.buildTonSendTx
+const mnemonic: string = seedphrase.normalizeMnemonic(' abandon ')
+const relay: typeof server.sendMpcRelayMessage = server.sendMpcRelayMessage
+const format: typeof balance.formatBalance = balance.formatBalance
+const walletCore: typeof getWalletCore = getWalletCore
+const impact: number = swap.MAX_PRICE_IMPACT_PCT
+const vote: typeof cosmos.gov.prepareCosmosVote = cosmos.gov.prepareCosmosVote
+const discovery = null as unknown as seedphrase.ChainDiscoveryAggregate
+const envelope = null as unknown as CosmosVoteEnvelope
+void [tronBuilder, utxoBuilder, tonBuilder, mnemonic, relay, format, walletCore, impact, vote, discovery, envelope]
+`
+  )
+  for (const condition of [null, 'browser', 'react-native']) {
+    writeFileSync(
+      path.join(appRoot, 'tsconfig.json'),
+      JSON.stringify({
         compilerOptions: {
           module: 'NodeNext',
           moduleResolution: 'NodeNext',
@@ -38,215 +102,13 @@ try {
           strict: true,
           noEmit: true,
           skipLibCheck: true,
+          ...(condition ? { customConditions: [condition] } : {}),
         },
-        include: ['smoke-types.ts'],
-      },
-      null,
-      2
-    ) + '\n'
-  )
-  writeFileSync(
-    path.join(appRoot, 'smoke-runtime.mjs'),
-    [
-      "import assert from 'node:assert/strict'",
-      "import { createRequire } from 'node:module'",
-      '',
-      'const require = createRequire(import.meta.url)',
-      "const parsePath = require.resolve('@vultisig/sdk/tools/parse')",
-      "const defiPath = require.resolve('@vultisig/sdk/tools/defi')",
-      "const bridgePath = require.resolve('@vultisig/sdk/tools/bridge')",
-      "const gasPath = require.resolve('@vultisig/sdk/tools/gas')",
-      "const balancePath = require.resolve('@vultisig/sdk/tools/balance')",
-      "const tronPath = require.resolve('@vultisig/sdk/chains/tron')",
-      "const utxoPath = require.resolve('@vultisig/sdk/chains/utxo')",
-      "const decodePath = require.resolve('@vultisig/sdk/tools/decode')",
-      "const policyPath = require.resolve('@vultisig/sdk/tools/policy')",
-      "const priceModuleCjs = require('@vultisig/sdk/tools/price')",
-      "const pricePath = require.resolve('@vultisig/sdk/tools/price')",
-      'const newSubpaths = ["tools/evm", "tools/cosmos", "signable-transaction"]',
-      'const newCjs = Object.fromEntries(newSubpaths.map(name => [name, require(`@vultisig/sdk/${name}`)]))',
-      'const newEsm = Object.fromEntries(await Promise.all(newSubpaths.map(async name => [name, await import(`@vultisig/sdk/${name}`)])))',
-      'const newPaths = {}',
-      'for (const name of newSubpaths) {',
-      '  const cjsPath = require.resolve(`@vultisig/sdk/${name}`)',
-      '  const esmPath = import.meta.resolve(`@vultisig/sdk/${name}`)',
-      '  assert.ok(cjsPath.endsWith(`/dist/${name}/index.cjs`), cjsPath)',
-      '  assert.ok(esmPath.endsWith(`/dist/${name}/index.js`), esmPath)',
-      '  newPaths[name] = { cjsPath, esmPath }',
-      '}',
-      'for (const modules of [newCjs, newEsm]) {',
-      '  const evm = modules["tools/evm"]',
-      '  const cosmos = modules["tools/cosmos"]',
-      '  const signable = modules["signable-transaction"]',
-      '  assert.equal(typeof evm.encodeErc20Approve, "function")',
-      '  assert.equal(evm.encodeErc20Approve("0x1111111111111111111111111111111111111111", 1n), "0x095ea7b3" + "0".repeat(24) + "1".repeat(40) + "0".repeat(63) + "1")',
-      '  assert.equal(typeof cosmos.prepareCosmosVote, "function")',
-      '  assert.equal(typeof cosmos.gov.prepareCosmosVote, "function")',
-      '  assert.equal(typeof signable.canonicalizeSignableTransactionValue, "function")',
-      '  assert.equal(signable.canonicalizeSignableTransactionValue({ z: 2, a: [1, "x"] }), "{\\"a\\":[1,\\"x\\"],\\"z\\":2}")',
-      '}',
-      "const swapPath = require.resolve('@vultisig/sdk/tools/swap')",
-      "const swapEsmPath = import.meta.resolve('@vultisig/sdk/tools/swap')",
-      'assert.ok(swapPath.endsWith("/dist/tools/swap/index.cjs"))',
-      'assert.ok(swapEsmPath.endsWith("/dist/tools/swap/index.js"))',
-      "const swapEsm = await import('@vultisig/sdk/tools/swap')",
-      "const swapCjs = require('@vultisig/sdk/tools/swap')",
-      'for (const swap of [swapEsm, swapCjs]) {',
-      '  for (const name of ["findSwapQuote", "findSwapQuotes", "acrossQuote", "buildJupiterSwapTx", "getNativeSwapMinAmountIn", "getNativeSwapDecimals", "buildAstroportSwap", "quoteSkipRoute", "runSkipSwap"]) {',
-      '    assert.equal(typeof swap[name], "function", name)',
-      '  }',
-      '  assert.equal(swap.MAX_PRICE_IMPACT_PCT, 10)',
-      '  const error = new swap.PriceImpactTooHighError(12)',
-      '  assert.ok(error instanceof Error)',
-      '  assert.equal(error.name, "PriceImpactTooHighError")',
-      '  assert.equal(error.impactPercent, 12)',
-      '}',
-      "const txPath = require.resolve('@vultisig/sdk/tx')",
-      'assert.match(parsePath, /dist\\/tools\\/parse\\/index\\.cjs$/)',
-      'assert.match(defiPath, /dist\\/tools\\/defi\\/index\\.cjs$/)',
-      'assert.match(bridgePath, /dist\\/tools\\/bridge\\/index\\.cjs$/)',
-      'assert.match(gasPath, /dist\\/tools\\/gas\\/index\\.cjs$/)',
-      'assert.match(balancePath, /dist\\/tools\\/balance\\/index\\.cjs$/)',
-      'assert.match(tronPath, /dist\\/chains\\/tron\\/index\\.cjs$/)',
-      'assert.match(utxoPath, /dist\\/chains\\/utxo\\/index\\.cjs$/)',
-      'assert.match(decodePath, /dist\\/tools\\/decode\\/index\\.cjs$/)',
-      'assert.match(policyPath, /dist\\/tools\\/policy\\/index\\.cjs$/)',
-      'assert.match(pricePath, /dist\\/tools\\/price\\/index\\.cjs$/)',
-      'assert.match(txPath, /dist\\/tx\\/index\\.cjs$/)',
-      "const parse = await import('@vultisig/sdk/tools/parse')",
-      "const defiModule = await import('@vultisig/sdk/tools/defi')",
-      "const bridgeModule = await import('@vultisig/sdk/tools/bridge')",
-      "const gasModule = await import('@vultisig/sdk/tools/gas')",
-      "const balanceModule = await import('@vultisig/sdk/tools/balance')",
-      "const balanceCjs = require('@vultisig/sdk/tools/balance')",
-      "const tron = await import('@vultisig/sdk/chains/tron')",
-      "const utxo = await import('@vultisig/sdk/chains/utxo')",
-      "const decodeModule = await import('@vultisig/sdk/tools/decode')",
-      "const policyModule = await import('@vultisig/sdk/tools/policy')",
-      "const priceModule = await import('@vultisig/sdk/tools/price')",
-      "const txModule = await import('@vultisig/sdk/tx')",
-      "assert.equal(parse.parseChain('Ethereum').success, true)",
-      "assert.equal(typeof parse.parseTicker, 'function')",
-      "assert.equal(typeof defiModule.defi, 'object')",
-      "assert.equal(typeof defiModule.osmosis.buildSwapExactAmountIn, 'function')",
-      "assert.equal(typeof bridgeModule.buildCctpBridge, 'function')",
-      "assert.equal(typeof bridgeModule.getCctpChain, 'function')",
-      "assert.equal(typeof gasModule.compareCosts, 'function')",
-      "assert.equal(typeof gasModule.getChainGasPriceGwei, 'function')",
-      "assert.equal(typeof balanceModule.getXrpBalance, 'function')",
-      "assert.equal(typeof balanceModule.getUtxoBalance, 'function')",
-      "assert.equal(typeof balanceCjs.getXrpBalance, 'function')",
-      "assert.equal(typeof balanceCjs.getUtxoBalance, 'function')",
-      "assert.equal(typeof tron.buildTronSendTx, 'function')",
-      "assert.equal(typeof tron.getTronBlockRefs, 'function')",
-      "assert.equal(typeof utxo.buildUtxoSendTx, 'function')",
-      "assert.equal(typeof utxo.getSighashLegacy, 'function')",
-      "assert.equal(typeof decodeModule.decodeFromToolResult, 'function')",
-      "assert.equal(typeof policyModule.policy.evaluate, 'function')",
-      "assert.equal(typeof policyModule.policy.checkInvariants, 'function')",
-      "const policyClaim = { chain: 'base', recipient: '0xAAA', asset: 'USDC', amount: '1', amountUnits: 'human' }",
-      "const policyEnvelope = { decoded: true, chainId: 'base', recipient: '0xBBB', asset: { symbol: 'USDC', decimals: 6 }, amount: 1000000n }",
-      'const policyVerdict = policyModule.policy.evaluate(policyClaim, policyEnvelope)',
-      "assert.equal(policyVerdict.result, 'BLOCK')",
-      'assert.equal(policyVerdict.diff.length, 1)',
-      "assert.equal(policyVerdict.diff[0].field, 'recipient')",
-      'const policyViolations = policyModule.policy.checkInvariants({ claim: policyClaim, envelope: policyEnvelope })',
-      'assert.equal(policyViolations.length, 1)',
-      "assert.equal(policyViolations[0].invariant, 'I1_recipient_matches_intent')",
-      "assert.equal(typeof priceModule.getPrice, 'function')",
-      "assert.equal(typeof priceModule.getPricesBatch, 'function')",
-      "assert.equal(typeof priceModule.symbolFromCoinGeckoId, 'function')",
-      "assert.equal(typeof priceModule.coinGeckoIdToSymbol, 'object')",
-      "assert.equal(typeof priceModuleCjs.getPrice, 'function')",
-      "assert.equal(typeof priceModuleCjs.getPricesBatch, 'function')",
-      "assert.equal(typeof priceModuleCjs.symbolFromCoinGeckoId, 'function')",
-      "assert.equal(typeof priceModuleCjs.coinGeckoIdToSymbol, 'object')",
-      "assert.equal(typeof txModule.normalizeTx, 'function')",
-      "assert.equal(txModule.normalizeTx({ to: '0x1', chain: 'Ethereum' }).chain, 'Ethereum')",
-      'console.log(JSON.stringify({ newPaths, newSubpathsOk: true, swapPath, swapEsmPath, swapOk: true, parsePath, defiPath, bridgePath, gasPath, balancePath, tronPath, utxoPath, decodePath, policyPath, pricePath, txPath, parseOk: true, defiOk: true, bridgeOk: true, gasOk: true, balanceOk: true, tronOk: true, utxoOk: true, decodeOk: true, policyOk: true, priceOk: true, txOk: true }))',
-      '',
-    ].join('\n')
-  )
-  writeFileSync(
-    path.join(appRoot, 'smoke-types.ts'),
-    [
-      "import { parseChain, type ParseChainResult } from '@vultisig/sdk/tools/parse'",
-      "import { defi, type Defi } from '@vultisig/sdk/tools/defi'",
-      "import { UtxoChain } from '@vultisig/sdk'",
-      "import { buildCctpBridge, type CctpChainConfig } from '@vultisig/sdk/tools/bridge'",
-      "import { compareCosts, type CompareCostsParams } from '@vultisig/sdk/tools/gas'",
-      "import { getUtxoBalance, getXrpBalance, type GetUtxoBalanceOptions, type UtxoBalance, type XrpBalance } from '@vultisig/sdk/tools/balance'",
-      "import { buildTronSendTx, type BuildTronSendOptions } from '@vultisig/sdk/chains/tron'",
-      "import { buildUtxoSendTx, type BuildUtxoSendOptions } from '@vultisig/sdk/chains/utxo'",
-      "import { decodeFromToolResult, type Envelope } from '@vultisig/sdk/tools/decode'",
-      "import { policy, type Verdict } from '@vultisig/sdk/tools/policy'",
-      "import { getPrice, type PriceQuote } from '@vultisig/sdk/tools/price'",
-      "import { encodeErc20Approve, type EvmBalance } from '@vultisig/sdk/tools/evm'",
-      "import { gov, prepareCosmosVote, type PrepareCosmosVoteParams } from '@vultisig/sdk/tools/cosmos'",
-      "import { canonicalizeSignableTransactionValue, type SignableCanonicalValue } from '@vultisig/sdk/signable-transaction'",
-      'const evmEncoder: typeof encodeErc20Approve = encodeErc20Approve',
-      'const evmBalance = null as unknown as EvmBalance',
-      'const cosmosVote: typeof prepareCosmosVote = gov.prepareCosmosVote',
-      'const cosmosParams = null as unknown as PrepareCosmosVoteParams',
-      'const signableValue: SignableCanonicalValue = { z: 2, a: [1, "x"] }',
-      'const canonical: string = canonicalizeSignableTransactionValue(signableValue)',
-      'void [evmEncoder, evmBalance, cosmosVote, cosmosParams, canonical]',
-      "import { findSwapQuote, getNativeSwapMinAmountIn, PriceImpactTooHighError, type FindSwapQuoteParams, type NativeSwapMinAmountIn } from '@vultisig/sdk/tools/swap'",
-      'const findQuote: (params: FindSwapQuoteParams) => ReturnType<typeof findSwapQuote> = findSwapQuote',
-      'const minimum: Awaited<ReturnType<typeof getNativeSwapMinAmountIn>> = null as unknown as NativeSwapMinAmountIn',
-      'const impact: number = new PriceImpactTooHighError(12).impactPercent',
-      'void [findQuote, minimum, impact]',
-      "import { normalizeTx, type NormalizedTx } from '@vultisig/sdk/tx'",
-      '',
-      "const chainResult: ParseChainResult = parseChain('Ethereum')",
-      'void chainResult',
-      'const tools: Defi = defi',
-      'void tools',
-      'const builder: typeof buildCctpBridge = buildCctpBridge',
-      'void builder',
-      'const chainConfig = null as unknown as CctpChainConfig',
-      'void chainConfig',
-      'const costComparer: typeof compareCosts = compareCosts',
-      'void costComparer',
-      'const costParams = null as unknown as CompareCostsParams',
-      'void costParams',
-      'const balanceReader: (address: string) => Promise<XrpBalance> = getXrpBalance',
-      'void balanceReader',
-      'const utxoReader: (chain: UtxoChain, address: string, options?: GetUtxoBalanceOptions) => Promise<UtxoBalance> = getUtxoBalance',
-      'void utxoReader',
-      "const xrpBalance: XrpBalance = { address: 'rExample', balanceDrops: '1000000', balanceXrp: '1.000000', asOf: '2026-08-11T00:00:00Z' }",
-      'void xrpBalance.balanceDrops',
-      "const utxoBalance: UtxoBalance = { chain: UtxoChain.Bitcoin, address: 'bc1qexample', symbol: 'BTC', satoshis: '42', balance: '0.00000042' }",
-      'void utxoBalance.satoshis',
-      'const tronBuilder: typeof buildTronSendTx = buildTronSendTx',
-      'void tronBuilder',
-      'const tronOptions = {} as BuildTronSendOptions',
-      'void tronOptions',
-      'const utxoBuilder: typeof buildUtxoSendTx = buildUtxoSendTx',
-      'void utxoBuilder',
-      'const utxoOptions = {} as BuildUtxoSendOptions',
-      'void utxoOptions',
-      "const decoded: Envelope = decodeFromToolResult({ chain: 'ethereum', payload: '0xabcd' })",
-      'void decoded',
-      'const verdict: Verdict = policy.evaluate(',
-      "  { chain: 'base', recipient: '0xAAA', asset: 'USDC', amount: '1', amountUnits: 'human' },",
-      "  { decoded: true, chainId: 'base', recipient: '0xBBB', asset: { symbol: 'USDC', decimals: 6 }, amount: 1000000n }",
-      ')',
-      'void verdict',
-      'const priceFn: typeof getPrice = getPrice',
-      'void priceFn',
-      'const priceQuote = null as unknown as PriceQuote',
-      'void priceQuote',
-      "const normalized: NormalizedTx = normalizeTx({ to: '0x1', chain: 'Ethereum' })",
-      'void normalized',
-      '',
-    ].join('\n')
-  )
-
-  run('npm', ['install', '--no-package-lock', tarballPath], appRoot)
-  await smokePrepConsumers({ appRoot, repoRoot })
-  run('node', ['smoke-runtime.mjs'], appRoot)
-  run('yarn', ['exec', 'tsc', '--project', path.join(appRoot, 'tsconfig.json')], repoRoot)
+        files: ['smoke-types.ts'],
+      })
+    )
+    run(path.join(repoRoot, 'node_modules/.bin/tsc'), ['--project', 'tsconfig.json'], appRoot)
+  }
 } finally {
   rmSync(tempRoot, { recursive: true, force: true })
 }

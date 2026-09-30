@@ -21,6 +21,12 @@ const platformTargetPattern = /(?:^|[./-])(browser|chrome-extension|react-native
 const runtimeUnsafePlatformPattern = /(?:^|[./-])(react-native|rn-preamble)(?:[./-]|$)/
 const builtInTypeConditions = new Set(['types', 'import', 'require', 'node', 'node-addons', 'default'])
 const packedDependencyFields = ['dependencies', 'optionalDependencies']
+const reactNativeFormatJsPackages = [
+  '@formatjs/intl-getcanonicallocales',
+  '@formatjs/intl-locale',
+  '@formatjs/intl-numberformat',
+  '@formatjs/intl-pluralrules',
+]
 const coordinatedSdkPackageNames = new Set([
   '@vultisig/core-chain',
   '@vultisig/core-mpc',
@@ -100,6 +106,99 @@ export function createPackedConsumerManifest(localPackages = {}) {
     type: 'module',
     packageManager: 'yarn@4.16.0',
     ...(Object.keys(localPackages).length ? { resolutions: localPackages } : {}),
+  }
+}
+
+export function validateReactNativeFormatJsDependencies(manifest) {
+  for (const packageName of reactNativeFormatJsPackages) {
+    assert.ok(manifest.devDependencies?.[packageName], `${packageName} must remain an SDK build dependency`)
+    for (const field of ['dependencies', 'optionalDependencies', 'peerDependencies']) {
+      assert.ok(!manifest[field]?.[packageName], `${packageName} must not be an SDK ${field} entry`)
+    }
+  }
+}
+
+export function validateNoInstalledReactNativeFormatJs(consumerRoot) {
+  for (const packageName of reactNativeFormatJsPackages) {
+    if (!existsSync(path.join(consumerRoot, 'node_modules', packageName))) continue
+    const result = run('npm', ['explain', packageName, '--json'], { cwd: consumerRoot })
+    const explanations = JSON.parse(result.stdout)
+    assert.ok(explanations.length > 0, `npm must explain installed ${packageName}`)
+    assert.ok(
+      explanations.every(
+        explanation =>
+          Array.isArray(explanation.dependents) &&
+          explanation.dependents.length > 0 &&
+          explanation.dependents.every(dependent => !hasSdkDependencyAncestry(dependent.from))
+      ),
+      `${packageName} must not be installed through an SDK dependency`
+    )
+  }
+}
+
+export function hasSdkDependencyAncestry(packageExplanation, visited = new Set()) {
+  if (!packageExplanation || visited.has(packageExplanation)) return false
+  if (packageExplanation.name === '@vultisig/sdk') return true
+  visited.add(packageExplanation)
+  return packageExplanation.dependents?.some(dependent => hasSdkDependencyAncestry(dependent.from, visited)) ?? false
+}
+
+function collectEnglishIntlRegistrations(ast, registrations) {
+  const pending = [ast]
+  while (pending.length) {
+    const node = pending.pop()
+    if (!node || typeof node !== 'object') continue
+    if (
+      node.type === 'CallExpression' &&
+      node.callee?.type === 'MemberExpression' &&
+      node.callee.property?.name === '__addLocaleData' &&
+      node.callee.object?.type === 'MemberExpression' &&
+      node.callee.object.object?.name === 'Intl'
+    ) {
+      const locale = node.arguments?.[0]?.properties?.find(
+        property => (property.key?.name ?? property.key?.value) === 'locale'
+      )?.value?.value
+      if (locale === 'en') registrations.add(node.callee.object.property?.name)
+    }
+    for (const value of Object.values(node)) {
+      if (value && typeof value === 'object') pending.push(...(Array.isArray(value) ? value : [value]))
+    }
+  }
+}
+
+export function validatePackedReactNativeIntl(packageRoot) {
+  for (const entry of ['dist/index.react-native.js']) {
+    const pending = [entry]
+    const visited = new Set()
+    let bundledSource = ''
+    const englishRegistrations = new Set()
+
+    while (pending.length) {
+      const relativePath = pending.pop()
+      if (visited.has(relativePath)) continue
+      visited.add(relativePath)
+      const source = readFileSync(path.join(packageRoot, relativePath), 'utf8')
+      bundledSource += source
+      assert.ok(!source.includes('@formatjs/'), `${relativePath} must bundle FormatJS instead of referencing it`)
+      const ast = parseAst(source)
+      collectEnglishIntlRegistrations(ast, englishRegistrations)
+      for (const statement of ast.body) {
+        if (!statement.source?.value) continue
+        const specifier = statement.source.value
+        if (specifier.startsWith('.')) {
+          const dependencyPath = path.posix.normalize(path.posix.join(path.posix.dirname(relativePath), specifier))
+          assert.ok(dependencyPath.startsWith('dist/'), `${relativePath} imports outside SDK dist: ${specifier}`)
+          pending.push(dependencyPath)
+        }
+      }
+    }
+
+    for (const marker of ['getCanonicalLocales', 'Locale', 'NumberFormat', 'PluralRules', '__addLocaleData']) {
+      assert.ok(bundledSource.includes(marker), `${entry} must embed Intl ${marker}`)
+    }
+    for (const intlType of ['NumberFormat', 'PluralRules']) {
+      assert.ok(englishRegistrations.has(intlType), `${entry} must register English ${intlType} locale data`)
+    }
   }
 }
 
@@ -876,6 +975,8 @@ export async function checkSdkPackageExports({
 
     const sourceManifest = JSON.parse(readFileSync(sdkManifestPath, 'utf8'))
     const packedManifest = JSON.parse(readFileSync(path.join(packageRoot, 'package.json'), 'utf8'))
+    validateReactNativeFormatJsDependencies(sourceManifest)
+    validateReactNativeFormatJsDependencies(packedManifest)
     assert.deepEqual(
       packedManifest.exports,
       sourceManifest.exports,
@@ -890,6 +991,7 @@ export async function checkSdkPackageExports({
     const targets = validatePackedExportTargets(sourceManifest, packageRoot)
     validatePackedReactNativePublicHelpers(packageRoot)
     validatePackedReactNativeRuntimeExports(packageRoot)
+    validatePackedReactNativeIntl(packageRoot)
     const importCases = collectNodeRuntimeCases(sourceManifest, 'import')
     const requireCases = collectNodeRuntimeCases(sourceManifest, 'require')
     if (!importCases.length || !requireCases.length) {
@@ -901,6 +1003,7 @@ export async function checkSdkPackageExports({
     const localPackages = packLocalSdkDependencies(workRoot, packedManifest)
     writeConsumerRuntimeFiles(consumerRoot, importCases, requireCases, localPackages)
     const env = installPackedSdk(consumerRoot, tarballPath)
+    validateNoInstalledReactNativeFormatJs(consumerRoot)
 
     run(process.execPath, ['verify-imports.mjs'], { cwd: consumerRoot, env, stdio: 'inherit' })
     run(process.execPath, ['verify-requires.cjs'], { cwd: consumerRoot, env, stdio: 'inherit' })

@@ -18,6 +18,7 @@
         "browser": "./dist/index.browser.d.ts",
         "worker": "./dist/index.browser.d.ts",
         "react-native": "./dist/index.react-native.d.ts",
+        "require": "./dist/index.d.cts",
         "default": "./dist/index.d.ts"
       },
       "chrome-extension": "./dist/index.chrome-extension.js",
@@ -76,19 +77,6 @@
       "require": "./dist/vite/index.cjs",
       "default": "./dist/vite/index.js"
     },
-    "./tools/parse": {
-      "types": "./dist/tools/parse/index.d.ts",
-      "browser": "./dist/tools/parse/index.js",
-      "worker": "./dist/tools/parse/index.js",
-      "react-native": "./dist/tools/parse/index.js",
-      "node": {
-        "import": "./dist/tools/parse/index.js",
-        "require": "./dist/tools/parse/index.cjs"
-      },
-      "import": "./dist/tools/parse/index.js",
-      "require": "./dist/tools/parse/index.cjs",
-      "default": "./dist/tools/parse/index.cjs"
-    },
     "./tools/defi": {
       "types": "./dist/tools/defi/index.d.ts",
       "browser": "./dist/tools/defi/index.js",
@@ -101,233 +89,6 @@
       "import": "./dist/tools/defi/index.js",
       "require": "./dist/tools/defi/index.cjs",
       "default": "./dist/tools/defi/index.cjs"
-    },
-    "./tools/bridge": {
-      "types": "./dist/tools/bridge/index.d.ts",
-      "browser": "./dist/tools/bridge/index.js",
-      "worker": "./dist/tools/bridge/index.js",
-      "react-native": "./dist/tools/bridge/index.js",
-      "node": {
-        "import": "./dist/tools/bridge/index.js",
-        "require": "./dist/tools/bridge/index.cjs"
-      },
-      "import": "./dist/tools/bridge/index.js",
-      "require": "./dist/tools/bridge/index.cjs",
-      "default": "./dist/tools/bridge/index.cjs"
-    },
-    "./tools/balance": {
-      "types": "./dist/tools/balance/index.d.ts",
-      "browser": "./dist/tools/balance/index.js",
-      "worker": "./dist/tools/balance/index.js",
-      "react-native": "./dist/tools/balance/index.js",
-      "node": {
-        "import": "./dist/tools/balance/index.js",
-        "require": "./dist/tools/balance/index.cjs"
-      },
-      "import": "./dist/tools/balance/index.js",
-      "require": "./dist/tools/balance/index.cjs",
-      "default": "./dist/tools/balance/index.cjs"
-    },
-    "./chains/tron": {
-      "types": "./dist/chains/tron/index.d.ts",
-      "browser": "./dist/chains/tron/index.js",
-      "worker": "./dist/chains/tron/index.js",
-      "react-native": "./dist/chains/tron/index.js",
-      "node": {
-        "import": "./dist/chains/tron/index.js",
-        "require": "./dist/chains/tron/index.cjs"
-      },
-      "import": "./dist/chains/tron/index.js",
-      "require": "./dist/chains/tron/index.cjs",
-      "default": "./dist/chains/tron/index.cjs"
-    },
-    "./chains/utxo": {
-      "types": "./dist/chains/utxo/index.d.ts",
-      "browser": "./dist/chains/utxo/index.js",
-      "worker": "./dist/chains/utxo/index.js",
-      "react-native": "./dist/chains/utxo/index.js",
-      "node": {
-        "import": "./dist/chains/utxo/index.js",
-        "require": "./dist/chains/utxo/index.cjs"
-      },
-      "import": "./dist/chains/utxo/index.js",
-      "require": "./dist/chains/utxo/index.cjs",
-      "default": "./dist/chains/utxo/index.cjs"
-    },
-    "./chains/ton": {
-      "types": "./dist/chains/ton/index.d.ts",
-      "browser": "./dist/chains/ton/index.js",
-      "worker": "./dist/chains/ton/index.js",
-      "react-native": "./dist/chains/ton/index.js",
-      "node": {
-        "import": "./dist/chains/ton/index.js",
-        "require": "./dist/chains/ton/index.cjs"
-      },
-      "import": "./dist/chains/ton/index.js",
-      "require": "./dist/chains/ton/index.cjs",
-      "default": "./dist/chains/ton/index.cjs"
-    },
-    "./abi": {
-      "types": "./dist/abi/index.d.ts",
-      "browser": "./dist/abi/index.js",
-      "worker": "./dist/abi/index.js",
-      "react-native": "./dist/abi/index.js",
-      "node": {
-        "import": "./dist/abi/index.js",
-        "require": "./dist/abi/index.cjs"
-      },
-      "import": "./dist/abi/index.js",
-      "require": "./dist/abi/index.cjs",
-      "default": "./dist/abi/index.cjs"
-    },
-    "./seedphrase": {
-      "types": "./dist/seedphrase/index.d.ts",
-      "node": {
-        "import": "./dist/seedphrase/index.js",
-        "require": "./dist/seedphrase/index.cjs"
-      },
-      "import": "./dist/seedphrase/index.js",
-      "require": "./dist/seedphrase/index.cjs",
-      "default": "./dist/seedphrase/index.cjs"
-    },
-    "./tools/decode": {
-      "types": "./dist/tools/decode/index.d.ts",
-      "browser": "./dist/tools/decode/index.js",
-      "worker": "./dist/tools/decode/index.js",
-      "react-native": "./dist/tools/decode/index.js",
-      "node": {
-        "import": "./dist/tools/decode/index.js",
-        "require": "./dist/tools/decode/index.cjs"
-      },
-      "import": "./dist/tools/decode/index.js",
-      "require": "./dist/tools/decode/index.cjs",
-      "default": "./dist/tools/decode/index.cjs"
-    },
-    "./tools/policy": {
-      "types": "./dist/tools/policy/index.d.ts",
-      "browser": "./dist/tools/policy/index.js",
-      "worker": "./dist/tools/policy/index.js",
-      "react-native": "./dist/tools/policy/index.js",
-      "node": {
-        "import": "./dist/tools/policy/index.js",
-        "require": "./dist/tools/policy/index.cjs"
-      },
-      "import": "./dist/tools/policy/index.js",
-      "require": "./dist/tools/policy/index.cjs",
-      "default": "./dist/tools/policy/index.cjs"
-    },
-    "./tools/price": {
-      "types": "./dist/tools/price/index.d.ts",
-      "browser": "./dist/tools/price/index.js",
-      "worker": "./dist/tools/price/index.js",
-      "react-native": "./dist/tools/price/index.js",
-      "node": {
-        "import": "./dist/tools/price/index.js",
-        "require": "./dist/tools/price/index.cjs"
-      },
-      "import": "./dist/tools/price/index.js",
-      "require": "./dist/tools/price/index.cjs",
-      "default": "./dist/tools/price/index.cjs"
-    },
-    "./tools/evm": {
-      "types": "./dist/tools/evm/index.d.ts",
-      "node": {
-        "import": "./dist/tools/evm/index.js",
-        "require": "./dist/tools/evm/index.cjs"
-      },
-      "import": "./dist/tools/evm/index.js",
-      "require": "./dist/tools/evm/index.cjs",
-      "default": "./dist/tools/evm/index.cjs"
-    },
-    "./tools/cosmos": {
-      "types": "./dist/tools/cosmos/index.d.ts",
-      "node": {
-        "import": "./dist/tools/cosmos/index.js",
-        "require": "./dist/tools/cosmos/index.cjs"
-      },
-      "import": "./dist/tools/cosmos/index.js",
-      "require": "./dist/tools/cosmos/index.cjs",
-      "default": "./dist/tools/cosmos/index.cjs"
-    },
-    "./signable-transaction": {
-      "types": "./dist/signable-transaction/index.d.ts",
-      "node": {
-        "import": "./dist/signable-transaction/index.js",
-        "require": "./dist/signable-transaction/index.cjs"
-      },
-      "import": "./dist/signable-transaction/index.js",
-      "require": "./dist/signable-transaction/index.cjs",
-      "default": "./dist/signable-transaction/index.cjs"
-    },
-    "./tx": {
-      "types": "./dist/tx/index.d.ts",
-      "browser": "./dist/tx/index.js",
-      "worker": "./dist/tx/index.js",
-      "react-native": "./dist/tx/index.js",
-      "node": {
-        "import": "./dist/tx/index.js",
-        "require": "./dist/tx/index.cjs"
-      },
-      "import": "./dist/tx/index.js",
-      "require": "./dist/tx/index.cjs",
-      "default": "./dist/tx/index.cjs"
-    },
-    "./tools/swap": {
-      "types": "./dist/tools/swap/index.d.ts",
-      "browser": "./dist/tools/swap/index.browser.js",
-      "worker": "./dist/tools/swap/index.browser.js",
-      "react-native": "./dist/tools/swap/index.react-native.js",
-      "node": {
-        "import": "./dist/tools/swap/index.js",
-        "require": "./dist/tools/swap/index.cjs"
-      },
-      "import": "./dist/tools/swap/index.js",
-      "require": "./dist/tools/swap/index.cjs",
-      "default": "./dist/tools/swap/index.cjs"
-    },
-    "./tools/gas": {
-      "types": "./dist/tools/gas/index.d.ts",
-      "browser": "./dist/tools/gas/index.js",
-      "worker": "./dist/tools/gas/index.js",
-      "react-native": "./dist/tools/gas/index.js",
-      "node": {
-        "import": "./dist/tools/gas/index.js",
-        "require": "./dist/tools/gas/index.cjs"
-      },
-      "import": "./dist/tools/gas/index.js",
-      "require": "./dist/tools/gas/index.cjs",
-      "default": "./dist/tools/gas/index.cjs"
-    },
-    "./server": {
-      "types": "./dist/server/index.d.ts",
-      "browser": "./dist/server/index.js",
-      "worker": "./dist/server/index.js",
-      "react-native": "./dist/server/index.js",
-      "node": {
-        "import": "./dist/server/index.js",
-        "require": "./dist/server/index.cjs"
-      },
-      "import": "./dist/server/index.js",
-      "require": "./dist/server/index.cjs",
-      "default": "./dist/server/index.cjs"
-    },
-    "./tools/prep": {
-      "types": {
-        "react-native": "./dist/tools/prep/index.react-native.d.ts",
-        "require": "./dist/tools/prep/index.d.cts",
-        "default": "./dist/tools/prep/index.d.ts"
-      },
-      "chrome-extension": "./dist/tools/prep/index.browser.js",
-      "browser": "./dist/tools/prep/index.browser.js",
-      "worker": "./dist/tools/prep/index.browser.js",
-      "react-native": "./dist/tools/prep/index.react-native.js",
-      "node": {
-        "import": "./dist/tools/prep/index.js",
-        "require": "./dist/tools/prep/index.cjs"
-      },
-      "import": "./dist/tools/prep/index.js",
-      "require": "./dist/tools/prep/index.cjs",
-      "default": "./dist/tools/prep/index.cjs"
     }
   },
   "scripts": {
@@ -335,7 +96,7 @@
     "clean": "rm -rf dist",
     "build": "node ../../examples/browser/scripts/ensure-local-sdk-build.mjs --begin sdk && yarn clean && yarn build:platforms && yarn build:types && node ../../examples/browser/scripts/ensure-local-sdk-build.mjs --record sdk",
     "build:js": "yarn build:platforms",
-    "build:types": "NODE_OPTIONS=--max-old-space-size=8192 rollup -c rollup.types.config.js",
+    "build:types": "NODE_OPTIONS=--max-old-space-size=8192 rollup -c rollup.types.config.js && node ../../scripts/write-sdk-cjs-types.mjs",
     "dev": "BUILD_TARGET=node rollup -c rollup.platforms.config.js -w",
     "_____PLATFORM_BUILDS_____": "",
     "build:platforms": "node ../../scripts/build-sdk-platforms.mjs \"yarn build:platform:node\" \"yarn build:platform:browser\" \"yarn build:platform:react-native\" \"yarn build:platform:vite\"",
@@ -435,10 +196,6 @@
     "@coral-xyz/anchor": "^0.32.1",
     "@cosmjs/encoding": "^0.39.0",
     "@cosmjs/stargate": "^0.39.0",
-    "@formatjs/intl-getcanonicallocales": "^3.2.11",
-    "@formatjs/intl-locale": "^5.3.10",
-    "@formatjs/intl-numberformat": "^9.3.11",
-    "@formatjs/intl-pluralrules": "^6.3.10",
     "@lifi/sdk": "^4.1.0",
     "@mysten/sui": "^2.22.1",
     "@noble/hashes": "^2.2.0",
@@ -491,6 +248,10 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@formatjs/intl-getcanonicallocales": "^3.2.12",
+    "@formatjs/intl-locale": "5.3.11",
+    "@formatjs/intl-numberformat": "^9.4.3",
+    "@formatjs/intl-pluralrules": "^6.3.15",
     "@rollup/plugin-alias": "^6.0.0",
     "@rollup/plugin-commonjs": "^29.0.3",
     "@rollup/plugin-inject": "^5.0.5",
@@ -506,7 +267,7 @@
     "@vitest/coverage-v8": "4.1.9",
     "concurrently": "^10.0.3",
     "dotenv": "^17.4.2",
-    "electron": "^42.4.1",
+    "electron": "42.10.0",
     "fake-indexeddb": "^6.2.5",
     "node-localstorage": "^3.0.5",
     "rollup": "^4.62.0",
