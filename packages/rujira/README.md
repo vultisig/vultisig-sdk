@@ -224,6 +224,37 @@ const signer = new VultisigRujiraProvider(vault /*, chainId? */)
 
 ---
 
+## Range funding builders
+
+Before creating a range position or depositing into one, resolve the market on
+that same client instance. Reuse the returned contract and **exact native
+denominations**; ticker symbols and normalized aliases are for discovery only.
+
+```typescript
+const pair = await client.range.getPairAddress('RUJI', 'RUNE')
+if (!pair) throw new Error('Market is not in the available FIN registry')
+
+const tx = client.range.buildDeposit({
+  pairAddress: pair.address,
+  idx: '42', // An existing position in this market
+  base: { denom: pair.base.denom, amount: '100' },
+  quote: { denom: pair.quote.denom, amount: '100' },
+})
+```
+
+`buildCreatePosition()` has the same requirement. Both builders remain
+synchronous and reject unverified contracts with `INVALID_PAIR`. Verification
+expires after five minutes; call `getPairAddress()` again and rebuild using the
+new result. A new client instance also requires its own lookup. Caller-supplied
+contract configuration cannot establish verification.
+
+Discovery traverses all FIN pair pages in name order before publishing a
+validated snapshot, including markets beyond the first 200. Incomplete or
+non-advancing pagination never establishes authority.
+Network errors and invalid registry responses fail closed; retry discovery
+once the service recovers. Withdraw, claim, transfer and atomic close retain
+their existing behavior.
+
 ## GraphQL / discovery rate limits (optional)
 
 Rujira contract discovery may use GraphQL. If you run into HTTP 429 rate limits, you can provide an API token to the **GraphQL client** used by discovery.

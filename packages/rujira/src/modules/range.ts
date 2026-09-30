@@ -366,14 +366,13 @@ const POSITION_QUERY = `
   }
 `
 
-// Pair lookup goes through finV3.pairs sorted by volume. We fetch the top N
-// and do (base, quote) matching client-side on symbols AND denoms — tolerating
-// LLM-mangled inputs like "xruji" (stripped "x/ruji") or "thorrune"
-// (stripped "thor.rune") by normalising separators on both sides.
+// Traverse the full connection in stable name order; a volume-ranked prefix
+// cannot establish market absence or authorize funding for all FIN markets.
 const PAIR_QUERY = `
-  query FinPairsAll {
+  query FinPairsAll($after: String) {
     finV3 {
-      pairs(first: 200, sortBy: VOLUME, sortDir: DESC) {
+      pairs(first: 200, after: $after, sortBy: NAME, sortDir: ASC) {
+        pageInfo { hasNextPage endCursor }
         edges {
           node {
             address
@@ -390,6 +389,10 @@ type FinPairNode = {
   address: string
   assetBase: { metadata?: { symbol?: string }; variants?: { native?: { denom?: string } } }
   assetQuote: { metadata?: { symbol?: string }; variants?: { native?: { denom?: string } } }
+}
+
+type FinPairPage = {
+  finV3?: { pairs?: { edges?: unknown; pageInfo?: { hasNextPage?: unknown; endCursor?: unknown } } }
 }
 
 type FinPairEdge = {
@@ -471,18 +474,99 @@ export class RujiraRange {
   private readonly client: RujiraClient
   private pairListCache: { expiresAt: number; edges: FinPairEdge[] } | null = null
   private pairListInflight: Promise<FinPairEdge[]> | null = null
+  private authoritativePairs = new Map<string, string>()
 
   constructor(client: RujiraClient) {
     this.client = client
   }
 
+  private assertAuthoritativePair(pairAddress: string, baseDenom: string, quoteDenom: string): void {
+    assertPairAddress(pairAddress)
+
+    if (!this.pairListCache || Date.now() >= this.pairListCache.expiresAt) {
+      throw new RujiraError(
+        RujiraErrorCode.INVALID_PAIR,
+        'The authoritative FIN pair registry is missing or expired; resolve the pair with getPairAddress() before building'
+      )
+    }
+
+    const marketKey = JSON.stringify([baseDenom, quoteDenom])
+    const authoritativeAddress = this.authoritativePairs.get(marketKey)
+    if (!authoritativeAddress) {
+      throw new RujiraError(
+        RujiraErrorCode.INVALID_PAIR,
+        `No authoritative FIN pair is registered for ${baseDenom}/${quoteDenom}; resolve it with getPairAddress() before building`
+      )
+    }
+
+    if (pairAddress !== authoritativeAddress) {
+      throw new RujiraError(
+        RujiraErrorCode.INVALID_PAIR,
+        `pairAddress does not match the authoritative FIN pair for ${baseDenom}/${quoteDenom}`
+      )
+    }
+  }
+
+  private replaceAuthoritativePairs(edges: FinPairEdge[]): void {
+    const next = new Map<string, string>()
+    const marketsByAddress = new Map<string, string>()
+
+    for (const { node } of edges) {
+      try {
+        assertPairAddress(node.address)
+      } catch {
+        throw new RujiraError(
+          RujiraErrorCode.NETWORK_ERROR,
+          `FIN pair-list response contains invalid contract address ${JSON.stringify(node.address)}`
+        )
+      }
+
+      const baseDenom = node.assetBase.variants?.native?.denom
+      const quoteDenom = node.assetQuote.variants?.native?.denom
+      if (
+        typeof baseDenom !== 'string' ||
+        !baseDenom ||
+        /\s/.test(baseDenom) ||
+        typeof quoteDenom !== 'string' ||
+        !quoteDenom ||
+        /\s/.test(quoteDenom)
+      ) {
+        throw new RujiraError(
+          RujiraErrorCode.NETWORK_ERROR,
+          `FIN pair ${node.address} has invalid canonical native denoms (backend or schema error)`
+        )
+      }
+
+      const marketKey = JSON.stringify([baseDenom, quoteDenom])
+      const existing = next.get(marketKey)
+      if (existing && existing !== node.address) {
+        throw new RujiraError(
+          RujiraErrorCode.NETWORK_ERROR,
+          `FIN pair-list response contains conflicting contracts for ${baseDenom}/${quoteDenom}`
+        )
+      }
+      const existingMarket = marketsByAddress.get(node.address)
+      if (existingMarket && existingMarket !== marketKey) {
+        throw new RujiraError(
+          RujiraErrorCode.NETWORK_ERROR,
+          'FIN pair-list response assigns one contract to conflicting markets'
+        )
+      }
+      marketsByAddress.set(node.address, marketKey)
+      next.set(marketKey, node.address)
+    }
+
+    this.authoritativePairs = next
+  }
+
   // ------------------- Builders -------------------
 
+  /** Resolve with getPairAddress() on this instance first; use its exact native denoms. */
   buildCreatePosition(params: CreatePositionParams): RangeTransactionParams {
-    assertPairAddress(params.pairAddress)
     assertConfig(params.config)
     assertCoin('base', params.base)
     assertCoin('quote', params.quote)
+    this.assertAuthoritativePair(params.pairAddress, params.base.denom, params.quote.denom)
     return {
       contractAddress: params.pairAddress,
       executeMsg: {
@@ -502,11 +586,12 @@ export class RujiraRange {
     }
   }
 
+  /** Resolve with getPairAddress() on this instance first; refresh after registry expiry. */
   buildDeposit(params: DepositParams): RangeTransactionParams {
-    assertPairAddress(params.pairAddress)
     assertIdx(params.idx)
     assertCoin('base', params.base)
     assertCoin('quote', params.quote)
+    this.assertAuthoritativePair(params.pairAddress, params.base.denom, params.quote.denom)
     return {
       contractAddress: params.pairAddress,
       executeMsg: { range: { deposit: { idx: params.idx } } },
@@ -582,27 +667,9 @@ export class RujiraRange {
       return this.pairListInflight
     }
 
-    this.pairListInflight = gqlFetch<{
-      finV3?: {
-        pairs?: {
-          edges?: unknown
-        }
-      }
-    }>(PAIR_QUERY, {})
-      .then(data => {
-        const edges = data?.finV3?.pairs?.edges
-        if (!Array.isArray(edges)) {
-          throw new RujiraError(
-            RujiraErrorCode.NETWORK_ERROR,
-            'GraphQL pair-list response missing `finV3.pairs.edges` array (backend or schema error)'
-          )
-        }
-        if (!edges.every(isFinPairEdge)) {
-          throw new RujiraError(
-            RujiraErrorCode.NETWORK_ERROR,
-            'GraphQL pair-list response contains malformed edge(s) (backend or schema error)'
-          )
-        }
+    this.pairListInflight = this.fetchCompletePairEdges()
+      .then(edges => {
+        this.replaceAuthoritativePairs(edges)
         this.pairListCache = {
           edges,
           expiresAt: Date.now() + PAIR_LIST_CACHE_TTL_MS,
@@ -614,6 +681,41 @@ export class RujiraRange {
       })
 
     return this.pairListInflight
+  }
+
+  private async fetchCompletePairEdges(): Promise<FinPairEdge[]> {
+    const allEdges: FinPairEdge[] = []
+    const cursors = new Set<string>()
+    let after: string | null = null
+    for (let page = 0; page < 100; page++) {
+      const data: FinPairPage = await gqlFetch<FinPairPage>(PAIR_QUERY, { after })
+      const pairs = data?.finV3?.pairs
+      const edges = pairs?.edges
+      if (!Array.isArray(edges)) {
+        throw new RujiraError(
+          RujiraErrorCode.NETWORK_ERROR,
+          'GraphQL pair-list response missing `finV3.pairs.edges` array'
+        )
+      }
+      if (!edges.every(isFinPairEdge)) {
+        throw new RujiraError(RujiraErrorCode.NETWORK_ERROR, 'GraphQL pair-list response contains malformed edge(s)')
+      }
+      const info = pairs?.pageInfo
+      if (typeof info?.hasNextPage !== 'boolean') {
+        throw new RujiraError(RujiraErrorCode.NETWORK_ERROR, 'FIN pair-list response missing valid pagination metadata')
+      }
+      allEdges.push(...edges)
+      if (!info.hasNextPage) return allEdges
+      if (typeof info.endCursor !== 'string' || !info.endCursor || cursors.has(info.endCursor) || edges.length === 0) {
+        throw new RujiraError(RujiraErrorCode.NETWORK_ERROR, 'FIN pair-list pagination did not advance')
+      }
+      cursors.add(info.endCursor)
+      after = info.endCursor
+    }
+    throw new RujiraError(
+      RujiraErrorCode.NETWORK_ERROR,
+      'FIN pair-list pagination exceeded the safety limit; authority incomplete'
+    )
   }
 
   /**
@@ -728,15 +830,25 @@ export class RujiraRange {
         )
       }
       if (!match) return null
+
+      const baseDenom = match.assetBase.variants?.native?.denom ?? ''
+      const quoteDenom = match.assetQuote.variants?.native?.denom ?? ''
+      if (!baseDenom || !quoteDenom) {
+        throw new RujiraError(
+          RujiraErrorCode.NETWORK_ERROR,
+          `FIN pair ${match.address} is missing canonical native denoms (backend or schema error)`
+        )
+      }
+
       return {
         address: match.address,
         base: {
           symbol: match.assetBase.metadata?.symbol ?? base,
-          denom: match.assetBase.variants?.native?.denom ?? '',
+          denom: baseDenom,
         },
         quote: {
           symbol: match.assetQuote.metadata?.symbol ?? quote,
-          denom: match.assetQuote.variants?.native?.denom ?? '',
+          denom: quoteDenom,
         },
       }
     } catch (error) {

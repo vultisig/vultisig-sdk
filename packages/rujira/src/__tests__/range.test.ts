@@ -1,16 +1,15 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { RujiraClient } from '../client.js'
 import { RujiraError } from '../errors.js'
 import { RujiraRange } from '../modules/range.js'
-
-const client = {} as RujiraClient
-const range = new RujiraRange(client)
+import { VALID_THOR_ADDRESS_2 } from './test-helpers.js'
 
 // Known-valid thor1 (RUJI staking contract) — we only need a real bech32 checksum.
 const validThor = 'thor13g83nn5ef4qzqeafp0508dnvkvm0zqr3sj7eefcn5umu65gqluusrml5cr'
 // Reusing the same bech32-valid contract-shaped thor1 for pair addresses.
 const validPair = validThor
+const forgedPair = VALID_THOR_ADDRESS_2
 
 const baseCoin = { denom: 'btc-btc', amount: '100000000' }
 const quoteCoin = { denom: 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', amount: '1000000000' }
@@ -23,13 +22,19 @@ const validConfig = {
   fee: '0.030000000000',
 }
 
-const pairEdge = (address: string, baseSymbol = 'RUJI', quoteSymbol = 'RUNE') => ({
+const pairEdge = (
+  address: string,
+  baseSymbol = 'RUJI',
+  quoteSymbol = 'RUNE',
+  baseDenom = `x/${baseSymbol.toLowerCase()}`,
+  quoteDenom = `thor.${quoteSymbol.toLowerCase()}`
+) => ({
   node: {
     address,
-    assetBase: { metadata: { symbol: baseSymbol }, variants: { native: { denom: `x/${baseSymbol.toLowerCase()}` } } },
+    assetBase: { metadata: { symbol: baseSymbol }, variants: { native: { denom: baseDenom } } },
     assetQuote: {
       metadata: { symbol: quoteSymbol },
-      variants: { native: { denom: `thor.${quoteSymbol.toLowerCase()}` } },
+      variants: { native: { denom: quoteDenom } },
     },
   },
 })
@@ -42,7 +47,7 @@ const mockPairFetch = (...edgeSets: Array<ReturnType<typeof pairEdge>[]>) => {
       json: async () => ({
         data: {
           finV3: {
-            pairs: { edges },
+            pairs: { edges, pageInfo: { hasNextPage: false, endCursor: null } },
           },
         },
       }),
@@ -58,6 +63,14 @@ afterEach(() => {
 })
 
 describe('RujiraRange builders', () => {
+  let range: RujiraRange
+
+  beforeEach(async () => {
+    range = new RujiraRange({ config: { contracts: { finContracts: {} } } } as RujiraClient)
+    mockPairFetch([pairEdge(validPair, 'BTC', 'USDC', baseCoin.denom, quoteCoin.denom)])
+    await range.getPairAddress(baseCoin.denom, quoteCoin.denom)
+  })
+
   describe('buildCreatePosition', () => {
     it('emits range.create with config + sorted funds', () => {
       const tx = range.buildCreatePosition({
@@ -160,6 +173,32 @@ describe('RujiraRange builders', () => {
         })
       ).toThrow(/pairAddress/)
     })
+
+    it('rejects a bech32-valid contract that is not the authoritative FIN pair', () => {
+      expect(() =>
+        range.buildCreatePosition({
+          pairAddress: forgedPair,
+          config: validConfig,
+          base: baseCoin,
+          quote: quoteCoin,
+        })
+      ).toThrow(/does not match the authoritative FIN pair/)
+    })
+
+    it('does not trust a caller-injected FIN config entry', () => {
+      const unregisteredRange = new RujiraRange({
+        config: { contracts: { finContracts: { [`${baseCoin.denom}/${quoteCoin.denom}`]: validPair } } },
+      } as RujiraClient)
+
+      expect(() =>
+        unregisteredRange.buildCreatePosition({
+          pairAddress: validPair,
+          config: validConfig,
+          base: baseCoin,
+          quote: quoteCoin,
+        })
+      ).toThrow(/registry is missing or expired/)
+    })
   })
 
   describe('buildDeposit', () => {
@@ -183,6 +222,17 @@ describe('RujiraRange builders', () => {
           quote: quoteCoin,
         })
       ).toThrow(/idx/)
+    })
+
+    it('rejects a bech32-valid contract that is not the authoritative FIN pair', () => {
+      expect(() =>
+        range.buildDeposit({
+          pairAddress: forgedPair,
+          idx: '42',
+          base: baseCoin,
+          quote: quoteCoin,
+        })
+      ).toThrow(/does not match the authoritative FIN pair/)
     })
   })
 
@@ -245,10 +295,25 @@ describe('RujiraRange builders', () => {
 })
 
 describe('RujiraRange queries', () => {
+  it('hydrates the authoritative FIN registry for subsequent range builders', async () => {
+    const localClient = {
+      config: { contracts: { finContracts: {} } },
+    } as RujiraClient
+    const localRange = new RujiraRange(localClient)
+    mockPairFetch([pairEdge(validPair, 'BTC', 'USDC', baseCoin.denom, quoteCoin.denom)])
+
+    await expect(localRange.getPairAddress(baseCoin.denom, quoteCoin.denom)).resolves.toMatchObject({
+      address: validPair,
+    })
+    expect(() =>
+      localRange.buildDeposit({ pairAddress: validPair, idx: '42', base: baseCoin, quote: quoteCoin })
+    ).not.toThrow()
+  })
+
   it('caches the FIN pair list across pair-address lookups', async () => {
     vi.useFakeTimers({ now: 1_000 })
     const fetchMock = mockPairFetch([pairEdge(validPair)])
-    const localRange = new RujiraRange(client)
+    const localRange = new RujiraRange({ config: { contracts: { finContracts: {} } } } as RujiraClient)
 
     const first = await localRange.getPairAddress('RUJI', 'RUNE')
     const second = await localRange.getPairAddress('x/ruji', 'thor.rune')
@@ -266,7 +331,7 @@ describe('RujiraRange queries', () => {
     })
     const fetchMock = vi.fn(() => fetchPromise)
     vi.stubGlobal('fetch', fetchMock)
-    const localRange = new RujiraRange(client)
+    const localRange = new RujiraRange({ config: { contracts: { finContracts: {} } } } as RujiraClient)
 
     const first = localRange.getPairAddress('RUJI', 'RUNE')
     const second = localRange.getPairAddress('x/ruji', 'thor.rune')
@@ -279,7 +344,7 @@ describe('RujiraRange queries', () => {
       json: async () => ({
         data: {
           finV3: {
-            pairs: { edges: [pairEdge(validPair)] },
+            pairs: { edges: [pairEdge(validPair)], pageInfo: { hasNextPage: false, endCursor: null } },
           },
         },
       }),
@@ -292,9 +357,9 @@ describe('RujiraRange queries', () => {
 
   it('refreshes the FIN pair list after the cache TTL expires', async () => {
     vi.useFakeTimers({ now: 1_000 })
-    const refreshedPair = 'thor1ezh0vln0axp6r45vhwjdyrhsq3xezh7pfyqqla'
+    const refreshedPair = VALID_THOR_ADDRESS_2
     const fetchMock = mockPairFetch([pairEdge(validPair)], [pairEdge(refreshedPair)])
-    const localRange = new RujiraRange(client)
+    const localRange = new RujiraRange({ config: { contracts: { finContracts: {} } } } as RujiraClient)
 
     const first = await localRange.getPairAddress('RUJI', 'RUNE')
     vi.setSystemTime(1_000 + 5 * 60 * 1000 + 1)
@@ -302,6 +367,42 @@ describe('RujiraRange queries', () => {
 
     expect(first?.address).toBe(validPair)
     expect(second?.address).toBe(refreshedPair)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('fails closed when a resolved authoritative snapshot expires before refresh', async () => {
+    vi.useFakeTimers({ now: 1_000 })
+    mockPairFetch([pairEdge(validPair, 'BTC', 'USDC', baseCoin.denom, quoteCoin.denom)])
+    const localRange = new RujiraRange({ config: { contracts: { finContracts: {} } } } as RujiraClient)
+
+    await localRange.getPairAddress(baseCoin.denom, quoteCoin.denom)
+    expect(() =>
+      localRange.buildDeposit({ pairAddress: validPair, idx: '42', base: baseCoin, quote: quoteCoin })
+    ).not.toThrow()
+
+    vi.setSystemTime(1_000 + 5 * 60 * 1000)
+    expect(() =>
+      localRange.buildDeposit({ pairAddress: validPair, idx: '42', base: baseCoin, quote: quoteCoin })
+    ).toThrow(/registry is missing or expired/)
+  })
+
+  it('revokes a previously resolved pair when a successful refresh removes it', async () => {
+    vi.useFakeTimers({ now: 1_000 })
+    const fetchMock = mockPairFetch([pairEdge(validPair, 'BTC', 'USDC', baseCoin.denom, quoteCoin.denom)], [])
+    const localRange = new RujiraRange({ config: { contracts: { finContracts: {} } } } as RujiraClient)
+
+    await expect(localRange.getPairAddress(baseCoin.denom, quoteCoin.denom)).resolves.toMatchObject({
+      address: validPair,
+    })
+    expect(() =>
+      localRange.buildDeposit({ pairAddress: validPair, idx: '42', base: baseCoin, quote: quoteCoin })
+    ).not.toThrow()
+
+    vi.setSystemTime(1_000 + 5 * 60 * 1000 + 1)
+    await expect(localRange.getPairAddress(baseCoin.denom, quoteCoin.denom)).resolves.toBeNull()
+    expect(() =>
+      localRange.buildDeposit({ pairAddress: validPair, idx: '42', base: baseCoin, quote: quoteCoin })
+    ).toThrow(/No authoritative FIN pair is registered/)
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
@@ -316,11 +417,13 @@ describe('RujiraRange queries', () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          data: { finV3: { pairs: { edges: [pairEdge(validPair)] } } },
+          data: {
+            finV3: { pairs: { edges: [pairEdge(validPair)], pageInfo: { hasNextPage: false, endCursor: null } } },
+          },
         }),
       })
     vi.stubGlobal('fetch', fetchMock)
-    const localRange = new RujiraRange(client)
+    const localRange = new RujiraRange({ config: { contracts: { finContracts: {} } } } as RujiraClient)
 
     await expect(localRange.getPairAddress('RUJI', 'RUNE')).rejects.toMatchObject({
       code: 'NETWORK_ERROR',
@@ -342,16 +445,171 @@ describe('RujiraRange queries', () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          data: { finV3: { pairs: { edges: [pairEdge(validPair)] } } },
+          data: {
+            finV3: { pairs: { edges: [pairEdge(validPair)], pageInfo: { hasNextPage: false, endCursor: null } } },
+          },
         }),
       })
     vi.stubGlobal('fetch', fetchMock)
-    const localRange = new RujiraRange(client)
+    const localRange = new RujiraRange({ config: { contracts: { finContracts: {} } } } as RujiraClient)
 
     await expect(localRange.getPairAddress('RUJI', 'RUNE')).rejects.toMatchObject({
       code: 'NETWORK_ERROR',
     })
     await expect(localRange.getPairAddress('RUJI', 'RUNE')).resolves.toMatchObject({ address: validPair })
     expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe.each(['create', 'deposit'] as const)('RujiraRange %s authority boundaries', builder => {
+  const build = (range: RujiraRange, address = validPair, base = baseCoin, quote = quoteCoin) =>
+    builder === 'create'
+      ? range.buildCreatePosition({ pairAddress: address, base, quote, config: validConfig })
+      : range.buildDeposit({ pairAddress: address, base, quote, idx: '42' })
+
+  it('rejects missing authority even with injected client configuration', () => {
+    const range = new RujiraRange({
+      config: {
+        contracts: {
+          finContracts: {
+            [`${baseCoin.denom}/${quoteCoin.denom}`]: validPair,
+          },
+        },
+      },
+    } as RujiraClient)
+    expect(() => build(range)).toThrow(/registry is missing or expired/)
+  })
+
+  it('requires exact ordered denoms rather than discovery aliases', async () => {
+    const range = new RujiraRange({} as RujiraClient)
+    mockPairFetch([pairEdge(validPair, 'BTC', 'USDC', baseCoin.denom, quoteCoin.denom)])
+    await range.getPairAddress('BTC', 'USDC')
+    expect(() => build(range, validPair, { ...baseCoin, denom: baseCoin.denom.toUpperCase() })).toThrow(
+      /No authoritative FIN pair/
+    )
+    expect(() => build(range, validPair, quoteCoin, baseCoin)).toThrow(/No authoritative FIN pair/)
+    expect(() => build(range, validPair, { ...baseCoin, denom: 'unknown' })).toThrow(/No authoritative FIN pair/)
+  })
+
+  it('does not confuse denomination tuples containing slashes', async () => {
+    const range = new RujiraRange({} as RujiraClient)
+    mockPairFetch([pairEdge(validPair, 'A', 'B', 'aaa/bbb', 'ccc'), pairEdge(forgedPair, 'C', 'D', 'aaa', 'bbb/ccc')])
+    await range.getPairAddress('A', 'B')
+    const base = { ...baseCoin, denom: 'aaa/bbb' }
+    const quote = { ...quoteCoin, denom: 'ccc' }
+    expect(build(range, validPair, base, quote).contractAddress).toBe(validPair)
+    expect(() => build(range, forgedPair, base, quote)).toThrow(/does not match/)
+    expect(build(range, forgedPair, { ...base, denom: 'aaa' }, { ...quote, denom: 'bbb/ccc' }).contractAddress).toBe(
+      forgedPair
+    )
+  })
+
+  it('expires authority and revokes a replaced contract after refresh', async () => {
+    vi.useFakeTimers({ now: 1000 })
+    const range = new RujiraRange({} as RujiraClient)
+    mockPairFetch(
+      [pairEdge(validPair, 'BTC', 'USDC', baseCoin.denom, quoteCoin.denom)],
+      [pairEdge(forgedPair, 'BTC', 'USDC', baseCoin.denom, quoteCoin.denom)],
+      []
+    )
+    await range.getPairAddress('BTC', 'USDC')
+    expect(build(range).contractAddress).toBe(validPair)
+    vi.setSystemTime(301000)
+    expect(() => build(range)).toThrow(/registry is missing or expired/)
+    await range.getPairAddress('BTC', 'USDC')
+    expect(() => build(range)).toThrow(/does not match/)
+    expect(build(range, forgedPair).contractAddress).toBe(forgedPair)
+    vi.setSystemTime(601000)
+    await range.getPairAddress('BTC', 'USDC')
+    expect(() => build(range, forgedPair)).toThrow(/No authoritative FIN pair/)
+  })
+
+  it.each([undefined, '', 123, {}, 'bad denom'])('rejects malformed registry denom %j atomically', async denom => {
+    const range = new RujiraRange({} as RujiraClient)
+    const malformed = pairEdge(forgedPair)
+    malformed.node.assetBase.variants.native.denom = denom as string
+    mockPairFetch([pairEdge(validPair, 'BTC', 'USDC', baseCoin.denom, quoteCoin.denom), malformed])
+    await expect(range.getPairAddress('BTC', 'USDC')).rejects.toMatchObject({ code: 'NETWORK_ERROR' })
+    expect(() => build(range)).toThrow(/registry is missing or expired/)
+  })
+
+  it('rejects conflicting contracts atomically', async () => {
+    const range = new RujiraRange({} as RujiraClient)
+    mockPairFetch(
+      [validPair, forgedPair].map(address => pairEdge(address, 'BTC', 'USDC', baseCoin.denom, quoteCoin.denom))
+    )
+    await expect(range.getPairAddress('BTC', 'USDC')).rejects.toMatchObject({ code: 'NETWORK_ERROR' })
+    expect(() => build(range)).toThrow(/registry is missing or expired/)
+  })
+})
+
+describe('complete FIN authority pagination', () => {
+  const response = (edges: ReturnType<typeof pairEdge>[], hasNextPage = false, endCursor: string | null = null) => ({
+    ok: true,
+    json: async () => ({ data: { finV3: { pairs: { edges, pageInfo: { hasNextPage, endCursor } } } } }),
+  })
+  const buildBoth = (range: RujiraRange) => [
+    () => range.buildCreatePosition({ pairAddress: validPair, base: baseCoin, quote: quoteCoin, config: validConfig }),
+    () => range.buildDeposit({ pairAddress: validPair, base: baseCoin, quote: quoteCoin, idx: '42' }),
+  ]
+
+  it('authorizes a market beyond the first 200 rows only after exhausting the connection', async () => {
+    const firstPage = Array.from({ length: 200 }, () => pairEdge(forgedPair))
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(response(firstPage, true, 'page-1'))
+      .mockResolvedValueOnce(response([pairEdge(validPair, 'BTC', 'USDC', baseCoin.denom, quoteCoin.denom)]))
+    vi.stubGlobal('fetch', fetchMock)
+    const range = new RujiraRange({} as RujiraClient)
+    const pair = await range.getPairAddress(baseCoin.denom, quoteCoin.denom)
+    expect(pair?.address).toBe(validPair)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).variables).toEqual({ after: 'page-1' })
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).query).toContain('sortBy: NAME')
+    for (const build of buildBoth(range)) expect(build().contractAddress).toBe(validPair)
+  })
+
+  it.each(['network', 'missing pageInfo', 'repeated cursor', 'empty advancing page'])(
+    'never publishes partial authority after %s',
+    async failure => {
+      const first = response([pairEdge(validPair, 'BTC', 'USDC', baseCoin.denom, quoteCoin.denom)], true, 'same-cursor')
+      const second =
+        failure === 'network'
+          ? { ok: false, status: 503 }
+          : failure === 'missing pageInfo'
+            ? { ok: true, json: async () => ({ data: { finV3: { pairs: { edges: [] } } } }) }
+            : response(
+                failure === 'empty advancing page' ? [] : [pairEdge(forgedPair)],
+                true,
+                failure === 'repeated cursor' ? 'same-cursor' : 'new-cursor'
+              )
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(first).mockResolvedValueOnce(second))
+      const range = new RujiraRange({} as RujiraClient)
+      await expect(range.getPairAddress(baseCoin.denom, quoteCoin.denom)).rejects.toMatchObject({
+        code: 'NETWORK_ERROR',
+      })
+      for (const build of buildBoth(range)) expect(build).toThrow(/missing or expired/)
+    }
+  )
+
+  it('rejects conflicting contracts split across pages', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          response([pairEdge(validPair, 'BTC', 'USDC', baseCoin.denom, quoteCoin.denom)], true, 'next')
+        )
+        .mockResolvedValueOnce(response([pairEdge(forgedPair, 'BTC', 'USDC', baseCoin.denom, quoteCoin.denom)]))
+    )
+    const range = new RujiraRange({} as RujiraClient)
+    await expect(range.getPairAddress(baseCoin.denom, quoteCoin.denom)).rejects.toThrow(/conflicting contracts/)
+    for (const build of buildBoth(range)) expect(build).toThrow(/missing or expired/)
+  })
+
+  it('rejects one contract assigned to different markets', async () => {
+    mockPairFetch([pairEdge(validPair), pairEdge(validPair, 'BTC', 'USDC', baseCoin.denom, quoteCoin.denom)])
+    const range = new RujiraRange({} as RujiraClient)
+    await expect(range.getPairAddress('RUJI', 'RUNE')).rejects.toThrow(/conflicting markets/)
   })
 })
