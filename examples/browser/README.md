@@ -92,7 +92,7 @@ yarn preview
 
 1. Click "Import Seedphrase"
 2. Choose vault type (FastVault or SecureVault)
-3. Enter your 12 or 24-word recovery phrase
+3. Enter your 12, 15, 18, 21 or 24-word recovery phrase
 4. Optionally enable:
    - **Discover chains with existing balances** - Scans all chains for funds
    - **Use Phantom wallet derivation path for Solana** - Enable if your seedphrase was created in Phantom wallet (uses a different derivation path)

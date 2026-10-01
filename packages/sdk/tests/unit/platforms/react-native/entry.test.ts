@@ -15,7 +15,6 @@ import type {
 import * as sdkRn from '../../../../src/platforms/react-native/index'
 import * as server from '../../../../src/server'
 import type { ServerEndpoints as CanonicalServerEndpoints } from '../../../../src/server/ServerManager'
-import type * as stakekitTypes from '../../../../src/tools/defi/stakekit'
 import * as recipientChecks from '../../../../src/tools/validate/recipientSanity'
 import type {
   PollTxStatusUntilFinalParams as PollTxStatusUntilFinalParamsFromTx,
@@ -49,32 +48,6 @@ describe('RN Fast Vault public exports', () => {
     }
     expectTypeOf<sdkRn.ServerEndpoints>().toEqualTypeOf<CanonicalServerEndpoints>()
     expectTypeOf<sdkRn.VaultFromServerResponse>().toEqualTypeOf<server.VaultFromServerResponse>()
-  })
-})
-
-describe('RN StakeKit companion types', () => {
-  it('matches the canonical StakeKit public contracts', () => {
-    expectTypeOf<sdkRn.EvmScanRequest>().toEqualTypeOf<stakekitTypes.EvmScanRequest>()
-    expectTypeOf<sdkRn.PendingAction>().toEqualTypeOf<stakekitTypes.PendingAction>()
-    expectTypeOf<sdkRn.ScanRequest>().toEqualTypeOf<stakekitTypes.ScanRequest>()
-    expectTypeOf<sdkRn.SolanaScanRequest>().toEqualTypeOf<stakekitTypes.SolanaScanRequest>()
-    expectTypeOf<sdkRn.StakekitActionDisplay>().toEqualTypeOf<stakekitTypes.StakekitActionDisplay>()
-    expectTypeOf<sdkRn.StakekitActionResult>().toEqualTypeOf<stakekitTypes.StakekitActionResult>()
-    expectTypeOf<sdkRn.StakekitDetailsResult>().toEqualTypeOf<stakekitTypes.StakekitDetailsResult>()
-    expectTypeOf<sdkRn.StakekitExitResult>().toEqualTypeOf<stakekitTypes.StakekitExitResult>()
-    expectTypeOf<sdkRn.UnsupportedScanRequest>().toEqualTypeOf<stakekitTypes.UnsupportedScanRequest>()
-    expectTypeOf<sdkRn.Validator>().toEqualTypeOf<stakekitTypes.Validator>()
-    expectTypeOf<sdkRn.YieldActionResponse>().toEqualTypeOf<stakekitTypes.YieldActionResponse>()
-    expectTypeOf<sdkRn.YieldArgs>().toEqualTypeOf<stakekitTypes.YieldArgs>()
-    expectTypeOf<sdkRn.YieldBalance>().toEqualTypeOf<stakekitTypes.YieldBalance>()
-    expectTypeOf<sdkRn.YieldDiscoverMetadata>().toEqualTypeOf<stakekitTypes.YieldDiscoverMetadata>()
-    expectTypeOf<sdkRn.YieldDiscoverOpportunity>().toEqualTypeOf<stakekitTypes.YieldDiscoverOpportunity>()
-    expectTypeOf<sdkRn.YieldDiscoverToken>().toEqualTypeOf<stakekitTypes.YieldDiscoverToken>()
-    expectTypeOf<sdkRn.YieldListResponse>().toEqualTypeOf<stakekitTypes.YieldListResponse>()
-    expectTypeOf<sdkRn.YieldMetadata>().toEqualTypeOf<stakekitTypes.YieldMetadata>()
-    expectTypeOf<sdkRn.YieldProduct>().toEqualTypeOf<stakekitTypes.YieldProduct>()
-    expectTypeOf<sdkRn.YieldToken>().toEqualTypeOf<stakekitTypes.YieldToken>()
-    expectTypeOf<sdkRn.YieldTransaction>().toEqualTypeOf<stakekitTypes.YieldTransaction>()
   })
 })
 
@@ -398,27 +371,6 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     }
   })
 
-  it('exposes canonical StakeKit helpers and preserves existing namespace members', async () => {
-    const canonical = await import('../../../../src/tools/defi/stakekit')
-
-    expect(reactNativeEntry.defi.stakekit).toEqual({
-      parseActionDisplay: canonical.parseActionDisplay,
-      finalizeStakekitAction: canonical.finalizeStakekitAction,
-      buildYieldActionScanRequest: canonical.buildYieldActionScanRequest,
-      validateStakekitActionAddress: canonical.validateStakekitActionAddress,
-      validateStakekitActionInput: canonical.validateStakekitActionInput,
-      normalizeNetwork: canonical.normalizeStakekitNetwork,
-      networkToCanonicalChain: canonical.yieldNetworkToCanonicalChain,
-      NETWORK_ALIASES: canonical.STAKEKIT_NETWORK_ALIASES,
-      search: canonical.stakekitSearch,
-      details: canonical.stakekitDetails,
-      balances: canonical.stakekitBalances,
-      buildEnter: canonical.stakekitBuildEnter,
-      buildExit: canonical.stakekitBuildExit,
-      buildManage: canonical.stakekitBuildManage,
-    })
-  })
-
   it('re-exports Blockaid EVM chain canonicals by identity', () => {
     expect(reactNativeEntry.blockaidEvmChain).toBe(blockaidChains.blockaidEvmChain)
     expect(reactNativeEntry.blockaidSupportedEvmChains).toBe(blockaidChains.blockaidSupportedEvmChains)
@@ -463,44 +415,6 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     const canonical = await import('@vultisig/core-chain/chains/utxo/client/getBlockchairBaseUrl')
 
     expect(reactNativeEntry.getBlockchairBaseUrl).toBe(canonical.getBlockchairBaseUrl)
-  })
-
-  it('re-exports the plural StakeKit scan-request builder by identity', async () => {
-    const stakekit = await import('../../../../src/tools/defi/stakekit')
-    expect(reactNativeEntry.buildYieldActionScanRequests).toBe(stakekit.buildYieldActionScanRequests)
-  })
-
-  it.each([
-    'buildYieldActionScanRequest',
-    'parseActionDisplay',
-    'stakekitBalances',
-    'stakekitBuildEnter',
-    'stakekitBuildExit',
-    'stakekitBuildManage',
-    'stakekitDetails',
-    'stakekitSearch',
-  ] as const)('re-exports canonical StakeKit runtime helper %s by identity', async name => {
-    const stakekit = await import('../../../../src/tools/defi/stakekit')
-    expect(reactNativeEntry[name]).toBe(stakekit[name])
-  })
-
-  it('re-exports the StakeKit action validators by identity', async () => {
-    const stakekit = await import('../../../../src/tools/defi/stakekit')
-
-    expect(reactNativeEntry.validateStakekitActionAddress).toBe(stakekit.validateStakekitActionAddress)
-    expect(reactNativeEntry.validateStakekitActionInput).toBe(stakekit.validateStakekitActionInput)
-    expect(reactNativeEntry.validateStakekitActionInput(`0x${'a'.repeat(40)}`, '1')).toBeNull()
-    expect(reactNativeEntry.validateStakekitActionInput('0xdeadbeef', '1')).toMatch(/Invalid 0x-prefixed address/)
-  })
-
-  it.each([
-    'chunkStakekitBalanceQueries',
-    'fetchAllStakekitBalances',
-    'fetchStakekitBalancesBatch',
-    'STAKEKIT_BALANCE_QUERIES_PER_REQUEST',
-  ] as const)('re-exports StakeKit batched-balances canonical %s by identity', async name => {
-    const stakekit = await import('../../../../src/tools/defi/stakekit')
-    expect(reactNativeEntry[name]).toBe(stakekit[name])
   })
 
   // sdk#1772: the RN entry omitted the whole validation / address-format
@@ -618,16 +532,11 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(sdk.swap.findSwapQuote).toBe(rn.findSwapQuote)
   })
 
-  it('exports the ThreeJane USDC helper values (not just their types) on the RN entrypoint', async () => {
-    const rn = await import('../../../../src/platforms/react-native/index')
-    const threeJane = await import('../../../../src/tools/defi/threeJane')
-
-    expect(rn.buildThreeJaneSupplyUsdc).toBe(threeJane.buildThreeJaneSupplyUsdc)
-    expect(rn.THREE_JANE_ADDRESSES).toBe(threeJane.THREE_JANE_ADDRESSES)
-    // Aliased to avoid colliding with the CCTP bridge's own `parseUsdcAmount`
-    // export, which is also present on this entrypoint.
-    expect(rn.parseThreeJaneUsdcAmount).toBe(threeJane.parseUsdcAmount)
-    expect(typeof rn.parseUsdcAmount).toBe('function')
+  it('omits agent DeFi exports from the wallet RN entry', async () => {
+    const rn = (await import('../../../../src/platforms/react-native/index')) as Record<string, unknown>
+    for (const name of ['defi', 'buildArkisSupplyTx', 'buildThreeJaneSupplyUsdc', 'stakekitBalances', 'river']) {
+      expect(rn).not.toHaveProperty(name)
+    }
   })
 
   it('re-exports root swap helpers needed by React Native consumers', () => {
@@ -928,17 +837,6 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
       type: 'wasm/MsgExecuteContract',
       value: '{"sender":"thor1sender","contract":"thor1contract","msg":{"swap":{"minimum_output":"123"}},"funds":[]}',
     })
-  })
-
-  it('re-exports the root River helper family on the RN entrypoint', async () => {
-    const rn = await import('../../../../src/platforms/react-native/index')
-    const river = await import('../../../../src/tools/defi/river')
-
-    expect(rn.describeRiverMarket).toBe(river.describeRiverMarket)
-    expect(rn.findRiverInsertHints).toBe(river.findRiverInsertHints)
-    expect(rn.formatRiverPercentWad).toBe(river.formatRiverPercentWad)
-    expect(rn.RIVER_TROVE_STATUS_NAMES).toBe(river.RIVER_TROVE_STATUS_NAMES)
-    expect(rn.riverStatusName).toBe(river.riverStatusName)
   })
 
   it('re-exports XRPL issued-currency canonicals on the RN entrypoint', async () => {

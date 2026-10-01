@@ -46,9 +46,23 @@ chainTron.buildTronSendTx(/* ... */)
 seedphrase.normalizeMnemonic('  abandon  ')
 ```
 
-No helper is intentionally retired. The checked-in
+No helper among these nineteen paths is intentionally retired. The checked-in
 `packages/sdk/public-subpath-migration.json` lists every value and type export,
-its source condition, and its exact replacement. `/tools/defi` stays published.
+its source condition, and its exact replacement. The separate agent DeFi API
+is retired below.
+
+## `@vultisig/sdk`: agent DeFi helpers removed in the next major
+
+The wallet SDK no longer exports the agent-focused DeFi helpers from its root,
+React Native entry, `Vultisig.defi`, or `@vultisig/sdk/tools/defi`. This removes
+the Arkis, Balancer, GLIF, Osmosis, Pendle, River, StakeKit, and ThreeJane
+builders from the published package. `@balancer/sdk` is no longer an SDK
+dependency.
+
+Consumers that still need a protocol builder should keep that implementation
+in their own application. There is no replacement SDK DeFi package. Wallet
+APIs such as balance, prep, swap, decode, and the shared USDC amount helpers
+remain available from their existing exports.
 
 ## TAO builders: explicit WalletCore runtime
 

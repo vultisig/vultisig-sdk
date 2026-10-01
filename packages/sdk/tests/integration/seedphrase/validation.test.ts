@@ -50,6 +50,19 @@ describe('Seedphrase Validation (Real WASM)', () => {
       expect(result.wordCount).toBe(24)
     })
 
+    // All-zero entropy at each remaining BIP39 length; the 18-word one is the official BIP39 test vector
+    it.each([
+      [15, `${'abandon '.repeat(14)}address`],
+      [18, `${'abandon '.repeat(17)}agent`],
+      [21, `${'abandon '.repeat(20)}admit`],
+    ])('should validate %i-word mnemonic', async (wordCount, mnemonic) => {
+      const result = await validator.validate(mnemonic)
+
+      expect(result.valid).toBe(true)
+      expect(result.wordCount).toBe(wordCount)
+      expect(result.detectedLanguage).toBe('english')
+    })
+
     it('should validate real-world style mnemonic', async () => {
       // A more realistic-looking mnemonic
       const mnemonic = 'zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo wrong'
@@ -84,7 +97,21 @@ describe('Seedphrase Validation (Real WASM)', () => {
 
       expect(result.valid).toBe(false)
       expect(result.wordCount).toBe(11)
-      expect(result.error).toContain('12 or 24')
+      expect(result.error).toContain('12, 15, 18, 21 or 24')
+    })
+
+    it('should reject 16-word mnemonic', async () => {
+      const result = await validator.validate(Array(16).fill('abandon').join(' '))
+
+      expect(result.valid).toBe(false)
+      expect(result.wordCount).toBe(16)
+    })
+
+    it('should reject 18-word mnemonic with invalid checksum', async () => {
+      const result = await validator.validate(Array(18).fill('abandon').join(' '))
+
+      expect(result.valid).toBe(false)
+      expect(result.wordCount).toBe(18)
     })
 
     it('should reject 13-word mnemonic', async () => {
@@ -137,8 +164,8 @@ abandon abandon about`
   })
 
   describe('word count constants', () => {
-    it('should only support 12 and 24 word counts', () => {
-      expect(SEEDPHRASE_WORD_COUNTS).toEqual([12, 24])
+    it('should support every BIP39 word count', () => {
+      expect(SEEDPHRASE_WORD_COUNTS).toEqual([12, 15, 18, 21, 24])
     })
   })
 })
