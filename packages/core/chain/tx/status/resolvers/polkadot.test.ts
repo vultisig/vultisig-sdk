@@ -92,7 +92,7 @@ describe('getPolkadotTxStatus', () => {
     mocks.queryUrl.mockResolvedValue({
       code: 0,
       message: 'Success',
-      data: { hash, success: false, finalized: false },
+      data: { extrinsic_hash: hash, success: false, finalized: false },
     })
 
     const result = await getPolkadotTxStatus({
@@ -106,7 +106,7 @@ describe('getPolkadotTxStatus', () => {
     mocks.queryUrl.mockResolvedValue({
       code: 0,
       message: 'Success',
-      data: { hash, success: true, finalized: true, fee_used: '125000000' },
+      data: { extrinsic_hash: hash, success: true, finalized: true, fee_used: '125000000' },
     })
 
     const result = await getPolkadotTxStatus({
@@ -120,11 +120,39 @@ describe('getPolkadotTxStatus', () => {
     })
   })
 
+  it('returns success for a finalized successful Subscan payload with extrinsic_hash', async () => {
+    mocks.queryUrl.mockResolvedValue({
+      code: 0,
+      message: 'Success',
+      data: { extrinsic_hash: hash, success: true, finalized: true },
+    })
+
+    const result = await getPolkadotTxStatus({
+      chain: OtherChain.Polkadot,
+      hash,
+    })
+    expect(result.status).toBe('success')
+  })
+
+  it('returns unknown pending when Subscan data has hash but no extrinsic_hash', async () => {
+    mocks.queryUrl.mockResolvedValue({
+      code: 0,
+      message: 'Success',
+      data: { hash, success: true, finalized: true },
+    })
+
+    const result = await getPolkadotTxStatus({
+      chain: OtherChain.Polkadot,
+      hash,
+    })
+    expect(result).toEqual({ status: 'pending', isKnown: false })
+  })
+
   it('falls back to fee when fee_used is absent', async () => {
     mocks.queryUrl.mockResolvedValue({
       code: 0,
       message: 'Success',
-      data: { hash, success: true, finalized: true, fee: '200000000' },
+      data: { extrinsic_hash: hash, success: true, finalized: true, fee: '200000000' },
     })
 
     const result = await getPolkadotTxStatus({
@@ -138,7 +166,7 @@ describe('getPolkadotTxStatus', () => {
     mocks.queryUrl.mockResolvedValue({
       code: 0,
       message: 'Success',
-      data: { hash, success: false, finalized: true, fee_used: '125000000' },
+      data: { extrinsic_hash: hash, success: false, finalized: true, fee_used: '125000000' },
     })
 
     const result = await getPolkadotTxStatus({
@@ -152,7 +180,7 @@ describe('getPolkadotTxStatus', () => {
     mocks.queryUrl.mockResolvedValue({
       code: 0,
       message: 'Success',
-      data: { hash, success: true, finalized: true },
+      data: { extrinsic_hash: hash, success: true, finalized: true },
     })
 
     const result = await getPolkadotTxStatus({

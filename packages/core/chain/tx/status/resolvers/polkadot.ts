@@ -15,7 +15,8 @@ type SubscanExtrinsicResponse = {
   code: number
   message: string
   data: {
-    hash: string
+    // Subscan response schema: https://support.subscan.io/api-36911038
+    extrinsic_hash: string
     success: boolean
     finalized: boolean
     fee?: string
@@ -39,7 +40,7 @@ export const getPolkadotTxStatus: TxStatusResolver<OtherChain.Polkadot> = async 
 
   if (
     typeof response.data !== 'object' ||
-    typeof response.data.hash !== 'string' ||
+    typeof response.data.extrinsic_hash !== 'string' ||
     typeof response.data.success !== 'boolean' ||
     typeof response.data.finalized !== 'boolean'
   ) {
