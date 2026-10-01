@@ -1,25 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
 import { buildCctpBridge, formatUsdc as formatCctpUsdc, parseUsdcAmount as parseCctpUsdcAmount } from '@/tools/bridge'
-import {
-  buildThreeJaneSupplyUsdc,
-  formatUsdc as formatThreeJaneUsdc,
-  parseUsdcAmount as parseThreeJaneUsdcAmount,
-} from '@/tools/defi/threeJane'
 import { formatUsdc, parseUsdcAmount } from '@/tools/parse/usdcAmount'
 
 const SENDER = '0x1111111111111111111111111111111111111111'
 
 describe('shared formatUsdc (sdk#1931)', () => {
-  // parseUsdcAmount was already shared; formatUsdc - its inverse - was copied
-  // into buildCctpBridge.ts and threeJane/buildSupplyUsdc.ts independently. The
-  // two copies still agreed, but this is the helper that renders the
-  // `amountUsdc` string a user reads on a signing card, so a drift would show
-  // the same amount two different ways depending on which builder produced it.
-  it('uses one implementation for CCTP and ThreeJane', () => {
+  it('uses the canonical implementation for CCTP', () => {
     expect(formatCctpUsdc).toBe(formatUsdc)
-    expect(formatThreeJaneUsdc).toBe(formatUsdc)
-    expect(formatCctpUsdc).toBe(formatThreeJaneUsdc)
   })
 
   it('is the exact inverse of parseUsdcAmount', () => {
@@ -38,16 +26,10 @@ describe('shared formatUsdc (sdk#1931)', () => {
 })
 
 describe('shared parseUsdcAmount', () => {
-  it('uses one implementation for CCTP and ThreeJane', () => {
-    expect(parseCctpUsdcAmount).toBe(parseThreeJaneUsdcAmount)
-  })
-
-  it.each(['+1', '-1', '1e3', '1_000', '1a'])('rejects signed or non-digit input %s through both callers', value => {
+  it.each(['+1', '-1', '1e3', '1_000', '1a'])('rejects signed or non-digit input %s through CCTP', value => {
     expect(() => parseCctpUsdcAmount(value)).toThrow()
-    expect(() => parseThreeJaneUsdcAmount(value)).toThrow()
     expect(() =>
       buildCctpBridge({ sourceChain: 'Base', destinationChain: 'Arbitrum', amount: value, from: SENDER })
     ).toThrow()
-    expect(() => buildThreeJaneSupplyUsdc({ from: SENDER, amount: value })).toThrow()
   })
 })

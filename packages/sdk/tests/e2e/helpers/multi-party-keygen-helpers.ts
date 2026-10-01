@@ -65,7 +65,7 @@ export type PartyKeyImportResult = {
  * Parameters for multi-party key import
  */
 export type MultiPartyKeyImportParams = {
-  /** BIP39 mnemonic phrase (12 or 24 words) */
+  /** BIP39 mnemonic phrase (12, 15, 18, 21 or 24 words) */
   mnemonic: string
   /** Name for the vault */
   vaultName: string
