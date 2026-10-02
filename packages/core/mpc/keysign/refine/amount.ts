@@ -1,4 +1,4 @@
-import { getMaxSendableAmount } from '@vultisig/core-chain/amount/getMaxSendableAmount'
+import { getMaxSendableAmount, getSendRetainedBalance } from '@vultisig/core-chain/amount/getMaxSendableAmount'
 import { Chain, CosmosChain, UtxoBasedChain } from '@vultisig/core-chain/Chain'
 import { isTerraClassicUstcCoin } from '@vultisig/core-chain/chains/cosmos/terraClassicTax'
 import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
@@ -68,7 +68,13 @@ export const refineKeysignAmount = async (input: RefineKeysignAmountInput) => {
   )
 
   if (refinedAmount <= 0n) {
-    throw new BuildKeysignPayloadError('not-enough-funds')
+    throw new BuildKeysignPayloadError('not-enough-funds', undefined, {
+      required: BigInt(input.keysignPayload.toAmount) + fee + getSendRetainedBalance(coin.chain, allowDeath),
+      available: input.balance,
+      ticker: coin.ticker,
+      decimals: coin.decimals,
+      includesNetworkCosts: true,
+    })
   }
 
   return {

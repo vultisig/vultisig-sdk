@@ -24,10 +24,14 @@ type GetMaxSendableAmountInput = {
   allowDeath?: boolean
 }
 
+/** What a send must leave in the account beyond the amount and fee. */
+export const getSendRetainedBalance = (chain: Chain, allowDeath = false): bigint =>
+  allowDeath ? 0n : (retainedBalance[chain] ?? 0n)
+
 /**
  * Largest native amount a send can move: the balance less the network fee and
  * whatever the chain requires the sender to keep. Zero when the balance does
  * not cover even those.
  */
 export const getMaxSendableAmount = ({ chain, balance, fee, allowDeath = false }: GetMaxSendableAmountInput): bigint =>
-  getMaxValue(balance, fee + (allowDeath ? 0n : (retainedBalance[chain] ?? 0n)))
+  getMaxValue(balance, fee + getSendRetainedBalance(chain, allowDeath))

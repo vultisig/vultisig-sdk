@@ -86,9 +86,16 @@ export const refineKeysignUtxo = async (input: RefineKeysignUtxoInput): Promise<
       planError === TW.Common.Proto.SigningError.Error_missing_input_utxos ||
       planError === TW.Common.Proto.SigningError.Error_not_enough_utxos
     ) {
+      const chain = getKeysignChain<'utxo'>(input.keysignPayload)
+      const { decimals, ticker } = chainFeeCoin[chain]
+      const balance = bigIntSum(input.keysignPayload.utxoInfo.map(({ amount }) => amount))
+      // The planner does not report the fee, so only an amount the balance alone cannot cover is a stated shortfall.
       throw new BuildKeysignPayloadError(
         'not-enough-funds',
-        `Failed to build transaction: insufficient balance (${errorName})`
+        `Failed to build transaction: insufficient balance (${errorName})`,
+        amount > balance
+          ? { required: amount, available: balance, ticker, decimals, includesNetworkCosts: false }
+          : undefined
       )
     }
 
@@ -120,7 +127,8 @@ export const refineKeysignUtxo = async (input: RefineKeysignUtxoInput): Promise<
 
       throw new BuildKeysignPayloadError(
         'not-enough-funds',
-        `Failed to build transaction: insufficient balance (requested ${requestedAmount}, available ${availableBalance})`
+        `Failed to build transaction: insufficient balance (requested ${requestedAmount}, available ${availableBalance})`,
+        { required: amount, available: balance, ticker, decimals, includesNetworkCosts: false }
       )
     }
   }
