@@ -234,13 +234,13 @@ describe('getEvmFeeQuote', () => {
       )
     })
 
-    it('signs a simulation above the floor and a route figure above both', async () => {
+    it('signs a simulation above the floor and ignores the route gas figure', async () => {
       mocks.client.estimateGas.mockResolvedValueOnce(150_000n)
       expect((await getEvmFeeQuote({ keysignPayload: emptyPayload })).gasLimit).toBe(150_000n)
 
       mocks.client.estimateGas.mockResolvedValueOnce(48_000n)
-      const routed = await getEvmFeeQuote({ keysignPayload: emptyPayload, thirdPartyGasLimitEstimation: 200_000n })
-      expect(routed.gasLimit).toBe(200_000n)
+      const routed = await getEvmFeeQuote({ keysignPayload: emptyPayload, thirdPartyGasLimitEstimation: 900_000n })
+      expect(routed.gasLimit).toBe(120_000n)
     })
 
     it('falls back to the ERC-20 floor when the transfer cannot be simulated', async () => {

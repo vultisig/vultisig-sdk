@@ -136,9 +136,10 @@ export const getEvmFeeQuote = async ({
           requestedGasLimit > 0n ? requestedGasLimit : kindGasLimit,
           inflateGasLimit(estimatedGasLimit ?? fallbackGasLimit)
         ),
-      // A deposit transfer is sized like a token send: its simulation, raised to
-      // the per-chain ERC-20 floor and to any gas the route asks for.
-      depositTransfer: () => bigIntMax(estimatedGasLimit ?? fallbackGasLimit, kindGasLimit, requestedGasLimit),
+      // A deposit transfer is sized like a token send: its own simulation, raised
+      // to the per-chain ERC-20 floor. The route's gas figure is not a bound on a
+      // plain transfer and only over-reserves the fee.
+      depositTransfer: () => bigIntMax(estimatedGasLimit ?? fallbackGasLimit, kindGasLimit),
       // A router deposit is never simulated, so its fixed limit is the stand-in
       // a caller minimum may raise.
       routerDeposit: () => bigIntMax(fallbackGasLimit, requestedGasLimit),
