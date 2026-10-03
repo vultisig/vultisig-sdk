@@ -186,6 +186,12 @@ describe('getLifiSwapQuote — evm.approvalAddress exposure (#895)', () => {
     expect((evm.affiliateFee as { amount: bigint }).amount).toBe(30n)
   })
 
+  it("reports LI.FI's own share of the fixed fee as the protocol fee", async () => {
+    const evm = await getEvmTx()
+    expect((evm.affiliateFee as { amount: bigint }).amount).toBe(30n)
+    expect((evm.protocolFee as { amount: bigint }).amount).toBe(70n)
+  })
+
   it.each([undefined, '0'])('omits affiliateFee without a positive integrator split (%s)', async integratorFee => {
     fixture.leadingNonAffiliateFee = true
     fixture.integratorFee = integratorFee

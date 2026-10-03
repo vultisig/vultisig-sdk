@@ -32,7 +32,7 @@ import {
 } from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
 import { injectSolanaAtaIfMissing } from '@vultisig/core-chain/swap/general/lifi/api/injectSolanaAtaIfMissing'
 import { MAX_COMBINED_COST_BPS, resolveLifiSlippage } from '@vultisig/core-chain/swap/general/lifi/api/lifiSlippage'
-import { resolveSwapFeeChain } from '@vultisig/core-chain/swap/general/lifi/api/lifiSwapFeeChain'
+import { getLifiEvmSwapFees, getLifiSolanaSwapFees } from '@vultisig/core-chain/swap/general/lifi/api/lifiSwapFees'
 import {
   getLifiClient,
   LifiAffiliateConfig,
@@ -152,10 +152,6 @@ export const getLifiSwapQuote = async ({
     const rawData = shouldBePresent(data)
     const { gasCosts, feeCosts } = estimate
     const [networkFee] = shouldBePresent(gasCosts)
-    const fees = shouldBePresent(feeCosts)
-    const swapFee = shouldBePresent(fees.find(fee => fee.name === 'LIFI Fixed Fee') || fees[0])
-    const swapFeeAssetId =
-      [fromToken, toToken].find(token => token === swapFee.token.address) || chainFeeCoin[transfer.from.chain].id
 
     const { data: patchedData, ataInjected } = await injectSolanaAtaIfMissing(rawData, toToken, toAddress, fromAddress)
 
@@ -169,12 +165,11 @@ export const getLifiSwapQuote = async ({
         solana: {
           data: patchedData,
           networkFee: BigInt(networkFee.amount) + ataRentBuffer,
-          swapFee: {
-            amount: BigInt(swapFee.amount),
-            decimals: swapFee.token.decimals,
-            chain: resolveSwapFeeChain(swapFee.token.chainId, transfer.from.chain),
-            id: swapFeeAssetId,
-          },
+          ...getLifiSolanaSwapFees({
+            feeCosts: shouldBePresent(feeCosts),
+            fromChain: transfer.from.chain,
+            routeTokens: [fromToken, toToken],
+          }),
         },
       },
     }
@@ -198,44 +193,19 @@ export const getLifiSwapQuote = async ({
         const { gasCosts, feeCosts } = estimate
         const [networkFee] = shouldBePresent(gasCosts)
 
-        const fees = shouldBePresent(feeCosts)
-
-        const swapFee = shouldBePresent(fees.find(fee => fee.name === 'LIFI Fixed Fee') || fees[0])
-
-        const swapFeeAssetId =
-          [fromToken, toToken].find(token => token === swapFee.token.address) || chainFeeCoin[transfer.from.chain].id
-
         return {
           solana: {
             data: shouldBePresent(data),
             networkFee: BigInt(networkFee.amount),
-            swapFee: {
-              amount: BigInt(swapFee.amount),
-              decimals: swapFee.token.decimals,
-              chain: resolveSwapFeeChain(swapFee.token.chainId, transfer.from.chain),
-              id: swapFeeAssetId,
-            },
+            ...getLifiSolanaSwapFees({
+              feeCosts: shouldBePresent(feeCosts),
+              fromChain: transfer.from.chain,
+              routeTokens: [fromToken, toToken],
+            }),
           },
         }
       },
       evm: () => {
-        // Mirror the core implementation's EVM affiliate-fee extraction so RN
-        // routes surface the same swap-fee row context as desktop/web. LI.FI's
-        // `feeCosts` is the same shape across both kinds; keep `affiliateFee`
-        // optional because not every route has one (affiliateBps may be 0 and
-        // no LIFI Fixed Fee charged). See core for the full rationale on the
-        // lowercase address normalization. (CodeRabbit #540 actionable.)
-        const fees = estimate.feeCosts ?? []
-        const swapFee = fees.find(fee => fee.name === 'LIFI Fixed Fee') || fees[0]
-        // EVM addresses can come back from LiFi in either lowercase or
-        // EIP-55 checksum form; normalize both sides to lowercase so a
-        // checksum mismatch doesn't silently fall back to the native
-        // fee coin and misattribute the affiliate fee.
-        const swapFeeAddress = swapFee?.token.address.toLowerCase()
-        const swapFeeAssetId =
-          swapFee &&
-          ([fromToken, toToken].find(token => token.toLowerCase() === swapFeeAddress) ||
-            chainFeeCoin[transfer.from.chain].id)
         // LI.FI `estimate.approvalAddress` is route-dependent and can differ
         // from the Diamond destination. Mirror core's trust boundary: accept
         // the official Diamond directly, but require an independent benign
@@ -254,16 +224,9 @@ export const getLifiSwapQuote = async ({
             ...(approvalAddr && approvalAddr !== '0x0000000000000000000000000000000000000000'
               ? { approvalAddress: approvalAddr }
               : {}),
-            ...(swapFee
-              ? {
-                  affiliateFee: {
-                    amount: BigInt(swapFee.amount),
-                    decimals: swapFee.token.decimals,
-                    chain: resolveSwapFeeChain(swapFee.token.chainId, transfer.from.chain),
-                    id: swapFeeAssetId,
-                  },
-                }
-              : {}),
+            // Same fee split as core, so RN routes itemize the integrator's
+            // cut and LI.FI's own exactly as desktop/web do.
+            ...getLifiEvmSwapFees({ feeCosts: estimate.feeCosts ?? [], fromChain: transfer.from.chain }),
           },
         }
       },

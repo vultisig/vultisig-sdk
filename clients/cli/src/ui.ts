@@ -395,6 +395,14 @@ export function displaySwapPreview(
       }
     }
 
+    if (quote.fees.protocol && quote.fees.protocol > 0n) {
+      const protocolFeeFormatted = formatBigintAmount(quote.fees.protocol, options.feeDecimals)
+      printResult(`    Protocol: ${protocolFeeFormatted} ${options.feeSymbol}`)
+      if (quote.feesFiat?.protocol) {
+        printResult(`              (~$${quote.feesFiat.protocol.toFixed(2)})`)
+      }
+    }
+
     printResult(`    Total:    ${totalFeeFormatted} ${options.feeSymbol}`)
     if (quote.feesFiat) {
       printResult(`              (~$${quote.feesFiat.total.toFixed(2)})`)
