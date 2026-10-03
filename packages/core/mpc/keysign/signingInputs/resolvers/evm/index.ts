@@ -17,6 +17,7 @@ import {
   assertKnownAggregatorRouterOnSigningPath,
   assertLifiApprovalAddress,
   assertSwapKitAddressReputation,
+  getSwapKitErc20DepositRecipient,
 } from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
 
 import { getBlockchainSpecificValue } from '../../../chainSpecific/KeysignChainSpecific'
@@ -105,12 +106,33 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
   // above (sdk#1358 review follow-up; sdk#1457 extended it to cowswap, whose spender IS its tx.to).
   // LI.FI and SwapKit distinct spenders are independently reputation-checked above. The legacy
   // `''` provider remains unenforced.
+  //
+  // A SwapKit ERC-20 deposit (NEAR Intents `simpleTransfer`) is addressed to the sold token, so
+  // screening `tx.to` screens only the token while the funds go to the calldata recipient. The
+  // quote-time binding to the screened targetAddress never runs here, so this path re-derives the
+  // deposit from the signed bytes: exactly `transfer(recipient, fromAmount)` on the sold token with
+  // no native value, any other `transfer` call or token-addressed calldata throws, and the decoded
+  // recipient gets its own reputation verdict.
   if (swapPayload && 'general' in swapPayload) {
-    const { provider, quote } = swapPayload.general
+    const { provider, quote, fromCoin, fromAmount } = swapPayload.general
     // Pass the raw (possibly empty) destination unconditionally: for an enforced provider an empty
     // `to` must ALSO fail closed (the helper rejects it as unrecognized), not be silently skipped.
     if (provider === 'swapkit') {
-      await assertSwapKitAddressReputation(quote?.tx?.to ?? '', chain, 'transaction destination')
+      const tx = quote?.tx
+      await assertSwapKitAddressReputation(tx?.to ?? '', chain, 'transaction destination')
+      const depositRecipient =
+        tx &&
+        getSwapKitErc20DepositRecipient({
+          to: tx.to,
+          data: tx.data,
+          value: BigInt(tx.value),
+          sourceToken: fromCoin?.contractAddress,
+          amount: BigInt(fromAmount),
+          chain,
+        })
+      if (depositRecipient) {
+        await assertSwapKitAddressReputation(depositRecipient, chain, 'deposit recipient')
+      }
     } else {
       assertKnownAggregatorRouterOnSigningPath(provider, quote?.tx?.to ?? '', chain)
     }

@@ -1,4 +1,5 @@
 import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
+import { stripHexPrefix } from '@vultisig/lib-utils/hex/stripHexPrefix'
 
 import { Chain, EvmChain } from '../../Chain'
 import { scanAddressWithBlockaid } from '../../security/blockaid/address'
@@ -335,55 +336,77 @@ export function assertSwapKitDestinationMatchesTarget(
 }
 
 const erc20TransferSelector = 'a9059cbb'
-const erc20TransferCalldataLength = 2 + 8 + 64 * 2
+// Exactly `transfer(address,uint256)` as the signer encodes it: selector, a
+// zero-padded address word and an amount word, nothing after.
+const erc20TransferCalldata = /^a9059cbb0{24}([0-9a-f]{40})([0-9a-f]{64})$/
 
-/**
- * A SwapKit deposit route (NEAR Intents `simpleTransfer`) that sells an ERC-20
- * calls the token itself with `transfer(targetAddress, amount)`, so `tx.to`
- * is the token rather than `targetAddress`. Returns true when the transaction
- * is that shape and binds both halves: exactly the sold token, no native value,
- * exactly a `transfer` call, the screened `targetAddress` as recipient and the
- * sold amount. A token-addressed transaction that is anything else throws.
- * Returns false when `tx.to` is not the sold token, leaving the router check.
- */
-export function isSwapKitErc20DepositTransfer({
-  to,
-  data,
-  value,
-  sourceToken,
-  amount,
-  targetAddress,
-  chain,
-}: {
+const refuseSwapKitErc20Deposit = (chain: Chain, reason: string): never => {
+  throw new Error(`SwapKit ERC-20 deposit on ${chain} ${reason} — refusing to build a signable transaction.`)
+}
+
+type SwapKitErc20DepositInput = {
   to: string
   data: string | undefined
   value: bigint
   sourceToken: string | undefined
   amount: bigint
-  targetAddress: string | undefined
   chain: Chain
-}): boolean {
-  if (!sourceToken || to.toLowerCase() !== sourceToken.toLowerCase()) return false
+}
 
-  const refuse = (reason: string): never => {
-    throw new Error(`SwapKit ERC-20 deposit on ${chain} ${reason} — refusing to build a signable transaction.`)
+/**
+ * A SwapKit deposit route (NEAR Intents `simpleTransfer`) that sells an ERC-20
+ * calls the token itself with `transfer(recipient, amount)`. Returns the
+ * lowercase recipient when the transaction is exactly that: addressed to the
+ * sold token, no native value, exactly a `transfer` call, the sold amount.
+ * Returns undefined when it is neither addressed to the sold token nor a
+ * `transfer` call. Anything else that is (another token, native value, other
+ * calldata, another amount) throws.
+ */
+export function getSwapKitErc20DepositRecipient({
+  to,
+  data,
+  value,
+  sourceToken,
+  amount,
+  chain,
+}: SwapKitErc20DepositInput): string | undefined {
+  const calldata = stripHexPrefix(data ?? '').toLowerCase()
+  const isTokenAddressed = !!sourceToken && to.toLowerCase() === sourceToken.toLowerCase()
+  if (!isTokenAddressed && !calldata.startsWith(erc20TransferSelector)) return undefined
+
+  if (!isTokenAddressed) refuseSwapKitErc20Deposit(chain, `calls transfer on ${to}, not the sold token ${sourceToken}`)
+  if (value !== 0n) refuseSwapKitErc20Deposit(chain, `attaches native value ${value}`)
+
+  const [, recipient, transferred] =
+    erc20TransferCalldata.exec(calldata) ??
+    refuseSwapKitErc20Deposit(chain, 'is not exactly an ERC-20 transfer(address,uint256) call')
+  const transferredAmount = BigInt(`0x${transferred}`)
+  if (transferredAmount !== amount) {
+    refuseSwapKitErc20Deposit(chain, `transfers ${transferredAmount}, not the sold amount ${amount}`)
   }
 
-  if (!targetAddress || !/^0x[0-9a-fA-F]{40}$/.test(targetAddress)) refuse('has no valid targetAddress')
-  if (value !== 0n) refuse(`attaches native value ${value}`)
+  return `0x${recipient}`
+}
 
-  const calldata = (data ?? '').toLowerCase()
-  if (calldata.length !== erc20TransferCalldataLength || calldata.slice(2, 10) !== erc20TransferSelector) {
-    refuse('is not exactly an ERC-20 transfer(address,uint256) call')
+/**
+ * Quote-time binding of a SwapKit ERC-20 deposit: true when the transaction is
+ * that shape (see `getSwapKitErc20DepositRecipient`) and transfers to the
+ * screened `targetAddress`; throws when it is that shape to anyone else.
+ * Returns false when it is not a deposit, leaving the router check.
+ */
+export function isSwapKitErc20DepositTransfer({
+  targetAddress,
+  ...transfer
+}: SwapKitErc20DepositInput & { targetAddress: string | undefined }): boolean {
+  const recipient = getSwapKitErc20DepositRecipient(transfer)
+  if (recipient === undefined) return false
+
+  if (recipient !== targetAddress?.toLowerCase()) {
+    refuseSwapKitErc20Deposit(
+      transfer.chain,
+      `transfers to ${recipient}, not the screened targetAddress ${targetAddress}`
+    )
   }
-
-  const recipient = `0x${calldata.slice(10 + 24, 10 + 64)}`
-  if (calldata.slice(10, 10 + 24) !== '0'.repeat(24) || recipient !== targetAddress!.toLowerCase()) {
-    refuse(`transfers to ${recipient}, not the screened targetAddress ${targetAddress}`)
-  }
-
-  const transferred = BigInt(`0x${calldata.slice(10 + 64)}`)
-  if (transferred !== amount) refuse(`transfers ${transferred}, not the sold amount ${amount}`)
 
   return true
 }
