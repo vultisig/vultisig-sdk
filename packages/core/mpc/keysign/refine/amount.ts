@@ -78,7 +78,7 @@ export const refineKeysignAmount = async (input: RefineKeysignAmountInput) => {
     if (required > input.balance) {
       throw new BuildKeysignPayloadError(
         'not-enough-funds',
-        `NEAR send needs ${required} yoctoNEAR (amount + gas reservation + storage reserve) but only ${input.balance} is available`,
+        'Not enough NEAR: the amount plus the gas reservation and storage reserve exceeds the available balance',
         { required, available: input.balance, ticker: coin.ticker, decimals: coin.decimals, includesNetworkCosts: true }
       )
     }
