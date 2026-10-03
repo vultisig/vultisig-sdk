@@ -332,6 +332,48 @@ describe('getSwapKitQuote', () => {
     })
   })
 
+  it("keeps SwapKit's service fee out of the affiliate fee on an EVM route", async () => {
+    // Fee shape the proxy returns for a 1inch route at 30 bps, with the amounts
+    // the vultisig-sdk#2396 swap paid on-chain: 0.30% to the affiliate and
+    // another 0.15% to SwapKit. Summing them made the consumer show SwapKit's
+    // cut under the integrator's name.
+    const quote = await stubEvmRoute({
+      fees: [
+        { type: 'liquidity', amount: '0.00000012', asset: 'ETH.ETH', chain: 'ETH', protocol: 'ONEINCH' },
+        {
+          type: 'affiliate',
+          amount: '0.002875',
+          amountBps: 30,
+          asset: 'ETH.USDC-0xusdc',
+          chain: 'ETH',
+          protocol: 'ONEINCH',
+        },
+        {
+          type: 'service',
+          amount: '0.001437',
+          amountBps: 15,
+          asset: 'ETH.USDC-0xusdc',
+          chain: 'ETH',
+          protocol: 'ONEINCH',
+        },
+        { type: 'inbound', amount: '0.000010005106897405', asset: 'ETH.ETH', chain: 'ETH', protocol: 'ONEINCH' },
+      ],
+    })
+
+    expect('evm' in quote.tx && quote.tx.evm.affiliateFee).toEqual({
+      amount: 2_875n,
+      chain: Chain.Ethereum,
+      id: '0xusdc',
+      decimals: 6,
+    })
+    expect('evm' in quote.tx && quote.tx.evm.protocolFee).toEqual({
+      amount: 1_437n,
+      chain: Chain.Ethereum,
+      id: '0xusdc',
+      decimals: 6,
+    })
+  })
+
   it('keeps an EVM route signable when the fee shape cannot be resolved', async () => {
     // The fee is display-only on this branch, so an unexpected asset must not
     // take down a route that would otherwise sign. Solana legitimately throws
@@ -350,6 +392,7 @@ describe('getSwapKitQuote', () => {
     const quote = await stubEvmRoute()
 
     expect('evm' in quote.tx && quote.tx.evm.affiliateFee).toBeUndefined()
+    expect('evm' in quote.tx && quote.tx.evm.protocolFee).toBeUndefined()
   })
 
   const stubTransferRoute = ({ fees }: { fees?: unknown[] } = {}) => {
@@ -390,6 +433,23 @@ describe('getSwapKitQuote', () => {
 
     expect('transfer' in quote.tx && quote.tx.transfer.swapFee).toEqual({
       amount: 250_000n,
+      chain: Chain.Zcash,
+      id: undefined,
+      decimals: 8,
+    })
+  })
+
+  it("itemizes SwapKit's service fee apart from the affiliate fee on a transfer route", async () => {
+    const quote = await stubTransferRoute({
+      fees: [
+        { type: 'affiliate', amount: '0.0025', asset: 'ZEC.ZEC', chain: 'ZEC' },
+        { type: 'service', amount: '0.00125', asset: 'ZEC.ZEC', chain: 'ZEC' },
+      ],
+    })
+
+    expect('transfer' in quote.tx && quote.tx.transfer.swapFee).toMatchObject({ amount: 250_000n })
+    expect('transfer' in quote.tx && quote.tx.transfer.protocolFee).toEqual({
+      amount: 125_000n,
       chain: Chain.Zcash,
       id: undefined,
       decimals: 8,
@@ -856,7 +916,8 @@ describe('getSwapKitQuote', () => {
         solana: {
           data: 'serialized-solana-transaction',
           networkFee: 5000n,
-          swapFee: { amount: 7n, decimals: 9, chain: Chain.Solana },
+          swapFee: { amount: 0n, decimals: 9, chain: Chain.Solana },
+          protocolFee: { amount: 7n, decimals: 9, chain: Chain.Solana },
         },
       },
     })
@@ -899,7 +960,10 @@ describe('getSwapKitQuote', () => {
     })
 
     expect(quote.tx).toMatchObject({
-      solana: { swapFee: { amount: 492_298_648n, decimals: 6, chain: Chain.Ethereum, id: usdcId.toLowerCase() } },
+      solana: {
+        swapFee: { amount: 378_691_268n, decimals: 6, chain: Chain.Ethereum, id: usdcId.toLowerCase() },
+        protocolFee: { amount: 113_607_380n, decimals: 6, chain: Chain.Ethereum, id: usdcId.toLowerCase() },
+      },
     })
   })
 
@@ -936,7 +1000,10 @@ describe('getSwapKitQuote', () => {
     })
 
     expect(quote.tx).toMatchObject({
-      solana: { swapFee: { amount: 1_750_000n, decimals: 6, chain: Chain.Ethereum, id: usdcId.toLowerCase() } },
+      solana: {
+        swapFee: { amount: 1_250_000n, decimals: 6, chain: Chain.Ethereum, id: usdcId.toLowerCase() },
+        protocolFee: { amount: 500_000n, decimals: 6, chain: Chain.Ethereum, id: usdcId.toLowerCase() },
+      },
     })
   })
 
@@ -967,7 +1034,9 @@ describe('getSwapKitQuote', () => {
       amount: 1_000_000n,
     })
 
-    expect(quote.tx).toMatchObject({ solana: { swapFee: { amount: 300_000_000n, decimals: 9, chain: Chain.Solana } } })
+    expect(quote.tx).toMatchObject({
+      solana: { protocolFee: { amount: 300_000_000n, decimals: 9, chain: Chain.Solana } },
+    })
   })
 
   it('rejects a non-zero SwapKit fee without asset metadata', async () => {

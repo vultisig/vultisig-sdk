@@ -540,6 +540,99 @@ describe('buildSwapKeysignPayload transfer routes', () => {
     }
   })
 
+  it("folds SwapKit's own fee into the SwapKit payload fee", async () => {
+    // The peer labels this amount neutrally as the swap fee, so it has to
+    // cover everything the provider side takes, not only the affiliate's cut.
+    const swapQuote: SwapQuote = {
+      discounts: [],
+      quote: {
+        general: {
+          dstAmount: '144490532',
+          provider: 'swapkit',
+          tx: {
+            transfer: {
+              to: 't1Deposit',
+              amount: 9_332_136n,
+              txType: 'TRANSFER',
+              swapFee: { amount: 250_000n, chain: Chain.Zcash, decimals: 8 },
+              protocolFee: { amount: 125_000n, chain: Chain.Zcash, decimals: 8 },
+            },
+          },
+        },
+      },
+    }
+
+    const payload = await buildSwapKeysignPayload({
+      fromCoin: { chain: Chain.Zcash, address: 't1Source', ticker: 'ZEC', decimals: 8 },
+      toCoin: { chain: Chain.Tron, address: 'TDestination', ticker: 'TRX', decimals: 6 },
+      amount: 0.09332136,
+      swapQuote,
+      vaultId: 'vault-id',
+      localPartyId: 'local-party',
+      fromPublicKey: publicKey,
+      toPublicKey: publicKey,
+      libType: 'DKLS',
+      walletCore: {} as never,
+    })
+
+    expect(payload.swapPayload.case).toBe('swapkitSwapPayload')
+    if (payload.swapPayload.case === 'swapkitSwapPayload') {
+      expect(payload.swapPayload.value.swapFee).toBe('375000')
+      expect(payload.swapPayload.value.swapFeeChain).toBe(Chain.Zcash)
+      expect(payload.swapPayload.value.swapFeeDecimals).toBe(8)
+    }
+  })
+
+  it("keeps the LI.FI Solana payload fee at the whole fixed fee, LI.FI's share included", async () => {
+    // vultisig-sdk#2396's swap: of LI.FI's 55000-lamport fixed fee, 30000 went
+    // to the integrator and 25000 to LI.FI. Splitting the quote must not change
+    // what the peer is told the swap costs.
+    const swapQuote: SwapQuote = {
+      discounts: [],
+      quote: {
+        general: {
+          dstAmount: '1187100',
+          provider: 'li.fi',
+          tx: {
+            solana: {
+              data: 'serialized-solana-transaction',
+              networkFee: 11_359n,
+              swapFee: { amount: 30_000n, chain: Chain.Solana, decimals: 9 },
+              protocolFee: { amount: 25_000n, chain: Chain.Solana, decimals: 9 },
+            },
+          },
+        },
+      },
+    }
+
+    const payload = await buildSwapKeysignPayload({
+      fromCoin: { chain: Chain.Solana, address: 'sol-source', ticker: 'SOL', decimals: 9 },
+      toCoin: {
+        chain: Chain.Solana,
+        address: 'sol-source',
+        ticker: 'USDC',
+        id: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+        decimals: 6,
+      },
+      amount: 0.01,
+      swapQuote,
+      vaultId: 'vault-id',
+      localPartyId: 'local-party',
+      fromPublicKey: publicKey,
+      toPublicKey: publicKey,
+      libType: 'DKLS',
+      walletCore: {} as never,
+    })
+
+    expect(payload.swapPayload.case).toBe('oneinchSwapPayload')
+    if (payload.swapPayload.case === 'oneinchSwapPayload') {
+      const tx = payload.swapPayload.value.quote?.tx
+      expect(tx?.swapFee).toBe('55000')
+      expect(tx?.swapFeeChain).toBe(Chain.Solana)
+      expect(tx?.swapFeeDecimals).toBe(9)
+    }
+  })
+
   it('leaves the SwapKit payload fee empty when the route itemizes none', async () => {
     // An empty amount with no coin is how a peer tells "no fee" from a fee it
     // cannot price. A zero with a coin would render as a definite $0.00.

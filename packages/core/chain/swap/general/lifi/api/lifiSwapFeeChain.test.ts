@@ -34,15 +34,16 @@ describe('LI.FI quote fee-chain architecture', () => {
     new URL('../../../../../../sdk/src/platforms/react-native/overrides/getLifiSwapQuote.ts', import.meta.url),
     'utf8'
   )
+  const feeSource = readFileSync(new URL('./lifiSwapFees.ts', import.meta.url), 'utf8')
 
-  it('keeps both quote paths on the shared canonical helper', () => {
-    expect(coreQuoteSource).toContain("import { resolveSwapFeeChain } from './lifiSwapFeeChain'")
-    expect(reactNativeQuoteSource).toContain(
-      "import { resolveSwapFeeChain } from '@vultisig/core-chain/swap/general/lifi/api/lifiSwapFeeChain'"
-    )
+  it('keeps both quote paths on the shared fee helpers', () => {
+    expect(feeSource).toContain("import { resolveSwapFeeChain } from './lifiSwapFeeChain'")
+    expect(coreQuoteSource).toContain("from './lifiSwapFees'")
+    expect(reactNativeQuoteSource).toContain("from '@vultisig/core-chain/swap/general/lifi/api/lifiSwapFees'")
 
     for (const source of [coreQuoteSource, reactNativeQuoteSource]) {
       expect(source).not.toMatch(/(?:const|function)\s+resolveSwapFeeChain\b/)
+      expect(source).not.toContain('feeSplit')
     }
   })
 })
