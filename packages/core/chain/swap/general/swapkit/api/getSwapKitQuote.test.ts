@@ -279,6 +279,65 @@ describe('getSwapKitQuote', () => {
     }
   )
 
+  describe('ERC-20 deposit transfer (NEAR Intents simpleTransfer)', () => {
+    // Live USDT -> NEAR `/v3/swap` shape (2026-10-01): `tx.to` is the token,
+    // the calldata is `transfer(targetAddress, amount)`, `value` is zero.
+    const USDT = '0xdAC17F958D2ee523a2206206994597C13D831ec7'
+    const DEPOSIT = '0x1F01af4e50082E2982bA5041707efDDd3AA4c121'
+    const AMOUNT = 20_000_000n
+    const word = (hex: string) => hex.replace(/^0x/, '').toLowerCase().padStart(64, '0')
+    const transferData = (to: string, amount: bigint) => `0xa9059cbb${word(to)}${word(amount.toString(16))}`
+
+    const quoteErc20Deposit = (tx: Record<string, unknown>, targetAddress = DEPOSIT) => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(
+          response({ routes: [{ routeId: 'near-route', providers: ['NEAR'], expectedBuyAmount: '0.11' }] })
+        )
+        .mockResolvedValueOnce(
+          response({
+            expectedBuyAmount: '0.11',
+            providers: ['NEAR'],
+            targetAddress,
+            txHint: 'simpleTransfer',
+            meta: { txType: 'EVM' },
+            tx: { from: '0xsender', to: USDT, value: '0x0', gas: '60000', ...tx },
+          })
+        )
+      vi.stubGlobal('fetch', fetchMock)
+      configureSwapKit({ apiKey: 'test-key', baseUrl: 'https://swapkit.example' })
+
+      return getSwapKitQuote({
+        from: { chain: Chain.Ethereum, address: '0xsender', ticker: 'USDT', id: USDT, decimals: 6 },
+        to: { chain: Chain.Solana, address: 'sol-destination', ticker: 'SOL', decimals: 9 },
+        amount: AMOUNT,
+      })
+    }
+
+    it('accepts a transfer of exactly the sold amount to the screened deposit address', async () => {
+      const quote = await quoteErc20Deposit({ data: transferData(DEPOSIT, AMOUNT) })
+
+      expect(quote.tx).toMatchObject({
+        evm: { to: USDT, data: transferData(DEPOSIT, AMOUNT), value: '0', erc20TransferDeposit: true },
+      })
+      const screened = mockScanAddressWithBlockaid.mock.calls.map(([address]) => address.toLowerCase())
+      expect(screened).toEqual(expect.arrayContaining([USDT.toLowerCase(), DEPOSIT.toLowerCase()]))
+    })
+
+    it.each([
+      [
+        'a recipient other than targetAddress',
+        { data: transferData('0x2222222222222222222222222222222222222222', AMOUNT) },
+      ],
+      ['an amount other than the sold amount', { data: transferData(DEPOSIT, AMOUNT + 1n) }],
+      ['a non-zero native value', { data: transferData(DEPOSIT, AMOUNT), value: '1' }],
+      ['trailing calldata', { data: `${transferData(DEPOSIT, AMOUNT)}00` }],
+      ['a non-transfer selector on the token', { data: `0x095ea7b3${word(DEPOSIT)}${word(AMOUNT.toString(16))}` }],
+    ])('refuses a token-addressed transaction carrying %s', async (_, tx) => {
+      await expect(quoteErc20Deposit(tx)).rejects.toThrow(/ERC-20 deposit/)
+    })
+  })
+
   const stubEvmRoute = ({ route, fees }: { route?: Record<string, unknown>; fees?: unknown[] } = {}) => {
     const fetchMock = vi
       .fn()

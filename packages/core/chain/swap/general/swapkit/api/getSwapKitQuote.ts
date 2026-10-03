@@ -9,6 +9,7 @@ import { GeneralSwapQuote, GeneralSwapTx } from '@vultisig/core-chain/swap/gener
 import {
   assertSwapKitAddressReputation,
   assertSwapKitDestinationMatchesTarget,
+  isSwapKitErc20DepositTransfer,
 } from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
 import { getSwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
 import {
@@ -345,6 +346,9 @@ type BuildEvmTxInput = {
   chain: Chain
   approvalTx?: SwapKitSwapResponse['approvalTx']
   fees: SwapKitSwapFees
+  /** The sold ERC-20 contract, when the source is a token. */
+  sourceToken?: string
+  amount: bigint
 }
 
 const buildEvmTx = async ({
@@ -354,6 +358,8 @@ const buildEvmTx = async ({
   chain,
   approvalTx,
   fees: { affiliate, protocol },
+  sourceToken,
+  amount,
 }: BuildEvmTxInput): Promise<GeneralSwapTx> => {
   if (!isRecord(tx)) {
     throw new Error('SwapKit EVM route did not return a transaction object.')
@@ -365,9 +371,21 @@ const buildEvmTx = async ({
     throw new Error('SwapKit EVM transaction is missing a required to field.')
   }
 
+  const erc20TransferDeposit = isSwapKitErc20DepositTransfer({
+    to: evmTx.to,
+    data: evmTx.data,
+    value: BigInt(bigintString(evmTx.value)),
+    sourceToken,
+    amount,
+    targetAddress,
+    chain,
+  })
+
   // sdk#1458: tx.to and targetAddress share the same untrusted /v3/swap response, so
   // equality is defense in depth rather than an independent trust boundary.
-  assertSwapKitDestinationMatchesTarget(evmTx.to, targetAddress, chain)
+  if (!erc20TransferDeposit) {
+    assertSwapKitDestinationMatchesTarget(evmTx.to, targetAddress, chain)
+  }
 
   const gas = evmTx.gasLimit ?? evmTx.gas
 
@@ -380,6 +398,9 @@ const buildEvmTx = async ({
   // Benign result for both the transaction destination and any distinct approval
   // spender before either address can enter a signable quote.
   const reputationChecks = [assertSwapKitAddressReputation(evmTx.to, chain, 'transaction destination')]
+  if (erc20TransferDeposit) {
+    reputationChecks.push(assertSwapKitAddressReputation(targetAddress!, chain, 'deposit recipient'))
+  }
   if (approvalAddress && approvalAddress.toLowerCase() !== evmTx.to.toLowerCase()) {
     reputationChecks.push(assertSwapKitAddressReputation(approvalAddress, chain, 'approval spender'))
   }
@@ -394,6 +415,7 @@ const buildEvmTx = async ({
       value: bigintString(evmTx.value),
       gasLimit: safeBigInt(gas),
       ...(approvalAddress ? { approvalAddress } : {}),
+      ...(erc20TransferDeposit ? { erc20TransferDeposit: true as const } : {}),
       // SwapKit itemizes the affiliate and service fees it charges. The Solana
       // branch already surfaces them; leaving them off the EVM branch made an
       // aggregator swap look like it carried no swap fee at all, so the fee row
@@ -905,6 +927,8 @@ const buildSwapKitTx = (
     targetAddress: response.targetAddress,
     chain: from.chain,
     approvalTx: response.approvalTx,
+    sourceToken: from.id,
+    amount,
     fees: getSwapKitDisplaySwapFees({
       fees: response.fees,
       from,

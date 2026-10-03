@@ -32,7 +32,7 @@ import { publicActionsL2 } from 'viem/zksync'
  * What a transaction does on-chain, which decides how much headroom its gas
  * limit and its gas price are signed with.
  */
-type EvmTxKind = 'transfer' | 'contractCall' | 'swap' | 'routerDeposit'
+type EvmTxKind = 'transfer' | 'contractCall' | 'swap' | 'depositTransfer' | 'routerDeposit'
 
 type EvmFeeQuote = {
   gasLimit: bigint
@@ -58,8 +58,26 @@ const percentOf = (value: bigint, percent: bigint) => (value * percent) / 100n
 // slightly more gas than its simulation would otherwise revert and forfeit the gas.
 const inflateGasLimit = (value: bigint) => value + value / 2n
 
-const getEvmTxKind = (keysignPayload: KeysignPayload, swapPayload: KeysignSwapPayload | undefined): EvmTxKind => {
+const erc20TransferCalldata = /^0xa9059cbb[0-9a-f]{128}$/i
+
+/**
+ * A general swap that calls the sold token with exactly `transfer(address,uint256)`:
+ * a provider deposit (SwapKit NEAR Intents) rather than a router call. It spends
+ * no allowance, so it can be simulated, and it costs what a token transfer costs.
+ */
+const isDepositTransferSwap = (swapPayload: KeysignSwapPayload, tokenId: string | undefined) =>
+  'general' in swapPayload &&
+  !!tokenId &&
+  swapPayload.general.quote?.tx?.to?.toLowerCase() === tokenId.toLowerCase() &&
+  erc20TransferCalldata.test(swapPayload.general.quote?.tx?.data ?? '')
+
+const getEvmTxKind = (
+  keysignPayload: KeysignPayload,
+  swapPayload: KeysignSwapPayload | undefined,
+  tokenId: string | undefined
+): EvmTxKind => {
   if (swapPayload) {
+    if (isDepositTransferSwap(swapPayload, tokenId)) return 'depositTransfer'
     return 'general' in swapPayload ? 'swap' : 'routerDeposit'
   }
 
@@ -85,12 +103,13 @@ export const getEvmFeeQuote = async ({
   const receiver = keysignPayload.toAddress
   const data = keysignPayload.memo ? formatDataToHex(keysignPayload.memo) : undefined
   const swapPayload = getKeysignSwapPayload(keysignPayload)
-  const kind = getEvmTxKind(keysignPayload, swapPayload)
+  const kind = getEvmTxKind(keysignPayload, swapPayload, coin.id)
 
   const kindGasLimit = match(kind, {
     transfer: () => getEvmTransferGasLimit(coin),
     contractCall: () => getEvmContractCallGasLimit(chain),
     swap: () => getEvmContractCallGasLimit(chain),
+    depositTransfer: () => getEvmTransferGasLimit(coin),
     routerDeposit: () => evmRouterDepositGasLimit,
   })
   // A fee-coin transfer that could not be simulated still has to cover the
@@ -117,6 +136,9 @@ export const getEvmFeeQuote = async ({
           requestedGasLimit > 0n ? requestedGasLimit : kindGasLimit,
           inflateGasLimit(estimatedGasLimit ?? fallbackGasLimit)
         ),
+      // A deposit transfer is sized like a token send: its simulation, raised to
+      // the per-chain ERC-20 floor and to any gas the route asks for.
+      depositTransfer: () => bigIntMax(estimatedGasLimit ?? fallbackGasLimit, kindGasLimit, requestedGasLimit),
       // A router deposit is never simulated, so its fixed limit is the stand-in
       // a caller minimum may raise.
       routerDeposit: () => bigIntMax(fallbackGasLimit, requestedGasLimit),
@@ -156,8 +178,9 @@ export const getEvmFeeQuote = async ({
         native: () => null,
         general: ({ quote }) => {
           // A token route cannot be simulated until its allowance exists, so it
-          // is sized from the route's own gas and the swap fallback instead.
-          if (coin.id || !quote?.tx) {
+          // is sized from the route's own gas and the swap fallback instead. A
+          // deposit transfer spends no allowance and simulates as it will run.
+          if ((coin.id && kind !== 'depositTransfer') || !quote?.tx) {
             return null
           }
 

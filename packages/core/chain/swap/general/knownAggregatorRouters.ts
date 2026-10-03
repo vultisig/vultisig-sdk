@@ -334,6 +334,60 @@ export function assertSwapKitDestinationMatchesTarget(
   }
 }
 
+const erc20TransferSelector = 'a9059cbb'
+const erc20TransferCalldataLength = 2 + 8 + 64 * 2
+
+/**
+ * A SwapKit deposit route (NEAR Intents `simpleTransfer`) that sells an ERC-20
+ * calls the token itself with `transfer(targetAddress, amount)`, so `tx.to`
+ * is the token rather than `targetAddress`. Returns true when the transaction
+ * is that shape and binds both halves: exactly the sold token, no native value,
+ * exactly a `transfer` call, the screened `targetAddress` as recipient and the
+ * sold amount. A token-addressed transaction that is anything else throws.
+ * Returns false when `tx.to` is not the sold token, leaving the router check.
+ */
+export function isSwapKitErc20DepositTransfer({
+  to,
+  data,
+  value,
+  sourceToken,
+  amount,
+  targetAddress,
+  chain,
+}: {
+  to: string
+  data: string | undefined
+  value: bigint
+  sourceToken: string | undefined
+  amount: bigint
+  targetAddress: string | undefined
+  chain: Chain
+}): boolean {
+  if (!sourceToken || to.toLowerCase() !== sourceToken.toLowerCase()) return false
+
+  const refuse = (reason: string): never => {
+    throw new Error(`SwapKit ERC-20 deposit on ${chain} ${reason} — refusing to build a signable transaction.`)
+  }
+
+  if (!targetAddress || !/^0x[0-9a-fA-F]{40}$/.test(targetAddress)) refuse('has no valid targetAddress')
+  if (value !== 0n) refuse(`attaches native value ${value}`)
+
+  const calldata = (data ?? '').toLowerCase()
+  if (calldata.length !== erc20TransferCalldataLength || calldata.slice(2, 10) !== erc20TransferSelector) {
+    refuse('is not exactly an ERC-20 transfer(address,uint256) call')
+  }
+
+  const recipient = `0x${calldata.slice(10 + 24, 10 + 64)}`
+  if (calldata.slice(10, 10 + 24) !== '0'.repeat(24) || recipient !== targetAddress!.toLowerCase()) {
+    refuse(`transfers to ${recipient}, not the screened targetAddress ${targetAddress}`)
+  }
+
+  const transferred = BigInt(`0x${calldata.slice(10 + 64)}`)
+  if (transferred !== amount) refuse(`transfers ${transferred}, not the sold amount ${amount}`)
+
+  return true
+}
+
 /**
  * Log-only (never throws) — retained only for legacy unattributed signing payloads.
  */
