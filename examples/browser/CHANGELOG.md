@@ -1,5 +1,13 @@
 # @vultisig/example-browser
 
+## 0.1.188
+
+### Patch Changes
+
+- Updated dependencies [[`eff856a`](https://github.com/vultisig/vultisig-sdk/commit/eff856a9c6f5d56516688507a2abb59297437642), [`60acf82`](https://github.com/vultisig/vultisig-sdk/commit/60acf82b0596d4345b77045365f94b7a6ee44e13)]:
+  - @vultisig/sdk@10.0.0
+  - @vultisig/examples-shared@0.1.172
+
 ## 0.1.187
 
 ### Patch Changes

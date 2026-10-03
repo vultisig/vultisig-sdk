@@ -1,5 +1,19 @@
 # @vultisig/sdk
 
+## 10.0.0
+
+### Major Changes
+
+- [#2490](https://github.com/vultisig/vultisig-sdk/pull/2490) [`60acf82`](https://github.com/vultisig/vultisig-sdk/commit/60acf82b0596d4345b77045365f94b7a6ee44e13) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Remove the agent-focused DeFi namespace, builders, and `tools/defi` subpath from the wallet SDK, along with its exclusive `@balancer/sdk` dependency. Declare `@noble/ciphers` directly for the retained React Native encryption polyfills. Load the Polkadot API when a Polkadot client is first requested so the SDK root no longer includes it in the eager wallet graph.
+
+### Patch Changes
+
+- [#2494](https://github.com/vultisig/vultisig-sdk/pull/2494) [`eff856a`](https://github.com/vultisig/vultisig-sdk/commit/eff856a9c6f5d56516688507a2abb59297437642) Thanks [@neavra](https://github.com/neavra)! - Update axios to 1.20.0 and @grpc/grpc-js to 1.14.5 to address published high-severity security advisories.
+
+- Updated dependencies [[`60acf82`](https://github.com/vultisig/vultisig-sdk/commit/60acf82b0596d4345b77045365f94b7a6ee44e13)]:
+  - @vultisig/core-chain@6.1.4
+  - @vultisig/core-mpc@5.0.4
+
 ## 9.0.0
 
 ### Major Changes
