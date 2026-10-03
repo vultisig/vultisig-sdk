@@ -5,6 +5,7 @@ import { broadcastBittensorTx } from './resolvers/bittensor'
 import { broadcastCardanoTx } from './resolvers/cardano'
 import { broadcastCosmosTx } from './resolvers/cosmos'
 import { broadcastEvmTx } from './resolvers/evm'
+import { broadcastNearTx } from './resolvers/near'
 import { broadcastPolkadotTx } from './resolvers/polkadot'
 import { broadcastQbtcTx } from './resolvers/qbtc'
 import { broadcastRippleTx } from './resolvers/ripple'
@@ -28,6 +29,7 @@ const resolvers: Record<ChainKind, BroadcastTxResolver<any>> = {
   ton: broadcastTonTx,
   utxo: broadcastUtxoTx,
   tron: broadcastTronTx,
+  near: broadcastNearTx,
 }
 
 const hasResolverOwnedRetry = (chainKind: ChainKind): boolean =>

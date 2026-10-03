@@ -35,6 +35,11 @@ export const swapKitSourceChains = [
   // decode for its payload yet (see that file's
   // `SWAP_SOURCE_TX_BUILD_UNSUPPORTED` guard).
   Chain.Cardano,
+  // NEAR confirmed live via SwapKit's NEAR-Intents provider in both directions
+  // (NEAR.NEAR<->ETH.ETH). As a source, `/v3/swap` returns `txHint:
+  // 'simpleTransfer'`, a per-swap implicit-account `targetAddress` and no memo,
+  // so it is a plain native transfer on the `transfer` arm.
+  Chain.Near,
 ] as const
 
 export type SwapKitSourceChain = (typeof swapKitSourceChains)[number] | BlockaidSupportedEvmChain

@@ -1689,7 +1689,13 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     const { chain, txHash, lastValidBlockHeight } = params
 
     try {
-      const result = await coreTxStatus({ chain, hash: txHash, lastValidBlockHeight })
+      // NEAR looks transactions up by (hash, sender), and this is an outgoing
+      // broadcast from this vault, so the sender is the vault's own account.
+      // Other chains ignore the field. A transaction received by the vault
+      // cannot be looked up this way and is not claimed to be.
+      const senderAccountId = chain === Chain.Near ? await this.address(Chain.Near) : undefined
+
+      const result = await coreTxStatus({ chain, hash: txHash, lastValidBlockHeight, senderAccountId })
 
       if (result.status === 'success') {
         this.emit('transactionConfirmed', { chain, txHash, receipt: result.receipt })

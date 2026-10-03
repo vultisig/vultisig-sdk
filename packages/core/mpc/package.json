@@ -246,6 +246,11 @@
       "import": "./dist/keysign/chainSpecific/resolvers/maya.js",
       "default": "./dist/keysign/chainSpecific/resolvers/maya.js"
     },
+    "./keysign/chainSpecific/resolvers/near": {
+      "types": "./dist/keysign/chainSpecific/resolvers/near.d.ts",
+      "import": "./dist/keysign/chainSpecific/resolvers/near.js",
+      "default": "./dist/keysign/chainSpecific/resolvers/near.js"
+    },
     "./keysign/chainSpecific/resolvers/polkadot": {
       "types": "./dist/keysign/chainSpecific/resolvers/polkadot/index.d.ts",
       "import": "./dist/keysign/chainSpecific/resolvers/polkadot/index.js",
@@ -380,6 +385,11 @@
       "types": "./dist/keysign/fee/resolvers/evm/getEvmFeeQuote.d.ts",
       "import": "./dist/keysign/fee/resolvers/evm/getEvmFeeQuote.js",
       "default": "./dist/keysign/fee/resolvers/evm/getEvmFeeQuote.js"
+    },
+    "./keysign/fee/resolvers/near": {
+      "types": "./dist/keysign/fee/resolvers/near.d.ts",
+      "import": "./dist/keysign/fee/resolvers/near.js",
+      "default": "./dist/keysign/fee/resolvers/near.js"
     },
     "./keysign/fee/resolvers/polkadot": {
       "types": "./dist/keysign/fee/resolvers/polkadot.d.ts",
@@ -540,6 +550,11 @@
       "types": "./dist/keysign/signingInputs/resolvers/evm/incrementKeysignPayloadNonce.d.ts",
       "import": "./dist/keysign/signingInputs/resolvers/evm/incrementKeysignPayloadNonce.js",
       "default": "./dist/keysign/signingInputs/resolvers/evm/incrementKeysignPayloadNonce.js"
+    },
+    "./keysign/signingInputs/resolvers/near": {
+      "types": "./dist/keysign/signingInputs/resolvers/near.d.ts",
+      "import": "./dist/keysign/signingInputs/resolvers/near.js",
+      "default": "./dist/keysign/signingInputs/resolvers/near.js"
     },
     "./keysign/signingInputs/resolvers/polkadot": {
       "types": "./dist/keysign/signingInputs/resolvers/polkadot.d.ts",

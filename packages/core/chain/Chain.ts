@@ -73,6 +73,7 @@ export enum OtherChain {
   Ripple = 'Ripple',
   Tron = 'Tron',
   Cardano = 'Cardano',
+  Near = 'Near',
   /** Post-quantum testnet (Cosmos SDK + MLDSA); not supported by WalletCore signing. */
   QBTC = 'QBTC',
 }

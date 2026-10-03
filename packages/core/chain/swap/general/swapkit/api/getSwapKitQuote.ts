@@ -149,6 +149,7 @@ const swapKitTransferSourceChains = [
   Chain.Sui,
   Chain.Ton,
   Chain.Tron,
+  Chain.Near,
   Chain.Zcash,
 ] as const
 
