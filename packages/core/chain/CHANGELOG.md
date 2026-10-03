@@ -1,5 +1,11 @@
 # @vultisig/core-chain
 
+## 6.1.4
+
+### Patch Changes
+
+- [#2490](https://github.com/vultisig/vultisig-sdk/pull/2490) [`60acf82`](https://github.com/vultisig/vultisig-sdk/commit/60acf82b0596d4345b77045365f94b7a6ee44e13) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Remove the agent-focused DeFi namespace, builders, and `tools/defi` subpath from the wallet SDK, along with its exclusive `@balancer/sdk` dependency. Declare `@noble/ciphers` directly for the retained React Native encryption polyfills. Load the Polkadot API when a Polkadot client is first requested so the SDK root no longer includes it in the eager wallet graph.
+
 ## 6.1.3
 
 ### Patch Changes
