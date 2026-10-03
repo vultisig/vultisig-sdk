@@ -76,6 +76,9 @@ export type NearAccessKeyView = {
  * `null` when the account holds no such key. The node reports a missing key as a
  * `result.error` string, not a JSON-RPC error, so it is read rather than thrown.
  *
+ * Read at `optimistic` finality, the latest nonce: a `final` read lags the chain,
+ * so a second send inside the finality window would reuse the nonce.
+ *
  * Read from the raw body: `nonce` is a uint64 rendered as a bare JSON number, and
  * `JSON.parse` silently rounds anything above 2^53 into a neighbouring double, so
  * the digits are quoted before parsing and an unquoted, unparseable token is
@@ -86,7 +89,7 @@ export const getNearAccessKey = async (accountId: string, hexPublicKey: string):
 
   const raw = await callNearRpcText('query', {
     request_type: 'view_access_key',
-    finality: 'final',
+    finality: 'optimistic',
     account_id: accountId,
     public_key: publicKey,
   })
