@@ -12,7 +12,9 @@ block, protocol config), the raw unlocked balance, preparation that freezes the
 access-key nonce, final block hash and upfront gas reservation, NEAR's fee and
 MAX (balance minus the gas reservation and the storage the account must keep
 backing), a locally derived transaction hash, broadcast bound to that hash, and
-finality-checked status.
+finality-checked status. Preparation refuses a named receiver that does not
+exist with `BuildKeysignPayloadError` type `near-destination-not-found`; a
+64-hex implicit receiver is created by the transfer and skips that read.
 
 Fee arithmetic is transcribed from nearcore protocol 86: `total_cost` is
 converted-receipt gas burnt at the block's price plus receipt gas purchased at

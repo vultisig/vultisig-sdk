@@ -1,6 +1,7 @@
 export type BuildKeysignPayloadErrorType =
   | 'bittensor-destination-below-existential-deposit'
   | 'dangerous-destination'
+  | 'near-destination-not-found'
   | 'not-enough-funds'
   | 'ripple-destination-not-activated'
   | 'ripple-destination-tag-invalid'
