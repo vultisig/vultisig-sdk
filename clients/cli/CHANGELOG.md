@@ -1,5 +1,26 @@
 # @vultisig/cli
 
+## 9.0.0
+
+### Minor Changes
+
+- [#2472](https://github.com/vultisig/vultisig-sdk/pull/2472) [`0a09912`](https://github.com/vultisig/vultisig-sdk/commit/0a09912f54b2a7186a7299ce657d85dc31e5f5ed) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(seedphrase): accept every BIP39 mnemonic length (12, 15, 18, 21 and 24 words) in seedphrase validation, import and the CLI prompt. `SEEDPHRASE_WORD_COUNTS` is now `[12, 15, 18, 21, 24]`, which widens `SeedphraseWordCount`.
+
+### Patch Changes
+
+- [#2478](https://github.com/vultisig/vultisig-sdk/pull/2478) [`3369db3`](https://github.com/vultisig/vultisig-sdk/commit/3369db39738810b5789cd43b78bba1182d3dbaa4) Thanks [@neavra](https://github.com/neavra)! - `vultisig portfolio` no longer rewrites the vault's currency preference: `--currency` is a per-call display override and plain `portfolio` uses the stored preference, including in the interactive shell. Invalid stored preferences fall back to USD. Only `vultisig currency <code>` changes it. `vultisig currency` with no argument now honours `--output json` and reports `updated: false`.
+
+- [#2465](https://github.com/vultisig/vultisig-sdk/pull/2465) [`faffc26`](https://github.com/vultisig/vultisig-sdk/commit/faffc266efae199d638ae6bf8d45009896fcbee3) Thanks [@neavra](https://github.com/neavra)! - UTXO sends (Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash, Zcash) whose recipient amount is below the chain's static dust floor are now refused before signing with the minimum named in the error; fee-rate-dependent dust rejections above that floor instead explain that the current network dust threshold requires a larger amount. Additionally, a UTXO transaction plan that fails (dust, insufficient funds, or any other planner error) now fails authoritatively with that error instead of being retried as a send-max transaction, and deterministic dust or balance failures surface to CLI consumers as invalid input. Max-send and max-swap fee estimates now request a max spend explicitly instead of relying on the removed retry.
+
+  An amount above the available balance now fails with an insufficient-balance error instead of being planned as a max spend.
+
+  A non-max UTXO request is never converted to a max spend; a small remainder is left to WalletCore's dust handling.
+
+- Updated dependencies [[`0a09912`](https://github.com/vultisig/vultisig-sdk/commit/0a09912f54b2a7186a7299ce657d85dc31e5f5ed), [`658aa00`](https://github.com/vultisig/vultisig-sdk/commit/658aa00a115c329808432014164980f543edf09b), [`5acb3d2`](https://github.com/vultisig/vultisig-sdk/commit/5acb3d27f15f081d518155c937295d208defdd84), [`341f5ec`](https://github.com/vultisig/vultisig-sdk/commit/341f5ec2793e5b91ba69410bf35d82833f104632), [`d83a5b0`](https://github.com/vultisig/vultisig-sdk/commit/d83a5b0c31f5d8f5ca8ecd6e586e16424596bed3), [`f49cbb0`](https://github.com/vultisig/vultisig-sdk/commit/f49cbb05cd20c6aa3411aa84ba8a09fc89284f07), [`16b5a78`](https://github.com/vultisig/vultisig-sdk/commit/16b5a7860dce8a5bacf4759ff0260073c8cfb3e7), [`faffc26`](https://github.com/vultisig/vultisig-sdk/commit/faffc266efae199d638ae6bf8d45009896fcbee3)]:
+  - @vultisig/sdk@9.0.0
+  - @vultisig/core-chain@6.1.3
+  - @vultisig/client-shared@0.3.8
+
 ## 8.1.1
 
 ### Patch Changes

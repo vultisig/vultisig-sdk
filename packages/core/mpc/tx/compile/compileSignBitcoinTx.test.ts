@@ -23,6 +23,9 @@ import { TW, initWasm, type WalletCore } from '@trustwallet/wallet-core'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { buildSignBitcoinFromPsbt } from '@vultisig/core-chain/chains/utxo/tx/buildSignBitcoinFromPsbt'
 import { getTwPublicKeyType } from '@vultisig/core-chain/publicKey/tw/getTwPublicKeyType'
+import { decodeSigningOutput } from '@vultisig/core-chain/tw/signingOutput'
+import { selectEncodedBytes } from '@vultisig/core-chain/tx/broadcast/resolvers/utxo'
+import { getTxHash } from '@vultisig/core-chain/tx/hash'
 
 import { encodeDERSignature } from '../../derSignature'
 import { computePreSigningHashes } from '../../keysign/signingInputs/resolvers/bitcoin/sighash'
@@ -37,6 +40,8 @@ const TEST_PUBKEY = Buffer.from('0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce2
 const RECIPIENT_ADDRESS = 'bc1q0ht9tyks4vh7p5p904t340cr9nvahy7u3re7zg'
 const EXPECTED_BITCOINJS_RAW_TX =
   '02000000000101aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0000000000ffffffff01905f0100000000001600147dd65592d0ab2fe0d0257d571abf032cd9db93dc02483045022100cf5ed8951fc872ce1ec2021f76de2d191494c78f9ace2901c0ba41e9292bdd5d022018801adb6683ff7d68d0ccd02ecb001169f5f22c3ae0c2b3748bdad457fa649801210279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f8179800000000'
+// reverse(hash256(non-witness serialization)) of the raw tx above, in display order
+const EXPECTED_TXID = '33c69b38031b60731eeb7c096bcef5e2bed184cb79f2f13bb7b5aa634d782dc9'
 
 describe('compileSignBitcoinTx', () => {
   let walletCore: WalletCore
@@ -114,7 +119,7 @@ describe('compileSignBitcoinTx', () => {
     expect(compiledRaw.equals(expected)).toBe(true)
   })
 
-  it('routes SwapKit PSBT payloads through the SignBitcoin hash and compile path', () => {
+  it('routes SwapKit PSBT payloads through the SignBitcoin hash and compile path', async () => {
     const privKey = new Uint8Array(32)
     privKey[31] = 1
 
@@ -182,6 +187,15 @@ describe('compileSignBitcoinTx', () => {
     const decoded = TW.Bitcoin.Proto.SigningOutput.decode(compiled)
 
     expect(Buffer.from(decoded.encoded).toString('hex')).toBe(EXPECTED_BITCOINJS_RAW_TX)
+
+    // What keysign actually broadcasts and reports: the decoded output as read
+    // by the UTXO broadcast and hash resolvers (vultisig-windows#5035).
+    const signingOutput = decodeSigningOutput(Chain.Bitcoin, compiled)
+
+    expect(Buffer.from(selectEncodedBytes(Chain.Bitcoin, signingOutput)).toString('hex')).toBe(
+      EXPECTED_BITCOINJS_RAW_TX
+    )
+    expect(await getTxHash({ chain: Chain.Bitcoin, tx: signingOutput })).toBe(EXPECTED_TXID)
   })
 
   it('returns SwapKit PSBT hashes in deterministic sorted ceremony order', () => {

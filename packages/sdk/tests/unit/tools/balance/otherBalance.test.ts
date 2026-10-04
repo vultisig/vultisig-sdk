@@ -13,6 +13,10 @@ vi.mock('@/tools/balance/rpc', async () => {
 
 vi.mock('@vultisig/core-chain/chains/tron/queryTron', () => ({
   queryTron: (path: string, options: { body: unknown }) => mockFetchJson(path, options.body),
+  queryTronWithText: async (path: string, options: { body: unknown }) => {
+    const data = await mockFetchJson(path, options.body)
+    return { data, text: JSON.stringify(data) }
+  },
 }))
 
 import {
@@ -116,6 +120,7 @@ describe('getTrxBalance', () => {
     mockFetchJson.mockResolvedValueOnce({ balance: 12_500_000 })
     const r = await getTrxBalance(TRON_ADDR)
     expect(r.balanceSun).toBe(12_500_000)
+    expect(r.balanceSunRaw).toBe('12500000')
     expect(r.balanceTrx).toBe('12.5')
   })
 

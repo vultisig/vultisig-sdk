@@ -62,9 +62,14 @@ const hasSigningResultV2 = (
   signingResultV2: { encoded?: Uint8Array | null }
 } => tx != null && typeof tx === 'object' && 'signingResultV2' in tx && !!(tx as any).signingResultV2
 
+/**
+ * Picks the signed tx bytes to broadcast, preferring WalletCore's BitcoinV2
+ * result. A decoded, unset bytes field is an empty (still truthy) array, so
+ * only a non-empty `signingResultV2.encoded` wins over the legacy field.
+ */
 export const selectEncodedBytes = (chain: UtxoBasedChain, tx: UtxoBasedDecodedTx): Uint8Array => {
-  if (getChainKind(chain) === 'utxo' && hasSigningResultV2(tx) && tx.signingResultV2.encoded) {
-    return shouldBePresent(tx.signingResultV2.encoded)
+  if (getChainKind(chain) === 'utxo' && hasSigningResultV2(tx) && tx.signingResultV2.encoded?.length) {
+    return tx.signingResultV2.encoded
   }
   return shouldBePresent(tx.encoded)
 }

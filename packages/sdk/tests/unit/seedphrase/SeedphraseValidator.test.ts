@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import type { WasmProvider } from '../../../src/context/SdkContext'
 import { cleanMnemonic, SeedphraseValidator } from '../../../src/seedphrase/SeedphraseValidator'
+import { SEEDPHRASE_WORD_COUNTS } from '../../../src/seedphrase/types'
 
 // Create a minimal mock WasmProvider (not used for validation anymore, but required by constructor)
 const createMockWasmProvider = (): WasmProvider => ({
@@ -22,6 +23,10 @@ const VALID_ENGLISH_24 =
 const VALID_JAPANESE_12 =
   'あいこくしん あいこくしん あいこくしん あいこくしん あいこくしん あいこくしん あいこくしん あいこくしん あいこくしん あいこくしん あいこくしん あおぞら'
 const VALID_SPANISH_12 = 'ábaco ábaco ábaco ábaco ábaco ábaco ábaco ábaco ábaco ábaco ábaco abierto'
+// All-zero entropy at each remaining BIP39 length; the 18-word one is the official BIP39 test vector
+const VALID_ENGLISH_15 = `${'abandon '.repeat(14)}address`
+const VALID_ENGLISH_18 = `${'abandon '.repeat(17)}agent`
+const VALID_ENGLISH_21 = `${'abandon '.repeat(20)}admit`
 
 describe('cleanMnemonic', () => {
   it('should trim whitespace', () => {
@@ -79,6 +84,20 @@ describe('SeedphraseValidator', () => {
       expect(result.detectedLanguage).toBe('english')
     })
 
+    it.each([
+      [15, VALID_ENGLISH_15],
+      [18, VALID_ENGLISH_18],
+      [21, VALID_ENGLISH_21],
+    ])('should return valid for %i-word valid English mnemonic', async (wordCount, mnemonic) => {
+      const validator = new SeedphraseValidator(createMockWasmProvider())
+      const result = await validator.validate(mnemonic)
+
+      expect(result.valid).toBe(true)
+      expect(result.wordCount).toBe(wordCount)
+      expect(result.detectedLanguage).toBe('english')
+      expect(result.error).toBeUndefined()
+    })
+
     it('should return invalid for wrong word count (11 words)', async () => {
       const validator = new SeedphraseValidator(createMockWasmProvider())
       const mnemonic = Array(11).fill('abandon').join(' ')
@@ -86,16 +105,25 @@ describe('SeedphraseValidator', () => {
 
       expect(result.valid).toBe(false)
       expect(result.wordCount).toBe(11)
-      expect(result.error).toContain('12 or 24')
+      expect(result.error).toBe('Mnemonic must be 12, 15, 18, 21 or 24 words, got 11')
     })
 
-    it('should return invalid for wrong word count (15 words)', async () => {
+    it.each([13, 16, 23, 25])('should return invalid for wrong word count (%i words)', async wordCount => {
       const validator = new SeedphraseValidator(createMockWasmProvider())
-      const mnemonic = Array(15).fill('abandon').join(' ')
-      const result = await validator.validate(mnemonic)
+      const result = await validator.validate(Array(wordCount).fill('abandon').join(' '))
 
       expect(result.valid).toBe(false)
-      expect(result.wordCount).toBe(15)
+      expect(result.wordCount).toBe(wordCount)
+      expect(result.error).toContain(`got ${wordCount}`)
+    })
+
+    it('should list every supported word count in the word count error', async () => {
+      const validator = new SeedphraseValidator(createMockWasmProvider())
+      const result = await validator.validate('abandon')
+
+      for (const wordCount of SEEDPHRASE_WORD_COUNTS) {
+        expect(result.error).toContain(String(wordCount))
+      }
     })
 
     it('should return invalid for empty mnemonic', async () => {
@@ -222,6 +250,17 @@ describe('SeedphraseValidator', () => {
       const result = await validator.validate(mnemonic, { language: 'english' })
 
       expect(result.valid).toBe(false)
+      expect(result.invalidWords).toBeUndefined()
+      expect(result.error).toContain('checksum')
+    })
+
+    it('should reject an 18-word mnemonic with an invalid checksum', async () => {
+      const validator = new SeedphraseValidator(createMockWasmProvider())
+      const mnemonic = Array(18).fill('abandon').join(' ')
+      const result = await validator.validate(mnemonic, { language: 'english' })
+
+      expect(result.valid).toBe(false)
+      expect(result.wordCount).toBe(18)
       expect(result.invalidWords).toBeUndefined()
       expect(result.error).toContain('checksum')
     })

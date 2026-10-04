@@ -103,6 +103,7 @@ export const computeMaxSendFromBalance = async (
     walletCore,
     libType: identity.libType,
     feeSettings: params.feeSettings,
+    sendMaxAmount: true,
     tonGasless: params.tonGasless,
     allowDeath: params.allowDeath,
   })

@@ -286,27 +286,6 @@ export class ServerManager {
       signatureResults[msg] = sig
     }
 
-    let mldsaSignatureHex: string | undefined
-    if (vault.keyShareMldsa) {
-      reportProgress({
-        step: 'signing',
-        progress: 80,
-        message: 'Performing ML-DSA post-quantum signing...',
-        mode: 'fast' as import('../types').SigningMode,
-        participantCount: 2,
-        participantsReady: 2,
-      })
-
-      mldsaSignatureHex = await this.runMldsaFastSigningSession({
-        vault,
-        messages,
-        password,
-        chain: payload.chain,
-        signingLocalPartyId,
-        signal,
-      })
-    }
-
     // Step 7: Complete - Format signature results
     reportProgress({
       step: 'complete',
@@ -318,9 +297,6 @@ export class ServerManager {
     })
 
     const signature = formatSignature(signatureResults, messages, signatureAlgorithm)
-    if (mldsaSignatureHex) {
-      signature.mldsaSignature = mldsaSignatureHex
-    }
 
     reportProgress({
       step: 'complete',

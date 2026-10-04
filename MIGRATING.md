@@ -1,5 +1,69 @@
 # Migration Guide
 
+## SDK package paths in the next major
+
+Nineteen narrow `@vultisig/sdk` paths are removed. Import their APIs from the
+root (`@vultisig/sdk`) or the matching platform entry (`/node`, `/browser`,
+`/chrome-extension`, `/electron`, or `/react-native`). The table shows the
+replacement for a former value import. Most type names remain available from
+the root; chain, seedphrase, and server types also live inside their
+corresponding namespaces. The former `/tools/policy` types `AssetRef` and
+`Envelope` use the root names `PolicyAssetRef` and `PolicyEnvelope` to avoid
+collisions with other root types.
+
+| Former path suffix      | Replacement from the root                                                       |
+| ----------------------- | ------------------------------------------------------------------------------- |
+| `/tools/prep`           | Named builders or `prep.*`; `getWalletCore` is named                            |
+| `/seedphrase`           | `seedphrase.*` (including normalization, validation, derivation, and discovery) |
+| `/tools/balance`        | Named helpers or `balance.*`                                                    |
+| `/tools/swap`           | Named helpers or `swap.*`                                                       |
+| `/tools/decode`         | Named helpers or `decode.*`                                                     |
+| `/tx`                   | Same named exports                                                              |
+| `/chains/tron`          | `chainTron.*`                                                                   |
+| `/chains/utxo`          | `chainUtxo.*`                                                                   |
+| `/chains/ton`           | `chainTon.*`                                                                    |
+| `/abi`                  | Same named exports                                                              |
+| `/tools/parse`          | Same named exports                                                              |
+| `/tools/policy`         | Named helpers or `policy.*`                                                     |
+| `/tools/price`          | Named helpers or `price.*`                                                      |
+| `/tools/gas`            | Named helpers or `gas.*`                                                        |
+| `/tools/bridge`         | Same named exports                                                              |
+| `/tools/evm`            | Named helpers or `evm.*`                                                        |
+| `/tools/cosmos`         | Named helpers or `cosmos.*` (including `cosmos.gov`)                            |
+| `/signable-transaction` | Same named exports                                                              |
+| `/server`               | Named fast-vault helpers or `server.*` for relay helpers                        |
+
+For example:
+
+```ts
+// Before
+import { buildTronSendTx } from '@vultisig/sdk/chains/tron'
+import { normalizeMnemonic } from '@vultisig/sdk/seedphrase'
+
+// After
+import { chainTron, seedphrase } from '@vultisig/sdk'
+chainTron.buildTronSendTx(/* ... */)
+seedphrase.normalizeMnemonic('  abandon  ')
+```
+
+No helper among these nineteen paths is intentionally retired. The checked-in
+`packages/sdk/public-subpath-migration.json` lists every value and type export,
+its source condition, and its exact replacement. The separate agent DeFi API
+is retired below.
+
+## `@vultisig/sdk`: agent DeFi helpers removed in the next major
+
+The wallet SDK no longer exports the agent-focused DeFi helpers from its root,
+React Native entry, `Vultisig.defi`, or `@vultisig/sdk/tools/defi`. This removes
+the Arkis, Balancer, GLIF, Osmosis, Pendle, River, StakeKit, and ThreeJane
+builders from the published package. `@balancer/sdk` is no longer an SDK
+dependency.
+
+Consumers that still need a protocol builder should keep that implementation
+in their own application. There is no replacement SDK DeFi package. Wallet
+APIs such as balance, prep, swap, decode, and the shared USDC amount helpers
+remain available from their existing exports.
+
 ## TAO builders: explicit WalletCore runtime
 
 The next major versions of `@vultisig/core-chain` and `@vultisig/core-mpc` require the caller’s initialized WalletCore for direct TAO payload construction and fee refinement. This enforces SS58 network prefix 42 consistently with address validation and native runtimes.
@@ -31,11 +95,7 @@ Only consumers that directly imported the removed Station constants. If you were
 Copy the constant definitions into your own consumer package:
 
 ```ts
-import type {
-  KyberSwapBaseAffiliateConfig,
-  NativeSwapAffiliateConfig,
-  OneInchAffiliateConfig,
-} from '@vultisig/sdk'
+import type { KyberSwapBaseAffiliateConfig, NativeSwapAffiliateConfig, OneInchAffiliateConfig } from '@vultisig/sdk'
 
 // Station EVM fee-receiver address (KyberSwap + 1inch)
 const STATION_EVM_FEE_RECEIVER = '0x649E1289fD780C2F9A3D27476511283EB0d0076D'

@@ -12,6 +12,7 @@ export type BuildKeysignPayloadErrorType =
   | 'ton-gasless-quote-invalid'
   | 'ton-gasless-unsupported'
   | 'ton-memo-too-long'
+  | 'utxo-dust-amount-requested'
 
 export class BuildKeysignPayloadError extends Error {
   constructor(

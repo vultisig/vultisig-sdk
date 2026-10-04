@@ -7,6 +7,7 @@
  * Multi-language BIP39 validation aligned with other Vultisig products.
  */
 import { validateMnemonic } from '@scure/bip39'
+import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
 
 import type { WasmProvider } from '../context/SdkContext'
 import {
@@ -78,12 +79,11 @@ export class SeedphraseValidator {
     const words = normalized.split(' ')
     const wordCount = words.length
 
-    // Check word count (must be 12 or 24)
-    if (!SEEDPHRASE_WORD_COUNTS.includes(wordCount as 12 | 24)) {
+    if (!isOneOf(wordCount, SEEDPHRASE_WORD_COUNTS)) {
       return {
         valid: false,
         wordCount,
-        error: `Mnemonic must be 12 or 24 words, got ${wordCount}`,
+        error: `Mnemonic must be 12, 15, 18, 21 or 24 words, got ${wordCount}`,
       }
     }
 
@@ -128,7 +128,7 @@ export class SeedphraseValidator {
 
       return {
         valid: true,
-        wordCount: wordCount as 12 | 24,
+        wordCount,
         detectedLanguage: language,
       }
     }
@@ -136,7 +136,7 @@ export class SeedphraseValidator {
     // Language was auto-detected and is valid
     return {
       valid: true,
-      wordCount: wordCount as 12 | 24,
+      wordCount,
       detectedLanguage: language,
     }
   }
