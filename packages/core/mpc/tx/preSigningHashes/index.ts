@@ -13,6 +13,7 @@ import { getBlockchainSpecificValue } from '../../keysign/chainSpecific/KeysignC
 import { getPreSigningOutput } from '../../keysign/preSigningOutput'
 import { getKeysignTonGasless, getTonGaslessPreSigningHashes } from '../../keysign/ton/gasless'
 import { KeysignPayload, KeysignPayloadSchema } from '../../types/vultisig/keysign/v1/keysign_message_pb'
+import { getSwapKitCardanoPrebuiltPayload, getSwapKitCardanoPrebuiltPreSigningHash } from '../swapkitCardanoPrebuilt'
 import { getSwapKitSignBitcoin } from '../swapkitSignBitcoin'
 
 type Input = {
@@ -33,6 +34,14 @@ export const getPreSigningHashes = ({ walletCore, txInputData, chain, keysignPay
   // final PSBT assembly still maps signatures by hash and preserves input order.
   if (signBitcoin) {
     return sortHashes(computePreSigningHashes(signBitcoin))
+  }
+
+  // SwapKit pre-built Cardano transaction (sdk#2468): txInputData is SwapKit's
+  // unsigned CBOR envelope, already validated against the vault's own key by
+  // getEncodedSigningInputs. The digest is blake2b-256 of its body verbatim —
+  // never of a WalletCore rebuild (iOS / Android parity).
+  if (keysignPayload && getSwapKitCardanoPrebuiltPayload(keysignPayload)) {
+    return [getSwapKitCardanoPrebuiltPreSigningHash(txInputData)]
   }
 
   if (chain === Chain.QBTC) {

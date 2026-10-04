@@ -853,9 +853,11 @@ const buildTransferTx = ({
 // SwapKitEnabledChains.ts) but has no wired tx-build path here yet:
 // `encodeSwapKitTxPayload` explicitly returns an EMPTY byte array for
 // `normalizedTxType === 'CARDANO'` — there is no decode implementation at all,
-// so any tx built from it would be silently wrong. iOS covers this with a
-// separate `CARDANO_PREBUILT` CBOR path (`SwapKitCardanoSigner.swift`); porting
-// that decode is follow-on work.
+// so any tx built from it would be silently wrong. iOS and Android cover this
+// with a separate `CARDANO_PREBUILT` CBOR path. Signing that path is ported
+// (`core-mpc` `tx/swapkitCardanoPrebuilt.ts`), so a swap another device
+// initiates can be co-signed; decoding the hex CBOR here to initiate one is
+// follow-on work.
 //
 // Rejected in `getSwapKitQuote` BEFORE the network round-trip (no route/swap
 // API calls wasted on a request that can never produce a signable tx).
