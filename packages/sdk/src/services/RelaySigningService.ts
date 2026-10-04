@@ -404,32 +404,7 @@ export class RelaySigningService {
         signatures.push(signature)
       }
 
-      // Step 10: MLDSA signing (if vault has ML-DSA keys)
-      let mldsaSignatureHex: string | undefined
-      if (vault.keyShareMldsa) {
-        reportProgress('signing', 85, 'Performing ML-DSA post-quantum signing...')
-        try {
-          const mldsaKeysign = new MldsaKeysign({
-            keysignCommittee: devices,
-            serverURL: this.relayUrl,
-            sessionId,
-            localPartyId,
-            messagesToSign: payload.messageHashes,
-            keyShareBase64: vault.keyShareMldsa,
-            hexEncryptionKey,
-            chainPath,
-            isInitiatingDevice: true,
-          })
-          const mldsaResults = await mldsaKeysign.startKeysignWithRetry()
-          if (mldsaResults.length > 0) {
-            mldsaSignatureHex = mldsaResults[0].signature
-          }
-        } catch (error) {
-          console.warn('MLDSA signing failed (non-fatal):', error instanceof Error ? error.message : error)
-        }
-      }
-
-      // Step 11: Format and return signature
+      // Step 10: Format and return signature
       reportProgress('complete', 100, 'Signing complete')
 
       // Build signature results map for formatSignature adapter
@@ -440,9 +415,6 @@ export class RelaySigningService {
 
       // Use formatSignature adapter for correct ECDSA/EdDSA handling
       const formattedSignature = formatSignature(signatureResults, payload.messageHashes, signatureAlgorithm)
-      if (mldsaSignatureHex) {
-        formattedSignature.mldsaSignature = mldsaSignatureHex
-      }
 
       return formattedSignature
     } catch (error) {
@@ -590,31 +562,6 @@ export class RelaySigningService {
         signatures.push(signature)
       }
 
-      // MLDSA signing (if vault has ML-DSA keys)
-      let mldsaSignatureHex: string | undefined
-      if (vault.keyShareMldsa) {
-        reportProgress('signing', 85, 'Performing ML-DSA post-quantum signing...')
-        try {
-          const mldsaKeysign = new MldsaKeysign({
-            keysignCommittee: devices,
-            serverURL: this.relayUrl,
-            sessionId,
-            localPartyId,
-            messagesToSign: bytesOptions.messageHashes,
-            keyShareBase64: vault.keyShareMldsa,
-            hexEncryptionKey,
-            chainPath,
-            isInitiatingDevice: true,
-          })
-          const mldsaResults = await mldsaKeysign.startKeysignWithRetry()
-          if (mldsaResults.length > 0) {
-            mldsaSignatureHex = mldsaResults[0].signature
-          }
-        } catch (error) {
-          console.warn('MLDSA signing failed (non-fatal):', error instanceof Error ? error.message : error)
-        }
-      }
-
       reportProgress('complete', 100, 'Signing complete')
 
       // Build signature results map for formatSignature adapter
@@ -625,9 +572,6 @@ export class RelaySigningService {
 
       // Use formatSignature adapter for correct ECDSA/EdDSA handling
       const formattedSignature = formatSignature(signatureResults, bytesOptions.messageHashes, signatureAlgorithm)
-      if (mldsaSignatureHex) {
-        formattedSignature.mldsaSignature = mldsaSignatureHex
-      }
 
       return formattedSignature
     } catch (error) {
