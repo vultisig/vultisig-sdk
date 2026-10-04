@@ -222,6 +222,12 @@ describe('RujiraSwap.easySwap()', () => {
 
       const result = await swap.easySwap(request)
 
+      expect(mockClient.executeContract).toHaveBeenCalledWith(
+        'thor1contract...',
+        { swap: { min_return: '98010000', to: VALID_THOR_ADDRESS } },
+        [{ denom: 'rune', amount: '100000000' }],
+        undefined
+      )
       expect(result).toMatchObject({
         txHash: 'TESTHASH123',
         status: 'pending',
@@ -248,6 +254,21 @@ describe('RujiraSwap.easySwap()', () => {
       )
     })
   })
+
+  it.each([undefined, VALID_THOR_ADDRESS])(
+    'builds flat FIN transaction and memo payloads for %s',
+    async destination => {
+      const params = { fromAsset: 'rune', toAsset: 'btc-btc', amount: '100000000', destination }
+      const expected = { swap: { min_return: '98010000', to: destination } }
+      const transaction = await swap.buildTransaction(params)
+      expect(transaction.msg).toStrictEqual(expected)
+      expect(transaction.funds).toEqual([{ denom: 'rune', amount: '100000000' }])
+      const memo = await swap.buildL1Memo(params)
+      const [prefix, contract, payload] = memo.split(':')
+      expect([prefix, contract]).toEqual(['x', transaction.contractAddress])
+      expect(JSON.parse(Buffer.from(payload, 'base64').toString())).toStrictEqual(JSON.parse(JSON.stringify(expected)))
+    }
+  )
 
   describe('all EASY_ROUTES', () => {
     // Test that all defined routes can be resolved

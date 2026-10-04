@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   bpsToPercent,
+  buildSwapMsg,
   calculateMinReturn,
   calculateSlippage,
   formatFee,
@@ -10,6 +11,12 @@ import {
   percentToBps,
   toBaseUnits,
 } from '../utils/format.js'
+
+describe('buildSwapMsg', () => {
+  it.each([undefined, 'thor1recipient'])('builds a flat FIN minimum-return request for %s', to => {
+    expect(buildSwapMsg('1000', to)).toStrictEqual({ swap: { min_return: '1000', to } })
+  })
+})
 
 describe('toBaseUnits', () => {
   it('converts whole numbers', () => {

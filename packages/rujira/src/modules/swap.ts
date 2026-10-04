@@ -185,10 +185,8 @@ export class RujiraSwap {
 
     const swapMsg: FinExecuteMsg = {
       swap: {
-        min: {
-          min_return: minReturn,
-          to: quote.params.destination,
-        },
+        min_return: minReturn,
+        to: quote.params.destination,
       },
     }
 
@@ -234,10 +232,8 @@ export class RujiraSwap {
 
     const msg: FinExecuteMsg = {
       swap: {
-        min: {
-          min_return: minReturn,
-          to: params.destination,
-        },
+        min_return: minReturn,
+        to: params.destination,
       },
     }
 
