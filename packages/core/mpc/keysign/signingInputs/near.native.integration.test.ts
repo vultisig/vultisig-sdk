@@ -66,7 +66,6 @@ const IMPLICIT_GAS_FEE = 7_607_442_456_250_000_000_000n
 
 /** 182 bytes of storage (100 account + 33 key + 9 access key + 40 record). */
 const IMPLICIT_STORAGE_USAGE = 182
-const STORAGE_RESERVE_182 = 1_820_000_000_000_000_000_000n
 
 const PROTOCOL_CONFIG = {
   runtime_config: {
@@ -645,6 +644,14 @@ describe('NEAR finality status', () => {
       status: 'success',
       isKnown: true,
     })
+  })
+
+  it('refuses a final outcome that does not name its transaction', async () => {
+    setupTransport({ status: { final_execution_status: 'FINAL', status: { SuccessValue: '' } } })
+
+    await expect(getTxStatus({ chain: Chain.Near, hash, senderAccountId: SENDER })).rejects.toThrow(
+      'without the transaction hash'
+    )
   })
 
   it('reports an executed failure as an error, not a success', async () => {

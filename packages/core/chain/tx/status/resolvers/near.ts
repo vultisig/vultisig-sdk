@@ -91,6 +91,11 @@ export const getNearTxStatus: TxStatusResolver = async ({ hash, senderAccountId 
 
   const status = readExecutionStatus(response)
 
+  // A FINAL outcome always names its transaction; one that does not cannot be bound to this hash.
+  if (status !== 'pending' && returnedHash === undefined) {
+    throw new Error(`NEAR status for ${hash} reported a final outcome without the transaction hash`)
+  }
+
   const result: TxStatusResult = { status, isKnown: returnedHash !== undefined }
 
   return result
