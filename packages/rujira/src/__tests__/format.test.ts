@@ -13,8 +13,9 @@ import {
 } from '../utils/format.js'
 
 describe('buildSwapMsg', () => {
+  // FIN mainnet tx: 1B90D792DB80ED4449908F4460F2A59A1B22DB1429B8CA1AF886C24DC77D76EF
   it.each([undefined, 'thor1recipient'])('builds a flat FIN minimum-return request for %s', to => {
-    expect(buildSwapMsg('1000', to)).toStrictEqual({ swap: { min_return: '1000', to } })
+    expect(buildSwapMsg('6822999992', to)).toStrictEqual({ swap: { min_return: '6822999992', to } })
   })
 })
 
