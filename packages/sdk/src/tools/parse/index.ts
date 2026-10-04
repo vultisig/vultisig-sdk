@@ -14,7 +14,7 @@
  * any SDK tool:
  *
  * ```ts
- * import { parseChain } from '@vultisig/sdk/tools/parse'
+ * import { parseChain } from '@vultisig/sdk'
  *
  * const result = parseChain(args.chain)
  * if (!result.success) {

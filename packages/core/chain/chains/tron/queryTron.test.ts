@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { tronGridUrl, tronPublicRpcUrl, tronRpcUrl } from './config'
-import { broadcastTronTransaction, queryTron } from './queryTron'
+import { broadcastTronTransaction, queryTron, queryTronWithText } from './queryTron'
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status })
 const hash = 'ab'.repeat(32)
@@ -13,6 +13,17 @@ afterEach(() => {
 })
 
 describe('Tron default routing', () => {
+  it('exposes the validated original response without rounding its text', async () => {
+    const text = '{"balance":9007199254740993}'
+    const fetch = vi.fn().mockResolvedValue(new Response(text))
+    vi.stubGlobal('fetch', fetch)
+    await expect(queryTronWithText('/wallet/getaccount')).resolves.toEqual({
+      data: { balance: 9007199254740992 },
+      text,
+    })
+    expect(fetch).toHaveBeenCalledOnce()
+  })
+
   it('uses only the primary on success and preserves request body', async () => {
     const fetch = vi.fn().mockResolvedValue(json({ balance: 42 }))
     vi.stubGlobal('fetch', fetch)
@@ -143,7 +154,7 @@ describe('Tron default routing', () => {
       .mockImplementationOnce((_url, { signal }) =>
         Promise.resolve({
           ok: true,
-          json: () => new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason))),
+          text: () => new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason))),
         })
       )
       .mockResolvedValueOnce(json({ balance: 42 }))
@@ -157,6 +168,9 @@ describe('Tron default routing', () => {
 describe('Tron broadcast replay safety', () => {
   it('never submits through the generic read helper', async () => {
     await expect(queryTron('/wallet/broadcasttransaction', { body })).rejects.toThrow('Use broadcastTronTransaction')
+    await expect(queryTronWithText('/wallet/broadcasttransaction', { body })).rejects.toThrow(
+      'Use broadcastTronTransaction'
+    )
   })
 
   it('checks both nodes before resubmitting identical bytes once', async () => {

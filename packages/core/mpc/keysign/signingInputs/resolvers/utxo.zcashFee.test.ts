@@ -134,7 +134,7 @@ describe('getUtxoSigningInputs — Zcash ZIP-317 conventional fee', () => {
   it('passes an empty (insufficient-funds) plan through untouched for the caller to handle', async () => {
     // Balance can't cover amount + fee + dust, so WalletCore selects no UTXOs.
     // The conventional-fee guard must not hijack this with a ZIP-317 error —
-    // refineKeysignUtxo owns the sendMax flip / insufficient-funds outcome.
+    // refineKeysignUtxo owns the insufficient-funds outcome without changing MAX intent.
     const [signingInput] = await getUtxoSigningInputs({
       keysignPayload: buildZcashPayload({
         amount: 90_000n,

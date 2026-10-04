@@ -1,5 +1,7 @@
 import type { WalletCore } from '@trustwallet/wallet-core'
 import { Chain } from '@vultisig/core-chain/Chain'
+import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
+import { getUtxoMinSendAmountError } from '@vultisig/core-chain/chains/utxo/send/validateUtxoRequirements'
 import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
 import { assertSafeDestination } from '@vultisig/core-chain/security/dangerousAddresses'
@@ -12,6 +14,7 @@ import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 
 import { getWalletCore } from '../../context/wasmRuntime'
+import { VaultError, VaultErrorCode } from '../../vault/VaultError'
 import type { VaultIdentity } from './types'
 
 export type PrepareSendTxFromKeysParams = {
@@ -70,6 +73,20 @@ export const prepareSendTxFromKeys = async (
 ): Promise<KeysignPayload> => {
   if (params.amount <= 0n) {
     throw new Error('Amount must be greater than zero')
+  }
+
+  // Reject before WalletCore planning: its dust-error plan has no selected
+  // inputs, which the later UTXO refinement can otherwise retry as send-max.
+  // These chains only have native coins, so no token-id branch is needed.
+  // Cardano has its own chain kind and builder.
+  if (isChainOfKind(params.coin.chain, 'utxo')) {
+    const minSendAmountError = getUtxoMinSendAmountError({
+      amount: params.amount,
+      chain: params.coin.chain,
+    })
+    if (minSendAmountError) {
+      throw new VaultError(VaultErrorCode.InvalidAmount, minSendAmountError)
+    }
   }
 
   const walletCore = walletCoreOverride ?? (await getWalletCore())

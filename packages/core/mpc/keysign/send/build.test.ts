@@ -12,6 +12,8 @@ import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v
 import { KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { getUtxoChainSpecific } from '../chainSpecific/resolvers/utxo'
+
 const { getChainSpecificMock, getCoinBalanceMock, getKeysignUtxoInfoMock, getBittensorCoinBalanceMock } = vi.hoisted(
   () => ({
     getChainSpecificMock: vi.fn(),
@@ -115,14 +117,20 @@ describe('buildSendKeysignPayload XRP DestinationTag compatibility', () => {
     })
 
     expect(getChainSpecificMock).toHaveBeenCalledWith(
-      expect.objectContaining({ transactionType: TransactionType.RIPPLE_PAYMENT })
+      expect.objectContaining({
+        transactionType: TransactionType.RIPPLE_PAYMENT,
+      })
     )
     expect(payload.coin?.isNativeToken).toBe(false)
     expect(payload.toAmount).toBe('1500000000000000')
   })
 
   it.each([
-    { label: 'inexact', amount: 12_345_678_901_234_567n, message: /16 significant digits/ },
+    {
+      label: 'inexact',
+      amount: 12_345_678_901_234_567n,
+      message: /16 significant digits/,
+    },
     { label: 'zero', amount: 0n, message: /must be positive/ },
   ])(
     'rejects an $label issued amount as bad input, before preparing a transaction for review',
@@ -134,7 +142,9 @@ describe('buildSendKeysignPayload XRP DestinationTag compatibility', () => {
         amount,
       })
 
-      await expect(build).rejects.toMatchObject({ type: 'ripple-issued-currency-amount-invalid' })
+      await expect(build).rejects.toMatchObject({
+        type: 'ripple-issued-currency-amount-invalid',
+      })
       await expect(build).rejects.toThrow(message)
       expect(getChainSpecificMock).not.toHaveBeenCalled()
     }
@@ -217,6 +227,30 @@ describe('buildSendKeysignPayload MAX intent', () => {
     await buildPayload()
 
     expect(getChainSpecificMock).toHaveBeenCalledWith(expect.objectContaining({ sendMaxAmount: undefined }))
+  })
+
+  it('builds a UTXO max payload with max intent before refinement', async () => {
+    getChainSpecificMock.mockImplementationOnce(async input => ({
+      case: 'utxoSpecific',
+      value: await getUtxoChainSpecific({ ...input, feeSettings: { byteFee: 12n } }),
+    }))
+
+    const payload = await buildPayload({
+      coin: {
+        chain: Chain.Bitcoin,
+        address: 'bc1qsender',
+        ticker: 'BTC',
+        decimals: 8,
+      },
+      receiver: 'bc1qrecipient',
+      amount: 99_000n,
+      sendMaxAmount: true,
+      omitDestinationTag: true,
+    })
+
+    expect(payload.blockchainSpecific.case).toBe('utxoSpecific')
+    if (payload.blockchainSpecific.case !== 'utxoSpecific') throw new Error('Expected UTXO-specific payload')
+    expect(payload.blockchainSpecific.value.sendMaxAmount).toBe(true)
   })
 })
 
@@ -357,7 +391,12 @@ describe('buildSendKeysignPayload Bittensor destination existential deposit', ()
     getBittensorCoinBalanceMock.mockResolvedValue(0n)
 
     return buildSendKeysignPayload({
-      coin: { chain: Chain.Bittensor, ticker: 'TAO', address: sender, decimals: 9 },
+      coin: {
+        chain: Chain.Bittensor,
+        ticker: 'TAO',
+        address: sender,
+        decimals: 9,
+      },
       receiver: emptyDestination,
       amount,
       vaultId: 'vault-public-key',
@@ -385,17 +424,27 @@ describe('buildSendKeysignPayload Bittensor destination existential deposit', ()
       name: 'BuildKeysignPayloadError',
       type: 'bittensor-destination-below-existential-deposit',
     })
-    expect(getBittensorCoinBalanceMock).toHaveBeenCalledWith({ chain: Chain.Bittensor, address: emptyDestination })
+    expect(getBittensorCoinBalanceMock).toHaveBeenCalledWith({
+      chain: Chain.Bittensor,
+      address: emptyDestination,
+    })
   })
 
   it('forwards an explicit allow-death choice to the chain-specific resolver', async () => {
-    await buildTaoPayload({ amount: 1_000n, balance: fee + 500n + 600n, allowDeath: true })
+    await buildTaoPayload({
+      amount: 1_000n,
+      balance: fee + 500n + 600n,
+      allowDeath: true,
+    })
 
     expect(getChainSpecificMock).toHaveBeenCalledWith(expect.objectContaining({ allowDeath: true }))
   })
 
   it('lets a refined amount that still clears the deposit through without reading the destination', async () => {
-    const payload = await buildTaoPayload({ amount: 1_000n, balance: fee + 500n + 600n })
+    const payload = await buildTaoPayload({
+      amount: 1_000n,
+      balance: fee + 500n + 600n,
+    })
 
     expect(payload.toAmount).toBe('600')
     expect(getBittensorCoinBalanceMock).not.toHaveBeenCalled()
