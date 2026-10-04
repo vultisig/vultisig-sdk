@@ -8,6 +8,8 @@ import { CoinType, WalletCore } from '@trustwallet/wallet-core/dist/src/wallet-c
 import Long from 'long'
 
 import { getBlockchainSpecificValue } from '../../chainSpecific/KeysignChainSpecific'
+import { NearSpecific } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
+import { Coin } from '@vultisig/core-mpc/types/vultisig/keysign/v1/coin_pb'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { SigningInputsResolver } from '../resolver'
 
@@ -127,9 +129,7 @@ const assertSwapKitDepositOnly = (keysignPayload: KeysignPayload) => {
   }
 }
 
-export const getNearSigningInputs: SigningInputsResolver<'near'> = ({ keysignPayload, walletCore }) => {
-  const coin = shouldBePresent(keysignPayload.coin)
-
+const assertNativeTransferOnly = (keysignPayload: KeysignPayload, coin: Coin) => {
   if (coin.chain !== Chain.Near || !coin.isNativeToken) {
     throw new Error('NEAR frozen signing supports native NEAR transfers only, not token coin payloads')
   }
@@ -147,6 +147,31 @@ export const getNearSigningInputs: SigningInputsResolver<'near'> = ({ keysignPay
   if (keysignPayload.signData.case !== undefined) {
     throw new Error('NEAR native transfers do not support custom sign payloads')
   }
+}
+
+const parseNearSpecific = ({ nonce, blockHash, gasFee }: NearSpecific) => {
+  const parsedNonce = parseUnsignedBigInt(nonce.toString(), 'nonce', MAX_U64)
+
+  if (parsedNonce === 0n) {
+    throw new Error('Invalid NEAR nonce: a signed transaction must carry a positive access-key nonce')
+  }
+
+  const blockHashBytes = new Uint8Array(blockHash)
+
+  if (blockHashBytes.length !== BLOCK_HASH_BYTES) {
+    throw new Error(`Invalid NEAR block hash: expected ${BLOCK_HASH_BYTES} bytes, received ${blockHashBytes.length}`)
+  }
+
+  // Display metadata: NEAR charges the gas actually burnt, never a fee from the payload.
+  parseUnsignedBigInt(gasFee, 'gas fee', MAX_U128)
+
+  return { nonce: parsedNonce, blockHash: blockHashBytes }
+}
+
+export const getNearSigningInputs: SigningInputsResolver<'near'> = ({ keysignPayload, walletCore }) => {
+  const coin = shouldBePresent(keysignPayload.coin)
+
+  assertNativeTransferOnly(keysignPayload, coin)
 
   const nearSpecific = getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'nearSpecific')
 
@@ -162,20 +187,7 @@ export const getNearSigningInputs: SigningInputsResolver<'near'> = ({ keysignPay
     throw new Error(`Invalid NEAR transfer amount: ${keysignPayload.toAmount} is not a positive deposit`)
   }
 
-  const nonce = parseUnsignedBigInt(nearSpecific.nonce.toString(), 'nonce', MAX_U64)
-
-  if (nonce === 0n) {
-    throw new Error('Invalid NEAR nonce: a signed transaction must carry a positive access-key nonce')
-  }
-
-  const blockHash = new Uint8Array(nearSpecific.blockHash)
-
-  if (blockHash.length !== BLOCK_HASH_BYTES) {
-    throw new Error(`Invalid NEAR block hash: expected ${BLOCK_HASH_BYTES} bytes, received ${blockHash.length}`)
-  }
-
-  // Display metadata: NEAR charges the gas actually burnt, never a fee from the payload.
-  parseUnsignedBigInt(nearSpecific.gasFee, 'gas fee', MAX_U128)
+  const { nonce, blockHash } = parseNearSpecific(nearSpecific)
 
   const signerId = resolveSignerId({
     walletCore,
