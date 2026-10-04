@@ -200,6 +200,62 @@ describe('broadcastCardanoTx', () => {
     })
   })
 
+  it('accepts the mempool rejection a duplicate broadcast gets, with the locally computed hash', async () => {
+    // The reply the losing device of a multi-device keysign gets from the node
+    // (captured live): the winner's copy already spent every input. It may
+    // still be in the mempool, where no hash lookup can see it yet.
+    const tx = txWithTtl(1_000)
+    mocks.getCardanoCurrentSlot.mockResolvedValue(939n)
+    mocks.submitCardanoCbor.mockResolvedValue({
+      txHash: null,
+      errorMessage: 'All inputs are spent. Transaction has probably already been included',
+      rpcErrorCode: 3997,
+      rpcErrorDetail: 'All inputs are spent. Transaction has probably already been included',
+    })
+    mocks.getCardanoTxHash.mockResolvedValue('0xlocal-hash')
+
+    await expect(broadcastCardanoTx({ chain, tx })).resolves.toEqual({
+      status: 'accepted',
+      finality: 'pending',
+      txHash: 'local-hash',
+    })
+
+    expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
+  })
+
+  it('accepts the unknown-output-reference code a duplicate broadcast used to get', async () => {
+    const tx = txWithTtl(1_000)
+    mocks.getCardanoCurrentSlot.mockResolvedValue(939n)
+    mocks.submitCardanoCbor.mockResolvedValue({ txHash: null, errorMessage: 'unknown inputs', rpcErrorCode: 3117 })
+    mocks.getCardanoTxHash.mockResolvedValue('local-hash')
+
+    await expect(broadcastCardanoTx({ chain, tx })).resolves.toMatchObject({ status: 'accepted', txHash: 'local-hash' })
+
+    expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
+  })
+
+  it('still verifies by hash a mempool rejection that is not about spent inputs', async () => {
+    const tx = txWithTtl(1_000)
+    const verifyError = new Error('Failed to broadcast transaction: Unelected committee voters')
+    mocks.getCardanoCurrentSlot.mockResolvedValue(939n)
+    mocks.submitCardanoCbor.mockResolvedValue({
+      txHash: null,
+      errorMessage: 'Unelected committee voters',
+      rpcErrorCode: 3997,
+      rpcErrorDetail: 'Unelected committee voters',
+    })
+    mocks.verifyBroadcastByHash.mockRejectedValue(verifyError)
+
+    await expect(broadcastCardanoTx({ chain, tx })).resolves.toMatchObject({ status: 'failed', cause: verifyError })
+
+    expect(mocks.verifyBroadcastByHash).toHaveBeenCalledWith({
+      chain,
+      tx,
+      error: expect.objectContaining({ message: 'Failed to broadcast transaction: Unelected committee voters' }),
+    })
+    expect(mocks.getCardanoTxHash).not.toHaveBeenCalled()
+  })
+
   it('still succeeds on a genuine MPC-race "already known" when hash verification confirms the tx IS on chain', async () => {
     const tx = txWithTtl(1_000)
     mocks.getCardanoCurrentSlot.mockResolvedValue(939n)
