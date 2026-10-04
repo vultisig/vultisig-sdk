@@ -2,6 +2,7 @@ import { Chain, EvmChain } from '@vultisig/core-chain/Chain'
 import { evmChainInfo } from '@vultisig/core-chain/chains/evm/chainInfo'
 import { getEvmClient } from '@vultisig/core-chain/chains/evm/client'
 import { evmChainTxFeeFormat } from '@vultisig/core-chain/chains/evm/tx/fee'
+import { getSwapKitErc20DepositRecipient } from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
 import { getEvmBaseFee } from '@vultisig/core-chain/tx/fee/evm/baseFee'
 import { clampEvmPriorityFee, isZeroPriorityFeeChain } from '@vultisig/core-chain/tx/fee/evm/clampEvmPriorityFee'
 import {
@@ -58,26 +59,38 @@ const percentOf = (value: bigint, percent: bigint) => (value * percent) / 100n
 // slightly more gas than its simulation would otherwise revert and forfeit the gas.
 const inflateGasLimit = (value: bigint) => value + value / 2n
 
-const erc20TransferCalldata = /^0xa9059cbb[0-9a-f]{128}$/i
-
 /**
- * A general swap that calls the sold token with exactly `transfer(address,uint256)`:
- * a provider deposit (SwapKit NEAR Intents) rather than a router call. It spends
- * no allowance, so it can be simulated, and it costs what a token transfer costs.
+ * A SwapKit swap that calls the sold token with exactly `transfer(recipient, fromAmount)`:
+ * a provider deposit (NEAR Intents) rather than a router call. It spends no allowance,
+ * so it can be simulated, and it costs what a token transfer costs. Decided by the
+ * decoder the signer binds, so fee and signer agree on what a deposit is.
  */
-const isDepositTransferSwap = (swapPayload: KeysignSwapPayload, tokenId: string | undefined) =>
-  'general' in swapPayload &&
-  !!tokenId &&
-  swapPayload.general.quote?.tx?.to?.toLowerCase() === tokenId.toLowerCase() &&
-  erc20TransferCalldata.test(swapPayload.general.quote?.tx?.data ?? '')
+const isDepositTransferSwap = (swapPayload: KeysignSwapPayload, chain: Chain): boolean => {
+  if (!('general' in swapPayload) || swapPayload.general.provider !== 'swapkit') return false
+
+  const { quote, fromCoin, fromAmount } = swapPayload.general
+  const tx = quote?.tx
+
+  return (
+    !!tx &&
+    getSwapKitErc20DepositRecipient({
+      to: tx.to,
+      data: tx.data,
+      value: BigInt(tx.value),
+      sourceToken: fromCoin?.contractAddress,
+      amount: BigInt(fromAmount),
+      chain,
+    }) !== undefined
+  )
+}
 
 const getEvmTxKind = (
   keysignPayload: KeysignPayload,
   swapPayload: KeysignSwapPayload | undefined,
-  tokenId: string | undefined
+  chain: Chain
 ): EvmTxKind => {
   if (swapPayload) {
-    if (isDepositTransferSwap(swapPayload, tokenId)) return 'depositTransfer'
+    if (isDepositTransferSwap(swapPayload, chain)) return 'depositTransfer'
     return 'general' in swapPayload ? 'swap' : 'routerDeposit'
   }
 
@@ -103,7 +116,7 @@ export const getEvmFeeQuote = async ({
   const receiver = keysignPayload.toAddress
   const data = keysignPayload.memo ? formatDataToHex(keysignPayload.memo) : undefined
   const swapPayload = getKeysignSwapPayload(keysignPayload)
-  const kind = getEvmTxKind(keysignPayload, swapPayload, coin.id)
+  const kind = getEvmTxKind(keysignPayload, swapPayload, chain)
 
   const kindGasLimit = match(kind, {
     transfer: () => getEvmTransferGasLimit(coin),
