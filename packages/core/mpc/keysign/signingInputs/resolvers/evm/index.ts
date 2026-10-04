@@ -17,10 +17,10 @@ import {
   assertKnownAggregatorRouterOnSigningPath,
   assertLifiApprovalAddress,
   assertSwapKitAddressReputation,
-  getSwapKitErc20DepositRecipient,
 } from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
 
 import { getBlockchainSpecificValue } from '../../../chainSpecific/KeysignChainSpecific'
+import { getKeysignSwapKitDepositRecipient } from '../../../swap/getKeysignSwapKitDepositRecipient'
 import { getKeysignSwapPayload } from '../../../swap/getKeysignSwapPayload'
 import { KeysignSwapPayload } from '../../../swap/KeysignSwapPayload'
 import { toTwAddress } from '../../../tw/toTwAddress'
@@ -114,22 +114,12 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
   // no native value, any other `transfer` call or token-addressed calldata throws, and the decoded
   // recipient gets its own reputation verdict.
   if (swapPayload && 'general' in swapPayload) {
-    const { provider, quote, fromCoin, fromAmount } = swapPayload.general
+    const { provider, quote } = swapPayload.general
     // Pass the raw (possibly empty) destination unconditionally: for an enforced provider an empty
     // `to` must ALSO fail closed (the helper rejects it as unrecognized), not be silently skipped.
     if (provider === 'swapkit') {
-      const tx = quote?.tx
-      await assertSwapKitAddressReputation(tx?.to ?? '', chain, 'transaction destination')
-      const depositRecipient =
-        tx &&
-        getSwapKitErc20DepositRecipient({
-          to: tx.to,
-          data: tx.data,
-          value: BigInt(tx.value),
-          sourceToken: fromCoin?.contractAddress,
-          amount: BigInt(fromAmount),
-          chain,
-        })
+      await assertSwapKitAddressReputation(quote?.tx?.to ?? '', chain, 'transaction destination')
+      const depositRecipient = getKeysignSwapKitDepositRecipient(keysignPayload)
       if (depositRecipient) {
         await assertSwapKitAddressReputation(depositRecipient, chain, 'deposit recipient')
       }
