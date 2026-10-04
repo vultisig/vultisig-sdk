@@ -19,25 +19,29 @@ function makeBalance(): Balance {
 
 function makePortfolioCtx(currency: string) {
   const setCurrency = vi.fn(async () => {})
-  const getValues = vi.fn(async (_chain: Chain, displayCurrency: FiatCurrency) => ({
-    native: {
-      amount: '10.00',
-      currency: displayCurrency,
-      lastUpdated: 0,
-    } satisfies Value,
+  const getValuesDetailed = vi.fn(async (_chain: Chain, displayCurrency: FiatCurrency) => ({
+    values: {
+      native: {
+        amount: '10.00',
+        currency: displayCurrency,
+        lastUpdated: 0,
+      } satisfies Value,
+    },
+    failures: [],
   }))
   const vault = {
     currency,
     chains: [ChainName.Ethereum],
+    tokens: {},
     setCurrency,
     balance: vi.fn(async () => makeBalance()),
-    getValues,
+    getValuesDetailed,
     getValue: vi.fn(),
   } as unknown as VaultBase
 
   return {
     ctx: { ensureActiveVault: async () => vault } as unknown as CommandContext,
-    getValues,
+    getValuesDetailed,
     setCurrency,
   }
 }
@@ -60,7 +64,7 @@ describe('portfolio display currency', () => {
   })
 
   it('uses an explicit currency as a per-call display override without persisting it', async () => {
-    const { ctx, getValues, setCurrency } = makePortfolioCtx('eur')
+    const { ctx, getValuesDetailed, setCurrency } = makePortfolioCtx('eur')
     const stdout = captureStdout()
 
     await executePortfolio(ctx, { currency: 'gbp' })
@@ -68,13 +72,13 @@ describe('portfolio display currency', () => {
     const envelope = JSON.parse(stdout.output())
     stdout.restore()
     expect(setCurrency).not.toHaveBeenCalled()
-    expect(getValues).toHaveBeenCalledWith(ChainName.Ethereum, 'gbp')
+    expect(getValuesDetailed).toHaveBeenCalledWith(ChainName.Ethereum, 'gbp')
     expect(envelope.data.currency).toBe('gbp')
     expect(envelope.data.portfolio.totalValue.currency).toBe('gbp')
   })
 
   it('uses the stored preference when no display override is provided', async () => {
-    const { ctx, getValues, setCurrency } = makePortfolioCtx('eur')
+    const { ctx, getValuesDetailed, setCurrency } = makePortfolioCtx('eur')
     const stdout = captureStdout()
 
     await executePortfolio(ctx)
@@ -82,13 +86,13 @@ describe('portfolio display currency', () => {
     const envelope = JSON.parse(stdout.output())
     stdout.restore()
     expect(setCurrency).not.toHaveBeenCalled()
-    expect(getValues).toHaveBeenCalledWith(ChainName.Ethereum, 'eur')
+    expect(getValuesDetailed).toHaveBeenCalledWith(ChainName.Ethereum, 'eur')
     expect(envelope.data.currency).toBe('eur')
     expect(envelope.data.portfolio.totalValue.currency).toBe('eur')
   })
 
   it('normalises an uppercase stored preference', async () => {
-    const { ctx, getValues, setCurrency } = makePortfolioCtx('EUR')
+    const { ctx, getValuesDetailed, setCurrency } = makePortfolioCtx('EUR')
     const stdout = captureStdout()
 
     await executePortfolio(ctx)
@@ -96,12 +100,12 @@ describe('portfolio display currency', () => {
     const envelope = JSON.parse(stdout.output())
     stdout.restore()
     expect(setCurrency).not.toHaveBeenCalled()
-    expect(getValues).toHaveBeenCalledWith(ChainName.Ethereum, 'eur')
+    expect(getValuesDetailed).toHaveBeenCalledWith(ChainName.Ethereum, 'eur')
     expect(envelope.data.portfolio.totalValue.currency).toBe('eur')
   })
 
   it('silently falls back to USD for an unsupported stored preference', async () => {
-    const { ctx, getValues, setCurrency } = makePortfolioCtx('xyz')
+    const { ctx, getValuesDetailed, setCurrency } = makePortfolioCtx('xyz')
     const stdout = captureStdout()
 
     await expect(executePortfolio(ctx)).resolves.toBeUndefined()
@@ -109,16 +113,16 @@ describe('portfolio display currency', () => {
     const envelope = JSON.parse(stdout.output())
     stdout.restore()
     expect(setCurrency).not.toHaveBeenCalled()
-    expect(getValues).toHaveBeenCalledWith(ChainName.Ethereum, 'usd')
+    expect(getValuesDetailed).toHaveBeenCalledWith(ChainName.Ethereum, 'usd')
     expect(envelope.data.portfolio.totalValue.currency).toBe('usd')
   })
 
   it('rejects an invalid display currency with the existing error', async () => {
-    const { ctx, getValues, setCurrency } = makePortfolioCtx('eur')
+    const { ctx, getValuesDetailed, setCurrency } = makePortfolioCtx('eur')
 
     await expect(executePortfolio(ctx, { currency: 'xyz' as FiatCurrency })).rejects.toThrow('Invalid currency')
     expect(setCurrency).not.toHaveBeenCalled()
-    expect(getValues).not.toHaveBeenCalled()
+    expect(getValuesDetailed).not.toHaveBeenCalled()
   })
 })
 

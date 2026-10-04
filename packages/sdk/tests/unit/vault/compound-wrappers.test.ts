@@ -12,8 +12,9 @@ import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import { signatureAlgorithms } from '@vultisig/core-chain/signing/SignatureAlgorithm'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { Token } from '../../../src/types'
+import type { Balance, Token } from '../../../src/types'
 import { resolveTokenRef } from '../../../src/vault/tokenRef'
+import { VaultBase } from '../../../src/vault/VaultBase'
 import { VaultError, VaultErrorCode } from '../../../src/vault/VaultError'
 
 // ---------------------------------------------------------------------------
@@ -441,6 +442,52 @@ describe('allBalances', () => {
 })
 
 describe('portfolio', () => {
+  it('returns priced balances and reports an unpriced token without rejecting', async () => {
+    const tokenId = '7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs'
+    const balances: Record<string, Balance> = {
+      [Chain.Ethereum]: {
+        amount: '1000000000000000000',
+        formattedAmount: '1',
+        decimals: 18,
+        symbol: 'ETH',
+        chainId: Chain.Ethereum,
+      },
+      [`${Chain.Solana}:${tokenId}`]: {
+        amount: '21033',
+        formattedAmount: '0.00021033',
+        decimals: 8,
+        symbol: 'ETH',
+        chainId: Chain.Solana,
+        tokenId,
+      },
+    }
+    const getPrice = vi.fn(async (chain: Chain, requestedTokenId?: string) => {
+      if (chain === Chain.Solana && requestedTokenId === tokenId) throw new Error('No price source')
+      return 3000
+    })
+    const vault = {
+      _userChains: [Chain.Ethereum, Chain.Solana],
+      _currency: 'usd',
+      balances: vi.fn().mockResolvedValue(balances),
+      getTokens: vi.fn((chain: Chain) =>
+        chain === Chain.Solana ? [{ id: tokenId, contractAddress: tokenId, symbol: 'ETH', decimals: 8 }] : []
+      ),
+      fiatValueService: {
+        getPrices: vi.fn().mockResolvedValue({ [Chain.Ethereum]: 3000 }),
+        getPrice,
+      },
+      balancesWithPrices: VaultBase.prototype.balancesWithPrices,
+      balancesWithPricesDetailed: VaultBase.prototype.balancesWithPricesDetailed,
+    }
+
+    const result = await VaultBase.prototype.portfolio.call(vault as never, 'usd')
+
+    expect(result.totalValue).toBe('3000.00')
+    expect(result.balances).toHaveLength(2)
+    expect(result.balances.find(balance => balance.tokenId === tokenId)).not.toHaveProperty('fiatValue')
+    expect(result.failures).toEqual([{ chain: Chain.Solana, tokenId, error: 'No price source' }])
+  })
+
   it('should combine balances with prices and total value', async () => {
     const vault = createMockVault()
 
@@ -483,6 +530,23 @@ describe('portfolio', () => {
 
     expect((balances[0] as { fiatValue: number }).fiatValue).toBe(3000)
     expect((balances[1] as { fiatValue: number }).fiatValue).toBe(60000)
+  })
+
+  it('emits per-asset failures when values are refreshed', async () => {
+    const tokenId = 'unpriced-token'
+    const emit = vi.fn()
+    const failures = [{ chain: Chain.Solana, tokenId, error: 'No price source' }]
+    const vault = {
+      fiatValueService: {
+        updateValues: vi.fn().mockResolvedValue(undefined),
+        updateValuesDetailed: vi.fn().mockResolvedValue(failures),
+      },
+      emit,
+    }
+
+    await VaultBase.prototype.updateValues.call(vault as never, Chain.Solana)
+
+    expect(emit).toHaveBeenCalledWith('valuesUpdated', { chain: Chain.Solana, failures })
   })
 })
 
