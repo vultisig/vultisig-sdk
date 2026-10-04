@@ -472,6 +472,13 @@ describe('NEAR frozen native transfer — fail closed', () => {
     await rejects({ toAddress: IMPLICIT_RECEIVER, swapPayload: swapKitDeposit(swapOverrides) }, expected)
   })
 
+  it('rejects a named SwapKit deposit address even when it is the transfer receiver', async () => {
+    await rejects(
+      { toAddress: NAMED_RECEIVER, swapPayload: swapKitDeposit({ targetAddress: NAMED_RECEIVER }) },
+      /not an implicit account/i
+    )
+  })
+
   it('rejects a contract payload', async () => {
     await rejects({ withContractPayload: true }, /contract/i)
   })

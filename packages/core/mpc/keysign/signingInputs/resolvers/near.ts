@@ -105,6 +105,10 @@ const assertSwapKitDepositOnly = (keysignPayload: KeysignPayload) => {
   if (swap.fromCoin?.chain !== Chain.Near || !swap.fromCoin.isNativeToken) {
     throw new Error('NEAR SwapKit deposit must sell native NEAR')
   }
+  // NEAR Intents deposits go to a fresh per-swap implicit account; a named target is never one.
+  if (!isNearImplicitAccountId(swap.targetAddress)) {
+    throw new Error(`NEAR SwapKit deposit address ${swap.targetAddress} is not an implicit account`)
+  }
   if (swap.targetAddress !== keysignPayload.toAddress) {
     throw new Error(
       `NEAR SwapKit deposit address ${swap.targetAddress} is not the transfer receiver ${keysignPayload.toAddress}`
