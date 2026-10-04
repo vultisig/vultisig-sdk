@@ -1,7 +1,9 @@
 import { getMaxSendableAmount, getSendRetainedBalance } from '@vultisig/core-chain/amount/getMaxSendableAmount'
 import { Chain, CosmosChain, UtxoBasedChain } from '@vultisig/core-chain/Chain'
 import { isTerraClassicUstcCoin } from '@vultisig/core-chain/chains/cosmos/terraClassicTax'
-import { getNearSendLimits } from '@vultisig/core-chain/chains/near/sendLimits'
+import { getNearAccount, getNearFeeConfig } from '@vultisig/core-chain/chains/near/api'
+import { getNearSendRequiredAmount, getNearStorageReserve } from '@vultisig/core-chain/chains/near/fees'
+import { NearUnknownEntityError } from '@vultisig/core-chain/chains/near/rpc'
 import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
 import { minBigInt } from '@vultisig/lib-utils/math/minBigInt'
@@ -14,7 +16,6 @@ import { KeysignPayload } from '../../types/vultisig/keysign/v1/keysign_message_
 import { BuildKeysignPayloadError } from '../error'
 import { getFeeAmount } from '../fee'
 import { getBlockchainSpecificValue } from '../chainSpecific/KeysignChainSpecific'
-import { getNearSendRequiredAmount } from '@vultisig/core-chain/chains/near/fees'
 import { getCosmosChainSpecific } from '../signingInputs/resolvers/cosmos/chainSpecific'
 import { getKeysignCoin } from '../utils/getKeysignCoin'
 
@@ -36,7 +37,17 @@ const assertNearSendAffordable = async (
   coin: ReturnType<typeof getKeysignCoin>
 ) => {
   const { gasFee } = getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'nearSpecific')
-  const { storageReserve } = await getNearSendLimits({ address: coin.address, receiver: keysignPayload.toAddress })
+  const [account, { storageAmountPerByte }] = await Promise.all([getNearAccount(coin.address), getNearFeeConfig()])
+
+  if (!account) {
+    throw new NearUnknownEntityError('account', `NEAR account ${coin.address} does not exist`)
+  }
+
+  const storageReserve = getNearStorageReserve({
+    storageUsage: account.storageUsage,
+    locked: account.locked,
+    storageAmountPerByte,
+  })
 
   const required = getNearSendRequiredAmount({
     requestedAmount: BigInt(keysignPayload.toAmount),
