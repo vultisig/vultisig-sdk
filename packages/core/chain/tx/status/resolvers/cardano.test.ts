@@ -39,26 +39,48 @@ describe('getCardanoTxStatus', () => {
     })
   })
 
-  it('returns unknown pending when Koios has no record of the transaction', async () => {
+  it('reports not_found when Koios returns null confirmations for the requested hash', async () => {
     mocks.queryUrl.mockResolvedValue([{ tx_hash: hash, num_confirmations: null }])
 
     await expect(getCardanoTxStatus({ chain: OtherChain.Cardano, hash })).resolves.toEqual({
-      status: 'pending',
+      status: 'not_found',
       isKnown: false,
     })
   })
 
-  it('returns unknown pending when the response omits the requested hash', async () => {
+  it('reports not_found when a successful Koios response omits the requested hash', async () => {
     mocks.queryUrl.mockResolvedValue([{ tx_hash: 'different', num_confirmations: 3 }])
 
     await expect(getCardanoTxStatus({ chain: OtherChain.Cardano, hash })).resolves.toEqual({
-      status: 'pending',
+      status: 'not_found',
+      isKnown: false,
+    })
+  })
+
+  it('reports not_found when Koios returns an empty array', async () => {
+    mocks.queryUrl.mockResolvedValue([])
+
+    await expect(getCardanoTxStatus({ chain: OtherChain.Cardano, hash })).resolves.toEqual({
+      status: 'not_found',
       isKnown: false,
     })
   })
 
   it('returns unknown pending for a malformed response', async () => {
     mocks.queryUrl.mockResolvedValue({ tx_hash: hash, num_confirmations: 3 })
+
+    await expect(getCardanoTxStatus({ chain: OtherChain.Cardano, hash })).resolves.toEqual({
+      status: 'pending',
+      isKnown: false,
+    })
+  })
+
+  it.each([
+    ['null entry', [null]],
+    ['entry without tx_hash', [{}]],
+    ['entry with a non-string tx_hash', [{ tx_hash: 123, num_confirmations: 1 }]],
+  ])('returns unknown pending for a malformed array %s', async (_case, response) => {
+    mocks.queryUrl.mockResolvedValue(response)
 
     await expect(getCardanoTxStatus({ chain: OtherChain.Cardano, hash })).resolves.toEqual({
       status: 'pending',
