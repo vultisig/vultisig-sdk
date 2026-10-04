@@ -25,6 +25,34 @@ type RefineKeysignAmountInput = {
   balance: bigint
 }
 
+// NEAR is charged upfront for the amount *plus* the gas reservation, and an
+// account must keep backing its own storage. Clamping the amount down to
+// whatever fits (the shared behaviour in `refineKeysignAmount`) would sign a
+// smaller transfer than the user asked for, so an unaffordable NEAR send fails
+// instead. MAX is the one flow that may reduce, and it reduces explicitly by
+// passing the already-reduced amount.
+const assertNearSendAffordable = async (
+  { keysignPayload, balance }: RefineKeysignAmountInput,
+  coin: ReturnType<typeof getKeysignCoin>
+) => {
+  const { gasFee } = getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'nearSpecific')
+  const { storageReserve } = await getNearSendLimits({ address: coin.address, receiver: keysignPayload.toAddress })
+
+  const required = getNearSendRequiredAmount({
+    requestedAmount: BigInt(keysignPayload.toAmount),
+    gasReservation: BigInt(gasFee),
+    storageReserve,
+  })
+
+  if (required > balance) {
+    throw new BuildKeysignPayloadError(
+      'not-enough-funds',
+      'Not enough NEAR: the amount plus the gas reservation and storage reserve exceeds the available balance',
+      { required, available: balance, ticker: coin.ticker, decimals: coin.decimals, includesNetworkCosts: true }
+    )
+  }
+}
+
 export const refineKeysignAmount = async (input: RefineKeysignAmountInput) => {
   if (!input.keysignPayload.toAmount || input.keysignPayload.toAmount === '0') {
     return input.keysignPayload
@@ -56,33 +84,8 @@ export const refineKeysignAmount = async (input: RefineKeysignAmountInput) => {
     return input.keysignPayload
   }
 
-  // NEAR is charged upfront for the amount *plus* the gas reservation, and an
-  // account must keep backing its own storage. Clamping the amount down to
-  // whatever fits (the shared behaviour below) would sign a smaller transfer
-  // than the user asked for, so an unaffordable NEAR send fails instead. MAX is
-  // the one flow that may reduce, and it reduces explicitly by passing the
-  // already-reduced amount.
   if (coin.chain === Chain.Near) {
-    const { gasFee } = getBlockchainSpecificValue(input.keysignPayload.blockchainSpecific, 'nearSpecific')
-    const { storageReserve } = await getNearSendLimits({
-      address: coin.address,
-      receiver: input.keysignPayload.toAddress,
-    })
-
-    const required = getNearSendRequiredAmount({
-      requestedAmount: BigInt(input.keysignPayload.toAmount),
-      gasReservation: BigInt(gasFee),
-      storageReserve,
-    })
-
-    if (required > input.balance) {
-      throw new BuildKeysignPayloadError(
-        'not-enough-funds',
-        'Not enough NEAR: the amount plus the gas reservation and storage reserve exceeds the available balance',
-        { required, available: input.balance, ticker: coin.ticker, decimals: coin.decimals, includesNetworkCosts: true }
-      )
-    }
-
+    await assertNearSendAffordable(input, coin)
     return input.keysignPayload
   }
 
