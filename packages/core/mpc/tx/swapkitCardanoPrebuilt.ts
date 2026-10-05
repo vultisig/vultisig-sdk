@@ -305,6 +305,11 @@ const verifyOutputs = ({ reader, vaultAddress, fromAmount }: VerifyOutputsInput)
       )
     }
   }
+
+  // A body that only pays the vault back swaps nothing and still spends the fee.
+  if (deposits === 0) {
+    throw new Error('SwapKit Cardano transaction pays no deposit outside this vault.')
+  }
 }
 
 const cardanoPublicKeyLength = 32
@@ -348,14 +353,16 @@ type VerifySwapKitCardanoBodyInput = {
  * Refuses a transaction body the displayed quote does not imply.
  *
  * No Verify screen reads the body, so it must be a plain payment out of this
- * vault: every output pays back to the vault except a single ADA-only deposit
- * of at most `fromAmount`, and the fee is bounded. Fields a plain payment never
- * carries (certificates, withdrawals, minting, collateral, required signers,
- * governance) are refused. The deposit address is not pinned, because
- * SwapKit's on-chain deposit address differs from its declared `targetAddress`.
+ * vault: exactly one output is the deposit, ADA-only and at most `fromAmount`,
+ * every other output pays back to the vault, and the fee is bounded. Fields a
+ * plain payment never carries (certificates, withdrawals, minting, collateral,
+ * required signers, governance) are refused. The deposit address is not
+ * pinned, because SwapKit's on-chain deposit address differs from its declared
+ * `targetAddress`.
  *
- * Same rule set as Android's and iOS's `verifyBody`, plus a refusal of
- * repeated fields.
+ * Android's and iOS's `verifyBody` rule set, plus two refusals of its own: a
+ * body with no deposit, which would spend the fee without swapping anything,
+ * and repeated fields.
  */
 export const verifySwapKitCardanoBody = ({ body, fromAmount, vaultPublicKey }: VerifySwapKitCardanoBodyInput): void => {
   const vaultAddress = getVaultEnterpriseAddress(vaultPublicKey)

@@ -7,8 +7,8 @@
  *
  * - the digest of a real captured `/v3/swap` transaction, the same vector the
  *   iOS suite (`SwapKitCardanoSignerTests`) pins;
- * - the body rules a co-signer enforces before signing, matching Android's and
- *   iOS's `verifyBody`;
+ * - the body rules a co-signer enforces before signing: Android's and iOS's
+ *   `verifyBody`, plus the refusals this port adds;
  * - the whole path through getEncodedSigningInputs → getPreSigningHashes →
  *   compileTx on real WalletCore, signature included.
  */
@@ -136,6 +136,10 @@ const verify = (bodyCbor: Uint8Array, fromAmount = 45_500_000n) =>
   verifySwapKitCardanoBody({ body: bodyCbor, fromAmount, vaultPublicKey })
 
 const vaultChange = output({ address: vaultAddress, lovelace: 5_000_000 })
+const deposit = output({ address: depositAddress, lovelace: 40_000_000 })
+
+/** What every swap body pays: the deposit, and the change back to the vault. */
+const swapOutputs = [deposit, vaultChange]
 
 describe('getSwapKitCardanoPrebuiltPayload', () => {
   const keysignPayloadOf = (chain: Chain, txType: string) =>
@@ -178,7 +182,7 @@ describe('getSwapKitCardanoPrebuiltPreSigningHash', () => {
   })
 
   it('hashes exactly the body bytes', () => {
-    const bodyCbor = body({ outputs: [vaultChange] })
+    const bodyCbor = body({ outputs: swapOutputs })
 
     expect(hex(getSwapKitCardanoPrebuiltPreSigningHash(envelopeOf(bodyCbor)))).toBe(
       hex(blake2b(bodyCbor, { dkLen: 32 }))
@@ -210,18 +214,8 @@ describe('getSwapKitCardanoPrebuiltPreSigningHash', () => {
 
 describe('verifySwapKitCardanoBody', () => {
   describe('accepts', () => {
-    it('a body that only pays back to the vault', () => {
-      expect(() => verify(body({ outputs: [vaultChange] }), 0n)).not.toThrow()
-    })
-
     it('a single deposit within the quote plus vault change', () => {
-      expect(() =>
-        verify(
-          body({
-            outputs: [output({ address: depositAddress, lovelace: 40_000_000 }), vaultChange],
-          })
-        )
-      ).not.toThrow()
+      expect(() => verify(body({ outputs: swapOutputs }))).not.toThrow()
     })
 
     it('a deposit equal to the quote', () => {
@@ -239,6 +233,7 @@ describe('verifySwapKitCardanoBody', () => {
         verify(
           body({
             outputs: [
+              deposit,
               output({
                 address: vaultAddress,
                 lovelace: 2_000_000,
@@ -272,7 +267,7 @@ describe('verifySwapKitCardanoBody', () => {
       expect(() =>
         verify(
           body({
-            outputs: [vaultChange],
+            outputs: swapOutputs,
             extraFields: [
               [3, cborUint(190_000_000)],
               [7, cborBytes(new Uint8Array(32).fill(0xaa))],
@@ -287,7 +282,7 @@ describe('verifySwapKitCardanoBody', () => {
     it('collections wrapped in the Conway set tag', () => {
       const taggedBody = cborMap([
         [cborUint(0), concat([setTag, inputs])],
-        [cborUint(1), concat([setTag, cborArray([vaultChange])])],
+        [cborUint(1), concat([setTag, cborArray(swapOutputs)])],
         [cborUint(2), cborUint(170_000)],
       ])
 
@@ -295,7 +290,7 @@ describe('verifySwapKitCardanoBody', () => {
     })
 
     it('a fee at the ceiling', () => {
-      expect(() => verify(body({ outputs: [vaultChange], fee: 2_000_000 }))).not.toThrow()
+      expect(() => verify(body({ outputs: swapOutputs, fee: 2_000_000 }))).not.toThrow()
     })
 
     it('lovelace amounts beyond 32 bits', () => {
@@ -427,6 +422,12 @@ describe('verifySwapKitCardanoBody', () => {
       ).toThrow(/more than one output outside this vault/)
     })
 
+    it('a body with no deposit, which would spend the fee and swap nothing', () => {
+      expect(() => verify(body({ outputs: [vaultChange] }))).toThrow(/pays no deposit outside this vault/)
+      expect(() => verify(body({ outputs: [vaultChange, vaultChange] }))).toThrow(/pays no deposit outside this vault/)
+      expect(() => verify(body({ outputs: [] }))).toThrow(/pays no deposit outside this vault/)
+    })
+
     it('a body with no outputs', () => {
       expect(() => verify(body({}))).toThrow(/has no outputs/)
     })
@@ -436,14 +437,14 @@ describe('verifySwapKitCardanoBody', () => {
         verify(
           cborMap([
             [cborUint(0), inputs],
-            [cborUint(1), cborArray([vaultChange])],
+            [cborUint(1), cborArray(swapOutputs)],
           ])
         )
       ).toThrow(/has no fee/)
     })
 
     it('a fee above the ceiling', () => {
-      expect(() => verify(body({ outputs: [vaultChange], fee: 2_000_001 }))).toThrow(/exceeds the 2000000 ceiling/)
+      expect(() => verify(body({ outputs: swapOutputs, fee: 2_000_001 }))).toThrow(/exceeds the 2000000 ceiling/)
     })
 
     it.each([
@@ -462,7 +463,7 @@ describe('verifySwapKitCardanoBody', () => {
       [21, 'treasury value'],
       [22, 'treasury donation'],
     ])('body field %i (%s)', key => {
-      expect(() => verify(body({ outputs: [vaultChange], extraFields: [[key, cborArray([])]] }))).toThrow(
+      expect(() => verify(body({ outputs: swapOutputs, extraFields: [[key, cborArray([])]] }))).toThrow(
         new RegExp(`carries field ${key}, which a plain payment never uses`)
       )
     })
@@ -471,7 +472,7 @@ describe('verifySwapKitCardanoBody', () => {
       expect(() =>
         verify(
           body({
-            outputs: [vaultChange],
+            outputs: swapOutputs,
             extraFields: [[2, cborUint(170_000)]],
           })
         )
@@ -479,8 +480,8 @@ describe('verifySwapKitCardanoBody', () => {
       expect(() =>
         verify(
           body({
-            outputs: [vaultChange],
-            extraFields: [[1, cborArray([vaultChange])]],
+            outputs: swapOutputs,
+            extraFields: [[1, cborArray(swapOutputs)]],
           })
         )
       ).toThrow(/repeats field 1/)
@@ -497,13 +498,13 @@ describe('verifySwapKitCardanoBody', () => {
     })
 
     it('trailing bytes after the body', () => {
-      expect(() => verify(concat([body({ outputs: [vaultChange] }), Uint8Array.of(0x00)]))).toThrow(/trailing bytes/)
+      expect(() => verify(concat([body({ outputs: swapOutputs }), Uint8Array.of(0x00)]))).toThrow(/trailing bytes/)
     })
 
     it('a truncated body', () => {
-      const bodyCbor = body({ outputs: [vaultChange] })
+      const bodyCbor = body({ outputs: swapOutputs })
 
-      expect(() => verify(bodyCbor.subarray(0, bodyCbor.length - 4))).toThrow()
+      expect(() => verify(bodyCbor.subarray(0, bodyCbor.length - 4))).toThrow(/truncated/)
     })
 
     it('a body that is not a map', () => {
@@ -513,7 +514,7 @@ describe('verifySwapKitCardanoBody', () => {
     it('a vault key of the wrong length', () => {
       expect(() =>
         verifySwapKitCardanoBody({
-          body: body({ outputs: [vaultChange] }),
+          body: body({ outputs: swapOutputs }),
           fromAmount: 0n,
           vaultPublicKey: new Uint8Array(33),
         })
@@ -630,7 +631,7 @@ describe('buildSignedSwapKitCardanoTx', () => {
   })
 
   it('refuses a signature of the wrong length', () => {
-    const envelope = envelopeOf(body({ outputs: [vaultChange] }))
+    const envelope = envelopeOf(body({ outputs: swapOutputs }))
 
     expect(() =>
       buildSignedSwapKitCardanoTx({
