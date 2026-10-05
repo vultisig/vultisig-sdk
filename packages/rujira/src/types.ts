@@ -324,14 +324,14 @@ export type FinExecuteMsg = { swap: SwapRequest } | FinOrderExecuteMsg | { arb: 
 export type FinOrderExecuteMsg = { order: [OrderTarget[], CallbackData | null] }
 
 /**
- * Swap request variants
+ * Swap request variants (untagged in the FIN contract)
  * @internal
  */
 export type SwapRequest =
-  | { yolo: { to?: string; callback?: CallbackData } }
-  | { min: { min_return: string; to?: string; callback?: CallbackData } }
-  | { exact: { exact_return: string; to?: string; callback?: CallbackData } }
-  | { limit: { price: string; to?: string; callback?: CallbackData } }
+  | { to?: string; callback?: CallbackData }
+  | { min_return: string; to?: string; callback?: CallbackData }
+  | { exact_return: string; to?: string; callback?: CallbackData }
+  | { price: string; to?: string; callback?: CallbackData }
 
 /**
  * Order target tuple - uses ContractSide for contract communication
@@ -341,13 +341,11 @@ export type OrderPrice = { fixed: string } | { oracle: number }
 export type OrderTarget = [ContractSide, OrderPrice, string | null]
 
 /**
- * Callback data for contract composition
+ * Callback data for contract composition. The contract's `CallbackData(Binary)`
+ * newtype serializes as a bare base64 string.
  * @internal
  */
-export type CallbackData = {
-  contract: string
-  msg: string
-}
+export type CallbackData = Base64Binary
 
 /**
  * FIN contract QueryMsg variants - uses ContractSide for contract communication

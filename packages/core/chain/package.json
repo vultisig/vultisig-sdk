@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "6.0.0",
+  "version": "6.1.3",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -1812,6 +1812,11 @@
       "types": "./dist/swap/discount/SwapDiscount.d.ts",
       "import": "./dist/swap/discount/SwapDiscount.js",
       "default": "./dist/swap/discount/SwapDiscount.js"
+    },
+    "./swap/general/calldataMinOutput": {
+      "types": "./dist/swap/general/calldataMinOutput.d.ts",
+      "import": "./dist/swap/general/calldataMinOutput.js",
+      "default": "./dist/swap/general/calldataMinOutput.js"
     },
     "./swap/general/cowswap/api/getCowSwapOrderStatus": {
       "types": "./dist/swap/general/cowswap/api/getCowSwapOrderStatus.d.ts",

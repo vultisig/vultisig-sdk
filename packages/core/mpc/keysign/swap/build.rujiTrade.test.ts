@@ -43,7 +43,12 @@ const buildInput = {
   walletCore: {} as never,
 }
 
-const makeQuote = (denom = 'rune', recipient = address, fundAmount = '1000000'): SwapQuote => ({
+const makeQuote = (
+  denom = 'rune',
+  recipient = address,
+  fundAmount = '1000000',
+  executeMsg = JSON.stringify({ swap: { min_return: '988142', to: recipient } })
+): SwapQuote => ({
   discounts: [],
   quote: {
     general: {
@@ -53,7 +58,7 @@ const makeQuote = (denom = 'rune', recipient = address, fundAmount = '1000000'):
         cosmosWasm: {
           sender: address,
           contract: address,
-          executeMsg: JSON.stringify({ swap: { min: { min_return: '988142', to: recipient } } }),
+          executeMsg,
           funds: [{ denom, amount: fundAmount }],
         },
       },
@@ -76,7 +81,7 @@ describe('buildSwapKeysignPayload RUJI Trade', () => {
       value: {
         senderAddress: address,
         contractAddress: address,
-        executeMsg: JSON.stringify({ swap: { min: { min_return: '988142', to: address } } }),
+        executeMsg: JSON.stringify({ swap: { min_return: '988142', to: address } }),
         coins: [{ denom: 'rune', amount: '1000000' }],
       },
     })
@@ -105,6 +110,20 @@ describe('buildSwapKeysignPayload RUJI Trade', () => {
       buildSwapKeysignPayload({
         ...buildInput,
         swapQuote: makeQuote('rune', 'thor1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqm7g9t'),
+      })
+    ).rejects.toThrow('guarded FIN swap execute message')
+    expect(mocks.getChainSpecific).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { label: 'nests the request under a min variant', swap: { min: { min_return: '988142', to: address } } },
+    { label: 'encodes min_return as a number', swap: { min_return: 988142, to: address } },
+    { label: 'sets min_return above Uint128', swap: { min_return: (1n << 128n).toString(), to: address } },
+  ])('fails closed when the FIN execute message $label', async ({ swap }) => {
+    await expect(
+      buildSwapKeysignPayload({
+        ...buildInput,
+        swapQuote: makeQuote('rune', address, '1000000', JSON.stringify({ swap })),
       })
     ).rejects.toThrow('guarded FIN swap execute message')
     expect(mocks.getChainSpecific).not.toHaveBeenCalled()

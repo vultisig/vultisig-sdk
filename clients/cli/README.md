@@ -108,7 +108,7 @@ All devices joined. Running keygen...
 
 ### Import from Seedphrase
 
-Import an existing wallet from a BIP39 recovery phrase (12 or 24 words):
+Import an existing wallet from a BIP39 recovery phrase (12, 15, 18, 21 or 24 words):
 
 ```bash
 # FastVault import (server-assisted 2-of-2)
@@ -134,7 +134,7 @@ When `--mnemonic` is not provided, you'll be prompted to enter it securely (mask
 ```bash
 $ vultisig create-from-seedphrase fast --name "My Wallet" --email user@example.com --password "mypassword" --discover-chains
 
-Enter your 12 or 24-word recovery phrase.
+Enter your 12, 15, 18, 21 or 24-word recovery phrase.
 Words will be hidden as you type.
 
 Seedphrase: ************************
@@ -436,7 +436,7 @@ Explorer: https://etherscan.io/tx/0x9f8e7d6c...
 
 A malformed hash fails before vault access or RPC with exit code `4`. JSON output uses error code `INVALID_HASH` and includes `error.context.status: "invalid_hash"`. A well-formed hash unknown to the node reports `not_found` in `--no-wait` mode; default polling exits `5` with `TX_NOT_FOUND` if it remains unseen for the wait budget. A known, unconfirmed transaction remains `pending`; if it is still `pending` when the wait budget is exhausted, default polling exits `3` with `TX_STATUS_TIMEOUT` (retryable) rather than reporting a false terminal status.
 
-EVM RPCs can distinguish a missing receipt from a hash the node does not know, so they report `not_found` explicitly. Some non-EVM providers do not distinguish an absent transaction from a failed lookup; those chains conservatively remain `pending` with an unknown-presence signal, and default CLI polling is still bounded by `--timeout`.
+All resolvers report `not_found` for an unseen hash except Polkadot. Its indexer currently requires an API key the CLI does not send, so Polkadot stays `pending`; default CLI polling remains bounded by `--timeout`.
 
 #### Signing Arbitrary Bytes
 

@@ -1,5 +1,65 @@
 # @vultisig/core-mpc
 
+## 5.0.3
+
+### Patch Changes
+
+- [#2467](https://github.com/vultisig/vultisig-sdk/pull/2467) [`d83a5b0`](https://github.com/vultisig/vultisig-sdk/commit/d83a5b0c31f5d8f5ca8ecd6e586e16424596bed3) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Bitcoin PSBT keysigns (SwapKit BTC swaps and `signBitcoin` payloads) now broadcast the signed transaction and report its txid. The compiled output left `signingResultV2.encoded` and `txid` unset, and the UTXO broadcast resolver took the resulting empty bytes over the real transaction, posting `{"data":""}` to Blockchair and resolving an empty hash.
+
+- [#2471](https://github.com/vultisig/vultisig-sdk/pull/2471) [`f49cbb0`](https://github.com/vultisig/vultisig-sdk/commit/f49cbb05cd20c6aa3411aa84ba8a09fc89284f07) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - A SwapKit Bitcoin PSBT carrying an input this vault cannot sign is now refused before the keysign ceremony, on the initiator and on every co-signer. `compileSignBitcoinTx` gives such an input an empty witness and still returns a complete-looking transaction, so the route signed it, broadcast it and let the network reject it after the user had already approved. Every input is checked against the vault's own address rather than the PSBT's `isOurs` flag, which `buildSignBitcoinFromPsbt` derives from BIP-32 data and defaults to true for every input when a PSBT carries none. The dApp `signPsbt` route is unaffected: its PSBTs may legitimately hold inputs owned by someone else and are returned partially signed rather than broadcast.
+
+- [#2465](https://github.com/vultisig/vultisig-sdk/pull/2465) [`faffc26`](https://github.com/vultisig/vultisig-sdk/commit/faffc266efae199d638ae6bf8d45009896fcbee3) Thanks [@neavra](https://github.com/neavra)! - UTXO sends (Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash, Zcash) whose recipient amount is below the chain's static dust floor are now refused before signing with the minimum named in the error; fee-rate-dependent dust rejections above that floor instead explain that the current network dust threshold requires a larger amount. Additionally, a UTXO transaction plan that fails (dust, insufficient funds, or any other planner error) now fails authoritatively with that error instead of being retried as a send-max transaction, and deterministic dust or balance failures surface to CLI consumers as invalid input. Max-send and max-swap fee estimates now request a max spend explicitly instead of relying on the removed retry.
+
+  An amount above the available balance now fails with an insufficient-balance error instead of being planned as a max spend.
+
+  A non-max UTXO request is never converted to a max spend; a small remainder is left to WalletCore's dust handling.
+
+- Updated dependencies [[`341f5ec`](https://github.com/vultisig/vultisig-sdk/commit/341f5ec2793e5b91ba69410bf35d82833f104632), [`d83a5b0`](https://github.com/vultisig/vultisig-sdk/commit/d83a5b0c31f5d8f5ca8ecd6e586e16424596bed3), [`16b5a78`](https://github.com/vultisig/vultisig-sdk/commit/16b5a7860dce8a5bacf4759ff0260073c8cfb3e7), [`faffc26`](https://github.com/vultisig/vultisig-sdk/commit/faffc266efae199d638ae6bf8d45009896fcbee3)]:
+  - @vultisig/core-chain@6.1.3
+
+## 5.0.2
+
+### Patch Changes
+
+- Updated dependencies [[`25aafc6`](https://github.com/vultisig/vultisig-sdk/commit/25aafc62cb9f37488bdce24b02aff4ad2e77169c), [`ed67a44`](https://github.com/vultisig/vultisig-sdk/commit/ed67a4430ee97069eb07f505ab797a433a40d267), [`21eb4cf`](https://github.com/vultisig/vultisig-sdk/commit/21eb4cfdec42b2a01ac37fc61d47758c79c152aa)]:
+  - @vultisig/core-chain@6.1.2
+
+## 5.0.1
+
+### Patch Changes
+
+- [#2393](https://github.com/vultisig/vultisig-sdk/pull/2393) [`f4ad1b2`](https://github.com/vultisig/vultisig-sdk/commit/f4ad1b28b7fa50f484b7bad0a328b2aa45560647) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - An explicit "empty the account" send can now be initiated: `prepareSendTx`, `prepareSendTxFromKeys`, `send`, `estimateSendFee` and `getMaxSendAmount` accept `allowDeath`, both chain-specific resolvers record it in `PolkadotSpecific.allowDeath` and price that call, and the MAX/refinement keep nothing back for the existential deposit. The CLI gains `send <Polkadot|Bittensor> <to> --max --allow-death`, which discloses the reap before confirmation. Only set it for an explicit user choice; every co-signer must read the field.
+
+- Updated dependencies [[`f4ad1b2`](https://github.com/vultisig/vultisig-sdk/commit/f4ad1b28b7fa50f484b7bad0a328b2aa45560647)]:
+  - @vultisig/core-chain@6.1.1
+
+## 5.0.0
+
+### Major Changes
+
+- [#2414](https://github.com/vultisig/vultisig-sdk/pull/2414) [`2ad15b2`](https://github.com/vultisig/vultisig-sdk/commit/2ad15b2f87a74298a7d6baff8f45a42b8b627d25) Thanks [@gastonm5](https://github.com/gastonm5)! - Regenerate the keysign protobuf types so a custom-message signing request can carry the dApp that asked for it.
+
+  `CustomMessagePayload` gains `dappMetadata?: DAppMetadata` (`optional DAppMetadata dapp_metadata = 6` in vultisig/commondata). Until now dApp identity travelled only on `KeysignPayload`, so message signing — `personal_sign`, EIP-712 typed data, Cosmos `signArbitrary`, and the hash-only Cardano `signTx` / `ton_proof` requests — reached co-signing devices with no indication of which dApp asked. The field is optional: leave it unset when there is no dApp, and such a payload encodes to the same bytes as before. All three values are declared by the initiating device and covered by no signature, so treat them as display-only.
+
+  **Source-breaking import move for TypeScript consumers.** Both payload kinds now share the type, so upstream moved `message DAppMetadata` into its own `dapp_metadata.proto`. `DAppMetadata` and `DAppMetadataSchema` are no longer exported from `@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb`; import them from `@vultisig/core-mpc/types/vultisig/keysign/v1/dapp_metadata_pb` instead. The old import fails at compile time rather than silently.
+
+  Wire compatibility is preserved. `DAppMetadata` keeps its full message name and field numbers, and `KeysignPayload.dapp_metadata` stays at field 50, so existing payloads decode as before. The new `CustomMessagePayload` field is additive: devices on older versions skip it.
+
+  `@vultisig/sdk` does not expose these types; it is bumped so its bundled copy of the generated code stays in step.
+
+### Minor Changes
+
+- [#2390](https://github.com/vultisig/vultisig-sdk/pull/2390) [`b11c68e`](https://github.com/vultisig/vultisig-sdk/commit/b11c68e9876e86277fdca907fca6b6bbda40ea27) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Send an `approve(0)` reset before the approve when a USDT-style token would reject a non-zero to non-zero approve over a stale partial allowance. The need for the reset is stated on the wire (`Erc20ApprovePayload.reset_allowance_first`, commondata#111) so every co-signer builds the same extra leg. `buildCowSwapApprovalSigningInputs` (new) returns every approve leg in nonce order; `buildCowSwapApprovalSigningInput` stays exported as a deprecated single-leg form for existing consumers and throws, rather than dropping a leg, when the payload asks for the reset.
+
+### Patch Changes
+
+- [#2451](https://github.com/vultisig/vultisig-sdk/pull/2451) [`8c58622`](https://github.com/vultisig/vultisig-sdk/commit/8c5862298a65712a05a6fc284ffaab9dc9381839) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Check the router minimum, final output asset, and receiver against the quoted swap immediately before EVM keysign payload construction for 1inch, Kyber, and same-chain LI.FI selectors that expose those fields. Reject 1inch and Kyber partial-fill calldata because its proportional floor does not guarantee the quoted absolute output. Packed-pool 1inch selectors retain a minimum and recipient check, but their hidden final asset remains unverified. Unsupported selectors and LI.FI bridge routes remain available and retain the aggregator trust boundary.
+
+- [#2443](https://github.com/vultisig/vultisig-sdk/pull/2443) [`36b9013`](https://github.com/vultisig/vultisig-sdk/commit/36b901334b14177c7ddf4c1791fed96e249a05a1) Thanks [@neavra](https://github.com/neavra)! - Max swaps on THORChain and Maya routes now reserve the estimated source-chain network fee instead of subtracting the destination-asset outbound fee, size EVM native reserves and token fee summaries with the router deposit that is actually signed, fall back to the native minimum helper when a provider omits its recommendation, pin fee-aware requotes to the selected provider, clamp once when memo-dependent fees drift, expose the committed amount to callers, report the source-chain fee as the quote's network fee, and refuse a max swap that would fall below it.
+
+- Updated dependencies [[`8c58622`](https://github.com/vultisig/vultisig-sdk/commit/8c5862298a65712a05a6fc284ffaab9dc9381839), [`d7810e5`](https://github.com/vultisig/vultisig-sdk/commit/d7810e59cdc7f42681f1dd4e30e1d50e7dcde0f4), [`36b9013`](https://github.com/vultisig/vultisig-sdk/commit/36b901334b14177c7ddf4c1791fed96e249a05a1), [`b11c68e`](https://github.com/vultisig/vultisig-sdk/commit/b11c68e9876e86277fdca907fca6b6bbda40ea27)]:
+  - @vultisig/core-chain@6.1.0
+
 ## 4.0.0
 
 ### Major Changes

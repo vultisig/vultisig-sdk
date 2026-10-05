@@ -38,8 +38,8 @@ export type SeedphraseValidationOptions = {
 export type SeedphraseValidation = {
   /** Whether the seedphrase is valid */
   valid: boolean
-  /** Number of words in the seedphrase */
-  wordCount: 12 | 24 | number
+  /** Number of words in the seedphrase (one of `SEEDPHRASE_WORD_COUNTS` when valid) */
+  wordCount: SeedphraseWordCount | number
   /** Words that are not in the BIP39 wordlist (if any) */
   invalidWords?: string[]
   /** Error message if validation failed */
@@ -49,9 +49,11 @@ export type SeedphraseValidation = {
 }
 
 /**
- * Supported seedphrase word counts
+ * Supported seedphrase word counts: every mnemonic length BIP39 defines,
+ * from 128 to 256 bits of entropy in 32-bit steps.
  */
-export const SEEDPHRASE_WORD_COUNTS = [12, 24] as const
+export const SEEDPHRASE_WORD_COUNTS = [12, 15, 18, 21, 24] as const
+/** A word count BIP39 defines for a mnemonic. */
 export type SeedphraseWordCount = (typeof SEEDPHRASE_WORD_COUNTS)[number]
 
 /**
@@ -124,7 +126,7 @@ export type ChainDiscoveryAggregate = {
  * Options for creating a FastVault from a seedphrase (2-of-2 with VultiServer)
  */
 export type CreateFastVaultFromSeedphraseOptions = {
-  /** The mnemonic phrase (12 or 24 words, space-separated) */
+  /** The mnemonic phrase (12, 15, 18, 21 or 24 words, space-separated) */
   mnemonic: string
   /** Name for the new vault */
   name: string
@@ -156,7 +158,7 @@ export type CreateFastVaultFromSeedphraseOptions = {
  * Options for creating a SecureVault from a seedphrase (N-of-M multi-device)
  */
 export type CreateSecureVaultFromSeedphraseOptions = {
-  /** The mnemonic phrase (12 or 24 words, space-separated) */
+  /** The mnemonic phrase (12, 15, 18, 21 or 24 words, space-separated) */
   mnemonic: string
   /** Name for the new vault */
   name: string

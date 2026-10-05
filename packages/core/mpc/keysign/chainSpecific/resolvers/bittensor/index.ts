@@ -29,6 +29,7 @@ const rpc = async <T>(method: string, params: unknown[] = []) => {
 export const getBittensorChainSpecific: GetChainSpecificResolver<'polkadotSpecific'> = async ({
   keysignPayload,
   walletCore,
+  allowDeath = false,
 }) => {
   const { address } = getKeysignCoin(keysignPayload)
 
@@ -48,6 +49,7 @@ export const getBittensorChainSpecific: GetChainSpecificResolver<'polkadotSpecif
     transactionVersion: runtimeVersion.transactionVersion,
     genesisHash,
     gas: bittensorConfig.fee,
+    allowDeath,
   })
 
   return withFallback(

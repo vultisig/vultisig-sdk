@@ -15,11 +15,20 @@ export type GetChainSpecificInput<C extends KeysignChainSpecificKey = KeysignCha
   /** XRPL DestinationTag, carried in RippleSpecific for Ripple payments. */
   destinationTag?: number
   /**
-   * Whether the caller's UI offered this as a MAX send, carried in TonSpecific.
+   * Whether the caller's UI offered this as a MAX send, carried in the
+   * chain-specific payloads whose signing path needs or records that intent.
    * Must come from the flow that drew the button — inferring it from the amount
    * mislabels an ordinary send that happens to sit close to the balance.
    */
   sendMaxAmount?: boolean
+  /**
+   * Encode the Substrate transfer as `transfer_allow_death`, carried in
+   * PolkadotSpecific. Only for an explicit "empty the account" send: the chain
+   * reaps the sender once its balance drops below the existential deposit.
+   * Every co-signer derives the call index from the payload field, so this is
+   * the only place the intent can be stated.
+   */
+  allowDeath?: boolean
 } & (C extends 'ethereumSpecific'
   ? {
       feeSettings?: FeeSettings<'evm'>

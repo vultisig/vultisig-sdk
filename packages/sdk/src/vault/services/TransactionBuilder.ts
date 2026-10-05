@@ -7,6 +7,7 @@ import { getTwPublicKeyType } from '@vultisig/core-chain/publicKey/tw/getTwPubli
 import { withEvmChecksumHint } from '@vultisig/core-chain/utils/getEvmChecksumMismatchHint'
 import { isValidRecipient } from '@vultisig/core-chain/utils/isValidRecipient'
 import { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
+import { BuildKeysignPayloadError } from '@vultisig/core-mpc/keysign/error'
 import { getSendFeeEstimate } from '@vultisig/core-mpc/keysign/send/getSendFeeEstimate'
 import { getEncodedSigningInputs } from '@vultisig/core-mpc/keysign/signingInputs'
 import { getKeysignTwPublicKey } from '@vultisig/core-mpc/keysign/tw/getKeysignTwPublicKey'
@@ -50,6 +51,12 @@ export class TransactionBuilder {
       if (error instanceof VaultError) throw error
       const message = error instanceof Error ? error.message : String(error)
       const cause = error instanceof Error ? error : new Error(message)
+      if (
+        error instanceof BuildKeysignPayloadError &&
+        (error.type === 'utxo-dust-amount-requested' || error.type === 'not-enough-funds')
+      ) {
+        throw new VaultError(VaultErrorCode.InvalidAmount, message, cause)
+      }
       throw new VaultError(VaultErrorCode.InvalidConfig, `Failed to prepare ${opName}: ${message}`, cause)
     }
   }
@@ -72,6 +79,10 @@ export class TransactionBuilder {
    *   `balance - fee` figure the UI displayed.
    * @param params.tonGasless - TON only: pay the fee in the jetton being sent through the
    *   gasless relay (W5 accounts, relay-accepted jettons). The relay's commission is the fee.
+   * @param params.allowDeath - Empty the account with a Substrate `transfer_allow_death`
+   *   (Polkadot, Bittensor): the chain reaps the sender once its balance drops below
+   *   the existential deposit. Only for an explicit user choice, with the reap
+   *   disclosed; ignored on other chains.
    *
    * @returns A KeysignPayload ready to be signed with the sign() method
    *
@@ -99,6 +110,7 @@ export class TransactionBuilder {
     feeSettings?: FeeSettings
     sendMaxAmount?: boolean
     tonGasless?: boolean
+    allowDeath?: boolean
   }): Promise<KeysignPayload> {
     if (params.amount <= 0n) {
       throw new VaultError(VaultErrorCode.InvalidAmount, 'Amount must be greater than zero')
@@ -144,7 +156,9 @@ export class TransactionBuilder {
     memo?: string
     destinationTag?: number
     feeSettings?: FeeSettings
+    sendMaxAmount?: boolean
     tonGasless?: boolean
+    allowDeath?: boolean
   }): Promise<bigint> {
     try {
       const walletCore = await this.wasmProvider.getWalletCore()
@@ -194,7 +208,9 @@ export class TransactionBuilder {
         walletCore,
         libType: toKeysignLibType(this.vaultData),
         feeSettings: params.feeSettings,
+        sendMaxAmount: params.sendMaxAmount,
         tonGasless: params.tonGasless,
+        allowDeath: params.allowDeath,
       })
     } catch (error) {
       if (error instanceof VaultError) throw error

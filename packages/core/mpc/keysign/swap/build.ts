@@ -10,6 +10,7 @@ import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { areEqualCoins } from '@vultisig/core-chain/coin/Coin'
 import { COW_VAULT_RELAYER_ADDRESS } from '@vultisig/core-chain/swap/general/cowswap/config'
 import { encodeCowSwapKeysignData } from '@vultisig/core-chain/swap/general/cowswap/keysign/cowSwapKeysignData'
+import { assertAggregatorCalldataMinOutputBound } from '@vultisig/core-chain/swap/general/calldataMinOutput'
 import { GeneralSwapTx } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
 import { rujiTradeRuneBruneMarketContract } from '@vultisig/core-chain/swap/general/ruji/config'
 import { getSwapDestinationAddress } from '@vultisig/core-chain/swap/keysign/getSwapDestinationAddress'
@@ -23,7 +24,10 @@ import { refineKeysignUtxo } from '@vultisig/core-mpc/keysign/refine/utxo'
 import { CommKeysignSwapPayload } from '@vultisig/core-mpc/keysign/swap/KeysignSwapPayload'
 import { getKeysignUtxoInfo } from '@vultisig/core-mpc/keysign/utxo/getKeysignUtxoInfo'
 import { KeysignLibType } from '@vultisig/core-mpc/mpcLib'
-import { verifySwapKitBitcoinPsbtOutputs } from '@vultisig/core-mpc/tx/swapkitSignBitcoin'
+import {
+  verifySwapKitBitcoinPsbtInputs,
+  verifySwapKitBitcoinPsbtOutputs,
+} from '@vultisig/core-mpc/tx/swapkitSignBitcoin'
 import { toCommCoin } from '@vultisig/core-mpc/types/utils/commCoin'
 import {
   OneInchQuoteSchema,
@@ -67,6 +71,8 @@ export type BuildSwapKeysignPayloadInput = {
 
 type TransferSwapTx = Extract<GeneralSwapTx, { transfer: unknown }>['transfer']
 type CosmosWasmSwapTx = Extract<GeneralSwapTx, { cosmosWasm: unknown }>['cosmosWasm']
+
+const maxUint128 = (1n << 128n) - 1n
 
 const getThorAddressIdentity = (address: string): string | undefined => {
   try {
@@ -119,13 +125,16 @@ const getRujiTradeFundAmount = (tx: CosmosWasmSwapTx, fromCoin: AccountCoin, eff
   } catch {
     throw new Error('RUJI Trade CosmWasm route contains an invalid execute message.')
   }
-  const min = (executeMsg as { swap?: { min?: { min_return?: unknown; to?: unknown } } })?.swap?.min
+  // FIN's SwapRequest is untagged and ignores unknown keys, so a nested `{ min: { ... } }`
+  // or a min_return outside Uint128 decodes as an unguarded Yolo swap instead of failing.
+  const swap = (executeMsg as { swap?: { min_return?: unknown; to?: unknown } })?.swap
   if (
-    typeof min?.min_return !== 'string' ||
-    !/^\d+$/.test(min.min_return) ||
-    BigInt(min.min_return) <= 0n ||
-    typeof min.to !== 'string' ||
-    !areEqualThorAddresses(min.to, effectiveRecipient)
+    typeof swap?.min_return !== 'string' ||
+    !/^\d+$/.test(swap.min_return) ||
+    BigInt(swap.min_return) <= 0n ||
+    BigInt(swap.min_return) > maxUint128 ||
+    typeof swap.to !== 'string' ||
+    !areEqualThorAddresses(swap.to, effectiveRecipient)
   ) {
     throw new Error('RUJI Trade CosmWasm route must contain a guarded FIN swap execute message.')
   }
@@ -147,6 +156,11 @@ const getSwapKitBitcoinSignData = (fromCoin: AccountCoin, transfer: TransferSwap
 
   const signBitcoin = buildSignBitcoinFromPsbt({
     psbt: Psbt.fromBuffer(Buffer.from(transfer.txPayload)),
+    senderAddress: fromCoin.address,
+  })
+
+  verifySwapKitBitcoinPsbtInputs({
+    signBitcoin,
     senderAddress: fromCoin.address,
   })
 
@@ -385,6 +399,15 @@ export const buildSwapKeysignPayload = async ({
 
       const txMsg = matchRecordUnion<GeneralSwapTx, Omit<OneInchTransaction, '$typeName'>>(quote.tx, {
         evm: ({ from, to, data, value, affiliateFee }) => {
+          assertAggregatorCalldataMinOutputBound({
+            provider: quote.provider,
+            data,
+            quotedOutputAmount: quote.dstAmount,
+            maxSlippageBps: quote.maxSlippageBps,
+            destinationAsset: toCoin.id,
+            intendedRecipient: recipient ?? toCoin.address,
+            senderAddress: fromCoin.address,
+          })
           return {
             from,
             to,

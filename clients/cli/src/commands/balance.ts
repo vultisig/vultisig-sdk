@@ -114,19 +114,17 @@ export type PortfolioOptions = {
 export async function executePortfolio(ctx: CommandContext, options: PortfolioOptions = {}): Promise<void> {
   const vault = await ctx.ensureActiveVault()
 
-  const currency = options.currency || 'usd'
-
-  if (!fiatCurrencies.includes(currency)) {
-    error(`x Invalid currency: ${currency}`)
+  const explicitCurrency = options.currency?.toLowerCase() as FiatCurrency | undefined
+  if (explicitCurrency !== undefined && !fiatCurrencies.includes(explicitCurrency)) {
+    error(`x Invalid currency: ${options.currency}`)
     warn(`Supported currencies: ${fiatCurrencies.join(', ')}`)
     throw new Error('Invalid currency')
   }
 
-  if (vault.currency !== currency) {
-    await vault.setCurrency(currency)
-  }
+  const storedCurrency = String(vault.currency ?? '').toLowerCase() as FiatCurrency
+  const displayCurrency = explicitCurrency ?? (fiatCurrencies.includes(storedCurrency) ? storedCurrency : 'usd')
 
-  const currencyName = fiatCurrencyNameRecord[currency]
+  const currencyName = fiatCurrencyNameRecord[displayCurrency]
   const spinner = createSpinner(`Loading portfolio in ${currencyName}...`)
 
   const chains = vault.chains
@@ -137,15 +135,15 @@ export async function executePortfolio(ctx: CommandContext, options: PortfolioOp
   //   - balance() fails → no entry, failure { stage: 'balance' }
   //   - value lookup fails → entry kept without value, failure { stage: 'value' }
   //
-  // Values come from getValues(), which prices the native asset AND every token
-  // the vault tracks on the chain. The total below is the sum of exactly these
-  // rows. It used to come from a separate vault.getTotalValue() call that
-  // included token value while the breakdown listed native value only, so the
-  // headline figure contradicted the rows printed under it (and the gap grew
+  // Values come from getValuesDetailed(), which prices the native asset AND
+  // reports failures for every token the vault tracks on the chain. The total
+  // below is the sum of exactly these rows. It used to come from a separate
+  // vault.getTotalValue() call that included token value while the breakdown
+  // listed native value only, so the headline figure contradicted the rows printed under it (and the gap grew
   // silently as `tokens --discover` added tokens).
   type ChainResult = {
     entry?: PortfolioSummary['chainBalances'][number]
-    failure?: ChainFailure
+    failures?: ChainFailure[]
   }
 
   const results = await Promise.all(
@@ -154,47 +152,45 @@ export async function executePortfolio(ctx: CommandContext, options: PortfolioOp
       try {
         balance = await vault.balance(chain)
       } catch (err) {
-        return { failure: { chain, stage: 'balance', error: conciseError(err) } }
-      }
-
-      let values: Record<string, Value>
-      try {
-        values = await vault.getValues(chain, currency)
-      } catch (err) {
-        // Balance succeeded but the fiat value did not — keep the balance and
-        // flag the missing value rather than swallowing it as "no value".
-        return { entry: { chain, balance }, failure: { chain, stage: 'value', error: conciseError(err) } }
-      }
-
-      const { native, ...tokenValues } = values
-      if (!native) {
-        // getValues() logs and drops a per-asset failure rather than throwing.
-        // Ask again for just the native value so the failure we report carries
-        // the real error instead of a generic "unavailable".
-        try {
-          const retried = await vault.getValue(chain, undefined, currency)
-          return { entry: { chain, balance, value: retried, tokens: await withAmounts(tokenValues) } }
-        } catch (err) {
-          return {
-            entry: { chain, balance, tokens: await withAmounts(tokenValues) },
-            failure: { chain, stage: 'value', error: conciseError(err) },
-          }
+        return {
+          failures: [{ chain, stage: 'balance', error: conciseError(err) }],
         }
       }
 
-      return { entry: { chain, balance, value: native, tokens: await withAmounts(tokenValues) } }
+      let detailedValues: Awaited<ReturnType<typeof vault.getValuesDetailed>>
+      try {
+        detailedValues = await vault.getValuesDetailed(chain, displayCurrency)
+      } catch (err) {
+        // Balance succeeded but the fiat value did not — keep the balance and
+        // flag the missing value rather than swallowing it as "no value".
+        return {
+          entry: { chain, balance },
+          failures: [{ chain, stage: 'value', error: conciseError(err) }],
+        }
+      }
 
-      // Pair each priced token with its held amount. getValues() has already
-      // fetched (and cached) these balances, so this does not re-hit the RPC;
-      // a token whose balance is somehow unavailable still shows its value.
-      async function withAmounts(byTokenId: Record<string, Value>) {
-        return Promise.all(
-          Object.entries(byTokenId).map(async ([tokenId, value]) => ({
+      const { native, ...tokenValues } = detailedValues.values
+      const tokens = (vault.tokens[chain] ?? []).filter(token => Boolean(token.contractAddress))
+      const tokenRows = await Promise.all(
+        tokens.map(async token => {
+          const tokenId = token.contractAddress!
+          return {
             tokenId,
-            value,
+            value: tokenValues[tokenId] ?? null,
             balance: await vault.balance(chain, tokenId).catch(() => undefined),
-          }))
-        )
+          }
+        })
+      )
+      const failures = detailedValues.failures.map(failure => ({
+        chain,
+        stage: 'value' as const,
+        ...(failure.tokenId === undefined ? {} : { tokenId: failure.tokenId }),
+        error: failure.error,
+      }))
+
+      return {
+        entry: { chain, balance, value: native, tokens: tokenRows },
+        failures,
       }
     })
   )
@@ -203,7 +199,7 @@ export async function executePortfolio(ctx: CommandContext, options: PortfolioOp
   const failures: ChainFailure[] = []
   for (const result of results) {
     if (result.entry) chainBalances.push(result.entry)
-    if (result.failure) failures.push(result.failure)
+    if (result.failures) failures.push(...result.failures)
   }
 
   // Every chain failed to even fetch a balance → this is a real error, not a
@@ -225,10 +221,17 @@ export async function executePortfolio(ctx: CommandContext, options: PortfolioOp
     (sum, entry) =>
       sum +
       parseFloat(entry.value?.amount ?? '0') +
-      (entry.tokens ?? []).reduce((tokenSum, token) => tokenSum + parseFloat(token.value.amount), 0),
+      (entry.tokens ?? []).reduce(
+        (tokenSum, token) => tokenSum + (token.value === null ? 0 : parseFloat(token.value.amount)),
+        0
+      ),
     0
   )
-  const totalValue: Value = { amount: total.toFixed(2), currency, lastUpdated: Date.now() }
+  const totalValue: Value = {
+    amount: total.toFixed(2),
+    currency: displayCurrency,
+    lastUpdated: Date.now(),
+  }
 
   const portfolio: PortfolioSummary = { totalValue, chainBalances }
 
@@ -242,15 +245,17 @@ export async function executePortfolio(ctx: CommandContext, options: PortfolioOp
     // `failures` is always present (empty array when none) so machine consumers
     // can branch on `data.failures.length` without probing for the field.
     // `scopeHint` is omitted when every supported chain is enabled.
-    outputJson({ portfolio, currency, failures, scopeHint })
+    outputJson({ portfolio, currency: displayCurrency, failures, scopeHint })
     return
   }
-  displayPortfolio(portfolio, currency, options.raw ?? false)
+  displayPortfolio(portfolio, displayCurrency, options.raw ?? false)
   if (scopeHint) info(`\n${scopeHint}`)
   if (failures.length > 0) {
-    warn(`\nWarning: ${failures.length} chain(s) failed to load fully:`)
+    const chainFailures = failures.filter(failure => failure.tokenId === undefined).length
+    const tokenFailures = failures.length - chainFailures
+    warn(`\nWarning: ${chainFailures} chain(s) and ${tokenFailures} token(s) could not be priced/loaded:`)
     for (const f of failures) {
-      warn(`  - ${f.chain} (${f.stage}): ${f.error}`)
+      warn(`  - ${f.chain}${f.tokenId ? `:${f.tokenId}` : ''} (${f.stage}): ${f.error}`)
     }
   }
 }

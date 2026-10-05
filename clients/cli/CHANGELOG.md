@@ -1,5 +1,58 @@
 # @vultisig/cli
 
+## 9.0.0
+
+### Minor Changes
+
+- [#2472](https://github.com/vultisig/vultisig-sdk/pull/2472) [`0a09912`](https://github.com/vultisig/vultisig-sdk/commit/0a09912f54b2a7186a7299ce657d85dc31e5f5ed) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(seedphrase): accept every BIP39 mnemonic length (12, 15, 18, 21 and 24 words) in seedphrase validation, import and the CLI prompt. `SEEDPHRASE_WORD_COUNTS` is now `[12, 15, 18, 21, 24]`, which widens `SeedphraseWordCount`.
+
+### Patch Changes
+
+- [#2478](https://github.com/vultisig/vultisig-sdk/pull/2478) [`3369db3`](https://github.com/vultisig/vultisig-sdk/commit/3369db39738810b5789cd43b78bba1182d3dbaa4) Thanks [@neavra](https://github.com/neavra)! - `vultisig portfolio` no longer rewrites the vault's currency preference: `--currency` is a per-call display override and plain `portfolio` uses the stored preference, including in the interactive shell. Invalid stored preferences fall back to USD. Only `vultisig currency <code>` changes it. `vultisig currency` with no argument now honours `--output json` and reports `updated: false`.
+
+- [#2465](https://github.com/vultisig/vultisig-sdk/pull/2465) [`faffc26`](https://github.com/vultisig/vultisig-sdk/commit/faffc266efae199d638ae6bf8d45009896fcbee3) Thanks [@neavra](https://github.com/neavra)! - UTXO sends (Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash, Zcash) whose recipient amount is below the chain's static dust floor are now refused before signing with the minimum named in the error; fee-rate-dependent dust rejections above that floor instead explain that the current network dust threshold requires a larger amount. Additionally, a UTXO transaction plan that fails (dust, insufficient funds, or any other planner error) now fails authoritatively with that error instead of being retried as a send-max transaction, and deterministic dust or balance failures surface to CLI consumers as invalid input. Max-send and max-swap fee estimates now request a max spend explicitly instead of relying on the removed retry.
+
+  An amount above the available balance now fails with an insufficient-balance error instead of being planned as a max spend.
+
+  A non-max UTXO request is never converted to a max spend; a small remainder is left to WalletCore's dust handling.
+
+- Updated dependencies [[`0a09912`](https://github.com/vultisig/vultisig-sdk/commit/0a09912f54b2a7186a7299ce657d85dc31e5f5ed), [`658aa00`](https://github.com/vultisig/vultisig-sdk/commit/658aa00a115c329808432014164980f543edf09b), [`5acb3d2`](https://github.com/vultisig/vultisig-sdk/commit/5acb3d27f15f081d518155c937295d208defdd84), [`341f5ec`](https://github.com/vultisig/vultisig-sdk/commit/341f5ec2793e5b91ba69410bf35d82833f104632), [`d83a5b0`](https://github.com/vultisig/vultisig-sdk/commit/d83a5b0c31f5d8f5ca8ecd6e586e16424596bed3), [`f49cbb0`](https://github.com/vultisig/vultisig-sdk/commit/f49cbb05cd20c6aa3411aa84ba8a09fc89284f07), [`16b5a78`](https://github.com/vultisig/vultisig-sdk/commit/16b5a7860dce8a5bacf4759ff0260073c8cfb3e7), [`faffc26`](https://github.com/vultisig/vultisig-sdk/commit/faffc266efae199d638ae6bf8d45009896fcbee3)]:
+  - @vultisig/sdk@9.0.0
+  - @vultisig/core-chain@6.1.3
+  - @vultisig/client-shared@0.3.8
+
+## 8.1.1
+
+### Patch Changes
+
+- [#2436](https://github.com/vultisig/vultisig-sdk/pull/2436) [`df53bee`](https://github.com/vultisig/vultisig-sdk/commit/df53bee0f6543eebd18a6c35e505a45b21715f6e) Thanks [@neavra](https://github.com/neavra)! - The CLI's pre-sign consent line now renders ERC-20 approve legs from the signed calldata (spender and allowance), never from producer labels. Single-leg approves say so explicitly, multi-leg envelopes name the approve leg, unlimited allowances render as UNLIMITED, and an approval leg whose calldata is not an ERC-20 approve fails closed.
+
+  Over-long provider summary text can no longer push the approve-leg spender and allowance out of the capped proposal and signing records.
+
+- Updated dependencies [[`a55fda9`](https://github.com/vultisig/vultisig-sdk/commit/a55fda9325d071aa7717bf59c9ad328a0edd556b), [`25aafc6`](https://github.com/vultisig/vultisig-sdk/commit/25aafc62cb9f37488bdce24b02aff4ad2e77169c), [`ed67a44`](https://github.com/vultisig/vultisig-sdk/commit/ed67a4430ee97069eb07f505ab797a433a40d267), [`21eb4cf`](https://github.com/vultisig/vultisig-sdk/commit/21eb4cfdec42b2a01ac37fc61d47758c79c152aa)]:
+  - @vultisig/sdk@8.1.1
+  - @vultisig/core-chain@6.1.2
+
+## 8.1.0
+
+### Patch Changes
+
+- [#2393](https://github.com/vultisig/vultisig-sdk/pull/2393) [`f4ad1b2`](https://github.com/vultisig/vultisig-sdk/commit/f4ad1b28b7fa50f484b7bad0a328b2aa45560647) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - An explicit "empty the account" send can now be initiated: `prepareSendTx`, `prepareSendTxFromKeys`, `send`, `estimateSendFee` and `getMaxSendAmount` accept `allowDeath`, both chain-specific resolvers record it in `PolkadotSpecific.allowDeath` and price that call, and the MAX/refinement keep nothing back for the existential deposit. The CLI gains `send <Polkadot|Bittensor> <to> --max --allow-death`, which discloses the reap before confirmation. Only set it for an explicit user choice; every co-signer must read the field.
+
+- Updated dependencies [[`f77d12b`](https://github.com/vultisig/vultisig-sdk/commit/f77d12b2fa33ef8a79f59b6870513e1acdbc3b1c), [`f4ad1b2`](https://github.com/vultisig/vultisig-sdk/commit/f4ad1b28b7fa50f484b7bad0a328b2aa45560647)]:
+  - @vultisig/sdk@8.1.0
+  - @vultisig/core-chain@6.1.1
+
+## 8.0.1
+
+### Patch Changes
+
+- [#2443](https://github.com/vultisig/vultisig-sdk/pull/2443) [`36b9013`](https://github.com/vultisig/vultisig-sdk/commit/36b901334b14177c7ddf4c1791fed96e249a05a1) Thanks [@neavra](https://github.com/neavra)! - Max swaps on THORChain and Maya routes now reserve the estimated source-chain network fee instead of subtracting the destination-asset outbound fee, size EVM native reserves and token fee summaries with the router deposit that is actually signed, fall back to the native minimum helper when a provider omits its recommendation, pin fee-aware requotes to the selected provider, clamp once when memo-dependent fees drift, expose the committed amount to callers, report the source-chain fee as the quote's network fee, and refuse a max swap when its committed amount is below the route's recommended minimum.
+
+- Updated dependencies [[`2ad15b2`](https://github.com/vultisig/vultisig-sdk/commit/2ad15b2f87a74298a7d6baff8f45a42b8b627d25), [`c3735f7`](https://github.com/vultisig/vultisig-sdk/commit/c3735f7418faba0549d070a4dfd3b48af3c1bd1f), [`e5e5958`](https://github.com/vultisig/vultisig-sdk/commit/e5e5958176e539363bef3686004c7ada5ac6ba5f), [`8c58622`](https://github.com/vultisig/vultisig-sdk/commit/8c5862298a65712a05a6fc284ffaab9dc9381839), [`d7810e5`](https://github.com/vultisig/vultisig-sdk/commit/d7810e59cdc7f42681f1dd4e30e1d50e7dcde0f4), [`4110f68`](https://github.com/vultisig/vultisig-sdk/commit/4110f6846f8dcb8f3984e1f78ae00c3f26cf06d8), [`36b9013`](https://github.com/vultisig/vultisig-sdk/commit/36b901334b14177c7ddf4c1791fed96e249a05a1), [`b11c68e`](https://github.com/vultisig/vultisig-sdk/commit/b11c68e9876e86277fdca907fca6b6bbda40ea27), [`e2dd959`](https://github.com/vultisig/vultisig-sdk/commit/e2dd95998304b0678d1cd8ecdaa65de8fd9e32e2)]:
+  - @vultisig/sdk@8.0.1
+  - @vultisig/core-chain@6.1.0
+
 ## 8.0.0
 
 ### Patch Changes

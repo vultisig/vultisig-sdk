@@ -50,7 +50,7 @@ const quoteFor = (from: AccountCoin, recipient = address): GeneralSwapQuote => (
     cosmosWasm: {
       sender: from.address,
       contract: address,
-      executeMsg: JSON.stringify({ swap: { min: { min_return: '988142', to: recipient } } }),
+      executeMsg: JSON.stringify({ swap: { min_return: '988142', to: recipient } }),
       funds: [{ denom: from.id === 'x/brune' ? 'x/brune' : 'rune', amount: '1000000' }],
     },
   },

@@ -12,9 +12,6 @@ import type { ServerEndpoints as BuilderServerEndpoints } from '../../../src/con
 import * as sdk from '../../../src/index'
 import * as server from '../../../src/server'
 import type { ServerEndpoints as CanonicalServerEndpoints } from '../../../src/server/ServerManager'
-import * as tools from '../../../src/tools'
-import * as stakekit from '../../../src/tools/defi/stakekit'
-import * as threeJane from '../../../src/tools/defi/threeJane'
 import * as dangerousAddresses from '../../../src/utils/dangerousAddresses'
 import { resolveChainIdReference } from '../../../src/utils/resolveChainReference'
 import {
@@ -112,48 +109,25 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.deriveQbtcAddress(qbtcPublicKey)).toBe(qbtcAddress)
   })
 
+  it('omits agent DeFi exports from the wallet SDK', () => {
+    const walletExports = sdk as Record<string, unknown>
+    for (const name of [
+      'defi',
+      'buildArkisSupplyTx',
+      'buildBalancerV3SwapCalldata',
+      'buildThreeJaneSupplyUsdc',
+      'river',
+    ]) {
+      expect(walletExports).not.toHaveProperty(name)
+    }
+    expect(Object.getOwnPropertyDescriptor(sdk.Vultisig.prototype, 'defi')).toBeUndefined()
+  })
+
   it('exports the strict chain-ID resolver by identity with its string-only signature', () => {
     expect(sdk.resolveChainIdReference).toBe(resolveChainIdReference)
     expectTypeOf(sdk.resolveChainIdReference).toEqualTypeOf<(chainId: string) => sdk.Chain | undefined>()
     expect(sdk.resolveChainIdReference('8453')).toBe(sdk.Chain.Base)
     expect(sdk.resolveChainIdReference('Ethereum')).toBeUndefined()
-  })
-
-  it('re-exports StakeKit action validators from root and tools by canonical identity', () => {
-    expect(sdk.validateStakekitActionAddress).toBe(stakekit.validateStakekitActionAddress)
-    expect(sdk.validateStakekitActionInput).toBe(stakekit.validateStakekitActionInput)
-    expect(tools.validateStakekitActionAddress).toBe(stakekit.validateStakekitActionAddress)
-    expect(tools.validateStakekitActionInput).toBe(stakekit.validateStakekitActionInput)
-
-    expect(sdk.validateStakekitActionAddress(`0x${'a'.repeat(40)}`)).toBeNull()
-    expect(sdk.validateStakekitActionAddress(`0x${'b'.repeat(64)}`)).toBeNull()
-    expect(sdk.validateStakekitActionAddress('cosmos1abc')).toBeNull()
-    expect(sdk.validateStakekitActionAddress('0xdeadbeef')).toMatch(/Invalid 0x-prefixed address/)
-    expect(sdk.validateStakekitActionInput(`0x${'a'.repeat(40)}`, '1.25')).toBeNull()
-
-    for (const amount of ['0', '-1', '1e3', ' 1 ']) {
-      expect(sdk.validateStakekitActionInput(`0x${'a'.repeat(40)}`, amount)).toMatch(/positive plain decimal/)
-    }
-  })
-
-  it('exposes canonical StakeKit helpers and preserves existing namespace members', async () => {
-    const canonical = await import('../../../src/tools/defi/stakekit')
-
-    expect(sdk.defi.stakekit).toEqual({
-      parseActionDisplay: canonical.parseActionDisplay,
-      buildYieldActionScanRequest: canonical.buildYieldActionScanRequest,
-      validateStakekitActionAddress: canonical.validateStakekitActionAddress,
-      validateStakekitActionInput: canonical.validateStakekitActionInput,
-      normalizeNetwork: canonical.normalizeStakekitNetwork,
-      networkToCanonicalChain: canonical.yieldNetworkToCanonicalChain,
-      NETWORK_ALIASES: canonical.STAKEKIT_NETWORK_ALIASES,
-      search: canonical.stakekitSearch,
-      details: canonical.stakekitDetails,
-      balances: canonical.stakekitBalances,
-      buildEnter: canonical.stakekitBuildEnter,
-      buildExit: canonical.stakekitBuildExit,
-      buildManage: canonical.stakekitBuildManage,
-    })
   })
 
   it('re-exports Blockaid EVM chain canonicals by identity', () => {
@@ -418,15 +392,6 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.fetchNoonUsdcVaultMetrics).toBe('function')
   })
 
-  it('exports the ThreeJane USDC helper values (not just their types) from the root SDK entrypoint', () => {
-    expect(sdk.buildThreeJaneSupplyUsdc).toBe(threeJane.buildThreeJaneSupplyUsdc)
-    expect(sdk.THREE_JANE_ADDRESSES).toBe(threeJane.THREE_JANE_ADDRESSES)
-    // Aliased to avoid colliding with the CCTP bridge's own `parseUsdcAmount`
-    // export, which is also present at the root.
-    expect(sdk.parseThreeJaneUsdcAmount).toBe(threeJane.parseUsdcAmount)
-    expect(typeof sdk.parseUsdcAmount).toBe('function')
-  })
-
   it('exports the sdk.decode namespace documented as the canonical bytes-oracle keystone', () => {
     // `packages/sdk/src/tools/policy/types.ts` documents the canonical
     // decoder as `sdk.decode.fromToolResult` — pin that exact shape, aliased
@@ -435,32 +400,6 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.decode.fromToolResult).toBe(sdk.decodeFromToolResult)
     expect(sdk.decode.decodeCosmosTx).toBe(sdk.decodeCosmosTx)
     expect(sdk.decode.decodeEvmTx).toBe(sdk.decodeEvmTx)
-  })
-
-  it('exports the sdk.defi namespace with the Arkis lender supply builder', () => {
-    expect(sdk.defi).toBeDefined()
-    expect(sdk.defi.arkis).toBeDefined()
-    expect(typeof sdk.defi.arkis.buildArkisSupplyTx).toBe('function')
-    expect(typeof sdk.defi.arkis.parseArkisTokenAmount).toBe('function')
-    expect(typeof sdk.defi.arkis.resolveArkisPoolKind).toBe('function')
-    expect(sdk.defi.arkis.ARKIS_OFFICIAL_ADDRESSES.dispatcher).toBe('0x2f01D7CFfe62673B3D2b680295A2D047F3848e4c')
-  })
-
-  it('exports Balancer V3 calldata builder on the root sdk surface alongside other DeFi builders', () => {
-    expect(typeof sdk.buildBalancerV3SwapCalldata).toBe('function')
-    expect(typeof sdk.buildBuyPt).toBe('function')
-    expect(typeof sdk.defi.balancer.buildBalancerV3SwapCalldata).toBe('function')
-    expect(sdk.buildBalancerV3SwapCalldata).toBe(sdk.defi.balancer.buildBalancerV3SwapCalldata)
-  })
-
-  it('exports the full River helper family from the root sdk surface', () => {
-    expect(typeof sdk.describeRiverMarket).toBe('function')
-    expect(typeof sdk.findRiverInsertHints).toBe('function')
-    expect(typeof sdk.formatRiverPercentWad).toBe('function')
-    expect(Array.isArray(sdk.RIVER_TROVE_STATUS_NAMES)).toBe(true)
-    expect(typeof sdk.riverStatusName).toBe('function')
-    expect(sdk.river.describeMarket).toBe(sdk.describeRiverMarket)
-    expect(sdk.river.findInsertHints).toBe(sdk.findRiverInsertHints)
   })
 
   it('exports Chain enum, cosmos chain subsets, chain helpers, and VaultBase class for first-party consumers', () => {

@@ -1,0 +1,6 @@
+{
+  "baselineBytes": 19976658,
+  "hardCapBytes": 35000000,
+  "eagerGraphCapBytes": 4000000,
+  "growthPercent": 10
+}

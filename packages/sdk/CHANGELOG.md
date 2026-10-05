@@ -1,5 +1,109 @@
 # @vultisig/sdk
 
+## 9.0.0
+
+### Major Changes
+
+- [#2487](https://github.com/vultisig/vultisig-sdk/pull/2487) [`5acb3d2`](https://github.com/vultisig/vultisig-sdk/commit/5acb3d27f15f081d518155c937295d208defdd84) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Remove 19 redundant package subpaths. Their functions and types remain available from the root or corresponding platform entry, with chain, seedphrase, and relay helpers grouped under `chainTron`, `chainUtxo`, `chainTon`, `seedphrase`, and `server`. `@vultisig/sdk/tools/defi` and all platform paths remain published. See `MIGRATING.md` for every path mapping.
+
+### Minor Changes
+
+- [#2472](https://github.com/vultisig/vultisig-sdk/pull/2472) [`0a09912`](https://github.com/vultisig/vultisig-sdk/commit/0a09912f54b2a7186a7299ce657d85dc31e5f5ed) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(seedphrase): accept every BIP39 mnemonic length (12, 15, 18, 21 and 24 words) in seedphrase validation, import and the CLI prompt. `SEEDPHRASE_WORD_COUNTS` is now `[12, 15, 18, 21, 24]`, which widens `SeedphraseWordCount`.
+
+### Patch Changes
+
+- [#2486](https://github.com/vultisig/vultisig-sdk/pull/2486) [`658aa00`](https://github.com/vultisig/vultisig-sdk/commit/658aa00a115c329808432014164980f543edf09b) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Move React Native FormatJS polyfills to build-only dependencies so ordinary SDK installs no longer download their locale data. The polyfills remain embedded in the React Native bundle; React Native consumers do not need to add packages.
+
+- [#2485](https://github.com/vultisig/vultisig-sdk/pull/2485) [`341f5ec`](https://github.com/vultisig/vultisig-sdk/commit/341f5ec2793e5b91ba69410bf35d82833f104632) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Preserve every digit in TRX balances with the new exact `balanceSunRaw` string and format `balanceTrx` from it. Keep `balanceSun` as a best-effort number for compatibility; it may round above `Number.MAX_SAFE_INTEGER` SUN (approximately 9.007 billion TRX). Reject invalid or duplicate account balance tokens while preserving existing TRON routing.
+
+- [#2467](https://github.com/vultisig/vultisig-sdk/pull/2467) [`d83a5b0`](https://github.com/vultisig/vultisig-sdk/commit/d83a5b0c31f5d8f5ca8ecd6e586e16424596bed3) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Bitcoin PSBT keysigns (SwapKit BTC swaps and `signBitcoin` payloads) now broadcast the signed transaction and report its txid. The compiled output left `signingResultV2.encoded` and `txid` unset, and the UTXO broadcast resolver took the resulting empty bytes over the real transaction, posting `{"data":""}` to Blockchair and resolving an empty hash.
+
+- [#2471](https://github.com/vultisig/vultisig-sdk/pull/2471) [`f49cbb0`](https://github.com/vultisig/vultisig-sdk/commit/f49cbb05cd20c6aa3411aa84ba8a09fc89284f07) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - A SwapKit Bitcoin PSBT carrying an input this vault cannot sign is now refused before the keysign ceremony, on the initiator and on every co-signer. `compileSignBitcoinTx` gives such an input an empty witness and still returns a complete-looking transaction, so the route signed it, broadcast it and let the network reject it after the user had already approved. Every input is checked against the vault's own address rather than the PSBT's `isOurs` flag, which `buildSignBitcoinFromPsbt` derives from BIP-32 data and defaults to true for every input when a PSBT carries none. The dApp `signPsbt` route is unaffected: its PSBTs may legitimately hold inputs owned by someone else and are returned partially signed rather than broadcast.
+
+- [#2412](https://github.com/vultisig/vultisig-sdk/pull/2412) [`16b5a78`](https://github.com/vultisig/vultisig-sdk/commit/16b5a7860dce8a5bacf4759ff0260073c8cfb3e7) Thanks [@aminsato](https://github.com/aminsato)! - fix(tron): reject incomplete `getnowblock` / `getblockbynum` responses instead of zeroing the TAPOS header
+
+  `getTronBlockInfo` defaulted every missing `block_header.raw_data` field to `0` / `''`, so a partial gateway response (or an `{Error}`-on-200 envelope) produced an all-zero header. WalletCore derived `ref_block_bytes` / `ref_block_hash` from it, the full MPC ceremony ran (including a Fast-Vault server co-sign), and the transaction could only fail on broadcast with `TAPOS_ERROR`. Both fetches now surface the gateway error message and reject any response missing `blockID` or a complete `raw_data`, before any signing starts. Header identifier fields (`txTrieRoot`, `parentHash`, `witness_address`) must also be hex of the exact protocol byte length, since `Buffer.from(value, 'hex')` would otherwise silently truncate malformed strings into the same broken header.
+
+- [#2465](https://github.com/vultisig/vultisig-sdk/pull/2465) [`faffc26`](https://github.com/vultisig/vultisig-sdk/commit/faffc266efae199d638ae6bf8d45009896fcbee3) Thanks [@neavra](https://github.com/neavra)! - UTXO sends (Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash, Zcash) whose recipient amount is below the chain's static dust floor are now refused before signing with the minimum named in the error; fee-rate-dependent dust rejections above that floor instead explain that the current network dust threshold requires a larger amount. Additionally, a UTXO transaction plan that fails (dust, insufficient funds, or any other planner error) now fails authoritatively with that error instead of being retried as a send-max transaction, and deterministic dust or balance failures surface to CLI consumers as invalid input. Max-send and max-swap fee estimates now request a max spend explicitly instead of relying on the removed retry.
+
+  An amount above the available balance now fails with an insufficient-balance error instead of being planned as a max spend.
+
+  A non-max UTXO request is never converted to a max spend; a small remainder is left to WalletCore's dust handling.
+
+- Updated dependencies [[`341f5ec`](https://github.com/vultisig/vultisig-sdk/commit/341f5ec2793e5b91ba69410bf35d82833f104632), [`d83a5b0`](https://github.com/vultisig/vultisig-sdk/commit/d83a5b0c31f5d8f5ca8ecd6e586e16424596bed3), [`f49cbb0`](https://github.com/vultisig/vultisig-sdk/commit/f49cbb05cd20c6aa3411aa84ba8a09fc89284f07), [`16b5a78`](https://github.com/vultisig/vultisig-sdk/commit/16b5a7860dce8a5bacf4759ff0260073c8cfb3e7), [`faffc26`](https://github.com/vultisig/vultisig-sdk/commit/faffc266efae199d638ae6bf8d45009896fcbee3)]:
+  - @vultisig/core-chain@6.1.3
+  - @vultisig/core-mpc@5.0.3
+
+## 8.1.2
+
+### Patch Changes
+
+- [#2469](https://github.com/vultisig/vultisig-sdk/pull/2469) [`04b519b`](https://github.com/vultisig/vultisig-sdk/commit/04b519b60b11f515bff02f6caa47d5d5cf4df832) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reduce the SDK install size by sharing generated runtime and declaration chunks and omitting source maps from the npm package. Public import paths and APIs remain unchanged.
+
+## 8.1.1
+
+### Patch Changes
+
+- [#2464](https://github.com/vultisig/vultisig-sdk/pull/2464) [`a55fda9`](https://github.com/vultisig/vultisig-sdk/commit/a55fda9325d071aa7717bf59c9ad328a0edd556b) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Expose the Arkis helper family as named imports from the SDK root and DeFi entrypoint.
+
+- [#2462](https://github.com/vultisig/vultisig-sdk/pull/2462) [`25aafc6`](https://github.com/vultisig/vultisig-sdk/commit/25aafc62cb9f37488bdce24b02aff4ad2e77169c) Thanks [@realpaaao](https://github.com/realpaaao)! - fix(solana): read Stakewiz `total_apy` for validator APY — `apy_estimate` overstated realized staking yield by ~60% (8.1% vs ~5.1%)
+
+- [#2459](https://github.com/vultisig/vultisig-sdk/pull/2459) [`ed67a44`](https://github.com/vultisig/vultisig-sdk/commit/ed67a4430ee97069eb07f505ab797a433a40d267) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - `getSwapArrivalStatus` now finds a THORChain or MayaChain swap that started on an EVM chain. THORNode and Midgard key a deposit by its hash without the `0x` prefix, so the prefixed hash an EVM chain returns read as `not_found` for as long as it was polled. The lookup now strips the prefix (and uppercases hex, leaving base58 signatures untouched), and the result still echoes the hash the caller passed. The deposit's own hash is also no longer mistaken for the destination while the outbound is unsent.
+
+- [#2454](https://github.com/vultisig/vultisig-sdk/pull/2454) [`21eb4cf`](https://github.com/vultisig/vultisig-sdk/commit/21eb4cfdec42b2a01ac37fc61d47758c79c152aa) Thanks [@neavra](https://github.com/neavra)! - Transaction status lookups on Solana and Cosmos-family chains (THORChain, Maya, Cosmos Hub, …) now report `not_found` when the node has no record of the hash, matching EVM, instead of an indefinite `pending`. On Solana, a transient RPC failure and an unseen signature whose `lastValidBlockHeight` has not expired still report `pending`.
+
+- Updated dependencies [[`25aafc6`](https://github.com/vultisig/vultisig-sdk/commit/25aafc62cb9f37488bdce24b02aff4ad2e77169c), [`ed67a44`](https://github.com/vultisig/vultisig-sdk/commit/ed67a4430ee97069eb07f505ab797a433a40d267), [`21eb4cf`](https://github.com/vultisig/vultisig-sdk/commit/21eb4cfdec42b2a01ac37fc61d47758c79c152aa)]:
+  - @vultisig/core-chain@6.1.2
+  - @vultisig/core-mpc@5.0.2
+
+## 8.1.0
+
+### Minor Changes
+
+- [#2452](https://github.com/vultisig/vultisig-sdk/pull/2452) [`f77d12b`](https://github.com/vultisig/vultisig-sdk/commit/f77d12b2fa33ef8a79f59b6870513e1acdbc3b1c) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject StakeKit actions that lack complete signable transactions in all public builders, and export a typed finalization result and refusal error.
+
+### Patch Changes
+
+- [#2393](https://github.com/vultisig/vultisig-sdk/pull/2393) [`f4ad1b2`](https://github.com/vultisig/vultisig-sdk/commit/f4ad1b28b7fa50f484b7bad0a328b2aa45560647) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - An explicit "empty the account" send can now be initiated: `prepareSendTx`, `prepareSendTxFromKeys`, `send`, `estimateSendFee` and `getMaxSendAmount` accept `allowDeath`, both chain-specific resolvers record it in `PolkadotSpecific.allowDeath` and price that call, and the MAX/refinement keep nothing back for the existential deposit. The CLI gains `send <Polkadot|Bittensor> <to> --max --allow-death`, which discloses the reap before confirmation. Only set it for an explicit user choice; every co-signer must read the field.
+
+- Updated dependencies [[`f4ad1b2`](https://github.com/vultisig/vultisig-sdk/commit/f4ad1b28b7fa50f484b7bad0a328b2aa45560647)]:
+  - @vultisig/core-chain@6.1.1
+  - @vultisig/core-mpc@5.0.1
+
+## 8.0.1
+
+### Patch Changes
+
+- [#2414](https://github.com/vultisig/vultisig-sdk/pull/2414) [`2ad15b2`](https://github.com/vultisig/vultisig-sdk/commit/2ad15b2f87a74298a7d6baff8f45a42b8b627d25) Thanks [@gastonm5](https://github.com/gastonm5)! - Regenerate the keysign protobuf types so a custom-message signing request can carry the dApp that asked for it.
+
+  `CustomMessagePayload` gains `dappMetadata?: DAppMetadata` (`optional DAppMetadata dapp_metadata = 6` in vultisig/commondata). Until now dApp identity travelled only on `KeysignPayload`, so message signing — `personal_sign`, EIP-712 typed data, Cosmos `signArbitrary`, and the hash-only Cardano `signTx` / `ton_proof` requests — reached co-signing devices with no indication of which dApp asked. The field is optional: leave it unset when there is no dApp, and such a payload encodes to the same bytes as before. All three values are declared by the initiating device and covered by no signature, so treat them as display-only.
+
+  **Source-breaking import move for TypeScript consumers.** Both payload kinds now share the type, so upstream moved `message DAppMetadata` into its own `dapp_metadata.proto`. `DAppMetadata` and `DAppMetadataSchema` are no longer exported from `@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb`; import them from `@vultisig/core-mpc/types/vultisig/keysign/v1/dapp_metadata_pb` instead. The old import fails at compile time rather than silently.
+
+  Wire compatibility is preserved. `DAppMetadata` keeps its full message name and field numbers, and `KeysignPayload.dapp_metadata` stays at field 50, so existing payloads decode as before. The new `CustomMessagePayload` field is additive: devices on older versions skip it.
+
+  `@vultisig/sdk` does not expose these types; it is bumped so its bundled copy of the generated code stays in step.
+
+- [#2453](https://github.com/vultisig/vultisig-sdk/pull/2453) [`c3735f7`](https://github.com/vultisig/vultisig-sdk/commit/c3735f7418faba0549d070a4dfd3b48af3c1bd1f) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Export the canonical QBTC address derivation helper from the root and React Native SDK entrypoints.
+
+- [#2455](https://github.com/vultisig/vultisig-sdk/pull/2455) [`e5e5958`](https://github.com/vultisig/vultisig-sdk/commit/e5e5958176e539363bef3686004c7ada5ac6ba5f) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reserve Mantle L1 and operator fees correctly for native max sends.
+
+- [#2451](https://github.com/vultisig/vultisig-sdk/pull/2451) [`8c58622`](https://github.com/vultisig/vultisig-sdk/commit/8c5862298a65712a05a6fc284ffaab9dc9381839) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Check the router minimum, final output asset, and receiver against the quoted swap immediately before EVM keysign payload construction for 1inch, Kyber, and same-chain LI.FI selectors that expose those fields. Reject 1inch and Kyber partial-fill calldata because its proportional floor does not guarantee the quoted absolute output. Packed-pool 1inch selectors retain a minimum and recipient check, but their hidden final asset remains unverified. Unsupported selectors and LI.FI bridge routes remain available and retain the aggregator trust boundary.
+
+- [#2104](https://github.com/vultisig/vultisig-sdk/pull/2104) [`d7810e5`](https://github.com/vultisig/vultisig-sdk/commit/d7810e59cdc7f42681f1dd4e30e1d50e7dcde0f4) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add unit test coverage for the 10 previously-untested `tx/hash/resolvers` (evm/utxo/cosmos/solana/ton/tron/ripple/cardano/bittensor/polkadot) and the CoW swap order-status API. Fix the UTXO resolver to fall back to `transactionId` when WalletCore returns an empty V2 `txid`.
+
+- [#2450](https://github.com/vultisig/vultisig-sdk/pull/2450) [`4110f68`](https://github.com/vultisig/vultisig-sdk/commit/4110f6846f8dcb8f3984e1f78ae00c3f26cf06d8) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Export the seedphrase import preflight helper and its types from `@vultisig/sdk/seedphrase`.
+
+- [#2443](https://github.com/vultisig/vultisig-sdk/pull/2443) [`36b9013`](https://github.com/vultisig/vultisig-sdk/commit/36b901334b14177c7ddf4c1791fed96e249a05a1) Thanks [@neavra](https://github.com/neavra)! - Max swaps on THORChain and Maya routes now reserve the estimated source-chain network fee instead of subtracting the destination-asset outbound fee, size EVM native reserves and token fee summaries with the router deposit that is actually signed, fall back to the native minimum helper when a provider omits its recommendation, pin fee-aware requotes to the selected provider, clamp once when memo-dependent fees drift, expose the committed amount to callers, report the source-chain fee as the quote's network fee, and refuse a max swap that would fall below it.
+
+- [#2390](https://github.com/vultisig/vultisig-sdk/pull/2390) [`b11c68e`](https://github.com/vultisig/vultisig-sdk/commit/b11c68e9876e86277fdca907fca6b6bbda40ea27) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Send an `approve(0)` reset before the approve when a USDT-style token would reject a non-zero to non-zero approve over a stale partial allowance. The need for the reset is stated on the wire (`Erc20ApprovePayload.reset_allowance_first`, commondata#111) so every co-signer builds the same extra leg. `buildCowSwapApprovalSigningInputs` (new) returns every approve leg in nonce order; `buildCowSwapApprovalSigningInput` stays exported as a deprecated single-leg form for existing consumers and throws, rather than dropping a leg, when the payload asks for the reset.
+
+- [#2083](https://github.com/vultisig/vultisig-sdk/pull/2083) [`e2dd959`](https://github.com/vultisig/vultisig-sdk/commit/e2dd95998304b0678d1cd8ecdaa65de8fd9e32e2) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Fix `SwapService.extractFees` silently dropping the Vultisig affiliate fee for EVM aggregator routes (it never read `tx.evm.affiliateFee` at all) and for Solana routes (it folded the swap fee into `total` but never surfaced it as `affiliate`), so `SwapQuoteBase.fees.affiliate` is now populated whenever the aggregator returns a fee priced in the source chain's native token. Non-native-denominated affiliate/swap fees are left off both fields rather than being unsafely summed into a native-unit total. Extracted the fee-derivation logic into a standalone, unit-tested `extractSwapFees` helper.
+
+- Updated dependencies [[`2ad15b2`](https://github.com/vultisig/vultisig-sdk/commit/2ad15b2f87a74298a7d6baff8f45a42b8b627d25), [`8c58622`](https://github.com/vultisig/vultisig-sdk/commit/8c5862298a65712a05a6fc284ffaab9dc9381839), [`d7810e5`](https://github.com/vultisig/vultisig-sdk/commit/d7810e59cdc7f42681f1dd4e30e1d50e7dcde0f4), [`36b9013`](https://github.com/vultisig/vultisig-sdk/commit/36b901334b14177c7ddf4c1791fed96e249a05a1), [`b11c68e`](https://github.com/vultisig/vultisig-sdk/commit/b11c68e9876e86277fdca907fca6b6bbda40ea27)]:
+  - @vultisig/core-mpc@5.0.0
+  - @vultisig/core-chain@6.1.0
+
 ## 8.0.0
 
 ### Minor Changes

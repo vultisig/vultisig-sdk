@@ -4,7 +4,7 @@ import { SolanaValidator } from './models/validator'
  * Resolves a per-validator staking APY (as a fraction, e.g. 0.067 for 6.7%) for
  * the Solana DeFi stake rows. Two sources, in order:
  *
- *   1. Stakewiz `apy_estimate` passthrough — the metadata provider's estimate is
+ *   1. Stakewiz `total_apy` passthrough — the metadata provider's estimate is
  *      the preferred, network-measured value (already commission-net).
  *   2. On-chain fallback — derive APR from the network inflation rate and the
  *      fraction of supply staked, net of the validator's commission, then

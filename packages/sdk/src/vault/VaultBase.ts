@@ -32,6 +32,7 @@ import { VaultSchema } from '@vultisig/core-mpc/types/vultisig/vault/v1/vault_pb
 import { vaultContainerFromString } from '@vultisig/core-mpc/vault/utils/vaultContainerFromString'
 import { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
+import { decryptVaultBackupWithPassword } from '@vultisig/lib-utils/encryption/vaultBackup/decryptVaultBackupWithPassword'
 import { fromBase64 } from '@vultisig/lib-utils/fromBase64'
 
 import { DEFAULT_CHAINS } from '../constants'
@@ -54,10 +55,12 @@ import { pollTxStatusUntilFinal } from '../tx'
 // Types
 import {
   Balance,
+  BalancesWithPricesResult,
   CompoundSwapResult,
   ContractCallResult,
   CosmosSigningOptions,
   FiatCurrency,
+  FiatValuesResult,
   GasInfoForChain,
   MaxSendAmount,
   MessageSignature,
@@ -71,6 +74,7 @@ import {
   SigningMode,
   SigningPayload,
   Token,
+  TotalValueDetailedResult,
   Value,
   VaultData,
 } from '../types'
@@ -1122,28 +1126,58 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   }
 
   /**
-   * Unlock this vault by caching password
+   * Unlock this vault by verifying the password against the vault file and caching it.
+   * A wrong password throws and leaves any previously cached password in place.
    */
   public async unlock(password: string): Promise<void> {
     if (!this.isVaultEncrypted()) {
       throw new VaultError(VaultErrorCode.InvalidConfig, 'Cannot unlock unencrypted vault')
     }
 
-    // Temporarily cache password for verification
-    this.passwordCache.set(this.id, password)
+    const previousPassword = this.passwordCache.get(this.id)
+    const previousTTL = this.passwordCache.getRemainingTTL(this.id)
 
     try {
-      // Verify password by attempting to load key shares
-      await this.ensureKeySharesLoaded()
-      // Password is valid and now cached
+      if (this.hasKeySharesLoaded()) {
+        // ensureKeySharesLoaded() short-circuits once shares are in memory and would not check the password
+        this.verifyPassword(password)
+        this.passwordCache.set(this.id, password)
+      } else {
+        // Cached first so ensureKeySharesLoaded() decrypts with it, which verifies it and loads the shares in one pass
+        this.passwordCache.set(this.id, password)
+        await this.ensureKeySharesLoaded()
+      }
     } catch (error) {
-      // Password is invalid - remove from cache
-      this.passwordCache.delete(this.id)
+      if (previousPassword) {
+        this.passwordCache.set(this.id, previousPassword, previousTTL)
+      } else {
+        this.passwordCache.delete(this.id)
+      }
       throw new VaultError(
         VaultErrorCode.InvalidConfig,
         `Failed to unlock vault: ${error instanceof Error ? error.message : String(error)}`,
         error as Error
       )
+    }
+  }
+
+  private hasKeySharesLoaded(): boolean {
+    return !!this.coreVault.keyShares.ecdsa && !!this.coreVault.keyShares.eddsa
+  }
+
+  /**
+   * Throws unless the password decrypts the stored vault file.
+   * A vault file stored unencrypted has nothing to check the password against.
+   */
+  private verifyPassword(password: string): void {
+    const content = this.vaultData.vultFileContent?.trim()
+    if (!content) {
+      throw new VaultError(VaultErrorCode.InvalidVault, 'Vault file content is empty. Cannot verify password.')
+    }
+
+    const container = vaultContainerFromString(content)
+    if (container.isEncrypted) {
+      decryptVaultBackupWithPassword(password, fromBase64(container.vault))
     }
   }
 
@@ -1246,6 +1280,15 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     includeTokens = false,
     fiatCurrency?: FiatCurrency
   ): Promise<Record<string, Balance>> {
+    return (await this.balancesWithPricesDetailed(chains, includeTokens, fiatCurrency)).balances
+  }
+
+  /** Get priced balances while retaining per-asset price failures. */
+  async balancesWithPricesDetailed(
+    chains?: Chain[],
+    includeTokens = false,
+    fiatCurrency?: FiatCurrency
+  ): Promise<BalancesWithPricesResult> {
     const balances = await this.balances(chains, includeTokens)
     const currency = (fiatCurrency ?? this._currency ?? 'usd') as FiatCurrency
 
@@ -1257,7 +1300,9 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
           .map(balance => balance.chainId as Chain)
       ),
     ]
-    const nativePrices = nativeChains.length > 0 ? await this.fiatValueService.getPrices(nativeChains, currency) : {}
+    const nativePrices =
+      nativeChains.length > 0 ? await this.fiatValueService.getPrices(nativeChains, currency).catch(() => ({})) : {}
+    const failures: BalancesWithPricesResult['failures'] = []
 
     await Promise.all(
       Object.entries(balances).map(async ([key, balance]) => {
@@ -1269,26 +1314,29 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
             ? trackedToken.contractAddress || trackedToken.id
             : resolveTokenRefId(chain, balance.tokenId, tokens)
           : undefined
-        const price = balance.tokenId
-          ? await this.fiatValueService.getPrice(chain, tokenId, currency)
-          : (nativePrices[chain] ?? (await this.fiatValueService.getPrice(chain, undefined, currency)))
+        try {
+          const price = balance.tokenId
+            ? await this.fiatValueService.getPrice(chain, tokenId, currency)
+            : (nativePrices[chain] ?? (await this.fiatValueService.getPrice(chain, undefined, currency)))
+          const fiatValue = getCoinValue({ amount: BigInt(balance.amount), decimals: balance.decimals, price })
 
-        const fiatValue = getCoinValue({
-          amount: BigInt(balance.amount),
-          decimals: balance.decimals,
-          price,
-        })
-
-        result[key] = {
-          ...balance,
-          value: price,
-          fiatValue,
-          fiatCurrency: currency,
+          result[key] = { ...balance, value: price, fiatValue, fiatCurrency: currency }
+        } catch (error) {
+          const unpricedBalance = { ...balance }
+          delete unpricedBalance.value
+          delete unpricedBalance.fiatValue
+          delete unpricedBalance.fiatCurrency
+          result[key] = unpricedBalance
+          failures.push({
+            chain,
+            ...(tokenId === undefined ? {} : { tokenId }),
+            error: error instanceof Error ? error.message : String(error),
+          })
         }
       })
     )
 
-    return result
+    return { balances: result, failures }
   }
 
   /**
@@ -1330,6 +1378,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     sendMaxAmount?: boolean
     /** TON only: pay the fee in the jetton being sent through the gasless relay. */
     tonGasless?: boolean
+    allowDeath?: boolean
   }): Promise<KeysignPayload> {
     return this.transactionBuilder.prepareSendTx(params)
   }
@@ -1340,6 +1389,8 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    * Network fees are denominated in the chain's native fee asset, including
    * when `coin` is a token — except for a gasless TON jetton send
    * (`tonGasless`), whose relay commission is charged in the jetton itself.
+   * Pass `allowDeath` to price the `transfer_allow_death` call an explicit
+   * account-emptying Polkadot or Bittensor send signs.
    * Use {@link getMaxSendAmount} when the desired result is a balance-aware
    * maximum rather than the fee for one specified send.
    */
@@ -1350,8 +1401,11 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     memo?: string
     destinationTag?: number
     feeSettings?: FeeSettings
+    /** Price a send that spends the full available balance. */
+    sendMaxAmount?: boolean
     /** TON only: pay the fee in the jetton being sent through the gasless relay. */
     tonGasless?: boolean
+    allowDeath?: boolean
   }): Promise<SendFeeEstimate> {
     const feeAmountBase = await this.transactionBuilder.estimateSendFee(params)
     const feeCoin = getSendFeeCoin(params)
@@ -1414,6 +1468,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     feeSettings?: FeeSettings
     /** TON only: the relay commission is deducted from the jetton balance being sent. */
     tonGasless?: boolean
+    allowDeath?: boolean
   }): Promise<MaxSendAmount> {
     const walletCore = await this.wasmProvider.getWalletCore()
     // Validate receiver before fetching balance so bad input doesn't waste a
@@ -1946,13 +2001,22 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   }
 
   /**
+   * Get fiat values and per-asset failures for all assets on a chain.
+   * @param chain - The blockchain chain
+   * @param fiatCurrency - Optional currency override
+   */
+  async getValuesDetailed(chain: Chain, fiatCurrency?: FiatCurrency): Promise<FiatValuesResult> {
+    return this.fiatValueService.getValuesDetailed(chain, fiatCurrency)
+  }
+
+  /**
    * Refresh price data for specified chain or all chains.
    * @param chain - Chain to update, or 'all' for all chains
    */
   async updateValues(chain: Chain | 'all'): Promise<void> {
-    await this.fiatValueService.updateValues(chain)
+    const failures = await this.fiatValueService.updateValuesDetailed(chain)
     // Emit event
-    this.emit('valuesUpdated', { chain })
+    this.emit('valuesUpdated', { chain, failures })
   }
 
   /**
@@ -1962,6 +2026,11 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    */
   async getTotalValue(fiatCurrency?: FiatCurrency): Promise<Value> {
     return this.fiatValueService.getTotalValue(fiatCurrency)
+  }
+
+  /** Get the total for priced assets and report every asset omitted from it. */
+  async getTotalValueDetailed(fiatCurrency?: FiatCurrency): Promise<TotalValueDetailedResult> {
+    return this.fiatValueService.getTotalValueDetailed(fiatCurrency)
   }
 
   /**
@@ -2078,14 +2147,16 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   /** Portfolio overview: balances with fiat values + total. */
   async portfolio(fiatCurrency?: FiatCurrency): Promise<Portfolio> {
     const currency = (fiatCurrency ?? this._currency ?? 'usd') as FiatCurrency
-    const balances = Object.values(await this.balancesWithPrices(this._userChains, true, currency))
+    const result = await this.balancesWithPricesDetailed(this._userChains, true, currency)
+    const balances = Object.values(result.balances)
     const total = balances.reduce((sum, b) => sum + (b.fiatValue ?? 0), 0)
-    return { balances, totalValue: total.toFixed(2), currency }
+    return { balances, totalValue: total.toFixed(2), currency, failures: result.failures }
   }
 
   /**
    * Send tokens. Use amount "max" for the native balance minus fees, or the full token balance when native gas is covered. Set dryRun for fee estimates without signing.
    * `gasless` (TON jettons on a W5 account) pays the fee in the jetton itself through the relay, so no TON is needed.
+   * `allowDeath` empties a Polkadot or Bittensor account with `transfer_allow_death` — the chain reaps it below the existential deposit — so only pass it for an explicit user choice with the reap disclosed.
    */
   async send(params: {
     chain: Chain
@@ -2094,17 +2165,18 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     symbol?: string
     memo?: string
     destinationTag?: number
+    allowDeath?: boolean
     dryRun?: boolean
     gasless?: boolean
   }): Promise<SendResult> {
-    const { chain, to, amount, symbol, memo, destinationTag, dryRun, gasless } = params
+    const { chain, to, amount, symbol, memo, destinationTag, allowDeath, dryRun, gasless } = params
     const tokenInfo = this.resolveTokenInfo(chain, symbol)
     const coin = this.buildAccountCoin(chain, await this.address(chain), tokenInfo)
     const tonGasless = chain === Chain.Ton && Boolean(tokenInfo.contractAddress) && gasless === true
 
     let amountBigInt: bigint
     if (amount === 'max') {
-      const maxInfo = await this.getMaxSendAmount({ coin, receiver: to, memo, destinationTag, tonGasless })
+      const maxInfo = await this.getMaxSendAmount({ coin, receiver: to, memo, destinationTag, tonGasless, allowDeath })
       if (maxInfo.maxSendable <= 0n)
         throw new VaultError(VaultErrorCode.InvalidAmount, 'Insufficient balance to cover network fees')
       amountBigInt = maxInfo.maxSendable
@@ -2122,6 +2194,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       // it, so the payload records it here or nowhere.
       sendMaxAmount: amount === 'max',
       tonGasless,
+      allowDeath,
     })
 
     if (dryRun) {
@@ -2131,7 +2204,9 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
         amount: amountBigInt,
         memo,
         destinationTag,
+        sendMaxAmount: amount === 'max',
         tonGasless,
+        allowDeath,
       })
       // The network fee is paid in the chain's native asset, never in the token
       // being sent — except for a relayed TON send, whose commission is charged
@@ -2493,6 +2568,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
         }),
         amount: balance,
         memo: quote.native.memo,
+        sendMaxAmount: true,
       })
       fee = routerDepositFee === undefined || sendFee > routerDepositFee ? sendFee : routerDepositFee
       if (fee <= 0n) return { maxSwapable: 0n }

@@ -474,7 +474,7 @@ describe('prepareSwapTxFromKeys — amount consistency (ABTS/plan 005)', () => {
             cosmosWasm: {
               sender: thorCoin.address,
               contract: 'thor1contract',
-              executeMsg: JSON.stringify({ swap: { min: { min_return: '1', to: recipient } } }),
+              executeMsg: JSON.stringify({ swap: { min_return: '1', to: recipient } }),
               funds: [{ denom: 'rune', amount: '100000000' }],
             },
           },

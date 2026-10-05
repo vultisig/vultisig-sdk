@@ -136,6 +136,29 @@ describe('getMaxSendAmountFromKeys', () => {
     expect(balance - result.maxSendable - fee).toBeGreaterThanOrEqual(500n)
   })
 
+  it('spends the deposit too for a TAO max-send that is allowed to reap the account, and prices that call', async () => {
+    const balance = 1_000_000_000n
+    const fee = 200_000n
+    mockGetCoinBalance.mockResolvedValue(balance)
+    mockGetSendFeeEstimate.mockResolvedValue(fee)
+
+    const coin = {
+      chain: Chain.Bittensor,
+      address: '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty',
+      decimals: 9,
+      ticker: 'TAO',
+    } as any
+
+    const result = await getMaxSendAmountFromKeys(baseIdentity, {
+      coin,
+      receiver: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY',
+      allowDeath: true,
+    })
+
+    expect(result.maxSendable).toBe(balance - fee)
+    expect(mockGetSendFeeEstimate).toHaveBeenCalledWith(expect.objectContaining({ allowDeath: true }))
+  })
+
   it('returns the full 6-decimal ERC-20 balance and checks the native gas balance', async () => {
     const balance = 16_140_000n
     const fee = 20_000_000_000_000_000n
@@ -481,7 +504,37 @@ describe('computeMaxSendFromBalance', () => {
 
     expect(mockGetCoinBalance).not.toHaveBeenCalled()
     expect(mockGetSendFeeEstimate.mock.calls[0][0].amount).toBe(providedBalance)
+    expect(mockGetSendFeeEstimate.mock.calls[0][0].sendMaxAmount).toBe(true)
     expect(result.balance).toBe(providedBalance)
     expect(result.maxSendable).toBe(providedBalance - 1_000_000n)
+  })
+
+  it('requests a max plan so a full-balance UTXO fee estimate resolves to balance minus fee', async () => {
+    const balance = 12_621n
+    const fee = 500n
+    const planner = vi.fn(({ sendMaxAmount }: { sendMaxAmount?: boolean }) => {
+      if (!sendMaxAmount) return { error: 'Error_not_enough_utxos', utxos: [] }
+      return { fee, utxos: [{ amount: balance }] }
+    })
+    mockGetSendFeeEstimate.mockImplementation(input => {
+      const plan = planner(input)
+      if ('error' in plan) throw new Error(plan.error)
+      return plan.fee
+    })
+
+    await expect(
+      computeMaxSendFromBalance(baseIdentity, {
+        coin: {
+          chain: Chain.Bitcoin,
+          address: 'bc1qsender',
+          decimals: 8,
+          ticker: 'BTC',
+        } as any,
+        receiver: 'bc1qreceiver',
+        balance,
+      })
+    ).resolves.toEqual({ balance, fee, maxSendable: balance - fee })
+
+    expect(planner).toHaveBeenCalledWith(expect.objectContaining({ amount: balance, sendMaxAmount: true }))
   })
 })

@@ -732,7 +732,7 @@ console.log('Vault renamed to:', vault.name)
 
 ## Creating Vaults from Seedphrase
 
-Import existing wallets from BIP39 mnemonic phrases (12 or 24 words). This allows migrating wallets from other applications into Vultisig.
+Import existing wallets from BIP39 mnemonic phrases (12, 15, 18, 21 or 24 words). This allows migrating wallets from other applications into Vultisig.
 
 ### Validating a Seedphrase
 

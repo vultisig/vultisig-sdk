@@ -14,6 +14,7 @@ export type SendParams = {
   memo?: string
   destinationTag?: number
   gasless?: boolean // TON jettons on a W5 account: pay the fee in the jetton through the relay
+  allowDeath?: boolean // Empty a Polkadot/Bittensor account: sign transfer_allow_death so the chain reaps it
   yes?: boolean // Skip confirmation prompt
   dryRun?: boolean // Preview transaction without signing/broadcasting
   force?: boolean // Bypass the broadcast-journal duplicate guard
@@ -73,11 +74,10 @@ export type PortfolioSummary = {
     /** Fiat value of the native balance. Absent when the price lookup failed. */
     value?: Value
     /**
-     * Tracked tokens on this chain that carry a fiat value. Itemized so the
-     * breakdown accounts for the whole total instead of leaving token value as
-     * an unexplained gap between the total and the sum of the native rows.
+     * Tracked tokens on this chain. An unpriced token has a null value and is
+     * excluded from the portfolio total.
      */
-    tokens?: Array<{ tokenId: string; balance?: Balance; value: Value }>
+    tokens?: Array<{ tokenId: string; balance?: Balance; value: Value | null }>
   }>
 }
 
@@ -89,6 +89,7 @@ export type PortfolioSummary = {
 export type ChainFailure = {
   chain: Chain
   stage: 'balance' | 'value'
+  tokenId?: string
   error: string
 }
 

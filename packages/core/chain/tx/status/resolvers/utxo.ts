@@ -7,16 +7,26 @@ import { getBlockchairBaseUrl } from '../../../chains/utxo/client/getBlockchairB
 import { TxStatusResolver } from '../resolver'
 
 type BlockchairTxResponse = {
-  data: Record<
-    string,
-    {
-      transaction: {
-        block_id: number | null
-        fee?: number
-      }
-    }
-  >
+  data:
+    | []
+    | Record<
+        string,
+        {
+          transaction: {
+            block_id: number | null
+            fee?: number
+          }
+        }
+      >
 }
+
+const getBlockchairTransaction = (response: BlockchairTxResponse, hash: string) => {
+  if (!response.data || typeof response.data !== 'object' || Array.isArray(response.data)) return undefined
+  return response.data[hash]?.transaction
+}
+
+const isBlockchairNotFound = (response: BlockchairTxResponse): boolean =>
+  Array.isArray(response.data) && response.data.length === 0
 
 export const getUtxoTxStatus: TxStatusResolver<UtxoBasedChain> = async ({ chain, hash }) => {
   const baseUrl = getBlockchairBaseUrl(chain)
@@ -24,19 +34,15 @@ export const getUtxoTxStatus: TxStatusResolver<UtxoBasedChain> = async ({ chain,
 
   const { data: response, error } = await attempt(queryUrl<BlockchairTxResponse>(url))
 
-  if (error || !response || !response.data[hash]) {
-    // Transient RPC/network failure OR Blockchair affirmatively has no record of this
-    // hash at all — either way we can't confirm the tx is genuinely known. isKnown:false
-    // so verifyBroadcastByHash's safety net does NOT swallow a real broadcast failure as
-    // success (mirrors the isKnown convention every other chain resolver already uses —
-    // cosmos.ts/evm.ts/polkadot.ts/ripple.ts/solana.ts). Before this, a genuinely-failed
-    // broadcast (e.g. BadInputsUTxO, tx never reached the network) and a real in-flight
-    // tx were indistinguishable here — both returned bare `{status:'pending'}`, which
-    // verifyBroadcastByHash's `isKnown !== false` check treated as a confirmed positive.
+  if (error || !response) {
     return { status: 'pending', isKnown: false }
   }
 
-  const tx = response.data[hash].transaction
+  // Blockchair returns a successful response with data:[] when the hash has no record.
+  if (isBlockchairNotFound(response)) return { status: 'not_found', isKnown: false }
+
+  const tx = getBlockchairTransaction(response, hash)
+  if (!tx) return { status: 'pending', isKnown: false }
 
   if (tx.block_id === null || tx.block_id === -1) {
     // Blockchair HAS indexed this hash (mempool, not yet mined) — a real positive signal

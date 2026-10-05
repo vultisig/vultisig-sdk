@@ -1,4 +1,3 @@
-import { ApiPromise, HttpProvider } from '@polkadot/api'
 import { rootApiUrl } from '@vultisig/core-config'
 import { memoizeAsync } from '@vultisig/lib-utils/memoizeAsync'
 
@@ -12,7 +11,8 @@ export const assetHubRpcUrl = `${rootApiUrl}/dot-ah/`
  * For Asset Hub queries (e.g. pallet_assets), use assetHubRpcUrl directly
  * via the getAssetHubTokenBalance resolver instead.
  */
-export const getPolkadotClient = memoizeAsync(() => {
+export const getPolkadotClient = memoizeAsync(async () => {
+  const { ApiPromise, HttpProvider } = await import('@polkadot/api')
   const provider = new HttpProvider(polkadotRpcUrl)
   return ApiPromise.create({ provider })
 })

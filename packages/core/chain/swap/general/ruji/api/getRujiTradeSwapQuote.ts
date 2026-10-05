@@ -189,12 +189,12 @@ export const getRujiTradeSwapQuote = async ({
     throw new Error('RUJI Trade returned a zero-output quote.')
   }
 
+  // FIN's SwapRequest is untagged: a `{ min: { ... } }` wrapper would decode as an
+  // unguarded Yolo swap that drops both the minimum return and the recipient.
   const executeMsg = JSON.stringify({
     swap: {
-      min: {
-        min_return: calculateMinimumOutput(expectedOutput, slippageBps),
-        to: normalizedDestination,
-      },
+      min_return: calculateMinimumOutput(expectedOutput, slippageBps),
+      to: normalizedDestination,
     },
   })
 

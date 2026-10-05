@@ -46,6 +46,7 @@ describe('VaultBase balancesWithPrices', () => {
         getPrices,
         getPrice,
       },
+      balancesWithPricesDetailed: VaultBase.prototype.balancesWithPricesDetailed,
     }
 
     const result = await VaultBase.prototype.balancesWithPrices.call(
@@ -111,10 +112,40 @@ describe('VaultBase balancesWithPrices', () => {
         getPrices: vi.fn(),
         getPrice,
       },
+      balancesWithPricesDetailed: VaultBase.prototype.balancesWithPricesDetailed,
     }
 
     await VaultBase.prototype.balancesWithPrices.call(vault as never, [Chain.Ethereum], true, 'usd')
 
     expect(getPrice).toHaveBeenCalledWith(Chain.Ethereum, contractAddress, 'usd')
+  })
+
+  it('reports a native price failure and keeps the unpriced balance', async () => {
+    const balance: Balance = {
+      amount: '100000000',
+      formattedAmount: '1',
+      decimals: 8,
+      symbol: 'BTC',
+      chainId: Chain.Bitcoin,
+    }
+    const vault = {
+      _currency: 'usd',
+      balances: vi.fn().mockResolvedValue({ [Chain.Bitcoin]: balance }),
+      getTokens: vi.fn().mockReturnValue([]),
+      fiatValueService: {
+        getPrices: vi.fn().mockResolvedValue({}),
+        getPrice: vi.fn().mockRejectedValue(new Error('Native price unavailable')),
+      },
+    }
+
+    const result = await VaultBase.prototype.balancesWithPricesDetailed.call(
+      vault as never,
+      [Chain.Bitcoin],
+      false,
+      'usd'
+    )
+
+    expect(result.balances[Chain.Bitcoin]).toEqual(balance)
+    expect(result.failures).toEqual([{ chain: Chain.Bitcoin, error: 'Native price unavailable' }])
   })
 })
