@@ -10,7 +10,14 @@ import { TxStatusResolver } from '../resolver'
 const taostatsExtrinsicUrl = `${rootApiUrl}/tao-tx/v1`
 
 type TaostatsExtrinsicResponse = {
-  pagination: { page: number; limit: number; total: number }
+  pagination: {
+    current_page: number
+    per_page: number
+    total_items: number
+    total_pages: number
+    next_page: number | null
+    prev_page: number | null
+  }
   data: Array<{
     hash: string
     block_number: number
@@ -27,11 +34,18 @@ export const getBittensorTxStatus: TxStatusResolver<OtherChain.Bittensor> = asyn
     queryUrl<TaostatsExtrinsicResponse>(`${taostatsExtrinsicUrl}?${new URLSearchParams({ hash: txHash })}`)
   )
 
-  if (error || !response?.data?.length) {
+  if (error || !response || !Array.isArray(response.data)) {
     return { status: 'pending', isKnown: false }
   }
 
+  // A successful Taostats query with an empty data array has no matching extrinsic.
+  if (response.data.length === 0) return { status: 'not_found', isKnown: false }
+
   const extrinsic = response.data[0]
+  if (!extrinsic || typeof extrinsic !== 'object' || typeof extrinsic.success !== 'boolean') {
+    return { status: 'pending', isKnown: false }
+  }
+
   const feeCoin = chainFeeCoin[Chain.Bittensor]
   let receipt: { feeAmount: bigint; feeDecimals: number; feeTicker: string } | undefined
   if (extrinsic.fee) {

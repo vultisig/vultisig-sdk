@@ -65,16 +65,16 @@ describe('status resolver isKnown contract', () => {
     })
   })
 
-  it('marks Ton lookup failures and empty transaction lists as not known', async () => {
+  it('keeps Ton lookup failures pending and reports complete empty lookups as not_found', async () => {
     mocks.queryUrl.mockRejectedValueOnce(new Error('api down'))
     await expect(getTonTxStatus({ chain: OtherChain.Ton, hash })).resolves.toEqual({
       status: 'pending',
       isKnown: false,
     })
 
-    mocks.queryUrl.mockResolvedValueOnce({ transactions: [] })
+    mocks.queryUrl.mockResolvedValue({ transactions: [], traces: [] })
     await expect(getTonTxStatus({ chain: OtherChain.Ton, hash })).resolves.toEqual({
-      status: 'pending',
+      status: 'not_found',
       isKnown: false,
     })
   })
@@ -107,16 +107,26 @@ describe('status resolver isKnown contract', () => {
     })
   })
 
-  it('marks Bittensor lookup failures and empty indexer results as not known', async () => {
+  it('keeps Bittensor lookup failures pending and reports empty indexer results as not_found', async () => {
     mocks.queryUrl.mockRejectedValueOnce(new Error('api down'))
     await expect(getBittensorTxStatus({ chain: OtherChain.Bittensor, hash })).resolves.toEqual({
       status: 'pending',
       isKnown: false,
     })
 
-    mocks.queryUrl.mockResolvedValueOnce({ pagination: { page: 1, limit: 1, total: 0 }, data: [] })
+    mocks.queryUrl.mockResolvedValueOnce({
+      pagination: {
+        current_page: 1,
+        per_page: 50,
+        total_items: 0,
+        total_pages: 0,
+        next_page: null,
+        prev_page: null,
+      },
+      data: [],
+    })
     await expect(getBittensorTxStatus({ chain: OtherChain.Bittensor, hash })).resolves.toEqual({
-      status: 'pending',
+      status: 'not_found',
       isKnown: false,
     })
   })
