@@ -498,6 +498,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       async chains => {
         await this.addresses(chains)
       },
+      chains => this.addressService.getUnderivableChains(chains),
       () => this.save(),
       data => this.emit('chainAdded', data),
       data => this.emit('chainRemoved', data)

@@ -10,12 +10,16 @@ import { InvalidChainError, InvalidInputError } from '../core'
 import { createSpinner, info, isJsonOutput, outputJson, printResult, success } from '../lib/output'
 import { displayAddresses } from '../ui'
 
-const MLDSA_HINT = 'Run "vultisig add-mldsa --email <email>" to add ML-DSA keys to this vault'
-const MLDSA_ADD_CHAIN_HINT =
-  'Run "vultisig add-mldsa --email <email>" to add ML-DSA keys, then "vultisig chains --add QBTC"'
+type HintVault = { type: 'fast' | 'secure' }
 
-function addressFailureHint(error: string): string | undefined {
-  return /mldsa/i.test(error) ? MLDSA_HINT : undefined
+function mldsaHint(vault: HintVault): string {
+  return vault.type === 'secure'
+    ? 'ML-DSA keys can currently be added only to fast vaults, so this secure vault cannot derive QBTC addresses'
+    : 'Run "vultisig add-mldsa --email <email>" to add ML-DSA keys to this vault'
+}
+
+function addressFailureHint(error: string, vault: HintVault): string | undefined {
+  return /mldsa/i.test(error) ? mldsaHint(vault) : undefined
 }
 
 export type ChainsOptions = {
@@ -36,17 +40,21 @@ export async function executeChains(ctx: CommandContext, options: ChainsOptions 
     const underivable = vault.getUnderivableChains([...SUPPORTED_CHAINS])
     const underivableSet = new Set(underivable)
     const derivable = SUPPORTED_CHAINS.filter(chain => !underivableSet.has(chain))
+    const next = [...new Set([...vault.chains, ...derivable])]
     const { failures } = await vault.addressesDetailed(underivable)
-    const skipped = underivable.map(chain => ({
+    const underivableRows = underivable.map(chain => ({
       chain,
       reason:
         failures.find(failure => failure.chain === chain)?.error ?? 'The vault cannot derive an address for this chain',
-      hint: chain === 'QBTC' ? MLDSA_ADD_CHAIN_HINT : 'Add the keys required to derive this chain before enabling it',
+      hint: chain === 'QBTC' ? mldsaHint(vault) : 'Add the keys required to derive this chain before enabling it',
     }))
+    const skipped = underivableRows.filter(({ chain }) => !currentChains.has(chain))
+    const unavailable = underivableRows.filter(({ chain }) => currentChains.has(chain))
     const spinner = createSpinner(`Adding all ${SUPPORTED_CHAINS.length} supported chains...`)
-    await vault.setChains(derivable)
-    const addedCount = derivable.filter(chain => !currentChains.has(chain)).length
-    spinner.succeed(`Added ${addedCount} chains (${derivable.length} enabled)`)
+    const changed = next.length !== vault.chains.length || next.some((chain, index) => chain !== vault.chains[index])
+    if (changed) await vault.setChains(next)
+    const addedCount = next.filter(chain => !currentChains.has(chain)).length
+    spinner.succeed(`Added ${addedCount} chains (${next.length} enabled)`)
 
     if (isJsonOutput()) {
       outputJson({
@@ -54,12 +62,17 @@ export async function executeChains(ctx: CommandContext, options: ChainsOptions 
         added: addedCount,
         total: SUPPORTED_CHAINS.length,
         skipped,
+        unavailable,
       })
       return
     }
     info(chalk.gray('\nAll derivable supported chains are now enabled.'))
     skipped.forEach(({ chain, reason, hint }) => {
       info(`Skipped ${chain}: ${reason}`)
+      info(hint)
+    })
+    unavailable.forEach(({ chain, reason, hint }) => {
+      info(`Enabled but unavailable ${chain}: ${reason}`)
       info(hint)
     })
     return
@@ -82,7 +95,7 @@ export async function executeChains(ctx: CommandContext, options: ChainsOptions 
     if (vault.getUnderivableChains([options.add]).length > 0) {
       const { failures } = await vault.addressesDetailed([options.add])
       const reason = failures[0]?.error ?? 'The vault cannot derive an address for this chain'
-      throw new InvalidInputError(reason, options.add === 'QBTC' ? MLDSA_ADD_CHAIN_HINT : undefined)
+      throw new InvalidInputError(reason, options.add === 'QBTC' ? mldsaHint(vault) : undefined)
     }
     const alreadyActive = vault.chains.includes(options.add)
     if (!alreadyActive) {
@@ -130,7 +143,7 @@ export async function executeAddresses(ctx: CommandContext): Promise<void> {
   const failures = addressFailures.map(({ chain, error }) => ({
     chain,
     error,
-    ...(addressFailureHint(error) ? { hint: addressFailureHint(error) } : {}),
+    ...(addressFailureHint(error, vault) ? { hint: addressFailureHint(error, vault) } : {}),
   }))
 
   spinner.succeed('Addresses loaded')

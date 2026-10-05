@@ -360,8 +360,21 @@ describe('classifyError with VaultError', () => {
       code: 'INVALID_INPUT',
       exitCode: ExitCode.INVALID_INPUT,
       retryable: false,
-      hint: 'Run "vultisig add-mldsa --email <email>" to add ML-DSA keys to this vault',
+      hint: 'This vault has no ML-DSA key. On a fast vault, run "vultisig add-mldsa --email <email>" to add one.',
     })
+  })
+
+  it('keeps unrelated address derivation failures under the pre-existing unknown classification', () => {
+    const err = new VaultError(
+      VaultErrorCode.AddressDerivationFailed,
+      'Failed to derive address for Ethereum',
+      new Error('WalletCore init failed')
+    )
+
+    const result = classifyError(err)
+
+    expect(result).toBeInstanceOf(UnknownError)
+    expect(result).toMatchObject({ code: 'UNKNOWN_ERROR', exitCode: ExitCode.UNKNOWN, retryable: false })
   })
 
   it('maps InvalidConfig with "Unknown chain" message to InvalidChainError', () => {

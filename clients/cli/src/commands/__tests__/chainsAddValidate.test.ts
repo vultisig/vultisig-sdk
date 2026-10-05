@@ -14,9 +14,10 @@ import { executeAddresses, executeChains } from '../chains'
 
 const MLDSA_ERROR = 'Vault has no MLDSA public key (required for QBTC address derivation)'
 
-function makeVaultAndCtx(initialChains: string[], hasMldsa = true) {
+function makeVaultAndCtx(initialChains: string[], hasMldsa = true, type: 'fast' | 'secure' = 'fast') {
   const chains = [...initialChains]
   const vault = {
+    type,
     get chains() {
       return chains
     },
@@ -24,6 +25,7 @@ function makeVaultAndCtx(initialChains: string[], hasMldsa = true) {
       chains.push(chain)
     }),
     address: vi.fn(async (chain: string) => `addr-for-${chain}`),
+    addresses: vi.fn(async () => ({ Ethereum: '0xabc' })),
     addressesDetailed: vi.fn(async () => ({
       addresses: { Ethereum: '0xabc' },
       failures: hasMldsa
@@ -129,10 +131,33 @@ describe('chains --add fail-closed validation', () => {
         {
           chain: Chain.QBTC,
           reason: MLDSA_ERROR,
-          hint: 'Run "vultisig add-mldsa --email <email>" to add ML-DSA keys, then "vultisig chains --add QBTC"',
+          hint: 'Run "vultisig add-mldsa --email <email>" to add ML-DSA keys to this vault',
         },
       ],
+      unavailable: [],
     })
+  })
+
+  it('keeps an enabled underivable QBTC chain and reports it as unavailable', async () => {
+    configureOutput({ format: 'json' })
+    const { vault, ctx } = makeVaultAndCtx([Chain.QBTC], false)
+    const out = captureStdout()
+
+    await executeChains(ctx, { addAll: true })
+    out.restore()
+
+    expect(vault.setChains).toHaveBeenCalledOnce()
+    expect(vault.setChains.mock.calls[0]?.[0]).toContain(Chain.QBTC)
+    expect(vault.chains).toContain(Chain.QBTC)
+    const envelope = JSON.parse(out.calls.join(''))
+    expect(envelope.data.skipped).toEqual([])
+    expect(envelope.data.unavailable).toEqual([
+      {
+        chain: Chain.QBTC,
+        reason: MLDSA_ERROR,
+        hint: 'Run "vultisig add-mldsa --email <email>" to add ML-DSA keys to this vault',
+      },
+    ])
   })
 
   it('includes QBTC in --add-all when the vault has an MLDSA key', async () => {
@@ -146,6 +171,15 @@ describe('chains --add fail-closed validation', () => {
     expect(vault.setChains.mock.calls[0]?.[0]).toContain(Chain.QBTC)
     const envelope = JSON.parse(out.calls.join(''))
     expect(envelope.data.skipped).toEqual([])
+    expect(envelope.data.unavailable).toEqual([])
+  })
+
+  it('does not persist --add-all when the enabled chain list is already complete', async () => {
+    const { vault, ctx } = makeVaultAndCtx([...SUPPORTED_CHAINS])
+
+    await executeChains(ctx, { addAll: true })
+
+    expect(vault.setChains).not.toHaveBeenCalled()
   })
 
   it('rejects --add QBTC before persisting when the vault has no MLDSA key', async () => {
@@ -159,11 +193,9 @@ describe('chains --add fail-closed validation', () => {
     expect(vault.addChain).not.toHaveBeenCalled()
   })
 
-  it('returns address failures in JSON without writing a stderr trace', async () => {
+  it('returns address failures in JSON through addressesDetailed', async () => {
     configureOutput({ format: 'json' })
-    const { ctx } = makeVaultAndCtx([Chain.Ethereum, Chain.QBTC], false)
-    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { vault, ctx } = makeVaultAndCtx([Chain.Ethereum, Chain.QBTC], false)
     const out = captureStdout()
 
     await executeAddresses(ctx)
@@ -180,7 +212,46 @@ describe('chains --add fail-closed validation', () => {
         },
       ],
     })
-    expect(stderr).not.toHaveBeenCalled()
-    expect(warn).not.toHaveBeenCalled()
+    expect(vault.addressesDetailed).toHaveBeenCalledOnce()
+    expect(vault.addresses).not.toHaveBeenCalled()
+  })
+
+  it('uses vault-type-aware ML-DSA hints on every chain command surface', async () => {
+    configureOutput({ format: 'json' })
+    const { ctx: secureCtx } = makeVaultAndCtx([Chain.QBTC], false, 'secure')
+    const addAllOut = captureStdout()
+    await executeChains(secureCtx, { addAll: true })
+    addAllOut.restore()
+    const addAllEnvelope = JSON.parse(addAllOut.calls.join(''))
+
+    const addressesOut = captureStdout()
+    await executeAddresses(secureCtx)
+    addressesOut.restore()
+    const addressesEnvelope = JSON.parse(addressesOut.calls.join(''))
+
+    let addError: InvalidInputError | undefined
+    try {
+      await executeChains(secureCtx, { add: Chain.QBTC })
+    } catch (error) {
+      addError = error as InvalidInputError
+    }
+
+    const secureHints = [
+      addAllEnvelope.data.unavailable[0].hint,
+      addressesEnvelope.data.failures[0].hint,
+      addError?.hint,
+    ]
+    expect(secureHints).toEqual([
+      'ML-DSA keys can currently be added only to fast vaults, so this secure vault cannot derive QBTC addresses',
+      'ML-DSA keys can currently be added only to fast vaults, so this secure vault cannot derive QBTC addresses',
+      'ML-DSA keys can currently be added only to fast vaults, so this secure vault cannot derive QBTC addresses',
+    ])
+    expect(secureHints.every(hint => !hint?.includes('add-mldsa'))).toBe(true)
+
+    const { ctx: fastCtx } = makeVaultAndCtx([Chain.QBTC], false, 'fast')
+    const fastOut = captureStdout()
+    await executeAddresses(fastCtx)
+    fastOut.restore()
+    expect(JSON.parse(fastOut.calls.join('')).data.failures[0].hint).toContain('add-mldsa')
   })
 })

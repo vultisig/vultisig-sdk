@@ -2,6 +2,11 @@ import { Chain } from '@vultisig/core-chain/Chain'
 
 import { DEFAULT_CHAINS } from '../../constants'
 import { type CacheService } from '../../services/CacheService'
+import { VaultError, VaultErrorCode } from '../VaultError'
+
+const addressRequirementReasons: Partial<Record<Chain, string>> = {
+  [Chain.QBTC]: 'Vault has no MLDSA public key (required for QBTC address derivation)',
+}
 
 /**
  * PreferencesService
@@ -20,6 +25,7 @@ export class PreferencesService {
     private getCurrency: () => string,
     private setCurrencyValue: (currency: string) => void,
     private deriveAddresses: (chains: Chain[]) => Promise<void>,
+    private getUnderivableChains: (chains: Chain[]) => Chain[],
     private saveVault: () => Promise<void>,
     private emitChainAdded: (data: { chain: Chain }) => void,
     private emitChainRemoved: (data: { chain: Chain }) => void
@@ -33,9 +39,10 @@ export class PreferencesService {
    * @param chains Array of chains to set
    */
   async setChains(chains: Chain[]): Promise<void> {
-    // Pre-derive addresses for all chains BEFORE mutating state
-    // This ensures validation happens first - if any derivation fails,
-    // the vault state remains unchanged
+    const currentChains = new Set(this.getUserChains())
+    this.assertNewChainsDerivable(chains.filter(chain => !currentChains.has(chain)))
+
+    // Pre-warm address caches before updating the preference list.
     await this.deriveAddresses(chains)
 
     // Only mutate state after validation succeeds
@@ -54,9 +61,9 @@ export class PreferencesService {
     const currentChains = this.getUserChains()
 
     if (!currentChains.includes(chain)) {
-      // Pre-derive address for this chain BEFORE mutating state
-      // This ensures validation happens first - if derivation fails,
-      // the vault state remains unchanged
+      this.assertNewChainsDerivable([chain])
+
+      // Pre-warm the address cache before updating the preference list.
       await this.deriveAddresses([chain])
 
       // Only mutate state after validation succeeds
@@ -67,6 +74,19 @@ export class PreferencesService {
       // Emit chain added event
       this.emitChainAdded({ chain })
     }
+  }
+
+  private assertNewChainsDerivable(chains: Chain[]): void {
+    const underivable = this.getUnderivableChains(chains)
+    if (underivable.length === 0) return
+
+    const chain = underivable[0]
+    const reason = addressRequirementReasons[chain] ?? `Vault cannot derive an address for ${chain}`
+    throw new VaultError(
+      VaultErrorCode.AddressDerivationFailed,
+      `Failed to derive address for ${chain}`,
+      new Error(reason)
+    )
   }
 
   /**
