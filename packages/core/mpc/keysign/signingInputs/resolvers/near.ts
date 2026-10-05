@@ -1,6 +1,7 @@
 import { Buffer } from 'buffer'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { isNearAccountId, isNearImplicitAccountId } from '@vultisig/core-chain/chains/near/accountId'
+import { NEAR_UNSIGNED_DECIMAL } from '@vultisig/core-chain/chains/near/api'
 import { getCoinType } from '@vultisig/core-chain/coin/coinType'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { TW } from '@trustwallet/wallet-core'
@@ -13,7 +14,6 @@ import { Coin } from '@vultisig/core-mpc/types/vultisig/keysign/v1/coin_pb'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { SigningInputsResolver } from '../resolver'
 
-const UNSIGNED_DECIMAL = /^\d+$/
 const ED25519_PUBLIC_KEY_HEX = /^[0-9a-f]{64}$/
 
 const MAX_U64 = (1n << 64n) - 1n
@@ -22,7 +22,7 @@ const BLOCK_HASH_BYTES = 32
 const U128_BYTES = 16
 
 const parseUnsignedBigInt = (value: string, label: string, maximum: bigint) => {
-  if (!UNSIGNED_DECIMAL.test(value)) {
+  if (!NEAR_UNSIGNED_DECIMAL.test(value)) {
     throw new Error(`Invalid NEAR ${label}: ${value} is not an unsigned decimal integer`)
   }
 
