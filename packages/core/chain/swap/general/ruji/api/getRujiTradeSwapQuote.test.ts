@@ -70,7 +70,7 @@ describe('getRujiTradeSwapQuote', () => {
         sender: address,
         contract: address,
         executeMsg: JSON.stringify({
-          swap: { min: { min_return: '973170', to: address } },
+          swap: { min_return: '973170', to: address },
         }),
         funds: [{ denom, amount: '1000000' }],
       },
@@ -151,7 +151,7 @@ describe('getRujiTradeSwapQuote', () => {
       cosmosWasm: {
         sender: address,
         contract: address,
-        executeMsg: JSON.stringify({ swap: { min: { min_return: '988142', to: address } } }),
+        executeMsg: JSON.stringify({ swap: { min_return: '988142', to: address } }),
       },
     })
   })

@@ -101,7 +101,7 @@ export function displayPortfolio(portfolio: PortfolioSummary, currency: FiatCurr
       Chain: chain,
       Amount: token.balance?.formattedAmount ?? '-',
       Symbol: token.balance?.symbol ?? token.tokenId,
-      Value: `${token.value.amount} ${token.value.currency.toUpperCase()}`,
+      Value: token.value ? `${token.value.amount} ${token.value.currency.toUpperCase()}` : '— no price',
     })),
   ])
 
