@@ -344,8 +344,7 @@ type BuildEvmTxInput = {
   targetAddress: string | undefined
   chain: Chain
   approvalTx?: SwapKitSwapResponse['approvalTx']
-  /** Omitted when the response itemizes no affiliate/service fee at all. */
-  affiliateFee?: SwapFee
+  fees: SwapKitSwapFees
 }
 
 const buildEvmTx = async ({
@@ -354,7 +353,7 @@ const buildEvmTx = async ({
   targetAddress,
   chain,
   approvalTx,
-  affiliateFee,
+  fees: { affiliate, protocol },
 }: BuildEvmTxInput): Promise<GeneralSwapTx> => {
   if (!isRecord(tx)) {
     throw new Error('SwapKit EVM route did not return a transaction object.')
@@ -395,8 +394,8 @@ const buildEvmTx = async ({
       value: bigintString(evmTx.value),
       gasLimit: safeBigInt(gas),
       ...(approvalAddress ? { approvalAddress } : {}),
-      // SwapKit itemizes the affiliate/service fee it charges. The Solana
-      // branch already surfaces it; leaving it off the EVM branch made an
+      // SwapKit itemizes the affiliate and service fees it charges. The Solana
+      // branch already surfaces them; leaving them off the EVM branch made an
       // aggregator swap look like it carried no swap fee at all, so the fee row
       // had nothing to show and the total omitted it.
       //
@@ -404,7 +403,8 @@ const buildEvmTx = async ({
       // shape that could not be resolved — because none of them establishes an
       // amount we can vouch for. Consumers report the fee as part of the quoted
       // rate rather than asserting a zero.
-      ...(affiliateFee && affiliateFee.amount > 0n ? { affiliateFee } : {}),
+      ...(affiliate && affiliate.amount > 0n ? { affiliateFee: affiliate } : {}),
+      ...(protocol && protocol.amount > 0n ? { protocolFee: protocol } : {}),
     },
   }
 }
@@ -454,14 +454,24 @@ const toSwapKitFeeAmount = (amount: string, decimals: number, type: string): big
   }
 }
 
-const getSwapKitSwapFee = (
+/**
+ * SwapKit's itemized charges, split by who keeps the money: `affiliate` is the
+ * integrator's cut requested through `affiliateFee`, `protocol` is SwapKit's
+ * own `service` fee charged on top of it (15 bps on vultisig-sdk#2396's route).
+ */
+type SwapKitSwapFees = {
+  affiliate?: SwapFee
+  protocol?: SwapFee
+}
+
+const getSwapKitSwapFees = (
   fees: SwapKitSwapResponse['fees'],
   from: AccountCoin<SwapKitSourceChain>,
   to: AccountCoin,
   routeProvider: string | undefined,
   fromMetadata: SwapKitChainMetadata,
   toMetadata: SwapKitChainMetadata
-): SwapFee => {
+): SwapKitSwapFees => {
   const feeCoins: { coin: SwapKitAssetCoin; metadata: SwapKitChainMetadata }[] = [
     { coin: from, metadata: fromMetadata },
     { coin: to, metadata: toMetadata },
@@ -474,7 +484,8 @@ const getSwapKitSwapFee = (
     metadata,
     asset: toSwapKitAsset(coin, metadata).toLowerCase(),
   }))
-  let result: SwapFee | undefined
+  const result: SwapKitSwapFees = {}
+  let feeCoin: SwapFee | undefined
 
   for (const fee of fees ?? []) {
     const type = fee.type?.toLowerCase()
@@ -512,14 +523,19 @@ const getSwapKitSwapFee = (
       throw new SwapKitFeeShapeError(`SwapKit ${type} fee amount cannot be negative.`)
     }
 
-    if (result && !sameSwapFeeCoin(result, current)) {
+    // A cosigning peer sees both fees as one `swap_fee`, which only adds up
+    // when they share a coin.
+    if (feeCoin && !sameSwapFeeCoin(feeCoin, current)) {
       throw new SwapKitFeeShapeError('SwapKit affiliate and service fees use different assets.')
     }
+    feeCoin = current
 
-    result = result ? { ...result, amount: result.amount + current.amount } : current
+    const slot = type === 'affiliate' ? 'affiliate' : 'protocol'
+    const previous = result[slot]
+    result[slot] = previous ? { ...previous, amount: previous.amount + current.amount } : current
   }
 
-  return result ?? { amount: 0n, chain: from.chain, id: from.id, decimals: from.decimals }
+  return result
 }
 
 const buildSolanaTx = (
@@ -537,12 +553,14 @@ const buildSolanaTx = (
 
   const decimals = chainFeeCoin[Chain.Solana].decimals
   const networkFee = getSwapKitFeeAmount(fees, 'network', decimals)
+  const { affiliate, protocol } = getSwapKitSwapFees(fees, from, to, routeProvider, fromMetadata, toMetadata)
 
   return {
     solana: {
       data: tx,
       networkFee,
-      swapFee: getSwapKitSwapFee(fees, from, to, routeProvider, fromMetadata, toMetadata),
+      swapFee: affiliate ?? { amount: 0n, chain: from.chain, id: from.id, decimals: from.decimals },
+      ...(protocol ? { protocolFee: protocol } : {}),
     },
   }
 }
@@ -825,7 +843,7 @@ const buildTransferTx = ({
 
   // Same fee the EVM branch surfaces, and absent on the same terms: a zero or
   // unresolved amount is reported as no fee rather than as a fee of nothing.
-  const swapFee = getSwapKitDisplaySwapFee({
+  const { affiliate, protocol } = getSwapKitDisplaySwapFees({
     fees: response.fees,
     from,
     to: toCoin,
@@ -843,7 +861,8 @@ const buildTransferTx = ({
     ...(response.tx ? { txPayload } : {}),
     ...(response.inboundAddress ? { inboundAddress: response.inboundAddress } : {}),
     ...(response.swapId ? { swapId: response.swapId } : {}),
-    ...(swapFee && swapFee.amount > 0n ? { swapFee } : {}),
+    ...(affiliate && affiliate.amount > 0n ? { swapFee: affiliate } : {}),
+    ...(protocol && protocol.amount > 0n ? { protocolFee: protocol } : {}),
   }
 
   return { transfer }
@@ -886,7 +905,7 @@ const buildSwapKitTx = (
     targetAddress: response.targetAddress,
     chain: from.chain,
     approvalTx: response.approvalTx,
-    affiliateFee: getSwapKitDisplaySwapFee({
+    fees: getSwapKitDisplaySwapFees({
       fees: response.fees,
       from,
       to,
@@ -898,7 +917,7 @@ const buildSwapKitTx = (
   })
 }
 
-type GetSwapKitDisplaySwapFeeInput = {
+type GetSwapKitDisplaySwapFeesInput = {
   fees: SwapKitSwapResponse['fees']
   from: AccountCoin<SwapKitSourceChain>
   to: AccountCoin
@@ -909,17 +928,17 @@ type GetSwapKitDisplaySwapFeeInput = {
 }
 
 /**
- * SwapKit's affiliate/service fee for an EVM or transfer route, or `undefined`
- * when its shape cannot be resolved.
+ * SwapKit's affiliate and service fees for an EVM or transfer route, or none
+ * when their shape cannot be resolved.
  *
  * The fee is not part of what either route signs — calldata for EVM, a
  * destination and an amount for a transfer — so an unexpected shape must never
  * take down a route that would otherwise sign. Only [SwapKitFeeShapeError] is
  * swallowed; anything else is a bug in the resolution and stays loud. The
- * Solana branch calls `getSwapKitSwapFee` bare and lets it throw on purpose:
+ * Solana branch calls `getSwapKitSwapFees` bare and lets it throw on purpose:
  * its tx type requires the fee, so an unresolved one really is fatal there.
  */
-const getSwapKitDisplaySwapFee = ({
+const getSwapKitDisplaySwapFees = ({
   fees,
   from,
   to,
@@ -927,16 +946,16 @@ const getSwapKitDisplaySwapFee = ({
   fromMetadata,
   toMetadata,
   route,
-}: GetSwapKitDisplaySwapFeeInput): SwapFee | undefined => {
+}: GetSwapKitDisplaySwapFeesInput): SwapKitSwapFees => {
   try {
-    return getSwapKitSwapFee(fees, from, to, routeProvider, fromMetadata, toMetadata)
+    return getSwapKitSwapFees(fees, from, to, routeProvider, fromMetadata, toMetadata)
   } catch (error) {
     if (!(error instanceof SwapKitFeeShapeError)) {
       throw error
     }
 
     console.warn(`[getSwapKitQuote] unresolved SwapKit fee on a ${route} route; reporting none`, error)
-    return undefined
+    return {}
   }
 }
 

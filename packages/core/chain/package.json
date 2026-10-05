@@ -1958,6 +1958,11 @@
       "import": "./dist/swap/general/lifi/api/lifiSwapFeeChain.js",
       "default": "./dist/swap/general/lifi/api/lifiSwapFeeChain.js"
     },
+    "./swap/general/lifi/api/lifiSwapFees": {
+      "types": "./dist/swap/general/lifi/api/lifiSwapFees.d.ts",
+      "import": "./dist/swap/general/lifi/api/lifiSwapFees.js",
+      "default": "./dist/swap/general/lifi/api/lifiSwapFees.js"
+    },
     "./swap/general/lifi/config": {
       "types": "./dist/swap/general/lifi/config.d.ts",
       "import": "./dist/swap/general/lifi/config.js",

@@ -454,6 +454,13 @@ export class SwapService {
               price: feePrice,
             })
           : undefined,
+        protocol: fees.protocol
+          ? getCoinValue({
+              amount: fees.protocol,
+              decimals: feeTokenDecimals,
+              price: feePrice,
+            })
+          : undefined,
         total: getCoinValue({
           amount: fees.total,
           decimals: feeTokenDecimals,
