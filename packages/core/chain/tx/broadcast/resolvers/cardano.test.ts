@@ -31,7 +31,7 @@ vi.mock('../verifyBroadcastByHash', () => ({
 import { OtherChain } from '@vultisig/core-chain/Chain'
 
 import { BroadcastErrorCode } from '../resolver'
-import { broadcastCardanoTx, getCardanoTtlFreshnessError } from './cardano'
+import { broadcastCardanoTx, cardanoSpentInputsVerificationAttempts, getCardanoTtlFreshnessError } from './cardano'
 
 const txWithTtl = (ttl: number) =>
   ({
@@ -200,30 +200,60 @@ describe('broadcastCardanoTx', () => {
     })
   })
 
-  it('accepts the mempool rejection a duplicate broadcast gets, with the locally computed hash', async () => {
-    // The reply the losing device of a multi-device keysign gets from the node
-    // (captured live): the winner's copy already spent every input. It may
-    // still be in the mempool, where no hash lookup can see it yet.
+  // The reply the device that loses a multi-device broadcast race gets from
+  // the node (captured live). The same text answers a transaction whose inputs
+  // another transaction spent, so it must not be accepted on its own.
+  const spentInputsReply = {
+    txHash: null,
+    errorMessage: 'All inputs are spent. Transaction has probably already been included',
+    rpcErrorCode: 3997,
+    rpcErrorDetail: 'All inputs are spent. Transaction has probably already been included',
+  }
+
+  it('waits for the next block to confirm the hash when the node says the inputs are spent', async () => {
     const tx = txWithTtl(1_000)
     mocks.getCardanoCurrentSlot.mockResolvedValue(939n)
-    mocks.submitCardanoCbor.mockResolvedValue({
-      txHash: null,
-      errorMessage: 'All inputs are spent. Transaction has probably already been included',
-      rpcErrorCode: 3997,
-      rpcErrorDetail: 'All inputs are spent. Transaction has probably already been included',
-    })
-    mocks.getCardanoTxHash.mockResolvedValue('0xlocal-hash')
+    mocks.submitCardanoCbor.mockResolvedValue(spentInputsReply)
+    mocks.verifyBroadcastByHash.mockResolvedValue('verified-hash')
 
     await expect(broadcastCardanoTx({ chain, tx })).resolves.toEqual({
       status: 'accepted',
       finality: 'pending',
-      txHash: 'local-hash',
+      txHash: 'verified-hash',
     })
 
-    expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
+    expect(mocks.verifyBroadcastByHash).toHaveBeenCalledWith({
+      chain,
+      tx,
+      error: expect.objectContaining({
+        message:
+          'Failed to broadcast transaction: All inputs are spent. Transaction has probably already been included',
+      }),
+      maxAttempts: cardanoSpentInputsVerificationAttempts,
+    })
+    expect(mocks.getCardanoTxHash).not.toHaveBeenCalled()
   })
 
-  it('accepts the unknown-output-reference code a duplicate broadcast used to get', async () => {
+  it('reports a failure when the hash never shows up, because another transaction spent the inputs', async () => {
+    const tx = txWithTtl(1_000)
+    const verifyError = new Error(
+      'Failed to broadcast transaction: All inputs are spent. Transaction has probably already been included'
+    )
+    mocks.getCardanoCurrentSlot.mockResolvedValue(939n)
+    mocks.submitCardanoCbor.mockResolvedValue(spentInputsReply)
+    mocks.verifyBroadcastByHash.mockRejectedValue(verifyError)
+
+    await expect(broadcastCardanoTx({ chain, tx })).resolves.toEqual({
+      status: 'failed',
+      code: BroadcastErrorCode.Rejected,
+      retryable: false,
+      cause: verifyError,
+    })
+
+    expect(mocks.getCardanoTxHash).not.toHaveBeenCalled()
+  })
+
+  it('still accepts code 3117 with the locally computed hash', async () => {
     const tx = txWithTtl(1_000)
     mocks.getCardanoCurrentSlot.mockResolvedValue(939n)
     mocks.submitCardanoCbor.mockResolvedValue({ txHash: null, errorMessage: 'unknown inputs', rpcErrorCode: 3117 })
