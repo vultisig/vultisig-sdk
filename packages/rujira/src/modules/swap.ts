@@ -61,7 +61,10 @@ export class RujiraSwap {
     }
 
     if (!skipCache && this.quoteCache) {
-      const cached = this.quoteCache.get(params.fromAsset, params.toAsset, params.amount)
+      const entry = this.quoteCache.get(params.fromAsset, params.toAsset, params.amount)
+      // The cache key ignores destination and slippage, so a hit must carry this
+      // request's params; execute() routes output to quote.params.destination.
+      const cached = entry ? { ...entry, params } : null
       if (cached) {
         if (Date.now() >= cached.expiresAt) {
           // expired; fall through to fetch
