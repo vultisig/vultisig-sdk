@@ -1,6 +1,14 @@
 import { readFileSync } from 'node:fs'
 
-import type { Balance, Chain as ChainType, FiatCurrency, Value, VaultBase } from '@vultisig/sdk'
+import type {
+  Balance,
+  Chain as ChainType,
+  FiatCurrency,
+  FiatValuesResult,
+  Token,
+  Value,
+  VaultBase,
+} from '@vultisig/sdk'
 import { Chain, SUPPORTED_CHAINS } from '@vultisig/sdk'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -32,12 +40,15 @@ type VaultOverrides = {
   balance: (chain: ChainType, tokenId?: string) => Promise<Balance>
   getValue: (chain: ChainType, tokenId: string | undefined, currency: FiatCurrency) => Promise<Value>
   getValues?: (chain: ChainType, currency: FiatCurrency) => Promise<Record<string, Value>>
+  getValuesDetailed?: (chain: ChainType, currency: FiatCurrency) => Promise<FiatValuesResult>
+  tokens?: Record<string, Token[]>
 }
 
 function makeCtx(overrides: VaultOverrides): CommandContext {
   const vault = {
     currency: 'usd' as FiatCurrency,
     chains: overrides.chains,
+    tokens: overrides.tokens ?? {},
     setCurrency: vi.fn(async () => {}),
     balance: vi.fn(overrides.balance),
     getValue: vi.fn(overrides.getValue),
@@ -45,6 +56,15 @@ function makeCtx(overrides: VaultOverrides): CommandContext {
       overrides.getValues ??
         (async (chain: ChainType, currency: FiatCurrency) => ({
           native: await overrides.getValue(chain, undefined, currency),
+        }))
+    ),
+    getValuesDetailed: vi.fn(
+      overrides.getValuesDetailed ??
+        (async (chain: ChainType, currency: FiatCurrency) => ({
+          values: overrides.getValues
+            ? await overrides.getValues(chain, currency)
+            : { native: await overrides.getValue(chain, undefined, currency) },
+          failures: [],
         }))
     ),
   } as unknown as VaultBase
@@ -250,7 +270,10 @@ describe('executePortfolio partial-failure reporting', () => {
       (sum, entry) =>
         sum +
         parseFloat(entry.value?.amount ?? '0') +
-        (entry.tokens ?? []).reduce((tokenSum, token) => tokenSum + parseFloat(token.value.amount), 0),
+        (entry.tokens ?? []).reduce(
+          (tokenSum, token) => tokenSum + (token.value === null ? 0 : parseFloat(token.value.amount)),
+          0
+        ),
       0
     )
   }
@@ -258,6 +281,18 @@ describe('executePortfolio partial-failure reporting', () => {
   it('reports a total equal to the sum of its own breakdown when a token is held', async () => {
     const ctx = makeCtx({
       chains: [Chain.Ethereum, Chain.Bitcoin],
+      tokens: {
+        [Chain.Ethereum]: [
+          {
+            id: USDC,
+            symbol: 'USDC',
+            name: 'USD Coin',
+            decimals: 6,
+            chainId: Chain.Ethereum,
+            contractAddress: USDC,
+          },
+        ],
+      },
       balance: async (chain, tokenId) => makeBalance(tokenId ? 'USDC' : chain === Chain.Bitcoin ? 'BTC' : 'ETH'),
       getValue: async () => makeValue('1.06'),
       getValues: async chain =>
@@ -276,6 +311,18 @@ describe('executePortfolio partial-failure reporting', () => {
   it('itemizes each held token with its own amount and value', async () => {
     const ctx = makeCtx({
       chains: [Chain.Ethereum],
+      tokens: {
+        [Chain.Ethereum]: [
+          {
+            id: USDC,
+            symbol: 'USDC',
+            name: 'USD Coin',
+            decimals: 6,
+            chainId: Chain.Ethereum,
+            contractAddress: USDC,
+          },
+        ],
+      },
       balance: async (_chain, tokenId) => makeBalance(tokenId ? 'USDC' : 'ETH'),
       getValue: async () => makeValue('1.06'),
       getValues: async () => ({ native: makeValue('1.06'), [USDC]: makeValue('6.62') }),
@@ -292,6 +339,18 @@ describe('executePortfolio partial-failure reporting', () => {
   it('still totals correctly when a chain drops out at the balance stage', async () => {
     const ctx = makeCtx({
       chains: [Chain.Ethereum, Chain.Bitcoin],
+      tokens: {
+        [Chain.Ethereum]: [
+          {
+            id: USDC,
+            symbol: 'USDC',
+            name: 'USD Coin',
+            decimals: 6,
+            chainId: Chain.Ethereum,
+            contractAddress: USDC,
+          },
+        ],
+      },
       balance: async chain => {
         if (chain === Chain.Bitcoin) throw new Error('btc down')
         return makeBalance('ETH')
@@ -306,14 +365,29 @@ describe('executePortfolio partial-failure reporting', () => {
     expect(failures).toHaveLength(1)
   })
 
-  it('recovers the real error message when getValues drops the native value', async () => {
+  it('reports the native pricing error returned by getValuesDetailed', async () => {
     const ctx = makeCtx({
       chains: [Chain.Ethereum],
-      balance: async () => makeBalance('ETH'),
+      tokens: {
+        [Chain.Ethereum]: [
+          {
+            id: USDC,
+            symbol: 'USDC',
+            name: 'USD Coin',
+            decimals: 6,
+            chainId: Chain.Ethereum,
+            contractAddress: USDC,
+          },
+        ],
+      },
+      balance: async (_chain, tokenId) => makeBalance(tokenId ? 'USDC' : 'ETH'),
       getValue: async () => {
         throw new Error('coingecko 429')
       },
-      getValues: async () => ({ [USDC]: makeValue('6.62') }),
+      getValuesDetailed: async () => ({
+        values: { [USDC]: makeValue('6.62') },
+        failures: [{ error: 'coingecko 429' }],
+      }),
     })
 
     const { portfolio, failures } = (await captureJson(() => executePortfolio(ctx, { currency: 'usd' }))).data
@@ -332,6 +406,18 @@ describe('executePortfolio partial-failure reporting', () => {
 
     const ctx = makeCtx({
       chains: [Chain.Ethereum],
+      tokens: {
+        [Chain.Ethereum]: [
+          {
+            id: USDC,
+            symbol: 'USDC',
+            name: 'USD Coin',
+            decimals: 6,
+            chainId: Chain.Ethereum,
+            contractAddress: USDC,
+          },
+        ],
+      },
       balance: async (_chain, tokenId) => makeBalance(tokenId ? 'USDC' : 'ETH'),
       getValue: async () => makeValue('1.06'),
       getValues: async () => ({ native: makeValue('1.06'), [USDC]: makeValue('6.62') }),
@@ -342,6 +428,91 @@ describe('executePortfolio partial-failure reporting', () => {
     expect(rows.map(r => r.Symbol)).toEqual(['ETH', 'USDC'])
     expect(rows.map(r => r.Value)).toEqual(['1.06 USD', '6.62 USD'])
     expect(rows.every(r => r.Chain === Chain.Ethereum)).toBe(true)
+  })
+
+  it('lists an unpriced token, reports its failure, and excludes it from the total', async () => {
+    const unpriced = '0x0000000000000000000000000000000000000001'
+    const ctx = makeCtx({
+      chains: [Chain.Ethereum],
+      tokens: {
+        [Chain.Ethereum]: [
+          {
+            id: USDC,
+            symbol: 'USDC',
+            name: 'USD Coin',
+            decimals: 6,
+            chainId: Chain.Ethereum,
+            contractAddress: USDC,
+          },
+          {
+            id: unpriced,
+            symbol: 'MISS',
+            name: 'Missing',
+            decimals: 18,
+            chainId: Chain.Ethereum,
+            contractAddress: unpriced,
+          },
+        ],
+      },
+      balance: async (_chain, tokenId) =>
+        makeBalance(tokenId === USDC ? 'USDC' : tokenId === unpriced ? 'MISS' : 'ETH'),
+      getValue: async () => makeValue('10.00'),
+      getValuesDetailed: async () => ({
+        values: { native: makeValue('10.00'), [USDC]: makeValue('6.62') },
+        failures: [{ tokenId: unpriced, error: 'Price not found for token' }],
+      }),
+    })
+
+    const { portfolio, failures } = (await captureJson(() => executePortfolio(ctx, { currency: 'usd' }))).data
+
+    expect(portfolio.chainBalances[0].tokens).toEqual([
+      { tokenId: USDC, value: makeValue('6.62'), balance: makeBalance('USDC') },
+      { tokenId: unpriced, value: null, balance: makeBalance('MISS') },
+    ])
+    expect(failures).toEqual([
+      {
+        chain: Chain.Ethereum,
+        stage: 'value',
+        tokenId: unpriced,
+        error: 'Price not found for token',
+      },
+    ])
+    expect(portfolio.totalValue.amount).toBe('16.62')
+  })
+
+  it('renders an explicit no-price marker for an unpriced token', async () => {
+    configureOutput({ format: 'table', silent: false })
+    const unpriced = '0x0000000000000000000000000000000000000001'
+    let rows: Array<Record<string, string>> = []
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'table').mockImplementation((data: unknown) => {
+      rows = data as Array<Record<string, string>>
+    })
+    const ctx = makeCtx({
+      chains: [Chain.Ethereum],
+      tokens: {
+        [Chain.Ethereum]: [
+          {
+            id: unpriced,
+            symbol: 'MISS',
+            name: 'Missing',
+            decimals: 18,
+            chainId: Chain.Ethereum,
+            contractAddress: unpriced,
+          },
+        ],
+      },
+      balance: async (_chain, tokenId) => makeBalance(tokenId ? 'MISS' : 'ETH'),
+      getValue: async () => makeValue('10.00'),
+      getValuesDetailed: async () => ({
+        values: { native: makeValue('10.00') },
+        failures: [{ tokenId: unpriced, error: 'Price not found for token' }],
+      }),
+    })
+
+    await executePortfolio(ctx, { currency: 'usd' })
+
+    expect(rows.find(row => row.Symbol === 'MISS')?.Value).toBe('— no price')
   })
 
   it('prints per-chain warnings on the human-readable (table) output', async () => {
@@ -367,7 +538,7 @@ describe('executePortfolio partial-failure reporting', () => {
     tableSpy.mockRestore()
 
     const joined = logs.join('\n')
-    expect(joined).toContain('failed to load fully')
+    expect(joined).toContain('1 chain(s) and 0 token(s) could not be priced/loaded')
     expect(joined).toContain('Bitcoin')
     expect(joined).toContain('btc unreachable')
   })
@@ -392,7 +563,13 @@ describe('executeBalance honours --tokens on a single chain', () => {
     }))
     const balance = vi.fn(async () => makeBalance('ETH'))
     const vault = { balances, balance } as unknown as VaultBase
-    return { ctx: { ensureActiveVault: async () => vault } as unknown as CommandContext, balances, balance }
+    return {
+      ctx: {
+        ensureActiveVault: async () => vault,
+      } as unknown as CommandContext,
+      balances,
+      balance,
+    }
   }
 
   it('returns token entries for one chain instead of dropping the flag', async () => {
@@ -411,7 +588,10 @@ describe('executeBalance honours --tokens on a single chain', () => {
     const envelope = await captureJson(() => executeBalance(ctx, { chain: Chain.Ethereum }))
     expect(balance).toHaveBeenCalledWith(Chain.Ethereum)
     expect(balances).not.toHaveBeenCalled()
-    expect(envelope.data).toMatchObject({ chain: Chain.Ethereum, balance: { symbol: 'ETH' } })
+    expect(envelope.data).toMatchObject({
+      chain: Chain.Ethereum,
+      balance: { symbol: 'ETH' },
+    })
   })
 })
 
@@ -435,14 +615,24 @@ describe('aggregate scope hint (DF-02)', () => {
     const emitted = { [Chain.Ethereum]: makeBalance('ETH') }
     const vault = {
       chains,
+      tokens: {},
       currency: 'usd' as FiatCurrency,
       setCurrency: vi.fn(async () => {}),
       balances: vi.fn(async () => emitted),
       balance: vi.fn(async () => makeBalance('ETH')),
       getValue: vi.fn(async () => makeValue('1.00')),
       getValues: vi.fn(async () => ({ native: makeValue('1.00') })),
+      getValuesDetailed: vi.fn(async () => ({
+        values: { native: makeValue('1.00') },
+        failures: [],
+      })),
     } as unknown as VaultBase
-    return { ctx: { ensureActiveVault: async () => vault } as unknown as CommandContext, emitted }
+    return {
+      ctx: {
+        ensureActiveVault: async () => vault,
+      } as unknown as CommandContext,
+      emitted,
+    }
   }
 
   it('puts the hint in its own JSON field on all-chains balance, leaving the balances payload unchanged', async () => {
