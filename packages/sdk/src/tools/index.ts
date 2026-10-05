@@ -1,4 +1,12 @@
 // Grouped public helper families, alongside the existing flat exports.
+export type {
+  BalancesWithPricesResult,
+  FiatValueFailure,
+  FiatValuesResult,
+  PortfolioValueResult,
+  TotalValueDetailedResult,
+} from '../types'
+
 import * as balance from './balance'
 import * as prep from './prep'
 import * as swap from './swap'
