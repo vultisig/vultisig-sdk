@@ -32,6 +32,7 @@ import { VaultSchema } from '@vultisig/core-mpc/types/vultisig/vault/v1/vault_pb
 import { vaultContainerFromString } from '@vultisig/core-mpc/vault/utils/vaultContainerFromString'
 import { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
+import { decryptVaultBackupWithPassword } from '@vultisig/lib-utils/encryption/vaultBackup/decryptVaultBackupWithPassword'
 import { fromBase64 } from '@vultisig/lib-utils/fromBase64'
 
 import { DEFAULT_CHAINS } from '../constants'
@@ -1125,28 +1126,58 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   }
 
   /**
-   * Unlock this vault by caching password
+   * Unlock this vault by verifying the password against the vault file and caching it.
+   * A wrong password throws and leaves any previously cached password in place.
    */
   public async unlock(password: string): Promise<void> {
     if (!this.isVaultEncrypted()) {
       throw new VaultError(VaultErrorCode.InvalidConfig, 'Cannot unlock unencrypted vault')
     }
 
-    // Temporarily cache password for verification
-    this.passwordCache.set(this.id, password)
+    const previousPassword = this.passwordCache.get(this.id)
+    const previousTTL = this.passwordCache.getRemainingTTL(this.id)
 
     try {
-      // Verify password by attempting to load key shares
-      await this.ensureKeySharesLoaded()
-      // Password is valid and now cached
+      if (this.hasKeySharesLoaded()) {
+        // ensureKeySharesLoaded() short-circuits once shares are in memory and would not check the password
+        this.verifyPassword(password)
+        this.passwordCache.set(this.id, password)
+      } else {
+        // Cached first so ensureKeySharesLoaded() decrypts with it, which verifies it and loads the shares in one pass
+        this.passwordCache.set(this.id, password)
+        await this.ensureKeySharesLoaded()
+      }
     } catch (error) {
-      // Password is invalid - remove from cache
-      this.passwordCache.delete(this.id)
+      if (previousPassword) {
+        this.passwordCache.set(this.id, previousPassword, previousTTL)
+      } else {
+        this.passwordCache.delete(this.id)
+      }
       throw new VaultError(
         VaultErrorCode.InvalidConfig,
         `Failed to unlock vault: ${error instanceof Error ? error.message : String(error)}`,
         error as Error
       )
+    }
+  }
+
+  private hasKeySharesLoaded(): boolean {
+    return !!this.coreVault.keyShares.ecdsa && !!this.coreVault.keyShares.eddsa
+  }
+
+  /**
+   * Throws unless the password decrypts the stored vault file.
+   * A vault file stored unencrypted has nothing to check the password against.
+   */
+  private verifyPassword(password: string): void {
+    const content = this.vaultData.vultFileContent?.trim()
+    if (!content) {
+      throw new VaultError(VaultErrorCode.InvalidVault, 'Vault file content is empty. Cannot verify password.')
+    }
+
+    const container = vaultContainerFromString(content)
+    if (container.isEncrypted) {
+      decryptVaultBackupWithPassword(password, fromBase64(container.vault))
     }
   }
 
