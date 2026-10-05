@@ -69,6 +69,21 @@ const sentFrom = (prepareSendTx: ReturnType<typeof vi.spyOn>) =>
   (prepareSendTx.mock.calls.at(-1)?.[0] as { coin: { address: string } }).coin.address
 
 describe('vault-level TON wallet selection', () => {
+  it('exposes detailed address failures and underivable chains through the vault', async () => {
+    const { vault } = makeVault()
+
+    expect(vault.getUnderivableChains([Chain.Ethereum, Chain.QBTC])).toEqual([Chain.QBTC])
+    await expect(vault.addressesDetailed([Chain.Ethereum, Chain.QBTC])).resolves.toMatchObject({
+      addresses: { Ethereum: 'ethereum-address' },
+      failures: [
+        {
+          chain: Chain.QBTC,
+          error: 'Vault has no MLDSA public key (required for QBTC address derivation)',
+        },
+      ],
+    })
+  })
+
   it('starts on V4R2, the account every existing vault uses', async () => {
     const { vault } = makeVault()
 

@@ -6,9 +6,17 @@ import { SUPPORTED_CHAINS } from '@vultisig/sdk'
 import chalk from 'chalk'
 
 import type { CommandContext } from '../core'
-import { InvalidChainError } from '../core'
+import { InvalidChainError, InvalidInputError } from '../core'
 import { createSpinner, info, isJsonOutput, outputJson, printResult, success } from '../lib/output'
 import { displayAddresses } from '../ui'
+
+const MLDSA_HINT = 'Run "vultisig add-mldsa --email <email>" to add ML-DSA keys to this vault'
+const MLDSA_ADD_CHAIN_HINT =
+  'Run "vultisig add-mldsa --email <email>" to add ML-DSA keys, then "vultisig chains --add QBTC"'
+
+function addressFailureHint(error: string): string | undefined {
+  return /mldsa/i.test(error) ? MLDSA_HINT : undefined
+}
 
 export type ChainsOptions = {
   add?: Chain
@@ -24,17 +32,36 @@ export async function executeChains(ctx: CommandContext, options: ChainsOptions 
 
   // Handle --add-all
   if (options.addAll) {
-    const currentCount = vault.chains.length
+    const currentChains = new Set(vault.chains)
+    const underivable = vault.getUnderivableChains([...SUPPORTED_CHAINS])
+    const underivableSet = new Set(underivable)
+    const derivable = SUPPORTED_CHAINS.filter(chain => !underivableSet.has(chain))
+    const { failures } = await vault.addressesDetailed(underivable)
+    const skipped = underivable.map(chain => ({
+      chain,
+      reason:
+        failures.find(failure => failure.chain === chain)?.error ?? 'The vault cannot derive an address for this chain',
+      hint: chain === 'QBTC' ? MLDSA_ADD_CHAIN_HINT : 'Add the keys required to derive this chain before enabling it',
+    }))
     const spinner = createSpinner(`Adding all ${SUPPORTED_CHAINS.length} supported chains...`)
-    await vault.setChains([...SUPPORTED_CHAINS])
-    const addedCount = SUPPORTED_CHAINS.length - currentCount
-    spinner.succeed(`Added ${addedCount} chains (${SUPPORTED_CHAINS.length} total)`)
+    await vault.setChains(derivable)
+    const addedCount = derivable.filter(chain => !currentChains.has(chain)).length
+    spinner.succeed(`Added ${addedCount} chains (${derivable.length} enabled)`)
 
     if (isJsonOutput()) {
-      outputJson({ chains: [...vault.chains], added: addedCount, total: SUPPORTED_CHAINS.length })
+      outputJson({
+        chains: [...vault.chains],
+        added: addedCount,
+        total: SUPPORTED_CHAINS.length,
+        skipped,
+      })
       return
     }
-    info(chalk.gray('\nAll supported chains are now enabled.'))
+    info(chalk.gray('\nAll derivable supported chains are now enabled.'))
+    skipped.forEach(({ chain, reason, hint }) => {
+      info(`Skipped ${chain}: ${reason}`)
+      info(hint)
+    })
     return
   }
 
@@ -51,6 +78,11 @@ export async function executeChains(ctx: CommandContext, options: ChainsOptions 
         undefined,
         { chain: String(options.add) }
       )
+    }
+    if (vault.getUnderivableChains([options.add]).length > 0) {
+      const { failures } = await vault.addressesDetailed([options.add])
+      const reason = failures[0]?.error ?? 'The vault cannot derive an address for this chain'
+      throw new InvalidInputError(reason, options.add === 'QBTC' ? MLDSA_ADD_CHAIN_HINT : undefined)
     }
     const alreadyActive = vault.chains.includes(options.add)
     if (!alreadyActive) {
@@ -94,14 +126,26 @@ export async function executeAddresses(ctx: CommandContext): Promise<void> {
   const vault = await ctx.ensureActiveVault()
 
   const spinner = createSpinner('Loading addresses...')
-  const addresses = await vault.addresses()
+  const { addresses, failures: addressFailures } = await vault.addressesDetailed()
+  const failures = addressFailures.map(({ chain, error }) => ({
+    chain,
+    error,
+    ...(addressFailureHint(error) ? { hint: addressFailureHint(error) } : {}),
+  }))
 
   spinner.succeed('Addresses loaded')
 
   if (isJsonOutput()) {
-    outputJson({ addresses })
+    outputJson({ addresses, failures })
     return
   }
 
   displayAddresses(addresses)
+  if (failures.length > 0) {
+    printResult(`\n${failures.length} chain(s) could not derive an address:`)
+    failures.forEach(({ chain, error, hint }) => {
+      printResult(`  ${chain}: ${error}`)
+      if (hint) printResult(`  ${hint}`)
+    })
+  }
 }

@@ -570,6 +570,13 @@ function classifyVaultError(err: VaultError): VsigError {
       return new NetworkError(err.message)
     case VaultErrorCode.InvalidAmount:
       return new InvalidInputError(err.message)
+    case VaultErrorCode.AddressDerivationFailed:
+      return new InvalidInputError(
+        err.message,
+        /mldsa/i.test(err.originalError?.message ?? '')
+          ? 'Run "vultisig add-mldsa --email <email>" to add ML-DSA keys to this vault'
+          : 'The vault cannot derive an address for this chain'
+      )
     case VaultErrorCode.InvalidConfig: {
       // SDK overloads InvalidConfig for "Unknown chain" — detect and reclassify
       // so agents get INVALID_INPUT / non-retryable instead of generic USAGE.

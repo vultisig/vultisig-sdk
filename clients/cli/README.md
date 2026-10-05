@@ -336,6 +336,38 @@ vultisig export
 | `chains`         | List and manage chains (--add, --remove) |
 | `tokens <chain>` | List and manage tokens for a chain       |
 
+`chains --add-all --output json` reports chains that could not be enabled in `skipped`:
+
+```json
+{
+  "chains": ["Ethereum", "Bitcoin"],
+  "added": 2,
+  "total": 39,
+  "skipped": [
+    {
+      "chain": "QBTC",
+      "reason": "Vault has no MLDSA public key (required for QBTC address derivation)",
+      "hint": "Run \"vultisig add-mldsa --email <email>\" to add ML-DSA keys, then \"vultisig chains --add QBTC\""
+    }
+  ]
+}
+```
+
+`addresses --output json` returns successful addresses and always includes a `failures` array:
+
+```json
+{
+  "addresses": { "Ethereum": "0xabc..." },
+  "failures": [
+    {
+      "chain": "QBTC",
+      "error": "Vault has no MLDSA public key (required for QBTC address derivation)",
+      "hint": "Run \"vultisig add-mldsa --email <email>\" to add ML-DSA keys to this vault"
+    }
+  ]
+}
+```
+
 ### Swap Operations
 
 | Command                           | Description                    |
