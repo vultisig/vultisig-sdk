@@ -947,6 +947,11 @@
       "import": "./dist/tx/signature/generateSignature.js",
       "default": "./dist/tx/signature/generateSignature.js"
     },
+    "./tx/swapkitCardanoPrebuilt": {
+      "types": "./dist/tx/swapkitCardanoPrebuilt.d.ts",
+      "import": "./dist/tx/swapkitCardanoPrebuilt.js",
+      "default": "./dist/tx/swapkitCardanoPrebuilt.js"
+    },
     "./tx/swapkitSignBitcoin": {
       "types": "./dist/tx/swapkitSignBitcoin.d.ts",
       "import": "./dist/tx/swapkitSignBitcoin.js",
