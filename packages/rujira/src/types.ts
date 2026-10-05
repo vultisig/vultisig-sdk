@@ -341,13 +341,11 @@ export type OrderPrice = { fixed: string } | { oracle: number }
 export type OrderTarget = [ContractSide, OrderPrice, string | null]
 
 /**
- * Callback data for contract composition
+ * Callback data for contract composition. The contract's `CallbackData(Binary)`
+ * newtype serializes as a bare base64 string.
  * @internal
  */
-export type CallbackData = {
-  contract: string
-  msg: string
-}
+export type CallbackData = Base64Binary
 
 /**
  * FIN contract QueryMsg variants - uses ContractSide for contract communication
