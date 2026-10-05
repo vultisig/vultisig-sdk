@@ -61,13 +61,24 @@ type TonTracesResponse = {
 /** Which message field the transaction is looked up by. */
 type TonMessageLookup = 'msg_hash' | 'body_hash'
 
-const findTonTransaction = async (lookup: TonMessageLookup, hash: string): Promise<TonTransaction | undefined> => {
-  const params = new URLSearchParams({ [lookup]: hash, direction: 'in', limit: '1' })
+type TonLookupResult<T> = { kind: 'found'; value: T } | { kind: 'not_found' } | { kind: 'unknown' }
+
+const findTonTransaction = async (lookup: TonMessageLookup, hash: string): Promise<TonLookupResult<TonTransaction>> => {
+  const params = new URLSearchParams({
+    [lookup]: hash,
+    direction: 'in',
+    limit: '1',
+  })
   const url = `${rootApiUrl}/ton/v3/transactionsByMessage?${params}`
 
-  const { data: response } = await attempt(() => queryUrl<TonTransactionsResponse>(url))
+  const { data: response, error } = await attempt(() => queryUrl<TonTransactionsResponse>(url))
 
-  return response?.transactions?.[0]
+  if (error || !response || !Array.isArray(response.transactions)) return { kind: 'unknown' }
+
+  if (response.transactions.length === 0) return { kind: 'not_found' }
+
+  const transaction = response.transactions[0]
+  return transaction && typeof transaction === 'object' ? { kind: 'found', value: transaction } : { kind: 'unknown' }
 }
 
 /** The W5 `internal_signed` opcode as toncenter spells a message's opcode. */
@@ -79,18 +90,27 @@ const isTonRelayedRequest = (message: TonInboundMessage | TonOutboundMessage | n
 /** Which trace field the trace is looked up by: its id, or the hash of any message in it. */
 type TonTraceLookup = 'trace_id' | 'msg_hash'
 
-const findTonTrace = async (lookup: TonTraceLookup, hash: string): Promise<TonTrace | undefined> => {
+const findTonTrace = async (lookup: TonTraceLookup, hash: string): Promise<TonLookupResult<TonTrace>> => {
   const params = new URLSearchParams({ [lookup]: hash })
   const url = `${rootApiUrl}/ton/v3/traces?${params}`
 
-  const { data: response } = await attempt(() => queryUrl<TonTracesResponse>(url))
+  const { data: response, error } = await attempt(() => queryUrl<TonTracesResponse>(url))
 
-  return response?.traces?.[0]
+  if (error || !response || !Array.isArray(response.traces)) return { kind: 'unknown' }
+
+  if (response.traces.length === 0) return { kind: 'not_found' }
+
+  const trace = response.traces[0]
+  return trace && typeof trace.transactions === 'object' && trace.transactions !== null
+    ? { kind: 'found', value: trace }
+    : { kind: 'unknown' }
 }
 
 type TonResolvedTransaction = {
   /** Whether the indexer has the send at all — the transaction itself, or the relay's part of it. */
   isKnown: boolean
+  /** Every applicable lookup succeeded and affirmatively returned no record. */
+  isNotFound?: boolean
   /** The transaction to judge: the wallet's own, once it has landed. */
   tx?: TonTransaction
 }
@@ -112,7 +132,11 @@ const followTonRelayDelivery = async (tx: TonTransaction): Promise<TonResolvedTr
     return { isKnown: true, tx }
   }
 
-  return { isKnown: true, tx: await findTonTransaction('msg_hash', delivered.hash) }
+  const delivery = await findTonTransaction('msg_hash', delivered.hash)
+  return {
+    isKnown: true,
+    tx: delivery.kind === 'found' ? delivery.value : undefined,
+  }
 }
 
 /**
@@ -121,15 +145,21 @@ const followTonRelayDelivery = async (tx: TonTransaction): Promise<TonResolvedTr
  * message in it. The wallet's transaction is the one that received the signed
  * request as an internal message.
  */
+const resolveTonTrace = (trace: TonTrace): TonResolvedTransaction => ({
+  isKnown: true,
+  tx: Object.values(trace.transactions).find(tx => isTonRelayedRequest(tx.in_msg)),
+})
+
 const findTonRelayedWalletTransaction = async (hash: string): Promise<TonResolvedTransaction> => {
-  const trace = (await findTonTrace('trace_id', hash)) ?? (await findTonTrace('msg_hash', hash))
-  if (!trace) {
-    return { isKnown: false }
-  }
+  const byTraceId = await findTonTrace('trace_id', hash)
+  if (byTraceId.kind === 'found') return resolveTonTrace(byTraceId.value)
+
+  const byMessage = await findTonTrace('msg_hash', hash)
+  if (byMessage.kind === 'found') return resolveTonTrace(byMessage.value)
 
   return {
-    isKnown: true,
-    tx: Object.values(trace.transactions).find(tx => isTonRelayedRequest(tx.in_msg)),
+    isKnown: false,
+    isNotFound: byTraceId.kind === 'not_found' && byMessage.kind === 'not_found',
   }
 }
 
@@ -155,11 +185,31 @@ const findTonRelayedWalletTransaction = async (hash: string): Promise<TonResolve
  * and how to fix it.
  */
 export const getTonTxStatus: TxStatusResolver<OtherChain.Ton> = async ({ hash }) => {
-  const matched = (await findTonTransaction('msg_hash', hash)) ?? (await findTonTransaction('body_hash', hash))
-  const resolved = matched ? await followTonRelayDelivery(matched) : await findTonRelayedWalletTransaction(hash)
+  const byMessage = await findTonTransaction('msg_hash', hash)
+  let resolved: TonResolvedTransaction
+
+  if (byMessage.kind === 'found') {
+    resolved = await followTonRelayDelivery(byMessage.value)
+  } else {
+    const byBody = await findTonTransaction('body_hash', hash)
+    if (byBody.kind === 'found') {
+      resolved = await followTonRelayDelivery(byBody.value)
+    } else {
+      const byTrace = await findTonRelayedWalletTransaction(hash)
+      resolved = {
+        ...byTrace,
+        isNotFound: byMessage.kind === 'not_found' && byBody.kind === 'not_found' && byTrace.isNotFound === true,
+      }
+    }
+  }
+
   const { tx } = resolved
 
   if (!tx) {
+    // All four successful lookup forms returned an empty list, so the indexer
+    // affirmatively has no transaction or trace for this hash.
+    if (resolved.isNotFound) return { status: 'not_found', isKnown: false }
+
     // The relay's part is indexed but the wallet's transaction is not yet: the
     // request is still on its way through the relay.
     return { status: 'pending', isKnown: resolved.isKnown }

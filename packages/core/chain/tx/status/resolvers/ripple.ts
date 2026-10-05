@@ -9,6 +9,14 @@ import { TxReceiptInfo, TxStatusResolver } from '../resolver'
 
 const maxXrpDrops = 100_000_000_000_000_000n
 
+const getRippleErrorData = (value: unknown): Record<string, unknown> | undefined => {
+  if (!value || typeof value !== 'object') return undefined
+
+  const record = value as Record<string, unknown>
+  if (typeof record.error === 'string') return record
+  return getRippleErrorData(record.data)
+}
+
 const isValidIssuedCurrencyValue = (value: string): boolean => {
   const match = /^(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/.exec(value)
   if (!match) return false
@@ -89,19 +97,28 @@ export const getRippleTxStatus: TxStatusResolver<OtherChain.Ripple> = async ({ h
     })
   )
 
+  // xrpl.js rejects rippled's txnNotFound response as a RippledError whose
+  // data carries the server fields. A ranged search with searched_all:false is
+  // inconclusive; omitted (the full-history request shape) or true is authoritative.
+  const rippleError = getRippleErrorData(error) ?? getRippleErrorData(response?.result)
+  if (rippleError?.error === 'txnNotFound') {
+    return rippleError.searched_all === false
+      ? { status: 'pending', isKnown: false }
+      : { status: 'not_found', isKnown: false }
+  }
+
   if (error || !response || typeof response.result !== 'object' || response.result === null) {
-    // The chain says it doesn't know this hash, OR the response is
-    // shaped unexpectedly (e.g. malformed payload `{}` without `result`).
-    // Either case: mark `isKnown: false` so the verify-by-hash safety
-    // net does NOT swallow broadcast errors. Mirrors `solana.ts:19`.
-    // Status itself stays `'pending'` so status-polling UI can re-query
-    // later.
+    // A transport failure or malformed payload cannot establish absence.
     return { status: 'pending', isKnown: false }
   }
 
   const { validated, meta, tx_json } = response.result as {
     validated?: boolean
-    meta?: { TransactionResult?: string; delivered_amount?: unknown; DeliveredAmount?: unknown }
+    meta?: {
+      TransactionResult?: string
+      delivered_amount?: unknown
+      DeliveredAmount?: unknown
+    }
     tx_json?: { Fee?: string; TransactionType?: string }
   }
 

@@ -18,7 +18,7 @@ describe('getUtxoTxStatus', () => {
     vi.clearAllMocks()
   })
 
-  it('returns isKnown:false when Blockchair has no record of the hash at all — verify-by-hash MUST NOT swallow broadcast errors for unknown hashes', async () => {
+  it('reports not_found when Blockchair returns its empty-array no-record response', async () => {
     // Regression for the false-success bug (VA-88 broadcast-verify audit, 2026-07-08):
     // broadcastUtxoTx/broadcastCardanoTx fall through to verifyBroadcastByHash on an
     // ambiguous submit error (BadInputsUTxO/txn-mempool-conflict/already known). That
@@ -29,14 +29,21 @@ describe('getUtxoTxStatus', () => {
     // network) was reported as success — the app showed a "done" screen with a
     // locally computed hash that had no on-chain counterpart. Mirrors cosmos.ts:15 /
     // evm.ts:52 / polkadot.ts:36 / ripple.ts:25.
-    mocks.queryUrl.mockResolvedValue({ data: {} })
+    mocks.queryUrl.mockResolvedValue({ data: [] })
+
+    const result = await getUtxoTxStatus({ chain: UtxoChain.Bitcoin, hash })
+    expect(result).toEqual({ status: 'not_found', isKnown: false })
+  })
+
+  it('returns isKnown:false on network/API error', async () => {
+    mocks.queryUrl.mockRejectedValue(new Error('network failure'))
 
     const result = await getUtxoTxStatus({ chain: UtxoChain.Bitcoin, hash })
     expect(result).toEqual({ status: 'pending', isKnown: false })
   })
 
-  it('returns isKnown:false on network/API error', async () => {
-    mocks.queryUrl.mockRejectedValue(new Error('network failure'))
+  it('keeps a malformed successful response pending', async () => {
+    mocks.queryUrl.mockResolvedValue({ data: {} })
 
     const result = await getUtxoTxStatus({ chain: UtxoChain.Bitcoin, hash })
     expect(result).toEqual({ status: 'pending', isKnown: false })

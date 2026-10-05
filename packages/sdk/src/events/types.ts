@@ -2,6 +2,7 @@ import type { Chain } from '@vultisig/core-chain/Chain'
 
 import type {
   Balance,
+  FiatValueFailure,
   Signature,
   SigningPayload,
   SigningStep,
@@ -111,6 +112,7 @@ export type VaultEvents = {
   /** Emitted when fiat values are updated for a chain */
   valuesUpdated: {
     chain: Chain | 'all'
+    failures?: FiatValueFailure[]
   }
 
   /** Emitted when total portfolio value is recalculated */

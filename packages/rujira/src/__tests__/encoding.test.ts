@@ -22,7 +22,7 @@ describe('base64Encode / base64Decode', () => {
   })
 
   it('round-trips JSON', () => {
-    const json = JSON.stringify({ swap: { min: { min_return: '1000' } } })
+    const json = JSON.stringify({ swap: { min_return: '1000' } })
     expect(base64Decode(base64Encode(json))).toBe(json)
   })
 

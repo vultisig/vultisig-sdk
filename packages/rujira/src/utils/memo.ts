@@ -33,9 +33,9 @@ export function validateMemoComponent(value: string, fieldName: string): void {
  * @example
  * ```typescript
  * const memo = buildExecuteMemo('thor1...fin...', {
- *   swap: { min: { min_return: '1000000' } }
+ *   swap: { min_return: '1000000' }
  * });
- * // Returns: "x:thor1...fin...:eyJzd2FwIjp7Im1pbiI6eyJtaW5fcmV0dXJuIjoiMTAwMDAwMCJ9fX0="
+ * // Returns: "x:thor1...fin...:eyJzd2FwIjp7Im1pbl9yZXR1cm4iOiIxMDAwMDAwIn19"
  * ```
  */
 export function buildExecuteMemo(contractAddress: string, msg: object): string {
@@ -94,10 +94,8 @@ export function parseExecuteMemo(memo: string): {
 export function buildSwapMemo(contractAddress: string, minReturn: string, destination?: string): string {
   const msg: FinExecuteMsg = {
     swap: {
-      min: {
-        min_return: minReturn,
-        to: destination,
-      },
+      min_return: minReturn,
+      to: destination,
     },
   }
   return buildExecuteMemo(contractAddress, msg)

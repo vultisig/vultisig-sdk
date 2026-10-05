@@ -78,6 +78,14 @@ import {
 } from './prep'
 import { ReactNativeStorage } from './storage'
 
+export type {
+  BalancesWithPricesResult,
+  FiatValueFailure,
+  FiatValuesResult,
+  PortfolioValueResult,
+  TotalValueDetailedResult,
+} from '../../types'
+
 // Server-assisted Fast Vault public helpers.
 export type { ServerEndpoints, VaultFromServerResponse } from '../../server'
 export {

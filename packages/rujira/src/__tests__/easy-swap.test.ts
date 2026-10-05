@@ -222,6 +222,12 @@ describe('RujiraSwap.easySwap()', () => {
 
       const result = await swap.easySwap(request)
 
+      expect(mockClient.executeContract).toHaveBeenCalledWith(
+        'thor1contract...',
+        { swap: { min_return: '98010000', to: VALID_THOR_ADDRESS } },
+        [{ denom: 'rune', amount: '100000000' }],
+        undefined
+      )
       expect(result).toMatchObject({
         txHash: 'TESTHASH123',
         status: 'pending',
@@ -246,6 +252,49 @@ describe('RujiraSwap.easySwap()', () => {
           destination: VALID_THOR_ADDRESS_2,
         })
       )
+    })
+  })
+
+  it.each([undefined, VALID_THOR_ADDRESS])(
+    'builds flat FIN transaction and memo payloads for %s',
+    async destination => {
+      const params = { fromAsset: 'rune', toAsset: 'btc-btc', amount: '100000000', destination }
+      const expected = { swap: { min_return: '98010000', to: destination } }
+      const transaction = await swap.buildTransaction(params)
+      expect(transaction.msg).toStrictEqual(expected)
+      expect(transaction.funds).toEqual([{ denom: 'rune', amount: '100000000' }])
+      const memo = await swap.buildL1Memo(params)
+      const [prefix, contract, payload] = memo.split(':')
+      expect([prefix, contract]).toEqual(['x', transaction.contractAddress])
+      expect(JSON.parse(Buffer.from(payload, 'base64').toString())).toStrictEqual(JSON.parse(JSON.stringify(expected)))
+    }
+  )
+
+  describe('with the default quote cache', () => {
+    const base = { fromAsset: 'rune', toAsset: 'btc-btc', amount: '100000000' }
+
+    it.each([
+      [VALID_THOR_ADDRESS, VALID_THOR_ADDRESS_2],
+      [VALID_THOR_ADDRESS, undefined],
+      [undefined, VALID_THOR_ADDRESS_2],
+    ])('sends a swap quoted for %s to the new destination %s', async (previous, next) => {
+      const cachedSwap = new RujiraSwap(mockClient as any)
+      await cachedSwap.getQuote({ ...base, destination: previous })
+      await cachedSwap.executeSwap(next ? { ...base, destination: next } : base)
+
+      expect(mockClient.simulateSwap).toHaveBeenCalledTimes(1)
+      expect(mockClient.executeContract.mock.calls[0][1]).toStrictEqual({ swap: { min_return: '98010000', to: next } })
+    })
+
+    it('easySwap ignores the destination of a cached quote', async () => {
+      const cachedSwap = new RujiraSwap(mockClient as any)
+      await cachedSwap.getQuote({ ...base, destination: VALID_THOR_ADDRESS })
+      await cachedSwap.easySwap({ from: 'rune', to: 'btc-btc', amount: '100000000', destination: VALID_THOR_ADDRESS_2 })
+
+      expect(mockClient.simulateSwap).toHaveBeenCalledTimes(1)
+      expect(mockClient.executeContract.mock.calls[0][1]).toStrictEqual({
+        swap: { min_return: '98010000', to: VALID_THOR_ADDRESS_2 },
+      })
     })
   })
 
