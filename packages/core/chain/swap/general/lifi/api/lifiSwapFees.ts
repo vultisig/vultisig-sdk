@@ -9,6 +9,18 @@ import { resolveSwapFeeChain } from './lifiSwapFeeChain'
 
 const zeroAddress = '0x0000000000000000000000000000000000000000'
 
+/**
+ * LI.FI's native SOL token, and wrapped SOL, which prices as SOL and which the
+ * Jupiter quote already treats as the native coin.
+ */
+const solanaNativeFeeTokenAddresses = new Set([
+  '11111111111111111111111111111111',
+  'So11111111111111111111111111111111111111112',
+])
+
+/** LI.FI split its fees in a shape that one fee per slot cannot carry. */
+class LifiFeeShapeError extends Error {}
+
 type LifiFeeShares = {
   token: Token
   integratorAmount: bigint
@@ -33,8 +45,12 @@ const isSameLifiToken = (one: Token, another: Token) =>
  * Every split entry is summed. Each one's protocol slice is the remainder of
  * its `amount` rather than `feeSplit.lifiFee`, so the slices always add up to
  * what the entries charge — intermediary and distribution slices are not the
- * integrator's either. An entry in another token cannot be added and is
- * skipped.
+ * integrator's either.
+ *
+ * Entries in more than one token throw a [LifiFeeShapeError]: one fee per
+ * slot cannot carry several tokens, and adding only the entries that match
+ * would report less than the user pays. LI.FI documents its fee amounts in the
+ * source token, so no such quote is expected.
  */
 const sumLifiFeeShares = (feeCosts: FeeCost[]): LifiFeeShares | undefined => {
   const splitFees = feeCosts.filter((fee): fee is SplitFeeCost => Boolean(fee.feeSplit))
@@ -43,15 +59,12 @@ const sumLifiFeeShares = (feeCosts: FeeCost[]): LifiFeeShares | undefined => {
     return undefined
   }
 
-  return splitFees.reduce<LifiFeeShares>(
-    (shares, { name, token, amount, feeSplit }) => {
-      if (!isSameLifiToken(token, shares.token)) {
-        console.warn(
-          `[getLifiSwapQuote] fee "${name}" is in ${token.symbol}, not ${shares.token.symbol}; leaving it out`
-        )
-        return shares
-      }
+  if (!splitFees.every(({ token }) => isSameLifiToken(token, first.token))) {
+    throw new LifiFeeShapeError('LI.FI split its fees across more than one token.')
+  }
 
+  return splitFees.reduce<LifiFeeShares>(
+    (shares, { amount, feeSplit }) => {
       const total = BigInt(amount)
       const integratorFee = BigInt(feeSplit.integratorFee)
       const integratorAmount = integratorFee < total ? integratorFee : total
@@ -92,7 +105,8 @@ type LifiSolanaSwapFees = {
  * Splits a Solana LI.FI quote's fees into the integrator's cut and everyone
  * else's — LI.FI's and any distribution recipient's. A quote whose fees carry
  * no `feeSplit` cannot be divided, so its fixed fee is reported whole as the
- * swap fee.
+ * swap fee. One whose fees span several tokens throws: this tx shape requires
+ * a swap fee, so the quote is dropped rather than reported short.
  */
 export const getLifiSolanaSwapFees = ({
   feeCosts,
@@ -101,15 +115,38 @@ export const getLifiSolanaSwapFees = ({
 }: GetLifiSolanaSwapFeesInput): LifiSolanaSwapFees => {
   const { token, integratorAmount, protocolAmount } = sumLifiFeeShares(feeCosts) ?? toUndividedLifiFeeShares(feeCosts)
 
+  // Keep the fee token's identity when it is neither route token; only LI.FI's
+  // native SOL tokens become the native coin.
+  const isNativeFee = token.chainId === lifiSwapChainId[fromChain] && solanaNativeFeeTokenAddresses.has(token.address)
   const coin = {
     decimals: token.decimals,
     chain: resolveSwapFeeChain(token.chainId, fromChain),
-    id: routeTokens.find(routeToken => routeToken === token.address) || chainFeeCoin[fromChain].id,
+    id:
+      routeTokens.find(routeToken => routeToken === token.address) ??
+      (isNativeFee ? chainFeeCoin[fromChain].id : token.address),
   }
 
   return {
     swapFee: { ...coin, amount: integratorAmount },
     ...(protocolAmount > 0n ? { protocolFee: { ...coin, amount: protocolAmount } } : {}),
+  }
+}
+
+/**
+ * [sumLifiFeeShares] for a route whose fees are display-only: a fee shape it
+ * cannot itemize yields none. Anything other than a [LifiFeeShapeError] is a
+ * bug and stays loud.
+ */
+const getDisplayLifiFeeShares = (feeCosts: FeeCost[]): LifiFeeShares | undefined => {
+  try {
+    return sumLifiFeeShares(feeCosts)
+  } catch (error) {
+    if (!(error instanceof LifiFeeShapeError)) {
+      throw error
+    }
+
+    console.warn('[getLifiSwapQuote] unresolved LI.FI fee shape on an EVM route; reporting none', error)
+    return undefined
   }
 }
 
@@ -129,9 +166,13 @@ type LifiEvmSwapFees = {
  * is zero. A fee entry without a `feeSplit` is left out entirely: its amount
  * can include more than the integrator's share, so it cannot be attributed to
  * anyone.
+ *
+ * The fees are not part of the signed calldata, so fees that span several
+ * tokens are reported as none rather than taking down a route that would
+ * otherwise sign — the same terms SwapKit's EVM fees are reported on.
  */
 export const getLifiEvmSwapFees = ({ feeCosts, fromChain }: GetLifiEvmSwapFeesInput): LifiEvmSwapFees => {
-  const shares = sumLifiFeeShares(feeCosts)
+  const shares = getDisplayLifiFeeShares(feeCosts)
   if (!shares) {
     return {}
   }

@@ -67,6 +67,25 @@ describe('getLifiSolanaSwapFees', () => {
     })
   })
 
+  it('keeps the identity of a fee token outside the route', () => {
+    const bonk = 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263'
+    const feeCosts: FeeCost[] = [{ ...solanaFixedFee, token: { ...solanaNative, address: bonk, decimals: 5 } }]
+
+    expect(getLifiSolanaSwapFees({ feeCosts, fromChain: Chain.Solana, routeTokens })).toMatchObject({
+      swapFee: { amount: 30_000n, decimals: 5, chain: Chain.Solana, id: bonk },
+    })
+  })
+
+  it('reports a wrapped SOL fee as the native coin', () => {
+    const feeCosts: FeeCost[] = [
+      { ...solanaFixedFee, token: { ...solanaNative, address: 'So11111111111111111111111111111111111111112' } },
+    ]
+
+    expect(getLifiSolanaSwapFees({ feeCosts, fromChain: Chain.Solana, routeTokens })).toMatchObject({
+      swapFee: { amount: 30_000n, decimals: 9, chain: Chain.Solana, id: undefined },
+    })
+  })
+
   it('keeps an undivided fixed fee whole as the swap fee', () => {
     const undivided = { ...solanaFixedFee, feeSplit: undefined }
 
@@ -205,15 +224,24 @@ describe('LI.FI quotes with fees beyond the fixed fee', () => {
     })
   })
 
-  it('skips a split fee in another token, which cannot be added', () => {
+  it('reports no EVM fees rather than a short total when split fees span tokens', () => {
     const foreignFee = {
       ...distributionFee,
       token: { ...baseUsdc, address: '0x4200000000000000000000000000000000000006' },
     }
 
-    expect(getLifiEvmSwapFees({ feeCosts: [fixedFee, foreignFee], fromChain: Chain.Base })).toEqual({
-      affiliateFee: { ...usdc, amount: 200_000n },
-      protocolFee: { ...usdc, amount: 125_000n },
-    })
+    expect(getLifiEvmSwapFees({ feeCosts: [fixedFee, foreignFee], fromChain: Chain.Base })).toEqual({})
+  })
+
+  it('drops a Solana quote whose split fees span tokens', () => {
+    const foreignFee = {
+      ...solanaFixedFee,
+      name: 'Distributions',
+      token: { ...solanaNative, address: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v' },
+    }
+
+    expect(() =>
+      getLifiSolanaSwapFees({ feeCosts: [solanaFixedFee, foreignFee], fromChain: Chain.Solana, routeTokens })
+    ).toThrow('LI.FI split its fees across more than one token.')
   })
 })
