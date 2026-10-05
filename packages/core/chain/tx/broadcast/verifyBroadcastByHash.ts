@@ -11,6 +11,13 @@ type VerifyInput<T extends Chain> = {
   error: unknown
   /** Solana: lets the status lookup report an unseen signature as expired. */
   lastValidBlockHeight?: number
+  /**
+   * How many status lookups to make before giving up; defaults to
+   * {@link broadcastVerificationMaxAttempts}. The pause after each one grows by
+   * {@link broadcastVerificationBaseDelayMs}, so a caller that has to wait for
+   * a block rather than for RPC propagation passes a larger count.
+   */
+  maxAttempts?: number
 }
 
 export const broadcastVerificationMaxAttempts = 4
@@ -42,6 +49,7 @@ export const verifyBroadcastByHash = async <T extends Chain>({
   tx,
   error,
   lastValidBlockHeight,
+  maxAttempts = broadcastVerificationMaxAttempts,
 }: VerifyInput<T>): Promise<string> => {
   let hash: string
 
@@ -51,7 +59,7 @@ export const verifyBroadcastByHash = async <T extends Chain>({
     throw error
   }
 
-  for (let attempt = 1; attempt <= broadcastVerificationMaxAttempts; attempt++) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     let result: Awaited<ReturnType<typeof getTxStatus>> | undefined
 
     try {
@@ -72,7 +80,7 @@ export const verifyBroadcastByHash = async <T extends Chain>({
       }
     }
 
-    if (attempt < broadcastVerificationMaxAttempts) {
+    if (attempt < maxAttempts) {
       await sleep(broadcastVerificationBaseDelayMs * attempt)
     }
   }
