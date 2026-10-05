@@ -1,5 +1,15 @@
 # @vultisig/rujira
 
+## 71.0.2
+
+### Patch Changes
+
+- [#2504](https://github.com/vultisig/vultisig-sdk/pull/2504) [`c1100c6`](https://github.com/vultisig/vultisig-sdk/commit/c1100c6af52b85b5f4eebf78f35ae321bd128966) Thanks [@PragmaticMonkey](https://github.com/PragmaticMonkey)! - Fix FIN swap messages and encoded memos to place `min_return` and `to` directly under `swap`, matching the contract's untagged request format and preserving minimum output and recipient.
+
+- [#2504](https://github.com/vultisig/vultisig-sdk/pull/2504) [`5aea7aa`](https://github.com/vultisig/vultisig-sdk/commit/5aea7aa4af3ebed6beccc9cb2d757a2c5e9218f3) Thanks [@PragmaticMonkey](https://github.com/PragmaticMonkey)! - Cached swap quotes now carry the current request's destination and slippage. The quote cache is keyed by assets and amount only, so `easySwap()` / `executeSwap()` could reuse an earlier quote and route the output to that earlier request's destination.
+
+- [#2504](https://github.com/vultisig/vultisig-sdk/pull/2504) [`035087c`](https://github.com/vultisig/vultisig-sdk/commit/035087c0c4414b4d26eac9c35d93f5229bdcbdb7) Thanks [@PragmaticMonkey](https://github.com/PragmaticMonkey)! - Type FIN `CallbackData` as the base64 string the contract's `CallbackData(Binary)` expects. The previous `{ contract, msg }` shape would make FIN reject the message.
+
 ## 71.0.1
 
 ### Patch Changes

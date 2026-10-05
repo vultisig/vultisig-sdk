@@ -1,5 +1,57 @@
 # @vultisig/sdk
 
+## 10.0.0
+
+### Major Changes
+
+- [#2490](https://github.com/vultisig/vultisig-sdk/pull/2490) [`60acf82`](https://github.com/vultisig/vultisig-sdk/commit/60acf82b0596d4345b77045365f94b7a6ee44e13) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Remove the agent-focused DeFi namespace, builders, and `tools/defi` subpath from the wallet SDK, along with its exclusive `@balancer/sdk` dependency. Declare `@noble/ciphers` directly for the retained React Native encryption polyfills. Load the Polkadot API when a Polkadot client is first requested so the SDK root no longer includes it in the eager wallet graph.
+
+### Minor Changes
+
+- [#2498](https://github.com/vultisig/vultisig-sdk/pull/2498) [`0251a9b`](https://github.com/vultisig/vultisig-sdk/commit/0251a9bbb6ea85d178cef4846c1c8471aca04386) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Itemize the swap provider's own fee apart from the integrator's affiliate fee. LI.FI quotes now split every fee entry that carries a `feeSplit` (the fixed fee and any distribution fees) and SwapKit quotes keep the `service` fee out of the `affiliate` one, so `evm.affiliateFee` and `solana.swapFee` / `transfer.swapFee` carry only the integrator's cut and the new optional `protocolFee` carries everyone else's (LI.FI's, a distribution recipient's, or SwapKit's). The keysign payload `swap_fee` still reports both together, so cosigning peers see the same total as before. `SwapFees` and `SwapFeesFiat` gain an optional `protocol` amount, which is included in `total`.
+
+### Patch Changes
+
+- [#2494](https://github.com/vultisig/vultisig-sdk/pull/2494) [`eff856a`](https://github.com/vultisig/vultisig-sdk/commit/eff856a9c6f5d56516688507a2abb59297437642) Thanks [@neavra](https://github.com/neavra)! - Update axios to 1.20.0 and @grpc/grpc-js to 1.14.5 to address published high-severity security advisories.
+
+- [#2503](https://github.com/vultisig/vultisig-sdk/pull/2503) [`7785d05`](https://github.com/vultisig/vultisig-sdk/commit/7785d059e62c76f8393874d70f498a634d2bc6f9) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Stop reporting a Cardano broadcast as failed when another signing device already sent the same transaction. Every device in a keysign broadcasts the same bytes, and the node now answers the later ones with a mempool rejection (code 3997, "All inputs are spent. Transaction has probably already been included") instead of code 3117. The fallback hash lookup gave up after about 3 seconds, before the first copy could be in a block, so the device that lost the race showed "Failed to broadcast transaction" for a transaction that went through.
+
+  That reply does not prove the transaction is the one that spent the inputs, so it is not accepted on its own. It now makes the hash lookup wait long enough for the next block (up to about two minutes): the broadcast is reported as sent once the hash is seen, and as failed if it never appears. The node's justification also replaces the message that only pointed at it ("A justification is given as 'data.error'").
+
+- [#2456](https://github.com/vultisig/vultisig-sdk/pull/2456) [`2c09369`](https://github.com/vultisig/vultisig-sdk/commit/2c09369a981a5653a9eb129efe816b9158440803) Thanks [@realpaaao](https://github.com/realpaaao)! - Report which contract-price lookups failed, and cap a multi-batch CoinGecko fetch at 20 seconds. `getErc20Prices` still returns the price map.
+
+- [#2483](https://github.com/vultisig/vultisig-sdk/pull/2483) [`d1b3bd2`](https://github.com/vultisig/vultisig-sdk/commit/d1b3bd2ec255eca8b18069b00086f31a5cc137b7) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Scope ML-DSA signing to ML-DSA chains. A vault holding an ML-DSA key share ran a
+  full ML-DSA sign alongside every ECDSA/EdDSA sign, because the trailing blocks in
+  `ServerManager.coordinateFastSigning` and both `RelaySigningService` signing paths
+  were gated on `vault.keyShareMldsa` instead of the requested signature algorithm.
+
+  That produced an ML-DSA signature over raw message hashes with no QBTC SignDoc
+  binding and returned it on the public `Signature.mldsaSignature` field, so a
+  non-QBTC sign could hand back QBTC-authorizing key material. It also cost relay
+  signers a full `startKeysignWithRetry` cycle on every ordinary sign, and reused the
+  DKLS session id and encryption key for the ML-DSA round.
+
+  ML-DSA now runs only through the dedicated `signatureAlgorithm === 'mldsa'` paths,
+  and `mldsaSignature` is only ever set from there.
+
+- [#2484](https://github.com/vultisig/vultisig-sdk/pull/2484) [`0475c2b`](https://github.com/vultisig/vultisig-sdk/commit/0475c2bfbe12d1995e91e4c1e5a2b6da88aa7193) Thanks [@neavra](https://github.com/neavra)! - Tokens without a price source are no longer valued at 0: the SDK reports them as failures (new `getValuesDetailed`), and `vultisig portfolio` lists them with `value: null`, records each in `failures` with its token id, and sums only priced rows into the total.
+
+  `vault.portfolio()` now returns partial results with an additive `failures` list instead of rejecting when one asset has no price source.
+
+- [#2504](https://github.com/vultisig/vultisig-sdk/pull/2504) [`6a20f41`](https://github.com/vultisig/vultisig-sdk/commit/6a20f4130f73b9a0dc68a80b950876af4ae01f0a) Thanks [@PragmaticMonkey](https://github.com/PragmaticMonkey)! - Fix RUJI Trade (RUNE ↔ bRUNE) swaps to send FIN's untagged swap request with `min_return` and `to` directly under `swap`. The previous `{ swap: { min: { ... } } }` wrapper decoded on-chain as an unguarded Yolo swap, dropping the slippage guard and the recipient. Keysign now requires the flat form, and also rejects a `min_return` outside Uint128, which FIN would likewise treat as Yolo.
+
+- [#2502](https://github.com/vultisig/vultisig-sdk/pull/2502) [`37e06d5`](https://github.com/vultisig/vultisig-sdk/commit/37e06d515baede9d05ab7e3e1d7cbe2b8218b330) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Co-sign SwapKit swaps that carry a pre-built Cardano transaction (`tx_type = "CARDANO_PREBUILT"`). SwapKit builds the whole transaction for this route and the initiator relays it in `tx_payload` as the CBOR envelope `[body, witness_set, is_valid, aux_data]`, but nothing handled that type: a co-signer rebuilt a native ADA send from `toAddress` / `toAmount` / `utxoInfo`, signed a different body than iOS and Android, and the keysign never converged. The envelope is now the signing input — the digest is blake2b-256 of its body bytes verbatim, and the signed transaction is the same envelope with the vault's vkey witness in place of item 1.
+
+  No Verify screen shows that body, so it is validated against the vault's own key before any hash is produced. It must be a plain payment (only inputs, outputs, fee, ttl, validity start, aux-data hash and network id) in which exactly one output is an ADA-only deposit of at most `from_amount` and every other output pays the vault's enterprise address, with a fee of at most 2 ADA. The swap's source asset must be ADA, so that `from_amount` is a lovelace amount.
+
+- [#2489](https://github.com/vultisig/vultisig-sdk/pull/2489) [`0b107b0`](https://github.com/vultisig/vultisig-sdk/commit/0b107b0741f036f7fd82afa163e167b2cdef15ce) Thanks [@neavra](https://github.com/neavra)! - Transaction status lookups on Sui, TON, Ripple, Polkadot, the UTXO chains, Cardano, QBTC and Bittensor now report `not_found` when the node or indexer has no record of the hash, matching EVM, Solana and Cosmos, instead of an indefinite `pending`. A hash the node knows about, or a lookup that fails transiently, still reports `pending`.
+
+- [#2477](https://github.com/vultisig/vultisig-sdk/pull/2477) [`d5525e0`](https://github.com/vultisig/vultisig-sdk/commit/d5525e0ae236338faeaabfd76314af5ddd50dd96) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(vault): `unlock()` now verifies the password even when key shares are already loaded, and a wrong password no longer replaces or clears a previously cached one
+
+- Updated dependencies [[`7785d05`](https://github.com/vultisig/vultisig-sdk/commit/7785d059e62c76f8393874d70f498a634d2bc6f9), [`2c09369`](https://github.com/vultisig/vultisig-sdk/commit/2c09369a981a5653a9eb129efe816b9158440803), [`60acf82`](https://github.com/vultisig/vultisig-sdk/commit/60acf82b0596d4345b77045365f94b7a6ee44e13), [`6a20f41`](https://github.com/vultisig/vultisig-sdk/commit/6a20f4130f73b9a0dc68a80b950876af4ae01f0a), [`0251a9b`](https://github.com/vultisig/vultisig-sdk/commit/0251a9bbb6ea85d178cef4846c1c8471aca04386), [`37e06d5`](https://github.com/vultisig/vultisig-sdk/commit/37e06d515baede9d05ab7e3e1d7cbe2b8218b330), [`0b107b0`](https://github.com/vultisig/vultisig-sdk/commit/0b107b0741f036f7fd82afa163e167b2cdef15ce)]:
+  - @vultisig/core-chain@6.2.0
+  - @vultisig/core-mpc@5.0.4
+
 ## 9.0.0
 
 ### Major Changes
