@@ -61,6 +61,7 @@ const buildPayload = (routerTo: string, provider = '1inch') =>
       case: 'oneinchSwapPayload',
       value: create(OneInchSwapPayloadSchema, {
         provider,
+        fromAmount: '1000000',
         quote: create(OneInchQuoteSchema, {
           tx: create(OneInchTransactionSchema, { to: routerTo, data: '0xabcdef', value: '0', gasPrice: '0', gas: 0n }),
         }),
