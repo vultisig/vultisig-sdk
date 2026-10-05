@@ -5,6 +5,10 @@ import { KeysignPayload, KeysignPayloadSchema } from '@vultisig/core-mpc/types/v
 import { WalletCore } from '@trustwallet/wallet-core'
 import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
 
+import {
+  getSwapKitCardanoPrebuiltPayload,
+  getSwapKitCardanoPrebuiltSigningInput,
+} from '../../tx/swapkitCardanoPrebuilt'
 import { getKeysignTonGasless } from '../ton/gasless'
 import { getKeysignChain } from '../utils/getKeysignChain'
 import { signingInputClasses } from './core'
@@ -67,6 +71,30 @@ export const getEncodedSigningInputs = async (input: Input): Promise<Uint8Array[
   // getPreSigningHashes and compileTx hash and assemble it from the payload.
   if (chainKind === 'ton' && getKeysignTonGasless(input.keysignPayload)) {
     return [toBinary(KeysignPayloadSchema, input.keysignPayload)]
+  }
+
+  // SwapKit pre-built Cardano transaction (sdk#2468): the txInputData IS
+  // SwapKit's unsigned CBOR envelope, and getPreSigningHashes / compileTx have
+  // matching branches that hash its body verbatim and splice the witness back
+  // in. Resolving it into a TW SigningInput would rebuild a native send from
+  // toAddress / toAmount / utxoInfo — a different body, so a different digest
+  // than the one iOS / Android peers sign. The body is validated here against
+  // the caller's own vault key, not the payload's coin (which a co-signer
+  // receives from the initiator), so an unexpected transaction never yields a
+  // hash to sign.
+  const swapKitCardanoPrebuilt = getSwapKitCardanoPrebuiltPayload(input.keysignPayload)
+  if (swapKitCardanoPrebuilt) {
+    if (!input.publicKey) {
+      throw new Error('publicKey is required to validate a SwapKit pre-built Cardano transaction')
+    }
+
+    return [
+      getSwapKitCardanoPrebuiltSigningInput({
+        swapKitPayload: swapKitCardanoPrebuilt,
+        // The extended ed25519Cardano key leads with the 32-byte spending key.
+        vaultPublicKey: new Uint8Array(input.publicKey.data()).slice(0, 32),
+      }),
+    ]
   }
 
   const signingInputs = await signingInputResolversByChainKind[chainKind](input as any)
