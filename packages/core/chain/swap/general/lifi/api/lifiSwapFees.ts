@@ -1,4 +1,4 @@
-import type { FeeCost } from '@lifi/sdk'
+import type { FeeCost, Token } from '@lifi/sdk'
 import { evmNativeCoinAddress } from '@vultisig/core-chain/chains/evm/config'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { lifiSwapChainId, LifiSwapEnabledChain } from '@vultisig/core-chain/swap/general/lifi/LifiSwapEnabledChains'
@@ -9,33 +9,71 @@ import { resolveSwapFeeChain } from './lifiSwapFeeChain'
 
 const zeroAddress = '0x0000000000000000000000000000000000000000'
 
-type LifiFixedFeeSplit = {
-  fee: FeeCost
+type LifiFeeShares = {
+  token: Token
   integratorAmount: bigint
   protocolAmount: bigint
 }
 
+type SplitFeeCost = FeeCost & Required<Pick<FeeCost, 'feeSplit'>>
+
+const isSameLifiToken = (one: Token, another: Token) =>
+  one.chainId === another.chainId && one.address.toLowerCase() === another.address.toLowerCase()
+
 /**
- * LI.FI charges its own cut and the integrator's in a single `feeCosts` entry:
- * `amount` is the whole charge and `feeSplit.integratorFee` the integrator's
- * slice alone. On a 0.01 SOL swap at 30 bps that entry is 55000 lamports, of
- * which 30000 go to the integrator and 25000 to LI.FI (vultisig-sdk#2396).
+ * LI.FI itemizes each fee it collects for a recipient as a `feeCosts` entry
+ * carrying a `feeSplit`. Its fixed fee holds LI.FI's cut and the integrator's
+ * in one `amount`, with `feeSplit.integratorFee` the integrator's slice alone:
+ * on a 0.01 SOL swap at 30 bps that entry is 55000 lamports, 30000 to the
+ * integrator and 25000 to LI.FI (vultisig-sdk#2396). Each recipient added
+ * through `distributionFees` arrives as a further entry ("Distributions")
+ * with no integrator slice. Entries without a split are the route's own
+ * costs, such as bridge and liquidity fees, and stay out of this.
  *
- * The protocol slice is taken as the remainder rather than read from
- * `feeSplit.lifiFee`, so the two slices always add up to what the entry
- * charges — an intermediary's slice, when present, is not ours either.
+ * Every split entry is summed. Each one's protocol slice is the remainder of
+ * its `amount` rather than `feeSplit.lifiFee`, so the slices always add up to
+ * what the entries charge — intermediary and distribution slices are not the
+ * integrator's either. An entry in another token cannot be added and is
+ * skipped.
  */
-const splitLifiFixedFee = (feeCosts: FeeCost[]): LifiFixedFeeSplit | undefined => {
-  const fee = feeCosts.find(({ feeSplit }) => feeSplit)
-  if (!fee?.feeSplit) {
+const sumLifiFeeShares = (feeCosts: FeeCost[]): LifiFeeShares | undefined => {
+  const splitFees = feeCosts.filter((fee): fee is SplitFeeCost => Boolean(fee.feeSplit))
+  const [first] = splitFees
+  if (!first) {
     return undefined
   }
 
-  const amount = BigInt(fee.amount)
-  const integratorFee = BigInt(fee.feeSplit.integratorFee)
-  const integratorAmount = integratorFee < amount ? integratorFee : amount
+  return splitFees.reduce<LifiFeeShares>(
+    (shares, { name, token, amount, feeSplit }) => {
+      if (!isSameLifiToken(token, shares.token)) {
+        console.warn(
+          `[getLifiSwapQuote] fee "${name}" is in ${token.symbol}, not ${shares.token.symbol}; leaving it out`
+        )
+        return shares
+      }
 
-  return { fee, integratorAmount, protocolAmount: amount - integratorAmount }
+      const total = BigInt(amount)
+      const integratorFee = BigInt(feeSplit.integratorFee)
+      const integratorAmount = integratorFee < total ? integratorFee : total
+
+      return {
+        token: shares.token,
+        integratorAmount: shares.integratorAmount + integratorAmount,
+        protocolAmount: shares.protocolAmount + total - integratorAmount,
+      }
+    },
+    { token: first.token, integratorAmount: 0n, protocolAmount: 0n }
+  )
+}
+
+/**
+ * A fixed fee without a split cannot be divided, so it is reported whole as
+ * the integrator's, as it was before the split existed.
+ */
+const toUndividedLifiFeeShares = (feeCosts: FeeCost[]): LifiFeeShares => {
+  const { token, amount } = shouldBePresent(feeCosts.find(({ name }) => name === 'LIFI Fixed Fee') || feeCosts[0])
+
+  return { token, integratorAmount: BigInt(amount), protocolAmount: 0n }
 }
 
 type GetLifiSolanaSwapFeesInput = {
@@ -51,31 +89,27 @@ type LifiSolanaSwapFees = {
 }
 
 /**
- * Splits a Solana LI.FI quote's fixed fee into the integrator's cut and
- * LI.FI's own. A fee entry without a `feeSplit` cannot be divided, so it is
- * reported whole as the swap fee, as it was before the split existed.
+ * Splits a Solana LI.FI quote's fees into the integrator's cut and everyone
+ * else's — LI.FI's and any distribution recipient's. A quote whose fees carry
+ * no `feeSplit` cannot be divided, so its fixed fee is reported whole as the
+ * swap fee.
  */
 export const getLifiSolanaSwapFees = ({
   feeCosts,
   fromChain,
   routeTokens,
 }: GetLifiSolanaSwapFeesInput): LifiSolanaSwapFees => {
-  const split = splitLifiFixedFee(feeCosts)
-  const fee = split?.fee ?? shouldBePresent(feeCosts.find(({ name }) => name === 'LIFI Fixed Fee') || feeCosts[0])
+  const { token, integratorAmount, protocolAmount } = sumLifiFeeShares(feeCosts) ?? toUndividedLifiFeeShares(feeCosts)
 
   const coin = {
-    decimals: fee.token.decimals,
-    chain: resolveSwapFeeChain(fee.token.chainId, fromChain),
-    id: routeTokens.find(token => token === fee.token.address) || chainFeeCoin[fromChain].id,
-  }
-
-  if (!split) {
-    return { swapFee: { ...coin, amount: BigInt(fee.amount) } }
+    decimals: token.decimals,
+    chain: resolveSwapFeeChain(token.chainId, fromChain),
+    id: routeTokens.find(routeToken => routeToken === token.address) || chainFeeCoin[fromChain].id,
   }
 
   return {
-    swapFee: { ...coin, amount: split.integratorAmount },
-    ...(split.protocolAmount > 0n ? { protocolFee: { ...coin, amount: split.protocolAmount } } : {}),
+    swapFee: { ...coin, amount: integratorAmount },
+    ...(protocolAmount > 0n ? { protocolFee: { ...coin, amount: protocolAmount } } : {}),
   }
 }
 
@@ -90,18 +124,19 @@ type LifiEvmSwapFees = {
 }
 
 /**
- * Splits an EVM LI.FI quote's fixed fee into the integrator's cut and LI.FI's
- * own, omitting either one that is zero. A fee entry without a `feeSplit` is
- * left out entirely: its amount can include more than the integrator's share,
- * so it cannot be attributed to anyone.
+ * Splits an EVM LI.FI quote's fees into the integrator's cut and everyone
+ * else's — LI.FI's and any distribution recipient's — omitting either one that
+ * is zero. A fee entry without a `feeSplit` is left out entirely: its amount
+ * can include more than the integrator's share, so it cannot be attributed to
+ * anyone.
  */
 export const getLifiEvmSwapFees = ({ feeCosts, fromChain }: GetLifiEvmSwapFeesInput): LifiEvmSwapFees => {
-  const split = splitLifiFixedFee(feeCosts)
-  if (!split) {
+  const shares = sumLifiFeeShares(feeCosts)
+  if (!shares) {
     return {}
   }
 
-  const { token } = split.fee
+  const { token, integratorAmount, protocolAmount } = shares
   const chain = resolveSwapFeeChain(token.chainId, fromChain)
   // Keep LI.FI's fee-token identity even when it differs from both route
   // endpoints. Only its native-token sentinels may become a native fee.
@@ -119,7 +154,7 @@ export const getLifiEvmSwapFees = ({ feeCosts, fromChain }: GetLifiEvmSwapFeesIn
   }
 
   return {
-    ...(split.integratorAmount > 0n ? { affiliateFee: { ...coin, amount: split.integratorAmount } } : {}),
-    ...(split.protocolAmount > 0n ? { protocolFee: { ...coin, amount: split.protocolAmount } } : {}),
+    ...(integratorAmount > 0n ? { affiliateFee: { ...coin, amount: integratorAmount } } : {}),
+    ...(protocolAmount > 0n ? { protocolFee: { ...coin, amount: protocolAmount } } : {}),
   }
 }

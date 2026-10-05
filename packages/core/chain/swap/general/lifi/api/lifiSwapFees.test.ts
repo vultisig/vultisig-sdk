@@ -120,3 +120,100 @@ describe('getLifiEvmSwapFees', () => {
     expect(getLifiEvmSwapFees({ feeCosts: [undivided], fromChain: Chain.Ethereum })).toEqual({})
   })
 })
+
+describe('LI.FI quotes with fees beyond the fixed fee', () => {
+  const baseUsdc = {
+    address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+    chainId: 8453,
+    symbol: 'USDC',
+    decimals: 6,
+    name: 'USD Coin',
+    priceUSD: '1',
+  }
+
+  // `estimate.feeCosts` LI.FI returned for 50 USDC to WETH on Base at 40 bps
+  // with one `distributionFees` recipient at 0.10%: the distribution arrives as
+  // an entry of its own, with no integrator slice.
+  const fixedFee = {
+    name: 'LIFI Fixed Fee',
+    description: 'Fixed LIFI fee, independent of any other fee',
+    token: baseUsdc,
+    amount: '325000',
+    amountUSD: '0.3259',
+    percentage: '0.0065',
+    included: true,
+    feeSplit: {
+      lifiFee: '125000',
+      integratorFee: '200000',
+      recipients: [
+        { name: 'lifi', type: 'FIXED', fee: '125000' },
+        { name: 'vultisig-0', type: 'FIXED', fee: '200000' },
+      ],
+    },
+  } satisfies FeeCost
+
+  const distributionFee = {
+    name: 'Distributions',
+    description: 'Distribution fees',
+    token: baseUsdc,
+    amount: '50000',
+    amountUSD: '0.0501',
+    percentage: '0.0010',
+    included: true,
+    feeSplit: {
+      integratorFee: '0',
+      lifiFee: '0',
+      recipients: [
+        {
+          name: '0x000000000000000000000000000000000000dEaD',
+          fee: '50000',
+          type: 'DISTRIBUTION',
+          walletAddress: '0x000000000000000000000000000000000000dEaD',
+        },
+      ],
+    },
+  } satisfies FeeCost
+
+  const usdc = { decimals: 6, chain: Chain.Base, id: baseUsdc.address }
+
+  it.each([
+    ['fixed fee first', [fixedFee, distributionFee]],
+    ['distribution first', [distributionFee, fixedFee]],
+  ])('counts a distribution fee as a protocol charge (%s)', (_, feeCosts) => {
+    expect(getLifiEvmSwapFees({ feeCosts, fromChain: Chain.Base })).toEqual({
+      affiliateFee: { ...usdc, amount: 200_000n },
+      protocolFee: { ...usdc, amount: 175_000n },
+    })
+  })
+
+  it("leaves a bridge's own cost out of the fees", () => {
+    // The route's cost rather than a fee LI.FI collects for a recipient: it has
+    // no split, like the LayerSwap fee on an Ethereum to Arbitrum route.
+    const bridgeFee = {
+      name: 'LayerSwap fee',
+      description: 'LayerSwap fee',
+      token: baseUsdc,
+      amount: '9580',
+      amountUSD: '0.0096',
+      percentage: '0.0002',
+      included: true,
+    } satisfies FeeCost
+
+    expect(getLifiEvmSwapFees({ feeCosts: [fixedFee, bridgeFee], fromChain: Chain.Base })).toEqual({
+      affiliateFee: { ...usdc, amount: 200_000n },
+      protocolFee: { ...usdc, amount: 125_000n },
+    })
+  })
+
+  it('skips a split fee in another token, which cannot be added', () => {
+    const foreignFee = {
+      ...distributionFee,
+      token: { ...baseUsdc, address: '0x4200000000000000000000000000000000000006' },
+    }
+
+    expect(getLifiEvmSwapFees({ feeCosts: [fixedFee, foreignFee], fromChain: Chain.Base })).toEqual({
+      affiliateFee: { ...usdc, amount: 200_000n },
+      protocolFee: { ...usdc, amount: 125_000n },
+    })
+  })
+})
