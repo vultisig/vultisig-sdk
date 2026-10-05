@@ -399,6 +399,75 @@ describe('RelaySigningService', () => {
     })
   })
 
+  describe('non-MLDSA signing on an MLDSA-capable vault', () => {
+    const messageHash = 'cd'.repeat(32)
+    const vault = {
+      keyShares: { ecdsa: 'ecdsa-share', eddsa: 'eddsa-share' },
+      keyShareMldsa: 'mldsa-key-share',
+      signers: ['party1', 'party2'],
+      publicKeys: { ecdsa: 'ecdsa-public-key', eddsa: 'eddsa-public-key' },
+    }
+
+    beforeEach(() => {
+      vi.mocked(queryUrl).mockResolvedValue(['peer-1', 'peer-2'])
+      vi.mocked(keysign).mockResolvedValue({
+        msg: messageHash,
+        r: '11'.repeat(32),
+        s: '22'.repeat(32),
+        der_signature: 'der-signature',
+        recovery_id: '1',
+      } as any)
+      vi.mocked(MldsaKeysign).mockImplementation(function () {
+        throw new Error('MldsaKeysign must not be constructed for a non-MLDSA sign')
+      } as unknown as typeof MldsaKeysign)
+    })
+
+    it('never opens an MLDSA session for an ECDSA transaction', async () => {
+      const signature = await service.signWithRelay(
+        vault as any,
+        { chain: Chain.Ethereum, transaction: {}, messageHashes: [messageHash] } as any,
+        mockWalletCore,
+        { sessionId: 'evm-session' }
+      )
+
+      expect(MldsaKeysign).not.toHaveBeenCalled()
+      expect(signature.mldsaSignature).toBeUndefined()
+      expect(signature.format).toBe('ECDSA')
+    })
+
+    it('never opens an MLDSA session for an EdDSA transaction', async () => {
+      vi.mocked(getChainSigningInfo).mockReturnValue({
+        signatureAlgorithm: 'eddsa',
+        derivePath: "m/44'/501'/0'/0'",
+        chainPath: 'm/44/501/0/0',
+      })
+
+      const signature = await service.signWithRelay(
+        vault as any,
+        { chain: Chain.Solana, transaction: {}, messageHashes: [messageHash] } as any,
+        mockWalletCore,
+        { sessionId: 'solana-session' }
+      )
+
+      expect(MldsaKeysign).not.toHaveBeenCalled()
+      expect(signature.mldsaSignature).toBeUndefined()
+      expect(signature.format).toBe('EdDSA')
+    })
+
+    it('never opens an MLDSA session for raw non-QBTC bytes', async () => {
+      const signature = await service.signBytesWithRelay(
+        vault as any,
+        { chain: Chain.Ethereum, messageHashes: [messageHash] },
+        mockWalletCore,
+        { sessionId: 'evm-bytes-session' }
+      )
+
+      expect(MldsaKeysign).not.toHaveBeenCalled()
+      expect(signature.mldsaSignature).toBeUndefined()
+      expect(keysign).toHaveBeenCalledOnce()
+    })
+  })
+
   describe('signBytesWithRelay validation', () => {
     it('should require loaded key shares', async () => {
       const mockVaultNoKeys = {
