@@ -72,6 +72,8 @@ export type BuildSwapKeysignPayloadInput = {
 type TransferSwapTx = Extract<GeneralSwapTx, { transfer: unknown }>['transfer']
 type CosmosWasmSwapTx = Extract<GeneralSwapTx, { cosmosWasm: unknown }>['cosmosWasm']
 
+const maxUint128 = (1n << 128n) - 1n
+
 const getThorAddressIdentity = (address: string): string | undefined => {
   try {
     const decoded = decodeBech32(address.trim())
@@ -123,13 +125,16 @@ const getRujiTradeFundAmount = (tx: CosmosWasmSwapTx, fromCoin: AccountCoin, eff
   } catch {
     throw new Error('RUJI Trade CosmWasm route contains an invalid execute message.')
   }
-  const min = (executeMsg as { swap?: { min?: { min_return?: unknown; to?: unknown } } })?.swap?.min
+  // FIN's SwapRequest is untagged and ignores unknown keys, so a nested `{ min: { ... } }`
+  // or a min_return outside Uint128 decodes as an unguarded Yolo swap instead of failing.
+  const swap = (executeMsg as { swap?: { min_return?: unknown; to?: unknown } })?.swap
   if (
-    typeof min?.min_return !== 'string' ||
-    !/^\d+$/.test(min.min_return) ||
-    BigInt(min.min_return) <= 0n ||
-    typeof min.to !== 'string' ||
-    !areEqualThorAddresses(min.to, effectiveRecipient)
+    typeof swap?.min_return !== 'string' ||
+    !/^\d+$/.test(swap.min_return) ||
+    BigInt(swap.min_return) <= 0n ||
+    BigInt(swap.min_return) > maxUint128 ||
+    typeof swap.to !== 'string' ||
+    !areEqualThorAddresses(swap.to, effectiveRecipient)
   ) {
     throw new Error('RUJI Trade CosmWasm route must contain a guarded FIN swap execute message.')
   }

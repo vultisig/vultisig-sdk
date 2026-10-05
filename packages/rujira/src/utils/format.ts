@@ -190,10 +190,8 @@ export function generateQuoteId(): string {
 export function buildSwapMsg(minReturn: string, to?: string): { swap: SwapRequest } {
   return {
     swap: {
-      min: {
-        min_return: minReturn,
-        to,
-      },
+      min_return: minReturn,
+      to,
     },
   }
 }

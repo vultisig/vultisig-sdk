@@ -4,6 +4,7 @@ import {
   buildExecuteMemo,
   buildSecureMintMemo,
   buildSecureRedeemMemo,
+  buildSwapMemo,
   buildThorSwapMemo,
   parseExecuteMemo,
   parseMemoType,
@@ -53,7 +54,7 @@ describe('buildSecureRedeemMemo', () => {
 
 describe('buildExecuteMemo', () => {
   it('encodes message as base64', () => {
-    const msg = { swap: { min: { min_return: '100' } } }
+    const msg = { swap: { min_return: '100' } }
     const memo = buildExecuteMemo('thor1contract', msg)
 
     expect(memo).toMatch(/^x:thor1contract:/)
@@ -65,7 +66,7 @@ describe('buildExecuteMemo', () => {
 
 describe('parseExecuteMemo', () => {
   it('round-trips with buildExecuteMemo', () => {
-    const msg = { swap: { min: { min_return: '500' } } }
+    const msg = { swap: { min_return: '500' } }
     const memo = buildExecuteMemo('thor1addr', msg)
     const parsed = parseExecuteMemo(memo)
 
@@ -84,6 +85,14 @@ describe('parseExecuteMemo', () => {
     expect(parseExecuteMemo('x:')).toBeNull()
     expect(parseExecuteMemo('x:contract')).toBeNull()
     expect(parseExecuteMemo('x:contract:!!!notbase64')).toBeNull()
+  })
+})
+
+describe('buildSwapMemo', () => {
+  it.each([undefined, 'thor1recipient'])('encodes a flat FIN minimum-return request for %s', to => {
+    const memo = buildSwapMemo('thor1contract', '1000', to)
+    const expected = { swap: { min_return: '1000', ...(to ? { to } : {}) } }
+    expect(parseExecuteMemo(memo)).toStrictEqual({ contract: 'thor1contract', msg: expected })
   })
 })
 
