@@ -147,6 +147,10 @@ const assertNativeTransferOnly = (keysignPayload: KeysignPayload, coin: Coin) =>
   if (keysignPayload.signData.case !== undefined) {
     throw new Error('NEAR native transfers do not support custom sign payloads')
   }
+
+  if (keysignPayload.erc20ApprovePayload) {
+    throw new Error('NEAR native transfers cannot carry an ERC-20 approval')
+  }
 }
 
 const parseNearSpecific = ({ nonce, blockHash, gasFee }: NearSpecific) => {
