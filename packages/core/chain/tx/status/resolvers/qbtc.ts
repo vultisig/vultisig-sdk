@@ -21,14 +21,31 @@ type TxResponse = {
   }
 }
 
+type QbtcLookup = { kind: 'found'; response: TxResponse } | { kind: 'not_found' }
+
+const isQbtcNotFoundResponse = (status: number, body: unknown): boolean => {
+  if (status !== 404 || !body || typeof body !== 'object') return false
+
+  const { code, message } = body as { code?: unknown; message?: unknown }
+  return code === 5 && typeof message === 'string' && message.includes('tx not found')
+}
+
 export const getQbtcTxStatus: TxStatusResolver<typeof Chain.QBTC> = async ({ hash }) => {
   const url = `${qbtcRestUrl}/cosmos/tx/v1beta1/txs/${hash}`
-  const { data, error } = await attempt(async () => {
+  const { data: lookup, error } = await attempt(async (): Promise<QbtcLookup> => {
     const resp = await fetch(url)
+    const body: unknown = await resp.json()
+    if (isQbtcNotFoundResponse(resp.status, body)) return { kind: 'not_found' }
     if (!resp.ok) throw new Error(`${resp.status}`)
-    return resp.json() as Promise<TxResponse>
+    return { kind: 'found', response: body as TxResponse }
   })
 
+  if (lookup?.kind === 'not_found') {
+    // The Cosmos LCD reserves code 5 / HTTP 404 for an absent transaction hash.
+    return { status: 'not_found', isKnown: false }
+  }
+
+  const data = lookup?.kind === 'found' ? lookup.response : undefined
   if (error || !data?.tx_response) {
     return { status: 'pending', isKnown: false }
   }

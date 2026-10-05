@@ -15,10 +15,58 @@ describe('getSuiTxStatus — unified client result union', () => {
   beforeEach(() => mocks.getTransaction.mockReset())
 
   it('asks for effects by digest', async () => {
-    mocks.getTransaction.mockResolvedValueOnce({ $kind: 'Transaction', Transaction: {} })
+    mocks.getTransaction.mockResolvedValueOnce({
+      $kind: 'Transaction',
+      Transaction: {},
+    })
     await getSuiTxStatus({ chain: OtherChain.Sui, hash })
 
-    expect(mocks.getTransaction).toHaveBeenCalledWith({ digest: hash, include: { effects: true } })
+    expect(mocks.getTransaction).toHaveBeenCalledWith({
+      digest: hash,
+      include: { effects: true },
+    })
+  })
+
+  it('reports not_found for the gRPC client missing-transaction error', async () => {
+    mocks.getTransaction.mockRejectedValueOnce(
+      Object.assign(new Error('Transaction%20BWWMRhDrfnMWiLCsGqcvJZGDLGGkTKAyLQMJVGqZ4Vzq%20not%20found'), {
+        code: 'NOT_FOUND',
+      })
+    )
+
+    await expect(getSuiTxStatus({ chain: OtherChain.Sui, hash })).resolves.toEqual({
+      status: 'not_found',
+      isKnown: false,
+    })
+  })
+
+  it('reports not_found when the React Native GraphQL client returns a null transaction', async () => {
+    mocks.getTransaction.mockRejectedValueOnce(new Error('Missing response data'))
+
+    await expect(getSuiTxStatus({ chain: OtherChain.Sui, hash })).resolves.toEqual({
+      status: 'not_found',
+      isKnown: false,
+    })
+  })
+
+  it('keeps unrelated GraphQL client errors pending', async () => {
+    mocks.getTransaction.mockRejectedValueOnce(new Error('GraphQL request failed: rate limit exceeded'))
+
+    await expect(getSuiTxStatus({ chain: OtherChain.Sui, hash })).resolves.toEqual({
+      status: 'pending',
+      isKnown: false,
+    })
+  })
+
+  it('keeps unrelated client failures pending', async () => {
+    mocks.getTransaction.mockRejectedValueOnce(
+      Object.assign(new Error('upstream unavailable'), { code: 'UNAVAILABLE' })
+    )
+
+    await expect(getSuiTxStatus({ chain: OtherChain.Sui, hash })).resolves.toEqual({
+      status: 'pending',
+      isKnown: false,
+    })
   })
 
   it('reports success with a fee receipt derived from gasUsed', async () => {
@@ -52,7 +100,10 @@ describe('getSuiTxStatus — unified client result union', () => {
   it('omits the receipt when the success response carries no gas breakdown', async () => {
     mocks.getTransaction.mockResolvedValueOnce({
       $kind: 'Transaction',
-      Transaction: { status: { success: true, error: null }, effects: { transactionDigest: hash } },
+      Transaction: {
+        status: { success: true, error: null },
+        effects: { transactionDigest: hash },
+      },
     })
 
     await expect(getSuiTxStatus({ chain: OtherChain.Sui, hash })).resolves.toEqual({
@@ -76,7 +127,9 @@ describe('getSuiTxStatus — unified client result union', () => {
   it('reports error when the Transaction arm itself carries a failed status', async () => {
     mocks.getTransaction.mockResolvedValueOnce({
       $kind: 'Transaction',
-      Transaction: { status: { success: false, error: { message: 'InsufficientGas' } } },
+      Transaction: {
+        status: { success: false, error: { message: 'InsufficientGas' } },
+      },
     })
 
     await expect(getSuiTxStatus({ chain: OtherChain.Sui, hash })).resolves.toEqual({ status: 'error' })

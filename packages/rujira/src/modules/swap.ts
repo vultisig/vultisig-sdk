@@ -61,7 +61,10 @@ export class RujiraSwap {
     }
 
     if (!skipCache && this.quoteCache) {
-      const cached = this.quoteCache.get(params.fromAsset, params.toAsset, params.amount)
+      const entry = this.quoteCache.get(params.fromAsset, params.toAsset, params.amount)
+      // The cache key ignores destination and slippage, so a hit must carry this
+      // request's params; execute() routes output to quote.params.destination.
+      const cached = entry ? { ...entry, params } : null
       if (cached) {
         if (Date.now() >= cached.expiresAt) {
           // expired; fall through to fetch
@@ -185,10 +188,8 @@ export class RujiraSwap {
 
     const swapMsg: FinExecuteMsg = {
       swap: {
-        min: {
-          min_return: minReturn,
-          to: quote.params.destination,
-        },
+        min_return: minReturn,
+        to: quote.params.destination,
       },
     }
 
@@ -234,10 +235,8 @@ export class RujiraSwap {
 
     const msg: FinExecuteMsg = {
       swap: {
-        min: {
-          min_return: minReturn,
-          to: params.destination,
-        },
+        min_return: minReturn,
+        to: params.destination,
       },
     }
 

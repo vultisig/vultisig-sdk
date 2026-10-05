@@ -135,6 +135,33 @@ export type Value = {
   lastUpdated: number
 }
 
+export type FiatValuesResult = {
+  values: Record<string, Value>
+  failures: Array<{ tokenId?: string; error: string }>
+}
+
+/** A price/value lookup that failed without making the aggregate operation fail. */
+export type FiatValueFailure = {
+  chain: Chain
+  tokenId?: string
+  error: string
+}
+
+export type BalancesWithPricesResult = {
+  balances: Record<string, Balance>
+  failures: FiatValueFailure[]
+}
+
+export type PortfolioValueResult = {
+  total: number
+  failures: FiatValueFailure[]
+}
+
+export type TotalValueDetailedResult = {
+  total: string
+  failures: FiatValueFailure[]
+}
+
 export type SigningMode = 'fast' | 'relay' | 'local'
 
 export type SigningPayload = {
@@ -636,6 +663,8 @@ export type Portfolio = {
   totalValue: string
   /** Fiat currency used for valuation */
   currency: string
+  /** Assets omitted from the total because their fiat value could not be resolved. */
+  failures?: FiatValueFailure[]
 }
 
 export type SendResult =

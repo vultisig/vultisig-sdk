@@ -10,6 +10,18 @@ type CardanoTxStatusResponse = Array<{
   num_confirmations: number | null
 }>
 
+const isCardanoTxStatus = (value: unknown): value is CardanoTxStatusResponse[number] => {
+  if (typeof value !== 'object' || value === null) return false
+
+  const { tx_hash, num_confirmations } = value as Record<string, unknown>
+
+  return (
+    typeof tx_hash === 'string' &&
+    (num_confirmations === null ||
+      (typeof num_confirmations === 'number' && Number.isInteger(num_confirmations) && num_confirmations >= 0))
+  )
+}
+
 export const getCardanoTxStatus: TxStatusResolver<OtherChain.Cardano> = async ({ hash }) => {
   const { data: response, error } = await attempt(
     queryUrl<CardanoTxStatusResponse>(`${cardanoApiUrl}/tx_status`, {
@@ -21,13 +33,19 @@ export const getCardanoTxStatus: TxStatusResolver<OtherChain.Cardano> = async ({
     return { status: 'pending', isKnown: false }
   }
 
-  const transaction = response.find(item => item?.tx_hash === hash)
-
-  const confirmations = transaction?.num_confirmations
-
-  if (typeof confirmations !== 'number' || !Number.isInteger(confirmations) || confirmations < 0) {
+  if (!response.every(isCardanoTxStatus)) {
     return { status: 'pending', isKnown: false }
   }
+
+  const transaction = response.find(item => item.tx_hash === hash)
+
+  // Koios answered successfully but omitted the hash, or returned its explicit
+  // null confirmation marker: either form means it has no record of the tx.
+  if (!transaction || transaction.num_confirmations === null) {
+    return { status: 'not_found', isKnown: false }
+  }
+
+  const confirmations = transaction.num_confirmations
 
   if (confirmations === 0) {
     return { status: 'pending', isKnown: true }
