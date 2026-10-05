@@ -32,8 +32,8 @@ type RefineKeysignAmountInput = {
 // smaller transfer than the user asked for, so an unaffordable NEAR send fails
 // instead. MAX is the one flow that may reduce, and it reduces explicitly by
 // passing the already-reduced amount.
-const assertNearSendAffordable = async (
-  { keysignPayload, balance }: RefineKeysignAmountInput,
+export const assertNearSendAffordable = async (
+  { keysignPayload, balance }: Pick<RefineKeysignAmountInput, 'keysignPayload' | 'balance'>,
   coin: ReturnType<typeof getKeysignCoin>
 ) => {
   const { gasFee } = getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'nearSpecific')

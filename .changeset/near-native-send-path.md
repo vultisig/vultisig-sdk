@@ -31,4 +31,6 @@ directions. As a source, a swap is a `simpleTransfer` deposit to a per-swap
 implicit account (requested with `disableBuildTx`), signed as the plain
 transfer it names: the NEAR signer accepts a SwapKit payload only when its
 target and amount equal the transfer's and it carries no pre-built bytes,
-transaction type or memo.
+transaction type or memo. Building a NEAR-source swap refuses a deposit that,
+with the gas reservation and the storage reserve, exceeds the balance, with the
+same `not-enough-funds` shortfall a send raises, before any signing starts.
