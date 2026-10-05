@@ -6,7 +6,7 @@ import { extractErrorMsg } from '@vultisig/lib-utils/error/extractErrorMsg'
 type OgmiosResponse = {
   jsonrpc?: string
   result?: { transaction?: { id?: string } }
-  error?: { code?: number; message?: string }
+  error?: { code?: number; message?: string; data?: { error?: unknown } }
 }
 
 const cardanoBroadcastUrl = `${rootApiUrl}/ada/`
@@ -22,6 +22,12 @@ export type SubmitCardanoCborResult = {
   errorMessage: string | null
   /** JSON-RPC error code from the node, when present. */
   rpcErrorCode?: number
+  /**
+   * The node's own justification (`error.data.error`), when it gives one. Some
+   * Ogmios errors carry nothing else of use: a mempool rejection's `message`
+   * only says "A justification is given as 'data.error'".
+   */
+  rpcErrorDetail?: string
   /** Raw response body, for callers that want to log or pattern match. */
   rawResponse: string
 }
@@ -91,10 +97,14 @@ export const submitCardanoCbor = async (cborHex: string): Promise<SubmitCardanoC
     }
   }
 
+  const justification = parsed?.error?.data?.error
+  const rpcErrorDetail = typeof justification === 'string' && justification.trim() ? justification : undefined
+
   return {
     txHash: null,
-    errorMessage: extractErrorMsg(parsed?.error ?? rawResponse),
+    errorMessage: rpcErrorDetail ?? extractErrorMsg(parsed?.error ?? rawResponse),
     rpcErrorCode: parsed?.error?.code,
+    rpcErrorDetail,
     rawResponse,
   }
 }

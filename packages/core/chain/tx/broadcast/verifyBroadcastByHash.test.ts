@@ -85,6 +85,38 @@ describe('verifyBroadcastByHash', () => {
     expect(sleepMock).toHaveBeenCalledTimes(broadcastVerificationMaxAttempts - 1)
   })
 
+  it('keeps looking for as many attempts as the caller asks for', async () => {
+    const originalError = new Error('inputs are spent')
+    getTxHashMock.mockResolvedValue('0xslowblock')
+    getTxStatusMock.mockResolvedValue({ status: 'not_found', isKnown: false })
+    // Unseen for longer than the default window, then in a block.
+    for (let lookup = 0; lookup < broadcastVerificationMaxAttempts + 3; lookup++) {
+      getTxStatusMock.mockResolvedValueOnce({ status: 'not_found', isKnown: false })
+    }
+    getTxStatusMock.mockResolvedValueOnce({ status: 'success' })
+
+    await expect(verifyBroadcastByHash({ chain, tx, error: originalError, maxAttempts: 12 })).resolves.toBe(
+      '0xslowblock'
+    )
+
+    expect(getTxStatusMock).toHaveBeenCalledTimes(broadcastVerificationMaxAttempts + 4)
+    expect(sleepMock).toHaveBeenCalledTimes(broadcastVerificationMaxAttempts + 3)
+    expect(sleepMock).toHaveBeenLastCalledWith(
+      broadcastVerificationBaseDelayMs * (broadcastVerificationMaxAttempts + 3)
+    )
+  })
+
+  it('rethrows the original error once the requested attempts are used up', async () => {
+    const originalError = new Error('inputs are spent')
+    getTxHashMock.mockResolvedValue('0xmissing')
+    getTxStatusMock.mockResolvedValue({ status: 'not_found', isKnown: false })
+
+    await expect(verifyBroadcastByHash({ chain, tx, error: originalError, maxAttempts: 7 })).rejects.toBe(originalError)
+
+    expect(getTxStatusMock).toHaveBeenCalledTimes(7)
+    expect(sleepMock).toHaveBeenCalledTimes(6)
+  })
+
   it('recovers when a status lookup fails before a known pending result', async () => {
     const originalError = new Error('broadcast failed')
     getTxHashMock.mockResolvedValue('0xpending')
