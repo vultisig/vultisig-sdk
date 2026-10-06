@@ -9,6 +9,7 @@ import {
 } from '@vultisig/core-chain/chains/near/api'
 import { getNearGasReservation } from '@vultisig/core-chain/chains/near/fees'
 import { NearUnknownEntityError } from '@vultisig/core-chain/chains/near/rpc'
+import { NEAR_MAX_U64 } from '@vultisig/core-chain/chains/near/uint'
 import { NearSpecificSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import bs58 from 'bs58'
@@ -17,7 +18,6 @@ import { BuildKeysignPayloadError } from '../../error'
 import { GetChainSpecificResolver } from '../resolver'
 
 const HEX_PUBLIC_KEY = /^[0-9a-f]{64}$/
-const MAX_U64 = (1n << 64n) - 1n
 
 /**
  * Native NEAR preparation: freezes, once, the two values a NEAR transaction cannot
@@ -73,7 +73,7 @@ export const getNearChainSpecific: GetChainSpecificResolver<'nearSpecific'> = as
     throw new Error(`NEAR signing key for ${sender} is a function-call key; a native transfer needs full access`)
   }
 
-  if (accessKey.nonce === MAX_U64) {
+  if (accessKey.nonce === NEAR_MAX_U64) {
     throw new Error(`NEAR access key nonce for ${sender} has no successor in the uint64 field: ${accessKey.nonce}`)
   }
 

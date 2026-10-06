@@ -435,7 +435,7 @@ describe('NEAR frozen native transfer — fail closed', () => {
   })
 
   it.each([['1.5'], ['-1'], ['0x10'], ['']])('rejects an unsigned-decimal violation in gasFee %j', async gasFee => {
-    await rejects({ gasFee }, /gas fee/i)
+    await rejects({ gasFee }, /decimal integer/)
   })
 
   it('rejects a sender address that is not the selected EdDSA key implicit account', async () => {

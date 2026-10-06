@@ -1,10 +1,8 @@
+import { parseNonNegativeBigInt } from '@vultisig/lib-utils/bigint/parseNonNegativeBigInt'
 import bs58 from 'bs58'
 
 import { NearFeeConfig, NearParameterCost } from './fees'
 import { callNearRpc, callNearRpcText, getNearRpcErrorName, parseNearRpcResponse, toNearRpcError } from './rpc'
-
-/** An unsigned base-10 integer string, as NEAR renders u64/u128 values. */
-export const NEAR_UNSIGNED_DECIMAL = /^\d+$/
 
 /** Exact non-negative integer from a JSON field that may arrive as a string or a number. */
 export const parseNearExactInteger = (value: unknown, label: string): bigint => {
@@ -20,8 +18,8 @@ export const parseNearExactInteger = (value: unknown, label: string): bigint => 
     return BigInt(value)
   }
 
-  if (typeof value === 'string' && NEAR_UNSIGNED_DECIMAL.test(value)) {
-    return BigInt(value)
+  if (typeof value === 'string') {
+    return parseNonNegativeBigInt(value)
   }
 
   throw new Error(`NEAR ${label} is not an exact non-negative integer: ${JSON.stringify(value)}`)

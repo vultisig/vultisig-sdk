@@ -1,4 +1,4 @@
-import { NEAR_UNSIGNED_DECIMAL } from '@vultisig/core-chain/chains/near/api'
+import { parseNonNegativeBigInt } from '@vultisig/lib-utils/bigint/parseNonNegativeBigInt'
 
 import { getBlockchainSpecificValue } from '../../chainSpecific/KeysignChainSpecific'
 import { FeeAmountResolver } from '../resolver'
@@ -11,9 +11,5 @@ import { FeeAmountResolver } from '../resolver'
 export const getNearFeeAmount: FeeAmountResolver = async ({ keysignPayload }) => {
   const { gasFee } = getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'nearSpecific')
 
-  if (!NEAR_UNSIGNED_DECIMAL.test(gasFee)) {
-    throw new Error(`Invalid NEAR gas fee: ${gasFee} is not an unsigned decimal integer`)
-  }
-
-  return BigInt(gasFee)
+  return parseNonNegativeBigInt(gasFee)
 }

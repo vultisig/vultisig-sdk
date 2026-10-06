@@ -1,7 +1,7 @@
 import { Buffer } from 'buffer'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { isNearAccountId, isNearImplicitAccountId } from '@vultisig/core-chain/chains/near/accountId'
-import { NEAR_UNSIGNED_DECIMAL } from '@vultisig/core-chain/chains/near/api'
+import { NEAR_MAX_U128, NEAR_MAX_U64, parseNearUint } from '@vultisig/core-chain/chains/near/uint'
 import { getCoinType } from '@vultisig/core-chain/coin/coinType'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { TW } from '@trustwallet/wallet-core'
@@ -16,24 +16,8 @@ import { SigningInputsResolver } from '../resolver'
 
 const ED25519_PUBLIC_KEY_HEX = /^[0-9a-f]{64}$/
 
-const MAX_U64 = (1n << 64n) - 1n
-const MAX_U128 = (1n << 128n) - 1n
 const BLOCK_HASH_BYTES = 32
 const U128_BYTES = 16
-
-const parseUnsignedBigInt = (value: string, label: string, maximum: bigint) => {
-  if (!NEAR_UNSIGNED_DECIMAL.test(value)) {
-    throw new Error(`Invalid NEAR ${label}: ${value} is not an unsigned decimal integer`)
-  }
-
-  const parsed = BigInt(value)
-
-  if (parsed > maximum) {
-    throw new Error(`Invalid NEAR ${label}: ${value} exceeds the chain's field width`)
-  }
-
-  return parsed
-}
 
 /** Borsh `u128` deposit: 16 little-endian bytes, the encoding WalletCore expects. */
 const encodeU128Le = (value: bigint) => {
@@ -154,10 +138,8 @@ const assertNativeTransferOnly = (keysignPayload: KeysignPayload, coin: Coin) =>
 }
 
 const parseNearSpecific = ({ nonce, blockHash, gasFee }: NearSpecific) => {
-  const parsedNonce = parseUnsignedBigInt(nonce.toString(), 'nonce', MAX_U64)
-
-  if (parsedNonce === 0n) {
-    throw new Error('Invalid NEAR nonce: a signed transaction must carry a positive access-key nonce')
+  if (nonce <= 0n || nonce > NEAR_MAX_U64) {
+    throw new Error(`Invalid NEAR nonce: ${nonce} is not a positive uint64 access-key nonce`)
   }
 
   const blockHashBytes = new Uint8Array(blockHash)
@@ -167,9 +149,9 @@ const parseNearSpecific = ({ nonce, blockHash, gasFee }: NearSpecific) => {
   }
 
   // Display metadata: NEAR charges the gas actually burnt, never a fee from the payload.
-  parseUnsignedBigInt(gasFee, 'gas fee', MAX_U128)
+  parseNearUint(gasFee, 'gas fee', NEAR_MAX_U128)
 
-  return { nonce: parsedNonce, blockHash: blockHashBytes }
+  return { nonce, blockHash: blockHashBytes }
 }
 
 export const getNearSigningInputs: SigningInputsResolver<'near'> = ({ keysignPayload, walletCore }) => {
@@ -185,7 +167,7 @@ export const getNearSigningInputs: SigningInputsResolver<'near'> = ({ keysignPay
     throw new Error(`Invalid NEAR receiver account id: ${receiverId}`)
   }
 
-  const deposit = parseUnsignedBigInt(keysignPayload.toAmount, 'transfer amount', MAX_U128)
+  const deposit = parseNearUint(keysignPayload.toAmount, 'transfer amount', NEAR_MAX_U128)
 
   if (deposit === 0n) {
     throw new Error(`Invalid NEAR transfer amount: ${keysignPayload.toAmount} is not a positive deposit`)

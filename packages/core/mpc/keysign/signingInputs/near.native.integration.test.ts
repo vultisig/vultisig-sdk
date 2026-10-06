@@ -283,7 +283,7 @@ describe('NEAR native balance through the registered resolver', () => {
       JSON.stringify({ result: { amount: '1.5', locked: '0', storage_usage: IMPLICIT_STORAGE_USAGE } })
     )
 
-    await expect(getNearAccount(SENDER)).rejects.toThrow(/account amount/)
+    await expect(getNearAccount(SENDER)).rejects.toThrow(/decimal integer/)
   })
 })
 
@@ -438,7 +438,7 @@ describe('NEAR fee and MAX through the registered seams', () => {
       setupTransport({})
 
       await expect(getFeeAmount({ keysignPayload: buildPayload({ gasFee }), walletCore, publicKey })).rejects.toThrow(
-        /gas fee/
+        /decimal integer/
       )
     }
   )
