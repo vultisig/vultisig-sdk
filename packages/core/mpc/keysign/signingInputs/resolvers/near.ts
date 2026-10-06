@@ -7,6 +7,7 @@ import {
 } from '@vultisig/core-chain/chains/near/accountId'
 import { NEAR_MAX_U128, NEAR_MAX_U64, parseNearUint } from '@vultisig/core-chain/chains/near/uint'
 import { getCoinType } from '@vultisig/core-chain/coin/coinType'
+import { assertSafeDestination } from '@vultisig/core-chain/security/dangerousAddresses'
 import { NearSpecific } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { Coin } from '@vultisig/core-mpc/types/vultisig/keysign/v1/coin_pb'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
@@ -164,6 +165,8 @@ export const getNearSigningInputs: SigningInputsResolver<'near'> = ({ keysignPay
   if (!isNearAccountId(receiverId)) {
     throw new Error(`Invalid NEAR receiver account id: ${receiverId}`)
   }
+
+  assertSafeDestination(Chain.Near, receiverId)
 
   const deposit = parseNearUint(keysignPayload.toAmount, 'transfer amount', NEAR_MAX_U128)
 
