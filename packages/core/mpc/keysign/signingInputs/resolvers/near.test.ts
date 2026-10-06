@@ -28,10 +28,10 @@ import { TW, initWasm, type WalletCore } from '@trustwallet/wallet-core'
 import type { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
-import { KeysignSignature } from '../KeysignSignature'
-import { compileTx } from '../../tx/compile/compileTx'
-import { getPreSigningHashes } from '../../tx/preSigningHashes'
-import { getEncodedSigningInputs } from './index'
+import { KeysignSignature } from '../../KeysignSignature'
+import { compileTx } from '../../../tx/compile/compileTx'
+import { getPreSigningHashes } from '../../../tx/preSigningHashes'
+import { getEncodedSigningInputs } from '../index'
 
 // RFC 8032 §7.1 TEST 1 / TEST 2 — published test vectors, no funds, no wallet.
 const TEST_SEED_HEX = '9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60'
