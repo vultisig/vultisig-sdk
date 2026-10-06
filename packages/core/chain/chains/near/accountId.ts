@@ -33,10 +33,6 @@ export const assertNearEd25519PublicKeyHex = (hexPublicKey: string) => {
 }
 
 export const isNearAccountId = (accountId: string) => {
-  if (typeof accountId !== 'string') {
-    return false
-  }
-
   if (accountId.length < MIN_ACCOUNT_ID_LENGTH || accountId.length > MAX_ACCOUNT_ID_LENGTH) {
     return false
   }

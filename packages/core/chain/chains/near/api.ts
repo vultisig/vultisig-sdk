@@ -1,5 +1,6 @@
 import { parseNonNegativeBigInt } from '@vultisig/lib-utils/bigint/parseNonNegativeBigInt'
 import bs58 from 'bs58'
+import { Buffer } from 'buffer'
 
 import { NearFeeConfig, NearParameterCost } from './fees'
 import { callNearRpc, callNearRpcText, getNearRpcErrorName, parseNearRpcResponse, toNearRpcError } from './rpc'
