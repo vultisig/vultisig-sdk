@@ -3,6 +3,7 @@ import { Chain, CosmosChain, UtxoBasedChain } from '@vultisig/core-chain/Chain'
 import { isTerraClassicUstcCoin } from '@vultisig/core-chain/chains/cosmos/terraClassicTax'
 import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
+import { parseNonNegativeBigInt } from '@vultisig/lib-utils/bigint/parseNonNegativeBigInt'
 import { minBigInt } from '@vultisig/lib-utils/math/minBigInt'
 import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
 import { WalletCore } from '@trustwallet/wallet-core'
@@ -62,14 +63,15 @@ export const refineKeysignAmount = async (input: RefineKeysignAmountInput) => {
   // keeps nothing back.
   const { blockchainSpecific } = input.keysignPayload
   const allowDeath = blockchainSpecific.case === 'polkadotSpecific' && blockchainSpecific.value.allowDeath
+  const amount = parseNonNegativeBigInt(input.keysignPayload.toAmount)
   const refinedAmount = minBigInt(
-    BigInt(input.keysignPayload.toAmount),
+    amount,
     getMaxSendableAmount({ chain: coin.chain, balance: input.balance, fee, allowDeath })
   )
 
   if (refinedAmount <= 0n) {
     throw new BuildKeysignPayloadError('not-enough-funds', undefined, {
-      required: BigInt(input.keysignPayload.toAmount) + fee + getSendRetainedBalance(coin.chain, allowDeath),
+      required: amount + fee + getSendRetainedBalance(coin.chain, allowDeath),
       available: input.balance,
       ticker: coin.ticker,
       decimals: coin.decimals,
