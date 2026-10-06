@@ -28,6 +28,9 @@ vi.mock('@vultisig/core-chain/chains/utxo/zcashBranchId', () => ({
 const texVaultAddress = 'tex1z8e8k9jg5xh28ny8ctek2dwpnc6qd9qd037yju'
 const transparentVaultAddress = 't1KWVyTZA6DPBDrHPERjuHSFWmAioomt5mE'
 const zcashAddress = 't1PoLLLwEcVhqMBhk53tANtSepnPXAQJkPM'
+// Real payloads carry the vault in toAddress too. A different address here
+// makes a resolver that reads toAddress instead of the vault fail the test.
+const unrelatedToAddress = 't1KuEaP8Lb2pUGtpciBCT2ppomGvFi8sEPY'
 const memo = '=:ETH.ETH:0x2f7a1d0b9b6c4e6a8f0c3b7d5e1a9c2b4d6f8e0a:0/1/0:vi:50'
 
 const buildThorchainZcashSwapPayload = (vaultAddress: string) => {
@@ -41,7 +44,7 @@ const buildThorchainZcashSwapPayload = (vaultAddress: string) => {
 
   return create(KeysignPayloadSchema, {
     coin: zec,
-    toAddress: vaultAddress,
+    toAddress: unrelatedToAddress,
     toAmount: '5000000',
     memo,
     blockchainSpecific: {
@@ -77,12 +80,18 @@ describe('getUtxoSigningInputs — THORChain swap from Zcash', () => {
     walletCore = await initWasm()
   })
 
-  const getPreSigningHashes = async (vaultAddress: string): Promise<string[]> => {
+  const resolveSigningInput = async (vaultAddress: string) => {
     const [signingInput] = await getUtxoSigningInputs({
       keysignPayload: buildThorchainZcashSwapPayload(vaultAddress),
       walletCore,
       publicKey: {} as never,
     })
+
+    return signingInput
+  }
+
+  const getPreSigningHashes = async (vaultAddress: string): Promise<string[]> => {
+    const signingInput = await resolveSigningInput(vaultAddress)
     const { errorMessage, hashPublicKeys } = TW.Bitcoin.Proto.PreSigningOutput.decode(
       walletCore.TransactionCompiler.preImageHashes(
         walletCore.CoinType.zcash,
@@ -102,6 +111,15 @@ describe('getUtxoSigningInputs — THORChain swap from Zcash', () => {
 
     expect(lockScript(texVaultAddress)).toBe(lockScript(transparentVaultAddress))
   })
+
+  it.each([texVaultAddress, transparentVaultAddress])(
+    'pays the swap to the vault %s, not to keysignPayload.toAddress',
+    async vaultAddress => {
+      const { toAddress } = await resolveSigningInput(vaultAddress)
+
+      expect(toAddress).toBe(vaultAddress)
+    }
+  )
 
   it('signs a swap to the TEX vault exactly like one to its transparent form', async () => {
     const texHashes = await getPreSigningHashes(texVaultAddress)
