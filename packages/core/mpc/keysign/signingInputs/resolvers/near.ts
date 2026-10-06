@@ -1,6 +1,10 @@
 import { Buffer } from 'buffer'
 import { Chain } from '@vultisig/core-chain/Chain'
-import { isNearAccountId, isNearImplicitAccountId } from '@vultisig/core-chain/chains/near/accountId'
+import {
+  assertNearEd25519PublicKeyHex,
+  isNearAccountId,
+  isNearImplicitAccountId,
+} from '@vultisig/core-chain/chains/near/accountId'
 import { NEAR_MAX_U128, NEAR_MAX_U64, parseNearUint } from '@vultisig/core-chain/chains/near/uint'
 import { getCoinType } from '@vultisig/core-chain/coin/coinType'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
@@ -13,8 +17,6 @@ import { NearSpecific } from '@vultisig/core-mpc/types/vultisig/keysign/v1/block
 import { Coin } from '@vultisig/core-mpc/types/vultisig/keysign/v1/coin_pb'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { SigningInputsResolver } from '../resolver'
-
-const ED25519_PUBLIC_KEY_HEX = /^[0-9a-f]{64}$/
 
 const BLOCK_HASH_BYTES = 32
 const U128_BYTES = 16
@@ -52,9 +54,7 @@ const resolveSignerId = ({
     throw new Error(`Invalid NEAR sender address: ${address} is not a 64-character lowercase implicit account`)
   }
 
-  if (!ED25519_PUBLIC_KEY_HEX.test(hexPublicKey)) {
-    throw new Error(`Invalid NEAR public key: ${hexPublicKey} is not a 32-byte Ed25519 key in lowercase hex`)
-  }
+  assertNearEd25519PublicKeyHex(hexPublicKey)
 
   const publicKey = walletCore.PublicKey.createWithData(
     new Uint8Array(Buffer.from(hexPublicKey, 'hex')),

@@ -1,6 +1,10 @@
 import { create } from '@bufbuild/protobuf'
 import { Chain } from '@vultisig/core-chain/Chain'
-import { isNearAccountId, isNearImplicitAccountId } from '@vultisig/core-chain/chains/near/accountId'
+import {
+  assertNearEd25519PublicKeyHex,
+  isNearAccountId,
+  isNearImplicitAccountId,
+} from '@vultisig/core-chain/chains/near/accountId'
 import {
   getNearAccessKey,
   getNearAccount,
@@ -16,8 +20,6 @@ import bs58 from 'bs58'
 
 import { BuildKeysignPayloadError } from '../../error'
 import { GetChainSpecificResolver } from '../resolver'
-
-const HEX_PUBLIC_KEY = /^[0-9a-f]{64}$/
 
 /**
  * Native NEAR preparation: freezes, once, the two values a NEAR transaction cannot
@@ -41,9 +43,7 @@ export const getNearChainSpecific: GetChainSpecificResolver<'nearSpecific'> = as
     throw new Error(`Invalid NEAR recipient account id: ${receiver}`)
   }
 
-  if (!HEX_PUBLIC_KEY.test(hexPublicKey)) {
-    throw new Error(`Invalid NEAR public key: ${hexPublicKey} is not a 32-byte Ed25519 key in lowercase hex`)
-  }
+  assertNearEd25519PublicKeyHex(hexPublicKey)
 
   const receiverIsImplicit = isNearImplicitAccountId(receiver)
 

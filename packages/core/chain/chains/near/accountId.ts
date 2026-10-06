@@ -25,6 +25,13 @@ const MAX_ACCOUNT_ID_LENGTH = 64
 
 export const isNearImplicitAccountId = (accountId: string) => IMPLICIT_ACCOUNT_ID.test(accountId)
 
+/** Throws unless the key is a 32-byte Ed25519 public key in lowercase hex, the spelling an implicit account uses. */
+export const assertNearEd25519PublicKeyHex = (hexPublicKey: string) => {
+  if (!IMPLICIT_ACCOUNT_ID.test(hexPublicKey)) {
+    throw new Error(`Invalid NEAR public key: ${hexPublicKey} is not a 32-byte Ed25519 key in lowercase hex`)
+  }
+}
+
 export const isNearAccountId = (accountId: string) => {
   if (typeof accountId !== 'string') {
     return false
