@@ -389,17 +389,17 @@ export function getSwapKitErc20DepositRecipient({
 }
 
 /**
- * Quote-time binding of a SwapKit ERC-20 deposit: true when the transaction is
- * that shape (see `getSwapKitErc20DepositRecipient`) and transfers to the
- * screened `targetAddress`; throws when it is that shape to anyone else.
- * Returns false when it is not a deposit, leaving the router check.
+ * Quote-time binding of a SwapKit ERC-20 deposit: the recipient when the
+ * transaction is that shape (see `getSwapKitErc20DepositRecipient`) and
+ * transfers to the screened `targetAddress`; throws when it is that shape to
+ * anyone else. Returns undefined when it is not a deposit, leaving the router check.
  */
-export function isSwapKitErc20DepositTransfer({
+export function getBoundSwapKitErc20DepositRecipient({
   targetAddress,
   ...transfer
-}: SwapKitErc20DepositInput & { targetAddress: string | undefined }): boolean {
+}: SwapKitErc20DepositInput & { targetAddress: string | undefined }): string | undefined {
   const recipient = getSwapKitErc20DepositRecipient(transfer)
-  if (recipient === undefined) return false
+  if (recipient === undefined) return undefined
 
   if (recipient !== targetAddress?.toLowerCase()) {
     refuseSwapKitErc20Deposit(
@@ -408,7 +408,7 @@ export function isSwapKitErc20DepositTransfer({
     )
   }
 
-  return true
+  return recipient
 }
 
 /**
