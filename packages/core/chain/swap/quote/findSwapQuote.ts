@@ -318,6 +318,7 @@ const isBelowMinimumMsg = (msg: string) => {
   return (
     lower.includes('below minimum') ||
     lower.includes('minimum amount') ||
+    lower.includes('minimum is') ||
     lower.includes('min amount') ||
     lower.includes('amount too small') ||
     lower.includes('below the minimum')
@@ -1198,10 +1199,20 @@ export const findSwapQuotes = async (input: FindSwapQuoteInput): Promise<FindSwa
   // a native protocol can route AND we actually need it (sole-family pre-flight
   // or the all-fail path) — never on every quote — so valid swaps pay no extra
   // network cost. Resolves to `null` when not determinable.
-  const computeNativeMin = (): Promise<NativeSwapMinAmountIn | null> =>
-    matchingSwapChains.includes(Chain.THORChain)
-      ? getNativeSwapMinAmountIn({ from, to, swapChain: Chain.THORChain })
-      : Promise.resolve(null)
+  let nativeMinPromise: Promise<NativeSwapMinAmountIn | null> | undefined
+  const computeNativeMin = (): Promise<NativeSwapMinAmountIn | null> => {
+    nativeMinPromise ??= (async () => {
+      if (!matchingSwapChains.includes(Chain.THORChain)) return null
+
+      try {
+        return await getNativeSwapMinAmountIn({ from, to, swapChain: Chain.THORChain })
+      } catch {
+        return null
+      }
+    })()
+
+    return nativeMinPromise
+  }
 
   // Eager short-circuit ONLY when THORChain is the *sole* possible route: no
   // aggregators AND no MayaChain. We only compute a proactive minimum for
@@ -1326,23 +1337,23 @@ export const findSwapQuotes = async (input: FindSwapQuoteInput): Promise<FindSwa
     }
   }
 
-  if (belowMinimumByProvider.size > 0) {
-    // Pick the message from the highest-preference provider that has one.
-    const preferred = belowMinimumProviderOrder.find(p => belowMinimumByProvider.has(p))
-    const belowMinimumMessage = preferred
-      ? belowMinimumByProvider.get(preferred)!
-      : [...belowMinimumByProvider.values()][0]
-    throw new SwapError(
-      SwapErrorCode.AmountBelowMinimum,
-      `Amount below the minimum required by a swap provider. ${belowMinimumMessage}`
-    )
-  }
+  // Pick the message from the highest-preference provider that has one, then
+  // classify all size signals in one place. A provider-stated numeric threshold
+  // is most authoritative. Number-less provider copy yields to a computable
+  // native minimum, but remains preferable to the generic fallback.
+  const preferredBelowMinimumProvider = belowMinimumProviderOrder.find(p => belowMinimumByProvider.has(p))
+  const belowMinimumMessage = preferredBelowMinimumProvider
+    ? belowMinimumByProvider.get(preferredBelowMinimumProvider)!
+    : [...belowMinimumByProvider.values()][0]
 
-  // A provider-stated threshold is most authoritative; otherwise compute the
-  // native threshold lazily, and only fall back to non-numeric provider copy.
-  if (amountTooSmall) {
-    throw await belowAvailableProviderMinimumError({ computeNativeMin, from, provider: amountTooSmallProvider })
-  }
+  const belowMinimumError = await getBelowMinimumSignalError({
+    providerMessage: belowMinimumMessage,
+    amountTooSmall,
+    provider: amountTooSmallProvider,
+    computeNativeMin,
+    from,
+  })
+  if (belowMinimumError) throw belowMinimumError
 
   const haltError = getHaltAllFailError({
     settled,
@@ -1439,17 +1450,37 @@ const belowNativeMinimumError = (min: NativeSwapMinAmountIn, from: AccountCoin):
     }
   )
 
-const belowAvailableProviderMinimumError = async ({
+const getBelowMinimumSignalError = async ({
+  providerMessage,
+  amountTooSmall,
+  provider,
   computeNativeMin,
   from,
-  provider,
 }: {
+  providerMessage?: string
+  amountTooSmall: boolean
+  provider?: SwapQuoteProviderName
   computeNativeMin: () => Promise<NativeSwapMinAmountIn | null>
   from: AccountCoin
-  provider?: SwapQuoteProviderName
-}): Promise<SwapError> => {
+}): Promise<SwapError | null> => {
+  if (providerMessage && /\d/.test(providerMessage)) {
+    return new SwapError(
+      SwapErrorCode.AmountBelowMinimum,
+      `Amount below the minimum required by a swap provider. ${providerMessage}`
+    )
+  }
+
+  if (!providerMessage && !amountTooSmall) return null
+
   const nativeMin = await computeNativeMin()
   if (nativeMin) return belowNativeMinimumError(nativeMin, from)
+
+  if (providerMessage) {
+    return new SwapError(
+      SwapErrorCode.AmountBelowMinimum,
+      `Amount below the minimum required by a swap provider. ${providerMessage}`
+    )
+  }
 
   return new SwapError(
     SwapErrorCode.AmountTooSmall,

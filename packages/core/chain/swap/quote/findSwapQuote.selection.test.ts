@@ -907,6 +907,80 @@ describe('findSwapQuote parallel selection', () => {
     )
   })
 
+  it('prefers a computed native minimum over number-less provider text', async () => {
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('kyber fail'))
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('inch fail'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('lifi fail'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('Sell asset amount too small for provider FLASHNET.'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('native fail'))
+    vi.mocked(getNativeSwapMinAmountIn).mockResolvedValue(minResult(420_000n, '0.0042'))
+
+    const error = await captureSwapError(findSwapQuote({ ...evmSameChainCoins, amount: 1n }))
+
+    expect(error.code).toBe(SwapErrorCode.AmountBelowMinimum)
+    expect(error.message).toBe(
+      'Amount is below the minimum for this swap. Minimum is ~0.0042 SRC. Please increase the amount.'
+    )
+    expect(error.details).toEqual({
+      minAmountInBaseUnits: '420000',
+      minAmountInHuman: '0.0042',
+      ticker: 'SRC',
+    })
+    expect(getNativeSwapMinAmountIn).toHaveBeenCalledTimes(1)
+  })
+
+  it('prefers numeric provider text over a computed native minimum', async () => {
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('kyber fail'))
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('inch fail'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('lifi fail'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('minimum is 0.01 ETH'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('native fail'))
+    vi.mocked(getNativeSwapMinAmountIn).mockResolvedValue(minResult(420_000n, '0.0042'))
+
+    const error = await captureSwapError(findSwapQuote({ ...evmSameChainCoins, amount: 1n }))
+
+    expect(error.code).toBe(SwapErrorCode.AmountBelowMinimum)
+    expect(error.message).toBe('Amount below the minimum required by a swap provider. minimum is 0.01 ETH')
+    expect(error.details).toBeUndefined()
+    expect(getNativeSwapMinAmountIn).not.toHaveBeenCalled()
+  })
+
+  it('falls back to number-less provider text when native minimum computation rejects', async () => {
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('kyber fail'))
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('inch fail'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('lifi fail'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('Sell asset amount too small for provider FLASHNET.'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('native fail'))
+    vi.mocked(getNativeSwapMinAmountIn).mockRejectedValue(new Error('minimum lookup failed'))
+
+    const error = await captureSwapError(findSwapQuote({ ...evmSameChainCoins, amount: 1n }))
+
+    expect(error.code).toBe(SwapErrorCode.AmountBelowMinimum)
+    expect(error.message).toBe(
+      'Amount below the minimum required by a swap provider. Sell asset amount too small for provider FLASHNET.'
+    )
+    expect(error.details).toBeUndefined()
+    expect(getNativeSwapMinAmountIn).toHaveBeenCalledTimes(1)
+  })
+
+  it('falls back to the generic too-small error when native minimum computation rejects', async () => {
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('kyber fail'))
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('inch fail'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('lifi fail'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new SwapKitAmountBelowMinimumError(Chain.Ethereum, Chain.Ethereum))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('native fail'))
+    vi.mocked(getNativeSwapMinAmountIn).mockRejectedValue(new Error('minimum lookup failed'))
+
+    const error = await captureSwapError(findSwapQuote({ ...evmSameChainCoins, amount: 1n }))
+
+    expect(error.code).toBe(SwapErrorCode.AmountTooSmall)
+    expect(error.message).toBe(
+      'Amount is below the minimum of the available swap providers. Please increase the amount.'
+    )
+    expect(error.details).toEqual({ provider: 'SwapKit' })
+    expect(getNativeSwapMinAmountIn).toHaveBeenCalledTimes(1)
+  })
+
   it('reports the computed native minimum for a dust-threshold rejection', async () => {
     vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('kyber fail'))
     vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('inch fail'))
