@@ -10,7 +10,7 @@
  */
 
 /** NEP-448 zero-balance accounts reach this storage usage; `verifier.rs:40`. */
-export const NEAR_ZERO_BALANCE_STORAGE_LIMIT = 770n
+const NEAR_ZERO_BALANCE_STORAGE_LIMIT = 770n
 
 /** `ParameterCost` as exposed by `transaction_costs` in the runtime config. */
 export type NearParameterCost = {
@@ -46,7 +46,7 @@ type GetNearGasReservationInput = {
   receiverIsImplicit: boolean
 }
 
-export const isNearZeroBalanceAccount = (storageUsage: bigint): boolean =>
+const isNearZeroBalanceAccount = (storageUsage: bigint): boolean =>
   storageUsage <= NEAR_ZERO_BALANCE_STORAGE_LIMIT
 
 const sendGas = (cost: NearParameterCost, senderIsReceiver: boolean): bigint =>

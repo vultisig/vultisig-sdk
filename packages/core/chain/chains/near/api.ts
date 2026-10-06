@@ -5,7 +5,7 @@ import { NearFeeConfig, NearParameterCost } from './fees'
 import { callNearRpc, callNearRpcText, getNearRpcErrorName, parseNearRpcResponse, toNearRpcError } from './rpc'
 
 /** Exact non-negative integer from a JSON field that may arrive as a string or a number. */
-export const parseNearExactInteger = (value: unknown, label: string): bigint => {
+const parseNearExactInteger = (value: unknown, label: string): bigint => {
   if (typeof value === 'bigint') {
     return value
   }
