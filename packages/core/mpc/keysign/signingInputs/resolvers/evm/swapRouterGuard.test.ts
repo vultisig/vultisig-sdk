@@ -38,16 +38,18 @@ const COW_VAULT_RELAYER = '0xC92E8bdf79f0507f65a392b0ab4667716BFE0110'
 const SENDER = '0x1234567890123456789012345678901234567890'
 const USDC = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
 
+const coin = create(CoinSchema, {
+  chain: Chain.Ethereum,
+  ticker: 'USDC',
+  address: SENDER,
+  decimals: 6,
+  contractAddress: USDC,
+  isNativeToken: false,
+})
+
 const buildPayload = (routerTo: string, provider = '1inch') =>
   create(KeysignPayloadSchema, {
-    coin: create(CoinSchema, {
-      chain: Chain.Ethereum,
-      ticker: 'USDC',
-      address: SENDER,
-      decimals: 6,
-      contractAddress: USDC,
-      isNativeToken: false,
-    }),
+    coin,
     blockchainSpecific: {
       case: 'ethereumSpecific',
       value: create(EthereumSpecificSchema, {
@@ -61,6 +63,7 @@ const buildPayload = (routerTo: string, provider = '1inch') =>
       case: 'oneinchSwapPayload',
       value: create(OneInchSwapPayloadSchema, {
         provider,
+        fromCoin: coin,
         fromAmount: '1000000',
         quote: create(OneInchQuoteSchema, {
           tx: create(OneInchTransactionSchema, { to: routerTo, data: '0xabcdef', value: '0', gasPrice: '0', gas: 0n }),

@@ -183,6 +183,35 @@ export function assertKnownAggregatorRouterOnSigningPath(provider: string, addre
   }
 }
 
+type SwapCoinIdentity = { chain: string; isNativeToken: boolean; contractAddress: string }
+
+const describeSwapCoin = ({ chain, isNativeToken, contractAddress }: SwapCoinIdentity) =>
+  isNativeToken ? `native ${chain}` : `${contractAddress} on ${chain}`
+
+/**
+ * Refuses an aggregator swap whose sold coin is not the coin being signed: same chain, same
+ * native/token kind and the same contract (case-insensitive). The signer builds for the signing
+ * coin while the swap bounds read the payload's coin. Mirrors iOS `EVMSwapTxGuard` (`coinMismatch`)
+ * and the Android `EvmSwapTxGuard`.
+ */
+export function assertSwapCoinIsSigningCoin(
+  fromCoin: SwapCoinIdentity | undefined,
+  signingCoin: SwapCoinIdentity
+): void {
+  if (!fromCoin) {
+    throw new Error('Swap payload carries no source coin — refusing to sign.')
+  }
+  if (
+    fromCoin.chain !== signingCoin.chain ||
+    fromCoin.isNativeToken !== signingCoin.isNativeToken ||
+    fromCoin.contractAddress.toLowerCase() !== signingCoin.contractAddress.toLowerCase()
+  ) {
+    throw new Error(
+      `Swap sells ${describeSwapCoin(fromCoin)} but signs ${describeSwapCoin(signingCoin)} — refusing to sign.`
+    )
+  }
+}
+
 /**
  * Independent reputation boundary shared by dynamic aggregator addresses. Only an explicit
  * Benign Blockaid verdict is accepted; unsupported chains, scan failures, Warning, and Malicious

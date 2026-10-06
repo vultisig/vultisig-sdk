@@ -23,8 +23,7 @@ const parseUint256 = (value: string, label: string): bigint => {
  * from the calldata that gets signed, or undefined when the payload is not such a
  * deposit (always undefined off EVM). Throws when it has the deposit shape but is not exactly
  * `transfer(recipient, fromAmount)` on the sold token (see `getSwapKitErc20DepositRecipient`), or when
- * `tx.value` or `fromAmount` is not a plain decimal string within uint256, or when the sold coin is not on
- * the keysign coin's chain.
+ * `tx.value` or `fromAmount` is not a plain decimal string within uint256.
  */
 export const getKeysignSwapKitDepositRecipient = (keysignPayload: KeysignPayload): string | undefined => {
   const swapPayload = getKeysignSwapPayload(keysignPayload)
@@ -37,11 +36,6 @@ export const getKeysignSwapKitDepositRecipient = (keysignPayload: KeysignPayload
   // An ERC-20 deposit only exists on EVM; a SwapKit Solana payload carries an empty `value`.
   const chain = getKeysignChain(keysignPayload)
   if (!isChainOfKind(chain, 'evm')) return undefined
-
-  // The bounds below read the payload's coin, so it must be on the chain being signed.
-  if (fromCoin && fromCoin.chain !== chain) {
-    throw new Error(`SwapKit swap sells a coin on ${fromCoin.chain} but signs on ${chain} — refusing to sign.`)
-  }
 
   return getSwapKitErc20DepositRecipient({
     to: tx.to,
