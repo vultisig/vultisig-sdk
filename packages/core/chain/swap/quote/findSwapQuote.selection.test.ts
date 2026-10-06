@@ -913,16 +913,16 @@ describe('findSwapQuote parallel selection', () => {
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('lifi fail'))
     vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('Sell asset amount too small for provider FLASHNET.'))
     vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('native fail'))
-    vi.mocked(getNativeSwapMinAmountIn).mockResolvedValue(minResult(420_000n, '0.0042'))
+    vi.mocked(getNativeSwapMinAmountIn).mockResolvedValue(minResult(4_200_000_000_000_000n, '0.0042'))
 
     const error = await captureSwapError(findSwapQuote({ ...evmSameChainCoins, amount: 1n }))
 
     expect(error.code).toBe(SwapErrorCode.AmountBelowMinimum)
     expect(error.message).toBe(
-      'Amount is below the minimum for this swap. Minimum is ~0.0042 SRC. Please increase the amount.'
+      'Amount is below the minimum for the THORChain route. Minimum is ~0.0042 SRC. Please increase the amount.'
     )
     expect(error.details).toEqual({
-      minAmountInBaseUnits: '420000',
+      minAmountInBaseUnits: '4200000000000000',
       minAmountInHuman: '0.0042',
       ticker: 'SRC',
     })
@@ -935,7 +935,7 @@ describe('findSwapQuote parallel selection', () => {
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('lifi fail'))
     vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('minimum is 0.01 ETH'))
     vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('native fail'))
-    vi.mocked(getNativeSwapMinAmountIn).mockResolvedValue(minResult(420_000n, '0.0042'))
+    vi.mocked(getNativeSwapMinAmountIn).mockResolvedValue(minResult(4_200_000_000_000_000n, '0.0042'))
 
     const error = await captureSwapError(findSwapQuote({ ...evmSameChainCoins, amount: 1n }))
 
@@ -981,6 +981,24 @@ describe('findSwapQuote parallel selection', () => {
     expect(getNativeSwapMinAmountIn).toHaveBeenCalledTimes(1)
   })
 
+  it('does not report a computed native minimum that the requested amount already clears', async () => {
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('kyber fail'))
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('inch fail'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('lifi fail'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new SwapKitAmountBelowMinimumError(Chain.Ethereum, Chain.Ethereum))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('native fail'))
+    vi.mocked(getNativeSwapMinAmountIn).mockResolvedValue(minResult(4_200_000_000_000_000n, '0.0042'))
+
+    const error = await captureSwapError(findSwapQuote({ ...evmSameChainCoins, amount: 5_000_000_000_000_000n }))
+
+    expect(error.code).toBe(SwapErrorCode.AmountTooSmall)
+    expect(error.message).toBe(
+      'Amount is below the minimum of the available swap providers. Please increase the amount.'
+    )
+    expect(error.details).toEqual({ provider: 'SwapKit' })
+    expect(error.details?.minAmountInHuman).toBeUndefined()
+  })
+
   it('reports the computed native minimum for a dust-threshold rejection', async () => {
     vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('kyber fail'))
     vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('inch fail'))
@@ -992,12 +1010,12 @@ describe('findSwapQuote parallel selection', () => {
       }
       throw new Error('quote below dust threshold')
     })
-    vi.mocked(getNativeSwapMinAmountIn).mockResolvedValue(minResult(420_000n, '0.0042'))
+    vi.mocked(getNativeSwapMinAmountIn).mockResolvedValue(minResult(4_200_000_000_000_000n, '0.0042'))
 
     const error = await captureSwapError(findSwapQuote({ ...evmSameChainCoins, amount: 1n }))
 
     expect(error.code).toBe(SwapErrorCode.AmountBelowMinimum)
-    expect(error.message).toContain('Minimum is ~0.0042 SRC')
+    expect(error.message).toContain('minimum for the THORChain route. Minimum is ~0.0042 SRC')
     expect(error.details?.minAmountInHuman).toBe('0.0042')
   })
 
@@ -1055,7 +1073,7 @@ describe('findSwapQuote parallel selection', () => {
     vi.mocked(getNativeSwapMinAmountIn).mockResolvedValue(minResult(1_000_000n, '0.01'))
 
     await expect(findSwapQuote({ ...evmSameChainCoins, amount: 1n })).rejects.toThrow(
-      'Amount is below the minimum for this swap. Minimum is ~0.01 SRC. Please increase the amount.'
+      'Amount is below the minimum for the THORChain route. Minimum is ~0.01 SRC. Please increase the amount.'
     )
   })
 

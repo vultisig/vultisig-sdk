@@ -18,6 +18,7 @@ import { getNativeSwapMinAmountIn } from '@vultisig/core-chain/swap/native/minim
 import { getNativeSwapDecimals } from '@vultisig/core-chain/swap/native/utils/getNativeSwapDecimals'
 import { nativeSwapAmountToCoinBaseUnit } from '@vultisig/core-chain/swap/native/utils/nativeSwapAmountToCoinBaseUnit'
 import { getSwapQuoteProviderExcludeName, providerPreferenceOrder } from '@vultisig/core-chain/swap/quote/findSwapQuote'
+import { SwapError, SwapErrorCode } from '@vultisig/core-chain/swap/SwapError'
 import { getEvmRouterDepositFee } from '@vultisig/core-chain/tx/fee/evm/getEvmRouterDepositFee'
 import { getTxStatus as coreTxStatus } from '@vultisig/core-chain/tx/status'
 import type { TxStatusResult } from '@vultisig/core-chain/tx/status/resolver'
@@ -2366,9 +2367,18 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
         toCoin,
       })
       if (minimum !== undefined && committedAmountBaseUnits < minimum) {
+        const minAmountInHuman = this.formatUnits(minimum, fromToken.decimals)
+        const message =
+          `Max swappable ${normalizedAmount} ${fromToken.ticker} is below ${quote.quote.quote.native.swapChain}'s recommended minimum of ${minAmountInHuman} ${fromToken.ticker}; ` +
+          'the swap would likely fail or be refunded net of fees. Increase the balance or choose another route.'
         throw new VaultError(
           VaultErrorCode.InvalidAmount,
-          `Max swappable ${normalizedAmount} ${fromToken.ticker} is below ${quote.quote.quote.native.swapChain}'s recommended minimum of ${this.formatUnits(minimum, fromToken.decimals)} ${fromToken.ticker}; the swap would likely fail or be refunded net of fees. Increase the balance or choose another route.`
+          message,
+          new SwapError(SwapErrorCode.AmountBelowMinimum, message, {
+            minAmountInBaseUnits: minimum.toString(),
+            minAmountInHuman,
+            ticker: fromToken.ticker,
+          })
         )
       }
     }

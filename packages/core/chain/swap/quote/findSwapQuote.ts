@@ -1228,7 +1228,7 @@ export const findSwapQuotes = async (input: FindSwapQuoteInput): Promise<FindSwa
 
     const nativeMin = await computeNativeMin()
     if (nativeMin && amount < nativeMin.minAmountInBaseUnits) {
-      throw belowNativeMinimumError(nativeMin, from)
+      throw belowNativeMinimumError(nativeMin, from, false)
     }
   }
 
@@ -1352,6 +1352,8 @@ export const findSwapQuotes = async (input: FindSwapQuoteInput): Promise<FindSwa
     provider: amountTooSmallProvider,
     computeNativeMin,
     from,
+    amount,
+    isMultiProviderPair: !thorIsSoleRoute,
   })
   if (belowMinimumError) throw belowMinimumError
 
@@ -1371,7 +1373,7 @@ export const findSwapQuotes = async (input: FindSwapQuoteInput): Promise<FindSwa
   // match, so the computed threshold is the authoritative signal here (#604).
   const nativeMin = await computeNativeMin()
   if (nativeMin && amount < nativeMin.minAmountInBaseUnits) {
-    throw belowNativeMinimumError(nativeMin, from)
+    throw belowNativeMinimumError(nativeMin, from, !thorIsSoleRoute)
   }
 
   const failedProviders = settled
@@ -1439,10 +1441,14 @@ export const findSwapQuotes = async (input: FindSwapQuoteInput): Promise<FindSwa
 export const findSwapQuote = async (input: FindSwapQuoteInput): Promise<BoundSwapQuote> =>
   (await findSwapQuotes(input)).best
 
-const belowNativeMinimumError = (min: NativeSwapMinAmountIn, from: AccountCoin): SwapError =>
+const belowNativeMinimumError = (
+  min: NativeSwapMinAmountIn,
+  from: AccountCoin,
+  isMultiProviderPair: boolean
+): SwapError =>
   new SwapError(
     SwapErrorCode.AmountBelowMinimum,
-    `Amount is below the minimum for this swap. Minimum is ~${min.minAmountInHuman} ${from.ticker}. Please increase the amount.`,
+    `Amount is below the minimum for ${isMultiProviderPair ? 'the THORChain route' : 'this swap'}. Minimum is ~${min.minAmountInHuman} ${from.ticker}. Please increase the amount.`,
     {
       minAmountInBaseUnits: min.minAmountInBaseUnits.toString(),
       minAmountInHuman: min.minAmountInHuman,
@@ -1456,12 +1462,16 @@ const getBelowMinimumSignalError = async ({
   provider,
   computeNativeMin,
   from,
+  amount,
+  isMultiProviderPair,
 }: {
   providerMessage?: string
   amountTooSmall: boolean
   provider?: SwapQuoteProviderName
   computeNativeMin: () => Promise<NativeSwapMinAmountIn | null>
   from: AccountCoin
+  amount: bigint
+  isMultiProviderPair: boolean
 }): Promise<SwapError | null> => {
   if (providerMessage && /\d/.test(providerMessage)) {
     return new SwapError(
@@ -1473,7 +1483,9 @@ const getBelowMinimumSignalError = async ({
   if (!providerMessage && !amountTooSmall) return null
 
   const nativeMin = await computeNativeMin()
-  if (nativeMin) return belowNativeMinimumError(nativeMin, from)
+  if (nativeMin && amount < nativeMin.minAmountInBaseUnits) {
+    return belowNativeMinimumError(nativeMin, from, isMultiProviderPair)
+  }
 
   if (providerMessage) {
     return new SwapError(
