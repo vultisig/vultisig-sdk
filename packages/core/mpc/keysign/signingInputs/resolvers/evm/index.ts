@@ -16,7 +16,6 @@ import {
   assertEnforcedSwapApprovalSpenderBound,
   assertKnownAggregatorRouterOnSigningPath,
   assertLifiApprovalAddress,
-  assertSwapCoinIsSigningCoin,
   assertSwapKitAddressReputation,
 } from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
 
@@ -110,8 +109,7 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
   //
   // SwapKit ERC-20 deposit: tx.to is the token, so screen the calldata recipient too.
   if (swapPayload && 'general' in swapPayload) {
-    const { provider, quote, fromCoin } = swapPayload.general
-    assertSwapCoinIsSigningCoin(fromCoin, coin)
+    const { provider, quote } = swapPayload.general
     // Pass the raw (possibly empty) destination unconditionally: for an enforced provider an empty
     // `to` must ALSO fail closed (the helper rejects it as unrecognized), not be silently skipped.
     if (provider === 'swapkit') {

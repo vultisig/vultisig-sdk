@@ -189,10 +189,10 @@ const describeSwapCoin = ({ chain, isNativeToken, contractAddress }: SwapCoinIde
   isNativeToken ? `native ${chain}` : `${contractAddress} on ${chain}`
 
 /**
- * Refuses an aggregator swap whose sold coin is not the coin being signed: same chain, same
- * native/token kind and the same contract (case-insensitive). The signer builds for the signing
- * coin while the swap bounds read the payload's coin. Mirrors iOS `EVMSwapTxGuard` (`coinMismatch`)
- * and the Android `EvmSwapTxGuard`.
+ * Refuses an aggregator swap whose sold coin is missing or is not the coin being signed: same
+ * chain, same native/token kind and the same contract (case-insensitive). The signer builds for the
+ * signing coin while the swap bounds and co-signer screens read the payload's coin. Mirrors
+ * `SwapPayload.requireSellsSigningCoin` on iOS and Android.
  */
 export function assertSwapCoinIsSigningCoin(
   fromCoin: SwapCoinIdentity | undefined,
