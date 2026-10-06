@@ -74,10 +74,7 @@ export const computeMaxSendFromBalance = async (
 
   const isQbtc = params.coin.chain === Chain.QBTC
 
-  // NEAR's sendable maximum is not `balance - gas` either: the account has to
-  // keep backing its own storage, and asking the fee estimator for a send of the
-  // whole balance would be rejected by NEAR's own over-balance guard. One read
-  // returns the gas reservation, the storage reserve and the difference.
+  // NEAR MAX also keeps the account's storage reserve back, so it is not balance minus gas.
   if (params.coin.chain === Chain.Near && isFeeCoin(params.coin)) {
     const limits = await getNearSendLimits({ address: params.coin.address, receiver: params.receiver })
 

@@ -1,12 +1,6 @@
 /**
- * NEAR fee arithmetic, transcribed from nearcore protocol 86 (tag 2.13.4):
- * `runtime/runtime/src/config.rs` `calculate_tx_cost`, `core/parameters/src/cost.rs`
- * (an implicit receiver reserves `create_account` + `add_full_access_key` gas
- * whether or not it already exists), `runtime/runtime/src/verifier.rs`
- * `check_storage_stake` (NEP-448 exempts `storage_usage <= 770`) and the outright
- * rejection when the balance cannot cover the charge. `account_creation_charge` is
- * absent on purpose: nearcore collects it at execution time out of the receipt's
- * gas refund, so it is neither upfront nor part of the balance requirement.
+ * Transcribed from nearcore protocol 86 (2.13.4) runtime/runtime/src/config.rs `calculate_tx_cost` and verifier.rs.
+ * `account_creation_charge` is absent on purpose: nearcore takes it from the receipt's gas refund, not upfront.
  */
 
 /** NEP-448 zero-balance accounts reach this storage usage; `verifier.rs:40`. */

@@ -35,10 +35,7 @@ export const swapKitSourceChains = [
   // decode for its payload yet (see that file's
   // `SWAP_SOURCE_TX_BUILD_UNSUPPORTED` guard).
   Chain.Cardano,
-  // NEAR confirmed live via SwapKit's NEAR-Intents provider in both directions
-  // (NEAR.NEAR<->ETH.ETH). As a source, `/v3/swap` returns `txHint:
-  // 'simpleTransfer'`, a per-swap implicit-account `targetAddress` and no memo,
-  // so it is a plain native transfer on the `transfer` arm.
+  // NEAR-Intents: a NEAR-source swap is a plain transfer to a per-swap implicit account.
   Chain.Near,
 ] as const
 

@@ -72,16 +72,9 @@ export type NearAccessKeyView = {
 }
 
 /**
- * `null` when the account holds no such key. The node reports a missing key as a
- * `result.error` string, not a JSON-RPC error, so it is read rather than thrown.
- *
- * Read at `optimistic` finality, the latest nonce: a `final` read lags the chain,
- * so a second send inside the finality window would reuse the nonce.
- *
- * Read from the raw body: `nonce` is a uint64 rendered as a bare JSON number, and
- * `JSON.parse` silently rounds anything above 2^53 into a neighbouring double, so
- * the digits are quoted before parsing and an unquoted, unparseable token is
- * rejected rather than rounded.
+ * `null` when the account holds no such key (the node answers with a `result.error` string).
+ * Read at `optimistic`, since a `final` nonce lags and a quick second send would reuse it, and
+ * from the raw body, since `JSON.parse` rounds a u64 nonce above 2^53.
  */
 export const getNearAccessKey = async (accountId: string, hexPublicKey: string): Promise<NearAccessKeyView | null> => {
   const publicKey = `ed25519:${bs58.encode(Buffer.from(hexPublicKey, 'hex'))}`
