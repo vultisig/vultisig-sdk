@@ -221,7 +221,7 @@ describe('getEvmFeeQuote', () => {
       mocks.getKeysignSwapPayload.mockReturnValue({
         general: {
           provider: 'swapkit',
-          fromCoin: { contractAddress: token },
+          fromCoin: { chain: EvmChain.Ethereum, contractAddress: token },
           fromAmount: '20000000',
           quote: { tx: { to: token, data: depositTransferData, value: '0' } },
         },
