@@ -107,12 +107,7 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
   // LI.FI and SwapKit distinct spenders are independently reputation-checked above. The legacy
   // `''` provider remains unenforced.
   //
-  // A SwapKit ERC-20 deposit (NEAR Intents `simpleTransfer`) is addressed to the sold token, so
-  // screening `tx.to` screens only the token while the funds go to the calldata recipient. The
-  // quote-time binding to the screened targetAddress never runs here, so this path re-derives the
-  // deposit from the signed bytes: exactly `transfer(recipient, fromAmount)` on the sold token with
-  // no native value, any other `transfer` call or token-addressed calldata throws, and the decoded
-  // recipient gets its own reputation verdict.
+  // SwapKit ERC-20 deposit: tx.to is the token, so screen the calldata recipient too.
   if (swapPayload && 'general' in swapPayload) {
     const { provider, quote } = swapPayload.general
     // Pass the raw (possibly empty) destination unconditionally: for an enforced provider an empty
