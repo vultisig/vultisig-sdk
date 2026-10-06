@@ -1,14 +1,12 @@
 import { callNearRpc, getNearRpcErrorName } from '@vultisig/core-chain/chains/near/rpc'
+import { NearTxOutcome, readNearOutcomeHash } from '@vultisig/core-chain/chains/near/txOutcome'
 
 import { TxStatusResolver, TxStatusResult } from '../resolver'
 
 type NearExecutionStatus = 'SuccessValue' | 'SuccessReceiptId'
 
-type NearStatusResponse = {
-  final_execution_status?: unknown
+type NearStatusResponse = NearTxOutcome & {
   status?: { SuccessValue?: unknown; SuccessReceiptId?: unknown; Failure?: unknown } | NearExecutionStatus
-  transaction?: { hash?: unknown }
-  transaction_outcome?: { id?: unknown }
 }
 
 /**
@@ -17,12 +15,6 @@ type NearStatusResponse = {
  * `pending`. `EXECUTED` is not enough either — it means executed optimistically.
  */
 const NEAR_FINAL_EXECUTION_STATUS = 'FINAL'
-
-const readTransactionHash = (response: NearStatusResponse): string | undefined => {
-  const hash = response.transaction?.hash ?? response.transaction_outcome?.id
-
-  return typeof hash === 'string' && hash.length > 0 ? hash : undefined
-}
 
 const readExecutionStatus = (response: NearStatusResponse): 'success' | 'error' | 'pending' => {
   if (response.final_execution_status !== NEAR_FINAL_EXECUTION_STATUS) {
@@ -83,7 +75,7 @@ export const getNearTxStatus: TxStatusResolver = async ({ hash, senderAccountId 
     throw error
   }
 
-  const returnedHash = readTransactionHash(response)
+  const returnedHash = readNearOutcomeHash(response)
 
   if (returnedHash !== undefined && returnedHash !== hash) {
     throw new Error(`NEAR status for ${hash} returned the outcome of ${returnedHash}`)

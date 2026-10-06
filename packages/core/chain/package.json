@@ -735,6 +735,11 @@
       "import": "./dist/chains/near/signedTransaction.js",
       "default": "./dist/chains/near/signedTransaction.js"
     },
+    "./chains/near/txOutcome": {
+      "types": "./dist/chains/near/txOutcome.d.ts",
+      "import": "./dist/chains/near/txOutcome.js",
+      "default": "./dist/chains/near/txOutcome.js"
+    },
     "./chains/near/uint": {
       "types": "./dist/chains/near/uint.d.ts",
       "import": "./dist/chains/near/uint.js",
