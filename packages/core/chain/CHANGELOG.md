@@ -1,5 +1,11 @@
 # @vultisig/core-chain
 
+## 6.2.1
+
+### Patch Changes
+
+- [#2508](https://github.com/vultisig/vultisig-sdk/pull/2508) [`da500e5`](https://github.com/vultisig/vultisig-sdk/commit/da500e593bfae7ebdc74d87cce6cec7f33cc9da5) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Offer THORChain for Zcash swaps. ZEC was only quoted through MayaChain, though THORChain runs a ZEC pool. A THORChain swap from Zcash signs like the other UTXO sources: a send to the inbound vault with the memo in OP_RETURN. THORChain publishes that vault as a ZIP-320 TEX address (`tex1…`). WalletCore parses it to the same P2PKH script as its `t1…` form, so the signature matches iOS and Android, which convert the address before signing.
+
 ## 6.2.0
 
 ### Minor Changes
