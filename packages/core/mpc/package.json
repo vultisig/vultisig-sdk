@@ -461,6 +461,11 @@
       "import": "./dist/keysign/refine/amount.js",
       "default": "./dist/keysign/refine/amount.js"
     },
+    "./keysign/refine/near": {
+      "types": "./dist/keysign/refine/near.d.ts",
+      "import": "./dist/keysign/refine/near.js",
+      "default": "./dist/keysign/refine/near.js"
+    },
     "./keysign/refine/utxo": {
       "types": "./dist/keysign/refine/utxo.d.ts",
       "import": "./dist/keysign/refine/utxo.js",

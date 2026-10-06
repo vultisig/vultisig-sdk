@@ -1,9 +1,6 @@
 import { getMaxSendableAmount, getSendRetainedBalance } from '@vultisig/core-chain/amount/getMaxSendableAmount'
 import { Chain, CosmosChain, UtxoBasedChain } from '@vultisig/core-chain/Chain'
 import { isTerraClassicUstcCoin } from '@vultisig/core-chain/chains/cosmos/terraClassicTax'
-import { getNearAccount, getNearFeeConfig } from '@vultisig/core-chain/chains/near/api'
-import { getNearSendRequiredAmount, getNearStorageReserve } from '@vultisig/core-chain/chains/near/fees'
-import { NearUnknownEntityError } from '@vultisig/core-chain/chains/near/rpc'
 import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
 import { minBigInt } from '@vultisig/lib-utils/math/minBigInt'
@@ -15,53 +12,15 @@ import { TransactionType } from '../../types/vultisig/keysign/v1/blockchain_spec
 import { KeysignPayload } from '../../types/vultisig/keysign/v1/keysign_message_pb'
 import { BuildKeysignPayloadError } from '../error'
 import { getFeeAmount } from '../fee'
-import { getBlockchainSpecificValue } from '../chainSpecific/KeysignChainSpecific'
 import { getCosmosChainSpecific } from '../signingInputs/resolvers/cosmos/chainSpecific'
 import { getKeysignCoin } from '../utils/getKeysignCoin'
+import { assertNearSendAffordable } from './near'
 
 type RefineKeysignAmountInput = {
   keysignPayload: KeysignPayload
   walletCore: WalletCore
   publicKey: PublicKey
   balance: bigint
-}
-
-// NEAR is charged upfront for the amount *plus* the gas reservation, and an
-// account must keep backing its own storage. Clamping the amount down to
-// whatever fits (the shared behaviour in `refineKeysignAmount`) would sign a
-// smaller transfer than the user asked for, so an unaffordable NEAR send fails
-// instead. MAX is the one flow that may reduce, and it reduces explicitly by
-// passing the already-reduced amount.
-export const assertNearSendAffordable = async (
-  { keysignPayload, balance }: Pick<RefineKeysignAmountInput, 'keysignPayload' | 'balance'>,
-  coin: ReturnType<typeof getKeysignCoin>
-) => {
-  const { gasFee } = getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'nearSpecific')
-  const [account, { storageAmountPerByte }] = await Promise.all([getNearAccount(coin.address), getNearFeeConfig()])
-
-  if (!account) {
-    throw new NearUnknownEntityError('account', `NEAR account ${coin.address} does not exist`)
-  }
-
-  const storageReserve = getNearStorageReserve({
-    storageUsage: account.storageUsage,
-    locked: account.locked,
-    storageAmountPerByte,
-  })
-
-  const required = getNearSendRequiredAmount({
-    requestedAmount: BigInt(keysignPayload.toAmount),
-    gasReservation: BigInt(gasFee),
-    storageReserve,
-  })
-
-  if (required > balance) {
-    throw new BuildKeysignPayloadError(
-      'not-enough-funds',
-      'Not enough NEAR: the amount plus the gas reservation and storage reserve exceeds the available balance',
-      { required, available: balance, ticker: coin.ticker, decimals: coin.decimals, includesNetworkCosts: true }
-    )
-  }
 }
 
 export const refineKeysignAmount = async (input: RefineKeysignAmountInput) => {
@@ -96,7 +55,7 @@ export const refineKeysignAmount = async (input: RefineKeysignAmountInput) => {
   }
 
   if (coin.chain === Chain.Near) {
-    await assertNearSendAffordable(input, coin)
+    await assertNearSendAffordable({ keysignPayload: input.keysignPayload, balance: input.balance, coin })
     return input.keysignPayload
   }
 

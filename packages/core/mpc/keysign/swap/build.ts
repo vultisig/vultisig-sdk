@@ -22,7 +22,7 @@ import { SwapFee } from '@vultisig/core-chain/swap/SwapFee'
 import { decodeBech32 } from '@vultisig/core-chain/utils/decodeBech32'
 import { getChainSpecific } from '@vultisig/core-mpc/keysign/chainSpecific'
 import { getBlockchainSpecificValue } from '@vultisig/core-mpc/keysign/chainSpecific/KeysignChainSpecific'
-import { assertNearSendAffordable } from '@vultisig/core-mpc/keysign/refine/amount'
+import { assertNearSendAffordable } from '@vultisig/core-mpc/keysign/refine/near'
 import { refineKeysignUtxo } from '@vultisig/core-mpc/keysign/refine/utxo'
 import { CommKeysignSwapPayload } from '@vultisig/core-mpc/keysign/swap/KeysignSwapPayload'
 import { getKeysignUtxoInfo } from '@vultisig/core-mpc/keysign/utxo/getKeysignUtxoInfo'
@@ -628,7 +628,7 @@ export const buildSwapKeysignPayload = async ({
   }
 
   if (chain === Chain.Near && isFeeCoin(fromCoin)) {
-    await assertNearSendAffordable({ keysignPayload, balance: await getCoinBalance(fromCoin) }, fromCoin)
+    await assertNearSendAffordable({ keysignPayload, balance: await getCoinBalance(fromCoin), coin: fromCoin })
   }
 
   if (isChainOfKind(fromCoin.chain, 'utxo')) {
