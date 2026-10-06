@@ -40,8 +40,7 @@ type GetNearGasReservationInput = {
   receiverIsImplicit: boolean
 }
 
-const isNearZeroBalanceAccount = (storageUsage: bigint): boolean =>
-  storageUsage <= NEAR_ZERO_BALANCE_STORAGE_LIMIT
+const isNearZeroBalanceAccount = (storageUsage: bigint): boolean => storageUsage <= NEAR_ZERO_BALANCE_STORAGE_LIMIT
 
 const sendGas = (cost: NearParameterCost, senderIsReceiver: boolean): bigint =>
   senderIsReceiver ? cost.sendSir : cost.sendNotSir
