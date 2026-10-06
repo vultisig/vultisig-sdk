@@ -7,18 +7,22 @@ import { Buffer } from 'buffer'
 import { broadcastAccepted, broadcastFailed, BroadcastTxResolver, isRetryableBroadcastCause } from '../resolver'
 import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
 
+/** Malformed requests: a copy of an already valid transaction can never produce them. */
+const nearMalformedRequestNames = new Set(['REQUEST_VALIDATION_ERROR', 'PARSE_ERROR'])
+
 /**
- * The node rejecting the signed transaction itself: re-sending the same bytes
- * gets the same answer, so the caller must see the reason instead of a retry.
+ * Final for these bytes, but also nearcore's answer to a peer re-sending a
+ * transaction that already landed (`InvalidNonce` when its own lookup misses
+ * it), so the hash decides before the rejection is reported.
  */
-const nearRejectionNames = new Set(['INVALID_TRANSACTION', 'REQUEST_VALIDATION_ERROR', 'PARSE_ERROR'])
+const NEAR_INVALID_TRANSACTION = 'INVALID_TRANSACTION'
 
 /**
  * Broadcasts the frozen signed bytes and binds the node's answer to the hash
  * derived locally from those same bytes, so an acknowledgement for a different
  * transaction can never be reported as this one. `wait_until: INCLUDED` stops at
- * inclusion; a timeout or internal error leaves the state unknown, so the hash is
- * verified against the chain before either failing or accepting.
+ * inclusion; any error but a malformed request leaves the state unknown, so the
+ * hash is verified against the chain before either failing or accepting.
  */
 export const broadcastNearTx: BroadcastTxResolver<OtherChain.Near> = async ({ chain, tx }) => {
   const localHash = getNearTransactionHash(tx.signedTransaction)
@@ -43,14 +47,14 @@ export const broadcastNearTx: BroadcastTxResolver<OtherChain.Near> = async ({ ch
     return broadcastAccepted(localHash, { provider: result })
   } catch (error) {
     const errorName = getNearRpcErrorName(error)
-    if (errorName !== undefined && nearRejectionNames.has(errorName)) {
+    if (errorName !== undefined && nearMalformedRequestNames.has(errorName)) {
       return broadcastFailed(error, false)
     }
 
     try {
       return broadcastAccepted(await verifyBroadcastByHash({ chain, tx, error, senderAccountId }))
     } catch (cause) {
-      return broadcastFailed(cause, isRetryableBroadcastCause(error))
+      return broadcastFailed(cause, errorName !== NEAR_INVALID_TRANSACTION && isRetryableBroadcastCause(error))
     }
   }
 }
