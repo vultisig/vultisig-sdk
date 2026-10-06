@@ -6,12 +6,24 @@ import { parseNonNegativeBigInt } from '@vultisig/lib-utils/bigint/parseNonNegat
 import { getKeysignChain } from '../utils/getKeysignChain'
 import { getKeysignSwapPayload } from './getKeysignSwapPayload'
 
+const MAX_UINT256 = (1n << 256n) - 1n
+
+// Decimal only, like the iOS and Android co-signers: BigInt also reads '' and '0x0' as zero.
+const parseUint256 = (value: string, label: string): bigint => {
+  const parsed = parseNonNegativeBigInt(value)
+  if (parsed > MAX_UINT256) {
+    throw new Error(`SwapKit EVM ${label} ${value} does not fit in uint256 — refusing to sign.`)
+  }
+
+  return parsed
+}
+
 /**
  * The address a SwapKit ERC-20 deposit payload transfers the sold token to, decoded
  * from the calldata that gets signed, or undefined when the payload is not such a
  * deposit (always undefined off EVM). Throws when it has the deposit shape but is not exactly
  * `transfer(recipient, fromAmount)` on the sold token (see `getSwapKitErc20DepositRecipient`), or when
- * `tx.value` or `fromAmount` is not a plain decimal string.
+ * `tx.value` or `fromAmount` is not a plain decimal string within uint256.
  */
 export const getKeysignSwapKitDepositRecipient = (keysignPayload: KeysignPayload): string | undefined => {
   const swapPayload = getKeysignSwapPayload(keysignPayload)
@@ -28,10 +40,9 @@ export const getKeysignSwapKitDepositRecipient = (keysignPayload: KeysignPayload
   return getSwapKitErc20DepositRecipient({
     to: tx.to,
     data: tx.data,
-    // Decimal only, like the iOS and Android co-signers: BigInt also reads '' and '0x0' as zero.
-    value: parseNonNegativeBigInt(tx.value),
+    value: parseUint256(tx.value, 'tx.value'),
     sourceToken: fromCoin?.contractAddress,
-    amount: parseNonNegativeBigInt(fromAmount),
+    amount: parseUint256(fromAmount, 'fromAmount'),
     chain,
   })
 }
