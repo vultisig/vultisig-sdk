@@ -55,6 +55,9 @@ export const refineKeysignUtxo = async (input: RefineKeysignUtxoInput): Promise<
   const planUtxos = plan.utxos
 
   const amount = getKeysignAmount(input.keysignPayload)
+  const chain = getKeysignChain<'utxo'>(input.keysignPayload)
+  const { decimals, ticker } = chainFeeCoin[chain]
+  const balance = bigIntSum(input.keysignPayload.utxoInfo.map(({ amount }) => amount))
   // WalletCore's proto3 enum defaults to OK even though the generated
   // TypeScript interface still permits nullish values.
   const planError = plan.error as TW.Common.Proto.SigningError
@@ -62,14 +65,12 @@ export const refineKeysignUtxo = async (input: RefineKeysignUtxoInput): Promise<
 
   if (planError !== TW.Common.Proto.SigningError.OK) {
     if (planError === TW.Common.Proto.SigningError.Error_dust_amount_requested) {
-      const chain = getKeysignChain<'utxo'>(input.keysignPayload)
       const minSendAmountError = amount
         ? getUtxoMinSendAmountError({
             amount,
             chain,
           })
         : undefined
-      const { decimals, ticker } = chainFeeCoin[chain]
       const formattedAmount = formatAmount(fromChainAmount(amount, decimals), {
         ticker,
       })
@@ -86,9 +87,6 @@ export const refineKeysignUtxo = async (input: RefineKeysignUtxoInput): Promise<
       planError === TW.Common.Proto.SigningError.Error_missing_input_utxos ||
       planError === TW.Common.Proto.SigningError.Error_not_enough_utxos
     ) {
-      const chain = getKeysignChain<'utxo'>(input.keysignPayload)
-      const { decimals, ticker } = chainFeeCoin[chain]
-      const balance = bigIntSum(input.keysignPayload.utxoInfo.map(({ amount }) => amount))
       // The planner does not report the fee, so only an amount the balance alone cannot cover is a stated shortfall.
       throw new BuildKeysignPayloadError(
         'not-enough-funds',
@@ -109,7 +107,6 @@ export const refineKeysignUtxo = async (input: RefineKeysignUtxoInput): Promise<
   }
 
   if (amount && !utxoSpecific.sendMaxAmount) {
-    const balance = bigIntSum(input.keysignPayload.utxoInfo.map(({ amount }) => amount))
     const remainingBalance = balance - amount
 
     // WalletCore can clamp an over-balance non-max request to a successful
@@ -118,8 +115,6 @@ export const refineKeysignUtxo = async (input: RefineKeysignUtxoInput): Promise<
     // remainder, WalletCore handles dust change according to fixedDustThreshold.
     // A non-max request is never converted to max here; only the caller decides MAX.
     if (remainingBalance < 0n) {
-      const chain = getKeysignChain<'utxo'>(input.keysignPayload)
-      const { decimals, ticker } = chainFeeCoin[chain]
       const requestedAmount = formatAmount(fromChainAmount(amount, decimals), {
         ticker,
       })
