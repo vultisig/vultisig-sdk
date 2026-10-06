@@ -1,4 +1,4 @@
-import { parseNonNegativeBigInt } from '@vultisig/lib-utils/bigint/parseNonNegativeBigInt'
+import { NEAR_MAX_U128, parseNearUint } from '@vultisig/core-chain/chains/near/uint'
 
 import { getBlockchainSpecificValue } from '../../chainSpecific/KeysignChainSpecific'
 import { FeeAmountResolver } from '../resolver'
@@ -11,5 +11,5 @@ import { FeeAmountResolver } from '../resolver'
 export const getNearFeeAmount: FeeAmountResolver = async ({ keysignPayload }) => {
   const { gasFee } = getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'nearSpecific')
 
-  return parseNonNegativeBigInt(gasFee)
+  return parseNearUint(gasFee, 'gas fee', NEAR_MAX_U128)
 }
