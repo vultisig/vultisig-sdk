@@ -89,6 +89,7 @@ import type { WasmProvider } from '../../../src/context/SdkContext'
 import type { VaultEvents } from '../../../src/events/types'
 import { SwapService } from '../../../src/vault/services/SwapService'
 import type { SwapQuoteResult } from '../../../src/vault/swap-types'
+import { VaultError, VaultErrorCode } from '../../../src/vault/VaultError'
 
 describe('SwapService', () => {
   let service: SwapService
@@ -423,7 +424,9 @@ describe('SwapService', () => {
           general: {
             dstAmount: '1000000',
             provider: '1inch',
-            tx: { evm: { from: '0xsender', to: '0xrouter', data: '0x', value: '0' } },
+            tx: {
+              evm: { from: '0xsender', to: '0xrouter', data: '0x', value: '0' },
+            },
           },
         },
         discounts: [],
@@ -809,7 +812,11 @@ describe('SwapService', () => {
         amount: 1,
       })
 
-      expect(result.fees).toEqual({ network: 5_000n, affiliate: 25_000n, total: 30_000n })
+      expect(result.fees).toEqual({
+        network: 5_000n,
+        affiliate: 25_000n,
+        total: 30_000n,
+      })
     })
 
     it('should populate affiliate from tx.evm.affiliateFee when native-denominated (sdk#1450)', async () => {
@@ -921,8 +928,8 @@ describe('SwapService', () => {
       [SwapErrorCode.AllProvidersFailed, 'No swap route found between these tokens', 'all providers failed'],
       [
         SwapErrorCode.AmountTooSmall,
-        'Swap amount too small: Please increase the amount to proceed.',
-        'Please increase the amount to proceed.',
+        'Amount is below the minimum of the available swap providers. Please increase the amount.',
+        'Amount is below the minimum of the available swap providers. Please increase the amount.',
       ],
       [SwapErrorCode.AmountBelowMinimum, 'Minimum amount is 0.5 BTC', 'Minimum amount is 0.5 BTC'],
       [SwapErrorCode.InvalidConfig, 'Swap configuration error', 'mixed-case THORName'],
@@ -944,11 +951,10 @@ describe('SwapService', () => {
           error => error as Error
         )
 
-      if (code === SwapErrorCode.AmountTooSmall) {
-        expect(error.message).toBe(expectedMessage)
-        expect(error.message.match(/Swap amount too small/g)).toHaveLength(1)
-      } else {
-        expect(error.message).toContain(expectedMessage)
+      expect(error.message).toContain(expectedMessage)
+      if (code === SwapErrorCode.AmountTooSmall || code === SwapErrorCode.AmountBelowMinimum) {
+        expect(error).toMatchObject({ code: VaultErrorCode.InvalidAmount })
+        expect((error as VaultError).originalError).toBeInstanceOf(SwapError)
       }
     })
   })

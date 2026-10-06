@@ -1250,7 +1250,11 @@ export const findSwapQuotes = async (input: FindSwapQuoteInput): Promise<FindSwa
   // A native halt is not a verdict on the aggregators that ran alongside it, so
   // give the ones that merely blipped (timeout / network / 5xx) a second chance
   // before the all-fail classification below can report the pair as halted.
-  settled = await retryTransientFetchersAfterNativeHalt({ settled, fetchers, runFetchers })
+  settled = await retryTransientFetchersAfterNativeHalt({
+    settled,
+    fetchers,
+    runFetchers,
+  })
   const bestAfterRetry = selectBestEligibleQuote(settled)
 
   if (bestAfterRetry) {
@@ -1285,6 +1289,8 @@ export const findSwapQuotes = async (input: FindSwapQuoteInput): Promise<FindSwa
   const belowMinimumByProvider = new Map<SwapQuoteProviderName, string>()
   const haltedProviders = new Set<SwapQuoteProviderName>()
   let proactiveTradingHalt: SwapError | null = null
+  let amountTooSmall = false
+  let amountTooSmallProvider: SwapQuoteProviderName | undefined
 
   for (let i = 0; i < settled.length; i++) {
     const result = settled[i]
@@ -1304,7 +1310,8 @@ export const findSwapQuotes = async (input: FindSwapQuoteInput): Promise<FindSwa
       isInError(result.reason, 'dust threshold') ||
       isInError(result.reason, 'amount less than')
     ) {
-      throw new SwapError(SwapErrorCode.AmountTooSmall, 'Please increase the amount to proceed.')
+      amountTooSmall = true
+      amountTooSmallProvider ??= fetchers[i].providerName
     }
 
     if (isBelowMinimumMsg(msg) && !belowMinimumByProvider.has(fetchers[i].providerName)) {
@@ -1331,7 +1338,18 @@ export const findSwapQuotes = async (input: FindSwapQuoteInput): Promise<FindSwa
     )
   }
 
-  const haltError = getHaltAllFailError({ settled, fetchers, proactiveTradingHalt, haltedProviders })
+  // A provider-stated threshold is most authoritative; otherwise compute the
+  // native threshold lazily, and only fall back to non-numeric provider copy.
+  if (amountTooSmall) {
+    throw await belowAvailableProviderMinimumError({ computeNativeMin, from, provider: amountTooSmallProvider })
+  }
+
+  const haltError = getHaltAllFailError({
+    settled,
+    fetchers,
+    proactiveTradingHalt,
+    haltedProviders,
+  })
   if (haltError) {
     throw haltError
   }
@@ -1413,5 +1431,29 @@ export const findSwapQuote = async (input: FindSwapQuoteInput): Promise<BoundSwa
 const belowNativeMinimumError = (min: NativeSwapMinAmountIn, from: AccountCoin): SwapError =>
   new SwapError(
     SwapErrorCode.AmountBelowMinimum,
-    `Amount is below the minimum for this swap. Minimum is ~${min.minAmountInHuman} ${from.ticker}. Please increase the amount.`
+    `Amount is below the minimum for this swap. Minimum is ~${min.minAmountInHuman} ${from.ticker}. Please increase the amount.`,
+    {
+      minAmountInBaseUnits: min.minAmountInBaseUnits.toString(),
+      minAmountInHuman: min.minAmountInHuman,
+      ticker: from.ticker,
+    }
   )
+
+const belowAvailableProviderMinimumError = async ({
+  computeNativeMin,
+  from,
+  provider,
+}: {
+  computeNativeMin: () => Promise<NativeSwapMinAmountIn | null>
+  from: AccountCoin
+  provider?: SwapQuoteProviderName
+}): Promise<SwapError> => {
+  const nativeMin = await computeNativeMin()
+  if (nativeMin) return belowNativeMinimumError(nativeMin, from)
+
+  return new SwapError(
+    SwapErrorCode.AmountTooSmall,
+    'Amount is below the minimum of the available swap providers. Please increase the amount.',
+    { provider }
+  )
+}

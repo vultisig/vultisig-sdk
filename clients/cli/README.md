@@ -360,6 +360,28 @@ vultisig swap ethereum bitcoin 0.1 -y --password mypassword
 
 Swap quotes and previews show your VULT discount tier when affiliate fees are applied. See `vultisig discount` for tier details.
 
+When a swap quote is below the computed minimum, the CLI exits with code 4 (`INVALID_INPUT`). JSON output includes
+the threshold in `error.context.minimum` when THORChain can route the pair:
+
+```json
+{
+  "error": {
+    "code": "INVALID_INPUT",
+    "exitCode": 4,
+    "message": "Amount is below the minimum for this swap. Minimum is ~0.0042 ETH. Please increase the amount.",
+    "hint": "Increase the amount to at least ~0.0042 ETH",
+    "context": {
+      "minimum": "0.0042",
+      "ticker": "ETH",
+      "minimumBaseUnits": "4200000000000000"
+    },
+    "retryable": false
+  }
+}
+```
+
+Aggregator-only routes also exit 4, but omit `context.minimum` when no provider supplies a numeric threshold.
+
 ### Advanced Operations
 
 | Command                      | Description                                   |
