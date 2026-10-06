@@ -39,7 +39,7 @@ const encodeU128Le = (value: bigint) => {
  * Ed25519 public key. Deriving it through WalletCore binds the reviewed address to
  * the key the ceremony actually signs with.
  */
-const resolveSignerId = ({
+const assertSignerIsImplicitAccount = ({
   walletCore,
   coinType,
   address,
@@ -70,8 +70,6 @@ const resolveSignerId = ({
   } finally {
     publicKey.delete()
   }
-
-  return hexPublicKey
 }
 
 /**
@@ -175,20 +173,23 @@ export const getNearSigningInputs: SigningInputsResolver<'near'> = ({ keysignPay
 
   const { nonce, blockHash } = parseNearSpecific(nearSpecific)
 
-  const signerId = resolveSignerId({
+  const address = shouldBePresent(coin.address)
+  const hexPublicKey = shouldBePresent(coin.hexPublicKey)
+
+  assertSignerIsImplicitAccount({
     walletCore,
     coinType: getCoinType({ walletCore, chain: Chain.Near }),
-    address: shouldBePresent(coin.address),
-    hexPublicKey: shouldBePresent(coin.hexPublicKey),
+    address,
+    hexPublicKey,
   })
 
   return [
     TW.NEAR.Proto.SigningInput.create({
-      signerId,
+      signerId: address,
       nonce: Long.fromString(nonce.toString(), true),
       receiverId,
       blockHash,
-      publicKey: new Uint8Array(Buffer.from(signerId, 'hex')),
+      publicKey: new Uint8Array(Buffer.from(hexPublicKey, 'hex')),
       actions: [
         TW.NEAR.Proto.Action.create({
           transfer: TW.NEAR.Proto.Transfer.create({ deposit: encodeU128Le(deposit) }),
