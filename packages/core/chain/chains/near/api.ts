@@ -39,20 +39,19 @@ type RawNearAccountView = {
 
 /** `null` when the node answered UNKNOWN_ACCOUNT, which is a valid balance of zero. */
 export const getNearAccount = async (accountId: string): Promise<NearAccountView | null> => {
-  const { result: view, error } = parseNearRpcResponse<RawNearAccountView>(
-    'query',
-    await callNearRpcText('query', {
+  let view: RawNearAccountView | undefined
+
+  try {
+    view = await callNearRpc<RawNearAccountView>('query', {
       request_type: 'view_account',
       finality: 'final',
       account_id: accountId,
     })
-  )
-
-  if (error) {
-    if (getNearRpcErrorName(toNearRpcError('query', error)) === 'UNKNOWN_ACCOUNT') {
+  } catch (error) {
+    if (getNearRpcErrorName(error) === 'UNKNOWN_ACCOUNT') {
       return null
     }
-    throw toNearRpcError('query', error)
+    throw error
   }
 
   if (!view) {
