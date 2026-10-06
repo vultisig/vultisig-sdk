@@ -1,5 +1,6 @@
 // Grouped public helper families, alongside the existing flat exports.
 export type {
+  AddressFailure,
   BalancesWithPricesResult,
   FiatValueFailure,
   FiatValuesResult,

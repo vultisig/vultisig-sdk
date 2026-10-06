@@ -79,6 +79,7 @@ import {
 import { ReactNativeStorage } from './storage'
 
 export type {
+  AddressFailure,
   BalancesWithPricesResult,
   FiatValueFailure,
   FiatValuesResult,
