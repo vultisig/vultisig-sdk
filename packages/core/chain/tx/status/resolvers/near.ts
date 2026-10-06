@@ -1,7 +1,8 @@
+import { OtherChain } from '@vultisig/core-chain/Chain'
 import { callNearRpc, getNearRpcErrorName } from '@vultisig/core-chain/chains/near/rpc'
 import { NearTxOutcome, readNearOutcomeHash } from '@vultisig/core-chain/chains/near/txOutcome'
 
-import { TxStatusResolver, TxStatusResult } from '../resolver'
+import { TxStatusResolver } from '../resolver'
 
 type NearExecutionStatus = 'SuccessValue' | 'SuccessReceiptId'
 
@@ -48,7 +49,7 @@ const readExecutionStatus = (response: NearStatusResponse): 'success' | 'error' 
  * UNKNOWN_TRANSACTION is `not_found` (affirmatively no record); a node-side wait
  * timeout is `pending` with `isKnown: false`.
  */
-export const getNearTxStatus: TxStatusResolver = async ({ hash, senderAccountId }) => {
+export const getNearTxStatus: TxStatusResolver<OtherChain.Near> = async ({ hash, senderAccountId }) => {
   if (!senderAccountId) {
     throw new Error(`NEAR transaction status needs the sender account id for ${hash}`)
   }
@@ -88,7 +89,5 @@ export const getNearTxStatus: TxStatusResolver = async ({ hash, senderAccountId 
     throw new Error(`NEAR status for ${hash} reported a final outcome without the transaction hash`)
   }
 
-  const result: TxStatusResult = { status, isKnown: returnedHash !== undefined }
-
-  return result
+  return { status, isKnown: returnedHash !== undefined }
 }
