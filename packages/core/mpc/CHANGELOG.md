@@ -1,5 +1,20 @@
 # @vultisig/core-mpc
 
+## 5.0.4
+
+### Patch Changes
+
+- [#2504](https://github.com/vultisig/vultisig-sdk/pull/2504) [`6a20f41`](https://github.com/vultisig/vultisig-sdk/commit/6a20f4130f73b9a0dc68a80b950876af4ae01f0a) Thanks [@PragmaticMonkey](https://github.com/PragmaticMonkey)! - Fix RUJI Trade (RUNE ↔ bRUNE) swaps to send FIN's untagged swap request with `min_return` and `to` directly under `swap`. The previous `{ swap: { min: { ... } } }` wrapper decoded on-chain as an unguarded Yolo swap, dropping the slippage guard and the recipient. Keysign now requires the flat form, and also rejects a `min_return` outside Uint128, which FIN would likewise treat as Yolo.
+
+- [#2498](https://github.com/vultisig/vultisig-sdk/pull/2498) [`0251a9b`](https://github.com/vultisig/vultisig-sdk/commit/0251a9bbb6ea85d178cef4846c1c8471aca04386) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Itemize the swap provider's own fee apart from the integrator's affiliate fee. LI.FI quotes now split every fee entry that carries a `feeSplit` (the fixed fee and any distribution fees) and SwapKit quotes keep the `service` fee out of the `affiliate` one, so `evm.affiliateFee` and `solana.swapFee` / `transfer.swapFee` carry only the integrator's cut and the new optional `protocolFee` carries everyone else's (LI.FI's, a distribution recipient's, or SwapKit's). The keysign payload `swap_fee` still reports both together, so cosigning peers see the same total as before. `SwapFees` and `SwapFeesFiat` gain an optional `protocol` amount, which is included in `total`.
+
+- [#2502](https://github.com/vultisig/vultisig-sdk/pull/2502) [`37e06d5`](https://github.com/vultisig/vultisig-sdk/commit/37e06d515baede9d05ab7e3e1d7cbe2b8218b330) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Co-sign SwapKit swaps that carry a pre-built Cardano transaction (`tx_type = "CARDANO_PREBUILT"`). SwapKit builds the whole transaction for this route and the initiator relays it in `tx_payload` as the CBOR envelope `[body, witness_set, is_valid, aux_data]`, but nothing handled that type: a co-signer rebuilt a native ADA send from `toAddress` / `toAmount` / `utxoInfo`, signed a different body than iOS and Android, and the keysign never converged. The envelope is now the signing input — the digest is blake2b-256 of its body bytes verbatim, and the signed transaction is the same envelope with the vault's vkey witness in place of item 1.
+
+  No Verify screen shows that body, so it is validated against the vault's own key before any hash is produced. It must be a plain payment (only inputs, outputs, fee, ttl, validity start, aux-data hash and network id) in which exactly one output is an ADA-only deposit of at most `from_amount` and every other output pays the vault's enterprise address, with a fee of at most 2 ADA. The swap's source asset must be ADA, so that `from_amount` is a lovelace amount.
+
+- Updated dependencies [[`7785d05`](https://github.com/vultisig/vultisig-sdk/commit/7785d059e62c76f8393874d70f498a634d2bc6f9), [`2c09369`](https://github.com/vultisig/vultisig-sdk/commit/2c09369a981a5653a9eb129efe816b9158440803), [`60acf82`](https://github.com/vultisig/vultisig-sdk/commit/60acf82b0596d4345b77045365f94b7a6ee44e13), [`6a20f41`](https://github.com/vultisig/vultisig-sdk/commit/6a20f4130f73b9a0dc68a80b950876af4ae01f0a), [`0251a9b`](https://github.com/vultisig/vultisig-sdk/commit/0251a9bbb6ea85d178cef4846c1c8471aca04386), [`0b107b0`](https://github.com/vultisig/vultisig-sdk/commit/0b107b0741f036f7fd82afa163e167b2cdef15ce)]:
+  - @vultisig/core-chain@6.2.0
+
 ## 5.0.3
 
 ### Patch Changes

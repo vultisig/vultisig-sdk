@@ -85,6 +85,8 @@ export type SwapFees = {
   network: bigint
   /** Affiliate fees (if applicable) */
   affiliate?: bigint
+  /** The swap provider's own fee, charged on top of the affiliate fee (if applicable) */
+  protocol?: bigint
   /** Total fees */
   total: bigint
 }
@@ -97,6 +99,8 @@ export type SwapFeesFiat = {
   network: number
   /** Affiliate fees in fiat (if applicable) */
   affiliate?: number
+  /** The swap provider's own fee in fiat (if applicable) */
+  protocol?: number
   /** Total fees in fiat */
   total: number
   /** The fiat currency used */

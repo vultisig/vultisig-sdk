@@ -5,6 +5,18 @@ import { CowSwapTokenBalance } from './cowswap/sign/buildCowSwapOrder'
 import { CowSwapOrderKind } from './cowswap/types'
 import { GeneralSwapProvider } from './GeneralSwapProvider'
 
+/**
+ * The cut a general swap provider keeps for itself on top of the integrator's
+ * affiliate fee — LI.FI's share of its fixed fee, SwapKit's service fee.
+ *
+ * Kept apart from the affiliate fee because it is not the integrator's money:
+ * a consumer that labels the affiliate fee with its own name must not show
+ * this under that name. It is denominated in the same coin as the affiliate
+ * fee of the same route, and like it is already netted out of `dstAmount`.
+ * Absent when the provider itemizes no such cut.
+ */
+export type GeneralSwapProtocolFee = SwapFee
+
 export type GeneralSwapTx =
   | {
       evm: {
@@ -13,7 +25,9 @@ export type GeneralSwapTx =
         data: string
         value: string
         gasLimit?: bigint
+        /** The integrator's own cut of the route — the only fee here that is ours. */
         affiliateFee?: SwapFee
+        protocolFee?: GeneralSwapProtocolFee
         /**
          * The address that will be called as `transferFrom` spender for the
          * input ERC-20 token. Set by LI.FI quotes from `estimate.approvalAddress`
@@ -36,7 +50,9 @@ export type GeneralSwapTx =
       solana: {
         data: string
         networkFee: bigint
+        /** The integrator's own cut of the route; zero when none is charged. */
         swapFee: SwapFee
+        protocolFee?: GeneralSwapProtocolFee
       }
     }
   | {
@@ -49,15 +65,17 @@ export type GeneralSwapTx =
         inboundAddress?: string
         swapId?: string
         /**
-         * Provider fee for the route, when the response itemizes one. Absent
-         * rather than zero when no fee is itemized or its shape can't be
-         * resolved — the same convention `evm.affiliateFee` follows, since
-         * neither establishes an amount worth vouching for.
+         * The integrator's own cut of the route, when the response itemizes
+         * one. Absent rather than zero when no fee is itemized or its shape
+         * can't be resolved — the same convention `evm.affiliateFee` follows,
+         * since neither establishes an amount worth vouching for.
          *
-         * Not part of the signed transfer. It travels so a cosigning peer,
-         * which holds no quote, can state what the swap costs.
+         * Not part of the signed transfer. It travels, together with
+         * `protocolFee`, so a cosigning peer, which holds no quote, can state
+         * what the swap costs.
          */
         swapFee?: SwapFee
+        protocolFee?: GeneralSwapProtocolFee
       }
     }
   | {
