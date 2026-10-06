@@ -637,7 +637,7 @@ describe('NEAR finality status', () => {
 
   it('binds success to a final execution outcome for the same hash', async () => {
     setupTransport({
-      status: { final_execution_status: 'FINAL', status: { SuccessReceiptId: hash }, transaction: { hash } },
+      status: { final_execution_status: 'FINAL', status: { SuccessValue: '' }, transaction: { hash } },
     })
 
     await expect(getTxStatus({ chain: Chain.Near, hash, senderAccountId: SENDER })).resolves.toMatchObject({

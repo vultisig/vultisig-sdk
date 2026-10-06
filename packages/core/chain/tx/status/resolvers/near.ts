@@ -4,11 +4,8 @@ import { NearTxOutcome, readNearOutcomeHash } from '@vultisig/core-chain/chains/
 
 import { TxStatusResolver } from '../resolver'
 
-type NearExecutionStatus = 'SuccessValue' | 'SuccessReceiptId'
-
-type NearStatusResponse = NearTxOutcome & {
-  status?: { SuccessValue?: unknown; SuccessReceiptId?: unknown; Failure?: unknown } | NearExecutionStatus
-}
+/** `status` is nearcore's `FinalExecutionStatus` (core/primitives/src/views.rs): `{ SuccessValue }` or `{ Failure }` once final. */
+type NearStatusResponse = NearTxOutcome & { status?: unknown }
 
 /**
  * `FINAL` is the only execution status that may be reported as success: an
@@ -22,14 +19,10 @@ const readExecutionStatus = (response: NearStatusResponse): 'success' | 'error' 
     return 'pending'
   }
 
-  const status = response.status
-
-  if (status === 'SuccessValue' || status === 'SuccessReceiptId') {
-    return 'success'
-  }
+  const { status } = response
 
   if (typeof status === 'object' && status !== null) {
-    if ('SuccessValue' in status || 'SuccessReceiptId' in status) {
+    if ('SuccessValue' in status) {
       return 'success'
     }
 
