@@ -1,5 +1,25 @@
 # @vultisig/core-chain
 
+## 6.2.0
+
+### Minor Changes
+
+- [#2456](https://github.com/vultisig/vultisig-sdk/pull/2456) [`2c09369`](https://github.com/vultisig/vultisig-sdk/commit/2c09369a981a5653a9eb129efe816b9158440803) Thanks [@realpaaao](https://github.com/realpaaao)! - Report which contract-price lookups failed, and cap a multi-batch CoinGecko fetch at 20 seconds. `getErc20Prices` still returns the price map.
+
+- [#2498](https://github.com/vultisig/vultisig-sdk/pull/2498) [`0251a9b`](https://github.com/vultisig/vultisig-sdk/commit/0251a9bbb6ea85d178cef4846c1c8471aca04386) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Itemize the swap provider's own fee apart from the integrator's affiliate fee. LI.FI quotes now split every fee entry that carries a `feeSplit` (the fixed fee and any distribution fees) and SwapKit quotes keep the `service` fee out of the `affiliate` one, so `evm.affiliateFee` and `solana.swapFee` / `transfer.swapFee` carry only the integrator's cut and the new optional `protocolFee` carries everyone else's (LI.FI's, a distribution recipient's, or SwapKit's). The keysign payload `swap_fee` still reports both together, so cosigning peers see the same total as before. `SwapFees` and `SwapFeesFiat` gain an optional `protocol` amount, which is included in `total`.
+
+### Patch Changes
+
+- [#2503](https://github.com/vultisig/vultisig-sdk/pull/2503) [`7785d05`](https://github.com/vultisig/vultisig-sdk/commit/7785d059e62c76f8393874d70f498a634d2bc6f9) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Stop reporting a Cardano broadcast as failed when another signing device already sent the same transaction. Every device in a keysign broadcasts the same bytes, and the node now answers the later ones with a mempool rejection (code 3997, "All inputs are spent. Transaction has probably already been included") instead of code 3117. The fallback hash lookup gave up after about 3 seconds, before the first copy could be in a block, so the device that lost the race showed "Failed to broadcast transaction" for a transaction that went through.
+
+  That reply does not prove the transaction is the one that spent the inputs, so it is not accepted on its own. It now makes the hash lookup wait long enough for the next block (up to about two minutes): the broadcast is reported as sent once the hash is seen, and as failed if it never appears. The node's justification also replaces the message that only pointed at it ("A justification is given as 'data.error'").
+
+- [#2490](https://github.com/vultisig/vultisig-sdk/pull/2490) [`60acf82`](https://github.com/vultisig/vultisig-sdk/commit/60acf82b0596d4345b77045365f94b7a6ee44e13) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Remove the agent-focused DeFi namespace, builders, and `tools/defi` subpath from the wallet SDK, along with its exclusive `@balancer/sdk` dependency. Declare `@noble/ciphers` directly for the retained React Native encryption polyfills. Load the Polkadot API when a Polkadot client is first requested so the SDK root no longer includes it in the eager wallet graph.
+
+- [#2504](https://github.com/vultisig/vultisig-sdk/pull/2504) [`6a20f41`](https://github.com/vultisig/vultisig-sdk/commit/6a20f4130f73b9a0dc68a80b950876af4ae01f0a) Thanks [@PragmaticMonkey](https://github.com/PragmaticMonkey)! - Fix RUJI Trade (RUNE ↔ bRUNE) swaps to send FIN's untagged swap request with `min_return` and `to` directly under `swap`. The previous `{ swap: { min: { ... } } }` wrapper decoded on-chain as an unguarded Yolo swap, dropping the slippage guard and the recipient. Keysign now requires the flat form, and also rejects a `min_return` outside Uint128, which FIN would likewise treat as Yolo.
+
+- [#2489](https://github.com/vultisig/vultisig-sdk/pull/2489) [`0b107b0`](https://github.com/vultisig/vultisig-sdk/commit/0b107b0741f036f7fd82afa163e167b2cdef15ce) Thanks [@neavra](https://github.com/neavra)! - Transaction status lookups on Sui, TON, Ripple, Polkadot, the UTXO chains, Cardano, QBTC and Bittensor now report `not_found` when the node or indexer has no record of the hash, matching EVM, Solana and Cosmos, instead of an indefinite `pending`. A hash the node knows about, or a lookup that fails transiently, still reports `pending`.
+
 ## 6.1.3
 
 ### Patch Changes

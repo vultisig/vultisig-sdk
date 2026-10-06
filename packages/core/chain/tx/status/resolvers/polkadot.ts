@@ -5,13 +5,18 @@ import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { TxStatusResolver } from '../resolver'
 
+// Subscan requires an API key, which the SDK does not send. Unauthenticated
+// calls return `{ code: 403 }` and therefore resolve to unknown `pending`.
+// A configurable key or node-RPC lookup is required before this resolver can
+// report any production lookup as something other than `pending`.
 const subscanExtrinsicUrl = 'https://assethub-polkadot.api.subscan.io/api/scan/extrinsic'
 
 type SubscanExtrinsicResponse = {
   code: number
   message: string
   data: {
-    hash: string
+    // Subscan response schema: https://support.subscan.io/api-36911038
+    extrinsic_hash: string
     success: boolean
     finalized: boolean
     fee?: string
@@ -26,13 +31,19 @@ export const getPolkadotTxStatus: TxStatusResolver<OtherChain.Polkadot> = async 
     })
   )
 
-  if (error || !response || response.code !== 0 || !response.data) {
-    // Subscan does not know this hash (or the API errored). Mark
-    // `isKnown: false` so the verify-by-hash safety net does NOT swallow
-    // the original broadcast error. Otherwise an `author_submitExtrinsic`
-    // rejection is silently reported as success and the UI shows a fake
-    // "done" with a hash that has no on-chain counterpart. Mirrors
-    // ripple.ts:25 / solana.ts:19.
+  if (error || !response || response.code !== 0) {
+    return { status: 'pending', isKnown: false }
+  }
+
+  // A successful Subscan response with null data means no indexed extrinsic matched.
+  if (response.data === null) return { status: 'not_found', isKnown: false }
+
+  if (
+    typeof response.data !== 'object' ||
+    typeof response.data.extrinsic_hash !== 'string' ||
+    typeof response.data.success !== 'boolean' ||
+    typeof response.data.finalized !== 'boolean'
+  ) {
     return { status: 'pending', isKnown: false }
   }
 

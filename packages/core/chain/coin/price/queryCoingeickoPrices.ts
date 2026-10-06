@@ -6,10 +6,11 @@ type CoinPricesResponse = Record<string, Record<FiatCurrency, number>>
 type QueryCoingeickoPricesInput = {
   url: string
   fiatCurrency: FiatCurrency
+  signal?: AbortSignal
 }
 
-export const queryCoingeickoPrices = async ({ url, fiatCurrency }: QueryCoingeickoPricesInput) => {
-  const result = await queryUrl<CoinPricesResponse>(url)
+export const queryCoingeickoPrices = async ({ url, fiatCurrency, signal }: QueryCoingeickoPricesInput) => {
+  const result = await queryUrl<CoinPricesResponse>(url, signal ? { signal } : undefined)
 
   return recordMap(result, value => value[fiatCurrency])
 }

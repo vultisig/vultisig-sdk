@@ -22,6 +22,7 @@ import { compileTonGaslessTx, getKeysignTonGasless } from '../../keysign/ton/gas
 import { KeysignPayload, KeysignPayloadSchema } from '../../types/vultisig/keysign/v1/keysign_message_pb'
 import { getPreSigningHashes } from '../preSigningHashes'
 import { generateSignature } from '../signature/generateSignature'
+import { buildSignedSwapKitCardanoTx, getSwapKitCardanoPrebuiltPayload } from '../swapkitCardanoPrebuilt'
 import { getSwapKitSignBitcoin } from '../swapkitSignBitcoin'
 import { compileSignBitcoinTx } from './compileSignBitcoinTx'
 
@@ -190,6 +191,34 @@ export const compileTx = ({
       signatureFormat,
     })
 
+    const spendingKey = new Uint8Array(publicKey.data()).slice(0, 32)
+
+    const toSigningOutput = (encoded: Uint8Array) =>
+      TW.Cardano.Proto.SigningOutput.encode(
+        TW.Cardano.Proto.SigningOutput.create({
+          encoded,
+          // hashes[0] is blake2b-256 of the body — correct txId for every path
+          txId: hash,
+        })
+      ).finish()
+
+    // SwapKit pre-built Cardano transaction (sdk#2468): txInputData is
+    // SwapKit's unsigned envelope and hashes[0] the hash of its body (see
+    // getPreSigningHashes). The witness is spliced into those exact bytes
+    // rather than wrapped around a WalletCore-planned body, which would not be
+    // the one that was signed.
+    const swapKitCardanoPrebuilt = keysignPayload ? getSwapKitCardanoPrebuiltPayload(keysignPayload) : undefined
+    if (swapKitCardanoPrebuilt) {
+      return toSigningOutput(
+        buildSignedSwapKitCardanoTx({
+          envelope: txInputData,
+          swapKitPayload: swapKitCardanoPrebuilt,
+          vaultPublicKey: spendingKey,
+          signature: new Uint8Array(sig),
+        })
+      )
+    }
+
     // Re-derive the tx body to wrap it with the witness set. WalletCore already
     // committed the aux_data_hash into this body when a memo was set, so it is
     // used as-is; the matching aux-data bytes go into element [3] of the tx.
@@ -201,21 +230,14 @@ export const compileTx = ({
     const txBodyCbor = preOutput.data
     const auxDataCbor = memo ? buildCip20AuxData(memo).auxDataCbor : undefined
 
-    const spendingKey = new Uint8Array(publicKey.data()).slice(0, 32)
-    const encoded = buildSignedCardanoTx({
-      txBodyCbor,
-      publicKey: spendingKey,
-      signature: new Uint8Array(sig),
-      auxDataCbor,
-    })
-
-    return TW.Cardano.Proto.SigningOutput.encode(
-      TW.Cardano.Proto.SigningOutput.create({
-        encoded,
-        // hashes[0] is blake2b-256 of the body — correct txId for both paths
-        txId: hash,
+    return toSigningOutput(
+      buildSignedCardanoTx({
+        txBodyCbor,
+        publicKey: spendingKey,
+        signature: new Uint8Array(sig),
+        auxDataCbor,
       })
-    ).finish()
+    )
   }
 
   const allSignatures = walletCore.DataVector.create()

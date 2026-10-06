@@ -6,18 +6,40 @@ import { attempt } from '@vultisig/lib-utils/attempt'
 
 import { TxStatusResolver } from '../resolver'
 
+const isMissingSuiTransaction = (error: unknown): boolean => {
+  if (!(error instanceof Error)) return false
+
+  const code = 'code' in error ? String(error.code) : undefined
+  let message = error.message
+  try {
+    message = decodeURIComponent(message)
+  } catch {
+    // Keep the original message when it is not URI encoded.
+  }
+
+  return message === 'Missing response data' || (code === 'NOT_FOUND' && /^Transaction \S+ not found$/i.test(message))
+}
+
 export const getSuiTxStatus: TxStatusResolver<OtherChain.Sui> = async ({ hash }) => {
   const client = getSuiClient()
 
   // `getTransaction` replaces the retired `getTransactionBlock`. An unknown
-  // digest REJECTS ("missing digest") rather than resolving to null, which the
-  // attempt() wrapper already funnels into the not-known branch below.
+  // digest rejects rather than resolving to null, so preserve the client error
+  // for the conservative classification below.
   const { data, error } = await attempt(
     client.getTransaction({
       digest: hash,
       include: { effects: true },
     })
   )
+
+  // The gRPC client returns a transaction-specific NOT_FOUND error. The React
+  // Native GraphQL client throws "Missing response data" after a null
+  // transaction result (GraphQL-level errors are thrown earlier). Other
+  // failures and malformed successful responses prove nothing and remain retryable.
+  if (isMissingSuiTransaction(error)) {
+    return { status: 'not_found', isKnown: false }
+  }
 
   if (error || !data) {
     return { status: 'pending', isKnown: false }

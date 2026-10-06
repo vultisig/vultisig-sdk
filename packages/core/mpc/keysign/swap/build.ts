@@ -72,6 +72,8 @@ export type BuildSwapKeysignPayloadInput = {
 type TransferSwapTx = Extract<GeneralSwapTx, { transfer: unknown }>['transfer']
 type CosmosWasmSwapTx = Extract<GeneralSwapTx, { cosmosWasm: unknown }>['cosmosWasm']
 
+const maxUint128 = (1n << 128n) - 1n
+
 const getThorAddressIdentity = (address: string): string | undefined => {
   try {
     const decoded = decodeBech32(address.trim())
@@ -123,13 +125,16 @@ const getRujiTradeFundAmount = (tx: CosmosWasmSwapTx, fromCoin: AccountCoin, eff
   } catch {
     throw new Error('RUJI Trade CosmWasm route contains an invalid execute message.')
   }
-  const min = (executeMsg as { swap?: { min?: { min_return?: unknown; to?: unknown } } })?.swap?.min
+  // FIN's SwapRequest is untagged and ignores unknown keys, so a nested `{ min: { ... } }`
+  // or a min_return outside Uint128 decodes as an unguarded Yolo swap instead of failing.
+  const swap = (executeMsg as { swap?: { min_return?: unknown; to?: unknown } })?.swap
   if (
-    typeof min?.min_return !== 'string' ||
-    !/^\d+$/.test(min.min_return) ||
-    BigInt(min.min_return) <= 0n ||
-    typeof min.to !== 'string' ||
-    !areEqualThorAddresses(min.to, effectiveRecipient)
+    typeof swap?.min_return !== 'string' ||
+    !/^\d+$/.test(swap.min_return) ||
+    BigInt(swap.min_return) <= 0n ||
+    BigInt(swap.min_return) > maxUint128 ||
+    typeof swap.to !== 'string' ||
+    !areEqualThorAddresses(swap.to, effectiveRecipient)
   ) {
     throw new Error('RUJI Trade CosmWasm route must contain a guarded FIN swap execute message.')
   }
@@ -245,6 +250,37 @@ const toCommSwapFee = (swapFee: SwapFee | undefined) => ({
       }
     : {}),
 })
+
+type GetPayloadSwapFeeInput<T extends SwapFee | undefined> = {
+  swapFee: T
+  protocolFee: SwapFee | undefined
+}
+
+/**
+ * Everything the provider side of a route takes — the integrator's cut plus
+ * the provider's own — as the single `swap_fee` a cosigning peer shows. The
+ * peer holds no quote and labels this amount neutrally, so it must cover the
+ * whole charge rather than the integrator's share alone. A protocol fee in a
+ * different coin cannot be added and is left out.
+ */
+const getPayloadSwapFee = <T extends SwapFee | undefined>({
+  swapFee,
+  protocolFee,
+}: GetPayloadSwapFeeInput<T>): T | SwapFee => {
+  if (!protocolFee) {
+    return swapFee
+  }
+
+  if (!swapFee || swapFee.amount === 0n) {
+    return protocolFee
+  }
+
+  if (!areEqualCoins(swapFee, protocolFee) || swapFee.decimals !== protocolFee.decimals) {
+    return swapFee
+  }
+
+  return { ...swapFee, amount: swapFee.amount + protocolFee.amount }
+}
 
 export const buildSwapKeysignPayload = async ({
   fromCoin,
@@ -387,13 +423,13 @@ export const buildSwapKeysignPayload = async ({
             ...(transfer.memo ? { memo: transfer.memo } : {}),
             subProvider: quote.routeProvider ?? '',
             swapId: transfer.swapId ?? '',
-            ...toCommSwapFee(transfer.swapFee),
+            ...toCommSwapFee(getPayloadSwapFee({ swapFee: transfer.swapFee, protocolFee: transfer.protocolFee })),
           }),
         }
       }
 
       const txMsg = matchRecordUnion<GeneralSwapTx, Omit<OneInchTransaction, '$typeName'>>(quote.tx, {
-        evm: ({ from, to, data, value, affiliateFee }) => {
+        evm: ({ from, to, data, value, affiliateFee, protocolFee }) => {
           assertAggregatorCalldataMinOutputBound({
             provider: quote.provider,
             data,
@@ -410,31 +446,35 @@ export const buildSwapKeysignPayload = async ({
             value,
             gasPrice: '',
             gas: 0n,
-            ...toCommSwapFee(affiliateFee),
+            ...toCommSwapFee(getPayloadSwapFee({ swapFee: affiliateFee, protocolFee })),
           }
         },
-        solana: ({ data, swapFee }) => ({
-          from: '',
-          to: '',
-          data,
-          value: '',
-          gasPrice: '',
-          gas: BigInt(0),
-          swapFee: swapFee.amount.toString(),
-          swapFeeChain: swapFee.chain,
-          swapFeeTokenId: swapFee.id,
-          swapFeeDecimals: swapFee.decimals,
-        }),
+        solana: ({ data, swapFee, protocolFee }) => {
+          const payloadSwapFee = getPayloadSwapFee({ swapFee, protocolFee })
+
+          return {
+            from: '',
+            to: '',
+            data,
+            value: '',
+            gasPrice: '',
+            gas: BigInt(0),
+            swapFee: payloadSwapFee.amount.toString(),
+            swapFeeChain: payloadSwapFee.chain,
+            swapFeeTokenId: payloadSwapFee.id,
+            swapFeeDecimals: payloadSwapFee.decimals,
+          }
+        },
         // Non-SwapKit transfer routes can still use the existing general display shape.
         // SwapKit transfer routes return above with the dedicated commondata payload.
-        transfer: ({ to, swapFee }) => ({
+        transfer: ({ to, swapFee, protocolFee }) => ({
           from: fromCoin.address,
           to,
           data: '',
           value: '',
           gasPrice: '',
           gas: 0n,
-          ...toCommSwapFee(swapFee),
+          ...toCommSwapFee(getPayloadSwapFee({ swapFee, protocolFee })),
         }),
         cosmosWasm: ({ sender, contract, executeMsg, funds }) => ({
           from: sender,

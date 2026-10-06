@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "6.1.3",
+  "version": "6.2.0",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -1957,6 +1957,11 @@
       "types": "./dist/swap/general/lifi/api/lifiSwapFeeChain.d.ts",
       "import": "./dist/swap/general/lifi/api/lifiSwapFeeChain.js",
       "default": "./dist/swap/general/lifi/api/lifiSwapFeeChain.js"
+    },
+    "./swap/general/lifi/api/lifiSwapFees": {
+      "types": "./dist/swap/general/lifi/api/lifiSwapFees.d.ts",
+      "import": "./dist/swap/general/lifi/api/lifiSwapFees.js",
+      "default": "./dist/swap/general/lifi/api/lifiSwapFees.js"
     },
     "./swap/general/lifi/config": {
       "types": "./dist/swap/general/lifi/config.d.ts",

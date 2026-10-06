@@ -17,6 +17,14 @@ import { SwapFees } from '../../swap-types'
 const isNativeDenominated = (fee: SwapFee, chain: Chain) =>
   fee.chain === chain && fee.id === undefined && fee.decimals === chainFeeCoin[chain].decimals
 
+const getNativeFeeAmount = (fee: SwapFee | undefined, chain: Chain): bigint =>
+  fee && isNativeDenominated(fee, chain) ? fee.amount : 0n
+
+const getProviderFees = (affiliate: bigint, protocol: bigint) => ({
+  affiliate: affiliate > 0n ? affiliate : undefined,
+  protocol: protocol > 0n ? protocol : undefined,
+})
+
 type EvmFeeRates = {
   getBaseFee: (chain: EvmChain) => Promise<bigint>
   getMaxPriorityFeePerGas: (chain: EvmChain) => Promise<bigint>
@@ -33,7 +41,9 @@ const defaultEvmFeeRates: EvmFeeRates = {
  * Native (THORChain/MayaChain) quotes carry an explicit affiliate amount.
  * General-swap quotes (EVM/Solana) carry an optional `affiliateFee`/`swapFee`
  * that previously got silently dropped (EVM) or folded into `total` without
- * ever populating `affiliate` (Solana) — see vultisig-sdk#1450.
+ * ever populating `affiliate` (Solana) — see vultisig-sdk#1450. The
+ * provider's own cut rides beside it as `protocolFee` and is reported apart
+ * from the affiliate fee, but counted in `total` all the same.
  */
 export const extractSwapFees = async (
   quoteData: SwapQuote['quote'],
@@ -54,22 +64,22 @@ export const extractSwapFees = async (
   // Solana has explicit fees in the quote
   if ('solana' in tx) {
     const networkFee = tx.solana.networkFee
-    const swapFee = tx.solana.swapFee
     // SwapFees is native-denominated. Only fold (and surface) a swap fee
     // that's priced in the chain's native token; a non-native swap fee has
     // no native-unit representation here and is left off both fields.
-    const nativeSwapFee = isNativeDenominated(swapFee, fromChain) ? swapFee.amount : 0n
+    const nativeSwapFee = getNativeFeeAmount(tx.solana.swapFee, fromChain)
+    const nativeProtocolFee = getNativeFeeAmount(tx.solana.protocolFee, fromChain)
     return {
       network: networkFee,
-      affiliate: nativeSwapFee > 0n ? nativeSwapFee : undefined,
-      total: networkFee + nativeSwapFee,
+      ...getProviderFees(nativeSwapFee, nativeProtocolFee),
+      total: networkFee + nativeSwapFee + nativeProtocolFee,
     }
   }
 
   // EVM - estimate from gasLimit × gas price
   if ('evm' in tx) {
-    const affiliateFee = tx.evm.affiliateFee
-    const nativeAffiliateFee = affiliateFee && isNativeDenominated(affiliateFee, fromChain) ? affiliateFee.amount : 0n
+    const nativeAffiliateFee = getNativeFeeAmount(tx.evm.affiliateFee, fromChain)
+    const nativeProtocolFee = getNativeFeeAmount(tx.evm.protocolFee, fromChain)
     let networkFee = 0n
     if (tx.evm.gasLimit && isChainOfKind(fromChain, 'evm')) {
       try {
@@ -82,8 +92,8 @@ export const extractSwapFees = async (
     }
     return {
       network: networkFee,
-      affiliate: nativeAffiliateFee > 0n ? nativeAffiliateFee : undefined,
-      total: networkFee + nativeAffiliateFee,
+      ...getProviderFees(nativeAffiliateFee, nativeProtocolFee),
+      total: networkFee + nativeAffiliateFee + nativeProtocolFee,
     }
   }
 
