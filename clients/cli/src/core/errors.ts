@@ -554,6 +554,31 @@ function wrongPasswordError(): AuthRequiredError {
   return new AuthRequiredError('Wrong vault password', 'Check the password and try again', [])
 }
 
+function classifyKnownInputShape(err: Error): InvalidInputError | undefined {
+  const seen = new Set<Error>()
+  let current: Error | undefined = err
+
+  while (current && !seen.has(current)) {
+    seen.add(current)
+    const message = current.message
+
+    if (/requires a destinationtag/i.test(message)) {
+      return new InvalidInputError(err.message, 'Pass --destination-tag <tag>')
+    }
+
+    const tokenNotFoundMatch = message.match(/token\s+"[^"]+"\s+not found on\s+([^.]+)\./i)
+    if (tokenNotFoundMatch) {
+      const chain = tokenNotFoundMatch[1].trim()
+      return new InvalidInputError(err.message, `Run "vultisig tokens ${chain} --add <address>" to track it`)
+    }
+
+    const originalError = (current as Error & { originalError?: unknown }).originalError
+    current = originalError instanceof Error ? originalError : undefined
+  }
+
+  return undefined
+}
+
 function classifyVaultError(err: VaultError): VsigError {
   // BalanceFetchFailed is a wrapper code — the real cause may be invalid input
   // (e.g. unknown chain). Unwrap originalError so we don't mis-tag validation
@@ -574,6 +599,9 @@ function classifyVaultError(err: VaultError): VsigError {
     case VaultErrorCode.InvalidAmount:
       return new InvalidInputError(err.message)
     case VaultErrorCode.InvalidConfig: {
+      const knownInput = classifyKnownInputShape(err)
+      if (knownInput) return knownInput
+
       // SDK overloads InvalidConfig for "Unknown chain" — detect and reclassify
       // so agents get INVALID_INPUT / non-retryable instead of generic USAGE.
       const lowerMsg = err.message.toLowerCase()
@@ -732,14 +760,8 @@ export function classifyError(err: Error): VsigError {
   if (msg.includes('unsupported state or unable to authenticate data') || msg.includes('unable to authenticate data')) {
     return wrongPasswordError()
   }
-  if (msg.includes('requires a destinationtag')) {
-    return new InvalidInputError(err.message, 'Pass --destination-tag <tag>')
-  }
-  const tokenNotFoundMatch = err.message.match(/token\s+"[^"]+"\s+not found on\s+([^.]+)\./i)
-  if (tokenNotFoundMatch) {
-    const chain = tokenNotFoundMatch[1].trim()
-    return new InvalidInputError(err.message, `Run "vultisig tokens ${chain} --add <address>" to track it`)
-  }
+  const knownInput = classifyKnownInputShape(err)
+  if (knownInput) return knownInput
   if (msg.includes('no vault found matching') || msg.includes('vault not found')) {
     return new VaultNotFoundError(err.message)
   }

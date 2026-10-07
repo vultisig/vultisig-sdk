@@ -68,9 +68,12 @@ describe('classifyError', () => {
     expect(result.context).toEqual({ address })
   })
 
-  it('B: classifies a missing XRP DestinationTag as INVALID_INPUT with a CLI hint', () => {
-    const message = 'Failed to prepare send transaction: XRP destination rExample requires a DestinationTag'
-    const result = classifyError(new Error(message))
+  it('B: classifies the wrapped XRP DestinationTag failure as INVALID_INPUT with a CLI hint', () => {
+    const destination = 'rEb8TK3gBgk5auZkwc6sHnwrGVJH8DuaLh'
+    const originalError = new Error(`XRP destination ${destination} requires a DestinationTag`)
+    const message = `Failed to prepare send transaction: ${originalError.message}`
+    const error = new VaultError(VaultErrorCode.InvalidConfig, message, originalError)
+    const result = classifyError(error)
     expect(result).toBeInstanceOf(InvalidInputError)
     expect(result).toMatchObject({
       code: 'INVALID_INPUT',
@@ -80,9 +83,11 @@ describe('classifyError', () => {
     })
   })
 
-  it('D: classifies an unknown token reference as INVALID_INPUT with a CLI command hint', () => {
-    const message = 'Token "0xdead" not found on Ethereum. Add it with vault.addToken().'
-    const result = classifyError(new Error(message))
+  it("D: classifies resolveTokenRef's InvalidConfig error as INVALID_INPUT with a CLI command hint", () => {
+    const message =
+      'Token "0xdead" not found on Ethereum. Pass a token symbol or contract address, or add it with vault.addToken().'
+    const error = new VaultError(VaultErrorCode.InvalidConfig, message)
+    const result = classifyError(error)
     expect(result).toBeInstanceOf(InvalidInputError)
     expect(result).toMatchObject({
       code: 'INVALID_INPUT',
