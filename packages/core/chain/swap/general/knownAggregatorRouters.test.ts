@@ -6,6 +6,7 @@ import { COW_VAULT_RELAYER_ADDRESS, cowSwapSupportedChains } from './cowswap/con
 import {
   assertKnownAggregatorRouter,
   assertKnownAggregatorRouterOnSigningPath,
+  assertSwapCoinIsSigningCoin,
   assertSwapKitDestinationMatchesTarget,
   logUnenforcedAggregatorDestination,
 } from './knownAggregatorRouters'
@@ -316,5 +317,26 @@ describe('SwapKit EVM source chains are fully covered by Blockaid — sdk#1458 r
     const uncoveredChains = evmSwapKitSourceChains.filter(chain => !(chain in blockaidEvmChain))
 
     expect(uncoveredChains).toEqual([])
+  })
+})
+
+describe('assertSwapCoinIsSigningCoin', () => {
+  const USDC = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+  const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+  const evmToken = (contractAddress: string) => ({ chain: Chain.Ethereum, isNativeToken: false, contractAddress })
+  const solanaToken = (contractAddress: string) => ({ chain: Chain.Solana, isNativeToken: false, contractAddress })
+
+  it('accepts an EVM contract that differs only in checksum case', () => {
+    expect(() => assertSwapCoinIsSigningCoin(evmToken(USDC.toLowerCase()), evmToken(USDC))).not.toThrow()
+  })
+
+  it('refuses a Solana mint that differs only in case', () => {
+    expect(() => assertSwapCoinIsSigningCoin(solanaToken(USDC_MINT.toLowerCase()), solanaToken(USDC_MINT))).toThrow(
+      /refusing to sign/
+    )
+  })
+
+  it('refuses a payload without a source coin', () => {
+    expect(() => assertSwapCoinIsSigningCoin(undefined, evmToken(USDC))).toThrow(/no source coin/)
   })
 })

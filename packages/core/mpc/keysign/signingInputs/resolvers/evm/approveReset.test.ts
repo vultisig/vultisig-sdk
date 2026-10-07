@@ -23,16 +23,18 @@ const ONE_INCH_V6_ROUTER = '0x111111125421ca6dc452d289314280a0f8842a65'
 const SENDER = '0x1234567890123456789012345678901234567890'
 const USDT = '0xdAC17F958D2ee523a2206206994597C13D831ec7'
 
+const coin = create(CoinSchema, {
+  chain: Chain.Ethereum,
+  ticker: 'USDT',
+  address: SENDER,
+  decimals: 6,
+  contractAddress: USDT,
+  isNativeToken: false,
+})
+
 const buildPayload = ({ resetAllowanceFirst }: { resetAllowanceFirst: boolean }) =>
   create(KeysignPayloadSchema, {
-    coin: create(CoinSchema, {
-      chain: Chain.Ethereum,
-      ticker: 'USDT',
-      address: SENDER,
-      decimals: 6,
-      contractAddress: USDT,
-      isNativeToken: false,
-    }),
+    coin,
     blockchainSpecific: {
       case: 'ethereumSpecific',
       value: create(EthereumSpecificSchema, {
@@ -51,6 +53,7 @@ const buildPayload = ({ resetAllowanceFirst }: { resetAllowanceFirst: boolean })
       case: 'oneinchSwapPayload',
       value: create(OneInchSwapPayloadSchema, {
         provider: '1inch',
+        fromCoin: coin,
         quote: create(OneInchQuoteSchema, {
           tx: create(OneInchTransactionSchema, {
             to: ONE_INCH_V6_ROUTER,

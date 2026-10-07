@@ -182,6 +182,40 @@ export function assertKnownAggregatorRouterOnSigningPath(provider: string, addre
   }
 }
 
+type SwapCoinIdentity = { chain: string; isNativeToken: boolean; contractAddress: string }
+
+const describeSwapCoin = ({ chain, isNativeToken, contractAddress }: SwapCoinIdentity) =>
+  isNativeToken ? `native ${chain}` : `${contractAddress} on ${chain}`
+
+// An EVM contract is hex, where case is only a checksum; every other chain's token ids (Solana mints,
+// Cosmos denoms, ...) are case-sensitive, so two that differ only in case are different tokens.
+const isSameContract = (chain: string, a: string, b: string) =>
+  isOneOf(chain, Object.values(EvmChain)) ? a.toLowerCase() === b.toLowerCase() : a === b
+
+/**
+ * Refuses an aggregator swap whose sold coin is missing or is not the coin being signed: same
+ * chain, same native/token kind and the same contract (case-insensitive on EVM only). The signer
+ * builds for the signing coin while the swap bounds and co-signer screens read the payload's coin.
+ * Mirrors `SwapPayload.requireSellsSigningCoin` on iOS and Android.
+ */
+export function assertSwapCoinIsSigningCoin(
+  fromCoin: SwapCoinIdentity | undefined,
+  signingCoin: SwapCoinIdentity
+): void {
+  if (!fromCoin) {
+    throw new Error('Swap payload carries no source coin — refusing to sign.')
+  }
+  if (
+    fromCoin.chain !== signingCoin.chain ||
+    fromCoin.isNativeToken !== signingCoin.isNativeToken ||
+    !isSameContract(signingCoin.chain, fromCoin.contractAddress, signingCoin.contractAddress)
+  ) {
+    throw new Error(
+      `Swap sells ${describeSwapCoin(fromCoin)} but signs ${describeSwapCoin(signingCoin)} — refusing to sign.`
+    )
+  }
+}
+
 /**
  * Independent reputation boundary shared by dynamic aggregator addresses. Only an explicit
  * Benign Blockaid verdict is accepted; unsupported chains, scan failures, Warning, and Malicious
