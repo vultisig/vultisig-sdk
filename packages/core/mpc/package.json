@@ -606,6 +606,11 @@
       "import": "./dist/keysign/suiCoinSelection.js",
       "default": "./dist/keysign/suiCoinSelection.js"
     },
+    "./keysign/swap/assertKeysignSwapKitAmounts": {
+      "types": "./dist/keysign/swap/assertKeysignSwapKitAmounts.d.ts",
+      "import": "./dist/keysign/swap/assertKeysignSwapKitAmounts.js",
+      "default": "./dist/keysign/swap/assertKeysignSwapKitAmounts.js"
+    },
     "./keysign/swap/assertNativeSwapReadyForBroadcast": {
       "types": "./dist/keysign/swap/assertNativeSwapReadyForBroadcast.d.ts",
       "import": "./dist/keysign/swap/assertNativeSwapReadyForBroadcast.js",
