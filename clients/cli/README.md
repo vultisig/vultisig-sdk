@@ -1296,9 +1296,10 @@ command, an unknown option, or a missing required option are written to stdout a
 with `code: "USAGE_ERROR"` and `exitCode: 1`. Table/TTY mode keeps Commander's plain-text usage errors. Help and
 version output remain unchanged and exit successfully in either mode.
 
-A wrong vault password is reported as `AUTH_REQUIRED` with exit code `2`, the message `Wrong vault password`,
-and a hint to check the password and try again. This applies consistently when importing, exporting, unlocking
-for send or swap, and verifying a password-protected vault.
+A wrong vault password or corrupted vault ciphertext is reported as `AUTH_REQUIRED` with exit code `2`, the
+message `Wrong vault password, or the vault data is corrupted`, and a hint to check the password and, if it is
+correct, re-import the vault from a backup. This applies consistently when importing, exporting, or unlocking
+for send or swap.
 
 ### Partial failures (`portfolio`)
 

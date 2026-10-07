@@ -70,6 +70,7 @@ import {
   cachePassword,
   createPasswordCallback,
   loadActiveVaultSafely,
+  parseSlippagePercent,
   resolveChainOrThrow,
   resolveOptionalChainOrThrow,
 } from './core'
@@ -132,6 +133,9 @@ function outputFormatBeforeParse(argv: string[]): 'json' | 'table' {
       index++
     } else if (arg.startsWith('--output=')) {
       const value = arg.slice('--output='.length)
+      if (value === 'json' || value === 'table') explicit = value
+    } else if (arg.startsWith('-o') && arg.length > 2) {
+      const value = arg.slice(2)
       if (value === 'json' || value === 'table') explicit = value
     }
   }
@@ -200,7 +204,9 @@ program
     const opts = thisCommand.opts()
     // --ci implies --output json --non-interactive --quiet
     if (opts.ci) {
-      const outputExplicit = process.argv.some(a => a === '--output' || a === '-o' || a.startsWith('--output='))
+      const outputExplicit = process.argv.some(
+        a => a === '--output' || a === '-o' || a.startsWith('--output=') || (a.startsWith('-o') && a.length > 2)
+      )
       opts.output = opts.output === 'table' && !outputExplicit ? 'json' : opts.output
       opts.quiet = true
       opts.nonInteractive = true
@@ -1401,10 +1407,7 @@ See also: swap-quote, swap-chains, balance`
       ) => {
         if (!amountStr && !options.max) throw new InvalidInputError('Provide an amount or use --max')
         if (amountStr && options.max) throw new Error('Cannot specify both amount and --max')
-        const slippage = Number(options.slippage)
-        if (!Number.isFinite(slippage) || slippage < 0 || slippage > 50) {
-          throw new InvalidInputError(`Invalid --slippage: "${options.slippage}"; expected a percentage from 0 to 50`)
-        }
+        const slippage = parseSlippagePercent(options.slippage ?? '1')
         const context = await init(program.opts().vault)
         // A decline throws ConfirmationRequiredError (exit 12) — see `send` above.
         await executeSwap(context, {
@@ -1975,7 +1978,11 @@ if (isInteractiveMode) {
     if (!(err instanceof CommanderError)) throw err
     if (err.exitCode === ExitCode.SUCCESS) process.exit(ExitCode.SUCCESS)
     if (isJsonOutput()) {
-      outputErrorJson(toErrorJson(new UsageError(err.message)))
+      const message =
+        err.code === 'commander.help' || err.message === '(outputHelp)'
+          ? 'Missing command. Run "vultisig --help" for usage.'
+          : err.message
+      outputErrorJson(toErrorJson(new UsageError(message)))
     }
     process.exit(err.exitCode)
   }

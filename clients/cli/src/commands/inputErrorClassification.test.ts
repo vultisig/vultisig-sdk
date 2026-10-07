@@ -74,7 +74,7 @@ describe('command-layer SDK input error classification', () => {
     expect(classifyError(error)).toBeInstanceOf(InvalidInputError)
   })
 
-  it("D: preserves and classifies resolveTokenRef's InvalidConfig error from vault.swap", async () => {
+  it("D: preserves and classifies VaultBase's unknown-token InvalidConfig from vault.swap", async () => {
     const sdkError = new VaultError(
       VaultErrorCode.InvalidConfig,
       'Token "0xdead" not found on Ethereum. Pass a token symbol or contract address, or add it with vault.addToken().'

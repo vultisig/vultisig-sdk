@@ -544,14 +544,18 @@ function isPermanentBroadcastInputError(err: VaultError): boolean {
 const INVALID_ADDRESS_RE = /invalid (?:receiver |recipient |destination )?address|bad address|malformed address/i
 
 function invalidAddressError(message: string): InvalidAddressError {
-  const receiverMatch = message.match(/invalid receiver address for chain [^:]+:\s*(.+)$/i)
+  const receiverMatch = message.match(/invalid receiver address(?: format)? for chain [^:]+:\s*(.+)$/i)
   const fallbackMatch = message.match(/(0x[a-fA-F0-9]+|bc1[a-z0-9]+|[13][a-km-zA-HJ-NP-Z1-9]+)/i)
   const address = receiverMatch?.[1]?.trim() || fallbackMatch?.[1]
   return new InvalidAddressError(message, undefined, undefined, address ? { address } : undefined)
 }
 
 function wrongPasswordError(): AuthRequiredError {
-  return new AuthRequiredError('Wrong vault password', 'Check the password and try again', [])
+  return new AuthRequiredError(
+    'Wrong vault password, or the vault data is corrupted',
+    'Check the password and try again; if it is correct, re-import the vault from a backup',
+    []
+  )
 }
 
 function classifyKnownInputShape(err: Error): InvalidInputError | undefined {
@@ -562,7 +566,7 @@ function classifyKnownInputShape(err: Error): InvalidInputError | undefined {
     seen.add(current)
     const message = current.message
 
-    if (/requires a destinationtag/i.test(message)) {
+    if (/^(?:Failed to prepare send transaction:\s*)?XRP destination \S+ requires a DestinationTag/i.test(message)) {
       return new InvalidInputError(err.message, 'Pass --destination-tag <tag>')
     }
 

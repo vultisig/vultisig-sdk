@@ -61,6 +61,7 @@ describe('classifyError', () => {
 
   it.each([
     ['Invalid receiver address for chain Bitcoin: iwMx271Cxwcfkm6SQBpxA', 'iwMx271Cxwcfkm6SQBpxA'],
+    ['Invalid receiver address format for chain Ethereum: not-an-address', 'not-an-address'],
     ['Invalid receiver address for chain MayaChain: maya149ekcexampleaddress', 'maya149ekcexampleaddress'],
   ])('J: preserves the full receiver in INVALID_ADDRESS context for %s', (message, address) => {
     const result = classifyError(new Error(message))
@@ -83,7 +84,17 @@ describe('classifyError', () => {
     })
   })
 
-  it("D: classifies resolveTokenRef's InvalidConfig error as INVALID_INPUT with a CLI command hint", () => {
+  it('B: keeps a wrapped transient XRP DestinationTag lookup failure as UsageError', () => {
+    const destination = 'rEb8TK3gBgk5auZkwc6sHnwrGVJH8DuaLh'
+    const originalError = new Error(`Unable to verify whether XRP destination ${destination} requires a DestinationTag`)
+    const message = `Failed to prepare send transaction: ${originalError.message}`
+    const result = classifyError(new VaultError(VaultErrorCode.InvalidConfig, message, originalError))
+
+    expect(result).toBeInstanceOf(UsageError)
+    expect(result).not.toBeInstanceOf(InvalidInputError)
+  })
+
+  it("D: classifies VaultBase's unknown-token InvalidConfig as INVALID_INPUT with a CLI command hint", () => {
     const message =
       'Token "0xdead" not found on Ethereum. Pass a token symbol or contract address, or add it with vault.addToken().'
     const error = new VaultError(VaultErrorCode.InvalidConfig, message)
@@ -97,14 +108,14 @@ describe('classifyError', () => {
     })
   })
 
-  it('G: classifies the raw AES-GCM authentication failure as a wrong vault password', () => {
+  it('G: classifies the raw AES-GCM authentication failure without overclaiming the cause', () => {
     const result = classifyError(new Error('Unsupported state or unable to authenticate data'))
     expect(result).toBeInstanceOf(AuthRequiredError)
     expect(result).toMatchObject({
       code: 'AUTH_REQUIRED',
       exitCode: ExitCode.AUTH_REQUIRED,
-      message: 'Wrong vault password',
-      hint: 'Check the password and try again',
+      message: 'Wrong vault password, or the vault data is corrupted',
+      hint: 'Check the password and try again; if it is correct, re-import the vault from a backup',
     })
   })
 
@@ -506,12 +517,12 @@ describe('classifyError with VaultImportError', () => {
     expect(result.exitCode).toBe(ExitCode.AUTH_REQUIRED)
   })
 
-  it('maps INVALID_PASSWORD to a clear wrong-password AuthRequiredError', () => {
+  it('maps INVALID_PASSWORD to the shared password-or-corruption AuthRequiredError', () => {
     const err = new VaultImportError(VaultImportErrorCode.INVALID_PASSWORD, 'wrong password')
     const result = classifyError(err)
     expect(result).toBeInstanceOf(AuthRequiredError)
-    expect(result.message).toBe('Wrong vault password')
-    expect(result.hint).toBe('Check the password and try again')
+    expect(result.message).toBe('Wrong vault password, or the vault data is corrupted')
+    expect(result.hint).toBe('Check the password and try again; if it is correct, re-import the vault from a backup')
   })
 
   it('maps INVALID_FILE_FORMAT to InvalidInputError', () => {

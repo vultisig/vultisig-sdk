@@ -51,7 +51,7 @@ function expectError(result: ReturnType<typeof runCli>, code: string, exitCode: 
   return envelope
 }
 
-function encryptedVaultFixture(password: string): string {
+function encryptedVaultFixture(password: string, tamper = false): string {
   const ecdsaPublicKey = `02${'11'.repeat(32)}`
   const eddsaPublicKey = '22'.repeat(32)
   const vault = create(VaultSchema, {
@@ -68,12 +68,17 @@ function encryptedVaultFixture(password: string): string {
     ],
   })
   const encrypted = encryptWithAesGcm({ key: password, value: Buffer.from(toBinary(VaultSchema, vault)) })
+  if (tamper) encrypted[encrypted.length - 1] ^= 1
   const container = create(VaultContainerSchema, {
     version: 1n,
     vault: encrypted.toString('base64'),
     isEncrypted: true,
   })
   return Buffer.from(toBinary(VaultContainerSchema, container)).toString('base64')
+}
+
+function tamperedEncryptedVaultFixture(password: string): string {
+  return encryptedVaultFixture(password, true)
 }
 
 describe('CLI input error hygiene', { timeout: TIMEOUT }, () => {
@@ -138,10 +143,31 @@ describe('CLI input error hygiene', { timeout: TIMEOUT }, () => {
     expect(result.stderr).toContain("required option '--chain <chain>' not specified")
   })
 
+  it.each([
+    ['explicit JSON', ['--output', 'json']],
+    ['piped default', []],
+  ])('F: reports a missing command clearly in %s mode', (_mode, args) => {
+    const envelope = expectError(runCli(args), 'USAGE_ERROR', 1)
+    expect(envelope.error.message).toBe('Missing command. Run "vultisig --help" for usage.')
+  })
+
+  it('F: prints help for a missing command in table mode', () => {
+    const result = runCli(['--output', 'table'])
+    expect(result.status, result.stdout).toBe(1)
+    expect(result.stderr).toContain('Usage: vultisig [options] [command]')
+    expect(result.stderr).not.toContain('(outputHelp)')
+  })
+
   it.each([['--help'], ['--version']])('F: keeps %s successful in JSON mode', flag => {
     const result = runCli(['--output', 'json', flag])
     expect(result.status, result.stderr).toBe(0)
     expect(result.stdout).not.toBe('')
+    expect(result.stderr).toBe('')
+  })
+
+  it('accepts the attached -ojson short option', () => {
+    const result = runCli(['--output', 'table', '-ojson', 'tx-status', '--tx-hash', 'abc'])
+    expectError(result, 'USAGE_ERROR', 1)
     expect(result.stderr).toBe('')
   })
 
@@ -159,8 +185,27 @@ describe('CLI input error hygiene', { timeout: TIMEOUT }, () => {
       )
       const envelope = expectError(result, 'AUTH_REQUIRED', 2)
       expect(envelope.error).toMatchObject({
-        message: 'Wrong vault password',
-        hint: 'Check the password and try again',
+        message: 'Wrong vault password, or the vault data is corrupted',
+        hint: 'Check the password and try again; if it is correct, re-import the vault from a backup',
+      })
+    } finally {
+      rmSync(configDir, { recursive: true, force: true })
+    }
+  })
+
+  it('G: gives the exact password-or-corruption copy for tampered ciphertext', () => {
+    const configDir = mkdtempSync(path.join(tmpdir(), 'vultisig-tampered-vault-'))
+    try {
+      const fixture = path.join(configDir, 'tampered.vult')
+      writeFileSync(fixture, tamperedEncryptedVaultFixture('correct-password'))
+      const envelope = expectError(
+        runCli(['--output', 'json', 'import', fixture, '--password', 'correct-password'], configDir),
+        'AUTH_REQUIRED',
+        2
+      )
+      expect(envelope.error).toMatchObject({
+        message: 'Wrong vault password, or the vault data is corrupted',
+        hint: 'Check the password and try again; if it is correct, re-import the vault from a backup',
       })
     } finally {
       rmSync(configDir, { recursive: true, force: true })
