@@ -10,6 +10,7 @@ import {
   assertSwapKitAddressReputation,
   assertSwapKitDestinationMatchesTarget,
   getBoundSwapKitErc20DepositRecipient,
+  screenSwapKitDepositRecipient,
 } from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
 import { getSwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
 import {
@@ -396,8 +397,14 @@ const buildEvmTx = async ({
 
   // The Blockaid verdict is independent of SwapKit's response. Require an explicit
   // Benign result for both the transaction destination and any distinct approval
-  // spender before either address can enter a signable quote.
-  const reputationChecks = [assertSwapKitAddressReputation(evmTx.to, chain, 'transaction destination')]
+  // spender before either address can enter a signable quote. A deposit recipient is advisory:
+  // only a Malicious verdict refuses it.
+  const reputationChecks: Promise<unknown>[] = [
+    assertSwapKitAddressReputation(evmTx.to, chain, 'transaction destination'),
+  ]
+  if (depositRecipient) {
+    reputationChecks.push(screenSwapKitDepositRecipient(depositRecipient, chain))
+  }
   if (approvalAddress && approvalAddress.toLowerCase() !== evmTx.to.toLowerCase()) {
     reputationChecks.push(assertSwapKitAddressReputation(approvalAddress, chain, 'approval spender'))
   }

@@ -163,7 +163,7 @@ describe('getEvmSigningInputs — sdk#1457 provider-string spoofing guard, end t
 
 // A SwapKit ERC-20 deposit is addressed to the sold token, so screening tx.to screens only the
 // token. The co-signer must bind the calldata itself: exactly transfer(recipient, fromAmount) on
-// the sold token.
+// the sold token, with the decoded recipient screened.
 describe('getEvmSigningInputs — SwapKit ERC-20 deposit binding on the signing-input path', () => {
   const DEPOSIT = '0x1f01af4e50082e2982ba5041707efddd3aa4c121'
   const ATTACKER = '0x2222222222222222222222222222222222222222'
@@ -194,7 +194,27 @@ describe('getEvmSigningInputs — SwapKit ERC-20 deposit binding on the signing-
     walletCore = await initWasm()
   })
 
-  it('signs a transfer of exactly fromAmount on the sold token', async () => {
+  it('signs a transfer of exactly fromAmount on the sold token after screening the decoded recipient', async () => {
+    const data = transferData(DEPOSIT, AMOUNT)
+
+    const inputs = await getEvmSigningInputs({ keysignPayload: buildDepositPayload({ data }), walletCore })
+
+    expect(inputs[0]?.toAddress).toBe(USDC)
+    expect(mockScanAddressWithBlockaid).toHaveBeenCalledWith(DEPOSIT, 'ethereum')
+  })
+
+  it.each([
+    ['a Warning verdict', async () => ({ resultType: 'Warning' as const, features: ['new_address'] })],
+    [
+      'a failed scan',
+      async () => {
+        throw new Error('Blockaid rate limited')
+      },
+    ],
+  ])('still signs when the deposit recipient gets %s', async (_, scanDeposit) => {
+    mockScanAddressWithBlockaid.mockImplementation(async address =>
+      address.toLowerCase() === DEPOSIT ? scanDeposit() : { resultType: 'Benign', features: ['trusted'] }
+    )
     const data = transferData(DEPOSIT, AMOUNT)
 
     const inputs = await getEvmSigningInputs({ keysignPayload: buildDepositPayload({ data }), walletCore })
@@ -203,6 +223,7 @@ describe('getEvmSigningInputs — SwapKit ERC-20 deposit binding on the signing-
   })
 
   it.each([
+    ['a recipient Blockaid flags Malicious', { data: transferData(ATTACKER, AMOUNT) }, /Malicious Blockaid verdict/],
     ['an amount other than fromAmount', { data: transferData(DEPOSIT, AMOUNT + 1n) }, /not the sold amount/],
     [
       'a transfer on a token other than the sold one',
@@ -215,6 +236,12 @@ describe('getEvmSigningInputs — SwapKit ERC-20 deposit binding on the signing-
       /not exactly an ERC-20 transfer/,
     ],
   ])('throws for a SwapKit token transfer carrying %s', async (_, fixture, error) => {
+    mockScanAddressWithBlockaid.mockImplementation(async address =>
+      address.toLowerCase() === ATTACKER
+        ? { resultType: 'Malicious', features: ['drainer'] }
+        : { resultType: 'Benign', features: ['trusted'] }
+    )
+
     await expect(getEvmSigningInputs({ keysignPayload: buildDepositPayload(fixture), walletCore })).rejects.toThrow(
       error
     )
