@@ -15,6 +15,7 @@ import { BuildKeysignPayloadError } from '../error'
 import { getFeeAmount } from '../fee'
 import { getCosmosChainSpecific } from '../signingInputs/resolvers/cosmos/chainSpecific'
 import { getKeysignCoin } from '../utils/getKeysignCoin'
+import { assertNearSendAffordable } from './near'
 
 type RefineKeysignAmountInput = {
   keysignPayload: KeysignPayload
@@ -51,6 +52,11 @@ export const refineKeysignAmount = async (input: RefineKeysignAmountInput) => {
   }
 
   if (isOneOf(coin.chain, Object.values(UtxoBasedChain)) || coin.chain === Chain.Ton) {
+    return input.keysignPayload
+  }
+
+  if (coin.chain === Chain.Near) {
+    await assertNearSendAffordable({ keysignPayload: input.keysignPayload, balance: input.balance, coin })
     return input.keysignPayload
   }
 
