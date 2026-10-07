@@ -9,6 +9,7 @@ import { getBittensorFeeAmount } from './resolvers/bittensor'
 import { getCardanoFeeAmount } from './resolvers/cardano'
 import { getCosmosFeeAmount } from './resolvers/cosmos'
 import { getEvmFeeAmount } from './resolvers/evm'
+import { getNearFeeAmount } from './resolvers/near'
 import { getPolkadotFeeAmount } from './resolvers/polkadot'
 import { getQbtcFeeAmount } from './resolvers/qbtc'
 import { getRippleFeeAmount } from './resolvers/ripple'
@@ -37,6 +38,7 @@ const resolvers: Record<ChainKind, FeeAmountResolver> = {
   ton: tonFeeAmountResolver,
   utxo: getUtxoFeeAmount,
   tron: getTronFeeAmount,
+  near: getNearFeeAmount,
 }
 
 export const getFeeAmount = async (input: Input): Promise<bigint> => {

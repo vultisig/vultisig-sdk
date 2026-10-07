@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   cardano: vi.fn(),
   cosmos: vi.fn(),
   evm: vi.fn(),
+  near: vi.fn(),
   polkadot: vi.fn(),
   qbtc: vi.fn(),
   ripple: vi.fn(),
@@ -20,6 +21,7 @@ vi.mock('./resolvers/bittensor', () => ({ broadcastBittensorTx: mocks.bittensor 
 vi.mock('./resolvers/cardano', () => ({ broadcastCardanoTx: mocks.cardano }))
 vi.mock('./resolvers/cosmos', () => ({ broadcastCosmosTx: mocks.cosmos }))
 vi.mock('./resolvers/evm', () => ({ broadcastEvmTx: mocks.evm }))
+vi.mock('./resolvers/near', () => ({ broadcastNearTx: mocks.near }))
 vi.mock('./resolvers/polkadot', () => ({ broadcastPolkadotTx: mocks.polkadot }))
 vi.mock('./resolvers/qbtc', () => ({ broadcastQbtcTx: mocks.qbtc }))
 vi.mock('./resolvers/ripple', () => ({ broadcastRippleTx: mocks.ripple }))
@@ -41,6 +43,7 @@ const cases = {
   cardano: { chain: OtherChain.Cardano, resolver: mocks.cardano },
   cosmos: { chain: CosmosChain.Cosmos, resolver: mocks.cosmos },
   evm: { chain: EvmChain.Ethereum, resolver: mocks.evm },
+  near: { chain: OtherChain.Near, resolver: mocks.near },
   polkadot: { chain: OtherChain.Polkadot, resolver: mocks.polkadot },
   qbtc: { chain: OtherChain.QBTC, resolver: mocks.qbtc },
   ripple: { chain: OtherChain.Ripple, resolver: mocks.ripple },

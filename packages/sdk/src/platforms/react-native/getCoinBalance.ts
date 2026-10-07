@@ -17,6 +17,8 @@ const resolverLoaders: Record<ChainKind, () => Promise<BalanceResolver>> = {
     import('@vultisig/core-chain/coin/balance/resolvers/cosmos').then(m => m.getCosmosCoinBalance as BalanceResolver),
   evm: () =>
     import('@vultisig/core-chain/coin/balance/resolvers/evm').then(m => m.getEvmCoinBalance as BalanceResolver),
+  near: () =>
+    import('@vultisig/core-chain/coin/balance/resolvers/near').then(m => m.getNearCoinBalance as BalanceResolver),
   polkadot: () =>
     import('@vultisig/core-chain/coin/balance/resolvers/polkadot').then(
       m => m.getPolkadotCoinBalance as BalanceResolver
