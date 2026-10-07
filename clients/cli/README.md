@@ -1291,6 +1291,15 @@ Configuration is stored in `~/.vultisig/`:
 > truth) and are covered by a doc-lint test that fails if this table drifts from the code. Run
 > `vultisig --help` for the same list.
 
+In JSON output mode (`--output json`, `--ci`, or piped stdout), Commander usage failures such as an unknown
+command, an unknown option, or a missing required option are written to stdout as the standard error envelope
+with `code: "USAGE_ERROR"` and `exitCode: 1`. Table/TTY mode keeps Commander's plain-text usage errors. Help and
+version output remain unchanged and exit successfully in either mode.
+
+A wrong vault password is reported as `AUTH_REQUIRED` with exit code `2`, the message `Wrong vault password`,
+and a hint to check the password and try again. This applies consistently when importing, exporting, unlocking
+for send or swap, and verifying a password-protected vault.
+
 ### Partial failures (`portfolio`)
 
 The `portfolio` command fetches every chain independently, so one unreachable chain no longer
