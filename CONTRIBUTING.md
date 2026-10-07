@@ -164,14 +164,12 @@ typecheck, tests, and Knip do not catch directly:
   `.config/secretlintrc.json` and `.config/secretlintignore`.
 - `markdownlint-cli2` and `markdown-link-check` catch broken Markdown syntax and
   local documentation links while ignoring external URLs to keep CI stable.
-- `yarn quality:audit` evaluates high and critical dependency advisories against
-  the same 14-day release-age policy as `yarn deps:release-age`. Advisories are
-  `ACTIONABLE` when a fixed release is old enough to install, `DEFERRED` when no
-  fix is published, or `DEFERRED` until the exact date a young fix clears the
-  release-age gate. Only actionable advisories fail by default; `--strict` or
-  `NPM_AUDIT_STRICT=1` makes any advisory fail. Deferred advisories should be
-  upgraded when their fixes clear the gate. Audit-ignore entries are reserved
-  for risks the team has explicitly accepted, not cooldown-blocked fixes.
+- `yarn quality:audit` applies the 14-day cooldown to every advisory's fix,
+  direct or transitive, for consistency. Transitive fixes may be installed
+  earlier through `resolutions` at the maintainers' discretion.
+  The gate does not read dependents' ranges, so a cross-major-only fix is
+  `ACTIONABLE` with a major-upgrade note for maintainers to decide whether to
+  ignore the advisory or add a resolution.
 
 Run the full local suite with:
 

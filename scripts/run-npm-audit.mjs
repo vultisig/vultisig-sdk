@@ -5,20 +5,13 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import semver from "semver";
 
-const auditArgs = [
-  "npm",
-  "audit",
-  "--recursive",
-  "--all",
-  "--severity",
-  "high",
-  "--json",
-];
+const auditArgs = ["npm", "audit", "--recursive", "--all", "--severity", "high", "--json"];
 const maxAttempts = 3;
 const retryDelaysMs = [5_000, 15_000];
 const transientErrorPattern =
   /RequestError|Timeout awaiting 'socket'|ECONNRESET|ETIMEDOUT|EAI_AGAIN|fetch failed|socket hang up/i;
 const defaultMinimumAgeDays = 14;
+const defaultRegistryTimeoutMs = 30_000;
 const dayMs = 24 * 60 * 60 * 1000;
 
 const args = process.argv.slice(2);
@@ -34,18 +27,15 @@ const minimumAgeDays = Number(
     process.env.DEPENDENCY_RELEASE_MIN_AGE_DAYS ??
     defaultMinimumAgeDays,
 );
-const now = new Date(
-  getArgValue("--now") ?? process.env.DEPENDENCY_RELEASE_AGE_NOW ?? Date.now(),
-);
+const now = new Date(getArgValue("--now") ?? process.env.DEPENDENCY_RELEASE_AGE_NOW ?? Date.now());
 const registryUrl = (
   getArgValue("--registry") ??
   process.env.NPM_REGISTRY_URL ??
   "https://registry.npmjs.org"
 ).replace(/\/+$/, "");
+const registryTimeoutMs = Number(getArgValue("--registry-timeout-ms") ?? defaultRegistryTimeoutMs);
 const auditFile = getArgValue("--audit-file");
-const metadataFile =
-  getArgValue("--metadata-file") ??
-  process.env.DEPENDENCY_RELEASE_METADATA_FILE;
+const metadataFile = getArgValue("--metadata-file") ?? process.env.DEPENDENCY_RELEASE_METADATA_FILE;
 const strict = args.includes("--strict") || process.env.NPM_AUDIT_STRICT === "1";
 
 if (!Number.isFinite(minimumAgeDays) || minimumAgeDays < 0) {
@@ -54,31 +44,62 @@ if (!Number.isFinite(minimumAgeDays) || minimumAgeDays < 0) {
 if (Number.isNaN(now.getTime())) {
   throw new Error(`Invalid --now value: ${now}`);
 }
+if (!Number.isFinite(registryTimeoutMs) || registryTimeoutMs <= 0) {
+  throw new Error(`Invalid --registry-timeout-ms value: ${registryTimeoutMs}`);
+}
 
 const sleep = (milliseconds) =>
   new Promise((resolveSleep) => setTimeout(resolveSleep, milliseconds));
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
-const metadataFixture = metadataFile
-  ? readJson(resolve(process.cwd(), metadataFile))
-  : undefined;
+const metadataFixture = metadataFile ? readJson(resolve(process.cwd(), metadataFile)) : undefined;
+
+const validatePackageMetadata = (metadata) => {
+  const versions = metadata?.versions;
+  const time = metadata?.time;
+  if (
+    typeof metadata !== "object" ||
+    metadata === null ||
+    Array.isArray(metadata) ||
+    typeof versions !== "object" ||
+    versions === null ||
+    Array.isArray(versions) ||
+    Object.keys(versions).length === 0 ||
+    typeof time !== "object" ||
+    time === null ||
+    Array.isArray(time)
+  ) {
+    throw new Error("malformed registry metadata");
+  }
+  return metadata;
+};
 
 const fetchPackageMetadata = async (name) => {
   if (metadataFixture) {
     const metadata = metadataFixture[name];
     if (!metadata) throw new Error(`metadata fixture missing package ${name}`);
-    return metadata;
+    return validatePackageMetadata(metadata);
   }
 
   const encodedName = name.startsWith("@")
     ? `@${encodeURIComponent(name.slice(1)).replace("%2F", "%2f")}`
     : encodeURIComponent(name);
-  const response = await fetch(`${registryUrl}/${encodedName}`);
+  let response;
+  try {
+    response = await fetch(`${registryUrl}/${encodedName}`, {
+      signal: AbortSignal.timeout(registryTimeoutMs),
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === "TimeoutError") {
+      throw new Error(`npm metadata lookup timed out after ${registryTimeoutMs}ms`);
+    }
+    throw error;
+  }
   if (!response.ok) {
     throw new Error(
       `npm metadata lookup failed for ${name}: ${response.status} ${response.statusText}`,
     );
   }
-  return response.json();
+  return validatePackageMetadata(await response.json());
 };
 
 const parseAuditOutput = (output) =>
@@ -104,9 +125,7 @@ const loadAdvisories = async () => {
     const stderr = result.stderr ?? "";
     const output = `${stdout}\n${stderr}`;
     const canRetry =
-      result.status !== 0 &&
-      attempt < maxAttempts &&
-      transientErrorPattern.test(output);
+      result.status !== 0 && attempt < maxAttempts && transientErrorPattern.test(output);
 
     if (canRetry) {
       const delayMs = retryDelaysMs[attempt - 1];
@@ -131,9 +150,7 @@ const loadAdvisories = async () => {
 
     if (result.status !== 0 && advisories.length === 0) {
       process.stderr.write(stderr);
-      throw new Error(
-        `npm audit command failed with exit code ${result.status ?? 1}`,
-      );
+      throw new Error(`npm audit command failed with exit code ${result.status ?? 1}`);
     }
 
     return advisories;
@@ -144,10 +161,22 @@ const loadAdvisories = async () => {
 
 const formatDate = (date) => date.toISOString().slice(0, 10);
 
-const findEarliestFix = (advisory, metadata) => {
-  const vulnerableRange = advisory.children?.["Vulnerable Versions"];
+const normalizeVulnerableRange = (advisory) => {
+  const rawRange = advisory.children?.["Vulnerable Versions"];
+  if (typeof rawRange !== "string") {
+    throw new Error("audit result is missing vulnerable or installed versions");
+  }
+  const normalizedRange = rawRange.trim().replace(/,\s+/g, " ");
+  const vulnerableRange = normalizedRange ? semver.validRange(normalizedRange) : null;
+  if (!vulnerableRange) {
+    throw new Error(`unparseable vulnerable range "${rawRange}"`);
+  }
+  return vulnerableRange;
+};
+
+const findLowestFix = (advisory, metadata, vulnerableRange) => {
   const treeVersions = advisory.children?.["Tree Versions"];
-  if (typeof vulnerableRange !== "string" || !Array.isArray(treeVersions)) {
+  if (!Array.isArray(treeVersions)) {
     throw new Error("audit result is missing vulnerable or installed versions");
   }
 
@@ -164,28 +193,29 @@ const findEarliestFix = (advisory, metadata) => {
     return (
       validVersion &&
       semver.gt(validVersion, lowestInstalled) &&
-      !semver.satisfies(validVersion, vulnerableRange) &&
+      !semver.satisfies(validVersion, vulnerableRange, {
+        includePrerelease: allowPrerelease,
+      }) &&
       (allowPrerelease || semver.prerelease(validVersion) === null)
     );
   });
 
   if (candidates.length === 0) return { lowestInstalled };
 
-  const publishedCandidates = candidates.map((version) => {
-    const publishedAt = metadata?.time?.[version];
-    const publishedDate = new Date(publishedAt);
-    if (!publishedAt || Number.isNaN(publishedDate.getTime())) {
-      throw new Error(`registry metadata has no valid publish time for ${version}`);
-    }
-    return { version, publishedDate };
-  });
-
-  publishedCandidates.sort(
-    (a, b) =>
-      a.publishedDate.getTime() - b.publishedDate.getTime() ||
-      semver.compare(a.version, b.version),
-  );
-  return { lowestInstalled, earliestFix: publishedCandidates[0] };
+  candidates.sort(semver.compare);
+  const version = candidates[0];
+  const publishedAt = metadata.time[version];
+  const publishedDate = new Date(publishedAt);
+  if (!publishedAt || Number.isNaN(publishedDate.getTime())) {
+    throw new Error(`registry metadata has no valid publish time for ${version}`);
+  }
+  return {
+    lowestInstalled,
+    lowestFix: {
+      version,
+      publishedDate,
+    },
+  };
 };
 
 const classifyAdvisory = async (advisory, metadataByPackage) => {
@@ -201,13 +231,14 @@ const classifyAdvisory = async (advisory, metadataByPackage) => {
     if (typeof packageName !== "string" || !packageName) {
       throw new Error("audit result is missing the package name");
     }
+    const vulnerableRange = normalizeVulnerableRange(advisory);
     if (!metadataByPackage.has(packageName)) {
       metadataByPackage.set(packageName, await fetchPackageMetadata(packageName));
     }
     const metadata = metadataByPackage.get(packageName);
-    const { lowestInstalled, earliestFix } = findEarliestFix(advisory, metadata);
+    const { lowestInstalled, lowestFix } = findLowestFix(advisory, metadata, vulnerableRange);
 
-    if (!earliestFix) {
+    if (!lowestFix) {
       return {
         ...base,
         installed: lowestInstalled,
@@ -216,15 +247,21 @@ const classifyAdvisory = async (advisory, metadataByPackage) => {
       };
     }
 
-    const clearsAt = new Date(
-      earliestFix.publishedDate.getTime() + minimumAgeDays * dayMs,
-    );
+    const clearsAt = new Date(lowestFix.publishedDate.getTime() + minimumAgeDays * dayMs);
+    if (semver.major(lowestFix.version) !== semver.major(lowestInstalled)) {
+      return {
+        ...base,
+        installed: lowestInstalled,
+        actionable: true,
+        classification: `ACTIONABLE (fix ${lowestFix.version} requires a major upgrade)`,
+      };
+    }
     if (now.getTime() < clearsAt.getTime()) {
       return {
         ...base,
         installed: lowestInstalled,
         actionable: false,
-        classification: `DEFERRED (fix ${earliestFix.version} clears the release-age gate on ${formatDate(clearsAt)})`,
+        classification: `DEFERRED (fix ${lowestFix.version} clears the release-age gate on ${formatDate(clearsAt)})`,
       };
     }
 
@@ -232,7 +269,7 @@ const classifyAdvisory = async (advisory, metadataByPackage) => {
       ...base,
       installed: lowestInstalled,
       actionable: true,
-      classification: `ACTIONABLE (fix ${earliestFix.version} installable since ${formatDate(clearsAt)})`,
+      classification: `ACTIONABLE (fix ${lowestFix.version} installable since ${formatDate(clearsAt)})`,
     };
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
@@ -259,8 +296,7 @@ const printTable = (classifications) => {
   const widths = headers.map((header, index) =>
     Math.max(header.length, ...rows.map((row) => String(row[index]).length)),
   );
-  const render = (row) =>
-    row.map((cell, index) => String(cell).padEnd(widths[index])).join(" | ");
+  const render = (row) => row.map((cell, index) => String(cell).padEnd(widths[index])).join(" | ");
 
   process.stdout.write(
     [
@@ -305,7 +341,8 @@ const main = async () => {
         "",
         "BLOCKING: ACTIONABLE npm audit advisories:",
         ...actionable.map(
-          (item) => `- ${item.packageName}: ${item.classification}${item.url ? ` (${item.url})` : ""}`,
+          (item) =>
+            `- ${item.packageName}: ${item.classification}${item.url ? ` (${item.url})` : ""}`,
         ),
         "",
         "quality:audit failed on this lockfile (absolute, not vs origin/main).",
@@ -325,8 +362,6 @@ const main = async () => {
 };
 
 main().catch((error) => {
-  process.stderr.write(
-    `${error instanceof Error ? error.message : String(error)}\n`,
-  );
+  process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
   process.exitCode = 1;
 });
