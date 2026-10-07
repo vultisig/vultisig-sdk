@@ -318,6 +318,18 @@ describe('getSwapKitQuote', () => {
       const quote = await quoteErc20Deposit({ data: transferData(DEPOSIT, AMOUNT) })
 
       expect(quote.tx).toMatchObject({ evm: { to: USDT, data: transferData(DEPOSIT, AMOUNT), value: '0' } })
+      const screened = mockScanAddressWithBlockaid.mock.calls.map(([address]) => address.toLowerCase())
+      expect(screened).toEqual(expect.arrayContaining([USDT.toLowerCase(), DEPOSIT.toLowerCase()]))
+    })
+
+    it('returns the quote when Blockaid only warns about the deposit recipient', async () => {
+      mockScanAddressWithBlockaid.mockImplementation(async address =>
+        address.toLowerCase() === DEPOSIT.toLowerCase()
+          ? { resultType: 'Warning', features: ['new_address'] }
+          : { resultType: 'Benign', features: ['trusted'] }
+      )
+
+      await expect(quoteErc20Deposit({ data: transferData(DEPOSIT, AMOUNT) })).resolves.toBeDefined()
     })
 
     it.each([

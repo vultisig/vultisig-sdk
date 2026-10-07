@@ -17,6 +17,7 @@ import {
   assertKnownAggregatorRouterOnSigningPath,
   assertLifiApprovalAddress,
   assertSwapKitAddressReputation,
+  screenSwapKitDepositRecipient,
 } from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
 
 import { getBlockchainSpecificValue } from '../../../chainSpecific/KeysignChainSpecific'
@@ -114,8 +115,12 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
     // `to` must ALSO fail closed (the helper rejects it as unrecognized), not be silently skipped.
     if (provider === 'swapkit') {
       await assertSwapKitAddressReputation(quote?.tx?.to ?? '', chain, 'transaction destination')
-      // Throws unless a deposit is exactly `transfer(recipient, fromAmount)` on the sold token.
-      getKeysignSwapKitDepositRecipient(keysignPayload)
+      // Throws unless a deposit is exactly `transfer(recipient, fromAmount)` on the sold token. Its
+      // recipient is refused only on a Malicious verdict; the review screen shows any other.
+      const depositRecipient = getKeysignSwapKitDepositRecipient(keysignPayload)
+      if (depositRecipient) {
+        await screenSwapKitDepositRecipient(depositRecipient, chain)
+      }
     } else {
       assertKnownAggregatorRouterOnSigningPath(provider, quote?.tx?.to ?? '', chain)
     }
