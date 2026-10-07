@@ -44,6 +44,11 @@ export type GeneralSwapTx =
          * spender when present, falling back to `to` only when absent.
          */
         approvalAddress?: string
+        /**
+         * The input ERC-20 moves by a direct `transfer` to the provider's deposit
+         * address (SwapKit NEAR Intents), so no allowance and no approve leg.
+         */
+        erc20TransferDeposit?: true
       }
     }
   | {
