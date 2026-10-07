@@ -164,9 +164,14 @@ typecheck, tests, and Knip do not catch directly:
   `.config/secretlintrc.json` and `.config/secretlintignore`.
 - `markdownlint-cli2` and `markdown-link-check` catch broken Markdown syntax and
   local documentation links while ignoring external URLs to keep CI stable.
-- `yarn npm audit --severity critical` blocks newly introduced critical
-  dependency advisories; current high-severity advisories are tracked as a
-  follow-up cleanup task.
+- `yarn quality:audit` evaluates high and critical dependency advisories against
+  the same 14-day release-age policy as `yarn deps:release-age`. Advisories are
+  `ACTIONABLE` when a fixed release is old enough to install, `DEFERRED` when no
+  fix is published, or `DEFERRED` until the exact date a young fix clears the
+  release-age gate. Only actionable advisories fail by default; `--strict` or
+  `NPM_AUDIT_STRICT=1` makes any advisory fail. Deferred advisories should be
+  upgraded when their fixes clear the gate. Audit-ignore entries are reserved
+  for risks the team has explicitly accepted, not cooldown-blocked fixes.
 
 Run the full local suite with:
 
