@@ -360,8 +360,10 @@ vultisig swap ethereum bitcoin 0.1 -y --password mypassword
 
 Swap quotes and previews show your VULT discount tier when affiliate fees are applied. See `vultisig discount` for tier details.
 
-Below-minimum swap quotes exit with code 4 (`INVALID_INPUT`). JSON output includes `error.context.minimum` only when
-the minimum was computed from THORChain's inbound/outbound economics and the submitted amount is below it:
+Below-minimum swaps exit with code 4 (`INVALID_INPUT`). JSON output includes `error.context.minimum` when either a
+swap quote fails and the submitted amount is below the THORChain-computed minimum, or `swap --max` is refused because
+the spendable balance is below the native protocol's recommended minimum (THORChain or MayaChain, from the quote's
+`recommended_min_amount_in`):
 
 ```json
 {
@@ -380,8 +382,8 @@ the minimum was computed from THORChain's inbound/outbound economics and the sub
 }
 ```
 
-The context is omitted when a provider's own error text wins, even if that text contains a number, and when no
-THORChain route exists.
+The context is omitted when a provider's own error text wins, including numeric provider text, and when no native
+route exists.
 
 ### Advanced Operations
 
