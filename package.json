@@ -43,7 +43,7 @@
     "typecheck:example-browser": "node scripts/check-agent-toolchain.mjs --typescript-only && yarn workspace @vultisig/examples-shared typecheck && yarn workspace @vultisig/example-browser typecheck",
     "test": "yarn worktree:check && yarn test:scripts && yarn workspace @vultisig/sdk test && yarn test:rujira && yarn test:core && yarn workspace @vultisig/cli test && yarn workspace @vultisig/mcp test && yarn test:electron",
     "test:coverage": "yarn workspace @vultisig/sdk test:coverage",
-    "test:scripts": "node --test 'scripts/**/*.test.mjs'",
+    "test:scripts": "node --test scripts/**/*.test.mjs",
     "test:all": "yarn test:unit; yarn test:integration; yarn test:e2e",
     "test:unit": "yarn workspace @vultisig/sdk test:unit",
     "test:integration": "yarn workspace @vultisig/sdk test:integration",
