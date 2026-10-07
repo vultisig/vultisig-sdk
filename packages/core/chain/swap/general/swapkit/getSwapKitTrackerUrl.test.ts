@@ -19,6 +19,7 @@ describe('getSwapKitTrackerUrl', () => {
     [Chain.Tron, '728126428'],
     [Chain.Cardano, 'cardano'],
     [Chain.Ton, 'ton'],
+    [Chain.Near, 'near'],
     [Chain.Solana, 'solana'],
     [Chain.Bitcoin, 'bitcoin'],
     [Chain.BitcoinCash, 'bitcoincash'],
@@ -38,7 +39,7 @@ describe('getSwapKitTrackerUrl', () => {
   })
 
   it('keeps the map and the test matrix exhaustive', () => {
-    expect(Object.keys(swapKitTrackerChainIds)).toHaveLength(26)
+    expect(Object.keys(swapKitTrackerChainIds)).toHaveLength(27)
   })
 
   it('encodes the hash without altering it', () => {
