@@ -8,7 +8,7 @@ import { getKeysignSwapPayload } from './getKeysignSwapPayload'
 const MAX_UINT256 = (1n << 256n) - 1n
 
 // Decimal only, like the iOS and Android co-signers: BigInt also reads '' and '0x0' as zero.
-const parseSwapKitUint256 = (value: string, label: string): bigint => {
+export const parseSwapKitUint256 = (value: string, label: string): bigint => {
   const parsed = parseNonNegativeBigInt(value)
   if (parsed > MAX_UINT256) {
     throw new Error(`SwapKit ${label} ${value} does not fit in uint256 — refusing to sign.`)

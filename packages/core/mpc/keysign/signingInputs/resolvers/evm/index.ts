@@ -20,6 +20,7 @@ import {
 } from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
 
 import { getBlockchainSpecificValue } from '../../../chainSpecific/KeysignChainSpecific'
+import { getKeysignSwapKitDepositRecipient } from '../../../swap/getKeysignSwapKitDepositRecipient'
 import { getKeysignSwapPayload } from '../../../swap/getKeysignSwapPayload'
 import { KeysignSwapPayload } from '../../../swap/KeysignSwapPayload'
 import { toTwAddress } from '../../../tw/toTwAddress'
@@ -105,12 +106,16 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
   // above (sdk#1358 review follow-up; sdk#1457 extended it to cowswap, whose spender IS its tx.to).
   // LI.FI and SwapKit distinct spenders are independently reputation-checked above. The legacy
   // `''` provider remains unenforced.
+  //
+  // SwapKit ERC-20 deposit: tx.to is the token, so the calldata itself is bound to the sold token and amount.
   if (swapPayload && 'general' in swapPayload) {
     const { provider, quote } = swapPayload.general
     // Pass the raw (possibly empty) destination unconditionally: for an enforced provider an empty
     // `to` must ALSO fail closed (the helper rejects it as unrecognized), not be silently skipped.
     if (provider === 'swapkit') {
       await assertSwapKitAddressReputation(quote?.tx?.to ?? '', chain, 'transaction destination')
+      // Throws unless a deposit is exactly `transfer(recipient, fromAmount)` on the sold token.
+      getKeysignSwapKitDepositRecipient(keysignPayload)
     } else {
       assertKnownAggregatorRouterOnSigningPath(provider, quote?.tx?.to ?? '', chain)
     }
