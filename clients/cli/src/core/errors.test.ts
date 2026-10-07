@@ -59,6 +59,66 @@ describe('classifyError', () => {
     expect(result.exitCode).toBe(ExitCode.INVALID_INPUT)
   })
 
+  it.each([
+    ['Invalid receiver address for chain Bitcoin: iwMx271Cxwcfkm6SQBpxA', 'iwMx271Cxwcfkm6SQBpxA'],
+    ['Invalid receiver address format for chain Ethereum: not-an-address', 'not-an-address'],
+    ['Invalid receiver address for chain MayaChain: maya149ekcexampleaddress', 'maya149ekcexampleaddress'],
+  ])('J: preserves the full receiver in INVALID_ADDRESS context for %s', (message, address) => {
+    const result = classifyError(new Error(message))
+    expect(result).toBeInstanceOf(InvalidAddressError)
+    expect(result.context).toEqual({ address })
+  })
+
+  it('B: classifies the wrapped XRP DestinationTag failure as INVALID_INPUT with a CLI hint', () => {
+    const destination = 'rEb8TK3gBgk5auZkwc6sHnwrGVJH8DuaLh'
+    const originalError = new Error(`XRP destination ${destination} requires a DestinationTag`)
+    const message = `Failed to prepare send transaction: ${originalError.message}`
+    const error = new VaultError(VaultErrorCode.InvalidConfig, message, originalError)
+    const result = classifyError(error)
+    expect(result).toBeInstanceOf(InvalidInputError)
+    expect(result).toMatchObject({
+      code: 'INVALID_INPUT',
+      exitCode: ExitCode.INVALID_INPUT,
+      message,
+      hint: 'Pass --destination-tag <tag>',
+    })
+  })
+
+  it('B: keeps a wrapped transient XRP DestinationTag lookup failure as UsageError', () => {
+    const destination = 'rEb8TK3gBgk5auZkwc6sHnwrGVJH8DuaLh'
+    const originalError = new Error(`Unable to verify whether XRP destination ${destination} requires a DestinationTag`)
+    const message = `Failed to prepare send transaction: ${originalError.message}`
+    const result = classifyError(new VaultError(VaultErrorCode.InvalidConfig, message, originalError))
+
+    expect(result).toBeInstanceOf(UsageError)
+    expect(result).not.toBeInstanceOf(InvalidInputError)
+  })
+
+  it("D: classifies VaultBase's unknown-token InvalidConfig as INVALID_INPUT with a CLI command hint", () => {
+    const message =
+      'Token "0xdead" not found on Ethereum. Pass a token symbol or contract address, or add it with vault.addToken().'
+    const error = new VaultError(VaultErrorCode.InvalidConfig, message)
+    const result = classifyError(error)
+    expect(result).toBeInstanceOf(InvalidInputError)
+    expect(result).toMatchObject({
+      code: 'INVALID_INPUT',
+      exitCode: ExitCode.INVALID_INPUT,
+      message,
+      hint: 'Run "vultisig tokens Ethereum --add <address>" to track it',
+    })
+  })
+
+  it('G: classifies the raw AES-GCM authentication failure without overclaiming the cause', () => {
+    const result = classifyError(new Error('Unsupported state or unable to authenticate data'))
+    expect(result).toBeInstanceOf(AuthRequiredError)
+    expect(result).toMatchObject({
+      code: 'AUTH_REQUIRED',
+      exitCode: ExitCode.AUTH_REQUIRED,
+      message: 'Wrong vault password, or the vault data is corrupted',
+      hint: 'Check the password and try again; if it is correct, re-import the vault from a backup',
+    })
+  })
+
   it('classifies bad address errors', () => {
     const result = classifyError(new Error('Bad address provided'))
     expect(result).toBeInstanceOf(InvalidAddressError)
@@ -457,29 +517,31 @@ describe('classifyError with VaultImportError', () => {
     expect(result.exitCode).toBe(ExitCode.AUTH_REQUIRED)
   })
 
-  it('maps INVALID_PASSWORD to AuthRequiredError', () => {
+  it('maps INVALID_PASSWORD to the shared password-or-corruption AuthRequiredError', () => {
     const err = new VaultImportError(VaultImportErrorCode.INVALID_PASSWORD, 'wrong password')
     const result = classifyError(err)
     expect(result).toBeInstanceOf(AuthRequiredError)
+    expect(result.message).toBe('Wrong vault password, or the vault data is corrupted')
+    expect(result.hint).toBe('Check the password and try again; if it is correct, re-import the vault from a backup')
   })
 
-  it('maps INVALID_FILE_FORMAT to UsageError', () => {
+  it('maps INVALID_FILE_FORMAT to InvalidInputError', () => {
     const err = new VaultImportError(VaultImportErrorCode.INVALID_FILE_FORMAT, 'bad file')
     const result = classifyError(err)
-    expect(result).toBeInstanceOf(UsageError)
-    expect(result.exitCode).toBe(ExitCode.USAGE)
+    expect(result).toBeInstanceOf(InvalidInputError)
+    expect(result.exitCode).toBe(ExitCode.INVALID_INPUT)
   })
 
-  it('maps CORRUPTED_DATA to UsageError', () => {
+  it('maps CORRUPTED_DATA to InvalidInputError', () => {
     const err = new VaultImportError(VaultImportErrorCode.CORRUPTED_DATA, 'corrupted')
     const result = classifyError(err)
-    expect(result).toBeInstanceOf(UsageError)
+    expect(result).toBeInstanceOf(InvalidInputError)
   })
 
-  it('maps UNSUPPORTED_FORMAT to UsageError', () => {
+  it('maps UNSUPPORTED_FORMAT to InvalidInputError', () => {
     const err = new VaultImportError(VaultImportErrorCode.UNSUPPORTED_FORMAT, 'unsupported')
     const result = classifyError(err)
-    expect(result).toBeInstanceOf(UsageError)
+    expect(result).toBeInstanceOf(InvalidInputError)
   })
 
   it('gives duplicate imports a CLI-native replacement instruction', () => {

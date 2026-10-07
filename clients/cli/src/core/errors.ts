@@ -124,11 +124,8 @@ export class AuthRequiredError extends VsigError {
   readonly exitCode = ExitCode.AUTH_REQUIRED
   readonly code = 'AUTH_REQUIRED'
 
-  constructor(message?: string) {
-    super(message ?? 'Authentication required. Set up vault credentials.', 'Ensure your vault is unlocked', [
-      'vsig vaults',
-      'vsig create',
-    ])
+  constructor(message?: string, hint = 'Ensure your vault is unlocked', suggestions = ['vsig vaults', 'vsig create']) {
+    super(message ?? 'Authentication required. Set up vault credentials.', hint, suggestions)
   }
 }
 
@@ -547,8 +544,43 @@ function isPermanentBroadcastInputError(err: VaultError): boolean {
 const INVALID_ADDRESS_RE = /invalid (?:receiver |recipient |destination )?address|bad address|malformed address/i
 
 function invalidAddressError(message: string): InvalidAddressError {
-  const addrMatch = message.match(/(0x[a-fA-F0-9]+|bc1[a-z0-9]+|[13][a-km-zA-HJ-NP-Z1-9]+)/i)
-  return new InvalidAddressError(message, undefined, undefined, addrMatch ? { address: addrMatch[1] } : undefined)
+  const receiverMatch = message.match(/invalid receiver address(?: format)? for chain [^:]+:\s*(.+)$/i)
+  const fallbackMatch = message.match(/(0x[a-fA-F0-9]+|bc1[a-z0-9]+|[13][a-km-zA-HJ-NP-Z1-9]+)/i)
+  const address = receiverMatch?.[1]?.trim() || fallbackMatch?.[1]
+  return new InvalidAddressError(message, undefined, undefined, address ? { address } : undefined)
+}
+
+function wrongPasswordError(): AuthRequiredError {
+  return new AuthRequiredError(
+    'Wrong vault password, or the vault data is corrupted',
+    'Check the password and try again; if it is correct, re-import the vault from a backup',
+    []
+  )
+}
+
+function classifyKnownInputShape(err: Error): InvalidInputError | undefined {
+  const seen = new Set<Error>()
+  let current: Error | undefined = err
+
+  while (current && !seen.has(current)) {
+    seen.add(current)
+    const message = current.message
+
+    if (/^(?:Failed to prepare send transaction:\s*)?XRP destination \S+ requires a DestinationTag/i.test(message)) {
+      return new InvalidInputError(err.message, 'Pass --destination-tag <tag>')
+    }
+
+    const tokenNotFoundMatch = message.match(/token\s+"[^"]+"\s+not found on\s+([^.]+)\./i)
+    if (tokenNotFoundMatch) {
+      const chain = tokenNotFoundMatch[1].trim()
+      return new InvalidInputError(err.message, `Run "vultisig tokens ${chain} --add <address>" to track it`)
+    }
+
+    const originalError = (current as Error & { originalError?: unknown }).originalError
+    current = originalError instanceof Error ? originalError : undefined
+  }
+
+  return undefined
 }
 
 function classifyVaultError(err: VaultError): VsigError {
@@ -571,6 +603,9 @@ function classifyVaultError(err: VaultError): VsigError {
     case VaultErrorCode.InvalidAmount:
       return new InvalidInputError(err.message)
     case VaultErrorCode.InvalidConfig: {
+      const knownInput = classifyKnownInputShape(err)
+      if (knownInput) return knownInput
+
       // SDK overloads InvalidConfig for "Unknown chain" — detect and reclassify
       // so agents get INVALID_INPUT / non-retryable instead of generic USAGE.
       const lowerMsg = err.message.toLowerCase()
@@ -593,7 +628,7 @@ function classifyVaultError(err: VaultError): VsigError {
       // documented code. Unify on 4.
       if (INVALID_ADDRESS_RE.test(lowerMsg)) return invalidAddressError(err.message)
       if (lowerMsg.includes('failed to unlock vault') || lowerMsg.includes('invalid password')) {
-        return new AuthRequiredError(err.message)
+        return wrongPasswordError()
       }
       return new UsageError(err.message)
     }
@@ -699,8 +734,14 @@ export function classifyError(err: Error): VsigError {
   if (err instanceof VaultImportError) {
     switch (err.code) {
       case VaultImportErrorCode.PASSWORD_REQUIRED:
-      case VaultImportErrorCode.INVALID_PASSWORD:
         return new AuthRequiredError(err.message)
+      case VaultImportErrorCode.INVALID_PASSWORD:
+        return wrongPasswordError()
+      case VaultImportErrorCode.INVALID_FILE_FORMAT:
+      case VaultImportErrorCode.CORRUPTED_DATA:
+      case VaultImportErrorCode.UNSUPPORTED_FORMAT:
+      case VaultImportErrorCode.INCOMPATIBLE_VAULT:
+        return new InvalidInputError(err.message)
       case VaultImportErrorCode.DUPLICATE_VAULT:
         return new UsageError('Vault already exists. Re-run the import with --replace to replace a compatible share.')
       case VaultImportErrorCode.STALE_SHARE:
@@ -720,6 +761,11 @@ export function classifyError(err: Error): VsigError {
 
   // Best-effort heuristic for errors that escape SDK typing — may misclassify
   const msg = err.message.toLowerCase()
+  if (msg.includes('unsupported state or unable to authenticate data') || msg.includes('unable to authenticate data')) {
+    return wrongPasswordError()
+  }
+  const knownInput = classifyKnownInputShape(err)
+  if (knownInput) return knownInput
   if (msg.includes('no vault found matching') || msg.includes('vault not found')) {
     return new VaultNotFoundError(err.message)
   }
