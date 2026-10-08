@@ -323,8 +323,20 @@ describe('SwapKit EVM source chains are fully covered by Blockaid — sdk#1458 r
 describe('assertSwapCoinIsSigningCoin', () => {
   const USDC = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
   const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
-  const evmToken = (contractAddress: string) => ({ chain: Chain.Ethereum, isNativeToken: false, contractAddress })
-  const solanaToken = (contractAddress: string) => ({ chain: Chain.Solana, isNativeToken: false, contractAddress })
+  const evmToken = (contractAddress: string) => ({
+    chain: Chain.Ethereum,
+    isNativeToken: false,
+    contractAddress,
+    ticker: 'USDC',
+    decimals: 6,
+  })
+  const solanaToken = (contractAddress: string) => ({
+    chain: Chain.Solana,
+    isNativeToken: false,
+    contractAddress,
+    ticker: 'USDC',
+    decimals: 6,
+  })
 
   it('accepts an EVM contract that differs only in checksum case', () => {
     expect(() => assertSwapCoinIsSigningCoin(evmToken(USDC.toLowerCase()), evmToken(USDC))).not.toThrow()
