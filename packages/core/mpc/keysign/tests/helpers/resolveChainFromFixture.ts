@@ -41,6 +41,7 @@ const aliases: Record<string, Chain> = {
 
   solana: Chain.Solana,
   ripple: Chain.Ripple,
+  near: Chain.Near,
   ton: Chain.Ton,
   tron: Chain.Tron,
   polkadot: Chain.Polkadot,

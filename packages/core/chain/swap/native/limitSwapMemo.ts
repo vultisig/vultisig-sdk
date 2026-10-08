@@ -337,6 +337,7 @@ const limitSwapDestinationValidators: Record<Chain, LimitSwapDestinationValidato
   [Chain.Tron]: address =>
     new RegExp(`^T[${base58AddressChars}]{33}$`).test(address) && isBase58CheckPayload(address, [0x41], 20),
   [Chain.Cardano]: undefined,
+  [Chain.Near]: undefined,
   [Chain.QBTC]: undefined,
 }
 

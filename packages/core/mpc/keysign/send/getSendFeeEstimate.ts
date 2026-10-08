@@ -17,10 +17,21 @@ const smallestJettonTransfer = 1n
  * depend on the amount, so the fee is quoted for the smallest transfer instead
  * of the caller's; the send itself is still built with the real amount.
  */
-const toFeeQuoteInput = (input: BuildSendKeysignPayloadInput): BuildSendKeysignPayloadInput =>
+const isTonGaslessJetton = (input: BuildSendKeysignPayloadInput) =>
   input.tonGasless && input.coin.chain === Chain.Ton && !isFeeCoin(input.coin)
-    ? { ...input, amount: smallestJettonTransfer, sendMaxAmount: false }
-    : input
+
+/**
+ * NEAR's gas reservation depends on the receiver, not the amount, and a NEAR
+ * send that cannot afford amount + reservation + storage is refused rather
+ * than clamped — so a full-balance estimate would always be refused.
+ */
+const smallestNearTransfer = 1n
+
+const toFeeQuoteInput = (input: BuildSendKeysignPayloadInput): BuildSendKeysignPayloadInput => {
+  if (isTonGaslessJetton(input)) return { ...input, amount: smallestJettonTransfer, sendMaxAmount: false }
+  if (input.coin.chain === Chain.Near) return { ...input, amount: smallestNearTransfer, sendMaxAmount: false }
+  return input
+}
 
 export const getSendFeeEstimate = async (input: BuildSendKeysignPayloadInput): Promise<bigint> => {
   const keysignPayload = await buildSendKeysignPayload(toFeeQuoteInput(input))

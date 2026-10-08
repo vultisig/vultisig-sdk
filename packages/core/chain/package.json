@@ -705,6 +705,46 @@
       "import": "./dist/chains/evm/tx/tw/toEvmTxData.js",
       "default": "./dist/chains/evm/tx/tw/toEvmTxData.js"
     },
+    "./chains/near/accountId": {
+      "types": "./dist/chains/near/accountId.d.ts",
+      "import": "./dist/chains/near/accountId.js",
+      "default": "./dist/chains/near/accountId.js"
+    },
+    "./chains/near/api": {
+      "types": "./dist/chains/near/api.d.ts",
+      "import": "./dist/chains/near/api.js",
+      "default": "./dist/chains/near/api.js"
+    },
+    "./chains/near/fees": {
+      "types": "./dist/chains/near/fees.d.ts",
+      "import": "./dist/chains/near/fees.js",
+      "default": "./dist/chains/near/fees.js"
+    },
+    "./chains/near/rpc": {
+      "types": "./dist/chains/near/rpc.d.ts",
+      "import": "./dist/chains/near/rpc.js",
+      "default": "./dist/chains/near/rpc.js"
+    },
+    "./chains/near/sendLimits": {
+      "types": "./dist/chains/near/sendLimits.d.ts",
+      "import": "./dist/chains/near/sendLimits.js",
+      "default": "./dist/chains/near/sendLimits.js"
+    },
+    "./chains/near/signedTransaction": {
+      "types": "./dist/chains/near/signedTransaction.d.ts",
+      "import": "./dist/chains/near/signedTransaction.js",
+      "default": "./dist/chains/near/signedTransaction.js"
+    },
+    "./chains/near/txOutcome": {
+      "types": "./dist/chains/near/txOutcome.d.ts",
+      "import": "./dist/chains/near/txOutcome.js",
+      "default": "./dist/chains/near/txOutcome.js"
+    },
+    "./chains/near/uint": {
+      "types": "./dist/chains/near/uint.d.ts",
+      "import": "./dist/chains/near/uint.js",
+      "default": "./dist/chains/near/uint.js"
+    },
     "./chains/polkadot/client": {
       "types": "./dist/chains/polkadot/client.d.ts",
       "import": "./dist/chains/polkadot/client.js",
@@ -1269,6 +1309,11 @@
       "types": "./dist/coin/balance/resolvers/evm.d.ts",
       "import": "./dist/coin/balance/resolvers/evm.js",
       "default": "./dist/coin/balance/resolvers/evm.js"
+    },
+    "./coin/balance/resolvers/near": {
+      "types": "./dist/coin/balance/resolvers/near.d.ts",
+      "import": "./dist/coin/balance/resolvers/near.js",
+      "default": "./dist/coin/balance/resolvers/near.js"
     },
     "./coin/balance/resolvers/polkadot": {
       "types": "./dist/coin/balance/resolvers/polkadot.d.ts",
@@ -2258,6 +2303,11 @@
       "import": "./dist/tx/broadcast/resolvers/evm.js",
       "default": "./dist/tx/broadcast/resolvers/evm.js"
     },
+    "./tx/broadcast/resolvers/near": {
+      "types": "./dist/tx/broadcast/resolvers/near.d.ts",
+      "import": "./dist/tx/broadcast/resolvers/near.js",
+      "default": "./dist/tx/broadcast/resolvers/near.js"
+    },
     "./tx/broadcast/resolvers/polkadot": {
       "types": "./dist/tx/broadcast/resolvers/polkadot.d.ts",
       "import": "./dist/tx/broadcast/resolvers/polkadot.js",
@@ -2393,6 +2443,11 @@
       "import": "./dist/tx/hash/resolvers/evm.js",
       "default": "./dist/tx/hash/resolvers/evm.js"
     },
+    "./tx/hash/resolvers/near": {
+      "types": "./dist/tx/hash/resolvers/near.d.ts",
+      "import": "./dist/tx/hash/resolvers/near.js",
+      "default": "./dist/tx/hash/resolvers/near.js"
+    },
     "./tx/hash/resolvers/polkadot": {
       "types": "./dist/tx/hash/resolvers/polkadot.d.ts",
       "import": "./dist/tx/hash/resolvers/polkadot.js",
@@ -2462,6 +2517,11 @@
       "types": "./dist/tx/status/resolvers/evm.d.ts",
       "import": "./dist/tx/status/resolvers/evm.js",
       "default": "./dist/tx/status/resolvers/evm.js"
+    },
+    "./tx/status/resolvers/near": {
+      "types": "./dist/tx/status/resolvers/near.d.ts",
+      "import": "./dist/tx/status/resolvers/near.js",
+      "default": "./dist/tx/status/resolvers/near.js"
     },
     "./tx/status/resolvers/polkadot": {
       "types": "./dist/tx/status/resolvers/polkadot.d.ts",

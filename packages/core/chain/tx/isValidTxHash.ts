@@ -24,6 +24,7 @@ const validators: Record<ChainKind, (hash: string) => boolean> = {
   qbtc: h => HEX_64.test(h),
   // base58-encoded 32-byte digest (~43-44 chars).
   sui: h => base58(40, 48).test(h),
+  near: h => base58(40, 48).test(h),
   // base58-encoded 64-byte signature (~87-88 chars).
   solana: h => base58(80, 90).test(h),
   ton: h => HEX_64.test(h) || TON_BASE64.test(h),

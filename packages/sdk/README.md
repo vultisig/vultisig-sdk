@@ -8,7 +8,7 @@ A TypeScript SDK for secure multi-party computation (MPC) and blockchain operati
 - 🏦 **Fast Vault** - Server-assisted 2-of-2 vault for quick setup and instant signing
 - 🛡️ **Secure Vault** - Multi-device N-of-M threshold signing with mobile device pairing
 - 📲 **QR Code Pairing** - Pair with Vultisig mobile apps (iOS/Android) for vault creation and signing
-- 🌐 **Multi-Chain Support** - Bitcoin, Ethereum, Solana, THORChain, and 37 blockchains
+- 🌐 **Multi-Chain Support** - Bitcoin, Ethereum, Solana, THORChain, and 38 blockchains
 - 🔗 **Address Derivation** - Generate addresses across multiple blockchain networks
 - 📱 **Cross-Platform** - Works in browsers, Node.js, and Electron (React Native coming soon)
 - 🔒 **Vault Management** - Import, export, encrypt, and decrypt vault keyshares
@@ -444,7 +444,7 @@ Companion helpers: `prepareSwapTxFromKeys`, `prepareContractCallTxFromKeys`, `pr
 
 ## Supported Blockchains
 
-The SDK supports address derivation and operations for 37 blockchain networks:
+The SDK supports address derivation and operations for 38 blockchain networks:
 
 **EVM Chains**
 
@@ -502,6 +502,9 @@ The SDK supports address derivation and operations for 37 blockchain networks:
 | Ripple    | `Ripple`    | XRP Ledger       |
 | Tron      | `Tron`      | TRON mainnet     |
 | Cardano   | `Cardano`   | Cardano mainnet  |
+| NEAR      | `Near`      | NEAR mainnet     |
+
+NEAR supports native NEAR transfers only; NEP-141 tokens are not supported.
 
 Use `Chain` values in SDK calls: `Chain.Bitcoin`, `Chain.Ethereum`, etc.
 
