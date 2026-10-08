@@ -11,7 +11,7 @@ import { BuildKeysignPayloadError } from '../error'
 type AssertNearSendAffordableInput = {
   keysignPayload: KeysignPayload
   balance: bigint
-  coin: Pick<AccountCoin, 'address' | 'ticker' | 'decimals'>
+  coin: Pick<AccountCoin, 'address'>
 }
 
 /**
@@ -42,8 +42,7 @@ export const assertNearSendAffordable = async ({ keysignPayload, balance, coin }
   if (required > balance) {
     throw new BuildKeysignPayloadError(
       'not-enough-funds',
-      'Not enough NEAR: the amount plus the gas reservation and storage reserve exceeds the available balance',
-      { required, available: balance, ticker: coin.ticker, decimals: coin.decimals, includesNetworkCosts: true }
+      'Not enough NEAR: the amount plus the gas reservation and storage reserve exceeds the available balance'
     )
   }
 }
