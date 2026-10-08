@@ -317,7 +317,9 @@ describe('getSwapKitQuote', () => {
     it('accepts a transfer of exactly the sold amount to the screened deposit address', async () => {
       const quote = await quoteErc20Deposit({ data: transferData(DEPOSIT, AMOUNT) })
 
-      expect(quote.tx).toMatchObject({ evm: { to: USDT, data: transferData(DEPOSIT, AMOUNT), value: '0' } })
+      expect(quote.tx).toMatchObject({
+        evm: { to: USDT, data: transferData(DEPOSIT, AMOUNT), value: '0', erc20TransferDeposit: true },
+      })
     })
 
     it.each([

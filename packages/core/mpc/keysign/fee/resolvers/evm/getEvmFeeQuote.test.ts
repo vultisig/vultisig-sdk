@@ -210,6 +210,73 @@ describe('getEvmFeeQuote', () => {
     })
   })
 
+  describe('ERC-20 deposit transfer swap', () => {
+    // A SwapKit NEAR-Intents deposit: the swap calls the sold token itself with
+    // `transfer(deposit, amount)`, which needs no allowance and costs a transfer.
+    const deposit = '4444444444444444444444444444444444444444'
+    const depositTransferData = `0xa9059cbb${deposit.padStart(64, '0')}${(20_000_000).toString(16).padStart(64, '0')}`
+
+    beforeEach(() => {
+      mocks.getKeysignCoin.mockReturnValue(makeCoin(EvmChain.Ethereum, token))
+      mocks.getKeysignSwapPayload.mockReturnValue({
+        general: {
+          provider: 'swapkit',
+          fromCoin: { chain: EvmChain.Ethereum, contractAddress: token },
+          fromAmount: '20000000',
+          quote: { tx: { to: token, data: depositTransferData, value: '0' } },
+        },
+      })
+    })
+
+    it('simulates the transfer and raises it to the ERC-20 floor instead of the swap default', async () => {
+      mocks.client.estimateGas.mockResolvedValueOnce(48_000n)
+
+      const quote = await getEvmFeeQuote({ keysignPayload: emptyPayload })
+
+      expect(quote.gasLimit).toBe(120_000n)
+      expect(mocks.client.estimateGas).toHaveBeenCalledWith(
+        expect.objectContaining({ to: token, data: depositTransferData, value: 0n })
+      )
+    })
+
+    it('signs a simulation above the floor and ignores the route gas figure', async () => {
+      mocks.client.estimateGas.mockResolvedValueOnce(150_000n)
+      expect((await getEvmFeeQuote({ keysignPayload: emptyPayload })).gasLimit).toBe(150_000n)
+
+      mocks.client.estimateGas.mockResolvedValueOnce(48_000n)
+      const routed = await getEvmFeeQuote({ keysignPayload: emptyPayload, thirdPartyGasLimitEstimation: 900_000n })
+      expect(routed.gasLimit).toBe(120_000n)
+    })
+
+    it('falls back to the ERC-20 floor, and says so, when the transfer cannot be simulated', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      mocks.client.estimateGas.mockRejectedValueOnce(new Error('execution reverted'))
+
+      const quote = await getEvmFeeQuote({ keysignPayload: emptyPayload })
+
+      expect(quote.gasLimit).toBe(120_000n)
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('did not simulate'), expect.any(Error))
+      warn.mockRestore()
+    })
+
+    it('prices the base fee with transfer headroom', async () => {
+      const quote = await getEvmFeeQuote({ keysignPayload: emptyPayload })
+
+      expect(quote.baseFeePerGas).toBe(120n)
+    })
+
+    it('keeps the swap default for a token route that is not exactly a transfer', async () => {
+      mocks.getKeysignSwapPayload.mockReturnValue({
+        general: { quote: { tx: { to: token, data: `${depositTransferData}00`, value: '0' } } },
+      })
+
+      const quote = await getEvmFeeQuote({ keysignPayload: emptyPayload, thirdPartyGasLimitEstimation: 300_000n })
+
+      expect(quote.gasLimit).toBe(900_000n)
+      expect(mocks.client.estimateGas).not.toHaveBeenCalled()
+    })
+  })
+
   describe('router deposit', () => {
     beforeEach(() => {
       mocks.getKeysignSwapPayload.mockReturnValue(nativeSwapPayload)
