@@ -212,9 +212,9 @@ const findSwapCoinMismatch = (fromCoin: SwapCoinIdentity, signingCoin: SwapCoinI
 }
 
 /**
- * Refuses an aggregator swap whose sold coin is missing or is not the coin being signed: same
- * chain, same native/token kind, the same contract (case-insensitive on EVM only), ticker and
- * decimals. The signer builds for the signing coin while the swap bounds and co-signer screens read
+ * Refuses a swap (every provider, THORChain and Maya included) whose sold coin is missing or is not
+ * the coin being signed: same chain, same native/token kind, the same contract (case-insensitive on
+ * EVM only), ticker and decimals. The signer builds for the signing coin while the swap bounds and co-signer screens read
  * the payload's coin, including the ticker and decimals they render the amount with.
  * Mirrors `SwapPayload.requireSellsSigningCoin` on iOS and Android.
  */
