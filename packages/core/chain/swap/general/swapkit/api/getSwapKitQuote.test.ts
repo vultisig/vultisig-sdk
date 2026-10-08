@@ -47,6 +47,10 @@ const makeBitcoinPsbtPayload = (outputValue: bigint) => {
   return { sourceAddress: p2wpkh.address!, targetAddress: BTC_RECIPIENT_ADDRESS, payload: psbt.toBuffer() }
 }
 
+// Shapes from a live `/v3/swap` NEAR.NEAR -> ETH.ETH response (2026-10-01).
+const NEAR_SOURCE = 'd75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a'
+const NEAR_DEPOSIT = '14397e36f7e4f15599c8ba31baac5fbfd79b415729428ba70d94aee794a4f27f'
+
 type TransferSourceFixture = readonly [string, SwapKitSourceChain, string, number, string, string]
 
 const transferSourceFixtures: TransferSourceFixture[] = [
@@ -57,6 +61,7 @@ const transferSourceFixtures: TransferSourceFixture[] = [
   ['Zcash', Chain.Zcash, 'ZEC', 8, 't1Source', 't1Deposit'],
   ['Tron', Chain.Tron, 'TRX', 6, 'TSource', 'TDeposit'],
   ['TON', Chain.Ton, 'TON', 9, 'UQSource', 'EQCIcjES4cQET0z6nRixZ0MdvTB4u3_8triztLSrIIrDkpgJ'],
+  ['NEAR', Chain.Near, 'NEAR', 24, NEAR_SOURCE, NEAR_DEPOSIT],
 ]
 
 describe('getSwapKitQuote', () => {
@@ -278,6 +283,40 @@ describe('getSwapKitQuote', () => {
       })
     }
   )
+
+  it('maps a NEAR Intents simpleTransfer deposit to a plain transfer with no memo or pre-built tx', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        response({ routes: [{ routeId: 'near-route', providers: ['NEAR'], expectedBuyAmount: '0.0088' }] })
+      )
+      .mockResolvedValueOnce(
+        response({
+          expectedBuyAmount: '0.0088',
+          providers: ['NEAR'],
+          targetAddress: NEAR_DEPOSIT,
+          inboundAddress: NEAR_DEPOSIT,
+          swapId: '3e4605fe-e640-4524-ba6a-a2541101b7f1',
+          txHint: 'simpleTransfer',
+        })
+      )
+
+    vi.stubGlobal('fetch', fetchMock)
+    configureSwapKit({ apiKey: 'test-key', baseUrl: 'https://swapkit.example' })
+
+    const quote = await getSwapKitQuote({
+      from: { chain: Chain.Near, address: NEAR_SOURCE, ticker: 'NEAR', decimals: 24 },
+      to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
+      amount: 5n * 10n ** 24n,
+    })
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({ sellAsset: 'NEAR.NEAR' })
+    const { transfer } = quote.tx as { transfer: Record<string, unknown> }
+    expect(transfer).toMatchObject({ to: NEAR_DEPOSIT, amount: 5n * 10n ** 24n })
+    expect(transfer.memo).toBeUndefined()
+    expect(transfer.txType).toBeUndefined()
+    expect(transfer.txPayload).toBeUndefined()
+  })
 
   const stubEvmRoute = ({ route, fees }: { route?: Record<string, unknown>; fees?: unknown[] } = {}) => {
     const fetchMock = vi
