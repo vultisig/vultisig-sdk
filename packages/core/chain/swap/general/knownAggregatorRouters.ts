@@ -1,4 +1,5 @@
 import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
+import { attempt } from '@vultisig/lib-utils/attempt'
 import { stripHexPrefix } from '@vultisig/lib-utils/hex/stripHexPrefix'
 
 import { Chain, EvmChain } from '../../Chain'
@@ -227,6 +228,43 @@ async function assertAggregatorAddressReputation(
  */
 export function assertSwapKitAddressReputation(address: string, chain: Chain, role = 'destination'): Promise<void> {
   return assertAggregatorAddressReputation('SwapKit', address, chain, role)
+}
+
+/** What a review screen shows about a SwapKit deposit recipient that Blockaid did not refuse. */
+export type SwapKitDepositRecipientScreen =
+  | { status: 'benign' }
+  | { status: 'warning'; features: string[] }
+  | { status: 'notScanned'; reason: string }
+
+/**
+ * Advisory Blockaid screen of a SwapKit ERC-20 deposit recipient. The calldata binding already ties
+ * the recipient to the quoted `targetAddress`, so only a confirmed Malicious verdict refuses; a
+ * Warning, an unsupported chain or a failed scan comes back for the review screen to show, the way
+ * the transaction scan degrades to "not scanned".
+ */
+export async function screenSwapKitDepositRecipient(
+  address: string,
+  chain: Chain
+): Promise<SwapKitDepositRecipientScreen> {
+  const blockaidChain = (blockaidEvmChain as Partial<Record<Chain, string>>)[chain]
+  if (!blockaidChain) {
+    return { status: 'notScanned', reason: `Blockaid does not cover ${chain}` }
+  }
+
+  const scan = await attempt(scanAddressWithBlockaid(address, blockaidChain))
+  if ('error' in scan) {
+    return { status: 'notScanned', reason: scan.error instanceof Error ? scan.error.message : String(scan.error) }
+  }
+
+  const { resultType, features } = scan.data
+  if (resultType === 'Malicious') {
+    const flagged = features.length ? ` (${features.join(', ')})` : ''
+    throw new Error(
+      `SwapKit deposit recipient (${address}) received a Malicious Blockaid verdict on ${chain}${flagged} — refusing to sign or return the transaction.`
+    )
+  }
+
+  return resultType === 'Warning' ? { status: 'warning', features } : { status: 'benign' }
 }
 
 /**
