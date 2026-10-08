@@ -61,6 +61,7 @@ const buildPayload = (routerTo: string, provider = '1inch') =>
       case: 'oneinchSwapPayload',
       value: create(OneInchSwapPayloadSchema, {
         provider,
+        fromAmount: '1000000',
         quote: create(OneInchQuoteSchema, {
           tx: create(OneInchTransactionSchema, { to: routerTo, data: '0xabcdef', value: '0', gasPrice: '0', gas: 0n }),
         }),
@@ -157,6 +158,66 @@ describe('getEvmSigningInputs — sdk#1457 provider-string spoofing guard, end t
     await expect(
       getEvmSigningInputs({ keysignPayload: buildPayload(ONE_INCH_V6_ROUTER, 'swapkit'), walletCore })
     ).rejects.toThrow(/reputation check failed/)
+  })
+})
+
+// A SwapKit ERC-20 deposit is addressed to the sold token, so screening tx.to screens only the
+// token. The co-signer must bind the calldata itself: exactly transfer(recipient, fromAmount) on
+// the sold token.
+describe('getEvmSigningInputs — SwapKit ERC-20 deposit binding on the signing-input path', () => {
+  const DEPOSIT = '0x1f01af4e50082e2982ba5041707efddd3aa4c121'
+  const ATTACKER = '0x2222222222222222222222222222222222222222'
+  const USDT = '0xdAC17F958D2ee523a2206206994597C13D831ec7'
+  const AMOUNT = 20_000_000n
+  const word = (hex: string) => hex.replace(/^0x/, '').toLowerCase().padStart(64, '0')
+  const transferData = (to: string, amount: bigint) => `0xa9059cbb${word(to)}${word(amount.toString(16))}`
+
+  const buildDepositPayload = ({ to = USDC, data }: { to?: string; data: string }) => {
+    const payload = buildPayload(to, 'swapkit')
+    payload.swapPayload = {
+      case: 'oneinchSwapPayload',
+      value: create(OneInchSwapPayloadSchema, {
+        provider: 'swapkit',
+        fromCoin: payload.coin,
+        fromAmount: AMOUNT.toString(),
+        quote: create(OneInchQuoteSchema, {
+          tx: create(OneInchTransactionSchema, { to, data, value: '0', gasPrice: '0', gas: 0n }),
+        }),
+      }),
+    }
+    return payload
+  }
+
+  let walletCore: WalletCore
+
+  beforeAll(async () => {
+    walletCore = await initWasm()
+  })
+
+  it('signs a transfer of exactly fromAmount on the sold token', async () => {
+    const data = transferData(DEPOSIT, AMOUNT)
+
+    const inputs = await getEvmSigningInputs({ keysignPayload: buildDepositPayload({ data }), walletCore })
+
+    expect(inputs[0]?.toAddress).toBe(USDC)
+  })
+
+  it.each([
+    ['an amount other than fromAmount', { data: transferData(DEPOSIT, AMOUNT + 1n) }, /not the sold amount/],
+    [
+      'a transfer on a token other than the sold one',
+      { to: USDT, data: transferData(ATTACKER, AMOUNT) },
+      /not the sold token/,
+    ],
+    [
+      'other calldata on the sold token',
+      { data: `0x095ea7b3${word(ATTACKER)}${word(AMOUNT.toString(16))}` },
+      /not exactly an ERC-20 transfer/,
+    ],
+  ])('throws for a SwapKit token transfer carrying %s', async (_, fixture, error) => {
+    await expect(getEvmSigningInputs({ keysignPayload: buildDepositPayload(fixture), walletCore })).rejects.toThrow(
+      error
+    )
   })
 })
 
