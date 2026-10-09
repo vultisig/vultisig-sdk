@@ -30,7 +30,6 @@ tags:
   - mayachain
   - osmosis
   - dydx
-  - kujira
   - sui
   - polkadot
   - ton
@@ -104,8 +103,8 @@ Ethereum, Polygon, BSC, Arbitrum, Optimism, Base, Avalanche, Blast, Cronos, zkSy
 ### UTXO Chains (6)
 Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash, Zcash
 
-### Cosmos Chains (10)
-Cosmos, THORChain, MayaChain, Osmosis, dYdX, Kujira, Terra, Terra Classic, Noble, Akash
+### Cosmos Chains (9)
+Cosmos, THORChain, MayaChain, Osmosis, dYdX, Terra, Terra Classic, Noble, Akash
 
 ### Other Chains (7)
 Solana, Sui, Polkadot, TON, Ripple, Tron, Cardano
