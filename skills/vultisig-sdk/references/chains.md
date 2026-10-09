@@ -51,7 +51,7 @@ Bitcoin-like chains using UTXO model.
 - Native transfers
 - Cross-chain swaps via THORChain
 
-## Cosmos Chains (10)
+## Cosmos Chains (9)
 
 Cosmos SDK chains using Tendermint consensus.
 
@@ -62,7 +62,6 @@ Cosmos SDK chains using Tendermint consensus.
 | MayaChain | `Chain.MayaChain` | CACAO | 10 |
 | Osmosis | `Chain.Osmosis` | OSMO | 6 |
 | dYdX | `Chain.Dydx` | DYDX | 18 |
-| Kujira | `Chain.Kujira` | KUJI | 6 |
 | Terra | `Chain.Terra` | LUNA | 6 |
 | Terra Classic | `Chain.TerraClassic` | LUNC | 6 |
 | Noble | `Chain.Noble` | USDC | 6 |

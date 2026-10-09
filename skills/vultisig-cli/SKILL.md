@@ -411,7 +411,7 @@ See [references/errors.md](references/errors.md) for common errors and solutions
 36+ blockchains including:
 - **EVM**: Ethereum, Polygon, Arbitrum, Optimism, BSC, Base, Avalanche, Blast, Cronos, ZkSync, Hyperliquid, Mantle, Sei
 - **UTXO**: Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash, Zcash
-- **Cosmos**: Cosmos, THORChain, MayaChain, Osmosis, Dydx, Kujira, Terra, Noble, Akash
+- **Cosmos**: Cosmos, THORChain, MayaChain, Osmosis, Dydx, Terra, Noble, Akash
 - **Other**: Solana, Sui, Polkadot, TON, Ripple, Tron, Cardano
 
 See [references/chains.md](references/chains.md) for full list with details.

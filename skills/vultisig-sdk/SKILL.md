@@ -182,7 +182,7 @@ Chain.Dash, Chain.Zcash
 
 // Cosmos
 Chain.Cosmos, Chain.THORChain, Chain.MayaChain, Chain.Osmosis, Chain.Dydx,
-Chain.Kujira, Chain.Terra, Chain.TerraClassic, Chain.Noble, Chain.Akash
+Chain.Terra, Chain.TerraClassic, Chain.Noble, Chain.Akash
 
 // Other
 Chain.Solana, Chain.Sui, Chain.Polkadot, Chain.Ton, Chain.Ripple,
@@ -221,7 +221,7 @@ For full details and code examples, see the [SDK Users Guide](../../docs/SDK-USE
 36+ blockchains:
 - **EVM (13)**: Ethereum, Polygon, BSC, Arbitrum, Optimism, Base, Avalanche, Blast, Cronos, ZkSync, Hyperliquid, Mantle, Sei
 - **UTXO (6)**: Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash, Zcash
-- **Cosmos (10)**: Cosmos, THORChain, MayaChain, Osmosis, Dydx, Kujira, Terra, Terra Classic, Noble, Akash
+- **Cosmos (9)**: Cosmos, THORChain, MayaChain, Osmosis, Dydx, Terra, Terra Classic, Noble, Akash
 - **Other (7)**: Solana, Sui, Polkadot, TON, Ripple, Tron, Cardano
 
 ## Resources
