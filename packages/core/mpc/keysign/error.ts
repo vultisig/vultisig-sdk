@@ -14,10 +14,21 @@ export type BuildKeysignPayloadErrorType =
   | 'ton-memo-too-long'
   | 'utxo-dust-amount-requested'
 
+/** What the send needs against what the sender has, in `ticker`'s chain units. */
+export type BuildKeysignPayloadShortfall = {
+  required: bigint
+  available: bigint
+  ticker: string
+  decimals: number
+  /** `required` includes network costs (fee, and any balance the chain keeps back). */
+  includesNetworkCosts: boolean
+}
+
 export class BuildKeysignPayloadError extends Error {
   constructor(
     public readonly type: BuildKeysignPayloadErrorType,
-    message: string = type
+    message: string = type,
+    public readonly shortfall?: BuildKeysignPayloadShortfall
   ) {
     super(message)
     this.name = 'BuildKeysignPayloadError'
