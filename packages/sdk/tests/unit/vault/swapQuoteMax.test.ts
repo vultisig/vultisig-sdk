@@ -1,5 +1,6 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
+import { SwapErrorCode } from '@vultisig/core-chain/swap/SwapError'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const getNativeSwapMinAmountIn = vi.hoisted(() => vi.fn().mockResolvedValue(null))
@@ -682,6 +683,33 @@ describe('VaultBase.swap max safeguards', () => {
     await expect(swap).rejects.toThrow(
       "Max swappable 0.00003599 BTC is below THORChain's recommended minimum of 0.00006316 BTC"
     )
+  })
+
+  it('attaches structured minimum details to a below-minimum max refusal', async () => {
+    const quote = nativeQuote({ from: btc, to: eth })
+    const { vault } = makeVault({ quote, balance: 12_621n, fee: 9_022n })
+    configureCompoundSwap(vault)
+
+    await expect(
+      vault.swap({
+        fromChain: Chain.Bitcoin,
+        fromSymbol: 'BTC',
+        toChain: Chain.Ethereum,
+        toSymbol: 'ETH',
+        amount: 'max',
+        dryRun: true,
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.InvalidAmount,
+      originalError: {
+        code: SwapErrorCode.AmountBelowMinimum,
+        details: {
+          minAmountInBaseUnits: '6316',
+          minAmountInHuman: '0.00006316',
+          ticker: 'BTC',
+        },
+      },
+    })
   })
 
   it('keeps an explicit below-minimum native amount as a warning', async () => {

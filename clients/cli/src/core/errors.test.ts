@@ -1,3 +1,4 @@
+import { SwapError, SwapErrorCode } from '@vultisig/core-chain/swap/SwapError'
 import { Chain, VaultError, VaultErrorCode, VaultImportError, VaultImportErrorCode } from '@vultisig/sdk'
 import { describe, expect, it } from 'vitest'
 
@@ -373,6 +374,37 @@ describe('classifyError with VaultError', () => {
     const result = classifyError(err)
     expect(result).toBeInstanceOf(InvalidInputError)
     expect(result.exitCode).toBe(ExitCode.INVALID_INPUT)
+  })
+
+  it('includes a swap minimum in INVALID_INPUT context and guidance', () => {
+    const message = 'Amount is below the minimum for this swap. Minimum is ~0.0042 ETH. Please increase the amount.'
+    const swapError = new SwapError(SwapErrorCode.AmountBelowMinimum, message, {
+      minAmountInHuman: '0.0042',
+      ticker: 'ETH',
+      minAmountInBaseUnits: '4200000000000000',
+    })
+
+    const result = classifyError(new VaultError(VaultErrorCode.InvalidAmount, message, swapError))
+
+    expect(result.code).toBe('INVALID_INPUT')
+    expect(result.exitCode).toBe(ExitCode.INVALID_INPUT)
+    expect(result.context).toEqual({
+      minimum: '0.0042',
+      ticker: 'ETH',
+      minimumBaseUnits: '4200000000000000',
+    })
+    expect(result.hint).toContain('0.0042 ETH')
+  })
+
+  it('keeps InvalidAmount at exit 4 without fabricating minimum context', () => {
+    const message = 'Amount is below the minimum of the available swap providers. Please increase the amount.'
+    const result = classifyError(
+      new VaultError(VaultErrorCode.InvalidAmount, message, new SwapError(SwapErrorCode.AmountTooSmall, message))
+    )
+
+    expect(result.code).toBe('INVALID_INPUT')
+    expect(result.exitCode).toBe(ExitCode.INVALID_INPUT)
+    expect(result.context?.minimum).toBeUndefined()
   })
 
   it.each([

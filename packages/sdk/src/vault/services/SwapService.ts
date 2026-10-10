@@ -493,9 +493,8 @@ export class SwapService {
             error
           )
         case SwapErrorCode.AmountTooSmall:
-          return new VaultError(VaultErrorCode.InvalidConfig, `Swap amount too small: ${message}`, error)
         case SwapErrorCode.AmountBelowMinimum:
-          return new VaultError(VaultErrorCode.InvalidConfig, message, error)
+          return new VaultError(VaultErrorCode.InvalidAmount, message, error)
         case SwapErrorCode.TradingHalted:
           return new VaultError(VaultErrorCode.InvalidConfig, message, error)
         case SwapErrorCode.InvalidConfig:
