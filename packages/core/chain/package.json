@@ -265,6 +265,11 @@
       "import": "./dist/chains/cosmos/cosmosRpcUrl.js",
       "default": "./dist/chains/cosmos/cosmosRpcUrl.js"
     },
+    "./chains/cosmos/dydx/dydxVoteMemo": {
+      "types": "./dist/chains/cosmos/dydx/dydxVoteMemo.d.ts",
+      "import": "./dist/chains/cosmos/dydx/dydxVoteMemo.js",
+      "default": "./dist/chains/cosmos/dydx/dydxVoteMemo.js"
+    },
     "./chains/cosmos/gas": {
       "types": "./dist/chains/cosmos/gas.d.ts",
       "import": "./dist/chains/cosmos/gas.js",

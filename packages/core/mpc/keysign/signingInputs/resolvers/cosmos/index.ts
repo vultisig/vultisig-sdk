@@ -1,6 +1,7 @@
 import { Chain, CosmosChain, VaultBasedCosmosChain } from '@vultisig/core-chain/Chain'
 import { cosmosFeeCoinDenom } from '@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom'
 import { getCosmosGasLimit } from '@vultisig/core-chain/chains/cosmos/cosmosGasLimitRecord'
+import { DydxVoteOption, parseDydxVoteMemo } from '@vultisig/core-chain/chains/cosmos/dydx/dydxVoteMemo'
 import { resolveCosmosGasLimit } from '@vultisig/core-chain/chains/cosmos/resolveCosmosGasLimit'
 import { isTerraClassicUstcCoin } from '@vultisig/core-chain/chains/cosmos/terraClassicTax'
 import { getCosmosChainKind } from '@vultisig/core-chain/chains/cosmos/utils/getCosmosChainKind'
@@ -27,6 +28,13 @@ import { getKeysignCoin } from '../../../utils/getKeysignCoin'
 import { SigningInputsResolver } from '../../resolver'
 import { CosmosChainSpecific, getCosmosChainSpecific } from './chainSpecific'
 import { getCosmosCoinAmount } from './coinAmount'
+
+const twVoteOption: Record<DydxVoteOption, TW.Cosmos.Proto.Message.VoteOption> = {
+  yes: TW.Cosmos.Proto.Message.VoteOption.YES,
+  abstain: TW.Cosmos.Proto.Message.VoteOption.ABSTAIN,
+  no: TW.Cosmos.Proto.Message.VoteOption.NO,
+  noWithVeto: TW.Cosmos.Proto.Message.VoteOption.NO_WITH_VETO,
+}
 
 const getNativeSwapPayload = (keysignPayload: Parameters<typeof getKeysignSwapPayload>[0]) => {
   const swapPayload = getKeysignSwapPayload(keysignPayload)
@@ -180,6 +188,35 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
           txMemo: memo,
         }
       }
+
+      if (transactionType === TransactionType.VOTE) {
+        // Only dYdX carries a vote on this path (QBTC signs through
+        // QBTCHelper). Anywhere else the payload would fall through to a
+        // MsgSend the user never asked for, so refuse.
+        if (chain !== Chain.Dydx) {
+          throw new Error(
+            `Cosmos signing input: VOTE is only supported on dYdX, got ${chain}. Refusing to fall back to MsgSend.`
+          )
+        }
+
+        const { option, proposalId } = parseDydxVoteMemo(shouldBePresent(memo, 'dYdX vote memo'))
+
+        return {
+          messages: [
+            TW.Cosmos.Proto.Message.create({
+              msgVote: TW.Cosmos.Proto.Message.MsgVote.create({
+                proposalId: Long.fromString(proposalId.toString(), true),
+                voter: coin.address,
+                option: twVoteOption[option],
+              }),
+            }),
+          ],
+          // The ballot is the message. iOS DydxHelperStruct signs a vote with
+          // no tx memo, and the SignDoc has to match it byte for byte.
+          txMemo: undefined,
+        }
+      }
+
       if (transactionType === TransactionType.IBC_TRANSFER) {
         const packedMemo = shouldBePresent(keysignPayload.memo)
         const [, channel, , ...userMemoParts] = packedMemo.split(':')
