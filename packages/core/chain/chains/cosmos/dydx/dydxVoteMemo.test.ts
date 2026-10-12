@@ -34,4 +34,13 @@ describe('dYdX vote memo', () => {
   ])('rejects %s', (_, memo) => {
     expect(() => parseDydxVoteMemo(memo)).toThrow()
   })
+
+  // The encoder holds the parser's bounds, so no initiator can build a memo
+  // every signer would refuse.
+  it.each([
+    ['a negative proposal id', -1n],
+    ['a proposal id above uint64', 18446744073709551616n],
+  ])('refuses to encode %s', (_, proposalId) => {
+    expect(() => toDydxVoteMemo({ option: 'yes', proposalId })).toThrow(/dYdX vote proposalId/)
+  })
 })

@@ -26,9 +26,15 @@ const memoTokenByOption: Record<DydxVoteOption, string> = {
 /**
  * Encodes a vote as `DYDX_VOTE:<option>:<proposalId>`, the memo every signer
  * (iOS `DydxHelperStruct`, this SDK's Cosmos resolver) turns into a `MsgVote`.
+ * Throws on a proposal id outside uint64, which no signer would accept.
  */
-export const toDydxVoteMemo = ({ option, proposalId }: DydxVote): string =>
-  [dydxVoteMemoPrefix, memoTokenByOption[option], proposalId.toString()].join(':')
+export const toDydxVoteMemo = ({ option, proposalId }: DydxVote): string => {
+  // Checked by the parser's own rule, so an initiator can never build a memo
+  // that `parseDydxVoteMemo` rejects at signing time.
+  const checkedProposalId = parseUint64({ value: proposalId.toString(), field: 'proposalId', context: 'dYdX vote' })
+
+  return [dydxVoteMemoPrefix, memoTokenByOption[option], checkedProposalId.toString()].join(':')
+}
 
 /**
  * Decodes a `DYDX_VOTE:<option>:<proposalId>` memo. Throws on anything else: a
