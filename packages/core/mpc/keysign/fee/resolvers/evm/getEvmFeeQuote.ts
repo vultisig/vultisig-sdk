@@ -14,14 +14,13 @@ import { getEvmGasPrice } from '@vultisig/core-chain/tx/fee/evm/gasPrice'
 import { getEvmRouterDepositFee } from '@vultisig/core-chain/tx/fee/evm/getEvmRouterDepositFee'
 import { getEvmMaxPriorityFeePerGas } from '@vultisig/core-chain/tx/fee/evm/maxPriorityFeePerGas'
 import { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
-import { getKeysignSwapKitDepositRecipient } from '@vultisig/core-mpc/keysign/swap/getKeysignSwapKitDepositRecipient'
 import { getKeysignSwapPayload } from '@vultisig/core-mpc/keysign/swap/getKeysignSwapPayload'
 import { KeysignSwapPayload } from '@vultisig/core-mpc/keysign/swap/KeysignSwapPayload'
 import { getIsGenericContractCall } from '@vultisig/core-mpc/keysign/utils/getIsGenericContractCall'
 import { getKeysignAmount } from '@vultisig/core-mpc/keysign/utils/getKeysignAmount'
 import { getKeysignCoin } from '@vultisig/core-mpc/keysign/utils/getKeysignCoin'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
-import { attempt } from '@vultisig/lib-utils/attempt'
+import { attempt, withFallback } from '@vultisig/lib-utils/attempt'
 import { bigIntMax } from '@vultisig/lib-utils/bigint/bigIntMax'
 import { formatDataToHex } from '@vultisig/lib-utils/formatDataToHex'
 import { match } from '@vultisig/lib-utils/match'
@@ -33,7 +32,7 @@ import { publicActionsL2 } from 'viem/zksync'
  * What a transaction does on-chain, which decides how much headroom its gas
  * limit and its gas price are signed with.
  */
-type EvmTxKind = 'transfer' | 'contractCall' | 'swap' | 'depositTransfer' | 'routerDeposit'
+type EvmTxKind = 'transfer' | 'contractCall' | 'swap' | 'routerDeposit'
 
 type EvmFeeQuote = {
   gasLimit: bigint
@@ -61,9 +60,6 @@ const inflateGasLimit = (value: bigint) => value + value / 2n
 
 const getEvmTxKind = (keysignPayload: KeysignPayload, swapPayload: KeysignSwapPayload | undefined): EvmTxKind => {
   if (swapPayload) {
-    // A SwapKit deposit calls the sold token with a plain `transfer`: it spends no
-    // allowance, so it can be simulated, and it costs what a token transfer costs.
-    if (getKeysignSwapKitDepositRecipient(keysignPayload)) return 'depositTransfer'
     return 'general' in swapPayload ? 'swap' : 'routerDeposit'
   }
 
@@ -95,7 +91,6 @@ export const getEvmFeeQuote = async ({
     transfer: () => getEvmTransferGasLimit(coin),
     contractCall: () => getEvmContractCallGasLimit(chain),
     swap: () => getEvmContractCallGasLimit(chain),
-    depositTransfer: () => getEvmTransferGasLimit(coin),
     routerDeposit: () => evmRouterDepositGasLimit,
   })
   // A fee-coin transfer that could not be simulated still has to cover the
@@ -122,10 +117,6 @@ export const getEvmFeeQuote = async ({
           requestedGasLimit > 0n ? requestedGasLimit : kindGasLimit,
           inflateGasLimit(estimatedGasLimit ?? fallbackGasLimit)
         ),
-      // A deposit transfer is sized like a token send: its own simulation, raised
-      // to the per-chain ERC-20 floor. The route's gas figure is not a bound on a
-      // plain transfer and only over-reserves the fee.
-      depositTransfer: () => bigIntMax(estimatedGasLimit ?? fallbackGasLimit, kindGasLimit),
       // A router deposit is never simulated, so its fixed limit is the stand-in
       // a caller minimum may raise.
       routerDeposit: () => bigIntMax(fallbackGasLimit, requestedGasLimit),
@@ -165,9 +156,8 @@ export const getEvmFeeQuote = async ({
         native: () => null,
         general: ({ quote }) => {
           // A token route cannot be simulated until its allowance exists, so it
-          // is sized from the route's own gas and the swap fallback instead. A
-          // deposit transfer spends no allowance and simulates as it will run.
-          if ((coin.id && kind !== 'depositTransfer') || !quote?.tx) {
+          // is sized from the route's own gas and the swap fallback instead.
+          if (coin.id || !quote?.tx) {
             return null
           }
 
@@ -267,27 +257,19 @@ export const getEvmFeeQuote = async ({
     }
     const estimateGasParams = await getEstimateGasParams()
 
-    const estimation = estimateGasParams
-      ? await attempt(
-          client.estimateGas({
-            account: address as `0x${string}`,
-            to: estimateGasParams.to,
-            value: estimateGasParams.value,
-            data: estimateGasParams.data,
-          })
+    const estimatedGasLimit = estimateGasParams
+      ? await withFallback(
+          attempt(
+            client.estimateGas({
+              account: address as `0x${string}`,
+              to: estimateGasParams.to,
+              value: estimateGasParams.value,
+              data: estimateGasParams.data,
+            })
+          ),
+          undefined
         )
       : undefined
-
-    // A deposit transfer that does not simulate is likely to revert; it is still signed at the
-    // ERC-20 floor, so leave a trace of why.
-    if (estimation && 'error' in estimation && kind === 'depositTransfer') {
-      console.warn(
-        '[evm-fee] SwapKit deposit transfer did not simulate; using the ERC-20 transfer floor',
-        estimation.error
-      )
-    }
-
-    const estimatedGasLimit = estimation && 'data' in estimation ? estimation.data : undefined
 
     const [baseFeePerGas, maxPriorityFeePerGas] = await Promise.all([getBaseFeePerGas(), getMaxPriorityFeePerGas()])
 
