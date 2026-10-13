@@ -64,7 +64,7 @@ const QBTC = {
 // Wallet-core integration tests (require real WalletCore WASM init).
 // These pin the exact addresses that must validate so a future wallet-core version
 // bump that breaks tron/ton/cardano validation is caught by CI immediately.
-describe('isValidAddress — Tron / TON / Cardano / QBTC (real walletCore)', () => {
+describe('isValidAddress — Tron / TON / Cardano / QBTC / NEAR (real walletCore)', () => {
   let walletCore: WalletCore
 
   beforeAll(async () => {
@@ -169,6 +169,24 @@ describe('isValidAddress — Tron / TON / Cardano / QBTC (real walletCore)', () 
     it('rejects garbage input for QBTC', () => {
       expect(isValidAddress({ chain: Chain.QBTC, address: QBTC.garbage, walletCore })).toBe(false)
     })
+  })
+
+  // ── NEAR ──────────────────────────────────────────────────────────────────
+  // WalletCore 4.7.3 answers the opposite on the named and the non-lowercase rows.
+  it('NEAR follows the account-ID grammar, not WalletCore', () => {
+    const implicit = 'd75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a'
+    const cases: [string, boolean][] = [
+      ['alice.near', true],
+      ['wrap.near', true],
+      ['intents.near', true],
+      [implicit, true],
+      [implicit.toUpperCase(), false],
+      [`0x${implicit}`, false],
+    ]
+
+    expect(cases.map(([address]) => [address, isValidAddress({ chain: Chain.Near, address, walletCore })])).toEqual(
+      cases
+    )
   })
 })
 

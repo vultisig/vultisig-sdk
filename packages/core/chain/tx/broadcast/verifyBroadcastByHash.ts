@@ -18,6 +18,8 @@ type VerifyInput<T extends Chain> = {
    * a block rather than for RPC propagation passes a larger count.
    */
   maxAttempts?: number
+  /** NEAR: the transaction lookup is sharded by sender. */
+  senderAccountId?: string
 }
 
 export const broadcastVerificationMaxAttempts = 4
@@ -50,6 +52,7 @@ export const verifyBroadcastByHash = async <T extends Chain>({
   error,
   lastValidBlockHeight,
   maxAttempts = broadcastVerificationMaxAttempts,
+  senderAccountId,
 }: VerifyInput<T>): Promise<string> => {
   let hash: string
 
@@ -63,7 +66,7 @@ export const verifyBroadcastByHash = async <T extends Chain>({
     let result: Awaited<ReturnType<typeof getTxStatus>> | undefined
 
     try {
-      result = await getTxStatus({ chain, hash, lastValidBlockHeight })
+      result = await getTxStatus({ chain, hash, lastValidBlockHeight, senderAccountId })
     } catch {
       // Retry status lookup failures within the same bounded window.
     }
