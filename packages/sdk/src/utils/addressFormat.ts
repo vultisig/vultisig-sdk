@@ -22,6 +22,7 @@
  * format-validation, RN-safe (bs58 is pure JS), no network, no signing.
  */
 
+import { isNearAccountId } from '@vultisig/core-chain/chains/near/accountId'
 import bs58 from 'bs58'
 
 import { isUtxoAddressBrandValid } from '../chains/utxo/addressBrand'
@@ -312,6 +313,7 @@ const chainFormatRules: Record<string, Matcher[]> = {
   polkadot: [re(rePolkadot)],
   bittensor: [re(reBittensor)],
   cardano: [re(reCardano)],
+  near: [isNearAccountId],
 }
 
 /**

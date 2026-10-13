@@ -7,6 +7,7 @@ import { getBittensorTxHash } from './resolvers/bittensor'
 import { getCardanoTxHash } from './resolvers/cardano'
 import { getCosmosTxHash } from './resolvers/cosmos'
 import { getEvmTxHash } from './resolvers/evm'
+import { getNearTxHash } from './resolvers/near'
 import { getPolkadotTxHash } from './resolvers/polkadot'
 import { getRippleTxHash } from './resolvers/ripple'
 import { getSolanaTxHash } from './resolvers/solana'
@@ -28,6 +29,7 @@ const hashHandlers: Record<ChainKind, TxHashResolver<any>> = {
   ton: getTonTxHash,
   utxo: getUtxoTxHash,
   tron: getTronTxHash,
+  near: getNearTxHash,
 }
 
 type GetTxHashInput = {

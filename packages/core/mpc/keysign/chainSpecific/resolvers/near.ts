@@ -1,0 +1,94 @@
+import { create } from '@bufbuild/protobuf'
+import { Chain } from '@vultisig/core-chain/Chain'
+import {
+  assertNearEd25519PublicKeyHex,
+  isNearAccountId,
+  isNearImplicitAccountId,
+} from '@vultisig/core-chain/chains/near/accountId'
+import {
+  getNearAccessKey,
+  getNearAccount,
+  getNearFeeConfig,
+  getNearFinalBlock,
+} from '@vultisig/core-chain/chains/near/api'
+import { getNearGasReservation } from '@vultisig/core-chain/chains/near/fees'
+import { NearUnknownEntityError } from '@vultisig/core-chain/chains/near/rpc'
+import { NEAR_MAX_U64 } from '@vultisig/core-chain/chains/near/uint'
+import { NearSpecificSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
+import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
+import bs58 from 'bs58'
+
+import { BuildKeysignPayloadError } from '../../error'
+import { GetChainSpecificResolver } from '../resolver'
+
+/**
+ * Native NEAR preparation: freezes, once, the two values a NEAR transaction cannot
+ * re-fetch — the transaction nonce and the final block hash — plus the gas
+ * reservation signing only displays. An unknown sender account or key, a named
+ * recipient that does not exist, a function-call key and an out-of-grammar
+ * recipient all stop the build before review.
+ */
+export const getNearChainSpecific: GetChainSpecificResolver<'nearSpecific'> = async ({ keysignPayload }) => {
+  const coin = shouldBePresent(keysignPayload.coin)
+
+  if (coin.chain !== Chain.Near || !coin.isNativeToken) {
+    throw new Error('NEAR preparation supports native NEAR transfers only')
+  }
+
+  const sender = shouldBePresent(coin.address, 'NEAR sender address')
+  const hexPublicKey = shouldBePresent(coin.hexPublicKey, 'NEAR sender public key')
+  const receiver = keysignPayload.toAddress
+
+  if (!isNearAccountId(receiver)) {
+    throw new Error(`Invalid NEAR recipient account id: ${receiver}`)
+  }
+
+  assertNearEd25519PublicKeyHex(hexPublicKey)
+
+  const receiverIsImplicit = isNearImplicitAccountId(receiver)
+
+  const [accessKey, block, fees, receiverExists] = await Promise.all([
+    getNearAccessKey(sender, hexPublicKey),
+    getNearFinalBlock(),
+    getNearFeeConfig(),
+    // The transfer itself creates an implicit receiver.
+    receiverIsImplicit || getNearAccount(receiver).then(account => account !== null),
+  ])
+
+  if (!receiverExists) {
+    throw new BuildKeysignPayloadError(
+      'near-destination-not-found',
+      `NEAR account ${receiver} does not exist: a transfer to it would burn the gas and return the amount`
+    )
+  }
+
+  if (!accessKey) {
+    throw new NearUnknownEntityError(
+      'access key',
+      `NEAR account ${sender} does not hold the signing key ${hexPublicKey}`
+    )
+  }
+
+  if (!accessKey.isFullAccess) {
+    throw new Error(`NEAR signing key for ${sender} is a function-call key; a native transfer needs full access`)
+  }
+
+  if (accessKey.nonce === NEAR_MAX_U64) {
+    throw new Error(`NEAR access key nonce for ${sender} has no successor in the uint64 field: ${accessKey.nonce}`)
+  }
+
+  const { reserved } = getNearGasReservation({
+    fees,
+    gasPrice: block.gasPrice,
+    senderIsReceiver: sender === receiver,
+    receiverIsImplicit,
+  })
+
+  return create(NearSpecificSchema, {
+    // The access-key nonce is not itself a valid transaction nonce: nearcore's
+    // `verify_nonce` rejects `tx_nonce <= ak_nonce` (runtime/runtime/src/verifier.rs).
+    nonce: accessKey.nonce + 1n,
+    blockHash: new Uint8Array(bs58.decode(block.hash)),
+    gasFee: reserved.toString(),
+  })
+}

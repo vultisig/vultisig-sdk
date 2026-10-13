@@ -66,7 +66,7 @@ const stakeRujiWireHex =
 // to serializer-path code (e.g. normalizeKeysignPayloadFromJson,
 // mapSwapPayload) that alters wire bytes for ANY fixture - not just the one
 // rich fixture pinned below - will fail here.
-const expectedCorpusDigest = '199ece7f7902e9cda2c78fbad707d96b8d2e4ac88a827417aad7ff4d6f9276cb'
+const expectedCorpusDigest = '2215c59fd8ca25926ada5f04216a48d3e3a31acea56d27bdcf597dd252c33279'
 
 const expectedPerFileDigests: Record<string, string> = {
   'arb.json': 'b11f8989372fd8a51909c37b5da0d79138a647359685b916a2e905973d585e1f',
@@ -83,6 +83,7 @@ const expectedPerFileDigests: Record<string, string> = {
   'lifiswap.json': 'ed5b2c7c2626d70d31055996e756fedc45a654c3f3455f1e78ef35c406abc546',
   'maya.json': 'c7ee0a247cec74133b02b055f2a0702bacb59fc1726c2da236ff5b3f2ae0637a',
   'mayaswap.json': 'f9599bc5efca0d9c41432dc634554de4a72d7748d9322448803d5cc730c3390f',
+  'near.json': 'b0c4d10d922986a2a47e5826e7e32b5a04b268d88f694769871370a4bd08931b',
   'pol.json': 'aa7b14a348278e1643b91c0867ea86cc18d957462925b6acdf75ba0b46eca692',
   'qbtc.json': '786e2604a16df4e98d6ceca1600ac61642da3dba6459820779df92b8676ece4b',
   'sei.json': '17735eac74aeb8cc2875fdb313171a4edc806279b825f14f5f1dec19b107f6f8',
@@ -105,7 +106,7 @@ describe('KeysignPayload protobuf wire contract', () => {
   it('serializes the complete mobile fixture corpus', () => {
     const serialized = fixtureCases.map(serializeFixture)
 
-    expect(serialized).toHaveLength(97)
+    expect(serialized).toHaveLength(99)
     expect(serialized.every(bytes => bytes.length > 0)).toBe(true)
   })
 
