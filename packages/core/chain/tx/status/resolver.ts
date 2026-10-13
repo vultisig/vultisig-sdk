@@ -55,6 +55,13 @@ export type TxStatusInput<T extends Chain = Chain> = {
    * chains ignore it.
    */
   lastValidBlockHeight?: number
+  /**
+   * NEAR only: the node looks transactions up by `(hash, sender)`, because the
+   * lookup is sharded by sender. With it, an unseen hash is `not_found`
+   * (affirmatively no record); without it a NEAR lookup fails closed rather
+   * than reporting an unknown hash as `pending`. Other chains ignore it.
+   */
+  senderAccountId?: string
 }
 
 export type TxStatusResolver<T extends Chain = Chain> = Resolver<TxStatusInput<T>, Promise<TxStatusResult>>

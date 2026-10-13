@@ -91,6 +91,7 @@ export const chainRegistry = Object.freeze({
   [Chain.Tron]: descriptor(Chain.Tron, 'https://tronscan.org/#', '/address/', '/transaction/'),
   [Chain.Zcash]: descriptor(Chain.Zcash, 'https://blockexplorer.one/zcash/mainnet', '/address/', '/tx/'),
   [Chain.Cardano]: descriptor(Chain.Cardano, 'https://cardanoscan.io', '/address/', '/transaction/'),
+  [Chain.Near]: descriptor(Chain.Near, 'https://nearblocks.io', '/address/', '/txns/'),
   [Chain.Mantle]: descriptor(Chain.Mantle, 'https://explorer.mantle.xyz', '/address/', '/tx/'),
   [Chain.Hyperliquid]: descriptor(Chain.Hyperliquid, 'https://hypurrscan.io/evm', '/address/', '/tx/'),
   [Chain.Sei]: descriptor(Chain.Sei, 'https://seiscan.io', '/address/', '/tx/'),

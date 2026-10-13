@@ -47,5 +47,6 @@ export const getCoinType = ({ walletCore: { CoinType }, chain }: Input): CoinTyp
     [Chain.Robinhood]: () => CoinType.robinhoodChain,
     [Chain.Hyperliquid]: () => CoinType.ethereum,
     [Chain.Sei]: () => CoinType.ethereum,
+    [Chain.Near]: () => CoinType.near,
     [Chain.QBTC]: () => CoinType.cosmos,
   })

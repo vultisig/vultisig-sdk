@@ -603,7 +603,13 @@ export const buildSwapKeysignPayload = async ({
     keysignPayload.swapPayload.value.quote.tx.gas = BigInt(gasLimit)
   }
 
-  if (isChainOfKind(chain, 'evm') && fromCoin.id) {
+  // A direct ERC-20 `transfer` to a deposit address spends no allowance.
+  const isErc20TransferDeposit = matchRecordUnion<SwapQuoteResult, boolean>(swapQuote.quote, {
+    native: () => false,
+    general: ({ tx }) => 'evm' in tx && tx.evm.erc20TransferDeposit === true,
+  })
+
+  if (isChainOfKind(chain, 'evm') && fromCoin.id && !isErc20TransferDeposit) {
     const approvalAddress = matchRecordUnion<SwapQuoteResult, string | undefined>(swapQuote.quote, {
       native: () => undefined,
       general: ({ tx }) => ('evm' in tx ? tx.evm.approvalAddress : undefined),

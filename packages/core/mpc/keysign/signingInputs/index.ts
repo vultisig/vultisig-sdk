@@ -9,6 +9,7 @@ import {
   getSwapKitCardanoPrebuiltPayload,
   getSwapKitCardanoPrebuiltSigningInput,
 } from '../../tx/swapkitCardanoPrebuilt'
+import { assertKeysignSwapSellsSigningCoin } from '../swap/assertKeysignSwapSellsSigningCoin'
 import { getKeysignTonGasless } from '../ton/gasless'
 import { getKeysignChain } from '../utils/getKeysignChain'
 import { signingInputClasses } from './core'
@@ -17,6 +18,7 @@ import { getBittensorSigningInputs } from './resolvers/bittensor'
 import { getCardanoSigningInputs } from './resolvers/cardano'
 import { getCosmosSigningInputs } from './resolvers/cosmos'
 import { getEvmSigningInputs } from './resolvers/evm'
+import { getNearSigningInputs } from './resolvers/near'
 import { getPolkadotSigningInputs } from './resolvers/polkadot'
 import { getQbtcSigningInputs } from './resolvers/qbtc'
 import { getRippleSigningInputs } from './resolvers/ripple'
@@ -46,9 +48,12 @@ export const signingInputResolversByChainKind: Record<ChainKind, SigningInputsRe
   ton: getTonSigningInputs,
   utxo: getUtxoSigningInputs,
   tron: getTronSigningInputs,
+  near: getNearSigningInputs,
 }
 
 export const getEncodedSigningInputs = async (input: Input): Promise<Uint8Array[]> => {
+  assertKeysignSwapSellsSigningCoin(input.keysignPayload)
+
   const chain = getKeysignChain(input.keysignPayload)
   const chainKind = getChainKind(chain)
 

@@ -15,6 +15,7 @@ const signingOutputs = {
   ripple: TW.Ripple.Proto.SigningOutput,
   tron: TW.Tron.Proto.SigningOutput,
   cardano: TW.Cardano.Proto.SigningOutput,
+  near: TW.NEAR.Proto.SigningOutput,
   qbtc: TW.Cosmos.Proto.SigningOutput,
 } as const satisfies Record<ChainKind, unknown>
 
