@@ -2,7 +2,7 @@ import { Chain } from '@vultisig/core-chain/Chain'
 import { getCustomRpcOverride } from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
-export const nearMainnetRpcUrl = 'https://rpc.mainnet.fastnear.com'
+export const nearMainnetRpcUrl = 'https://api.vultisig.com/near/'
 
 /** Honors the app-wide override funnel so a user-configured node is used here too. */
 export const getNearRpcUrl = (): string => getCustomRpcOverride(Chain.Near) ?? nearMainnetRpcUrl
