@@ -120,6 +120,7 @@ type SwapKitSwapResponse = {
   depositAddress?: string
   inboundAddress?: string
   depositAmount?: string
+  txHint?: string
   memo?: string
   swapId?: string
   providers?: string[]
@@ -873,9 +874,25 @@ const buildTransferTx = ({
     route: 'transfer',
   })
 
+  const transferAmount = psbtDestinationAmount ?? getTransferAmount(response, amount, from.decimals)
+
+  // NEAR is signed as a plain transfer of whatever amount lands here, so the
+  // route must say it is a plain deposit and must not move more than was sold.
+  if (from.chain === Chain.Near) {
+    if (response.txHint !== 'simpleTransfer') {
+      throw new Error('SwapKit NEAR route did not return txHint "simpleTransfer"; refusing to sign a plain transfer.')
+    }
+
+    if (transferAmount !== amount) {
+      throw new Error(
+        `SwapKit NEAR route deposit amount (${transferAmount} base units) differs from the requested sell amount (${amount} base units).`
+      )
+    }
+  }
+
   const transfer = {
     to,
-    amount: psbtDestinationAmount ?? getTransferAmount(response, amount, from.decimals),
+    amount: transferAmount,
     ...(response.memo ? { memo: response.memo } : {}),
     ...(txType ? { txType } : {}),
     ...(response.tx ? { txPayload } : {}),

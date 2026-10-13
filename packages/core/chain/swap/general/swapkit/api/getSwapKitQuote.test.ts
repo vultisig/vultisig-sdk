@@ -257,7 +257,14 @@ describe('getSwapKitQuote', () => {
         .mockResolvedValueOnce(
           response({ routes: [{ routeId: 'near-transfer-route', providers: ['NEAR'], expectedBuyAmount: '0.01' }] })
         )
-        .mockResolvedValueOnce(response({ expectedBuyAmount: '0.009', providers: ['NEAR'], targetAddress: target }))
+        .mockResolvedValueOnce(
+          response({
+            expectedBuyAmount: '0.009',
+            providers: ['NEAR'],
+            targetAddress: target,
+            ...(chain === Chain.Near ? { txHint: 'simpleTransfer' } : {}),
+          })
+        )
 
       vi.stubGlobal('fetch', fetchMock)
       configureSwapKit({ apiKey: 'test-key', baseUrl: 'https://swapkit.example' })
@@ -316,6 +323,37 @@ describe('getSwapKitQuote', () => {
     expect(transfer.memo).toBeUndefined()
     expect(transfer.txType).toBeUndefined()
     expect(transfer.txPayload).toBeUndefined()
+  })
+
+  it.each([
+    ['a deposit amount that differs from the requested amount', { txHint: 'simpleTransfer', depositAmount: '6' }],
+    ['a response without txHint simpleTransfer', {}],
+  ])('rejects a NEAR route with %s', async (_label, extra) => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        response({ routes: [{ routeId: 'near-route', providers: ['NEAR'], expectedBuyAmount: '0.0088' }] })
+      )
+      .mockResolvedValueOnce(
+        response({
+          expectedBuyAmount: '0.0088',
+          providers: ['NEAR'],
+          targetAddress: NEAR_DEPOSIT,
+          inboundAddress: NEAR_DEPOSIT,
+          ...extra,
+        })
+      )
+
+    vi.stubGlobal('fetch', fetchMock)
+    configureSwapKit({ apiKey: 'test-key', baseUrl: 'https://swapkit.example' })
+
+    await expect(
+      getSwapKitQuote({
+        from: { chain: Chain.Near, address: NEAR_SOURCE, ticker: 'NEAR', decimals: 24 },
+        to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
+        amount: 5n * 10n ** 24n,
+      })
+    ).rejects.toThrow(/NEAR route/)
   })
 
   describe('ERC-20 deposit transfer (NEAR Intents simpleTransfer)', () => {
