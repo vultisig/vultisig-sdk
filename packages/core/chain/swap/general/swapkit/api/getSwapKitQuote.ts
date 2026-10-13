@@ -9,6 +9,7 @@ import { GeneralSwapQuote, GeneralSwapTx } from '@vultisig/core-chain/swap/gener
 import {
   assertSwapKitAddressReputation,
   assertSwapKitDestinationMatchesTarget,
+  getBoundSwapKitErc20DepositRecipient,
 } from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
 import { getSwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
 import {
@@ -345,6 +346,9 @@ type BuildEvmTxInput = {
   chain: Chain
   approvalTx?: SwapKitSwapResponse['approvalTx']
   fees: SwapKitSwapFees
+  /** The sold ERC-20 contract, when the source is a token. */
+  sourceToken?: string
+  amount: bigint
 }
 
 const buildEvmTx = async ({
@@ -354,6 +358,8 @@ const buildEvmTx = async ({
   chain,
   approvalTx,
   fees: { affiliate, protocol },
+  sourceToken,
+  amount,
 }: BuildEvmTxInput): Promise<GeneralSwapTx> => {
   if (!isRecord(tx)) {
     throw new Error('SwapKit EVM route did not return a transaction object.')
@@ -365,9 +371,21 @@ const buildEvmTx = async ({
     throw new Error('SwapKit EVM transaction is missing a required to field.')
   }
 
+  const depositRecipient = getBoundSwapKitErc20DepositRecipient({
+    to: evmTx.to,
+    data: evmTx.data,
+    value: BigInt(bigintString(evmTx.value)),
+    sourceToken,
+    amount,
+    targetAddress,
+    chain,
+  })
+
   // sdk#1458: tx.to and targetAddress share the same untrusted /v3/swap response, so
   // equality is defense in depth rather than an independent trust boundary.
-  assertSwapKitDestinationMatchesTarget(evmTx.to, targetAddress, chain)
+  if (!depositRecipient) {
+    assertSwapKitDestinationMatchesTarget(evmTx.to, targetAddress, chain)
+  }
 
   const gas = evmTx.gasLimit ?? evmTx.gas
 
@@ -905,6 +923,8 @@ const buildSwapKitTx = (
     targetAddress: response.targetAddress,
     chain: from.chain,
     approvalTx: response.approvalTx,
+    sourceToken: from.id,
+    amount,
     fees: getSwapKitDisplaySwapFees({
       fees: response.fees,
       from,
