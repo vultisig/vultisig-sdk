@@ -412,6 +412,7 @@ const buildEvmTx = async ({
       value: bigintString(evmTx.value),
       gasLimit: safeBigInt(gas),
       ...(approvalAddress ? { approvalAddress } : {}),
+      ...(depositRecipient ? { erc20TransferDeposit: true as const } : {}),
       // SwapKit itemizes the affiliate and service fees it charges. The Solana
       // branch already surfaces them; leaving them off the EVM branch made an
       // aggregator swap look like it carried no swap fee at all, so the fee row
