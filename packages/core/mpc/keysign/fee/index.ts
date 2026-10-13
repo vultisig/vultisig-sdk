@@ -3,6 +3,7 @@ import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/key
 import { WalletCore } from '@trustwallet/wallet-core'
 import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
 
+import { assertKeysignSwapSellsSigningCoin } from '../swap/assertKeysignSwapSellsSigningCoin'
 import { getKeysignChain } from '../utils/getKeysignChain'
 import { FeeAmountResolver } from './resolver'
 import { getBittensorFeeAmount } from './resolvers/bittensor'
@@ -40,6 +41,8 @@ const resolvers: Record<ChainKind, FeeAmountResolver> = {
 }
 
 export const getFeeAmount = async (input: Input): Promise<bigint> => {
+  assertKeysignSwapSellsSigningCoin(input.keysignPayload)
+
   const chain = getKeysignChain(input.keysignPayload)
   const kind = getChainKind(chain)
 
