@@ -182,6 +182,57 @@ export function assertKnownAggregatorRouterOnSigningPath(provider: string, addre
   }
 }
 
+type SwapCoinIdentity = {
+  chain: string
+  isNativeToken: boolean
+  contractAddress: string
+  ticker: string
+  decimals: number
+}
+
+const describeSwapCoin = ({ chain, isNativeToken, contractAddress, ticker }: SwapCoinIdentity) =>
+  isNativeToken ? `native ${ticker} on ${chain}` : `${ticker} (${contractAddress}) on ${chain}`
+
+// An EVM contract is hex, where case is only a checksum; every other chain's token ids (Solana mints,
+// Cosmos denoms, ...) are case-sensitive, so two that differ only in case are different tokens.
+const isSameContract = (chain: string, a: string, b: string) =>
+  isOneOf(chain, Object.values(EvmChain)) ? a.toLowerCase() === b.toLowerCase() : a === b
+
+const findSwapCoinMismatch = (fromCoin: SwapCoinIdentity, signingCoin: SwapCoinIdentity) => {
+  if (fromCoin.chain !== signingCoin.chain) return 'chain differs'
+  if (fromCoin.isNativeToken !== signingCoin.isNativeToken) return 'native flag differs'
+  if (!isSameContract(signingCoin.chain, fromCoin.contractAddress, signingCoin.contractAddress)) {
+    return 'contract differs'
+  }
+  if (fromCoin.ticker !== signingCoin.ticker) return 'ticker differs'
+  if (fromCoin.decimals !== signingCoin.decimals) {
+    return `decimals differ (${fromCoin.decimals} vs ${signingCoin.decimals})`
+  }
+  return undefined
+}
+
+/**
+ * Refuses a swap (every provider, THORChain and Maya included) whose sold coin is missing or is not
+ * the coin being signed: same chain, same native/token kind, the same contract (case-insensitive on
+ * EVM only), ticker and decimals. The signer builds for the signing coin while the swap bounds and co-signer screens read
+ * the payload's coin, including the ticker and decimals they render the amount with.
+ * Mirrors `SwapPayload.requireSellsSigningCoin` on iOS and Android.
+ */
+export function assertSwapCoinIsSigningCoin(
+  fromCoin: SwapCoinIdentity | undefined,
+  signingCoin: SwapCoinIdentity
+): void {
+  if (!fromCoin) {
+    throw new Error('Swap payload carries no source coin — refusing to sign.')
+  }
+  const mismatch = findSwapCoinMismatch(fromCoin, signingCoin)
+  if (mismatch) {
+    throw new Error(
+      `Swap sells ${describeSwapCoin(fromCoin)} but signs ${describeSwapCoin(signingCoin)}: ${mismatch} — refusing to sign.`
+    )
+  }
+}
+
 /**
  * Independent reputation boundary shared by dynamic aggregator addresses. Only an explicit
  * Benign Blockaid verdict is accepted; unsupported chains, scan failures, Warning, and Malicious
