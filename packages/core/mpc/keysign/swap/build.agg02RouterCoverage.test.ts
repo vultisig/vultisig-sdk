@@ -103,6 +103,72 @@ describe('buildSwapKeysignPayload — EVM approval spender and signed destinatio
     )
   })
 
+  describe('SwapKit ERC-20 source swap — erc20TransferDeposit flag vs approve leg', () => {
+    const USDT = '0xdAC17F958D2ee523a2206206994597C13D831ec7'
+
+    const buildSwapKitPayload = (evm: Record<string, unknown>) =>
+      buildSwapKeysignPayload({
+        fromCoin: {
+          chain: Chain.Ethereum,
+          address: SENDER,
+          id: USDT,
+          ticker: 'USDT',
+          decimals: 6,
+        },
+        toCoin: {
+          chain: Chain.Solana,
+          address: 'sol-destination',
+          ticker: 'SOL',
+          decimals: 9,
+        },
+        amount: 20,
+        swapQuote: {
+          quote: {
+            general: {
+              provider: 'swapkit',
+              routeProvider: 'NEAR',
+              dstAmount: '110000000',
+              tx: { evm },
+            },
+          },
+          discounts: [],
+        } as never,
+        vaultId: 'vault-id',
+        localPartyId: 'local-party',
+        fromPublicKey: publicKey,
+        toPublicKey: publicKey,
+        libType: 'DKLS' as const,
+        walletCore: {} as never,
+      })
+
+    it('the flag wins over a SwapKit approvalAddress: still no approve leg', async () => {
+      const payload = await buildSwapKitPayload({
+        from: SENDER,
+        to: USDT,
+        data: '0xa9059cbb',
+        value: '0',
+        approvalAddress: LIFI_APPROVAL_SPENDER,
+        erc20TransferDeposit: true,
+      })
+
+      expect(payload.erc20ApprovePayload).toBeUndefined()
+      expect(mocks.getErc20Allowance).not.toHaveBeenCalled()
+    })
+
+    it('a router swap without the flag still approves the SwapKit approvalAddress', async () => {
+      const payload = await buildSwapKitPayload({
+        from: SENDER,
+        to: ONE_INCH_V6_ROUTER,
+        data: '0xdeadbeef',
+        value: '0',
+        approvalAddress: LIFI_APPROVAL_SPENDER,
+      })
+
+      expect(payload.erc20ApprovePayload?.spender).toBe(LIFI_APPROVAL_SPENDER)
+      expect(mocks.getErc20Allowance).toHaveBeenCalledWith(expect.objectContaining({ spender: LIFI_APPROVAL_SPENDER }))
+    })
+  })
+
   it('the ERC-20 approval spender AND the swap tx destination (read by the evm signingInputs resolver) both carry the SAME validated router address', async () => {
     // This quote shape is exactly what getOneInchSwapQuote returns AFTER its AGG-02
     // allowlist check passes — production code can never construct this object with
