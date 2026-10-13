@@ -11,7 +11,7 @@ import {
 
 describe('seedphrase import chain support', () => {
   it('excludes chains that cannot be imported and signed end-to-end', () => {
-    expect(SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS).toEqual([Chain.Cardano, Chain.QBTC])
+    expect(SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS).toEqual([Chain.Cardano, Chain.QBTC, Chain.Near])
     expect(SEEDPHRASE_IMPORT_SUPPORTED_CHAINS).toContain(Chain.Ethereum)
     expect(SEEDPHRASE_IMPORT_SUPPORTED_CHAINS).toContain(Chain.Solana)
     expect(SEEDPHRASE_IMPORT_SUPPORTED_CHAINS).toContain(Chain.Bittensor)
@@ -21,5 +21,6 @@ describe('seedphrase import chain support', () => {
     expect(isSeedphraseImportSupportedChain(Chain.Cardano)).toBe(false)
     expect(getUnsupportedSeedphraseImportChains([Chain.Ethereum, Chain.Cardano])).toEqual([Chain.Cardano])
     expect(() => assertSeedphraseImportSupportsChains([Chain.Cardano])).toThrow(/Cardano/)
+    expect(isSeedphraseImportSupportedChain(Chain.Near)).toBe(false)
   })
 })

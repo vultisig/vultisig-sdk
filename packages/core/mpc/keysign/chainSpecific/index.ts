@@ -8,6 +8,7 @@ import { getCardanoChainSpecific } from './resolvers/cardano'
 import { getCosmosChainSpecific } from './resolvers/cosmos'
 import { getEvmChainSpecific } from './resolvers/evm'
 import { getMayaChainSpecific } from './resolvers/maya'
+import { getNearChainSpecific } from './resolvers/near'
 import { getPolkadotChainSpecific } from './resolvers/polkadot'
 import { getQbtcChainSpecific } from './resolvers/qbtc'
 import { getRippleChainSpecific } from './resolvers/ripple'
@@ -31,6 +32,7 @@ const resolvers: Record<KeysignChainSpecific['case'], GetChainSpecificResolver<a
   tonSpecific: getTonChainSpecific,
   tronSpecific: getTronChainSpecific,
   cardano: getCardanoChainSpecific,
+  nearSpecific: getNearChainSpecific,
 }
 
 // Chains that share a proto case but need their own resolver

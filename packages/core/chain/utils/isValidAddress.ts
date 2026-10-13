@@ -4,6 +4,7 @@ import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import { getCoinType } from '@vultisig/core-chain/coin/coinType'
 import { isAddress } from 'viem'
 
+import { isNearAccountId } from '../chains/near/accountId'
 import { isValidRippleXAddress } from '../chains/ripple/address'
 import { decodeBech32 } from './decodeBech32'
 import { hasUniformEvmAddressCase, isEvmHexAddress } from './getEvmChecksumMismatchHint'
@@ -25,6 +26,11 @@ export const isValidAddress = ({ chain, address, walletCore }: Input) => {
     }
 
     return hasUniformEvmAddressCase(address) || isAddress(address, { strict: true })
+  }
+
+  // WalletCore rejects every named account and accepts uppercase or 0x-prefixed hex.
+  if (chain === Chain.Near) {
+    return isNearAccountId(address)
   }
 
   const coinType = getCoinType({
