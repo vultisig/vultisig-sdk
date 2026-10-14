@@ -74,6 +74,14 @@ describe('AddressService', () => {
     })
   })
 
+  it('getUnderivableChains reports QBTC only when the vault lacks an MLDSA key', () => {
+    const withoutMldsa = new AddressService(baseVault as never, cache, wasmProvider)
+    const withMldsa = new AddressService({ ...baseVault, publicKeyMldsa: 'mldsa-pub' } as never, cache, wasmProvider)
+
+    expect(withoutMldsa.getUnderivableChains([Chain.Ethereum, Chain.QBTC])).toEqual([Chain.QBTC])
+    expect(withMldsa.getUnderivableChains([Chain.Ethereum, Chain.QBTC])).toEqual([])
+  })
+
   it('getAddress wraps derivation failures in VaultError', async () => {
     mockDeriveAddress.mockImplementation(() => {
       throw new Error('boom')
@@ -103,6 +111,33 @@ describe('AddressService', () => {
     expect(out).toEqual({})
     expect(warn).toHaveBeenCalled()
     warn.mockRestore()
+  })
+
+  it('getAddressesDetailed returns successful addresses and the innermost QBTC failure', async () => {
+    const service = new AddressService(baseVault as never, cache, wasmProvider)
+
+    await expect(service.getAddressesDetailed([Chain.Ethereum, Chain.QBTC])).resolves.toEqual({
+      addresses: { Ethereum: '0xderived' },
+      failures: [
+        {
+          chain: Chain.QBTC,
+          code: VaultErrorCode.AddressDerivationFailed,
+          error: 'Vault has no MLDSA public key (required for QBTC address derivation)',
+        },
+      ],
+    })
+  })
+
+  it('getAddresses warns once per failure with a message only', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const service = new AddressService(baseVault as never, cache, wasmProvider)
+
+    await expect(service.getAddresses([Chain.Ethereum, Chain.QBTC])).resolves.toEqual({ Ethereum: '0xderived' })
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn).toHaveBeenCalledWith(
+      'Failed to derive address for QBTC: Vault has no MLDSA public key (required for QBTC address derivation)'
+    )
+    expect(warn.mock.calls.flat().some(value => value instanceof Error)).toBe(false)
   })
 
   it('getAddresses merges successful chains', async () => {
