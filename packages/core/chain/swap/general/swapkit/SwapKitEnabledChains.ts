@@ -35,6 +35,8 @@ export const swapKitSourceChains = [
   // decode for its payload yet (see that file's
   // `SWAP_SOURCE_TX_BUILD_UNSUPPORTED` guard).
   Chain.Cardano,
+  // NEAR-Intents: a NEAR-source swap is a plain transfer to a per-swap implicit account.
+  Chain.Near,
 ] as const
 
 export type SwapKitSourceChain = (typeof swapKitSourceChains)[number] | BlockaidSupportedEvmChain

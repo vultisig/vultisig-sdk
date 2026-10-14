@@ -100,6 +100,18 @@ export const mapBlockchainSpecific = (bsRaw: any) => {
     }
   }
 
+  // NEAR: block_hash is base64 (Swift `Data` Codable); nonce may be a string above 2^53
+  if (bsRaw.NearSpecific || bsRaw.nearSpecific) {
+    const n = bsRaw.NearSpecific ?? bsRaw.nearSpecific
+    return {
+      nearSpecific: {
+        nonce: BigInt(n.nonce),
+        blockHash: Uint8Array.from(Buffer.from(n.block_hash ?? n.blockHash, 'base64')),
+        gasFee: n.gas_fee ?? n.gasFee,
+      },
+    }
+  }
+
   // TON
   if (bsRaw.TonSpecific || bsRaw.tonSpecific) {
     const t = bsRaw.TonSpecific ?? bsRaw.tonSpecific

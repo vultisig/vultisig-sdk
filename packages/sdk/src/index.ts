@@ -439,6 +439,7 @@ export {
 export type {
   AddressBook,
   AddressBookEntry,
+  AddressFailure,
   AddressResult,
   Balance,
   BalancesWithPricesResult,

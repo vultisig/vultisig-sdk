@@ -563,6 +563,40 @@ describe('SwapService', () => {
       expect(result.approvalInfo).toBeUndefined()
     })
 
+    it('should not require approval for a SwapKit ERC-20 deposit transfer', async () => {
+      const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
+      const { getErc20Allowance } = await import('@vultisig/core-chain/chains/evm/erc20/getErc20Allowance')
+      const owner = '0x1234567890abcdef1234567890abcdef12345678'
+      const usdt = '0xdAC17F958D2ee523a2206206994597C13D831ec7'
+
+      vi.mocked(findSwapQuote).mockResolvedValue({
+        quote: {
+          general: {
+            dstAmount: '110000000',
+            provider: 'swapkit' as const,
+            tx: {
+              evm: { from: owner, to: usdt, data: '0xa9059cbb', value: '0', erc20TransferDeposit: true as const },
+            },
+          },
+        },
+        discounts: [],
+        requestedAmount: 100_000_000n,
+        expiresAt: Date.now() + 60_000,
+        safetyFingerprint: 'test-fingerprint',
+      })
+      vi.mocked(getErc20Allowance).mockResolvedValue(0n)
+
+      const result = await service.getQuote({
+        fromCoin: { chain: Chain.Ethereum, address: owner, id: usdt, ticker: 'USDT', decimals: 6 },
+        toCoin: { chain: Chain.Solana, address: 'sol-destination', ticker: 'SOL', decimals: 9 },
+        amount: 100,
+      })
+
+      expect(getErc20Allowance).not.toHaveBeenCalled()
+      expect(result.requiresApproval).toBe(false)
+      expect(result.approvalInfo).toBeUndefined()
+    })
+
     it('should fall back to the general provider when routeProvider is blank', async () => {
       const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
 

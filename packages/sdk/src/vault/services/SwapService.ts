@@ -334,7 +334,12 @@ export class SwapService {
   private getSpenderFromQuote(quoteData: SwapQuote['quote']): string | undefined {
     if ('general' in quoteData && quoteData.general.tx) {
       if ('evm' in quoteData.general.tx) {
-        return quoteData.general.tx.evm.approvalAddress ?? quoteData.general.tx.evm.to
+        const { evm } = quoteData.general.tx
+        // A direct ERC-20 `transfer` to a deposit address spends no allowance.
+        if (evm.erc20TransferDeposit) {
+          return undefined
+        }
+        return evm.approvalAddress ?? evm.to
       }
       // UTXO/Cosmos deposit-channel swaps: no ERC-20 spender approval needed.
       if ('transfer' in quoteData.general.tx) {

@@ -7,7 +7,9 @@ import { Chain } from '@vultisig/core-chain/Chain'
 import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
+import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 import { areEqualCoins } from '@vultisig/core-chain/coin/Coin'
+import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import { COW_VAULT_RELAYER_ADDRESS } from '@vultisig/core-chain/swap/general/cowswap/config'
 import { encodeCowSwapKeysignData } from '@vultisig/core-chain/swap/general/cowswap/keysign/cowSwapKeysignData'
 import { assertAggregatorCalldataMinOutputBound } from '@vultisig/core-chain/swap/general/calldataMinOutput'
@@ -20,6 +22,7 @@ import { SwapFee } from '@vultisig/core-chain/swap/SwapFee'
 import { decodeBech32 } from '@vultisig/core-chain/utils/decodeBech32'
 import { getChainSpecific } from '@vultisig/core-mpc/keysign/chainSpecific'
 import { getBlockchainSpecificValue } from '@vultisig/core-mpc/keysign/chainSpecific/KeysignChainSpecific'
+import { assertNearSendAffordable } from '@vultisig/core-mpc/keysign/refine/near'
 import { refineKeysignUtxo } from '@vultisig/core-mpc/keysign/refine/utxo'
 import { CommKeysignSwapPayload } from '@vultisig/core-mpc/keysign/swap/KeysignSwapPayload'
 import { getKeysignUtxoInfo } from '@vultisig/core-mpc/keysign/utxo/getKeysignUtxoInfo'
@@ -603,7 +606,13 @@ export const buildSwapKeysignPayload = async ({
     keysignPayload.swapPayload.value.quote.tx.gas = BigInt(gasLimit)
   }
 
-  if (isChainOfKind(chain, 'evm') && fromCoin.id) {
+  // A direct ERC-20 `transfer` to a deposit address spends no allowance.
+  const isErc20TransferDeposit = matchRecordUnion<SwapQuoteResult, boolean>(swapQuote.quote, {
+    native: () => false,
+    general: ({ tx }) => 'evm' in tx && tx.evm.erc20TransferDeposit === true,
+  })
+
+  if (isChainOfKind(chain, 'evm') && fromCoin.id && !isErc20TransferDeposit) {
     const approvalAddress = matchRecordUnion<SwapQuoteResult, string | undefined>(swapQuote.quote, {
       native: () => undefined,
       general: ({ tx }) => ('evm' in tx ? tx.evm.approvalAddress : undefined),
@@ -616,6 +625,10 @@ export const buildSwapKeysignPayload = async ({
       spender,
       amount: chainAmount,
     })
+  }
+
+  if (chain === Chain.Near && isFeeCoin(fromCoin)) {
+    await assertNearSendAffordable({ keysignPayload, balance: await getCoinBalance(fromCoin), coin: fromCoin })
   }
 
   if (isChainOfKind(fromCoin.chain, 'utxo')) {

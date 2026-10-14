@@ -336,6 +336,44 @@ vultisig export
 | `chains`         | List and manage chains (--add, --remove) |
 | `tokens <chain>` | List and manage tokens for a chain       |
 
+`chains --add-all --output json` reports chains that could not be enabled in `skipped`. Chains that were already
+enabled are never removed; if one cannot currently derive an address, it appears in `unavailable` instead:
+
+```json
+{
+  "chains": ["Ethereum", "Bitcoin"],
+  "added": 2,
+  "total": 39,
+  "skipped": [
+    {
+      "chain": "QBTC",
+      "reason": "Vault has no MLDSA public key (required for QBTC address derivation)",
+      "hint": "Run \"vultisig add-mldsa --email <email>\" to add ML-DSA keys to this vault"
+    }
+  ],
+  "unavailable": []
+}
+```
+
+For an already-enabled QBTC chain without an ML-DSA key, `skipped` is empty and `unavailable` contains the QBTC row.
+On a secure vault its hint is `ML-DSA keys can currently be added only to fast vaults, so this secure vault cannot
+derive QBTC addresses` because `add-mldsa` is available only for fast vaults.
+
+`addresses --output json` returns successful addresses and always includes a `failures` array:
+
+```json
+{
+  "addresses": { "Ethereum": "0xabc..." },
+  "failures": [
+    {
+      "chain": "QBTC",
+      "error": "Vault has no MLDSA public key (required for QBTC address derivation)",
+      "hint": "Run \"vultisig add-mldsa --email <email>\" to add ML-DSA keys to this vault"
+    }
+  ]
+}
+```
+
 ### Swap Operations
 
 | Command                           | Description                    |

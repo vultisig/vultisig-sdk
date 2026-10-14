@@ -1,4 +1,5 @@
 import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
+import { stripHexPrefix } from '@vultisig/lib-utils/hex/stripHexPrefix'
 
 import { Chain, EvmChain } from '../../Chain'
 import { scanAddressWithBlockaid } from '../../security/blockaid/address'
@@ -182,6 +183,57 @@ export function assertKnownAggregatorRouterOnSigningPath(provider: string, addre
   }
 }
 
+type SwapCoinIdentity = {
+  chain: string
+  isNativeToken: boolean
+  contractAddress: string
+  ticker: string
+  decimals: number
+}
+
+const describeSwapCoin = ({ chain, isNativeToken, contractAddress, ticker }: SwapCoinIdentity) =>
+  isNativeToken ? `native ${ticker} on ${chain}` : `${ticker} (${contractAddress}) on ${chain}`
+
+// An EVM contract is hex, where case is only a checksum; every other chain's token ids (Solana mints,
+// Cosmos denoms, ...) are case-sensitive, so two that differ only in case are different tokens.
+const isSameContract = (chain: string, a: string, b: string) =>
+  isOneOf(chain, Object.values(EvmChain)) ? a.toLowerCase() === b.toLowerCase() : a === b
+
+const findSwapCoinMismatch = (fromCoin: SwapCoinIdentity, signingCoin: SwapCoinIdentity) => {
+  if (fromCoin.chain !== signingCoin.chain) return 'chain differs'
+  if (fromCoin.isNativeToken !== signingCoin.isNativeToken) return 'native flag differs'
+  if (!isSameContract(signingCoin.chain, fromCoin.contractAddress, signingCoin.contractAddress)) {
+    return 'contract differs'
+  }
+  if (fromCoin.ticker !== signingCoin.ticker) return 'ticker differs'
+  if (fromCoin.decimals !== signingCoin.decimals) {
+    return `decimals differ (${fromCoin.decimals} vs ${signingCoin.decimals})`
+  }
+  return undefined
+}
+
+/**
+ * Refuses a swap (every provider, THORChain and Maya included) whose sold coin is missing or is not
+ * the coin being signed: same chain, same native/token kind, the same contract (case-insensitive on
+ * EVM only), ticker and decimals. The signer builds for the signing coin while the swap bounds and co-signer screens read
+ * the payload's coin, including the ticker and decimals they render the amount with.
+ * Mirrors `SwapPayload.requireSellsSigningCoin` on iOS and Android.
+ */
+export function assertSwapCoinIsSigningCoin(
+  fromCoin: SwapCoinIdentity | undefined,
+  signingCoin: SwapCoinIdentity
+): void {
+  if (!fromCoin) {
+    throw new Error('Swap payload carries no source coin — refusing to sign.')
+  }
+  const mismatch = findSwapCoinMismatch(fromCoin, signingCoin)
+  if (mismatch) {
+    throw new Error(
+      `Swap sells ${describeSwapCoin(fromCoin)} but signs ${describeSwapCoin(signingCoin)}: ${mismatch} — refusing to sign.`
+    )
+  }
+}
+
 /**
  * Independent reputation boundary shared by dynamic aggregator addresses. Only an explicit
  * Benign Blockaid verdict is accepted; unsupported chains, scan failures, Warning, and Malicious
@@ -332,6 +384,89 @@ export function assertSwapKitDestinationMatchesTarget(
       `SwapKit swap transaction destination (${address}) does not match the screened targetAddress (${targetAddress}) on ${chain} — refusing to build a signable transaction.`
     )
   }
+}
+
+const erc20TransferSelector = 'a9059cbb'
+// Exactly `transfer(address,uint256)` as the signer encodes it: selector, a
+// zero-padded address word and an amount word, nothing after.
+const erc20TransferCalldata = /^a9059cbb0{24}([0-9a-f]{40})([0-9a-f]{64})$/
+
+const refuseSwapKitErc20Deposit = (chain: Chain, reason: string): never => {
+  throw new Error(`SwapKit ERC-20 deposit on ${chain} ${reason} — refusing to build a signable transaction.`)
+}
+
+type SwapKitErc20DepositInput = {
+  to: string
+  data: string | undefined
+  value: bigint
+  sourceToken: string | undefined
+  amount: bigint
+  chain: Chain
+}
+
+/**
+ * A SwapKit deposit route (NEAR Intents `simpleTransfer`) that sells an ERC-20
+ * calls the token itself with `transfer(recipient, amount)`. Returns the
+ * lowercase recipient when the transaction is exactly that: addressed to the
+ * sold token, no native value, exactly a `transfer` call, the sold amount.
+ * Returns undefined when it is neither addressed to the sold token nor a
+ * `transfer` call. Anything else that is (another token, native value, other
+ * calldata, another amount) throws.
+ */
+export function getSwapKitErc20DepositRecipient({
+  to,
+  data,
+  value,
+  sourceToken,
+  amount,
+  chain,
+}: SwapKitErc20DepositInput): string | undefined {
+  const calldata = stripHexPrefix(data ?? '').toLowerCase()
+  const isTokenAddressed = !!sourceToken && to.toLowerCase() === sourceToken.toLowerCase()
+  if (!isTokenAddressed && !calldata.startsWith(erc20TransferSelector)) return undefined
+
+  if (!isTokenAddressed) {
+    refuseSwapKitErc20Deposit(
+      chain,
+      sourceToken
+        ? `calls transfer on ${to}, not the sold token ${sourceToken}`
+        : `sells the native coin but calls transfer on ${to}`
+    )
+  }
+  if (value !== 0n) refuseSwapKitErc20Deposit(chain, `attaches native value ${value}`)
+
+  const [, recipient, transferred] =
+    erc20TransferCalldata.exec(calldata) ??
+    refuseSwapKitErc20Deposit(chain, 'is not exactly an ERC-20 transfer(address,uint256) call')
+  const transferredAmount = BigInt(`0x${transferred}`)
+  if (transferredAmount !== amount) {
+    refuseSwapKitErc20Deposit(chain, `transfers ${transferredAmount}, not the sold amount ${amount}`)
+  }
+
+  return `0x${recipient}`
+}
+
+/**
+ * Quote-time binding of a SwapKit ERC-20 deposit: the recipient when the
+ * transaction is that shape (see `getSwapKitErc20DepositRecipient`) and
+ * transfers to the screened `targetAddress`; throws when it is that shape to
+ * anyone else. Returns undefined when it is not a deposit, leaving the router check.
+ */
+export function getBoundSwapKitErc20DepositRecipient({
+  targetAddress,
+  ...transfer
+}: SwapKitErc20DepositInput & { targetAddress: string | undefined }): string | undefined {
+  const recipient = getSwapKitErc20DepositRecipient(transfer)
+  if (recipient === undefined) return undefined
+
+  if (recipient !== targetAddress?.toLowerCase()) {
+    refuseSwapKitErc20Deposit(
+      transfer.chain,
+      `transfers to ${recipient}, not the screened targetAddress ${targetAddress}`
+    )
+  }
+
+  return recipient
 }
 
 /**
