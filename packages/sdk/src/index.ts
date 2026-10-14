@@ -118,6 +118,8 @@ export {
 export type { TonGaslessConfig } from '@vultisig/core-chain/chains/ton/gasless/api'
 export { getTonGaslessConfig, isTonGasJetton } from '@vultisig/core-chain/chains/ton/gasless/api'
 export { resolveTokenPriceId } from '@vultisig/core-chain/coin/price/resolveTokenPriceId'
+export type { SwapErrorDetails } from '@vultisig/core-chain/swap/SwapError'
+export { SwapError, SwapErrorCode } from '@vultisig/core-chain/swap/SwapError'
 export {
   CosmosSequenceMismatchError,
   toCosmosSequenceMismatchError,
