@@ -20,7 +20,8 @@ import { getKeysignChain } from '../utils/getKeysignChain'
 type RefineKeysignUtxoInput = {
   keysignPayload: KeysignPayload
   walletCore: WalletCore
-  publicKey: PublicKey
+  /** Not read; kept optional so existing callers that pass it still compile. */
+  publicKey?: PublicKey | null
 }
 
 type ConvertPlanUtxosToUtxoInfoInput = {
