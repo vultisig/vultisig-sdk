@@ -176,6 +176,12 @@ const leanChainFeeCoin: Record<Chain, KnownCoinMetadata> = {
     decimals: 6,
     priceProviderId: 'cardano',
   },
+  [Chain.Near]: {
+    ticker: 'NEAR',
+    logo: 'near',
+    decimals: 24,
+    priceProviderId: 'near',
+  },
   [Chain.Mantle]: {
     ticker: 'MNT',
     logo: 'mantle',

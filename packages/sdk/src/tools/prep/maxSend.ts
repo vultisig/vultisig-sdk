@@ -2,6 +2,8 @@ import type { WalletCore } from '@trustwallet/wallet-core'
 import { getMaxSendableAmount } from '@vultisig/core-chain/amount/getMaxSendableAmount'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { isTerraClassicUstcCoin } from '@vultisig/core-chain/chains/cosmos/terraClassicTax'
+import { getNearMaxSendable } from '@vultisig/core-chain/chains/near/fees'
+import { getNearSendLimits } from '@vultisig/core-chain/chains/near/sendLimits'
 import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
@@ -72,6 +74,17 @@ export const computeMaxSendFromBalance = async (
   }
 
   const isQbtc = params.coin.chain === Chain.QBTC
+
+  // NEAR MAX also keeps the account's storage reserve back, so it is not balance minus gas.
+  if (params.coin.chain === Chain.Near && isFeeCoin(params.coin)) {
+    const { gasReservation, storageReserve } = await getNearSendLimits({
+      address: params.coin.address,
+      receiver: params.receiver,
+    })
+    const maxSendable = getNearMaxSendable({ amount: params.balance, gasReservation, storageReserve })
+
+    return { balance: params.balance, fee: gasReservation, maxSendable }
+  }
 
   const publicKey = isQbtc
     ? null

@@ -57,6 +57,8 @@ export const chainSpecificRecord = {
 
   [Chain.Cardano]: 'cardano',
 
+  [Chain.Near]: 'nearSpecific',
+
   [Chain.QBTC]: 'cosmosSpecific',
 } as const satisfies Record<Chain, KeysignChainSpecificKey>
 

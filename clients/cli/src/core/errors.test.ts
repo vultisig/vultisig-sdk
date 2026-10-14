@@ -341,6 +341,42 @@ describe('classifyError with VaultError', () => {
     expect(result.context).toEqual({ chain: 'ethreum' })
   })
 
+  it('unwraps a QBTC address derivation failure as non-retryable invalid input', () => {
+    const derivation = new VaultError(
+      VaultErrorCode.AddressDerivationFailed,
+      'Failed to derive address for QBTC',
+      new Error('Vault has no MLDSA public key (required for QBTC address derivation)')
+    )
+    const wrapped = new VaultError(
+      VaultErrorCode.BalanceFetchFailed,
+      'Failed to fetch balance for QBTC: VaultError: Failed to derive address for QBTC',
+      derivation
+    )
+
+    const result = classifyError(wrapped)
+
+    expect(result).toBeInstanceOf(InvalidInputError)
+    expect(result).toMatchObject({
+      code: 'INVALID_INPUT',
+      exitCode: ExitCode.INVALID_INPUT,
+      retryable: false,
+      hint: 'This vault has no ML-DSA key. On a fast vault, run "vultisig add-mldsa --email <email>" to add one.',
+    })
+  })
+
+  it('keeps unrelated address derivation failures under the pre-existing unknown classification', () => {
+    const err = new VaultError(
+      VaultErrorCode.AddressDerivationFailed,
+      'Failed to derive address for Ethereum',
+      new Error('WalletCore init failed')
+    )
+
+    const result = classifyError(err)
+
+    expect(result).toBeInstanceOf(UnknownError)
+    expect(result).toMatchObject({ code: 'UNKNOWN_ERROR', exitCode: ExitCode.UNKNOWN, retryable: false })
+  })
+
   it('maps InvalidConfig with "Unknown chain" message to InvalidChainError', () => {
     const err = new VaultError(VaultErrorCode.InvalidConfig, 'Unknown chain: "foo". Available: [Ethereum]')
     const result = classifyError(err)

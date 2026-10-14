@@ -47,6 +47,10 @@ const makeBitcoinPsbtPayload = (outputValue: bigint) => {
   return { sourceAddress: p2wpkh.address!, targetAddress: BTC_RECIPIENT_ADDRESS, payload: psbt.toBuffer() }
 }
 
+// Shapes from a live `/v3/swap` NEAR.NEAR -> ETH.ETH response (2026-10-01).
+const NEAR_SOURCE = 'd75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a'
+const NEAR_DEPOSIT = '14397e36f7e4f15599c8ba31baac5fbfd79b415729428ba70d94aee794a4f27f'
+
 type TransferSourceFixture = readonly [string, SwapKitSourceChain, string, number, string, string]
 
 const transferSourceFixtures: TransferSourceFixture[] = [
@@ -57,6 +61,7 @@ const transferSourceFixtures: TransferSourceFixture[] = [
   ['Zcash', Chain.Zcash, 'ZEC', 8, 't1Source', 't1Deposit'],
   ['Tron', Chain.Tron, 'TRX', 6, 'TSource', 'TDeposit'],
   ['TON', Chain.Ton, 'TON', 9, 'UQSource', 'EQCIcjES4cQET0z6nRixZ0MdvTB4u3_8triztLSrIIrDkpgJ'],
+  ['NEAR', Chain.Near, 'NEAR', 24, NEAR_SOURCE, NEAR_DEPOSIT],
 ]
 
 describe('getSwapKitQuote', () => {
@@ -252,7 +257,14 @@ describe('getSwapKitQuote', () => {
         .mockResolvedValueOnce(
           response({ routes: [{ routeId: 'near-transfer-route', providers: ['NEAR'], expectedBuyAmount: '0.01' }] })
         )
-        .mockResolvedValueOnce(response({ expectedBuyAmount: '0.009', providers: ['NEAR'], targetAddress: target }))
+        .mockResolvedValueOnce(
+          response({
+            expectedBuyAmount: '0.009',
+            providers: ['NEAR'],
+            targetAddress: target,
+            ...(chain === Chain.Near ? { txHint: 'simpleTransfer' } : {}),
+          })
+        )
 
       vi.stubGlobal('fetch', fetchMock)
       configureSwapKit({ apiKey: 'test-key', baseUrl: 'https://swapkit.example' })
@@ -278,6 +290,128 @@ describe('getSwapKitQuote', () => {
       })
     }
   )
+
+  it('maps a NEAR Intents simpleTransfer deposit to a plain transfer with no memo or pre-built tx', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        response({ routes: [{ routeId: 'near-route', providers: ['NEAR'], expectedBuyAmount: '0.0088' }] })
+      )
+      .mockResolvedValueOnce(
+        response({
+          expectedBuyAmount: '0.0088',
+          providers: ['NEAR'],
+          targetAddress: NEAR_DEPOSIT,
+          inboundAddress: NEAR_DEPOSIT,
+          swapId: '3e4605fe-e640-4524-ba6a-a2541101b7f1',
+          txHint: 'simpleTransfer',
+        })
+      )
+
+    vi.stubGlobal('fetch', fetchMock)
+    configureSwapKit({ apiKey: 'test-key', baseUrl: 'https://swapkit.example' })
+
+    const quote = await getSwapKitQuote({
+      from: { chain: Chain.Near, address: NEAR_SOURCE, ticker: 'NEAR', decimals: 24 },
+      to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
+      amount: 5n * 10n ** 24n,
+    })
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({ sellAsset: 'NEAR.NEAR' })
+    const { transfer } = quote.tx as { transfer: Record<string, unknown> }
+    expect(transfer).toMatchObject({ to: NEAR_DEPOSIT, amount: 5n * 10n ** 24n })
+    expect(transfer.memo).toBeUndefined()
+    expect(transfer.txType).toBeUndefined()
+    expect(transfer.txPayload).toBeUndefined()
+  })
+
+  it.each([
+    ['a deposit amount that differs from the requested amount', { txHint: 'simpleTransfer', depositAmount: '6' }],
+    ['a response without txHint simpleTransfer', {}],
+  ])('rejects a NEAR route with %s', async (_label, extra) => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        response({ routes: [{ routeId: 'near-route', providers: ['NEAR'], expectedBuyAmount: '0.0088' }] })
+      )
+      .mockResolvedValueOnce(
+        response({
+          expectedBuyAmount: '0.0088',
+          providers: ['NEAR'],
+          targetAddress: NEAR_DEPOSIT,
+          inboundAddress: NEAR_DEPOSIT,
+          ...extra,
+        })
+      )
+
+    vi.stubGlobal('fetch', fetchMock)
+    configureSwapKit({ apiKey: 'test-key', baseUrl: 'https://swapkit.example' })
+
+    await expect(
+      getSwapKitQuote({
+        from: { chain: Chain.Near, address: NEAR_SOURCE, ticker: 'NEAR', decimals: 24 },
+        to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
+        amount: 5n * 10n ** 24n,
+      })
+    ).rejects.toThrow(/NEAR route/)
+  })
+
+  describe('ERC-20 deposit transfer (NEAR Intents simpleTransfer)', () => {
+    // Live USDT -> NEAR `/v3/swap` shape (2026-10-01): `tx.to` is the token,
+    // the calldata is `transfer(targetAddress, amount)`, `value` is zero.
+    const USDT = '0xdAC17F958D2ee523a2206206994597C13D831ec7'
+    const DEPOSIT = '0x1F01af4e50082E2982bA5041707efDDd3AA4c121'
+    const AMOUNT = 20_000_000n
+    const word = (hex: string) => hex.replace(/^0x/, '').toLowerCase().padStart(64, '0')
+    const transferData = (to: string, amount: bigint) => `0xa9059cbb${word(to)}${word(amount.toString(16))}`
+
+    const quoteErc20Deposit = (tx: Record<string, unknown>, targetAddress = DEPOSIT) => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(
+          response({ routes: [{ routeId: 'near-route', providers: ['NEAR'], expectedBuyAmount: '0.11' }] })
+        )
+        .mockResolvedValueOnce(
+          response({
+            expectedBuyAmount: '0.11',
+            providers: ['NEAR'],
+            targetAddress,
+            txHint: 'simpleTransfer',
+            meta: { txType: 'EVM' },
+            tx: { from: '0xsender', to: USDT, value: '0x0', gas: '60000', ...tx },
+          })
+        )
+      vi.stubGlobal('fetch', fetchMock)
+      configureSwapKit({ apiKey: 'test-key', baseUrl: 'https://swapkit.example' })
+
+      return getSwapKitQuote({
+        from: { chain: Chain.Ethereum, address: '0xsender', ticker: 'USDT', id: USDT, decimals: 6 },
+        to: { chain: Chain.Solana, address: 'sol-destination', ticker: 'SOL', decimals: 9 },
+        amount: AMOUNT,
+      })
+    }
+
+    it('accepts a transfer of exactly the sold amount to the screened deposit address', async () => {
+      const quote = await quoteErc20Deposit({ data: transferData(DEPOSIT, AMOUNT) })
+
+      expect(quote.tx).toMatchObject({
+        evm: { to: USDT, data: transferData(DEPOSIT, AMOUNT), value: '0', erc20TransferDeposit: true },
+      })
+    })
+
+    it.each([
+      [
+        'a recipient other than targetAddress',
+        { data: transferData('0x2222222222222222222222222222222222222222', AMOUNT) },
+      ],
+      ['an amount other than the sold amount', { data: transferData(DEPOSIT, AMOUNT + 1n) }],
+      ['a non-zero native value', { data: transferData(DEPOSIT, AMOUNT), value: '1' }],
+      ['trailing calldata', { data: `${transferData(DEPOSIT, AMOUNT)}00` }],
+      ['a non-transfer selector on the token', { data: `0x095ea7b3${word(DEPOSIT)}${word(AMOUNT.toString(16))}` }],
+    ])('refuses a token-addressed transaction carrying %s', async (_, tx) => {
+      await expect(quoteErc20Deposit(tx)).rejects.toThrow(/ERC-20 deposit/)
+    })
+  })
 
   const stubEvmRoute = ({ route, fees }: { route?: Record<string, unknown>; fees?: unknown[] } = {}) => {
     const fetchMock = vi

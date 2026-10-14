@@ -9,6 +9,7 @@ import { GeneralSwapQuote, GeneralSwapTx } from '@vultisig/core-chain/swap/gener
 import {
   assertSwapKitAddressReputation,
   assertSwapKitDestinationMatchesTarget,
+  getBoundSwapKitErc20DepositRecipient,
 } from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
 import { getSwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
 import {
@@ -119,6 +120,7 @@ type SwapKitSwapResponse = {
   depositAddress?: string
   inboundAddress?: string
   depositAmount?: string
+  txHint?: string
   memo?: string
   swapId?: string
   providers?: string[]
@@ -148,6 +150,7 @@ const swapKitTransferSourceChains = [
   Chain.Sui,
   Chain.Ton,
   Chain.Tron,
+  Chain.Near,
   Chain.Zcash,
 ] as const
 
@@ -345,6 +348,9 @@ type BuildEvmTxInput = {
   chain: Chain
   approvalTx?: SwapKitSwapResponse['approvalTx']
   fees: SwapKitSwapFees
+  /** The sold ERC-20 contract, when the source is a token. */
+  sourceToken?: string
+  amount: bigint
 }
 
 const buildEvmTx = async ({
@@ -354,6 +360,8 @@ const buildEvmTx = async ({
   chain,
   approvalTx,
   fees: { affiliate, protocol },
+  sourceToken,
+  amount,
 }: BuildEvmTxInput): Promise<GeneralSwapTx> => {
   if (!isRecord(tx)) {
     throw new Error('SwapKit EVM route did not return a transaction object.')
@@ -365,9 +373,21 @@ const buildEvmTx = async ({
     throw new Error('SwapKit EVM transaction is missing a required to field.')
   }
 
+  const depositRecipient = getBoundSwapKitErc20DepositRecipient({
+    to: evmTx.to,
+    data: evmTx.data,
+    value: BigInt(bigintString(evmTx.value)),
+    sourceToken,
+    amount,
+    targetAddress,
+    chain,
+  })
+
   // sdk#1458: tx.to and targetAddress share the same untrusted /v3/swap response, so
   // equality is defense in depth rather than an independent trust boundary.
-  assertSwapKitDestinationMatchesTarget(evmTx.to, targetAddress, chain)
+  if (!depositRecipient) {
+    assertSwapKitDestinationMatchesTarget(evmTx.to, targetAddress, chain)
+  }
 
   const gas = evmTx.gasLimit ?? evmTx.gas
 
@@ -394,6 +414,7 @@ const buildEvmTx = async ({
       value: bigintString(evmTx.value),
       gasLimit: safeBigInt(gas),
       ...(approvalAddress ? { approvalAddress } : {}),
+      ...(depositRecipient ? { erc20TransferDeposit: true as const } : {}),
       // SwapKit itemizes the affiliate and service fees it charges. The Solana
       // branch already surfaces them; leaving them off the EVM branch made an
       // aggregator swap look like it carried no swap fee at all, so the fee row
@@ -853,9 +874,25 @@ const buildTransferTx = ({
     route: 'transfer',
   })
 
+  const transferAmount = psbtDestinationAmount ?? getTransferAmount(response, amount, from.decimals)
+
+  // NEAR is signed as a plain transfer of whatever amount lands here, so the
+  // route must say it is a plain deposit and must not move more than was sold.
+  if (from.chain === Chain.Near) {
+    if (response.txHint !== 'simpleTransfer') {
+      throw new Error('SwapKit NEAR route did not return txHint "simpleTransfer"; refusing to sign a plain transfer.')
+    }
+
+    if (transferAmount !== amount) {
+      throw new Error(
+        `SwapKit NEAR route deposit amount (${transferAmount} base units) differs from the requested sell amount (${amount} base units).`
+      )
+    }
+  }
+
   const transfer = {
     to,
-    amount: psbtDestinationAmount ?? getTransferAmount(response, amount, from.decimals),
+    amount: transferAmount,
     ...(response.memo ? { memo: response.memo } : {}),
     ...(txType ? { txType } : {}),
     ...(response.tx ? { txPayload } : {}),
@@ -905,6 +942,8 @@ const buildSwapKitTx = (
     targetAddress: response.targetAddress,
     chain: from.chain,
     approvalTx: response.approvalTx,
+    sourceToken: from.id,
+    amount,
     fees: getSwapKitDisplaySwapFees({
       fees: response.fees,
       from,
