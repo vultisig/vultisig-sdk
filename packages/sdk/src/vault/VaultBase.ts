@@ -54,6 +54,7 @@ import { vaultDataToIdentity } from '../tools/prep/types'
 import { pollTxStatusUntilFinal } from '../tx'
 // Types
 import {
+  AddressFailure,
   Balance,
   BalancesWithPricesResult,
   CompoundSwapResult,
@@ -497,6 +498,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       async chains => {
         await this.addresses(chains)
       },
+      chains => this.addressService.getUnderivableChains(chains),
       () => this.save(),
       data => this.emit('chainAdded', data),
       data => this.emit('chainRemoved', data)
@@ -1248,6 +1250,20 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     return this.addressService.getAddresses(chainsToDerive)
   }
 
+  /** Get addresses and concise per-chain failures without logging derivation errors. */
+  async addressesDetailed(chains?: Chain[]): Promise<{
+    addresses: Record<string, string>
+    failures: AddressFailure[]
+  }> {
+    const chainsToDerive = chains ?? this._userChains
+    return this.addressService.getAddressesDetailed(chainsToDerive)
+  }
+
+  /** Return requested vault chains that do not meet their address-key requirements. */
+  getUnderivableChains(chains: Chain[] = this._userChains): Chain[] {
+    return this.addressService.getUnderivableChains(chains)
+  }
+
   // ===== BALANCE METHODS =====
 
   /**
@@ -1689,7 +1705,10 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     const { chain, txHash, lastValidBlockHeight } = params
 
     try {
-      const result = await coreTxStatus({ chain, hash: txHash, lastValidBlockHeight })
+      // NEAR looks a transaction up by (hash, sender); an outgoing broadcast's sender is this vault.
+      const senderAccountId = chain === Chain.Near ? await this.address(Chain.Near) : undefined
+
+      const result = await coreTxStatus({ chain, hash: txHash, lastValidBlockHeight, senderAccountId })
 
       if (result.status === 'success') {
         this.emit('transactionConfirmed', { chain, txHash, receipt: result.receipt })

@@ -18,6 +18,8 @@ export type { VaultKeyShares } from '@vultisig/core-mpc/vault/Vault'
 
 // Import MpcLib for use in VaultData type
 import type { MpcLib } from '@vultisig/core-mpc/mpcLib'
+
+import type { VaultErrorCode } from '../vault/VaultError'
 export type { MpcLib }
 
 // Import and export Chain types
@@ -144,6 +146,13 @@ export type FiatValuesResult = {
 export type FiatValueFailure = {
   chain: Chain
   tokenId?: string
+  error: string
+}
+
+/** An address derivation that failed without making the aggregate operation fail. */
+export type AddressFailure = {
+  chain: Chain
+  code: VaultErrorCode | 'UNKNOWN'
   error: string
 }
 

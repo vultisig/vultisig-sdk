@@ -1,5 +1,19 @@
 # @vultisig/core-chain
 
+## 6.3.0
+
+### Minor Changes
+
+- [#2533](https://github.com/vultisig/vultisig-sdk/pull/2533) [`1e702cc`](https://github.com/vultisig/vultisig-sdk/commit/1e702ccdab33255bd7a4177fc010d987584bab74) Thanks [@realpaaao](https://github.com/realpaaao)! - Add native NEAR: implicit-account addresses and the account-ID grammar, balance, preparation that freezes the access-key nonce, final block hash and gas reservation, fee and MAX (balance less the gas and storage reserves), signing, a locally derived transaction hash, broadcast bound to it, and finality-checked status. A NEAR transfer carries no swap payload, memo or token. An unaffordable NEAR send fails with `not-enough-funds`, and a missing named receiver with `near-destination-not-found`. The all-zero implicit account is refused as a destination, and the address-format gate validates NEAR account IDs. NEAR is not a default or seedphrase-import chain yet, and NEP-141 tokens are unsupported.
+
+- [#2535](https://github.com/vultisig/vultisig-sdk/pull/2535) [`93d191c`](https://github.com/vultisig/vultisig-sdk/commit/93d191c243ec64cde7a447defa4693ad6fa1fd9e) Thanks [@realpaaao](https://github.com/realpaaao)! - NEAR is a SwapKit source chain: a NEAR-Intents `simpleTransfer` quote becomes a plain transfer to the per-swap implicit deposit account, and the NEAR signer accepts only a SwapKit deposit that names exactly that transfer (same receiver and amount, no memo or pre-built transaction). An unaffordable NEAR-source swap fails with the `not-enough-funds` shortfall before signing.
+
+- [#2525](https://github.com/vultisig/vultisig-sdk/pull/2525) [`387a80b`](https://github.com/vultisig/vultisig-sdk/commit/387a80bbd44d3b526b9d09717133f1d8530277d1) Thanks [@realpaaao](https://github.com/realpaaao)! - Signing inputs and fee amounts on every chain refuse a swap (every provider, THORChain and Maya included) whose sold coin is missing or is not the keysign coin (chain, native flag, contract, ticker and decimals; contracts compare case-insensitively on EVM only), as iOS and Android do. A THORChain secured-asset withdrawal (`isSecuredAssetWithdrawal`, e.g. `@vultisig/rujira` withdraw) is exempt, since its deposit is built from the L1 asset its payload names. New `assertKeysignSwapSellsSigningCoin` (`@vultisig/core-mpc/keysign/swap/assertKeysignSwapSellsSigningCoin`) lets co-signer screens refuse the same payloads before approval.
+
+- [#2534](https://github.com/vultisig/vultisig-sdk/pull/2534) [`f9dba70`](https://github.com/vultisig/vultisig-sdk/commit/f9dba7097adac87b28acaf4d242ee993d59443f8) Thanks [@realpaaao](https://github.com/realpaaao)! - A SwapKit ERC-20 deposit transfer builds no approve leg and reports no approval spender: a direct `transfer` to the deposit address spends no allowance. New optional `GeneralSwapTx.evm.erc20TransferDeposit` marks such quotes.
+
+- [#2532](https://github.com/vultisig/vultisig-sdk/pull/2532) [`b002bd6`](https://github.com/vultisig/vultisig-sdk/commit/b002bd6a57f2ee729108f58ad3e58d8c9346d0b3) Thanks [@realpaaao](https://github.com/realpaaao)! - Accept SwapKit ERC-20 deposit transfers (NEAR-Intents `simpleTransfer`) only when they are exactly `transfer(targetAddress, fromAmount)` on the sold token with no native value, at quote time and again on every co-signer. New `getKeysignSwapKitDepositRecipient` (`@vultisig/core-mpc/keysign/swap/getKeysignSwapKitDepositRecipient`) returns the recipient a payload signs so co-signers show the same address.
+
 ## 6.2.1
 
 ### Patch Changes

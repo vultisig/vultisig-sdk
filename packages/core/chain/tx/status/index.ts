@@ -5,6 +5,7 @@ import { getBittensorTxStatus } from './resolvers/bittensor'
 import { getCardanoTxStatus } from './resolvers/cardano'
 import { getCosmosTxStatus } from './resolvers/cosmos'
 import { getEvmTxStatus } from './resolvers/evm'
+import { getNearTxStatus } from './resolvers/near'
 import { getPolkadotTxStatus } from './resolvers/polkadot'
 import { getQbtcTxStatus } from './resolvers/qbtc'
 import { getRippleTxStatus } from './resolvers/ripple'
@@ -27,6 +28,7 @@ const statusHandlers: Record<ChainKind, TxStatusResolver<any>> = {
   ton: getTonTxStatus,
   utxo: getUtxoTxStatus,
   tron: getTronTxStatus,
+  near: getNearTxStatus,
 }
 
 export const getTxStatus = (input: TxStatusInput) => {

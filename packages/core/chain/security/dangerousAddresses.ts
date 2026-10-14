@@ -61,6 +61,11 @@ const POLKADOT_DANGEROUS_ADDRESSES: Record<string, string> = {
   '111111111111111111111111111111111HC1': 'Polkadot zero account: funds are unrecoverable',
 }
 
+/** The implicit account of the all-zero Ed25519 key, which no one holds. */
+const NEAR_DANGEROUS_ADDRESSES: Record<string, string> = {
+  ['0'.repeat(64)]: 'NEAR zero account: funds are unrecoverable',
+}
+
 /** UTXO (Bitcoin family) burn destinations. Keys are case-sensitive base58. */
 export const UTXO_DANGEROUS_ADDRESSES: Record<string, string> = {
   '1111111111111111111114oLvT2': 'Bitcoin burn address: funds are unrecoverable',
@@ -134,6 +139,9 @@ export const getChainDangerousReason = (chain: string, address: string): string 
   }
   if (normalizedChain === 'polkadot') {
     return safeGet(POLKADOT_DANGEROUS_ADDRESSES, destination)
+  }
+  if (normalizedChain === 'near') {
+    return safeGet(NEAR_DANGEROUS_ADDRESSES, destination)
   }
   if (UTXO_CHAINS.has(normalizedChain)) {
     return safeGet(UTXO_DANGEROUS_ADDRESSES, destination)
