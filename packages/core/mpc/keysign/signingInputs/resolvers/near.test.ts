@@ -14,7 +14,11 @@ import { create, fromBinary, toBinary } from '@bufbuild/protobuf'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { NearSpecificSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { CoinSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/coin_pb'
-import { KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import {
+  type KeysignPayload,
+  KeysignPayloadSchema,
+} from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import { SwapKitSwapPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/swapkit_swap_payload_pb'
 import { THORChainSwapPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/thorchain_swap_payload_pb'
 import {
   SignDirectSchema,
@@ -111,6 +115,7 @@ type PayloadOverrides = {
   ticker?: string
   memo?: string
   withSwapPayload?: boolean
+  swapPayload?: KeysignPayload['swapPayload']
   withContractPayload?: boolean
   withSignData?: boolean
 }
@@ -136,9 +141,11 @@ const buildNearPayload = (overrides: PayloadOverrides = {}) =>
       }),
     },
     memo: overrides.memo,
-    swapPayload: overrides.withSwapPayload
-      ? { case: 'thorchainSwapPayload', value: create(THORChainSwapPayloadSchema, {}) }
-      : undefined,
+    swapPayload:
+      overrides.swapPayload ??
+      (overrides.withSwapPayload
+        ? { case: 'thorchainSwapPayload', value: create(THORChainSwapPayloadSchema, {}) }
+        : undefined),
     contractPayload: overrides.withContractPayload
       ? {
           case: 'wasmExecuteContractPayload',
@@ -343,6 +350,42 @@ describe('NEAR frozen native transfer — real registry, preimage and compile pa
   })
 })
 
+const swapKitDeposit = (
+  overrides: Partial<{
+    targetAddress: string
+    fromAmount: string
+    txPayload: Uint8Array
+    txType: string
+    memo: string
+  }> = {}
+): KeysignPayload['swapPayload'] => ({
+  case: 'swapkitSwapPayload',
+  value: create(SwapKitSwapPayloadSchema, {
+    fromCoin: create(CoinSchema, { chain: Chain.Near, ticker: 'NEAR', isNativeToken: true, decimals: 24 }),
+    fromAmount: overrides.fromAmount ?? DEPOSIT_YOCTO,
+    targetAddress: overrides.targetAddress ?? IMPLICIT_RECEIVER,
+    txType: overrides.txType ?? '',
+    txPayload: overrides.txPayload ?? new Uint8Array(),
+    ...(overrides.memo ? { memo: overrides.memo } : {}),
+    subProvider: 'NEAR',
+  }),
+})
+
+describe('NEAR SwapKit deposit swap', () => {
+  it('signs exactly the plain transfer to the deposit address', async () => {
+    const plain = await getEncodedSigningInputs({
+      keysignPayload: buildNearPayload({ toAddress: IMPLICIT_RECEIVER }),
+      walletCore,
+    })
+    const swap = await getEncodedSigningInputs({
+      keysignPayload: buildNearPayload({ toAddress: IMPLICIT_RECEIVER, swapPayload: swapKitDeposit() }),
+      walletCore,
+    })
+
+    expect(swap.map(hex)).toEqual(plain.map(hex))
+  })
+})
+
 describe('NEAR frozen native transfer — fail closed', () => {
   const rejects = async (overrides: PayloadOverrides, expected: RegExp) => {
     await expect(async () =>
@@ -417,6 +460,23 @@ describe('NEAR frozen native transfer — fail closed', () => {
 
   it('rejects a non-SwapKit swap payload', async () => {
     await rejects({ withSwapPayload: true }, /swap/i)
+  })
+
+  it.each([
+    ['a deposit address other than the transfer receiver', { targetAddress: NAMED_RECEIVER }, /deposit address/i],
+    ['an amount other than the transfer amount', { fromAmount: '1' }, /amount/i],
+    ['pre-built transaction bytes', { txPayload: new Uint8Array([1]) }, /pre-built/i],
+    ['a transaction type', { txType: 'NEAR' }, /pre-built/i],
+    ['a memo', { memo: 'deposit-tag' }, /memo/i],
+  ] as const)('rejects a SwapKit deposit carrying %s', async (_, swapOverrides, expected) => {
+    await rejects({ toAddress: IMPLICIT_RECEIVER, swapPayload: swapKitDeposit(swapOverrides) }, expected)
+  })
+
+  it('rejects a named SwapKit deposit address even when it is the transfer receiver', async () => {
+    await rejects(
+      { toAddress: NAMED_RECEIVER, swapPayload: swapKitDeposit({ targetAddress: NAMED_RECEIVER }) },
+      /not an implicit account/i
+    )
   })
 
   it('rejects a contract payload', async () => {
