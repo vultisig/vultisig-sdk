@@ -58,19 +58,22 @@ export type BlockaidSuiSimulation = {
   }
 }
 
+const isNativeSuiCoinType = (coinType: string): boolean => /^0x0*2::sui::SUI$/.test(coinType)
+
 const isNativeSui = (asset: BlockaidSuiRawAsset): boolean =>
   asset.type === 'NATIVE' ||
   asset.type === 'SUI' ||
   asset.asset_type === 'NATIVE' ||
-  asset.coin_type === SUI_NATIVE_COIN_TYPE ||
+  (asset.coin_type !== undefined && isNativeSuiCoinType(asset.coin_type)) ||
+  (asset.id !== undefined && isNativeSuiCoinType(asset.id)) ||
   (!asset.id && !asset.coin_type && !asset.address && asset.symbol === 'SUI')
 
+// Native SUI always resolves to the canonical type tag so every spelling of it
+// — `type: 'NATIVE'` with no id, or a fully qualified `0x000…2::sui::SUI` —
+// lands in the same group.
 const coinTypeFromAsset = (asset: BlockaidSuiRawAsset): string | null => {
-  if (asset.id) return asset.id
-  if (asset.coin_type) return asset.coin_type
-  if (asset.address) return asset.address
   if (isNativeSui(asset)) return SUI_NATIVE_COIN_TYPE
-  return null
+  return asset.id ?? asset.coin_type ?? asset.address ?? null
 }
 
 // Convert Blockaid's `raw_value` (always an integer in the asset's base unit,
@@ -88,19 +91,35 @@ const toBigInt = (raw: number | string): bigint | null => {
   return BigInt(raw)
 }
 
+type SuiMovement = {
+  asset: BlockaidSuiAsset
+  /** `in - out` across every diff of the coin type; negative leaves the account. */
+  net: bigint
+}
+
 /**
- * Parse a Blockaid Sui simulation into the user's net balance changes,
- * mirroring how Solana classifies into a `swap` or `transfer` headline.
+ * Parse a Blockaid Sui simulation into the user's net balance change,
+ * classified as a `swap` (one coin leaves, another arrives) or a `transfer`
+ * (one coin leaves), the way the Solana parser does.
  *
- * Only emits a headline when the relevant diff set is unambiguous:
- *   - exactly one out-only diff → `transfer`
- *   - exactly two diffs, one out-only + one in-only on different assets
- *     → `swap`
+ * Diffs are grouped by coin type and netted (`in - out`) per group before
+ * anything is classified, so every movement counts — native SUI included,
+ * whatever its position or size. Live `/sui/transaction/scan` responses
+ * (sdk#2423) show Blockaid folding gas into the native diff: a SUI send or a
+ * SUI-funded swap reports principal plus gas as one native outflow, a swap
+ * into SUI reports one native inflow already net of gas, and a transaction
+ * that moves only other coins reports gas as a separate native outflow.
+ * Nothing in the response identifies that outflow as gas rather than a small
+ * SUI principal, and neither position, diff count nor size does either, so a
+ * shape with three or more net movements — a token-to-token swap with its
+ * gas, for one — declines the headline instead of guessing which movement to
+ * drop; the consumer shows the decoded transaction instead. The former
+ * three-diff rule discarded whichever native diff came first, which could
+ * delete a principal SUI inflow and headline the remaining legs.
  *
- * Anything more complex (e.g. a swap that also sends a third asset)
- * returns `null` — a partial "you're swapping…" headline would hide the
- * additional movement and mislead users approving the transaction. The
- * popup falls back to the decoded-command view when this returns `null`.
+ * Returns `null` for any shape that cannot be summarised without hiding a
+ * movement, and for any malformed response, so a Blockaid change degrades to
+ * "no preview" instead of crashing the popup.
  */
 export const parseBlockaidSuiSimulation = async (
   simulation: BlockaidSuiSimulation
@@ -108,62 +127,52 @@ export const parseBlockaidSuiSimulation = async (
   const assetDiffs = simulation.account_summary?.account_assets_diffs ?? simulation.account_summary?.account_assets_diff
   if (!assetDiffs || assetDiffs.length === 0) return null
 
-  // When we have 3 items and one is native SUI, filter it out and use the
-  // other two tokens — the native SUI is likely the gas charge, not part of
-  // the swap itself. Same heuristic as Solana.
-  let relevantDiffs = assetDiffs
-  if (assetDiffs.length === 3) {
-    const nativeIdx = assetDiffs.findIndex(diff => isNativeSui(diff.asset))
-    if (nativeIdx !== -1) {
-      relevantDiffs = assetDiffs.filter((_, i) => i !== nativeIdx)
+  const groups = new Map<string, SuiMovement>()
+  for (const diff of assetDiffs) {
+    const asset = blockaidSuiAssetFrom(diff.asset)
+    if (!asset) return null
+    const inRaw = diff.in ? toBigInt(diff.in.raw_value) : 0n
+    const outRaw = diff.out ? toBigInt(diff.out.raw_value) : 0n
+    if (inRaw === null || outRaw === null || inRaw < 0n || outRaw < 0n) return null
+
+    const existing = groups.get(asset.coinType)
+    if (existing) {
+      existing.net += inRaw - outRaw
+    } else {
+      groups.set(asset.coinType, { asset, net: inRaw - outRaw })
     }
   }
 
-  if (relevantDiffs.length === 1) {
-    const [diff] = relevantDiffs
-    // A single diff with an `in` side but no `out` would be a pure receive;
-    // we don't surface that as a "you're sending" headline.
-    if (!diff.out || diff.in) return null
-    const from = blockaidSuiAssetFrom(diff.asset)
-    if (!from) return null
-    const fromAmount = toBigInt(diff.out.raw_value)
-    if (fromAmount === null) return null
+  const movements = [...groups.values()].filter(({ net }) => net !== 0n)
+
+  if (movements.length === 1) {
+    const [only] = movements
+    // A pure receive has no "you're sending" headline.
+    if (only.net > 0n) return null
     return {
       transfer: {
-        from,
-        fromAmount,
+        from: only.asset,
+        fromAmount: -only.net,
       },
     }
   }
 
-  // Strict two-diff swap: one diff is out-only, the other is in-only, and
-  // they're on different assets. Anything else (mixed in+out on one side,
-  // three+ relevant diffs, same-asset refund pair) returns `null` rather
-  // than risk a misleading partial headline.
-  if (relevantDiffs.length !== 2) return null
-
-  const [a, b] = relevantDiffs
-  const outDiff = !a.in && a.out ? a : !b.in && b.out ? b : null
-  const inDiff = !a.out && a.in ? a : !b.out && b.in ? b : null
-  if (!outDiff || !inDiff || outDiff === inDiff) return null
-  if (!outDiff.out || !inDiff.in) return null
-
-  const from = blockaidSuiAssetFrom(outDiff.asset)
-  const to = blockaidSuiAssetFrom(inDiff.asset)
-  if (!from || !to || from.coinType === to.coinType) return null
-
-  const fromAmount = toBigInt(outDiff.out.raw_value)
-  const toAmount = toBigInt(inDiff.in.raw_value)
-  if (fromAmount === null || toAmount === null) return null
-
-  return {
-    swap: {
-      from,
-      to,
-      fromAmount,
-      toAmount,
-    },
+  if (movements.length === 2) {
+    const [first, second] = movements
+    const [outgoing, incoming] = first.net < 0n ? [first, second] : [second, first]
+    if (outgoing.net < 0n && incoming.net > 0n) {
+      return {
+        swap: {
+          from: outgoing.asset,
+          to: incoming.asset,
+          fromAmount: -outgoing.net,
+          toAmount: incoming.net,
+        },
+      }
+    }
   }
+
+  return null
 }
 
 const blockaidSuiAssetFrom = (asset: BlockaidSuiRawAsset): BlockaidSuiAsset | null => {

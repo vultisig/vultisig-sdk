@@ -1,11 +1,14 @@
 import { EvmChain } from '@vultisig/core-chain/Chain'
 import { describe, expect, it } from 'vitest'
 
+import suiSimulationFixtures from '../../../../../fixtures/blockaid-sui-simulations.json'
 import {
   BlockaidEVMSimulation,
   BlockaidSolanaSimulation,
+  BlockaidSuiSimulation,
   parseBlockaidEvmSimulation,
   parseBlockaidSolanaSimulation,
+  parseBlockaidSuiSimulation,
 } from './core'
 
 type AssetDiff = BlockaidEVMSimulation['account_summary']['assets_diffs'][number]
@@ -555,5 +558,243 @@ describe('parseBlockaidSolanaSimulation', () => {
         ])
       )
     ).rejects.toThrow('Invalid simulation data')
+  })
+})
+
+describe('parseBlockaidSuiSimulation', () => {
+  type SuiSummary = NonNullable<BlockaidSuiSimulation['account_summary']>
+  type SuiDiff = NonNullable<SuiSummary['account_assets_diffs']>[number]
+  type SuiRawAsset = SuiDiff['asset']
+
+  const sui = '0x2::sui::SUI'
+  const native: SuiRawAsset = { type: 'NATIVE', symbol: 'SUI', name: 'Sui', decimals: 9, logo_url: 'https://logo/sui' }
+  const walType = '0x356a26eb9e012a68958082340d4c4116e7f55615cf27affcff209cf0ae544f59::wal::WAL'
+  const usdcType = '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC'
+  const wal: SuiRawAsset = { type: 'COIN', id: walType, symbol: 'WAL', decimals: 9 }
+  const usdc: SuiRawAsset = { type: 'COIN', id: usdcType, symbol: 'USDC', decimals: 6 }
+
+  const movement = (asset: SuiRawAsset, direction: 'in' | 'out', raw: number | string): SuiDiff => ({
+    asset,
+    in: direction === 'in' ? { raw_value: raw } : null,
+    out: direction === 'out' ? { raw_value: raw } : null,
+  })
+  const simulation = (diffs: SuiDiff[]): BlockaidSuiSimulation => ({
+    status: 'Success',
+    account_summary: { account_assets_diffs: diffs },
+  })
+  const permutations = <T>(items: T[]): T[][] =>
+    items.length <= 1
+      ? [items]
+      : items.flatMap((item, index) =>
+          permutations([...items.slice(0, index), ...items.slice(index + 1)]).map(rest => [item, ...rest])
+        )
+  const parsedFixture = (name: keyof Omit<typeof suiSimulationFixtures, '_source'>) =>
+    parseBlockaidSuiSimulation({
+      status: 'Success',
+      account_summary: { account_assets_diffs: suiSimulationFixtures[name].account_assets_diffs },
+    })
+
+  // Live `/sui/transaction/scan` simulations of unsigned mainnet transactions
+  // (fixtures/blockaid-sui-simulations.json). Blockaid nets each coin into one
+  // diff and folds gas into native SUI when SUI itself moves.
+  describe('live Blockaid responses', () => {
+    it('headlines a SUI send with the single native outflow, gas included', async () => {
+      await expect(parsedFixture('suiTransfer')).resolves.toEqual({
+        transfer: {
+          from: { coinType: sui, symbol: 'SUI', decimals: 9, logo: expect.stringContaining('0x2::sui::SUI') },
+          fromAmount: 101_088_099n,
+        },
+      })
+    })
+
+    it('headlines a SUI-funded swap with the native outflow and the coin inflow', async () => {
+      await expect(parsedFixture('suiToCoinSwap')).resolves.toMatchObject({
+        swap: {
+          from: { coinType: sui, symbol: 'SUI', decimals: 9 },
+          to: { coinType: usdcType, symbol: 'USDC', decimals: 6 },
+          fromAmount: 101_424_127n,
+          toAmount: 97_961n,
+        },
+      })
+    })
+
+    it('keeps the native inflow of a swap into SUI as the swap destination', async () => {
+      await expect(parsedFixture('coinToSuiSwap')).resolves.toMatchObject({
+        swap: {
+          from: { coinType: walType, symbol: 'WAL', decimals: 9 },
+          to: { coinType: sui, symbol: 'SUI', decimals: 9 },
+          fromAmount: 13_120_000_000n,
+          toAmount: 691_913_411n,
+        },
+      })
+    })
+
+    it('declines a coin send, whose gas is a second, native outflow the response does not identify as gas', async () => {
+      await expect(parsedFixture('coinTransfer')).resolves.toBeNull()
+    })
+
+    it('declines a coin-to-coin swap with its separate native gas outflow rather than drop a movement', async () => {
+      // The former three-diff rule turned this into a WAL -> USDC headline by
+      // discarding the native diff; nothing in the response says it is gas.
+      await expect(parsedFixture('coinToCoinSwap')).resolves.toBeNull()
+    })
+  })
+
+  describe('native SUI principal among three diffs', () => {
+    it.each([
+      ['inflow', 'in', 500_000_000],
+      ['outflow', 'out', 500_000_000],
+      ['fee-sized inflow', 'in', 1_482_041],
+      ['fee-sized outflow', 'out', 1_482_041],
+    ] as const)(
+      'never discards a native %s to headline the other two legs, in any order',
+      async (_, direction, raw) => {
+        for (const diffs of permutations([
+          movement(native, direction, raw),
+          movement(wal, 'out', 13_120_000_000),
+          movement(usdc, 'in', 679_441),
+        ])) {
+          await expect(parseBlockaidSuiSimulation(simulation(diffs))).resolves.toBeNull()
+        }
+      }
+    )
+
+    it('declines two coin outflows plus a native inflow instead of reversing the direction', async () => {
+      // The sdk#2091 counterexample shape: with the native inflow discarded,
+      // the former rule reported one of the outflows as the whole transfer.
+      for (const diffs of permutations([
+        movement(native, 'in', 2_000_000_000),
+        movement(wal, 'out', 1_000),
+        movement(usdc, 'out', 1_000),
+      ])) {
+        await expect(parseBlockaidSuiSimulation(simulation(diffs))).resolves.toBeNull()
+      }
+    })
+  })
+
+  describe('netting by coin type', () => {
+    it('nets split native diffs into one movement so an in/out pair cannot read as two assets', async () => {
+      for (const diffs of permutations([
+        movement(native, 'in', 700_000_000),
+        movement(native, 'out', 8_086_589),
+        movement(wal, 'out', 13_120_000_000),
+      ])) {
+        await expect(parseBlockaidSuiSimulation(simulation(diffs))).resolves.toMatchObject({
+          swap: {
+            from: { coinType: walType },
+            to: { coinType: sui },
+            fromAmount: 13_120_000_000n,
+            toAmount: 691_913_411n,
+          },
+        })
+      }
+    })
+
+    it('nets a diff carrying both sides for the same coin', async () => {
+      await expect(
+        parseBlockaidSuiSimulation(
+          simulation([{ asset: native, in: { raw_value: 700_000_000 }, out: { raw_value: 8_086_589 } }])
+        )
+      ).resolves.toBeNull()
+      await expect(
+        parseBlockaidSuiSimulation(
+          simulation([{ asset: native, in: { raw_value: 100 }, out: { raw_value: 700_000_000 } }])
+        )
+      ).resolves.toEqual({ transfer: { from: expect.objectContaining({ coinType: sui }), fromAmount: 699_999_900n } })
+    })
+
+    it('ignores a coin whose movements cancel out', async () => {
+      const refund: SuiDiff[] = [movement(usdc, 'out', 5_000), movement(usdc, 'in', 5_000)]
+      await expect(
+        parseBlockaidSuiSimulation(simulation([...refund, movement(wal, 'out', 1_000)]))
+      ).resolves.toMatchObject({
+        transfer: { from: { coinType: walType }, fromAmount: 1_000n },
+      })
+    })
+
+    it('groups every spelling of native SUI together', async () => {
+      const qualified: SuiRawAsset = { type: 'COIN', id: `0x${'0'.repeat(63)}2::sui::SUI`, symbol: 'SUI', decimals: 9 }
+      const byCoinType: SuiRawAsset = { coin_type: sui, symbol: 'SUI', decimals: 9 }
+      const bare: SuiRawAsset = { symbol: 'SUI', decimals: 9 }
+      await expect(
+        parseBlockaidSuiSimulation(
+          simulation([
+            movement(native, 'out', 400),
+            movement(qualified, 'out', 300),
+            movement(byCoinType, 'out', 200),
+            movement(bare, 'out', 100),
+          ])
+        )
+      ).resolves.toEqual({ transfer: { from: expect.objectContaining({ coinType: sui }), fromAmount: 1_000n } })
+    })
+  })
+
+  describe('classification', () => {
+    it('headlines a swap identically whichever diff comes first', async () => {
+      const diffs = [movement(wal, 'out', 1_000), movement(usdc, 'in', 2_000)]
+      const expected = {
+        swap: {
+          from: { coinType: walType, symbol: 'WAL', decimals: 9 },
+          to: { coinType: usdcType, symbol: 'USDC', decimals: 6 },
+          fromAmount: 1_000n,
+          toAmount: 2_000n,
+        },
+      }
+      await expect(parseBlockaidSuiSimulation(simulation(diffs))).resolves.toEqual(expected)
+      await expect(parseBlockaidSuiSimulation(simulation([...diffs].reverse()))).resolves.toEqual(expected)
+    })
+
+    it.each([
+      ['a pure receive', [movement(usdc, 'in', 1)]],
+      ['two outflows', [movement(wal, 'out', 1_000), movement(usdc, 'out', 5_000)]],
+      ['two inflows', [movement(wal, 'in', 1_000), movement(usdc, 'in', 5_000)]],
+      ['an empty diff list', []],
+    ] as const)('declines %s', async (_, diffs) => {
+      await expect(parseBlockaidSuiSimulation(simulation([...diffs]))).resolves.toBeNull()
+    })
+
+    it('reads the singular account_assets_diff key too', async () => {
+      await expect(
+        parseBlockaidSuiSimulation({ account_summary: { account_assets_diff: [movement(wal, 'out', 1_000)] } })
+      ).resolves.toMatchObject({ transfer: { fromAmount: 1_000n } })
+    })
+
+    it('declines a missing account summary', async () => {
+      await expect(parseBlockaidSuiSimulation({})).resolves.toBeNull()
+    })
+  })
+
+  describe('malformed amounts and assets', () => {
+    it.each([Number.MAX_SAFE_INTEGER + 1, NaN, Infinity, 1.5, '1.5', '1e3', '', -1, '-1'])(
+      'declines the unsafe or negative raw_value %s on either side',
+      async raw => {
+        await expect(parseBlockaidSuiSimulation(simulation([movement(wal, 'out', raw)]))).resolves.toBeNull()
+        await expect(
+          parseBlockaidSuiSimulation(simulation([movement(wal, 'out', 1), movement(usdc, 'in', raw)]))
+        ).resolves.toBeNull()
+      }
+    )
+
+    it('keeps integer strings above the safe JS number range exact', async () => {
+      await expect(
+        parseBlockaidSuiSimulation(simulation([movement(wal, 'out', '9007199254740993')]))
+      ).resolves.toMatchObject({
+        transfer: { fromAmount: 9_007_199_254_740_993n },
+      })
+    })
+
+    it('declines a coin without any type tag rather than merge it into another group', async () => {
+      const untyped: SuiRawAsset = { type: 'COIN', symbol: 'X', decimals: 6 }
+      await expect(
+        parseBlockaidSuiSimulation(simulation([movement(untyped, 'out', 1), movement(usdc, 'in', 1)]))
+      ).resolves.toBeNull()
+    })
+
+    it('falls back to the type tag name when a coin has no symbol', async () => {
+      const unnamed: SuiRawAsset = { type: 'COIN', id: walType, decimals: 9 }
+      await expect(parseBlockaidSuiSimulation(simulation([movement(unnamed, 'out', 1)]))).resolves.toMatchObject({
+        transfer: { from: { coinType: walType, symbol: 'WAL' } },
+      })
+    })
   })
 })
