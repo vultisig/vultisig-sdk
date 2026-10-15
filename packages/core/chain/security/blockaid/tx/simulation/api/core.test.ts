@@ -783,6 +783,13 @@ describe('parseBlockaidSuiSimulation', () => {
       })
     })
 
+    it('declines a diff with a missing asset instead of rejecting', async () => {
+      const broken = [{ ...movement(usdc, 'in', 1), asset: null }, null] as unknown as SuiDiff[]
+      for (const diff of broken) {
+        await expect(parseBlockaidSuiSimulation(simulation([movement(wal, 'out', 1), diff]))).resolves.toBeNull()
+      }
+    })
+
     it('declines a coin without any type tag rather than merge it into another group', async () => {
       const untyped: SuiRawAsset = { type: 'COIN', symbol: 'X', decimals: 6 }
       await expect(

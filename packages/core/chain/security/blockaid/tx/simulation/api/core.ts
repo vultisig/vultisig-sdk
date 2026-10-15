@@ -129,6 +129,8 @@ export const parseBlockaidSuiSimulation = async (
 
   const groups = new Map<string, SuiMovement>()
   for (const diff of assetDiffs) {
+    // External data: a diff or its asset may be missing despite the type.
+    if (!diff?.asset) return null
     const asset = blockaidSuiAssetFrom(diff.asset)
     if (!asset) return null
     const inRaw = diff.in ? toBigInt(diff.in.raw_value) : 0n
