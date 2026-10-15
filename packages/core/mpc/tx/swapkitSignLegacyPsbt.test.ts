@@ -460,9 +460,12 @@ describe('SwapKit legacy P2PKH PSBT signing', () => {
     expect(() => getSwapKitLegacyPsbtSignBitcoin(payloadWith('TON'))).toThrow(
       'Unsupported SwapKit Dogecoin transaction type'
     )
-    // No transaction bytes at all: the plain deposit transfer older SDKs produced.
-    expect(getSwapKitLegacyPsbtSignBitcoin(payloadWith('', new Uint8Array()))).toBeUndefined()
-    expect(getSwapKitSignBitcoin(payloadWith('', new Uint8Array()))).toBeUndefined()
+    // No transaction bytes at all, under whatever txType the old quote
+    // reported: the plain deposit transfer older SDKs produced.
+    for (const txType of ['', 'TRANSFER', 'PSBT', 'PSBT_DOGE']) {
+      expect(getSwapKitLegacyPsbtSignBitcoin(payloadWith(txType, new Uint8Array()))).toBeUndefined()
+      expect(getSwapKitSignBitcoin(payloadWith(txType, new Uint8Array()))).toBeUndefined()
+    }
   })
 
   it('binds the PSBT to the quoted amount and the vault address', () => {

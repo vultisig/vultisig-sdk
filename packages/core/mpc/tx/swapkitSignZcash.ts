@@ -26,9 +26,10 @@ const zcashPsbtTxTypes = ['', 'PSBT', swapKitZcashPsbtTxType]
 /**
  * The SwapKit payload of a Zcash keysign that carries SwapKit's pre-built PSBT
  * (sdk#2460), or `undefined` for any other keysign. A SwapKit payload with no
- * transaction bytes is the plain deposit transfer older SDK initiators
- * produced and still signs through the regular UTXO path. Any other `txType`
- * is refused rather than signed as something it is not.
+ * transaction bytes at all — under whatever `txType` the quote reported — is
+ * the plain deposit transfer older SDK initiators produced and still signs
+ * through the regular UTXO path. Any other `txType` on a payload that does
+ * carry bytes is refused rather than signed as something it is not.
  */
 export const getSwapKitZcashPsbtPayload = (keysignPayload: KeysignPayload): SwapKitSwapPayload | undefined => {
   if (keysignPayload.coin?.chain !== Chain.Zcash || keysignPayload.swapPayload.case !== 'swapkitSwapPayload') {
@@ -36,10 +37,11 @@ export const getSwapKitZcashPsbtPayload = (keysignPayload: KeysignPayload): Swap
   }
 
   const swapKitPayload = keysignPayload.swapPayload.value
-  const txType = swapKitPayload.txType.trim().toUpperCase()
-  if (swapKitPayload.txPayload.length === 0 && txType === '') {
+  if (swapKitPayload.txPayload.length === 0) {
     return undefined
   }
+
+  const txType = swapKitPayload.txType.trim().toUpperCase()
   if (!zcashPsbtTxTypes.includes(txType)) {
     throw new Error(`Unsupported SwapKit Zcash transaction type "${swapKitPayload.txType}".`)
   }

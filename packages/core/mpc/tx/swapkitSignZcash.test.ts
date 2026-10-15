@@ -259,8 +259,11 @@ describe('SwapKit Zcash PSBT signing', () => {
     expect(() => getSwapKitZcashPsbtPayload(makeKeysignPayload({ txType: 'PSBT_DOGE' }))).toThrow(
       'Unsupported SwapKit Zcash transaction type "PSBT_DOGE"'
     )
-    // No transaction bytes at all: the plain deposit transfer older SDKs produced.
-    expect(getSwapKitZcashPsbtPayload(makeKeysignPayload({ txType: '', psbt: new Uint8Array() }))).toBeUndefined()
+    // No transaction bytes at all, under whatever txType the old quote
+    // reported: the plain deposit transfer older SDKs produced.
+    for (const txType of ['', 'TRANSFER', 'PSBT', 'PSBT_ZEC']) {
+      expect(getSwapKitZcashPsbtPayload(makeKeysignPayload({ txType, psbt: new Uint8Array() }))).toBeUndefined()
+    }
   })
 
   it('leaves the keysign untouched in UTXO refinement', async () => {

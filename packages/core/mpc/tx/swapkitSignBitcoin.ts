@@ -183,9 +183,9 @@ type SwapKitLegacyPsbtKeysign = {
  * pre-built PSBT (sdk#2460), or `undefined` for any other keysign. The
  * `txType` may be the wire value, blank, or the per-chain literal iOS and
  * Android stamp; anything else is refused rather than signed as something it
- * is not. A SwapKit payload with no transaction bytes is the plain deposit
- * transfer older SDK initiators produced and still signs through the regular
- * UTXO path.
+ * is not. A SwapKit payload with no transaction bytes at all — under whatever
+ * `txType` the quote reported — is the plain deposit transfer older SDK
+ * initiators produced and still signs through the regular UTXO path.
  */
 export const getSwapKitLegacyPsbtPayload = (keysignPayload: KeysignPayload): SwapKitLegacyPsbtKeysign | undefined => {
   const chain = keysignPayload.coin?.chain
@@ -194,10 +194,11 @@ export const getSwapKitLegacyPsbtPayload = (keysignPayload: KeysignPayload): Swa
   }
 
   const swapKitPayload = keysignPayload.swapPayload.value
-  const txType = swapKitPayload.txType.trim().toUpperCase()
-  if (swapKitPayload.txPayload.length === 0 && txType === '') {
+  if (swapKitPayload.txPayload.length === 0) {
     return undefined
   }
+
+  const txType = swapKitPayload.txType.trim().toUpperCase()
   if (!['', 'PSBT', swapKitLegacyPsbtTxType[chain]].includes(txType)) {
     throw new Error(`Unsupported SwapKit ${chain} transaction type "${swapKitPayload.txType}".`)
   }
