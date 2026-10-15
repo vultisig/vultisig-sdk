@@ -987,6 +987,11 @@
       "import": "./dist/tx/swapkitSignBitcoin.js",
       "default": "./dist/tx/swapkitSignBitcoin.js"
     },
+    "./tx/swapkitSignZcash": {
+      "types": "./dist/tx/swapkitSignZcash.d.ts",
+      "import": "./dist/tx/swapkitSignZcash.js",
+      "default": "./dist/tx/swapkitSignZcash.js"
+    },
     "./types/plugin/constraint_pb": {
       "types": "./dist/types/plugin/constraint_pb.d.ts",
       "import": "./dist/types/plugin/constraint_pb.js",

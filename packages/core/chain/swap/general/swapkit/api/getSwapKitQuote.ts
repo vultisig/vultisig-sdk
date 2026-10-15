@@ -2,6 +2,19 @@ import { base64Decode } from '@bufbuild/protobuf/wire'
 import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { areEqualTonAddresses, tonAddressToBounceable } from '@vultisig/core-chain/chains/ton/address'
+import {
+  buildSignBitcoinFromLegacyPsbt,
+  isSwapKitLegacyPsbtChain,
+  normalizeSwapKitLegacyPsbtVersion,
+  SwapKitLegacyPsbtChain,
+  swapKitLegacyPsbtTxType,
+} from '@vultisig/core-chain/chains/utxo/tx/swapKitLegacyPsbt'
+import { verifySwapKitP2pkhSpend } from '@vultisig/core-chain/chains/utxo/tx/swapKitP2pkhSpend'
+import {
+  parseSwapKitZcashPsbt,
+  swapKitZcashPsbtTxType,
+  verifySwapKitZcashPsbt,
+} from '@vultisig/core-chain/chains/utxo/tx/swapKitZcashPsbt'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { usdc } from '@vultisig/core-chain/coin/knownTokens'
@@ -741,13 +754,22 @@ const shouldUseTransferTx = (chain: SwapKitSourceChain): chain is (typeof swapKi
   isOneOf(chain, swapKitTransferSourceChains)
 
 // Transfer-arm chains that still need SwapKit to BUILD the transaction, so
-// `/v3/swap` must not be sent `disableBuildTx`. Bitcoin gets a PSBT and Sui a
-// pre-built PTB; in both cases those bytes drive signing directly, and asking
-// SwapKit to skip construction returns a response with no `tx` at all. The
-// remaining transfer chains are deposit-only (TON/XRP/ADA style) — they need
-// nothing but an address, so skipping the build saves a pointless server-side
-// construction that can fail on balance checks.
-const swapKitPrebuiltTxSourceChains: ReadonlySet<SwapKitSourceChain> = new Set([Chain.Bitcoin, Chain.Sui])
+// `/v3/swap` must not be sent `disableBuildTx`. The UTXO chains get a PSBT
+// and Sui a pre-built PTB; in every case those bytes drive signing directly,
+// and asking SwapKit to skip construction returns a response with no `tx` at
+// all. DOGE / BCH / ZEC must be built (sdk#2460): iOS and Android sign
+// SwapKit's PSBT for them, so a plain deposit transfer could never be
+// co-signed by a mobile peer. The remaining transfer chains are deposit-only
+// (TON/XRP/ADA style) — they need nothing but an address, so skipping the
+// build saves a pointless server-side construction that can fail on balance
+// checks.
+const swapKitPrebuiltTxSourceChains: ReadonlySet<SwapKitSourceChain> = new Set([
+  Chain.Bitcoin,
+  Chain.BitcoinCash,
+  Chain.Dogecoin,
+  Chain.Zcash,
+  Chain.Sui,
+])
 
 const textEncoder = new TextEncoder()
 
@@ -778,7 +800,7 @@ const encodeSwapKitTxPayload = (tx: unknown, txType?: string): Uint8Array => {
   }
 
   if (typeof tx === 'string') {
-    if (normalizedTxType === 'PSBT' || normalizedTxType === 'SUI') {
+    if (normalizedTxType === 'PSBT' || normalizedTxType?.startsWith('PSBT_') || normalizedTxType === 'SUI') {
       return base64Decode(tx)
     }
 
@@ -813,6 +835,80 @@ const getBitcoinPsbtDestinationAmount = ({
   }
 }
 
+type SwapKitP2pkhPsbtRoute = {
+  txPayload: Uint8Array
+  /** The value the PSBT moves out of the vault, in base units. */
+  depositAmount: bigint
+}
+
+type BuildSwapKitP2pkhPsbtRouteInput = {
+  response: SwapKitSwapResponse
+  chain: SwapKitLegacyPsbtChain | typeof Chain.Zcash
+  senderAddress: string
+  /** The requested sell amount, in base units. */
+  amount: bigint
+}
+
+/**
+ * The PSBT a DOGE / BCH / DASH / ZEC route must carry (sdk#2460), decoded and
+ * bound to the vault address and the requested amount before anything is
+ * built from it. The `txType` SwapKit reports is not consulted: the source
+ * chain is the reliable discriminator (see `buildTransferTx`), and a payload
+ * that is not a PSBT fails to parse. DOGE / BCH / DASH PSBTs are rewritten to
+ * transaction version 1 so every co-signer build hashes the same transaction
+ * (see `normalizeSwapKitLegacyPsbtVersion`).
+ */
+const buildSwapKitP2pkhPsbtRoute = ({
+  response,
+  chain,
+  senderAddress,
+  amount,
+}: BuildSwapKitP2pkhPsbtRouteInput): SwapKitP2pkhPsbtRoute => {
+  if (typeof response.tx !== 'string' || !response.tx) {
+    throw new Error(`SwapKit ${chain} route did not return a PSBT to sign.`)
+  }
+  const psbt = base64Decode(response.tx)
+
+  if (chain === Chain.Zcash) {
+    const { deposit } = verifySwapKitZcashPsbt({ tx: parseSwapKitZcashPsbt(psbt), senderAddress, fromAmount: amount })
+    return { txPayload: psbt, depositAmount: deposit }
+  }
+
+  const txPayload = normalizeSwapKitLegacyPsbtVersion(chain, psbt)
+  const signBitcoin = buildSignBitcoinFromLegacyPsbt({ chain, psbt: txPayload, senderAddress })
+  const depositAmount = verifySwapKitP2pkhSpend({
+    chain,
+    inputAmounts: signBitcoin.inputs.map(({ amount }) => amount),
+    outputs: signBitcoin.outputs.map(({ amount, isChange }) => ({ amount, isChange })),
+    fromAmount: amount,
+  })
+
+  return { txPayload, depositAmount }
+}
+
+/**
+ * The `txType` relayed on the keysign payload. SwapKit renames base64 tx types
+ * on the wire without versioning — `SOLANA` became `SERIALIZED_BASE64` and
+ * `CARDANO` became `CBOR` mid-flight (iOS accepts both spellings in
+ * `SwapKitSwapResponse.decodeTx`) — so for the chains whose bytes drive
+ * signing the source chain is the discriminator, and the value is normalized
+ * to what iOS stamps (`buildSwapKitSuiPayload` hardcodes `"SUI"`;
+ * `buildSwapKitLegacyPSBTPayload` the per-chain `PSBT_*` literal iOS also
+ * dispatches on when co-signing). Cosigning peers must agree.
+ */
+const getSwapKitTransferTxType = (chain: SwapKitSourceChain, wireTxType: string | undefined): string | undefined => {
+  if (chain === Chain.Sui) {
+    return 'SUI'
+  }
+  if (isSwapKitLegacyPsbtChain(chain)) {
+    return swapKitLegacyPsbtTxType[chain]
+  }
+  if (chain === Chain.Zcash) {
+    return swapKitZcashPsbtTxType
+  }
+  return wireTxType
+}
+
 type BuildTransferTxInput = {
   response: SwapKitSwapResponse
   from: AccountCoin<SwapKitSourceChain>
@@ -842,23 +938,25 @@ const buildTransferTx = ({
 
   const to = from.chain === Chain.Ton ? toCanonicalTonDeposit(agreedDestination) : agreedDestination
 
-  // SwapKit renames base64 tx types on the wire without versioning — `SOLANA`
-  // became `SERIALIZED_BASE64` and `CARDANO` became `CBOR` mid-flight (iOS
-  // accepts both spellings in `SwapKitSwapResponse.decodeTx`). A Sui route's
-  // `meta.txType` therefore cannot be trusted to read `SUI`. The source chain
-  // is the reliable discriminator, and normalizing here also keeps
-  // `SwapKitSwapPayload.txType` byte-identical to what iOS stamps
-  // (`buildSwapKitSuiPayload` hardcodes `"SUI"`) — cosigning peers must agree.
-  const wireTxType = response.meta?.txType
-  const txType = from.chain === Chain.Sui ? 'SUI' : wireTxType
+  const txType = getSwapKitTransferTxType(from.chain, response.meta?.txType)
 
   if (from.chain === Chain.Sui && response.tx !== undefined && typeof response.tx !== 'string') {
     throw new Error('SwapKit Sui route did not return a base64 programmable transaction block.')
   }
 
-  const txPayload = response.tx ? encodeSwapKitTxPayload(response.tx, txType) : undefined
-  const psbtDestinationAmount =
-    from.chain === Chain.Bitcoin && txType?.toUpperCase() === 'PSBT' && txPayload?.length
+  const p2pkhPsbtRoute =
+    isSwapKitLegacyPsbtChain(from.chain) || from.chain === Chain.Zcash
+      ? buildSwapKitP2pkhPsbtRoute({ response, chain: from.chain, senderAddress: from.address, amount })
+      : undefined
+
+  const txPayload = p2pkhPsbtRoute
+    ? p2pkhPsbtRoute.txPayload
+    : response.tx
+      ? encodeSwapKitTxPayload(response.tx, txType)
+      : undefined
+  const psbtDestinationAmount = p2pkhPsbtRoute
+    ? p2pkhPsbtRoute.depositAmount
+    : from.chain === Chain.Bitcoin && txType?.toUpperCase() === 'PSBT' && txPayload?.length
       ? getBitcoinPsbtDestinationAmount({ txPayload, senderAddress: from.address, targetAddress: to })
       : undefined
 
@@ -895,7 +993,7 @@ const buildTransferTx = ({
     amount: transferAmount,
     ...(response.memo ? { memo: response.memo } : {}),
     ...(txType ? { txType } : {}),
-    ...(response.tx ? { txPayload } : {}),
+    ...(txPayload ? { txPayload } : {}),
     ...(response.inboundAddress ? { inboundAddress: response.inboundAddress } : {}),
     ...(response.swapId ? { swapId: response.swapId } : {}),
     ...(affiliate && affiliate.amount > 0n ? { swapFee: affiliate } : {}),

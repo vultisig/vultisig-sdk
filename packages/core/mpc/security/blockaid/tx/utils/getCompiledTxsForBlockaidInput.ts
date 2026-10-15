@@ -15,6 +15,7 @@ import { getKeysignChain } from '../../../../keysign/utils/getKeysignChain'
 import { KeysignPayload } from '../../../../types/vultisig/keysign/v1/keysign_message_pb'
 import { compileSignBitcoinTx } from '../../../../tx/compile/compileSignBitcoinTx'
 import { getPreSigningHashes } from '../../../../tx/preSigningHashes'
+import { getSwapKitSignBitcoin } from '../../../../tx/swapkitSignBitcoin'
 
 type Input = {
   payload: KeysignPayload
@@ -33,7 +34,10 @@ export const getCompiledTxsForBlockaidInput = async ({ payload, walletCore }: In
     walletCore,
   })
 
-  if (payload.signData.case === 'signBitcoin') {
+  // Structured Bitcoin-family transactions (dApp PSBT, SwapKit BTC / DOGE /
+  // BCH / DASH PSBT) are hashed and assembled by the SignBitcoin path.
+  const signBitcoin = getSwapKitSignBitcoin(payload)
+  if (signBitcoin) {
     const privateKey = walletCore.PrivateKey.create()
     const signatures = getPreSigningHashes({
       walletCore,
@@ -51,7 +55,7 @@ export const getCompiledTxsForBlockaidInput = async ({ payload, walletCore }: In
       return result
     }, {})
 
-    return [compileSignBitcoinTx(payload.signData.value, signatures, publicKey)]
+    return [compileSignBitcoinTx(signBitcoin, signatures, publicKey, chain)]
   }
 
   const inputs = await getEncodedSigningInputs({

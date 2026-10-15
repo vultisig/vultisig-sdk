@@ -8,9 +8,11 @@ import {
   SwapKitNoEligibleRoutesError,
 } from '@vultisig/core-chain/swap/general/swapkit/SwapKitErrors'
 import { resetSwapKitProvidersCache } from '@vultisig/core-chain/swap/general/swapkit/SwapKitProviders'
-import { networks, payments, Psbt } from 'bitcoinjs-lib'
+import { networks, payments, Psbt, Transaction } from 'bitcoinjs-lib'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { buildP2pkhScript, getP2pkhScriptForAddress } from '../../../../chains/utxo/tx/p2pkhAddress'
+import utxoPsbtFixtures from '../../../../fixtures/swapkit-utxo-psbts.json'
 import { getSwapKitQuote } from './getSwapKitQuote'
 
 vi.mock('@vultisig/core-chain/security/blockaid/address', () => ({ scanAddressWithBlockaid: vi.fn() }))
@@ -55,10 +57,7 @@ type TransferSourceFixture = readonly [string, SwapKitSourceChain, string, numbe
 
 const transferSourceFixtures: TransferSourceFixture[] = [
   ['Litecoin', Chain.Litecoin, 'LTC', 8, 'ltc1qsource', 'Ldeposit'],
-  ['Dogecoin', Chain.Dogecoin, 'DOGE', 8, 'Dsource', 'Ddeposit'],
-  ['Bitcoin Cash', Chain.BitcoinCash, 'BCH', 8, 'bitcoincash:qsource', 'bitcoincash:qdeposit'],
   ['Ripple', Chain.Ripple, 'XRP', 6, 'rSource', 'rDeposit'],
-  ['Zcash', Chain.Zcash, 'ZEC', 8, 't1Source', 't1Deposit'],
   ['Tron', Chain.Tron, 'TRX', 6, 'TSource', 'TDeposit'],
   ['TON', Chain.Ton, 'TON', 9, 'UQSource', 'EQCIcjES4cQET0z6nRixZ0MdvTB4u3_8triztLSrIIrDkpgJ'],
   ['NEAR', Chain.Near, 'NEAR', 24, NEAR_SOURCE, NEAR_DEPOSIT],
@@ -290,6 +289,178 @@ describe('getSwapKitQuote', () => {
       })
     }
   )
+
+  describe('UTXO PSBT sources (sdk#2460)', () => {
+    // The CashAddr specification's example pair, in the bare spelling the vault stores.
+    const bchSource = 'qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a'
+    const bchSourceScript = getP2pkhScriptForAddress({ chain: Chain.BitcoinCash, address: bchSource })
+    const bchDepositScript = buildP2pkhScript(Buffer.alloc(20, 0x22))
+
+    const makeLegacyPsbt = ({
+      version = 1,
+      sequence = 0xffffffff,
+      sourceScript,
+      outputs,
+    }: {
+      version?: number
+      sequence?: number
+      sourceScript: Buffer
+      outputs: { script: Buffer; value: bigint }[]
+    }) => {
+      const prevTx = new Transaction()
+      prevTx.addInput(Buffer.alloc(32, 0x01), 0)
+      prevTx.addOutput(sourceScript, 50_000_000n)
+      const psbt = new Psbt()
+      psbt.setVersion(version)
+      psbt.addInput({ hash: prevTx.getId(), index: 0, sequence, nonWitnessUtxo: prevTx.toBuffer() })
+      outputs.forEach(output => psbt.addOutput(output))
+      return psbt.toBase64()
+    }
+
+    const bchPsbt = (overrides: { version?: number; sequence?: number } = {}) =>
+      makeLegacyPsbt({
+        ...overrides,
+        sourceScript: bchSourceScript,
+        outputs: [
+          { script: bchDepositScript, value: 49_748_500n },
+          { script: bchSourceScript, value: 250_000n },
+        ],
+      })
+
+    const quotePsbtRoute = async ({
+      chain,
+      ticker,
+      address,
+      amount,
+      swapResponse,
+    }: {
+      chain: SwapKitSourceChain
+      ticker: string
+      address: string
+      amount: bigint
+      swapResponse: Record<string, unknown>
+    }) => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(
+          response({ routes: [{ routeId: 'psbt-route', providers: ['NEAR'], expectedBuyAmount: '0.01' }] })
+        )
+        .mockResolvedValueOnce(response({ expectedBuyAmount: '0.01', providers: ['NEAR'], ...swapResponse }))
+      vi.stubGlobal('fetch', fetchMock)
+      configureSwapKit({ apiKey: 'test-key', baseUrl: 'https://swapkit.example' })
+
+      const quote = await getSwapKitQuote({
+        from: { chain, address, ticker, decimals: 8 },
+        to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
+        amount,
+      })
+
+      return { quote, swapRequest: JSON.parse(fetchMock.mock.calls[1][1].body) }
+    }
+
+    const { dogecoin, zcash } = utxoPsbtFixtures
+
+    it.each([
+      [
+        'Dogecoin',
+        'PSBT_DOGE',
+        {
+          chain: Chain.Dogecoin,
+          ticker: 'DOGE',
+          address: dogecoin.sourceAddress,
+          amount: BigInt(dogecoin.sellAmount),
+          swapResponse: { targetAddress: dogecoin.targetAddress, meta: { txType: 'PSBT' }, tx: dogecoin.psbt },
+        },
+        { to: dogecoin.targetAddress, amount: 99_799_970_000n, txPayload: Buffer.from(dogecoin.psbt, 'base64') },
+      ],
+      [
+        'Bitcoin Cash',
+        'PSBT_BCH',
+        {
+          chain: Chain.BitcoinCash,
+          ticker: 'BCH',
+          address: bchSource,
+          amount: 50_000_000n,
+          swapResponse: { targetAddress: 'bitcoincash:qdeposit', meta: { txType: 'PSBT' }, tx: bchPsbt() },
+        },
+        { to: 'bitcoincash:qdeposit', amount: 49_748_500n, txPayload: Buffer.from(bchPsbt(), 'base64') },
+      ],
+      [
+        'Zcash',
+        'PSBT_ZEC',
+        {
+          chain: Chain.Zcash,
+          ticker: 'ZEC',
+          address: zcash.sourceAddress,
+          amount: BigInt(zcash.sellAmount),
+          swapResponse: { targetAddress: zcash.targetAddress, meta: { txType: 'PSBT' }, tx: zcash.psbt },
+        },
+        { to: zcash.targetAddress, amount: 100_000_000n, txPayload: Buffer.from(zcash.psbt, 'base64') },
+      ],
+    ] as const)('asks SwapKit to build a %s PSBT and relays it as %s', async (_, txType, input, transfer) => {
+      const { quote, swapRequest } = await quotePsbtRoute(input)
+
+      expect(swapRequest.disableBuildTx).toBeUndefined()
+      expect(quote.tx).toEqual({
+        transfer: {
+          to: transfer.to,
+          amount: transfer.amount,
+          txType,
+          txPayload: new Uint8Array(transfer.txPayload),
+        },
+      })
+    })
+
+    it('rewrites a version-2 legacy PSBT to version 1 before relaying it', async () => {
+      const { quote } = await quotePsbtRoute({
+        chain: Chain.BitcoinCash,
+        ticker: 'BCH',
+        address: bchSource,
+        amount: 50_000_000n,
+        swapResponse: {
+          targetAddress: 'bitcoincash:qdeposit',
+          meta: { txType: 'PSBT' },
+          tx: bchPsbt({ version: 2, sequence: 0xfffffffe }),
+        },
+      })
+
+      const relayed = 'transfer' in quote.tx ? Psbt.fromBuffer(Buffer.from(quote.tx.transfer.txPayload!)) : undefined
+      expect(relayed?.version).toBe(1)
+      expect(relayed?.txInputs[0].sequence).toBe(0xfffffffe)
+      expect(relayed?.txOutputs.map(({ value }) => value)).toEqual([49_748_500n, 250_000n])
+    })
+
+    it.each([
+      ['no transaction at all', { targetAddress: dogecoin.targetAddress }, /did not return a PSBT/],
+      [
+        'a PSBT spending from another address',
+        { targetAddress: dogecoin.targetAddress, meta: { txType: 'PSBT' }, tx: utxoPsbtFixtures.dash.psbt },
+        /does not spend from this vault's address/,
+      ],
+    ])('refuses a Dogecoin route with %s', async (_, swapResponse, error) => {
+      await expect(
+        quotePsbtRoute({
+          chain: Chain.Dogecoin,
+          ticker: 'DOGE',
+          address: dogecoin.sourceAddress,
+          amount: BigInt(dogecoin.sellAmount),
+          swapResponse,
+        })
+      ).rejects.toThrow(error)
+    })
+
+    it('refuses a PSBT that moves more than the requested amount out of the vault', async () => {
+      await expect(
+        quotePsbtRoute({
+          chain: Chain.Dogecoin,
+          ticker: 'DOGE',
+          address: dogecoin.sourceAddress,
+          amount: 99_799_969_999n,
+          swapResponse: { targetAddress: dogecoin.targetAddress, meta: { txType: 'PSBT' }, tx: dogecoin.psbt },
+        })
+      ).rejects.toThrow(/more than the quoted swap amount/)
+    })
+  })
 
   it('maps a NEAR Intents simpleTransfer deposit to a plain transfer with no memo or pre-built tx', async () => {
     const fetchMock = vi
@@ -539,7 +710,9 @@ describe('getSwapKitQuote', () => {
         response({
           expectedBuyAmount: '144.49',
           providers: ['NEAR'],
-          targetAddress: 't1Deposit',
+          targetAddress: utxoPsbtFixtures.zcash.targetAddress,
+          meta: { txType: 'PSBT' },
+          tx: utxoPsbtFixtures.zcash.psbt,
           ...(fees ? { fees } : {}),
         })
       )
@@ -547,9 +720,9 @@ describe('getSwapKitQuote', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     return getSwapKitQuote({
-      from: { chain: Chain.Zcash, address: 't1Source', ticker: 'ZEC', decimals: 8 },
+      from: { chain: Chain.Zcash, address: utxoPsbtFixtures.zcash.sourceAddress, ticker: 'ZEC', decimals: 8 },
       to: { chain: Chain.Tron, address: 'TDestination', ticker: 'TRX', decimals: 6 },
-      amount: 9_332_136n,
+      amount: BigInt(utxoPsbtFixtures.zcash.sellAmount),
     })
   }
 
@@ -597,7 +770,7 @@ describe('getSwapKitQuote', () => {
       fees: [{ type: 'affiliate', amount: '0.04', asset: 'ETH.ETH', chain: 'ETH' }],
     })
 
-    expect('transfer' in quote.tx && quote.tx.transfer.to).toBe('t1Deposit')
+    expect('transfer' in quote.tx && quote.tx.transfer.to).toBe(utxoPsbtFixtures.zcash.targetAddress)
     expect('transfer' in quote.tx && quote.tx.transfer.swapFee).toBeUndefined()
   })
 
@@ -612,7 +785,7 @@ describe('getSwapKitQuote', () => {
       fees: [{ type: 'affiliate', amount, asset: 'ZEC.ZEC', chain: 'ZEC' }],
     })
 
-    expect('transfer' in quote.tx && quote.tx.transfer.to).toBe('t1Deposit')
+    expect('transfer' in quote.tx && quote.tx.transfer.to).toBe(utxoPsbtFixtures.zcash.targetAddress)
     expect('transfer' in quote.tx && quote.tx.transfer.swapFee).toBeUndefined()
   })
 

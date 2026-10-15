@@ -13,6 +13,8 @@ import { KeysignPayload } from '../../types/vultisig/keysign/v1/keysign_message_
 import { UtxoInfoSchema } from '../../types/vultisig/keysign/v1/utxo_info_pb'
 import { getBlockchainSpecificValue } from '../chainSpecific/KeysignChainSpecific'
 import { BuildKeysignPayloadError } from '../error'
+import { getSwapKitLegacyPsbtPayload } from '../../tx/swapkitSignBitcoin'
+import { getSwapKitZcashPsbtPayload } from '../../tx/swapkitSignZcash'
 import { getUtxoSigningInputs } from '../signingInputs/resolvers/utxo'
 import { getKeysignAmount } from '../utils/getKeysignAmount'
 import { getKeysignChain } from '../utils/getKeysignChain'
@@ -41,13 +43,18 @@ const convertPlanUtxosToUtxoInfo = ({ utxos, walletCore }: ConvertPlanUtxosToUtx
   })
 
 export const refineKeysignUtxo = async (input: RefineKeysignUtxoInput): Promise<KeysignPayload> => {
-  const utxoSpecific = getBlockchainSpecificValue(input.keysignPayload.blockchainSpecific, 'utxoSpecific')
-
   // PSBTs already have UTXOs defined — skip refinement.
-  // When signData is signBitcoin, the PSBT defines exact inputs/outputs.
-  if (input.keysignPayload.signData.case === 'signBitcoin') {
+  // When signData is signBitcoin, or the keysign carries SwapKit's DOGE / BCH /
+  // DASH / ZEC PSBT, the PSBT defines exact inputs/outputs.
+  if (
+    input.keysignPayload.signData.case === 'signBitcoin' ||
+    getSwapKitLegacyPsbtPayload(input.keysignPayload) ||
+    getSwapKitZcashPsbtPayload(input.keysignPayload)
+  ) {
     return input.keysignPayload
   }
+
+  const utxoSpecific = getBlockchainSpecificValue(input.keysignPayload.blockchainSpecific, 'utxoSpecific')
 
   const [signingInput] = await getUtxoSigningInputs(input)
 

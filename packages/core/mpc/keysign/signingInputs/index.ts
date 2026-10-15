@@ -2,13 +2,15 @@ import { Buffer } from 'buffer'
 import { toBinary } from '@bufbuild/protobuf'
 import { ChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
 import { KeysignPayload, KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
-import { WalletCore } from '@trustwallet/wallet-core'
+import { TW, WalletCore } from '@trustwallet/wallet-core'
 import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
 
 import {
   getSwapKitCardanoPrebuiltPayload,
   getSwapKitCardanoPrebuiltSigningInput,
 } from '../../tx/swapkitCardanoPrebuilt'
+import { assertSignBitcoinInputsOwnedByKey, getSwapKitLegacyPsbtSignBitcoin } from '../../tx/swapkitSignBitcoin'
+import { buildSwapKitZcashSigningInput, getSwapKitZcashPsbtPayload } from '../../tx/swapkitSignZcash'
 import { assertKeysignSwapSellsSigningCoin } from '../swap/assertKeysignSwapSellsSigningCoin'
 import { getKeysignTonGasless } from '../ton/gasless'
 import { getKeysignChain } from '../utils/getKeysignChain'
@@ -100,6 +102,44 @@ export const getEncodedSigningInputs = async (input: Input): Promise<Uint8Array[
         vaultPublicKey: new Uint8Array(input.publicKey.data()).slice(0, 32),
       }),
     ]
+  }
+
+  // SwapKit pre-built DOGE / BCH / DASH PSBT (sdk#2460): the hashes come from
+  // the PSBT's own inputs and outputs, as on iOS / Android, never from a
+  // transfer rebuilt from toAddress / toAmount / utxoInfo. getPreSigningHashes
+  // and compileTx have matching SignBitcoin branches keyed off the payload, so
+  // the payload itself is the signing input. The PSBT is bound to the caller's
+  // own vault key here, before any hash is produced.
+  const swapKitLegacyPsbt = getSwapKitLegacyPsbtSignBitcoin(input.keysignPayload)
+  if (swapKitLegacyPsbt) {
+    if (!input.publicKey) {
+      throw new Error('publicKey is required to validate a SwapKit legacy PSBT')
+    }
+
+    assertSignBitcoinInputsOwnedByKey({
+      signBitcoin: swapKitLegacyPsbt,
+      publicKey: new Uint8Array(input.publicKey.data()),
+    })
+
+    return [toBinary(KeysignPayloadSchema, input.keysignPayload)]
+  }
+
+  // SwapKit pre-built Zcash PSBT (sdk#2460): WalletCore signs it from a frozen
+  // transaction plan carrying the PSBT's inputs, outputs and fee, so the
+  // ZIP-243 digest is the one iOS / Android compute. The regular UTXO
+  // resolver would plan a different transaction from utxoInfo and byteFee.
+  if (getSwapKitZcashPsbtPayload(input.keysignPayload)) {
+    if (!input.publicKey) {
+      throw new Error('publicKey is required to validate a SwapKit Zcash PSBT')
+    }
+
+    const signingInput = await buildSwapKitZcashSigningInput({
+      keysignPayload: input.keysignPayload,
+      walletCore: input.walletCore,
+      publicKey: new Uint8Array(input.publicKey.data()),
+    })
+
+    return [TW.Bitcoin.Proto.SigningInput.encode(signingInput).finish()]
   }
 
   const signingInputs = await signingInputResolversByChainKind[chainKind](input as any)
