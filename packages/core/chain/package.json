@@ -1620,6 +1620,7 @@
       "import": "./dist/coin/utils/sortCoinsByBalance.js",
       "default": "./dist/coin/utils/sortCoinsByBalance.js"
     },
+    "./fixtures/blockaid-sui-simulations.json": "./fixtures/blockaid-sui-simulations.json",
     "./fixtures/jupiter-swap-transactions.json": "./fixtures/jupiter-swap-transactions.json",
     "./fixtures/limit-swap-memos.json": "./fixtures/limit-swap-memos.json",
     "./package.json": "./package.json",
