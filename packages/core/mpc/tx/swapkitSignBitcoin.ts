@@ -1,6 +1,16 @@
 import { Buffer } from 'buffer'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { buildSignBitcoinFromPsbt } from '@vultisig/core-chain/chains/utxo/tx/buildSignBitcoinFromPsbt'
+import { getP2pkhScriptKeyHash, getPublicKeyHash160 } from '@vultisig/core-chain/chains/utxo/tx/p2pkhAddress'
+import {
+  buildSignBitcoinFromLegacyPsbt,
+  SwapKitLegacyPsbtChain,
+  swapKitLegacyPsbtChains,
+  swapKitLegacyPsbtTxType,
+} from '@vultisig/core-chain/chains/utxo/tx/swapKitLegacyPsbt'
+import { verifySwapKitP2pkhSpend } from '@vultisig/core-chain/chains/utxo/tx/swapKitP2pkhSpend'
+import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
+import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { address as btcAddress, networks, Psbt } from 'bitcoinjs-lib'
 
 import { KeysignPayload } from '../types/vultisig/keysign/v1/keysign_message_pb'
@@ -163,7 +173,104 @@ const getSwapKitBitcoinPsbtPayload = (keysignPayload: KeysignPayload): SwapKitSw
   return swapKitPayload.txType.toUpperCase() === 'PSBT' ? swapKitPayload : undefined
 }
 
+type SwapKitLegacyPsbtKeysign = {
+  chain: SwapKitLegacyPsbtChain
+  swapKitPayload: SwapKitSwapPayload
+}
+
+/**
+ * The SwapKit payload of a DOGE / BCH / DASH keysign that carries SwapKit's
+ * pre-built PSBT (sdk#2460), or `undefined` for any other keysign. The
+ * `txType` may be the wire value, blank, or the per-chain literal iOS and
+ * Android stamp; anything else is refused rather than signed as something it
+ * is not. A SwapKit payload with no transaction bytes is the plain deposit
+ * transfer older SDK initiators produced and still signs through the regular
+ * UTXO path.
+ */
+export const getSwapKitLegacyPsbtPayload = (keysignPayload: KeysignPayload): SwapKitLegacyPsbtKeysign | undefined => {
+  const chain = keysignPayload.coin?.chain
+  if (!isOneOf(chain, swapKitLegacyPsbtChains) || keysignPayload.swapPayload.case !== 'swapkitSwapPayload') {
+    return undefined
+  }
+
+  const swapKitPayload = keysignPayload.swapPayload.value
+  const txType = swapKitPayload.txType.trim().toUpperCase()
+  if (swapKitPayload.txPayload.length === 0 && txType === '') {
+    return undefined
+  }
+  if (!['', 'PSBT', swapKitLegacyPsbtTxType[chain]].includes(txType)) {
+    throw new Error(`Unsupported SwapKit ${chain} transaction type "${swapKitPayload.txType}".`)
+  }
+
+  return { chain, swapKitPayload }
+}
+
+/**
+ * SwapKit's DOGE / BCH / DASH PSBT as structured `SignBitcoin`, bound to the
+ * keysign's vault address and quoted amount, or `undefined` when the keysign
+ * carries no such PSBT. The hashes every co-signer must agree on come from
+ * these PSBT bytes — never from the keysign's `signData` or a rebuilt
+ * transfer — because that is what iOS and Android sign.
+ */
+export const getSwapKitLegacyPsbtSignBitcoin = (keysignPayload: KeysignPayload): SignBitcoin | undefined => {
+  const legacyPsbt = getSwapKitLegacyPsbtPayload(keysignPayload)
+  if (!legacyPsbt) {
+    return undefined
+  }
+
+  const { chain, swapKitPayload } = legacyPsbt
+  const signBitcoin = buildSignBitcoinFromLegacyPsbt({
+    chain,
+    psbt: swapKitPayload.txPayload,
+    senderAddress: shouldBePresent(keysignPayload.coin, 'keysign coin').address,
+  })
+  verifySwapKitP2pkhSpend({
+    chain,
+    inputAmounts: signBitcoin.inputs.map(({ amount }) => amount),
+    outputs: signBitcoin.outputs.map(({ amount, isChange }) => ({ amount, isChange })),
+    fromAmount: swapKitPayload.fromAmount,
+  })
+
+  return signBitcoin
+}
+
+type AssertSignBitcoinInputsOwnedByKeyInput = {
+  signBitcoin: SignBitcoin
+  /** This vault's compressed secp256k1 public key for the keysign chain. */
+  publicKey: Uint8Array
+}
+
+/**
+ * Refuses a legacy PSBT whose P2PKH inputs lock to a key other than this
+ * vault's own signing key. The keysign's coin address comes from the
+ * initiator, so binding to it alone would still let the MPC network be asked
+ * to sign an input the vault does not own.
+ */
+export const assertSignBitcoinInputsOwnedByKey = ({
+  signBitcoin,
+  publicKey,
+}: AssertSignBitcoinInputsOwnedByKeyInput) => {
+  const keyHash = getPublicKeyHash160(publicKey)
+  signBitcoin.inputs.forEach((input, index) => {
+    const inputKeyHash = getP2pkhScriptKeyHash(Buffer.from(input.scriptPubKey, 'hex'))
+    if (!inputKeyHash?.equals(keyHash)) {
+      throw new Error(`SwapKit PSBT input #${index} does not lock to this vault's signing key.`)
+    }
+  })
+}
+
+/**
+ * The structured Bitcoin-family transaction a keysign signs through the
+ * `SignBitcoin` hash and compile path, or `undefined` when the keysign is a
+ * regular WalletCore-built transaction: a dApp PSBT (`signData.signBitcoin`),
+ * SwapKit's Bitcoin PSBT, or SwapKit's DOGE / BCH / DASH PSBT.
+ */
 export const getSwapKitSignBitcoin = (keysignPayload: KeysignPayload): SignBitcoin | undefined => {
+  const legacyPsbtSignBitcoin = getSwapKitLegacyPsbtSignBitcoin(keysignPayload)
+  if (legacyPsbtSignBitcoin) {
+    return legacyPsbtSignBitcoin
+  }
+
   let signBitcoin: SignBitcoin | undefined
   const swapKitBitcoinPsbtPayload = getSwapKitBitcoinPsbtPayload(keysignPayload)
 
