@@ -7339,7 +7339,7 @@ __metadata:
     events: "npm:^3.3.0"
     fake-indexeddb: "npm:^6.2.5"
     i18next: "npm:^26.3.1"
-    i18next-http-backend: "npm:^4.0.1"
+    i18next-http-backend: "npm:^4.0.3"
     isomorphic-fetch: "npm:^3.0.0"
     koffi: "npm:^3.1.4"
     node-fetch: "npm:^3.3.2"
@@ -12544,10 +12544,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"i18next-http-backend@npm:^4.0.1":
-  version: 4.0.1
-  resolution: "i18next-http-backend@npm:4.0.1"
-  checksum: 10c0/faf837f4260842cb43cd152ff4099ff1811e75c1b4a56a24d116a60f5b5d4ab2e189821f5f9ecf58df4927d91e77ca440ba44bd51220af347db850745da44346
+"i18next-http-backend@npm:^4.0.3":
+  version: 4.0.3
+  resolution: "i18next-http-backend@npm:4.0.3"
+  checksum: 10c0/61650dbea6c16499d67ec738b76fd73bd55df3b6bfd2ee60c85f8070974f6cfada18ce63983430f826556720fb8995bef8542b3829a0397bd09eccad5651e3ef
   languageName: node
   linkType: hard
 
