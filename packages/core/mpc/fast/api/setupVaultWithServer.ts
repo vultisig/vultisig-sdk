@@ -1,5 +1,6 @@
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
+import { toLibType } from '../../types/utils/libType'
 import { fastVaultServerUrl } from '../config'
 
 type Input = {
@@ -18,6 +19,7 @@ type Input = {
 
 export const setupVaultWithServer = async ({ vaultBaseUrl, ...body }: Input) =>
   queryUrl(`${vaultBaseUrl ?? fastVaultServerUrl}/batch/keygen`, {
-    body,
+    // VultiServer stores an omitted lib_type as GG20, and then fast signing never completes.
+    body: { ...body, lib_type: toLibType('DKLS') },
     responseType: 'none',
   })
