@@ -66,6 +66,12 @@ describe('getSolanaFeeAmount', () => {
     expect(getSolanaFeeAmount(buildInput({ priorityFee: '5000000' }))).toBe(505_000n)
   })
 
+  // Mainnet charges 128_457 lamports for this message (getFeeForMessage): the
+  // runtime rounds 123_456.7 up, so a floored quote leaves a MAX send short.
+  it('rounds a fractional priorityFeeAmount up to a whole lamport, as the runtime does', () => {
+    expect(getSolanaFeeAmount(buildInput({ priorityFee: '1234567' }))).toBe(128_457n)
+  })
+
   it('adds ATA rent for SPL transfers when recipient ATA is missing', () => {
     // base 5000 + ataRent 2_039_280 + priority 100_000 = 2_144_280
     expect(
