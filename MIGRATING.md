@@ -1,5 +1,40 @@
 # Migration Guide
 
+## SDK dependencies in the next major: React Native and Vite apps install their own
+
+`@vultisig/sdk` now installs only what its Node and browser builds import.
+Node, browser, Electron, and Chrome extension apps need no change.
+
+**React Native.** The RN build imports some chain libraries without bundling them,
+and they are now optional peer dependencies. Install the ones for chains your app
+uses, and stub the rest in `metro.config.js` (`resolver.resolveRequest`) as you
+already do for Node builtins. Metro fails the bundle with "Unable to resolve
+module" for any that are neither installed nor stubbed:
+
+```sh
+npm install @cosmjs/encoding @lifi/sdk @mysten/sui @polkadot/api @polkadot/util \
+  @polkadot/util-crypto @solana/spl-token bitcoinjs-lib bs58 bs58check cbor-x \
+  js-md5 ripple-address-codec xrpl
+```
+
+**Vite (`@vultisig/sdk/vite`).** The preset's plugins and browser shims are now
+optional peer dependencies. Install them as dev dependencies; `vultisig()` throws
+an error that names any that are missing:
+
+```sh
+npm install -D vite-plugin-wasm vite-plugin-node-polyfills crypto-browserify \
+  stream-browserify path-browserify process util events
+```
+
+`isomorphic-fetch` is only needed if your app's graph imports `node-fetch`.
+
+**Types.** The declarations no longer import `@vultisig/core-chain` or
+`@vultisig/core-mpc`; every exported name is unchanged. Six ERC-20 helpers
+(`ERC20_APPROVE_SELECTOR`, `assertSafeTokenTransferDestination`,
+`decodeErc20Approve`, `decodeErc20Recipient`, `decodeErc20RecipientFromSig`,
+`isErc20TransferCalldata`) were typed as `any` before and now have their real
+types, so wrong arguments to them are now compile errors.
+
 ## SDK package paths in the next major
 
 Nineteen narrow `@vultisig/sdk` paths are removed. Import their APIs from the

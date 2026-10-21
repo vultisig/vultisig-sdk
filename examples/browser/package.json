@@ -33,6 +33,9 @@
     "stream-browserify": "^3.0.0",
     "tailwindcss": "^4.3.2",
     "typescript": "^6.0.3",
-    "vite": "^8.1.4"
+    "util": "^0.12.5",
+    "vite": "^8.1.4",
+    "vite-plugin-node-polyfills": "^0.28.0",
+    "vite-plugin-wasm": "^3.6.0"
   }
 }
