@@ -90,14 +90,17 @@ describe('NEAR preparation through the registered chain-specific resolver', () =
     await expect(prepare()).rejects.toBeInstanceOf(NearUnknownEntityError)
   })
 
-  it('stops a named receiver the node does not know before signing, but not an implicit one', async () => {
-    setupTransport({ account: { unknown: true } })
+  it.each([[false], [true]])(
+    'stops a named receiver the node does not know before signing, but not an implicit one (name-less error: %s)',
+    async namelessError => {
+      setupTransport({ account: { unknown: true, namelessError } })
 
-    await expect(prepare(buildNearKeysignPayload({ toAddress: NAMED_RECEIVER }))).rejects.toMatchObject({
-      type: 'near-destination-not-found',
-    })
-    await expect(prepare(buildNearKeysignPayload({ toAddress: IMPLICIT_RECEIVER }))).resolves.toBeDefined()
-  })
+      await expect(prepare(buildNearKeysignPayload({ toAddress: NAMED_RECEIVER }))).rejects.toMatchObject({
+        type: 'near-destination-not-found',
+      })
+      await expect(prepare(buildNearKeysignPayload({ toAddress: IMPLICIT_RECEIVER }))).resolves.toBeDefined()
+    }
+  )
 
   it('rejects a negative access key nonce instead of preparing a transaction nonce from it', async () => {
     setupTransport({ accessKeyNonce: '-1' })
