@@ -24,6 +24,15 @@ describe('ensResolver', () => {
     expect(getEnsAddress).toHaveBeenCalledWith({ name: 'vitalik.eth' })
   })
 
+  it('resolves a subdomain like any other ENS name', async () => {
+    getEnsAddress.mockResolvedValue('0xd8da6bf26964af9d7eed9e03e53415d37aa96045')
+
+    await expect(ensResolver.resolve({ name: 'pay.vitalik.eth', chain: Chain.Ethereum })).resolves.toMatchObject({
+      kind: 'resolved',
+    })
+    expect(getEnsAddress).toHaveBeenCalledWith({ name: 'pay.vitalik.eth' })
+  })
+
   it('reports a name with no address as not found', async () => {
     getEnsAddress.mockResolvedValue(null)
 

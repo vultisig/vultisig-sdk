@@ -3,7 +3,9 @@ import {
   getNativeSwapChainId,
   nativeSwapApiBaseUrl,
   NativeSwapChain,
+  nativeSwapEnabledChainsRecord,
 } from '@vultisig/core-chain/swap/native/NativeSwapChain'
+import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { HttpResponseError } from '@vultisig/lib-utils/fetch/HttpResponseError'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
@@ -28,10 +30,12 @@ const isMissingNameError = (error: unknown) =>
 /**
  * Builds the resolver for a THORChain-style name service (THORName, MAYAName).
  * Both nodes return the same record, with aliases keyed by the chain
- * identifiers their pools use (BTC, ETH, GAIA, ...).
+ * identifiers their pools use (BTC, ETH, GAIA, ...). A name can hold an
+ * address only for a chain its own network trades: a THORName has no Dash
+ * alias, a MAYAName no BSC one.
  */
 export const getNativeChainNameResolver = (nativeChain: NativeSwapChain): NameServiceResolver => ({
-  isChainSupported: chain => getNativeSwapChainId(chain) !== null,
+  isChainSupported: chain => isOneOf(chain, nativeSwapEnabledChainsRecord[nativeChain]),
   resolve: async ({ name, chain }) => {
     const chainId = shouldBePresent(getNativeSwapChainId(chain), `${nativeChain} name chain id for ${chain}`)
     const label = name.slice(0, name.lastIndexOf('.'))

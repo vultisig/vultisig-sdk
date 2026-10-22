@@ -111,10 +111,17 @@ describe('thornameResolver', () => {
     )
   })
 
-  it('holds addresses only for chains THORChain-style names can carry', () => {
-    expect(thornameResolver.isChainSupported(Chain.Bitcoin)).toBe(true)
-    expect(thornameResolver.isChainSupported(Chain.Polygon)).toBe(false)
-    expect(thornameResolver.isChainSupported(Chain.Near)).toBe(false)
+  it.each<[Chain, boolean]>([
+    [Chain.THORChain, true],
+    [Chain.Bitcoin, true],
+    [Chain.BSC, true],
+    [Chain.Dash, false],
+    [Chain.Arbitrum, false],
+    [Chain.MayaChain, false],
+    [Chain.Polygon, false],
+    [Chain.Near, false],
+  ])('holds a %s address: %s', (chain, isSupported) => {
+    expect(thornameResolver.isChainSupported(chain)).toBe(isSupported)
   })
 })
 
@@ -139,5 +146,18 @@ describe('mayanameResolver', () => {
     await expect(mayanameResolver.resolve({ name: 'nope.maya', chain: Chain.Dash })).resolves.toEqual({
       kind: 'notFound',
     })
+  })
+
+  it.each<[Chain, boolean]>([
+    [Chain.MayaChain, true],
+    [Chain.THORChain, true],
+    [Chain.Dash, true],
+    [Chain.Arbitrum, true],
+    [Chain.Bitcoin, true],
+    [Chain.BSC, false],
+    [Chain.Solana, false],
+    [Chain.Polygon, false],
+  ])('holds a %s address: %s', (chain, isSupported) => {
+    expect(mayanameResolver.isChainSupported(chain)).toBe(isSupported)
   })
 })

@@ -6,9 +6,9 @@ import { normalize } from 'viem/ens'
 import { NameServiceResolver } from '../resolver'
 
 /**
- * ENS names (`.eth`), resolved to their Ethereum mainnet address. Only root
- * `.eth` names on Ethereum: ENSIP-11 multi-chain coin types and offchain
- * (CCIP-Read) resolvers are not supported.
+ * ENS names (`.eth`, subdomains such as `pay.vitalik.eth` included), resolved
+ * on Ethereum mainnet to their Ethereum address. ENSIP-11 records for other
+ * chains are not read, so a name is only sent to on Ethereum.
  */
 export const ensResolver: NameServiceResolver = {
   isChainSupported: chain => chain === Chain.Ethereum,
