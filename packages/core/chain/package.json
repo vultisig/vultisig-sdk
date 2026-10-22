@@ -1260,6 +1260,26 @@
       "import": "./dist/chains/utxo/tx/getUtxos.js",
       "default": "./dist/chains/utxo/tx/getUtxos.js"
     },
+    "./chains/utxo/tx/p2pkhAddress": {
+      "types": "./dist/chains/utxo/tx/p2pkhAddress.d.ts",
+      "import": "./dist/chains/utxo/tx/p2pkhAddress.js",
+      "default": "./dist/chains/utxo/tx/p2pkhAddress.js"
+    },
+    "./chains/utxo/tx/swapKitLegacyPsbt": {
+      "types": "./dist/chains/utxo/tx/swapKitLegacyPsbt.d.ts",
+      "import": "./dist/chains/utxo/tx/swapKitLegacyPsbt.js",
+      "default": "./dist/chains/utxo/tx/swapKitLegacyPsbt.js"
+    },
+    "./chains/utxo/tx/swapKitP2pkhSpend": {
+      "types": "./dist/chains/utxo/tx/swapKitP2pkhSpend.d.ts",
+      "import": "./dist/chains/utxo/tx/swapKitP2pkhSpend.js",
+      "default": "./dist/chains/utxo/tx/swapKitP2pkhSpend.js"
+    },
+    "./chains/utxo/tx/swapKitZcashPsbt": {
+      "types": "./dist/chains/utxo/tx/swapKitZcashPsbt.d.ts",
+      "import": "./dist/chains/utxo/tx/swapKitZcashPsbt.js",
+      "default": "./dist/chains/utxo/tx/swapKitZcashPsbt.js"
+    },
     "./chains/utxo/tx/UtxoScriptType": {
       "types": "./dist/chains/utxo/tx/UtxoScriptType.d.ts",
       "import": "./dist/chains/utxo/tx/UtxoScriptType.js",
@@ -1622,6 +1642,7 @@
     },
     "./fixtures/jupiter-swap-transactions.json": "./fixtures/jupiter-swap-transactions.json",
     "./fixtures/limit-swap-memos.json": "./fixtures/limit-swap-memos.json",
+    "./fixtures/swapkit-utxo-psbts.json": "./fixtures/swapkit-utxo-psbts.json",
     "./package.json": "./package.json",
     "./publicKey/address/bittensor": {
       "types": "./dist/publicKey/address/bittensor.d.ts",

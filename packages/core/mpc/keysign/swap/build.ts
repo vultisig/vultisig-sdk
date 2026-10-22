@@ -1,6 +1,18 @@
 import { Buffer } from 'buffer'
 import { create } from '@bufbuild/protobuf'
 import { buildSignBitcoinFromPsbt } from '@vultisig/core-chain/chains/utxo/tx/buildSignBitcoinFromPsbt'
+import {
+  buildSignBitcoinFromLegacyPsbt,
+  isSwapKitLegacyPsbtChain,
+  SwapKitLegacyPsbtChain,
+  swapKitLegacyPsbtTxType,
+} from '@vultisig/core-chain/chains/utxo/tx/swapKitLegacyPsbt'
+import { verifySwapKitP2pkhSpend } from '@vultisig/core-chain/chains/utxo/tx/swapKitP2pkhSpend'
+import {
+  parseSwapKitZcashPsbt,
+  swapKitZcashPsbtTxType,
+  verifySwapKitZcashPsbt,
+} from '@vultisig/core-chain/chains/utxo/tx/swapKitZcashPsbt'
 import { fromChainAmountDisplay } from '@vultisig/core-chain/amount/fromChainAmountExact'
 import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import { Chain } from '@vultisig/core-chain/Chain'
@@ -207,14 +219,70 @@ const getSwapKitSuiSignData = (transfer: TransferSwapTx): KeysignPayload['signDa
 }
 
 /**
+ * Refuses a DOGE / BCH / DASH route that is not SwapKit's PSBT, and binds that
+ * PSBT to the vault address and the quoted transfer before it is relayed. The
+ * PSBT rides `SwapKitSwapPayload.txPayload`, which is what every co-signer
+ * (iOS, Android, this SDK) hashes; `signData` stays empty.
+ */
+const assertSwapKitLegacyPsbtTransfer = (
+  chain: SwapKitLegacyPsbtChain,
+  senderAddress: string,
+  transfer: TransferSwapTx
+): void => {
+  const txType = swapKitLegacyPsbtTxType[chain]
+  if (transfer.txType?.toUpperCase() !== txType || !transfer.txPayload?.length) {
+    throw new Error(`SwapKit ${chain} transfer routes must include a ${txType} transaction payload.`)
+  }
+
+  const signBitcoin = buildSignBitcoinFromLegacyPsbt({ chain, psbt: transfer.txPayload, senderAddress })
+  const deposit = verifySwapKitP2pkhSpend({
+    chain,
+    inputAmounts: signBitcoin.inputs.map(({ amount }) => amount),
+    outputs: signBitcoin.outputs.map(({ amount, isChange }) => ({ amount, isChange })),
+    fromAmount: transfer.amount,
+  })
+  if (deposit !== transfer.amount) {
+    throw new Error(`SwapKit ${chain} PSBT deposits ${deposit}, but the quote says ${transfer.amount}.`)
+  }
+}
+
+/** The Zcash counterpart of `assertSwapKitLegacyPsbtTransfer`: SwapKit's Sapling PSBT, bound and relayed verbatim. */
+const assertSwapKitZcashPsbtTransfer = (senderAddress: string, transfer: TransferSwapTx): void => {
+  if (transfer.txType?.toUpperCase() !== swapKitZcashPsbtTxType || !transfer.txPayload?.length) {
+    throw new Error(`SwapKit Zcash transfer routes must include a ${swapKitZcashPsbtTxType} transaction payload.`)
+  }
+
+  const { deposit } = verifySwapKitZcashPsbt({
+    tx: parseSwapKitZcashPsbt(transfer.txPayload),
+    senderAddress,
+    fromAmount: transfer.amount,
+  })
+  if (deposit !== transfer.amount) {
+    throw new Error(`SwapKit Zcash PSBT deposits ${deposit}, but the quote says ${transfer.amount}.`)
+  }
+}
+
+/**
  * Route a SwapKit transfer route to the chain-specific pre-built signing
  * payload it needs. Chains whose SwapKit wire shape is a plain native send
  * (TON, XRP, ADA deposits) carry no pre-built bytes and sign through the
- * normal per-chain builder, so they get an empty `signData`.
+ * normal per-chain builder, so they get an empty `signData`. So do the DOGE /
+ * BCH / DASH / ZEC PSBTs: they are validated here but signed from
+ * `SwapKitSwapPayload.txPayload` (sdk#2460).
  */
 const getSwapKitSignData = (fromCoin: AccountCoin, transfer: TransferSwapTx): KeysignPayload['signData'] => {
   if (fromCoin.chain === Chain.Bitcoin) {
     return getSwapKitBitcoinSignData(fromCoin, transfer)
+  }
+
+  if (isSwapKitLegacyPsbtChain(fromCoin.chain)) {
+    assertSwapKitLegacyPsbtTransfer(fromCoin.chain, fromCoin.address, transfer)
+    return { case: undefined }
+  }
+
+  if (fromCoin.chain === Chain.Zcash) {
+    assertSwapKitZcashPsbtTransfer(fromCoin.address, transfer)
+    return { case: undefined }
   }
 
   if (fromCoin.chain === Chain.Sui) {

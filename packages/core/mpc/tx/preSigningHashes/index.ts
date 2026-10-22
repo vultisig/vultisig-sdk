@@ -29,11 +29,13 @@ const sortHashes = (hashes: Uint8Array[]): Uint8Array[] =>
 export const getPreSigningHashes = ({ walletCore, txInputData, chain, keysignPayload }: Input) => {
   const signBitcoin = keysignPayload ? getSwapKitSignBitcoin(keysignPayload) : undefined
 
-  // PSBT signing: compute BIP-143 sighashes directly from structured data.
-  // Sort the public ceremony hashes for deterministic cross-platform order;
-  // final PSBT assembly still maps signatures by hash and preserves input order.
+  // PSBT signing: compute the sighashes directly from structured data —
+  // BIP-143 for Bitcoin, the chain's legacy digest for SwapKit's DOGE / BCH /
+  // DASH PSBTs. Sort the public ceremony hashes for deterministic
+  // cross-platform order; final PSBT assembly still maps signatures by hash
+  // and preserves input order.
   if (signBitcoin) {
-    return sortHashes(computePreSigningHashes(signBitcoin))
+    return sortHashes(computePreSigningHashes(signBitcoin, chain))
   }
 
   // SwapKit pre-built Cardano transaction (sdk#2468): txInputData is SwapKit's

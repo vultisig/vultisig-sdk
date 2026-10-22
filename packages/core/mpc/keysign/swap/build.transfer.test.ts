@@ -1,6 +1,7 @@
 import { Buffer } from 'buffer'
 import { create, fromBinary, toBinary } from '@bufbuild/protobuf'
 import { Chain } from '@vultisig/core-chain/Chain'
+import utxoPsbtFixtures from '@vultisig/core-chain/fixtures/swapkit-utxo-psbts.json'
 import { SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
 import { KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { networks, payments, Psbt } from 'bitcoinjs-lib'
@@ -500,9 +501,10 @@ describe('buildSwapKeysignPayload transfer routes', () => {
           routeProvider: 'NEAR',
           tx: {
             transfer: {
-              to: 't1Deposit',
-              amount: 9_332_136n,
-              txType: 'TRANSFER',
+              to: utxoPsbtFixtures.zcash.targetAddress,
+              amount: 100_000_000n,
+              txType: 'PSBT_ZEC',
+              txPayload: new Uint8Array(Buffer.from(utxoPsbtFixtures.zcash.psbt, 'base64')),
               swapFee: { amount: 250_000n, chain: Chain.Zcash, decimals: 8 },
             },
           },
@@ -511,9 +513,9 @@ describe('buildSwapKeysignPayload transfer routes', () => {
     }
 
     const payload = await buildSwapKeysignPayload({
-      fromCoin: { chain: Chain.Zcash, address: 't1Source', ticker: 'ZEC', decimals: 8 },
+      fromCoin: { chain: Chain.Zcash, address: utxoPsbtFixtures.zcash.sourceAddress, ticker: 'ZEC', decimals: 8 },
       toCoin: { chain: Chain.Tron, address: 'TDestination', ticker: 'TRX', decimals: 6 },
-      amount: 0.09332136,
+      amount: 1,
       swapQuote,
       vaultId: 'vault-id',
       localPartyId: 'local-party',
@@ -551,9 +553,10 @@ describe('buildSwapKeysignPayload transfer routes', () => {
           provider: 'swapkit',
           tx: {
             transfer: {
-              to: 't1Deposit',
-              amount: 9_332_136n,
-              txType: 'TRANSFER',
+              to: utxoPsbtFixtures.zcash.targetAddress,
+              amount: 100_000_000n,
+              txType: 'PSBT_ZEC',
+              txPayload: new Uint8Array(Buffer.from(utxoPsbtFixtures.zcash.psbt, 'base64')),
               swapFee: { amount: 250_000n, chain: Chain.Zcash, decimals: 8 },
               protocolFee: { amount: 125_000n, chain: Chain.Zcash, decimals: 8 },
             },
@@ -563,9 +566,9 @@ describe('buildSwapKeysignPayload transfer routes', () => {
     }
 
     const payload = await buildSwapKeysignPayload({
-      fromCoin: { chain: Chain.Zcash, address: 't1Source', ticker: 'ZEC', decimals: 8 },
+      fromCoin: { chain: Chain.Zcash, address: utxoPsbtFixtures.zcash.sourceAddress, ticker: 'ZEC', decimals: 8 },
       toCoin: { chain: Chain.Tron, address: 'TDestination', ticker: 'TRX', decimals: 6 },
-      amount: 0.09332136,
+      amount: 1,
       swapQuote,
       vaultId: 'vault-id',
       localPartyId: 'local-party',
@@ -642,15 +645,22 @@ describe('buildSwapKeysignPayload transfer routes', () => {
         general: {
           dstAmount: '144490532',
           provider: 'swapkit',
-          tx: { transfer: { to: 't1Deposit', amount: 9_332_136n, txType: 'TRANSFER' } },
+          tx: {
+            transfer: {
+              to: utxoPsbtFixtures.zcash.targetAddress,
+              amount: 100_000_000n,
+              txType: 'PSBT_ZEC',
+              txPayload: new Uint8Array(Buffer.from(utxoPsbtFixtures.zcash.psbt, 'base64')),
+            },
+          },
         },
       },
     }
 
     const payload = await buildSwapKeysignPayload({
-      fromCoin: { chain: Chain.Zcash, address: 't1Source', ticker: 'ZEC', decimals: 8 },
+      fromCoin: { chain: Chain.Zcash, address: utxoPsbtFixtures.zcash.sourceAddress, ticker: 'ZEC', decimals: 8 },
       toCoin: { chain: Chain.Tron, address: 'TDestination', ticker: 'TRX', decimals: 6 },
-      amount: 0.09332136,
+      amount: 1,
       swapQuote,
       vaultId: 'vault-id',
       localPartyId: 'local-party',
@@ -711,5 +721,123 @@ describe('buildSwapKeysignPayload transfer routes', () => {
       expect(payload.swapPayload.value.targetAddress).toBe('sui-deposit')
       expect(payload.swapPayload.value.fromAmount).toBe('1500000000')
     }
+  })
+})
+
+describe('buildSwapKeysignPayload SwapKit UTXO PSBT routes (sdk#2460)', () => {
+  const buildUtxoPsbtPayload = ({
+    chain,
+    address,
+    ticker,
+    amount,
+    transfer,
+  }: {
+    chain: Chain
+    address: string
+    ticker: string
+    amount: number
+    transfer: { to: string; amount: bigint; txType?: string; txPayload?: Uint8Array }
+  }) => {
+    mocks.getChainSpecific.mockResolvedValueOnce({
+      case: 'utxoSpecific',
+      value: { byteFee: '10', sendMaxAmount: false },
+    })
+
+    return buildSwapKeysignPayload({
+      fromCoin: { chain, address, ticker, decimals: 8 },
+      toCoin: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
+      amount,
+      swapQuote: {
+        discounts: [],
+        quote: {
+          general: { dstAmount: '1000000', provider: 'swapkit', routeProvider: 'NEAR', tx: { transfer } },
+        },
+      },
+      vaultId: 'vault-id',
+      localPartyId: 'local-party',
+      fromPublicKey: publicKey,
+      toPublicKey: publicKey,
+      libType: 'DKLS',
+      walletCore: {} as never,
+    })
+  }
+
+  const dogecoin = utxoPsbtFixtures.dogecoin
+  const dogePsbt = new Uint8Array(Buffer.from(dogecoin.psbt, 'base64'))
+  const zcash = utxoPsbtFixtures.zcash
+  const zcashPsbt = new Uint8Array(Buffer.from(zcash.psbt, 'base64'))
+
+  it.each([
+    [
+      'Dogecoin',
+      'PSBT_DOGE',
+      { chain: Chain.Dogecoin, address: dogecoin.sourceAddress, ticker: 'DOGE', amount: 1000 },
+      { to: dogecoin.targetAddress, amount: 99_799_970_000n, txType: 'PSBT_DOGE', txPayload: dogePsbt },
+    ],
+    [
+      'Zcash',
+      'PSBT_ZEC',
+      { chain: Chain.Zcash, address: zcash.sourceAddress, ticker: 'ZEC', amount: 1 },
+      { to: zcash.targetAddress, amount: 100_000_000n, txType: 'PSBT_ZEC', txPayload: zcashPsbt },
+    ],
+  ])('relays a %s PSBT verbatim as %s with no signData', async (_, txType, coin, transfer) => {
+    const payload = await buildUtxoPsbtPayload({ ...coin, transfer })
+
+    expect(payload.signData.case).toBeUndefined()
+    expect(payload.toAddress).toBe(transfer.to)
+    expect(payload.toAmount).toBe(transfer.amount.toString())
+    expect(payload.swapPayload.case).toBe('swapkitSwapPayload')
+    if (payload.swapPayload.case === 'swapkitSwapPayload') {
+      expect(payload.swapPayload.value.txType).toBe(txType)
+      expect(payload.swapPayload.value.txPayload).toEqual(transfer.txPayload)
+      expect(payload.swapPayload.value.fromAmount).toBe(transfer.amount.toString())
+      expect(payload.swapPayload.value.targetAddress).toBe(transfer.to)
+    }
+  })
+
+  it('rejects a Dogecoin route that carries no PSBT', async () => {
+    await expect(
+      buildUtxoPsbtPayload({
+        chain: Chain.Dogecoin,
+        address: dogecoin.sourceAddress,
+        ticker: 'DOGE',
+        amount: 1000,
+        transfer: { to: dogecoin.targetAddress, amount: 100_000_000_000n, txType: 'TRANSFER' },
+      })
+    ).rejects.toThrow('must include a PSBT_DOGE transaction payload')
+  })
+
+  it('rejects a PSBT whose deposit differs from the quoted transfer amount', async () => {
+    await expect(
+      buildUtxoPsbtPayload({
+        chain: Chain.Dogecoin,
+        address: dogecoin.sourceAddress,
+        ticker: 'DOGE',
+        amount: 1000,
+        transfer: { to: dogecoin.targetAddress, amount: 99_799_970_001n, txType: 'PSBT_DOGE', txPayload: dogePsbt },
+      })
+    ).rejects.toThrow('but the quote says 99799970001')
+
+    await expect(
+      buildUtxoPsbtPayload({
+        chain: Chain.Zcash,
+        address: zcash.sourceAddress,
+        ticker: 'ZEC',
+        amount: 1,
+        transfer: { to: zcash.targetAddress, amount: 99_999_999n, txType: 'PSBT_ZEC', txPayload: zcashPsbt },
+      })
+    ).rejects.toThrow('more than the quoted swap amount')
+  })
+
+  it('rejects a PSBT that does not spend from the source address', async () => {
+    await expect(
+      buildUtxoPsbtPayload({
+        chain: Chain.Dogecoin,
+        address: dogecoin.targetAddress,
+        ticker: 'DOGE',
+        amount: 1000,
+        transfer: { to: dogecoin.targetAddress, amount: 99_799_970_000n, txType: 'PSBT_DOGE', txPayload: dogePsbt },
+      })
+    ).rejects.toThrow("does not spend from this vault's address")
   })
 })
