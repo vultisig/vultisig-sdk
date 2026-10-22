@@ -73,6 +73,45 @@ const assertSignerIsImplicitAccount = ({
   }
 }
 
+/**
+ * A SwapKit deposit (NEAR Intents `simpleTransfer`) is signed as the plain
+ * transfer it describes, so the swap metadata must name exactly that transfer:
+ * same receiver, same amount, and nothing a native transfer could not carry.
+ */
+const assertSwapKitDepositOnly = (keysignPayload: KeysignPayload) => {
+  const { swapPayload } = keysignPayload
+  if (swapPayload.case === undefined) return
+
+  if (swapPayload.case !== 'swapkitSwapPayload') {
+    throw new Error('NEAR native transfers support SwapKit deposit swaps only')
+  }
+
+  const swap = swapPayload.value
+  if (swap.fromCoin?.chain !== Chain.Near || !swap.fromCoin.isNativeToken) {
+    throw new Error('NEAR SwapKit deposit must sell native NEAR')
+  }
+  // NEAR Intents deposits go to a fresh per-swap implicit account; a named target is never one.
+  if (!isNearImplicitAccountId(swap.targetAddress)) {
+    throw new Error(`NEAR SwapKit deposit address ${swap.targetAddress} is not an implicit account`)
+  }
+  if (swap.targetAddress !== keysignPayload.toAddress) {
+    throw new Error(
+      `NEAR SwapKit deposit address ${swap.targetAddress} is not the transfer receiver ${keysignPayload.toAddress}`
+    )
+  }
+  if (swap.fromAmount !== keysignPayload.toAmount) {
+    throw new Error(
+      `NEAR SwapKit deposit amount ${swap.fromAmount} is not the transfer amount ${keysignPayload.toAmount}`
+    )
+  }
+  if (swap.txPayload.length > 0 || swap.txType !== '') {
+    throw new Error('NEAR SwapKit deposits are plain transfers and cannot carry a pre-built transaction')
+  }
+  if (swap.memo) {
+    throw new Error('NEAR SwapKit deposits cannot carry a memo')
+  }
+}
+
 const assertNativeTransferOnly = (keysignPayload: KeysignPayload, coin: Coin) => {
   if (coin.chain !== Chain.Near || !coin.isNativeToken) {
     throw new Error('NEAR frozen signing supports native NEAR transfers only, not token coin payloads')
@@ -82,9 +121,7 @@ const assertNativeTransferOnly = (keysignPayload: KeysignPayload, coin: Coin) =>
     throw new Error('NEAR native transfers cannot carry a memo')
   }
 
-  if (keysignPayload.swapPayload.case !== undefined) {
-    throw new Error('NEAR native transfers do not support swap payloads')
-  }
+  assertSwapKitDepositOnly(keysignPayload)
 
   if (keysignPayload.contractPayload.case !== undefined) {
     throw new Error('NEAR native transfers do not support contract payloads')

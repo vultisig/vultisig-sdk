@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "6.2.1",
+  "version": "6.3.0",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -2632,7 +2632,7 @@
     "@lifi/sdk": "^4.1.0",
     "@mysten/sui": "^2.22.1",
     "@noble/curves": "^2.2.0",
-    "@noble/hashes": "^2.2.0",
+    "@noble/hashes": "^2.4.0",
     "@polkadot/api": "^16.5.6",
     "@polkadot/util": "^14.0.3",
     "@polkadot/util-crypto": "^14.0.3",

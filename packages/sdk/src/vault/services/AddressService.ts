@@ -7,6 +7,7 @@ import type { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 
 import type { WasmProvider } from '../../context/SdkContext'
 import { CacheScope, type CacheService } from '../../services/CacheService'
+import type { AddressFailure } from '../../types'
 import { assertValidChain } from '../../utils/chainValidation'
 import { VaultError, VaultErrorCode } from '../VaultError'
 
@@ -19,6 +20,24 @@ import { VaultError, VaultErrorCode } from '../VaultError'
 export type GetAddressOptions = {
   /** TON only: which wallet contract to derive. Defaults to V4R2. */
   tonWalletVersion?: TonWalletVersion
+}
+
+export type AddressesDetailedResult = {
+  addresses: Record<string, string>
+  failures: AddressFailure[]
+}
+
+const addressRequirements: Partial<Record<Chain, (vaultData: CoreVault) => string | undefined>> = {
+  [Chain.QBTC]: vaultData =>
+    vaultData.publicKeyMldsa ? undefined : 'Vault has no MLDSA public key (required for QBTC address derivation)',
+}
+
+function innermostErrorMessage(error: unknown): string {
+  let current = error
+  while (current instanceof VaultError && current.originalError) {
+    current = current.originalError
+  }
+  return current instanceof Error ? current.message : String(current)
 }
 
 export class AddressService {
@@ -45,6 +64,14 @@ export class AddressService {
     this.tonWalletVersion = tonWalletVersion
   }
 
+  /** Return chains whose address key requirements are not met by this vault. */
+  getUnderivableChains(chains: Chain[]): Chain[] {
+    return chains.filter(chain => {
+      const requirement = addressRequirements[chain]
+      return requirement ? Boolean(requirement(this.vaultData)) : false
+    })
+  }
+
   /**
    * Get address for specified chain
    * Uses CacheService with automatic persistent caching
@@ -57,6 +84,14 @@ export class AddressService {
    */
   async getAddress(chain: Chain, options: GetAddressOptions = {}): Promise<string> {
     assertValidChain(chain)
+    const requirementError = addressRequirements[chain]?.(this.vaultData)
+    if (requirementError) {
+      throw new VaultError(
+        VaultErrorCode.AddressDerivationFailed,
+        `Failed to derive address for ${chain}`,
+        new Error(requirementError)
+      )
+    }
     const tonWalletVersion = chain === Chain.Ton ? (options.tonWalletVersion ?? this.tonWalletVersion) : undefined
     const cacheKey =
       tonWalletVersion && tonWalletVersion !== defaultTonWalletVersion
@@ -66,10 +101,7 @@ export class AddressService {
       // Derive address (expensive WASM operation)
       try {
         if (chain === Chain.QBTC) {
-          if (!this.vaultData.publicKeyMldsa) {
-            throw new Error('Vault has no MLDSA public key (required for QBTC address derivation)')
-          }
-          return deriveQbtcAddress(this.vaultData.publicKeyMldsa)
+          return deriveQbtcAddress(this.vaultData.publicKeyMldsa!)
         }
 
         const walletCore = await this.wasmProvider.getWalletCore()
@@ -102,23 +134,44 @@ export class AddressService {
    * Get addresses for multiple chains
    */
   async getAddresses(chains?: Chain[]): Promise<Record<string, string>> {
+    const result = await this.getAddressesDetailed(chains)
+    result.failures.forEach(({ chain, error }) => {
+      console.warn(`Failed to derive address for ${chain}: ${error}`)
+    })
+    return result.addresses
+  }
+
+  /** Get addresses while retaining a concise failure for each chain that could not be derived. */
+  async getAddressesDetailed(chains?: Chain[]): Promise<AddressesDetailedResult> {
     if (!chains || chains.length === 0) {
-      return {}
+      return { addresses: {}, failures: [] }
     }
 
-    const result: Record<string, string> = {}
-
-    // Parallel derivation
-    await Promise.all(
+    const results = await Promise.all(
       chains.map(async chain => {
         try {
-          result[chain] = await this.getAddress(chain)
+          return { success: true as const, chain, address: await this.getAddress(chain) }
         } catch (error) {
-          console.warn(`Failed to derive address for ${chain}:`, error)
+          const failure: AddressFailure = {
+            chain,
+            code: error instanceof VaultError ? error.code : 'UNKNOWN',
+            error: innermostErrorMessage(error),
+          }
+          return { success: false as const, failure }
         }
       })
     )
 
-    return result
+    const addresses: Record<string, string> = {}
+    const failures: AddressFailure[] = []
+    results.forEach(result => {
+      if (result.success) {
+        addresses[result.chain] = result.address
+      } else {
+        failures.push(result.failure)
+      }
+    })
+
+    return { addresses, failures }
   }
 }
