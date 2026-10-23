@@ -32,7 +32,7 @@ describe('SDK public package entries', () => {
   it('does not publish or build the removed agent DeFi API', () => {
     expect(manifest.exports).not.toHaveProperty('./tools/defi')
     expect(manifest.dependencies).not.toHaveProperty('@balancer/sdk')
-    expect(manifest.dependencies).toHaveProperty('@noble/ciphers')
+    expect(manifest.devDependencies).toHaveProperty('@noble/ciphers')
     expect(runtimeConfig).not.toContain("distBase: 'tools/defi'")
     expect(typesConfig).not.toContain('src/tools/defi/index.ts')
   })

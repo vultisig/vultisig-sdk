@@ -1311,46 +1311,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@coral-xyz/anchor-errors@npm:^0.31.1":
-  version: 0.31.1
-  resolution: "@coral-xyz/anchor-errors@npm:0.31.1"
-  checksum: 10c0/d359d6244a89bcfb606e6d31d545c3be8e32dccd47b78dac6ec0091a51b2eb6c78aad9601f39db2659d8e66db8fffc36477247d58d570bc9d866e7ec3e40b5b2
-  languageName: node
-  linkType: hard
-
-"@coral-xyz/anchor@npm:^0.32.1":
-  version: 0.32.1
-  resolution: "@coral-xyz/anchor@npm:0.32.1"
-  dependencies:
-    "@coral-xyz/anchor-errors": "npm:^0.31.1"
-    "@coral-xyz/borsh": "npm:^0.31.1"
-    "@noble/hashes": "npm:^1.3.1"
-    "@solana/web3.js": "npm:^1.69.0"
-    bn.js: "npm:^5.1.2"
-    bs58: "npm:^4.0.1"
-    buffer-layout: "npm:^1.2.2"
-    camelcase: "npm:^6.3.0"
-    cross-fetch: "npm:^3.1.5"
-    eventemitter3: "npm:^4.0.7"
-    pako: "npm:^2.0.3"
-    superstruct: "npm:^0.15.4"
-    toml: "npm:^3.0.0"
-  checksum: 10c0/669b6f54efb0a5a96dad9e055d30b3b803f691b1b058379efefb87c11f97a9d369d513b2f200082c0b55b4cb31540dc5404e244c6f23f0a14b6d2ad2e18f08b7
-  languageName: node
-  linkType: hard
-
-"@coral-xyz/borsh@npm:^0.31.1":
-  version: 0.31.1
-  resolution: "@coral-xyz/borsh@npm:0.31.1"
-  dependencies:
-    bn.js: "npm:^5.1.2"
-    buffer-layout: "npm:^1.2.0"
-  peerDependencies:
-    "@solana/web3.js": ^1.69.0
-  checksum: 10c0/3d6d40a1476df5eb0635d8687a640de89fd7e7ffd135f733907f13ff2569a2a07f65f64768d632fb45ed55006d9c9ee94e40fd775813a9cf1211fefa567f98dd
-  languageName: node
-  linkType: hard
-
 "@cosmjs/amino@npm:^0.39.0":
   version: 0.39.0
   resolution: "@cosmjs/amino@npm:0.39.0"
@@ -5696,7 +5656,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@solana/web3.js@npm:^1.32.0, @solana/web3.js@npm:^1.69.0, @solana/web3.js@npm:^1.98.4":
+"@solana/web3.js@npm:^1.32.0, @solana/web3.js@npm:^1.98.4":
   version: 1.98.4
   resolution: "@solana/web3.js@npm:1.98.4"
   dependencies:
@@ -6954,7 +6914,7 @@ __metadata:
     ripple-address-codec: "npm:^5.0.1"
     tiny-secp256k1: "npm:^2.2.4"
     viem: "npm:^2.55.10"
-    xrpl: "npm:^5.0.0"
+    xrpl: "npm:^5.3.0"
   languageName: unknown
   linkType: soft
 
@@ -7015,7 +6975,10 @@ __metadata:
     stream-browserify: "npm:^3.0.0"
     tailwindcss: "npm:^4.3.2"
     typescript: "npm:^6.0.3"
+    util: "npm:^0.12.5"
     vite: "npm:^8.1.4"
+    vite-plugin-node-polyfills: "npm:^0.28.0"
+    vite-plugin-wasm: "npm:^3.6.0"
   languageName: unknown
   linkType: soft
 
@@ -7086,7 +7049,7 @@ __metadata:
   dependencies:
     buffer: "npm:^6.0.3"
     long: "npm:^5.3.2"
-    tldts: "npm:^7.4.10"
+    tldts: "npm:^7.4.18"
     viem: "npm:^2.55.10"
   languageName: unknown
   linkType: soft
@@ -7173,8 +7136,8 @@ __metadata:
     7z-wasm: "npm:^1.2.0"
     "@balancer-labs/balancer-maths": "npm:^0.0.41"
     "@bufbuild/protobuf": "npm:^2.13.0"
-    "@coral-xyz/anchor": "npm:^0.32.1"
     "@cosmjs/encoding": "npm:^0.39.0"
+    "@cosmjs/proto-signing": "npm:^0.39.0"
     "@cosmjs/stargate": "npm:^0.39.0"
     "@formatjs/intl-getcanonicallocales": "npm:^3.2.12"
     "@formatjs/intl-locale": "npm:5.3.11"
@@ -7211,7 +7174,6 @@ __metadata:
     "@vultisig/lib-mldsa": "workspace:*"
     "@vultisig/lib-schnorr": "workspace:*"
     "@vultisig/mpc-types": "workspace:*"
-    axios: "npm:^1.20.0"
     bech32: "npm:^2.0.0"
     bip32: "npm:^5.0.1"
     bitcoinjs-lib: "npm:^7.0.1"
@@ -7222,18 +7184,13 @@ __metadata:
     concurrently: "npm:^10.0.3"
     cosmjs-types: "npm:^0.11.0"
     crypto-browserify: "npm:^3.12.1"
-    date-fns: "npm:^4.4.0"
     dotenv: "npm:^17.4.2"
     electron: "npm:42.10.0"
-    ethers: "npm:^6.17.0"
     event-target-polyfill: "npm:^0.0.4"
     events: "npm:^3.3.0"
     fake-indexeddb: "npm:^6.2.5"
-    i18next: "npm:^26.3.1"
-    i18next-http-backend: "npm:^4.0.1"
     isomorphic-fetch: "npm:^3.0.0"
     koffi: "npm:^3.1.4"
-    node-fetch: "npm:^3.3.2"
     node-localstorage: "npm:^3.0.5"
     path-browserify: "npm:^1.0.1"
     process: "npm:^0.11.10"
@@ -7248,33 +7205,101 @@ __metadata:
     tsx: "npm:^4.22.4"
     typescript: "npm:^6.0.3"
     util: "npm:^0.12.5"
-    uuid: "npm:^14.0.2"
     viem: "npm:^2.55.10"
     vite-plugin-node-polyfills: "npm:^0.28.0"
     vite-plugin-wasm: "npm:^3.6.0"
     vitest: "npm:^4.1.8"
     ws: "npm:^8.21.1"
-    xrpl: "npm:^5.0.0"
+    xrpl: "npm:^5.3.0"
     zod: "npm:^4.4.3"
   peerDependencies:
+    "@cosmjs/encoding": ^0.39.0
+    "@lifi/sdk": ^4.1.0
+    "@mysten/sui": ^2.22.1
+    "@polkadot/api": ^16.5.6
+    "@polkadot/util": ^14.0.3
+    "@polkadot/util-crypto": ^14.0.3
     "@react-native-async-storage/async-storage": ^2.0.0
+    "@solana/spl-token": ^0.4.14
     "@vultisig/mpc-native": "workspace:*"
     "@vultisig/walletcore-native": "workspace:*"
+    bitcoinjs-lib: ^7.0.1
+    bs58: ^6.0.0
+    bs58check: ^4.0.0
+    cbor-x: ^1.6.6
+    crypto-browserify: ^3.12.1
+    events: ^3.3.0
     expo-crypto: ^13.0.0 || ^14.0.0 || ^15.0.0 || ^55.0.0
     expo-sqlite: ^14.0.3 || ^15.0.0 || ^16.0.0 || ^55.0.0 || ^56.0.0 || ^57.0.0
+    isomorphic-fetch: ^3.0.0
+    js-md5: ^0.8.0
+    path-browserify: ^1.0.1
+    process: ^0.11.10
+    ripple-address-codec: ^5.0.1
+    stream-browserify: ^3.0.0
+    util: ^0.12.5
     vite: ^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0
+    vite-plugin-node-polyfills: ">=0.25.0 <1"
+    vite-plugin-wasm: ^3.6.0
+    xrpl: ^5.3.0
   peerDependenciesMeta:
+    "@cosmjs/encoding":
+      optional: true
+    "@lifi/sdk":
+      optional: true
+    "@mysten/sui":
+      optional: true
+    "@polkadot/api":
+      optional: true
+    "@polkadot/util":
+      optional: true
+    "@polkadot/util-crypto":
+      optional: true
     "@react-native-async-storage/async-storage":
+      optional: true
+    "@solana/spl-token":
       optional: true
     "@vultisig/mpc-native":
       optional: true
     "@vultisig/walletcore-native":
       optional: true
+    bitcoinjs-lib:
+      optional: true
+    bs58:
+      optional: true
+    bs58check:
+      optional: true
+    cbor-x:
+      optional: true
+    crypto-browserify:
+      optional: true
+    events:
+      optional: true
     expo-crypto:
       optional: true
     expo-sqlite:
       optional: true
+    isomorphic-fetch:
+      optional: true
+    js-md5:
+      optional: true
+    path-browserify:
+      optional: true
+    process:
+      optional: true
+    ripple-address-codec:
+      optional: true
+    stream-browserify:
+      optional: true
+    util:
+      optional: true
     vite:
+      optional: true
+    vite-plugin-node-polyfills:
+      optional: true
+    vite-plugin-wasm:
+      optional: true
+    xrpl:
       optional: true
   languageName: unknown
   linkType: soft
@@ -7305,6 +7330,13 @@ __metadata:
     eventemitter3: "npm:5.0.1"
     ws: "npm:^8.20.0"
   checksum: 10c0/02eb5d965bc3c44a4ebcae6e712640ce8c2a7ac0122da77bab5954614e0a352e35166947264cf11c182c2079a6e282b0bf4c576cb6ae169d885875a7edd5b723
+  languageName: node
+  linkType: hard
+
+"@xrplf/mpt-crypto@npm:^0.1.1":
+  version: 0.1.1
+  resolution: "@xrplf/mpt-crypto@npm:0.1.1"
+  checksum: 10c0/883765f668a7fc7276bd929aac8f07d0f11497a8f1ff79dbb606a36c660884a2376f0d978f578b18506b89372002bced98affa3287f81ab6ad1c0563d8ba7995
   languageName: node
   linkType: hard
 
@@ -8283,7 +8315,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"bn.js@npm:^5.1.2, bn.js@npm:^5.2.0, bn.js@npm:^5.2.1, bn.js@npm:^5.2.2":
+"bn.js@npm:^5.2.0, bn.js@npm:^5.2.1, bn.js@npm:^5.2.2":
   version: 5.2.3
   resolution: "bn.js@npm:5.2.3"
   checksum: 10c0/eef19cb9cf5e91e91e3e0f036b799ce6c72f79463c3934d62991c3dcdb58f6c94dc3d806495d9b0bf31cd121870ed79bb2115cea71b56c03e794fb71485031fa
@@ -8559,13 +8591,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"buffer-layout@npm:^1.2.0, buffer-layout@npm:^1.2.2":
-  version: 1.2.2
-  resolution: "buffer-layout@npm:1.2.2"
-  checksum: 10c0/d90d1f622f592553555dd290d0e6dd0bababb2566655d0728812b2667af5a23d795929c38c25f5065252024fa29d75ea54eeb6f469d69814f4ebf614c6672acf
-  languageName: node
-  linkType: hard
-
 "buffer-xor@npm:^1.0.3":
   version: 1.0.3
   resolution: "buffer-xor@npm:1.0.3"
@@ -8742,7 +8767,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"camelcase@npm:^6.2.0, camelcase@npm:^6.3.0":
+"camelcase@npm:^6.2.0":
   version: 6.3.0
   resolution: "camelcase@npm:6.3.0"
   checksum: 10c0/0d701658219bd3116d12da3eab31acddb3f9440790c0792e0d398f0a520a6a4058018e546862b6fba89d7ae990efaeb97da71e1913e9ebf5a8b5621a3d55c710
@@ -9440,15 +9465,6 @@ __metadata:
   version: 1.1.1
   resolution: "create-require@npm:1.1.1"
   checksum: 10c0/157cbc59b2430ae9a90034a5f3a1b398b6738bf510f713edc4d4e45e169bc514d3d99dd34d8d01ca7ae7830b5b8b537e46ae8f3c8f932371b0875c0151d7ec91
-  languageName: node
-  linkType: hard
-
-"cross-fetch@npm:^3.1.5":
-  version: 3.2.0
-  resolution: "cross-fetch@npm:3.2.0"
-  dependencies:
-    node-fetch: "npm:^2.7.0"
-  checksum: 10c0/d8596adf0269130098a676f6739a0922f3cc7b71cc89729925411ebe851a87026171c82ea89154c4811c9867c01c44793205a52e618ce2684650218c7fbeeb9f
   languageName: node
   linkType: hard
 
@@ -10901,13 +10917,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"eventemitter3@npm:^4.0.7":
-  version: 4.0.7
-  resolution: "eventemitter3@npm:4.0.7"
-  checksum: 10c0/5f6d97cbcbac47be798e6355e3a7639a84ee1f7d9b199a07017f1d2f1e2fe236004d14fa5dfaeba661f94ea57805385e326236a6debbc7145c8877fbc0297c6b
-  languageName: node
-  linkType: hard
-
 "eventemitter3@npm:^5.0.1, eventemitter3@npm:^5.0.4":
   version: 5.0.4
   resolution: "eventemitter3@npm:5.0.4"
@@ -12342,9 +12351,9 @@ __metadata:
   linkType: hard
 
 "http-cache-semantics@npm:^4.0.0, http-cache-semantics@npm:^4.1.1":
-  version: 4.2.0
-  resolution: "http-cache-semantics@npm:4.2.0"
-  checksum: 10c0/45b66a945cf13ec2d1f29432277201313babf4a01d9e52f44b31ca923434083afeca03f18417f599c9ab3d0e7b618ceb21257542338b57c54b710463b4a53e37
+  version: 4.3.0
+  resolution: "http-cache-semantics@npm:4.3.0"
+  checksum: 10c0/b9668e271b4a99cba067bfa6f286b12eff1408a24e090ca16f0f5fa826ac07f67b4b8c7aa6e7458596d890683f3c172f647a00ca516a8f0158c80d7e4ebe0316
   languageName: node
   linkType: hard
 
@@ -12432,25 +12441,6 @@ __metadata:
   bin:
     husky: bin.js
   checksum: 10c0/35bb110a71086c48906aa7cd3ed4913fb913823715359d65e32e0b964cb1e255593b0ae8014a5005c66a68e6fa66c38dcfa8056dbbdfb8b0187c0ffe7ee3a58f
-  languageName: node
-  linkType: hard
-
-"i18next-http-backend@npm:^4.0.1":
-  version: 4.0.1
-  resolution: "i18next-http-backend@npm:4.0.1"
-  checksum: 10c0/faf837f4260842cb43cd152ff4099ff1811e75c1b4a56a24d116a60f5b5d4ab2e189821f5f9ecf58df4927d91e77ca440ba44bd51220af347db850745da44346
-  languageName: node
-  linkType: hard
-
-"i18next@npm:^26.3.1":
-  version: 26.3.1
-  resolution: "i18next@npm:26.3.1"
-  peerDependencies:
-    typescript: ^5 || ^6
-  peerDependenciesMeta:
-    typescript:
-      optional: true
-  checksum: 10c0/8f26cb9a09b648edde395a58c2fe890dd996cb81a969d0a05da178b9cb4ce3dee009f9c677a480bb58b5a9d8bbf762fd226111626b015e9bbd66b96132dbba39
   languageName: node
   linkType: hard
 
@@ -15992,13 +15982,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"pako@npm:^2.0.3":
-  version: 2.1.0
-  resolution: "pako@npm:2.1.0"
-  checksum: 10c0/8e8646581410654b50eb22a5dfd71159cae98145bd5086c9a7a816ec0370b5f72b4648d08674624b3870a521e6a3daffd6c2f7bc00fdefc7063c9d8232ff5116
-  languageName: node
-  linkType: hard
-
 "pako@npm:~1.0.5":
   version: 1.0.11
   resolution: "pako@npm:1.0.11"
@@ -17135,6 +17118,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"ripple-binary-codec@npm:^2.11.0":
+  version: 2.11.0
+  resolution: "ripple-binary-codec@npm:2.11.0"
+  dependencies:
+    "@xrplf/isomorphic": "npm:^1.0.2"
+    bignumber.js: "npm:^10.0.2"
+    ripple-address-codec: "npm:^5.0.1"
+  checksum: 10c0/166795b5d89b4416f12beb07868d0d48b23b67c22d94e42c5f14e12f5a0e18d6bff8ba63326377c5fbde1624d4a501eeddf1497d3ba924a9aef3e60bd906acc4
+  languageName: node
+  linkType: hard
+
 "ripple-binary-codec@npm:^2.8.0":
   version: 2.8.0
   resolution: "ripple-binary-codec@npm:2.8.0"
@@ -17154,6 +17148,17 @@ __metadata:
     "@xrplf/isomorphic": "npm:^1.0.2"
     ripple-address-codec: "npm:^5.0.1"
   checksum: 10c0/e12807a9d9d780539f70b51536a12ffc817971765b53dd680ea127c1ff56605a5abd0b15b9028c2c5450b5e2469546884f3e53092963ee4369fb46a5c4ea93b7
+  languageName: node
+  linkType: hard
+
+"ripple-keypairs@npm:^3.1.0":
+  version: 3.1.0
+  resolution: "ripple-keypairs@npm:3.1.0"
+  dependencies:
+    "@noble/curves": "npm:^2.0.1"
+    "@xrplf/isomorphic": "npm:^1.0.2"
+    ripple-address-codec: "npm:^5.0.1"
+  checksum: 10c0/59bee1b823debdc78ffaf755a9a41614870527617c7e9037dee081b6072c9ff6a7ff042c4a0df269c51e919e040aeacd745957c7c729a7e3c7a1cc18b36ce0fe
   languageName: node
   linkType: hard
 
@@ -17777,10 +17782,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"shell-quote@npm:1.10.0":
-  version: 1.10.0
-  resolution: "shell-quote@npm:1.10.0"
-  checksum: 10c0/46ee59bfd972ce6a45500c44ed130dff2d0a7d6fbac9841e59d548518cad8060a06393c9a5dcbc0cede294ad80b2a2cd8c904679e09265f53efc0a0879f30961
+"shell-quote@npm:1.11.0":
+  version: 1.11.0
+  resolution: "shell-quote@npm:1.11.0"
+  checksum: 10c0/c6addefb2c40b3c6172c000306df5781b46ef05cd7ec31017bc600bacd3882f69f55351310fe023dcab692fee98a8062192071d9ab16f5bc9eba056a5b3a378f
   languageName: node
   linkType: hard
 
@@ -18458,13 +18463,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"superstruct@npm:^0.15.4":
-  version: 0.15.5
-  resolution: "superstruct@npm:0.15.5"
-  checksum: 10c0/73ae2043443dcc7868da6e8b4e4895410c79a88e021b514c665161199675ee920d5eadd85bb9dee5a9f515817e62f4b65a67ccb82d29f73259d012afcbcd3ce4
-  languageName: node
-  linkType: hard
-
 "superstruct@npm:^2.0.2":
   version: 2.0.2
   resolution: "superstruct@npm:2.0.2"
@@ -18876,21 +18874,21 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tldts-core@npm:^7.4.10":
-  version: 7.4.10
-  resolution: "tldts-core@npm:7.4.10"
-  checksum: 10c0/a5f42aad8aa8adfc57d33e9bd5c43094e9de226dce4851867ea7014d8679040b4c01c500b9947595ab22cdfe9783ea5d88a7c0be2092d19a14f75c7cd4671181
+"tldts-core@npm:^7.4.18":
+  version: 7.4.18
+  resolution: "tldts-core@npm:7.4.18"
+  checksum: 10c0/474fa18404d313b16b8fa339406607b3d295561d20d48d734b0faaf45abf77aede26ed680f62a7c777bb2a35ae25da4b2ca0cefce676b4c09ea8408a23ac7e3c
   languageName: node
   linkType: hard
 
-"tldts@npm:^7.4.10":
-  version: 7.4.10
-  resolution: "tldts@npm:7.4.10"
+"tldts@npm:^7.4.18":
+  version: 7.4.18
+  resolution: "tldts@npm:7.4.18"
   dependencies:
-    tldts-core: "npm:^7.4.10"
+    tldts-core: "npm:^7.4.18"
   bin:
     tldts: bin/cli.js
-  checksum: 10c0/a9a85d260bd0bfd046794f140667aae0975da4a3aa805d180b0808b672a6fa7de0fc9f36110c3bdeed87ad780e961e1e5bb1ed8b41f8aa3ad5d5fb469e70ba38
+  checksum: 10c0/3e51339815c8679293ae8e84289ed5f96241075187573e84f37b2450315a7860bbcaf8125fba684f298b969bc6a8ae93c0e125be7feab7d1449d326e7cf815ec
   languageName: node
   linkType: hard
 
@@ -18941,13 +18939,6 @@ __metadata:
   version: 1.0.1
   resolution: "toidentifier@npm:1.0.1"
   checksum: 10c0/93937279934bd66cc3270016dd8d0afec14fb7c94a05c72dc57321f8bd1fa97e5bea6d1f7c89e728d077ca31ea125b78320a616a6c6cd0e6b9cb94cb864381c1
-  languageName: node
-  linkType: hard
-
-"toml@npm:^4.2.0":
-  version: 4.3.0
-  resolution: "toml@npm:4.3.0"
-  checksum: 10c0/4a0ad64d4ef0b47f672a7b6bd7e776b9e03ad845998968fb105f8d561c3648eaff0217baca3f562d17e865e5bd7393441a8e54528920f0c171e41fdc8dfb39d6
   languageName: node
   linkType: hard
 
@@ -19482,15 +19473,6 @@ __metadata:
   bin:
     uuid: dist/esm/bin/uuid
   checksum: 10c0/34aa51b9874ae398c2b799c88a127701408cd581ee89ec3baa53509dd8728cbb25826f2a038f9465f8b7be446f0fbf11558862965b18d21c993684297628d4d3
-  languageName: node
-  linkType: hard
-
-"uuid@npm:^14.0.2":
-  version: 14.0.2
-  resolution: "uuid@npm:14.0.2"
-  bin:
-    uuid: dist-node/bin/uuid
-  checksum: 10c0/88906237004db370b013129c8372a2149f6fa1aad7a5f78fa65ddf2ba0a8663097022300d81fa01f551efee9d6bbe8c7ab140dc6d49f1b03d289f855096990c9
   languageName: node
   linkType: hard
 
@@ -20230,21 +20212,22 @@ __metadata:
   languageName: node
   linkType: hard
 
-"xrpl@npm:^5.0.0":
-  version: 5.0.0
-  resolution: "xrpl@npm:5.0.0"
+"xrpl@npm:^5.3.0":
+  version: 5.3.0
+  resolution: "xrpl@npm:5.3.0"
   dependencies:
     "@scure/bip32": "npm:^2.0.1"
     "@scure/bip39": "npm:^2.0.1"
     "@xrplf/isomorphic": "npm:^1.0.2"
+    "@xrplf/mpt-crypto": "npm:^0.1.1"
     "@xrplf/secret-numbers": "npm:^3.0.0"
     bignumber.js: "npm:^10.0.2"
     eventemitter3: "npm:^5.0.1"
     fast-json-stable-stringify: "npm:^2.1.0"
     ripple-address-codec: "npm:^5.0.1"
-    ripple-binary-codec: "npm:^2.8.0"
-    ripple-keypairs: "npm:^3.0.0"
-  checksum: 10c0/7ff189aeca283c09ed48282226e75351d451b216fd9d33894a613dcd6cef2e014d8823eebfdff24d972d4ab5fff6c0bda8d244b166b2876e5bec3ebf4a0b2f2f
+    ripple-binary-codec: "npm:^2.11.0"
+    ripple-keypairs: "npm:^3.1.0"
+  checksum: 10c0/bc8faafe2f4ed385b5f41543f1f5d77e28f6e701b474839d241a80ed46cfefd8df16320c524dc92805177f70e45ace6442baf6e95ed74f7a95f9779112f29518
   languageName: node
   linkType: hard
 
