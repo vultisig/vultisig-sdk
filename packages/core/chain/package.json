@@ -1622,6 +1622,51 @@
     },
     "./fixtures/jupiter-swap-transactions.json": "./fixtures/jupiter-swap-transactions.json",
     "./fixtures/limit-swap-memos.json": "./fixtures/limit-swap-memos.json",
+    "./nameService": {
+      "types": "./dist/nameService/index.d.ts",
+      "import": "./dist/nameService/index.js",
+      "default": "./dist/nameService/index.js"
+    },
+    "./nameService/getNameServiceName": {
+      "types": "./dist/nameService/getNameServiceName.d.ts",
+      "import": "./dist/nameService/getNameServiceName.js",
+      "default": "./dist/nameService/getNameServiceName.js"
+    },
+    "./nameService/getNativeChainNameResolver": {
+      "types": "./dist/nameService/getNativeChainNameResolver.d.ts",
+      "import": "./dist/nameService/getNativeChainNameResolver.js",
+      "default": "./dist/nameService/getNativeChainNameResolver.js"
+    },
+    "./nameService/NameService": {
+      "types": "./dist/nameService/NameService.d.ts",
+      "import": "./dist/nameService/NameService.js",
+      "default": "./dist/nameService/NameService.js"
+    },
+    "./nameService/NameServiceResolution": {
+      "types": "./dist/nameService/NameServiceResolution.d.ts",
+      "import": "./dist/nameService/NameServiceResolution.js",
+      "default": "./dist/nameService/NameServiceResolution.js"
+    },
+    "./nameService/resolver": {
+      "types": "./dist/nameService/resolver.d.ts",
+      "import": "./dist/nameService/resolver.js",
+      "default": "./dist/nameService/resolver.js"
+    },
+    "./nameService/resolvers/ens": {
+      "types": "./dist/nameService/resolvers/ens.d.ts",
+      "import": "./dist/nameService/resolvers/ens.js",
+      "default": "./dist/nameService/resolvers/ens.js"
+    },
+    "./nameService/resolvers/mayaname": {
+      "types": "./dist/nameService/resolvers/mayaname.d.ts",
+      "import": "./dist/nameService/resolvers/mayaname.js",
+      "default": "./dist/nameService/resolvers/mayaname.js"
+    },
+    "./nameService/resolvers/thorname": {
+      "types": "./dist/nameService/resolvers/thorname.d.ts",
+      "import": "./dist/nameService/resolvers/thorname.js",
+      "default": "./dist/nameService/resolvers/thorname.js"
+    },
     "./package.json": "./package.json",
     "./publicKey/address/bittensor": {
       "types": "./dist/publicKey/address/bittensor.d.ts",
