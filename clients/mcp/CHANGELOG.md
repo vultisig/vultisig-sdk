@@ -1,5 +1,14 @@
 # @vultisig/mcp
 
+## 1.0.5
+
+### Patch Changes
+
+- [#2573](https://github.com/vultisig/vultisig-sdk/pull/2573) [`9363db0`](https://github.com/vultisig/vultisig-sdk/commit/9363db0e8186b552c0bab2129ef7bd3e5c8a891e) Thanks [@realpaaao](https://github.com/realpaaao)! - Bump `@modelcontextprotocol/sdk` to `~1.32.1` to clear GHSA-22jm-h49p-29qw, where experimental tasks were not tied to the session that created them. The MCP server only uses `McpServer` and `StdioServerTransport`, so it never reached the affected task code, but installs of `@vultisig/mcp` no longer pull in the flagged range.
+
+- Updated dependencies [[`a4ae3c5`](https://github.com/vultisig/vultisig-sdk/commit/a4ae3c5f0855a560ee5400aa4a96ae492b14eb68)]:
+  - @vultisig/sdk@10.1.1
+
 ## 1.0.4
 
 ### Patch Changes
