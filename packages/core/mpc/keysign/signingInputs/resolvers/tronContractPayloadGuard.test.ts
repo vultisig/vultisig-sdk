@@ -49,6 +49,14 @@ const usdt = create(CoinSchema, {
   isNativeToken: false,
   contractAddress: USDT,
 })
+// Flagged native while naming another asset: only TRX's full identity passes.
+const fakeNative = create(CoinSchema, {
+  chain: Chain.Tron,
+  ticker: 'USDT',
+  address: OWNER,
+  decimals: 6,
+  isNativeToken: true,
+})
 const trc10 = create(CoinSchema, {
   chain: Chain.Tron,
   ticker: 'BTT',
@@ -206,6 +214,11 @@ describe('getTronSigningInputs -- dApp contract payloads match the review', () =
       /TRX/,
     ],
     [
+      'a TRX transfer reviewed as a native coin with another ticker',
+      { coin: fakeNative, toAddress: RECIPIENT, toAmount: '1000000', contractPayload: transfer() },
+      /TRX/,
+    ],
+    [
       'a TRC-20 transfer reviewed as TRX',
       { coin: trx, toAddress: RECIPIENT, toAmount: '9610000', contractPayload: call() },
       /token/,
@@ -248,6 +261,16 @@ describe('getTronSigningInputs -- dApp contract payloads match the review', () =
         toAmount: '2500000',
         contractPayload: call({ data: unlimitedApproveData, callValue: '2500000' }),
       },
+      /TRX/,
+    ],
+    [
+      'a contract call without TRX reviewed as a token',
+      { coin: usdt, toAddress: USDT, toAmount: '0', contractPayload: call({ data: unlimitedApproveData }) },
+      /TRX/,
+    ],
+    [
+      'a contract call reviewed as a native coin with another ticker',
+      { coin: fakeNative, toAddress: USDT, toAmount: '0', contractPayload: call({ data: unlimitedApproveData }) },
       /TRX/,
     ],
     [

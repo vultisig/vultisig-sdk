@@ -1,4 +1,5 @@
 import { Buffer } from 'buffer'
+import { Chain } from '@vultisig/core-chain/Chain'
 import { decodeTronAddress } from '@vultisig/core-chain/chains/tron/address'
 import { decodeTrc20TransferData } from '@vultisig/core-chain/chains/tron/trc20/decodeTrc20TransferData'
 import { attempt } from '@vultisig/lib-utils/attempt'
@@ -7,11 +8,14 @@ import { stripHexPrefix } from '@vultisig/lib-utils/hex/stripHexPrefix'
 import { TW } from '@trustwallet/wallet-core'
 import Long from 'long'
 
+import { Coin } from '../../../types/vultisig/keysign/v1/coin_pb'
 import { KeysignPayload } from '../../../types/vultisig/keysign/v1/keysign_message_pb'
 
-// The guard mirrors vultisig-android's TronContractPayloadGuard so a co-signer
-// on any platform refuses the same payloads. The expected shapes follow how
-// the extension's TronWeb provider fills `coin` / `toAddress` / `toAmount`.
+// The guard follows vultisig-android's TronContractPayloadGuard so a co-signer
+// on any platform refuses the same payloads, and also requires the reviewed
+// coin to be TRX itself wherever the bound amount is TRX. The expected shapes
+// follow how the extension's TronWeb provider fills `coin` / `toAddress` /
+// `toAmount`.
 
 const tronAddressPrefix = 0x41
 const trc20TransferDataBytes = 4 + 2 * 32
@@ -45,6 +49,11 @@ const isSameTronAddress = (a: string, b: string) => {
 
 const toBigInt = (value: Long) => BigInt(value.toString())
 
+// `isNativeToken` alone is a flag the payload sets, so a coin shown as another
+// ticker could carry it; TRX is pinned by its full identity instead.
+const isTrx = (coin: Coin) =>
+  coin.chain === Chain.Tron && coin.ticker === 'TRX' && coin.isNativeToken && !coin.contractAddress
+
 const assertOwner = (keysignPayload: KeysignPayload, ownerAddress: string) => {
   const { address } = shouldBePresent(keysignPayload.coin)
   if (!isSameTronAddress(ownerAddress, address)) {
@@ -75,7 +84,7 @@ export const assertTronTransferMatchesReview = ({
   contract,
 }: TronContractReviewInput<TW.Tron.Proto.TransferContract>) => {
   assertOwner(keysignPayload, contract.ownerAddress)
-  if (!shouldBePresent(keysignPayload.coin).isNativeToken) {
+  if (!isTrx(shouldBePresent(keysignPayload.coin))) {
     throw new Error('Tron TransferContract must be reviewed as TRX')
   }
   assertRecipient(keysignPayload, contract.toAddress)
@@ -103,8 +112,9 @@ export const assertTronTransferAssetMatchesReview = ({
  * Refuses a dApp `TriggerSmartContract` whose signed call disagrees with the
  * review. A TRC-20 `transfer` is bound by the recipient and amount decoded from
  * its data and must be reviewed as that token with no TRX attached; any other
- * call is reviewed as the contract address receiving the attached `call_value`.
- * TRC-10 value attached to a call has nothing to show it, so it is refused.
+ * call is reviewed as TRX, the attached `call_value`, sent to the contract
+ * address. TRC-10 value attached to a call has nothing to show it, so it is
+ * refused.
  */
 export const assertTronContractCallMatchesReview = ({
   keysignPayload,
@@ -123,8 +133,8 @@ export const assertTronContractCallMatchesReview = ({
       : null
 
   if (!transfer) {
-    if (callValue !== 0n && !coin.isNativeToken) {
-      throw new Error('Tron contract call attaching TRX must be reviewed as TRX')
+    if (!isTrx(coin)) {
+      throw new Error('Tron contract call must be reviewed as TRX')
     }
     assertRecipient(keysignPayload, contract.contractAddress)
     assertAmount(keysignPayload, callValue)
