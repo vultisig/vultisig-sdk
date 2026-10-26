@@ -76,6 +76,15 @@ export const deriveJupiterFeeAccount = async ({
 }
 
 /**
+ * Whether the Jupiter fee ATA is already on-chain. The prepended create
+ * instruction is idempotent, so its rent is charged only when this is false.
+ */
+export const jupiterFeeAccountExists = async (feeAccount: string): Promise<boolean> => {
+  const accountInfo = await getSolanaClient().getAccountInfo(new PublicKey(feeAccount))
+  return accountInfo !== null
+}
+
+/**
  * Prepend an idempotent `createAssociatedTokenAccount` instruction for the
  * Jupiter fee ATA to the serialized swap transaction.
  *

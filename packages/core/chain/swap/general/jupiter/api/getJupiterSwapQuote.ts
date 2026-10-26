@@ -12,9 +12,10 @@ import {
 } from '@vultisig/core-chain/swap/general/jupiter/config'
 import { JupiterSwapEnabledChain } from '@vultisig/core-chain/swap/general/jupiter/JupiterSwapEnabledChains'
 import { assertJupiterPriceImpactWithinCeiling } from '@vultisig/core-chain/swap/general/priceImpactGuard'
+import { attempt, withFallback } from '@vultisig/lib-utils/attempt'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 
-import { deriveJupiterFeeAccount, prependJupiterFeeAta } from './jupiterFeeAta'
+import { deriveJupiterFeeAccount, jupiterFeeAccountExists, prependJupiterFeeAta } from './jupiterFeeAta'
 
 /** Canonical wrapped-SOL mint, used as the mint address for native SOL legs. */
 const solanaNativeMint = 'So11111111111111111111111111111111111111112'
@@ -73,6 +74,21 @@ const requestJson = async <T>(url: string, init?: RequestInit): Promise<T> => {
 }
 
 /**
+ * Rent the prepended fee-ATA create will charge: none once the ATA exists,
+ * which is every swap after the first into a given output mint. A failed
+ * existence read quotes the rent, so the estimate errs high instead of
+ * failing a quote over a display figure.
+ */
+const getFeeAccountRent = async (feeAccount: string): Promise<bigint> => {
+  const exists = await withFallback(
+    attempt(() => jupiterFeeAccountExists(feeAccount)),
+    false
+  )
+
+  return exists ? 0n : BigInt(solanaConfig.ataRentLamports)
+}
+
+/**
  * Fetch a Solana same-chain swap quote from Jupiter and build the signed-tx
  * payload the keysign pipeline expects.
  *
@@ -82,7 +98,8 @@ const requestJson = async <T>(url: string, init?: RequestInit): Promise<T> => {
  * an idempotent create instruction is prepended to the returned transaction
  * only when the quote actually returns a non-zero `platformFee.amount`. When
  * `affiliateBps` is 0 (e.g. an Ultimate-tier VULT holder) or Jupiter floors the
- * fee to zero, no fee account is touched.
+ * fee to zero, no fee account is touched. The quoted `networkFee` includes the
+ * fee ATA's rent only when that ATA does not exist yet.
  */
 export const getJupiterSwapQuote = async ({
   from,
@@ -138,17 +155,20 @@ export const getJupiterSwapQuote = async ({
   // prepended create instruction.
   const feeAccountInfo = chargesFee ? await deriveJupiterFeeAccount({ outputMint, feeOwner }) : undefined
 
-  const swapResponse = await requestJson<JupiterSwapResponse>(`${baseUrl}/swap/v1/swap`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({
-      quoteResponse: quoteForSwap,
-      userPublicKey: from.address,
-      wrapAndUnwrapSol: true,
-      dynamicComputeUnitLimit: true,
-      ...(feeAccountInfo ? { feeAccount: feeAccountInfo.feeAccount } : {}),
+  const [swapResponse, feeAccountRent] = await Promise.all([
+    requestJson<JupiterSwapResponse>(`${baseUrl}/swap/v1/swap`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        quoteResponse: quoteForSwap,
+        userPublicKey: from.address,
+        wrapAndUnwrapSol: true,
+        dynamicComputeUnitLimit: true,
+        ...(feeAccountInfo ? { feeAccount: feeAccountInfo.feeAccount } : {}),
+      }),
     }),
-  })
+    feeAccountInfo ? getFeeAccountRent(feeAccountInfo.feeAccount) : 0n,
+  ])
 
   if (!swapResponse.swapTransaction) {
     throw new Error('Jupiter swap response did not include a serialized transaction.')
@@ -172,11 +192,10 @@ export const getJupiterSwapQuote = async ({
       })
     : swapResponse.swapTransaction
 
-  // Network fee is an upper-bound estimate: Solana's per-signature base fee plus
-  // the fee-ATA rent buffer when we prepend a create instruction (charged once
-  // per fee mint; idempotent thereafter). Jupiter embeds its own priority fee in
-  // the returned tx, which the consumer surfaces at broadcast time.
-  const networkFee = BigInt(solanaConfig.baseFee) + (chargesFee ? BigInt(solanaConfig.ataRentLamports) : 0n)
+  // Network fee: Solana's per-signature base fee plus the fee-ATA rent when the
+  // prepended create will actually pay it. Jupiter embeds its own priority fee
+  // in the returned tx, which the consumer surfaces at broadcast time.
+  const networkFee = BigInt(solanaConfig.baseFee) + feeAccountRent
 
   return {
     dstAmount: quoteResponse.outAmount,
