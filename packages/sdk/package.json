@@ -191,7 +191,7 @@
     "@vultisig/mpc-types": "workspace:*",
     "buffer": "^6.0.3",
     "koffi": "^3.1.4",
-    "ripple-binary-codec": "^2.8.0",
+    "ripple-binary-codec": "^2.11.0",
     "tiny-secp256k1": "^2.2.4",
     "viem": "^2.55.10",
     "zod": "^4.4.3"
