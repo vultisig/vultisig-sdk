@@ -234,7 +234,7 @@
     "concurrently": "^10.0.3",
     "cosmjs-types": "^0.11.0",
     "crypto-browserify": "^3.12.1",
-    "dotenv": "^17.4.2",
+    "dotenv": "^18.0.9",
     "electron": "42.10.0",
     "event-target-polyfill": "^0.0.4",
     "events": "^3.3.0",
