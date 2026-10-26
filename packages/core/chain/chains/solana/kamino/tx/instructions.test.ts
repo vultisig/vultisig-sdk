@@ -2,11 +2,10 @@ import { createHash } from 'node:crypto'
 
 import { describe, expect, it } from 'vitest'
 
+import { computeUnitLimitArgument, computeUnitPriceArgument } from '../../computeBudget'
 import {
   anchorU64Argument,
   anchorU128Argument,
-  computeUnitLimitArgument,
-  computeUnitPriceArgument,
   deriveKaminoFarmsUserState,
   hasNoAnchorArgument,
   isAttributionMemoData,

@@ -1,6 +1,7 @@
 import { getAssociatedTokenAddressSync, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from '@solana/spl-token'
 import { PublicKey, VersionedTransaction } from '@solana/web3.js'
 
+import { computeUnitLimitArgument, computeUnitPriceArgument } from '../../computeBudget'
 import { KaminoShareAmount, kaminoShareAmount, KaminoTokenAmount } from '../amount'
 import { kaminoMaxBaseUnits } from '../baseUnits'
 import { kaminoConfig } from '../config'
@@ -9,8 +10,6 @@ import { getKaminoVaultDescriptor } from '../registry'
 import {
   anchorU64Argument,
   anchorU128Argument,
-  computeUnitLimitArgument,
-  computeUnitPriceArgument,
   deriveKaminoFarmsUserState,
   hasNoAnchorArgument,
   isAttributionMemoData,

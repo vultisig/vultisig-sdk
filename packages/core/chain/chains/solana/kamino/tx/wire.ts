@@ -1,7 +1,8 @@
 import { MessageV0, PublicKey, VersionedTransaction } from '@solana/web3.js'
 
 import { getSolanaClient } from '../../client'
-import { computeBudgetDiscriminators, kaminoAllowedPrograms, kaminoAttributionMemoTagBytes } from './instructions'
+import { computeBudgetDiscriminators } from '../../computeBudget'
+import { kaminoAllowedPrograms, kaminoAttributionMemoTagBytes } from './instructions'
 
 /**
  * Wire-level operations over the v0 transaction Kamino's builder returns:
