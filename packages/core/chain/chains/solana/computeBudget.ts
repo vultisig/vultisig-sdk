@@ -1,8 +1,15 @@
-import { PublicKey, VersionedMessage } from '@solana/web3.js'
+import { PublicKey, SystemProgram, VersionedMessage } from '@solana/web3.js'
 
 import { solanaConfig } from './solanaConfig'
 
 const computeBudgetProgramId = new PublicKey('ComputeBudget111111111111111111111111111111')
+
+/**
+ * Builtins the runtime reserves 3,000 units for when no limit is set. Only the
+ * two a wallet transaction carries are listed: any other builtin is counted at
+ * the 200,000-unit rate, which can only raise the fee, never lower it.
+ */
+const builtinProgramIds = [SystemProgram.programId, computeBudgetProgramId]
 
 /** ComputeBudget `SetComputeUnitLimit` / `SetComputeUnitPrice` one-byte tags. */
 export const computeBudgetDiscriminators = { setUnitLimit: 2, setUnitPrice: 3 } as const
@@ -27,6 +34,7 @@ export const computeUnitPriceArgument = (data: Uint8Array): bigint | undefined =
 
 const maxComputeUnitLimit = 1_400_000n
 const defaultInstructionComputeUnitLimit = 200_000n
+const builtinInstructionComputeUnitLimit = 3_000n
 const microLamportsPerLamport = 1_000_000n
 
 /**
@@ -34,21 +42,23 @@ const microLamportsPerLamport = 1_000_000n
  * required signature plus the prioritization fee its ComputeBudget
  * instructions set, rounded up to a whole lamport as the runtime rounds it.
  *
- * A price without a limit is charged against the default limit, taken here as
- * 200,000 units per other instruction up to the 1.4M cap. Runtimes that reserve
- * less for builtin programs charge at most that. Program ids are never loaded
- * from address lookup tables, so the message alone is enough.
+ * A price without a limit is charged against the default limit: 3,000 units
+ * for each System or ComputeBudget instruction (the ComputeBudget ones count
+ * too) and 200,000 for any other, up to the 1.4M cap. Program ids are never
+ * loaded from address lookup tables, so the message alone is enough.
  */
 export const getSolanaMessageFee = (message: VersionedMessage): bigint => {
   let unitLimit: bigint | undefined
   let unitPrice = 0n
-  let otherInstructionCount = 0n
+  let defaultUnitLimit = 0n
 
   for (const { programIdIndex, data } of message.compiledInstructions) {
-    if (!message.staticAccountKeys[programIdIndex].equals(computeBudgetProgramId)) {
-      otherInstructionCount += 1n
-      continue
-    }
+    const programId = message.staticAccountKeys[programIdIndex]
+    defaultUnitLimit += builtinProgramIds.some(id => id.equals(programId))
+      ? builtinInstructionComputeUnitLimit
+      : defaultInstructionComputeUnitLimit
+
+    if (!programId.equals(computeBudgetProgramId)) continue
 
     const limit = computeUnitLimitArgument(data)
     if (limit !== undefined) unitLimit = BigInt(limit)
@@ -57,7 +67,7 @@ export const getSolanaMessageFee = (message: VersionedMessage): bigint => {
     if (price !== undefined) unitPrice = price
   }
 
-  const requestedLimit = unitLimit ?? defaultInstructionComputeUnitLimit * otherInstructionCount
+  const requestedLimit = unitLimit ?? defaultUnitLimit
   const chargedLimit = requestedLimit < maxComputeUnitLimit ? requestedLimit : maxComputeUnitLimit
   const priorityFee = (unitPrice * chargedLimit + microLamportsPerLamport - 1n) / microLamportsPerLamport
 

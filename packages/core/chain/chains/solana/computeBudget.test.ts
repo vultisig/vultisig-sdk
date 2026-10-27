@@ -16,6 +16,7 @@ import { getSolanaMessageFee } from './computeBudget'
 const payer = Keypair.generate().publicKey
 const cosigner = Keypair.generate().publicKey
 const recentBlockhash = '44jzmJEahEFTHexSNLkLfXXXyKggtpT2jJuJ3hdCBbsB'
+const memoProgramId = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr')
 
 const transfer = (from: PublicKey = payer) =>
   SystemProgram.transfer({ fromPubkey: from, toPubkey: cosigner, lamports: 1 })
@@ -41,17 +42,29 @@ describe('getSolanaMessageFee', () => {
     expect(getSolanaMessageFee(message)).toBe(375_371n)
   })
 
-  it('charges a price without a limit against 200,000 units per other instruction', () => {
-    const message = v0Message([
-      ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1_000_000 }),
-      transfer(),
-      transfer(),
-    ])
+  // Without a limit, each expected value is what mainnet `getFeeForMessage`
+  // returned for the same instructions on 2026-10-27.
+  describe('a price without a limit', () => {
+    const price = () => ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1_000_000 })
+    const memo = (text = 'memo') =>
+      new TransactionInstruction({ programId: memoProgramId, keys: [], data: Buffer.from(text) })
 
-    expect(getSolanaMessageFee(message)).toBe(405_000n)
+    it('is charged 3,000 units per builtin instruction, ComputeBudget included', () => {
+      expect(getSolanaMessageFee(v0Message([price(), transfer(), transfer()]))).toBe(14_000n)
+    })
+
+    it('is charged 200,000 units per instruction of any other program', () => {
+      expect(getSolanaMessageFee(v0Message([price(), transfer(), memo()]))).toBe(211_000n)
+    })
+
+    it('is capped at 1.4M units', () => {
+      const memos = Array.from({ length: 8 }, (_, i) => memo(`m${i}`))
+
+      expect(getSolanaMessageFee(v0Message([price(), ...memos]))).toBe(1_405_000n)
+    })
   })
 
-  it('caps the limit at 1.4M units', () => {
+  it('caps a set limit at 1.4M units', () => {
     const message = v0Message([
       ComputeBudgetProgram.setComputeUnitLimit({ units: 2_000_000 }),
       ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1_000_000 }),
@@ -72,7 +85,8 @@ describe('getSolanaMessageFee', () => {
       instructions: [ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 10 }), transfer()],
     }).compileToLegacyMessage()
 
-    expect(getSolanaMessageFee(message)).toBe(5_002n)
+    // 6,000 default units × 10 / 1e6 = 0.06, rounded up to 1 (mainnet agrees)
+    expect(getSolanaMessageFee(message)).toBe(5_001n)
   })
 
   // Each expected value is what mainnet `getFeeForMessage` returned for the
