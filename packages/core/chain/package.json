@@ -2682,7 +2682,7 @@
     "@polkadot/util": "^14.0.3",
     "@polkadot/util-crypto": "^14.0.3",
     "@solana/spl-token": "^0.4.14",
-    "@solana/web3.js": "^1.98.4",
+    "@solana/web3.js": "^3.1.1",
     "@ton/core": "^0.63.1",
     "@ton/crypto": "^3.3.0",
     "@trustwallet/wallet-core": "^4.7.3",
