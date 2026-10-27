@@ -1,9 +1,8 @@
-import { SendTransactionError } from '@solana/web3.js'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   sendJitoTransaction: vi.fn(),
-  sendRawTransaction: vi.fn(),
+  sendTransaction: vi.fn(),
   getSignatureStatuses: vi.fn(),
   getBlockHeight: vi.fn(),
   getLatestBlockhash: vi.fn(),
@@ -15,8 +14,8 @@ vi.mock('@vultisig/core-chain/chains/solana/jito', () => ({
 }))
 
 vi.mock('@vultisig/core-chain/chains/solana/client', () => ({
+  solanaRpcUrl: 'https://solana.rpc.test/',
   getSolanaClient: () => ({
-    sendRawTransaction: mocks.sendRawTransaction,
     getSignatureStatuses: mocks.getSignatureStatuses,
     getBlockHeight: mocks.getBlockHeight,
     getLatestBlockhash: mocks.getLatestBlockhash,
@@ -29,6 +28,7 @@ vi.mock('../verifyBroadcastByHash', () => ({
 
 import { Chain } from '../../../Chain'
 import { solanaRpcTimeoutMs } from '../../../chains/solana/rpcTimeout'
+import { SolanaSendTransactionError } from '../../../chains/solana/sendTransaction'
 import { BroadcastErrorCode } from '../resolver'
 import { SolanaBlockhashExpiredError } from '../solanaBlockhashExpired'
 import { broadcastSolanaTx, solanaBroadcastMaxDurationMs, solanaRebroadcastIntervalMs } from './solana'
@@ -40,8 +40,21 @@ const processed = { value: [{ err: null, confirmationStatus: 'processed' }] }
 const confirmed = { value: [{ err: null, confirmationStatus: 'confirmed' }] }
 const revertedOnChain = { value: [{ err: { InstructionError: [0, 'Custom'] }, confirmationStatus: 'confirmed' }] }
 
-const firstSendOptions = { skipPreflight: false, preflightCommitment: 'confirmed', maxRetries: 0 }
-const resendOptions = { ...firstSendOptions, skipPreflight: true }
+// The sendTransaction config on the wire. A resend reads `processed`, as
+// web3.js always sent whenever preflight was skipped.
+const firstSendConfig = { encoding: 'base64', maxRetries: 0, preflightCommitment: 'confirmed' }
+const resendConfig = { encoding: 'base64', maxRetries: 0, skipPreflight: true, preflightCommitment: 'processed' }
+
+const rpcResult = (result: string) => ({ jsonrpc: '2.0', id: 1, result })
+
+// A preflight rejection in the shape mainnet returns it: a fixed message, the
+// verdict only in `data.err`. Verbatim for BlockhashNotFound and AccountNotFound
+// from api.mainnet-beta.solana.com and the Vultisig proxy (2026-10-27).
+const preflightFailure = (err: unknown, logs: string[] = []) => ({
+  jsonrpc: '2.0',
+  id: 1,
+  error: { code: -32002, message: 'Transaction simulation failed', data: { err, logs } },
+})
 
 const expectExpiry = (result: unknown, expected: { signature?: string; lastValidBlockHeight?: number }) => {
   expect(result).toMatchObject({
@@ -63,7 +76,12 @@ describe('broadcastSolanaTx', () => {
     vi.clearAllMocks()
     vi.useFakeTimers()
     mocks.sendJitoTransaction.mockResolvedValue('jito-signature')
-    mocks.sendRawTransaction.mockResolvedValue(signature)
+    // Only sendTransaction goes over fetch; every other RPC is on the mocked client.
+    vi.stubGlobal('fetch', async (_url: string, init: RequestInit) => {
+      const body = await mocks.sendTransaction(...JSON.parse(String(init.body)).params)
+      return { ok: true, status: 200, json: async () => body }
+    })
+    mocks.sendTransaction.mockResolvedValue(rpcResult(signature))
     mocks.getSignatureStatuses.mockResolvedValue(confirmed)
     mocks.getBlockHeight.mockResolvedValue(100)
     mocks.getLatestBlockhash.mockResolvedValue({ blockhash: 'latest', lastValidBlockHeight: 150 })
@@ -71,14 +89,15 @@ describe('broadcastSolanaTx', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+    vi.unstubAllGlobals()
   })
 
   it('relays through standard RPC even when JITO accepts, and accepts once the signature is confirmed', async () => {
     await expect(broadcast()).resolves.toEqual({ status: 'accepted', finality: 'pending', txHash: signature })
 
     expect(mocks.sendJitoTransaction).toHaveBeenCalledTimes(1)
-    expect(mocks.sendRawTransaction).toHaveBeenCalledTimes(1)
-    expect(mocks.sendRawTransaction).toHaveBeenCalledWith(expect.any(Uint8Array), firstSendOptions)
+    expect(mocks.sendTransaction).toHaveBeenCalledTimes(1)
+    expect(mocks.sendTransaction).toHaveBeenCalledWith(expect.any(String), firstSendConfig)
     expect(mocks.getSignatureStatuses).toHaveBeenCalledWith([signature], { searchTransactionHistory: false })
   })
 
@@ -95,15 +114,15 @@ describe('broadcastSolanaTx', () => {
 
     const promise = broadcast(150)
     await vi.advanceTimersByTimeAsync(solanaRebroadcastIntervalMs - 1)
-    expect(mocks.sendRawTransaction).toHaveBeenCalledTimes(1)
+    expect(mocks.sendTransaction).toHaveBeenCalledTimes(1)
 
     await vi.advanceTimersByTimeAsync(solanaRebroadcastIntervalMs * 2)
     await expect(promise).resolves.toMatchObject({ status: 'accepted', txHash: signature })
 
-    expect(mocks.sendRawTransaction).toHaveBeenCalledTimes(3)
-    expect(mocks.sendRawTransaction).toHaveBeenNthCalledWith(1, expect.any(Uint8Array), firstSendOptions)
-    expect(mocks.sendRawTransaction).toHaveBeenNthCalledWith(2, expect.any(Uint8Array), resendOptions)
-    expect(mocks.sendRawTransaction).toHaveBeenNthCalledWith(3, expect.any(Uint8Array), resendOptions)
+    expect(mocks.sendTransaction).toHaveBeenCalledTimes(3)
+    expect(mocks.sendTransaction).toHaveBeenNthCalledWith(1, expect.any(String), firstSendConfig)
+    expect(mocks.sendTransaction).toHaveBeenNthCalledWith(2, expect.any(String), resendConfig)
+    expect(mocks.sendTransaction).toHaveBeenNthCalledWith(3, expect.any(String), resendConfig)
     expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
   })
 
@@ -114,7 +133,7 @@ describe('broadcastSolanaTx', () => {
     await vi.advanceTimersByTimeAsync(solanaRebroadcastIntervalMs)
     await expect(promise).resolves.toMatchObject({ status: 'accepted' })
 
-    expect(mocks.sendRawTransaction).toHaveBeenCalledTimes(2)
+    expect(mocks.sendTransaction).toHaveBeenCalledTimes(2)
   })
 
   // The broadcast layer reports "the node took the bytes"; the downstream
@@ -124,7 +143,7 @@ describe('broadcastSolanaTx', () => {
 
     await expect(broadcast(150)).resolves.toMatchObject({ status: 'accepted', txHash: signature })
 
-    expect(mocks.sendRawTransaction).toHaveBeenCalledTimes(1)
+    expect(mocks.sendTransaction).toHaveBeenCalledTimes(1)
   })
 
   it('fails with a re-sign verdict once the deadline passes with the signature still unseen', async () => {
@@ -136,7 +155,7 @@ describe('broadcastSolanaTx', () => {
     const result = await promise
 
     expectExpiry(result, { signature, lastValidBlockHeight: 150 })
-    expect(mocks.sendRawTransaction).toHaveBeenCalledTimes(2)
+    expect(mocks.sendTransaction).toHaveBeenCalledTimes(2)
     // The last look searches history: the bytes may have landed in the final valid block.
     expect(mocks.getSignatureStatuses).toHaveBeenLastCalledWith([signature], { searchTransactionHistory: true })
     expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
@@ -180,7 +199,7 @@ describe('broadcastSolanaTx', () => {
 
   it('reports a transport failure, not expiry, when history is unusable and the bytes were never accepted', async () => {
     const transport = new Error('ECONNRESET')
-    mocks.sendRawTransaction.mockRejectedValue(transport)
+    mocks.sendTransaction.mockRejectedValue(transport)
     mocks.getSignatureStatuses.mockRejectedValue(new Error('status rpc unavailable'))
     mocks.getBlockHeight.mockResolvedValueOnce(100).mockResolvedValue(151)
 
@@ -201,103 +220,137 @@ describe('broadcastSolanaTx', () => {
 
     await expect(broadcast(150)).resolves.toMatchObject({ status: 'accepted', txHash: signature })
 
-    expect(mocks.sendRawTransaction).toHaveBeenCalledTimes(1)
+    expect(mocks.sendTransaction).toHaveBeenCalledTimes(1)
   })
 
   it('treats a block-height-exceeded rejection as the expiry itself', async () => {
-    mocks.sendRawTransaction.mockRejectedValue(new Error('Transaction simulation failed: block height exceeded'))
+    mocks.sendTransaction.mockRejectedValue(new Error('Transaction simulation failed: block height exceeded'))
     mocks.getSignatureStatuses.mockResolvedValue(unseen)
 
     expectExpiry(await broadcast(150), { signature, lastValidBlockHeight: 150 })
-    expect(mocks.sendRawTransaction).toHaveBeenCalledTimes(1)
+    expect(mocks.sendTransaction).toHaveBeenCalledTimes(1)
     expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
   })
 
   it('keeps preflight on while a blockhash miss is still propagating, then accepts', async () => {
-    mocks.sendRawTransaction.mockRejectedValueOnce(new Error('Blockhash not found')).mockResolvedValue(signature)
+    mocks.sendTransaction
+      .mockResolvedValueOnce(preflightFailure('BlockhashNotFound'))
+      .mockResolvedValue(rpcResult(signature))
     mocks.getSignatureStatuses.mockResolvedValueOnce(unseen).mockResolvedValue(confirmed)
 
     const promise = broadcast(150)
     await vi.advanceTimersByTimeAsync(solanaRebroadcastIntervalMs)
     await expect(promise).resolves.toMatchObject({ status: 'accepted', txHash: signature })
 
-    expect(mocks.sendRawTransaction).toHaveBeenNthCalledWith(2, expect.any(Uint8Array), firstSendOptions)
+    expect(mocks.sendTransaction).toHaveBeenNthCalledWith(2, expect.any(String), firstSendConfig)
     expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
   })
 
-  it('reports a persistent blockhash miss as expiry once the deadline passes, not as a transport failure', async () => {
-    mocks.sendRawTransaction.mockRejectedValue(new Error('BlockhashNotFound'))
+  it('resends through a persistent blockhash miss and reports expiry once the deadline passes', async () => {
+    mocks.sendTransaction.mockResolvedValue(preflightFailure('BlockhashNotFound'))
     mocks.getSignatureStatuses.mockResolvedValue(unseen)
-    mocks.getBlockHeight.mockResolvedValueOnce(100).mockResolvedValue(151)
+    mocks.getBlockHeight.mockResolvedValueOnce(100).mockResolvedValueOnce(120).mockResolvedValue(151)
 
     const promise = broadcast(150)
-    await vi.advanceTimersByTimeAsync(solanaRebroadcastIntervalMs)
+    await vi.advanceTimersByTimeAsync(solanaRebroadcastIntervalMs * 2)
 
     expectExpiry(await promise, { signature, lastValidBlockHeight: 150 })
+    // Never accepted, so every resend keeps preflight on.
+    expect(mocks.sendTransaction).toHaveBeenCalledTimes(3)
+    expect(mocks.sendTransaction).toHaveBeenNthCalledWith(3, expect.any(String), firstSendConfig)
+    expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
+  })
+
+  // A payload signed against a blockhash that has already aged out: the node
+  // answers BlockhashNotFound and the chain is past the deadline from the start.
+  it('reports a blockhash miss as expiry at once when the deadline has already passed', async () => {
+    mocks.sendTransaction.mockResolvedValue(preflightFailure('BlockhashNotFound'))
+    mocks.getSignatureStatuses.mockResolvedValue(unseen)
+    mocks.getBlockHeight.mockResolvedValue(151)
+
+    expectExpiry(await broadcast(150), { signature, lastValidBlockHeight: 150 })
+    expect(mocks.sendTransaction).toHaveBeenCalledTimes(1)
     expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
   })
 
   it('retries a transport failure on the first send instead of giving up', async () => {
-    mocks.sendRawTransaction.mockRejectedValueOnce(new Error('ECONNRESET')).mockResolvedValue(signature)
+    mocks.sendTransaction.mockRejectedValueOnce(new Error('ECONNRESET')).mockResolvedValue(rpcResult(signature))
     mocks.getSignatureStatuses.mockResolvedValueOnce(unseen).mockResolvedValue(confirmed)
 
     const promise = broadcast(150)
     await vi.advanceTimersByTimeAsync(solanaRebroadcastIntervalMs)
     await expect(promise).resolves.toMatchObject({ status: 'accepted', txHash: signature })
 
-    expect(mocks.sendRawTransaction).toHaveBeenCalledTimes(2)
+    expect(mocks.sendTransaction).toHaveBeenCalledTimes(2)
     expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
   })
 
   it('routes a preflight rejection of the bytes through hash verification, with the deadline', async () => {
-    const rejection = new Error('rpc rejected')
-    mocks.sendRawTransaction.mockRejectedValue(rejection)
+    mocks.sendTransaction.mockResolvedValue(preflightFailure('AccountNotFound'))
     mocks.verifyBroadcastByHash.mockResolvedValue('verified-hash')
 
     await expect(broadcast(150)).resolves.toMatchObject({ status: 'accepted', txHash: 'verified-hash' })
 
-    expect(mocks.sendRawTransaction).toHaveBeenCalledTimes(1)
+    expect(mocks.sendTransaction).toHaveBeenCalledTimes(1)
     expect(mocks.verifyBroadcastByHash).toHaveBeenCalledWith({
       chain: Chain.Solana,
       tx,
-      error: rejection,
+      error: expect.any(SolanaSendTransactionError),
       lastValidBlockHeight: 150,
     })
   })
 
-  it('hoists SendTransactionError program logs into the verified error message', async () => {
-    const sendError = new SendTransactionError({
-      action: 'send',
-      signature: 'sig',
-      transactionMessage: 'Transaction simulation failed: custom program error: 0x1',
-      logs: [
+  it('returns a definitive failure naming the verdict when hash verification cannot confirm the bytes', async () => {
+    mocks.sendTransaction.mockResolvedValue(preflightFailure('AccountNotFound'))
+    mocks.verifyBroadcastByHash.mockImplementation(async ({ error }) => {
+      throw error
+    })
+
+    const result = await broadcast(150)
+
+    expect(result).toMatchObject({
+      status: 'failed',
+      code: BroadcastErrorCode.Rejected,
+      retryable: false,
+      cause: expect.any(SolanaSendTransactionError),
+    })
+    expect(result).toHaveProperty('cause.message', 'Transaction simulation failed: AccountNotFound')
+  })
+
+  it('hoists program logs into the verified error message, after the verdict', async () => {
+    mocks.sendTransaction.mockResolvedValue(
+      preflightFailure({ InstructionError: [0, { Custom: 1 }] }, [
         'Program 11111111111111111111111111111111 invoke [1]',
         'Program 11111111111111111111111111111111 failed: insufficient lamports',
-      ],
-    })
-    mocks.sendRawTransaction.mockRejectedValue(sendError)
+      ])
+    )
     mocks.verifyBroadcastByHash.mockResolvedValue('verified-hash')
 
     await broadcast(150)
 
     const { error } = mocks.verifyBroadcastByHash.mock.calls[0][0]
-    expect(error).toBeInstanceOf(Error)
-    expect(error.cause).toBe(sendError)
-    expect(error.message).toContain('Transaction simulation failed')
-    expect(error.message).toContain('insufficient lamports')
+    expect(error.cause).toBeInstanceOf(SolanaSendTransactionError)
+    expect(error.message).toBe(
+      [
+        'Transaction simulation failed: {"InstructionError":[0,{"Custom":1}]}',
+        'Program 11111111111111111111111111111111 invoke [1]',
+        'Program 11111111111111111111111111111111 failed: insufficient lamports',
+      ].join('\n')
+    )
   })
 
-  it('returns a definitive failure when the bytes are rejected and hash verification cannot confirm them', async () => {
-    const rejection = new Error('invalid signature')
-    mocks.sendRawTransaction.mockRejectedValue(rejection)
-    mocks.verifyBroadcastByHash.mockRejectedValue(rejection)
-
-    await expect(broadcast(150)).resolves.toEqual({
-      status: 'failed',
-      code: BroadcastErrorCode.Rejected,
-      retryable: false,
-      cause: rejection,
+  // Program logs are the program's own text. One that reads like a blockhash
+  // miss must not turn a rejected instruction into a resend loop.
+  it('classifies on the node verdict, never on program logs', async () => {
+    mocks.sendTransaction.mockResolvedValue(
+      preflightFailure({ InstructionError: [0, { Custom: 1 }] }, ['Program log: Blockhash not found'])
+    )
+    mocks.verifyBroadcastByHash.mockImplementation(async ({ error }) => {
+      throw error
     })
+
+    await expect(broadcast(150)).resolves.toMatchObject({ status: 'failed', retryable: false })
+    expect(mocks.sendTransaction).toHaveBeenCalledTimes(1)
   })
 
   it('falls back to standard RPC when JITO rejects the transaction', async () => {
@@ -306,7 +359,7 @@ describe('broadcastSolanaTx', () => {
     await expect(broadcast(150)).resolves.toMatchObject({ status: 'accepted' })
 
     expect(mocks.sendJitoTransaction).toHaveBeenCalledTimes(1)
-    expect(mocks.sendRawTransaction).toHaveBeenCalledTimes(1)
+    expect(mocks.sendTransaction).toHaveBeenCalledTimes(1)
   })
 
   // Pins the BROADCAST-LAYER decision for the AlreadyProcessed branch so a
@@ -314,19 +367,11 @@ describe('broadcastSolanaTx', () => {
   // into a resend) is caught here. The authority on real success/failure is
   // the downstream getTxStatus confirmation poll (see the status-resolver test).
   it('treats a duplicate-signature rejection as an idempotent success: one send, no verification', async () => {
-    mocks.sendRawTransaction.mockRejectedValue(new Error('This transaction has already been processed'))
+    mocks.sendTransaction.mockResolvedValue(preflightFailure('AlreadyProcessed'))
 
     await expect(broadcast(150)).resolves.toMatchObject({ status: 'accepted', txHash: signature })
 
-    expect(mocks.sendRawTransaction).toHaveBeenCalledTimes(1)
-    expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
-  })
-
-  it('treats an AlreadyProcessed transaction error as an idempotent success', async () => {
-    mocks.sendRawTransaction.mockRejectedValue(new Error('Transaction error: AlreadyProcessed'))
-
-    await expect(broadcast(150)).resolves.toMatchObject({ status: 'accepted' })
-
+    expect(mocks.sendTransaction).toHaveBeenCalledTimes(1)
     expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
   })
 
@@ -339,7 +384,7 @@ describe('broadcastSolanaTx', () => {
     await expect(promise).resolves.toMatchObject({ status: 'accepted', txHash: signature })
 
     expect(mocks.getBlockHeight).not.toHaveBeenCalled()
-    expect(mocks.sendRawTransaction.mock.calls.length).toBeGreaterThan(
+    expect(mocks.sendTransaction.mock.calls.length).toBeGreaterThan(
       solanaBroadcastMaxDurationMs / solanaRebroadcastIntervalMs
     )
   })
@@ -347,7 +392,7 @@ describe('broadcastSolanaTx', () => {
   it('fails retryably at the wall-clock cap when the RPC never accepted the bytes', async () => {
     const transport = new Error('ECONNRESET')
     mocks.getLatestBlockhash.mockRejectedValue(new Error('rpc down'))
-    mocks.sendRawTransaction.mockRejectedValue(transport)
+    mocks.sendTransaction.mockRejectedValue(transport)
     mocks.getSignatureStatuses.mockResolvedValue(unseen)
 
     const promise = broadcast()
