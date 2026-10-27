@@ -76,6 +76,15 @@ export const deriveJupiterFeeAccount = async ({
 }
 
 /**
+ * Whether the Jupiter fee ATA is already on-chain. The prepended create
+ * instruction is idempotent, so its rent is charged only when this is false.
+ */
+export const jupiterFeeAccountExists = async (feeAccount: string): Promise<boolean> => {
+  const accountInfo = await getSolanaClient().getAccountInfo(new PublicKey(feeAccount))
+  return accountInfo !== null
+}
+
+/**
  * Prepend an idempotent `createAssociatedTokenAccount` instruction for the
  * Jupiter fee ATA to the serialized swap transaction.
  *
@@ -85,8 +94,9 @@ export const deriveJupiterFeeAccount = async ({
  * charged) when the ATA already exists, making this safe to run on every swap
  * without an existence probe.
  *
- * Rent (~0.002 SOL, the first time per fee mint) is paid by the tx fee-payer
- * (the user), matching the existing LiFi Solana ATA-injection behaviour.
+ * Rent (~0.002 SOL, the first time per fee owner and mint) is paid by the tx
+ * fee-payer (the user), matching the existing LiFi Solana ATA-injection
+ * behaviour.
  *
  * `recentBlockhash` is preserved verbatim from Jupiter's quote. The consumer's
  * keysign path refreshes the blockhash before broadcast (same as every other
