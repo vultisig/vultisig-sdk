@@ -94,8 +94,9 @@ export const jupiterFeeAccountExists = async (feeAccount: string): Promise<boole
  * charged) when the ATA already exists, making this safe to run on every swap
  * without an existence probe.
  *
- * Rent (~0.002 SOL, the first time per fee mint) is paid by the tx fee-payer
- * (the user), matching the existing LiFi Solana ATA-injection behaviour.
+ * Rent (~0.002 SOL, the first time per fee owner and mint) is paid by the tx
+ * fee-payer (the user), matching the existing LiFi Solana ATA-injection
+ * behaviour.
  *
  * `recentBlockhash` is preserved verbatim from Jupiter's quote. The consumer's
  * keysign path refreshes the blockhash before broadcast (same as every other
