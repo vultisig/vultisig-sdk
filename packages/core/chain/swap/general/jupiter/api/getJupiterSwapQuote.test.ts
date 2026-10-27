@@ -1,6 +1,7 @@
 import { PublicKey } from '@solana/web3.js'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { assertSafeSolanaSwapTransactionBase64 } from '@vultisig/core-chain/chains/solana/assertSafeSolanaSwapInstructions'
+import { solanaRpcTimeoutMs } from '@vultisig/core-chain/chains/solana/rpcTimeout'
 import { solanaConfig } from '@vultisig/core-chain/chains/solana/solanaConfig'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -91,6 +92,7 @@ describe('getJupiterSwapQuote', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.unstubAllGlobals()
   })
 
@@ -143,6 +145,16 @@ describe('getJupiterSwapQuote', () => {
       vi.mocked(jupiterFeeAccountExists).mockRejectedValue(new Error('RPC unavailable'))
 
       expect(await getNetworkFee(50)).toBe(baseFee + ataRent)
+    })
+
+    it('quotes the ATA rent instead of hanging when the existence read never settles', async () => {
+      vi.useFakeTimers()
+      vi.mocked(jupiterFeeAccountExists).mockReturnValue(new Promise<never>(() => {}))
+
+      const networkFee = getNetworkFee(50)
+      await vi.advanceTimersByTimeAsync(solanaRpcTimeoutMs)
+
+      await expect(networkFee).resolves.toBe(baseFee + ataRent)
     })
 
     it('skips the existence read when no fee is charged', async () => {

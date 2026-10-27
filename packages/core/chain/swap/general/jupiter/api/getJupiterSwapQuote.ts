@@ -1,6 +1,7 @@
 import { PublicKey } from '@solana/web3.js'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { assertSafeSolanaSwapTransactionBase64 } from '@vultisig/core-chain/chains/solana/assertSafeSolanaSwapInstructions'
+import { withSolanaRpcTimeout } from '@vultisig/core-chain/chains/solana/rpcTimeout'
 import { solanaConfig } from '@vultisig/core-chain/chains/solana/solanaConfig'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { GeneralSwapQuote } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
@@ -75,13 +76,13 @@ const requestJson = async <T>(url: string, init?: RequestInit): Promise<T> => {
 
 /**
  * Rent the prepended fee-ATA create will charge: none once the ATA exists,
- * which is every swap after the first into a given output mint. A failed
- * existence read quotes the rent, so the estimate errs high instead of
- * failing a quote over a display figure.
+ * which is every swap after the first into a given output mint. A failed or
+ * unanswered existence read quotes the rent, so the estimate errs high
+ * instead of failing or stalling a quote over a display figure.
  */
 const getFeeAccountRent = async (feeAccount: string): Promise<bigint> => {
   const exists = await withFallback(
-    attempt(() => jupiterFeeAccountExists(feeAccount)),
+    attempt(() => withSolanaRpcTimeout(jupiterFeeAccountExists(feeAccount), 'getAccountInfo')),
     false
   )
 
