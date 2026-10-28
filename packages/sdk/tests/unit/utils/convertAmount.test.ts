@@ -155,4 +155,37 @@ describe('convertAmount — fiat ↔ crypto (price as input)', () => {
     // sci-path small value also truncates rather than rounding up
     expect(cryptoToFiat({ amount: 9e-7, price: 1, fiatDecimals: 2 })).toBe('0')
   })
+
+  // A float result a hair below the true value used to lose a whole unit to truncation.
+  it('truncates the exact decimal result, not its float approximation', () => {
+    expect(cryptoToFiat({ amount: 1.15, price: 100 })).toBe('115')
+    expect(cryptoToFiat({ amount: 4.35, price: 100 })).toBe('435')
+    expect(fiatToCrypto({ fiatValue: 0.3, price: 0.1, decimals: 0 })).toBe('3')
+    expect(fiatToCrypto({ fiatValue: 100, price: 3, decimals: 18 })).toBe('33.333333333333333333')
+  })
+
+  it('takes plain-decimal strings digit for digit, beyond float precision', () => {
+    expect(cryptoToFiat({ amount: '12345678901234567.89', price: 1 })).toBe('12345678901234567.89')
+    expect(fiatToCrypto({ fiatValue: '0.30000000000000000001', price: '0.1', decimals: 20 })).toBe(
+      '3.0000000000000000001'
+    )
+  })
+
+  it('still rejects results that overflow a float', () => {
+    expect(() => cryptoToFiat({ amount: 1e308, price: 1e308 })).toThrow(AmountConvertError)
+    expect(() => fiatToCrypto({ fiatValue: 1e308, price: 5e-324, decimals: 255 })).toThrow(AmountConvertError)
+  })
+
+  it('matches exact decimal arithmetic across cent-precision inputs', () => {
+    const cents = (n: number) => `${Math.floor(n / 100)}.${String(n % 100).padStart(2, '0')}`
+    for (let a = 1; a <= 1000; a += 7) {
+      for (let p = 1; p <= 1000; p += 13) {
+        const product = BigInt(a) * BigInt(p)
+        expect(cryptoToFiat({ amount: cents(a), price: cents(p) })).toBe(toHumanUnits((product / 100n).toString(), 2))
+        expect(fiatToCrypto({ fiatValue: cents(a), price: cents(p), decimals: 8 })).toBe(
+          toHumanUnits(((BigInt(a) * 10n ** 8n) / BigInt(p)).toString(), 8)
+        )
+      }
+    }
+  })
 })
