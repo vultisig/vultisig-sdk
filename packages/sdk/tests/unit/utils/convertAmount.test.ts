@@ -176,15 +176,27 @@ describe('convertAmount — fiat ↔ crypto (price as input)', () => {
     expect(() => fiatToCrypto({ fiatValue: 1e308, price: 5e-324, decimals: 255 })).toThrow(AmountConvertError)
   })
 
-  it('matches exact decimal arithmetic across cent-precision inputs', () => {
-    const cents = (n: number) => `${Math.floor(n / 100)}.${String(n % 100).padStart(2, '0')}`
-    for (let a = 1; a <= 1000; a += 7) {
-      for (let p = 1; p <= 1000; p += 13) {
-        const product = BigInt(a) * BigInt(p)
-        expect(cryptoToFiat({ amount: cents(a), price: cents(p) })).toBe(toHumanUnits((product / 100n).toString(), 2))
-        expect(fiatToCrypto({ fiatValue: cents(a), price: cents(p), decimals: 8 })).toBe(
-          toHumanUnits(((BigInt(a) * 10n ** 8n) / BigInt(p)).toString(), 8)
-        )
+  it('accepts operands with more fractional digits than the decimals cap', () => {
+    expect(fiatToCrypto({ fiatValue: 5e-324, price: 5e-324, decimals: 18 })).toBe('1')
+    expect(cryptoToFiat({ amount: 5e-324, price: 1 })).toBe('0')
+  })
+
+  it('matches exact decimal arithmetic for inputs with up to 8 fractional digits', () => {
+    const pow10 = (n: number) => 10n ** BigInt(n)
+    for (let aPlaces = 0; aPlaces <= 8; aPlaces++) {
+      for (let pPlaces = 0; pPlaces <= 8; pPlaces++) {
+        for (let a = 1n; a < 100_000_000n; a = a * 7n + 3n) {
+          for (let p = 1n; p < 100_000_000n; p = p * 13n + 5n) {
+            const amount = toHumanUnits(a.toString(), aPlaces)
+            const price = toHumanUnits(p.toString(), pPlaces)
+            expect(cryptoToFiat({ amount, price })).toBe(
+              toHumanUnits(((a * p * pow10(2)) / pow10(aPlaces + pPlaces)).toString(), 2)
+            )
+            expect(fiatToCrypto({ fiatValue: amount, price, decimals: 8 })).toBe(
+              toHumanUnits(((a * pow10(pPlaces + 8)) / (p * pow10(aPlaces))).toString(), 8)
+            )
+          }
+        }
       }
     }
   })

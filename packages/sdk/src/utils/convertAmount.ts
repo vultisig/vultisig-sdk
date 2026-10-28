@@ -201,7 +201,7 @@ const toExactDecimal = (input: number | string, parsed: number): { units: bigint
   const trimmed = typeof input === 'string' ? input.trim() : ''
   const plain = PLAIN_DECIMAL.test(trimmed) && trimmed !== '' ? trimmed : expandToPlainDecimal(parsed)
   const scale = plain.split('.')[1]?.length ?? 0
-  return { units: BigInt(toBaseUnits(plain, scale)), scale }
+  return { units: BigInt(plain.replace('.', '')), scale }
 }
 
 const assertFiniteResult = (value: number): void => {
