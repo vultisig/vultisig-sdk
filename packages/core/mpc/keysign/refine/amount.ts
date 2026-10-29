@@ -19,7 +19,8 @@ import { assertNearSendAffordable } from './near'
 type RefineKeysignAmountInput = {
   keysignPayload: KeysignPayload
   walletCore: WalletCore
-  publicKey: PublicKey
+  /** Not read; kept optional so existing callers that pass it still compile. */
+  publicKey?: PublicKey | null
   balance: bigint
 }
 
