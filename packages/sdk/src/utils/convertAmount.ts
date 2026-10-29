@@ -194,24 +194,27 @@ const expandToPlainDecimal = (value: number): string => {
   return `${sign}${result}`
 }
 
-/**
- * Format a JS number as a decimal string capped to `decimals` fractional
- * digits with trailing zeros trimmed. Prefers `toString()` (shortest
- * round-trip); any scientific-notation form (small OR large magnitude) is
- * expanded to a plain decimal first so no exponent ever leaks and no large
- * value is silently truncated. The fractional part is truncated (not rounded)
- * to `decimals` digits — same direction as the base↔human path.
- */
-const formatDecimalString = (value: number, decimals: number): string => {
+const PLAIN_DECIMAL = /^\d*\.?\d*$/
+
+/** `units / 10^scale`: plain-decimal strings digit for digit, else the number's shortest round-trip form. */
+const toExactDecimal = (input: number | string, parsed: number): { units: bigint; scale: number } => {
+  const trimmed = typeof input === 'string' ? input.trim() : ''
+  const plain = PLAIN_DECIMAL.test(trimmed) && trimmed !== '' ? trimmed : expandToPlainDecimal(parsed)
+  const scale = plain.split('.')[1]?.length ?? 0
+  return { units: BigInt(plain.replace('.', '')), scale }
+}
+
+const assertFiniteResult = (value: number): void => {
   if (!Number.isFinite(value)) {
     throw new AmountConvertError(`Non-finite amount computed: ${value}`)
   }
-  const str = expandToPlainDecimal(value)
-  if (!str.includes('.')) return str
-  const [whole, fraction] = str.split('.')
-  const trimmed = fraction.slice(0, decimals).replace(/0+$/, '')
-  return trimmed === '' ? whole : `${whole}.${trimmed}`
 }
+
+const pow10 = (exponent: number): bigint => 10n ** BigInt(exponent)
+
+/** Exact `numerator / denominator`, truncated to `decimals` like the base↔human path. */
+const formatTruncatedRatio = (numerator: bigint, denominator: bigint, decimals: number): string =>
+  toHumanUnits(((numerator * pow10(decimals)) / denominator).toString(), decimals)
 
 export type FiatToCryptoParams = {
   /** Fiat value to convert (e.g. 100 for $100). Positive number or numeric string. */
@@ -225,7 +228,8 @@ export type FiatToCryptoParams = {
 /**
  * Convert a fiat value to a human-readable crypto amount given a unit price.
  *
- * `amount = fiatValue / price`, then capped to `decimals` fractional digits.
+ * `amount = fiatValue / price`, then TRUNCATED (not rounded) to `decimals`
+ * fractional digits — never exceeds the true value.
  * Pure + synchronous — the price is an INPUT. For a live-price variant that
  * fetches the rate itself, use `fiatToAmount`.
  *
@@ -234,9 +238,12 @@ export type FiatToCryptoParams = {
  */
 export const fiatToCrypto = ({ fiatValue, price, decimals }: FiatToCryptoParams): string => {
   assertDecimals(decimals)
-  const value = parsePositiveNumber(fiatValue, 'fiat value')
-  const unitPrice = parsePositiveNumber(price, 'price')
-  return formatDecimalString(value / unitPrice, decimals)
+  const parsedValue = parsePositiveNumber(fiatValue, 'fiat value')
+  const parsedPrice = parsePositiveNumber(price, 'price')
+  assertFiniteResult(parsedValue / parsedPrice)
+  const value = toExactDecimal(fiatValue, parsedValue)
+  const unitPrice = toExactDecimal(price, parsedPrice)
+  return formatTruncatedRatio(value.units * pow10(unitPrice.scale), unitPrice.units * pow10(value.scale), decimals)
 }
 
 export type CryptoToFiatParams = {
@@ -253,8 +260,8 @@ export type CryptoToFiatParams = {
  *
  * `fiat = amount * price`, then TRUNCATED (not rounded) to `fiatDecimals`
  * fractional digits (default 2 — cents). Truncation matches the base↔human
- * path and is fail-safe: the result never exceeds the true value. This is a
- * float-based display/estimate helper — do NOT use its output as a signing or
+ * path and is fail-safe: the result never exceeds the true value. Prices are
+ * estimates, so this is a display helper — do NOT use its output as a signing or
  * min-receive boundary value; use the precision-exact base↔human path for that.
  *
  * @example
@@ -264,9 +271,12 @@ export const cryptoToFiat = ({ amount, price, fiatDecimals = 2 }: CryptoToFiatPa
   if (!Number.isInteger(fiatDecimals) || fiatDecimals < 0 || fiatDecimals > MAX_DECIMALS) {
     throw new AmountConvertError(`Invalid fiatDecimals "${fiatDecimals}" — must be an integer in [0, ${MAX_DECIMALS}].`)
   }
-  const value = parsePositiveNumber(amount, 'amount')
-  const unitPrice = parsePositiveNumber(price, 'price')
-  return formatDecimalString(value * unitPrice, fiatDecimals)
+  const parsedValue = parsePositiveNumber(amount, 'amount')
+  const parsedPrice = parsePositiveNumber(price, 'price')
+  assertFiniteResult(parsedValue * parsedPrice)
+  const value = toExactDecimal(amount, parsedValue)
+  const unitPrice = toExactDecimal(price, parsedPrice)
+  return formatTruncatedRatio(value.units * unitPrice.units, pow10(value.scale + unitPrice.scale), fiatDecimals)
 }
 
 /** Pure amount helpers. Fiat conversions use caller-supplied prices and are display estimates. */
