@@ -1,5 +1,5 @@
+import { computeBudgetDiscriminators } from '../../computeBudget'
 import {
-  computeBudgetDiscriminators,
   createIdempotentAtaDiscriminator,
   hasAnchorDiscriminator,
   isAttributionMemoData,
