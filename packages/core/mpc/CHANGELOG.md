@@ -1,5 +1,16 @@
 # @vultisig/core-mpc
 
+## 5.1.1
+
+### Patch Changes
+
+- [#2572](https://github.com/vultisig/vultisig-sdk/pull/2572) [`7a8e609`](https://github.com/vultisig/vultisig-sdk/commit/7a8e6093555b0531f08f6e2e21eaefa33c40a027) Thanks [@realpaaao](https://github.com/realpaaao)! - Fast vaults created with `tssBatching: true` can now be fast-signed. `setupVaultWithServer` now sends `lib_type: DKLS` to `/vault/batch/keygen`. Before, VultiServer stored the vault as GG20, and every fast sign timed out after 3 minutes.
+
+- [#2571](https://github.com/vultisig/vultisig-sdk/pull/2571) [`9596b43`](https://github.com/vultisig/vultisig-sdk/commit/9596b4383d81c48653a8e08b5c57023270c47097) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - A native SOL MAX send no longer fails on-chain when the priority fee moves between the quote and signing. MAX now keeps Solana's rent-exempt floor (890,880 lamports) back, so the sender is never left holding a sub-rent remainder, which the runtime rejects with `InsufficientFundsForRent`. The Solana fee estimate also rounds the priority fee up to a whole lamport, as the runtime does, instead of quoting one lamport short.
+
+- Updated dependencies [[`c060960`](https://github.com/vultisig/vultisig-sdk/commit/c0609605ba6523bd1df9f964c834f7b52832d24f), [`9596b43`](https://github.com/vultisig/vultisig-sdk/commit/9596b4383d81c48653a8e08b5c57023270c47097), [`56853df`](https://github.com/vultisig/vultisig-sdk/commit/56853dfd79e9392c044659caa3f9911cf643d1cb)]:
+  - @vultisig/core-chain@6.4.0
+
 ## 5.1.0
 
 ### Minor Changes
