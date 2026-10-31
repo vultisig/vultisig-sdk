@@ -1,5 +1,28 @@
 # @vultisig/sdk
 
+## 11.0.0
+
+### Major Changes
+
+- [#2575](https://github.com/vultisig/vultisig-sdk/pull/2575) [`795caa9`](https://github.com/vultisig/vultisig-sdk/commit/795caa9f51bce918afd5507d1faca8e9dc88fa6c) Thanks [@realpaaao](https://github.com/realpaaao)! - Install only what the published build imports. `@vultisig/sdk` now has 19 dependencies instead of 57; a fresh `npm install` goes from about 589 MB and 471 packages to about 216 MB and 144.
+
+  - The `.d.ts` files inline the `@vultisig/core-chain` and `@vultisig/core-mpc` types, so those packages and their dependency trees (Polkadot, Sui, LI.FI, XRPL, ethers, date-fns) are no longer installed. The Node and browser builds already bundled that code. This also fixes declarations that failed with `skipLibCheck: false`: version-skewed imports of ERC-20 helpers (typed as `any` before), type-only names used as values, and an unresolvable `@trustwallet/wallet-core` deep import.
+  - Libraries only the React Native build imports are now optional peer dependencies: `@cosmjs/encoding`, `@lifi/sdk`, `@mysten/sui`, `@polkadot/api`, `@polkadot/util`, `@polkadot/util-crypto`, `@solana/spl-token`, `bitcoinjs-lib`, `bs58`, `bs58check`, `cbor-x`, `js-md5`, `ripple-address-codec`, `xrpl`.
+  - The `@vultisig/sdk/vite` preset's toolchain is now optional peer dependencies (`vite-plugin-wasm`, `vite-plugin-node-polyfills`, `crypto-browserify`, `stream-browserify`, `path-browserify`, `process`, `util`, `events`). The preset resolves them when `vultisig()` runs and throws one error naming any that are missing. `isomorphic-fetch` is also an optional peer, needed only if your app's graph imports `node-fetch`.
+  - Removed unused dependencies: `axios`, `uuid`, `i18next`, `i18next-http-backend`, `@coral-xyz/anchor`, `date-fns`, `ethers`, `node-fetch`. Added `@cosmjs/proto-signing`, which the build imports but was never declared.
+
+  See MIGRATING.md for the install lines React Native and Vite apps need.
+
+### Patch Changes
+
+- [#2572](https://github.com/vultisig/vultisig-sdk/pull/2572) [`7a8e609`](https://github.com/vultisig/vultisig-sdk/commit/7a8e6093555b0531f08f6e2e21eaefa33c40a027) Thanks [@realpaaao](https://github.com/realpaaao)! - Fast vaults created with `tssBatching: true` can now be fast-signed. `setupVaultWithServer` now sends `lib_type: DKLS` to `/vault/batch/keygen`. Before, VultiServer stored the vault as GG20, and every fast sign timed out after 3 minutes.
+
+- [#2574](https://github.com/vultisig/vultisig-sdk/pull/2574) [`c060960`](https://github.com/vultisig/vultisig-sdk/commit/c0609605ba6523bd1df9f964c834f7b52832d24f) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - NEAR: a missing account or transaction reported without nearcore's structured error name (as the default `api.vultisig.com/near/` RPC does) is now read from nearcore's whole not-found message, so an unfunded account's balance reads 0 and a send to a named account that does not exist fails with `near-destination-not-found` instead of `NEAR query failed (UNKNOWN_ERROR)`. Structured names still win. NEAR transaction status now asks with `wait_until: NONE`, so an unknown hash is reported as `not_found` at once instead of the lookup timing out.
+
+- [#2505](https://github.com/vultisig/vultisig-sdk/pull/2505) [`a4ae3c5`](https://github.com/vultisig/vultisig-sdk/commit/a4ae3c5f0855a560ee5400aa4a96ae492b14eb68) Thanks [@neavra](https://github.com/neavra)! - QBTC on a vault without an ML-DSA key: `chains --add-all` now preserves enabled chains and reports underivable ones as `skipped` or `unavailable`, `chains --add QBTC` fails closed, `addresses` lists it under `failures` instead of printing a stack trace, and `balance QBTC` reports a non-retryable invalid-input error with a vault-aware hint. The SDK gains `vault.addressesDetailed()` and `vault.getUnderivableChains()`, and `vault.addChain()` / `vault.setChains()` now reject newly added chains that the vault cannot derive.
+
+- [#2571](https://github.com/vultisig/vultisig-sdk/pull/2571) [`9596b43`](https://github.com/vultisig/vultisig-sdk/commit/9596b4383d81c48653a8e08b5c57023270c47097) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - A native SOL MAX send no longer fails on-chain when the priority fee moves between the quote and signing. MAX now keeps Solana's rent-exempt floor (890,880 lamports) back, so the sender is never left holding a sub-rent remainder, which the runtime rejects with `InsufficientFundsForRent`. The Solana fee estimate also rounds the priority fee up to a whole lamport, as the runtime does, instead of quoting one lamport short.
+
 ## 10.1.0
 
 ### Minor Changes
