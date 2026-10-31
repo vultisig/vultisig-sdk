@@ -246,6 +246,7 @@
     "toml@npm:^3.0.0": "^4.2.0",
     "smol-toml": "1.7.1",
     "follow-redirects": "1.16.1",
+    "node-forge": "1.4.2",
     "markdown-it": "14.3.2",
     "vite@npm:^8.1.4": "8.1.6"
   }
