@@ -17,12 +17,6 @@ type BuildMsgClaimWithProofInput = {
   utxos: UtxoRef[]
   /** Hex-encoded PLONK ZK proof. */
   proof: string
-  /** 64-char hex MessageHash. */
-  messageHash: string
-  /** 40-char hex AddressHash (Hash160). */
-  addressHash: string
-  /** 64-char hex QBTCAddressHash. */
-  qbtcAddressHash: string
   /**
    * 64-char hex SHA256 of the 33-byte SEC-compressed BTC pubkey. The chain
    * runs RIPEMD160 over this natively to bind the proof to the BTC address
@@ -49,7 +43,7 @@ const assertHex = (value: string, name: string, expectedLength: number) => {
 
 /** Validates the claim input against the chain's constraints (Section 5). */
 export const validateClaimInput = (input: BuildMsgClaimWithProofInput) => {
-  const { claimer, utxos, proof, messageHash, addressHash, qbtcAddressHash, pubKeyHashSha256, broadcaster } = input
+  const { claimer, utxos, proof, pubKeyHashSha256, broadcaster } = input
 
   if (claimer.length === 0) {
     throw new Error('claimer is required')
@@ -83,9 +77,6 @@ export const validateClaimInput = (input: BuildMsgClaimWithProofInput) => {
   if (proof.length > 100_000) {
     throw new Error('Proof too large (max 50 KB / 100000 hex chars)')
   }
-  assertHex(messageHash, 'message_hash', 64)
-  assertHex(addressHash, 'address_hash', 40)
-  assertHex(qbtcAddressHash, 'qbtc_address_hash', 64)
   assertHex(pubKeyHashSha256, 'pub_key_hash_sha256', 64)
 }
 
@@ -93,7 +84,11 @@ export const validateClaimInput = (input: BuildMsgClaimWithProofInput) => {
 const encodeUtxoRef = ({ txid, vout }: UtxoRef): Uint8Array =>
   concatBytes(protoString(1, txid), protoVarint(2, BigInt(vout)))
 
-/** Encodes MsgClaimWithProof as protobuf bytes. */
+/**
+ * Encodes MsgClaimWithProof as protobuf bytes. Fields 4-6 (message, address
+ * and QBTC address hashes) are reserved since btcq-org/qbtc#210: the chain
+ * derives them from the UTXO's address and the claim message text.
+ */
 const buildMsgClaimWithProof = (input: BuildMsgClaimWithProofInput): Uint8Array => {
   const utxoBytes = input.utxos.map(utxo => protoBytes(2, encodeUtxoRef(utxo)))
 
@@ -101,9 +96,6 @@ const buildMsgClaimWithProof = (input: BuildMsgClaimWithProofInput): Uint8Array 
     protoString(1, input.claimer),
     ...utxoBytes,
     protoString(3, input.proof),
-    protoString(4, input.messageHash),
-    protoString(5, input.addressHash),
-    protoString(6, input.qbtcAddressHash),
     protoString(7, input.pubKeyHashSha256),
     protoString(9, input.broadcaster)
   )

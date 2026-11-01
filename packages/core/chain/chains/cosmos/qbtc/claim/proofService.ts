@@ -34,6 +34,11 @@ type GenerateClaimProofInput = {
   signatureS: string
   /** Compressed secp256k1 public key (66-char hex string). */
   publicKey: string
+  /**
+   * The P2PKH or P2WPKH address being claimed, exactly as stored on the
+   * UTXOs. It is part of the signed claim message (btcq-org/qbtc#210).
+   */
+  bitcoinAddress: string
   /** UTXOs to include in the claim. */
   utxos: UtxoRef[]
   /** QBTC bech32 address of the claimer. */
@@ -57,12 +62,6 @@ type GenerateClaimProofInput = {
 type GenerateClaimProofResponse = {
   /** Hex-encoded PLONK ZK proof. */
   proof: string
-  /** 64-char hex MessageHash. */
-  message_hash: string
-  /** 40-char hex AddressHash (Hash160). */
-  address_hash: string
-  /** 64-char hex QBTCAddressHash. */
-  qbtc_address_hash: string
   /**
    * 64-char hex SHA256 of the SEC-compressed BTC pubkey. Required by
    * `MsgClaimWithProof` (proto field 7) since btcq-org/qbtc#148 — the
@@ -70,6 +69,10 @@ type GenerateClaimProofResponse = {
    * BTC address.
    */
   pub_key_hash_sha256: string
+  /** The claim message text the signature covers (echoed back). */
+  message_text: string
+  /** The Bitcoin address being claimed (echoed back). */
+  bitcoin_address: string
   /** UTXOs included in the proof. */
   utxos: UtxoRef[]
   /** QBTC claimer address. */
@@ -93,15 +96,6 @@ const assertValidClaimProofResponse = (data: GenerateClaimProofResponse): void =
   if (typeof data.proof !== 'string' || data.proof.length === 0) {
     throw new Error('Invalid proof service response: missing proof')
   }
-  if (!isHexWithLength(data.message_hash, 64)) {
-    throw new Error('Invalid proof service response: invalid message_hash')
-  }
-  if (!isHexWithLength(data.address_hash, 40)) {
-    throw new Error('Invalid proof service response: invalid address_hash')
-  }
-  if (!isHexWithLength(data.qbtc_address_hash, 64)) {
-    throw new Error('Invalid proof service response: invalid qbtc_address_hash')
-  }
   if (!isHexWithLength(data.pub_key_hash_sha256, 64)) {
     throw new Error('Invalid proof service response: invalid pub_key_hash_sha256')
   }
@@ -121,6 +115,7 @@ export const generateClaimProof = async ({
   signatureR,
   signatureS,
   publicKey,
+  bitcoinAddress,
   utxos,
   claimerAddress,
   chainId,
@@ -139,6 +134,7 @@ export const generateClaimProof = async ({
         signature_r: signatureR,
         signature_s: signatureS,
         public_key: publicKey,
+        bitcoin_address: bitcoinAddress,
         utxos: utxos.map(({ txid, vout }) => ({ txid, vout })),
         claimer_address: claimerAddress,
         chain_id: chainId,
