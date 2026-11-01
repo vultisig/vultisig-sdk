@@ -230,7 +230,7 @@ export type Signature = {
     der: string
     recovery?: number
   }>
-  // ML-DSA-44 post-quantum signature (hex-encoded), present when vault has MLDSA keys
+  // ML-DSA-65 post-quantum signature (hex-encoded), present when vault has MLDSA keys
   mldsaSignature?: string
 }
 
@@ -550,7 +550,7 @@ export type VaultData = {
   readonly chainPublicKeys?: Partial<Record<string, string>>
   readonly chainKeyShares?: Partial<Record<string, string>>
 
-  // === ML-DSA-44 post-quantum keys ===
+  // === ML-DSA-65 post-quantum keys ===
   readonly publicKeyMldsa?: string
   readonly keyShareMldsa?: string
 

@@ -613,7 +613,7 @@ export class Vultisig<
   }
 
   /**
-   * Add ML-DSA-44 post-quantum keys to an existing fast vault (VultiServer `/mldsa` + relay).
+   * Add ML-DSA-65 post-quantum keys to an existing fast vault (VultiServer `/mldsa` + relay).
    * Initial fast vault creation only generates ECDSA and EdDSA; use this when PQ signing is required.
    */
   async addPostQuantumKeysToFastVault(

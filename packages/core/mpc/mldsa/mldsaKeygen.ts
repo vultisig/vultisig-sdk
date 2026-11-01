@@ -12,8 +12,7 @@ import { waitForSetupMessage } from '../message/setup/get'
 import { uploadMpcSetupMessage } from '../message/setup/upload'
 import { sleep } from '@vultisig/lib-utils/sleep'
 import { initializeMldsaLib } from './initializeMldsa'
-
-const mldsaLevel = 44
+import { mldsaLevel } from './mldsaLevel'
 
 type MldsaKeygenResult = {
   keyshare: string
