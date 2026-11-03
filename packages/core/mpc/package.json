@@ -616,6 +616,11 @@
       "import": "./dist/keysign/signingInputs/resolvers/tron.js",
       "default": "./dist/keysign/signingInputs/resolvers/tron.js"
     },
+    "./keysign/signingInputs/resolvers/tronContractPayloadGuard": {
+      "types": "./dist/keysign/signingInputs/resolvers/tronContractPayloadGuard.d.ts",
+      "import": "./dist/keysign/signingInputs/resolvers/tronContractPayloadGuard.js",
+      "default": "./dist/keysign/signingInputs/resolvers/tronContractPayloadGuard.js"
+    },
     "./keysign/signingInputs/resolvers/utxo": {
       "types": "./dist/keysign/signingInputs/resolvers/utxo.d.ts",
       "import": "./dist/keysign/signingInputs/resolvers/utxo.js",
