@@ -810,6 +810,11 @@
       "import": "./dist/chains/solana/client.js",
       "default": "./dist/chains/solana/client.js"
     },
+    "./chains/solana/computeBudget": {
+      "types": "./dist/chains/solana/computeBudget.d.ts",
+      "import": "./dist/chains/solana/computeBudget.js",
+      "default": "./dist/chains/solana/computeBudget.js"
+    },
     "./chains/solana/config": {
       "types": "./dist/chains/solana/config.d.ts",
       "import": "./dist/chains/solana/config.js",
@@ -1621,6 +1626,7 @@
       "default": "./dist/coin/utils/sortCoinsByBalance.js"
     },
     "./fixtures/jupiter-swap-transactions.json": "./fixtures/jupiter-swap-transactions.json",
+    "./fixtures/lifi-solana-swap-transactions.json": "./fixtures/lifi-solana-swap-transactions.json",
     "./fixtures/limit-swap-memos.json": "./fixtures/limit-swap-memos.json",
     "./nameService": {
       "types": "./dist/nameService/index.d.ts",
