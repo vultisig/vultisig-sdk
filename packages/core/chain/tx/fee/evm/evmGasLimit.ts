@@ -73,6 +73,33 @@ export const getEvmCalldataGas = (data: `0x${string}`): bigint =>
 export const getEvmContractCallGasLimit = (chain: EvmChain): bigint =>
   chain === EvmChain.Mantle ? 3_000_000_000n : 600_000n
 
+const gasIncludesDataCost: Record<EvmChain, boolean> = {
+  [EvmChain.Ethereum]: false,
+  [EvmChain.Base]: false,
+  [EvmChain.Arbitrum]: true,
+  [EvmChain.Polygon]: false,
+  [EvmChain.Optimism]: false,
+  [EvmChain.CronosChain]: false,
+  [EvmChain.Blast]: false,
+  [EvmChain.BSC]: false,
+  [EvmChain.Avalanche]: false,
+  [EvmChain.Zksync]: true,
+  [EvmChain.Mantle]: true,
+  [EvmChain.Hyperliquid]: false,
+  [EvmChain.Sei]: false,
+  [EvmChain.Robinhood]: true,
+}
+
+/**
+ * Whether a chain's gas units also pay for publishing the transaction's data:
+ * Arbitrum and the Orbit chains built on it (Robinhood) charge the L1 posting
+ * cost in L2 gas, Mantle meters its L1 cost the same way, and zkSync charges
+ * pubdata in gas. OP-stack chains bill their L1 fee apart from gas. Only a
+ * simulation on the chain itself prices that share, so a gas figure computed
+ * off-chain, such as an aggregator's route estimate, can fall short there.
+ */
+export const getEvmGasIncludesDataCost = (chain: EvmChain): boolean => gasIncludesDataCost[chain]
+
 /**
  * Gas limit signed for a THORChain or Maya deposit leaving an EVM chain: a
  * memo-carrying transfer to the inbound vault for the fee coin, a router
