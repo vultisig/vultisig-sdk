@@ -136,7 +136,7 @@ describe('getEvmFeeQuote', () => {
       expect(quote.gasLimit).toBe(600_000n)
     })
 
-    it('inflates the swap default when the route cannot be simulated', async () => {
+    it('inflates the route gas when the route cannot be simulated', async () => {
       mocks.client.estimateGas.mockRejectedValueOnce(new Error('TransferHelper: TRANSFER_FROM_FAILED'))
 
       const quote = await getEvmFeeQuote({
@@ -144,19 +144,67 @@ describe('getEvmFeeQuote', () => {
         thirdPartyGasLimitEstimation: 300_000n,
       })
 
+      expect(quote.gasLimit).toBe(450_000n)
+    })
+
+    it('sizes a token route from its inflated gas without simulating it', async () => {
+      mocks.getKeysignCoin.mockReturnValue(makeCoin(EvmChain.Ethereum, token))
+
+      const quote = await getEvmFeeQuote({
+        keysignPayload: emptyPayload,
+        thirdPartyGasLimitEstimation: 229_496n,
+      })
+
+      // 1inch's figure for a USDC -> USDT route that used 175,783 gas on-chain.
+      expect(quote.gasLimit).toBe(344_244n)
+      expect(mocks.client.estimateGas).not.toHaveBeenCalled()
+    })
+
+    it('inflates the swap default for a token route that carries no gas figure', async () => {
+      mocks.getKeysignCoin.mockReturnValue(makeCoin(EvmChain.Ethereum, token))
+
+      const quote = await getEvmFeeQuote({ keysignPayload: emptyPayload })
+
       expect(quote.gasLimit).toBe(900_000n)
     })
 
-    it('sizes a token route from its gas and the inflated default without simulating it', async () => {
+    it('lets a caller minimum raise the route gas it stands in for', async () => {
       mocks.getKeysignCoin.mockReturnValue(makeCoin(EvmChain.Ethereum, token))
+
+      const quote = await getEvmFeeQuote({
+        keysignPayload: emptyPayload,
+        thirdPartyGasLimitEstimation: 300_000n,
+        minimumGasLimit: 400_000n,
+      })
+
+      expect(quote.gasLimit).toBe(600_000n)
+    })
+
+    it.each([
+      [EvmChain.Arbitrum, 900_000n],
+      [EvmChain.Robinhood, 900_000n],
+      [EvmChain.Zksync, 900_000n],
+      [EvmChain.Mantle, 4_500_000_000n],
+    ])('keeps the inflated default for a token route on %s, whose gas also pays for data', async (chain, gasLimit) => {
+      mocks.getKeysignCoin.mockReturnValue(makeCoin(chain, token))
 
       const quote = await getEvmFeeQuote({
         keysignPayload: emptyPayload,
         thirdPartyGasLimitEstimation: 300_000n,
       })
 
-      expect(quote.gasLimit).toBe(900_000n)
-      expect(mocks.client.estimateGas).not.toHaveBeenCalled()
+      expect(quote.gasLimit).toBe(gasLimit)
+    })
+
+    it('sizes a token route on an OP-stack chain from its route gas', async () => {
+      mocks.getKeysignCoin.mockReturnValue(makeCoin(EvmChain.Base, token))
+
+      const quote = await getEvmFeeQuote({
+        keysignPayload: emptyPayload,
+        thirdPartyGasLimitEstimation: 300_000n,
+      })
+
+      expect(quote.gasLimit).toBe(450_000n)
     })
 
     it('prices the base fee with 32% headroom and floors the tip', async () => {

@@ -1,5 +1,16 @@
 # @vultisig/cli
 
+## 11.0.0
+
+### Patch Changes
+
+- [#2505](https://github.com/vultisig/vultisig-sdk/pull/2505) [`a4ae3c5`](https://github.com/vultisig/vultisig-sdk/commit/a4ae3c5f0855a560ee5400aa4a96ae492b14eb68) Thanks [@neavra](https://github.com/neavra)! - QBTC on a vault without an ML-DSA key: `chains --add-all` now preserves enabled chains and reports underivable ones as `skipped` or `unavailable`, `chains --add QBTC` fails closed, `addresses` lists it under `failures` instead of printing a stack trace, and `balance QBTC` reports a non-retryable invalid-input error with a vault-aware hint. The SDK gains `vault.addressesDetailed()` and `vault.getUnderivableChains()`, and `vault.addChain()` / `vault.setChains()` now reject newly added chains that the vault cannot derive.
+
+- Updated dependencies [[`7a8e609`](https://github.com/vultisig/vultisig-sdk/commit/7a8e6093555b0531f08f6e2e21eaefa33c40a027), [`c060960`](https://github.com/vultisig/vultisig-sdk/commit/c0609605ba6523bd1df9f964c834f7b52832d24f), [`a4ae3c5`](https://github.com/vultisig/vultisig-sdk/commit/a4ae3c5f0855a560ee5400aa4a96ae492b14eb68), [`795caa9`](https://github.com/vultisig/vultisig-sdk/commit/795caa9f51bce918afd5507d1faca8e9dc88fa6c), [`9596b43`](https://github.com/vultisig/vultisig-sdk/commit/9596b4383d81c48653a8e08b5c57023270c47097), [`56853df`](https://github.com/vultisig/vultisig-sdk/commit/56853dfd79e9392c044659caa3f9911cf643d1cb)]:
+  - @vultisig/sdk@11.0.0
+  - @vultisig/core-chain@6.4.0
+  - @vultisig/client-shared@0.3.10
+
 ## 10.0.0
 
 ### Patch Changes
