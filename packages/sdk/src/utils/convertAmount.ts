@@ -156,50 +156,32 @@ const parsePositiveNumber = (value: number | string, label: string): number => {
   return n
 }
 
-/**
- * Expand a JS number's string form to a plain fixed-point decimal, never
- * scientific notation, for ANY magnitude.
- *
- * `Number.toString()` emits exponential form below 1e-6 and at/above 1e21,
- * and — critically — `Number.toFixed()` ALSO emits exponential form at/above
- * 1e21. A naive `toFixed`-then-`split('.')` therefore corrupts large values:
- * `(1.5e21).toFixed(0)` is `"1.5e+21"`, which splits into whole `"1"` (off by
- * 21 orders of magnitude) and leaks the `"5e+21"` exponent into the fraction.
- * This is the canonical amount-rendering primitive feeding signing-boundary
- * drift checks, so a silent 10^21 truncation here is fund-relevant.
- *
- * Returns a string of the form `[-]<digits>[.<digits>]` with no exponent.
- */
-const expandToPlainDecimal = (value: number): string => {
-  const raw = value.toString()
-  const match = /^(-?)(\d+)(?:\.(\d+))?[eE]([+-]?\d+)$/.exec(raw)
-  if (!match) return raw // already plain (no exponent)
+/** `[+]digits[.digits][e±exp]` with at least one digit. */
+const DECIMAL_STRING = /^\+?(?=\.?\d)(\d*)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/
 
-  const [, sign, intPart, fracPart = '', expStr] = match
+/** Plain `<digits>[.<digits>]` from a decimal string's own digits, never via a float; `undefined` if it is not one. */
+const expandDecimalString = (raw: string): string | undefined => {
+  const match = DECIMAL_STRING.exec(raw)
+  if (!match) return undefined
+
+  const [, intPart, fracPart = '', expStr] = match
+  if (expStr === undefined) return fracPart ? `${intPart}.${fracPart}` : intPart
   const exp = Number(expStr)
   const digits = intPart + fracPart
   // Position of the decimal point measured from the left of `digits`.
   const pointPos = intPart.length + exp
 
-  let result: string
-  if (pointPos <= 0) {
-    // 0.00…digits
-    result = `0.${'0'.repeat(-pointPos)}${digits}`
-  } else if (pointPos >= digits.length) {
-    // digits followed by trailing zeros, no fraction
-    result = digits + '0'.repeat(pointPos - digits.length)
-  } else {
-    result = `${digits.slice(0, pointPos)}.${digits.slice(pointPos)}`
-  }
-  return `${sign}${result}`
+  if (pointPos <= 0) return `0.${'0'.repeat(-pointPos)}${digits}`
+  if (pointPos >= digits.length) return digits + '0'.repeat(pointPos - digits.length)
+  return `${digits.slice(0, pointPos)}.${digits.slice(pointPos)}`
 }
 
-const PLAIN_DECIMAL = /^\d*\.?\d*$/
-
-/** `units / 10^scale`: plain-decimal strings digit for digit, else the number's shortest round-trip form. */
+/** `units / 10^scale`: decimal strings (incl. `+` and exponent forms) digit for digit, else the number's shortest round-trip form. */
 const toExactDecimal = (input: number | string, parsed: number): { units: bigint; scale: number } => {
-  const trimmed = typeof input === 'string' ? input.trim() : ''
-  const plain = PLAIN_DECIMAL.test(trimmed) && trimmed !== '' ? trimmed : expandToPlainDecimal(parsed)
+  const plain =
+    (typeof input === 'string' ? expandDecimalString(input.trim()) : undefined) ??
+    expandDecimalString(parsed.toString())
+  if (plain === undefined) throw new AmountConvertError(`Cannot read "${input}" as a decimal amount.`)
   const scale = plain.split('.')[1]?.length ?? 0
   return { units: BigInt(plain.replace('.', '')), scale }
 }
