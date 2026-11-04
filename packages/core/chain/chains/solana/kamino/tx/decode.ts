@@ -1,5 +1,6 @@
 import { PublicKey, VersionedTransaction } from '@solana/web3.js'
 
+import { computeUnitLimitArgument, computeUnitPriceArgument } from '../../computeBudget'
 import { kaminoMaxBaseUnits, renderKaminoBaseUnits } from '../baseUnits'
 import { kaminoConfig } from '../config'
 import { KaminoVaultDescriptor, kaminoVaultRegistry } from '../registry'
@@ -7,8 +8,6 @@ import { clampKaminoUnitPrice, kaminoComputeBudget, kaminoExpectedUnitLimit } fr
 import {
   anchorU64Argument,
   anchorU128Argument,
-  computeUnitLimitArgument,
-  computeUnitPriceArgument,
   deriveKaminoFarmsUserState,
   hasNoAnchorArgument,
   KaminoAllowedProgram,

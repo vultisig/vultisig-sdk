@@ -139,9 +139,6 @@ export const tokenCloseAccountDiscriminator = 9
 /** System Program `Transfer`: a 4-byte little-endian enum index. */
 export const systemTransferDiscriminator = Uint8Array.from([2, 0, 0, 0])
 
-/** ComputeBudget `SetComputeUnitLimit` / `SetComputeUnitPrice` one-byte tags. */
-export const computeBudgetDiscriminators = { setUnitLimit: 2, setUnitPrice: 3 } as const
-
 const bytesEqual = (a: Uint8Array, b: Uint8Array): boolean =>
   a.length === b.length && a.every((byte, index) => byte === b[index])
 
@@ -198,21 +195,6 @@ export const systemTransferLamports = (data: Uint8Array): bigint | undefined => 
   if (data.length !== 12) return undefined
   if (!bytesEqual(data.slice(0, 4), systemTransferDiscriminator)) return undefined
   return littleEndianBigInt(data.slice(4, 12))
-}
-
-/** `SetComputeUnitLimit`'s `u32` argument. */
-export const computeUnitLimitArgument = (data: Uint8Array): number | undefined => {
-  if (data.length !== 5 || data[0] !== computeBudgetDiscriminators.setUnitLimit) return undefined
-  return Number(littleEndianBigInt(data.slice(1, 5)))
-}
-
-/**
- * `SetComputeUnitPrice`'s `u64` argument, in micro-lamports per compute unit.
- * The fee it produces is `price × limit`, so this is a spend.
- */
-export const computeUnitPriceArgument = (data: Uint8Array): bigint | undefined => {
-  if (data.length !== 9 || data[0] !== computeBudgetDiscriminators.setUnitPrice) return undefined
-  return littleEndianBigInt(data.slice(1, 9))
 }
 
 /**
