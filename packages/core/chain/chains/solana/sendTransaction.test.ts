@@ -112,6 +112,52 @@ describe('sendSolanaTransaction', () => {
 
     expect(error).toBeInstanceOf(HttpResponseError)
     expect(error.status).toBe(503)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  describe('when the RPC rate-limits the send', () => {
+    const rateLimited = () =>
+      Response.json({ message: 'rate limited' }, { status: 429, statusText: 'Too Many Requests' })
+    const accepted = () => Response.json({ jsonrpc: '2.0', id: 1, result: signature })
+
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('resends the same request on the web3.js schedule until the node takes it', async () => {
+      fetchMock.mockResolvedValueOnce(rateLimited()).mockResolvedValueOnce(rateLimited()).mockResolvedValue(accepted())
+
+      const send = sendSolanaTransaction({ rawTransaction, skipPreflight: false, maxRetries: 3 })
+
+      await vi.advanceTimersByTimeAsync(499)
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(fetchMock).toHaveBeenCalledTimes(3)
+
+      await expect(send).resolves.toBe(signature)
+      expect(new Set(fetchMock.mock.calls.map(([, init]) => init.body)).size).toBe(1)
+    })
+
+    it('gives up after four retries, about 7.5 s, and leaves the 429 for the caller to classify', async () => {
+      fetchMock.mockImplementation(async () => rateLimited())
+
+      const send = sendSolanaTransaction({ rawTransaction, skipPreflight: false, maxRetries: 3 }).catch(e => e)
+
+      await vi.advanceTimersByTimeAsync(7_499)
+      expect(fetchMock).toHaveBeenCalledTimes(4)
+      await vi.advanceTimersByTimeAsync(1)
+
+      const error = await send
+      expect(error).toBeInstanceOf(HttpResponseError)
+      expect(error.status).toBe(429)
+      expect(fetchMock).toHaveBeenCalledTimes(5)
+    })
   })
 
   it('rejects a response with neither a signature nor an error', async () => {

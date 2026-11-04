@@ -1,4 +1,6 @@
+import { HttpResponseError } from '@vultisig/lib-utils/fetch/HttpResponseError'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
+import { sleep } from '@vultisig/lib-utils/sleep'
 
 import { solanaRpcUrl } from './client'
 import { solanaRpcTimeoutMs } from './rpcTimeout'
@@ -37,6 +39,26 @@ export class SolanaSendTransactionError extends Error {
   }
 }
 
+// The pauses `@solana/web3.js` takes before each retry of an HTTP 429: four
+// retries, about 7.5 s in all. Resending the same signed bytes is safe, since
+// the network deduplicates a signature it already holds.
+const rateLimitRetryDelaysMs = [500, 1_000, 2_000, 4_000]
+
+const isRateLimited = (error: unknown) => error instanceof HttpResponseError && error.status === 429
+
+const withRateLimitRetry = async <T>(request: () => Promise<T>): Promise<T> => {
+  for (const delayMs of rateLimitRetryDelaysMs) {
+    try {
+      return await request()
+    } catch (error) {
+      if (!isRateLimited(error)) throw error
+    }
+    await sleep(delayMs)
+  }
+
+  return request()
+}
+
 type SendSolanaTransactionInput = {
   rawTransaction: Uint8Array
   skipPreflight: boolean
@@ -46,34 +68,37 @@ type SendSolanaTransactionInput = {
 /**
  * Sends signed bytes to the Vultisig Solana RPC with the request
  * `Connection.sendRawTransaction` makes, and returns the signature the node
- * accepted. A rejection throws {@link SolanaSendTransactionError}, which keeps
- * the reason `web3.js` would discard.
+ * accepted. Like `web3.js`, it rides out an HTTP 429 before giving up. A
+ * rejection throws {@link SolanaSendTransactionError}, which keeps the reason
+ * `web3.js` would discard.
  */
 export const sendSolanaTransaction = async ({
   rawTransaction,
   skipPreflight,
   maxRetries,
 }: SendSolanaTransactionInput): Promise<string> => {
-  const { result, error } = await queryUrl<SendTransactionResponse>(solanaRpcUrl, {
-    body: {
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'sendTransaction',
-      params: [
-        Buffer.from(rawTransaction).toString('base64'),
-        {
-          encoding: 'base64',
-          maxRetries,
-          // web3.js sends `processed` whenever preflight is skipped, as a
-          // workaround for anza-xyz/agave#483; keep its request unchanged.
-          ...(skipPreflight
-            ? { skipPreflight, preflightCommitment: 'processed' }
-            : { preflightCommitment: 'confirmed' }),
-        },
-      ],
-    },
-    timeoutMs: solanaRpcTimeoutMs,
-  })
+  const { result, error } = await withRateLimitRetry(() =>
+    queryUrl<SendTransactionResponse>(solanaRpcUrl, {
+      body: {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'sendTransaction',
+        params: [
+          Buffer.from(rawTransaction).toString('base64'),
+          {
+            encoding: 'base64',
+            maxRetries,
+            // web3.js sends `processed` whenever preflight is skipped, as a
+            // workaround for anza-xyz/agave#483; keep its request unchanged.
+            ...(skipPreflight
+              ? { skipPreflight, preflightCommitment: 'processed' }
+              : { preflightCommitment: 'confirmed' }),
+          },
+        ],
+      },
+      timeoutMs: solanaRpcTimeoutMs,
+    })
+  )
 
   if (error) {
     throw new SolanaSendTransactionError(error)
