@@ -1,137 +1,96 @@
-import { ripemd160 } from '@noble/hashes/legacy.js'
+import { secp256k1 } from '@noble/curves/secp256k1.js'
 import { sha256 } from '@noble/hashes/sha2.js'
 import { describe, expect, it } from 'vitest'
 
-import {
-  computeAddressHash,
-  computeAllClaimHashes,
-  computeChainIdHash,
-  computeClaimMessageHash,
-  computeQbtcAddressHash,
-} from './computeClaimHashes'
-
-const hexToBytes = (hex: string) => Buffer.from(hex, 'hex')
+import { computeClaimMessageHash, getBitcoinSignedMessageDigest, getClaimMessageText } from './computeClaimHashes'
 
 const bytesToHex = (bytes: Uint8Array) => Buffer.from(bytes).toString('hex')
 
-// A well-known compressed public key for testing
-const testCompressedPubkey = hexToBytes('0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798')
+/** SHA256d(0x18 || "Bitcoin Signed Message:\n" || compactSize(len) || text), built by hand. */
+const referenceDigest = (text: string) => {
+  const textBytes = Buffer.from(text, 'utf8')
+  const length =
+    textBytes.length < 0xfd
+      ? Buffer.from([textBytes.length])
+      : Buffer.from([0xfd, textBytes.length & 0xff, textBytes.length >> 8])
+  return sha256(
+    sha256(Buffer.concat([Buffer.from([0x18]), Buffer.from('Bitcoin Signed Message:\n'), length, textBytes]))
+  )
+}
 
-describe('computeAddressHash', () => {
-  it('computes Hash160 for ECDSA circuit', () => {
-    const result = computeAddressHash({
-      compressedPubkey: testCompressedPubkey,
-      circuit: 'ecdsa',
-    })
+const claim = {
+  chainId: 'qbtc-1',
+  bitcoinAddress: 'bc1qatknmeca5p0fy5decdj5704hf7prt47e0e7e9n',
+  qbtcAddress: 'qbtc1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqpz7s0q',
+}
 
-    // Hash160 = RIPEMD160(SHA256(pubkey))
-    const expected = ripemd160(sha256(testCompressedPubkey))
-    expect(bytesToHex(result)).toBe(bytesToHex(expected))
-    expect(result.length).toBe(20)
-  })
-
-  it('extracts x-only pubkey for Schnorr circuit', () => {
-    const result = computeAddressHash({
-      compressedPubkey: testCompressedPubkey,
-      circuit: 'schnorr',
-    })
-
-    // x-only = last 32 bytes of 33-byte compressed key
-    const expected = testCompressedPubkey.slice(1, 33)
-    expect(bytesToHex(result)).toBe(bytesToHex(expected))
-    expect(result.length).toBe(32)
+describe('getClaimMessageText', () => {
+  it('joins the version, chain ID, Bitcoin address and destination with "|"', () => {
+    expect(getClaimMessageText({ chainId: 'qbtc-1', bitcoinAddress: 'bc1qexample', qbtcAddress: 'qbtc1dest' })).toBe(
+      'qbtc-claim-v1|qbtc-1|bc1qexample|qbtc1dest'
+    )
   })
 })
 
-describe('computeQbtcAddressHash', () => {
-  it('computes SHA256 of the qbtc address string', () => {
-    const qbtcAddress = 'qbtc1abc123'
-    const result = computeQbtcAddressHash(qbtcAddress)
+describe('getBitcoinSignedMessageDigest', () => {
+  // Bitcoin Core test/functional/rpc_signmessagewithprivkey.py, also pinned by
+  // btcq-org/qbtc x/qbtc/zk/testdata/bip137_vectors.json. The public key is
+  // that of WIF cUeKHd5orzT3mz8P9pxyREHfsWtVfgsfDjiZZBcjUBAaGk1BTj7N.
+  it("recovers Bitcoin Core's signmessagewithprivkey signer", () => {
+    const signature = Buffer.from(
+      'INbVnW4e6PeRmsv2Qgu8NuopvrVjkcxob+sX8OcZG0SALhWybUjzMLPdAsXI46YZGb0KQTRii+wWIQzRpG/U+S0=',
+      'base64'
+    )
+    const recoveryId = (signature[0] - 27) & 3
+    const recovered = secp256k1.recoverPublicKey(
+      Uint8Array.from([recoveryId, ...signature.subarray(1)]),
+      getBitcoinSignedMessageDigest('This is just a test message'),
+      { prehash: false }
+    )
 
-    const expected = sha256(new TextEncoder().encode(qbtcAddress))
-    expect(bytesToHex(result)).toBe(bytesToHex(expected))
-    expect(result.length).toBe(32)
+    expect(bytesToHex(recovered)).toBe('03c150061989643d77162902b725409087959f15914649d4f06b6cc3f8c87bb238')
   })
-})
 
-describe('computeChainIdHash', () => {
-  it('computes first 8 bytes of SHA256 of chain ID', () => {
-    const result = computeChainIdHash('qbtc-1')
-
-    const fullHash = sha256(new TextEncoder().encode('qbtc-1'))
-    const expected = fullHash.slice(0, 8)
-    expect(bytesToHex(result)).toBe(bytesToHex(expected))
-    expect(result.length).toBe(8)
-  })
+  it.each(['', 'x'.repeat(252), 'x'.repeat(253), 'x'.repeat(300), 'Virès is Numéris'])(
+    'matches the hand-built BIP-137 preimage for %j',
+    text => {
+      expect(bytesToHex(getBitcoinSignedMessageDigest(text))).toBe(bytesToHex(referenceDigest(text)))
+    }
+  )
 })
 
 describe('computeClaimMessageHash', () => {
-  it('uses "ecdsa-hash160:" prefix for ECDSA circuit', () => {
-    const addressHash = new Uint8Array(20).fill(0xaa)
-    const qbtcAddressHash = new Uint8Array(32).fill(0xbb)
-    const chainIdHash = new Uint8Array(8).fill(0xcc)
-
-    const result = computeClaimMessageHash({
-      addressHash,
-      qbtcAddressHash,
-      chainIdHash,
-      circuit: 'ecdsa',
-    })
-
-    expect(result.length).toBe(32)
-
-    // Verify by manually constructing the same input — must match
-    // ClaimTagECDSAHash160 ("ecdsa-hash160:") on the chain side.
-    const encoder = new TextEncoder()
-    const input = new Uint8Array([
-      ...encoder.encode('ecdsa-hash160:'),
-      ...addressHash,
-      ...qbtcAddressHash,
-      ...chainIdHash,
-      ...encoder.encode('qbtc-claim-v1'),
-    ])
-    expect(bytesToHex(result)).toBe(bytesToHex(sha256(input)))
+  it('is the BIP-137 digest of the claim text', () => {
+    expect(bytesToHex(computeClaimMessageHash(claim))).toBe(
+      bytesToHex(referenceDigest(`qbtc-claim-v1|${claim.chainId}|${claim.bitcoinAddress}|${claim.qbtcAddress}`))
+    )
   })
 
-  it('rejects Schnorr circuit (not yet supported on-chain)', () => {
-    const addressHash = new Uint8Array(32).fill(0xaa)
-    const qbtcAddressHash = new Uint8Array(32).fill(0xbb)
-    const chainIdHash = new Uint8Array(8).fill(0xcc)
-
-    expect(() =>
-      computeClaimMessageHash({
-        addressHash,
-        qbtcAddressHash,
-        chainIdHash,
-        circuit: 'schnorr',
-      })
-    ).toThrow(/Schnorr/)
-  })
-})
-
-describe('computeAllClaimHashes', () => {
-  it('computes all hashes for a P2WPKH address', () => {
-    const result = computeAllClaimHashes({
-      btcAddress: 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4',
-      compressedPubkey: testCompressedPubkey,
-      qbtcAddress: 'qbtc1test',
-      chainId: 'qbtc-1',
-    })
-
-    expect(result.circuit).toBe('ecdsa')
-    expect(result.addressHash.length).toBe(20)
-    expect(result.qbtcAddressHash.length).toBe(32)
-    expect(result.messageHash.length).toBe(32)
+  it('accepts a P2PKH address', () => {
+    expect(computeClaimMessageHash({ ...claim, bitcoinAddress: '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2' })).toHaveLength(32)
   })
 
-  it('rejects P2TR addresses until the chain defines a Schnorr tag', () => {
-    expect(() =>
-      computeAllClaimHashes({
-        btcAddress: 'bc1p5d7rjq7g6rdk2yhzks9smlaqtedr4dekq08ge8ztwac72sfr9rusxg3297',
-        compressedPubkey: testCompressedPubkey,
-        qbtcAddress: 'qbtc1test',
-        chainId: 'qbtc-1',
-      })
-    ).toThrow(/Schnorr/)
+  it.each([
+    ['the chain ID', { chainId: 'other-chain-1' }],
+    ['the Bitcoin address', { bitcoinAddress: '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2' }],
+    ['the destination', { qbtcAddress: 'qbtc1attacker' }],
+  ])('binds %s', (_, change) => {
+    expect(bytesToHex(computeClaimMessageHash({ ...claim, ...change }))).not.toBe(
+      bytesToHex(computeClaimMessageHash(claim))
+    )
+  })
+
+  it('binds the version token', () => {
+    expect(bytesToHex(computeClaimMessageHash(claim))).not.toBe(
+      bytesToHex(getBitcoinSignedMessageDigest([claim.chainId, claim.bitcoinAddress, claim.qbtcAddress].join('|')))
+    )
+  })
+
+  it.each([
+    ['P2SH-P2WPKH', '3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy'],
+    ['P2WSH', 'bc1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qccfmv3'],
+    ['P2TR', 'bc1p5d7rjq7g6rdk2yhzks9smlaqtedr4dekq08ge8ztwac72sfr9rusxg3297'],
+  ])('rejects a %s address', (_, bitcoinAddress) => {
+    expect(() => computeClaimMessageHash({ ...claim, bitcoinAddress })).toThrow('P2PKH and P2WPKH addresses only')
   })
 })
