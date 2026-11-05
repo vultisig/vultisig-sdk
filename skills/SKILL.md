@@ -156,10 +156,14 @@ import { Vultisig, Chain } from '@vultisig/sdk'
 const sdk = new Vultisig()
 await sdk.initialize()
 
+// An inbox the owner reads: it receives the OTP and the server key-share backup
+const ownerEmail = process.env.OWNER_EMAIL
+if (!ownerEmail) throw new Error('Set OWNER_EMAIL')
+
 // Step 1: Create vault (returns vaultId, sends OTP to email)
 const vaultId = await sdk.createFastVault({
   name: 'bot-wallet',
-  email: ownerEmail, // inbox the owner reads: receives the OTP and the server key-share backup
+  email: ownerEmail,
   password: 'SecurePass123!'
 })
 
