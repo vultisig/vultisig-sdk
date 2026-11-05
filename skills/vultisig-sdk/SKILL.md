@@ -60,11 +60,11 @@ await sdk.initialize()
 // Create a FastVault
 const vaultId = await sdk.createFastVault({
   name: 'agent-wallet',
-  email: 'agent@example.com',
+  email: ownerEmail, // inbox the owner reads: receives the OTP and the server key-share backup
   password: 'SecurePassword123!'
 })
 
-// Verify with email code
+// Verify with email code (agents that can't read email: pass skipVerification: true above instead)
 const vault = await sdk.verifyVault(vaultId, 'verification-code')
 
 // Get address

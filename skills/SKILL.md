@@ -136,8 +136,9 @@ SDK-only capabilities:
 ```bash
 npm install -g @vultisig/cli
 
-# Create vault (non-interactive, --two-step skips OTP prompt)
-vultisig create fast --name "bot-wallet" --email "bot@example.com" --password "SecurePass123!" --two-step -o json
+# Create vault (non-interactive, --two-step skips the OTP prompt; the vault stays pending until verified)
+# --email: an inbox the owner reads. It receives the OTP and the server key-share backup.
+vultisig create fast --name "bot-wallet" --email "$OWNER_EMAIL" --password "SecurePass123!" --two-step -o json
 # Returns: {"vaultId": "...", "status": "pending_verification", "verifyCommand": "..."}
 
 # Verify with email OTP
@@ -158,7 +159,7 @@ await sdk.initialize()
 // Step 1: Create vault (returns vaultId, sends OTP to email)
 const vaultId = await sdk.createFastVault({
   name: 'bot-wallet',
-  email: 'bot@example.com',
+  email: ownerEmail, // inbox the owner reads: receives the OTP and the server key-share backup
   password: 'SecurePass123!'
 })
 
