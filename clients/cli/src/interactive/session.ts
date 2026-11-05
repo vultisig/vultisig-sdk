@@ -51,6 +51,7 @@ import {
 } from '../commands'
 import {
   loadActiveVaultSafely,
+  parseSlippagePercent,
   resolveChainOrThrow,
   resolveOptionalChainOrThrow,
   shouldAutoSelectActiveVault,
@@ -912,7 +913,7 @@ export class ShellSession {
         toToken = rest[i + 1]
         i++
       } else if (rest[i] === '--slippage' && i + 1 < rest.length) {
-        slippage = parseFloat(rest[i + 1])
+        slippage = parseSlippagePercent(rest[i + 1])
         i++
       }
     }

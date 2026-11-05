@@ -56,8 +56,17 @@ describe('addresses help matches the command signature', () => {
 
       const rejectedArgument = run(['addresses', 'Ethereum'])
 
-      expect(rejectedArgument.status).not.toBe(0)
-      expect(rejectedArgument.stderr).toContain(
+      expect(rejectedArgument.status).toBe(1)
+      expect(rejectedArgument.stderr).toBe('')
+      const envelope = JSON.parse(rejectedArgument.stdout)
+      expect(envelope).toMatchObject({
+        success: false,
+        error: {
+          code: 'USAGE_ERROR',
+          exitCode: 1,
+        },
+      })
+      expect(envelope.error.message).toContain(
         "error: too many arguments for 'addresses'. Expected 0 arguments but got 1"
       )
     },

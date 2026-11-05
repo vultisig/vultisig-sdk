@@ -1,3 +1,7 @@
+import { promises as fs } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+
 import { descriptions } from '@vultisig/client-shared'
 import type { VaultBase } from '@vultisig/sdk'
 import { Chain } from '@vultisig/sdk'
@@ -144,7 +148,13 @@ async function expectFailsClosed(run: () => Promise<unknown>): Promise<void> {
 
 describe('non-interactive prompt fail-closed, per command', () => {
   it('import (encrypted vault password prompt)', async () => {
-    await expectFailsClosed(() => executeImport(makeCtx(), '/tmp/does-not-matter.vult'))
+    const file = path.join(await fs.mkdtemp(path.join(os.tmpdir(), 'vsig-import-prompt-')), 'encrypted.vult')
+    await fs.writeFile(file, 'fixture')
+    try {
+      await expectFailsClosed(() => executeImport(makeCtx(), file))
+    } finally {
+      await fs.rm(path.dirname(file), { recursive: true, force: true })
+    }
   })
 
   it('export (export-password prompt)', async () => {
