@@ -1,0 +1,203 @@
+{
+  "_source": "Live Blockaid /sui/transaction/scan simulations of unsigned mainnet programmable transactions, captured 2026-10-15 (vultisig-sdk#2423). account_summary.account_assets_diffs verbatim.",
+  "suiTransfer": {
+    "description": "Transfer of 0.1 SUI split from the gas coin; gas is folded into the single native outflow.",
+    "account_assets_diffs": [
+      {
+        "asset": {
+          "type": "NATIVE",
+          "symbol": "SUI",
+          "name": "Sui",
+          "decimals": 9,
+          "logo_url": "https://dm8wquhbuh2eq.cloudfront.net/chain/sui-mainnet/token/0x2::sui::SUI/sec/e6a722bf-bfaf-4346-bc90-852df3103751"
+        },
+        "in": null,
+        "out": {
+          "usd_price": 0.1,
+          "summary": "Sent 0.101088099 Sui",
+          "value": "0.101088099",
+          "raw_value": 101088099
+        },
+        "asset_type": "NATIVE"
+      }
+    ]
+  },
+  "coinTransfer": {
+    "description": "Transfer of 1000 WAL; gas is a separate native SUI outflow next to the coin outflow.",
+    "account_assets_diffs": [
+      {
+        "asset": {
+          "type": "NATIVE",
+          "symbol": "SUI",
+          "name": "Sui",
+          "decimals": 9,
+          "logo_url": "https://dm8wquhbuh2eq.cloudfront.net/chain/sui-mainnet/token/0x2::sui::SUI/sec/6df12348-4011-4415-8a78-de6918e6d3c2"
+        },
+        "in": null,
+        "out": {
+          "usd_price": 0,
+          "summary": "Sent 0.001407331 Sui",
+          "value": "0.001407331",
+          "raw_value": 1407331
+        },
+        "asset_type": "NATIVE"
+      },
+      {
+        "asset": {
+          "type": "COIN",
+          "id": "0x356a26eb9e012a68958082340d4c4116e7f55615cf27affcff209cf0ae544f59::wal::WAL",
+          "name": "WAL Token",
+          "symbol": "WAL",
+          "logo_url": "https://dm8wquhbuh2eq.cloudfront.net/chain/sui-mainnet/token/0x356a26eb9e012a68958082340d4c4116e7f55615cf27affcff209cf0ae544f59::wal::WAL/sec/6df12348-4011-4415-8a78-de6918e6d3c2",
+          "decimals": 9
+        },
+        "in": null,
+        "out": {
+          "usd_price": 0,
+          "summary": "Sent 0.000001000 WAL Token",
+          "value": "0.000001",
+          "raw_value": 1000
+        },
+        "asset_type": "COIN"
+      }
+    ]
+  },
+  "suiToCoinSwap": {
+    "description": "Aftermath router swap of 0.1 SUI to USDC; the native outflow is principal plus gas.",
+    "account_assets_diffs": [
+      {
+        "asset": {
+          "type": "NATIVE",
+          "symbol": "SUI",
+          "name": "Sui",
+          "decimals": 9,
+          "logo_url": "https://dm8wquhbuh2eq.cloudfront.net/chain/sui-mainnet/token/0x2::sui::SUI/sec/68d7b1b9-952d-4ea1-8227-64419923a248"
+        },
+        "in": null,
+        "out": {
+          "usd_price": 0.1,
+          "summary": "Sent 0.101424127 Sui",
+          "value": "0.101424127",
+          "raw_value": 101424127
+        },
+        "asset_type": "NATIVE"
+      },
+      {
+        "asset": {
+          "type": "COIN",
+          "id": "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC",
+          "name": "USDC",
+          "symbol": "USDC",
+          "logo_url": "https://dm8wquhbuh2eq.cloudfront.net/chain/sui-mainnet/token/0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC/sec/68d7b1b9-952d-4ea1-8227-64419923a248",
+          "decimals": 6
+        },
+        "in": {
+          "usd_price": 0.1,
+          "summary": "Received 0.097961 USDC",
+          "value": "0.097961",
+          "raw_value": 97961
+        },
+        "out": null,
+        "asset_type": "COIN"
+      }
+    ]
+  },
+  "coinToSuiSwap": {
+    "description": "Aftermath router swap of WAL to SUI; native SUI is one net inflow, gas already deducted.",
+    "account_assets_diffs": [
+      {
+        "asset": {
+          "type": "NATIVE",
+          "symbol": "SUI",
+          "name": "Sui",
+          "decimals": 9,
+          "logo_url": "https://dm8wquhbuh2eq.cloudfront.net/chain/sui-mainnet/token/0x2::sui::SUI/sec/7f35d946-9a29-4353-a7c9-1e555b6e724d"
+        },
+        "in": {
+          "usd_price": 0.68,
+          "summary": "Received 0.691913411 Sui",
+          "value": "0.691913411",
+          "raw_value": 691913411
+        },
+        "out": null,
+        "asset_type": "NATIVE"
+      },
+      {
+        "asset": {
+          "type": "COIN",
+          "id": "0x356a26eb9e012a68958082340d4c4116e7f55615cf27affcff209cf0ae544f59::wal::WAL",
+          "name": "WAL Token",
+          "symbol": "WAL",
+          "logo_url": "https://dm8wquhbuh2eq.cloudfront.net/chain/sui-mainnet/token/0x356a26eb9e012a68958082340d4c4116e7f55615cf27affcff209cf0ae544f59::wal::WAL/sec/7f35d946-9a29-4353-a7c9-1e555b6e724d",
+          "decimals": 9
+        },
+        "in": null,
+        "out": {
+          "usd_price": 0.69,
+          "summary": "Sent 13.120000000 WAL Token",
+          "value": "13.12",
+          "raw_value": 13120000000
+        },
+        "asset_type": "COIN"
+      }
+    ]
+  },
+  "coinToCoinSwap": {
+    "description": "Aftermath router swap of WAL to USDC; gas is a third, native SUI outflow.",
+    "account_assets_diffs": [
+      {
+        "asset": {
+          "type": "NATIVE",
+          "symbol": "SUI",
+          "name": "Sui",
+          "decimals": 9,
+          "logo_url": "https://dm8wquhbuh2eq.cloudfront.net/chain/sui-mainnet/token/0x2::sui::SUI/sec/bc44b962-80d9-41ea-8bc0-7f613f134ca4"
+        },
+        "in": null,
+        "out": {
+          "usd_price": 0,
+          "summary": "Sent 0.001482041 Sui",
+          "value": "0.001482041",
+          "raw_value": 1482041
+        },
+        "asset_type": "NATIVE"
+      },
+      {
+        "asset": {
+          "type": "COIN",
+          "id": "0x356a26eb9e012a68958082340d4c4116e7f55615cf27affcff209cf0ae544f59::wal::WAL",
+          "name": "WAL Token",
+          "symbol": "WAL",
+          "logo_url": "https://dm8wquhbuh2eq.cloudfront.net/chain/sui-mainnet/token/0x356a26eb9e012a68958082340d4c4116e7f55615cf27affcff209cf0ae544f59::wal::WAL/sec/bc44b962-80d9-41ea-8bc0-7f613f134ca4",
+          "decimals": 9
+        },
+        "in": null,
+        "out": {
+          "usd_price": 0.69,
+          "summary": "Sent 13.120000000 WAL Token",
+          "value": "13.12",
+          "raw_value": 13120000000
+        },
+        "asset_type": "COIN"
+      },
+      {
+        "asset": {
+          "type": "COIN",
+          "id": "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC",
+          "name": "USDC",
+          "symbol": "USDC",
+          "logo_url": "https://dm8wquhbuh2eq.cloudfront.net/chain/sui-mainnet/token/0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC/sec/bc44b962-80d9-41ea-8bc0-7f613f134ca4",
+          "decimals": 6
+        },
+        "in": {
+          "usd_price": 0.68,
+          "summary": "Received 0.679441 USDC",
+          "value": "0.679441",
+          "raw_value": 679441
+        },
+        "out": null,
+        "asset_type": "COIN"
+      }
+    ]
+  }
+}
