@@ -267,6 +267,32 @@ describe('buildCosmosPayload', () => {
     })
   })
 
+  describe('buildSignAminoKeysignPayload timeoutHeight', () => {
+    const buildOsmosisAmino = (timeoutHeight: bigint | undefined) =>
+      buildSignAminoKeysignPayload({
+        chain: Chain.Osmosis,
+        coin: { chain: Chain.Osmosis, address: 'osmo1test', decimals: 6, ticker: 'OSMO' },
+        msgs: [{ type: 'osmosis/poolmanager/swap-exact-amount-in', value: '{}' }],
+        fee: { amount: [{ denom: 'uosmo', amount: '5000' }], gas: '200000' },
+        timeoutHeight,
+        vaultId: 'vault-ecdsa',
+        localPartyId: 'device-1',
+        publicKey: fakePublicKey,
+        libType,
+        skipChainSpecificFetch: true,
+      })
+
+    it.each([
+      [74183007n, 74183007n],
+      [undefined, undefined],
+    ])('carries timeoutHeight %s onto the SignAmino payload', async (timeoutHeight, expected) => {
+      const payload = await buildOsmosisAmino(timeoutHeight)
+
+      expect(payload.signData.case).toBe('signAmino')
+      expect(payload.signData.case === 'signAmino' && payload.signData.value.timeoutHeight).toBe(expected)
+    })
+  })
+
   describe('buildSignDirectKeysignPayload', () => {
     const directBase = {
       coin: {
