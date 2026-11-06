@@ -1,5 +1,16 @@
 # @vultisig/core-chain
 
+## 6.4.1
+
+### Patch Changes
+
+- [#2582](https://github.com/vultisig/vultisig-sdk/pull/2582) [`742ca32`](https://github.com/vultisig/vultisig-sdk/commit/742ca323e37307d47943b2066b506fce8e18f85e) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - An EVM aggregator swap that cannot be simulated is now signed with 1.5× the route's own gas figure instead of the generic 900,000 fallback. Swaps from an ERC-20 always take this path, because their allowance does not exist yet when the fee is quoted. A 1 USDC → USDT route that used 175,783 gas used to quote 900,000; it now quotes about 1.5× the aggregator's figure. An unsimulated route whose figure exceeded 900,000 used to be signed at that figure with no headroom, though aggregators can come in below the real cost. It now gets the same 1.5× headroom. Arbitrum, Robinhood, Mantle and zkSync keep the old fallback, since their gas also pays for posting data and an off-chain figure leaves that out. New export: `getEvmGasIncludesDataCost` from `tx/fee/evm/evmGasLimit`.
+
+- [#2583](https://github.com/vultisig/vultisig-sdk/pull/2583) [`b7e3c84`](https://github.com/vultisig/vultisig-sdk/commit/b7e3c84fc90588ade3425cb5e92e12b0a91a3af6) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - The network fee of a Solana aggregator swap (Jupiter, LI.FI, SwapKit) now comes from the provider's own transaction. The swap is signed as the provider built it, with only the blockhash replaced, so its ComputeBudget instructions set what the network charges. `getSolanaFeeAmount` used to quote the chain-specific priority fee instead, a flat 105,000 lamports for every swap. A recorded LI.FI SOL → USDC swap that mainnet charges 48,423 lamports now quotes 48,423. Sends, deposits and THORChain/Maya swaps from Solana are unchanged. New export: `getSolanaMessageFee` from `chains/solana/computeBudget`, which also now holds the ComputeBudget argument readers the Kamino decoder uses.
+
+- Updated dependencies [[`1cb7044`](https://github.com/vultisig/vultisig-sdk/commit/1cb704409f72439b206308a2f19cfbde5ca63202)]:
+  - @vultisig/mpc-types@0.4.0
+
 ## 6.4.0
 
 ### Minor Changes
