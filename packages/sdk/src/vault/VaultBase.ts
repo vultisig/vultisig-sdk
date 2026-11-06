@@ -427,7 +427,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       chainPublicKeys: this.coreVault.chainPublicKeys,
       chainKeyShares: this.coreVault.chainKeyShares,
 
-      // ML-DSA-44 post-quantum keys
+      // ML-DSA-65 post-quantum keys
       publicKeyMldsa: this.coreVault.publicKeyMldsa,
       keyShareMldsa: this.coreVault.keyShareMldsa,
 
@@ -718,7 +718,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     return this.vaultData.hexChainCode
   }
 
-  /** ML-DSA-44 post-quantum public key (undefined if vault was created without MLDSA support). */
+  /** ML-DSA-65 post-quantum public key (undefined if vault was created without MLDSA support). */
   get publicKeyMldsa(): string | undefined {
     return this.vaultData.publicKeyMldsa
   }

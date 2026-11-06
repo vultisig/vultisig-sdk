@@ -261,7 +261,7 @@ export class FastVault extends VaultBase {
   }
 
   /**
-   * Add ML-DSA-44 (post-quantum) keys via VultiServer (`POST /mldsa` + relay keygen).
+   * Add ML-DSA-65 (post-quantum) keys via VultiServer (`POST /mldsa` + relay keygen).
    * Requires the vault backup to exist on the server (after initial fast vault keygen).
    */
   async addPostQuantumKeys(options: {
