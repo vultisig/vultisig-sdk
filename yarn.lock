@@ -6428,7 +6428,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/ws@npm:^8.18.1, @types/ws@npm:^8.2.2":
+"@types/ws@npm:^8.18.2":
+  version: 8.18.2
+  resolution: "@types/ws@npm:8.18.2"
+  dependencies:
+    "@types/node": "npm:*"
+  checksum: 10c0/8cf79499d26df06ffc27109fc86f1400371a5932082a4c1269be3f11e22b9e5a403a4ba2c1a3245d5fae420c270571aa833142a3d7fdce8f6cd24a45c52a98e4
+  languageName: node
+  linkType: hard
+
+"@types/ws@npm:^8.2.2":
   version: 8.18.1
   resolution: "@types/ws@npm:8.18.1"
   dependencies:
@@ -6835,7 +6844,7 @@ __metadata:
     "@types/inquirer": "npm:^9.0.10"
     "@types/node": "npm:^26.1.1"
     "@types/tabtab": "npm:^3.0.4"
-    "@types/ws": "npm:^8.18.1"
+    "@types/ws": "npm:^8.18.2"
     "@vultisig/client-shared": "workspace:^"
     "@vultisig/core-chain": "workspace:^"
     "@vultisig/core-mpc": "workspace:^"
@@ -6857,7 +6866,7 @@ __metadata:
     typescript: "npm:^6.0.3"
     viem: "npm:^2.55.10"
     vitest: "npm:^4.1.8"
-    ws: "npm:^8.21.1"
+    ws: "npm:^8.22.1"
   bin:
     vsig: ./dist/index.js
     vultisig: ./dist/index.js
@@ -7207,7 +7216,7 @@ __metadata:
     vite-plugin-node-polyfills: "npm:^0.28.0"
     vite-plugin-wasm: "npm:^3.6.0"
     vitest: "npm:^4.1.8"
-    ws: "npm:^8.21.1"
+    ws: "npm:^8.22.1"
     xrpl: "npm:^5.3.0"
     zod: "npm:^4.4.3"
   peerDependencies:
@@ -20113,9 +20122,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ws@npm:^8.21.1":
-  version: 8.21.1
-  resolution: "ws@npm:8.21.1"
+"ws@npm:^8.22.1":
+  version: 8.22.1
+  resolution: "ws@npm:8.22.1"
   peerDependencies:
     bufferutil: ^4.0.1
     utf-8-validate: ">=5.0.2"
@@ -20124,7 +20133,7 @@ __metadata:
       optional: true
     utf-8-validate:
       optional: true
-  checksum: 10c0/c4c6f1d95f6d465262de2037c57c715725d67e078dd49420ede4e19115668aba159cb64d85c5e89c06eb2826be599e62e5095860ad6cc54ff42e8bd7684e1db8
+  checksum: 10c0/858ccc31e56a7549c25d0bfd522b65c64f7bffdc5460eeb4c29517d34728d34de102d2ebf8296160c8b4594fd45ead6a324acd9a1ea0b0b8742bbed4d52d9a51
   languageName: node
   linkType: hard
 
