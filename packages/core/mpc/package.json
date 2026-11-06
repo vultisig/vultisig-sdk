@@ -972,6 +972,11 @@
       "import": "./dist/tx/compile/compileTx.js",
       "default": "./dist/tx/compile/compileTx.js"
     },
+    "./tx/compile/zcash/zcashV5": {
+      "types": "./dist/tx/compile/zcash/zcashV5.d.ts",
+      "import": "./dist/tx/compile/zcash/zcashV5.js",
+      "default": "./dist/tx/compile/zcash/zcashV5.js"
+    },
     "./tx/preSigningHashes": {
       "types": "./dist/tx/preSigningHashes/index.d.ts",
       "import": "./dist/tx/preSigningHashes/index.js",
