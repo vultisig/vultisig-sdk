@@ -39,6 +39,20 @@ const valueRules: Record<string, [(value: unknown) => boolean, string]> = {
 
 type Fields = Record<string, unknown>
 
+// JSON.stringify throws on bigint and circular values; an error message must not.
+const describe = (value: unknown): string => {
+  if (typeof value === 'bigint') return `${value}n`
+  try {
+    return JSON.stringify(value) ?? String(value)
+  } catch {
+    try {
+      return String(value)
+    } catch {
+      return typeof value
+    }
+  }
+}
+
 const invalid = (shape: string, spec: object, problem: string) =>
   new VaultError(
     VaultErrorCode.InvalidConfig,
@@ -63,7 +77,7 @@ const validate = (shape: string, spec: Record<string, boolean>, fields: Fields) 
       continue
     }
     const [isValid, rule] = valueRules[key] ?? [() => true, '']
-    if (!isValid(value)) throw invalid(shape, spec, `${key} must be ${rule}, got ${JSON.stringify(value)}`)
+    if (!isValid(value)) throw invalid(shape, spec, `${key} must be ${rule}, got ${describe(value)}`)
   }
 }
 
@@ -74,7 +88,7 @@ export const normalizeAccountCoin = (input: unknown): AccountCoin => {
     const fail = (problem: string) => invalid('AccountCoin', accountCoinKeys, problem)
     if (!isTokenId(contractAddress)) throw fail(`contractAddress must be ${tokenIdRule}`)
     if (fields.id !== undefined && fields.id !== contractAddress) {
-      throw fail(`contractAddress ${contractAddress} differs from id ${String(fields.id)}`)
+      throw fail(`contractAddress ${contractAddress} differs from id ${describe(fields.id)}`)
     }
     fields.id = contractAddress
   }

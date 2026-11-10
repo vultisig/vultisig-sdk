@@ -84,6 +84,7 @@ import type { TransactionSimulationResult, TransactionValidationResult } from '.
 import type { DiscoveredToken, TokenInfo } from '../types/tokens'
 import { computePersonalSignHash } from '../utils/eip191'
 import { createVaultBackup } from '../utils/export'
+import { normalizeAccountCoin } from '../utils/normalizeCoinInput'
 // Vault services
 import { AddressService, type GetAddressOptions } from './services/AddressService'
 import { BalanceService } from './services/BalanceService'
@@ -1423,8 +1424,10 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     tonGasless?: boolean
     allowDeath?: boolean
   }): Promise<SendFeeEstimate> {
-    const feeAmountBase = await this.transactionBuilder.estimateSendFee(params)
-    const feeCoin = getSendFeeCoin(params)
+    // Normalize once so the fee asset sees the same coin as the estimate (a jetton given by contractAddress).
+    const normalized = { ...params, coin: normalizeAccountCoin(params.coin) }
+    const feeAmountBase = await this.transactionBuilder.estimateSendFee(normalized)
+    const feeCoin = getSendFeeCoin(normalized)
 
     return {
       feeAmountBase,
