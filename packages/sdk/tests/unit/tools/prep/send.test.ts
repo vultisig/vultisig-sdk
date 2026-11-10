@@ -365,8 +365,7 @@ describe('prepareSendTxFromKeys', () => {
         address: 'rFrom',
         decimals: 6,
         ticker: 'XRP',
-        isNativeToken: true,
-      } as any,
+      },
       receiver: 'rDestination',
       amount: 1_000_000n,
       destinationTag: 12345,
@@ -550,6 +549,84 @@ describe('prepareSendTxFromKeys', () => {
       })
     ).rejects.toThrow(/destination.*is the USDT token contract/)
 
+    expect(mockBuildSendKeysignPayload).not.toHaveBeenCalled()
+  })
+})
+
+// 2026-11-02 incident: a JS caller put the token contract under `contractAddress`; the unknown key was
+// ignored and a 5 USDT send was prepared as a native BNB send.
+describe('prepareSendTxFromKeys coin input validation', () => {
+  const usdt = '0x55d398326f99059fF775485246999027B3197955'
+  const nativeBnb = { chain: Chain.BSC, address: '0xfrom', decimals: 18, ticker: 'BNB' }
+  const usdtCoin = { ...nativeBnb, ticker: 'USDT' }
+  const receiver = '0x6fc4443666cEb0F55BCEBa84E1B68b5697309826'
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockGetWalletCore.mockResolvedValue(mockWalletCore)
+    mockIsValidRecipient.mockReturnValue(true)
+    mockGetPublicKey.mockReturnValue(mockPublicKey)
+    mockBuildSendKeysignPayload.mockResolvedValue(mockPayload)
+  })
+
+  const send = (coin: unknown, to = receiver) =>
+    prepareSendTxFromKeys(baseIdentity, { coin: coin as any, receiver: to, amount: 5_000_000_000_000_000_000n })
+  const builtCoin = () => mockBuildSendKeysignPayload.mock.calls[0][0].coin
+
+  it('treats contractAddress as the token id without mutating the input', async () => {
+    const coin = Object.freeze({ ...usdtCoin, contractAddress: usdt })
+    await send(coin)
+
+    expect(builtCoin()).toEqual({ ...usdtCoin, id: usdt })
+    expect(coin).toEqual({ ...usdtCoin, contractAddress: usdt })
+  })
+
+  it('accepts contractAddress equal to id', async () => {
+    await send({ ...usdtCoin, id: usdt, contractAddress: usdt })
+
+    expect(builtCoin()).toEqual({ ...usdtCoin, id: usdt })
+  })
+
+  it('copies a non-EVM contractAddress into id verbatim', async () => {
+    const mint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+    const solana = {
+      chain: Chain.Solana,
+      address: 'GmaDrppBC7P5ARKV8g3djiwP89vz1jLK23V2GBjuAEGB',
+      decimals: 6,
+      ticker: 'USDC',
+    }
+    await send({ ...solana, contractAddress: mint }, 'BnJQssQwsYPcNb2RrW5SP1kVxijMqsA9VVQX1U1p4kkq')
+
+    expect(builtCoin()).toEqual({ ...solana, id: mint })
+  })
+
+  it('passes a native coin through unchanged', async () => {
+    const coin = Object.freeze({ ...nativeBnb })
+    const before = structuredClone(coin)
+    await send(coin)
+
+    expect(builtCoin()).toEqual(before)
+    expect(coin).toEqual(before)
+  })
+
+  it.each([
+    ['a typo key', { ...usdtCoin, contract: usdt }, 'contract'],
+    ['string decimals with the alias', { ...usdtCoin, decimals: '18', contractAddress: usdt }, 'decimals'],
+    ['a SimpleCoinInput', { chain: Chain.BSC, token: usdt }, 'token'],
+    ['an empty object', {}, 'chain'],
+    ['an array', [], 'array'],
+    ['an unknown chain', { ...nativeBnb, chain: 'bsc' }, 'chain'],
+    ['a blank address', { ...nativeBnb, address: '  ' }, 'address'],
+    ['a blank id', { ...nativeBnb, id: ' ' }, 'id'],
+    ['a blank contractAddress', { ...nativeBnb, contractAddress: '' }, 'contractAddress'],
+    ['the zero address as contractAddress', { ...nativeBnb, contractAddress: `0x${'0'.repeat(40)}` }, 'omit id'],
+    ['the zero address as id', { ...nativeBnb, id: `0x${'0'.repeat(40)}` }, 'omit id'],
+    ['contractAddress differing from id', { ...usdtCoin, id: usdt, contractAddress: '0xother' }, 'contractAddress'],
+  ])('rejects %s', async (_, coin, key) => {
+    await expect(send(coin)).rejects.toMatchObject({
+      code: VaultErrorCode.InvalidConfig,
+      message: expect.stringContaining(key),
+    })
     expect(mockBuildSendKeysignPayload).not.toHaveBeenCalled()
   })
 })

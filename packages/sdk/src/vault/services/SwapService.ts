@@ -36,9 +36,9 @@ import type { FiatValueService } from '../../services/FiatValueService'
 // modules at module-load time, which breaks vitest setups that mock chainFeeCoin.
 import { prepareSwapTxFromKeys } from '../../tools/prep/swap'
 import { vaultDataToIdentity } from '../../tools/prep/types'
+import { normalizeCoinInput } from '../../utils/normalizeCoinInput'
 import {
   CoinInput,
-  isAccountCoin,
   SwapApprovalInfo,
   SwapFees,
   SwapFeesFiat,
@@ -242,8 +242,9 @@ export class SwapService {
   /**
    * Resolve CoinInput to full AccountCoin
    */
-  private async resolveCoinInput(input: CoinInput): Promise<AccountCoin> {
-    if (isAccountCoin(input)) {
+  private async resolveCoinInput(rawInput: CoinInput): Promise<AccountCoin> {
+    const input = normalizeCoinInput(rawInput)
+    if ('address' in input) {
       return input
     }
 
