@@ -5,6 +5,9 @@ const mocks = vi.hoisted(() => {
   const client = {
     estimateGas: vi.fn(),
     extend: vi.fn(),
+    getFeeHistory: vi.fn(),
+    getGasPrice: vi.fn(),
+    estimateMaxPriorityFeePerGas: vi.fn(),
   }
 
   return {
@@ -15,7 +18,6 @@ const mocks = vi.hoisted(() => {
     getEvmClient: vi.fn(),
     getEvmBaseFee: vi.fn(),
     getEvmGasPrice: vi.fn(),
-    getEvmMaxPriorityFeePerGas: vi.fn(),
     getKeysignAmount: vi.fn(),
     getKeysignCoin: vi.fn(),
     getKeysignSwapPayload: vi.fn(),
@@ -32,10 +34,6 @@ vi.mock('@vultisig/core-chain/tx/fee/evm/baseFee', () => ({
 
 vi.mock('@vultisig/core-chain/tx/fee/evm/gasPrice', () => ({
   getEvmGasPrice: mocks.getEvmGasPrice,
-}))
-
-vi.mock('@vultisig/core-chain/tx/fee/evm/maxPriorityFeePerGas', () => ({
-  getEvmMaxPriorityFeePerGas: mocks.getEvmMaxPriorityFeePerGas,
 }))
 
 vi.mock('@vultisig/core-mpc/keysign/swap/getKeysignSwapPayload', () => ({
@@ -85,13 +83,18 @@ const emptyPayload = {} as never
 const transferPayload = { toAddress: router } as never
 const contractCallPayload = { toAddress: router, memo: '0xabcdef' } as never
 
+const milligwei = (n: number) => BigInt(n) * 1_000_000n
+const marketTipIs = (tip: bigint) => mocks.client.getFeeHistory.mockResolvedValue({ reward: [[tip], [tip], [tip]] })
+
 describe('getEvmFeeQuote', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.getEvmClient.mockReturnValue(mocks.client)
     mocks.getEvmBaseFee.mockResolvedValue(100n)
     mocks.getEvmGasPrice.mockResolvedValue(1_000n)
-    mocks.getEvmMaxPriorityFeePerGas.mockResolvedValue(2n)
+    mocks.client.getFeeHistory.mockRejectedValue(new Error('method not found'))
+    mocks.client.getGasPrice.mockResolvedValue(100_000n * gwei)
+    mocks.client.estimateMaxPriorityFeePerGas.mockResolvedValue(2n)
     mocks.getKeysignAmount.mockReturnValue(1n)
     mocks.getKeysignCoin.mockReturnValue(makeCoin())
     mocks.getKeysignSwapPayload.mockReturnValue(undefined)
@@ -215,6 +218,15 @@ describe('getEvmFeeQuote', () => {
       expect(quote.maxPriorityFeePerGas).toBe(1n * gwei)
     })
 
+    it('floors an Ethereum market tip at 0.5 gwei for a swap', async () => {
+      marketTipIs(milligwei(100))
+
+      const quote = await getEvmFeeQuote({ keysignPayload: emptyPayload })
+
+      expect(quote.maxPriorityFeePerGas).toBe(milligwei(500))
+      expect(mocks.client.getFeeHistory).toHaveBeenCalledWith({ blockCount: 10, rewardPercentiles: [75] })
+    })
+
     it('never lets a caller minimum raise a successful simulation', async () => {
       const simulated = await getEvmFeeQuote({
         keysignPayload: emptyPayload,
@@ -243,7 +255,8 @@ describe('getEvmFeeQuote', () => {
 
       expect(quote.gasLimit).toBe(4_500_000_000n)
       expect(quote.maxPriorityFeePerGas).toBe(0n)
-      expect(mocks.getEvmMaxPriorityFeePerGas).not.toHaveBeenCalled()
+      expect(mocks.client.getFeeHistory).not.toHaveBeenCalled()
+      expect(mocks.client.estimateMaxPriorityFeePerGas).not.toHaveBeenCalled()
     })
 
     it('prices a legacy-fee chain from its gas price with 10% headroom and no tip', async () => {
@@ -254,7 +267,8 @@ describe('getEvmFeeQuote', () => {
       expect(quote.baseFeePerGas).toBe(1_100n)
       expect(quote.maxPriorityFeePerGas).toBe(0n)
       expect(mocks.getEvmBaseFee).not.toHaveBeenCalled()
-      expect(mocks.getEvmMaxPriorityFeePerGas).not.toHaveBeenCalled()
+      expect(mocks.client.getFeeHistory).not.toHaveBeenCalled()
+      expect(mocks.client.estimateMaxPriorityFeePerGas).not.toHaveBeenCalled()
     })
   })
 
@@ -281,9 +295,38 @@ describe('getEvmFeeQuote', () => {
 
       expect(quote.gasLimit).toBe(200_000n)
     })
+
+    it('floors an Ethereum market tip at 0.5 gwei for a router deposit', async () => {
+      marketTipIs(milligwei(100))
+
+      const quote = await getEvmFeeQuote({
+        keysignPayload: { toAddress: router, memo: '=:ETH.ETH:0x4444' } as never,
+      })
+
+      expect(quote.maxPriorityFeePerGas).toBe(milligwei(500))
+    })
   })
 
   describe('transfer', () => {
+    it.each([
+      [milligwei(15), milligwei(200)],
+      [milligwei(310), milligwei(310)],
+    ])('signs an Ethereum send at max(median p75 %s, 0.2 gwei)', async (tip, expected) => {
+      marketTipIs(tip)
+
+      const quote = await getEvmFeeQuote({ keysignPayload: transferPayload })
+
+      expect(quote.maxPriorityFeePerGas).toBe(expected)
+    })
+
+    it('keeps the 1 gwei floor for an Ethereum send when fee history fails', async () => {
+      mocks.client.estimateMaxPriorityFeePerGas.mockResolvedValue(milligwei(15))
+
+      const quote = await getEvmFeeQuote({ keysignPayload: transferPayload })
+
+      expect(quote.maxPriorityFeePerGas).toBe(gwei)
+    })
+
     it('uses the live Mantle native estimate when it exceeds the transfer floor', async () => {
       mocks.getKeysignCoin.mockReturnValue(makeCoin(EvmChain.Mantle))
       mocks.client.estimateGas.mockResolvedValue(30_000n)
@@ -459,6 +502,14 @@ describe('getEvmFeeQuote', () => {
 
       expect(fallback.gasLimit).toBe(1_200_000n)
     })
+
+    it('floors an Ethereum market tip at the 0.2 gwei send floor', async () => {
+      marketTipIs(milligwei(15))
+
+      const quote = await getEvmFeeQuote({ keysignPayload: contractCallPayload })
+
+      expect(quote.maxPriorityFeePerGas).toBe(milligwei(200))
+    })
   })
 
   it('honors explicit fee settings without simulating', async () => {
@@ -534,7 +585,7 @@ describe('getEvmFeeQuote', () => {
   describe('priority fee sanity', () => {
     it('passes a normal RPC-reported priority fee through unchanged (SDK2-01 legit-path guard)', async () => {
       // 80 gwei — a realistic heavy-congestion Ethereum L1 tip, well under the 500 gwei ceiling.
-      mocks.getEvmMaxPriorityFeePerGas.mockResolvedValue(80n * gwei)
+      mocks.client.estimateMaxPriorityFeePerGas.mockResolvedValue(80n * gwei)
 
       const quote = await getEvmFeeQuote({ keysignPayload: transferPayload })
 
@@ -544,7 +595,7 @@ describe('getEvmFeeQuote', () => {
     it('clamps an absurdly inflated RPC-reported priority fee to the sanity ceiling (SDK2-01)', async () => {
       // A compromised/anomalous RPC reporting 10,000 gwei — orders of magnitude above any
       // legitimate Ethereum L1 congestion tip.
-      mocks.getEvmMaxPriorityFeePerGas.mockResolvedValue(10_000n * gwei)
+      mocks.client.estimateMaxPriorityFeePerGas.mockResolvedValue(10_000n * gwei)
 
       const quote = await getEvmFeeQuote({ keysignPayload: transferPayload })
 

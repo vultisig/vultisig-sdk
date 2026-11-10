@@ -13,7 +13,7 @@ import {
 } from '@vultisig/core-chain/tx/fee/evm/evmGasLimit'
 import { getEvmGasPrice } from '@vultisig/core-chain/tx/fee/evm/gasPrice'
 import { getEvmRouterDepositFee } from '@vultisig/core-chain/tx/fee/evm/getEvmRouterDepositFee'
-import { getEvmMaxPriorityFeePerGas } from '@vultisig/core-chain/tx/fee/evm/maxPriorityFeePerGas'
+import { getEvmSigningPriorityFee } from '@vultisig/core-chain/tx/fee/evm/maxPriorityFeePerGas'
 import { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
 import { getKeysignSwapPayload } from '@vultisig/core-mpc/keysign/swap/getKeysignSwapPayload'
 import { KeysignSwapPayload } from '@vultisig/core-mpc/keysign/swap/KeysignSwapPayload'
@@ -148,9 +148,7 @@ export const getEvmFeeQuote = async ({
   // A legacy-priced chain carries no tip, and a chain that pins it to zero
   // needs no network suggestion to discard.
   const getMaxPriorityFeePerGas = async () =>
-    isLegacyPriced || isZeroPriorityFeeChain(chain)
-      ? 0n
-      : clampEvmPriorityFee(chain, await getEvmMaxPriorityFeePerGas(chain))
+    isLegacyPriced || isZeroPriorityFeeChain(chain) ? 0n : getEvmSigningPriorityFee({ chain, isSwap: kind === 'swap' })
 
   const getEstimateGasParams = async () => {
     if (swapPayload) {

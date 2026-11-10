@@ -1,10 +1,10 @@
 import { EvmChain } from '../../../Chain'
 import { evmChainTxFeeFormat } from '../../../chains/evm/tx/fee'
 import { getEvmBaseFee } from './baseFee'
-import { clampEvmPriorityFee, isZeroPriorityFeeChain } from './clampEvmPriorityFee'
+import { isZeroPriorityFeeChain } from './clampEvmPriorityFee'
 import { evmRouterDepositGasLimit } from './evmGasLimit'
 import { getEvmGasPrice } from './gasPrice'
-import { getEvmMaxPriorityFeePerGas } from './maxPriorityFeePerGas'
+import { getEvmSigningPriorityFee } from './maxPriorityFeePerGas'
 
 export type EvmRouterDepositFee = {
   gasLimit: bigint
@@ -24,7 +24,7 @@ export const getEvmRouterDepositFee = async (chain: EvmChain): Promise<EvmRouter
     isLegacyPriced ? getEvmGasPrice(chain) : getEvmBaseFee(chain).then(baseFee => (baseFee * 120n) / 100n),
     isLegacyPriced || isZeroPriorityFeeChain(chain)
       ? Promise.resolve(0n)
-      : getEvmMaxPriorityFeePerGas(chain).then(priorityFee => clampEvmPriorityFee(chain, priorityFee)),
+      : getEvmSigningPriorityFee({ chain, isSwap: true }),
   ])
 
   return {

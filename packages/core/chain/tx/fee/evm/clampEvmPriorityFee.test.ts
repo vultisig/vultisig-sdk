@@ -1,9 +1,15 @@
 import { EvmChain } from '@vultisig/core-chain/Chain'
 import { describe, expect, it } from 'vitest'
 
-import { clampEvmPriorityFee, isZeroPriorityFeeChain } from './clampEvmPriorityFee'
+import {
+  clampEvmPriorityFee,
+  ethereumSendPriorityFeeFloor,
+  ethereumSwapPriorityFeeFloor,
+  isZeroPriorityFeeChain,
+} from './clampEvmPriorityFee'
 
 const gwei = (n: number) => BigInt(n) * 1_000_000_000n
+const milligwei = (n: number) => BigInt(n) * 1_000_000n
 
 describe('clampEvmPriorityFee', () => {
   it.each([
@@ -77,6 +83,23 @@ describe('clampEvmPriorityFee', () => {
 
   it('never floors a fee that sits exactly at the floor', () => {
     expect(clampEvmPriorityFee(EvmChain.Ethereum, gwei(1))).toBe(gwei(1))
+  })
+
+  it('pins the Ethereum market-tip floors at 0.2 gwei for sends and 0.5 gwei for swaps', () => {
+    expect(ethereumSendPriorityFeeFloor).toBe(200_000_000n)
+    expect(ethereumSwapPriorityFeeFloor).toBe(500_000_000n)
+  })
+
+  it.each([
+    ['a send at 0.015 gwei', milligwei(15), ethereumSendPriorityFeeFloor, milligwei(200)],
+    ['a send at 0.31 gwei', milligwei(310), ethereumSendPriorityFeeFloor, milligwei(310)],
+    ['a swap at 0.1 gwei', milligwei(100), ethereumSwapPriorityFeeFloor, milligwei(500)],
+  ])('applies the market-tip floor instead of 1 gwei to %s', (_label, fee, floor, expected) => {
+    expect(clampEvmPriorityFee(EvmChain.Ethereum, fee, floor)).toBe(expected)
+  })
+
+  it('keeps the sanity ceiling under a market-tip floor', () => {
+    expect(clampEvmPriorityFee(EvmChain.Ethereum, gwei(10_000), ethereumSendPriorityFeeFloor)).toBe(gwei(500))
   })
 
   it.each([

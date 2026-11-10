@@ -68,6 +68,14 @@ const priorityFeeFloorWeiByChain: Partial<Record<EvmChain, bigint>> = {
 }
 
 /**
+ * Minimum tip (wei) for an Ethereum transaction priced from recent blocks'
+ * rewards rather than the node's suggestion: 0.2 gwei for a send, 0.5 gwei for
+ * a swap, whose quote goes stale fastest.
+ */
+export const ethereumSendPriorityFeeFloor = 200_000_000n
+export const ethereumSwapPriorityFeeFloor = 500_000_000n
+
+/**
  * Chains whose sequencer admits transactions first-come-first-served without a
  * tip auction, so any priority fee is money paid for nothing. Signed with a
  * zero tip regardless of what the RPC suggests.
@@ -84,11 +92,16 @@ export const isZeroPriorityFeeChain = (chain: EvmChain): boolean => zeroPriority
  * Clamps an RPC-reported EVM maxPriorityFeePerGas into a per-chain sane
  * range: zero on chains that ignore the tip, a generous ceiling against a
  * compromised RPC inflating the fee, and a floor (tip-auction chains) against
- * an honest RPC suggesting a tip too low to ever be mined. Never throws — a
+ * an honest RPC suggesting a tip too low to ever be mined. `floorWei` replaces
+ * the chain's floor for a tip that comes from market data. Never throws — a
  * clamp still lets the tx go through at a safe fee, whereas rejecting it would
  * strand the user mid-flow.
  */
-export const clampEvmPriorityFee = (chain: EvmChain, rpcPriorityFeeWei: bigint): bigint => {
+export const clampEvmPriorityFee = (
+  chain: EvmChain,
+  rpcPriorityFeeWei: bigint,
+  floorWei: bigint = priorityFeeFloorWeiByChain[chain] ?? 0n
+): bigint => {
   if (zeroPriorityFeeChains.includes(chain)) {
     return 0n
   }
@@ -103,10 +116,8 @@ export const clampEvmPriorityFee = (chain: EvmChain, rpcPriorityFeeWei: bigint):
     return ceiling
   }
 
-  const floor = priorityFeeFloorWeiByChain[chain] ?? 0n
-
-  if (rpcPriorityFeeWei < floor) {
-    return floor
+  if (rpcPriorityFeeWei < floorWei) {
+    return floorWei
   }
 
   return rpcPriorityFeeWei
