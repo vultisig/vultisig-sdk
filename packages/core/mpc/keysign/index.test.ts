@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   inputMessage: vi.fn(),
   makeSignSession: vi.fn(),
   outputMessage: vi.fn(),
+  sendMpcRelaySessionMessage: vi.fn(),
   setupMessageHash: vi.fn(),
 }))
 
@@ -23,6 +24,7 @@ vi.mock('../lib/signSession', () => ({
   },
 }))
 vi.mock('../message/relay/get', () => ({ getMpcRelayMessages: mocks.getMpcRelayMessages }))
+vi.mock('../message/relay/send', () => ({ sendMpcRelaySessionMessage: mocks.sendMpcRelaySessionMessage }))
 vi.mock('../message/server', () => ({ fromMpcServerMessage: mocks.fromMpcServerMessage }))
 vi.mock('../message/setup/ensure', () => ({ ensureSetupMessage: mocks.ensureSetupMessage }))
 
@@ -37,9 +39,7 @@ describe('keysign', () => {
       inputMessage: mocks.inputMessage,
       outputMessage: mocks.outputMessage,
     })
-    mocks.outputMessage.mockImplementation(() => {
-      throw new Error('stop outbound processing')
-    })
+    mocks.outputMessage.mockReturnValue(undefined)
     mocks.getMpcRelayMessages.mockResolvedValue([{ body: 'body', from: 'peer', hash: 'hash' }])
     mocks.fromMpcServerMessage.mockReturnValue(Uint8Array.of(1))
     mocks.inputMessage.mockReturnValue(true)
@@ -88,6 +88,29 @@ describe('keysign', () => {
     expect(error).toBeInstanceOf(DklsMaliciousPartyError)
     // devices = [local, a, b, c, d, e]; code 103 -> partyIndex 4 -> devices[3] = 'c'
     expect(error).toMatchObject({ code: 103, partyIndex: 4, partyId: 'c' })
+  })
+
+  it('rejects with the relay error when an outbound message cannot be sent', async () => {
+    mocks.outputMessage.mockReturnValueOnce({ body: Uint8Array.of(2), receivers: ['peer'] })
+    mocks.sendMpcRelaySessionMessage.mockRejectedValue(new Error('relay unavailable'))
+
+    const error = await keysign({
+      keyShare: 'key-share',
+      signatureAlgorithm: 'ecdsa',
+      message: '00',
+      chainPath: "m/44'/60'/0'/0/0",
+      localPartyId: 'local',
+      peers: ['peer'],
+      serverUrl: 'https://relay.example',
+      sessionId: 'session',
+      hexEncryptionKey: '00',
+      isInitiatingDevice: true,
+    }).catch(error => error)
+
+    expect(error).toBeInstanceOf(Error)
+    expect(error.message).toBe('Failed to send MPC relay message: relay unavailable')
+    expect(mocks.getMpcRelayMessages).not.toHaveBeenCalled()
+    expect(mocks.finish).not.toHaveBeenCalled()
   })
 
   it('does not resolve partyId when not the initiating device', async () => {
