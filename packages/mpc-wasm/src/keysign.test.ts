@@ -8,10 +8,10 @@ import { base64Encode } from '@vultisig/lib-utils/base64Encode'
 import { configureMpc, type MpcKeyshare, type MpcMessage, type MpcSession } from '@vultisig/mpc-types'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
-import { WasmMpcEngine } from '../../../mpc-wasm/src/index'
-import { getMessageHash } from '../getMessageHash'
-import type { MpcRelayMessage } from '../message/relay'
-import { fromMpcServerMessage, toMpcServerMessage } from '../message/server'
+import { WasmMpcEngine } from './index'
+import { getMessageHash } from '../../core/mpc/getMessageHash'
+import type { MpcRelayMessage } from '../../core/mpc/message/relay'
+import { fromMpcServerMessage, toMpcServerMessage } from '../../core/mpc/message/server'
 
 const relay = vi.hoisted(() => {
   const state: {
@@ -26,7 +26,7 @@ const relay = vi.hoisted(() => {
   return state
 })
 
-vi.mock('../message/setup/ensure', () => ({
+vi.mock('../../core/mpc/message/setup/ensure', () => ({
   ensureSetupMessage: async () => relay.setupMessage,
 }))
 
@@ -39,7 +39,7 @@ vi.mock('@vultisig/lib-utils/query/queryUrl', () => ({
   },
 }))
 
-const { keysign } = await import('./index')
+const { keysign } = await import('../../core/mpc/keysign/index')
 
 const originalFetch = globalThis.fetch
 const engine = new WasmMpcEngine()
