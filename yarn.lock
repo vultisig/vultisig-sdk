@@ -6004,12 +6004,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@trustwallet/wallet-core@npm:^4.7.3":
-  version: 4.7.3
-  resolution: "@trustwallet/wallet-core@npm:4.7.3"
+"@trustwallet/wallet-core@npm:^4.9.1":
+  version: 4.9.1
+  resolution: "@trustwallet/wallet-core@npm:4.9.1"
   dependencies:
-    protobufjs: "npm:>=6.11.3"
-  checksum: 10c0/c7692400bc1dabfe0e7bdd8e868dc534294cd0c6c249abcf51a6765d0f3c61a94e346750eb1c14adb3f2767f35543c38774fa3e7beb775e848e24ee08c0254a7
+    protobufjs: "npm:^7.6.3"
+  checksum: 10c0/6abf7d8af8845f05cf70dd3edec405aeddc76f137a2116b081a4eb41f248e007720b2ec50985d6818dd680931fb5131ca28b12315f7f5d03f467b0d9148131dd
   languageName: node
   linkType: hard
 
@@ -6897,7 +6897,7 @@ __metadata:
     "@solana/web3.js": "npm:^1.98.4"
     "@ton/core": "npm:^0.63.1"
     "@ton/crypto": "npm:^3.3.0"
-    "@trustwallet/wallet-core": "npm:^4.7.3"
+    "@trustwallet/wallet-core": "npm:^4.9.1"
     "@vultisig/core-config": "npm:0.9.1"
     "@vultisig/lib-utils": "npm:0.10.7"
     "@vultisig/mpc-types": "workspace:*"
@@ -6932,7 +6932,7 @@ __metadata:
     "@mysten/sui": "npm:^2.22.1"
     "@noble/hashes": "npm:^2.4.0"
     "@solana/web3.js": "npm:^1.98.4"
-    "@trustwallet/wallet-core": "npm:^4.7.3"
+    "@trustwallet/wallet-core": "npm:^4.9.1"
     "@vultisig/core-chain": "npm:6.4.1"
     "@vultisig/core-config": "npm:0.9.1"
     "@vultisig/lib-dkls": "npm:0.9.0"
@@ -7160,7 +7160,7 @@ __metadata:
     "@solana/web3.js": "npm:^1.98.4"
     "@ton/core": "npm:^0.63.1"
     "@ton/crypto": "npm:^3.3.0"
-    "@trustwallet/wallet-core": "npm:^4.7.3"
+    "@trustwallet/wallet-core": "npm:^4.9.1"
     "@types/chrome": "npm:^0.2.2"
     "@types/events": "npm:^3"
     "@types/node": "npm:^26.1.1"
@@ -16452,12 +16452,22 @@ __metadata:
   languageName: node
   linkType: hard
 
-"protobufjs@npm:^8.4.1":
-  version: 8.6.3
-  resolution: "protobufjs@npm:8.6.3"
+"protobufjs@npm:^7.6.3":
+  version: 7.6.6
+  resolution: "protobufjs@npm:7.6.6"
   dependencies:
+    "@protobufjs/aspromise": "npm:^1.1.2"
+    "@protobufjs/base64": "npm:^1.1.2"
+    "@protobufjs/codegen": "npm:^2.0.5"
+    "@protobufjs/eventemitter": "npm:^1.1.1"
+    "@protobufjs/fetch": "npm:^1.1.1"
+    "@protobufjs/float": "npm:^1.0.2"
+    "@protobufjs/path": "npm:^1.1.2"
+    "@protobufjs/pool": "npm:^1.1.0"
+    "@protobufjs/utf8": "npm:^1.1.1"
+    "@types/node": "npm:>=13.7.0"
     long: "npm:^5.3.2"
-  checksum: 10c0/b61ba11dd5f58bc5ea7bca315b22be2f125e3ee514ef209f3ac42a25b6428bcab97e8b6b43d7f76fbb4ffad14bb73156d0e9a2b470759f5f649b7bf54e993c52
+  checksum: 10c0/6c0dc6d4a2801825e39417bc116297d5261c0cf28892a5e28adafc13432331c0cb75603bbe50ad6f2715f3b0a9ce2896591ad6b51fdc8eae2d05b9ac2e4a8ec1
   languageName: node
   linkType: hard
 

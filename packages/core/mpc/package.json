@@ -1188,7 +1188,7 @@
     "@mysten/sui": "^2.22.1",
     "@noble/hashes": "^2.4.0",
     "@solana/web3.js": "^1.98.4",
-    "@trustwallet/wallet-core": "^4.7.3",
+    "@trustwallet/wallet-core": "^4.9.1",
     "@vultisig/core-chain": "6.4.1",
     "@vultisig/core-config": "0.9.1",
     "@vultisig/lib-dkls": "0.9.0",
