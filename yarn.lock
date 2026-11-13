@@ -1001,10 +1001,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@bufbuild/protobuf@npm:^2.16.0":
-  version: 2.16.0
-  resolution: "@bufbuild/protobuf@npm:2.16.0"
-  checksum: 10c0/ba3bc677e801a71d9cf0bdc138174144e493706efec3a47865eb07e956423315a80ff12301f6835d352202ae4d6599f2946a7c67338cf0079ed2a06af1a18097
+"@bufbuild/protobuf@npm:^2.17.0":
+  version: 2.17.0
+  resolution: "@bufbuild/protobuf@npm:2.17.0"
+  checksum: 10c0/29140e179408e9ed8601843f6c423658bd130e5cc2e4da470b7a305e4500054872f6f5f62884dc8a1652e85beed19bd5ba6d9482c323e773db84a6c26c183957
   languageName: node
   linkType: hard
 
@@ -6881,7 +6881,7 @@ __metadata:
   resolution: "@vultisig/core-chain@workspace:packages/core/chain"
   dependencies:
     7z-wasm: "npm:^1.2.0"
-    "@bufbuild/protobuf": "npm:^2.16.0"
+    "@bufbuild/protobuf": "npm:^2.17.0"
     "@cosmjs/amino": "npm:^0.39.0"
     "@cosmjs/encoding": "npm:^0.39.0"
     "@cosmjs/proto-signing": "npm:^0.39.0"
@@ -6927,7 +6927,7 @@ __metadata:
   resolution: "@vultisig/core-mpc@workspace:packages/core/mpc"
   dependencies:
     7z-wasm: "npm:^1.2.0"
-    "@bufbuild/protobuf": "npm:^2.16.0"
+    "@bufbuild/protobuf": "npm:^2.17.0"
     "@cosmjs/encoding": "npm:^0.39.0"
     "@mysten/sui": "npm:^2.22.1"
     "@noble/hashes": "npm:^2.4.0"
@@ -7088,7 +7088,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@vultisig/mpc-types@workspace:packages/mpc-types"
   dependencies:
-    "@bufbuild/protobuf": "npm:^2.16.0"
+    "@bufbuild/protobuf": "npm:^2.17.0"
   peerDependencies:
     "@vultisig/mpc-wasm": ">=0.1.5"
   peerDependenciesMeta:
@@ -7111,7 +7111,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@vultisig/rujira@workspace:packages/rujira"
   dependencies:
-    "@bufbuild/protobuf": "npm:^2.16.0"
+    "@bufbuild/protobuf": "npm:^2.17.0"
     "@cosmjs/cosmwasm": "npm:^0.39.0"
     "@cosmjs/proto-signing": "npm:^0.39.0"
     "@cosmjs/stargate": "npm:^0.39.0"
@@ -7133,7 +7133,7 @@ __metadata:
   dependencies:
     7z-wasm: "npm:^1.2.0"
     "@balancer-labs/balancer-maths": "npm:^0.0.41"
-    "@bufbuild/protobuf": "npm:^2.16.0"
+    "@bufbuild/protobuf": "npm:^2.17.0"
     "@cosmjs/encoding": "npm:^0.39.0"
     "@cosmjs/proto-signing": "npm:^0.39.0"
     "@cosmjs/stargate": "npm:^0.39.0"
