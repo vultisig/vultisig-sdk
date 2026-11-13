@@ -1,13 +1,16 @@
 import { PublicKey } from '@solana/web3.js'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { assertSafeSolanaSwapTransactionBase64 } from '@vultisig/core-chain/chains/solana/assertSafeSolanaSwapInstructions'
+import { solanaRpcTimeoutMs } from '@vultisig/core-chain/chains/solana/rpcTimeout'
+import { solanaConfig } from '@vultisig/core-chain/chains/solana/solanaConfig'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getJupiterSwapQuote } from './getJupiterSwapQuote'
-import { deriveJupiterFeeAccount, prependJupiterFeeAta } from './jupiterFeeAta'
+import { deriveJupiterFeeAccount, jupiterFeeAccountExists, prependJupiterFeeAta } from './jupiterFeeAta'
 
 vi.mock('./jupiterFeeAta', () => ({
   deriveJupiterFeeAccount: vi.fn(),
+  jupiterFeeAccountExists: vi.fn(),
   prependJupiterFeeAta: vi.fn(),
 }))
 
@@ -64,6 +67,7 @@ describe('getJupiterSwapQuote', () => {
         mintPubkey: {} as never,
         ownerPubkey: {} as never,
       })
+    vi.mocked(jupiterFeeAccountExists).mockReset().mockResolvedValue(true)
     vi.mocked(prependJupiterFeeAta).mockReset().mockResolvedValue('prepended-base64-tx')
     vi.mocked(assertSafeSolanaSwapTransactionBase64).mockReset().mockResolvedValue(undefined)
 
@@ -88,6 +92,7 @@ describe('getJupiterSwapQuote', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.unstubAllGlobals()
   })
 
@@ -111,6 +116,51 @@ describe('getJupiterSwapQuote', () => {
     expect(quote.provider).toBe('jupiter')
     expect(quote.dstAmount).toBe('1000000')
     expect('solana' in quote.tx && quote.tx.solana.data).toBe('prepended-base64-tx')
+  })
+
+  describe('networkFee', () => {
+    const baseFee = BigInt(solanaConfig.baseFee)
+    const ataRent = BigInt(solanaConfig.ataRentLamports)
+
+    const getNetworkFee = async (affiliateBps: number) => {
+      const quote = await getJupiterSwapQuote({ from: solNative, to: solUsdc, amount: 1_000_000_000n, affiliateBps })
+      if (!('solana' in quote.tx)) throw new Error('expected a Solana quote')
+      return quote.tx.solana.networkFee
+    }
+
+    it('is the base fee alone when the fee ATA already exists', async () => {
+      expect(await getNetworkFee(50)).toBe(baseFee)
+      expect(jupiterFeeAccountExists).toHaveBeenCalledWith(feeAccount)
+      // The idempotent create is still prepended: only the estimate changes.
+      expect(prependJupiterFeeAta).toHaveBeenCalledOnce()
+    })
+
+    it('adds the ATA rent when the fee ATA does not exist yet', async () => {
+      vi.mocked(jupiterFeeAccountExists).mockResolvedValue(false)
+
+      expect(await getNetworkFee(50)).toBe(baseFee + ataRent)
+    })
+
+    it('quotes the ATA rent instead of failing when the existence read fails', async () => {
+      vi.mocked(jupiterFeeAccountExists).mockRejectedValue(new Error('RPC unavailable'))
+
+      expect(await getNetworkFee(50)).toBe(baseFee + ataRent)
+    })
+
+    it('quotes the ATA rent instead of hanging when the existence read never settles', async () => {
+      vi.useFakeTimers()
+      vi.mocked(jupiterFeeAccountExists).mockReturnValue(new Promise<never>(() => {}))
+
+      const networkFee = getNetworkFee(50)
+      await vi.advanceTimersByTimeAsync(solanaRpcTimeoutMs)
+
+      await expect(networkFee).resolves.toBe(baseFee + ataRent)
+    })
+
+    it('skips the existence read when no fee is charged', async () => {
+      expect(await getNetworkFee(0)).toBe(baseFee)
+      expect(jupiterFeeAccountExists).not.toHaveBeenCalled()
+    })
   })
 
   it('uses per-call Jupiter affiliate config overrides', async () => {
