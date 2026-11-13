@@ -107,7 +107,7 @@ describe('WalletCore cross-encoder signing hashes', () => {
     return hex(hashes[0])
   }
 
-  const expectRippleFixture = async (fixture: RippleFixture) => {
+  const expectRippleFixture = async (fixture: RippleFixture, transactionType = TransactionType.UNSPECIFIED) => {
     const senderPrivateKey = walletCore.PrivateKey.createWithData(Buffer.from(fixture.senderPrivateKeyHex, 'hex'))
     const senderPublicKey = senderPrivateKey.getPublicKeySecp256k1(true)
     const recipientPrivateKey = walletCore.PrivateKey.createWithData(Buffer.from(fixture.recipientPrivateKeyHex, 'hex'))
@@ -139,6 +139,7 @@ describe('WalletCore cross-encoder signing hashes', () => {
           gas: BigInt(fixture.feeDrops),
           sequence: BigInt(fixture.sequence),
           lastLedgerSequence: BigInt(fixture.lastLedgerSequence),
+          transactionType,
         }),
       },
     })
@@ -149,6 +150,12 @@ describe('WalletCore cross-encoder signing hashes', () => {
   it('matches the shared XRP Payment fixture consumed by the RN-JS builder suite', async () => {
     expect(ripple.flags).toBe(0)
     await expectRippleFixture(ripple)
+  })
+
+  // iOS and Android pin their RIPPLE_PAYMENT handling to this same hash: the
+  // discriminator selects the operation and never reaches the signed bytes.
+  it('signs a native XRP Payment declared RIPPLE_PAYMENT to the same hash as an unset one', async () => {
+    await expectRippleFixture(ripple, TransactionType.RIPPLE_PAYMENT)
   })
 
   it('matches the shared XRP Payment memo fixture consumed by the RN-JS builder suite', async () => {
