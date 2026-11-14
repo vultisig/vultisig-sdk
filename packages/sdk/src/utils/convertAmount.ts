@@ -156,62 +156,47 @@ const parsePositiveNumber = (value: number | string, label: string): number => {
   return n
 }
 
-/**
- * Expand a JS number's string form to a plain fixed-point decimal, never
- * scientific notation, for ANY magnitude.
- *
- * `Number.toString()` emits exponential form below 1e-6 and at/above 1e21,
- * and — critically — `Number.toFixed()` ALSO emits exponential form at/above
- * 1e21. A naive `toFixed`-then-`split('.')` therefore corrupts large values:
- * `(1.5e21).toFixed(0)` is `"1.5e+21"`, which splits into whole `"1"` (off by
- * 21 orders of magnitude) and leaks the `"5e+21"` exponent into the fraction.
- * This is the canonical amount-rendering primitive feeding signing-boundary
- * drift checks, so a silent 10^21 truncation here is fund-relevant.
- *
- * Returns a string of the form `[-]<digits>[.<digits>]` with no exponent.
- */
-const expandToPlainDecimal = (value: number): string => {
-  const raw = value.toString()
-  const match = /^(-?)(\d+)(?:\.(\d+))?[eE]([+-]?\d+)$/.exec(raw)
-  if (!match) return raw // already plain (no exponent)
+/** `[+]digits[.digits][e±exp]` with at least one digit. */
+const DECIMAL_STRING = /^\+?(?=\.?\d)(\d*)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/
 
-  const [, sign, intPart, fracPart = '', expStr] = match
+/** Plain `<digits>[.<digits>]` from a decimal string's own digits, never via a float; `undefined` if it is not one. */
+const expandDecimalString = (raw: string): string | undefined => {
+  const match = DECIMAL_STRING.exec(raw)
+  if (!match) return undefined
+
+  const [, intPart, fracPart = '', expStr] = match
+  if (expStr === undefined) return fracPart ? `${intPart}.${fracPart}` : intPart
   const exp = Number(expStr)
   const digits = intPart + fracPart
   // Position of the decimal point measured from the left of `digits`.
   const pointPos = intPart.length + exp
 
-  let result: string
-  if (pointPos <= 0) {
-    // 0.00…digits
-    result = `0.${'0'.repeat(-pointPos)}${digits}`
-  } else if (pointPos >= digits.length) {
-    // digits followed by trailing zeros, no fraction
-    result = digits + '0'.repeat(pointPos - digits.length)
-  } else {
-    result = `${digits.slice(0, pointPos)}.${digits.slice(pointPos)}`
-  }
-  return `${sign}${result}`
+  if (pointPos <= 0) return `0.${'0'.repeat(-pointPos)}${digits}`
+  if (pointPos >= digits.length) return digits + '0'.repeat(pointPos - digits.length)
+  return `${digits.slice(0, pointPos)}.${digits.slice(pointPos)}`
 }
 
-/**
- * Format a JS number as a decimal string capped to `decimals` fractional
- * digits with trailing zeros trimmed. Prefers `toString()` (shortest
- * round-trip); any scientific-notation form (small OR large magnitude) is
- * expanded to a plain decimal first so no exponent ever leaks and no large
- * value is silently truncated. The fractional part is truncated (not rounded)
- * to `decimals` digits — same direction as the base↔human path.
- */
-const formatDecimalString = (value: number, decimals: number): string => {
+/** `units / 10^scale`: decimal strings (incl. `+` and exponent forms) digit for digit, else the number's shortest round-trip form. */
+const toExactDecimal = (input: number | string, parsed: number): { units: bigint; scale: number } => {
+  const plain =
+    (typeof input === 'string' ? expandDecimalString(input.trim()) : undefined) ??
+    expandDecimalString(parsed.toString())
+  if (plain === undefined) throw new AmountConvertError(`Cannot read "${input}" as a decimal amount.`)
+  const scale = plain.split('.')[1]?.length ?? 0
+  return { units: BigInt(plain.replace('.', '')), scale }
+}
+
+const assertFiniteResult = (value: number): void => {
   if (!Number.isFinite(value)) {
     throw new AmountConvertError(`Non-finite amount computed: ${value}`)
   }
-  const str = expandToPlainDecimal(value)
-  if (!str.includes('.')) return str
-  const [whole, fraction] = str.split('.')
-  const trimmed = fraction.slice(0, decimals).replace(/0+$/, '')
-  return trimmed === '' ? whole : `${whole}.${trimmed}`
 }
+
+const pow10 = (exponent: number): bigint => 10n ** BigInt(exponent)
+
+/** Exact `numerator / denominator`, truncated to `decimals` like the base↔human path. */
+const formatTruncatedRatio = (numerator: bigint, denominator: bigint, decimals: number): string =>
+  toHumanUnits(((numerator * pow10(decimals)) / denominator).toString(), decimals)
 
 export type FiatToCryptoParams = {
   /** Fiat value to convert (e.g. 100 for $100). Positive number or numeric string. */
@@ -225,7 +210,8 @@ export type FiatToCryptoParams = {
 /**
  * Convert a fiat value to a human-readable crypto amount given a unit price.
  *
- * `amount = fiatValue / price`, then capped to `decimals` fractional digits.
+ * `amount = fiatValue / price`, then TRUNCATED (not rounded) to `decimals`
+ * fractional digits — never exceeds the true value.
  * Pure + synchronous — the price is an INPUT. For a live-price variant that
  * fetches the rate itself, use `fiatToAmount`.
  *
@@ -234,9 +220,12 @@ export type FiatToCryptoParams = {
  */
 export const fiatToCrypto = ({ fiatValue, price, decimals }: FiatToCryptoParams): string => {
   assertDecimals(decimals)
-  const value = parsePositiveNumber(fiatValue, 'fiat value')
-  const unitPrice = parsePositiveNumber(price, 'price')
-  return formatDecimalString(value / unitPrice, decimals)
+  const parsedValue = parsePositiveNumber(fiatValue, 'fiat value')
+  const parsedPrice = parsePositiveNumber(price, 'price')
+  assertFiniteResult(parsedValue / parsedPrice)
+  const value = toExactDecimal(fiatValue, parsedValue)
+  const unitPrice = toExactDecimal(price, parsedPrice)
+  return formatTruncatedRatio(value.units * pow10(unitPrice.scale), unitPrice.units * pow10(value.scale), decimals)
 }
 
 export type CryptoToFiatParams = {
@@ -253,8 +242,8 @@ export type CryptoToFiatParams = {
  *
  * `fiat = amount * price`, then TRUNCATED (not rounded) to `fiatDecimals`
  * fractional digits (default 2 — cents). Truncation matches the base↔human
- * path and is fail-safe: the result never exceeds the true value. This is a
- * float-based display/estimate helper — do NOT use its output as a signing or
+ * path and is fail-safe: the result never exceeds the true value. Prices are
+ * estimates, so this is a display helper — do NOT use its output as a signing or
  * min-receive boundary value; use the precision-exact base↔human path for that.
  *
  * @example
@@ -264,9 +253,12 @@ export const cryptoToFiat = ({ amount, price, fiatDecimals = 2 }: CryptoToFiatPa
   if (!Number.isInteger(fiatDecimals) || fiatDecimals < 0 || fiatDecimals > MAX_DECIMALS) {
     throw new AmountConvertError(`Invalid fiatDecimals "${fiatDecimals}" — must be an integer in [0, ${MAX_DECIMALS}].`)
   }
-  const value = parsePositiveNumber(amount, 'amount')
-  const unitPrice = parsePositiveNumber(price, 'price')
-  return formatDecimalString(value * unitPrice, fiatDecimals)
+  const parsedValue = parsePositiveNumber(amount, 'amount')
+  const parsedPrice = parsePositiveNumber(price, 'price')
+  assertFiniteResult(parsedValue * parsedPrice)
+  const value = toExactDecimal(amount, parsedValue)
+  const unitPrice = toExactDecimal(price, parsedPrice)
+  return formatTruncatedRatio(value.units * unitPrice.units, pow10(value.scale + unitPrice.scale), fiatDecimals)
 }
 
 /** Pure amount helpers. Fiat conversions use caller-supplied prices and are display estimates. */
