@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/sdk",
-  "version": "10.1.0",
+  "version": "11.1.0",
   "description": "The self-custody MPC wallet SDK for AI agents. Bitcoin, Ethereum, Solana & 36+ chains via DKLS23 threshold signatures. TypeScript, multi-platform (Node, browser, React Native).",
   "type": "module",
   "main": "dist/index.node.cjs",
@@ -178,7 +178,7 @@
   "dependencies": {
     "7z-wasm": "^1.2.0",
     "@balancer-labs/balancer-maths": "^0.0.41",
-    "@bufbuild/protobuf": "^2.13.0",
+    "@bufbuild/protobuf": "^2.16.0",
     "@cosmjs/proto-signing": "^0.39.0",
     "@cosmjs/stargate": "^0.39.0",
     "@solana/web3.js": "^1.98.4",
@@ -234,7 +234,7 @@
     "concurrently": "^10.0.3",
     "cosmjs-types": "^0.11.0",
     "crypto-browserify": "^3.12.1",
-    "dotenv": "^17.4.2",
+    "dotenv": "^18.0.9",
     "electron": "42.10.0",
     "event-target-polyfill": "^0.0.4",
     "events": "^3.3.0",

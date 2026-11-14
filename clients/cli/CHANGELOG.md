@@ -1,5 +1,26 @@
 # @vultisig/cli
 
+## 11.1.0
+
+### Patch Changes
+
+- [#2596](https://github.com/vultisig/vultisig-sdk/pull/2596) [`b881dd2`](https://github.com/vultisig/vultisig-sdk/commit/b881dd2ef9df11ae6d6a8ebecf09e84ef3437765) Thanks [@johnnyluo](https://github.com/johnnyluo)! - Bump zod 4.x to 4.6.6 (GHSA-mrhx-c7xc-m3w5).
+
+- Updated dependencies [[`742ca32`](https://github.com/vultisig/vultisig-sdk/commit/742ca323e37307d47943b2066b506fce8e18f85e), [`1cb7044`](https://github.com/vultisig/vultisig-sdk/commit/1cb704409f72439b206308a2f19cfbde5ca63202), [`c8e9b9d`](https://github.com/vultisig/vultisig-sdk/commit/c8e9b9d09dc8cd881a94c8f227fa92cdc3ea9c62), [`b7e3c84`](https://github.com/vultisig/vultisig-sdk/commit/b7e3c84fc90588ade3425cb5e92e12b0a91a3af6), [`43573f7`](https://github.com/vultisig/vultisig-sdk/commit/43573f75e2ad8c4ba3aea709713317db9ceda6b6), [`b881dd2`](https://github.com/vultisig/vultisig-sdk/commit/b881dd2ef9df11ae6d6a8ebecf09e84ef3437765)]:
+  - @vultisig/core-chain@6.4.1
+  - @vultisig/sdk@11.1.0
+
+## 11.0.0
+
+### Patch Changes
+
+- [#2505](https://github.com/vultisig/vultisig-sdk/pull/2505) [`a4ae3c5`](https://github.com/vultisig/vultisig-sdk/commit/a4ae3c5f0855a560ee5400aa4a96ae492b14eb68) Thanks [@neavra](https://github.com/neavra)! - QBTC on a vault without an ML-DSA key: `chains --add-all` now preserves enabled chains and reports underivable ones as `skipped` or `unavailable`, `chains --add QBTC` fails closed, `addresses` lists it under `failures` instead of printing a stack trace, and `balance QBTC` reports a non-retryable invalid-input error with a vault-aware hint. The SDK gains `vault.addressesDetailed()` and `vault.getUnderivableChains()`, and `vault.addChain()` / `vault.setChains()` now reject newly added chains that the vault cannot derive.
+
+- Updated dependencies [[`7a8e609`](https://github.com/vultisig/vultisig-sdk/commit/7a8e6093555b0531f08f6e2e21eaefa33c40a027), [`c060960`](https://github.com/vultisig/vultisig-sdk/commit/c0609605ba6523bd1df9f964c834f7b52832d24f), [`a4ae3c5`](https://github.com/vultisig/vultisig-sdk/commit/a4ae3c5f0855a560ee5400aa4a96ae492b14eb68), [`795caa9`](https://github.com/vultisig/vultisig-sdk/commit/795caa9f51bce918afd5507d1faca8e9dc88fa6c), [`9596b43`](https://github.com/vultisig/vultisig-sdk/commit/9596b4383d81c48653a8e08b5c57023270c47097), [`56853df`](https://github.com/vultisig/vultisig-sdk/commit/56853dfd79e9392c044659caa3f9911cf643d1cb)]:
+  - @vultisig/sdk@11.0.0
+  - @vultisig/core-chain@6.4.0
+  - @vultisig/client-shared@0.3.10
+
 ## 10.0.0
 
 ### Patch Changes

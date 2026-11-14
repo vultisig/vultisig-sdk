@@ -295,6 +295,8 @@ describe('getTronSigningInputs -- bounded int64 fee/gas fields (sdk#1200)', () =
         decimals: 6,
         isNativeToken: true,
       }),
+      toAddress: OWNER,
+      toAmount: callValue ?? '0',
       blockchainSpecific: {
         case: 'tronSpecific',
         value: makeTronSpecific(gasEstimation),

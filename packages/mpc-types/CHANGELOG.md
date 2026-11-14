@@ -1,5 +1,11 @@
 # @vultisig/mpc-types
 
+## 0.4.0
+
+### Minor Changes
+
+- [#2613](https://github.com/vultisig/vultisig-sdk/pull/2613) [`1cb7044`](https://github.com/vultisig/vultisig-sdk/commit/1cb704409f72439b206308a2f19cfbde5ca63202) Thanks [@realpaaao](https://github.com/realpaaao)! - Sign a dApp amino sign doc's tx-level `timeout_height`. `SignAmino` gains an optional `timeoutHeight`, the Cosmos signing input carries it when it is set and non-zero, and `SignAminoInput` accepts it. Without it the chain rejected the signature for any dApp that sets a timeout (Osmosis).
+
 ## 0.3.0
 
 ### Minor Changes

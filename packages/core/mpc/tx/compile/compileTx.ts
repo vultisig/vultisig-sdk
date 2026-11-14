@@ -25,6 +25,7 @@ import { generateSignature } from '../signature/generateSignature'
 import { buildSignedSwapKitCardanoTx, getSwapKitCardanoPrebuiltPayload } from '../swapkitCardanoPrebuilt'
 import { getSwapKitSignBitcoin } from '../swapkitSignBitcoin'
 import { compileSignBitcoinTx } from './compileSignBitcoinTx'
+import { compileZcashV5Tx } from './zcash/zcashV5'
 
 type Input = {
   publicKey?: PublicKey
@@ -83,6 +84,11 @@ export const compileTx = ({
       publicKey,
       signatures: keysignSignatures,
     })
+  }
+
+  // WalletCore only builds v4 Zcash transactions, which NU7 rejects.
+  if (chain === Chain.Zcash) {
+    return compileZcashV5Tx({ walletCore, txInputData, publicKey, signatures: keysignSignatures })
   }
 
   const hashes = getPreSigningHashes({

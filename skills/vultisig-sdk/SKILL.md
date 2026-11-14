@@ -57,14 +57,19 @@ const sdk = new Vultisig({
 })
 await sdk.initialize()
 
+// An inbox the owner reads: it receives the OTP and the server key-share backup
+const ownerEmail = process.env.OWNER_EMAIL
+if (!ownerEmail) throw new Error('Set OWNER_EMAIL')
+
 // Create a FastVault
 const vaultId = await sdk.createFastVault({
   name: 'agent-wallet',
-  email: 'agent@example.com',
+  email: ownerEmail,
   password: 'SecurePassword123!'
 })
 
-// Verify with email code
+// Verify with email code. An agent that cannot read email passes skipVerification: true to
+// createFastVault instead: it then returns the activated vault and this step is not needed.
 const vault = await sdk.verifyVault(vaultId, 'verification-code')
 
 // Get address
