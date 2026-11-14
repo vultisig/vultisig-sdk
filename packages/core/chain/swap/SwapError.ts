@@ -13,12 +13,20 @@ export enum SwapErrorCode {
   InvalidConfig = 'SWAP_INVALID_CONFIG',
 }
 
+export type SwapErrorDetails = {
+  minAmountInBaseUnits?: string
+  minAmountInHuman?: string
+  ticker?: string
+  provider?: string
+}
+
 export class SwapError extends Error {
   readonly name = 'SwapError'
 
   constructor(
     public readonly code: SwapErrorCode,
-    message: string
+    message: string,
+    public readonly details?: SwapErrorDetails
   ) {
     super(message)
   }
