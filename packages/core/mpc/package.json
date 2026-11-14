@@ -846,6 +846,11 @@
       "import": "./dist/mldsa/mldsaKeysign.js",
       "default": "./dist/mldsa/mldsaKeysign.js"
     },
+    "./mldsa/mldsaLevel": {
+      "types": "./dist/mldsa/mldsaLevel.d.ts",
+      "import": "./dist/mldsa/mldsaLevel.js",
+      "default": "./dist/mldsa/mldsaLevel.js"
+    },
     "./mpcDebugLog": {
       "types": "./dist/mpcDebugLog.d.ts",
       "import": "./dist/mpcDebugLog.js",

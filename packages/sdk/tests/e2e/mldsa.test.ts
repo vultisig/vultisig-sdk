@@ -1,19 +1,25 @@
 /**
- * E2E Test: MLDSA (ML-DSA-44) Keygen & Signing
+ * E2E Test: MLDSA (ML-DSA-65) Keygen & Signing
  *
  * Verifies ML-DSA post-quantum signature support end-to-end:
  * 1. Two-party distributed key generation (DKG) via in-process message exchange
  * 2. Two-party threshold signing with the generated keyshares
- * 3. Signature consistency: same message + keys produce identical signatures
+ * 3. Both parties produce matching signatures, with the ML-DSA-65 encoded sizes
  *
  * Uses the MLDSA WASM library directly - no relay server needed.
  * Messages are exchanged synchronously between two sessions in-process.
  */
 
+import { createPublicKey, verify } from 'node:crypto'
+
+import { mldsaLevel } from '@vultisig/core-mpc/mldsa/mldsaLevel'
 import initializeMldsa, { KeygenSession, Keyshare, SignSession } from '@vultisig/lib-mldsa/vs_wasm'
 import { beforeAll, describe, expect, it } from 'vitest'
 
-const MLDSA_LEVEL = 44
+// ML-DSA verification requires OpenSSL 3.5+; older supported Node versions
+// still exercise the WASM keygen and signing tests below.
+const [opensslMajor, opensslMinor] = process.versions.openssl.split('.').map(Number)
+const supportsMldsaVerification = opensslMajor > 3 || (opensslMajor === 3 && opensslMinor >= 5)
 
 type MpcSession = {
   outputMessage(): { body: Uint8Array; receivers: string[] } | undefined
@@ -64,7 +70,7 @@ function signWithRetry(
       const ksA = Keyshare.fromBytes(new Uint8Array(keyshareABytes))
       const ksB = Keyshare.fromBytes(new Uint8Array(keyshareBBytes))
 
-      const setupMsg = SignSession.setup(MLDSA_LEVEL, keyId, chainPath, messageHash, partyIds)
+      const setupMsg = SignSession.setup(mldsaLevel, keyId, chainPath, messageHash, partyIds)
 
       const sA = new SignSession(setupMsg, partyIds[0], ksA)
       const sB = new SignSession(setupMsg, partyIds[1], ksB)
@@ -83,7 +89,7 @@ function signWithRetry(
   throw new Error('unreachable')
 }
 
-describe('MLDSA (ML-DSA-44) Keygen & Signing', () => {
+describe('MLDSA (ML-DSA-65) Keygen & Signing', () => {
   const partyA = 'party-alpha'
   const partyB = 'party-beta'
   const parties = [partyA, partyB]
@@ -98,7 +104,7 @@ describe('MLDSA (ML-DSA-44) Keygen & Signing', () => {
   beforeAll(async () => {
     await initializeMldsa()
 
-    const setupMsg = KeygenSession.setup(MLDSA_LEVEL, undefined, threshold, parties)
+    const setupMsg = KeygenSession.setup(mldsaLevel, undefined, threshold, parties)
     const sessionA = new KeygenSession(setupMsg, partyA)
     const sessionB = new KeygenSession(setupMsg, partyB)
 
@@ -122,6 +128,7 @@ describe('MLDSA (ML-DSA-44) Keygen & Signing', () => {
     const restoredA = Keyshare.fromBytes(new Uint8Array(keyshareABytes))
     const restoredB = Keyshare.fromBytes(new Uint8Array(keyshareBBytes))
 
+    expect(restoredA.publicKey()).toHaveLength(1952)
     expect(Buffer.from(restoredA.publicKey()).toString('hex')).toBe(publicKeyHex)
     expect(Buffer.from(restoredB.publicKey()).toString('hex')).toBe(publicKeyHex)
 
@@ -137,7 +144,7 @@ describe('MLDSA (ML-DSA-44) Keygen & Signing', () => {
     const keyId = Buffer.from(keyIdHex, 'hex')
 
     // Verify setup message structure
-    const setupMsg = SignSession.setup(MLDSA_LEVEL, keyId, chainPath, messageHash, parties)
+    const setupMsg = SignSession.setup(mldsaLevel, keyId, chainPath, messageHash, parties)
     expect(setupMsg).toBeInstanceOf(Uint8Array)
 
     const extractedHash = SignSession.setupMessageHash(setupMsg)
@@ -162,12 +169,40 @@ describe('MLDSA (ML-DSA-44) Keygen & Signing', () => {
     const sigHexB = Buffer.from(signatureB).toString('hex')
     expect(sigHexA).toBe(sigHexB)
 
-    // ML-DSA-44 signatures are ~2420 bytes
-    expect(signatureA.length).toBeGreaterThan(2000)
+    // ML-DSA-65 signatures are exactly 3309 bytes
+    expect(signatureA).toHaveLength(3309)
 
     console.log(`   Signature length: ${signatureA.length} bytes`)
     console.log(`   Signature (first 64 hex chars): ${sigHexA.slice(0, 64)}...`)
   })
+
+  it.skipIf(!supportsMldsaVerification)(
+    'should produce a signature accepted by the independent OpenSSL ML-DSA-65 verifier',
+    () => {
+      const messageHash = Buffer.alloc(32, 42)
+      const { sigA } = signWithRetry(
+        keyshareABytes,
+        keyshareBBytes,
+        Buffer.from(keyIdHex, 'hex'),
+        'm/44/0/0/0',
+        messageHash,
+        parties
+      )
+      // SubjectPublicKeyInfo for ML-DSA-65 (OID 2.16.840.1.101.3.4.3.18),
+      // with a 1952-byte public key encoded as a BIT STRING.
+      const publicKey = createPublicKey({
+        key: Buffer.concat([
+          Buffer.from('308207b2300b0609608648016503040312038207a100', 'hex'),
+          Buffer.from(publicKeyHex, 'hex'),
+        ]),
+        format: 'der',
+        type: 'spki',
+      })
+
+      expect(verify(null, messageHash, publicKey, sigA)).toBe(true)
+      expect(verify(null, Buffer.alloc(32, 43), publicKey, sigA)).toBe(false)
+    }
+  )
 
   it('should sign the same message multiple times', () => {
     const messageHash = Buffer.from('deadbeef00000000000000000000000000000000000000000000000000000001', 'hex')
@@ -183,7 +218,7 @@ describe('MLDSA (ML-DSA-44) Keygen & Signing', () => {
 
     // ML-DSA is randomized, so signatures differ but length is consistent
     expect(signatures[0].length).toBe(signatures[1].length)
-    expect(signatures[0].length).toBeGreaterThan(4000)
+    expect(signatures[0]).toHaveLength(3309 * 2)
     console.log(`   Two signatures produced (both ${signatures[0].length / 2} bytes)`)
   })
 
@@ -213,7 +248,7 @@ describe('MLDSA (ML-DSA-44) Keygen & Signing', () => {
 
     expect(signatures.length).toBe(3)
     for (const sig of signatures) {
-      expect(sig.length).toBeGreaterThan(4000)
+      expect(sig).toHaveLength(3309 * 2)
     }
 
     console.log(`   Successfully signed ${messages.length} different messages`)
@@ -224,6 +259,7 @@ describe('MLDSA (ML-DSA-44) Keygen & Signing', () => {
     const restoredA = Keyshare.fromBytes(new Uint8Array(keyshareABytes))
     const restoredB = Keyshare.fromBytes(new Uint8Array(keyshareBBytes))
 
+    expect(restoredA.publicKey()).toHaveLength(1952)
     expect(Buffer.from(restoredA.publicKey()).toString('hex')).toBe(publicKeyHex)
     expect(Buffer.from(restoredB.publicKey()).toString('hex')).toBe(publicKeyHex)
     expect(Buffer.from(restoredA.keyId()).toString('hex')).toBe(keyIdHex)
@@ -238,7 +274,7 @@ describe('MLDSA (ML-DSA-44) Keygen & Signing', () => {
       messageHash,
       parties
     )
-    expect(sigA.length).toBeGreaterThan(2000)
+    expect(sigA).toHaveLength(3309)
 
     console.log(`   Serialization round-trip + signing verified`)
   })
