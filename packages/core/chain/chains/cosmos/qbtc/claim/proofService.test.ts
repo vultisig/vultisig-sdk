@@ -79,6 +79,7 @@ describe('generateClaimProof', () => {
     signatureR: 'aa'.repeat(24),
     signatureS: 'bb'.repeat(32),
     publicKey: '02' + 'cc'.repeat(32),
+    bitcoinAddress: 'bc1qatknmeca5p0fy5decdj5704hf7prt47e0e7e9n',
     utxos: [{ txid: 'dd'.repeat(32), vout: 0 }],
     claimerAddress: 'qbtc1abc',
     chainId: 'qbtc-1',
@@ -87,10 +88,9 @@ describe('generateClaimProof', () => {
 
   const validResponse = {
     proof: 'ff'.repeat(100),
-    message_hash: 'aa'.repeat(32),
-    address_hash: 'bb'.repeat(20),
-    qbtc_address_hash: 'cc'.repeat(32),
     pub_key_hash_sha256: 'ee'.repeat(32),
+    message_text: 'qbtc-claim-v1|qbtc-1|bc1qatknmeca5p0fy5decdj5704hf7prt47e0e7e9n|qbtc1abc',
+    bitcoin_address: 'bc1qatknmeca5p0fy5decdj5704hf7prt47e0e7e9n',
     utxos: [{ txid: 'dd'.repeat(32), vout: 0 }],
     claimer_address: 'qbtc1abc',
   }
@@ -109,6 +109,7 @@ describe('generateClaimProof', () => {
           signature_r: validInput.signatureR,
           signature_s: validInput.signatureS,
           public_key: validInput.publicKey,
+          bitcoin_address: validInput.bitcoinAddress,
           utxos: validInput.utxos,
           claimer_address: validInput.claimerAddress,
           chain_id: validInput.chainId,
@@ -123,9 +124,7 @@ describe('generateClaimProof', () => {
     const result = await generateClaimProof(validInput)
 
     expect(result.proof).toBe(validResponse.proof)
-    expect(result.message_hash).toBe(validResponse.message_hash)
-    expect(result.address_hash).toBe(validResponse.address_hash)
-    expect(result.qbtc_address_hash).toBe(validResponse.qbtc_address_hash)
+    expect(result.message_text).toBe(validResponse.message_text)
     expect(result.pub_key_hash_sha256).toBe(validResponse.pub_key_hash_sha256)
     expect(result.claimer_address).toBe('qbtc1abc')
   })
@@ -145,9 +144,9 @@ describe('generateClaimProof', () => {
   })
 
   it('throws on invalid response fields', async () => {
-    mockFetch({ ...validResponse, message_hash: 'not-hex' })
+    mockFetch({ ...validResponse, proof: '' })
 
-    await expect(generateClaimProof(validInput)).rejects.toThrow('Invalid proof service response: invalid message_hash')
+    await expect(generateClaimProof(validInput)).rejects.toThrow('Invalid proof service response: missing proof')
   })
 
   it('omits broadcast from the request body when not requested', async () => {
