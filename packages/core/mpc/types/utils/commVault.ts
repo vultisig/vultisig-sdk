@@ -121,13 +121,33 @@ export const fromCommVault = (vault: CommVault): Vault => {
       ).keyshare
     : undefined
 
+  // Chains that derive the same key (all EVM chains, the Cosmos-SDK chains, ...) each run
+  // their own key-import ceremony, so a backup can hold several distinct keyshares under one
+  // public key. They are stored root keyshares first, then in `chainPublicKeys` order, so the
+  // n-th chain using a public key owns the n-th keyshare stored under it. Collapsing them onto
+  // a single keyshare makes every other chain of the group sign with a share the other party
+  // did not pair with ("Invalid final_session_id").
+  const rootPublicKeys = new Set([vault.publicKeyEcdsa, vault.publicKeyEddsa, vault.publicKeyMldsa44])
+  const seenByPublicKey = new Map<string, number>()
+  const lastKeyShareByPublicKey = new Map<string, string>()
   vault.keyShares.forEach(keyShare => {
     const chains = chainsByPublicKey.get(keyShare.publicKey)
-    if (chains) {
-      chains.forEach(chain => {
-        chainKeyShares[chain] = keyShare.keyshare
-      })
+    if (!chains) return
+    const seen = seenByPublicKey.get(keyShare.publicKey) ?? 0
+    seenByPublicKey.set(keyShare.publicKey, seen + 1)
+    lastKeyShareByPublicKey.set(keyShare.publicKey, keyShare.keyshare)
+    const index = rootPublicKeys.has(keyShare.publicKey) ? seen - 1 : seen
+    if (index >= 0 && index < chains.length) {
+      chainKeyShares[chains[index]] = keyShare.keyshare
     }
+  })
+  // Backups that store one keyshare per key: every chain on that key uses it.
+  chainsByPublicKey.forEach((chains, publicKey) => {
+    const keyshare = lastKeyShareByPublicKey.get(publicKey)
+    if (keyshare === undefined) return
+    chains.forEach(chain => {
+      if (!(chain in chainKeyShares)) chainKeyShares[chain] = keyshare
+    })
   })
 
   const chainPublicKeysWithKeyShare = toEntries(allChainPublicKeys)
