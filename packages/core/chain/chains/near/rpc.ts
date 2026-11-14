@@ -33,7 +33,8 @@ export class NearUnknownEntityError extends Error {
 /**
  * A JSON-RPC error the node returned (bad params, invalid transaction, timeout
  * …). `rpcName` is read from the top level or `cause.name`, because `query`
- * nests handler errors one level deeper than the transaction endpoints do.
+ * nests handler errors one level deeper than the transaction endpoints do. An
+ * endpoint that sends neither reads as `UNKNOWN_ERROR`.
  */
 export class NearRpcError extends Error {
   constructor(
@@ -58,10 +59,27 @@ export const getNearRpcErrorName = (error: unknown): string | undefined => {
   return undefined
 }
 
+/**
+ * nearcore's whole not-found messages, for endpoints that relay `data` but drop
+ * `name` and `cause` (api.vultisig.com/near/ does). Anchored at both ends, so a
+ * failure that only mentions a missing record never reads as one.
+ */
+const nearcoreNotFoundMessages: [RegExp, string][] = [
+  [/^account \S+ does not exist while viewing$/, 'UNKNOWN_ACCOUNT'],
+  [/^Transaction \S+ doesn't exist$/, 'UNKNOWN_TRANSACTION'],
+]
+
+const readNotFoundName = (description: string): string | undefined =>
+  nearcoreNotFoundMessages.find(([pattern]) => pattern.test(description))?.[1]
+
+/**
+ * Types a JSON-RPC error body. The structured name always wins; only a body with
+ * neither `name` nor `cause` is matched against nearcore's not-found messages.
+ */
 export const toNearRpcError = (method: string, error: unknown): Error => {
   const { name, cause, data, message } = (error ?? {}) as NearJsonRpcError
-  const rpcName = cause?.name ?? name ?? 'UNKNOWN_ERROR'
   const description = typeof data === 'string' ? data : (message ?? JSON.stringify(error))
+  const rpcName = cause?.name ?? name ?? readNotFoundName(description) ?? 'UNKNOWN_ERROR'
 
   if (rpcName === 'UNKNOWN_ACCOUNT') {
     return new NearUnknownEntityError('account', description)

@@ -680,7 +680,7 @@ When running in a non-TTY environment (pipes, scripts, AI agents), the CLI **aut
 
 ```bash
 # Agent runs this — auto-detects non-TTY, skips interactive prompt
-vultisig create fast --name "Agent Wallet" --password "$VAULT_PASSWORD" --email agent@example.com
+vultisig create fast --name "Agent Wallet" --password "$VAULT_PASSWORD" --email "$OWNER_EMAIL"
 
 # Returns immediately with vault ID (pending verification)
 # Vault ID: 023118...
@@ -689,14 +689,16 @@ vultisig create fast --name "Agent Wallet" --password "$VAULT_PASSWORD" --email 
 vultisig verify 023118... --code 123456
 ```
 
+`--email` must be an inbox the vault owner reads: VultiServer sends the activation code and the backup of its key share (`.vult`) there. A placeholder address sends both to an inbox nobody reads.
+
 You can also force two-step mode explicitly:
 
 ```bash
 # Force two-step even in a TTY
-vultisig create fast --name "Agent Wallet" --password "$VAULT_PASSWORD" --email agent@example.com --two-step
+vultisig create fast --name "Agent Wallet" --password "$VAULT_PASSWORD" --email "$OWNER_EMAIL" --two-step
 
 # JSON output for machine parsing
-vultisig create fast --name "Agent Wallet" --password "$VAULT_PASSWORD" --email agent@example.com --two-step -o json
+vultisig create fast --name "Agent Wallet" --password "$VAULT_PASSWORD" --email "$OWNER_EMAIL" --two-step -o json
 ```
 
 JSON output for two-step create:
@@ -707,7 +709,7 @@ JSON output for two-step create:
   "status": "pending_verification",
   "message": "Vault created. Verify with email OTP to activate.",
   "verifyCommand": "vultisig verify 023118... --code <OTP>",
-  "resendCommand": "vultisig verify 023118... --resend --email agent@example.com --password ..."
+  "resendCommand": "vultisig verify 023118... --resend --email owner@example.com --password ..."
 }
 ```
 

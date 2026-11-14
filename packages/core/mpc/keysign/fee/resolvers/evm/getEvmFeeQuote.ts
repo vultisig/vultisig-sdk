@@ -8,6 +8,7 @@ import {
   evmRouterDepositGasLimit,
   getEvmCalldataGas,
   getEvmContractCallGasLimit,
+  getEvmGasIncludesDataCost,
   getEvmTransferGasLimit,
 } from '@vultisig/core-chain/tx/fee/evm/evmGasLimit'
 import { getEvmGasPrice } from '@vultisig/core-chain/tx/fee/evm/gasPrice'
@@ -102,6 +103,10 @@ export const getEvmFeeQuote = async ({
   // this stand-in, never a real estimate.
   const fallbackGasLimit = bigIntMax(unsimulatedGasLimit, minimumGasLimit ?? 0n)
   const requestedGasLimit = thirdPartyGasLimitEstimation ?? 0n
+  // A swap that cannot be simulated, such as a token route quoted before its
+  // allowance exists, can stand on the route's own gas figure instead of the
+  // generic default, except where gas also pays for data the figure leaves out.
+  const routeGasStandsIn = requestedGasLimit > 0n && !getEvmGasIncludesDataCost(chain)
 
   const resolveGasLimit = (estimatedGasLimit: bigint | undefined): bigint =>
     match(kind, {
@@ -112,11 +117,15 @@ export const getEvmFeeQuote = async ({
       contractCall: () => inflateGasLimit(bigIntMax(estimatedGasLimit ?? fallbackGasLimit, requestedGasLimit)),
       // A swap is signed with the larger of the route's own gas and the inflated
       // simulation; a route that carries no gas figure counts as the swap default.
+      // Without a simulation, the route's gas gets the headroom a simulation
+      // would, raised by any caller minimum as the default would be.
       swap: () =>
-        bigIntMax(
-          requestedGasLimit > 0n ? requestedGasLimit : kindGasLimit,
-          inflateGasLimit(estimatedGasLimit ?? fallbackGasLimit)
-        ),
+        estimatedGasLimit === undefined && routeGasStandsIn
+          ? inflateGasLimit(bigIntMax(requestedGasLimit, minimumGasLimit ?? 0n))
+          : bigIntMax(
+              requestedGasLimit > 0n ? requestedGasLimit : kindGasLimit,
+              inflateGasLimit(estimatedGasLimit ?? fallbackGasLimit)
+            ),
       // A router deposit is never simulated, so its fixed limit is the stand-in
       // a caller minimum may raise.
       routerDeposit: () => bigIntMax(fallbackGasLimit, requestedGasLimit),
@@ -156,7 +165,7 @@ export const getEvmFeeQuote = async ({
         native: () => null,
         general: ({ quote }) => {
           // A token route cannot be simulated until its allowance exists, so it
-          // is sized from the route's own gas and the swap fallback instead.
+          // is sized from the route's own gas instead (see resolveGasLimit).
           if (coin.id || !quote?.tx) {
             return null
           }

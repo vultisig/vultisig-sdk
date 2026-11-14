@@ -1,5 +1,11 @@
 import { create } from '@bufbuild/protobuf'
 import { Chain } from '@vultisig/core-chain/Chain'
+import lifiSwapFixtures from '@vultisig/core-chain/fixtures/lifi-solana-swap-transactions.json'
+import {
+  OneInchQuoteSchema,
+  OneInchSwapPayloadSchema,
+  OneInchTransactionSchema,
+} from '@vultisig/core-mpc/types/vultisig/keysign/v1/1inch_swap_payload_pb'
 import { CoinSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/coin_pb'
 import { KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { SolanaSpecificSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
@@ -66,6 +72,12 @@ describe('getSolanaFeeAmount', () => {
     expect(getSolanaFeeAmount(buildInput({ priorityFee: '5000000' }))).toBe(505_000n)
   })
 
+  // Mainnet charges 128_457 lamports for this message (getFeeForMessage): the
+  // runtime rounds 123_456.7 up, so a floored quote leaves a MAX send short.
+  it('rounds a fractional priorityFeeAmount up to a whole lamport, as the runtime does', () => {
+    expect(getSolanaFeeAmount(buildInput({ priorityFee: '1234567' }))).toBe(128_457n)
+  })
+
   it('adds ATA rent for SPL transfers when recipient ATA is missing', () => {
     // base 5000 + ataRent 2_039_280 + priority 100_000 = 2_144_280
     expect(
@@ -90,5 +102,42 @@ describe('getSolanaFeeAmount', () => {
         })
       )
     ).toBe(105_000n)
+  })
+
+  describe('aggregator swap', () => {
+    const withSwapTransaction = (input: ReturnType<typeof buildInput>, data: string) => {
+      input.keysignPayload.swapPayload = {
+        case: 'oneinchSwapPayload',
+        value: create(OneInchSwapPayloadSchema, {
+          quote: create(OneInchQuoteSchema, { tx: create(OneInchTransactionSchema, { data }) }),
+        }),
+      }
+      return input
+    }
+
+    it("charges what the provider transaction's compute budget sets, not the chain-specific priority fee", () => {
+      const input = withSwapTransaction(
+        buildInput({ priorityFee: '1000000' }),
+        lifiSwapFixtures.solToUsdc.swapTransaction
+      )
+
+      // getFeeForMessage on mainnet for this message; the chain-specific fields alone quote 105,000.
+      expect(getSolanaFeeAmount(input)).toBe(48_423n)
+    })
+
+    it('keeps the ATA rent term for a swap from a token', () => {
+      const input = withSwapTransaction(
+        buildInput({ contractAddress: USDC_MINT, fromTokenAssociatedAddress: FROM_ATA, priorityFee: '1000000' }),
+        lifiSwapFixtures.solToUsdc.swapTransaction
+      )
+
+      expect(getSolanaFeeAmount(input)).toBe(48_423n + 2_039_280n)
+    })
+
+    it('falls back to the chain-specific fields when the swap carries no transaction', () => {
+      const input = withSwapTransaction(buildInput({ priorityFee: '1000000' }), '')
+
+      expect(getSolanaFeeAmount(input)).toBe(105_000n)
+    })
   })
 })

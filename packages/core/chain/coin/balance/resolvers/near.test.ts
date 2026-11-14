@@ -24,11 +24,14 @@ describe('NEAR native balance through the registered resolver', () => {
     await expect(getCoinBalance({ chain: Chain.Near, address: SENDER })).resolves.toBe(BigInt(AMOUNT))
   })
 
-  it('reports an unfunded account as zero without hiding a network failure', async () => {
-    setupTransport({ account: { unknown: true } })
+  it.each([[false], [true]])(
+    'reports an unfunded account as zero without hiding a network failure (name-less error: %s)',
+    async namelessError => {
+      setupTransport({ account: { unknown: true, namelessError } })
 
-    await expect(getCoinBalance({ chain: Chain.Near, address: SENDER })).resolves.toBe(0n)
-  })
+      await expect(getCoinBalance({ chain: Chain.Near, address: SENDER })).resolves.toBe(0n)
+    }
+  )
 
   it.each([[new Error('503 Service Unavailable')], [new Error('fetch failed')]])(
     'propagates a transport failure instead of returning zero (%s)',

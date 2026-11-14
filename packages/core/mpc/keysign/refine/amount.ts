@@ -19,7 +19,8 @@ import { assertNearSendAffordable } from './near'
 type RefineKeysignAmountInput = {
   keysignPayload: KeysignPayload
   walletCore: WalletCore
-  publicKey: PublicKey
+  /** Not read; kept optional so existing callers that pass it still compile. */
+  publicKey?: PublicKey | null
   balance: bigint
 }
 
@@ -65,7 +66,7 @@ export const refineKeysignAmount = async (input: RefineKeysignAmountInput) => {
   // and, on chains that reap emptied accounts, the existential deposit — so a
   // MAX send quoted as `balance - fee` cannot fail a keep-alive transfer. A
   // payload that explicitly allows death is meant to empty the account and
-  // keeps nothing back.
+  // keeps nothing back. Solana's rent-exempt floor is kept back regardless.
   const { blockchainSpecific } = input.keysignPayload
   const allowDeath = blockchainSpecific.case === 'polkadotSpecific' && blockchainSpecific.value.allowDeath
   const refinedAmount = minBigInt(

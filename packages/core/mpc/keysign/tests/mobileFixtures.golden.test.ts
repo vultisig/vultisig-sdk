@@ -80,8 +80,22 @@ describe('mobile keysign pre-image hash golden fixtures', () => {
   })
 
   it(`loads the mobile and supplemental fixture corpus (${cases.length} cases)`, () => {
-    expect(cases.length).toBe(99)
+    expect(cases.length).toBe(100)
     expect(new Set(cases.map(({ fixtureFile }) => fixtureFile)).size).toBe(31)
+  })
+
+  // The cross-repo sync check only compares cases that exist somewhere, so a
+  // chain missing from every corpus goes unnoticed without this.
+  it('pins a vector for every supported chain', () => {
+    const pinnedChains = new Set(
+      cases
+        .filter(({ expected_image_hash }) => expected_image_hash.length > 0)
+        .map(({ keysign_payload }) =>
+          resolveChainFromFixture(normalizeKeysignPayloadFromJson(keysign_payload).coin?.chain ?? '')
+        )
+    )
+
+    expect(Object.values(Chain).filter(chain => !pinnedChains.has(chain))).toEqual([])
   })
 
   it('uses the branch ID committed with the Zcash mobile vector', () => {
@@ -125,6 +139,7 @@ describe('mobile keysign pre-image hash golden fixtures', () => {
         Chain.Hyperliquid,
         Chain.Mantle,
         Chain.Optimism,
+        Chain.Robinhood,
         Chain.Sei,
         Chain.Zksync,
       ].sort()

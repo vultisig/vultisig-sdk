@@ -31,7 +31,7 @@ Vultisig offers two vault types, each optimized for different use cases.
 ```bash
 vultisig create fast \
   --name "agent-wallet" \
-  --email "agent@example.com" \
+  --email "$OWNER_EMAIL" \
   --password "SecurePassword123!"
 ```
 

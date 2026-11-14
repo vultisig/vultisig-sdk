@@ -80,6 +80,40 @@ describe('NEAR finality status', () => {
     })
   })
 
+  it('reports an unknown hash as not found when the endpoint drops the error name', async () => {
+    // Verbatim from api.vultisig.com/near/ (2026-10-21).
+    setupTransport({
+      statusError: { code: -32000, message: 'Server error', data: `Transaction ${hash} doesn't exist` },
+    })
+
+    await expect(getTxStatus({ chain: Chain.Near, hash, senderAccountId: SENDER })).resolves.toMatchObject({
+      status: 'not_found',
+      isKnown: false,
+    })
+  })
+
+  it('asks for what the node knows now, since any wait turns an unknown hash into a timeout', async () => {
+    setupTransport({
+      status: { final_execution_status: 'FINAL', status: { SuccessValue: '' }, transaction: { hash } },
+    })
+
+    await getTxStatus({ chain: Chain.Near, hash, senderAccountId: SENDER })
+
+    expect(queryUrl).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        body: expect.objectContaining({ method: 'tx', params: expect.objectContaining({ wait_until: 'NONE' }) }),
+      })
+    )
+  })
+
+  it('propagates a name-less upstream failure instead of reporting not found or pending', async () => {
+    // What api.vultisig.com/near/ answers when its upstream gives up (2026-10-21).
+    setupTransport({ statusError: { code: -32603, message: 'Internal error', data: 'upstream request failed' } })
+
+    await expect(getTxStatus({ chain: Chain.Near, hash, senderAccountId: SENDER })).rejects.toThrow(/UNKNOWN_ERROR/)
+  })
+
   it('keeps an unanswered lookup pending rather than claiming it failed', async () => {
     setupTransport({
       statusError: {

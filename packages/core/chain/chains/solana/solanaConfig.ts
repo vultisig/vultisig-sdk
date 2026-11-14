@@ -20,4 +20,15 @@ export const solanaConfig = {
   // the Solana runtime. If Solana ever bumps RENT_PER_BYTE_PER_YEAR or
   // the 2-year threshold, re-derive from the formula above.
   ataRentLamports: 2_039_280,
+
+  // Rent-exempt minimum for a data-less wallet (system) account. The runtime
+  // rejects a transaction that leaves the sender holding anything between
+  // zero and this floor.
+  //
+  // 128-byte account header × 6,960 lamports per byte = 890,880, the rate
+  // before SIMD-0437. SIMD-0437 only lowers that rate (the live
+  // `getMinimumBalanceForRentExemption(0)` read 650,240 in October 2026) and
+  // its SIMD-0438 fallback restores it at most, so this stays an upper bound
+  // on the live value.
+  walletRentExemptLamports: 890_880,
 }

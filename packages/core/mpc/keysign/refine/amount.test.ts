@@ -1,10 +1,13 @@
 import { create } from '@bufbuild/protobuf'
 import { Chain, EvmChain } from '@vultisig/core-chain/Chain'
+import { getMaxSendableAmount } from '@vultisig/core-chain/amount/getMaxSendableAmount'
 import { bittensorConfig } from '@vultisig/core-chain/chains/bittensor/config'
+import { solanaConfig } from '@vultisig/core-chain/chains/solana/solanaConfig'
 import {
   CosmosSpecificSchema,
   EthereumSpecificSchema,
   PolkadotSpecificSchema,
+  SolanaSpecificSchema,
   TransactionType,
 } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
@@ -70,19 +73,33 @@ const buildPayload = ({
                 allowDeath,
               }),
             }
-          : {
-              case: 'ethereumSpecific',
-              value: create(EthereumSpecificSchema, {
-                gasLimit: '40000',
-                maxFeePerGasWei: '1500000',
-                priorityFee: '0',
-                nonce: 0n,
-              }),
-            },
+          : chain === Chain.Solana
+            ? {
+                case: 'solanaSpecific',
+                value: create(SolanaSpecificSchema, {
+                  recentBlockHash: '44jzmJEahEFTHexSNLkLfXXXyKggtpT2jJuJ3hdCBbsB',
+                  priorityFee: '1000000',
+                  computeLimit: '100000',
+                }),
+              }
+            : {
+                case: 'ethereumSpecific',
+                value: create(EthereumSpecificSchema, {
+                  gasLimit: '40000',
+                  maxFeePerGasWei: '1500000',
+                  priorityFee: '0',
+                  nonce: 0n,
+                }),
+              },
   })
 
 const refine = (keysignPayload: ReturnType<typeof buildPayload>, balance: bigint) =>
-  refineKeysignAmount({ keysignPayload, balance, walletCore: {} as never, publicKey: {} as never })
+  refineKeysignAmount({
+    keysignPayload,
+    balance,
+    walletCore: {} as never,
+    publicKey: {} as never,
+  })
 
 describe('refineKeysignAmount', () => {
   beforeEach(() => {
@@ -142,7 +159,14 @@ describe('refineKeysignAmount', () => {
     const fee = 200_000n
     mocks.getFeeAmount.mockResolvedValue(fee)
 
-    const refined = await refine(buildPayload({ chain: Chain.Bittensor, amount: balance, allowDeath: true }), balance)
+    const refined = await refine(
+      buildPayload({
+        chain: Chain.Bittensor,
+        amount: balance,
+        allowDeath: true,
+      }),
+      balance
+    )
 
     expect(BigInt(refined.toAmount)).toBe(balance - fee)
   })
@@ -163,6 +187,52 @@ describe('refineKeysignAmount', () => {
     )
   })
 
+  // The MAX is quoted from one priority-fee read and the signed payload carries
+  // another. Before the floor was kept back, a fee that fell in between left
+  // the sender holding the difference, below rent exemption, and mainnet
+  // rejected the send with InsufficientFundsForRent.
+  it('leaves a Solana MAX holding the rent-exempt floor when the signed fee is below the quote', async () => {
+    const balance = 245_740_123n
+    const signedFee = 105_000n
+    mocks.getFeeAmount.mockResolvedValue(signedFee)
+    const approved = getMaxSendableAmount({
+      chain: Chain.Solana,
+      balance,
+      fee: 205_000n,
+    })
+
+    const refined = await refine(buildPayload({ chain: Chain.Solana, amount: approved }), balance)
+
+    expect(BigInt(refined.toAmount)).toBe(approved)
+    expect(balance - BigInt(refined.toAmount) - signedFee).toBeGreaterThanOrEqual(
+      BigInt(solanaConfig.walletRentExemptLamports)
+    )
+  })
+
+  it('refits a Solana MAX down to keep the rent-exempt floor when the signed fee is above the quote', async () => {
+    const balance = 245_740_123n
+    const signedFee = 205_000n
+    mocks.getFeeAmount.mockResolvedValue(signedFee)
+    const approved = getMaxSendableAmount({
+      chain: Chain.Solana,
+      balance,
+      fee: 105_000n,
+    })
+
+    const refined = await refine(buildPayload({ chain: Chain.Solana, amount: approved }), balance)
+
+    expect(BigInt(refined.toAmount)).toBe(balance - signedFee - BigInt(solanaConfig.walletRentExemptLamports))
+  })
+
+  it('refuses a Solana send whose balance only covers the fee and the rent-exempt floor', async () => {
+    const fee = 105_000n
+    mocks.getFeeAmount.mockResolvedValue(fee)
+
+    await expect(
+      refine(buildPayload({ chain: Chain.Solana, amount: 1n }), BigInt(solanaConfig.walletRentExemptLamports) + fee)
+    ).rejects.toThrow(BuildKeysignPayloadError)
+  })
+
   it('refuses before the ceremony when the fee swallows the balance', async () => {
     mocks.getFeeAmount.mockResolvedValue(20_000_000_000n)
 
@@ -174,7 +244,10 @@ describe('refineKeysignAmount', () => {
     const tokenBalance = 5_000_000n
 
     const refined = await refine(
-      buildPayload({ amount: tokenBalance, contractAddress: '0x3333333333333333333333333333333333333333' }),
+      buildPayload({
+        amount: tokenBalance,
+        contractAddress: '0x3333333333333333333333333333333333333333',
+      }),
       tokenBalance
     )
 
@@ -192,7 +265,11 @@ describe('refineKeysignAmount', () => {
     mocks.getFeeAmount.mockResolvedValue(fee)
 
     const refined = await refine(
-      buildPayload({ chain: Chain.TerraClassic, amount: balance, contractAddress: 'uusd' }),
+      buildPayload({
+        chain: Chain.TerraClassic,
+        amount: balance,
+        contractAddress: 'uusd',
+      }),
       balance
     )
 

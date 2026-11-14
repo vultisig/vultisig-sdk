@@ -159,6 +159,34 @@ describe('getMaxSendAmountFromKeys', () => {
     expect(mockGetSendFeeEstimate).toHaveBeenCalledWith(expect.objectContaining({ allowDeath: true }))
   })
 
+  // The signed payload re-reads the priority fee; if it comes in under this
+  // quote, a MAX of `balance - fee` strands a sub-rent remainder that Solana
+  // rejects, so the rent-exempt floor is kept back.
+  it('keeps the rent-exempt floor back for a native SOL max-send', async () => {
+    const balance = 245_740_123n
+    const fee = 105_000n
+    mockGetCoinBalance.mockResolvedValue(balance)
+    mockGetSendFeeEstimate.mockResolvedValue(fee)
+
+    const coin = {
+      chain: Chain.Solana,
+      address: 'A4431ZvwEbpavkp51PbQYMVp4GdwZGpegYpapiPWdRQ9',
+      decimals: 9,
+      ticker: 'SOL',
+    } as any
+
+    const result = await getMaxSendAmountFromKeys(baseIdentity, {
+      coin,
+      receiver: 'GogodXVKU6KfeZiSR9oybanGGZXRuQ34ogb2i3f3WvYi',
+    })
+
+    expect(result).toEqual({
+      balance,
+      fee,
+      maxSendable: balance - fee - 890_880n,
+    })
+  })
+
   it('returns the full 6-decimal ERC-20 balance and checks the native gas balance', async () => {
     const balance = 16_140_000n
     const fee = 20_000_000_000_000_000n

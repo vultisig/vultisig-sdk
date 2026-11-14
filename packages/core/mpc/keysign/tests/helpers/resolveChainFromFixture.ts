@@ -14,6 +14,7 @@ const aliases: Record<string, Chain> = {
   mantle: Chain.Mantle,
   hyperliquid: Chain.Hyperliquid,
   sei: Chain.Sei,
+  robinhood: Chain.Robinhood,
   bsc: Chain.BSC,
   binancesmartchain: Chain.BSC,
   smartchain: Chain.BSC,

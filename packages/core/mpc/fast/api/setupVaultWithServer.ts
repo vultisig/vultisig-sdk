@@ -1,5 +1,6 @@
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
+import { toLibType } from '../../types/utils/libType'
 import { fastVaultServerUrl } from '../config'
 
 type Input = {
@@ -18,6 +19,6 @@ type Input = {
 
 export const setupVaultWithServer = async ({ vaultBaseUrl, ...body }: Input) =>
   queryUrl(`${vaultBaseUrl ?? fastVaultServerUrl}/batch/keygen`, {
-    body,
+    body: { ...body, lib_type: toLibType('DKLS') },
     responseType: 'none',
   })

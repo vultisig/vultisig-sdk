@@ -82,14 +82,16 @@ See [references/vault-types.md](references/vault-types.md) for full details on k
 
 ## Quick Start (Agent-Friendly, Non-Interactive)
 
-FastVault creation requires email verification. Use `--two-step` for a fully non-interactive flow (or the CLI auto-detects non-TTY environments and enables it automatically).
+FastVault creation requires email verification. `--two-step` creates the vault without prompting (the CLI enables it automatically in non-TTY environments); the vault stays `pending_verification` until `vultisig verify` runs with the code from the email.
+
+`--email` must be an inbox the vault owner reads: VultiServer sends the activation code and the backup of its key share (`.vult`) there. A placeholder address sends both to an inbox nobody reads.
 
 ### 1. Create a FastVault
 
 ```bash
 vultisig create fast \
   --name "agent-wallet" \
-  --email "agent@example.com" \
+  --email "$OWNER_EMAIL" \
   --password "SecurePass123!" \
   --two-step \
   -o json
@@ -102,7 +104,7 @@ Returns:
   "status": "pending_verification",
   "message": "Vault created. Verify with email OTP to activate.",
   "verifyCommand": "vultisig verify abc123-def456 --code <OTP>",
-  "resendCommand": "vultisig verify abc123-def456 --resend --email agent@example.com --password <password>"
+  "resendCommand": "vultisig verify abc123-def456 --resend --email owner@example.com --password <password>"
 }
 ```
 
@@ -121,7 +123,7 @@ Returns:
 
 To resend the verification email:
 ```bash
-vultisig verify abc123-def456 --resend --email "agent@example.com" --password "SecurePass123!"
+vultisig verify abc123-def456 --resend --email "$OWNER_EMAIL" --password "SecurePass123!"
 ```
 
 ### 3. Get Addresses
@@ -322,7 +324,7 @@ vultisig info -o json
 # {"vault":{"id":"...","name":"...","type":"fast","chains":[...]}}
 
 # Create vault (two-step)
-vultisig create fast --name "w" --email "e@e.com" --password "p" --two-step -o json
+vultisig create fast --name "w" --email "$OWNER_EMAIL" --password "p" --two-step -o json
 # {"vaultId":"...","status":"pending_verification","verifyCommand":"vultisig verify ... --code <OTP>"}
 
 # Verify vault
@@ -336,7 +338,7 @@ vultisig verify <id> --code 123456 -o json
 
 ```bash
 # 1. Create vault (non-interactive, returns vault ID)
-RESULT=$(vultisig create fast --name "agent-wallet" --email "agent@example.com" --password "SecurePass123!" --two-step -o json)
+RESULT=$(vultisig create fast --name "agent-wallet" --email "$OWNER_EMAIL" --password "SecurePass123!" --two-step -o json)
 VAULT_ID=$(echo "$RESULT" | jq -r '.vaultId')
 
 # 2. User retrieves OTP from email, then verify

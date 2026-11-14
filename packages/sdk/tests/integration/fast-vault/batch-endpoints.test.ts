@@ -45,6 +45,7 @@ describe('Fast vault batch vs sequential HTTP contracts', () => {
       body: expect.objectContaining({
         protocols: ['ecdsa', 'eddsa'],
         hex_chain_code: 'hexcc',
+        lib_type: 1,
       }),
       responseType: 'none',
     })

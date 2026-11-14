@@ -61,7 +61,14 @@ const BLOCK_RESPONSE = {
   header: { hash: BLOCK_HASH, gas_price: BLOCK_GAS_PRICE, height: 216116469, latest_protocol_version: 86 },
 }
 
-type AccountFixture = { amount?: string; locked?: string; storage_usage?: number; unknown?: boolean }
+type AccountFixture = {
+  amount?: string
+  locked?: string
+  storage_usage?: number
+  unknown?: boolean
+  /** Answers `unknown` the way api.vultisig.com/near/ does: nearcore's message with no `name` or `cause`. */
+  namelessError?: boolean
+}
 
 type Fixtures = {
   account?: AccountFixture
@@ -82,6 +89,13 @@ const UNKNOWN_ACCOUNT_ERROR = {
   message: 'Server error',
   data: `account ${SENDER} does not exist while viewing`,
 }
+
+// Captured from api.vultisig.com/near/, 2026-10-21.
+const namelessUnknownAccountError = (accountId: unknown) => ({
+  code: -32000,
+  message: 'Server error',
+  data: `account ${String(accountId)} does not exist while viewing`,
+})
 
 const buildNearBody = ({ receiverId, deposit, nonce }: { receiverId: string; deposit: bigint; nonce: bigint }) => {
   const u32 = (value: number) => {
@@ -135,7 +149,11 @@ export const setupTransport = (fixtures: Fixtures) => {
 
         if (requestType === 'view_account') {
           if (account.unknown) {
-            return respond({ error: UNKNOWN_ACCOUNT_ERROR })
+            return respond({
+              error: account.namelessError
+                ? namelessUnknownAccountError(body.params?.account_id)
+                : UNKNOWN_ACCOUNT_ERROR,
+            })
           }
 
           return respond({
