@@ -250,6 +250,19 @@ describe('getRippleChainSpecific — states the XRPL operation on the wire', () 
     expect(res.transactionType).toBe(TransactionType.UNSPECIFIED)
   })
 
+  // Every send builder requests a Payment, but iOS and Android signers that
+  // predate RIPPLE_PAYMENT refuse it outright. Native XRP is unambiguous without
+  // it, so it must reach the wire unset or those co-signers cannot sign at all.
+  it('leaves a native XRP send undiscriminated even when a Payment is requested', async () => {
+    const res = await getRippleChainSpecific({
+      keysignPayload: payload(DEST_FUNDED, '1000'),
+      walletCore: {} as never,
+      transactionType: TransactionType.RIPPLE_PAYMENT,
+    })
+
+    expect(res.transactionType).toBe(TransactionType.UNSPECIFIED)
+  })
+
   it('does not claim a verbatim dApp transaction is a TrustSet', async () => {
     // `signRipple` is signed exactly as supplied and never rebuilt from the coin.
     // A dApp transaction carries no toAddress — an offer has no destination.
