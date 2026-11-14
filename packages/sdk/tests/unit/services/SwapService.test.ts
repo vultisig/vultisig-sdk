@@ -1370,4 +1370,44 @@ describe('SwapService', () => {
       ).rejects.toThrow('allowance rpc timeout')
     })
   })
+
+  describe('coin input validation', () => {
+    const usdc = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+    const address = '0x1234567890abcdef1234567890abcdef12345678'
+    const eth = { chain: Chain.Ethereum, address, ticker: 'ETH', decimals: 18 }
+
+    it('accepts contractAddress as an alias for id', async () => {
+      const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
+      vi.mocked(findSwapQuote).mockRejectedValue(new SwapError(SwapErrorCode.NoRoutesFound, 'stop after resolve'))
+
+      await expect(
+        service.getQuote({
+          fromCoin: { ...eth, ticker: 'USDC', decimals: 6, contractAddress: usdc } as any,
+          toCoin: eth,
+          amount: 1,
+        })
+      ).rejects.toThrow()
+
+      expect(findSwapQuote).toHaveBeenCalledWith(
+        expect.objectContaining({ from: { ...eth, ticker: 'USDC', decimals: 6, id: usdc } })
+      )
+    })
+
+    it.each([
+      ['a typo key', { ...eth, contract: usdc }, 'contract'],
+      // Used to fail isAccountCoin and resolve as the native coin.
+      ['string decimals', { ...eth, ticker: 'USDC', decimals: '6', contractAddress: usdc }, 'decimals'],
+      ['a token without address', { chain: Chain.Ethereum, contractAddress: usdc }, 'missing address'],
+      ['a blank token', { chain: Chain.Ethereum, token: ' ' }, 'token'],
+      ['a SimpleCoinInput without chain', { token: usdc }, 'chain'],
+    ])('rejects %s', async (_, fromCoin, key) => {
+      const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
+
+      await expect(service.getQuote({ fromCoin: fromCoin as any, toCoin: eth, amount: 1 })).rejects.toMatchObject({
+        code: VaultErrorCode.InvalidConfig,
+        message: expect.stringContaining(key),
+      })
+      expect(findSwapQuote).not.toHaveBeenCalled()
+    })
+  })
 })
