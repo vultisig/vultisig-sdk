@@ -1,5 +1,15 @@
 # @vultisig/cli
 
+## 11.1.1
+
+### Patch Changes
+
+- [#2624](https://github.com/vultisig/vultisig-sdk/pull/2624) [`a89e65f`](https://github.com/vultisig/vultisig-sdk/commit/a89e65fcf5d898ac8bdcfeed8aae84ae0799a95c) Thanks [@neavra](https://github.com/neavra)! - `send` on a secure vault now renders the keysign QR and reports device joins, matching `sign` (in JSON mode the QR is a `{"qrPayload": ...}` event line before the result). `execute` still prints a bare URL in JSON mode.
+
+- Updated dependencies [[`21b0462`](https://github.com/vultisig/vultisig-sdk/commit/21b04628f7bd5cfa6873888d76eec33d64a43068)]:
+  - @vultisig/core-chain@6.4.2
+  - @vultisig/sdk@11.1.1
+
 ## 11.1.0
 
 ### Patch Changes
