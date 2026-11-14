@@ -1,5 +1,11 @@
 # @vultisig/sdk
 
+## 11.1.1
+
+### Patch Changes
+
+- [#2626](https://github.com/vultisig/vultisig-sdk/pull/2626) [`21b0462`](https://github.com/vultisig/vultisig-sdk/commit/21b04628f7bd5cfa6873888d76eec33d64a43068) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(core-chain): use xrpscan's `/tx/` path for XRP transaction explorer links (was `/transaction/`, which xrpscan does not route)
+
 ## 11.1.0
 
 ### Minor Changes
