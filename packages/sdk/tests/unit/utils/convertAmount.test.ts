@@ -155,4 +155,87 @@ describe('convertAmount — fiat ↔ crypto (price as input)', () => {
     // sci-path small value also truncates rather than rounding up
     expect(cryptoToFiat({ amount: 9e-7, price: 1, fiatDecimals: 2 })).toBe('0')
   })
+
+  // A float result a hair below the true value used to lose a whole unit to truncation.
+  it('truncates the exact decimal result, not its float approximation', () => {
+    expect(cryptoToFiat({ amount: 1.15, price: 100 })).toBe('115')
+    expect(cryptoToFiat({ amount: 4.35, price: 100 })).toBe('435')
+    expect(fiatToCrypto({ fiatValue: 0.3, price: 0.1, decimals: 0 })).toBe('3')
+    expect(fiatToCrypto({ fiatValue: 100, price: 3, decimals: 18 })).toBe('33.333333333333333333')
+  })
+
+  it('takes plain-decimal strings digit for digit, beyond float precision', () => {
+    expect(cryptoToFiat({ amount: '12345678901234567.89', price: 1 })).toBe('12345678901234567.89')
+    expect(fiatToCrypto({ fiatValue: '0.30000000000000000001', price: '0.1', decimals: 20 })).toBe(
+      '3.0000000000000000001'
+    )
+  })
+
+  // A float round-trip of these strings rounds up past the true value (e.g. '+0.99…9' → 1).
+  it('takes leading-plus and exponent strings digit for digit', () => {
+    expect(cryptoToFiat({ amount: '+0.99999999999999999999', price: 1 })).toBe('0.99')
+    expect(cryptoToFiat({ amount: '0.99999999999999999999e0', price: 1 })).toBe('0.99')
+    expect(cryptoToFiat({ amount: '1.15e2', price: '+1' })).toBe('115')
+    expect(cryptoToFiat({ amount: '115E-2', price: 100 })).toBe('115')
+    expect(fiatToCrypto({ fiatValue: '99.999999999999999999e-2', price: 1, decimals: 18 })).toBe('0.999999999999999999')
+    expect(fiatToCrypto({ fiatValue: 9, price: '+.30000000000000000001e1', decimals: 0 })).toBe('2')
+    expect(fiatToCrypto({ fiatValue: '.3e+1', price: '1e0', decimals: 0 })).toBe('3')
+  })
+
+  it('still rejects results that overflow a float', () => {
+    expect(() => cryptoToFiat({ amount: 1e308, price: 1e308 })).toThrow(AmountConvertError)
+    expect(() => fiatToCrypto({ fiatValue: 1e308, price: 5e-324, decimals: 255 })).toThrow(AmountConvertError)
+  })
+
+  it('accepts operands with more fractional digits than the decimals cap', () => {
+    expect(fiatToCrypto({ fiatValue: 5e-324, price: 5e-324, decimals: 18 })).toBe('1')
+    expect(cryptoToFiat({ amount: 5e-324, price: 1 })).toBe('0')
+  })
+
+  it('matches exact decimal arithmetic for inputs with up to 8 fractional digits', () => {
+    const pow10 = (n: number) => 10n ** BigInt(n)
+    for (let aPlaces = 0; aPlaces <= 8; aPlaces++) {
+      for (let pPlaces = 0; pPlaces <= 8; pPlaces++) {
+        for (let a = 1n; a < 100_000_000n; a = a * 7n + 3n) {
+          for (let p = 1n; p < 100_000_000n; p = p * 13n + 5n) {
+            const amount = toHumanUnits(a.toString(), aPlaces)
+            const price = toHumanUnits(p.toString(), pPlaces)
+            expect(cryptoToFiat({ amount, price })).toBe(
+              toHumanUnits(((a * p * pow10(2)) / pow10(aPlaces + pPlaces)).toString(), 2)
+            )
+            expect(fiatToCrypto({ fiatValue: amount, price, decimals: 8 })).toBe(
+              toHumanUnits(((a * pow10(pPlaces + 8)) / (p * pow10(aPlaces))).toString(), 8)
+            )
+          }
+        }
+      }
+    }
+  })
+
+  it('matches exact decimal arithmetic for plus-sign and exponent strings past float precision', () => {
+    const pow10 = (n: number) => 10n ** BigInt(n)
+    const shifted = (units: bigint, shift: number) => (shift >= 0 ? units * pow10(shift) : units / pow10(-shift))
+    for (const digits of ['99999999999999999999', '12345678901234567891', '10000000000000000001']) {
+      const d = BigInt(digits)
+      const coefficients: [string, number][] = [
+        [digits, 0],
+        [`${digits[0]}.${digits.slice(1)}`, -19],
+        [`.${digits}`, -20],
+      ]
+      for (const [coefficient, coefficientShift] of coefficients) {
+        for (let e = -25; e <= 5; e++) {
+          const exp = e - coefficientShift
+          for (const s of [`${coefficient}e${exp}`, `+${coefficient}E${exp >= 0 ? '+' : ''}${exp}`]) {
+            expect(cryptoToFiat({ amount: s, price: 1 })).toBe(toHumanUnits(shifted(d, e + 2).toString(), 2))
+            expect(fiatToCrypto({ fiatValue: s, price: 1, decimals: 8 })).toBe(
+              toHumanUnits(shifted(d, e + 8).toString(), 8)
+            )
+            expect(fiatToCrypto({ fiatValue: 1, price: s, decimals: 8 })).toBe(
+              toHumanUnits((pow10(8 + Math.max(0, -e)) / (d * pow10(Math.max(0, e)))).toString(), 8)
+            )
+          }
+        }
+      }
+    }
+  })
 })
