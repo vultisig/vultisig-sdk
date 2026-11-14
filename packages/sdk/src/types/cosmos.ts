@@ -85,6 +85,8 @@ export type SignAminoInput = {
   fee: CosmosFeeInput
   /** Optional transaction memo */
   memo?: string
+  /** The sign doc's tx-level `timeout_height`, when the dApp set one */
+  timeoutHeight?: bigint
 }
 
 /**
