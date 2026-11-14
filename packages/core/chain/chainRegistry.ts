@@ -84,7 +84,7 @@ export const chainRegistry = Object.freeze({
   [Chain.Terra]: descriptor(Chain.Terra, `${cosmosBlockExplorer}/terra`, '/address/', '/tx/'),
   [Chain.TerraClassic]: descriptor(Chain.TerraClassic, 'https://finder.terra.money/classic', '/address/', '/tx/'),
   [Chain.Noble]: descriptor(Chain.Noble, `${cosmosBlockExplorer}/noble`, '/address/', '/tx/'),
-  [Chain.Ripple]: descriptor(Chain.Ripple, 'https://xrpscan.com', '/account/', '/transaction/'),
+  [Chain.Ripple]: descriptor(Chain.Ripple, 'https://xrpscan.com', '/account/', '/tx/'),
   [Chain.THORChain]: descriptor(Chain.THORChain, 'https://thorchain.net', '/address/', '/tx/'),
   [Chain.MayaChain]: descriptor(Chain.MayaChain, 'https://www.explorer.mayachain.info', '/address/', '/tx/'),
   [Chain.Akash]: descriptor(Chain.Akash, `${cosmosBlockExplorer}/akash`, '/address/', '/tx/'),
