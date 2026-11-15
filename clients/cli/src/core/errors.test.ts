@@ -109,15 +109,13 @@ describe('classifyError', () => {
     })
   })
 
-  it('G: classifies the raw AES-GCM authentication failure without overclaiming the cause', () => {
-    const result = classifyError(new Error('Unsupported state or unable to authenticate data'))
-    expect(result).toBeInstanceOf(AuthRequiredError)
-    expect(result).toMatchObject({
-      code: 'AUTH_REQUIRED',
-      exitCode: ExitCode.AUTH_REQUIRED,
-      message: 'Wrong vault password, or the vault data is corrupted',
-      hint: 'Check the password and try again; if it is correct, re-import the vault from a backup',
-    })
+  it('G: leaves raw AES-GCM authentication failures unclassified as password errors', () => {
+    const message = 'Unsupported state or unable to authenticate data'
+    const result = classifyError(new Error(message))
+    expect(result).toBeInstanceOf(UnknownError)
+    expect(result).toMatchObject({ code: 'UNKNOWN_ERROR', exitCode: ExitCode.UNKNOWN, message })
+    expect(result.code).not.toBe('AUTH_REQUIRED')
+    expect(result.message).not.toContain('Wrong vault password')
   })
 
   it('classifies bad address errors', () => {

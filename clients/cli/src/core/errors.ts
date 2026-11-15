@@ -787,9 +787,6 @@ export function classifyError(err: Error): VsigError {
 
   // Best-effort heuristic for errors that escape SDK typing — may misclassify
   const msg = err.message.toLowerCase()
-  if (msg.includes('unsupported state or unable to authenticate data') || msg.includes('unable to authenticate data')) {
-    return wrongPasswordError()
-  }
   const knownInput = classifyKnownInputShape(err)
   if (knownInput) return knownInput
   if (msg.includes('no vault found matching') || msg.includes('vault not found')) {
