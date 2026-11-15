@@ -257,6 +257,11 @@ export const getRippleChainSpecific: GetChainSpecificResolver<'rippleSpecific'> 
   // Only genuine originations are declared. Stamping a token send would make
   // every signer agree to build a TrustSet from it, which is worse than the
   // divergence: the ceremony completes over an operation nobody asked for.
+  //
+  // A requested Payment is declared only for an issued currency, the one case
+  // the coin leaves ambiguous. Native XRP stays unset: iOS and Android signers
+  // that predate RIPPLE_PAYMENT reject it, and the signed bytes are identical.
+  const isDeclaredPayment = transactionType === TransactionType.RIPPLE_PAYMENT && isIssuedCurrencySend
   return create(RippleSpecificSchema, {
     sequence: BigInt(account_data.Sequence),
     lastLedgerSequence: getRippleLastLedgerSequence(ledgerCurrentIndex),
@@ -265,7 +270,7 @@ export const getRippleChainSpecific: GetChainSpecificResolver<'rippleSpecific'> 
     ...(effectiveDestinationTag !== undefined ? { destinationTag: effectiveDestinationTag } : {}),
     ...(isTrustSet
       ? { transactionType: TransactionType.RIPPLE_TRUST_SET }
-      : transactionType === TransactionType.RIPPLE_PAYMENT
+      : isDeclaredPayment
         ? { transactionType: TransactionType.RIPPLE_PAYMENT }
         : {}),
   })
