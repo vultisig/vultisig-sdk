@@ -93,8 +93,7 @@ export const normalizeAccountCoin = (input: unknown): AccountCoin => {
   const isNativeToken = fields.isNativeToken
   for (const key of ignoredAccountCoinKeys) delete fields[key]
   if (fields.id == null || (typeof fields.id === 'string' && fields.id.trim() === '')) delete fields.id
-  const hasContract =
-    contractAddress != null && !(typeof contractAddress === 'string' && contractAddress.trim() === '')
+  const hasContract = contractAddress != null && !(typeof contractAddress === 'string' && contractAddress.trim() === '')
   if (hasContract) {
     const fail = (problem: string) => invalid('AccountCoin', accountCoinKeys, problem)
     if (!isTokenId(contractAddress)) throw fail(`contractAddress must be ${tokenIdRule}`)

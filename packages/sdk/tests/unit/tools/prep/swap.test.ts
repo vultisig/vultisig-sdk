@@ -70,7 +70,12 @@ const bindSwapQuote = (
     fromCoin = ethCoin,
     toCoin = btcCoin,
     recipient,
-  }: { expiresAt?: number; fromCoin?: any; toCoin?: any; recipient?: string } = {}
+  }: {
+    expiresAt?: number
+    fromCoin?: any
+    toCoin?: any
+    recipient?: string
+  } = {}
 ) =>
   ({
     quote,
@@ -95,13 +100,18 @@ const freshNativeQuote = (requestedAmount: bigint, fromCoin = ethCoin, toCoin = 
 
 describe('prepareSwapTxFromKeys', () => {
   it.each(['fromCoin', 'toCoin'])('validates %s before quote or wallet processing', async key => {
-    await expect(prepareSwapTxFromKeys(baseIdentity, {
-      fromCoin: ethCoin,
-      toCoin: btcCoin,
-      amount: '1',
-      swapQuote: freshNativeQuote(10n ** 18n),
-      [key]: { ...ethCoin, contractAdress: '0xtoken' },
-    })).rejects.toMatchObject({ code: 'INVALID_CONFIG', message: expect.stringContaining('contractAdress') })
+    await expect(
+      prepareSwapTxFromKeys(baseIdentity, {
+        fromCoin: ethCoin,
+        toCoin: btcCoin,
+        amount: '1',
+        swapQuote: freshNativeQuote(10n ** 18n),
+        [key]: { ...ethCoin, contractAdress: '0xtoken' },
+      })
+    ).rejects.toMatchObject({
+      code: 'INVALID_CONFIG',
+      message: expect.stringContaining('contractAdress'),
+    })
   })
 
   it('normalizes both contract aliases before checking the quote and building', async () => {
@@ -110,7 +120,11 @@ describe('prepareSwapTxFromKeys', () => {
     const { id: fromId, ...from } = fromCoin
     const { id: toId, ...to } = toCoin
     await prepareSwapTxFromKeys(baseIdentity, {
-      fromCoin: { ...from, contractAddress: fromId, isNativeToken: false } as any,
+      fromCoin: {
+        ...from,
+        contractAddress: fromId,
+        isNativeToken: false,
+      } as any,
       toCoin: { ...to, contractAddress: toId } as any,
       amount: '1',
       swapQuote: freshNativeQuote(10n ** 18n, fromCoin, toCoin),
@@ -498,7 +512,9 @@ describe('prepareSwapTxFromKeys — amount consistency (ABTS/plan 005)', () => {
             cosmosWasm: {
               sender: thorCoin.address,
               contract: 'thor1contract',
-              executeMsg: JSON.stringify({ swap: { min_return: '1', to: recipient } }),
+              executeMsg: JSON.stringify({
+                swap: { min_return: '1', to: recipient },
+              }),
               funds: [{ denom: 'rune', amount: '100000000' }],
             },
           },
@@ -652,7 +668,11 @@ describe('prepareSwapTxFromKeys — amount consistency (ABTS/plan 005)', () => {
     mockBuildSwapKeysignPayload.mockResolvedValue({ __mock: 'payload' })
 
     const quote = bindSwapQuote(
-      { general: { tx: { evm: { to: '0xrouter', data: '0xdeadbeef', value: '0' } } } },
+      {
+        general: {
+          tx: { evm: { to: '0xrouter', data: '0xdeadbeef', value: '0' } },
+        },
+      },
       1_000_000_000_000_000_000n
     )
     const params = {
