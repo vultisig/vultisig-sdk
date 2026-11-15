@@ -545,7 +545,10 @@ function isPermanentBroadcastInputError(err: VaultError): boolean {
 const INVALID_ADDRESS_RE = /invalid (?:receiver |recipient |destination )?address|bad address|malformed address/i
 
 function invalidAddressError(message: string): InvalidAddressError {
-  const receiverMatch = message.match(/invalid receiver address(?: format)? for chain [^:]+:\s*(.+)$/i)
+  // The SDK may append " (EIP-55 checksum mismatch: …)" to the receiver; context.address carries only the receiver.
+  const receiverMatch = message.match(
+    /invalid receiver address(?: format)? for chain [^:]+:\s*(.+?)(?:\s*\(EIP-55 checksum mismatch:[^)]*\))?$/i
+  )
   const fallbackMatch = message.match(/(0x[a-fA-F0-9]+|bc1[a-z0-9]+|[13][a-km-zA-HJ-NP-Z1-9]+)/i)
   const address = receiverMatch?.[1]?.trim() || fallbackMatch?.[1]
   return new InvalidAddressError(message, undefined, undefined, address ? { address } : undefined)
@@ -571,7 +574,11 @@ function classifyKnownInputShape(err: Error): InvalidInputError | undefined {
       return new InvalidInputError(err.message, 'Pass --destination-tag <tag>')
     }
 
-    const tokenNotFoundMatch = message.match(/token\s+"[^"]+"\s+not found on\s+([^.]+)\./i)
+    // Anchored to the SDK's own error shape (tokenRef.ts), optionally behind the prepare wrapper, so a RECEIVER that
+    // happens to contain this text is still classified as INVALID_ADDRESS by the address path below.
+    const tokenNotFoundMatch = message.match(
+      /^(?:Failed to prepare send transaction:\s*)?Token\s+"[^"]+"\s+not found on\s+([^.]+)\.\s/i
+    )
     if (tokenNotFoundMatch) {
       const chain = tokenNotFoundMatch[1].trim()
       return new InvalidInputError(err.message, `Run "vultisig tokens ${chain} --add <address>" to track it`)

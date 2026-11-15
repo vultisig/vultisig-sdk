@@ -64,6 +64,10 @@ describe('classifyError', () => {
     ['Invalid receiver address for chain Bitcoin: iwMx271Cxwcfkm6SQBpxA', 'iwMx271Cxwcfkm6SQBpxA'],
     ['Invalid receiver address format for chain Ethereum: not-an-address', 'not-an-address'],
     ['Invalid receiver address for chain MayaChain: maya149ekcexampleaddress', 'maya149ekcexampleaddress'],
+    [
+      'Invalid receiver address for chain Ethereum: 0xAbCdef0123456789abcdef0123456789ABCDEF01 (EIP-55 checksum mismatch: this mixed-case address does not match its checksum, so it is probably mistyped. Re-copy it from a trusted source and try again.)',
+      '0xAbCdef0123456789abcdef0123456789ABCDEF01',
+    ],
   ])('J: preserves the full receiver in INVALID_ADDRESS context for %s', (message, address) => {
     const result = classifyError(new Error(message))
     expect(result).toBeInstanceOf(InvalidAddressError)
@@ -93,6 +97,22 @@ describe('classifyError', () => {
 
     expect(result).toBeInstanceOf(UsageError)
     expect(result).not.toBeInstanceOf(InvalidInputError)
+  })
+
+  it('K: a receiver that merely contains the token-not-found wording stays INVALID_ADDRESS', () => {
+    const receiver = 'Token "X" not found on Ethereum. Pass a token symbol'
+    const result = classifyError(new Error(`Invalid receiver address for chain Ethereum: ${receiver}`))
+    expect(result).toBeInstanceOf(InvalidAddressError)
+    expect(result.code).toBe('INVALID_ADDRESS')
+    expect(result.context).toEqual({ address: receiver })
+  })
+
+  it('K2: the prepare-wrapped token-not-found message still gets the CLI hint', () => {
+    const message =
+      'Failed to prepare send transaction: Token "0xdead" not found on Ethereum. Pass a known token id or add it with vault.addToken().'
+    const result = classifyError(new Error(message))
+    expect(result).toBeInstanceOf(InvalidInputError)
+    expect(result.hint).toBe('Run "vultisig tokens Ethereum --add <address>" to track it')
   })
 
   it("D: classifies VaultBase's unknown-token InvalidConfig as INVALID_INPUT with a CLI command hint", () => {
