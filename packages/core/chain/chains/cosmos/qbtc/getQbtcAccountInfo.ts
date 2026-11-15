@@ -42,8 +42,8 @@ export const getQbtcAccountInfo = async ({ address }: { address: string }) => {
 
   return {
     address,
-    accountNumber: Number(accountNumberBigInt),
-    sequence: Number(sequenceBigInt),
+    accountNumber: accountNumberBigInt.toString(),
+    sequence: sequenceBigInt.toString(),
     accountNumberBigInt,
     sequenceBigInt,
     latestBlock,

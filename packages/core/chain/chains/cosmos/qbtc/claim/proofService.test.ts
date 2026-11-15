@@ -76,9 +76,7 @@ describe('checkProofServiceHealth', () => {
 
 describe('generateClaimProof', () => {
   const validInput = {
-    signatureR: 'aa'.repeat(24),
-    signatureS: 'bb'.repeat(32),
-    publicKey: '02' + 'cc'.repeat(32),
+    signature: Buffer.from('1f' + 'aa'.repeat(64), 'hex').toString('base64'),
     bitcoinAddress: 'bc1qatknmeca5p0fy5decdj5704hf7prt47e0e7e9n',
     utxos: [{ txid: 'dd'.repeat(32), vout: 0 }],
     claimerAddress: 'qbtc1abc',
@@ -106,9 +104,7 @@ describe('generateClaimProof', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          signature_r: validInput.signatureR,
-          signature_s: validInput.signatureS,
-          public_key: validInput.publicKey,
+          signature: validInput.signature,
           bitcoin_address: validInput.bitcoinAddress,
           utxos: validInput.utxos,
           claimer_address: validInput.claimerAddress,
@@ -161,7 +157,7 @@ describe('generateClaimProof', () => {
 
   it('forwards broadcast=true and the returned tx_hash', async () => {
     const validTxHash = 'AB'.repeat(32)
-    mockFetch({ ...validResponse, tx_hash: validTxHash })
+    mockFetch({ tx_hash: validTxHash })
 
     const result = await generateClaimProof({ ...validInput, broadcast: true })
 

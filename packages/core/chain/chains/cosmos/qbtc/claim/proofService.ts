@@ -1,3 +1,5 @@
+import { getClaimMessageText } from './computeClaimHashes'
+
 /** Base URL for the QBTC proof service. */
 export const defaultProofServiceUrl = 'https://proof.qbtc.network'
 
@@ -28,12 +30,8 @@ type UtxoRef = {
 }
 
 type GenerateClaimProofInput = {
-  /** r-component of the ECDSA signature (hex string). */
-  signatureR: string
-  /** s-component of the ECDSA signature (hex string). */
-  signatureS: string
-  /** Compressed secp256k1 public key (66-char hex string). */
-  publicKey: string
+  /** Base64-encoded 65-byte BIP-137 compact signature. */
+  signature: string
   /**
    * The P2PKH or P2WPKH address being claimed, exactly as stored on the
    * UTXOs. It is part of the signed claim message (btcq-org/qbtc#210).
@@ -64,7 +62,7 @@ type GenerateClaimProofResponse = {
   proof: string
   /**
    * 64-char hex SHA256 of the SEC-compressed BTC pubkey. Required by
-   * `MsgClaimWithProof` (proto field 7) since btcq-org/qbtc#148 — the
+   * `MsgClaimWithProof` (proto field 4) since btcq-org/qbtc#148 — the
    * chain runs RIPEMD160 over this natively to bind the proof to the
    * BTC address.
    */
@@ -96,6 +94,14 @@ const assertValidClaimProofResponse = (data: GenerateClaimProofResponse): void =
   if (typeof data.proof !== 'string' || data.proof.length === 0) {
     throw new Error('Invalid proof service response: missing proof')
   }
+  if (
+    data.proof.length < 200 ||
+    data.proof.length > 100_000 ||
+    data.proof.length % 2 !== 0 ||
+    !/^[0-9a-f]+$/i.test(data.proof)
+  ) {
+    throw new Error('Invalid proof service response: invalid proof')
+  }
   if (!isHexWithLength(data.pub_key_hash_sha256, 64)) {
     throw new Error('Invalid proof service response: invalid pub_key_hash_sha256')
   }
@@ -111,17 +117,19 @@ const assertValidClaimProofResponse = (data: GenerateClaimProofResponse): void =
  *
  * Timeout: up to 300 seconds — proof generation is computationally expensive.
  */
-export const generateClaimProof = async ({
-  signatureR,
-  signatureS,
-  publicKey,
+export function generateClaimProof(input: GenerateClaimProofInput & { broadcast: true }): Promise<{ tx_hash: string }>
+export function generateClaimProof(
+  input: GenerateClaimProofInput & { broadcast?: false }
+): Promise<GenerateClaimProofResponse>
+export async function generateClaimProof({
+  signature,
   bitcoinAddress,
   utxos,
   claimerAddress,
   chainId,
   baseUrl = defaultProofServiceUrl,
   broadcast,
-}: GenerateClaimProofInput): Promise<GenerateClaimProofResponse> => {
+}: GenerateClaimProofInput): Promise<GenerateClaimProofResponse | { tx_hash: string }> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), proofGenerationTimeoutMs)
 
@@ -131,9 +139,7 @@ export const generateClaimProof = async ({
       headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,
       body: JSON.stringify({
-        signature_r: signatureR,
-        signature_s: signatureS,
-        public_key: publicKey,
+        signature,
         bitcoin_address: bitcoinAddress,
         utxos: utxos.map(({ txid, vout }) => ({ txid, vout })),
         claimer_address: claimerAddress,
@@ -147,9 +153,54 @@ export const generateClaimProof = async ({
       throw new Error(`Proof service error (${response.status}): ${text}`)
     }
 
-    const data: GenerateClaimProofResponse = await response.json()
-    assertValidClaimProofResponse(data)
-    return data
+    const data: unknown = await response.json()
+    if (typeof data !== 'object' || data === null) {
+      throw new Error('Invalid proof service response')
+    }
+    if (broadcast) {
+      if (!('tx_hash' in data) || !isHexWithLength(data.tx_hash, 64)) {
+        throw new Error('Invalid proof service response: invalid tx_hash')
+      }
+      return { tx_hash: data.tx_hash }
+    }
+    if (
+      !('proof' in data) ||
+      typeof data.proof !== 'string' ||
+      !('pub_key_hash_sha256' in data) ||
+      typeof data.pub_key_hash_sha256 !== 'string' ||
+      !('message_text' in data) ||
+      typeof data.message_text !== 'string' ||
+      !('bitcoin_address' in data) ||
+      typeof data.bitcoin_address !== 'string' ||
+      !('claimer_address' in data) ||
+      typeof data.claimer_address !== 'string'
+    ) {
+      throw new Error('Invalid proof service response')
+    }
+    if (
+      data.message_text !==
+        getClaimMessageText({
+          chainId,
+          bitcoinAddress,
+          qbtcAddress: claimerAddress,
+        }) ||
+      data.bitcoin_address !== bitcoinAddress ||
+      data.claimer_address !== claimerAddress ||
+      ('receiver_address' in data && data.receiver_address !== '') ||
+      ('referrer_address' in data && data.referrer_address !== '')
+    ) {
+      throw new Error('Proof service response does not match the signed claim')
+    }
+    const proof = {
+      proof: data.proof,
+      pub_key_hash_sha256: data.pub_key_hash_sha256,
+      message_text: data.message_text,
+      bitcoin_address: data.bitcoin_address,
+      claimer_address: data.claimer_address,
+      utxos: utxos.map(({ txid, vout }) => ({ txid, vout })),
+    }
+    assertValidClaimProofResponse(proof)
+    return proof
   } finally {
     clearTimeout(timeout)
   }

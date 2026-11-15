@@ -43,15 +43,17 @@ describe('getQbtcAccountInfo', () => {
 
     expect(result.accountNumberBigInt).toBe(BigInt(accountNumber))
     expect(result.sequenceBigInt).toBe(BigInt(sequence))
+    expect(result.accountNumber).toBe(BigInt(accountNumber).toString())
+    expect(result.sequence).toBe(BigInt(sequence).toString())
   })
 
-  it('preserves the legacy numeric account fields for existing consumers', async () => {
+  it('returns decimal strings for account fields', async () => {
     mockResponses('7', '3')
 
     const result = await getQbtcAccountInfo({ address: 'qbtc1test' })
 
-    expect(result.accountNumber).toBe(7)
-    expect(result.sequence).toBe(3)
+    expect(result.accountNumber).toBe('7')
+    expect(result.sequence).toBe('3')
   })
 
   it.each([

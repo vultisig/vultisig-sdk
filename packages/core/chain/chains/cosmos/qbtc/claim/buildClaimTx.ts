@@ -84,11 +84,7 @@ export const validateClaimInput = (input: BuildMsgClaimWithProofInput) => {
 const encodeUtxoRef = ({ txid, vout }: UtxoRef): Uint8Array =>
   concatBytes(protoString(1, txid), protoVarint(2, BigInt(vout)))
 
-/**
- * Encodes MsgClaimWithProof as protobuf bytes. Fields 4-6 (message, address
- * and QBTC address hashes) are reserved since btcq-org/qbtc#210: the chain
- * derives them from the UTXO's address and the claim message text.
- */
+/** Encodes MsgClaimWithProof: claimer=1, UTXOs=2, proof=3, key hash=4, broadcaster=6. */
 const buildMsgClaimWithProof = (input: BuildMsgClaimWithProofInput): Uint8Array => {
   const utxoBytes = input.utxos.map(utxo => protoBytes(2, encodeUtxoRef(utxo)))
 
@@ -96,8 +92,8 @@ const buildMsgClaimWithProof = (input: BuildMsgClaimWithProofInput): Uint8Array 
     protoString(1, input.claimer),
     ...utxoBytes,
     protoString(3, input.proof),
-    protoString(7, input.pubKeyHashSha256),
-    protoString(9, input.broadcaster)
+    protoString(4, input.pubKeyHashSha256),
+    protoString(6, input.broadcaster)
   )
 }
 

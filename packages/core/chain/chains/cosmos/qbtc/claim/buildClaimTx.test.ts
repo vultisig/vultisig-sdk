@@ -125,16 +125,16 @@ describe('buildClaimTxBody', () => {
     expect(result.length).toBeGreaterThan(0)
   })
 
-  it('encodes broadcaster as proto field 9', () => {
+  it('encodes broadcaster as proto field 6', () => {
     const result = buildClaimTxBody({
       ...validInput,
       broadcaster: 'qbtc1broadcaster',
     })
-    // Proto field 9 with wire type 2 (length-delimited) → tag byte 0x4a
-    expect(Array.from(result)).toContain(0x4a)
+    // Proto field 6 with wire type 2 (length-delimited) → tag byte 0x32
+    expect(Array.from(result)).toContain(0x32)
   })
 
-  it('encodes no reserved field 4-6 (removed in btcq-org/qbtc#210)', () => {
-    expect(readMsgClaimWithProofFieldNumbers(buildClaimTxBody(validInput))).toEqual([1, 2, 3, 7, 9])
+  it('encodes the current claim message field numbers', () => {
+    expect(readMsgClaimWithProofFieldNumbers(buildClaimTxBody(validInput))).toEqual([1, 2, 3, 4, 6])
   })
 })
