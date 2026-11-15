@@ -1480,7 +1480,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    *
    * @returns Balance, fee, and max sendable amount (all in base units)
    */
-  async getMaxSendAmount(params: {
+  async getMaxSendAmount(rawParams: {
     coin: AccountCoin
     receiver: string
     memo?: string
@@ -1490,6 +1490,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     tonGasless?: boolean
     allowDeath?: boolean
   }): Promise<MaxSendAmount> {
+    const params = { ...rawParams, coin: normalizeAccountCoin(rawParams.coin) }
     const walletCore = await this.wasmProvider.getWalletCore()
     // Validate receiver before fetching balance so bad input doesn't waste a
     // network round-trip. computeMaxSendFromBalance re-validates for the

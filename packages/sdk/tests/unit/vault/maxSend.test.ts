@@ -29,7 +29,7 @@ describe('VaultBase.getMaxSendAmount', () => {
     mockGetPublicKey.mockReturnValue({ __mock: 'publicKey' })
   })
 
-  it('uses the balance service for both the token amount and native gas affordability', async () => {
+  it.each(['id', 'contractAddress'])('uses %s for token balance and native gas affordability', async key => {
     const tokenBalance = 16_140_000n
     const nativeBalance = 8_530_000_000_000_000_000n
     const fee = 20_000_000_000_000_000n
@@ -56,7 +56,7 @@ describe('VaultBase.getMaxSendAmount', () => {
       coin: {
         chain: Chain.Ethereum,
         address: '0xfrom',
-        id: tokenId,
+        [key]: tokenId,
         decimals: 6,
         ticker: 'USDC',
       },
@@ -67,6 +67,14 @@ describe('VaultBase.getMaxSendAmount', () => {
     expect(getBalance).toHaveBeenCalledWith(Chain.Ethereum, tokenId)
     expect(getBalance).toHaveBeenCalledWith(Chain.Ethereum)
     expect(result).toEqual({ balance: tokenBalance, fee, maxSendable: tokenBalance })
+  })
+
+  it('rejects a typo before fetching balance or loading wallet core', async () => {
+    const vault = Object.create(VaultBase.prototype) as VaultBase
+    await expect(vault.getMaxSendAmount({
+      coin: { chain: Chain.Ethereum, address: '0xfrom', decimals: 18, ticker: 'ETH', contractAdress: '0xtoken' } as any,
+      receiver: '0xto',
+    })).rejects.toMatchObject({ code: 'INVALID_CONFIG', message: expect.stringContaining('contractAdress') })
   })
 
   it('rejects an off-curve Solana recipient before fetching balances', async () => {

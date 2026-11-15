@@ -105,8 +105,26 @@ describe('getMaxSendAmountFromKeys', () => {
       maxSendable: balance - fee,
     })
     expect(mockGetCoinBalance).toHaveBeenCalledTimes(1)
-    expect(mockGetCoinBalance).toHaveBeenCalledWith(coin)
+    expect(mockGetCoinBalance).toHaveBeenCalledWith({
+      chain: coin.chain,
+      address: coin.address,
+      decimals: coin.decimals,
+      ticker: coin.ticker,
+    })
   })
+
+  it.each([{ contractAdress: '0xtoken' }])(
+    'rejects invalid coin fields before fetching balance: %j',
+    async extra => {
+      await expect(
+        getMaxSendAmountFromKeys(baseIdentity, {
+          coin: { chain: Chain.Ethereum, address: '0xfrom', decimals: 18, ticker: 'ETH', ...extra } as any,
+          receiver: '0xto',
+        })
+      ).rejects.toMatchObject({ code: 'INVALID_CONFIG', message: expect.stringContaining(Object.keys(extra)[0]) })
+      expect(mockGetCoinBalance).not.toHaveBeenCalled()
+    }
+  )
 
   // transfer_keep_alive refuses to leave the sender under Bittensor's 500 rao
   // existential deposit, so the MAX the SDK quotes has to keep it back too.
@@ -187,7 +205,7 @@ describe('getMaxSendAmountFromKeys', () => {
     })
   })
 
-  it('returns the full 6-decimal ERC-20 balance and checks the native gas balance', async () => {
+  it.each(['id', 'contractAddress'])('returns the token balance using %s and checks native gas', async key => {
     const balance = 16_140_000n
     const fee = 20_000_000_000_000_000n
     const nativeBalance = 8_530_000_000_000_000_000n
@@ -197,7 +215,7 @@ describe('getMaxSendAmountFromKeys', () => {
     const tokenCoin = {
       chain: Chain.Ethereum,
       address: '0xfrom',
-      id: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+      [key]: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
       decimals: 6,
       ticker: 'USDC',
     } as any
@@ -210,7 +228,10 @@ describe('getMaxSendAmountFromKeys', () => {
     expect(result.balance).toBe(balance)
     expect(result.fee).toBe(fee)
     expect(result.maxSendable).toBe(balance)
-    expect(mockGetCoinBalance).toHaveBeenNthCalledWith(1, tokenCoin)
+    expect(mockGetCoinBalance).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ id: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48' })
+    )
     expect(mockGetCoinBalance).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({ chain: Chain.Ethereum, address: '0xfrom', ticker: 'ETH' })

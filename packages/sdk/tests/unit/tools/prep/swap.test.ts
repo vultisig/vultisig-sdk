@@ -94,6 +94,30 @@ const freshNativeQuote = (requestedAmount: bigint, fromCoin = ethCoin, toCoin = 
   bindSwapQuote({ native: { expiry: Math.floor(Date.now() / 1000) + 600 } }, requestedAmount, { fromCoin, toCoin })
 
 describe('prepareSwapTxFromKeys', () => {
+  it.each(['fromCoin', 'toCoin'])('validates %s before quote or wallet processing', async key => {
+    await expect(prepareSwapTxFromKeys(baseIdentity, {
+      fromCoin: ethCoin,
+      toCoin: btcCoin,
+      amount: '1',
+      swapQuote: freshNativeQuote(10n ** 18n),
+      [key]: { ...ethCoin, contractAdress: '0xtoken' },
+    })).rejects.toMatchObject({ code: 'INVALID_CONFIG', message: expect.stringContaining('contractAdress') })
+  })
+
+  it('normalizes both contract aliases before checking the quote and building', async () => {
+    const fromCoin = { ...ethCoin, id: '0xtoken' }
+    const toCoin = { ...ethCoin, id: '0xother' }
+    const { id: fromId, ...from } = fromCoin
+    const { id: toId, ...to } = toCoin
+    await prepareSwapTxFromKeys(baseIdentity, {
+      fromCoin: { ...from, contractAddress: fromId, isNativeToken: false } as any,
+      toCoin: { ...to, contractAddress: toId } as any,
+      amount: '1',
+      swapQuote: freshNativeQuote(10n ** 18n, fromCoin, toCoin),
+    })
+    expect(mockBuildSwapKeysignPayload).toHaveBeenCalledWith(expect.objectContaining({ fromCoin, toCoin }))
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetWalletCore.mockResolvedValue(mockWalletCore)

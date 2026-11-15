@@ -23,10 +23,13 @@ const accountCoinKeys = {
 } satisfies Record<keyof AccountCoin, boolean>
 const simpleCoinKeys = { chain: true, token: false } satisfies Record<keyof SimpleCoinInput, boolean>
 
+// Compatibility metadata only; asset identifiers must never be silently stripped.
+const ignoredAccountCoinKeys = new Set(['isNativeToken'])
+
 const chains = new Set<unknown>(Object.values(Chain))
 const isNonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.trim() !== ''
 const isTokenId = (value: unknown) => isNonEmptyString(value) && !/^0x0{40}$/i.test(value)
-const tokenIdRule = 'a non-empty token contract (omit id for native)'
+const tokenIdRule = 'a non-zero token contract (omit id for native)'
 
 const valueRules: Record<string, [(value: unknown) => boolean, string]> = {
   chain: [value => chains.has(value), 'a known Chain value'],
@@ -34,7 +37,10 @@ const valueRules: Record<string, [(value: unknown) => boolean, string]> = {
   ticker: [isNonEmptyString, 'a non-empty string'],
   decimals: [value => Number.isInteger(value) && (value as number) >= 0, 'a non-negative integer'],
   id: [isTokenId, tokenIdRule],
-  token: [isNonEmptyString, 'a non-empty string'],
+  token: [isTokenId, tokenIdRule],
+  priceProviderId: [value => typeof value === 'string', 'a string'],
+  logo: [value => typeof value === 'string', 'a string'],
+  isHidden: [value => typeof value === 'boolean', 'a boolean'],
 }
 
 type Fields = Record<string, unknown>
@@ -84,7 +90,12 @@ const validate = (shape: string, spec: Record<string, boolean>, fields: Fields) 
 /** Validate an `AccountCoin`, copying a `contractAddress` alias into `id`. Never mutates the input. */
 export const normalizeAccountCoin = (input: unknown): AccountCoin => {
   const { contractAddress, ...fields } = toFields(input)
-  if (contractAddress !== undefined) {
+  const isNativeToken = fields.isNativeToken
+  for (const key of ignoredAccountCoinKeys) delete fields[key]
+  if (fields.id == null || (typeof fields.id === 'string' && fields.id.trim() === '')) delete fields.id
+  const hasContract =
+    contractAddress != null && !(typeof contractAddress === 'string' && contractAddress.trim() === '')
+  if (hasContract) {
     const fail = (problem: string) => invalid('AccountCoin', accountCoinKeys, problem)
     if (!isTokenId(contractAddress)) throw fail(`contractAddress must be ${tokenIdRule}`)
     if (fields.id !== undefined && fields.id !== contractAddress) {
@@ -92,8 +103,11 @@ export const normalizeAccountCoin = (input: unknown): AccountCoin => {
     }
     fields.id = contractAddress
   }
+  if (isNativeToken === true && fields.id !== undefined) {
+    throw invalid('AccountCoin', accountCoinKeys, 'isNativeToken conflicts with token id/contractAddress')
+  }
   validate('AccountCoin', accountCoinKeys, fields)
-  return (contractAddress === undefined ? input : fields) as AccountCoin
+  return fields as AccountCoin
 }
 
 /**

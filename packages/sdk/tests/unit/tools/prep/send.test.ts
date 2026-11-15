@@ -365,7 +365,8 @@ describe('prepareSendTxFromKeys', () => {
         address: 'rFrom',
         decimals: 6,
         ticker: 'XRP',
-      },
+        isNativeToken: true,
+      } as any,
       receiver: 'rDestination',
       amount: 1_000_000n,
       destinationTag: 12345,
@@ -610,6 +611,16 @@ describe('prepareSendTxFromKeys coin input validation', () => {
   })
 
   it.each([
+    ['a blank id', { ...nativeBnb, id: ' ' }],
+    ['a blank contractAddress', { ...nativeBnb, contractAddress: '' }],
+  ])('accepts %s as native', async (_, coin) => {
+    await expect(send(coin)).resolves.toEqual(mockPayload)
+
+    expect(builtCoin()).toEqual(nativeBnb)
+    expect(builtCoin()).not.toHaveProperty('id')
+  })
+
+  it.each([
     ['a typo key', { ...usdtCoin, contract: usdt }, 'contract'],
     ['string decimals with the alias', { ...usdtCoin, decimals: '18', contractAddress: usdt }, 'decimals'],
     ['a SimpleCoinInput', { chain: Chain.BSC, token: usdt }, 'token'],
@@ -617,8 +628,6 @@ describe('prepareSendTxFromKeys coin input validation', () => {
     ['an array', [], 'array'],
     ['an unknown chain', { ...nativeBnb, chain: 'bsc' }, 'chain'],
     ['a blank address', { ...nativeBnb, address: '  ' }, 'address'],
-    ['a blank id', { ...nativeBnb, id: ' ' }, 'id'],
-    ['a blank contractAddress', { ...nativeBnb, contractAddress: '' }, 'contractAddress'],
     ['the zero address as contractAddress', { ...nativeBnb, contractAddress: `0x${'0'.repeat(40)}` }, 'omit id'],
     ['the zero address as id', { ...nativeBnb, id: `0x${'0'.repeat(40)}` }, 'omit id'],
     ['contractAddress differing from id', { ...usdtCoin, id: usdt, contractAddress: '0xother' }, 'contractAddress'],
