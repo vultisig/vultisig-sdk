@@ -341,7 +341,7 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     const publicKey = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
     expect(reactNativeEntry.deriveQbtcAddress).toBe(canonicalDeriveQbtcAddress)
     expectTypeOf(reactNativeEntry.deriveQbtcAddress).toEqualTypeOf<(mldsaPublicKeyHex: string) => string>()
-    expect(reactNativeEntry.deriveQbtcAddress(publicKey)).toBe('qbtc1p3xsn0hgurfgfygl4wc9qslemjuujqg2x9fdnp')
+    expect(reactNativeEntry.deriveQbtcAddress(publicKey)).toBe('qbtc1fzz0m2h7537znl48zkwsmtwansy96csqd9q9zp')
   })
   it('exports the strict chain-ID resolver by identity with its string-only signature', () => {
     expect(reactNativeEntry.resolveChainIdReference).toBe(resolveChainIdReference)

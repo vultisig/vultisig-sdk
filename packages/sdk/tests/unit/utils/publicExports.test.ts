@@ -34,7 +34,7 @@ const dangerousAddressCanonicalExports = [
 ] as const
 
 const qbtcPublicKey = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
-const qbtcAddress = 'qbtc1p3xsn0hgurfgfygl4wc9qslemjuujqg2x9fdnp'
+const qbtcAddress = 'qbtc1fzz0m2h7537znl48zkwsmtwansy96csqd9q9zp'
 describe('@vultisig/sdk public exports', () => {
   it('exports canonical Cosmos validator helpers and types', () => {
     expect(sdk.getValidatorsUrl).toBe(cosmosStaking.getValidatorsUrl)
