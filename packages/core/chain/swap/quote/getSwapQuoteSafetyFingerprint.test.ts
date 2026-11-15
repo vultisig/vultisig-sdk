@@ -31,6 +31,25 @@ const recipientFingerprint = (recipient: string) =>
   })
 
 describe('getSwapQuoteSafetyFingerprint', () => {
+  it.each(['from', 'to'] as const)('treats blank %s coin IDs as native without changing non-blank IDs', side => {
+    const nativeCoin = { ...coin, id: undefined }
+    const coinFingerprint = (id?: string) =>
+      getSwapQuoteSafetyFingerprint({
+        from: coin,
+        to: coin,
+        [side]: id === undefined ? nativeCoin : { ...nativeCoin, id },
+        requestedAmount: 1n,
+        expiresAt: 1,
+        quote: { general: { value: 'quote' } } as never,
+      })
+
+    expect(coinFingerprint('')).toBe(coinFingerprint())
+    expect(coinFingerprint('  ')).toBe(coinFingerprint())
+    expect(coinFingerprint(coin.id)).not.toBe(coinFingerprint())
+    expect(coinFingerprint(' Token ')).not.toBe(coinFingerprint('Token'))
+    expect(coinFingerprint('Token')).not.toBe(coinFingerprint('token'))
+  })
+
   it('keeps canonical bigint tags distinct from provider object keys', () => {
     expect(fingerprint(5n)).not.toBe(fingerprint({ $bigint: '5' }))
   })

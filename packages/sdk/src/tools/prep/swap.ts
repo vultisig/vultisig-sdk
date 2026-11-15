@@ -12,6 +12,7 @@ import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v
 import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
 
 import { getWalletCore } from '../../context/wasmRuntime'
+import { normalizeAccountCoin } from '../../utils/normalizeCoinInput'
 import { assertEvmSwapSourceToken, decodeEvmSwapCommitment } from './evmSwapCommitment'
 import { SwapQuoteExpiredError } from './SwapQuoteExpiredError'
 import type { VaultIdentity } from './types'
@@ -164,7 +165,11 @@ export const prepareSwapTxFromKeys = async (
   params: PrepareSwapTxFromKeysParams,
   walletCoreOverride?: WalletCore
 ): Promise<KeysignPayload> => {
-  const safeParams = snapshotPreparationParams(params)
+  const safeParams = snapshotPreparationParams({
+    ...params,
+    fromCoin: normalizeAccountCoin(params.fromCoin),
+    toCoin: normalizeAccountCoin(params.toCoin),
+  })
   const { quote } = safeParams.swapQuote
   const requestedAmount = toChainAmount(safeParams.amount, safeParams.fromCoin.decimals)
   assertQuoteSafetyBinding(safeParams, requestedAmount)
