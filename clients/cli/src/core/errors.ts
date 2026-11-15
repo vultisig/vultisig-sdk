@@ -3,6 +3,7 @@ import {
   type ChainKind,
   getChainKind,
   StorageError,
+  type SwapErrorDetails,
   toCosmosSequenceMismatchError,
   VaultError,
   VaultErrorCode,
@@ -583,6 +584,23 @@ function classifyKnownInputShape(err: Error): InvalidInputError | undefined {
   return undefined
 }
 
+function invalidAmountError(err: VaultError): InvalidInputError {
+  const details = (err.originalError as { details?: SwapErrorDetails } | undefined)?.details
+  if (!details?.minAmountInHuman) return new InvalidInputError(err.message)
+
+  const context: Record<string, string> = { minimum: details.minAmountInHuman }
+  if (details.ticker) context.ticker = details.ticker
+  if (details.minAmountInBaseUnits) context.minimumBaseUnits = details.minAmountInBaseUnits
+
+  const ticker = details.ticker ? ` ${details.ticker}` : ''
+  return new InvalidInputError(
+    err.message,
+    `Increase the amount to at least ~${details.minAmountInHuman}${ticker}`,
+    undefined,
+    context
+  )
+}
+
 function classifyVaultError(err: VaultError): VsigError {
   // BalanceFetchFailed is a wrapper code — the real cause may be invalid input
   // (e.g. unknown chain). Unwrap originalError so we don't mis-tag validation
@@ -601,7 +619,7 @@ function classifyVaultError(err: VaultError): VsigError {
     case VaultErrorCode.Timeout:
       return new NetworkError(err.message)
     case VaultErrorCode.InvalidAmount:
-      return new InvalidInputError(err.message)
+      return invalidAmountError(err)
     case VaultErrorCode.AddressDerivationFailed:
       if (/mldsa/i.test(err.originalError?.message ?? '')) {
         return new InvalidInputError(

@@ -1,5 +1,28 @@
 # @vultisig/core-chain
 
+## 6.4.1
+
+### Patch Changes
+
+- [#2582](https://github.com/vultisig/vultisig-sdk/pull/2582) [`742ca32`](https://github.com/vultisig/vultisig-sdk/commit/742ca323e37307d47943b2066b506fce8e18f85e) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - An EVM aggregator swap that cannot be simulated is now signed with 1.5× the route's own gas figure instead of the generic 900,000 fallback. Swaps from an ERC-20 always take this path, because their allowance does not exist yet when the fee is quoted. A 1 USDC → USDT route that used 175,783 gas used to quote 900,000; it now quotes about 1.5× the aggregator's figure. An unsimulated route whose figure exceeded 900,000 used to be signed at that figure with no headroom, though aggregators can come in below the real cost. It now gets the same 1.5× headroom. Arbitrum, Robinhood, Mantle and zkSync keep the old fallback, since their gas also pays for posting data and an off-chain figure leaves that out. New export: `getEvmGasIncludesDataCost` from `tx/fee/evm/evmGasLimit`.
+
+- [#2583](https://github.com/vultisig/vultisig-sdk/pull/2583) [`b7e3c84`](https://github.com/vultisig/vultisig-sdk/commit/b7e3c84fc90588ade3425cb5e92e12b0a91a3af6) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - The network fee of a Solana aggregator swap (Jupiter, LI.FI, SwapKit) now comes from the provider's own transaction. The swap is signed as the provider built it, with only the blockhash replaced, so its ComputeBudget instructions set what the network charges. `getSolanaFeeAmount` used to quote the chain-specific priority fee instead, a flat 105,000 lamports for every swap. A recorded LI.FI SOL → USDC swap that mainnet charges 48,423 lamports now quotes 48,423. Sends, deposits and THORChain/Maya swaps from Solana are unchanged. New export: `getSolanaMessageFee` from `chains/solana/computeBudget`, which also now holds the ComputeBudget argument readers the Kamino decoder uses.
+
+- Updated dependencies [[`1cb7044`](https://github.com/vultisig/vultisig-sdk/commit/1cb704409f72439b206308a2f19cfbde5ca63202)]:
+  - @vultisig/mpc-types@0.4.0
+
+## 6.4.0
+
+### Minor Changes
+
+- [#2576](https://github.com/vultisig/vultisig-sdk/pull/2576) [`56853df`](https://github.com/vultisig/vultisig-sdk/commit/56853dfd79e9392c044659caa3f9911cf643d1cb) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Resolve send recipients typed as names: `.thor` (THORName, on THORNode), `.maya` (MAYAName, on MAYANode) and `.eth` (ENS, Ethereum only). `getNameServiceName` reads a typed recipient as a name by its suffix, `getBareNameServiceName` reads one typed without a suffix as a name of the chain's own service (a THORName on THORChain, a MAYAName on MayaChain, an ENS name on Ethereum), `isNameServiceChain` says whether its service can hold an address for a chain, and `resolveNameServiceName` returns the name's address on that chain, or `notFound` / `noAddressForChain`. A name that was never registered and an expired one are both `notFound`; a node that cannot be reached throws instead of reporting the name missing.
+
+### Patch Changes
+
+- [#2574](https://github.com/vultisig/vultisig-sdk/pull/2574) [`c060960`](https://github.com/vultisig/vultisig-sdk/commit/c0609605ba6523bd1df9f964c834f7b52832d24f) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - NEAR: a missing account or transaction reported without nearcore's structured error name (as the default `api.vultisig.com/near/` RPC does) is now read from nearcore's whole not-found message, so an unfunded account's balance reads 0 and a send to a named account that does not exist fails with `near-destination-not-found` instead of `NEAR query failed (UNKNOWN_ERROR)`. Structured names still win. NEAR transaction status now asks with `wait_until: NONE`, so an unknown hash is reported as `not_found` at once instead of the lookup timing out.
+
+- [#2571](https://github.com/vultisig/vultisig-sdk/pull/2571) [`9596b43`](https://github.com/vultisig/vultisig-sdk/commit/9596b4383d81c48653a8e08b5c57023270c47097) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - A native SOL MAX send no longer fails on-chain when the priority fee moves between the quote and signing. MAX now keeps Solana's rent-exempt floor (890,880 lamports) back, so the sender is never left holding a sub-rent remainder, which the runtime rejects with `InsufficientFundsForRent`. The Solana fee estimate also rounds the priority fee up to a whole lamport, as the runtime does, instead of quoting one lamport short.
+
 ## 6.3.0
 
 ### Minor Changes

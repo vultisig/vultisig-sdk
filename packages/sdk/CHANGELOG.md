@@ -1,5 +1,50 @@
 # @vultisig/sdk
 
+## 11.1.0
+
+### Minor Changes
+
+- [#2613](https://github.com/vultisig/vultisig-sdk/pull/2613) [`1cb7044`](https://github.com/vultisig/vultisig-sdk/commit/1cb704409f72439b206308a2f19cfbde5ca63202) Thanks [@realpaaao](https://github.com/realpaaao)! - Sign a dApp amino sign doc's tx-level `timeout_height`. `SignAmino` gains an optional `timeoutHeight`, the Cosmos signing input carries it when it is set and non-zero, and `SignAminoInput` accepts it. Without it the chain rejected the signature for any dApp that sets a timeout (Osmosis).
+
+### Patch Changes
+
+- [#2582](https://github.com/vultisig/vultisig-sdk/pull/2582) [`742ca32`](https://github.com/vultisig/vultisig-sdk/commit/742ca323e37307d47943b2066b506fce8e18f85e) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - An EVM aggregator swap that cannot be simulated is now signed with 1.5× the route's own gas figure instead of the generic 900,000 fallback. Swaps from an ERC-20 always take this path, because their allowance does not exist yet when the fee is quoted. A 1 USDC → USDT route that used 175,783 gas used to quote 900,000; it now quotes about 1.5× the aggregator's figure. An unsimulated route whose figure exceeded 900,000 used to be signed at that figure with no headroom, though aggregators can come in below the real cost. It now gets the same 1.5× headroom. Arbitrum, Robinhood, Mantle and zkSync keep the old fallback, since their gas also pays for posting data and an off-chain figure leaves that out. New export: `getEvmGasIncludesDataCost` from `tx/fee/evm/evmGasLimit`.
+
+- [#2579](https://github.com/vultisig/vultisig-sdk/pull/2579) [`c8e9b9d`](https://github.com/vultisig/vultisig-sdk/commit/c8e9b9d09dc8cd881a94c8f227fa92cdc3ea9c62) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Tighten signing checks for dApp transactions.
+
+- [#2583](https://github.com/vultisig/vultisig-sdk/pull/2583) [`b7e3c84`](https://github.com/vultisig/vultisig-sdk/commit/b7e3c84fc90588ade3425cb5e92e12b0a91a3af6) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - The network fee of a Solana aggregator swap (Jupiter, LI.FI, SwapKit) now comes from the provider's own transaction. The swap is signed as the provider built it, with only the blockhash replaced, so its ComputeBudget instructions set what the network charges. `getSolanaFeeAmount` used to quote the chain-specific priority fee instead, a flat 105,000 lamports for every swap. A recorded LI.FI SOL → USDC swap that mainnet charges 48,423 lamports now quotes 48,423. Sends, deposits and THORChain/Maya swaps from Solana are unchanged. New export: `getSolanaMessageFee` from `chains/solana/computeBudget`, which also now holds the ComputeBudget argument readers the Kamino decoder uses.
+
+- [#2615](https://github.com/vultisig/vultisig-sdk/pull/2615) [`43573f7`](https://github.com/vultisig/vultisig-sdk/commit/43573f75e2ad8c4ba3aea709713317db9ceda6b6) Thanks [@realpaaao](https://github.com/realpaaao)! - Zcash sends and THORChain/Maya ZEC swaps now sign version-5 transactions (ZIP-225 format, ZIP-244 sighash and txid). NU7 (mainnet block 3,543,405) rejects the version-4 transactions WalletCore builds, and version 5 is valid before and after activation. WalletCore still plans the transaction (UTXO selection, ZIP-317 fee, change, memo, branch id); only the pre-signing hashes and the signed bytes move off WalletCore. Inputs must be transparent P2PKH, memos are capped at 80 bytes, and a missing branch id, an output address WalletCore returns no lock script for, or a signature that does not verify throws before a transaction is produced. The returned txid is the ZIP-244 txid, which is not `sha256d` of the bytes. Every device in a keysign must run a build with this change: an older device computes v4 hashes and the keysign fails. SwapKit ZEC swaps are deposit-channel sends built by the same path, so they sign version 5 as well. New export: `tx/compile/zcash/zcashV5`.
+
+- [#2596](https://github.com/vultisig/vultisig-sdk/pull/2596) [`b881dd2`](https://github.com/vultisig/vultisig-sdk/commit/b881dd2ef9df11ae6d6a8ebecf09e84ef3437765) Thanks [@johnnyluo](https://github.com/johnnyluo)! - Bump zod 4.x to 4.6.6 (GHSA-mrhx-c7xc-m3w5).
+
+- Updated dependencies [[`1cb7044`](https://github.com/vultisig/vultisig-sdk/commit/1cb704409f72439b206308a2f19cfbde5ca63202)]:
+  - @vultisig/mpc-types@0.4.0
+  - @vultisig/mpc-native@1.0.2
+
+## 11.0.0
+
+### Major Changes
+
+- [#2575](https://github.com/vultisig/vultisig-sdk/pull/2575) [`795caa9`](https://github.com/vultisig/vultisig-sdk/commit/795caa9f51bce918afd5507d1faca8e9dc88fa6c) Thanks [@realpaaao](https://github.com/realpaaao)! - Install only what the published build imports. `@vultisig/sdk` now has 19 dependencies instead of 57; a fresh `npm install` goes from about 589 MB and 471 packages to about 216 MB and 144.
+
+  - The `.d.ts` files inline the `@vultisig/core-chain` and `@vultisig/core-mpc` types, so those packages and their dependency trees (Polkadot, Sui, LI.FI, XRPL, ethers, date-fns) are no longer installed. The Node and browser builds already bundled that code. This also fixes declarations that failed with `skipLibCheck: false`: version-skewed imports of ERC-20 helpers (typed as `any` before), type-only names used as values, and an unresolvable `@trustwallet/wallet-core` deep import.
+  - Libraries only the React Native build imports are now optional peer dependencies: `@cosmjs/encoding`, `@lifi/sdk`, `@mysten/sui`, `@polkadot/api`, `@polkadot/util`, `@polkadot/util-crypto`, `@solana/spl-token`, `bitcoinjs-lib`, `bs58`, `bs58check`, `cbor-x`, `js-md5`, `ripple-address-codec`, `xrpl`.
+  - The `@vultisig/sdk/vite` preset's toolchain is now optional peer dependencies (`vite-plugin-wasm`, `vite-plugin-node-polyfills`, `crypto-browserify`, `stream-browserify`, `path-browserify`, `process`, `util`, `events`). The preset resolves them when `vultisig()` runs and throws one error naming any that are missing. `isomorphic-fetch` is also an optional peer, needed only if your app's graph imports `node-fetch`.
+  - Removed unused dependencies: `axios`, `uuid`, `i18next`, `i18next-http-backend`, `@coral-xyz/anchor`, `date-fns`, `ethers`, `node-fetch`. Added `@cosmjs/proto-signing`, which the build imports but was never declared.
+
+  See MIGRATING.md for the install lines React Native and Vite apps need.
+
+### Patch Changes
+
+- [#2572](https://github.com/vultisig/vultisig-sdk/pull/2572) [`7a8e609`](https://github.com/vultisig/vultisig-sdk/commit/7a8e6093555b0531f08f6e2e21eaefa33c40a027) Thanks [@realpaaao](https://github.com/realpaaao)! - Fast vaults created with `tssBatching: true` can now be fast-signed. `setupVaultWithServer` now sends `lib_type: DKLS` to `/vault/batch/keygen`. Before, VultiServer stored the vault as GG20, and every fast sign timed out after 3 minutes.
+
+- [#2574](https://github.com/vultisig/vultisig-sdk/pull/2574) [`c060960`](https://github.com/vultisig/vultisig-sdk/commit/c0609605ba6523bd1df9f964c834f7b52832d24f) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - NEAR: a missing account or transaction reported without nearcore's structured error name (as the default `api.vultisig.com/near/` RPC does) is now read from nearcore's whole not-found message, so an unfunded account's balance reads 0 and a send to a named account that does not exist fails with `near-destination-not-found` instead of `NEAR query failed (UNKNOWN_ERROR)`. Structured names still win. NEAR transaction status now asks with `wait_until: NONE`, so an unknown hash is reported as `not_found` at once instead of the lookup timing out.
+
+- [#2505](https://github.com/vultisig/vultisig-sdk/pull/2505) [`a4ae3c5`](https://github.com/vultisig/vultisig-sdk/commit/a4ae3c5f0855a560ee5400aa4a96ae492b14eb68) Thanks [@neavra](https://github.com/neavra)! - QBTC on a vault without an ML-DSA key: `chains --add-all` now preserves enabled chains and reports underivable ones as `skipped` or `unavailable`, `chains --add QBTC` fails closed, `addresses` lists it under `failures` instead of printing a stack trace, and `balance QBTC` reports a non-retryable invalid-input error with a vault-aware hint. The SDK gains `vault.addressesDetailed()` and `vault.getUnderivableChains()`, and `vault.addChain()` / `vault.setChains()` now reject newly added chains that the vault cannot derive.
+
+- [#2571](https://github.com/vultisig/vultisig-sdk/pull/2571) [`9596b43`](https://github.com/vultisig/vultisig-sdk/commit/9596b4383d81c48653a8e08b5c57023270c47097) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - A native SOL MAX send no longer fails on-chain when the priority fee moves between the quote and signing. MAX now keeps Solana's rent-exempt floor (890,880 lamports) back, so the sender is never left holding a sub-rent remainder, which the runtime rejects with `InsufficientFundsForRent`. The Solana fee estimate also rounds the priority fee up to a whole lamport, as the runtime does, instead of quoting one lamport short.
+
 ## 10.1.0
 
 ### Minor Changes

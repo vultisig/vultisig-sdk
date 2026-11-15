@@ -5,7 +5,6 @@ import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import type { Plugin, PluginOption, ResolvedConfig, UserConfig } from 'vite'
-import wasm from 'vite-plugin-wasm'
 
 const WASM_GLUE = ['@vultisig/lib-dkls', '@vultisig/lib-schnorr', '@vultisig/lib-mldsa'] as const
 const ADDITIONAL_WASM_EXCLUDES = ['7z-wasm'] as const
@@ -13,32 +12,59 @@ const ADDITIONAL_WASM_EXCLUDES = ['7z-wasm'] as const
 const sdkPackageJson = fileURLToPath(new URL('../../package.json', import.meta.url))
 const requireFromSdk = createRequire(sdkPackageJson)
 
-const DEFAULT_ALIASES: Readonly<Record<string, string>> = {
-  crypto: requireFromSdk.resolve('crypto-browserify'),
-  'node:crypto': requireFromSdk.resolve('crypto-browserify'),
-  stream: requireFromSdk.resolve('stream-browserify'),
-  'node:stream': requireFromSdk.resolve('stream-browserify'),
-  buffer: requireFromSdk.resolve('buffer/'),
-  'node:buffer': requireFromSdk.resolve('buffer/'),
-  util: requireFromSdk.resolve('util/'),
-  'node:util': requireFromSdk.resolve('util/'),
-  path: requireFromSdk.resolve('path-browserify'),
-  'node:path': requireFromSdk.resolve('path-browserify'),
-  events: requireFromSdk.resolve('events/'),
-  'node:events': requireFromSdk.resolve('events/'),
-  process: requireFromSdk.resolve('process/browser'),
-  'node:process': requireFromSdk.resolve('process/browser'),
-  'node-fetch': 'isomorphic-fetch',
-}
+type ModuleRequire = ReturnType<typeof createRequire>
+
+/** Node builtin → browser shim. The shim packages are optional peers the consumer installs. */
+const BROWSER_SHIMS = {
+  crypto: 'crypto-browserify',
+  stream: 'stream-browserify',
+  buffer: 'buffer/',
+  util: 'util/',
+  path: 'path-browserify',
+  events: 'events/',
+  process: 'process/browser',
+} as const
 
 const DEFAULT_OPT_INCLUDE = ['buffer', 'process', 'crypto-browserify', 'stream-browserify', 'events'] as const
 
-const nodePolyfillsPackageDir = path.dirname(path.dirname(requireFromSdk.resolve('vite-plugin-node-polyfills')))
+const packageNameOf = (specifier: string) =>
+  specifier.startsWith('@') ? specifier.split('/').slice(0, 2).join('/') : specifier.split('/')[0]
+
+/** Resolves from the consumer's project first, then from the SDK's own install. */
+const tryResolve = (resolvers: readonly ModuleRequire[], specifier: string) => {
+  for (const resolver of resolvers) {
+    try {
+      return resolver.resolve(specifier)
+    } catch {
+      // Try the next resolver.
+    }
+  }
+  return undefined
+}
 
 /** Absolute paths to ESM shim files (avoids package export edge cases without importing raw CJS files). */
-const BUFFER_SHIM_FILE = path.join(nodePolyfillsPackageDir, 'shims/buffer/dist/index.js')
-const PROCESS_SHIM_FILE = path.join(nodePolyfillsPackageDir, 'shims/process/dist/index.js')
-const GLOBAL_SHIM_FILE = path.join(nodePolyfillsPackageDir, 'shims/global/dist/index.js')
+const nodePolyfillShimFiles = (packageDir: string) => ({
+  'vite-plugin-node-polyfills/shims/buffer': path.join(packageDir, 'shims/buffer/dist/index.js'),
+  'vite-plugin-node-polyfills/shims/process': path.join(packageDir, 'shims/process/dist/index.js'),
+  'vite-plugin-node-polyfills/shims/global': path.join(packageDir, 'shims/global/dist/index.js'),
+})
+
+/** Resolves every specifier, or throws one error naming each package that is missing. */
+const resolvePeers = (resolvers: readonly ModuleRequire[], specifiers: readonly string[]) => {
+  const paths: Record<string, string> = {}
+  const missing = new Set<string>()
+  for (const specifier of specifiers) {
+    const resolved = tryResolve(resolvers, specifier)
+    if (resolved) paths[specifier] = resolved
+    else missing.add(packageNameOf(specifier))
+  }
+  if (missing.size === 0) return paths
+  const names = [...missing].join(' ')
+  throw new Error(
+    `[vultisig-sdk] @vultisig/sdk/vite needs these packages in your project: ${names}. ` +
+      `Install them as dev dependencies: npm install -D ${names} (or yarn add -D / pnpm add -D).`
+  )
+}
 
 export type VultisigViteOptions = {
   /**
@@ -130,7 +156,31 @@ export default function vultisig(userOptions: VultisigViteOptions = {}): PluginO
   let command: ResolvedConfig['command'] = 'build'
   let sevenZipWasmFile: string | undefined
   let walletCoreWasmFile: string | undefined
-  const mergedAliases: Record<string, string> = { ...DEFAULT_ALIASES, ...userAliases }
+
+  const peerResolvers = [createRequire(path.join(configRoot, 'package.json')), requireFromSdk]
+  const peerSpecifiers: string[] = [
+    ...Object.values(BROWSER_SHIMS),
+    'vite-plugin-wasm',
+    ...(useShimResolver || useNodePolyfills ? ['vite-plugin-node-polyfills'] : []),
+  ]
+  const peerPaths = resolvePeers(peerResolvers, peerSpecifiers)
+
+  const shimAliases = Object.fromEntries(
+    Object.entries(BROWSER_SHIMS).flatMap(([builtin, specifier]) => [
+      [builtin, peerPaths[specifier]],
+      [`node:${builtin}`, peerPaths[specifier]],
+    ])
+  )
+  const mergedAliases: Record<string, string> = {
+    ...shimAliases,
+    'node-fetch': 'isomorphic-fetch',
+    ...userAliases,
+  }
+  const wasm = requireFromSdk(peerPaths['vite-plugin-wasm']) as () => Plugin
+  // `resolve('vite-plugin-node-polyfills')` is `<pkg>/dist/index.cjs`.
+  const shimFiles: Readonly<Record<string, string>> = useShimResolver
+    ? nodePolyfillShimFiles(path.dirname(path.dirname(peerPaths['vite-plugin-node-polyfills'])))
+    : {}
   const excludeList = [...WASM_GLUE, ...ADDITIONAL_WASM_EXCLUDES, ...(userOptimize.exclude ?? [])]
   const includeList = [...DEFAULT_OPT_INCLUDE, ...(userOptimize.include ?? [])]
 
@@ -224,16 +274,7 @@ export default function vultisig(userOptions: VultisigViteOptions = {}): PluginO
     enforce: 'pre',
     resolveId(id) {
       if (!useShimResolver) return null
-      if (id === 'vite-plugin-node-polyfills/shims/buffer') {
-        return BUFFER_SHIM_FILE
-      }
-      if (id === 'vite-plugin-node-polyfills/shims/process') {
-        return PROCESS_SHIM_FILE
-      }
-      if (id === 'vite-plugin-node-polyfills/shims/global') {
-        return GLOBAL_SHIM_FILE
-      }
-      return null
+      return shimFiles[id] ?? null
     },
   }
 
@@ -324,10 +365,10 @@ export default function vultisig(userOptions: VultisigViteOptions = {}): PluginO
     },
   }
 
-  const out: Plugin[] = [configPlugin, browserGlobalsPlugin, wasm() as unknown as Plugin]
+  const out: Plugin[] = [configPlugin, browserGlobalsPlugin, wasm()]
   if (useShimResolver) out.push(shimPlugin)
   if (useNodePolyfills) {
-    const { nodePolyfills: nodePolyfillsFactory } = requireFromSdk('vite-plugin-node-polyfills') as {
+    const { nodePolyfills: nodePolyfillsFactory } = requireFromSdk(peerPaths['vite-plugin-node-polyfills']) as {
       nodePolyfills: (opts: Record<string, unknown>) => Plugin
     }
     out.push(

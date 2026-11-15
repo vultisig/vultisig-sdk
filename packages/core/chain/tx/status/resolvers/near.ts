@@ -39,7 +39,12 @@ const readExecutionStatus = (response: NearStatusResponse): 'success' | 'error' 
  * because the lookup is sharded by sender, so a missing `senderAccountId` fails
  * closed instead of reporting an unknown hash as pending forever.
  *
- * UNKNOWN_TRANSACTION is `not_found` (affirmatively no record); a node-side wait
+ * Asked with `wait_until: NONE`, the node reports what it knows now. At any other
+ * level it waits for the transaction and answers a hash it never sees with
+ * TIMEOUT_ERROR (HTTP 408), never UNKNOWN_TRANSACTION, so `not_found` would be
+ * unreachable; callers poll instead.
+ *
+ * UNKNOWN_TRANSACTION is `not_found` (affirmatively no record); a node-side
  * timeout is `pending` with `isKnown: false`.
  */
 export const getNearTxStatus: TxStatusResolver<OtherChain.Near> = async ({ hash, senderAccountId }) => {
@@ -53,7 +58,7 @@ export const getNearTxStatus: TxStatusResolver<OtherChain.Near> = async ({ hash,
     response = await callNearRpc<NearStatusResponse>('tx', {
       tx_hash: hash,
       sender_account_id: senderAccountId,
-      wait_until: NEAR_FINAL_EXECUTION_STATUS,
+      wait_until: 'NONE',
     })
   } catch (error) {
     const errorName = getNearRpcErrorName(error)

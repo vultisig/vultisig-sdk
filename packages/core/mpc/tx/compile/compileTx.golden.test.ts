@@ -17,7 +17,7 @@
  *   does not include Bittensor's current signed extensions.
  * - QBTC pins the custom Cosmos TxRaw assembly used for MLDSA signatures, which
  *   WalletCore cannot verify or assemble.
- * - Bitcoin-Cash, Litecoin, Dogecoin, Dash, and Zcash pin WalletCore
+ * - Bitcoin-Cash, Litecoin, Dogecoin, and Dash pin WalletCore
  *   compileWithSignatures output for the generic (non-SwapKit-PSBT) UTXO send
  *   path, cross-checked against walletCore.AnySigner.sign with an embedded
  *   private key — the same second-implementation pattern used for EVM/Solana/
@@ -28,12 +28,11 @@
  *   inputs: both share Bitcoin's original legacy P2PKH sighash algorithm with
  *   no chain-specific wire marker, so the only chain-identifying artifact is
  *   the address encoding (base58 version byte), not the transaction bytes.
- * - Zcash pins WalletCore's *current* output, which is version-4 (Sapling)
- *   framing signed with a NU5+ consensus branch id — WalletCore does not
- *   implement true NU5 v5 (ZIP-244/Orchard) transaction framing. This suite
- *   only guards against a wire-format regression in that WalletCore output;
- *   the SDK's independent NU5 v5-aware UTXO builder is verified separately
- *   elsewhere in this audit and is out of scope here.
+ * - Zcash compiles through the SDK's own transparent v5 (ZIP-225 / ZIP-244)
+ *   builder, because WalletCore only emits version-4 (Sapling) framing, which
+ *   NU7 rejects. The v5 bytes are pinned to values from an independent ZIP-244
+ *   reference implementation; WalletCore's AnySigner output stays pinned as v4
+ *   so the test flags the day WalletCore ships v5 and Zcash can route back.
  */
 import { Buffer } from 'buffer'
 import { readFileSync } from 'fs'
@@ -87,7 +86,9 @@ const EXPECTED_DOGE_RAW_TX =
   '01000000014444444444444444444444444444444444444444444444444444444444444444000000006a47304402207048fb061ed4502f7c4517a4bcfa152f406e9f3cfc46639e15488b1a197fd2a002202b853ec92c43c36eb1a342df8182c3ec2f9762c717645cc296b313af5a67e5830121031b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078fffffffff0270110100000000001976a914ebc0ee0b2ab9e8277a600c251475e22a3241a1c188ac28b90000000000001976a91479b000887626b294a914501a4cd226b58b23598388ac00000000'
 const EXPECTED_DASH_RAW_TX =
   '01000000015555555555555555555555555555555555555555555555555555555555555555000000006b4830450221008e10337a586413f4dc93616bb07a1eee4ff23a42b4bbc7a6198789760beaca5f0220024ce21dfa1c31017715ee638677c1aa2c3af6ce04f903d9c0f195e35c82d9080121031b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078fffffffff0280380100000000001976a914ebc0ee0b2ab9e8277a600c251475e22a3241a1c188ac16340100000000001976a91479b000887626b294a914501a4cd226b58b23598388ac00000000'
-const EXPECTED_ZEC_RAW_TX =
+const EXPECTED_ZEC_V5_RAW_TX =
+  '050000800a27a72630f337540000000000000000016666666666666666666666666666666666666666666666666666666666666666000000006a47304402204ee30b1feb4e13837e01e2c013f3f4110f108cd3827a8052e6066278e70f430002201d0e73f20d599f7f26a74f442f8a9ff512108549f54f4c7162a61fc0e13158a40121031b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078fffffffff02905f0100000000001976a914ebc0ee0b2ab9e8277a600c251475e22a3241a1c188ac80380100000000001976a91479b000887626b294a914501a4cd226b58b23598388ac000000'
+const EXPECTED_ZEC_WALLETCORE_V4_RAW_TX =
   '0400008085202f89016666666666666666666666666666666666666666666666666666666666666666000000006a473044022065cf6eff680bc0bdbb40c07b05f8f9791213e3791a4ea94d59056d808ffefa6e0220058f39d10fbe41932e58097ce95e4f40b35a4f5e69ca4a2405f0b966cb6c76820121031b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078fffffffff02905f0100000000001976a914ebc0ee0b2ab9e8277a600c251475e22a3241a1c188ac80380100000000001976a91479b000887626b294a914501a4cd226b58b23598388ac00000000000000000000000000000000000000'
 
 /**
@@ -900,7 +901,7 @@ describe('compileTx golden vectors', () => {
     expect(dogecoin.compiledRaw).toBe(dash.compiledRaw)
   })
 
-  it('pins WalletCore output for a Zcash (NU5+ branch id, v4 Sapling framing) transfer', () => {
+  it('compiles a Zcash transfer as v5 while WalletCore AnySigner still emits v4', () => {
     const { compiledRaw, signedRaw } = compileUtxoGolden({
       walletCore,
       chain: Chain.Zcash,
@@ -909,8 +910,8 @@ describe('compileTx golden vectors', () => {
       byteFee: 10,
     })
 
-    expect(compiledRaw).toBe(EXPECTED_ZEC_RAW_TX)
-    expect(compiledRaw).toBe(signedRaw)
+    expect(compiledRaw).toBe(EXPECTED_ZEC_V5_RAW_TX)
+    expect(signedRaw).toBe(EXPECTED_ZEC_WALLETCORE_V4_RAW_TX)
   })
 
   it('pins the manual Cardano witness wrapper', () => {

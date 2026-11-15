@@ -644,7 +644,13 @@ const sdk = new Vultisig({
 
 ### Web apps: Vite
 
-Install the peer dependency `vite` and add the SDK preset. It excludes wasm glue packages from the dev pre-bundler, wires wasm handling, browser shim aliases, and a lightweight `process` preamble, serves `7zz.wasm` and `wallet-core.wasm` in dev, and emits both wasm assets into the build output. It does not write SDK artifacts into your source `public/` directory.
+Install `vite` and the preset's optional peer dependencies, then add the SDK preset. `vultisig()` throws an error naming any that are missing:
+
+```sh
+npm install -D vite vite-plugin-wasm vite-plugin-node-polyfills crypto-browserify stream-browserify path-browserify process util events
+```
+
+The preset excludes wasm glue packages from the dev pre-bundler, wires wasm handling, browser shim aliases, and a lightweight `process` preamble, serves `7zz.wasm` and `wallet-core.wasm` in dev, and emits both wasm assets into the build output. It does not write SDK artifacts into your source `public/` directory.
 
 With `@vitejs/plugin-react` (or your UI plugin), a minimal `vite.config` looks like this:
 
@@ -660,7 +666,7 @@ export default defineConfig({
 
 MPC WebAssembly (DKLS, Schnorr, ML-DSA) is loaded from the `@vultisig/lib-*` packages that ship with `@vultisig/sdk` — keep those packages in `node_modules` and do **not** pre-bundle them; the plugin sets `optimizeDeps.exclude` for you. You do not need to copy those `.wasm` files into `public/`.
 
-`7z-wasm` is also excluded from pre-bundling so fetches line up with the package layout. `@trustwallet/wallet-core` is intentionally left available for Vite to pre-bundle because the package is CommonJS and browser dev servers need Vite's CJS interop for exports such as `initWasm`; the preset serves its `wallet-core.wasm` payload wherever the loader requests it in dev and emits it next to built chunks. Install the usual browser shims the preset pre-bundles (for example `buffer`, `process`, `crypto-browserify`, `stream-browserify`, `events`, `util`, `path-browserify`); the [browser example](../../examples/browser) shows a full dependency set.
+`7z-wasm` is also excluded from pre-bundling so fetches line up with the package layout. `@trustwallet/wallet-core` is intentionally left available for Vite to pre-bundle because the package is CommonJS and browser dev servers need Vite's CJS interop for exports such as `initWasm`; the preset serves its `wallet-core.wasm` payload wherever the loader requests it in dev and emits it next to built chunks. The [browser example](../../examples/browser) shows a full dependency set.
 
 `import vultisig from '@vultisig/sdk/vite'` returns a [Vite `PluginOption`](https://vite.dev/config/shared-options.html#plugins) (a small preset of plugins that Vite flattens in place). Use `plugins: [react(), vultisig()]` or `plugins: [vultisig()]` without spreading. Options: `sevenZipWasm`, `walletCoreWasm`, `nodePolyfills`, `shimResolver`, `aliases`, `optimizeDeps`, `defineGlobal`, `browserGlobals`, `debug`.
 

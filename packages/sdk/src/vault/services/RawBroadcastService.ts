@@ -11,6 +11,7 @@ import { getEvmClient } from '@vultisig/core-chain/chains/evm/client'
 import { polkadotRpcUrl } from '@vultisig/core-chain/chains/polkadot/client'
 import { getRippleClient } from '@vultisig/core-chain/chains/ripple/client'
 import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
+import { sendSolanaTransaction } from '@vultisig/core-chain/chains/solana/sendTransaction'
 import { getSuiClient } from '@vultisig/core-chain/chains/sui/client'
 import { getSuiResultTransaction } from '@vultisig/core-chain/chains/sui/transactionResult'
 import { broadcastTronTransaction } from '@vultisig/core-chain/chains/tron/queryTron'
@@ -290,11 +291,7 @@ export class RawBroadcastService {
     const txBytes = decodeSolanaRawTx(rawTx)
 
     const { data: sentSignature, error } = await attempt(
-      client.sendRawTransaction(txBytes, {
-        skipPreflight: false,
-        preflightCommitment: 'confirmed',
-        maxRetries: 3,
-      })
+      sendSolanaTransaction({ rawTransaction: txBytes, skipPreflight: false, maxRetries: 3 })
     )
 
     if (error) {

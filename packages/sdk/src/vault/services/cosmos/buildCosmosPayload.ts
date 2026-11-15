@@ -118,7 +118,7 @@ async function buildCosmosBlockchainSpecific(
 /**
  * Build SignAmino signData from input
  */
-function buildSignAminoData(msgs: CosmosMsgInput[], fee: CosmosFeeInput) {
+function buildSignAminoData(msgs: CosmosMsgInput[], fee: CosmosFeeInput, timeoutHeight: bigint | undefined) {
   return {
     case: 'signAmino' as const,
     value: create(SignAminoSchema, {
@@ -139,6 +139,7 @@ function buildSignAminoData(msgs: CosmosMsgInput[], fee: CosmosFeeInput) {
           value: m.value,
         })
       ),
+      timeoutHeight,
     }),
   }
 }
@@ -168,7 +169,19 @@ function buildSignDirectData(bodyBytes: string, authInfoBytes: string, chainId: 
  * @returns Complete KeysignPayload ready for signing
  */
 export async function buildSignAminoKeysignPayload(input: BuildSignAminoPayloadInput): Promise<KeysignPayload> {
-  const { chain, coin, msgs, fee, memo, vaultId, localPartyId, publicKey, libType, skipChainSpecificFetch } = input
+  const {
+    chain,
+    coin,
+    msgs,
+    fee,
+    memo,
+    timeoutHeight,
+    vaultId,
+    localPartyId,
+    publicKey,
+    libType,
+    skipChainSpecificFetch,
+  } = input
 
   // Get account info from chain unless skipped
   let accountNumber = '0'
@@ -184,7 +197,7 @@ export async function buildSignAminoKeysignPayload(input: BuildSignAminoPayloadI
   }
 
   // Build the signData
-  const signData = buildSignAminoData(msgs, fee)
+  const signData = buildSignAminoData(msgs, fee, timeoutHeight)
 
   // Build blockchain-specific data
   const blockchainSpecific = await buildCosmosBlockchainSpecific(

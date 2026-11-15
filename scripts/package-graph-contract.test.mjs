@@ -32,11 +32,10 @@ test('published SDK packages declare an acyclic package graph', () => {
   assert.deepEqual([...graph['@vultisig/mpc-types']].sort(), [])
   assert.deepEqual([...graph['@vultisig/core-chain']].sort(), ['@vultisig/mpc-types'])
   assert.deepEqual([...graph['@vultisig/core-mpc']].sort(), ['@vultisig/core-chain', '@vultisig/mpc-types'])
-  assert.deepEqual([...graph['@vultisig/sdk']].sort(), [
-    '@vultisig/core-chain',
-    '@vultisig/core-mpc',
-    '@vultisig/mpc-types',
-  ])
+  // The SDK bundles core-chain and core-mpc (code and declarations), so consumers do not install them.
+  assert.deepEqual([...graph['@vultisig/sdk']].sort(), ['@vultisig/mpc-types'])
+  const sdkDevDependencies = Object.keys(manifests['@vultisig/sdk'].devDependencies ?? {})
+  assert.ok(sdkDevDependencies.includes('@vultisig/core-chain') && sdkDevDependencies.includes('@vultisig/core-mpc'))
 
   const visited = new Set()
   const active = new Set()

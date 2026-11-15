@@ -42,7 +42,13 @@ yarn add @vultisig/sdk
 
 ### Browser setup: Vite and WASM
 
-**Vite (recommended for SPAs):** add `@vultisig/sdk/vite` to `plugins` as a single entry (Vite flattens nested plugin lists). The preset serves `7zz.wasm` in dev, emits it into the build output, and keeps wasm packages out of `optimizeDeps` so `import.meta.url` resolves. It does not write SDK artifacts into your source `public/` directory. Example:
+**Vite (recommended for SPAs):** add `@vultisig/sdk/vite` to `plugins` as a single entry (Vite flattens nested plugin lists). The preset serves `7zz.wasm` in dev, emits it into the build output, and keeps wasm packages out of `optimizeDeps` so `import.meta.url` resolves. It does not write SDK artifacts into your source `public/` directory. Its plugins and browser shims are optional peer dependencies; install them first (`vultisig()` throws an error naming any that are missing):
+
+```sh
+npm install -D vite vite-plugin-wasm vite-plugin-node-polyfills crypto-browserify stream-browserify path-browserify process util events
+```
+
+Example:
 
 ```ts
 import { defineConfig } from 'vite'

@@ -15,6 +15,7 @@ import { getKeysignTonGasless, getTonGaslessPreSigningHashes } from '../../keysi
 import { KeysignPayload, KeysignPayloadSchema } from '../../types/vultisig/keysign/v1/keysign_message_pb'
 import { getSwapKitCardanoPrebuiltPayload, getSwapKitCardanoPrebuiltPreSigningHash } from '../swapkitCardanoPrebuilt'
 import { getSwapKitSignBitcoin } from '../swapkitSignBitcoin'
+import { getZcashV5PreSigningHashes } from '../compile/zcash/zcashV5'
 
 type Input = {
   walletCore: WalletCore
@@ -73,6 +74,11 @@ export const getPreSigningHashes = ({ walletCore, txInputData, chain, keysignPay
   // WalletCore re-encode (ios#4419 / android#5223 parity).
   if (getChainKind(chain) === 'solana' && keysignPayload?.signData.case === 'signSolana') {
     return [extractSolanaMessageBytes(txInputData).message]
+  }
+
+  // WalletCore only builds v4 Zcash transactions, which NU7 rejects.
+  if (chain === Chain.Zcash) {
+    return getZcashV5PreSigningHashes({ walletCore, txInputData })
   }
 
   const output = getPreSigningOutput({

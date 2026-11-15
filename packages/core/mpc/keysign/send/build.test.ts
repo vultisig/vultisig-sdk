@@ -3,6 +3,7 @@ import { Chain } from '@vultisig/core-chain/Chain'
 import { encodeRippleXAddress } from '@vultisig/core-chain/chains/ripple/address'
 import { rippleKnownIssuedTokens } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
 import {
+  CosmosSpecificSchema,
   PolkadotSpecificSchema,
   RippleSpecificSchema,
   TonSpecificSchema,
@@ -14,14 +15,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getUtxoChainSpecific } from '../chainSpecific/resolvers/utxo'
 
-const { getChainSpecificMock, getCoinBalanceMock, getKeysignUtxoInfoMock, getBittensorCoinBalanceMock } = vi.hoisted(
-  () => ({
-    getChainSpecificMock: vi.fn(),
-    getCoinBalanceMock: vi.fn(),
-    getKeysignUtxoInfoMock: vi.fn(),
-    getBittensorCoinBalanceMock: vi.fn(),
-  })
-)
+const {
+  getChainSpecificMock,
+  getCoinBalanceMock,
+  getKeysignUtxoInfoMock,
+  getBittensorCoinBalanceMock,
+  refineKeysignUtxoMock,
+} = vi.hoisted(() => ({
+  getChainSpecificMock: vi.fn(),
+  getCoinBalanceMock: vi.fn(),
+  getKeysignUtxoInfoMock: vi.fn(),
+  getBittensorCoinBalanceMock: vi.fn(),
+  // The real UTXO refinement plans with WalletCore, which these unit tests stub
+  // out, so it only records that it ran and passes the payload through.
+  refineKeysignUtxoMock: vi.fn(async ({ keysignPayload }: { keysignPayload: KeysignPayload }) => keysignPayload),
+}))
 
 vi.mock('@vultisig/core-mpc/keysign/chainSpecific', () => ({
   getChainSpecific: getChainSpecificMock,
@@ -35,8 +43,23 @@ vi.mock('@vultisig/core-mpc/keysign/utxo/getKeysignUtxoInfo', () => ({
 vi.mock('@vultisig/core-chain/coin/balance/resolvers/bittensor', () => ({
   getBittensorCoinBalance: getBittensorCoinBalanceMock,
 }))
+vi.mock('@vultisig/core-mpc/keysign/refine/utxo', () => ({
+  refineKeysignUtxo: refineKeysignUtxoMock,
+}))
+// Wrapped, not replaced: the amount refinement runs for real unless a test
+// opts out because its chain-specific fixture is not that chain's.
+vi.mock('@vultisig/core-mpc/keysign/refine/amount', async importOriginal => {
+  const actual = await importOriginal<typeof import('../refine/amount')>()
+  return { refineKeysignAmount: vi.fn(actual.refineKeysignAmount) }
+})
+
+import { refineKeysignAmount } from '@vultisig/core-mpc/keysign/refine/amount'
 
 import { buildSendKeysignPayload } from './build'
+
+/** For a test whose chain-specific fixture belongs to another chain, so its fee cannot be priced. */
+const skipAmountRefinementOnce = () =>
+  vi.mocked(refineKeysignAmount).mockImplementationOnce(async ({ keysignPayload }) => keysignPayload)
 
 const rippleCoin = {
   chain: Chain.Ripple,
@@ -509,6 +532,8 @@ describe('buildSendKeysignPayload burn-address guard', () => {
   })
 
   it('does not let a Solana program id block an unrelated chain', async () => {
+    skipAmountRefinementOnce()
+
     await expect(
       buildPayload({
         coin: ethereumCoin,
@@ -528,6 +553,8 @@ describe('buildSendKeysignPayload burn-address guard', () => {
   })
 
   it('still builds a send to an ordinary recipient', async () => {
+    skipAmountRefinementOnce()
+
     const payload = await buildPayload({
       coin: solanaCoin,
       receiver: 'HN7cABqLq46Es1jh92dQQisAq662SmxELLLsHHe4YWrH',
@@ -535,5 +562,80 @@ describe('buildSendKeysignPayload burn-address guard', () => {
     })
 
     expect(payload.toAddress).toBe('HN7cABqLq46Es1jh92dQQisAq662SmxELLLsHHe4YWrH')
+  })
+})
+
+// #1390: the MLDSA-only path signs with `publicKey: null` and a raw
+// `hexPublicKeyOverride`. Refinement used to run only when a WalletCore key was
+// present, so a MAX send there shipped a stale `balance - fee` uncapped.
+describe('buildSendKeysignPayload refinement on the hexPublicKeyOverride path', () => {
+  const qbtcGas = 7_500n
+
+  const buildQbtcPayload = ({ amount, balance }: { amount: bigint; balance: bigint }) => {
+    getCoinBalanceMock.mockResolvedValue(balance)
+    getChainSpecificMock.mockResolvedValue({
+      case: 'cosmosSpecific',
+      value: create(CosmosSpecificSchema, { gas: qbtcGas }),
+    })
+
+    return buildSendKeysignPayload({
+      coin: { chain: Chain.QBTC, ticker: 'QBTC', address: 'qbtc1sender', decimals: 8 },
+      receiver: 'qbtc1receiver',
+      amount,
+      vaultId: 'vault-public-key',
+      localPartyId: 'party-1',
+      publicKey: null,
+      hexPublicKeyOverride: 'ab'.repeat(32),
+      libType: 'DKLS',
+      walletCore: {} as never,
+      sendMaxAmount: true,
+    })
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getKeysignUtxoInfoMock.mockResolvedValue(undefined)
+  })
+
+  it('re-caps a MAX send that no longer leaves room for the fee', async () => {
+    const payload = await buildQbtcPayload({ amount: 100_000n, balance: 100_000n })
+
+    expect(payload.toAmount).toBe((100_000n - qbtcGas).toString())
+  })
+
+  it('leaves an amount that already fits untouched', async () => {
+    const payload = await buildQbtcPayload({ amount: 50_000n, balance: 100_000n })
+
+    expect(payload.toAmount).toBe('50000')
+  })
+
+  it('refuses a send whose balance cannot cover the fee', async () => {
+    await expect(buildQbtcPayload({ amount: qbtcGas, balance: qbtcGas })).rejects.toMatchObject({
+      name: 'BuildKeysignPayloadError',
+      type: 'not-enough-funds',
+    })
+  })
+
+  it('runs the UTXO refinement without a WalletCore key', async () => {
+    getCoinBalanceMock.mockResolvedValue(100_000n)
+    getChainSpecificMock.mockImplementationOnce(async input => ({
+      case: 'utxoSpecific',
+      value: await getUtxoChainSpecific({ ...input, feeSettings: { byteFee: 12n } }),
+    }))
+
+    await buildSendKeysignPayload({
+      coin: { chain: Chain.Bitcoin, ticker: 'BTC', address: 'bc1qsender', decimals: 8 },
+      receiver: 'bc1qrecipient',
+      amount: 99_000n,
+      vaultId: 'vault-public-key',
+      localPartyId: 'party-1',
+      publicKey: null,
+      hexPublicKeyOverride: `02${'ab'.repeat(32)}`,
+      libType: 'DKLS',
+      walletCore: {} as never,
+      sendMaxAmount: true,
+    })
+
+    expect(refineKeysignUtxoMock).toHaveBeenCalledOnce()
   })
 })
