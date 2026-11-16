@@ -16,10 +16,6 @@ const THORCHAIN_CONFIG = {
   decimals: 8,
 }
 
-// Strict DER: positive, at most 32 bytes past a 0x00 sign byte, which appears only when needed
-const isCanonicalDerInteger = (value: Uint8Array) =>
-  value[0] < 0x80 && (value.length <= 32 || value[0] === 0) && !(value[0] === 0 && value.length > 1 && value[1] < 0x80)
-
 export class VultisigRujiraProvider implements RujiraSigner {
   private readonly vault: VultisigVault
   private readonly chainId: string
@@ -129,25 +125,19 @@ export class VultisigRujiraProvider implements RujiraSigner {
     if (der[0] !== 0x30) {
       return derHex
     }
-    if (der[1] !== der.length - 2) throw new Error('Invalid DER: sequence length mismatch')
 
     let offset = 2
 
     if (der[offset] !== 0x02) throw new Error('Invalid DER: expected 0x02 for r')
     offset++
     const rLen = der[offset++]
-    if (rLen < 1 || rLen > 33) throw new Error('Invalid DER: bad r length')
     let r = der.slice(offset, offset + rLen)
     offset += rLen
 
     if (der[offset] !== 0x02) throw new Error('Invalid DER: expected 0x02 for s')
     offset++
     const sLen = der[offset++]
-    if (sLen < 1 || sLen > 33 || offset + sLen !== der.length) {
-      throw new Error('Invalid DER: bad s length or trailing data')
-    }
     let s = der.slice(offset, offset + sLen)
-    if (!isCanonicalDerInteger(r) || !isCanonicalDerInteger(s)) throw new Error('Invalid DER: non-canonical INTEGER')
 
     while (r.length > 32 && r[0] === 0) r = r.slice(1)
     while (s.length > 32 && s[0] === 0) s = s.slice(1)
@@ -185,26 +175,22 @@ export class VultisigRujiraProvider implements RujiraSigner {
 
     sig = sig.startsWith('0x') ? sig.slice(2) : sig
 
+    if (sig.length < 128) {
+      throw new Error(`Invalid signature length: too short, expected at least 128 hex chars, got ${sig.length}`)
+    }
+
     if (sig.length > 200) {
       throw new Error(`Invalid signature length: too long, got ${sig.length} hex chars`)
     }
 
-    // Minimal DER can be 64 bytes or shorter, so DER wins and raw r||s[||v] is the fallback (as in eip191)
-    const isRawLength = sig.length === 128 || sig.length === 130
-    if (sig.startsWith('30')) {
+    if (sig.length > 130) {
       try {
         sig = this.derToRaw(sig)
       } catch (error) {
-        if (!isRawLength) {
-          throw new Error(
-            `Failed to convert DER signature to raw format: ${error instanceof Error ? error.message : String(error)}`
-          )
-        }
+        throw new Error(
+          `Failed to convert DER signature to raw format: ${error instanceof Error ? error.message : String(error)}`
+        )
       }
-    }
-
-    if (sig.length < 128) {
-      throw new Error(`Invalid signature length: too short, expected at least 128 hex chars, got ${sig.length}`)
     }
 
     if (sig.length !== 128 && sig.length !== 130) {
