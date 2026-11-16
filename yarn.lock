@@ -6910,7 +6910,7 @@ __metadata:
     ethers: "npm:^6.17.0"
     long: "npm:^5.3.2"
     ripple-address-codec: "npm:^5.0.1"
-    tiny-secp256k1: "npm:^2.2.4"
+    tiny-secp256k1: "npm:^2.2.5"
     viem: "npm:^2.55.10"
     xrpl: "npm:^5.3.0"
   languageName: unknown
@@ -7199,7 +7199,7 @@ __metadata:
     rollup-plugin-dts: "npm:^6.4.1"
     rollup-plugin-esbuild: "npm:^6.2.1"
     stream-browserify: "npm:^3.0.0"
-    tiny-secp256k1: "npm:^2.2.4"
+    tiny-secp256k1: "npm:^2.2.5"
     tsx: "npm:^4.22.4"
     typescript: "npm:^6.0.3"
     util: "npm:^0.12.5"
@@ -18781,12 +18781,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tiny-secp256k1@npm:^2.2.4":
-  version: 2.2.4
-  resolution: "tiny-secp256k1@npm:2.2.4"
+"tiny-secp256k1@npm:^2.2.5":
+  version: 2.2.5
+  resolution: "tiny-secp256k1@npm:2.2.5"
   dependencies:
     uint8array-tools: "npm:0.0.7"
-  checksum: 10c0/51645e9f5e45ea8d1a160eb18dc63375359d32390bdeadb33e3e17779c2cde05f69b7a92533e69f6c6138dd48c07c2bff198c23721d5084924336e6c1ebe1f04
+  checksum: 10c0/db514ccf560419ab640da5d51a509f033b2f755da82806a6a27b58743b3ea08583164ea1b0ae25d53cb88fa15e21ac281f8ed74438e9192a8e0f69466d0c41ce
   languageName: node
   linkType: hard
 
