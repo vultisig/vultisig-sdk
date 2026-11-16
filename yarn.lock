@@ -7047,7 +7047,7 @@ __metadata:
   dependencies:
     buffer: "npm:^6.0.3"
     long: "npm:^5.3.2"
-    tldts: "npm:^7.4.18"
+    tldts: "npm:^7.5.2"
     viem: "npm:^2.55.10"
   languageName: unknown
   linkType: soft
@@ -18838,21 +18838,21 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tldts-core@npm:^7.4.18":
-  version: 7.4.18
-  resolution: "tldts-core@npm:7.4.18"
-  checksum: 10c0/474fa18404d313b16b8fa339406607b3d295561d20d48d734b0faaf45abf77aede26ed680f62a7c777bb2a35ae25da4b2ca0cefce676b4c09ea8408a23ac7e3c
+"tldts-core@npm:^7.5.2":
+  version: 7.5.2
+  resolution: "tldts-core@npm:7.5.2"
+  checksum: 10c0/6bbcad5fa22eb44a767aaa793685b722d337b6d3af5126506b607346b5caf711a4a786f32ae2604b7541993ce6aa9681a40733b876fd063cca3535c943794296
   languageName: node
   linkType: hard
 
-"tldts@npm:^7.4.18":
-  version: 7.4.18
-  resolution: "tldts@npm:7.4.18"
+"tldts@npm:^7.5.2":
+  version: 7.5.2
+  resolution: "tldts@npm:7.5.2"
   dependencies:
-    tldts-core: "npm:^7.4.18"
+    tldts-core: "npm:^7.5.2"
   bin:
     tldts: bin/cli.js
-  checksum: 10c0/3e51339815c8679293ae8e84289ed5f96241075187573e84f37b2450315a7860bbcaf8125fba684f298b969bc6a8ae93c0e125be7feab7d1449d326e7cf815ec
+  checksum: 10c0/34d1716804a7cbfd8c4559b8107945b4812b2c67f9b5af1e6d3aa58b8872aa0eec2293f3e6a2ba8113798d595b3a5aa7b1bbf4e7af4fbfe96e6685110e33f7ac
   languageName: node
   linkType: hard
 
