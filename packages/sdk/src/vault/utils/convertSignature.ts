@@ -2,6 +2,9 @@ import type { KeysignSignature } from '@vultisig/core-mpc/keysign/KeysignSignatu
 
 import type { Signature } from '../../types'
 
+// DER integers are minimal (a 0x00 sign byte, or fewer than 32 bytes); compilers need exactly 32 bytes
+const toScalarHex = (value: string) => '0x' + value.slice(-64).padStart(64, '0')
+
 /**
  * Parse r and s values from DER-encoded signature
  *
@@ -29,13 +32,7 @@ function parseDerSignature(derHex: string): { r: string; s: string } {
   const rLength = parseInt(der.slice(offset, offset + 2), 16) * 2
   offset += 2
 
-  // Read r value
-  let r = der.slice(offset, offset + rLength)
-  // Remove leading 0x00 padding if present (added for DER encoding when high bit set)
-  if (r.startsWith('00') && r.length > 64) {
-    r = r.slice(2)
-  }
-  r = '0x' + r
+  const r = toScalarHex(der.slice(offset, offset + rLength))
   offset += rLength
 
   // Skip 0x02 (INTEGER tag for s)
@@ -45,13 +42,7 @@ function parseDerSignature(derHex: string): { r: string; s: string } {
   const sLength = parseInt(der.slice(offset, offset + 2), 16) * 2
   offset += 2
 
-  // Read s value
-  let s = der.slice(offset, offset + sLength)
-  // Remove leading 0x00 padding if present
-  if (s.startsWith('00') && s.length > 64) {
-    s = s.slice(2)
-  }
-  s = '0x' + s
+  const s = toScalarHex(der.slice(offset, offset + sLength))
 
   return { r, s }
 }

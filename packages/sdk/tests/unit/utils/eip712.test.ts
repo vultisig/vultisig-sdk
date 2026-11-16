@@ -65,4 +65,21 @@ describe('toCanonicalEvmSignature', () => {
     const raw = `0x${r}${sLow}`
     expect(toCanonicalEvmSignature(raw, 1)).toEqual({ r, s: sLow, recovery: 1 })
   })
+
+  it('reads a 64-byte minimal DER signature as DER, not raw r||s', () => {
+    const shortR = '000000' + '11'.repeat(28) + '02'
+    const shortS = '000000' + '22'.repeat(29)
+    const der = `303e021d${shortR.slice(6)}021d${shortS.slice(6)}`
+    expect(der).toHaveLength(128)
+    expect(toCanonicalEvmSignature(der, 0)).toEqual({ r: shortR, s: shortS, recovery: 0 })
+  })
+
+  it('keeps a raw r||s that only starts like DER as raw', () => {
+    for (const raw of [
+      '303e020101020102' + '11'.repeat(23) + '12' + '11'.repeat(32),
+      '303e022101' + '11'.repeat(32) + '0219' + '22'.repeat(25),
+    ]) {
+      expect(toCanonicalEvmSignature(raw, 0)).toEqual({ r: raw.slice(0, 64), s: raw.slice(64), recovery: 0 })
+    }
+  })
 })

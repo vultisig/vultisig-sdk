@@ -54,13 +54,38 @@ export function computeEip712Hash(
   } as Parameters<typeof hashTypedData>[0])
 }
 
+const rawSignatureHexLength = 128
+
+// Minimal DER can also be 64 bytes, so DER wins and raw r||s is the fallback (as in eip191)
 function parseDERSignature(sigHex: string): { r: string; s: string } {
   const raw = sigHex.startsWith('0x') ? sigHex.slice(2) : sigHex
+  const asRaw = () => ({ r: raw.slice(0, 64), s: raw.slice(64) })
 
-  if (raw.length === 128) {
-    return { r: raw.slice(0, 64), s: raw.slice(64) }
+  if (raw.length === rawSignatureHexLength && !raw.startsWith('30')) {
+    return asRaw()
   }
 
+  try {
+    return parseDerHex(raw)
+  } catch (error) {
+    if (raw.length !== rawSignatureHexLength) {
+      throw error
+    }
+    return asRaw()
+  }
+}
+
+// A secp256k1 scalar is 1 to 32 bytes, plus one 0x00 sign byte when its top bit is set
+const isScalarLength = (length: number) => length >= 1 && length <= 33
+
+// Strict DER (as in eip191): positive, at most 32 bytes past a 0x00 sign byte, which appears only when needed
+const isCanonicalDerInteger = (hex: string) => {
+  const first = Number.parseInt(hex.slice(0, 2), 16)
+  if (first >= 0x80 || (hex.length > 64 && first !== 0)) return false
+  return !(first === 0 && hex.length > 2 && Number.parseInt(hex.slice(2, 4), 16) < 0x80)
+}
+
+function parseDerHex(raw: string): { r: string; s: string } {
   let offset = 0
   if (raw.slice(offset, offset + 2) !== '30') {
     throw new Error('EIP-712 signature must be DER or 64-byte raw r||s hex')
@@ -78,6 +103,9 @@ function parseDERSignature(sigHex: string): { r: string; s: string } {
   offset += 2
   const rLen = Number.parseInt(raw.slice(offset, offset + 2), 16)
   offset += 2
+  if (!isScalarLength(rLen)) {
+    throw new Error('Malformed DER signature: bad r length')
+  }
   const r = raw.slice(offset, offset + rLen * 2)
   offset += rLen * 2
 
@@ -87,7 +115,13 @@ function parseDERSignature(sigHex: string): { r: string; s: string } {
   offset += 2
   const sLen = Number.parseInt(raw.slice(offset, offset + 2), 16)
   offset += 2
+  if (!isScalarLength(sLen) || offset + sLen * 2 !== raw.length) {
+    throw new Error('Malformed DER signature: bad s length or trailing data')
+  }
   const s = raw.slice(offset, offset + sLen * 2)
+  if (!isCanonicalDerInteger(r) || !isCanonicalDerInteger(s)) {
+    throw new Error('Malformed DER signature: non-canonical INTEGER')
+  }
 
   return {
     r: r.padStart(64, '0').slice(-64),
