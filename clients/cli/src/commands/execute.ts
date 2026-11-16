@@ -19,7 +19,7 @@ import qrcode from 'qrcode-terminal'
 
 import type { CommandContext, TransactionResult } from '../core'
 import { ensureVaultUnlocked } from '../core'
-import { ConfirmationRequiredError } from '../core/errors'
+import { ConfirmationRequiredError, InvalidInputError } from '../core/errors'
 import { createSpinner, info, isJsonOutput, isNonInteractive, isSilent, outputJson, printResult } from '../lib/output'
 import { confirmTransaction, displayTransactionResult } from '../ui'
 
@@ -102,18 +102,18 @@ function parseFunds(fundsStr?: string): ParsedFund[] {
  * Execute a CosmWasm contract
  */
 export async function executeExecute(ctx: CommandContext, params: ExecuteParams): Promise<TransactionResult> {
-  const vault = await ctx.ensureActiveVault()
-
-  // Validate chain is supported and source the execution metadata from the SDK canonicals.
-  const chainConfig = getCosmosChainConfig(params.chain)
-
   // Parse and validate message JSON
   let msg: object
   try {
     msg = JSON.parse(params.msg)
   } catch {
-    throw new Error(`Invalid JSON message: ${params.msg}`)
+    throw new InvalidInputError(`Invalid JSON message: ${params.msg}`)
   }
+
+  const vault = await ctx.ensureActiveVault()
+
+  // Validate chain is supported and source the execution metadata from the SDK canonicals.
+  const chainConfig = getCosmosChainConfig(params.chain)
 
   // Parse funds
   const funds = parseFunds(params.funds)

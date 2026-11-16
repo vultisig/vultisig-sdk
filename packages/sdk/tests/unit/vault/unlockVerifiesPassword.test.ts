@@ -9,7 +9,7 @@ import { PasswordCacheService } from '../../../src/services/PasswordCacheService
 import { createVaultBackup } from '../../../src/utils/export'
 import { FastVault } from '../../../src/vault/FastVault'
 import { SecureVault } from '../../../src/vault/SecureVault'
-import { VaultError } from '../../../src/vault/VaultError'
+import { VaultError, VaultErrorCode } from '../../../src/vault/VaultError'
 
 const vaultId = 'test-vault'
 const correctPassword = 'correct-password'
@@ -93,6 +93,24 @@ describe.each([
       })
       await vault.unlock(wrongPassword)
       expect(passwordCache.get(vaultId)).toBe(wrongPassword)
+    })
+  })
+})
+
+describe.each([
+  ['FastVault', FastVault],
+  ['SecureVault', SecureVault],
+] as const)('%s.export()', (_, VaultClass) => {
+  it('wraps a raw AES-GCM failure while loading shares as a vault unlock error', async () => {
+    const { vault, passwordCache } = makeVault({ VaultClass, sharesLoaded: false })
+    passwordCache.set(vaultId, wrongPassword)
+
+    const error = await vault.export().catch((error: unknown) => error)
+    expect(error).toBeInstanceOf(VaultError)
+    expect(error).toMatchObject({
+      code: VaultErrorCode.InvalidConfig,
+      message: 'Failed to unlock vault: could not decrypt vault with the provided password',
+      originalError: expect.objectContaining({ message: 'Unsupported state or unable to authenticate data' }),
     })
   })
 })

@@ -298,6 +298,18 @@ export async function executeImport(
   flagPassword?: string,
   replace = false
 ): Promise<VaultBase> {
+  let vultContent: string
+  try {
+    const stat = await fs.stat(file)
+    if (!stat.isFile()) {
+      throw new InvalidInputError(`Import path is not a file: ${file}`)
+    }
+    vultContent = await fs.readFile(file, 'utf-8')
+  } catch (err) {
+    if (err instanceof InvalidInputError) throw err
+    throw new InvalidInputError((err as Error).message, 'Check that the vault file exists and is readable')
+  }
+
   // Password priority: --password flag > VAULT_PASSWORD env var > interactive prompt
   let password = flagPassword || process.env.VAULT_PASSWORD || ''
   if (!password) {
@@ -314,7 +326,6 @@ export async function executeImport(
 
   const spinner = createSpinner('Importing vault...')
 
-  const vultContent = await fs.readFile(file, 'utf-8')
   const vault = await ctx.sdk.importVault(
     vultContent,
     password || undefined,

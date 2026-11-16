@@ -30,6 +30,7 @@ import { prepareThorchainMsgDepositTxFromKeys } from '../../tools/prep/thorchain
 import { vaultDataToIdentity } from '../../tools/prep/types'
 import type { ContractCallTxParams } from '../../types/contractCall'
 import type { CosmosSigningOptions, SignAminoInput, SignDirectInput } from '../../types/cosmos'
+import { normalizeAccountCoin } from '../../utils/normalizeCoinInput'
 import { VaultError, VaultErrorCode } from '../VaultError'
 
 /**
@@ -146,10 +147,10 @@ export class TransactionBuilder {
    * Builds a keysign payload internally and extracts the fee amount
    * without returning the full payload.
    *
-   * @param params - Transaction parameters (same as prepareSendTx)
+   * @param rawParams - Transaction parameters (same as prepareSendTx)
    * @returns Fee amount in base units (e.g., wei)
    */
-  async estimateSendFee(params: {
+  async estimateSendFee(rawParams: {
     coin: AccountCoin
     receiver: string
     amount: bigint
@@ -160,6 +161,7 @@ export class TransactionBuilder {
     tonGasless?: boolean
     allowDeath?: boolean
   }): Promise<bigint> {
+    const params = { ...rawParams, coin: normalizeAccountCoin(rawParams.coin) }
     try {
       const walletCore = await this.wasmProvider.getWalletCore()
 

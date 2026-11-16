@@ -61,7 +61,7 @@ const canonicalize = (value: unknown): string => {
 const coinIdentity = ({ chain, address, id, ticker, decimals }: AccountCoin) => ({
   chain,
   address,
-  id,
+  id: typeof id === 'string' && id.trim() === '' ? undefined : id,
   ticker,
   decimals,
 })
