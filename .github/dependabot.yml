@@ -55,3 +55,8 @@ updates:
         update-types:
           - minor
           - patch
+    ignore:
+      # action v2 requires @changesets/cli v3; repo is on v2.x.
+      - dependency-name: changesets/action
+        update-types:
+          - version-update:semver-major

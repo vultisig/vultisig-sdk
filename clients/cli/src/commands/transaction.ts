@@ -4,11 +4,21 @@
 import { getLegacyDestinationTag, resolveDestinationTag } from '@vultisig/core-mpc/keysign/utils/rippleDestinationTag'
 import type { KeysignPayload, VaultBase } from '@vultisig/sdk'
 import { Chain, normalizeRippleDestination, Vultisig } from '@vultisig/sdk'
+import qrcode from 'qrcode-terminal'
 
 import type { CommandContext, SendDryRunResult, SendParams, TransactionResult } from '../core'
 import { buildSendBroadcastIntent, ensureVaultUnlocked, guardedBroadcast } from '../core'
 import { ConfirmationRequiredError } from '../core/errors'
-import { createSpinner, info, isJsonOutput, isNonInteractive, outputJson, warn } from '../lib/output'
+import {
+  createSpinner,
+  info,
+  isJsonOutput,
+  isNonInteractive,
+  isSilent,
+  outputJson,
+  printResult,
+  warn,
+} from '../lib/output'
 import {
   confirmTransaction,
   displayTransactionPreview,
@@ -295,6 +305,9 @@ export async function sendTransaction(
     isMax: params.amount === 'max',
   })
   let signSpinner: ReturnType<typeof createSpinner> | undefined
+  // Unsubscribers for the QR listeners this send registers; cleanup removes
+  // exactly these so listeners other owners put on the vault survive.
+  const unsubscribeQr: Array<() => void> = []
 
   try {
     const broadcast = await guardedBroadcast(intent, params.force ?? false, async () => {
@@ -304,6 +317,37 @@ export async function sendTransaction(
       vault.on('signingProgress', ({ step }: any) => {
         if (signSpinner) signSpinner.text = `${step.message} (${step.progress}%)`
       })
+      // A secure vault signs with a second device that joins the relay session
+      // through the QR the SDK announces here. Without this listener the QR is
+      // never shown and `send` waits out the device-join timeout with no way for
+      // the phone to join (`sign` and `execute` already render it).
+      if (vault.type === 'secure') {
+        const offQrCodeReady = vault.on('qrCodeReady', ({ qrPayload }: { qrPayload: string }) => {
+          if (isJsonOutput()) {
+            // JSON mode: an NDJSON event line before the result envelope, as in sign.ts
+            printResult(JSON.stringify({ qrPayload }))
+          } else if (isSilent()) {
+            printResult(`QR Payload: ${qrPayload}`)
+          } else {
+            signSpinner?.stop()
+            info('\nScan this QR code with your Vultisig mobile app to sign:')
+            qrcode.generate(qrPayload, { small: true })
+            info(`\nOr use this URL: ${qrPayload}\n`)
+            signSpinner?.start('Waiting for devices to join signing session...')
+          }
+        })
+        const offDeviceJoined = vault.on(
+          'deviceJoined',
+          ({ deviceId, totalJoined, required }: { deviceId: string; totalJoined: number; required: number }) => {
+            if (!isSilent()) {
+              if (signSpinner) signSpinner.text = `Device joined: ${totalJoined}/${required} (${deviceId})`
+            } else if (!isJsonOutput()) {
+              printResult(`Device joined: ${totalJoined}/${required}`)
+            }
+          }
+        )
+        unsubscribeQr.push(offQrCodeReady, offDeviceJoined)
+      }
       const result = await vault.send({
         chain: params.chain,
         to: params.to,
@@ -338,5 +382,6 @@ export async function sendTransaction(
     throw err
   } finally {
     vault.removeAllListeners('signingProgress')
+    for (const unsubscribe of unsubscribeQr) unsubscribe()
   }
 }

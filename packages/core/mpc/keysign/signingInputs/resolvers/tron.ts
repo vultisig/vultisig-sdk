@@ -13,6 +13,11 @@ import Long from 'long'
 import { getBlockchainSpecificValue } from '../../chainSpecific/KeysignChainSpecific'
 import { getKeysignSwapPayload } from '../../swap/getKeysignSwapPayload'
 import { SigningInputsResolver } from '../resolver'
+import {
+  assertTronContractCallMatchesReview,
+  assertTronTransferAssetMatchesReview,
+  assertTronTransferMatchesReview,
+} from './tronContractPayloadGuard'
 
 // sdk#1200: callValue / callTokenValue / feeLimit are all TRON int64 proto
 // fields fed by third-party gas estimation / swap-aggregator data — bound
@@ -172,35 +177,39 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
       'value',
       {
         tronTransferContractPayload: value => {
-          return {
-            transfer: TW.Tron.Proto.TransferContract.create({
-              ownerAddress: value.ownerAddress,
-              toAddress: value.toAddress,
-              amount: Long.fromString(value.amount),
-            }),
-          }
+          const transfer = TW.Tron.Proto.TransferContract.create({
+            ownerAddress: value.ownerAddress,
+            toAddress: value.toAddress,
+            amount: Long.fromString(value.amount),
+          })
+          assertTronTransferMatchesReview({ keysignPayload, contract: transfer })
+          return { transfer }
         },
         tronTriggerSmartContractPayload: value => {
+          const triggerSmartContract = TW.Tron.Proto.TriggerSmartContract.create({
+            ownerAddress: value.ownerAddress,
+            contractAddress: value.contractAddress,
+            callValue: value.callValue ? toBoundedTronLong(value.callValue.toString()) : undefined,
+            data: value.data ? Buffer.from(value.data, 'hex') : undefined,
+            callTokenValue: value.callTokenValue ? toBoundedTronLong(value.callTokenValue.toString()) : undefined,
+            tokenId: value.tokenId ? Long.fromString(value.tokenId?.toString()) : undefined,
+          })
+          assertTronContractCallMatchesReview({ keysignPayload, contract: triggerSmartContract })
           return {
-            triggerSmartContract: TW.Tron.Proto.TriggerSmartContract.create({
-              ownerAddress: value.ownerAddress,
-              contractAddress: value.contractAddress,
-              callValue: value.callValue ? toBoundedTronLong(value.callValue.toString()) : undefined,
-              data: value.data ? Buffer.from(value.data, 'hex') : undefined,
-              callTokenValue: value.callTokenValue ? toBoundedTronLong(value.callTokenValue.toString()) : undefined,
-              tokenId: value.tokenId ? Long.fromString(value.tokenId?.toString()) : undefined,
-            }),
+            triggerSmartContract,
             feeLimit: toBoundedTronLong(tronSpecific.gasEstimation.toString()),
           }
         },
         tronTransferAssetContractPayload: value => {
+          const transferAsset = TW.Tron.Proto.TransferAssetContract.create({
+            ownerAddress: value.ownerAddress,
+            toAddress: value.toAddress,
+            amount: Long.fromString(value.amount),
+            assetName: value.assetName,
+          })
+          assertTronTransferAssetMatchesReview({ keysignPayload, contract: transferAsset })
           return {
-            transferAsset: TW.Tron.Proto.TransferAssetContract.create({
-              ownerAddress: value.ownerAddress,
-              toAddress: value.toAddress,
-              amount: Long.fromString(value.amount),
-              assetName: value.assetName,
-            }),
+            transferAsset,
             feeLimit: toBoundedTronLong(tronSpecific.gasEstimation.toString()),
           }
         },

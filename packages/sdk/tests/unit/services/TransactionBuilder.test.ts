@@ -246,5 +246,21 @@ describe('TransactionBuilder', () => {
 
       expect(getSendFeeEstimate).not.toHaveBeenCalled()
     })
+
+    it('accepts contractAddress as an alias for id and rejects a typo key', async () => {
+      const { getSendFeeEstimate } = await import('@vultisig/core-mpc/keysign/send/getSendFeeEstimate')
+      vi.mocked(getSendFeeEstimate).mockResolvedValue(1n)
+      const usdc = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+      const receiver = '0xabcdef1234567890abcdef1234567890abcdef12'
+
+      await builder.estimateSendFee({ coin: { ...mockCoin, contractAddress: usdc } as any, receiver, amount: 1n })
+      expect(vi.mocked(getSendFeeEstimate).mock.calls.at(-1)?.[0].coin).toEqual({ ...mockCoin, id: usdc })
+
+      vi.mocked(getSendFeeEstimate).mockClear()
+      await expect(
+        builder.estimateSendFee({ coin: { ...mockCoin, contract: usdc } as any, receiver, amount: 1n })
+      ).rejects.toMatchObject({ code: VaultErrorCode.InvalidConfig, message: expect.stringContaining('contract') })
+      expect(getSendFeeEstimate).not.toHaveBeenCalled()
+    })
   })
 })

@@ -79,6 +79,21 @@ describe('VaultBase.estimateSendFee', () => {
     ).resolves.toMatchObject({ feeAmountBase: 90_000_000n, feeDecimals: 9 })
   })
 
+  it('reports the jetton as the fee asset when a gasless TON coin is given by contractAddress', async () => {
+    const estimateSendFee = vi.fn().mockResolvedValue(7_000n)
+    const jetton = 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs'
+    const usdt = { chain: Chain.Ton, address: 'UQsender', decimals: 6, ticker: 'USDT' }
+    const send = { receiver: 'UQreceiver', amount: 25_000_000n, tonGasless: true }
+    const coin = { ...usdt, contractAddress: jetton } as unknown as Parameters<VaultBase['estimateSendFee']>[0]['coin']
+
+    const byId = await callPublicEstimate({ estimateSendFee }, { ...send, coin: { ...usdt, id: jetton } })
+    const byContract = await callPublicEstimate({ estimateSendFee }, { ...send, coin })
+
+    expect(byContract).toEqual({ feeAmountBase: 7_000n, feeDecimals: 6, feeSymbol: 'USDT' })
+    expect(byContract).toEqual(byId)
+    expect(estimateSendFee).toHaveBeenLastCalledWith(expect.objectContaining({ coin: { ...usdt, id: jetton } }))
+  })
+
   it('forwards allowDeath so the estimate prices the transfer_allow_death call', async () => {
     const estimateSendFee = vi.fn().mockResolvedValue(1_560_000_000n)
     const dot = { chain: Chain.Polkadot, address: '1sender', decimals: 10, ticker: 'DOT' }
