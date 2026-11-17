@@ -37,6 +37,7 @@ const readMsgClaimWithProofFieldNumbers = (txBody: Uint8Array) => {
 
 const validInput = {
   claimer: 'qbtc1abc',
+  bitcoinAddress: 'bc1qatknmeca5p0fy5decdj5704hf7prt47e0e7e9n',
   utxos: [{ txid: 'aa'.repeat(32), vout: 0 }],
   proof: 'ff'.repeat(200),
   pubKeyHashSha256: 'ee'.repeat(32),
@@ -47,6 +48,24 @@ describe('validateClaimInput', () => {
   it('accepts valid input', () => {
     expect(() => validateClaimInput(validInput)).not.toThrow()
   })
+
+  it('rejects a missing Bitcoin address', () => {
+    expect(() => validateClaimInput({ ...validInput, bitcoinAddress: '' })).toThrow('bitcoinAddress is required')
+  })
+
+  it.each(['1BoatSLRHtKNngkdXEeobR76b53LETtpyT', validInput.bitcoinAddress])(
+    'accepts a supported claim address %s',
+    bitcoinAddress => {
+      expect(() => validateClaimInput({ ...validInput, bitcoinAddress })).not.toThrow()
+    }
+  )
+
+  it.each(['3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy', `bc1p${'a'.repeat(58)}`, 'not-an-address'])(
+    'rejects an unsupported claim address %s',
+    bitcoinAddress => {
+      expect(() => validateClaimInput({ ...validInput, bitcoinAddress })).toThrow()
+    }
+  )
 
   it('rejects empty UTXOs', () => {
     expect(() => validateClaimInput({ ...validInput, utxos: [] })).toThrow('UTXOs count must be 1-50')
@@ -135,6 +154,14 @@ describe('buildClaimTxBody', () => {
   })
 
   it('encodes the current claim message field numbers', () => {
-    expect(readMsgClaimWithProofFieldNumbers(buildClaimTxBody(validInput))).toEqual([1, 2, 3, 4, 6])
+    expect(readMsgClaimWithProofFieldNumbers(buildClaimTxBody(validInput))).toEqual([1, 2, 3, 4, 6, 8])
+  })
+  it('writes the exact signed Bitcoin address at field 8', () => {
+    const [[, anyMsg]] = readLengthDelimitedFields(buildClaimTxBody(validInput))
+    const [, [, message]] = readLengthDelimitedFields(anyMsg)
+    const fields = new Map(readLengthDelimitedFields(message))
+    expect(new TextDecoder().decode(fields.get(8))).toBe(validInput.bitcoinAddress)
+    expect(fields.has(5)).toBe(false)
+    expect(fields.has(7)).toBe(false)
   })
 })

@@ -1,5 +1,7 @@
 import { concatBytes, protoBytes, protoString, protoVarint } from '@vultisig/core-chain/chains/cosmos/protoEncoding'
 
+import { detectBtcAddressType } from './detectBtcAddressType'
+
 const msgClaimWithProofTypeURL = '/qbtc.qbtc.v1.MsgClaimWithProof'
 
 type UtxoRef = {
@@ -13,6 +15,8 @@ type BuildMsgClaimWithProofInput = {
    * no longer the cosmos signer since btcq-org/qbtc#171.
    */
   claimer: string
+  /** P2PKH/P2WPKH address in the signed claim text, byte for byte (proto field 8). */
+  bitcoinAddress: string
   /** UTXOs to include in the claim (1-50, no duplicates). */
   utxos: UtxoRef[]
   /** Hex-encoded PLONK ZK proof. */
@@ -43,10 +47,17 @@ const assertHex = (value: string, name: string, expectedLength: number) => {
 
 /** Validates the claim input against the chain's constraints (Section 5). */
 export const validateClaimInput = (input: BuildMsgClaimWithProofInput) => {
-  const { claimer, utxos, proof, pubKeyHashSha256, broadcaster } = input
+  const { claimer, bitcoinAddress, utxos, proof, pubKeyHashSha256, broadcaster } = input
 
   if (claimer.length === 0) {
     throw new Error('claimer is required')
+  }
+  if (!bitcoinAddress) {
+    throw new Error('bitcoinAddress is required')
+  }
+  const addressType = detectBtcAddressType(bitcoinAddress)
+  if (addressType !== 'p2pkh' && addressType !== 'p2wpkh') {
+    throw new Error('QBTC claims require a P2PKH or P2WPKH Bitcoin address')
   }
   if (broadcaster.length === 0) {
     throw new Error('broadcaster is required')
@@ -84,7 +95,7 @@ export const validateClaimInput = (input: BuildMsgClaimWithProofInput) => {
 const encodeUtxoRef = ({ txid, vout }: UtxoRef): Uint8Array =>
   concatBytes(protoString(1, txid), protoVarint(2, BigInt(vout)))
 
-/** Encodes MsgClaimWithProof: claimer=1, UTXOs=2, proof=3, key hash=4, broadcaster=6. */
+/** Encodes MsgClaimWithProof: claimer=1, UTXOs=2, proof=3, key hash=4, broadcaster=6, Bitcoin address=8. */
 const buildMsgClaimWithProof = (input: BuildMsgClaimWithProofInput): Uint8Array => {
   const utxoBytes = input.utxos.map(utxo => protoBytes(2, encodeUtxoRef(utxo)))
 
@@ -93,7 +104,8 @@ const buildMsgClaimWithProof = (input: BuildMsgClaimWithProofInput): Uint8Array 
     ...utxoBytes,
     protoString(3, input.proof),
     protoString(4, input.pubKeyHashSha256),
-    protoString(6, input.broadcaster)
+    protoString(6, input.broadcaster),
+    protoString(8, input.bitcoinAddress)
   )
 }
 
