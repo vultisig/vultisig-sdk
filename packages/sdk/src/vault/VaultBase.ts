@@ -18,6 +18,7 @@ import { getNativeSwapMinAmountIn } from '@vultisig/core-chain/swap/native/minim
 import { getNativeSwapDecimals } from '@vultisig/core-chain/swap/native/utils/getNativeSwapDecimals'
 import { nativeSwapAmountToCoinBaseUnit } from '@vultisig/core-chain/swap/native/utils/nativeSwapAmountToCoinBaseUnit'
 import { getSwapQuoteProviderExcludeName, providerPreferenceOrder } from '@vultisig/core-chain/swap/quote/findSwapQuote'
+import { SwapError, SwapErrorCode } from '@vultisig/core-chain/swap/SwapError'
 import { getEvmRouterDepositFee } from '@vultisig/core-chain/tx/fee/evm/getEvmRouterDepositFee'
 import { getTxStatus as coreTxStatus } from '@vultisig/core-chain/tx/status'
 import type { TxStatusResult } from '@vultisig/core-chain/tx/status/resolver'
@@ -84,6 +85,7 @@ import type { TransactionSimulationResult, TransactionValidationResult } from '.
 import type { DiscoveredToken, TokenInfo } from '../types/tokens'
 import { computePersonalSignHash } from '../utils/eip191'
 import { createVaultBackup } from '../utils/export'
+import { normalizeAccountCoin } from '../utils/normalizeCoinInput'
 // Vault services
 import { AddressService, type GetAddressOptions } from './services/AddressService'
 import { BalanceService } from './services/BalanceService'
@@ -1423,8 +1425,10 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     tonGasless?: boolean
     allowDeath?: boolean
   }): Promise<SendFeeEstimate> {
-    const feeAmountBase = await this.transactionBuilder.estimateSendFee(params)
-    const feeCoin = getSendFeeCoin(params)
+    // Normalize once so the fee asset sees the same coin as the estimate (a jetton given by contractAddress).
+    const normalized = { ...params, coin: normalizeAccountCoin(params.coin) }
+    const feeAmountBase = await this.transactionBuilder.estimateSendFee(normalized)
+    const feeCoin = getSendFeeCoin(normalized)
 
     return {
       feeAmountBase,
@@ -1476,7 +1480,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    *
    * @returns Balance, fee, and max sendable amount (all in base units)
    */
-  async getMaxSendAmount(params: {
+  async getMaxSendAmount(rawParams: {
     coin: AccountCoin
     receiver: string
     memo?: string
@@ -1486,6 +1490,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     tonGasless?: boolean
     allowDeath?: boolean
   }): Promise<MaxSendAmount> {
+    const params = { ...rawParams, coin: normalizeAccountCoin(rawParams.coin) }
     const walletCore = await this.wasmProvider.getWalletCore()
     // Validate receiver before fetching balance so bad input doesn't waste a
     // network round-trip. computeMaxSendFromBalance re-validates for the
@@ -2385,9 +2390,18 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
         toCoin,
       })
       if (minimum !== undefined && committedAmountBaseUnits < minimum) {
+        const minAmountInHuman = this.formatUnits(minimum, fromToken.decimals)
+        const message =
+          `Max swappable ${normalizedAmount} ${fromToken.ticker} is below ${quote.quote.quote.native.swapChain}'s recommended minimum of ${minAmountInHuman} ${fromToken.ticker}; ` +
+          'the swap would likely fail or be refunded net of fees. Increase the balance or choose another route.'
         throw new VaultError(
           VaultErrorCode.InvalidAmount,
-          `Max swappable ${normalizedAmount} ${fromToken.ticker} is below ${quote.quote.quote.native.swapChain}'s recommended minimum of ${this.formatUnits(minimum, fromToken.decimals)} ${fromToken.ticker}; the swap would likely fail or be refunded net of fees. Increase the balance or choose another route.`
+          message,
+          new SwapError(SwapErrorCode.AmountBelowMinimum, message, {
+            minAmountInBaseUnits: minimum.toString(),
+            minAmountInHuman,
+            ticker: fromToken.ticker,
+          })
         )
       }
     }

@@ -1,5 +1,27 @@
 # @vultisig/sdk
 
+## 11.1.0
+
+### Minor Changes
+
+- [#2613](https://github.com/vultisig/vultisig-sdk/pull/2613) [`1cb7044`](https://github.com/vultisig/vultisig-sdk/commit/1cb704409f72439b206308a2f19cfbde5ca63202) Thanks [@realpaaao](https://github.com/realpaaao)! - Sign a dApp amino sign doc's tx-level `timeout_height`. `SignAmino` gains an optional `timeoutHeight`, the Cosmos signing input carries it when it is set and non-zero, and `SignAminoInput` accepts it. Without it the chain rejected the signature for any dApp that sets a timeout (Osmosis).
+
+### Patch Changes
+
+- [#2582](https://github.com/vultisig/vultisig-sdk/pull/2582) [`742ca32`](https://github.com/vultisig/vultisig-sdk/commit/742ca323e37307d47943b2066b506fce8e18f85e) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - An EVM aggregator swap that cannot be simulated is now signed with 1.5× the route's own gas figure instead of the generic 900,000 fallback. Swaps from an ERC-20 always take this path, because their allowance does not exist yet when the fee is quoted. A 1 USDC → USDT route that used 175,783 gas used to quote 900,000; it now quotes about 1.5× the aggregator's figure. An unsimulated route whose figure exceeded 900,000 used to be signed at that figure with no headroom, though aggregators can come in below the real cost. It now gets the same 1.5× headroom. Arbitrum, Robinhood, Mantle and zkSync keep the old fallback, since their gas also pays for posting data and an off-chain figure leaves that out. New export: `getEvmGasIncludesDataCost` from `tx/fee/evm/evmGasLimit`.
+
+- [#2579](https://github.com/vultisig/vultisig-sdk/pull/2579) [`c8e9b9d`](https://github.com/vultisig/vultisig-sdk/commit/c8e9b9d09dc8cd881a94c8f227fa92cdc3ea9c62) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Tighten signing checks for dApp transactions.
+
+- [#2583](https://github.com/vultisig/vultisig-sdk/pull/2583) [`b7e3c84`](https://github.com/vultisig/vultisig-sdk/commit/b7e3c84fc90588ade3425cb5e92e12b0a91a3af6) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - The network fee of a Solana aggregator swap (Jupiter, LI.FI, SwapKit) now comes from the provider's own transaction. The swap is signed as the provider built it, with only the blockhash replaced, so its ComputeBudget instructions set what the network charges. `getSolanaFeeAmount` used to quote the chain-specific priority fee instead, a flat 105,000 lamports for every swap. A recorded LI.FI SOL → USDC swap that mainnet charges 48,423 lamports now quotes 48,423. Sends, deposits and THORChain/Maya swaps from Solana are unchanged. New export: `getSolanaMessageFee` from `chains/solana/computeBudget`, which also now holds the ComputeBudget argument readers the Kamino decoder uses.
+
+- [#2615](https://github.com/vultisig/vultisig-sdk/pull/2615) [`43573f7`](https://github.com/vultisig/vultisig-sdk/commit/43573f75e2ad8c4ba3aea709713317db9ceda6b6) Thanks [@realpaaao](https://github.com/realpaaao)! - Zcash sends and THORChain/Maya ZEC swaps now sign version-5 transactions (ZIP-225 format, ZIP-244 sighash and txid). NU7 (mainnet block 3,543,405) rejects the version-4 transactions WalletCore builds, and version 5 is valid before and after activation. WalletCore still plans the transaction (UTXO selection, ZIP-317 fee, change, memo, branch id); only the pre-signing hashes and the signed bytes move off WalletCore. Inputs must be transparent P2PKH, memos are capped at 80 bytes, and a missing branch id, an output address WalletCore returns no lock script for, or a signature that does not verify throws before a transaction is produced. The returned txid is the ZIP-244 txid, which is not `sha256d` of the bytes. Every device in a keysign must run a build with this change: an older device computes v4 hashes and the keysign fails. SwapKit ZEC swaps are deposit-channel sends built by the same path, so they sign version 5 as well. New export: `tx/compile/zcash/zcashV5`.
+
+- [#2596](https://github.com/vultisig/vultisig-sdk/pull/2596) [`b881dd2`](https://github.com/vultisig/vultisig-sdk/commit/b881dd2ef9df11ae6d6a8ebecf09e84ef3437765) Thanks [@johnnyluo](https://github.com/johnnyluo)! - Bump zod 4.x to 4.6.6 (GHSA-mrhx-c7xc-m3w5).
+
+- Updated dependencies [[`1cb7044`](https://github.com/vultisig/vultisig-sdk/commit/1cb704409f72439b206308a2f19cfbde5ca63202)]:
+  - @vultisig/mpc-types@0.4.0
+  - @vultisig/mpc-native@1.0.2
+
 ## 11.0.0
 
 ### Major Changes

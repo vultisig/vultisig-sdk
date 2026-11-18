@@ -235,7 +235,16 @@ export class FastVault extends VaultBase {
 
       // Decrypt vault
       const encryptedData = fromBase64(container.vault)
-      const decryptedBuffer = decryptVaultBackupWithPassword(password, encryptedData)
+      let decryptedBuffer: Buffer
+      try {
+        decryptedBuffer = decryptVaultBackupWithPassword(password, encryptedData)
+      } catch (error) {
+        throw new VaultError(
+          VaultErrorCode.InvalidConfig,
+          'Failed to unlock vault: could not decrypt vault with the provided password',
+          error as Error
+        )
+      }
       vaultBase64 = Buffer.from(decryptedBuffer).toString('base64')
     } else {
       // Vault is not encrypted - use content directly

@@ -17,6 +17,7 @@ import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 
 import { getWalletCore } from '../../context/wasmRuntime'
 import type { MaxSendAmount } from '../../types'
+import { normalizeAccountCoin } from '../../utils/normalizeCoinInput'
 import type { VaultIdentity } from './types'
 
 export type GetMaxSendAmountFromKeysParams = {
@@ -163,9 +164,10 @@ export const computeMaxSendFromBalance = async (
  */
 export const getMaxSendAmountFromKeys = async (
   identity: VaultIdentity,
-  params: GetMaxSendAmountFromKeysParams,
+  rawParams: GetMaxSendAmountFromKeysParams,
   walletCoreOverride?: WalletCore
 ): Promise<MaxSendAmount> => {
+  const params = { ...rawParams, coin: normalizeAccountCoin(rawParams.coin) }
   const walletCore = walletCoreOverride ?? (await getWalletCore())
   // Receiver validation lives in computeMaxSendFromBalance (the canonical check
   // for all callers) — don't duplicate it here.

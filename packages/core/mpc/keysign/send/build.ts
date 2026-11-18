@@ -228,21 +228,20 @@ export const buildSendKeysignPayload = async ({
 
   const balance = await getCoinBalance(coin)
 
-  if (publicKey) {
-    keysignPayload = await refineKeysignAmount({
+  // Refinement reads the payload (balance, fee, UTXOs), never the WalletCore
+  // key, so it runs on the `hexPublicKeyOverride` path too (#1390). Skipping it
+  // there left a MAX send signing a stale `balance - fee` the chain rejects.
+  keysignPayload = await refineKeysignAmount({
+    keysignPayload,
+    walletCore,
+    balance,
+  })
+
+  if (isChainOfKind(coin.chain, 'utxo')) {
+    keysignPayload = await refineKeysignUtxo({
       keysignPayload,
       walletCore,
-      publicKey,
-      balance,
     })
-
-    if (isChainOfKind(coin.chain, 'utxo')) {
-      keysignPayload = await refineKeysignUtxo({
-        keysignPayload,
-        walletCore,
-        publicKey,
-      })
-    }
   }
 
   assertTonMemoFits({ coin, keysignPayload })

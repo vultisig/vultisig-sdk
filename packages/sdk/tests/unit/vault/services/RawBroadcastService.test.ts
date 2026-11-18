@@ -5,6 +5,7 @@ import { bytesToHex } from '@noble/hashes/utils.js'
 import { Chain, OtherChain } from '@vultisig/core-chain/Chain'
 import { bittensorRpcUrl } from '@vultisig/core-chain/chains/bittensor/client'
 import { polkadotRpcUrl } from '@vultisig/core-chain/chains/polkadot/client'
+import { SolanaSendTransactionError } from '@vultisig/core-chain/chains/solana/sendTransaction'
 import { tronRpcUrl } from '@vultisig/core-chain/chains/tron/config'
 import base58 from 'bs58'
 import { encode as xrplEncode } from 'ripple-binary-codec'
@@ -73,10 +74,22 @@ vi.mock('@vultisig/core-chain/chains/utxo/client/getBlockchairBaseUrl', () => ({
 
 vi.mock('@vultisig/core-chain/chains/solana/client', () => ({
   getSolanaClient: () => ({
-    sendRawTransaction: mockSendSolanaRawTx,
     getSignatureStatuses: mockGetSolanaSignatureStatuses,
   }),
 }))
+
+vi.mock('@vultisig/core-chain/chains/solana/sendTransaction', async importOriginal => ({
+  ...(await importOriginal()),
+  sendSolanaTransaction: (...args: unknown[]) => mockSendSolanaRawTx(...args),
+}))
+
+// A preflight rejection in the shape mainnet returns it: the verdict only in `data.err`.
+const solanaPreflightFailure = (err: string) =>
+  new SolanaSendTransactionError({
+    code: -32002,
+    message: 'Transaction simulation failed',
+    data: { err, logs: [] },
+  })
 
 vi.mock('@vultisig/core-chain/chains/cosmos/client', () => ({
   getCosmosClient: (...args: unknown[]) => mockGetCosmosClient(...args),
@@ -212,7 +225,20 @@ describe('RawBroadcastService', () => {
       rawTx: 'YQ==',
     })
     expect(hash).toBe('sol-signature')
-    expect(mockSendSolanaRawTx).toHaveBeenCalled()
+    expect(mockSendSolanaRawTx).toHaveBeenCalledWith({
+      rawTransaction: Uint8Array.from([0x61]),
+      skipPreflight: false,
+      maxRetries: 3,
+    })
+  })
+
+  it("names the node's verdict when Solana rejects the transaction in preflight", async () => {
+    mockSendSolanaRawTx.mockRejectedValue(solanaPreflightFailure('AccountNotFound'))
+
+    await expect(service.broadcastRawTx({ chain: Chain.Solana, rawTx: 'YQ==' })).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: 'Failed to broadcast raw transaction on Solana: Transaction simulation failed: AccountNotFound',
+    })
   })
 
   // sendRawTransaction is fire-and-forget (accepted-into-queue, not execution result), so the
@@ -257,7 +283,7 @@ describe('RawBroadcastService', () => {
   it('rejects a duplicate Solana transaction with an explicit on-chain failure', async () => {
     const signature = Uint8Array.from({ length: 64 }, (_, index) => index + 1)
     const rawTx = Buffer.from(Uint8Array.from([1, ...signature, 0])).toString('base64')
-    mockSendSolanaRawTx.mockRejectedValue(new Error('AlreadyProcessed'))
+    mockSendSolanaRawTx.mockRejectedValue(solanaPreflightFailure('AlreadyProcessed'))
     mockGetSolanaSignatureStatuses.mockResolvedValue({
       value: [{ err: { InstructionError: [0, 'Custom'] } }],
     })
@@ -279,7 +305,7 @@ describe('RawBroadcastService', () => {
   it('accepts a duplicate Solana transaction when its status is not indexed yet', async () => {
     const signature = Uint8Array.from({ length: 64 }, (_, index) => index + 1)
     const rawTx = Buffer.from(Uint8Array.from([1, ...signature, 0])).toString('base64')
-    mockSendSolanaRawTx.mockRejectedValue(new Error('AlreadyProcessed'))
+    mockSendSolanaRawTx.mockRejectedValue(solanaPreflightFailure('AlreadyProcessed'))
     mockGetSolanaSignatureStatuses.mockResolvedValue({ value: [null] })
 
     const hash = await service.broadcastRawTx({
@@ -293,7 +319,7 @@ describe('RawBroadcastService', () => {
   it('accepts a duplicate Solana transaction when its best-effort status lookup is unavailable', async () => {
     const signature = Uint8Array.from({ length: 64 }, (_, index) => index + 1)
     const rawTx = Buffer.from(Uint8Array.from([1, ...signature, 0])).toString('base64')
-    mockSendSolanaRawTx.mockRejectedValue(new Error('AlreadyProcessed'))
+    mockSendSolanaRawTx.mockRejectedValue(solanaPreflightFailure('AlreadyProcessed'))
     mockGetSolanaSignatureStatuses.mockRejectedValue(new Error('rpc down'))
 
     const hash = await service.broadcastRawTx({

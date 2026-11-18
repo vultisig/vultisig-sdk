@@ -7,7 +7,7 @@ import { descriptions } from '@vultisig/client-shared'
 import type { FiatCurrency, VaultBase } from '@vultisig/sdk'
 import { Chain, parseKeygenQR, SEEDPHRASE_WORD_COUNTS, Vultisig } from '@vultisig/sdk'
 import chalk from 'chalk'
-import { InvalidArgumentError, program } from 'commander'
+import { Command, CommanderError, InvalidArgumentError, program } from 'commander'
 
 import { CLIContext, withExit } from './adapters'
 import {
@@ -70,10 +70,11 @@ import {
   cachePassword,
   createPasswordCallback,
   loadActiveVaultSafely,
+  parseSlippagePercent,
   resolveChainOrThrow,
   resolveOptionalChainOrThrow,
 } from './core'
-import { EXIT_CODE_DESCRIPTIONS, ExitCode, InvalidInputError } from './core/errors'
+import { EXIT_CODE_DESCRIPTIONS, ExitCode, InvalidInputError, toErrorJson, UsageError } from './core/errors'
 import { parseServerEndpointOverridesFromArgv, resolveServerEndpoints } from './core/server-endpoints'
 import { findChainByName, ShellSession } from './interactive'
 import {
@@ -88,6 +89,7 @@ import {
   initOutputMode,
   isJsonOutput,
   isNonInteractive,
+  outputErrorJson,
   outputJson,
   printResult,
   requireInteractive,
@@ -120,6 +122,38 @@ setupUserAgent()
 // ============================================================================
 
 let ctx: CLIContext
+
+function outputFormatBeforeParse(argv: string[]): 'json' | 'table' {
+  let explicit: 'json' | 'table' | undefined
+  for (let index = 0; index < argv.length; index++) {
+    const arg = argv[index]
+    if (arg === '--output' || arg === '-o') {
+      const value = argv[index + 1]
+      if (value === 'json' || value === 'table') explicit = value
+      index++
+    } else if (arg.startsWith('--output=')) {
+      const value = arg.slice('--output='.length)
+      if (value === 'json' || value === 'table') explicit = value
+    } else if (arg.startsWith('-o') && arg.length > 2) {
+      const value = arg.slice(2)
+      if (value === 'json' || value === 'table') explicit = value
+    }
+  }
+  if (explicit) return explicit
+  if (argv.includes('--ci')) return 'json'
+  return process.stdout.isTTY ? 'table' : 'json'
+}
+
+function configureCommanderErrors(command: Command): void {
+  command.exitOverride()
+  command.configureOutput({
+    writeOut: text => process.stdout.write(text),
+    writeErr: text => {
+      if (!isJsonOutput()) process.stderr.write(text)
+    },
+  })
+  for (const subcommand of command.commands) configureCommanderErrors(subcommand)
+}
 
 // ============================================================================
 // Program Configuration
@@ -170,7 +204,9 @@ program
     const opts = thisCommand.opts()
     // --ci implies --output json --non-interactive --quiet
     if (opts.ci) {
-      const outputExplicit = process.argv.some(a => a === '--output' || a === '-o' || a.startsWith('--output='))
+      const outputExplicit = process.argv.some(
+        a => a === '--output' || a === '-o' || a.startsWith('--output=') || (a.startsWith('-o') && a.length > 2)
+      )
       opts.output = opts.output === 'table' && !outputExplicit ? 'json' : opts.output
       opts.quiet = true
       opts.nonInteractive = true
@@ -707,11 +743,11 @@ See also: balance, tx-status`
           password?: string
         }
       ) => {
-        if (!amount && !options.max) throw new Error('Provide an amount or use --max')
+        if (!amount && !options.max) throw new InvalidInputError('Provide an amount or use --max')
         if (amount && options.max) throw new Error('Cannot specify both amount and --max')
         const chain = resolveChainOrThrow(chainStr)
         if (options.destinationTag !== undefined && chain !== Chain.Ripple) {
-          throw new Error('--destination-tag is only supported for XRP')
+          throw new InvalidInputError('--destination-tag is only supported for XRP')
         }
         if (options.gasless && (chain !== Chain.Ton || !options.token)) {
           throw new Error('--gasless is only supported for TON jetton sends (pass --token)')
@@ -1312,7 +1348,7 @@ Examples:
         amountStr: string | undefined,
         options: { max?: boolean; fromToken?: string; toToken?: string }
       ) => {
-        if (!amountStr && !options.max) throw new Error('Provide an amount or use --max')
+        if (!amountStr && !options.max) throw new InvalidInputError('Provide an amount or use --max')
         if (amountStr && options.max) throw new Error('Cannot specify both amount and --max')
         const fromChain = resolveChainOrThrow(fromChainStr, 'source chain')
         const toChain = resolveChainOrThrow(toChainStr, 'destination chain')
@@ -1335,7 +1371,7 @@ program
   .option('--max', 'Swap maximum amount (full balance minus fees for native)')
   .option('--from-token <address>', 'Token address to swap from (default: native)')
   .option('--to-token <address>', 'Token address to swap to (default: native)')
-  .option('--slippage <percent>', 'Slippage tolerance in percent', '1')
+  .option('--slippage <percent>', 'Slippage tolerance in percent (0 to 50)', '1')
   .option('--dry-run', 'Preview swap without signing or broadcasting')
   .option('--confirm', 'Confirm and broadcast (required to execute non-interactively; use --dry-run to preview)')
   .option('-y, --yes', 'Alias for --confirm')
@@ -1369,8 +1405,9 @@ See also: swap-quote, swap-chains, balance`
           password?: string
         }
       ) => {
-        if (!amountStr && !options.max) throw new Error('Provide an amount or use --max')
+        if (!amountStr && !options.max) throw new InvalidInputError('Provide an amount or use --max')
         if (amountStr && options.max) throw new Error('Cannot specify both amount and --max')
+        const slippage = parseSlippagePercent(options.slippage ?? '1')
         const context = await init(program.opts().vault)
         // A decline throws ConfirmationRequiredError (exit 12) — see `send` above.
         await executeSwap(context, {
@@ -1379,7 +1416,7 @@ See also: swap-quote, swap-chains, balance`
           amount: options.max ? 'max' : amountStr!,
           fromToken: options.fromToken,
           toToken: options.toToken,
-          slippage: options.slippage ? parseFloat(options.slippage) : undefined,
+          slippage,
           dryRun: options.dryRun,
           yes: options.yes || options.confirm,
           force: options.force,
@@ -1933,5 +1970,20 @@ if (isInteractiveMode) {
     process.exit(1)
   })
 } else {
-  program.parse()
+  initOutputMode({ output: outputFormatBeforeParse(process.argv.slice(2)) })
+  configureCommanderErrors(program)
+  try {
+    program.parse()
+  } catch (err) {
+    if (!(err instanceof CommanderError)) throw err
+    if (err.exitCode === ExitCode.SUCCESS) process.exit(ExitCode.SUCCESS)
+    if (isJsonOutput()) {
+      const message =
+        err.code === 'commander.help' || err.message === '(outputHelp)'
+          ? 'Missing command. Run "vultisig --help" for usage.'
+          : err.message
+      outputErrorJson(toErrorJson(new UsageError(message)))
+    }
+    process.exit(err.exitCode)
+  }
 }

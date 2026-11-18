@@ -620,6 +620,8 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
     memo: txMemo,
     messages,
     fee,
+    // The dApp signs over its tx-level timeout; dropping it invalidates the signature.
+    ...(signAmino?.timeoutHeight ? { timeoutHeight: Long.fromString(signAmino.timeoutHeight.toString(), true) } : {}),
   })
 
   return [input]

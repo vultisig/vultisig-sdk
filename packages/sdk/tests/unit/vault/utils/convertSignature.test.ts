@@ -41,6 +41,32 @@ describe('convertToKeysignSignatures', () => {
       expect(result).toHaveProperty(messageHashes[0])
       expect(result[messageHashes[0]].recovery_id).toBeUndefined()
     })
+
+    // Zcash tx 6ee6f4e001d83db3ec348c2d857ee60bac130a130e9ccdccfc0d9e7ddb08cecd input 1: minimal DER, 31-byte r
+    it('should left-pad a short DER integer to 32 bytes', () => {
+      const signature: Signature = {
+        signature:
+          '3043021f7aeb956e43b493d241249db26530ea4593d5a0c22f247f391289c95b1f19eb022072f64b8f0fd4d4d25563c30ec6f549df5e7fe8356e09bb731a61ded1c5a4d4cb',
+        recovery: 1,
+        format: 'ECDSA',
+      }
+      const messageHashes = ['0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef']
+
+      const result = convertToKeysignSignatures(signature, messageHashes)
+
+      expect(result[messageHashes[0]].r).toBe('0x007aeb956e43b493d241249db26530ea4593d5a0c22f247f391289c95b1f19eb')
+      expect(result[messageHashes[0]].s).toBe('0x72f64b8f0fd4d4d25563c30ec6f549df5e7fe8356e09bb731a61ded1c5a4d4cb')
+
+      const shortS = convertToKeysignSignatures(
+        {
+          ...signature,
+          signature:
+            '3043022072f64b8f0fd4d4d25563c30ec6f549df5e7fe8356e09bb731a61ded1c5a4d4cb021f7aeb956e43b493d241249db26530ea4593d5a0c22f247f391289c95b1f19eb',
+        },
+        messageHashes
+      )[messageHashes[0]]
+      expect(shortS.s).toBe('0x007aeb956e43b493d241249db26530ea4593d5a0c22f247f391289c95b1f19eb')
+    })
   })
 
   describe('Single signature (EdDSA)', () => {

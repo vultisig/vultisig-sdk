@@ -398,6 +398,31 @@ vultisig swap ethereum bitcoin 0.1 -y --password mypassword
 
 Swap quotes and previews show your VULT discount tier when affiliate fees are applied. See `vultisig discount` for tier details.
 
+Below-minimum swaps exit with code 4 (`INVALID_INPUT`). JSON output includes `error.context.minimum` when either a
+swap quote fails and the submitted amount is below the THORChain-computed minimum, or `swap --max` is refused because
+the spendable balance is below the native protocol's recommended minimum (THORChain or MayaChain, from the quote's
+`recommended_min_amount_in`):
+
+```json
+{
+  "error": {
+    "code": "INVALID_INPUT",
+    "exitCode": 4,
+    "message": "Amount is below the minimum for the THORChain route. Minimum is ~0.0042 ETH. Please increase the amount.",
+    "hint": "Increase the amount to at least ~0.0042 ETH",
+    "context": {
+      "minimum": "0.0042",
+      "ticker": "ETH",
+      "minimumBaseUnits": "4200000000000000"
+    },
+    "retryable": false
+  }
+}
+```
+
+The context is omitted when a provider's own error text wins, including numeric provider text, and when no native
+route exists.
+
 ### Advanced Operations
 
 | Command                      | Description                                   |
@@ -680,7 +705,7 @@ When running in a non-TTY environment (pipes, scripts, AI agents), the CLI **aut
 
 ```bash
 # Agent runs this — auto-detects non-TTY, skips interactive prompt
-vultisig create fast --name "Agent Wallet" --password "$VAULT_PASSWORD" --email agent@example.com
+vultisig create fast --name "Agent Wallet" --password "$VAULT_PASSWORD" --email "$OWNER_EMAIL"
 
 # Returns immediately with vault ID (pending verification)
 # Vault ID: 023118...
@@ -689,14 +714,16 @@ vultisig create fast --name "Agent Wallet" --password "$VAULT_PASSWORD" --email 
 vultisig verify 023118... --code 123456
 ```
 
+`--email` must be an inbox the vault owner reads: VultiServer sends the activation code and the backup of its key share (`.vult`) there. A placeholder address sends both to an inbox nobody reads.
+
 You can also force two-step mode explicitly:
 
 ```bash
 # Force two-step even in a TTY
-vultisig create fast --name "Agent Wallet" --password "$VAULT_PASSWORD" --email agent@example.com --two-step
+vultisig create fast --name "Agent Wallet" --password "$VAULT_PASSWORD" --email "$OWNER_EMAIL" --two-step
 
 # JSON output for machine parsing
-vultisig create fast --name "Agent Wallet" --password "$VAULT_PASSWORD" --email agent@example.com --two-step -o json
+vultisig create fast --name "Agent Wallet" --password "$VAULT_PASSWORD" --email "$OWNER_EMAIL" --two-step -o json
 ```
 
 JSON output for two-step create:
@@ -707,7 +734,7 @@ JSON output for two-step create:
   "status": "pending_verification",
   "message": "Vault created. Verify with email OTP to activate.",
   "verifyCommand": "vultisig verify 023118... --code <OTP>",
-  "resendCommand": "vultisig verify 023118... --resend --email agent@example.com --password ..."
+  "resendCommand": "vultisig verify 023118... --resend --email owner@example.com --password ..."
 }
 ```
 
@@ -1328,6 +1355,16 @@ Configuration is stored in `~/.vultisig/`:
 > These are generated from the `ExitCode` enum in `src/core/errors.ts` (the single source of
 > truth) and are covered by a doc-lint test that fails if this table drifts from the code. Run
 > `vultisig --help` for the same list.
+
+In JSON output mode (`--output json`, `--ci`, or piped stdout), Commander usage failures such as an unknown
+command, an unknown option, or a missing required option are written to stdout as the standard error envelope
+with `code: "USAGE_ERROR"` and `exitCode: 1`. Table/TTY mode keeps Commander's plain-text usage errors. Help and
+version output remain unchanged and exit successfully in either mode.
+
+A wrong vault password or corrupted vault ciphertext is reported as `AUTH_REQUIRED` with exit code `2`, the
+message `Wrong vault password, or the vault data is corrupted`, and a hint to check the password and, if it is
+correct, re-import the vault from a backup. This applies consistently when importing, exporting, or unlocking
+for send or swap.
 
 ### Partial failures (`portfolio`)
 

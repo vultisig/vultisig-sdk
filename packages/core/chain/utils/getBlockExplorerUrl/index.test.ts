@@ -45,7 +45,7 @@ describe('getBlockExplorerUrl', () => {
     [Chain.Polkadot, 'address', 'account'],
     [Chain.Polkadot, 'tx', 'extrinsic'],
     [Chain.Ripple, 'address', 'account'],
-    [Chain.Ripple, 'tx', 'transaction'],
+    [Chain.Ripple, 'tx', 'tx'],
     [Chain.BitcoinCash, 'tx', 'transaction'],
     [Chain.QBTC, 'address', 'account'],
   ] as const)('preserves the %s %s explorer path', (chain, entity, path) => {

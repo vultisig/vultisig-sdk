@@ -1,8 +1,8 @@
-import { SendTransactionError } from '@solana/web3.js'
 import { OtherChain } from '@vultisig/core-chain/Chain'
 import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
 import { sendJitoTransaction } from '@vultisig/core-chain/chains/solana/jito'
 import { withSolanaRpcTimeout } from '@vultisig/core-chain/chains/solana/rpcTimeout'
+import { sendSolanaTransaction, SolanaSendTransactionError } from '@vultisig/core-chain/chains/solana/sendTransaction'
 import { attempt } from '@vultisig/lib-utils/attempt'
 import { isInError } from '@vultisig/lib-utils/error/isInError'
 import base58 from 'bs58'
@@ -25,7 +25,8 @@ export const solanaRebroadcastIntervalMs = 2_000
 /**
  * Wall-clock cap on the resend loop, reached only when neither the payload nor
  * the RPC could supply a block-height deadline. A confirmed blockhash lives
- * about 150 blocks (60–90 s), so this outlasts any real deadline. Checked
+ * 150 blocks, about 32 s at the 0.21 s mainnet block time measured on
+ * 2026-10-27, so this outlasts any real deadline. Checked
  * between iterations, so the loop can overrun it by at most one iteration's
  * RPC round trips (each bounded by `solanaRpcTimeoutMs`); a fallback, not an
  * SLA, and shrinking a send's timeout as the cap nears would only fail sends
@@ -44,18 +45,16 @@ const isAlreadyProcessedError = (error: unknown) => isInError(error, 'already be
 const wait = (durationMs: number) => new Promise(resolve => setTimeout(resolve, durationMs))
 
 /**
- * Hoists the on-chain rejection reason into a Solana send error's message.
+ * Hoists the program logs of a Solana send rejection into its message.
  *
- * On a preflight rejection the RPC returns the actionable detail in
- * `data.err` / `data.logs` (the program logs), which `web3.js` exposes via
- * `SendTransactionError.logs`. The bare `.message` ("failed to send
- * transaction") hides it, so any consumer reading only the top-level message
- * loses the reason. Fold the program logs into the message — preserving the
- * original error as `cause` — so the real reason ("insufficient lamports",
- * "custom program error: 0x1", a failed instruction) reaches the surface.
+ * The send error's message names the node's verdict but keeps the program logs
+ * out, so a program's output cannot steer how the error is classified. Once
+ * that is decided, fold them in — preserving the original error as `cause` — so the
+ * detail behind the verdict ("insufficient lamports", "custom program error:
+ * 0x1") reaches a consumer that reads only the top-level message.
  */
 const withSolanaBroadcastReason = (error: unknown): unknown => {
-  if (!(error instanceof SendTransactionError)) {
+  if (!(error instanceof SolanaSendTransactionError)) {
     return error
   }
 
@@ -201,19 +200,16 @@ export const broadcastSolanaTx: BroadcastTxResolver<OtherChain.Solana> = async (
 
   while (true) {
     const { data: acceptedSignature, error: sendError } = await attempt(() =>
-      withSolanaRpcTimeout(
-        client.sendRawTransaction(rawTransaction, {
-          // Preflight until the RPC has accepted the bytes once: it is how a
-          // real rejection (insufficient lamports, a failing program) surfaces.
-          // A resend skips it, so a node whose simulation bank lags cannot veto
-          // bytes a leader already holds.
-          skipPreflight: sent,
-          preflightCommitment: 'confirmed',
-          // The node's own resend loop would race this one.
-          maxRetries: 0,
-        }),
-        'sendTransaction'
-      )
+      sendSolanaTransaction({
+        rawTransaction,
+        // Preflight until the RPC has accepted the bytes once: it is how a
+        // real rejection (insufficient lamports, a failing program) surfaces.
+        // A resend skips it, so a node whose simulation bank lags cannot veto
+        // bytes a leader already holds.
+        skipPreflight: sent,
+        // The node's own resend loop would race this one.
+        maxRetries: 0,
+      })
     )
 
     if (acceptedSignature !== undefined) {

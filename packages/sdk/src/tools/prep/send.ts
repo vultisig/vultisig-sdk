@@ -14,6 +14,7 @@ import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 
 import { getWalletCore } from '../../context/wasmRuntime'
+import { normalizeAccountCoin } from '../../utils/normalizeCoinInput'
 import { VaultError, VaultErrorCode } from '../../vault/VaultError'
 import type { VaultIdentity } from './types'
 
@@ -68,9 +69,10 @@ export type PrepareSendTxFromKeysParams = {
  */
 export const prepareSendTxFromKeys = async (
   identity: VaultIdentity,
-  params: PrepareSendTxFromKeysParams,
+  rawParams: PrepareSendTxFromKeysParams,
   walletCoreOverride?: WalletCore
 ): Promise<KeysignPayload> => {
+  const params = { ...rawParams, coin: normalizeAccountCoin(rawParams.coin) }
   if (params.amount <= 0n) {
     throw new Error('Amount must be greater than zero')
   }

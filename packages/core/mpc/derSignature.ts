@@ -1,6 +1,11 @@
 // Helper function to encode a Uint8Array to DER format
 function encodeDERInteger(value: Uint8Array): Uint8Array {
-  let byteArray = value
+  // DER integers are minimal: strip leading zero bytes (strict-DER nodes reject them)
+  let start = 0
+  while (start < value.length - 1 && value[start] === 0x00) {
+    start++
+  }
+  let byteArray = value.subarray(start)
 
   // If the first byte is >= 0x80, prepend a 0x00 byte
   if (byteArray[0] >= 0x80) {

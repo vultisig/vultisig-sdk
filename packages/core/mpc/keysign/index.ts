@@ -7,11 +7,9 @@ import { markLocalPartyKeysignComplete } from '@vultisig/core-mpc/keysignComplet
 import { sleep } from '@vultisig/lib-utils/sleep'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { attempt } from '@vultisig/lib-utils/attempt'
-import { base64Encode } from '@vultisig/lib-utils/base64Encode'
 import { prefixErrorWith } from '@vultisig/lib-utils/error/prefixErrorWith'
 import { transformError } from '@vultisig/lib-utils/error/transformError'
 import { match } from '@vultisig/lib-utils/match'
-import { chainPromises } from '@vultisig/lib-utils/promise/chainPromises'
 import { ignorePromiseOutcome } from '@vultisig/lib-utils/promise/ignorePromiseOutcome'
 import { withoutUndefinedFields } from '@vultisig/lib-utils/record/withoutUndefinedFields'
 import { Minutes } from '@vultisig/lib-utils/time'
@@ -22,8 +20,8 @@ import { initializeMpcLib } from '../lib/initialize'
 import { makeSignSession, SignSession } from '../lib/signSession'
 import { deleteMpcRelayMessage } from '../message/relay/delete'
 import { getMpcRelayMessages } from '../message/relay/get'
-import { sendMpcRelayMessage } from '../message/relay/send'
-import { fromMpcServerMessage, toMpcServerMessage } from '../message/server'
+import { sendMpcRelaySessionMessage } from '../message/relay/send'
+import { fromMpcServerMessage } from '../message/server'
 import { ensureSetupMessage } from '../message/setup/ensure'
 
 type KeysignInput = {
@@ -40,6 +38,7 @@ type KeysignInput = {
 }
 
 const maxInboundWaitTime: Minutes = 3
+const inboundTimeoutMessage = `Exited inbound processing due to a timeout after ${maxInboundWaitTime} min`
 
 const rethrowKeysignError = (
   error: unknown,
@@ -112,51 +111,31 @@ export const keysign = async ({
 
   const abortController = new AbortController()
 
-  const processOutbound = async (sequenceNo = 0): Promise<void> => {
-    if (abortController.signal.aborted) {
-      return
-    }
+  let sequenceNo = 0
 
-    const message = session.outputMessage()
-    if (!message) {
-      await sleep(100)
-      return processOutbound(sequenceNo)
-    }
-
-    const { body, receivers } = message
-
-    const messageToSend = toMpcServerMessage(body, hexEncryptionKey)
-
-    await chainPromises(
-      receivers.map(
-        (receiver, index) => () =>
-          transformError(
-            sendMpcRelayMessage({
-              serverUrl,
-              sessionId,
-              message: {
-                session_id: sessionId,
-                from: localPartyId,
-                to: [receiver],
-                body: messageToSend,
-                hash: getMessageHash(base64Encode(body)),
-                sequence_no: sequenceNo + index,
-              },
-              messageId,
-            }),
-            prefixErrorWith('Failed to send MPC relay message')
-          )
+  const sendOutbound = async (): Promise<void> => {
+    for (let outbound = session.outputMessage(); outbound; outbound = session.outputMessage()) {
+      sequenceNo = await transformError(
+        sendMpcRelaySessionMessage({
+          serverUrl,
+          sessionId,
+          messageId,
+          localPartyId,
+          hexEncryptionKey,
+          message: outbound,
+          sequenceNo,
+          signal: abortController.signal,
+        }),
+        prefixErrorWith('Failed to send MPC relay message')
       )
-    )
-
-    return processOutbound(sequenceNo + receivers.length)
+    }
   }
 
   const processedMessages: Record<string, boolean> = {}
 
   const processInbound = async (): Promise<void> => {
     if (abortController.signal.aborted) {
-      throw new Error(`Exited inbound processing due to a timeout after ${maxInboundWaitTime} min`)
+      throw new Error(inboundTimeoutMessage)
     }
 
     const relayMessages = await transformError(
@@ -198,6 +177,10 @@ export const keysign = async ({
         }
       })()
 
+      // Send before the next input: a later message in the same batch can finish
+      // our side, and peers still need what this one produced.
+      await sendOutbound()
+
       if (accepted) {
         processedMessages[cacheKey] = true
         return
@@ -211,18 +194,13 @@ export const keysign = async ({
     return processInbound()
   }
 
-  const outboundPromise = processOutbound()
-
   const timeout = setTimeout(
     () => {
-      abortController.abort()
+      abortController.abort(new Error(inboundTimeoutMessage))
     },
     convertDuration(maxInboundWaitTime, 'min', 'ms')
   )
-  const { error } = await attempt(processInbound())
-  abortController.abort()
-
-  await attempt(outboundPromise)
+  const { error } = await attempt(sendOutbound().then(processInbound))
   clearTimeout(timeout)
 
   if (error) {
