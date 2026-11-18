@@ -1,5 +1,21 @@
 # @vultisig/core-chain
 
+## 6.4.2
+
+### Patch Changes
+
+- [#2626](https://github.com/vultisig/vultisig-sdk/pull/2626) [`21b0462`](https://github.com/vultisig/vultisig-sdk/commit/21b04628f7bd5cfa6873888d76eec33d64a43068) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(core-chain): use xrpscan's `/tx/` path for XRP transaction explorer links (was `/transaction/`, which xrpscan does not route)
+
+- [#2625](https://github.com/vultisig/vultisig-sdk/pull/2625) [`1e0920b`](https://github.com/vultisig/vultisig-sdk/commit/1e0920b265a2b5b85d37ac8d03ef710aa09caf56) Thanks [@neavra](https://github.com/neavra)! - Validate coin inputs at runtime in coin-taking entry points: send (`prepareSendTx` / `prepareSendTxFromKeys`), fee estimate (`estimateSendFee`) and swap coin resolution. Send and fee estimate require an `AccountCoin`; swap accepts an `AccountCoin` or a `SimpleCoinInput`. Unknown keys, missing or mistyped values (unknown chain, blank address/ticker, non-integer decimals, zero-address `id`) now throw an `InvalidConfig` error naming the key and listing the accepted keys. `contractAddress` is accepted as an alias for `id` (a conflicting `id` throws). Previously an unknown key was ignored, so a token contract under `contractAddress` silently prepared a native send.
+
+  Known metadata extras are ignored, and max-send and vault-free swap preparation are now validated too. Blank `id` and blank `contractAddress` are treated as absent (native).
+
+  Swap quote fingerprints also treat a blank `id` as native.
+
+- [#2594](https://github.com/vultisig/vultisig-sdk/pull/2594) [`fec6a7e`](https://github.com/vultisig/vultisig-sdk/commit/fec6a7e38ea15bf107750d19bb73711e40e880ea) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Solana: a broadcast the node rejects in preflight now reports why. The node puts the reason (`BlockhashNotFound`, `AccountNotFound`, an instruction error) only in `data.err`, which `@solana/web3.js` drops, so every rejection read `Simulation failed. Message: Transaction simulation failed. Logs: []`. Sends now go through `sendSolanaTransaction`, which keeps it: the error reads `Transaction simulation failed: BlockhashNotFound`, with the program logs in `logs`. A stale blockhash therefore takes the resend path and ends in `SolanaBlockhashExpiredError` (`recovery: 'resign'`) instead of a generic rejection, and a duplicate send (`AlreadyProcessed`) is accepted as idempotent, in both `broadcastTx` and `broadcastRawTx`.
+
+- [#2515](https://github.com/vultisig/vultisig-sdk/pull/2515) [`8dbac4f`](https://github.com/vultisig/vultisig-sdk/commit/8dbac4fe3bf9abc011dcf8fe690e2772ebeb3ede) Thanks [@neavra](https://github.com/neavra)! - Below-minimum swap quotes now report the computed minimum input when THORChain can route the pair and the submitted amount is below that floor. The error identifies it as the THORChain route minimum on multi-provider pairs and exposes it in `SwapError.details`; the SDK raises these errors as `InvalidAmount` instead of `InvalidConfig`, and the CLI exits 4 (`INVALID_INPUT`) with `error.context.minimum` instead of 1.
+
 ## 6.4.1
 
 ### Patch Changes

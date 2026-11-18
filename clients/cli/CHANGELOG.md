@@ -1,5 +1,21 @@
 # @vultisig/cli
 
+## 11.1.1
+
+### Patch Changes
+
+- [#2523](https://github.com/vultisig/vultisig-sdk/pull/2523) [`89554ac`](https://github.com/vultisig/vultisig-sdk/commit/89554ac59b8bb5beeb70724ff84c0a5f28d5c135) Thanks [@neavra](https://github.com/neavra)! - CLI input errors (missing amount, unsupported destination tag, missing XRP tag, unknown token, invalid slippage, invalid execute message, missing import file) now exit 4 (`INVALID_INPUT`); import pre-check failures including `EACCES` and `EISDIR` map to `INVALID_INPUT`, and missing-file text identifies the failing `stat`; a wrong vault password or corrupted vault data exits 2 (`AUTH_REQUIRED`) with clear recovery guidance; commander usage errors are emitted as the JSON error envelope in JSON mode; `INVALID_ADDRESS.context.address` carries the full address.
+
+  Blank `--slippage` input is now rejected, and the AES-GCM substring heuristic is removed in favour of source classification for vault decryption failures.
+
+- [#2624](https://github.com/vultisig/vultisig-sdk/pull/2624) [`a89e65f`](https://github.com/vultisig/vultisig-sdk/commit/a89e65fcf5d898ac8bdcfeed8aae84ae0799a95c) Thanks [@neavra](https://github.com/neavra)! - `send` on a secure vault now renders the keysign QR and reports device joins, matching `sign` (in JSON mode the QR is a `{"qrPayload": ...}` event line before the result). `execute` still prints a bare URL in JSON mode.
+
+- [#2515](https://github.com/vultisig/vultisig-sdk/pull/2515) [`8dbac4f`](https://github.com/vultisig/vultisig-sdk/commit/8dbac4fe3bf9abc011dcf8fe690e2772ebeb3ede) Thanks [@neavra](https://github.com/neavra)! - Below-minimum swap quotes now report the computed minimum input when THORChain can route the pair and the submitted amount is below that floor. The error identifies it as the THORChain route minimum on multi-provider pairs and exposes it in `SwapError.details`; the SDK raises these errors as `InvalidAmount` instead of `InvalidConfig`, and the CLI exits 4 (`INVALID_INPUT`) with `error.context.minimum` instead of 1.
+
+- Updated dependencies [[`f50c66b`](https://github.com/vultisig/vultisig-sdk/commit/f50c66baaa63eddc19cd4b60c63b1bc49a6cfd0a), [`18ff50b`](https://github.com/vultisig/vultisig-sdk/commit/18ff50b72b01c3714c99264f95e29228b8f9583b), [`21b0462`](https://github.com/vultisig/vultisig-sdk/commit/21b04628f7bd5cfa6873888d76eec33d64a43068), [`55c5313`](https://github.com/vultisig/vultisig-sdk/commit/55c5313d7918dbc1ea6c8e90521070f62484c53f), [`99859a6`](https://github.com/vultisig/vultisig-sdk/commit/99859a60316ddf9dfa9cf8706be6e3f6d6e2d5d4), [`1e0920b`](https://github.com/vultisig/vultisig-sdk/commit/1e0920b265a2b5b85d37ac8d03ef710aa09caf56), [`89554ac`](https://github.com/vultisig/vultisig-sdk/commit/89554ac59b8bb5beeb70724ff84c0a5f28d5c135), [`fec6a7e`](https://github.com/vultisig/vultisig-sdk/commit/fec6a7e38ea15bf107750d19bb73711e40e880ea), [`8dbac4f`](https://github.com/vultisig/vultisig-sdk/commit/8dbac4fe3bf9abc011dcf8fe690e2772ebeb3ede), [`6a8cc43`](https://github.com/vultisig/vultisig-sdk/commit/6a8cc433a47e045fcab10d683022bd3432b2e6f4)]:
+  - @vultisig/sdk@11.1.1
+  - @vultisig/core-chain@6.4.2
+
 ## 11.1.0
 
 ### Patch Changes
