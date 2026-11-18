@@ -2709,7 +2709,7 @@
     "ethers": "^6.17.0",
     "long": "^5.3.2",
     "ripple-address-codec": "^5.0.1",
-    "tiny-secp256k1": "^2.2.4",
+    "tiny-secp256k1": "^2.2.5",
     "viem": "^2.55.10",
     "xrpl": "^5.3.0"
   }
