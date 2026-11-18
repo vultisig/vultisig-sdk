@@ -1,6 +1,6 @@
 [
   {
-    "name": "Send QBTC",
+    "name": "Send QBTC (historical payload with ML-DSA-65 wire encoding)",
     "keysign_payload": {
       "coin": {
         "chain": "QBTC",
@@ -30,7 +30,7 @@
       "lib_type": "DKLS"
     },
     "expected_image_hash": [
-      "2983aaac0d91f511d7498d3a00ca08f079e7e87a18d38c6a67f16eb3b05f9970"
+      "899a381906516c0f64e78660539d1c49a1c7f46b30c5a1a718b398452d29825a"
     ]
   }
 ]

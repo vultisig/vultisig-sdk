@@ -1,6 +1,6 @@
 import { concatBytes, protoBytes, protoString, protoVarint } from '@vultisig/core-chain/chains/cosmos/protoEncoding'
 
-const pubKeyTypeURL = '/cosmos.crypto.mldsa.PubKey'
+const pubKeyTypeURL = '/cosmos.crypto.mldsa65.PubKey'
 const defaultGasLimit = 300_000n
 
 export const qbtcChainID = 'qbtc'
@@ -23,7 +23,8 @@ type BuildQBTCAuthInfoInput = {
 export const buildQBTCAuthInfo = ({ pubKeyData, sequence, gasLimit, fee }: BuildQBTCAuthInfoInput): Uint8Array => {
   const pubKeyMsg = protoBytes(1, pubKeyData)
   const pubKeyAny = concatBytes(protoString(1, pubKeyTypeURL), protoBytes(2, pubKeyMsg))
-  const singleMode = protoVarint(1, 1n)
+  // Sign mode 1000 verifies ML-DSA over SHA256(SignDoc).
+  const singleMode = protoVarint(1, 1000n)
   const modeInfo = protoBytes(1, singleMode)
   const signerInfo = concatBytes(protoBytes(1, pubKeyAny), protoBytes(2, modeInfo), protoVarint(3, sequence))
   const feeCoin = fee

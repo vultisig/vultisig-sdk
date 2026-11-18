@@ -14,8 +14,8 @@
  * asserts its hand-rolled encoder against the SAME fixture value, so the two
  * encoders are bound: neither can drift without a test firing.
  *
- * The only QBTC-specific wire detail vs a vanilla Cosmos send is the signer
- * public-key Any typeUrl (`/cosmos.crypto.mldsa.PubKey`). The MLDSA PubKey proto
+ * QBTC-specific wire details include sign mode 1000 and the signer
+ * public-key Any typeUrl (`/cosmos.crypto.mldsa65.PubKey`). The MLDSA PubKey proto
  * is `{ key: bytes }` at field 1 - byte-identical to secp256k1 PubKey - so the
  * reference reuses cosmjs-types' PubKey encoder for the inner bytes and only
  * swaps the Any typeUrl.
@@ -71,7 +71,7 @@ const buildReferenceSignDoc = (fx: QbtcCrossEncoderFixture): Uint8Array => {
 
   const pubKeyAnyBytes = Any.encode(
     Any.fromPartial({
-      typeUrl: '/cosmos.crypto.mldsa.PubKey',
+      typeUrl: '/cosmos.crypto.mldsa65.PubKey',
       value: PubKey.encode(PubKey.fromPartial({ key: Uint8Array.from(Buffer.from(fx.pubKeyHex, 'hex')) })).finish(),
     })
   ).finish()
@@ -81,7 +81,8 @@ const buildReferenceSignDoc = (fx: QbtcCrossEncoderFixture): Uint8Array => {
       signerInfos: [
         SignerInfo.fromPartial({
           publicKey: Any.decode(pubKeyAnyBytes),
-          modeInfo: ModeInfo.fromPartial({ single: { mode: 1 } }),
+          // Custom mode 1000 is absent from the standard Cosmos SignMode enum.
+          modeInfo: ModeInfo.decode(Uint8Array.of(0x0a, 0x03, 0x08, 0xe8, 0x07)),
           sequence: BigInt(fx.sequence),
         }),
       ],
@@ -131,7 +132,7 @@ describe('qbtc / MLDSA bank.MsgSend SignDoc golden vector', () => {
     expect(msg.amount).toEqual([{ denom: fx.denom, amount: fx.amount }])
 
     const authInfo = AuthInfo.decode(signDoc.authInfoBytes)
-    expect(authInfo.signerInfos[0].publicKey?.typeUrl).toBe('/cosmos.crypto.mldsa.PubKey')
+    expect(authInfo.signerInfos[0].publicKey?.typeUrl).toBe('/cosmos.crypto.mldsa65.PubKey')
     expect(authInfo.fee?.amount).toEqual([{ denom: fx.denom, amount: fx.feeAmount }])
     expect(authInfo.fee?.gasLimit).toBe(BigInt(fx.gasLimit))
   })

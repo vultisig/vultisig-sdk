@@ -537,7 +537,7 @@ assert.equal(typeof root?.normalizeChain, 'function', 'root import exports norma
 assert.equal(typeof root?.fromChainAmountExact, 'function', 'root import exports fromChainAmountExact')
 assert.equal(typeof root?.getBlockExplorerUrl, 'function', 'root import exports getBlockExplorerUrl')
 const qbtcPublicKey = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
-const qbtcAddress = 'qbtc1p3xsn0hgurfgfygl4wc9qslemjuujqg2x9fdnp'
+const qbtcAddress = 'qbtc1fzz0m2h7537znl48zkwsmtwansy96csqd9q9zp'
 assert.equal(typeof root?.deriveQbtcAddress, 'function', 'root import exports deriveQbtcAddress')
 assert.equal(root.deriveQbtcAddress(qbtcPublicKey), qbtcAddress)
 const tronAddress = 'TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH'
@@ -597,7 +597,7 @@ for (const { specifier, target } of cases) {
 
 assert.equal(typeof requiredModules.get('@vultisig/sdk')?.Vultisig, 'function', 'root require exports Vultisig')
 const qbtcPublicKey = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
-const qbtcAddress = 'qbtc1p3xsn0hgurfgfygl4wc9qslemjuujqg2x9fdnp'
+const qbtcAddress = 'qbtc1fzz0m2h7537znl48zkwsmtwansy96csqd9q9zp'
 assert.equal(
   requiredModules.get('@vultisig/sdk')?.deriveQbtcAddress(qbtcPublicKey),
   qbtcAddress,
