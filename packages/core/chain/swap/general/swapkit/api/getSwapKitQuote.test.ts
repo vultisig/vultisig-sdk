@@ -520,6 +520,23 @@ describe('getSwapKitQuote', () => {
     expect('evm' in quote.tx && quote.tx.evm.affiliateFee).toBeUndefined()
   })
 
+  it('surfaces NEAR Intents fees charged in the source asset on an EVM route', async () => {
+    // NEAR Intents labels its fees with the NEAR ledger as their chain. Before
+    // that shape was recognised, the display-only EVM branch swallowed it and
+    // reported no fee at all.
+    const quote = await stubEvmRoute({
+      route: { providers: ['NEAR'] },
+      fees: [
+        { type: 'affiliate', amount: '0.0003', asset: 'ETH.ETH', chain: 'NEAR', protocol: 'NEAR' },
+        { type: 'service', amount: '0.00001', asset: 'ETH.ETH', chain: 'NEAR', protocol: 'NEAR' },
+      ],
+    })
+
+    const sourceEth = { chain: Chain.Ethereum, id: undefined, decimals: 18 }
+    expect('evm' in quote.tx && quote.tx.evm.affiliateFee).toEqual({ ...sourceEth, amount: 300_000_000_000_000n })
+    expect('evm' in quote.tx && quote.tx.evm.protocolFee).toEqual({ ...sourceEth, amount: 10_000_000_000_000n })
+  })
+
   it('leaves the affiliate fee absent when SwapKit itemizes none', async () => {
     // A zero here would render as a definite "$0.00" swap fee; staying absent
     // lets the consumer report the fee as part of the quoted rate instead.
@@ -1286,6 +1303,89 @@ describe('getSwapKitQuote', () => {
         amount: 1_000_000n,
       })
     ).rejects.toThrow(`SwapKit service fee uses unsupported asset ETH.USDC-${usdcId}.`)
+  })
+
+  // Shapes from a live `/v3/swap` SOL.USDC -> ARB.USDC NEAR Intents response
+  // (2026-11-16): the affiliate and service fees are charged in the SOURCE asset
+  // on the NEAR Intents ledger, so their `chain` is NEAR, not Solana.
+  const nearSolanaUsdcAsset = 'SOL.USDC-EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+  const nearArbitrumUsdcAsset = 'ARB.USDC-0xaf88d065e77c8cC2239327C5EDb3A432268e5831'
+
+  const nearIntentsFees = ({ feeProtocol, feeAsset }: { feeProtocol: string | undefined; feeAsset: string }) => [
+    { type: 'affiliate', amount: '0.5', asset: feeAsset, chain: 'NEAR', protocol: feeProtocol },
+    { type: 'service', amount: '0.01', asset: feeAsset, chain: 'NEAR', protocol: feeProtocol },
+    { type: 'outbound', amount: '0.0053', asset: nearArbitrumUsdcAsset, chain: 'ARB', protocol: 'NEAR' },
+    { type: 'inbound', amount: '0.000005', asset: 'SOL.SOL', chain: 'SOL', protocol: 'NEAR' },
+  ]
+
+  const solanaUsdcToArbitrumUsdc = {
+    from: {
+      chain: Chain.Solana,
+      address: 'sol-source',
+      ticker: 'USDC',
+      decimals: 6,
+      id: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+    },
+    to: {
+      chain: Chain.Arbitrum,
+      address: '0xdestination',
+      ticker: 'USDC',
+      decimals: 6,
+      id: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
+    },
+    amount: 100_000_000n,
+    affiliateBps: 50,
+  }
+
+  const stubNearIntentsSwap = (feeProtocol: string | undefined, feeAsset = nearSolanaUsdcAsset) =>
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          response({ routes: [{ routeId: 'near-sol-usdc', providers: ['NEAR'], expectedBuyAmount: '99.485259' }] })
+        )
+        .mockResolvedValueOnce(
+          response({
+            providers: ['NEAR'],
+            expectedBuyAmount: '99.485259',
+            tx: 'serialized-solana-transaction',
+            fees: nearIntentsFees({ feeProtocol, feeAsset }),
+          })
+        )
+    )
+
+  it('maps NEAR Intents fees charged in the source asset on the NEAR ledger', async () => {
+    stubNearIntentsSwap('NEAR')
+
+    const quote = await getSwapKitQuote(solanaUsdcToArbitrumUsdc)
+
+    const sourceUsdc = { decimals: 6, chain: Chain.Solana, id: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v' }
+    expect(quote.dstAmount).toBe('99485259')
+    expect(quote.routeProvider).toBe('NEAR')
+    expect(quote.tx).toMatchObject({
+      solana: {
+        data: 'serialized-solana-transaction',
+        swapFee: { ...sourceUsdc, amount: 500_000n },
+        protocolFee: { ...sourceUsdc, amount: 10_000n },
+      },
+    })
+  })
+
+  it('still rejects a NEAR-chain fee that NEAR Intents did not charge', async () => {
+    stubNearIntentsSwap(undefined)
+
+    await expect(getSwapKitQuote(solanaUsdcToArbitrumUsdc)).rejects.toThrow(
+      `SwapKit affiliate fee uses unsupported asset ${nearSolanaUsdcAsset}.`
+    )
+  })
+
+  it('rejects a NEAR-ledger fee charged in the destination asset', async () => {
+    stubNearIntentsSwap('NEAR', nearArbitrumUsdcAsset)
+
+    await expect(getSwapKitQuote(solanaUsdcToArbitrumUsdc)).rejects.toThrow(
+      `SwapKit affiliate fee uses unsupported asset ${nearArbitrumUsdcAsset}.`
+    )
   })
 
   it('uses the Vultisig proxy without an API key by default', async () => {

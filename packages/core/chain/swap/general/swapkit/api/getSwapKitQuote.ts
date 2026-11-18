@@ -102,7 +102,7 @@ type SwapKitQuoteResponse = {
   message?: string
 }
 
-type SwapKitFee = { type?: string; amount?: string; asset?: string; chain?: string }
+type SwapKitFee = { type?: string; amount?: string; asset?: string; chain?: string; protocol?: string }
 
 type SwapKitSwapResponse = {
   expectedBuyAmount?: string
@@ -476,6 +476,16 @@ const toSwapKitFeeAmount = (amount: string, decimals: number, type: string): big
 }
 
 /**
+ * NEAR Intents collects its affiliate and service fees on the NEAR Intents
+ * ledger, in the asset the user sold, so SwapKit labels them `chain: NEAR`
+ * while `asset` still names the source coin (e.g. `SOL.USDC-…` on a Solana ->
+ * Arbitrum route). Such a fee may only resolve to the source coin; the check
+ * is per fee because a multi-leg route reports only its first provider.
+ */
+const isNearIntentsLedgerFee = ({ chain, protocol }: SwapKitFee) =>
+  chain?.toUpperCase() === 'NEAR' && protocol?.toUpperCase() === 'NEAR'
+
+/**
  * SwapKit's itemized charges, split by who keeps the money: `affiliate` is the
  * integrator's cut requested through `affiliateFee`, `protocol` is SwapKit's
  * own `service` fee charged on top of it (15 bps on vultisig-sdk#2396's route).
@@ -521,7 +531,8 @@ const getSwapKitSwapFees = (
 
     const candidate = candidates.find(
       ({ asset, coin, metadata }) =>
-        asset === fee.asset!.toLowerCase() && matchesSwapKitFeeChain(fee.chain, coin.chain, metadata)
+        asset === fee.asset!.toLowerCase() &&
+        (matchesSwapKitFeeChain(fee.chain, coin.chain, metadata) || (isNearIntentsLedgerFee(fee) && coin === from))
     )
 
     if (!candidate) {

@@ -118,8 +118,15 @@ export const getLifiSwapQuote = async ({
   // For Solana SPL-token swaps the destination ATA may not yet exist. LiFi's
   // transaction blob won't include the creation instruction in that case, which
   // causes the simulation to revert with custom program error 0x17. We check
-  // and inject the instruction before returning the quote data.
-  if (chainKind === 'solana' && toToken !== chainFeeCoin[transfer.to.chain].ticker) {
+  // and inject the instruction before returning the quote data. Only when the
+  // destination is on Solana too: for a cross-chain route (e.g. Solana ->
+  // Arbitrum) the destination token and recipient are the other chain's
+  // addresses, and the bridge — not this transaction — delivers them.
+  if (
+    chainKind === 'solana' &&
+    getChainKind(transfer.to.chain) === 'solana' &&
+    toToken !== chainFeeCoin[transfer.to.chain].ticker
+  ) {
     const rawData = shouldBePresent(data)
     const { gasCosts, feeCosts } = estimate
     const [networkFee] = shouldBePresent(gasCosts)
