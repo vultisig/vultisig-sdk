@@ -1,5 +1,20 @@
 # @vultisig/core-mpc
 
+## 5.2.1
+
+### Patch Changes
+
+- [#2646](https://github.com/vultisig/vultisig-sdk/pull/2646) [`f50c66b`](https://github.com/vultisig/vultisig-sdk/commit/f50c66baaa63eddc19cd4b60c63b1bc49a6cfd0a) Thanks [@realpaaao](https://github.com/realpaaao)! - ECDSA DER signatures are now always canonical. When `r` or `s` started with a zero byte, the encoder kept that byte, and UTXO chains (BTC, LTC, DOGE, BCH, DASH, ZEC) rejected the transaction with `Non-canonical DER signature`. This hit about 1 in 100 signatures, so sends with many inputs failed most often. The encoder now drops leading zero bytes, as DER requires. `vault.sign()` results with a short `r` or `s` are padded back to 32 bytes before broadcast.
+
+- [#2630](https://github.com/vultisig/vultisig-sdk/pull/2630) [`55c5313`](https://github.com/vultisig/vultisig-sdk/commit/55c5313d7918dbc1ea6c8e90521070f62484c53f) Thanks [@realpaaao](https://github.com/realpaaao)! - Signing no longer stalls when one relay poll returns several peer messages at once. Before, `keysign` stopped sending as soon as the local side finished, so its last message could be left unsent. The peer never finished, and the next message of the transaction timed out after 3 minutes. This most often broke fast-vault UTXO transactions with many inputs, and it could also hit EdDSA and multi-device signing. Every outbound message is now sent right after the input that produced it. A failed relay send now fails `keysign` instead of stalling until the timeout.
+
+- [#2552](https://github.com/vultisig/vultisig-sdk/pull/2552) [`99859a6`](https://github.com/vultisig/vultisig-sdk/commit/99859a60316ddf9dfa9cf8706be6e3f6d6e2d5d4) Thanks [@aminsato](https://github.com/aminsato)! - `buildSendKeysignPayload` now runs `refineKeysignAmount` and `refineKeysignUtxo` on the `hexPublicKeyOverride` path (`publicKey: null`, e.g. QBTC / MLDSA-only signing), which previously skipped both silently. A QBTC send there is now re-capped to `min(toAmount, balance - fee)` and refused with `not-enough-funds` when the balance cannot cover the fee, matching how native sends on account-based chains such as ETH and SOL are already refined (UTXO and TON keep their own handling). Neither refinement reads the WalletCore key, so `publicKey` is now optional on `refineKeysignAmount`, `refineKeysignUtxo`, `getFeeAmount` and the UTXO signing-input resolver; existing callers that pass it are unaffected.
+
+- [#2632](https://github.com/vultisig/vultisig-sdk/pull/2632) [`6a8cc43`](https://github.com/vultisig/vultisig-sdk/commit/6a8cc433a47e045fcab10d683022bd3432b2e6f4) Thanks [@realpaaao](https://github.com/realpaaao)! - Leave a native XRP send's `transaction_type` unset instead of declaring it `RIPPLE_PAYMENT`. iOS and Android co-signers that predate `RIPPLE_PAYMENT` refused every XRP send started from the SDK or Windows ("XRP payload carries an unsupported transaction type (11)"). Native XRP signs the same bytes either way; issued-currency Payments still declare `RIPPLE_PAYMENT`.
+
+- Updated dependencies [[`21b0462`](https://github.com/vultisig/vultisig-sdk/commit/21b04628f7bd5cfa6873888d76eec33d64a43068), [`1e0920b`](https://github.com/vultisig/vultisig-sdk/commit/1e0920b265a2b5b85d37ac8d03ef710aa09caf56), [`fec6a7e`](https://github.com/vultisig/vultisig-sdk/commit/fec6a7e38ea15bf107750d19bb73711e40e880ea), [`8dbac4f`](https://github.com/vultisig/vultisig-sdk/commit/8dbac4fe3bf9abc011dcf8fe690e2772ebeb3ede)]:
+  - @vultisig/core-chain@6.4.2
+
 ## 5.2.0
 
 ### Minor Changes
