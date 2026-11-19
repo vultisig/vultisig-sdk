@@ -2,13 +2,44 @@ import { describe, expect, it } from 'vitest'
 
 import { buildClaimTxBody, validateClaimInput } from './buildClaimTx'
 
+const readVarint = (bytes: Uint8Array, offset: number) => {
+  let value = 0
+  let shift = 0
+  let position = offset
+  while (bytes[position] & 0x80) {
+    value += (bytes[position] & 0x7f) * 2 ** shift
+    shift += 7
+    position++
+  }
+  value += bytes[position] * 2 ** shift
+  return { value, next: position + 1 }
+}
+
+/** Splits length-delimited protobuf fields into [fieldNumber, payload] pairs. */
+const readLengthDelimitedFields = (bytes: Uint8Array): [number, Uint8Array][] => {
+  const fields: [number, Uint8Array][] = []
+  let offset = 0
+  while (offset < bytes.length) {
+    const tag = readVarint(bytes, offset)
+    const length = readVarint(bytes, tag.next)
+    fields.push([tag.value >> 3, bytes.subarray(length.next, length.next + length.value)])
+    offset = length.next + length.value
+  }
+  return fields
+}
+
+/** TxBody.messages[0] (Any) → value (MsgClaimWithProof) → its field numbers. */
+const readMsgClaimWithProofFieldNumbers = (txBody: Uint8Array) => {
+  const [[, anyMsg]] = readLengthDelimitedFields(txBody)
+  const [, [, msg]] = readLengthDelimitedFields(anyMsg)
+  return readLengthDelimitedFields(msg).map(([field]) => field)
+}
+
 const validInput = {
   claimer: 'qbtc1abc',
+  bitcoinAddress: 'bc1qatknmeca5p0fy5decdj5704hf7prt47e0e7e9n',
   utxos: [{ txid: 'aa'.repeat(32), vout: 0 }],
   proof: 'ff'.repeat(200),
-  messageHash: 'bb'.repeat(32),
-  addressHash: 'cc'.repeat(20),
-  qbtcAddressHash: 'dd'.repeat(32),
   pubKeyHashSha256: 'ee'.repeat(32),
   broadcaster: 'qbtc1abc',
 }
@@ -17,6 +48,24 @@ describe('validateClaimInput', () => {
   it('accepts valid input', () => {
     expect(() => validateClaimInput(validInput)).not.toThrow()
   })
+
+  it('rejects a missing Bitcoin address', () => {
+    expect(() => validateClaimInput({ ...validInput, bitcoinAddress: '' })).toThrow('bitcoinAddress is required')
+  })
+
+  it.each(['1BoatSLRHtKNngkdXEeobR76b53LETtpyT', validInput.bitcoinAddress])(
+    'accepts a supported claim address %s',
+    bitcoinAddress => {
+      expect(() => validateClaimInput({ ...validInput, bitcoinAddress })).not.toThrow()
+    }
+  )
+
+  it.each(['3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy', `bc1p${'a'.repeat(58)}`, 'not-an-address'])(
+    'rejects an unsupported claim address %s',
+    bitcoinAddress => {
+      expect(() => validateClaimInput({ ...validInput, bitcoinAddress })).toThrow()
+    }
+  )
 
   it('rejects empty UTXOs', () => {
     expect(() => validateClaimInput({ ...validInput, utxos: [] })).toThrow('UTXOs count must be 1-50')
@@ -61,24 +110,6 @@ describe('validateClaimInput', () => {
     expect(() => validateClaimInput({ ...validInput, proof: 'ff'.repeat(60_000) })).toThrow('Proof too large')
   })
 
-  it('rejects invalid messageHash length', () => {
-    expect(() => validateClaimInput({ ...validInput, messageHash: 'aa'.repeat(16) })).toThrow(
-      'message_hash must be 64 hex chars'
-    )
-  })
-
-  it('rejects invalid addressHash length', () => {
-    expect(() => validateClaimInput({ ...validInput, addressHash: 'aa'.repeat(16) })).toThrow(
-      'address_hash must be 40 hex chars'
-    )
-  })
-
-  it('rejects invalid qbtcAddressHash length', () => {
-    expect(() => validateClaimInput({ ...validInput, qbtcAddressHash: 'aa'.repeat(16) })).toThrow(
-      'qbtc_address_hash must be 64 hex chars'
-    )
-  })
-
   it('rejects invalid pubKeyHashSha256 length', () => {
     expect(() => validateClaimInput({ ...validInput, pubKeyHashSha256: 'aa'.repeat(16) })).toThrow(
       'pub_key_hash_sha256 must be 64 hex chars'
@@ -113,12 +144,24 @@ describe('buildClaimTxBody', () => {
     expect(result.length).toBeGreaterThan(0)
   })
 
-  it('encodes broadcaster as proto field 9', () => {
+  it('encodes broadcaster as proto field 6', () => {
     const result = buildClaimTxBody({
       ...validInput,
       broadcaster: 'qbtc1broadcaster',
     })
-    // Proto field 9 with wire type 2 (length-delimited) → tag byte 0x4a
-    expect(Array.from(result)).toContain(0x4a)
+    // Proto field 6 with wire type 2 (length-delimited) → tag byte 0x32
+    expect(Array.from(result)).toContain(0x32)
+  })
+
+  it('encodes the current claim message field numbers', () => {
+    expect(readMsgClaimWithProofFieldNumbers(buildClaimTxBody(validInput))).toEqual([1, 2, 3, 4, 6, 8])
+  })
+  it('writes the exact signed Bitcoin address at field 8', () => {
+    const [[, anyMsg]] = readLengthDelimitedFields(buildClaimTxBody(validInput))
+    const [, [, message]] = readLengthDelimitedFields(anyMsg)
+    const fields = new Map(readLengthDelimitedFields(message))
+    expect(new TextDecoder().decode(fields.get(8))).toBe(validInput.bitcoinAddress)
+    expect(fields.has(5)).toBe(false)
+    expect(fields.has(7)).toBe(false)
   })
 })

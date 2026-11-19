@@ -11,6 +11,7 @@ const bytesToHex = (bytes: Uint8Array) => Buffer.from(bytes).toString('hex')
 describe('QBTCClaimHelper', () => {
   const bodyBytes = buildClaimTxBody({
     claimer: 'qbtc1qpzry9x8gf2tvdw0s3jn54khce6mua7l',
+    bitcoinAddress: 'bc1qatknmeca5p0fy5decdj5704hf7prt47e0e7e9n',
     broadcaster: 'qbtc1qpzry9x8gf2tvdw0s3jn54khce6mua7l',
     utxos: [
       {
@@ -19,9 +20,6 @@ describe('QBTCClaimHelper', () => {
       },
     ],
     proof: 'ab'.repeat(120),
-    messageHash: '11'.repeat(32),
-    addressHash: '22'.repeat(20),
-    qbtcAddressHash: '33'.repeat(32),
     pubKeyHashSha256: '44'.repeat(32),
   })
   const mldsaPublicKey = hexToBytes('55'.repeat(16))
@@ -38,7 +36,7 @@ describe('QBTCClaimHelper', () => {
     expect(bytesToHex(authInfoBytes)).toBe(
       '0a3b0a310a1b2f636f736d6f732e63727970746f2e6d6c6473612e5075624b657912120a105555555555555555555555555555555512040a0208011803120410e0a712'
     )
-    expect(bytesToHex(hash)).toBe('88cb0167715df07029084f765522ba384f7e9e7bf54b21e2af63af6c0e9605cb')
+    expect(bytesToHex(hash)).toBe('eb1659d213e87b68a299aa72f051822c960cf9230bbcd49c1fa6c5e3c5df26a7')
   })
 
   it('assembles signed claim transaction bytes and tx hash', () => {
@@ -56,8 +54,8 @@ describe('QBTCClaimHelper', () => {
     })
 
     expect(result.txBytesBase64).toBe(
-      'Cp4FCpsFCh8vcWJ0Yy5xYnRjLnYxLk1zZ0NsYWltV2l0aFByb29mEvcECiVxYnRjMXFwenJ5OXg4Z2YydHZkdzBzM2puNTRraGNlNm11YTdsEkQKQDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAQARrwAWFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYiJAMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMSooMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjJAMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzpANDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NEolcWJ0YzFxcHpyeTl4OGdmMnR2ZHcwczNqbjU0a2hjZTZtdWE3bBJDCjsKMQobL2Nvc21vcy5jcnlwdG8ubWxkc2EuUHViS2V5EhIKEFVVVVVVVVVVVVVVVVVVVVUSBAoCCAEYAxIEEOCnEhogZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmY='
+      'CpwECpkECh8vcWJ0Yy5xYnRjLnYxLk1zZ0NsYWltV2l0aFByb29mEvUDCiVxYnRjMXFwenJ5OXg4Z2YydHZkdzBzM2puNTRraGNlNm11YTdsEkQKQDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAQARrwAWFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYiJANDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDIlcWJ0YzFxcHpyeTl4OGdmMnR2ZHcwczNqbjU0a2hjZTZtdWE3bEIqYmMxcWF0a25tZWNhNXAwZnk1ZGVjZGo1NzA0aGY3cHJ0NDdlMGU3ZTluEkMKOwoxChsvY29zbW9zLmNyeXB0by5tbGRzYS5QdWJLZXkSEgoQVVVVVVVVVVVVVVVVVVVVVRIECgIIARgDEgQQ4KcSGiBmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZg=='
     )
-    expect(result.txHash).toBe('2EF29D984BB9AD607362E97DBBFC7CAF6EB04DDB2C84B5BC24D44412D97DB2A5')
+    expect(result.txHash).toBe('7378A0077071FC1A3D10E16B9C022BD6E78AC4E702331B41AA2CDD5E870A61A2')
   })
 })

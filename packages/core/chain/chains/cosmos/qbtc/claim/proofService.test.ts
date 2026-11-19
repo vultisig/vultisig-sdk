@@ -76,9 +76,8 @@ describe('checkProofServiceHealth', () => {
 
 describe('generateClaimProof', () => {
   const validInput = {
-    signatureR: 'aa'.repeat(24),
-    signatureS: 'bb'.repeat(32),
-    publicKey: '02' + 'cc'.repeat(32),
+    signature: Buffer.from('1f' + 'aa'.repeat(64), 'hex').toString('base64'),
+    bitcoinAddress: 'bc1qatknmeca5p0fy5decdj5704hf7prt47e0e7e9n',
     utxos: [{ txid: 'dd'.repeat(32), vout: 0 }],
     claimerAddress: 'qbtc1abc',
     chainId: 'qbtc-1',
@@ -87,10 +86,9 @@ describe('generateClaimProof', () => {
 
   const validResponse = {
     proof: 'ff'.repeat(100),
-    message_hash: 'aa'.repeat(32),
-    address_hash: 'bb'.repeat(20),
-    qbtc_address_hash: 'cc'.repeat(32),
     pub_key_hash_sha256: 'ee'.repeat(32),
+    message_text: 'qbtc-claim-v1|qbtc-1|bc1qatknmeca5p0fy5decdj5704hf7prt47e0e7e9n|qbtc1abc',
+    bitcoin_address: 'bc1qatknmeca5p0fy5decdj5704hf7prt47e0e7e9n',
     utxos: [{ txid: 'dd'.repeat(32), vout: 0 }],
     claimer_address: 'qbtc1abc',
   }
@@ -106,9 +104,8 @@ describe('generateClaimProof', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          signature_r: validInput.signatureR,
-          signature_s: validInput.signatureS,
-          public_key: validInput.publicKey,
+          signature: validInput.signature,
+          bitcoin_address: validInput.bitcoinAddress,
           utxos: validInput.utxos,
           claimer_address: validInput.claimerAddress,
           chain_id: validInput.chainId,
@@ -123,9 +120,7 @@ describe('generateClaimProof', () => {
     const result = await generateClaimProof(validInput)
 
     expect(result.proof).toBe(validResponse.proof)
-    expect(result.message_hash).toBe(validResponse.message_hash)
-    expect(result.address_hash).toBe(validResponse.address_hash)
-    expect(result.qbtc_address_hash).toBe(validResponse.qbtc_address_hash)
+    expect(result.message_text).toBe(validResponse.message_text)
     expect(result.pub_key_hash_sha256).toBe(validResponse.pub_key_hash_sha256)
     expect(result.claimer_address).toBe('qbtc1abc')
   })
@@ -145,9 +140,9 @@ describe('generateClaimProof', () => {
   })
 
   it('throws on invalid response fields', async () => {
-    mockFetch({ ...validResponse, message_hash: 'not-hex' })
+    mockFetch({ ...validResponse, proof: '' })
 
-    await expect(generateClaimProof(validInput)).rejects.toThrow('Invalid proof service response: invalid message_hash')
+    await expect(generateClaimProof(validInput)).rejects.toThrow('Invalid proof service response: missing proof')
   })
 
   it('omits broadcast from the request body when not requested', async () => {
@@ -162,7 +157,7 @@ describe('generateClaimProof', () => {
 
   it('forwards broadcast=true and the returned tx_hash', async () => {
     const validTxHash = 'AB'.repeat(32)
-    mockFetch({ ...validResponse, tx_hash: validTxHash })
+    mockFetch({ tx_hash: validTxHash })
 
     const result = await generateClaimProof({ ...validInput, broadcast: true })
 
