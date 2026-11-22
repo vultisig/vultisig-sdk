@@ -37,7 +37,7 @@ type KeysignInput = {
   isInitiatingDevice: boolean
 }
 
-const maxInboundWaitTime: Minutes = 3
+const maxInboundWaitTime: Minutes = 5
 const inboundTimeoutMessage = `Exited inbound processing due to a timeout after ${maxInboundWaitTime} min`
 
 const rethrowKeysignError = (
