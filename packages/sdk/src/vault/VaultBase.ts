@@ -106,6 +106,12 @@ import { VaultConfig } from './VaultServices'
 
 // ─── DACS-Standard Guardrail (§9.5.7 & §14.4) ─────────────────────────────
 
+/**
+ * DACS mandate metadata for pre-flight spend ceiling checks.
+ * Note: In `contractCall`, the spend ceiling applies strictly to native `value`
+ * (`params.value ?? 0n`) and does not decode or enforce token transfer amounts
+ * encoded inside contract `args`.
+ */
 export interface DacsMandateMeta {
   dacsMandate?: string
   dacsSessionId?: string
@@ -117,7 +123,14 @@ export function assertDacsSpendMandate(
   decimals: number,
   meta?: DacsMandateMeta
 ): void {
-  if (!meta || (!meta.dacsMandate && !meta.dacsSessionId)) {
+  if (!meta) {
+    return
+  }
+
+  const hasMandateOrSession = Boolean(meta.dacsMandate && meta.dacsSessionId)
+  const hasMaxAmount = meta.dacsMaxAmount !== undefined
+
+  if (!hasMandateOrSession && !hasMaxAmount) {
     return
   }
 
@@ -2455,11 +2468,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     if (dryRun) return { dryRun: true, quote, amount: normalizedAmount }
 
     // DACS-Standard (§9.5.7) Pre-Flight Mandate Enforcement
-    assertDacsSpendMandate(
-      toChainAmount(normalizedAmount, fromToken.decimals),
-      fromToken.decimals,
-      params
-    )
+    assertDacsSpendMandate(toChainAmount(normalizedAmount, fromToken.decimals), fromToken.decimals, params)
 
     const { keysignPayload, approvalPayload } = await this.prepareSwapTx({
       fromCoin,
@@ -2573,6 +2582,11 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   /**
    * Call an EVM smart contract function. Set dryRun for payload without signing.
    *
+   * Note: DACS pre-flight spend mandate enforcement in `contractCall` checks
+   * native transaction `value` (`params.value ?? 0n`) only; token transfer
+   * amounts encoded inside `args` (such as ERC-20 `transfer`) are not decoded
+   * or capped by this check.
+   *
    * @example
    * ```typescript
    * // ERC-1155 setApprovalForAll
@@ -2596,9 +2610,15 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       dryRun?: boolean
     } & DacsMandateMeta
   ): Promise<ContractCallResult> {
-    const { dryRun, dacsMandate: _dacsMandate, dacsSessionId: _dacsSessionId, dacsMaxAmount: _dacsMaxAmount, ...txParams } = params
+    const {
+      dryRun,
+      dacsMandate: _dacsMandate,
+      dacsSessionId: _dacsSessionId,
+      dacsMaxAmount: _dacsMaxAmount,
+      ...txParams
+    } = params
 
-    // DACS-Standard (§9.5.7) Pre-Flight Mandate Enforcement
+    // DACS-Standard (§9.5.7) Pre-Flight Mandate Enforcement (native `value` scope only; `args` calldata is not decoded)
     const nativeFeeCoin = chainFeeCoin[params.chain]
     assertDacsSpendMandate(params.value ?? 0n, nativeFeeCoin.decimals, params)
 
