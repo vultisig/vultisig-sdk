@@ -104,6 +104,59 @@ import { canonicalizeVaultData } from './utils/canonicalizeVaultData'
 import { VaultConflictError, VaultError, VaultErrorCode } from './VaultError'
 import { VaultConfig } from './VaultServices'
 
+// ─── DACS-Standard Guardrail (§9.5.7 & §14.4) ─────────────────────────────
+
+/**
+ * DACS mandate metadata for pre-flight spend ceiling checks.
+ * Note: In `contractCall`, the spend ceiling applies strictly to native `value`
+ * (`params.value ?? 0n`) and does not decode or enforce token transfer amounts
+ * encoded inside contract `args`.
+ */
+export interface DacsMandateMeta {
+  dacsMandate?: string
+  dacsSessionId?: string
+  dacsMaxAmount?: bigint | string | number
+}
+
+export function assertDacsSpendMandate(
+  requestedBaseUnits: bigint,
+  decimals: number,
+  meta?: DacsMandateMeta
+): void {
+  if (!meta) {
+    return
+  }
+
+  const hasMandateOrSession = Boolean(meta.dacsMandate && meta.dacsSessionId)
+  const hasMaxAmount = meta.dacsMaxAmount !== undefined
+
+  if (!hasMandateOrSession && !hasMaxAmount) {
+    return
+  }
+
+  if (meta.dacsMaxAmount !== undefined) {
+    let ceilingBaseUnits: bigint
+    try {
+      ceilingBaseUnits =
+        typeof meta.dacsMaxAmount === 'bigint'
+          ? meta.dacsMaxAmount
+          : toChainAmount(String(meta.dacsMaxAmount).trim(), decimals)
+    } catch {
+      throw new VaultError(
+        VaultErrorCode.InvalidAmount,
+        `[DACS-Standard §9.5.7] Invalid dacsMaxAmount ceiling: "${meta.dacsMaxAmount}".`
+      )
+    }
+
+    if (requestedBaseUnits > ceilingBaseUnits) {
+      throw new VaultError(
+        VaultErrorCode.InvalidAmount,
+        `[DACS-Standard §9.5.7] Vultisig MPC execution aborted: requested spend (${requestedBaseUnits.toString()}) exceeds authorized mandate ceiling (${ceilingBaseUnits.toString()}).`
+      )
+    }
+  }
+}
+
 export type VaultSaveOptions = {
   /**
    * Reject stale records by default. `merge-metadata` retries only when the
@@ -2182,17 +2235,19 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    * `gasless` (TON jettons on a W5 account) pays the fee in the jetton itself through the relay, so no TON is needed.
    * `allowDeath` empties a Polkadot or Bittensor account with `transfer_allow_death` — the chain reaps it below the existential deposit — so only pass it for an explicit user choice with the reap disclosed.
    */
-  async send(params: {
-    chain: Chain
-    to: string
-    amount: string
-    symbol?: string
-    memo?: string
-    destinationTag?: number
-    allowDeath?: boolean
-    dryRun?: boolean
-    gasless?: boolean
-  }): Promise<SendResult> {
+  async send(
+    params: {
+      chain: Chain
+      to: string
+      amount: string
+      symbol?: string
+      memo?: string
+      destinationTag?: number
+      allowDeath?: boolean
+      dryRun?: boolean
+      gasless?: boolean
+    } & DacsMandateMeta
+  ): Promise<SendResult> {
     const { chain, to, amount, symbol, memo, destinationTag, allowDeath, dryRun, gasless } = params
     const tokenInfo = this.resolveTokenInfo(chain, symbol)
     const coin = this.buildAccountCoin(chain, await this.address(chain), tokenInfo)
@@ -2207,6 +2262,9 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     } else {
       amountBigInt = this.parseAmount(amount, tokenInfo.decimals)
     }
+
+    // DACS-Standard (§9.5.7) Pre-Flight Mandate Enforcement
+    assertDacsSpendMandate(amountBigInt, tokenInfo.decimals, params)
 
     const keysignPayload = await this.prepareSendTx({
       coin,
@@ -2260,17 +2318,19 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   }
 
   /** Swap tokens. Use amount "max" to swap entire balance. Set dryRun for quote without signing. */
-  async swap(params: {
-    fromChain: Chain
-    fromSymbol: string
-    toChain: Chain
-    toSymbol: string
-    amount: string
-    recipient?: string
-    slippageTolerance?: number
-    excludeProviders?: import('./swap-types').SwapQuoteParams['excludeProviders']
-    dryRun?: boolean
-  }): Promise<CompoundSwapResult> {
+  async swap(
+    params: {
+      fromChain: Chain
+      fromSymbol: string
+      toChain: Chain
+      toSymbol: string
+      amount: string
+      recipient?: string
+      slippageTolerance?: number
+      excludeProviders?: import('./swap-types').SwapQuoteParams['excludeProviders']
+      dryRun?: boolean
+    } & DacsMandateMeta
+  ): Promise<CompoundSwapResult> {
     const { fromChain, fromSymbol, toChain, toSymbol, amount, recipient, slippageTolerance, excludeProviders, dryRun } =
       params
     const fromToken = this.resolveTokenInfo(fromChain, fromSymbol)
@@ -2407,6 +2467,9 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     }
     if (dryRun) return { dryRun: true, quote, amount: normalizedAmount }
 
+    // DACS-Standard (§9.5.7) Pre-Flight Mandate Enforcement
+    assertDacsSpendMandate(toChainAmount(normalizedAmount, fromToken.decimals), fromToken.decimals, params)
+
     const { keysignPayload, approvalPayload } = await this.prepareSwapTx({
       fromCoin,
       toCoin,
@@ -2519,6 +2582,11 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   /**
    * Call an EVM smart contract function. Set dryRun for payload without signing.
    *
+   * Note: DACS pre-flight spend mandate enforcement in `contractCall` checks
+   * native transaction `value` (`params.value ?? 0n`) only; token transfer
+   * amounts encoded inside `args` (such as ERC-20 `transfer`) are not decoded
+   * or capped by this check.
+   *
    * @example
    * ```typescript
    * // ERC-1155 setApprovalForAll
@@ -2531,16 +2599,29 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    * })
    * ```
    */
-  async contractCall(params: {
-    chain: Chain
-    contractAddress: string
-    abi: readonly unknown[]
-    functionName: string
-    args?: readonly unknown[]
-    value?: bigint
-    dryRun?: boolean
-  }): Promise<ContractCallResult> {
-    const { dryRun, ...txParams } = params
+  async contractCall(
+    params: {
+      chain: Chain
+      contractAddress: string
+      abi: readonly unknown[]
+      functionName: string
+      args?: readonly unknown[]
+      value?: bigint
+      dryRun?: boolean
+    } & DacsMandateMeta
+  ): Promise<ContractCallResult> {
+    const {
+      dryRun,
+      dacsMandate: _dacsMandate,
+      dacsSessionId: _dacsSessionId,
+      dacsMaxAmount: _dacsMaxAmount,
+      ...txParams
+    } = params
+
+    // DACS-Standard (§9.5.7) Pre-Flight Mandate Enforcement (native `value` scope only; `args` calldata is not decoded)
+    const nativeFeeCoin = chainFeeCoin[params.chain]
+    assertDacsSpendMandate(params.value ?? 0n, nativeFeeCoin.decimals, params)
+
     const keysignPayload = await this.prepareContractCallTx(txParams)
 
     if (dryRun) return { dryRun: true, keysignPayload }
