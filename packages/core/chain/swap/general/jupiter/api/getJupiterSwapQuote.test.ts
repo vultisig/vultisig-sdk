@@ -6,6 +6,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getJupiterSwapQuote } from './getJupiterSwapQuote'
 import { deriveJupiterFeeAccount, prependJupiterFeeAta } from './jupiterFeeAta'
 
+const getSolanaTokenAccountRent = vi.hoisted(() => vi.fn())
+
+vi.mock('@vultisig/core-chain/chains/solana/tokenAccountRent', () => ({
+  getSolanaTokenAccountRent,
+}))
+
 vi.mock('./jupiterFeeAta', () => ({
   deriveJupiterFeeAccount: vi.fn(),
   prependJupiterFeeAta: vi.fn(),
@@ -65,6 +71,7 @@ describe('getJupiterSwapQuote', () => {
         ownerPubkey: {} as never,
       })
     vi.mocked(prependJupiterFeeAta).mockReset().mockResolvedValue('prepended-base64-tx')
+    getSolanaTokenAccountRent.mockReset().mockResolvedValue(1_488_440n)
     vi.mocked(assertSafeSolanaSwapTransactionBase64).mockReset().mockResolvedValue(undefined)
 
     vi.stubGlobal(
@@ -111,6 +118,20 @@ describe('getJupiterSwapQuote', () => {
     expect(quote.provider).toBe('jupiter')
     expect(quote.dstAmount).toBe('1000000')
     expect('solana' in quote.tx && quote.tx.solana.data).toBe('prepended-base64-tx')
+  })
+
+  it('quotes the base fee plus the live rent of the fee account it creates', async () => {
+    const quote = await getJupiterSwapQuote({ from: solNative, to: solUsdc, amount: 1_000_000_000n, affiliateBps: 50 })
+
+    expect(getSolanaTokenAccountRent).toHaveBeenCalledOnce()
+    expect('solana' in quote.tx && quote.tx.solana.networkFee).toBe(5000n + 1_488_440n)
+  })
+
+  it('quotes only the base fee and skips the rent read when no fee account is created', async () => {
+    const quote = await getJupiterSwapQuote({ from: solNative, to: solUsdc, amount: 1_000_000_000n, affiliateBps: 0 })
+
+    expect(getSolanaTokenAccountRent).not.toHaveBeenCalled()
+    expect('solana' in quote.tx && quote.tx.solana.networkFee).toBe(5000n)
   })
 
   it('uses per-call Jupiter affiliate config overrides', async () => {

@@ -1010,6 +1010,11 @@
       "import": "./dist/chains/solana/staking/tx/stakingPayload.js",
       "default": "./dist/chains/solana/staking/tx/stakingPayload.js"
     },
+    "./chains/solana/tokenAccountRent": {
+      "types": "./dist/chains/solana/tokenAccountRent.d.ts",
+      "import": "./dist/chains/solana/tokenAccountRent.js",
+      "default": "./dist/chains/solana/tokenAccountRent.js"
+    },
     "./chains/sui/buildTransactionFromJson": {
       "types": "./dist/chains/sui/buildTransactionFromJson.d.ts",
       "import": "./dist/chains/sui/buildTransactionFromJson.js",
