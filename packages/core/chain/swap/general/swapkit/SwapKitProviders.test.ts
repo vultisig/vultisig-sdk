@@ -194,13 +194,13 @@ describe('SwapKitProviders', () => {
         'fetch',
         vi
           .fn()
-          .mockResolvedValueOnce(response([{ provider: 'ONEINCH', enabledChainIds: ['81457'] }]))
-          .mockResolvedValueOnce(response({ tokens: [{ chain: 'BLAST', chainId: 81457 }] }))
+          .mockResolvedValueOnce(response([{ provider: 'ONEINCH', enabledChainIds: ['5000'] }]))
+          .mockResolvedValueOnce(response({ tokens: [{ chain: 'MANTLE', chainId: 5000 }] }))
       )
 
-      await expect(resolveSwapKitChainMetadata(Chain.Blast)).resolves.toEqual({
-        assetPrefix: 'BLAST',
-        providerChainId: '81457',
+      await expect(resolveSwapKitChainMetadata(Chain.Mantle)).resolves.toEqual({
+        assetPrefix: 'MANTLE',
+        providerChainId: '5000',
       })
     })
 
@@ -211,15 +211,15 @@ describe('SwapKitProviders', () => {
           .fn()
           .mockResolvedValueOnce(
             response([
-              { provider: 'FLASHNET', enabledChainIds: ['81457'] },
-              { provider: 'ONEINCH', enabledChainIds: ['81457'] },
+              { provider: 'FLASHNET', enabledChainIds: ['5000'] },
+              { provider: 'ONEINCH', enabledChainIds: ['5000'] },
             ])
           )
-          .mockResolvedValueOnce(response({ tokens: [{ chain: 'BLAST', chainId: '81457' }] }))
-          .mockResolvedValueOnce(response({ tokens: [{ chain: 'BLAST_ALT', chainId: '81457' }] }))
+          .mockResolvedValueOnce(response({ tokens: [{ chain: 'MANTLE', chainId: '5000' }] }))
+          .mockResolvedValueOnce(response({ tokens: [{ chain: 'MANTLE_ALT', chainId: '5000' }] }))
       )
 
-      await expect(resolveSwapKitChainMetadata(Chain.Blast)).resolves.toBeUndefined()
+      await expect(resolveSwapKitChainMetadata(Chain.Mantle)).resolves.toBeUndefined()
     })
 
     it('skips a dynamic chain when an advertising provider omits its catalog identity', async () => {
@@ -229,15 +229,15 @@ describe('SwapKitProviders', () => {
           .fn()
           .mockResolvedValueOnce(
             response([
-              { provider: 'FLASHNET', enabledChainIds: ['81457'] },
-              { provider: 'ONEINCH', enabledChainIds: ['81457'] },
+              { provider: 'FLASHNET', enabledChainIds: ['5000'] },
+              { provider: 'ONEINCH', enabledChainIds: ['5000'] },
             ])
           )
-          .mockResolvedValueOnce(response({ tokens: [{ chain: 'BLAST', chainId: '81457' }] }))
+          .mockResolvedValueOnce(response({ tokens: [{ chain: 'MANTLE', chainId: '5000' }] }))
           .mockResolvedValueOnce(response({ tokens: [{ chain: 'ETH', chainId: '1' }] }))
       )
 
-      await expect(resolveSwapKitChainMetadata(Chain.Blast)).resolves.toBeUndefined()
+      await expect(resolveSwapKitChainMetadata(Chain.Mantle)).resolves.toBeUndefined()
     })
 
     it('skips only the dynamic chain when any required token catalog is unavailable', async () => {
@@ -245,11 +245,11 @@ describe('SwapKitProviders', () => {
         'fetch',
         vi
           .fn()
-          .mockResolvedValueOnce(response([{ provider: 'FLASHNET', enabledChainIds: ['81457'] }]))
+          .mockResolvedValueOnce(response([{ provider: 'FLASHNET', enabledChainIds: ['5000'] }]))
           .mockResolvedValueOnce(response({}, false, 503))
       )
 
-      await expect(resolveSwapKitChainMetadata(Chain.Blast)).resolves.toBeUndefined()
+      await expect(resolveSwapKitChainMetadata(Chain.Mantle)).resolves.toBeUndefined()
     })
   })
 })

@@ -81,7 +81,6 @@ export const canonicalEvmContracts: ReadonlySet<string> = new Set([
   '0x06380c0e0912312b5150364b9dc4542ba0dbbc85', // Avalanche
   '0x28e2ea090877bf75740558f6bfb36a5ffee9e9df', // BSC
   '0x498581ff718922c3f8e6a244956af099b2652b2b', // Base
-  '0x1631559198a9e474033433b2958dabc135ab6446', // Blast
   '0x9a13f98cb987694c9f086b1f5eb990eea8264ec3', // Optimism
   '0x67366782805870060151383f4bbff9dab53e5cd6', // Polygon
 
@@ -91,7 +90,6 @@ export const canonicalEvmContracts: ReadonlySet<string> = new Set([
   '0xb74b1f14d2754acfcbbe1a221023a5cf50ab8acd', // Avalanche
   '0x7a4a5c919ae2541aed11041a1aeee68f1287f95b', // BSC
   '0x7c5f5a4bbd8fd63184577525326123b519429bdc', // Base
-  '0x4ad2f4cca2682cbb5b950d660dd458a1d3f1baad', // Blast
   '0x3c3ea4b57a46241e54610e5f022e5c45859a1017', // Optimism
   '0x1ec2ebf4f37e7363fdfe3551602425af0b3ceef9', // Polygon
 
@@ -101,7 +99,6 @@ export const canonicalEvmContracts: ReadonlySet<string> = new Set([
   '0xbe40675bb704506a3c2ccfb762dcfd1e979845c2', // Avalanche
   '0x9f75dd27d6664c475b90e105573e550ff69437b0', // BSC
   '0x0d5e0f971ed27fbff6c2837bf31316121532048d', // Base
-  '0x6f71cdcb0d119ff72c6eb501abceb576fbf62bcf', // Blast
   '0x1f3131a13296fb91c90870043742c3cdbff1a8d7', // Optimism
   '0xb3d5c3dfc3a7aebff71895a7191796bffc2c81b9', // Polygon
 
@@ -111,7 +108,6 @@ export const canonicalEvmContracts: ReadonlySet<string> = new Set([
   '0xc3c9e198c735a4b97e3e683f391ccbdd60b69286', // Avalanche
   '0xd13dd3d6e93f276fafc9db9e6bb47c1180aee0c4', // BSC
   '0xa3c0c9b65bad0b08107aa264b0f3db444b867a71', // Base
-  '0x12a88ae16f46dce4e8b15368008ab3380885df30', // Blast
   '0xc18a3169788f4f75a170290584eca6395c75ecdb', // Optimism
   '0x5ea1bd7974c8a611cbab0bdcafcb1d9cc9b3ba5a', // Polygon
 
@@ -121,12 +117,11 @@ export const canonicalEvmContracts: ReadonlySet<string> = new Set([
   '0x94b75331ae8d42c1b61065089b7d48fe14aa73b7', // Avalanche
   '0x1906c1d672b88cd1b9ac7593301ca990f94eae07', // BSC
   '0x6ff5693b99212da76ad316178a184ab56d299b43', // Base
-  '0xeabbcb3e8e415306207ef514f660a3f820025be3', // Blast
   '0x851116d9223fabed8e56c0e6b8ad0c31d98b3507', // Optimism
   '0x1095692a6237d83c6a72f3f5efedb9a670c49223', // Polygon
 
   // --- Uniswap V4 Universal Router 2.1.1 ---
-  '0x8b844f885672f333bc0042cb669255f93a4c1e6b', // shared Arbitrum/Avalanche/BSC/Blast/Optimism/Polygon
+  '0x8b844f885672f333bc0042cb669255f93a4c1e6b', // shared Arbitrum/Avalanche/BSC/Optimism/Polygon
   '0xfdf682f51fe81aa4898f0ae2163d8a55c127fbc7', // Base-specific
   '0x4c82d1fbfe28c977cbb58d8c7ff8fcf9f70a2cca', // Ethereum-specific
 

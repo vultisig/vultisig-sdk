@@ -86,7 +86,6 @@ const LIFI_DIAMOND_BY_CHAIN: Record<EvmChain, string> = {
   [Chain.Arbitrum]: '0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae',
   [Chain.Avalanche]: '0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae',
   [Chain.Base]: '0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae',
-  [Chain.Blast]: '0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae',
   [Chain.BSC]: '0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae',
   [Chain.CronosChain]: '0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae',
   [Chain.Ethereum]: '0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae',
@@ -344,7 +343,7 @@ export function assertKnownAggregatorRouter(provider: EnforcedRouterProvider, ad
             // resolves on EVERY EVM chain, but CoW has only deployed the GPv2 stack on
             // cowSwapSupportedChains (findSwapQuote gates quotes to exactly those). Accepting it
             // chain-agnostically would let a tampered payload relabelled 'cowswap' on e.g. CronosChain /
-            // Zksync / Blast — where eth_getCode at this address is literally `0x`, verified 2026-07-21 —
+            // Zksync — where eth_getCode at this address is literally `0x`, verified 2026-07-21 —
             // pass BOTH this guard and assertEnforcedSwapApprovalSpenderBound, so the co-signer would
             // sign an ERC-20 approve to a codeless address anyone can later claim via the deterministic
             // deployment proxy. Fail closed off the supported set.

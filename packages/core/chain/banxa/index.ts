@@ -27,7 +27,6 @@ const banxaChainCode = {
   [Chain.Optimism]: 'OPTIMISM',
   [Chain.BSC]: 'BSC',
   [Chain.Zksync]: 'ZKSYNC',
-  [Chain.Blast]: 'BLAST',
   [Chain.Mantle]: 'MNT',
   [Chain.CronosChain]: 'CRO',
 } as const satisfies Partial<Record<Chain, string>>

@@ -18,7 +18,7 @@ const defaultPriorityFeeCeilingWei = 500n * GWEI
  *   congestion (NFT mints, MEV bursts) -> 500 gwei ceiling, 5-10x margin.
  * - Polygon PoS: gas has historically spiked into the hundreds of gwei
  *   during congestion -> 3,000 gwei ceiling, well above any observed spike.
- * - Rollup L2s (Arbitrum, Base, Blast, Optimism, Zksync, Mantle, Robinhood): sequencer
+ * - Rollup L2s (Arbitrum, Base, Optimism, Zksync, Mantle, Robinhood): sequencer
  *   priority fees are typically ~0-2 gwei -> 50 gwei ceiling. Still 25x+
  *   normal, but tight enough to catch an order-of-magnitude inflation on a
  *   chain where fees are otherwise negligible.
@@ -30,7 +30,6 @@ const defaultPriorityFeeCeilingWei = 500n * GWEI
 const priorityFeeCeilingWeiByChain: Record<EvmChain, bigint> = {
   [EvmChain.Arbitrum]: 50n * GWEI,
   [EvmChain.Base]: 50n * GWEI,
-  [EvmChain.Blast]: 50n * GWEI,
   [EvmChain.Optimism]: 50n * GWEI,
   [EvmChain.Zksync]: 50n * GWEI,
   [EvmChain.Mantle]: 50n * GWEI,
@@ -63,7 +62,6 @@ const priorityFeeFloorWeiByChain: Partial<Record<EvmChain, bigint>> = {
   [EvmChain.Sei]: 1n * GWEI,
   [EvmChain.Polygon]: 30n * GWEI,
   [EvmChain.Base]: 20n,
-  [EvmChain.Blast]: 20n,
   [EvmChain.Optimism]: 20n,
 }
 

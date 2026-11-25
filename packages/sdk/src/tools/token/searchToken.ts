@@ -14,7 +14,6 @@ const platformToChain: Record<string, Chain> = {
   'arbitrum-one': Chain.Arbitrum,
   'optimistic-ethereum': Chain.Optimism,
   base: Chain.Base,
-  blast: Chain.Blast,
   mantle: Chain.Mantle,
   robinhood: Chain.Robinhood,
   'zksync-era': Chain.Zksync,

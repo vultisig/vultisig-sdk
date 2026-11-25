@@ -175,15 +175,15 @@ describe('getSwapKitQuote', () => {
   })
 
   it('quotes a catalog-recognized EVM destination without a SwapKit enabled-list row', async () => {
-    const fetchMock = stubCatalogEvmRoute({ providerChainId: '81457', assetPrefix: 'BLAST' })
+    const fetchMock = stubCatalogEvmRoute({ providerChainId: '5000', assetPrefix: 'MANTLE' })
 
     await getSwapKitQuote({
       from: { chain: Chain.Ethereum, address: '0xsender', ticker: 'ETH', decimals: 18 },
-      to: { chain: Chain.Blast, address: '0xdestination', ticker: 'ETH', decimals: 18 },
+      to: { chain: Chain.Mantle, address: '0xdestination', ticker: 'MNT', decimals: 18 },
       amount: 1_000_000_000_000_000_000n,
     })
 
-    expect(JSON.parse(fetchMock.mock.calls[2][1].body).buyAsset).toBe('BLAST.ETH')
+    expect(JSON.parse(fetchMock.mock.calls[2][1].body).buyAsset).toBe('MANTLE.MNT')
   })
 
   it('quotes and builds an EVM transaction while filtering native THOR/Maya routes', async () => {

@@ -38,7 +38,6 @@ const coinGeckoNetwork: Record<EvmChain, string> = {
   [EvmChain.Ethereum]: 'ethereum',
   [EvmChain.Avalanche]: 'avalanche',
   [EvmChain.Base]: 'base',
-  [EvmChain.Blast]: 'blast',
   [EvmChain.Arbitrum]: 'arbitrum-one',
   [EvmChain.Polygon]: 'polygon-pos',
   [EvmChain.Optimism]: 'optimistic-ethereum',

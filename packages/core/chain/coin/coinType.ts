@@ -17,7 +17,6 @@ export const getCoinType = ({ walletCore: { CoinType }, chain }: Input): CoinTyp
     [Chain.Base]: () => CoinType.base,
     [Chain.CronosChain]: () => CoinType.cronosChain,
     [Chain.BSC]: () => CoinType.smartChain,
-    [Chain.Blast]: () => CoinType.blast,
     [Chain.Ethereum]: () => CoinType.ethereum,
     [Chain.Optimism]: () => CoinType.optimism,
     [Chain.Polygon]: () => CoinType.polygon,

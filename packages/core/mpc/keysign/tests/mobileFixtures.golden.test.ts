@@ -80,7 +80,7 @@ describe('mobile keysign pre-image hash golden fixtures', () => {
   })
 
   it(`loads the mobile and supplemental fixture corpus (${cases.length} cases)`, () => {
-    expect(cases.length).toBe(100)
+    expect(cases.length).toBe(99)
     expect(new Set(cases.map(({ fixtureFile }) => fixtureFile)).size).toBe(31)
   })
 
@@ -134,7 +134,6 @@ describe('mobile keysign pre-image hash golden fixtures', () => {
       [
         Chain.Avalanche,
         Chain.Base,
-        Chain.Blast,
         Chain.CronosChain,
         Chain.Hyperliquid,
         Chain.Mantle,

@@ -21,7 +21,6 @@ describe('normalizeChain', () => {
       ['Optimism', Chain.Optimism],
       ['Avalanche', Chain.Avalanche],
       ['Base', Chain.Base],
-      ['Blast', Chain.Blast],
       ['Mantle', Chain.Mantle],
       ['Zksync', Chain.Zksync],
       ['ZKSYNC', Chain.Zksync],
@@ -132,7 +131,6 @@ describe('normalizeChain', () => {
       ['zcash', Chain.Zcash],
       ['dash', Chain.Dash],
       ['base', Chain.Base],
-      ['blast', Chain.Blast],
       ['zksync', Chain.Zksync],
       ['zk', Chain.Zksync],
       ['mnt', Chain.Mantle],
@@ -187,6 +185,10 @@ describe('normalizeChain', () => {
 
     it('throws UnknownChainError for undefined input', () => {
       expect(() => normalizeChain(undefined)).toThrow(UnknownChainError)
+    })
+
+    it.each(['Blast', 'blast', 'BLAST'])('throws UnknownChainError for %s, a chain that was removed', input => {
+      expect(() => normalizeChain(input)).toThrow(UnknownChainError)
     })
   })
 

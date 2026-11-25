@@ -55,7 +55,6 @@ describe('parseChain — consumer-observed input forms (backward-compat receipt)
     ['Arbitrum', Chain.Arbitrum],
     ['Optimism', Chain.Optimism],
     ['Base', Chain.Base],
-    ['Blast', Chain.Blast],
     ['Mantle', Chain.Mantle],
     ['Zksync', Chain.Zksync],
     ['Avalanche', Chain.Avalanche],
@@ -185,6 +184,14 @@ describe('parseChain — malformed inputs return typed errors (not crash)', () =
   it('parseChain("   ") → { success: false } (whitespace only)', () => {
     const result = parseChain('   ')
     expect(result.success).toBe(false)
+  })
+
+  it.each(['Blast', 'blast'])('rejects %s, a chain that was removed after it shut down', input => {
+    const result = parseChain(input)
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error).toMatch(/unknown chain/i)
+    }
   })
 
   it('error message mentions "Unknown chain" for unrecognized input', () => {

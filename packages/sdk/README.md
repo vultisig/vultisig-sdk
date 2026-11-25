@@ -453,7 +453,6 @@ The SDK supports address derivation and operations for 38 blockchain networks:
 | Ethereum    | `Ethereum`    | Ethereum mainnet   |
 | Arbitrum    | `Arbitrum`    | Arbitrum One L2    |
 | Base        | `Base`        | Base L2 (Coinbase) |
-| Blast       | `Blast`       | Blast L2           |
 | Optimism    | `Optimism`    | Optimism L2        |
 | Zksync      | `Zksync`      | zkSync Era         |
 | Mantle      | `Mantle`      | Mantle L2          |

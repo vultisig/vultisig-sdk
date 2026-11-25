@@ -291,7 +291,6 @@ type LimitSwapDestinationValidator = (address: string) => boolean
 const limitSwapDestinationValidators: Record<Chain, LimitSwapDestinationValidator | undefined> = {
   [Chain.Arbitrum]: isEvmAddress,
   [Chain.Base]: isEvmAddress,
-  [Chain.Blast]: undefined,
   [Chain.Optimism]: undefined,
   [Chain.Zksync]: undefined,
   [Chain.Mantle]: undefined,

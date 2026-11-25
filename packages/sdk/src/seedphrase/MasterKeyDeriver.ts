@@ -426,7 +426,6 @@ export class MasterKeyDeriver {
       Noble: 'noble',
       Akash: 'akash',
       CronosChain: 'cronosChain',
-      Blast: 'blast',
       Zksync: 'zksync',
       Mantle: 'mantle',
       Zcash: 'zcash',

@@ -73,7 +73,6 @@ export const chainRegistry = Object.freeze({
   [Chain.Base]: descriptor(Chain.Base, 'https://basescan.org', '/address/', '/tx/'),
   [Chain.Optimism]: descriptor(Chain.Optimism, 'https://optimistic.etherscan.io', '/address/', '/tx/'),
   [Chain.Polygon]: descriptor(Chain.Polygon, 'https://polygonscan.com', '/address/', '/tx/'),
-  [Chain.Blast]: descriptor(Chain.Blast, 'https://blastscan.io', '/address/', '/tx/'),
   [Chain.CronosChain]: descriptor(Chain.CronosChain, 'https://cronoscan.com', '/address/', '/tx/'),
   [Chain.Sui]: descriptor(Chain.Sui, 'https://suiscan.xyz/mainnet', '/address/', '/tx/'),
   [Chain.Polkadot]: descriptor(Chain.Polkadot, 'https://assethub-polkadot.subscan.io', '/account/', '/extrinsic/'),

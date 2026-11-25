@@ -12,7 +12,6 @@ export const chainSpecificRecord = {
   [Chain.Base]: 'ethereumSpecific',
   [Chain.CronosChain]: 'ethereumSpecific',
   [Chain.BSC]: 'ethereumSpecific',
-  [Chain.Blast]: 'ethereumSpecific',
   [Chain.Ethereum]: 'ethereumSpecific',
   [Chain.Optimism]: 'ethereumSpecific',
   [Chain.Polygon]: 'ethereumSpecific',

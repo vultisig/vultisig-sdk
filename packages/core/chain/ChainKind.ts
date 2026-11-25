@@ -6,7 +6,6 @@ const chainKindRecord = {
   [EvmChain.Base]: 'evm',
   [EvmChain.CronosChain]: 'evm',
   [EvmChain.BSC]: 'evm',
-  [EvmChain.Blast]: 'evm',
   [EvmChain.Ethereum]: 'evm',
   [EvmChain.Optimism]: 'evm',
   [EvmChain.Polygon]: 'evm',
