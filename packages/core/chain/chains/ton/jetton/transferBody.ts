@@ -1,5 +1,6 @@
 import { Address, beginCell, Cell, Slice } from '@ton/core'
 
+import { assertTonMainnetAddress } from '../address'
 import { TonOp } from '../messageBody/opcodes'
 
 /** The 32-bit zero opcode that opens a TON text comment. */
@@ -33,6 +34,8 @@ export const buildTonJettonTransferBody = ({
   comment,
   queryId = 0n,
 }: BuildTonJettonTransferBodyInput): Cell => {
+  assertTonMainnetAddress(destination)
+  assertTonMainnetAddress(responseDestination)
   const body = beginCell()
     .storeUint(TonOp.JETTON_TRANSFER, 32)
     .storeUint(queryId, 64)

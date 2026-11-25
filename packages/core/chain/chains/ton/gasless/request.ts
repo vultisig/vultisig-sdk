@@ -15,6 +15,7 @@ import {
 } from '@ton/core'
 import { attempt } from '@vultisig/lib-utils/attempt'
 
+import { assertTonMainnetAddress } from '../address'
 import { tonPayloadToBase64 } from '../messageBody/decode'
 import { getTonMessageBounceable } from '../messageBounce'
 import { tonV5R1WalletId } from '../walletV5R1'
@@ -61,6 +62,7 @@ export const toTonGaslessInternalMessage = ({
   payload,
   stateInit,
 }: TonGaslessRequestMessage): MessageRelaxed => {
+  assertTonMainnetAddress(to)
   const stateInitCell = cellFromPayload(stateInit)
 
   return internal({

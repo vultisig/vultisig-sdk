@@ -6,6 +6,7 @@ import { isAddress } from 'viem'
 
 import { isNearAccountId } from '../chains/near/accountId'
 import { isValidRippleXAddress } from '../chains/ripple/address'
+import { assertTonMainnetAddress } from '../chains/ton/address'
 import { decodeBech32 } from './decodeBech32'
 import { hasUniformEvmAddressCase, isEvmHexAddress } from './getEvmChecksumMismatchHint'
 
@@ -31,6 +32,14 @@ export const isValidAddress = ({ chain, address, walletCore }: Input) => {
   // WalletCore rejects every named account and accepts uppercase or 0x-prefixed hex.
   if (chain === Chain.Near) {
     return isNearAccountId(address)
+  }
+
+  if (chain === Chain.Ton) {
+    try {
+      assertTonMainnetAddress(address)
+    } catch {
+      return false
+    }
   }
 
   const coinType = getCoinType({

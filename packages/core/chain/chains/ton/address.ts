@@ -2,6 +2,16 @@ import { Address } from '@ton/core'
 import { attempt } from '@vultisig/lib-utils/attempt'
 import { fromBase64 } from '@vultisig/lib-utils/fromBase64'
 
+/** Rejects testnet-only friendly destinations before mainnet address normalization. */
+export const assertTonMainnetAddress = (address: string): void => {
+  // Raw spellings carry no network flag; retain the signer's existing syntax rules.
+  if (!Address.isFriendly(address)) return
+  const parsed = Address.parseFriendly(address)
+  if (parsed.isTestOnly) {
+    throw new Error('A testnet-only TON address cannot be used on mainnet')
+  }
+}
+
 /** Converts base64url encoding to standard base64 so `Buffer.from` can decode it. */
 const fromBase64Url = (value: string): Buffer => {
   const standardBase64 = value.replace(/-/g, '+').replace(/_/g, '/')
@@ -13,6 +23,7 @@ const fromBase64Url = (value: string): Buffer => {
  * The toncenter v3 API requires raw addresses.
  */
 export const tonAddressToRaw = (userFriendlyAddress: string): string => {
+  assertTonMainnetAddress(userFriendlyAddress)
   const decoded = fromBase64Url(userFriendlyAddress)
   const workchain = decoded[1] >= 128 ? decoded[1] - 256 : decoded[1]
   const hash = decoded.subarray(2, 34).toString('hex')
@@ -29,6 +40,7 @@ export const tonAddressToRaw = (userFriendlyAddress: string): string => {
  * already in user-friendly form are returned re-encoded as bounceable.
  */
 export const tonAddressToBounceable = (address: string): string => {
+  assertTonMainnetAddress(address)
   const parsed = address.includes(':') ? Address.parseRaw(address) : Address.parse(address)
 
   return parsed.toString({ bounceable: true, testOnly: false, urlSafe: true })

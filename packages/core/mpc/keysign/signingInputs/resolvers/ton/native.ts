@@ -1,4 +1,5 @@
 import { Buffer } from 'buffer'
+import { assertTonMainnetAddress } from '@vultisig/core-chain/chains/ton/address'
 import { validateTonComment } from '@vultisig/core-chain/chains/ton/comment'
 import { TonWalletVersion } from '@vultisig/core-chain/chains/ton/wallet'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
@@ -99,6 +100,7 @@ export const buildNativeTonTransfer = ({
   bounceable,
   walletVersion,
 }: BuildNativeTonTransferInput): TW.TheOpenNetwork.Proto.Transfer => {
+  assertTonMainnetAddress(keysignPayload.toAddress)
   const comment = keysignPayload.memo || ''
   validateTonComment({ memo: comment })
 
@@ -123,6 +125,7 @@ export const buildNativeTonTransferFromMessage = ({
   bounceable,
   walletVersion,
 }: BuildNativeTonTransferFromMessageInput): TW.TheOpenNetwork.Proto.Transfer => {
+  assertTonMainnetAddress(to)
   return TW.TheOpenNetwork.Proto.Transfer.create({
     dest: to,
     amount: tonAmountToBytes(amount),
