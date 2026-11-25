@@ -18,7 +18,23 @@ vi.mock('@polkadot/api', () => {
   }
 })
 
-import { getPolkadotClient, polkadotRpcUrl } from './client'
+import { rootApiUrl } from '@vultisig/core-config'
+
+import { assetHubRpcUrl, getPolkadotClient, polkadotRpcUrl } from './client'
+
+describe('Polkadot RPC endpoints', () => {
+  it('serves Polkadot Asset Hub through the /dot/ proxy', () => {
+    expect(polkadotRpcUrl).toBe(`${rootApiUrl}/dot/`)
+  })
+
+  it('reads Asset Hub tokens from the same endpoint as native DOT', () => {
+    expect(assetHubRpcUrl).toBe(polkadotRpcUrl)
+  })
+
+  it('does not use the retired /dot-ah/ proxy, which returns 404', () => {
+    expect(assetHubRpcUrl).not.toContain('dot-ah')
+  })
+})
 
 describe('getPolkadotClient', () => {
   beforeEach(() => {

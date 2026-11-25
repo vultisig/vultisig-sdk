@@ -175,6 +175,20 @@ describe('getPolkadotAssetBalance — pallet_assets', () => {
     expect(res.balanceRaw).toBe('12500000')
   })
 
+  it('queries Asset Hub through the /dot/ proxy, not the retired /dot-ah/', async () => {
+    mockQueryUrl.mockResolvedValueOnce({ result: null })
+    await getPolkadotAssetBalance(POLKADOT_ADDR, '1984')
+
+    expect(mockQueryUrl).toHaveBeenCalledTimes(1)
+    const [url, options] = mockQueryUrl.mock.calls[0]
+    expect(url).toBe('https://api.vultisig.com/dot/')
+    expect(options.body.method).toBe('state_getStorage')
+    // twox128("Assets") ++ twox128("Account")
+    expect(
+      options.body.params[0].startsWith('0x682a59d51ab9e48a8c8cc418ff9708d2b99d880ec681799c0cf30e8886371da9')
+    ).toBe(true)
+  })
+
   it('returns 0 for a null (no entry) asset account', async () => {
     mockQueryUrl.mockResolvedValueOnce({ result: null })
     const res = await getPolkadotAssetBalance(POLKADOT_ADDR, '1337')
