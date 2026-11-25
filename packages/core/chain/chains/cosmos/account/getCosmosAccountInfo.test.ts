@@ -448,6 +448,64 @@ describe('getCosmosAccountInfo — LCD fallback URL on primary failure', () => {
     expect(secondUrl).toContain('lcd.terra-classic.hexxagon.io')
   })
 
+  it('falls back to IBS when the THORChain primary LCD fails', async () => {
+    // #2666: thorchain-api.polkachu.com stopped resolving, so the fallback
+    // must point at a live mirror. Response shape recorded from
+    // thorchain.ibs.team/api on 2026-11-25.
+    const address = 'thor18altpx2gwt4c4ejr5uzda4kyzsudyn9q56fnng'
+    const client = makeClient(null)
+    vi.mocked(getCosmosClient).mockResolvedValue(client as never)
+    vi.mocked(queryUrl)
+      .mockRejectedValueOnce(new Error('HTTP 503 from primary'))
+      .mockResolvedValueOnce({
+        account: {
+          '@type': '/cosmos.auth.v1beta1.BaseAccount',
+          address,
+          pub_key: {
+            '@type': '/cosmos.crypto.secp256k1.PubKey',
+            key: 'A6+E6dMoJ7nSgGv2TL/4urxQF4uIyr+8htujkA0WuuiL',
+          },
+          account_number: '109315',
+          sequence: '672',
+        },
+      } as never)
+
+    const result = await getCosmosAccountInfo({ chain: CosmosChain.THORChain, address })
+
+    expect(result.accountNumber).toBe(109315n)
+    expect(result.sequence).toBe(672)
+    expect(queryUrl).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(queryUrl).mock.calls[0]?.[0]).toContain('gateway.liquify.com/chain/thorchain_api')
+    expect(vi.mocked(queryUrl).mock.calls[1]?.[0]).toBe(
+      `https://thorchain.ibs.team/api/cosmos/auth/v1beta1/accounts/${address}`
+    )
+  })
+
+  it("treats the THORChain fallback's not-found 404 as a new account", async () => {
+    // IBS wraps the not-found message differently from the primary
+    // ("account … not found" behind an "rpc error" prefix). Body recorded
+    // from thorchain.ibs.team/api on 2026-11-25 for a never-used address.
+    const address = 'thor1p3znph34exwru6l360xc57hdhnvs6q2sl9cd8s'
+    const client = makeClient(null)
+    vi.mocked(getCosmosClient).mockResolvedValue(client as never)
+    vi.mocked(queryUrl)
+      .mockRejectedValueOnce(new Error('HTTP 503 from primary'))
+      .mockRejectedValueOnce(
+        httpError(404, {
+          code: 5,
+          message: `rpc error: code = NotFound desc = account ${address} not found: key not found`,
+          details: [],
+        })
+      )
+
+    const result = await getCosmosAccountInfo({ chain: CosmosChain.THORChain, address })
+
+    expect(result.accountNumber).toBe(0n)
+    expect(result.sequence).toBe(0)
+    expect(result.sequenceBigInt).toBe(0n)
+    expect(queryUrl).toHaveBeenCalledTimes(2)
+  })
+
   it('does not retry a structured 404 because it authoritatively means account not found', async () => {
     // A real auth-account 404 is authoritative evidence that the endpoint
     // understood the request and the account is absent. Preserve the direct

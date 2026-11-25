@@ -105,15 +105,18 @@ const parseLcdAccount = (resp: LcdAccountResponse): ParsedAccount => {
 //
 // Polkachu mirrors per cosmos chain. Hexxagon for columbus-5 since polkachu
 // has no Terra Classic endpoint (verified 2026-05-28 — see
-// vultiagent-app#1017 + mcp-ts#266). Keys are the chain id used by
-// cosmos-sdk; chains not in this map have no fallback (degrade fail-closed
-// behaviour preserved).
+// vultiagent-app#1017 + mcp-ts#266). IBS for THORChain, since
+// thorchain-api.polkachu.com stopped resolving (NXDOMAIN, 2026-11-25, #2666);
+// IBS answers a missing account with a 404 whose message
+// isAuthoritativeCosmosAccountNotFound accepts, like the primary's.
+// Keys are the chain id used by cosmos-sdk; chains not in this map have no
+// fallback (degrade fail-closed behaviour preserved).
 const COSMOS_LCD_FALLBACK_URLS: Partial<Record<CosmosChain, string>> = {
   [Chain.Cosmos]: 'https://cosmos-api.polkachu.com',
   [Chain.Osmosis]: 'https://osmosis-api.polkachu.com',
   [Chain.Terra]: 'https://terra-api.polkachu.com',
   [Chain.TerraClassic]: 'https://lcd.terra-classic.hexxagon.io',
-  [Chain.THORChain]: 'https://thorchain-api.polkachu.com',
+  [Chain.THORChain]: 'https://thorchain.ibs.team/api',
   [Chain.Noble]: 'https://noble-api.polkachu.com',
   [Chain.Dydx]: 'https://dydx-api.polkachu.com',
   [Chain.Akash]: 'https://akash-api.polkachu.com',
