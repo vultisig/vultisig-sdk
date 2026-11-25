@@ -164,9 +164,11 @@ export type EstimateUtxoFeeOptions = UtxoApiOptions & {
 /**
  * Get a suggested fee rate in sats/byte for the next-block target.
  *
- * For Zcash we clamp to 100 sats/byte to satisfy ZIP-317's 10,000 zat/tx
- * minimum on typical 150-250 byte txs (Blockchair reports ~1 sat/byte which
- * is below the network floor — see packages/core/chain/chains/utxo/fee/byteFee).
+ * For Zcash we return 100 sats/byte (Blockchair reports ~1 sat/byte, which
+ * means nothing for ZIP-317 fees — see packages/core/chain/chains/utxo/fee/byteFee).
+ * `buildUtxoSendTx` already raises any Zcash fee to the ZIP-317 conventional
+ * fee (1,000 zats per action since ZIP 2009), so this rate sits well above
+ * that floor.
  */
 export async function estimateUtxoFee(opts: EstimateUtxoFeeOptions): Promise<number> {
   if (opts.chain === 'Zcash') return 100

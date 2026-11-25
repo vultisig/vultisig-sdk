@@ -198,7 +198,7 @@ describe('Zcash branch ID', () => {
 })
 
 describe('Zcash ZIP-317 fee planning', () => {
-  it('enables ZIP-317 on the WalletCore planner input for Zcash sends', async () => {
+  it("keeps WalletCore's zip_0317 planner off for Zcash sends (it hardcodes 5,000 zats per action)", async () => {
     const resolver = await getUtxoSigningInputs()
     const walletCore = makeWalletCore()
     const plan = (walletCore as unknown as { AnySigner: { plan: ReturnType<typeof vi.fn> } }).AnySigner.plan
@@ -230,6 +230,6 @@ describe('Zcash ZIP-317 fee planning', () => {
 
     const planInput = vi.mocked(plan).mock.calls[0]?.[0]
     expect(planInput).toBeDefined()
-    expect(TW.Bitcoin.Proto.SigningInput.decode(planInput).zip_0317).toBe(true)
+    expect(TW.Bitcoin.Proto.SigningInput.decode(planInput).zip_0317).toBe(false)
   })
 })

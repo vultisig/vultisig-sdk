@@ -4,10 +4,11 @@ import { getUtxoStats } from '@vultisig/core-chain/chains/utxo/client/getUtxoSta
 const byteFeeMultiplier = (value: bigint) => (value * 25n) / 10n
 
 export const getUtxoByteFee = async (chain: UtxoChain) => {
-  // ZIP-317 requires 5,000 zats per logical action (10,000 zat floor) — see
-  // ./zip317 for the conventional-fee formula. Blockchair reports ~1 sat/byte
-  // which is below that floor; 100 sat/byte clears it for any realistic tx
-  // shape (a P2PKH input pays 14,800 zats vs 5,000 required per action).
+  // Zcash fees are ZIP-317 conventional fees (1,000 zats per logical action
+  // since ZIP 2009) — see ./zip317. The keysign signing-input planner ignores
+  // this byteFee for Zcash and prices the plan from ./zip317 directly; 100
+  // sat/byte is only the value carried in the payload (Blockchair reports
+  // ~1 sat/byte, which no longer means anything for Zcash).
   if (chain === UtxoChain.Zcash) return 100n
 
   const {

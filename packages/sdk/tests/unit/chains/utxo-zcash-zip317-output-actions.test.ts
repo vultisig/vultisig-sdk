@@ -53,10 +53,10 @@ const buildZcashSend = ({
   })
 
 describe('Zcash — ZIP-317 conventional fee counts OUTPUT actions too (UTXO-04)', () => {
-  it('a plain 1-input send with no memo keeps the pre-fix 10,000 zat floor (unchanged)', () => {
+  it('a plain 1-input send with no memo pays the 2-action grace floor of 2,000 zats', () => {
     // recipient + change P2PKH = 68 output bytes -> ceil(68/34)=2 output actions,
     // 1 input -> ceil(148/150)=1 input action; max(1,2)=2 -> 2-action grace floor.
-    expect(() => buildZcashSend({ utxoValues: [105_000n], amount: 100_000n })).toThrowError(/fee=10000\b/)
+    expect(() => buildZcashSend({ utxoValues: [101_999n], amount: 100_000n })).toThrowError(/fee=2000\b/)
     expect(() => buildZcashSend({ utxoValues: [115_000n], amount: 100_000n })).not.toThrowError()
   })
 
@@ -64,22 +64,22 @@ describe('Zcash — ZIP-317 conventional fee counts OUTPUT actions too (UTXO-04)
     // Output sizes: recipient (34) + change (34) + OP_RETURN(80-byte memo, OP_PUSHDATA1
     // -> 3-byte header + 80 = 83-byte script -> 9+83=92-byte tx_out) = 160 bytes total.
     // outputActions = ceil(160/34) = 5. inputActions (1 input) = 1. logicalActions =
-    // max(1,5) = 5 -> fee = 5,000 * 5 = 25,000 zats.
+    // max(1,5) = 5 -> fee = 1,000 * 5 = 5,000 zats.
     //
     // The OLD (buggy, input-only) formula ignored the memo entirely and would have
-    // charged the 2-action grace floor of 10,000 zats here — a 15,000 zat shortfall
+    // charged the 2-action grace floor of 2,000 zats here — a 3,000 zat shortfall
     // that risks "tx unpaid action limit exceeded" at broadcast.
     const memo = 'A'.repeat(80)
     expect(() =>
       buildZcashSend({
-        utxoValues: [124_999n],
+        utxoValues: [104_999n],
         amount: 100_000n,
         opReturnData: memo,
       })
-    ).toThrowError(/fee=25000\b/)
+    ).toThrowError(/fee=5000\b/)
     expect(() =>
       buildZcashSend({
-        utxoValues: [125_000n],
+        utxoValues: [105_000n],
         amount: 100_000n,
         opReturnData: memo,
       })
@@ -89,18 +89,18 @@ describe('Zcash — ZIP-317 conventional fee counts OUTPUT actions too (UTXO-04)
   it('a small memo that keeps outputs under the grace window does not raise the fee', () => {
     // 10-byte memo: direct push -> 2-byte header + 10 = 12-byte script -> 8+1+12=21-byte
     // tx_out. Total outputs = 34+34+21=89 -> ceil(89/34)=3 output actions. 1 input
-    // action. max(1,3)=3 -> above the 2-action grace window -> fee = 5,000*3=15,000.
+    // action. max(1,3)=3 -> above the 2-action grace window -> fee = 1,000*3=3,000.
     const memo = 'A'.repeat(10)
     expect(() =>
       buildZcashSend({
-        utxoValues: [114_999n],
+        utxoValues: [102_999n],
         amount: 100_000n,
         opReturnData: memo,
       })
-    ).toThrowError(/fee=15000\b/)
+    ).toThrowError(/fee=3000\b/)
     expect(() =>
       buildZcashSend({
-        utxoValues: [115_000n],
+        utxoValues: [103_000n],
         amount: 100_000n,
         opReturnData: memo,
       })
@@ -109,14 +109,14 @@ describe('Zcash — ZIP-317 conventional fee counts OUTPUT actions too (UTXO-04)
 
   it('scales with both input count and a large memo together', () => {
     // 4 inputs -> inputActions = ceil(4*148/150) = 4. Same 80-byte memo -> outputActions
-    // = 5 (as above). max(4,5) = 5 -> fee stays 25,000 (output-bound, not input-bound).
+    // = 5 (as above). max(4,5) = 5 -> fee stays 5,000 (output-bound, not input-bound).
     const memo = 'A'.repeat(80)
     expect(() =>
       buildZcashSend({
-        utxoValues: [30_000n, 30_000n, 30_000n, 24_999n],
+        utxoValues: [30_000n, 30_000n, 30_000n, 14_999n],
         amount: 100_000n,
         opReturnData: memo,
       })
-    ).toThrowError(/fee=25000\b/)
+    ).toThrowError(/fee=5000\b/)
   })
 })
