@@ -1,17 +1,26 @@
 import { describe, expect, it } from 'vitest'
 
-import { getZcashConventionalFee, getZcashOpReturnOutputSize, getZcashTransparentOutputSizes } from './zip317'
+import {
+  getZcashConventionalFee,
+  getZcashOpReturnOutputSize,
+  getZcashTransparentOutputSizes,
+  zcashMarginalFee,
+} from './zip317'
 
 const p2pkhOutput = 34n
 
 describe('getZcashConventionalFee', () => {
-  it('returns the 10,000 zat floor for a simple 1-in 2-out send', () => {
+  it('charges 1,000 zats per logical action (ZIP 2009), not 5,000', () => {
+    expect(zcashMarginalFee).toBe(1000n)
+  })
+
+  it('returns the 2,000 zat floor for a simple 1-in 2-out send', () => {
     expect(
       getZcashConventionalFee({
         inputCount: 1,
         outputSizes: [p2pkhOutput, p2pkhOutput],
       })
-    ).toBe(10_000n)
+    ).toBe(2_000n)
   })
 
   it('scales with input count beyond the grace window', () => {
@@ -20,7 +29,7 @@ describe('getZcashConventionalFee', () => {
         inputCount: 4,
         outputSizes: [p2pkhOutput, p2pkhOutput],
       })
-    ).toBe(20_000n)
+    ).toBe(4_000n)
   })
 
   it('charges input actions from serialized bytes, not raw count', () => {
@@ -30,18 +39,18 @@ describe('getZcashConventionalFee', () => {
         inputCount: 75,
         outputSizes: [p2pkhOutput, p2pkhOutput],
       })
-    ).toBe(370_000n)
+    ).toBe(74_000n)
   })
 
   it('counts large OP_RETURN outputs as multiple actions', () => {
     // 80-byte memo output: 92 bytes serialized -> with two p2pkh outputs,
-    // ceil(160 / 34) = 5 actions -> 25,000 zats
+    // ceil(160 / 34) = 5 actions -> 5,000 zats
     expect(
       getZcashConventionalFee({
         inputCount: 1,
         outputSizes: [p2pkhOutput, p2pkhOutput, 92n],
       })
-    ).toBe(25_000n)
+    ).toBe(5_000n)
   })
 })
 

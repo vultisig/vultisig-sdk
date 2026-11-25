@@ -80,7 +80,6 @@ export const getUtxoSigningInputs: SigningInputsResolver<'utxo'> = async ({ keys
     toAddress: destinationAddress,
     changeAddress: coin.address,
     byteFee: Long.fromString(byteFee),
-    zip_0317: chain === UtxoChain.Zcash,
     coinType: coinType.value,
     fixedDustThreshold: Long.fromBigInt(minUtxo[chain]),
     scripts: {
@@ -125,7 +124,7 @@ export const getUtxoSigningInputs: SigningInputsResolver<'utxo'> = async ({ keys
   return [input]
 }
 
-/** Max non-ZIP-317 re-plans before we give up raising the Zcash fee. */
+/** Max byteFee re-plans before we give up raising the Zcash fee. */
 const maxZcashFeeBumps = 5
 
 type PlanZcashConventionalFeeInput = {
@@ -135,15 +134,19 @@ type PlanZcashConventionalFeeInput = {
 }
 
 /**
- * Produce a Zcash plan whose fee meets the ZIP-317 conventional fee.
+ * Produce a Zcash plan whose fee meets the ZIP-317 conventional fee at
+ * {@link zcashMarginalFee} (1,000 zats per action under ZIP 2009).
  *
- * WalletCore's `zip_0317` planner sizes an OP_RETURN output as a flat ~34
- * bytes and ignores `byteFee`, so memo sends plan exactly one logical action
- * short (e.g. 15,000 zats where the network requires 20,000) with no way to
- * raise the fee in that mode. When the `zip_0317` plan underpays the
- * byte-accurate conventional fee, we re-plan with `zip_0317` off — where
- * WalletCore honours `byteFee` — and bump `byteFee` until the fee clears.
- * Plain (no-memo) sends already meet the fee and keep the `zip_0317` plan.
+ * WalletCore's `zip_0317` planner can't do that: it hardcodes 5,000 zats per
+ * action, ignores `byteFee`, and sizes an OP_RETURN output as a flat ~34 bytes.
+ * So every Zcash plan is built with `zip_0317` off — where WalletCore honours
+ * `byteFee` — starting at 1 zat/byte and raising `byteFee` until the fee clears
+ * the byte-accurate conventional fee. The result is the conventional fee
+ * rounded up to whole zats per byte.
+ *
+ * Co-signers derive the signed transaction from this plan, so every platform
+ * must run this exact sequence (start at 1, then the bump formula below) and
+ * the same {@link zcashMarginalFee}, or keysign digests diverge.
  *
  * An empty plan (no selected UTXOs) is returned untouched so refinement can
  * report the planner failure. Only the caller decides whether a request is MAX.
@@ -166,19 +169,19 @@ const planZcashConventionalFee = ({
   const meetsConventionalFee = (plan: TW.Bitcoin.Proto.TransactionPlan): boolean =>
     plan.utxos.length === 0 || BigInt(plan.fee.toString()) >= conventionalFee(plan)
 
-  const zipPlan = planInput(input)
-  if (meetsConventionalFee(zipPlan)) {
-    return zipPlan
-  }
-
   input.zip_0317 = false
   let byteFee = 1n
-  let plan = zipPlan
-  for (let bump = 0; bump < maxZcashFeeBumps; bump++) {
+  for (let attempt = 1; ; attempt++) {
     input.byteFee = Long.fromString(byteFee.toString())
-    plan = planInput(input)
+    const plan = planInput(input)
     if (meetsConventionalFee(plan)) {
       return plan
+    }
+
+    if (attempt === maxZcashFeeBumps) {
+      throw new Error(
+        `Failed to meet the Zcash minimum network fee (ZIP-317): planned ${plan.fee.toString()} zats, required ${conventionalFee(plan)}`
+      )
     }
 
     // byteFee mode scales fee linearly with vsize; derive the byteFee that
@@ -187,8 +190,4 @@ const planZcashConventionalFee = ({
     const plannerVsize = fee > 0n ? fee / byteFee : 1n
     byteFee = bigIntMax(ceilDiv({ value: conventionalFee(plan), divisor: plannerVsize }), byteFee + 1n)
   }
-
-  throw new Error(
-    `Failed to meet the Zcash minimum network fee (ZIP-317): planned ${plan.fee.toString()} zats, required ${conventionalFee(plan)}`
-  )
 }

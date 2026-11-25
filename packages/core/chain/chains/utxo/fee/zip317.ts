@@ -8,8 +8,17 @@ import { bigIntSum } from '@vultisig/lib-utils/bigint/bigIntSum'
  * Canonical implementation — consumers (extension dApp guard, SDK send
  * builder) should derive their floors from here.
  * https://zips.z.cash/zip-0317
+ *
+ * Marginal fee per logical action: 1,000 zats since ZIP 2009 took effect at
+ * mainnet height 3,590,000 (2026-11-19), down from ZIP 317's 5,000. Do not go
+ * lower: Zebra 7.2 beta accepts 400, but most nodes still don't relay below
+ * 1,000. https://zips.z.cash/zip-2009
+ *
+ * WalletCore's `zip_0317` planner hardcodes 5,000 (`gMarginalFee`), so the
+ * signing-input resolver does not use that planner for Zcash; it prices every
+ * Zcash plan from this constant instead.
  */
-export const zcashMarginalFee = 5000n
+export const zcashMarginalFee = 1000n
 export const zcashGraceActions = 2n
 /** Serialized size of a signed transparent P2PKH input (ZIP-317 §3.1). */
 const p2pkhInputSize = 148n
@@ -35,7 +44,7 @@ type GetZcashConventionalFeeInput = {
 
 /**
  * Minimum fee the Zcash network relays for a transparent tx of the given
- * shape: 5,000 zats per logical action with a two-action grace window, where
+ * shape: {@link zcashMarginalFee} per logical action with a two-action grace window, where
  * logical actions = max(ceil(tx_in bytes / 150), ceil(tx_out bytes / 34)).
  */
 export const getZcashConventionalFee = ({ inputCount, outputSizes }: GetZcashConventionalFeeInput): bigint => {

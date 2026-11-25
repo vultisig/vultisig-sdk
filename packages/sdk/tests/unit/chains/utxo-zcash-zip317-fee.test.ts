@@ -1,7 +1,7 @@
 /**
  * Verifies the ZIP-317 conventional-fee floor in `buildUtxoSendTx`. Zcash
- * nodes relay zero "unpaid actions" (5,000 zats per logical action, 10,000
- * minimum), so a size-based fee from a low feeRate must be raised to the
+ * nodes relay zero "unpaid actions" (1,000 zats per logical action since
+ * ZIP 2009, 2,000 minimum), so a size-based fee from a low feeRate must be raised to the
  * floor or the network rejects the broadcast with
  * "tx unpaid action limit exceeded".
  *
@@ -40,9 +40,9 @@ const buildZcashSend = ({
   })
 
 describe('Zcash — ZIP-317 conventional fee floor', () => {
-  it('raises a 1 sat/byte fee to the 10,000 zat floor for a single-input send', () => {
+  it('raises a 1 sat/byte fee to the 2,000 zat floor for a single-input send', () => {
     // size fee would be 238 zats (228 bytes * 1); funds only cover that, not the floor
-    expect(() => buildZcashSend({ utxoValues: [105_000n], amount: 100_000n })).toThrowError(/fee=10000\b/)
+    expect(() => buildZcashSend({ utxoValues: [101_000n], amount: 100_000n })).toThrowError(/fee=2000\b/)
   })
 
   it('builds successfully once funds cover the floored fee', () => {
@@ -50,14 +50,14 @@ describe('Zcash — ZIP-317 conventional fee floor', () => {
   })
 
   it('scales the floor with input count beyond the 2-action grace window', () => {
-    // 4 inputs -> 4 logical actions -> 20,000 zat floor (size fee at 1 sat/byte is 678)
-    expect(() => buildZcashSend({ utxoValues: [30_000n, 30_000n, 30_000n, 25_000n], amount: 100_000n })).toThrowError(
-      /fee=20000\b/
+    // 4 inputs -> 4 logical actions -> 4,000 zat floor (size fee at 1 sat/byte is 678)
+    expect(() => buildZcashSend({ utxoValues: [30_000n, 30_000n, 30_000n, 13_000n], amount: 100_000n })).toThrowError(
+      /fee=4000\b/
     )
   })
 
   it('keeps the size-based fee when it already exceeds the floor', () => {
-    // 100 sat/byte * 228 bytes = 22,800 > 10,000 floor
+    // 100 sat/byte * 228 bytes = 22,800 > 2,000 floor
     expect(() => buildZcashSend({ utxoValues: [110_000n], amount: 100_000n, feeRate: 100 })).toThrowError(/fee=22800\b/)
   })
 

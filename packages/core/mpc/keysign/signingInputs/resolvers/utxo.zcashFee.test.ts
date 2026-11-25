@@ -1,9 +1,14 @@
 /**
- * Real-WalletCore regression for the Zcash ZIP-317 conventional-fee guard in
- * getUtxoSigningInputs. WalletCore's `zip_0317` planner flat-sizes OP_RETURN
- * and ignores `byteFee`, so memo sends plan one logical action short with no
- * way to raise the fee in that mode. The resolver re-plans with `zip_0317`
- * off (where `byteFee` is honoured) until the fee clears the conventional fee.
+ * Real-WalletCore regression for Zcash fee planning in getUtxoSigningInputs.
+ * WalletCore's `zip_0317` planner hardcodes 5,000 zats per action, flat-sizes
+ * OP_RETURN and ignores `byteFee`, so the resolver never uses it: every Zcash
+ * plan runs with `zip_0317` off (where `byteFee` is honoured), raising
+ * `byteFee` from 1 until the fee clears the ZIP 2009 conventional fee
+ * (1,000 zats per action).
+ *
+ * The exact fees below are cross-platform vectors: co-signers rebuild the
+ * transaction from the same payload, so iOS and Android must plan the same
+ * amounts or keysign digests diverge.
  */
 import { create } from '@bufbuild/protobuf'
 import { initWasm, WalletCore } from '@trustwallet/wallet-core'
@@ -77,13 +82,36 @@ describe('getUtxoSigningInputs — Zcash ZIP-317 conventional fee', () => {
     return BigInt(plan.fee.toString())
   }
 
-  it('leaves a plain (no-memo) send on the zip_0317 plan at the 10,000 floor', async () => {
+  it("plans a plain send at the 1,000-zat rate, not WalletCore's hardcoded 10,000", async () => {
     const fee = await planFee({ amount: 5_000_000n, balance: 8_300_000n })
+    const required = getZcashConventionalFee({
+      inputCount: 1,
+      outputSizes: getZcashTransparentOutputSizes({ change: 1n, memo: undefined }),
+    })
 
-    expect(fee).toBe(10_000n)
+    expect(required).toBe(2_000n)
+    // 226 vbytes × ceil(2,000 / 226) = 9 zats/byte
+    expect(fee).toBe(2_034n)
   })
 
-  it('raises a memo send with change to meet the conventional fee (reported 15000→20000)', async () => {
+  it('plans a plain sendMax at the 1,000-zat rate', async () => {
+    const fee = await planFee({ amount: 2_200_000n, balance: 2_200_000n, sendMax: true })
+
+    // One output, still two grace actions: required 2,000; 192 vbytes × 11.
+    expect(fee).toBe(2_112n)
+  })
+
+  it("never hands the plan to WalletCore's zip_0317 planner", async () => {
+    const [signingInput] = await getUtxoSigningInputs({
+      keysignPayload: buildZcashPayload({ amount: 5_000_000n, balance: 8_300_000n }),
+      walletCore,
+      publicKey: {} as never,
+    })
+
+    expect(signingInput?.zip_0317).toBe(false)
+  })
+
+  it('raises a memo send with change to meet the conventional fee', async () => {
     const memo = 'm'.repeat(40)
     const fee = await planFee({
       amount: 5_000_000n,
@@ -95,11 +123,11 @@ describe('getUtxoSigningInputs — Zcash ZIP-317 conventional fee', () => {
       outputSizes: getZcashTransparentOutputSizes({ change: 1n, memo }),
     })
 
-    expect(required).toBe(20_000n)
-    expect(fee).toBeGreaterThanOrEqual(required)
+    expect(required).toBe(4_000n)
+    expect(fee).toBe(4_160n)
   })
 
-  it('raises a sendMax memo send (no change) to meet the conventional fee (reported 10000→15000)', async () => {
+  it('raises a sendMax memo send (no change) to meet the conventional fee', async () => {
     const memo = 'm'.repeat(40)
     const fee = await planFee({
       amount: 2_200_000n,
@@ -112,8 +140,8 @@ describe('getUtxoSigningInputs — Zcash ZIP-317 conventional fee', () => {
       outputSizes: getZcashTransparentOutputSizes({ change: 0n, memo }),
     })
 
-    expect(required).toBe(15_000n)
-    expect(fee).toBeGreaterThanOrEqual(required)
+    expect(required).toBe(3_000n)
+    expect(fee).toBe(3_164n)
   })
 
   it('clears the conventional fee for a long memo that spans extra actions', async () => {
@@ -128,7 +156,8 @@ describe('getUtxoSigningInputs — Zcash ZIP-317 conventional fee', () => {
       outputSizes: getZcashTransparentOutputSizes({ change: 1n, memo }),
     })
 
-    expect(fee).toBeGreaterThanOrEqual(required)
+    expect(required).toBe(9_000n)
+    expect(fee).toBe(9_100n)
   })
 
   it('passes an empty (insufficient-funds) plan through untouched for the caller to handle', async () => {
@@ -137,7 +166,7 @@ describe('getUtxoSigningInputs — Zcash ZIP-317 conventional fee', () => {
     // refineKeysignUtxo owns the insufficient-funds outcome without changing MAX intent.
     const [signingInput] = await getUtxoSigningInputs({
       keysignPayload: buildZcashPayload({
-        amount: 90_000n,
+        amount: 99_000n,
         balance: 100_000n,
         memo: 'm'.repeat(40),
       }),
